@@ -756,6 +756,10 @@
     }
     // 清單寫進條目給主持AI 看。隱藏成就照樣給它(它要知道才鋪得出來),玩家那邊才遮。
     // 🚨明講「名字要一字不差」:程式端靠名字比對來標已完成,寫成同義詞就對不上。
+    // 🚨清單是拿來「照抄名字」的,不是背景設定:程式端靠名字一字不差比對才會標完成。
+    //   舊版把規則寫在清單後面、語氣又是「達成時記下來」→ 實測跑了一百多輪,主持AI 照樣
+    //   每三輪自己取一個名字(它在照角色卡「里程碑2-8字」那條發揮),沒有一條對得上、全部落空。
+    //   所以規則改成「發標記的當下要做的事」,而且清單前後各講一次(它讀長條目容易只記得頭尾)。
     function _achvBlock(w) {
         const a = w.achv;
         if (!a) return '';
@@ -765,10 +769,14 @@
         if ((a.bond || []).length) parts.push('### 與同行者之間\n' + rows('bond'));
         if ((a.hidden || []).length) parts.push('### 隱藏(玩家看不到條件)\n' + rows('hidden'));
         if (!parts.length) return '';
-        return '\n\n## 這個世界的成就\n' + parts.join('\n') +
-            '\n這是這個世界值得被記下來的事,不是任務清單,玩家不做也沒關係——但機會要鋪得出來:' +
-            '別讓這個世界只剩下戰鬥,上面那些日常與關係的事也要有發生的餘地。' +
-            '玩家真的達成其中一條時,用既有的成就標記把它記下來,名字必須跟上面一字不差,不可以改寫或換同義詞。';
+        return '\n\n## 這個世界的成就（發成就標記時的取名規則）\n' +
+            '**要發成就標記前,一定先看這份清單。** 這一輪發生的事只要對得上其中一條,' +
+            '成就名就直接照抄那一條,一字不差,不可以改寫、縮寫或換同義詞——名字不一樣等於沒記到。\n' +
+            '真的一條都對不上時,才自己取名。\n\n' +
+            parts.join('\n') +
+            '\n\n這些是這個世界值得被記下來的事,不是任務清單,玩家不做也沒關係——' +
+            '但機會要鋪得出來:別讓這個世界只剩下戰鬥,上面那些日常與關係的事也要有發生的餘地。\n' +
+            '再說一次:發成就標記時,先在上面的清單找對得上的那一條,有就照抄那個名字。';
     }
 
     // ── 世界條目落地【奧瑞亞-視差】書 ──
@@ -1784,6 +1792,24 @@
             if (g) { if (id) await g.enterParallax(); else await g.exitParallax(); }
         } catch (e) {}
         try { await _syncWorldLamps(id, '每輪確認'); } catch (e) {}
+        try { await _upgradeAchvBlock(id); } catch (e) {}
+    }
+
+    // 成就取名規則改寫過（見 _achvBlock）→ 已經落地的條目還是舊那份,主持AI 讀到的也還是舊的。
+    //   重擬成就會換掉整份清單(還要燒一次 API),這裡只是把條目原文重寫一次:清單不動、不花錢。
+    //   每個世界只做一次(存版號),做完就不再碰世界書。
+    const ACHV_BLOCK_V = 2;
+    async function _upgradeAchvBlock(id) {
+        if (!id) return;
+        const worlds = await _get(K_WORLDS, []);
+        const w = worlds.find(x => x && x.id === id);
+        if (!w || !w.achv || !w.entryText) return;
+        if (w.achvBlockV === ACHV_BLOCK_V) return;
+        const okDone = await _writeEntry(w, w.entryText);
+        if (!okDone) return;
+        w.achvBlockV = ACHV_BLOCK_V;
+        await _saveWorld(w);
+        console.log('[Worldgate③] 🏅「' + w.name + '」的成就取名規則已更新到條目裡');
     }
     function _initLaunchHook() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(_initLaunchHook, 1000); return; }
