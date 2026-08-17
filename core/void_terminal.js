@@ -357,19 +357,15 @@ const IRIS_IDLE = [
         try {
             const d = await db.getLobbyHistory(chatId);
             if (!d) return false;
-            const in404    = !!d.is404Room;
-            // 把當前場景的歷史填進 IRIS_STATE.history，其餘存到對應 backup
-            // （舊存檔可能還帶 claudeHistory / codexHistory / isClaudeRoom，一律忽略）
-            if (in404) {
-                IRIS_STATE.history = [...(d.cheshireHistory || [])];
-                _irisHistoryBackup     = [...(d.irisHistory || [])];
-                _cheshireHistoryBackup = [];
-            } else {
-                IRIS_STATE.history = [...(d.irisHistory || [])];
-                _irisHistoryBackup     = [];
-                _cheshireHistoryBackup = [...(d.cheshireHistory || [])];
-            }
-            is404Room     = in404;
+            // 🚨 存檔記著上次在 404 也一律回大廳開場：
+            //    404 是「刻意走進去」的地方（打 ERR_404 / 快轉地圖 → glitch 轉場、首訪還有開場片），
+            //    靠還原把人直接丟進去等於跳過儀式；更糟的是還原只換了 UI 皮（dock 標籤、配色、BGM），
+            //    舞台場景沒跟著切 → 變成「純白大廳配 404 綠皮」的四不像（Rae 2026-08-18 回報）。
+            //    柴郡的對話仍完整保留在 backup，走進 404 就接得回去；visit404Count 也留著（維持已解鎖）。
+            IRIS_STATE.history     = [...(d.irisHistory || [])];
+            _irisHistoryBackup     = [];
+            _cheshireHistoryBackup = [...(d.cheshireHistory || [])];
+            is404Room     = false;
             visit404Count = d.visit404Count || 0;
             if (d.userName) IRIS_STATE.userName = d.userName; // 讀取使用者名稱
             _currentChatId = chatId;
