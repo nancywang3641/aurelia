@@ -129,7 +129,10 @@
         };
         if (_busy || !enabled() || !opts || !opts.host) { fire(); return; }
         _busy = true;
-        const fuse = setTimeout(fire, 3000);   // 保險絲：演出掛了也要放行載入
+        // 保險絲：演出掛了也要放行載入。DUR 才 1.15 秒，3 秒還沒收場＝rAF 停了
+        // （面板被藏起來時瀏覽器會停發幀），順手把殘局收掉並解鎖 _busy，
+        // 否則旗標卡住，之後每次進章節都會被當成「正在演出」直接跳過轉場。
+        const fuse = setTimeout(() => { fire(); try { restore(); } catch (e) {} _busy = false; }, 3000);
 
         // 殘局收拾放外層：中途 throw 也要拆掉碎片層、把原卡還原、取消旁卡動畫，
         // 不然面板上永遠疊著一張假卡（或旁卡永遠停在飛出去的位置）
@@ -325,7 +328,12 @@
             const t0 = performance.now();
             const tick = () => {
                 const t = (performance.now() - t0) / DUR;
-                if (t >= 1) { cv.remove(); restore(); _busy = false; clearTimeout(fuse); return; }
+                // 🚨 收場前一定要 fire()：載入是掛在「t 落在 [LOAD_AT,1) 的那一幀」上，
+                //    但那段只有 DUR*(1-LOAD_AT)＝138ms（1150 版）。畫面一卡、幀距超過這段，
+                //    下一幀就直接 t>=1 收場並清掉保險絲 → doLoad 從沒被呼叫，
+                //    玩家看到的正是「zoom in 演完又回到章節面板」。fire() 自帶去重，補呼叫安全。
+                //    (1500ms 版窗口 180ms 比較不容易踩到，縮短成 1150 之後就常態化了)
+                if (t >= 1) { fire(); cv.remove(); restore(); _busy = false; clearTimeout(fuse); return; }
                 cx.clearRect(0, 0, W, H);
 
                 // ③ 目的地場景滲入墊底：t≈0.55 起整層淡入並緩慢推進＝衝刺終點已在場景裡
