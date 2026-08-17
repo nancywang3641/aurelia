@@ -842,6 +842,18 @@
             container.querySelectorAll('.jrnl-tab').forEach(b =>
                 b.classList.toggle('active', b.dataset.tab === activeTab));
         }
+        // 總結頁只端「事件表」那一段;全文只在「查看完整總結」彈窗裡看
+        function _extractEvents(content) {
+            const lines = String(content || '').split('\n');
+            const out = []; let inEv = false;
+            for (const raw of lines) {
+                const t = raw.trim();
+                if (/^【[^】]*事件[^】]*】/.test(t)) { inEv = true; out.push(t); continue; }
+                if (inEv && /^【[^】]+】/.test(t)) break;   // 下一個段落標題=事件表結束
+                if (inEv) out.push(raw);
+            }
+            return out.join('\n').trim();
+        }
         async function _loadSummaryPane() {
             const body = container.querySelector('.jrnl-sec-summary .jrnl-summary-body');
             if (!body) return;
@@ -851,8 +863,15 @@
             body.textContent = '載入中…';
             try {
                 const rec = await _readStorySummary(active);
-                active._summaryHtml = (rec && rec.content) ? _renderMd(rec.content) : '<p>這段劇情還沒有大總結(或已清空)。</p>';
-            } catch (e) { active._summaryHtml = `<p>讀取失敗:${_escape(e.message || e)}</p>`; }
+                if (rec && rec.content) {
+                    const ev = _extractEvents(rec.content);
+                    active._summaryHtml = ev
+                        ? _renderMd(ev)
+                        : '<p style="text-align:center;">這段總結沒有事件表,點下方「查看完整總結」看全文。</p>';
+                } else {
+                    active._summaryHtml = '<p style="text-align:center;">這段劇情還沒有大總結(或已清空)。</p>';
+                }
+            } catch (e) { active._summaryHtml = `<p style="text-align:center;">讀取失敗:${_escape(e.message || e)}</p>`; }
             body.innerHTML = active._summaryHtml;
         }
         container.querySelectorAll('.jrnl-tab').forEach(btn => {

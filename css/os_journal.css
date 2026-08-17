@@ -816,7 +816,7 @@
 .jrnl-desk .jrnl-tl-item { background: transparent; }
 .jrnl-desk .jrnl-act-btn:hover { border-color: rgba(185,104,117,0.6); color: #a8434f; }
 .jrnl-desk .jrnl-d-section { margin-top: 0.9cqw; }
-.jrnl-desk .jrnl-d-section-head { border-bottom: none; position: relative; margin-bottom: 0.7cqw; }
+.jrnl-desk .jrnl-d-section-head { border-bottom: none; position: relative; margin-bottom: 0.7cqw; justify-content: center; gap: 0.6cqw; }
 .jrnl-desk .jrnl-d-section-head::after {
     content: ''; position: absolute; left: 0; right: 0; bottom: -0.3cqw; height: 0.5cqw;
     background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/divider.webp') center / contain no-repeat;
@@ -835,7 +835,7 @@
 }
 .jrnl-desk .jrnl-summary-body p { margin: 0 0 0.5cqw; }
 .jrnl-desk .jrnl-summary-body .jrnl-md-h {
-    display: flex; align-items: center; gap: 0.5cqw;
+    display: flex; align-items: center; justify-content: center; gap: 0.5cqw;
     margin: 1.1cqw 0 0.55cqw;
     color: #7c5a63; font-size: 0.82cqw; font-weight: 700; letter-spacing: 0.2cqw;
 }
