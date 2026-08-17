@@ -565,6 +565,16 @@
             });
         }
 
+        // 書裝環境的彈窗跟著換皮(彈窗掛在 container、是 .jrnl-root 的兄弟,desk 狀態靠這裡手動同步)
+        function _tagModalDesk(modal, kind) {
+            try {
+                if (container.querySelector('.jrnl-root')?.classList.contains('jrnl-desk')) {
+                    modal.classList.add('jrnl-modal-desk');
+                    if (kind) modal.classList.add('jrnl-modal-' + kind);
+                }
+            } catch (e) { }
+        }
+
         // 角色詳情 modal：沿用 .jrnl-modal 外殼，內容換成欄位列表 + 頭像
         function _openCharModal(c, story) {
             if (!c) return;
@@ -588,6 +598,7 @@
             // 模板 B：左大圖 + 右資料分欄（淺色，配合日誌風格）
             const modal = document.createElement('div');
             modal.className = 'jrnl-modal';
+            _tagModalDesk(modal, 'kchar');
             modal.innerHTML = `
                 <div class="jrnl-modal-card jrnl-modal-char">
                     <button class="jrnl-cm-close" title="關閉">✕</button>
@@ -628,6 +639,7 @@
             const title = active?.storyTitle || active?.cardName || '完整總結';
             const modal = document.createElement('div');
             modal.className = 'jrnl-modal';
+            _tagModalDesk(modal, 'kview');
             modal.innerHTML = `
                 <div class="jrnl-modal-card">
                     <div class="jrnl-modal-head">
@@ -679,6 +691,7 @@
             const title = story?.storyTitle || story?.cardName || '完整總結';
             const modal = document.createElement('div');
             modal.className = 'jrnl-modal';
+            _tagModalDesk(modal, editMode ? 'kedit' : 'kview');
             const close = () => modal.remove();
             if (editMode) {
                 modal.innerHTML = `
@@ -746,6 +759,7 @@
             const title = story.storyTitle || story.cardName || '這段劇情';
             const modal = document.createElement('div');
             modal.className = 'jrnl-modal';
+            _tagModalDesk(modal, 'kview');
             const close = () => modal.remove();
             modal.innerHTML = `
                 <div class="jrnl-modal-card">
