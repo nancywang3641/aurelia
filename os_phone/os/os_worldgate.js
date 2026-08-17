@@ -1526,6 +1526,8 @@
             async function joinTeam() {
                 t.recruited = true;
                 await _saveWorld(w);
+                // 隊伍名單即時寫進條目（DIVE 前本來就會寫一次，但玩到一半入隊的人也要馬上算數）
+                if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
                 try { if (t.accept) win.LobbyStage.pushNpcHistory(npcKey, { role: 'assistant', content: t.accept }); } catch (e) {}   // 入隊宣言入他的記憶(考題過程不入)
                 const sig = box.querySelector('.wg-poster-sig');
                 if (sig && !sig.querySelector('.wg-joined')) sig.insertAdjacentHTML('beforeend', '<i class="wg-joined"><i class="fa-solid fa-circle-check"></i> 已入隊</i>');
@@ -2542,8 +2544,25 @@
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-id-card"></i> ' + _esc(t.name) + '</span>' +
               '<span class="wg-section-note">' + (t.recruited ? '已入隊' : '旅人') + '・' + _esc(t.job || '') + '</span></div>' +
             '<div class="wg-card">' + _profRows(t) + '</div>' +
+            // 退隊＝回到候選池,人還在大廳,聊得順還能再入隊一次(不是把人刪掉)
+            (t.recruited ? '<button class="wg-btn danger" data-act="leave"><i class="fa-solid fa-user-minus"></i> 請他離隊</button>' : '') +
             '<button class="wg-btn ghost" data-act="back">返回</button>';
         b.querySelector('[data-act="back"]').addEventListener('click', () => _renderDetail(w));
+        // 兩段確認：這顆會改動世界書裡的隊伍名單，不做成一點就走
+        let _leaveArm = 0;
+        b.querySelector('[data-act="leave"]')?.addEventListener('click', async (ev) => {
+            if (_leaveArm === 0) {
+                _leaveArm = 1;
+                ev.currentTarget.innerHTML = '<i class="fa-solid fa-user-minus"></i> 再按一次確認離隊';
+                return;
+            }
+            t.recruited = false;
+            await _saveWorld(w);
+            // 條目裡的隊伍區塊跟著更新，不然主持AI 還會照著演一個已經離隊的人
+            if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
+            _toast(t.name + ' 離開了隊伍，回大廳等下一趟');
+            _renderDetail(w);
+        });
     }
 
     // ── 🧍 出發編成槽位 ──
