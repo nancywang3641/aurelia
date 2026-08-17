@@ -715,7 +715,14 @@
     background-position: calc(100% - 0.9cqw) 55%, calc(100% - 0.6cqw) 55%;
     background-size: 0.28cqw 0.28cqw, 0.28cqw 0.28cqw;
 }
-.jrnl-desk .jrnl-list { gap: 0.55cqw; padding-right: 0.4cqw; }
+/* 清單容器往左擴出書溝(照阿洛 mockup):緞帶書籤掛在條目左外側才有地方露出來,又不會被捲軸箱剪掉 */
+.jrnl-desk .jrnl-list {
+    gap: 0.55cqw;
+    width: calc(100% + 4.6cqw);
+    margin-left: -4.6cqw;
+    padding-left: 4.6cqw;
+    padding-right: 0.4cqw;
+}
 /* 目錄條目:紙上墨線風 */
 .jrnl-desk .jrnl-card {
     background: transparent; border: none; border-radius: 0.5cqw;
@@ -726,15 +733,19 @@
 }
 .jrnl-desk .jrnl-card:hover { background: rgba(255,251,243,0.7); box-shadow: none; transform: none; }
 .jrnl-desk .jrnl-card.active {
-    background: rgba(255,248,240,0.95);
+    background: #fffaf4;
     border-left: none;
-    box-shadow: 0 0.2cqw 0.9cqw rgba(150,110,90,0.14);
+    border-color: rgba(208, 162, 140, 0.44);
+    box-shadow: 0 0.28cqw 0.8cqw rgba(131, 88, 68, 0.08);
+    z-index: 0;   /* 建立堆疊上下文,緞帶 z:-1 才會壓在卡片底下、只露出左側那截 */
 }
-/* 現役書籤緞帶 */
+/* 現役書籤緞帶:照阿洛 mockup——4cqw 寬、掛在條目「左外側」像夾在書頁裡的書籤 */
 .jrnl-desk .jrnl-card.active::before {
-    content: ''; position: absolute; left: 0.1cqw; top: 50%; transform: translateY(-50%);
-    width: 1.6cqw; height: 2.6cqw;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/ribbon.webp') center / contain no-repeat;
+    content: ''; position: absolute; z-index: -1;
+    left: -3.9cqw; top: 1cqw;
+    width: 4cqw; height: 3.4cqw;
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/ribbon.webp') center / 100% 100% no-repeat;
+    filter: saturate(0.75);
 }
 .jrnl-desk .jrnl-card-num {
     position: static; width: auto; height: auto; line-height: 1;
@@ -756,7 +767,7 @@
 .jrnl-desk .jrnl-right {
     position: absolute; z-index: 4;
     left: 47.25%; top: 13.1%; width: 41.55%; height: 74.1%;
-    padding: 1.3cqw 3.2cqw 1.6cqw 2.4cqw; box-sizing: border-box;
+    padding: 1.3cqw 3.6cqw 2cqw 2.4cqw; box-sizing: border-box;   /* 右側多留,內容別壓到書頁捲邊 */
     overflow-y: auto;
     scrollbar-width: thin; scrollbar-color: rgba(160,132,100,0.4) transparent;
 }
@@ -817,8 +828,59 @@
 .jrnl-desk .jrnl-tl-head { font-size: 0.78cqw; color: #574a3e; }
 .jrnl-desk .jrnl-tl-brief { font-size: 0.72cqw; line-height: 1.85; color: #6a5c4e; }
 .jrnl-desk .jrnl-chars-grid { gap: 0.8cqw; }
-.jrnl-desk .jrnl-summary-body { font-size: 0.74cqw; line-height: 1.9; color: #5c4f42; }
-.jrnl-desk .jrnl-summary-body .jrnl-md-h { color: #7c5a63; }
+/* ── 完整總結頁:照阿洛 mockup 的結構化排版(段落+區塊標籤+正規事件表) ── */
+.jrnl-desk .jrnl-summary-body {
+    font-size: 0.72cqw; line-height: 1.9; color: #5c4f42;
+    padding-right: 0.8cqw;
+}
+.jrnl-desk .jrnl-summary-body p { margin: 0 0 0.5cqw; }
+.jrnl-desk .jrnl-summary-body .jrnl-md-h {
+    display: flex; align-items: center; gap: 0.5cqw;
+    margin: 1.1cqw 0 0.55cqw;
+    color: #7c5a63; font-size: 0.82cqw; font-weight: 700; letter-spacing: 0.2cqw;
+}
+.jrnl-desk .jrnl-summary-body .jrnl-md-h::before { content: '◆'; color: #b9924f; font-size: 0.5cqw; }
+.jrnl-desk .jrnl-summary-body .jrnl-md-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255, 251, 244, 0.55);
+    border: 1px solid rgba(181, 151, 123, 0.35);
+    margin: 0.3cqw 0 0.9cqw;
+}
+.jrnl-desk .jrnl-summary-body .jrnl-md-table th {
+    background: rgba(190, 150, 120, 0.18);
+    color: #6b5646; font-size: 0.64cqw; font-weight: 700; letter-spacing: 0.08cqw;
+    padding: 0.45cqw 0.55cqw; text-align: left; white-space: nowrap;
+    border-bottom: 1px solid rgba(181, 151, 123, 0.35);
+}
+.jrnl-desk .jrnl-summary-body .jrnl-md-table td {
+    font-size: 0.64cqw; line-height: 1.75; color: #5c4f42;
+    padding: 0.45cqw 0.55cqw; vertical-align: top;
+    border-top: 1px solid rgba(160, 132, 100, 0.16);
+}
+.jrnl-desk .jrnl-summary-body .jrnl-md-table tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.38); }
+.jrnl-desk .jrnl-summary-actions {
+    display: flex; justify-content: center; gap: 0.8cqw;
+    margin: 1.1cqw 0 0.4cqw;
+}
+/* ornate 鈕:阿洛同款(象牙金邊 / 玫紅主鈕) */
+.jrnl-desk .jrnl-ornate {
+    min-width: 9cqw; min-height: 2.4cqw;
+    padding: 0.42cqw 1.1cqw;
+    border: 0.08cqw solid #d1ad78;
+    border-radius: 0.35cqw;
+    background: linear-gradient(#fffdf7, #f5eadb);
+    color: #786052;
+    box-shadow: inset 0 0 0 0.13cqw rgba(255,255,255,0.65), 0 0.16cqw 0.35cqw rgba(75,50,35,0.1);
+    font-family: inherit; font-size: 0.72cqw; font-weight: 700; letter-spacing: 0.08cqw;
+    cursor: pointer;
+    transition: transform 0.15s, filter 0.15s;
+}
+.jrnl-desk .jrnl-ornate:hover { transform: translateY(-0.12cqw); filter: brightness(1.03); }
+.jrnl-desk .jrnl-ornate.jrnl-ornate-primary {
+    color: #fffaf4; border-color: #a55b68;
+    background: linear-gradient(#c87985, #aa5866);
+}
 
 /* ── 書籤頁籤(貼書右緣) ── */
 .jrnl-desk .jrnl-tabs {
