@@ -293,7 +293,12 @@
                 </div>
             </div>
 
-            <div class="jrnl-d-section">
+            <div class="jrnl-volume" aria-hidden="true">
+                <div class="jrnl-volume-main">共 ${story.briefs.length} 章</div>
+                <div class="jrnl-volume-sub">${story.characters.length} 名角色 · ${_fmtDate(latestTs)}</div>
+            </div>
+
+            <div class="jrnl-d-section jrnl-sec-story">
                 <div class="jrnl-d-section-head">
                     <h3>劇情時間軸</h3>
                     <span class="jrnl-d-count">共 ${story.briefs.length} 章</span>
@@ -301,12 +306,19 @@
                 <ol class="jrnl-timeline">${timelineHtml}</ol>
             </div>
 
-            <div class="jrnl-d-section">
+            <div class="jrnl-d-section jrnl-sec-chars">
                 <div class="jrnl-d-section-head">
                     <h3>出場角色</h3>
                     <span class="jrnl-d-count">共 ${story.characters.length} 名</span>
                 </div>
                 ${charsHtml ? `<div class="jrnl-chars-grid">${charsHtml}</div>` : '<div class="jrnl-empty-txt" style="text-align:center; padding:20px;">尚無角色紀錄</div>'}
+            </div>
+
+            <div class="jrnl-d-section jrnl-sec-summary">
+                <div class="jrnl-d-section-head">
+                    <h3>完整總結</h3>
+                </div>
+                <div class="jrnl-summary-body">載入中…</div>
             </div>
         `;
     }
@@ -376,7 +388,20 @@
 
                 <button class="jrnl-close" id="jrnl-close" title="關閉">✕</button>
 
-                <aside class="jrnl-left">
+                <!-- 🕮 桌面書裝(jrnl-desk 時啟用;窄屏全部 display:none,原版型不動) -->
+                <div class="jrnl-topbar-desk">
+                    <span class="jrnl-topbar-brand">瀅瀅的故事日誌</span>
+                    <span class="jrnl-topbar-en">STORY JOURNAL</span>
+                </div>
+                <div class="jrnl-stage">
+                    <div class="jrnl-book-art"></div>
+                    <nav class="jrnl-tabs" aria-label="日誌頁籤">
+                        <button class="jrnl-tab active" type="button" data-tab="story"><i class="fa-solid fa-book-open"></i><span>故事回顧</span></button>
+                        <button class="jrnl-tab" type="button" data-tab="chars"><i class="fa-solid fa-user"></i><span>人物圖鑑</span></button>
+                        <button class="jrnl-tab" type="button" data-tab="summary"><i class="fa-solid fa-file-lines"></i><span>完整總結</span></button>
+                        <button class="jrnl-tab" type="button" data-tab="tools"><i class="fa-solid fa-screwdriver-wrench"></i><span>故事管理</span></button>
+                    </nav>
+                    <aside class="jrnl-left">
                     <div class="jrnl-brand">
                         <h1>瀅瀅的<span>故事日誌</span></h1>
                         <div class="jrnl-brand-sub">Story Journal</div>
@@ -391,11 +416,22 @@
                         </select>
                     </div>
                     <div class="jrnl-list" id="jrnl-list"></div>
-                </aside>
+                    </aside>
 
-                <main class="jrnl-right" id="jrnl-right"></main>
+                    <main class="jrnl-right" id="jrnl-right"></main>
+                </div>
             </div>
         `;
+
+        // 🕮 書裝開關:看「容器」寬(手機殼/窄窗維持原版型),同入場精靈的判定思路
+        try {
+            const rootEl = container.querySelector('.jrnl-root');
+            const ro = new ResizeObserver(() => {
+                if (rootEl.isConnected) rootEl.classList.toggle('jrnl-desk', rootEl.clientWidth >= 960);
+            });
+            ro.observe(rootEl);
+            rootEl.classList.toggle('jrnl-desk', rootEl.clientWidth >= 960);
+        } catch (e) { /* 沒 ResizeObserver 就永遠原版型 */ }
 
         const listEl   = container.querySelector('#jrnl-list');
         const rightEl  = container.querySelector('#jrnl-right');
@@ -445,6 +481,7 @@
             rightEl.innerHTML = _renderDetail(active);
             _wireDetail(active);
             _hydrateVnImages();
+            try { if (activeTab === 'summary') _loadSummaryPane(); } catch (e) { /* 書籤區還沒初始化(首輪) */ }
         }
 
         // VN 圖片補位：掃 data-bg-key / data-avatar-key，async 查 VN_Cache 覆蓋 background-image
@@ -776,6 +813,43 @@
         // 搜尋與排序
         searchEl.addEventListener('input', _renderList);
         sortEl.addEventListener('change', _renderList);
+
+        // 🕮 書裝側邊書籤:story/chars/summary 三枚切右頁區塊;tools 開故事管理面板(獨立 overlay)
+        //    切換只掛 class,區塊顯隱交給 CSS(窄屏書籤整列 display:none,原版型全區塊直排不受影響)
+        const rootForTabs = container.querySelector('.jrnl-root');
+        let activeTab = 'story';
+        function _applyTab() {
+            rootForTabs.classList.remove('jrnl-tab-story', 'jrnl-tab-chars', 'jrnl-tab-summary');
+            rootForTabs.classList.add('jrnl-tab-' + activeTab);
+            container.querySelectorAll('.jrnl-tab').forEach(b =>
+                b.classList.toggle('active', b.dataset.tab === activeTab));
+        }
+        async function _loadSummaryPane() {
+            const body = container.querySelector('.jrnl-sec-summary .jrnl-summary-body');
+            if (!body) return;
+            const active = allStories.find(s => `${s.cardName}|||${s.chatId}` === activeKey);
+            if (!active) { body.textContent = '尚無故事'; return; }
+            if (active._summaryHtml !== undefined) { body.innerHTML = active._summaryHtml; return; }
+            body.textContent = '載入中…';
+            try {
+                const rec = await _readStorySummary(active);
+                active._summaryHtml = (rec && rec.content) ? _renderMd(rec.content) : '<p>這段劇情還沒有大總結(或已清空)。</p>';
+            } catch (e) { active._summaryHtml = `<p>讀取失敗:${_escape(e.message || e)}</p>`; }
+            body.innerHTML = active._summaryHtml;
+        }
+        container.querySelectorAll('.jrnl-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const t = btn.dataset.tab;
+                if (t === 'tools') {
+                    try { win.OS_STORY_TOOLS?.openPanel ? win.OS_STORY_TOOLS.openPanel(container) : alert('故事管理工具尚未載入'); } catch (e) { }
+                    return;   // tools 是彈出面板,不改變當前頁籤
+                }
+                activeTab = t;
+                _applyTab();
+                if (t === 'summary') _loadSummaryPane();
+            });
+        });
+        _applyTab();
 
         // 關閉 → 回大廳（走 PhoneSystem.goHome，跟 spend 面板同套）
         //   不能用 AureliaControlCenter.hide()，那會關整支手機 + 下次打開 state 還在 → 回不去大廳
