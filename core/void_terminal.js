@@ -198,6 +198,42 @@ const IRIS_IDLE = [
     // 🎮 404號房舞台：走到底部出口＝系統還原回書咖
     window.addEventListener('lstage-restore-lobby', () => { if (is404Room) restoreLobby(); });
 
+    // 🔒 404 皮的單一真相＝「舞台正站在 404 號房」。舞台每次換場景/掛載都廣播，這裡照著對齊。
+    //    以前是各記各的旗標：用快轉地圖從 404 跳去書咖、或還原存檔時，皮沒被脫掉 →
+    //    變成「書咖現場卻套著 404 綠皮、dock 全是禁庫/異常記錄」(Rae 2026-08-18 回報)。
+    //    這條只換皮與對話紀錄；glitch/開場片/旁白是 enter404Room / restoreLobby 的儀式，不在這裡放。
+    window.addEventListener('lstage-scene', (e) => {
+        const sc = e && e.detail && e.detail.scene;
+        if (sc) _sync404Chrome(sc === 'room404');
+    });
+    function _sync404Chrome(on) {
+        on = !!on;
+        if (on === is404Room) return;            // 已經一致（儀式路徑會先設好旗標）→ 什麼都不做
+        is404Room = on;
+        if (on) { _irisHistoryBackup = [...IRIS_STATE.history]; IRIS_STATE.history = [..._cheshireHistoryBackup]; }
+        else    { _cheshireHistoryBackup = [...IRIS_STATE.history]; IRIS_STATE.history = [..._irisHistoryBackup]; }
+
+        document.getElementById('aurelia-home-tab')?.classList.toggle('mode-404', on);
+        document.getElementById('aurelia-phone-screen')?.classList.toggle('mode-404', on);
+        const avatar = document.getElementById('iris-avatar');
+        if (avatar) {
+            avatar.src = on ? 'https://files.catbox.moe/1gddlp.png' : URLS.IRIS_AVATAR;
+            avatar.title = on ? '戳戳 柴郡' : '戳戳 瀅瀅';
+            avatar.style.opacity = '1'; avatar.style.display = '';
+        }
+        const titleEl = document.getElementById('home-chat-title');
+        if (titleEl) titleEl.textContent = on ? '[ERR_404] THE STRAY NODE' : 'Parallax Archive & Cafe';
+        const inputField = document.getElementById('iris-input');
+        if (inputField) inputField.placeholder = on ? '...你最好有話說。' : '提供故事素材或與瀅瀅對話...';
+        const nameBox = document.getElementById('iris-name-tag');
+        if (nameBox) { nameBox.style.display = 'block'; const _s = nameBox.querySelector('span'); if (_s) _s.textContent = on ? 'CHESHIRE / 柴郡' : '瀅瀅'; }
+        const iH = document.getElementById('iris-hist-btn');
+        const cH = document.getElementById('cheshire-hist-btn');
+        if (iH) iH.style.display = on ? 'none' : '';
+        if (cH) cH.style.display = on ? '' : 'none';
+        try { VoidAmbient.switchBgm(on ? '404' : 'lobby'); } catch (_) {}
+    }
+
     function startIdleTimer() {
         stopIdleTimer();
         _idleTimer = setInterval(() => {
