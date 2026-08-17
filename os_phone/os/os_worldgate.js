@@ -782,13 +782,14 @@
         if (rows('hidden')) parts.push('### 隱藏(玩家看不到條件)\n' + rows('hidden'));
         return '\n\n## 這個世界的成就（發成就標記時的規則）\n' +
             '**要發成就標記前,一定先看這份清單。** 這一輪發生的事對得上其中一條時,' +
-            '成就標記的「名字」欄請直接填那一條前面的代碼,不要填成就名、也不要自己改寫——' +
-            '程式會把代碼換回正式名字。填名字會對不上(簡繁與用字只要差一個就不算),填代碼才保險。\n' +
-            '真的一條都對不上時,才照原本的方式自己取名。\n\n' +
+            '成就標記照原樣寫(表情、名字、描述都照你的意思),**最後再多接一段,填那一條前面的代碼**——' +
+            '也就是變成五段:[Achievement|表情|名|描述|代碼]。\n' +
+            '程式是靠這個代碼認出你記的是哪一條的,只比對名字會因為簡繁或用字差一個就不算。\n' +
+            '真的一條都對不上時,就照原本的四段寫法,不要加代碼。\n\n' +
             parts.join('\n') +
             '\n\n這些是這個世界值得被記下來的事,不是任務清單,玩家不做也沒關係——' +
             '但機會要鋪得出來:別讓這個世界只剩下戰鬥,上面那些日常與關係的事也要有發生的餘地。\n' +
-            '再說一次:發成就標記時,先在上面的清單找對得上的那一條,有就把名字欄填成它的代碼。';
+            '再說一次:發成就標記時,先在上面的清單找對得上的那一條,有就在標記最後多接一段填它的代碼。';
     }
 
     // ── 世界條目落地【奧瑞亞-視差】書 ──
@@ -1766,18 +1767,24 @@
         const w = worlds.find(x => x.id === id);
         const list = _achvCoded(w);
         if (!list.length) return;
+        // 整段抓下來自己切:[Achievement|表情|名|描述|代碼]，代碼是視差世界才有的第五段(選填)
         const got = [];
-        const re = /\[Achievement\|([^\]|]*)\|([^\]|]*)\|/gi;   // [Achievement|表情|名|描述]
+        const re = /\[Achievement\|([^\]]*)\]/gi;
         let m;
-        while ((m = re.exec(String(text || '')))) got.push(m[2].trim());
+        while ((m = re.exec(String(text || '')))) {
+            const seg = m[1].split('|').map(s => s.trim());
+            got.push({ name: seg[1] || '', code: seg[3] || '' });
+        }
         if (!got.length) return;
         const done = Object.assign({}, w.achvDone || {});
         let hit = 0;
-        got.forEach(n => {
-            // 代碼優先(繁簡/改寫都不影響);舊世界或它照舊寫名字時,退回原本的洗字比對
-            const t = _ACHV_CODE_RE.test(n)
-                ? list.find(x => x.code.toLowerCase() === n.toLowerCase())
-                : list.find(x => _achvKey(x.name) === _achvKey(n));
+        got.forEach(g => {
+            // 代碼優先(繁簡/改寫都不影響);沒帶代碼時退回原本的洗字比對,
+            // 名字欄被它直接填成代碼的情況也認(不同模型理解不同,兩種都收)
+            let t = null;
+            if (_ACHV_CODE_RE.test(g.code)) t = list.find(x => x.code.toLowerCase() === g.code.toLowerCase());
+            if (!t && _ACHV_CODE_RE.test(g.name)) t = list.find(x => x.code.toLowerCase() === g.name.toLowerCase());
+            if (!t && g.name) t = list.find(x => _achvKey(x.name) === _achvKey(g.name));
             if (t && !done[t.name]) { done[t.name] = Date.now(); hit++; }
         });
         if (!hit) return;
@@ -1808,7 +1815,7 @@
     // 成就取名規則改寫過（見 _achvBlock）→ 已經落地的條目還是舊那份,主持AI 讀到的也還是舊的。
     //   重擬成就會換掉整份清單(還要燒一次 API),這裡只是把條目原文重寫一次:清單不動、不花錢。
     //   每個世界只做一次(存版號),做完就不再碰世界書。
-    const ACHV_BLOCK_V = 3;   // 2=規則講在發標記當下 3=改成填代碼
+    const ACHV_BLOCK_V = 4;   // 2=規則講在發標記當下 3=名字欄填代碼 4=改成第五段接代碼
     async function _upgradeAchvBlock(id) {
         if (!id) return;
         const worlds = await _get(K_WORLDS, []);
