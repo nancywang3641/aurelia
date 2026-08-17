@@ -206,7 +206,7 @@
             this.applyTheme();
             const themeBtn = document.getElementById('se-btn-theme');
             if (themeBtn) {
-                themeBtn.textContent = this.currentTheme === THEMES.darkgold ? '☀️' : '🌙';
+                themeBtn.innerHTML = this.currentTheme === THEMES.darkgold ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
                 themeBtn.title = this.currentTheme === THEMES.darkgold ? '切換到淺色模式' : '切換到黑金模式';
             }
         },
@@ -289,11 +289,11 @@
             }
             rootWrapper.innerHTML = `
                 <div id="se-toolbar">
-                    <button class="se-back-btn" title="返回" id="se-btn-close">‹</button>
+                    <button class="se-back-btn" title="返回" id="se-btn-close"><i class="fa-solid fa-chevron-left"></i></button>
                     <div class="se-title">踏入故事</div>
                     <div class="se-controls">
-                        <button class="se-icon-btn" title="切換主題" id="se-btn-theme">🌙</button>
-                        <button class="se-icon-btn" title="刷新" id="se-btn-refresh">↻</button>
+                        <button class="se-icon-btn" title="切換主題" id="se-btn-theme"><i class="fa-solid fa-moon"></i></button>
+                        <button class="se-icon-btn" title="刷新" id="se-btn-refresh"><i class="fa-solid fa-rotate-right"></i></button>
                     </div>
                 </div>
                 <div id="se-swipe-bar" class="se-hidden">
@@ -352,7 +352,7 @@
 
             const themeBtn = rootWrapper.querySelector('#se-btn-theme');
             themeBtn.onclick = () => this.toggleTheme();
-            themeBtn.textContent = this.currentTheme === THEMES.darkgold ? '☀️' : '🌙';
+            themeBtn.innerHTML = this.currentTheme === THEMES.darkgold ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
             themeBtn.title = this.currentTheme === THEMES.darkgold ? '切換到淺色模式' : '切換到黑金模式';
 
             this.applyTheme();
