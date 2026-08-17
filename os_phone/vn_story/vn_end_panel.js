@@ -51,17 +51,32 @@
         (async () => {
             for (const [name, url] of cands) {
                 if (await _canLoad(url)) {
-                    root.style.setProperty('--vnep-bg', 'url("' + url.replace(/"/g, '\\"') + '")');
+                    _setBgLayer(root, url);
                     root.classList.add('has-bg');
-                    console.log('[VN末尾面板] 底圖用「' + name + '」');
+                    console.log('[VN末尾面板] 底圖用「' + name + '」（' + Math.round(url.length / 1024) + 'KB）');
                     return;
                 }
                 console.warn('[VN末尾面板] ' + name + '載不起來(' + url.slice(0, 40) + '…)，往下一個退');
             }
-            root.style.removeProperty('--vnep-bg');
+            _setBgLayer(root, '');
             root.classList.remove('has-bg');
             console.warn('[VN末尾面板] 一張底圖都沒有(候選 ' + cands.length + ' 個)，先用世界底色撐著');
         })();
+    }
+    // 🚨🚨底圖絕對不能塞進 CSS 自訂屬性：實測 Chrome 對 --var 的值有長度上限，
+    //   1MB 進得去、2MB 直接被丟掉——setProperty 不報錯、讀回來是空的，
+    //   於是 background-image 解析成 none，畫面就變成純底色（她的「黑屏／紫色」就是這個）。
+    //   啟航群像是 1344×768 的 dataURL，大多超過 2MB，所以每次都中。
+    //   改成獨立一層 div 直接設 style.backgroundImage：那條沒有這個上限。
+    function _setBgLayer(root, url) {
+        let layer = root.querySelector(':scope > .vnep-bglayer');
+        if (!url) { if (layer) layer.remove(); return; }
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'vnep-bglayer';
+            root.insertBefore(layer, root.firstChild);   // 要在 .vnep-ui 前面，不然蓋在面板上
+        }
+        layer.style.backgroundImage = 'url("' + url.replace(/"/g, '\\"') + '")';
     }
     function _canLoad(url) {
         return new Promise(res => {

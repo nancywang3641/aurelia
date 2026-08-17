@@ -2127,7 +2127,9 @@
             '.wg-slot-job i{color:#3a5580;font-size:8px;flex:none;}' +
             '.wg-spawn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:4px;}' +
             // 有方位圖時格子疊在圖上面:底板要壓暗一點,不然白底的格子跟圖糊在一起看不出邊界
-            '.wg-spawn-grid.has-map{background-image:var(--wg-map);background-size:cover;background-position:center;padding:5px;border-radius:11px;}' +
+            // 🚨底圖不走 var()：自訂屬性的值超過約 1MB 會被瀏覽器丟掉（方位圖那種 dataURL 一定超過），
+            //   設了不報錯、讀回來是空的 → 圖靜靜地不見。改由 JS 直接設 style.backgroundImage。
+            '.wg-spawn-grid.has-map{background-size:cover;background-position:center;padding:5px;border-radius:11px;}' +
             '.wg-spawn-grid.has-map .wg-spawn{background:rgba(255,255,255,.86);}' +
             '.wg-spawn-grid.has-map .wg-spawn-empty{border-color:rgba(255,255,255,.42);}' +
             '.wg-spawn-empty{border-radius:9px;border:1px dashed rgba(26,28,40,.07);min-height:44px;}' +
@@ -2974,7 +2976,7 @@
             // 方位圖是動態網址,只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
             if (w.mapArt) {
                 const mg = b.querySelector('[data-spawn-grid]');
-                if (mg) mg.style.setProperty('--wg-map', 'url("' + w.mapArt + '")');
+                if (mg) mg.style.backgroundImage = 'url("' + String(w.mapArt).replace(/"/g, '\\"') + '")';
             }
             // 降生地:純前端切換,選好存進世界資料;再點一次同一個=取消(交回主持AI安排)
             b.querySelectorAll('.wg-spawn').forEach(el => el.addEventListener('click', async () => {
