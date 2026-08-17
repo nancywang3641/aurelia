@@ -238,6 +238,7 @@
             `;
         }
         const coverIdx = _coverFor(story.cardName + story.chatId);
+        const pinned = _npcPickMap()[story.cardName] === story.chatId;
         const title = story.storyTitle || story.cardName || '未命名故事線';
         const subtitle = story.cardName && story.cardName !== title ? story.cardName : '';
         const latestTs = story.briefs[0]?.ts || 0;
@@ -292,9 +293,10 @@
                     <span class="jrnl-view-full-sub">回顧更多細節，重溫完整故事</span>
                 </button>
                 <div class="jrnl-foot-acts">
-                    <button class="jrnl-act-btn jrnl-pin-npc ${_npcPickMap()[story.cardName] === story.chatId ? 'active' : ''}"
+                    <button class="jrnl-act-btn jrnl-pin-npc ${pinned ? 'active' : ''}"
+                            data-on-label="★ 書咖常客來源（點擊取消）" data-off-label="☕ 設為書咖常客"
                             title="書咖舞台的客人會從這一輪的角色裡挑（同一張卡只認一輪，沒指定就用最新的）">
-                        ${_npcPickMap()[story.cardName] === story.chatId ? '★ 書咖常客來源（點擊取消）' : '☕ 設為書咖常客'}
+                        ${pinned ? '★ 書咖常客來源（點擊取消）' : '☕ 設為書咖常客'}
                     </button>
                     <button class="jrnl-act-btn jrnl-edit-full">✏️ 編輯總結</button>
                     <button class="jrnl-act-btn jrnl-act-danger jrnl-wipe-story">🗑️ 清空這段劇情</button>
@@ -322,14 +324,49 @@
                 ${charsHtml ? `<div class="jrnl-chars-grid">${charsHtml}</div>` : '<div class="jrnl-empty-txt" style="text-align:center; padding:20px;">尚無角色紀錄</div>'}
             </div>
 
-            <div class="jrnl-d-section jrnl-sec-summary">
+            <div class="jrnl-d-section jrnl-sec-manage">
                 <div class="jrnl-d-section-head">
-                    <h3>完整總結</h3>
+                    <h3>故事管理</h3>
                 </div>
-                <div class="jrnl-summary-body">載入中…</div>
-                <div class="jrnl-summary-actions">
-                    <button class="jrnl-ornate jrnl-sum-view" type="button">查看完整總結</button>
-                    <button class="jrnl-ornate jrnl-ornate-primary jrnl-sum-edit" type="button">編輯總結</button>
+                <div class="jrnl-mg-list">
+                    <div class="jrnl-mg-row">
+                        <div class="jrnl-mg-txt">
+                            <div class="jrnl-mg-k"><i class="fa-solid fa-file-lines"></i>完整總結</div>
+                            <div class="jrnl-mg-d">這段故事目前記下的全部內容</div>
+                        </div>
+                        <div class="jrnl-mg-acts">
+                            <button class="jrnl-ornate jrnl-sum-view" type="button">查看</button>
+                            <button class="jrnl-ornate jrnl-ornate-primary jrnl-sum-edit" type="button">編輯</button>
+                        </div>
+                    </div>
+                    <div class="jrnl-mg-row">
+                        <div class="jrnl-mg-txt">
+                            <div class="jrnl-mg-k"><i class="fa-solid fa-mug-saucer"></i>書咖常客</div>
+                            <div class="jrnl-mg-d">書咖舞台的客人會從這一輪的角色裡挑</div>
+                        </div>
+                        <div class="jrnl-mg-acts">
+                            <button class="jrnl-ornate jrnl-pin-npc ${pinned ? 'active' : ''}" type="button"
+                                    data-on-label="取消指定" data-off-label="設為常客">${pinned ? '取消指定' : '設為常客'}</button>
+                        </div>
+                    </div>
+                    <div class="jrnl-mg-row">
+                        <div class="jrnl-mg-txt">
+                            <div class="jrnl-mg-k"><i class="fa-solid fa-screwdriver-wrench"></i>總結與隱藏工具</div>
+                            <div class="jrnl-mg-d">生成／重壓大總結、隱藏樓層，作用於目前開啟的對話</div>
+                        </div>
+                        <div class="jrnl-mg-acts">
+                            <button class="jrnl-ornate jrnl-open-tools" type="button">開啟</button>
+                        </div>
+                    </div>
+                    <div class="jrnl-mg-row jrnl-mg-row-danger">
+                        <div class="jrnl-mg-txt">
+                            <div class="jrnl-mg-k"><i class="fa-solid fa-trash-can"></i>清空這段劇情</div>
+                            <div class="jrnl-mg-d">刪掉這段故事記下的內容，之後無法復原</div>
+                        </div>
+                        <div class="jrnl-mg-acts">
+                            <button class="jrnl-ornate jrnl-ornate-danger jrnl-wipe-story" type="button">清空</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -410,8 +447,7 @@
                     <nav class="jrnl-tabs" aria-label="日誌頁籤">
                         <button class="jrnl-tab active" type="button" data-tab="story"><i class="fa-solid fa-book-open"></i><span>故事回顧</span></button>
                         <button class="jrnl-tab" type="button" data-tab="chars"><i class="fa-solid fa-user"></i><span>人物圖鑑</span></button>
-                        <button class="jrnl-tab" type="button" data-tab="summary"><i class="fa-solid fa-file-lines"></i><span>完整總結</span></button>
-                        <button class="jrnl-tab" type="button" data-tab="tools"><i class="fa-solid fa-screwdriver-wrench"></i><span>故事管理</span></button>
+                        <button class="jrnl-tab" type="button" data-tab="manage"><i class="fa-solid fa-screwdriver-wrench"></i><span>故事管理</span></button>
                     </nav>
                     <aside class="jrnl-left">
                     <div class="jrnl-brand">
@@ -493,7 +529,6 @@
             rightEl.innerHTML = _renderDetail(active);
             _wireDetail(active);
             _hydrateVnImages();
-            try { if (activeTab === 'summary') _loadSummaryPane(); } catch (e) { /* 書籤區還沒初始化(首輪) */ }
         }
 
         // VN 圖片補位：掃 data-bg-key / data-avatar-key，async 查 VN_Cache 覆蓋 background-image
@@ -557,20 +592,33 @@
                 rightEl.querySelectorAll('.jrnl-view-full, .jrnl-sum-view').forEach(b => { b.onclick = _viewFull; });
                 rightEl.querySelectorAll('.jrnl-edit-full, .jrnl-sum-edit').forEach(b => { b.onclick = _editFull; });
             }
-            const wipeBtn = rightEl.querySelector('.jrnl-wipe-story');
-            if (wipeBtn && active) wipeBtn.onclick = () => _openWipeConfirm(active);
+            if (active) rightEl.querySelectorAll('.jrnl-wipe-story').forEach(b => {
+                b.onclick = () => _openWipeConfirm(active);
+            });
+
+            // 🛠️ 總結與隱藏工具：獨立 overlay（作用於目前開啟的對話）
+            rightEl.querySelectorAll('.jrnl-open-tools').forEach(b => {
+                b.onclick = () => {
+                    try { win.OS_STORY_TOOLS?.openPanel ? win.OS_STORY_TOOLS.openPanel(container) : alert('故事管理工具尚未載入'); } catch (e) { }
+                };
+            });
 
             // ☕ 書咖常客 pin：這張卡 → 這一輪；再點取消（回到預設「最新一輪」）
-            const pinBtn = rightEl.querySelector('.jrnl-pin-npc');
-            if (pinBtn && active) pinBtn.onclick = () => {
-                const m = _npcPickMap();
-                const on = m[active.cardName] === active.chatId;
-                if (on) delete m[active.cardName];
-                else m[active.cardName] = active.chatId;
-                _saveNpcPickMap(m);
-                pinBtn.classList.toggle('active', !on);
-                pinBtn.textContent = !on ? '★ 書咖常客來源（點擊取消）' : '☕ 設為書咖常客';
-            };
+            //    手機版在頁尾、書裝版在「故事管理」頁，兩顆都在 DOM 裡 → 一起同步（各自的字面走 data-*-label）
+            const _syncPinBtns = (on) => rightEl.querySelectorAll('.jrnl-pin-npc').forEach(b => {
+                b.classList.toggle('active', on);
+                b.textContent = on ? (b.dataset.onLabel || '') : (b.dataset.offLabel || '');
+            });
+            if (active) rightEl.querySelectorAll('.jrnl-pin-npc').forEach(btn => {
+                btn.onclick = () => {
+                    const m = _npcPickMap();
+                    const on = m[active.cardName] === active.chatId;
+                    if (on) delete m[active.cardName];
+                    else m[active.cardName] = active.chatId;
+                    _saveNpcPickMap(m);
+                    _syncPinBtns(!on);
+                };
+            });
 
             // 角色卡片點擊 → 跳 modal 看完整內容（卡片塞不下全部）
             rightEl.querySelectorAll('.jrnl-char-card').forEach(card => {
@@ -852,58 +900,20 @@
         });
         sortEl.addEventListener('change', _renderList);
 
-        // 🕮 書裝側邊書籤:story/chars/summary 三枚切右頁區塊;tools 開故事管理面板(獨立 overlay)
+        // 🕮 書裝側邊書籤:story/chars/manage 三枚切右頁區塊
         //    切換只掛 class,區塊顯隱交給 CSS(窄屏書籤整列 display:none,原版型全區塊直排不受影響)
         const rootForTabs = container.querySelector('.jrnl-root');
         let activeTab = 'story';
         function _applyTab() {
-            rootForTabs.classList.remove('jrnl-tab-story', 'jrnl-tab-chars', 'jrnl-tab-summary');
+            rootForTabs.classList.remove('jrnl-tab-story', 'jrnl-tab-chars', 'jrnl-tab-manage');
             rootForTabs.classList.add('jrnl-tab-' + activeTab);
             container.querySelectorAll('.jrnl-tab').forEach(b =>
                 b.classList.toggle('active', b.dataset.tab === activeTab));
         }
-        // 總結頁只端「事件表」那一段;全文只在「查看完整總結」彈窗裡看
-        function _extractEvents(content) {
-            const lines = String(content || '').split('\n');
-            const out = []; let inEv = false;
-            for (const raw of lines) {
-                const t = raw.trim();
-                if (/^【[^】]*事件[^】]*】/.test(t)) { inEv = true; out.push(t); continue; }
-                if (inEv && /^【[^】]+】/.test(t)) break;   // 下一個段落標題=事件表結束
-                if (inEv) out.push(raw);
-            }
-            return out.join('\n').trim();
-        }
-        async function _loadSummaryPane() {
-            const body = container.querySelector('.jrnl-sec-summary .jrnl-summary-body');
-            if (!body) return;
-            const active = allStories.find(s => `${s.cardName}|||${s.chatId}` === activeKey);
-            if (!active) { body.textContent = '尚無故事'; return; }
-            if (active._summaryHtml !== undefined) { body.innerHTML = active._summaryHtml; return; }
-            body.textContent = '載入中…';
-            try {
-                const rec = await _readStorySummary(active);
-                if (rec && rec.content) {
-                    const ev = _extractEvents(rec.content);
-                    active._summaryHtml = ev
-                        ? _renderMd(ev)
-                        : '<p style="text-align:center;">這段總結沒有事件表,點下方「查看完整總結」看全文。</p>';
-                } else {
-                    active._summaryHtml = '<p style="text-align:center;">這段劇情還沒有大總結(或已清空)。</p>';
-                }
-            } catch (e) { active._summaryHtml = `<p style="text-align:center;">讀取失敗:${_escape(e.message || e)}</p>`; }
-            body.innerHTML = active._summaryHtml;
-        }
         container.querySelectorAll('.jrnl-tab').forEach(btn => {
             btn.addEventListener('click', () => {
-                const t = btn.dataset.tab;
-                if (t === 'tools') {
-                    try { win.OS_STORY_TOOLS?.openPanel ? win.OS_STORY_TOOLS.openPanel(container) : alert('故事管理工具尚未載入'); } catch (e) { }
-                    return;   // tools 是彈出面板,不改變當前頁籤
-                }
-                activeTab = t;
+                activeTab = btn.dataset.tab;
                 _applyTab();
-                if (t === 'summary') _loadSummaryPane();
             });
         });
         _applyTab();
