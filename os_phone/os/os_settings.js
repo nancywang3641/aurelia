@@ -35,7 +35,16 @@
             usePresetPrompts: false, presetName: '', customCot: '', customCotMap: {}
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
+        _mergeTavernFlags(config);
         config._isSecondary = false;   // 源頭貼標：走主模型連線 → DEBUG 面板歸「主模型」類（全新物件，不共用）
+        return config;
+    }
+
+    // 「跟隨酒館」與「🍎」原本是兩個開關，實際差別只在「沒選連接預設」時送的請求 body：
+    // 🍎 那條是乾淨 body（不送 penalty，gemini/vertex 才不會 404），選了預設時兩條根本一樣。
+    // → 併成一個開關「用酒館的連線」，內部兩個旗標一起走；舊設定只開了跟隨的自動補上 🍎。
+    function _mergeTavernFlags(config) {
+        if (config && config.useSystemApi) config.useGenerateRaw = true;
         return config;
     }
 
@@ -52,6 +61,7 @@
             usePresetPrompts: false, presetName: '', customCot: ''
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
+        _mergeTavernFlags(config);
         config._isSecondary = true;   // 源頭貼標：走副模型連線 → DEBUG 面板歸「副模型」類（全新物件，不共用）
         return config;
     }
@@ -953,20 +963,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-llm" class="api-subview">
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span>🔗 跟隨酒館主系統</span>
+                                <span>🔗 用酒館的連線</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-system-api" ${llmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
+                            <div class="set-desc">關掉就用下面自己填的網址與金鑰。</div>
                             <div id="st-profile-group" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
                                 <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="os-st-profile">${primaryProfileOpts}</select>
                                 <div id="st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72); word-break:break-all; line-height:1.6;"></div>
-                                <div class="set-label" style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;" title="改用酒館 generateRaw 組請求：排除 preset、只送本系統訊息，避開 iOS WebView CORS 與 gemini penalty 404。選了 profile 會連該 profile 的來源。">
-                                    <span>🍎 generateRaw 模式</span>
-                                    <label class="toggle-switch"><input type="checkbox" id="os-use-generateraw" ${llmConfig.useGenerateRaw ? 'checked' : ''}><span class="slider"></span></label>
-                                </div>
-                                <div class="set-desc">iOS 直連失敗時開啟。</div>
-                                <details style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
-                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在所有訊息最前面，只在 🍎 generateRaw 模式生效；PWA／直連／副模型不受影響。">📝 自訂前置指令</summary>
+                                <details style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
+                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在所有訊息最前面；只在用酒館連線時生效，自己填網址那條與副模型不受影響。">📝 自訂前置指令</summary>
                                     <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                                     <div class="set-desc">留空＝不注入。</div>
                                 </details>
@@ -1055,18 +1061,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-sec-llm" class="api-subview" style="display:none;">
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span>🔗 跟隨酒館主系統</span>
+                                <span>🔗 用酒館的連線</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-system-api" ${secLlmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
+                            <div class="set-desc">關掉就用下面自己填的網址與金鑰。</div>
                             <div id="sec-st-profile-group" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
                                 <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="sec-st-profile">${secondaryProfileOpts}</select>
                                 <div id="sec-st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72); word-break:break-all; line-height:1.6;"></div>
-                                <div class="set-label" style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;" title="改用酒館 generateRaw 組請求：排除 preset、只送本系統訊息，避開 iOS WebView CORS 與 gemini penalty 404。選了 profile 會連該 profile 的來源。">
-                                    <span>🍎 generateRaw 模式</span>
-                                    <label class="toggle-switch"><input type="checkbox" id="sec-use-generateraw" ${secLlmConfig.useGenerateRaw ? 'checked' : ''}><span class="slider"></span></label>
-                                </div>
-                                <div class="set-desc">iOS 直連失敗時開啟。</div>
                             </div>
                         </div>
 
@@ -2749,7 +2751,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     presence_penalty: parseFloat(elPresPenalty.value),
                     enableThinking: elEnableThinking ? elEnableThinking.checked : false,
                     thinkingBudget: elThinkingBudget ? parseInt(elThinkingBudget.value) : 8000,
-                    useGenerateRaw: container.querySelector('#os-use-generateraw')?.checked || false,
+                    useGenerateRaw: elSystemApi.checked,   // 兩個旗標併成一個開關：用酒館連線＝走 🍎 那條乾淨 body
                     customCot: (elCustomCot ? elCustomCot.value : ''),
                     customCotMap: (function () { if (elCustomCot) _cotMap[_curCotKey] = elCustomCot.value; return _cotMap; })(),
                     directMode: false, enableStreaming: false, disableTyping: false
@@ -2772,7 +2774,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     top_p: parseFloat(secTopP.value),
                     frequency_penalty: parseFloat(secFreqPenalty.value),
                     presence_penalty: parseFloat(secPresPenalty.value),
-                    useGenerateRaw: container.querySelector('#sec-use-generateraw')?.checked || false,
+                    useGenerateRaw: secSystemApi.checked,   // 同主模型：用酒館連線＝走 🍎 那條
                     customCot: container.querySelector('#sec-custom-cot')?.value || '',
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
