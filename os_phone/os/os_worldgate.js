@@ -2778,12 +2778,9 @@
         const team = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x.t.recruited && !x.t.gone);
         // 名冊＝這個世界召過、還沒被刪掉的每一個人（帶原本的 index，刪除與開身分卡都靠它）
         const roster = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x.t && x.t.name && !x.t.gone);
-        // 有設年齡範圍時，順手算出「不在範圍內」那幾位，給一鍵清掉
-        const _pf = w.travPref || {};
-        const _lo = Number(_pf.ageMin) || 0, _hi = Number(_pf.ageMax) || 0;
-        const offRange = (_lo || _hi)
-            ? roster.filter(x => x.t.age && (x.t.age < (_lo || 1) || x.t.age > (_hi || 120)))
-            : [];
+        // 🚨年齡範圍只是「這一輪要找什麼樣的人」，不是拿來回頭審判池子裡的舊人：
+        //   上一輪用 50 找到的人，下一輪把範圍調成 30 就被標成超齡等著被刪，這不合理。
+        //   要刪誰，用名冊上他自己的 ✕。
         const figs = (st === 2) ? await _slotFigures(w, team.map(x => x.i)) : {};   // 照隊友真正的編號撈立姿
         const tagsHtml = '<div class="wg-tags">' +
             '<span class="wg-tag"><i class="fa-solid fa-wand-magic-sparkles"></i>' + _esc(w.style) + '</span>' +
@@ -2805,7 +2802,7 @@
             _slotsHtml(team) +
             (roster.length
                 ? '<div class="wg-section-head"><span class="wg-section-title">大廳裡的旅人</span>' +
-                    '<span class="wg-section-note">' + roster.length + ' 人' + (offRange.length ? '・' + offRange.length + ' 人超齡' : '') + '</span></div>' +
+                    '<span class="wg-section-note">' + roster.length + ' 人</span></div>' +
                   '<div class="wg-chips">' + roster.map(function (x) {
                       var t = x.t, i = x.i;
                       return '<span class="wg-chip' + (t.recruited ? ' on' : '') + '">' +
@@ -2822,8 +2819,7 @@
               '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
               '<span>歲</span></div>' +
             '<button class="wg-btn ghost" data-act="more-trav"><i class="fa-solid fa-user-plus"></i> ' +
-              ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>' +
-            (offRange.length ? '<button class="wg-btn ghost" data-act="purge-age"><i class="fa-solid fa-user-slash"></i> 刪掉 ' + offRange.length + ' 位超齡的</button>' : '');
+              ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>';
 
         // ── ③ 出發設定：降生地 + 我的身分
         const page3 =
@@ -2888,22 +2884,6 @@
                     _toast(t2.name + ' 已從這個世界刪掉');
                     _renderDetail(w, 2);
                 });
-            });
-            // 一鍵清掉不在年齡範圍的
-            let _purgeArm = 0;
-            b.querySelector('[data-act="purge-age"]')?.addEventListener('click', async (ev) => {
-                if (!_purgeArm) {
-                    _purgeArm = 1;
-                    ev.currentTarget.innerHTML = '<i class="fa-solid fa-user-slash"></i> 再按一次確認刪掉這 ' + offRange.length + ' 位';
-                    return;
-                }
-                let hadTeam = false;
-                offRange.forEach(x => { w.travelers[x.i].gone = true; if (w.travelers[x.i].recruited) hadTeam = true; });
-                await _saveWorld(w);
-                if (hadTeam && w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
-                _spawnTravelers(w, true);
-                _toast('已刪掉 ' + offRange.length + ' 位不在年齡範圍的旅人');
-                _renderDetail(w, 2);
             });
             // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
             //   世界檔案與旅人本來就是分兩次生的（旅人那次掛掉時世界照樣存下來），所以這顆同時也是
