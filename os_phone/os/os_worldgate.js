@@ -2650,9 +2650,15 @@
             return src ? { src: src, sheet: sk.kind === 'sheet' } : null;
         } catch (e) { return null; }
     }
-    async function _slotFigures(w) {
+    // 🚨要哪幾個編號就撈哪幾個。舊寫法固定撈 0~3，那是「池子只有四個人」時代的假設：
+    //   現在旅人可以一直加召，隊友的編號很容易是第 5、第 12 個 → 撈不到皮膚，
+    //   編成槽的立姿就整排空白（大廳卻看得到，因為大廳是照真編號取的）。
+    async function _slotFigures(w, idxs) {
         const out = {};
-        for (let i = 0; i < MAX_TRAVELER_SPAWN; i++) {
+        const list = (Array.isArray(idxs) && idxs.length)
+            ? idxs
+            : (w.travelers || []).map((t, i) => i).slice(0, MAX_TRAVELER_SPAWN);
+        for (const i of list) {
             const f = await _figureOf(w.id, i);
             if (f) out[i] = f;
         }
@@ -2778,7 +2784,7 @@
         const offRange = (_lo || _hi)
             ? roster.filter(x => x.t.age && (x.t.age < (_lo || 1) || x.t.age > (_hi || 120)))
             : [];
-        const figs = (st === 2) ? await _slotFigures(w) : {};
+        const figs = (st === 2) ? await _slotFigures(w, team.map(x => x.i)) : {};   // 照隊友真正的編號撈立姿
         const tagsHtml = '<div class="wg-tags">' +
             '<span class="wg-tag"><i class="fa-solid fa-wand-magic-sparkles"></i>' + _esc(w.style) + '</span>' +
             '<span class="wg-tag lure"><i class="fa-solid fa-gem"></i>' + _esc(w.lure) + '</span>' +
