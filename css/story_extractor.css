@@ -2,19 +2,20 @@
 
 /* ============================================================
    藏書 Reader（踏入故事）
-   亮版 = 精緻電子書（暖白紙感 / 襯線）
+   亮版 = 白金視差（冷白理石 / 深藍 / 金點綴,與入場精靈同一套 DNA）
    暗版 = 黑金模式（深藍燙金 / 描邊框 / 金色標題）
-   參考 GPT 模板 #3（亮）與 #5（暗）；功能性結構不動，只重塑視覺。
+   功能性結構不動，只重塑視覺。
    ============================================================ */
 
 :root {
-    /* 亮版 — 暖白紙 */
-    --se-paper:        #f6f3ea;
-    --se-paper-card:   #fffdf7;
-    --se-ink:          #2c261d;
-    --se-ink-soft:     rgba(44,38,29,0.62);
-    --se-line:         rgba(44,38,29,0.12);
-    --se-accent:       #b08a3e;     /* 亮版點綴金（沉穩）*/
+    /* 亮版 — 白金視差（對齊 story_entry_wizard 的配色）*/
+    --se-paper:        #eef1f7;
+    --se-paper-card:   #fdfdfc;
+    --se-ink:          #1f3a68;
+    --se-ink-soft:     rgba(31,58,104,0.62);
+    --se-line:         rgba(42,74,128,0.22);
+    --se-navy-acc:     #2a4a80;     /* 亮版主色深藍 */
+    --se-accent:       #b9924f;     /* 亮版點綴金 */
     /* 暗版 — 深藍燙金 */
     --se-navy-0:       #0a1024;
     --se-navy-1:       #111a38;
@@ -30,7 +31,7 @@
 /* === 發消息後的等待室（故事撰寫中 → 圖片繪製中 → 進入劇情）=== */
 #se-flow-overlay {
     position: absolute; inset: 0; z-index: 60;
-    background: rgba(246,243,234,0.96);
+    background: rgba(238,241,247,0.96);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
 }
 .theme-darkgold #se-flow-overlay {
@@ -38,7 +39,7 @@
 }
 #se-flow-spin {
     width: 34px; height: 34px; border-radius: 50%;
-    border: 3px solid rgba(44,38,29,0.15); border-top-color: var(--se-accent);
+    border: 3px solid rgba(42,74,128,0.15); border-top-color: var(--se-navy-acc);
     animation: se-flow-rot 1s linear infinite;
 }
 .theme-darkgold #se-flow-spin { border-color: rgba(212,175,55,0.2); border-top-color: var(--se-gold); }
@@ -49,14 +50,14 @@
 @keyframes se-flow-rot { to { transform: rotate(360deg); } }
 
 /* ============================================================
-   亮版（默認）：精緻電子書
+   亮版（默認）：白金視差
    ============================================================ */
 #se-root-wrapper {
     width: 100%; height: 100%; display: flex; flex-direction: column;
     position: relative; overflow: hidden; box-sizing: border-box;
     color: var(--se-ink);
     background:
-        radial-gradient(circle at 50% -10%, #fbf9f2 0%, var(--se-paper) 55%, #efe9dc 100%);
+        radial-gradient(circle at 50% -10%, #ffffff 0%, var(--se-paper) 55%, #e3e9f4 100%);
 }
 
 /* Header — 對齊「系統設置」：左返回鍵 + 絕對置中標題 + 右控制；淨色橫條、只留底線無陰影 */
@@ -64,19 +65,28 @@
     position: relative;
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 16px;
-    background: rgba(251,249,242,0.92);
+    background: rgba(253,253,252,0.92);
     border-bottom: 1px solid var(--se-line);
     flex-shrink: 0;
+}
+/* 標題兩側翼線收尾金菱（呼應入場精靈的標題列）*/
+#se-toolbar::after {
+    content: '';
+    position: absolute; left: 50%; bottom: -3.5px;
+    width: 6px; height: 6px;
+    background: var(--se-accent);
+    transform: translateX(-50%) rotate(45deg);
+    pointer-events: none;
 }
 .se-back-btn {
     position: relative; z-index: 2;
     border: none; background: transparent; cursor: pointer; padding: 0;
-    font-size: 26px; line-height: 1; color: var(--se-ink-soft);
+    font-size: 18px; line-height: 1; color: var(--se-ink-soft);
     width: 34px; height: 34px; border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
     transition: all 0.2s ease;
 }
-.se-back-btn:hover { background: rgba(44,38,29,0.08); color: var(--se-ink); }
+.se-back-btn:hover { background: rgba(42,74,128,0.08); color: var(--se-ink); }
 .se-title {
     position: absolute; left: 0; right: 0; z-index: 1;
     text-align: center; pointer-events: none;
@@ -86,11 +96,11 @@
 .se-controls { position: relative; z-index: 2; display: flex; gap: 4px; }
 .se-icon-btn {
     border: none; background: transparent; cursor: pointer;
-    font-size: 16px; color: var(--se-ink-soft); transition: all 0.2s ease;
+    font-size: 15px; color: var(--se-ink-soft); transition: all 0.2s ease;
     width: 34px; height: 34px; border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
 }
-.se-icon-btn:hover { color: var(--se-ink); background: rgba(176,138,62,0.12); }
+.se-icon-btn:hover { color: var(--se-navy-acc); background: rgba(42,74,128,0.10); }
 
 #se-content-area {
     flex: 1; position: relative; width: 100%;
@@ -99,15 +109,15 @@
     padding: 22px 20px 28px; box-sizing: border-box;
 }
 
-/* 純文字容器：精緻紙卡 */
+/* 純文字容器：白理石紙卡（細藍框,同入場精靈選卡 DNA）*/
 #se-root-wrapper .native-render-wrapper {
     color: var(--se-ink); display: flow-root; width: 100%;
     max-width: 720px; margin: 0 auto 18px;
     background: var(--se-paper-card);
-    border: 1px solid var(--se-line);
-    border-radius: 10px;
+    border: 1px solid rgba(42,74,128,0.35);
+    border-radius: 8px;
     padding: 26px 30px;
-    box-shadow: 0 1px 2px rgba(44,38,29,0.05), 0 10px 28px -18px rgba(44,38,29,0.45);
+    box-shadow: 0 1px 2px rgba(42,74,128,0.05), 0 10px 28px -18px rgba(31,58,104,0.45);
     font-family: var(--se-serif);
     font-size: calc(var(--mainFontSize, 16px) + 3px);
     line-height: 1.9;
@@ -236,7 +246,7 @@
    ============================================================ */
 #se-root-wrapper #se-input-area {
     flex-shrink: 0; width: 100%;
-    background: rgba(251,249,242,0.86);
+    background: rgba(253,253,252,0.88);
     border-top: 1px solid var(--se-line);
     z-index: 10; min-height: 50px; box-sizing: border-box;
 }
@@ -262,8 +272,8 @@
 #se-root-wrapper #se-input-area #send_textarea:focus,
 #se-root-wrapper #se-input-area textarea:focus {
     background: #fff !important;
-    border-color: var(--se-accent) !important;
-    box-shadow: 0 0 0 2px rgba(176,138,62,0.14) !important;
+    border-color: var(--se-navy-acc) !important;
+    box-shadow: 0 0 0 2px rgba(42,74,128,0.16) !important;
     outline: none !important;
 }
 #se-root-wrapper #se-input-area #form_sheld > div,
@@ -292,13 +302,13 @@
 }
 #se-root-wrapper #se-input-area #send_but,
 #se-root-wrapper #se-input-area .send_but {
-    background: rgba(176,138,62,0.12) !important;
-    border: 1px solid rgba(176,138,62,0.30) !important;
+    background: rgba(42,74,128,0.08) !important;
+    border: 1px solid rgba(42,74,128,0.30) !important;
     border-radius: 8px !important;
 }
 #se-root-wrapper #se-input-area #send_but:hover,
 #se-root-wrapper #se-input-area .send_but:hover {
-    background: var(--se-accent) !important; color: #fff !important;
+    background: var(--se-navy-acc) !important; color: #fff !important;
 }
 #se-root-wrapper #se-input-area #send_but:hover i,
 #se-root-wrapper #se-input-area .send_but:hover i { color: #fff !important; fill: #fff !important; }
@@ -371,7 +381,7 @@
     cursor: pointer;
     transition: all 0.2s ease;
 }
-.se-swipe-btn:hover:not(:disabled) { color: var(--se-ink); background: rgba(176,138,62,0.12); }
+.se-swipe-btn:hover:not(:disabled) { color: var(--se-navy-acc); background: rgba(42,74,128,0.10); }
 .se-swipe-btn:disabled { opacity: 0.3; cursor: default; }
 .theme-darkgold #se-swipe-bar { border-bottom-color: var(--se-gold-line); }
 .theme-darkgold #se-swipe-label { color: var(--se-gold-soft); }
@@ -405,9 +415,9 @@
     transition: all 0.2s ease;
 }
 .se-mode-chip.active {
-    background: var(--se-accent);
-    border-color: var(--se-accent);
-    color: #fffdf6;
+    background: var(--se-navy-acc);
+    border-color: var(--se-navy-acc);
+    color: #f4efe3;
     font-weight: 700;
 }
 .theme-darkgold #se-mode-bar { border-bottom-color: var(--se-gold-line); }
