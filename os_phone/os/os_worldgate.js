@@ -453,11 +453,28 @@
             return { name: name.slice(0, 12), dir, note: String(p[2] || '').slice(0, 24) };
         }).filter(Boolean).slice(0, 4);
     }
-    async function _expandTravelers(seed, worldText, note) {
+    // 召集偏好：她這一趟想要什麼樣的旅人（自由描述）＋年齡範圍。
+    //   🚨年齡一定要用「數字欄位」管:以前年齡只藏在 sprite 的英文關鍵詞裡,程式看不見也擋不住,
+    //     加上下面那條「年齡層要明顯拉開」的配額,就會骰出 70/80 歲的隊友(她實測常中)。
+    function _prefLines(pref) {
+        const p = pref || {};
+        const wish = String(p.note || '').trim();
+        const lo = Number(p.ageMin) || 0, hi = Number(p.ageMax) || 0;
+        let s = '';
+        if (wish) s += '【這一趟想找的人】' + wish + '——在不違反下面配額的前提下盡量照這個方向找。\n';
+        if (lo || hi) {
+            const a = lo || 1, b = hi || 120;
+            s += '【年齡硬性範圍】四位旅人的 age 都必須落在 ' + a + '~' + b + ' 歲之間(含兩端)。' +
+                 '這條優先於「年齡層拉開」那項配額:範圍內還是要有差距,但不准有人超出這個範圍。\n';
+        }
+        return s;
+    }
+    async function _expandTravelers(seed, worldText, note, pref) {
         const prompt =
             '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
             _toneLine(seed) +   // 喜劇向的世界配四段悲愴身世會很出戲
             _noteLine(note) +
+            _prefLines(pref) +
             '他們是視差玩家(來自奧瑞亞的普通人),不是這個世界的原住民;世界檔案第九節的核心人物不算在內,不可重複。性格差異明顯。\n' +
             // 🚨這四個人是各自報名、在大廳湊在一起的陌生人,不是一支照著世界主題配好的專業小隊。
             //   沒有下面這組配額的話,模型會讓四個人的職業全部咬合這個世界的題材(藝術世界配四個藝術從業者),
@@ -467,7 +484,7 @@
             '- 至少兩人的職業不需要專業訓練或學歷。\n' +
             '- 至少一人來這裡沒有正當理由,動機講出來顯得沒什麼份量,他就只是想來。\n' +
             '只回傳純 JSON:\n' +
-            '{"travelers":[{"name":"{旅人名}","job":"{職業,不超過6字,普通人在做的工作}","persona":"{一句話性格}","origin":"{一句話來歷}",' +
+            '{"travelers":[{"name":"{旅人名}","age":{數字年齡},"job":"{職業,不超過6字,普通人在做的工作}","persona":"{一句話性格}","origin":"{一句話來歷}",' +
             '"skill":"{一句話擅長,可以是專業本事,也可以只是生活裡練出來的小能力}","look":"{一句話外貌印象}","record":"{一句話視差資歷}",' +
             '"reason":"{一句話前往此世界的動機,份量可輕可重}",' +
             '"fit":"{他跟這個世界的關係,一句:可以正好對上,也可以完全不搭、甚至是會出事的錯位}","weakness":"{明確的弱點,一句,要能在跑團裡出事}","goal":"{他自己的個人目標,一句}",' +
@@ -480,7 +497,7 @@
             // 🚨sprite 的年齡不寫清楚就會吐 age 32 這種數字:生圖模型看不懂數字,只會把它當雜訊,
             //   年紀完全畫不出來(實機回報)。這裡只描述「要什麼性質」,不列年齡層清單——列了四個檔位
             //   模型會拿它當題庫輪流填,四個旅人的年齡就被那份清單決定了。
-            '【sprite 的年齡】年齡要寫成生圖模型看得懂的英文年齡說法,不准出現數字、也不准出現 age 這個字。四十歲以上還要再補一個看得見的老化特徵,不然畫出來一律是年輕臉。\n' +
+            '【sprite 的年齡】sprite 裡的年齡要寫成生圖模型看得懂的英文年齡說法(跟上面 age 那個數字對得上),不准出現數字、也不准出現 age 這個字。四十歲以上還要再補一個看得見的老化特徵,不然畫出來一律是年輕臉。\n' +
             '每位旅人 quiz 固定 3 題、每題 options 固定 3 個且恰好 1 個 good=true;good 選項不是討好或客套話,而是最對上這個人性格與在意之處的回應,要靠理解他才選得中,錯誤選項也要看起來合理。\n' +
             // 🚨只餵前段:旅人要的是世界長怎樣、社會怎麼運作,用不到正史/核心人物/事件鉤子。
             //   整份塞回去會讓這支的輸入暴增(實測破萬字),輸出額度被擠掉 → JSON 被截斷 → 召集失敗。
@@ -527,7 +544,9 @@
     }
     function _normTravelers(arr) {
         return (Array.isArray(arr) ? arr : []).slice(0, 4).map(t => ({
-            name: String(t.name || '無名旅人'), job: String(t.job || '旅人'),
+            name: String(t.name || '無名旅人'),
+            age: (function () { const n = parseInt(t.age, 10); return (isFinite(n) && n > 0 && n < 130) ? n : 0; })(),   // 0=舊世界或它沒填
+            job: String(t.job || '旅人'),
             persona: String(t.persona || ''), origin: String(t.origin || ''), skill: String(t.skill || ''),
             look: String(t.look || ''), record: String(t.record || ''), reason: String(t.reason || ''),
             fit: String(t.fit || ''), weakness: String(t.weakness || ''), goal: String(t.goal || ''),
@@ -1122,14 +1141,17 @@
             '定位:' + t.job + '。性格:' + t.persona + '。來歷:' + t.origin + '。擅長:' + t.skill + '。' +
             '你正打算前往世界「' + worldName + '」,在大廳物色隊友;聊得投機可以表達願意同行。輕鬆對話為主,不推進正式劇情。';
     }
-    // 大廳一次只站得下 MAX 個人,但旅人池會愈召愈多 → 挑「還沒入隊的、新的先站」。
-    //   已入隊的排最後(有空位才出現):她要的是去搭話認識新面孔,不是看隊友站在那。
-    //   🚨帶著原本的 index 一起走:NPC key、立姿皮膚、入隊寫回都是靠 index 認人的。
+    // 🚨大廳站幾個人 ≠ 隊伍幾個位子。這兩件事本來被同一個 MAX_TRAVELER_SPAWN(4) 綁在一起,
+    //   結果再召集之後,先前的候選被擠出大廳＝她再也搭不到話,等於一批人變成孤兒資料(她實測罵爆)。
+    //   隊伍還是 4 格,但大廳一律把「所有還沒入隊的」都放出來(HALL_CAP 只是站位擠爆的保險),
+    //   已入隊的排在後面(還想找隊友聊天時也找得到)。資料本身從頭到尾只有 w.travelers 一份,
+    //   再召集是 concat,沒有任何一行會覆蓋或另存。
+    const HALL_CAP = 12;
     function _travSpawnList(w) {
         const all = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x && x.t && x.t.name);
-        const fresh = all.filter(x => !x.t.recruited).reverse();   // 後面召集的排前面
+        const fresh = all.filter(x => !x.t.recruited).reverse();   // 後面召集的排前面(先看到新面孔)
         const joined = all.filter(x => x.t.recruited);
-        return fresh.concat(joined).slice(0, MAX_TRAVELER_SPAWN);
+        return fresh.concat(joined).slice(0, HALL_CAP);
     }
     // force=true：名單真的變了（再召集一批／有人離隊）→ 一定要重新上線，
     //   不然下面那道「同世界不重刷」的守衛會擋住，新召來的人永遠站不出來（她實測到的）。
@@ -1141,7 +1163,14 @@
         _travWorldId = w.id;
         const alice = b.S.npcs.find(n => n.key === 'alice');
         const ax = alice ? alice.x : 1000, ay = alice ? alice.y : 400;
-        const Z = { x: Math.max(60, ax - 620), y: ay + 150, w: 640, h: 280 };   // 愛麗絲前方偏左的開闊區,rollSpot 會避開家具
+        // 人多就把區域攤開、彼此的最小間距放寬一點,不然十幾個人會疊在同一塊
+        const _n = _travSpawnList(w).length;
+        const Z = {
+            x: Math.max(60, ax - 620), y: ay + 150,
+            w: 640 + Math.max(0, _n - 4) * 80,
+            h: 280 + Math.max(0, _n - 6) * 45,
+        };   // 愛麗絲前方偏左的開闊區,rollSpot 會避開家具
+        const _gap = _n > 8 ? 90 : 120;
         const taken = [];
         const rollSpot = () => {
             let best = null, bestScore = -1;
@@ -1150,7 +1179,7 @@
                 try { if (b.blocked && b.blocked(x, y)) continue; } catch (e) {}
                 let score = 0.5;
                 try { if (b.whiteRatio) score = b.whiteRatio(x, y, 70); } catch (e) {}
-                if (taken.some(p => Math.hypot(p.x - x, p.y - y) < 120)) score -= 0.5;
+                if (taken.some(p => Math.hypot(p.x - x, p.y - y) < _gap)) score -= 0.5;
                 if (score > bestScore) { bestScore = score; best = { x, y }; }
             }
             const p = best || { x: Z.x + Z.w / 2, y: Z.y + Z.h / 2 };
@@ -1404,7 +1433,7 @@
     }
     function _profRows(t) {
         const row = (k, v) => v ? '<div class="wg-prof-row"><span>' + k + '</span><b>' + _esc(v) + '</b></div>' : '';
-        return row('定位', t.job) + row('外貌', t.look) + row('性格', t.persona) +
+        return row('年齡', t.age ? (t.age + ' 歲') : '') + row('定位', t.job) + row('外貌', t.look) + row('性格', t.persona) +
             row('來歷', t.origin) + row('資歷', t.record) + row('擅長', t.skill) + row('動機', t.reason) +
             row('目標', t.goal) + row('對這個世界', t.fit) + row('弱點', t.weakness);
     }
@@ -2091,8 +2120,18 @@
             '.wg-btn.ghost{background:rgba(255,255,255,.6);color:#3a3e56;border:1px solid rgba(26,28,40,.18);box-shadow:none;}' +
             '.wg-btn.danger{background:rgba(180,80,60,.1);color:#a05040;border:1px solid rgba(180,80,60,.3);box-shadow:none;}' +
             '.wg-btn-row{display:flex;gap:7px;}.wg-btn-row .wg-btn{flex:1;}' +
-            // 再召集一批：鈕下面補一行現況，才知道池子裡還有幾個人在大廳等
+            // 再召集一批：偏好兩行 + 鈕 + 一行現況
             '.wg-trav-more{margin-top:2px;}.wg-trav-more .wg-section-note{text-align:center;margin-top:5px;}' +
+            '.wg-age-row{display:flex;align-items:center;gap:6px;margin-top:6px;color:#6b7089;font-size:11px;}' +
+            '.wg-input.age{width:64px;text-align:center;padding:6px 4px;}' +
+            // 旅人名冊：召過的人全在這裡，點名字開身分卡
+            '.wg-roster{padding:2px 0;}' +
+            '.wg-roster-row{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px dashed rgba(26,28,40,.10);}' +
+            '.wg-roster-row:last-child{border-bottom:none;}.wg-roster-row:hover{background:rgba(26,28,40,.04);}' +
+            '.wg-roster-n{font-weight:700;color:#3a3e56;font-size:12px;}.wg-roster-n i{font-style:normal;color:#8a8ea6;font-size:10px;margin-left:4px;}' +
+            '.wg-roster-j{flex:1;color:#8a8ea6;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+            '.wg-roster-s{font-size:10px;color:#8a8ea6;border:1px solid rgba(26,28,40,.15);border-radius:6px;padding:1px 6px;}' +
+            '.wg-roster-s.on{color:#3a6b4a;border-color:rgba(60,140,90,.35);background:rgba(60,140,90,.08);}' +
             // 管理模式下卡片底部的維護區：一行一個對象，左邊標名字、右邊短鈕
             '.wg-card-ops{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,28,40,.12);}' +
             '.wg-ops-row{display:flex;align-items:center;gap:5px;}.wg-ops-row+.wg-ops-row{margin-top:5px;}' +
@@ -2725,10 +2764,28 @@
             // 召旅人＝往池子裡加人，不換掉任何人（她的用法是「有時候看看能抽到什麼」）。
             //   大廳一次站 MAX 個，新召的排前面 → 按完進大廳就是四張新面孔。
             '<div class="wg-trav-more">' +
+              '<input class="wg-input" data-wg-travnote maxlength="80" placeholder="想找什麼樣的旅人（可留空）" value="' + _esc((w.travPref && w.travPref.note) || '') + '">' +
+              '<div class="wg-age-row"><span>年齡</span>' +
+                '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((w.travPref && w.travPref.ageMin) || '') + '">' +
+                '<span>～</span>' +
+                '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
+                '<span>歲</span></div>' +
               '<button class="wg-btn ghost" data-act="more-trav"><i class="fa-solid fa-user-plus"></i> ' +
               ((w.travelers || []).length ? '再召集一批旅人' : '召集旅人') + '</button>' +
               '<div class="wg-section-note">目前候選 ' + ((w.travelers || []).filter(t => t && !t.recruited).length) + ' 人，在大廳等你搭話</div>' +
             '</div>' +
+            // 🚨旅人名冊：召過的人一個都不會消失，全部列在這裡（點得開身分卡）。
+            //   沒有這張清單的話，被擠出大廳的人看起來就像「被覆蓋掉」——資料還在，只是看不到。
+            ((w.travelers || []).length
+                ? '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-address-book"></i> 旅人名冊</span>' +
+                    '<span class="wg-section-note">共 ' + w.travelers.length + ' 人</span></div>' +
+                  '<div class="wg-card wg-roster">' + (w.travelers || []).map((t, i) =>
+                    '<div class="wg-roster-row" data-prof="' + i + '">' +
+                      '<span class="wg-roster-n">' + _esc(t.name) + (t.age ? '<i>' + t.age + '</i>' : '') + '</span>' +
+                      '<span class="wg-roster-j">' + _esc(t.job || '') + '</span>' +
+                      '<span class="wg-roster-s' + (t.recruited ? ' on' : '') + '">' + (t.recruited ? '已入隊' : '大廳') + '</span>' +
+                    '</div>').join('') + '</div>'
+                : '') +
             // 面板是後來才加的功能:舊世界一律沒有,這裡補一顆給它們;已經有的話這顆就是「換一個樣子」
             _spawnHtml(w, entryText) +
             // 🎭 玩家在這個世界要當什麼。不做選單:每個世界的職業與種族體系都不一樣,
@@ -2745,6 +2802,9 @@
             '</div>';
         b.querySelectorAll('.wg-slot.on').forEach(el => el.addEventListener('click', () => {
             _renderProfilePage(w, Number(el.dataset.i));   // 面板內第二層頁,不彈modal
+        }));
+        b.querySelectorAll('[data-prof]').forEach(el => el.addEventListener('click', () => {
+            _renderProfilePage(w, Number(el.dataset.prof));   // 名冊點誰都看得到身分卡
         }));
         // 空槽不放說明文字(身分卡在偶遇窗裡已經有一份)——點下去才講怎麼補人
         b.querySelectorAll('.wg-slot.empty').forEach(el => el.addEventListener('click', () => {
@@ -2777,22 +2837,46 @@
         //   「一個旅人都沒有」時的補救按鈕，不必另外做一顆。
         b.querySelector('[data-act="more-trav"]')?.addEventListener('click', async () => {
             if (_busy) return;
+            // 偏好在按下去這刻收（她可能填完直接按，沒有離開輸入框的動作）＋存起來，下次打開還在
+            const _clampAge = (v) => { const n = parseInt(v, 10); return (isFinite(n) && n > 0 && n < 130) ? n : 0; };
+            let pref = {
+                note: (b.querySelector('[data-wg-travnote]')?.value || '').trim().slice(0, 80),
+                ageMin: _clampAge(b.querySelector('[data-wg-agemin]')?.value),
+                ageMax: _clampAge(b.querySelector('[data-wg-agemax]')?.value),
+            };
+            if (pref.ageMin && pref.ageMax && pref.ageMin > pref.ageMax) {   // 填反了就自己轉回來
+                const t0 = pref.ageMin; pref.ageMin = pref.ageMax; pref.ageMax = t0;
+            }
+            w.travPref = pref;
+            await _saveWorld(w);
             _busy = true;
             _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
             const trav = await _expandTravelers(
                 { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept, twist: w.twist },
                 w.entryText || entryText || w.concept || w.name,
-                w.note || '');   // 當初展開時的追加要求要跟著帶,不然新召的旅人會跟這個世界對不上
+                w.note || '',   // 當初展開時的追加要求要跟著帶,不然新召的旅人會跟這個世界對不上
+                pref);
             _busy = false;
             if (!trav.length) { _toast('旅人召集失敗,請再試一次'); _renderDetail(w); return; }
             // 同名的不重複收（它偶爾會再抽到上一批的人）
             const had = new Set((w.travelers || []).map(t => String(t && t.name || '').trim()));
-            const add = _normTravelers(trav).filter(t => t && t.name && !had.has(String(t.name).trim()));
+            let add = _normTravelers(trav).filter(t => t && t.name && !had.has(String(t.name).trim()));
+            // 年齡把關：規則寫了它還是可能超線 → 程式再擋一次。
+            //   🚨但不能擋到一個都不剩(那趟 API 就白燒了)：整批都超線時全部收下並講一聲，讓她自己決定要不要理。
+            let dropped = 0;
+            if (pref.ageMin || pref.ageMax) {
+                const lo = pref.ageMin || 1, hi = pref.ageMax || 120;
+                const fit = add.filter(t => !t.age || (t.age >= lo && t.age <= hi));   // age=0(它沒填)不擋
+                if (fit.length) { dropped = add.length - fit.length; add = fit; }
+                else dropped = -1;   // 整批都超線
+            }
             if (!add.length) { _toast('這批召來的都是已經在的人,再試一次'); _renderDetail(w); return; }
             w.travelers = (w.travelers || []).concat(add);
             await _saveWorld(w);
             _spawnTravelers(w, true);   // 名單變了 → 立刻換一批人站上大廳(不 force 會被「同世界不重刷」擋掉)
-            _toast('又來了 ' + add.length + ' 位旅人,去大廳跟他們搭話');
+            _toast('又來了 ' + add.length + ' 位旅人,去大廳跟他們搭話' +
+                (dropped > 0 ? '（' + dropped + ' 位年齡不合已略過）' : '') +
+                (dropped < 0 ? '（這批年齡都不在範圍內,還是先收下了）' : ''));
             _renderDetail(w);
         });
         _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
