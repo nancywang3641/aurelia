@@ -639,11 +639,11 @@
     pointer-events: none;
 }
 .jrnl-desk .jrnl-topbar-brand {
-    color: #506789; font-size: 1.72cqw; font-weight: 700; letter-spacing: 0.15cqw;
+    color: #506789; font-size: max(24px, 1.72cqw); font-weight: 700; letter-spacing: 0.15cqw;
     text-shadow: 0 0.08cqw 0.15cqw rgba(255,255,255,0.9);
 }
 .jrnl-desk .jrnl-topbar-en {
-    color: #8795aa; font-size: 0.62cqw; letter-spacing: 0.23cqw; font-family: Georgia, serif;
+    color: #8795aa; font-size: max(12.5px, 0.62cqw); letter-spacing: 0.23cqw; font-family: Georgia, serif;
 }
 .jrnl-desk .jrnl-topbar-desk::after {
     content: ''; flex: 1; height: 1px; align-self: center;
@@ -652,7 +652,7 @@
 .jrnl-desk .jrnl-close {
     top: 1.8%; right: 1.8%;
     background: transparent; border: none;
-    color: #536988; font-size: 1.5cqw;
+    color: #536988; font-size: max(21px, 1.5cqw);
 }
 .jrnl-desk .jrnl-close:hover { color: #a8434f; }
 
@@ -691,7 +691,7 @@
     content: '目 錄';
     display: block; flex-shrink: 0;
     text-align: center;
-    color: #936d5e; font-size: 1.9cqw; font-weight: 600; letter-spacing: 0.32cqw;
+    color: #936d5e; font-size: max(24px, 1.9cqw); font-weight: 600; letter-spacing: 0.32cqw;
     padding: 0.4cqw 0 0.5cqw;
 }
 .jrnl-desk .jrnl-search {
@@ -699,7 +699,7 @@
     background: rgba(255,253,247,0.56);
     border: 1px solid rgba(205,171,138,0.31);
     border-radius: 0.72cqw;
-    font-size: 0.72cqw; padding: 0.5cqw 0.95cqw;
+    font-size: max(13px, 0.72cqw); padding: 0.5cqw 0.95cqw;
     color: #6a6059;
     box-shadow: inset 0 0.06cqw 0.16cqw rgba(133,97,65,0.08);
 }
@@ -707,7 +707,7 @@
 .jrnl-desk .jrnl-toolbar { justify-content: center; }
 .jrnl-desk .jrnl-sort {
     flex: 0 0 auto; width: 40%;
-    font-size: 0.66cqw; padding: 0.3cqw 1.6cqw 0.3cqw 0.7cqw;
+    font-size: max(12.5px, 0.66cqw); padding: 0.3cqw 1.6cqw 0.3cqw 0.7cqw;
     background: rgba(255,253,247,0.5) !important;
     border-color: rgba(205,171,138,0.31) !important;
     color: #8a7362 !important;
@@ -750,18 +750,18 @@
 .jrnl-desk .jrnl-card-num {
     position: static; width: auto; height: auto; line-height: 1;
     background: none; border-radius: 0;
-    font-size: 1.5cqw; color: #7d6a58; font-style: normal;
+    font-size: max(21px, 1.5cqw); color: #7d6a58; font-style: normal;
     font-family: Georgia, serif;
 }
 .jrnl-desk .jrnl-card.active .jrnl-card-num { color: #a8434f; }
 .jrnl-desk .jrnl-card-img { width: 3.2cqw; height: 3.2cqw; border-radius: 0.35cqw; border-color: rgba(205,171,138,0.4); }
-.jrnl-desk .jrnl-card-title { font-size: 0.95cqw; color: #574a3e; letter-spacing: 0.06cqw; }
+.jrnl-desk .jrnl-card-title { font-size: max(15px, 0.95cqw); color: #574a3e; letter-spacing: 0.06cqw; }
 .jrnl-desk .jrnl-card.active .jrnl-card-title { color: #a8434f; }
 .jrnl-desk .jrnl-card-badge { display: none; }
-.jrnl-desk .jrnl-card-sub { font-size: 0.6cqw; color: #9a8678; }
+.jrnl-desk .jrnl-card-sub { font-size: max(12px, 0.6cqw); color: #9a8678; }
 .jrnl-desk .jrnl-card-brief { display: none; }
-.jrnl-desk .jrnl-card-meta { font-size: 0.58cqw; color: #a08d7a; gap: 0.8cqw; }
-.jrnl-desk .jrnl-empty-txt { font-size: 0.8cqw; }
+.jrnl-desk .jrnl-card-meta { font-size: max(12px, 0.58cqw); color: #a08d7a; gap: 0.8cqw; }
+.jrnl-desk .jrnl-empty-txt { font-size: max(14px, 0.8cqw); }
 
 /* ── 右頁:卷宗 ── */
 .jrnl-desk .jrnl-right {
@@ -786,13 +786,13 @@
 .jrnl-desk .jrnl-d-title::before {
     content: 'STORY ARCHIVE';
     display: block;
-    font-size: 0.55cqw; letter-spacing: 0.3cqw; color: #b08e6a;
+    font-size: max(12px, 0.55cqw); letter-spacing: 0.3cqw; color: #b08e6a;
     font-family: Georgia, serif; margin-bottom: 0.4cqw;
 }
-.jrnl-desk .jrnl-d-title { font-size: 1.9cqw; color: #3f4c66; letter-spacing: 0.2cqw; margin: 0 0 0.3cqw; }
-.jrnl-desk .jrnl-d-sub { font-size: 0.72cqw; color: #8a7362; }
+.jrnl-desk .jrnl-d-title { font-size: max(24px, 1.9cqw); color: #3f4c66; letter-spacing: 0.2cqw; margin: 0 0 0.3cqw; }
+.jrnl-desk .jrnl-d-sub { font-size: max(13px, 0.72cqw); color: #8a7362; }
 .jrnl-desk .jrnl-d-tags { justify-content: center; gap: 0.5cqw; margin-top: 0.5cqw; }
-.jrnl-desk .jrnl-d-tags > span { font-size: 0.6cqw; padding: 0.15cqw 0.7cqw; border-radius: 0.5cqw; }
+.jrnl-desk .jrnl-d-tags > span { font-size: max(12px, 0.6cqw); padding: 0.15cqw 0.7cqw; border-radius: 0.5cqw; }
 .jrnl-desk .jrnl-volume {
     display: block;
     width: 72%; margin: 0.7cqw auto;
@@ -801,14 +801,14 @@
     background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/volume-frame.webp') center / 100% 100% no-repeat;
     box-sizing: border-box;
 }
-.jrnl-desk .jrnl-volume-main { font-size: 1.25cqw; font-weight: 700; color: #3f4c66; letter-spacing: 0.25cqw; }
-.jrnl-desk .jrnl-volume-sub { font-size: 0.62cqw; color: #8a7362; margin-top: 0.25cqw; letter-spacing: 0.1cqw; }
+.jrnl-desk .jrnl-volume-main { font-size: max(18px, 1.25cqw); font-weight: 700; color: #3f4c66; letter-spacing: 0.25cqw; }
+.jrnl-desk .jrnl-volume-sub { font-size: max(12.5px, 0.62cqw); color: #8a7362; margin-top: 0.25cqw; letter-spacing: 0.1cqw; }
 .jrnl-desk .jrnl-d-foot { margin: 0.4cqw 0 0.8cqw; justify-content: center; }
 .jrnl-desk .jrnl-view-full { display: none; }   /* 桌面走「完整總結」書籤,不用這顆大鈕 */
 .jrnl-desk .jrnl-foot-acts { justify-content: center; gap: 0.5cqw; width: auto; }
 .jrnl-desk .jrnl-act-btn {
     flex: 0 0 auto; min-width: 0;
-    font-size: 0.62cqw; padding: 0.3cqw 0.8cqw;
+    font-size: max(12.5px, 0.62cqw); padding: 0.3cqw 0.8cqw;
     background: rgba(255,253,247,0.6); border: 1px solid rgba(205,171,138,0.4);
     border-radius: 0.5cqw; color: #7a6553;
 }
@@ -822,24 +822,24 @@
     background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_journal/divider.webp') center / contain no-repeat;
     opacity: 0.8;
 }
-.jrnl-desk .jrnl-d-section-head h3 { font-size: 0.95cqw; color: #7c5a63; letter-spacing: 0.2cqw; }
-.jrnl-desk .jrnl-d-count { font-size: 0.58cqw; color: #a08d7a; }
+.jrnl-desk .jrnl-d-section-head h3 { font-size: max(15px, 0.95cqw); color: #7c5a63; letter-spacing: 0.2cqw; }
+.jrnl-desk .jrnl-d-count { font-size: max(12px, 0.58cqw); color: #a08d7a; }
 .jrnl-desk .jrnl-tl-num { color: #c97a8e; }
-.jrnl-desk .jrnl-tl-head { font-size: 0.78cqw; color: #574a3e; }
-.jrnl-desk .jrnl-tl-brief { font-size: 0.72cqw; line-height: 1.85; color: #6a5c4e; }
+.jrnl-desk .jrnl-tl-head { font-size: max(13px, 0.78cqw); color: #574a3e; }
+.jrnl-desk .jrnl-tl-brief { font-size: max(13px, 0.72cqw); line-height: 1.85; color: #6a5c4e; }
 .jrnl-desk .jrnl-chars-grid { gap: 0.8cqw; }
 /* ── 完整總結頁:照阿洛 mockup 的結構化排版(段落+區塊標籤+正規事件表) ── */
 .jrnl-desk .jrnl-summary-body {
-    font-size: 0.72cqw; line-height: 1.9; color: #5c4f42;
+    font-size: max(13px, 0.72cqw); line-height: 1.9; color: #5c4f42;
     padding-right: 0.8cqw;
 }
 .jrnl-desk .jrnl-summary-body p { margin: 0 0 0.5cqw; }
 .jrnl-desk .jrnl-summary-body .jrnl-md-h {
     display: flex; align-items: center; justify-content: center; gap: 0.5cqw;
     margin: 1.1cqw 0 0.55cqw;
-    color: #7c5a63; font-size: 0.82cqw; font-weight: 700; letter-spacing: 0.2cqw;
+    color: #7c5a63; font-size: max(14px, 0.82cqw); font-weight: 700; letter-spacing: 0.2cqw;
 }
-.jrnl-desk .jrnl-summary-body .jrnl-md-h::before { content: '◆'; color: #b9924f; font-size: 0.5cqw; }
+.jrnl-desk .jrnl-summary-body .jrnl-md-h::before { content: '◆'; color: #b9924f; font-size: max(12px, 0.5cqw); }
 .jrnl-desk .jrnl-summary-body .jrnl-md-table {
     width: 100%;
     table-layout: fixed;   /* 欄寬照配比鋪滿,不讓空欄把內容全擠到左邊 */
@@ -856,13 +856,13 @@
 .jrnl-desk .jrnl-summary-body .jrnl-md-table th:nth-child(5) { width: 18%; }
 .jrnl-desk .jrnl-summary-body .jrnl-md-table th {
     background: rgba(190, 150, 120, 0.18);
-    color: #6b5646; font-size: 0.64cqw; font-weight: 700; letter-spacing: 0.08cqw;
-    padding: 0.45cqw 0.55cqw; text-align: left; white-space: nowrap;
+    color: #6b5646; font-size: max(12.5px, 0.64cqw); font-weight: 700; letter-spacing: 0.08cqw;
+    padding: 0.45cqw 0.35cqw; text-align: left; white-space: nowrap;
     border-bottom: 1px solid rgba(181, 151, 123, 0.35);
 }
 .jrnl-desk .jrnl-summary-body .jrnl-md-table td {
-    font-size: 0.64cqw; line-height: 1.75; color: #5c4f42;
-    padding: 0.45cqw 0.55cqw; vertical-align: top;
+    font-size: max(12.5px, 0.64cqw); line-height: 1.75; color: #5c4f42;
+    padding: 0.45cqw 0.35cqw; vertical-align: top;
     border-top: 1px solid rgba(160, 132, 100, 0.16);
     word-break: break-word;   /* fixed 版型下長句要能折行 */
 }
@@ -880,7 +880,7 @@
     background: linear-gradient(#fffdf7, #f5eadb);
     color: #786052;
     box-shadow: inset 0 0 0 0.13cqw rgba(255,255,255,0.65), 0 0.16cqw 0.35cqw rgba(75,50,35,0.1);
-    font-family: inherit; font-size: 0.72cqw; font-weight: 700; letter-spacing: 0.08cqw;
+    font-family: inherit; font-size: max(13px, 0.72cqw); font-weight: 700; letter-spacing: 0.08cqw;
     cursor: pointer;
     transition: transform 0.15s, filter 0.15s;
 }
@@ -916,9 +916,10 @@
 }
 .jrnl-desk .jrnl-tab span {
     writing-mode: vertical-rl;
-    font-size: 0.85cqw; letter-spacing: 0.3cqw; line-height: 1;
+    white-space: nowrap;   /* 🚨直書高度不夠時會自己往旁邊換欄(故/事 拆兩行)→ 鎖單欄 */
+    font-size: max(13px, 0.85cqw); letter-spacing: 0.16cqw; line-height: 1;
 }
-.jrnl-desk .jrnl-tab i { font-size: 0.85cqw; }
+.jrnl-desk .jrnl-tab i { font-size: max(14px, 0.85cqw); }
 .jrnl-desk .jrnl-tab:hover {
     transform: translateX(-0.2cqw);
     filter: drop-shadow(0.18cqw 0.25cqw 0.28cqw rgba(64,48,38,0.18)) saturate(1.05);
@@ -1048,10 +1049,10 @@
     border-radius: 0.25cqw;
     background-color: #f2e7d5;
 }
-.jrnl-desk .jrnl-char-name { color: #574a3e; font-size: 0.85cqw; }
-.jrnl-desk .jrnl-char-role { color: #8a7362; font-size: 0.62cqw; }
-.jrnl-desk .jrnl-char-trait { color: #9a8678; font-size: 0.6cqw; }
+.jrnl-desk .jrnl-char-name { color: #574a3e; font-size: max(14px, 0.85cqw); }
+.jrnl-desk .jrnl-char-role { color: #8a7362; font-size: max(12.5px, 0.62cqw); }
+.jrnl-desk .jrnl-char-trait { color: #9a8678; font-size: max(12px, 0.6cqw); }
 .jrnl-desk .jrnl-char-tag {
     background: rgba(252, 228, 231, 0.8); color: #b25260;
-    font-size: 0.55cqw; border-radius: 0.4cqw;
+    font-size: max(12px, 0.55cqw); border-radius: 0.4cqw;
 }
