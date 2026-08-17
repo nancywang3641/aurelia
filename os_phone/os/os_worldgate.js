@@ -1122,6 +1122,15 @@
             '定位:' + t.job + '。性格:' + t.persona + '。來歷:' + t.origin + '。擅長:' + t.skill + '。' +
             '你正打算前往世界「' + worldName + '」,在大廳物色隊友;聊得投機可以表達願意同行。輕鬆對話為主,不推進正式劇情。';
     }
+    // 大廳一次只站得下 MAX 個人,但旅人池會愈召愈多 → 挑「還沒入隊的、新的先站」。
+    //   已入隊的排最後(有空位才出現):她要的是去搭話認識新面孔,不是看隊友站在那。
+    //   🚨帶著原本的 index 一起走:NPC key、立姿皮膚、入隊寫回都是靠 index 認人的。
+    function _travSpawnList(w) {
+        const all = (w.travelers || []).map((t, i) => ({ t, i })).filter(x => x && x.t && x.t.name);
+        const fresh = all.filter(x => !x.t.recruited).reverse();   // 後面召集的排前面
+        const joined = all.filter(x => x.t.recruited);
+        return fresh.concat(joined).slice(0, MAX_TRAVELER_SPAWN);
+    }
     function _spawnTravelers(w) {
         const b = _stage();
         if (!b || b.S.scene !== 'hall') return false;
@@ -1147,7 +1156,7 @@
             return p;
         };
         const gen = _travGen;
-        (w.travelers || []).slice(0, MAX_TRAVELER_SPAWN).forEach((t, i) => {
+        _travSpawnList(w).forEach(({ t, i }, slot) => {
             const sp = rollSpot();   // 站位先佔好(彼此保持距離),上線時間錯開=玩家陸續登入的感覺
             setTimeout(() => {
                 if (gen !== _travGen) return;   // 期間清過場(換世界/DIVE/關窗)就別再冒出來
@@ -1173,7 +1182,7 @@
                     onProfile: (n) => _openEncProfile(w.id, i, n),    // 右鍵=身分卡(lobby_dress 選單動態項;開在組隊卡的身分卡頁)
                 });
                 _travNpcs.push(npc);
-            }, 350 + i * 750);
+            }, 350 + slot * 750);   // 錯開的是「第幾個上線」,不是他在池子裡的編號(池子會愈召愈長)
         });
         _autofillSprites(w, gen);
         return true;
@@ -1206,10 +1215,10 @@
         if (!cfg.key) return;                                  // 沒在設置頁挑畫風包＝這功能沒開
         const LD = win.LobbyDress || window.LobbyDress;
         if (!LD || !LD.genSpriteInto) return;                  // 舊版 lobby_dress＝優雅跳過
-        const list = (w.travelers || []).slice(0, MAX_TRAVELER_SPAWN);
-        for (let i = 0; i < list.length; i++) {
+        const list = _travSpawnList(w);                        // 跟場上站的那幾位一致(新召集的優先)
+        for (let k = 0; k < list.length; k++) {
             if (gen !== _travGen) return;                      // 換世界/DIVE/關窗＝立刻停手，別再燒圖
-            const t = list[i];
+            const t = list[k].t, i = list[k].i;
             if (!t || !t.sprite) continue;                     // 舊世界沒有 sprite 欄位→跳過(重新召集旅人就會有)
             const key = 'wg_' + w.id + '_' + i;
             const b = _stage();
@@ -2078,6 +2087,8 @@
             '.wg-btn.ghost{background:rgba(255,255,255,.6);color:#3a3e56;border:1px solid rgba(26,28,40,.18);box-shadow:none;}' +
             '.wg-btn.danger{background:rgba(180,80,60,.1);color:#a05040;border:1px solid rgba(180,80,60,.3);box-shadow:none;}' +
             '.wg-btn-row{display:flex;gap:7px;}.wg-btn-row .wg-btn{flex:1;}' +
+            // 再召集一批：鈕下面補一行現況，才知道池子裡還有幾個人在大廳等
+            '.wg-trav-more{margin-top:2px;}.wg-trav-more .wg-section-note{text-align:center;margin-top:5px;}' +
             // 管理模式下卡片底部的維護區：一行一個對象，左邊標名字、右邊短鈕
             '.wg-card-ops{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,28,40,.12);}' +
             '.wg-ops-row{display:flex;align-items:center;gap:5px;}.wg-ops-row+.wg-ops-row{margin-top:5px;}' +
@@ -2689,7 +2700,13 @@
             (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>' : '') +
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-users"></i> 出發編成</span><span class="wg-section-note">' + team.length + ' / ' + MAX_TRAVELER_SPAWN + '</span></div>' +
             _slotsHtml(team) +
-            ((w.travelers || []).length ? '' : '<button class="wg-btn ghost" data-act="regen-trav"><i class="fa-solid fa-user-plus"></i> 重新召集旅人</button>') +
+            // 召旅人＝往池子裡加人，不換掉任何人（她的用法是「有時候看看能抽到什麼」）。
+            //   大廳一次站 MAX 個，新召的排前面 → 按完進大廳就是四張新面孔。
+            '<div class="wg-trav-more">' +
+              '<button class="wg-btn ghost" data-act="more-trav"><i class="fa-solid fa-user-plus"></i> ' +
+              ((w.travelers || []).length ? '再召集一批旅人' : '召集旅人') + '</button>' +
+              '<div class="wg-section-note">目前候選 ' + ((w.travelers || []).filter(t => t && !t.recruited).length) + ' 人，在大廳等你搭話</div>' +
+            '</div>' +
             // 面板是後來才加的功能:舊世界一律沒有,這裡補一顆給它們;已經有的話這顆就是「換一個樣子」
             _spawnHtml(w, entryText) +
             // 🎭 玩家在這個世界要當什麼。不做選單:每個世界的職業與種族體系都不一樣,
@@ -2733,21 +2750,26 @@
             if (tip) tip.textContent = w.spawn ? ('降生地：' + w.spawn) : '沒選＝落在哪由主持AI安排';
         }));
         // （結束畫面／成就的維護動作已移到檔案庫的管理模式，見 _worldOp）
-        // 世界檔案與旅人是分兩次生的:旅人那次掛掉時世界照樣存下來,這裡補一次(沒有旅人=偶遇組隊整條路都走不了)
-        b.querySelector('[data-act="regen-trav"]')?.addEventListener('click', async () => {
+        // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
+        //   世界檔案與旅人本來就是分兩次生的（旅人那次掛掉時世界照樣存下來），所以這顆同時也是
+        //   「一個旅人都沒有」時的補救按鈕，不必另外做一顆。
+        b.querySelector('[data-act="more-trav"]')?.addEventListener('click', async () => {
             if (_busy) return;
             _busy = true;
             _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
             const trav = await _expandTravelers(
                 { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept, twist: w.twist },
                 w.entryText || entryText || w.concept || w.name,
-                w.note || '');   // 當初展開時的追加要求要跟著帶,不然重召的旅人會跟這個世界對不上
+                w.note || '');   // 當初展開時的追加要求要跟著帶,不然新召的旅人會跟這個世界對不上
             _busy = false;
             if (!trav.length) { _toast('旅人召集失敗,請再試一次'); _renderDetail(w); return; }
-            w.travelers = _normTravelers(trav);
+            // 同名的不重複收（它偶爾會再抽到上一批的人）
+            const had = new Set((w.travelers || []).map(t => String(t && t.name || '').trim()));
+            const add = _normTravelers(trav).filter(t => t && t.name && !had.has(String(t.name).trim()));
+            if (!add.length) { _toast('這批召來的都是已經在的人,再試一次'); _renderDetail(w); return; }
+            w.travelers = (w.travelers || []).concat(add);
             await _saveWorld(w);
-            if (w.entryText) await _writeEntry(w, w.entryText);   // 條目裡的旅人區塊一起更新
-            _toast('旅人已上線大廳');
+            _toast('又來了 ' + add.length + ' 位旅人,去大廳跟他們搭話');
             _renderDetail(w);
         });
         _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
