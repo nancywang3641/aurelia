@@ -21,9 +21,24 @@
         toggle: 'ui-toggle',       // 開關／分頁切換
         ping:   'ui-ping',         // 世界頻道新訊息
         unlock: 'ui-unlock',       // 兌換成功
+        // 書類紙質音：故事日誌那套書裝介面用，由 os_journal.js 直接點播（不走下面的點擊委派）
+        book_open:  'ui-book_open',    // 翻開書（打開日誌）
+        book_close: 'ui-book_close',   // 闔上書（關閉日誌）
+        page_turn:  'Flip_paper',      // 翻一頁（換故事線）
+        book_riffle:'ui-book_riffle',  // 快速翻書（切書籤）
+        paper_slide:'ui-paper_slide',  // 紙張輕滑（滑過條目）
+        pen_write:  'ui-pen_write',    // 落筆（開編輯器）
+        book_stamp: 'ui-stamp',        // 書放到桌上（保存成功）
+        paper_tear: 'ui-paper_tear',   // 撕頁（清空劇情）
     };
     // 各音效的相對音量：滑過最輕，提示音最響（總音量之外再乘一層）
-    const GAIN = { hover: 0.4, slide: 0.7, click: 0.75, toggle: 0.8, cancel: 0.8, close: 0.8, error: 0.9, confirm: 1, ping: 1, unlock: 1 };
+    const GAIN = {
+        hover: 0.4, slide: 0.7, click: 0.75, toggle: 0.8, cancel: 0.8, close: 0.8,
+        error: 0.9, confirm: 1, ping: 1, unlock: 1,
+        // 紙質音本身錄得比介面音小聲，整體往上帶；滑過那顆維持最輕
+        paper_slide: 0.55, page_turn: 0.9, book_riffle: 0.9, pen_write: 1,
+        book_open: 1, book_close: 1, book_stamp: 0.9, paper_tear: 0.9,
+    };
 
     // 大廳 tab 之外，只多放行章節選擇面板 —— 它是 VN 層的全屏 overlay，不在大廳 tab 裡
     const ROOT_SEL = '#aurelia-home-tab, #chapter-overlay';

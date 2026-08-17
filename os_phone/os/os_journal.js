@@ -372,6 +372,11 @@
         `;
     }
 
+    // 🔊 書類紙質音：音檔／開關／音量都掛在大廳那套 VoidUiSfx（設置關掉時這裡自然不響）
+    function _sfx(kind) {
+        try { (win.VoidUiSfx || window.VoidUiSfx)?.play?.(kind); } catch (e) { }
+    }
+
     async function launch(container) {
         if (!container) return;
         const osDb = win.OS_DB;
@@ -577,6 +582,7 @@
             //   桌面書裝的總結頁另有一組 ornate 鈕(.jrnl-sum-view/.jrnl-sum-edit),行為同款
             const _viewFull = async () => {
                 try {
+                    _sfx('page_turn');   // 翻到總結那頁
                     const rec = await _readStorySummary(active);
                     if (!rec || !rec.content) return _openFullModal('這段劇情還沒有大總結（或已清空）。', active);
                     _openSummaryFull(rec.content, active, rec, false);
@@ -584,6 +590,7 @@
             };
             const _editFull = async () => {
                 try {
+                    _sfx('pen_write');   // 開編輯器＝落筆
                     const rec = (await _readStorySummary(active)) || { content: '' };
                     _openSummaryFull(rec.content || '', active, rec, true);
                 } catch (e) { _openFullModal('讀取失敗：' + (e.message || e), active); }
@@ -616,6 +623,7 @@
                     if (on) delete m[active.cardName];
                     else m[active.cardName] = active.chatId;
                     _saveNpcPickMap(m);
+                    _sfx('book_stamp');
                     _syncPinBtns(!on);
                 };
             });
@@ -798,6 +806,7 @@
                             rawChatId: (rec && rec.rawChatId) || '',
                         });
                         try { win.OS_SUMMARY_INJECT?.invalidate?.(story.chatId); } catch (e) {}
+                        _sfx('book_stamp');   // 存檔完成＝書放回桌上
                         status.textContent = '已儲存 ✓';
                         setTimeout(close, 700);
                     } catch (e) { status.textContent = '儲存失敗：' + (e.message || e); saveB.disabled = false; }
@@ -869,6 +878,7 @@
                     }
                     const report = await osDb.deleteAllByChatId(story.chatId, { storyId, vnWorld: rawChatId || story.chatId, rawChatId: rawChatId || story.chatId });
                     try { win.OS_SUMMARY_INJECT?.invalidate?.(story.chatId); } catch (e) {}
+                    _sfx('paper_tear');   // 清空完成＝撕頁
                     console.log('[OS_JOURNAL] 🗑️ 清空', story.chatId, report);
                     allStories = allStories.filter(s => !((s.cardName || '') === (story.cardName || '') && (s.chatId || '') === (story.chatId || '')));
                     activeKey = allStories[0] ? `${allStories[0].cardName}|||${allStories[0].chatId}` : null;
@@ -885,6 +895,7 @@
         listEl.addEventListener('click', (e) => {
             const card = e.target.closest('.jrnl-card');
             if (!card) return;
+            if (card.dataset.key !== activeKey) _sfx('page_turn');   // 換故事線＝翻一頁
             activeKey = card.dataset.key;
             _renderList();
             if (window.matchMedia('(max-width: 720px)').matches) {
@@ -912,18 +923,36 @@
         }
         container.querySelectorAll('.jrnl-tab').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (btn.dataset.tab !== activeTab) _sfx('book_riffle');   // 切書籤＝快速翻書
                 activeTab = btn.dataset.tab;
                 _applyTab();
             });
         });
         _applyTab();
 
+        // 滑過目錄條目／書籤：紙張輕滑（只給真滑鼠，觸控 tap 會補一次 mouseover 變兩聲）
+        if (!window.matchMedia || window.matchMedia('(hover: hover)').matches) {
+            let hoverEl = null, hoverAt = 0;
+            container.addEventListener('mouseover', (e) => {
+                const el = e.target.closest?.('.jrnl-card, .jrnl-tab');
+                if (!el || el === hoverEl) return;
+                const now = Date.now();
+                if (now - hoverAt >= 120) _sfx('paper_slide');   // 掃過一整排不要連環響
+                hoverEl = el; hoverAt = now;
+            }, true);
+            container.addEventListener('mouseout', (e) => {
+                if (hoverEl && e.target === hoverEl) hoverEl = null;
+            }, true);
+        }
+
         // 關閉 → 回大廳（走 PhoneSystem.goHome，跟 spend 面板同套）
         //   不能用 AureliaControlCenter.hide()，那會關整支手機 + 下次打開 state 還在 → 回不去大廳
         closeEl.addEventListener('click', () => {
+            _sfx('book_close');
             if (win.PhoneSystem?.goHome) win.PhoneSystem.goHome();
         });
 
+        _sfx('book_open');   // 日誌開場＝翻開書
         _renderList();
     }
 
