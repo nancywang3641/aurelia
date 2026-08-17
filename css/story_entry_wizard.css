@@ -89,15 +89,14 @@
     top: calc(var(--sew-u, 1px) * 14);
     right: calc(var(--sew-u, 1px) * 16);
     border: none; background: none;
-    color: var(--sew-ink);
-    font-size: calc(var(--sew-u, 1px) * 22);
     line-height: 1;
     padding: calc(var(--sew-u, 1px) * 6);
     cursor: pointer;
     z-index: 5;
-    transition: transform 0.15s ease, color 0.15s ease;
+    transition: transform 0.15s ease, filter 0.15s ease;
 }
-.sew-close:hover { color: var(--sew-navy); transform: scale(1.15); }
+.sew-close img { width: calc(var(--sew-u, 1px) * 20); height: auto; display: block; }
+.sew-close:hover { transform: scale(1.15); filter: brightness(1.2); }
 
 /* ── 標題列:翼線 ─◆ 標題 ◆─ ── */
 .sew-title-row {
@@ -106,23 +105,16 @@
     gap: calc(var(--sew-u, 1px) * 16);
     margin-top: calc(var(--sew-u, 1px) * 4);
 }
+/* 標題翼線=阿洛手繪裝飾線(wing-left/right),貼著標題側對齊 */
 .sew-wing {
     flex: 1;
-    height: calc(var(--sew-u, 1px) * 1.5);
-    background: linear-gradient(90deg, transparent, rgba(42, 74, 128, 0.45));
-    position: relative;
+    height: calc(var(--sew-u, 1px) * 16);
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/wing-left.webp') right center / contain no-repeat;
 }
-.sew-wing:last-child { background: linear-gradient(270deg, transparent, rgba(42, 74, 128, 0.45)); }
-.sew-wing::after {
-    content: '';
-    position: absolute;
-    top: 50%; right: calc(var(--sew-u, 1px) * -3);
-    width: calc(var(--sew-u, 1px) * 6);
-    height: calc(var(--sew-u, 1px) * 6);
-    background: var(--sew-gold);
-    transform: translateY(-50%) rotate(45deg);
+.sew-wing:last-child {
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/wing-right.webp');
+    background-position: left center;
 }
-.sew-wing:last-child::after { right: auto; left: calc(var(--sew-u, 1px) * -3); }
 .sew-title {
     margin: 0;
     font-size: calc(var(--sew-u, 1px) * 30);
@@ -255,23 +247,12 @@
     color: var(--sew-ink-soft);
     white-space: nowrap;
 }
-/* 卡底分隔:─ ◇ ─ */
+/* 卡底分隔=阿洛手繪菱晶分隔線 */
 .sew-card-divider {
-    position: relative;
-    width: 46%;
-    height: calc(var(--sew-u, 1px) * 1.2);
-    margin-top: calc(var(--sew-u, 1px) * 12);
-    background: linear-gradient(90deg, transparent, rgba(42, 74, 128, 0.5), transparent);
-}
-.sew-card-divider::after {
-    content: '';
-    position: absolute;
-    top: 50%; left: 50%;
-    width: calc(var(--sew-u, 1px) * 6);
-    height: calc(var(--sew-u, 1px) * 6);
-    background: #fff;
-    border: calc(var(--sew-u, 1px) * 1.2) solid var(--sew-navy);
-    transform: translate(-50%, -50%) rotate(45deg);
+    width: 56%;
+    height: calc(var(--sew-u, 1px) * 12);
+    margin-top: calc(var(--sew-u, 1px) * 10);
+    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/card-divider.webp') center / contain no-repeat;
 }
 
 /* ── 資訊條(白膠囊三欄) ── */
@@ -293,6 +274,7 @@
     font-size: calc(var(--sew-u, 1px) * 17);
     color: var(--sew-navy-deep);
 }
+.sew-info-ico { width: calc(var(--sew-u, 1px) * 26); height: auto; display: block; }
 .sew-info-txt {
     display: flex; flex-direction: column;
     font-size: calc(var(--sew-u, 1px) * 10.5);
@@ -336,8 +318,9 @@
     clip-path: polygon(4.5% 0, 95.5% 0, 100% 50%, 95.5% 100%, 4.5% 100%, 0 50%);
     z-index: 0;
 }
-.sew-cta span, .sew-cta i { position: relative; z-index: 1; }
+.sew-cta span, .sew-cta i, .sew-cta .sew-cta-ico { position: relative; z-index: 1; }
 .sew-cta i { font-size: calc(var(--sew-u, 1px) * 14); text-indent: 0; }
+.sew-cta .sew-cta-ico { height: calc(var(--sew-u, 1px) * 16); width: auto; display: block; }
 .sew-cta:hover { filter: brightness(1.12); }
 .sew-cta.sew-enter { min-width: calc(var(--sew-u, 1px) * 250); }
 
