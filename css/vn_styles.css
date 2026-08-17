@@ -250,7 +250,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* ── 背景與白霧 ── */
         .chx-bg {
             position: absolute; inset: 0;
-            background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/bg-desktop.png') center / cover no-repeat;
+            background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/bg-desktop.png') center / cover no-repeat;
         }
         .chx-veil {
             position: absolute; inset: 0; pointer-events: none;
@@ -426,11 +426,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .chx-dot {
             width: 1.9cqh; height: 1.9cqh; min-width: 9px; min-height: 9px;
             padding: 0; border: none; cursor: pointer;
-            background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/09-node-completed.png') center / contain no-repeat;
+            background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/09-node-completed.png') center / contain no-repeat;
             filter: var(--chx-deco-filter); opacity: 0.6; transition: opacity 0.2s, transform 0.2s;
         }
         .chx-dot.active {
-            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/10-node-current.png');
+            background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/10-node-current.png');
             opacity: 1; transform: scale(1.25);
         }
 
@@ -481,7 +481,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             height: 8.6cqh; aspect-ratio: 720 / 142;
             display: flex; align-items: center; justify-content: center;
             padding: 0; border: none; cursor: pointer;
-            background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/16-enter-chapter-normal.png') center / 100% 100% no-repeat;
+            background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/16-enter-chapter-normal.png') center / 100% 100% no-repeat;
             color: #24557f; font-family: var(--chx-font); font-weight: 600;
             font-size: clamp(11px, 2.2cqh, 17px); letter-spacing: 0.34em; text-indent: 0.34em;
             text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
@@ -575,7 +575,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 404 專屬背景：柴郡塗鴉大廳（有專圖就不用把白廳整張壓黑硬轉色了）；
            只留輕微壓暗讓綠字卡片浮在前面 */
         #aurelia-phone-screen.mode-404 .chx-bg {
-            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/bg-404-desktop.png');
+            background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/bg-404-desktop.png');
             filter: brightness(0.8);
         }
         /* 白霧遮罩是給白廳的，404 換成掃描線＋暗角（老 CRT 監視器）；直式沒有專圖，沿用桌機圖置中裁 */
@@ -587,7 +587,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                 radial-gradient(120% 100% at 50% 0%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
         }
         #aurelia-phone-screen.mode-404 .chx-enter {
-            background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/17-enter-chapter-404.png');
+            background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/17-enter-chapter-404.png');
             color: #00ff88; text-shadow: 0 0 6px rgba(0, 255, 136, 0.6);
         }
         #aurelia-phone-screen.mode-404 .chx-card-num,
@@ -631,7 +631,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            ══════════════════════════════════════════════════════ */
         @container chwin (max-aspect-ratio: 0.95) {
             .chx-bg {
-                background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/bg-mobile.png');
+                background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/bg-mobile.png');
             }
             .chx-nav, .chx-dots, .chx-info, .chx-sel-top, .chx-sel-prism { display: none !important; }
             .chx-stage { top: 24cqh; height: 71cqh; }
@@ -671,7 +671,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
         @media (max-width: 768px) {
             #chapter-window .chx-bg {
-                background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/bg-mobile.png');
+                background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/bg-mobile.png');
             }
             #chapter-window .chx-nav, #chapter-window .chx-dots, #chapter-window .chx-info,
             #chapter-window .chx-sel-top, #chapter-window .chx-sel-prism { display: none !important; }

@@ -103,7 +103,7 @@
 /* 🎬 小劇場窗口 v2：票券檔案館（阿洛底板；素材＝sound-files aseets/theater_ui/ 外框/票券/播放鈕） */
 .lstage-theater-win2 { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3300;
   width:min(340px, 92%); aspect-ratio:794/1653;
-  background:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/theater_ui/memory-theater-frame-base.png) center/100% 100% no-repeat;
+  background:url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/theater_ui/memory-theater-frame-base.png) center/100% 100% no-repeat;
   filter:drop-shadow(0 18px 44px rgba(30,40,80,.35)); }
 @media (max-height:780px) { .lstage-theater-win2 { width:min(300px, 92%); } }
 .ltw2-in { position:absolute; inset:6.5% 7% 5.5%; display:flex; flex-direction:column; }
@@ -121,7 +121,7 @@
 .ltw2-empty { color:#8a93ad; font-size:12px; text-align:center; padding:26px 8px 10px; }
 /* 票券卡：主區(左 72%)＝配對/地點/時間/引言；存根(右)＝播放鈕；REC=進行中 */
 .ltw2-ticket { position:relative; width:100%; aspect-ratio:1616/664; flex:0 0 auto;
-  background:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/theater_ui/memory-theater-ticket-empty.png) center/100% 100% no-repeat; }
+  background:url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/theater_ui/memory-theater-ticket-empty.png) center/100% 100% no-repeat; }
 .ltw2-tk-main { position:absolute; left:4.5%; top:9%; bottom:10%; width:69%; border:none; background:transparent; cursor:pointer;
   display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; padding:0 0 0 2%; font-family:inherit; }
 .ltw2-tk-head { display:flex; align-items:center; gap:7px; min-width:0; width:100%; }
@@ -143,7 +143,7 @@
 .ltw2-tk-rec i { font-size:6px; vertical-align:1px; margin-right:3px; animation:ltw2Rec 1.4s ease-in-out infinite; }
 @keyframes ltw2Rec { 0%,100%{opacity:1} 50%{opacity:.35} }
 .ltw2-tk-play { position:absolute; right:4.5%; top:50%; transform:translateY(-50%); width:17%; aspect-ratio:789/828; border:none; cursor:pointer;
-  background:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/theater_ui/memory-theater-play-button.png) center/contain no-repeat; transition:transform .15s ease; }
+  background:url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/theater_ui/memory-theater-play-button.png) center/contain no-repeat; transition:transform .15s ease; }
 .ltw2-tk-play:hover { transform:translateY(-50%) scale(1.08); }
 /* 底部動作列（回顧 tab：重壓縮/清空，做成細字連結不搶票券戲） */
 .ltw2-acts { display:flex; align-items:center; justify-content:center; gap:8px; padding:2px 0 0; }

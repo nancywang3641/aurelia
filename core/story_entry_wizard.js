@@ -10,7 +10,7 @@
 (function () {
     'use strict';
 
-    const CDN = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/';
+    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/';
     const CANVAS_W = 1253.438, CANVAS_H = 705.469;
     const PORTRAIT_REF_W = 430;   // 直式一欄的參考寬(單位換算用)
 

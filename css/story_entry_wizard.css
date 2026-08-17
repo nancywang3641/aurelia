@@ -37,7 +37,7 @@
 /* 滿版背景(白色圖書館大廳) */
 .sew-bg {
     position: absolute; inset: 0;
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/bg.webp') center / cover no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/bg.webp') center / cover no-repeat;
 }
 
 /* 舞台=置中容器;面板=白理石主體 */
@@ -109,10 +109,10 @@
 .sew-wing {
     flex: 1;
     height: calc(var(--sew-u, 1px) * 16);
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/wing-left.webp') right center / contain no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/wing-left.webp') right center / contain no-repeat;
 }
 .sew-wing:last-child {
-    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/wing-right.webp');
+    background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/wing-right.webp');
     background-position: left center;
 }
 .sew-title {
@@ -252,7 +252,7 @@
     width: 56%;
     height: calc(var(--sew-u, 1px) * 12);
     margin-top: calc(var(--sew-u, 1px) * 10);
-    background: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/story_entry/card-divider.webp') center / contain no-repeat;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/card-divider.webp') center / contain no-repeat;
 }
 
 /* ── 資訊條(白膠囊三欄) ── */

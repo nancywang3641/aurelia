@@ -45,7 +45,7 @@
 .osx-frame {
     position: relative; width: 100%; aspect-ratio: 1040 / 957;
     container-type: inline-size;
-    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-frame-desktop-base.png) center / 100% 100% no-repeat;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-frame-desktop-base.png) center / 100% 100% no-repeat;
     color: #2f3f66; font-family: inherit;
     filter: drop-shadow(0 18px 40px rgba(40, 60, 110, 0.3));
 }
@@ -54,7 +54,7 @@
 .osx-plate {
     position: absolute; left: var(--osx-plate-x); top: var(--osx-plate-y);
     width: var(--osx-plate-w); aspect-ratio: 880 / 540; z-index: 0;
-    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-inner-plate.png) center / 100% 100% no-repeat;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-inner-plate.png) center / 100% 100% no-repeat;
     pointer-events: none;
 }
 
@@ -89,12 +89,12 @@
 .osx-bal {
     position: absolute; right: var(--osx-bal-x); top: var(--osx-bal-y); z-index: 3;
     width: var(--osx-bal-w); aspect-ratio: 276 / 90;
-    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-balance-capsule-empty.png) center / 100% 100% no-repeat;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-balance-capsule-empty.png) center / 100% 100% no-repeat;
 }
 /* 膠囊內部槽位量自設計稿（相對膠囊自身）：左圓 5.8~29.4%、數字 33.7~70.3%、右圓 70.6~94.2% */
 .osx-bal-coin {
     position: absolute; left: 5.8%; top: 16.6%; width: 23.6%; height: 67.2%;
-    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-pt-coin-pt-face.png) center / contain no-repeat;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-pt-coin-pt-face.png) center / contain no-repeat;
 }
 .osx-bal-n {
     position: absolute; left: 33.7%; right: 29.7%; top: 0; bottom: 0;
@@ -108,7 +108,7 @@
 .osx-stage {
     position: absolute; left: var(--osx-ring-x); top: var(--osx-ring-y);
     width: var(--osx-ring-w); aspect-ratio: 455 / 419; z-index: 1;
-    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-orbit-ring-empty.png) center / 100% 100% no-repeat;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-orbit-ring-empty.png) center / 100% 100% no-repeat;
     pointer-events: none;
 }
 
@@ -120,9 +120,9 @@
     background: center / 100% 100% no-repeat;
     pointer-events: auto;
 }
-.osx-card.left   { left: var(--osx-card-l1); background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-left-empty.png); }
-.osx-card.center { left: var(--osx-card-l2); top: var(--osx-card-t-mid); background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-center-empty.png); }
-.osx-card.right  { left: var(--osx-card-l3); background-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-product-card-right-empty.png); }
+.osx-card.left   { left: var(--osx-card-l1); background-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-product-card-left-empty.png); }
+.osx-card.center { left: var(--osx-card-l2); top: var(--osx-card-t-mid); background-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-product-card-center-empty.png); }
+.osx-card.right  { left: var(--osx-card-l3); background-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-product-card-right-empty.png); }
 
 /* 卡內槽位：三張卡各自量出來的（來源 components_v5/README.md），
    插圖下緣一律 63.56%，凹槽左中右各有零點幾個百分點的差，別共用同一組。 */
@@ -168,7 +168,7 @@
 .osx-rail {
     position: absolute; left: var(--osx-rail-x); top: var(--osx-rail-y);
     width: var(--osx-rail-w); aspect-ratio: 942 / 135; z-index: 1;
-    background: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/exchange_ui/exchange-status-rail-empty.png) center / 100% 100% no-repeat;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-status-rail-empty.png) center / 100% 100% no-repeat;
 }
 /* 狀態列內部槽位量自設計稿（相對狀態列自身）：左圓 3.4~13.8%、文字 19.4% 起、右圓 86.2~94.8%
    左圓素材上本來就有圖案，狀態圖示改放右圓那格。 */

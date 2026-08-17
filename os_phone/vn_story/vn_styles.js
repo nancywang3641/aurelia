@@ -345,19 +345,19 @@
                     <div class="chx-bg"></div>
                     <div class="chx-veil"></div>
                     <div class="chx-top">
-                        <img class="chx-top-rail" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/01-header-star-rail.png" alt="">
+                        <img class="chx-top-rail" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/01-header-star-rail.png" alt="">
                         <div class="chx-top-name">WORLDLINE ARCHIVE</div>
                         <button class="chx-close" onclick="window.VN_PLAYER.closeChapterPanel()" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="chx-title">
                         <div class="chx-title-zh">章節選擇</div>
                         <div class="chx-title-sub" id="chapter-subheader">酒館數據庫</div>
-                        <img class="chx-title-divider" src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/02-title-divider.png" alt="">
+                        <img class="chx-title-divider" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/02-title-divider.png" alt="">
                     </div>
                     <div class="chx-stage">
-                        <button class="chx-nav chx-nav-prev" id="ch-nav-prev" aria-label="上一章"><img src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/12-nav-left.png" alt=""></button>
+                        <button class="chx-nav chx-nav-prev" id="ch-nav-prev" aria-label="上一章"><img src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/12-nav-left.png" alt=""></button>
                         <div id="chapter-list" class="chx-track"></div>
-                        <button class="chx-nav chx-nav-next" id="ch-nav-btn" aria-label="下一章"><img src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/chapter_ui/13-nav-right.png" alt=""></button>
+                        <button class="chx-nav chx-nav-next" id="ch-nav-btn" aria-label="下一章"><img src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/13-nav-right.png" alt=""></button>
                     </div>
                     <div class="chx-dots" id="ch-dots"></div>
                     <div class="chx-info" id="chx-info">
