@@ -1657,7 +1657,31 @@
     // 時序剛好:正文一回來就開生,VN 要演好幾分鐘,生圖時間被演出吃掉,走到末尾面板時圖早就在了。
     // 🚨這段規則不包在 <request> 裡:她的正則把 <request> 區塊從「系統提示詞」也一起剝掉,
     //   包起來等於主持AI 根本讀不到這段。純文字寫在指令裡最保險。
-    const _LAUNCH_REQ =
+    // 🚨插圖桶現在掛哪個接口，關鍵詞的寫法就得跟著換：
+    //   NAI 吃的是 Danbooru 標籤（小寫底線、逗號分隔），A1111/ComfyUI 那套 (tag:1.5) 權重語法它不認，
+    //   人數也不是靠權重壓，而是靠 1girl/2boys 這種人數標籤。寫錯格式＝人數與構圖整個失控。
+    function _sceneSvc() {
+        try {
+            const IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+            if (IM && typeof IM.serviceFor === 'function') return String(IM.serviceFor('scene') || '').toLowerCase();
+            const c = IM && IM.config;
+            return String((c && (c.serviceScene || c.serviceLiving || c.service)) || '').toLowerCase();
+        } catch (e) { return ''; }
+    }
+    function _isNaiScene() { return /novelai|nai/.test(_sceneSvc()); }
+    // 兩套只差「怎麼寫關鍵詞」，其餘規則（畫什麼、不畫什麼、景別、留白）兩邊完全一樣
+    function _launchFmt() {
+        return _isNaiScene()
+            ? '【關鍵詞寫法：這台是 NovelAI】全部用 Danbooru 標籤:小寫、詞內用底線、之間用逗號;' +
+              '不准寫句子、不准用 (tag:1.5) 這種權重括號。\n' +
+              '人數用 Danbooru 的人數標籤寫在最前面(1girl、2boys、1boy_1girl 這類),數量要跟你底下列出的角色行數一模一樣。\n' +
+              '景別用標籤寫:full_body, wide_shot, from_above, standing。\n'
+            : '【關鍵詞寫法】英文關鍵詞、逗號分隔。\n' +
+              '人數那一句必須照這個形狀寫成加權:(only N characters in scene:1.5),後面緊接著用英文寫出男女各幾人。' +
+              'N 要跟你底下實際列出的角色行數一模一樣。\n';
+    }
+    function _launchReq() { return _LAUNCH_REQ_HEAD + _launchFmt() + _LAUNCH_REQ_TAIL; }
+    const _LAUNCH_REQ_HEAD =
         // 🚨不講清楚它是什麼,模型會直接把它當場景插圖畫:出來的是「剛才那一幕」——
         //   幾個人圍著同一個東西、鏡頭推到臉上。但這張是面板的固定底圖,每次劇情演完都看到同一張,
         //   綁在某個瞬間本來就不成立。定義成「出發前的集結畫面」它才知道要畫待機而不是事件。
@@ -1666,10 +1690,9 @@
         '這是一張「出發前的集結畫面」:隊伍聚在他們落腳的地方,各自等著出發。' +
         '它是這個世界的固定門面,玩家每結束一段劇情都會再看到同一張,所以畫面不可以綁在某個瞬間上。\n' +
         '規則:\n' +
-        // 🚨人數與性別一定要加權:只用普通描述寫,權重壓不過後面那幾行角色描述,生出來常常多人或少人。
-        '1. 出場人數依當前名單:玩家可以單獨出場,也可以帶 1~4 名隊友。不得固定四人或固定性別比例,不得加入名單以外的人物。\n' +
-        '1-1. 人數那一句必須照這個形狀寫成加權:(only N characters in scene:1.5),後面緊接著用英文寫出男女各幾人。' +
-        'N 要跟你底下實際列出的角色行數一模一樣。\n' +
+        '1. 出場人數依當前名單:玩家可以單獨出場,也可以帶 1~4 名隊友。不得固定四人或固定性別比例,不得加入名單以外的人物。\n';
+    // 🚨人數怎麼強調要看接口（見 _launchFmt）：只用普通描述寫,壓不過後面那幾行角色描述,生出來常常多人或少人。
+    const _LAUNCH_REQ_TAIL =
         '2. 性別只用 male、female;每名角色只寫一次性別與一次種族。\n' +
         '3. 人類標記 human;非人類必須標記明確種族。\n' +
         '4. 保留角色固定外貌;種族、服裝、職業、配件與身體構造跟隨當前世界觀,不得殘留上一個世界的元素。\n' +
@@ -1697,10 +1720,15 @@
         '輸出格式如下。標籤與三行的行首都必須原樣照抄下面的英文,不可翻譯、不可改寫、不可換成中文,程式要靠它們認位置:\n' +
         '<LaunchArt>\n' +
         // 微縮模型／等距那組詞擺在最前面:它決定整張圖的取景方式,放後面會被前面的內容詞蓋過去
-        'Background: diorama, miniature, isometric, isometric concept, from above, front view, [畫風], [世界觀], [隊伍落腳處的室內或有邊界的空間], [光線與氣氛], wide shot, full body, head to toe, feet visible, slightly high angle, wide-angle lens, 16:9,\n' +
-        'Characters: (only [人數] characters in scene:1.5), [男女各幾人的英文寫法],\n' +
-        '[依當前名單,每名角色一行,行末分號:a/an + age + gender + species + 固定外貌 + 這個世界的服裝, is + 待機動作 ;]\n' +
-        'in the [落腳處] , standing by, waiting to depart, evenly spaced apart\n' +
+        (_isNaiScene()
+            ? 'Background: diorama, miniature, isometric, from_above, front_view, [畫風標籤], [世界觀標籤], [落腳處的空間標籤], [光線與氣氛標籤], wide_shot, full_body, standing,\n' +
+              'Characters: [人數標籤,例如 1girl 或 2boys 這種形狀], \n' +
+              '[依當前名單,每名角色一行,行末分號:年齡層 + 性別 + 種族 + 固定外貌 + 這個世界的服裝 + 待機動作,全部用底線標籤 ;]\n' +
+              'indoors, waiting, evenly_spaced\n'
+            : 'Background: diorama, miniature, isometric, isometric concept, from above, front view, [畫風], [世界觀], [隊伍落腳處的室內或有邊界的空間], [光線與氣氛], wide shot, full body, head to toe, feet visible, slightly high angle, wide-angle lens, 16:9,\n' +
+              'Characters: (only [人數] characters in scene:1.5), [男女各幾人的英文寫法],\n' +
+              '[依當前名單,每名角色一行,行末分號:a/an + age + gender + species + 固定外貌 + 這個世界的服裝, is + 待機動作 ;]\n' +
+              'in the [落腳處] , standing by, waiting to depart, evenly spaced apart\n') +
         '</LaunchArt>\n';
     // 隊伍組成當 key:重進舊世界目前是 0 次 API,不能因為又 DIVE 一次就重生一張圖。
     //   同一組人再進去＝重用上次那張;換過人才重新要一張。
@@ -1793,7 +1821,9 @@
         const prompt =
             '照下面的世界與隊伍，寫一張「出發前的合照」的生圖關鍵詞。只回傳純 JSON：\n' +
             '{"bg":"{場景的英文關鍵詞，逗號分隔}","chars":"{每個人的外觀英文關鍵詞，同一行逗號分隔}"}\n' +
-            '全部用英文關鍵詞，不要句子、不要畫風或畫質詞、不要鏡頭術語。\n' +
+            (_isNaiScene()
+                ? '全部用 Danbooru 標籤：小寫、詞內用底線、之間用逗號，不要句子、不要權重括號；人數用 1girl/2boys 這種人數標籤。\n'
+                : '全部用英文關鍵詞，不要句子、不要畫風或畫質詞、不要鏡頭術語。\n') +
             '【世界】' + w.name + '：' + (w.concept || '') + '（風格:' + (w.style || '') + '）\n' +
             '【這趟隊伍】\n' + who;
         const r = await _callAI(prompt, '世界門補生啟航圖', 'worldgate_launchart', false, false, true);
@@ -2000,7 +2030,7 @@
             '章節開頭給 [Chapter|…],立繪、場景、背景等標記照這張卡既有的 VN 規範走。' +
             '不要把對白與敘述混成整段散文。\n' +
             // 這組隊伍已經有封面就不要再帶這段:重進舊世界本來是 0 次 API,不能每次 DIVE 都多背一份規則
-            (_needLaunchArt(w) ? _LAUNCH_REQ : '') +
+            (_needLaunchArt(w) ? _launchReq() : '') +
             '━━━━━━━━━━━━━━━━━━━━━';
     }
     async function _dive(w) {
