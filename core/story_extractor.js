@@ -387,12 +387,22 @@
                 if (!bar) return;
                 const FM = window.VN_FREE_MODE;
                 if (!FM || !FM.storyId()) { bar.classList.add('se-hidden'); return; }
-                const free = FM.isFree();
+                // 人在視差世界裡＝世界門把模式壓成自由（旅人隨機生成、沒圖庫）→ 這裡要顯示「真的在跑的那個」，
+                // 而且鎖住不給改：她存的選擇沒被動到，撤離就會回來，此時給按只會看起來壞掉。
+                const locked = !!FM.inParallax?.();
+                const free = locked ? true : FM.isFree();
                 const libBtn = bar.querySelector('#se-mode-lib'), freeBtn = bar.querySelector('#se-mode-free');
                 libBtn.classList.toggle('active', !free);
                 freeBtn.classList.toggle('active', free);
-                libBtn.onclick = async () => { if (!FM.isFree()) return; await FM.set(false); this._refreshModeBar(rootWrapper); };
-                freeBtn.onclick = async () => { if (FM.isFree()) return; await FM.set(true); this._refreshModeBar(rootWrapper); };
+                [libBtn, freeBtn].forEach(b => {
+                    b.classList.toggle('locked', locked);
+                    b.title = locked
+                        ? '現在人在視差世界裡：同行的旅人是隨機生成的、沒有表情圖庫，所以固定用自由。撤離回主世界就會回到你選的模式。'
+                        : (b === libBtn ? '有準備圖庫的卡：表情立繪照舊，AI 輸出表情格'
+                                        : '世界卡/隨機NPC：立繪純生成，AI 不輸出表情格、省字');
+                });
+                libBtn.onclick = async () => { if (locked || !FM.isFree()) return; await FM.set(false); this._refreshModeBar(rootWrapper); };
+                freeBtn.onclick = async () => { if (locked || FM.isFree()) return; await FM.set(true); this._refreshModeBar(rootWrapper); };
                 bar.classList.remove('se-hidden');
             } catch (e) { console.warn('[StoryExtractor] 模式列失敗:', e); }
         },

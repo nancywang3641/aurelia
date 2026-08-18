@@ -34,6 +34,19 @@
     }
     function _key(id) { return 'vn_free_mode_' + id; }
 
+    // 🌌 人在視差世界裡 → 一律當自由模式。旅人是每趟隨機生成的、根本沒有表情圖庫，
+    //   立繪本來就全走生成，還讓 AI 每句寫一格表情只是白燒 token（而且它會亂寫）。
+    //   🚨這是「疊上去」不是「改掉她的設定」：localStorage 存的永遠是她在藏書手動選的那個，
+    //   撤離回主世界就自動疊回去——大廳那些有圖庫的固定角色不會被世界門洗成純生成。
+    function _inParallax() {
+        try {
+            const g = win.AURELIA_WORLDGATE || window.AURELIA_WORLDGATE;
+            return !!(g && typeof g.isInParallax === 'function' && g.isInParallax());
+        } catch (e) { return false; }
+    }
+    // 實際跑的模式（世界書/正則要對齊的是這個，不是 isFree()）
+    function _effectiveFree(id) { return isFree(id) || _inParallax(); }
+
     // 找「固定版總綱」所在的世界書與條目（掃全域已選＋角色主/附加）
     async function _findCoreEntry() {
         const th = _th();
@@ -94,23 +107,30 @@
         }, { type: 'global' });
     }
 
-    // 把世界書/正則調成當前卡該有的樣子（切模式、換卡都走這；狀態沒變就不寫、避免磁碟空轉）
+    // 把世界書/正則調成當前卡該有的樣子（切模式、換卡、進出視差都走這；狀態沒變就不寫、避免磁碟空轉）
+    // force=true → 略過記憶直接重算：換卡/開機用（也順便修她自己在世界書面板手撥過的燈）。
     let _applying = false;
-    async function applyForCurrent() {
+    let _lastEff = null;   // 上次真的套用完的實際模式；沒變就連世界書都不用讀（世界門每則訊息會戳這支一次）
+    async function applyForCurrent(force) {
         if (_applying) return;
+        const free = _effectiveFree();
+        if (!force && _lastEff === free) return;
         _applying = true;
         try {
             const th = _th();
             if (!th) return;
-            const free = isFree();
             const hit = await _findCoreEntry();
-            if (!hit) { console.log('[VN自由模式] 找不到總綱條目（這張卡可能不掛VN世界書）→ 不動'); return; }
+            // 🚨這兩條「做不了」的出口也要記下來：世界門每則訊息會戳這支一次，不記＝每則訊息都把
+            //   全部世界書重讀一遍＋刷一行 log。force（換卡/開機/她手動切）還是會重新檢查，
+            //   所以中途補上條目不會永遠卡住。
+            if (!hit) { _lastEff = free; console.log('[VN自由模式] 找不到總綱條目（這張卡可能不掛VN世界書）→ 不動'); return; }
             const { book, ents } = hit;
             const core = ents.find(e => _isCoreName(e.name) && !String(e.name || '').includes('自由'));
             const freeEnt = ents.find(e => { const nm = String(e.name || ''); return _isCoreName(nm) && nm.includes('自由'); });
 
             // 自由版條目是 Rae 自己維護的；不存在就不切換、絕不代寫（她明令：腳本不注入世界書）
             if (free && !freeEnt) {
+                _lastEff = free;
                 console.warn(`[VN自由模式] 「${book}」裡找不到自由版總綱條目（名字需含「${CORE_ENTRY_HINT}」+「自由」）→ 維持固定版、不切換`);
                 return;
             }
@@ -129,6 +149,7 @@
                 console.log(`[VN自由模式] 世界書開關已切換 → ${free ? '自由版' : '固定版'}總綱（${book}）`);
             }
             await _setHistoryRegex(free);
+            _lastEff = free;   // 世界書＋正則都對齊了才記；中途 return 的（找不到條目等）不記，下次還會再試
         } catch (e) {
             console.warn('[VN自由模式] 套用失敗:', e);
         } finally { _applying = false; }
@@ -149,14 +170,14 @@
     function _hook() {
         try {
             if (win.eventOn && win.tavern_events && win.tavern_events.CHAT_CHANGED) {
-                win.eventOn(win.tavern_events.CHAT_CHANGED, () => { setTimeout(applyForCurrent, 800); });
+                win.eventOn(win.tavern_events.CHAT_CHANGED, () => { setTimeout(() => applyForCurrent(true), 800); });
             }
         } catch (e) {}
-        setTimeout(applyForCurrent, 3000);   // 開機對齊一次
+        setTimeout(() => applyForCurrent(true), 3000);   // 開機對齊一次
     }
     if (_th()) _hook(); else setTimeout(() => { if (_th()) _hook(); }, 5000);
 
-    win.VN_FREE_MODE = { isFree, set, applyForCurrent, storyId: _storyId };
+    win.VN_FREE_MODE = { isFree, set, applyForCurrent, storyId: _storyId, inParallax: _inParallax, effectiveFree: _effectiveFree };
     window.VN_FREE_MODE = win.VN_FREE_MODE;
     console.log('🎲 [VN自由模式] 模組就緒');
 })();

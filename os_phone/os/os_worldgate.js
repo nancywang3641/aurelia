@@ -74,6 +74,14 @@
     }
     function _th() { return win.TavernHelper || window.TavernHelper; }
     function _gate() { return win.AURELIA_WORLDGATE || window.AURELIA_WORLDGATE; }
+    // 🎲 VN 自由模式跟著「人在不在視差世界」走：旅人每趟隨機生成、沒有表情圖庫,
+    //   立繪本來就全走生成 → 世界裡固定純生成,撤離自動回她在藏書選的模式(那邊的設定不會被動到)。
+    //   模組自己讀 isInParallax() 判斷,這裡只負責在狀態可能變了的時候戳它一下;
+    //   它有「跟上次一樣就不動」的記憶,所以每則訊息戳一次也不會反覆讀世界書。
+    function _syncFreeMode() {
+        try { return (win.VN_FREE_MODE || window.VN_FREE_MODE)?.applyForCurrent?.() || Promise.resolve(); }
+        catch (e) { return Promise.resolve(); }
+    }
     function _mkId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function _esc(s) { return String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
 
@@ -1904,6 +1912,7 @@
             const g = _gate();
             if (g) { if (id) await g.enterParallax(); else await g.exitParallax(); }
         } catch (e) {}
+        await _syncFreeMode();
         try { await _syncWorldLamps(id, '每輪確認'); } catch (e) {}
         try { await _upgradeAchvBlock(id); } catch (e) {}
     }
@@ -1973,6 +1982,7 @@
                 const g = _gate();
                 if (g) { if (id) await g.enterParallax(); else await g.exitParallax(); }
             } catch (e) {}
+            await _syncFreeMode();
             try { await _syncWorldLamps(id, '換聊天室'); } catch (e) {}
         };
         // 延遲是等酒館把 chatId 切過去,太早讀到的還是上一個聊天室(同 vn_free_mode 的作法)
@@ -2038,6 +2048,9 @@
         if (!gate) return { ok: false, msg: '切書模組不可用' };
         const r = await gate.enterParallax();
         if (!r.ok) return r;
+        // 🚨自由模式要在開場指令送出「之前」切好:送出的下一瞬間酒館就開始組 prompt 讀世界書,
+        //   晚一步＝第一章是在固定版總綱下生成的,整章都會帶表情格(同下面點燈那條的理由)。
+        await _syncFreeMode();
         // 隊伍在按下 DIVE 這刻定案(下面馬上 _clearTravelers 清場,之後不會再變)
         // → 先把條目的旅人區塊刷成「這趟真正同行的人」,免得開場指令說單人行動、世界檔案裡卻躺著沒招募的人。
         if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) { console.warn('[Worldgate] DIVE 前更新世界條目失敗', e); } }
@@ -2052,6 +2065,7 @@
         const sent = await _toChat(_divePrompt(w));
         if (sent === 'nofield') {
             await gate.exitParallax();
+            await _syncFreeMode();
             await _setCurrentId(''); await _syncWorldLamps('', '撤離');   // 進不去就把剛點的燈收回來
             return { ok: false, msg: '找不到酒館輸入框,已切回主世界' };
         }
@@ -2522,6 +2536,7 @@
         b.querySelector('[data-act="draw"]')?.addEventListener('click', _renderSeedPage);
         b.querySelector('[data-act="leave"]')?.addEventListener('click', async () => {
             const r = await _gate()?.exitParallax?.();
+            await _syncFreeMode();     // 立繪模式疊回她在藏書選的那個（大廳的固定角色有圖庫）
             await _setCurrentId('');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
             await _syncWorldLamps('', '撤離');   // 世界條目全部關掉，免得回到主世界還在吃異世界設定
             try { window.WORLD_RULES && window.WORLD_RULES.sync('撤離'); } catch (e) {}
