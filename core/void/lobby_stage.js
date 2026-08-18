@@ -1142,7 +1142,70 @@
         if (rb) rb.style.display = 'none';
     }
 
-    // ── 對話目標（對話本體仍走 void_terminal.sendIrisMessage）──
+    // ── 停靠面板型 NPC：走近他們是為了「講話」或「辦事」，桌機兩件事並排放得下，手機放不下 ──
+    const PANEL_OF = {
+        alice:  { label: '世界門',   icon: 'fa-globe',   open: () => window.OS_WORLDGATE?.openGate?.() },
+        rabbit: { label: '交易所',   icon: 'fa-house',   open: () => window.OS_PT?.openExchange?.() },
+        ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
+    };
+    function _panelFor(npc) {
+        const p = npc && PANEL_OF[npc.key];
+        if (!p || (p.when && !p.when())) return null;
+        return p;
+    }
+    // 斷點跟 lobby.css 的 @media (max-width:760px) 對齊：那份版型成立的地方才需要岔路
+    function _narrowScreen() {
+        try { return !!(window.matchMedia && window.matchMedia('(max-width:760px)').matches); } catch (e) { return false; }
+    }
+
+    // 📱 岔路：手機上這兩件事會互相擠，先問要哪一個，選了就整個畫面給它。
+    //    面板那條沿用既有的「對話收起」版型(lstage-dlg-hidden)——那個狀態本來就是為了讓面板長高吃滿螢幕，
+    //    不另外做一套全屏樣式。要邊看面板邊講話仍然按 💬 浮鈕，跟原本一樣。
+    function _showTalkPick(npc, panel) {
+        _closeTalkPick();
+        const left = document.querySelector('.lobby-left');
+        if (!left) return;
+        // 岔路期間畫面上只留岔路：對話框與輸入列走 lstage-dlg-hidden，
+        // 🚨反應框(戳戳/放置語音)不歸它管、會直接留在原地跟岔路疊成兩張卡 → 照 hideDialog 那樣收掉。
+        left.classList.add('lstage-dlg-hidden', 'lstage-picking');
+        const rb = document.getElementById('iris-reaction-box');
+        if (rb) rb.style.display = 'none';
+        const box = document.createElement('div');
+        box.className = 'lstage-pick';
+        box.innerHTML =
+            '<div class="lstage-pick-who">' + npc.name + '</div>' +
+            '<div class="lstage-pick-row">' +
+              '<button class="lstage-pick-btn" data-go="talk"><i class="fa-solid fa-comment-dots"></i><span>對話</span></button>' +
+              '<button class="lstage-pick-btn" data-go="panel"><i class="fa-solid ' + panel.icon + '"></i><span>' + panel.label + '</span></button>' +
+            '</div>';
+        // 岔路掛在 .lobby-left 底下、跟 S.root 是兄弟 → 點它不會冒泡到 .lstage-click(那層會判成點空地→結束對話)
+        box.addEventListener('click', (e) => {
+            const b = e.target.closest('.lstage-pick-btn');
+            if (!b) return;
+            _closeTalkPick();
+            if (b.dataset.go === 'talk') { _enterTalk(npc); return; }
+            try { panel.open(); } catch (err) { console.warn('[LobbyStage] 開面板失敗', err); }
+        });
+        left.appendChild(box);
+        S.pickEl = box;
+    }
+    function _closeTalkPick() {
+        S.pickEl?.remove(); S.pickEl = null;
+        document.querySelector('.lobby-left')?.classList.remove('lstage-picking');
+    }
+
+    // 對話本體（對話管線仍走 void_terminal.sendIrisMessage）
+    function _enterTalk(npc) {
+        showDialog();
+        // 瀅瀅/柴郡=對話目標，但管線走各自原生軌道（void_terminal 對這兩位不走 NPC 分支）
+        if (npc.key === 'ying' || npc.key === 'cheshire') {
+            window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句(404房自動用柴郡池)
+            return;
+        }
+        window.VoidTerminal?.primeStageDialog?.(npc);   // 清掉殘留(瀅瀅預設/上一位)、改顯示這位自己的最後一句
+    }
+
+    // ── 對話目標 ──
     function startTalk(npc) {
         if (S.edit) return;
         if (S.theater && (npc === S.theater.a || npc === S.theater.b)) window.LobbyTheater?.end();   // 🎭 跟配對當事人開聊→收掉配對（清泡泡+解凍）免凍結卡死；跟旁人聊不打斷等待中的小劇場
@@ -1150,23 +1213,16 @@
         S.npcs.forEach(n => { n.hint.style.display = 'none'; });
         const tagSpan = document.querySelector('#iris-name-tag span');
         const input = document.getElementById('iris-input');
-        if (npc.key === 'ying' || npc.key === 'cheshire') {
-            // 瀅瀅/柴郡=對話目標，但管線走各自原生軌道（void_terminal 對這兩位不走 NPC 分支）
-            if (tagSpan) tagSpan.textContent = npc.name;
-            if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
-            showDialog();
-            window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句(404房自動用柴郡池)
-            if (npc.key === 'ying' && S.scene === 'cafe') { try { window.OS_CAFE?.openWorkshop?.(); } catch (e) {} }   // ☕ 跟瀅瀅開聊→右側停靠書咖櫃檯(同白兔買房面板成例)
-            return;
-        }
         if (tagSpan) tagSpan.textContent = npc.name;
         if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
-        showDialog();
-        window.VoidTerminal?.primeStageDialog?.(npc);   // 清掉殘留(瀅瀅預設/上一位)、改顯示這位自己的最後一句
-        if (npc.key === 'rabbit') { try { window.OS_PT?.openExchange?.(); } catch (e) {} }   // 白兔：對話時右側浮出買房面板
-        if (npc.key === 'alice') { try { window.OS_WORLDGATE?.openGate?.(); } catch (e) {} }   // 🌌 愛麗絲：對話時右側浮出世界門(同白兔成例)
+
+        const panel = _panelFor(npc);
+        if (panel && _narrowScreen()) { _showTalkPick(npc, panel); return; }   // 📱 先岔路
+        _enterTalk(npc);
+        if (panel) { try { panel.open(); } catch (e) {} }                      // 🖥 桌機照舊：右側浮出面板、對話框同時在
     }
     function endTalk() {
+        _closeTalkPick();   // 還停在岔路就走開 → 岔路跟著收
         if (!S.talkTarget) return;
         const t = S.talkTarget;
         S.talkTarget = null;
@@ -1977,6 +2033,7 @@
             _left.querySelector('.lstage-talk-portrait')?.remove();
             _left.querySelector('.lstage-chat-fab')?.remove();
         }
+        _closeTalkPick();
         S.root = S.world = null;
         S.player = null; S.npcs = []; S.talkTarget = null; S.followers = []; S.keys = {}; S.objEls = [];
         S.mask = null;
