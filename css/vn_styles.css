@@ -1163,7 +1163,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 🚨底圖走這一層（JS 直接設 style.backgroundImage）。不要再用 var(--vnep-bg)：
            自訂屬性的值超過約 1MB 就會被瀏覽器丟掉，啟航群像那種 dataURL 每次都中，
            結果是 background-image 變 none、畫面只剩底色。 */
-        #vn-end-panel .vnep-bglayer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; }
+        #vn-end-panel .vnep-bglayer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; opacity: 1; transition: opacity 0.75s ease; }
+        /* 末尾插圖在面板亮著之後才生好 → 新的一層疊上來淡入（JS 下一幀拔掉 -in） */
+        #vn-end-panel .vnep-bglayer.vnep-bglayer-in { opacity: 0; }
         /* 中段留給人物，四周壓暗讓沿邊的 UI 讀得清楚 */
         #vn-end-panel::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; background: radial-gradient(circle at 50% 48%, rgba(0,0,0,0) 32%, rgba(4,6,14,0.45) 68%, rgba(3,4,10,0.88) 100%); }
         #vn-end-panel .vnep-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }

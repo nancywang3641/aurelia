@@ -19,6 +19,13 @@
     function _wg() { return win.OS_WORLDGATE || window.OS_WORLDGATE; }
     function _el() { return document.getElementById(PANEL_ID); }
 
+    // 這一輪末尾的號碼牌：底圖是非同步塞進去的（載圖／等插圖生完都要時間），
+    // 期間玩家可能已經離開末尾或進了下一章 → clear()／render() 都會換號，
+    // 對不上號的非同步結果一律丟掉。不然圖晚到會被塞進「已經清空的面板」，
+    // 留下一層孤兒底圖＋has-bg（面板本體已經沒了，看起來就是一張莫名其妙的圖）。
+    let _gen = 0;
+    function _stale(root, my) { return my !== _gen || !root || !root.isConnected || _el() !== root; }
+
     // 逐條 selector 前綴 #vn-end-panel。整包包一層 #id{...} 的巢狀寫法在舊瀏覽器不成立，
     // 所以照煉丹預覽那條逐條改寫。
     // 🚨兩種東西長得像選擇器但不是，加了前綴會讓整段失效：
@@ -41,16 +48,21 @@
     //   所以逐個候選真的載一次，載得起來才用；全都不行才退到漸層，並把原因印出來。
     function _applyBg(root, w) {
         root.style.setProperty('--vnep-fallback', _hueOf(w));   // 先鋪底，圖載好會蓋在上面
+        const endCg = (function () { try { return _endSceneCg(); } catch (e) { return null; } })();
         const cands = [
+            ['末尾插圖', (endCg && endCg.url) || ''],
             ['啟航群像', (w.launchArt && w.launchArt.url) || ''],
             ['世界概念圖', w.art || ''],
             ['本章場景背景', (function () { try { return _lastSceneBg(); } catch (e) { return ''; } })()],
         ].filter(x => x[1]);
         // 成功也印一行：不然「畫面怪怪的」時只能用猜的（沒有 log 到底是沒進來、還是進來但沒圖）
-        console.log('[VN末尾面板] 底圖候選：' + (cands.length ? cands.map(x => x[0]).join('、') : '無'));
+        console.log('[VN末尾面板] 底圖候選：' + (cands.length ? cands.map(x => x[0]).join('、') : '無')
+            + (endCg && endCg.wait ? '（末尾插圖還在生，生好會淡入換上來）' : ''));
+        const my = _gen;
         (async () => {
             for (const [name, url] of cands) {
                 if (await _canLoad(url)) {
+                    if (_stale(root, my)) return;
                     _setBgLayer(root, url);
                     root.classList.add('has-bg');
                     console.log('[VN末尾面板] 底圖用「' + name + '」（' + Math.round(url.length / 1024) + 'KB）');
@@ -58,26 +70,76 @@
                 }
                 console.warn('[VN末尾面板] ' + name + '載不起來(' + url.slice(0, 40) + '…)，往下一個退');
             }
+            if (_stale(root, my)) return;
             _setBgLayer(root, '');
             root.classList.remove('has-bg');
             console.warn('[VN末尾面板] 一張底圖都沒有(候選 ' + cands.length + ' 個)，先用世界底色撐著');
         })();
+        // 末尾插圖還在生：不空等（面板先用啟航群像那組撐著），生好再淡入換上來。
+        // 錨在最後一段的插圖幾乎都是這條路——玩家一句就走到底，圖還在路上。
+        if (endCg && endCg.wait) {
+            (async () => {
+                const url = await _withTimeout(endCg.wait, END_CG_WAIT_MS);
+                if (_stale(root, my)) return;
+                if (!url) { console.warn('[VN末尾面板] 末尾插圖沒等到（失敗或逾時），維持原底圖'); return; }
+                if (!(await _canLoad(url))) { console.warn('[VN末尾面板] 末尾插圖生好了但載不起來，維持原底圖'); return; }
+                if (_stale(root, my)) return;   // _canLoad 又等了一段，再確認一次
+                _setBgLayer(root, url, true);
+                root.classList.add('has-bg');
+                console.log('[VN末尾面板] 末尾插圖生好，底圖換成它（' + Math.round(url.length / 1024) + 'KB）');
+            })();
+        }
+    }
+    // 末尾插圖＝走到章節尾巴時場景插圖還鋪在畫面上。副模型很愛把錨點放在最後一段，
+    //   而插圖是「鋪底停 3 句對話」的設計（vn_core `_sceneCgLinger`），剩不到 3 句就到底＝倒數走不完，
+    //   然後末尾面板(z-index 15)整個蓋掉插圖(z-index 5)，剛生出來的圖等於沒出現過。
+    //   → 這種情況把那張圖當末尾面板底圖，排在啟航群像前面：玩家剛看到的畫面直接留著當底。
+    //   插圖已自然淡出（linger 歸零）＝她已經看完了，不介入、照原本的優先序。
+    const END_CG_WAIT_MS = 25000;   // 還在生時最多等這麼久；超時就維持原底圖，不留半調子狀態
+    function _endSceneCg() {
+        const C = win.VN_Core || window.VN_Core;
+        if (!C || !(C._sceneCgLinger > 0)) return null;
+        if (C._sceneCgHold) return null;                      // 失敗佔位卡：根本沒有圖，別拿去當底圖
+        const id = (C._sceneCgCur && C._sceneCgCur.cacheId) || '';
+        if (!id) return null;
+        const url = (C._sceneMemCache || {})[id] || '';
+        if (url) return { url: url, wait: null };
+        const p = (C._sceneInflight || {})[id];               // 還在生 → 交出 promise，讓上面等它
+        return p ? { url: '', wait: p } : null;
+    }
+    function _withTimeout(p, ms) {
+        return Promise.race([
+            Promise.resolve(p).then(v => String(v || ''), () => ''),
+            new Promise(res => setTimeout(() => res(''), ms)),
+        ]);
     }
     // 🚨🚨底圖絕對不能塞進 CSS 自訂屬性：實測 Chrome 對 --var 的值有長度上限，
     //   1MB 進得去、2MB 直接被丟掉——setProperty 不報錯、讀回來是空的，
     //   於是 background-image 解析成 none，畫面就變成純底色（她的「黑屏／紫色」就是這個）。
     //   啟航群像是 1344×768 的 dataURL，大多超過 2MB，所以每次都中。
     //   改成獨立一層 div 直接設 style.backgroundImage：那條沒有這個上限。
-    function _setBgLayer(root, url) {
-        let layer = root.querySelector(':scope > .vnep-bglayer');
-        if (!url) { if (layer) layer.remove(); return; }
-        if (!layer) {
-            layer = document.createElement('div');
+    function _setBgLayer(root, url, fade) {
+        const layers = root.querySelectorAll(':scope > .vnep-bglayer');
+        const cur = layers.length ? layers[layers.length - 1] : null;   // 淡入期間會有兩層並存，最後一層才是「現在這張」
+        if (!url) { layers.forEach(l => l.remove()); return; }
+        if (!cur) {
+            const layer = document.createElement('div');
             layer.className = 'vnep-bglayer';
+            layer.style.backgroundImage = _bgUrl(url);
             root.insertBefore(layer, root.firstChild);   // 要在 .vnep-ui 前面，不然蓋在面板上
+            return;
         }
-        layer.style.backgroundImage = 'url("' + url.replace(/"/g, '\\"') + '")';
+        if (!fade) { cur.style.backgroundImage = _bgUrl(url); return; }
+        // 換圖：新的一層疊在舊層上淡入、淡完拆舊的。同一層直接改 backgroundImage 是硬切，
+        // 面板都亮著了底圖整張抽換會很跳。🚨新層要插在舊層「之後」——同層沒有 z-index，靠 DOM 序決定誰在上面。
+        const next = document.createElement('div');
+        next.className = 'vnep-bglayer vnep-bglayer-in';
+        next.style.backgroundImage = _bgUrl(url);
+        cur.insertAdjacentElement('afterend', next);
+        requestAnimationFrame(() => requestAnimationFrame(() => next.classList.remove('vnep-bglayer-in')));
+        setTimeout(() => { if (next.isConnected) cur.remove(); }, 900);   // 新層真的還在才拆舊的，免得換到一半被清掉留空底
     }
+    function _bgUrl(u) { return 'url("' + String(u).replace(/"/g, '\\"') + '")'; }
     function _canLoad(url) {
         return new Promise(res => {
             const img = new Image();   // 🚨不設 crossOrigin：設了會變成另一份請求、快取全落空
@@ -321,6 +383,7 @@
 
     function clear() {
         const root = _el();
+        _gen++;              // 換號：上一輪還在飛的底圖／插圖非同步結果全部作廢
         _unwatch();
         _toggleNative([]);   // 原生系統鍵先還原，不然面板拆了按鈕也跟著不見
         if (!root) return;
