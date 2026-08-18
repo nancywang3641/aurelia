@@ -2874,9 +2874,11 @@
               '<span>歲</span></div>' +
             '<button class="wg-btn ghost" data-act="more-trav"><i class="fa-solid fa-user-plus"></i> ' +
               ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>' +
-            // 啟航群像是主持AI 寫了啟航段落才會自動生；它忘了就手動補一張（末尾畫面的底圖用的是這個）
-            (team.length && _needLaunchArt(w)
-                ? '<button class="wg-btn ghost" data-act="make-launch"><i class="fa-solid fa-camera-retro"></i> 生成啟航群像</button>'
+            // 啟航群像＝末尾畫面的底圖。主持AI 寫了啟航段落才會自動生，忘了就手動補；
+            //   已經有圖時也要留著這顆——想換一張(例如換了插圖接口、或就是不喜歡)總得有路可走。
+            (team.length
+                ? '<button class="wg-btn ghost" data-act="make-launch"><i class="fa-solid fa-camera-retro"></i> ' +
+                  (_needLaunchArt(w) ? '生成啟航群像' : '重生啟航群像') + '</button>'
                 : '');
 
         // ── ③ 出發設定：降生地 + 我的身分
