@@ -414,6 +414,11 @@
     cursor: pointer;
     transition: all 0.2s ease;
 }
+/* 視差世界期間模式由世界門決定 → 兩顆都不給按（active 那顆照樣亮著，看得出現在在跑哪個） */
+.se-mode-chip.locked {
+    cursor: default;
+    opacity: 0.55;
+}
 .se-mode-chip.active {
     background: var(--se-navy-acc);
     border-color: var(--se-navy-acc);
