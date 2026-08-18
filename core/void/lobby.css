@@ -703,6 +703,61 @@
 .lstage-dlg-fold { display:none; }
 
 /* =========================================================
+   📱 岔路：手機走近面板型 NPC（愛麗絲／白兔／書咖的瀅瀅）先問要做什麼。
+   兩顆並排、貼在輸入框上方——手指自然落點就在這一帶，不用往上搆。
+   只有 lobby_stage 在窄螢幕才會建這個元素，所以不包在 media query 裡
+   （包進去的話萬一在寬螢幕被建出來會變成一坨沒樣式的字）。
+   ========================================================= */
+/* 岔路期間輸入列是收起來的 → 直接貼底，不留一條空帶 */
+.lstage-pick {
+    position: absolute; left: 16px; right: 16px; bottom: 18px;
+    z-index: 3600;                      /* 面板 3350、💬 浮鈕 3500 之上：岔路期間它最大 */
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 14px 14px 16px;
+    border-radius: 20px;
+    background: rgba(255, 253, 248, 0.97);
+    border: 1px solid rgba(190, 163, 126, 0.5);
+    box-shadow: 0 10px 30px rgba(69, 46, 27, 0.24);
+    animation: lstage-pick-in 0.18s ease both;
+}
+@keyframes lstage-pick-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+}
+.lstage-pick-who {
+    text-align: center; font-size: 12.5px; letter-spacing: 1px;
+    color: #8a6a4a;
+}
+.lstage-pick-row { display: flex; gap: 10px; }
+.lstage-pick-btn {
+    flex: 1 1 0; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    padding: 15px 8px;
+    border-radius: 15px; border: 1px solid rgba(190, 163, 126, 0.45);
+    background: linear-gradient(rgba(255, 255, 255, 0.9), rgba(248, 242, 232, 0.9));
+    color: #4a3828; font-size: 14px; font-weight: 700; letter-spacing: 1px;
+    cursor: pointer;
+}
+.lstage-pick-btn i { font-size: 19px; color: #a8845c; }
+.lstage-pick-btn:active { transform: scale(0.97); background: rgba(240, 231, 218, 0.95); }
+/* 404 房是黑底綠字，米白卡片在那裡會刺眼 */
+.void-tab.mode-404 .lstage-pick {
+    background: rgba(8, 12, 8, 0.95); border-color: rgba(74, 222, 128, 0.35);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.void-tab.mode-404 .lstage-pick-who { color: rgba(74, 222, 128, 0.7); }
+.void-tab.mode-404 .lstage-pick-btn {
+    background: rgba(16, 24, 16, 0.9); border-color: rgba(74, 222, 128, 0.3); color: #d3f9d8;
+}
+.void-tab.mode-404 .lstage-pick-btn i { color: #4ade80; }
+/* 岔路期間 💬 浮鈕與搖桿一起讓開：兩顆按鈕就是全部的選項，
+   留著 💬 會變成第三條沒說明的路（按了對話浮出來、岔路卻還掛著）。
+   ⚠️ 權重要壓過 lobby_stage.css 的 .lobby-left.lstage-on.lstage-dlg-hidden .lstage-chat-fab{display:flex}
+      （0,4,0 且它後載入）→ 這裡多帶一個 class 到 0,5,0。 */
+.lobby-left.lstage-on.lstage-dlg-hidden.lstage-picking .lstage-chat-fab { display: none; }
+.lobby-left.lstage-on.lstage-picking .lstage-joy { display: none; }
+
+/* =========================================================
    📱 手機：NPC 停靠面板開著時的版型
    桌機是 16:9「左立繪＋右面板」；手機直立沒有左右，面板一開就整個
    蓋掉場景與對話框（書咖／交易所／世界門都是同一套窗）。
