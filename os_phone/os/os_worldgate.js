@@ -2353,8 +2353,10 @@
         const st2 = doc.createElement('style');
         st2.id = 'os-wg-style-bp';
         st2.textContent =
-            '.wg-win.wgbp{left:50%;right:auto;top:50%;transform:translate(-50%,-50%);width:min(1180px,94%);max-width:none;' +
-              'min-height:0;max-height:none;height:min(780px,90%);background:none;border:none;border-radius:0;box-shadow:none;' +
+            // 🚨 位置沿用原窗的「右側停靠」邏輯:左邊要留給愛麗絲立繪、底部要留給聊天輸入列,
+            //    圖紙不能置中放大蓋全場(Rae 抓過)。寬度放大到兩欄圖塊剛好的程度就好。
+            '.wg-win.wgbp{right:max(2%,calc(50% - 560px));top:50%;transform:translateY(-50%);width:min(740px,62%);max-width:none;' +
+              'min-height:min(640px,78%);max-height:80%;height:auto;background:none;border:none;border-radius:0;box-shadow:none;' +
               'overflow:visible;backdrop-filter:none;font-family:"Noto Serif TC","Source Han Serif TC","Songti TC","PMingLiU",serif;}' +
             '.wgbp-under,.wgbp-paper,.wgbp-tb,.wgbp-compass{display:none;}' +
             '.wg-win.wgbp .wgbp-under{display:block;position:absolute;inset:0;z-index:0;' +
@@ -2394,7 +2396,7 @@
             '.wg-win.wgbp .wg-btn.ghost{background:#fff;color:#1f3a68;border:1.4px solid #2a4a80;}' +
             '.wg-win.wgbp .wg-btn.danger{background:rgba(184,86,74,.08);color:#b8564a;border:1.4px solid rgba(184,86,74,.5);}' +
             // 世界=測繪圖塊
-            '.wgbp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding-top:10px;}' +
+            '.wgbp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;padding-top:10px;}' +
             '.wgbp-blk{position:relative;background:#fff;box-shadow:0 4px 14px rgba(31,58,104,.14);display:flex;flex-direction:column;' +
               'cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;}' +
             '.wgbp-blk:nth-child(odd){transform:rotate(-.5deg);}' +
