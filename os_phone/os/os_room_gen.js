@@ -308,6 +308,73 @@
             im.src = src;
         });
     }
+    // 🖼 房間形狀遮罩(map 底板遮罩同款亮度閾值,改「從畫布邊緣灌水」版):
+    //    ① 亮度 >= 閾值 = 亮格;② 從四邊只沿「暗格」灌水,走得到的=房外黑底;
+    //    ③ 其餘全算房內——被房間包住的深色家具/門洞不是洞,大白區整片填滿;
+    //    ④ 只留最大連通塊(8連通,門前台階隔線暗縫也算同塊),黑底上的雜訊亮點浮不起來。
+    //    占比不合理(退化)回 null=照舊整張顯示。閾值 console 可調 aurelia_room_mask_threshold(不進 UI)。
+    function _roomShapeMask(srcCv, W, H) {
+        try {
+            const MW = 384, MH = Math.max(2, Math.round(MW * H / W));
+            const doc = win.document;
+            const sc = doc.createElement('canvas'); sc.width = MW; sc.height = MH;
+            const sx = sc.getContext('2d', { willReadFrequently: true });
+            sx.imageSmoothingEnabled = false;
+            sx.drawImage(srcCv, 0, 0, MW, MH);
+            const d = sx.getImageData(0, 0, MW, MH).data;
+            let TH = 70;
+            try { const t = parseInt(localStorage.getItem('aurelia_room_mask_threshold'), 10); if (t >= 0 && t <= 255) TH = t; } catch (e) {}
+            const N = MW * MH;
+            const bright = new Uint8Array(N);
+            for (let i = 0; i < N; i++) {
+                if (d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114 >= TH) bright[i] = 1;
+            }
+            const outside = new Uint8Array(N);
+            const q = [];
+            const push = function (p) { if (!outside[p] && !bright[p]) { outside[p] = 1; q.push(p); } };
+            for (let x = 0; x < MW; x++) { push(x); push(N - MW + x); }
+            for (let y = 0; y < MH; y++) { push(y * MW); push(y * MW + MW - 1); }
+            while (q.length) {
+                const p = q.pop(); const x = p % MW, y = (p / MW) | 0;
+                if (x > 0) push(p - 1);
+                if (x < MW - 1) push(p + 1);
+                if (y > 0) push(p - MW);
+                if (y < MH - 1) push(p + MW);
+            }
+            const comp = new Int32Array(N);
+            let compCount = 0, bestId = 0, bestSize = 0;
+            for (let p0 = 0; p0 < N; p0++) {
+                if (outside[p0] || comp[p0]) continue;
+                const id = ++compCount; let size = 0;
+                comp[p0] = id; q.length = 0; q.push(p0);
+                while (q.length) {
+                    const p = q.pop(); size++;
+                    const x = p % MW, y = (p / MW) | 0;
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if (!dx && !dy) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx < 0 || ny < 0 || nx >= MW || ny >= MH) continue;
+                        const np = ny * MW + nx;
+                        if (!outside[np] && !comp[np]) { comp[np] = id; q.push(np); }
+                    }
+                }
+                if (size > bestSize) { bestSize = size; bestId = id; }
+            }
+            // 下限別設高:personH 定尺度後房形常只佔舞台畫布 8% 上下(小房間更小)
+            if (!(bestSize / N > 0.03 && bestSize / N < 0.98)) return null;
+            const im = sx.createImageData(MW, MH);
+            for (let i = 0; i < N; i++) {
+                if (comp[i] === bestId) {
+                    im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = 255;
+                    im.data[i * 4 + 3] = 255;
+                }
+            }
+            const mc = doc.createElement('canvas'); mc.width = MW; mc.height = MH;
+            mc.getContext('2d').putImageData(im, 0, 0);
+            return mc;
+        } catch (e) { return null; }
+    }
+
     // room：{ image, floor, viewBox }。回 { base, mask, floorStage }，floorStage=換算成舞台座標的地板多邊形
     async function stageLayers(room, W, H) {
         if (!room || !room.image) throw new Error('這間房還沒有圖。');
@@ -319,6 +386,14 @@
         const cx = cv.getContext('2d');
         cx.fillStyle = '#0b0d12'; cx.fillRect(0, 0, W, H);
         cx.drawImage(await _loadImg(room.image), f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
+        // 🖼 剪掉成品圖四周的黑底,只留房間形狀貼在舞台上;算不出可信遮罩=照舊整張顯示
+        const shape = _roomShapeMask(cv, W, H);
+        if (shape) {
+            cx.globalCompositeOperation = 'destination-in';
+            cx.imageSmoothingEnabled = true;
+            cx.drawImage(shape, 0, 0, W, H);
+            cx.globalCompositeOperation = 'source-over';
+        }
 
         const toStage = function (p) { return [p[0] * f.s + f.ox, p[1] * f.s + f.oy]; };
         const floorStage = (room.floor || []).map(toStage);
