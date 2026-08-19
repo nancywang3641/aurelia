@@ -417,8 +417,52 @@
         };
     }
 
+    // ── 房形摳圖(縮圖/卡片用)──
+    //   同一套房形遮罩直接算在原圖上:剪掉房外黑底、再裁到房形的邊界框,
+    //   拿到的是「只有房間本體」的透明底小圖,貼在什麼底色上都乾淨。
+    //   算不出可信遮罩回 null=呼叫端照舊用原圖,絕不變更糟。
+    async function cutout(imageSrc) {
+        try {
+            const img = await _loadImg(imageSrc);
+            const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+            if (!W || !H) return null;
+            const doc = win.document;
+            const cv = doc.createElement('canvas'); cv.width = W; cv.height = H;
+            const cx = cv.getContext('2d');
+            // 先鋪黑:空房母圖是透明底,透明在亮度上=黑,跟成品圖的「房外」走同一條判定
+            cx.fillStyle = '#000'; cx.fillRect(0, 0, W, H);
+            cx.drawImage(img, 0, 0, W, H);
+            const shape = _roomShapeMask(cv, W, H);
+            if (!shape) return null;
+            const md = shape.getContext('2d').getImageData(0, 0, shape.width, shape.height).data;
+            let x0 = shape.width, y0 = shape.height, x1 = -1, y1 = -1;
+            for (let y = 0; y < shape.height; y++) {
+                for (let x = 0; x < shape.width; x++) {
+                    if (!md[(y * shape.width + x) * 4 + 3]) continue;
+                    if (x < x0) x0 = x; if (x > x1) x1 = x;
+                    if (y < y0) y0 = y; if (y > y1) y1 = y;
+                }
+            }
+            if (x1 < 0) return null;
+            cx.globalCompositeOperation = 'destination-in';
+            cx.imageSmoothingEnabled = true;
+            cx.drawImage(shape, 0, 0, W, H);
+            cx.globalCompositeOperation = 'source-over';
+            // 邊界框換回原圖座標,四周留 2 格呼吸(遮罩是縮小算的,邊緣有半格誤差)
+            const sx = W / shape.width, sy = H / shape.height, pad = 2;
+            const rx = Math.max(0, Math.round((x0 - pad) * sx));
+            const ry = Math.max(0, Math.round((y0 - pad) * sy));
+            const rw = Math.min(W - rx, Math.round((x1 - x0 + 1 + pad * 2) * sx));
+            const rh = Math.min(H - ry, Math.round((y1 - y0 + 1 + pad * 2) * sy));
+            if (rw < 8 || rh < 8) return null;
+            const out = doc.createElement('canvas'); out.width = rw; out.height = rh;
+            out.getContext('2d').drawImage(cv, rx, ry, rw, rh, 0, 0, rw, rh);
+            return out.toDataURL('image/png');
+        } catch (e) { return null; }
+    }
+
     win.OS_ROOM_GEN = {
-        deliver, buildBase, stageLayers, positionWord, orderMessages, parseLayout, sanitizeCeiling, clusterOrder,
+        deliver, buildBase, stageLayers, cutout, positionWord, orderMessages, parseLayout, sanitizeCeiling, clusterOrder,
         listStylePresets, getStyleName, setStyleName, pickStylePreset,
         // console 調小人大小用：改完重進房間就看得到（決定好再寫回上面那個常數）
         _setFigure: function (px) { const v = parseFloat(px); if (isFinite(v) && v > 20) FIGURE_PX = v; return FIGURE_PX; },

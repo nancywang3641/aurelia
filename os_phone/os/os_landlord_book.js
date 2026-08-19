@@ -93,6 +93,8 @@
             '.llb-thumb{flex:0 0 92px;height:76px;border-radius:4px;overflow:hidden;',
             '  background:linear-gradient(180deg,#223c6b,#1a2d51);display:flex;align-items:center;justify-content:center}',
             '.llb-thumb img{width:100%;height:100%;object-fit:cover;display:block}',
+            // 摳過黑底的房形圖:整間房完整浮在深藍底上(cover 會把梯形房的邊裁掉)
+            '.llb-thumb img.cut{object-fit:contain;padding:3px;box-sizing:border-box}',
             '.llb-thumb svg{width:86%;display:block}',
             '.llb-unit-info{flex:1;display:flex;flex-direction:column;gap:5px;min-width:0}',
             '.llb-unit-name{font-size:16.5px;font-weight:700;letter-spacing:.1em}',
@@ -214,6 +216,19 @@
         b.innerHTML = '<i class="' + icon + '"></i><span>' + _esc(text) + '</span>';
         return b;
     }
+    // 縮圖摳圖快取:同一張房圖只算一次(key=戶id+生成時間,重新生成後 at 變了自然重算)
+    const _thumbCuts = {};
+    async function _thumbCut(id, room) {
+        const GEN = _GEN();
+        if (!GEN || typeof GEN.cutout !== 'function' || !room || !room.image) return null;
+        const key = id + '::' + (room.at || 0);
+        if (key in _thumbCuts) return _thumbCuts[key];
+        let cut = null;
+        try { cut = await GEN.cutout(room.image); } catch (e) {}
+        _thumbCuts[key] = cut;
+        return cut;
+    }
+
     // 空房縮圖：藍圖線稿(inline SVG,不吃任何素材)
     function _thumbPlaceholder(empty) {
         return '<svg viewBox="0 0 120 84" xmlns="http://www.w3.org/2000/svg">'
@@ -378,7 +393,11 @@
         const top = d.createElement('div'); top.className = 'llb-unit-top';
         const thumb = d.createElement('div'); thumb.className = 'llb-thumb';
         if (room && room.image) {
-            const img = d.createElement('img'); img.alt = ''; img.src = room.image;
+            const img = d.createElement('img'); img.alt = '';
+            // 房形摳圖:剪掉生圖四周的黑底,只把房間本體浮在藍圖紙底上;摳不出來才退回原圖
+            const cut = await _thumbCut(u.id, room);
+            if (cut) { img.src = cut; img.className = 'cut'; }
+            else img.src = room.image;
             thumb.appendChild(img);
         } else {
             thumb.innerHTML = _thumbPlaceholder(true);
