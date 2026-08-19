@@ -2097,8 +2097,8 @@
         const st = doc.createElement('style');
         st.id = 'os-wg-style';
         st.textContent =
-            /* 🌌 量子白:純白大廳配色(白霧面板+墨藍字+銀光點綴),跟愛麗絲站在一起不突兀 */
-            '.wg-win{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3350;width:400px;max-width:52%;min-height:min(500px,74%);max-height:80%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(rgba(250,251,255,.97),rgba(238,240,246,.97));border:1px solid rgba(26,28,40,.16);border-radius:16px;color:#1A1C28;font-size:13px;box-shadow:0 14px 40px rgba(26,28,40,.28),inset 0 0 0 3px rgba(255,255,255,.5);backdrop-filter:blur(8px);}' +
+            /* 窗殼只留結構(定位/flex/層級);視覺皮整組在 .wgbp(航行圖紙)那邊——舊量子白皮已退役,別再長回來 */
+            '.wg-win{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3350;width:400px;max-width:52%;min-height:min(500px,74%);max-height:80%;display:flex;flex-direction:column;overflow:hidden;color:#1A1C28;font-size:13px;}' +
             '.wg-head{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid rgba(26,28,40,.1);background:rgba(255,255,255,.55);}' +
             '.wg-brand{display:flex;align-items:center;gap:9px;min-width:0;}.wg-brand-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#1A1C28;color:#fff;font-size:16px;box-shadow:0 3px 9px rgba(26,28,40,.22);}' +
             '.wg-brand-copy{display:flex;flex-direction:column;line-height:1.05;white-space:nowrap;}.wg-brand-copy b{font-size:15px;letter-spacing:.06em;}.wg-brand-copy small{margin-top:4px;color:#8a8ea6;font-size:8px;letter-spacing:.18em;font-weight:700;}' +
@@ -2328,7 +2328,7 @@
             '.wg-tab:hover{color:#fff;}.wg-tab.on{color:#fff;}' +
             '.wg-tab.on::after{content:"";position:absolute;left:28%;right:28%;bottom:7px;height:2px;background:var(--npc-accent);}' +
             // 手機:上下堆疊,海報收成角色橫幅;字級一律不縮(縮了就變回催眠表單)
-            '@media (max-width:760px){.wg-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;}' +
+            '@media (max-width:760px){' +
               '.wg-meet{flex-direction:column;}' +
               // 手機換另一張底板:桌機那張是 2:3 直式，攤成橫幅會整個變形。這張是專門的角色舞台，
               //   底部中央有發光平台＝人站的位置，左側墨藍楔形＝放代號牌的地方。
@@ -2524,7 +2524,8 @@
         const host = doc.querySelector('.lobby-left') || doc.body;
         host.classList.add('void-dock-open');
         const box = doc.createElement('div');
-        box.className = 'wg-win';
+        // 🚨開窗當下就是圖紙皮:wgbp 若等 _renderList 讀完 DB 才掛,會先閃幾百毫秒的舊白窗(Rae:死馬)
+        box.className = 'wg-win wgbp';
         box.innerHTML =
             // 📐 航行圖紙的圖層(檔案庫頁才顯示;.wgbp 沒掛時全部 display:none)
             '<div class="wgbp-under u1"></div><div class="wgbp-under u2"></div>' +
