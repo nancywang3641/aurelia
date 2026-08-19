@@ -842,9 +842,16 @@
             } catch (e) { console.warn('[VN_Battle] 剪掉續寫戰果失敗:', e); }
 
             const player = await this._battlePlayerStats();
-            console.log('[VN_Battle] 開戰 msg#' + mid + '，玩家現況:', JSON.stringify(player));
+            // ⚔️ 已入隊的旅人跟著上場（引擎與酒館零耦合,名單由這裡撈了傳進去;撈不到=照舊單人）
+            let mates = [];
+            try {
+                const WG = window.OS_WORLDGATE;
+                if (WG && WG.getBattleAllies) mates = (await WG.getBattleAllies()) || [];
+            } catch (e) { console.warn('[VN_Battle] 讀隊友名單失敗，單人應戰', e); }
+            console.log('[VN_Battle] 開戰 msg#' + mid + '，玩家現況:', JSON.stringify(player),
+                mates.length ? ('隊友:' + mates.map(m => m.name).join('、')) : '（無隊友）');
             const host = document.getElementById('page-game') || document.body;
-            window.VN_Battle.start({ host: host, raw: raw, player: player }, async function (result) {
+            window.VN_Battle.start({ host: host, raw: raw, player: player, allies: mates }, async function (result) {
                 console.log('[VN_Battle] 戰鬥結束:', result ? result.outcome + ' hp:' + result.hp + '/' + result.maxHp : '（無結果）');
                 try {
                     if (result && msgRaw && _th && mid != null && _th.setChatMessages) {

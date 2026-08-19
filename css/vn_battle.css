@@ -106,6 +106,19 @@
   40%{transform:translate(-50%,-18px) scale(1)} 100%{opacity:0;transform:translate(-50%,-48px) scale(.95)} }
 
 /* ── 我方狀態 ── */
+/* ── ⚔️ 隊友列：一人一張小卡,倒下灰掉不移除 ── */
+.vnb-allies { flex:none; display:flex; flex-wrap:wrap; gap:6px; padding:0 14px; }
+.vnb-allies:empty { display:none; }
+.vnb-ally { display:flex; align-items:center; gap:7px; padding:4px 10px; border-radius:9px;
+  background:rgba(38,31,24,.86); border:1px solid rgba(243,234,216,.16); font-size:12px; color:#d8cdb4; }
+.vnb-ally i.fa-solid { color:#c9b98f; font-size:11px; }
+.vnb-ally .vnb-ally-nm { max-width:88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vnb-ally .vnb-bar { width:52px; height:6px; }
+.vnb-ally .vnb-bar i { background:linear-gradient(90deg,#4f8f5a,#7fc98a); }
+.vnb-ally .vnb-ally-hp { font-size:10px; color:#c9b98f; min-width:16px; text-align:right; }
+.vnb-ally.dead { opacity:.38; filter:grayscale(1); }
+.vnb-ally.hurt { animation:vnb-shake .34s ease; }
+
 .vnb-me { flex:none; padding:10px 14px 6px; }
 .vnb-me-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
 .vnb-me-nm { font-size:13px; color:#f3ead8; flex:none; }

@@ -35,6 +35,32 @@
 
     // 技能類型 → 圖標（AI 不知道有哪些圖標可用，所以它只給類型，圖示由這裡配）
     const TYPE_ICON = { '單體': 'fa-khanda', '群體': 'fa-fan', '回復': 'fa-kit-medical', '削弱': 'fa-hand-sparkles' };
+
+    // ── ⚔️ 隊友原型：從旅人的職業/擅長猜他在戰場上是哪種人（純關鍵字，零 API）──
+    //    數值刻意比玩家略弱：戰鬥的主角還是玩家，隊友是「有人跟你並肩」不是代打。
+    //    這格是「補師玩家被群毆」的解：入隊的旅人真的上場、真的行動，治療也終於有對象。
+    const ALLY_ROLES = {
+        striker: { hp: 24, ac: 12, atk: 5, dmg: [1, 8, 2], spd: 4, icon: 'fa-khanda' },
+        tank:    { hp: 38, ac: 15, atk: 3, dmg: [1, 6, 1], spd: 1, icon: 'fa-shield-halved' },
+        healer:  { hp: 22, ac: 12, atk: 2, dmg: [1, 4, 1], spd: 2, icon: 'fa-kit-medical' },
+        fighter: { hp: 28, ac: 13, atk: 4, dmg: [1, 6, 2], spd: 2, icon: 'fa-hand-fist' },
+    };
+    const ROLE_HINTS = [
+        [/醫|治|療|補|癒|藥|救|牧|聖|奶/,        'healer'],
+        [/盾|守|坦|衛|鎧|壁|護/,                 'tank'],
+        [/刺|斥候|影|弓|獵|快|迅|殺手|狙|攻/,     'striker'],
+    ];
+    function allyRole(text) {
+        for (const [re, r] of ROLE_HINTS) if (re.test(String(text || ''))) return r;
+        return 'fighter';
+    }
+    // 呼叫端傳進來的旅人（{name,job,skill}）→ 戰鬥單位。純函式，不碰酒館。
+    function allyFromInfo(t) {
+        const role = allyRole((t.job || '') + ' ' + (t.skill || ''));
+        const a = ALLY_ROLES[role];
+        return { name: t.name || '同行者', role: role, icon: a.icon,
+                 hp: a.hp, maxHp: a.hp, ac: a.ac, atk: a.atk, dmg: a.dmg.slice(), spd: a.spd };
+    }
     // 敵人圖標：從名字猜，猜不到給通用款。純粹是為了不要每隻怪都長一樣
     const FOE_ICON_HINTS = [
         [/狼|獸|犬|虎|熊|貓|鼠/, 'fa-paw'],
@@ -68,10 +94,12 @@
 
     const S = {
         root: null, host: null, onEnd: null,
-        me: null, foes: [], order: [], oi: 0,
+        me: null, foes: [], allies: [], order: [], oi: 0,
         round: 1, target: null, busy: false, over: false,
         log: [], skills: null, fleeDC: 12, notes: [], gen: 0,
     };
+    // 我方全員（玩家＋還站著的隊友）：敵人選目標、治療選對象都看這份
+    const partyAlive = () => [S.me].concat(S.allies).filter(u => u && !u.dead);
 
     // ================================================================
     //  <BattleStart> 解析：AI 開場配一次數值，這裡負責讀懂它、擋住離譜值
@@ -140,7 +168,7 @@
     }
 
     function parseSpec(text) {
-        const spec = { enemies: [], skills: [], field: null, notes: [] };
+        const spec = { enemies: [], skills: [], allies: [], field: null, notes: [] };
         String(text || '').split(/\r?\n/).forEach((raw) => {
             const p = parseLine(raw);
             if (!p) return;
@@ -189,6 +217,16 @@
                     desc: p.desc || ({ '單體': '單體攻擊', '群體': '掃向所有敵人',
                                        '回復': '回復體力', '削弱': '使目標失衡' }[type]),
                 });
+            } else if (p.tag === 'ally') {
+                // 劇情裡臨時助拳的 NPC（[Ally|名|role=…|hp=…]）。入隊旅人不用寫——程式會自動上場。
+                const role = allyRole(p.role || p.name || '');
+                const base = ALLY_ROLES[role];
+                const dice = parseDice(p.dmg, base.dmg);
+                const hp = clamp(p.hp, LIM.hp, base.hp);
+                spec.allies.push({ name: p.name || '同行者', role: role, icon: base.icon,
+                    hp: hp, maxHp: hp, ac: clamp(p.ac, LIM.ac, base.ac),
+                    atk: clamp(p.atk, LIM.atk, base.atk), dmg: dice.spec,
+                    spd: clamp(p.spd, [-5, 10], base.spd) });
             } else if (p.tag === 'field') {
                 spec.field = { name: p.name || '', flee: FLEE_LV[p.flee] != null ? FLEE_LV[p.flee] : 12,
                                aim: AIM[p.difficulty] || AIM[p.aim] || null };
@@ -251,15 +289,20 @@
     // ── 難度校準 ──
     //  AI 配數值時看不到玩家現在多強，配出來常常一面倒。它只負責說「這是什麼等級的仗」，
     //  實際數字在這裡對著玩家當下的血量/命中/輸出調整，並保留敵人之間的相對強弱。
-    function calibrate(foes, me, aim) {
+    function calibrate(foes, me, aim, allies) {
         if (!aim || !foes.length) return null;
         const hitRate = (ac) => Math.min(0.95, Math.max(0.05, (21 - (ac - me.atk)) / 20));
         const avg = ([n, s, b]) => n * (s + 1) / 2 + b;
-        const myDps = avg(me.dmg) * (foes.reduce((a, f) => a + hitRate(f.ac), 0) / foes.length);
+        // ⚔️ 隊友算進強弱比:他們貢獻輸出(六成命中概算)、也用血量幫全隊分攤傷害——
+        //    不算的話,帶滿隊友的「硬仗」會被校準成白給
+        const mates = allies || [];
+        const allyDps = mates.reduce((a, u) => a + avg(u.dmg) * 0.6, 0);
+        const allyHp = mates.reduce((a, u) => a + u.hp, 0);
+        const myDps = avg(me.dmg) * (foes.reduce((a, f) => a + hitRate(f.ac), 0) / foes.length) + allyDps;
         const foeHp = foes.reduce((a, f) => a + f.hp, 0);
         const foeDps = foes.reduce((a, f) => a + avg(f.dmg) * hitRate(me.ac + (0 - f.atk) + me.atk), 0);
-        const R = foeHp / Math.max(1, myDps);          // 玩家要打幾回合才清場
-        const Sv = me.hp / Math.max(0.5, foeDps);      // 玩家能撐幾回合
+        const R = foeHp / Math.max(1, myDps);                       // 我方要打幾回合才清場
+        const Sv = (me.hp + allyHp * 0.6) / Math.max(0.5, foeDps);  // 全隊能撐幾回合(傷害會分攤,隊友血打六折算)
         const ratio = Sv / Math.max(0.5, R);
         if (ratio >= aim * 0.6 && ratio <= aim * 1.6) return null;   // 合理帶放寬：只有真的離譜才動手
         // 血量和傷害各調一半（開根號）：ratio 同時對兩者敏感，全壓在單一項上會把形狀弄壞
@@ -316,6 +359,9 @@
         const log = el('div', 'vnb-log');
         root.appendChild(log);
 
+        const allies = el('div', 'vnb-allies');   // ⚔️ 隊友列（沒隊友時空著不占位）
+        root.appendChild(allies);
+
         const me = el('div', 'vnb-me');
         me.innerHTML =
             '<div class="vnb-me-row">'
@@ -351,7 +397,7 @@
         root.appendChild(dice);
 
         S.root = root;
-        S.el = { order, foes, log, me, acts, dice, skills,
+        S.el = { order, foes, log, me, acts, dice, skills, allies,
                  round: top.querySelector('.vnb-round b'),
                  meNm: me.querySelector('.vnb-me-nm'),
                  meBar: me.querySelector('.vnb-me-hp'),
@@ -381,6 +427,23 @@
             });
             f.el = card;
             S.el.foes.appendChild(card);
+        });
+    }
+
+    // ⚔️ 隊友列：一人一張小卡（名字＋血條）。倒下就灰掉,不移除——「他倒在那裡」是戰況的一部分
+    function renderAllies() {
+        if (!S.el || !S.el.allies) return;
+        S.el.allies.innerHTML = '';
+        S.allies.forEach((a) => {
+            const card = el('div', 'vnb-ally' + (a.dead ? ' dead' : ''));
+            card.innerHTML =
+                '<i class="fa-solid ' + a.icon + '"></i>'
+              + '<span class="vnb-ally-nm">' + a.name + '</span>'
+              + '<span class="vnb-bar"><i></i></span>'
+              + '<span class="vnb-ally-hp">' + Math.max(0, a.hp) + '</span>';
+            card.querySelector('.vnb-bar i').style.width = Math.max(0, a.hp / a.maxHp * 100) + '%';
+            a.el = card;
+            S.el.allies.appendChild(card);
         });
     }
 
@@ -581,16 +644,19 @@
         const done = () => later(checkOverThenNext, T_NEXT);
 
         // ── 回復（內建急救 / AI 的回復型）──
+        // ⚔️ 有隊友時治療找「血量比例最低的我方」（含自己）：補師帶隊友,治療才真的有對象
         if (key === 'mend' || sk.type === '回復') {
+            const tgt = partyAlive().sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0] || S.me;
             const pct = sk.heal && /%/.test(sk.heal) ? parseFloat(sk.heal) / 100 : null;
             const flat = sk.heal && !/%/.test(sk.heal) ? parseFloat(sk.heal) : null;
             const heal = Math.max(1, Math.round(flat != null && !isNaN(flat) ? flat
-                                              : S.me.maxHp * (pct != null && !isNaN(pct) ? pct : 0.3)));
-            const before = S.me.hp;
-            S.me.hp = Math.min(S.me.maxHp, S.me.hp + heal);
-            renderMe();
-            popNum(S.el.meBar, '+' + (S.me.hp - before), 'heal');
-            say('<b>你</b> 使出 <b>' + sk.name + '</b>，回復 <em>' + (S.me.hp - before) + '</em> 點體力。', 'sys');
+                                              : tgt.maxHp * (pct != null && !isNaN(pct) ? pct : 0.3)));
+            const before = tgt.hp;
+            tgt.hp = Math.min(tgt.maxHp, tgt.hp + heal);
+            renderMe(); renderAllies();
+            popNum(tgt === S.me ? S.el.meBar : tgt.el, '+' + (tgt.hp - before), 'heal');
+            say('<b>你</b> 使出 <b>' + sk.name + '</b>，替 <b>' + (tgt === S.me ? '自己' : tgt.name) + '</b> 回復 <em>'
+                + (tgt.hp - before) + '</em> 點體力。', 'sys');
             return done();
         }
 
@@ -642,24 +708,70 @@
             }
             const big = !!f.charging;
             f.charging = false;
-            const r = attackRoll(f, S.me, { hitMod: big ? 2 : 0 });
+            // ⚔️ 目標分散到全隊（加權隨機）：坦型最招仇恨、玩家其次、其他人一份——
+            //    「只有玩家挨打」是單挑時代的遺產，補師被群毆的根源就在這行。
+            const pool = partyAlive();
+            const wOf = (u) => u.side === 'me' ? 2 : (u.role === 'tank' ? 3 : 1);
+            let sum = 0; pool.forEach(u => { sum += wOf(u); });
+            let pick = Math.random() * sum, tgt = pool[0] || S.me;
+            for (const u of pool) { pick -= wOf(u); if (pick <= 0) { tgt = u; break; } }
+            const isMe = tgt === S.me;
+            const r = attackRoll(f, tgt, { hitMod: big ? 2 : 0 });
             showDice(r.nat, r.crit ? '會心一擊！' : r.hit ? '命中' : '未命中');
             later(() => {
                 const verb = big ? '全力砸下' : '撲上來';
-                // 擋下大招＝敵人失衡，下回合跳過。沒有這個回報的話，擋一次省下的傷害
-                // 剛好等於少打一次的損失（實測 17% vs 19%），防禦仍是白按的。
-                if (big && S.me.guard) { f.stunned = true; if (S.beats) S.beats.guardedBig++; }
+                const tName = isMe ? '你' : tgt.name;
+                // 擋下大招＝敵人失衡，下回合跳過（防禦只有玩家會擺,隊友沒這個動作）
+                if (big && isMe && S.me.guard) { f.stunned = true; if (S.beats) S.beats.guardedBig++; }
                 if (r.hit) {
-                    const dmg = applyDamage(f, S.me, r, { extraDice: big ? f.dmg[0] * 2 : 0 });
-                    renderMe();
-                    say('<b>' + f.name + '</b> ' + verb + '（' + r.total + ' vs 防禦 ' + r.ac + '）<br>'
-                      + (r.crit ? '會心一擊！' : '') + '你受到 <em>' + dmg + '</em> 點傷害'
-                      + (S.me.guard ? '（已擋下一半）' : ''),
+                    const dmg = applyDamage(f, tgt, r, { extraDice: big ? f.dmg[0] * 2 : 0 });
+                    renderMe(); renderAllies();
+                    say('<b>' + f.name + '</b> ' + verb + '向 <b>' + tName + '</b>（' + r.total + ' vs 防禦 ' + r.ac + '）<br>'
+                      + (r.crit ? '會心一擊！' : '') + tName + '受到 <em>' + dmg + '</em> 點傷害'
+                      + (isMe && S.me.guard ? '（已擋下一半）' : ''),
                       r.crit || big ? 'crit hit' : 'hit');
+                    if (!isMe && tgt.dead) { if (S.beats) S.beats.allyDowns.push(tgt.name); say('<b>' + tgt.name + '</b> 撐不住倒下了。', 'dead'); }
                 } else {
-                    say('<b>' + f.name + '</b> ' + verb + '，落空了（' + r.total + ' vs 防禦 ' + r.ac + '）', 'miss');
+                    say('<b>' + f.name + '</b> ' + verb + '向 <b>' + tName + '</b>，落空了（' + r.total + ' vs 防禦 ' + r.ac + '）', 'miss');
                 }
                 if (f.stunned) { renderFoes(); say('你穩穩接下這一擊，<b>' + f.name + '</b> 收勢不及、露出破綻。', 'sys'); }
+                later(checkOverThenNext, T_NEXT);
+            }, T_RESOLVE);
+        }, T_FOE_THINK);
+    }
+
+    // ⚔️ 隊友行動（自動,不用玩家指揮）：補型見傷先救,其他人打最弱的敵人補刀
+    function allyAct(a) {
+        S.busy = true; actsEnabled(false);
+        later(() => {
+            const hurt = partyAlive().filter(u => u.hp / u.maxHp < 0.6)
+                                     .sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
+            if (a.role === 'healer' && hurt) {
+                const heal = Math.max(1, Math.round(hurt.maxHp * 0.22));
+                const before = hurt.hp;
+                hurt.hp = Math.min(hurt.maxHp, hurt.hp + heal);
+                renderMe(); renderAllies();
+                popNum(hurt === S.me ? S.el.meBar : hurt.el, '+' + (hurt.hp - before), 'heal');
+                say('<b>' + a.name + '</b> 替 <b>' + (hurt === S.me ? '你' : hurt.name) + '</b> 處置傷勢，回復 <em>'
+                    + (hurt.hp - before) + '</em> 點體力。', 'sys');
+                later(checkOverThenNext, T_NEXT);
+                return;
+            }
+            const alive = S.foes.filter(x => !x.dead);
+            if (!alive.length) { later(checkOverThenNext, T_NEXT); return; }
+            const t = alive.slice().sort((x, y) => x.hp - y.hp)[0];   // 打最弱的:隊友的價值在收頭,不在搶戲
+            const r = attackRoll(a, t);
+            showDice(r.nat, a.name + (r.crit ? ' 會心！' : r.hit ? ' 命中' : ' 未命中'));
+            later(() => {
+                if (r.hit) {
+                    const dmg = applyDamage(a, t, r);
+                    say('<b>' + a.name + '</b> 攻向 <b>' + t.name + (t.tagNo || '') + '</b>（' + r.total + ' vs 防禦 ' + r.ac + '）<br>'
+                      + (r.crit ? '會心一擊！' : '命中，') + '造成 <em>' + dmg + '</em> 點傷害', r.crit ? 'crit hit' : 'hit');
+                    renderFoes();
+                    if (t.dead) say('<b>' + t.name + (t.tagNo || '') + '</b> 倒下了。', 'dead');
+                } else {
+                    say('<b>' + a.name + '</b> 攻向 <b>' + t.name + (t.tagNo || '') + '</b>，被閃開了（' + r.total + ' vs 防禦 ' + r.ac + '）', 'miss');
+                }
                 later(checkOverThenNext, T_NEXT);
             }, T_RESOLVE);
         }, T_FOE_THINK);
@@ -683,7 +795,7 @@
             guard++;
         } while (S.order[S.oi].dead && guard < 50);
 
-        renderOrder(); renderFoes(); renderMe();
+        renderOrder(); renderFoes(); renderMe(); renderAllies();
         const cur = S.order[S.oi];
         if (cur.stunned) {   // 大招被擋下的那一回合：站著喘，直接跳過
             cur.stunned = false;
@@ -697,6 +809,9 @@
             renderMe();
             S.busy = false; actsEnabled(true);
             if (!S.target || S.target.dead) { S.target = S.foes.find(f => !f.dead) || null; renderFoes(); }
+        } else if (cur.side === 'ally') {
+            closeSkills();
+            allyAct(cur);
         } else {
             closeSkills();
             foeAct(cur);
@@ -726,6 +841,8 @@
             skills: (S.beats && S.beats.skills.slice()) || [],     // 過程重點：橋接句用，AI 靠這些接續
             guardedBig: (S.beats && S.beats.guardedBig) || 0,
             crits: (S.beats && S.beats.crits) || 0,
+            // ⚔️ 同行者戰後狀態:寫回正文,AI 才知道誰掛彩誰倒下(倒下=失去意識,生死歸主持人裁定)
+            mates: S.allies.map(a => ({ name: a.name, hp: a.hp, maxHp: a.maxHp, down: !!a.dead })),
             log: S.log.slice(),
         };
 
@@ -742,6 +859,9 @@
           +   '<div class="vnb-st"><b>' + S.round + '</b><span>回合</span></div>'
           +   '<div class="vnb-st"><b>' + S.me.hp + ' / ' + S.me.maxHp + '</b><span>剩餘體力</span></div>'
           +   '<div class="vnb-st"><b>' + killed.length + '</b><span>擊倒</span></div>'
+          +   (S.allies.length
+                ? '<div class="vnb-st"><b>' + S.allies.filter(a => !a.dead).length + ' / ' + S.allies.length + '</b><span>同行者健在</span></div>'
+                : '')
           + '</div>';
 
         // LAB 觀察窗：把「要寫回正文的東西」攤開給人看（正式模組不掛這塊）
@@ -802,18 +922,19 @@
 
             if (S.root) { try { S.root.remove(); } catch (e) {} }   // 上一場沒收乾淨就直接拆掉
             S.gen++;        // 新的一場：舊鏈全部作廢（沒這行，兩場的 nextTurn 會搶同一份 S）
-            S.foes = []; S.order = []; S.oi = 0; S.round = 1;
+            S.foes = []; S.allies = []; S.order = []; S.oi = 0; S.round = 1;
             S.busy = false; S.over = false; S.log = []; S.target = null;
             S.notes = []; S.fleeDC = 12; S.skills = null;
-            S.beats = { skills: [], guardedBig: 0, crits: 0 };   // 過程重點：寫回正文的橋接句要用（AI 靠這個接續）
+            S.beats = { skills: [], guardedBig: 0, crits: 0, allyDowns: [] };   // 過程重點：寫回正文的橋接句要用（AI 靠這個接續）
             S.onEnd = onEnd || null; S.host = host;
 
-            let list = spec.enemies || ['goblin'], aiSkills = null, field = null;
+            let list = spec.enemies || ['goblin'], aiSkills = null, field = null, tagAllies = [];
             if (spec.raw) {
                 const p = parseSpec(spec.raw);
                 list = p.enemies;
                 if (p.skills.length) aiSkills = p.skills;
                 field = p.field;
+                tagAllies = p.allies || [];
                 S.notes = p.notes.slice();
             }
 
@@ -837,6 +958,12 @@
             S.me.hp = Math.max(1, Math.min(S.me.hp, S.me.maxHp));   // 目前血高於上限＝血條撐爆容器，呼叫端給錯也要擋住
             S.target = S.foes[0];
 
+            // ⚔️ 隊友：<BattleStart> 自己帶了 [Ally|…]（劇情NPC助拳）就用它的,
+            //    否則用呼叫端傳進來的入隊旅人(spec.allies={name,job,skill})——旅人上場不必靠 AI 記得寫標籤。
+            const allyInfos = tagAllies.length ? tagAllies : (spec.allies || []).map(allyFromInfo);
+            S.allies = allyInfos.slice(0, 4).map(a =>
+                Object.assign({}, a, { side: 'ally', maxHp: a.maxHp || a.hp, hp: a.hp, dead: false, el: null }));
+
             // 相對玩家的最後一道：一擊打掉近半血就沒有反應餘地了（蓄力大招是三倍骰，擋下才活得成）。
             //   AI 想做必死的仗該用 difficulty=絕望 表達，而不是靠單擊 500 傷。
             const capAvg = Math.max(3, S.me.maxHp * 0.45);
@@ -855,21 +982,22 @@
             // 場地：逃跑難度＋難度校準（AI 說等級，數字對著玩家現況調）
             if (field) {
                 S.fleeDC = field.flee;
-                const cal = calibrate(S.foes, S.me, field.aim);
+                const cal = calibrate(S.foes, S.me, field.aim, S.allies);
                 if (cal) S.notes.push('難度校準：原本強弱比 ' + cal.ratio + '（目標 ' + cal.aim + '）'
                                     + ' → 敵人血量 ×' + cal.k + '，校準後約 ' + cal.after);
             }
 
             host.appendChild(build());
-            renderFoes(); renderMe();
+            renderFoes(); renderMe(); renderAllies();
 
             // 先攻：d20 + 敏捷，同分玩家先（讓玩家握有主動權比較好玩）
-            S.order = S.foes.concat([S.me]).map(u => Object.assign(u, { _init: d(20) + u.spd }));
+            S.order = S.foes.concat([S.me]).concat(S.allies).map(u => Object.assign(u, { _init: d(20) + u.spd }));
             S.order.sort((a, b) => (b._init - a._init) || (a.side === 'me' ? -1 : 1));
             S.oi = -1;
 
             if (field && field.name) say('<b>' + field.name + '</b>', 'sys');
             say('遭遇 <b>' + S.foes.map(f => f.name + (f.tagNo || '')).join('、') + '</b>。', 'sys');
+            if (S.allies.length) say('<b>' + S.allies.map(a => a.name).join('、') + '</b> 與你並肩迎敵。', 'sys');
             say('出手順序：' + S.order.map(u => u.name + (u.tagNo || '')).join(' → '), 'sys');
             if (S.notes.length) console.log('[VN_Battle] 開場調整：\n' + S.notes.join('\n'));
             renderOrder();
@@ -889,6 +1017,7 @@
             //   還得自己開會討論「罪不致死」——生死本來就該由主持人按劇情分寸裁定
             if (r.killed.length) parts.push('down:' + tally(r.killed, '+'));
             if (r.escaped.length) parts.push('left:' + tally(r.escaped, '+'));
+            if (r.mates && r.mates.length) parts.push('mates:' + r.mates.map(m => m.name + '@' + m.hp + '/' + m.maxHp).join('+'));
             return parts.join('|') + ']';
         },
         //   這句是 AI 下一輪唯一的戰鬥記憶（假戰果被剪掉了），寫太薄它會沒頭沒尾接不下去，
@@ -900,11 +1029,19 @@
             if (r.guardedBig) bits.push('穩穩擋下對方蓄力的重擊');
             if (r.crits) bits.push('打出過會心一擊');
             const mid = bits.length ? '，' + bits.join('，') : '';
+            // ⚔️ 同行者也要進戰鬥記憶:誰並肩作戰、誰被打倒(失去意識非死亡),AI 下一輪才接得住
+            let mateTxt = '';
+            if (r.mates && r.mates.length) {
+                const up = r.mates.filter(m => !m.down).map(m => m.name);
+                const dn = r.mates.filter(m => m.down).map(m => m.name);
+                mateTxt = '；' + (up.length ? tally(up) + '與你並肩作戰' : '')
+                        + (dn.length ? (up.length ? '，' : '') + tally(dn) + '在戰鬥中被打倒（失去意識，並未死亡）' : '');
+            }
             if (r.outcome === 'win')
-                return '（戰鬥結果：與' + tally(r.killed) + '交手了' + r.rounds + '回合' + mid + '，最終將對方擊倒；你' + w + '。）';
+                return '（戰鬥結果：與' + tally(r.killed) + '交手了' + r.rounds + '回合' + mid + '，最終將對方擊倒；你' + w + mateTxt + '。）';
             if (r.outcome === 'flee')
-                return '（戰鬥結果：與' + tally(r.escaped) + '纏鬥了' + r.rounds + '回合' + mid + '，你抽身甩開對方脫離戰場；' + w + '。）';
-            return '（戰鬥結果：與' + (tally(r.alive || []) || tally(r.killed || []) || '對手') + '纏鬥了' + r.rounds + '回合' + mid + '，你力竭被擊倒。）';
+                return '（戰鬥結果：與' + tally(r.escaped) + '纏鬥了' + r.rounds + '回合' + mid + '，你抽身甩開對方脫離戰場；' + w + mateTxt + '。）';
+            return '（戰鬥結果：與' + (tally(r.alive || []) || tally(r.killed || []) || '對手') + '纏鬥了' + r.rounds + '回合' + mid + '，你力竭被擊倒' + mateTxt + '。）';
         },
     };
 
