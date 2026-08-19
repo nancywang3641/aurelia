@@ -482,11 +482,13 @@ const IRIS_IDLE = [
                 : `<span style="color:#5c3a28;font-style:italic;">(素材檔案已載入，繼續吧。)</span>`;
             if (nameBox) nameBox.style.display = 'none';
         } else {
-            const userName = IRIS_STATE.userName || '委託人';
             if (is404Room) {
                 playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個假笑人偶消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個寫小說的天然呆。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
             } else {
-                playIrisSequence(`[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]\n[Char|瀅瀅|smile|「啊！歡迎光臨，${userName}！我正好卡文了，今天有什麼新素材（委託）要交給我嗎？」]`);
+                // 🚫 這裡原本還接一句寫死的瀅瀅開場白（歡迎光臨＋卡文＋要新素材嗎）。
+                //    寫死的台詞會變成範本被套到每個 NPC 頭上 → 移除，只留進場的旁白。
+                //    瀅瀅自己要說話走她的反應池（lstage-poke-ying），那是她專屬的。
+                playIrisSequence('[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]');
             }
         }
         setSceneBadge(is404Room ? '404號房' : '視差書咖');
