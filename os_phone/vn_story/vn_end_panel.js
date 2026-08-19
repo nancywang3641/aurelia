@@ -335,14 +335,19 @@
             ? '<div class="vnep-ac-sec">' + title + '</div>' + _achvRows(list, done, hidden) : '';
         const box = document.createElement('div');
         box.className = 'vnep-achv';
+        // 📐 航行圖紙皮(同世界門檔案庫):深幕+白藍格紙,成就=測繪紀錄行,達成=紅色審查印章
         box.innerHTML =
-            '<div class="vnep-ac-head"><span class="vnep-ac-title">這個世界的成就</span>' +
-              '<span class="vnep-ac-count">' + got + ' / ' + all.length + '</span>' +
-              '<span class="vnep-ac-x">✕</span></div>' +
-            '<div class="vnep-ac-body">' +
-              sec('一般', a.normal, false) + sec('與同行者之間', a.bond, false) + sec('隱藏', a.hidden, true) +
+            '<div class="vnep-ac-sheet">' +
+              '<div class="vnep-ac-head"><span class="vnep-ac-title">這個世界的成就</span>' +
+                '<span class="vnep-ac-count">已測繪 ' + got + ' / ' + all.length + '</span>' +
+                '<span class="vnep-ac-x">✕</span></div>' +
+              '<div class="vnep-ac-body">' +
+                sec('一般', a.normal, false) + sec('與同行者之間', a.bond, false) + sec('隱藏', a.hidden, true) +
+              '</div>' +
             '</div>';
         box.querySelector('.vnep-ac-x').addEventListener('click', () => box.remove());
+        // 點深幕空白處也能關(圖紙本體不關)
+        box.addEventListener('click', (e) => { if (e.target === box) box.remove(); });
         root.appendChild(box);
     }
 
