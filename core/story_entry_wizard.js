@@ -76,35 +76,6 @@
             <path d="M34 74 q1.6 8.4 10 10 q-8.4 1.6 -10 10 q-1.6 -8.4 -10 -10 q8.4 -1.6 10 -10" fill="#f0c060"/>
         </svg>`,
 
-        // 資訊條:人像(金環三點+深藍剪影)
-        infoPerson: `<svg class="sew-info-ico" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="60" cy="63" r="49" fill="none" stroke="#cfa85e" stroke-width="2.6"/>
-            <g fill="#d9b46a"><circle cx="60" cy="14" r="4.6"/><circle cx="17.6" cy="87.5" r="4.6"/><circle cx="102.4" cy="87.5" r="4.6"/></g>
-            <circle cx="60" cy="47" r="20" fill="#1c3260"/>
-            <path d="M24 100 q5 -34 36 -34 q31 0 36 34 q-17 7 -36 7 q-19 0 -36 -7 z" fill="#1c3260"/>
-        </svg>`,
-
-        // 資訊條:調色盤(金環+頂部緞飾+深藍盤三點)
-        infoPalette: `<svg class="sew-info-ico" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="60" cy="64" r="47" fill="none" stroke="#cfa85e" stroke-width="2.6"/>
-            <path d="M42 11 q10 8 18 8 q8 0 18 -8 q-6 13 -18 13 q-12 0 -18 -13 z" fill="#d3ac60"/>
-            <g transform="translate(60 64) scale(1.12) translate(-60 -64)">
-                <path d="M60 32 C 83 32 99 45 99 63 C 99 72 90 76 82 73 C 75 70.5 71 74 73 81 C 75 89 68 96 58 96 C 35 96 21 82 21 62 C 21 44 38 32 60 32 Z" fill="#223a6e" stroke="#cbb277" stroke-width="2"/>
-                <g fill="#f4ecd6" stroke="#c9ab6f" stroke-width="1.5"><circle cx="47" cy="52" r="6"/><circle cx="67" cy="48" r="6"/><circle cx="43" cy="70" r="6"/></g>
-            </g>
-        </svg>`,
-
-        // 資訊條:攤開書(金環+奶油頁緣+深藍封面)
-        infoBook: `<svg class="sew-info-ico" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="60" cy="62" r="47" fill="none" stroke="#cfa85e" stroke-width="2.4"/>
-            <g transform="translate(60 64) scale(1.14) translate(-60 -64)">
-                <path d="M60 46 C 47 35 30 33 15 38 L15 84 C 30 80 47 82 60 92 C 73 82 90 80 105 84 L105 38 C 90 33 73 35 60 46 Z" fill="#ead9ac"/>
-                <path d="M60 42 C 47 31 30 29 16 34 L16 80 C 30 76 47 78 60 88 C 73 78 90 76 104 80 L104 34 C 90 29 73 31 60 42 Z" fill="#1c3260"/>
-                <path d="M60 42 L60 88" stroke="#ead9ac" stroke-width="2.2"/>
-                <path d="M44 94 L76 94 L82 102 L38 102 Z" fill="#1c3260"/>
-            </g>
-        </svg>`,
-
         // CTA 箭頭:金邊奶白粗夾角(用 2 次,無 defs)
         chevron: `<svg class="sew-cta-ico" viewBox="0 0 60 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <path d="M16 14 L47 50 L16 86" fill="none" stroke="#ddc294" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
@@ -179,11 +150,11 @@
                                 </div>
                             </div>
                             <div class="sew-info">
-                                <div class="sew-info-col">${SVG.infoPerson}<div class="sew-info-txt">角色來源<small>自動識別</small></div></div>
+                                <div class="sew-info-col"><span class="sew-info-ring"><i class="fa-solid fa-user"></i></span><div class="sew-info-txt">角色來源<small>自動識別</small></div></div>
                                 <span class="sew-info-sep"></span>
-                                <div class="sew-info-col">${SVG.infoPalette}<div class="sew-info-txt">視覺方案<small>由你選擇</small></div></div>
+                                <div class="sew-info-col"><span class="sew-info-ring"><i class="fa-solid fa-palette"></i></span><div class="sew-info-txt">視覺方案<small>由你選擇</small></div></div>
                                 <span class="sew-info-sep"></span>
-                                <div class="sew-info-col">${SVG.infoBook}<div class="sew-info-txt">開場內容<small>保持原樣</small></div></div>
+                                <div class="sew-info-col"><span class="sew-info-ring"><i class="fa-solid fa-book-open"></i></span><div class="sew-info-txt">開場內容<small>保持原樣</small></div></div>
                             </div>
                             <button class="sew-cta" id="sew-go-preview" type="button"><span>預覽開場</span>${SVG.chevron}</button>
                         </div>
