@@ -2347,6 +2347,114 @@
               '.wg-brand-copy small{display:none}' +
               '.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
+
+        // ═══ 📐 航行圖紙皮(只在檔案庫頁掛 .wgbp;種子/詳情頁摘掉=回量子白窗) ═══
+        // 白底藍格工程紙+多紙堆疊+手繪歪框(feTurbulence 濾鏡,框線獨立層才不糊字);設計稿 tmp/worldgate_blueprint_mockup.html
+        const st2 = doc.createElement('style');
+        st2.id = 'os-wg-style-bp';
+        st2.textContent =
+            '.wg-win.wgbp{left:50%;right:auto;top:50%;transform:translate(-50%,-50%);width:min(1180px,94%);max-width:none;' +
+              'min-height:0;max-height:none;height:min(780px,90%);background:none;border:none;border-radius:0;box-shadow:none;' +
+              'overflow:visible;backdrop-filter:none;font-family:"Noto Serif TC","Source Han Serif TC","Songti TC","PMingLiU",serif;}' +
+            '.wgbp-under,.wgbp-paper,.wgbp-tb,.wgbp-compass{display:none;}' +
+            '.wg-win.wgbp .wgbp-under{display:block;position:absolute;inset:0;z-index:0;' +
+              'background:linear-gradient(178deg,#f2f5fa,#e3eaf4);border:1.5px solid rgba(42,74,128,.5);' +
+              'box-shadow:0 10px 26px rgba(15,30,60,.35);filter:url(#wgwob-rough);}' +
+            '.wg-win.wgbp .wgbp-under.u1{transform:rotate(-1.2deg) translate(-8px,6px);}' +
+            '.wg-win.wgbp .wgbp-under.u2{transform:rotate(.9deg) translate(9px,11px);}' +
+            '.wg-win.wgbp .wgbp-paper{display:block;position:absolute;inset:0;z-index:1;' +
+              'background:repeating-linear-gradient(0deg,transparent 0 23px,rgba(90,140,210,.13) 23px 24px),' +
+              'repeating-linear-gradient(90deg,transparent 0 23px,rgba(90,140,210,.13) 23px 24px),' +
+              'repeating-linear-gradient(0deg,transparent 0 119px,rgba(90,140,210,.26) 119px 120px),' +
+              'repeating-linear-gradient(90deg,transparent 0 119px,rgba(90,140,210,.26) 119px 120px),' +
+              'linear-gradient(178deg,#ffffff 0%,#f7fafd 60%,#eef4fb 100%);' +
+              'box-shadow:0 16px 44px rgba(15,30,60,.5);}' +
+            '.wg-win.wgbp .wgbp-frame{position:absolute;inset:0;border:2.2px solid #2a4a80;filter:url(#wgwob-line);pointer-events:none;}' +
+            '.wg-win.wgbp .wgbp-frame::before{content:"";position:absolute;inset:5px;border:1px solid rgba(42,74,128,.45);}' +
+            // 圖紙標題欄(右下)+指北針(左下):純裝飾,不吃點擊
+            '.wg-win.wgbp .wgbp-tb{display:flex;position:absolute;right:12px;bottom:12px;z-index:3;border:1.4px solid #2a4a80;' +
+              'background:rgba(255,255,255,.92);font-size:10px;letter-spacing:.14em;color:#46639b;pointer-events:none;}' +
+            '.wg-win.wgbp .wgbp-tb>div{padding:5px 12px;border-left:1px solid rgba(42,74,128,.4);display:flex;flex-direction:column;gap:2px;}' +
+            '.wg-win.wgbp .wgbp-tb>div:first-child{border-left:none;}' +
+            '.wg-win.wgbp .wgbp-tb b{color:#1f3a68;font-size:11.5px;letter-spacing:.2em;}' +
+            '.wg-win.wgbp .wgbp-compass{display:block;position:absolute;left:16px;bottom:12px;z-index:3;width:42px;height:42px;opacity:.8;pointer-events:none;}' +
+            // 頭尾浮在紙上
+            '.wg-win.wgbp .wg-head{position:relative;z-index:2;background:none;border-bottom:1.6px solid #2a4a80;margin:18px 26px 0;padding:0 0 10px;}' +
+            '.wg-win.wgbp .wg-brand-icon{background:none;border:1.6px solid #2a4a80;border-radius:50%;color:#2a4a80;width:40px;height:40px;box-shadow:none;}' +
+            '.wg-win.wgbp .wg-brand-copy b{font-size:19px;letter-spacing:.3em;color:#1f3a68;}' +
+            '.wg-win.wgbp .wg-brand-copy small{color:#46639b;letter-spacing:.42em;font-size:9px;}' +
+            '.wg-win.wgbp .wg-mode-pill{border:1.4px solid #2a4a80;border-radius:3px;background:#fff;color:#1f3a68;font-size:11px;letter-spacing:.15em;}' +
+            '.wg-win.wgbp .wg-mode-pill.para{background:linear-gradient(180deg,#2c4a7e,#1e3554);color:#f4efe3;border-color:#1e3554;}' +
+            '.wg-win.wgbp .wg-body{position:relative;z-index:2;padding:14px 26px 64px;}' +
+            '.wg-win.wgbp .wg-section-title{font-size:15px;letter-spacing:.3em;color:#1f3a68;}' +
+            '.wg-win.wgbp .wg-section-note{font-size:11px;letter-spacing:.12em;color:#46639b;}' +
+            '.wg-win.wgbp .wg-mgr-btn{border:1.4px solid #2a4a80;border-radius:3px;background:#fff;color:#1f3a68;font-size:11px;letter-spacing:.1em;padding:4px 12px;}' +
+            '.wg-win.wgbp .wg-mgr-btn:hover,.wg-win.wgbp .wg-mgr-btn.on{background:#1e3554;color:#f4efe3;border-color:#1e3554;}' +
+            '.wg-win.wgbp .wg-btn{background:linear-gradient(180deg,#2c4a7e,#1e3554);border:1px solid #1e3554;border-radius:3px;letter-spacing:.2em;font-family:inherit;}' +
+            '.wg-win.wgbp .wg-btn.ghost{background:#fff;color:#1f3a68;border:1.4px solid #2a4a80;}' +
+            '.wg-win.wgbp .wg-btn.danger{background:rgba(184,86,74,.08);color:#b8564a;border:1.4px solid rgba(184,86,74,.5);}' +
+            // 世界=測繪圖塊
+            '.wgbp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding-top:10px;}' +
+            '.wgbp-blk{position:relative;background:#fff;box-shadow:0 4px 14px rgba(31,58,104,.14);display:flex;flex-direction:column;' +
+              'cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;}' +
+            '.wgbp-blk:nth-child(odd){transform:rotate(-.5deg);}' +
+            '.wgbp-blk:nth-child(even){transform:rotate(.45deg);}' +
+            '.wgbp-blk:hover{transform:rotate(0) translateY(-3px);box-shadow:0 10px 22px rgba(31,58,104,.24);}' +
+            '.wgbp-blk::after{content:"";position:absolute;inset:0;z-index:2;border:1.4px solid #2a4a80;pointer-events:none;filter:url(#wgwob-soft);}' +
+            '.wgbp-blk.sel{box-shadow:0 0 0 2px rgba(42,74,128,.4),0 10px 22px rgba(31,58,104,.24);}' +
+            '.wgbp-no{position:absolute;top:-10px;left:12px;z-index:3;padding:2px 12px;background:#f7fafd;border:1.2px solid #2a4a80;' +
+              'font-size:10px;letter-spacing:.22em;color:#46639b;box-shadow:0 2px 5px rgba(31,58,104,.18);}' +
+            '.wgbp-pin{position:absolute;top:-6px;right:14px;z-index:3;width:11px;height:11px;border-radius:50%;' +
+              'background:radial-gradient(circle at 35% 30%,#e8cf96,#b9924f 60%,#8f6f38);box-shadow:0 2px 4px rgba(31,58,104,.4);}' +
+            '.wgbp-art{position:relative;height:92px;overflow:hidden;border-bottom:1.2px solid #2a4a80;background:linear-gradient(165deg,#b9d0ee,#3c5d96);}' +
+            '.wgbp-art img{width:100%;height:100%;object-fit:cover;display:block;}' +
+            '.wgbp-art::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(42,74,128,0) 55%,rgba(42,74,128,.38));}' +
+            '.wgbp-visits{position:absolute;right:10px;top:64px;z-index:2;padding:2px 10px;background:rgba(247,250,253,.92);' +
+              'border:1.2px solid #2a4a80;border-radius:2px;font-size:10px;letter-spacing:.18em;color:#1f3a68;}' +
+            '.wgbp-body2{padding:11px 13px;display:flex;flex-direction:column;gap:7px;}' +
+            '.wgbp-nm{font-size:15.5px;font-weight:700;letter-spacing:.12em;color:#1f3a68;display:flex;align-items:center;gap:8px;}' +
+            '.wgbp-nm i{font-size:12px;color:#2a4a80;}' +
+            '.wgbp-cc{font-size:11.5px;line-height:1.75;color:#46639b;letter-spacing:.03em;min-height:3.2em;}' +
+            '.wgbp-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}' +
+            '.wgbp-tag{padding:2px 9px;border:1px solid rgba(42,74,128,.45);border-radius:2px;font-size:10px;letter-spacing:.08em;color:#46639b;background:#f7fafd;}' +
+            '.wgbp-tag.warn{border:1.4px solid #b8564a;color:#b8564a;border-radius:3px;transform:rotate(-4deg);font-weight:700;background:rgba(184,86,74,.05);}' +
+            '.wgbp-blk .wg-card-ops{padding:0 13px 11px;}' +
+            '.wgbp-blk.empty{border:1.6px dashed rgba(42,74,128,.55);background:transparent;box-shadow:none;align-items:center;' +
+              'justify-content:center;gap:9px;min-height:210px;text-align:center;transform:none;padding:14px;box-sizing:border-box;}' +
+            '.wgbp-blk.empty::after{display:none;}' +
+            '.wgbp-blk.empty:hover{transform:translateY(-3px);}' +
+            '.wgbp-blk.empty i.big{font-size:24px;color:#2a4a80;}' +
+            '.wgbp-empty-nm{font-size:15px;font-weight:700;letter-spacing:.18em;color:#1f3a68;}' +
+            '.wgbp-empty-cc{font-size:11px;line-height:1.8;color:#46639b;letter-spacing:.05em;}' +
+            '@media (max-width:760px){' +
+              '.wg-win.wgbp{width:auto;left:10px;right:10px;transform:translateY(-50%);height:88%;}' +
+              '.wg-win.wgbp .wg-head{margin:14px 14px 0;}' +
+              '.wg-win.wgbp .wg-body{padding:12px 14px 20px;}' +
+              '.wgbp-grid{grid-template-columns:1fr;gap:16px;}' +
+              '.wgbp-blk,.wgbp-blk:nth-child(odd),.wgbp-blk:nth-child(even){transform:none;}' +
+              '.wg-win.wgbp .wgbp-tb,.wg-win.wgbp .wgbp-compass{display:none;}' +
+              '.wgbp-cc{min-height:0;}}';
+        doc.head.appendChild(st2);
+
+        // 手繪歪框濾鏡(直線被噪聲擠歪):框線各自獨立層,內容不受影響
+        if (!doc.getElementById('os-wg-wobs')) {
+            const sv = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            sv.id = 'os-wg-wobs';
+            sv.setAttribute('width', '0'); sv.setAttribute('height', '0'); sv.setAttribute('aria-hidden', 'true');
+            sv.innerHTML =
+                '<defs>' +
+                '<filter id="wgwob-line" x="-3%" y="-3%" width="106%" height="106%">' +
+                  '<feTurbulence type="fractalNoise" baseFrequency="0.011 0.017" numOctaves="2" seed="7" result="n"/>' +
+                  '<feDisplacementMap in="SourceGraphic" in2="n" scale="7"/></filter>' +
+                '<filter id="wgwob-soft" x="-3%" y="-3%" width="106%" height="106%">' +
+                  '<feTurbulence type="fractalNoise" baseFrequency="0.02 0.03" numOctaves="2" seed="11" result="n"/>' +
+                  '<feDisplacementMap in="SourceGraphic" in2="n" scale="2.4"/></filter>' +
+                '<filter id="wgwob-rough" x="-5%" y="-5%" width="110%" height="110%">' +
+                  '<feTurbulence type="fractalNoise" baseFrequency="0.016 0.04" numOctaves="3" seed="23" result="n"/>' +
+                  '<feDisplacementMap in="SourceGraphic" in2="n" scale="12"/></filter>' +
+                '</defs>';
+            (doc.body || doc.documentElement).appendChild(sv);
+        }
     }
 
     let _winEl = null;
@@ -2379,11 +2487,21 @@
         const box = doc.createElement('div');
         box.className = 'wg-win';
         box.innerHTML =
+            // 📐 航行圖紙的圖層(檔案庫頁才顯示;.wgbp 沒掛時全部 display:none)
+            '<div class="wgbp-under u1"></div><div class="wgbp-under u2"></div>' +
+            '<div class="wgbp-paper"><div class="wgbp-frame"></div></div>' +
             '<div class="wg-head">' +
               '<div class="wg-brand"><span class="wg-brand-icon"><i class="fa-solid fa-globe"></i></span>' +
                 '<span class="wg-brand-copy"><b>世界門</b><small>WORLD GATE PLAZA</small></span></div>' +
               '<span class="wg-mode-pill" data-wg-mode><i class="fa-solid fa-city"></i> 主世界</span></div>' +
-            '<div class="wg-body"></div>';
+            '<div class="wg-body"></div>' +
+            '<svg class="wgbp-compass" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">' +
+              '<circle cx="30" cy="30" r="26" fill="none" stroke="#2a4a80" stroke-width="1.4"/>' +
+              '<circle cx="30" cy="30" r="20" fill="none" stroke="#2a4a80" stroke-width="0.6" stroke-dasharray="2 3"/>' +
+              '<path d="M30 8 L34 30 L30 52 L26 30 Z" fill="#2a4a80"/>' +
+              '<path d="M30 8 L34 30 L30 30 Z" fill="#b9924f"/></svg>' +
+            '<div class="wgbp-tb"><div><span>圖名</span><b>世界航行圖</b></div><div><span>測繪</span><b>愛麗絲</b></div>' +
+              '<div><span>圖號</span><b data-wgbp-no>WG-α</b></div><div><span>比例</span><b>1 : ∞</b></div></div>';
         host.appendChild(box);
         _winEl = box;
         _refreshModePill();
@@ -2435,6 +2553,10 @@
         _selIds.forEach(id => { if (!worlds.some(w => w.id === id)) _selIds.delete(id); });   // 別留已被刪掉的殘影
         const inPara = !!_gate()?.isInParallax?.();
         const allOn = worlds.length > 0 && _selIds.size === worlds.length;
+        // 📐 檔案庫頁掛上航行圖紙皮(離開這頁的 renderer 會摘掉);圖號跟著世界數走
+        _winEl?.classList.add('wgbp');
+        const tbNo = _winEl?.querySelector('[data-wgbp-no]');
+        if (tbNo) tbNo.textContent = 'WG-α' + worlds.length;
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-book-atlas"></i> 世界檔案庫</span>' +
               '<span class="wg-head-acts">' +
@@ -2450,36 +2572,51 @@
             //     給一顆讓她自己決定要不要掛。掛的是主世界那組，視差書由切書機制在 DIVE 時才上。
             //   🚨「視差書在不在」不能當判準：主世界模式下它本來就被收起來，拿它判會永遠誤報。
             _warnHtml() +
-            (worlds.length
-                ? worlds.map(w =>
-                    '<div class="wg-card ' + (_mgr ? 'click pick' + (_selIds.has(w.id) ? ' sel' : '') : 'click') + '" data-id="' + w.id + '">' +
-                      '<div class="wg-card-title"><i class="fa-solid ' +
-                        (_mgr ? (_selIds.has(w.id) ? 'fa-square-check' : 'fa-square') : 'fa-earth-asia') + '"></i> ' + _esc(w.name) +
-                        '<span class="wg-visits">進入 ' + (w.visits || 0) + ' 次</span></div>' +
-                      '<div class="wg-card-sub">' + _esc(w.concept) + '</div>' +
-                      '<div class="wg-tags"><span class="wg-tag">' + _esc(w.style) + '</span>' +
-                        '<span class="wg-tag">' + _esc(w.lure) + '</span>' +
-                        '<span class="wg-tag warn">' + _esc(w.danger) + '</span></div>' +
-                      // 🚨這幾個是難得動一次的維護動作,只在管理模式露出:詳情頁是出發用的,
-                      //   把它們放在那裡等於每次出發都要看一次自己用不到的東西。
-                      (_mgr
-                        // 🚨兩個東西各有兩個動作,平鋪成四顆就得靠加長文案去區分,愈補愈醜。
-                        //   分成兩行、左邊寫是什麼、右邊放短鈕,結構自己講清楚,字就不用長。
-                        ? '<div class="wg-card-ops">' +
-                            '<div class="wg-ops-row"><span class="wg-ops-k">結束畫面</span>' +
-                              '<button class="wg-mgr-btn" data-op="panel" data-id="' + w.id + '">' +
-                                (w.panel ? '換一個' : '做一個') + '</button>' +
-                              (w.panel ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除</button>' : '') +
-                            '</div>' +
-                            '<div class="wg-ops-row"><span class="wg-ops-k">成就</span>' +
-                              '<button class="wg-mgr-btn" data-op="achv" data-id="' + w.id + '">' +
-                                (w.achv ? '重擬' : '設計') + '</button>' +
-                              (w.achv ? '<button class="wg-mgr-btn" data-op="achv-x" data-id="' + w.id + '">移除</button>' : '') +
-                            '</div>' +
-                          '</div>'
-                        : '') +
-                    '</div>').join('')
-                : '<div class="wg-empty"><i class="fa-solid fa-globe"></i>檔案庫還是空的。<br>請愛麗絲為你調出新的世界。</div>') +
+            // 📐 世界=圖紙上的測繪圖塊:No.編號籤+金圖釘+概念圖帶+入場圖章;危險標籤=紅色審查印章。
+            //   概念圖:世界自己的 w.art 優先,沒有走題材退路圖(_fbUrl,靜態 CDN 不燒 API)。
+            '<div class="wgbp-grid">' +
+            worlds.map((w, idx) =>
+                '<div class="wgbp-blk click' + (_mgr ? ' pick' + (_selIds.has(w.id) ? ' sel' : '') : '') + '" data-id="' + w.id + '">' +
+                  '<span class="wgbp-no">No.' + String(idx + 1).padStart(2, '0') + '</span><span class="wgbp-pin"></span>' +
+                  '<div class="wgbp-art"><img src="' + _esc(w.art || _fbUrl(w, 'concept')) + '" loading="lazy" alt="" ' +
+                    'onerror="this.remove()"></div>' +
+                  '<span class="wgbp-visits">入場 ×' + (w.visits || 0) + '</span>' +
+                  '<div class="wgbp-body2">' +
+                    '<div class="wgbp-nm"><i class="fa-solid ' +
+                      (_mgr ? (_selIds.has(w.id) ? 'fa-square-check' : 'fa-square') : 'fa-location-crosshairs') + '"></i>' + _esc(w.name) + '</div>' +
+                    '<div class="wgbp-cc">' + _esc(w.concept) + '</div>' +
+                    '<div class="wgbp-tags"><span class="wgbp-tag">' + _esc(w.style) + '</span>' +
+                      '<span class="wgbp-tag">' + _esc(w.lure) + '</span>' +
+                      '<span class="wgbp-tag warn">' + _esc(w.danger) + '</span></div>' +
+                  '</div>' +
+                  // 🚨這幾個是難得動一次的維護動作,只在管理模式露出:詳情頁是出發用的,
+                  //   把它們放在那裡等於每次出發都要看一次自己用不到的東西。
+                  (_mgr
+                    // 🚨兩個東西各有兩個動作,平鋪成四顆就得靠加長文案去區分,愈補愈醜。
+                    //   分成兩行、左邊寫是什麼、右邊放短鈕,結構自己講清楚,字就不用長。
+                    ? '<div class="wg-card-ops">' +
+                        '<div class="wg-ops-row"><span class="wg-ops-k">結束畫面</span>' +
+                          '<button class="wg-mgr-btn" data-op="panel" data-id="' + w.id + '">' +
+                            (w.panel ? '換一個' : '做一個') + '</button>' +
+                          (w.panel ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除</button>' : '') +
+                        '</div>' +
+                        '<div class="wg-ops-row"><span class="wg-ops-k">成就</span>' +
+                          '<button class="wg-mgr-btn" data-op="achv" data-id="' + w.id + '">' +
+                            (w.achv ? '重擬' : '設計') + '</button>' +
+                          (w.achv ? '<button class="wg-mgr-btn" data-op="achv-x" data-id="' + w.id + '">移除</button>' : '') +
+                        '</div>' +
+                      '</div>'
+                    : '') +
+                '</div>').join('') +
+            // 調出新世界=圖紙上還沒測繪的虛線空格(管理模式收起,別跟批次刪除擠在一起)
+            (_mgr ? '' :
+                '<div class="wgbp-blk empty click" data-act="draw">' +
+                  '<i class="fa-solid fa-compass-drafting big"></i>' +
+                  '<div class="wgbp-empty-nm">請愛麗絲調出新世界</div>' +
+                  '<div class="wgbp-empty-cc">' + (worlds.length ? '這一格還沒測繪。' : '檔案庫還是空的。') +
+                    '調出新世界會呼叫 AI(抽選+展開共兩次);重進已有世界不呼叫。</div>' +
+                '</div>') +
+            '</div>' +
             (_mgr
                 ? '<div class="wg-btn-row">' +
                     '<button class="wg-btn ghost" data-act="mgr-done">完成</button>' +
@@ -2487,15 +2624,14 @@
                       '<i class="fa-solid fa-trash-can"></i> ' +
                       (_bulkArm ? '再按一次確認刪除' : '刪除選取的 ' + _selIds.size + ' 個') + '</button>' +
                   '</div>'
-                : '<button class="wg-btn" data-act="draw"><i class="fa-solid fa-dice"></i> 請愛麗絲調出新世界</button>' +
-                  '<div class="wg-note">調出新世界會呼叫 AI(抽選+展開共兩次);重進已有世界不呼叫。</div>') +
+                : '') +
             (inPara ? '<button class="wg-btn danger" data-act="leave"><i class="fa-solid fa-door-open"></i> 撤離視差,返回主世界</button>' : '');
         // 卡片上的維護鈕:要擋掉冒泡,不然按下去會變成勾選那張卡
         b.querySelectorAll('[data-op]').forEach(el => el.addEventListener('click', (ev) => {
             ev.stopPropagation();
             _worldOp(el.dataset.id, el.dataset.op);
         }));
-        b.querySelectorAll('.wg-card.click').forEach(el => el.addEventListener('click', async () => {
+        b.querySelectorAll('.wgbp-blk.click[data-id]').forEach(el => el.addEventListener('click', async () => {
             if (_mgr) {   // 管理模式下點卡片=勾選,不進詳情
                 const id = el.dataset.id;
                 if (_selIds.has(id)) _selIds.delete(id); else _selIds.add(id);
@@ -2548,6 +2684,7 @@
     // ── P2 種子抽選 ──
     async function _renderSeedPage() {
         const b = _body(); if (!b) return;
+        _winEl?.classList.remove('wgbp');   // 離開檔案庫=收起航行圖紙皮,回量子白窗
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-dice"></i> 世界種子</span><span class="wg-section-note">此頁功能會呼叫 AI</span></div>' +
             '<div class="wg-empty" data-wg-seedhint><i class="fa-solid fa-wand-magic-sparkles"></i>填了題材,四顆種子都會是那個題材,<br>留空就讓愛麗絲隨手抽一把。</div>' +
@@ -2832,6 +2969,7 @@
     }
     async function _renderDetail(w, step) {
         const b = _body(); if (!b) return;
+        _winEl?.classList.remove('wgbp');   // 離開檔案庫=收起航行圖紙皮,回量子白窗
         const st = Math.min(3, Math.max(1, Number(step) || 1));
         _delArm = 0;
         _mgrOff();   // 離開檔案庫=管理模式歸零,回來時不會還停在勾選狀態
