@@ -2,15 +2,115 @@
  * 藏書入場精靈(白金視差風)
  * 兩幕:入場規劃(選 圖庫立繪/自由生成)→ 開場預覽(切開場)→ 進入故事
  * 只在第 0 樓(故事未推進)出現;蓋在藏書面板上,收起後即現有閱讀畫面,渲染管線不碰。
- * 視覺:框/鈕/線全 CSS(縮放銳利),只留「畫」用圖——背景大廳、卡片圖案x2、盾徽;
- *      符號類圖標一律 FontAwesome。直橫共用一套 flex 流式,直式(.sew-portrait)只調參數。
- * 素材:sound-files/aseets/story_entry/;樣式在 css/story_entry_wizard.css
+ * 視覺:框/鈕/線全 CSS(縮放銳利),裝飾圖案全部 inline SVG(向量銳利、不走 CDN);
+ *      只剩滿版背景大廳 bg.webp 仍是圖(寫實場景,見 css)。
+ * 樣式在 css/story_entry_wizard.css;翼線/分隔線是 CSS data-URI SVG
  */
 
 (function () {
     'use strict';
 
-    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/';
+    // ── 面板裝飾圖案(手繪 SVG,白金視差風:深藍 #1c3260 系 + 金 #d0a95c 系)──
+    // 注意:重複使用的圖案(盾徽/箭頭)不放 <defs> 漸層,避免同頁 id 撞名
+    const SVG = {
+        // 關閉X:雙弧交叉筆畫
+        closeX: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g stroke="#1e3a76" stroke-width="13" stroke-linecap="round" fill="none"><path d="M15 17 C36 33 64 61 85 83"/><path d="M85 17 C64 33 36 61 15 83"/></g></svg>`,
+
+        // 盾徽:深藍硬幣+金細環+四向星芒+層疊盾牌+書籤鑰匙孔(用 3 次,全平塗無 defs)
+        badge: `<svg class="sew-badge-icon" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="60" cy="60" r="57" fill="#1d3468" stroke="#0e1c3c" stroke-width="1.5"/>
+            <ellipse cx="60" cy="38" rx="44" ry="26" fill="#2e4f96" opacity="0.5"/>
+            <circle cx="60" cy="60" r="48.5" fill="none" stroke="#e3cf96" stroke-width="1.6"/>
+            <g fill="#eee0b4">
+                <path d="M60 5.5 q1.2 4.8 6 6 q-4.8 1.2 -6 6 q-1.2 -4.8 -6 -6 q4.8 -1.2 6 -6"/>
+                <path d="M60 96.5 q1.2 4.8 6 6 q-4.8 1.2 -6 6 q-1.2 -4.8 -6 -6 q4.8 -1.2 6 -6"/>
+                <path d="M5.5 60 q4.8 -1.2 6 -6 q1.2 4.8 6 6 q-4.8 1.2 -6 6 q-1.2 -4.8 -6 -6"/>
+                <path d="M96.5 60 q4.8 -1.2 6 -6 q1.2 4.8 6 6 q-4.8 1.2 -6 6 q-1.2 -4.8 -6 -6"/>
+            </g>
+            <g transform="translate(60 63) scale(1.08) translate(-60 -63)">
+                <path d="M40 34 L80 34 Q88 34 88 42 L88 82 Q88 89 81 91 L60 97 L39 91 Q32 89 32 82 L32 42 Q32 34 40 34 Z" fill="#1c3260" stroke="#e6d5a4" stroke-width="4"/>
+                <path d="M40 34 L80 34 Q88 34 88 42 L88 82 Q88 89 81 91 L60 97 L39 91 Q32 89 32 82 L32 42 Q32 34 40 34 Z" fill="#24407a" stroke="#e6d5a4" stroke-width="2.6" transform="translate(60 63) scale(0.76) translate(-60 -63)"/>
+                <circle cx="60" cy="55" r="7.5" fill="#f2e7c4"/>
+                <path d="M53.5 60 h13 v20 l-6.5 -6 l-6.5 6 z" fill="#f2e7c4"/>
+            </g>
+        </svg>`,
+
+        // 圖庫立繪卡:相框山景(藍日+金星+雙峰)
+        cardLib: `<svg viewBox="0 0 300 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs><clipPath id="sewLibClip"><rect x="26" y="26" width="248" height="208" rx="12"/></clipPath></defs>
+            <rect x="6" y="6" width="288" height="248" rx="26" fill="#26418f"/>
+            <rect x="26" y="26" width="248" height="208" rx="12" fill="#ffffff"/>
+            <g clip-path="url(#sewLibClip)">
+                <circle cx="92" cy="88" r="27" fill="#7d9ede" stroke="#4a6bbd" stroke-width="3"/>
+                <circle cx="83" cy="79" r="9" fill="#adc6f1" opacity="0.85"/>
+                <polygon points="196,102 100,234 196,234" fill="#3a57ad"/>
+                <polygon points="196,102 196,234 288,234" fill="#22397e"/>
+                <polygon points="97,138 4,234 97,234" fill="#2f4d9f"/>
+                <polygon points="97,138 97,234 186,234" fill="#1f3577"/>
+            </g>
+            <path d="M184 52 q2.4 11.6 14 14 q-11.6 2.4 -14 14 q-2.4 -11.6 -14 -14 q11.6 -2.4 14 -14" fill="#e6b053"/>
+            <path d="M184 60 q1.6 5.4 6 7 q-5.4 1.6 -6 6 q-1.6 -5.4 -6 -6 q5.4 -1.6 6 -7" fill="#f5d68a"/>
+        </svg>`,
+
+        // 自由生成卡:藍水晶+金色軌道環+星芒(單次使用,defs id 加 sewFree 前綴)
+        cardFree: `<svg class="sew-icon-crystal" viewBox="0 0 340 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+                <linearGradient id="sewFreeLight" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9db8f2"/><stop offset="1" stop-color="#3b5bc4"/></linearGradient>
+                <linearGradient id="sewFreeMid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4d6fd6"/><stop offset="1" stop-color="#22389b"/></linearGradient>
+                <linearGradient id="sewFreeDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e3184"/><stop offset="1" stop-color="#0a1440"/></linearGradient>
+                <linearGradient id="sewFreeDeep" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16255e"/><stop offset="1" stop-color="#060d2e"/></linearGradient>
+                <linearGradient id="sewFreeGold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f5d47a"/><stop offset="0.5" stop-color="#eda23f"/><stop offset="1" stop-color="#d9731f"/></linearGradient>
+            </defs>
+            <g transform="rotate(-18 170 138)"><path d="M -148 0 A 148 44 0 0 1 148 0" transform="translate(170 138)" fill="none" stroke="url(#sewFreeGold)" stroke-width="8" stroke-linecap="round" opacity="0.9"/></g>
+            <g stroke="#0a1440" stroke-width="1" stroke-linejoin="round">
+                <polygon points="170,8 92,98 146,98" fill="url(#sewFreeLight)"/>
+                <polygon points="170,8 146,98 194,98" fill="url(#sewFreeMid)"/>
+                <polygon points="170,8 194,98 248,98" fill="url(#sewFreeDark)"/>
+                <polygon points="92,98 146,98 170,250" fill="url(#sewFreeMid)"/>
+                <polygon points="146,98 194,98 170,250" fill="url(#sewFreeDeep)"/>
+                <polygon points="194,98 248,98 170,250" fill="url(#sewFreeDark)"/>
+            </g>
+            <polygon points="170,8 152,82 168,62" fill="#cfdcfa" opacity="0.8"/>
+            <g transform="rotate(-18 170 138)"><path d="M -148 0 A 148 44 0 0 0 148 0" transform="translate(170 138)" fill="none" stroke="url(#sewFreeGold)" stroke-width="13" stroke-linecap="round"/></g>
+            <path d="M306 42 q2.4 12.6 15 15 q-12.6 2.4 -15 15 q-2.4 -12.6 -15 -15 q12.6 -2.4 15 -15" fill="#eda23f"/>
+            <path d="M34 74 q1.6 8.4 10 10 q-8.4 1.6 -10 10 q-1.6 -8.4 -10 -10 q8.4 -1.6 10 -10" fill="#f0c060"/>
+        </svg>`,
+
+        // 資訊條:人像(金環三點+深藍剪影)
+        infoPerson: `<svg class="sew-info-ico" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="60" cy="63" r="49" fill="none" stroke="#cfa85e" stroke-width="2.6"/>
+            <g fill="#d9b46a"><circle cx="60" cy="14" r="4.6"/><circle cx="17.6" cy="87.5" r="4.6"/><circle cx="102.4" cy="87.5" r="4.6"/></g>
+            <circle cx="60" cy="47" r="20" fill="#1c3260"/>
+            <path d="M24 100 q5 -34 36 -34 q31 0 36 34 q-17 7 -36 7 q-19 0 -36 -7 z" fill="#1c3260"/>
+        </svg>`,
+
+        // 資訊條:調色盤(金環+頂部緞飾+深藍盤三點)
+        infoPalette: `<svg class="sew-info-ico" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="60" cy="64" r="47" fill="none" stroke="#cfa85e" stroke-width="2.6"/>
+            <path d="M42 11 q10 8 18 8 q8 0 18 -8 q-6 13 -18 13 q-12 0 -18 -13 z" fill="#d3ac60"/>
+            <g transform="translate(60 64) scale(1.12) translate(-60 -64)">
+                <path d="M60 32 C 83 32 99 45 99 63 C 99 72 90 76 82 73 C 75 70.5 71 74 73 81 C 75 89 68 96 58 96 C 35 96 21 82 21 62 C 21 44 38 32 60 32 Z" fill="#223a6e" stroke="#cbb277" stroke-width="2"/>
+                <g fill="#f4ecd6" stroke="#c9ab6f" stroke-width="1.5"><circle cx="47" cy="52" r="6"/><circle cx="67" cy="48" r="6"/><circle cx="43" cy="70" r="6"/></g>
+            </g>
+        </svg>`,
+
+        // 資訊條:攤開書(金環+奶油頁緣+深藍封面)
+        infoBook: `<svg class="sew-info-ico" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="60" cy="62" r="47" fill="none" stroke="#cfa85e" stroke-width="2.4"/>
+            <g transform="translate(60 64) scale(1.14) translate(-60 -64)">
+                <path d="M60 46 C 47 35 30 33 15 38 L15 84 C 30 80 47 82 60 92 C 73 82 90 80 105 84 L105 38 C 90 33 73 35 60 46 Z" fill="#ead9ac"/>
+                <path d="M60 42 C 47 31 30 29 16 34 L16 80 C 30 76 47 78 60 88 C 73 78 90 76 104 80 L104 34 C 90 29 73 31 60 42 Z" fill="#1c3260"/>
+                <path d="M60 42 L60 88" stroke="#ead9ac" stroke-width="2.2"/>
+                <path d="M44 94 L76 94 L82 102 L38 102 Z" fill="#1c3260"/>
+            </g>
+        </svg>`,
+
+        // CTA 箭頭:金邊奶白粗夾角(用 2 次,無 defs)
+        chevron: `<svg class="sew-cta-ico" viewBox="0 0 60 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M16 14 L47 50 L16 86" fill="none" stroke="#ddc294" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16 14 L47 50 L16 86" fill="none" stroke="#fdf9ec" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`,
+    };
     const CANVAS_W = 1253.438, CANVAS_H = 705.469;
     const PORTRAIT_REF_W = 430;   // 直式一欄的參考寬(單位換算用)
 
@@ -44,7 +144,7 @@
                 <div class="sew-bg"></div>
                 <div class="sew-stage">
                     <div class="sew-panel">
-                        <button class="sew-close" id="sew-close" type="button" title="關閉"><img src="${CDN}close-x.webp" alt=""></button>
+                        <button class="sew-close" id="sew-close" type="button" title="關閉">${SVG.closeX}</button>
                         <div class="sew-title-row">
                             <span class="sew-wing"></span>
                             <h2 class="sew-title">視差入場規劃</h2>
@@ -53,14 +153,14 @@
 
                         <div class="sew-screen" id="sew-screen-plan">
                             <div class="sew-badge">
-                                <img class="sew-badge-icon" src="${CDN}badge-icon.webp" alt="">
+                                ${SVG.badge}
                                 <span class="sew-badge-text">已識別:<b id="sew-card-name"></b></span>
                             </div>
                             <div class="sew-cards">
                                 <div class="sew-card" id="sew-pick-lib">
                                     <div class="sew-dia-row">
                                         <span class="sew-dia-deco"></span>
-                                        <div class="sew-diamond"><img src="${CDN}card-lib-icon.webp" alt=""></div>
+                                        <div class="sew-diamond">${SVG.cardLib}</div>
                                         <span class="sew-dia-deco sew-dia-deco-r"></span>
                                     </div>
                                     <div class="sew-card-title">圖庫立繪</div>
@@ -70,7 +170,7 @@
                                 <div class="sew-card" id="sew-pick-free">
                                     <div class="sew-dia-row">
                                         <span class="sew-dia-deco"></span>
-                                        <div class="sew-diamond"><img class="sew-icon-crystal" src="${CDN}card-free-icon.webp" alt=""></div>
+                                        <div class="sew-diamond">${SVG.cardFree}</div>
                                         <span class="sew-dia-deco sew-dia-deco-r"></span>
                                     </div>
                                     <div class="sew-card-title">自由生成</div>
@@ -79,18 +179,18 @@
                                 </div>
                             </div>
                             <div class="sew-info">
-                                <div class="sew-info-col"><img class="sew-info-ico" src="${CDN}info-person.webp" alt=""><div class="sew-info-txt">角色來源<small>自動識別</small></div></div>
+                                <div class="sew-info-col">${SVG.infoPerson}<div class="sew-info-txt">角色來源<small>自動識別</small></div></div>
                                 <span class="sew-info-sep"></span>
-                                <div class="sew-info-col"><img class="sew-info-ico" src="${CDN}info-palette.webp" alt=""><div class="sew-info-txt">視覺方案<small>由你選擇</small></div></div>
+                                <div class="sew-info-col">${SVG.infoPalette}<div class="sew-info-txt">視覺方案<small>由你選擇</small></div></div>
                                 <span class="sew-info-sep"></span>
-                                <div class="sew-info-col"><img class="sew-info-ico" src="${CDN}info-book.webp" alt=""><div class="sew-info-txt">開場內容<small>保持原樣</small></div></div>
+                                <div class="sew-info-col">${SVG.infoBook}<div class="sew-info-txt">開場內容<small>保持原樣</small></div></div>
                             </div>
-                            <button class="sew-cta" id="sew-go-preview" type="button"><span>預覽開場</span><img class="sew-cta-ico" src="${CDN}cta-chevron.webp" alt=""></button>
+                            <button class="sew-cta" id="sew-go-preview" type="button"><span>預覽開場</span>${SVG.chevron}</button>
                         </div>
 
                         <div class="sew-screen sew-hidden" id="sew-screen-preview">
                             <div class="sew-badge">
-                                <img class="sew-badge-icon" src="${CDN}badge-icon.webp" alt="">
+                                ${SVG.badge}
                                 <span class="sew-badge-text sew-chip2-text">開場預覽</span>
                             </div>
                             <div class="sew-preview-frame">
@@ -110,7 +210,7 @@
 
                         <div class="sew-screen sew-hidden" id="sew-screen-embark">
                             <div class="sew-badge">
-                                <img class="sew-badge-icon" src="${CDN}badge-icon.webp" alt="">
+                                ${SVG.badge}
                                 <span class="sew-badge-text sew-chip2-text">啟程</span>
                             </div>
                             <div class="sew-embark-frame">
@@ -119,7 +219,7 @@
                             </div>
                             <div class="sew-btn-row">
                                 <button class="sew-btn-outline" id="sew-embark-back" type="button"><i class="fa-solid fa-chevron-left"></i><span>上一步</span></button>
-                                <button class="sew-cta sew-enter" id="sew-embark-go" type="button"><span>啟 程</span><img class="sew-cta-ico" src="${CDN}cta-chevron.webp" alt=""></button>
+                                <button class="sew-cta sew-enter" id="sew-embark-go" type="button"><span>啟 程</span>${SVG.chevron}</button>
                             </div>
                         </div>
                     </div>
