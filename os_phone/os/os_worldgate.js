@@ -2365,9 +2365,10 @@
               'width:min(1040px,76%);max-width:none;height:min(620px,calc(100% - 330px));min-height:0;max-height:none;' +
               'background:none;border:none;border-radius:0;box-shadow:none;' +
               'overflow:visible;backdrop-filter:none;font-family:"Noto Serif TC","Source Han Serif TC","Songti TC","PMingLiU",serif;}' +
-            // 🧍 愛麗絲要站在圖紙「前面」(Rae 指定):圖紙開著時立繪不壓暗、抬到面板之上;
-            //    立繪這時不吃點擊,免得擋到圖紙左緣的卡片
-            '.lobby-left:has(.wg-win.wgbp) #iris-avatar{opacity:1;filter:none;position:relative;z-index:3400;pointer-events:none;}' +
+            // 🧍 愛麗絲要站在圖紙「前面」(Rae 指定)。🚨對象是舞台的對話立繪 .lstage-talk-portrait(z-index:4),
+            //    不是 #iris-avatar(那是舞台關閉時的舊大廳立繪)——大廳三種立繪別再搞混。
+            //    它本來就 pointer-events:none,抬上來不會擋到圖紙的點擊。
+            '.lobby-left:has(.wg-win.wgbp) .lstage-talk-portrait{z-index:3400;}' +
             // 圖紙自備關上鈕:就算哪台機器的離開鈕還是被壓到,世界門永遠關得掉
             '.wgbp-close{display:none;}' +
             '.wg-win.wgbp .wgbp-close{display:flex;align-items:center;justify-content:center;margin-left:10px;' +
@@ -2545,7 +2546,11 @@
               '<div><span>圖號</span><b data-wgbp-no>WG-α</b></div><div><span>比例</span><b>1 : ∞</b></div></div>';
         host.appendChild(box);
         _winEl = box;
-        box.querySelector('.wgbp-close')?.addEventListener('click', closeGate);
+        // ✕ = 整個退出:連愛麗絲的對話一起結束(Rae:只關面板還要再點空地退對話,很煩)
+        box.querySelector('.wgbp-close')?.addEventListener('click', () => {
+            closeGate();
+            try { (win.LobbyStage || window.LobbyStage)?.endTalk?.(); } catch (e) {}
+        });
         _refreshModePill();
         _renderList();
     }
