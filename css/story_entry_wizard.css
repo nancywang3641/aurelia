@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    藏書入場精靈(白金視差風)——CSS 為主的版本
-   框/鈕/線全 CSS;只留「畫」用圖:背景大廳 bg.webp、卡片圖案 card-*-icon、盾徽 badge-icon
-   符號類圖標一律 FontAwesome。直橫共用一套 flex 流式,直式(.sew-portrait)只調參數。
+   框/鈕/線全 CSS;裝飾圖案全部 SVG(inline 在 JS 模板、翼線/分隔線在此用 data-URI)
+   只剩滿版背景大廳 bg.webp 仍是圖(寫實場景)。直橫共用一套 flex 流式,直式(.sew-portrait)只調參數。
    縮放:--sew-u = 版面單位 px、--sew-h = 容器高(JS ResizeObserver 維護)
    ═══════════════════════════════════════════════════════════════ */
 
@@ -95,7 +95,7 @@
     z-index: 5;
     transition: transform 0.15s ease, filter 0.15s ease;
 }
-.sew-close img { width: calc(var(--sew-u, 1px) * 20); height: auto; display: block; }
+.sew-close img, .sew-close svg { width: calc(var(--sew-u, 1px) * 20); height: auto; display: block; }
 .sew-close:hover { transform: scale(1.15); filter: brightness(1.2); }
 
 /* ── 標題列:翼線 ─◆ 標題 ◆─ ── */
@@ -105,14 +105,14 @@
     gap: calc(var(--sew-u, 1px) * 16);
     margin-top: calc(var(--sew-u, 1px) * 4);
 }
-/* 標題翼線=阿洛手繪裝飾線(wing-left/right),貼著標題側對齊 */
+/* 標題翼線=SVG 裝飾線(空心淺藍菱—小藍菱—金線—大藍菱),貼著標題側對齊 */
 .sew-wing {
     flex: 1;
     height: calc(var(--sew-u, 1px) * 16);
-    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/wing-left.webp') right center / contain no-repeat;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 150'%3E%3Cg fill='none'%3E%3Cpath d='M75 18 L132 75 L75 132 L18 75 Z' stroke='%23a6c6f0' stroke-width='5'/%3E%3Cpath d='M75 34 L116 75 L75 116 L34 75 Z' stroke='%23d4e4fa' stroke-width='2.5'/%3E%3C/g%3E%3Cpath d='M238 60 L253 75 L238 90 L223 75 Z' fill='%231c3260' stroke='%23caa85f' stroke-width='3'/%3E%3Cpolygon points='256,74 642,71.5 642,78.5 256,76' fill='%23d0a95c'/%3E%3Cpath d='M695 25 C682 51 668 63 645 75 C668 87 682 99 695 125 C708 99 722 87 745 75 C722 63 708 51 695 25 Z' fill='%231e3767' stroke='%23d8b76a' stroke-width='5'/%3E%3Cpath d='M695 25 C682 51 668 63 645 75 C668 87 682 99 695 125 C708 99 722 87 745 75 C722 63 708 51 695 25 Z' fill='none' stroke='%23f0dfae' stroke-width='2' transform='translate(695 75) scale(0.78) translate(-695 -75)'/%3E%3C/svg%3E") right center / contain no-repeat;
 }
 .sew-wing:last-child {
-    background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/wing-right.webp');
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 150'%3E%3Cg transform='translate(760 0) scale(-1 1)'%3E%3Cg fill='none'%3E%3Cpath d='M75 18 L132 75 L75 132 L18 75 Z' stroke='%23a6c6f0' stroke-width='5'/%3E%3Cpath d='M75 34 L116 75 L75 116 L34 75 Z' stroke='%23d4e4fa' stroke-width='2.5'/%3E%3C/g%3E%3Cpath d='M238 60 L253 75 L238 90 L223 75 Z' fill='%231c3260' stroke='%23caa85f' stroke-width='3'/%3E%3Cpolygon points='256,74 642,71.5 642,78.5 256,76' fill='%23d0a95c'/%3E%3Cpath d='M695 25 C682 51 668 63 645 75 C668 87 682 99 695 125 C708 99 722 87 745 75 C722 63 708 51 695 25 Z' fill='%231e3767' stroke='%23d8b76a' stroke-width='5'/%3E%3Cpath d='M695 25 C682 51 668 63 645 75 C668 87 682 99 695 125 C708 99 722 87 745 75 C722 63 708 51 695 25 Z' fill='none' stroke='%23f0dfae' stroke-width='2' transform='translate(695 75) scale(0.78) translate(-695 -75)'/%3E%3C/g%3E%3C/svg%3E");
     background-position: left center;
 }
 .sew-title {
@@ -222,7 +222,7 @@
     box-shadow: 0 0 calc(var(--sew-u, 1px) * 10) rgba(42, 74, 128, 0.12);
     margin: calc(var(--sew-u, 1px) * 12);
 }
-.sew-diamond img {
+.sew-diamond img, .sew-diamond svg {
     width: 62%;
     height: auto;
     transform: rotate(-45deg);
@@ -247,12 +247,12 @@
     color: var(--sew-ink-soft);
     white-space: nowrap;
 }
-/* 卡底分隔=阿洛手繪菱晶分隔線 */
+/* 卡底分隔=SVG 菱晶分隔線(藍細線+空心點+中央菱) */
 .sew-card-divider {
     width: 56%;
     height: calc(var(--sew-u, 1px) * 12);
     margin-top: calc(var(--sew-u, 1px) * 10);
-    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/card-divider.webp') center / contain no-repeat;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 24'%3E%3Crect x='8' y='11.2' width='176' height='1.6' rx='0.8' fill='%238fb6e8'/%3E%3Ccircle cx='190' cy='12' r='2.6' fill='none' stroke='%238fb6e8' stroke-width='1.4'/%3E%3Crect x='236' y='11.2' width='176' height='1.6' rx='0.8' fill='%238fb6e8'/%3E%3Ccircle cx='230' cy='12' r='2.6' fill='none' stroke='%238fb6e8' stroke-width='1.4'/%3E%3Cg transform='translate(210 12) rotate(45)'%3E%3Crect x='-7' y='-7' width='14' height='14' fill='%23ffffff' stroke='%231c3260' stroke-width='2'/%3E%3Crect x='-3' y='-3' width='6' height='6' fill='%23d8a75a'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 /* ── 資訊條(白膠囊三欄) ── */
