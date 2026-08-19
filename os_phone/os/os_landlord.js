@@ -1,9 +1,9 @@
 // ----------------------------------------------------------------
 // [檔案] os_landlord.js
 // 路徑：os_phone/os/os_landlord.js
-// 職責：包租婆系統①地基——物業/租客資料、離線補算收租、招租與定調、app 主畫面。
+// 職責：包租婆系統①地基——物業/租客資料、離線補算收租、招租與定調。純邏輯無 UI。
 //   成本哲學同書咖：日常收租全本地零 API；只有「租客定調(每人一次)」燒 API 且有本地退路。
-//   設計書 docs/landlord_design.md
+//   UI 在 os_landlord_book.js（房產手帳窗口）；設計書 docs/landlord_design.md
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -442,8 +442,8 @@
         const name = String((npc && npc.key) || (npc && npc.name) || '');
         let h = 0;
         for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-        // 口味也用同一組雜湊挑：看房要拿它跟房裡的家具比，空陣列的話等於誰都無所謂
-        const pool = (win.OS_FURNITURE && win.OS_FURNITURE._cfg && win.OS_FURNITURE._cfg.TAGS) || [];
+        // 口味也用同一組雜湊挑：看房要拿它跟房裡的擺設比，空陣列的話等於誰都無所謂
+        const pool = (win.OS_BLUEPRINTS && win.OS_BLUEPRINTS._cfg && win.OS_BLUEPRINTS._cfg.TAGS) || [];
         const habit = [];
         if (pool.length) {
             habit.push(pool[h % pool.length]);
@@ -541,7 +541,7 @@
         return s;
     }
 
-    // ── 開 app：先補算離線收租,再畫主畫面 ──
+    // ── 打開房產（手帳窗口進來走這條）：先補算離線收租 ──
     // 🚨入帳與存檔綁定：有租金時,唯有 addPT 真的成功才可以把 lastSettleDay 推進到今天。
     //   否則存檔會讓這筆房租永久消失(下次開 app 誤以為已收過)。
     // 修正#4：入帳成功後若存檔失敗,需重試一次後回傳 saveFailed 旗標,避免重複入帳
@@ -794,271 +794,9 @@
         return { ok: true, state: state };
     }
 
-    function _injectStyle() {
-        const d = win.document;
-        if (d.getElementById('ll-style')) return;
-        const s = d.createElement('style'); s.id = 'll-style';
-        s.textContent = [
-            '.ll-wrap{padding:16px;color:#e7eaf1;font-family:inherit;background:#0e1015;min-height:100%;box-sizing:border-box}',
-            '.ll-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}',
-            '.ll-title{font-size:15px;font-weight:700}',
-            '.ll-purse{font-size:13px;color:#d9b06a}',
-            '.ll-note{font-size:12px;color:#9aa1b0;margin-bottom:12px;line-height:1.6}',
-            '.ll-units{display:flex;flex-direction:column;gap:10px}',
-            '.ll-unit{border:1px solid #2c3140;border-radius:10px;padding:11px;background:#171a21}',
-            '.ll-unit-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}',
-            '.ll-unit-name{font-size:13px;font-weight:600}',
-            '.ll-unit-sub{font-size:11px;color:#8b91a1}',
-            '.ll-btn{padding:7px 12px;border-radius:8px;border:1px solid #2c3140;background:#20242e;color:#e7eaf1;font-size:12px;cursor:pointer}',
-            '.ll-btn:hover{border-color:#d98fb0}',
-            '.ll-empty{color:#7a8090}',
-            '.ll-listed{color:#e7c98a}',
-            '.ll-idle{margin-top:8px;font-size:11px;color:#7a8090}',
-            // 🔔 看房紀錄
-            '.ll-view{margin-top:8px;border-top:1px solid #23283a;padding-top:8px}',
-            '.ll-view-head{display:flex;align-items:baseline;gap:8px}',
-            '.ll-view-name{color:#e7eaf1;font-size:13px;font-weight:600}',
-            '.ll-want{color:#a8d8b0;font-size:11px}',
-            '.ll-pass{color:#9aa1b0;font-size:11px}',
-            '.ll-view-line{margin-top:5px;font-size:12px;line-height:1.7;color:#c9cfdb}',
-            '.ll-view-bar{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}',
-            '.ll-mood-ok{color:#a8d8b0}',
-            '.ll-mood-warn{color:#e7c98a}',
-            '.ll-mood-bad{color:#e0a0a8}',
-            '.ll-left{color:#e0a0a8;font-size:11px}',
-            '.ll-btn-sm{padding:6px 10px;font-size:11px}',
-            '.ll-btn-quiet{color:#9aa1b0}',
-            '.ll-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}',
-            '.ll-cand{display:flex;justify-content:space-between;align-items:center;border:1px solid #2c3140;border-radius:9px;padding:10px 11px;background:#171a21}',
-            '.ll-cand > div{color:#e7eaf1;font-size:13px}',
-            '.ll-btn:disabled{opacity:.5;cursor:default}',
-            '.ll-error{color:#e08a8a}',
-        ].join('\n');
-        (d.head || d.documentElement).appendChild(s);
-    }
-
-    // 🚨不要用布林旗標防連點：外層 control_center 每次啟動 app 都會清空容器、傳一個全新的 div 進來,
-    //   連點時若靜默 return,後一次呼叫拿到的新容器會什麼都沒畫到,玩家看到空白面板。
-    //   真正需要防重複的是「結算入帳」這個動作本身,那個閂下在 _openAndSettle(見上方 _settling)。
-    //   這裡永遠把結果畫進「這次傳進來的容器」。
-    async function launch(container) {
-        const d = win.document;
-        const root = container || d.body;
-        _injectStyle();
-        root.innerHTML = '<div class="ll-wrap"><div class="ll-note">正在整理房產…</div></div>';
-
-        let res;
-        try {
-            res = await _openAndSettle();
-        } catch (e) {
-            console.warn('[Landlord] 開啟房產失敗', e);
-            _renderError(root);
-            return;
-        }
-        let purse = 0;
-        try { const pt = win.OS_PT || window.OS_PT; if (pt && pt.getPT) purse = await pt.getPT(); } catch (e) {}
-
-        const wrap = d.createElement('div'); wrap.className = 'll-wrap';
-        const head = d.createElement('div'); head.className = 'll-head';
-        head.innerHTML = '<span class="ll-title"><i class="fa-solid fa-building"></i> 我的房產</span>'
-            + '<span class="ll-purse"><i class="fa-solid fa-coins"></i> ' + purse + '</span>';
-        wrap.appendChild(head);
-
-        const note = d.createElement('div'); note.className = 'll-note';
-        note.textContent = res.payFailed
-            ? '房租入帳暫時失敗，晚點再開一次房產就會自動重新結算。'
-            : (res.saveFailed
-                ? '房租已經收好了，這次的紀錄慢了一拍，下次打開房產時會重新整理一次。'
-                : (res.days > 0 && res.earned > 0
-                    ? ('你不在的這 ' + res.days + ' 天，收到房租 ' + res.earned + '。')
-                    : (res.days > 0 ? ('過了 ' + res.days + ' 天，目前沒有房客繳租。') : '今天的房租已經收過了。')));
-        wrap.appendChild(note);
-
-        const units = d.createElement('div'); units.className = 'll-units';
-        const RT = (win.OS_ROOM_SVG && win.OS_ROOM_SVG.ROOM_TYPES) || {};
-        res.state.units.forEach(function (u) {
-            const card = d.createElement('div'); card.className = 'll-unit';
-            const type = (RT[u.roomTypeKey] && RT[u.roomTypeKey].label) || '未知房型';
-            const label = (u.floor ? (u.floor + '樓 ' + String(SLOTS[u.slot] || '').toUpperCase() + '　') : '') + type;
-            const top = d.createElement('div'); top.className = 'll-unit-top';
-            const left = d.createElement('div');
-            const got = u.earnedTotal || 0;
-            const paid = res.perUnit && res.perUnit.find(function (p) { return p.unitId === u.id; });
-            const vacant = u.listed
-                ? '<span class="ll-listed">招租中</span>　每日開價 ' + (u.rent || 0)
-                : '<span class="ll-empty">空著，還沒掛招租</span>';
-            const mood = stayMood(u);
-            const moodCls = (u.unhappy || 0) >= 4 ? 'll-mood-bad' : ((u.unhappy || 0) >= 2 ? 'll-mood-warn' : 'll-mood-ok');
-            left.innerHTML = '<div class="ll-unit-name">' + label + '</div>'
-                + '<div class="ll-unit-sub">' + (u.tenantName
-                    ? ('房客：' + u.tenantName + '　每日租金 ' + u.rent
-                        + (mood ? '　<span class="' + moodCls + '">' + mood + '</span>' : '')
-                        + (got ? '<br>累計收租 ' + got : '')
-                        + (paid ? '　這次 +' + paid.amount : ''))
-                    : vacant) + '</div>';
-            top.appendChild(left);
-            card.appendChild(top);
-
-            // 🔔 這戶還掛著的看房紀錄：想租的排前面
-            const open = (res.state.viewings || [])
-                .filter(function (v) { return v.unitId === u.id && !v.done; })
-                .sort(function (a, b) { return (b.want - a.want) || (b.day - a.day); });
-            // 🏃 剛搬走的：先講一聲再談招租
-            (res.state.moveOuts || [])
-                .filter(function (o) { return o.unitId === u.id && !o.done; })
-                .forEach(function (o) { card.appendChild(_moveOutRow(root, o)); });
-
-            if (!u.tenantKey && open.length) {
-                open.forEach(function (v) { card.appendChild(_viewingRow(root, v)); });
-            } else if (!u.tenantKey && u.listed) {
-                const idle = d.createElement('div'); idle.className = 'll-idle';
-                idle.textContent = '掛著招租，還沒有人上門。';
-                card.appendChild(idle);
-            }
-            units.appendChild(card);
-        });
-        wrap.appendChild(units);
-
-        // 🏢 加蓋是「操作」＝在樓裡那根控制柱做,這頁只管帳,所以這裡只說現況不放按鈕。
-        const floors = res.state.floors || 0;
-        const foot = d.createElement('div'); foot.className = 'll-note';
-        foot.textContent = !floors
-            ? '你的樓還沒隔出租房。走進城市裡自己那棟，用裡面那根柱子加蓋。'
-            : (floors >= LL_CFG.maxFloors
-                ? ('整棟 ' + floors + ' 樓，已經蓋到頂了。')
-                : ('整棟 ' + floors + ' 樓。想再加一層，到樓裡那根柱子。'));
-        wrap.appendChild(foot);
-        root.innerHTML = ''; root.appendChild(wrap);
-    }
-
-    // 🏃 一筆退租：誰搬走了、想不想聽他說為什麼
-    function _moveOutRow(root, o) {
-        const d = win.document;
-        const row = d.createElement('div'); row.className = 'll-view';
-        const head = d.createElement('div'); head.className = 'll-view-head';
-        head.innerHTML = '<span class="ll-view-name">' + _esc(o.name) + '</span>'
-            + '<span class="ll-left">搬走了</span>';
-        row.appendChild(head);
-
-        const line = d.createElement('div'); line.className = 'll-view-line';
-        line.textContent = o.line || '';
-        if (o.line) row.appendChild(line);
-
-        const bar = d.createElement('div'); bar.className = 'll-view-bar';
-        if (!o.line) {
-            const hear = d.createElement('button'); hear.className = 'll-btn ll-btn-sm';
-            hear.innerHTML = '<i class="fa-solid fa-comment"></i> 他為什麼走';
-            hear.onclick = async function () {
-                hear.disabled = true;
-                hear.innerHTML = '<i class="fa-solid fa-comment"></i> 問問看…';
-                try {
-                    const txt = await hearMoveOut(o.id);
-                    line.textContent = txt; row.insertBefore(line, bar); hear.remove();
-                } catch (e) {
-                    hear.disabled = false;
-                    hear.innerHTML = '<i class="fa-solid fa-comment"></i> 他為什麼走';
-                    line.className = 'll-view-line ll-error';
-                    line.textContent = (e && e.message) || '他沒多說什麼。';
-                    row.insertBefore(line, bar);
-                }
-            };
-            bar.appendChild(hear);
-        }
-        const ok = d.createElement('button'); ok.className = 'll-btn ll-btn-sm ll-btn-quiet';
-        ok.innerHTML = '<i class="fa-solid fa-check"></i> 知道了';
-        ok.onclick = async function () {
-            ok.disabled = true;
-            const r = await dismissMoveOut(o.id).catch(function () { return { ok: false }; });
-            if (r && r.ok) { launch(root); return; }
-            ok.disabled = false;
-        };
-        bar.appendChild(ok);
-        row.appendChild(bar);
-        return row;
-    }
-
-    // 🔔 一筆看房紀錄：誰來看過、想不想租、想聽他說什麼、要不要租給他
-    function _viewingRow(root, v) {
-        const d = win.document;
-        const row = d.createElement('div'); row.className = 'll-view';
-        const head = d.createElement('div'); head.className = 'll-view-head';
-        head.innerHTML = '<span class="ll-view-name">' + _esc(v.name) + '</span>'
-            + '<span class="' + (v.want ? 'll-want' : 'll-pass') + '">' + (v.want ? '想租' : '沒興趣') + '</span>';
-        row.appendChild(head);
-
-        const line = d.createElement('div'); line.className = 'll-view-line';
-        line.textContent = v.line || '';
-        if (v.line) row.appendChild(line);
-
-        const bar = d.createElement('div'); bar.className = 'll-view-bar';
-        if (!v.line) {
-            const hear = d.createElement('button'); hear.className = 'll-btn ll-btn-sm';
-            hear.innerHTML = '<i class="fa-solid fa-comment"></i> 他怎麼說';
-            hear.onclick = async function () {
-                hear.disabled = true;
-                hear.innerHTML = '<i class="fa-solid fa-comment"></i> 問問看…';
-                try {
-                    const txt = await hearViewing(v.id);
-                    line.textContent = txt; row.insertBefore(line, bar); hear.remove();
-                } catch (e) {
-                    hear.disabled = false;
-                    hear.innerHTML = '<i class="fa-solid fa-comment"></i> 他怎麼說';
-                    line.className = 'll-view-line ll-error';
-                    line.textContent = (e && e.message) || '他這次沒說什麼。';
-                    row.insertBefore(line, bar);
-                }
-            };
-            bar.appendChild(hear);
-        }
-        if (v.want) {
-            const yes = d.createElement('button'); yes.className = 'll-btn ll-btn-sm';
-            yes.innerHTML = '<i class="fa-solid fa-key"></i> 租給他';
-            yes.onclick = async function () {
-                yes.disabled = true;
-                const r = await moveInFromViewing(v.id).catch(function () { return { ok: false }; });
-                if (r && r.ok) { launch(root); return; }
-                yes.disabled = false;
-                line.className = 'll-view-line ll-error';
-                line.textContent = r && r.reason === 'occupied' ? '這間已經租出去了。' : '這次沒成，再按一次就好。';
-                row.insertBefore(line, bar);
-            };
-            bar.appendChild(yes);
-        }
-        const no = d.createElement('button'); no.className = 'll-btn ll-btn-sm ll-btn-quiet';
-        no.innerHTML = '<i class="fa-solid fa-xmark"></i> 送走';
-        no.onclick = async function () {
-            no.disabled = true;
-            const r = await dismissViewing(v.id).catch(function () { return { ok: false }; });
-            if (r && r.ok) { launch(root); return; }
-            no.disabled = false;
-        };
-        bar.appendChild(no);
-        row.appendChild(bar);
-        return row;
-    }
-    function _esc(s) {
-        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-    }
-
-    // 開啟房產失敗時的畫面:給玩家一個看得懂的提示與重試入口,不讓畫面卡在載入中
-    function _renderError(root) {
-        const d = win.document;
-        const wrap = d.createElement('div'); wrap.className = 'll-wrap';
-        const note = d.createElement('div'); note.className = 'll-note ll-error';
-        note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 房產資料暫時讀不到，請稍後再試一次。';
-        wrap.appendChild(note);
-        const btn = d.createElement('button'); btn.className = 'll-btn';
-        btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 再試一次';
-        btn.onclick = function () { launch(root); };
-        wrap.appendChild(btn);
-        root.innerHTML = ''; root.appendChild(wrap);
-    }
-
     win.OS_LANDLORD = {
         _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, getRoom, saveRoom, _dayNum, settleCore,
-        listCandidates, tuneTenant, moveIn, _fallbackTuning, launch, _openAndSettle,   // _openAndSettle=console 診斷用
+        listCandidates, tuneTenant, moveIn, _fallbackTuning, _openAndSettle,   // _openAndSettle=手帳窗口的結算入口
         addFloor, _makeFloorUnits, _unitId,   // 🏢 樓層制
         suggestRent, rentRange, getPricing, setListing,   // 💰 定價＋掛招租
         settleViewings, judgeFit, moveInFromViewing, dismissViewing, hearViewing,   // 🔔 看房訪客

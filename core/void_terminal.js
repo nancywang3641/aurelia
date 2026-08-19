@@ -603,6 +603,10 @@ const IRIS_IDLE = [
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-apps-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="終端機">應用</span>
                         </button>
+                        <button class="lb-dock-btn" data-proxy="void-estate-btn" title="房產手帳">
+                            <i class="fa-solid fa-building-columns"></i>
+                            <span class="lb-dock-label" data-cn-404="違章建築">房產</span>
+                        </button>
                         <div class="lb-dock-sep"></div>
                         <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-depart-flat.png" alt="">
@@ -688,6 +692,16 @@ const IRIS_IDLE = [
                             <div class="lb-menu-txt">
                                 <span class="lb-menu-cn" data-cn-404="異常蒐集">成就</span>
                                 <span class="lb-menu-en" data-en-404="ANOMALY SET">ACHIEVEMENTS</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-estate-btn" title="房產手帳" onclick="if(window.OS_LANDLORD_BOOK) window.OS_LANDLORD_BOOK.open();">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-building-columns"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="違章建築">房產手帳</span>
+                                <span class="lb-menu-en" data-en-404="ROGUE BLOCKS">ESTATE BOOK</span>
                             </div>
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
