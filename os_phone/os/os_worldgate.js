@@ -2355,10 +2355,19 @@
         st2.textContent =
             // 🚨 位置沿用原窗的「右側停靠」邏輯:左邊要留給愛麗絲立繪、底部要留給聊天輸入列,
             //    圖紙不能置中放大蓋全場(Rae 抓過)。寬度放大到兩欄圖塊剛好的程度就好。
-            // 高度上限比原窗再收一截(74%):圖紙下面還吊著紙堆和圖紙標題欄,80% 會頂到底部對話列
-            '.wg-win.wgbp{right:max(2%,calc(50% - 560px));top:47%;transform:translateY(-50%);width:min(740px,62%);max-width:none;' +
-              'min-height:min(600px,68%);max-height:74%;height:auto;background:none;border:none;border-radius:0;box-shadow:none;' +
+            // 🚨 幾何鐵則(Rae 兩輪回饋):①橫版長方,寬要明顯大於高(高鎖 620px 上下,別讓它長成正方形)
+            //    ②下緣讓位用「固定像素」(bottom:180px=離開鈕+輸入列那條帶),百分比在真環境會壓到離開鈕
+            //    ③top/bottom 都給+height 固定+margin auto=在剩餘空間裡垂直置中;內容超出=窗內捲動
+            '.wg-win.wgbp{right:max(2%,calc(50% - 710px));top:0;bottom:180px;margin-top:auto;margin-bottom:auto;transform:none;' +
+              'width:min(1040px,76%);max-width:none;height:min(620px,calc(100% - 210px));min-height:0;max-height:none;' +
+              'background:none;border:none;border-radius:0;box-shadow:none;' +
               'overflow:visible;backdrop-filter:none;font-family:"Noto Serif TC","Source Han Serif TC","Songti TC","PMingLiU",serif;}' +
+            // 圖紙自備關上鈕:就算哪台機器的離開鈕還是被壓到,世界門永遠關得掉
+            '.wgbp-close{display:none;}' +
+            '.wg-win.wgbp .wgbp-close{display:flex;align-items:center;justify-content:center;margin-left:10px;' +
+              'width:34px;height:34px;border:1.4px solid #2a4a80;border-radius:3px;background:#fff;color:#1f3a68;' +
+              'font-size:15px;cursor:pointer;flex:none;}' +
+            '.wg-win.wgbp .wgbp-close:hover{background:#1e3554;color:#f4efe3;border-color:#1e3554;}' +
             '.wgbp-under,.wgbp-paper,.wgbp-tb,.wgbp-compass{display:none;}' +
             '.wg-win.wgbp .wgbp-under{display:block;position:absolute;inset:0;z-index:0;' +
               'background:linear-gradient(178deg,#f2f5fa,#e3eaf4);border:1.5px solid rgba(42,74,128,.5);' +
@@ -2397,7 +2406,8 @@
             '.wg-win.wgbp .wg-btn.ghost{background:#fff;color:#1f3a68;border:1.4px solid #2a4a80;}' +
             '.wg-win.wgbp .wg-btn.danger{background:rgba(184,86,74,.08);color:#b8564a;border:1.4px solid rgba(184,86,74,.5);}' +
             // 世界=測繪圖塊
-            '.wgbp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;padding-top:10px;}' +
+            '.wgbp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding-top:10px;}' +
+            '@media (max-width:1240px){.wgbp-grid{grid-template-columns:repeat(2,1fr);}}' +
             '.wgbp-blk{position:relative;background:#fff;box-shadow:0 4px 14px rgba(31,58,104,.14);display:flex;flex-direction:column;' +
               'cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;}' +
             '.wgbp-blk:nth-child(odd){transform:rotate(-.5deg);}' +
@@ -2430,7 +2440,7 @@
             '.wgbp-empty-nm{font-size:15px;font-weight:700;letter-spacing:.18em;color:#1f3a68;}' +
             '.wgbp-empty-cc{font-size:11px;line-height:1.8;color:#46639b;letter-spacing:.05em;}' +
             '@media (max-width:760px){' +
-              '.wg-win.wgbp{width:auto;left:10px;right:10px;transform:translateY(-50%);height:auto;min-height:60%;max-height:76%;}' +
+              '.wg-win.wgbp{width:auto;left:10px;right:10px;top:12px;bottom:170px;transform:none;height:auto;min-height:0;max-height:none;}' +
               '.wg-win.wgbp .wg-head{margin:14px 14px 0;}' +
               '.wg-win.wgbp .wg-body{padding:12px 14px 20px;}' +
               '.wgbp-grid{grid-template-columns:1fr;gap:16px;}' +
@@ -2496,7 +2506,8 @@
             '<div class="wg-head">' +
               '<div class="wg-brand"><span class="wg-brand-icon"><i class="fa-solid fa-globe"></i></span>' +
                 '<span class="wg-brand-copy"><b>世界門</b><small>WORLD GATE PLAZA</small></span></div>' +
-              '<span class="wg-mode-pill" data-wg-mode><i class="fa-solid fa-city"></i> 主世界</span></div>' +
+              '<span class="wg-mode-pill" data-wg-mode><i class="fa-solid fa-city"></i> 主世界</span>' +
+              '<button class="wgbp-close" type="button" title="關上世界門"><i class="fa-solid fa-xmark"></i></button></div>' +
             '<div class="wg-body"></div>' +
             '<svg class="wgbp-compass" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">' +
               '<circle cx="30" cy="30" r="26" fill="none" stroke="#2a4a80" stroke-width="1.4"/>' +
@@ -2507,6 +2518,7 @@
               '<div><span>圖號</span><b data-wgbp-no>WG-α</b></div><div><span>比例</span><b>1 : ∞</b></div></div>';
         host.appendChild(box);
         _winEl = box;
+        box.querySelector('.wgbp-close')?.addEventListener('click', closeGate);
         _refreshModePill();
         _renderList();
     }
