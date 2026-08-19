@@ -2358,10 +2358,13 @@
             // 🚨 幾何鐵則(Rae 兩輪回饋):①橫版長方,寬要明顯大於高(高鎖 620px 上下,別讓它長成正方形)
             //    ②下緣讓位用「固定像素」(bottom:180px=離開鈕+輸入列那條帶),百分比在真環境會壓到離開鈕
             //    ③top/bottom 都給+height 固定+margin auto=在剩餘空間裡垂直置中;內容超出=窗內捲動
-            '.wg-win.wgbp{right:max(2%,calc(50% - 710px));top:0;bottom:180px;margin-top:auto;margin-bottom:auto;transform:none;' +
-              'width:min(1040px,76%);max-width:none;height:min(620px,calc(100% - 210px));min-height:0;max-height:none;' +
+            '.wg-win.wgbp{right:max(2%,calc(50% - 710px));top:110px;bottom:200px;margin-top:auto;margin-bottom:auto;transform:none;' +
+              'width:min(1040px,76%);max-width:none;height:min(620px,calc(100% - 330px));min-height:0;max-height:none;' +
               'background:none;border:none;border-radius:0;box-shadow:none;' +
               'overflow:visible;backdrop-filter:none;font-family:"Noto Serif TC","Source Han Serif TC","Songti TC","PMingLiU",serif;}' +
+            // 🧍 愛麗絲要站在圖紙「前面」(Rae 指定):圖紙開著時立繪不壓暗、抬到面板之上;
+            //    立繪這時不吃點擊,免得擋到圖紙左緣的卡片
+            '.lobby-left:has(.wg-win.wgbp) #iris-avatar{opacity:1;filter:none;position:relative;z-index:3400;pointer-events:none;}' +
             // 圖紙自備關上鈕:就算哪台機器的離開鈕還是被壓到,世界門永遠關得掉
             '.wgbp-close{display:none;}' +
             '.wg-win.wgbp .wgbp-close{display:flex;align-items:center;justify-content:center;margin-left:10px;' +
