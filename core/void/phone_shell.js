@@ -12,8 +12,7 @@
         { id: 'wb',     name: '微薄', emoji: '👁️',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微博'] && win.__PHONE_APPS['微博'](c); } },
         { id: 'tarot',  name: '塔羅', emoji: '🔮',  mode: 'inside', go: function (c) { return win.OS_TAROT && win.OS_TAROT.launch && win.OS_TAROT.launch(c); } },
         { id: 'rpg',    name: 'RPG',  emoji: '🛡️', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },
-        { id: 'landlord', name: '房產', emoji: '🏢', mode: 'inside', go: function (c) { return win.OS_LANDLORD && win.OS_LANDLORD.launch && win.OS_LANDLORD.launch(c); } },
-        { id: 'furniture', name: '家具', emoji: '🛋️', mode: 'inside', go: function (c) { return win.OS_FURNITURE && win.OS_FURNITURE.launch && win.OS_FURNITURE.launch(c); } },
+        // 🏢 房產/家具已移出手機：合併成「房產手帳」獨立窗口（大廳右側 dock 的房產鈕）
         { id: 'reader', name: '閱讀', emoji: '📖',  mode: 'inside', go: function (c) {
             if (!win.VN_READER || !win.VN_READER.show) return;
             win.VN_READER.show(c);
