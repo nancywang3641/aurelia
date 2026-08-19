@@ -3015,13 +3015,15 @@
             '<span class="wg-tag lure"><i class="fa-solid fa-gem"></i>' + _esc(w.lure) + '</span>' +
             '<span class="wg-tag warn"><i class="fa-solid fa-triangle-exclamation"></i>' + _esc(w.danger) + '</span></div>';
 
-        // ── ① 這是什麼世界：只給看，不放任何操作
+        // ── ① 這是什麼世界：看世界＋重生結束畫面(Rae 定位:放這裡,旅人頁太亂)
         const page1 =
             (w.art
                 ? '<div class="wg-art"><img src="' + _esc(w.art) + '" alt="">' +
                     '<div class="wg-art-ov"><div class="wg-art-concept">' + _esc(w.concept) + '</div>' + tagsHtml + '</div></div>'
                 : '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' + tagsHtml + '</div>') +
-            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>' : '');
+            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>' : '') +
+            '<button class="wg-btn ghost" data-act="remake-panel"><i class="fa-solid fa-wand-magic-sparkles"></i> ' +
+              (w.panel ? '重生結束畫面' : '生成結束畫面') + '</button>';
 
         // ── ② 誰跟我走：隊伍四格 + 大廳名冊 + 召集
         const page2 =
@@ -3082,6 +3084,20 @@
         b.querySelectorAll('.wg-step').forEach(el => el.addEventListener('click', () => _renderDetail(w, Number(el.dataset.step))));
         b.querySelector('[data-act="prev"]').addEventListener('click', () => { if (st === 1) _renderList(); else _renderDetail(w, st - 1); });
         b.querySelector('[data-act="next"]')?.addEventListener('click', () => _renderDetail(w, st + 1));
+        // 重生結束畫面(世界頁那顆):跟管理模式那顆同一條生成路,就地重畫、畫完留在這一頁
+        b.querySelector('[data-act="remake-panel"]')?.addEventListener('click', async () => {
+            if (_busy) return;
+            _busy = true;
+            _loading('正在佈置「' + _esc(w.name) + '」的結束畫面…');
+            let ok = false;
+            try {
+                const src = { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept };
+                const panel = await _expandPanel(src, entryText || w.concept || w.name).catch(() => null);
+                if (panel) { w.panel = panel; await _saveWorld(w); ok = true; }
+            } finally { _busy = false; }
+            _toast(ok ? '結束畫面已換上,下次劇情演完就看得到' : '結束畫面沒做出來,再試一次');
+            _renderDetail(w, 1);
+        });
 
         if (st === 2) {
             b.querySelectorAll('.wg-slot.on').forEach(el => el.addEventListener('click', () => {
