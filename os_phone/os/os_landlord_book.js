@@ -35,7 +35,9 @@
             '  overflow-y:auto;background:rgba(10,13,20,.72);backdrop-filter:blur(3px);',
             "  font-family:'Noto Serif TC','Source Han Serif TC','Songti TC','PMingLiU',serif;color:#1f3a68;",
             '  padding:28px 12px 48px;box-sizing:border-box;scrollbar-width:thin}',
+            // 高度不隨內容縮：min 高鎖住(小螢幕=貼滿視窗,大螢幕=固定書頁高),兩個書籤切換窗形不跳
             '.llb-book{position:relative;width:880px;max-width:100%;margin:auto;',
+            '  min-height:calc(100vh - 76px);min-height:min(calc(100dvh - 76px),820px);',
             '  background:linear-gradient(178deg,#ffffff 0%,#fbfcfe 55%,#f4f6fb 100%);',
             '  clip-path:polygon(22px 0,calc(100% - 22px) 0,100% 22px,100% calc(100% - 22px),',
             '  calc(100% - 22px) 100%,22px 100%,0 calc(100% - 22px),0 22px);',
