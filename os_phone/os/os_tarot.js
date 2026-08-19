@@ -1,12 +1,12 @@
 // ----------------------------------------------------------------
-// [檔案] os_tarot.js (V6.0 - Seamless Immersion)
+// [檔案] os_tarot.js (V6.1 - Grounded Reading)
 // 路徑：os_phone/os/os_tarot.js
-// 職責：賽博塔羅占卜 V6.0
+// 職責：賽博塔羅占卜 V6.1
 // 修改：
-// 1. [UX重構] "揭示"後，頂部舞台會完全隱藏 (display:none)，聊天室佔滿全屏。
-// 2. [流程] 卡牌結果會直接成為聊天記錄的第一條內容，實現「無縫轉移」視覺效果。
-// 3. [單抽優化] 點擊單抽時，舞台會暫時滑出，選完後自動收回。
-// 4. [保留] V5.1 的 Ace 圖片修復 (swac, waac...)。
+// 1. [解讀品質] 內建78張牌正逆位牌義庫 (TAROT_MEANINGS)，抽到的牌連同牌義餵給AI，防止瞎編。
+// 2. [牌陣] 三牌陣明確標注位置意義 (根源/現況/走向)。
+// 3. [精簡] 移除評判室吐槽三人組 (callJury/parseJury)，占卜回歸一對一。
+// 4. [保留] V6.0 無縫轉移 UX 與 V5.1 的 Ace 圖片修復 (swac, waac...)。
 // ----------------------------------------------------------------
 (function() {
     console.log('[PhoneOS] 載入賽博塔羅系統 (V6.0 Seamless Immersion)...');
@@ -68,6 +68,94 @@
             FULL_DECK_DEF.push({ id: fileName, name: cardName });
         }
     });
+
+    // 78張牌的正逆位牌義（餵給AI當解讀依據，防止胡編）
+    const TAROT_MEANINGS = {
+        ar00: { up: '新的開始、冒險、自由、天真的勇氣', rev: '魯莽、逃避現實、不計後果、遲遲不敢踏出第一步' },
+        ar01: { up: '創造力、行動力、資源到位、心想事成', rev: '空談、欺瞞、才能被浪費、準備不足' },
+        ar02: { up: '直覺、潛意識、靜觀其變、隱藏的真相', rev: '忽視直覺、秘密洩露、只看表面、沉不住氣' },
+        ar03: { up: '豐盛、滋養、感性、成果正在孕育', rev: '依賴、過度保護、享樂過頭、創造力停滯' },
+        ar04: { up: '權威、秩序、掌控、事業穩固', rev: '專橫、僵化、控制欲、權威失效' },
+        ar05: { up: '傳統、指導、規範、可信賴的建議', rev: '教條、盲從、被規則束縛、需要打破常規' },
+        ar06: { up: '愛情、結合、價值觀契合、重要抉擇', rev: '關係失衡、誘惑、三心二意、錯誤的選擇' },
+        ar07: { up: '意志力、勝利、掌控方向、勇往直前', rev: '失控、方向迷失、內外拉扯、急躁冒進' },
+        ar08: { up: '柔性的力量、勇氣、耐心、馴服慾望', rev: '自我懷疑、意志薄弱、硬碰硬、情緒失控' },
+        ar09: { up: '內省、獨處、尋求真理、智者的指引', rev: '孤立、自我封閉、鑽牛角尖、逃避人群' },
+        ar10: { up: '轉機、命運的節點、好運降臨、順勢而為', rev: '時運不濟、循環的困境、抗拒改變' },
+        ar11: { up: '公平、因果、權衡、法律或契約順利', rev: '不公、失衡、逃避責任、偏頗的判斷' },
+        ar12: { up: '換位思考、主動暫停、以犧牲換取領悟', rev: '無謂的犧牲、僵局、拖延、視角固化' },
+        ar13: { up: '結束與重生、斷捨離、舊階段落幕', rev: '抗拒結束、拖著爛攤子、恐懼改變' },
+        ar14: { up: '平衡、調和、節制、耐心整合', rev: '失衡、走極端、揮霍、欲速則不達' },
+        ar15: { up: '慾望、束縛、成癮、物質誘惑', rev: '掙脫枷鎖、覺醒、戒斷、擺脫依賴' },
+        ar16: { up: '驟變、崩塌、真相炸裂、推倒重來', rev: '勉強撐著的危樓、延遲的崩壞、僥倖逃過一劫' },
+        ar17: { up: '希望、療癒、靈感、值得等待的願景', rev: '失望、信心動搖、好高騖遠' },
+        ar18: { up: '不安、迷霧、潛藏的恐懼、真相未明', rev: '迷霧散去、恐懼消退、真相浮現' },
+        ar19: { up: '成功、活力、坦率、光明正大的喜悅', rev: '延遲的成功、盲目樂觀、光環褪色' },
+        ar20: { up: '覺醒、命運的召喚、重獲新生、蓋棺定論', rev: '過度自我批判、錯過召喚、無法釋懷過去' },
+        ar21: { up: '圓滿、完成、整合、抵達終點', rev: '差一步的完成、留有缺憾、停在終點前' },
+        waac: { up: '新機會、熱情點燃、行動的火種', rev: '熱情熄滅、虛假的機會、動力不足' },
+        wa02: { up: '規劃未來、掌握主動、選定方向', rev: '害怕未知、計畫停在紙上、選擇困難' },
+        wa03: { up: '初見成果、遠見、等待船入港', rev: '計畫受阻、目光短淺、成果延遲' },
+        wa04: { up: '慶祝、階段性的穩定成果、歸屬感', rev: '基礎不穩、慶祝言之過早、家內失和' },
+        wa05: { up: '競爭、摩擦、良性的衝突', rev: '惡性內耗、一味避戰、衝突升級' },
+        wa06: { up: '勝利、被認可、凱旋歸來', rev: '虛名、成果被質疑、驕兵必敗' },
+        wa07: { up: '堅守立場、以一擋百、防禦成功', rev: '寡不敵眾、疲於應付、快守不住了' },
+        wa08: { up: '迅速進展、消息傳來、事態加速', rev: '延誤、節奏混亂、操之過急' },
+        wa09: { up: '堅持到底、帶傷防備、最後一哩路', rev: '精疲力竭、偏執的防備、瀕臨放棄' },
+        wa10: { up: '重擔、責任壓身、負重前行', rev: '該卸下重擔、學會放手，否則會被壓垮' },
+        wapa: { up: '熱情的新消息、探索、躍躍欲試', rev: '三分鐘熱度、壞消息、幼稚衝動' },
+        wakn: { up: '衝勁、冒險、大膽行動', rev: '魯莽、半途而廢、火氣上頭' },
+        waqu: { up: '自信、魅力、熱情的感染力', rev: '善妒、跋扈、外強中乾' },
+        waki: { up: '領導力、有遠見的開創者、魄力', rev: '獨斷、暴躁、承諾跳票' },
+        cuac: { up: '新感情、情感豐沛、心靈滿溢', rev: '情感空虛、錯過的感情、壓抑情緒' },
+        cu02: { up: '兩情相悅、夥伴契合、和解', rev: '關係失衡、貌合神離、溝通破裂' },
+        cu03: { up: '友誼、慶祝、團體的支持', rev: '第三者、社交倦怠、小圈子是非' },
+        cu04: { up: '倦怠、無視眼前的機會、需要重新聚焦', rev: '走出低潮、接住新機會、重燃興趣' },
+        cu05: { up: '失落、悔恨、眼裡只有失去的', rev: '走出悲傷、接受現實、回頭看見還剩下的' },
+        cu06: { up: '懷舊、舊識重逢、純真的善意', rev: '困在過去、舊事重演、該向前看了' },
+        cu07: { up: '選項太多、幻想、霧裡看花', rev: '幻象破滅、下定決心、看清現實' },
+        cu08: { up: '離開已無意義的事物、去追尋更深的東西', rev: '不敢離開、反覆糾結、假裝灑脫' },
+        cu09: { up: '願望成真、滿足、犒賞自己', rev: '貪心不足、表面的滿足、願望變了質' },
+        cu10: { up: '圓滿的關係、家庭和樂、情感的歸宿', rev: '家庭失和、表面幸福、理想與現實的落差' },
+        cupa: { up: '感性的訊息、創意萌芽、心意傳達', rev: '情緒化、不切實際、曖昧不明的訊號' },
+        cukn: { up: '浪漫的追求、心意的邀請、白馬騎士', rev: '花言巧語、情感操縱、承諾不可信' },
+        cuqu: { up: '共情、溫柔、直覺敏銳的照顧者', rev: '情緒勒索、多愁善感、界線模糊' },
+        cuki: { up: '情緒成熟、包容、以柔御剛', rev: '情緒壓抑、喜怒無常、拿感情當武器' },
+        swac: { up: '清晰的判斷、真相、突破性的想法', rev: '思緒混亂、誤判、真相被掩蓋' },
+        sw02: { up: '僵持、逃避抉擇、蒙著眼的平衡', rev: '僵局鬆動、被迫面對、底牌掀開' },
+        sw03: { up: '心碎、背叛、痛苦的真相', rev: '正在療傷、逐漸釋懷、傷口未癒先別掀' },
+        sw04: { up: '休息、暫停、養精蓄銳', rev: '被迫停擺、倦怠爆發、該醒來行動了' },
+        sw05: { up: '慘勝、衝突留下裂痕、贏了面子輸了裡子', rev: '冤冤相報、該放下爭端、認賠止損' },
+        sw06: { up: '過渡、駛離風暴、漸入平靜', rev: '走不出去、舊問題跟著上船、行程受阻' },
+        sw07: { up: '策略、迂迴、隱瞞或取巧', rev: '謊言敗露、自欺欺人、良心發現' },
+        sw08: { up: '自我設限、感覺被困、其實出口就在旁邊', rev: '掙脫束縛、看見出口、重獲自由' },
+        sw09: { up: '焦慮、失眠、被恐懼放大的陰影', rev: '焦慮緩解、噩夢結束、走出黑暗' },
+        sw10: { up: '谷底、結束的劇痛、背後插刀', rev: '觸底反彈、劫後餘生、小心舊傷復發' },
+        swpa: { up: '好奇、觀察、蒐集情報', rev: '八卦、窺探、輕率的言論' },
+        swkn: { up: '果斷出擊、直言、雷厲風行', rev: '咄咄逼人、莽撞、言語傷人' },
+        swqu: { up: '清醒、獨立、一針見血', rev: '刻薄、冷酷、被偏見蒙蔽' },
+        swki: { up: '理性的權威、專業判斷、講原則', rev: '濫用權力、冷血、強詞奪理' },
+        peac: { up: '新的財源、實際的機會、種子落地', rev: '錯失機會、財務不穩、計畫缺乏根基' },
+        pe02: { up: '多工平衡、靈活調度、收支週轉', rev: '顧此失彼、失衡、被瑣事淹沒' },
+        pe03: { up: '團隊合作、技能被認可、扎實累積', rev: '單打獨鬥、敷衍了事、合作不順' },
+        pe04: { up: '守成、握緊資源、穩固但保守', rev: '吝嗇、抓得太緊，或反過來散財失控' },
+        pe05: { up: '匱乏、困頓、被關在門外', rev: '谷底回升、獲得援助、擺脫窮酸心態' },
+        pe06: { up: '施與受、資源流動、貴人相助', rev: '不對等的給予、附帶條件的幫助、欠人情債' },
+        pe07: { up: '耐心等待收成、盤點、長線投資', rev: '白費工夫、不耐煩、報酬不如預期' },
+        pe08: { up: '勤勉、打磨技藝、專注細節', rev: '敷衍、重複勞動的倦怠、半吊子' },
+        pe09: { up: '獨立自足、優雅的成果、享受果實', rev: '過勞、虛有其表、靠別人供養' },
+        pe10: { up: '家業、長期的富足、傳承', rev: '家產糾紛、財務不穩、短視近利' },
+        pepa: { up: '務實的學習、新的實務機會、腳踏實地', rev: '拖延、心不在焉、計畫落不了地' },
+        pekn: { up: '穩紮穩打、可靠、按部就班', rev: '停滯、一成不變、過度保守' },
+        pequ: { up: '務實的照顧、理財有道、安穩', rev: '患得患失、工作與生活失衡、物質焦慮' },
+        peki: { up: '事業有成、財務穩健、可靠的靠山', rev: '貪婪、固執、用金錢衡量一切' }
+    };
+
+    function cardBrief(card) {
+        const m = TAROT_MEANINGS[card.id];
+        if (!m) return '';
+        return `｜牌義參考: ${card.isReversed ? m.rev : m.up}`;
+    }
 
     // =================================================================
     // 3. 邏輯狀態管理
@@ -144,8 +232,6 @@
                     </div>
 
                     <div class="tr-panel-footer">
-                         <span class="tr-link-btn" onclick="window.OS_TAROT.callJury()">💬 召喚吐槽評判室</span>
-                         <span>|</span>
                          <span class="tr-link-btn" style="color:#00e676; font-weight:bold;" onclick="window.OS_TAROT.startNewReading()">🔄 問下一個問題 (NEXT)</span>
                     </div>
                 </div>
@@ -385,10 +471,10 @@
         const card3 = STATE.selectedCards[2];
 
         const cardInfo = `
-牌陣數據:
-1. ${card1.name} [${card1.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]
-2. ${card2.name} [${card2.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]
-3. ${card3.name} [${card3.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]`;
+牌陣數據 (時間之流牌陣：1=根源/過去, 2=現況/癥結, 3=走向/結果):
+1. ${card1.name} [${card1.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(card1)}
+2. ${card2.name} [${card2.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(card2)}
+3. ${card3.name} [${card3.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(card3)}`;
 
         let systemPrompt = "你現在是 Pythia，一位神秘、溫柔且富有洞察力的塔羅占卜師(姊姊)。";
         if (win.OS_PROMPTS) {
@@ -408,7 +494,7 @@
 
 請根據以下三張牌為用戶解讀：${cardInfo}
 用戶的問題是: "${STATE.question}"。
-請先進行整體的牌陣解讀 (三張牌的關聯)。語氣要自然，像在對話，不要像寫論文。` 
+請先進行整體的牌陣解讀 (三張牌沿位置串成一條因果線)。牌義參考只是你的內部依據，禁止照抄條列，必須揉進用戶的具體問題。語氣要自然，像在對話，不要像寫論文。`
         });
 
         await streamResponse(STATE.chatHistory);
@@ -578,7 +664,7 @@
                 }
             }
             
-            const cardInfo = `單卡: ${card.name} [${card.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]`;
+            const cardInfo = `單卡: ${card.name} [${card.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(card)}`;
             
             STATE.chatHistory.push({
                 role: 'system',
@@ -606,64 +692,6 @@
         }
     }
 
-    // 評判室
-    async function callJury() {
-        const log = document.getElementById('tr-log');
-        log.innerHTML += `<div style="text-align:center; color:#00f2ff; margin:20px 0; font-size:12px;">——— 系統插播：評判室吐槽 ———</div>`;
-        
-        const currentTime = getCurrentTime();
-        
-        const prompt = `
-【當前時間】${currentTime.formatted}
-
-用戶問題: ${STATE.question}
-Pythia 的解讀已經結束。
-請 Logic, Emo, Troll 三人組針對剛才的牌局進行簡短的吐槽。
-牌面: ${STATE.selectedCards.map(c => c.name).join(', ')}
-        `;
-        
-        let sysPrompt = "你是吐槽三人組。";
-        if (win.OS_PROMPTS) {
-            const customPrompt = win.OS_PROMPTS.get('tarot_jury');
-            if (customPrompt && customPrompt.trim().length > 0) {
-                sysPrompt = customPrompt;
-            }
-        }
-
-        let config = win.OS_SETTINGS && win.OS_SETTINGS.getSecondaryConfig ? win.OS_SETTINGS.getSecondaryConfig() : {};
-        const messages = [{ role: 'system', content: sysPrompt }, { role: 'user', content: prompt }];
-
-        const msgDiv = document.createElement('div');
-        log.appendChild(msgDiv);
-        log.scrollTop = log.scrollHeight;
-
-        let fullText = "";
-        try {
-            await new Promise((resolve, reject) => {
-                win.OS_API.chat(messages, config, (chunk) => {
-                    fullText += chunk;
-                    msgDiv.innerHTML = parseJury(fullText);
-                    log.scrollTop = log.scrollHeight;
-                }, (final) => {
-                    fullText = final;
-                    msgDiv.innerHTML = parseJury(final);
-                    resolve();
-                }, reject);
-            });
-        } catch (e) {
-            msgDiv.innerHTML = `<div style="color:red">吐槽失敗: ${e.message}</div>`;
-        }
-    }
-
-    function parseJury(text) {
-        if (!text) return "";
-        let html = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-        html = html.replace(/Logic/g, '<span style="color:#3498db">Logic</span>')
-                   .replace(/Emo/g, '<span style="color:#ff6b81">Emo</span>')
-                   .replace(/Troll/g, '<span style="color:#00f2ff">Troll</span>');
-        return `<div class="tr-msg-block" style="font-size:12px; opacity:0.8;">${html}</div>`;
-    }
-
     function reset() {
         document.getElementById('tr-panel').classList.remove('active');
         document.getElementById('tr-stage').classList.remove('hidden-mode');
@@ -677,7 +705,6 @@ Pythia 的解讀已經結束。
         pickCard,
         revealCards,
         sendFollowUp,
-        callJury,
         reset,
         startNewReading, 
         triggerSingleCardDraw 
