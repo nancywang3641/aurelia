@@ -1871,8 +1871,11 @@
             '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
             '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-badge"></span></button>' +
-            // 🏙 快轉地圖：書咖/大廳/交易所/城裡/404 都出現（404 進出走完整轉場流程，見 _openCityMap 的 jump）
-            ((S.scene === 'cafe' || S.scene === 'hall' || S.scene === 'exchange' || S.scene === 'city' || S.scene === 'room404') ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
+            // 🏙 快轉地圖：每個走得到的場景都要有（404 進出走完整轉場流程，見 _openCityMap 的 jump）
+            //    room＝住家／房客的房／公寓走廊。廣場鎖上之後那裡面唯一的出路是走到門口，
+            //    別的地方都能一鍵跳、只有屋裡要用走的說不過去。
+            (['cafe', 'hall', 'exchange', 'city', 'room404', 'room'].indexOf(S.scene) >= 0
+                ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
             // ☕ 書咖櫃檯入口=跟瀅瀅開聊(startTalk 掛鉤,同白兔成例);獨立鈕已退役
         left.appendChild(root);
         if (S._theaterTimer) clearInterval(S._theaterTimer);
