@@ -2355,8 +2355,9 @@
         st2.textContent =
             // 🚨 位置沿用原窗的「右側停靠」邏輯:左邊要留給愛麗絲立繪、底部要留給聊天輸入列,
             //    圖紙不能置中放大蓋全場(Rae 抓過)。寬度放大到兩欄圖塊剛好的程度就好。
-            '.wg-win.wgbp{right:max(2%,calc(50% - 560px));top:50%;transform:translateY(-50%);width:min(740px,62%);max-width:none;' +
-              'min-height:min(640px,78%);max-height:80%;height:auto;background:none;border:none;border-radius:0;box-shadow:none;' +
+            // 高度上限比原窗再收一截(74%):圖紙下面還吊著紙堆和圖紙標題欄,80% 會頂到底部對話列
+            '.wg-win.wgbp{right:max(2%,calc(50% - 560px));top:47%;transform:translateY(-50%);width:min(740px,62%);max-width:none;' +
+              'min-height:min(600px,68%);max-height:74%;height:auto;background:none;border:none;border-radius:0;box-shadow:none;' +
               'overflow:visible;backdrop-filter:none;font-family:"Noto Serif TC","Source Han Serif TC","Songti TC","PMingLiU",serif;}' +
             '.wgbp-under,.wgbp-paper,.wgbp-tb,.wgbp-compass{display:none;}' +
             '.wg-win.wgbp .wgbp-under{display:block;position:absolute;inset:0;z-index:0;' +
@@ -2429,7 +2430,7 @@
             '.wgbp-empty-nm{font-size:15px;font-weight:700;letter-spacing:.18em;color:#1f3a68;}' +
             '.wgbp-empty-cc{font-size:11px;line-height:1.8;color:#46639b;letter-spacing:.05em;}' +
             '@media (max-width:760px){' +
-              '.wg-win.wgbp{width:auto;left:10px;right:10px;transform:translateY(-50%);height:88%;}' +
+              '.wg-win.wgbp{width:auto;left:10px;right:10px;transform:translateY(-50%);height:auto;min-height:60%;max-height:76%;}' +
               '.wg-win.wgbp .wg-head{margin:14px 14px 0;}' +
               '.wg-win.wgbp .wg-body{padding:12px 14px 20px;}' +
               '.wgbp-grid{grid-template-columns:1fr;gap:16px;}' +
