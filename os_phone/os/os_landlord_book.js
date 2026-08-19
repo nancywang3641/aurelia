@@ -53,7 +53,9 @@
             '  background:#2a4a80;transform:translateY(-50%) rotate(45deg)}',
             '.llb-wing.r{background:linear-gradient(270deg,transparent,rgba(42,74,128,.45))}',
             '.llb-wing.r::after{right:auto;left:-2px}',
-            '.llb-h1{margin:0;font-size:27px;font-weight:700;letter-spacing:.35em;text-indent:.35em;white-space:nowrap}',
+            // 🚨 標題/粗體一律明寫顏色與字體：窗口掛在酒館 body 下，主題的全域 h1/b 樣式(常是金黃字)會蓋進來
+            '.llb-h1{margin:0;font-size:27px;font-weight:700;letter-spacing:.35em;text-indent:.35em;',
+            '  white-space:nowrap;color:#1f3a68!important;font-family:inherit;line-height:1.4;text-shadow:none!important}',
             // 頁首：書籤 + PT
             '.llb-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}',
             '.llb-tabs{display:flex;gap:10px}',
@@ -72,7 +74,7 @@
             '  background:#2a4a80;transform:translateY(-50%) rotate(45deg)}',
             '.llb-sec .d.r{background:linear-gradient(270deg,transparent,rgba(42,74,128,.4))}',
             '.llb-sec .d.r::after{right:auto;left:0}',
-            '.llb-sec b{font-size:15px;letter-spacing:.3em;text-indent:.3em;white-space:nowrap}',
+            '.llb-sec b{font-size:15px;letter-spacing:.3em;text-indent:.3em;white-space:nowrap;color:#1f3a68!important;text-shadow:none!important}',
             // 收租條
             '.llb-strip{width:100%;box-sizing:border-box;padding:10px 20px;background:#fdfdfc;',
             '  border:1px solid rgba(42,74,128,.28);border-radius:26px;font-size:13px;letter-spacing:.08em;line-height:1.8}',
@@ -115,7 +117,7 @@
             // 看房/退租列（卡片裡）
             '.llb-visit{border-top:1px dashed rgba(42,74,128,.3);padding-top:9px;display:flex;flex-direction:column;gap:6px}',
             '.llb-visit-head{display:flex;align-items:baseline;gap:8px;font-size:13px}',
-            '.llb-visit-head b{font-weight:700}',
+            '.llb-visit-head b{font-weight:700;color:#1f3a68!important;text-shadow:none!important}',
             '.llb-want{color:#2c6e49;font-size:11.5px}',
             '.llb-pass{color:#46639b;font-size:11.5px}',
             '.llb-gone{color:#9c3a3a;font-size:11.5px}',
@@ -268,7 +270,7 @@
         _root.innerHTML = ''
             + '<div class="llb-book">'
             + '  <button class="llb-close" type="button" title="關上"><i class="fa-solid fa-xmark"></i></button>'
-            + '  <div class="llb-title-row"><span class="llb-wing"></span><h1 class="llb-h1">房產手帳</h1><span class="llb-wing r"></span></div>'
+            + '  <div class="llb-title-row"><span class="llb-wing"></span><div class="llb-h1">房產手帳</div><span class="llb-wing r"></span></div>'
             + '  <div class="llb-head">'
             + '    <div class="llb-tabs">'
             + '      <button class="llb-tab" type="button" data-tab="estate">我的房產</button>'
