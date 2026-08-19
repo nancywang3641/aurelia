@@ -2445,8 +2445,28 @@
             '.wgbp-blk.empty i.big{font-size:24px;color:#2a4a80;}' +
             '.wgbp-empty-nm{font-size:15px;font-weight:700;letter-spacing:.18em;color:#1f3a68;}' +
             '.wgbp-empty-cc{font-size:11px;line-height:1.8;color:#46639b;letter-spacing:.05em;}' +
+            // ── 📄 wgbp-sub=詳情/種子頁:同一疊圖紙抽出的「窄單頁」(直式文件比例),內容沿用原結構只換零件皮 ──
+            '.wg-win.wgbp.wgbp-sub{width:min(520px,80%);}' +
+            '.wg-win.wgbp .wg-card{border-radius:0;border:1.2px solid rgba(42,74,128,.45);background:#fff;box-shadow:none;}' +
+            '.wg-win.wgbp .wg-card-title{color:#1f3a68;}' +
+            '.wg-win.wgbp .wg-card-sub,.wg-win.wgbp .wg-entry-text{color:#46639b;}' +
+            '.wg-win.wgbp .wg-tag{border-radius:2px;background:#f7fafd;border:1px solid rgba(42,74,128,.45);color:#46639b;}' +
+            '.wg-win.wgbp .wg-tag.warn{border:1.4px solid #b8564a;color:#b8564a;border-radius:3px;transform:rotate(-3deg);font-weight:700;background:rgba(184,86,74,.06);}' +
+            '.wg-win.wgbp .wg-art{border-radius:0;border:1.2px solid #2a4a80;}' +
+            '.wg-win.wgbp .wg-step{border-radius:2px;color:#46639b;background:#f7fafd;border:1px solid rgba(42,74,128,.3);}' +
+            '.wg-win.wgbp .wg-step.done{color:#1f3a68;}' +
+            '.wg-win.wgbp .wg-step.on{background:linear-gradient(180deg,#2c4a7e,#1e3554);border-color:#1e3554;color:#f4efe3;}' +
+            '.wg-win.wgbp .wg-steps b{color:rgba(42,74,128,.4);}' +
+            '.wg-win.wgbp .wg-input{border:1.2px solid rgba(42,74,128,.45);border-radius:2px;background:#fff;color:#1f3a68;font-family:inherit;}' +
+            '.wg-win.wgbp .wg-chip{border-radius:2px;background:#fff;border:1px solid rgba(42,74,128,.45);color:#1f3a68;}' +
+            '.wg-win.wgbp .wg-empty{color:#46639b;}' +
+            '.wg-win.wgbp .wg-empty i{color:#2a4a80;}' +
+            '.wg-win.wgbp .wg-spawn{border-radius:2px;border:1.2px solid rgba(42,74,128,.4);}' +
+            '.wg-win.wgbp .wg-spawn.on{border-color:#1e3554;box-shadow:0 0 0 1px #1e3554;}' +
+            '.wg-win.wgbp .wg-spawn-n{color:#1f3a68;}' +
+            '.wg-win.wgbp .wg-spawn-s{color:#46639b;}' +
             '@media (max-width:760px){' +
-              '.wg-win.wgbp{width:auto;left:10px;right:10px;top:12px;bottom:170px;transform:none;height:auto;min-height:0;max-height:none;}' +
+              '.wg-win.wgbp,.wg-win.wgbp.wgbp-sub{width:auto;left:10px;right:10px;top:12px;bottom:170px;transform:none;height:auto;min-height:0;max-height:none;}' +
               '.wg-win.wgbp .wg-head{margin:14px 14px 0;}' +
               '.wg-win.wgbp .wg-body{padding:12px 14px 20px;}' +
               '.wgbp-grid{grid-template-columns:1fr;gap:16px;}' +
@@ -2574,8 +2594,9 @@
         _selIds.forEach(id => { if (!worlds.some(w => w.id === id)) _selIds.delete(id); });   // 別留已被刪掉的殘影
         const inPara = !!_gate()?.isInParallax?.();
         const allOn = worlds.length > 0 && _selIds.size === worlds.length;
-        // 📐 檔案庫頁掛上航行圖紙皮(離開這頁的 renderer 會摘掉);圖號跟著世界數走
+        // 📐 檔案庫頁=大張航行圖紙;詳情/種子頁=同一疊抽出的窄單頁(wgbp-sub),整組不換皮(Rae:割裂)
         _winEl?.classList.add('wgbp');
+        _winEl?.classList.remove('wgbp-sub');
         const tbNo = _winEl?.querySelector('[data-wgbp-no]');
         if (tbNo) tbNo.textContent = 'WG-α' + worlds.length;
         b.innerHTML =
@@ -2705,7 +2726,7 @@
     // ── P2 種子抽選 ──
     async function _renderSeedPage() {
         const b = _body(); if (!b) return;
-        _winEl?.classList.remove('wgbp');   // 離開檔案庫=收起航行圖紙皮,回量子白窗
+        _winEl?.classList.add('wgbp', 'wgbp-sub');   // 同一疊圖紙抽出的窄單頁
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-dice"></i> 世界種子</span><span class="wg-section-note">此頁功能會呼叫 AI</span></div>' +
             '<div class="wg-empty" data-wg-seedhint><i class="fa-solid fa-wand-magic-sparkles"></i>填了題材,四顆種子都會是那個題材,<br>留空就讓愛麗絲隨手抽一把。</div>' +
@@ -2990,7 +3011,7 @@
     }
     async function _renderDetail(w, step) {
         const b = _body(); if (!b) return;
-        _winEl?.classList.remove('wgbp');   // 離開檔案庫=收起航行圖紙皮,回量子白窗
+        _winEl?.classList.add('wgbp', 'wgbp-sub');   // 同一疊圖紙抽出的窄單頁
         const st = Math.min(3, Math.max(1, Number(step) || 1));
         _delArm = 0;
         _mgrOff();   // 離開檔案庫=管理模式歸零,回來時不會還停在勾選狀態
