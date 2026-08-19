@@ -1015,7 +1015,12 @@
             // 🚨判斷「有沒有啟用」也要認 disable:只看 enabled 的話,那個欄位不存在＝永遠讀成已啟用,
             //   於是「已經是對的就不寫」誤判成不用寫,關掉的條目連寫都沒寫就跳過了。
             const isEnabled = e => (e.disable === true ? false : (e.enabled !== false));
+            // 🏛 大廳限定條目(comment 帶「大廳限定」):大廳世界觀/開發團隊那幾條寫滿表世界人名,
+            //    進了異世界照鑰匙觸發會把熟人炸進劇情(獅子黎昂事故)——在世界裡一律硬關,回大廳打開。
+            const isHubOnly = e => !!e && String(e.comment || '').indexOf('大廳限定') >= 0;
+            const hubOn = !activeId;   // 沒進任何世界＝人在大廳
             const dirty = cur.some(e => {
+                if (isHubOnly(e)) return isEnabled(e) !== hubOn;
                 if (!isOurs(e)) return false;
                 const on = isMine(e);
                 return isOn(e) !== on || isEnabled(e) !== on;
@@ -1032,6 +1037,8 @@
                 if (why !== '撤離' && why !== '刪世界') _toast(line);
             }
             await TH.updateLorebookEntriesWith(BOOK_PARA, list => (list || []).map(e => {
+                // 大廳限定條目只動開關,不動觸發方式(它們本來就是鑰匙條目)
+                if (isHubOnly(e)) return Object.assign({}, e, { disable: !hubOn, enabled: hubOn });
                 if (!isOurs(e)) return e;   // 不是世界門建的條目（別人放在同一本書裡的東西）→ 一律不碰
                 const on = isMine(e);
                 // 🚨🚨「啟用」欄位在酒館的世界書裡是 disable(反過來的),不是 enabled。
