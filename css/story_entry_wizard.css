@@ -270,11 +270,21 @@
     display: flex; align-items: center;
     gap: calc(var(--sew-u, 1px) * 10);
 }
-.sew-info-col > i {
-    font-size: calc(var(--sew-u, 1px) * 17);
-    color: var(--sew-navy-deep);
+/* 三欄圖標=FA 符號+統一金色圓環 */
+.sew-info-ring {
+    flex: 0 0 auto;
+    width: calc(var(--sew-u, 1px) * 26);
+    height: calc(var(--sew-u, 1px) * 26);
+    display: flex; align-items: center; justify-content: center;
+    border: calc(var(--sew-u, 1px) * 1.4) solid #cfa85e;
+    border-radius: 50%;
+    box-sizing: border-box;
 }
-.sew-info-ico { width: calc(var(--sew-u, 1px) * 26); height: auto; display: block; }
+.sew-info-ring i {
+    font-size: calc(var(--sew-u, 1px) * 11);
+    color: var(--sew-navy-deep);
+    line-height: 1;
+}
 .sew-info-txt {
     display: flex; flex-direction: column;
     font-size: calc(var(--sew-u, 1px) * 10.5);
