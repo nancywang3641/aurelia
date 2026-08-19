@@ -33,6 +33,15 @@
     // ── 🗺️ 場景註冊表（雙子設定：瀅瀅書咖 ⇄ 愛麗絲純白大廳）──
     // layout: footH=腳印高(物件底部佔地)、s=個別縮放；points: 各場景擺設模式各存各的
     // doors: 走進觸發區→白光過場→切場景（spawn=抵達點）
+    // 🔒 廣場（視差城市／街區）封起來：主軸是 VN 跑團，移動實際上都靠快轉在走，
+    //    走進廣場那條路先關掉。關掉的是「進得去」，素材、擺設、快轉地圖的底圖都原封不動，
+    //    要開回來只要把 lobby_city_locked 設成 '0'（或把這裡的預設改掉），舊行為整組回來。
+    //    影響到的三條路，各自在下面處理：①書咖/大廳的底部大門 ②快轉的廣場鈕與點空地傳送
+    //    ③房間走出來的出口（預設是回廣場，鎖上時改成回進門前待的場景，不然會走不出來）。
+    function _cityLocked() {
+        try { return localStorage.getItem('lobby_city_locked') !== '0'; } catch (e) { return true; }
+    }
+
     const SCENES = {
         cafe: {
             base: 'lobby_base_v2.png',
@@ -379,7 +388,11 @@
         const SC = SCENES[S.scene];
         let layout = (SC.layout || []).map(o => Object.assign({}, o));
         const points = JSON.parse(JSON.stringify(SC.points || {}));
-        const doors = (SC.doors || []).map(d => Object.assign({}, d));   // 靜態地圖沒 doors→給空陣列，別讓 undefined.map 炸掉整個掛載
+        // 靜態地圖沒 doors→給空陣列，別讓 undefined.map 炸掉整個掛載
+        // 🔒 廣場鎖上：通往廣場的門整扇不存在（書咖／大廳的底部大門）。房間的出口不走這裡——
+        //    它在 enterRoom 就改好目的地了，濾掉的話會變成一間沒有門的房間。
+        const doors = (SC.doors || []).map(d => Object.assign({}, d))
+            .filter(d => !(d.to === 'city' && S.scene !== 'room' && _cityLocked()));
         let baseOverride = null, maskOverride = null;
         try {
             const saved = SC.cfgKey ? JSON.parse(localStorage.getItem(SC.cfgKey) || 'null') : null;   // 動態場景沒 cfgKey＝不存擺設
@@ -430,6 +443,7 @@
         raf: 0, last: 0, active: false,
         scene: 'cafe',              // 目前場景（每次開大廳從書咖開始）
         spawnOverride: null,        // 過門後的抵達點
+        roomFrom: '',               // 進房間之前待的場景（廣場鎖上時，走出房間就回這裡）
         doorCd: 0,                  // 過門冷卻（防止落地瞬間又觸發）
         doorArm: false,             // 門武裝狀態：落地後走出門區一次才重新啟動
         transitioning: false,
@@ -1532,7 +1546,10 @@
         const pts = { player: { x: px, y: py }, arrive: { x: px, y: py }, actorScale: scale };
         if (poly) pts.boundary = poly.map(p => ({ x: p[0], y: p[1] }));   // 遮罩沒載成功時的退路輪廓
         SCENES.room.points = pts;
-        const ex = dyn.exit || { to: 'city' };
+        let ex = dyn.exit || { to: 'city' };
+        // 🔒 廣場鎖上時房間的出口不能還通向廣場，否則走出自己家就卡在一個進不去的場景。
+        //    退回「進這間房之前待的那個場景」——從書咖快轉進家、走出來就回書咖。
+        if (_cityLocked() && ex.to === 'city' && !ex.panel) ex = { to: S.roomFrom || 'cafe' };
         // 觸發區貼著地板最下緣那一條，不往房間裡面吃
         // 出口也可以是 panel 型：公寓裡走出一戶＝回到那層走廊，而不是一路彈回城市
         SCENES.room.doors = [{
@@ -1552,6 +1569,7 @@
             });
         }
         S.dyn = dyn;
+        if (S.scene !== 'room') S.roomFrom = S.scene;   // 記住從哪裡進來的（房間套房間時不要被內層洗掉）
         if (S.active) goScene('room', null, 'arrive');
         else { S.scene = 'room'; tryMount(); }
         return true;
@@ -1605,7 +1623,8 @@
         // 🐈‍⬛ 404 目的地：解鎖過（進過一次 ERR_404）才顯示；沒解鎖整顆藏起來
         const _vt = window.VoidTerminal || {};
         const _st404 = (_vt.get404State ? _vt.get404State() : null) || { unlocked: false, active: false };
-        const chips = [['city', '廣場'], ['cafe', '書咖'], ['hall', '大廳'], ['exchange', '交易所']];
+        const locked = _cityLocked();   // 🔒 廣場鎖上：不給「廣場」這個目的地，地圖本身還是照畫（它就是這張快轉圖）
+        const chips = (locked ? [] : [['city', '廣場']]).concat([['cafe', '書咖'], ['hall', '大廳'], ['exchange', '交易所']]);
         if (_st404.unlocked) chips.push(['room404', '404']);
         // 🚪 統一跳場口：進 404 走 enter404Room（glitch 特效+音效+柴郡開場）；從 404 離開走 restoreLobby 還原流程再落到目標
         const jump = (to, spawn) => {
@@ -1619,7 +1638,8 @@
         const box = document.createElement('div');
         box.className = 'lstage-citymap';
         box.innerHTML =
-            '<div class="lcm-title"><i class="fa-solid fa-map-location-dot"></i> 快轉——點地圖上任何地方' +
+            '<div class="lcm-title"><i class="fa-solid fa-map-location-dot"></i> ' +
+              (locked ? '快轉——點地圖上的地標' : '快轉——點地圖上任何地方') +
               '<button class="lcm-close"><i class="fa-solid fa-xmark"></i></button></div>' +
             '<div class="lcm-map" style="width:' + Math.round(MAP_W * K) + 'px;height:' + Math.round(MAP_H * K) + 'px"></div>' +
             '<div class="lcm-chips">' +
@@ -1657,8 +1677,12 @@
             const front = { x: Math.round(o.x + o.w * s / 2), y: Math.round(o.y + o.h * s + 18) };
             if (/book_cafe/.test(f)) dests.push({ o, label: '書咖', go: () => jump('cafe') });
             else if (/lobby_day/.test(f)) dests.push({ o, label: '大廳', go: () => jump('hall') });
-            else if (/player_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '我的家', go: () => jump('city', front) });
-            else if (/npc_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '鄰居家', go: () => jump('city', front) });
+            // 🏠 我的家：以前是傳到廣場上的家門口，還要自己再走進去一次——快轉點的是「家」，就直接進屋。
+            //    走廣場那條路（走到門口踩觸發區）還在，廣場開鎖時照舊。
+            else if (/player_house/.test(f) && (!o.plot || _plotOccupied(o.plot)))
+                dests.push({ o, label: '我的家', go: () => window.dispatchEvent(new CustomEvent('lstage-open-myhome')) });
+            // 鄰居家沒有屋內可進（廣場裡也沒有給它們的門），它的作用就是傳到那戶門口 → 廣場鎖上就沒有落點，整顆收起來
+            else if (!locked && /npc_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '鄰居家', go: () => jump('city', front) });
         });
         dests.forEach(d => {
             const o = d.o, s = o.s || 1;
@@ -1672,13 +1696,16 @@
             hs.addEventListener('click', (e) => { e.stopPropagation(); box.remove(); d.go(); });
             map.appendChild(hs);
         });
-        // 點空地＝傳送到該點（落點若在牆裡,掛載後的遮罩檢查會自動彈到最近可走處）
-        map.addEventListener('click', (e) => {
-            const r = map.getBoundingClientRect();
-            const x = Math.round((e.clientX - r.left) / K), y = Math.round((e.clientY - r.top) / K);
-            box.remove();
-            jump('city', { x, y });
-        });
+        // 點空地＝傳送到廣場的該點（落點若在牆裡,掛載後的遮罩檢查會自動彈到最近可走處）
+        // 🔒 廣場鎖上時整個關掉：那是唯一一條「走進廣場」的捷徑，留著等於鎖了個寂寞
+        if (!locked) {
+            map.addEventListener('click', (e) => {
+                const r = map.getBoundingClientRect();
+                const x = Math.round((e.clientX - r.left) / K), y = Math.round((e.clientY - r.top) / K);
+                box.remove();
+                jump('city', { x, y });
+            });
+        }
         box.querySelector('.lcm-close').addEventListener('click', () => box.remove());
         box.querySelectorAll('.lcm-chip').forEach(b => b.addEventListener('click', () => { box.remove(); jump(b.dataset.go); }));
         S.root.appendChild(box);
