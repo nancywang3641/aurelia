@@ -2,8 +2,11 @@
 // [檔案] worldgate.js — 視差世界門 ②切書機制（2026-07-22）
 // 職責：奧瑞亞卡的世界書自動切換。
 //   主世界模式：主書=【奧瑞亞世界】(表世界) ＋ 附加【奧瑞亞-人物核心】
-//   視差模式  ：主書卸下(null)            ＋ 附加【奧瑞亞-人物核心】+【奧瑞亞-視差】
-//   人物核心永遠在場；她自己另掛的附加書一律原樣保留。
+//   視差模式  ：主書卸下(null)            ＋ 附加【奧瑞亞-視差】
+//   🚨人物核心只在主世界（2026-08-19 改）：熟人條目的鑰匙全是裸名（「丹」「雷伊」…），
+//     異世界隨便生一個撞名NPC就會把熟人人設炸進場、AI把NPC演成熟人；
+//     表世界的配對/世界狀態常駐條目也不該漏進異世界（認知隔離）。
+//   她自己另掛的附加書一律原樣保留。
 // 守衛：綁定裡出現任一本奧瑞亞書才動手——其他作者的卡一律不碰（跨卡隔離）。
 // 對帳：載入/換聊天時檢查殘局（上次切到一半當機＝主書空但視差也不在→復原表世界）。
 // 依賴：TavernHelper（getCharLorebooks/setCurrentCharLorebooks/getLorebooks），呼叫時才取用。
@@ -45,7 +48,7 @@
         return [BOOK_MAIN, BOOK_CORE, BOOK_PARA].filter(b => names.indexOf(b) < 0);
     }
 
-    // 進視差：表世界主書收起，掛核心＋視差
+    // 進視差：表世界主書收起、人物核心也收起，只掛視差書
     async function enterParallax() {
         const TH = _th();
         const s = _snapshot();
@@ -54,9 +57,10 @@
         const missing = _missingBooks(TH);
         if (missing === null) return { ok: false, msg: '世界書清單讀取失敗' };
         if (missing.length) return { ok: false, msg: '還沒匯入：' + missing.join('、') };
-        if (s.primary !== BOOK_MAIN && s.additional.indexOf(BOOK_PARA) >= 0) return { ok: true, msg: '已在視差模式' };
+        // 「已在視差」還得核心不在場才算數：舊版把核心一起掛著，那種狀態要重寫一次剝掉
+        if (s.primary !== BOOK_MAIN && s.additional.indexOf(BOOK_PARA) >= 0 && s.additional.indexOf(BOOK_CORE) < 0) return { ok: true, msg: '已在視差模式' };
         const add = s.additional.filter(b => b !== BOOK_PARA && b !== BOOK_CORE);
-        add.push(BOOK_CORE, BOOK_PARA);
+        add.push(BOOK_PARA);
         try {
             await TH.setCurrentCharLorebooks({ primary: null, additional: add });
         } catch (e) {
@@ -95,6 +99,10 @@
         if (!s.primary && s.additional.indexOf(BOOK_PARA) < 0) {
             console.warn('[Worldgate] 偵測到殘局（主書空且非視差模式），自動復原表世界');
             await exitParallax();
+        } else if (s.primary !== BOOK_MAIN && s.additional.indexOf(BOOK_PARA) >= 0 && s.additional.indexOf(BOOK_CORE) >= 0) {
+            // 舊版視差把人物核心一起掛著 → 剝掉（寫完核心不在了，下一輪對帳直接命中「已在視差」不再寫）
+            console.warn('[Worldgate] 視差模式下人物核心還掛著（舊版狀態），自動收起');
+            await enterParallax();
         }
     }
 
