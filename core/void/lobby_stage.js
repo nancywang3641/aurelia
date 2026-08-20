@@ -222,7 +222,8 @@
             // 🔮 占卜桌＝可點的互動點（點了開占卜面板；走近紫薇則是純聊天，兩件事分開）。
             //    obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上，不用回來改座標。
             hotspots: [
-                { obj: 'obj_table', label: '入座占卜', icon: 'fa-wand-sparkles', open: 'tarot', cls: 'hs-tarot' },
+                { obj: 'obj_table', label: '入座占卜', icon: 'fa-wand-sparkles', open: 'tarot', cls: 'hs-tarot',
+                  hRatio: 0.77, radius: '50%' },   // 0.77＝桌面橢圓的高度佔比（實測素材 alpha 得出）
             ],
         },
         room: {   // 🏠 房間：底圖與碰撞遮罩不是素材，是「進門當下」餵進來的（見 enterRoom）
@@ -1787,6 +1788,17 @@
     // ── 🔮 占卜面板（小屋裡點紫薇）：塔羅 app 本來就吃容器，直接掛進浮窗、面板一行都不用改 ──
     //    ❮ 返回鈕：塔羅的 HTML 寫死呼叫 PhoneSystem.goHome（它原本住在手機殼裡）。
     //    小屋沒有手機 → 開窗時暫借這個方法指向「關窗」，關窗再還原，跟 phone_shell 借法一致。
+    // 只掛立繪、不開對話框：占卜面板開著時她人還站在旁邊，只是白框跟輸入列收起來。
+    //（hideDialog 會把立繪 remove 掉，所以收完框要用這個把她掛回來）
+    function _showPortraitOnly(npc) {
+        const left = document.querySelector('.lobby-left');
+        if (!left || !npc) return;
+        let p = left.querySelector('.lstage-talk-portrait');
+        if (!p) { p = document.createElement('img'); p.className = 'lstage-talk-portrait'; left.appendChild(p); }
+        p.src = npc.portrait || (npc.el && npc.el.src) || (typeof npc.defaultSrc === 'string' ? npc.defaultSrc : ASSET.mcM);
+        p.classList.toggle('is-avatar', !!(npc.portraitKind === 'avatar' && npc.portrait));
+    }
+
     let _tarotWin = null;   // 占卜浮窗單例（開聊時要把它收掉，見 startTalk）
     function _closeTarotPanel() { if (_tarotWin) { try { _tarotWin(); } catch (e) {} } }
     function _openTarotPanel() {
@@ -1795,6 +1807,8 @@
         //    開占卜就把對話那條收乾淨（Rae 2026-08-21）。反過來 startTalk 也會關掉這個面板。
         endTalk();      // 正在跟她聊 → 結束（順帶收掉立繪與其他面板）
         hideDialog();   // 沒在聊但框還浮著 → 也收掉
+        // 🧍 但立繪要留著（Rae 2026-08-21）：收的是「白框＋輸入列」，不是把人趕走。
+        _showPortraitOnly(S.npcs.find(n => n.key === 'zhiwei'));
         const box = document.createElement('div');
         box.className = 'lstage-tarotwin';
         box.innerHTML =
@@ -1809,6 +1823,8 @@
         const close = () => {
             box.remove();
             _tarotWin = null;
+            // 關窗＝人也退場（沒在對話卻留一張立繪會很怪）；開聊那條會自己再掛一次
+            if (!S.talkTarget) host.querySelector('.lstage-talk-portrait')?.remove();
             try { host.classList.remove('void-dock-open'); } catch (e) {}
             if (PS) { if (savedGoHome === undefined) delete PS.goHome; else PS.goHome = savedGoHome; }
             else if (window.PhoneSystem && window.PhoneSystem.__tarotShim) delete window.PhoneSystem;
@@ -2067,12 +2083,15 @@
                 const o = (CFG.layout || []).find(l => String(l.file || '').indexOf(hs.obj) >= 0);
                 if (!o || o._plotOff) return;   // 家具不在（換過素材／地塊沒蓋）→ 這顆熱點就不要
                 const s = o.s || 1;
-                box = { x: o.x, y: o.y, w: o.w * s, h: o.h * s };
+                // hRatio＝只取家具上半那一段（占卜桌的桌面橢圓在 0~77%，77% 以下是桌腳，
+                //   框到桌腳就會變成一個包住整張桌子的方框，很醜）
+                box = { x: o.x, y: o.y, w: o.w * s, h: o.h * s * (hs.hRatio || 1) };
             }
             const el = document.createElement('div');
             el.className = 'lstage-hotspot' + (hs.cls ? ' ' + hs.cls : '');
             el.style.left = box.x + 'px'; el.style.top = box.y + 'px';
             el.style.width = box.w + 'px'; el.style.height = box.h + 'px';
+            if (hs.radius) el.style.borderRadius = hs.radius;   // '50%'＝橢圓，描邊會沿著桌緣走
             if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid ' +
                 (hs.icon || 'fa-door-open') + '"></i> ' + hs.label + '</span>';
             el.addEventListener('click', (e) => {
