@@ -186,17 +186,19 @@
         tarot: {   // 🔮 占卜小屋：廣場左側那間小屋的室內。紫薇老師坐占卜桌後面，點她開占卜面板。
             //   碰撞不走手繪遮罩（這間沒有 mask 素材）＝吃 boundary 鋼索，四個牆角在擺設模式可以直接拖。
             base: 'lobby_tarot_base_v1.png',
-            cfgKey: 'lobby_stage_layout_tarot_v1',
-            layout: [   // ⚠️ 初版目測擺位；Rae 進擺設模式拖完複製數據回來換掉這份
-                { file: 'lobby_tarot_obj_curtain_v1.png', x: 636, y: 60,  w: 900, h: 606, footH: 0,  s: 0.30,  layer: 'back', noCollide: true },   // 星圖掛簾(牆上)
-                { file: 'lobby_tarot_obj_bar_v1.png',     x: 196, y: 138, w: 900, h: 793, footH: 150, s: 0.367 },   // 靠牆小吧台
-                { file: 'lobby_tarot_obj_shelf_v1.png',   x: 1090, y: 110, w: 872, h: 900, footH: 150, s: 0.321 },  // 牌櫃／酒櫃
-                { file: 'lobby_tarot_obj_rug_v2.png',     x: 372, y: 400, w: 900, h: 613, footH: 0,  s: 0.889, layer: 'floor', noCollide: true },  // 地毯(平貼地板)
-                { file: 'lobby_tarot_obj_chair_zhiwei_v1.png', x: 694, y: 224, w: 572, h: 900, footH: 120, s: 0.262 },   // 紫薇的高背椅(桌子後方)
-                { file: 'lobby_tarot_obj_table_v1.png',   x: 508, y: 396, w: 900, h: 588, footH: 160, s: 0.578 },   // 占卜桌
-                { file: 'lobby_tarot_obj_chair_guest_v1.png',  x: 700, y: 600, w: 821, h: 900, footH: 150, s: 0.170 },   // 客人椅(桌子前方)
-                { file: 'lobby_tarot_obj_candle_v1.png',  x: 96,  y: 640, w: 376, h: 900, footH: 90, s: 0.187 },   // 落地燭台(左)
-                { file: 'lobby_tarot_obj_candle_v1.png',  x: 1352, y: 470, w: 376, h: 900, footH: 90, s: 0.187 },  // 落地燭台(右)
+            cfgKey: 'lobby_stage_layout_tarot_v2',   // v2=家具換緊裁版(尺寸全變)；存檔的 layoutFull 是整份覆蓋，不升版會蓋掉新佈局
+            // 🚨 家具素材必須「緊裁到物件本身」：佔地寬是拿 w*s 算的，圖邊留白會讓碰撞框比看到的物件寬一大截
+            //    （2026-08-21 Rae 抓到：櫃子/椅子/燭台被空氣擋住，實際虛胖 28~43%）。v2＝重裁版。
+            layout: [   // ⚠️ 目測擺位；Rae 進擺設模式拖完複製數據回來換掉這份
+                { file: 'lobby_tarot_obj_curtain_v1.png', x: 636, y: 60,  w: 900, h: 606, footH: 0,   s: 0.30,   layer: 'back', noCollide: true },   // 星圖掛簾(牆上)
+                { file: 'lobby_tarot_obj_bar_v2.png',     x: 198, y: 152, w: 900, h: 747, footH: 149, s: 0.3429 },   // 靠牆小吧台
+                { file: 'lobby_tarot_obj_shelf_v2.png',   x: 1135, y: 114, w: 648, h: 900, footH: 162, s: 0.3002 },  // 牌櫃／酒櫃
+                { file: 'lobby_tarot_obj_rug_v2.png',     x: 372, y: 400, w: 900, h: 613, footH: 0,   s: 0.889,  layer: 'floor', noCollide: true },  // 地毯(平貼地板)
+                { file: 'lobby_tarot_obj_chair_zhiwei_v2.png', x: 712, y: 227, w: 461, h: 900, footH: 126, s: 0.2353 },   // 紫薇的高背椅(桌子後方)
+                { file: 'lobby_tarot_obj_table_v2.png',   x: 517, y: 441, w: 900, h: 429, footH: 103, s: 0.5549 },   // 占卜桌
+                { file: 'lobby_tarot_obj_chair_guest_v2.png',  x: 728, y: 601, w: 626, h: 900, footH: 144, s: 0.1526 },   // 客人椅(桌子前方)
+                { file: 'lobby_tarot_obj_candle_v2.png',  x: 101, y: 638, w: 228, h: 900, footH: 81,  s: 0.1755 },   // 落地燭台(左)
+                { file: 'lobby_tarot_obj_candle_v2.png',  x: 1357, y: 468, w: 228, h: 900, footH: 81,  s: 0.1755 },  // 落地燭台(右)
             ],
             points: {
                 player: { x: 768, y: 790 },
