@@ -770,6 +770,7 @@
        top+bottom 一起給＝高度固定，不隨內容縮。 */
     .lobby-left.void-dock-open .oc-win,
     .lobby-left.void-dock-open .wg-win,
+    .lobby-left.void-dock-open .lstage-tarotwin,
     .lobby-left.void-dock-open .os-pt-dock {
         top:34%; bottom:74px; left:10px; right:10px; width:auto; max-width:none;
         transform:none; max-height:none; min-height:0;

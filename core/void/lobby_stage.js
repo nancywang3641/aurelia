@@ -472,6 +472,7 @@
                     if (saved.points.alicePos) points.alicePos = saved.points.alicePos;
                     if (saved.points.cheshirePos) points.cheshirePos = saved.points.cheshirePos;
                     if (saved.points.rabbitPos) points.rabbitPos = saved.points.rabbitPos;
+                    if (saved.points.zhiweiPos) points.zhiweiPos = saved.points.zhiweiPos;
                     if (Array.isArray(saved.points.boundary) && saved.points.boundary.length >= 3) points.boundary = saved.points.boundary;
                     if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
                 }
@@ -1776,8 +1777,11 @@
 
         const PS = window.PhoneSystem;
         const savedGoHome = PS ? PS.goHome : undefined;
+        // 掛在 .lobby-left（同世界門）：放進 .lstage-root 會被它的獨立堆疊脈絡壓在對話框底下
+        const host = document.querySelector('.lobby-left') || S.root;
         const close = () => {
             box.remove();
+            try { host.classList.remove('void-dock-open'); } catch (e) {}
             if (PS) { if (savedGoHome === undefined) delete PS.goHome; else PS.goHome = savedGoHome; }
             else if (window.PhoneSystem && window.PhoneSystem.__tarotShim) delete window.PhoneSystem;
         };
@@ -1785,7 +1789,8 @@
         else window.PhoneSystem = { goHome: close, __tarotShim: true };
 
         box.querySelector('.lstage-tw-close').addEventListener('click', close);
-        S.root.appendChild(box);
+        host.appendChild(box);
+        host.classList.add('void-dock-open');   // 手機版靠這個 class 讓面板改吃滿寬（同世界門/交易所）
         _regWin(close);
         try { window.OS_TAROT?.launch?.(box.querySelector('.lstage-tw-body')); }
         catch (e) { box.querySelector('.lstage-tw-body').innerHTML = '<div style="padding:24px;color:#c88">占卜面板載入失敗</div>'; }

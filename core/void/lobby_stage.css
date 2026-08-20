@@ -316,6 +316,7 @@
 .lstage-marker.m-alice { background:#8fa8d8; }
 .lstage-marker.m-cheshire { background:#3f9c46; }
 .lstage-marker.m-rabbit { background:#e6e6ea; color:#333; }
+.lstage-marker.m-zhiwei { background:#6b3a5e; }
 .lstage-obj.lstage-grouped { outline:3px dashed #4ab6ff; outline-offset:-2px; }
 /* 框選（擺設模式，Ctrl+拖空地）：藍色虛線框 */
 .lstage-marquee { position:absolute; border:2px dashed #4ab6ff; background:rgba(74,182,255,.12);
@@ -347,9 +348,14 @@
 .lcm-chip:disabled { opacity:.35; cursor:default; background:rgba(240,244,252,.8); color:#23315e; }
 
 /* 🔮 占卜浮窗（小屋裡點紫薇→「占卜」）：塔羅 app 是 width/height:100% 吃滿父層,所以內容區要給定高。
+   版型照世界門那套「左立繪＋右面板」——右側靠邊、留左邊給紫薇立繪,不要置中長條。
+   🚨 掛在 .lobby-left 上而不是 .lstage-root 裡：root 是 z-index:1 的獨立堆疊脈絡,
+      窗放進去會被對話框(z:5)整個壓住(揭示鈕點不到)。z-index 對齊世界門的 3350。
+   右錨點的 78px＝右側 dock 的淨空（.lb-dock 是 right:10px + width:58px,窗的 z-index 比它高會蓋掉）。
    配色刻意不走大廳那套白,改紫薇的暗紫/酒紅/舊金——窗一開就知道換了個地方。 */
-.lstage-tarotwin { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:5100;
-  width:min(430px,94%); height:min(760px,92%); display:flex; flex-direction:column; overflow:hidden;
+.lstage-tarotwin { position:absolute; right:max(78px,calc(50% - 660px)); top:50%; transform:translateY(-50%);
+  z-index:3350; width:min(880px,70%); height:min(660px,calc(100% - 130px));
+  display:flex; flex-direction:column; overflow:hidden;
   background:#0b0710; border:1px solid rgba(198,160,92,.42); border-radius:16px;
   box-shadow:0 16px 44px rgba(0,0,0,.6); }
 .lstage-tw-title { display:flex; align-items:center; gap:7px; flex:0 0 auto; padding:9px 12px;
