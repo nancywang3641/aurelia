@@ -219,6 +219,11 @@
             ],
             doorsV: 1,
             zhiwei: { x: 768, y: 430 },   // 觸發 lobby_npcs 的 if(SC.zhiwei)：紫薇老師坐鎮
+            // 🔮 占卜桌＝可點的互動點（點了開占卜面板；走近紫薇則是純聊天，兩件事分開）。
+            //    obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上，不用回來改座標。
+            hotspots: [
+                { obj: 'obj_table', label: '入座占卜', icon: 'fa-wand-sparkles', open: 'tarot', cls: 'hs-tarot' },
+            ],
         },
         room: {   // 🏠 房間：底圖與碰撞遮罩不是素材，是「進門當下」餵進來的（見 enterRoom）
             //   房間圖＝生成的那張、可走區＝房間地板多邊形轉的白遮罩，所以每一間都不一樣、也不吃 CDN 素材。
@@ -1219,7 +1224,8 @@
         alice:  { label: '世界門',   icon: 'fa-globe',   open: () => window.OS_WORLDGATE?.openGate?.() },
         rabbit: { label: '交易所',   icon: 'fa-house',   open: () => window.OS_PT?.openExchange?.() },
         ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
-        zhiwei: { label: '占卜',     icon: 'fa-wand-sparkles', open: () => _openTarotPanel() },
+        // 🔮 紫薇沒有面板鈕：走近她＝純聊天，占卜要點桌子（Rae 2026-08-21 定案）。
+        //    兩件事分開才不會「面板裡在解牌、底下對話框也在講話」。
     };
     function _panelFor(npc) {
         const p = npc && PANEL_OF[npc.key];
@@ -1281,6 +1287,7 @@
     // ── 對話目標 ──
     function startTalk(npc) {
         if (S.edit) return;
+        _closeTarotPanel();   // 🔮 開聊＝收掉占卜面板：同一個人不能一邊在面板裡解牌、一邊在底下對話框講話
         if (S.theater && (npc === S.theater.a || npc === S.theater.b)) window.LobbyTheater?.end();   // 🎭 跟配對當事人開聊→收掉配對（清泡泡+解凍）免凍結卡死；跟旁人聊不打斷等待中的小劇場
         S.talkTarget = npc;
         S.npcs.forEach(n => { n.hint.style.display = 'none'; });
@@ -1780,8 +1787,14 @@
     // ── 🔮 占卜面板（小屋裡點紫薇）：塔羅 app 本來就吃容器，直接掛進浮窗、面板一行都不用改 ──
     //    ❮ 返回鈕：塔羅的 HTML 寫死呼叫 PhoneSystem.goHome（它原本住在手機殼裡）。
     //    小屋沒有手機 → 開窗時暫借這個方法指向「關窗」，關窗再還原，跟 phone_shell 借法一致。
+    let _tarotWin = null;   // 占卜浮窗單例（開聊時要把它收掉，見 startTalk）
+    function _closeTarotPanel() { if (_tarotWin) { try { _tarotWin(); } catch (e) {} } }
     function _openTarotPanel() {
         _closeWins();
+        // 🚨 同一個人不能同時在兩個地方講話：紫薇在面板裡解牌，底下又浮著大廳對話框＝很割裂。
+        //    開占卜就把對話那條收乾淨（Rae 2026-08-21）。反過來 startTalk 也會關掉這個面板。
+        endTalk();      // 正在跟她聊 → 結束（順帶收掉立繪與其他面板）
+        hideDialog();   // 沒在聊但框還浮著 → 也收掉
         const box = document.createElement('div');
         box.className = 'lstage-tarotwin';
         box.innerHTML =
@@ -1795,10 +1808,12 @@
         const host = document.querySelector('.lobby-left') || S.root;
         const close = () => {
             box.remove();
+            _tarotWin = null;
             try { host.classList.remove('void-dock-open'); } catch (e) {}
             if (PS) { if (savedGoHome === undefined) delete PS.goHome; else PS.goHome = savedGoHome; }
             else if (window.PhoneSystem && window.PhoneSystem.__tarotShim) delete window.PhoneSystem;
         };
+        _tarotWin = close;
         if (PS) PS.goHome = close;
         else window.PhoneSystem = { goHome: close, __tarotShim: true };
 
@@ -2029,16 +2044,8 @@
         if (isStatic || SCENES[S.scene].dynamic) editBtn.style.display = 'none';   // 靜態地圖／房間沒有可拖佈局→藏擺設鈕
         else editBtn.addEventListener('click', () => window.LobbyEditor?.toggle());   // 🖊 擺設模式（實作在 lobby_editor.js）
         // 🗺️ 靜態點擊地圖：畫建築點擊區（點了白光過場進室內），跳過所有走路系統
+        _mountHotspots();
         if (isStatic) {
-            (SCENES[S.scene].hotspots || []).forEach(hs => {
-                const el = document.createElement('div');
-                el.className = 'lstage-hotspot';
-                el.style.left = hs.x + 'px'; el.style.top = hs.y + 'px';
-                el.style.width = hs.w + 'px'; el.style.height = hs.h + 'px';
-                if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid fa-door-open"></i> ' + hs.label + '</span>';
-                el.addEventListener('click', () => goScene(hs.to, hs.spawn, 'arrive'));
-                S.world.appendChild(el);
-            });
             _applySceneHeader();
             fitCamera();
             window.addEventListener('resize', fitCamera);
@@ -2046,7 +2053,38 @@
             console.log('[LobbyStage] mounted (static map)');
             return;
         }
-        // 座標命中角色（不動角色 pointer-events）：桌機右鍵、手機長按共用
+        // 🎯 場景熱點：地圖上一塊可點的區域。原本只有靜態大地圖在用（點建築進室內），
+    //    現在一般場景也吃 → 家具可以變成互動點（占卜桌＝點了開占卜面板）。
+    //    hs.obj＝跟著 layout 裡的某件家具走（在擺設模式挪家具，熱點自己跟上，不用回來改座標）
+    //    hs.to＝切場景；hs.open＝呼叫 HOTSPOT_ACTIONS 裡的動作
+    const HOTSPOT_ACTIONS = {
+        tarot: () => _openTarotPanel(),
+    };
+    function _mountHotspots() {
+        (SCENES[S.scene].hotspots || []).forEach(hs => {
+            let box = hs;
+            if (hs.obj) {
+                const o = (CFG.layout || []).find(l => String(l.file || '').indexOf(hs.obj) >= 0);
+                if (!o || o._plotOff) return;   // 家具不在（換過素材／地塊沒蓋）→ 這顆熱點就不要
+                const s = o.s || 1;
+                box = { x: o.x, y: o.y, w: o.w * s, h: o.h * s };
+            }
+            const el = document.createElement('div');
+            el.className = 'lstage-hotspot' + (hs.cls ? ' ' + hs.cls : '');
+            el.style.left = box.x + 'px'; el.style.top = box.y + 'px';
+            el.style.width = box.w + 'px'; el.style.height = box.h + 'px';
+            if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid ' +
+                (hs.icon || 'fa-door-open') + '"></i> ' + hs.label + '</span>';
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();   // 別冒泡到 .lstage-click（那層會判成點空地→走過去/結束對話）
+                if (hs.open && HOTSPOT_ACTIONS[hs.open]) HOTSPOT_ACTIONS[hs.open]();
+                else if (hs.to) goScene(hs.to, hs.spawn, 'arrive');
+            });
+            S.world.appendChild(el);
+        });
+    }
+
+    // 座標命中角色（不動角色 pointer-events）：桌機右鍵、手機長按共用
         const _hitAt = (clientX, clientY) => {
             const r = S.world.getBoundingClientRect();
             const mx = (clientX - r.left) / S.scale, my = (clientY - r.top) / S.scale;
