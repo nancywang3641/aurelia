@@ -966,9 +966,9 @@
             if (e.type === 'keydown' && (k === 'e' || k === 'f' || k === 'escape')) {
                 if (S.talkTarget) { endTalk(); e.preventDefault(); e.stopPropagation(); return; }
                 if (k !== 'escape' && S.player && !S.edit) {
-                    let best = null, bestD = INTERACT_R;
+                    let best = null, bestD = Infinity;
                     for (const n of S.npcs) {
-                        if (!n.hint) continue;
+                        if (!n.hint || !_npcInReach(n)) continue;   // 搆得到才算（含桌子那塊 talkRect）
                         const d = Math.hypot(n.x - S.player.x, n.y - S.player.y);
                         if (d < bestD) { bestD = d; best = n; }
                     }
@@ -1008,6 +1008,20 @@
 
     // ── NPC ──────────────────────────────────────────────
     const NPC_H = 180, INTERACT_R = 130;
+
+    // 🎯 搆不搆得到 NPC：預設是「離他多近」(INTERACT_R)。
+    //    但隔著一張大桌子的人搆不到——桌子的碰撞帶把你擋在 260px 外，圓形半徑再大也蓋不到桌子的左右前角。
+    //    → NPC 可以帶一塊 talkRect（通常就是他坐鎮的那張桌／櫃台）：人站在那塊範圍旁邊就算搆得到。
+    function _distToRect(px, py, r) {
+        const dx = Math.max(r.x - px, 0, px - (r.x + r.w));
+        const dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+        return Math.hypot(dx, dy);
+    }
+    function _npcInReach(n) {
+        if (!S.player || !n) return false;
+        if (Math.hypot(n.x - S.player.x, n.y - S.player.y) < (n.talkR || INTERACT_R)) return true;
+        return !!n.talkRect && _distToRect(S.player.x, S.player.y, n.talkRect) < (n.talkPad || 60);
+    }
 
     // 🧑‍🤝‍🧑 NPC 生成/名冊（愛麗絲/柴郡/瀅瀅駐點、SN名冊雷伊丹、日誌客人池＋訪客頭像掛載）→ 拆到 lobby_npcs.js（走 _b 橋；2026-07-16）
     function addNpc(cfg) {
@@ -1107,7 +1121,7 @@
         });
     }
     function _npcNearCheck(n) {
-        const near = S.player && Math.hypot(n.x - S.player.x, n.y - S.player.y) < INTERACT_R;
+        const near = _npcInReach(n);
         n.hint.style.display = (near && !S.talkTarget) ? '' : 'none';
     }
 
@@ -1959,7 +1973,7 @@
             // 🏙 快轉地圖：每個走得到的場景都要有（404 進出走完整轉場流程，見 _openCityMap 的 jump）
             //    room＝住家／房客的房／公寓走廊。廣場鎖上之後那裡面唯一的出路是走到門口，
             //    別的地方都能一鍵跳、只有屋裡要用走的說不過去。
-            (['cafe', 'hall', 'exchange', 'city', 'room404', 'room'].indexOf(S.scene) >= 0
+            (['cafe', 'hall', 'exchange', 'city', 'room404', 'room', 'tarot'].indexOf(S.scene) >= 0
                 ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
             // ☕ 書咖櫃檯入口=跟瀅瀅開聊(startTalk 掛鉤,同白兔成例);獨立鈕已退役
         left.appendChild(root);
