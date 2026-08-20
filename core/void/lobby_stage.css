@@ -346,6 +346,21 @@
 .lcm-chip:hover { background:#23315e; color:#fff; }
 .lcm-chip:disabled { opacity:.35; cursor:default; background:rgba(240,244,252,.8); color:#23315e; }
 
+/* 🔮 占卜浮窗（小屋裡點紫薇→「占卜」）：塔羅 app 是 width/height:100% 吃滿父層,所以內容區要給定高。
+   配色刻意不走大廳那套白,改紫薇的暗紫/酒紅/舊金——窗一開就知道換了個地方。 */
+.lstage-tarotwin { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:5100;
+  width:min(430px,94%); height:min(760px,92%); display:flex; flex-direction:column; overflow:hidden;
+  background:#0b0710; border:1px solid rgba(198,160,92,.42); border-radius:16px;
+  box-shadow:0 16px 44px rgba(0,0,0,.6); }
+.lstage-tw-title { display:flex; align-items:center; gap:7px; flex:0 0 auto; padding:9px 12px;
+  background:linear-gradient(180deg,rgba(58,26,52,.95),rgba(26,12,26,.95));
+  border-bottom:1px solid rgba(198,160,92,.3); color:#e8d5a8; font-size:12px; font-weight:700; letter-spacing:2px; }
+.lstage-tw-title i { color:#c6a05c; }
+.lstage-tw-title .lstage-tw-close { margin-left:auto; background:none; border:none; color:#9b8a72;
+  cursor:pointer; font-size:15px; padding:2px 6px; }
+.lstage-tw-title .lstage-tw-close:hover { color:#e8d5a8; }
+.lstage-tw-body { flex:1; min-height:0; position:relative; }
+
 /* 🌦 天氣層(小雨/小雪)：蓋過場景與前景牆(4000)、壓在編輯面板(5000)下;不吃滑鼠
    底色=天色濾鏡:雨天冷灰藍暗罩(純白地圖上雨絲才看得清)、雪天淡淡冷霧 */
 .lstage-weather { position:absolute; inset:0; z-index:4200; pointer-events:none; }

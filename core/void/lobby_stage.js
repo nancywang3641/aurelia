@@ -27,6 +27,8 @@
         dan:      CDN + 'lobby_dan.png',           // 丹對話立繪
         rabbitWalk: CDN + 'lobby_rabbit_walk_v1.png',   // 白兔先生走路圖(3×4；交易所店員)
         rabbit: CDN + 'lobby_rabbit_portrait_v2.png',   // 白兔先生對話立繪(v2=Rae調尺寸 972x1882)
+        zhiweiWalk: CDN + 'lobby_zhiwei_walk_v1.png',       // 紫薇老師走路圖(3×4；占卜小屋店主)
+        zhiwei: CDN + 'lobby_zhiwei_portrait_v1.png',       // 紫薇老師對話立繪(972x1882)
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
@@ -181,6 +183,41 @@
             doorsV: 1,
             rabbit: { x: 773, y: 365 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
         },
+        tarot: {   // 🔮 占卜小屋：廣場左側那間小屋的室內。紫薇老師坐占卜桌後面，點她開占卜面板。
+            //   碰撞不走手繪遮罩（這間沒有 mask 素材）＝吃 boundary 鋼索，四個牆角在擺設模式可以直接拖。
+            base: 'lobby_tarot_base_v1.png',
+            cfgKey: 'lobby_stage_layout_tarot_v1',
+            layout: [   // ⚠️ 初版目測擺位；Rae 進擺設模式拖完複製數據回來換掉這份
+                { file: 'lobby_tarot_obj_curtain_v1.png', x: 636, y: 60,  w: 900, h: 606, footH: 0,  s: 0.30,  layer: 'back', noCollide: true },   // 星圖掛簾(牆上)
+                { file: 'lobby_tarot_obj_bar_v1.png',     x: 196, y: 138, w: 900, h: 793, footH: 150, s: 0.367 },   // 靠牆小吧台
+                { file: 'lobby_tarot_obj_shelf_v1.png',   x: 1090, y: 110, w: 872, h: 900, footH: 150, s: 0.321 },  // 牌櫃／酒櫃
+                { file: 'lobby_tarot_obj_rug_v2.png',     x: 372, y: 400, w: 900, h: 613, footH: 0,  s: 0.889, layer: 'floor', noCollide: true },  // 地毯(平貼地板)
+                { file: 'lobby_tarot_obj_chair_zhiwei_v1.png', x: 694, y: 224, w: 572, h: 900, footH: 120, s: 0.262 },   // 紫薇的高背椅(桌子後方)
+                { file: 'lobby_tarot_obj_table_v1.png',   x: 508, y: 396, w: 900, h: 588, footH: 160, s: 0.578 },   // 占卜桌
+                { file: 'lobby_tarot_obj_chair_guest_v1.png',  x: 700, y: 600, w: 821, h: 900, footH: 150, s: 0.170 },   // 客人椅(桌子前方)
+                { file: 'lobby_tarot_obj_candle_v1.png',  x: 96,  y: 640, w: 376, h: 900, footH: 90, s: 0.187 },   // 落地燭台(左)
+                { file: 'lobby_tarot_obj_candle_v1.png',  x: 1352, y: 470, w: 376, h: 900, footH: 90, s: 0.187 },  // 落地燭台(右)
+            ],
+            points: {
+                player: { x: 768, y: 790 },
+                arrive: { x: 768, y: 800 },   // 從門口進來的落點(小屋門在下緣中央)
+                zhiweiPos: { x: 768, y: 430 },   // 紫薇坐桌子後面(擺設模式可拖)
+                // 可走範圍：地板那塊梯形(牆往前是外八)。角點在擺設模式可拖。
+                boundary: [
+                    { x: 160, y: 330 }, { x: 1385, y: 330 },
+                    { x: 1465, y: 860 }, { x: 80, y: 860 },
+                ],
+                actorScale: 0.7,
+            },
+            walls: [],
+            doors: [
+                // 小屋大門→廣場(落在小屋門口下方)。🔒 廣場鎖上時改回「進門前待的場景」，見過門判定。
+                // 🚨 觸發區必須整個落在 boundary 裡面，不然玩家走不到門＝被關在小屋（tmp/tarot_hut_test.cjs 有守）
+                { x: 700, y: 818, w: 136, h: 44, to: 'city', spawn: { x: 329, y: 600 } },
+            ],
+            doorsV: 1,
+            zhiwei: { x: 768, y: 430 },   // 觸發 lobby_npcs 的 if(SC.zhiwei)：紫薇老師坐鎮
+        },
         room: {   // 🏠 房間：底圖與碰撞遮罩不是素材，是「進門當下」餵進來的（見 enterRoom）
             //   房間圖＝生成的那張、可走區＝房間地板多邊形轉的白遮罩，所以每一間都不一樣、也不吃 CDN 素材。
             //   points/doors 由 enterRoom 依當間房的地板算好再寫進來；沒有 cfgKey＝不存擺設（每間房各自不同）。
@@ -196,7 +233,7 @@
             upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
             alphaFoot: true,   // 🏢 建築照真實輪廓(alpha)擋，但✂️只算底部「佔地高」那一帶→上半可走過去(小人繞屋後)；佔地高可調
             nightBase: 'city/city_floor_night.png',   // 🌙 夜版地板；物件/牆框夜版走 CITY_NIGHT 對照表（2026-07-20 夜版素材上齊,解鎖日夜）
-            cfgKey: 'lobby_stage_layout_city_v8',   // v8=Rae定版佈局烤進預設+地塊(plot)欄位（v7舊存檔作廢，內容=同一份定版不掉東西）
+            cfgKey: 'lobby_stage_layout_city_v9',   // v9=npc04 那塊地換成占卜小屋（v8舊存檔作廢；v8 的內容就是這份定版，不掉東西）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
             // 前景物件＝獨立元素（書咖/大廳/房子/噴泉/樹/燈柱/長椅）；noCollide=不進碰撞(碰撞全走遮罩)；
             //   靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
@@ -208,12 +245,12 @@
                 { file: "city/obj/npc_house_01.png", x: 874, y: 638, w: 1095, h: 839, footH: 445, s: 0.274, plot: "npc01" },
                 { file: "city/obj/npc_house_02.png", x: 1182, y: 580, w: 794, h: 853, footH: 339, s: 0.327, plot: "npc02" },
                 { file: "city/obj/npc_house_03.png", x: 990, y: 128, w: 1030, h: 814, footH: 288, s: 0.281, plot: "npc03" },
-                { file: "city/obj/npc_house_04.png", x: 164, y: 327, w: 1093, h: 850, footH: 388, s: 0.271, plot: "npc04" },
+                // 🔮 占卜小屋（原 npc04 那塊地；鄰居系統不做了→這棟永遠都在，不吃 plot 開關）
+                { file: "city/obj/tarot_hut_day.png", x: 164, y: 327, w: 1428, h: 1024, footH: 360, s: 0.231 },
                 { file: "city/obj/plot_frame_day_player.png", x: 156, y: 619, w: 1342, h: 836, footH: 0, s: 0.308, layer: "floor", noCollide: true, plotFrame: "player" },   // MC家空地框(沒買房時顯示)
                 { file: "city/obj/plot_frame_day_npc01.png", x: 889, y: 639, w: 357, h: 342, footH: 0, s: 0.673, layer: "floor", noCollide: true, plotFrame: "npc01" },
                 { file: "city/obj/plot_frame_day_npc02.png", x: 1180, y: 643, w: 342, h: 340, footH: 0, s: 0.684, layer: "floor", noCollide: true, plotFrame: "npc02" },
                 { file: "city/obj/plot_frame_day_npc03.png", x: 992, y: 152, w: 398, h: 300, footH: 0, s: 0.657, layer: "floor", noCollide: true, plotFrame: "npc03" },
-                { file: "city/obj/plot_frame_day_npc04.png", x: 164, y: 337, w: 411, h: 305, footH: 0, s: 0.72, layer: "floor", noCollide: true, plotFrame: "npc04" },
                 { file: "city/obj/fountain_node_day.png", x: 706, y: 325, w: 180, h: 222, footH: 67, s: 0.799 },
                 { file: "city/obj/crystal_monument_day.png", x: 1086, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
                 { file: "city/obj/crystal_monument_day.png", x: 1224, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
@@ -260,6 +297,8 @@
                 //    門的位置可以在擺設模式直接拖(新增在陣列最後,不影響上面兩扇已調好的門)。
                 //    觸發區要落在房子「下緣外側」那一條——房子本體會擋路,站不進去就永遠踩不到門(同書咖那扇的做法)。
                 { x: 330, y: 850, w: 100, h: 42, panel: 'myhome', plot: 'player' },
+                // 🔮 占卜小屋門口（觸發區壓在小屋下緣外側那一條，同書咖那扇的作法）
+                { x: 279, y: 566, w: 100, h: 42, to: 'tarot', spawn: { x: 768, y: 800 } },
             ],
         },
     };
@@ -276,6 +315,7 @@
         'city/obj/npc_house_02.png': 'city/obj/npc_house_02_night.png',
         'city/obj/npc_house_03.png': 'city/obj/npc_house_03_night.png',
         'city/obj/npc_house_04.png': 'city/obj/npc_house_04_night.png',
+        'city/obj/tarot_hut_day.png': 'city/obj/tarot_hut_night.png',
         'city/obj/city_bench_01_day.png': 'city/obj/city_bench_01_night.png',
         'city/obj/city_bench_horizontal_02_day.png': 'city/obj/city_bench_horizontal_02_night.png',
         'city/obj/city_bench_horizontal_03_day.png': 'city/obj/city_bench_horizontal_03_night.png',
@@ -444,6 +484,7 @@
         scene: 'cafe',              // 目前場景（每次開大廳從書咖開始）
         spawnOverride: null,        // 過門後的抵達點
         roomFrom: '',               // 進房間之前待的場景（廣場鎖上時，走出房間就回這裡）
+        tarotFrom: '',              // 進占卜小屋之前待的場景（同上：小屋的門對外是廣場，鎖上時得回得去）
         doorCd: 0,                  // 過門冷卻（防止落地瞬間又觸發）
         doorArm: false,             // 門武裝狀態：落地後走出門區一次才重新啟動
         transitioning: false,
@@ -1161,6 +1202,7 @@
         alice:  { label: '世界門',   icon: 'fa-globe',   open: () => window.OS_WORLDGATE?.openGate?.() },
         rabbit: { label: '交易所',   icon: 'fa-house',   open: () => window.OS_PT?.openExchange?.() },
         ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
+        zhiwei: { label: '占卜',     icon: 'fa-wand-sparkles', open: () => _openTarotPanel() },
     };
     function _panelFor(npc) {
         const p = npc && PANEL_OF[npc.key];
@@ -1469,6 +1511,9 @@
                             S.doorCd = performance.now() + 1500;
                             // detail 帶整扇門：同一個 panel 型別可以有好幾扇（出租房四棟共用 'rental'，靠 door.plot 分辨是哪一戶）
                             window.dispatchEvent(new CustomEvent('lstage-open-' + door.panel, { detail: { door: door } }));
+                        } else if (door.to === 'city' && _cityLocked() && S.scene === 'tarot') {
+                            // 🔒 廣場鎖上：走出占卜小屋不能落在進不去的廣場→回進門前待的場景（同房間的 roomFrom）
+                            goScene(S.tarotFrom || 'hall');
                         } else goScene(door.to, door.spawn);
                     }
                 } else S.doorArm = true;
@@ -1487,6 +1532,7 @@
     }
     function goScene(to, spawn, spawnMode) {
         if (S.transitioning || !SCENES[to]) return;
+        if (to === 'tarot' && S.scene !== 'tarot') S.tarotFrom = S.scene;   // 記住從哪進小屋的（出口要用）
         S.transitioning = true;
         const left = document.querySelector('.lobby-left');
         const fade = document.createElement('div');
@@ -1624,7 +1670,7 @@
         const _vt = window.VoidTerminal || {};
         const _st404 = (_vt.get404State ? _vt.get404State() : null) || { unlocked: false, active: false };
         const locked = _cityLocked();   // 🔒 廣場鎖上：不給「廣場」這個目的地，地圖本身還是照畫（它就是這張快轉圖）
-        const chips = (locked ? [] : [['city', '廣場']]).concat([['cafe', '書咖'], ['hall', '大廳'], ['exchange', '交易所']]);
+        const chips = (locked ? [] : [['city', '廣場']]).concat([['cafe', '書咖'], ['hall', '大廳'], ['exchange', '交易所'], ['tarot', '占卜小屋']]);
         if (_st404.unlocked) chips.push(['room404', '404']);
         // 🚪 統一跳場口：進 404 走 enter404Room（glitch 特效+音效+柴郡開場）；從 404 離開走 restoreLobby 還原流程再落到目標
         const jump = (to, spawn) => {
@@ -1677,6 +1723,8 @@
             const front = { x: Math.round(o.x + o.w * s / 2), y: Math.round(o.y + o.h * s + 18) };
             if (/book_cafe/.test(f)) dests.push({ o, label: '書咖', go: () => jump('cafe') });
             else if (/lobby_day/.test(f)) dests.push({ o, label: '大廳', go: () => jump('hall') });
+            // 🔮 占卜小屋：同書咖/大廳＝直接進室內，所以廣場鎖著也照樣能點
+            else if (/tarot_hut/.test(f)) dests.push({ o, label: '占卜小屋', go: () => jump('tarot') });
             // 🏠 我的家：以前是傳到廣場上的家門口，還要自己再走進去一次——快轉點的是「家」，就直接進屋。
             //    走廣場那條路（走到門口踩觸發區）還在，廣場開鎖時照舊。
             else if (/player_house/.test(f) && (!o.plot || _plotOccupied(o.plot)))
@@ -1712,6 +1760,35 @@
         _regWin(() => box.remove());
     }
 
+    // ── 🔮 占卜面板（小屋裡點紫薇）：塔羅 app 本來就吃容器，直接掛進浮窗、面板一行都不用改 ──
+    //    ❮ 返回鈕：塔羅的 HTML 寫死呼叫 PhoneSystem.goHome（它原本住在手機殼裡）。
+    //    小屋沒有手機 → 開窗時暫借這個方法指向「關窗」，關窗再還原，跟 phone_shell 借法一致。
+    function _openTarotPanel() {
+        _closeWins();
+        const box = document.createElement('div');
+        box.className = 'lstage-tarotwin';
+        box.innerHTML =
+            '<div class="lstage-tw-title"><i class="fa-solid fa-moon"></i> 微醺星軌' +
+              '<button class="lstage-tw-close"><i class="fa-solid fa-xmark"></i></button></div>' +
+            '<div class="lstage-tw-body"></div>';
+
+        const PS = window.PhoneSystem;
+        const savedGoHome = PS ? PS.goHome : undefined;
+        const close = () => {
+            box.remove();
+            if (PS) { if (savedGoHome === undefined) delete PS.goHome; else PS.goHome = savedGoHome; }
+            else if (window.PhoneSystem && window.PhoneSystem.__tarotShim) delete window.PhoneSystem;
+        };
+        if (PS) PS.goHome = close;
+        else window.PhoneSystem = { goHome: close, __tarotShim: true };
+
+        box.querySelector('.lstage-tw-close').addEventListener('click', close);
+        S.root.appendChild(box);
+        _regWin(close);
+        try { window.OS_TAROT?.launch?.(box.querySelector('.lstage-tw-body')); }
+        catch (e) { box.querySelector('.lstage-tw-body').innerHTML = '<div style="padding:24px;color:#c88">占卜面板載入失敗</div>'; }
+    }
+
     // ── ⚙️ 大廳設置小面板（舞台上，仿裝扮室）──
     function _closeLobbySettings() { S.setEl?.remove(); S.setEl = null; }
     function _openLobbySettings() {
@@ -1727,6 +1804,7 @@
             { id:'chess', name:'柴郡（404）',     sub:'404 號房管理員',     icon:'fa-cat',            load:P.loadCheshire, save:P.saveCheshire },
             { id:'alice', name:'愛麗絲（導覽官）', sub:'純白大廳首席導覽',   icon:'fa-user-astronaut', load:P.loadAlice,   save:P.saveAlice },
             { id:'rabbit',name:'白兔先生（交易所）', sub:'交易區職員 · 成就估值', icon:'fa-stopwatch',   load:P.loadRabbit,  save:P.saveRabbit },
+            { id:'zhiwei',name:'紫薇老師（占卜小屋）', sub:'微醺星軌店主 · 只管聊天',  icon:'fa-moon',    load:P.loadZhiwei,  save:P.saveZhiwei },
             { id:'world', name:'奧瑞亞世界觀',    sub:'主世界觀補充設定',   icon:'fa-globe',          load:P.loadWorld,   save:P.saveWorld },
         ];
 
