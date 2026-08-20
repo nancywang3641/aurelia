@@ -1254,6 +1254,32 @@
         return true;
     }
 
+    // 🚪 從面板點名去找某位旅人：關面板 → 走進他的對話(跟直接在大廳點他完全同一條路)。
+    //   面板裡看得到人、卻要玩家自己關窗去大廳認人＝動線斷掉(Rae 實測回報的割裂感)。
+    function _goMeet(w, i) {
+        const t = (w.travelers || [])[i];
+        if (!t) return;
+        const key = 'wg_' + w.id + '_' + i;
+        const npc = _travNpcs.find(n => n && n.key === key);
+        const b = _stage();
+        // 人還沒上線(剛換場景/還在錯峰登場)：講清楚為什麼,不要靜靜地沒反應
+        if (!npc || !b || b.S.scene !== 'hall') {
+            _toast(t.name + ' 還沒走進大廳，稍等一下再試');
+            return;
+        }
+        closeGate();
+        try {
+            const LS = win.LobbyStage || window.LobbyStage;
+            // 開場白 seed 成他的第一句(只 seed 一次)——跟大廳直接點他的行為一致
+            if (t.greet && LS && !(LS.getNpcHistory(key) || []).length) {
+                LS.pushNpcHistory(key, { role: 'assistant', content: t.greet });
+            }
+        } catch (e) {}
+        try { b.startTalk(npc); } catch (e) { console.warn('[Worldgate③] 開聊失敗', e); }
+        _openEncounter(w.id, i, npc);
+        _toast('走向 ' + t.name + '…');
+    }
+
     // ── 🎨 旅人立姿自動補圖：不用一個一個右鍵進裝扮室，四個剪影會自己陸續換成本人 ──
     //   走裝扮室同一條管線(LobbyDress.genSpriteInto)：生圖→去背像素化→存 skins。
     //   存進 skins 之後就是永久的——下次再進大廳 addNpc 會自己套用，不會重生、不再燒圖。
@@ -2474,9 +2500,9 @@
             // ── 📄 wgbp-sub=詳情/種子頁 ──
             // 🚨圖紙的外框尺寸「每一頁都一樣」(Rae:點進去寬度縮了、變來變去很醜):
             //   換頁不動窗,只把單欄內容限寬置中——視覺上就是同一張圖紙翻頁,不是換了一個面板。
-            '.wg-win.wgbp.wgbp-sub .wg-body > *{max-width:620px;width:100%;margin-left:auto;margin-right:auto;}' +
-            // step1(世界頁)=海報版型,吃滿圖紙寬度
-            '.wg-win.wgbp.wgbp-sub .wg-body.wgd-st1 > *{max-width:100%;}' +
+            // 🚨 只有種子頁(單欄表單)限寬置中;詳情三頁一律吃滿圖紙寬度——
+            //    窗開了 900+ 卻把內容關在 620 裡、左右各留一大塊白,就是 Rae 說的「有空間幹嘛不利用」。
+            '.wg-win.wgbp.wgbp-sub .wg-body.wgd-narrow > *{max-width:620px;width:100%;margin-left:auto;margin-right:auto;}' +
             '.wgd-split{display:grid;grid-template-columns:1.12fr .88fr;gap:16px;align-items:stretch;min-height:0;}' +
             // 左:大概念圖,名字/概念/標籤壓在圖上(海報)
             '.wgd-art{position:relative;overflow:hidden;border:1.4px solid #2a4a80;background:#1c3358;min-height:230px;}' +
@@ -2512,6 +2538,33 @@
             // 🚨 width:auto 不能省:.wg-btn 本身是 width:100%,只寫 flex:0 0 auto 的話 basis 讀的還是那個 100%
             '.wg-btn-row.wgd-foot1 .wg-btn{flex:0 0 auto;width:auto;min-width:132px;padding-left:18px;padding-right:18px;}' +
             '.wg-btn-row.wgd-foot1 .wgd-del{margin-right:auto;min-width:0;}' +
+            // ── 🧑‍🤝‍🧑 旅人頁:左編成、右名冊(可直接去找人)+召集(收合) ──
+            '.wgt-split{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start;}' +
+            '.wgt-left,.wgt-side{display:flex;flex-direction:column;gap:8px;min-width:0;}' +
+            '.wgt-roster{display:flex;flex-direction:column;gap:6px;max-height:262px;overflow-y:auto;' +
+              'padding:6px;background:#fff;border:1.2px solid rgba(42,74,128,.45);scrollbar-width:thin;}' +
+            '.wgt-roster.flash{animation:wgtFlash .9s ease;}' +
+            '@keyframes wgtFlash{0%,100%{box-shadow:none;}30%,70%{box-shadow:0 0 0 2px #b9924f;}}' +
+            '.wgt-person{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid rgba(42,74,128,.28);background:#f7fafd;}' +
+            '.wgt-person.on{border-color:rgba(44,110,73,.5);background:rgba(44,110,73,.05);}' +
+            '.wgt-p-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;cursor:pointer;}' +
+            '.wgt-p-nm{font-size:12.5px;font-weight:700;color:#1f3a68;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+            '.wgt-p-nm i{margin-left:5px;font-style:normal;font-size:10px;color:#46639b;opacity:.75;}' +
+            '.wgt-p-job{font-size:10.5px;color:#46639b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+            '.wgt-p-go{flex:none;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;cursor:pointer;' +
+              'border:1.2px solid #2a4a80;border-radius:2px;background:#2a4a80;color:#f2f5fb;font-family:inherit;font-size:11px;letter-spacing:.06em;}' +
+            '.wgt-p-go:hover{background:#1e3554;}' +
+            '.wgt-p-on{flex:none;font-size:10.5px;color:#2c6e49;letter-spacing:.06em;white-space:nowrap;}' +
+            '.wgt-p-x{flex:none;cursor:pointer;color:rgba(42,74,128,.45);font-size:12px;padding:0 2px;}' +
+            '.wgt-p-x:hover{color:#b8564a;}' +
+            '.wgt-empty{padding:18px 10px;text-align:center;color:#46639b;font-size:11.5px;line-height:1.9;}' +
+            '.wgt-rec-btn{position:relative;}' +
+            '.wgt-rec-caret{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:10px;transition:transform .18s;}' +
+            '.wgt-rec-btn.on .wgt-rec-caret{transform:translateY(-50%) rotate(180deg);}' +
+            '.wgt-recruit{display:flex;flex-direction:column;gap:7px;padding:10px;background:#fff;border:1.2px solid rgba(42,74,128,.45);}' +
+            '.wgt-recruit[hidden]{display:none;}' +
+            '.wgt-rec-hint{font-size:10.5px;color:#46639b;letter-spacing:.08em;}' +
+            '.wgt-recruit .wg-btn{margin-top:2px;}' +
             '.wg-win.wgbp .wg-card{border-radius:0;border:1.2px solid rgba(42,74,128,.45);background:#fff;box-shadow:none;}' +
             '.wg-win.wgbp .wg-card-title{color:#1f3a68;}' +
             '.wg-win.wgbp .wg-card-sub,.wg-win.wgbp .wg-entry-text{color:#46639b;}' +
@@ -2543,7 +2596,9 @@
               '.wg-win.wgbp.wgbp-sub .wg-body.wgd-st1{overflow-y:auto;}' +
               '.wg-body.wgd-st1 .wgd-split{flex:none;}' +
               '.wgd-art{min-height:0;aspect-ratio:16/9;}' +
-              '.wgd-doc .wg-entry-text{max-height:38vh;}}';
+              '.wgd-doc .wg-entry-text{max-height:38vh;}' +
+              '.wgt-split{grid-template-columns:1fr;}' +
+              '.wgt-roster{max-height:200px;}}';
         doc.head.appendChild(st2);
 
         // 手繪歪框濾鏡(直線被噪聲擠歪):框線各自獨立層,內容不受影響
@@ -2802,7 +2857,9 @@
     // ── P2 種子抽選 ──
     async function _renderSeedPage() {
         const b = _body(); if (!b) return;
-        _winEl?.classList.add('wgbp', 'wgbp-sub');   // 同一疊圖紙抽出的窄單頁
+        _winEl?.classList.add('wgbp', 'wgbp-sub');   // 同一疊圖紙抽出的一頁
+        b.classList.add('wgd-narrow');               // 種子頁是單欄表單:限寬置中才不會拉成一條
+        b.classList.remove('wgd-st1');
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-dice"></i> 世界種子</span><span class="wg-section-note">此頁功能會呼叫 AI</span></div>' +
             '<div class="wg-empty" data-wg-seedhint><i class="fa-solid fa-wand-magic-sparkles"></i>填了題材,四顆種子都會是那個題材,<br>留空就讓愛麗絲隨手抽一把。</div>' +
@@ -3139,37 +3196,60 @@
               '</div>' +
             '</div>';
 
-        // ── ② 誰跟我走：隊伍四格 + 大廳名冊 + 召集
+        // ── ② 誰跟我走：左=出發編成四格、右=大廳名冊(可直接去找人)+召集(收在按鈕裡)
+        //   🚨 舊版把召集表單常駐攤在底部:那是偶爾才用一次的動作,卻佔掉半頁還把編成擠掉(Rae:很不美觀)。
+        //   🚨 更關鍵的是動線:面板叫玩家「去大廳搭話」卻不帶他去,關窗後還得自己認人(Rae:割裂感很強)。
+        //      → 名冊每一列都能直接「去找他」:關面板＋走進對話，一步到位。
+        const _personRow = function (x) {
+            const t = x.t, i = x.i;
+            return '<div class="wgt-person' + (t.recruited ? ' on' : '') + '">' +
+                '<span class="wgt-p-main" data-prof="' + i + '">' +
+                    '<span class="wgt-p-nm">' + _esc(t.name) + (t.age ? '<i>' + t.age + '</i>' : '') + '</span>' +
+                    '<span class="wgt-p-job">' + _esc(t.job || '旅人') + '</span>' +
+                '</span>' +
+                (t.recruited
+                    ? '<span class="wgt-p-on"><i class="fa-solid fa-circle-check"></i> 同行中</span>'
+                    : '<button class="wgt-p-go" data-meet="' + i + '" title="關上面板，去大廳跟他聊聊">' +
+                        '<i class="fa-solid fa-comments"></i> 去找他</button>') +
+                '<b class="wgt-p-x" data-del="' + i + '" title="從這個世界刪掉他">✕</b>' +
+            '</div>';
+        };
         const page2 =
-            '<div class="wg-section-head"><span class="wg-section-title">出發編成</span>' +
-              '<span class="wg-section-note">' + team.length + ' / ' + MAX_TRAVELER_SPAWN + '</span></div>' +
-            _slotsHtml(team) +
-            (roster.length
-                ? '<div class="wg-section-head"><span class="wg-section-title">大廳裡的旅人</span>' +
-                    '<span class="wg-section-note">' + roster.length + ' 人</span></div>' +
-                  '<div class="wg-chips">' + roster.map(function (x) {
-                      var t = x.t, i = x.i;
-                      return '<span class="wg-chip' + (t.recruited ? ' on' : '') + '">' +
-                        '<span data-prof="' + i + '">' + _esc(t.name) + (t.age ? '<i>' + t.age + '</i>' : '') + '</span>' +
-                        '<b data-del="' + i + '" title="從這個世界刪掉他">✕</b></span>';
-                  }).join('') + '</div>'
-                : '') +
-            '<div class="wg-section-head"><span class="wg-section-title">召集旅人</span>' +
-              '<span class="wg-section-note">加人，不會換掉現有的</span></div>' +
-            '<input class="wg-input" data-wg-travnote maxlength="80" placeholder="想找什麼樣的旅人（可留空）" value="' + _esc((w.travPref && w.travPref.note) || '') + '">' +
-            '<div class="wg-age-row"><span>年齡</span>' +
-              '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((w.travPref && w.travPref.ageMin) || '') + '">' +
-              '<span>～</span>' +
-              '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
-              '<span>歲</span></div>' +
-            '<button class="wg-btn ghost" data-act="more-trav"><i class="fa-solid fa-user-plus"></i> ' +
-              ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>' +
-            // 啟航群像＝末尾畫面的底圖。主持AI 寫了啟航段落才會自動生，忘了就手動補；
-            //   已經有圖時也要留著這顆——想換一張(例如換了插圖接口、或就是不喜歡)總得有路可走。
-            (team.length
-                ? '<button class="wg-btn ghost" data-act="make-launch"><i class="fa-solid fa-camera-retro"></i> ' +
-                  (_needLaunchArt(w) ? '生成啟航群像' : '重生啟航群像') + '</button>'
-                : '');
+            '<div class="wgt-split">' +
+              '<div class="wgt-left">' +
+                '<div class="wg-section-head"><span class="wg-section-title">出發編成</span>' +
+                  '<span class="wg-section-note">' + team.length + ' / ' + MAX_TRAVELER_SPAWN + '</span></div>' +
+                _slotsHtml(team) +
+                // 啟航群像＝末尾畫面的底圖。主持AI 寫了啟航段落才會自動生，忘了就手動補；
+                //   已經有圖時也要留著這顆——想換一張(例如換了插圖接口、或就是不喜歡)總得有路可走。
+                (team.length
+                    ? '<button class="wg-btn ghost" data-act="make-launch"><i class="fa-solid fa-camera-retro"></i> ' +
+                      (_needLaunchArt(w) ? '生成啟航群像' : '重生啟航群像') + '</button>'
+                    : '') +
+              '</div>' +
+              '<div class="wgt-side">' +
+                '<div class="wg-section-head"><span class="wg-section-title">大廳裡的旅人</span>' +
+                  '<span class="wg-section-note">' + (roster.length ? roster.length + ' 人' : '還沒有人') + '</span></div>' +
+                '<div class="wgt-roster" data-wgt-roster>' +
+                  (roster.length
+                    ? roster.map(_personRow).join('')
+                    : '<div class="wgt-empty">這個世界還沒召集過旅人。<br>用下面那顆按鈕請愛麗絲找幾位。</div>') +
+                '</div>' +
+                '<button class="wg-btn ghost wgt-rec-btn" data-act="rec-toggle">' +
+                  '<i class="fa-solid fa-user-plus"></i> ' + ((w.travelers || []).length ? '再召集一批' : '召集旅人') +
+                  '<i class="fa-solid fa-chevron-down wgt-rec-caret"></i></button>' +
+                '<div class="wgt-recruit" data-wgt-rec hidden>' +
+                  '<div class="wgt-rec-hint">加人，不會換掉現有的</div>' +
+                  '<input class="wg-input" data-wg-travnote maxlength="80" placeholder="想找什麼樣的旅人（可留空）" value="' + _esc((w.travPref && w.travPref.note) || '') + '">' +
+                  '<div class="wg-age-row"><span>年齡</span>' +
+                    '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((w.travPref && w.travPref.ageMin) || '') + '">' +
+                    '<span>～</span>' +
+                    '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
+                    '<span>歲</span></div>' +
+                  '<button class="wg-btn" data-act="more-trav"><i class="fa-solid fa-wand-magic-sparkles"></i> 請愛麗絲找人</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
 
         // ── ③ 出發設定：降生地 + 我的身分
         const page3 =
@@ -3181,7 +3261,8 @@
             '<textarea class="wg-input area" data-wg-pc maxlength="200" rows="2" ' +
               'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>';
 
-        // step1 走滿寬海報版型(名字已經在海報上,不再重複一行標題);step2/3 維持單欄置中
+        // 詳情三頁都吃滿寬;step1 另外走海報版型(名字在海報上,不再重複一行標題)
+        b.classList.remove('wgd-narrow');
         b.classList.toggle('wgd-st1', st === 1);
         b.innerHTML =
             (st === 1 ? ''
@@ -3224,10 +3305,34 @@
             b.querySelectorAll('[data-prof]').forEach(el => el.addEventListener('click', () => {
                 _renderProfilePage(w, Number(el.dataset.prof));   // 名冊點誰都看得到身分卡
             }));
-            // 空槽不放說明文字(身分卡在偶遇窗裡已經有一份)——點下去才講怎麼補人
+            // 空槽點下去＝把視線帶到右邊名冊(那裡每個人都能一鍵去搭話),不再只丟一句話讓玩家自己想辦法
             b.querySelectorAll('.wg-slot.empty').forEach(el => el.addEventListener('click', () => {
-                _toast('旅人在純白大廳等你搭話,聊得投機才會答應同行');
+                const box = b.querySelector('[data-wgt-roster]');
+                const free = box && box.querySelector('.wgt-p-go');
+                if (free) {
+                    box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
+                    free.scrollIntoView({ block: 'nearest' });
+                    _toast('從右邊挑一位「去找他」，聊得投機才會答應同行');
+                } else {
+                    const rec = b.querySelector('[data-act="rec-toggle"]');
+                    if (rec) rec.click();
+                    _toast('大廳裡沒有還沒入隊的人了，先召集一批');
+                }
             }));
+            // 🚪 去找他：關面板→(補開場白)→直接進對話。把「關窗、認人、走過去、點他」四步收成一步
+            b.querySelectorAll('[data-meet]').forEach(el => el.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                _goMeet(w, Number(el.dataset.meet));
+            }));
+            // 召集區:預設收起(偶爾才用一次的動作不該常駐佔版面)
+            const recBtn = b.querySelector('[data-act="rec-toggle"]');
+            const recBox = b.querySelector('[data-wgt-rec]');
+            if (recBtn && recBox) recBtn.addEventListener('click', () => {
+                const open = recBox.hasAttribute('hidden');
+                if (open) recBox.removeAttribute('hidden'); else recBox.setAttribute('hidden', '');
+                recBtn.classList.toggle('on', open);
+                if (open) recBox.querySelector('[data-wg-travnote]')?.focus();
+            });
             // 小人皮膚是動態網址(IDB blob/dataURL),只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
             b.querySelectorAll('[data-fig]').forEach(el => {
                 const f = figs[Number(el.dataset.fig)];
