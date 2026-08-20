@@ -2475,6 +2475,43 @@
             // 🚨圖紙的外框尺寸「每一頁都一樣」(Rae:點進去寬度縮了、變來變去很醜):
             //   換頁不動窗,只把單欄內容限寬置中——視覺上就是同一張圖紙翻頁,不是換了一個面板。
             '.wg-win.wgbp.wgbp-sub .wg-body > *{max-width:620px;width:100%;margin-left:auto;margin-right:auto;}' +
+            // step1(世界頁)=海報版型,吃滿圖紙寬度
+            '.wg-win.wgbp.wgbp-sub .wg-body.wgd-st1 > *{max-width:100%;}' +
+            '.wgd-split{display:grid;grid-template-columns:1.12fr .88fr;gap:16px;align-items:stretch;min-height:0;}' +
+            // 左:大概念圖,名字/概念/標籤壓在圖上(海報)
+            '.wgd-art{position:relative;overflow:hidden;border:1.4px solid #2a4a80;background:#1c3358;min-height:230px;}' +
+            '.wgd-art img{width:100%;height:100%;object-fit:cover;display:block;}' +
+            '.wgd-noart{width:100%;height:100%;min-height:230px;display:grid;place-items:center;color:rgba(207,224,248,.5);font-size:40px;}' +
+            '.wgd-art-visits{position:absolute;top:10px;right:10px;z-index:2;padding:2px 10px;background:rgba(247,250,253,.92);' +
+              'border:1.2px solid #2a4a80;border-radius:2px;font-size:10.5px;letter-spacing:.16em;color:#1f3a68;}' +
+            '.wgd-art-ov{position:absolute;left:0;right:0;bottom:0;padding:26px 14px 12px;' +
+              'background:linear-gradient(rgba(10,20,40,0),rgba(10,20,40,.45) 38%,rgba(10,20,40,.86));}' +
+            '.wgd-art-name{color:#fff;font-size:21px;font-weight:700;letter-spacing:.16em;line-height:1.3;' +
+              'text-shadow:0 2px 10px rgba(10,20,40,.75);}' +
+            '.wgd-art-concept{margin-top:5px;color:#eaf1fb;font-size:12.5px;line-height:1.65;letter-spacing:.03em;' +
+              'text-shadow:0 1px 8px rgba(10,20,40,.8);}' +
+            '.wgd-art-ov .wg-tags{margin-top:8px;}' +
+            '.wgd-art-ov .wg-tag{background:rgba(247,250,253,.92);border-color:rgba(42,74,128,.5);color:#1f3a68;}' +
+            '.wgd-art-ov .wg-tag.warn{background:rgba(255,240,238,.95);}' +
+            // 右:世界檔案(自己捲,不把整頁撐長)+ 操作鈕
+            '.wgd-side{display:flex;flex-direction:column;gap:10px;min-height:0;}' +
+            '.wgd-doc{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;' +
+              'border:1.2px solid rgba(42,74,128,.45);padding:11px 13px;box-sizing:border-box;}' +
+            '.wgd-doc-hd{flex:none;padding-bottom:7px;margin-bottom:8px;border-bottom:1.2px solid rgba(42,74,128,.35);' +
+              'font-size:12.5px;font-weight:700;letter-spacing:.3em;color:#1f3a68;}' +
+            '.wgd-doc .wg-entry-text{flex:1;min-height:0;overflow-y:auto;color:#46639b;font-size:12px;line-height:1.9;' +
+              'scrollbar-width:thin;padding-right:4px;}' +
+            '.wgd-side .wg-btn{margin-top:0;flex:none;}' +
+            // 桌機:海報頁自己不捲,圖與檔案都在一眼內(要捲的是右邊那份檔案)
+            '.wg-win.wgbp.wgbp-sub .wg-body.wgd-st1{overflow:hidden;padding-bottom:18px;}' +
+            '.wg-body.wgd-st1 .wgd-split{flex:1;min-height:0;}' +
+            // 詳情頁把右下的圖紙標題欄收掉:那塊在檔案庫是裝飾,在這裡會壓住內容(空間留給正文)
+            '.wg-win.wgbp.wgbp-sub .wgbp-tb{display:none;}' +
+            // 底部三顆:刪除靠左、返回/繼續靠右,各自照內容寬(滿寬平分會變兩條大長條)
+            '.wg-btn-row.wgd-foot1{justify-content:flex-end;gap:10px;}' +
+            // 🚨 width:auto 不能省:.wg-btn 本身是 width:100%,只寫 flex:0 0 auto 的話 basis 讀的還是那個 100%
+            '.wg-btn-row.wgd-foot1 .wg-btn{flex:0 0 auto;width:auto;min-width:132px;padding-left:18px;padding-right:18px;}' +
+            '.wg-btn-row.wgd-foot1 .wgd-del{margin-right:auto;min-width:0;}' +
             '.wg-win.wgbp .wg-card{border-radius:0;border:1.2px solid rgba(42,74,128,.45);background:#fff;box-shadow:none;}' +
             '.wg-win.wgbp .wg-card-title{color:#1f3a68;}' +
             '.wg-win.wgbp .wg-card-sub,.wg-win.wgbp .wg-entry-text{color:#46639b;}' +
@@ -2500,7 +2537,13 @@
               '.wgbp-grid{grid-template-columns:1fr;gap:16px;}' +
               '.wgbp-blk,.wgbp-blk:nth-child(odd),.wgbp-blk:nth-child(even){transform:none;}' +
               '.wg-win.wgbp .wgbp-tb,.wg-win.wgbp .wgbp-compass{display:none;}' +
-              '.wgbp-cc{min-height:0;}}';
+              '.wgbp-cc{min-height:0;}' +
+              // 窄容器:海報收單欄,整頁改回可捲(圖佔一段、檔案接在下面)
+              '.wgd-split{grid-template-columns:1fr;}' +
+              '.wg-win.wgbp.wgbp-sub .wg-body.wgd-st1{overflow-y:auto;}' +
+              '.wg-body.wgd-st1 .wgd-split{flex:none;}' +
+              '.wgd-art{min-height:0;aspect-ratio:16/9;}' +
+              '.wgd-doc .wg-entry-text{max-height:38vh;}}';
         doc.head.appendChild(st2);
 
         // 手繪歪框濾鏡(直線被噪聲擠歪):框線各自獨立層,內容不受影響
@@ -3069,15 +3112,32 @@
             '<span class="wg-tag lure"><i class="fa-solid fa-gem"></i>' + _esc(w.lure) + '</span>' +
             '<span class="wg-tag warn"><i class="fa-solid fa-triangle-exclamation"></i>' + _esc(w.danger) + '</span></div>';
 
-        // ── ① 這是什麼世界：看世界＋重生結束畫面(Rae 定位:放這裡,旅人頁太亂)
+        // ── ① 這是什麼世界：海報式兩欄——左邊大概念圖(名字/概念/標籤疊在圖上)、右邊世界檔案直接可讀。
+        //   🚨 中央一欄的舊版被打回票:左右留白全浪費、正文還被壓到摺線下要捲才看得到(Rae:很廉價)。
+        //   窄容器自動收單欄(CSS)。
         const page1 =
-            (w.art
-                ? '<div class="wg-art"><img src="' + _esc(w.art) + '" alt="">' +
-                    '<div class="wg-art-ov"><div class="wg-art-concept">' + _esc(w.concept) + '</div>' + tagsHtml + '</div></div>'
-                : '<div class="wg-card"><div class="wg-card-sub">' + _esc(w.concept) + '</div>' + tagsHtml + '</div>') +
-            (entryText ? '<div class="wg-card"><div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>' : '') +
-            '<button class="wg-btn ghost" data-act="remake-panel"><i class="fa-solid fa-wand-magic-sparkles"></i> ' +
-              (w.panel ? '重生結束畫面' : '生成結束畫面') + '</button>';
+            '<div class="wgd-split">' +
+              '<div class="wgd-art">' +
+                (w.art
+                    ? '<img src="' + _esc(w.art) + '" alt="">'
+                    : '<div class="wgd-noart"><i class="fa-solid fa-earth-asia"></i></div>') +
+                '<span class="wgd-art-visits">進入 ' + (w.visits || 0) + ' 次</span>' +
+                '<div class="wgd-art-ov">' +
+                  '<div class="wgd-art-name">' + _esc(w.name) + '</div>' +
+                  '<div class="wgd-art-concept">' + _esc(w.concept) + '</div>' +
+                  tagsHtml +
+                '</div>' +
+              '</div>' +
+              '<div class="wgd-side">' +
+                (entryText
+                    ? '<div class="wgd-doc"><div class="wgd-doc-hd">世界檔案</div>' +
+                        '<div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>'
+                    : '<div class="wgd-doc"><div class="wgd-doc-hd">世界檔案</div>' +
+                        '<div class="wg-entry-text">這個世界還沒有寫進條目。</div></div>') +
+                '<button class="wg-btn ghost" data-act="remake-panel"><i class="fa-solid fa-wand-magic-sparkles"></i> ' +
+                  (w.panel ? '重生結束畫面' : '生成結束畫面') + '</button>' +
+              '</div>' +
+            '</div>';
 
         // ── ② 誰跟我走：隊伍四格 + 大廳名冊 + 召集
         const page2 =
@@ -3121,18 +3181,22 @@
             '<textarea class="wg-input area" data-wg-pc maxlength="200" rows="2" ' +
               'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>';
 
+        // step1 走滿寬海報版型(名字已經在海報上,不再重複一行標題);step2/3 維持單欄置中
+        b.classList.toggle('wgd-st1', st === 1);
         b.innerHTML =
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) + '</span>' +
-              '<span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>' +
+            (st === 1 ? ''
+                : '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-earth-asia"></i> ' + _esc(w.name) + '</span>' +
+                  '<span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>') +
             _stepBar(st) +
             (st === 1 ? page1 : st === 2 ? page2 : page3) +
-            '<div class="wg-btn-row wg-steps-foot">' +
+            // step1 的三顆併成一行:刪除靠左、返回/繼續靠右(滿寬下平分會拉成兩條超長按鈕)
+            '<div class="wg-btn-row wg-steps-foot' + (st === 1 ? ' wgd-foot1' : '') + '">' +
+              (st === 1 ? '<button class="wg-btn danger wgd-del" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' : '') +
               '<button class="wg-btn ghost" data-act="prev">' + (st === 1 ? '返回' : '上一步') + '</button>' +
               (st < 3
                 ? '<button class="wg-btn" data-act="next">繼續 ›</button>'
                 : '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>') +
-            '</div>' +
-            (st === 1 ? '<button class="wg-btn danger" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' : '');
+            '</div>';
 
         // 步驟列可以直接點（回頭改東西不必一步一步退）
         b.querySelectorAll('.wg-step').forEach(el => el.addEventListener('click', () => _renderDetail(w, Number(el.dataset.step))));
