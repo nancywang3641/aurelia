@@ -318,10 +318,29 @@
 .lstage-marker.m-rabbit { background:#e6e6ea; color:#333; }
 .lstage-marker.m-zhiwei { background:#6b3a5e; }
 
-/* 🔮 占卜桌熱點：預設熱點是藍的(科幻白場景用)，小屋是暗紫酒紅金→換一套金色的 */
-.lstage-hotspot.hs-tarot:hover { background:rgba(212,175,55,.14); box-shadow:0 0 0 3px rgba(212,175,55,.55) inset; }
-.lstage-hotspot.hs-tarot .lstage-hotspot-chip { background:rgba(26,12,26,.9); color:#e8d5a8; border:1px solid rgba(168,130,60,.6); }
-.lstage-hotspot.hs-tarot .lstage-hotspot-chip i { color:#d4af37; }
+/* 🧍 占卜面板開著時紫薇要站在面板「前面」：立繪預設 z-index:4，會被 3350 的窗整個蓋掉。
+   照世界門那條成例(.lobby-left:has(.wg-win.wgbp) .lstage-talk-portrait) 抬上來。
+   立繪本來就 pointer-events:none，抬高不會擋到面板的點擊。 */
+.lobby-left:has(.lstage-tarotwin) .lstage-talk-portrait { z-index:3400; }
+/* 對話框收起時立繪原本靠 bottom:128px 讓開白框；白框收了就讓她站回地面 */
+.lobby-left.lstage-dlg-hidden:has(.lstage-tarotwin) .lstage-talk-portrait { bottom:0; height:82%; }
+
+/* 🔮 占卜桌熱點：
+   ① 預設熱點是藍色方框(科幻白大地圖用的)，小屋是暗紫酒紅金 → 換一套金的
+   ② 桌子是橢圓，方框圈起來很醜 → border-radius:50%，inset 陰影會沿著橢圓描邊，剛好貼桌緣
+      （高度只取素材的 77%＝桌面那圈，見 hotspots 的 hRatio；框到桌腳就變成包住整張桌子的方塊）
+   ③ 標籤預設是 26px 常駐大字，蓋在牌面上很吵 → 縮成 12px 金色細字，只在滑過時淡出 */
+.lstage-hotspot.hs-tarot { padding-bottom:16px; }
+.lstage-hotspot.hs-tarot:hover {
+  background:radial-gradient(ellipse at center, rgba(212,175,55,.15), rgba(212,175,55,.04) 72%);
+  box-shadow:0 0 0 2px rgba(212,175,55,.5) inset, 0 0 22px rgba(212,175,55,.16); }
+.lstage-hotspot.hs-tarot .lstage-hotspot-chip {
+  background:rgba(26,12,26,.82); color:#e8d5a8; border:1px solid rgba(168,130,60,.55);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-tarot:hover .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-tarot .lstage-hotspot-chip i { color:#d4af37; font-size:11px; }
 .lstage-obj.lstage-grouped { outline:3px dashed #4ab6ff; outline-offset:-2px; }
 /* 框選（擺設模式，Ctrl+拖空地）：藍色虛線框 */
 .lstage-marquee { position:absolute; border:2px dashed #4ab6ff; background:rgba(74,182,255,.12);
