@@ -2249,6 +2249,7 @@ ${sections}`;
             try {
                 if (npcTarget && npcTarget.key === 'alice') aliceSupplement = (window.OS_PROMPTS?.loadAlice?.() || '').trim();
                 else if (npcTarget && npcTarget.key === 'rabbit') aliceSupplement = (window.OS_PROMPTS?.loadRabbit?.() || '').trim();
+                else if (npcTarget && npcTarget.key === 'zhiwei') aliceSupplement = (window.OS_PROMPTS?.loadZhiwei?.() || '').trim();
             } catch (e) {}
 
             // USER 身分：guest NPC 用「那輪大總結紀錄的 persona」(認得古風輪的你，不靠當前 USER)；
