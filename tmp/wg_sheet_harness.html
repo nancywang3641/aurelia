@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>世界門 航行圖紙 harness</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #10141d; }
+  .lobby-left { position: absolute; inset: 0; }
+</style>
+</head>
+<body>
+<div class="lobby-left"></div>
+<script>
+  window.toastr = { info: (m) => console.log('🍞', m) };
+  // 假概念圖:漸層 canvas 當底(真環境是生成圖)
+  function fakeArt(a, b) {
+    const cv = document.createElement('canvas'); cv.width = 640; cv.height = 360;
+    const cx = cv.getContext('2d');
+    const g = cx.createLinearGradient(0, 0, 640, 360);
+    g.addColorStop(0, a); g.addColorStop(1, b);
+    cx.fillStyle = g; cx.fillRect(0, 0, 640, 360);
+    cx.fillStyle = 'rgba(255,255,255,.16)';
+    for (let i = 0; i < 26; i++) cx.fillRect(Math.random() * 640, Math.random() * 360, 40, 3);
+    return cv.toDataURL('image/png');
+  }
+  const LONG = '精神體在使用能力時，會以半透明、具備個人獨特顏色的動物特徵（如獸耳、尾巴）顯現在人身上。'
+    + '高顏值者幾乎全被法則分配為草食系的軟前嚮導（受者），而高戰力者則成為肉食系的強悍哨兵（攻者）。\n\n'
+    + '哨兵必須用狩獵來的高階珍獸肉品，換取草食嚮導的「毛絨梳理權」，梳下的絨毛能全額折抵學分；'
+    + '而輕傷只需摸頭接吻安撫，中重度失衡則必須透過插入式性行為進行深度疏導。\n\n'
+    + '為了擴充國家未來戰力，社會強烈期許並補助擁有多名伴侶（多妻多夫制），生越多補助越多。'
+    + '然而，精神體相性媒合率低的哨兵，可以申請補助在艦內經營「撫慰茶館」，透過讓學來「蹭毛」抵免學分。\n\n'
+    + '一般人早就習慣了在茶館裡互相摸尾巴、交接體液的日常；若踩過頭（如抗拒安撫、隱瞞失衡），'
+    + '巡查隊會直接把人帶去疏導所，那裡沒有簾子也沒有選擇權。';
+  const worlds = [
+    { id: 'w1', name: '蒼穹白鹿號', concept: '星艦學院裡以撫慰實習與精神體社交為主的溫馨日常。', genre: '星際', style: '溫馨學院風', lure: '萌寵精神體', danger: '期末退學壓', visits: 1, art: fakeArt('#f0c8a0', '#3c5d96'), entryText: LONG },
+    { id: 'w2', name: '神權星冕號', concept: '以繁育價值決定權力階級的精英飛空城', genre: '奇幻', style: '華麗巴洛克金屬', lure: '高等級結合權', danger: '精神鏈接斷層', visits: 1 },
+    { id: 'w3', name: '琥珀暖巢號', concept: '專門安置高產嚮導與待產哨兵的超大型生態溫室航艦。', genre: '田園', style: '溫馨碎花田園', lure: '帶薪繁衍假期', danger: '鄰里噪音糾紛', visits: 1 },
+    { id: 'w4', name: '翡翠方舟', concept: '血緣與契合度決定社會階級的封閉式垂直方舟。', genre: '奇幻', style: '巴洛克植被、晶體吊燈', lure: '皇室血脈、基因擴張', danger: '精神過載、家族奪權', visits: 1 },
+    { id: 'w5', name: '霓虹翡翠港', concept: '光影與美貌即是權力的浮空大都市', genre: '都市', style: '霓虹軟墊繁花', lure: '頂級特許權', danger: '色彩失調症', visits: 1 },
+  ];
+  window.OS_DB = {
+    getAppData: async (app, key) => (app === 'worldgate' && key === 'worlds') ? worlds : null,
+    saveAppData: async () => {},
+  };
+  // 世界條目 stub:詳情頁的「世界檔案」是從世界書撈的,不是 w.entryText
+  window.TavernHelper = {
+    getLorebookEntries: async () => worlds.filter(w => w.entryText)
+      .map(w => ({ uid: w.id, comment: '【世界檔案-' + w.name + '】', content: w.entryText })),
+  };
+</script>
+<script src="../os_phone/os/os_worldgate.js"></script>
+<script>
+  OS_WORLDGATE.openGate();
+</script>
+</body>
+</html>
