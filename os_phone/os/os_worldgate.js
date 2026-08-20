@@ -2471,8 +2471,10 @@
             '.wgbp-blk.empty i.big{font-size:24px;color:#2a4a80;}' +
             '.wgbp-empty-nm{font-size:15px;font-weight:700;letter-spacing:.18em;color:#1f3a68;}' +
             '.wgbp-empty-cc{font-size:11px;line-height:1.8;color:#46639b;letter-spacing:.05em;}' +
-            // ── 📄 wgbp-sub=詳情/種子頁:同一疊圖紙抽出的「窄單頁」(直式文件比例),內容沿用原結構只換零件皮 ──
-            '.wg-win.wgbp.wgbp-sub{width:min(520px,80%);}' +
+            // ── 📄 wgbp-sub=詳情/種子頁 ──
+            // 🚨圖紙的外框尺寸「每一頁都一樣」(Rae:點進去寬度縮了、變來變去很醜):
+            //   換頁不動窗,只把單欄內容限寬置中——視覺上就是同一張圖紙翻頁,不是換了一個面板。
+            '.wg-win.wgbp.wgbp-sub .wg-body > *{max-width:620px;width:100%;margin-left:auto;margin-right:auto;}' +
             '.wg-win.wgbp .wg-card{border-radius:0;border:1.2px solid rgba(42,74,128,.45);background:#fff;box-shadow:none;}' +
             '.wg-win.wgbp .wg-card-title{color:#1f3a68;}' +
             '.wg-win.wgbp .wg-card-sub,.wg-win.wgbp .wg-entry-text{color:#46639b;}' +
