@@ -327,13 +327,14 @@
 
 /* 🔮 占卜桌熱點：
    ① 預設熱點是藍色方框(科幻白大地圖用的)，小屋是暗紫酒紅金 → 換一套金的
-   ② 桌子是橢圓，方框圈起來很醜 → border-radius:50%，inset 陰影會沿著橢圓描邊，剛好貼桌緣
-      （高度只取素材的 77%＝桌面那圈，見 hotspots 的 hRatio；框到桌腳就變成包住整張桌子的方塊）
+   ② 方框圈住整張桌子很醜 → 滑過時改疊 Rae 畫的描邊圖(--hs-hover-img)，沿桌子真實輪廓含桌腳。
+      CSS 的 border-radius 只能做正橢圓、配不上這種帶桌腳的形狀。
+      🚨 描邊圖中間必須是透明的：熱點在 z:1500，含桌面的話會把椅背跟走到桌前的小人蓋掉。
    ③ 標籤預設是 26px 常駐大字，蓋在牌面上很吵 → 縮成 12px 金色細字，只在滑過時淡出 */
 .lstage-hotspot.hs-tarot { padding-bottom:16px; }
 .lstage-hotspot.hs-tarot:hover {
-  background:radial-gradient(ellipse at center, rgba(212,175,55,.15), rgba(212,175,55,.04) 72%);
-  box-shadow:0 0 0 2px rgba(212,175,55,.5) inset, 0 0 22px rgba(212,175,55,.16); }
+  background:var(--hs-hover-img) center / 100% 100% no-repeat;
+  box-shadow:none; }
 .lstage-hotspot.hs-tarot .lstage-hotspot-chip {
   background:rgba(26,12,26,.82); color:#e8d5a8; border:1px solid rgba(168,130,60,.55);
   font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;

@@ -223,7 +223,7 @@
             //    obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上，不用回來改座標。
             hotspots: [
                 { obj: 'obj_table', label: '入座占卜', icon: 'fa-wand-sparkles', open: 'tarot', cls: 'hs-tarot',
-                  hRatio: 0.77, radius: '50%' },   // 0.77＝桌面橢圓的高度佔比（實測素材 alpha 得出）
+                  hoverImg: 'lobby_tarot_obj_table_glow_v1.png' },   // 描邊沿桌子真實輪廓(含桌腳)，比 CSS 橢圓準
             ],
         },
         room: {   // 🏠 房間：底圖與碰撞遮罩不是素材，是「進門當下」餵進來的（見 enterRoom）
@@ -2083,15 +2083,18 @@
                 const o = (CFG.layout || []).find(l => String(l.file || '').indexOf(hs.obj) >= 0);
                 if (!o || o._plotOff) return;   // 家具不在（換過素材／地塊沒蓋）→ 這顆熱點就不要
                 const s = o.s || 1;
-                // hRatio＝只取家具上半那一段（占卜桌的桌面橢圓在 0~77%，77% 以下是桌腳，
-                //   框到桌腳就會變成一個包住整張桌子的方框，很醜）
+                // hRatio＝只取家具上半那一段（不給就是整件；熱點要跟 hoverImg 對齊時務必留 1）
                 box = { x: o.x, y: o.y, w: o.w * s, h: o.h * s * (hs.hRatio || 1) };
             }
             const el = document.createElement('div');
             el.className = 'lstage-hotspot' + (hs.cls ? ' ' + hs.cls : '');
             el.style.left = box.x + 'px'; el.style.top = box.y + 'px';
             el.style.width = box.w + 'px'; el.style.height = box.h + 'px';
-            if (hs.radius) el.style.borderRadius = hs.radius;   // '50%'＝橢圓，描邊會沿著桌緣走
+            if (hs.radius) el.style.borderRadius = hs.radius;
+            // 🖼 hoverImg＝滑過時疊上去的描邊圖（Rae 手繪，沿家具真實輪廓）。
+            //    熱點框＝家具的完整矩形，圖用 100% 100% 鋪滿 → 跟家具本體像素對齊。
+            //    圖只留外圈金邊、中間透明，才不會蓋掉椅背與走到桌前的小人（熱點在 z:1500）。
+            if (hs.hoverImg) el.style.setProperty('--hs-hover-img', 'url("' + CDN + hs.hoverImg + '")');
             if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid ' +
                 (hs.icon || 'fa-door-open') + '"></i> ' + hs.label + '</span>';
             el.addEventListener('click', (e) => {
