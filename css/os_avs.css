@@ -127,9 +127,15 @@
         .avs-st-chip .chip-x { cursor: pointer; opacity: 0.5; font-size: 10px; }
         .avs-st-chip .chip-x:hover { opacity: 1; color: #c0392b; }
         /* 沿用浮層：按角色卡分頁（同一張卡玩過幾輪就有幾份設定） */
-        .avs-adopt-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid rgba(26,28,40,0.10); scrollbar-width: none; }
-        .avs-adopt-tabs::-webkit-scrollbar { display: none; }
-        .avs-adopt-tab { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 4px 11px 4px 4px; border-radius: 999px; border: 1px solid rgba(26,28,40,0.15); background: transparent; color: rgba(26,28,40,0.6); font-size: 12px; cursor: pointer; max-width: 190px; }
+        /* 分頁列改「換行」不橫捲：卡片數量本來就不多，全部攤開一眼選得到，
+           不必拖（桌機沒有橫向滾輪，橫捲那版等於選不了後面的卡）。太多卡時自己垂直捲。
+           吸頂：往下捲看設定清單時，分頁列留在原位好切換。 */
+        .avs-adopt-tabs { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; max-height: 128px; overflow-y: auto; overflow-x: hidden;
+            position: sticky; top: -6px; z-index: 2; padding: 6px 0 8px; margin-bottom: 10px;
+            border-bottom: 1px solid rgba(26,28,40,0.10); background: #eef1f8; scrollbar-width: thin; }
+        .avs-adopt-tabs::-webkit-scrollbar { width: 4px; }
+        .avs-adopt-tabs::-webkit-scrollbar-thumb { background: rgba(26,28,40,0.2); border-radius: 2px; }
+        .avs-adopt-tab { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; padding: 4px 11px 4px 4px; border-radius: 999px; border: 1px solid rgba(26,28,40,0.15); background: transparent; color: rgba(26,28,40,0.6); font-size: 12px; cursor: pointer; max-width: 190px; }
         .avs-adopt-tab.on { background: rgba(26,28,40,0.85); color: #EEF0F6; border-color: rgba(26,28,40,0.85); }
         .avs-adopt-ava { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: rgba(26,28,40,0.10); }
         .avs-adopt-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -203,7 +209,9 @@
         .avs-sm-card { width: min(680px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: #EEF0F6; border: 1px solid rgba(26,28,40,0.15); border-radius: 14px; padding: 18px; box-shadow: 0 16px 50px rgba(0,0,0,0.35); }
         .avs-sm-title { font-size: 16px; font-weight: 800; color: #1A1C28; margin-bottom: 6px; }
         .avs-sm-desc { font-size: 11.5px; color: rgba(26,28,40,0.45); line-height: 1.6; margin-bottom: 12px; }
-        .avs-sm-list { flex: 1; overflow-y: auto; border: 1px solid rgba(26,28,40,0.12); border-radius: 8px; padding: 6px; background: rgba(228,232,245,0.5); }
+        /* 🚨 overflow-x 一定要明寫 hidden：只寫 overflow-y:auto 時 x 會被算成 auto，
+           裡面的角色卡分頁列就把整個清單往右撐開（分頁列自己反而不產生捲軸＝桌機拖不動、選不到後面的卡）。 */
+        .avs-sm-list { flex: 1; overflow-y: auto; overflow-x: hidden; border: 1px solid rgba(26,28,40,0.12); border-radius: 8px; padding: 6px; background: rgba(228,232,245,0.5); }
         .avs-sm-tip { text-align: center; padding: 28px 10px; color: rgba(26,28,40,0.4); font-size: 12.5px; }
         .avs-sm-tip.err { color: #c0392b; }
         .avs-sm-row { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px dashed rgba(26,28,40,0.1); }
