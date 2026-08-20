@@ -120,11 +120,19 @@
         }
         if (SC.zhiwei) {   // 占卜小屋：紫薇老師坐鎮占卜桌、不漫步；同白兔那套(立繪+對話框)，另有「占卜」鈕開面板
             const zp = CFG.points.zhiweiPos || SC.zhiwei;
+            // 🎯 互動區綁在占卜桌上（Rae 2026-08-21 指定）：她坐在桌後，桌子的碰撞帶把人擋在 260px 外，
+            //    靠 INTERACT_R 那顆圓永遠搆不到——坐在對面得繞到她正面才點得到。
+            //    改成「站在桌子這塊範圍旁邊就算搆得到」＝坐下來就能點，也涵蓋桌子左右前角。
+            //    直接讀 layout 的桌子矩形 → 之後在擺設模式挪桌子，互動區自己跟著走。
+            const tbl = (CFG.layout || []).find(o => /obj_table/.test(o.file || ''));
+            const ts = tbl ? (tbl.s || 1) : 1;
             _b.addNpc({ key: 'zhiwei', name: '紫薇老師', personaFull: ZHIWEI_PERSONA,
                      subTitle: '微醺星軌 · 占卜小屋店主',
                      x: zp.x, y: zp.y, h: 200,
                      src: { sheet: ASSET.zhiweiWalk }, portrait: ASSET.zhiwei,
                      noWander: true,
+                     talkRect: tbl ? { x: tbl.x, y: tbl.y, w: tbl.w * ts, h: tbl.h * ts } : null,
+                     talkPad: 110,   // 桌邊往外這麼寬都算「坐在桌前」（客人椅本身也佔了一段深度）
                      homeRect: { x: zp.x, y: zp.y, w: 0, h: 0 } });
             return;
         }
