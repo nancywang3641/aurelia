@@ -102,14 +102,21 @@
     //            打不中就是拖長回合、多挨幾輪。
     //   foeHit ＝敵人打中玩家的機率上限。三隻圍毆時這欄比什麼都重要：一回合三次七成，
     //            等於每回合固定挨兩下。
+    // 🚨這些是「安全網的門檻」，不是「要達到的目標」。
+    //   把每場都校準到同一個目標＝橡皮筋：玩家練得再強，敵人跟著補強，體感永遠一樣，
+    //   角色成長在戰鬥裡完全讀不出來。實測過更糟的：老手的勝率比一般人還低（56% vs 64%），
+    //   因為他數值高、敵人被補得更凶 —— 變強反而受罰。
+    //   所以這裡只在「低於門檻」時出手，而且只救到門檻本身，不多給。
+    //   rFloor＝血量池至少要撐到全場總傷害的幾倍；myHit＝玩家最低該有的命中率；
+    //   foeHit＝敵人打中玩家的機率上限。
     const AIM = {
-        '輕鬆': { r: 2.0, myHit: 0.70, foeHit: 0.50 },   // 笨打法約九成勝
-        '普通': { r: 1.3, myHit: 0.60, foeHit: 0.58 },   // 笨打法約六成半
-        '硬仗': { r: 1.1, myHit: 0.52, foeHit: 0.65 },   // 笨打法五五波，會用招才穩贏
-        '絕望': { r: 0.9, myHit: 0.45, foeHit: 0.72 },   // 笨打法約三成，逃跑是正解
+        '輕鬆': { rFloor: 1.10, myHit: 0.45, foeHit: 0.66 },
+        '普通': { rFloor: 0.80, myHit: 0.38, foeHit: 0.74 },
+        '硬仗': { rFloor: 0.55, myHit: 0.32, foeHit: 0.82 },
+        '絕望': { rFloor: 0.38, myHit: 0.26, foeHit: 0.90 },
     };
 
-    const DEFAULT_PLAYER = { name: '你', maxHp: 34, hp: 34, ac: 13, atk: 4, dmg: [1, 8, 3], spd: 3,
+    const DEFAULT_PLAYER = { name: '你', maxHp: 34, hp: 34, ac: 13, atk: 4, dmg: [1, 8, 3], spd: 3, luck: 1,
                              maxSp: 6, sp: 4, skills: ['flurry', 'pierce', 'sweep', 'mend'] };
 
     // 節奏：每一步都要看得見，快了像作弊、慢了像卡住
@@ -277,6 +284,7 @@
                     dmg:   mcDmg,
                     spd:   clamp(p.spd, [-5, 10], DEFAULT_PLAYER.spd),
                     maxSp: clamp(p.sp, [2, 9], DEFAULT_PLAYER.maxSp),
+                    luck:  clamp(p.luck, [0, 10], DEFAULT_PLAYER.luck),
                 };
                 ['hp', 'ac', 'atk'].forEach((k) => {
                     const lim = LIM[k === 'hp' ? 'mcHp' : k === 'ac' ? 'mcAc' : 'mcAtk'];
@@ -402,18 +410,23 @@
         const decay = (foes.length + 1) / (2 * foes.length);
         const incoming = foeDps * R * decay;                        // 打完這場，我方總共要挨多少
         const ratio = (me.hp + allyHp * 0.6) / Math.max(1, incoming);   // 血量池夠挨幾倍(隊友血打六折算,傷害會分攤)
-        if (ratio >= aim.r * 0.75 && ratio <= aim.r * 1.5) return null;   // 合理帶：只有真的離譜才動手
+        // 只擋兩種極端：撐不到打完（必死），和荒謬到沒有威脅（白給）。
+        //   中間一律不碰 —— 那段區間正是「你變強了所以這場變輕鬆」該被讀出來的地方。
+        //   上界拉到八倍才動：老手回頭打雜兵本來就該是白給，那是成長的回報，不是要修的 bug。
+        const CEIL = aim.rFloor * 8;
+        if (ratio >= aim.rFloor && ratio <= CEIL) return null;
+        const target = ratio < aim.rFloor ? aim.rFloor : CEIL;   // 只救到門檻本身，不多給
         // 血量和傷害各調一半（開根號）：ratio 同時對兩者敏感，全壓在單一項上會把形狀弄壞
         //   —— 只砍血會讓哥布林變成一刀一隻的紙片，只砍傷害則敵人變成打不死的沙包。
         //   下限 0.3：三隻圍毆一個算出來要 0.29，夾在 0.5 等於只修一半 —— 修一半的校準比不修更難查，
         //   因為它照樣回報「已校準」，數字看起來動過了，人還是被輪死。
-        const k = Math.min(2, Math.max(0.3, Math.sqrt(ratio / aim.r)));
+        const k = Math.min(2, Math.max(0.3, Math.sqrt(ratio / target)));
         foes.forEach((f) => {
             f.hp = f.maxHp = clamp(f.hp * k, LIM.hp, f.hp);
             f.dmg = scaleDice(f.dmg, k);
         });
         const after = ratio / (k * k);
-        return { ratio: +ratio.toFixed(2), aim: aim.r, k: +k.toFixed(2), after: +after.toFixed(2) };
+        return { ratio: +ratio.toFixed(2), aim: aim.rFloor, k: +k.toFixed(2), after: +after.toFixed(2) };
     }
 
     // 流程用的延時一律走這裡：S.gen 是這一場的序號，關閉或重開就 +1，
@@ -683,13 +696,20 @@
     // ================================================================
     //  一次攻擊 = 命中檢定 → 傷害骰
     // ================================================================
+    //  🍀 幸運改的是骰運本身，不是命中率：命中已經有 atk 那條軸了，再疊一個會變成「隱形的命中加值」。
+    //     它動的是會心與失手的門檻 —— 運氣好的人更常打出會心、更少手滑，這是同一個 d20 上另一種讀法。
+    //     0＝黴到會多手滑，1＝一般人（跟以前完全一樣），高了才開始有額外的好運。
+    function luckOf(u) { return Math.max(0, Math.min(10, u && u.luck != null ? u.luck : 1)); }
     function attackRoll(src, dst, opt) {
         opt = opt || {};
         const nat = d(20);
         const total = nat + src.atk + (opt.hitMod || 0);
         const ac = opt.acMul ? Math.ceil(dst.ac * opt.acMul) : dst.ac;
-        const crit = nat === 20;
-        const fumble = nat === 1;
+        const lk = luckOf(src);
+        const critAt = 20 - Math.floor(lk / 3);     // 0~2→只有 20，3~5→19 起，6~8→18 起，9~10→17 起
+        const fumbleAt = lk <= 0 ? 2 : 1;           // 運氣掛零的人：1 跟 2 都算手滑
+        const crit = nat >= critAt;
+        const fumble = !crit && nat <= fumbleAt;
         const hit = crit || (!fumble && total >= ac);
         return { nat, total, ac, crit, fumble, hit };
     }
