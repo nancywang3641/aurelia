@@ -81,7 +81,19 @@
     const CHARGE_LV = { '無': 0, '低': 0.12, '中': 0.22, '高': 0.34 };
     const FLEE_LV = { '易': 8, '中': 12, '難': 16 };
     // AI 只說「這是什麼等級的仗」，實際數字由程式對著玩家現況調（見 calibrate）
-    const AIM = { '輕鬆': 3.0, '普通': 2.0, '硬仗': 1.35, '絕望': 0.75 };
+    //   r      ＝血量池目標（打完全場、我方血量夠挨幾倍）。旁邊的百分比是模擬 4000 場量出來的
+    //            「最笨打法」勝率——純攻擊、不用技能不防禦不換目標，也就是勝率下限。
+    //   myHit  ＝玩家該打得中的機率下限。這欄是「一排未命中」的解藥：玩家的命中加值是固定的，
+    //            AI 卻能把 ac 填到 22（＝15% 命中），而砍血砍傷害補不回打不中——敵人再薄，
+    //            打不中就是拖長回合、多挨幾輪。
+    //   foeHit ＝敵人打中玩家的機率上限。三隻圍毆時這欄比什麼都重要：一回合三次七成，
+    //            等於每回合固定挨兩下。
+    const AIM = {
+        '輕鬆': { r: 2.0, myHit: 0.70, foeHit: 0.50 },   // 笨打法約九成勝
+        '普通': { r: 1.3, myHit: 0.60, foeHit: 0.58 },   // 笨打法約六成半
+        '硬仗': { r: 1.1, myHit: 0.52, foeHit: 0.65 },   // 笨打法五五波，會用招才穩贏
+        '絕望': { r: 0.9, myHit: 0.45, foeHit: 0.72 },   // 笨打法約三成，逃跑是正解
+    };
 
     const DEFAULT_PLAYER = { name: '你', maxHp: 34, hp: 34, ac: 13, atk: 4, dmg: [1, 8, 3], spd: 3,
                              maxSp: 6, sp: 4, skills: ['flurry', 'pierce', 'sweep', 'mend'] };
@@ -289,31 +301,66 @@
     // ── 難度校準 ──
     //  AI 配數值時看不到玩家現在多強，配出來常常一面倒。它只負責說「這是什麼等級的仗」，
     //  實際數字在這裡對著玩家當下的血量/命中/輸出調整，並保留敵人之間的相對強弱。
-    function calibrate(foes, me, aim, allies) {
-        if (!aim || !foes.length) return null;
-        const hitRate = (ac) => Math.min(0.95, Math.max(0.05, (21 - (ac - me.atk)) / 20));
+    //  兩段式：先把「打得中／被打中」的機率壓進合理帶，再用血量與傷害調整體強弱。
+    //  順序不能反 —— 命中率是後面算強弱比的輸入，先修過才算得準。
+    function calibrate(foes, me, aim, allies, notes) {
+        if (!foes.length) return null;
+        aim = aim || AIM['普通'];   // AI 漏寫 difficulty 也要校準：完全沒校準的那種仗才是會把人輪死的那種
+        const hitRate = (ac, atk) => Math.min(0.95, Math.max(0.05, (21 - (ac - atk)) / 20));
         const avg = ([n, s, b]) => n * (s + 1) / 2 + b;
+
+        // ── ① 命中率水位 ──
+        //  整組平移而不是逐隻夾平：石魔像本來就該比黏液怪難打中，超標的是整體水位，
+        //  不是敵人之間的相對差距。夾平會把 AI 配的強弱層次抹掉。
+        const acFor = (hit) => me.atk + 21 - 20 * hit;              // 反解：想要這個命中率，ac 該是多少
+        //  單挑放寬：一對一每回合只挨一下，磨得起 ——「這頭目很硬」的手感該留著。
+        //  圍毆就不行了，多磨一回合就多挨 n 次，打不中直接滾成必死。
+        const myHit = foes.length > 1 ? aim.myHit : aim.myHit - 0.08;
+        const avgAc = foes.reduce((a, f) => a + f.ac, 0) / foes.length;
+        const acDrop = Math.round(avgAc - acFor(myHit));
+        if (acDrop > 0) {
+            const hardest = acFor(Math.max(0.35, myHit - 0.15));       // 全場最硬的那隻也要打得中
+            foes.forEach((f) => { f.ac = Math.min(hardest, clamp(f.ac - acDrop, LIM.ac, f.ac)); });
+            notes.push('敵人防禦整組下調 ' + acDrop + '：你原本平均只有 '
+                     + Math.round(hitRate(avgAc, me.atk) * 100) + '% 打得中');
+        }
+        // 敵人的命中加值同理，方向相反：太高＝你每回合固定挨滿，人數越多越致命。
+        const atkFor = (hit) => me.ac - 21 + 20 * hit;
+        const avgAtk = foes.reduce((a, f) => a + f.atk, 0) / foes.length;
+        const atkDrop = Math.round(avgAtk - atkFor(aim.foeHit));
+        if (atkDrop > 0) {
+            foes.forEach((f) => { f.atk = clamp(f.atk - atkDrop, LIM.atk, f.atk); });
+            notes.push('敵人命中整組下調 ' + atkDrop + '：原本每擊有 '
+                     + Math.round(hitRate(me.ac, avgAtk) * 100) + '% 打中你');
+        }
+
+        // ── ② 整體強弱 ──
         // ⚔️ 隊友算進強弱比:他們貢獻輸出(六成命中概算)、也用血量幫全隊分攤傷害——
         //    不算的話,帶滿隊友的「硬仗」會被校準成白給
         const mates = allies || [];
         const allyDps = mates.reduce((a, u) => a + avg(u.dmg) * 0.6, 0);
         const allyHp = mates.reduce((a, u) => a + u.hp, 0);
-        const myDps = avg(me.dmg) * (foes.reduce((a, f) => a + hitRate(f.ac), 0) / foes.length) + allyDps;
+        const myDps = avg(me.dmg) * (foes.reduce((a, f) => a + hitRate(f.ac, me.atk), 0) / foes.length) + allyDps;
         const foeHp = foes.reduce((a, f) => a + f.hp, 0);
-        const foeDps = foes.reduce((a, f) => a + avg(f.dmg) * hitRate(me.ac + (0 - f.atk) + me.atk), 0);
+        const foeDps = foes.reduce((a, f) => a + avg(f.dmg) * hitRate(me.ac, f.atk), 0);
         const R = foeHp / Math.max(1, myDps);                       // 我方要打幾回合才清場
-        const Sv = (me.hp + allyHp * 0.6) / Math.max(0.5, foeDps);  // 全隊能撐幾回合(傷害會分攤,隊友血打六折算)
-        const ratio = Sv / Math.max(0.5, R);
-        if (ratio >= aim * 0.6 && ratio <= aim * 1.6) return null;   // 合理帶放寬：只有真的離譜才動手
+        // 敵人是一隻一隻倒的，火力隨場上人數遞減 —— 全程總傷害不是「滿編火力 × 全部回合」。
+        //   不打這個折，三隻雜兵會被算成滅團級，校準就把牠們砍成一刀一隻的紙片。
+        const decay = (foes.length + 1) / (2 * foes.length);
+        const incoming = foeDps * R * decay;                        // 打完這場，我方總共要挨多少
+        const ratio = (me.hp + allyHp * 0.6) / Math.max(1, incoming);   // 血量池夠挨幾倍(隊友血打六折算,傷害會分攤)
+        if (ratio >= aim.r * 0.75 && ratio <= aim.r * 1.5) return null;   // 合理帶：只有真的離譜才動手
         // 血量和傷害各調一半（開根號）：ratio 同時對兩者敏感，全壓在單一項上會把形狀弄壞
         //   —— 只砍血會讓哥布林變成一刀一隻的紙片，只砍傷害則敵人變成打不死的沙包。
-        const k = Math.min(2, Math.max(0.5, Math.sqrt(ratio / aim)));
+        //   下限 0.3：三隻圍毆一個算出來要 0.29，夾在 0.5 等於只修一半 —— 修一半的校準比不修更難查，
+        //   因為它照樣回報「已校準」，數字看起來動過了，人還是被輪死。
+        const k = Math.min(2, Math.max(0.3, Math.sqrt(ratio / aim.r)));
         foes.forEach((f) => {
             f.hp = f.maxHp = clamp(f.hp * k, LIM.hp, f.hp);
             f.dmg = scaleDice(f.dmg, k);
         });
         const after = ratio / (k * k);
-        return { ratio: +ratio.toFixed(2), aim: aim, k: +k.toFixed(2), after: +after.toFixed(2) };
+        return { ratio: +ratio.toFixed(2), aim: aim.r, k: +k.toFixed(2), after: +after.toFixed(2) };
     }
 
     // 流程用的延時一律走這裡：S.gen 是這一場的序號，關閉或重開就 +1，
@@ -980,12 +1027,12 @@
             else (S.me.skills || []).forEach(k => { if (SKILLS[k]) S.skills[k] = SKILLS[k]; });
 
             // 場地：逃跑難度＋難度校準（AI 說等級，數字對著玩家現況調）
-            if (field) {
-                S.fleeDC = field.flee;
-                const cal = calibrate(S.foes, S.me, field.aim, S.allies);
-                if (cal) S.notes.push('難度校準：原本強弱比 ' + cal.ratio + '（目標 ' + cal.aim + '）'
-                                    + ' → 敵人血量 ×' + cal.k + '，校準後約 ' + cal.after);
-            }
+            //   校準無條件跑：綁在 [Field] 上的時候，AI 一漏寫這行整場就零校準，
+            //   而漏寫最常發生在它忙著配一堆敵人的那種場合——正好是最需要校準的那種。
+            if (field) S.fleeDC = field.flee;
+            const cal = calibrate(S.foes, S.me, field && field.aim, S.allies, S.notes);
+            if (cal) S.notes.push('難度校準：原本強弱比 ' + cal.ratio + '（目標 ' + cal.aim + '）'
+                                + ' → 敵人血量與傷害 ×' + cal.k + '，校準後約 ' + cal.after);
 
             host.appendChild(build());
             renderFoes(); renderMe(); renderAllies();
