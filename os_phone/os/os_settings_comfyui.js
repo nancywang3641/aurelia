@@ -331,21 +331,29 @@
                 }
             }
             // 把生成的圖縮成 ~256px JPEG 縮圖（避免 localStorage 爆肥）
+            // 🚨縮不出來就不要縮圖，絕對不能退回原圖：這些預設包存在 localStorage（全站共用 5MB），
+            //   一張沒縮成的原圖就是一兩 MB，足以把整個空間吃掉，之後所有 localStorage 寫入
+            //   （大廳小人皮膚就是其一）全部開始靜默失敗，而且完全查不出跟這裡有關。
+            const THUMB_MAX = 120 * 1024;
             function toThumb(dataUrl){
                 return new Promise(function(resolve){
                     try {
                         const img = new Image();
                         img.onload = function(){
-                            const max = 256; let w = img.width, h = img.height;
-                            if (w >= h) { if (w > max){ h = Math.round(h*max/w); w = max; } }
-                            else { if (h > max){ w = Math.round(w*max/h); h = max; } }
-                            const c = document.createElement('canvas'); c.width = w; c.height = h;
-                            c.getContext('2d').drawImage(img, 0, 0, w, h);
-                            resolve(c.toDataURL('image/jpeg', 0.7));
+                            try {
+                                const max = 256; let w = img.width, h = img.height;
+                                if (w >= h) { if (w > max){ h = Math.round(h*max/w); w = max; } }
+                                else { if (h > max){ w = Math.round(w*max/h); h = max; } }
+                                const c = document.createElement('canvas'); c.width = w; c.height = h;
+                                c.getContext('2d').drawImage(img, 0, 0, w, h);
+                                const out = c.toDataURL('image/jpeg', 0.7);
+                                // 壓完還是過大（多半是畫布被污染或格式沒吃到）→ 寧可沒有縮圖
+                                resolve(out && out.length <= THUMB_MAX ? out : '');
+                            } catch(e){ resolve(''); }
                         };
-                        img.onerror = function(){ resolve(dataUrl); };
+                        img.onerror = function(){ resolve(''); };
                         img.src = dataUrl;
-                    } catch(e){ resolve(dataUrl); }
+                    } catch(e){ resolve(''); }
                 });
             }
             function cardStatus(i, msg){

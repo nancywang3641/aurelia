@@ -340,7 +340,11 @@
         const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         await _b.idbPut(id, data);
         // 只存大廳小人皮膚，不碰對話立繪(a.portrait)——那是另一套東西(Rae定案 2026-07-17)
-        _b.saveSkin(key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
+        const ok = _b.saveSkin(key, { kind: kind === 'sheet' ? 'sheet' : 'img', ref: { idb: id } });
+        // 索引沒寫進去(localStorage 滿了)就把剛落地的圖收回來：留著也沒人引用得到，
+        //   只會在 IndexedDB 裡變成孤兒，而且下一輪重生又會再堆一張。
+        if (ok === false) { try { await _b.idbDel(id); } catch (e) {} return false; }
+        return true;
     }
 
     // ── 🤖 無人值守版立姿生成（世界門旅人自動補圖）──
@@ -355,8 +359,9 @@
         let final;
         try { final = await _renderSpriteImage(prompt, src, preset, 'img'); } catch (e) { return false; }
         if (!final) return false;
-        await _saveSpriteSkin(key, final, 'img');
-        return true;   // 只負責生成＋存皮膚；要不要立刻換裝由呼叫方決定(它才知道小人生成了沒、場景還在不在)
+        // 存不下要照實回 false：以前不管存成功沒都回 true，呼叫端就以為「這位已經有圖了」，
+        //   下次進大廳一查又沒有，於是再燒一輪 —— 生成重複、畫面剪影，兩個症狀都從這裡來。
+        return await _saveSpriteSkin(key, final, 'img');   // 只負責生成＋存皮膚；要不要立刻換裝由呼叫方決定
     }
 
     function _wireDressGen(box, a) {
