@@ -1,48 +1,96 @@
 /* ================================================================
    vn_battle.css — VN 戰鬥面板（零 API、純本地骰）
    配色沿用大廳：深褐黑底 + 米白字 + 金黃強調
+
+   版型：四條橫帶疊起來 —— 順序條 / 舞台 / 戰鬥紀錄 / 你＋行動。
+   只有「舞台」那一層會換方向：寬畫面左右對峙（左你、右敵人），
+   窄畫面上下（上敵下我）。其餘三條兩邊共用。
+
+   判準走 @container 而不是 @media：VN 舞台在酒館版是裝在手機框浮窗裡的，
+   量視窗寬度會回報桌機尺寸，面板明明很窄卻挑到寬版型。
    ================================================================ */
 
 .vnb-root { position:absolute; inset:0; z-index:9000; display:flex; flex-direction:column;
-  background:linear-gradient(180deg,#17140f 0%,#241d15 55%,#171310 100%); color:#f3ead8;
-  font-family:inherit; overflow:hidden; user-select:none; }
+  background:#17140f; color:#f3ead8;
+  font-family:inherit; overflow:hidden; user-select:none;
+  container-type:inline-size; }
 .vnb-root.vnb-out { animation:vnb-fadeout .32s ease forwards; }
 @keyframes vnb-fadeout { to { opacity:0; } }
 .vnb-root * { box-sizing:border-box; }
 
-/* ── 頂部：回合數 + 出手順序 ── */
-.vnb-top { flex:none; padding:10px 12px 8px; border-bottom:1px solid rgba(243,234,216,.14); }
-.vnb-turnline { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-.vnb-round { font-size:12px; letter-spacing:.08em; color:#c9b98f; }
-.vnb-round b { color:#ffd27a; font-size:15px; margin:0 3px; }
-.vnb-order { display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; }
-.vnb-order::-webkit-scrollbar { height:0; }
-.vnb-ochip { flex:none; display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:999px;
-  background:rgba(243,234,216,.09); font-size:11px; color:#d8cdb4; white-space:nowrap;
-  border:1px solid transparent; transition:all .2s ease; }
-.vnb-ochip.now { background:rgba(255,210,122,.18); border-color:rgba(255,210,122,.55); color:#ffe1a0; }
-.vnb-ochip.dead { opacity:.32; text-decoration:line-through; }
+/* ── 背景層 ── 借當下那一幕的 VN 背景（由 JS 把 game-bg 的圖複製過來），
+   壓暗＋去彩讓前景讀得清楚。不加 blur —— 糊的背景只該配退路圖，真圖糊掉會像沒載入。 */
+.vnb-bg { position:absolute; inset:0; z-index:0; background:#100d0a center 42% / cover no-repeat;
+  filter:saturate(.5); }
+.vnb-bg::after { content:""; position:absolute; inset:0;
+  background:
+    linear-gradient(180deg, rgba(10,8,6,.86) 0%, rgba(10,8,6,.66) 38%, rgba(10,8,6,.95) 100%),
+    radial-gradient(120% 80% at 50% 32%, rgba(58,47,34,.42) 0%, rgba(16,13,10,.72) 70%); }
+/* 只把四條橫帶墊到背景之上，逐條指名 —— 用 :not(.vnb-bg) 那種廣泛寫法會連結算頁一起吃掉，
+   把它的 position:absolute 覆寫成 relative，整頁就掉進文件流、只蓋住下半截畫面。 */
+.vnb-top, .vnb-stage, .vnb-log, .vnb-foot { position:relative; z-index:1; }
 
-/* ── 敵人區 ── */
-.vnb-foes { flex:none; display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
-  padding:14px 12px 10px; }
-.vnb-foe { position:relative; width:132px; padding:10px 10px 8px; border-radius:12px; cursor:pointer;
-  background:rgba(38,31,24,.86); border:1px solid rgba(243,234,216,.16); transition:all .18s ease; }
-.vnb-foe:hover { border-color:rgba(255,210,122,.5); }
-.vnb-foe.target { border-color:#ffd27a; background:rgba(58,45,30,.92); box-shadow:0 0 0 1px rgba(255,210,122,.35); }
+/* ── ① 頂部：回合數 + 出手順序 ── */
+.vnb-top { flex:none; display:flex; align-items:center; gap:14px;
+  padding:11px 16px; border-bottom:1px solid rgba(243,234,216,.14);
+  background:linear-gradient(180deg, rgba(12,10,8,.7), rgba(12,10,8,.25)); }
+.vnb-round { flex:none; font-size:12px; letter-spacing:.08em; color:#c9b98f; }
+.vnb-round b { color:#ffd27a; font-size:17px; margin:0 4px; }
+.vnb-order { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+.vnb-order::-webkit-scrollbar { height:0; }
+.vnb-ochip { flex:none; display:flex; align-items:center; gap:5px; padding:5px 12px; border-radius:999px;
+  background:rgba(243,234,216,.07); font-size:11.5px; color:#d8cdb4; white-space:nowrap;
+  border:1px solid transparent; transition:all .2s ease; }
+.vnb-ochip i { font-size:10px; opacity:.75; }
+.vnb-ochip.now { background:rgba(255,210,122,.16); border-color:rgba(255,210,122,.6); color:#ffe1a0;
+  box-shadow:0 0 0 3px rgba(255,210,122,.08); }
+.vnb-ochip.dead { opacity:.3; text-decoration:line-through; }
+
+/* ── ② 舞台：唯一會換方向的一層 ── */
+.vnb-stage { position:relative; flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
+  justify-content:space-between; gap:12px; padding:14px 14px 12px; }
+
+/* 我方（你＋隊友）。窄畫面 order:2 排在敵人下方＝上敵下我，對峙感留著。 */
+.vnb-side { order:2; flex:none; display:flex; flex-direction:column; align-items:center; gap:8px; }
+/* 金色描邊剪影：填色壓暗、只留輪廓 */
+.vnb-hero-art { flex:none; display:flex; align-items:center; justify-content:center;
+  color:rgba(14,11,8,.55); -webkit-text-stroke:1.5px rgba(229,192,122,.45);
+  font-size:62px; line-height:1; }
+.vnb-hero-nm { flex:none; padding:5px 26px; border-radius:999px; font-size:13px; color:#f3ead8;
+  background:rgba(20,16,12,.75); border:1px solid rgba(255,210,122,.42);
+  box-shadow:0 2px 14px rgba(0,0,0,.5); }
+
+/* 敵人卡列。
+   折行而不是橫向捲：六隻的時候後三隻會捲到畫面外，而畫面上不會有任何「還有敵人」的提示，
+   但「還剩幾隻」正是戰鬥裡最該一眼看到的東西。
+   padding-top 留給「蓄力中」那顆標籤 —— 它負 top 掛在卡片外面，容器一裁就沒了，
+   而那顆標籤是玩家該按防禦的唯一提示。 */
+.vnb-foes { order:1; flex:none; min-width:0;
+  display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; justify-content:center;
+  padding-top:14px; }
+.vnb-foe { position:relative; flex:1 1 96px; min-width:96px; max-width:190px;
+  padding:12px 10px 10px; border-radius:13px; cursor:pointer;
+  background:linear-gradient(180deg, rgba(44,36,27,.9), rgba(28,23,17,.9));
+  border:1px solid rgba(243,234,216,.16); transition:all .18s ease; }
+.vnb-foe:hover { border-color:rgba(255,210,122,.45); }
+.vnb-foe.target { border-color:rgba(255,210,122,.85);
+  background:linear-gradient(180deg, rgba(58,46,32,.95), rgba(34,27,19,.95));
+  box-shadow:0 0 0 3px rgba(255,210,122,.12), 0 6px 20px rgba(0,0,0,.45); }
 .vnb-foe.dead { opacity:.35; pointer-events:none; filter:grayscale(1); }
 .vnb-foe.hurt { animation:vnb-shake .34s ease; }
 @keyframes vnb-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
-.vnb-foe-ic { display:block; text-align:center; font-size:26px; color:#e5c07a; margin-bottom:5px; }
-.vnb-foe-nm { font-size:13px; text-align:center; margin-bottom:6px; color:#f3ead8; }
+.vnb-foe-ic { display:block; text-align:center; font-size:30px; color:#e5c07a; margin-bottom:7px; }
+.vnb-foe.dead .vnb-foe-ic { color:#8b8069; }
+.vnb-foe-nm { font-size:12.5px; line-height:1.35; text-align:center; margin-bottom:8px; color:#f3ead8; }
 .vnb-foe-nm span { color:#a99b7c; font-size:11px; margin-left:2px; }
 /* display:block 不能省：我方血條掛在 <span> 上，inline 元素吃不到 height＝整條看不見 */
-.vnb-bar { display:block; height:7px; border-radius:999px; background:rgba(0,0,0,.45); overflow:hidden; }
+.vnb-bar { display:block; height:7px; border-radius:999px; background:rgba(0,0,0,.5); overflow:hidden; }
 .vnb-bar i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#b8433a,#e0654f);
   transition:width .45s cubic-bezier(.2,.7,.3,1); }
-.vnb-foe-hp { text-align:center; font-size:10px; color:#a99b7c; margin-top:3px; }
-.vnb-tmark { position:absolute; top:-7px; right:-5px; width:20px; height:20px; border-radius:50%;
-  background:#ffd27a; color:#241d15; font-size:10px; display:none; align-items:center; justify-content:center; }
+.vnb-foe-hp { text-align:center; font-size:10.5px; color:#a99b7c; margin-top:4px; }
+.vnb-tmark { position:absolute; top:-8px; right:-6px; width:22px; height:22px; border-radius:50%;
+  background:#ffd27a; color:#241d15; font-size:10px; display:none; align-items:center; justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.5); }
 .vnb-foe.target .vnb-tmark { display:flex; }
 
 /* 蓄力預告：下一擊會很重，玩家該按防禦 —— 要一眼看到，所以整張卡都在呼吸 */
@@ -50,34 +98,31 @@
   animation:vnb-charge 1.1s ease-in-out infinite; }
 @keyframes vnb-charge { 0%,100% { box-shadow:0 0 0 0 rgba(224,101,79,.55); }
                         50% { box-shadow:0 0 14px 3px rgba(224,101,79,.5); } }
-.vnb-cmark { position:absolute; left:50%; top:-11px; transform:translateX(-50%); white-space:nowrap;
-  padding:2px 8px; border-radius:999px; background:#e0654f; color:#fff5ee; font-size:10px; font-weight:700; }
+.vnb-cmark { position:absolute; left:50%; top:-12px; transform:translateX(-50%); white-space:nowrap;
+  padding:2px 9px; border-radius:999px; background:#e0654f; color:#fff5ee; font-size:10px; font-weight:700; }
 .vnb-cmark i { font-size:9px; margin-right:2px; }
 
-/* ── 戰鬥日誌 ── */
-/* 貼底堆疊：戰鬥前期只有兩三行，靠上會留一大片空白。第一行 margin-top:auto 撐開，
-   內容多了照常往上長、也還捲得動（直接用 justify-content:flex-end 會裁掉頂部） */
-.vnb-log { flex:1 1 auto; min-height:60px; overflow-y:auto; padding:8px 14px;
-  display:flex; flex-direction:column;
-  border-top:1px solid rgba(243,234,216,.1); border-bottom:1px solid rgba(243,234,216,.1); }
-.vnb-log > .vnb-li:first-child { margin-top:auto; }
-.vnb-li { flex:none; }
-.vnb-log::-webkit-scrollbar { width:4px; }
-.vnb-log::-webkit-scrollbar-thumb { background:rgba(243,234,216,.2); border-radius:2px; }
-.vnb-li { font-size:12.5px; line-height:1.65; color:#cfc4ab; padding:1px 0;
-  animation:vnb-slidein .22s ease; }
-@keyframes vnb-slidein { from { opacity:0; transform:translateY(4px); } }
-.vnb-li b { color:#f3ead8; font-weight:600; }
-.vnb-li.hit em { color:#ff9e7a; font-style:normal; font-weight:700; }
-.vnb-li.crit { color:#ffd27a; }
-.vnb-li.miss { color:#8d846f; }
-.vnb-li.sys { color:#9fb8a3; }
-.vnb-li.dead { color:#e07a6a; }
+/* ── ⚔️ 隊友列：一人一張小卡,倒下灰掉不移除（「他倒在那裡」是戰況的一部分）── */
+.vnb-allies { flex:none; display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+.vnb-allies:empty { display:none; }
+.vnb-ally { display:flex; align-items:center; gap:7px; padding:4px 10px; border-radius:9px;
+  background:rgba(38,31,24,.86); border:1px solid rgba(243,234,216,.16); font-size:12px; color:#d8cdb4; }
+.vnb-ally i.fa-solid { color:#c9b98f; font-size:11px; }
+.vnb-ally .vnb-ally-nm { max-width:88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vnb-ally .vnb-bar { width:52px; height:6px; }
+.vnb-ally .vnb-bar i { background:linear-gradient(90deg,#4f8f5a,#7fc98a); }
+.vnb-ally .vnb-ally-hp { font-size:10px; color:#c9b98f; min-width:16px; text-align:right; }
+.vnb-ally.dead { opacity:.38; filter:grayscale(1); }
+.vnb-ally.hurt { animation:vnb-shake .34s ease; }
 
-/* ── 骰子浮層 ── */
-.vnb-dice { position:absolute; left:50%; top:44%; transform:translate(-50%,-50%) scale(.6);
+/* ── 骰子浮層 ── 跟結算數字共用舞台正中：兩者時序接力（骰子飛走、數字接上），不會同框 */
+.vnb-dice { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(.6);
   z-index:40; opacity:0; pointer-events:none; text-align:center; }
 .vnb-dice.show { animation:vnb-dicepop 1.05s cubic-bezier(.18,.9,.3,1) forwards; }
+/* 結算數字要接手時，骰子快速收掉（等它自己的動畫跑完會跟數字疊在一起）*/
+.vnb-dice.out { animation:none; opacity:0;
+  transform:translate(-50%,-50%) scale(.82) translateY(-16px);
+  transition:opacity .18s ease, transform .18s ease; }
 @keyframes vnb-dicepop {
   0% { opacity:0; transform:translate(-50%,-50%) scale(.55) rotate(-16deg); }
   18% { opacity:1; transform:translate(-50%,-50%) scale(1.12) rotate(4deg); }
@@ -93,10 +138,33 @@
 .vnb-dice.c20 .vnb-d20 { background:radial-gradient(circle at 34% 28%,#fff3d0,#ffd27a 55%,#e08a2e);
   box-shadow:0 0 30px rgba(255,190,90,.75); }
 .vnb-dice.c1 .vnb-d20 { background:radial-gradient(circle at 34% 28%,#d9cfc2,#8d8175 60%,#5c5349); color:#2a241d; }
-.vnb-dcap { margin-top:7px; font-size:13px; font-weight:700; color:#f3ead8; text-shadow:0 2px 6px rgba(0,0,0,.8); }
+/* 暗底：敵人多的時候卡片會鋪到舞台中央，這行字直接疊在卡片名字上會糊掉 */
+.vnb-dcap { position:relative; margin-top:7px; padding:2px 14px; font-size:13px; font-weight:700;
+  color:#f3ead8; text-shadow:0 2px 6px rgba(0,0,0,.8); }
+.vnb-dcap::before { content:""; position:absolute; inset:-4px -18px; z-index:-1;
+  background:radial-gradient(closest-side, rgba(8,6,5,.92), rgba(8,6,5,0)); }
 .vnb-dice.c20 .vnb-dcap { color:#ffd27a; }
 
-/* 傷害飄字 */
+/* ── 結算演出：骰子落定後，這一擊的結果放大講一次 ──
+   自帶暗底光暈：背景是場景圖，亮處配亮字會糊掉，而這行正是玩家唯一要讀的東西。 */
+.vnb-fx { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  z-index:42; text-align:center; pointer-events:none; opacity:0; transition:opacity .22s ease; }
+.vnb-fx.show { opacity:1; }
+.vnb-fx::before { content:""; position:absolute; inset:-32px -62px; z-index:-1;
+  background:radial-gradient(closest-side, rgba(8,6,5,.9), rgba(8,6,5,.55) 55%, rgba(8,6,5,0)); }
+.vnb-fx-n { font-size:66px; font-weight:800; line-height:1; color:#ff8f6e;
+  text-shadow:0 4px 24px rgba(0,0,0,.85); letter-spacing:-.02em;
+  animation:vnb-fxpop .34s cubic-bezier(.2,.9,.3,1); }
+@keyframes vnb-fxpop { from { transform:scale(.72); } 60% { transform:scale(1.08); } }
+.vnb-fx-n small { font-size:18px; font-weight:700; color:#e8785c; margin-left:8px; letter-spacing:.1em; }
+.vnb-fx-t { margin-top:12px; padding-top:11px; font-size:14px; color:#f3ead8;
+  border-top:1px solid rgba(243,234,216,.22); text-shadow:0 2px 10px rgba(0,0,0,.9); }
+.vnb-fx-t b { color:#ffd27a; }
+.vnb-fx.crit .vnb-fx-n { color:#ffd27a; text-shadow:0 0 30px rgba(255,190,90,.6), 0 4px 24px rgba(0,0,0,.85); }
+.vnb-fx.heal .vnb-fx-n { color:#8fd6a0; }
+.vnb-fx.miss .vnb-fx-n { font-size:40px; color:#a99b7c; }
+
+/* 傷害飄字（掛在被打的那張卡上，跟中央的結算數字分工：一個標位置、一個講結果）*/
 .vnb-pop { position:absolute; z-index:45; font-size:22px; font-weight:800; color:#ff8f6e;
   text-shadow:0 2px 8px rgba(0,0,0,.85); pointer-events:none;
   animation:vnb-popup 1s cubic-bezier(.2,.8,.3,1) forwards; }
@@ -105,41 +173,53 @@
 @keyframes vnb-popup { 0%{opacity:0;transform:translate(-50%,0) scale(.7)} 22%{opacity:1;transform:translate(-50%,-14px) scale(1.15)}
   40%{transform:translate(-50%,-18px) scale(1)} 100%{opacity:0;transform:translate(-50%,-48px) scale(.95)} }
 
-/* ── 我方狀態 ── */
-/* ── ⚔️ 隊友列：一人一張小卡,倒下灰掉不移除 ── */
-.vnb-allies { flex:none; display:flex; flex-wrap:wrap; gap:6px; padding:0 14px; }
-.vnb-allies:empty { display:none; }
-.vnb-ally { display:flex; align-items:center; gap:7px; padding:4px 10px; border-radius:9px;
-  background:rgba(38,31,24,.86); border:1px solid rgba(243,234,216,.16); font-size:12px; color:#d8cdb4; }
-.vnb-ally i.fa-solid { color:#c9b98f; font-size:11px; }
-.vnb-ally .vnb-ally-nm { max-width:88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.vnb-ally .vnb-bar { width:52px; height:6px; }
-.vnb-ally .vnb-bar i { background:linear-gradient(90deg,#4f8f5a,#7fc98a); }
-.vnb-ally .vnb-ally-hp { font-size:10px; color:#c9b98f; min-width:16px; text-align:right; }
-.vnb-ally.dead { opacity:.38; filter:grayscale(1); }
-.vnb-ally.hurt { animation:vnb-shake .34s ease; }
+/* ── ③ 戰鬥紀錄：窄→直向堆疊上下捲；寬→橫向並排。兩邊都不摺疊 ──
+   80px＝上下 padding 16 + 三行 63.75，讓捲動停在整行、不切半行字。 */
+.vnb-log { flex:none; display:flex; flex-direction:column; gap:0;
+  max-height:80px; overflow-y:auto; scrollbar-width:none; padding:8px 16px;
+  background:linear-gradient(180deg, rgba(10,8,6,.5), rgba(10,8,6,.75));
+  border-top:1px solid rgba(243,234,216,.12); border-bottom:1px solid rgba(243,234,216,.12); }
+.vnb-log::-webkit-scrollbar { width:0; }
+/* 貼底堆疊：開場只有兩三行，靠上會留白 */
+.vnb-log > .vnb-li:first-of-type { margin-top:auto; }
+/* 窄畫面不顯示「戰鬥紀錄」四個字：那裡是上下捲的，標題不是被捲走就是釘住蓋掉一行，
+   而日誌內容本身就讀得懂。橫向排列時它才是欄位標籤。 */
+.vnb-log-h { display:none; flex:none; font-size:11.5px; color:#c9b98f; letter-spacing:.1em; }
+.vnb-li { flex:none; font-size:12.5px; line-height:1.7; color:#cfc4ab;
+  animation:vnb-slidein .22s ease; }
+@keyframes vnb-slidein { from { opacity:0; transform:translateY(4px); } }
+.vnb-li b { color:#f3ead8; font-weight:600; }
+.vnb-li.hit em { color:#ff9e7a; font-style:normal; font-weight:700; }
+.vnb-li.crit { color:#ffd27a; }
+.vnb-li.miss { color:#8d846f; }
+.vnb-li.sys { color:#9fb8a3; }
+.vnb-li.dead { color:#e07a6a; }
 
-.vnb-me { flex:none; padding:10px 14px 6px; }
-.vnb-me-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
-.vnb-me-nm { font-size:13px; color:#f3ead8; flex:none; }
-.vnb-me-hp { display:block; flex:1 1 auto; }
-.vnb-me-hp .vnb-bar { height:11px; }
+/* ── ④ 底部：你的狀態 + 行動 ── */
+.vnb-foot { position:relative; flex:none; display:flex; flex-direction:column;
+  background:linear-gradient(180deg, rgba(12,10,8,.55), rgba(12,10,8,.9)); }
+.vnb-me { flex:none; display:grid; grid-template-columns:auto 1fr; column-gap:12px; row-gap:5px;
+  align-items:center; padding:10px 16px 4px; }
+.vnb-me-nm { grid-column:1 / -1; font-size:14px; color:#f3ead8; }
+.vnb-me-k { font-size:11px; color:#a99b7c; letter-spacing:.06em; }
+.vnb-me-hp { flex:none; display:flex; align-items:center; gap:10px; }
+.vnb-me-hp .vnb-bar { flex:0 0 200px; height:9px; }
 .vnb-me-hp .vnb-bar i { background:linear-gradient(90deg,#4f8f5a,#7fc98a); }
 .vnb-me-hp.low .vnb-bar i { background:linear-gradient(90deg,#b8433a,#e0654f); }
-.vnb-me-num { flex:none; font-size:12px; color:#c9b98f; min-width:58px; text-align:right; }
-.vnb-me-tags { display:flex; align-items:center; gap:8px; min-height:18px; }
-.vnb-tag { font-size:10.5px; padding:2px 7px; border-radius:999px;
+.vnb-me-num { flex:none; white-space:nowrap; font-size:12px; color:#c9b98f; }
+.vnb-me-tags { display:flex; align-items:center; gap:7px; flex-wrap:wrap; min-height:18px; }
+.vnb-tag { font-size:10.5px; padding:3px 9px; border-radius:999px; white-space:nowrap;
   background:rgba(126,175,200,.16); color:#a8cbdd; border:1px solid rgba(168,203,221,.3); }
 
 /* 氣力：點點比數字好讀 —— 要一眼看出「還夠不夠放那招」 */
-.vnb-sp { display:flex; align-items:center; gap:3px; font-size:10.5px; color:#a99b7c; }
-.vnb-sp i { width:8px; height:8px; border-radius:50%; background:rgba(243,234,216,.16);
+.vnb-sp { display:flex; align-items:center; gap:4px; }
+.vnb-sp i { width:11px; height:11px; border-radius:50%; background:rgba(243,234,216,.14);
   border:1px solid rgba(243,234,216,.22); transition:background .25s ease; }
-.vnb-sp i:first-of-type { margin-left:3px; }
-.vnb-sp i.on { background:#7fbede; border-color:#a8cbdd; box-shadow:0 0 5px rgba(127,190,222,.5); }
+.vnb-sp i.on { background:#7fbede; border-color:#a8cbdd; box-shadow:0 0 6px rgba(127,190,222,.5); }
 
-/* ── 技能抽屜：浮在行動列上方，刻意不做全屏遮罩，開著也還能點敵人改目標 ── */
-.vnb-skills { position:absolute; left:10px; right:10px; bottom:96px; z-index:50;
+/* ── 技能抽屜：貼在行動列上方（bottom:100% 而不是寫死像素——底部那條的高度會隨畫面變）。
+   刻意不做全屏遮罩：開著也還能點敵人改目標。 ── */
+.vnb-skills { position:absolute; left:10px; right:10px; bottom:100%; z-index:50;
   display:none; flex-direction:column; gap:5px; padding:7px; border-radius:13px;
   background:rgba(24,20,15,.97); border:1px solid rgba(243,234,216,.2);
   box-shadow:0 -8px 26px rgba(0,0,0,.55); animation:vnb-skillup .2s ease; }
@@ -159,17 +239,20 @@
   padding:3px 8px; border-radius:999px; background:rgba(126,175,200,.16); white-space:nowrap; }
 .vnb-sk-cost::before { content:'氣力 '; color:#7c8a93; }
 
-/* ── 行動列 ── */
-.vnb-acts { flex:none; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:8px 10px 14px; }
-.vnb-act { padding:10px 2px 8px; border-radius:11px; border:1px solid rgba(243,234,216,.2);
-  background:rgba(38,31,24,.9); color:#f3ead8; cursor:pointer; font-size:12px; font-family:inherit;
-  display:flex; flex-direction:column; align-items:center; gap:4px; transition:all .16s ease; }
-.vnb-act i { font-size:16px; color:#e5c07a; }
-.vnb-act:hover:not(:disabled) { background:rgba(58,45,30,.95); border-color:rgba(255,210,122,.55); }
+/* ── 行動列 ── 逃跑跟四個戰鬥動作分開：它不是「第五種打法」，誤按會直接結束這場仗 */
+.vnb-acts { flex:none; display:grid; grid-template-columns:repeat(4,1fr) auto; gap:8px;
+  padding:8px 16px 14px; }
+.vnb-act { padding:11px 4px 9px; border-radius:12px; border:1px solid rgba(243,234,216,.2);
+  background:rgba(38,31,24,.8); color:#f3ead8; cursor:pointer; font-family:inherit;
+  display:flex; flex-direction:column; align-items:center; gap:3px; transition:all .16s ease; }
+.vnb-act i { font-size:19px; color:#e5c07a; }
+.vnb-act span { font-size:14px; letter-spacing:.06em; }
+.vnb-act small { font-size:10.5px; color:#a99b7c; line-height:1.25; text-align:center; }
+.vnb-act:hover:not(:disabled) { background:rgba(58,46,32,.9); border-color:rgba(255,210,122,.6); }
 .vnb-act:active:not(:disabled) { transform:translateY(1px); }
 .vnb-act:disabled { opacity:.32; cursor:default; }
-.vnb-act small { font-size:9px; color:#a99b7c; line-height:1.2; text-align:center; }
-.vnb-act i { font-size:15px; }
+.vnb-act.flee { background:transparent; border-color:rgba(243,234,216,.13); padding-left:18px; padding-right:18px; }
+.vnb-act.flee i, .vnb-act.flee span { color:#a99b7c; }
 
 /* ── 結算 ── */
 /* 底下的戰鬥日誌不能透出來跟結算文字糊在一起 —— 疊一層近乎不透明的底＋模糊 */
@@ -190,6 +273,45 @@
 .vnb-end-btn { margin-top:4px; padding:11px 30px; border-radius:11px; border:none; cursor:pointer;
   background:#ffd27a; color:#241d15; font-size:14px; font-weight:700; font-family:inherit; }
 .vnb-end-btn:active { transform:translateY(1px); }
+
+/* ════════ 寬畫面：舞台翻成左右對峙 ════════ */
+@container (min-width: 620px) {
+  .vnb-stage { flex-direction:row; gap:24px; padding:16px 22px 14px; align-items:center; }
+  .vnb-side { order:1; flex:0 0 28%; }
+  .vnb-hero-art { font-size:108px; }
+  .vnb-hero-nm { padding:6px 34px; font-size:13.5px; }
+  /* 靠右：中間那條空白是結算數字的演出位，卡片鋪滿就會壓在數字上 */
+  .vnb-foes { order:2; flex:1 1 auto; align-items:center; justify-content:flex-end; }
+  .vnb-foe { flex:0 1 168px; }
+  .vnb-fx { left:44%; }
+  .vnb-dice { left:44%; }
+  .vnb-log { flex-direction:row; align-items:center; max-height:none;
+    overflow-x:auto; overflow-y:hidden; padding:9px 20px; }
+  .vnb-log-h { display:block; padding:0 14px 0 0; }
+  .vnb-li { padding:0 18px; border-left:1px solid rgba(243,234,216,.14); white-space:nowrap;
+    margin-top:0 !important; }
+  .vnb-li:first-of-type { border-left:0; }
+  /* 一行排完：名字 / 體力 / 氣力 / 狀態。grid 在這個寬度會把數字擠到換行。 */
+  /* 技能排兩欄：堆成一直條會從行動列一路蓋到敵人卡，而這個抽屜的前提就是「開著也還能點敵人改目標」 */
+  .vnb-skills.open { display:grid; grid-template-columns:1fr 1fr; }
+  .vnb-me { display:flex; align-items:center; flex-wrap:wrap; gap:10px 18px; padding:11px 20px 5px; }
+  .vnb-me-nm { flex:none; }
+  .vnb-acts { padding:10px 20px 16px; }
+}
+
+/* ════════ 很窄（手機直向）：小字縮短，別撞在一起 ════════ */
+@container (max-width: 419px) {
+  .vnb-act span { font-size:13px; }
+  .vnb-act small { font-size:9.5px; }
+  .vnb-acts { gap:5px; padding:8px 10px 12px; }
+  .vnb-act.flee { padding-left:10px; padding-right:10px; }
+  .vnb-stage { padding:12px 10px 8px; }
+  .vnb-log { padding:8px 12px; }
+  .vnb-me { padding:9px 12px 4px; }
+  .vnb-me-hp .vnb-bar { flex:1 1 auto; }
+  .vnb-d20 { width:74px; height:74px; font-size:29px; }
+  .vnb-fx-n { font-size:54px; }
+}
 
 /* ── LAB 專用：回傳字串預覽（正式模組不會有） ── */
 .vnb-wire { width:100%; max-width:340px; padding:9px 11px; border-radius:9px;

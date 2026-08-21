@@ -100,7 +100,7 @@
 
     // 節奏：每一步都要看得見，快了像作弊、慢了像卡住
     const T_DICE = 1050,      // 骰子動畫全長
-          T_RESOLVE = 430,    // 骰子飛出去到結算的空檔
+          T_RESOLVE = 600,    // 骰子飛出去到結算的空檔（要夠久：骰子定格在 340ms，太早接手就看不清擲了幾點）
           T_NEXT = 620,       // 結算完到換下一位
           T_FOE_THINK = 560;  // 敵人「思考」的停頓
 
@@ -391,46 +391,62 @@
     // ================================================================
     //  建面板
     // ================================================================
+    //  四條橫帶：順序條 / 舞台 / 戰鬥紀錄 / 你＋行動。
+    //  只有舞台那層會換方向（寬＝左右對峙、窄＝上敵下我），其餘三條兩邊共用同一份 DOM。
     function build() {
         const root = el('div', 'vnb-root');
+        const bg = el('div', 'vnb-bg');           // 當下那一幕的背景（開場時由 stageBg 填）
+        root.appendChild(bg);
 
+        // ① 回合數 + 出手順序
         const top = el('div', 'vnb-top');
-        top.appendChild(el('div', 'vnb-turnline', '<span class="vnb-round">第 <b>1</b> 回合</span>'));
+        top.appendChild(el('span', 'vnb-round', '第 <b>1</b> 回合'));
         const order = el('div', 'vnb-order');
         top.appendChild(order);
         root.appendChild(top);
 
+        // ② 舞台：敵人卡 / 我方（你＋隊友）/ 骰子 / 結算演出
+        const stage = el('div', 'vnb-stage');
         const foes = el('div', 'vnb-foes');
-        root.appendChild(foes);
+        const side = el('div', 'vnb-side',
+              '<div class="vnb-hero-art"><i class="fa-solid fa-user-large"></i></div>'
+            + '<div class="vnb-hero-nm"></div>');
+        const allies = el('div', 'vnb-allies');   // ⚔️ 隊友列（沒隊友時空著不占位）
+        side.appendChild(allies);
+        const dice = el('div', 'vnb-dice', '<div class="vnb-d20">20</div><div class="vnb-dcap"></div>');
+        const fx = el('div', 'vnb-fx');
+        [foes, side, dice, fx].forEach(n => stage.appendChild(n));
+        root.appendChild(stage);
 
-        const log = el('div', 'vnb-log');
+        // ③ 戰鬥紀錄
+        const log = el('div', 'vnb-log', '<span class="vnb-log-h">戰鬥紀錄</span>');
         root.appendChild(log);
 
-        const allies = el('div', 'vnb-allies');   // ⚔️ 隊友列（沒隊友時空著不占位）
-        root.appendChild(allies);
-
+        // ④ 你的狀態 + 行動
+        const foot = el('div', 'vnb-foot');
         const me = el('div', 'vnb-me');
         me.innerHTML =
-            '<div class="vnb-me-row">'
-          +   '<span class="vnb-me-nm"></span>'
-          +   '<span class="vnb-me-hp"><span class="vnb-bar"><i></i></span></span>'
-          +   '<span class="vnb-me-num"></span>'
-          + '</div>'
-          + '<div class="vnb-me-tags"></div>';
-        root.appendChild(me);
+            '<span class="vnb-me-nm"></span>'
+          + '<span class="vnb-me-k">體力</span>'
+          + '<span class="vnb-me-hp"><span class="vnb-bar"><i></i></span><span class="vnb-me-num"></span></span>'
+          + '<span class="vnb-me-k">氣力</span><span class="vnb-sp"></span>'
+          + '<span class="vnb-me-k vnb-k-tags">狀態</span><span class="vnb-me-tags"></span>';
+        foot.appendChild(me);
 
         const skills = el('div', 'vnb-skills');   // 技能抽屜（浮在行動列上方，不擋敵人卡＝還能改選目標）
-        root.appendChild(skills);
+        foot.appendChild(skills);
 
+        // 逃跑的成功率算得出來就寫出來：這顆按鈕的代價是結束整場仗，不能讓人瞎按
+        const fleeOdds = Math.round(Math.min(95, Math.max(5, (21 - (S.fleeDC - (S.me ? S.me.spd : 0))) / 20 * 100)));
         const acts = el('div', 'vnb-acts');
         [
             ['attack', 'fa-hand-fist',      '攻擊', ''],
             ['heavy',  'fa-bolt',           '重擊', '難中高傷'],
             ['skill',  'fa-wand-sparkles',  '技能', '耗氣力'],
             ['guard',  'fa-shield-halved',  '防禦', '傷害減半'],
-            ['flee',   'fa-person-running', '逃跑', ''],
+            ['flee',   'fa-person-running', '逃跑', fleeOdds + '% 成功'],
         ].forEach(([act, ic, label, sub]) => {
-            const b = el('button', 'vnb-act',
+            const b = el('button', 'vnb-act' + (act === 'flee' ? ' flee' : ''),
                 '<i class="fa-solid ' + ic + '"></i><span>' + label + '</span>'
                 + (sub ? '<small>' + sub + '</small>' : ''));
             b.type = 'button';
@@ -438,18 +454,19 @@
             b.addEventListener('click', () => act === 'skill' ? toggleSkills() : playerAct(act));
             acts.appendChild(b);
         });
-        root.appendChild(acts);
-
-        const dice = el('div', 'vnb-dice', '<div class="vnb-d20">20</div><div class="vnb-dcap"></div>');
-        root.appendChild(dice);
+        foot.appendChild(acts);
+        root.appendChild(foot);
 
         S.root = root;
-        S.el = { order, foes, log, me, acts, dice, skills, allies,
+        S.el = { order, foes, log, me, acts, dice, skills, allies, stage, fx, bg,
                  round: top.querySelector('.vnb-round b'),
+                 heroNm: side.querySelector('.vnb-hero-nm'),
                  meNm: me.querySelector('.vnb-me-nm'),
                  meBar: me.querySelector('.vnb-me-hp'),
                  meBarI: me.querySelector('.vnb-me-hp i'),
                  meNum: me.querySelector('.vnb-me-num'),
+                 meSp: me.querySelector('.vnb-sp'),
+                 meKTags: me.querySelector('.vnb-k-tags'),
                  meTags: me.querySelector('.vnb-me-tags') };
         return root;
     }
@@ -497,16 +514,48 @@
     function renderMe() {
         const m = S.me;
         S.el.meNm.textContent = m.name;
+        S.el.heroNm.textContent = m.name;
         const pct = Math.max(0, m.hp / m.maxHp * 100);
         S.el.meBarI.style.width = pct + '%';
         S.el.meBar.classList.toggle('low', pct <= 33);
         S.el.meNum.textContent = Math.max(0, m.hp) + ' / ' + m.maxHp;
         // 氣力用點點不用數字：要一眼看出「還夠不夠放那招」，數字得先減一次
-        let sp = '<span class="vnb-sp">氣力';
+        let sp = '';
         for (let i = 0; i < m.maxSp; i++) sp += '<i class="' + (i < m.sp ? 'on' : '') + '"></i>';
-        sp += '</span>';
-        S.el.meTags.innerHTML = sp
-            + (m.guard ? '<span class="vnb-tag"><i class="fa-solid fa-shield-halved"></i> 防禦姿態</span>' : '');
+        S.el.meSp.innerHTML = sp;
+        const tags = m.guard ? '<span class="vnb-tag"><i class="fa-solid fa-shield-halved"></i> 防禦姿態</span>' : '';
+        S.el.meTags.innerHTML = tags;
+        // 沒有狀態時連「狀態」兩個字一起收掉 —— 光留一個空欄位比不顯示還費解
+        S.el.meKTags.style.display = tags ? '' : 'none';
+        S.el.meTags.style.display = tags ? '' : 'none';
+    }
+
+    // ── 結算演出：骰子落定後，這一擊的結果放大講一次 ──
+    //  只演玩家自己的行動。敵人與隊友照舊走飄字＋日誌：一回合五個人各彈一次大數字，
+    //  「這一下是我打的」就沒有份量了。
+    function showFx(big, text, cls) {
+        if (!S.el || !S.el.fx) return;
+        const fx = S.el.fx;
+        // 骰子讓位：兩個演出共用舞台正中，靠接力而不是並排 —— 並排在窄畫面根本擺不下
+        if (S.el.dice) S.el.dice.className = 'vnb-dice out';
+        fx.innerHTML = '<div class="vnb-fx-n">' + big + '</div>'
+                     + '<div class="vnb-fx-t">' + text + '</div>';
+        fx.className = 'vnb-fx show' + (cls ? ' ' + cls : '');
+        const g = S.gen;
+        clearTimeout(S._fxT);
+        S._fxT = setTimeout(function () { if (g === S.gen) fx.className = 'vnb-fx'; }, 1500);
+    }
+
+    //  背景：借當下那一幕的 VN 背景（只取圖，不連立繪對話框一起透出來）。
+    //  拿不到就是純色底，不是錯誤——開場白那種還沒生成背景的場合本來就沒有圖。
+    function stageBg(el) {
+        try {
+            const src = document.getElementById('game-bg');
+            if (!src || !el) return;
+            const img = getComputedStyle(src).backgroundImage;
+            // 直接設 style，不走 CSS 自訂屬性：背景可能是 dataURL，大圖塞進變數會被靜靜丟掉
+            if (img && img !== 'none') el.style.backgroundImage = img;
+        } catch (e) {}
     }
 
     // ── 技能抽屜 ──
@@ -556,6 +605,9 @@
     // ── 骰子浮層：d20 的數字要看得見，這是這套玩法的靈魂 ──
     function showDice(v, caption) {
         const dice = S.el.dice;
+        // 上一擊的結算讓位：骰子跟結算數字同時在畫面上，會被讀成同一件事
+        //   （敵人擲出 1，旁邊還留著你上一擊的「命中，9 點傷害」＝看起來像擲 1 也能打中）
+        if (S.el.fx) S.el.fx.className = 'vnb-fx';
         dice.className = 'vnb-dice show' + (v === 20 ? ' c20' : v === 1 ? ' c1' : '');
         dice.querySelector('.vnb-d20').textContent = v;
         dice.querySelector('.vnb-dcap').textContent = caption || '';
@@ -638,6 +690,7 @@
 
         // 攻擊 / 重擊：重擊難命中但多一顆傷害骰
         const heavy = act === 'heavy';
+        S.actName = heavy ? '重擊' : '攻擊';   // 結算演出要講「你的什麼命中了」，verb 是動詞短語組不成句
         const t = S.target && !S.target.dead ? S.target : S.foes.find(f => !f.dead);
         if (!t) { finish('win'); return; }
         S.target = t; renderFoes();
@@ -653,8 +706,14 @@
         showDice(r.nat, r.crit ? '會心一擊！' : r.fumble ? '失手' : r.hit ? '命中' : '未命中');
         later(() => {
             const acTxt = opt.acMul ? '（' + r.total + ' vs 防禦 ' + r.ac + '·已破防）' : '（' + r.total + ' vs 防禦 ' + r.ac + '）';
+            const act = S.actName || '攻擊';
+            const tgtNm = t.name + (t.tagNo || '');
             if (r.hit) {
                 const dmg = applyDamage(S.me, t, r, opt);
+                showFx(dmg + '<small>DAMAGE</small>',
+                       r.crit ? '<b>會心一擊！</b>' + act + '命中<b>' + tgtNm + '</b>'
+                              : '你的<b>' + act + '</b>命中<b>' + tgtNm + '</b>',
+                       r.crit ? 'crit' : '');
                 say('<b>你</b> ' + verb + ' <b>' + t.name + '</b>' + acTxt
                   + (r.crit ? '<br>會心一擊！造成 <em>' + dmg + '</em> 點傷害' : '<br>命中，造成 <em>' + dmg + '</em> 點傷害'),
                   r.crit ? 'crit hit' : 'hit');
@@ -662,6 +721,10 @@
                 renderFoes();
                 if (t.dead) say('<b>' + t.name + '</b> 倒下了。', 'dead');
             } else {
+                showFx(r.fumble ? '落空' : '未命中',
+                       r.fumble ? '你的<b>' + act + '</b>重心一歪'
+                                : '你的<b>' + act + '</b>被<b>' + tgtNm + '</b>閃開了',
+                       'miss');
                 say('<b>你</b> ' + verb + ' <b>' + t.name + '</b>' + acTxt + '<br>'
                   + (r.fumble ? '重心一歪，完全落空。' : '被閃開了。'), 'miss');
             }
@@ -686,6 +749,7 @@
         S.busy = true; actsEnabled(false); closeSkills();
         S.me.guard = false;
         S.me.sp -= sk.cost;
+        S.actName = sk.name;
         if (S.beats && S.beats.skills.indexOf(sk.name) < 0) S.beats.skills.push(sk.name);
         renderMe();
         const done = () => later(checkOverThenNext, T_NEXT);
@@ -702,6 +766,9 @@
             tgt.hp = Math.min(tgt.maxHp, tgt.hp + heal);
             renderMe(); renderAllies();
             popNum(tgt === S.me ? S.el.meBar : tgt.el, '+' + (tgt.hp - before), 'heal');
+            showFx('+' + (tgt.hp - before),
+                   '<b>' + sk.name + '</b>　' + (tgt === S.me ? '你回復了體力' : '<b>' + tgt.name + '</b> 回復了體力'),
+                   'heal');
             say('<b>你</b> 使出 <b>' + sk.name + '</b>，替 <b>' + (tgt === S.me ? '自己' : tgt.name) + '</b> 回復 <em>'
                 + (tgt.hp - before) + '</em> 點體力。', 'sys');
             return done();
@@ -971,7 +1038,7 @@
             S.gen++;        // 新的一場：舊鏈全部作廢（沒這行，兩場的 nextTurn 會搶同一份 S）
             S.foes = []; S.allies = []; S.order = []; S.oi = 0; S.round = 1;
             S.busy = false; S.over = false; S.log = []; S.target = null;
-            S.notes = []; S.fleeDC = 12; S.skills = null;
+            S.notes = []; S.fleeDC = 12; S.skills = null; S.actName = '';
             S.beats = { skills: [], guardedBig: 0, crits: 0, allyDowns: [] };   // 過程重點：寫回正文的橋接句要用（AI 靠這個接續）
             S.onEnd = onEnd || null; S.host = host;
 
@@ -1035,6 +1102,7 @@
                                 + ' → 敵人血量與傷害 ×' + cal.k + '，校準後約 ' + cal.after);
 
             host.appendChild(build());
+            stageBg(S.el.bg);      // 背景吃當下那一幕（拿不到就純色底）
             renderFoes(); renderMe(); renderAllies();
 
             // 先攻：d20 + 敏捷，同分玩家先（讓玩家握有主動權比較好玩）
