@@ -897,12 +897,26 @@
     function _skins() {
         try { return JSON.parse(localStorage.getItem(SKIN_KEY) || '{}'); } catch (e) { return {}; }
     }
+    // 🚨回傳成不成功，別再靜靜吞掉。localStorage 有 5MB 上限，滿了以後這裡會拋 QuotaExceeded——
+    //   以前空 catch 掉了，於是：圖生好了→存不進去→下次進大廳查「生過沒」查不到→再生一次→
+    //   再存不進去。ComfyUI 白燒一輪又一輪，畫面上永遠是剪影，而且一句話都不會說。
     function _saveSkin(key, skin) {
         try {
             const all = _skins();
             if (skin) all[key] = skin; else delete all[key];
             localStorage.setItem(SKIN_KEY, JSON.stringify(all));
-        } catch (e) {}
+            return true;
+        } catch (e) {
+            const full = e && (e.name === 'QuotaExceededError' || e.code === 22 || /quota/i.test(e.message || ''));
+            console.warn('[LobbyStage] 皮膚存檔失敗' + (full ? '（本機空間滿了）' : '') + '：', key, e);
+            if (full) {
+                try {
+                    const T = window.toastr || (window.parent && window.parent.toastr);
+                    T && T.error('本機儲存空間滿了，小人的新造型存不下來', '大廳');
+                } catch (_) {}
+            }
+            return false;
+        }
     }
     // 換裝：把角色元素整顆換掉（img↔div 走路圖兩種形態）
     function _swapActorSrc(a, src) {

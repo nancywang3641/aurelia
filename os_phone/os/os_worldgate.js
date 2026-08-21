@@ -1320,6 +1320,13 @@
             if (!preset) return;                               // 包被刪或改名→整批停手，不要拿錯包亂生
             try {
                 const ok = await LD.genSpriteInto(key, _cleanSpriteAge(t.sprite), { src: cfg.src, preset: preset });
+                // 🚨存不下就整批停手。continue 下去只會把剩下的人也各燒一張圖然後全部丟掉，
+                //   而且下次進大廳從頭再來一輪 —— 圖重複、畫面剪影、算力全白費，都是從這裡滾出來的。
+                if (ok === false) {
+                    console.warn('[Worldgate] 旅人立姿存不下來（本機空間滿了？）→ 這批停手，不再燒圖');
+                    _toast('小人的新造型存不下來，本機空間可能滿了');
+                    return;
+                }
                 // 🚨換裝要等生成回來才找小人：旅人是錯峰上線的(最晚 2.6 秒)，開跑當下第一位還沒站上場。
                 //   期間若換世界/DIVE/關窗就別再動場上的人(皮膚已存好，下次進大廳照樣是本人)。
                 if (ok && gen === _travGen) {
