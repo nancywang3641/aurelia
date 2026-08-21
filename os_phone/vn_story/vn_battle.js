@@ -50,6 +50,20 @@
         [/盾|守|坦|衛|鎧|壁|護/,                 'tank'],
         [/刺|斥候|影|弓|獵|快|迅|殺手|狙|攻/,     'striker'],
     ];
+    // [Party] 點名的字串跟隊伍名單對得起來就算同一個人。
+    //   比對要放寬：模型常寫簡稱（隊伍裡是「艾爾瑟·莫雷」，它只寫「艾爾瑟」），
+    //   逐字比對會全部落空 → 明明點名了卻沒人上場，比不點名還難查。
+    function _sameName(a, b) {
+        a = String(a || '').trim(); b = String(b || '').trim();
+        if (!a || !b) return false;
+        if (a === b) return true;
+        const head = (s) => s.split(/[·・.\s]/)[0];
+        if (head(a).length >= 2 && head(a) === head(b)) return true;
+        if (a.length >= 2 && b.indexOf(a) >= 0) return true;   // 至少兩個字才做包含比對，不然單字會亂中
+        if (b.length >= 2 && a.indexOf(b) >= 0) return true;
+        return false;
+    }
+
     function allyRole(text) {
         for (const [re, r] of ROLE_HINTS) if (re.test(String(text || ''))) return r;
         return 'fighter';
@@ -180,7 +194,7 @@
     }
 
     function parseSpec(text) {
-        const spec = { enemies: [], skills: [], allies: [], field: null, notes: [] };
+        const spec = { enemies: [], skills: [], allies: [], field: null, notes: [], party: null };
         String(text || '').split(/\r?\n/).forEach((raw) => {
             const p = parseLine(raw);
             if (!p) return;
@@ -239,6 +253,14 @@
                     hp: hp, maxHp: hp, ac: clamp(p.ac, LIM.ac, base.ac),
                     atk: clamp(p.atk, LIM.atk, base.atk), dmg: dice.spec,
                     spd: clamp(p.spd, [-5, 10], base.spd) });
+            } else if (p.tag === 'party') {
+                // 🚨誰參戰只能由 AI 講。入隊 ≠ 在場，在場 ≠ 動手 ——
+                //   程式這端看不出「這一幕跟隊友分頭走了」或「他在旁邊但沒插手」，
+                //   猜錯就是把不該在的人擺上戰場，那一幕的劇情當場被砸掉。
+                const raw = String(p.name || p._extra || '').trim();
+                spec.party = /^(全部|全隊|所有人|all)$/i.test(raw) ? { all: true }
+                           : /^(無|沒有|none|-)$/i.test(raw) || !raw ? { names: [] }
+                           : { names: raw.split(/[、,，\/|]+/).map(x => x.trim()).filter(Boolean) };
             } else if (p.tag === 'field') {
                 spec.field = { name: p.name || '', flee: FLEE_LV[p.flee] != null ? FLEE_LV[p.flee] : 12,
                                aim: AIM[p.difficulty] || AIM[p.aim] || null };
@@ -1042,13 +1064,14 @@
             S.beats = { skills: [], guardedBig: 0, crits: 0, allyDowns: [] };   // 過程重點：寫回正文的橋接句要用（AI 靠這個接續）
             S.onEnd = onEnd || null; S.host = host;
 
-            let list = spec.enemies || ['goblin'], aiSkills = null, field = null, tagAllies = [];
+            let list = spec.enemies || ['goblin'], aiSkills = null, field = null, tagAllies = [], party = null;
             if (spec.raw) {
                 const p = parseSpec(spec.raw);
                 list = p.enemies;
                 if (p.skills.length) aiSkills = p.skills;
                 field = p.field;
                 tagAllies = p.allies || [];
+                party = p.party;
                 S.notes = p.notes.slice();
             }
 
@@ -1072,9 +1095,23 @@
             S.me.hp = Math.max(1, Math.min(S.me.hp, S.me.maxHp));   // 目前血高於上限＝血條撐爆容器，呼叫端給錯也要擋住
             S.target = S.foes[0];
 
-            // ⚔️ 隊友：<BattleStart> 自己帶了 [Ally|…]（劇情NPC助拳）就用它的,
-            //    否則用呼叫端傳進來的入隊旅人(spec.allies={name,job,skill})——旅人上場不必靠 AI 記得寫標籤。
-            const allyInfos = tagAllies.length ? tagAllies : (spec.allies || []).map(allyFromInfo);
+            // ⚔️ 隊友：<BattleStart> 自己帶了 [Ally|…]（劇情NPC助拳）就用它的，
+            //    否則從呼叫端傳進來的入隊旅人裡挑 —— 挑誰由 [Party|…] 決定。
+            // 🚨不能把整份入隊名單直接拉上場：入隊 ≠ 這一幕在場，在場 ≠ 這場動手。
+            //    分頭行動的那一幕照樣把所有人擺上戰場，等於當場把劇情演爛。
+            //    程式端沒有辦法判斷（劇本裡有沒有提到名字也不算數：有人在旁邊但沒參戰），
+            //    只有寫 <BattleStart> 的模型知道，所以這件事一定要它明說。
+            let mateSrc = spec.allies || [];
+            if (!party) {
+                if (mateSrc.length) console.warn('[VN_Battle] <BattleStart> 沒寫 [Party|…] → 這場當作沒有隊友（入隊 ' + mateSrc.length + ' 人）');
+                mateSrc = [];
+            } else if (!party.all) {
+                const want = party.names || [];
+                mateSrc = mateSrc.filter(m => want.some(n => _sameName(n, m && m.name)));
+                const missed = want.filter(n => !(spec.allies || []).some(m => _sameName(n, m && m.name)));
+                if (missed.length) S.notes.push('[Party] 點名了不在隊伍裡的人：' + missed.join('、'));
+            }
+            const allyInfos = tagAllies.length ? tagAllies : mateSrc.map(allyFromInfo);
             S.allies = allyInfos.slice(0, 4).map(a =>
                 Object.assign({}, a, { side: 'ally', maxHp: a.maxHp || a.hp, hp: a.hp, dead: false, el: null }));
 
