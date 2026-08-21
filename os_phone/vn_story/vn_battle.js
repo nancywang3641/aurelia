@@ -131,7 +131,10 @@
     //  <BattleStart> 解析：AI 開場配一次數值，這裡負責讀懂它、擋住離譜值
     // ================================================================
     //  合法上下限。ac 是唯一會讓戰鬥「打不完」的欄位（玩家 d20+atk 有天花板），夾得最緊。
+    //   mcXxx＝玩家自己的上下限，夾得比敵人窄：玩家的命中加值是整個系統的基準線，
+    //   它一往上跑，敵人的 ac 就得跟著疊高才有挑戰，而 ac 一高就回到「一排未命中」那個老問題。
     const LIM = { hp: [1, 999], ac: [5, 22], atk: [0, 15], cost: [0, 9],
+                  mcHp: [12, 80], mcAc: [8, 18], mcAtk: [0, 8],
                   dn: [1, 10], ds: [2, 100], db: [-5, 40] };
     const clamp = (v, [lo, hi], dft) => {
         const n = Number(v);
@@ -194,7 +197,7 @@
     }
 
     function parseSpec(text) {
-        const spec = { enemies: [], skills: [], allies: [], field: null, notes: [], party: null };
+        const spec = { enemies: [], skills: [], allies: [], field: null, notes: [], party: null, mc: null };
         String(text || '').split(/\r?\n/).forEach((raw) => {
             const p = parseLine(raw);
             if (!p) return;
@@ -253,6 +256,34 @@
                     hp: hp, maxHp: hp, ac: clamp(p.ac, LIM.ac, base.ac),
                     atk: clamp(p.atk, LIM.atk, base.atk), dmg: dice.spec,
                     spd: clamp(p.spd, [-5, 10], base.spd) });
+            } else if (p.tag === 'mc') {
+                // 玩家這一場的身手：職業、裝備、傷勢、有沒有被綁住，都靠這行反映。
+                // 🚨命中加值(atk)夾得比敵人窄得多：玩家的 atk 是整個系統的基準線，
+                //   它一高，敵人的 ac 就得跟著往上疊才有挑戰，而 ac 一高就回到「一排未命中」。
+                const dice = parseDice(p.dmg, DEFAULT_PLAYER.dmg);
+                if (dice.bad) spec.notes.push('你的傷害「' + p.dmg + '」看不懂，用預設 ' + diceTxt(dice.spec));
+                // 玩家單擊的平均上限比敵人低得多：這個數字是校準敵人血量的分母，
+                //   一膨脹，敵人就得跟著被灌成幾百血才撐得住一回合，數字全部失去手感。
+                let mcDmg = dice.spec;
+                if (avgOf(mcDmg) > 14) {
+                    const was = diceTxt(mcDmg);
+                    mcDmg = capDice(mcDmg, 14);
+                    spec.notes.push('你的傷害 ' + was + ' 太高，壓成 ' + diceTxt(mcDmg));
+                }
+                spec.mc = {
+                    maxHp: clamp(p.hp, LIM.mcHp, DEFAULT_PLAYER.maxHp),
+                    ac:    clamp(p.ac, LIM.mcAc, DEFAULT_PLAYER.ac),
+                    atk:   clamp(p.atk, LIM.mcAtk, DEFAULT_PLAYER.atk),
+                    dmg:   mcDmg,
+                    spd:   clamp(p.spd, [-5, 10], DEFAULT_PLAYER.spd),
+                    maxSp: clamp(p.sp, [2, 9], DEFAULT_PLAYER.maxSp),
+                };
+                ['hp', 'ac', 'atk'].forEach((k) => {
+                    const lim = LIM[k === 'hp' ? 'mcHp' : k === 'ac' ? 'mcAc' : 'mcAtk'];
+                    const got = k === 'hp' ? spec.mc.maxHp : spec.mc[k];
+                    if (String(p[k] || '') && got !== Math.round(Number(p[k])))
+                        spec.notes.push('你的' + ({ hp: '體力', ac: '防禦', atk: '命中' })[k] + ' ' + p[k] + ' 夾到 ' + got);
+                });
             } else if (p.tag === 'party') {
                 // 🚨誰參戰只能由 AI 講。入隊 ≠ 在場，在場 ≠ 動手 ——
                 //   程式這端看不出「這一幕跟隊友分頭走了」或「他在旁邊但沒插手」，
@@ -1064,7 +1095,7 @@
             S.beats = { skills: [], guardedBig: 0, crits: 0, allyDowns: [] };   // 過程重點：寫回正文的橋接句要用（AI 靠這個接續）
             S.onEnd = onEnd || null; S.host = host;
 
-            let list = spec.enemies || ['goblin'], aiSkills = null, field = null, tagAllies = [], party = null;
+            let list = spec.enemies || ['goblin'], aiSkills = null, field = null, tagAllies = [], party = null, mcCfg = null;
             if (spec.raw) {
                 const p = parseSpec(spec.raw);
                 list = p.enemies;
@@ -1072,6 +1103,7 @@
                 field = p.field;
                 tagAllies = p.allies || [];
                 party = p.party;
+                mcCfg = p.mc;
                 S.notes = p.notes.slice();
             }
 
@@ -1090,9 +1122,24 @@
             });
             if (!S.foes.length) { console.warn('[VN_Battle] 沒有有效敵人，取消'); return null; }
 
-            S.me = Object.assign({}, DEFAULT_PLAYER, spec.player || {}, { side: 'me', dead: false });
+            // 玩家：AI 用 [MC] 配這一場的身手（職業、裝備、有沒有帶傷、是不是被綁著），蓋掉那組寫死的預設。
+            // 🚨但「還剩幾成血」必須從上一場延續，不能跟著新的 maxHp 一起重置 ——
+            //    否則只要這一輪 AI 換了一套數值，上一場打到剩三滴血的傷勢就憑空痊癒了。
+            //    所以血量走比例：上一場剩六成，這場就從六成開始。
+            const prevHp = spec.player || {};
+            S.me = Object.assign({}, DEFAULT_PLAYER, mcCfg || {}, { side: 'me', dead: false });
+            if (prevHp.maxHp > 0 && prevHp.hp != null) {
+                const pct = Math.max(0, Math.min(1, prevHp.hp / prevHp.maxHp));
+                S.me.hp = Math.max(1, Math.round(S.me.maxHp * pct));
+                if (mcCfg && prevHp.maxHp !== S.me.maxHp)
+                    S.notes.push('體力上限 ' + prevHp.maxHp + ' → ' + S.me.maxHp + '，帶著上一場的 '
+                               + Math.round(pct * 100) + '% 血開打');
+            } else if (prevHp.hp != null && !mcCfg) {
+                S.me.hp = prevHp.hp;   // 沒有 [MC] 也沒有上限資訊＝走舊路徑，行為同以往
+            }
             if (S.me.hp == null) S.me.hp = S.me.maxHp;
             S.me.hp = Math.max(1, Math.min(S.me.hp, S.me.maxHp));   // 目前血高於上限＝血條撐爆容器，呼叫端給錯也要擋住
+            S.me.sp = Math.max(0, Math.min(S.me.sp == null ? 4 : S.me.sp, S.me.maxSp));
             S.target = S.foes[0];
 
             // ⚔️ 隊友：<BattleStart> 自己帶了 [Ally|…]（劇情NPC助拳）就用它的，
