@@ -406,6 +406,43 @@
             })();
         },
 
+        // 🎩 把道具圖掛上彈窗舞台。去背成功＝裸物件浮空(柔光＋投影)；去背失敗/關閉＝加 vnitem-raw 走羽化遮罩，
+        //   不然一塊白底方塊浮在半透明黑幕上，比原本的卡片還難看。url 空＝回到「等圖」狀態（轉著的菱形）。
+        _itemShowImg: function(itemName, url) {
+            const img = document.getElementById('item-img');
+            const stage = document.getElementById('item-stage');
+            if (!img) return;
+            img.classList.remove('vnitem-in');
+            if (stage) stage.classList.remove('loaded');
+            if (!url) { img.removeAttribute('src'); return; }
+            img.classList.toggle('vnitem-raw', this._itemCutOk[itemName] !== true);
+            img.onload = function () {
+                img.classList.add('vnitem-in');
+                if (stage) stage.classList.add('loaded');
+            };
+            img.src = url;
+        },
+
+        // 道具去背總開關：localStorage.vn_item_cut = '0' 關掉（關了就是帶底原圖＋羽化遮罩顯示）
+        _itemCutEnabled: function() {
+            try { return localStorage.getItem('vn_item_cut') !== '0'; } catch (e) { return true; }
+        },
+        // ✂️ 道具去背：回 { url(可存的圖), cut(有沒有真的去掉底) }，任何一步失敗都原樣把圖送回去。
+        //   走跟立繪同一支 AI 去背(isnet，吃任何背景)，不用純色 flood-fill——道具很多是淺色紙張/白瓷/銀器，
+        //   跟白底只差一點點，容差一定會吃進物件本體（立繪那邊就是為了這個把 flood-fill 砍掉的）。
+        //   _stripSpriteBgAI 自帶序列化鏈，預熱一次生好幾張也不會併發搶 CPU。
+        _cutItemImage: async function(srcUrl) {
+            if (!srcUrl || !this._itemCutEnabled()) return { url: srcUrl, cut: false };
+            let blob = null;
+            try { blob = await (await fetch(srcUrl)).blob(); } catch (e) {}
+            if (!blob) return { url: srcUrl, cut: false };
+            let out = null;
+            try { out = await this._stripSpriteBgAI(blob); } catch (e) {}
+            if (!out) { console.warn('[VN] ⚠️ 道具去背失敗 → 用帶底原圖（彈窗退成羽化遮罩）。往上找「AI 去背失敗」的原因，多半是去背模型下載不了'); return { url: srcUrl, cut: false }; }
+            const du = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(String(rd.result)); rd.onerror = () => r(''); rd.readAsDataURL(out); });
+            return du ? { url: du, cut: true } : { url: srcUrl, cut: false };
+        },
+
         // 去重包裝：同一道具若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
         _safeFetchItem: function(itemName, desc) {
             if (this._itemMemCache[itemName]) return Promise.resolve(this._itemMemCache[itemName]);
@@ -420,6 +457,18 @@
             if (this._itemMemCache[itemName]) return this._itemMemCache[itemName];
             const cached = await VN_Cache.get('item_cache', itemName);
             if (cached && cached.url && !cached.url.startsWith('blob:')) {
+                // cut 旗標是「彈窗改成去背浮空版」之後才有的：舊快取存的一定是帶底原圖，
+                //   直接拿來浮在黑幕上就是一塊白方塊 → 補去背一次、存回去，之後就不必再跑。
+                //   去背關著的時候不補、也不寫旗標——寫了 false 就等於把這張圖釘死，之後開回來也不會再去背。
+                if (cached.cut === undefined && this._itemCutEnabled()) {
+                    const re = await this._cutItemImage(cached.url);
+                    await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: re.url, cut: re.cut });
+                    this._itemCutOk[itemName] = re.cut;
+                    const reObj = await this._toObjectUrl(re.url);
+                    this._itemMemCache[itemName] = reObj || re.url;
+                    return this._itemMemCache[itemName];
+                }
+                this._itemCutOk[itemName] = (cached.cut === true);
                 const objUrl = await this._toObjectUrl(cached.url);
                 this._itemMemCache[itemName] = objUrl || cached.url;
                 return this._itemMemCache[itemName];
@@ -429,27 +478,27 @@
             }
             const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, desc));
             if (!raw) return '';
+            // 先轉成可存的圖再去背：去背吐的是新的 PNG，原本那顆 blob 用不上了
+            let src = '';
             try {
-                const fetchRes = await fetch(raw);
-                const blob = await fetchRes.blob();
-                const objUrl = URL.createObjectURL(blob);
-                const dataUrl = await new Promise(r => {
+                const blob = await (await fetch(raw)).blob();
+                src = await new Promise(r => {
                     const reader = new FileReader();
-                    reader.onload = () => r(reader.result);
+                    reader.onload = () => r(String(reader.result));
                     reader.onerror = () => r('');
                     reader.readAsDataURL(blob);
                 });
-                this._itemMemCache[itemName] = objUrl;
-                if (dataUrl) await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: dataUrl });
-                return objUrl;
-            } catch(e) {
-                const url = await this._toDataUrl(raw);
-                if (url) {
-                    this._itemMemCache[itemName] = url;
-                    await VN_Cache.set('item_cache', itemName, { prompt: itemName, url });
-                }
-                return this._itemMemCache[itemName] || '';
-            }
+            } catch(e) {}
+            if (!src) src = await this._toDataUrl(raw);   // 抓不下來(CORS等)＝原網址硬上，去背那步會自己再試一次
+            if (!src) return '';
+            const cut = await this._cutItemImage(src);
+            this._itemCutOk[itemName] = cut.cut;
+            const objUrl = await this._toObjectUrl(cut.url);
+            this._itemMemCache[itemName] = objUrl || cut.url;
+            const rec = { prompt: itemName, url: cut.url };
+            if (this._itemCutEnabled()) rec.cut = cut.cut;   // 同上：關著的時候不留旗標
+            await VN_Cache.set('item_cache', itemName, rec);
+            return this._itemMemCache[itemName];
         },
 
         // 解析 <scene> block 內容行 → { cacheId, prompt }。

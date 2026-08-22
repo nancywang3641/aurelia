@@ -220,14 +220,18 @@
                     <div id="trans-text"></div>
                 </div>
 
-                <div id="item-overlay">
-                    <div id="item-card">
-                        <div class="item-close" onclick="window.VN_Core.next()">✕</div>
-                        <div id="item-icon-box"><img id="item-img" src=""></div>
+                <div id="item-overlay" onclick="window.VN_Core.next()">
+                    <div id="item-stage">
+                        <div id="item-halo"></div>
+                        <div id="item-loading"></div>
+                        <img id="item-img">
+                    </div>
+                    <div id="item-caption">
+                        <div id="item-kicker">獲 得 物 品</div>
                         <div id="item-title"></div>
                         <div id="item-desc"></div>
-                        <button id="item-btn" onclick="window.VN_Core.next()">確認</button>
                     </div>
+                    <div id="item-hint"><i class="fa-solid fa-chevron-down"></i> 點擊任意處繼續</div>
                 </div>
 
                 <div id="vn-bgm-toast">

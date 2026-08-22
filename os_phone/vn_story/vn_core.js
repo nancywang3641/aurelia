@@ -51,6 +51,7 @@
         _sceneGenBackoff: 0,    // 本輪插圖退避：撞失敗(拼車 NAI 429)後設時戳→後續插圖不再自動猛打；手動重生/新一輪清
         _itemMemCache: {},
         _itemInflight: {},  // 進行中的道具圖生成(itemName→promise)：同 _bgInflight
+        _itemCutOk: {},     // 道具圖去背成功與否(itemName→bool)：彈窗照這個決定「裸物件浮空」還是「退成羽化遮罩」
         _avatarMemCache: {},
         _pendingAvatars: {},
         _decodedImgs: {},
@@ -305,6 +306,7 @@
                 if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
             }
             this._itemMemCache = {};
+            this._itemCutOk = {};
             // ⚠️ avatars / _avatarMemCache 跨章節保留，不歸零
             // 原因：AI 上下文長了必然重複輸出同角色 profile，用程式碼去重比靠 prompt 規則可靠
             // 完整清除只在 stopGame() / 頁面重新整理時執行
@@ -2406,15 +2408,15 @@
                 document.getElementById('item-desc').innerText  = parts[1] || '';
                 document.getElementById('item-overlay').classList.add('active');
                 this.hideVNPanel();
-                document.getElementById('item-img').src = '';
+                this._itemShowImg(itemName, '');   // 先歸零：舞台回到「等圖」狀態，不會殘留上一件的圖
                 const memUrl = this._itemMemCache[itemName];
                 if (memUrl) {
-                    document.getElementById('item-img').src = memUrl;
+                    this._itemShowImg(itemName, memUrl);
                 } else {
                     (async () => {
                         // 走 _safeFetchItem：預熱還在生同一張時共用同一個 promise，不再重複生成
                         const url = await this._safeFetchItem(itemName, parts[1] || '');
-                        if (url) document.getElementById('item-img').src = url;
+                        if (url) this._itemShowImg(itemName, url);
                     })();
                 }
                 this.addLog("獲得物品", `${itemName} - ${parts[1]||''}`);

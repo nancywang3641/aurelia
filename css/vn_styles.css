@@ -1394,50 +1394,89 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #trans-overlay { background: radial-gradient(circle, #1a1a24, #000); z-index: 50; transition: opacity 0.8s ease; }
         #trans-text { font-size: 1.6rem; letter-spacing: 6px; color: #fff; text-shadow: 0 0 15px rgba(255,255,255,0.5); padding: 0 48px; box-sizing: border-box; text-align: center; }
 
-        /* 🎩 物品彈窗 (黑金高貴版, 無括號按鈕) */
-        #item-overlay { background: rgba(0,0,0,0.9); z-index: 40; backdrop-filter: blur(10px); }
-        #item-card { 
-            background: linear-gradient(135deg, #141414 0%, #050505 100%); 
-            border: 1px solid rgba(212,175,55,0.3); 
-            box-shadow: 0 20px 60px rgba(0,0,0,0.9); 
-            width: 350px; padding: 45px 35px 35px; text-align: center; position: relative; 
-            border-radius: 4px;
+        /* 🎩 物品彈窗 —— 半透明黑幕 ＋ 去背物件浮空 ＋ 底部文字帶（VN 慣用的「獲得」一幕，不再是卡片）
+           圖走 AI 去背（vn_core_images._cutItemImage，同立繪那支 isnet）；
+           去背失敗才加 .vnitem-raw 走羽化遮罩 —— 帶底原圖直接浮在黑幕上會是一塊白方塊。 */
+        #item-overlay {
+            flex-direction: column; align-items: center; justify-content: flex-start;
+            padding: 7% 0 clamp(18px, 4%, 40px); box-sizing: border-box; cursor: pointer;
+            background: radial-gradient(ellipse 82% 56% at 50% 36%, rgba(24,20,14,0.34) 0%, rgba(0,0,0,0.66) 50%, rgba(0,0,0,0.88) 100%);
+            z-index: 40; backdrop-filter: blur(7px);
         }
-        /* 古典細線內框 */
-        #item-card::before {
-            content: ''; position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px;
-            border: 1px solid rgba(212, 175, 55, 0.15); pointer-events: none;
+        /* 物件舞台：剩下的高度全歸它，圖只會縮不會把下面的字頂掉（矮容器/橫螢幕也成立） */
+        #item-stage { position: relative; flex: 1 1 auto; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
+        /* 物件背後的柔光：深色道具在黑幕上才有輪廓，不會糊成一團黑 */
+        #item-halo {
+            position: absolute; top: 50%; left: 50%; width: min(56vh, 62%); aspect-ratio: 1;
+            transform: translate(-50%, -50%); pointer-events: none;
+            background: radial-gradient(circle, rgba(212,175,55,0.22) 0%, rgba(212,175,55,0.08) 42%, rgba(212,175,55,0) 70%);
+            animation: itemHaloBreath 4.6s ease-in-out infinite;
         }
-        
-        .item-close { position: absolute; top: 15px; right: 20px; color: #666; cursor: pointer; font-size: 1.5rem; transition: 0.2s; font-family: var(--font-sans); z-index: 2;}
-        .item-close:hover { color: var(--gold); }
-        
-        /* 金屬質感的圖示外框 */
-        #item-icon-box {
-            background: #0a0a0a; border: 1px solid rgba(212,175,55,0.4);
-            width: 130px; height: 130px; margin: 0 auto 30px;
-            display: flex; justify-content: center; align-items: center;
-            position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(212,175,55,0.05);
-            transform: rotate(45deg); /* 菱形外框 */
-            overflow: hidden; /* 裁切圖片在菱形內，防止溢出 */
+        @keyframes itemHaloBreath {
+            0%, 100% { opacity: 0.72; transform: translate(-50%,-50%) scale(1); }
+            50%      { opacity: 1;    transform: translate(-50%,-50%) scale(1.06); }
         }
+        /* 等圖：慢慢轉的金色菱形（圖一到就換掉，不留一片空畫面） */
+        #item-loading {
+            position: absolute; top: 50%; left: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px;
+            border: 1px solid rgba(212,175,55,0.75); box-sizing: border-box;
+            box-shadow: 0 0 18px rgba(0,0,0,0.6); animation: itemLoadSpin 3.2s linear infinite;
+        }
+        #item-loading::after { content: ''; position: absolute; inset: 10px; border: 1px solid rgba(212,175,55,0.38); }
+        @keyframes itemLoadSpin { from { transform: rotate(45deg); } to { transform: rotate(405deg); } }
+        #item-stage.loaded #item-loading { display: none; }
+
         #item-img {
-            width: 142%; height: 142%; /* √2 × 100% ≈ 141.4%，剛好填滿菱形 */
-            object-fit: cover;
-            transform: rotate(-45deg); /* 圖片轉正 */
-            flex-shrink: 0;
+            max-height: 100%; max-width: min(58vh, 66%); object-fit: contain;
+            opacity: 0; transform: translateY(26px) scale(0.93);
+            transition: opacity 0.55s ease, transform 0.72s cubic-bezier(0.16, 0.84, 0.36, 1);
+            filter: drop-shadow(0 18px 26px rgba(0,0,0,0.72)) drop-shadow(0 0 26px rgba(212,175,55,0.26));
         }
-        
-        #item-title { color: var(--gold); font-size: 1.4rem; margin-bottom: 15px; font-family: var(--font-classic); letter-spacing: 2px; }
-        #item-desc { color: #b0ada5; font-size: 0.95rem; line-height: 1.6; margin-bottom: 35px; padding: 15px; text-align: center; border-top: 1px solid rgba(212,175,55,0.1); border-bottom: 1px solid rgba(212,175,55,0.1); font-family: var(--font-sans); }
-        
-        #item-btn { 
-            background: transparent; color: var(--gold); border: 1px solid var(--gold); 
-            padding: 12px 0; font-size: 1rem; font-family: var(--font-sans); 
-            cursor: pointer; transition: all 0.3s; letter-spacing: 2px; 
-            width: 100%; box-sizing: border-box; border-radius: 4px;
+        #item-img.vnitem-in { opacity: 1; transform: none; }
+        /* 去背失敗的退路：帶底原圖用羽化遮罩把四角化掉，讓它像一張暈開的舊照片沉進黑幕，
+           不會是一塊硬邦邦的白方塊。不加金框——框只會把「這是張帶底的圖」講得更大聲。 */
+        #item-img.vnitem-raw {
+            max-width: min(46vh, 52%);
+            filter: brightness(0.95) saturate(0.95);
+            -webkit-mask-image: radial-gradient(ellipse 58% 58% at 50% 50%, #000 26%, rgba(0,0,0,0.42) 66%, transparent 92%);
+                    mask-image: radial-gradient(ellipse 58% 58% at 50% 50%, #000 26%, rgba(0,0,0,0.42) 66%, transparent 92%);
         }
-        #item-btn:hover { background: var(--gold); color: #000; box-shadow: 0 5px 15px rgba(212,175,55,0.3); }
+
+        /* 文字帶最多吃掉畫面 52%，而且不參與收縮(flex-shrink:0)：
+           要縮就縮舞台那格(圖跟著變小)，字永遠是完整的——描述長到頂就在描述那格自己捲。 */
+        #item-caption {
+            flex: 0 0 auto; max-height: 52%; min-height: 0; display: flex; flex-direction: column;
+            width: min(620px, 84%); text-align: center; padding-top: clamp(14px, 3vh, 30px);
+        }
+        #item-kicker, #item-title { flex: 0 0 auto; }
+        #item-kicker {
+            font-family: var(--font-classic); font-size: 0.68rem;
+            letter-spacing: 0.62em; text-indent: 0.62em; color: rgba(212,175,55,0.72);
+        }
+        #item-title {
+            font-family: var(--font-classic); font-size: clamp(1.25rem, 3.4vh, 1.8rem); font-weight: bold;
+            color: var(--gold); letter-spacing: 3px; margin: 12px 0 0;
+            text-shadow: 0 2px 16px rgba(0,0,0,0.85), 0 0 24px rgba(212,175,55,0.22);
+        }
+        #item-title::after {
+            content: ''; display: block; width: 88px; height: 1px; margin: 14px auto;
+            background: linear-gradient(90deg, transparent, rgba(212,175,55,0.55), transparent);
+        }
+        #item-desc {
+            flex: 0 1 auto; min-height: 0; overflow-y: auto;
+            font-family: var(--font-sans); color: #c6c1b5; font-size: 0.95rem; line-height: 1.85;
+            text-shadow: 0 1px 8px rgba(0,0,0,0.9);
+        }
+        #item-desc::-webkit-scrollbar { width: 4px; }
+        #item-desc::-webkit-scrollbar-track { background: transparent; }
+        #item-desc::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.25); border-radius: 2px; }
+        #item-hint {
+            flex: 0 0 auto; margin-top: clamp(12px, 2.4vh, 24px);
+            font-family: var(--font-sans); font-size: 0.7rem; letter-spacing: 3px;
+            color: rgba(255,255,255,0.36); animation: itemHintPulse 2.4s ease-in-out infinite;
+        }
+        #item-hint i { margin-right: 6px; font-size: 0.62rem; }
+        @keyframes itemHintPulse { 0%, 100% { opacity: 0.32; } 50% { opacity: 0.8; } }
 
         /* 🏆 成就：VN 內舊的中心彈出 overlay 已移除（展示改由 VN 組件卡片負責）；解鎖只記錄進成就資料、不在劇情中顯示。 */
 
@@ -1879,7 +1918,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #sys-box { padding: 30px 35px; font-size: 1.1rem; }
 
             /* 物品彈窗 */
-            #item-card { width: 85vw; }
+            #item-caption { width: 86%; }
+            #item-img { max-width: 72%; }
 
             /* 手機裝置框：高度不超過 VN 容器；寬度由 aspect-ratio(1:2) 自動推、維持手機比例不矮胖 */
             #phone-device { height: min(720px, calc(100% - 16px)); }
@@ -1929,11 +1969,15 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #trans-text { font-size: 1.2rem; letter-spacing: 4px; padding: 0 32px; }
 
             /* 物品彈窗 */
-            #item-card { width: 90vw; padding: 35px 22px 25px; }
-            #item-icon-box { width: 90px; height: 90px; }
-            #item-title { font-size: 1.2rem; }
-            #item-desc { font-size: 0.88rem; margin-bottom: 22px; padding: 10px; }
-            #item-btn { padding: 10px 0; font-size: 0.9rem; }
+            #item-overlay { padding: 9% 0 clamp(14px, 3.5%, 28px); }
+            #item-caption { width: 88%; }
+            #item-img { max-width: 78%; }
+            #item-img.vnitem-raw { max-width: 62%; }
+            #item-kicker { font-size: 0.6rem; letter-spacing: 0.5em; text-indent: 0.5em; }
+            #item-title { letter-spacing: 2px; }
+            #item-title::after { width: 70px; margin: 12px auto; }
+            #item-desc { font-size: 0.88rem; line-height: 1.75; }
+            #item-hint { font-size: 0.64rem; letter-spacing: 2px; }
 
             /* Log 面板 */
             #vn-log-header { padding: 0 18px 15px; }
