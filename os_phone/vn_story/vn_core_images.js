@@ -236,7 +236,11 @@
                 raw = await this._loremFlickrFallback(prompt, cacheId);
                 if (raw) { isFallback = true; console.log('[VN] fallback source: LoremFlickr'); }
             }
-            if (!raw) return '';
+            if (!raw) {
+                // 三條路(主來源→Pixabay→LoremFlickr)都空手 → 這格背景註定是黑的，說清楚別讓人猜
+                console.warn(`[VN] 背景三條路都沒拿到圖：${cacheId}｜主來源 ${_bgSvc || '(問不到)'}｜提示詞「${String(prompt).slice(0, 60)}」`);
+                return '';
+            }
 
             const savedPrompt = meta.translatedPrompt || prompt;
             try {
@@ -250,6 +254,7 @@
                 } finally {
                     if (_timer) clearTimeout(_timer);
                 }
+                if (!fetchRes.ok) console.warn(`[VN] 背景圖下載回 ${fetchRes.status}：${cacheId}`);
                 const blob = await fetchRes.blob();
                 const objUrl = URL.createObjectURL(blob);
                 const dataUrl = await new Promise(r => {
@@ -266,6 +271,7 @@
             } catch(e) {
                 const _aborted = e && e.name === 'AbortError';
                 if (_aborted) console.warn('[VN] 背景下載逾時(90秒)，改走備援:', cacheId);
+                else console.warn(`[VN] 背景圖抓取失敗：${cacheId}｜${e && e.message || e}｜來源 URL 開頭「${String(raw).slice(0, 60)}」`);
                 // 主來源失敗且還沒用過備援 → 補一輪 Pixabay → LoremFlickr，別讓進度永遠缺一格
                 if (!isFallback) {
                     try {
