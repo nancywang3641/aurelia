@@ -69,6 +69,14 @@
 
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
+            // 摘要標記存回 VN_READER 讀的那兩個 key（全系統抓摘要都走它）——留空＝恢復預設 <summary>
+            try {
+                const so = (container.querySelector('#vncfg-sum-open')?.value || '').trim();
+                const sc = (container.querySelector('#vncfg-sum-close')?.value || '').trim();
+                if (so && sc) { localStorage.setItem('vn_reader_sum_open', so); localStorage.setItem('vn_reader_sum_close', sc); }
+                else { localStorage.removeItem('vn_reader_sum_open'); localStorage.removeItem('vn_reader_sum_close'); }
+            } catch (e) {}
+
             // 若 VN_Config 正在運行，即時同步（下次開啟 VN 時也會重新 load）
             try { if (window.VN_Config?.load) window.VN_Config.load(); } catch (e) {}
 
@@ -81,6 +89,9 @@
 
             // 「Context 保留最近幾章全文」僅獨立(PWA)版本有意義；酒館版由酒館自己管 prompt 注入，隱藏這個設定
             const isStandalone = !!(window.OS_API?.isStandalone?.());
+            const _sumDef = (window.VN_READER?.sumDefaults?.()) || { open: '<summary>', close: '</summary>' };
+            const _sumNow = (window.VN_READER?.sumMarks?.()) || { open: _sumDef.open, close: _sumDef.close };
+            const _sumEsc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             // 🚨 全系統就這一格：劇情面板與手機 app（微信/微薄/電話/通訊錄）共用同一個數字，
             //    別再為 app 另開一格。幾百輪的量本來就不可能吃全文，預設就是「幾層之後轉摘要」。
             const ctxChaptersBlock = `
@@ -88,6 +99,16 @@
             <div class="set-label">📚 保留最近幾章全文 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">更舊的自動縮成摘要</span></div>
             <input class="set-input" type="number" id="vncfg-ctx-chapters" min="0" max="50" placeholder="5" value="${d.ctxChapters ?? 5}" style="width:120px;">
             <div class="set-desc">建議 3–6 章。手機 app 讀劇情時也吃這一格。設 0 ＝ 全部只讀摘要（最省）；清空 ＝ 全送不限制（很吃 Token）。</div>
+        </div>
+        <div class="set-group">
+            <div class="set-label">🔖 摘要標記 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">換了別家 preset 之後填新的</span></div>
+            <div class="set-desc" style="margin-bottom:8px;">上面那格要「縮成摘要」時，是靠這對標記把摘要從正文裡撈出來。用別人的 preset 時標籤常常不是 &lt;summary&gt;（有的叫 &lt;meow_FM&gt;、有的叫 &lt;draft&gt;），填錯就撈不到。</div>
+            <label class="set-label" style="font-size:11px;">開頭</label>
+            <input class="set-input" type="text" id="vncfg-sum-open" spellcheck="false" placeholder="${_sumDef.open}" value="${_sumEsc(_sumNow.open)}" oninput="window.VN_SETTINGS_PANEL.trySum()">
+            <label class="set-label" style="font-size:11px; margin-top:8px;">結尾</label>
+            <input class="set-input" type="text" id="vncfg-sum-close" spellcheck="false" placeholder="${_sumDef.close}" value="${_sumEsc(_sumNow.close)}" oninput="window.VN_SETTINGS_PANEL.trySum()">
+            <div class="set-label" style="font-size:11px; margin-top:8px;">拿最新一章試抓</div>
+            <div id="vncfg-sum-preview" class="set-desc" style="min-height:34px; padding:8px 10px; border:1px dashed rgba(26,28,40,0.22); border-radius:6px; white-space:pre-wrap; word-break:break-word;">按上面的欄位就會試抓</div>
         </div>`;
 
             return /* html */`
@@ -125,6 +146,20 @@
 
     ${ctxChaptersBlock}
 </div>`;
+        },
+
+        // 摘要標記的「試抓」：拿目前欄位去撈最新一章，當場看得到撈不撈得到
+        async trySum() {
+            const box = document.getElementById('vncfg-sum-preview');
+            if (!box) return;
+            const o = (document.getElementById('vncfg-sum-open')?.value || '').trim();
+            const c = (document.getElementById('vncfg-sum-close')?.value || '').trim();
+            if (!window.VN_READER?.sumTry) { box.textContent = '閱讀器模組還沒載入'; return; }
+            const r = await window.VN_READER.sumTry(o, c);
+            if (r.state === 'ok')            box.textContent = r.text.length > 140 ? r.text.slice(0, 140) + '…' : r.text;
+            else if (r.state === 'empty')    box.textContent = '撈到了，但裡面是空的';
+            else if (r.state === 'nosample') box.textContent = '目前沒有章節可以試抓';
+            else                             box.textContent = '最新一章撈不到 —— 標記填的跟正文對不上';
         }
     };
 

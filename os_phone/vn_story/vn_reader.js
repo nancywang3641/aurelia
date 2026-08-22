@@ -42,8 +42,6 @@
                 <div style="display:flex;align-items:center;gap:10px;">
                     <div id="vn-reader-sa-summary-btn" class="vrd-hd-btn">
                         <i class="fa-solid fa-file-lines"></i> 大總結</div>
-                    <div id="vn-reader-sa-settings-btn" class="vrd-hd-icobtn" title="閱讀器設置">
-                        <i class="fa-solid fa-gear"></i></div>
                     <div id="vn-reader-sa-close" class="vrd-hd-icobtn vrd-hd-close">
                         <i class="fa-solid fa-xmark"></i></div>
                 </div>
@@ -62,7 +60,6 @@
 
         _overlay.querySelector('#vn-reader-sa-close').onclick        = () => VN_READER.hide();
         _overlay.querySelector('#vn-reader-sa-summary-btn').onclick  = () => VN_READER.showSummaryEditor();
-        _overlay.querySelector('#vn-reader-sa-settings-btn').onclick = () => VN_READER.showSettings();
 
         return _overlay;
     }
@@ -103,6 +100,40 @@
             try { s = s.replace(new RegExp(_rxEsc(m.open) + '[\\s\\S]*?' + _rxEsc(m.close), 'gi'), ''); } catch (e) {}
         }
         return s.replace(/<summary>[\s\S]*?<\/summary>/gi, '');
+    }
+
+    // 拿一段「最新章節原文」來試抓，給設定頁的即時預覽用（兩版各自的來源）。
+    async function _sampleContent() {
+        if (_readerSorted.length) return _readerSorted[_readerSorted.length - 1].content || '';
+        try {
+            if ((win.OS_API?.isStandalone?.()) && win.OS_DB?.getAllVnChapters) {
+                const sid = win.OS_AVS_ADAPTER?.getStoryId?.() || '';
+                const all = (await win.OS_DB.getAllVnChapters()) || [];
+                const list = sid ? all.filter(c => c.storyId === sid) : all;
+                if (list.length) return list[list.length - 1].content || '';
+            } else {
+                const msgs = await _fetchFullMessages();
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    const t = (msgs[i] && (msgs[i].message || msgs[i].mes)) || '';
+                    if (t.indexOf('<content>') >= 0) return t;
+                }
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    // 給設定頁：拿一對標記去試抓最新一章，回 { state, text }。
+    //   state: 'ok' 抓到 / 'empty' 抓到但裡面空的 / 'miss' 抓不到 / 'nosample' 沒有章節可試
+    async function _sumTry(open, close) {
+        const o = String(open || '').trim() || SUM_OPEN_DEF;
+        const c = String(close || '').trim() || SUM_CLOSE_DEF;
+        const sample = await _sampleContent();
+        if (!sample) return { state: 'nosample', text: '' };
+        let m = null;
+        try { m = sample.match(_sumRegex(o, c)); } catch (e) {}
+        if (!m) return { state: 'miss', text: '' };
+        const t = m[1].trim().replace(/<[^>]+>/g, '').trim();
+        return t ? { state: 'ok', text: t } : { state: 'empty', text: '' };
     }
 
     // 抽章節摘要：先用使用者設的標記，抓不到再退回預設 <summary>；都沒有回空字串。
@@ -426,6 +457,9 @@
         //   寫死的後果是靜默的：上下文壓縮抓不到就把那章壓成空字串＝整章從歷史消失。
         sumExtract: _extractSummary,        // 章節原文 → 摘要純文字(抓不到回 '')
         sumStrip: _stripSummaryBlocks,      // 章節原文 → 剝掉摘要區塊後的文字
+        sumMarks: _getSumMarks,             // 目前設的標記 { open, close, custom }
+        sumTry: _sumTry,                    // 設定頁的「試抓」預覽：拿一對標記去抓最新一章
+        sumDefaults: () => ({ open: SUM_OPEN_DEF, close: SUM_CLOSE_DEF }),
         fetchFullChat: _fetchFullMessages,   // 完整讀當前聊天(讀檔繞 lazy-load、不展開不卡死)；給大總結等共用
         getCurrentChars: _getCurrentChars,   // 當前聊天室出現過的角色 [{name,count}]；給 app/面板做角色選單(繞懶載、不等總結)
 
@@ -597,96 +631,8 @@
             } catch(e) { alert('儲存失敗: ' + (e.message || e)); }
         },
 
-        // ── 閱讀器設置 ────────────────────────────────────────────
-        showSettings() {
-            const overlay = _ensureDOM();
-            const body    = overlay.querySelector('#vn-reader-sa-body');
-            const tabsEl  = overlay.querySelector('#vn-reader-sa-tabs');
-            if (!body) return;
-
-            body._prevHtml   = body.innerHTML;
-            body._prevScroll = body.scrollTop;
-            if (tabsEl) { body._prevTabsDisplay = tabsEl.style.display; tabsEl.style.display = 'none'; }
-
-            const marks = _getSumMarks();
-            body.innerHTML = `
-                <div class="vrd-set">
-                    <div class="vrd-set-bar">
-                        <button class="vrd-back-btn" onclick="window.VN_READER.hideSettings()">
-                            <i class="fa-solid fa-arrow-left"></i> 返回</button>
-                        <span class="vrd-detail-title">閱讀器設置</span>
-                    </div>
-
-                    <div class="vrd-set-sec">章節摘要</div>
-                    <div class="vrd-set-note">換了預設之後摘要格式跟著變的話，把新的開頭、結尾填進來。</div>
-
-                    <label class="vrd-set-label">摘要開頭</label>
-                    <input id="vrd-set-sum-open" class="vrd-set-input" spellcheck="false"
-                           placeholder="${escAttr(SUM_OPEN_DEF)}" value="${escAttr(marks.open)}"
-                           oninput="window.VN_READER._settingsPreview()">
-
-                    <label class="vrd-set-label">摘要結尾</label>
-                    <input id="vrd-set-sum-close" class="vrd-set-input" spellcheck="false"
-                           placeholder="${escAttr(SUM_CLOSE_DEF)}" value="${escAttr(marks.close)}"
-                           oninput="window.VN_READER._settingsPreview()">
-
-                    <div class="vrd-set-label">抓到的樣子</div>
-                    <div id="vrd-set-preview" class="vrd-set-preview"></div>
-
-                    <div class="vrd-set-acts">
-                        <button class="vrd-set-btn" onclick="window.VN_READER._settingsReset()">
-                            <i class="fa-solid fa-rotate-left"></i> 恢復原本</button>
-                        <button class="vrd-set-btn primary" onclick="window.VN_READER.saveSettings()">儲存</button>
-                    </div>
-                </div>`;
-
-            this._settingsPreview();
-        },
-
-        hideSettings() { this.hideSummaryEditor(); },
-
-        saveSettings() {
-            const o = (document.getElementById('vrd-set-sum-open')?.value || '').trim();
-            const c = (document.getElementById('vrd-set-sum-close')?.value || '').trim();
-            try {
-                if (o && c) { localStorage.setItem(SUM_OPEN_KEY, o); localStorage.setItem(SUM_CLOSE_KEY, c); }
-                else { localStorage.removeItem(SUM_OPEN_KEY); localStorage.removeItem(SUM_CLOSE_KEY); }
-            } catch (e) {}
-            // 回章節列表並用新標記重畫摘要
-            const body = _overlay?.querySelector('#vn-reader-sa-body');
-            const tabsEl = _overlay?.querySelector('#vn-reader-sa-tabs');
-            if (tabsEl && body && body._prevTabsDisplay !== undefined) tabsEl.style.display = body._prevTabsDisplay;
-            if (body && _readerSorted.length) _renderChapters(_readerSorted, body);
-            else this.hideSettings();
-        },
-
-        // 即時試抓：拿最新一章當樣本，看填的標記抓不抓得到
-        _settingsPreview() {
-            const box = document.getElementById('vrd-set-preview');
-            if (!box) return;
-            const o = (document.getElementById('vrd-set-sum-open')?.value || '').trim() || SUM_OPEN_DEF;
-            const c = (document.getElementById('vrd-set-sum-close')?.value || '').trim() || SUM_CLOSE_DEF;
-            const sample = _readerSorted.length ? (_readerSorted[_readerSorted.length - 1].content || '') : '';
-            if (!sample) { box.className = 'vrd-set-preview miss'; box.textContent = '目前沒有章節可以試抓'; return; }
-            let m = null;
-            try { m = sample.match(_sumRegex(o, c)); } catch (e) {}
-            if (m) {
-                const t = m[1].trim().replace(/<[^>]+>/g, '').trim();
-                box.className = 'vrd-set-preview';
-                box.textContent = t ? (t.length > 120 ? t.slice(0, 120) + '…' : t) : '（抓到了，但裡面是空的）';
-            } else {
-                box.className = 'vrd-set-preview miss';
-                box.textContent = '最新一章抓不到，卡片會改顯示正文開頭';
-            }
-        },
-
-        _settingsReset() {
-            const o = document.getElementById('vrd-set-sum-open');
-            const c = document.getElementById('vrd-set-sum-close');
-            if (o) o.value = SUM_OPEN_DEF;
-            if (c) c.value = SUM_CLOSE_DEF;
-            this._settingsPreview();
-        },
+        // ⛔ 閱讀器設置已搬到「劇情設置 → 摘要標記」，跟「保留最近幾章全文」放在一起：
+        //    那兩格是同一件事的兩半(一個定義摘要長怎樣、一個決定何時用摘要)，分兩個地方找不到。
 
         // ── 內部輔助（供 onclick 呼叫）────────────────────────────
         _thinkToggle(id) {
