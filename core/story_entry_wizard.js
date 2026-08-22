@@ -340,7 +340,11 @@
                 const body = root.querySelector('#sew-preview-body');
                 // 預覽＝閱讀畫面同一套渲染:作者的 HTML 美化面板照原樣上牆(以前自己剝成純文字,美化面板整個不見)
                 let blocks = 0;
-                try { blocks = window.StoryExtractor?.renderOpeningInto?.(body) || 0; } catch (e) { blocks = 0; }
+                try {
+                    blocks = window.StoryExtractor?.renderOpeningInto?.(body) || 0;
+                    // 預覽框是固定高的框:整頁式卡片(100vh)搬進來會在框底留一大段空白 → 放掉那層高度
+                    if (blocks) window.StoryExtractor?.deflateFullPageBlocks?.(body);
+                } catch (e) { blocks = 0; }
                 if (!blocks) {
                     // 刮不到已渲染的第 0 樓(掛載特殊/尚未上牆)→ 退回原文純文字,至少讀得到內容
                     body.innerHTML = '';

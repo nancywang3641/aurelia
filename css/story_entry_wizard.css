@@ -421,8 +421,8 @@
     border: calc(var(--sew-u, 1px) * 1) solid rgba(42, 74, 128, 0.28);
     box-shadow: none;
 }
+/* 作者面板寬度沿用閱讀畫面的 760px:那是卡片設計時的參考寬,跟著版面放大會把等比卡撐爆 */
 #se-root-wrapper #sew-root .story-html-block {
-    max-width: calc(var(--sew-u, 1px) * 700);
     margin: 0 auto calc(var(--sew-u, 1px) * 14);
 }
 #sew-root.sew-portrait .native-render-wrapper,
