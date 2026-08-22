@@ -473,6 +473,12 @@
             // 移除 HTML 註解行（如作者思維鏈 <!-- 分析內容 --> 等），含跨行註解
             this.script = this.script.join('\n').replace(/<!--[\s\S]*?-->/g, '').split('\n').map(l=>l.trim()).filter(l=>l!=='');
             this.script = this.script.map(l => l.replace(/<\/?status>/g, '').replace(/<\/?content>/g, ''));
+            // 🚨 <ChapterCard> 這兩行標籤要在「未知區塊過濾器」之前就拆掉。
+            //    那個過濾器看到 ^<Xxx>$ 而 Xxx 不在白名單，就判定為「作者的 DOM 區塊」→
+            //    把區塊內的原始文字整段刪掉。ChapterCard 裡裝的正是 [Story|/[Chapter|/[BGM|/[Bg|/[Avatar|，
+            //    於是背景、BGM、左上角場景 tag 全部沒了（立繪還在是因為早鳥直接掃原文、不經這條路）。
+            //    這兩行標籤本身在 next() 沒有 handler，留著會被當旁白 → 直接整行移除。
+            this.script = this.script.map(l => l.replace(/<\/?ChapterCard>/gi, '').trim()).filter(l => l !== '');
             // 切割：AI 常把旁白和 [Char|...] 擠在同一行（旁白混進對話泡）→ 拆成獨立行，
             //   每個 [Char|...] 自成一行、中間/前後的旁白各自一行，下游照常渲染對話泡/旁白。
             //   不靠 AI 守排版規範，腳本端硬切（同 WX 拆 [图片:] 的思路）。
