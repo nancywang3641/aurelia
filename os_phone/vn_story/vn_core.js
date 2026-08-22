@@ -2538,6 +2538,12 @@
             if (!popup) return;
             const isOpen = popup.classList.toggle('show');
             if (btn) btn.classList.toggle('active', isOpen);
+            // 這顆鈕兩版做的事不一樣(酒館開故事管理面板、PWA 直接生大總結) → 名字也要跟著換，
+            //   不然 PWA 按下去跑的是大總結、標題卻寫故事管理。
+            if (isOpen) {
+                const sb = document.getElementById('ctx-summary-btn');
+                if (sb) sb.textContent = ((win.OS_API?.isStandalone?.()) ?? false) ? '📝 大總結' : '🛠️ 故事管理';
+            }
             if (isOpen) VN_CtxMonitor.poll();
         },
         closeCtx: function() {
@@ -2548,6 +2554,16 @@
         },
         // 🛠️ 故事管理：開 OS_STORY_TOOLS 完整面板（大總結 + 編輯模板 + 合併 + 隱藏對話）。取代原 CTX 的「📝 大總結」快捷鈕。
         openStoryTools: function() {
+            // 🚨 PWA 走自帶的大總結產生器。故事管理面板整套是酒館的：它讀酒館聊天樓層、隱藏對話靠酒館斜線指令，
+            //   獨立版兩樣都沒有 → 開起來是空轉。（2026-06-19 CTX 浮窗重做時這顆鈕改指故事管理，
+            //   VN_Summary.generate 從此沒有呼叫點，PWA 的大總結就是那時候斷線的。）
+            if ((win.OS_API?.isStandalone?.()) ?? false) {
+                const S = win.VN_Summary || window.VN_Summary;
+                if (S && typeof S.generate === 'function') { S.generate(); return; }   // CTX 先不收：那顆鈕要留著顯示「⏳ 生成中…」
+                this.closeCtx();
+                alert('大總結模組尚未載入');
+                return;
+            }
             this.closeCtx();
             const st = window.OS_STORY_TOOLS || (window.parent && window.parent.OS_STORY_TOOLS);
             const cont = document.getElementById('page-game') || document.body;

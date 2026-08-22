@@ -14,7 +14,11 @@
     const win = window.parent || window;
     const API = {};
 
-    // === 取目前對話 id（沿用原 status_panel 邏輯）===
+    // === 取目前劇情線的識別碼 ===
+    //   酒館＝chatId（聊天檔名）。這段的正規化方式一個字都不能改：它是 tavern_summary 既有存檔的 key，
+    //   改了舊總結全部認不得（所以不共用 OS_AVS_ADAPTER.getCurrentChatId，那邊空白正規化不同）。
+    //   PWA＝storyId。以前這裡沒有 PWA 分支，會掉到最下面那行「Unsaved_Chat_今天日期」——
+    //   一把用日期組的假鑰匙、每天換一次，而且不管在跑哪一本書都是同一把 → 全部劇情線擠同一格。
     function getChatIdentifier() {
         if (window.parent.SillyTavern && window.parent.SillyTavern.getContext) {
             const ctx = window.parent.SillyTavern.getContext();
@@ -22,8 +26,11 @@
                 return ctx.chatId.split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
             }
         }
+        // PWA：跟章節 / 記憶 / AVS 用同一把鑰匙（adapter 在獨立版回 vn_current_story_id）
+        try { const sid = win.OS_AVS_ADAPTER?.getStoryId?.(); if (sid) return sid; } catch (e) {}
         return "Unsaved_Chat_" + new Date().toISOString().slice(0, 10);
     }
+    function _isStandalone() { try { return (win.OS_API?.isStandalone?.()) ?? false; } catch (e) { return false; } }
 
     // === 酒館原生 API：背景讀聊天檔（不靠記憶體 chat 陣列、不展開、不靠酒館助手）===
     function _stCtx() { try { return win.SillyTavern?.getContext?.() || null; } catch (e) { return null; } }
@@ -435,7 +442,10 @@
                 }
                 if (String(body || '').trim()) out.push(`【${h}】\n${String(body).trim()}`);
             }
-            return out.join('\n\n').trim();
+            const packed = out.join('\n\n').trim();
+            // 🚨 切不出任何區塊就退回全文，絕不回空字串：舊格式 / 自訂模板沒用【區塊名】包表頭時
+            //   _splitSummarySections 會回空陣列 → 這裡本來會回 ''，注入端拿到空字串＝整份長期記憶靜靜消失。
+            return packed || _stripSummaryHead(fullContent).trim();
         } catch (e) {
             console.warn('[大總結] buildInjectionPayload 失敗，退回全文:', e);
             return _stripSummaryHead(fullContent).trim();
@@ -471,6 +481,17 @@
         } catch (e) { return null; }
     }
     async function _loadTavernSummary(chatId) {
+        // PWA：大總結存在 vn_grand_summaries（by storyId、一版一筆），不是酒館那個 tavern_summary。
+        //   取 count 最大的那版包成同一個形狀回傳，下游(getCurrentInjectionPayload → wx/電話/微博 app)不用分版本。
+        if (_isStandalone()) {
+            try {
+                const list = (await (win.OS_DB?.getGrandSummaries?.(chatId))) || [];
+                if (!list.length) return null;
+                const latest = list.reduce((a, b) => ((a.count || 0) >= (b.count || 0) ? a : b));
+                if (!latest || !latest.content) return null;
+                return { content: latest.content, summaryCount: latest.count || list.length, lastId: null, title: '', bgCacheId: '' };
+            } catch (e) { return null; }
+        }
         try {
             const osDb = window.parent.OS_DB;
             if (osDb?.getTavernSummary) {
@@ -484,6 +505,10 @@
     }
     API._loadTavernSummary = _loadTavernSummary;
     API.getChatId = getChatIdentifier;   // 注入器/外部要用「跟存檔 key 同款」的 chatId，從這拿(別用 OS_DB.currentChatId，空白正規化不同)
+    // 給 PWA 的 vn_summary 共用：同一份模板(含她自訂的)與同一道品質閘門。
+    //   兩版差在「資料從哪來」與「怎麼注入」，這兩支是純文字處理、跟來源無關 → 沒有理由各寫一份。
+    API.getSummaryTemplate = getSummaryTemplate;
+    API.validateSummary = _validateSummary;
 
     // 給 os_summary_inject 每輪呼叫：讀目前 chatId 的大總結 → 回壓縮後注入字串(沒有就回 '')
     API.getCurrentInjectionPayload = async function (opts) {
