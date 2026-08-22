@@ -137,7 +137,9 @@
             await DB.saveWorldbookEntry({ ...e, enabled: want, updatedAt: Date.now() });
             changed++;
         }
+        // 有沒有切都出聲：選了自由卻還被要求寫表情格時，看這行就知道是「沒切到」還是「切了但條目內容沒差」
         if (changed) console.log(`[VN自由模式] 獨立版世界書開關已切換 → ${free ? '自由版' : '固定版'}總綱（改了 ${changed} 條）`);
+        else console.log(`[VN自由模式] 獨立版世界書已經是${free ? '自由版' : '固定版'}總綱（共 ${cores.length} 條總綱條目），不用動`);
     }
 
     let _applying = false;
