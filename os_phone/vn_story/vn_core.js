@@ -1279,10 +1279,10 @@
                         console.log(`[VN] 頭像從 IDB 載入：${name}`); continue;
                     }
                     if (cached?.url?.startsWith('blob:')) await VN_Cache.delete('avatar_cache', name);
-                    // persona URL 橋接：若名字是主角且有頭像 URL，直接用；有 desc 則注入為生圖 prompt
+                    // persona 橋接：名字是主角且自己設了頭像圖 → 直接用那張。
+                    // 🚫 沒圖就跟其他沒外觀的角色一樣走剪影：不拿人設 desc 去生圖（那是給 AI 讀的長文，不是外觀詞）
                     const pf = this._getPersonaFallback(name);
                     if (pf?.url) { this._avatarMemCache[name] = pf.url; console.log(`[VN] 頭像使用 Persona URL：${name}`); continue; }
-                    if (pf?.prompt && !this.avatars[name]) this.avatars[name] = pf.prompt;
                     // 自備靜態立繪/預設圖存在 → 播放時直接讀，不必生
                     if (await this._staticAvatarExists(name)) { console.log(`[VN] 頭像使用自備靜態圖：${name}`); continue; }
                     if (win.OS_IMAGE_MANAGER) needGen.push(name);
@@ -2803,39 +2803,8 @@
                 const userName = win.OS_PERSONA?.getName?.() || win.OS_API?.getGlobalUserName?.();
                 if (!userName || name !== userName) return null;
                 const p = win.OS_PERSONA?.getCurrent?.() || {};
-                return { url: p.avatar || '', prompt: this._personaLooksOf(p.desc) };
+                return { url: p.avatar || '' };
             } catch(e) { return null; }
-        },
-
-        // 🚨 主角人設(Persona)的自我介紹是寫給 AI 讀的長文——性格、能力邊界、背景全在裡面，還帶 markdown。
-        //    以前整篇直接當「外觀 prompt」丟去生圖：① 翻譯把它逐段送出去（免費額度一輪就被打爆、console 洗版）
-        //    ② 幾千字餵給模型，出來的圖也不準。→ 這裡只留外觀那一段，並硬性截短。
-        _personaLooksOf: function(desc) {
-            const raw = String(desc || '').trim();
-            if (!raw) return '';
-            let out = '';
-            // 先找「外觀/外貌/容貌/長相/appearance/looks」那個標題段，取到下一個標題為止
-            const head = raw.match(/^#{1,6}[^\n]*(外[观觀貌形]|容貌|长相|長相|appearance|looks?)[^\n]*$/im);
-            if (head) {
-                const rest = raw.slice(raw.indexOf(head[0]) + head[0].length);
-                const nextHead = rest.search(/^#{1,6}\s+/m);
-                out = nextHead >= 0 ? rest.slice(0, nextHead) : rest;
-            }
-            if (!out.trim()) out = raw;          // 沒分段的人設 → 退回整篇，靠下面截短
-            out = out.replace(/[#*_>`~]+/g, ' ')          // markdown 記號
-                     .replace(/\s*\n+\s*/g, ', ')          // 換行 → 逗號（生圖 prompt 是標籤串）
-                     .replace(/\s{2,}/g, ' ')
-                     .replace(/(?:,\s*){2,}/g, ', ')
-                     .trim()
-                     .replace(/^[,\s]+|[,\s]+$/g, '');
-            const MAX = 200;                              // 外觀詞不該比這更長
-            if (out.length > MAX) {
-                const cut = out.slice(0, MAX);
-                const lastComma = cut.lastIndexOf(',');
-                out = (lastComma > MAX * 0.5 ? cut.slice(0, lastComma) : cut).trim();
-                console.warn('[VN] 主角人設過長 → 只取前段當外觀 prompt（想精準就在人設裡開一段「外觀」）');
-            }
-            return out;
         },
 
         // 原始查表（不過濾 none）：外觀字串照實回傳，給 _isNoneChar 判斷用
