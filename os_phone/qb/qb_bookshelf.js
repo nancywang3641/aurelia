@@ -957,6 +957,7 @@
                         選擇開場白：${w.title}
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;">
+                        <button id="qb-greet-beautify-btn" class="qb-btn-ghost qb-hidden" title="這張卡自帶的美化面板">美化</button>
                         <button id="qb-greet-replace-btn" class="qb-btn-ghost" title="文字取代">取代</button>
                         <button id="qb-inner-close" style="
                             background:none;border:none;color:var(--qbk-ink);
@@ -1281,6 +1282,67 @@
                 // 移到底部圓點列兩端後改用 visibility:位置留著,列才不會隨著到頭/到尾左右跳
                 if (prevBtn) prevBtn.style.visibility = (currentSlide === 0) ? 'hidden' : 'visible';
                 if (nextBtn) nextBtn.style.visibility = (currentSlide === totalSlides - 1) ? 'hidden' : 'visible';
+
+                // 翻到的這一張才做美化（函式在下面宣告，updateSlider 只在使用者操作時才跑得到）
+                try { _renderSlideText(currentSlide); } catch (e) {}
+            }
+
+            // ── 卡片自帶的美化面板：只做「現在這一張」──────────────────────
+            //   一張卡動輒十幾則開場白，每個面板都是一份完整 HTML 文件(iframe)；
+            //   全部一次渲染會直接把手機拖死，所以跟著 updateSlider 走，翻到哪張才做哪張。
+            const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
+            const beautifyBtn = panel.querySelector('#qb-greet-beautify-btn');
+            let _beautifyOn = false;
+            const _greetRaw = (i) => String(w.greetings[i] || '')
+                .replace(/\{\{\s*user\s*\}\}/gi, currentUserName)
+                .replace(/\{\{\s*char\s*\}\}/gi, w.title);
+            // 面板是整份 HTML 文件，塞進 iframe 後沒有高度可言 → 載入完照內容撐高（同 VN 那邊做法）
+            function _fitCardFrames(root) {
+                root.querySelectorAll('iframe.vn-regex-card').forEach(fr => {
+                    const fit = () => {
+                        try {
+                            const fd = fr.contentDocument;
+                            const h = Math.max(fd.body ? fd.body.scrollHeight : 0, fd.documentElement ? fd.documentElement.scrollHeight : 0);
+                            if (h) fr.style.height = h + 'px';
+                        } catch (e) { fr.style.height = '60vh'; }
+                    };
+                    fr.addEventListener('load', () => { fit(); setTimeout(fit, 400); });
+                    setTimeout(fit, 50);
+                });
+            }
+            function _renderSlideText(i) {
+                const slide = panel.querySelector(`.qb-greet-slide[data-greet-idx="${i}"]`);
+                const textDiv = slide && slide.querySelector('.qb-greet-text');
+                if (!textDiv) return;
+                const raw = _greetRaw(i);
+                if (_beautifyOn && _CR) {
+                    try {
+                        const html = _CR.renderRichHtml(raw, _escHtml, w.id);
+                        if (html) { textDiv.innerHTML = html; _fitCardFrames(textDiv); return; }
+                    } catch (e) { console.warn('[書架] 開場白美化失敗，退回原文', e); }
+                }
+                textDiv.innerHTML = _escHtml(raw);
+            }
+            function _syncBeautifyBtn() {
+                if (!beautifyBtn) return;
+                beautifyBtn.textContent = _beautifyOn ? '美化' : '原文';
+                beautifyBtn.classList.toggle('qb-btn-on', _beautifyOn);
+            }
+            if (_CR && beautifyBtn) {
+                _CR.getPack(w.id).then(pack => {
+                    if (!pack || !Array.isArray(pack.scripts) || !pack.scripts.length) return;   // 這張卡沒帶正則＝按鈕不出現
+                    beautifyBtn.classList.remove('qb-hidden');
+                    _beautifyOn = pack.enabled !== false;
+                    _syncBeautifyBtn();
+                    _renderSlideText(currentSlide);
+                }).catch(() => {});
+                beautifyBtn.onclick = async () => {
+                    _beautifyOn = !_beautifyOn;
+                    _syncBeautifyBtn();
+                    // 這個開關同時決定劇情播放時要不要套（就是這本書的正則總開關），所以寫回正則庫
+                    try { await _CR.setEnabled(w.id, _beautifyOn); } catch (e) {}
+                    _renderSlideText(currentSlide);
+                };
             }
 
             // 綁定點擊按鈕切換
@@ -1342,10 +1404,7 @@
                     const newText = editor.value;
                     w.greetings[idx] = newText;
                     _saveGreetings();
-                    // 重新渲染文字（帶顯示替換）
-                    textDiv.innerHTML = _escHtml(newText)
-                        .replace(/\{\{\s*user\s*\}\}/gi, currentUserName)
-                        .replace(/\{\{\s*char\s*\}\}/gi, w.title);
+                    _renderSlideText(idx);   // 走同一支重畫：美化開著就重新長面板，關著就是轉義原文
                 }
                 textDiv.style.display   = '';
                 editor.style.display    = 'none';

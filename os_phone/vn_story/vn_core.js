@@ -430,6 +430,9 @@
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
+            // 這份劇本的原文：區塊內容等一下會被「未知 XML 區塊過濾器」刪掉，
+            //   彈卡片時要回原文撈整顆 <tag>…</tag>（PWA 沒有酒館訊息可讀，只能靠這份）。
+            this._scriptRawText = String(txt || '');
             this._sceneIdPlayed = Object.create(null);  // 本份劇本已播過的插圖 ID（同一份裡重複的只播第一次，見 [Scene| handler）
             this.charVoices = this._loadCharVoices();   // 先載入本卡持久化的固定聲線（跨訊息/大總結/重載留存），下面解析 [Avatar] 再合併
             // 🔄 學 PWA：重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 生效。
@@ -849,6 +852,17 @@
                     }
                 }
             } catch (e) {}
+            // 🎴 角色卡自帶的正則（PWA 來源）：匯入角色卡時收進正則庫，這裡當第二順位問它。
+            //    酒館那邊這些正則由 TavernHelper 供應；PWA 沒有酒館可問 → 不接這一條的話，
+            //    卡片作者做的美化面板（<标题栏>、<播放器>…）在 PWA 全部變成裸文字。
+            //    順序在「自訂組件」之後：她自己做的組件永遠贏過卡片作者的版型。
+            try {
+                const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
+                if (_CR && typeof _CR.cardHtmlFor === 'function') {
+                    const _cardHtml = _CR.cardHtmlFor(blockText);
+                    if (_cardHtml) return _cardHtml;
+                }
+            } catch (e) {}
             const _win = window.parent || window;
             const _th = (_win && _win.TavernHelper) || window.TavernHelper;
             if (!_th || typeof _th.getTavernRegexes !== 'function') return '';
@@ -977,14 +991,29 @@
             if (!_regexCardHtml) {
                 let _block = rawBlockOverride || '';
                 if (!_block && tagHint) {
+                    // 整顆 <tag>…</tag> 的比對式。
+                    //   🚨 不能用 \b 收尾：JS 的 \b 只認 [A-Za-z0-9_]，中文 tag（<标题栏>）在「栏」與「>」
+                    //      之間根本沒有邊界 → 整條比對永遠不成立，卡片作者用中文標籤做的面板一律抓不到。
+                    //      改成「後面要嘛直接收尾、要嘛接一個空白再帶屬性」，對 ASCII tag 一樣不會誤吃 <calls>。
+                    const _blockRe = new RegExp('<' + tagHint + '(?:\\s[^>]*)?>[\\s\\S]*?<\\/' + tagHint + '>', 'i');
                     const _th = (_win && _win.TavernHelper) || window.TavernHelper;
                     if (_th && typeof _th.getChatMessages === 'function') {
                         try {
                             const _mid = (this._currentMessageId != null) ? this._currentMessageId : -1;
                             const _msg = _th.getChatMessages(_mid)[0];
                             const _raw = (_msg && _msg.message) || '';
-                            const _bm = _raw.match(new RegExp('<' + tagHint + '\\b[^>]*>[\\s\\S]*?<\\/' + tagHint + '>', 'i'));
+                            const _bm = _raw.match(_blockRe);
                             if (_bm) _block = _bm[0];
+                        } catch (e) {}
+                    }
+                    // PWA 沒有酒館訊息可撈（getChatMessages 回空陣列）→ 用這份劇本的原文。
+                    //   區塊內容在 loadScript 就被「未知 XML 區塊過濾器」刪掉了，只剩頭尾兩行，
+                    //   所以一定要回原文撈，不能從 this.script 拼。
+                    if (!_block) {
+                        try {
+                            const _rawSelf = this._scriptRawText || this._lastRawText || '';
+                            const _bm2 = _rawSelf && _rawSelf.match(_blockRe);
+                            if (_bm2) _block = _bm2[0];
                         } catch (e) {}
                     }
                 }

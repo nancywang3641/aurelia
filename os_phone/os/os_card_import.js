@@ -184,6 +184,16 @@
             localStorage.setItem('aurelia_custom_worlds', JSON.stringify(saved));
         } catch (e) { console.warn('[CardImport] localStorage 寫入失敗', e); }
 
+        // ── 3.5 卡片自帶的美化正則 ─────────────────────────────
+        //  酒館卡把美化面板放在 extensions.regex_scripts（找一段標記 → 換成一整份 HTML）。
+        //  不收下來的話，這張卡在這裡就只剩裸文字（<标题栏> 那種標記直接晾在畫面上）。
+        //  存進 IDB 的正則庫，不塞進上面那顆 world 物件——它是進 localStorage 的，一張卡的正則就上百 KB。
+        let regexCount = 0;
+        try {
+            if (win.OS_CARD_REGEX) regexCount = await win.OS_CARD_REGEX.saveFromCard(worldId, card.name, rawCard);
+            else console.warn('[CardImport] 正則庫模組沒載入，這張卡自帶的美化面板不會生效');
+        } catch (e) { console.warn('[CardImport] 自帶正則存入失敗', e); }
+
         // ── 4. 完成 ────────────────────────────────────────────
         _setProgress(panelEl, `✅ 完成！`, 100);
         setTimeout(() => {
@@ -191,6 +201,7 @@
                 name: card.name,
                 worldDesc,
                 importedEntryCount,
+                regexCount,
                 railEl,
             });
         }, 600);
@@ -209,7 +220,7 @@
     // ═══════════════════════════════════════════════════════════
     //  匯入成功畫面
     // ═══════════════════════════════════════════════════════════
-    function _showSuccess(panelEl, { name, worldDesc, importedEntryCount, railEl }) {
+    function _showSuccess(panelEl, { name, worldDesc, importedEntryCount, regexCount, railEl }) {
         panelEl.innerHTML = `
             <div style="position:absolute;inset:0;background:linear-gradient(160deg,#0e2a1a 0%,#061a0e 100%);"></div>
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
@@ -222,7 +233,7 @@
                 </div>
                 <div style="font-size:11px;color:rgba(168,255,204,0.8);line-height:2.4;
                             background:rgba(0,0,0,0.3);padding:10px 18px;border-radius:6px;">
-                    📚 世界書條目　${importedEntryCount} 條
+                    📚 世界書條目　${importedEntryCount} 條${regexCount ? `<br>✨ 自帶美化面板　${regexCount} 條` : ''}
                 </div>
                 <button id="ci-go-back" style="
                     margin-top:8px;background:linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030);

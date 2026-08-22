@@ -163,6 +163,14 @@
     font-size: 12px; padding: 5px 12px; letter-spacing: 0.5px; border-radius: 4px;
 }
 
+/* ✨ 卡片自帶的美化面板：開關 + 面板本體
+   角色卡把美化面板放在自己的正則裡，內容是一整份 HTML 文件 → 只能塞 iframe 才跑得動它的字體與腳本。
+   高度由 JS 照內容撐（iframe 沒有自然高度），這裡只負責寬度吃滿、去掉框線與白底。 */
+#qb-greet-beautify-btn.qb-btn-ghost { font-size: 12px; padding: 5px 12px; letter-spacing: 0.5px; border-radius: 4px; }
+#qb-greet-beautify-btn.qb-btn-on { color: #f0d9a8; border-color: rgba(240,217,168,0.55); background: rgba(240,217,168,0.10); }
+.qb-hidden { display: none !important; }
+.qb-greet-text iframe.vn-regex-card { width: 100%; border: 0; display: block; background: transparent; margin: 8px 0; }
+
 /* 🎭 這本書的立繪模式（圖庫／自由）— 藏書設定列，跟擴充館藏、變數包同一區 */
 .qb-spmode-row { width:78%; display:flex; align-items:center; gap:8px; margin-bottom:16px; }
 .qb-spmode-label { font-size:10px; color:var(--qbk-ink-faint); letter-spacing:2px; white-space:nowrap; flex-shrink:0; }
