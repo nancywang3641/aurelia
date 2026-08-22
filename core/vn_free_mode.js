@@ -22,14 +22,22 @@
     const RX_NAME = '[VN自由模式] 歷史表情格剝除';     // promptOnly 正則名
 
     function _th() { return win.TavernHelper || null; }
+    function _isStandalone() {
+        try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; }
+    }
 
     // 這張卡的鑰匙：卡片層級（同卡不同聊天共用）
+    //   獨立版沒有角色卡，對應物是「這本藏書」＝ vn_current_world_id（書架 dive 時寫入）。
+    //   用 storyId 會每開一個新開場白就換一把 → 每次都要重選模式，那不是卡片層級。
     function _storyId() {
         try {
             const th = _th();
             const cd = th && th.getCharData ? th.getCharData('current') : null;
             if (cd && (cd.avatar || cd.name)) return String(cd.avatar || cd.name);
         } catch (e) {}
+        if (_isStandalone()) {
+            try { const w = localStorage.getItem('vn_current_world_id'); if (w) return String(w); } catch (e) {}
+        }
         try { return localStorage.getItem('vn_current_story_id') || ''; } catch (e) { return ''; }
     }
     function _key(id) { return 'vn_free_mode_' + id; }
@@ -109,6 +117,29 @@
 
     // 把世界書/正則調成當前卡該有的樣子（切模式、換卡、進出視差都走這；狀態沒變就不寫、避免磁碟空轉）
     // force=true → 略過記憶直接重算：換卡/開機用（也順便修她自己在世界書面板手撥過的燈）。
+    // 獨立版：總綱條目住 OS_DB，用同一套名字判準撥開關。
+    //   規矩跟酒館完全一樣 —— 兩條條目都是她的，腳本只撥 enabled、絕不創建也不寫內容。
+    async function _applyStandalone(free) {
+        const DB = win.OS_DB || window.OS_DB;
+        if (!DB || !DB.getAllWorldbookEntries || !DB.saveWorldbookEntry) return;
+        const all = (await DB.getAllWorldbookEntries()) || [];
+        const cores = all.filter(e => _isCoreName(e && e.title));
+        if (!cores.length) { console.log('[VN自由模式] 獨立版世界書裡沒有總綱條目 → 不動'); return; }
+        const _isFreeEnt = (e) => String(e.title || '').includes('自由');
+        if (free && !cores.some(_isFreeEnt)) {
+            console.warn(`[VN自由模式] 獨立版世界書裡找不到自由版總綱條目（名字需含「${CORE_ENTRY_HINT}」+「自由」）→ 維持固定版、不切換`);
+            return;
+        }
+        let changed = 0;
+        for (const e of cores) {
+            const want = _isFreeEnt(e) ? free : !free;
+            if ((e.enabled !== false) === want) continue;
+            await DB.saveWorldbookEntry({ ...e, enabled: want, updatedAt: Date.now() });
+            changed++;
+        }
+        if (changed) console.log(`[VN自由模式] 獨立版世界書開關已切換 → ${free ? '自由版' : '固定版'}總綱（改了 ${changed} 條）`);
+    }
+
     let _applying = false;
     let _lastEff = null;   // 上次真的套用完的實際模式；沒變就連世界書都不用讀（世界門每則訊息會戳這支一次）
     async function applyForCurrent(force) {
@@ -117,6 +148,10 @@
         if (!force && _lastEff === free) return;
         _applying = true;
         try {
+            // 獨立版沒有 TavernHelper：世界書走 OS_DB，歷史表情格的剝除由組 prompt 時做
+            //   （PWA 不吃酒館正則，歷史是 os_api_engine 從章節組出來的）
+            if (_isStandalone()) { await _applyStandalone(free); _lastEff = free; return; }
+
             const th = _th();
             if (!th) return;
             const hit = await _findCoreEntry();
@@ -158,11 +193,14 @@
     function isFree(id) {
         try { return localStorage.getItem(_key(id || _storyId())) === '1'; } catch (e) { return false; }
     }
-    async function set(on) {
-        const id = _storyId();
-        if (!id) { console.warn('[VN自由模式] 拿不到當前卡片，略過'); return false; }
-        try { localStorage.setItem(_key(id), on ? '1' : '0'); } catch (e) {}
-        await applyForCurrent();
+    // id 可省略＝設「現在這張卡/這本書」。書架在踏入之前就要先選模式，那時 vn_current_world_id
+    //   還是上一本 → 由呼叫端把那本書的 id 傳進來，只寫檔；等 dive 把它設成當前再套用。
+    async function set(on, id) {
+        const cur = _storyId();
+        const target = id || cur;
+        if (!target) { console.warn('[VN自由模式] 拿不到當前卡片，略過'); return false; }
+        try { localStorage.setItem(_key(target), on ? '1' : '0'); } catch (e) {}
+        if (target === cur) await applyForCurrent(true);
         return true;
     }
 
@@ -175,9 +213,19 @@
         } catch (e) {}
         setTimeout(() => applyForCurrent(true), 3000);   // 開機對齊一次
     }
-    if (_th()) _hook(); else setTimeout(() => { if (_th()) _hook(); }, 5000);
+    // 獨立版沒有 TavernHelper 也要掛：世界書那條路走 OS_DB，開機一樣要對齊一次
+    //   （以前這行只在有 TavernHelper 時執行，所以 PWA 連對齊都不會發生）
+    if (_th() || _isStandalone()) _hook();
+    else setTimeout(() => { if (_th() || _isStandalone()) _hook(); }, 5000);
 
-    win.VN_FREE_MODE = { isFree, set, applyForCurrent, storyId: _storyId, inParallax: _inParallax, effectiveFree: _effectiveFree };
+    // 歷史對齊（獨立版）：酒館用 promptOnly 正則把歷史裡的表情格剝掉，PWA 的歷史是組 prompt 時
+    //   從章節拼出來的 → 由 os_api_engine 呼叫這支，正則只留這一份。
+    function stripEmotionCol(text) {
+        return String(text == null ? '' : text)
+            .replace(/\[Char\|([^|\]]+)\|\s*[A-Za-z]+\s*\|/g, '[Char|$1|');
+    }
+
+    win.VN_FREE_MODE = { isFree, set, applyForCurrent, storyId: _storyId, inParallax: _inParallax, effectiveFree: _effectiveFree, stripEmotionCol };
     window.VN_FREE_MODE = win.VN_FREE_MODE;
     console.log('🎲 [VN自由模式] 模組就緒');
 })();

@@ -102,3 +102,10 @@
 .qbfp-chip-nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px; }
 .qbfp-chip-del { flex:none; opacity:.4; font-size:11px; font-style:normal; }
 .qbfp-chip-del:hover { opacity:1; color:rgba(255,150,150,0.95); }
+
+/* 🎭 這本書的立繪模式（圖庫／自由）— 藏書設定列，跟擴充館藏、變數包同一區 */
+.qb-spmode-row { width:78%; display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+.qb-spmode-label { font-size:10px; color:rgba(26,28,40,0.25); letter-spacing:2px; white-space:nowrap; flex-shrink:0; }
+.qb-spmode-btn { flex:1; min-width:0; background:rgba(0,0,0,0.45); border:1px solid rgba(26,28,40,0.10); border-radius:12px; color:rgba(26,28,40,0.68); font-size:10px; padding:4px 10px; outline:none; font-family:inherit; cursor:pointer; transition:border-color .2s, background .2s, color .2s; }
+.qb-spmode-btn:hover { border-color:rgba(26,28,40,0.28); }
+.qb-spmode-btn.on { background:rgba(200,160,48,0.22); border-color:rgba(200,160,48,0.65); color:#6b5410; font-weight:700; }
