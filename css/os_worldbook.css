@@ -16,11 +16,6 @@
         
         .wb-search { width:100%; background:#EEF0F6; border:1px solid rgba(26,28,40,0.20); border-radius:20px; color:#1A1C28; font-size:12px; padding:6px 14px; outline:none; box-sizing:border-box; }
         .wb-search:focus { border-color:#1A1C28; }
-
-        .wb-cat-bar { display:flex; gap:4px; padding:8px 10px; background:rgba(228,232,245,0.96); overflow-x:auto; flex-shrink:0; scrollbar-width:none; border-bottom:1px solid rgba(26,28,40,0.15); }
-        .wb-cat-bar::-webkit-scrollbar { display:none; }
-        .wb-cat-tab { flex-shrink:0; padding:4px 12px; border-radius:20px; border:1px solid rgba(26,28,40,0.15); background:none; color:rgba(26,28,40,0.72); font-size:11px; cursor:pointer; transition:.2s; }
-        .wb-cat-tab.active { background:#1A1C28; border-color:#1A1C28; color:#EEF0F6; font-weight:700; }
         
         .wb-list { flex:1; overflow-y:auto; padding:8px 10px 75px 10px; display:flex; flex-direction:column; gap:6px; }
         .wb-list::-webkit-scrollbar { width:3px; } .wb-list::-webkit-scrollbar-thumb { background:rgba(26,28,40,0.15); border-radius:2px; }
@@ -32,7 +27,6 @@
         .wb-entry-title { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#1A1C28; display:flex; align-items:center; gap:6px; }
         .wb-entry-order { background:rgba(228,232,245,0.90); color:#1A1C28; padding:1px 5px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid rgba(26,28,40,0.10); }
         .wb-entry-meta { font-size:10px; color:#3A3F5C; margin-top:4px; }
-        .wb-entry-cat { display:inline-block; padding:1px 7px; border-radius:10px; background:rgba(228,232,245,0.90); border:1px solid rgba(26,28,40,0.15); font-size:9px; color:#1A1C28; margin-right:4px; }
         
         .wb-entry-edit, .wb-entry-del { background:none; border:none; cursor:pointer; font-size:14px; padding:5px; border-radius:6px; transition:.2s; flex-shrink:0; }
         .wb-entry-edit { color:rgba(26,28,40,0.72); }
@@ -141,15 +135,11 @@ html:has(.mode-404) .wb-book-btn.danger { color:#ff8080 !important; border-color
 html:has(.mode-404) .wb-search { background:rgba(0,18,0,0.90) !important; border-color:rgba(0,255,65,0.30) !important; color:#b8ffcb !important; font-family:'Courier New',monospace !important; }
 html:has(.mode-404) .wb-search::placeholder { color:rgba(0,255,65,0.40) !important; }
 
-html:has(.mode-404) .wb-cat-bar { background:rgba(0,15,5,0.92) !important; border-bottom-color:rgba(0,255,65,0.25) !important; }
-html:has(.mode-404) .wb-cat-tab { background:rgba(0,15,5,0.78) !important; border-color:rgba(0,255,65,0.30) !important; color:rgba(0,255,65,0.70) !important; font-family:'Courier New',monospace !important; }
-html:has(.mode-404) .wb-cat-tab:hover { background:rgba(0,255,65,0.10) !important; border-color:#00ff41 !important; color:#00ff41 !important; }
 
 html:has(.mode-404) .wb-entry { background:rgba(0,15,5,0.78) !important; border-color:rgba(0,255,65,0.20) !important; color:#b8ffcb !important; }
 html:has(.mode-404) .wb-entry-title { color:#00ff41 !important; font-family:'Courier New',monospace !important; }
 html:has(.mode-404) .wb-entry-order { background:rgba(0,255,65,0.10) !important; color:#00ff41 !important; border-color:rgba(0,255,65,0.30) !important; }
 html:has(.mode-404) .wb-entry-meta { color:rgba(0,255,65,0.60) !important; }
-html:has(.mode-404) .wb-entry-cat { background:rgba(0,255,65,0.10) !important; border-color:rgba(0,255,65,0.30) !important; color:#00ff41 !important; }
 html:has(.mode-404) .wb-entry-edit { color:rgba(0,255,65,0.70) !important; }
 html:has(.mode-404) .wb-empty { color:rgba(0,255,65,0.55) !important; font-family:'Courier New',monospace !important; }
 html:has(.mode-404) .wb-fab { background:#001a00 !important; border:1px solid #00ff41 !important; color:#00ff41 !important; box-shadow:0 0 14px rgba(0,255,65,0.35) !important; }
@@ -167,3 +157,12 @@ html:has(.mode-404) .wb-export-cancel { color:rgba(0,255,65,0.70) !important; bo
         .wb-field select:focus, .wb-field textarea:focus, .wb-tag-box:focus-within {
             border-color:#1A1C28; box-shadow:0 0 0 2px rgba(26,28,40,0.10);
         }
+
+        /* 快速加入關鍵字：收成折疊（一本書幾十條標籤全攤開會把表單拉到天邊） */
+        .wb-tag-fold { margin-top:6px; }
+        .wb-tag-fold-sum { list-style:none; cursor:pointer; font-size:11px; color:rgba(26,28,40,0.72); padding:5px 8px; border:1px solid rgba(26,28,40,0.15); border-radius:8px; background:rgba(228,232,245,0.60); user-select:none; display:flex; align-items:center; gap:4px; }
+        .wb-tag-fold-sum::-webkit-details-marker { display:none; }
+        .wb-tag-fold-sum::after { content:'▾'; margin-left:auto; font-size:10px; opacity:.6; }
+        .wb-tag-fold[open] .wb-tag-fold-sum::after { content:'▴'; }
+        .wb-tag-fold-n { color:#1A1C28; font-weight:700; }
+        .wb-tag-fold[open] .wb-tag-sug-area { max-height:150px; overflow-y:auto; padding:8px 2px 2px; }

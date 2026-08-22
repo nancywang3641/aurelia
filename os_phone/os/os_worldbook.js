@@ -10,7 +10,6 @@
     'use strict';
     const win = window.parent || window;
 
-    const LSKEY_CATS = 'os_worldbook_cats';
     const LSKEY_BOOKS = 'os_worldbook_books';
     const DEFAULT_CATS = ['預設', '角色設定', '世界觀', '規則設定', '故事背景', '物品', '其他'];
     const DEFAULT_BOOKS = ['預設書包'];
@@ -18,11 +17,6 @@
     // ── 樣式注入 ────────────────────────────────────────────────────
 
     // ── 資料存取 ────────────────────────────────────────────────────
-    function getCats() {
-        try { return JSON.parse(localStorage.getItem(LSKEY_CATS)) || [...DEFAULT_CATS]; }
-        catch(e) { return [...DEFAULT_CATS]; }
-    }
-    function saveCats(cats) { localStorage.setItem(LSKEY_CATS, JSON.stringify(cats)); }
 
     function getBooks() {
         try { return JSON.parse(localStorage.getItem(LSKEY_BOOKS)) || [...DEFAULT_BOOKS]; }
@@ -51,14 +45,11 @@
     // ── 格式匯入 ────────────────────────────────────────────────────
     function importFromST(json, targetBookName) {
         const entries = [];
-        const cats = getCats();
         const src = json.entries || json;
         const items = Array.isArray(src) ? src : Object.values(src);
         
         items.forEach((e, i) => {
             const cat = e.group && e.group.trim() ? e.group.trim() : '預設';
-            if (cat && !cats.includes(cat)) cats.push(cat);
-            
             // 🚨 觸發關鍵字：酒館「匯出世界書」的欄位叫 `key`，只有助手 API 那條路才叫 `keyword`。
             //    以前只讀 keyword → 匯入真的酒館檔案時每一條的關鍵字都被靜靜丟掉，
             //    而 PWA 的規則是「沒填關鍵字＝常駐」→ 整本書每輪全部注入（五種曲風的 BGM 清單一起送）。
@@ -83,7 +74,6 @@
                 updatedAt: Date.now()
             });
         });
-        saveCats(cats);
         return entries;
     }
 
@@ -108,8 +98,6 @@
             <input class="wb-search" id="wb-search" placeholder="搜尋條目或關鍵字..." />
           </div>
 
-          <div class="wb-cat-bar" id="wb-cat-bar"></div>
-
           <div style="position:relative;flex:1;overflow:hidden;display:flex;flex-direction:column;">
             <div class="wb-list" id="wb-list"></div>
             <button class="wb-fab" id="wb-add-btn" title="新增條目">＋</button>
@@ -127,15 +115,9 @@
                   <label>條目標題</label>
                   <input type="text" id="wb-f-title" placeholder="例：奧瑞亞·星野 基本設定" />
                 </div>
-                <div style="display:flex; gap:10px;">
-                  <div class="wb-field" style="flex:1;">
-                    <label>分類 (Category)</label>
-                    <select id="wb-f-cat"></select>
-                  </div>
-                  <div class="wb-field" style="flex:0 0 80px;">
-                    <label>權重(Order)</label>
-                    <input type="number" id="wb-f-order" value="0" style="text-align:center;" />
-                  </div>
+                <div class="wb-field" style="max-width:140px;">
+                  <label>權重(Order)</label>
+                  <input type="number" id="wb-f-order" value="0" style="text-align:center;" />
                 </div>
                 
                 <div class="wb-field">
@@ -143,8 +125,10 @@
                   <div class="wb-tag-box" id="wb-tag-box" onclick="document.getElementById('wb-f-keys-input').focus()">
                     <input type="text" class="wb-tag-input" id="wb-f-keys-input" placeholder="新增標籤..." autocomplete="off" />
                   </div>
-                  <div class="wb-hint" style="margin-top:6px; color:rgba(26,28,40,0.72);">📚 點擊快速加入：</div>
-                  <div class="wb-tag-sug-area" id="wb-tag-suggestions"></div>
+                  <details class="wb-tag-fold">
+                    <summary class="wb-tag-fold-sum">📚 點擊快速加入<span class="wb-tag-fold-n" id="wb-tag-sug-count"></span></summary>
+                    <div class="wb-tag-sug-area" id="wb-tag-suggestions"></div>
+                  </details>
                 </div>
                 <div class="wb-field-row">
                   <label>允許注入 (啟用)</label>
@@ -175,14 +159,6 @@
                   <input type="file" id="wb-file-input" accept=".json" style="display:none" />
                 </div>
                 <div class="wb-section">
-                  <div class="wb-section-title">🏷 全域分類管理</div>
-                  <div id="wb-cats-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-                  <div style="display:flex;gap:6px">
-                    <input class="wb-input" id="wb-new-cat-input" placeholder="新分類名稱" style="margin:0;flex:1" />
-                    <button class="wb-btn wb-btn-primary" id="wb-add-cat-btn" style="width:auto;padding:7px 14px;margin:0">添加</button>
-                  </div>
-                </div>
-                <div class="wb-section">
                   <div class="wb-section-title" style="color:#fc8181">⚠️ 危險操作</div>
                   <button class="wb-btn wb-btn-danger" id="wb-clear-all-btn">🗑 銷毀所有書包與條目</button>
                 </div>
@@ -194,7 +170,6 @@
 
     let _entries = [];
     let _activeBook = '預設書包';
-    let _activeCat = '全部';
     let _editingId = null;
     let _searchQuery = '';
     let _currentTags = [];
@@ -224,42 +199,11 @@
             : `讓「${_activeBook}」每本書都讀得到（不佔那本書自己的欄位）`;
     }
 
-    function renderCatBar(root) {
-        const bar = root.querySelector('#wb-cat-bar');
-        
-        // 取得當前書包內的所有條目
-        const currentBookEntries = _entries.filter(e => e.book === _activeBook);
-        
-        // 提取該書包內有用到的分類
-        const usedCats = [...new Set(currentBookEntries.map(e => e.category).filter(c => c && c.trim()))].sort();
-        const storedCats = getCats();
-        
-        // 合併全域預設分類與目前用到的分類
-        const displayCats = ['全部', ...new Set([...storedCats, ...usedCats])];
-
-        bar.innerHTML = displayCats.map(c => {
-            return `<button class="wb-cat-tab${c === _activeCat ? ' active' : ''}" data-cat="${escHtml(c)}">${escHtml(c)}</button>`;
-        }).join('');
-        
-        bar.querySelectorAll('.wb-cat-tab').forEach(btn => {
-            btn.addEventListener('click', () => {
-                _activeCat = btn.dataset.cat;
-                renderCatBar(root);
-                renderList(root);
-            });
-        });
-    }
-
     function renderList(root) {
         const list = root.querySelector('#wb-list');
         
         // 1. 先過濾出屬於當前「書包」的條目
         let filtered = _entries.filter(e => e.book === _activeBook);
-        
-        // 2. 再根據分類過濾
-        if (_activeCat !== '全部') {
-            filtered = filtered.filter(e => e.category === _activeCat);
-        }
         
         // 3. 搜尋過濾
         if (_searchQuery) {
@@ -309,7 +253,6 @@
                         ${orderLabel}
                     </div>
                     <div class="wb-entry-meta">
-                        <span class="wb-entry-cat">${escHtml(e.category || '預設')}</span>
                         <span>${e.content.length} 字</span>
                     </div>
                     <div style="margin-top:4px;">${keysHtml}</div>
@@ -382,7 +325,9 @@
         });
 
         const suggestions = Array.from(allTags).filter(t => !_currentTags.includes(t));
-        
+        const cnt = root.querySelector('#wb-tag-sug-count');
+        if (cnt) cnt.textContent = suggestions.length ? `（${suggestions.length}）` : '（0）';
+
         if (suggestions.length === 0) {
             sugArea.innerHTML = '<span style="color:rgba(26,28,40,0.72); font-size:10px;">(當前書包無其他可用標籤)</span>';
         } else {
@@ -400,15 +345,6 @@
         }
     }
 
-    function populateCatSelect(root) {
-        const sel = root.querySelector('#wb-f-cat');
-        const storedCats = getCats();
-        const currentBookEntries = _entries.filter(e => e.book === _activeBook);
-        const usedCats  = [...new Set(currentBookEntries.map(e => e.category).filter(c => c && c.trim()))];
-        const allCats    = [...new Set([...storedCats, ...usedCats])];
-        sel.innerHTML = allCats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
-    }
-
     function openAddForm(root) {
         if (!_activeBook) {
             alert('請先選擇或創建一個世界書包！');
@@ -420,8 +356,6 @@
         root.querySelector('#wb-f-order').value = '0';
         root.querySelector('#wb-f-content').value = '';
         root.querySelector('#wb-f-enabled').checked = true;
-        populateCatSelect(root);
-        if (_activeCat !== '全部') root.querySelector('#wb-f-cat').value = _activeCat;
         
         _currentTags = [];
         root.querySelector('#wb-f-keys-input').value = '';
@@ -439,8 +373,6 @@
         root.querySelector('#wb-f-order').value = entry.order || '0';
         root.querySelector('#wb-f-content').value = entry.content;
         root.querySelector('#wb-f-enabled').checked = entry.enabled;
-        populateCatSelect(root);
-        root.querySelector('#wb-f-cat').value = entry.category || '預設';
 
         // 🔥 修復：強制轉成字串，防止舊資料格式報錯
         _currentTags = entry.keys ? String(entry.keys).split(',').map(k => k.trim()).filter(k => k) : [];
@@ -465,7 +397,7 @@
             title,
             keys: _currentTags.join(','), 
             content: root.querySelector('#wb-f-content').value.trim(),
-            category: root.querySelector('#wb-f-cat').value,
+            category: (_editingId ? (_entries.find(e => e.id === _editingId)?.category || '預設') : '預設'),   // 欄位留著相容匯出/舊資料，UI 已不分類
             enabled: root.querySelector('#wb-f-enabled').checked,
             order: parseInt(root.querySelector('#wb-f-order').value) || 0,
             createdAt: _editingId ? (_entries.find(e => e.id === _editingId)?.createdAt ?? Date.now()) : Date.now(),
@@ -485,27 +417,7 @@
 
     // ── 設定與操作 ────────────────────────────────────────────────────
     function openSettings(root) {
-        renderCatsList(root);
         root.querySelector('#wb-cfg-overlay').classList.remove('hidden');
-    }
-
-    function renderCatsList(root) {
-        const cats = getCats();
-        const el = root.querySelector('#wb-cats-list');
-        el.innerHTML = cats.map(c =>
-            `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;background:rgba(228,232,245,0.60);border:1px solid rgba(26,28,40,0.15);font-size:11px;color:#1A1C28">
-                ${escHtml(c)}
-                ${DEFAULT_CATS.includes(c) ? '' : `<button data-cat="${escHtml(c)}" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:12px;padding:0 0 0 2px">×</button>`}
-            </span>`
-        ).join('');
-        el.querySelectorAll('[data-cat]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const newCats = getCats().filter(c => c !== btn.dataset.cat);
-                saveCats(newCats);
-                renderCatsList(root);
-                renderCatBar(root);
-            });
-        });
     }
 
     function exportJSON(root) {
@@ -654,7 +566,6 @@
         }
         
         renderBookSelector(root);
-        renderCatBar(root);
         renderList(root);
     }
 
@@ -662,9 +573,7 @@
         // 書包下拉選單
         root.querySelector('#wb-book-select').addEventListener('change', e => {
             _activeBook = e.target.value;
-            _activeCat = '全部'; // 切換書包時重置分類
             renderGlobalBtn(root);
-            renderCatBar(root);
             renderList(root);
         });
 
@@ -688,9 +597,7 @@
                     saveBooks(books);
                 }
                 _activeBook = name;
-                _activeCat = '全部';
                 renderBookSelector(root);
-                renderCatBar(root);
                 renderList(root);
             }
         });
@@ -716,7 +623,6 @@
             saveGlobalPacks(getGlobalPacks().filter(p => p !== _activeBook));   // 常駐名單別留下不存在的書包
             
             _activeBook = books[0];
-            _activeCat = '全部';
             await reload(root);
         });
 
@@ -738,16 +644,6 @@
         });
 
         root.querySelector('#wb-export-btn').addEventListener('click', () => exportJSON(root));
-
-        root.querySelector('#wb-add-cat-btn').addEventListener('click', () => {
-            const val = root.querySelector('#wb-new-cat-input').value.trim();
-            if (!val) return;
-            const cats = getCats();
-            if (!cats.includes(val)) { cats.push(val); saveCats(cats); }
-            root.querySelector('#wb-new-cat-input').value = '';
-            renderCatsList(root);
-            renderCatBar(root);
-        });
 
         root.querySelector('#wb-clear-all-btn').addEventListener('click', async () => {
             if (!confirm('🚨 確定要銷毀所有世界書包與條目嗎？此操作不可撤銷！')) return;
