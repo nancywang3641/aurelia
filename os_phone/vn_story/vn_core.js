@@ -379,6 +379,8 @@
             const _branchRaw = branchesMatch
                 ? branchesMatch[1]
                     .replace(/<panels>[\s\S]*?<\/panels>/gi, '')
+                    // ⚠️ 這個 <summary> 是 <details><summary>剧情分支</summary> 的 HTML 標籤，
+                    //   不是章節摘要 → 這行不可以改成 VN_READER.sumStrip，它要剝的是別的東西。
                     .replace(/<summary>[\s\S]*?<\/summary>/gi, '')
                 : '';
             const _branchLines = branchesMatch
@@ -3039,7 +3041,8 @@
                 let s = text;
                 // 1. 先移除不需要顯示的整個 block（順序很重要，必須在剝 tag 之前）
                 s = s.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi, '');
-                s = s.replace(/<summary>[\s\S]*?<\/summary>/gi, '');
+                // 摘要區塊：標記可能被改成別家 preset 的 → 走 VN_READER 那份唯一真相，剝不掉會被當正文播出來
+                s = win.VN_READER?.sumStrip ? win.VN_READER.sumStrip(s) : s.replace(/<summary>[\s\S]*?<\/summary>/gi, '');
                 s = s.replace(/<avatar>[\s\S]*?<\/avatar>/gi, '');
                 s = s.replace(/<status>[\s\S]*?<\/status>/gi, '');
                 // 2. 從 <content> block 取正文（若有），移除包裹 tag

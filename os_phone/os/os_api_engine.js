@@ -1391,12 +1391,13 @@
                             _c = _c.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
                             const _isRecent = _ctxN === 0 || idx >= arr.length - _ctxN;
                             if (!_isRecent) {
-                                const _sm = _c.match(/<summary>([\s\S]*?)<\/summary>/i);
-                                _c = _sm ? _sm[1].trim() : '';
+                                // 摘要標記可能被改成別家 preset 的(<meow_FM>/<draft>…)→ 走 VN_READER 那份唯一真相；
+                                //   以前寫死 <summary>，換 preset 後這裡抓不到就把整章壓成空字串＝那章直接從歷史消失。
+                                _c = (win.VN_READER?.sumExtract?.(_c) || '').trim();
                             } else {
                                 const _m = _c.match(/<content>([\s\S]*?)<\/content>/i);
                                 if (_m) _c = _m[1].trim();
-                                _c = _c.replace(/<summary>[\s\S]*?<\/summary>/gi, '').trim();
+                                _c = (win.VN_READER?.sumStrip ? win.VN_READER.sumStrip(_c) : _c.replace(/<summary>[\s\S]*?<\/summary>/gi, '')).trim();
                             }
                             if (ch.request) _vnMsgs.push({ role: 'user', content: ch.request });
                             if (_c) _vnMsgs.push({ role: 'assistant', content: _c });
@@ -1410,9 +1411,9 @@
                 // ── 故事時間掃描（從章節 summary 抽最新「故事時間:」）──
                 let _latestStoryTime = '';
                 for (const _ch of _stCh) {
-                    const _sm = (_ch.content || '').match(/<summary>([\s\S]*?)<\/summary>/i);
-                    if (!_sm) continue;
-                    const _tMatch = _sm[1].match(/故事時間\s*[:：]\s*(.+)/);
+                    const _sumTxt = win.VN_READER?.sumExtract?.(_ch.content || '') || '';
+                    if (!_sumTxt) continue;
+                    const _tMatch = _sumTxt.match(/故事時間\s*[:：]\s*(.+)/);
                     if (_tMatch) _latestStoryTime = _tMatch[1].trim();
                 }
 
@@ -1521,12 +1522,12 @@
                             content = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
 
                             if (useSummary) {
-                                const match = content.match(/<summary>([\s\S]*?)<\/summary>/i);
-                                content = match ? match[1].trim() : content;
+                                const _s = win.VN_READER?.sumExtract?.(content) || '';
+                                content = _s ? _s : content;
                             } else {
                                 const match = content.match(/<content>([\s\S]*?)<\/content>/i);
                                 if (match) content = match[1].trim();
-                                content = content.replace(/<summary>[\s\S]*?<\/summary>/gi, '').trim();
+                                content = (win.VN_READER?.sumStrip ? win.VN_READER.sumStrip(content) : content.replace(/<summary>[\s\S]*?<\/summary>/gi, '')).trim();
                             }
 
                             if (content) apiMessages.push({
