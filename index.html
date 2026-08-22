@@ -21,6 +21,7 @@
 
     <!-- core 模組 CSS -->
     <link rel="stylesheet" href="css/toast_manager.css" />
+    <link rel="stylesheet" href="core/void/lobby_stage.css" />
     <link rel="stylesheet" href="css/story_extractor.css" />
     <link rel="stylesheet" href="css/story_entry_wizard.css" />
     <link rel="stylesheet" href="css/html_extractor.css" />
@@ -79,10 +80,18 @@
     <script src="core/ui_utilities.js"></script>
     <script src="core/claude_terminal.js"></script>
     <script src="core/void/panels.js"></script>
+    <script src="core/void/worldview.js"></script>
     <script src="core/void/prompts.js"></script>
+    <script src="core/void/worldgate.js"></script>
     <script src="core/void/ambient.js"></script>
     <script src="core/void/ui_sfx.js"></script>
     <script src="core/void/canvas.js"></script>
+    <!-- 🏙 舞台模式（大廳俯視小人）：五支一組，順序照酒館版 —— stage 是底座，其餘掛在它上面 -->
+    <script src="core/void/lobby_stage.js"></script>
+    <script src="core/void/lobby_theater.js"></script>
+    <script src="core/void/lobby_dress.js"></script>
+    <script src="core/void/lobby_editor.js"></script>
+    <script src="core/void/lobby_npcs.js"></script>
     <script src="core/void/login.js"></script>
     <script src="core/void/phone_shell.js"></script>
     <script src="core/void/app_runtime.js"></script>
@@ -92,6 +101,7 @@
     <script src="core/chat_canvas.js"></script>
     <script src="core/void_terminal.js"></script>
     <script src="core/control_center.js"></script>
+    <script src="core/vn_free_mode.js"></script>
     <script src="bgm-global-collector.js"></script>
 
     <script src="os_phone/os/os_settings.js"></script>
@@ -129,6 +139,7 @@
     <script src="os_phone/os/os_worldbook.js"></script>
     <script src="os_phone/os/os_avs_state.js"></script>
     <script src="os_phone/os/os_avs_memory.js"></script>
+    <script src="os_phone/os/os_ui_style_packs.js"></script>
     <script src="os_phone/os/os_avs.js"></script>
     <script src="os_phone/os/os_card_import.js"></script>
     <script src="os_phone/os/nai_recipe.js"></script>
@@ -136,6 +147,8 @@
     <script src="os_phone/os/os_board.js"></script>
     <script src="os_phone/os/os_workbench.js"></script>
 
+    <!-- 🚪 世界門（AI 生成世界觀）：依賴大廳與風格庫，所以排在它們後面 -->
+    <script src="os_phone/os/os_worldgate.js"></script>
     <script src="os_phone/vn_story/vn_styles.js"></script>
     <script src="os_phone/vn_story/vn_settings.js"></script>
     <script src="os_phone/vn_story/vn_dynamic_parser.js"></script>
