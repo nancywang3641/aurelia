@@ -822,6 +822,52 @@
         },
 
         // ====================================================================
+        // 🔀 條目開關（獨立版）：對應酒館的 TavernHelper.setLorebookEntries
+        // ====================================================================
+        /**
+         * 程式要「新增一條會被讀到的條目」時放哪本：VN 正在用的第一個書包，沒有就退預設書包。
+         * 放錯書包＝生成時 getContextByPacks 撈不到＝寫了等於沒寫，所以集中在這裡一處決定。
+         */
+        getTargetBook: function() {
+            try {
+                const raw = localStorage.getItem('vn_active_wb_packs');
+                const packs = raw ? JSON.parse(raw) : null;
+                if (Array.isArray(packs) && packs.length) return String(packs[0]);
+            } catch (e) {}
+            const books = getBooks();
+            return books[0] || '預設書包';
+        },
+
+        /**
+         * 依「標題含關鍵字」批次開關條目。
+         * PWA 沒有角色卡主世界書的概念 → 掃全部書包，只認標題（＝酒館的 comment）。
+         * ⚠️ 邊界跟酒館那兩支同步器一樣：只改 enabled，不寫內容、不碰 keys/order；
+         *    managed 名單外的條目一律不碰（使用者自己的內容偏好條目不會被翻）。
+         * @param {string[]} managed 受管標題關鍵字（標題含其一才會被動到）
+         * @param {string[]|Set<string>} on 這批裡該「開」的關鍵字，其餘受管條目關掉
+         * @returns {Promise<{opened:string[], closed:string[], seen:string[]}>}
+         */
+        setEnabledByTitle: async function(managed, on) {
+            const out = { opened: [], closed: [], seen: [] };
+            try {
+                if (!win.OS_DB?.getAllWorldbookEntries || !Array.isArray(managed) || !managed.length) return out;
+                const onSet = on instanceof Set ? on : new Set(on || []);
+                const entries = (await win.OS_DB.getAllWorldbookEntries()) || [];
+                for (const e of entries) {
+                    const title = String(e?.title || '');
+                    const hit = managed.find(n => title.includes(n));
+                    if (!hit) continue;                       // 名單外＝完全不碰
+                    out.seen.push(hit);
+                    const should = onSet.has(hit);
+                    if ((e.enabled !== false) === should) continue;
+                    await win.OS_DB.saveWorldbookEntry({ ...e, enabled: should, updatedAt: Date.now() });
+                    (should ? out.opened : out.closed).push(hit);
+                }
+            } catch (e) { console.warn('[OS_WORLDBOOK] setEnabledByTitle 失敗:', e); }
+            return out;
+        },
+
+        // ====================================================================
         // 🔥 新增：角色卡自動匯入專用 API
         // ====================================================================
         

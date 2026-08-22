@@ -204,8 +204,10 @@
     <script src="os_phone/rpg/status_panel.js"></script>
     <!-- ⛔ 已停用：avatar_manager 與 VN 頭像系統並行重複生成、浪費資源（index.js 早已停用，這裡對齊）。檔案保留。 -->
     <!-- <script src="os_phone/rpg/avatar_manager.js"></script> -->
-    <!-- ⛔ avatar_rules_injector / world_rules_injector 不進 PWA：它們只翻酒館世界書條目的開關，
-         走 TavernHelper 世界書 API，而 PWA 的 TavernHelper 是 null -->
+    <!-- 🔀 世界書條目開關同步器：兩支都補上獨立版分支（改翻 OS_DB 世界書條目的 enabled，
+         規則與邊界跟酒館同一份），所以 PWA 也要載。必須排在 os_worldbook / os_worldgate 之後。 -->
+    <script src="os_phone/rpg/avatar_rules_injector.js"></script>
+    <script src="os_phone/rpg/world_rules_injector.js"></script>
 
     <!-- 🗺️ 地圖：css/map_core.css 早就掛著，但這六支一直沒補，所以地圖 app 開不起來 -->
     <script src="os_phone/map/map_data.js"></script>

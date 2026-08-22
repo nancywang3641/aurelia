@@ -33,6 +33,10 @@
         catch (e) { return 'pollinations'; }
     }
 
+    function _isStandalone() {
+        try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; }
+    }
+
     let _syncing = false;
 
     // 依當前產圖器：啟用對應條目、停用其餘兩條（找「名字」、只改 enabled）
@@ -40,14 +44,29 @@
         if (_syncing) return;
         _syncing = true;
         try {
+            const service = _currentService();
+            const wantTag = SERVICE_TO_ENTRY[service] || null;
+
+            // 🟢 獨立版：世界書條目住 OS_DB、沒有 TavernHelper。規則與邊界完全一樣（只改 enabled、只認名字）
+            if (_isStandalone()) {
+                const WB = win.OS_WORLDBOOK || window.OS_WORLDBOOK;
+                if (!WB?.setEnabledByTitle) return;
+                const r = await WB.setEnabledByTitle(ALL_ENTRY_TAGS, wantTag ? [wantTag] : []);
+                if (!r.seen.length) {
+                    console.warn('🪪 [Avatar Rules] ⛔ 獨立版世界書裡找不到 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] 任何一條');
+                    return;
+                }
+                if (r.opened.length || r.closed.length) {
+                    console.log(`🪪 [Avatar Rules] ✅ service=${service} → 啟用 ${wantTag}、停用其餘（獨立版，改了 ${r.opened.length + r.closed.length} 條）`);
+                }
+                return;
+            }
+
             const TH = win.TavernHelper;
             if (!TH?.getLorebookEntries || !TH?.setLorebookEntries) {
                 console.warn('🪪 [Avatar Rules] ⛔ TavernHelper 世界書 API 不可用 → 跳過');
                 return;
             }
-
-            const service = _currentService();
-            const wantTag = SERVICE_TO_ENTRY[service] || null;
 
             let entries;
             try {

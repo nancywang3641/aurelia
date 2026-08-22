@@ -268,6 +268,15 @@
 
     // === 3. 工具函數 ===
     function getChatIdentifier() {
+        // 🚨 獨立版沒有 SillyTavern → 以前一路掉到最後那行，拿到「Unsaved_Chat_今天日期」：
+        //    每過一天換一把、而且不分劇情線。分艙鑰匙一律走 adapter（酒館分支一個字不動）。
+        try {
+            const A = window.OS_AVS_ADAPTER;
+            if (A && A.isStandalone && A.isStandalone()) {
+                const sid = A.getStoryId && A.getStoryId();
+                if (sid) return String(sid);
+            }
+        } catch (e) {}
         if (window.parent.SillyTavern && window.parent.SillyTavern.getContext) {
             const ctx = window.parent.SillyTavern.getContext();
             if (ctx && ctx.chatId) {
@@ -449,9 +458,41 @@
         API.renderBlacklist();
     };
 
+    // ── 黑名單的獨立版存放處 ─────────────────────────────────────────────
+    //   酒館：角色卡主世界書的條目，靠 blacklist_injector 每輪 injectPrompts 補上（世界書要對話提到
+    //         名字才觸發，黑名單正好是「不准出現的名字」，永遠觸發不到）。
+    //   PWA ：OS_DB 世界書條目，keys 留空＝常駐條目，組 context 時本來就每輪直送 → 不需要注入器。
+    //   兩版的條目長相（title/內容格式）一致，之後要互匯也對得上。
+    function _blStandalone() {
+        try { return !!(window.OS_API && window.OS_API.isStandalone && window.OS_API.isStandalone()); } catch (e) { return false; }
+    }
+    function _blTitle() { return `[當前永不出現名單-黑名單角色] - ${getChatIdentifier()}`; }
+    function _blNamesOf(content) {
+        return String(content || '').split('\n').map(l => l.trim())
+            .filter(l => l && !l.startsWith('[') && !l.includes('規則'));
+    }
+    function _blContent(names) {
+        return `[當前永不出現名單-黑名單角色]\n黑名單規則：劇情封禁\n\n${names.join('\n')}`;
+    }
+    async function _blEntriesStandalone() {
+        const all = (await window.OS_DB.getAllWorldbookEntries()) || [];
+        return all.filter(e => String(e.title || '').includes('[當前永不出現名單-黑名單角色]'));
+    }
+
     API.renderBlacklist = async function() {
         const div = document.getElementById('blacklist-content');
         div.innerHTML = "讀取中...";
+        if (_blStandalone()) {
+            try {
+                const list = await _blEntriesStandalone();
+                if (!list.length) return div.innerHTML = '<div style="color:#666; text-align:center; padding:20px;">暫無名單</div>';
+                div.innerHTML = list.map(e => {
+                    const names = _blNamesOf(e.content);
+                    return `<div class="rpg-blacklist-item"><span>🚫 ${names.join(', ') || '未知'}</span><button onclick="window.RPG_PANEL.removeCharacterFromBlacklist('${e.id}')" title="刪除">🗑️</button></div>`;
+                }).join('');
+            } catch (e) { div.innerHTML = `<div style="color:#ff4444; padding:10px;">❌ 讀取失敗: ${e.message}</div>`; }
+            return;
+        }
         try {
             const helper = window.parent.TavernHelper;
             const bookName = helper.getCurrentCharPrimaryLorebook();
@@ -476,6 +517,33 @@
     API.addBlacklistCharacter = async function() {
         const name = document.getElementById('blacklist-input').value.trim();
         if(!name) return;
+        if (_blStandalone()) {
+            try {
+                const title = _blTitle();
+                const list = await _blEntriesStandalone();
+                const exist = list.find(e => e.title === title);
+                const names = new Set(exist ? _blNamesOf(exist.content) : []);
+                if (names.has(name)) return alert("已在黑名單中");
+                names.add(name);
+                await window.OS_DB.saveWorldbookEntry({
+                    ...(exist || {
+                        id: 'wb_blacklist_' + getChatIdentifier(),
+                        book: window.OS_WORLDBOOK?.getTargetBook?.() || '預設書包',
+                        category: '規則設定',
+                        title,
+                        keys: '',          // 空＝常駐，每輪直送（黑名單靠關鍵字觸發本來就不可能命中）
+                        order: 9999,
+                        createdAt: Date.now()
+                    }),
+                    content: _blContent(Array.from(names)),
+                    enabled: true,
+                    updatedAt: Date.now()
+                });
+                document.getElementById('blacklist-input').value = '';
+                API.renderBlacklist();
+            } catch (e) { alert('失敗:' + e.message); }
+            return;
+        }
         try {
             const helper = window.parent.TavernHelper;
             const bookName = helper.getCurrentCharPrimaryLorebook();
@@ -510,6 +578,13 @@
 
     API.removeCharacterFromBlacklist = async function(uid) {
         if(!confirm("確定要永遠開放（移出黑名單）嗎？")) return;
+        if (_blStandalone()) {
+            try {
+                await window.OS_DB.deleteWorldbookEntry(uid);   // 獨立版的 uid＝條目 id（字串）
+                API.renderBlacklist();
+            } catch (e) { alert('失敗:' + e.message); }
+            return;
+        }
         try {
             const helper = window.parent.TavernHelper;
             const bookName = helper.getCurrentCharPrimaryLorebook();
