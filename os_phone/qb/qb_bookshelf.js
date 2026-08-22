@@ -1508,7 +1508,7 @@
 
         // 踏入故事 / 與TA相遇 按鈕
         panel.querySelectorAll('.qb-dive-world-btn').forEach(btn => {
-            btn.onclick = () => {
+            btn.onclick = async () => {
                 const isStandalone = window.OS_API?.isStandalone?.() ?? false;
 
                 // ── 角色卡路徑（cardImport）─────────────────────────
@@ -1522,7 +1522,10 @@
                     localStorage.removeItem('vn_pending_first_mes');
                     try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
                     try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}     // 這一刻＝建立聊天室
-                    try { window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}   // 立繪模式跟著這本書
+                    // 🚨 一定要等：這支會改世界書（VN 總綱固定版/自由版二選一）。
+                    //    以前沒 await，切換還在寫 IDB，prompt 就已經組好送出 →
+                    //    選了「自由」的第一輪，AI 讀到的還是固定版總綱，照樣每句寫表情格。
+                    try { await window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
 
                     document.getElementById('qb-bookshelf-overlay').classList.remove('qb-reading');
                     document.getElementById('qb-bookshelf-overlay').style.display = 'none';
@@ -1557,7 +1560,8 @@
                 //    下面的變數包初始化、AVS、記憶、手機資料都按 storyId 分艙，
                 //    晚一步生就會全部寫進「上一本書」的桶裡。
                 try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}
-                try { window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
+                // 🚨 同上：等世界書切完再往下走，不然第一輪的總綱是舊的
+                try { await window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
 
                 // 這本書自帶的追蹤欄位範本（匯入角色卡／生成世界時順手建的，不是手動綁的）→
                 //   倒進「剛生出來的這條篇章」的狀態桶。順序很重要：newStoryId 要在前面。
