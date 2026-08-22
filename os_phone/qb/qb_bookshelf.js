@@ -1298,19 +1298,10 @@
             const _greetRaw = (i) => String(w.greetings[i] || '')
                 .replace(/\{\{\s*user\s*\}\}/gi, currentUserName)
                 .replace(/\{\{\s*char\s*\}\}/gi, w.title);
-            // 面板是整份 HTML 文件，塞進 iframe 後沒有高度可言 → 載入完照內容撐高（同 VN 那邊做法）
+            // 面板是整份 HTML 文件，塞進 iframe 後沒有高度可言 → 交給共用那支撐高
+            //   （它會順手把收起來的 <details> 展開、並盯著內容變動重量，見 os_card_regex.fitCardFrames）
             function _fitCardFrames(root) {
-                root.querySelectorAll('iframe.vn-regex-card').forEach(fr => {
-                    const fit = () => {
-                        try {
-                            const fd = fr.contentDocument;
-                            const h = Math.max(fd.body ? fd.body.scrollHeight : 0, fd.documentElement ? fd.documentElement.scrollHeight : 0);
-                            if (h) fr.style.height = h + 'px';
-                        } catch (e) { fr.style.height = '60vh'; }
-                    };
-                    fr.addEventListener('load', () => { fit(); setTimeout(fit, 400); });
-                    setTimeout(fit, 50);
-                });
+                if (_CR && _CR.fitCardFrames) _CR.fitCardFrames(root);
             }
             // 🔇 卡片的音樂面板會自己播：只要不是「現在正在看的那一張」，一律拆成純文字。
             //   iframe 從 DOM 移掉＝它的 document 連同 <audio> 一起銷毀，這是唯一保證停得掉的做法

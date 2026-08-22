@@ -221,6 +221,71 @@
         return out;
     }
 
+    // ── 📐 卡片面板(iframe)照內容撐高 ──────────────────────────────
+    //   iframe 沒有自然高度，不撐就是預設 150px。兩個一定要處理的坑：
+    //   ① 卡片的面板常做成 <details>，預設是收起來的 → 量到的只有標題那一條(110px)，
+    //      畫面上看起來就是「面板被切掉」。預覽是要給人看內容的，載入時先展開。
+    //   ② 高度不是量一次就算了：切分頁、換配色、使用者自己收合，內容隨時在變 →
+    //      掛 ResizeObserver 跟著改，不然一動就爆版或留一大塊空白。
+    function fitCardFrames(root, opts) {
+        opts = opts || {};
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll('iframe.vn-regex-card').forEach(fr => {
+            if (fr._crFitted) return;   // 同一個 frame 只掛一次
+            fr._crFitted = true;
+            // 量內容底邊，不要用 documentElement.scrollHeight。
+            //   🚨 documentElement.scrollHeight 至少等於 iframe 現在的高度 → 拿它當基準，高度只會長不會縮：
+            //      面板一收起來就永遠留著一大塊空白。body.scrollHeight 也一樣，只要卡片把 body 設成 height:100%。
+            //      改成量 body 子元素的實際底邊（外加 body 自己的下緣留白），漲跌都跟得上。
+            const measure = (fd) => {
+                const b = fd && fd.body;
+                if (!b) return 0;
+                let bottom = 0;
+                Array.prototype.forEach.call(b.children, (c) => {
+                    const r = c.getBoundingClientRect();
+                    if (r.height) bottom = Math.max(bottom, r.bottom);
+                });
+                let h = bottom ? Math.ceil(bottom) : 0;
+                if (h) {
+                    try {
+                        const cs = fd.defaultView.getComputedStyle(b);
+                        h += (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.marginBottom) || 0);
+                    } catch (e) {}
+                }
+                if (!h) h = b.scrollHeight || 0;   // 整份內容都絕對定位之類 → 退回 scrollHeight
+                return Math.round(h);
+            };
+            const fit = () => {
+                try {
+                    const fd = fr.contentDocument;
+                    if (!fd) return;
+                    const h = measure(fd);
+                    if (h > 20 && Math.abs(h - fr.clientHeight) > 2) fr.style.height = h + 'px';
+                } catch (e) { if (!fr.style.height) fr.style.height = '60vh'; }
+            };
+            const ready = () => {
+                try {
+                    const fd = fr.contentDocument;
+                    if (fd && opts.openDetails !== false) {
+                        fd.querySelectorAll('details:not([open])').forEach(d => d.setAttribute('open', 'true'));
+                    }
+                    const RO = fr.contentWindow && fr.contentWindow.ResizeObserver;
+                    if (RO && fd && fd.body) {
+                        const ro = new RO(() => fit());
+                        ro.observe(fd.body);
+                        if (fd.documentElement) ro.observe(fd.documentElement);
+                    }
+                    // <details> 的 toggle 不冒泡 → 用捕獲期接
+                    if (fd) fd.addEventListener('toggle', fit, true);
+                } catch (e) {}
+                fit(); setTimeout(fit, 120); setTimeout(fit, 600);
+            };
+            fr.addEventListener('load', ready);
+            // srcdoc 有可能在掛 listener 之前就載完了
+            try { if (fr.contentDocument && fr.contentDocument.readyState === 'complete') ready(); } catch (e) {}
+        });
+    }
+
     // ── 🔇 停掉一段畫面裡「卡片自帶的 BGM」──────────────────────────
     //   角色卡的音樂面板＝<audio autoplay loop> ＋ 一段自己會 .play() 的腳本，整份包在 srcdoc iframe 裡。
     //   soft（預設）：暫停＋倒帶＋靜音＋拔掉 autoplay。面板還要留在畫面上給人看，但不准出聲。
@@ -257,7 +322,7 @@
 
     win.OS_CARD_REGEX = window.OS_CARD_REGEX = {
         saveFromCard, listPacks, getPack, setEnabled, removePack, hasPack, refresh,
-        currentWorldId, scriptsFor, cardHtmlFor, applyText, renderRichHtml, stopMedia
+        currentWorldId, scriptsFor, cardHtmlFor, applyText, renderRichHtml, stopMedia, fitCardFrames
     };
 
     // 開機先把庫讀進記憶體：VN 播放中間是同步取用，臨時才讀就來不及。

@@ -1190,17 +1190,25 @@
 
             document.getElementById('vn-dom-block-body').innerHTML = domEl.outerHTML;
             // 正則卡片(iframe)依內容自動撐高：避免固定高度留白，也免掉 iframe 內建醜滾動條（真的太高時溢出交給外層美化捲軸）
-            const _vCardFrame = document.getElementById('vn-dom-block-body').querySelector('iframe.vn-regex-card');
-            if (_vCardFrame) {
-                const _fitFrame = () => {
-                    try {
-                        const _fd = _vCardFrame.contentDocument;
-                        const _h = Math.max(_fd.body ? _fd.body.scrollHeight : 0, _fd.documentElement ? _fd.documentElement.scrollHeight : 0);
-                        if (_h) _vCardFrame.style.height = _h + 'px';
-                    } catch (e) { _vCardFrame.style.height = '70vh'; }
-                };
-                _vCardFrame.addEventListener('load', () => { _fitFrame(); setTimeout(_fitFrame, 400); });
-                setTimeout(_fitFrame, 50);
+            const _vBody = document.getElementById('vn-dom-block-body');
+            const _CRfit = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
+            if (_CRfit && _CRfit.fitCardFrames) {
+                // 共用那支：順手展開收起來的 <details>（不展開的話面板只剩一條標題，看起來像被切掉），
+                //   並盯著內容變動重量（卡片面板會切分頁/換配色/自己收合）。
+                _CRfit.fitCardFrames(_vBody);
+            } else {
+                const _vCardFrame = _vBody.querySelector('iframe.vn-regex-card');
+                if (_vCardFrame) {
+                    const _fitFrame = () => {
+                        try {
+                            const _fd = _vCardFrame.contentDocument;
+                            const _h = Math.max(_fd.body ? _fd.body.scrollHeight : 0, _fd.documentElement ? _fd.documentElement.scrollHeight : 0);
+                            if (_h) _vCardFrame.style.height = _h + 'px';
+                        } catch (e) { _vCardFrame.style.height = '70vh'; }
+                    };
+                    _vCardFrame.addEventListener('load', () => { _fitFrame(); setTimeout(_fitFrame, 400); });
+                    setTimeout(_fitFrame, 50);
+                }
             }
             // 每次彈卡重置兩段式關閉狀態：上一張卡點過一下的「待確認」不能帶到這張
             this._bgCloseArmed = false;
