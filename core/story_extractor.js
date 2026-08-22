@@ -94,6 +94,11 @@
             if (this._overlayShown()) return;
             const host = document.getElementById('se-root-wrapper');
             if (!host) return;
+            // 開始生成＝開場白預覽退場：預覽那份直接拆掉（只是被等待室蓋住，iframe 還活著會一直放）
+            //   拆完要把渲染簽章作廢：生成被中止/退回來時，scanAndRender 會因為「原稿沒變、容器還有東西」
+            //   而跳過重演 → 面板被拆掉就再也回不來。
+            this._stopPanelMedia(true);
+            this._lastRenderSig = null;
             const o = document.createElement('div');
             o.id = 'se-flow-overlay';
 
@@ -829,23 +834,43 @@
             });
         },
 
-        // 停掉藏書面板裡「卡片自帶的 BGM/音訊」——角色卡開場白常含 <audio autoplay>，
-        //   渲染進預覽就自動播；★移除播放中的 <audio> 不一定會停(detached 仍續播)，必須先 pause()。
-        //   同源 iframe 內的也順手停。關閉/換卡/渲染後都呼叫 → 不殘留、不疊加、預覽不被洗版。
-        _stopPanelMedia() {
+        // 停掉「卡片自帶的 BGM/音訊」——角色卡開場白常含 <audio autoplay>，渲染進去就自動播。
+        //   ★移除播放中的 <audio> 不一定會停(detached 仍續播)，必須先 pause()。同源 iframe 內的也順手停。
+        //   hard=true：連 iframe 一起拆掉（生成開始／面板收起時用）。腳本是「載完抓完網址」才 .play() 的，
+        //     只暫停一次擋不住晚一步才響的那種；把 iframe 的 document 整個銷毀才是真的斷乾淨。
+        //   🚨 酒館第 0 樓本體才是 BGM 的真正來源：藏書這份是拓印(outerHTML 複製出來的第二個 iframe)，
+        //     只停拓印＝原版在背後一路放到底（「開始劇情、loading 了 BGM 還在響」就是這個）。
+        //     那是酒館自己的 DOM，只暫停＋拔掉 autoplay，不靜音也不拆——她關掉藏書後還要能自己按播放。
+        _stopPanelMedia(hard) {
             try {
                 const docs = [document];
                 try { const pd = window.parent && window.parent.document; if (pd && pd !== document) docs.push(pd); } catch (e) {}
-                const stop = (m) => { try { m.pause(); m.currentTime = 0; m.muted = true; m.removeAttribute('autoplay'); } catch (e) {} };
+                const stop = (m, keepAudible) => {
+                    try {
+                        m.pause(); m.currentTime = 0; m.removeAttribute('autoplay');
+                        if (!keepAudible) m.muted = true;
+                    } catch (e) {}
+                };
+                const sweep = (root, opt) => {
+                    if (!root || !root.querySelectorAll) return;
+                    opt = opt || {};
+                    root.querySelectorAll('audio, video').forEach(m => stop(m, opt.keepAudible));
+                    root.querySelectorAll('iframe').forEach(f => {
+                        try {
+                            const idoc = f.contentWindow && f.contentWindow.document;
+                            if (idoc) idoc.querySelectorAll('audio, video').forEach(m => stop(m, opt.keepAudible));
+                        } catch (e) {}
+                        if (opt.hard) {
+                            try { f.removeAttribute('srcdoc'); f.removeAttribute('src'); } catch (e) {}
+                            try { f.remove(); } catch (e) {}
+                        }
+                    });
+                };
                 docs.forEach(d => {
                     ['se-content-area', 'story-extractor-container-vn', 'story-panel-container', 'sew-root'].forEach(id => {
-                        const root = d.getElementById && d.getElementById(id);
-                        if (!root) return;
-                        root.querySelectorAll('audio, video').forEach(stop);
-                        root.querySelectorAll('iframe').forEach(f => {
-                            try { const idoc = f.contentWindow && f.contentWindow.document; if (idoc) idoc.querySelectorAll('audio, video').forEach(stop); } catch (e) {}
-                        });
+                        sweep(d.getElementById && d.getElementById(id), { hard: hard });
                     });
+                    try { sweep(d.querySelector && d.querySelector('#chat .mes[mesid="0"]'), { keepAudible: true }); } catch (e) {}
                 });
             } catch (e) { console.warn('[StoryExtractor] 停止面板媒體失敗', e); }
         },
@@ -863,7 +888,7 @@
             console.log('[StoryExtractor] 🔍 hide() 被調用');
 
             // 先停掉卡片自帶 BGM，再清空內容(移除 <audio>/iframe＝斷源停音)，避免關閉後 BGM 殘留/疊加
-            this._stopPanelMedia();
+            this._stopPanelMedia(true);
             try {
                 [document, (window.parent && window.parent.document)].forEach(d => {
                     try { const ca = d && d.getElementById && d.getElementById('se-content-area'); if (ca) ca.innerHTML = ''; } catch (e) {}

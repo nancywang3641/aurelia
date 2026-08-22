@@ -277,7 +277,8 @@
                 this._screen(root, 'embark');
                 setTimeout(() => { try { $('#sew-embark-input').focus(); } catch (e) { } }, 60);
             };
-            $('#sew-embark-back').onclick = () => this._screen(root, 'preview');
+            // 退回預覽要重畫：離開預覽那一幕時已經把卡片面板(iframe)拆掉了，不重畫就只剩純文字
+            $('#sew-embark-back').onclick = () => { this._renderPreview(root); this._screen(root, 'preview'); };
             // 啟程:把第一句塞進酒館輸入框直接送出;精靈留著當底。
             // 🚨 不可以在這裡 StoryExtractor.hide():第0樓劇情頁還沒開,hide() 會連整個 VN 面板收掉回主頁;
             //    而 VN 的撰寫幕布掛在劇情頁裡、此刻也看不到 → 統一 loading 由藏書等待室「借校準艙殼」來演
@@ -331,6 +332,10 @@
         // 切幕:只有開場預覽那幕走沉浸態(面板殼/標題/徽章全退場,開場白鋪滿舞台——框著看代入不進去)
         _screen(root, name) {
             const MAP = { plan: '#sew-screen-plan', preview: '#sew-screen-preview', embark: '#sew-screen-embark' };
+            // 離開預覽那一幕就把卡片自帶的音樂面板整個拆掉。
+            //   幕只是加 sew-hidden(display:none)，iframe 還活著 —— 她在寫第一句、或退回規劃幕的時候，
+            //   卡片 BGM 會一路放到底。display:none 不會停任何媒體。
+            if (name !== 'preview') { try { window.StoryExtractor?._stopPanelMedia?.(true); } catch (e) {} }
             for (const [key, sel] of Object.entries(MAP)) {
                 root.querySelector(sel)?.classList.toggle('sew-hidden', key !== name);
             }

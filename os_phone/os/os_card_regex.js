@@ -221,6 +221,32 @@
         return out;
     }
 
+    // ── 🔇 停掉一段畫面裡「卡片自帶的 BGM」──────────────────────────
+    //   角色卡的音樂面板＝<audio autoplay loop> ＋ 一段自己會 .play() 的腳本，整份包在 srcdoc iframe 裡。
+    //   soft（預設）：暫停＋倒帶＋靜音＋拔掉 autoplay。面板還要留在畫面上給人看，但不准出聲。
+    //   hard：連 iframe 一起拆掉。腳本是「載完、抓完網址」才 .play() 的，暫停一次擋不住晚一步才響的那種；
+    //         把 iframe 的 document 整個銷毀才是真的停 —— 離開那一頁時一律用 hard。
+    //   🚨 移除播放中的 <audio> 不保證會停（detached 仍會續播）→ 一定先 pause 再移除。
+    function stopMedia(root, hard) {
+        if (!root || !root.querySelectorAll) return;
+        const stop = (m) => { try { m.pause(); m.currentTime = 0; m.muted = true; m.removeAttribute('autoplay'); } catch (e) {} };
+        try {
+            root.querySelectorAll('audio, video').forEach(stop);
+            root.querySelectorAll('iframe').forEach(f => {
+                // srcdoc 的 iframe 跟母文件同源，進得去
+                try {
+                    const idoc = f.contentWindow && f.contentWindow.document;
+                    if (idoc) idoc.querySelectorAll('audio, video').forEach(stop);
+                } catch (e) {}
+                if (hard) {
+                    try { f.removeAttribute('srcdoc'); f.removeAttribute('src'); } catch (e) {}
+                    try { f.remove(); } catch (e) {}
+                }
+            });
+            if (hard) root.querySelectorAll('audio, video').forEach(m => { try { m.remove(); } catch (e) {} });
+        } catch (e) { console.warn('[卡片正則] 停掉自帶 BGM 失敗', e); }
+    }
+
     // 有沒有東西可套（UI 決定要不要顯示「美化」開關用）
     async function hasPack(worldId) {
         const pack = await getPack(worldId || currentWorldId());
@@ -231,7 +257,7 @@
 
     win.OS_CARD_REGEX = window.OS_CARD_REGEX = {
         saveFromCard, listPacks, getPack, setEnabled, removePack, hasPack, refresh,
-        currentWorldId, scriptsFor, cardHtmlFor, applyText, renderRichHtml
+        currentWorldId, scriptsFor, cardHtmlFor, applyText, renderRichHtml, stopMedia
     };
 
     // 開機先把庫讀進記憶體：VN 播放中間是同步取用，臨時才讀就來不及。

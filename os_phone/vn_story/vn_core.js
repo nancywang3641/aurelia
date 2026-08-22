@@ -1218,6 +1218,20 @@
             if (_hint) _hint.style.opacity = '0';
             const overlay = document.getElementById('vn-dom-block-overlay');
             if (overlay) overlay.classList.remove('active');
+            // 🔇 卡片面板常自帶 BGM（<audio autoplay> 包在 iframe 裡）。收起來只是拿掉 .active，
+            //    iframe 還活著 → 音樂會一路放到下一張卡把它換掉為止。
+            //    先靜音（淡出中面板還看得到，不能立刻拆），淡完再把 iframe 整個拆掉才算真的斷。
+            const _body = document.getElementById('vn-dom-block-body');
+            const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
+            if (_body && _CR && _CR.stopMedia) {
+                _CR.stopMedia(_body, false);
+                setTimeout(() => {
+                    // 這段時間內又彈了新的一張 → 別動它
+                    const _ov = document.getElementById('vn-dom-block-overlay');
+                    if (_ov && _ov.classList.contains('active')) return;
+                    try { _CR.stopMedia(_body, true); _body.innerHTML = ''; } catch (e) {}
+                }, 420);
+            }
             this.next();
         },
 

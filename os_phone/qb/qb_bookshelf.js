@@ -1225,6 +1225,7 @@
             const gotoEmbark = panel.querySelector('#qb-goto-embark-btn');
             if (embarkView && gotoEmbark) {
                 gotoEmbark.onclick = () => {
+                    if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();   // 寫第一句時背後不該還有卡片 BGM 在響
                     embarkView.style.display = 'flex';
                     setTimeout(() => { try { panel.querySelector('#qb-user-reply')?.focus(); } catch (e) { } }, 40);
                 };
@@ -1247,6 +1248,7 @@
 
             // 關閉內頁 → 退回目錄那一層（從哪裡進來就退回哪裡）
             panel.querySelector('#qb-inner-close').onclick = () => {
+                if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();
                 innerView.style.display = 'none';
                 // 退回目錄：目錄現在也是滿版，滿版態要留著；只有退到書封才收回木框書架窗
                 if (tocView) { tocView.style.display = 'flex'; }
@@ -1310,10 +1312,31 @@
                     setTimeout(fit, 50);
                 });
             }
+            // 🔇 卡片的音樂面板會自己播：只要不是「現在正在看的那一張」，一律拆成純文字。
+            //   iframe 從 DOM 移掉＝它的 document 連同 <audio> 一起銷毀，這是唯一保證停得掉的做法
+            //   （只 pause 擋不住腳本抓完網址後才呼叫的 .play()）。
+            function _teardownSlides(keepIdx) {
+                panel.querySelectorAll('.qb-greet-slide').forEach(slide => {
+                    const i = parseInt(slide.dataset.greetIdx, 10);
+                    if (i === keepIdx) return;
+                    const td = slide.querySelector('.qb-greet-text');
+                    if (!td || !td.querySelector('iframe, audio, video')) return;   // 已經是純文字就別重畫
+                    if (_CR && _CR.stopMedia) _CR.stopMedia(td, true);
+                    td.innerHTML = _escHtml(_greetRaw(i));
+                });
+            }
+            // 離開開場白這一頁（返回／進啟程幕／踏進故事）→ 全部拆光，不留任何還在響的面板
+            function _leaveGreetings() {
+                try { _teardownSlides(-1); } catch (e) {}
+            }
+            panel._qbLeaveGreetings = _leaveGreetings;   // 給同檔其它路徑（踏入故事那顆按鈕）叫，同 panel._qbHideToc 的做法
+
             function _renderSlideText(i) {
                 const slide = panel.querySelector(`.qb-greet-slide[data-greet-idx="${i}"]`);
                 const textDiv = slide && slide.querySelector('.qb-greet-text');
                 if (!textDiv) return;
+                _teardownSlides(i);   // 先把別張拆乾淨，再畫這一張
+                if (_CR && _CR.stopMedia) _CR.stopMedia(textDiv, false);   // 這一張自己的舊面板先閉嘴
                 const raw = _greetRaw(i);
                 if (_beautifyOn && _CR) {
                     try {
@@ -1334,7 +1357,9 @@
                     beautifyBtn.classList.remove('qb-hidden');
                     _beautifyOn = pack.enabled !== false;
                     _syncBeautifyBtn();
-                    _renderSlideText(currentSlide);
+                    // 🚨 只有「開場白那一頁真的開著」才畫。這支是非同步回來的，
+                    //    在書封就畫下去＝人還在看封面，卡片的音樂面板已經在背景響了。
+                    if (innerView && innerView.style.display !== 'none') _renderSlideText(currentSlide);
                 }).catch(() => {});
                 beautifyBtn.onclick = async () => {
                     _beautifyOn = !_beautifyOn;
@@ -1581,6 +1606,9 @@
         // 踏入故事 / 與TA相遇 按鈕
         panel.querySelectorAll('.qb-dive-world-btn').forEach(btn => {
             btn.onclick = async () => {
+                // 踏進故事＝開場白預覽退場：先把卡片自帶的音樂面板拆掉，
+                //   不然生成 loading 的整段時間它都還在放（面板只是被蓋住，iframe 還活著）。
+                if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();
                 const isStandalone = window.OS_API?.isStandalone?.() ?? false;
 
                 // ── 角色卡路徑（cardImport）─────────────────────────
