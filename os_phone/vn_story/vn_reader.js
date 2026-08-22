@@ -257,35 +257,90 @@
     // 章節資料快取（給 _openChapter 用 index 取全文）
     let _readerSorted = [];
     let _readerBody = null;
+    let _readerQuery = '';     // 搜尋關鍵字（返回章節列表時保留）
+    let _readerFlow  = false;  // false=一章一張卡，true=整本攤成一頁連著讀
 
-    // ── 渲染章節「選擇卡片」：只放 章節名 + 摘要，點進去才看全文 ──────
+    // 純文字/摘要各算一次就存在章節物件上：搜尋是逐鍵重算的，章節多的時候不能每次都重跑 _strip
+    function _chPlain(ch)   { if (ch._plain == null) ch._plain = _strip(ch.content || ''); return ch._plain; }
+    function _chSummary(ch) { if (ch._sum   == null) ch._sum   = _extractSummary(ch.content || '') || ''; return ch._sum; }
+    function _chHit(ch, q) {
+        if (!q) return true;
+        return String(ch.title || '').toLowerCase().includes(q)
+            || _chSummary(ch).toLowerCase().includes(q)
+            || _chPlain(ch).toLowerCase().includes(q);
+    }
+    function _nlToBr(s) { return esc(s).replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>'); }
+
+    function _cardHtml(ch, i) {
+        const sum = _chSummary(ch) || _chPlain(ch);
+        const cut = sum.slice(0, 100) + (sum.length > 100 ? '…' : '');
+        const ts  = ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('zh-TW') : '';
+        return `<div class="vrd-card" onclick="window.VN_READER._openChapter(${i})">
+            <div class="vrd-card-hd">
+                <span class="vrd-card-no">CH.${String(i+1).padStart(2,'0')}</span>
+                <span class="vrd-card-title">${esc(ch.title || '未命名章節')}</span>
+                <span class="vrd-card-time">${ts}</span>
+            </div>
+            <div class="vrd-card-summary">${cut.trim() ? _nlToBr(cut) : '<span class="vrd-dim">（無摘要）</span>'}</div>
+            <div class="vrd-card-readmore">點此看全文 →</div>
+        </div>`;
+    }
+    function _flowHtml(ch, i) {
+        const txt = _chPlain(ch);
+        return `<div class="vrd-flow">
+            <div class="vrd-flow-hd">
+                <span class="vrd-card-no">CH.${String(i+1).padStart(2,'0')}</span>
+                <span class="vrd-card-title">${esc(ch.title || '未命名章節')}</span>
+                <span class="vrd-hd-btn" onclick="window.VN_READER._openChapter(${i})">單章</span>
+            </div>
+            <div class="vrd-flow-body">${txt.trim() ? _toHtml(txt) : '<span class="vrd-dim">（無內容）</span>'}</div>
+        </div>`;
+    }
+
+    function _paintList() {
+        const wrap = document.getElementById('vrd-list');
+        if (!wrap) return;
+        const q = _readerQuery.trim().toLowerCase();
+        const hits = _readerSorted.map((ch, i) => ({ ch, i })).filter(o => _chHit(o.ch, q));
+        const cnt = document.getElementById('vrd-count');
+        if (cnt) cnt.textContent = q
+            ? (hits.length ? `找到 ${hits.length} 章` : '沒有符合的章節')
+            : `共 ${_readerSorted.length} 章`;
+        if (!hits.length) { wrap.innerHTML = '<div class="vrd-empty">換個字再找找看。</div>'; return; }
+        wrap.innerHTML = _readerFlow
+            ? hits.map(o => _flowHtml(o.ch, o.i)).join('')
+            : '<div class="vrd-cards">' + hits.map(o => _cardHtml(o.ch, o.i)).join('') + '</div>';
+    }
+
+    // ── 渲染章節列表：上面一條搜尋＋閱讀方式，下面卡片或連續內文 ──────
     function _renderChapters(chapters, body) {
         const sorted = [...chapters].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
         _readerSorted = sorted; _readerBody = body;
         if (!sorted.length) {
-            body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;">此故事無章節記錄</div>';
+            body.innerHTML = '<div class="vrd-empty">此故事還沒有章節記錄。</div>';
             return;
         }
-        let html = '<div class="vrd-cards">';
-        sorted.forEach((ch, i) => {
-            const content   = ch.content || '';
-            const fullPlain = _strip(content);
-            let summary = _extractSummary(content) || fullPlain;
-            summary = summary.slice(0, 100) + (summary.length > 100 ? '…' : '');   // 卡片只顯示前 100 字
-            const summaryHtml = summary.trim() ? esc(summary).replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>') : '<span style="color:#666">（無摘要）</span>';
-            const ts = ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('zh-TW') : '';
-            html += `<div class="vrd-card" onclick="window.VN_READER._openChapter(${i})">
-                <div class="vrd-card-hd">
-                    <span class="vrd-card-no">CH.${String(i+1).padStart(2,'0')}</span>
-                    <span class="vrd-card-title">${esc(ch.title || '未命名章節')}</span>
-                    <span class="vrd-card-time">${ts}</span>
+        body.innerHTML = `
+            <div class="vrd-tools">
+                <div class="vrd-search">
+                    <i class="fa-solid fa-magnifying-glass vrd-search-ico" aria-hidden="true"></i>
+                    <input id="vrd-q" class="vrd-search-input" type="text" placeholder="找一段內容或章節名" value="${escAttr(_readerQuery)}">
                 </div>
-                <div class="vrd-card-summary">${summaryHtml}</div>
-                <div class="vrd-card-readmore">點此看全文 →</div>
-            </div>`;
-        });
-        html += '</div>';
-        body.innerHTML = html;
+                <button class="vrd-mode-btn" id="vrd-mode" type="button">
+                    <i class="fa-solid ${_readerFlow ? 'fa-align-left' : 'fa-table-cells-large'}" aria-hidden="true"></i>
+                    <span>${_readerFlow ? '連著讀' : '一章一張'}</span>
+                </button>
+            </div>
+            <div class="vrd-count" id="vrd-count"></div>
+            <div id="vrd-list"></div>`;
+        const q = body.querySelector('#vrd-q');
+        if (q) {
+            let t = null;
+            q.oninput = () => { clearTimeout(t); t = setTimeout(() => { _readerQuery = q.value; _paintList(); }, 150); };
+        }
+        const m = body.querySelector('#vrd-mode');
+        if (m) m.onclick = () => { _readerFlow = !_readerFlow; _renderChapters(_readerSorted, body); };
+        _paintList();
         body.scrollTop = 0;
     }
 
@@ -298,23 +353,55 @@
         const content   = ch.content || '';
         const novelText = `<p style="margin:0">${_toHtml(_strip(content))}</p>`;
         const rawText   = esc(content);
-        const thinkText = esc(ch.thinking || '');
+        // thinking 優先用存起來的欄位；舊章節只把 <think> 寫在正文裡沒有這個欄位 → 現場抽一次，
+        //   不然那段會被 _strip 清掉、在閱讀器裡整段消失。
+        let _think = ch.thinking || '';
+        if (!_think) { const _tm = content.match(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/i); if (_tm) _think = _tm[1].trim(); }
+        const thinkText = esc(_think);
         const userText  = ch.request ? esc(ch.request) : '';
         const ts        = ch.createdAt ? new Date(ch.createdAt).toLocaleString('zh-TW') : '';
-        const userBlock = userText ? `<div class="vn-reader-msg user"><div class="vn-reader-label">👤 用戶</div><div class="vn-reader-bubble">${userText}</div></div>` : '';
-        const thinkBlock = thinkText ? `<div class="vn-reader-think-wrap" id="vrth-${id}"><div class="vn-reader-think-hd" onclick="window.VN_READER._thinkToggle('${id}')"><span class="rth-arrow">▶</span><span>思考了一段時間</span></div><div class="vn-reader-think-body">${thinkText}</div></div>` : '';
+        const userBlock = userText ? `<div class="vn-reader-msg user"><div class="vn-reader-label"><i class="fa-solid fa-user" aria-hidden="true"></i> 我說的</div><div class="vn-reader-bubble">${userText}</div></div>` : '';
+        const thinkBlock = thinkText ? `<div class="vn-reader-think-wrap" id="vrth-${id}"><div class="vn-reader-think-hd" onclick="window.VN_READER._thinkToggle('${id}')"><i class="fa-solid fa-chevron-right rth-arrow" aria-hidden="true"></i><span>思考了一段時間</span></div><div class="vn-reader-think-body">${thinkText}</div></div>` : '';
+
+        // 摘要與「這章開始時的數值」：PWA 的章節本來就存著，以前沒地方看 —— 檢查劇情對不對得上就靠這兩塊
+        const sumText = _chSummary(ch);
+        const sumBlock = sumText.trim() ? _foldHtml(`vrsum-${id}`, 'fa-align-left', '這章的摘要', _nlToBr(sumText)) : '';
+        const st = ch.avsStateBefore;
+        let stBlock = '';
+        if (st && typeof st === 'object' && Object.keys(st).length) {
+            const rows = Object.keys(st).map(k => {
+                const v = st[k];
+                const txt = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
+                return `<div class="vrd-kv"><span class="vrd-kv-k">${esc(k)}</span><span class="vrd-kv-v">${esc(txt)}</span></div>`;
+            }).join('');
+            stBlock = _foldHtml(`vrst-${id}`, 'fa-sliders', '這章開始時的數值', rows);
+        }
+
         body.innerHTML = `
             <div class="vrd-detail-bar">
-                <button class="vrd-back-btn" onclick="window.VN_READER._backToCards()">← 返回章節</button>
+                <button class="vrd-back-btn" onclick="window.VN_READER._backToCards()"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> 返回章節</button>
                 <span class="vrd-detail-title">CH.${String(i+1).padStart(2,'0')}　${esc(ch.title || '')}</span>
-                <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('${id}',this)">📄 原始 tag</button>
+                <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('${id}',this)"><i class="fa-solid fa-code" aria-hidden="true"></i> 原始文字</button>
             </div>
-            <div style="color:#666;font-size:0.72rem;margin:0 0 12px;">${ts}</div>
+            <div class="vrd-detail-time">${ts}</div>
             ${userBlock}
             ${thinkBlock}
-            <div class="vn-reader-bubble novel-view" id="vrb-novel-${id}">${novelText || '<span style="color:#555">（無內容）</span>'}</div>
+            ${sumBlock}
+            ${stBlock}
+            <div class="vn-reader-bubble novel-view" id="vrb-novel-${id}">${novelText || '<span class="vrd-dim">（無內容）</span>'}</div>
             <div class="vn-reader-bubble raw-view" id="vrb-raw-${id}">${rawText}</div>`;
         body.scrollTop = 0;
+    }
+    // 通用摺疊區塊（摘要／數值共用，長相跟既有的「思考了一段時間」同一套）
+    function _foldHtml(id, icon, label, innerHtml) {
+        return `<div class="vrd-fold" id="${id}">
+            <div class="vrd-fold-hd" onclick="window.VN_READER._foldToggle('${id}')">
+                <i class="fa-solid fa-chevron-right vrd-fold-arrow" aria-hidden="true"></i>
+                <i class="fa-solid ${icon} vrd-fold-ico" aria-hidden="true"></i>
+                <span>${label}</span>
+            </div>
+            <div class="vrd-fold-body">${innerHtml}</div>
+        </div>`;
     }
     function _backToCards() {
         if (_readerBody && _readerSorted.length) _renderChapters(_readerSorted, _readerBody);
@@ -590,6 +677,9 @@
         _thinkToggle(id) {
             document.getElementById(`vrth-${id}`)?.classList.toggle('open');
         },
+        _foldToggle(id) {
+            document.getElementById(id)?.classList.toggle('open');
+        },
         // 切換小說 ↔ 原始 tag（互斥顯示，不展開在底部）
         _toggle(id, btn) {
             const novel = document.getElementById(`vrb-novel-${id}`);
@@ -599,7 +689,9 @@
             raw.classList.toggle('active', showRaw);
             novel.classList.toggle('hidden', showRaw);
             btn.classList.toggle('active', showRaw);
-            btn.textContent = showRaw ? '📖 看小說' : '📄 看原始 tag';
+            btn.innerHTML = showRaw
+                ? '<i class="fa-solid fa-book-open" aria-hidden="true"></i> 看小說'
+                : '<i class="fa-solid fa-code" aria-hidden="true"></i> 原始文字';
         },
         // 章節選擇卡片 → 看全文 / 返回章節
         _openChapter,
