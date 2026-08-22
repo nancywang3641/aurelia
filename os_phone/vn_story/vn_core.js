@@ -2230,6 +2230,8 @@
                     const sceneName = sceneLabel.replace(/_/g, ' ');
                     const rankPanel = document.getElementById('stream-rank-panel');
                     const usePanel  = rankPanel && !rankPanel.classList.contains('hidden');
+                    // 左上角場景 tag 沒出現時，這行直接說明是「被直播面板接走」還是「元素不見了」
+                    console.log(`[VN_Core🔎] 場景 tag「${sceneName}」→ ${usePanel ? '直播面板那格' : '左上角 #top-badge'}｜元素 ${document.getElementById(usePanel ? 'stream-scene-label' : 'top-badge') ? 'ok' : '不存在'}`);
                     if (usePanel) {
                         document.getElementById('stream-scene-label').innerText = sceneName;
                         document.getElementById('stream-scene-row').classList.remove('hidden');
@@ -2248,7 +2250,7 @@
                         this._setBgImage(_gameBg, memUrl);
                     } else {
                         (async () => {
-                            const url = await this._safeFetchBg(cacheId, aiPrompt);
+                            const url = await this._safeFetchBg(cacheId, aiPrompt, true);   // 現場這一格：預熱失敗過也再試一次
                             // ★只有真的拿到圖才更新 _lastBgCacheId；生成失敗/逾時(url='')→保留上一個可用背景，
                             //   下次 resetState 還原它（治「漏Bg時背景變空」：失敗的 cacheId 指向空 IDB 槽 → 撈空變黑）
                             if (url) { this._lastBgCacheId = cacheId; this._setBgImage(_gameBg, url); }

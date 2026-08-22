@@ -156,10 +156,17 @@
 
         // 去重包裝：同一 cacheId 若已在生成中(預熱/現場)，共用同一個 promise，
         // 避免兩邊各生一張(競態) → 顯示一張、快取被另一張覆蓋 → 重開變不同圖。
-        _safeFetchBg: function(cacheId, prompt) {
+        //   retryFailed=true（現場播到 [Bg|] 那一格時傳）：預熱失敗過的也再給一次機會。
+        //   🚨 預熱只是「先做著」——它逾時/失敗就把 cacheId 記進黑名單，會害玩家眼前這一格
+        //      永遠是黑的（ComfyUI 其實把圖生出來了，只是預熱那趟等不到）。預熱失敗不該連累現場。
+        _safeFetchBg: function(cacheId, prompt, retryFailed) {
             if (this._bgMemCache[cacheId]) return Promise.resolve(this._bgMemCache[cacheId]);
             if (this._bgInflight[cacheId]) return this._bgInflight[cacheId];
-            if (this._bgFailed[cacheId]) return Promise.resolve('');   // 這個背景剛生失敗過 → 不自動重打(同場景的預熱+現場序列各打一次=白燒)；切新背景是新 cacheId、重整重置
+            if (this._bgFailed[cacheId]) {
+                if (!retryFailed) return Promise.resolve('');   // 預熱路徑：同場景不重打(白燒)
+                delete this._bgFailed[cacheId];
+                console.log(`[VN] 背景 ${cacheId} 預熱時失敗過 → 現場再試一次`);
+            }
             const self = this;
             const p = this._doFetchBg(cacheId, prompt);
             this._bgInflight[cacheId] = p;
@@ -198,9 +205,14 @@
             //     套 12 秒會把還在生的圖砍掉、誤掉進 Pixabay 真實圖 fallback(+#fallback 玻璃磨砂)＝「comfyui 背景被套玻璃遮罩」真凶。
             //   → 非 Pollinations 來源放寬到 150 秒(跟頭像/場景逾時同量級)，別再誤砍本機生圖。
             const _IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER || (window.parent && window.parent.OS_IMAGE_MANAGER);
-            let _bgSvc = 'pollinations';
-            try { if (_IM && typeof _IM.serviceFor === 'function') _bgSvc = _IM.serviceFor('bg') || 'pollinations'; } catch (e) {}
+            // 🚨 預設值不能是 pollinations：拿不到 serviceFor 時會落到 12 秒逾時，
+            //    而本機 ComfyUI 生一張 1024×768 背景動輒 20~60 秒 → 圖還在生就被判逾時、
+            //    備援又接不上 → 回空＝「背景沒拿到圖」，但 ComfyUI 那邊其實生完了。
+            //    → 只有「確定是 pollinations」才用短逾時，問不出來一律當本機/直連放寬。
+            let _bgSvc = '';
+            try { if (_IM && typeof _IM.serviceFor === 'function') _bgSvc = _IM.serviceFor('bg') || ''; } catch (e) {}
             const _bgTimeoutMs = (_bgSvc === 'pollinations') ? 12000 : 150000;
+            console.log(`[VN] 背景生成 ${cacheId}｜來源 ${_bgSvc || '(問不到，當本機直連)'}｜逾時 ${_bgTimeoutMs / 1000}s`);
             let raw = '';
             if (!forceFallback) {
                 try {
