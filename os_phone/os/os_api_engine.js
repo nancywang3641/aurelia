@@ -1499,7 +1499,9 @@
                             if (_injectedSys.has(_item.id)) continue;
                             _injectedSys.add(_item.id);
                             if      (_item.id === 'cot'          && cotPrompt) _vn.push({ role: 'system', content: `### \n${cotPrompt}` });
-                            else if (_item.id === 'panel_prompt')              { const fmt = win.OS_PROMPTS?.getSystemPrompt?.('vn_story') || win.OS_PROMPTS?.getFormat?.('vn_story') || ''; if (fmt) _vn.push({ role: 'system', content: fmt }); }
+                            // 只要格式協議本身。用 getSystemPrompt 會把整包(條目＋格式)重組一遍，
+                            //   而條目在下面 _item.type==='entry' 那條會各自 push → 每條被送兩次。
+                            else if (_item.id === 'panel_prompt')              { const fmt = win.OS_PROMPTS?.getPanelFormat?.('vn_story') || win.OS_PROMPTS?.getFormat?.('vn_story') || ''; if (fmt) _vn.push({ role: 'system', content: fmt }); }
                             else if (_item.id === 'worldbook'   && lore)       _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
                             else if (_item.id === 'persona'     && (userDesc || userName !== 'User'))  _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
                             else if (_item.id === 'vn_history') _vnMsgs.forEach(m => _vn.push(m));
