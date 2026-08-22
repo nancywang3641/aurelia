@@ -93,10 +93,18 @@
 
     let _syncing = false;
 
+    function _isStandalone() {
+        try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; }
+    }
+
     async function sync(reason) {
         if (_syncing) return;
         _syncing = true;
         try {
+            // 🟢 獨立版：沒有角色卡也沒有 TavernHelper，世界書條目住在 OS_DB。
+            //    跨卡守衛不需要——PWA 整個就是奧瑞亞，不會有「玩別人的卡」這回事。
+            if (_isStandalone()) { await _syncStandalone(reason); return; }
+
             const TH = win.TavernHelper || window.TavernHelper;
             if (!TH || !TH.getLorebookEntries || !TH.setLorebookEntries) return;
             if (!_isAurelia()) { console.log('🌍 [World Rules] 非奧瑞亞角色卡 → 一條都不碰（' + reason + '）'); return; }
@@ -138,7 +146,33 @@
         } finally { _syncing = false; }
     }
 
+    // 獨立版分支：同一份 planFor，換成 OS_DB 世界書條目的開關（標題比對，名單外不碰）
+    async function _syncStandalone(reason) {
+        const WB = win.OS_WORLDBOOK || window.OS_WORLDBOOK;
+        if (!WB || !WB.setEnabledByTitle) return;
+        const world = await _currentWorld();
+        const plan = planFor(world);
+        const r = await WB.setEnabledByTitle(plan.managed, plan.on);
+        if (!r.seen.length) {
+            console.log('🌍 [World Rules] 獨立版世界書裡找不到任何受管條目（戰鬥觸發／手機那組／BGM）→ 不動（' + reason + '）');
+            return;
+        }
+        if (!r.opened.length && !r.closed.length) return;
+        const where = world ? ('「' + world.name + '」(' + (world.genre || '未標題材') + ')') : '奧瑞亞主世界';
+        console.log('🌍 [World Rules] ' + where + ' → 開:' + (r.opened.join('、') || '無')
+                  + ' / 關:' + (r.closed.join('、') || '無') + '（獨立版・' + reason + '）');
+        try {
+            const t = win.toastr || window.toastr;
+            if (t && t.info) t.info((r.opened.length ? '開啟 ' + r.opened.join('、') : '')
+                                  + (r.opened.length && r.closed.length ? '；' : '')
+                                  + (r.closed.length ? '關閉 ' + r.closed.join('、') : ''),
+                                  '世界模組：' + where, { timeOut: 4000 });
+        } catch (e) {}
+    }
+
     function init() {
+        // 獨立版的 eventOn 是空 stub、CHAT_CHANGED 永遠不會來 → 那邊換世界靠世界門自己戳
+        // WORLD_RULES.sync（進出世界的呼叫點本來就在），開機這次對帳兩版共用。
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         // 換聊天室＝換世界（世界資料是 chat-scope）→ 重新對帳一次
         if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => setTimeout(() => sync('換聊天室'), 900));
