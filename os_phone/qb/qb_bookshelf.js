@@ -1550,6 +1550,11 @@
                         //   那條路得先叫出生成面板才跑得動，面板一拆整個 dive 就斷了。
                         const _dive = { worldId: w.id, greeting: chosenGreeting, title: w.title, userReply };
                         if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                        // 🚨 VN 的舞台 DOM（#page-game / #text-panel-wrapper …）是 showVnPanel → launchApp 建的。
+                        //    以前這裡只切 nav-story，舞台從沒被建出來 → 生成完要開播時 hideOverlays 讀到
+                        //    null.style 直接炸掉，畫面就停在白底。（續讀舊篇章那條本來就有叫 showVnPanel，
+                        //    所以只有「新開的第一輪」會中。）showVnPanel 內部有 vnInited 旗標，重複叫不會重建。
+                        if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel();
                         setTimeout(() => {
                             // 🚨掛在 VN_PLAYER 不是 VN_Core：舊碼寫成 VN_Core，?. 把它整個吞掉，
                             //   角色卡 Dive 一直是空打。找不到就出聲，不要再靜靜失敗。

@@ -2113,6 +2113,10 @@
                 const audio = document.getElementById('bgm-player');
                 if (name === 'stop') {
                     if (audio) audio.pause();
+                } else if (!audio) {
+                    console.warn(`[VN] BGM「${name}」不播：找不到 #bgm-player（VN 舞台還沒建起來？）`);
+                } else if (!VN_Config.data.bgm) {
+                    console.log(`[VN] BGM「${name}」跳過：設定裡的背景音樂是關的`);
                 } else if (VN_Config.data.bgm && audio) {
                     const _self = this;
                     const tryPlay = (filename, fuzzyHint) => {
@@ -2238,6 +2242,7 @@
                 if (aiPrompt) {
                     const memUrl = this._bgMemCache[cacheId];
                     const _gameBg = document.getElementById('game-bg');
+                    console.log(`[VN_Core🔎] [Bg|${cacheId}] → ${memUrl ? '記憶體快取命中' : '要去撈/生圖'}｜#game-bg ${_gameBg ? 'ok' : '不存在'}`);
                     if (memUrl) {
                         this._lastBgCacheId = cacheId;   // 有現成圖 → 更新「最後可用背景」
                         this._setBgImage(_gameBg, memUrl);
@@ -2247,6 +2252,7 @@
                             // ★只有真的拿到圖才更新 _lastBgCacheId；生成失敗/逾時(url='')→保留上一個可用背景，
                             //   下次 resetState 還原它（治「漏Bg時背景變空」：失敗的 cacheId 指向空 IDB 槽 → 撈空變黑）
                             if (url) { this._lastBgCacheId = cacheId; this._setBgImage(_gameBg, url); }
+                            else console.warn(`[VN] 背景沒拿到圖：${cacheId}（生成失敗/逾時，或這個 cacheId 剛失敗過被記住了）`);
                         })();
                     }
                 }
