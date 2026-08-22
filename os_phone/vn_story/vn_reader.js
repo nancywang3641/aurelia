@@ -95,6 +95,16 @@
         return new RegExp(_rxEsc(open) + '([\\s\\S]*?)' + _rxEsc(close), 'i');
     }
 
+    // 把「摘要區塊」整個剝掉（自訂標記與預設 <summary> 都剝）——給正文清洗與上下文壓縮共用。
+    function _stripSummaryBlocks(text) {
+        let s = String(text == null ? '' : text);
+        const m = _getSumMarks();
+        if (m.custom) {
+            try { s = s.replace(new RegExp(_rxEsc(m.open) + '[\\s\\S]*?' + _rxEsc(m.close), 'gi'), ''); } catch (e) {}
+        }
+        return s.replace(/<summary>[\s\S]*?<\/summary>/gi, '');
+    }
+
     // 抽章節摘要：先用使用者設的標記，抓不到再退回預設 <summary>；都沒有回空字串。
     function _extractSummary(content) {
         if (!content) return '';
@@ -411,6 +421,11 @@
     const VN_READER = {
 
         clean: _strip,   // VN 格式 → 純小說正文(抽 <content>、[Char]→「名：台詞」、去所有 VN 標籤)；給 app 上下文清洗共用
+        // 🚨 摘要標記是「唯一真相」：Rae 會照別人家 preset 改摘要標籤(<meow_FM>、<draft>…)，
+        //   所以誰要抓摘要都得走這兩支，別再各自寫死 /<summary>…<\/summary>/。
+        //   寫死的後果是靜默的：上下文壓縮抓不到就把那章壓成空字串＝整章從歷史消失。
+        sumExtract: _extractSummary,        // 章節原文 → 摘要純文字(抓不到回 '')
+        sumStrip: _stripSummaryBlocks,      // 章節原文 → 剝掉摘要區塊後的文字
         fetchFullChat: _fetchFullMessages,   // 完整讀當前聊天(讀檔繞 lazy-load、不展開不卡死)；給大總結等共用
         getCurrentChars: _getCurrentChars,   // 當前聊天室出現過的角色 [{name,count}]；給 app/面板做角色選單(繞懶載、不等總結)
 

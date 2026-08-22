@@ -248,8 +248,8 @@
         const src = _cfg().extractSource || 'content';
         let cleanContent = '';
         if (src === 'summary') {
-            const sm = chapterContent.match(/<summary>([\s\S]*?)<\/summary>/i);
-            cleanContent = sm ? sm[1] : '';
+            // 摘要標記走 VN_READER 那份唯一真相(Rae 會照別家 preset 改成 <meow_FM>/<draft>…)
+            cleanContent = win.VN_READER?.sumExtract?.(chapterContent) || '';
         }
         if (!cleanContent.trim()) {   // 全文模式，或摘要模式但這則沒 <summary> → 回退全文
             const _noCot = String(chapterContent).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT 再取正文
@@ -383,7 +383,7 @@
         // 把章節原文清成「要餵給抽取的內容」(跟 ingest 同邏輯：summary 或 <content>)，給結合觸發共用
         const src = _cfg().extractSource || 'content';
         let c = '';
-        if (src === 'summary') { const sm = String(raw||'').match(/<summary>([\s\S]*?)<\/summary>/i); c = sm ? sm[1] : ''; }
+        if (src === 'summary') { c = win.VN_READER?.sumExtract?.(String(raw || '')) || ''; }
         if (!c.trim()) { const _noCot = String(raw||'').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, ''); const cm = _noCot.match(/<content>([\s\S]*?)<\/content>/i); c = cm ? cm[1] : _noCot; }
         return c.trim();
     } };
