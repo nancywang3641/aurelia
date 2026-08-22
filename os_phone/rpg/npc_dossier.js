@@ -9,6 +9,12 @@
 // 治的病：群像卡/世界卡隨機 NPC 幾百輪後再登場被當陌生人——語意向量召回對「同名精準命中」
 // 先天吃虧，這裡用實體(名字)索引補上。隱藏開關 localStorage sp_npc_dossier=0 可關，預設開。
 // 資料存 OS_DB state_data(chatId) 的 npcLedger / npcDossiers 欄位（CHAT_DELETED 自動跟著清）。
+//
+// 🔀 雙版：記帳/建檔規則/檔案資料完全共用，差在「誰餵正文、誰負責注入」──
+//   酒館：state_runtime 那通副模型搭便車建檔（prepare→commit）＋ GENERATION_STARTED injectPrompts
+//   PWA ：VN_CHAPTER_SAVED → 自己打一通副模型建檔；注入由 _buildStandaloneContext 的
+//         npc_dossier 那一格取 buildBlock() 塞進 messages（PWA 沒有 injectPrompts）
+//   分艙鑰匙一律走 OS_AVS_ADAPTER（酒館 chatId／PWA storyId）。
 // ----------------------------------------------------------------
 (function() {
     console.log('📇 [NPC Dossier] V1 載入');
@@ -34,11 +40,32 @@
         let s = String(raw).split(/[\\/]/).pop() || '';
         return s.replace(/\.jsonl?$/i, '').trim();
     }
+    function _isStandalone() {
+        try { return !!win.OS_API?.isStandalone?.(); } catch (e) { return false; }
+    }
+    // 分艙鑰匙：酒館＝chatId、PWA＝storyId。一律走 adapter，自己寫 fallback 會在 PWA 拿到假鑰匙。
     function _getChatId() {
-        try { return _normChatId(win.SillyTavern?.getContext?.()?.chatId); } catch (e) { return ''; }
+        try {
+            if (win.OS_AVS_ADAPTER?.getStoryId) return String(win.OS_AVS_ADAPTER.getStoryId() || '');
+            return _normChatId(win.SillyTavern?.getContext?.()?.chatId);
+        } catch (e) { return ''; }
     }
     function _userName() {
-        try { return String(win.SillyTavern?.getContext?.()?.name1 || '').trim(); } catch (e) { return ''; }
+        try {
+            const n = String(win.SillyTavern?.getContext?.()?.name1 || '').trim();
+            if (n) return n;
+        } catch (e) {}
+        try { return String(win.OS_API?.getGlobalUserName?.() || '').trim(); } catch (e) { return ''; }
+    }
+    // PWA：當前故事的章節（新→舊 由 getAllVnChapters 給，這裡轉成舊→新）
+    async function _pwaChapters() {
+        try {
+            if (!win.OS_DB?.getAllVnChapters) return [];
+            const sid = _getChatId();
+            const all = await win.OS_DB.getAllVnChapters();
+            const mine = sid ? all.filter(ch => ch.storyId === sid) : all.filter(ch => !ch.storyId);
+            return mine.slice().reverse();   // 舊 → 新，索引＝「樓號」
+        } catch (e) { return []; }
     }
 
     // 從正文抓 [Char|名]：跳過 {代號} / *心聲* / 明顯非人名（過長、佔位符）；主角本人不建檔
@@ -177,6 +204,14 @@ ${list}
             let msgs = null;
             if (_hasCorpus) {
                 msgs = corpusList.map(t => ({ message: String(t || '') }));
+            } else if (_isStandalone()) {
+                // PWA 沒有聊天樓：底本＝當前故事的章節（正文才是唯一真相，跟酒館同語意）
+                const chs = await _pwaChapters();
+                msgs = chs.map(ch => ({ message: String(ch.content || '') }));
+                if (!msgs.length) {
+                    console.warn(`📇 [NPC Dossier] 對帳(${tag})：讀不到章節 → 不動`);
+                    return;
+                }
             } else {
                 try { msgs = await win.VN_READER?.fetchFullChat?.(); } catch (e) {}
                 if (!Array.isArray(msgs) || !msgs.length) {
@@ -228,27 +263,18 @@ ${list}
     // ── 3. 注入：名冊常駐 + 名字命中的完整檔案 ─────────────────────────────
     let _lastUninject = null;
 
-    async function injectDossiers() {
+    // 組注入文字（兩版共用的唯一真相）：recentText＝最近正文＋這次輸入，用來判斷哪些角色本輪相關。
+    //   酒館端由 injectDossiers 包成 injectPrompts；PWA 端由 _buildStandaloneContext 當
+    //   npc_dossier 那一格 push 進 messages（PWA 沒有 injectPrompts，這層才要拆出來）。
+    async function buildBlock(recentText) {
         try {
-            try { _lastUninject?.(); } catch (e) {}
-            _lastUninject = null;
-            if (!_isOn() || !win.TavernHelper?.injectPrompts) return;
+            if (!_isOn()) return '';
             const chatId = _getChatId();
-            if (!chatId || !win.OS_DB?.getStateData) return;
+            if (!chatId || !win.OS_DB?.getStateData) return '';
             const data = await win.OS_DB.getStateData(chatId);
             const dossiers = data?.npcDossiers;
-            if (!dossiers || !Object.keys(dossiers).length) return;
+            if (!dossiers || !Object.keys(dossiers).length) return '';
             const chars = data?.npcLedger?.chars || {};
-
-            // 最近幾則正文（含用戶剛送出的那句「去找某人」）→ 名字命中 = 該角色本輪相關
-            let recentText = '';
-            try {
-                const ctx = win.SillyTavern?.getContext?.();
-                if (ctx && Array.isArray(ctx.chat)) {
-                    recentText = ctx.chat.slice(-CONFIG.scanMsgs).filter(m => m && !m.is_system)
-                        .map(m => m.mes || m.message || '').join('\n');
-                }
-            } catch (e) {}
 
             const byRecency = Object.keys(dossiers)
                 .sort((a, b) => (chars[b]?.lastAt || 0) - (chars[a]?.lastAt || 0));
@@ -270,19 +296,102 @@ ${list}
                 parts.push(`<人物檔案 規則="本輪相關人物的長期檔案·權威·寫作不得矛盾">\n${fileLines}\n</人物檔案>`);
             }
 
+            // 🔬 chatId 一起印：查「新聊天室卻冒出舊角色」時，這串直接告訴你檔案是從哪一格 DB 撈的
+            console.log(`📇 [NPC Dossier] 名冊 ${rosterNames.length} 人` + (mentioned.length ? `＋完整檔案 [${mentioned.join('、')}]` : '（本輪無名字命中）') + `｜讀自 chatId=${chatId}`);
+            return parts.join('\n');
+        } catch (e) {
+            console.warn('[NPC Dossier] 組注入文字失敗:', e?.message || e);
+            return '';
+        }
+    }
+
+    async function injectDossiers() {
+        try {
+            try { _lastUninject?.(); } catch (e) {}
+            _lastUninject = null;
+            if (!win.TavernHelper?.injectPrompts) return;
+
+            // 最近幾則正文（含用戶剛送出的那句「去找某人」）→ 名字命中 = 該角色本輪相關
+            let recentText = '';
+            try {
+                const ctx = win.SillyTavern?.getContext?.();
+                if (ctx && Array.isArray(ctx.chat)) {
+                    recentText = ctx.chat.slice(-CONFIG.scanMsgs).filter(m => m && !m.is_system)
+                        .map(m => m.mes || m.message || '').join('\n');
+                }
+            } catch (e) {}
+
+            const content = await buildBlock(recentText);
+            if (!content) return;
+
             const result = win.TavernHelper.injectPrompts([{
                 id: CONFIG.injectId,
-                content: parts.join('\n'),
+                content,
                 position: 'in_chat',
                 depth: 1,
                 role: 'system'
             }], { once: true });
             _lastUninject = result?.uninject || null;
-            // 🔬 chatId 一起印：查「新聊天室卻冒出舊角色」時，這串直接告訴你檔案是從哪一格 DB 撈的
-            console.log(`📇 [NPC Dossier] 注入：名冊 ${rosterNames.length} 人` + (mentioned.length ? `＋完整檔案 [${mentioned.join('、')}]` : '（本輪無名字命中）') + `｜讀自 chatId=${chatId}`);
         } catch (e) {
             console.warn('[NPC Dossier] 注入失敗:', e?.message || e);
         }
+    }
+
+    // ── 4. PWA 建檔驅動：酒館靠 state_runtime 那通副模型搭便車，PWA 沒有那條路 ──────
+    //   PWA 的「一章寫完」訊號＝ OS_DB.saveVnChapter 發的 VN_CHAPTER_SAVED（向量記憶也接這個）。
+    //   收到後：prepare 純程式記帳 → 有待建檔的人才多打一通副模型（沒人達標＝0 API）→ commit。
+    let _pwaBusy = false;
+    async function _pwaExtract(detail) {
+        if (_pwaBusy) return;
+        _pwaBusy = true;
+        try {
+            if (!_isOn() || !_isStandalone()) return;
+            const chatId = _getChatId();
+            if (!chatId) return;
+            const content = String(detail?.content || '');
+            if (!content) return;
+
+            // 「樓號」＝這章在本故事章節序列中的位置；重生同一章拿到同一個索引 → 不會灌水登場數
+            const chs = await _pwaChapters();
+            let idx = chs.findIndex(ch => ch.id === detail?.id);
+            if (idx < 0) idx = chs.length - 1;
+
+            const handle = await prepare(chatId, content, idx);
+            if (!handle) return;
+            if (!handle.candidates?.length) { await commit(handle, null); return; }   // 沒人達標也要落帳
+
+            const files = await _pwaAskFiles(handle, content);
+            await commit(handle, files);
+        } catch (e) {
+            console.warn('[NPC Dossier] PWA 建檔失敗:', e?.message || e);
+        } finally { _pwaBusy = false; }
+    }
+
+    // 副模型單通：把 prepare 組好的同一份規則（block）當 system，正文當 user，只要 npc_files
+    function _pwaAskFiles(handle, content) {
+        return new Promise((resolve) => {
+            try {
+                if (!win.OS_API?.chat) return resolve(null);
+                const secCfg = (win.OS_SETTINGS?.getSecondaryConfig?.()) || (win.OS_SETTINGS?.getConfig?.()) || {};
+                secCfg._isSecondary = true;
+                const sys = '你是「人物檔案管理員」。讀下面的劇情正文，依規則產出 JSON，只輸出 JSON、不要任何說明文字。\n'
+                    + '輸出格式：{ "npc_files": [ { "name": "...", "hook": "...", "file": "..." } ] }\n'
+                    + String(handle.block || '');
+                win.OS_API.chat(
+                    [{ role: 'system', content: sys }, { role: 'user', content: content.slice(0, 6000) }],
+                    secCfg, null,
+                    (text) => {
+                        try {
+                            const m = String(text || '').match(/\{[\s\S]*\}/);
+                            const obj = m ? JSON.parse(m[0]) : null;
+                            resolve(Array.isArray(obj?.npc_files) ? obj.npc_files : null);
+                        } catch (e) { resolve(null); }
+                    },
+                    () => resolve(null),
+                    { disableTyping: true }
+                );
+            } catch (e) { resolve(null); }
+        });
     }
 
     // ── 事件接線 ───────────────────────────────────────────────────────
@@ -315,8 +424,14 @@ ${list}
         console.log('📇 [NPC Dossier] Ready（含正文對帳）');
     }
 
+    // PWA 接線：章節落地就記帳＋建檔（判 isStandalone 放在事件內，載入當下 OS_API 還沒起來）
+    win.addEventListener('VN_CHAPTER_SAVED', (e) => {
+        if (!_isStandalone()) return;
+        setTimeout(() => _pwaExtract(e.detail || {}), 800);   // 讓向量 ingest 先開跑，兩通不互相卡
+    });
+
     win.OS_NPC_DOSSIER = {
-        prepare, commit, injectDossiers, reconcile,
+        prepare, commit, injectDossiers, reconcile, buildBlock,
         isOn: _isOn,
         // 診斷/管理用：撈當前卡全部檔案與登場帳
         dump: async () => {
