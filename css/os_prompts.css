@@ -120,3 +120,8 @@
         .pm-gcot-ta:focus, .pm-entry-ta:focus, .pm-persona-ta:focus {
             border-color:#1A1C28; box-shadow:0 0 0 2px rgba(26,28,40,0.10); outline:none;
         }
+
+        /* 條目編輯全屏頁：名稱一行 + 內容吃滿剩下的高度（原本折在卡片裡只有幾行） */
+        .pm-emodal .pm-bmodal-body.pm-entry-edit { display:flex; flex-direction:column; gap:8px; padding:12px 12px 16px; }
+        .pm-entry-edit .pm-entry-name-input { margin-bottom:0; flex-shrink:0; }
+        .pm-entry-edit .pm-entry-ta { flex:1; min-height:0; margin:0; font-size:13px; line-height:1.7; }

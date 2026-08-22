@@ -1003,6 +1003,46 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         body.appendChild(addBundleBtn);
     }
 
+    // ── 條目編輯（Layer 2 全屏頁）──
+    // 原本是在列表裡就地折疊展開：框只有幾行高、又擠在卡片裡，長條目要改字像在針孔裡動手術。
+    function openEntryModal(entryId, bodyEl, onSaved) {
+        const wrap = bodyEl.closest('.pm-wrap') || bodyEl.parentElement;
+        let modal = wrap.querySelector('.pm-emodal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.className = 'pm-bmodal pm-emodal';   // 殼沿用預設包那層，內容自己一套
+            wrap.appendChild(modal);
+        }
+        const entry = loadEntries().find(e => e.id === entryId);
+        if (!entry) return;
+
+        modal.innerHTML = `
+            <div class="pm-bmodal-hd">
+                <button class="pm-bmodal-back">‹</button>
+                <span class="pm-bmodal-title">✏️ 編輯條目</span>
+                <button class="pm-bundle-save pm-emodal-sv">保存</button>
+            </div>
+            <div class="pm-bmodal-body pm-entry-edit">
+                <input class="pm-entry-name-input" type="text" placeholder="條目名稱" value="${(entry.name||'').replace(/"/g,'&quot;')}">
+                <textarea class="pm-entry-ta" placeholder="輸入條目內容...">${(entry.content||'').replace(/</g,'&lt;')}</textarea>
+            </div>`;
+
+        const close = () => modal.classList.remove('open');
+        modal.querySelector('.pm-bmodal-back').onclick = close;
+        modal.querySelector('.pm-emodal-sv').onclick = () => {
+            const list = loadEntries(); const idx = list.findIndex(e => e.id === entryId);
+            if (idx < 0) return close();
+            list[idx].name    = modal.querySelector('.pm-entry-name-input').value.trim() || '(未命名)';
+            list[idx].content = modal.querySelector('.pm-entry-ta').value;
+            saveEntries(list);
+            const btn = modal.querySelector('.pm-emodal-sv');
+            btn.textContent = '已保存 ✓';
+            setTimeout(() => { close(); btn.textContent = '保存'; onSaved?.(); }, 500);
+        };
+        requestAnimationFrame(() => modal.classList.add('open'));
+        setTimeout(() => { try { modal.querySelector('.pm-entry-name-input')?.focus(); } catch (e) { } }, 60);
+    }
+
     function renderStaging(stagingList, refresh) {
         stagingList.innerHTML = '';
         const entries = loadEntries();
@@ -1020,11 +1060,6 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 <span class="pm-staging-name">${entry.name || '(未命名)'}</span>
                 <button class="pm-icon-btn pm-st-edit">✏️ 編輯</button>
                 <button class="pm-icon-btn del pm-st-del">🗑️</button>
-            </div>
-            <div class="pm-staging-body">
-                <input class="pm-entry-name-input" type="text" placeholder="條目名稱" value="${(entry.name||'').replace(/"/g,'&quot;')}">
-                <textarea class="pm-entry-ta" placeholder="輸入條目內容...">${entry.content||''}</textarea>
-                <button class="pm-entry-save">保存</button>
             </div>`;
 
             card.querySelector('.pm-entry-toggle').onchange = function() {
@@ -1033,25 +1068,13 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             };
             card.querySelector('.pm-st-edit').onclick = ev => {
                 ev.stopPropagation();
-                card.querySelector('.pm-staging-body').classList.toggle('open');
+                openEntryModal(entry.id, stagingList, refresh);
             };
             card.querySelector('.pm-st-del').onclick = ev => {
                 ev.stopPropagation();
                 if (!confirm(`刪除條目「${entry.name||'(未命名)'}」?`)) return;
                 saveEntries(loadEntries().filter(e => e.id !== entry.id));
                 refresh();
-            };
-            card.querySelector('.pm-entry-save').onclick = () => {
-                const list = loadEntries(); const idx = list.findIndex(e => e.id === entry.id);
-                if (idx < 0) return;
-                list[idx].name    = card.querySelector('.pm-entry-name-input').value.trim() || '(未命名)';
-                list[idx].content = card.querySelector('.pm-entry-ta').value;
-                saveEntries(list);
-                card.querySelector('.pm-staging-name').textContent = list[idx].name;
-                const btn = card.querySelector('.pm-entry-save');
-                btn.textContent = '已保存 ✓'; btn.style.background = '#6b8e23'; btn.style.color = '#1A1C28';
-                setTimeout(() => { btn.textContent = '保存'; btn.style.background = ''; btn.style.color = ''; }, 1200);
-                card.querySelector('.pm-staging-body').classList.remove('open');
             };
 
             stagingList.appendChild(card);
@@ -1073,13 +1096,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             entries.push({ id: genId(), name: '新條目', content: '', enabled: true, order: entries.length });
             saveEntries(entries);
             renderStaging(list, () => renderLibrary(body));
-            setTimeout(() => {
-                const cards = list.querySelectorAll('.pm-staging-entry');
-                if (cards.length) {
-                    cards[cards.length-1].querySelector('.pm-staging-body')?.classList.add('open');
-                    cards[cards.length-1].querySelector('.pm-entry-name-input')?.focus();
-                }
-            }, 30);
+            setTimeout(() => openEntryModal(entries[entries.length-1].id, list, () => renderLibrary(body)), 30);
         };
         renderStaging(list, () => renderLibrary(body));
     }
