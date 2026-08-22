@@ -69,6 +69,13 @@
             this._currentStoryTitle = storyTitle || '';
             localStorage.setItem('vn_current_story_id',    storyId    || '');
             localStorage.setItem('vn_current_story_title', storyTitle || '');
+            // 大廳左上角顯示「現在在玩哪一條」。酒館那條線在 index.js（讀 SillyTavern 的 chatId），
+            //   PWA 根本沒載那支 → 標題一直停在預設字串。獨立版由這裡餵，換篇章就跟著換。
+            try {
+                if (win.OS_API?.isStandalone?.() && storyTitle) {
+                    win.AureliaControlCenter?.setChatTitle?.(storyTitle);
+                }
+            } catch (e) {}
         },
 
         // 🆕 開一條新故事線 —— 對應酒館「建立聊天室就產生 chatId」那一刻。

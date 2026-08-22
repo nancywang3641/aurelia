@@ -733,6 +733,88 @@
         };
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // 📇 篇章目錄 —— 一本書開過的故事線清單（＝酒館一張卡底下的那些聊天室）
+    // ──────────────────────────────────────────────────────────────
+    // 清單來源 vn_story_index（踏入時寫的 storyId → worldId / wbPacks / title / createdAt），
+    // 章數與最後更新時間再從 OS_DB 章節補。索引裡有、章節數 0 的是「踏進去但沒生成成功」，
+    // 照樣列出來也照樣切得過去 —— 那就是酒館的空聊天室。
+    // ══════════════════════════════════════════════════════════════
+    function _storyIndex() {
+        try { return JSON.parse(localStorage.getItem('vn_story_index') || '{}') || {}; } catch (e) { return {}; }
+    }
+
+    async function _renderToc(w, panel) {
+        const listEl = panel.querySelector('#qb-toc-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<div class="qb-toc-empty">讀取中…</div>';
+
+        const idx = _storyIndex();
+        const mine = Object.keys(idx).filter(sid => (idx[sid] || {}).worldId === w.id);
+        let chapters = [];
+        try { chapters = (await window.OS_DB?.getAllVnChapters?.()) || []; } catch (e) {}
+        const byStory = {};
+        chapters.forEach(c => { if (c.storyId) (byStory[c.storyId] = byStory[c.storyId] || []).push(c); });
+
+        const rows = mine.map(sid => {
+            const meta = idx[sid] || {};
+            const chs  = byStory[sid] || [];
+            const last = chs.length ? Math.max(...chs.map(c => c.createdAt || 0)) : (meta.createdAt || 0);
+            return { sid, title: meta.title || sid, n: chs.length, last };
+        }).sort((a, b) => b.last - a.last);
+
+        if (!rows.length) {
+            listEl.innerHTML = '<div class="qb-toc-empty">這本書還沒有篇章</div>';
+            return;
+        }
+
+        const cur = window.VN_Core?._currentStoryId || localStorage.getItem('vn_current_story_id') || '';
+        listEl.innerHTML = '';
+        rows.forEach(r => {
+            const when = r.last ? new Date(r.last).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+            const row = document.createElement('button');
+            row.className = 'qb-toc-item' + (r.sid === cur ? ' now' : '');
+            row.innerHTML = `<span class="qb-toc-item-t">${_escHtml(r.title)}</span>
+                <span class="qb-toc-item-m">${r.n ? r.n + ' 章' : '尚未開始'}${when ? '　' + when : ''}</span>
+                ${r.sid === cur ? '<span class="qb-toc-now">進行中</span>' : ''}`;
+            row.onclick = () => _resumeStory(r, w, panel);
+            listEl.appendChild(row);
+        });
+    }
+
+    // 接著玩某一條：切分艙鑰匙 → 把那條當初掛的書與世界書帶回來 → 載入最新一章開播
+    async function _resumeStory(r, w, panel) {
+        try {
+            const meta = _storyIndex()[r.sid] || {};
+            window.VN_Core?._setStoryId?.(r.sid, r.title);
+            if (meta.worldId) { try { localStorage.setItem('vn_current_world_id', meta.worldId); } catch (e) {} }
+            if (Array.isArray(meta.wbPacks)) { try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(meta.wbPacks)); } catch (e) {} }
+            try { await window.VN_FREE_MODE?.applyForCurrent?.(true); } catch (e) {}
+            try { window.AureliaControlCenter?.setChatTitle?.(r.title); } catch (e) {}
+
+            let chs = [];
+            try { chs = ((await window.OS_DB?.getAllVnChapters?.()) || []).filter(c => c.storyId === r.sid); } catch (e) {}
+            chs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+            // 空篇章（踏進去沒生成成功）→ 只切過去，讓她從「創建新篇章」重來
+            if (!chs.length) {
+                await _renderToc(w, panel);
+                console.log(`[書架] 已切到「${r.title}」，這條還沒有章節`);
+                return;
+            }
+
+            const overlay = document.getElementById('qb-bookshelf-overlay');
+            if (overlay) overlay.style.display = 'none';
+            panel.style.display = 'none';
+            _getShelves().forEach(s => s.style.display = 'flex');
+
+            window._lobbyPendingChapter = chs[chs.length - 1];
+            if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
+        } catch (e) {
+            console.warn('[書架] 切換篇章失敗:', e);
+        }
+    }
+
     // ── 書封面與內頁展開面板 (雙層結構 + 滑動卡片) ────────────────────────
     function openCover(w) {
         const panel = document.getElementById('qb-book-cover-panel');
@@ -829,12 +911,33 @@
                 </div>
 
                 <div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;">
-                    ${isCard ? `
-                    <button id="qb-open-inner-btn" class="qb-btn-primary">翻閱開場白</button>
-                    ` : `
-                    <button class="qb-dive-world-btn qb-btn-primary" data-wid="${w.id}">踏入故事</button>
-                    `}
+                    <button id="qb-toc-open-btn" class="qb-btn-primary">${isCard ? '翻閱開場白' : '踏入故事'}</button>
                     ${w.custom ? `<button class="qb-remove-world-btn qb-btn-danger" data-wid="${w.id}">下架</button>` : ''}
+                </div>
+            </div>
+
+            <!-- 📇 篇章目錄：這本書開過幾條故事線（＝酒館的聊天室列表）。
+                 一律先經過這一層，跟酒館「選卡片先看到聊天室清單」同一個心智模型。
+                 「創建新篇章」那一格放的就是原本封面上的那顆鈕(id/class 都沒動)，
+                 所以既有的開場白內頁與 dive 綁定完全不用改。 -->
+            <div id="qb-toc-view" style="
+                display:none;position:absolute;inset:0;z-index:9;
+                background:rgba(20,12,8,0.98);
+                flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
+                <div style="padding:16px 20px;border-bottom:1px solid var(--qbk-line);
+                            display:flex;align-items:center;justify-content:space-between;
+                            background:rgba(0,0,0,0.3);flex-shrink:0;">
+                    <div style="font-size:14px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">${_escHtml(w.title)}</div>
+                    <button id="qb-toc-close" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+                </div>
+                <div class="qb-toc-body" id="qb-toc-body">
+                    <div class="qb-toc-new">
+                        ${isCard
+                            ? `<button id="qb-open-inner-btn" class="qb-btn-primary block">創建新篇章</button>`
+                            : `<button class="qb-dive-world-btn qb-btn-primary block" data-wid="${w.id}">創建新篇章</button>`}
+                    </div>
+                    <div class="qb-toc-label">歷史篇章</div>
+                    <div id="qb-toc-list"></div>
                 </div>
             </div>
 
@@ -1093,25 +1196,51 @@
             }
         }
 
+        // ── 📇 篇章目錄（兩種書共用）───────────────────────────────
+        (function _initToc() {
+            const tocView  = panel.querySelector('#qb-toc-view');
+            const coverView= panel.querySelector('#qb-cover-view');
+            const coverBack= panel.querySelector('#qb-cover-back');
+            const openBtn  = panel.querySelector('#qb-toc-open-btn');
+            if (!tocView || !openBtn) return;
+
+            const showToc = async () => {
+                coverView.style.display = 'none';
+                if (coverBack) coverBack.style.display = 'none';
+                tocView.style.display = 'flex';
+                await _renderToc(w, panel);
+            };
+            const hideToc = () => {
+                tocView.style.display = 'none';
+                coverView.style.display = 'flex';
+                if (coverBack) coverBack.style.display = 'block';
+            };
+            openBtn.onclick = showToc;
+            panel.querySelector('#qb-toc-close').onclick = hideToc;
+            panel._qbHideToc = hideToc;   // 開場白內頁關閉時要退回目錄，不是退回封面
+        })();
+
         // ── 視圖切換與滑動卡片邏輯 (角色卡專屬) ───────────────────────
         if (isCard) {
             const coverView = panel.querySelector('#qb-cover-view');
             const innerView = panel.querySelector('#qb-inner-view');
             const coverBack = panel.querySelector('#qb-cover-back');
-            
-            // 開啟內頁
+            const tocView   = panel.querySelector('#qb-toc-view');
+
+            // 開啟內頁（現在是從目錄的「創建新篇章」進來）
             panel.querySelector('#qb-open-inner-btn').onclick = () => {
+                if (tocView) tocView.style.display = 'none';
                 coverView.style.display = 'none';
                 coverBack.style.display = 'none';
                 innerView.style.display = 'flex';
                 updateSlider(); // 初始化顯示第一張
             };
-            
-            // 關閉內頁
+
+            // 關閉內頁 → 退回目錄那一層（從哪裡進來就退回哪裡）
             panel.querySelector('#qb-inner-close').onclick = () => {
                 innerView.style.display = 'none';
-                coverView.style.display = 'flex';
-                coverBack.style.display = 'block';
+                if (tocView) { tocView.style.display = 'flex'; }
+                else { coverView.style.display = 'flex'; coverBack.style.display = 'block'; }
             };
 
             // 滑動核心邏輯

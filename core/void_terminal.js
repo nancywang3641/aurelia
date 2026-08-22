@@ -222,7 +222,7 @@ const IRIS_IDLE = [
             avatar.style.opacity = '1'; avatar.style.display = '';
         }
         const titleEl = document.getElementById('home-chat-title');
-        if (titleEl) titleEl.textContent = on ? '[ERR_404] THE STRAY NODE' : 'Parallax Archive & Cafe';
+        if (titleEl) titleEl.textContent = on ? '[ERR_404] THE STRAY NODE' : _lobbyDefaultTitle();
         const inputField = document.getElementById('iris-input');
         if (inputField) inputField.placeholder = on ? '...你最好有話說。' : '提供故事素材或與瀅瀅對話...';
         const nameBox = document.getElementById('iris-name-tag');
@@ -460,7 +460,7 @@ const IRIS_IDLE = [
             const avatar = document.getElementById('iris-avatar');
             if (avatar) { avatar.onerror = function(){ this.style.display='none'; }; avatar.src = URLS.IRIS_AVATAR; avatar.title = '戳戳 瀅瀅'; avatar.style.opacity = '1'; avatar.style.display = ''; }
             const titleEl = document.getElementById('home-chat-title');
-            if (titleEl) titleEl.textContent = 'Parallax Archive & Cafe';
+            if (titleEl) titleEl.textContent = _lobbyDefaultTitle();
             const inputField = document.getElementById('iris-input');
             if (inputField) inputField.placeholder = '提供故事素材或與瀅瀅對話...';
             const nameBox = document.getElementById('iris-name-tag');
@@ -506,6 +506,18 @@ const IRIS_IDLE = [
     }
 
     // ── 書架視窗 → 已移至 os_phone/qb/qb_bookshelf.js（QbBookshelf 模組）──
+    // 大廳左上角平常顯示什麼：獨立版有正在玩的篇章就顯示那條(＝酒館顯示 chatId 的位置)，
+    //   沒有(還沒踏入任何故事)或酒館模式就用場景預設名。
+    function _lobbyDefaultTitle() {
+        try {
+            if (window.OS_API?.isStandalone?.()) {
+                const t = localStorage.getItem('vn_current_story_title') || '';
+                if (t) return '[Session] ' + t;
+            }
+        } catch (e) {}
+        return 'Parallax Archive & Cafe';
+    }
+
     VoidTerminal.createTab = function(parentDoc) {
         if (window.AureliaVoidStyles) window.AureliaVoidStyles.inject(VoidAmbient.currentBgUrl());
         
@@ -1501,7 +1513,7 @@ const IRIS_IDLE = [
             }
 
             const titleEl = document.getElementById('home-chat-title');
-            if (titleEl) titleEl.textContent = 'Parallax Archive & Cafe';
+            if (titleEl) titleEl.textContent = _lobbyDefaultTitle();
             const inputField = document.getElementById('iris-input');
             if (inputField) inputField.placeholder = '提供故事素材或與瀅瀅對話...';
             const nameBox = document.getElementById('iris-name-tag');
