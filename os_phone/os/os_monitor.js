@@ -92,7 +92,7 @@
                     <div class="mon-row"><span>讀取耗時</span><span class="mon-val">${time}ms</span></div>
                     <div class="mon-row"><span>角色名稱</span><span class="mon-val">${charName}</span></div>
                     <div class="mon-row"><span>用戶名稱</span><span class="mon-val">${userName}</span></div>
-                    <div class="mon-row"><span>app 讀劇情歷史</span>${summaryHtml}</div>
+                    <div class="mon-row"><span>保留最近幾章全文</span>${summaryHtml}</div>
                     <div class="mon-row"><span>世界書大小</span><span class="mon-val">${loreLen} 字</span></div>
                     <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
                     <div class="mon-row"><span>歷史訊息量 (Reality)</span><span class="mon-val ok" style="font-weight:bold;">${historyCount} 條</span></div>

@@ -59,7 +59,12 @@
                 bgNegPrompt:         g('bg-neg'),
                 itemBasePrompt:      g('item-prompt'),
                 itemNegPrompt:       g('item-neg'),
-                ctxChapters:         gi('ctx-chapters', 5)
+                ctxChapters:         (() => {                       // 0 要留得住、清空要能表達「全送」
+                    const el = container.querySelector('#vncfg-ctx-chapters');
+                    if (!el || el.value.trim() === '') return null;      // null＝全送不限制
+                    const n = parseInt(el.value);
+                    return isNaN(n) ? 5 : Math.max(0, n);
+                })()
             };
 
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -76,12 +81,14 @@
 
             // 「Context 保留最近幾章全文」僅獨立(PWA)版本有意義；酒館版由酒館自己管 prompt 注入，隱藏這個設定
             const isStandalone = !!(window.OS_API?.isStandalone?.());
-            const ctxChaptersBlock = isStandalone ? `
+            // 🚨 全系統就這一格：劇情面板與手機 app（微信/微薄/電話/通訊錄）共用同一個數字，
+            //    別再為 app 另開一格。幾百輪的量本來就不可能吃全文，預設就是「幾層之後轉摘要」。
+            const ctxChaptersBlock = `
         <div class="set-group">
-            <div class="set-label">📚 Context 保留最近幾章全文 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">其餘舊章節自動縮成摘要</span></div>
-            <input class="set-input" type="number" id="vncfg-ctx-chapters" min="1" max="20" placeholder="5" value="${d.ctxChapters ?? 5}" style="width:120px;">
-            <div class="set-desc">建議 3–6 章。設 0 或留空 = 全送（不限制）。</div>
-        </div>` : '';
+            <div class="set-label">📚 保留最近幾章全文 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">更舊的自動縮成摘要</span></div>
+            <input class="set-input" type="number" id="vncfg-ctx-chapters" min="0" max="50" placeholder="5" value="${d.ctxChapters ?? 5}" style="width:120px;">
+            <div class="set-desc">建議 3–6 章。手機 app 讀劇情時也吃這一格。設 0 ＝ 全部只讀摘要（最省）；清空 ＝ 全送不限制（很吃 Token）。</div>
+        </div>`;
 
             return /* html */`
 <div style="padding-bottom:4px;">
