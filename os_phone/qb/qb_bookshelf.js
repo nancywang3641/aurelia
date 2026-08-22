@@ -833,6 +833,12 @@
                     </div>
                 </div>
 
+                <div id="qb-sprite-mode-row" class="qb-spmode-row">
+                    <span class="qb-spmode-label">🎭 立繪</span>
+                    <button class="qb-spmode-btn" data-free="0">圖庫</button>
+                    <button class="qb-spmode-btn" data-free="1">自由</button>
+                </div>
+
                 <div id="qb-var-pack-row" style="
                     width:78%; display:flex; align-items:center; gap:8px; margin-bottom:16px;">
                     <span style="font-size:10px; color:rgba(26,28,40,0.25); letter-spacing:2px; white-space:nowrap; flex-shrink:0;">⚙ 變數包</span>
@@ -1072,6 +1078,33 @@
         _populatePackSelect();
         const _packSel = panel.querySelector('#qb-wb-pack-add');
         if (_packSel) _packSel.onchange = _packSelectChange;
+
+        // ── 🎭 立繪模式（圖庫／自由）──────────────────────────────
+        //   酒館那邊這組在藏書開場白提取器裡，PWA 的藏書長得不一樣、一直沒有地方放 →
+        //   放在這本書的設定列（跟擴充館藏、變數包同一區）。按書記（w.id），不是按開場白記，
+        //   所以同一本書開新故事不用重選。只在獨立版顯示，免得跟酒館那組變成兩個入口。
+        (function _initSpriteMode() {
+            const row = panel.querySelector('#qb-sprite-mode-row');
+            if (!row) return;
+            const FM = window.VN_FREE_MODE;
+            const standalone = window.OS_API?.isStandalone?.() ?? false;
+            if (!FM || !standalone) { row.style.display = 'none'; return; }
+            const btns = row.querySelectorAll('.qb-spmode-btn');
+            const paint = () => {
+                const free = FM.isFree(w.id);
+                btns.forEach(b => b.classList.toggle('on', (b.dataset.free === '1') === free));
+            };
+            btns.forEach(b => {
+                b.title = b.dataset.free === '1'
+                    ? '角色是隨機/新登場的：立繪直接生成，AI 不用每句寫表情，省字'
+                    : '這本有準備好的表情圖庫：照舊用圖庫的表情立繪';
+                b.onclick = async () => {
+                    await FM.set(b.dataset.free === '1', w.id);
+                    paint();
+                };
+            });
+            paint();
+        })();
 
         // ── 🔧 變數包插槽 初始化 ──────────────────────────────────
         (async () => {
@@ -1414,6 +1447,7 @@
                     localStorage.setItem('vn_current_world_id', w.id);
                     localStorage.removeItem('vn_pending_first_mes');
                     try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
+                    try { window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}   // 立繪模式跟著這本書
 
                     document.getElementById('qb-bookshelf-overlay').style.display = 'none';
                     panel.style.display = 'none';
@@ -1440,6 +1474,10 @@
 
                 // ── 一般世界路徑（QB 任務板）───────────────────────
                 try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
+                // 這條路以前沒寫 vn_current_world_id，留著上一次 dive 的舊值 →
+                //   「這本書」的設定（立繪模式、AVS 條件規則的 worldId）全部認錯書。
+                try { localStorage.setItem('vn_current_world_id', w.id); } catch(e) {}
+                try { window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
 
                 // 初始化變數包（若有綁定）
                 if (w.autoPackId && window.OS_DB && window._AVS_ENGINE) {

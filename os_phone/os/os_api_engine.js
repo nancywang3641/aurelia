@@ -1441,6 +1441,9 @@
                                 if (_m) _c = _m[1].trim();
                                 _c = (win.VN_READER?.sumStrip ? win.VN_READER.sumStrip(_c) : _c.replace(/<summary>[\s\S]*?<\/summary>/gi, '')).trim();
                             }
+                            // 🎲 自由模式：歷史裡的表情格要剝掉，不然 AI 照著上下文範例繼續寫表情格
+                            //    （酒館是靠一條 promptOnly 正則做同一件事，PWA 的歷史是這裡拼的）
+                            if (_c && win.VN_FREE_MODE?.effectiveFree?.()) _c = win.VN_FREE_MODE.stripEmotionCol(_c);
                             if (ch.request) _vnMsgs.push({ role: 'user', content: ch.request });
                             if (_c) _vnMsgs.push({ role: 'assistant', content: _c });
                         });
