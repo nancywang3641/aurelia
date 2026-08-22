@@ -252,9 +252,6 @@
 .lb-dock-ic { width:30px; height:30px; object-fit:contain; display:block; pointer-events:none; }
 .lb-dock-label { font-size:11px; font-weight:700; letter-spacing:1px; color:#2b3652; line-height:1.2; pointer-events:none; }
 .lb-dock-sep { width:34px; height:1px; margin:1px 0; background:linear-gradient(to right,transparent,rgba(60,80,130,0.4),transparent); }
-#lb-dock-story { display:none; }   /* 踏入故事：只在獨立版(PWA)出現，void_terminal 依 isStandalone 開 */
-#lb-dock-story i { font-size:22px; height:30px; line-height:30px; color:#4f74c8; pointer-events:none; }
-.void-tab.mode-404 #lb-dock-story i { color:#7de89a; }
 /* 成就待兌換小圓點 */
 .lb-dock-btn.has-pending::after {
     content:''; position:absolute; top:6px; right:8px; width:7px; height:7px; border-radius:50%;
@@ -414,7 +411,6 @@
 .void-tab.mode-404 #void-exit-btn    { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/墜入404_cheshire.png); }
 
 /* 踏入故事：設計圖只有 3 格 → 移出主選單，PWA 暫掛底部（見模板）*/
-.lobby-right #void-story-btn { display:none; }
 
 /* TODAY'S SPECIAL 小卡 — 模板右側只有 5 張選單卡、底下不放東西 → 收掉 */
 .lb-info-cards {
