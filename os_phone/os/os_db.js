@@ -41,12 +41,21 @@
     let dbInstance = null;
 
     // 取得當前 tavern 劇情存檔 id（與 state_runtime 同款正規化）→ 給 app 紀錄蓋章做 chatId 隔離
+    // 當前劇情線的分艙鑰匙：酒館＝chatId、PWA＝storyId（PWA 沒有 SillyTavern，以前一律回 null
+    //   ＝手機資料完全不分艙，換一本書照樣看到上一本的聯絡人/微薄）。舊資料沒蓋章、讀取端一律保留。
     function _curTavernChatId() {
         try {
             const ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
             let cid = ctx && ctx.chatId;
             if (cid == null && win.SillyTavern && typeof win.SillyTavern.getCurrentChatId === 'function') cid = win.SillyTavern.getCurrentChatId();
-            if (cid == null) return null;
+            if (cid == null) {
+                try {
+                    const sid = win.OS_AVS_ADAPTER && win.OS_AVS_ADAPTER.isStandalone && win.OS_AVS_ADAPTER.isStandalone()
+                        ? win.OS_AVS_ADAPTER.getStoryId() : '';
+                    if (sid) return String(sid);
+                } catch (e) {}
+                return null;
+            }
             return String(cid).replace(/^.*[\\/]/, '').replace(/\.(jsonl|json)$/i, '');
         } catch (e) { return null; }
     }

@@ -79,7 +79,7 @@
             for (let i = 0; i < posts.length; i++) {
                 const p = posts[i];
                 if (!p || p.isMe) continue;
-                if (p.tavernChatId !== curCid) continue;      // 🔒 只收當前劇情的微薄
+                if (p.tavernChatId != null && p.tavernChatId !== curCid) continue;   // 🔒 只收當前劇情的微薄（沒蓋章的舊資料保留）
                 const name = p.user;
                 if (!name) continue;
                 (by[name] = by[name] || []).push(p);
@@ -126,7 +126,7 @@
     function _pluginLines(recs, curCid) {
         const out = [];
         for (let i = 0; i < recs.length; i++) {
-            const es = recs[i].entries.filter(function (e) { return e && e.tavernChatId === curCid; }).slice(-PER_CHAR_MSGS);
+            const es = recs[i].entries.filter(function (e) { return e && (e.tavernChatId == null || e.tavernChatId === curCid); }).slice(-PER_CHAR_MSGS);
             for (let k = 0; k < es.length; k++) {
                 const t = _cut(es[k].text); if (!t) continue;
                 const who = es[k].speaker || '';
@@ -136,20 +136,17 @@
         return out;
     }
 
-    async function injectAppMemory() {
+    // 組「手機近況」文字（兩版共用的唯一真相）：recentText＝最近正文＋這次輸入，用來篩「在場角色」。
+    //   酒館端由 injectAppMemory 包成 injectPrompts；PWA 端由 _buildStandaloneContext 的
+    //   app_memory 那一格取這份塞進 messages（PWA 沒有 injectPrompts）。
+    async function buildAppMemoryBlock(recentText) {
         try {
-            try { _lastUninject && _lastUninject(); } catch (e) {}
-            _lastUninject = null;
+            if (!_enabled()) return '';
+            if (!win.OS_DB) return '';
 
-            if (win.__AURELIA_SUMMARIZING) return;            // 大總結生成不摻
-            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
-            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
-            if (!_enabled()) return;
-            if (!win.OS_DB) return;
-
-            // 🔒 chatId 隔離：只注入「當前劇情」的 app 資料（跟 AVS 同款），避免換劇情/角色卡時冒出別劇情的手機數據
+            // 🔒 分艙隔離：只注入「當前劇情」的 app 資料（酒館＝chatId、PWA＝storyId，同一支 currentChatId）
             const curCid = (win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
-            if (curCid == null) { console.warn('📱 [App Memory Injector] 取不到當前 chatId → 為免跨卡污染，本輪不注入'); return; }
+            if (curCid == null) { console.warn('📱 [App Memory Injector] 取不到當前劇情 id → 為免跨卡污染，本輪不注入'); return ''; }
 
             // 候選角色：名字 → { chat, posts }（微信/電話來自 api_chats、微薄來自 wb_posts）
             const cand = {};
@@ -157,7 +154,9 @@
             Object.keys(chats).forEach(function (id) {
                 const c = chats[id];
                 if (!c || c.isGroup) return;                  // v1 先不處理群聊
-                if (c.tavernChatId !== curCid) return;        // 🔒 只收當前劇情建立的對話
+                // 🔒 只收當前劇情建立的對話。沒蓋章的一律保留 —— 跟 OS_DB.getApiChatsForCurrentCard 同一把尺：
+                //    PWA 以前根本取不到分艙鑰匙、資料全是沒蓋章的，濾掉就等於這個注入源在 PWA 永遠是空的。
+                if (c.tavernChatId != null && c.tavernChatId !== curCid) return;
                 const name = c.name || c.realName || '';
                 if (!name || name.length < 2) return;
                 (cand[name] = cand[name] || {}).chat = c;
@@ -173,17 +172,17 @@
                 (cand[name] = cand[name] || {}).plugins = pluginBy[name];
             });
             const names = Object.keys(cand);
-            if (!names.length) return;
+            if (!names.length) return '';
 
-            const recent = await _recentChatText();
-            if (!recent) return;
+            const recent = String(recentText || '');
+            if (!recent) return '';
 
             // scope：只留「劇情近期有提到名字」的角色
             const present = [];
             for (let i = 0; i < names.length && present.length < MAX_CHARS; i++) {
                 if (recent.includes(names[i])) present.push(names[i]);
             }
-            if (!present.length) return;
+            if (!present.length) return '';
 
             const userName = _userName();
             let block = `<手機記憶 規則="下列角色最近在手機 app（微信/微薄/電話等）上跟${userName}的真實互動，都已經發生過。寫作時必須記得並延續，別當沒發生；這是記憶供你參考，不是要你照抄這個格式。">`;
@@ -204,17 +203,36 @@
                 any = true;
             }
             block += `\n</手機記憶>`;
-            if (!any) return;
+            if (!any) return '';
+
+            console.log(`📱 [App Memory Injector] ${present.length} 個在場角色的手機近況（微信/微薄/電話）`);
+            return block.trim();
+        } catch (e) {
+            console.warn('[App Memory Injector] 組文字失敗:', (e && e.message) || e);
+            return '';
+        }
+    }
+
+    async function injectAppMemory() {
+        try {
+            try { _lastUninject && _lastUninject(); } catch (e) {}
+            _lastUninject = null;
+
+            if (win.__AURELIA_SUMMARIZING) return;            // 大總結生成不摻
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 這條路酒館 only（PWA 走 app_memory 那一格）
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+
+            const content = await buildAppMemoryBlock(await _recentChatText());
+            if (!content) return;
 
             const result = win.TavernHelper.injectPrompts([{
                 id: INJECT_ID,
-                content: block.trim(),
+                content,
                 position: 'in_chat',
                 depth: 2,   // 手機/工坊 app 記憶＝背景事實，放深一點(2)不搶戲；VN組件說明是格式規則維持 0 高注意
                 role: 'system'
             }], { once: true });
             _lastUninject = (result && result.uninject) || null;
-            console.log(`📱 [App Memory Injector] 注入 ${present.length} 個在場角色的手機近況（微信/微薄/電話）`);
         } catch (e) {
             console.warn('[App Memory Injector] 失敗:', (e && e.message) || e);
         }
@@ -481,6 +499,7 @@
 
     win.OS_APP_MEMORY_INJECT = {
         injectAppMemory: injectAppMemory,
+        buildAppMemoryBlock: buildAppMemoryBlock,   // PWA：_buildStandaloneContext 的 app_memory 那一格取這份
         injectAppData: injectAppData,
         isEnabled: _enabled,
         setEnabled: function (v) { try { localStorage.setItem(FLAG_KEY, v ? '1' : '0'); } catch (e) {} },

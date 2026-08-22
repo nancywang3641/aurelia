@@ -491,6 +491,9 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         { type: 'sys', id: 'persona' },
         { type: 'sys', id: 'grand_summary' },
         { type: 'sys', id: 'vn_history' },
+        // 這兩格在酒館是 injectPrompts 的 depth 2 / depth 1（貼著正文結尾）→ 出廠排在歷史之後，位置等價
+        { type: 'sys', id: 'app_memory' },
+        { type: 'sys', id: 'npc_dossier' },
         { type: 'sys', id: 'memory_recall' },
         { type: 'sys', id: 'avs_vars' },
     ];
@@ -538,6 +541,13 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                         // 大總結原本是塞在歷史最前面的 → 補在 vn_history 前一格，位置等同以前
                         const _hi = _items.findIndex(i => i.type === 'sys' && i.id === 'vn_history');
                         _items.splice(_hi < 0 ? _items.length : _hi, 0, { type: 'sys', id: 'grand_summary' });
+                        _dirty = true;
+                    }
+                    // 手機近況／NPC 人物檔案：酒館貼著正文結尾注入 → 補在 vn_history 後面，別掉到召回/變數之後
+                    for (const id of ['npc_dossier', 'app_memory']) {   // 反序插同一點 → 落地順序＝手機近況、人物檔案
+                        if (_has(id)) continue;
+                        const _hi = _items.findIndex(i => i.type === 'sys' && i.id === 'vn_history');
+                        _items.splice(_hi < 0 ? _items.length : _hi + 1, 0, { type: 'sys', id });
                         _dirty = true;
                     }
                     // 這兩格原本寫死在所有包之後 → 補到最後，位置等同以前
@@ -648,6 +658,9 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         'grand_summary':{ label: '大總結',       icon: '📌', desc: '到目前為止的劇情長期記憶', type: 'placeholder' },
         'memory_recall':{ label: '劇情記憶召回',  icon: '📌', desc: '依這次輸入撈出相關的舊事', type: 'placeholder' },
         'avs_vars':     { label: '狀態變數',     icon: '📌', desc: '目前的角色與世界數值', type: 'placeholder' },
+        // 酒館靠 injectPrompts 每輪臨時插的注入源，獨立版沒有那條路 → 一樣收進這張順序表當一格。
+        'npc_dossier':  { label: 'NPC 人物檔案',  icon: '📌', desc: '登場過的人物名冊，被提到的加注完整檔案', type: 'placeholder' },
+        'app_memory':   { label: '手機近況',      icon: '📌', desc: '在場角色最近在手機 app 上跟你的互動', type: 'placeholder' },
     };
     const _LATE_SYS_SLOTS = ['grand_summary', 'memory_recall', 'avs_vars'];   // 舊包遷移用：補進來時要放的位置見 loadBundles
 

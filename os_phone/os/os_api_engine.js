@@ -1435,6 +1435,15 @@
                     } catch(_ve) { console.warn('[OS_API vn_story] 向量召回失敗:', _ve); }
                 }
 
+                // ── 兩個「酒館靠 injectPrompts、PWA 沒有那條路」的注入源：也要先算好才排得進順序表 ──
+                //   掃描文字用 scanText（最近三章正文＋這次輸入），跟世界書關鍵字觸發同一份，
+                //   名字命中才注入完整檔案／手機近況，不在場的角色不佔 token。
+                let _npcBlock = '', _appMemBlock = '';
+                try { _npcBlock = (await win.OS_NPC_DOSSIER?.buildBlock?.(scanText)) || ''; }
+                catch (_e) { console.warn('[OS_API vn_story] NPC 人物檔案組裝失敗:', _e); }
+                try { _appMemBlock = (await win.OS_APP_MEMORY_INJECT?.buildAppMemoryBlock?.(scanText)) || ''; }
+                catch (_e) { console.warn('[OS_API vn_story] 手機近況組裝失敗:', _e); }
+
                 const _vn = [];
                 const _entryMap = Object.fromEntries((win.OS_PROMPTS?.getEntries?.() || []).map(e => [e.id, e]));
                 const _vnBundles = (win.OS_PROMPTS?.getBundles?.() || [])
@@ -1454,6 +1463,8 @@
                             else if (_item.id === 'grand_summary' && _grandSummaryBlock) _vn.push({ role: 'system', content: _grandSummaryBlock });
                             else if (_item.id === 'memory_recall' && _recallBlock)       _vn.push({ role: 'system', content: _recallBlock });
                             else if (_item.id === 'avs_vars'      && avsPrompt)          _vn.push({ role: 'system', content: avsPrompt });
+                            else if (_item.id === 'npc_dossier'   && _npcBlock)          _vn.push({ role: 'system', content: _npcBlock });
+                            else if (_item.id === 'app_memory'    && _appMemBlock)       _vn.push({ role: 'system', content: _appMemBlock });
                         } else if (_item.type === 'entry') {
                             const _e = _entryMap[_item.id];
                             if (_e?.enabled !== false && _e?.content?.trim()) _vn.push({ role: 'system', content: _e.content.trim() });
@@ -1468,6 +1479,8 @@
                     if (userDesc || userName !== 'User') _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
                     if (_grandSummaryBlock) _vn.push({ role: 'system', content: _grandSummaryBlock });
                     _vnMsgs.forEach(m => _vn.push(m));
+                    if (_appMemBlock) _vn.push({ role: 'system', content: _appMemBlock });
+                    if (_npcBlock)    _vn.push({ role: 'system', content: _npcBlock });
                     if (_recallBlock) _vn.push({ role: 'system', content: _recallBlock });
                     if (avsPrompt)    _vn.push({ role: 'system', content: avsPrompt });
                 }
@@ -1475,7 +1488,8 @@
                 // 🚨 安全網：三格有內容、卻沒有任何一個包排到它 → 那個包多半沒配到 vn_story(遷移補錯地方)。
                 //   靜靜少注入＝整份長期記憶消失、而且畫面上完全看不出來，所以這裡補回去並且出聲，別讓它無聲無息。
                 if (_vnBundles.length) {
-                    const _late = [['grand_summary', _grandSummaryBlock], ['memory_recall', _recallBlock], ['avs_vars', avsPrompt]];
+                    const _late = [['grand_summary', _grandSummaryBlock], ['memory_recall', _recallBlock], ['avs_vars', avsPrompt],
+                                   ['app_memory', _appMemBlock], ['npc_dossier', _npcBlock]];
                     for (const [_id, _content] of _late) {
                         if (!_content || _injectedSys.has(_id)) continue;
                         console.warn(`[OS_API vn_story] 順序表裡找不到「${_id}」這一格 → 補在最後面。去提示詞窗口把它拖到你要的位置。`);
