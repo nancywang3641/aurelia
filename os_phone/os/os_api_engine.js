@@ -1240,6 +1240,42 @@
             return apiMessages;
         },
 
+        // --- 4.5 獨立模式：劇情正文當背景（酒館那條路的 ### Reality Context 對應物）---
+        //   資料源是 OS_DB 章節（by storyId），不是聊天樓；保留幾章全文走全系統唯一那格 ctxChapters
+        //   （N＝最近 N 章全文、0＝全部只讀摘要、null＝全送），更舊的縮成摘要，跟劇情面板同一套。
+        _buildStoryReality: async function(userName) {
+            if (!win.OS_DB?.getAllVnChapters) return '';
+            const _sid = (win.OS_AVS_ADAPTER?.getStoryId?.()) || localStorage.getItem('vn_current_story_id') || '';
+            const _all = await win.OS_DB.getAllVnChapters();
+            const _ch = (_sid ? _all.filter(c => c.storyId === _sid) : _all.filter(c => !c.storyId)).reverse();   // 舊→新
+            if (!_ch.length) return '';
+
+            const _keepN = win.OS_APP_CTX_MSGS ? win.OS_APP_CTX_MSGS() : 5;
+            const _lines = [];
+            _ch.forEach((c, idx) => {
+                let _t = String(c.content || '');
+                if (!_t) return;
+                _t = _t.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
+                const _recent = (_keepN === null) || (idx >= _ch.length - _keepN);
+                if (!_recent) {
+                    // 摘要標記可能被改成別家 preset 的 → 走 VN_READER 那份唯一真相
+                    _t = (win.VN_READER?.sumExtract?.(_t) || '').trim();
+                } else {
+                    const _m = _t.match(/<content>([\s\S]*?)<\/content>/i);
+                    if (_m) _t = _m[1];
+                    _t = (win.VN_READER?.sumStrip ? win.VN_READER.sumStrip(_t) : _t.replace(/<summary>[\s\S]*?<\/summary>/gi, '')).trim();
+                }
+                _t = stripVnTags(_t);
+                if (!_t) return;
+                if (c.request) _lines.push(`[${userName}]: ${String(c.request).trim()}`);
+                _lines.push(`[劇情]: ${_t}`);
+            });
+            if (!_lines.length) return '';
+            console.log(`[OS_API standalone] 注入劇情正文 ${_ch.length} 章（最近 ${_keepN === null ? '全部' : _keepN} 章全文）`);
+            return '### Reality Context (Story History)\nThis is the background story. Use this ONLY for context. DO NOT reply to the story directly. Stick to the APP FORMAT.\n\n'
+                 + _lines.join('\n');
+        },
+
         // --- 5. 獨立模式 Context Builder (精準掃描引擎) ---
         _buildStandaloneContext: async function(userMessage, promptKey) {
             const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];   // 📞 通話「保留」CoT：AI 靠它讀世界書情感/規範條目想怎麼回；思考關進 <thinking> 由字幕端剝掉
@@ -1515,6 +1551,30 @@
                 if (lore)         contextBlock += `[World Info]:\n${lore}\n\n`;
             }
             if (contextBlock) apiMessages.push({ role: 'system', content: contextBlock });
+
+            // ── 劇情長期記憶 + 劇情正文：手機 app 也要知道劇情發生了什麼 ──────────────────
+            //   酒館那條路早就有（大總結壓縮版 ＋ ### Reality Context (Story History)），
+            //   獨立版一直完全沒有 → PWA 的微信/電話/微薄不知道劇情走到哪，只能靠 app 內的對話瞎猜。
+            //   正文來源是 OS_DB 章節（PWA 沒有聊天樓），保留幾章全文照全系統唯一那格 ctxChapters。
+            const _NO_HISTORY_STD = ['iris_chat', 'cheshire_chat', 'general_assistant'];   // 工具型生成不背劇情
+            const _lobbySeeStory = _NO_CARD_STD && localStorage.getItem('lobby_npc_see_current_story') === '1';
+            if (!_NO_HISTORY_STD.includes(promptKey) || _lobbySeeStory) {
+                // 大總結：跟酒館同一支壓縮器、同一顆開關
+                try {
+                    if (localStorage.getItem('sp_app_inject_summary') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
+                        const _sum = await win.OS_STORY_TOOLS.getCurrentInjectionPayload();
+                        if (_sum && _sum.trim()) {
+                            apiMessages.push({ role: 'system', content: `[劇情總結 — 至今為止的劇情長期記憶，延續勿矛盾]\n${_sum}` });
+                            console.log(`[OS_API standalone] 注入大總結壓縮版 ${_sum.length} 字 (route: ${promptKey})`);
+                        }
+                    }
+                } catch (e) { console.warn('[OS_API standalone] 大總結注入失敗:', e); }
+
+                try {
+                    const _reality = await this._buildStoryReality(userName);
+                    if (_reality) apiMessages.push({ role: 'system', content: _reality });
+                } catch (e) { console.warn('[OS_API standalone] 劇情正文注入失敗:', e); }
+            }
 
             if (avsPrompt && !_NO_CARD_STD) apiMessages.push({ role: 'system', content: avsPrompt });
 
