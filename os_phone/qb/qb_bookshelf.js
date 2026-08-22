@@ -116,7 +116,7 @@
                         <span>
                             <strong style="font-size:13px;color:#fc8181;">完整清除</strong>
                             <div style="font-size:11px;color:var(--qbk-ink-dim);margin-top:2px;">
-                                書籍${hasVarPack ? '、變數包' : ''}、世界書條目（分類「${cardName}」）
+                                書籍${hasVarPack ? '、追蹤欄位' : ''}、世界書條目（分類「${cardName}」）
                             </div>
                         </span>
                     </label>
@@ -149,9 +149,9 @@
             try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
 
             if (scope === 'all') {
-                // 2. 刪變數包
+                // 2. 刪這本書自帶的追蹤欄位範本（匯入／生成時建的那一份）
                 if (hasVarPack && window.OS_DB?.deleteVarPack) {
-                    try { await window.OS_DB.deleteVarPack(w.autoPackId); } catch(e) { console.warn('[DelWorld] 變數包刪除失敗', e); }
+                    try { await window.OS_DB.deleteVarPack(w.autoPackId); } catch(e) { console.warn('[DelWorld] 追蹤欄位刪除失敗', e); }
                 }
                 // 3. 刪世界書條目（category = 書名）
                 if (window.OS_DB?.getAllWorldbookEntries && window.OS_DB?.deleteWorldbookEntry) {
@@ -861,7 +861,7 @@
                 
                 ${!isCard ? `
                 <div style="font-size:13px;color:rgba(255,242,210,0.88);line-height:2;font-style:italic;
-                            text-shadow:0 1px 6px rgba(0,0,0,1);margin-bottom:18px;">${w.desc}</div>
+                            text-shadow:0 1px 6px rgba(0,0,0,1);margin-bottom:18px;">${_escHtml(w.desc || '')}</div>
                 <div style="color:rgba(229,62,62,0.85);font-size:11px;letter-spacing:2px;margin-bottom:16px;
                             text-shadow:0 0 6px rgba(0,0,0,0.8);">
                     危&ensp;險&ensp;度 &nbsp;${dangerFill}<span style="opacity:0.3;">${dangerEmpty}</span>
@@ -896,18 +896,6 @@
                     <span class="qb-spmode-label">立繪</span>
                     <button class="qb-spmode-btn" data-free="0">圖庫</button>
                     <button class="qb-spmode-btn" data-free="1">自由</button>
-                </div>
-
-                <div id="qb-var-pack-row" style="
-                    width:78%; display:flex; align-items:center; gap:8px; margin-bottom:16px;">
-                    <span style="font-size:10px; color:var(--qbk-ink-dim); letter-spacing:2px; white-space:nowrap; flex-shrink:0;">變數包</span>
-                    <select id="qb-var-pack-sel" style="
-                        flex:1; background:rgba(0,0,0,0.45); border:1px solid var(--qbk-line);
-                        border-radius:12px; color:var(--qbk-ink); font-size:10px;
-                        padding:4px 10px; outline:none; font-family:inherit; cursor:pointer;
-                        transition:border-color 0.2s;">
-                        <option value="">— 未連結 —</option>
-                    </select>
                 </div>
 
                 <div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;">
@@ -1156,36 +1144,6 @@
             paint();
         })();
 
-        // ── 🔧 變數包插槽 初始化 ──────────────────────────────────
-        (async () => {
-            const varSel = panel.querySelector('#qb-var-pack-sel');
-            if (!varSel || !window.OS_DB?.getAllVarPacks) return;
-            try {
-                const packs = await window.OS_DB.getAllVarPacks();
-                packs.forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = p.id;
-                    opt.textContent = p.name || p.id;
-                    if (p.id === w.autoPackId) opt.selected = true;
-                    varSel.appendChild(opt);
-                });
-            } catch(e) { console.warn('[QB] 變數包列表載入失敗', e); }
-            varSel.onchange = () => {
-                w.autoPackId = varSel.value || undefined;
-                // 寫回 AURELIA_CUSTOM_WORLDS + localStorage
-                const idx = (window.AURELIA_CUSTOM_WORLDS || []).findIndex(x => x.id === w.id);
-                if (idx !== -1) {
-                    if (w.autoPackId) window.AURELIA_CUSTOM_WORLDS[idx].autoPackId = w.autoPackId;
-                    else delete window.AURELIA_CUSTOM_WORLDS[idx].autoPackId;
-                    try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
-                }
-                // 高亮邊框反饋
-                varSel.style.borderColor = w.autoPackId ? 'rgba(217,180,90,0.75)' : 'rgba(239,227,208,0.14)';
-            };
-            // 初始高亮
-            if (w.autoPackId) varSel.style.borderColor = 'rgba(217,180,90,0.75)';
-        })();
-        // ──────────────────────────────────────────────────────────
 
         // ── 開場白儲存輔助 ────────────────────────────────────────────
         function _saveGreetings() {
@@ -1560,16 +1518,17 @@
                 try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}
                 try { window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
 
-                // 初始化變數包（若有綁定）
+                // 這本書自帶的追蹤欄位範本（匯入角色卡／生成世界時順手建的，不是手動綁的）→
+                //   倒進「剛生出來的這條篇章」的狀態桶。順序很重要：newStoryId 要在前面。
                 if (w.autoPackId && window.OS_DB && window._AVS_ENGINE) {
                     window.OS_DB.getAllVarPacks?.().then(packs => {
                         const pack = (packs || []).find(p => p.id === w.autoPackId);
                         if (pack) {
                             window._AVS_ENGINE.initFromPack(pack);
                             window.OS_AVS?.activateTemplateForPack?.(w.autoPackId);
-                            console.log(`[QB] 已初始化變數包：${pack.name}`);
+                            console.log(`[QB] 已初始化追蹤欄位：${pack.name}`);
                         }
-                    }).catch(e => console.warn('[QB] 變數包初始化失敗:', e));
+                    }).catch(e => console.warn('[QB] 追蹤欄位初始化失敗:', e));
                 }
 
                 document.getElementById('qb-bookshelf-overlay').style.display = 'none';
