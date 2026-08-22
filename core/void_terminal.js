@@ -736,8 +736,8 @@ const IRIS_IDLE = [
                 <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(90,55,25,0.35) 0%, transparent 70%); pointer-events:none;"></div>
 
                 <div style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, #3e271a, #2c1e16); border-bottom:2px solid #1a110b; padding:12px 15px; box-shadow:0 4px 15px rgba(0,0,0,0.4);">
-                    <div style="color:#1A1C28; font-weight:bold; font-size:16px; font-family:'Cinzel', serif; letter-spacing:1px; text-shadow:2px 2px 4px rgba(0,0,0,0.5);">📖 瀅瀅的館藏書架</div>
-                    <button id="close-bookshelf-btn" style="background:none; border:none; color:rgba(26,28,40,0.72); font-size:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(26,28,40,0.40)'">✕</button>
+                    <div style="color:var(--qbk-ink); font-weight:bold; font-size:16px; font-family:'Cinzel', serif; letter-spacing:1px; text-shadow:2px 2px 4px rgba(0,0,0,0.5);">瀅瀅的館藏書架</div>
+                    <button id="close-bookshelf-btn" style="background:none; border:none; color:var(--qbk-ink-dim); font-size:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='var(--qbk-ink)'" onmouseout="this.style.color='var(--qbk-ink-dim)'">✕</button>
                 </div>
 
                 <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">

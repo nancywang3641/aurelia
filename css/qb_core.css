@@ -103,9 +103,69 @@
 .qbfp-chip-del { flex:none; opacity:.4; font-size:11px; font-style:normal; }
 .qbfp-chip-del:hover { opacity:1; color:rgba(255,150,150,0.95); }
 
+/* =========================================================
+   書架自己的墨色（深底）— 不吃全域那組白底墨色
+   ---------------------------------------------------------
+   🚨 書架的底是深色木頭(#1a1008→#0d0804)，而全域那組灰字是為「白底可讀性」調的
+   近黑色(rgba(26,28,40,·))。2026-05-15 有一次全庫替換把兩邊一起換掉，
+   書架的書脊字與標題因此變成近黑印在近黑上、整片看不見。
+   → 這裡把書架用到的文字色獨立成自己的變數，全域再怎麼調白底都影響不到這裡。
+   ========================================================= */
+#qb-bookshelf-overlay, #qb-book-cover-panel, #qb-inner-modal-root, #qb-del-world-dialog {
+    --qbk-ink:       #efe3d0;               /* 主要文字：暖白，壓在木色上仍清楚 */
+    --qbk-ink-dim:   rgba(239,227,208,0.62);/* 次要說明 */
+    --qbk-ink-faint: rgba(239,227,208,0.38);/* 標籤、佔位 */
+    --qbk-accent:    #d9b45a;               /* 主動作：單一實色，不做漸層 */
+    --qbk-accent-ink:#2a1c0a;
+    --qbk-line:      rgba(239,227,208,0.16);
+}
+
+/* 主動作鈕：實色、不漸層、不打陰影光暈 */
+.qb-btn-primary {
+    background: var(--qbk-accent); color: var(--qbk-accent-ink);
+    border: 1px solid var(--qbk-accent);
+    font-family: inherit; font-weight: 700; font-size: 15px;
+    padding: 13px 40px; border-radius: 4px; cursor: pointer;
+    letter-spacing: 3px; transition: background .15s, border-color .15s;
+}
+.qb-btn-primary:hover { background: #e6c470; border-color: #e6c470; }
+.qb-btn-primary:active { background: #c9a24a; }
+
+/* 主動作鈕（自由劇情那一區是藍調，換一組同形狀的色） */
+.qb-btn-primary.cool { background:#5a8fd6; border-color:#5a8fd6; color:#08131f; }
+.qb-btn-primary.cool:hover { background:#6ea2e6; border-color:#6ea2e6; }
+.qb-btn-primary.cool:active { background:#4a7cc0; }
+.qb-btn-primary.block { width:100%; padding:14px; letter-spacing:3px; }
+
+/* 次要動作鈕：描邊 */
+.qb-btn-ghost {
+    background: transparent; color: var(--qbk-ink);
+    border: 1px solid var(--qbk-line);
+    font-family: inherit; font-weight: 600; font-size: 13px;
+    padding: 9px 20px; border-radius: 4px; cursor: pointer;
+    letter-spacing: 1px; transition: background .15s, border-color .15s;
+}
+.qb-btn-ghost:hover { background: rgba(239,227,208,0.08); border-color: rgba(239,227,208,0.34); }
+
+/* 破壞性動作鈕：紅描邊，不填滿 */
+.qb-btn-danger {
+    background: transparent; color: #e08a8a;
+    border: 1px solid rgba(224,138,138,0.42);
+    font-family: inherit; font-weight: 600; font-size: 13px;
+    padding: 9px 20px; border-radius: 4px; cursor: pointer;
+    letter-spacing: 1px; transition: background .15s, border-color .15s;
+}
+.qb-btn-danger:hover { background: rgba(224,138,138,0.12); border-color: rgba(224,138,138,0.7); }
+
+/* 小尺寸：開場白那排逐條操作的鈕，跟正文同一個量級 */
+.qb-greet-edit-btn.qb-btn-ghost, .qb-greet-cancel-btn.qb-btn-ghost,
+.qb-greet-save-btn.qb-btn-ghost, #qb-greet-replace-btn.qb-btn-ghost {
+    font-size: 12px; padding: 5px 12px; letter-spacing: 0.5px; border-radius: 4px;
+}
+
 /* 🎭 這本書的立繪模式（圖庫／自由）— 藏書設定列，跟擴充館藏、變數包同一區 */
 .qb-spmode-row { width:78%; display:flex; align-items:center; gap:8px; margin-bottom:16px; }
-.qb-spmode-label { font-size:10px; color:rgba(26,28,40,0.25); letter-spacing:2px; white-space:nowrap; flex-shrink:0; }
-.qb-spmode-btn { flex:1; min-width:0; background:rgba(0,0,0,0.45); border:1px solid rgba(26,28,40,0.10); border-radius:12px; color:rgba(26,28,40,0.68); font-size:10px; padding:4px 10px; outline:none; font-family:inherit; cursor:pointer; transition:border-color .2s, background .2s, color .2s; }
-.qb-spmode-btn:hover { border-color:rgba(26,28,40,0.28); }
-.qb-spmode-btn.on { background:rgba(200,160,48,0.22); border-color:rgba(200,160,48,0.65); color:#6b5410; font-weight:700; }
+.qb-spmode-label { font-size:10px; color:var(--qbk-ink-faint); letter-spacing:2px; white-space:nowrap; flex-shrink:0; }
+.qb-spmode-btn { flex:1; min-width:0; background:rgba(0,0,0,0.35); border:1px solid var(--qbk-line); border-radius:4px; color:var(--qbk-ink-dim); font-size:11px; padding:5px 10px; outline:none; font-family:inherit; cursor:pointer; transition:border-color .15s, background .15s, color .15s; }
+.qb-spmode-btn:hover { border-color:rgba(239,227,208,0.34); color:var(--qbk-ink); }
+.qb-spmode-btn.on { background:rgba(217,180,90,0.18); border-color:var(--qbk-accent); color:var(--qbk-accent); font-weight:700; }
