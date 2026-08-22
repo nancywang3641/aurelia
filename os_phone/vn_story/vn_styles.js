@@ -172,7 +172,6 @@
                     <div id="vn-reader-header">
                         <div id="vn-reader-title">📖 劇情閱讀器</div>
                         <div style="display:flex;align-items:center;gap:10px;">
-                            <div id="vn-reader-summary-btn" onclick="window.VN_PLAYER.showSummaryEditor()" title="查看/編輯大總結" style="color:#888;font-size:0.78rem;cursor:pointer;padding:3px 8px;border:1px solid rgba(212,175,55,0.2);border-radius:4px;transition:all 0.2s;" onmouseover="this.style.color='#d4af37';this.style.borderColor='rgba(212,175,55,0.5)'" onmouseout="this.style.color='#888';this.style.borderColor='rgba(212,175,55,0.2)'">📝 大總結</div>
                             <div id="vn-reader-close" onclick="window.VN_PLAYER.hideReaderPanel()">✕</div>
                         </div>
                     </div>
