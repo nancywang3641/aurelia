@@ -203,7 +203,6 @@
                 });
                 window.VN_Core._lastRawText = fullText;
                 if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
-                closeGeneratePanel();
                 try { window.VN_Core.earlybirdFromText(fullText); } catch (e) {}  // 頭像早鳥：先開生
                 window.VN_Core._startWithLoader(fullText, null);   // 載入→loading 等全部圖片→開播
                 console.log('[VN_Gen] ✅ 角色卡開場白直通成功，變數已透過參數直接初始化');
@@ -310,13 +309,12 @@
                             }
                         }
 
-                        // 🗑️ 這裡原本呼叫 _saveGenPreset()：拆生成面板那次(ede76f2)把定義刪了、呼叫漏刪，
-                        //    帶標題的 dive 一跑到這行就 ReferenceError → 後面的 switchPage / _startWithLoader
-                        //    全被中斷，畫面就停在白底。具名收藏現在由書架自己存（qb_bookshelf._savePreset）。
+                        // 生成面板拆掉後遺留的兩行呼叫(_saveGenPreset / closeGeneratePanel)已移除：
+                        // 定義早就沒了，走到就 ReferenceError 把後面的開播整條打斷。
+                        // 具名收藏由書架自己存；生成遮罩由 onDone → ui.done() 收。
 
                         window.VN_Core._lastRawText = fullText;
                         if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
-                        closeGeneratePanel();
                         try { window.VN_Core.earlybirdFromText(fullText); } catch (e) {}  // 頭像早鳥：先開生
                         window.VN_Core._startWithLoader(fullText, null);   // 載入→loading 等全部圖片→開播
                         resolve();
