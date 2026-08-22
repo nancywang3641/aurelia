@@ -175,8 +175,13 @@
                     || presetTitle
                     || localStorage.getItem('vn_current_story_title')
                     || '角色開場';
-                const storyId    = `${storyTitle}_${now}`;
-                window.VN_Core._setStoryId(storyId, storyTitle);
+                // id 已在書架踏入時生好（runCardDive 那條路也是），這裡只換標題
+                if (!window.VN_Core._currentStoryId || window.VN_Core._currentStoryId === '__new_story__') {
+                    window.VN_Core.newStoryId(storyTitle, '');
+                } else {
+                    window.VN_Core.renameStory(storyTitle);
+                }
+                const storyId = window.VN_Core._currentStoryId;
 
                 // 🌟 【重構】直接使用手上的 targetPackId
                 if (win.dispatchEvent) {
@@ -229,7 +234,13 @@
             const userMsg = request || '請根據現有世界觀與角色設定，自由創作一段沉浸式互動劇情。';
             if (win.OS_THINK) win.OS_THINK.setContext({ panel: 'VN 劇情生成', userInput: userMsg });
 
-            window.VN_Core._setStoryId('__new_story__', '');
+            // ⛔ 不再寫 '__new_story__' 這個哨兵：故事線的 id 已經在書架踏入的那一刻生好了
+            //   （見 VN_Core.newStoryId）。這裡再蓋一個假鑰匙的話，整輪生成期間所有按
+            //   storyId 分艙的讀寫（數值、記憶、手機資料）又會掉進同一個共用桶。
+            //   沒有 id 才自己補一條（例如舊入口直接呼叫生成器）。
+            if (!window.VN_Core._currentStoryId || window.VN_Core._currentStoryId === '__new_story__') {
+                window.VN_Core.newStoryId(presetTitle || '未命名故事', '');
+            }
 
             const messages = await win.OS_API.buildContext(userMsg, 'vn_story');
 
@@ -258,9 +269,10 @@
 
                             const now = Date.now();
                             const storyTitle = window.VN_Core._extractStoryTitle(fullText) || presetTitle || '未命名故事';
-                            const storyId    = `${storyTitle}_${now}`;
-
-                            window.VN_Core._setStoryId(storyId, storyTitle);
+                            // 正文吐出 [Story|標題] → 只換標題，id 沿用踏入時生的那個。
+                            //   （酒館的 chatId 也不會因為劇情改名而換掉，存檔身分要穩定）
+                            window.VN_Core.renameStory(storyTitle);
+                            const storyId = window.VN_Core._currentStoryId;
 
                             // 🌟 【重構】AI 生成完畢，直接使用手上的 targetPackId 初始化
                             if (win.dispatchEvent) {

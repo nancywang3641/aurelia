@@ -70,6 +70,39 @@
             localStorage.setItem('vn_current_story_id',    storyId    || '');
             localStorage.setItem('vn_current_story_title', storyTitle || '');
         },
+
+        // 🆕 開一條新故事線 —— 對應酒館「建立聊天室就產生 chatId」那一刻。
+        //   酒館的 chatId 是 角色卡-建立時間，聊天室建好時就存在、內容還是空的；
+        //   同一張卡可以開很多間＝重複遊玩。PWA 以前是「等 AI 生成成功才生 id」，
+        //   中間那段空窗掛著 '__new_story__' 這個假鑰匙，凡是按 storyId 分艙的東西
+        //   （數值、記憶、人物檔案、手機資料）在那段時間全部寫錯桶。
+        //   → 改成踏入故事的當下就生，之後只換標題、**id 永不變**（跟 chatId 一樣，
+        //     劇情改名不該讓存檔換身分）。
+        newStoryId: function(title, worldId) {
+            const t  = String(title || '').trim() || '未命名故事';
+            const id = `${t}_${Date.now()}`;
+            this._setStoryId(id, t);
+            try {
+                const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');
+                idx[id] = {
+                    worldId: worldId || localStorage.getItem('vn_current_world_id') || '',
+                    title: t, createdAt: Date.now()
+                };
+                localStorage.setItem('vn_story_index', JSON.stringify(idx));
+            } catch (e) {}
+            console.log(`[VN] 新故事線 ${id}（書：${worldId || '(自由劇情)'}）`);
+            return id;
+        },
+        // 正文吐出 [Story|標題] 之後只改顯示用的標題，id 不動
+        renameStory: function(title) {
+            const t = String(title || '').trim();
+            if (!t || !this._currentStoryId) return;
+            this._setStoryId(this._currentStoryId, t);
+            try {
+                const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');
+                if (idx[this._currentStoryId]) { idx[this._currentStoryId].title = t; localStorage.setItem('vn_story_index', JSON.stringify(idx)); }
+            } catch (e) {}
+        },
         
         // 音效管理參數
         _currentSfxAudio: null,
