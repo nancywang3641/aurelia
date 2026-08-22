@@ -150,6 +150,11 @@
     async function _syncStandalone(reason) {
         const WB = win.OS_WORLDBOOK || window.OS_WORLDBOOK;
         if (!WB || !WB.setEnabledByTitle) return;
+        // 一條世界書條目都沒有＝還沒匯入世界書，正常狀態，安靜跳過（不是錯誤）
+        try {
+            const _all = (await win.OS_DB?.getAllWorldbookEntries?.()) || [];
+            if (!_all.length) return;
+        } catch (e) { return; }
         const world = await _currentWorld();
         const plan = planFor(world);
         const r = await WB.setEnabledByTitle(plan.managed, plan.on);
