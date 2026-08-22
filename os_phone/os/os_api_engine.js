@@ -1507,16 +1507,15 @@
 
             if (promptKey === 'wx_chat_system' && win.WX_DB?.getApiChat && win.wxApp?.GLOBAL_ACTIVE_ID) {
                 try {
-                    const useSummary = (() => {
-                        try {
-                            const cfg = JSON.parse(localStorage.getItem('os_global_config') || '{}');
-                            return cfg.enableSummaryOnly === true;
-                        } catch(e) { return false; }
-                    })();
+                    // 保留最近幾則全文、更舊的縮成摘要（判讀跟酒館那條路共用 OS_APP_CTX_MSGS）。
+                    //   以前這裡是全開/全關的「僅讀取摘要」，關著就整包全吃、完全沒有上限。
+                    const _keepN = win.OS_APP_CTX_MSGS ? win.OS_APP_CTX_MSGS() : 10;
 
                     const apiChat = await win.WX_DB.getApiChat(win.wxApp.GLOBAL_ACTIVE_ID);
                     if (apiChat?.messages?.length) {
-                        apiChat.messages.forEach(msg => {
+                        const _cut = _keepN === null ? -1 : apiChat.messages.length - _keepN;
+                        apiChat.messages.forEach((msg, _i) => {
+                            const useSummary = _i < _cut;
                             let content = msg.raw || msg.content || '';
                             if (!content) return;
                             content = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓

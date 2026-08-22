@@ -30,7 +30,7 @@
             useSystemApi: true, stProfileId: '', 
             directMode: false, enableStreaming: false, disableTyping: false,
             useGenerateRaw: false,
-            enableSummaryOnly: false,
+            appCtxMsgs: 10,   // app 讀劇情歷史保留最近幾則全文；0＝全部只讀摘要、null＝全送
             maxTokens: 2000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
             usePresetPrompts: false, presetName: '', customCot: '', customCotMap: {}
         };
@@ -56,7 +56,6 @@
             useSystemApi: true, stProfileId: '', syncWithPrimary: true, // 🔥 預設開啟同步主模型
             directMode: false, enableStreaming: false, disableTyping: false,
             useGenerateRaw: false,
-            enableSummaryOnly: false,
             maxTokens: 1000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
             usePresetPrompts: false, presetName: '', customCot: ''
         };
@@ -991,11 +990,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="只讀取訊息裡的 summary 標籤內容，大幅省 Token、避免讀到過舊歷史。">
-                                <span>僅讀取摘要</span>
-                                <label class="toggle-switch"><input type="checkbox" id="os-summary-mode" ${llmConfig.enableSummaryOnly ? 'checked' : ''}><span class="slider"></span></label>
-                            </div>
-                            <div class="set-desc">只讀 summary 標籤、省 Token。</div>
+                            <div class="set-label" title="微信／微薄／電話／通訊錄這些 app 讀劇情歷史時，只有最近這幾則帶全文，更舊的自動縮成摘要。">📱 app 讀劇情保留最近幾則全文 <span class="lbl-opt">其餘自動縮成摘要</span></div>
+                            <input class="set-input" type="number" id="os-app-ctx-msgs" min="0" max="200" placeholder="10" value="${llmConfig.appCtxMsgs ?? 10}" style="width:120px;">
+                            <div class="set-desc">建議 5–20 則。設 0 ＝ 全部只讀摘要（最省）；留空 ＝ 全送不限制（很吃 Token）。這一格不影響劇情面板，劇情面板有自己的「保留最近幾章全文」。</div>
                         </div>
 
                         <div class="set-group"${stHide}>
@@ -1091,12 +1088,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
 
-                        <div class="set-group">
-                            <div class="set-label" title="只讀取訊息裡的 summary 標籤內容，大幅省 Token、避免讀到過舊歷史。">
-                                <span>僅讀取摘要</span>
-                                <label class="toggle-switch"><input type="checkbox" id="sec-summary-mode" ${secLlmConfig.enableSummaryOnly ? 'checked' : ''}><span class="slider"></span></label>
-                            </div>
-                        </div>
+                        <!-- ⛔ 副模型的「僅讀取摘要」已移除：沒有任何程式讀 os_secondary_llm_config.enableSummaryOnly，
+                             它從頭到尾只是一顆存得起來、但誰也不看的開關。歷史用量控制在主模型那格。 -->
 
                         <div class="set-group">
                             <details>
@@ -2136,7 +2129,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elThinkingBudget = container.querySelector('#os-thinking-budget');
         const elThinkBudgetVal = container.querySelector('#val-think-budget');
         const thinkBudgetGroup = container.querySelector('#thinking-budget-group');
-        const elSummaryMode = container.querySelector('#os-summary-mode');
+        const elAppCtxMsgs = container.querySelector('#os-app-ctx-msgs');
         const elUsePresetPrompts = container.querySelector('#os-use-preset-prompts');
         const valTemp = container.querySelector('#val-temp');
         const valTopP = container.querySelector('#val-topp');
@@ -2158,7 +2151,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const secTopP = container.querySelector('#sec-top-p');
         const secFreqPenalty = container.querySelector('#sec-freq-penalty');
         const secPresPenalty = container.querySelector('#sec-pres-penalty');
-        const secSummaryMode = container.querySelector('#sec-summary-mode');
+        // 副模型的「僅讀取摘要」已移除（沒有任何程式讀那個欄位）
         const secUsePresetPrompts = container.querySelector('#sec-use-preset-prompts');
         const elPresetName       = container.querySelector('#os-preset-name');
         const elPresetNameGroup  = container.querySelector('#os-preset-name-group');
@@ -2676,7 +2669,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     url: elUrl.value.trim(),
                     key: elKey.value.trim(),
                     model: elModel.value,
-                    enableSummaryOnly: elSummaryMode ? elSummaryMode.checked : false,
+                    appCtxMsgs: (elAppCtxMsgs && elAppCtxMsgs.value.trim() !== '') ? Math.max(0, parseInt(elAppCtxMsgs.value) || 0) : null,   // null＝全送不限制
                     usePresetPrompts: elUsePresetPrompts ? elUsePresetPrompts.checked : false,
                     presetName: (elPresetName ? elPresetName.value : '') || '',
                     maxTokens: parseInt(elMaxTokens.value),
@@ -2701,7 +2694,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     url: isSecSync ? elUrl.value.trim() : secUrl.value.trim(),
                     key: isSecSync ? elKey.value.trim() : secKey.value.trim(),
                     model: secModel.value,
-                    enableSummaryOnly: secSummaryMode ? secSummaryMode.checked : false,
                     usePresetPrompts: secUsePresetPrompts ? secUsePresetPrompts.checked : false,
                     presetName: (secPresetName ? secPresetName.value : '') || '',
                     maxTokens: parseInt(secMaxTokens.value),
