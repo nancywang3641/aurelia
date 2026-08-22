@@ -1344,6 +1344,11 @@
 
                 const _vnMsgs = [];
                 let _stCh = [];
+                let _grandSummaryBlock = '';   // 在外層宣告：它現在是順序表裡自己一格，要在下面的組裝迴圈用得到
+                // 🚨 _sid 也必須在外層：它原本宣告在下面那個 try 區塊裡，而向量召回在區塊外面用它 →
+                //   每次都丟 ReferenceError、被召回自己的 catch 吞掉只留一行 warn。
+                //   也就是說 PWA 的記憶召回一直沒有真的注入過，只是沒人看 console 所以沒發現。
+                const _sid = localStorage.getItem('vn_current_story_id') || '';
                 if (win.OS_DB?.getAllVnChapters) {
                     try {
                         const _ctxN = (() => {
@@ -1351,13 +1356,13 @@
                             catch(e) { return 5; }
                         })();
                         const _allCh  = await win.OS_DB.getAllVnChapters();
-                        const _sid    = localStorage.getItem('vn_current_story_id') || '';
+                        // _sid 已在外層宣告(向量召回也要用)
                         _stCh     = _sid
                             ? _allCh.filter(ch => ch.storyId === _sid)
                             : _allCh.filter(ch => !ch.storyId);
 
                         // 查詢大總結，過濾已覆蓋章節
-                        let _grandSummaryBlock = '';
+                        // _grandSummaryBlock 已在外層宣告(順序表要用)，這裡只賦值
                         if (win.OS_DB?.getGrandSummaries) {
                             const _summaries = await win.OS_DB.getGrandSummaries(_sid);
                             if (_summaries.length > 0) {
@@ -1397,10 +1402,8 @@
                             if (_c) _vnMsgs.push({ role: 'assistant', content: _c });
                         });
 
-                        // 大總結插在歷史最前面
-                        if (_grandSummaryBlock) {
-                            _vnMsgs.unshift({ role: 'system', content: _grandSummaryBlock });
-                        }
+                        // 大總結不再 unshift 進歷史陣列：它現在是順序表裡自己一格(grand_summary)，
+                        //   預設就排在 vn_history 前面＝跟以前同一個位置，但可以被拖走。
                     } catch(e) { console.warn('[OS_API vn_story] VN 歷史載入失敗:', e); }
                 }
 
@@ -1411,6 +1414,25 @@
                     if (!_sm) continue;
                     const _tMatch = _sm[1].match(/故事時間\s*[:：]\s*(.+)/);
                     if (_tMatch) _latestStoryTime = _tMatch[1].trim();
+                }
+
+                // ── 記憶召回先算好：它要當順序表裡的一格，就不能等迴圈跑完才 await ──
+                let _recallBlock = '';
+                if (win.OS_VECTOR_ENGINE?.isEnabled?.() === true && userMessage) {
+                    try {
+                        const _memories = await win.OS_VECTOR_ENGINE.search(userMessage, _sid);
+                        if (_memories.length > 0) {
+                            _recallBlock = `[記憶召回]\n`;
+                            if (_latestStoryTime) _recallBlock += `當前故事時間：${_latestStoryTime}\n\n`;
+                            for (const _m of _memories) {
+                                _recallBlock += `[${_m.type || 'event'}] ${_m.text}`;
+                                if (_m.tags?.length) _recallBlock += `（${_m.tags.join('、')}）`;
+                                _recallBlock += '\n';
+                            }
+                            _recallBlock = _recallBlock.trim();
+                            console.log(`[OS_API vn_story] 向量召回：${_memories.length} 條記憶`);
+                        }
+                    } catch(_ve) { console.warn('[OS_API vn_story] 向量召回失敗:', _ve); }
                 }
 
                 const _vn = [];
@@ -1429,6 +1451,9 @@
                             else if (_item.id === 'worldbook'   && lore)       _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
                             else if (_item.id === 'persona'     && (userDesc || userName !== 'User'))  _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
                             else if (_item.id === 'vn_history') _vnMsgs.forEach(m => _vn.push(m));
+                            else if (_item.id === 'grand_summary' && _grandSummaryBlock) _vn.push({ role: 'system', content: _grandSummaryBlock });
+                            else if (_item.id === 'memory_recall' && _recallBlock)       _vn.push({ role: 'system', content: _recallBlock });
+                            else if (_item.id === 'avs_vars'      && avsPrompt)          _vn.push({ role: 'system', content: avsPrompt });
                         } else if (_item.type === 'entry') {
                             const _e = _entryMap[_item.id];
                             if (_e?.enabled !== false && _e?.content?.trim()) _vn.push({ role: 'system', content: _e.content.trim() });
@@ -1436,36 +1461,27 @@
                     }
                 }
                 
+                // 一個包都沒有(還沒建過提示詞包)：照出廠順序自己排一份，跟 DEFAULT_SYS_ITEMS 一致
                 if (_vnBundles.length === 0) {
                     if (sysPrompt)  _vn.push({ role: 'system', content: `### Roleplay Instruction\n${sysPrompt}` });
                     if (lore)       _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
                     if (userDesc || userName !== 'User') _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
+                    if (_grandSummaryBlock) _vn.push({ role: 'system', content: _grandSummaryBlock });
                     _vnMsgs.forEach(m => _vn.push(m));
+                    if (_recallBlock) _vn.push({ role: 'system', content: _recallBlock });
+                    if (avsPrompt)    _vn.push({ role: 'system', content: avsPrompt });
                 }
 
-                // ── 角色記錄 / 向量召回 ──
-                const _vecEnabled = win.OS_VECTOR_ENGINE?.isEnabled?.() === true;
-                if (_vecEnabled && userMessage) {
-                    // 向量模式：跳過全量 [角色記錄]，改用語意召回
-                    try {
-                        const _memories = await win.OS_VECTOR_ENGINE.search(userMessage, _sid);
-                        if (_memories.length > 0) {
-                            let _recallBlock = `[記憶召回]\n`;
-                            if (_latestStoryTime) _recallBlock += `當前故事時間：${_latestStoryTime}\n\n`;
-                            for (const _m of _memories) {
-                                _recallBlock += `[${_m.type || 'event'}] ${_m.text}`;
-                                if (_m.tags?.length) _recallBlock += `（${_m.tags.join('、')}）`;
-                                _recallBlock += '\n';
-                            }
-                            _vn.push({ role: 'system', content: _recallBlock.trim() });
-                            console.log(`[OS_API vn_story] 向量召回：${_memories.length} 條記憶`);
-                        }
-                    } catch(_ve) {
-                        console.warn('[OS_API vn_story] 向量召回失敗:', _ve);
+                // 🚨 安全網：三格有內容、卻沒有任何一個包排到它 → 那個包多半沒配到 vn_story(遷移補錯地方)。
+                //   靜靜少注入＝整份長期記憶消失、而且畫面上完全看不出來，所以這裡補回去並且出聲，別讓它無聲無息。
+                if (_vnBundles.length) {
+                    const _late = [['grand_summary', _grandSummaryBlock], ['memory_recall', _recallBlock], ['avs_vars', avsPrompt]];
+                    for (const [_id, _content] of _late) {
+                        if (!_content || _injectedSys.has(_id)) continue;
+                        console.warn(`[OS_API vn_story] 順序表裡找不到「${_id}」這一格 → 補在最後面。去提示詞窗口把它拖到你要的位置。`);
+                        _vn.push({ role: 'system', content: _content });
                     }
                 }
-
-                if (avsPrompt) _vn.push({ role: 'system', content: avsPrompt });
 
                 if (userMessage) {
                     const _cotReminder = `\n\n[SYS]\n叮! 委託者發來新的消息，請查收後，提交<thinking> tag，草稿及正文本`;
