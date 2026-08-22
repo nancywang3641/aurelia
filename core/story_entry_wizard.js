@@ -338,11 +338,17 @@
                 next.disabled = cur >= list.length - 1;
 
                 const body = root.querySelector('#sew-preview-body');
-                body.innerHTML = '';
-                for (const line of this._plainLines(list[cur])) {
-                    const p = document.createElement('p');
-                    p.textContent = line;
-                    body.appendChild(p);
+                // 預覽＝閱讀畫面同一套渲染:作者的 HTML 美化面板照原樣上牆(以前自己剝成純文字,美化面板整個不見)
+                let blocks = 0;
+                try { blocks = window.StoryExtractor?.renderOpeningInto?.(body) || 0; } catch (e) { blocks = 0; }
+                if (!blocks) {
+                    // 刮不到已渲染的第 0 樓(掛載特殊/尚未上牆)→ 退回原文純文字,至少讀得到內容
+                    body.innerHTML = '';
+                    for (const line of this._plainLines(list[cur])) {
+                        const p = document.createElement('p');
+                        p.textContent = line;
+                        body.appendChild(p);
+                    }
                 }
                 if (!body.childNodes.length) {
                     const p = document.createElement('p');
@@ -370,6 +376,8 @@
                 await window.TavernHelper.setChatMessages([{ message_id: 0, swipe_id: idx }]);   // 官方切換:真改第 0 樓+存檔
                 try { window.StoryExtractor?._scheduleRender?.(300); } catch (e) { }             // 底下面板跟著換
                 this._renderPreview(root);
+                // 預覽刮的是酒館第 0 樓已渲染的 DOM,切 swipe 後那邊要幾拍才重繪 → 補渲染一次拿最終態
+                setTimeout(() => this._renderPreview(root), 400);
             } catch (e) { console.warn('[StoryEntryWizard] 切換開場失敗:', e); }
         },
 
