@@ -1,0 +1,165 @@
+/* ═══════════════════════════════════════════════════════════════════
+   系統性面板的統一外殼（基準＝系統設置 .set-header / .set-tabs）
+
+   微信、微薄、QB 那種「應用」可以有自己的皮；
+   系統性面板（系統設置、狀態檔案、提示詞、世界書、電話、手機設置）
+   一律長同一個樣，不然一路點下去每一頁的頭都不一樣，很割裂：
+
+     ‹ 返回(32×32 圓形)  ／  置中標題 18px‧800‧字距2  ／  右側動作(32×32)
+     底下若有分頁列 → 一律 3px 主色底線＋淡陰影
+
+   這支排在載入清單最後，蓋掉各面板自己那套舊的頭。
+   新的系統面板只要把 header 掛上 .sysh、標題 .sysh-title、返回 .sysh-back
+   就自動長成一樣，不必再抄一次數值。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 標頭列 ── */
+.sysh,
+.set-header, .avs-header, .pm-header, .wb-header, .dlr-head, .aps-set-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    /* 不寫 width:100%：手機設置那條是靠負邊距撐回滿版的，寫死 100% 會讓它右邊少一截 */
+    box-sizing: border-box;
+    padding: 15px 20px;
+    padding-top: calc(15px + env(safe-area-inset-top, 0px));
+    background: rgba(228, 232, 245, 0.88);
+    border-bottom: 1px solid rgba(26, 28, 40, 0.15);
+    flex-shrink: 0;
+    color: #1A1C28;
+    /* 電話那條把字級字重寫在容器上，會滲進子元素 → 在這裡歸零 */
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: normal;
+}
+body.layout-pad-ios .sysh,
+body.layout-pad-ios .set-header,
+body.layout-pad-ios .avs-header,
+body.layout-pad-ios .pm-header,
+body.layout-pad-ios .wb-header,
+body.layout-pad-ios .dlr-head,
+body.layout-pad-ios .aps-set-top { padding-top: 55px; }
+
+/* 手機設置的標頭包在有內距的頁面裡 → 負邊距吃回去，才跟其他面板一樣是滿版一條 */
+.aps-set-top { margin: -18px -16px 12px; }
+
+/* ── 標題（置中、單行、過長省略）── */
+.sysh-title,
+.set-title, .avs-title, .pm-title, .wb-title, .dlr-head-title, .aps-set-h {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #1A1C28;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* 狀態檔案的標題本來是 flex（標題旁掛圖標）→ 保住排版、只把它推到中間 */
+.avs-title { display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* ── 返回鈕 ── */
+.sysh-back,
+.set-back-btn, .avs-back-btn, .pm-back-btn, .wb-back-btn, .dlr-back, .aps-set-back {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 400;
+    color: rgba(26, 28, 40, 0.72);
+    background: none;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+}
+.sysh-back:hover,
+.set-back-btn:hover, .avs-back-btn:hover, .pm-back-btn:hover,
+.wb-back-btn:hover, .dlr-back:hover, .aps-set-back:hover {
+    background: rgba(26, 28, 40, 0.08);
+    color: #1A1C28;
+}
+
+/* ── 右側動作鈕（沒有動作的面板補一格佔位，標題才會真的在正中間）── */
+.sysh-act,
+.wb-settings-btn, .pm-header-action {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    font-size: 15px;
+    color: rgba(26, 28, 40, 0.72);
+    background: none;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+}
+.sysh-act:hover,
+.wb-settings-btn:hover, .pm-header-action:hover {
+    background: rgba(26, 28, 40, 0.08);
+    color: #1A1C28;
+}
+.pm-header-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.dlr-head::after, .aps-set-top::after { content: ''; flex: 0 0 32px; }
+
+/* ── 分頁列 ── */
+.sysh-tabs,
+.set-tabs, .avs-tabs, .pm-tabs {
+    display: flex;
+    background: rgba(228, 232, 245, 0.92);
+    border-bottom: 1px solid rgba(26, 28, 40, 0.15);
+    flex-shrink: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+}
+.sysh-tabs::-webkit-scrollbar,
+.set-tabs::-webkit-scrollbar, .avs-tabs::-webkit-scrollbar, .pm-tabs::-webkit-scrollbar { display: none; }
+
+.sysh-tab,
+.set-tab, .avs-tab, .pm-tab {
+    flex: 1;
+    min-width: 70px;
+    text-align: center;
+    padding: 12px 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: rgba(26, 28, 40, 0.72);
+    cursor: pointer;
+    position: relative;
+    transition: .3s;
+    border-bottom: none;
+    white-space: nowrap;
+}
+.sysh-tab.active,
+.set-tab.active, .avs-tab.active, .pm-tab.active {
+    color: #1A1C28;
+    font-weight: 800;
+    border-bottom: none;
+}
+.sysh-tab.active::after,
+.set-tab.active::after, .avs-tab.active::after, .pm-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #1A1C28;
+    border-radius: 3px 3px 0 0;
+    box-shadow: 0 -2px 8px rgba(26, 28, 40, 0.30);
+}
