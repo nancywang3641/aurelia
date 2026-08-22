@@ -1267,16 +1267,16 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             <div class="pm-wrap">
                 <div class="pm-header">
                     <span class="pm-back-btn" id="pm-nav-home">‹</span>
-                    <span class="pm-title">📝 提示詞管理</span>
+                    <span class="pm-title">提示詞管理</span>
                     <div class="pm-header-actions">
-                        <span class="pm-header-action" id="pm-export" title="匯出提示詞包">📤</span>
-                        <span class="pm-header-action" id="pm-import" title="匯入提示詞/ST預設包">📥</span>
+                        <span class="pm-header-action" id="pm-export" title="匯出提示詞包"><i class="fa-solid fa-file-export"></i></span>
+                        <span class="pm-header-action" id="pm-import" title="匯入提示詞/ST預設包"><i class="fa-solid fa-file-import"></i></span>
                         <input type="file" id="pm-import-file" accept=".json" style="display:none">
                     </div>
                 </div>
                 <div class="pm-tabs">
-                    <div class="pm-tab active" data-tab="unified">📦 預設包</div>
-                    <div class="pm-tab" data-tab="library">📝 條目庫</div>
+                    <div class="pm-tab active" data-tab="unified">預設包</div>
+                    <div class="pm-tab" data-tab="library">條目庫</div>
                     <!-- 🎭 人設 tab 已搬到 os_settings 的「大廳人設」分頁，這裡移除避免酒館 PWA 雙地方混淆 -->
                 </div>
                 <div class="pm-body" id="pm-body"></div>

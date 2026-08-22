@@ -84,7 +84,7 @@
           <div class="wb-header">
             <button onclick="goHome()" title="返回大廳" class="wb-back-btn wb-header-btn-hover">‹</button>
             <span class="wb-title">世界書工坊</span>
-            <button id="wb-settings-btn" title="系統管理" class="wb-settings-btn wb-header-btn-hover">⚙️</button>
+            <button id="wb-settings-btn" title="系統管理" class="wb-settings-btn wb-header-btn-hover"><i class="fa-solid fa-gear"></i></button>
           </div>
 
           <div class="wb-tool-bar">

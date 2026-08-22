@@ -486,6 +486,9 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/rpg_status_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/void_achievement.css');
 
+        // 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後才蓋得掉各自的舊頭
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_sys_chrome.css');
+
         if (_AURELIA_EXT_NAME) {
             // 本機：維持原樣(本地讀檔極快、且已驗證穩定，不動)
             for (const conf of MODULE_LOAD_ORDER) await loadModule(conf);
