@@ -288,13 +288,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         return config;
     }
 
-    function loadVectorConfig() {
-        let saved = localStorage.getItem('os_vector_config');
-        let config = { enabled: false, embeddingUrl: '', embeddingModel: 'text-embedding-3-small', syncKeyWithPrimary: true, embeddingKey: '', topK: 5 };
-        if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
-        return config;
-    }
-
     function saveConfig(llmData, secLlmData, imgData, minimaxData) {
         localStorage.setItem(LLM_STORAGE_KEY, JSON.stringify(llmData));
         localStorage.setItem(SEC_LLM_STORAGE_KEY, JSON.stringify(secLlmData));
@@ -949,7 +942,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div class="set-tab" data-tab="img">圖片</div>
                     <div class="set-tab" data-tab="voice">語音</div>
                     <div class="set-tab" data-tab="vn">素材</div>
-                    <div class="set-tab" data-tab="vec"${!isStandalone ? ' style="display:none"' : ''}>記憶向量</div>
+                    <!-- ⛔ 「記憶向量」分頁已移除：它跟 📝 記憶（變數工坊→記憶）是同一個系統、同一份 os_vector_config，
+                         但欄位少了本地模型/記憶來源/主模型只注入近期那幾個，而它存檔是整份覆蓋 →
+                         每按一次「保存所有設定」就把那幾個設定清掉（本地模型的勾會自己不見就是這個）。 -->
                     <div class="set-tab" data-tab="sys"${!isStandalone ? ' style="display:none"' : ''}>系統/備份</div>
                 </div>
 
@@ -2010,46 +2005,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getHTML() : '<div class="set-desc" style="padding:20px; text-align:center;">⚠️ vn_settings.js 尚未載入</div>'}
                     </div>
 
-                    <!-- ── 向量記憶設定 ── -->
-                    <div id="view-vec" class="tab-view hidden">
-                        <div class="set-group">
-                            <div class="set-label">記憶模式
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="vec-enabled">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                            <div class="set-desc" title="關閉：不啟用記憶召回，依靠章節原文 + 摘要。開啟：副模型背景提取 → 向量搜尋按需召回；長劇/多NPC 推薦。">開啟後副模型背景提取、按需召回記憶。</div>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label" title="OpenAI 相容的 /v1/embeddings 端點，可與主模型同一個 API 服務。">Embedding 端點</div>
-                            <div class="set-desc">OpenAI 相容的 embeddings 端點。</div>
-                            <input class="set-input" id="vec-url" type="text" placeholder="https://api.openai.com/v1（不需加 /embeddings）" />
-                            <div class="set-label" style="margin-top:12px;">Embedding 模型</div>
-                            <input class="set-input" id="vec-model" type="text" placeholder="text-embedding-3-small" style="margin-top:6px;" />
-                            <div class="set-label" style="margin-top:12px;">
-                                API Key
-                                <label style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:11px;cursor:pointer;">
-                                    <input type="checkbox" id="vec-sync-key"> 同步主模型 Key
-                                </label>
-                            </div>
-                            <input class="set-input" id="vec-key" type="password" placeholder="留空則同步主模型 Key" style="margin-top:6px;" />
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label" title="每次組建上下文時，從向量庫召回最相關的 N 條記憶注入。">召回條數 top-K <span class="set-slider-val" id="vec-topk-val">5</span></div>
-                            <div class="set-desc">每次召回最相關的 N 條記憶。</div>
-                            <input class="set-slider" type="range" id="vec-topk" min="1" max="20" value="5" />
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">測試連線</div>
-                            <div class="btn-test" id="vec-test-btn">🔌 測試 Embedding API</div>
-                            <div id="vec-test-result" style="margin-top:8px;font-size:12px;color:rgba(26,28,40,0.72);min-height:16px;"></div>
-                        </div>
-                    </div>
-
                     <div id="view-sys" class="tab-view hidden">
 
                         <div class="set-group">
@@ -2235,26 +2190,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const imgTestPreview = container.querySelector('#img-test-preview');
         const imgTestImage = container.querySelector('#img-test-image');
         const imgTestUrl = container.querySelector('#img-test-url');
-
-        // 向量記憶設定 — 載入並填充欄位
-        const vecCfg = loadVectorConfig();
-        const vecEnabled  = container.querySelector('#vec-enabled');
-        const vecUrl      = container.querySelector('#vec-url');
-        const vecModel    = container.querySelector('#vec-model');
-        const vecSyncKey  = container.querySelector('#vec-sync-key');
-        const vecKey      = container.querySelector('#vec-key');
-        const vecTopK     = container.querySelector('#vec-topk');
-        const vecTopKVal  = container.querySelector('#vec-topk-val');
-        const vecTestBtn  = container.querySelector('#vec-test-btn');
-        const vecTestResult = container.querySelector('#vec-test-result');
-        if (vecEnabled)  vecEnabled.checked       = vecCfg.enabled;
-        if (vecUrl)      vecUrl.value             = vecCfg.embeddingUrl || '';
-        if (vecModel)    vecModel.value           = vecCfg.embeddingModel || '';
-        if (vecSyncKey)  vecSyncKey.checked       = vecCfg.syncKeyWithPrimary !== false;
-        if (vecKey)      vecKey.value             = vecCfg.embeddingKey || '';
-        if (vecTopK)   { vecTopK.value            = vecCfg.topK || 5; }
-        if (vecTopKVal)  vecTopKVal.innerText      = vecCfg.topK || 5;
-        if (vecTopK)     vecTopK.oninput = () => { if (vecTopKVal) vecTopKVal.innerText = vecTopK.value; };
 
         // 按鈕
         const btnFetch = container.querySelector('#os-fetch-btn');
@@ -2912,18 +2847,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 // 換產圖器後：依新 service 自動翻「-VN小說家-」世界書三條目的開關（只翻 enabled，不寫內容）
                 try { (window.parent || window).OS_AVATAR_RULES_INJECTOR?.syncAvatarRuleEntries?.(); } catch (e) {}
 
-                // 向量記憶設定
-                if (vecEnabled) {
-                    const vecData = {
-                        enabled:           vecEnabled.checked,
-                        embeddingUrl:      vecUrl  ? vecUrl.value.trim()  : '',
-                        embeddingModel:    vecModel ? vecModel.value.trim() : 'text-embedding-3-small',
-                        syncKeyWithPrimary: vecSyncKey ? vecSyncKey.checked : true,
-                        embeddingKey:      vecKey  ? vecKey.value.trim()  : '',
-                        topK:              vecTopK  ? parseInt(vecTopK.value) : 5
-                    };
-                    localStorage.setItem('os_vector_config', JSON.stringify(vecData));
-                }
+                // ⛔ 這裡原本會整份覆寫 os_vector_config（只帶 6 個欄位）→ 每按一次保存就把
+                //    📝 記憶面板才有的 embeddingLocal / localModel / extractSource / mainRecentOnly 清掉。
+                //    記憶設定現在只由 📝 記憶（變數工坊→記憶）那一處管，它是讀舊值再逐欄覆蓋、不會互相蓋。
 
                 // VN 設置由外部模組統一存入 vn_cfg_v4
                 if (window.VN_SETTINGS_PANEL) window.VN_SETTINGS_PANEL.save(container);
@@ -3643,26 +3569,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 btnImgTest.style.opacity = "1";
             }
         };
-
-        // 向量 Embedding 測試按鈕
-        if (vecTestBtn) {
-            vecTestBtn.onclick = async () => {
-                vecTestBtn.style.opacity = '0.5';
-                vecTestBtn.textContent = '⏳ 測試中...';
-                if (vecTestResult) { vecTestResult.style.color = 'rgba(26,28,40,0.40)'; vecTestResult.textContent = '⏳ 呼叫 Embedding API...'; }
-                try {
-                    const winRef = window.parent || window;
-                    if (!winRef.OS_VECTOR_ENGINE) throw new Error('OS_VECTOR_ENGINE 尚未載入');
-                    const vec = await winRef.OS_VECTOR_ENGINE.embed('測試文字');
-                    if (vecTestResult) { vecTestResult.style.color = '#7CFC00'; vecTestResult.textContent = `✅ 連線成功！向量維度：${vec.length}`; }
-                } catch(e) {
-                    if (vecTestResult) { vecTestResult.style.color = '#FF6B6B'; vecTestResult.textContent = `❌ ${e.message}`; }
-                } finally {
-                    vecTestBtn.style.opacity = '1';
-                    vecTestBtn.textContent = '🔌 測試 Embedding API';
-                }
-            };
-        }
 
     }
 
