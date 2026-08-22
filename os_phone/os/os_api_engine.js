@@ -1367,8 +1367,16 @@
                                 if (_coveredIds.size > 0) {
                                     _stCh = _stCh.filter(ch => !_coveredIds.has(ch.id));
                                 }
-                                _grandSummaryBlock = `【大總結（第${_latest.count}次）】\n${_latest.content}`;
-                                console.log(`[OS_API vn_story] 大總結注入：第${_latest.count}次，已過濾 ${_coveredIds.size} 章`);
+                                // 注入壓縮版(丟結算清單/代辦/物品表、事件與性事紀限筆數)，跟酒館同一支處理器。
+                                //   原本是把整份原文每輪送進去 → 總結一長 token 就跟著長。
+                                //   壓縮器切不出區塊(舊格式總結)會自己退回全文，不會變空。
+                                let _sumTxt = _latest.content;
+                                try {
+                                    const _packed = win.OS_STORY_TOOLS?.buildInjectionPayload?.(_latest.content);
+                                    if (_packed && _packed.trim()) _sumTxt = _packed;
+                                } catch (e) { console.warn('[OS_API vn_story] 大總結壓縮失敗，用全文:', e); }
+                                _grandSummaryBlock = `【大總結（第${_latest.count}次）】\n${_sumTxt}`;
+                                console.log(`[OS_API vn_story] 大總結注入：第${_latest.count}次，已過濾 ${_coveredIds.size} 章，${_latest.content.length}→${_sumTxt.length} 字`);
                             }
                         }
 

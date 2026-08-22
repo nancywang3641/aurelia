@@ -177,7 +177,11 @@
                 ? `**【上一版總結·第${latest.count}次】—— 把它當底稿，與下方新劇情合併、改寫成一份全新的最新總結，全面取代舊版：**\n${latest.content}\n`
                 : `**【首次總結】**\n`;
 
-            const tplBody = this.TEMPLATE.replace(/\{\{count\}\}/g, count);
+            // 模板跟酒館共用同一份（含她在故事管理改過的自訂版）：兩版的差別只在資料來源與注入方式，
+            //   格式沒有理由分家 —— 而且酒館那份的區塊是【】包起來的，注入前的壓縮器才切得動。
+            //   拿不到 OS_STORY_TOOLS 才退回本檔自帶的舊模板。
+            let tplBody = (win.OS_STORY_TOOLS?.getSummaryTemplate?.() || this.TEMPLATE).replace(/\{\{count\}\}/g, count);
+            if (count > 1) tplBody = tplBody.replace(/\n*【故事標題】[\s\S]*?(?=\n【|$)/g, '').trim();   // 故事標題只第一次填，第二次起移除(同酒館)
             const prompt  = `${tplBody}\n\n${prevSection}\n=== 新劇情內容 ===\n${contentToSummarize}`;
 
             const osApi = win.OS_API;
@@ -199,7 +203,17 @@
                     );
                 });
 
+                // 🚨 品質閘門：空／被截斷／API 錯誤頁不准存 —— 這是滾動合併，一次壞生成會直接蓋掉
+                //   上一版好總結，而舊版是被取代掉的、救不回來。跟酒館用同一道閘門。
+                const _v = win.OS_STORY_TOOLS?.validateSummary?.(generated) || { ok: true };
+                if (!_v.ok) {
+                    console.warn('[VN_Summary] 生成結果未通過驗證，放棄存檔、保留舊總結：' + _v.reason);
+                    alert('這次生成的內容不像總結（' + _v.reason + '）\n已保留上一版，沒有覆蓋掉。可以再按一次重試。');
+                    return;
+                }
                 await this._saveToDB(storyId, { count, content: generated, coveredChapterIds });
+                try { win.OS_SUMMARY_INJECT?.invalidate?.(storyId); } catch (e) {}   // 有注入快取的話讓它重抓
+                try { document.getElementById('vn-ctx-popup')?.classList.remove('show'); } catch (e) {}   // 生完才收 CTX：生成中要留著給那顆鈕顯示進度
                 this.showResult(generated, count);
             } catch(e) {
                 alert('生成失敗: ' + (e.message || e));
