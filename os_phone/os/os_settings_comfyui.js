@@ -365,23 +365,101 @@
                 if (!grid) return;
                 const openBtn = container.querySelector('#img-cfd-preset-open');
                 if (openBtn) openBtn.textContent = '📦 打開預設包（' + cfdPresets.length + ' 個）';
-                if (!cfdPresets.length) { grid.innerHTML = '<div style="grid-column:1/-1; color:rgba(26,28,40,0.5); font-size:12px; padding:20px; text-align:center;">還沒有預設包。把面板調好後，按下面「➕ 從目前設定另存」。</div>'; return; }
+                if (!cfdPresets.length) { grid.innerHTML = '<div class="cfd-pack-empty">還沒有預設包。把面板調好後，按下面「➕ 從目前設定另存」。</div>'; return; }
                 grid.innerHTML = cfdPresets.map(function(p, i){
                     const thumb = p.preview
-                        ? '<img src="' + p.preview + '" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:6px; background:#0001;">'
-                        : '<div style="width:100%; aspect-ratio:1; border-radius:6px; background:rgba(26,28,40,0.06); display:flex; align-items:center; justify-content:center; color:rgba(26,28,40,0.4); font-size:11px; text-align:center; line-height:1.5;">尚無預覽<br>點 🖼️ 生成</div>';
-                    return '<div style="border:1px solid rgba(26,28,40,0.15); border-radius:8px; padding:8px; background:#fff;">' +
+                        ? '<img class="cfd-pack-thumb" src="' + p.preview + '">'
+                        : '<div class="cfd-pack-thumb cfd-pack-thumb-empty">尚無預覽</div>';
+                    return '<div class="cfd-pack-card">' +
                         thumb +
-                        '<div style="font-size:12px; font-weight:600; color:#1A1C28; margin:6px 0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escAttr(p.name) + (p.customWorkflow ? '（自帶工作流）' : '') + '">' + (p.customWorkflow ? '⚙️ ' : '') + escAttr(p.name) + '</div>' +
-                        '<div style="display:flex; gap:3px;">' +
-                          '<span style="flex:1; text-align:center; font-size:11px; cursor:pointer; padding:4px 0; border:1px solid rgba(26,28,40,0.2); border-radius:4px; background:rgba(26,28,40,0.05);" onclick="window._cfdPreset.applyIdx(' + i + ')">套用</span>' +
-                          '<span style="font-size:12px; cursor:pointer; padding:4px 7px; border:1px solid rgba(26,28,40,0.2); border-radius:4px; background:rgba(26,28,40,0.05);" title="生成風格預覽" onclick="window._cfdPreset.genPreviewIdx(' + i + ')">🖼️</span>' +
-                          '<span style="font-size:12px; cursor:pointer; padding:4px 7px; border:1px solid #2b6cb0; border-radius:4px; background:rgba(43,108,176,0.1);" title="用目前面板設定覆蓋（會清掉預覽）" onclick="window._cfdPreset.overwriteIdx(' + i + ')">🔄</span>' +
-                          '<span style="font-size:12px; cursor:pointer; padding:4px 7px; border:1px solid #fc8181; border-radius:4px; background:rgba(252,129,129,0.1);" title="刪除" onclick="window._cfdPreset.delIdx(' + i + ')">🗑️</span>' +
+                        '<div class="cfd-pack-name" data-idx="' + i + '" title="' + escAttr(p.name) + (p.customWorkflow ? '（自帶工作流）' : '') + '　點名字可以改名" onclick="window._cfdPreset.renameIdx(' + i + ')">' +
+                          (p.customWorkflow ? '<i class="fa-solid fa-gear cfd-pack-wf"></i>' : '') + escAttr(p.name) +
                         '</div>' +
-                        '<div class="cfd-card-status" data-idx="' + i + '" style="font-size:10px; color:rgba(26,28,40,0.55); margin-top:3px; min-height:13px;"></div>' +
+                        '<div class="cfd-pack-acts">' +
+                          '<span class="cfd-pack-act is-apply" onclick="window._cfdPreset.applyIdx(' + i + ')">套用</span>' +
+                        '</div>' +
+                        '<div class="cfd-pack-acts">' +
+                          '<span class="cfd-pack-act" title="生成風格預覽" onclick="window._cfdPreset.genPreviewIdx(' + i + ')"><i class="fa-solid fa-image"></i></span>' +
+                          '<span class="cfd-pack-act" title="改名" onclick="window._cfdPreset.renameIdx(' + i + ')"><i class="fa-solid fa-pen-to-square"></i></span>' +
+                          '<span class="cfd-pack-act is-overwrite" title="用目前面板設定覆蓋（會清掉預覽）" onclick="window._cfdPreset.overwriteIdx(' + i + ')"><i class="fa-solid fa-rotate"></i></span>' +
+                          '<span class="cfd-pack-act is-del" title="刪除" onclick="window._cfdPreset.delIdx(' + i + ')"><i class="fa-solid fa-trash"></i></span>' +
+                        '</div>' +
+                        '<div class="cfd-card-status" data-idx="' + i + '"></div>' +
                       '</div>';
                 }).join('');
+            }
+            // 🚨改名不是只換一個字串：ComfyUI 的預設包**沒有 id 欄**（lobby_dress 的 presetKeyOf = p.id || p.name），
+            //   所以名字就是身分。別處記著這個名字的地方全部要一起換，不然裝扮室／貼紙煉丹／世界門立姿
+            //   會靜靜地「找不到包」——世界門那條甚至寫死「包被刪或改名→整批停手」。
+            function _renamePresetEverywhere(oldName, newName){
+                const res = { ok: true, err: '', touched: false };
+                const _w = window.parent || window;
+                // 面板若被塞進 iframe，兩個 window 各有一份 localStorage；讀這些鍵的人散在大廳與手機 app → 兩邊都寫
+                const stores = [window.localStorage];
+                try { if (_w && _w !== window && _w.localStorage) stores.push(_w.localStorage); } catch(e) {}
+
+                // ① 四個桶記的「目前套用哪個包」（記憶體 + 面板狀態列）
+                _CFD_BUCKETS.forEach(function(b){
+                    if (_comfyBuckets[b] && _comfyBuckets[b].activePreset === oldName) { _comfyBuckets[b].activePreset = newName; res.touched = true; }
+                    if (_cfdActivePreset[b] === oldName) { _cfdActivePreset[b] = newName; res.touched = true; }
+                });
+                _updateBucketHeader();
+
+                // ② 生圖引擎手上那份 config 是 init() 時的快照、不跟著 localStorage 走 → 直接改活物件
+                try {
+                    const M = _w.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+                    const arr = M && M.config && M.config.comfyuiDirect && M.config.comfyuiDirect.presets;
+                    if (Array.isArray(arr)) arr.forEach(function(x){ if (x && x.name === oldName) x.name = newName; });
+                } catch(e) {}
+
+                // ③ 落地 os_image_config：改名就是改名，不該還要她再按一次底部保存才算數
+                try {
+                    const raw = window.localStorage.getItem('os_image_config');
+                    if (raw) {
+                        const cfg = JSON.parse(raw);
+                        const cd = cfg && cfg.comfyuiDirect;
+                        if (cd) {
+                            if (Array.isArray(cd.presets)) cd.presets.forEach(function(x){ if (x && x.name === oldName) x.name = newName; });
+                            if (cd.buckets && typeof cd.buckets === 'object') Object.keys(cd.buckets).forEach(function(b){
+                                if (cd.buckets[b] && cd.buckets[b].activePreset === oldName) cd.buckets[b].activePreset = newName;
+                            });
+                            window.localStorage.setItem('os_image_config', JSON.stringify(cfg));
+                        }
+                    }
+                } catch(e) { res.ok = false; res.err = (e && e.message) || String(e); }
+
+                // ④ 別的模組各自記著的名字
+                const patch = function(key, fn){
+                    stores.forEach(function(st){
+                        try {
+                            const raw = st.getItem(key); if (!raw) return;
+                            const o = JSON.parse(raw); if (!o || typeof o !== 'object') return;
+                            if (fn(o)) { st.setItem(key, JSON.stringify(o)); res.touched = true; }
+                        } catch(e) {}
+                    });
+                };
+                patch('lstage_dress_gen_v1', function(o){ if (o.comfyPreset === oldName) { o.comfyPreset = newName; return true; } return false; });   // 大廳裝扮室：生小小人
+                patch('avs_sticker_gen_v1',  function(o){ if (o.comfyPreset === oldName) { o.comfyPreset = newName; return true; } return false; });   // 變數工坊：世界貼紙
+                patch('wg_sprite_pack_v1',   function(o){ if (o.src !== 'novelai' && o.key === oldName) { o.key = newName; return true; } return false; });   // 世界門：旅人立姿
+                // 包租婆整房生圖的畫風包：這個鍵存的是純字串不是 JSON
+                stores.forEach(function(st){
+                    try { if (st.getItem('aurelia_room_style_preset') === oldName) { st.setItem('aurelia_room_style_preset', newName); res.touched = true; } } catch(e) {}
+                });
+
+                // ⑤ 這張設定頁上兩個「用名字當 value」的下拉是開面板時一次組好的 → 不同步就會停在舊名，
+                //    而它們是 onchange 就寫檔的，她之後隨手挑一下等於把舊名寫回去。
+                const fixSelect = function(sel, matchVal, nextVal, matchLabel, nextLabel){
+                    if (!sel) return;
+                    Array.prototype.forEach.call(sel.options, function(op){
+                        if (op.value === matchVal) op.value = nextVal;
+                        if (op.textContent === matchLabel) op.textContent = nextLabel;
+                    });
+                };
+                fixSelect(container.querySelector('#img-wg-sprite'),
+                          'comfyui_direct|' + oldName, 'comfyui_direct|' + newName,
+                          'ComfyUI｜' + oldName, 'ComfyUI｜' + newName);
+                fixSelect(container.querySelector('#img-room-style'), oldName, newName, oldName, newName);
+                return res;
             }
             window._cfdPreset = {
                 open: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.style.display = 'flex'; this._cancelImport(); renderPresetGrid(); },
@@ -392,6 +470,44 @@
                     try { if (window._cfdSetActivePreset) window._cfdSetActivePreset(p.name || ''); } catch(e){}   // 狀態列顯示目前套用的預設名
                     this.close();
                     if (statusEl) statusEl.textContent = '✅ 已套用預設包「' + (p.name || '') + '」（要正式生圖記得按底部保存）';
+                },
+                // 就地改名：點名字或 ✏️ → 那格變輸入框。Enter/移開焦點＝改，Esc＝不改。
+                renameIdx: function(i){
+                    const p = cfdPresets[i]; if (!p) return;
+                    const host = container.querySelector('.cfd-pack-name[data-idx="' + i + '"]');
+                    if (!host || host.classList.contains('is-editing')) return;   // 已經在改了（點輸入框會冒泡回這裡）
+                    const oldName = String(p.name || '');
+                    host.classList.add('is-editing');
+                    host.textContent = '';
+                    const inp = document.createElement('input');
+                    inp.type = 'text';
+                    inp.className = 'cfd-pack-name-input';
+                    inp.value = oldName;
+                    host.appendChild(inp);
+                    inp.focus(); inp.select();
+                    let done = false;
+                    const finish = function(commit){
+                        if (done) return; done = true;
+                        const nn = commit ? inp.value.trim() : '';
+                        if (!nn || nn === oldName) { renderPresetGrid(); return; }
+                        const norm = function(s){ return String(s == null ? '' : s).trim().toLowerCase(); };
+                        if (cfdPresets.some(function(x, j){ return j !== i && norm(x.name) === norm(nn); })) {
+                            renderPresetGrid();
+                            cardStatus(i, '⚠️ 已經有同名的包了，沒有改');
+                            return;
+                        }
+                        cfdPresets[i].name = nn;
+                        const r = _renamePresetEverywhere(oldName, nn);
+                        renderPresetGrid();
+                        cardStatus(i, r.ok
+                            ? ('✅ 已改名' + (r.touched ? '，套用它的地方也一起換了' : ''))
+                            : ('⚠️ 名字改了但存不進本機空間（' + r.err + '），關掉重開會變回原名'));
+                    };
+                    inp.addEventListener('keydown', function(e){
+                        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+                        else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+                    });
+                    inp.addEventListener('blur', function(){ finish(true); });
                 },
                 saveNew: function(){
                     const ni = container.querySelector('#img-cfd-preset-newname');
