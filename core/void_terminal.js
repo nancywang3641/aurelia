@@ -655,7 +655,10 @@ const IRIS_IDLE = [
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
-                    <div class="void-btn" id="void-story-btn" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel(window.OS_API?.isStandalone?.() ? 'generate' : 'story');">
+                    <!-- 獨立版：直接進書架的「自由劇情」。以前開的是另一個「AI 生成劇情」面板，
+                         那面板跟自由劇情做同一件事、資料卻各存各的，兩個入口只會讓人猶豫該按哪個。
+                         書架沒載入時退回舊面板，不至於整顆按鈕沒反應。酒館版這顆是隱藏的（見下方），照舊走 'story'。 -->
+                    <div class="void-btn" id="void-story-btn" onclick="if(window.OS_API?.isStandalone?.()){ if(!window.QbBookshelf?.openFreeScript?.()) window.AureliaControlCenter?.showVnPanel?.('generate'); } else { window.AureliaControlCenter?.showVnPanel?.('story'); }">
                         <div class="void-btn-inner"><span>踏入故事</span></div>
                     </div>
                     <div class="void-btn" id="void-chapter-btn">

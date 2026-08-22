@@ -82,3 +82,23 @@
         .ying-content { flex: 1; display: flex; flex-direction: column; }
         .ying-name { color: #3e271a; font-size: 15px; font-weight: bold; margin-bottom: 5px; letter-spacing: 1px; border-bottom: 1px solid rgba(139,115,85,0.3); padding-bottom: 3px; }
         .ying-text { color: #4a3f35; font-size: 14px; line-height: 1.6; }
+
+/* ── 📂 自由劇情：收藏的開場白 ──────────────────────────────
+   跟下面的「過往開場」語意不同：這排是主動命名收藏的（同名會覆蓋），
+   那份是每次踏入自動記的流水帳。所以這裡做成一排 chip、那裡維持卡片。
+   資料跟舊的「AI 生成劇情」面板共用 os_vn_gen_presets，兩個入口合併後不用重打。 */
+.qbfp-wrap { margin-bottom:16px; }
+.qbfp-wrap:empty, .qbfp-wrap.qbfp-none { display:none; }
+.qbfp-hd { display:flex; align-items:center; gap:6px; margin-bottom:8px;
+  font-size:10px; letter-spacing:2px; text-transform:uppercase; color:rgba(150,200,255,0.3); }
+.qbfp-count { color:rgba(150,200,255,0.22); letter-spacing:1px; }
+.qbfp-list { display:flex; flex-wrap:wrap; gap:6px; }
+.qbfp-chip { display:inline-flex; align-items:center; gap:6px; max-width:100%;
+  padding:5px 10px; border-radius:999px; cursor:pointer;
+  background:rgba(100,180,255,0.08); border:1px solid rgba(100,180,255,0.22);
+  color:rgba(200,225,255,0.85); font-size:12px; line-height:1.4;
+  transition:background .15s ease, border-color .15s ease; }
+.qbfp-chip:hover { background:rgba(100,180,255,0.16); border-color:rgba(100,180,255,0.45); }
+.qbfp-chip-nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px; }
+.qbfp-chip-del { flex:none; opacity:.4; font-size:11px; font-style:normal; }
+.qbfp-chip-del:hover { opacity:1; color:rgba(255,150,150,0.95); }

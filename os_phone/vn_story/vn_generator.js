@@ -300,8 +300,14 @@
     async function generateStory(options = {}) {
         const submitBtn = document.getElementById('vn-gen-submit');
         const statusEl  = document.getElementById('vn-gen-status');
-        const request   = (document.getElementById('vn-gen-request')?.value || '').trim();
-        const presetTitle = (document.getElementById('vn-gen-title')?.value || '').trim();
+        // 🚨呼叫端可以直接把值傳進來，不必先去填那個 overlay 的輸入框。
+        //   舊路徑（書架自由劇情、QB Dive）都是「填 DOM → 按下去」，等於整條生成綁死在
+        //   那個面板的 DOM 上：面板一改版或收起來，別的入口就跟著壞。
+        //   不傳就完全照舊讀 DOM，既有呼叫端零影響。
+        const request   = (options.request != null ? String(options.request)
+                          : (document.getElementById('vn-gen-request')?.value || '')).trim();
+        const presetTitle = (options.title != null ? String(options.title)
+                          : (document.getElementById('vn-gen-title')?.value || '')).trim();
 
         // 🌟 接收傳遞過來的變數包 ID
         const targetPackId = options.targetPackId || null;
