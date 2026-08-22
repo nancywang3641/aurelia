@@ -952,18 +952,23 @@
                     </div>
                 </div>
 
-                <div id="qb-greet-replace-panel" style="display:none;padding:14px 20px;background:rgba(30,18,8,0.97);border-bottom:1px solid var(--qbk-line);flex-shrink:0;flex-direction:column;gap:10px;">
-                    <div style="font-size:12px;color:var(--qbk-ink-dim);letter-spacing:1px;margin-bottom:2px;">全部開場白批量取代</div>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <input id="qb-greet-find" placeholder="搜尋文字…" style="flex:1;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:8px 10px;font-size:13px;outline:none;">
-                        <span style="color:var(--qbk-ink-faint);font-size:16px;">→</span>
-                        <input id="qb-greet-repl" placeholder="替換為…" style="flex:1;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:8px 10px;font-size:13px;outline:none;">
-                        <button id="qb-greet-replace-do" class="qb-btn-ghost">取代全部</button>
-                    </div>
-                    <div id="qb-greet-replace-msg" style="font-size:12px;color:rgba(150,220,130,0.8);min-height:16px;"></div>
-                    <div id="qb-greet-saved-rules" style="display:none;border-top:1px solid var(--qbk-line);padding-top:10px;display:flex;flex-direction:column;gap:6px;">
-                        <div style="font-size:11px;color:var(--qbk-ink-faint);letter-spacing:1px;margin-bottom:2px;">📌 已儲存規則（點擊套用）</div>
-                        <div id="qb-greet-rules-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                <!-- 批量取代：獨立 modal（原本是內嵌展開，一開就把正文擠掉，
+                     那一列三個欄位並排在手機寬度直接爆出畫面外）-->
+                <div id="qb-greet-replace-panel" style="display:none;position:absolute;inset:0;z-index:30;background:rgba(0,0,0,0.72);align-items:center;justify-content:center;padding:18px;box-sizing:border-box;">
+                    <div id="qb-greet-replace-box" style="width:100%;max-width:340px;max-height:92%;overflow-y:auto;box-sizing:border-box;background:#1e1208;border:1px solid var(--qbk-line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 18px 44px rgba(0,0,0,0.7);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <div style="font-size:13px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">全部開場白批量取代</div>
+                            <button id="qb-greet-replace-close" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:20px;line-height:1;cursor:pointer;padding:0 2px;">×</button>
+                        </div>
+                        <input id="qb-greet-find" placeholder="搜尋文字…" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:9px 10px;font-size:13px;outline:none;font-family:inherit;">
+                        <div style="text-align:center;color:var(--qbk-ink-faint);font-size:13px;line-height:1;">↓</div>
+                        <input id="qb-greet-repl" placeholder="替換為…（留空＝刪掉這段字）" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:9px 10px;font-size:13px;outline:none;font-family:inherit;">
+                        <button id="qb-greet-replace-do" class="qb-btn-primary" style="width:100%;">取代全部</button>
+                        <div id="qb-greet-replace-msg" style="font-size:12px;color:rgba(150,220,130,0.8);min-height:16px;text-align:center;"></div>
+                        <div id="qb-greet-saved-rules" style="display:none;border-top:1px solid var(--qbk-line);padding-top:12px;flex-direction:column;gap:8px;">
+                            <div style="font-size:11px;color:var(--qbk-ink-faint);letter-spacing:1px;">已儲存規則（點擊套用）</div>
+                            <div id="qb-greet-rules-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                        </div>
                     </div>
                 </div>
                 
@@ -1436,14 +1441,15 @@
             }
 
             if (replaceBtn && replacePanel) {
+                const closeRepl = () => { replacePanel.style.display = 'none'; };
                 replaceBtn.onclick = () => {
-                    const open = replacePanel.style.display === 'flex';
-                    replacePanel.style.display = open ? 'none' : 'flex';
-                    if (!open) {
-                        _renderRules();
-                        if (findInput) findInput.focus();
-                    }
+                    replacePanel.style.display = 'flex';
+                    _renderRules();
+                    setTimeout(() => { try { findInput?.focus(); } catch (e) { } }, 30);
                 };
+                innerView.querySelector('#qb-greet-replace-close').onclick = closeRepl;
+                replacePanel.onclick = (e) => { if (e.target === replacePanel) closeRepl(); };   // 點遮罩收掉
+                replacePanel.addEventListener('keydown', e => { if (e.key === 'Escape') closeRepl(); });
             }
 
             if (doReplBtn) {
