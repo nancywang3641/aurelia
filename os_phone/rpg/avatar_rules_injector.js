@@ -51,9 +51,15 @@
             if (_isStandalone()) {
                 const WB = win.OS_WORLDBOOK || window.OS_WORLDBOOK;
                 if (!WB?.setEnabledByTitle) return;
+                // 一條世界書條目都沒有＝根本還沒匯入世界書，那是正常狀態不是錯誤 → 安靜跳過。
+                //   （這支掛在圖片設置的保存鈕上，每按一次就會叫一次；不擋的話 console 會被洗版）
+                try {
+                    const _all = (await win.OS_DB?.getAllWorldbookEntries?.()) || [];
+                    if (!_all.length) return;
+                } catch (e) { return; }
                 const r = await WB.setEnabledByTitle(ALL_ENTRY_TAGS, wantTag ? [wantTag] : []);
                 if (!r.seen.length) {
-                    console.warn('🪪 [Avatar Rules] ⛔ 獨立版世界書裡找不到 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] 任何一條');
+                    console.warn('🪪 [Avatar Rules] ⛔ 世界書裡找不到 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] 任何一條 → 頭像規則沒有東西可切');
                     return;
                 }
                 if (r.opened.length || r.closed.length) {

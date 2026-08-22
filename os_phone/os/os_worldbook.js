@@ -41,10 +41,15 @@
             const cat = e.group && e.group.trim() ? e.group.trim() : '預設';
             if (cat && !cats.includes(cat)) cats.push(cat);
             
+            // 🚨 觸發關鍵字：酒館「匯出世界書」的欄位叫 `key`，只有助手 API 那條路才叫 `keyword`。
+            //    以前只讀 keyword → 匯入真的酒館檔案時每一條的關鍵字都被靜靜丟掉，
+            //    而 PWA 的規則是「沒填關鍵字＝常駐」→ 整本書每輪全部注入（五種曲風的 BGM 清單一起送）。
+            // 🔵 constant（藍燈）＝酒館的無條件常駐，語意剛好就是 PWA 的「關鍵字留空」→ 不帶 keys。
             let keyStr = '';
-            if (e.keyword) {
-                if (Array.isArray(e.keyword)) keyStr = e.keyword.join(',');
-                else if (typeof e.keyword === 'string') keyStr = e.keyword;
+            if (!e.constant) {
+                const k = (e.keyword !== undefined) ? e.keyword : e.key;
+                if (Array.isArray(k)) keyStr = k.join(',');
+                else if (typeof k === 'string') keyStr = k;
             }
 
             entries.push({
