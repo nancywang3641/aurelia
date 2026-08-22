@@ -82,7 +82,9 @@
             <path d="M16 14 L47 50 L16 86" fill="none" stroke="#fdf9ec" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>`,
     };
-    const CANVAS_W = 1253.438, CANVAS_H = 705.469;
+    // 橫式版面基準:面板 880u + 舞台左右留白 32u,寬基準壓到 950u 讓面板吃滿容器寬(約 93%)
+    // 高基準 705u 只當溢出保護(最高的一幕內容約 629u),不夠高時才改由高度決定單位
+    const CANVAS_W = 950, CANVAS_H = 705.469;
     const PORTRAIT_REF_W = 430;   // 直式一欄的參考寬(單位換算用)
 
     // 同一張聊天按過「進入故事」後,這輪 session 內不再彈(避免每次開藏書都重走)
