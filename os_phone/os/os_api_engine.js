@@ -1344,8 +1344,15 @@
 
             let lore = '';
             try {
-                const _rawPacks = localStorage.getItem('vn_active_wb_packs');
-                const _activePacks = _rawPacks ? JSON.parse(_rawPacks) : null;
+                // 常駐書包(每本都用) ∪ 這本藏書自己掛的 —— 前者是酒館「全域世界書」的對應物，
+                //   格式協議/BGM/音效清單那種跨故事的同一份放在那裡，不必每開一本新書重掛一次。
+                let _activePacks = null;
+                if (win.OS_WORLDBOOK?.getActivePacks) {
+                    _activePacks = win.OS_WORLDBOOK.getActivePacks();
+                } else {
+                    const _rawPacks = localStorage.getItem('vn_active_wb_packs');
+                    _activePacks = _rawPacks ? JSON.parse(_rawPacks) : null;
+                }
                 if (_activePacks && _activePacks.length && win.OS_WORLDBOOK?.getContextByPacks) {
                     lore = await win.OS_WORLDBOOK.getContextByPacks(_activePacks, scanText);
                 } else if (win.OS_WORLDBOOK?.getEnabledContext) {
