@@ -14,16 +14,10 @@
     if (!targetDoc.getElementById('os-monitor-css')) {
     }
 
-    // --- 輔助：讀取摘要設定狀態 ---
+    // --- 輔助：app 讀劇情歷史保留最近幾則全文（null＝全送、0＝全部只讀摘要）---
     function getSummaryStatus() {
-        try {
-            const saved = localStorage.getItem('os_global_config') || localStorage.getItem('wx_phone_api_config');
-            if (saved) {
-                const config = JSON.parse(saved);
-                return config.enableSummaryOnly === true;
-            }
-        } catch(e) {}
-        return false;
+        try { if (win.OS_APP_CTX_MSGS) return win.OS_APP_CTX_MSGS(); } catch (e) {}
+        return 10;
     }
 
     // --- 核心診斷邏輯 ---
@@ -87,16 +81,18 @@
                     tokenDisplay = "Unknown";
                 }
 
-                const isSummaryOn = getSummaryStatus();
-                const summaryHtml = isSummaryOn 
-                    ? '<span class="mon-val ok">✅ 開啟 (ON)</span>' 
-                    : '<span class="mon-val warn">❌ 關閉 (OFF)</span>';
+                const _keepN = getSummaryStatus();
+                const summaryHtml = _keepN === null
+                    ? '<span class="mon-val warn">全送（不限制）</span>'
+                    : (_keepN === 0
+                        ? '<span class="mon-val ok">全部只讀摘要</span>'
+                        : `<span class="mon-val ok">最近 ${_keepN} 則全文</span>`);
 
                 let dataHtml = `
                     <div class="mon-row"><span>讀取耗時</span><span class="mon-val">${time}ms</span></div>
                     <div class="mon-row"><span>角色名稱</span><span class="mon-val">${charName}</span></div>
                     <div class="mon-row"><span>用戶名稱</span><span class="mon-val">${userName}</span></div>
-                    <div class="mon-row"><span>摘要模式 (Summary)</span>${summaryHtml}</div>
+                    <div class="mon-row"><span>app 讀劇情歷史</span>${summaryHtml}</div>
                     <div class="mon-row"><span>世界書大小</span><span class="mon-val">${loreLen} 字</span></div>
                     <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
                     <div class="mon-row"><span>歷史訊息量 (Reality)</span><span class="mon-val ok" style="font-weight:bold;">${historyCount} 條</span></div>

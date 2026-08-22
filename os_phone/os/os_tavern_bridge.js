@@ -16,17 +16,22 @@
         return win.TavernHelper || (win.parent && win.parent.TavernHelper) || (win.top && win.top.TavernHelper);
     }
 
-    // --- 讀取設定檔 ---
-    function getSummaryConfig() {
+    // --- app 讀劇情歷史時保留最近幾則全文（更舊的縮成摘要）---
+    //   回傳 null＝不限制全送；0＝全部只讀摘要；N＝最近 N 則全文。
+    //   舊設定 enableSummaryOnly:true 等於「全部只讀摘要」→ 遷移成 0。
+    function getAppCtxMsgs() {
         try {
             const saved = localStorage.getItem('os_global_config') || localStorage.getItem('wx_phone_api_config');
             if (saved) {
                 const config = JSON.parse(saved);
-                return config.enableSummaryOnly === true; 
+                if (config.appCtxMsgs === null) return null;
+                if (config.appCtxMsgs != null) { const n = parseInt(config.appCtxMsgs); return isNaN(n) ? 10 : Math.max(0, n); }
+                if (config.enableSummaryOnly === true) return 0;
             }
         } catch(e) {}
-        return false;
+        return 10;
     }
+    win.OS_APP_CTX_MSGS = getAppCtxMsgs;   // PWA 那條路(os_api_engine)共用同一份判讀，別各寫一份
 
     // --- 1. 監聽器 (用戶列表) ---
     win.addEventListener('message', async (event) => {
@@ -178,8 +183,12 @@
 
                         // 🔥 第二步：摘要過濾 (Summary Logic)
                         // skipSummary: true 時跳過此步驟（供 VN 等需要完整原文的面板使用）
-                        const useSummary = !options.skipSummary && getSummaryConfig();
+                        //   以前是「全開/全關」：開了就每一則都砍成摘要，關了就整本全吃(這條路本來沒有任何上限)。
+                        //   改成跟劇情面板同一套：最近 N 則留全文、更舊的才縮摘要。
+                        const _keepN = options.skipSummary ? null : getAppCtxMsgs();
+                        const useSummary = _keepN !== null;
                         if (useSummary) {
+                            const _cut = messages.length - _keepN;   // 這個索引之前的才轉摘要
                             // 摘要標記走 VN_READER 那份唯一真相：Rae 會照別家 preset 把標籤改成
                             //   <meow_FM>/<draft> 之類，寫死 <summary> 的話這個開關會安靜地完全沒作用。
                             const _sumOf = (t) => {
@@ -188,7 +197,8 @@
                                 const m = String(t || '').match(/<summary>([\s\S]*?)<\/summary>/i);
                                 return m ? m[1].trim() : '';
                             };
-                            messages = messages.map(msg => {
+                            messages = messages.map((msg, i) => {
+                                if (i >= _cut) return msg;               // 最近 N 則原樣保留
                                 let newMsg = { ...msg };
                                 let rawContent = newMsg.mes || newMsg.message || newMsg.content || "";
                                 const summaryText = _sumOf(rawContent);
@@ -199,7 +209,7 @@
                                 }
                                 return newMsg;
                             });
-                            console.log(`[PhoneOS] 已處理 ${messages.length} 條訊息 (含 Hidden 過濾 & Summary)`);
+                            console.log(`[PhoneOS] 已處理 ${messages.length} 條訊息（Hidden 過濾＋最近 ${_keepN} 則留全文，更舊的縮摘要）`);
                         }
                     }
                 }
