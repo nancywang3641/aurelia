@@ -1005,16 +1005,18 @@
 
                     </div>
                     
-                    <button id="qb-greet-prev-btn" style="position:absolute;left:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">◀</button>
-                    <button id="qb-greet-next-btn" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">▶</button>
                 </div>
 
                 <div style="padding:10px 16px 14px;border-top:1px solid var(--qbk-line);
                             background:rgba(0,0,0,0.4);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:10px;">
                     
-                    <div id="qb-greet-dots" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:80%;">
+                    <div style="display:flex;align-items:center;justify-content:center;gap:14px;width:100%;">
+                    <button id="qb-greet-prev-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;">◀</button>
+                    <div id="qb-greet-dots" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:70%;">
                         ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:#1A1C28;opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
                         <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:#4a9eff;opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
+                    </div>
+                    <button id="qb-greet-next-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;">▶</button>
                     </div>
 
                     <div style="width:100%;max-width:340px;position:relative;">
@@ -1235,8 +1237,9 @@
                 });
 
                 // 控制左右按鈕的顯示 (非觸控裝置輔助)
-                if (prevBtn) prevBtn.style.display = (currentSlide === 0) ? 'none' : 'flex';
-                if (nextBtn) nextBtn.style.display = (currentSlide === totalSlides - 1) ? 'none' : 'flex';
+                // 移到底部圓點列兩端後改用 visibility:位置留著,列才不會隨著到頭/到尾左右跳
+                if (prevBtn) prevBtn.style.visibility = (currentSlide === 0) ? 'hidden' : 'visible';
+                if (nextBtn) nextBtn.style.visibility = (currentSlide === totalSlides - 1) ? 'hidden' : 'visible';
             }
 
             // 綁定點擊按鈕切換
