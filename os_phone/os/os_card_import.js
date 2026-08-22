@@ -173,14 +173,29 @@
         };
 
         // Upsert：同一 worldId 只保留最新一筆，避免重複匯入產生多本書
+        // 重複匯入＝就地更新，不整顆換掉：
+        //   ① 蓋掉整顆會把這本書後來長出來的東西（擴充館藏、追蹤欄位範本、立繪模式…）一起洗掉
+        //   ② 開場白被改過就留她那份 —— 卡片自帶的那幾則永遠回得來，她改過的字回不來
+        //   （為了讓舊書吃到自帶正則，重新匯入同一張卡是唯一的路，這條路不能順手弄丟東西）
+        function _mergeWorld(prev) {
+            if (!prev) return newWorld;
+            const merged = Object.assign({}, prev, newWorld);
+            if (Array.isArray(prev.greetings) && prev.greetings.length) {
+                merged.greetings = prev.greetings;
+                console.log('[CardImport] 這本書已經有 ' + prev.greetings.length + ' 則開場白（可能被你改過）→ 保留，不用卡片自帶的覆蓋');
+            }
+            if (!newWorld.cover && prev.cover) merged.cover = prev.cover;
+            return merged;
+        }
+
         if (!win.AURELIA_CUSTOM_WORLDS) win.AURELIA_CUSTOM_WORLDS = [];
         const existingIdx = win.AURELIA_CUSTOM_WORLDS.findIndex(w => w.id === worldId);
-        if (existingIdx >= 0) win.AURELIA_CUSTOM_WORLDS[existingIdx] = newWorld;
+        if (existingIdx >= 0) win.AURELIA_CUSTOM_WORLDS[existingIdx] = _mergeWorld(win.AURELIA_CUSTOM_WORLDS[existingIdx]);
         else win.AURELIA_CUSTOM_WORLDS.push(newWorld);
         try {
             const saved    = JSON.parse(localStorage.getItem('aurelia_custom_worlds') || '[]');
             const savedIdx = saved.findIndex(w => w.id === worldId);
-            if (savedIdx >= 0) saved[savedIdx] = newWorld; else saved.push(newWorld);
+            if (savedIdx >= 0) saved[savedIdx] = _mergeWorld(saved[savedIdx]); else saved.push(newWorld);
             localStorage.setItem('aurelia_custom_worlds', JSON.stringify(saved));
         } catch (e) { console.warn('[CardImport] localStorage 寫入失敗', e); }
 
