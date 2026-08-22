@@ -416,6 +416,9 @@
                 <button class="vrd-back-btn" onclick="window.VN_READER._backToCards()"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> 返回章節</button>
                 <span class="vrd-detail-title">CH.${String(i+1).padStart(2,'0')}　${esc(ch.title || '')}</span>
                 <button class="vn-reader-act-btn" onclick="window.VN_READER._toggle('${id}',this)"><i class="fa-solid fa-code" aria-hidden="true"></i> 原始文字</button>
+                ${_isTavernMode() ? '' : `
+                <button class="vn-reader-act-btn" onclick="window.VN_READER._editChapter(${i})" title="改這章的內容"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+                <button class="vn-reader-act-btn danger" onclick="window.VN_READER._deleteChapter(${i})" title="刪掉這章"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>`}
             </div>
             <div class="vrd-detail-time">${ts}</div>
             ${userBlock}
@@ -439,6 +442,115 @@
     }
     function _backToCards() {
         if (_readerBody && _readerSorted.length) _renderChapters(_readerSorted, _readerBody);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // 章節的改／刪 + 連動回朔（獨立版）
+    // ──────────────────────────────────────────────────────────────
+    // 酒館的回朔是掛在 MESSAGE_DELETED / SWIPED / EDITED 上的：刪一則就砍對應 patch、重算狀態、
+    // 對帳人物檔案與記憶。PWA 沒有那些事件（index.html 的 eventOn 是空 stub），正文也不是聊天樓
+    // 而是 OS_DB 章節 → 這裡直接把那條連動線寫成呼叫鏈，改/刪的入口都走這兩支，別各自處理。
+    //
+    // 三樣要跟著動的東西：
+    //   ① AVS 狀態：章節上存著 avsStateBefore（這章開始前的完整狀態）→ 以「被動到那章的 before」
+    //      為底，把它之後每一章的 <vars> 重放一次。底本之前的手動改值因此完整保留。
+    //   ② 向量記憶：按 chapterId 精準刪（PWA 的 chapterId 是字串 id，不是酒館的樓層位置）。
+    //   ③ NPC 人物檔案：以「還活著的章節正文」為底本重掃 [Char|]，人沒了檔案與登場帳一起清 ——
+    //      不清的話名冊每輪都對主模型下「嚴禁當新角色」，被刪掉的角色下一輪原樣復活。
+    // ══════════════════════════════════════════════════════════════
+    function _sid() {
+        try { const s = win.OS_AVS_ADAPTER?.getStoryId?.(); if (s) return String(s); } catch (e) {}
+        return localStorage.getItem('vn_current_story_id') || '';
+    }
+    async function _storyChapters() {
+        const all = (await win.OS_DB?.getAllVnChapters?.()) || [];
+        const sid = _sid();
+        return (sid ? all.filter(c => c.storyId === sid) : all.filter(c => !c.storyId))
+            .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 舊 → 新
+    }
+    function _varsOf(content) {
+        const m = String(content || '').match(/<vars>([\s\S]*?)<\/vars>/i);
+        return m ? m[1] : '';
+    }
+
+    // 以 chapters[baseIdx].avsStateBefore 當底，重放 applyFrom..結尾 的 <vars>。
+    //   刪章時 baseIdx 是「被刪那章」（它的 before 就是要退回去的點），applyFrom 從下一章起 ——
+    //   兩個索引分開才對，合成一個的話會把剛刪掉那章的 <vars> 又算一次。
+    async function _replayAvs(chapters, baseIdx, applyFrom) {
+        const E = win._AVS_ENGINE;
+        const base = chapters[baseIdx]?.avsStateBefore;
+        if (!E?.write || !E?.apply) return { ok: false, why: 'AVS 引擎未載入' };
+        if (!base || typeof base !== 'object') return { ok: false, why: '這章沒有存開始時的數值（舊章節）' };
+        E.write(JSON.parse(JSON.stringify(base)));
+        let n = 0;
+        const from = (applyFrom == null ? baseIdx : applyFrom);
+        for (let i = from; i < chapters.length; i++) {
+            const ch = chapters[i];
+            // 🚨 每章的 avsStateBefore 也要跟著改寫：它是「這章開始前的數值」，前面少了一章之後
+            //    原本存的那份就是舊的了。不改的話下次拿它當底本重算會退回一個不存在的狀態。
+            //    silent 寫入：正文沒動，別觸發向量抽取與人物檔案建檔。
+            try {
+                const now = E.read ? E.read() : null;
+                if (now && JSON.stringify(now) !== JSON.stringify(ch.avsStateBefore || null)) {
+                    ch.avsStateBefore = JSON.parse(JSON.stringify(now));
+                    await win.OS_DB?.saveVnChapter?.(ch, { silent: true });
+                }
+            } catch (e) { console.warn('[VN Reader] 回寫章節數值基準失敗:', e); }
+
+            const inner = _varsOf(ch.content);
+            if (!inner.trim()) continue;
+            try { E.apply(inner, { noSnapshot: true }); n++; } catch (e) { console.warn('[VN Reader] 重放 <vars> 失敗:', e); }
+        }
+        return { ok: true, replayed: n };
+    }
+
+    async function _reconcileSide(alive) {
+        try { await win.OS_NPC_DOSSIER?.reconcile?.('章節改刪', alive.map(c => String(c.content || ''))); }
+        catch (e) { console.warn('[VN Reader] 人物檔案對帳失敗:', e); }
+    }
+
+    async function deleteChapter(id) {
+        if (!id || !win.OS_DB?.deleteVnChapter) return { ok: false, why: '沒有可刪的章節' };
+        const chs = await _storyChapters();
+        const idx = chs.findIndex(c => c.id === id);
+        if (idx < 0) return { ok: false, why: '找不到這一章' };
+        const sid = _sid();
+
+        await win.OS_DB.deleteVnChapter(id);
+        try { await win.OS_DB.deleteVnMemoriesByChapter?.(id, sid); } catch (e) { console.warn('[VN Reader] 記憶清理失敗:', e); }
+
+        // 重放要用「被刪那章的 before」當底，但它已經不在名單裡 → 拿刪除前的完整名單，
+        // 底本索引 idx、重放範圍是 idx+1 之後（＝跳過被刪的那章本身）
+        const kept = chs.slice(0, idx).concat(chs.slice(idx + 1));
+        const avs = await _replayAvs(chs, idx, idx + 1);
+        await _reconcileSide(kept);
+        console.log(`[VN Reader] 刪除章節 ${id}｜AVS ${avs.ok ? '已重算（重放 ' + avs.replayed + ' 章）' : '未動（' + avs.why + '）'}`);
+        return { ok: true, avs };
+    }
+
+    async function updateChapter(id, newContent) {
+        if (!id || !win.OS_DB?.saveVnChapter) return { ok: false, why: '存不了' };
+        const chs = await _storyChapters();
+        const idx = chs.findIndex(c => c.id === id);
+        if (idx < 0) return { ok: false, why: '找不到這一章' };
+        const sid = _sid();
+        const old = chs[idx];
+        const varsChanged = _varsOf(old.content) !== _varsOf(newContent);
+
+        const next = { ...old, content: String(newContent) };
+        delete next._plain; delete next._sum;                 // 閱讀器的純文字/摘要快取跟著失效
+        await win.OS_DB.saveVnChapter(next);
+        chs[idx] = next;
+
+        // 這章的記憶是依舊文抽的 → 先清掉。重抽不用自己叫：saveVnChapter 會發 VN_CHAPTER_SAVED，
+        // 向量引擎與人物檔案都接那個訊號（引擎沒開就只是清乾淨，不會留下對不上正文的舊記憶）。
+        try { await win.OS_DB.deleteVnMemoriesByChapter?.(id, sid); }
+        catch (e) { console.warn('[VN Reader] 記憶清理失敗:', e); }
+
+        const avs = varsChanged ? await _replayAvs(chs, idx, idx) : { ok: true, replayed: 0, skipped: true };
+        await _reconcileSide(chs);
+        console.log(`[VN Reader] 更新章節 ${id}｜<vars> ${varsChanged ? '有變 → AVS 重算' : '沒變 → AVS 不動'}`);
+        return { ok: true, avs };
     }
 
     // ── 公開 API ──────────────────────────────────────────────────
@@ -561,6 +673,70 @@
         // 章節選擇卡片 → 看全文 / 返回章節
         _openChapter,
         _backToCards,
+
+        // ── 改／刪（獨立版；資料層連動見上方 deleteChapter / updateChapter）──────
+        deleteChapter, updateChapter,
+
+        _editChapter(i) {
+            const ch = _readerSorted[i];
+            const body = _readerBody || document.getElementById('vn-reader-sa-body');
+            if (!ch || !body) return;
+            if (document.getElementById('vrd-edit-ta')) return;   // 已經在編輯了
+            const wrap = document.createElement('div');
+            wrap.className = 'vrd-edit';
+            wrap.id = 'vrd-edit-wrap';
+            wrap.innerHTML = `
+                <div class="vrd-edit-hint">改的是原始文字。動到 &lt;vars&gt; 那段，這章之後的數值會跟著重算。</div>
+                <textarea class="vrd-edit-ta" id="vrd-edit-ta" spellcheck="false"></textarea>
+                <div class="vrd-edit-bar">
+                    <button class="vrd-back-btn" onclick="window.VN_READER._editCancel()">取消</button>
+                    <button class="vrd-back-btn primary" onclick="window.VN_READER._editSave(${i})"><i class="fa-solid fa-check" aria-hidden="true"></i> 儲存</button>
+                </div>`;
+            body.appendChild(wrap);
+            const ta = wrap.querySelector('#vrd-edit-ta');
+            ta.value = ch.content || '';
+            body.querySelectorAll('.vn-reader-bubble').forEach(el => el.classList.add('hidden'));
+            ta.focus();
+        },
+        _editCancel() {
+            document.getElementById('vrd-edit-wrap')?.remove();
+            const body = _readerBody || document.getElementById('vn-reader-sa-body');
+            if (!body) return;
+            // 先全部解除隱藏，再照「小說/原始」那顆的狀態(.active)重新套一次 —— 退出編輯要回到
+            // 進來之前的樣子。留一顆 .hidden 在 raw-view 上的話，之後按「原始文字」會沒反應。
+            body.querySelectorAll('.vn-reader-bubble').forEach(el => el.classList.remove('hidden'));
+            const raw = body.querySelector('.vn-reader-bubble.raw-view');
+            const novel = body.querySelector('.vn-reader-bubble.novel-view');
+            if (raw && novel) novel.classList.toggle('hidden', raw.classList.contains('active'));
+        },
+        async _editSave(i) {
+            const ch = _readerSorted[i];
+            const ta = document.getElementById('vrd-edit-ta');
+            if (!ch || !ta) return;
+            const btnBar = document.querySelector('#vrd-edit-wrap .vrd-edit-bar');
+            if (btnBar) btnBar.classList.add('busy');
+            const r = await updateChapter(ch.id, ta.value);
+            if (!r.ok) { alert('存不進去：' + (r.why || '未知原因')); if (btnBar) btnBar.classList.remove('busy'); return; }
+            ch.content = ta.value; delete ch._plain; delete ch._sum;
+            if (r.avs && r.avs.ok === false && !r.avs.skipped) {
+                alert('內容已存起來。這章沒有留下開始時的數值（舊章節），所以數值沒有重算。');
+            }
+            this._editCancel();
+            _openChapter(i);
+        },
+        async _deleteChapter(i) {
+            const ch = _readerSorted[i];
+            if (!ch) return;
+            if (!confirm(`刪掉「${ch.title || '這一章'}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
+            const r = await deleteChapter(ch.id);
+            if (!r.ok) { alert('刪不掉：' + (r.why || '未知原因')); return; }
+            _readerSorted.splice(i, 1);
+            if (_readerSorted.length) _renderChapters(_readerSorted, _readerBody || document.getElementById('vn-reader-sa-body'));
+            else {
+                const body = _readerBody || document.getElementById('vn-reader-sa-body');
+                if (body) body.innerHTML = '<div class="vrd-empty">這本已經沒有章節了</div>';
+            }
+        },
 
     };
 

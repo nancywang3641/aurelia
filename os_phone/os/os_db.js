@@ -952,7 +952,10 @@
 
     // --- VN 與其他系統 (維持原樣) ---
     Object.assign(win.OS_DB, {
-        saveVnChapter: async function(chapter) {
+        // opts.silent：不發 VN_CHAPTER_SAVED。給「只改章節附帶欄位、正文沒動」的批次寫入用
+        //   （例如改/刪章之後回頭修正每章的 avsStateBefore）——不擋的話每寫一章就觸發一次
+        //   向量抽取與人物檔案建檔，重算十幾章＝十幾通副模型。
+        saveVnChapter: async function(chapter, opts) {
             const db = await this.init();
             return new Promise((r, j) => {
                 try {
@@ -962,9 +965,11 @@
                     const tx = db.transaction(STORE_NAME_VN_CHAPTERS, 'readwrite');
                     tx.objectStore(STORE_NAME_VN_CHAPTERS).put(chapter);
                     tx.oncomplete = () => {
-                        win.dispatchEvent(new CustomEvent('VN_CHAPTER_SAVED', { detail: {
-                            id: chapter.id, storyId: chapter.storyId, content: chapter.content
-                        }}));
+                        if (!opts || !opts.silent) {
+                            win.dispatchEvent(new CustomEvent('VN_CHAPTER_SAVED', { detail: {
+                                id: chapter.id, storyId: chapter.storyId, content: chapter.content
+                            }}));
+                        }
                         r(chapter.id);
                     };
                 } catch(e) { j(e); }
