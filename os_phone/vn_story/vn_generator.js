@@ -43,6 +43,10 @@
     //  生成中的遮罩。以前它掛在生成面板內部 —— 面板不在，就完全沒有進度可看；
     //  現在掛在 VN 頁本身，跟你從哪個入口進來無關。
     function _diveLoading(w, greeting, userReply) {
+        // 🚨 #page-game 在模板裡預設 class="page hidden"，沒 switchPage 就是隱藏的。
+        //    遮罩掛進一個隱藏的頁＝什麼都看不到，畫面就是一片黑（Rae 看到的「黑屏沒 loading」）。
+        //    先揭開這一頁，等一下生成完成的 switchPage 只是重複做一次，無害。
+        try { window.VN_PLAYER?.switchPage?.('page-game'); } catch (e) { }
         const host = document.getElementById('page-game') || document.body;
         const old = document.getElementById('vn-dive-loading');
         if (old) old.remove();
