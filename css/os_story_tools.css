@@ -139,3 +139,13 @@
 }
 .ost-modal-btns { display: flex; gap: 10px; margin-top: 16px; }
 .ost-modal-btns .ost-btn { flex: 1; text-align: center; }
+
+/* ───── 獨立版故事管理：大總結內容編輯 ───── */
+.ost-sa-text {
+    width: 100%; box-sizing: border-box; min-height: 240px; resize: vertical;
+    background: #fffdfa; border: 1px solid #e8d8c0; border-radius: 10px;
+    color: #5c4a3d; padding: 12px 14px; margin-bottom: 10px;
+    font-family: 'Consolas','Monaco',monospace; font-size: 12.5px; line-height: 1.75;
+    outline: none; white-space: pre-wrap; word-break: break-word;
+}
+.ost-sa-text:focus { border-color: #e0a0b0; }

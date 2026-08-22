@@ -1247,10 +1247,70 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         while (wrap.firstElementChild) document.body.appendChild(wrap.firstElementChild);
     }
 
+    // ── PWA 版故事管理：跟酒館同一個入口(故事日誌的書籤 / CTX 快捷)，內容換成獨立版自己的 ──
+    //   酒館那套的生成靠 TavernHelper 讀樓層、隱藏對話靠斜線指令，PWA 兩樣都沒有 → 開起來是空轉。
+    //   PWA 的大總結在 vn_grand_summaries(by storyId)，生成走 VN_Summary.generate 的滾動合併。
+    async function _openPanelStandalone(container) {
+        const ov = document.createElement('div');
+        ov.className = 'ost-overlay';
+        ov.id = 'ost-panel';
+        const sid = getChatIdentifier();
+        let list = [];
+        try { list = (await win.OS_DB?.getGrandSummaries?.(sid)) || []; } catch (e) {}
+        const latest = list.length ? list.reduce((a, b) => ((a.count || 0) >= (b.count || 0) ? a : b)) : null;
+        const ts = latest && latest.timestamp ? new Date(latest.timestamp).toLocaleString('zh-TW') : '';
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        ov.innerHTML = `
+            <div class="ost-card">
+                <div class="ost-head">
+                    <span class="ost-title">🛠️ 故事管理</span>
+                    <button class="ost-close" title="關閉">✕</button>
+                </div>
+                <div class="ost-body">
+                    <div class="ost-section">
+                        <div class="ost-section-title">📝 大總結</div>
+                        <div class="ost-note">${latest
+                            ? `目前是第 ${latest.count} 次，涵蓋 ${(latest.coveredChapterIds || []).length} 章${ts ? '　·　' + esc(ts) : ''}`
+                            : '還沒有大總結。玩幾章之後按下面那顆，系統會把劇情壓成一份長期記憶。'}</div>
+                        <button class="ost-btn ost-btn-primary" id="ost-sa-gen">📝 生成 / 更新大總結</button>
+                        <div class="ost-hint">拿上一版當底稿，只把「上次之後的新章節」合併進去</div>
+                    </div>
+                    ${latest ? `
+                    <div class="ost-section">
+                        <div class="ost-section-title">✏️ 內容</div>
+                        <textarea id="ost-sa-text" class="ost-sa-text" spellcheck="false">${esc(latest.content)}</textarea>
+                        <button class="ost-btn" id="ost-sa-save">💾 儲存修改</button>
+                        <div class="ost-hint">改完存回去，下一輪劇情就照新的走</div>
+                    </div>` : ''}
+                </div>
+            </div>`;
+        container.appendChild(ov);
+        ov.querySelector('.ost-close').onclick = () => API.closePanel();
+        ov.addEventListener('click', (e) => { if (e.target === ov) API.closePanel(); });
+        const gen = ov.querySelector('#ost-sa-gen');
+        if (gen) gen.onclick = () => {
+            const S = win.VN_Summary || window.VN_Summary;
+            if (!S?.generate) { alert('大總結模組尚未載入'); return; }
+            API.closePanel();
+            S.generate();
+        };
+        const sv = ov.querySelector('#ost-sa-save');
+        if (sv) sv.onclick = async () => {
+            const ta = ov.querySelector('#ost-sa-text');
+            if (!ta || !latest) return;
+            try {
+                await win.OS_DB?.saveGrandSummary({ ...latest, content: ta.value });
+                const o = sv.textContent; sv.textContent = '✓ 已儲存';
+                setTimeout(() => { sv.textContent = o; }, 1400);
+            } catch (e) { alert('儲存失敗：' + (e.message || e)); }
+        };
+    }
+
     API.openPanel = function (container) {
         if (!container) return;
         _ensureSubModals();
         API.closePanel();
+        if (_isStandalone()) { _openPanelStandalone(container); return; }
         const ov = document.createElement('div');
         ov.className = 'ost-overlay';
         ov.id = 'ost-panel';

@@ -40,8 +40,6 @@
                             font-family:'Playfair Display','Noto Serif TC',serif;">
                     <i class="fa-solid fa-book-open vrd-hd-ico"></i> 劇情閱讀器</div>
                 <div style="display:flex;align-items:center;gap:10px;">
-                    <div id="vn-reader-sa-summary-btn" class="vrd-hd-btn">
-                        <i class="fa-solid fa-file-lines"></i> 大總結</div>
                     <div id="vn-reader-sa-close" class="vrd-hd-icobtn vrd-hd-close">
                         <i class="fa-solid fa-xmark"></i></div>
                 </div>
@@ -59,17 +57,12 @@
         container.appendChild(_overlay);
 
         _overlay.querySelector('#vn-reader-sa-close').onclick        = () => VN_READER.hide();
-        _overlay.querySelector('#vn-reader-sa-summary-btn').onclick  = () => VN_READER.showSummaryEditor();
 
         return _overlay;
     }
 
-    // 大總結鈕只在 PWA 顯示：這顆讀的是 vn_grand_summaries(by storyId)，
-    // 酒館跑團的總結存在 tavern_summary(by chatId)、要在故事日誌看 → 酒館入口顯示會拿到別套資料。
-    function _syncSummaryBtn(overlay) {
-        const btn = overlay && overlay.querySelector('#vn-reader-sa-summary-btn');
-        if (btn) btn.style.display = _isTavernMode() ? 'none' : '';
-    }
+    // ⛔ 閱讀器的「大總結」鈕已移除：大總結收斂到「故事日誌 → 故事管理」一處(CTX 那顆是快捷)，
+    //    閱讀器專心當正文檢視層。兩版都一樣，不再一邊一個入口。
 
     // ── 章節摘要標記（換 PRESET 後摘要格式會變，讓使用者自己填）──────
     const SUM_OPEN_KEY  = 'vn_reader_sum_open';
@@ -466,7 +459,6 @@
         async show(mountInto) {
             const overlay = _ensureDOM(mountInto);
             overlay.style.display = 'flex';
-            _syncSummaryBtn(overlay);
 
             const body   = overlay.querySelector('#vn-reader-sa-body');
             const tabsEl = overlay.querySelector('#vn-reader-sa-tabs');
@@ -540,96 +532,8 @@
             if (_overlay) _overlay.style.display = 'none';
         },
 
-        // ── 大總結編輯器 ──────────────────────────────────────────
-        async showSummaryEditor() {
-            if (_isTavernMode()) return;   // 酒館版總結不在這套；鈕已隱藏，擋掉舊 DOM 的殘留呼叫
-            const overlay = _ensureDOM();
-            const body    = overlay.querySelector('#vn-reader-sa-body');
-            const tabsEl  = overlay.querySelector('#vn-reader-sa-tabs');
-            if (!body) return;
-
-            body._prevHtml   = body.innerHTML;
-            body._prevScroll = body.scrollTop;
-            if (tabsEl) { body._prevTabsDisplay = tabsEl.style.display; tabsEl.style.display = 'none'; }
-
-            body.innerHTML = '<div style="padding:20px;color:#555;font-size:0.85rem;">載入大總結中...</div>';
-
-            const storyId = _activeStoryId || localStorage.getItem('vn_current_story_id') || '';
-            let summaries = [];
-            try {
-                if (win.OS_DB?.getGrandSummaries) summaries = await win.OS_DB.getGrandSummaries(storyId);
-            } catch(e) {}
-
-            if (!summaries.length) {
-                body.innerHTML = `
-                    <div style="display:flex;flex-direction:column;height:100%;padding:20px;box-sizing:border-box;">
-                        <div style="color:#555;font-size:0.85rem;margin-bottom:16px;">尚無大總結記錄。Token 達 70% 時可在 CTX 彈窗中生成。</div>
-                        <button onclick="window.VN_READER.hideSummaryEditor()"
-                            style="align-self:flex-start;background:transparent;border:1px solid rgba(212,175,55,0.25);
-                                   color:#888;padding:6px 16px;border-radius:4px;cursor:pointer;font-size:0.82rem;">← 返回閱讀器</button>
-                    </div>`;
-                return;
-            }
-
-            const latest = summaries.reduce((a, b) => (a.count >= b.count ? a : b));
-            body._summaryEntry = latest;
-
-            const ts = latest.timestamp ? new Date(latest.timestamp).toLocaleString('zh-TW') : '';
-            body.innerHTML = `
-                <div style="display:flex;flex-direction:column;height:100%;padding:16px;box-sizing:border-box;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                        <div style="color:#d4af37;font-size:0.82rem;letter-spacing:1px;">
-                            📝 大總結（第 ${latest.count} 次）
-                            <span style="color:#555;font-size:0.75rem;margin-left:8px;">${ts}</span>
-                        </div>
-                        <div style="color:#555;font-size:0.72rem;">覆蓋 ${(latest.coveredChapterIds||[]).length} 章</div>
-                    </div>
-                    <textarea id="vn-reader-sa-summary-area"
-                        style="flex:1;width:100%;background:rgba(255,255,255,0.04);
-                               border:1px solid rgba(212,175,55,0.18);color:#e8dfc8;
-                               padding:12px;border-radius:6px;font-family:monospace;
-                               font-size:0.78rem;resize:none;line-height:1.6;
-                               box-sizing:border-box;outline:none;"
-                        spellcheck="false">${esc(latest.content)}</textarea>
-                    <div style="display:flex;gap:8px;margin-top:12px;flex-shrink:0;">
-                        <button onclick="window.VN_READER.hideSummaryEditor()"
-                            style="background:transparent;border:1px solid rgba(255,255,255,0.12);color:#888;
-                                   padding:7px 18px;border-radius:4px;cursor:pointer;font-size:0.82rem;">← 返回</button>
-                        <button onclick="window.VN_READER.saveSummaryEdit()"
-                            style="background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.35);
-                                   color:#d4af37;padding:7px 18px;border-radius:4px;
-                                   cursor:pointer;font-size:0.82rem;flex:1;">💾 儲存修改</button>
-                    </div>
-                </div>`;
-        },
-
-        hideSummaryEditor() {
-            const body   = _overlay?.querySelector('#vn-reader-sa-body');
-            const tabsEl = _overlay?.querySelector('#vn-reader-sa-tabs');
-            if (!body) return;
-            if (body._prevHtml !== undefined) {
-                body.innerHTML   = body._prevHtml;
-                body.scrollTop   = body._prevScroll || 0;
-            }
-            if (tabsEl && body._prevTabsDisplay !== undefined) tabsEl.style.display = body._prevTabsDisplay;
-        },
-
-        async saveSummaryEdit() {
-            const body     = _overlay?.querySelector('#vn-reader-sa-body');
-            const textarea = document.getElementById('vn-reader-sa-summary-area');
-            if (!textarea || !body?._summaryEntry) return;
-            const entry = { ...body._summaryEntry, content: textarea.value };
-            try {
-                await win.OS_DB?.saveGrandSummary(entry);
-                const saveBtn = textarea.closest('div').nextElementSibling?.querySelector('button:last-child');
-                if (saveBtn) {
-                    const orig = saveBtn.textContent;
-                    saveBtn.textContent = '✓ 已儲存';
-                    setTimeout(() => { saveBtn.textContent = orig; }, 1500);
-                }
-                body._summaryEntry = entry;
-            } catch(e) { alert('儲存失敗: ' + (e.message || e)); }
-        },
+        // ⛔ 大總結的檢視/編輯已搬到「故事日誌 → 故事管理」(os_story_tools 的獨立版分支)：
+        //    以前 CTX、這裡、VN 內建舊閱讀器三個地方各有一顆大總結鈕，改成一處。
 
         // ⛔ 閱讀器設置已搬到「劇情設置 → 摘要標記」，跟「保留最近幾章全文」放在一起：
         //    那兩格是同一件事的兩半(一個定義摘要長怎樣、一個決定何時用摘要)，分兩個地方找不到。
