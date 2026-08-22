@@ -91,6 +91,16 @@
         } catch (e) { return null; }
     }
 
+    // 🚨 玩「匯入的角色卡」時，世界門那邊本來就沒有世界 → _currentWorld() 回 null。
+    //    照 planFor(null) 會當成「人在奧瑞亞大廳(現代)」：開手機那組、BGM 換現代一般、
+    //    把武俠/奇幻那條關掉 —— 玩古代卡整組被翻掉，而且手動撥回來、重整又被翻一次。
+    //    酒館分支早有 _isAurelia() 擋這件事（註解寫得很清楚），PWA 這邊漏了 ——
+    //    當初「PWA 整個就是奧瑞亞、不會有別人的卡」的前提，在角色卡可以匯入之後就不成立了。
+    function _onCardStory() {
+        try { return /^world_card_/.test(String(localStorage.getItem('vn_current_world_id') || '')); }
+        catch (e) { return false; }
+    }
+
     let _syncing = false;
 
     function _isStandalone() {
@@ -156,6 +166,11 @@
             if (!_all.length) return;
         } catch (e) { return; }
         const world = await _currentWorld();
+        // 角色卡的故事沒有題材可判 → 一條都不碰，尊重她自己撥的開關
+        if (!world && _onCardStory()) {
+            console.log('🌍 [World Rules] 角色卡故事、沒有世界門世界 → 一條都不碰（獨立版・' + reason + '）');
+            return;
+        }
         const plan = planFor(world);
         const r = await WB.setEnabledByTitle(plan.managed, plan.on);
         if (!r.seen.length) {
