@@ -918,7 +918,7 @@
                             display:flex;align-items:center;justify-content:space-between;
                             background:rgba(0,0,0,0.3);flex-shrink:0;">
                     <div style="font-size:14px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">${_escHtml(w.title)}</div>
-                    <button id="qb-toc-close" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+                    <button id="qb-toc-close" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
                 </div>
                 <div class="qb-toc-body" id="qb-toc-body">
                     <div class="qb-toc-new">
@@ -947,8 +947,7 @@
                         <button id="qb-greet-replace-btn" class="qb-btn-ghost" title="文字取代">取代</button>
                         <button id="qb-inner-close" style="
                             background:none;border:none;color:var(--qbk-ink);
-                            font-size:24px;cursor:pointer;line-height:1;padding:0 5px;"
-                            onmouseover="this.style.color='var(--qbk-ink)'" onmouseout="this.style.color='var(--qbk-ink)'">×</button>
+                            font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
                     </div>
                 </div>
 
@@ -1024,18 +1023,28 @@
                     <button id="qb-greet-next-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;">▶</button>
                     </div>
 
-                    <div style="width:100%;max-width:340px;position:relative;">
-                        <textarea id="qb-user-reply" rows="1" placeholder="你的第一句回應（可留空）" style="
-                            width:100%;box-sizing:border-box;
-                            background:rgba(0,0,0,0.45);border:1px solid var(--qbk-line);
-                            border-radius:8px;color:var(--qbk-ink);font-size:13px;line-height:1.6;
-                            padding:8px 12px;resize:none;font-family:inherit;outline:none;
-                            transition:border-color 0.2s;scrollbar-width:none;"
-                            onfocus="this.style.borderColor='rgba(239,227,208,0.34)'"
-                            onblur="this.style.borderColor='rgba(239,227,208,0.34)'"></textarea>
-                    </div>
+                    <button id="qb-goto-embark-btn" class="qb-btn-primary" data-wid="${w.id}">與TA相遇</button>
+                </div>
 
-                    <button class="qb-dive-world-btn qb-btn-primary" data-wid="${w.id}">與TA相遇</button>
+                <!-- ✍️ 啟程：第一句回應自己一幕（跟酒館版同一個心智模型），不再跟開場白擠在同一頁 -->
+                <div id="qb-embark-view" style="display:none;position:absolute;inset:0;z-index:25;background:rgba(20,12,8,0.98);flex-direction:column;">
+                    <div style="padding:10px 16px;border-bottom:1px solid var(--qbk-line);display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.3);flex-shrink:0;">
+                        <button id="qb-embark-back" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
+                        <div style="font-size:13px;font-weight:bold;color:var(--qbk-ink);letter-spacing:3px;">啟程</div>
+                        <span style="width:44px;"></span>
+                    </div>
+                    <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:14px 16px;box-sizing:border-box;">
+                        <div style="font-size:12px;color:var(--qbk-ink-dim);letter-spacing:1px;text-align:center;">寫下你踏入故事的第一步——行動、對白或心聲都可以，也可以留空</div>
+                        <textarea id="qb-user-reply" placeholder="在這裡寫下你的第一句…" style="
+                            flex:1;min-height:0;width:100%;box-sizing:border-box;
+                            background:rgba(0,0,0,0.45);border:1px solid var(--qbk-line);
+                            border-radius:8px;color:var(--qbk-ink);font-size:14px;line-height:1.8;
+                            padding:12px 14px;resize:none;font-family:inherit;outline:none;
+                            scrollbar-width:none;"></textarea>
+                    </div>
+                    <div style="padding:0 16px 16px;flex-shrink:0;">
+                        <button class="qb-dive-world-btn qb-btn-primary block" data-wid="${w.id}">與TA相遇</button>
+                    </div>
                 </div>
             </div>
             ` : ''}
@@ -1170,14 +1179,17 @@
             const openBtn  = panel.querySelector('#qb-toc-open-btn');
             if (!tocView || !openBtn) return;
 
+            const _shelfWin = () => document.getElementById('qb-bookshelf-overlay');
             const showToc = async () => {
                 coverView.style.display = 'none';
                 if (coverBack) coverBack.style.display = 'none';
                 tocView.style.display = 'flex';
+                _shelfWin()?.classList.add('qb-reading');    // 滿版+藏木框標題列:整層只留一顆返回
                 await _renderToc(w, panel);
             };
             const hideToc = () => {
                 tocView.style.display = 'none';
+                _shelfWin()?.classList.remove('qb-reading');
                 coverView.style.display = 'flex';
                 if (coverBack) coverBack.style.display = 'block';
             };
@@ -1194,6 +1206,17 @@
             const tocView   = panel.querySelector('#qb-toc-view');
 
             // 開啟內頁（現在是從目錄的「創建新篇章」進來）
+            // 「與TA相遇」→ 先進啟程幕寫第一句（真正 dive 的是啟程幕裡那顆，走既有 qb-dive-world-btn）
+            const embarkView = panel.querySelector('#qb-embark-view');
+            const gotoEmbark = panel.querySelector('#qb-goto-embark-btn');
+            if (embarkView && gotoEmbark) {
+                gotoEmbark.onclick = () => {
+                    embarkView.style.display = 'flex';
+                    setTimeout(() => { try { panel.querySelector('#qb-user-reply')?.focus(); } catch (e) { } }, 40);
+                };
+                panel.querySelector('#qb-embark-back').onclick = () => { embarkView.style.display = 'none'; };
+            }
+
             // 讀開場白時整個書架窗滿版、木框標題列退場（內容被上下兩層殼夾成一小條，看不下去）
             const _reading = (on) => {
                 try { document.getElementById('qb-bookshelf-overlay')?.classList.toggle('qb-reading', !!on); } catch (e) { }
@@ -1211,9 +1234,9 @@
             // 關閉內頁 → 退回目錄那一層（從哪裡進來就退回哪裡）
             panel.querySelector('#qb-inner-close').onclick = () => {
                 innerView.style.display = 'none';
-                _reading(false);
+                // 退回目錄：目錄現在也是滿版，滿版態要留著；只有退到書封才收回木框書架窗
                 if (tocView) { tocView.style.display = 'flex'; }
-                else { coverView.style.display = 'flex'; coverBack.style.display = 'block'; }
+                else { _reading(false); coverView.style.display = 'flex'; coverBack.style.display = 'block'; }
             };
 
             // 滑動核心邏輯
