@@ -697,7 +697,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-reader-think-wrap { width: 100%; margin-bottom: 6px; }
         .vn-reader-think-hd { display: flex; align-items: center; gap: 6px; padding: 5px 12px; background: rgba(80,80,160,0.12); border: 1px solid rgba(100,100,200,0.28); border-radius: 6px; cursor: pointer; font-size: 0.78rem; color: #b8b8e8; transition: background 0.2s; user-select: none; }
         .vn-reader-think-hd:hover { background: rgba(80,80,160,0.22); }
-        .rth-arrow { font-size: 0.55rem; transition: transform 0.22s; display: inline-block; }
+        .rth-arrow { font-size: 0.68rem; transition: transform 0.22s; display: inline-block; }
         .vn-reader-think-wrap.open .rth-arrow { transform: rotate(90deg); }
         .vn-reader-think-wrap.open .vn-reader-think-hd { border-radius: 6px 6px 0 0; }
         .vn-reader-think-body { display: none; padding: 10px 14px; background: rgba(20,20,40,0.85); border: 1px solid rgba(100,100,200,0.22); border-top: none; border-radius: 0 0 6px 6px; font-size: 0.78rem; color: #c8c8e8; line-height: 1.75; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2a2a4a transparent; }
