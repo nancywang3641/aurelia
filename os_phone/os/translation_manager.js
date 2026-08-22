@@ -220,6 +220,17 @@
                 return text;
             }
 
+            // 🚨 護欄：这里服务的是「生图 prompt」，正常撑死几十个标签。
+            //    一旦有人把整份人设/世界书条目丢进来（曾经发生过：主角 Persona 的自我介绍被当成外观词），
+            //    下面的逐段翻会把整篇拆成几十次请求 → 免费额度一轮打爆、console 被刷满、生图还得等它翻完。
+            //    → 超长直接截断，并把呼叫来源印出来，别再静静地烧额度。
+            const MAX_LEN = 600;
+            if (text.length > MAX_LEN) {
+                const src = (new Error().stack || '').split('\n').slice(2, 5).join(' | ');
+                logger.warn(`翻译文本过长（${text.length} 字）→ 只取前 ${MAX_LEN} 字。生图 prompt 不该这么长，请检查呼叫来源：${src}`);
+                text = text.slice(0, MAX_LEN);
+            }
+
             // 🏷️ 图片 prompt 是 booru 式标签串（英文标签 + 中文标签混排）。整串当中文丢给句子翻译器，中文段会被
             //    吃成空、只剩一排逗号（no characters, no people,,,,,,）——且英文前缀还活着，空值防呆抓不到。
             //    改逐段翻：英文标签原样留、只把含中文的段送去翻、翻不动就留中文（绝不留空）。
