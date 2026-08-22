@@ -100,6 +100,36 @@
             console.log(`[VN] 新故事線 ${id}（書：${worldId || '(自由劇情)'}）`);
             return id;
         },
+        // 🗑️ 刪掉一整條故事線（一個 storyId 底下的全部東西）。
+        //    書架的「歷史篇章」與 VN 的章節管理都走這支 —— 以前兩邊各清各的，
+        //    章節管理刪完沒清 vn_story_index，書架就還列著那條已經沒有內容的幽靈篇章。
+        //    優先用 OS_DB.deleteAllByChatId（章節/向量記憶/大總結/狀態/追蹤檔案/手機資料一次清，
+        //    PWA 的 chatId 就是 storyId）；拿不到那支才退回逐項刪。
+        deleteStoryLine: async function (sid) {
+            const id = String(sid || '').trim();
+            if (!id) return false;
+            const DB = win.OS_DB || window.OS_DB;
+            if (DB && typeof DB.deleteAllByChatId === 'function') {
+                try { await DB.deleteAllByChatId(id, { storyId: id }); }
+                catch (e) { console.warn('[VN] 整批清理失敗，改逐項刪:', e); }
+            } else {
+                try { await DB?.deleteVnChaptersByStoryId?.(id); } catch (e) { console.warn('[VN] 刪章節失敗:', e); }
+                try { await DB?.deleteVnMemoriesByStoryId?.(id); } catch (e) { console.warn('[VN] 清向量記憶失敗:', e); }
+                try { await DB?.deleteStateData?.(id); } catch (e) { console.warn('[VN] 清人物檔案失敗:', e); }
+            }
+            // AVS 的即時狀態與回朔快照住在 localStorage，DB 那邊清不到
+            try { localStorage.removeItem('avs_state_' + id); localStorage.removeItem('avs_snap_' + id); } catch (e) {}
+            // 書架「歷史篇章」的清單來源
+            try {
+                const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');
+                if (idx[id]) { delete idx[id]; localStorage.setItem('vn_story_index', JSON.stringify(idx)); }
+            } catch (e) {}
+            // 刪的就是正在玩的這條 → 放掉當前指標，免得下一輪寫進已經不存在的桶
+            if (this._currentStoryId === id) this._setStoryId('', '');
+            console.log(`[VN] 🗑️ 已刪除故事線：${id}`);
+            return true;
+        },
+
         // 正文吐出 [Story|標題] 之後只改顯示用的標題，id 不動
         renameStory: function(title) {
             const t = String(title || '').trim();

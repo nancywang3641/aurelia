@@ -774,12 +774,25 @@
         listEl.innerHTML = '';
         rows.forEach(r => {
             const when = r.last ? new Date(r.last).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-            const row = document.createElement('button');
+            const row = document.createElement('div');
             row.className = 'qb-toc-item' + (r.sid === cur ? ' now' : '');
-            row.innerHTML = `<span class="qb-toc-item-t">${_escHtml(r.title)}</span>
-                <span class="qb-toc-item-m">${r.n ? r.n + ' 章' : '尚未開始'}${when ? '　' + when : ''}</span>
-                ${r.sid === cur ? '<span class="qb-toc-now">進行中</span>' : ''}`;
-            row.onclick = () => _resumeStory(r, w, panel);
+            row.innerHTML = `<div class="qb-toc-item-main">
+                    <span class="qb-toc-item-t">${_escHtml(r.title)}</span>
+                    <span class="qb-toc-item-m">${r.n ? r.n + ' 章' : '尚未開始'}${when ? '　' + when : ''}</span>
+                    ${r.sid === cur ? '<span class="qb-toc-now">進行中</span>' : ''}
+                </div>
+                <button class="qb-toc-del" title="刪除這條篇章"><i class="fa-solid fa-trash"></i></button>`;
+            row.querySelector('.qb-toc-item-main').onclick = () => _resumeStory(r, w, panel);
+            row.querySelector('.qb-toc-del').onclick = async (ev) => {
+                ev.stopPropagation();
+                // 整條刪掉＝章節、記憶、人物檔案、追蹤數值全走；問清楚再動手
+                if (!confirm(`刪除篇章「${r.title}」？
+
+這條的章節、記憶、人物檔案與追蹤數值都會一起刪掉，救不回來。`)) return;
+                try { await window.VN_Core?.deleteStoryLine?.(r.sid); }
+                catch (e) { console.warn('[書架] 刪除篇章失敗:', e); alert('刪除失敗，請看 console'); return; }
+                await _renderToc(w, panel);
+            };
             listEl.appendChild(row);
         });
     }

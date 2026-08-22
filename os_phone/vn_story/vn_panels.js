@@ -708,21 +708,10 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
     const sid = group.storyId;
     if (!confirm(`確定刪除「${group.storyTitle}」的所有章節？\n（開場白預設不受影響）`)) return;
     if (sid) {
-        // 1. 刪除資料庫裡的章節
-        await win.OS_DB.deleteVnChaptersByStoryId(sid);
-
-        // ✨ 2. 新增這兩行：同步清除遺留在 localStorage 的 AVS 變數與回朔快照
-        localStorage.removeItem(`avs_state_${sid}`);
-        localStorage.removeItem(`avs_snap_${sid}`);
-
-        // 3. 整個故事沒了，掛在它身上的長期記憶也要跟著走，不然下一本書會被上一本的記憶餵。
-        //    向量記憶＝這條故事線的、狀態資料＝NPC 登場帳與人物檔案（跟章節同一把 storyId 分艙）。
-        try { await win.OS_DB.deleteVnMemoriesByStoryId?.(sid); } catch (e) { console.warn('[VN] 清向量記憶失敗:', e); }
-        try { await win.OS_DB.deleteStateData?.(sid); } catch (e) { console.warn('[VN] 清人物檔案失敗:', e); }
-
-        if (sid === window.VN_Core._currentStoryId) {
-            window.VN_Core._setStoryId('', '');
-        }
+        // 🚨 統一走 VN_Core.deleteStoryLine：章節、向量記憶、人物檔案、AVS 數值與快照、
+        //    書架「歷史篇章」的索引一次清乾淨。以前這裡只清了前面幾樣、沒動 vn_story_index，
+        //    於是從這邊刪掉的故事，書架那頭還列著一條打開來是空的幽靈篇章。
+        await window.VN_Core.deleteStoryLine(sid);
     } else {
         // 舊版無 storyId 資料，逐條刪除
         for (const ch of group.chapters) await win.OS_DB.deleteVnChapter(ch.id);
