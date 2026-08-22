@@ -310,7 +310,9 @@
                             }
                         }
 
-                        if (presetTitle) _saveGenPreset(presetTitle, request);
+                        // 🗑️ 這裡原本呼叫 _saveGenPreset()：拆生成面板那次(ede76f2)把定義刪了、呼叫漏刪，
+                        //    帶標題的 dive 一跑到這行就 ReferenceError → 後面的 switchPage / _startWithLoader
+                        //    全被中斷，畫面就停在白底。具名收藏現在由書架自己存（qb_bookshelf._savePreset）。
 
                         window.VN_Core._lastRawText = fullText;
                         if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
