@@ -63,6 +63,22 @@
                 <div id="scene-cg-overlay" onclick="window.VN_Core.next()"><img id="scene-cg-img" src="" alt="scene cg"><button id="scene-cg-retry" onclick="event.stopPropagation(); window.VN_Core.retrySceneCg()" title="重新生成這張插圖（不重跑劇情 AI，只重生圖）">🔄</button></div>
 
                 <div id="top-badge"></div>
+
+                <!-- 📖 章節卡（內建固定版型）：<ChapterCard> 每輪必出，這裡把它演成一張卡。
+                     視覺吃跟對話框同一組主題變數（--vn-dialog-bg / --gold / --text-color / --font-classic），
+                     在應用工坊換劇情主題時會一起變。做了自訂 VN 組件的話由組件優先接管，這張不出場。 -->
+                <div id="vn-chapter-card" class="hidden">
+                    <div id="vncc-box">
+                        <div id="vncc-story"></div>
+                        <div id="vncc-num"></div>
+                        <div id="vncc-title"></div>
+                        <div id="vncc-rule"></div>
+                        <div id="vncc-preface"></div>
+                        <div id="vncc-meta"></div>
+                        <button id="vncc-enter" type="button" onclick="window.VN_Core.closeChapterCard()">開始閱讀</button>
+                    </div>
+                </div>
+
                 <div id="danmu-container"></div>
                 <img id="char-portrait" src="" alt="">
 

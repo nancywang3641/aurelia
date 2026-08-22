@@ -285,6 +285,9 @@
                 window.VN_DynamicParser._blockLines = [];
             }
             document.querySelectorAll('.vn-dyn-overlay').forEach(el => el.remove());
+            // 📖 章節卡：換章節時把上一張收掉（她可能還沒按「開始閱讀」就切走了）
+            this._ccOpen = false; this._ccData = null;
+            { const _cc = document.getElementById('vn-chapter-card'); if (_cc) _cc.classList.add('hidden'); }
 
             // 關閉選項 overlay（載入新/舊章節時清除殘留）
             const choiceOv = document.getElementById('vn-choice-overlay');
@@ -2037,10 +2040,19 @@
                 return;
             }
 
-            // <ChapterCard> 的開關標籤本身不是台詞。上面的動態積木攔截優先——
-            // 在應用工坊做了 ChapterCard 組件，整塊就由組件收走做章節卡片；
-            // 沒做（或沒啟用）就安靜跳過，裡面那些 [Story|/[BGM|/[Bg| 照常一行行播。
-            if (/^<\/?ChapterCard>$/i.test(line)) { this.next(); return; }
+            // ── 📖 章節卡（內建固定版型）────────────────────────────────
+            // 上面的動態積木攔截優先：在應用工坊做了自訂 ChapterCard 組件，整塊由組件收走，
+            // 這裡不會執行。沒做就走內建這張。
+            //   <ChapterCard>  → 先把要顯示的欄位抄一份（只讀、不動 index），
+            //                    區塊內那些 [Bg|/[BGM|/[Avatar| 照常一行行播，背景音樂立繪才會真的生效
+            //   </ChapterCard> → 那時圖與音樂都就位了，卡片才出場，按「開始閱讀」進正文
+            if (/^<ChapterCard>$/i.test(line)) { this._ccData = this._collectChapterCard(this.index); this.next(); return; }
+            if (/^<\/ChapterCard>$/i.test(line)) {
+                if (this._showChapterCard(this._ccData)) return;   // 卡片接管：等她按鈕
+                this.next(); return;
+            }
+            // 卡片的欄位 tag：值已經被卡片收走，本身不是台詞 → 別當旁白唸出來
+            if (/^\[(Story|Chapter|Preface|Protagonist|World)\|/i.test(line)) { this.next(); return; }
 
             // 裸 HTML 美化卡（loadScript 前置掃描收走的整塊）→ 消毒後彈窗展示
             if (line.startsWith('[HtmlCard|')) {
@@ -2550,6 +2562,96 @@
                 this.playSFX(_nx.sfx);
                 return;
             }
+            this.next();
+        },
+
+        /* --- 📖 章節卡（內建固定版型；自訂 VN 組件優先，做了組件這張就不出場） --- */
+        _ccEsc: function(v) {
+            return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        },
+        // 掃 <ChapterCard> 區塊裡的 tag 抄一份要顯示的欄位。
+        // 🚨只讀、不動 this.index —— 那些行還要照常一行行播，背景/BGM/立繪才會真的生效。
+        _collectChapterCard: function(from) {
+            const d = { story: '', num: '', title: '', preface: '', who: '', where: '', bgm: '' };
+            for (let i = from + 1; i < this.script.length; i++) {
+                const l = this.script[i];
+                if (/^<\/ChapterCard>$/i.test(l)) break;
+                const m = l.match(/^\[([A-Za-z]+)\|([\s\S]*)\]$/);
+                if (!m) continue;
+                const tag = m[1].toLowerCase(), body = m[2], p = body.split('|');
+                if (tag === 'story') d.story = body.trim();
+                else if (tag === 'chapter') { d.num = (p[0] || '').trim(); d.title = (p[1] || '').trim(); }
+                else if (tag === 'preface') d.preface = body.trim();
+                else if (tag === 'protagonist') d.who = body.trim();
+                else if (tag === 'bgm') d.bgm = (p[0] || '').trim();
+                else if (tag === 'bg') d.where = String(p.length >= 2 ? p[1] : p[0]).replace(/_/g, ' ').trim();
+            }
+            return d;
+        },
+        // 回 true＝卡片接管畫面（呼叫端就別再 next()，等「開始閱讀」）
+        _showChapterCard: function(d) {
+            const el = document.getElementById('vn-chapter-card');
+            if (!el || !d) return false;
+            if (!d.title && !d.story && !d.preface) return false;   // 全空＝沒東西可演，別擋路
+            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v || ''; };
+            set('vncc-story', d.story);
+            set('vncc-num', d.num ? ('Chapter ' + d.num) : '');
+            set('vncc-title', d.title || d.story);
+            set('vncc-preface', d.preface);
+            const meta = document.getElementById('vncc-meta');
+            if (meta) {
+                meta.innerHTML = [['Protagonist', d.who], ['Location', d.where], ['BGM', d.bgm]]
+                    .filter(c => c[1])
+                    .map(c => '<div class="vncc-cell"><span class="vncc-cell-k">' + this._ccEsc(c[0]) +
+                              '</span><span class="vncc-cell-v">' + this._ccEsc(c[1]) + '</span></div>')
+                    .join('');
+            }
+            this._ccSkin();
+            el.classList.remove('hidden');
+            this._ccOpen = true;
+            return true;
+        },
+        // 🎨 跟著劇情主題走：主題是「一段自由 CSS」（vn_theme），作者/AI 寫的多半只針對
+        //    #text-panel 那幾個選擇器 —— 卡片若自己一套顏色，換了主題就只有對話框變、卡片還是舊皮。
+        //    → 開卡前把對話框「當下實際算出來的皮」抄過來：底、字色、框線、圓角、陰影、字體。
+        //    #text-panel 有三態(char/nar/inner)，取 nar-mode（敘述者聲音，語氣最接近章節卡）。
+        //    主題想單獨設計這張卡 → 在自訂 CSS 裡對 #vncc-box 寫規則並加 !important 即可蓋過。
+        _ccSkin: function() {
+            try {
+                const panel = document.getElementById('text-panel');
+                const box = document.getElementById('vncc-box');
+                if (!panel || !box) return;
+                const had = panel.className;
+                panel.className = 'nar-mode';                     // 同步借用，讀完立刻還原、畫面不會閃
+                const cs = getComputedStyle(panel);
+                const skin = {
+                    background: cs.backgroundImage && cs.backgroundImage !== 'none' ? cs.backgroundImage : cs.backgroundColor,
+                    backgroundColor: cs.backgroundColor,
+                    border: cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor,
+                    borderRadius: cs.borderRadius,
+                    boxShadow: cs.boxShadow,
+                    color: cs.color,
+                    fontFamily: cs.fontFamily,
+                    backdropFilter: cs.backdropFilter,
+                };
+                panel.className = had;
+                if (skin.background && skin.background !== 'none') box.style.backgroundImage = skin.background;
+                if (skin.backgroundColor) box.style.backgroundColor = skin.backgroundColor;
+                if (skin.border && !/^0px/.test(skin.border)) box.style.border = skin.border;
+                if (skin.borderRadius) box.style.borderRadius = skin.borderRadius;
+                if (skin.boxShadow && skin.boxShadow !== 'none') box.style.boxShadow = skin.boxShadow;
+                // 字色走 CSS 變數：卡片裡每個字都寫 var(--text-color, …)，設在盒子上就整張跟著翻，
+                // 不會像直接設 color 那樣被子元素自己的宣告蓋掉（換淺色主題時標題才不會白底白字）
+                if (skin.color) box.style.setProperty('--text-color', skin.color);
+                if (skin.fontFamily) box.style.fontFamily = skin.fontFamily;
+                if (skin.backdropFilter && skin.backdropFilter !== 'none') box.style.backdropFilter = skin.backdropFilter;
+            } catch (e) { /* 讀不到就用 CSS 裡的預設皮，不影響出場 */ }
+        },
+        closeChapterCard: function() {
+            const el = document.getElementById('vn-chapter-card');
+            if (el) el.classList.add('hidden');
+            if (!this._ccOpen) return;
+            this._ccOpen = false;
             this.next();
         },
 

@@ -2130,3 +2130,94 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-dive-loading .vdl-close { margin-top:8px; padding:9px 28px; border-radius:4px; cursor:pointer;
           border:1px solid rgba(212,175,55,0.35); background:rgba(212,175,55,0.12);
           color:var(--gold,#d4af37); font-size:12px; font-family:inherit; }
+
+/* ═══════════════════════════════════════════════════════════════
+   📖 章節卡（內建固定版型）
+   <ChapterCard> 是 prompt 規定每輪必出的結構，所以做成內建、不靠煉丹爐。
+   視覺刻意跟對話框同源：底、字色、主色、襯線字都吃同一組主題變數，
+   在應用工坊換劇情主題時兩邊一起變，不會只換了對話框、卡片還是舊皮。
+   自訂 VN 組件優先——做了組件就由組件接管，這張不出場。
+   ═══════════════════════════════════════════════════════════════ */
+#vn-chapter-card {
+    position: absolute; inset: 0; z-index: 60;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    animation: vnccIn 0.35s ease both;
+}
+#vn-chapter-card.hidden { display: none; }
+@keyframes vnccIn { from { opacity: 0; } to { opacity: 1; } }
+
+#vncc-box {
+    width: 100%; max-width: 520px;
+    box-sizing: border-box;
+    padding: 38px 42px 32px;
+    text-align: center;
+    border-radius: 4px;
+    /* ← 跟 #text-panel.nar-mode 同一個底 */
+    background: var(--vn-dialog-bg, linear-gradient(180deg, rgba(12,12,16,0.88) 0%, rgba(4,4,6,0.95) 100%));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+    -webkit-backdrop-filter: blur(15px); backdrop-filter: blur(15px);
+    animation: vnccRise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes vnccRise { from { transform: translateY(14px); } to { transform: translateY(0); } }
+
+#vncc-story {
+    font-family: var(--font-classic); font-size: 0.8rem;
+    letter-spacing: 4px; color: var(--text-color, #b8b4ac); opacity: 0.55;
+    margin-bottom: 22px;
+}
+#vncc-num {
+    font-family: var(--font-classic); font-size: 0.82rem;
+    letter-spacing: 5px; color: var(--gold, #d4af37);
+    text-transform: uppercase; margin-bottom: 10px;
+}
+#vncc-title {
+    font-family: var(--font-classic); font-size: 2rem; font-weight: 700;
+    letter-spacing: 4px; color: var(--text-color, #f0e8d0); line-height: 1.3;
+}
+#vncc-rule {
+    width: 46px; height: 1px; margin: 20px auto;
+    background: var(--gold, #d4af37); opacity: 0.5;
+}
+#vncc-preface {
+    font-size: 0.95rem; font-style: italic; line-height: 1.9;
+    color: var(--text-color, #b8b4ac); opacity: 0.78;
+    margin-bottom: 26px;
+}
+#vncc-preface:empty { display: none; }
+
+#vncc-meta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 28px; }
+#vncc-meta:empty { display: none; }
+.vncc-cell {
+    min-width: 92px; padding: 9px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 3px;
+    background: rgba(255, 255, 255, 0.03);
+}
+.vncc-cell-k {
+    display: block; font-family: var(--font-classic); font-size: 0.6rem;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-color, #b8b4ac); opacity: 0.45; margin-bottom: 4px;
+}
+.vncc-cell-v { display: block; font-size: 0.85rem; color: var(--text-color, #e8e4dc); }
+
+#vncc-enter {
+    padding: 12px 42px; cursor: pointer;
+    font-family: var(--font-classic); font-size: 0.9rem; letter-spacing: 3px;
+    color: var(--gold, #d4af37); background: transparent;
+    border: 1px solid var(--gold, #d4af37); border-radius: 2px;
+    transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+}
+#vncc-enter:hover {
+    background: var(--gold, #d4af37); color: #0a0a0c;
+    box-shadow: 0 0 18px rgba(212, 175, 55, 0.35);
+}
+
+@media (max-width: 600px) {
+    #vncc-box { padding: 30px 24px 26px; }
+    #vncc-title { font-size: 1.6rem; letter-spacing: 3px; }
+    #vncc-preface { font-size: 0.9rem; }
+    .vncc-cell { min-width: 80px; padding: 8px 12px; }
+}
