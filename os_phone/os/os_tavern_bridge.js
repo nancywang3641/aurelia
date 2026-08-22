@@ -180,13 +180,19 @@
                         // skipSummary: true 時跳過此步驟（供 VN 等需要完整原文的面板使用）
                         const useSummary = !options.skipSummary && getSummaryConfig();
                         if (useSummary) {
-                            const summaryRegex = /<summary>([\s\S]*?)<\/summary>/i;
+                            // 摘要標記走 VN_READER 那份唯一真相：Rae 會照別家 preset 把標籤改成
+                            //   <meow_FM>/<draft> 之類，寫死 <summary> 的話這個開關會安靜地完全沒作用。
+                            const _sumOf = (t) => {
+                                const r = win.VN_READER?.sumExtract?.(t);
+                                if (r != null) return r;
+                                const m = String(t || '').match(/<summary>([\s\S]*?)<\/summary>/i);
+                                return m ? m[1].trim() : '';
+                            };
                             messages = messages.map(msg => {
                                 let newMsg = { ...msg };
                                 let rawContent = newMsg.mes || newMsg.message || newMsg.content || "";
-                                const match = rawContent.match(summaryRegex);
-                                if (match && match[1]) {
-                                    const summaryText = match[1].trim();
+                                const summaryText = _sumOf(rawContent);
+                                if (summaryText) {
                                     newMsg.mes = summaryText;
                                     newMsg.message = summaryText;
                                     newMsg.content = summaryText;
