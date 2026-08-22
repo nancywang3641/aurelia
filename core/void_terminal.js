@@ -747,7 +747,7 @@ const IRIS_IDLE = [
                 <div style="position:absolute; inset:0; background-image:repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 18px); pointer-events:none;"></div>
                 <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(90,55,25,0.35) 0%, transparent 70%); pointer-events:none;"></div>
 
-                <div style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, #3e271a, #2c1e16); border-bottom:2px solid #1a110b; padding:12px 15px; box-shadow:0 4px 15px rgba(0,0,0,0.4);">
+                <div class="qb-shelf-titlebar" style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, #3e271a, #2c1e16); border-bottom:2px solid #1a110b; padding:12px 15px; box-shadow:0 4px 15px rgba(0,0,0,0.4);">
                     <div style="color:var(--qbk-ink); font-weight:bold; font-size:16px; font-family:'Cinzel', serif; letter-spacing:1px; text-shadow:2px 2px 4px rgba(0,0,0,0.5);">瀅瀅的館藏書架</div>
                     <button id="close-bookshelf-btn" style="background:none; border:none; color:var(--qbk-ink-dim); font-size:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='var(--qbk-ink)'" onmouseout="this.style.color='var(--qbk-ink-dim)'">✕</button>
                 </div>
@@ -929,6 +929,7 @@ const IRIS_IDLE = [
             if (closeBookshelfBtn) {
                 closeBookshelfBtn.onclick = () => {
                     // 先還原書架狀態，再關閉 overlay
+                    bookshelfOverlay.classList.remove('qb-reading');   // 讀開場白的滿版態不能留到下次開書架
                     const coverPanel = bookshelfOverlay.querySelector('#qb-book-cover-panel');
                     if (coverPanel) { coverPanel.style.display = 'none'; coverPanel.innerHTML = ''; }
                     ['qb-shelf-1','qb-shelf-2','qb-shelf-3'].forEach(id => {

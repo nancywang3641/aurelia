@@ -280,6 +280,8 @@
     function render() {
         const shelves = _getShelves();
         if (!shelves.length) return;
+        // 回到書架這一層就不是在讀開場白了 → 收掉滿版態，木框書架窗照舊
+        try { document.getElementById('qb-bookshelf-overlay')?.classList.remove('qb-reading'); } catch (e) { }
 
         const allWorlds = [_FREE_WORLD]
             .concat(Object.values(window.AURELIA_WORLDS || {}))
@@ -935,10 +937,10 @@
                 background:rgba(20,12,8,0.98);
                 flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
                 
-                <div style="padding:16px 20px;border-bottom:1px solid var(--qbk-line);
+                <div style="padding:10px 16px;border-bottom:1px solid var(--qbk-line);
                             display:flex;align-items:center;justify-content:space-between;
                             background:rgba(0,0,0,0.3);flex-shrink:0;">
-                    <div style="font-size:14px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">
+                    <div style="font-size:13px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">
                         選擇開場白：${w.title}
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;">
@@ -969,9 +971,9 @@
                     <div id="qb-greeting-track" style="display:flex; width:100%; height:100%; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);">
                         
                         ${greetings.map((g, i) => `
-                            <div class="qb-greet-slide" data-greet-idx="${i}" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 20px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
-                                <div style="border:1px solid var(--qbk-line); background:rgba(0,0,0,0.5); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column;">
-                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid var(--qbk-line);padding-bottom:12px;">
+                            <div class="qb-greet-slide" data-greet-idx="${i}" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 10px 12px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
+                                <div style="border:1px solid var(--qbk-line); background:rgba(0,0,0,0.5); border-radius:10px; padding:14px 16px; flex:1; display:flex; flex-direction:column;">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;border-bottom:1px solid var(--qbk-line);padding-bottom:8px;">
                                         <span style="font-size:14px;color:var(--qbk-ink);letter-spacing:2px;font-weight:bold;">
                                             開場白 ${i + 1}
                                         </span>
@@ -992,7 +994,7 @@
                             </div>
                         `).join('')}
                         
-                        <div class="qb-greet-slide" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 20px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
+                        <div class="qb-greet-slide" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 10px 12px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
                             <div style="border:1px solid rgba(100,160,255,0.3); background:rgba(20,45,100,0.4); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
                                 <input type="radio" name="qb-greeting" value="-1" style="display:none;">
                                 <div style="font-size:48px; margin-bottom:20px; filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));">🎲</div>
@@ -1007,21 +1009,20 @@
                     <button id="qb-greet-next-btn" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:36px;height:36px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5;">▶</button>
                 </div>
 
-                <div style="padding:14px 20px 24px;border-top:1px solid var(--qbk-line);
-                            background:rgba(0,0,0,0.4);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:16px;">
+                <div style="padding:10px 16px 14px;border-top:1px solid var(--qbk-line);
+                            background:rgba(0,0,0,0.4);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:10px;">
                     
-                    <div id="qb-greet-dots" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:80%;">
+                    <div id="qb-greet-dots" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:80%;">
                         ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:#1A1C28;opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
                         <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:#4a9eff;opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
                     </div>
 
                     <div style="width:100%;max-width:340px;position:relative;">
-                        <div style="font-size:11px;color:var(--qbk-ink-faint);letter-spacing:1px;margin-bottom:6px;text-align:left;">💬 你的第一句回應（可選）</div>
-                        <textarea id="qb-user-reply" rows="2" placeholder="輸入你對開場白的回應，例如：「沒事，你繼續說。」" style="
+                        <textarea id="qb-user-reply" rows="1" placeholder="你的第一句回應（可留空）" style="
                             width:100%;box-sizing:border-box;
                             background:rgba(0,0,0,0.45);border:1px solid var(--qbk-line);
                             border-radius:8px;color:var(--qbk-ink);font-size:13px;line-height:1.6;
-                            padding:10px 12px;resize:none;font-family:inherit;outline:none;
+                            padding:8px 12px;resize:none;font-family:inherit;outline:none;
                             transition:border-color 0.2s;scrollbar-width:none;"
                             onfocus="this.style.borderColor='rgba(239,227,208,0.34)'"
                             onblur="this.style.borderColor='rgba(239,227,208,0.34)'"></textarea>
@@ -1186,17 +1187,24 @@
             const tocView   = panel.querySelector('#qb-toc-view');
 
             // 開啟內頁（現在是從目錄的「創建新篇章」進來）
+            // 讀開場白時整個書架窗滿版、木框標題列退場（內容被上下兩層殼夾成一小條，看不下去）
+            const _reading = (on) => {
+                try { document.getElementById('qb-bookshelf-overlay')?.classList.toggle('qb-reading', !!on); } catch (e) { }
+            };
+
             panel.querySelector('#qb-open-inner-btn').onclick = () => {
                 if (tocView) tocView.style.display = 'none';
                 coverView.style.display = 'none';
                 coverBack.style.display = 'none';
                 innerView.style.display = 'flex';
+                _reading(true);
                 updateSlider(); // 初始化顯示第一張
             };
 
             // 關閉內頁 → 退回目錄那一層（從哪裡進來就退回哪裡）
             panel.querySelector('#qb-inner-close').onclick = () => {
                 innerView.style.display = 'none';
+                _reading(false);
                 if (tocView) { tocView.style.display = 'flex'; }
                 else { coverView.style.display = 'flex'; coverBack.style.display = 'block'; }
             };
@@ -1484,6 +1492,7 @@
                     try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}     // 這一刻＝建立聊天室
                     try { window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}   // 立繪模式跟著這本書
 
+                    document.getElementById('qb-bookshelf-overlay').classList.remove('qb-reading');
                     document.getElementById('qb-bookshelf-overlay').style.display = 'none';
                     panel.style.display = 'none';
                     shelves.forEach(s => s.style.display = 'flex');
@@ -1531,6 +1540,7 @@
                     }).catch(e => console.warn('[QB] 追蹤欄位初始化失敗:', e));
                 }
 
+                document.getElementById('qb-bookshelf-overlay').classList.remove('qb-reading');
                 document.getElementById('qb-bookshelf-overlay').style.display = 'none';
                 panel.style.display = 'none';
                 shelves.forEach(s => s.style.display = 'flex');
