@@ -201,6 +201,7 @@
             rootWrapper.appendChild(root);
             this._watchScale(root);
             this._wire(root);
+            this._watchMes0(root);
             console.log('[StoryEntryWizard] ✅ 入場精靈已展開');
         },
 
@@ -309,6 +310,24 @@
             $('#sew-swipe-next').onclick = () => this._switch(root, +1);
         },
 
+        // 卡片自帶的「跳轉開場/轉換面板」美化按鈕(QR/腳本)改的是酒館第 0 樓,預覽是拓印不會自己跟上。
+        // 藏書那邊本來就盯著第 0 樓、變動時廣播 SE_MES0_CHANGED → 這裡收到就重畫預覽(只在預覽那幕)。
+        _watchMes0(root) {
+            this._unwatchMes0();
+            this._mes0Handler = () => {
+                if (!root.isConnected) return this._unwatchMes0();
+                if (root.querySelector('#sew-screen-preview')?.classList.contains('sew-hidden')) return;
+                clearTimeout(this._mes0Timer);
+                this._mes0Timer = setTimeout(() => this._renderPreview(root), 420);   // 跟藏書那邊的 400 同拍
+            };
+            document.addEventListener('SE_MES0_CHANGED', this._mes0Handler);
+        },
+        _unwatchMes0() {
+            try { if (this._mes0Handler) document.removeEventListener('SE_MES0_CHANGED', this._mes0Handler); } catch (e) { }
+            this._mes0Handler = null;
+            clearTimeout(this._mes0Timer);
+        },
+
         // 切幕:只有開場預覽那幕走沉浸態(面板殼/標題/徽章全退場,開場白鋪滿舞台——框著看代入不進去)
         _screen(root, name) {
             const MAP = { plan: '#sew-screen-plan', preview: '#sew-screen-preview', embark: '#sew-screen-embark' };
@@ -354,6 +373,13 @@
                         body.appendChild(p);
                     }
                 }
+                // 跟藏書同一套:卡片自帶 BGM 會自動播 → 延遲幾拍靜掉(預覽不該被洗版,含 iframe 晚載)
+                try {
+                    const SE = window.StoryExtractor;
+                    SE?._stopPanelMedia?.();
+                    setTimeout(() => SE?._stopPanelMedia?.(), 300);
+                    setTimeout(() => SE?._stopPanelMedia?.(), 1200);
+                } catch (e) { }
                 if (!body.childNodes.length) {
                     const p = document.createElement('p');
                     p.textContent = '(這個開場是純視覺內容,進入故事後可見完整版面)';
@@ -390,6 +416,7 @@
             const el = root || document.getElementById('sew-root');
             if (!el) return;
             try { this._resizeOb?.disconnect(); this._resizeOb = null; } catch (e) { }
+            this._unwatchMes0();
             el.classList.add('sew-leaving');
             setTimeout(() => el.remove(), 320);
         },

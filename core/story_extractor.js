@@ -592,6 +592,8 @@
                 if (!hit) return;
                 console.log('[StoryExtractor] 偵測到第 0 樓變動 → 排程同步重渲染');
                 this._scheduleRender(400);
+                // 疊在藏書上的畫面(入場精靈的開場預覽)也是同一份拓印 → 廣播讓它一起跟上
+                try { document.dispatchEvent(new CustomEvent('SE_MES0_CHANGED')); } catch (e) { }
             });
             this._chatObserver.observe(chat, { childList: true, subtree: true, characterData: true });
             console.log('[StoryExtractor] 第 0 樓同步觀察者已啟動');
@@ -836,7 +838,7 @@
                 try { const pd = window.parent && window.parent.document; if (pd && pd !== document) docs.push(pd); } catch (e) {}
                 const stop = (m) => { try { m.pause(); m.currentTime = 0; m.muted = true; m.removeAttribute('autoplay'); } catch (e) {} };
                 docs.forEach(d => {
-                    ['se-content-area', 'story-extractor-container-vn', 'story-panel-container'].forEach(id => {
+                    ['se-content-area', 'story-extractor-container-vn', 'story-panel-container', 'sew-root'].forEach(id => {
                         const root = d.getElementById && d.getElementById(id);
                         if (!root) return;
                         root.querySelectorAll('audio, video').forEach(stop);
