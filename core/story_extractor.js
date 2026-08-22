@@ -690,6 +690,27 @@
             });
         },
 
+        // 作者的美化面板常照「整頁」設計（min-height:100vh / height:100vh 撐滿螢幕）。
+        // 閱讀畫面是整頁捲動、看不太出來；搬進入場精靈那種固定高的框，就變成內容排在上面、框底一大段空白。
+        // → 只把「跟視窗一樣高」的容器放掉高度，改吃內容高；圖片/影片與絕對定位的層不碰（那些高度是版面的一部分）。
+        deflateFullPageBlocks(container) {
+            if (!container) return 0;
+            const vh = window.innerHeight || 0;
+            if (!vh) return 0;
+            const SKIP = ['IMG', 'VIDEO', 'CANVAS', 'SVG', 'IFRAME'];
+            let hit = 0;
+            container.querySelectorAll('.story-html-block, .story-html-block *').forEach(el => {
+                try {
+                    if (SKIP.includes(el.tagName.toUpperCase())) return;
+                    const cs = getComputedStyle(el);
+                    if (cs.position === 'absolute' || cs.position === 'fixed') return;
+                    if ((parseFloat(cs.minHeight) || 0) >= vh * 0.9) { el.style.minHeight = '0'; hit++; }
+                    if ((parseFloat(cs.height) || 0) >= vh * 0.9) { el.style.height = 'auto'; hit++; }
+                } catch (e) { }
+            });
+            return hit;
+        },
+
         // 共用：判斷元素是否隱藏（含 opacity:0，避免採到夜模式被淡出的 day-bg 之類）
         _isHidden(el) {
             try {
