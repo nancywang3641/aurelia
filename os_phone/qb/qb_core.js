@@ -639,12 +639,11 @@ status = "正常"`;
                     // 若 _pendingQBPayload 還沒被 launchApp 消費（VN 已在運行），手動觸發
                     if (window._pendingQBPayload) {
                         window._pendingQBPayload = null;
-                        const genInput = document.getElementById('vn-gen-request');
-                        const genTitle = document.getElementById('vn-gen-title');
-                        if (genInput) genInput.value = startPrompt;
-                        if (genTitle) genTitle.value = storyTitle;
-                        // 直接觸發 VN 生成（QB Dive 獨立路徑，不借用首頁生成面板）
-                        window.VN_Core?.generateStory?.();
+                        // 直接把值交進去。以前是填進生成面板的輸入框再按下去，
+                        //   面板一拆這條就斷了 —— 那個面板從來就不該當參數通道用。
+                        const _P = window.VN_PLAYER || window.VN_Core;
+                        if (_P && _P.runFreeDive) _P.runFreeDive({ title: storyTitle, request: startPrompt });
+                        else console.warn('[QB] 生成器還沒就緒，這次 dive 沒跑起來');
                     }
                 }, 500);
             }, 800);

@@ -13,301 +13,142 @@
     console.log('[PhoneOS] 載入 VN 獨立生成模組 (vn_generator.js)...');
     const win = window.parent || window;
 
-    // ── 開場白預設儲存（localStorage） ──
-    const GEN_PRESETS_KEY = 'os_vn_gen_presets';
+    // ── 🎭 角色卡 Dive ──────────────────────────────────────────
+    //  這一段以前是「開一個生成面板 → 把 prompt 填進它的輸入框 → 模擬按下送出」。
+    //  那個面板同時兼了三個身分：UI、參數通道（用按鈕的 dataset 當變數）、完成偵測
+    //  （MutationObserver 監看送出鈕的 disabled）。三件事綁死在同一組 DOM 上，
+    //  於是每一條入口都得先把面板叫出來才生得成，面板一動全部跟著壞。
+    //  現在拆開：組 prompt 是純函式、參數走 generateStory 的參數、進度走回呼。
 
-    function _loadGenPresets() {
-        try { return JSON.parse(localStorage.getItem(GEN_PRESETS_KEY) || '[]'); } catch(e) { return []; }
-    }
-    function _saveGenPreset(title, request) {
-        const list = _loadGenPresets().filter(p => p.title !== title);
-        list.unshift({ title, request, savedAt: Date.now() });
-        localStorage.setItem(GEN_PRESETS_KEY, JSON.stringify(list));
-    }
-    function _deleteGenPreset(title) {
-        const list = _loadGenPresets().filter(p => p.title !== title);
-        localStorage.setItem(GEN_PRESETS_KEY, JSON.stringify(list));
-    }
-    function _renderGenPresets() {
-        const container = document.getElementById('vn-gen-presets');
-        const countEl   = document.getElementById('vn-gen-presets-count');
-        if (!container) return;
-        const list = _loadGenPresets();
-        if (countEl) countEl.textContent = list.length ? `共 ${list.length} 筆` : '';
-        container.innerHTML = '';
-        list.forEach(p => {
-            const item = document.createElement('div');
-            item.className = 'vn-gen-preset-item';
-            item.innerHTML = `
-                <div class="vn-gen-preset-load" title="${p.request.replace(/"/g,'&quot;').slice(0,120)}">${p.title}</div>
-                <div class="vn-gen-preset-del" title="刪除">✕</div>`;
-            item.querySelector('.vn-gen-preset-load').onclick = () => {
-                const titleEl = document.getElementById('vn-gen-title');
-                const reqEl   = document.getElementById('vn-gen-request');
-                if (titleEl) titleEl.value = p.title;
-                if (reqEl)   reqEl.value   = p.request;
-            };
-            item.querySelector('.vn-gen-preset-del').onclick = (e) => {
-                e.stopPropagation();
-                _deleteGenPreset(p.title);
-                _renderGenPresets();
-            };
-            container.appendChild(item);
-        });
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function openGeneratePanel() {
-        const overlay = document.getElementById('vn-gen-overlay');
-        if (!overlay) return;
-        // 不是從書籍 dive 進來，清除殘留世界書，避免繼承上一本書的 worldbook
-        if (!window._pendingCardDive && !window._pendingQBPayload) {
-            localStorage.removeItem('vn_active_wb_packs');
-            localStorage.removeItem('vn_current_world_id');
+    //  角色卡＋開場白 → 給模型看的指令。純字串處理，不碰畫面。
+    function _buildCardPrompt(w, greeting, userReply) {
+        let request;
+        if (greeting && userReply) {
+            request = '請以下列對話情境為基礎，生成 VN 視覺小說格式的開場章節。\n\n'
+                    + '【角色開場白】\n' + greeting + '\n\n'
+                    + '【用戶的第一句回應】\n' + userReply + '\n\n'
+                    + '請從此對話後繼續發展劇情，讓角色自然地回應用戶的話語。';
+        } else if (greeting) {
+            request = '請以下列開場白情境為基礎，生成 VN 視覺小說格式的開場章節：\n\n' + greeting;
+        } else {
+            request = '請以角色「' + w.title + '」的世界觀生成 VN 視覺小說格式的開場章節。';
         }
-        document.getElementById('vn-gen-status').textContent = '';
-        document.getElementById('vn-gen-status').className = '';
-        document.getElementById('vn-gen-submit').disabled = false;
-        overlay.classList.add('active');
-        _renderGenPresets();
-        _renderCardCol();   // 每次開啟都刷新右欄角色卡
-        setTimeout(() => {
-            const ta = document.getElementById('vn-gen-request');
-            if (ta) ta.focus();
-        }, 350);
+        return { title: w.title, request: request };
     }
 
-    // ── 角色卡紀錄 helpers ──────────────────────────────────────
-    const _CARD_SESSIONS_KEY = 'vn_card_sessions';
-    function _loadCardSessions() {
-        try { return JSON.parse(localStorage.getItem(_CARD_SESSIONS_KEY) || '[]'); } catch(e) { return []; }
-    }
-    function _saveCardSession(worldId, worldTitle, greeting) {
-        const sessions = _loadCardSessions();
-        sessions.unshift({ id: `cs_${Date.now()}`, worldId, worldTitle, greeting, ts: Date.now() });
-        // 同角色同開場白去重（只保留最新一筆）
-        const seen = new Set();
-        const deduped = sessions.filter(s => {
-            const key = s.worldId + '|' + (s.greeting || '').slice(0, 30);
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-        localStorage.setItem(_CARD_SESSIONS_KEY, JSON.stringify(deduped.slice(0, 50)));
-    }
-    function _deleteCardSession(id) {
-        const sessions = _loadCardSessions().filter(s => s.id !== id);
-        localStorage.setItem(_CARD_SESSIONS_KEY, JSON.stringify(sessions));
-    }
-
-    // 渲染右欄：書架角色卡紀錄（格式：角色名 - 開場白描述）
-    function _renderCardCol() {
-        const list    = document.getElementById('vn-gen-card-list');
-        const diveBtn = document.getElementById('vn-gen-card-dive');
-        if (!list) return;
-
-        // ── 必須在任何 early-return 之前處理 pending ──────────────
-        // 否則 sessions 為空時 return 提前，_pendingCardDive 永遠不觸發
-        if (window._pendingCardDive) {
-            const p = window._pendingCardDive;
-            window._pendingCardDive = null;          // 先清除，防止遞迴循環
-            _saveCardSession(p.worldId, p.title, p.greeting);
-            // 預設 diveBtn（diveSelectedCard 依賴此 dataset）
-            if (diveBtn) {
-                diveBtn.dataset.wid       = p.worldId;
-                diveBtn.dataset.greeting  = p.greeting  || '';
-                diveBtn.dataset.userReply = p.userReply || '';
-            }
-            _renderCardCol();                        // 重繪列表（此時 pending 已 null）
-            setTimeout(() => diveSelectedCard(), 150);
-            return;
-        }
-        // ────────────────────────────────────────────────────────
-
-        const sessions = _loadCardSessions();
-        list.innerHTML = '';
-        if (diveBtn) diveBtn.classList.remove('visible');
-
-        if (!sessions.length) {
-            list.innerHTML = '<div id="vn-gen-card-empty">尚無書架角色卡紀錄<br><span style="font-size:0.68rem;opacity:0.5;">從書架點「與TA相遇」即會產生紀錄</span></div>';
-            return;
-        }
-
-        sessions.forEach(s => {
-            const item = document.createElement('div');
-            item.className = 'vn-gen-card-item';
-            const greetLabel = s.greeting
-                ? s.greeting.slice(0, 40) + (s.greeting.length > 40 ? '…' : '')
-                : '（AI 自由發揮）';
-            item.innerHTML = `
-                <div class="vn-gen-card-info" style="flex:1;min-width:0;">
-                    <div class="vn-gen-card-source">${s.worldTitle}</div>
-                    <div class="vn-gen-card-desc">${greetLabel}</div>
-                </div>
-                <button class="vn-card-del-btn" data-sid="${s.id}"
-                    style="flex-shrink:0;background:none;border:none;color:rgba(255,255,255,0.25);
-                           font-size:0.75rem;cursor:pointer;padding:0 2px;line-height:1;"
-                    title="刪除此紀錄">✕</button>
-            `;
-            item.querySelector('.vn-card-del-btn').onclick = e => {
-                e.stopPropagation();
-                _deleteCardSession(s.id);
-                _renderCardCol();
-            };
-            const _selectItem = () => {
-                list.querySelectorAll('.vn-gen-card-item').forEach(el => el.classList.remove('selected'));
-                item.classList.add('selected');
-                if (diveBtn) {
-                    diveBtn.dataset.wid      = s.worldId;
-                    diveBtn.dataset.greeting = s.greeting || '';
-                    diveBtn.classList.add('visible');
+    //  生成中的遮罩。以前它掛在生成面板內部 —— 面板不在，就完全沒有進度可看；
+    //  現在掛在 VN 頁本身，跟你從哪個入口進來無關。
+    function _diveLoading(w, greeting, userReply) {
+        const host = document.getElementById('page-game') || document.body;
+        const old = document.getElementById('vn-dive-loading');
+        if (old) old.remove();
+        const box = document.createElement('div');
+        box.id = 'vn-dive-loading';
+        box.className = 'vn-dive-loading';
+        const g = String(greeting || ''), r = String(userReply || '');
+        box.innerHTML =
+            '<div class="vdl-icon">' + _esc((w && w.icon) || '📖') + '</div>' +
+            '<div class="vdl-title">' + _esc((w && w.title) || '') + '</div>' +
+            (g ? '<div class="vdl-quote">「' + _esc(g.slice(0, 90)) + (g.length > 90 ? '…' : '') + '」</div>' : '') +
+            (r ? '<div class="vdl-reply">你：「' + _esc(r.slice(0, 60)) + (r.length > 60 ? '…' : '') + '」</div>' : '') +
+            '<div class="vdl-status"><span class="gen-spinner"></span>AI 正在編織故事，請稍候…</div>';
+        host.appendChild(box);
+        return {
+            fail: function (msg) {
+                const st = box.querySelector('.vdl-status');
+                if (st) st.innerHTML = '<span class="vdl-err">' + _esc(String(msg || '生成失敗，請重試').replace(/^❌\s*/, '')) + '</span>';
+                if (!box.querySelector('.vdl-close')) {
+                    const b = document.createElement('button');
+                    b.type = 'button'; b.className = 'vdl-close'; b.textContent = '關閉';
+                    b.onclick = function () { box.remove(); };
+                    box.appendChild(b);
                 }
-            };
-            item.onclick = _selectItem;
-            list.appendChild(item);
-        });
+            },
+            done: function () { box.remove(); },
+        };
     }
 
-    // 角色卡 DIVE：存紀錄 → 直接傳遞參數給生成器 (拔除 localStorage 貼布)
-    function diveSelectedCard() {
-        const diveBtn  = document.getElementById('vn-gen-card-dive');
-        const wid       = diveBtn?.dataset.wid;
-        const greeting  = diveBtn?.dataset.greeting  || '';
-        const userReply = diveBtn?.dataset.userReply || '';
-        if (!wid) return;
-        const w = (window.AURELIA_CUSTOM_WORLDS || []).find(x => x.id === wid);
-        if (!w) return;
-
-        // 存紀錄到右欄
-        _saveCardSession(w.id, w.title, greeting);
-
-        // 世界 ID → buildContext 取世界書 + 條件規則
+    //  角色卡 Dive 的唯一入口：書架點下去就走這裡，不必再叫出任何面板。
+    function runCardDive(p) {
+        p = p || {};
+        const w = (window.AURELIA_CUSTOM_WORLDS || []).find(x => x && x.id === p.worldId);
+        if (!w) { console.warn('[VN] 找不到這張角色卡：', p.worldId); return false; }
+        const greeting = p.greeting || '', userReply = p.userReply || '';
         localStorage.setItem('vn_current_world_id', w.id);
         localStorage.removeItem('vn_pending_first_mes');
-
-        // 🌟 【重構】把變數包 ID 打包成選項參數
-        const diveOptions = {
-            targetPackId: w.autoPackId || null
-        };
-
-        // 激活展廳面板可以先做，這只影響 UI 顯示
-        if (w.autoPackId && win.OS_AVS?.activateTemplateForPack) {
-            win.OS_AVS.activateTemplateForPack(w.autoPackId);
+        if (w.autoPackId && win.OS_AVS && win.OS_AVS.activateTemplateForPack) {
+            try { win.OS_AVS.activateTemplateForPack(w.autoPackId); } catch (e) {}
         }
-
-        // 靜默填入 vn-gen-request
-        const genInput = document.getElementById('vn-gen-request');
-        const genTitle = document.getElementById('vn-gen-title');
-        if (genInput) {
-            if (greeting && userReply) {
-                genInput.value =
-                    `請以下列對話情境為基礎，生成 VN 視覺小說格式的開場章節。\n\n` +
-                    `【角色開場白】\n${greeting}\n\n` +
-                    `【用戶的第一句回應】\n${userReply}\n\n` +
-                    `請從此對話後繼續發展劇情，讓角色自然地回應用戶的話語。`;
-            } else if (greeting) {
-                genInput.value = `請以下列開場白情境為基礎，生成 VN 視覺小說格式的開場章節：\n\n${greeting}`;
-            } else {
-                genInput.value = `請以角色「${w.title}」的世界觀生成 VN 視覺小說格式的開場章節。`;
-            }
-        }
-        if (genTitle) genTitle.value = w.title;
-
-        // ── 顯示全板生成中 Loading ────
-        const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        const genWindow = document.getElementById('vn-gen-window');
-        const LOAD_ID   = 'vn-card-dive-loading';
-        let   loadDiv   = document.getElementById(LOAD_ID);
-        if (!loadDiv && genWindow) {
-            loadDiv = document.createElement('div');
-            loadDiv.id = LOAD_ID;
-            loadDiv.style.cssText = [
-                'position:absolute;inset:0;z-index:20;border-radius:inherit;',
-                'background:rgba(8,6,4,0.97);',
-                'display:flex;flex-direction:column;align-items:center;justify-content:center;',
-                'gap:14px;text-align:center;padding:36px;'
-            ].join('');
-            const greetPreview = greeting
-                ? `<div style="font-size:11.5px;color:rgba(255,248,231,0.3);max-width:260px;
-                               line-height:1.75;font-style:italic;margin-top:4px;
-                               display:-webkit-box;-webkit-line-clamp:3;
-                               -webkit-box-orient:vertical;overflow:hidden;">
-                       「${_esc(greeting.slice(0, 90))}${greeting.length > 90 ? '…' : ''}」
-                   </div>` : '';
-            const replyPreview = userReply
-                ? `<div style="font-size:11px;color:rgba(150,200,255,0.4);max-width:260px;
-                               line-height:1.6;margin-top:-4px;
-                               display:-webkit-box;-webkit-line-clamp:2;
-                               -webkit-box-orient:vertical;overflow:hidden;">
-                       你：「${_esc(userReply.slice(0, 60))}${userReply.length > 60 ? '…' : ''}」
-                   </div>` : '';
-            loadDiv.innerHTML = `
-                <div style="font-size:44px;filter:drop-shadow(0 2px 14px rgba(212,175,55,0.45));">${_esc(w.icon)}</div>
-                <div style="font-size:17px;font-weight:900;color:#1A1C28;letter-spacing:3px;">${_esc(w.title)}</div>
-                ${greetPreview}
-                ${replyPreview}
-                <div id="vn-card-dive-status" style="display:flex;align-items:center;gap:8px;
-                     font-size:12px;color:rgba(212,175,55,0.75);margin-top:6px;">
-                    <span class="gen-spinner"></span>AI 正在編織故事，請稍候…
-                </div>
-            `;
-            genWindow.style.position = 'relative';
-            genWindow.appendChild(loadDiv);
-        }
-
-        const submitBtn = document.getElementById('vn-gen-submit');
-        if (submitBtn) {
-            const _obs = new MutationObserver(() => {
-                if (!submitBtn.disabled) {
-                    _obs.disconnect();
-                    const ld = document.getElementById(LOAD_ID);
-                    if (!ld) return;
-                    const ds = document.getElementById('vn-card-dive-status');
-                    if (ds) {
-                        const errMsg = document.getElementById('vn-gen-status')?.textContent || '生成失敗，請重試';
-                        ds.innerHTML = `<span style="color:rgba(255,90,90,0.9);">❌ ${_esc(errMsg.replace(/^❌\s*/,''))}</span>`;
-                    }
-                    if (!ld.querySelector('#vn-card-dive-retry')) {
-                        const retryBtn = document.createElement('button');
-                        retryBtn.id = 'vn-card-dive-retry';
-                        retryBtn.textContent = '關閉';
-                        retryBtn.style.cssText = [
-                            'margin-top:8px;padding:9px 28px;border-radius:4px;cursor:pointer;',
-                            'border:1px solid rgba(212,175,55,0.35);',
-                            'background:rgba(212,175,55,0.12);color:#1A1C28;font-size:12px;'
-                        ].join('');
-                        retryBtn.onclick = () => ld.remove();
-                        ld.appendChild(retryBtn);
-                    }
-                }
-            });
-            _obs.observe(submitBtn, { attributes: true, attributeFilter: ['disabled'] });
-        }
-
-        // 🌟 把選項傳遞給生成器
-        generateStory(diveOptions);
+        const built = _buildCardPrompt(w, greeting, userReply);
+        const ui = _diveLoading(w, greeting, userReply);
+        let failed = false;
+        generateStory({
+            title: built.title,
+            request: built.request,
+            targetPackId: w.autoPackId || null,
+            onStatus: function (text, cls) { if (cls === 'err') { failed = true; ui.fail(text); } },
+            onDone: function () { if (!failed) ui.done(); },
+        });
+        return true;
     }
 
-    function closeGeneratePanel() {
-        const overlay = document.getElementById('vn-gen-overlay');
-        if (overlay) overlay.classList.remove('active');
-        const pageGame = document.getElementById('page-game');
-        if (pageGame && pageGame.classList.contains('hidden')) {
-            if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
-        }
+    //  自由劇情／QB 那類「我自己有輸入介面」的入口：直接把值交進來就好。
+    function runFreeDive(opts) {
+        opts = opts || {};
+        const request = String(opts.request || '').trim();
+        if (!request) return false;
+        generateStory({
+            title: opts.title || '',
+            request: request,
+            targetPackId: opts.targetPackId || null,
+            onStatus: opts.onStatus,
+            onDone: opts.onDone,
+        });
+        return true;
+    }
+
+    //  以前這兩個是生成面板裡的 DOM（狀態列與送出鈕）。面板拆掉後換成兩個小殼子：
+    //  接住同樣的賦值，轉成呼叫端給的回呼 —— generateStory 內文那十幾處寫法一行都不用改。
+    function _ghostStatus(onStatus) {
+        let t = '', c = '';
+        const fire = function () { if (typeof onStatus === 'function') { try { onStatus(t, c); } catch (e) {} } };
+        return {
+            set textContent(v) { t = String(v == null ? '' : v); fire(); },
+            get textContent() { return t; },
+            set innerHTML(v) { t = String(v == null ? '' : v); fire(); },
+            get innerHTML() { return t; },
+            set className(v) { c = String(v == null ? '' : v); fire(); },
+            get className() { return c; },
+        };
+    }
+    function _ghostBtn(onDone) {
+        let d = false;
+        return {
+            // 由「鎖住」回到「可按」＝這一輪跑完了。原本的完成偵測就是監看這個屬性，
+            // 只是它得掛一個 MutationObserver 在真的按鈕上才辦得到。
+            set disabled(v) {
+                const was = d; d = !!v;
+                if (was && !d && typeof onDone === 'function') { try { onDone(); } catch (e) {} }
+            },
+            get disabled() { return d; },
+        };
     }
 
     // 🌟 【重構】加上 options = {} 參數與 async 關鍵字
     async function generateStory(options = {}) {
-        const submitBtn = document.getElementById('vn-gen-submit');
-        const statusEl  = document.getElementById('vn-gen-status');
+        // 面板已經拆掉：這兩個殼子接住內文原本對 DOM 的賦值，轉給呼叫端的回呼
+        const submitBtn = _ghostBtn(options.onDone);
+        const statusEl  = _ghostStatus(options.onStatus);
         // 🚨呼叫端可以直接把值傳進來，不必先去填那個 overlay 的輸入框。
         //   舊路徑（書架自由劇情、QB Dive）都是「填 DOM → 按下去」，等於整條生成綁死在
         //   那個面板的 DOM 上：面板一改版或收起來，別的入口就跟著壞。
         //   不傳就完全照舊讀 DOM，既有呼叫端零影響。
-        const request   = (options.request != null ? String(options.request)
-                          : (document.getElementById('vn-gen-request')?.value || '')).trim();
-        const presetTitle = (options.title != null ? String(options.title)
-                          : (document.getElementById('vn-gen-title')?.value || '')).trim();
+        const request     = String(options.request || '').trim();
+        const presetTitle = String(options.title || '').trim();
 
         // 🌟 接收傳遞過來的變數包 ID
         const targetPackId = options.targetPackId || null;
@@ -481,7 +322,7 @@
     }
 
     // === 暴露到全域 ===
-    window.VN_Generator = {
-        openGeneratePanel, closeGeneratePanel, generateStory, diveSelectedCard
-    };
+    //  openGeneratePanel / closeGeneratePanel / diveSelectedCard 已隨生成面板一起移除。
+    //  對外只剩三個：兩個入口（角色卡 Dive、自有輸入介面的 Dive）＋ 生成本身。
+    window.VN_Generator = { generateStory, runCardDive, runFreeDive };
 })();

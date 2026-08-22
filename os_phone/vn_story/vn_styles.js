@@ -375,48 +375,8 @@
                 </div>
             </div>
 
-            <div id="vn-gen-overlay">
-                <div id="vn-gen-window">
-                    <div id="vn-gen-titlebar">
-                        <span class="gen-title">✨ AI 生成劇情</span>
-                        <button class="gen-close" onclick="window.VN_PLAYER.closeGeneratePanel()">✕</button>
-                    </div>
-                    <div id="vn-gen-columns">
-                        <details id="vn-gen-body" class="vn-collapse-group" open>
-                            <summary class="vn-gen-col-hd">
-                                <span>✍️ 自由生成</span>
-                                <span class="collapse-icon">▼</span>
-                            </summary>
-                            <div class="collapse-content">
-                                <label>開場白標題 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，填了才會儲存/覆蓋)</span></label>
-                                <input id="vn-gen-title" type="text" placeholder="例：雨天咖啡廳初見" autocomplete="off" />
-                                <label>劇情指引 <span style="color:rgba(255,255,255,0.3); font-size:0.75rem; letter-spacing:0;">(選填，留空則 AI 自由發揮)</span></label>
-                                <textarea id="vn-gen-request" placeholder="例：繼續上次在咖啡廳的相遇，加入一段雨天的邂逅...&#10;&#10;或留空讓 AI 自由創作"></textarea>
-                                <button id="vn-gen-submit" onclick="window.VN_PLAYER.generateStory()">🚀 開始生成</button>
-                                <div id="vn-gen-presets-wrap">
-                                    <div class="vn-gen-presets-hd">
-                                        <span>📂 已儲存的開場白</span>
-                                        <span id="vn-gen-presets-count"></span>
-                                    </div>
-                                    <div id="vn-gen-presets"></div>
-                                </div>
-                            </div>
-                        </details>
+            <!-- 生成面板已移除：入口統一在書架的自由劇情，生成走 VN_Core.runFreeDive / runCardDive -->
 
-                        <details id="vn-gen-card-col" class="vn-collapse-group" open>
-                            <summary class="vn-gen-col-hd">
-                                <span>📚 書架角色卡</span>
-                                <span class="collapse-icon">▼</span>
-                            </summary>
-                            <div class="collapse-content">
-                                <div id="vn-gen-card-list"></div>
-                                <button id="vn-gen-card-dive" onclick="window.VN_PLAYER.diveSelectedCard()">🎭 與TA相遇</button>
-                            </div>
-                        </details>
-                    </div>
-                    <div id="vn-gen-status"></div>
-                </div>
-            </div>
         </div>
     </div>
     `;
