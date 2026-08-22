@@ -260,32 +260,23 @@
                         window.StoryExtractor?._refreshModeBar?.();   // 底下閱讀面板的模式列跟上
                     } catch (e) { console.warn('[StoryEntryWizard] 套用模式失敗:', e); }
                 }
-                $('#sew-screen-plan').classList.add('sew-hidden');
-                $('#sew-screen-preview').classList.remove('sew-hidden');
+                this._screen(root, 'preview');
                 this._renderPreview(root);
             };
 
             // 幕二:上一步 / 重新規劃(回開場1再回幕一)/ 進入故事
-            $('#sew-back').onclick = () => {
-                $('#sew-screen-preview').classList.add('sew-hidden');
-                $('#sew-screen-plan').classList.remove('sew-hidden');
-            };
+            $('#sew-back').onclick = () => this._screen(root, 'plan');
             $('#sew-replan').onclick = async () => {
                 try { await window.TavernHelper.setChatMessages([{ message_id: 0, swipe_id: 0 }]); } catch (e) { }
                 try { window.StoryExtractor?._scheduleRender?.(300); } catch (e) { }
-                $('#sew-screen-preview').classList.add('sew-hidden');
-                $('#sew-screen-plan').classList.remove('sew-hidden');
+                this._screen(root, 'plan');
             };
             // 進入故事 = 到「啟程」輸入幕;整條流程不再露出舊閱讀面板
             $('#sew-enter').onclick = () => {
-                $('#sew-screen-preview').classList.add('sew-hidden');
-                $('#sew-screen-embark').classList.remove('sew-hidden');
+                this._screen(root, 'embark');
                 setTimeout(() => { try { $('#sew-embark-input').focus(); } catch (e) { } }, 60);
             };
-            $('#sew-embark-back').onclick = () => {
-                $('#sew-screen-embark').classList.add('sew-hidden');
-                $('#sew-screen-preview').classList.remove('sew-hidden');
-            };
+            $('#sew-embark-back').onclick = () => this._screen(root, 'preview');
             // 啟程:把第一句塞進酒館輸入框直接送出;精靈留著當底。
             // 🚨 不可以在這裡 StoryExtractor.hide():第0樓劇情頁還沒開,hide() 會連整個 VN 面板收掉回主頁;
             //    而 VN 的撰寫幕布掛在劇情頁裡、此刻也看不到 → 統一 loading 由藏書等待室「借校準艙殼」來演
@@ -316,6 +307,15 @@
 
             $('#sew-swipe-prev').onclick = () => this._switch(root, -1);
             $('#sew-swipe-next').onclick = () => this._switch(root, +1);
+        },
+
+        // 切幕:只有開場預覽那幕走沉浸態(面板殼/標題/徽章全退場,開場白鋪滿舞台——框著看代入不進去)
+        _screen(root, name) {
+            const MAP = { plan: '#sew-screen-plan', preview: '#sew-screen-preview', embark: '#sew-screen-embark' };
+            for (const [key, sel] of Object.entries(MAP)) {
+                root.querySelector(sel)?.classList.toggle('sew-hidden', key !== name);
+            }
+            root.classList.toggle('sew-immersive', name === 'preview');
         },
 
         // ── 幕二資料 ──────────────────────────────────────────

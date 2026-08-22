@@ -547,3 +547,72 @@
 #sew-root.sew-portrait .sew-embark-frame { padding: calc(var(--sew-u, 1px) * 14) calc(var(--sew-u, 1px) * 14); }
 #sew-root.sew-portrait .sew-embark-frame { flex: 0 0 auto; }
 #sew-root.sew-portrait .sew-embark-input { flex: 0 0 auto; min-height: 0; height: calc(var(--sew-h, 1000px) * 0.3); }
+
+/* ═══════════════════════════════════════════════════════════════
+   幕二沉浸態(.sew-immersive):進了開場白就別再框著看
+   面板殼/標題/徽章/外框全退場,開場白鋪滿舞台;大廳背景壓成夜場,
+   只留最低限度的操作(切開場、上一步/重新規劃/進入故事)浮在上下。
+   ═══════════════════════════════════════════════════════════════ */
+#sew-root.sew-immersive .sew-stage { padding: 0; }
+#sew-root.sew-immersive .sew-panel {
+    width: 100%;
+    height: 100%;
+    background: none;
+    box-shadow: none;
+    clip-path: none;
+    gap: calc(var(--sew-u, 1px) * 10);
+    padding: calc(var(--sew-u, 1px) * 16) calc(var(--sew-u, 1px) * 20) calc(var(--sew-u, 1px) * 18);
+}
+#sew-root.sew-immersive .sew-panel::before,
+#sew-root.sew-immersive .sew-title-row,
+#sew-root.sew-immersive .sew-badge { display: none; }
+
+/* 燈暗:白理石大廳壓成夜場,卡片才不會像貼在亮底上的貼紙 */
+#sew-root.sew-immersive .sew-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 45%, rgba(8, 12, 22, 0.84), rgba(3, 5, 12, 0.95));
+}
+
+#sew-root.sew-immersive .sew-preview-frame {
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+#sew-root.sew-immersive .sew-preview-frame::before,
+#sew-root.sew-immersive .sew-preview-frame::after { display: none; }
+
+/* 切開場列:浮在內容上方的淡金小字 */
+#sew-root.sew-immersive .sew-preview-head {
+    color: rgba(232, 220, 181, 0.72);
+    padding: calc(var(--sew-u, 1px) * 4) 0 calc(var(--sew-u, 1px) * 8);
+}
+#sew-root.sew-immersive .sew-preview-head::before,
+#sew-root.sew-immersive .sew-preview-head::after { color: rgba(212, 175, 55, 0.75); }
+#sew-root.sew-immersive .sew-swipe-btn { color: rgba(232, 220, 181, 0.8); }
+/* 夜場字色:退路的純文字段落也要跟著翻淺(墨藍字在暗底等於看不見) */
+#sew-root.sew-immersive .sew-preview-body {
+    color: #e8dcb5;
+    scrollbar-color: rgba(212, 175, 55, 0.35) transparent;
+}
+
+/* 沒有美化面板的純文字開場:紙卡改暗色玻璃,跟夜場一致(有面板時偷學樣式會 inline 蓋掉這段) */
+#se-root-wrapper #sew-root.sew-immersive .native-render-wrapper {
+    background: rgba(12, 16, 28, 0.5);
+    border-color: rgba(212, 175, 55, 0.2);
+    color: #e8dcb5;
+}
+
+/* 關閉 X 與外框鈕在夜場改金線 */
+#sew-root.sew-immersive .sew-close svg g { stroke: rgba(232, 220, 181, 0.7); }
+#sew-root.sew-immersive .sew-btn-outline {
+    background: rgba(212, 175, 55, 0.5);
+    color: #f0e6cd;
+}
+#sew-root.sew-immersive .sew-btn-outline::before { background: rgba(10, 14, 26, 0.82); }
+#sew-root.sew-immersive .sew-btn-outline:hover { filter: brightness(1.25); }
+
+/* 直式的沉浸態:手機也一樣滿版(蓋掉直式那套內容高+捲動的參數) */
+#sew-root.sew-immersive.sew-portrait .sew-stage { padding: 0; align-items: stretch; }
+#sew-root.sew-immersive.sew-portrait .sew-panel { height: 100%; justify-content: center; }
+#sew-root.sew-immersive.sew-portrait .sew-preview-frame { flex: 1 1 auto; height: auto; min-height: 0; }
