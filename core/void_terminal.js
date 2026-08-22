@@ -838,59 +838,6 @@ const IRIS_IDLE = [
 
             <!-- 底部輸入列已搬進 .void-dialogue-wrap（對話框正下方）；獨立 .void-chat-bar 已移除 -->
 
-            <!-- 📖 大廳章節選擇面板 -->
-            <div id="lobby-chapter-panel" class="lcp-overlay">
-                <div class="lcp-notebook">
-                    <div class="lcp-rings"><div class="lcp-ring"></div><div class="lcp-ring"></div><div class="lcp-ring"></div></div>
-                    <button class="lcp-close-btn" id="lcp-close-btn">✕</button>
-                    <div class="lcp-inner">
-                        <div class="lcp-header">
-                            <div class="lcp-hdr-left">
-                                <div class="lcp-title">章節選擇</div>
-                                <div class="lcp-title-en">Chapter Select</div>
-                            </div>
-                            <div class="lcp-hdr-divider"></div>
-                            <div class="lcp-hdr-right">
-                                <div class="lcp-hdr-zh">故事書館</div>
-                                <div class="lcp-hdr-en">Story Bookmarks</div>
-                            </div>
-                        </div>
-                        <div class="lcp-cards-area">
-                            <div class="lcp-cards-viewport">
-                                <button class="lcp-nav lcp-prev" id="lcp-prev-btn" disabled>‹</button>
-                                <div class="lcp-cards-track" id="lcp-cards-track"></div>
-                                <button class="lcp-nav lcp-next" id="lcp-next-btn">›</button>
-                            </div>
-                            <div class="lcp-dots" id="lcp-dots"></div>
-                        </div>
-                        <div class="lcp-bottom">
-                            <div class="lcp-bottom-sec lcp-last-read">
-                                <div class="lcp-last-thumb"></div>
-                                <div class="lcp-last-info">
-                                    <div class="lcp-sec-label">最近選取</div>
-                                    <div class="lcp-sec-en">LAST SELECTED</div>
-                                    <div class="lcp-last-title" id="lcp-last-title">—</div>
-                                    <div class="lcp-last-meta" id="lcp-last-meta"></div>
-                                </div>
-                            </div>
-                            <div class="lcp-bottom-sec lcp-stat-sec">
-                                <div class="lcp-sec-label">故事數量</div>
-                                <div class="lcp-sec-en">TOTAL STORIES</div>
-                                <div class="lcp-big-num" id="lcp-story-count">—</div>
-                            </div>
-                            <div class="lcp-bottom-sec lcp-quote-sec">
-                                <div class="lcp-quote-text">「故事還在繼續，<br>而我們也在。」</div>
-                                <div class="lcp-quote-author">— Sohee</div>
-                            </div>
-                            <div class="lcp-bottom-sec lcp-back-sec" id="lcp-back-btn">
-                                <div class="lcp-back-zh">返回大廳</div>
-                                <div class="lcp-back-en">BACK TO MAIN</div>
-                                <div class="lcp-back-arrow">›</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         `;
 
         // 綁定事件，並實現自動檢查存檔以跳過登入
@@ -1132,129 +1079,6 @@ const IRIS_IDLE = [
                 });
             });
 
-            // 📖 大廳章節選擇面板 (LobbyChapterPanel)
-            const LobbyChapterPanel = (() => {
-                const PER_PAGE = 3;
-                const BK_IMG = 'https://files.catbox.moe/a1y4su.png';
-                const PALETTES = [
-                    'linear-gradient(180deg,#7a8a9a,#5a6a7a 50%,#8a8070)',
-                    'linear-gradient(135deg,#7a6a5a,#5a4a3a 50%,#8a7a6a)',
-                    'linear-gradient(135deg,#4a5a7a,#2a3a5a 50%,#6a7a9a)',
-                    'linear-gradient(180deg,#6a7a5a,#4a5a3a 50%,#7a8a6a)',
-                    'linear-gradient(135deg,#7a5a7a,#5a3a5a 50%,#9a7a9a)',
-                ];
-                let _all = [], _page = 0, _pages = 1;
-
-                function _palette(sid) {
-                    let h = 0; for (const c of (sid||'')) h = (h*31+c.charCodeAt(0))&0xffffffff;
-                    return PALETTES[Math.abs(h)%PALETTES.length];
-                }
-                function _chNum(ch) {
-                    const same = _all.filter(c=>c.storyId===ch.storyId).sort((a,b)=>a.createdAt-b.createdAt);
-                    return String(same.findIndex(c=>c.id===ch.id)+1).padStart(2,'0');
-                }
-                function _render() {
-                    const track = document.getElementById('lcp-cards-track');
-                    const dotsEl = document.getElementById('lcp-dots');
-                    if (!track) return;
-                    const slice = _all.slice(_page*PER_PAGE, (_page+1)*PER_PAGE);
-                    track.innerHTML = '';
-                    if (!slice.length) {
-                        track.innerHTML = '<div class="lcp-empty"><div style="font-size:28px;opacity:0.45">📖</div><div>尚無故事章節<br><span style="font-size:10px;opacity:0.6">去 VN 播放器生成第一章吧</span></div></div>';
-                    } else {
-                        slice.forEach((ch, i) => {
-                            const num = _chNum(ch);
-                            const isGold = (i===0 && _page===0);
-                            const bg = _palette(ch.storyId);
-                            const d = ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('zh-TW',{month:'2-digit',day:'2-digit'}) : '';
-                            const card = document.createElement('div');
-                            card.className = 'lcp-card' + (i===0 ? ' lcp-active' : '');
-                            card.innerHTML = `
-                                <div class="lcp-ribbon${isGold?' gold':''}"><img src="${BK_IMG}" alt=""></div>
-                                <div class="lcp-spacer"></div>
-                                <div class="lcp-chapter-label">CHAPTER</div>
-                                <div class="lcp-chapter-num">${num}</div>
-                                <div class="lcp-chapter-title">${ch.title||'未命名章節'}</div>
-                                <div class="lcp-chapter-story">${ch.storyTitle||''}</div>
-                                <div class="lcp-scene" style="background:${bg}">📖</div>
-                                <div class="lcp-card-date">${d}</div>
-                                <div class="lcp-card-status">
-                                    <span class="lcp-status-txt">已完成</span>
-                                    <div class="lcp-status-bar"><div class="lcp-status-fill"></div></div>
-                                    <span class="lcp-status-pct">100%</span>
-                                </div>`;
-                            card.addEventListener('click', () => _select(ch));
-                            track.appendChild(card);
-                        });
-                    }
-                    if (dotsEl) {
-                        dotsEl.innerHTML = '';
-                        for (let i=0;i<_pages;i++) {
-                            const dot = document.createElement('button');
-                            dot.className = 'lcp-dot'+(i===_page?' active':'');
-                            dot.addEventListener('click', ()=>{ _page=i; _render(); });
-                            dotsEl.appendChild(dot);
-                        }
-                    }
-                    const prev = document.getElementById('lcp-prev-btn');
-                    const next = document.getElementById('lcp-next-btn');
-                    if (prev) prev.disabled = _page===0;
-                    if (next) next.disabled = _page>=_pages-1;
-                }
-                function _select(ch) {
-                    try { localStorage.setItem('lcp_last', JSON.stringify({title:ch.title,storyTitle:ch.storyTitle,date:ch.createdAt})); } catch(e){}
-                    if (window.VN_Core?._setStoryId) window.VN_Core._setStoryId(ch.storyId||'', ch.storyTitle||'');
-                    window._lobbyPendingChapter = ch;
-                    _close();
-                    if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
-                }
-                function _updateLast() {
-                    try {
-                        const last = JSON.parse(localStorage.getItem('lcp_last')||'null');
-                        const t = document.getElementById('lcp-last-title');
-                        const m = document.getElementById('lcp-last-meta');
-                        if (last && t) { t.textContent = last.title||'—'; if(m) m.textContent = last.storyTitle||''; }
-                    } catch(e){}
-                }
-                async function _open() {
-                    // 酒館模式章節來自聊天歷史，直接走 VN 面板
-                    const isStandalone = window.OS_API?.isStandalone?.() ?? false;
-                    if (!isStandalone) {
-                        if (window.AureliaControlCenter) window.AureliaControlCenter.showVnPanel('chapter');
-                        return;
-                    }
-                    const panel = document.getElementById('lobby-chapter-panel');
-                    if (!panel) return;
-                    _page = 0; _all = [];
-                    const track = document.getElementById('lcp-cards-track');
-                    if (track) track.innerHTML = '<div class="lcp-empty"><div style="font-size:22px">⏳</div><div>讀取中...</div></div>';
-                    panel.classList.add('active');
-                    _updateLast();
-                    try {
-                        if (window.OS_DB?.getAllVnChapters) {
-                            const chapters = await window.OS_DB.getAllVnChapters();
-                            chapters.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-                            _all = chapters;
-                            const ids = new Set(chapters.map(c=>c.storyId).filter(Boolean));
-                            const cnt = document.getElementById('lcp-story-count');
-                            if (cnt) cnt.textContent = String(ids.size||chapters.length);
-                        }
-                    } catch(e) { console.warn('[LCP] DB err', e); }
-                    _pages = Math.max(1, Math.ceil(_all.length/PER_PAGE));
-                    _render();
-                }
-                function _close() { document.getElementById('lobby-chapter-panel')?.classList.remove('active'); }
-                function _init() {
-                    document.getElementById('lcp-close-btn')?.addEventListener('click', _close);
-                    document.getElementById('lcp-back-btn')?.addEventListener('click', _close);
-                    document.getElementById('lcp-prev-btn')?.addEventListener('click', ()=>{ if(_page>0){_page--;_render();} });
-                    document.getElementById('lcp-next-btn')?.addEventListener('click', ()=>{ if(_page<_pages-1){_page++;_render();} });
-                    document.getElementById('lobby-chapter-panel')?.addEventListener('click', e=>{ if(e.target.id==='lobby-chapter-panel') _close(); });
-                }
-                return { open: _open, close: _close, init: _init };
-            })();
-            LobbyChapterPanel.init();
-
             // 🎮 書咖俯視舞台：掛載＋頂欄開關鈕
             if (window.LobbyStage) window.LobbyStage.tryMount();
             const lstageBtn = tab.querySelector('#lstage-toggle');
@@ -1276,10 +1100,12 @@ const IRIS_IDLE = [
                 if (window.VN_READER) window.VN_READER.show();
             });
 
-            // 📚 章節選擇大廳面板
+            // 📚 章節選擇：兩版都開 VN 面板那一個（量子白廳）。
+            //   以前這裡卡著一個大廳專屬的舊筆記本面板(lcp)，而且只有獨立版看得到 ——
+            //   酒館按下去是新的、PWA 按下去是舊的，同一顆鈕兩種東西。舊那份已整份移除。
             const chapterBtn = tab.querySelector('#void-chapter-btn');
             if (chapterBtn) chapterBtn.addEventListener('click', () => {
-                LobbyChapterPanel.open();
+                if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel('chapter');
             });
 
             const storeCloseBtn = tab.querySelector('#store-close-btn');

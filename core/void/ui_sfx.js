@@ -46,7 +46,7 @@
 
     // 點擊規則：由上往下比對，第一個命中的勝
     const CLICK_RULES = [
-        ['.chx-nav, .lcp-nav', 'slide'],   // 章節選擇的左右翻頁（量子白廳 chx／舊筆記本 lcp）：滑過音當翻卡聲
+        ['.chx-nav', 'slide'],   // 章節選擇（量子白廳）的左右翻頁：滑過音當翻卡聲
         ['[data-act="close"], #ach-close-btn, #hist-close-btn, #lca-close, #close-bookshelf-btn, .lsd-close, .lstage-win-close', 'close'],
         ['[data-act="back"], .lset-back, .lb-back-btn', 'cancel'],
         ['#iris-send-btn, #iris-retry-btn, [data-act="save"], .lep-done, .hist-edit-confirm-btn', 'confirm'],

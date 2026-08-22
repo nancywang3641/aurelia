@@ -715,6 +715,11 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
         localStorage.removeItem(`avs_state_${sid}`);
         localStorage.removeItem(`avs_snap_${sid}`);
 
+        // 3. 整個故事沒了，掛在它身上的長期記憶也要跟著走，不然下一本書會被上一本的記憶餵。
+        //    向量記憶＝這條故事線的、狀態資料＝NPC 登場帳與人物檔案（跟章節同一把 storyId 分艙）。
+        try { await win.OS_DB.deleteVnMemoriesByStoryId?.(sid); } catch (e) { console.warn('[VN] 清向量記憶失敗:', e); }
+        try { await win.OS_DB.deleteStateData?.(sid); } catch (e) { console.warn('[VN] 清人物檔案失敗:', e); }
+
         if (sid === window.VN_Core._currentStoryId) {
             window.VN_Core._setStoryId('', '');
         }
@@ -751,8 +756,15 @@ header.querySelector('.ch-story-del').onclick = async (e) => {
                         // 刪除單章
                         item.querySelector('button[data-id]').onclick = async (e) => {
                             e.stopPropagation();
-                            if (!confirm(`確定刪除「${ch.title}」？`)) return;
-                            await win.OS_DB.deleteVnChapter(ch.id);
+                            if (!confirm(`確定刪除「${ch.title}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
+                            // 🚨 一律走 VN_READER.deleteChapter：直接叫 OS_DB.deleteVnChapter 會漏掉
+                            //    記憶清理 / 人物檔案對帳 / 數值重放（被刪的角色下一輪會原樣復活）。
+                            if (win.VN_READER?.deleteChapter) {
+                                const r = await win.VN_READER.deleteChapter(ch.id);
+                                if (!r || !r.ok) { alert('刪不掉：' + ((r && r.why) || '未知原因')); return; }
+                            } else {
+                                await win.OS_DB.deleteVnChapter(ch.id);
+                            }
                             item.remove();
                             // 更新章數顯示
                             const remaining = body.querySelectorAll('.ch-item').length;
