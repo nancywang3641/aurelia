@@ -30,6 +30,24 @@
     }
     function saveBooks(books) { localStorage.setItem(LSKEY_BOOKS, JSON.stringify(books)); }
 
+    // ── 常駐書包（＝酒館的「全域世界書」）─────────────────────────────
+    //   藏書自己掛的書包存在 vn_active_wb_packs（每本一份，開書時由書架寫入）。
+    //   但「格式協議／BGM 清單／音效清單」這種東西是跨故事的同一份，
+    //   逐本掛＝每開一本新書就要記得掛一次，漏掛不會報錯、只會安靜地少注入。
+    //   標成常駐的書包每本書都會併進去，且不佔那本書自己的插槽。
+    const LSKEY_GLOBAL = 'vn_global_wb_packs';
+    function getGlobalPacks() {
+        try { const a = JSON.parse(localStorage.getItem(LSKEY_GLOBAL) || '[]'); return Array.isArray(a) ? a : []; }
+        catch(e) { return []; }
+    }
+    function saveGlobalPacks(list) {
+        try { localStorage.setItem(LSKEY_GLOBAL, JSON.stringify([...new Set(list || [])])); } catch(e) {}
+    }
+    function getStoryPacks() {
+        try { const a = JSON.parse(localStorage.getItem('vn_active_wb_packs') || '[]'); return Array.isArray(a) ? a : []; }
+        catch(e) { return []; }
+    }
+
     // ── 格式匯入 ────────────────────────────────────────────────────
     function importFromST(json, targetBookName) {
         const entries = [];
@@ -83,6 +101,7 @@
             <div class="wb-book-row">
               <span style="font-size:18px; color:#1A1C28;" title="當前書包">📚</span>
               <select id="wb-book-select" class="wb-book-select"></select>
+              <button id="wb-global-btn" class="wb-book-btn"><i class="fa-regular fa-bookmark"></i> 每本都用</button>
               <button id="wb-new-book-btn" class="wb-book-btn" title="創建新世界書包">＋ 創建</button>
               <button id="wb-del-book-btn" class="wb-book-btn danger" title="刪除當前書包">🗑️</button>
             </div>
@@ -190,6 +209,19 @@
         }
 
         sel.innerHTML = books.map(b => `<option value="${escHtml(b)}" ${b === _activeBook ? 'selected' : ''}>${escHtml(b)}</option>`).join('');
+        renderGlobalBtn(root);
+    }
+
+    // 「每本都用」的亮暗狀態跟著當前書包走
+    function renderGlobalBtn(root) {
+        const btn = root.querySelector('#wb-global-btn');
+        if (!btn) return;
+        const on = getGlobalPacks().includes(_activeBook);
+        btn.classList.toggle('on', on);
+        btn.innerHTML = `<i class="fa-${on ? 'solid' : 'regular'} fa-bookmark"></i> 每本都用`;
+        btn.title = on
+            ? `「${_activeBook}」每本書都會讀到，點一下取消`
+            : `讓「${_activeBook}」每本書都讀得到（不佔那本書自己的欄位）`;
     }
 
     function renderCatBar(root) {
@@ -631,8 +663,18 @@
         root.querySelector('#wb-book-select').addEventListener('change', e => {
             _activeBook = e.target.value;
             _activeCat = '全部'; // 切換書包時重置分類
+            renderGlobalBtn(root);
             renderCatBar(root);
             renderList(root);
+        });
+
+        // 常駐書包開關（＝酒館的全域世界書）：掛一次、每本藏書都讀得到
+        root.querySelector('#wb-global-btn').addEventListener('click', () => {
+            const on = !getGlobalPacks().includes(_activeBook);
+            const list = getGlobalPacks().filter(p => p !== _activeBook);
+            if (on) list.push(_activeBook);
+            saveGlobalPacks(list);
+            renderGlobalBtn(root);
         });
 
         // 創建新書包
@@ -671,6 +713,7 @@
             const books = getBooks().filter(b => b !== _activeBook);
             if (books.length === 0) books.push('預設書包');
             saveBooks(books);
+            saveGlobalPacks(getGlobalPacks().filter(p => p !== _activeBook));   // 常駐名單別留下不存在的書包
             
             _activeBook = books[0];
             _activeCat = '全部';
@@ -710,6 +753,7 @@
             if (!confirm('🚨 確定要銷毀所有世界書包與條目嗎？此操作不可撤銷！')) return;
             await win.OS_DB.clearWorldbookEntries();
             saveBooks([...DEFAULT_BOOKS]);
+            saveGlobalPacks([]);
             _activeBook = '預設書包';
             await reload(root);
             root.querySelector('#wb-cfg-overlay').classList.add('hidden');
@@ -790,6 +834,19 @@
          */
         getAvailablePacks: function() {
             return getBooks();
+        },
+
+        /** 這輪真正要讀的書包＝常駐書包 ∪ 這本藏書自己掛的（去重）。組 context 一律走這支。 */
+        getActivePacks: function() {
+            return [...new Set(getGlobalPacks().concat(getStoryPacks()))];
+        },
+        getGlobalPacks,
+        isGlobalPack: function(name) { return getGlobalPacks().includes(String(name)); },
+        setGlobalPack: function(name, on) {
+            const n = String(name || ''); if (!n) return;
+            const list = getGlobalPacks().filter(p => p !== n);
+            if (on) list.push(n);
+            saveGlobalPacks(list);
         },
 
         /**
