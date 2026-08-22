@@ -1300,12 +1300,9 @@
                         return req + " " + text;
                     }).join(" ");
                     
-                    const doc = win.document;
-                    if (doc) {
-                        const genTitle = doc.getElementById('vn-gen-title')?.value || '';
-                        const genReq = doc.getElementById('vn-gen-request')?.value || '';
-                        scanText += " " + genTitle + " " + genReq;
-                    }
+                    // 這裡原本還會去讀生成面板那兩個輸入框補進掃描文字 ——
+                    //   但 scanText 的第一行就是 userMessage，而 userMessage 正是那個框裡的內容，
+                    //   等於同一段話被算了兩次。面板已移除，這段連同重複一起拿掉。
                 } catch(e) {}
             }
 

@@ -30,9 +30,9 @@
     } = window.VN_Panels;
 
     // 生成器函式（vn_generator.js）
-    const {
-        openGeneratePanel, closeGeneratePanel, generateStory, diveSelectedCard
-    } = window.VN_Generator;
+    //  生成面板已移除：以前這裡還匯入 openGeneratePanel/closeGeneratePanel/diveSelectedCard，
+    //  那三支的工作（開 UI、用 dataset 傳參數、監看按鈕判斷完成）已經拆進 runCardDive / runFreeDive。
+    const { generateStory, runCardDive, runFreeDive } = window.VN_Generator;
 
     // === 3. 核心腳本邏輯 ===
     const VN_Core = {
@@ -2909,7 +2909,7 @@
         switchPage, stopGame, openChapterPanel, closeChapterPanel,
         openGameSettings, closeGameSettings, openChatBgPanel, closeChatBgPanel, handleChatBgFile,
         applyChatBgUrl, clearChatBg,
-        openGeneratePanel, closeGeneratePanel, generateStory, diveSelectedCard,
+        generateStory, runCardDive, runFreeDive,
         resetPromptOrder() { VN_PromptOrder.reset(); },
         loadAvatarManager,   // 供 vn_settings.js 外接調用（接受自定義 listId）
         async backupAvatarsToWorldbook(btn) {
@@ -3246,29 +3246,23 @@
         }
 
         // 自由書籍 Dive：從書架自由劇情書過來
+        //  以前這裡是「把值填進生成面板的兩個輸入框，再呼叫 generateStory()」——
+        //  等於拿 DOM 當參數通道。現在直接傳，面板在不在都不影響。
         if (window._pendingFreeScriptDive && (win.OS_API?.isStandalone?.() ?? false)) {
             const _free = window._pendingFreeScriptDive;
             window._pendingFreeScriptDive = null;
             setTimeout(() => {
-                const genInput = document.getElementById('vn-gen-request');
-                const genTitle = document.getElementById('vn-gen-title');
-                if (genInput) genInput.value = _free.request;
-                if (genTitle) genTitle.value = _free.title || '';
-                generateStory();
+                runFreeDive({ title: _free.title || '', request: _free.request });
                 console.log('[VN] 自由書籍 Dive 觸發生成:', _free.title || '（無標題）');
             }, 300);
         }
 
-        // QB Dive：靜默填入 prompt，直接觸發生成（獨立路徑，不開首頁生成 overlay）
+        // QB Dive：直接觸發生成（獨立路徑）
         if (window._pendingQBPayload && (win.OS_API?.isStandalone?.() ?? false)) {
             const _qbPayload = window._pendingQBPayload;
             window._pendingQBPayload = null;
             setTimeout(() => {
-                const genInput = document.getElementById('vn-gen-request');
-                const genTitle = document.getElementById('vn-gen-title');
-                if (genInput) genInput.value = _qbPayload.startPrompt;
-                if (genTitle) genTitle.value = _qbPayload.title || '';
-                generateStory();
+                runFreeDive({ title: _qbPayload.title || '', request: _qbPayload.startPrompt });
                 console.log('[VN] QB Dive 觸發生成:', _qbPayload.title);
             }, 300);
         }

@@ -152,7 +152,7 @@
             if (!action) return;
             setTimeout(() => {
                 if (action === 'story' && window.StoryExtractor) window.StoryExtractor.show();
-                else if (action === 'generate' && window.VN_PLAYER) window.VN_PLAYER.openGeneratePanel();
+                // 'generate' 這個動作已經沒有對應面板：生成入口統一在書架的自由劇情
                 else if (action === 'chapter' && window.VN_PLAYER) window.VN_PLAYER.openChapterPanel();
                 else if (action === 'autoload' && window._lobbyPendingChapter && window.VN_Core) {
                     const p = window._lobbyPendingChapter;

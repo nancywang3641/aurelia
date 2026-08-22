@@ -1420,9 +1420,17 @@
                     shelves.forEach(s => s.style.display = 'flex');
 
                     if (isStandalone) {
-                        window._pendingCardDive = { worldId: w.id, greeting: chosenGreeting, title: w.title, userReply };
+                        // 直接把參數交給生成器，不再設 pending 等面板自己去撿 ——
+                        //   那條路得先叫出生成面板才跑得動，面板一拆整個 dive 就斷了。
+                        const _dive = { worldId: w.id, greeting: chosenGreeting, title: w.title, userReply };
                         if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
-                        setTimeout(() => window.VN_Core?.openGeneratePanel?.(), 400);
+                        setTimeout(() => {
+                            // 🚨掛在 VN_PLAYER 不是 VN_Core：舊碼寫成 VN_Core，?. 把它整個吞掉，
+                            //   角色卡 Dive 一直是空打。找不到就出聲，不要再靜靜失敗。
+                            const P = window.VN_PLAYER || window.VN_Core;
+                            if (P && P.runCardDive) P.runCardDive(_dive);
+                            else console.warn('[書架] 生成器還沒就緒，這次 dive 沒跑起來');
+                        }, 400);
                     } else {
                         if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
                         if (window.StoryExtractor?.show) window.StoryExtractor.show();
