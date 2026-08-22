@@ -40,6 +40,7 @@
     <link rel="stylesheet" href="css/os_debug_panel.css" />
     <link rel="stylesheet" href="css/os_tarot.css" />
     <link rel="stylesheet" href="css/os_journal.css" />
+    <link rel="stylesheet" href="css/os_story_tools.css" />
     <link rel="stylesheet" href="css/os_exchange.css" />
     <link rel="stylesheet" href="css/os_user_center.css" />
     <link rel="stylesheet" href="css/os_monitor.css" />
@@ -49,6 +50,7 @@
     <link rel="stylesheet" href="css/vn_styles.css" />
     <link rel="stylesheet" href="css/vn_core.css" />
     <link rel="stylesheet" href="css/vn_fx.css" />
+    <link rel="stylesheet" href="css/vn_battle.css" />
     <link rel="stylesheet" href="css/vn_gallery.css" />
     <link rel="stylesheet" href="css/vn_tts_panel.css" />
     <link rel="stylesheet" href="css/os_control_room.css" />
@@ -59,8 +61,6 @@
     <link rel="stylesheet" href="css/map_core.css" />
     <link rel="stylesheet" href="css/rpg_status_panel.css" />
     <link rel="stylesheet" href="css/void_achievement.css" />
-    <link rel="stylesheet" href="css/chat_window.css" />
-    <link rel="stylesheet" href="css/os_board.css" />
 </head>
 <body>
 
@@ -78,7 +78,6 @@
 
     <script src="core/panel_manager.js"></script>
     <script src="core/ui_utilities.js"></script>
-    <script src="core/claude_terminal.js"></script>
     <script src="core/void/panels.js"></script>
     <script src="core/void/worldview.js"></script>
     <script src="core/void/prompts.js"></script>
@@ -95,19 +94,24 @@
     <script src="core/void/login.js"></script>
     <script src="core/void/phone_shell.js"></script>
     <script src="core/void/app_runtime.js"></script>
-    <script src="core/chat_window.js"></script>
-    <script src="core/chat_room.js"></script>
-    <script src="core/chat_group.js"></script>
-    <script src="core/chat_canvas.js"></script>
     <script src="core/void_terminal.js"></script>
     <script src="core/control_center.js"></script>
     <script src="core/vn_free_mode.js"></script>
     <script src="bgm-global-collector.js"></script>
 
     <script src="os_phone/os/os_settings.js"></script>
+    <!-- 🖼️ 圖片設置的 ComfyUI 直連＋🎵 語音清單：2026-07-17 自 os_settings.js 拆出，
+         onclick 指名 window._cfdPreset.* → 少載這支＝圖片設置整頁按了就爆，存檔也丟包庫 -->
+    <script src="os_phone/os/os_settings_comfyui.js"></script>
+    <script src="os_phone/os/os_settings_voice.js"></script>
     <script src="os_phone/os/os_db.js"></script>
     <script src="os_phone/os/app_store.js"></script>
     <script src="os_phone/os/os_studio.js"></script>
+    <!-- 創作室四支拆檔：載入當下就抓 OS_STUDIO._b，必須緊跟在 os_studio.js 後面 -->
+    <script src="os_phone/os/os_studio_worldbook.js"></script>
+    <script src="os_phone/os/os_studio_persona.js"></script>
+    <script src="os_phone/os/os_studio_vn_gallery.js"></script>
+    <script src="os_phone/os/os_studio_diff_engine.js"></script>
     <script src="os_phone/os/os_persona.js"></script>
     <script src="os_phone/os/os_prompts.js"></script>
     <script src="os_phone/os/os_dialer.js"></script>
@@ -139,18 +143,32 @@
     <script src="os_phone/os/os_worldbook.js"></script>
     <script src="os_phone/os/os_avs_state.js"></script>
     <script src="os_phone/os/os_avs_memory.js"></script>
+    <script src="os_phone/os/os_avs_skins.js"></script>
     <script src="os_phone/os/os_ui_style_packs.js"></script>
     <script src="os_phone/os/os_avs.js"></script>
     <script src="os_phone/os/os_card_import.js"></script>
     <script src="os_phone/os/nai_recipe.js"></script>
-    <script src="os_phone/os/os_spend_panel.js"></script>
-    <script src="os_phone/os/os_board.js"></script>
-    <script src="os_phone/os/os_workbench.js"></script>
+
+    <!-- 📖 故事日誌與故事管理：大廳日誌鈕與 app_runtime 的總結注入都指名這兩支 -->
+    <script src="os_phone/os/os_journal.js"></script>
+    <script src="os_phone/os/os_story_tools.js"></script>
+
+    <!-- 🏦 經濟與房產：大廳白兔＝交易所、瀅瀅＝書咖櫃檯、dock＝房產手帳，全靠這批 -->
+    <script src="os_phone/os/os_pt.js"></script>
+    <script src="os_phone/os/os_cafe.js"></script>
+    <script src="os_phone/os/os_room_svg.js"></script>
+    <script src="os_phone/os/os_room_gen.js"></script>
+    <script src="os_phone/os/os_landlord.js"></script>
+    <script src="os_phone/os/os_blueprints.js"></script>
+    <script src="os_phone/os/os_landlord_room.js"></script>
+    <script src="os_phone/os/os_landlord_book.js"></script>
 
     <!-- 🚪 世界門（AI 生成世界觀）：依賴大廳與風格庫，所以排在它們後面 -->
     <script src="os_phone/os/os_worldgate.js"></script>
     <script src="os_phone/vn_story/vn_styles.js"></script>
     <script src="os_phone/vn_story/vn_settings.js"></script>
+    <script src="os_phone/vn_story/vn_tts.js"></script>
+    <script src="os_phone/vn_story/vn_tts_panel.js"></script>
     <script src="os_phone/vn_story/vn_dynamic_parser.js"></script>
     <!-- vn_core 拆分後的底層工具（必須先於 vn_core.js 載入） -->
     <script src="os_phone/vn_story/vn_cache.js"></script>
@@ -162,12 +180,17 @@
     <script src="os_phone/vn_story/vn_generator.js"></script>
     <script src="os_phone/vn_story/vn_theme.js"></script>
     <script src="os_phone/vn_story/vn_fx.js"></script>
+    <script src="os_phone/vn_story/vn_battle.js"></script>
     <script src="os_phone/vn_story/vn_chapter_warp.js"></script>
+    <!-- 開場 Loading 的視差校準艙＋輪播提示（vn_core 掛載時就要用到，必須排它前面） -->
+    <script src="os_phone/vn_story/vn_loader_tips.js"></script>
+    <script src="os_phone/vn_story/vn_loader_chamber.js"></script>
     <script src="os_phone/vn_story/vn_core.js"></script>
     <script src="os_phone/vn_story/vn_core_images.js"></script>
     <script src="os_phone/vn_story/vn_core_stage.js"></script>
     <script src="os_phone/vn_story/vn_scene_insert.js"></script>
     <script src="os_phone/vn_story/vn_avatar_earlybird.js"></script>
+    <script src="os_phone/vn_story/vn_end_panel.js"></script>
     <script src="os_phone/vn_story/vn_inspect.js"></script>
     <script src="os_phone/vn_story/vn_reader.js"></script>
     <script src="os_phone/vn_story/vn_phone.js"></script>
@@ -181,6 +204,16 @@
     <script src="os_phone/rpg/status_panel.js"></script>
     <!-- ⛔ 已停用：avatar_manager 與 VN 頭像系統並行重複生成、浪費資源（index.js 早已停用，這裡對齊）。檔案保留。 -->
     <!-- <script src="os_phone/rpg/avatar_manager.js"></script> -->
+    <!-- ⛔ avatar_rules_injector / world_rules_injector 不進 PWA：它們只翻酒館世界書條目的開關，
+         走 TavernHelper 世界書 API，而 PWA 的 TavernHelper 是 null -->
+
+    <!-- 🗺️ 地圖：css/map_core.css 早就掛著，但這六支一直沒補，所以地圖 app 開不起來 -->
+    <script src="os_phone/map/map_data.js"></script>
+    <script src="os_phone/map/world_runtime.js"></script>
+    <script src="os_phone/map/world_generator.js"></script>
+    <script src="os_phone/map/schedule_engine.js"></script>
+    <script src="os_phone/map/scene_map_engine.js"></script>
+    <script src="os_phone/map/map_core.js"></script>
 
     <script src="os_phone/wx/wx_user_profile.js"></script>
     <script src="os_phone/wx/wx_theme.js"></script>
