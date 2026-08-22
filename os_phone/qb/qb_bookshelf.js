@@ -715,6 +715,8 @@
             // 清除舊世界書狀態
             localStorage.removeItem('vn_active_wb_packs');
             localStorage.removeItem('vn_current_world_id');
+            // 自由劇情不屬於任何一本書，但一樣是一條新故事線 → 這裡就生 id
+            try { window.VN_Core?.newStoryId?.(title || '自由劇情', ''); } catch(e) {}
 
             // 設置 pending，讓 VN 頁接收後自動生成
             window._pendingFreeScriptDive = { title, request };
@@ -1392,6 +1394,7 @@
                     localStorage.setItem('vn_current_world_id', w.id);
                     localStorage.removeItem('vn_pending_first_mes');
                     try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
+                    try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}     // 這一刻＝建立聊天室
                     try { window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}   // 立繪模式跟著這本書
 
                     document.getElementById('qb-bookshelf-overlay').style.display = 'none';
@@ -1422,6 +1425,10 @@
                 // 這條路以前沒寫 vn_current_world_id，留著上一次 dive 的舊值 →
                 //   「這本書」的設定（立繪模式、AVS 條件規則的 worldId）全部認錯書。
                 try { localStorage.setItem('vn_current_world_id', w.id); } catch(e) {}
+                // 🚨 故事線的 id 要在這裡就生出來（＝酒館建立聊天室的那一刻）。
+                //    下面的變數包初始化、AVS、記憶、手機資料都按 storyId 分艙，
+                //    晚一步生就會全部寫進「上一本書」的桶裡。
+                try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}
                 try { window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
 
                 // 初始化變數包（若有綁定）
