@@ -212,7 +212,6 @@
             let _bgSvc = '';
             try { if (_IM && typeof _IM.serviceFor === 'function') _bgSvc = _IM.serviceFor('bg') || ''; } catch (e) {}
             const _bgTimeoutMs = (_bgSvc === 'pollinations') ? 12000 : 150000;
-            console.log(`[VN] 背景生成 ${cacheId}｜來源 ${_bgSvc || '(問不到，當本機直連)'}｜逾時 ${_bgTimeoutMs / 1000}s`);
             let raw = '';
             if (!forceFallback) {
                 try {

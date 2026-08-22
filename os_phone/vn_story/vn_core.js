@@ -2236,8 +2236,6 @@
                     const sceneName = sceneLabel.replace(/_/g, ' ');
                     const rankPanel = document.getElementById('stream-rank-panel');
                     const usePanel  = rankPanel && !rankPanel.classList.contains('hidden');
-                    // 左上角場景 tag 沒出現時，這行直接說明是「被直播面板接走」還是「元素不見了」
-                    console.log(`[VN_Core🔎] 場景 tag「${sceneName}」→ ${usePanel ? '直播面板那格' : '左上角 #top-badge'}｜元素 ${document.getElementById(usePanel ? 'stream-scene-label' : 'top-badge') ? 'ok' : '不存在'}`);
                     if (usePanel) {
                         document.getElementById('stream-scene-label').innerText = sceneName;
                         document.getElementById('stream-scene-row').classList.remove('hidden');
@@ -2250,7 +2248,6 @@
                 if (aiPrompt) {
                     const memUrl = this._bgMemCache[cacheId];
                     const _gameBg = document.getElementById('game-bg');
-                    console.log(`[VN_Core🔎] [Bg|${cacheId}] → ${memUrl ? '記憶體快取命中' : '要去撈/生圖'}｜#game-bg ${_gameBg ? 'ok' : '不存在'}`);
                     if (memUrl) {
                         this._lastBgCacheId = cacheId;   // 有現成圖 → 更新「最後可用背景」
                         this._setBgImage(_gameBg, memUrl);
