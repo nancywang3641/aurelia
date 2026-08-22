@@ -585,10 +585,6 @@ const IRIS_IDLE = [
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-archive-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="禁庫">藏書</span>
                         </button>
-                        <button class="lb-dock-btn" id="lb-dock-story" data-proxy="void-story-btn" title="踏入故事">
-                            <i class="fa-solid fa-masks-theater"></i>
-                            <span class="lb-dock-label" data-cn-404="故事">故事</span>
-                        </button>
                         <button class="lb-dock-btn" data-proxy="void-chapter-btn" title="章節選擇">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-chapters-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="異常記錄">章節</span>
@@ -654,12 +650,6 @@ const IRIS_IDLE = [
                             </div>
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
-                    </div>
-                    <!-- 獨立版：直接進書架的「自由劇情」。以前開的是另一個「AI 生成劇情」面板，
-                         那面板跟自由劇情做同一件事、資料卻各存各的，兩個入口只會讓人猶豫該按哪個。
-                         書架沒載入時退回舊面板，不至於整顆按鈕沒反應。酒館版這顆是隱藏的（見下方），照舊走 'story'。 -->
-                    <div class="void-btn" id="void-story-btn" onclick="if(window.OS_API?.isStandalone?.()){ if(!window.QbBookshelf?.openFreeScript?.()) window.AureliaControlCenter?.showVnPanel?.('generate'); } else { window.AureliaControlCenter?.showVnPanel?.('story'); }">
-                        <div class="void-btn-inner"><span>踏入故事</span></div>
                     </div>
                     <div class="void-btn" id="void-chapter-btn">
                         <div class="void-btn-inner">
@@ -974,14 +964,8 @@ const IRIS_IDLE = [
                 };
             }
 
-            // ST 版：隱藏「踏入故事」按鈕（與「館藏」功能重複）；獨立版 dock 補「故事」快捷
-            const storyBtn = tab.querySelector('#void-story-btn');
-            if (storyBtn && !(window.OS_API?.isStandalone?.() ?? false)) {
-                storyBtn.style.display = 'none';
-            } else {
-                const dockStory = tab.querySelector('#lb-dock-story');
-                if (dockStory) dockStory.style.display = 'flex';
-            }
+            // 「故事」按鈕已移除：它跟「藏書」都是進書架（自由劇情就是書架第一格），
+            //   留兩顆只是多一個要猜的入口。酒館版本來就把它藏起來，等於一直是空位。
 
             if (closeBookshelfBtn) {
                 closeBookshelfBtn.onclick = () => {
