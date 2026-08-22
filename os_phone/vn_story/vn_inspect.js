@@ -393,23 +393,11 @@
                 const lastCh = storyChs[0];
                 if (!lastCh.avsStateBefore) return;
 
-                // 刪除最後一章
-                await win.OS_DB?.deleteVnChapter?.(lastCh.id);
-
-                // 還原 AVS 狀態到章節開始前
-                const stateKey = `avs_state_${storyId}`;
-                localStorage.setItem(stateKey, JSON.stringify(lastCh.avsStateBefore));
-                if (win.dispatchEvent) win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: lastCh.avsStateBefore }));
-
-                // 📇 回朔對帳（Rae 定案 2026-08-03）：以「還活著的章節」為底本重掃 [Char|...]，
-                //    多出來的角色手冊＋登場帳一起刪——否則名冊每輪對主模型下「嚴禁當新角色」的
-                //    亡靈復活令，回朔掉的角色重生成時必定原樣回歸。記憶側順路對齊（自帶守門，安全）。
-                try {
-                    const alive = storyChs.filter(c => c.id !== lastCh.id)
-                        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-                    await win.OS_NPC_DOSSIER?.reconcile?.('VN回朔', alive.map(c => String(c.content || '')));
-                } catch (e2) { console.warn('[AVS] 回朔對帳(人物手冊)失敗:', e2); }
-                try { await win.OS_VECTOR_INJECT?.reconcileToStory?.(); } catch (e2) {}
+                // 刪章的連動（數值退回這章開始前、記憶按章清、人物檔案以還活著的正文對帳）
+                //   統一走 VN_READER.deleteChapter —— 閱讀器的刪章與這裡的回朔是同一件事，
+                //   分兩份寫的話補了一邊漏一邊（人物檔案不對帳＝被刪掉的角色下一輪原樣復活）。
+                const r = await win.VN_READER?.deleteChapter?.(lastCh.id);
+                if (!r || !r.ok) { console.warn('[AVS] 回朔失敗:', r && r.why); return; }
 
                 console.log('[AVS] ↩ 回朔成功，刪除章節:', lastCh.title || lastCh.id);
             } catch(e) {

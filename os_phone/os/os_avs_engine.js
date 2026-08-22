@@ -89,9 +89,11 @@
         }
     }
 
-    function _avsApplyVars(inner) {
+    // opts.noSnapshot：重算整條故事時用（改/刪章節後把 <vars> 逐章重放）。
+    //   快照堆只留 10 筆，重放幾十章會把「還原上一步」要用的那筆擠掉 → 重放不入堆。
+    function _avsApplyVars(inner, opts) {
         let state = _avsRead();
-        _avsSnapshot(state);
+        if (!opts || !opts.noSnapshot) _avsSnapshot(state);
 
         // 舊版 JSON 格式 fallback
         if (inner.trim().startsWith('{')) {
