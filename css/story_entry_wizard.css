@@ -398,12 +398,35 @@
     scrollbar-width: thin;
     scrollbar-color: #b9c6dd transparent;
 }
-/* 框變寬後行長會爆到 50 字以上,段落限一行約 42 字並置中 */
-.sew-preview-body p {
+/* 退路的純文字段落:框變寬後行長會爆到 50 字以上,限一行約 42 字並置中 */
+.sew-preview-body > p {
     margin: 0 auto calc(var(--sew-u, 1px) * 10);
     max-width: calc(var(--sew-u, 1px) * 580);
 }
-#sew-root.sew-portrait .sew-preview-body p { max-width: none; }
+#sew-root.sew-portrait .sew-preview-body > p { max-width: none; }
+
+/* ── 預覽框內＝藏書那套渲染(閱讀紙卡 + 作者美化面板) ──
+   紙卡本體沿用 story_extractor.css 的白理石樣式,只把固定 px 換成版面單位、
+   並壓掉黑金暗版對紙卡的染色(精靈永遠是白金舞台,深藍卡塞進來會撞色)。
+   .story-html-block(作者自帶樣式的美化面板)只調外框寬度,內部一律不碰。 */
+#se-root-wrapper #sew-root .native-render-wrapper {
+    max-width: calc(var(--sew-u, 1px) * 640);
+    margin: 0 auto calc(var(--sew-u, 1px) * 14);
+    padding: calc(var(--sew-u, 1px) * 20) calc(var(--sew-u, 1px) * 26);
+    border-radius: calc(var(--sew-u, 1px) * 6);
+    font-size: calc(var(--sew-u, 1px) * 13.5);
+    line-height: 2.1;
+    color: var(--sew-ink);
+    background: var(--sew-paper);
+    border: calc(var(--sew-u, 1px) * 1) solid rgba(42, 74, 128, 0.28);
+    box-shadow: none;
+}
+#se-root-wrapper #sew-root .story-html-block {
+    max-width: calc(var(--sew-u, 1px) * 700);
+    margin: 0 auto calc(var(--sew-u, 1px) * 14);
+}
+#sew-root.sew-portrait .native-render-wrapper,
+#sew-root.sew-portrait .story-html-block { max-width: 100%; }
 
 /* ── 幕三:啟程(第一句輸入) ── */
 .sew-embark-frame {

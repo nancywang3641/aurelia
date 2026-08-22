@@ -443,8 +443,28 @@
             setTimeout(() => this._stopPanelMedia(), 300);
             setTimeout(() => this._stopPanelMedia(), 1200);
 
+            if (!this.renderOpeningInto(contentArea, sig)) {
+                contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
+                    <div style="font-size:40px; margin-bottom:10px;">📭</div>
+                    開場白內容為空
+                </div>`;
+                return;
+            }
+            console.log(`[StoryExtractor] ✅ 開場白渲染完成，共 ${contentArea.children.length} 個區塊`);
+        },
+
+        // 把「已渲染好的第 0 樓開場白」鋪進任意容器：純文字段落 + HTML 美化區塊照原順序堆疊，回傳區塊數。
+        // 藏書內容區與入場精靈的開場預覽共用這一支——精靈以前自己把原文剝成純文字，作者的美化面板就整個不見了。
+        // srcHtml 省略時自己去刮第 0 樓；容器不存在或沒東西可鋪回傳 0，由呼叫端決定空狀態怎麼演。
+        renderOpeningInto(container, srcHtml) {
+            if (!container) return 0;
+            const html = (srcHtml != null)
+                ? srcHtml
+                : (document.querySelector('#chat .mes[mesid="0"] .mes_text')?.innerHTML || '');
+            if (!html) { container.innerHTML = ''; return 0; }
+
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = sig;
+            tempDiv.innerHTML = html;
 
             const BLOCK_TAGS = ['DIV', 'TABLE', 'FORM', 'DETAILS', 'SECTION', 'ARTICLE', 'ASIDE', 'NAV', 'FIELDSET', 'FIGURE', 'IFRAME', 'CANVAS', 'SVG'];
 
@@ -483,31 +503,20 @@
             });
             flushText();
 
-            contentArea.innerHTML = '';
-            contentArea.appendChild(frag);
+            container.innerHTML = '';
+            container.appendChild(frag);
+            if (container.children.length === 0) return 0;
 
-            if (contentArea.children.length === 0) {
-                contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
-                    <div style="font-size:40px; margin-bottom:10px;">📭</div>
-                    開場白內容為空
-                </div>`;
-                return;
-            }
-
-            this.fixIframes(contentArea);
-            this.mimicAuthorStyle(contentArea);
+            this.fixIframes(container);
+            this.mimicAuthorStyle(container);
             // iframe 載入慢（含內部 JS 觸發的 1.5s 過渡）→ 載完立刻補一次 + 1.6s 後再補一次最終態
-            contentArea.querySelectorAll('iframe').forEach(iframe => {
+            container.querySelectorAll('iframe').forEach(iframe => {
                 iframe.addEventListener('load', () => {
-                    console.log('[StoryExtractor] iframe 載入完成，補偷學樣式');
-                    this.mimicAuthorStyle(contentArea);
-                    setTimeout(() => {
-                        console.log('[StoryExtractor] iframe 載入後 1.6s，最終補正');
-                        this.mimicAuthorStyle(contentArea);
-                    }, 1600);
+                    this.mimicAuthorStyle(container);
+                    setTimeout(() => this.mimicAuthorStyle(container), 1600);
                 }, { once: true });
             });
-            console.log(`[StoryExtractor] ✅ 開場白渲染完成，共 ${contentArea.children.length} 個區塊`);
+            return container.children.length;
         },
 
         // ── 開場白切換列（卡片多開局）：拿「資料」自建、不搬酒館 DOM ──
