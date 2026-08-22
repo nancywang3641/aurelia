@@ -61,7 +61,8 @@
         // #fallback        → 中度磨砂（Pixabay，圖經審核可看清場景）
         // #fallback-strong → 重度磨砂（LoremFlickr，圖未審核糊到只剩色塊氛圍）
         _setBgImage: function(el, url) {
-            if (!el) return;
+            // 舞台還沒建好就套背景＝整張圖白生：以前這裡直接 return，畫面黑黑的什麼都不說
+            if (!el) { console.warn('[VN] 背景套用失敗：找不到 #game-bg（VN 舞台還沒建起來？）'); return; }
             if (url) {
                 el.style.backgroundImage = `url('${url}')`;
                 el.classList.toggle('bg-fallback', String(url).includes('#fallback'));
