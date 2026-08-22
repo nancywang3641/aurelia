@@ -16,20 +16,17 @@
         return win.TavernHelper || (win.parent && win.parent.TavernHelper) || (win.top && win.top.TavernHelper);
     }
 
-    // --- app 讀劇情歷史時保留最近幾則全文（更舊的縮成摘要）---
-    //   回傳 null＝不限制全送；0＝全部只讀摘要；N＝最近 N 則全文。
-    //   舊設定 enableSummaryOnly:true 等於「全部只讀摘要」→ 遷移成 0。
+    // --- 保留最近幾則全文（更舊的縮成摘要）---
+    //   🚨 全系統只有一格設定：劇情設置的 ctxChapters（預設 5）。劇情面板與 app 用同一格，
+    //      不要再開第二格 —— 幾百輪的量本來就不可能吃全文，預設就是「幾層之後轉摘要」。
+    //   回傳 N＝最近 N 則全文；0＝全部只讀摘要；null＝全送不限制。
     function getAppCtxMsgs() {
         try {
-            const saved = localStorage.getItem('os_global_config') || localStorage.getItem('wx_phone_api_config');
-            if (saved) {
-                const config = JSON.parse(saved);
-                if (config.appCtxMsgs === null) return null;
-                if (config.appCtxMsgs != null) { const n = parseInt(config.appCtxMsgs); return isNaN(n) ? 10 : Math.max(0, n); }
-                if (config.enableSummaryOnly === true) return 0;
-            }
+            const raw = JSON.parse(localStorage.getItem('vn_cfg_v4') || '{}').ctxChapters;
+            if (raw === null || raw === '') return null;             // 明確清空＝全送
+            if (raw != null) { const n = parseInt(raw); return isNaN(n) ? 5 : Math.max(0, n); }
         } catch(e) {}
-        return 10;
+        return 5;
     }
     win.OS_APP_CTX_MSGS = getAppCtxMsgs;   // PWA 那條路(os_api_engine)共用同一份判讀，別各寫一份
 

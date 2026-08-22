@@ -30,7 +30,6 @@
             useSystemApi: true, stProfileId: '', 
             directMode: false, enableStreaming: false, disableTyping: false,
             useGenerateRaw: false,
-            appCtxMsgs: 10,   // app 讀劇情歷史保留最近幾則全文；0＝全部只讀摘要、null＝全送
             maxTokens: 2000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
             usePresetPrompts: false, presetName: '', customCot: '', customCotMap: {}
         };
@@ -987,12 +986,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <select class="set-select" id="os-api-model"><option value="${llmConfig.model}">${llmConfig.model} (當前)</option></select>
                                 <div class="btn-fetch" id="os-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從酒館同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '🔄'}</div>
                             </div>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label" title="微信／微薄／電話／通訊錄這些 app 讀劇情歷史時，只有最近這幾則帶全文，更舊的自動縮成摘要。">📱 app 讀劇情保留最近幾則全文 <span class="lbl-opt">其餘自動縮成摘要</span></div>
-                            <input class="set-input" type="number" id="os-app-ctx-msgs" min="0" max="200" placeholder="10" value="${llmConfig.appCtxMsgs ?? 10}" style="width:120px;">
-                            <div class="set-desc">建議 5–20 則。設 0 ＝ 全部只讀摘要（最省）；留空 ＝ 全送不限制（很吃 Token）。這一格不影響劇情面板，劇情面板有自己的「保留最近幾章全文」。</div>
                         </div>
 
                         <div class="set-group"${stHide}>
@@ -2129,7 +2122,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elThinkingBudget = container.querySelector('#os-thinking-budget');
         const elThinkBudgetVal = container.querySelector('#val-think-budget');
         const thinkBudgetGroup = container.querySelector('#thinking-budget-group');
-        const elAppCtxMsgs = container.querySelector('#os-app-ctx-msgs');
+        // 「幾層之後轉摘要」只有一格設定，在劇情設置的 ctxChapters，這裡不再另開一格
         const elUsePresetPrompts = container.querySelector('#os-use-preset-prompts');
         const valTemp = container.querySelector('#val-temp');
         const valTopP = container.querySelector('#val-topp');
@@ -2669,7 +2662,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     url: elUrl.value.trim(),
                     key: elKey.value.trim(),
                     model: elModel.value,
-                    appCtxMsgs: (elAppCtxMsgs && elAppCtxMsgs.value.trim() !== '') ? Math.max(0, parseInt(elAppCtxMsgs.value) || 0) : null,   // null＝全送不限制
                     usePresetPrompts: elUsePresetPrompts ? elUsePresetPrompts.checked : false,
                     presetName: (elPresetName ? elPresetName.value : '') || '',
                     maxTokens: parseInt(elMaxTokens.value),

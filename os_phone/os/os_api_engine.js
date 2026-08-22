@@ -1351,10 +1351,9 @@
                 const _sid = localStorage.getItem('vn_current_story_id') || '';
                 if (win.OS_DB?.getAllVnChapters) {
                     try {
-                        const _ctxN = (() => {
-                            try { return parseInt(JSON.parse(localStorage.getItem('vn_cfg_v4') || '{}').ctxChapters || '5') || 5; }
-                            catch(e) { return 5; }
-                        })();
+                        // 全系統唯一那格(劇情設置 ctxChapters)：N＝最近 N 章全文、0＝全部只讀摘要、null＝全送。
+                        //   以前這裡寫 `ctxChapters || '5'`，0 會被當成假值換成 5 → 設 0 根本沒作用。
+                        const _ctxN = win.OS_APP_CTX_MSGS ? win.OS_APP_CTX_MSGS() : 5;
                         const _allCh  = await win.OS_DB.getAllVnChapters();
                         // _sid 已在外層宣告(向量召回也要用)
                         _stCh     = _sid
@@ -1389,7 +1388,7 @@
                             let _c = ch.content || '';
                             if (!_c) return;
                             _c = _c.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
-                            const _isRecent = _ctxN === 0 || idx >= arr.length - _ctxN;
+                            const _isRecent = (_ctxN === null) || (idx >= arr.length - _ctxN);
                             if (!_isRecent) {
                                 // 摘要標記可能被改成別家 preset 的(<meow_FM>/<draft>…)→ 走 VN_READER 那份唯一真相；
                                 //   以前寫死 <summary>，換 preset 後這裡抓不到就把整章壓成空字串＝那章直接從歷史消失。
