@@ -627,7 +627,18 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             return getSystemPrompt(key);   // panel_prompt sys slot 負責在正確位置注入格式提示詞
         },
         getSystemPrompt,
-        getFormat: (key) => HARDCODED[key] || '',   // 只取硬編碼格式提示詞
+        getFormat: (key) => HARDCODED[key] || '',   // 只取硬編碼格式提示詞（不含 VN 擴充標籤）
+        // 🚨 順序表「面板提示詞」那一格要用這支：只回格式協議本身（硬編碼＋VN 擴充標籤）。
+        //   以前那格用的是 getSystemPrompt()，但那支會把「整個預設包」重組一遍(條目＋格式)，
+        //   而組裝端本來就會逐項 push 條目 → 包裡每個條目都被送兩次（破限詞送兩份最明顯）。
+        getPanelFormat: function(promptKey) {
+            let fmt = HARDCODED[promptKey] || '';
+            if (promptKey === 'vn_story') {
+                const t = localStorage.getItem('os_vn_extra_tags_prompt') || '';
+                if (t) fmt += t;
+            }
+            return fmt;
+        },
         getEntries: loadEntries,
         getBundles: loadBundles,
         // 大廳人設補充（瀅瀅 / 柴郡 / 世界觀）— 給 os_settings「大廳人設」分頁讀寫用
