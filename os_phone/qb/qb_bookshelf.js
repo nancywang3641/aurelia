@@ -31,6 +31,26 @@
         custom: false
     };
 
+    // 📂 具名開場白：跟舊的「AI 生成劇情」面板共用同一份鍵（os_vn_gen_presets）。
+    //    兩個入口合併成一個之後，你以前在那邊存的那幾筆直接就在這裡看得到，不用重打。
+    //    它跟下面的「過往開場」語意不同：這份是你主動命名收藏的，那份是每次踏入自動記的。
+    const GEN_PRESETS_KEY = 'os_vn_gen_presets';
+    function _getPresets() {
+        try { const a = JSON.parse(localStorage.getItem(GEN_PRESETS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+        catch(e) { return []; }
+    }
+    function _savePreset(title, request) {
+        if (!title) return;                                   // 沒命名就不收藏，只進歷史
+        const list = _getPresets().filter(p => p && p.title !== title);   // 同名覆蓋
+        list.unshift({ title, request, savedAt: Date.now() });
+        try { localStorage.setItem(GEN_PRESETS_KEY, JSON.stringify(list)); }
+        catch(e) { console.warn('[書架] 開場白存不下來（本機空間滿了？）', e); }
+    }
+    function _delPreset(title) {
+        try { localStorage.setItem(GEN_PRESETS_KEY, JSON.stringify(_getPresets().filter(p => p && p.title !== title))); }
+        catch(e) {}
+    }
+
     function _getFreeHistory() {
         try { return JSON.parse(localStorage.getItem(FREE_SCRIPT_HISTORY_KEY) || '[]'); } catch(e) { return []; }
     }
@@ -572,6 +592,11 @@
                 </div>
 
                 <div style="flex:1;overflow-y:auto;padding:10px 18px;scrollbar-width:thin;scrollbar-color:#334 transparent;">
+                    <!-- 📂 收藏：主動命名存下的開場白（跟舊「AI 生成劇情」面板同一份資料） -->
+                    <div id="qb-free-presets-wrap" class="qbfp-wrap">
+                        <div class="qbfp-hd">收藏的開場白<span id="qb-free-presets-count" class="qbfp-count"></span></div>
+                        <div id="qb-free-presets-list" class="qbfp-list"></div>
+                    </div>
                     <div style="font-size:10px;color:rgba(150,200,255,0.3);letter-spacing:2px;margin-bottom:8px;text-transform:uppercase;">過往開場</div>
                     <div id="qb-free-history-list" style="display:flex;flex-direction:column;gap:6px;"></div>
                 </div>
@@ -606,6 +631,7 @@
             coverView.style.display = 'none';
             panel.querySelector('#qb-cover-back').style.display = 'none';
             innerView.style.display = 'flex';
+            _renderPresets();
             _renderFreeHistory();
             setTimeout(() => reqInput?.focus(), 150);
         };
@@ -619,6 +645,37 @@
             shelves.forEach(s => s.style.display = 'flex');
             if (nav) nav.style.display = '';
         };
+
+        // ── 收藏的開場白（主動命名存的，同名覆蓋）────────────────
+        function _renderPresets() {
+            const wrap = panel.querySelector('#qb-free-presets-wrap');
+            const listEl = panel.querySelector('#qb-free-presets-list');
+            const cntEl = panel.querySelector('#qb-free-presets-count');
+            if (!wrap || !listEl) return;
+            const list = _getPresets();
+            wrap.classList.toggle('qbfp-none', !list.length);   // 一筆都沒有就整區收掉，不留空標題
+            if (cntEl) cntEl.textContent = list.length ? '共 ' + list.length + ' 筆' : '';
+            listEl.innerHTML = '';
+            list.forEach((p) => {
+                if (!p || !p.title) return;
+                const chip = document.createElement('span');
+                chip.className = 'qbfp-chip';
+                chip.title = String(p.request || '').slice(0, 120);
+                const nm = document.createElement('span');
+                nm.className = 'qbfp-chip-nm';
+                nm.textContent = p.title;                        // textContent：標題是使用者打的，不進 innerHTML
+                const del = document.createElement('i');
+                del.className = 'qbfp-chip-del';
+                del.textContent = '✕';
+                chip.appendChild(nm); chip.appendChild(del);
+                chip.onclick = (ev) => {
+                    if (ev.target === del) { _delPreset(p.title); _renderPresets(); return; }
+                    if (titleInput) titleInput.value = p.title;
+                    if (reqInput) { reqInput.value = p.request || ''; reqInput.focus(); }
+                };
+                listEl.appendChild(chip);
+            });
+        }
 
         // ── 歷史列表渲染 ──────────────────────────────────────────
         function _renderFreeHistory() {
@@ -678,6 +735,7 @@
             }
 
             _addFreeHistory(title, request);
+            _savePreset(title, request);   // 有命名才會收藏，沒填就只進歷史
 
             // 清除舊世界書狀態
             localStorage.removeItem('vn_active_wb_packs');
@@ -1419,7 +1477,24 @@
     });
 
     // ── 公開 API ─────────────────────────────────────────────────
-    window.QbBookshelf = { render, openCover, openCreate };
+    // 🚪 從 dock 的「故事」直接進自由劇情：開書架 → 跳過封面那層，直接落在指令輸入。
+    //    合併前那顆開的是另一個「AI 生成劇情」面板，跟這裡做的是同一件事 ——
+    //    兩個長得不一樣、資料又各存各的入口，只會讓人每次都要想一下該按哪個。
+    //    書架照樣 render()：使用者按「← 書架」時要退得回去，不能退到空的。
+    function openFreeScript() {
+        try {
+            const overlay = document.getElementById('qb-bookshelf-overlay');
+            if (!overlay) return false;
+            overlay.style.display = 'flex';
+            render();
+            openCover(_FREE_WORLD);
+            const btn = document.querySelector('#qb-free-open-inner-btn');
+            if (btn) btn.click();   // 從 dock 進來就是要寫，不必再按一次「翻閱開場白」
+            return true;
+        } catch (e) { console.warn('[書架] 自由劇情開啟失敗', e); return false; }
+    }
+
+    window.QbBookshelf = { render, openCover, openCreate, openFreeScript };
 
     console.log('✅ QbBookshelf 模組就緒 (v1.6 - 動態人設防汙染預覽版)');
 })();
