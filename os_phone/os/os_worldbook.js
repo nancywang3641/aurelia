@@ -844,6 +844,9 @@
                 byKey.get(k).arr.push(fmt(e));
             });
             return {
+                // 這輪實際命中了哪些條目（給 console 用）——「規則說有清單、清單卻沒被觸發」
+                //   這種靜默失敗光看字數看不出來，一定要把標題印出來才查得到
+                hits: triggered.map(e => ({ title: e.title, depth: _entryDepth(e), order: e.order })),
                 pre: pre.join(SEP),
                 // 深度大的排前面（呼叫端由大到小插）；同深度內 AI(2) → 使用者(1) → 系統(0)，
                 //   跟酒館 doChatInject 一樣把系統留在最靠近生成點的位置。

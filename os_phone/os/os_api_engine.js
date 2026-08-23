@@ -1363,6 +1363,14 @@
                     const _parts = await win.OS_WORLDBOOK.getContextParts(_activePacks, scanText);
                     _lorePre = _parts.pre || '';
                     _loreDepths = _parts.depths || [];
+                    // 印出這輪命中的條目：世界書「有寫沒進來」是最難查的一類 ——
+                    //   規則條目常駐、清單條目靠關鍵字，清單沒被觸發時 prompt 裡就留下
+                    //   「只能用以下清單：」後面一片空白，AI 只好自己編，而畫面上完全看不出來。
+                    try {
+                        const _h = _parts.hits || [];
+                        console.log('[OS_API vn_story] 世界書命中 ' + _h.length + ' 條：' +
+                            _h.map(x => x.title + (x.depth === null ? '' : '@D' + x.depth)).join('、'));
+                    } catch (e) {}
                     lore = [_lorePre].concat((_loreDepths || []).map(d => d.text)).filter(Boolean).join('\n\n---\n\n');
                 } else if (_activePacks && _activePacks.length && win.OS_WORLDBOOK?.getContextByPacks) {
                     lore = await win.OS_WORLDBOOK.getContextByPacks(_activePacks, scanText);
