@@ -70,11 +70,31 @@
                 keys: keyStr.trim(),
                 enabled: !(e.disable || e.disabled || false),
                 order: parseInt(e.order) || parseInt(e.displayIndex) || 0,
+                depth: _stDepth(e),   // 酒館 @D 的深度；null＝跟著「世界書」那一格
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
         });
         return entries;
+    }
+
+    // 酒館的 position:4（@D）＝「插進對話歷史」，depth 就是「倒數第幾則之前」，0＝貼著生成點。
+    //   其他 position（0-3 都是插在角色定義前後）在 PWA 沒有對應的位置 →
+    //   回 null＝維持舊行為：跟著提示詞順序表上「世界書」那一格走。
+    //   🚨 匯入時不換算的話，整本書的深度設定就全丟了：條目全部堆在劇情歷史之前，
+    //      被幾千字的歷史蓋過去 —— 「酒館每次都給頭像、PWA 老是掉」就是這樣來的。
+    function _stDepth(e) {
+        if (!e) return null;
+        const pos = (e.position === undefined || e.position === null) ? null : parseInt(e.position, 10);
+        if (pos !== 4) return null;
+        const d = parseInt(e.depth, 10);
+        return isNaN(d) ? 0 : Math.max(0, d);
+    }
+    // 條目上的深度值 → 數字或 null（空字串/負數/非數字都當沒設定）
+    function _entryDepth(e) {
+        if (!e || e.depth === undefined || e.depth === null || e.depth === '') return null;
+        const d = parseInt(e.depth, 10);
+        return isNaN(d) ? null : Math.max(0, d);
     }
 
     // ── HTML 結構 (🔥 已完全退回 V1.6 的 Inline Flex 排版) ──────────
@@ -115,9 +135,16 @@
                   <label>條目標題</label>
                   <input type="text" id="wb-f-title" placeholder="例：奧瑞亞·星野 基本設定" />
                 </div>
-                <div class="wb-field" style="max-width:140px;">
-                  <label>權重(Order)</label>
-                  <input type="number" id="wb-f-order" value="0" style="text-align:center;" />
+                <div class="wb-field wb-field-inline">
+                  <div class="wb-field-cell">
+                    <label>權重(Order)</label>
+                    <input type="number" id="wb-f-order" value="0" style="text-align:center;" />
+                  </div>
+                  <div class="wb-field-cell">
+                    <label>壓在劇情後面第幾則</label>
+                    <input type="number" id="wb-f-depth" min="0" placeholder="空＝不壓" style="text-align:center;" />
+                    <div class="wb-field-hint">留空＝跟其他設定一起放在劇情之前。填 0＝擺在劇情最後、緊貼這一輪，最不容易被忘掉。</div>
+                  </div>
                 </div>
                 
                 <div class="wb-field">
@@ -240,6 +267,7 @@
                 keysHtml = String(e.keys).split(',').map(k => `<span style="display:inline-block;background:rgba(26,28,40,0.15);color:#1A1C28;padding:1px 6px;border-radius:6px;margin-right:3px;border:1px solid rgba(26,28,40,0.10);">#${escHtml(k.trim())}</span>`).join('');
             }
             const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${e.order}</span>` : '';
+            const depthLabel = (_entryDepth(e) !== null) ? `<span class="wb-entry-depth">壓在劇情後 ${_entryDepth(e)}</span>` : '';
 
             return `
             <div class="wb-entry${e.enabled ? '' : ' disabled'}" data-id="${e.id}">
@@ -250,7 +278,7 @@
                 <div class="wb-entry-info">
                     <div class="wb-entry-title">
                         ${escHtml(e.title)}
-                        ${orderLabel}
+                        ${orderLabel}${depthLabel}
                     </div>
                     <div class="wb-entry-meta">
                         <span>${e.content.length} 字</span>
@@ -354,6 +382,7 @@
         root.querySelector('#wb-form-title').textContent = `新增條目至「${_activeBook}」`;
         root.querySelector('#wb-f-title').value = '';
         root.querySelector('#wb-f-order').value = '0';
+        root.querySelector('#wb-f-depth').value = '';
         root.querySelector('#wb-f-content').value = '';
         root.querySelector('#wb-f-enabled').checked = true;
         
@@ -371,6 +400,7 @@
         root.querySelector('#wb-form-title').textContent = '編輯條目';
         root.querySelector('#wb-f-title').value = entry.title;
         root.querySelector('#wb-f-order').value = entry.order || '0';
+        root.querySelector('#wb-f-depth').value = (_entryDepth(entry) === null) ? '' : String(_entryDepth(entry));
         root.querySelector('#wb-f-content').value = entry.content;
         root.querySelector('#wb-f-enabled').checked = entry.enabled;
 
@@ -400,6 +430,12 @@
             category: (_editingId ? (_entries.find(e => e.id === _editingId)?.category || '預設') : '預設'),   // 欄位留著相容匯出/舊資料，UI 已不分類
             enabled: root.querySelector('#wb-f-enabled').checked,
             order: parseInt(root.querySelector('#wb-f-order').value) || 0,
+            depth: (() => {                       // 空＝不壓（null），0 要留得住
+                const v = (root.querySelector('#wb-f-depth').value || '').trim();
+                if (v === '') return null;
+                const n = parseInt(v, 10);
+                return isNaN(n) ? null : Math.max(0, n);
+            })(),
             createdAt: _editingId ? (_entries.find(e => e.id === _editingId)?.createdAt ?? Date.now()) : Date.now(),
             updatedAt: Date.now()
         };
@@ -720,6 +756,48 @@
             return triggered.map(e => `[${e.category || '設定'}] ${e.title}\n${e.content}`).join('\n\n---\n\n');
         },
 
+        /**
+         * 組 context 用的分堆版本：回 { pre, depths }
+         *   pre    ＝ 沒設深度的條目，合成一段（照舊放在「世界書」那一格）
+         *   depths ＝ [{ depth: N, text }]，要插進對話歷史「倒數第 N 則之前」，0＝歷史最後面
+         * 🚨 一定要分堆：整包一起壓到歷史後面的話，角色卡自帶的書也會被一起搬過去 ——
+         *    她要的是「特定條目壓在最後」，不是全部（Rae 2026-08-23）。
+         */
+        getContextParts: async function(packNames = [], scanText = '') {
+            const triggered = await this._triggeredEntries(packNames, scanText);
+            const fmt = (e) => `[${e.category || '設定'}] ${e.title}\n${e.content}`;
+            const SEP = '\n\n---\n\n';
+            const pre = [], byDepth = new Map();
+            triggered.forEach(e => {
+                const d = _entryDepth(e);
+                if (d === null) { pre.push(fmt(e)); return; }
+                if (!byDepth.has(d)) byDepth.set(d, []);
+                byDepth.get(d).push(fmt(e));
+            });
+            return {
+                pre: pre.join(SEP),
+                depths: [...byDepth.entries()]
+                    .map(([depth, arr]) => ({ depth: depth, text: arr.join(SEP) }))
+                    .sort((a, b) => b.depth - a.depth)
+            };
+        },
+
+        // 命中判定＋排序的共用本體（getContextByPacks / getContextParts 共用，判準只有一份）
+        _triggeredEntries: async function(packNames = [], scanText = '') {
+            if (!packNames || packNames.length === 0) return [];
+            const entries = await win.OS_DB.getAllWorldbookEntries();
+            const pool = entries.filter(e => e.enabled !== false && packNames.includes(e.book || '預設書包'));
+            const text = (scanText || '').toLowerCase();
+            const hit = pool.filter(e => {
+                const kStr = (e.keys ? String(e.keys) : '').trim();
+                if (!kStr) return true;
+                const keywords = kStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k);
+                if (!keywords.length) return true;
+                return keywords.some(k => text.includes(k));
+            });
+            return hit.sort((a, b) => (parseInt(b.order) || 0) - (parseInt(a.order) || 0));
+        },
+
         // ====================================================================
         // 🔥 VN 故事面板專用 API (Worldbook Packs API)
         // ====================================================================
@@ -751,30 +829,9 @@
          * @param {string} scanText - 要進行關鍵字掃描的文字
          * @returns {Promise<string>} - 組裝好的世界書字串
          */
+        // 不分深度、全部一起回（沒有深度概念的呼叫端照舊用這支；VN 那條走 getContextParts）
         getContextByPacks: async function(packNames = [], scanText = '') {
-            if (!packNames || packNames.length === 0) return '';
-            
-            const entries = await win.OS_DB.getAllWorldbookEntries();
-            
-            // 只篩選出啟用的，且其所屬「書包(book)」包含在 packNames 內的條目
-            const enabledAndSelected = entries.filter(e => 
-                e.enabled !== false && packNames.includes(e.book || '預設書包')
-            );
-            
-            let triggered = enabledAndSelected.filter(e => {
-                // 🔥 修復：強制轉成字串，防止舊資料格式報錯
-                const kStr = (e.keys ? String(e.keys) : '').trim();
-                if (!kStr) return true; 
-                
-                const keywords = kStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k);
-                if (!keywords.length) return true;
-                
-                const text = (scanText || '').toLowerCase();
-                return keywords.some(k => text.includes(k)); 
-            });
-
-            triggered.sort((a, b) => (parseInt(b.order) || 0) - (parseInt(a.order) || 0));
-
+            const triggered = await this._triggeredEntries(packNames, scanText);
             if (!triggered.length) return '';
             return triggered.map(e => `[${e.category || '設定'}] ${e.title}\n${e.content}`).join('\n\n---\n\n');
         },
@@ -854,6 +911,7 @@
                     keys: e.keyword ? (Array.isArray(e.keyword) ? e.keyword.join(',') : String(e.keyword)).trim() : '',
                     enabled: !(e.disable || e.disabled || false),
                     order: parseInt(e.order) || parseInt(e.displayIndex) || 0,
+                    depth: _stDepth(e),   // 同上：角色卡自帶的書也保留深度
                     createdAt: Date.now(),
                     updatedAt: Date.now()
                 };

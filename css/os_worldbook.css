@@ -26,6 +26,17 @@
         .wb-entry-info { flex:1; min-width:0; }
         .wb-entry-title { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#1A1C28; display:flex; align-items:center; gap:6px; }
         .wb-entry-order { background:rgba(228,232,245,0.90); color:#1A1C28; padding:1px 5px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid rgba(26,28,40,0.10); }
+        /* 有壓深度的條目：清單上標一下，不然「這條為什麼特別靈」永遠看不出來 */
+        .wb-entry-depth { background:rgba(212,175,55,0.16); color:#7a5c18; padding:1px 5px; border-radius:4px;
+            font-size:10px; font-weight:700; border:1px solid rgba(212,175,55,0.35); margin-left:4px; }
+        /* 權重與深度並排：兩格各半，窄螢幕自動掉下去 */
+        .wb-field-inline { display:flex; gap:10px; flex-wrap:wrap; }
+        .wb-field-cell { flex:1 1 150px; min-width:0; }
+        .wb-field-cell label { display:block; font-size:11px; color:rgba(26,28,40,0.72); margin-bottom:5px; letter-spacing:.3px; font-weight:600; }
+        .wb-field-cell input { width:100%; background:#EEF0F6 !important; border:1px solid rgba(26,28,40,0.20); border-radius:8px;
+            color:#1A1C28 !important; font-size:13px; padding:8px 10px; box-sizing:border-box; outline:none; font-family:inherit; color-scheme:light; }
+        .wb-field-cell input:focus { border-color:#1A1C28; }
+        .wb-field-hint { font-size:10px; color:#3A3F5C; line-height:1.55; margin-top:4px; }
         .wb-entry-meta { font-size:10px; color:#3A3F5C; margin-top:4px; }
         
         .wb-entry-edit, .wb-entry-del { background:none; border:none; cursor:pointer; font-size:14px; padding:5px; border-radius:6px; transition:.2s; flex-shrink:0; }

@@ -1343,6 +1343,11 @@
             }
 
             let lore = '';
+            // 世界書拆成兩半：_lorePre＝沒設深度的（VN 的「世界書」那一格用），
+            //   _loreDepths＝設了深度的 [{depth,text}]，等一下插進對話歷史「倒數第 N 則之前」。
+            //   lore 本身維持「全部」不變 —— 手機 app／大廳那些沒有深度概念的路徑照舊整包拿。
+            let _lorePre = '';
+            let _loreDepths = [];
             try {
                 // 常駐書包(每本都用) ∪ 這本藏書自己掛的 —— 前者是酒館「全域世界書」的對應物，
                 //   格式協議/BGM/音效清單那種跨故事的同一份放在那裡，不必每開一本新書重掛一次。
@@ -1353,16 +1358,27 @@
                     const _rawPacks = localStorage.getItem('vn_active_wb_packs');
                     _activePacks = _rawPacks ? JSON.parse(_rawPacks) : null;
                 }
-                if (_activePacks && _activePacks.length && win.OS_WORLDBOOK?.getContextByPacks) {
+                if (_activePacks && _activePacks.length && win.OS_WORLDBOOK?.getContextParts) {
+                    // 分堆版：沒設深度的照舊進「世界書」那一格，設了深度的等一下插進對話歷史裡
+                    const _parts = await win.OS_WORLDBOOK.getContextParts(_activePacks, scanText);
+                    _lorePre = _parts.pre || '';
+                    _loreDepths = _parts.depths || [];
+                    lore = [_lorePre].concat((_loreDepths || []).map(d => d.text)).filter(Boolean).join('\n\n---\n\n');
+                } else if (_activePacks && _activePacks.length && win.OS_WORLDBOOK?.getContextByPacks) {
                     lore = await win.OS_WORLDBOOK.getContextByPacks(_activePacks, scanText);
+                    _lorePre = lore;
                 } else if (win.OS_WORLDBOOK?.getEnabledContext) {
                     lore = await win.OS_WORLDBOOK.getEnabledContext(scanText);
+                    _lorePre = lore;
                 }
             } catch(e) { console.warn('[OS_API standalone] 世界書載入失敗:', e); }
 
             try {
                 const _avsRulesCtx = win.OS_AVS_RULES?.getActiveContext?.(_avsRead());
-                if (_avsRulesCtx) lore = lore ? lore + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;
+                if (_avsRulesCtx) {
+                    lore = lore ? lore + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;
+                    _lorePre = _lorePre ? _lorePre + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;
+                }
             } catch(e) { console.warn('[OS_API standalone] AVS 條件規則載入失敗:', e); }
 
             if (cotPrompt) apiMessages.push({ role: 'system', content: `### \n${cotPrompt}` });
@@ -1490,6 +1506,25 @@
                 try { _appMemBlock = (await win.OS_APP_MEMORY_INJECT?.buildAppMemoryBlock?.(scanText)) || ''; }
                 catch (_e) { console.warn('[OS_API vn_story] 手機近況組裝失敗:', _e); }
 
+                // 把對話歷史推進去，順便把「設了深度」的世界書條目插到對應位置。
+                //   depth N ＝ 倒數第 N 則之前；0 ＝ 全部歷史之後（最貼近這一輪，最不容易被忘掉）。
+                //   由大到小插，先插的不會被後插的位移影響。
+                //   🚨 這是酒館 position:4/@D 的對應物 —— 沒有它的話整本書只能一起壓在歷史之前，
+                //      幾千字歷史一蓋就把格式規則沖掉（[Avatar|] 老是掉就是這樣來的）。
+                const _injectHistoryWithDepths = (out, msgs, depths) => {
+                    const buf = (msgs || []).slice();
+                    (depths || []).slice().sort((a, b) => b.depth - a.depth).forEach(d => {
+                        if (!d || !d.text) return;
+                        const at = Math.max(0, buf.length - Math.max(0, d.depth | 0));
+                        buf.splice(at, 0, { role: 'system', content: d.text });
+                    });
+                    buf.forEach(m => out.push(m));
+                    if ((depths || []).length) {
+                        console.log('[OS_API vn_story] 世界書深度注入：' +
+                            depths.map(d => '@' + d.depth + '(' + d.text.length + '字)').join('、'));
+                    }
+                };
+
                 const _vn = [];
                 const _entryMap = Object.fromEntries((win.OS_PROMPTS?.getEntries?.() || []).map(e => [e.id, e]));
                 const _vnBundles = (win.OS_PROMPTS?.getBundles?.() || [])
@@ -1505,9 +1540,9 @@
                             // 只要格式協議本身。用 getSystemPrompt 會把整包(條目＋格式)重組一遍，
                             //   而條目在下面 _item.type==='entry' 那條會各自 push → 每條被送兩次。
                             else if (_item.id === 'panel_prompt')              { const fmt = win.OS_PROMPTS?.getPanelFormat?.('vn_story') || win.OS_PROMPTS?.getFormat?.('vn_story') || ''; if (fmt) _vn.push({ role: 'system', content: fmt }); }
-                            else if (_item.id === 'worldbook'   && lore)       _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
+                            else if (_item.id === 'worldbook'   && _lorePre)   _vn.push({ role: 'system', content: `[World Info]:\n${_lorePre}` });
                             else if (_item.id === 'persona'     && (userDesc || userName !== 'User'))  _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
-                            else if (_item.id === 'vn_history') _vnMsgs.forEach(m => _vn.push(m));
+                            else if (_item.id === 'vn_history') _injectHistoryWithDepths(_vn, _vnMsgs, _loreDepths);
                             else if (_item.id === 'grand_summary' && _grandSummaryBlock) _vn.push({ role: 'system', content: _grandSummaryBlock });
                             else if (_item.id === 'memory_recall' && _recallBlock)       _vn.push({ role: 'system', content: _recallBlock });
                             else if (_item.id === 'avs_vars'      && avsPrompt)          _vn.push({ role: 'system', content: avsPrompt });
@@ -1523,10 +1558,10 @@
                 // 一個包都沒有(還沒建過提示詞包)：照出廠順序自己排一份，跟 DEFAULT_SYS_ITEMS 一致
                 if (_vnBundles.length === 0) {
                     if (sysPrompt)  _vn.push({ role: 'system', content: `### Roleplay Instruction\n${sysPrompt}` });
-                    if (lore)       _vn.push({ role: 'system', content: `[World Info]:\n${lore}` });
+                    if (_lorePre)   _vn.push({ role: 'system', content: `[World Info]:\n${_lorePre}` });
                     if (userDesc || userName !== 'User') _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
                     if (_grandSummaryBlock) _vn.push({ role: 'system', content: _grandSummaryBlock });
-                    _vnMsgs.forEach(m => _vn.push(m));
+                    _injectHistoryWithDepths(_vn, _vnMsgs, _loreDepths);
                     if (_appMemBlock) _vn.push({ role: 'system', content: _appMemBlock });
                     if (_npcBlock)    _vn.push({ role: 'system', content: _npcBlock });
                     if (_recallBlock) _vn.push({ role: 'system', content: _recallBlock });
