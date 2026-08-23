@@ -1473,6 +1473,14 @@
                             // 🎲 自由模式：歷史裡的表情格要剝掉，不然 AI 照著上下文範例繼續寫表情格
                             //    （酒館是靠一條 promptOnly 正則做同一件事，PWA 的歷史是這裡拼的）
                             if (_c && win.VN_FREE_MODE?.effectiveFree?.()) _c = win.VN_FREE_MODE.stripEmotionCol(_c);
+                            // ⚔️ 戰鬥結果寫在 </content> 之後（寫進 content 會被 VN 當旁白唸出來）→
+                            //    上面那個 <content> 擷取會把它整段切掉，AI 下一輪就不知道這仗打成什麼樣，
+                            //    只好自己編一個戰果接下去。酒館是讀整則訊息原文才拿得到它，
+                            //    PWA 的歷史是這裡拼的，所以要自己補回來。
+                            //    只補敘事那句；[BattleResult|…] 是給程式讀的數值（酒館用 promptOnly 剝掉），不餵 AI。
+                            const _afterContent = (ch.content || '').split(/<\/content>/i).slice(1).join('');
+                            const _battleNarr = _afterContent.match(/（戰鬥結果：[\s\S]*?）/g);
+                            if (_battleNarr && _battleNarr.length) _c = (_c ? _c + '\n\n' : '') + _battleNarr.join('\n');
                             if (ch.request) _vnMsgs.push({ role: 'user', content: ch.request });
                             if (_c) _vnMsgs.push({ role: 'assistant', content: _c });
                         });

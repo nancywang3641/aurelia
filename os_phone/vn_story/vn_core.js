@@ -927,11 +927,31 @@
 
             // 每一步都出聲：這條鏈四步（讀訊息→剪續寫→開打→寫回），之前只在 throw 才警告，
             //   條件不成立的靜默路一個 log 都沒有，斷在哪一步完全查不到。
+            // 獨立版沒有聊天樓：等價的載體是「這場戰鬥所屬的那一章」，讀寫走 OS_DB。
+            const _sa = (win.OS_API?.isStandalone?.() ?? false);
             let msgRaw = '';
+            let _saCh = null;          // 獨立版：這場戰鬥寫回的目標章節
+            if (_sa) {
+                try {
+                    _saCh = await this._battleFindChapter(raw);
+                    if (!_saCh) console.warn('[VN_Battle] 找不到這場戰鬥所屬的章節，結果將無法寫回');
+                    else {
+                        msgRaw = _saCh.content || '';
+                        const _c = window.VN_Battle.cut(msgRaw);
+                        msgRaw = _c.text;
+                        if (_c.cut) {
+                            // silent：只是剪掉 AI 自己寫的戰果，記憶／AVS／插圖不必為此再跑一輪
+                            await win.OS_DB.saveVnChapter(Object.assign({}, _saCh, { content: _c.text }), { silent: true });
+                            console.log('[VN_Battle] 已剪掉續寫戰果 ' + _c.cut.length + ' 字（章節 ' + _saCh.id + '）');
+                        } else console.log('[VN_Battle] 章節裡沒有待剪的續寫段');
+                    }
+                } catch (e) { console.warn('[VN_Battle] 剪掉續寫戰果失敗:', e); }
+            }
             try {
-                if (!_th) console.warn('[VN_Battle] TavernHelper 不在，結果將無法寫回');
+                if (_sa) { /* 上面那段已經處理，酒館這條跳過 */ }
+                else if (!_th) console.warn('[VN_Battle] TavernHelper 不在，結果將無法寫回');
                 else if (mid == null) console.warn('[VN_Battle] _currentMessageId 是空的，結果將無法寫回');
-                if (_th && mid != null && _th.getChatMessages) {
+                if (!_sa && _th && mid != null && _th.getChatMessages) {
                     const _m = await _th.getChatMessages(mid);
                     msgRaw = (_m && _m[0] && _m[0].message) || '';
                     if (!msgRaw) console.warn('[VN_Battle] 讀不到 msg#' + mid + ' 的正文，結果將無法寫回');
@@ -960,7 +980,15 @@
             window.VN_Battle.start({ host: host, raw: raw, player: player, allies: mates }, async function (result) {
                 console.log('[VN_Battle] 戰鬥結束:', result ? result.outcome + ' hp:' + result.hp + '/' + result.maxHp : '（無結果）');
                 try {
-                    if (result && msgRaw && _th && mid != null && _th.setChatMessages) {
+                    if (_sa) {
+                        if (result && msgRaw && _saCh) {
+                            const _newTxt = window.VN_Battle.writeResult(msgRaw, result);
+                            // silent 同上：正文只多了系統戰果那兩行，<vars> 一個字沒動
+                            await win.OS_DB.saveVnChapter(Object.assign({}, _saCh, { content: _newTxt }), { silent: true });
+                            console.log('[VN_Battle] 結果已寫回章節 ' + _saCh.id + '：' + window.VN_Battle.toTag(result));
+                        } else console.warn('[VN_Battle] 結果沒寫回（result:' + !!result + ' msgRaw:' + !!msgRaw + ' 章節:' + !!_saCh + '）');
+                    }
+                    else if (result && msgRaw && _th && mid != null && _th.setChatMessages) {
                         // 這次要 refresh:'affected'：開打前那次剪除在播放中途、不能重渲染，但打完這裡戰鬥已收場，
                         //   不刷的話資料寫進去了、聊天畫面還是舊的——看起來就像結果沒寫回，要開編輯窗才現形
                         await _th.setChatMessages([{ message_id: mid, message: window.VN_Battle.writeResult(msgRaw, result) }], { refresh: 'affected' });
@@ -971,9 +999,47 @@
             });
         },
 
+        // 獨立版：這場戰鬥所屬的章節。沒有聊天樓可指，改用「正文裡含這段 <BattleStart> 區塊」來認 ——
+        //   raw 是這一場獨有的（敵人數值＋場地），比「拿最新一章」準：
+        //   從章節選擇回放舊章時遇到的戰鬥，也會寫回它自己那一章，不會誤蓋到最新章。
+        _battleFindChapter: async function (raw) {
+            try {
+                if (!win.OS_DB?.getAllVnChapters) return null;
+                const sid = win.OS_AVS_ADAPTER?.getStoryId?.() || this._currentStoryId
+                         || localStorage.getItem('vn_current_story_id') || '';
+                const all = (await win.OS_DB.getAllVnChapters()) || [];
+                const mine = all.filter(c => c && (!sid || c.storyId === sid));
+                // 比對用的特徵：區塊內容去掉空白（正文裡的換行/縮排可能跟劇本層不同）
+                const key = String(raw || '').replace(/\s+/g, '');
+                if (!key) return null;
+                const hit = mine.filter(c => String(c.content || '').replace(/\s+/g, '').includes(key));
+                if (!hit.length) return null;
+                return hit.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+            } catch (e) { console.warn('[VN_Battle] 找章節失敗:', e); return null; }
+        },
+
         // 玩家戰鬥數值：往回找最後一個 [BattleResult|…hp:x/y]。不另存 DB —— 刪樓重玩時記錄跟著沒，狀態自動退回。
         _battlePlayerStats: async function () {
             const out = {};
+            // 獨立版：同一條規則、換資料來源 —— 掃當前故事最近 30 章的正文（章節＝酒館的樓）
+            if (win.OS_API?.isStandalone?.() ?? false) {
+                try {
+                    const sid = win.OS_AVS_ADAPTER?.getStoryId?.() || this._currentStoryId
+                             || localStorage.getItem('vn_current_story_id') || '';
+                    const all = (await win.OS_DB?.getAllVnChapters?.()) || [];   // 已按 createdAt 新→舊
+                    const mine = all.filter(c => c && (!sid || c.storyId === sid)).slice(0, 30);
+                    for (const c of mine) {
+                        const m = /\[BattleResult\|[^\]]*hp:(\d+)\/(\d+)/i.exec(c.content || '');
+                        if (!m) continue;
+                        const hp = parseInt(m[1], 10), maxHp = parseInt(m[2], 10);
+                        out.maxHp = maxHp;
+                        // 上一場被打倒(hp 0)→這場不要用 1 滴血開打；跟酒館分支同一條規則
+                        out.hp = hp > 0 ? hp : maxHp;
+                        break;
+                    }
+                } catch (e) { console.warn('[VN_Battle] 讀戰鬥數值失敗，用預設值開打:', e); }
+                return out;
+            }
             try {
                 const _th = (win && win.TavernHelper) || window.TavernHelper;
                 if (!_th || !_th.getLastMessageId || !_th.getChatMessages) return out;
