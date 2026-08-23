@@ -124,6 +124,7 @@ function renderModels(cfg) {
 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
   <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addModel()">＋ 新增模型</button>
   <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.loadLocalConfig()" title="執行 scan_models.py 後點此，從 models/tts_models.json 批次匯入所有模型">📥 載入配置</button>
+  <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()" title="從 IndexTTS 服務把所有音色抓進來，情緒自動掛好">🎙️ 匯入 IndexTTS 音色</button>
   <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteAllModels()">🗑 一鍵清空</button>
 </div>
 <div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:10px;">💡 有多個模型？先執行擴展目錄裡的 <code style="color:rgba(26,28,40,0.55)">scan_models.bat</code>，再點「載入配置」一次匯入全部。</div>
@@ -133,6 +134,20 @@ ${cards}`;
 // 外層只給精簡卡（名稱 + 編輯/刪除），細節 GPT/SoVITS/音頻/情緒都收進內層（編輯頁），免一攤平就很長
 function renderModelCard(id, m) {
     const emoCount = Object.keys(m.emotions || {}).length;
+    // IndexTTS 音色不走 SoVITS 的編輯表單（那張表存的是 gptPath 那些欄位，一存就把 engine 洗掉）。
+    // 要改音色就去服務的資料夾換檔案，再按一次匯入。
+    if (m.engine === 'index') {
+        return `
+<div class="vtts-model-card vtts-model-card-compact" id="vtts-mc-${esc(id)}">
+  <div class="vtts-model-card-head">
+    <span class="vtts-model-name">🎙️ ${esc(m.name || id)}${emoCount ? ` <span class="vtts-model-emo-badge">${emoCount} 情緒</span>` : ''}</span>
+    <div class="vtts-model-actions">
+      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.playNpcModel('${escJs(id)}')">▶ 試聽</button>
+      <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
+    </div>
+  </div>
+</div>`;
+    }
     return `
 <div class="vtts-model-card vtts-model-card-compact" id="vtts-mc-${esc(id)}" onclick="VN_TTS_Panel.editModel('${escJs(id)}')">
   <div class="vtts-model-card-head">
@@ -1111,6 +1126,54 @@ const VN_TTS_Panel = {
         if (typeof tts._speakIndex === 'function') { tts._speakIndex('這是旁白語音的試聽，聽聽聲音和速度。'); this._toast('🔊 試聽中…（服務沒開會沒聲音）'); }
     },
 
+    // 腳本的表情會先被轉成這六個基礎情緒，這裡把它們接到服務端對應的情緒檔上
+    _INDEX_EMO_ALIAS: {
+        happy: 'Happy', sad: 'Sad', angry: 'Angry',
+        surprise: 'Surprised', scare: 'JumpScare', hate: 'Dissatisfied'
+    },
+
+    // 把服務上的音色整批變成模型，每個音色自帶全套情緒；角色分頁即可直接指派
+    async importIndexVoices() {
+        const tts = this._idx(); if (!tts) return;
+        const base = String(tts.config.narratorIndex.url || '').replace(/\/+$/, '');
+        if (!base) { this._toast('✗ 先到「配置」頁填語音服務網址'); return; }
+        this._toast('讀取中…');
+        let data;
+        try {
+            const resp = await fetch(base + '/v1/voices');
+            if (!resp.ok) { this._toast('✗ 服務回應異常 ' + resp.status); return; }
+            data = await resp.json();
+        } catch (e) { this._toast('✗ 連不上服務（沒開？）'); return; }
+
+        const voices = (data.voices || []).map(v => v.id);
+        if (!voices.length) { this._toast('✗ 服務上沒有音色'); return; }
+        const srvEmos = data.emotions || [];
+
+        // 三種寫法都掛上：原樣(Smirk)、小寫(smirk)、基礎情緒別名(angry→Angry)
+        const emotions = {};
+        for (const e of srvEmos) {
+            emotions[e] = { emo: e };
+            if (e.toLowerCase() !== e) emotions[e.toLowerCase()] = { emo: e };
+        }
+        for (const [alias, srv] of Object.entries(this._INDEX_EMO_ALIAS)) {
+            if (srvEmos.indexOf(srv) >= 0) emotions[alias] = { emo: srv };
+        }
+
+        let added = 0, updated = 0;
+        for (const v of voices) {
+            const id = 'idx_' + v;
+            const exists = !!tts.config.models[id];
+            tts.config.models[id] = {
+                name: v, engine: 'index', url: base, voice: v, speed: 1,
+                emotions: JSON.parse(JSON.stringify(emotions))
+            };
+            exists ? updated++ : added++;
+        }
+        tts.save();
+        this._renderBody('models');
+        this._toast(`✓ 音色 ${added} 新增／${updated} 更新，各帶 ${srvEmos.length} 種情緒`);
+    },
+
     deleteSystemMapping(sysName) {
         const tts = this._tts();
         if (!tts) return;
@@ -1340,7 +1403,14 @@ const VN_TTS_Panel = {
         const tts = this._tts();
         if (!tts) return;
         const m = tts.config.models[modelId];
-        if (!m || !m.refAudioPath) { this._toast('✗ 這聲音沒有參考音頻，沒得播'); return; }
+        if (!m) { this._toast('✗ 找不到這個聲音'); return; }
+        // IndexTTS 音色沒有參考音頻可放，直接合成一句來聽
+        if (m.engine === 'index') {
+            tts._speakWithModel({ id: modelId, ...m }, '這是這個角色的聲音試聽。', '');
+            this._toast('🔊 試聽中…（服務沒開會沒聲音）');
+            return;
+        }
+        if (!m.refAudioPath) { this._toast('✗ 這聲音沒有參考音頻，沒得播'); return; }
         this.playRefAudio(m.refAudioPath);
     },
 };

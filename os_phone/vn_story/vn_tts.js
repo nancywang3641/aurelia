@@ -535,6 +535,40 @@ const VN_TTS = {
         }
     },
 
+    // ── IndexTTS 角色音色 ───────────────────────────────────────────────
+    //   模型長相：{ name, engine:'index', url, voice, emotions:{ 情緒key:{emo:'服務端情緒名'} } }
+    //   沒有 gptPath/sovitsPath，所以 _ensureModel 會自己跳過換模型那段。
+
+    // 腳本的表情已被 _mapExprToEmotion 轉成 happy/sad/angry/… 或原樣自訂標籤，
+    // 兩種都試一次（大小寫不敏感），對不上就只用音色不套情緒。
+    _indexVoice(model, emotion) {
+        const base = model.voice || '';
+        if (!emotion || emotion === 'default' || !model.emotions) return base;
+        const em = model.emotions;
+        const hit = em[emotion]
+                 || em[String(emotion).toLowerCase()]
+                 || em[Object.keys(em).find(k => k.toLowerCase() === String(emotion).toLowerCase()) || ''];
+        return (hit && hit.emo) ? `${base}:${hit.emo}` : base;
+    },
+
+    async _fetchIndexBlob(model, text, emotion) {
+        const base = String(model.url || '').replace(/\/+$/, '');
+        if (!base) throw new Error('這個音色沒有服務網址');
+        const resp = await fetch(base + '/v1/audio/speech', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'indextts',
+                input: text,
+                voice: this._indexVoice(model, emotion),
+                response_format: 'mp3',
+                speed: model.speed || 1
+            })
+        });
+        if (!resp.ok) throw new Error('服務回應 ' + resp.status);
+        return await resp.blob();
+    },
+
     // ── IndexTTS 旁白合成（本機獨立服務、OpenAI 相容；不進 SoVITS GPU 佇列）──
     //   voice 帶冒號就是情緒，例：'丹:Angry'（情緒＝服務端 emotions/ 裡的檔名）
     async _speakIndex(rawText) {
@@ -586,6 +620,22 @@ const VN_TTS = {
         if (_tr) console.log('[VN_TTS🔬] ❌ 快取沒有，要現生 [' + model.id + ']「' + String(text).slice(0, 14) + '…」');
 
         this._pending.add(k);
+
+        // IndexTTS 音色：獨立服務、不換模型、不進 SoVITS GPU 佇列
+        if (model.engine === 'index') {
+            try {
+                const blob = await this._fetchIndexBlob(model, text, emotion);
+                const u = URL.createObjectURL(blob);
+                this._cache[k] = u;
+                this._playBlobUrl(u);
+            } catch (e) {
+                console.warn('[VN_TTS] IndexTTS 合成失敗（服務沒開？）', model.id, e);
+            } finally {
+                this._pending.delete(k);
+            }
+            return;
+        }
+
         try {
             const _tSwap = Date.now();
             const _need = (this._loadedGpt !== model.gptPath && !!model.gptPath) || (this._loadedSovits !== model.sovitsPath && !!model.sovitsPath);
@@ -636,6 +686,21 @@ const VN_TTS = {
         while (this._prewarmQueue.length) {
             const { model, text, emotion, key } = this._prewarmQueue.shift();
             if (this._cache[key]) { this._pending.delete(key); continue; }
+
+            // IndexTTS 音色不佔 SoVITS 的 GPU 佇列，直接生
+            if (model.engine === 'index') {
+                try {
+                    const blob = await this._fetchIndexBlob(model, text, emotion);
+                    this._cache[key] = URL.createObjectURL(blob);
+                    _n++;
+                } catch (e) {
+                    console.warn('[VN_TTS] prewarm 失敗（IndexTTS）', key, e);
+                } finally {
+                    this._pending.delete(key);
+                }
+                continue;
+            }
+
             const _W = (window.parent || window);
             const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
                 ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 2, 120000, '預熱語音/' + model.id)   // 預熱語音：最低優先（圖片/即時語音都先走），120 秒逾時防堵隊
