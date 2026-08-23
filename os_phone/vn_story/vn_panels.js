@@ -737,12 +737,10 @@
                         if (!confirm(`確定刪除「${ch.title}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
                         // 🚨 一律走 VN_READER.deleteChapter：直接叫 OS_DB.deleteVnChapter 會漏掉
                         //    記憶清理 / 人物檔案對帳 / 數值重放（被刪的角色下一輪會原樣復活）。
-                        if (win.VN_READER?.deleteChapter) {
-                            const r = await win.VN_READER.deleteChapter(ch.id);
-                            if (!r || !r.ok) { alert('刪不掉：' + ((r && r.why) || '未知原因')); return; }
-                        } else {
-                            await win.OS_DB.deleteVnChapter(ch.id);
-                        }
+                        //    所以模組不在就「不刪」，不留那條會把資料刪成半套的退路。
+                        if (!win.VN_READER?.deleteChapter) { alert('劇情閱讀器模組還沒載入，先進一次閱讀器再回來刪。'); return; }
+                        const r = await win.VN_READER.deleteChapter(ch.id);
+                        if (!r || !r.ok) { alert('刪不掉：' + ((r && r.why) || '未知原因')); return; }
                         item.remove();
                         const remaining = body.querySelectorAll('.ch-item').length;
                         header.querySelector('.ch-story-meta').textContent = `${dateStr}${dateStr ? ' · ' : ''}${remaining} 章`;
