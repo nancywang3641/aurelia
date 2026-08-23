@@ -78,7 +78,7 @@
         return entries;
     }
 
-    // 酒館的 position:4（@D）＝「插進對話歷史」，depth 就是「倒數第幾則之前」，0＝貼著生成點。
+    // 酒館的 position:4 就是 @D；depth 的定義完全照抄：0＝插在最新一則之後，N＝倒數第 N 則之前。
     //   其他 position（0-3 都是插在角色定義前後）在 PWA 沒有對應的位置 →
     //   回 null＝維持舊行為：跟著提示詞順序表上「世界書」那一格走。
     //   🚨 匯入時不換算的話，整本書的深度設定就全丟了：條目全部堆在劇情歷史之前，
@@ -141,9 +141,9 @@
                     <input type="number" id="wb-f-order" value="0" style="text-align:center;" />
                   </div>
                   <div class="wb-field-cell">
-                    <label>壓在劇情後面第幾則</label>
-                    <input type="number" id="wb-f-depth" min="0" placeholder="空＝不壓" style="text-align:center;" />
-                    <div class="wb-field-hint">留空＝跟其他設定一起放在劇情之前。填 0＝擺在劇情最後、緊貼這一輪，最不容易被忘掉。</div>
+                    <label>深度 @D</label>
+                    <input type="number" id="wb-f-depth" min="0" placeholder="留空" style="text-align:center;" />
+                    <div class="wb-field-hint">跟酒館的 @D 同一個意思：0＝插在最新一則的後面，1＝倒數第 1 則之前，依此類推。留空＝不用 @D（等同酒館的 ↑Char，跟其他設定一起放在最前面）。</div>
                   </div>
                 </div>
                 
@@ -267,7 +267,7 @@
                 keysHtml = String(e.keys).split(',').map(k => `<span style="display:inline-block;background:rgba(26,28,40,0.15);color:#1A1C28;padding:1px 6px;border-radius:6px;margin-right:3px;border:1px solid rgba(26,28,40,0.10);">#${escHtml(k.trim())}</span>`).join('');
             }
             const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${e.order}</span>` : '';
-            const depthLabel = (_entryDepth(e) !== null) ? `<span class="wb-entry-depth">壓在劇情後 ${_entryDepth(e)}</span>` : '';
+            const depthLabel = (_entryDepth(e) !== null) ? `<span class="wb-entry-depth">@D${_entryDepth(e)}</span>` : '';
 
             return `
             <div class="wb-entry${e.enabled ? '' : ' disabled'}" data-id="${e.id}">
