@@ -666,120 +666,93 @@
                     return;
                 }
 
-                // 按 storyId 分組（沒有 storyId 的舊資料歸入「舊版資料」群組）
-                const groups = {};
-                chapters.forEach(ch => {
-                    const gid = ch.storyId || '__legacy__';
-                    if (!groups[gid]) groups[gid] = { storyTitle: ch.storyTitle || '舊版資料', storyId: ch.storyId || '', chapters: [] };
-                    groups[gid].chapters.push(ch);
-                });
+                // 只顯示「當前這個故事」的章節（同酒館版只看當前聊天）。
+                //   以前這裡把每一本故事都攤成一個資料夾列出來 —— 分艙鍵明明有了，就不該再端出別本書的存檔。
+                //   換故事的入口是藏書的「篇章目錄」（那邊接著玩會一起把世界書／世界 id 帶回來），不是這裡。
+                const currentStoryId = win.OS_AVS_ADAPTER?.getStoryId?.()
+                    || window.VN_Core?._currentStoryId
+                    || localStorage.getItem('vn_current_story_id') || '';
 
-                // 按各群組最新章節時間排序（最新的故事顯示在上面）
-                const sortedGroups = Object.values(groups).sort((a, b) => {
-                    const aMax = Math.max(...a.chapters.map(c => c.createdAt || 0));
-                    const bMax = Math.max(...b.chapters.map(c => c.createdAt || 0));
-                    return bMax - aMax;
-                });
+                if (!currentStoryId) {
+                    list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>還沒有進行中的故事<br>回藏書挑一本踏進去</div></div>';
+                    return;
+                }
 
-                const currentStoryId = window.VN_Core._currentStoryId || '';
+                const mine = chapters.filter(ch => ch && ch.storyId === currentStoryId)
+                    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 舊→新：第一章在最上面
 
-                sortedGroups.forEach(group => {
-                    const isActive = group.storyId && group.storyId === currentStoryId;
-                    const groupId  = 'chgrp_' + Math.random().toString(36).slice(2, 8);
-                    const maxTime  = Math.max(...group.chapters.map(c => c.createdAt || 0));
+                if (!mine.length) {
+                    list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>這個故事還沒有章節<br>按「踏入故事」生成第一章吧</div></div>';
+                    return;
+                }
 
-                    // 1. 資料夾顯示完整的 日期 + 時間 (例如：04/16 下午01:30)
-                    const dateStr  = maxTime ? new Date(maxTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                const storyTitle = mine[mine.length - 1].storyTitle
+                    || localStorage.getItem('vn_current_story_title') || '目前故事';
+                const maxTime = Math.max(...mine.map(c => c.createdAt || 0));
+                const dateStr = maxTime ? new Date(maxTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                if (subheader) subheader.textContent = storyTitle;
 
-                    // ── 資料夾標題列 ──
-                    const header = document.createElement('div');
-                    header.className = 'ch-story-header' + (isActive ? ' active' : '');
-                    header.innerHTML = `
-                        <span class="ch-story-arrow">${isActive ? '▼' : '▶'}</span>
-                        <span class="ch-story-title">${group.storyTitle}</span>
-                        <span class="ch-story-meta">${dateStr}${dateStr ? ' · ' : ''}${group.chapters.length} 章</span>
-                        <button class="ch-story-del" title="刪除整個劇情"><i class="fa-solid fa-trash-can"></i></button>
+                // 只有一條故事＝沒有東西可以摺，標題列只剩「這是哪一條、幾章、整條刪掉」
+                const header = document.createElement('div');
+                header.className = 'ch-story-header active';
+                header.innerHTML = `
+                    <span class="ch-story-title">${storyTitle}</span>
+                    <span class="ch-story-meta">${dateStr}${dateStr ? ' · ' : ''}${mine.length} 章</span>
+                    <button class="ch-story-del" title="刪除整個劇情"><i class="fa-solid fa-trash-can"></i></button>
+                `;
+                const body = document.createElement('div');
+                body.className = 'ch-story-body';
+                body.style.display = 'block';
+
+                header.querySelector('.ch-story-del').onclick = async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`確定刪除「${storyTitle}」的所有章節？\n（開場白預設不受影響）`)) return;
+                    // 🚨 統一走 VN_Core.deleteStoryLine：章節、向量記憶、人物檔案、AVS 數值與快照、
+                    //    書架「歷史篇章」的索引一次清乾淨。少一環就會留下打開來是空的幽靈篇章。
+                    await window.VN_Core.deleteStoryLine(currentStoryId);
+                    list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>這個故事已經刪掉了<br>回藏書挑一本踏進去</div></div>';
+                };
+
+                mine.forEach(ch => {
+                    const item = document.createElement('div');
+                    item.className = 'ch-item';
+                    item.innerHTML = `
+                        <span class="ch-name">${ch.title}</span>
+                        <button class="ch-item-del" data-id="${ch.id}" title="刪除此章"><i class="fa-solid fa-trash-can"></i></button>
                     `;
-
-                    // ── 章節容器（預設：當前故事展開，其他折疊）──
-                    const body = document.createElement('div');
-                    body.id = groupId;
-                    body.className = 'ch-story-body';
-                    body.style.display = isActive ? 'block' : 'none';
-
-                    // 折疊 / 展開
-                    header.onclick = (e) => {
-                        if (e.target.closest('.ch-story-del')) return;   // 刪除鈕裡包了 FA <i>，classList 直判會漏
-                        const open = body.style.display !== 'none';
-                        body.style.display = open ? 'none' : 'block';
-                        header.querySelector('.ch-story-arrow').textContent = open ? '▶' : '▼';
+                    // 點擊載入
+                    item.onclick = (e) => {
+                        if (e.target.closest('.ch-item-del')) return;
+                        window.VN_Core._setStoryId(ch.storyId || '', ch.storyTitle || '');
+                        if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
+                        closeChapterPanel();
+                        try { window.VN_Core.earlybirdFromText(ch.content); } catch (e) {}  // 頭像早鳥：先開生
+                        window.VN_Core._startWithLoader(ch.content, null);   // 載入→loading 等全部圖片→開播
+                        // 獨立版章節的插圖存在 ch.scenes（生成時 _persistToLatestChapter 寫的）→ 載入後插回
+                        try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
                     };
-
-                    // 刪除整個故事
-header.querySelector('.ch-story-del').onclick = async (e) => {
-    e.stopPropagation();
-    const sid = group.storyId;
-    if (!confirm(`確定刪除「${group.storyTitle}」的所有章節？\n（開場白預設不受影響）`)) return;
-    if (sid) {
-        // 🚨 統一走 VN_Core.deleteStoryLine：章節、向量記憶、人物檔案、AVS 數值與快照、
-        //    書架「歷史篇章」的索引一次清乾淨。以前這裡只清了前面幾樣、沒動 vn_story_index，
-        //    於是從這邊刪掉的故事，書架那頭還列著一條打開來是空的幽靈篇章。
-        await window.VN_Core.deleteStoryLine(sid);
-    } else {
-        // 舊版無 storyId 資料，逐條刪除
-        for (const ch of group.chapters) await win.OS_DB.deleteVnChapter(ch.id);
-    }
-    header.remove();
-    body.remove();
-};
-
-                    // 2. 章節強制按時間「升序」（舊到新：第一章在最上面）
-                    group.chapters.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-                    // ── 各章節 ──
-                    group.chapters.forEach(ch => {
-                        const item = document.createElement('div');
-                        item.className = 'ch-item';
-                        item.innerHTML = `
-                            <span class="ch-name">${ch.title}</span>
-                            <button class="ch-item-del" data-id="${ch.id}" title="刪除此章"><i class="fa-solid fa-trash-can"></i></button>
-                        `;
-                        // 點擊載入
-                        item.onclick = (e) => {
-                            if (e.target.closest('.ch-item-del')) return;
-                            window.VN_Core._setStoryId(ch.storyId || '', ch.storyTitle || '');
-                            if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
-                            closeChapterPanel();
-                            try { window.VN_Core.earlybirdFromText(ch.content); } catch (e) {}  // 頭像早鳥：先開生
-                            window.VN_Core._startWithLoader(ch.content, null);   // 載入→loading 等全部圖片→開播
-                            // 獨立版章節的插圖存在 ch.scenes（生成時 _persistToLatestChapter 寫的）→ 載入後插回
-                            try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
-                        };
-                        // 刪除單章
-                        item.querySelector('button[data-id]').onclick = async (e) => {
-                            e.stopPropagation();
-                            if (!confirm(`確定刪除「${ch.title}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
-                            // 🚨 一律走 VN_READER.deleteChapter：直接叫 OS_DB.deleteVnChapter 會漏掉
-                            //    記憶清理 / 人物檔案對帳 / 數值重放（被刪的角色下一輪會原樣復活）。
-                            if (win.VN_READER?.deleteChapter) {
-                                const r = await win.VN_READER.deleteChapter(ch.id);
-                                if (!r || !r.ok) { alert('刪不掉：' + ((r && r.why) || '未知原因')); return; }
-                            } else {
-                                await win.OS_DB.deleteVnChapter(ch.id);
-                            }
-                            item.remove();
-                            // 更新章數顯示
-                            const remaining = body.querySelectorAll('.ch-item').length;
-                            header.querySelector('.ch-story-meta').textContent = `${dateStr}${dateStr ? ' · ' : ''}${remaining} 章`;
-                            // 整組都刪完了就移除資料夾
-                            if (remaining === 0) { header.remove(); body.remove(); }
-                        };
-                        body.appendChild(item);
-                    });
-
-                    list.appendChild(header);
-                    list.appendChild(body);
+                    // 刪除單章
+                    item.querySelector('button[data-id]').onclick = async (e) => {
+                        e.stopPropagation();
+                        if (!confirm(`確定刪除「${ch.title}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
+                        // 🚨 一律走 VN_READER.deleteChapter：直接叫 OS_DB.deleteVnChapter 會漏掉
+                        //    記憶清理 / 人物檔案對帳 / 數值重放（被刪的角色下一輪會原樣復活）。
+                        if (win.VN_READER?.deleteChapter) {
+                            const r = await win.VN_READER.deleteChapter(ch.id);
+                            if (!r || !r.ok) { alert('刪不掉：' + ((r && r.why) || '未知原因')); return; }
+                        } else {
+                            await win.OS_DB.deleteVnChapter(ch.id);
+                        }
+                        item.remove();
+                        const remaining = body.querySelectorAll('.ch-item').length;
+                        header.querySelector('.ch-story-meta').textContent = `${dateStr}${dateStr ? ' · ' : ''}${remaining} 章`;
+                        if (remaining === 0) list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>這個故事還沒有章節<br>按「踏入故事」生成第一章吧</div></div>';
+                    };
+                    body.appendChild(item);
                 });
+
+                list.appendChild(header);
+                list.appendChild(body);
 
             } catch(e) {
                 console.error('[VN_PLAYER] 讀取本地存檔失敗:', e);

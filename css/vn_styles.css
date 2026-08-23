@@ -482,7 +482,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
         .ch-story-header:hover { border-color: var(--chx-gold); }
         .ch-story-header.active .ch-story-title { color: var(--chx-accent); }
-        .ch-story-arrow { font-size: 0.6rem; color: var(--chx-gold); width: 12px; flex-shrink: 0; }
         .ch-story-title { flex: 1; font-size: 0.86rem; letter-spacing: 1px; color: var(--chx-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .ch-story-meta { font-size: 0.66rem; color: var(--chx-sub); white-space: nowrap; flex-shrink: 0; }
         .ch-story-del {
@@ -492,7 +491,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
         .ch-story-header:hover .ch-story-del { opacity: 1; }
         .ch-story-del:hover { color: #d05858; }
-        .ch-story-body { padding: 2px 0 2px 14px; }
+        /* 章節不再包在故事資料夾裡（只顯示當前故事）→ 拿掉那層縮排，否則看起來像整排無故偏右 */
+        .ch-story-body { padding: 2px 0; }
         .ch-item {
             position: relative; display: flex; align-items: center;
             margin: 7px 0; padding: 11px 52px 11px 14px;
