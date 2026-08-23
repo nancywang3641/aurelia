@@ -146,13 +146,16 @@
     //   對話那半是把既有的 .void-dialogue-wrap 用 CSS 搬進窗格，不動 DOM、不另做一套聊天。
     const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
     let _view = null;
+    let _toPick = null;   // openView 設定：面板內部的返回鈕要回「岔路」，跟標題列那顆一致
 
     // 🔮 把塔羅畫進窗格：OS_TAROT.launch 本來就吃容器，只差它的 ❮ 返回鈕。
-    //    那顆鈕寫死呼叫 PhoneSystem.goHome（它原本住手機殼裡）→ 暫借成「回地點清單」，關掉時還原。
+    //    那顆鈕寫死呼叫 PhoneSystem.goHome（它原本住手機殼裡）→ 暫借成「回岔路」，關掉時還原。
+    //    🚨 要跟標題列那顆 ‹ 去同一個地方,不然兩顆長得像卻行為不同=一定按錯(Rae 2026-08-24 回報)。
+    //    面板內那顆本身也用 CSS 藏起來了(一頁只留一顆返回鈕),這裡的接線是保險。
     function _mountTarot(c) {
         const PS = win.PhoneSystem;
         const saved = PS ? PS.goHome : undefined;
-        const back = () => { closeView(); openFlat(); };
+        const back = () => { if (_toPick) _toPick(); else { closeView(); openFlat(); } };
         if (PS) PS.goHome = back; else win.PhoneSystem = { goHome: back, __pvShim: true };
         c._pvRestore = () => {
             if (PS) { if (saved === undefined) delete PS.goHome; else PS.goHome = saved; }
@@ -207,6 +210,9 @@
         const talkOff = () => { try { win.LobbyStage?.endTalk?.(); } catch (e) {} };
 
         // mode: 'pick' 岔路 / 'talk' 對話 / 'app' 應用
+        const toPick = () => go('pick');
+        _toPick = toPick;
+
         const go = (mode) => {
             restorePanel();
             body.innerHTML = '';
@@ -235,6 +241,7 @@
         const close = () => {
             restorePanel();
             talkOff();
+            if (_toPick === toPick) _toPick = null;
             box.remove();
             if (_view === close) _view = null;
         };

@@ -129,6 +129,10 @@
   box-shadow:0 16px 44px rgba(0,0,0,.5); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
 .lb-pv:not(.is-app) .lb-pv-pane { display:none; }
 .lb-pv-body { flex:1; min-height:0; position:relative; overflow:auto; }
+/* 🚨 面板自己的返回鈕在地點視圖裡藏起來：標題列已經有一顆 ‹，兩顆疊在左上角長得又像
+   → 一定會按錯(Rae 2026-08-24 回報按到塔羅那顆、以為回大廳)。一頁只留一顆返回鈕。
+   只在 .lb-pv-body 裡藏,從小屋走進去開的塔羅浮窗不受影響。 */
+.lb-pv-body .tr-btn-icon { display:none; }
 .lb-pv-note, .lb-pv-fail { padding:26px 20px; text-align:center; font-size:13px; color:rgba(242,236,255,.66); }
 .lb-pv-fail { color:#ff9a9a; }
 
