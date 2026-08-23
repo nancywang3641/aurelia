@@ -223,6 +223,11 @@
             custom:      true,
             cardImport:  true,
             importedAt:  Date.now(),
+            // 🚨 這本書要讀哪個世界書書包：匯入時就掛上去。
+            //    以前沒寫這欄 → 踏入故事時 `w.wbPacks || []` 寫進 vn_active_wb_packs 的是空陣列，
+            //    組 context 時「這本書自己的書包」是空的 → 退到 getEnabledContext(它濾的是
+            //    「世界書 app 當下正在看的那本」) → 玩 A 書卻讀到 B 書的設定，而且完全不報錯。
+            wbPacks:     [cardCategory],
             // 開場白：first_mes + alternate_greetings 合併，過濾空值
             greetings: [
                 rawCard.first_mes || rawCard.data?.first_mes,
@@ -243,6 +248,7 @@
                 console.log('[CardImport] 這本書已經有 ' + prev.greetings.length + ' 則開場白（可能被你改過）→ 保留，不用卡片自帶的覆蓋');
             }
             if (!newWorld.cover && prev.cover) merged.cover = prev.cover;
+            if (!Array.isArray(merged.wbPacks) || !merged.wbPacks.length) merged.wbPacks = [cardCategory];
             return merged;
         }
 
@@ -624,9 +630,35 @@
         injectImportSpine,
         /** 直接解析 PNG ArrayBuffer → 角色 JSON（供外部使用） */
         parsePngCard,
+        /** 舊書補上世界書書包（書名同名者）*/
+        backfillWbPacks,
         /** 把已存的大張書封就地縮成縮圖，把 localStorage 空間要回來 */
         reclaimCoverSpace,
     };
+
+    // ── 🧷 舊書補書包（開機跑一次）────────────────────────────
+    //   匯入時沒寫 wbPacks 的書，踏進去會拿到空書包 → 世界書退到「app 當下在看的那本」，
+    //   玩 A 書讀到 B 書的設定。這裡按「書名 ＝ 世界書書包名」把它補回去（匯入時本來就是同名）。
+    async function backfillWbPacks() {
+        let list;
+        try { list = JSON.parse(localStorage.getItem('aurelia_custom_worlds') || '[]'); } catch (e) { return 0; }
+        if (!Array.isArray(list) || !list.length) return 0;
+        let books = [];
+        try { books = (win.OS_WORLDBOOK?.getAvailablePacks?.()) || []; } catch (e) {}
+        if (!books.length) return 0;
+        let n = 0;
+        for (const w of list) {
+            if (!w || !w.cardImport) continue;
+            if (Array.isArray(w.wbPacks) && w.wbPacks.length) continue;
+            if (w.title && books.includes(w.title)) { w.wbPacks = [w.title]; n++; }
+        }
+        if (!n) return 0;
+        const r = _saveWorlds(list);
+        if (!r.ok) { console.warn('[CardImport] 補書包後寫不回去'); return 0; }
+        try { win.AURELIA_CUSTOM_WORLDS = list; window.AURELIA_CUSTOM_WORLDS = list; } catch (e) {}
+        console.log('[CardImport] 🧷 補上世界書書包 ' + n + ' 本（以前踏進去會讀到別本書的設定）');
+        return n;
+    }
 
     // ── 🧹 舊書封瘦身（開機跑一次）──────────────────────────────
     //   在縮圖這條路之前匯入的書，封面是整張角色卡 PNG 的 dataURL（1MB 起跳）。
@@ -652,6 +684,7 @@
         return saved;
     }
     setTimeout(() => { reclaimCoverSpace().catch(() => {}); }, 3000);   // 開機忙完再跑，別跟首屏搶
+    setTimeout(() => { backfillWbPacks().catch(() => {}); }, 3500);
 
     console.log('[OS_CARD_IMPORT] 已載入 v1.1 - 核心人設轉化世界書支援版');
 })();

@@ -1376,6 +1376,11 @@
                     lore = await win.OS_WORLDBOOK.getContextByPacks(_activePacks, scanText);
                     _lorePre = lore;
                 } else if (win.OS_WORLDBOOK?.getEnabledContext) {
+                    // 🚨 這條退路濾的是「世界書 app 當下正在看的那本書」，跟你正在玩的故事沒有關係。
+                    //    走到這裡代表「這本書沒掛世界書書包」——以前它靜靜地把別本書的設定餵給主模型，
+                    //    畫面上完全看不出來（症狀是 AI 一直提到另一個世界的人事物）。現在講清楚。
+                    console.warn('[OS_API] ⚠️ 這本故事沒有掛世界書書包 → 退到「世界書 app 目前選的那本」，'
+                        + '讀到的很可能不是這個世界的設定。去 藏書→這本書 重新匯入一次角色卡，或在世界書把書包掛上。');
                     lore = await win.OS_WORLDBOOK.getEnabledContext(scanText);
                     _lorePre = lore;
                 }
