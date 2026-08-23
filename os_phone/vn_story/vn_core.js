@@ -1448,9 +1448,10 @@
         // ── 生成「一張角色圖」的共用咽喉（頭像 or 立繪，看 spriteDirect）──
         //   立繪模式＝唯二差別：① getSprite 模板取代 getAvatar ② AI 去背。整條 gate/解析/快取/去重由呼叫端
         //   (頭像管線：_genAvatarToCache / fallbackToAI) 共用，這裡只負責「生成那一步」。回 { objUrl, dataUrl }，失敗回 null。
-        _makeCharImage: async function(prompt, exp) {
+        _makeCharImage: async function(prompt, exp, force) {
             const sprite = (VN_Config.data.spriteDirect === true);
-            const raw = await (sprite ? VN_Image.getSprite(prompt) : VN_Image.getAvatar(prompt, exp));
+            // force：相簿的「重生」要繞過 generate() 的記憶體快取，否則同 prompt 會吐回同一張舊圖
+            const raw = await (sprite ? VN_Image.getSprite(prompt, force) : VN_Image.getAvatar(prompt, exp, force));
             if (!raw) return null;
             let blob = null;
             try { blob = await (await fetch(raw)).blob(); }

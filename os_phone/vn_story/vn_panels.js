@@ -290,10 +290,20 @@
             } catch (e) {}
             raw = _W.OS_IMAGE_MANAGER ? await _W.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: true }) : '';
         }
-        else raw = await VN_Image.getAvatar(prompt, 'Neutral', true);
+        else {
+            // 🚨 走 _makeCharImage 而不是寫死 getAvatar：立繪模式開著的時候，
+            //    這顆「重生」以前永遠吐頭像回來（她的「勾了立繪還是給我頭像」就是按到這裡）。
+            //    走共用咽喉才會跟著拉桿換模板、順便做 AI 去背。
+            const _mk = (window.VN_Core || (window.parent || window).VN_Core);
+            const _img = _mk && _mk._makeCharImage ? await _mk._makeCharImage(prompt, 'Neutral', true) : null;
+            raw = _img ? (_img.dataUrl || _img.objUrl) : await VN_Image.getAvatar(prompt, 'Neutral', true);
+        }
         if (!raw) return '';
         const url = (await _imgToDataUrl(raw)) || raw;
-        await VN_Cache.setRaw(cfg.store, fullKey, { ...val, prompt, url });   // 不再存 rawUrl(只寫不讀的死資料、徒增 DB+記憶體)
+        const _isSprite = (window.VN_Config || (window.parent || window).VN_Config)?.data?.spriteDirect === true;
+        await VN_Cache.setRaw(cfg.store, fullKey, _isSprite && cfg.kind === 'avatar'
+            ? { ...val, prompt, url, isSprite: true }
+            : { ...val, prompt, url });   // 不再存 rawUrl(只寫不讀的死資料、徒增 DB+記憶體)
         // 已轉成持久 dataURL → 釋放暫時的 blob 與 OS_IMAGE_MANAGER 快取，免 NAI blob 永久洩漏
         try {
             if (typeof raw === 'string' && raw.startsWith('blob:') && raw !== url) URL.revokeObjectURL(raw);
@@ -493,7 +503,10 @@
         const prompt = textarea.value.trim(); if (!prompt) return;
         const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
         try {
-            const raw = await VN_Image.getAvatar(prompt, 'Neutral');
+            // 同上：立繪模式時要生立繪，不是頭像
+            const _mk = (window.VN_Core || (window.parent || window).VN_Core);
+            const _img = _mk && _mk._makeCharImage ? await _mk._makeCharImage(prompt, 'Neutral', true) : null;
+            const raw = _img ? (_img.dataUrl || _img.objUrl) : await VN_Image.getAvatar(prompt, 'Neutral', true);
             if (raw) {
                 // 統一轉 dataUrl 再存 IDB，確保重開後不破圖（NAI 回傳 blob URL 不持久）
                 try {

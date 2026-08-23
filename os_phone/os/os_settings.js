@@ -761,7 +761,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const suffix = document.getElementById('sprite-tpl-suffix').value;
                     await win2.VN_Cache.set('sprite_cache', name, {
                         url: dataUrl,
-                        prompt: prefix + (state.selectedPrompt || '') + suffix,
+                        // 接縫補逗號：前綴自帶結尾逗號、後綴沒有 → 直接相加會把描述最後一個 tag
+                        //   跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"）。
+                        prompt: [prefix, state.selectedPrompt || '', suffix]
+                            .map(x => String(x || '').trim().replace(/^,+|,+$/g, '').trim()).filter(Boolean).join(', '),
                         isRemoved: state.isRemoved,
                         createdAt: Date.now()
                     });

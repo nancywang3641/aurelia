@@ -109,6 +109,15 @@
         }
     };
 
+    // 把幾段 prompt 接起來：接縫處補逗號、重複逗號收掉、空段跳過。
+    //   前綴通常自己就帶著結尾逗號，後綴通常沒有 —— 不統一處理就會黏在一起。
+    function _joinTags() {
+        return Array.prototype.slice.call(arguments)
+            .map(x => String(x == null ? '' : x).trim().replace(/^,+|,+$/g, '').trim())
+            .filter(Boolean)
+            .join(', ');
+    }
+
     // === 生圖引擎 ===
     const VN_Image = {
         _join: function(...parts) { return parts.filter(Boolean).join(', '); },
@@ -168,7 +177,10 @@
             try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
             if (pfx == null) pfx = DEF_PFX;
             if (sfx == null) sfx = DEF_SFX;
-            let full = pfx + this._stripForSprite(prompt) + sfx;   // = studio 的 prefix + finalPrompt + suffix
+            // 🚨 三段之間一定要逗號：以前是 pfx + desc + sfx 直接黏，
+            //    角色描述的最後一個 tag 會跟後綴的第一個字黏成一團（white dress + simple → "white dresssimple"），
+            //    等於一次毀掉兩個 tag。os_settings 的 studio 那條也是同一個寫法，一起修。
+            let full = _joinTags(_joinTags(pfx, this._stripForSprite(prompt)), sfx);   // = studio 的 prefix + finalPrompt + suffix
             // 立繪尺寸：跟 studio 共用「立繪比例」設定 os_sprite_size，預設 512×896
             let _w = 512, _h = 896;
             try { const _p = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_p[0] && _p[1]) { _w = _p[0]; _h = _p[1]; } } catch(e) {}
