@@ -288,7 +288,9 @@
             }
             document.querySelectorAll('.vn-dyn-overlay').forEach(el => el.remove());
             // 📖 章節卡：換章節時把上一張收掉（她可能還沒按「開始閱讀」就切走了）
-            this._ccOpen = false; this._ccData = null;
+            //    連對話框的接管旗標一起解除，不然上一章沒按「開始閱讀」就切走時，
+            //    這旗標留著＝下一章的對話框被 hideOverlays 的守衛擋住，整章都不出來。
+            this._ccOpen = false; this._ccData = null; this._ccPanelHidden = false;
             { const _cc = document.getElementById('vn-chapter-card'); if (_cc) _cc.classList.add('hidden'); }
 
             // 關閉選項 overlay（載入新/舊章節時清除殘留）
@@ -2671,6 +2673,13 @@
             this._ccSkin();
             el.classList.remove('hidden');
             this._ccOpen = true;
+            // 🚨 對話框要明確收起來：hideOverlays() 每次推進都把 text-panel-wrapper 設回 block，
+            //    卡片只是蓋在上面 → 底下留著一個空的對話框，而且它自己還吃得到點擊
+            //    （#text-panel-wrapper 掛著 handlePanelClick），點一下就在卡片背後偷推一句。
+            //    做法照 toggleUI('phone-chat') 那條：浮層接管畫面時對話框一律 display:none。
+            this._ccPanelHidden = true;
+            const wrap = document.getElementById('text-panel-wrapper');
+            if (wrap) wrap.style.display = 'none';
             return true;
         },
         // 🎨 跟著劇情主題走：主題是「一段自由 CSS」（vn_theme），作者/AI 寫的多半只針對
@@ -2712,6 +2721,11 @@
         closeChapterCard: function() {
             const el = document.getElementById('vn-chapter-card');
             if (el) el.classList.add('hidden');
+            if (this._ccPanelHidden) {
+                this._ccPanelHidden = false;
+                const wrap = document.getElementById('text-panel-wrapper');
+                if (wrap) wrap.style.display = 'block';
+            }
             if (!this._ccOpen) return;
             this._ccOpen = false;
             this.next();
@@ -2722,6 +2736,9 @@
             ['sys-overlay', 'trans-overlay', 'item-overlay', 'quest-overlay'].forEach(id => { const _el = document.getElementById(id); if (_el) _el.classList.remove('active'); });
             // 🎬 scene-cg-overlay 走鋪底式：linger>0 期間留著（由 renderVN 計數淡出），不被每句 next 的 hideOverlays 秒關
             if (this._sceneCgLinger <= 0 && !this._sceneCgHold) { const _sc = document.getElementById('scene-cg-overlay'); if (_sc) _sc.classList.remove('active'); }
+            // 章節卡接管畫面時別把對話框叫回來：卡片出場前後還有早鳥生圖／立繪這些非同步的活，
+            // 誰晚一步呼叫到這裡，空對話框就又浮出來了。
+            if (this._ccPanelHidden) return;
             document.getElementById('text-panel-wrapper').style.display = 'block';
         },
         _showBgmToast: function(name, found) {
