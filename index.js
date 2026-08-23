@@ -117,7 +117,6 @@ window.PANEL_COMMUNICATION = {
 const MODULE_LOAD_ORDER = [
     { name: 'debug_console', path: _AURELIA_EXT_BASE + '/core/debug_console.js', key: 'debugConsole' }, // 🐛 螢幕 console（無 devtools 環境用）— 最先載才攔得到後續 log
     { name: 'aurelia_api', path: _AURELIA_EXT_BASE + '/core/aurelia_api.js', key: 'aureliaApi' }, // 📦 統一資料入口(備用版插座)— 必須最先載
-    { name: 'bgm_collector', path: _AURELIA_EXT_BASE + '/bgm-global-collector.js', key: 'bgmCollector' },
     { name: 'loader_core', path: _AURELIA_EXT_BASE + '/core/loader_core.js', key: 'core' },
     { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
     { name: 'tavern_bridge', path: _AURELIA_EXT_BASE + '/core/tavern_bridge.js', key: 'bridge' },
@@ -248,7 +247,6 @@ const PHONE_FILES = [
     'rpg/world_rules_injector.js',  // 🌍 依這個聊天室所在世界的題材，自動翻戰鬥/手機/BGM 那幾條的開關（同上，只動 enabled）
     // 'rpg/summary_core.js',  // ⛔ 已刪(2026-06-19)：舊「<summary>→[RPG_LOG]世界書」自動寫入，key 從不觸發=寫了沒人讀，已被 AVS+向量+大總結取代
     'rpg/status_panel.js',
-    // 'rpg/avatar_manager.js',  // ⛔ 已停用：廢棄舊檔，會與 VN 頭像系統並行重複生成同一角色（浪費資源）+ 亂跳「已收錄」toast。檔案保留；vn_core 仍會讀世界書既有頭像。
 
     // === 🗺️ MAP 地圖系統 ===
     'map/map_data.js',
@@ -446,12 +444,9 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/app_store.css');
 
         // core 模組 CSS（兩版共用，selector 已 scoped 不污染酒館）
-        await loadCSS(_AURELIA_EXT_BASE + '/css/toast_manager.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/story_extractor.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/story_entry_wizard.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/html_extractor.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/image_settings_panel.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/settings_manager.css');
 
         // os_phone/os 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings.css');
@@ -468,9 +463,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_exchange.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_story_tools.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/os_user_center.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_monitor.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/os_barrage.css');
 
         // vn_story / qb / wx / map / rpg 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_styles.css');
@@ -673,7 +666,8 @@ function overrideToggleLogic() {
 function installAPI() {
     window.toggleVnPanel = () => safeTogglePanel('VN');
     window.toggleHtmlExtractor = () => window.AureliaHtmlExtractor?.show();
-    window.toggleSettingsPanel = () => window.AureliaSettingsManager?.toggle();
+    // ⛔ toggleSettingsPanel 已移除：AureliaSettingsManager(core/settings_manager.js) 早就退役，
+    //    這行只是 `?.` 吞掉的空動作。設置＝手機的「⚙️ 設置」app(OS_SETTINGS.launchApp)。
     window.togglePhoneSystem = () => {
         if (window.PhoneSystem) window.PhoneSystem.show();
         else console.warn('手機系統載入中...');
@@ -689,7 +683,6 @@ function installAPI() {
     window.AureliaLoader = {
         toggleVnPanel: window.toggleVnPanel,
         toggleHtmlExtractor: window.toggleHtmlExtractor,
-        toggleSettingsPanel: window.toggleSettingsPanel,
         togglePhoneSystem: window.togglePhoneSystem,
         hidePhoneModal: () => window.AureliaControlCenter?.hide(),
         openPhoneApp: function(targetAppName) {

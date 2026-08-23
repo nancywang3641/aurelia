@@ -20,13 +20,10 @@
     <link rel="stylesheet" href="css/app_store.css" />
 
     <!-- core 模組 CSS -->
-    <link rel="stylesheet" href="css/toast_manager.css" />
     <link rel="stylesheet" href="core/void/lobby_stage.css" />
     <link rel="stylesheet" href="css/story_extractor.css" />
     <link rel="stylesheet" href="css/story_entry_wizard.css" />
     <link rel="stylesheet" href="css/html_extractor.css" />
-    <link rel="stylesheet" href="css/image_settings_panel.css" />
-    <link rel="stylesheet" href="css/settings_manager.css" />
 
     <!-- os_phone/os 模組 CSS -->
     <link rel="stylesheet" href="css/os_settings.css" />
@@ -42,9 +39,7 @@
     <link rel="stylesheet" href="css/os_journal.css" />
     <link rel="stylesheet" href="css/os_story_tools.css" />
     <link rel="stylesheet" href="css/os_exchange.css" />
-    <link rel="stylesheet" href="css/os_user_center.css" />
     <link rel="stylesheet" href="css/os_monitor.css" />
-    <link rel="stylesheet" href="css/os_barrage.css" />
 
     <!-- vn_story / qb / wx / map / rpg 模組 CSS -->
     <link rel="stylesheet" href="css/vn_styles.css" />
@@ -100,7 +95,6 @@
     <script src="core/void_terminal.js"></script>
     <script src="core/control_center.js"></script>
     <script src="core/vn_free_mode.js"></script>
-    <script src="bgm-global-collector.js"></script>
 
     <script src="os_phone/os/os_settings.js"></script>
     <!-- 🖼️ 圖片設置的 ComfyUI 直連＋🎵 語音清單：2026-07-17 自 os_settings.js 拆出，
@@ -207,7 +201,6 @@
     <!-- ⛔ 已刪(2026-06-19)：summary_core 舊「<summary>→[RPG_LOG]世界書」自動寫入，寫了沒人讀，已被 AVS+向量+大總結取代 -->
     <script src="os_phone/rpg/status_panel.js"></script>
     <!-- ⛔ 已停用：avatar_manager 與 VN 頭像系統並行重複生成、浪費資源（index.js 早已停用，這裡對齊）。檔案保留。 -->
-    <!-- <script src="os_phone/rpg/avatar_manager.js"></script> -->
     <!-- 🔀 世界書條目開關同步器：兩支都補上獨立版分支（改翻 OS_DB 世界書條目的 enabled，
          規則與邊界跟酒館同一份），所以 PWA 也要載。必須排在 os_worldbook / os_worldgate 之後。 -->
     <script src="os_phone/rpg/avatar_rules_injector.js"></script>

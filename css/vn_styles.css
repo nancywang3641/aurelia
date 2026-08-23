@@ -24,8 +24,6 @@
             --font-sans: 'Microsoft JhengHei', -apple-system, sans-serif;
         }
 
-        
-
         .vn-root { margin: 0; padding: 0; background-color: #000; font-family: var(--font-sans); display: flex; justify-content: center; align-items: center; height: 100%; overflow: hidden; color: var(--text-light); }
         .vn-container { width: 100%; height: 100%; background-color: var(--bg-dark); position: relative; box-shadow: inset 0 0 80px rgba(0,0,0,0.8); display: flex; flex-direction: column; overflow: hidden; user-select: none; -webkit-user-select: none; }
         .page { width: 100%; height: 100%; position: absolute; top: 0; left: 0; box-sizing: border-box; overflow-y: auto; }
@@ -69,7 +67,6 @@
 .home-frame .tr { top: -1px; right: -1px; border-top-width: 2px; border-right-width: 2px; }
 .home-frame .bl { bottom: -1px; left: -1px; border-bottom-width: 2px; border-left-width: 2px; }
 .home-frame .br { bottom: -1px; right: -1px; border-bottom-width: 2px; border-right-width: 2px; }
-
 
 /* --- 選單與設置 (黑金高貴風) --- */
 .menu-wrapper { padding: 40px; text-align: center; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; z-index: 2; background: transparent; }
@@ -703,17 +700,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-reader-think-body { display: none; padding: 10px 14px; background: rgba(20,20,40,0.85); border: 1px solid rgba(100,100,200,0.22); border-top: none; border-radius: 0 0 6px 6px; font-size: 0.78rem; color: #c8c8e8; line-height: 1.75; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2a2a4a transparent; }
         .vn-reader-think-wrap.open .vn-reader-think-body { display: block; }
 
-        /* 📖 劇情閱讀器 */
-        #vn-reader-overlay { position: absolute; inset: 0; background: rgba(6,6,10,0.98); z-index: 70; display: none; flex-direction: column; }
-        #vn-reader-overlay.active { display: flex; }
-        #vn-reader-header { display: flex; justify-content: space-between; align-items: center; padding: calc(14px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 14px; border-bottom: 1px solid rgba(212,175,55,0.2); flex-shrink: 0; box-sizing: border-box; }
-        #vn-reader-title { color: var(--gold); font-family: var(--font-classic); font-size: 1rem; letter-spacing: 2px; }
-        #vn-reader-close { color: #666; font-size: 1.6rem; cursor: pointer; transition: color 0.2s; }
-        #vn-reader-close:hover { color: var(--gold); }
-        #vn-reader-body { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; scrollbar-color: #222 transparent; }
-        #vn-reader-body::-webkit-scrollbar { width: 4px; }
-        #vn-reader-body::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
-
         /* 對話泡泡 */
         .vn-reader-msg { display: flex; flex-direction: column; gap: 4px; width: 100%; }
         .vn-reader-msg.user { align-items: flex-end; }
@@ -735,8 +721,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-reader-act-btn.active { color: var(--gold); border-color: rgba(212,175,55,0.55); background: rgba(212,175,55,0.06); }
         .vn-reader-act-btn.danger:hover { color: #d98a8a; border-color: rgba(217,138,138,0.55); }
         .vn-reader-bubble.raw-view.hidden { display: none; }   /* 編輯模式蓋掉 .raw-view.active（同 3 個 class，靠順序贏） */
-        .vn-reader-divider { text-align: center; font-size: 0.7rem; color: #555; letter-spacing: 2px; padding: 6px 0; }
-        .vn-reader-loading { text-align: center; color: #333; font-size: 0.82rem; padding: 40px; }
 
         /* 🙈 全域：隱藏被酒館 /hide 標記的訊息（這是 Janus Nexus 的 CSS 技巧） */
         .mes[is_system="true"] { display: none !important; }
@@ -753,13 +737,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-think-popup-close:hover { color: var(--gold); transform: scale(1.1); }
         #vn-think-popup-body { overflow-y: auto; padding: 15px; font-size: 0.85rem; color: #e8dfc8; line-height: 1.8; white-space: pre-wrap; word-break: break-word; scrollbar-width: thin; scrollbar-color: rgba(212,175,55,0.3) transparent; font-family: var(--font-sans); }
         .think-empty-msg { color: #666; text-align: center; padding: 20px 0; font-family: var(--font-sans); }
-
-        /* 📖 閱讀器 — 故事分頁 Tab */
-        #vn-reader-tabs { flex-shrink: 0; display: flex; gap: 2px; padding: 8px 14px 0; overflow-x: auto; border-bottom: 1px solid rgba(255,255,255,0.05); scrollbar-width: none; }
-        #vn-reader-tabs::-webkit-scrollbar { display: none; }
-        .vn-reader-tab { font-size: 0.72rem; color: #555; padding: 5px 14px; border-radius: 4px 4px 0 0; cursor: pointer; white-space: nowrap; transition: all 0.2s; border: 1px solid transparent; border-bottom: none; user-select: none; }
-        .vn-reader-tab:hover { color: #888; background: rgba(255,255,255,0.03); }
-        .vn-reader-tab.active { color: var(--gold); background: rgba(212,175,55,0.06); border-color: rgba(212,175,55,0.15); }
 
         /* --- 對話框彈入動態 --- */
         @keyframes dialogueIn { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -1071,7 +1048,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .danmu-sep { color: rgba(255,255,255,0.35); font-size: 0.9rem; }
         .danmu-text { color: #fff; font-size: 1rem; text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
         @keyframes danmu-fly-rl { from { transform: translateX(120%); } to { transform: translateX(calc(-100vw - 120%)); } }
-
 
         /* =========================================
            對話框 (VN / Narration) - 🎩 古典黑金高貴風
@@ -1947,7 +1923,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             body.layout-pad-ios #btn-settings { top: 90px; }
             body.layout-pad-ios #btn-phone    { top: 128px; }
             
-
             /* 背景標籤 */
             #top-badge { font-size: 0.82rem; letter-spacing: 1.5px; }
 
@@ -2045,8 +2020,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #phone-call.call-active #call-name { font-size: 1.1rem; }
         }
 
-
-
         /* details.vn-collapse-group：摺疊區塊的標題列樣式（下面幾條）。
            原本這裡還有「AI 生成劇情面板」的手機堆疊規則；那個面板拆掉時選擇器被刪、
            宣告卻留著變成孤兒 CSS，解析器一路吃掉後面的規則 —— 已整段移除。 */
@@ -2077,7 +2050,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         details.vn-collapse-group summary:hover {
             color: var(--gold);
         }
-        
         
         /* 右側箭頭旋轉動畫 */
         .collapse-icon {

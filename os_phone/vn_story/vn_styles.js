@@ -183,17 +183,6 @@
                     <div id="vn-think-popup-body"></div>
                 </div>
 
-                <!-- 📖 劇情閱讀器（迷你酒館）-->
-                <div id="vn-reader-overlay">
-                    <div id="vn-reader-header">
-                        <div id="vn-reader-title">📖 劇情閱讀器</div>
-                        <div style="display:flex;align-items:center;gap:10px;">
-                            <div id="vn-reader-close" onclick="window.VN_PLAYER.hideReaderPanel()">✕</div>
-                        </div>
-                    </div>
-                    <div id="vn-reader-tabs" style="display:none"></div>
-                    <div id="vn-reader-body"></div>
-                </div>
 
                 <div id="sys-overlay" onclick="window.VN_Core.next()">
                     <div id="sys-box">
