@@ -1399,7 +1399,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            去背失敗才加 .vnitem-raw 走羽化遮罩 —— 帶底原圖直接浮在黑幕上會是一塊白方塊。 */
         #item-overlay {
             flex-direction: column; align-items: center; justify-content: flex-start;
-            padding: 7% 0 clamp(18px, 4%, 40px); box-sizing: border-box; cursor: pointer;
+            /* padding 的百分比一律以「寬度」為基準，上下也是 —— 用 % 會讓窄容器幾乎沒留白、
+               寬容器又留過頭。改成夾在固定範圍內。 */
+            padding: clamp(14px, 4%, 34px) 0 clamp(16px, 4%, 36px); box-sizing: border-box; cursor: pointer;
             background: radial-gradient(ellipse 82% 56% at 50% 36%, rgba(24,20,14,0.34) 0%, rgba(0,0,0,0.66) 50%, rgba(0,0,0,0.88) 100%);
             z-index: 40; backdrop-filter: blur(7px);
         }
@@ -1407,7 +1409,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #item-stage { position: relative; flex: 1 1 auto; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
         /* 物件背後的柔光：深色道具在黑幕上才有輪廓，不會糊成一團黑 */
         #item-halo {
-            position: absolute; top: 50%; left: 50%; width: min(56vh, 62%); aspect-ratio: 1;
+            position: absolute; top: 50%; left: 50%; width: 66%; height: 66%;
             transform: translate(-50%, -50%); pointer-events: none;
             background: radial-gradient(circle, rgba(212,175,55,0.22) 0%, rgba(212,175,55,0.08) 42%, rgba(212,175,55,0) 70%);
             animation: itemHaloBreath 4.6s ease-in-out infinite;
@@ -1426,8 +1428,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         @keyframes itemLoadSpin { from { transform: rotate(45deg); } to { transform: rotate(405deg); } }
         #item-stage.loaded #item-loading { display: none; }
 
+        /* 🚨 物件一律吃滿舞台：寬度以前卡在 min(58vh,66%)，容器只要不是 16:9 就一定有一邊嚴重過剩，
+           剩下的高度全部變成「物件與文字中間那一大塊空白」。改成高度給滿、寬度只留一點邊，
+           object-fit:contain 自己會照比例收，橫的直的都不會爆。 */
         #item-img {
-            max-height: 100%; max-width: min(58vh, 66%); object-fit: contain;
+            max-height: 100%; max-width: 88%; object-fit: contain;
             opacity: 0; transform: translateY(26px) scale(0.93);
             transition: opacity 0.55s ease, transform 0.72s cubic-bezier(0.16, 0.84, 0.36, 1);
             filter: drop-shadow(0 18px 26px rgba(0,0,0,0.72)) drop-shadow(0 0 26px rgba(212,175,55,0.26));
@@ -1436,7 +1441,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 去背失敗的退路：帶底原圖用羽化遮罩把四角化掉，讓它像一張暈開的舊照片沉進黑幕，
            不會是一塊硬邦邦的白方塊。不加金框——框只會把「這是張帶底的圖」講得更大聲。 */
         #item-img.vnitem-raw {
-            max-width: min(46vh, 52%);
+            max-width: 70%;
             filter: brightness(0.95) saturate(0.95);
             -webkit-mask-image: radial-gradient(ellipse 58% 58% at 50% 50%, #000 26%, rgba(0,0,0,0.42) 66%, transparent 92%);
                     mask-image: radial-gradient(ellipse 58% 58% at 50% 50%, #000 26%, rgba(0,0,0,0.42) 66%, transparent 92%);
@@ -1446,7 +1451,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            要縮就縮舞台那格(圖跟著變小)，字永遠是完整的——描述長到頂就在描述那格自己捲。 */
         #item-caption {
             flex: 0 0 auto; max-height: 52%; min-height: 0; display: flex; flex-direction: column;
-            width: min(620px, 84%); text-align: center; padding-top: clamp(14px, 3vh, 30px);
+            width: min(620px, 84%); text-align: center; padding-top: clamp(12px, 3.5%, 26px);
         }
         #item-kicker, #item-title { flex: 0 0 auto; }
         #item-kicker {
@@ -1454,7 +1459,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             letter-spacing: 0.62em; text-indent: 0.62em; color: rgba(212,175,55,0.72);
         }
         #item-title {
-            font-family: var(--font-classic); font-size: clamp(1.25rem, 3.4vh, 1.8rem); font-weight: bold;
+            font-family: var(--font-classic); font-size: clamp(1.2rem, 4.6vw, 1.75rem); font-weight: bold;
             color: var(--gold); letter-spacing: 3px; margin: 12px 0 0;
             text-shadow: 0 2px 16px rgba(0,0,0,0.85), 0 0 24px rgba(212,175,55,0.22);
         }
@@ -1471,7 +1476,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #item-desc::-webkit-scrollbar-track { background: transparent; }
         #item-desc::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.25); border-radius: 2px; }
         #item-hint {
-            flex: 0 0 auto; margin-top: clamp(12px, 2.4vh, 24px);
+            flex: 0 0 auto; margin-top: clamp(10px, 2.6%, 22px);
             font-family: var(--font-sans); font-size: 0.7rem; letter-spacing: 3px;
             color: rgba(255,255,255,0.36); animation: itemHintPulse 2.4s ease-in-out infinite;
         }
@@ -1919,7 +1924,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
             /* 物品彈窗 */
             #item-caption { width: 86%; }
-            #item-img { max-width: 72%; }
 
             /* 手機裝置框：高度不超過 VN 容器；寬度由 aspect-ratio(1:2) 自動推、維持手機比例不矮胖 */
             #phone-device { height: min(720px, calc(100% - 16px)); }
@@ -1969,10 +1973,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #trans-text { font-size: 1.2rem; letter-spacing: 4px; padding: 0 32px; }
 
             /* 物品彈窗 */
-            #item-overlay { padding: 9% 0 clamp(14px, 3.5%, 28px); }
             #item-caption { width: 88%; }
-            #item-img { max-width: 78%; }
-            #item-img.vnitem-raw { max-width: 62%; }
+            #item-img.vnitem-raw { max-width: 76%; }
             #item-kicker { font-size: 0.6rem; letter-spacing: 0.5em; text-indent: 0.5em; }
             #item-title { letter-spacing: 2px; }
             #item-title::after { width: 70px; margin: 12px auto; }
