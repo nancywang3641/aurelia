@@ -1511,17 +1511,23 @@
                 //   由大到小插，先插的不會被後插的位移影響。
                 //   🚨 這是酒館 position:4/@D 的對應物 —— 沒有它的話整本書只能一起壓在歷史之前，
                 //      幾千字歷史一蓋就把格式規則沖掉（[Avatar|] 老是掉就是這樣來的）。
+                const _ST_ROLE = { 0: 'system', 1: 'user', 2: 'assistant' };
                 const _injectHistoryWithDepths = (out, msgs, depths) => {
                     const buf = (msgs || []).slice();
-                    (depths || []).slice().sort((a, b) => b.depth - a.depth).forEach(d => {
-                        if (!d || !d.text) return;
-                        const at = Math.max(0, buf.length - Math.max(0, d.depth | 0));
-                        buf.splice(at, 0, { role: 'system', content: d.text });
-                    });
+                    // 深度大的先插（先插的不會被後插的位移）；同深度內 AI → 使用者 → 系統，
+                    //   跟酒館 doChatInject 一樣把系統留在最靠近生成點的位置。
+                    (depths || []).slice()
+                        .sort((a, b) => (b.depth - a.depth) || ((b.role || 0) - (a.role || 0)))
+                        .forEach(d => {
+                            if (!d || !d.text) return;
+                            const at = Math.max(0, buf.length - Math.max(0, d.depth | 0));
+                            buf.splice(at, 0, { role: _ST_ROLE[d.role || 0] || 'system', content: d.text });
+                        });
                     buf.forEach(m => out.push(m));
                     if ((depths || []).length) {
-                        console.log('[OS_API vn_story] 世界書深度注入：' +
-                            depths.map(d => '@' + d.depth + '(' + d.text.length + '字)').join('、'));
+                        console.log('[OS_API vn_story] 世界書 @D 注入：' +
+                            depths.map(d => '@D' + d.depth + '/' + (_ST_ROLE[d.role || 0] || 'system') +
+                                '(' + d.text.length + '字)').join('、'));
                     }
                 };
 

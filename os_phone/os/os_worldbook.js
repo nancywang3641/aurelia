@@ -71,6 +71,7 @@
                 enabled: !(e.disable || e.disabled || false),
                 order: parseInt(e.order) || parseInt(e.displayIndex) || 0,
                 depth: _stDepth(e),   // 酒館 @D 的深度；null＝跟著「世界書」那一格
+                role: _stRole(e),     // @D 的身分：0系統 1使用者 2AI
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -78,6 +79,11 @@
         return entries;
     }
 
+    // ── 以下三個換算完全照抄酒館 public/scripts/world-info.js，別憑印象改 ──
+    //   world_info_position = { before:0, after:1, ANTop:2, ANBottom:3, atDepth:4, EMTop:5, EMBottom:6, outlet:7 }
+    //   DEFAULT_DEPTH = 4（position:4 沒寫 depth 時用這個，不是 0）
+    //   extension_prompt_roles = { SYSTEM:0, USER:1, ASSISTANT:2 }
+    const ST_DEFAULT_DEPTH = 4;
     // 酒館的 position:4 就是 @D；depth 的定義完全照抄：0＝插在最新一則之後，N＝倒數第 N 則之前。
     //   其他 position（0-3 都是插在角色定義前後）在 PWA 沒有對應的位置 →
     //   回 null＝維持舊行為：跟著提示詞順序表上「世界書」那一格走。
@@ -88,7 +94,17 @@
         const pos = (e.position === undefined || e.position === null) ? null : parseInt(e.position, 10);
         if (pos !== 4) return null;
         const d = parseInt(e.depth, 10);
-        return isNaN(d) ? 0 : Math.max(0, d);
+        return isNaN(d) ? ST_DEFAULT_DEPTH : Math.max(0, d);   // 酒館 DEFAULT_DEPTH=4
+    }
+    // @D 的身分：0＝系統、1＝使用者、2＝AI（酒館 extension_prompt_roles）。只有 @D 條目有意義。
+    function _stRole(e) {
+        if (!e) return 0;
+        const r = parseInt(e.role, 10);
+        return (r === 1 || r === 2) ? r : 0;
+    }
+    function _entryRole(e) {
+        const r = parseInt(e && e.role, 10);
+        return (r === 1 || r === 2) ? r : 0;
     }
     // 條目上的深度值 → 數字或 null（空字串/負數/非數字都當沒設定）
     function _entryDepth(e) {
@@ -141,9 +157,18 @@
                     <input type="number" id="wb-f-order" value="0" style="text-align:center;" />
                   </div>
                   <div class="wb-field-cell">
-                    <label>深度 @D</label>
+                    <label>位置</label>
+                    <select id="wb-f-pos">
+                      <option value="">角色定義之前／之後（不用 @D）</option>
+                      <option value="0">@D ⚙ 在系統深度</option>
+                      <option value="1">@D 👤 在使用者深度</option>
+                      <option value="2">@D 🤖 在 AI 深度</option>
+                    </select>
+                  </div>
+                  <div class="wb-field-cell">
+                    <label>深度</label>
                     <input type="number" id="wb-f-depth" min="0" placeholder="留空" style="text-align:center;" />
-                    <div class="wb-field-hint">跟酒館的 @D 同一個意思：0＝插在最新一則的後面，1＝倒數第 1 則之前，依此類推。留空＝不用 @D（等同酒館的 ↑Char，跟其他設定一起放在最前面）。</div>
+                    <div class="wb-field-hint">跟酒館一樣：0＝插在最新一則之後，1＝倒數第 1 則之前。位置選「不用 @D」時這格沒作用。</div>
                   </div>
                 </div>
                 
@@ -267,7 +292,8 @@
                 keysHtml = String(e.keys).split(',').map(k => `<span style="display:inline-block;background:rgba(26,28,40,0.15);color:#1A1C28;padding:1px 6px;border-radius:6px;margin-right:3px;border:1px solid rgba(26,28,40,0.10);">#${escHtml(k.trim())}</span>`).join('');
             }
             const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${e.order}</span>` : '';
-            const depthLabel = (_entryDepth(e) !== null) ? `<span class="wb-entry-depth">@D${_entryDepth(e)}</span>` : '';
+            const _roleIcon = ['⚙', '👤', '🤖'][_entryRole(e)] || '⚙';
+            const depthLabel = (_entryDepth(e) !== null) ? `<span class="wb-entry-depth">@D${_roleIcon}${_entryDepth(e)}</span>` : '';
 
             return `
             <div class="wb-entry${e.enabled ? '' : ' disabled'}" data-id="${e.id}">
@@ -383,6 +409,7 @@
         root.querySelector('#wb-f-title').value = '';
         root.querySelector('#wb-f-order').value = '0';
         root.querySelector('#wb-f-depth').value = '';
+        root.querySelector('#wb-f-pos').value = '';
         root.querySelector('#wb-f-content').value = '';
         root.querySelector('#wb-f-enabled').checked = true;
         
@@ -401,6 +428,7 @@
         root.querySelector('#wb-f-title').value = entry.title;
         root.querySelector('#wb-f-order').value = entry.order || '0';
         root.querySelector('#wb-f-depth').value = (_entryDepth(entry) === null) ? '' : String(_entryDepth(entry));
+        root.querySelector('#wb-f-pos').value = (_entryDepth(entry) === null) ? '' : String(_entryRole(entry));
         root.querySelector('#wb-f-content').value = entry.content;
         root.querySelector('#wb-f-enabled').checked = entry.enabled;
 
@@ -430,12 +458,16 @@
             category: (_editingId ? (_entries.find(e => e.id === _editingId)?.category || '預設') : '預設'),   // 欄位留著相容匯出/舊資料，UI 已不分類
             enabled: root.querySelector('#wb-f-enabled').checked,
             order: parseInt(root.querySelector('#wb-f-order').value) || 0,
-            depth: (() => {                       // 空＝不壓（null），0 要留得住
+            // 位置選了 @D 才有深度；選「不用 @D」就一律 null（跟其他設定一起放最前面）
+            depth: (() => {
+                const pos = (root.querySelector('#wb-f-pos').value || '').trim();
+                if (pos === '') return null;
                 const v = (root.querySelector('#wb-f-depth').value || '').trim();
-                if (v === '') return null;
+                if (v === '') return 4;           // 同酒館 DEFAULT_DEPTH
                 const n = parseInt(v, 10);
-                return isNaN(n) ? null : Math.max(0, n);
+                return isNaN(n) ? 4 : Math.max(0, n);
             })(),
+            role: parseInt(root.querySelector('#wb-f-pos').value, 10) || 0,
             createdAt: _editingId ? (_entries.find(e => e.id === _editingId)?.createdAt ?? Date.now()) : Date.now(),
             updatedAt: Date.now()
         };
@@ -750,7 +782,7 @@
                 return keywords.some(k => text.includes(k)); 
             });
 
-            triggered.sort((a, b) => (parseInt(a.order) || 0) - (parseInt(b.order) || 0));
+            triggered.sort((a, b) => (parseInt(a.order) || 0) - (parseInt(b.order) || 0));   // 同酒館：order 大的排後面
 
             if (!triggered.length) return '';
             return triggered.map(e => `[${e.category || '設定'}] ${e.title}\n${e.content}`).join('\n\n---\n\n');
@@ -767,18 +799,22 @@
             const triggered = await this._triggeredEntries(packNames, scanText);
             const fmt = (e) => `[${e.category || '設定'}] ${e.title}\n${e.content}`;
             const SEP = '\n\n---\n\n';
-            const pre = [], byDepth = new Map();
+            const pre = [], byKey = new Map();
             triggered.forEach(e => {
                 const d = _entryDepth(e);
                 if (d === null) { pre.push(fmt(e)); return; }
-                if (!byDepth.has(d)) byDepth.set(d, []);
-                byDepth.get(d).push(fmt(e));
+                const r = _entryRole(e);
+                const k = d + ':' + r;
+                if (!byKey.has(k)) byKey.set(k, { depth: d, role: r, arr: [] });
+                byKey.get(k).arr.push(fmt(e));
             });
             return {
                 pre: pre.join(SEP),
-                depths: [...byDepth.entries()]
-                    .map(([depth, arr]) => ({ depth: depth, text: arr.join(SEP) }))
-                    .sort((a, b) => b.depth - a.depth)
+                // 深度大的排前面（呼叫端由大到小插）；同深度內 AI(2) → 使用者(1) → 系統(0)，
+                //   跟酒館 doChatInject 一樣把系統留在最靠近生成點的位置。
+                depths: [...byKey.values()]
+                    .map(o => ({ depth: o.depth, role: o.role, text: o.arr.join(SEP) }))
+                    .sort((a, b) => (b.depth - a.depth) || (b.role - a.role))
             };
         },
 
@@ -795,7 +831,9 @@
                 if (!keywords.length) return true;
                 return keywords.some(k => text.includes(k));
             });
-            return hit.sort((a, b) => (parseInt(b.order) || 0) - (parseInt(a.order) || 0));
+            // 🚨 方向照抄酒館：它 sort 成遞減之後逐條 unshift，最終結果是「order 大的在後面」。
+            //    後面＝越靠近生成點＝越壓得住。以前這裡是反的，order 9999 的總綱反而被排到最前面（最弱的位置）。
+            return hit.sort((a, b) => (parseInt(a.order) || 0) - (parseInt(b.order) || 0));
         },
 
         // ====================================================================
@@ -912,6 +950,7 @@
                     enabled: !(e.disable || e.disabled || false),
                     order: parseInt(e.order) || parseInt(e.displayIndex) || 0,
                     depth: _stDepth(e),   // 同上：角色卡自帶的書也保留深度
+                    role: _stRole(e),
                     createdAt: Date.now(),
                     updatedAt: Date.now()
                 };
