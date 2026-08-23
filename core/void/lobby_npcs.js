@@ -385,8 +385,23 @@
         } catch (e) {}
     }
 
+    // 🧑‍💼 管理員查表：立繪模式沒有舞台、拿不到 S.npcs，但還是要跟這些人對話。
+    //    → 用 staff(key) 組出一個「虛擬對話對象」餵給 LobbyStage.setTalkTarget。
+    //    🚨 只放「有面板的管理員」（Rae 2026-08-24：有面板的通常都是管理員，本來就該跟路人分開）。
+    //       路上遇到的客人/旅人不進這張表，他們沿用底部對話框那條路。
+    //    人設欄位要跟 initNpcs 裡生 NPC 時給的一致，否則同一個人在兩個模式會變成兩種個性。
+    const STAFF = {
+        ying:     { name: '瀅瀅',     persona: null,                subTitle: '視差書咖 · 店長',        portrait: ASSET.ying },
+        alice:    { name: '愛麗絲',   personaFull: ALICE_PERSONA,   subTitle: '純白大廳 · 首席導覽官',  portrait: ASSET.alice },
+        rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit },
+        zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei },
+        cheshire: { name: '柴郡',     persona: null,                subTitle: '系統異常部門 · 灰色夢魘組', portrait: ASSET.cheshire },
+    };
+
     window.LobbyNpcs = {
         init: initNpcs,                     // lobby_stage.tryMount 呼叫（async；掛載時生成本場景 NPC）
+        staff: (key) => (STAFF[key] ? Object.assign({ key: key }, STAFF[key]) : null),
+        staffKeys: () => Object.keys(STAFF),
         rollGuestPool: _journalGuestPool,   // console 診斷用（LobbyStage.rollGuestPool 懶轉接到這；async 回傳池陣列）
         // ☕ 書咖經營:顧客名冊=SN住民+日誌客人池全員(當前各卡最新輪的角色;key帶chatId=每輪隔離,同場景客人規則)
         // 🚨 key vs stableKey：

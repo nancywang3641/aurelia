@@ -77,6 +77,69 @@
 .lb-place:hover .lb-place-ic { background:#4a78d8; color:#fff; }
 .lb-places-empty { grid-column:1/-1; text-align:center; padding:22px 0; color:#8a93ad; font-size:12px; }
 
+/* =========================================================
+   🏛 地點視圖（立繪模式）：背景＝地點、左＝管理員立繪、右＝窗格。
+   窗格「對話／應用」二選一，不同時存在——同一個人不能一邊在面板裡講話、
+   底下對話框也在講話（紫薇那次治過一輪，這是通用版）。
+   🚨 對話那半不另做聊天：把既有的 .void-dialogue-wrap 用 CSS 搬進窗格，
+      掛在 .lobby-left.lb-pv-talk 上，DOM 完全不動。
+   ========================================================= */
+.lb-pv { position:absolute; inset:0; z-index:3355; overflow:hidden; }
+.lb-pv-bg { position:absolute; inset:0; background:#1b1524 center/cover no-repeat; }
+.lb-pv-bg::after { content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg, rgba(12,8,16,.15) 0%, rgba(12,8,16,.45) 52%, rgba(12,8,16,.72) 100%); }
+
+.lb-pv-hd { position:absolute; left:0; right:0; top:0; z-index:3; display:flex; align-items:center; gap:10px;
+  padding:12px 16px; color:#f2ecff; font-size:14px; font-weight:700; letter-spacing:2px;
+  background:linear-gradient(180deg, rgba(10,6,14,.72), rgba(10,6,14,0)); }
+.lb-pv-sub { font-size:11px; font-weight:400; letter-spacing:1px; color:rgba(242,236,255,.62); }
+.lb-pv-back, .lb-pv-x { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.24);
+  color:#f2ecff; width:30px; height:30px; border-radius:50%; cursor:pointer; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:13px; }
+.lb-pv-back:hover, .lb-pv-x:hover { background:rgba(255,255,255,.24); }
+.lb-pv-x { margin-left:auto; }
+
+/* 立繪：貼左下、不吃點擊。
+   🚨 寬度直接從「窗格左緣」算出來，不要另外給一個百分比——
+      兩組獨立百分比在中間寬度一定會對不齊（試過 46/58 與 38/56，1280 跟 967 都還是撞）。
+      這裡的算式跟 .lb-pv-pane 的 right/width 用同一組值，數學上不可能重疊。 */
+.lb-pv-portrait { position:absolute; left:0; bottom:0; height:88%; z-index:2;
+  max-width:calc(100% - max(78px, 50% - 620px) - min(720px, 56%) - 12px);
+  object-fit:contain; object-position:left bottom; pointer-events:none; user-select:none;
+  filter:drop-shadow(0 8px 22px rgba(0,0,0,.5)); }
+
+/* 右窗格 */
+.lb-pv-pane { position:absolute; right:max(78px,calc(50% - 620px)); top:64px; bottom:20px; z-index:4;
+  width:min(720px,56%); display:flex; flex-direction:column; overflow:hidden;
+  background:rgba(14,10,20,.82); border:1px solid rgba(255,255,255,.14); border-radius:16px;
+  box-shadow:0 16px 44px rgba(0,0,0,.5); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+.lb-pv-tabs { display:flex; gap:6px; padding:8px 8px 0; flex:0 0 auto; }
+.lb-pv-tab { flex:1; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+  border-bottom:none; border-radius:10px 10px 0 0; color:rgba(242,236,255,.62); cursor:pointer;
+  font-family:inherit; font-size:13px; font-weight:600; letter-spacing:2px; padding:9px 0; }
+.lb-pv-tab.is-on { background:rgba(255,255,255,.13); color:#f2ecff; }
+.lb-pv-body { flex:1; min-height:0; position:relative; overflow:auto; }
+.lb-pv-note, .lb-pv-fail { padding:26px 20px; text-align:center; font-size:13px; color:rgba(242,236,255,.66); }
+.lb-pv-fail { color:#ff9a9a; }
+
+/* 💬 對話那半：把大廳既有的對話框搬進窗格（位置本來就純靠 CSS，DOM 不用動） */
+/* 🚨 right/width 必須跟 .lb-pv-pane 完全一致，改一個要記得改另一個，
+      不然對話框會比窗格寬出一截、看起來像沒對齊（實測差 45px 抓到的）。 */
+.lobby-left.lb-pv-talk .void-dialogue-wrap {
+    position:absolute; left:auto; right:max(78px,calc(50% - 620px));
+    width:min(720px,56%); top:112px; bottom:20px; z-index:3358;
+    box-sizing:border-box;   /* 🚨 沒有這行 padding 會加在寬度外面，對話框比窗格寬 26px */
+    display:flex; flex-direction:column; justify-content:flex-end; padding:0 14px 14px;
+}
+.lobby-left.lb-pv-talk .void-dialogue-box { max-width:none; margin:0; }
+
+/* 📱 窄畫面：兩欄擠不下 → 窗格吃滿寬，立繪退到後面當氛圍（窗格是半透明＋毛玻璃，人還看得見） */
+@media (max-width:760px) {
+    .lb-pv-pane { left:12px; right:12px; width:auto; top:58px; bottom:14px; }
+    .lb-pv-portrait { max-width:66%; height:78%; }
+    .lobby-left.lb-pv-talk .void-dialogue-wrap { left:12px; right:12px; width:auto; top:106px; bottom:14px; }
+}
+
 /* ─────────────────────────────────────────────
    舊立繪清理：素材已是「背景＋人物」合成圖，
    舊的獨立立繪 #iris-avatar 一律不顯示。

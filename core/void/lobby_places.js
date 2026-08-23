@@ -31,35 +31,40 @@
     // icon     Font Awesome（🚨圖標一律 FA、禁 emoji）
     // obj      廣場上對應建築的檔名片段 → 地圖熱點靠它認人
     // scene    舞台模式要跳的場景；沒給就不出現在地圖 chip
-    // open()   直接開這個地點的面板；沒給就不出現在立繪模式
+    // open()   直接開這個地點的面板（自己開浮窗）；沒給就不出現在立繪模式
+    // openIn(c) 把面板畫進指定容器 → 地點視圖的「應用」窗格用這個。
+    //          沒有的地方會退回 open() 開浮窗（之後逐個補，見 docs 的推廣順序）
     // when()   要不要顯示（鎖住/沒解鎖/沒蓋房就整顆收起來）
+    // npc      這個地方的管理員 key（決定立繪是誰、對話跟誰講）；路人不在此列
+    // bg       立繪模式的地點背景圖（平視版，放在 CDN）
     // ready()  這個面板現在開得起來嗎（模組載入了沒）
     //          🚨 一定要有：open 裡面全是 `?.`，模組沒載入時呼叫不會報錯也不會有反應，
     //             那顆鈕就變成「點了什麼都沒發生」的死鈕。寧可不顯示也不要給死鈕。
     const PLACES = [
         {
-            id: 'cafe', name: '書咖', flatName: '書咖櫃檯', icon: 'fa-mug-hot',
+            id: 'cafe', name: '書咖', flatName: '書咖櫃檯', icon: 'fa-mug-hot', npc: 'ying', bg: 'lobby_pv_bg_cafe_v1.jpg',
             obj: 'book_cafe', scene: 'cafe',
             ready: () => !!win.OS_CAFE?.openWorkshop,
             open: () => win.OS_CAFE.openWorkshop(),
         },
         {
-            id: 'hall', name: '大廳', flatName: '世界門', icon: 'fa-globe',
+            id: 'hall', name: '大廳', flatName: '世界門', icon: 'fa-globe', npc: 'alice', bg: 'lobby_pv_bg_hall_v1.jpg',
             obj: 'lobby_day', scene: 'hall',
             ready: () => !!win.OS_WORLDGATE?.openGate,
             open: () => win.OS_WORLDGATE.openGate(),
         },
         {
-            id: 'exchange', name: '交易所', icon: 'fa-right-left',
+            id: 'exchange', name: '交易所', icon: 'fa-right-left', npc: 'rabbit', bg: 'lobby_pv_bg_exchange_v1.jpg',
             scene: 'exchange',
             ready: () => !!win.OS_PT?.openExchange,
             open: () => win.OS_PT.openExchange(),
         },
         {
-            id: 'tarot', name: '占卜小屋', flatName: '占卜', icon: 'fa-moon',
+            id: 'tarot', name: '占卜小屋', flatName: '占卜', icon: 'fa-moon', npc: 'zhiwei', bg: 'lobby_pv_bg_tarot_v1.jpg',
             obj: 'tarot_hut', scene: 'tarot',
-            ready: () => !!_stage()?.openTarotPanel,
+            ready: () => !!(_stage()?.openTarotPanel || win.OS_TAROT?.launch),
             open: () => _stage().openTarotPanel(),
+            openIn: (c) => _mountTarot(c),
         },
         {
             id: 'myhome', name: '我的家', icon: 'fa-house-chimney',
@@ -68,7 +73,7 @@
             open: () => _fire('lstage-open-myhome'),
         },
         {
-            id: 'room404', name: '404', icon: 'fa-ghost',
+            id: 'room404', name: '404', icon: 'fa-ghost', npc: 'cheshire', bg: 'lobby_pv_bg_room404_v1.jpg',
             scene: 'room404',
             when: () => !!_st404().unlocked,
             ready: () => !!win.VoidTerminal?.enter404Room,
@@ -125,10 +130,116 @@
             if (!b) return;
             const p = get(b.dataset.id);
             close();
+            // 有管理員的地方→開地點視圖(背景+立繪+窗格)；沒有的(例如我的家)照舊直接開
+            if (p && p.npc) { openView(p.id); return; }
             try { p && p.open && p.open(); } catch (err) { console.warn('[LobbyPlaces] 開啟失敗', b.dataset.id, err); }
         });
         host.appendChild(box);
         _close = close;
+        return box;
+    }
+
+    // ── 🏛 地點視圖（立繪模式）──────────────────────────────────
+    //   背景換成那個地點、左邊站管理員的立繪、右邊一個窗格。
+    //   🚨 窗格「要嘛對話、要嘛應用」，不同時存在——同一個人一邊在面板裡講話、
+    //      底下對話框也在講話＝很割裂（紫薇那次已經治過一輪，這裡是通用版）。
+    //   對話那半是把既有的 .void-dialogue-wrap 用 CSS 搬進窗格，不動 DOM、不另做一套聊天。
+    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
+    let _view = null;
+
+    // 🔮 把塔羅畫進窗格：OS_TAROT.launch 本來就吃容器，只差它的 ❮ 返回鈕。
+    //    那顆鈕寫死呼叫 PhoneSystem.goHome（它原本住手機殼裡）→ 暫借成「回地點清單」，關掉時還原。
+    function _mountTarot(c) {
+        const PS = win.PhoneSystem;
+        const saved = PS ? PS.goHome : undefined;
+        const back = () => { closeView(); openFlat(); };
+        if (PS) PS.goHome = back; else win.PhoneSystem = { goHome: back, __pvShim: true };
+        c._pvRestore = () => {
+            if (PS) { if (saved === undefined) delete PS.goHome; else PS.goHome = saved; }
+            else if (win.PhoneSystem && win.PhoneSystem.__pvShim) delete win.PhoneSystem;
+        };
+        win.OS_TAROT.launch(c);
+    }
+
+    function closeView() {
+        if (!_view) return;
+        try { _view(); } catch (e) {}
+        _view = null;
+    }
+
+    function openView(id) {
+        const p = get(id);
+        if (!p) return;
+        closeFlat(); closeView();
+        const host = document.querySelector('.lobby-left');
+        if (!host) { try { p.open && p.open(); } catch (e) {} return; }   // 沒有大廳外殼就退回單開面板
+
+        const npc = (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null;
+        const box = document.createElement('div');
+        box.className = 'lb-pv';
+        box.innerHTML =
+            (p.bg ? '<div class="lb-pv-bg" style="background-image:url(' + CDN + p.bg + ')"></div>' : '<div class="lb-pv-bg"></div>') +
+            '<div class="lb-pv-hd">' +
+              '<button class="lb-pv-back" type="button"><i class="fa-solid fa-chevron-left"></i></button>' +
+              '<span class="lb-pv-title">' + p.name + '</span>' +
+              (npc ? '<span class="lb-pv-sub">' + (npc.subTitle || '') + '</span>' : '') +
+              '<button class="lb-pv-x" type="button" aria-label="離開"><i class="fa-solid fa-xmark"></i></button>' +
+            '</div>' +
+            (npc && npc.portrait ? '<img class="lb-pv-portrait" src="' + npc.portrait + '" alt="">' : '') +
+            '<div class="lb-pv-pane">' +
+              '<div class="lb-pv-tabs">' +
+                '<button class="lb-pv-tab" data-tab="talk" type="button"><i class="fa-solid fa-comment-dots"></i> 對話</button>' +
+                '<button class="lb-pv-tab is-on" data-tab="app" type="button"><i class="fa-solid fa-window-maximize"></i> 應用</button>' +
+              '</div>' +
+              '<div class="lb-pv-body"></div>' +
+            '</div>';
+
+        const body = box.querySelector('.lb-pv-body');
+        const tabs = [...box.querySelectorAll('.lb-pv-tab')];
+
+        // 對話那半：把大廳既有的對話框搬進窗格（靠 class 切版位，不搬 DOM）
+        const talkOn = (on) => {
+            host.classList.toggle('lb-pv-talk', on);
+            if (!on) return;
+            // 指定對話對象＝這個地方的管理員。沒有舞台也能設，void_terminal 讀的是 talkTarget。
+            try { if (npc) win.LobbyStage?.setTalkTarget?.(npc); } catch (e) {}
+            try { win.LobbyStage?.showDialog?.(); } catch (e) {}
+        };
+
+        const show = (which) => {
+            try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}   // 上一個面板借走的東西先還
+            tabs.forEach(t => t.classList.toggle('is-on', t.dataset.tab === which));
+            if (which === 'talk') { body.innerHTML = ''; talkOn(true); return; }
+            talkOn(false);
+            body.innerHTML = '';
+            try {
+                if (p.openIn) { p.openIn(body); return; }
+                // 還沒改成吃容器的地方：照舊自己開浮窗，窗格說明一下免得看起來像壞了
+                body.innerHTML = '<div class="lb-pv-note">這個面板還是獨立視窗，已經幫你開了</div>';
+                p.open && p.open();
+            } catch (e) {
+                body.innerHTML = '<div class="lb-pv-fail">這個面板現在打不開</div>';
+                console.warn('[LobbyPlaces] 面板開啟失敗', id, e);
+            }
+        };
+
+        const close = () => {
+            try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}
+            talkOn(false);
+            try { win.LobbyStage?.endTalk?.(); } catch (e) {}
+            box.remove();
+            if (_view === close) _view = null;
+        };
+        box.querySelector('.lb-pv-x').addEventListener('click', close);
+        box.querySelector('.lb-pv-back').addEventListener('click', () => { close(); openFlat(); });
+        box.addEventListener('click', (e) => {
+            const t = e.target.closest('.lb-pv-tab');
+            if (t) show(t.dataset.tab);
+        });
+
+        host.appendChild(box);
+        _view = close;
+        show('app');   // 預設先給應用：從「前往」點進來的人是要辦事，要聊天再切
         return box;
     }
 
@@ -141,6 +252,6 @@
         openFlat();
     }
 
-    win.LobbyPlaces = { list, get, open, openFlat, closeFlat, PLACES };
+    win.LobbyPlaces = { list, get, open, openFlat, closeFlat, openView, closeView, PLACES };
     console.log('✅ LobbyPlaces（地點清單）模組就緒');
 })();
