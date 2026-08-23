@@ -1122,7 +1122,14 @@ ${numberedText}`;
             //    讀「完整原文」判斷(不切片，避免長正文結尾被截誤判)。兩種截斷：
             //    ① 有 <content> 沒 </content> = 截在正文中（任何聊天都擋）
             //    ② VN 前景但連 <content> 都沒有 = 思考期就截、正文還沒冒出來（只在 VN 模式擋，避免誤傷非 VN 訊息；建檔/套預設初始填充 skipScenes 不擋，怕卡片問候語沒 <content>）
-            try {
+            //
+            // 🚨 這整段讀的是「酒館最後一則訊息」。獨立版沒有 TavernHelper → _lastRaw 永遠是空字串，
+            //    於是 _hasOpen=false、而 VN 一定在前景(_vnFg=true) → 條件②每次都成立 →
+            //    每一章都印「正文截斷 → 跳過本通抽取」然後 return。AVS 抽不到、插圖搭不上車，
+            //    兩個功能同時像壞掉，實際上是這道守門把整通擋死了。
+            //    獨立版不需要這道守門：生成器在存章節之前就先驗過貨了（壞的根本不會落地，見 vn_generator 的壞回覆橫幅），
+            //    存下來的章節照定義就是完整的。
+            if (!_isStandalone()) try {
                 const _lastArr = await win.TavernHelper?.getChatMessages?.(-1);
                 const _lastRaw = String((_lastArr && _lastArr[0] && (_lastArr[0].message || _lastArr[0].mes)) || '');
                 // 🚫 API 報錯佔位訊息(主模型生成失敗、錯誤字串被當正文寫進聊天)→ 不是真劇情：
