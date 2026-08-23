@@ -301,10 +301,23 @@
         }
 
         list.innerHTML = filtered.map(e => {
-            let keysHtml = '<span class="wb-entry-keys" style="color:#6b8e23">📌 常駐</span>';
-            if (e.keys) {
-                // 🔥 修復：強制轉成字串，防止舊資料格式報錯
-                keysHtml = String(e.keys).split(',').map(k => `<span style="display:inline-block;background:rgba(26,28,40,0.15);color:#1A1C28;padding:1px 6px;border-radius:6px;margin-right:3px;border:1px solid rgba(26,28,40,0.10);">#${escHtml(k.trim())}</span>`).join('');
+            // 關鍵字只先亮 KEY_PREVIEW 個，其餘收在「+N」後面。
+            // 一條動輒五六十個關鍵字，全攤開會把單張卡撐成整頁，整份書就只剩滾軸可看。
+            let keysHtml = '<div class="wb-entry-keys-wrap"><span class="wb-entry-keys wb-keys-const">📌 常駐</span></div>';
+            // 🔥 修復：強制轉成字串，防止舊資料格式報錯
+            const keyList = e.keys ? String(e.keys).split(',').map(k => k.trim()).filter(k => k) : [];
+            if (keyList.length) {
+                const KEY_PREVIEW = 6;
+                // 搜尋命中的關鍵字可能剛好被收在後面，那樣「搜得到卻看不到」；命中就預設攤開
+                const hitBySearch = _searchQuery && keyList.some(k => k.toLowerCase().includes(_searchQuery.toLowerCase()));
+                const chips = keyList.map((k, i) =>
+                    `<span class="wb-key-chip${i >= KEY_PREVIEW ? ' wb-key-extra' : ''}">#${escHtml(k)}</span>`
+                ).join('');
+                const hidden = keyList.length - KEY_PREVIEW;
+                const moreBtn = hidden > 0
+                    ? `<button class="wb-key-more" data-n="${hidden}">${hitBySearch ? '收合' : '+' + hidden}</button>`
+                    : '';
+                keysHtml = `<div class="wb-entry-keys-wrap${hitBySearch ? ' open' : ''}">${chips}${moreBtn}</div>`;
             }
             const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${e.order}</span>` : '';
             const _roleIcon = ['⚙', '👤', '🤖'][_entryRole(e)] || '⚙';
@@ -324,7 +337,7 @@
                     <div class="wb-entry-meta">
                         <span>${e.content.length} 字</span>
                     </div>
-                    <div style="margin-top:4px;">${keysHtml}</div>
+                    ${keysHtml}
                 </div>
                 <div style="display:flex; gap:2px; flex-shrink:0;">
                     <button class="wb-entry-edit" data-id="${e.id}" title="編輯">✏️</button>
@@ -342,6 +355,16 @@
                 await win.OS_DB.saveWorldbookEntry(entry);
                 const card = list.querySelector(`.wb-entry[data-id="${entry.id}"]`);
                 if (card) card.classList.toggle('disabled', !entry.enabled);
+            });
+        });
+
+        list.querySelectorAll('.wb-key-more').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const wrap = btn.closest('.wb-entry-keys-wrap');
+                if (!wrap) return;
+                const open = wrap.classList.toggle('open');
+                btn.textContent = open ? '收合' : `+${btn.dataset.n}`;
             });
         });
 

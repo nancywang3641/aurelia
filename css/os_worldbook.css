@@ -41,6 +41,19 @@
         .wb-field-cell input:focus { border-color:#1A1C28; }
         .wb-field-hint { font-size:10px; color:#3A3F5C; line-height:1.55; margin-top:4px; }
         .wb-entry-meta { font-size:10px; color:#3A3F5C; margin-top:4px; }
+
+        /* 關鍵字：預設只亮前幾個，其餘藏在 .wb-key-more 後面（見 os_worldbook.js 的 KEY_PREVIEW） */
+        .wb-entry-keys-wrap { display:flex; flex-wrap:wrap; align-items:center; gap:3px; margin-top:4px; }
+        .wb-keys-const { color:#6b8e23; }
+        .wb-key-chip { display:inline-block; max-width:100%; background:rgba(26,28,40,0.15); color:#1A1C28;
+            padding:1px 6px; border-radius:6px; border:1px solid rgba(26,28,40,0.10);
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .wb-key-extra { display:none; }
+        .wb-entry-keys-wrap.open .wb-key-extra { display:inline-block; }
+        .wb-key-more { background:rgba(26,28,40,0.06); color:#3A3F5C; border:1px dashed rgba(26,28,40,0.30);
+            border-radius:6px; padding:1px 7px; cursor:pointer; font-family:inherit; font-size:inherit;
+            line-height:inherit; flex-shrink:0; transition:.2s; }
+        .wb-key-more:hover { background:rgba(26,28,40,0.15); color:#1A1C28; border-style:solid; }
         
         .wb-entry-edit, .wb-entry-del { background:none; border:none; cursor:pointer; font-size:14px; padding:5px; border-radius:6px; transition:.2s; flex-shrink:0; }
         .wb-entry-edit { color:rgba(26,28,40,0.72); }
@@ -154,6 +167,10 @@ html:has(.mode-404) .wb-entry { background:rgba(0,15,5,0.78) !important; border-
 html:has(.mode-404) .wb-entry-title { color:#00ff41 !important; font-family:'Courier New',monospace !important; }
 html:has(.mode-404) .wb-entry-order { background:rgba(0,255,65,0.10) !important; color:#00ff41 !important; border-color:rgba(0,255,65,0.30) !important; }
 html:has(.mode-404) .wb-entry-meta { color:rgba(0,255,65,0.60) !important; }
+html:has(.mode-404) .wb-key-chip { background:rgba(0,255,65,0.08) !important; color:#b8ffcb !important; border-color:rgba(0,255,65,0.25) !important; }
+html:has(.mode-404) .wb-keys-const { color:rgba(0,255,65,0.75) !important; }
+html:has(.mode-404) .wb-key-more { background:rgba(0,255,65,0.05) !important; color:rgba(0,255,65,0.70) !important; border-color:rgba(0,255,65,0.35) !important; }
+html:has(.mode-404) .wb-key-more:hover { background:rgba(0,255,65,0.16) !important; color:#00ff41 !important; }
 html:has(.mode-404) .wb-entry-edit { color:rgba(0,255,65,0.70) !important; }
 html:has(.mode-404) .wb-empty { color:rgba(0,255,65,0.55) !important; font-family:'Courier New',monospace !important; }
 html:has(.mode-404) .wb-fab { background:#001a00 !important; border:1px solid #00ff41 !important; color:#00ff41 !important; box-shadow:0 0 14px rgba(0,255,65,0.35) !important; }
