@@ -554,6 +554,9 @@ const VN_TTS = {
     async _fetchIndexBlob(model, text, emotion) {
         const base = String(model.url || '').replace(/\/+$/, '');
         if (!base) throw new Error('這個音色沒有服務網址');
+        // 情緒強度預設 0.5：情緒參考音檔會把音色往它自己的方向拉（實測拿男聲情緒套女聲，
+        // 基頻被壓低 110Hz），0.5 以下音色不受影響，1.0 會明顯變聲。
+        const alpha = (typeof model.emoAlpha === 'number') ? model.emoAlpha : 0.5;
         const resp = await fetch(base + '/v1/audio/speech', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -562,7 +565,8 @@ const VN_TTS = {
                 input: text,
                 voice: this._indexVoice(model, emotion),
                 response_format: 'mp3',
-                speed: model.speed || 1
+                speed: model.speed || 1,
+                emo_alpha: alpha
             })
         });
         if (!resp.ok) throw new Error('服務回應 ' + resp.status);

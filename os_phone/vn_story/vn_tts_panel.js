@@ -1163,8 +1163,9 @@ const VN_TTS_Panel = {
         for (const v of voices) {
             const id = 'idx_' + v;
             const exists = !!tts.config.models[id];
+            // emoAlpha 0.5：情緒參考音檔會把音色往它自己的方向拉，0.5 以下不受影響
             tts.config.models[id] = {
-                name: v, engine: 'index', url: base, voice: v, speed: 1,
+                name: v, engine: 'index', url: base, voice: v, speed: 1, emoAlpha: 0.5,
                 emotions: JSON.parse(JSON.stringify(emotions))
             };
             exists ? updated++ : added++;
