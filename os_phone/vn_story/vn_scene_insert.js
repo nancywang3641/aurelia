@@ -283,7 +283,11 @@
                 entries.forEach(e => { if (e && e.cacheId && !have[e.cacheId]) { saved.push({ cacheId: e.cacheId, prompt: e.prompt, after: e.after || '', idx: e.idx, msgId: (msgId != null ? String(msgId) : undefined) }); added++; } });
                 if (!added && !dropped) return;
                 latest.scenes = saved;
-                await win.OS_DB.saveVnChapter(latest);   // put = upsert，同 id 覆寫
+                // 🚨 silent 一定要帶：這裡只補「插哪一段」的欄位，正文一個字都沒動。
+                //    不帶的話 saveVnChapter 會再發一次 VN_CHAPTER_SAVED →
+                //    向量記憶、AVS 抽取、插圖抽取全部再跑一輪 → 又寫回來一次 → 同一章的副模型
+                //    與生圖成本直接翻倍，畫面上還會多插一組重複的插圖（cacheId 不同、擋不掉）。
+                await win.OS_DB.saveVnChapter(latest, { silent: true });   // put = upsert，同 id 覆寫
                 console.log('[VN_SceneInsert] 插圖寫回章節存檔 #' + latest.id + '(+' + added + '張' + (dropped ? '，清掉同樓舊版 ' + dropped + ' 張' : '') + ')，回放/重整後可見');
             } catch (e) { console.warn('[VN_SceneInsert] 寫回章節失敗:', (e && e.message) || e); }
         },
