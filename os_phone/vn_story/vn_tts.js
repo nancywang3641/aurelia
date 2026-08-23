@@ -40,6 +40,10 @@ const VN_TTS = {
         // 旁白用 MiniMax（雲端，只要 API key、免本地；給不會弄電腦的朋友。enabled 時優先於 SoVITS narratorModel）
         narratorMinimax: { enabled: false, voice: 'audiobook_female_1' },
 
+        // 旁白用 IndexTTS（本機獨立服務、OpenAI 相容；音色＝丟一段參考音檔就好，不用練模型）
+        //   voice 可帶情緒：'丹' 或 '丹:Angry'
+        narratorIndex: { enabled: false, url: 'http://127.0.0.1:8881', voice: '', speed: 1 },
+
         // 角色別名: 主名 → [別名1, 別名2, ...]（不分大小寫匹配，AI 用全名/小名都能對到同一個模型）
         charAliases: {},
 
@@ -76,6 +80,7 @@ const VN_TTS = {
                 if (!this.config.systemMappings) this.config.systemMappings = {};
                 if (!this.config.narratorKokoro) this.config.narratorKokoro = { enabled:false, url:'http://127.0.0.1:8880', voice:'zf_xiaoxiao' };
                 if (!this.config.narratorMinimax) this.config.narratorMinimax = { enabled:false, voice:'audiobook_female_1' };
+                if (!this.config.narratorIndex)  this.config.narratorIndex = { enabled:false, url:'http://127.0.0.1:8881', voice:'', speed:1 };
                 if (!this.config.npcCategories)  this.config.npcCategories = [];
                 if (!this.config.npcLocks)       this.config.npcLocks = {};
             }
@@ -484,8 +489,10 @@ const VN_TTS = {
     },
 
     // ── 旁白語音播放入口 ─────────────────────────────────────────────────
-    //   Kokoro 開了優先（獨立小服務、不碰 SoVITS GPU 佇列）；否則退 SoVITS 旁白音色（指派了才念）
+    //   IndexTTS / Kokoro 開了優先（獨立小服務、不碰 SoVITS GPU 佇列）；否則退 SoVITS 旁白音色（指派了才念）
     async playNarration(rawText, emotion) {
+        const ic = this.config.narratorIndex || {};
+        if (ic.enabled && ic.url) return this._speakIndex(rawText);
         const kc = this.config.narratorKokoro || {};
         if (kc.enabled && kc.url) return this._speakKokoro(rawText);
         const nm = this.config.narratorMinimax || {};
@@ -523,6 +530,37 @@ const VN_TTS = {
             this._playBlobUrl(u);
         } catch (e) {
             console.warn('[VN_TTS] Kokoro 旁白失敗（服務沒開？）', e);
+        } finally {
+            this._pending.delete(k);
+        }
+    },
+
+    // ── IndexTTS 旁白合成（本機獨立服務、OpenAI 相容；不進 SoVITS GPU 佇列）──
+    //   voice 帶冒號就是情緒，例：'丹:Angry'（情緒＝服務端 emotions/ 裡的檔名）
+    async _speakIndex(rawText) {
+        const ic = this.config.narratorIndex || {};
+        const base = String(ic.url || '').replace(/\/+$/, '');
+        if (!base) return;
+        const voice = ic.voice || '';
+        const text = this._cleanForKokoro(rawText);
+        if (!text) return;
+        const k = this._cacheKey('index:' + voice, text);
+        if (this._cache[k])       { this._playBlobUrl(this._cache[k]); return; }
+        if (this._pending.has(k)) { this._waitAndPlay(k); return; }
+        this._pending.add(k);
+        try {
+            const resp = await fetch(base + '/v1/audio/speech', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: 'indextts', input: text, voice, response_format: 'mp3', speed: ic.speed || 1 })
+            });
+            if (!resp.ok) { console.warn('[VN_TTS] IndexTTS 回應異常', resp.status); return; }
+            const blob = await resp.blob();
+            const u = URL.createObjectURL(blob);
+            this._cache[k] = u;
+            this._playBlobUrl(u);
+        } catch (e) {
+            console.warn('[VN_TTS] IndexTTS 旁白失敗（服務沒開？）', e);
         } finally {
             this._pending.delete(k);
         }

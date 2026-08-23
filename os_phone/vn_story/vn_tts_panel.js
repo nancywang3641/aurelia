@@ -258,7 +258,17 @@ function renderVoice(cfg) {
 
     const kcfg = cfg.narratorKokoro || {};
     const mcfg = cfg.narratorMinimax || {};
-    const narrVal = kcfg.enabled ? '__kokoro__' : (mcfg.enabled ? '__minimax__' : (cfg.narratorModel || ''));
+    const icfg = cfg.narratorIndex || {};
+    const narrVal = icfg.enabled ? '__index__'
+                  : kcfg.enabled ? '__kokoro__'
+                  : mcfg.enabled ? '__minimax__'
+                  : (cfg.narratorModel || '');
+    // 音色清單是按「讀取音色」時從服務抓回來存著的（render 是同步的，不能在這裡 await）
+    const iVoices = Array.isArray(icfg.voices) ? icfg.voices : [];
+    const iEmos   = Array.isArray(icfg.emotions) ? icfg.emotions : [];
+    const iCur    = String(icfg.voice || '');
+    const iCurV   = iCur.split(':')[0] || '';
+    const iCurE   = iCur.indexOf(':') >= 0 ? iCur.split(':')[1] : '';
     const mmVoices = [['audiobook_female_1','旁白女'],['audiobook_male_1','旁白男'],['female-tianmei','甜美女'],['female-yujie','御姐女'],['female-shaonv','少女'],['male-qn-qingse','青年男'],['presenter_female','主持女']];
 
     return `
@@ -268,6 +278,7 @@ function renderVoice(cfg) {
     <option value="" ${narrVal===''?'selected':''}>不念旁白</option>
     <option value="__minimax__" ${narrVal==='__minimax__'?'selected':''}>🔊 MiniMax</option>
     <option value="__kokoro__" ${narrVal==='__kokoro__'?'selected':''}>🐦 Kokoro</option>
+    <option value="__index__" ${narrVal==='__index__'?'selected':''}>🎙️ IndexTTS</option>
     ${Object.entries(cfg.models).map(([id,m]) =>
         `<option value="${esc(id)}" ${narrVal===id?'selected':''}>SoVITS：${esc(m.name||id)}</option>`
     ).join('')}
@@ -287,6 +298,25 @@ function renderVoice(cfg) {
       ${['zf_xiaoxiao','zf_xiaobei','zf_xiaoni','zf_xiaoyi','zm_yunxi','zm_yunjian','zm_yunxia','zm_yunyang'].map(v => `<option value="${v}" ${(kcfg.voice||'zf_xiaoxiao')===v?'selected':''}>${v}${v.indexOf('zf_')===0?'（女）':'（男）'}</option>`).join('')}
     </select>
     <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testKokoro()" style="align-self:flex-start;">🔊 試聽</button>
+  </div>` : ''}
+  ${narrVal==='__index__' ? `
+  <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+    <input class="vtts-input" type="text" placeholder="http://127.0.0.1:8881" value="${esc(icfg.url||'')}" onchange="VN_TTS_Panel.updateIndexUrl(this.value)">
+    <div class="vtts-row">
+      <select class="vtts-input" onchange="VN_TTS_Panel.updateIndexVoice(this.value)">
+        ${iVoices.length
+            ? iVoices.map(v => `<option value="${esc(v)}" ${iCurV===v?'selected':''}>${esc(v)}</option>`).join('')
+            : `<option value="">（先按右邊讀取音色）</option>`}
+      </select>
+      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.loadIndexVoices()" style="flex-shrink:0">↻ 讀取音色</button>
+    </div>
+    ${iEmos.length ? `
+    <select class="vtts-input" onchange="VN_TTS_Panel.updateIndexEmotion(this.value)">
+      <option value="" ${iCurE===''?'selected':''}>（不指定情緒）</option>
+      ${iEmos.map(e => `<option value="${esc(e)}" ${iCurE===e?'selected':''}>${esc(e)}</option>`).join('')}
+    </select>` : ''}
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testIndex()" style="align-self:flex-start;">🔊 試聽</button>
+    <div class="vtts-hint">音色＝服務資料夾裡的檔名，丟一段人聲進去就多一個音色，不用練模型。</div>
   </div>` : ''}
 </div>
 <div class="vtts-card">
@@ -992,9 +1022,11 @@ const VN_TTS_Panel = {
         const tts = this._kok();
         if (!tts) return;
         if (!tts.config.narratorMinimax) tts.config.narratorMinimax = { enabled:false, voice:'audiobook_female_1' };
+        if (!tts.config.narratorIndex) tts.config.narratorIndex = { enabled:false, url:'http://127.0.0.1:8881', voice:'', speed:1 };
         tts.config.narratorKokoro.enabled  = (val === '__kokoro__');
         tts.config.narratorMinimax.enabled = (val === '__minimax__');
-        if (val !== '__kokoro__' && val !== '__minimax__') tts.config.narratorModel = val || '';
+        tts.config.narratorIndex.enabled   = (val === '__index__');
+        if (val !== '__kokoro__' && val !== '__minimax__' && val !== '__index__') tts.config.narratorModel = val || '';
         tts.save();
         this._renderNarr();
     },
@@ -1025,6 +1057,58 @@ const VN_TTS_Panel = {
     testKokoro() {
         const tts = this._tts(); if (!tts) return;
         if (typeof tts._speakKokoro === 'function') { tts._speakKokoro('這是旁白語音的試聽，聽聽聲音和速度。'); this._toast('🔊 試聽中…（服務沒開會沒聲音）'); }
+    },
+
+    // ── IndexTTS 旁白 ───────────────────────────────────────────────────
+    _idx() {
+        const tts = this._tts(); if (!tts) return null;
+        if (!tts.config.narratorIndex) tts.config.narratorIndex = { enabled:false, url:'http://127.0.0.1:8881', voice:'', speed:1 };
+        return tts;
+    },
+    updateIndexUrl(url) {
+        const tts = this._idx(); if (!tts) return;
+        tts.config.narratorIndex.url = (url || '').trim();
+        tts.save();
+    },
+    // 音色與情緒分開存，但送出時合成 '音色:情緒' 一個字串（服務端就吃這個格式）
+    updateIndexVoice(voice) {
+        const tts = this._idx(); if (!tts) return;
+        const cur = String(tts.config.narratorIndex.voice || '');
+        const emo = cur.indexOf(':') >= 0 ? cur.split(':')[1] : '';
+        tts.config.narratorIndex.voice = emo ? `${voice}:${emo}` : (voice || '');
+        tts.save();
+    },
+    updateIndexEmotion(emo) {
+        const tts = this._idx(); if (!tts) return;
+        const cur = String(tts.config.narratorIndex.voice || '');
+        const v = cur.split(':')[0] || '';
+        tts.config.narratorIndex.voice = emo ? `${v}:${emo}` : v;
+        tts.save();
+    },
+    async loadIndexVoices() {
+        const tts = this._idx(); if (!tts) return;
+        const base = String(tts.config.narratorIndex.url || '').replace(/\/+$/, '');
+        if (!base) { this._toast('✗ 先填服務網址'); return; }
+        this._toast('讀取中…');
+        try {
+            const resp = await fetch(base + '/v1/voices');
+            if (!resp.ok) { this._toast('✗ 服務回應異常 ' + resp.status); return; }
+            const data = await resp.json();
+            const voices = (data.voices || []).map(v => v.id);
+            tts.config.narratorIndex.voices   = voices;
+            tts.config.narratorIndex.emotions = data.emotions || [];
+            // 還沒選過音色就自動選第一個，省一次點擊
+            if (!tts.config.narratorIndex.voice && voices.length) tts.config.narratorIndex.voice = voices[0];
+            tts.save();
+            this._renderNarr();
+            this._toast(`✓ 找到 ${voices.length} 個音色`);
+        } catch (e) {
+            this._toast('✗ 連不上服務（沒開？）');
+        }
+    },
+    testIndex() {
+        const tts = this._tts(); if (!tts) return;
+        if (typeof tts._speakIndex === 'function') { tts._speakIndex('這是旁白語音的試聽，聽聽聲音和速度。'); this._toast('🔊 試聽中…（服務沒開會沒聲音）'); }
     },
 
     deleteSystemMapping(sysName) {
