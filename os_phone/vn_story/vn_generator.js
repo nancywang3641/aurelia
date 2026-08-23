@@ -98,13 +98,16 @@
         const built = _buildCardPrompt(w, greeting, userReply);
         const ui = _diveLoading(w, greeting, userReply);
         let failed = false;
+        // 遮罩收不收，兩道保險：
+        //   ① onDone（generateStory 內部把「生成中」放掉時觸發）
+        //   ② generateStory 這顆 promise 落地 —— 萬一內部漏了 ①，遮罩也不會永遠掛在畫面上
         generateStory({
             title: built.title,
             request: built.request,
             targetPackId: w.autoPackId || null,
             onStatus: function (text, cls) { if (cls === 'err') { failed = true; ui.fail(text); } },
             onDone: function () { if (!failed) ui.done(); },
-        });
+        }).then(function () { if (!failed) ui.done(); }, function () {});
         return true;
     }
 
@@ -329,6 +332,11 @@
                         if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
                         try { window.VN_Core.earlybirdFromText(fullText); } catch (e) {}  // 頭像早鳥：先開生
                         window.VN_Core._startWithLoader(fullText, null);   // 載入→loading 等全部圖片→開播
+                        // 🚨 這一行以前沒有：成功路徑從來沒把「生成中」放掉，
+                        //    而 onDone 正是靠 disabled 由 true→false 觸發（_ghostBtn）→ 生成遮罩永遠不收，
+                        //    劇情其實已經在遮罩後面播了。只有失敗那條 catch 會放掉，所以「失敗反而會收」。
+                        //    放在 _startWithLoader 之後：校準艙（要等圖時）已經接手，中間不會露出空舞台。
+                        submitBtn.disabled = false;
                         resolve();
                     },
                     (err) => reject(err),
