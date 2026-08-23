@@ -1157,9 +1157,11 @@ ${numberedText}`;
             const _scenePromptText = _pickScenePrompt(_sceneCfg);
             // 建檔/套預設的「初始填充」傳 skipScenes:true → 只填狀態、不搭便車生場景插圖（建檔不是劇情推進，不該生圖）
             // 開了「獨立插圖副模型」→ 搭便車插圖停（改走 extractScenesStandalone 那條獨立通）；沒開＝照舊搭便車
-            // 🧩 PWA 只在這通做「狀態抽取」：向量記憶(os_vector_engine)與 NPC 人物檔案(npc_dossier)
-            //    各自已經掛在 VN_CHAPTER_SAVED 上跑自己的副模型；搭便車會變成同一章打兩通。
-            const wantScenes = !_isStandalone() && !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText) && !_sceneCfg.standaloneEnabled;
+            // 🧩 PWA 這通不做的是「記憶」與「NPC 檔案」：那兩樣各自掛在 VN_CHAPTER_SAVED 上跑自己的副模型，
+            //    搭便車會變成同一章打兩通、登場數還會灌水。
+            //    但「場景插圖」要走：它沒有自己的 VN_CHAPTER_SAVED 路，生產者只有兩個 ——
+            //    搭便車(這裡)或獨立插圖副模型(extractScenesStandalone)，跟酒館的分工完全一樣。
+            const wantScenes = !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText) && !_sceneCfg.standaloneEnabled;
 
             if (!hasState && !wantMemory) return;   // 兩邊都沒事做
 
@@ -1221,7 +1223,9 @@ ${numberedText}`;
             // 📇 NPC 檔案搭便車：登場記帳(0 API) + 回頭客建檔候選附進同一通（sp_npc_dossier=0 可關）
             let _npc = null;
             try {
-                if (win.OS_NPC_DOSSIER?.prepare) {
+                // 🧩 PWA 跳過：npc_dossier 自己掛在 VN_CHAPTER_SAVED 上做記帳+建檔，
+                //    這裡再 prepare 一次＝同一章登場記兩次(出場數灌水)＋多一通副模型。
+                if (!_isStandalone() && win.OS_NPC_DOSSIER?.prepare) {
                     _npc = await win.OS_NPC_DOSSIER.prepare(chatId, _lastFull || lastContent, lastId);   // 完整正文：長章節後半登場的NPC也要記到出場數
                     if (_npc && _npc.block) prompt += _npc.block;
                 }
@@ -1495,7 +1499,8 @@ ${numberedText}`;
             const chatId = getChatId();
             if (!chatId) return;
             // 截斷守門（簡版）：API 報錯 / 半截正文 → 別生圖
-            try {
+            //   PWA 沒有酒館樓層可讀 → 整段跳過（獨立版的半截正文由下面的章節內容自己顯現：沒 <content> 就沒段落可挑）
+            if (!_isStandalone()) try {
                 const _arr = await win.TavernHelper?.getChatMessages?.(-1);
                 const _raw = String((_arr && _arr[0] && (_arr[0].message || _arr[0].mes)) || '');
                 const _t = _raw.trim();
@@ -1509,7 +1514,7 @@ ${numberedText}`;
                 if ((_hasOpen && !_hasClose) || (_vnFg && !_hasOpen)) return;
             } catch (e) {}
             const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
-            if (!recentText || lastId < 0) return;
+            if (!recentText || !_hasId(lastId)) return;
             const paras = _segmentStory(lastContent || '');
             if (!paras.length) return;
             const numbered = paras.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
@@ -2507,7 +2512,14 @@ _directorSpec(castNames);
                 if (!isEnabled()) return;              // 狀態面板的「即時記錄狀態」關著就不抽
                 if (win.__AURELIA_SUMMARIZING) return; // 大總結那通不算劇情推進
                 setTimeout(() => {
-                    try { extractOnce({ skipScenes: true }); } catch (err) { console.warn('🛰️ [State Runtime] 章節抽取失敗:', err); }
+                    // skipScenes 不要寫死：開了「獨立插圖副模型」就走下面那通獨立的，
+                    // 沒開就讓插圖搭這通的便車（同酒館分工）。
+                    let _sgStandalone = false;
+                    try { _sgStandalone = !!((JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen || {}).standaloneEnabled); } catch (e) {}
+                    try { extractOnce({ skipScenes: _sgStandalone }); } catch (err) { console.warn('🛰️ [State Runtime] 章節抽取失敗:', err); }
+                    if (_sgStandalone) {
+                        try { extractScenesStandalone(); } catch (err) { console.warn('🎯 [獨立插圖] 章節觸發失敗:', err); }
+                    }
                 }, 1200);
             });
         }
