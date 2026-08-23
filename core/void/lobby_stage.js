@@ -1705,12 +1705,12 @@
             const saved = JSON.parse(localStorage.getItem(SCENES.city.cfgKey) || 'null');
             if (saved && Array.isArray(saved.layoutFull) && saved.layoutFull.length) layout = saved.layoutFull;
         } catch (e) {}
-        // 🐈‍⬛ 404 目的地：解鎖過（進過一次 ERR_404）才顯示；沒解鎖整顆藏起來
-        const _vt = window.VoidTerminal || {};
-        const _st404 = (_vt.get404State ? _vt.get404State() : null) || { unlocked: false, active: false };
+        const _vt = window.VoidTerminal || {};   // jump() 進出 404 要用（enter404Room/restoreLobby）
         const locked = _cityLocked();   // 🔒 廣場鎖上：不給「廣場」這個目的地，地圖本身還是照畫（它就是這張快轉圖）
-        const chips = (locked ? [] : [['city', '廣場']]).concat([['cafe', '書咖'], ['hall', '大廳'], ['exchange', '交易所'], ['tarot', '占卜小屋']]);
-        if (_st404.unlocked) chips.push(['room404', '404']);
+        // 🧭 chip 與熱點都讀 lobby_places 的地點清單（單一真相）——以前寫死在這裡，
+        //    加一個地方就要記得回來改，占卜小屋上線時就漏過一次。
+        const PLACES = (window.LobbyPlaces && window.LobbyPlaces.list()) || [];
+        const chips = PLACES.filter(p => p.scene).map(p => [p.id, p.name]);
         // 🚪 統一跳場口：進 404 走 enter404Room（glitch 特效+音效+柴郡開場）；從 404 離開走 restoreLobby 還原流程再落到目標
         const jump = (to, spawn) => {
             if (to === 'room404' && S.scene !== 'room404') {
@@ -1755,21 +1755,19 @@
             const nf = isNight ? (o.nightFile || CITY_NIGHT[o.file]) : null;
             put(nf ? { file: nf } : o, o.x, o.y, o.w * s, z, o.flipX);
         });
-        // 建築熱點：書咖/大廳=直接進室內；住宅=落到它門前
+        // 建築熱點：認 PLACES 裡的 obj（檔名片段）。書咖/大廳/占卜小屋＝直接進室內，
+        //   所以廣場鎖著也照樣能點；我的家＝直接進屋（不是傳到門口再走一次）。
         const dests = [];
         layout.forEach(o => {
             const f = String(o.file || ''), s = o.s || 1;
             const front = { x: Math.round(o.x + o.w * s / 2), y: Math.round(o.y + o.h * s + 18) };
-            if (/book_cafe/.test(f)) dests.push({ o, label: '書咖', go: () => jump('cafe') });
-            else if (/lobby_day/.test(f)) dests.push({ o, label: '大廳', go: () => jump('hall') });
-            // 🔮 占卜小屋：同書咖/大廳＝直接進室內，所以廣場鎖著也照樣能點
-            else if (/tarot_hut/.test(f)) dests.push({ o, label: '占卜小屋', go: () => jump('tarot') });
-            // 🏠 我的家：以前是傳到廣場上的家門口，還要自己再走進去一次——快轉點的是「家」，就直接進屋。
-            //    走廣場那條路（走到門口踩觸發區）還在，廣場開鎖時照舊。
-            else if (/player_house/.test(f) && (!o.plot || _plotOccupied(o.plot)))
-                dests.push({ o, label: '我的家', go: () => window.dispatchEvent(new CustomEvent('lstage-open-myhome')) });
+            const P = PLACES.find(p => p.obj && f.indexOf(p.obj) >= 0);
+            if (P && (!o.plot || _plotOccupied(o.plot))) {
+                dests.push({ o, label: P.name, go: () => (P.scene ? jump(P.scene) : (P.open && P.open())) });
+                return;
+            }
             // 鄰居家沒有屋內可進（廣場裡也沒有給它們的門），它的作用就是傳到那戶門口 → 廣場鎖上就沒有落點，整顆收起來
-            else if (!locked && /npc_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '鄰居家', go: () => jump('city', front) });
+            if (!locked && /npc_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '鄰居家', go: () => jump('city', front) });
         });
         dests.forEach(d => {
             const o = d.o, s = o.s || 1;
@@ -2411,6 +2409,8 @@
         setNpcHistory,
         setPlot,                            // 🏘 地塊「空地↔蓋房」切換（經濟③入住流程呼叫；console 也可手動）
         plotOccupied: _plotOccupied,
+        openCityMap: _openCityMap,          // 🧭 快轉地圖（lobby_places 的統一入口在舞台模式下走這條）
+        openTarotPanel: _openTarotPanel,    // 🔮 占卜面板（立繪模式沒有小屋可以走進去，直接開面板）
         rollGuestPool: () => window.LobbyNpcs?.rollGuestPool(),   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個；懶解析到 lobby_npcs.js，async 透傳）
         pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
         openDressRoom: (a) => window.LobbyDress?.openRoom(a),   // console 診斷用：直接開某個角色的裝扮室（傳 _S.npcs 裡的物件）
@@ -2419,6 +2419,7 @@
             S,
             get CFG() { return CFG; },   // CFG 會整顆換（_loadCfg），必須走 getter
             MAP_W, MAP_H, SCENES, SCENE_HEADER,
+            goScene, cityLocked: _cityLocked,   // 給 lobby_places.js（地點清單）
             placeActor,
             regWin: _regWin, closeWins: _closeWins,
             // 給 lobby_dress.js（裝扮室/歷史窗）：皮膚存取/換裝/圖片工具/NPC歷史資料

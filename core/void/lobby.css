@@ -47,6 +47,36 @@
 /* 舊大廳殘留元素：新版型用不到，收掉 */
 .void-tab .void-bubble-layer { display:none; }
 
+/* =========================================================
+   🧭 前往面板（立繪模式）：舞台關著時沒有地圖可以畫，就把地點列成按鈕。
+   舞台模式按同一顆「前往」開的是快轉地圖，不會走到這裡。
+   ⚠️ 做成浮層而不是常駐側欄：立繪模式的底圖是使用者可換的（--void-bg-url），
+      佔死畫面邊緣會蓋到人物，而那張圖長怎樣我們管不到。
+   ========================================================= */
+/* 🚨 捲動只給清單，標題列要釘住：地點一多整個面板捲的話，✕ 會跟著被捲出畫面 */
+.lb-places { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3360;
+  width:min(420px,86%); max-height:78%; overflow:hidden;
+  display:flex; flex-direction:column;
+  background:rgba(255,255,255,.96); border:1px solid rgba(60,80,130,.28); border-radius:18px;
+  box-shadow:0 14px 40px rgba(40,60,110,.3); color:#23315e;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.lb-places-hd { display:flex; align-items:center; gap:8px; padding:13px 16px 11px; flex:0 0 auto;
+  font-weight:700; letter-spacing:2px; font-size:13px; border-bottom:1px solid rgba(60,80,130,.14); }
+.lb-places-hd i { color:#4f74c8; }
+.lb-places-x { margin-left:auto; background:none; border:none; color:#8a93ad; cursor:pointer; font-size:16px; padding:2px 4px; }
+.lb-places-x:hover { color:#23315e; }
+.lb-places-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:14px 16px 16px;
+  flex:1 1 auto; min-height:0; overflow-y:auto; align-content:start; }
+.lb-place { display:flex; flex-direction:column; align-items:center; gap:7px; padding:15px 8px 12px;
+  background:rgba(240,244,252,.9); border:1px solid rgba(60,80,130,.2); border-radius:14px;
+  color:#23315e; cursor:pointer; font-family:inherit; font-size:13px; font-weight:600;
+  transition:background .14s ease, border-color .14s ease, transform .14s ease; }
+.lb-place:hover { background:#fff; border-color:#4a78d8; transform:translateY(-2px); }
+.lb-place-ic { display:flex; align-items:center; justify-content:center; width:38px; height:38px;
+  border-radius:50%; background:rgba(79,116,200,.13); color:#4f74c8; font-size:16px; }
+.lb-place:hover .lb-place-ic { background:#4a78d8; color:#fff; }
+.lb-places-empty { grid-column:1/-1; text-align:center; padding:22px 0; color:#8a93ad; font-size:12px; }
+
 /* ─────────────────────────────────────────────
    舊立繪清理：素材已是「背景＋人物」合成圖，
    舊的獨立立繪 #iris-avatar 一律不顯示。
