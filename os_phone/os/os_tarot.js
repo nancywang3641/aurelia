@@ -168,7 +168,10 @@
         isRevealed: false,
         chatHistory: [],    
         isAnalyzing: false, 
-        singleCardMode: false 
+        singleCardMode: false,
+        // 🃏 這輪已經攤在桌上的牌(三張牌陣＋之後補抽的)。selectedCards 在補抽時會被清空,
+        //    不能拿它當桌面現況——不然補抽完模型就忘了原本那三張。
+        tableCards: []
     };
 
     function initDeck() {
@@ -182,8 +185,9 @@
             isReversed: Math.random() < 0.5
         }));
         STATE.selectedCards = [];
+        STATE.tableCards = [];   // 新一副牌＝桌面清空
         STATE.isRevealed = false;
-        STATE.chatHistory = []; 
+        STATE.chatHistory = [];
         STATE.question = "";
     }
 
@@ -406,6 +410,7 @@
             isReversed: Math.random() < 0.5
         }));
         STATE.selectedCards = [];
+        STATE.tableCards = [];   // 問下一個問題＝把桌面收乾淨，不然舊牌會被當成還攤著
         STATE.isRevealed = false;
         STATE.question = "";
         STATE.isAnalyzing = false;
@@ -465,6 +470,7 @@
         
         // 🔥 轉移：在聊天中顯示卡牌
         renderCardsToHistory(STATE.selectedCards);
+        STATE.tableCards = STATE.selectedCards.slice();
 
         const card1 = STATE.selectedCards[0];
         const card2 = STATE.selectedCards[1];
@@ -501,6 +507,18 @@
         STATE.isAnalyzing = false;
     }
 
+    // 🚨 桌面現況：每一輪追問都重貼一次。
+    //    只把「不准自己生牌」寫在最初的系統提示裡壓不住——聊個兩三輪模型就會自己抽一張出來講
+    //    (Rae 2026-08-23 回報)。狀態要放在最靠近生成的位置才有效。
+    function tableStateNote() {
+        const list = (STATE.tableCards || []).map((c, i) =>
+            `${i + 1}. ${c.name} [${c.isReversed ? '逆位' : '正位'}]`).join('；');
+        return `【桌面現況】現在攤開的牌只有：${list || '（還沒有任何牌）'}。\n` +
+               `你沒有抽新牌，也不知道牌堆裡任何一張沒攤開的牌是什麼。\n` +
+               `要補抽就只講一句提議，然後在訊息最後放 [drew a card] 就停住——` +
+               `絕對不要自己講出任何沒攤開的牌名、正逆位或牌義。`;
+    }
+
     async function sendFollowUp() {
         const input = document.getElementById('tr-chat-input');
         const text = input.value.trim();
@@ -512,7 +530,8 @@
         const currentTime = getCurrentTime();
         appendMessage('user', text);
         STATE.chatHistory.push({ role: 'user', content: `【當前時間】${currentTime.formatted}\n\n${text}` });
-        await streamResponse(STATE.chatHistory);
+        // 提醒只加在這一輪送出的訊息裡、不寫進 chatHistory（不然每輪都疊一條，聊久了整串都是提醒）
+        await streamResponse(STATE.chatHistory.concat([{ role: 'system', content: tableStateNote() }]));
         STATE.isAnalyzing = false;
     }
 
@@ -547,7 +566,9 @@
             let cleanResponse = fullResponse;
             
             if (hasCardDrawTrigger) {
-                cleanResponse = fullResponse.replace(/\[drew a card\]/g, '').trim();
+                // 🚨 標記之後的內容一律砍掉：牌還沒抽，模型在標記後面接著寫的一定是幻覺出來的牌。
+                //    用程式強制「停在標記」，不靠模型自律。
+                cleanResponse = fullResponse.split('[drew a card]')[0].trim();
                 textEl.innerHTML = cleanResponse.replace(/\n/g, '<br>');
                 setTimeout(() => { showDrawCardButton(); }, 300);
             }
@@ -585,6 +606,7 @@
         
         STATE.singleCardMode = true;
         STATE.selectedCards = [];
+        // ⚠️ 補抽是「加一張」不是「重開」：tableCards 故意不清，原本的牌陣要留著給桌面現況用
         STATE.isRevealed = false;
         
         let tempDeck = [...FULL_DECK_DEF];
@@ -656,23 +678,17 @@
         }, 1200);
 
         function startSingleCardAI() {
-            let systemPrompt = "你現在是 Pythia，一位神秘、且富有洞察力的塔羅占卜師(姊姊)。";
-            if (win.OS_PROMPTS) {
-                const customPrompt = win.OS_PROMPTS.get('tarot_pythia');
-                if (customPrompt && customPrompt.trim().length > 0) {
-                    systemPrompt = customPrompt;
-                }
-            }
-            
             const cardInfo = `單卡: ${card.name} [${card.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(card)}`;
-            
+            STATE.tableCards = (STATE.tableCards || []).concat([card]);   // 補抽的牌也算攤在桌上了
+
+            // ⚠️ 這裡以前會把整份人設(含破甲前言)重貼一次 → 每抽一張就多幾千字，
+            //    而且會出現好幾條互相打架的 system 訊息。人設在歷史開頭就有了，這裡只補當下的狀態。
             STATE.chatHistory.push({
                 role: 'system',
-                content: `${systemPrompt}
+                content: `【當前時間】${currentTime.formatted}
 
-【當前時間】${currentTime.formatted}
-
-這是一張補充牌。請根據這張牌為用戶進行簡短的單卡解讀（約50-100字）。語氣要自然，像在對話。`
+用戶剛剛親手抽出了這張補充牌。請根據它做簡短的單卡解讀（約50-100字），語氣自然，像在對話。
+只能解讀這一張，不要再提到任何沒攤開的牌。`
             });
             STATE.chatHistory.push({
                 role: 'user',
