@@ -1643,13 +1643,16 @@
                         //    null.style 直接炸掉，畫面就停在白底。（續讀舊篇章那條本來就有叫 showVnPanel，
                         //    所以只有「新開的第一輪」會中。）showVnPanel 內部有 vnInited 旗標，重複叫不會重建。
                         if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel();
+                        // 舞台 DOM 是 showVnPanel → launchApp 當場同步建好的，不必再空等。
+                        //   等的那段時間畫面上是「VN 上一次停在哪一頁」（空舞台或主選單），
+                        //   看起來就是劇情頁先漏出來、進度遮罩慢半拍才蓋上。
                         setTimeout(() => {
                             // 🚨掛在 VN_PLAYER 不是 VN_Core：舊碼寫成 VN_Core，?. 把它整個吞掉，
                             //   角色卡 Dive 一直是空打。找不到就出聲，不要再靜靜失敗。
                             const P = window.VN_PLAYER || window.VN_Core;
                             if (P && P.runCardDive) P.runCardDive(_dive);
                             else console.warn('[書架] 生成器還沒就緒，這次 dive 沒跑起來');
-                        }, 400);
+                        }, 0);
                     } else {
                         if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
                         if (window.StoryExtractor?.show) window.StoryExtractor.show();

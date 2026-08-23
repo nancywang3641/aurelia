@@ -2044,40 +2044,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
 
 
-        /* =========================================
-           🔧 修正：AI 生成劇情面板 (手機端上下堆疊)
-           ========================================= */
-        @media (max-width: 768px) {
-            /* 1. 將雙欄 (flex-row) 改為上下堆疊 (flex-col) */
-                flex-direction: column; 
-            }
-            
-            /* 2. 左欄：移除原本的右邊線，改成下邊線分隔上下區塊 */
-                border-right: none; 
-                border-bottom: 1px solid rgba(212,175,55,0.12); 
-                padding: 16px 14px;
-            }
-            
-            /* 3. 右欄 (角色卡)：解除原本 220px 的寬度限制，改為滿版，並給個最大高度 */
-                width: 100%; 
-                box-sizing: border-box;
-                padding: 14px;
-                max-height: 280px; /* 限制高度，這樣角色多的時候會在區塊內滾動，不會撐爆畫面 */
-            }
-            
-            /* 4. 整個 Modal 視窗：確保不要超過手機螢幕高度 */
-                max-height: 90vh; 
-                overflow-y: auto; 
-            }
-        }
 
-        /* =========================================
-           ✨ 新增：AI 生成劇情面板 (摺疊功能樣式與手機堆疊)
-           ========================================= */
-        /* 讓 details 容器重置為區塊，避免 flex 衝突 */
-            display: block !important;
-            min-height: min-content; 
-        }
+        /* details.vn-collapse-group：摺疊區塊的標題列樣式（下面幾條）。
+           原本這裡還有「AI 生成劇情面板」的手機堆疊規則；那個面板拆掉時選擇器被刪、
+           宣告卻留著變成孤兒 CSS，解析器一路吃掉後面的規則 —— 已整段移除。 */
         
         /* 隱藏原生三角形 */
         details.vn-collapse-group summary::-webkit-details-marker {
@@ -2106,11 +2076,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             color: var(--gold);
         }
         
-        /* 拿掉原本手動寫在 div 的底線，交給 summary 統一管理 */
-            border-bottom: none !important;
-            padding-bottom: 0 !important;
-            margin-bottom: 0 !important;
-        }
         
         /* 右側箭頭旋轉動畫 */
         .collapse-icon {
@@ -2123,35 +2088,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             color: var(--gold);
         }
         
-        /* 把原本外層的 Flex 佈局移到內層內容區 */
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            padding-top: 14px;
-        }
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            padding-top: 10px;
-            /* 讓角色清單可以滾動 */
-            max-height: 260px;
-            overflow-y: auto;
-        }
-
-        /* 手機版 (RWD) 覆蓋：上下堆疊 */
-        @media (max-width: 768px) {
-            
-            /* 讓外層視窗統一處理滾動即可，避免雙重滾動條 */
-            
-            /* 🌟 修正點：解除內部高度限制，讓內容自然往下推 */
-                max-height: none; 
-                overflow-y: visible; 
-            }
-            
-            /* 🌟 修正點：確保按鈕與列表不會被 Flexbox 擠壓變形 */
-                flex-shrink: 0;
-            }
-        }
+        /* ⚠️ 這裡原本有一段「選擇器被刪掉、只剩宣告」的孤兒 CSS（vn-collapse-group 的殘骸）。
+           瀏覽器解析到那裡會整個亂掉，把後面好幾條規則一起丟掉 —— Dive 生成中遮罩
+           (.vn-dive-loading) 與章節卡的樣式都是這樣憑空消失的。已整段移除，別再貼回來。 */
 
         /* ── 🎭 Dive 生成中遮罩 ──────────────────────────────────
            以前這塊畫在生成面板內部，於是「沒開面板的入口」（書架、QB）
@@ -2159,7 +2098,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-dive-loading { position:absolute; inset:0; z-index:120;
           display:flex; flex-direction:column; align-items:center; justify-content:center;
           gap:14px; text-align:center; padding:36px;
-          background:rgba(8,6,4,0.97); }
+          /* 全不透明：0.97 會讓底下的退出／設定／對話框透出一層灰影，看起來像沒蓋住 */
+          background:#080604; }
         .vn-dive-loading .vdl-icon { font-size:44px; filter:drop-shadow(0 2px 14px rgba(212,175,55,0.45)); }
         .vn-dive-loading .vdl-title { font-size:17px; font-weight:900; letter-spacing:3px; color:var(--gold,#d4af37); }
         .vn-dive-loading .vdl-quote { max-width:260px; margin-top:4px; font-size:11.5px; font-style:italic;

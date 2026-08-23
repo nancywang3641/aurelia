@@ -47,7 +47,6 @@
         //    遮罩掛進一個隱藏的頁＝什麼都看不到，畫面就是一片黑（Rae 看到的「黑屏沒 loading」）。
         //    先揭開這一頁，等一下生成完成的 switchPage 只是重複做一次，無害。
         try { window.VN_PLAYER?.switchPage?.('page-game'); } catch (e) { }
-        const host = document.getElementById('page-game') || document.body;
         const old = document.getElementById('vn-dive-loading');
         if (old) old.remove();
         const box = document.createElement('div');
@@ -60,7 +59,16 @@
             (g ? '<div class="vdl-quote">「' + _esc(g.slice(0, 90)) + (g.length > 90 ? '…' : '') + '」</div>' : '') +
             (r ? '<div class="vdl-reply">你：「' + _esc(r.slice(0, 60)) + (r.length > 60 ? '…' : '') + '」</div>' : '') +
             '<div class="vdl-status"><span class="gen-spinner"></span>AI 正在編織故事，請稍候…</div>';
-        host.appendChild(box);
+        // 🚨 掛不到舞台時**不要**退到 document.body：body 沒有定位，絕對定位的遮罩會跑到
+        //    面板底下去，等於整段生成都看不到進度（畫面就是空舞台一直亮著）。
+        //    舞台是 launchApp 建的，慢一步就等它出現再掛。
+        const _mount = (tries) => {
+            const h = document.getElementById('page-game');
+            if (h) { h.appendChild(box); return; }
+            if ((tries || 0) < 60) { setTimeout(() => _mount((tries || 0) + 1), 50); return; }
+            console.warn('[VN] 等不到 VN 舞台（#page-game），這次 dive 沒有進度可看');
+        };
+        _mount(0);
         return {
             fail: function (msg) {
                 const st = box.querySelector('.vdl-status');
