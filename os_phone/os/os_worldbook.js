@@ -589,6 +589,24 @@
             alert('無法識別的 JSON 格式'); return;
         }
 
+        // 🚨 同名書包＝覆蓋，不要疊上去。
+        //   以前是直接往同一本裡塞：重新匯入同一本書 → 兩份條目都會被撈進 prompt，
+        //   同一條規則送兩次、關鍵字也重複命中，而且畫面上看不出哪條是舊的。
+        //   （會想重新匯入多半就是要把酒館那邊改過的設定帶進來 —— 那更不該留舊的。）
+        const _old = (await win.OS_DB.getAllWorldbookEntries())
+            .filter(e => (e.book || '預設書包') === newBookName);
+        if (_old.length) {
+            const _msg = '書包「' + newBookName + '」已經有 ' + _old.length + ' 條條目。' + '\n\n'
+                + '確定＝清掉舊的再匯入（重新匯入同一本用這個）' + '\n'
+                + '取消＝這次不匯入';
+            if (!confirm(_msg)) return;
+            for (const _e of _old) {
+                try { await win.OS_DB.deleteWorldbookEntry(_e.id); }
+                catch (err) { console.warn('[OS_WORLDBOOK] 舊條目刪除失敗', _e.id, err); }
+            }
+            console.log('[OS_WORLDBOOK] 覆蓋書包「' + newBookName + '」：先清掉 ' + _old.length + ' 條舊條目');
+        }
+
         // 儲存書包名稱
         const books = getBooks();
         if (!books.includes(newBookName)) {
