@@ -3203,6 +3203,9 @@
     }
 
     // === 5. 導出到 Window ===
+    // ⚠️ 截斷／API 錯誤橫幅：獨立版生成器也用這支，UI 只有一份
+    VN_Core.showTruncBanner = _vnTruncBannerShow;
+    VN_Core.hideTruncBanner = _vnTruncBannerHide;
     window.VN_Core = VN_Core;
 
     window.VN_PLAYER = {
@@ -3343,6 +3346,45 @@
         console.log('[VN] 收到 VN_STORY_STARTED，暫存 QB 劇本包:', payload.title);
     });
 
+    // ⚠️ 截斷／API 錯誤橫幅（兩版共用同一份 UI，重試行為由呼叫端給）
+    //    酒館：/regenerate 與 /continue 交給酒館助手；獨立版：生成器自己重跑或接續（沒有 slash 指令可用）。
+    //    掛在 document.body（不掛 page-game）→ 搭配 fixed + 高 z-index，浮在資訊中心那類 overlay 之上不被擋住。
+    function _vnTruncBannerHide() {
+        const b = document.getElementById('vn-trunc-banner');
+        if (b) b.classList.remove('show');
+    }
+    function _vnTruncBannerShow(opts) {
+        opts = opts || {};
+        let b = document.getElementById('vn-trunc-banner');
+        if (!b) {
+            b = document.createElement('div');
+            b.id = 'vn-trunc-banner';
+            b.innerHTML =
+                '<div class="vn-trunc-msg"></div>' +
+                '<div class="vn-trunc-sub"></div>' +
+                '<div class="vn-trunc-btns">' +
+                    '<button class="vn-trunc-btn vn-trunc-primary" id="vn-trunc-regen">重新生成</button>' +
+                    '<button class="vn-trunc-btn" id="vn-trunc-cont">繼續生成</button>' +
+                    '<button class="vn-trunc-btn" id="vn-trunc-close">關閉</button>' +
+                '</div>';
+            document.body.appendChild(b);
+        }
+        b.querySelector('.vn-trunc-msg').textContent = opts.title || '⚠️ 正文被截斷';
+        b.querySelector('.vn-trunc-sub').textContent = opts.sub || '沒收到結尾（缺 </content>）';
+        const _regen = b.querySelector('#vn-trunc-regen');
+        const _cont  = b.querySelector('#vn-trunc-cont');
+        const _close = b.querySelector('#vn-trunc-close');
+        _regen.style.display = opts.onRegen ? '' : 'none';
+        _cont.style.display  = opts.onContinue ? '' : 'none';
+        _regen.onclick = function () { _vnTruncBannerHide(); try { opts.onRegen && opts.onRegen(); } catch (e) { console.warn(e); } };
+        _cont.onclick  = function () { _vnTruncBannerHide(); try { opts.onContinue && opts.onContinue(); } catch (e) { console.warn(e); } };
+        _close.onclick = function () {
+            _vnTruncBannerHide();
+            try { opts.onClose ? opts.onClose() : window.VN_Core._hideWriterCurtain(); } catch (e) {}
+        };
+        b.classList.add('show');
+    }
+
     // === 8. 自動偵測新劇本 ===
     window._pendingAutoScript = window._pendingAutoScript || null;
 
@@ -3392,7 +3434,7 @@
                     return false;
                 } catch (e) { return false; }
             }
-            function _hideTruncBanner() { const b = document.getElementById('vn-trunc-banner'); if (b) b.classList.remove('show'); }
+            function _hideTruncBanner() { _vnTruncBannerHide(); }
             // 重試：/regenerate(整則重生，破甲截斷首選) 或 /continue(接著補寫，乾淨早停用)。
             // 補/重生完會再發 GENERATION_ENDED → 收尾完整就自動套用；先清 _lastApplied，確保即使內容雷同也照樣重套。
             function _retryTrunc(cmd) {
@@ -3407,25 +3449,12 @@
             function _continueTrunc() { _retryTrunc('/continue'); }
             function _showTruncBanner(messageId) {
                 _truncMsgId = messageId;
-                let b = document.getElementById('vn-trunc-banner');
-                if (!b) {
-                    b = document.createElement('div');
-                    b.id = 'vn-trunc-banner';
-                    b.innerHTML =
-                        '<div class="vn-trunc-msg">⚠️ 正文被截斷</div>' +
-                        '<div class="vn-trunc-sub">沒收到結尾（缺 &lt;/content&gt; 或 &lt;/summary&gt;）</div>' +
-                        '<div class="vn-trunc-btns">' +
-                            '<button class="vn-trunc-btn vn-trunc-primary" id="vn-trunc-regen">重新生成</button>' +
-                            '<button class="vn-trunc-btn" id="vn-trunc-cont">繼續生成</button>' +
-                            '<button class="vn-trunc-btn" id="vn-trunc-close">關閉</button>' +
-                        '</div>';
-                    // 掛到頂層 body（不掛 page-game）→ 搭配 fixed + 高 z-index 浮在資訊中心 overlay(9999) 之上，不被擋住
-                    document.body.appendChild(b);
-                    b.querySelector('#vn-trunc-regen').onclick = _rerollTrunc;
-                    b.querySelector('#vn-trunc-cont').onclick = _continueTrunc;
-                    b.querySelector('#vn-trunc-close').onclick = function () { _hideTruncBanner(); try { window.VN_Core._hideWriterCurtain(); } catch (e) {} };
-                }
-                b.classList.add('show');
+                _vnTruncBannerShow({
+                    title: '⚠️ 正文被截斷',
+                    sub: '沒收到結尾（缺 </content> 或 </summary>）',
+                    onRegen: _rerollTrunc,
+                    onContinue: _continueTrunc,
+                });
             }
 
             function _readMsgText(messageId) {

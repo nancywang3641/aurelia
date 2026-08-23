@@ -154,6 +154,45 @@
     }
 
     // 🌟 【重構】加上 options = {} 參數與 async 關鍵字
+    // ══════════════════════════════════════════════════════════════
+    // ⚠️ 壞回覆判定（獨立版）
+    // ──────────────────────────────────────────────────────────────
+    // 酒館那條靠 GENERATION_ENDED + 讀聊天樓判斷,獨立版沒有那兩樣 —— 但我們手上就有剛回來的
+    // 全文,直接判更準。兩種要攔:
+    //   ① API 錯誤頁被當正文回傳(OS_API 只有「完全空」才 throw,504/憑證錯誤那種是「表面成功」的文字)
+    //   ② 正文被截斷(有 <content> 沒 </content>) —— 破甲被切、模型中途停都會這樣
+    // 以前這裡的處置是「長度 > 50 就自己補上 <content> 包起來」→ 半截正文照樣存成章節,
+    // 還會連帶餵給 AVS/記憶/插圖。這種降級掩蓋才是最難查的：畫面上只是「這章怪怪的」。
+    // ══════════════════════════════════════════════════════════════
+    function _noCot(t) { return String(t == null ? '' : t).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, ''); }
+
+    // 把「續寫回來的片段」接回半截正文：續寫是接在斷點後面的，不是新的一章。
+    //   模型常會自己又開一個 <content>（或再寫一次 [Chapter|]）→ 接之前先剝掉，不然正文會多一層標籤。
+    //   接完仍然沒有 </content> ＝ 又被截一次 → 交給 _badReply 再跳一次橫幅，可以連續續寫。
+    function _stitchContinuation(partial, cont) {
+        let c = _noCot(String(cont || '')).trim();
+        c = c.replace(/^[\s\S]{0,200}?<content>\s*/i, '');   // 續段自己又開的 <content>（含前面那點客套話）剝掉
+        c = c.replace(/^\s*\[(?:Chapter|Story)\|[^\]]*\]\s*/i, '');   // 又重寫一次章節標頭也剝掉
+        let base = String(partial || '');
+        return base.replace(/\s*$/, '') + '\n' + c;
+    }
+
+    function _badReply(t) {
+        const s = (t == null) ? '' : String(t);
+        if (!s.trim()) return { bad: true, kind: 'empty', reason: '回應是空的（可能逾時或被中斷）' };
+        const head = s.slice(0, 400);
+        if (/^\s*\[\s*API\s*(錯誤|Error)\s*\]/i.test(s)) return { bad: true, kind: 'api', reason: head.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) };
+        if (/(endpoint|request)\s+failed\s+with\s+status\s+\d{3}/i.test(head)) return { bad: true, kind: 'api', reason: head.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) };
+        if (s.length < 1500 && /gateway timeout|bad gateway|service unavailable|the request could not be satisfied|we can'?t connect to the server|invalid_credentials|Authentication required/i.test(s))
+            return { bad: true, kind: 'api', reason: 'API 回了錯誤頁（如 504 逾時 / 憑證問題），不是正常內容' };
+        const c = _noCot(s);
+        const hasOpen = c.indexOf('<content>') !== -1, hasClose = c.indexOf('</content>') !== -1;
+        // ⚔️ 戰鬥交棒天生沒有 </content>（世界書要求輸出 </BattleStart> 就停筆）→ 不算截斷
+        if (hasOpen && !hasClose && !/<\/BattleStart>/i.test(c)) return { bad: true, kind: 'trunc', reason: '正文沒收到結尾（缺 </content>）' };
+        if (!hasOpen && s.trim().length < 50) return { bad: true, kind: 'empty', reason: '回應內容不足' };
+        return { bad: false };
+    }
+
     async function generateStory(options = {}) {
         // 面板已經拆掉：這兩個殼子接住內文原本對 DOM 的賦值，轉給呼叫端的回呼
         const submitBtn = _ghostBtn(options.onDone);
@@ -264,14 +303,21 @@
                     config,
                     null,
                     async (fullText) => {
-                        if (!fullText || !fullText.includes('<content>')) {
-                            if (fullText && fullText.length > 50) {
-                                fullText = `<content>\n${fullText}\n</content>`;
-                            } else {
-                                reject(new Error('AI 回應內容不足或格式錯誤'));
-                                return;
-                            }
+                        // 續寫回來的片段先接回半截正文，再一起驗貨（驗的是接完的完整章節，不是那個片段）
+                        if (options._continueFrom) fullText = _stitchContinuation(options._continueFrom, fullText);
+                        // ⚠️ 先驗貨再落地：壞的一律不存章節（存了就會連帶餵 AVS／記憶／插圖，還要回頭刪）
+                        const _bad = _badReply(fullText);
+                        if (_bad.bad) {
+                            console.warn('[VN_Gen] ⚠️ 這輪回覆有問題（' + _bad.kind + '）：' + _bad.reason);
+                            _showBadReplyBanner(_bad, fullText, options);
+                            statusEl.textContent = '⚠️ ' + _bad.reason;
+                            statusEl.className = 'err';
+                            submitBtn.disabled = false;
+                            try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
+                            resolve();   // 不當成 throw：橫幅已經接手，這裡靜靜收尾別再彈一次錯
+                            return;
                         }
+                        if (!fullText.includes('<content>')) fullText = `<content>\n${fullText}\n</content>`;   // 沒標籤但內容夠長＝模型忘了包，補上
 
                         try {
                             const titleMatch = fullText.match(/\[Chapter\|(?:\d+\|)?([^\]|]+)\]/i)
@@ -351,6 +397,37 @@
             submitBtn.disabled = false;
             window.VN_Core._setStoryId(_prevStoryId, _prevStoryTitle);
         }
+    }
+
+    // ⚠️ 壞回覆橫幅（UI 用 VN_Core 那份共用的，行為在這裡給）：
+    //   重新生成 ＝ 拿同一組 options 再跑一次（等同酒館的 /regenerate）
+    //   繼續生成 ＝ 把半截正文丟回去請它接著寫完,再把兩段接起來（等同 /continue）；只有截斷才給
+    function _showBadReplyBanner(bad, partial, options) {
+        const VC = window.VN_Core;
+        if (!VC?.showTruncBanner) { alert(bad.reason); return; }
+        VC.showTruncBanner({
+            title: bad.kind === 'trunc' ? '⚠️ 正文被截斷' : '⚠️ 這輪沒生成成功',
+            sub: bad.reason,
+            onRegen: function () { generateStory(options); },
+            // 下一次續寫的底本是「接到目前為止的整份」→ 可以連續續好幾次，不會退回最初那半截
+            onContinue: bad.kind === 'trunc' ? function () { _continueTruncated(partial, options); } : null,
+        });
+    }
+
+    // 接續：把半截正文交回主模型續寫,只要「接下去的部分」,回來自己接起來再走一次正常落地。
+    //   走 generateStory 的完成路徑(不另寫一套存檔),所以續回來的內容照樣會過壞回覆判定。
+    async function _continueTruncated(partial, options) {
+        const tail = String(partial || '').slice(-1500);
+        const req = [
+            '（系統：上一輪的正文被截斷了。請「接著」下面這段往下寫完，不要重寫、不要重複已經寫過的內容，不要重新開場，直接從斷點接下去，並且務必補上 </content> 收尾。）',
+            '',
+            '【被截斷的正文尾段】',
+            tail,
+        ].join('\n');
+        await generateStory(Object.assign({}, options, {
+            request: req,
+            _continueFrom: partial,   // 交給完成路徑接起來
+        }));
     }
 
     // === 暴露到全域 ===
