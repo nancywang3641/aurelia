@@ -34,10 +34,24 @@
     const IMAGE_STORES = { bg_cache:1, avatar_cache:1, item_cache:1, scene_cache:1, sprite_cache:1 };
     const SEP = '::';
 
+    // 🚨 這支決定所有圖片快取的隔離鍵，兩版各有各的來源：
+    //   酒館＝chatId；PWA＝storyId（chatId 在 PWA 的對應物，見 OS_AVS_ADAPTER.getStoryId）。
+    //   以前 PWA 這條問的是 VoidTerminal.getChatId()，而那支只讀酒館 context、在 PWA **永遠回
+    //   'lobby_default'** → 整個 PWA 不管哪一本書哪一條篇章全部擠進同一個桶：
+    //     ① 相簿分不了組（她說的「沒綁 ID」）
+    //     ② 「切拉桿不重生舊圖」變成全域生效 → 任何角色只要在任何故事出現過就有快取，
+    //        立繪模式永遠不會自動生成（她說的「自動立繪還是死的」）—— 兩個症狀同一個根。
+    //   storyId 一律問 OS_AVS_ADAPTER，不要自己拼 localStorage（會拿到假鑰匙）。
     function _curWorld() {
-        try { const w = window.parent || window; const ctx = w.SillyTavern && w.SillyTavern.getContext && w.SillyTavern.getContext(); if (ctx && ctx.chatId) return String(ctx.chatId); } catch(e){}
-        try { const w = window.parent || window; if (w.VoidTerminal && w.VoidTerminal.getChatId) { const c = w.VoidTerminal.getChatId(); if (c) return String(c); } } catch(e){}
-        return 'lobby_default';
+        const w = window.parent || window;
+        try { const ctx = w.SillyTavern && w.SillyTavern.getContext && w.SillyTavern.getContext(); if (ctx && ctx.chatId) return String(ctx.chatId); } catch(e){}
+        try {
+            const ad = w.OS_AVS_ADAPTER || window.OS_AVS_ADAPTER;
+            const sid = ad && ad.getStoryId && ad.getStoryId();
+            if (sid) return String(sid);
+        } catch(e){}
+        try { if (w.VoidTerminal && w.VoidTerminal.getChatId) { const c = w.VoidTerminal.getChatId(); if (c) return String(c); } } catch(e){}
+        return 'lobby_default';   // 還沒踏進任何故事（大廳）＝共用這一桶
     }
     function _scoped(store, key) {
         if (!IMAGE_STORES[store] || typeof key !== 'string') return key;
