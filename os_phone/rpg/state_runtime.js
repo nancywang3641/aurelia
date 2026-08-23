@@ -394,9 +394,11 @@
                 const raw = await callSecondary(prompt);
                 _lastRawText = raw;   // 存原始輸出(成功/失敗都存，給診斷看格式有沒有亂)
                 const json = extractJSON(raw);
-                // 結合觸發後：updates(狀態) 或 memories(記憶) 任一存在即算成功
-                if (json && (typeof json.updates === 'object' || Array.isArray(json.memories))) return json;
-                lastErr = new Error(`第 ${i+1} 次：JSON 不含 updates/memories`);
+                // 結合觸發後：updates(狀態) / memories(記憶) / scenes(插圖) 任一存在即算成功
+                //   🖼️ scenes 也要認：「只有插圖」那一路(沒有變數包、記憶走自己的路)回的就是純 scenes，
+                //      以前不認 → 被判定失敗、重試兩次後整通拋掉，插圖永遠不會派發。
+                if (json && (typeof json.updates === 'object' || Array.isArray(json.memories) || Array.isArray(json.scenes))) return json;
+                lastErr = new Error(`第 ${i+1} 次：JSON 不含 updates/memories/scenes`);
                 console.warn('[State Runtime]', lastErr.message, 'raw head:', String(raw).slice(0, 300));
             } catch(e) {
                 lastErr = e;
@@ -1162,8 +1164,22 @@ ${numberedText}`;
             //    但「場景插圖」要走：它沒有自己的 VN_CHAPTER_SAVED 路，生產者只有兩個 ——
             //    搭便車(這裡)或獨立插圖副模型(extractScenesStandalone)，跟酒館的分工完全一樣。
             const wantScenes = !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText) && !_sceneCfg.standaloneEnabled;
+            // 🔍 插圖開著卻沒生：把原因印出來。以前這裡是一路靜默 return，畫面上跟「AI 就是沒挑到要插圖」長得一模一樣。
+            if (_sceneCfg.extractEnabled && !wantScenes) {
+                let _why = '';
+                if (opts && opts.skipScenes) _why = '這通是初始填充/獨立插圖模式，插圖不搭這通';
+                else if (_sceneCfg.standaloneEnabled) _why = '開著「獨立插圖副模型」→ 由那條獨立通負責，不搭這通';
+                else if (!_scenePromptText) {
+                    let _svc = ''; try { _svc = (win.OS_IMAGE_MANAGER?.serviceFor?.('scene')) || ''; } catch (e) {}
+                    _why = '這個插圖來源(' + (_svc || '未知') + ')的「插圖規範」是空的 → 去 設置→圖片→插圖 把那一格填好（規範是按來源各存一份的）';
+                }
+                if (_why) console.warn('🖼️ [State Runtime] 插圖這輪沒跑：' + _why);
+            }
 
-            if (!hasState && !wantMemory) return;   // 兩邊都沒事做
+            // 🖼️ 插圖也算一件事：以前只看狀態/記憶，於是「插圖開著但沒有變數包」時整通直接 return，
+            //    使用者看到的是「插圖開了卻永遠不生」而且沒有任何訊息。PWA 尤其明顯 ——
+            //    記憶在獨立版走自己的路(wantMemory 恆 false)，等於插圖被綁死在「必須先有 AVS 變數包」。
+            if (!hasState && !wantMemory && !wantScenes) return;   // 三件事都沒得做
 
             const currentState = win._AVS_ENGINE?.read?.() || {};
             const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
@@ -1187,7 +1203,7 @@ ${numberedText}`;
             const stateAlreadyDone = !_force && hasState && _hasId(lastId) && _doneIds.some(id => _known.has(id));
             const doState = hasState && !stateAlreadyDone && !!recentText && _hasId(lastId);
 
-            if (!doState && !wantMemory) return;
+            if (!doState && !wantMemory && !wantScenes) return;
 
             // 組 prompt：狀態部分用原本 buildExtractPrompt(不動，保品質)；要記憶就附加 memories 區段共用同一通
             let prompt;
@@ -1217,8 +1233,12 @@ ${numberedText}`;
                 if (wantMemory) prompt += _memoryAddendum();
                 // 角色去重搭便車：有繁簡/別名候選才把名單塞進這通 prompt（不另開 API）
                 if (localStorage.getItem('sp_avs_dedupe') !== '0') { _dedupe = _buildDedupeBlock(currentState); if (_dedupe) prompt += _dedupe.block; }
-            } else {
+            } else if (wantMemory) {
                 prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '');
+            } else {
+                // 只有插圖：不抽狀態也不抽記憶，這通就純粹是「挑段落 + 寫插圖提示詞」。
+                // 指令本體由下面的 _sceneAddendum 附上（跟搭便車模式同一份規範，不另寫一套）。
+                prompt = '你是插圖分鏡助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。';
             }
             // 📇 NPC 檔案搭便車：登場記帳(0 API) + 回頭客建檔候選附進同一通（sp_npc_dossier=0 可關）
             let _npc = null;
@@ -1234,7 +1254,7 @@ ${numberedText}`;
             let _sceneParas = [];
             let _looksMap = null;   // ##角色名##佔位模式才建；null = 用外觀錨點舊模式、派發時不展開
             const _useNamePH = wantScenes && _sceneCfg.useNamePlaceholder !== false;   // 預設開
-            if (wantScenes && (doState || wantMemory) && recentText) {
+            if (wantScenes && recentText) {
                 _sceneParas = _segmentStory(_lastFull || lastContent || '');   // 完整正文分段：4000字後的段落也要能掛插圖（結尾高潮戲原本永遠沒編號）
                 if (_sceneParas.length) {
                     const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
