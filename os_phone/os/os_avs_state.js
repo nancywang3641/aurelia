@@ -237,11 +237,16 @@
     }
 
     // ── 主建構 ───────────────────────────────────────────────────
+    // 🚨 分艙鍵一律走 adapter：PWA 沒有酒館可問，那邊的「當前 chat」＝當前故事(storyId)。
+    //    這支面板以前四處直接讀 SillyTavern.getContext().chatId → PWA 一律空字串，症狀是
+    //    狀態讀不到資料、「沿用其他故事的設定」點下去回「目前沒有進行中的聊天」、資料管理頁標不出目前這個世界。
+    function _curChatId() {
+        try { return win.OS_AVS_ADAPTER?.getCurrentChatId?.() || ''; } catch (e) { return ''; }
+    }
     async function _build(opts) {
         if (!_host) return;
         const eng = win._AVS_ENGINE;
-        const ctx = win.SillyTavern?.getContext?.();
-        const chatId = ctx?.chatId || '';
+        const chatId = _curChatId();
         // fresh=true（外部事件、資料真的變了）才重讀；換頁沿用快取＝不清空、不 await、不閃
         const _useCache = !(opts && opts.fresh) && _cache.ready && _cache.key === chatId;
         if (!_useCache) _host.innerHTML = `<div class="avs-st"><div class="avs-st-loading">載入狀態中…</div></div>`;
@@ -670,7 +675,7 @@
         m.classList.add('active');
         const listEl = m.querySelector('#avs-adopt-list');
         listEl.innerHTML = '<div class="avs-sm-tip">載入中…</div>';
-        const chatId = win.SillyTavern?.getContext?.()?.chatId || '';
+        const chatId = _curChatId();
         const items = _adoptCandidates(chatId);
         if (!items.length) { listEl.innerHTML = '<div class="avs-sm-tip">還沒有其他故事的設定可以沿用</div>'; return; }
         let rules = [], tpls = [];
@@ -732,9 +737,9 @@
     // 實際搬移：變數包 + 條件規則 + UI 面板 → 當前聊天；來源與數值都不動
     async function _doAdopt(srcId) {
         const src = (_packs || []).find(p => p.id === srcId);
-        const chatId = win.SillyTavern?.getContext?.()?.chatId || '';
+        const chatId = _curChatId();
         if (!src) { alert('找不到這個故事的設定'); return; }
-        if (!chatId) { alert('目前沒有進行中的聊天'); return; }
+        if (!chatId) { alert('還沒有進行中的故事'); return; }
         if (!confirm(`把「${src.name}」的設定沿用到這個故事？\n\n・追蹤欄位、條件規則、UI 面板都會複製過來\n・不會帶入舊故事的數值，從空白開始記錄\n・原本那個故事完全不受影響`)) return;
         try {
             const newPackId = 'pack_' + Date.now();
@@ -943,8 +948,7 @@
         try {
             const all = await win.OS_STATE_RUNTIME.listAllStateData();
             if (!all.length) { listEl.innerHTML = '<div class="avs-sm-tip">還沒有任何世界開始追蹤</div>'; return; }
-            const ctx = win.SillyTavern?.getContext?.();
-            const currentId = win.OS_STATE_RUNTIME.normalizeChatId?.(ctx?.chatId) || '';
+            const currentId = _curChatId();
             listEl.innerHTML = all.map(e => {
                 const isCur = e.chatId === currentId;
                 const date = e.timestamp ? new Date(e.timestamp).toLocaleString() : '—';

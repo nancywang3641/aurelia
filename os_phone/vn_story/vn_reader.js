@@ -591,53 +591,31 @@
                 return;
             }
 
-            // PWA 模式：從 OS_DB 拿章節
-            let allChapters = [];
-            try { allChapters = await (win.OS_DB?.getAllVnChapters?.() || []); } catch(e) {}
+            // PWA 模式：只看「當前這個故事」的章節，跟酒館版只看當前聊天一樣。
+            //   以前這裡把所有 storyId 分組、在頂上排一列故事分頁，等於把別本書的章節也端出來；
+            //   當前故事沒章節時還會 fallback 到最近那本（畫面上看起來就是「章節跑到別的故事去了」）。
+            const sid = win.OS_AVS_ADAPTER?.getStoryId?.()
+                || win.VN_Core?._currentStoryId
+                || localStorage.getItem('vn_current_story_id') || '';
+            tabsEl.innerHTML = '';
+            tabsEl.style.display = 'none';
+            _activeStoryId = sid;
 
-            if (!allChapters.length) {
-                body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;">尚無章節記錄</div>';
+            if (!sid) {
+                body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;">還沒有進行中的故事</div>';
                 return;
             }
 
-            // 按 storyId 分組
-            const groups = {};
-            allChapters.forEach(ch => {
-                const gid = ch.storyId || '__legacy__';
-                if (!groups[gid]) groups[gid] = { storyTitle: ch.storyTitle || '舊版資料', storyId: ch.storyId || '', chapters: [] };
-                groups[gid].chapters.push(ch);
-            });
-            const sorted = Object.values(groups).sort((a, b) => {
-                const aMax = Math.max(...a.chapters.map(c => c.createdAt || 0));
-                const bMax = Math.max(...b.chapters.map(c => c.createdAt || 0));
-                return bMax - aMax;
-            });
+            let allChapters = [];
+            try { allChapters = await (win.OS_DB?.getAllVnChapters?.() || []); } catch(e) {}
+            const mine = allChapters.filter(c => c && c.storyId === sid);
 
-            const currentId = win.VN_Core?._currentStoryId || localStorage.getItem('vn_current_story_id') || '';
-            let active = sorted.find(g => g.storyId && g.storyId === currentId) || sorted[0];
-            _activeStoryId = active.storyId || '';
-
-            // 建 Tab 列
-            tabsEl.innerHTML = '';
-            if (sorted.length > 1) {
-                tabsEl.style.display = 'flex';
-                sorted.forEach(group => {
-                    const tab = document.createElement('div');
-                    tab.className = 'vn-reader-tab' + (group === active ? ' active' : '');
-                    tab.textContent = group.storyTitle;
-                    tab.onclick = () => {
-                        tabsEl.querySelectorAll('.vn-reader-tab').forEach(t => t.classList.remove('active'));
-                        tab.classList.add('active');
-                        _activeStoryId = group.storyId || '';
-                        _renderChapters(group.chapters, body);
-                    };
-                    tabsEl.appendChild(tab);
-                });
-            } else {
-                tabsEl.style.display = 'none';
+            if (!mine.length) {
+                body.innerHTML = '<div style="text-align:center;color:#333;font-size:0.82rem;padding:40px;">這個故事還沒有章節</div>';
+                return;
             }
 
-            _renderChapters(active.chapters, body);
+            _renderChapters(mine, body);
         },
 
         hide() {

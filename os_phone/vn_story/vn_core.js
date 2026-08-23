@@ -3273,49 +3273,26 @@
             const body = document.getElementById('vn-reader-body');
             body.innerHTML = '<div class="vn-reader-loading">載入中...</div>';
 
-            let allChapters = [];
-            try { allChapters = await (win.OS_DB?.getAllVnChapters?.() || []); } catch(e) {}
+            // 只看「當前這個故事」的章節（同 vn_reader、同酒館版只看當前聊天）。
+            //   以前這裡按 storyId 分組、頂上排一列故事分頁，等於把別本書的章節也端出來。
+            const _rCurrentId = win.OS_AVS_ADAPTER?.getStoryId?.()
+                || window.VN_Core?._currentStoryId
+                || localStorage.getItem('vn_current_story_id') || '';
+            const tabsEl = document.getElementById('vn-reader-tabs');
+            if (tabsEl) { tabsEl.innerHTML = ''; tabsEl.style.display = 'none'; }
 
-            if (!allChapters.length) {
-                body.innerHTML = '<div class="vn-reader-loading" style="color:#333">尚無章節記錄</div>';
+            if (!_rCurrentId) {
+                body.innerHTML = '<div class="vn-reader-loading" style="color:#333">還沒有進行中的故事</div>';
                 return;
             }
 
-            // ── 按 storyId 分組，從新到舊排列故事 ──
-            const _rGroups = {};
-            allChapters.forEach(ch => {
-                const gid = ch.storyId || '__legacy__';
-                if (!_rGroups[gid]) _rGroups[gid] = { storyTitle: ch.storyTitle || '舊版資料', storyId: ch.storyId || '', chapters: [] };
-                _rGroups[gid].chapters.push(ch);
-            });
-            const _rSortedGroups = Object.values(_rGroups).sort((a, b) => {
-                const aMax = Math.max(...a.chapters.map(c => c.createdAt || 0));
-                const bMax = Math.max(...b.chapters.map(c => c.createdAt || 0));
-                return bMax - aMax;
-            });
+            let allChapters = [];
+            try { allChapters = await (win.OS_DB?.getAllVnChapters?.() || []); } catch(e) {}
+            const _rActiveGroup = { chapters: allChapters.filter(c => c && c.storyId === _rCurrentId) };
 
-            // 預設顯示當前故事，找不到則第一個
-            const _rCurrentId = window.VN_Core?._currentStoryId || '';
-            let _rActiveGroup = _rSortedGroups.find(g => g.storyId && g.storyId === _rCurrentId) || _rSortedGroups[0];
-
-            // ── 建立 Tab 列（多故事才顯示）──
-            const tabsEl = document.getElementById('vn-reader-tabs');
-            tabsEl.innerHTML = '';
-            if (_rSortedGroups.length > 1) {
-                tabsEl.style.display = 'flex';
-                _rSortedGroups.forEach(group => {
-                    const tab = document.createElement('div');
-                    tab.className = 'vn-reader-tab' + (group === _rActiveGroup ? ' active' : '');
-                    tab.textContent = group.storyTitle;
-                    tab.onclick = () => {
-                        tabsEl.querySelectorAll('.vn-reader-tab').forEach(t => t.classList.remove('active'));
-                        tab.classList.add('active');
-                        _renderStoryChapters(group.chapters);
-                    };
-                    tabsEl.appendChild(tab);
-                });
-            } else {
-                tabsEl.style.display = 'none';
+            if (!_rActiveGroup.chapters.length) {
+                body.innerHTML = '<div class="vn-reader-loading" style="color:#333">這個故事還沒有章節</div>';
+                return;
             }
 
             // stripVnTags 本地實作（不依賴 os_api_engine 的私有函數）
