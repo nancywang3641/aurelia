@@ -84,6 +84,8 @@
                     color: #e8dfc8; display: flow-root; width: 100%; margin-bottom: 16px;
                     background: transparent; padding: 0; box-sizing: border-box;
                 }
+                /* 卡片自帶的美化面板是一份完整 HTML 文件 → 包成 iframe；高度由 os_card_regex.fitCardFrames 量內容撐開 */
+                .ue-tab-pane iframe.vn-regex-card { width: 100%; border: 0; display: block; background: transparent; }
                 .native-render-wrapper p, .native-render-wrapper li, .native-render-wrapper td { color: #e8dfc8; }
                 .native-render-wrapper h1, .native-render-wrapper h2, .native-render-wrapper h3 { color: #d4af37; }
                 .native-render-wrapper a { color: rgba(212,175,55,0.8); }

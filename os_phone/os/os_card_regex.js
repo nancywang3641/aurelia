@@ -221,6 +221,56 @@
         return out;
     }
 
+    // 分頁名：先問卡片自己的 <title>（跟酒館資訊中心同一條規則），沒有才退正則的名字。
+    //   正則名常是作者的簽名／防盜聲明（「✦某某社·By某某，此卡禁止出售✦」），整串塞進分頁列會擠爆 →
+    //   剝掉裝飾符號、取「·」後面那段（多半才是這張面板真正的名字），再限長。
+    function _panelTitle(rawHtml, scriptName) {
+        const m = String(rawHtml || '').match(/<title>([\s\S]*?)<\/title>/i);
+        let t = (m && m[1].trim()) || '';
+        if (!t) {
+            t = String(scriptName || '').replace(/[✦★☆◆■●※【】《》\[\]]/g, '').trim();
+            if (t.indexOf('·') >= 0) t = t.split('·').pop().trim();
+        }
+        t = t.replace(/\s+/g, ' ').trim();
+        if (!t) return '自定義面板';
+        return t.length > 12 ? t.slice(0, 11) + '…' : t;
+    }
+
+    // 一段原文 → 這段裡「所有卡片型面板」，一張一筆、各自帶名字（資料中心那種一個面板一個分頁的用法）。
+    //   跟 renderRichHtml 的差別：那支是把面板嵌回正文裡連著讀；這支是把面板一張張拆出來單獨陳列。
+    //   名字取卡片自己的 <title>（跟酒館資訊中心同一條規則），沒有就退正則的名字。
+    function cardsIn(text, worldId) {
+        let src = String(text || '');
+        const cards = [];
+        if (!src) return [];
+        // 🚨 一定要「邊比對邊把命中的段落換成佔位符」（同 renderRichHtml），不能每條規則都拿原文重比：
+        //    卡片常有兩條規則盯同一個區塊（例：<播放器> 一條出播放器、另一條把非最新樓折疊起來），
+        //    在酒館是前一條先把那段吃掉、後一條就比不中；拿原文各比一次的話兩條都中＝同一個東西出兩張面板。
+        for (const r of scriptsFor(worldId)) {
+            if (!_isCardType(r.replace_string)) continue;
+            const re = _toRegExp(r.find_regex, true);
+            if (!re) continue;
+            try {
+                src = src.replace(re, function () {
+                    const raw = _cleanCard(_expand(r.replace_string, arguments));
+                    cards.push({ title: _panelTitle(raw, r.script_name), html: _wrapCard(raw) });
+                    return '\u0000CARD' + (cards.length - 1) + '\u0000';
+                });
+            } catch (e) {}
+        }
+        // 佔位符在文中的位置＝面板在劇情裡的先後 → 分頁順序照劇情走，不是照正則清單的順序
+        const order = [];
+        src.replace(/\u0000CARD(\d+)\u0000/g, (m0, i, off) => { order.push({ i: +i, off: off }); return m0; });
+        order.sort((a, b) => a.off - b.off);
+        const out = order.map(o => cards[o.i]).filter(Boolean);
+        // 同一條規則一章命中好幾次（播放器那類帶 /g 的）→ 分頁名會重複，補序號才分得出誰是誰
+        const seen = Object.create(null);
+        return out.map(c => {
+            seen[c.title] = (seen[c.title] || 0) + 1;
+            return { title: seen[c.title] > 1 ? c.title + ' ' + seen[c.title] : c.title, html: c.html };
+        });
+    }
+
     // ── 📐 卡片面板(iframe)照內容撐高 ──────────────────────────────
     //   iframe 沒有自然高度，不撐就是預設 150px。兩個一定要處理的坑：
     //   ① 卡片的面板常做成 <details>，預設是收起來的 → 量到的只有標題那一條(110px)，
@@ -322,7 +372,7 @@
 
     win.OS_CARD_REGEX = window.OS_CARD_REGEX = {
         saveFromCard, listPacks, getPack, setEnabled, removePack, hasPack, refresh,
-        currentWorldId, scriptsFor, cardHtmlFor, applyText, renderRichHtml, stopMedia, fitCardFrames
+        currentWorldId, scriptsFor, cardHtmlFor, cardsIn, applyText, renderRichHtml, stopMedia, fitCardFrames
     };
 
     // 開機先把庫讀進記憶體：VN 播放中間是同步取用，臨時才讀就來不及。

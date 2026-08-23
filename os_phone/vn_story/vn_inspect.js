@@ -1,10 +1,11 @@
 // ----------------------------------------------------------------
 // [檔案] vn_inspect.js
 // 路徑：os_phone/vn_story/vn_inspect.js
-// 職責：VN 視覺小說播放器 - 獨立模式存檔/角色/錢包查閱面板 (VN_StandaloneArchive)
-//       含 AVS 狀態檢視、回朔上一章、錢包/交易紀錄、選項選擇器、變數歷史 diff
+// 職責：VN 視覺小說播放器 - 獨立模式（PWA）的資料中心 (VN_StandaloneArchive)
+//       ＝酒館版「資訊中心」(core/html_extractor.js) 的 PWA 對應：
+//       卡片自帶的美化面板（一個面板一個分頁）＋ AVS 狀態檢視、回朔上一章、選項選擇器、變數歷史 diff
 // 自 vn_core.js V8.6 拆分出獨立模組
-// 依賴：(運行期) VN_Core, OS_DB, OS_ECONOMY, OS_API, _AVS_ENGINE
+// 依賴：(運行期) VN_Core, OS_DB, OS_CARD_REGEX, OS_API, _AVS_ENGINE
 // 暴露：window.VN_StandaloneArchive
 // ----------------------------------------------------------------
 (function () {
@@ -55,7 +56,17 @@
             }
             this._rerollHandler = null;
             const overlay = document.getElementById('aurelia-extractor-phone-overlay');
-            if (overlay) { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 360); }
+            if (overlay) {
+                // 🔇 卡片自帶 BGM 的面板：關窗動畫還有 0.36 秒，等 remove 才停會繼續響。
+                //    只 pause 擋不住晚一步的 play() → 直接把 iframe 拆掉（同藏書開場白的離場處理）
+                try {
+                    const CR = win.OS_CARD_REGEX || window.OS_CARD_REGEX;
+                    if (CR && CR.stopMedia) CR.stopMedia(overlay, true);
+                } catch (e) {}
+                overlay.querySelectorAll('.ue-tab-pane[data-card="1"]').forEach(p => { p.innerHTML = ''; });
+                overlay.classList.remove('show');
+                setTimeout(() => overlay.remove(), 360);
+            }
         },
 
         async _renderContent(overlay) {
@@ -63,13 +74,22 @@
             const contentArea = overlay.querySelector('#ue-content-area');
             tabBar.innerHTML = '';
             contentArea.innerHTML = '';
+            // 非卡片頁也要拆卡片：自帶音樂的面板被切走＝看不見，但還在響
+            const _dropCards = () => this._teardownCards(contentArea, null);
             // 若有待處理選擇，優先顯示選擇頁
             const hasChoices = this._pendingChoices && this._pendingChoices.length > 0;
             if (hasChoices) {
-                this._addTab(tabBar, contentArea, 'choices', '🎯 做出選擇', this._choicesHtml(), true);
+                this._addTab(tabBar, contentArea, 'choices', '🎯 做出選擇', this._choicesHtml(), true, _dropCards);
             }
-            this._addTab(tabBar, contentArea, 'avs',      '📊 狀態',      await this._avsHtml(),       !hasChoices);
-            this._addTab(tabBar, contentArea, 'wallet',   '💰 錢包',      this._walletHtml(),          false);
+            // 🎴 卡片自帶的美化面板：一個面板一個分頁、名字取卡片的 <title>（跟酒館資訊中心同一條規則）
+            const cards = await this._cardPanels();
+            cards.forEach((c, i) => {
+                this._addTab(tabBar, contentArea, 'card' + i, c.title, '', !hasChoices && i === 0,
+                    (pane) => this._mountCard(contentArea, pane, c.html));
+            });
+            this._addTab(tabBar, contentArea, 'avs',      '📊 狀態',      await this._avsHtml(),       !hasChoices && !cards.length, _dropCards);
+            // 💰 錢包分頁已移除：OS_ECONOMY 早就退役到 _archive/dead-code、任何載入清單都不再載它，
+            //    這頁在畫面上永遠只有一行「OS_ECONOMY 未載入」。經濟現在是 OS_PT（視差城市 PT）那一套。
 
             // AVS_VARS_UPDATED 事件 → 自動刷新狀態 tab
             const _avsRefresh = async () => {
@@ -108,22 +128,62 @@
             overlay.addEventListener('click', this._rerollHandler);
         },
 
-        _addTab(tabBar, contentArea, id, name, html, active) {
+        // onShow：切到這頁時才呼叫（卡片面板靠它「翻到哪張才掛哪張 iframe」，見 _mountCard）
+        _addTab(tabBar, contentArea, id, name, html, active, onShow) {
             const btn = document.createElement('div');
             btn.className = 'ue-tab-item' + (active ? ' active' : '');
             btn.textContent = name;
+            const pane = document.createElement('div');
+            pane.className = 'ue-tab-pane' + (active ? ' active' : '');
+            pane.id = `tab-pane-${id}`;
+            pane.innerHTML = html;
             btn.onclick = () => {
                 tabBar.querySelectorAll('.ue-tab-item').forEach(b => b.classList.remove('active'));
                 contentArea.querySelectorAll('.ue-tab-pane').forEach(p => p.classList.remove('active'));
                 btn.classList.add('active');
                 contentArea.querySelector(`#tab-pane-${id}`)?.classList.add('active');
+                if (onShow) onShow(pane);
             };
             tabBar.appendChild(btn);
-            const pane = document.createElement('div');
-            pane.className = 'ue-tab-pane' + (active ? ' active' : '');
-            pane.id = `tab-pane-${id}`;
-            pane.innerHTML = html;
             contentArea.appendChild(pane);
+            if (active && onShow) onShow(pane);
+        },
+
+        // ── 🎴 卡片自帶的美化面板（PWA 版「資訊中心」）────────────────────────
+        //   酒館版是去聊天視窗抓 TavernHelper 煮好的 .TH-render 節點；PWA 沒有酒館可問，
+        //   來源改成「這一章的原文 + 匯入角色卡時收下的正則庫」，跟藏書開場白那條美化路同一支引擎。
+        //   （區塊內容在 loadScript 就被未知區塊過濾器刪掉了，所以一定要讀 _scriptRawText 這份原文）
+        async _cardPanels() {
+            const CR = win.OS_CARD_REGEX || window.OS_CARD_REGEX;
+            if (!CR || typeof CR.cardsIn !== 'function') return [];
+            const raw = (window.VN_Core && window.VN_Core._scriptRawText) || '';
+            if (!raw) return [];
+            const worldId = CR.currentWorldId();
+            try { await CR.getPack(worldId); } catch (e) {}   // cardsIn 是同步取用 → 先確定正則庫已從 IDB 讀進記憶體
+            try { return CR.cardsIn(raw, worldId) || []; } catch (e) { console.warn('[Archive] 卡片面板解析失敗', e); return []; }
+        },
+
+        // 只掛「現在在看的那一張」：面板是完整 HTML 文件(iframe)，自帶 BGM 的卡片
+        //   光是切分頁把它藏起來並不會停（display:none 不停媒體）→ 其餘的一律整個拆掉。
+        //   keepPane 以外的卡片頁一律整個拆掉。切到「狀態／錢包」那些非卡片頁時也要拆（keepPane 傳 null）——
+        //   不然自帶音樂的面板會在背景繼續響。
+        _teardownCards(contentArea, keepPane) {
+            const CR = win.OS_CARD_REGEX || window.OS_CARD_REGEX;
+            contentArea.querySelectorAll('.ue-tab-pane[data-card="1"]').forEach(p => {
+                if (p === keepPane) return;
+                if (!p.querySelector('iframe, audio, video')) return;
+                try { if (CR && CR.stopMedia) CR.stopMedia(p, true); } catch (e) {}
+                p.innerHTML = '';
+            });
+        },
+
+        _mountCard(contentArea, pane, html) {
+            const CR = win.OS_CARD_REGEX || window.OS_CARD_REGEX;
+            pane.dataset.card = '1';
+            this._teardownCards(contentArea, pane);
+            if (pane.querySelector('iframe, audio, video')) return;   // 已經掛好了就別重畫
+            pane.innerHTML = `<div class="native-render-wrapper">${html}</div>`;
+            try { if (CR && CR.fitCardFrames) CR.fitCardFrames(pane); } catch (e) {}
         },
 
         _choicesHtml() {
@@ -403,31 +463,6 @@
             } catch(e) {
                 console.error('[AVS] 回朔失敗:', e);
             }
-        },
-
-        _walletHtml() {
-            const eco = win.OS_ECONOMY;
-            if (!eco) return '<div style="padding:30px;text-align:center;color:#999">OS_ECONOMY 未載入</div>';
-            const data = eco.data || {};
-            const balance = data.balance ?? 0;
-            const DEFS = { vip_silver:{name:'不夜城白銀卡',icon:'🥈'}, vip_gold:{name:'不夜城黃金卡',icon:'👑'}, vip_black:{name:'黑曜石無限卡',icon:'💳'}, gang_pass:{name:'地下通行證',icon:'☠️'} };
-            const cards = (data.cards||[]).map(id => { const d=DEFS[id]||{name:id,icon:'💳'}; return `<span style="margin-right:10px">${d.icon} ${d.name}</span>`; }).join('') || '<span style="color:#666;font-size:12px">無持有卡片</span>';
-            const txRows = (data.transactions||[]).slice(0,20).map(t => `
-                <tr><td style="color:#aaa;font-size:11px;font-family:monospace">${t.time}</td>
-                <td style="color:${t.amount>=0?'#00d2d3':'#ff4757'};text-align:right;font-family:monospace;font-weight:bold">${t.amount>=0?'+':''}${t.amount.toLocaleString()}</td>
-                <td>${t.reason}</td></tr>`).join('') || `<tr><td colspan="3" style="text-align:center;color:#666;padding:16px">尚無交易紀錄</td></tr>`;
-            return `
-                <div style="text-align:center;padding:20px 0 16px">
-                    <div style="font-size:11px;color:#aaa;letter-spacing:3px;margin-bottom:8px">BALANCE</div>
-                    <div style="font-size:38px;font-weight:bold;color:#d4af37;font-family:'Courier New',monospace">$${balance.toLocaleString()}</div>
-                </div>
-                <div style="padding:0 0 16px;border-bottom:1px solid rgba(212,175,55,0.15)">
-                    <div style="font-size:10px;color:#d4af37;letter-spacing:2px;margin-bottom:8px">MY CARDS</div>${cards}
-                </div>
-                <div style="padding:16px 0 8px">
-                    <div style="font-size:10px;color:#d4af37;letter-spacing:2px;margin-bottom:10px">TRANSACTIONS</div>
-                    <table class="ue-md-table"><thead><tr><th>時間</th><th style="text-align:right">金額</th><th>說明</th></tr></thead><tbody>${txRows}</tbody></table>
-                </div>`;
         },
 
         _mdToHtml(md) {
