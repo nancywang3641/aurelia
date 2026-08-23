@@ -32,11 +32,28 @@
         return s.trim();
     }
 
+    // PWA（獨立版）＝沒有酒館可問：id 走 adapter（那邊 standalone 回 storyId）。
+    //   以前這裡只認 SillyTavern.getContext().chatId → PWA 一律空字串 → 「沒有 chatId，無法生成 schema」。
+    function isStandalone() { return !!(win.OS_API?.isStandalone?.()); }
+
     function getChatId() {
         try {
+            const id = win.OS_AVS_ADAPTER?.getCurrentChatId?.();
+            if (id) return id;
             const ctx = win.SillyTavern?.getContext?.();
             return normalizeChatId(ctx?.chatId);
         } catch(e) { return ''; }
+    }
+
+    // 當前這本藏書（PWA 的「角色卡」對應物：匯入角色卡時建的世界物件）
+    function _pwaWorld() {
+        try {
+            const wid = localStorage.getItem('vn_current_world_id') || '';
+            if (!wid) return null;
+            const list = win.AURELIA_CUSTOM_WORLDS || window.AURELIA_CUSTOM_WORLDS
+                || JSON.parse(localStorage.getItem('aurelia_custom_worlds') || '[]');
+            return (list || []).find(w => w && w.id === wid) || null;
+        } catch(e) { return null; }
     }
 
     function showToast(msg, type = 'info') {
@@ -63,6 +80,28 @@
 
     // --- 蒐集素材 ---
     async function gatherWorldbookText() {
+        // PWA：世界書在 OS_DB，範圍＝這本故事掛著的書包（常駐包 ∪ 這本自己的，同 os_api_engine 的取法）。
+        //   這裡要的是「整本設定」不是「這輪命中的條目」→ 不走關鍵字觸發那條，直接全撈已啟用的。
+        if (isStandalone()) {
+            try {
+                if (!win.OS_DB?.getAllWorldbookEntries) return '';
+                let packs = null;
+                try {
+                    packs = win.OS_WORLDBOOK?.getActivePacks?.()
+                        || JSON.parse(localStorage.getItem('vn_active_wb_packs') || 'null');
+                } catch(e) {}
+                const all = await win.OS_DB.getAllWorldbookEntries();
+                const pool = (all || []).filter(e => e && e.enabled !== false && e.content &&
+                    (!packs || !packs.length || packs.includes(e.book || '預設書包')));
+                if (!pool.length) return '';
+                return pool.slice(0, 25)
+                    .map(e => `[${e.category || e.title || '設定'}] ${e.title || ''}\n${String(e.content).slice(0, 800)}`)
+                    .join('\n\n');
+            } catch(e) {
+                console.warn('[State Schema] 讀世界書失敗(PWA):', e);
+                return '';
+            }
+        }
         try {
             if (!win.TavernHelper) return '';
             const ctx = win.SillyTavern?.getContext?.();
@@ -84,6 +123,13 @@
     }
 
     async function gatherUserPersona() {
+        if (isStandalone()) {
+            try {
+                const name = win.OS_PERSONA?.getName?.() || '';
+                const desc = win.OS_PERSONA?.getDesc?.() || '';
+                return (name || desc) ? `主角：${name}\n${desc}`.trim() : '';
+            } catch(e) { return ''; }
+        }
         try {
             const ctx = win.SillyTavern?.getContext?.();
             const name = ctx?.name1 || '';
@@ -93,6 +139,19 @@
     }
 
     async function gatherCharCard() {
+        // PWA：「角色卡」＝這本藏書（匯入卡片時建的世界物件）：世界描述 + 第一則開場白
+        if (isStandalone()) {
+            try {
+                const w = _pwaWorld();
+                if (!w) return '';
+                const parts = [];
+                if (w.title) parts.push(`世界：${w.title}`);
+                if (w.desc)  parts.push(`描述：${String(w.desc).slice(0, 1500)}`);
+                const g = Array.isArray(w.greetings) ? w.greetings.find(s => s && s.trim()) : '';
+                if (g) parts.push(`開場：${String(g).slice(0, 800)}`);
+                return parts.join('\n');
+            } catch(e) { return ''; }
+        }
         try {
             const ctx = win.SillyTavern?.getContext?.();
             const ch = ctx?.characters?.[ctx?.characterId];
@@ -106,6 +165,29 @@
     }
 
     async function gatherHeadMessages() {
+        // PWA：沒有酒館訊息樓層，對應物＝這本故事最早的幾章（request＝她輸入的，content＝AI 那一章）
+        if (isStandalone()) {
+            try {
+                if (!win.OS_DB?.getAllVnChapters) return '';
+                const sid = getChatId();
+                const all = await win.OS_DB.getAllVnChapters();
+                const mine = (all || []).filter(c => c && (!sid || c.storyId === sid))
+                    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+                    .slice(0, CONFIG.headMessages);
+                if (!mine.length) return '';
+                return mine.map(ch => {
+                    // 章節存的是整份劇本原文：剝掉思維鏈、只取 <content> 正文（同 os_api_engine 的取法）
+                    let text = String(ch.content || '').replace(/<(think(?:ing)?|vars_analyze)>[\s\S]*?<\/\1>/gi, '');
+                    const m = text.match(/<content>([\s\S]*?)<\/content>/i);
+                    if (m) text = m[1];
+                    const req = String(ch.request || '').trim();
+                    return (req ? `[USER] ${req.slice(0, 300)}\n\n` : '') + `[AI] ${text.trim().slice(0, 600)}`;
+                }).join('\n\n');
+            } catch(e) {
+                console.warn('[State Schema] 撈章節失敗(PWA):', e);
+                return '';
+            }
+        }
         try {
             if (!win.TavernHelper?.getChatMessages) return '';
             const last = await win.TavernHelper.getChatMessages(-1);

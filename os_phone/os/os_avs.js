@@ -590,7 +590,14 @@
 
         // 只渲染「當前卡」的檔案。其他卡 / 全域的檔案改從建檔畫面的「📋 沿用其他故事的設定」看，
         // 那邊按角色卡分頁、附頭像，比這裡摺一個灰色清單清楚；也省掉替 N 個用不到的檔案建卡片＋渲染 UI 面板預覽。
-        currentPacks.filter(p => p.chatId && p.chatId === _curCid).forEach(pack => {
+        const _mine = currentPacks.filter(p => p.chatId && p.chatId === _curCid);
+        // 有檔案、但沒有一個是這個故事的（例如舊版在 PWA 生的包 chatId 是空的）→ 這裡以前是整片空白，
+        //   看起來像「生成失敗」。明講一句，並指去看得到它們的地方。
+        if (!_mine.length) {
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">這個故事還沒有自己的檔案<br><br>已有的 ' + currentPacks.length + ' 份屬於別的故事<br>回上方建檔畫面用「📋 沿用其他故事的設定」搬過來</div>';
+            return;
+        }
+        _mine.forEach(pack => {
             const rulesCount = allRules.filter(r => r.packId === pack.id).length;
             // 找此 pack 的 UI 面板（只看屬於 AVS 的：有 packId + 沒 VN 標記）
             const packTpls = currentTemplates.filter(t => t.packId === pack.id && !t.isVNTag && !t.isBlock && !t.tagId);

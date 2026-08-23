@@ -30,7 +30,16 @@
         return String(raw).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim();
     }
 
+    // 🚨 PWA 沒有酒館可問，「當前 chat」＝當前這本故事(storyId)。以前 standalone 一律回 ''，連鎖三件事：
+    //    ① state_schema 擋在「沒有 chatId，無法生成 schema」② 生出來的變數包 chatId 是空的
+    //    ③ 檔案清單那條 (p.chatId && p.chatId === 當前) 永遠不成立 → PWA 的 AVS 檔案永遠是空的。
+    //    存取點只有這一支，getStoryId 也用它，兩邊不會再各寫一份而漂移。
+    function _pwaStoryId() {
+        try { return localStorage.getItem('vn_current_story_id') || ''; } catch(e) { return ''; }
+    }
+
     function getCurrentChatId() {
+        if (isStandalone()) return _pwaStoryId();
         try {
             const ctx = win.SillyTavern?.getContext?.();
             return normalizeChatId(ctx?.chatId);
@@ -63,7 +72,7 @@
 
     // ===== PWA：localStorage 直連（保留原 AVS engine 行為）=====
     function _pwaStateKey() {
-        const sid = localStorage.getItem('vn_current_story_id') || '';
+        const sid = _pwaStoryId();
         return sid ? `avs_state_${sid}` : 'avs_current_state';
     }
     function _pwaReadState() {
@@ -130,7 +139,7 @@
 
         /** storyId：用於 engine snapshot 等的 storage 分艙（酒館用 chatId）*/
         getStoryId() {
-            if (isStandalone()) return localStorage.getItem('vn_current_story_id') || '';
+            if (isStandalone()) return _pwaStoryId();
             return getCurrentChatId();
         },
 
