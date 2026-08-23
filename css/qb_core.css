@@ -163,6 +163,14 @@
     font-size: 12px; padding: 5px 12px; letter-spacing: 0.5px; border-radius: 4px;
 }
 
+/* 「與TA相遇」跟在開場白內容的末尾，不做固定頁尾：這一頁的主角是開場白內容，
+   要先讀完才會想按；固定頁尾則是不管內容多長都一直佔著一塊高度。 */
+.qb-greet-go-row {
+    width: 100%; box-sizing: border-box;
+    margin-top: 20px; padding-top: 16px;
+    border-top: 1px solid var(--qbk-line);
+}
+
 /* ✨ 卡片自帶的美化面板：開關 + 面板本體
    角色卡把美化面板放在自己的正則裡，內容是一整份 HTML 文件 → 只能塞 iframe 才跑得動它的字體與腳本。
    高度由 JS 照內容撐（iframe 沒有自然高度），這裡只負責寬度吃滿、去掉框線與白底。 */

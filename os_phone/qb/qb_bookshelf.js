@@ -950,18 +950,17 @@
                 background:rgba(20,12,8,0.98);
                 flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
                 
+                <!-- 標題列不寫「選擇開場白：《書名》」：都點進這本書了，不必再報一次是誰的開場白。
+                     返回擺左邊，跟啟程幕同一個位置。 -->
                 <div style="padding:10px 16px;border-bottom:1px solid var(--qbk-line);
                             display:flex;align-items:center;justify-content:space-between;
                             background:rgba(0,0,0,0.3);flex-shrink:0;">
-                    <div style="font-size:13px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">
-                        選擇開場白：${w.title}
-                    </div>
+                    <button id="qb-inner-close" style="
+                        background:none;border:none;color:var(--qbk-ink-dim);
+                        font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <button id="qb-greet-beautify-btn" class="qb-btn-ghost qb-hidden" title="這張卡自帶的美化面板">美化</button>
                         <button id="qb-greet-replace-btn" class="qb-btn-ghost" title="文字取代">取代</button>
-                        <button id="qb-inner-close" style="
-                            background:none;border:none;color:var(--qbk-ink);
-                            font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
                     </div>
                 </div>
 
@@ -1008,6 +1007,9 @@
                                         <button class="qb-greet-cancel-btn qb-btn-ghost" data-idx="${i}">取消</button>
                                         <button class="qb-greet-save-btn qb-btn-ghost" data-idx="${i}">儲存</button>
                                     </div>
+                                    <div class="qb-greet-go-row">
+                                        <button class="qb-goto-embark-btn qb-btn-primary block" data-idx="${i}" data-wid="${w.id}">與TA相遇</button>
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
@@ -1018,6 +1020,9 @@
                                 <div style="font-size:48px; margin-bottom:20px; filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));">🎲</div>
                                 <span style="font-size:18px;color:rgba(150,200,255,0.9);font-weight:bold;letter-spacing:3px;">讓 AI 自由發揮</span>
                                 <div style="font-size:13px;color:rgba(150,200,255,0.6);margin-top:12px;text-align:center;line-height:1.6;">無預設開場故事<br>直接踏入這個世界的未知領域</div>
+                                <div class="qb-greet-go-row">
+                                    <button class="qb-goto-embark-btn qb-btn-primary block" data-idx="-1" data-wid="${w.id}">與TA相遇</button>
+                                </div>
                             </div>
                         </div>
 
@@ -1036,8 +1041,6 @@
                     </div>
                     <button id="qb-greet-next-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;">▶</button>
                     </div>
-
-                    <button id="qb-goto-embark-btn" class="qb-btn-primary" data-wid="${w.id}">與TA相遇</button>
                 </div>
 
                 <!-- ✍️ 啟程：第一句回應自己一幕（跟酒館版同一個心智模型），不再跟開場白擠在同一頁 -->
@@ -1222,13 +1225,20 @@
             // 開啟內頁（現在是從目錄的「創建新篇章」進來）
             // 「與TA相遇」→ 先進啟程幕寫第一句（真正 dive 的是啟程幕裡那顆，走既有 qb-dive-world-btn）
             const embarkView = panel.querySelector('#qb-embark-view');
-            const gotoEmbark = panel.querySelector('#qb-goto-embark-btn');
-            if (embarkView && gotoEmbark) {
-                gotoEmbark.onclick = () => {
-                    if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();   // 寫第一句時背後不該還有卡片 BGM 在響
-                    embarkView.style.display = 'flex';
-                    setTimeout(() => { try { panel.querySelector('#qb-user-reply')?.focus(); } catch (e) { } }, 40);
-                };
+            const gotoEmbarkBtns = panel.querySelectorAll('.qb-goto-embark-btn');
+            if (embarkView && gotoEmbarkBtns.length) {
+                gotoEmbarkBtns.forEach(btn => {
+                    btn.onclick = () => {
+                        // 按鈕現在跟在每一張開場白的內容末尾 → 按哪一張就選哪一張，
+                        //   不再靠「當前這張剛好是選取的那張」這個隱性前提。
+                        const v = String(btn.dataset.idx);
+                        const radio = panel.querySelector('input[name="qb-greeting"][value="' + v + '"]');
+                        if (radio) radio.checked = true;
+                        if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();   // 寫第一句時背後不該還有卡片 BGM 在響
+                        embarkView.style.display = 'flex';
+                        setTimeout(() => { try { panel.querySelector('#qb-user-reply')?.focus(); } catch (e) { } }, 40);
+                    };
+                });
                 panel.querySelector('#qb-embark-back').onclick = () => { embarkView.style.display = 'none'; };
             }
 
