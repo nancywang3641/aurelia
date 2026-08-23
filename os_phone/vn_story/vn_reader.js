@@ -509,6 +509,53 @@
         catch (e) { console.warn('[VN Reader] 人物檔案對帳失敗:', e); }
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // 🧾 孤兒對帳（獨立版）——「只清垃圾，不碰數值」
+    // ──────────────────────────────────────────────────────────────
+    // 酒館那條(state_runtime._reconcilePatches)是掃聊天檔的 <!--avs:id--> 標記回滾 patch，
+    // 因為酒館會背著擴展改訊息。PWA 沒有那種路徑：改/刪都走 deleteChapter / updateChapter,
+    // 當下就以 avsStateBefore 重放，比事後猜哪些 patch 死了精準。
+    // 這支只補「連動鏈沒跑完」的殘局（中途關掉分頁、寫入失敗、歷史資料）：
+    // 找出指向「已經不存在的章節」的側邊資料，刪掉它們。
+    //
+    // 🚨 絕對不可以改成「從第一章全量重放數值」：
+    //    重放會把她在狀態面板手動改過的每一個值洗掉。刪章時的重放刻意只從被動到的那章往後算,
+    //    底本之前的手動修改要完整保留。這裡一個數值都不動。
+    // 🚨 一章都讀不到時什麼都不清：可能只是資料還沒載好或 storyId 還沒切過來,
+    //    照著清等於把好資料當孤兒殺掉（同酒館「連樓號都拿不到就保守不動」）。
+    // ══════════════════════════════════════════════════════════════
+    async function reconcileOrphans(tag) {
+        const out = { ran: false, memories: 0, dossier: false, why: '' };
+        try {
+            if (!(win.OS_API?.isStandalone?.())) { out.why = '酒館版走 state_runtime 的對帳'; return out; }
+            const sid = _sid();
+            if (!sid) { out.why = '沒有進行中的故事'; return out; }
+            const chs = await _storyChapters();
+            if (!chs.length) { out.why = '這個故事讀不到任何章節 → 保守不動'; return out; }
+            out.ran = true;
+            const alive = new Set(chs.map(c => String(c.id)));
+
+            // ① 向量記憶：chapterId 指向不存在的章節 → 刪。
+            //    沒有 chapterId 的舊資料一律留著——認不出來源的東西不能當孤兒殺。
+            try {
+                const mems = (await win.OS_DB?.getAllVnMemories?.(sid)) || [];
+                const dead = mems.filter(m => m && m.chapterId && !alive.has(String(m.chapterId)));
+                for (const m of dead) {
+                    try { await win.OS_DB.deleteVnMemory(m.id); out.memories++; } catch (e) {}
+                }
+            } catch (e) { console.warn('[VN Reader] 記憶孤兒清理失敗:', e); }
+
+            // ② 人物檔案／登場帳：以「還活著的章節正文」為唯一真相重掃
+            //    （人沒了檔案跟登場帳要一起清，否則名冊每輪都對主模型下「嚴禁當新角色」→ 死人復活）
+            try { await _reconcileSide(chs); out.dossier = true; } catch (e) {}
+
+            if (out.memories) {
+                console.log(`🧾 [VN Reader] 孤兒對帳(${tag || '手動'})：清掉 ${out.memories} 條指向已刪章節的記憶`);
+            }
+        } catch (e) { console.warn('[VN Reader] 孤兒對帳失敗:', e); out.why = String(e && e.message || e); }
+        return out;
+    }
+
     async function deleteChapter(id) {
         if (!id || !win.OS_DB?.deleteVnChapter) return { ok: false, why: '沒有可刪的章節' };
         const chs = await _storyChapters();
@@ -654,6 +701,8 @@
 
         // ── 改／刪（獨立版；資料層連動見上方 deleteChapter / updateChapter）──────
         deleteChapter, updateChapter,
+        // 🧾 孤兒對帳（狀態面板開啟時跑；只清指向已刪章節的殘留，不碰數值）
+        reconcileOrphans,
 
         _editChapter(i) {
             const ch = _readerSorted[i];

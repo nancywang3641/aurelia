@@ -263,7 +263,14 @@
         } else {
             // 🧾 讀資料前先對帳一次：刪樓事件在某些環境不會觸發，靠事件回滾會讓面板一直顯示已刪劇情的舊值。
             //    對帳自己會判斷「有沒有東西要回滾」，沒事就是一次輕量比對。
-            try { await win.OS_STATE_RUNTIME?.reconcile?.('開面板'); } catch (e) {}
+            // 獨立版走自己那條：酒館的對帳是掃聊天檔的 avs 標記回滾 patch，PWA 沒有聊天樓
+            //   （它在 PWA 一定停在「連樓號都拿不到，保守不動」）。PWA 的數值在刪章當下就重放過了，
+            //   這裡只要清掉「指向已刪章節」的側邊殘留（記憶／人物檔案），一個數值都不碰。
+            if (win.OS_API?.isStandalone?.()) {
+                try { await win.VN_READER?.reconcileOrphans?.('開面板'); } catch (e) {}
+            } else {
+                try { await win.OS_STATE_RUNTIME?.reconcile?.('開面板'); } catch (e) {}
+            }
             try { fields = await win.OS_STATE_RUNTIME?.getActiveSchema?.(); } catch (e) {}
             try { if (chatId && win.OS_DB?.getStateData) data = await win.OS_DB.getStateData(chatId); } catch (e) {}
             _cache = { ready: true, key: chatId, fields, data };
