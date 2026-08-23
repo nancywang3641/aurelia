@@ -46,18 +46,21 @@
             obj: 'book_cafe', scene: 'cafe',
             ready: () => !!win.OS_CAFE?.openWorkshop,
             open: () => win.OS_CAFE.openWorkshop(),
+            openIn: (c) => _mountFloating(c, () => win.OS_CAFE.openWorkshop(), '.oc-win', () => win.OS_CAFE.closeWorkshop && win.OS_CAFE.closeWorkshop()),
         },
         {
             id: 'hall', name: '大廳', flatName: '世界門', icon: 'fa-globe', npc: 'alice', bg: 'lobby_pv_bg_hall_v1.jpg',
             obj: 'lobby_day', scene: 'hall',
             ready: () => !!win.OS_WORLDGATE?.openGate,
             open: () => win.OS_WORLDGATE.openGate(),
+            openIn: (c) => _mountFloating(c, () => win.OS_WORLDGATE.openGate(), '.wg-win', () => win.OS_WORLDGATE.closeGate && win.OS_WORLDGATE.closeGate()),
         },
         {
             id: 'exchange', name: '交易所', icon: 'fa-right-left', npc: 'rabbit', bg: 'lobby_pv_bg_exchange_v1.jpg',
             scene: 'exchange',
             ready: () => !!win.OS_PT?.openExchange,
             open: () => win.OS_PT.openExchange(),
+            openIn: (c) => _mountFloating(c, () => win.OS_PT.openExchange(), '#os-pt-shop-dock', () => win.OS_PT.closeExchange && win.OS_PT.closeExchange()),
         },
         {
             id: 'tarot', name: '占卜小屋', flatName: '占卜', icon: 'fa-moon', npc: 'zhiwei', bg: 'lobby_pv_bg_tarot_v1.jpg',
@@ -162,6 +165,36 @@
             else if (win.PhoneSystem && win.PhoneSystem.__pvShim) delete win.PhoneSystem;
         };
         win.OS_TAROT.launch(c);
+    }
+
+    // 🪟 把「自己開浮窗」的面板搬進容器（照 phone_shell 搬黑市的成例）：
+    //    開它 → 等它的視窗生出來 → appendChild 進容器 → 離開時關掉/搬回原位。
+    //    這樣三個既有面板（世界門/交易所/書咖櫃檯）一行程式都不用改。
+    //    🚨 它們是 async 生成的，呼叫完當下抓不到元素 → 用 rAF 輪詢等它出現。
+    function _mountFloating(c, open, sel, close) {
+        const place = () => {
+            const el = document.querySelector(sel);
+            if (!el) return false;
+            const orig = el.parentElement;
+            c.appendChild(el);
+            c._pvRestore = () => {
+                try { close && close(); } catch (e) {}
+                // close 通常會把它移除；萬一沒有就搬回原位，別留在已經消失的容器裡
+                if (el.isConnected && orig) { try { orig.appendChild(el); } catch (e) {} }
+            };
+            return true;
+        };
+        let tries = 0;
+        const tick = () => {
+            if (place()) return;
+            if (++tries > 40) { c.innerHTML = '<div class="lb-pv-fail">面板沒開起來</div>'; return; }
+            // 🚨 用 setTimeout 不用 requestAnimationFrame：等的是「DOM 生出來沒」不是畫面，
+            //    而 rAF 在頁面沒在合成時（分頁切到背景、視窗被遮住）根本不會 fire，
+            //    面板就永遠搬不進來、離開時也不會被清掉（實測抓到）。
+            setTimeout(tick, 30);
+        };
+        try { open(); } catch (e) { console.warn('[LobbyPlaces] 面板開啟失敗', sel, e); }
+        tick();
     }
 
     function closeView() {
