@@ -794,9 +794,24 @@ ${_memoryRulesText()}
         const out = [];
         const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
         for (const l of lines) {
-            if (/^[\[<【]/.test(l)) continue;                          // [Bg|]/[Scene|]/[Choice|]/<xxx>/【卡片】等結構行
             if (/^(scene-id|status|summary|content)\s*[:：]/i.test(l)) continue;
             if (l === '</content>' || l === '</scene>') continue;
+            if (/^[\[<【]/.test(l)) {
+                // 🚨 VN 正文「每一行都是 [Nar|…]／[Char|…]／[Inner|…]」——舊版把開頭是 [ 的行全部丟掉，
+                //    等於一整章切出 0 個段落 → 場景區塊靜默不附進 prompt →「插圖規範根本沒送給副模型」。
+                //    所以要把這三種「有台詞/敘述的」標籤裡的字撈出來當段落；
+                //    撈出來的字是原始行的子字串 → VN_SceneInsert._findAnchor 照樣定位得到那一行。
+                //    其餘結構行（Bg/BGM/Chapter/Choice/Item/Scene/Trans/Avatar…）仍然跳過。
+                const _m = l.match(/^\[Nar\|([^\]]+)\]/i)
+                       || l.match(/^\[Char\|[^|]*\|[^|]*\|([^|\]]+)/i)
+                       || l.match(/^\[Inner\|[^|]*\|([^|\]]+)/i);
+                if (!_m) continue;
+                const _t = String(_m[1] || '').trim();
+                if (!_t) continue;
+                out.push(_t);
+                if (out.length >= 40) break;
+                continue;
+            }
             out.push(l);
             if (out.length >= 40) break;                              // 上限防爆
         }
