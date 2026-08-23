@@ -516,7 +516,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 document.getElementById('sprite-selected-info').innerHTML =
                     '🎯 當前：<b style="color:#1A1C28;">' + name + '</b>';
 
-                let fullPrompt = document.getElementById('sprite-tpl-prefix').value + finalPrompt + document.getElementById('sprite-tpl-suffix').value;
+                // 🚨 三段之間一定要逗號（同 VN_Image.getSprite / autoGenSprite）：直接相接會把角色描述的最後一個 tag
+                //    跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"），一次毀掉兩個 tag
+                const _JT = win2.VN_Image && win2.VN_Image._joinTags;
+                if (!_JT) { setStatus('生圖模組（vn_config.js）尚未載入，請先進一次 VN 再回來', true); return; }
+                let fullPrompt = _JT(document.getElementById('sprite-tpl-prefix').value, finalPrompt, document.getElementById('sprite-tpl-suffix').value);
                 setStatus('⏳ 為「' + name + '」生立繪中（5–30 秒）...');
                 document.getElementById('sprite-preview').innerHTML = '<span style="color:#666;font-size:11px;">生成中...</span>';
                 enableBtn('sprite-removebg-btn', false);

@@ -121,6 +121,8 @@
     // === 生圖引擎 ===
     const VN_Image = {
         _join: function(...parts) { return parts.filter(Boolean).join(', '); },
+        // 立繪三段（前綴/角色描述/後綴）接合：三條立繪路徑共用同一份，別再各自 pfx+desc+sfx 硬接（會黏成 dresssimple）
+        _joinTags: _joinTags,
         getBg: async function(prompt, outMeta) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
                 const full = this._join(VN_Config.data.bgBasePrompt, prompt);

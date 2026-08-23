@@ -382,7 +382,9 @@
                     .replace(/\bsoft\s+lighting\b/gi, '').replace(/\bstudio\s+lighting\b/gi, '').replace(/\bflat\s+lighting\b/gi, '')
                     .replace(/\bfrom\s+(above|below|side|behind|front)\b/gi, '')
                     .replace(/\s*,\s*,+/g, ', ').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
-                let prompt = pfx + rawP + sfx;
+                // 🚨 三段之間一定要逗號（同 VN_Image.getSprite）：直接相接會把角色描述的最後一個 tag
+                //    跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"），一次毀掉兩個 tag
+                let prompt = win.VN_Image._joinTags(pfx, rawP, sfx);
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
                 const imCfg = win.OS_IMAGE_MANAGER.config;
                 const _spriteSvc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (imCfg && imCfg.service);
