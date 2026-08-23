@@ -45,8 +45,14 @@
         return s.trim();
     }
 
+    // 🚨 分艙鍵一律走 adapter（酒館＝chatId、PWA＝storyId）。
+    //    這裡以前只認 SillyTavern.getContext().chatId → PWA 一律空字串，而全檔 14 個呼叫點都吃它：
+    //    最明顯的是 getActiveSchema 用它濾變數包（p.chatId === 當前），PWA 生好的包 chatId 是 storyId、
+    //    比不中 → 面板永遠停在「這個世界還沒開始追蹤狀態」，AI 明明已經生完欄位。
     function getChatId() {
         try {
+            const id = win.OS_AVS_ADAPTER?.getCurrentChatId?.();
+            if (id) return id;
             const ctx = win.SillyTavern?.getContext?.();
             return normalizeChatId(ctx?.chatId);
         } catch(e) { return ''; }

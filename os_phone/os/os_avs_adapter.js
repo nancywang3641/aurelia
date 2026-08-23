@@ -131,9 +131,19 @@
         },
 
         /** sync 寫規則陣列 */
+        //   🚨 寫失敗一定要讓人看見：localStorage 撞上限之後這裡會一直失敗，
+        //      但畫面上 AI 照樣報「已生成 N 條規則」——規則其實一條都沒存下來，
+        //      而她要到下一輪劇情不吃規則時才發現。console 她看不到，所以走 toast。
         saveRules(rules) {
-            try { localStorage.setItem(_rulesKey(), JSON.stringify(rules || [])); } catch(e) {
+            try { localStorage.setItem(_rulesKey(), JSON.stringify(rules || [])); return true; } catch(e) {
                 console.error('[AVS Adapter] 規則寫入失敗:', e);
+                try {
+                    const full = /quota|exceeded/i.test(String(e && (e.name || e.message)));
+                    win.toastr && win.toastr.error(
+                        full ? '瀏覽器空間已滿，條件規則沒能存下來。到書架刪幾本不玩的書再試一次。' : '條件規則存檔失敗，請看 console。',
+                        'AVS 規則', { timeOut: 12000 });
+                } catch (e2) {}
+                return false;
             }
         },
 

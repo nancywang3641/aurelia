@@ -18,6 +18,56 @@
     //  PNG 解析器
     //  ST 把角色 JSON base64 塞進 PNG tEXt chunk，key = "chara"
     // ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    //  🚨 封面與 localStorage 配額
+    //  角色卡 PNG 動輒 1MB 起跳，以前是整張 readAsDataURL 直接塞進
+    //  localStorage 的 aurelia_custom_worlds（base64 還會再脹三成）。
+    //  兩三本就撞破 5MB → QuotaExceededError，而且從那一刻起
+    //  「所有 localStorage 寫入」都開始失敗（AVS 規則、設定、storyId…），
+    //  症狀會出現在完全無關的功能上。所以封面一律先縮成縮圖再存。
+    // ═══════════════════════════════════════════════════════════
+    const COVER_MAX_W = 420;        // 書封在畫面上最寬也就這個量級
+    const COVER_BUDGET = 120 * 1024; // 單張縮圖上限，超過就再降一級品質
+
+    function _shrinkCover(dataUrl) {
+        return new Promise((resolve) => {
+            if (!dataUrl) return resolve(null);
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    const scale = Math.min(1, COVER_MAX_W / (img.naturalWidth || COVER_MAX_W));
+                    const w = Math.max(1, Math.round((img.naturalWidth || COVER_MAX_W) * scale));
+                    const h = Math.max(1, Math.round((img.naturalHeight || COVER_MAX_W) * scale));
+                    const cv = document.createElement('canvas');
+                    cv.width = w; cv.height = h;
+                    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+                    let out = cv.toDataURL('image/webp', 0.82);
+                    if (out.length > COVER_BUDGET) out = cv.toDataURL('image/webp', 0.6);
+                    if (out.length > COVER_BUDGET) out = cv.toDataURL('image/jpeg', 0.6);
+                    // 🚨 縮圖失敗絕不退回原圖：原圖就是撐爆配額的那個東西
+                    resolve(out && out.length < dataUrl.length ? out : null);
+                } catch (e) { console.warn('[CardImport] 封面縮圖失敗 → 這本書不存封面', e); resolve(null); }
+            };
+            img.onerror = () => resolve(null);
+            img.src = dataUrl;
+        });
+    }
+
+    // 配額安全寫入：滿了先把舊封面全部瘦身騰空間，再不行就放棄這本的封面 —— 但書一定要存下來。
+    //   以前只 console.warn 一句就算了 → 書根本沒寫進去，重載就消失，章節/正則/追蹤數值全成孤兒。
+    function _saveWorlds(list) {
+        const write = (arr) => localStorage.setItem('aurelia_custom_worlds', JSON.stringify(arr));
+        try { write(list); return { ok: true }; } catch (e) {
+            console.warn('[CardImport] localStorage 滿了 → 先把舊封面瘦身', e);
+        }
+        const shrunk = list.map(w => (w && typeof w.cover === 'string' && w.cover.length > COVER_BUDGET)
+            ? Object.assign({}, w, { cover: null, coverDropped: true }) : w);
+        try { write(shrunk); return { ok: true, droppedCovers: true }; } catch (e) {
+            console.warn('[CardImport] 瘦身後還是寫不下', e);
+        }
+        return { ok: false };
+    }
+
     function parsePngCard(buffer) {
         const bytes = new Uint8Array(buffer);
         const view  = new DataView(buffer);
@@ -200,12 +250,17 @@
         const existingIdx = win.AURELIA_CUSTOM_WORLDS.findIndex(w => w.id === worldId);
         if (existingIdx >= 0) win.AURELIA_CUSTOM_WORLDS[existingIdx] = _mergeWorld(win.AURELIA_CUSTOM_WORLDS[existingIdx]);
         else win.AURELIA_CUSTOM_WORLDS.push(newWorld);
-        try {
-            const saved    = JSON.parse(localStorage.getItem('aurelia_custom_worlds') || '[]');
+        {
+            let saved = [];
+            try { saved = JSON.parse(localStorage.getItem('aurelia_custom_worlds') || '[]'); } catch (e) {}
             const savedIdx = saved.findIndex(w => w.id === worldId);
             if (savedIdx >= 0) saved[savedIdx] = _mergeWorld(saved[savedIdx]); else saved.push(newWorld);
-            localStorage.setItem('aurelia_custom_worlds', JSON.stringify(saved));
-        } catch (e) { console.warn('[CardImport] localStorage 寫入失敗', e); }
+            const r = _saveWorlds(saved);
+            // 🚨 存不下來就要炸：書沒進 localStorage，重載後書會不見,
+            //    但它的世界書條目/自帶正則/之後產生的章節與追蹤數值都在 IDB → 全部變孤兒。
+            if (!r.ok) throw new Error('存不下這本書：瀏覽器的 localStorage 已滿。到書架刪掉幾本不玩的書再匯入一次。');
+            if (r.droppedCovers) console.warn('[CardImport] 空間不足 → 已捨棄部分書封（書本身都在）');
+        }
 
         // ── 3.5 卡片自帶的美化正則 ─────────────────────────────
         //  酒館卡把美化面板放在 extensions.regex_scripts（找一段標記 → 換成一整份 HTML）。
@@ -433,7 +488,8 @@
             const bufReader = new FileReader();
             const urlReader = new FileReader();
 
-            urlReader.onload = (e) => { coverDataUrl = e.target.result; };
+            // 整張 PNG 的 dataURL 只用來做縮圖，原圖不留（它就是撐爆 localStorage 的元凶）
+            urlReader.onload = async (e) => { coverDataUrl = await _shrinkCover(e.target.result); };
             urlReader.readAsDataURL(file);
 
             bufReader.onload = (e) => {
@@ -568,7 +624,34 @@
         injectImportSpine,
         /** 直接解析 PNG ArrayBuffer → 角色 JSON（供外部使用） */
         parsePngCard,
+        /** 把已存的大張書封就地縮成縮圖，把 localStorage 空間要回來 */
+        reclaimCoverSpace,
     };
+
+    // ── 🧹 舊書封瘦身（開機跑一次）──────────────────────────────
+    //   在縮圖這條路之前匯入的書，封面是整張角色卡 PNG 的 dataURL（1MB 起跳）。
+    //   localStorage 一旦撐破 5MB，之後「每一個」localStorage 寫入都會失敗 ——
+    //   而且錯誤會出現在完全無關的功能上（設定存不了、AVS 規則不見、storyId 沒換）。
+    //   所以開機時掃一遍，超標的就地縮圖再寫回去；沒有超標的話這段等於沒跑。
+    async function reclaimCoverSpace() {
+        let list;
+        try { list = JSON.parse(localStorage.getItem('aurelia_custom_worlds') || '[]'); } catch (e) { return 0; }
+        if (!Array.isArray(list) || !list.length) return 0;
+        const fat = list.filter(w => w && typeof w.cover === 'string' && w.cover.length > COVER_BUDGET);
+        if (!fat.length) return 0;
+        const before = JSON.stringify(list).length;
+        for (const w of fat) {
+            const small = await _shrinkCover(w.cover);
+            w.cover = small || null;   // 縮不動就不留封面，絕不把原圖寫回去
+        }
+        const r = _saveWorlds(list);
+        if (!r.ok) { console.warn('[CardImport] 書封瘦身後仍寫不回去'); return 0; }
+        const saved = before - JSON.stringify(list).length;
+        try { win.AURELIA_CUSTOM_WORLDS = list; window.AURELIA_CUSTOM_WORLDS = list; } catch (e) {}
+        console.log('[CardImport] 🧹 書封瘦身 ' + fat.length + ' 本，騰出約 ' + Math.round(saved / 1024) + ' KB');
+        return saved;
+    }
+    setTimeout(() => { reclaimCoverSpace().catch(() => {}); }, 3000);   // 開機忙完再跑，別跟首屏搶
 
     console.log('[OS_CARD_IMPORT] 已載入 v1.1 - 核心人設轉化世界書支援版');
 })();
