@@ -403,29 +403,41 @@
     //   重新生成 ＝ 拿同一組 options 再跑一次（等同酒館的 /regenerate）
     //   繼續生成 ＝ 把半截正文丟回去請它接著寫完,再把兩段接起來（等同 /continue）；只有截斷才給
     function _showBadReplyBanner(bad, partial, options) {
+        showBadBanner(bad, {
+            onRegen: function () { generateStory(options); },
+            // 下一次續寫的底本是「接到目前為止的整份」→ 可以連續續好幾次，不會退回最初那半截
+            onContinue: function () { _continueTruncated(partial, options); },
+        });
+    }
+
+    // 橫幅本身跟「這一輪是怎麼發出去的」無關 → 抽出來給別條生成路徑共用（見檔尾 window.VN_Generator）。
+    //   兩顆按鈕的行為由呼叫端給：只有截斷才給「繼續生成」，API 錯誤頁續寫沒有意義。
+    function showBadBanner(bad, handlers) {
         const VC = window.VN_Core;
         if (!VC?.showTruncBanner) { alert(bad.reason); return; }
         VC.showTruncBanner({
             title: bad.kind === 'trunc' ? '⚠️ 正文被截斷' : '⚠️ 這輪沒生成成功',
             sub: bad.reason,
-            onRegen: function () { generateStory(options); },
-            // 下一次續寫的底本是「接到目前為止的整份」→ 可以連續續好幾次，不會退回最初那半截
-            onContinue: bad.kind === 'trunc' ? function () { _continueTruncated(partial, options); } : null,
+            onRegen: handlers?.onRegen || null,
+            onContinue: (bad.kind === 'trunc' && handlers?.onContinue) ? handlers.onContinue : null,
         });
+    }
+
+    // 續寫用的系統指令：跟 _continueTruncated 同一份文案，別條路徑自己組 request 時共用
+    function continueRequest(partial) {
+        return [
+            '（系統：上一輪的正文被截斷了。請「接著」下面這段往下寫完，不要重寫、不要重複已經寫過的內容，不要重新開場，直接從斷點接下去，並且務必補上 </content> 收尾。）',
+            '',
+            '【被截斷的正文尾段】',
+            String(partial || '').slice(-1500),
+        ].join('\n');
     }
 
     // 接續：把半截正文交回主模型續寫,只要「接下去的部分」,回來自己接起來再走一次正常落地。
     //   走 generateStory 的完成路徑(不另寫一套存檔),所以續回來的內容照樣會過壞回覆判定。
     async function _continueTruncated(partial, options) {
-        const tail = String(partial || '').slice(-1500);
-        const req = [
-            '（系統：上一輪的正文被截斷了。請「接著」下面這段往下寫完，不要重寫、不要重複已經寫過的內容，不要重新開場，直接從斷點接下去，並且務必補上 </content> 收尾。）',
-            '',
-            '【被截斷的正文尾段】',
-            tail,
-        ].join('\n');
         await generateStory(Object.assign({}, options, {
-            request: req,
+            request: continueRequest(partial),
             _continueFrom: partial,   // 交給完成路徑接起來
         }));
     }
@@ -433,5 +445,13 @@
     // === 暴露到全域 ===
     //  openGeneratePanel / closeGeneratePanel / diveSelectedCard 已隨生成面板一起移除。
     //  對外只剩三個：兩個入口（角色卡 Dive、自有輸入介面的 Dive）＋ 生成本身。
-    window.VN_Generator = { generateStory, runCardDive, runFreeDive };
+    //  後四個是給「不走 generateStory 的生成路徑」共用的守門零件（點選項推進劇情就是一條）：
+    //  壞回覆的判定/橫幅/接合只能有一份，各寫各的＝哪條路沒裝橫幅只會靜靜把半截正文存成章節。
+    window.VN_Generator = {
+        generateStory, runCardDive, runFreeDive,
+        checkReply: _badReply,
+        showBadBanner,
+        stitchContinuation: _stitchContinuation,
+        continueRequest,
+    };
 })();

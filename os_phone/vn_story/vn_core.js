@@ -1285,7 +1285,9 @@
             VN_StandaloneArchive.show();
         },
 
-        _sendChoiceAndContinue: async function(choice) {
+        // opts._continueFrom：這一通是「接續截斷正文」，回來要先跟半截接合再驗貨
+        // opts._origChoice ：續寫時 choice 已被換成系統指令，存檔的 request 要留原本那個選項
+        _sendChoiceAndContinue: async function(choice, opts) {
             const config = (win.OS_SETTINGS?.getConfig?.()) || {};
             if (!win.OS_API || (!config.url && !config.useSystemApi)) return;
 
@@ -1299,6 +1301,29 @@
                 const messages = await win.OS_API.buildContext(choice, 'vn_story');
                 await new Promise((resolve, reject) => {
                     win.OS_API.chat(messages, config, null, async (fullText) => {
+                        // 續寫回來的片段先接回半截正文，再一起驗貨（驗的是接完的完整章節，不是那個片段）
+                        if (opts?._continueFrom) fullText = win.VN_Generator?.stitchContinuation?.(opts._continueFrom, fullText) ?? fullText;
+                        // 🚨 先驗貨再落地：截斷／API 錯誤頁一律不存章節。
+                        //    以前這條路（點選項推進劇情）根本沒有這道守門 —— 橫幅只裝在 vn_generator
+                        //    那條（開新故事／自由輸入），而玩起來大部分推進都走這裡：
+                        //    半截正文照樣 saveVnChapter，還連帶餵給 AVS／記憶／插圖，畫面上只是「這章怪怪的」。
+                        const _bad = win.VN_Generator?.checkReply?.(fullText);
+                        if (_bad?.bad) {
+                            console.warn('[VN_Choice] ⚠️ 這輪回覆有問題（' + _bad.kind + '）：' + _bad.reason);
+                            const _ld = document.getElementById('vn-start-loader');
+                            if (_ld) _ld.style.display = 'none';
+                            const _origChoice = opts?._origChoice || choice;
+                            win.VN_Generator.showBadBanner(_bad, {
+                                onRegen: () => this._sendChoiceAndContinue(_origChoice),
+                                // 續寫的底本是「接到目前為止的整份」→ 可以連續續好幾次，不會退回最初那半截
+                                onContinue: () => this._sendChoiceAndContinue(
+                                    win.VN_Generator.continueRequest(fullText),
+                                    { _continueFrom: fullText, _origChoice }
+                                ),
+                            });
+                            resolve();   // 不當成 throw：橫幅已經接手，別再彈一次「API 生成失敗」
+                            return;
+                        }
                         // <status> 交易解析
                         if (win.OS_ECONOMY && typeof win.OS_ECONOMY.processAiTransaction === 'function') {
                             const sm = fullText.match(/<status>([\s\S]*?)<\/status>/i);
@@ -1315,7 +1340,9 @@
                             if (!_thinking) _thinking = (win.AureliaAPI || window.AureliaAPI)?.getLatestReasoning?.() || '';
                             const _storyId    = window.VN_Core._currentStoryId    || '';
                             const _storyTitle = window.VN_Core._currentStoryTitle || '';
-                            await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${choice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: choice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
+                            // 續寫回來的那通，choice 是系統指令 → 標題與 request 都要記原本點的那個選項
+                            const _reqChoice = opts?._origChoice || choice;
+                            await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${_reqChoice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: _reqChoice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
                         } catch(e) {}
                         
                         window.VN_Core._lastRawText = fullText;
