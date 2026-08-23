@@ -1596,38 +1596,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         </div>
                                     </div>
 
-                                    <!-- 📦 NAI 拖圖預設包 modal：拖圖→解析內嵌配方→存預設(縮圖進 IndexedDB) -->
-                                    <div id="img-nai-pack-modal" class="nai-pack-modal">
-                                        <div class="nai-pack-box">
-                                            <div class="nai-pack-head">
-                                                <div class="nai-pack-title">📦 NAI 預設包（拖圖生成・含預覽）</div>
-                                                <button type="button" class="nai-pack-close" onclick="window._naiPreset.close()">✕</button>
-                                            </div>
-                                            <div class="nai-pack-io">
-                                                <div class="cfd-pack-io-row">
-                                                    <button type="button" class="set-btn" onclick="window._naiPreset.importPack()">📥 匯入預設包檔</button>
-                                                    <button type="button" class="set-btn" onclick="window._naiPreset.exportPack()">📤 匯出全部</button>
-                                                    <button type="button" class="set-btn cfd-pack-clear" onclick="window._naiPreset.clearAll()">🗑️ 清空</button>
-                                                    <input type="file" id="img-nai-pack-import-file" accept="application/json,.json" class="nai-pack-file-hidden">
-                                                </div>
-                                                <div class="cfd-pack-io-hint">匯出會把整牆預設（含預覽圖）存成一個檔分享；匯入時會問你要「覆蓋同名」還是「全部新增」。「清空」把整牆清掉（要按底部 💾 保存才生效）。</div>
-                                                <div id="img-nai-import-choice" class="cfd-import-choice" style="display:none;">
-                                                    <div class="cfd-import-choice-msg" id="img-nai-import-msg"></div>
-                                                    <div class="cfd-import-choice-btns">
-                                                        <button class="set-btn" type="button" onclick="window._naiPreset._applyImport('overwrite')">覆蓋同名</button>
-                                                        <button class="set-btn" type="button" onclick="window._naiPreset._applyImport('append')">全部新增</button>
-                                                        <button class="set-btn cfd-import-cancel" type="button" onclick="window._naiPreset._cancelImport()">取消</button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div id="img-nai-pack-drop" class="nai-pack-drop">
-                                                <input type="file" id="img-nai-pack-file" accept="image/png,image/webp,image/*" multiple class="nai-pack-file-hidden">
-                                                <div class="nai-pack-drop-hint">把下載的 <b>NAI 原圖</b>拖進來（可一次多張），或 <span class="nai-pack-pick" onclick="document.getElementById('img-nai-pack-file').click()">點此選圖</span><br>自動讀出底詞 / 負詞 / sampler / CFG / steps，存成預設，並用這張圖當預覽。<br><span class="nai-pack-warn">⚠️ 要原圖，截圖或被轉成 JPG 的讀不到。</span></div>
-                                            </div>
-                                            <div id="img-nai-pack-status" class="nai-pack-status"></div>
-                                            <div id="img-nai-pack-grid" class="nai-pack-grid"></div>
-                                        </div>
-                                    </div>
+                                    <!-- 📦 NAI 拖圖預設包 modal 已移到本檔最外層（見 set-footer 前）：
+                                         🚨 它是 position:fixed 的滿版遮罩，但 .set-group 有 backdrop-filter ——
+                                         backdrop-filter 跟 transform 一樣會給子孫的 fixed 建立包含塊，
+                                         放在 set-group 裡會讓整個 modal 縮到那一格設定的框裡（畫面上就是「被鎖在小窗」、右半截被裁掉）。 -->
 
                                     <div class="field-row">
                                         <div class="set-label" title="Danbooru tag 格式，逗號分隔。">🎨 角色底詞</div>
@@ -2052,6 +2024,39 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     </div>
 
                 </div>
+                <!-- 📦 NAI 拖圖預設包 modal：拖圖→解析內嵌配方→存預設(縮圖進 IndexedDB) -->
+                <div id="img-nai-pack-modal" class="nai-pack-modal">
+                    <div class="nai-pack-box">
+                        <div class="nai-pack-head">
+                            <div class="nai-pack-title">📦 NAI 預設包（拖圖生成・含預覽）</div>
+                            <button type="button" class="nai-pack-close" onclick="window._naiPreset.close()">✕</button>
+                        </div>
+                        <div class="nai-pack-io">
+                            <div class="cfd-pack-io-row">
+                                <button type="button" class="set-btn" onclick="window._naiPreset.importPack()">📥 匯入預設包檔</button>
+                                <button type="button" class="set-btn" onclick="window._naiPreset.exportPack()">📤 匯出全部</button>
+                                <button type="button" class="set-btn cfd-pack-clear" onclick="window._naiPreset.clearAll()">🗑️ 清空</button>
+                                <input type="file" id="img-nai-pack-import-file" accept="application/json,.json" class="nai-pack-file-hidden">
+                            </div>
+                            <div class="cfd-pack-io-hint">匯出會把整牆預設（含預覽圖）存成一個檔分享；匯入時會問你要「覆蓋同名」還是「全部新增」。「清空」把整牆清掉（要按底部 💾 保存才生效）。</div>
+                            <div id="img-nai-import-choice" class="cfd-import-choice" style="display:none;">
+                                <div class="cfd-import-choice-msg" id="img-nai-import-msg"></div>
+                                <div class="cfd-import-choice-btns">
+                                    <button class="set-btn" type="button" onclick="window._naiPreset._applyImport('overwrite')">覆蓋同名</button>
+                                    <button class="set-btn" type="button" onclick="window._naiPreset._applyImport('append')">全部新增</button>
+                                    <button class="set-btn cfd-import-cancel" type="button" onclick="window._naiPreset._cancelImport()">取消</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="img-nai-pack-drop" class="nai-pack-drop">
+                            <input type="file" id="img-nai-pack-file" accept="image/png,image/webp,image/*" multiple class="nai-pack-file-hidden">
+                            <div class="nai-pack-drop-hint">把下載的 <b>NAI 原圖</b>拖進來（可一次多張），或 <span class="nai-pack-pick" onclick="document.getElementById('img-nai-pack-file').click()">點此選圖</span><br>自動讀出底詞 / 負詞 / sampler / CFG / steps，存成預設，並用這張圖當預覽。<br><span class="nai-pack-warn">⚠️ 要原圖，截圖或被轉成 JPG 的讀不到。</span></div>
+                        </div>
+                        <div id="img-nai-pack-status" class="nai-pack-status"></div>
+                        <div id="img-nai-pack-grid" class="nai-pack-grid"></div>
+                    </div>
+                </div>
+
                 <div class="set-footer">
                     <div class="btn-save" id="os-save-btn">保存所有設定</div>
                     <div class="set-status" id="os-status"></div>
