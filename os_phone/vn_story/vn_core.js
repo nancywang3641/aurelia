@@ -52,6 +52,7 @@
         _itemMemCache: {},
         _itemInflight: {},  // 進行中的道具圖生成(itemName→promise)：同 _bgInflight
         _itemCutOk: {},     // 道具圖去背成功與否(itemName→bool)：彈窗照這個決定「裸物件浮空」還是「退成羽化遮罩」
+        _currentWorldTag: '',   // 這一輪 [World|現代] 那一格；none 路人合成立繪 prompt 時當時代感用
         _avatarMemCache: {},
         _pendingAvatars: {},
         _decodedImgs: {},
@@ -587,6 +588,13 @@
                 if (_an && _voice) this.charVoices[_an] = _voice;
             }
             this._saveCharVoices();   // 本則新宣告的聲線寫回持久化（合併制，只增不洗）
+
+            // [World|現代] —— ChapterCard 本來就會吐這一格，以前沒人收。
+            //   路人立繪要靠它判斷時代感（現代/奇幻/武俠），不然只能生一身現代便服。
+            {
+                const _wm = txtString.match(/\[World\|([^\]\n|]+)\]/i);
+                this._currentWorldTag = _wm ? _wm[1].trim() : '';
+            }
             // [Avatar|...] 是生成指令不是劇情行：從劇本剔除（卡片與對話框都不該顯示原始行）
             this.script = this.script.filter(l => !/^\[Avatar\|/i.test(l));
 
@@ -3049,18 +3057,52 @@
         // none 路人的 prompt 合成（立繪模式 / 一鍵生立繪 專用）：
         //   「故事標題, 角色名」→ 翻成英文（同 Bg 的中→英作法）→ 前面掛聲線推出的 1boy/1girl。
         //   回傳的英文串會被存進 avatar_cache.prompt，一鍵生立繪之後可直接重用。
+        // 名字 → 固定的小數字（同一個路人每次都長一樣，但彼此不一樣）
+        _nameSeed: function(name) {
+            let h = 0;
+            const s = String(name || '');
+            for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+            return Math.abs(h);
+        },
+        // 🚨 none 路人的立繪 prompt。
+        //   舊版是「故事標題 + 角色名」丟去翻譯當外觀 —— 兩個都是專有名詞，翻出來是垃圾：
+        //     「初入多重社, 時安」→ "Beginner Multiple Society, Safe time"
+        //   而且每個路人只差名字那一小段，其餘完全相同 → 相簿裡一整排長得同一個人。
+        //   改成：性別（從聲線推）＋ 世界觀（[World|] 那一格，那是普通名詞，翻得動）
+        //         ＋ 依名字固定挑選的中性外觀。**不放任何專有名詞**。
         _buildNonePrompt: async function(name) {
-            const title = this._currentStoryTitle || '';
-            const zh = [title, name].filter(Boolean).join(', ');
-            let en = zh;
-            try {
-                const TM = win.TranslationManager;
-                if (TM && typeof TM.translate === 'function' && (!TM.isChinese || TM.isChinese(zh))) {
-                    const t = await TM.translate(zh, 'zh', 'en');
-                    if (t && String(t).trim()) en = String(t).trim();
-                }
-            } catch (e) { console.warn('[VN] none 角色 prompt 翻譯失敗，用原文：', e); }
-            const p = [this._genderFromVoice(name), en].filter(Boolean).join(', ');
+            const HAIR  = ['black hair', 'dark brown hair', 'ash grey hair', 'light brown hair'];
+            const STYLE = ['short hair', 'medium hair', 'messy short hair', 'neat short hair'];
+            const AGE   = ['young adult', 'adult', 'teenager'];
+            const seed = this._nameSeed(name);
+
+            // 🚨 時代感不要丟去翻譯：「現代」會被翻成 "Modern history"（歷史課本用語），
+            //    生圖模型讀了只會更歪。常見的幾個直接對照，認不得就乾脆不放時代詞
+            //    —— 少一個詞只是比較普通，放錯詞會整張歪掉。
+            const ERA = [
+                [/現代|现代|都市|現實|现实/, 'modern day'],
+                [/未來|未来|科幻|賽博|赛博|cyber/i, 'futuristic sci-fi'],
+                [/奇幻|中世紀|中世纪|西幻|魔法/, 'medieval fantasy'],
+                [/武俠|武侠|仙俠|仙侠|古代|古風|古风|江湖/, 'ancient chinese, wuxia'],
+                [/校園|校园/, 'school campus'],
+                [/末世|廢土|废土/, 'post-apocalyptic'],
+            ];
+            let era = '';
+            const zhEra = String(this._currentWorldTag || '').trim();
+            if (zhEra) {
+                const hit = ERA.find(([re]) => re.test(zhEra));
+                if (hit) era = hit[1];
+                else console.log(`[VN] 路人立繪：認不得的世界觀「${zhEra}」→ 這次不放時代詞`);
+            }
+
+            const p = [
+                this._genderFromVoice(name) || 'solo',
+                era,
+                'ordinary passerby, plain clothes, neutral expression',
+                HAIR[seed % HAIR.length],
+                STYLE[(seed >> 3) % STYLE.length],
+                AGE[(seed >> 6) % AGE.length],
+            ].filter(Boolean).join(', ');
             console.log(`[VN] none 路人「${name}」合成立繪 prompt：${p}`);
             return p;
         },

@@ -95,7 +95,9 @@
         // 使用確定性 ID（角色名 + 條目 key 的 hash），重複匯入自動覆蓋，不產生重複條目
         _setProgress(panelEl, '📚 匯入世界書條目…', 20);
         let importedEntryCount = 0;
-        const cardCategory = card.name; // 用角色名當資料夾，多角色卡各自獨立
+        const cardCategory = card.name; // 用角色名當書包，多角色卡各自獨立
+        // 書包名要註冊進清單，否則世界書面板的下拉看不到這一本
+        try { win.OS_WORLDBOOK?.registerBook?.(cardCategory); } catch (e) {}
 
         // 🔥 新增：將角色卡核心人設轉換為一條「常駐」的世界書條目
         const coreSheetContent = (
@@ -109,6 +111,7 @@
                 const sheetStableId = 'wb_' + _simpleHash(card.name + '|core_persona_sheet');
                 await win.OS_DB.saveWorldbookEntry({
                     id: sheetStableId,
+                    book: cardCategory,   // 🚨 一定要有：生成時 getContextByPacks 濾的是 book，不是 category
                     title: `${card.name}-人設`,
                     keys: '', // 留空表示常駐
                     content: coreSheetContent,
@@ -133,12 +136,17 @@
                 const stableId = 'wb_' + _simpleHash(card.name + '|' + keys + '|' + (entry.comment || ''));
                 await win.OS_DB.saveWorldbookEntry({
                     id: stableId,
+                    book: cardCategory,   // 🚨 同上：少了它，整本卡片世界書在生成時一條都撈不到
                     title: entry.comment || entry.title || keys.slice(0, 20) || '條目',
                     keys,
                     content: entry.content || '',
                     category: cardCategory,   // 角色名作為分類資料夾
                     enabled: entry.enabled !== false,
                     order: entry.insertion_order ?? 50,
+                    // 酒館 @D 的深度／身分：character_book 把這些塞在 entry.extensions 裡，
+                    //   換算統一交給 OS_WORLDBOOK（那支兩種形狀都吃得到）
+                    depth: win.OS_WORLDBOOK?.stDepthOf?.(entry) ?? null,
+                    role:  win.OS_WORLDBOOK?.stRoleOf?.(entry) ?? 0,
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
                 });

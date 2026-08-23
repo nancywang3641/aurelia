@@ -84,6 +84,20 @@
     //   DEFAULT_DEPTH = 4（position:4 沒寫 depth 時用這個，不是 0）
     //   extension_prompt_roles = { SYSTEM:0, USER:1, ASSISTANT:2 }
     const ST_DEFAULT_DEPTH = 4;
+    // 🚨 兩種來源、兩種形狀：
+    //   ① 世界書 JSON（.json 匯入）→ position/depth/role 直接在條目頂層
+    //   ② 角色卡自帶的 character_book → 頂層 position 是 'before_char'/'after_char' 這種字串，
+    //      真正的酒館欄位全部塞在 entry.extensions 裡（position:1, depth:4, role:0…）
+    //   兩邊都要吃得到，不然卡片自帶的書一律被當成「不用 @D」。
+    function _stFields(e) {
+        const x = (e && e.extensions) || {};
+        const pick = (a, b) => (a !== undefined && a !== null) ? a : b;
+        return {
+            pos: pick(x.position, e && e.position),
+            dep: pick(x.depth, e && e.depth),
+            rol: pick(x.role, e && e.role),
+        };
+    }
     // 酒館的 position:4 就是 @D；depth 的定義完全照抄：0＝插在最新一則之後，N＝倒數第 N 則之前。
     //   其他 position（0-3 都是插在角色定義前後）在 PWA 沒有對應的位置 →
     //   回 null＝維持舊行為：跟著提示詞順序表上「世界書」那一格走。
@@ -91,15 +105,16 @@
     //      被幾千字的歷史蓋過去 —— 「酒館每次都給頭像、PWA 老是掉」就是這樣來的。
     function _stDepth(e) {
         if (!e) return null;
-        const pos = (e.position === undefined || e.position === null) ? null : parseInt(e.position, 10);
-        if (pos !== 4) return null;
-        const d = parseInt(e.depth, 10);
+        const f = _stFields(e);
+        const pos = (f.pos === undefined || f.pos === null) ? null : parseInt(f.pos, 10);
+        if (pos !== 4) return null;                            // 'after_char' 之類會 parseInt→NaN，自然落在這
+        const d = parseInt(f.dep, 10);
         return isNaN(d) ? ST_DEFAULT_DEPTH : Math.max(0, d);   // 酒館 DEFAULT_DEPTH=4
     }
     // @D 的身分：0＝系統、1＝使用者、2＝AI（酒館 extension_prompt_roles）。只有 @D 條目有意義。
     function _stRole(e) {
         if (!e) return 0;
-        const r = parseInt(e.role, 10);
+        const r = parseInt(_stFields(e).rol, 10);
         return (r === 1 || r === 2) ? r : 0;
     }
     function _entryRole(e) {
@@ -626,31 +641,33 @@
         alert('✅ 匯入完成，共 ' + entries.length + ' 個條目已加入書包「' + newBookName + '」');
     }
 
+    // 🚨 沒有 book 的條目＝生成時 getContextByPacks 撈不到（它濾的是 book，不是 category）。
+    //   角色卡匯入以前只寫 category，而這段補寫只掛在「打開世界書面板」那條路上 ——
+    //   匯完直接踏進故事的人，那本書等於完全沒生效（AI 拿不到角色外觀 → 只能寫 none）。
+    //   抽成獨立一支，開機也跑一次。回傳補了幾條。
+    async function migrateBooks(entries) {
+        const list = entries || (await win.OS_DB.getAllWorldbookEntries());
+        let n = 0;
+        let books = getBooks();
+        for (const e of list) {
+            if (e.book) continue;
+            if (e.category && !DEFAULT_CATS.includes(e.category)) {
+                e.book = e.category;              // 舊版把「角色名」存在 category → 升格成書包
+                e.category = '角色自帶設定';
+                if (!books.includes(e.book)) books.push(e.book);
+            } else {
+                e.book = '預設書包';
+            }
+            n++;
+            await win.OS_DB.saveWorldbookEntry(e);
+        }
+        if (n) { saveBooks(books); console.log('[OS_WORLDBOOK] 補上 book 欄位：' + n + ' 條'); }
+        return n;
+    }
+
     async function reload(root) {
         _entries = await win.OS_DB.getAllWorldbookEntries();
-        
-        // 🔥 向下兼容 & 角色卡相容升級：將舊版角色卡分類「升格」為獨立書包
-        let needsMigration = false;
-        let books = getBooks();
-        for (const e of _entries) {
-            if (!e.book) {
-                // 檢查是否為系統預設分類
-                if (e.category && !DEFAULT_CATS.includes(e.category)) {
-                    // 舊版把「角色名稱」存在 category 裡，現在將其升格為書包
-                    e.book = e.category;
-                    e.category = '角色自帶設定'; // 將原本條目的分類重置為預設
-                    if (!books.includes(e.book)) books.push(e.book);
-                } else {
-                    e.book = '預設書包';
-                }
-                needsMigration = true;
-                await win.OS_DB.saveWorldbookEntry(e); // 更新至資料庫
-            }
-        }
-        if (needsMigration) {
-            saveBooks(books); // 更新可用的書包清單
-        }
-        
+        if (await migrateBooks(_entries)) _entries = await win.OS_DB.getAllWorldbookEntries();
         renderBookSelector(root);
         renderList(root);
     }
@@ -899,6 +916,19 @@
          * 程式要「新增一條會被讀到的條目」時放哪本：VN 正在用的第一個書包，沒有就退預設書包。
          * 放錯書包＝生成時 getContextByPacks 撈不到＝寫了等於沒寫，所以集中在這裡一處決定。
          */
+        // 給匯入端用：把書包名加進清單（不加＝下拉看不到、也不會被當成可選書包）
+        // 換算工具對外開放：匯入端不必各自再寫一份（character_book 的欄位藏在 extensions 裡）
+        stDepthOf: function(e) { return _stDepth(e); },
+        stRoleOf:  function(e) { return _stRole(e); },
+        registerBook: function(name) {
+            const n = String(name || '').trim();
+            if (!n) return;
+            const books = getBooks();
+            if (!books.includes(n)) { books.push(n); saveBooks(books); }
+        },
+        // 補上缺 book 的舊條目（開機自動跑一次；匯入端也可以主動叫）
+        migrateBooks: function() { return migrateBooks(); },
+
         getTargetBook: function() {
             try {
                 const raw = localStorage.getItem('vn_active_wb_packs');
@@ -977,6 +1007,9 @@
             console.log(`[OS_WORLDBOOK] ✅ 已成功為角色卡「${cardName}」建立專屬書包並匯入 ${entriesData.length} 條設定。`);
         }
     };
+
+    // 開機補一次：不要等使用者打開面板才補 book（沒補＝那本書生成時整本讀不到）
+    setTimeout(() => { try { migrateBooks(); } catch (e) { console.warn('[OS_WORLDBOOK] 開機補 book 失敗', e); } }, 1500);
 
     console.log('[PhoneOS] ✅ 獨立世界書系統 (OS_WORLDBOOK V2.2 - 排版熱修復版) 已載入');
 })();
