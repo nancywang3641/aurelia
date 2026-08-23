@@ -49,6 +49,19 @@
     //    這裡以前只認 SillyTavern.getContext().chatId → PWA 一律空字串，而全檔 14 個呼叫點都吃它：
     //    最明顯的是 getActiveSchema 用它濾變數包（p.chatId === 當前），PWA 生好的包 chatId 是 storyId、
     //    比不中 → 面板永遠停在「這個世界還沒開始追蹤狀態」，AI 明明已經生完欄位。
+    let _pwaWired = false;   // VN_CHAPTER_SAVED 只掛一次（init 會被 setTimeout 重呼叫）
+
+    function _isStandalone() {
+        try { return !!(win.OS_API?.isStandalone?.()); } catch (e) { return false; }
+    }
+
+    // 「這輪有沒有身分」：酒館的身分是樓號(數字,-1 代表沒有)，PWA 是章節 id(字串)。
+    //   別再寫 lastId >= 0 —— 字串跟數字比大小永遠是 false,PWA 會整條靜默跳過。
+    function _hasId(v) {
+        if (typeof v === 'number') return v >= 0;
+        return !!(v && String(v).trim());
+    }
+
     function getChatId() {
         try {
             const id = win.OS_AVS_ADAPTER?.getCurrentChatId?.();
@@ -227,7 +240,40 @@
     }
 
     // --- 蒐集最近幾條訊息給副模型 ---
+    // PWA 的「最近幾則」＝這條故事最近幾章(舊→新)。
+    async function _gatherRecentChapters() {
+        const empty = { text: '', lastId: -1, lastContent: '' };
+        try {
+            if (!win.OS_DB?.getAllVnChapters) return empty;
+            const sid = getChatId();
+            const all = (await win.OS_DB.getAllVnChapters()) || [];
+            const mine = all.filter(c => c && c.storyId === sid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            if (!mine.length) return empty;
+            const win_ = mine.slice(-CONFIG.recentMsgs);
+            const last = win_[win_.length - 1];
+            const lastContent = String(last.content || '').slice(0, 4000);
+            // 標「哪一章才是本輪」——同酒館：滑動視窗會讓舊章重複出現,不標的話同一筆交易會被連扣好幾輪
+            const text = win_.map((ch, i) => {
+                const isCurrent = i === win_.length - 1;
+                const raw = String(ch.content || '');
+                const t = isCurrent
+                    ? (raw.length <= 6000 ? raw : raw.slice(0, 3000) + '\n……（中段省略）……\n' + raw.slice(-3000))
+                    : raw.slice(0, 1500);
+                const q = String(ch.request || '').trim();
+                const head = isCurrent ? '〔本輪新內容〕' : '〔前情參照〕';
+                return head + (q ? '\n[USER] ' + q.slice(0, 600) : '') + '\n[AI] ' + t;
+            }).join('\n\n');
+            return { text, lastId: String(last.id), lastContent };
+        } catch (e) {
+            console.warn('🛰️ [State Runtime] 讀章節失敗:', e);
+            return empty;
+        }
+    }
+
     async function gatherRecentMessages() {
+        // 🧩 PWA：正文不是聊天樓而是 OS_DB 章節。身分＝章節 id(字串),不是樓號。
+        //    其餘一切(標本輪、砍中段不砍尾、給副模型的格式)照抄酒館那條,兩邊吃到的 prompt 形狀一樣。
+        if (_isStandalone()) return await _gatherRecentChapters();
         try {
             if (!win.TavernHelper?.getChatMessages) return { text: '', lastId: -1 };
             const last = await win.TavernHelper.getChatMessages(-1);
@@ -1105,13 +1151,15 @@ ${numberedText}`;
 
             // 結合觸發：取走 vector_inject 掛的待處理記憶（狀態系統開著時它會交棒過來）
             pendingMem = (win.OS_VECTOR_INJECT?.consumePendingMemory?.()) || null;
-            const wantMemory = !!(pendingMem && win.OS_VECTOR_ENGINE?.isEnabled?.() === true && typeof win.OS_VECTOR_ENGINE?.ingestEntries === 'function');
+            const wantMemory = !_isStandalone() && !!(pendingMem && win.OS_VECTOR_ENGINE?.isEnabled?.() === true && typeof win.OS_VECTOR_ENGINE?.ingestEntries === 'function');
             // 場景插圖（副模型版）：搭便車在這通副模型多吐 scenes（不另開呼叫）
             const _sceneCfg = (function(){ try { return (JSON.parse(localStorage.getItem('os_image_config')||'{}').sceneGen) || {}; } catch(e){ return {}; } })();
             const _scenePromptText = _pickScenePrompt(_sceneCfg);
             // 建檔/套預設的「初始填充」傳 skipScenes:true → 只填狀態、不搭便車生場景插圖（建檔不是劇情推進，不該生圖）
             // 開了「獨立插圖副模型」→ 搭便車插圖停（改走 extractScenesStandalone 那條獨立通）；沒開＝照舊搭便車
-            const wantScenes = !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText) && !_sceneCfg.standaloneEnabled;
+            // 🧩 PWA 只在這通做「狀態抽取」：向量記憶(os_vector_engine)與 NPC 人物檔案(npc_dossier)
+            //    各自已經掛在 VN_CHAPTER_SAVED 上跑自己的副模型；搭便車會變成同一章打兩通。
+            const wantScenes = !_isStandalone() && !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText) && !_sceneCfg.standaloneEnabled;
 
             if (!hasState && !wantMemory) return;   // 兩邊都沒事做
 
@@ -1125,14 +1173,17 @@ ${numberedText}`;
             //    ⚠️ 必須讀完整正文：lastContent 是截斷到 4000 字的，標記釘在 </content> 前會被切掉
             const _force = !!(opts && opts.force);
             let _lastFull = '';
-            try {
-                const _lm = await win.TavernHelper?.getChatMessages?.(lastId);
-                _lastFull = String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || '');
-            } catch (e) {}
-            const _doneIds = _idsInText(_lastFull || lastContent);
+            if (!_isStandalone()) {
+                try {
+                    const _lm = await win.TavernHelper?.getChatMessages?.(lastId);
+                    _lastFull = String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || '');
+                } catch (e) {}
+            }
             const _known = new Set(_patchList(data.patches).map(p => String(p.id)));
-            const stateAlreadyDone = !_force && hasState && lastId >= 0 && _doneIds.some(id => _known.has(id));
-            const doState = hasState && !stateAlreadyDone && !!recentText && lastId >= 0;
+            // 身分制的兩種身分：酒館＝正文裡釘的 <!--avs:id-->；PWA＝章節 id 本身(章節就是那一輪,不必往正文釘東西)
+            const _doneIds = _isStandalone() ? [String(lastId)] : _idsInText(_lastFull || lastContent);
+            const stateAlreadyDone = !_force && hasState && _hasId(lastId) && _doneIds.some(id => _known.has(id));
+            const doState = hasState && !stateAlreadyDone && !!recentText && _hasId(lastId);
 
             if (!doState && !wantMemory) return;
 
@@ -1264,8 +1315,9 @@ ${numberedText}`;
                 // 🆔 身分制：先把 <!--avs:id--> 釘進這則正文，釘成功才把 patch 記下去。
                 //    釘不上（樓號漂到使用者樓／API 不給改）＝這輪沒有身分 → 狀態照樣寫進 current，
                 //    只是不進 patch（不可單獨回滾），總比記一筆對帳時找不到 id、下一輪被當孤兒清掉好。
-                const _avsId = _newAvsId();
-                const _stamped = await _stampAvsId(lastId, _avsId);
+                // PWA：章節 id 就是身分,不必(也沒地方)往正文釘標記；刪章＝那筆 patch 自然失去對應章節。
+                const _avsId = _isStandalone() ? String(lastId) : _newAvsId();
+                const _stamped = _isStandalone() ? true : await _stampAvsId(lastId, _avsId);
                 if (!_stamped) console.warn(`🛰️ [State Runtime] msg#${lastId} 釘不上 avs 標記 → 這輪不記 patch（狀態仍會寫入，只是不能單獨回滾）`);
                 const _prev = _patchList(data.patches);
                 const trimmed = trimPatches(_stamped ? [..._prev, { id: _avsId, updates: filtered }] : _prev, data.base);
@@ -2444,6 +2496,21 @@ _directorSpec(castNames);
 
     // --- 事件監聽 ---
     function init() {
+        // 🧩 PWA 接線：獨立版沒有 GENERATION_ENDED（window.eventOn 是空函式、tavern_events 裡也沒有那個鍵），
+        //    所以下面那整排監聽在 PWA 等於註冊進黑洞 —— 這就是「開了『即時記錄狀態』卻永遠沒反應」的原因。
+        //    獨立版的「一章寫完」訊號＝ OS_DB.saveVnChapter 發的 VN_CHAPTER_SAVED（向量記憶與 NPC 檔案早就接這個）。
+        //    延遲比那兩支晚一點：讓它們先開跑，三通副模型不互相卡。
+        if (!_pwaWired) {
+            _pwaWired = true;
+            win.addEventListener('VN_CHAPTER_SAVED', (e) => {
+                if (!_isStandalone()) return;
+                if (!isEnabled()) return;              // 狀態面板的「即時記錄狀態」關著就不抽
+                if (win.__AURELIA_SUMMARIZING) return; // 大總結那通不算劇情推進
+                setTimeout(() => {
+                    try { extractOnce({ skipScenes: true }); } catch (err) { console.warn('🛰️ [State Runtime] 章節抽取失敗:', err); }
+                }, 1200);
+            });
+        }
         if (!win.eventOn || !win.tavern_events) {
             setTimeout(init, 1000);
             return;
@@ -2621,6 +2688,29 @@ _directorSpec(castNames);
         forceExtract, clearPatches, deepConsolidate,
         injectCurrent, injectRules, extractOnce,
         reconcile: _reconcilePatches,   // 對帳回滾：不靠刪除事件，任何「要用狀態」的入口都可以先叫它
+        // 🧩 依 patch id 回滾（PWA 的 patch id ＝章節 id）：刪章／孤兒對帳呼叫，
+        //    把那幾筆 patch 砍掉、並把它們碰過的欄位退回「base＋剩餘 patch」的值。
+        //    酒館與獨立版共用同一支，回滾語意只有一份。
+        async rollbackByIds(ids) {
+            try {
+                const cid = getChatId();
+                if (!cid || !win.OS_DB?.getStateData) return 0;
+                const list = (ids || []).map(String).filter(Boolean);
+                if (!list.length) return 0;
+                const data = await win.OS_DB.getStateData(cid);
+                if (!data) return 0;
+                return await _rollbackPatches(cid, data, list);
+            } catch (e) { console.warn('🛰️ [State Runtime] rollbackByIds 失敗:', e); return 0; }
+        },
+        // 這條故事目前記了哪些 patch id（給孤兒對帳比對章節用）
+        async listPatchIds() {
+            try {
+                const cid = getChatId();
+                if (!cid || !win.OS_DB?.getStateData) return [];
+                const data = await win.OS_DB.getStateData(cid);
+                return _patchList(data && data.patches).map(x => String(x.id));
+            } catch (e) { return []; }
+        },
         repairOpeningSettings: _repairOpeningSettings,   // 手動補一次開頭 Bg/BGM（測試/救援用）
         compressOldMemories,   // 🗜️ 記憶合併壓縮（治長線過載），給 os_avs_memory 整理鈕呼叫
         listAllStateData, removeStateData,

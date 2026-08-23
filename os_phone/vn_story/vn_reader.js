@@ -525,7 +525,7 @@
     //    照著清等於把好資料當孤兒殺掉（同酒館「連樓號都拿不到就保守不動」）。
     // ══════════════════════════════════════════════════════════════
     async function reconcileOrphans(tag) {
-        const out = { ran: false, memories: 0, dossier: false, why: '' };
+        const out = { ran: false, memories: 0, patches: 0, dossier: false, why: '' };
         try {
             if (!(win.OS_API?.isStandalone?.())) { out.why = '酒館版走 state_runtime 的對帳'; return out; }
             const sid = _sid();
@@ -544,6 +544,18 @@
                     try { await win.OS_DB.deleteVnMemory(m.id); out.memories++; } catch (e) {}
                 }
             } catch (e) { console.warn('[VN Reader] 記憶孤兒清理失敗:', e); }
+
+            // ② 副模型 patch：id 指向不存在的章節 → 連同它記的數值一起退掉
+            //    （獨立版的 patch id ＝章節 id。這是這支唯一會動到數值的地方，而且只動「那筆 patch 碰過的欄位」，
+            //     其餘欄位與手動改值一律不碰 —— 跟酒館刪樓回滾共用同一支 _rollbackPatches）
+            try {
+                const ids = (await win.OS_STATE_RUNTIME?.listPatchIds?.()) || [];
+                const deadPatches = ids.filter(id => !alive.has(String(id)));
+                if (deadPatches.length) {
+                    out.patches = (await win.OS_STATE_RUNTIME?.rollbackByIds?.(deadPatches)) || 0;
+                    console.log('🧾 [VN Reader] 孤兒對帳：退掉 ' + deadPatches.length + ' 筆指向已刪章節的 patch（' + out.patches + ' 個欄位）');
+                }
+            } catch (e) { console.warn('[VN Reader] patch 孤兒回滾失敗:', e); }
 
             // ② 人物檔案／登場帳：以「還活著的章節正文」為唯一真相重掃
             //    （人沒了檔案跟登場帳要一起清，否則名冊每輪都對主模型下「嚴禁當新角色」→ 死人復活）
@@ -565,13 +577,17 @@
 
         await win.OS_DB.deleteVnChapter(id);
         try { await win.OS_DB.deleteVnMemoriesByChapter?.(id, sid); } catch (e) { console.warn('[VN Reader] 記憶清理失敗:', e); }
+        // 🧩 副模型抽的那筆數值也要退：獨立版的 patch id ＝章節 id（state_runtime 的 PWA 分支），
+        //    只做下面的 <vars> 重放會漏掉它 —— 章沒了、它記的數值卻留在 current 裡。
+        let _rolled = 0;
+        try { _rolled = (await win.OS_STATE_RUNTIME?.rollbackByIds?.([id])) || 0; } catch (e) { console.warn('[VN Reader] patch 回滾失敗:', e); }
 
         // 重放要用「被刪那章的 before」當底，但它已經不在名單裡 → 拿刪除前的完整名單，
         // 底本索引 idx、重放範圍是 idx+1 之後（＝跳過被刪的那章本身）
         const kept = chs.slice(0, idx).concat(chs.slice(idx + 1));
         const avs = await _replayAvs(chs, idx, idx + 1);
         await _reconcileSide(kept);
-        console.log(`[VN Reader] 刪除章節 ${id}｜AVS ${avs.ok ? '已重算（重放 ' + avs.replayed + ' 章）' : '未動（' + avs.why + '）'}`);
+        console.log(`[VN Reader] 刪除章節 ${id}｜AVS ${avs.ok ? '已重算（重放 ' + avs.replayed + ' 章）' : '未動（' + avs.why + '）'}` + (_rolled ? `｜退掉副模型記的 ${_rolled} 個欄位` : ''));
         return { ok: true, avs };
     }
 
