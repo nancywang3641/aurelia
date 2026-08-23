@@ -107,6 +107,8 @@
   max-width:calc(100% - max(78px, 50% - 620px) - min(720px, 56%) - 12px);
   object-fit:contain; object-position:left bottom; pointer-events:none; user-select:none;
   filter:drop-shadow(0 8px 22px rgba(0,0,0,.5)); }
+/* 半身圖（比例<1.7，例如丹/雷伊 640x896）站小一點；class 由 JS 讀原生比例掛上，不用手動標 */
+.lb-pv-portrait.is-half { height:62%; }
 
 /* 岔路：先問要幹嘛（對話／應用），選了才進去那件事。照手機 .lstage-pick 的體感。
    🚨 不做成分頁——對話走的是貼底的 VN 對話框，根本不需要右邊容器（Rae 2026-08-24）。 */
@@ -138,7 +140,13 @@
 
 /* 💬 對話模式：畫面只剩背景＋立繪＋貼底的對話框（＝正統 VN 版位）。
    對話框本來就住那裡，不搬也不改版位——這裡只把立繪放大一點，因為右邊空出來了。 */
-.lb-pv.is-talk .lb-pv-portrait { max-width:46%; }
+/* 💬 對話模式：右邊沒有面板 → 立繪置中（VN 慣例：單人講話時角色在中間）。
+   靠左那套是給「應用」用的——那邊右半被面板佔走，靠左才對。
+   下緣一律貼底，讓對話框蓋住腿／切口，全身半身都成立。 */
+.lb-pv.is-talk .lb-pv-portrait {
+  left:50%; right:auto; transform:translateX(-50%);
+  max-width:none; object-position:center bottom; height:92%; }
+.lb-pv.is-talk .lb-pv-portrait.is-half { height:66%; }
 /* 🚨 地點視圖是 inset:0 / z-index:3355 蓋滿整個大廳，而對話框平常只有 z-index:3
    → 不抬起來的話選「對話」會被地點背景整個蓋住，看起來像沒反應。位置不動，只抬層級。 */
 .lobby-left:has(.lb-pv.is-talk) .void-dialogue-wrap { z-index:3358; }

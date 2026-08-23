@@ -200,6 +200,20 @@
             '</div>' +
             '<div class="lb-pv-pane"><div class="lb-pv-body"></div></div>';
 
+        // 🧍 立繪大小依「圖片原生比例」自動決定，不必為了不同人準備不同資產：
+        //    細長(比例≥1.7)＝全身站高貼底，下緣讓對話框蓋掉＝自然的半身效果；
+        //    方(比例<1.7)＝本來就是半身(丹/雷伊 640x896)，放小一點、切口一樣藏進對話框。
+        //    🚨 所以全身圖不用砍半——對話框本身就是裁刀（Rae 2026-08-24 討論）。
+        const pimg = box.querySelector('.lb-pv-portrait');
+        if (pimg) {
+            const kind = () => {
+                const r = pimg.naturalWidth ? (pimg.naturalHeight / pimg.naturalWidth) : 0;
+                if (r) pimg.classList.toggle('is-half', r < 1.7);
+            };
+            if (pimg.complete && pimg.naturalWidth) kind();
+            else pimg.addEventListener('load', kind, { once: true });
+        }
+
         const body = box.querySelector('.lb-pv-body');
         const restorePanel = () => {
             try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}
