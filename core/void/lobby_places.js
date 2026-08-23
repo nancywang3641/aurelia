@@ -175,8 +175,9 @@
         if (!host) { try { p.open && p.open(); } catch (e) {} return; }   // 沒有大廳外殼就退回單開面板
 
         const npc = (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null;
+        const appLabel = p.flatName || p.name;
         const box = document.createElement('div');
-        box.className = 'lb-pv';
+        box.className = 'lb-pv is-pick';
         box.innerHTML =
             (p.bg ? '<div class="lb-pv-bg" style="background-image:url(' + CDN + p.bg + ')"></div>' : '<div class="lb-pv-bg"></div>') +
             '<div class="lb-pv-hd">' +
@@ -186,35 +187,43 @@
               '<button class="lb-pv-x" type="button" aria-label="離開"><i class="fa-solid fa-xmark"></i></button>' +
             '</div>' +
             (npc && npc.portrait ? '<img class="lb-pv-portrait" src="' + npc.portrait + '" alt="">' : '') +
-            '<div class="lb-pv-pane">' +
-              '<div class="lb-pv-tabs">' +
-                '<button class="lb-pv-tab" data-tab="talk" type="button"><i class="fa-solid fa-comment-dots"></i> 對話</button>' +
-                '<button class="lb-pv-tab is-on" data-tab="app" type="button"><i class="fa-solid fa-window-maximize"></i> 應用</button>' +
-              '</div>' +
-              '<div class="lb-pv-body"></div>' +
-            '</div>';
+            // 岔路：先問要幹嘛，選了才進去那件事（照手機那套 lstage-pick 的體感）
+            '<div class="lb-pv-pick">' +
+              (npc ? '<div class="lb-pv-pick-who">' + npc.name + '</div>' : '') +
+              '<button class="lb-pv-pick-btn" data-go="talk" type="button">' +
+                '<i class="fa-solid fa-comment-dots"></i><span>對話</span></button>' +
+              '<button class="lb-pv-pick-btn" data-go="app" type="button">' +
+                '<i class="fa-solid ' + p.icon + '"></i><span>' + appLabel + '</span></button>' +
+            '</div>' +
+            '<div class="lb-pv-pane"><div class="lb-pv-body"></div></div>';
 
         const body = box.querySelector('.lb-pv-body');
-        const tabs = [...box.querySelectorAll('.lb-pv-tab')];
-
-        // 對話那半：把大廳既有的對話框搬進窗格（靠 class 切版位，不搬 DOM）
-        const talkOn = (on) => {
-            host.classList.toggle('lb-pv-talk', on);
-            if (!on) return;
-            // 指定對話對象＝這個地方的管理員。沒有舞台也能設，void_terminal 讀的是 talkTarget。
-            try { if (npc) win.LobbyStage?.setTalkTarget?.(npc); } catch (e) {}
-            try { win.LobbyStage?.showDialog?.(); } catch (e) {}
+        const restorePanel = () => {
+            try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}
         };
 
-        const show = (which) => {
-            try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}   // 上一個面板借走的東西先還
-            tabs.forEach(t => t.classList.toggle('is-on', t.dataset.tab === which));
-            if (which === 'talk') { body.innerHTML = ''; talkOn(true); return; }
-            talkOn(false);
+        // 🚨 對話走既有的對話框（VN 版位、貼底），不塞進右邊容器——
+        //    Rae 2026-08-24：「我的對話是對話框，不是泡泡聊天」。右容器只給應用用。
+        const talkOff = () => { try { win.LobbyStage?.endTalk?.(); } catch (e) {} };
+
+        // mode: 'pick' 岔路 / 'talk' 對話 / 'app' 應用
+        const go = (mode) => {
+            restorePanel();
             body.innerHTML = '';
+            box.classList.remove('is-pick', 'is-talk', 'is-app');
+            if (mode === 'pick') { talkOff(); box.classList.add('is-pick'); return; }
+            if (mode === 'talk') {
+                box.classList.add('is-talk');
+                // 對話對象＝這個地方的管理員；沒有舞台也設得起來，void_terminal 讀的是 talkTarget
+                try { if (npc) win.LobbyStage?.setTalkTarget?.(npc); } catch (e) {}
+                try { win.LobbyStage?.showDialog?.(); } catch (e) {}
+                return;
+            }
+            talkOff();
+            box.classList.add('is-app');
             try {
                 if (p.openIn) { p.openIn(body); return; }
-                // 還沒改成吃容器的地方：照舊自己開浮窗，窗格說明一下免得看起來像壞了
+                // 還沒改成吃容器的地方：照舊自己開浮窗，容器說明一下免得看起來像壞了
                 body.innerHTML = '<div class="lb-pv-note">這個面板還是獨立視窗，已經幫你開了</div>';
                 p.open && p.open();
             } catch (e) {
@@ -224,22 +233,24 @@
         };
 
         const close = () => {
-            try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}
-            talkOn(false);
-            try { win.LobbyStage?.endTalk?.(); } catch (e) {}
+            restorePanel();
+            talkOff();
             box.remove();
             if (_view === close) _view = null;
         };
         box.querySelector('.lb-pv-x').addEventListener('click', close);
-        box.querySelector('.lb-pv-back').addEventListener('click', () => { close(); openFlat(); });
+        // ‹返回：在對話/應用裡→退回岔路；已經在岔路→退回地點清單（巢狀只有最外層是 ✕）
+        box.querySelector('.lb-pv-back').addEventListener('click', () => {
+            if (box.classList.contains('is-pick')) { close(); openFlat(); return; }
+            go('pick');
+        });
         box.addEventListener('click', (e) => {
-            const t = e.target.closest('.lb-pv-tab');
-            if (t) show(t.dataset.tab);
+            const b = e.target.closest('.lb-pv-pick-btn');
+            if (b) go(b.dataset.go);
         });
 
         host.appendChild(box);
         _view = close;
-        show('app');   // 預設先給應用：從「前往」點進來的人是要辦事，要聊天再切
         return box;
     }
 
