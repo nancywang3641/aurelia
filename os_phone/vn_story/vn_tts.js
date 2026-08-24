@@ -539,24 +539,28 @@ const VN_TTS = {
     //   模型長相：{ name, engine:'index', url, voice, emotions:{ 情緒key:{emo:'服務端情緒名'} } }
     //   沒有 gptPath/sovitsPath，所以 _ensureModel 會自己跳過換模型那段。
 
-    // 腳本的表情已被 _mapExprToEmotion 轉成 happy/sad/angry/… 或原樣自訂標籤，
-    // 兩種都試一次（大小寫不敏感），對不上就只用音色不套情緒。
+    // 腳本的表情已被 _mapExprToEmotion 轉成 happy/sad/angry/… 或原樣自訂標籤。
+    // 音色自己的 emotions 表只是「這個角色有本人錄的情緒音檔」時的對照，
+    // 對不上不能就把情緒丟掉：服務端有一張情緒權重表（認得 happy/sad/生氣/Smirk…），
+    // 標籤原樣送過去就能套語氣，權重不帶別人的聲音所以不會變聲。
+    // （只靠對照表的話，285 個音色裡只有 4 個有表 ⇒ 其餘全部整場沒有語氣。）
     _indexVoice(model, emotion) {
         const base = model.voice || '';
-        if (!emotion || emotion === 'default' || !model.emotions) return base;
-        const em = model.emotions;
+        if (!emotion || emotion === 'default') return base;
+        const em = model.emotions || {};
         const hit = em[emotion]
                  || em[String(emotion).toLowerCase()]
                  || em[Object.keys(em).find(k => k.toLowerCase() === String(emotion).toLowerCase()) || ''];
-        return (hit && hit.emo) ? `${base}:${hit.emo}` : base;
+        return `${base}:${(hit && hit.emo) ? hit.emo : emotion}`;
     },
 
     async _fetchIndexBlob(model, text, emotion) {
         const base = String(model.url || '').replace(/\/+$/, '');
         if (!base) throw new Error('這個音色沒有服務網址');
-        // 情緒強度預設 0.5：情緒參考音檔會把音色往它自己的方向拉（實測拿男聲情緒套女聲，
-        // 基頻被壓低 110Hz），0.5 以下音色不受影響，1.0 會明顯變聲。
-        const alpha = (typeof model.emoAlpha === 'number') ? model.emoAlpha : 0.5;
+        // 情緒強度給滿，由服務端決定要不要收：走情緒權重或本人錄的情緒音檔都不會變聲，
+        // 只有「共用情緒音檔」是別人的聲音（實測套過去基頻被壓低 110Hz），服務端自己壓到 0.5。
+        // 前端一律先壓 0.5 的話，能給滿的那兩條通道也跟著半殘（實測起伏只多 8%）。
+        const alpha = (typeof model.emoAlpha === 'number') ? model.emoAlpha : 1;
         const resp = await fetch(base + '/v1/audio/speech', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
