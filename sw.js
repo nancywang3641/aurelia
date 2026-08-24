@@ -1,25 +1,21 @@
 /**
  * Aurelia Service Worker v3
- * ─────────────────────────────────────────────────────────────
- * 策略說明：
- *   HTML / JS / CSS  → Network-First（永遠先抓最新版，離線才用快取）
- *   圖片 / 字型      → Cache-First  （不常變動，快取優先加快速度）
- *
- * ⚠️ 每次部署只需把下面 CACHE_VERSION 加 1，iOS 就會強制更新！
- * ─────────────────────────────────────────────────────────────
+ * ?????????????????????????????????????????????????????????????
+ * 蝑隤芣?嚗? *   HTML / JS / CSS  ??Network-First嚗偶?????啁?嚗蝺??典翰??
+ *   ?? / 摮?      ??Cache-First  嚗?撣貉???敹怠??芸??翰?漲嚗? *
+ * ?? 瘥活?函蔡?芷?????CACHE_VERSION ??1嚗OS 撠望?撘瑕?湔嚗? * ?????????????????????????????????????????????????????????????
  */
 
-const CACHE_VERSION = 194;                         // ← 每次部署 +1
+const CACHE_VERSION = 195;                         // ??瘥活?函蔡 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
-// App Shell 核心資源（用於離線備援）
+// App Shell ?詨?鞈?嚗?潮蝺??湛?
 const SHELL_ASSETS = [
     './',
     './index.html',
     './aurelia_core.css',
     './core/void/lobby.css',
-    // css/ 模組樣式（從各 JS 抽離後的集中區）
-    './css/story_extractor.css',
+    // css/ 璅∠?璅??嚗???JS ?賡敺??葉?嚗?    './css/story_extractor.css',
     './css/story_entry_wizard.css',
     './css/html_extractor.css',
     './css/os_settings.css',
@@ -69,49 +65,45 @@ const SHELL_ASSETS = [
     './os_phone/qb/qb_core.js',
 ];
 
-// ── Install：預快取（直接從網路抓最新版）──────────────────────
+// ?? Install嚗?敹怠?嚗?亙?蝬脰楝???啁?嚗??????????????????????
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache =>
             Promise.allSettled(
                 SHELL_ASSETS.map(url =>
-                    fetch(url, { cache: 'no-store' })   // 強制繞過 HTTP 快取
+                    fetch(url, { cache: 'no-store' })   // 撘瑕蝜? HTTP 敹怠?
                         .then(res => {
                             if (res && res.status === 200) cache.put(url, res);
                         })
-                        .catch(() => {/* 靜默忽略單個失敗 */})
+                        .catch(() => {/* ??敹賜?桀仃??*/})
                 )
             )
-        ).then(() => self.skipWaiting())  // 新 SW 立刻接管，不等舊分頁關閉
+        ).then(() => self.skipWaiting())  // ??SW 蝡?亦恣嚗?蝑?????
     );
 });
 
-// ── Activate：刪除所有舊版快取，立刻接管所有分頁 ────────────
+// ?? Activate嚗?斗????翰??蝡?亦恣?????????????????
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys()
             .then(keys => Promise.all(
                 keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
             ))
-            .then(() => self.clients.claim())  // 立刻接管，不等重新整理
-    );
+            .then(() => self.clients.claim())  // 蝡?亦恣嚗?蝑??唳??    );
 });
 
-// ── Fetch：依資源類型決定策略 ────────────────────────────────
+// ?? Fetch嚗?鞈?憿?瘙箏?蝑 ????????????????????????????????
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    // 跳過跨域（API / CDN 字型 / catbox 圖片）
-    if (url.origin !== self.location.origin) return;
+    // 頝喲?頝典?嚗PI / CDN 摮? / catbox ??嚗?    if (url.origin !== self.location.origin) return;
 
     const path = url.pathname;
     const isCodeFile = /\.(js|css|html)(\?.*)?$/.test(path) || path === '/' || path.endsWith('/');
 
     if (isCodeFile) {
-        // ── Network-First：HTML / JS / CSS ──
-        // 每次都先抓網路最新版，成功後更新快取；
-        // 離線或網路失敗才回落到快取，確保 PWA 仍可使用。
-        event.respondWith(
+        // ?? Network-First嚗TML / JS / CSS ??
+        // 瘥活?賢??雯頝舀??啁?嚗????湔敹怠?嚗?        // ?Ｙ??雯頝臬仃????啣翰??蝣箔? PWA 隞雿輻??        event.respondWith(
             fetch(event.request, { cache: 'no-store' })
                 .then(response => {
                     if (response && response.status === 200) {
@@ -123,9 +115,8 @@ self.addEventListener('fetch', event => {
                 .catch(() => caches.match(event.request))
         );
     } else {
-        // ── Cache-First：圖片 / 字型等靜態資源 ──
-        // 快取命中就直接返回（快），沒有再去抓並存入快取。
-        event.respondWith(
+        // ?? Cache-First嚗???/ 摮?蝑???皞???
+        // 敹怠??賭葉撠梁?亥???敹恬?嚗????餅?銝血??亙翰??        event.respondWith(
             caches.match(event.request).then(cached => {
                 if (cached) return cached;
                 return fetch(event.request).then(response => {
@@ -134,8 +125,7 @@ self.addEventListener('fetch', event => {
                         caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
                     }
                     return response;
-                }).catch(() => cached); // 完全離線時的最後保底
-            })
+                }).catch(() => cached); // 摰?Ｙ????敺?摨?            })
         );
     }
 });

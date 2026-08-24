@@ -37,7 +37,11 @@ function renderBasic(cfg) {
   <div class="vtts-field">
     <label class="vtts-label">API 地址</label>
     <input class="vtts-input" id="vtts-server" type="text" value="${esc(cfg.serverUrl)}" placeholder="http://127.0.0.1:9880">
-    <div class="vtts-hint">GPT-SoVITS 推理服務的 API 地址</div>
+    <div class="vtts-hint">${
+        Object.keys(cfg.models).length && !Object.values(cfg.models).some(m => m.engine !== 'index')
+        ? '你目前的音色全是 IndexTTS，不會用到這一項，放著不用管。IndexTTS 的網址寫在每個音色裡，匯入時就設好了。'
+        : 'GPT-SoVITS 推理服務的 API 地址'
+    }</div>
   </div>
   
   <div class="vtts-field">
