@@ -13,16 +13,47 @@ function buildPanelHTML() {
     <button class="vtts-close" onclick="VN_TTS_Panel.close()">✕</button>
   </div>
 
-  <div class="vtts-tabs">
-    <button class="vtts-tab active" data-tab="index"   onclick="VN_TTS_Panel.switchTab('index')">IndexTTS</button>
-    <button class="vtts-tab"        data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">SoVITS</button>
-    <button class="vtts-tab"        data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
-    <button class="vtts-tab"        data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
-    <button class="vtts-tab"        data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
-  </div>
+  <div id="vtts-nav"></div>
 
   <div class="vtts-body" id="vtts-body"></div>
   <div class="vtts-toast" id="vtts-toast"></div>
+</div>`;
+}
+
+
+
+// 這一頁該看見哪些音色。兩個引擎的清單永遠不混在一起。
+function ttsPick(models, eng) {
+    const out = {};
+    for (const [id, m] of Object.entries(models || {})) {
+        const isIdx = m.engine === 'index';
+        if (!eng || (eng === 'index') === isIdx) out[id] = m;
+    }
+    return out;
+}
+
+// ── 分頁結構 ──────────────────────────────────────────────────────────────
+// 上層：引擎二選一（顯存只夠一套，本來就該擇一）
+// 下層：選中引擎自己的頁，兩邊永遠不會同時出現在畫面上
+const TTS_ENGINES = [
+    { id: 'index',  label: '🎙️ IndexTTS', tabs: [['main','服務'], ['voices','音色'], ['chars','角色'], ['npc','NPC']] },
+    { id: 'sovits', label: '📡 SoVITS',   tabs: [['main','連線'], ['voices','模型'], ['chars','角色'], ['npc','NPC']] },
+];
+
+function renderEngineBar(engine) {
+    return `
+<div class="vtts-engine-bar">
+  ${TTS_ENGINES.map(e => `
+  <button class="vtts-engine-btn${e.id === engine ? ' active' : ''}" onclick="VN_TTS_Panel.switchEngine('${e.id}')">${e.label}</button>`).join('')}
+</div>`;
+}
+
+function renderSubTabs(engine, tab) {
+    const def = TTS_ENGINES.find(e => e.id === engine) || TTS_ENGINES[0];
+    return `
+<div class="vtts-tabs">
+  ${def.tabs.map(([k, label]) => `
+  <button class="vtts-tab${k === tab ? ' active' : ''}" data-tab="${k}" onclick="VN_TTS_Panel.switchTab('${k}')">${label}</button>`).join('')}
 </div>`;
 }
 
@@ -121,34 +152,16 @@ function renderBasic(cfg) {
 // 那頁的連線位址、Top_K、Temperature 這些參數 IndexTTS 一個都不吃，
 // 混在一起只會讓人以為每一欄都要填。
 function renderIndexTab(cfg) {
-    const all = Object.entries(cfg.models || {});
-    const idx = all.filter(([, m]) => m.engine === 'index');
-    // 網址是存在每個音色裡的（284 個音色就有 284 份），這裡取第一個當代表，
-    // 改完按「套用」一次寫回全部，免得換埠要一個一個改。
-    const url = (idx[0] && idx[0][1].url) || (cfg.narratorIndex && cfg.narratorIndex.url) || 'http://127.0.0.1:8881';
-    const emoTotal = idx.reduce((n, [, m]) => n + Object.keys(m.emotions || {}).length, 0);
-
-    const rows = idx.map(([id, m]) => {
-        const ec = Object.keys(m.emotions || {}).length;
-        return `
-<div class="vtts-model-card vtts-model-card-compact">
-  <div class="vtts-model-card-head">
-    <span class="vtts-model-name">🎙️ ${esc(m.name || id)}${ec ? ` <span class="vtts-model-emo-badge">${ec} 情緒</span>` : ''}</span>
-    <div class="vtts-model-actions">
-      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.playNpcModel('${escJs(id)}')">▶ 試聽</button>
-      <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
-    </div>
-  </div>
-</div>`;
-    }).join('');
-
+    const models = Object.values(cfg.models || {}).filter(m => m.engine === 'index');
+    // 網址是存在每個音色裡的（幾百個音色就幾百份），這裡給一個統一入口
+    const url = (models[0] && models[0].url) || (cfg.narratorIndex && cfg.narratorIndex.url) || 'http://127.0.0.1:8881';
     return `
 <div class="vtts-card">
   <div class="vtts-card-title">🎙️ 語音服務</div>
   <div class="vtts-field">
     <label class="vtts-label">服務網址</label>
     <input class="vtts-input" id="vtts-index-url" type="text" value="${esc(url)}" placeholder="http://127.0.0.1:8881">
-    <div class="vtts-hint">語音服務跑起來後的位址。改了要按「套用」，才會寫進每一個音色。</div>
+    <div class="vtts-hint">語音服務跑起來後的位址。改了要按「套用」才會寫進每個音色。</div>
   </div>
   <div class="vtts-row">
     <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.testIndexUrl()">🔗 測試連線</button>
@@ -157,14 +170,15 @@ function renderIndexTab(cfg) {
 </div>
 
 <div class="vtts-card">
-  <div class="vtts-card-title">🎨 音色</div>
-  <div class="vtts-row">
-    <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()">🔄 從服務匯入音色</button>
+  <div class="vtts-card-title">🗣 音量</div>
+  <div class="vtts-field">
+    <label class="vtts-label">播放音量 <span id="vtts-vol-val">${Math.round((cfg.volume ?? 1)*100)}%</span></label>
+    <input class="vtts-input" id="vtts-vol" type="range" min="0" max="1" step="0.05"
+           value="${cfg.volume ?? 1}" oninput="document.getElementById('vtts-vol-val').textContent=Math.round(this.value*100)+'%'">
   </div>
-  <div class="vtts-hint">把音檔丟進語音服務的 voices 資料夾，再按這裡就會出現在下面。檔名就是音色名，不用練模型。</div>
-  ${idx.length
-    ? `<div class="vtts-hint">目前 ${idx.length} 個音色，共 ${emoTotal} 條情緒對應。到「角色」頁把音色指派給角色。</div>${rows}`
-    : '<div class="vtts-empty">還沒有音色。先開語音服務，再按上面的按鈕匯入。</div>'}
+  <div class="vtts-save-bar">
+    <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.saveBasic()">儲存</button>
+  </div>
 </div>
 
 <div class="vtts-card">
@@ -178,9 +192,40 @@ function renderIndexTab(cfg) {
 </div>`;
 }
 
-function renderModels(cfg) {
-    const ids = Object.keys(cfg.models);
-    const cards = ids.length ? ids.map(id => renderModelCard(id, cfg.models[id])).join('') :
+// IndexTTS 的音色頁：只列 IndexTTS 音色，SoVITS 的模型不會混進來
+function renderIndexVoices(cfg) {
+    const idx = Object.entries(cfg.models || {}).filter(([, m]) => m.engine === 'index');
+    const emoTotal = idx.reduce((n, [, m]) => n + Object.keys(m.emotions || {}).length, 0);
+    const rows = idx.map(([id, m]) => {
+        const ec = Object.keys(m.emotions || {}).length;
+        return `
+<div class="vtts-model-card vtts-model-card-compact">
+  <div class="vtts-model-card-head">
+    <span class="vtts-model-name">${esc(m.name || id)}${ec ? ` <span class="vtts-model-emo-badge">${ec} 情緒</span>` : ''}</span>
+    <div class="vtts-model-actions">
+      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.playNpcModel('${escJs(id)}')">▶ 試聽</button>
+      <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
+    </div>
+  </div>
+</div>`;
+    }).join('');
+    return `
+<div class="vtts-card">
+  <div class="vtts-card-title">🎨 音色</div>
+  <div class="vtts-row">
+    <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()">🔄 從服務匯入音色</button>
+  </div>
+  <div class="vtts-hint">把音檔丟進語音服務的 voices 資料夾，再按這裡就會出現。檔名就是音色名，不用練模型。</div>
+</div>
+${idx.length
+  ? `<div class="vtts-card-subtitle">${idx.length} 個音色，共 ${emoTotal} 條情緒對應</div>${rows}`
+  : '<div class="vtts-empty">還沒有音色。先開語音服務，再按上面的按鈕匯入。</div>'}`;
+}
+
+function renderModels(cfg, eng) {
+    const models = ttsPick(cfg.models, eng);
+    const ids = Object.keys(models);
+    const cards = ids.length ? ids.map(id => renderModelCard(id, models[id])).join('') :
         `<div class="vtts-empty">尚無模型，點擊下方按鈕新增</div>`;
     return `
 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
@@ -410,12 +455,13 @@ function renderVoice(cfg) {
 </div>`;
 }
 
-function renderChars(cfg) {
-    const modelOptions = Object.entries(cfg.models)
+function renderChars(cfg, eng) {
+    const pick = ttsPick(cfg.models, eng);
+    const modelOptions = Object.entries(pick)
         .map(([id, m]) => `<option value="${esc(id)}">${esc(m.name || id)}</option>`)
         .join('');
 
-    const rows = Object.entries(cfg.charMappings).map(([char, mid]) => {
+    const rows = Object.entries(cfg.charMappings).filter(([, mid]) => !mid || pick[mid]).map(([char, mid]) => {
         const aliases = (cfg.charAliases && Array.isArray(cfg.charAliases[char])) ? cfg.charAliases[char] : [];
         const chipStyle = 'display:inline-flex;align-items:center;gap:5px;background:rgba(26,28,40,0.06);border:1px solid rgba(26,28,40,0.20);color:#1A1C28;padding:3px 9px;border-radius:11px;font-size:11px;line-height:1.2;';
         const chipXStyle = 'cursor:pointer;color:rgba(26,28,40,0.55);font-size:11px;line-height:1;padding:0 1px;';
@@ -429,7 +475,7 @@ function renderChars(cfg) {
     <span class="vtts-char-name" style="flex:0 0 auto;">${esc(char)}</span>
     <select class="vtts-input" id="vtts-cs-${esc(char)}" onchange="VN_TTS_Panel.updateCharMapping('${escJs(char)}',this.value)" style="flex:1;">
       <option value="">（未綁定）</option>
-      ${Object.entries(cfg.models).map(([id,m]) =>
+      ${Object.entries(pick).map(([id,m]) =>
           `<option value="${esc(id)}" ${mid===id?'selected':''}>${esc(m.name||id)}</option>`
       ).join('')}
     </select>
@@ -483,7 +529,8 @@ ${(() => {
 
 // NPC 分類用下拉選：只顯示選中的一張卡、其餘隱藏（分類一多就不會疊得很長）
 let _npcSel = null;
-function renderNpc(cfg) {
+function renderNpc(cfg, eng) {
+    const pick = ttsPick(cfg.models, eng);
     const cats = cfg.npcCategories || [];
     if (!cats.length) {
         return `
@@ -508,7 +555,7 @@ function renderNpc(cfg) {
     <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addNpcCategory()">＋ 新增</button>
   </div>
 </div>
-${renderNpcCard(sel, cfg.models)}`;
+${renderNpcCard(sel, pick)}`;
 }
 
 function renderNpcCard(cat, models) {
@@ -517,9 +564,10 @@ function renderNpcCard(cat, models) {
   <span class="vtts-tag-del" onclick="VN_TTS_Panel.removeNpcTag('${escJs(cat.id)}','${escJs(t)}')">✕</span>
 </span>`).join('');
 
-    const chips = (cat.modelIds || []).map(mid => {
+    // 已指派的也要過濾：另一個引擎的音色不屬於這一頁，留著會變成一串看不懂的 id
+    const chips = (cat.modelIds || []).filter(mid => models[mid]).map(mid => {
         const m = models[mid];
-        const nm = esc(m ? m.name || mid : mid);
+        const nm = esc(m.name || mid);
         return `<span class="vtts-model-chip" data-mid="${esc(mid)}">${nm}
   <span class="vtts-model-chip-play" onclick="VN_TTS_Panel.playNpcModel('${escJs(mid)}')" title="試聽">▶</span>
   <span class="vtts-model-chip-del" onclick="VN_TTS_Panel.removeNpcModel('${escJs(cat.id)}','${escJs(mid)}')">✕</span>
@@ -592,8 +640,8 @@ function escJs(s) {
 
 // ── 面板控制器 ────────────────────────────────────────────────────────────────
 const VN_TTS_Panel = {
-    _currentTab:    'basic',
-    _tabTouched:    false,   // 使用者手動切過分頁沒有
+    _currentTab:    'main',
+    _engine:        null,    // 'index' | 'sovits'；null = 還沒決定，看設定與音色自動選
     _modelFormMode: null,   
     _npcFormMode:   false,
     _bodyId:        'vtts-body',   
@@ -601,30 +649,48 @@ const VN_TTS_Panel = {
     _refPlayer: null, // 用來裝載試聽聲音的容器
     _savedListScroll: 0, // 👈 新增這行，用來記住高度
 
-    // 預設分頁：有 IndexTTS 音色就停在 IndexTTS，沒有的人維持原本的 SoVITS 頁
-    _defaultTab() {
-        const models = Object.values((this._cfg() || {}).models || {});
-        return models.some(m => m.engine === 'index') ? 'index' : 'basic';
+    // 目前是哪個引擎：選過就用選過的，沒選過就看實際有哪種音色
+    _eng() {
+        if (this._engine) return this._engine;
+        const cfg = this._cfg() || {};
+        if (cfg.localEngine === 'index' || cfg.localEngine === 'sovits') {
+            this._engine = cfg.localEngine;
+            return this._engine;
+        }
+        const models = Object.values(cfg.models || {});
+        this._engine = models.length && models.every(m => m.engine === 'index') ? 'index'
+                     : models.some(m => m.engine === 'index') && !models.some(m => m.engine !== 'index') ? 'index'
+                     : models.some(m => m.engine === 'index') ? 'index' : 'sovits';
+        return this._engine;
+    },
+
+    switchEngine(id) {
+        if (id !== 'index' && id !== 'sovits') return;
+        this._engine = id;
+        this._currentTab = 'main';
+        const tts = this._tts();
+        if (tts) { tts.config.localEngine = id; tts.save(); }
+        this._renderNav();
+        this._renderBody('main');
+    },
+
+    _renderNav() {
+        const nav = document.getElementById('vtts-nav');
+        if (nav) nav.innerHTML = renderEngineBar(this._eng()) + renderSubTabs(this._eng(), this._currentTab);
     },
 
     initInline(containerId) {
         const root = document.getElementById(containerId);
         if (!root) return;
-        if (!this._tabTouched) this._currentTab = this._defaultTab();
         this._bodyId  = 'vtts-inline-body';
         this._toastId = 'vtts-inline-toast';
         root.innerHTML = `
-<div style="position:relative;">
-  <div class="vtts-tabs" style="margin:0 -4px 12px;border-bottom:1px solid rgba(26,28,40,0.08);">
-    <button class="vtts-tab ${this._currentTab==='index'  ?'active':''}" data-tab="index"   onclick="VN_TTS_Panel.switchTab('index')">IndexTTS</button>
-    <button class="vtts-tab ${this._currentTab==='basic'  ?'active':''}" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">SoVITS</button>
-    <button class="vtts-tab ${this._currentTab==='models' ?'active':''}" data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
-    <button class="vtts-tab ${this._currentTab==='chars'  ?'active':''}" data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
-    <button class="vtts-tab ${this._currentTab==='npc'    ?'active':''}" data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
-  </div>
+<div class="vtts-inline-root">
+  <div id="vtts-nav"></div>
   <div id="vtts-inline-body"></div>
   <div class="vtts-toast" id="vtts-inline-toast"></div>
 </div>`;
+        this._renderNav();
         this._renderBody(this._currentTab);
     },
 
@@ -701,10 +767,7 @@ const VN_TTS_Panel = {
 
     switchTab(tab) {
         this._currentTab = tab;
-        this._tabTouched = true;
-        document.querySelectorAll('.vtts-tab').forEach(t =>
-            t.classList.toggle('active', t.dataset.tab === tab)
-        );
+        this._renderNav();
         this._renderBody(tab);
     },
 
@@ -712,17 +775,24 @@ const VN_TTS_Panel = {
         const body = document.getElementById(this._bodyId);
         if (!body) return;
         const cfg = this._cfg();
-        if (tab === 'index')  body.innerHTML = renderIndexTab(cfg);
-        if (tab === 'basic')  body.innerHTML = renderBasic(cfg);
-        if (tab === 'models') {
+        const eng = this._eng();
+
+        if (tab === 'main') {
+            // SoVITS 的設定頁沿用原本那份，一個字都沒改
+            body.innerHTML = (eng === 'index') ? renderIndexTab(cfg) : renderBasic(cfg);
+            return;
+        }
+        if (tab === 'voices') {
+            if (eng === 'index') { body.innerHTML = renderIndexVoices(cfg); return; }
             if (this._modelFormMode === 'add') body.innerHTML = renderModelForm(null, null);
             else if (this._modelFormMode)      body.innerHTML = renderModelForm(this._modelFormMode, cfg.models[this._modelFormMode]);
-            else                               body.innerHTML = renderModels(cfg);
+            else                               body.innerHTML = renderModels(cfg, eng);
+            return;
         }
-        if (tab === 'chars')  body.innerHTML = renderChars(cfg);
+        if (tab === 'chars') { body.innerHTML = renderChars(cfg, eng); return; }
         if (tab === 'npc') {
             if (this._npcFormMode) body.innerHTML = renderNpcForm();
-            else                   body.innerHTML = renderNpc(cfg);
+            else                   body.innerHTML = renderNpc(cfg, eng);
         }
     },
 

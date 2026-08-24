@@ -271,3 +271,19 @@ select.vtts-input option { background: #EEF0F6; color: #1A1C28; }
 }
 .vtts-toast.show { opacity: 1; }
 .vtts-file-hidden { display: none; }
+
+/* 引擎二選一（顯存只夠一套，本來就該擇一）— 比分頁重、比標題輕 */
+.vtts-engine-bar { display: flex; gap: 8px; margin-bottom: 14px; }
+.vtts-engine-btn {
+    flex: 1; padding: 14px 10px; font-size: 16px; cursor: pointer;
+    border-radius: 10px; border: 1px solid rgba(26,28,40,0.18);
+    background: rgba(26,28,40,0.03); color: rgba(26,28,40,0.50);
+    font-family: inherit; font-weight: 600; letter-spacing: 1px;
+    transition: all .2s;
+}
+.vtts-engine-btn:hover { color: #1A1C28; border-color: rgba(26,28,40,0.35); }
+.vtts-engine-btn.active {
+    background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: 800;
+}
+.vtts-inline-root { position: relative; }
+.vtts-inline-root .vtts-tabs { margin: 0 -4px 12px; }
