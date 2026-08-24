@@ -14,7 +14,8 @@ function buildPanelHTML() {
   </div>
 
   <div class="vtts-tabs">
-    <button class="vtts-tab active" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">配置</button>
+    <button class="vtts-tab active" data-tab="index"   onclick="VN_TTS_Panel.switchTab('index')">IndexTTS</button>
+    <button class="vtts-tab"        data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">SoVITS</button>
     <button class="vtts-tab"        data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
     <button class="vtts-tab"        data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
     <button class="vtts-tab"        data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
@@ -37,11 +38,7 @@ function renderBasic(cfg) {
   <div class="vtts-field">
     <label class="vtts-label">API 地址</label>
     <input class="vtts-input" id="vtts-server" type="text" value="${esc(cfg.serverUrl)}" placeholder="http://127.0.0.1:9880">
-    <div class="vtts-hint">${
-        Object.keys(cfg.models).length && !Object.values(cfg.models).some(m => m.engine !== 'index')
-        ? '你目前的音色全是 IndexTTS，不會用到這一項，放著不用管。IndexTTS 的網址寫在每個音色裡，匯入時就設好了。'
-        : 'GPT-SoVITS 推理服務的 API 地址'
-    }</div>
+    <div class="vtts-hint">GPT-SoVITS 推理服務的 API 地址</div>
   </div>
   
   <div class="vtts-field">
@@ -117,6 +114,67 @@ function renderBasic(cfg) {
 <div class="vtts-save-bar">
   <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.testConnection()">🔗 測試連線</button>
   <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.saveBasic()">儲存</button>
+</div>`;
+}
+
+// IndexTTS 專用分頁。刻意跟 SoVITS 那頁完全分開：
+// 那頁的連線位址、Top_K、Temperature 這些參數 IndexTTS 一個都不吃，
+// 混在一起只會讓人以為每一欄都要填。
+function renderIndexTab(cfg) {
+    const all = Object.entries(cfg.models || {});
+    const idx = all.filter(([, m]) => m.engine === 'index');
+    // 網址是存在每個音色裡的（284 個音色就有 284 份），這裡取第一個當代表，
+    // 改完按「套用」一次寫回全部，免得換埠要一個一個改。
+    const url = (idx[0] && idx[0][1].url) || (cfg.narratorIndex && cfg.narratorIndex.url) || 'http://127.0.0.1:8881';
+    const emoTotal = idx.reduce((n, [, m]) => n + Object.keys(m.emotions || {}).length, 0);
+
+    const rows = idx.map(([id, m]) => {
+        const ec = Object.keys(m.emotions || {}).length;
+        return `
+<div class="vtts-model-card vtts-model-card-compact">
+  <div class="vtts-model-card-head">
+    <span class="vtts-model-name">🎙️ ${esc(m.name || id)}${ec ? ` <span class="vtts-model-emo-badge">${ec} 情緒</span>` : ''}</span>
+    <div class="vtts-model-actions">
+      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.playNpcModel('${escJs(id)}')">▶ 試聽</button>
+      <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
+    </div>
+  </div>
+</div>`;
+    }).join('');
+
+    return `
+<div class="vtts-card">
+  <div class="vtts-card-title">🎙️ 語音服務</div>
+  <div class="vtts-field">
+    <label class="vtts-label">服務網址</label>
+    <input class="vtts-input" id="vtts-index-url" type="text" value="${esc(url)}" placeholder="http://127.0.0.1:8881">
+    <div class="vtts-hint">語音服務跑起來後的位址。改了要按「套用」，才會寫進每一個音色。</div>
+  </div>
+  <div class="vtts-row">
+    <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.testIndexUrl()">🔗 測試連線</button>
+    <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.applyIndexUrl()">套用到全部音色</button>
+  </div>
+</div>
+
+<div class="vtts-card">
+  <div class="vtts-card-title">🎨 音色</div>
+  <div class="vtts-row">
+    <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()">🔄 從服務匯入音色</button>
+  </div>
+  <div class="vtts-hint">把音檔丟進語音服務的 voices 資料夾，再按這裡就會出現在下面。檔名就是音色名，不用練模型。</div>
+  ${idx.length
+    ? `<div class="vtts-hint">目前 ${idx.length} 個音色，共 ${emoTotal} 條情緒對應。到「角色」頁把音色指派給角色。</div>${rows}`
+    : '<div class="vtts-empty">還沒有音色。先開語音服務，再按上面的按鈕匯入。</div>'}
+</div>
+
+<div class="vtts-card">
+  <div class="vtts-card-title">💾 跨裝置轉移</div>
+  <div class="vtts-row">
+    <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.exportConfig()">📤 匯出目前配置</button>
+    <button class="vtts-btn vtts-btn-cyan" onclick="document.getElementById('vtts-import-file-idx').click()">📥 從檔案匯入</button>
+    <input type="file" id="vtts-import-file-idx" class="vtts-file-hidden" accept=".json" onchange="VN_TTS_Panel.importConfig(this)">
+  </div>
+  <div class="vtts-hint">音色與角色綁定都在裡面，換裝置時匯出再匯入即可。</div>
 </div>`;
 }
 
@@ -535,6 +593,7 @@ function escJs(s) {
 // ── 面板控制器 ────────────────────────────────────────────────────────────────
 const VN_TTS_Panel = {
     _currentTab:    'basic',
+    _tabTouched:    false,   // 使用者手動切過分頁沒有
     _modelFormMode: null,   
     _npcFormMode:   false,
     _bodyId:        'vtts-body',   
@@ -542,15 +601,23 @@ const VN_TTS_Panel = {
     _refPlayer: null, // 用來裝載試聽聲音的容器
     _savedListScroll: 0, // 👈 新增這行，用來記住高度
 
+    // 預設分頁：有 IndexTTS 音色就停在 IndexTTS，沒有的人維持原本的 SoVITS 頁
+    _defaultTab() {
+        const models = Object.values((this._cfg() || {}).models || {});
+        return models.some(m => m.engine === 'index') ? 'index' : 'basic';
+    },
+
     initInline(containerId) {
         const root = document.getElementById(containerId);
         if (!root) return;
+        if (!this._tabTouched) this._currentTab = this._defaultTab();
         this._bodyId  = 'vtts-inline-body';
         this._toastId = 'vtts-inline-toast';
         root.innerHTML = `
 <div style="position:relative;">
   <div class="vtts-tabs" style="margin:0 -4px 12px;border-bottom:1px solid rgba(26,28,40,0.08);">
-    <button class="vtts-tab ${this._currentTab==='basic'  ?'active':''}" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">配置</button>
+    <button class="vtts-tab ${this._currentTab==='index'  ?'active':''}" data-tab="index"   onclick="VN_TTS_Panel.switchTab('index')">IndexTTS</button>
+    <button class="vtts-tab ${this._currentTab==='basic'  ?'active':''}" data-tab="basic"   onclick="VN_TTS_Panel.switchTab('basic')">SoVITS</button>
     <button class="vtts-tab ${this._currentTab==='models' ?'active':''}" data-tab="models"  onclick="VN_TTS_Panel.switchTab('models')">模型</button>
     <button class="vtts-tab ${this._currentTab==='chars'  ?'active':''}" data-tab="chars"   onclick="VN_TTS_Panel.switchTab('chars')">角色</button>
     <button class="vtts-tab ${this._currentTab==='npc'    ?'active':''}" data-tab="npc"     onclick="VN_TTS_Panel.switchTab('npc')">NPC</button>
@@ -634,6 +701,7 @@ const VN_TTS_Panel = {
 
     switchTab(tab) {
         this._currentTab = tab;
+        this._tabTouched = true;
         document.querySelectorAll('.vtts-tab').forEach(t =>
             t.classList.toggle('active', t.dataset.tab === tab)
         );
@@ -644,6 +712,7 @@ const VN_TTS_Panel = {
         const body = document.getElementById(this._bodyId);
         if (!body) return;
         const cfg = this._cfg();
+        if (tab === 'index')  body.innerHTML = renderIndexTab(cfg);
         if (tab === 'basic')  body.innerHTML = renderBasic(cfg);
         if (tab === 'models') {
             if (this._modelFormMode === 'add') body.innerHTML = renderModelForm(null, null);
@@ -665,20 +734,26 @@ const VN_TTS_Panel = {
     },
 
     // ── 儲存配置，新增了動態抓取四大參數的邏輯 ────────────────────────────
+    // 欄位分散在不同分頁，不在畫面上的就跳過不動（不能假設全都在，會 null）
     saveBasic() {
         const tts = this._tts();
         if (!tts) return;
-        tts.config.enabled     = document.getElementById('vtts-enabled').checked;
-        tts.config.serverUrl   = document.getElementById('vtts-server').value.trim();
-        tts.config.stRoot      = document.getElementById('vtts-st-root').value.trim(); // 🌟 補上這行，讓系統記住根目錄！
-        tts.config.textLang    = document.getElementById('vtts-lang').value;
-        
-        // 儲存新的情緒靈魂參數
-        tts.config.speed       = parseFloat(document.getElementById('vtts-spd').value);
-        tts.config.topK        = parseInt(document.getElementById('vtts-topk').value, 10);
-        tts.config.topP        = parseFloat(document.getElementById('vtts-topp').value);
-        tts.config.temperature  = parseFloat(document.getElementById('vtts-temp').value);
-        tts.config.sampleSteps  = parseInt(document.getElementById('vtts-steps').value, 10);
+        const el  = (id) => document.getElementById(id);
+        const str = (id, key) => { const e = el(id); if (e) tts.config[key] = e.value.trim(); };
+        const num = (id, key, fn) => { const e = el(id); if (e) { const v = fn(e.value); if (!isNaN(v)) tts.config[key] = v; } };
+        const F = parseFloat, I = (v) => parseInt(v, 10);
+
+        const en = el('vtts-enabled'); if (en) tts.config.enabled = en.checked;
+        str('vtts-server',  'serverUrl');
+        str('vtts-st-root', 'stRoot');
+        const lang = el('vtts-lang'); if (lang) tts.config.textLang = lang.value;
+
+        num('vtts-spd',   'speed',       F);
+        num('vtts-topk',  'topK',        I);
+        num('vtts-topp',  'topP',        F);
+        num('vtts-temp',  'temperature', F);
+        num('vtts-steps', 'sampleSteps', I);
+        const vol = el('vtts-vol'); if (vol) tts.config.volume = F(vol.value);
 
         tts.save();
         this._toast('✓ 已儲存');
@@ -1076,6 +1151,33 @@ const VN_TTS_Panel = {
     testKokoro() {
         const tts = this._tts(); if (!tts) return;
         if (typeof tts._speakKokoro === 'function') { tts._speakKokoro('這是旁白語音的試聽，聽聽聲音和速度。'); this._toast('🔊 試聽中…（服務沒開會沒聲音）'); }
+    },
+
+    // ── IndexTTS 服務網址（配置頁；音色各自存一份，這裡統一改）─────────
+    testIndexUrl() {
+        const el = document.getElementById('vtts-index-url');
+        const base = String(el ? el.value : '').trim().replace(/\/+$/, '');
+        if (!base) { this._toast('✗ 先填網址'); return; }
+        this._toast('測試中…');
+        fetch(base + '/health')
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(d => this._toast(d.ready ? `✓ 連上了，${(d.voices || []).length} 個音色` : '△ 連上了，模型還在載入'))
+            .catch(e => this._toast('✗ 連不上（服務沒開？）'));
+    },
+    applyIndexUrl() {
+        const tts = this._tts(); if (!tts) return;
+        const el = document.getElementById('vtts-index-url');
+        const base = String(el ? el.value : '').trim().replace(/\/+$/, '');
+        if (!base) { this._toast('✗ 先填網址'); return; }
+        let n = 0;
+        for (const m of Object.values(tts.config.models || {})) {
+            if (m.engine === 'index') { m.url = base; n++; }
+        }
+        // 旁白如果也用 IndexTTS，一起帶著改，免得只改一半
+        if (tts.config.narratorIndex) tts.config.narratorIndex.url = base;
+        tts.save();
+        this._renderBody('basic');
+        this._toast(`✓ ${n} 個音色都改成 ${base}`);
     },
 
     // ── IndexTTS 旁白 ───────────────────────────────────────────────────

@@ -151,6 +151,16 @@ select.vtts-input option { background: #EEF0F6; color: #1A1C28; }
     border: 1px solid rgba(26,28,40,0.15);
     border-radius: 8px; padding: 14px; margin-bottom: 12px;
 }
+/* 這張卡的設定對目前的音色沒有作用：淡化但不隱藏（之後換引擎還會用到） */
+.vtts-card.vtts-card-na { opacity: 0.45; }
+.vtts-card.vtts-card-na:hover { opacity: 0.85; }
+.vtts-field.vtts-field-na { opacity: 0.45; }
+.vtts-na-tag {
+    margin-left: 6px; padding: 1px 7px; border-radius: 9px;
+    font-size: 10px; font-weight: 500; letter-spacing: 0.5px; vertical-align: 1px;
+    background: rgba(26,28,40,0.10); color: rgba(26,28,40,0.62);
+    border: 1px solid rgba(26,28,40,0.18);
+}
 .vtts-card-title {
     font-size: 13px; color: #1A1C28; font-weight: 800;
     margin-bottom: 12px; letter-spacing: .5px;
@@ -260,3 +270,4 @@ select.vtts-input option { background: #EEF0F6; color: #1A1C28; }
     transition: opacity .3s; z-index: 100;
 }
 .vtts-toast.show { opacity: 1; }
+.vtts-file-hidden { display: none; }
