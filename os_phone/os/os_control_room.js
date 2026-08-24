@@ -227,7 +227,9 @@
             const dv = $('#cr-dot-voice');
             // IndexTTS 埠通了還要等模型載入，沒 ready 之前照樣算「啟動中」
             const voiceUp = !!cur?.up && (!isIdx || cur.ready !== false);
-            if (dv) dv.textContent = dot(voiceUp, 'voice');
+            // 載入中就是黃燈：不管是誰啟動的（控制塔自己帶起來時 _starting 是空的）
+            const voiceLoading = isIdx && !!cur?.up && cur.ready === false;
+            if (dv) dv.textContent = voiceLoading ? '🟡' : dot(voiceUp, 'voice');
             const iv = $('#cr-info-voice');
             if (iv) {
                 if (cur?.installed === false) {
