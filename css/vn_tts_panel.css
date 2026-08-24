@@ -263,13 +263,27 @@ select.vtts-input option { background: #EEF0F6; color: #1A1C28; }
 }
 
 /* ── 狀態提示 ── */
+/* 提示黏在內容頂端：面板嵌在設定頁裡會捲動，放底部會捲出畫面外看不到。
+   用負 margin 抵掉高度，沒有提示時不佔版面。 */
 .vtts-toast {
-    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: #1A1C28; color: #EEF0F6; padding: 8px 18px; border-radius: 20px;
-    font-size: 12px; font-weight: 600; opacity: 0; pointer-events: none;
-    transition: opacity .3s; z-index: 100;
+    position: sticky; top: 6px; z-index: 100;
+    width: fit-content; max-width: 92%; margin: 0 auto;
+    background: #1A1C28; color: #EEF0F6; border-radius: 20px;
+    font-size: 12px; font-weight: 600; text-align: center;
+    height: 0; padding: 0 18px; overflow: hidden;
+    opacity: 0; pointer-events: none; visibility: hidden;
+    box-shadow: 0 4px 14px rgba(26,28,40,0.28);
+    transition: opacity .25s;
 }
-.vtts-toast.show { opacity: 1; }
+.vtts-toast.show {
+    height: auto; padding: 9px 18px; margin-bottom: 10px;
+    opacity: 1; visibility: visible;
+}
+/* 獨立視窗版本身就是滿版固定高度，維持原本浮在底部的樣子 */
+#vn-tts-overlay > .vtts-toast {
+    position: absolute; top: auto; bottom: 20px; left: 50%;
+    transform: translateX(-50%); margin: 0;
+}
 .vtts-file-hidden { display: none; }
 
 /* 引擎二選一（顯存只夠一套，本來就該擇一）— 比分頁重、比標題輕 */

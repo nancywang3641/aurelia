@@ -687,8 +687,8 @@ const VN_TTS_Panel = {
         root.innerHTML = `
 <div class="vtts-inline-root">
   <div id="vtts-nav"></div>
-  <div id="vtts-inline-body"></div>
   <div class="vtts-toast" id="vtts-inline-toast"></div>
+  <div id="vtts-inline-body"></div>
 </div>`;
         this._renderNav();
         this._renderBody(this._currentTab);
