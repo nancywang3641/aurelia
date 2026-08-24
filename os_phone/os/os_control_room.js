@@ -13,7 +13,7 @@
 
     const ControlRoom = {
         _timer: null,
-        _starting: { sovits: 0, comfy: 0 },   // 按下啟動後的「啟動中」黃燈窗口（timestamp）
+        _starting: { voice: 0, comfy: 0 },   // 按下啟動後的「啟動中」黃燈窗口（timestamp）
 
         launchApp(container) {
             container.innerHTML = `
@@ -21,7 +21,7 @@
                     <div class="cr-header">
                         <div class="cr-header-text">
                             <div class="cr-title">🎛️ 控制室</div>
-                            <div class="cr-sub">SoVITS ＋ ComfyUI 都在這裡管，不用看黑窗</div>
+                            <div class="cr-sub">語音 ＋ 生圖都在這裡管，不用看黑窗</div>
                         </div>
                         <button class="cr-help-btn" id="cr-help-open" title="怎麼設定？看說明書"><i class="fa-solid fa-circle-question"></i></button>
                     </div>
@@ -30,17 +30,21 @@
                         <span class="cr-tower-hint">雙擊桌面的「奧瑞亞控制塔」捷徑，這裡就會亮起來</span>
                     </div>
                     <div id="cr-cards">
-                        <div class="cr-card" id="cr-card-sovits">
+                        <div class="cr-card" id="cr-card-voice">
                             <div class="cr-card-head">
-                                <span class="cr-dot" id="cr-dot-sovits">🔴</span>
+                                <span class="cr-dot" id="cr-dot-voice">🔴</span>
                                 <span class="cr-card-name">🎙️ 語音引擎</span>
-                                <span class="cr-card-tag">SoVITS · 9880</span>
+                                <span class="cr-card-tag" id="cr-tag-voice">—</span>
                             </div>
-                            <div class="cr-card-body" id="cr-info-sovits">—</div>
+                            <div class="cr-seg" id="cr-voice-seg">
+                                <button class="cr-seg-btn" data-engine="index">IndexTTS</button>
+                                <button class="cr-seg-btn" data-engine="sovits">SoVITS</button>
+                            </div>
+                            <div class="cr-card-body" id="cr-info-voice">—</div>
                             <div class="cr-card-btns">
-                                <button class="cr-btn" data-act="start" data-svc="sovits">啟動</button>
-                                <button class="cr-btn" data-act="restart" data-svc="sovits">重啟</button>
-                                <button class="cr-btn cr-btn-danger" data-act="stop" data-svc="sovits">停止</button>
+                                <button class="cr-btn" data-act="start" data-svc="voice">啟動</button>
+                                <button class="cr-btn" data-act="restart" data-svc="voice">重啟</button>
+                                <button class="cr-btn cr-btn-danger" data-act="stop" data-svc="voice">停止</button>
                             </div>
                         </div>
                         <div class="cr-card" id="cr-card-comfy">
@@ -117,6 +121,9 @@
             container.querySelectorAll('.cr-btn[data-act]').forEach(btn => {
                 btn.onclick = () => this._act(btn.dataset.act, btn.dataset.svc, container);
             });
+            container.querySelectorAll('.cr-seg-btn[data-engine]').forEach(btn => {
+                btn.onclick = () => this._switchEngine(btn.dataset.engine, container);
+            });
             const openBtn = container.querySelector('#cr-open-web');
             if (openBtn) openBtn.onclick = () => { this._post('/open'); };
 
@@ -157,11 +164,18 @@
 
         async _act(act, svc, container) {
             if (act === 'start' || act === 'restart') {
-                if (svc === 'sovits' || svc === 'all') this._starting.sovits = Date.now();
-                if (svc === 'comfy'  || svc === 'all') this._starting.comfy  = Date.now();
+                if (svc === 'voice' || svc === 'all') this._starting.voice = Date.now();
+                if (svc === 'comfy' || svc === 'all') this._starting.comfy = Date.now();
             }
             await this._post('/' + act + '?svc=' + svc);
             this._tick(container);   // 立刻刷一次
+        },
+
+        // 顯存只夠一套語音，切換＝停掉另一套再開這套，控制塔那邊會記住選擇
+        async _switchEngine(engine, container) {
+            this._starting.voice = Date.now();
+            await this._post('/voice?engine=' + engine);
+            this._tick(container);
         },
 
         _startPolling(container) {
@@ -200,9 +214,38 @@
                 return '🔴';
             };
 
-            const ds = $('#cr-dot-sovits'); if (ds) ds.textContent = dot(st.sovits?.up, 'sovits');
-            const is_ = $('#cr-info-sovits');
-            if (is_) is_.textContent = st.sovits?.up ? '運作中，語音隨叫隨到' : (this._starting.sovits ? '啟動中…（載入語音模型要一陣子）' : '未啟動');
+            // 語音：兩套引擎共用一張卡，顯示的是「目前選中的那套」的狀態
+            const eng = st.voiceEngine === 'sovits' ? 'sovits' : 'index';
+            const isIdx = eng === 'index';
+            const cur = isIdx ? st.index : st.sovits;
+            const seg = $('#cr-voice-seg');
+            if (seg) seg.querySelectorAll('.cr-seg-btn').forEach(b =>
+                b.classList.toggle('on', b.dataset.engine === eng));
+            const tag = $('#cr-tag-voice');
+            if (tag) tag.textContent = (isIdx ? 'IndexTTS · ' : 'SoVITS · ') + (cur?.port || (isIdx ? 8881 : 9880));
+
+            const dv = $('#cr-dot-voice');
+            // IndexTTS 埠通了還要等模型載入，沒 ready 之前照樣算「啟動中」
+            const voiceUp = !!cur?.up && (!isIdx || cur.ready !== false);
+            if (dv) dv.textContent = dot(voiceUp, 'voice');
+            const iv = $('#cr-info-voice');
+            if (iv) {
+                if (isIdx && cur?.up && cur.ready === false) {
+                    iv.textContent = '載入模型中…（第一次約一分鐘）';
+                } else if (voiceUp) {
+                    iv.textContent = isIdx
+                        ? `運作中，${cur.voices || 0} 個音色隨叫隨到`
+                        : '運作中，語音隨叫隨到';
+                } else {
+                    iv.textContent = this._starting.voice ? '啟動中…（載入語音模型要一陣子）' : '未啟動';
+                }
+            }
+
+            // 另一套如果還醒著就提醒，兩套一起吃顯存會撐爆
+            const other = isIdx ? st.sovits : st.index;
+            if (iv && other?.up) {
+                iv.textContent += isIdx ? '　⚠️ SoVITS 也還開著' : '　⚠️ IndexTTS 也還開著';
+            }
 
             const dc = $('#cr-dot-comfy'); if (dc) dc.textContent = dot(st.comfy?.up, 'comfy');
             const ic = $('#cr-info-comfy');

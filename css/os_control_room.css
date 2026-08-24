@@ -38,6 +38,12 @@
 .cr-card-tag { margin-left: auto; font-size: 10px; color: rgba(232,220,192,0.4); letter-spacing: 1px; }
 .cr-card-body { font-size: 12px; color: rgba(232,220,192,0.75); margin: 8px 0 2px; min-height: 16px; }
 
+/* 語音引擎二選一（顯存只夠開一套） */
+.cr-seg { display: flex; gap: 4px; margin-top: 8px; padding: 3px; border-radius: 7px; background: rgba(255,255,255,0.05); }
+.cr-seg-btn { flex: 1; padding: 6px 8px; font-size: 11px; letter-spacing: 1px; cursor: pointer; border-radius: 5px; border: 1px solid transparent; background: transparent; color: rgba(232,220,192,0.45); transition: all 0.2s; }
+.cr-seg-btn:hover { color: rgba(232,220,192,0.8); }
+.cr-seg-btn.on { border-color: rgba(212,175,55,0.45); background: rgba(212,175,55,0.16); color: #d4af37; font-weight: 800; }
+
 .cr-vram { margin-top: 8px; }
 .cr-vram-label { font-size: 10px; color: rgba(232,220,192,0.5); margin-bottom: 4px; letter-spacing: 1px; }
 .cr-vram-track { height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
