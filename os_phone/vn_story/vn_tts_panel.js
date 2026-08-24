@@ -170,11 +170,17 @@ function renderIndexTab(cfg) {
 </div>
 
 <div class="vtts-card">
-  <div class="vtts-card-title">🗣 音量</div>
+  <div class="vtts-card-title">🗣 播放與語氣</div>
   <div class="vtts-field">
     <label class="vtts-label">播放音量 <span id="vtts-vol-val">${Math.round((cfg.volume ?? 1)*100)}%</span></label>
     <input class="vtts-input" id="vtts-vol" type="range" min="0" max="1" step="0.05"
            value="${cfg.volume ?? 1}" oninput="document.getElementById('vtts-vol-val').textContent=Math.round(this.value*100)+'%'">
+  </div>
+  <div class="vtts-field">
+    <label class="vtts-label">語氣強度 <span id="vtts-idxemo-val">${Math.round((cfg.indexEmoAlpha ?? 0.5)*100)}%</span></label>
+    <input class="vtts-input" id="vtts-idxemo" type="range" min="0" max="1" step="0.05"
+           value="${cfg.indexEmoAlpha ?? 0.5}" oninput="document.getElementById('vtts-idxemo-val').textContent=Math.round(this.value*100)+'%'">
+    <div class="vtts-hint">劇本寫了表情時，說話起伏要跟到多滿。往上調戲會多，但調過頭會開始聽起來像另一個人 —— 低沉的聲音特別容易被拉高。覺得太平就往上一格一格試。</div>
   </div>
   <div class="vtts-save-bar">
     <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.saveBasic()">儲存</button>
@@ -824,6 +830,7 @@ const VN_TTS_Panel = {
         num('vtts-temp',  'temperature', F);
         num('vtts-steps', 'sampleSteps', I);
         const vol = el('vtts-vol'); if (vol) tts.config.volume = F(vol.value);
+        num('vtts-idxemo', 'indexEmoAlpha', F);   // IndexTTS 頁才有這顆，SoVITS 頁沒有就跳過
 
         tts.save();
         this._toast('✓ 已儲存');

@@ -40,6 +40,12 @@ const VN_TTS = {
         // 旁白用 MiniMax（雲端，只要 API key、免本地；給不會弄電腦的朋友。enabled 時優先於 SoVITS narratorModel）
         narratorMinimax: { enabled: false, voice: 'audiobook_female_1' },
 
+        // IndexTTS 的語氣強度（0~1，音色可用 emoAlpha 個別覆寫）。
+        //   實測 0.5 是甜蜜點：音高起伏 +18%、音域 +22%，而說話音高只升 2.3 半音（還是同一個人）。
+        //   往上就開始變成另一個人：專屬情緒音檔 1.0 升 6.5 半音，情緒權重對低沉的聲音更兇
+        //   （118Hz 的音色 1.0 會升到 251Hz，等於升 13 個半音，而且起伏反而掉）。
+        indexEmoAlpha: 0.5,
+
         // 旁白用 IndexTTS（本機獨立服務、OpenAI 相容；音色＝丟一段參考音檔就好，不用練模型）
         //   voice 可帶情緒：'丹' 或 '丹:Angry'
         narratorIndex: { enabled: false, url: 'http://127.0.0.1:8881', voice: '', speed: 1 },
@@ -557,10 +563,9 @@ const VN_TTS = {
     async _fetchIndexBlob(model, text, emotion) {
         const base = String(model.url || '').replace(/\/+$/, '');
         if (!base) throw new Error('這個音色沒有服務網址');
-        // 情緒強度給滿，由服務端決定要不要收：走情緒權重或本人錄的情緒音檔都不會變聲，
-        // 只有「共用情緒音檔」是別人的聲音（實測套過去基頻被壓低 110Hz），服務端自己壓到 0.5。
-        // 前端一律先壓 0.5 的話，能給滿的那兩條通道也跟著半殘（實測起伏只多 8%）。
-        const alpha = (typeof model.emoAlpha === 'number') ? model.emoAlpha : 1;
+        // 語氣強度：面板那顆滑桿（音色可個別覆寫）。共用情緒音檔那條服務端還會再壓一次。
+        const alpha = (typeof model.emoAlpha === 'number') ? model.emoAlpha
+                    : (typeof this.config.indexEmoAlpha === 'number') ? this.config.indexEmoAlpha : 0.5;
         const resp = await fetch(base + '/v1/audio/speech', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
