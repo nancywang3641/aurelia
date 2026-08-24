@@ -230,7 +230,9 @@
             if (dv) dv.textContent = dot(voiceUp, 'voice');
             const iv = $('#cr-info-voice');
             if (iv) {
-                if (isIdx && cur?.up && cur.ready === false) {
+                if (cur?.installed === false) {
+                    iv.textContent = isIdx ? '還沒安裝（跑安裝包就會出現）' : '還沒安裝';
+                } else if (isIdx && cur?.up && cur.ready === false) {
                     iv.textContent = '載入模型中…（第一次約一分鐘）';
                 } else if (voiceUp) {
                     iv.textContent = isIdx
@@ -263,7 +265,8 @@
                     if (bar) { bar.style.width = pct + '%'; bar.classList.toggle('cr-vram-hot', pct > 85); }
                 }
             } else {
-                if (ic) ic.textContent = this._starting.comfy ? '啟動中…（第一次要 30~60 秒）' : '未啟動';
+                if (ic) ic.textContent = (st.comfy?.installed === false) ? '還沒安裝'
+                    : (this._starting.comfy ? '啟動中…（第一次要 30~60 秒）' : '未啟動');
                 if (vramWrap) vramWrap.classList.add('hidden');
             }
 
