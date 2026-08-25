@@ -46,6 +46,11 @@ const VN_TTS = {
         //   （118Hz 的音色 1.0 會升到 251Hz，等於升 13 個半音，而且起伏反而掉）。
         indexEmoAlpha: 0.5,
 
+        // IndexTTS 共用情緒對照（標籤→服務端情緒名）。匯入音色時每顆的表都一模一樣，
+        //   以前每顆存一份 ⇒ 287 顆疊出幾百 KB、把 localStorage 5MB 推爆（save 一炸面板全滅）。
+        //   現在只存這一份；音色自己帶 emotions（本人錄的情緒音檔那幾顆）才覆寫。
+        indexEmoShared: {},
+
         // 旁白用 IndexTTS（本機獨立服務、OpenAI 相容；音色＝丟一段參考音檔就好，不用練模型）
         //   voice 可帶情緒：'丹' 或 '丹:Angry'
         narratorIndex: { enabled: false, url: 'http://127.0.0.1:8881', voice: '', speed: 1 },
@@ -89,13 +94,65 @@ const VN_TTS = {
                 if (!this.config.narratorIndex)  this.config.narratorIndex = { enabled:false, url:'http://127.0.0.1:8881', voice:'', speed:1 };
                 if (!this.config.npcCategories)  this.config.npcCategories = [];
                 if (!this.config.npcLocks)       this.config.npcLocks = {};
+                if (!this.config.indexEmoShared) this.config.indexEmoShared = {};
+                // 舊資料瘦身：把每顆音色重複的那份情緒表收攏成共用一份（省下的空間就是 save 能不能活的差別）
+                if (this._dedupeIndexEmotions()) this.save();
             }
         } catch (e) {}
         console.log('[VN_TTS] 初始化, 啟用:', this.config.enabled);
     },
 
+    // 匯入時代每顆 index 音色都存了一份一模一樣的情緒表 → 只留一份在 indexEmoShared，
+    //   跟共用表相同的刪掉；不同的（本人錄的情緒音檔）保留當覆寫。回傳有沒有改到東西。
+    _dedupeIndexEmotions() {
+        let changed = 0;
+        try {
+            const models = this.config.models || {};
+            let shared = (this.config.indexEmoShared && Object.keys(this.config.indexEmoShared).length)
+                ? this.config.indexEmoShared : null;
+            let sharedStr = shared ? JSON.stringify(shared) : '';
+            for (const m of Object.values(models)) {
+                if (!m || m.engine !== 'index' || !m.emotions || !Object.keys(m.emotions).length) continue;
+                const s = JSON.stringify(m.emotions);
+                if (!shared) { shared = m.emotions; sharedStr = s; this.config.indexEmoShared = shared; }
+                if (s === sharedStr) { delete m.emotions; changed++; }
+            }
+            if (changed) console.log(`[VN_TTS] 情緒表已收攏成共用一份（瘦身 ${changed} 顆音色）`);
+        } catch (e) {}
+        return changed > 0;
+    },
+
+    // 這個音色實際用的情緒對照：自帶的優先，IndexTTS 音色沒帶就用共用表
+    emoMapOf(model) {
+        if (model && model.emotions && Object.keys(model.emotions).length) return model.emotions;
+        if (model && model.engine === 'index') return this.config.indexEmoShared || {};
+        return (model && model.emotions) || {};
+    },
+
     save() {
-        localStorage.setItem(this.CONFIG_KEY, JSON.stringify(this.config));
+        try {
+            localStorage.setItem(this.CONFIG_KEY, JSON.stringify(this.config));
+            return true;
+        } catch (e) {
+            // localStorage 滿了（5MB）最常見：以前這裡直接炸掉，面板按什麼都像沒反應。
+            //   現在大聲喊＋把兇手（最肥的 key）列在 console，設定留在記憶體、本頁還能用。
+            console.error('[VN_TTS] 設定存不進 localStorage：', e && e.message);
+            try {
+                const sizes = Object.keys(localStorage)
+                    .map(k => [k, (localStorage.getItem(k) || '').length])
+                    .sort((a, b) => b[1] - a[1]).slice(0, 10)
+                    .map(([k, n]) => `${k}=${Math.round(n / 1024)}KB`);
+                console.error('[VN_TTS] localStorage 最肥的 10 個 key：', sizes.join(', '));
+            } catch (e2) {}
+            try {
+                const w = window.parent || window;
+                const t = w.toastr || window.toastr;
+                if (t && t.error) t.error('瀏覽器儲存空間滿了，語音設定存不進去（重整後會消失）', 'TTS 存檔失敗');
+                const P = w.VN_TTS_Panel || window.VN_TTS_Panel;
+                if (P && P._toast) P._toast('✗ 存檔失敗：瀏覽器空間滿了');
+            } catch (e2) {}
+            return false;
+        }
     },
 
     // ── 本卡 NPC 聲線鎖（按穩定角色卡 id；與全域 charMappings 分流）──────────
@@ -553,7 +610,7 @@ const VN_TTS = {
     _indexVoice(model, emotion) {
         const base = model.voice || '';
         if (!emotion || emotion === 'default') return base;
-        const em = model.emotions || {};
+        const em = this.emoMapOf(model);   // 自帶的優先，沒帶用共用表（匯入的音色已不再每顆存一份）
         const hit = em[emotion]
                  || em[String(emotion).toLowerCase()]
                  || em[Object.keys(em).find(k => k.toLowerCase() === String(emotion).toLowerCase()) || ''];

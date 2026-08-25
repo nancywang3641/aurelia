@@ -201,9 +201,11 @@ function renderIndexTab(cfg) {
 // IndexTTS 的音色頁：只列 IndexTTS 音色，SoVITS 的模型不會混進來
 function renderIndexVoices(cfg) {
     const idx = Object.entries(cfg.models || {}).filter(([, m]) => m.engine === 'index');
-    const emoTotal = idx.reduce((n, [, m]) => n + Object.keys(m.emotions || {}).length, 0);
+    // 情緒數看「實際用的表」：自帶的優先、沒帶算共用表（存檔裡已不再每顆放一份）
+    const _emoOf = (m) => { const T = (window.parent || window).VN_TTS; return (T && T.emoMapOf) ? T.emoMapOf(m) : (m.emotions || {}); };
+    const emoTotal = idx.reduce((n, [, m]) => n + Object.keys(_emoOf(m)).length, 0);
     const rows = idx.map(([id, m]) => {
-        const ec = Object.keys(m.emotions || {}).length;
+        const ec = Object.keys(_emoOf(m)).length;
         return `
 <div class="vtts-model-card vtts-model-card-compact">
   <div class="vtts-model-card-head">
@@ -246,7 +248,8 @@ ${cards}`;
 
 // 外層只給精簡卡（名稱 + 編輯/刪除），細節 GPT/SoVITS/音頻/情緒都收進內層（編輯頁），免一攤平就很長
 function renderModelCard(id, m) {
-    const emoCount = Object.keys(m.emotions || {}).length;
+    const _T = (window.parent || window).VN_TTS;
+    const emoCount = Object.keys((_T && _T.emoMapOf) ? _T.emoMapOf(m) : (m.emotions || {})).length;
     // IndexTTS 音色不走 SoVITS 的編輯表單（那張表存的是 gptPath 那些欄位，一存就把 engine 洗掉）。
     // 要改音色就去服務的資料夾換檔案，再按一次匯入。
     if (m.engine === 'index') {
@@ -832,7 +835,7 @@ const VN_TTS_Panel = {
         const vol = el('vtts-vol'); if (vol) tts.config.volume = F(vol.value);
         num('vtts-idxemo', 'indexEmoAlpha', F);   // IndexTTS 頁才有這顆，SoVITS 頁沒有就跳過
 
-        tts.save();
+        if (!tts.save()) return;   // 存不進去（空間滿）→ save 自己會喊，別再報成功
         this._toast('✓ 已儲存');
     },
 
@@ -887,7 +890,7 @@ const VN_TTS_Panel = {
                 if (tts) {
                     // 將檔案內容與目前的配置合併
                     Object.assign(tts.config, data);
-                    tts.save();
+                    if (!tts.save()) return;
                     this._toast('✓ 配置已成功匯入');
                     this._renderBody(this._currentTab);
                 }
@@ -987,7 +990,7 @@ const VN_TTS_Panel = {
         }
 
         input.value = ''; // 重置，允許再次選同一資料夾
-        tts.save();
+        if (!tts.save()) return;
 
         if (!imported) {
             this._toast('⚠️ 未找到模型（子資料夾需含 .ckpt 或 .pth）');
@@ -1058,7 +1061,7 @@ const VN_TTS_Panel = {
             if (!existingIds.has(cat.id)) tts.config.npcCategories.push(cat);
         }
 
-        tts.save();
+        if (!tts.save()) return;
         this._modelFormMode = null;
         this._renderBody('models');
 
@@ -1119,7 +1122,7 @@ const VN_TTS_Panel = {
         }
 
         tts.config.models[newId] = model;
-        tts.save();
+        if (!tts.save()) return;
         this._modelFormMode = null;
         this._toast('✓ 模型已儲存');
         this._renderBody('models');
@@ -1170,7 +1173,7 @@ const VN_TTS_Panel = {
         const mid  = document.getElementById('vtts-new-sys-model').value;
         if (!mid) { this._toast('✗ 請選擇模型'); return; }
         tts.config.systemMappings[name] = mid;   // name 可為空 ＝ 預設系統音
-        tts.save();
+        if (!tts.save()) return;
         this._toast(name ? `✓ 已新增系統音：${name}` : '✓ 已設定預設系統音');
         this._renderNarr();
     },
@@ -1252,7 +1255,7 @@ const VN_TTS_Panel = {
         }
         // 旁白如果也用 IndexTTS，一起帶著改，免得只改一半
         if (tts.config.narratorIndex) tts.config.narratorIndex.url = base;
-        tts.save();
+        if (!tts.save()) return;
         this._renderBody('basic');
         this._toast(`✓ ${n} 個音色都改成 ${base}`);
     },
@@ -1297,7 +1300,7 @@ const VN_TTS_Panel = {
             tts.config.narratorIndex.emotions = data.emotions || [];
             // 還沒選過音色就自動選第一個，省一次點擊
             if (!tts.config.narratorIndex.voice && voices.length) tts.config.narratorIndex.voice = voices[0];
-            tts.save();
+            if (!tts.save()) return;
             this._renderNarr();
             this._toast(`✓ 找到 ${voices.length} 個音色`);
         } catch (e) {
@@ -1342,18 +1345,22 @@ const VN_TTS_Panel = {
             if (srvEmos.indexOf(srv) >= 0) emotions[alias] = { emo: srv };
         }
 
+        // 情緒表每顆都一樣 → 只存共用一份（以前每顆複製一份，287 顆疊出幾百 KB 把 localStorage 推爆）
+        tts.config.indexEmoShared = emotions;
+        const sharedStr = JSON.stringify(emotions);
         let added = 0, updated = 0;
         for (const v of voices) {
             const id = 'idx_' + v;
-            const exists = !!tts.config.models[id];
+            const prev = tts.config.models[id];
+            // 音色自帶的情緒表（本人錄的情緒音檔）跟共用表不同才保留當覆寫
+            const keepEmo = (prev && prev.emotions && Object.keys(prev.emotions).length
+                && JSON.stringify(prev.emotions) !== sharedStr) ? prev.emotions : null;
             // emoAlpha 0.5：情緒參考音檔會把音色往它自己的方向拉，0.5 以下不受影響
-            tts.config.models[id] = {
-                name: v, engine: 'index', url: base, voice: v, speed: 1, emoAlpha: 0.5,
-                emotions: JSON.parse(JSON.stringify(emotions))
-            };
-            exists ? updated++ : added++;
+            tts.config.models[id] = { name: v, engine: 'index', url: base, voice: v, speed: 1, emoAlpha: 0.5 };
+            if (keepEmo) tts.config.models[id].emotions = keepEmo;
+            prev ? updated++ : added++;
         }
-        tts.save();
+        if (!tts.save()) return;
         this._renderBody('models');
         this._toast(`✓ 音色 ${added} 新增／${updated} 更新，各帶 ${srvEmos.length} 種情緒`);
     },
@@ -1374,7 +1381,7 @@ const VN_TTS_Panel = {
         if (!name) { this._toast('✗ 請填寫角色名稱'); return; }
         if (!mid)  { this._toast('✗ 請選擇模型'); return; }
         tts.config.charMappings[name] = mid;
-        tts.save();
+        if (!tts.save()) return;
         this._toast(`✓ 已新增：${name}`);
         this._renderBody('chars');
     },
