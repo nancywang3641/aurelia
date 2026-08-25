@@ -639,7 +639,7 @@ const VN_TTS = {
         return await resp.blob();
     },
 
-    // ── IndexTTS 旁白合成（本機獨立服務、OpenAI 相容；不進 SoVITS GPU 佇列）──
+    // ── IndexTTS 旁白合成（本機獨立服務、OpenAI 相容；跟生圖同一張卡，進 GPU 佇列排隊）──
     //   voice 帶冒號就是情緒，例：'丹:Angry'（情緒＝服務端 emotions/ 裡的檔名）
     async _speakIndex(rawText) {
         const ic = this.config.narratorIndex || {};
@@ -652,17 +652,23 @@ const VN_TTS = {
         if (this._cache[k])       { this._playBlobUrl(this._cache[k]); return; }
         if (this._pending.has(k)) { this._waitAndPlay(k); return; }
         this._pending.add(k);
+        const _Wn = (window.parent || window);
+        const _runQn = (_Wn.AURELIA_GPU_QUEUE && _Wn.AURELIA_GPU_QUEUE.run)
+            ? (fn) => _Wn.AURELIA_GPU_QUEUE.run(fn, 0, 90000, '旁白語音(IndexTTS)')   // 即時語音：最高優先，90 秒逾時防堵隊
+            : (fn) => fn();
         try {
-            const resp = await fetch(base + '/v1/audio/speech', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: 'indextts', input: text, voice, response_format: 'mp3', speed: ic.speed || 1 })
+            await _runQn(async () => {
+                const resp = await fetch(base + '/v1/audio/speech', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: 'indextts', input: text, voice, response_format: 'mp3', speed: ic.speed || 1 })
+                });
+                if (!resp.ok) { console.warn('[VN_TTS] IndexTTS 回應異常', resp.status); return; }
+                const blob = await resp.blob();
+                const u = URL.createObjectURL(blob);
+                this._cache[k] = u;
+                this._playBlobUrl(u);
             });
-            if (!resp.ok) { console.warn('[VN_TTS] IndexTTS 回應異常', resp.status); return; }
-            const blob = await resp.blob();
-            const u = URL.createObjectURL(blob);
-            this._cache[k] = u;
-            this._playBlobUrl(u);
         } catch (e) {
             console.warn('[VN_TTS] IndexTTS 旁白失敗（服務沒開？）', e);
         } finally {
@@ -691,10 +697,16 @@ const VN_TTS = {
 
         this._pending.add(k);
 
-        // IndexTTS 音色：獨立服務、不換模型、不進 SoVITS GPU 佇列
+        // IndexTTS 音色：獨立服務、不換模型；但跟生圖用同一張顯卡，一樣要進 GPU 佇列排隊
+        // （不排隊會跟 ComfyUI 直連生圖對撞：生圖從十幾秒被拖到 200 秒＋，2026-08-26 事故）
         if (model.engine === 'index') {
+            const _Wi = (window.parent || window);
+            const _runQi = (_Wi.AURELIA_GPU_QUEUE && _Wi.AURELIA_GPU_QUEUE.run)
+                ? (fn) => _Wi.AURELIA_GPU_QUEUE.run(fn, 0, 90000, '即時語音(IndexTTS)/' + model.id)   // 即時語音：最高優先，90 秒逾時防堵隊
+                : (fn) => fn();
             try {
-                const blob = await this._fetchIndexBlob(model, text, emotion);
+                const blob = await _runQi(() => this._fetchIndexBlob(model, text, emotion));
+                if (!blob) throw new Error('逾時被放行');
                 const u = URL.createObjectURL(blob);
                 this._cache[k] = u;
                 this._playBlobUrl(u);
@@ -757,12 +769,16 @@ const VN_TTS = {
             const { model, text, emotion, key } = this._prewarmQueue.shift();
             if (this._cache[key]) { this._pending.delete(key); continue; }
 
-            // IndexTTS 音色不佔 SoVITS 的 GPU 佇列，直接生
+            // IndexTTS 音色不用換模型，但一樣吃 GPU：預熱要用最低優先進佇列，讓生圖與即時語音先走
+            // （不排隊的話 36 連發會連續佔卡好幾分鐘，生圖全程被拖慢，2026-08-26 事故主嫌）
             if (model.engine === 'index') {
+                const _Wp = (window.parent || window);
+                const _runQp = (_Wp.AURELIA_GPU_QUEUE && _Wp.AURELIA_GPU_QUEUE.run)
+                    ? (fn) => _Wp.AURELIA_GPU_QUEUE.run(fn, 2, 120000, '預熱語音(IndexTTS)/' + model.id)   // 預熱：最低優先，120 秒逾時防堵隊
+                    : (fn) => fn();
                 try {
-                    const blob = await this._fetchIndexBlob(model, text, emotion);
-                    this._cache[key] = URL.createObjectURL(blob);
-                    _n++;
+                    const blob = await _runQp(() => this._fetchIndexBlob(model, text, emotion));
+                    if (blob) { this._cache[key] = URL.createObjectURL(blob); _n++; }
                 } catch (e) {
                     console.warn('[VN_TTS] prewarm 失敗（IndexTTS）', key, e);
                 } finally {
