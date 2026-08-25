@@ -1239,6 +1239,7 @@
         alice:  { label: '世界門',   icon: 'fa-globe',   open: () => window.OS_WORLDGATE?.openGate?.() },
         rabbit: { label: '交易所',   icon: 'fa-house',   open: () => window.OS_PT?.openExchange?.() },
         ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
+        cheshire: { label: '黑市', icon: 'fa-store', open: () => window.VoidPanels?.openStore?.() },   // 🏪 黑市攤位在他身上（手機 app 那個門 2026-08-25 退役）
         // 🔮 紫薇沒有面板鈕：走近她＝純聊天，占卜要點桌子（Rae 2026-08-21 定案）。
         //    兩件事分開才不會「面板裡在解牌、底下對話框也在講話」。
     };
@@ -1332,6 +1333,7 @@
         try { window.OS_CAFE?.closeWorkshop?.(); } catch (e) {}   // 離開瀅瀅→收起書咖櫃檯
         try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {}   // 離開愛麗絲→收起世界門
         try { window.OS_WORLDGATE?.closeMeet?.(); } catch (e) {}   // 離開旅人→收起組隊卡(身分卡不動,右鍵開的可獨立看)
+        try { window.VoidPanels?.closeStore?.(); } catch (e) {}   // 離開柴郡→收起黑市
     }
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {

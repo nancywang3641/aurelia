@@ -1,7 +1,7 @@
 // core/void/phone_shell.js
 // 大廳「📱 手機殼」浮窗 —— 置中、一支手機造型外框 + app 切換。
 // 一次顯示一個 app；點主畫面圖標進 app、底部 home bar / 返回鈕切回主畫面。
-// 能吃容器的 app(微信/微薄/塔羅/RPG)直接渲染進手機螢幕；自開大面板的(閱讀/黑市)從手機啟動、開它自己的面板。
+// 能吃容器的 app(微信/微薄/閱讀/RPG)直接渲染進手機螢幕；自開大面板的從手機啟動、開它自己的面板。
 (function () {
     'use strict';
     const win = window;
@@ -20,21 +20,7 @@
             const x = document.getElementById('vn-reader-sa-close');
             if (x) x.onclick = _home;   // 統一返回：閱讀 ✕ → 回手機主畫面
         } },
-        { id: 'store',  name: '黑市', emoji: '🏪',  mode: 'inside', go: function (c) {
-            // 黑市用大廳單例 #store-panel-overlay。搬進手機(填滿靠 CSS)；回傳離開回呼搬回大廳原位
-            // (不能讓手機清空時刪掉單例)。關閉鈕 rebind 成回主畫面、跟其他 app 統一。
-            const ov = document.getElementById('store-panel-overlay');
-            if (!ov || !c) return;
-            const origParent = ov.parentElement;
-            c.appendChild(ov);
-            if (win.VoidPanels && win.VoidPanels.openStore) win.VoidPanels.openStore();   // 渲染內容 + display:flex
-            const x = document.getElementById('store-close-btn');
-            if (x) x.onclick = _home;   // 統一返回：黑市 ✕ → 回手機主畫面
-            return function () {
-                ov.style.display = 'none';
-                if (origParent) origParent.appendChild(ov);
-            };
-        } },
+        // 🏪 黑市已搬到 404 號房的柴郡身上（快轉地圖→404→點柴郡→黑市；立繪模式走前往→黑市）；手機不再重複開一個門。
         { id: 'settings', name: '樣式', emoji: '🖌️', mode: 'inside', go: function (c) { _renderSettings(c); } },
         { id: 'appstore', name: '應用商城', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
         { id: 'ctrlroom', name: '控制室', emoji: '🎛️', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
@@ -49,7 +35,7 @@
 
     let _el = null;
     let _savedGoHome = null;   // app 內部「返回」會呼叫 PhoneSystem.goHome，開 app 時暫借、回主畫面/關閉時還原
-    let _leaveApp = null;      // 借用大廳單例面板的 app(如黑市)離開時要還原/搬回 → 存回呼，清空前先跑
+    let _leaveApp = null;      // 需要善後的 app(如 AI 助手要恢復大廳活動)離開時 → 存回呼，清空前先跑
 
     function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 

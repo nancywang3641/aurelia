@@ -135,14 +135,17 @@
    → 一定會按錯(Rae 2026-08-24 回報按到塔羅那顆、以為回大廳)。一頁只留一顆返回鈕。
    只在 .lb-pv-body 裡藏,從小屋走進去開的塔羅浮窗不受影響。 */
 .lb-pv-body .tr-btn-icon { display:none; }
+/* 黑市的 ✕ 同理：進出由標題列的 ‹/✕ 管，面板內那顆按了只會留下一格空容器 */
+.lb-pv-body .store-close { display:none; }
 
-/* 🪟 被搬進容器的既有面板（世界門/交易所/書咖櫃檯）：它們原本是浮在 .lobby-left 上、
+/* 🪟 被搬進容器的既有面板（世界門/交易所/書咖櫃檯/黑市）：它們原本是浮在 .lobby-left 上、
    自己帶一組 right/width/top/bottom。搬進容器後要改成吃滿容器。
    🚨 一定要 !important：那些模組的手機規則是 .lobby-left.void-dock-open .wg-win（0,3,0），
       比這裡的 .lb-pv-body > x（0,2,0）強，不加就會被它們的版位蓋回去。
       選擇器有限縮在 .lb-pv-body 底下，不會外洩到大廳本來的浮窗。 */
 .lb-pv-body > .wg-win,
 .lb-pv-body > #os-pt-shop-dock,
+.lb-pv-body > #store-panel-overlay,
 .lb-pv-body > .oc-win {
   position:absolute !important; left:0 !important; right:0 !important; top:0 !important; bottom:0 !important;
   width:auto !important; height:auto !important; margin:0 !important; transform:none !important;

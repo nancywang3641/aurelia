@@ -76,11 +76,12 @@
             open: () => _fire('lstage-open-myhome'),
         },
         {
-            id: 'room404', name: '404', icon: 'fa-ghost', npc: 'cheshire', bg: 'lobby_pv_bg_room404_v1.jpg',
+            id: 'room404', name: '404', flatName: '黑市', icon: 'fa-ghost', npc: 'cheshire', bg: 'lobby_pv_bg_room404_v1.jpg',
             scene: 'room404',
             when: () => !!_st404().unlocked,
-            ready: () => !!win.VoidTerminal?.enter404Room,
+            ready: () => !!win.VoidTerminal?.enter404Room && !!win.VoidPanels?.openStore,
             open: () => win.VoidTerminal.enter404Room(),
+            openIn: (c) => _mountFloating(c, () => win.VoidPanels.openStore(), '#store-panel-overlay', () => win.VoidPanels.closeStore && win.VoidPanels.closeStore()),
         },
         {
             // 廣場只有走路才有意義：立繪模式沒有「站在廣場上」這件事 → 不給 open
@@ -167,9 +168,9 @@
         win.OS_TAROT.launch(c);
     }
 
-    // 🪟 把「自己開浮窗」的面板搬進容器（照 phone_shell 搬黑市的成例）：
+    // 🪟 把「自己開浮窗」的面板搬進容器（原本是 phone_shell 搬黑市的成例；那個手機 app 退役後成例活在這裡）：
     //    開它 → 等它的視窗生出來 → appendChild 進容器 → 離開時關掉/搬回原位。
-    //    這樣三個既有面板（世界門/交易所/書咖櫃檯）一行程式都不用改。
+    //    這樣四個既有面板（世界門/交易所/書咖櫃檯/黑市）一行程式都不用改。
     //    🚨 它們是 async 生成的，呼叫完當下抓不到元素 → 用 rAF 輪詢等它出現。
     function _mountFloating(c, open, sel, close) {
         const place = () => {
