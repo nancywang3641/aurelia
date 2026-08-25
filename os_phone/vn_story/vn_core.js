@@ -149,11 +149,15 @@
 
         // 世界書頭像管理
         _lorebookAvatarCache: {},
+        _lorebookExpCache: {},      // 【素材-角色表情立繪】名字_表情 → URL（重構前的世界書圖庫第一層，2026-08-26 接回）
+        _lorebookSpriteCache: {},   // 【素材-角色預設立繪素材】名字 → URL（同上第二層）
         _lorebookLoaded: false,
 
         _loadLorebookAvatars: async function() {
             if (!win.TavernHelper) return;
             this._lorebookAvatarCache = {};
+            this._lorebookExpCache = {};
+            this._lorebookSpriteCache = {};
             try {
                 const lbs = new Set();
                 const settings = win.TavernHelper.getLorebookSettings();
@@ -169,23 +173,31 @@
                     try {
                         const entries = await win.TavernHelper.getLorebookEntries(lb);
                         for (const entry of entries) {
-                            if (entry.comment === '【素材-角色頭像素材】' || entry.comment === '【素材-隨機頭像素材】') {
-                                const lines = (entry.content || '').split('\n');
-                                for (const line of lines) {
-                                    const trimmed = line.trim();
-                                    if (!trimmed || trimmed.startsWith('//')) continue;
-                                    const match = trimmed.match(/^([^:]+):([^|]+)(?:\|(.*))?$/);
-                                    if (match) {
-                                        const mainName = match[1].trim();
-                                        const url = match[2].trim();
-                                        this._lorebookAvatarCache[mainName] = url;
-                                        if (match[3]) {
-                                            match[3].split(',').forEach(alias => {
-                                                const a = alias.trim();
-                                                if (a) this._lorebookAvatarCache[a] = url;
-                                            });
-                                        }
-                                    }
+                            const cm = entry.comment;
+                            const isAvatar = (cm === '【素材-角色頭像素材】' || cm === '【素材-隨機頭像素材】');
+                            const isExp    = (cm === '【素材-角色表情立繪】');
+                            const isPreset = (cm === '【素材-角色預設立繪素材】');
+                            if (!isAvatar && !isExp && !isPreset) continue;
+                            const lines = (entry.content || '').split('\n');
+                            for (const line of lines) {
+                                const trimmed = line.trim();
+                                if (!trimmed || trimmed.startsWith('//')) continue;
+                                const match = trimmed.match(/^([^:]+):([^|]+)(?:\|(.*))?$/);
+                                if (!match) continue;
+                                const mainName = match[1].trim();
+                                const url = match[2].trim();
+                                const aliases = match[3] ? match[3].split(',').map(a => a.trim()).filter(Boolean) : [];
+                                if (isExp) {
+                                    // 主鍵是「名字_表情」；別名欄只給名字，掛回同一個表情
+                                    const exp = mainName.split('_').pop();
+                                    this._lorebookExpCache[mainName] = url;
+                                    aliases.forEach(a => { this._lorebookExpCache[`${a}_${exp}`] = url; });
+                                } else if (isPreset) {
+                                    this._lorebookSpriteCache[mainName] = url;
+                                    aliases.forEach(a => { this._lorebookSpriteCache[a] = url; });
+                                } else {
+                                    this._lorebookAvatarCache[mainName] = url;
+                                    aliases.forEach(a => { this._lorebookAvatarCache[a] = url; });
                                 }
                             }
                         }
@@ -278,6 +290,8 @@
             if (ssr) ssr.classList.add('hidden');
 
             this._lorebookAvatarCache = {};
+            this._lorebookExpCache = {};
+            this._lorebookSpriteCache = {};
             this._lorebookLoaded = false;
             this._domBlockCursor = 0;     // 第幾個自訂 DOM block（每次 loadScript 歸零）
             this._currentMessageId = null; // 當前訊息 ID，供從 .mes_text 抓 DOM
@@ -1671,10 +1685,15 @@
                 }, 400);
             });
         },
-        // 探「使用者自備的靜態立繪/預設圖」在不在（對齊 _renderSlot/handleImgError 的 fallback 鏈：spriteBase→charDefaultBase）。
+        // 探「使用者自備的靜態立繪/預設圖」在不在（對齊 _renderSlot/handleImgError 的 fallback 鏈：表情立繪條目→spriteBase→預設立繪條目→charDefaultBase）。
         // 在＝播放時直接讀靜態檔、不用生；不在（AI 臨時編的 NPC）＝該角色 fallback 會走到「生成」，早鳥/預熱要提前生。
-        _staticAvatarExists: function(name) {
+        _staticAvatarExists: async function(name) {
+            if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
             const urls = [];
+            this._nameVariants(name).forEach(v => {
+                const e = this._lorebookExpCache[`${v}_Neutral`]; if (e) urls.push(e);
+                const s = this._lorebookSpriteCache[v]; if (s) urls.push(s);
+            });
             if (VN_Config.data.spriteBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.spriteBase}${v}_Neutral.png`));
             if (VN_Config.data.charDefaultBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.charDefaultBase}${v}_presets.png`));
             if (!urls.length) return Promise.resolve(false);
@@ -3264,7 +3283,8 @@
             if (img.getAttribute('src') === url && visible) { apply(); return; }   // 已是同圖且顯示中 → 直接套用
             const tmp = new Image();
             tmp.onload = apply;
-            tmp.onerror = apply;
+            // 探測失敗絕不上圖：此時 handleImgError 多半已把 onerror 拆掉，死連結一上就是永久破圖標
+            tmp.onerror = () => { console.warn('[VN_Core] 圖片載入失敗，略過:', String(url).slice(0, 120)); };
             tmp.src = url;
         },
 

@@ -103,6 +103,11 @@
         },
 
         // isStale：給雙格用的「這格還是不是同一角色」守衛；不給就退回舊的 currentName 守衛（通話模式用）
+        // 單張探測：載得動才算數（給 fallbackToAI 的世界書頭像用，死連結不落地）
+        _probeImg: function(url) {
+            return new Promise(res => { const t = new Image(); t.onload = () => res(true); t.onerror = () => res(false); t.src = url; });
+        },
+
         _tryLoad: function(targetImg, urls, fallback, onSuccess, isStale) {
             const guardName0 = this.currentName;
             const _stale = isStale || (() => this.currentName !== guardName0);
@@ -153,7 +158,8 @@
             this._applyStageLighting(idx, { grantSolo: isNew ? idx : -1 });   // 說話者亮、另一格變暗；置中只授予「進場當下就是獨角」的
         },
 
-        // 單格圖片解析鏈（sprite_cache → spriteBase → fallbackToAI），守衛改用「這格還是不是同角色」
+        // 單格圖片解析鏈（sprite_cache → 表情立繪條目 → spriteBase → 預設立繪條目 → charDefaultBase → fallbackToAI），
+        // 條目層＝世界書【素材-角色表情立繪】/【素材-角色預設立繪素材】（重構前的老邏輯，2026-08-26 接回）；守衛改用「這格還是不是同角色」
         _renderSlot: async function(idx, name, exp) {
             const img = this._slotEl(idx);
             if (!img) return;
@@ -171,10 +177,13 @@
                 const cached = await VN_Cache.get('sprite_cache', v);
                 if (cached?.url) { if (_stale()) return; this._swapImage(img, cached.url, false, _stale, () => triggerAnim(img)); return; }
             }
-            if (VN_Config.data.spriteBase) {
-                const urls = this._nameVariants(name).map(v => `${VN_Config.data.spriteBase}${v}_${exp}.png`);
-                this._tryLoad(img, urls, () => this.handleImgError(img), triggerAnim, _stale);
-            } else this.fallbackToAI(idx, name, exp);
+            // 世界書【素材-角色表情立繪】(名字_表情→URL) → spriteBase 拼檔名；全走探測制，掛一個自動下一個
+            if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
+            const urls = [];
+            this._nameVariants(name).forEach(v => { const u = this._lorebookExpCache[`${v}_${exp}`]; if (u && !urls.includes(u)) urls.push(u); });
+            if (VN_Config.data.spriteBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.spriteBase}${v}_${exp}.png`));
+            if (urls.length) this._tryLoad(img, urls, () => this.handleImgError(img), triggerAnim, _stale);
+            else this.handleImgError(img);   // 沒有表情層來源 → 直接進預設立繪層（重構前行為：條目層不依賴 spriteBase 有沒有填）
         },
         
         updateCallAvatar: function(name) {
@@ -209,12 +218,18 @@
                 else { if (lockedExp === 'Surprised') t.classList.add('sprite-shake'); if (lockedExp === 'JumpScare') t.classList.add('sprite-jumpscare'); }
             };
 
-            if (base) {
-                const urls = this._nameVariants(lockedName).map(v => `${base}${v}_presets.png`);
-                this._tryLoad(img, urls, () => { if (_stale()) return; this.fallbackToAI(target, lockedName, lockedExp); }, isCall ? null : triggerAnim, _stale);
-            } else {
-                this.fallbackToAI(target, lockedName, lockedExp);
-            }
+            // 世界書【素材-角色預設立繪素材】(名字→URL) → charDefaultBase 拼檔名；掛了才掉進 AI 生成
+            const proceed = () => {
+                if (_stale()) return;
+                const urls = [];
+                this._nameVariants(lockedName).forEach(v => { const u = this._lorebookSpriteCache[v]; if (u && !urls.includes(u)) urls.push(u); });
+                if (base) this._nameVariants(lockedName).forEach(v => urls.push(`${base}${v}_presets.png`));
+                if (urls.length) this._tryLoad(img, urls, () => { if (_stale()) return; this.fallbackToAI(target, lockedName, lockedExp); }, isCall ? null : triggerAnim, _stale);
+                else this.fallbackToAI(target, lockedName, lockedExp);
+            };
+            if (!this._lorebookLoaded) {
+                this._loadLorebookAvatars().then(() => { this._lorebookLoaded = true; proceed(); });
+            } else proceed();
         },
         
         // target：0/1 = 舞台格子；'call' = 通話頭像。雙格一律貼底立繪樣式(no-frame)，通話用 img.src
@@ -242,7 +257,11 @@
             // 世界書頭像
             if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
             const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
-            if (lbUrl) { show(lbUrl); return; }
+            if (lbUrl) {
+                // 探測後才用：catbox 這類圖床時好時壞，死連結直接跳過往下走，別釘在畫面上變破圖標
+                if (await this._probeImg(lbUrl)) { if (_stale()) return; show(lbUrl); return; }
+                if (_stale()) return;
+            }
 
             // 記憶體快取
             if (this._avatarMemCache[name]) { show(this._avatarMemCache[name]); return; }
