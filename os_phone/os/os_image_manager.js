@@ -1097,6 +1097,12 @@
                             }
                         } catch (e) { console.warn('[ImageManager] 🎨 Vibe 讀取失敗', e); }
                     }
+                    // 🛡️ 防超免費：NAI 同一張圖掛到第 5 顆 vibe 起、每生一張多扣 2 Anlas → 跟尺寸/步數同一顆保險絲，只取前 4 顆
+                    if (cfg.capFreeSize !== false && _vibeEnc.length > 4) {
+                        console.warn(`[ImageManager] 🛡️ 同時開了 ${_vibeEnc.length} 顆 vibe，第 5 顆起每張圖扣 2 Anlas → 只用前 4 顆（要全用請到 NAI 設定關「防超免費尺寸」）`);
+                        _vibeEnc = _vibeEnc.slice(0, 4);
+                        _vibeStr = _vibeStr.slice(0, 4);
+                    }
                     if (_vibeEnc.length) console.log(`[ImageManager] 🎨 Vibe ×${_vibeEnc.length} 強度[${_vibeStr.join(', ')}] → ${type}`);
                 }
             }

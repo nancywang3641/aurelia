@@ -1639,7 +1639,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <label class="nai-smea-toggle"><input type="checkbox" id="img-nai-vibe-sc-scene" ${imgConfig.novelai.vibeScope?.scene !== false ? 'checked' : ''}><span class="chk-label">插圖</span></label>
                                         <label class="nai-smea-toggle"><input type="checkbox" id="img-nai-vibe-sc-bg" ${imgConfig.novelai.vibeScope?.bg !== false ? 'checked' : ''}><span class="chk-label">背景・其他</span></label>
                                     </div>
-                                    <div class="field-hint">強度越高畫面越靠向參考圖的氛圍，太高會蓋過劇情描述（NovelAI 預設 0.6）。只有 V4 系列模型吃得到；vibe 檔是按模型算的，跟上面選的模型對不上會自動跳過。</div>
+                                    <div class="field-hint">強度越高畫面越靠向參考圖的氛圍，太高會蓋過劇情描述（NovelAI 預設 0.6）。只有 V4 系列模型吃得到；vibe 檔是按模型算的，跟上面選的模型對不上會自動跳過。用現成 vibe 檔生圖不扣 Anlas，但同時開超過 4 顆、第 5 顆起每張圖扣 2 → 「防超免費尺寸」開著時自動只用前 4 顆。</div>
                                 </div>
                             </div>
                         </div>
