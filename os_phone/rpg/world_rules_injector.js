@@ -30,7 +30,16 @@
 
     // 可自動管理的條目（用 comment 關鍵字比對，名單外一律不碰）
     const BATTLE = '戰鬥觸發';
-    const PHONE  = ['通話與手機聊天', '直播彈幕', '表情包清單'];
+    const CALL   = '通話與手機聊天';
+    const PHONE  = [CALL, '直播彈幕', '表情包清單'];
+
+    // 通話/手機那條分固定版與自由版（call 面板的 [Char] 有無表情格跟 VN 總綱同步）：
+    //   世界題材說「開」之後還要挑「開哪一版」——版本跟 VN 自由模式走，兩條只亮一條。
+    //   書裡只有一條（自由版還沒匯入）就不挑，維持舊行為。
+    function _vnFree() {
+        try { const F = win.VN_FREE_MODE || window.VN_FREE_MODE; return !!(F && F.effectiveFree && F.effectiveFree()); }
+        catch (e) { return false; }
+    }
     const BGM    = { modern: 'BGM｜現代一般', mystery: 'BGM｜偵探', fantasy: 'BGM｜奇幻',
                      wuxia: 'BGM｜武俠仙俠', horror: 'BGM｜恐怖' };
 
@@ -126,13 +135,16 @@
 
             const world = await _currentWorld();
             const plan = planFor(world);
+            const freeNow = _vnFree();
+            const callVariants = entries.filter(e => String((e && e.comment) || '').includes(CALL)).length;
 
             const updates = [], opened = [], closed = [];
             for (const e of entries) {
                 const cm = String((e && e.comment) || '');
                 const hit = plan.managed.find(n => cm.includes(n));
                 if (!hit) continue;                                   // 名單外＝完全不碰
-                const should = plan.on.has(hit);
+                let should = plan.on.has(hit);
+                if (hit === CALL && callVariants >= 2) should = should && (cm.includes('自由') === freeNow);
                 if (e.enabled === should) continue;
                 updates.push({ uid: e.uid, enabled: should });
                 (should ? opened : closed).push(hit);
@@ -161,8 +173,9 @@
         const WB = win.OS_WORLDBOOK || window.OS_WORLDBOOK;
         if (!WB || !WB.setEnabledByTitle) return;
         // 一條世界書條目都沒有＝還沒匯入世界書，正常狀態，安靜跳過（不是錯誤）
+        let _all = [];
         try {
-            const _all = (await win.OS_DB?.getAllWorldbookEntries?.()) || [];
+            _all = (await win.OS_DB?.getAllWorldbookEntries?.()) || [];
             if (!_all.length) return;
         } catch (e) { return; }
         const world = await _currentWorld();
@@ -172,7 +185,13 @@
             return;
         }
         const plan = planFor(world);
-        const r = await WB.setEnabledByTitle(plan.managed, plan.on);
+        // 通話/手機那條的固定/自由版本跟 VN 自由模式走（同酒館分支，兩條只亮一條）
+        const freeNow = _vnFree();
+        const callVariants = _all.filter(e => String((e && e.title) || '').includes(CALL)).length;
+        const r = await WB.setEnabledByTitle(plan.managed, plan.on, (title, hit, should) => {
+            if (hit === CALL && callVariants >= 2) return should && (String(title).includes('自由') === freeNow);
+            return should;
+        });
         if (!r.seen.length) {
             console.log('🌍 [World Rules] 獨立版世界書裡找不到任何受管條目（戰鬥觸發／手機那組／BGM）→ 不動（' + reason + '）');
             return;

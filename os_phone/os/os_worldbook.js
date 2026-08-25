@@ -974,7 +974,7 @@
          * @param {string[]|Set<string>} on 這批裡該「開」的關鍵字，其餘受管條目關掉
          * @returns {Promise<{opened:string[], closed:string[], seen:string[]}>}
          */
-        setEnabledByTitle: async function(managed, on) {
+        setEnabledByTitle: async function(managed, on, adjust) {
             const out = { opened: [], closed: [], seen: [] };
             try {
                 if (!win.OS_DB?.getAllWorldbookEntries || !Array.isArray(managed) || !managed.length) return out;
@@ -985,7 +985,9 @@
                     const hit = managed.find(n => title.includes(n));
                     if (!hit) continue;                       // 名單外＝完全不碰
                     out.seen.push(hit);
-                    const should = onSet.has(hit);
+                    let should = onSet.has(hit);
+                    // 選配：同名單一個 hit 底下還分版本（如通話條目的固定/自由版）時，讓呼叫端按 title 再裁一次
+                    if (typeof adjust === 'function') { try { should = !!adjust(title, hit, should); } catch (e2) {} }
                     if ((e.enabled !== false) === should) continue;
                     await win.OS_DB.saveWorldbookEntry({ ...e, enabled: should, updatedAt: Date.now() });
                     (should ? out.opened : out.closed).push(hit);

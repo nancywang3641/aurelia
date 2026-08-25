@@ -18,6 +18,12 @@
     //   (如「VN總綱-自由版」「VN總綱-固定版」) 與完整命名 (如「VN正文格式與TAG總綱」)，兩種都吃。
     //   自由版=再含「自由」，固定版=不含「自由」。兩條都Rae自己維護、腳本只撥開關。
     const _isCoreName = (nm) => { nm = String(nm || ''); return nm.includes('VN') && nm.includes('總綱'); };
+    // 通話/手機條目（call 面板）也分固定版與自由版——call 裡的 [Char] 有沒有表情格得跟總綱同步，
+    //   不然自由模式下 AI 看著固定版範例照樣寫表情格。同一套規矩：兩條都她的、腳本只撥開關。
+    //   跟總綱不同的是這組不是常駐必亮：配對的「總開關」（世界題材/她手動）尊重現況——
+    //   兩條裡任一條亮著才算在用，腳本只負責挑「亮哪一版」；兩條都暗就整組不碰。
+    //   只有一條（自由版還沒匯入）也不碰，維持舊行為。
+    const _isCallName = (nm) => String(nm || '').includes('通話與手機聊天');
     const CORE_ENTRY_HINT = 'VN…總綱';                 // 只用於 console 提示文字
     const RX_NAME = '[VN自由模式] 歷史表情格剝除';     // promptOnly 正則名
 
@@ -137,7 +143,18 @@
             await DB.saveWorldbookEntry({ ...e, enabled: want, updatedAt: Date.now() });
             changed++;
         }
-        if (changed) console.log(`[VN自由模式] 獨立版世界書開關已切換 → ${free ? '自由版' : '固定版'}總綱（改了 ${changed} 條）`);
+        // 通話/手機配對：任一條亮著才算在用，只挑版本、不動總開關
+        const calls = all.filter(e => _isCallName(e && e.title));
+        if (calls.length >= 2) {
+            const anyOn = calls.some(e => e.enabled !== false);
+            for (const e of calls) {
+                const want = anyOn && (String(e.title || '').includes('自由') === free);
+                if ((e.enabled !== false) === want) continue;
+                await DB.saveWorldbookEntry({ ...e, enabled: want, updatedAt: Date.now() });
+                changed++;
+            }
+        }
+        if (changed) console.log(`[VN自由模式] 獨立版世界書開關已切換 → ${free ? '自由版' : '固定版'}（改了 ${changed} 條）`);
     }
 
     let _applying = false;
@@ -172,16 +189,25 @@
 
             const coreOk = core.enabled === !free;
             const freeOk = free ? (freeEnt.enabled === true) : (!freeEnt || freeEnt.enabled === false);
-            if (!(coreOk && freeOk)) {
+            // 通話/手機配對（同一本書裡）：兩條都在才管，任一條亮＝在用 → 該亮「當前模式那條」
+            const callEnts = ents.filter(e => _isCallName(e.name));
+            let callOk = true;
+            if (callEnts.length >= 2) {
+                const anyOn = callEnts.some(e => e.enabled);
+                callOk = callEnts.every(e => e.enabled === (anyOn && (String(e.name || '').includes('自由') === free)));
+            }
+            if (!(coreOk && freeOk && callOk)) {
                 await th.updateWorldbookWith(book, (list) => {
+                    const callList = list.filter(e => _isCallName(e.name));
+                    const callOn = callList.length >= 2 && callList.some(e => e.enabled);
                     for (const e of list) {
                         const nm = String(e.name || '');
-                        if (!_isCoreName(nm)) continue;
-                        e.enabled = nm.includes('自由') ? free : !free;   // 只撥開關，內容永遠是她的
+                        if (_isCoreName(nm)) { e.enabled = nm.includes('自由') ? free : !free; continue; }   // 只撥開關，內容永遠是她的
+                        if (callList.length >= 2 && _isCallName(nm)) e.enabled = callOn && (nm.includes('自由') === free);
                     }
                     return list;
                 });
-                console.log(`[VN自由模式] 世界書開關已切換 → ${free ? '自由版' : '固定版'}總綱（${book}）`);
+                console.log(`[VN自由模式] 世界書開關已切換 → ${free ? '自由版' : '固定版'}（${book}）`);
             }
             await _setHistoryRegex(free);
             _lastEff = free;   // 世界書＋正則都對齊了才記；中途 return 的（找不到條目等）不記，下次還會再試

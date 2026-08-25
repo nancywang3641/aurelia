@@ -534,8 +534,11 @@
                 const isChar = line.startsWith('[Char|');
                 const box = document.getElementById('call-subtitle-box');
                 const nameEl = document.getElementById('call-sub-name');
-                const parts = line.slice(isChar ? 6 : 5, -1).split('|');
-                
+                // ⚠️ call 行不走 vn_core dispatch 的 [Char] 分支，得自己過 _normCharParts：
+                //    自由模式 [Char|名|台詞] 沒表情格，不補的話 parts.slice(2) 是空的 → 台詞整句蒸發。
+                let parts = line.slice(isChar ? 6 : 5, -1).split('|');
+                if (isChar) parts = core._normCharParts(parts);
+
                 if (isChar) {
                     const ex = core._extractTextAndSFX(parts.slice(2));
                     box.classList.remove('narration');
@@ -560,7 +563,7 @@
                         for (let i = curIdx + 1; i < script.length; i++) {
                             const nl = script[i];
                             if (nl.startsWith('[Char|')) {
-                                const np = nl.slice(6, -1).split('|');
+                                const np = core._normCharParts(nl.slice(6, -1).split('|'));   // 跟播放端同一條，自由模式快取 key 才對得上
                                 const nex = core._extractTextAndSFX(np.slice(2));
                                 if (nex.text) _mm.prefetchForChar(np[0], (core._speechOnly ? core._speechOnly(nex.text) : nex.text), { expression: np[1] });   // 預取跟播放同文字，快取才對得上
                                 break;
@@ -640,7 +643,7 @@
                 }
             } else if (mode === 'call') {
                 if (line.startsWith('[Char|')) {
-                    const p = line.slice(6, -1).split('|');
+                    const p = core._normCharParts(line.slice(6, -1).split('|'));   // 自由模式沒表情格，補齊欄位
                     const ex = core._extractTextAndSFX(p.slice(2));
                     core.addLog(p[0], ex.text);
                 } else if (line.startsWith('[Nar|')) {
