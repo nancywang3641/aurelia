@@ -1624,6 +1624,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         </div>
                                     </div>
                                 </div>
+
+                                <div class="iface-section-title">🎨 氛圍轉印（Vibe Transfer）</div>
+                                <div class="set-group">
+                                    <div id="img-nai-vibe-drop" class="nai-vibe-drop">
+                                        <div class="nai-pack-drop-hint">把 NovelAI 匯出的 <b>.naiv4vibe</b> 檔拖進來（或點這裡選檔）<br>生圖就會帶上那張參考圖的色調氛圍，可同時掛多個</div>
+                                        <input type="file" id="img-nai-vibe-file" class="nai-pack-file-hidden" accept=".naiv4vibe,.naiv4vibebundle,.json" multiple>
+                                    </div>
+                                    <div id="img-nai-vibe-status" class="nai-pack-status"></div>
+                                    <div id="img-nai-vibe-list" class="nai-vibe-list"></div>
+                                    <div class="row-inline nai-vibe-scope-row">
+                                        <span class="set-label">套用到：</span>
+                                        <label class="nai-smea-toggle"><input type="checkbox" id="img-nai-vibe-sc-char" ${imgConfig.novelai.vibeScope?.char === true ? 'checked' : ''}><span class="chk-label">頭像</span></label>
+                                        <label class="nai-smea-toggle"><input type="checkbox" id="img-nai-vibe-sc-scene" ${imgConfig.novelai.vibeScope?.scene !== false ? 'checked' : ''}><span class="chk-label">插圖</span></label>
+                                        <label class="nai-smea-toggle"><input type="checkbox" id="img-nai-vibe-sc-bg" ${imgConfig.novelai.vibeScope?.bg !== false ? 'checked' : ''}><span class="chk-label">背景・其他</span></label>
+                                    </div>
+                                    <div class="field-hint">強度越高畫面越靠向參考圖的氛圍，太高會蓋過劇情描述（NovelAI 預設 0.6）。只有 V4 系列模型吃得到；vibe 檔是按模型算的，跟上面選的模型對不上會自動跳過。</div>
+                                </div>
                             </div>
                         </div>
 
@@ -2752,6 +2769,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         itemBasePrompt: (container.querySelector('#img-nai-item-base')?.value || '').trim(),
                         itemNegPrompt:  (container.querySelector('#img-nai-item-neg')?.value  || '').trim(),
                         naiPresets: naiPresets,
+                        vibes: naiVibes,
+                        vibeScope: {
+                            char:  container.querySelector('#img-nai-vibe-sc-char')?.checked  ?? false,
+                            scene: container.querySelector('#img-nai-vibe-sc-scene')?.checked ?? true,
+                            bg:    container.querySelector('#img-nai-vibe-sc-bg')?.checked    ?? true,
+                        },
                     },
                     comfyuiDirect: {
                         url:       (container.querySelector('#img-cfd-url')?.value || '').trim(),
@@ -3354,6 +3377,121 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 this.renderGrid();
             }
         };
+
+        // ── 🎨 NAI 氛圍轉印（Vibe Transfer）────────────────────────
+        // encoding 本體（每模型 ~65KB base64）進 IndexedDB(nai_vibe_<id>)，naiVibes 只留 {id,name,strength,on} 輕引用進設定檔
+        let naiVibes = [...(imgConfig.novelai.vibes || [])];
+        const naiVibeModelLabel = mk => String(mk || '').replace(/^v/, 'V').replace('4-5', '4.5');
+
+        window._naiVibe = {
+            _init() {
+                const drop = container.querySelector('#img-nai-vibe-drop');
+                const file = container.querySelector('#img-nai-vibe-file');
+                if (!drop) return;
+                const self = this;
+                drop.addEventListener('click', () => file && file.click());
+                drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-drag'); });
+                drop.addEventListener('dragleave', () => drop.classList.remove('is-drag'));
+                drop.addEventListener('drop', e => {
+                    e.preventDefault(); drop.classList.remove('is-drag');
+                    if (e.dataTransfer && e.dataTransfer.files) self.handleFiles(e.dataTransfer.files);
+                });
+                if (file) file.addEventListener('change', e => { self.handleFiles(e.target.files); e.target.value = ''; });
+                this.renderList();
+            },
+            async handleFiles(fileList) {
+                const OSDB = (window.parent || window).OS_DB;
+                const statusEl = container.querySelector('#img-nai-vibe-status');
+                const files = Array.from(fileList || []);
+                if (!files.length) return;
+                let ok = 0, upd = 0, fail = 0;
+                for (const f of files) {
+                    let obj = null;
+                    try { obj = JSON.parse((await f.text()).replace(/^\uFEFF/, '')); } catch (e) {}
+                    // 單檔(.naiv4vibe)或合集(.naiv4vibebundle 的 vibes[])都吃
+                    const list = obj ? (Array.isArray(obj.vibes) ? obj.vibes : [obj]) : [];
+                    let got = false;
+                    for (const v of list) {
+                        if (!v || !v.encodings || typeof v.encodings !== 'object') continue;
+                        // 每個模型鍵收一顆 encoding：優先挑跟匯出時 information_extracted 相同的那顆
+                        const encodings = {};
+                        for (const mk of Object.keys(v.encodings)) {
+                            const entries = Object.values(v.encodings[mk] || {}).filter(x => x && x.encoding);
+                            if (!entries.length) continue;
+                            const wantIe = v.importInfo && v.importInfo.information_extracted;
+                            const hit = entries.find(x => x.params && x.params.information_extracted === wantIe) || entries[0];
+                            encodings[mk] = hit.encoding;
+                        }
+                        if (!Object.keys(encodings).length) continue;
+                        const id = String(v.id || ('nv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)));
+                        const name = (v.name || (f.name || 'vibe').replace(/\.[^.]+$/, '')).slice(0, 40);
+                        const exist = naiVibes.find(x => x.id === id);
+                        if (exist) {
+                            // 同 id 重複匯入＝補 encoding（同一張圖對不同模型各匯出一次的情況）
+                            let rec = null;
+                            try { rec = await OSDB.getNaiVibe(id); } catch (e) {}
+                            const merged = Object.assign({}, (rec && rec.encodings) || {}, encodings);
+                            await OSDB.saveNaiVibe(id, { name, thumb: (v.thumbnail || (rec && rec.thumb) || ''), encodings: merged });
+                            exist.models = Object.keys(merged);
+                            upd++;
+                        } else {
+                            await OSDB.saveNaiVibe(id, { name, thumb: v.thumbnail || '', encodings });
+                            naiVibes.push({
+                                id, name, on: true,
+                                strength: (v.importInfo && typeof v.importInfo.strength === 'number') ? v.importInfo.strength : 0.6,
+                                models: Object.keys(encodings)
+                            });
+                            ok++;
+                        }
+                        got = true;
+                    }
+                    if (!got) fail++;
+                }
+                this.renderList();
+                if (statusEl) statusEl.textContent = `✅ 新增 ${ok} 個${upd ? `、更新 ${upd} 個` : ''}${fail ? `（${fail} 個檔讀不懂：要 NovelAI 匯出的 .naiv4vibe）` : ''} · 記得按底部 💾 保存`;
+            },
+            async renderList() {
+                const listEl = container.querySelector('#img-nai-vibe-list');
+                if (!listEl) return;
+                if (!naiVibes.length) { listEl.innerHTML = ''; return; }
+                listEl.innerHTML = naiVibes.map((v, i) => `
+                    <div class="nai-vibe-row${v.on === false ? ' is-off' : ''}">
+                        <label class="nai-vibe-on" title="這顆要不要用"><input type="checkbox" ${v.on === false ? '' : 'checked'} onchange="window._naiVibe.toggle(${i}, this.checked)"></label>
+                        <div class="nai-vibe-thumb"><img data-vibe-thumb="${naiEscAttr(v.id)}" alt=""></div>
+                        <div class="nai-vibe-main">
+                            <div class="nai-vibe-name" title="${naiEscAttr(v.name)}">${naiEscAttr(v.name)}</div>
+                            <div class="nai-vibe-models">${(v.models || []).map(naiVibeModelLabel).map(naiEscAttr).join(' · ')}</div>
+                        </div>
+                        <div class="nai-vibe-strength" title="參考強度">
+                            <input type="range" min="0.05" max="1" step="0.05" value="${typeof v.strength === 'number' ? v.strength : 0.6}" oninput="window._naiVibe.setStrength(${i}, this.value, this)">
+                            <span class="nai-vibe-strength-val">${(typeof v.strength === 'number' ? v.strength : 0.6).toFixed(2)}</span>
+                        </div>
+                        <span class="nai-pack-act is-danger nai-vibe-del" onclick="window._naiVibe.del(${i})" title="刪除">🗑️</span>
+                    </div>`).join('');
+                const OSDB = (window.parent || window).OS_DB;
+                listEl.querySelectorAll('img[data-vibe-thumb]').forEach(async img => {
+                    try {
+                        const rec = await OSDB.getNaiVibe(img.getAttribute('data-vibe-thumb'));
+                        if (rec && rec.thumb) { img.src = rec.thumb; img.classList.add('is-loaded'); }
+                    } catch (e) {}
+                });
+            },
+            toggle(i, on) { if (naiVibes[i]) { naiVibes[i].on = !!on; this.renderList(); } },
+            setStrength(i, val, el) {
+                if (!naiVibes[i]) return;
+                naiVibes[i].strength = parseFloat(val);
+                const lab = el && el.parentElement && el.parentElement.querySelector('.nai-vibe-strength-val');
+                if (lab) lab.textContent = parseFloat(val).toFixed(2);
+            },
+            async del(i) {
+                const v = naiVibes[i]; if (!v) return;
+                if (!confirm(`刪除 Vibe「${v.name || ''}」？`)) return;
+                try { await (window.parent || window).OS_DB?.deleteNaiVibe(v.id); } catch (e) {}
+                naiVibes.splice(i, 1);
+                this.renderList();
+            }
+        };
+        window._naiVibe._init();
 
         // ── 場景插圖：規範提示詞模板 handlers ──────────────────────
         let sceneSpecTemplates = [...(imgConfig.sceneGen?.specTemplates || [])];

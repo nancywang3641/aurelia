@@ -461,6 +461,40 @@
                 } catch(e) { j(e); }
             });
         },
+        // NAI 氛圍轉印（Vibe Transfer）：.naiv4vibe 檔的 encoding（每顆每模型 ~65KB base64）＋縮圖，
+        // 設定檔(localStorage)只存 {id,name,strength,on} 輕引用 → 大字串一律放這。
+        saveNaiVibe: async function(id, record) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).put({ id: 'nai_vibe_' + id, data: record });
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getNaiVibe: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).get('nai_vibe_' + id);
+                    req.onsuccess = () => r(req.result ? req.result.data : null);
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteNaiVibe: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).delete('nai_vibe_' + id);
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
         saveApiChat: async function(id, d) {
             const db = await this.init();
             // 🔒 chatId 隔離：第一次存檔時蓋上「當前劇情 id」（已有就不覆蓋）→ 注入器只注入當前劇情的對話，避免古代卡冒出現代手機數據

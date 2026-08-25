@@ -142,6 +142,8 @@
                 itemBasePrompt: 'masterpiece, best quality, white background, simple background, no background, product image, detailed',
                 itemNegPrompt: 'person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text',
                 capFreeSize: true,   // 🛡️ 防超免費尺寸：超過 1024×1024(約100萬px) 自動等比縮回，避免誤設大圖扣 Anlas
+                vibes: [],           // 🎨 氛圍轉印：{id,name,strength,on,models[]} 輕引用；encoding 本體在 IndexedDB(nai_vibe_<id>)
+                vibeScope: { char: false, scene: true, bg: true },   // 套用範圍：頭像/插圖/背景其他（頭像預設關＝避免每輪頭像被參考圖帶跑）
             },
             // 酒館原生 /sd：走使用者在酒館 Image Generation 擴展設好的後端；以下全可空，空=用酒館自己的設定
             tavernSd: { negative: '', width: '', height: '', steps: '', cfg: '' },
@@ -1069,6 +1071,36 @@
             const isV4    = model.includes('nai-diffusion-4');
             const seed    = Math.floor(Math.random() * 9999999999);
 
+            // 🎨 氛圍轉印（Vibe Transfer）：把 .naiv4vibe 匯入的現成 encoding 附進請求（V4 系列限定）。
+            //    encoding 是「參考圖 + information_extracted」預先算好的向量 → 生圖時只送 encoding + 強度，
+            //    不重算、不扣 Anlas；information_extracted 已烤在 encoding 裡，這裡沒有那顆旋鈕。
+            //    encoding 按模型分（v4-5full 的向量餵 v4full 沒用）→ 只挑對得上當前模型的。
+            let _vibeEnc = [], _vibeStr = [];
+            if (isV4 && Array.isArray(cfg.vibes) && cfg.vibes.length) {
+                const _scope = cfg.vibeScope || {};
+                const _sKey = (type === 'char') ? 'char' : (type === 'scene' ? 'scene' : 'bg');
+                const _sOn = (_scope[_sKey] !== undefined) ? _scope[_sKey] : (_sKey !== 'char');
+                if (_sOn) {
+                    // 模型名 → vibe 檔 encoding 鍵：nai-diffusion-4-5-full → v4-5full；
+                    // curated-preview 是 curated 的預覽版、vibe 鍵同 v4curated → 先剝 -preview
+                    const _mKey = 'v' + model.replace('nai-diffusion-', '').replace(/-preview$/, '').replace(/-(full|curated)$/, '$1');
+                    for (const v of cfg.vibes) {
+                        if (!v || v.on === false) continue;
+                        try {
+                            const rec = await win.OS_DB.getNaiVibe(v.id);
+                            const enc = rec && rec.encodings && rec.encodings[_mKey];
+                            if (enc) {
+                                _vibeEnc.push(enc);
+                                _vibeStr.push(typeof v.strength === 'number' ? v.strength : 0.6);
+                            } else {
+                                console.warn(`[ImageManager] 🎨 Vibe「${v.name || v.id}」沒有 ${_mKey} 的 encoding，這輪跳過（該 vibe 檔是給別的模型的）`);
+                            }
+                        } catch (e) { console.warn('[ImageManager] 🎨 Vibe 讀取失敗', e); }
+                    }
+                    if (_vibeEnc.length) console.log(`[ImageManager] 🎨 Vibe ×${_vibeEnc.length} 強度[${_vibeStr.join(', ')}] → ${type}`);
+                }
+            }
+
             // 從用戶設定讀取，fallback 到安全預設值
             const sampler       = cfg.sampler       || 'k_euler_ancestral';
             const scale         = cfg.scale         ?? 5;
@@ -1117,6 +1149,7 @@
                 negative_prompt: negativePrompt,
                 deliberate_euler_ancestral_bug: false,
                 prefer_brownian: true,
+                ...(_vibeEnc.length ? { reference_image_multiple: _vibeEnc, reference_strength_multiple: _vibeStr } : {}),
             } : {
                 // V3：SMEA 從用戶設定讀取
                 width, height,
