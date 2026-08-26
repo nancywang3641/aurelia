@@ -267,6 +267,13 @@ const PHONE_FILES = [
     // === 📞 電話 (dialer) ===
     'os/os_dialer.js',
 
+    // === 🎬 404 混沌片場 ===
+    // 404 房的「禁庫」按下去就是開這支（void_terminal 的 quest 鈕在 is404Room 分支呼叫 OS_CHAOS.openModal）。
+    // 🚨 它的 CSS 早就在酒館這邊載了、JS 卻只掛在 PWA 的 index.html → 酒館按下去永遠只有柴郡那句故障台詞。
+    //    兩份載入清單漂移的典型案例（2026-08-27 Rae 回報「禁書死了」）。
+    'qb/os_404_chaos.js',
+
+
     // === 🟣 微薄 (Weibo) — 搬回酒館（順序同 PWA index.html）===
     'wb/wb_user_profile.js', 'wb/wb_account.js', 'wb/wb_theme.js',
     'wb/wb_view.js', 'wb/wb_core.js'
