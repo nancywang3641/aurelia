@@ -682,6 +682,8 @@
    ② 內縮 14px、切圓角＝框留在外面當畫框，角落玩偶照樣看得到（阿洛的稿就是這個樣子）
    工具開著時面板自己的標題列收起來，不然標題會疊兩層、離開鈕也會跟工具的返回鈕打架。 */
 .lws.is-tool > .lws-hd { display:none; }
+/* 角落玩偶與點陣只在入口頁（五張卡）出現：開了工具就整個是工作畫面，貓跟徽章留著只是雜訊 */
+.lws.is-tool .lws-doll, .lws.is-tool .lws-dots { display:none; }
 .lws.is-tool > .lws-body { visibility:hidden; }
 .lws.is-tool #os_studio_app, .lws.is-tool .vncomp-app, .lws.is-tool .lws-overlay {
   inset:14px !important; width:auto !important; height:auto !important;
