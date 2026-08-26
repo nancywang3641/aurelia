@@ -1182,6 +1182,23 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         } catch (e) { /* 抄不到就用預設皮，不影響預覽 */ }
     }
 
+    // 💬 對話式主題：規則沿用上面那份（元素清單、鐵則、可讀性），只換掉「一次性生成」那個前提。
+    const VTH_AI_CHAT = VTH_AI_PROMPT.replace('用戶想要的風格：', '') + `
+【這是一段對話，不是一次性生成】
+- 每次回覆都要輸出「完整的最新 CSS」（不是片段、不是 diff、不要只給改動的那幾條），用 \`\`\`css 包起來；使用者會直接拿去套用。
+- 只改使用者這次講的地方，沒被提到的部分「原封不動」保留，不要順手重做。
+- CSS 之外可以用一兩句話說你改了什麼，不要長篇解釋。
+- 如果使用者問的是問題、或你需要先確認才知道怎麼改，就「只回話、不要輸出 CSS」。
+`;
+
+    // 對話紀錄與版本備份都按世界分開存（改 A 世界的主題不該影響 B 世界）
+    function _vthChatKey(w) { return 'vn_theme_chat::' + (w || 'lobby_default'); }
+    function _vthChatLoad(w) { try { return JSON.parse(localStorage.getItem(_vthChatKey(w)) || '[]'); } catch (e) { return []; } }
+    function _vthChatSave(w, arr) { try { localStorage.setItem(_vthChatKey(w), JSON.stringify((arr || []).slice(-40))); } catch (e) {} }
+    function _vthUndoKey(w) { return 'vn_theme_undo::' + (w || 'lobby_default'); }
+    function _vthUndoLoad(w) { try { return JSON.parse(localStorage.getItem(_vthUndoKey(w)) || '[]'); } catch (e) { return []; } }
+    function _vthUndoSave(w, arr) { try { localStorage.setItem(_vthUndoKey(w), JSON.stringify((arr || []).slice(-10))); } catch (e) {} }
+
     function _vthGalleryLoad() { try { return JSON.parse(localStorage.getItem('vn_theme_gallery') || '[]'); } catch (e) { return []; } }
     function _vthGallerySave(arr) { try { localStorage.setItem('vn_theme_gallery', JSON.stringify(arr || [])); } catch (e) {} }
 
@@ -1214,40 +1231,54 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 <button class="vth-mini primary" id="vth-css-apply"><i class="fa-solid fa-floppy-disk"></i> 套用到此世界</button>
                 <button class="vth-mini" id="vth-css-clear">清空</button>
             </div>
-            <div class="vth-ai-row">
-                <input id="vth-ai-desc" class="vth-ai-desc" placeholder="描述風格讓 AI 生成（例：賽博夜雨霓虹 / 古典宮廷燙金 / 陰森廢墟舊紙）">
-                <button class="vth-mini primary" id="vth-ai-gen"><i class="fa-solid fa-robot"></i> AI 生成</button>
+            <div class="vth-chat" id="vth-chat"></div>
+            <div class="vth-undo-row" id="vth-undo-row">
+                <button class="vth-mini" id="vth-undo"><i class="fa-solid fa-clock-rotate-left"></i> 還原上一版 (<span id="vth-undo-n">0</span>)</button>
             </div>
-            <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
-            <div class="vth-css-hint">左邊寫 CSS、右邊即時預覽。「套用到此世界」存進當前世界、VN 開播自動套；「收藏目前」存進主題庫可跨世界重用。AI 用「寫作→API 設置」的副模型。</div>
-            <div class="vth-gal">
-                <div class="vth-gal-head">
-                    <span class="vth-gal-label"><i class="fa-solid fa-swatchbook"></i> 我的主題庫</span>
-                    <div class="vth-gal-save">
-                        <input id="vth-gal-name" class="vth-gal-name" placeholder="主題命名…">
-                        <button class="vth-mini primary" id="vth-gal-add"><i class="fa-solid fa-bookmark"></i> 收藏目前</button>
-                    </div>
-                </div>
-                <div class="vth-gal-list" id="vth-gal-list"></div>
+            <div class="studio-input-area vth-say-wrap">
+                <textarea class="studio-textarea" id="vth-say" placeholder="想要什麼風格、或哪裡要改，直接說（例：章節卡的標題再大一點、對話框換成暗紅燙金）"></textarea>
+                <button class="studio-send-btn" id="vth-send">送出</button>
             </div>
             </div>
             <div class="vth-col-prev">
-            <div class="vth-prev-head">
-                <span class="vth-prev-label"><i class="fa-solid fa-eye"></i> 即時預覽</span>
-                <div class="vth-vp-tabs">
-                    <button class="vth-vp active" data-vp="phone" title="手機端">手機</button>
-                    <button class="vth-vp" data-vp="center" title="桌面·中間聊天區">中間</button>
-                    <button class="vth-vp" data-vp="full" title="桌面·全屏（奧瑞亞擴大模式）">全屏</button>
-                    <input id="vth-vp-w" class="vth-vp-w" type="number" min="600" max="2560" step="20" title="中間聊天區寬度＝你嵌入奧瑞亞的實際寬度（約 900~1100）">
+            <div class="vth-ptabs">
+                <button class="vth-ptab active" data-pane="prev"><i class="fa-solid fa-eye"></i> 即時預覽</button>
+                <button class="vth-ptab" data-pane="css"><i class="fa-solid fa-code"></i> CSS</button>
+                <button class="vth-ptab" data-pane="gal"><i class="fa-solid fa-swatchbook"></i> 主題庫</button>
+            </div>
+            <div class="vth-pane vth-pane-prev on">
+                <div class="vth-prev-head">
+                    <div class="vth-vp-tabs">
+                        <button class="vth-vp active" data-vp="phone" title="手機端">手機</button>
+                        <button class="vth-vp" data-vp="center" title="桌面·中間聊天區">中間</button>
+                        <button class="vth-vp" data-vp="full" title="桌面·全屏（奧瑞亞擴大模式）">全屏</button>
+                        <input id="vth-vp-w" class="vth-vp-w" type="number" min="600" max="2560" step="20" title="中間聊天區寬度＝你嵌入奧瑞亞的實際寬度（約 900~1100）">
+                    </div>
+                    <div class="vth-mode-tabs">
+                        <button class="vth-mode active" data-mode="char-mode">角色對話</button>
+                        <button class="vth-mode" data-mode="nar-mode">旁白</button>
+                        <button class="vth-mode" data-mode="inner-mode">內心</button>
+                        <button class="vth-mode" data-mode="chapter">章節卡</button>
+                    </div>
                 </div>
-                <div class="vth-mode-tabs">
-                    <button class="vth-mode active" data-mode="char-mode">角色對話</button>
-                    <button class="vth-mode" data-mode="nar-mode">旁白</button>
-                    <button class="vth-mode" data-mode="inner-mode">內心</button>
-                    <button class="vth-mode" data-mode="chapter">章節卡</button>
+                <div class="vth-preview-wrap" id="vth-preview-wrap"><div class="vth-preview-box" id="vth-preview-box"><iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe></div></div>
+            </div>
+            <div class="vth-pane vth-pane-css">
+                <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
+                <div class="vth-css-hint">左邊跟 AI 講、或直接在這裡改，右邊即時預覽。AI 每次回的是完整的最新 CSS，會自動套進當前世界；改壞了按「還原上一版」。AI 用「寫作→API 設置」的副模型。</div>
+            </div>
+            <div class="vth-pane vth-pane-gal">
+                <div class="vth-gal">
+                    <div class="vth-gal-head">
+                        <span class="vth-gal-label"><i class="fa-solid fa-swatchbook"></i> 我的主題庫</span>
+                        <div class="vth-gal-save">
+                            <input id="vth-gal-name" class="vth-gal-name" placeholder="主題命名…">
+                            <button class="vth-mini primary" id="vth-gal-add"><i class="fa-solid fa-bookmark"></i> 收藏目前</button>
+                        </div>
+                    </div>
+                    <div class="vth-gal-list" id="vth-gal-list"></div>
                 </div>
             </div>
-            <div class="vth-preview-wrap" id="vth-preview-wrap"><div class="vth-preview-box" id="vth-preview-box"><iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe></div></div>
             </div>
         </div>`;
 
@@ -1303,6 +1334,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         applyVp();
         area.oninput = () => { if (_t) clearTimeout(_t); _t = setTimeout(refreshPreview, 250); };
 
+        host.querySelectorAll('.vth-ptab').forEach(b => b.onclick = () => {
+            host.querySelectorAll('.vth-ptab').forEach(x => x.classList.toggle('active', x === b));
+            host.querySelectorAll('.vth-pane').forEach(p2 => p2.classList.remove('on'));
+            host.querySelector('.vth-pane-' + b.dataset.pane).classList.add('on');
+            if (b.dataset.pane === 'prev') applyVp();   // 分頁藏著時量不到寬,切回來要重算縮放
+        });
+
         host.querySelectorAll('.vth-vp').forEach(b => b.onclick = () => {
             _curVp = b.dataset.vp;
             host.querySelectorAll('.vth-vp').forEach(x => x.classList.toggle('active', x === b));
@@ -1321,29 +1359,101 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         };
         host.querySelector('#vth-css-clear').onclick = () => { if (confirm('清空此世界的自訂 CSS？')) { VT.clear(chatId); area.value = ''; refreshPreview(); } };
 
-        const genBtn = host.querySelector('#vth-ai-gen');
-        genBtn.onclick = () => {
-            const desc = host.querySelector('#vth-ai-desc').value.trim();
-            if (!desc) { alert('先描述你想要的風格'); return; }
+        // ── 💬 對話式修改（照 VN 組件那套的體感：講一句改一次，改壞了還原上一版）──
+        const chatBox = host.querySelector('#vth-chat');
+        const sayEl   = host.querySelector('#vth-say');
+        const sendBtn = host.querySelector('#vth-send');
+        const undoRow = host.querySelector('#vth-undo-row');
+        const undoBtn = host.querySelector('#vth-undo');
+        const undoN   = host.querySelector('#vth-undo-n');
+        let chatLog = _vthChatLoad(chatId);      // [{role:'user'|'ai', text}]
+        let undoLog = _vthUndoLoad(chatId);      // 每次 AI 改動前的舊 CSS
+
+        const syncUndo = () => {
+            undoN.textContent = String(undoLog.length);
+            undoRow.classList.toggle('on', undoLog.length > 0);   // 用 class 不用 style：CSS 預設就是 none,設成 '' 會退回 none
+        };
+        const addBubble = (role, text, animate) => {
+            const b = document.createElement('div');
+            b.className = 'studio-bubble ' + (role === 'user' ? 'user' : 'ai') + (animate ? ' studio-bubble-enter' : '');
+            b.innerHTML = role === 'user' ? esc(text).replace(/\n/g, '<br>') : renderMarkdown(text);
+            chatBox.appendChild(b);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return b;
+        };
+        const renderChat = () => {
+            chatBox.innerHTML = '';
+            if (!chatLog.length) {
+                chatBox.innerHTML = '<div class="vth-chat-empty">跟 AI 說你要什麼風格，他會出一整套主題；之後想改哪裡就再說一句，' +
+                    '例如「章節卡的標題再大一點」「名牌換成燙金」。改壞了按上面的還原上一版。</div>';
+                return;
+            }
+            chatLog.forEach(m => addBubble(m.role, m.text, false));
+        };
+        renderChat(); syncUndo();
+
+        const applyCss = (newCss) => {
+            undoLog.push(area.value || '');
+            _vthUndoSave(chatId, undoLog); syncUndo();
+            area.value = newCss;
+            refreshPreview();
+            VT.setCss(chatId, newCss);   // 對話式＝邊講邊套，不用再按一次套用
+        };
+
+        let _sending = false;
+        const send = () => {
+            const text = (sayEl.value || '').trim();
+            if (!text || _sending) return;
             const api = (window.parent || window).OS_API || window.OS_API;
             if (!api || typeof api.chatSecondary !== 'function') { alert('AI（副模型）不可用，請先到「寫作 → API 設置」設好副模型'); return; }
-            const orig = genBtn.textContent; genBtn.textContent = '生成中…'; genBtn.disabled = true;
-            api.chatSecondary(
-                [{ role: 'user', content: VTH_AI_PROMPT + desc }],
-                () => {},
-                (full) => {
-                    const _bad = _studioBadReply(String(full || ''));   // 錯誤頁/空/截斷 → 問重試
-                    if (_bad.bad) { genBtn.textContent = orig; genBtn.disabled = false; _studioConfirmRetry(_bad.reason, () => genBtn.onclick()); return; }
-                    let out = String(full || '');
-                    const m = out.match(/```(?:css)?\s*([\s\S]*?)```/i);
-                    if (m) out = m[1];
-                    out = out.trim();
-                    if (out) { area.value = out; refreshPreview(); VT.setCss(chatId, out); }
-                    genBtn.textContent = '✓ 已生成（已預覽+套用）'; genBtn.disabled = false;
-                    setTimeout(() => { genBtn.textContent = orig; }, 1800);
-                },
-                (err) => { genBtn.textContent = orig; genBtn.disabled = false; _studioConfirmRetry((err && err.message) || err, () => genBtn.onclick()); }
-            );
+            sayEl.value = '';
+            if (!chatLog.length) chatBox.innerHTML = '';
+            chatLog.push({ role: 'user', text });
+            _vthChatSave(chatId, chatLog);
+            addBubble('user', text, true);
+
+            _sending = true; sendBtn.disabled = true;
+            const wait = document.createElement('div');
+            wait.className = 'studio-bubble ai studio-bubble-enter';
+            wait.innerHTML = '<div class="studio-typing-wrap"><span class="studio-typing-dot"></span><span class="studio-typing-dot"></span><span class="studio-typing-dot"></span></div>';
+            chatBox.appendChild(wait); chatBox.scrollTop = chatBox.scrollHeight;
+
+            // 上下文：規則 + 最近幾輪 + 這次要改（附當前 CSS）。
+            // 舊的 AI 回覆只留一句摘要——完整 CSS 每輪都會重新附在最後，留著舊的只是浪費上下文。
+            const msgs = [{ role: 'user', content: VTH_AI_CHAT }];
+            chatLog.slice(-9, -1).forEach(m => msgs.push(m.role === 'user'
+                ? { role: 'user', content: m.text }
+                : { role: 'assistant', content: '（已更新主題 CSS）' }));
+            msgs.push({ role: 'user', content: '【目前的 CSS】\n```css\n' + (area.value || '(還沒有，這是第一版)') + '\n```\n\n【這次要改】' + text });
+
+            const done = (full) => {
+                _sending = false; sendBtn.disabled = false;
+                wait.remove();
+                const bad = _studioBadReply(String(full || ''));
+                if (bad.bad) { _studioConfirmRetry(bad.reason, () => { sayEl.value = text; send(); }); return; }
+                const raw = String(full || '');
+                const m = raw.match(/```(?:css)?\s*([\s\S]*?)```/i);
+                const note = raw.replace(/```[\s\S]*?```/g, '').trim();
+                const newCss = m ? m[1].trim() : '';
+                const say = note || (newCss ? '好了，右邊看看。' : raw.trim());
+                chatLog.push({ role: 'ai', text: say });
+                _vthChatSave(chatId, chatLog);
+                addBubble('ai', say, true);
+                if (newCss) applyCss(newCss);
+            };
+            api.chatSecondary(msgs, () => {}, done,
+                (err) => {
+                    _sending = false; sendBtn.disabled = false; wait.remove();
+                    _studioConfirmRetry((err && err.message) || err, () => { sayEl.value = text; send(); });
+                });
+        };
+        sendBtn.onclick = send;
+        sayEl.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+        undoBtn.onclick = () => {
+            if (!undoLog.length) return;
+            const prev = undoLog.pop();
+            _vthUndoSave(chatId, undoLog); syncUndo();
+            area.value = prev; refreshPreview(); VT.setCss(chatId, prev);
         };
 
         // ── 主題庫（跨世界重用，像 VN UI 展廳）──

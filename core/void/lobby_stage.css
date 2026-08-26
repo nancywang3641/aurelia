@@ -901,11 +901,11 @@
    在工坊裡會跟暗紫框打架。權重比創作室那份高一級（多一個 .lws.is-tool）就蓋得過去。 */
 .lws.is-tool .studio-theme-pane { background:transparent; background-image:none; color:var(--lwt-ink); }
 .lws.is-tool .vth-css-world, .lws.is-tool .vth-prev-label, .lws.is-tool .vth-gal-label { color:#e79ec4; }
-.lws.is-tool .vth-mini, .lws.is-tool .vth-vp, .lws.is-tool .vth-mode {
+.lws.is-tool .vth-mini, .lws.is-tool .vth-vp, .lws.is-tool .vth-mode, .lws.is-tool .vth-ptab {
   background:rgba(255,255,255,.06); border-color:var(--lwt-line); color:var(--lwt-ink); }
-.lws.is-tool .vth-mini:hover, .lws.is-tool .vth-vp:hover, .lws.is-tool .vth-mode:hover {
+.lws.is-tool .vth-mini:hover, .lws.is-tool .vth-vp:hover, .lws.is-tool .vth-mode:hover, .lws.is-tool .vth-ptab:hover {
   background:rgba(255,255,255,.14); color:var(--lwt-ink); border-color:rgba(226,150,190,.5); }
-.lws.is-tool .vth-mini.primary, .lws.is-tool .vth-vp.active, .lws.is-tool .vth-mode.active {
+.lws.is-tool .vth-mini.primary, .lws.is-tool .vth-vp.active, .lws.is-tool .vth-mode.active, .lws.is-tool .vth-ptab.active {
   background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
 .lws.is-tool .vth-mini.danger { color:#f0a8bd; border-color:rgba(226,110,150,.45); background:rgba(255,255,255,.05); }
 .lws.is-tool .vth-ai-desc, .lws.is-tool .vth-css-area, .lws.is-tool .vth-gal-name, .lws.is-tool .vth-vp-w {
@@ -914,7 +914,7 @@
 .lws.is-tool .vth-css-area { color:#f3d9e8; }
 .lws.is-tool .vth-ai-desc::placeholder, .lws.is-tool .vth-css-area::placeholder,
 .lws.is-tool .vth-gal-name::placeholder { color:rgba(239,231,246,.4); }
-.lws.is-tool .vth-css-hint, .lws.is-tool .vth-gal-empty { color:var(--lwt-dim); }
+.lws.is-tool .vth-css-hint, .lws.is-tool .vth-gal-empty, .lws.is-tool .vth-chat-empty { color:var(--lwt-dim); }
 .lws.is-tool .vth-gal { border-color:var(--lwt-line); }
 .lws.is-tool .vth-gal-card { background-color:var(--lwt-card); background-image:none;
   border-color:var(--lwt-line); color:var(--lwt-ink); box-shadow:none; }

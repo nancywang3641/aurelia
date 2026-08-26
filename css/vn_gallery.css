@@ -214,7 +214,22 @@
    容器窄（手機殼、或創作室判成單欄）就收回上下排，預覽在上。 */
 .vth-wrap { display:flex; flex-direction:row; gap:14px; align-items:stretch; height:100%; min-height:0; }
 .vth-col-work { flex:1; min-width:280px; display:flex; flex-direction:column; gap:11px; min-height:0; overflow-y:auto; }
-.vth-col-prev { flex:1.15; min-width:300px; display:flex; flex-direction:column; gap:10px; min-height:0; overflow-y:auto; }
+.vth-col-prev { flex:1.15; min-width:300px; display:flex; flex-direction:column; gap:10px; min-height:0; overflow:hidden; }
+/* 💬 左欄＝對話（照 VN 組件那套：講一句改一次），泡泡直接用創作室那組 class，配色兩邊都已經有了 */
+.vth-chat { flex:1; min-height:120px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:4px 2px; }
+.vth-chat-empty { font-size:12px; line-height:1.7; color:#8a8a8a; padding:10px 4px; }
+.vth-undo-row { display:none; }
+.vth-undo-row.on { display:flex; justify-content:flex-end; }
+.vth-say-wrap { padding:0; gap:8px; align-items:flex-end; }
+.vth-say-wrap .studio-textarea { min-height:46px; max-height:120px; }
+/* 右欄三個分頁：即時預覽／CSS／主題庫（一次只看一件事，不再一長條疊下去） */
+.vth-ptabs { display:flex; gap:6px; flex:0 0 auto; }
+.vth-ptab { flex:1; padding:7px 4px; font-size:12px; border-radius:8px; border:1px solid rgba(128,128,128,0.3);
+  background:transparent; color:#bbb; cursor:pointer; white-space:nowrap; }
+.vth-ptab.active { background:#d4af37; color:#1a1a1a; border-color:#d4af37; font-weight:700; }
+.vth-pane { display:none; flex:1; min-height:0; overflow-y:auto; flex-direction:column; gap:10px; }
+.vth-pane.on { display:flex; }
+.vth-pane-css .vth-css-area { flex:1; min-height:220px; }
 .studio-mobile .vth-wrap, .vth-wrap.is-narrow { flex-direction:column; height:auto; }
 .studio-mobile .vth-col-work, .studio-mobile .vth-col-prev { overflow:visible; min-height:0; }
 @media (max-width:768px) { .vth-wrap { flex-direction:column; height:auto; } .vth-col-work, .vth-col-prev { overflow:visible; } }
