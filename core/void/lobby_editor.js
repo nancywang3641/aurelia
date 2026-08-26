@@ -42,7 +42,7 @@
         }
         // 常駐角色站位（拖了「完成」後生效）
         [['alicePos', '愛', 'm-alice'], ['cheshirePos', '柴', 'm-cheshire'], ['rabbitPos', '兔', 'm-rabbit'],
-         ['zhiweiPos', '紫', 'm-zhiwei']].forEach(([pk, label, cls]) => {
+         ['zhiweiPos', '紫', 'm-zhiwei'], ['hatterPos', '帽', 'm-hatter']].forEach(([pk, label, cls]) => {
             if (!_b.CFG.points[pk]) return;
             const m = mk(label, cls, () => _b.CFG.points[pk]);
             S.edit.markers.push(m);

@@ -29,6 +29,8 @@
         rabbit: CDN + 'lobby_rabbit_portrait_v2.png',   // 白兔先生對話立繪(v2=Rae調尺寸 972x1882)
         zhiweiWalk: CDN + 'lobby_zhiwei_walk_v1.png',       // 紫薇老師走路圖(3×4；占卜小屋店主)
         zhiwei: CDN + 'lobby_zhiwei_portrait_v1.png',       // 紫薇老師對話立繪(972x1882)
+        hatterWalk: CDN + 'lobby_hatter_walk_v1.png',       // 帽匠走路圖(3×4；奇想工坊店主)
+        hatter: CDN + 'lobby_hatter_portrait_v1.png',       // 帽匠對話立繪(972x1882)
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
@@ -226,6 +228,53 @@
                   hoverImg: 'lobby_tarot_obj_table_glow_v1.png' },   // 描邊沿桌子真實輪廓(含桌腳)，比 CSS 橢圓準
             ],
         },
+        workshop: {   // 🎩 帽匠的奇想工坊：廣場右側那間店的室內。帽匠站在造物儀旁邊，點造物儀開造物工坊面板。
+            //   同占卜小屋：沒有手繪遮罩素材＝碰撞吃 boundary 鋼索，四個牆角在擺設模式可以直接拖。
+            base: 'lobby_workshop_base_v1.png',
+            cfgKey: 'lobby_stage_layout_workshop_v1',
+            // 🚨 家具素材已經緊裁到物件本身（佔地寬＝w*s，圖邊留白會讓碰撞框比看到的東西寬一大截）。
+            layout: [   // ⚠️ 照阿洛的擺設稿目測擺位；Rae 進擺設模式拖完複製數據回來換掉這份
+                { file: 'lobby_workshop_obj_workbench_v1.png', x: 118, y: 115, w: 900, h: 578, footH: 300, s: 0.42 },   // 靠後牆的大工作桌
+                { file: 'lobby_workshop_obj_chair_v1.png',     x: 245, y: 227, w: 574, h: 900, footH: 260, s: 0.226 },  // 工作椅(桌子前面)
+                { file: 'lobby_workshop_obj_rack_v1.png',      x: 490, y: 286, w: 776, h: 900, footH: 400, s: 0.110 },  // 稿件架(桌子右邊)
+                { file: 'lobby_workshop_obj_cabinet_v1.png',   x: 30,  y: 394, w: 471, h: 900, footH: 300, s: 0.340 },  // 零件抽屜櫃(左牆)
+                { file: 'lobby_workshop_obj_beanbag_v1.png',   x: 120, y: 652, w: 900, h: 846, footH: 620, s: 0.211 },  // 懶骨頭(左下)
+                { file: 'lobby_workshop_obj_crate_v1.png',     x: 320, y: 701, w: 767, h: 900, footH: 520, s: 0.143 },  // 糖果箱(懶骨頭旁)
+                { file: 'lobby_workshop_obj_loom_v1.png',      x: 600, y: 279, w: 801, h: 900, footH: 280, s: 0.412 },  // 🎯 造物儀(正中央,互動點)
+                { file: 'lobby_workshop_obj_console_v1.png',   x: 1035, y: 164, w: 415, h: 900, footH: 320, s: 0.140 }, // 全息控制台(投影台左邊)
+                { file: 'lobby_workshop_obj_rig_v1.png',       x: 1105, y: 100, w: 482, h: 900, footH: 260, s: 0.300 }, // 全息試裝台(後牆右)
+                { file: 'lobby_workshop_obj_shelf_v1.png',     x: 1280, y: 117, w: 445, h: 900, footH: 180, s: 0.315 }, // 展示層架(右牆)
+                { file: 'lobby_workshop_obj_cart_v1.png',      x: 1240, y: 448, w: 710, h: 900, footH: 340, s: 0.280 }, // 工具推車(右側)
+                { file: 'lobby_workshop_obj_kiosk_v1.png',     x: 1080, y: 675, w: 524, h: 900, footH: 420, s: 0.172 }, // 安裝終端(右下)
+                { file: 'lobby_workshop_obj_coil_v1.png',      x: 1215, y: 709, w: 510, h: 344, footH: 200, s: 0.147 }, // 線材捲(地上)
+                { file: 'lobby_workshop_obj_case_v1.png',      x: 1290, y: 743, w: 801, h: 638, footH: 400, s: 0.137 }, // 樣品箱(右下角)
+            ],
+            points: {
+                player: { x: 768, y: 790 },
+                arrive: { x: 768, y: 800 },   // 從門口進來的落點(門在下緣中央)
+                hatterPos: { x: 545, y: 650 },   // 帽匠站在造物儀左前方(擺設模式可拖)
+                // 可走範圍：地板那塊梯形(牆往前是外八)。角點在擺設模式可拖。
+                boundary: [
+                    { x: 150, y: 330 }, { x: 1390, y: 330 },
+                    { x: 1450, y: 860 }, { x: 95, y: 860 },
+                ],
+                actorScale: 0.7,
+            },
+            walls: [],
+            doors: [
+                // 工坊大門→廣場。🔒 廣場鎖上時改回「進門前待的場景」，見過門判定。
+                // 🚨 觸發區必須整個落在 boundary 裡面，不然玩家走不到門＝被關在工坊（tmp/workshop_shop_test.cjs 有守）
+                { x: 700, y: 810, w: 136, h: 44, to: 'city', spawn: { x: 1312, y: 895 } },
+            ],
+            doorsV: 1,
+            hatter: { x: 545, y: 650 },   // 觸發 lobby_npcs 的 if(SC.hatter)：帽匠在店裡
+            // 🎯 造物儀＝可點的互動點（點了開造物工坊面板；走近帽匠是純聊天，兩件事分開，同占卜小屋那條規則）。
+            //    obj 讓熱點跟著家具走：擺設模式挪造物儀，熱點自己跟上，不用回來改座標。
+            hotspots: [
+                { obj: 'obj_loom', label: '開始造物', icon: 'fa-wand-magic-sparkles', open: 'workshop', cls: 'hs-workshop',
+                  hoverImg: 'lobby_workshop_obj_loom_glow_v1.png' },   // 描邊沿造物儀真實輪廓，中間透明
+            ],
+        },
         room: {   // 🏠 房間：底圖與碰撞遮罩不是素材，是「進門當下」餵進來的（見 enterRoom）
             //   房間圖＝生成的那張、可走區＝房間地板多邊形轉的白遮罩，所以每一間都不一樣、也不吃 CDN 素材。
             //   points/doors 由 enterRoom 依當間房的地板算好再寫進來；沒有 cfgKey＝不存擺設（每間房各自不同）。
@@ -241,7 +290,7 @@
             upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
             alphaFoot: true,   // 🏢 建築照真實輪廓(alpha)擋，但✂️只算底部「佔地高」那一帶→上半可走過去(小人繞屋後)；佔地高可調
             nightBase: 'city/city_floor_night.png',   // 🌙 夜版地板；物件/牆框夜版走 CITY_NIGHT 對照表（2026-07-20 夜版素材上齊,解鎖日夜）
-            cfgKey: 'lobby_stage_layout_city_v9',   // v9=npc04 那塊地換成占卜小屋（v8舊存檔作廢；v8 的內容就是這份定版，不掉東西）
+            cfgKey: 'lobby_stage_layout_city_v10',   // v10=npc02 那塊地換成帽匠的奇想工坊（v9舊存檔作廢；v9 的內容就是這份定版，不掉東西）
             outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
             // 前景物件＝獨立元素（書咖/大廳/房子/噴泉/樹/燈柱/長椅）；noCollide=不進碰撞(碰撞全走遮罩)；
             //   靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
@@ -251,13 +300,13 @@
                 { file: "city/obj/lobby_day.png", x: 976, y: 308, w: 468, h: 350, footH: 155, s: 0.827 },   // 大廳建築（回大廳門接這棟）
                 { file: "city/obj/player_house_lv1.png", x: 97, y: 565, w: 1284, h: 750, footH: 350, footW: 1272, s: 0.402, plot: "player" },   // MC家（跟白兔買了才蓋起來；狀態=OS_PT）
                 { file: "city/obj/npc_house_01.png", x: 874, y: 638, w: 1095, h: 839, footH: 445, s: 0.274, plot: "npc01" },
-                { file: "city/obj/npc_house_02.png", x: 1182, y: 580, w: 794, h: 853, footH: 339, s: 0.327, plot: "npc02" },
                 { file: "city/obj/npc_house_03.png", x: 990, y: 128, w: 1030, h: 814, footH: 288, s: 0.281, plot: "npc03" },
                 // 🔮 占卜小屋（原 npc04 那塊地；鄰居系統不做了→這棟永遠都在，不吃 plot 開關）
                 { file: "city/obj/tarot_hut_day.png", x: 164, y: 327, w: 1428, h: 1024, footH: 360, s: 0.231 },
+                // 🎩 帽匠的奇想工坊（原 npc02 那塊地；同上，永遠都在、不吃 plot 開關）。廣場左邊占卜小屋、右邊工坊，一邊一間店。
+                { file: "city/obj/hatter_shop_day.png", x: 1177, y: 619, w: 1010, h: 898, footH: 300, s: 0.267 },
                 { file: "city/obj/plot_frame_day_player.png", x: 156, y: 619, w: 1342, h: 836, footH: 0, s: 0.308, layer: "floor", noCollide: true, plotFrame: "player" },   // MC家空地框(沒買房時顯示)
                 { file: "city/obj/plot_frame_day_npc01.png", x: 889, y: 639, w: 357, h: 342, footH: 0, s: 0.673, layer: "floor", noCollide: true, plotFrame: "npc01" },
-                { file: "city/obj/plot_frame_day_npc02.png", x: 1180, y: 643, w: 342, h: 340, footH: 0, s: 0.684, layer: "floor", noCollide: true, plotFrame: "npc02" },
                 { file: "city/obj/plot_frame_day_npc03.png", x: 992, y: 152, w: 398, h: 300, footH: 0, s: 0.657, layer: "floor", noCollide: true, plotFrame: "npc03" },
                 { file: "city/obj/fountain_node_day.png", x: 706, y: 325, w: 180, h: 222, footH: 67, s: 0.799 },
                 { file: "city/obj/crystal_monument_day.png", x: 1086, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
@@ -307,6 +356,8 @@
                 { x: 330, y: 850, w: 100, h: 42, panel: 'myhome', plot: 'player' },
                 // 🔮 占卜小屋門口（觸發區壓在小屋下緣外側那一條，同書咖那扇的作法）
                 { x: 279, y: 566, w: 100, h: 42, to: 'tarot', spawn: { x: 768, y: 800 } },
+                // 🎩 帽匠工坊門口（同上，壓在工坊下緣外側）
+                { x: 1262, y: 861, w: 100, h: 42, to: 'workshop', spawn: { x: 768, y: 800 } },
             ],
         },
     };
@@ -324,6 +375,7 @@
         'city/obj/npc_house_03.png': 'city/obj/npc_house_03_night.png',
         'city/obj/npc_house_04.png': 'city/obj/npc_house_04_night.png',
         'city/obj/tarot_hut_day.png': 'city/obj/tarot_hut_night.png',
+        'city/obj/hatter_shop_day.png': 'city/obj/hatter_shop_night.png',
         'city/obj/city_bench_01_day.png': 'city/obj/city_bench_01_night.png',
         'city/obj/city_bench_horizontal_02_day.png': 'city/obj/city_bench_horizontal_02_night.png',
         'city/obj/city_bench_horizontal_03_day.png': 'city/obj/city_bench_horizontal_03_night.png',
@@ -479,6 +531,7 @@
                     if (saved.points.cheshirePos) points.cheshirePos = saved.points.cheshirePos;
                     if (saved.points.rabbitPos) points.rabbitPos = saved.points.rabbitPos;
                     if (saved.points.zhiweiPos) points.zhiweiPos = saved.points.zhiweiPos;
+                    if (saved.points.hatterPos) points.hatterPos = saved.points.hatterPos;
                     if (Array.isArray(saved.points.boundary) && saved.points.boundary.length >= 3) points.boundary = saved.points.boundary;
                     if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
                 }
@@ -494,6 +547,7 @@
         spawnOverride: null,        // 過門後的抵達點
         roomFrom: '',               // 進房間之前待的場景（廣場鎖上時，走出房間就回這裡）
         tarotFrom: '',              // 進占卜小屋之前待的場景（同上：小屋的門對外是廣場，鎖上時得回得去）
+        workshopFrom: '',           // 進帽匠工坊之前待的場景（同上）
         doorCd: 0,                  // 過門冷卻（防止落地瞬間又觸發）
         doorArm: false,             // 門武裝狀態：落地後走出門區一次才重新啟動
         transitioning: false,
@@ -1304,6 +1358,7 @@
     function startTalk(npc) {
         if (S.edit) return;
         _closeTarotPanel();   // 🔮 開聊＝收掉占卜面板：同一個人不能一邊在面板裡解牌、一邊在底下對話框講話
+        _closeWorkshopPanel();   // 🎩 同上：開聊＝收掉造物工坊面板
         if (S.theater && (npc === S.theater.a || npc === S.theater.b)) window.LobbyTheater?.end();   // 🎭 跟配對當事人開聊→收掉配對（清泡泡+解凍）免凍結卡死；跟旁人聊不打斷等待中的小劇場
         S.talkTarget = npc;
         S.npcs.forEach(n => { n.hint.style.display = 'none'; });
@@ -1342,6 +1397,7 @@
         room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
         city:    { name: '街區',   badge: '視差城市', ph: '在街區走走、點路人聊聊，或走進書咖／純白大廳...' },
         exchange:{ name: '白兔先生', badge: '交易所', ph: '走近白兔先生，兌換屬於你的一席之地...' },
+        workshop:{ name: '帽匠',   badge: '奇想工坊', ph: '和帽匠聊聊，或點中央的造物儀開始做東西...' },
     };
     function _applySceneHeader() {
         // 房間：抬頭跟著是誰的房間走（進門時給），不是固定文案
@@ -1555,6 +1611,8 @@
                         } else if (door.to === 'city' && _cityLocked() && S.scene === 'tarot') {
                             // 🔒 廣場鎖上：走出占卜小屋不能落在進不去的廣場→回進門前待的場景（同房間的 roomFrom）
                             goScene(S.tarotFrom || 'hall');
+                        } else if (door.to === 'city' && _cityLocked() && S.scene === 'workshop') {
+                            goScene(S.workshopFrom || 'hall');   // 🔒 同上：走出帽匠工坊
                         } else goScene(door.to, door.spawn);
                     }
                 } else S.doorArm = true;
@@ -1574,6 +1632,7 @@
     function goScene(to, spawn, spawnMode) {
         if (S.transitioning || !SCENES[to]) return;
         if (to === 'tarot' && S.scene !== 'tarot') S.tarotFrom = S.scene;   // 記住從哪進小屋的（出口要用）
+        if (to === 'workshop' && S.scene !== 'workshop') S.workshopFrom = S.scene;   // 記住從哪進工坊的（出口要用）
         S.transitioning = true;
         const left = document.querySelector('.lobby-left');
         const fade = document.createElement('div');
@@ -1855,6 +1914,33 @@
         catch (e) { box.querySelector('.lstage-tw-body').innerHTML = '<div style="padding:24px;color:#c88">占卜面板載入失敗</div>'; }
     }
 
+    // ── 🎩 造物工坊面板（工坊裡點造物儀）：面板本體在 lobby_workshop.js，這裡只負責那扇浮窗 ──
+    //    版型與規矩照占卜浮窗那套：右側靠邊、左邊留給帽匠立繪；開面板＝收掉對話框但人留著。
+    //    差別是這扇窗沒有自己的標題列——面板自帶阿洛畫的標題與 ✕（一頁只留一顆離開鈕）。
+    let _wsWin = null;   // 造物工坊浮窗單例（開聊時要收掉，見 startTalk）
+    function _closeWorkshopPanel() { if (_wsWin) { try { _wsWin(); } catch (e) {} } }
+    function _openWorkshopPanel() {
+        _closeWins();
+        endTalk();      // 正在跟帽匠聊 → 結束（順帶收掉立繪與其他面板）
+        hideDialog();   // 沒在聊但框還浮著 → 也收掉
+        _showPortraitOnly(S.npcs.find(n => n.key === 'hatter'));   // 🧍 人留著，收的是白框與輸入列
+        const box = document.createElement('div');
+        box.className = 'lstage-wswin';
+        const host = document.querySelector('.lobby-left') || S.root;
+        const close = () => {
+            box.remove();
+            _wsWin = null;
+            if (!S.talkTarget) host.querySelector('.lstage-talk-portrait')?.remove();
+            try { host.classList.remove('void-dock-open'); } catch (e) {}
+        };
+        _wsWin = close;
+        host.appendChild(box);
+        host.classList.add('void-dock-open');   // 手機版靠這個 class 讓面板改吃滿寬（同世界門/交易所）
+        _regWin(close);
+        if (window.LobbyWorkshop) window.LobbyWorkshop.mount(box, { onClose: close });
+        else box.innerHTML = '<div class="lws-fail">造物工坊面板載入失敗</div>';
+    }
+
     // ── ⚙️ 大廳設置小面板（舞台上，仿裝扮室）──
     function _closeLobbySettings() { S.setEl?.remove(); S.setEl = null; }
     function _openLobbySettings() {
@@ -1871,6 +1957,7 @@
             { id:'alice', name:'愛麗絲（導覽官）', sub:'純白大廳首席導覽',   icon:'fa-user-astronaut', load:P.loadAlice,   save:P.saveAlice },
             { id:'rabbit',name:'白兔先生（交易所）', sub:'交易區職員 · 成就估值', icon:'fa-stopwatch',   load:P.loadRabbit,  save:P.saveRabbit },
             { id:'zhiwei',name:'紫薇老師（占卜小屋）', sub:'微醺星軌店主 · 只管聊天',  icon:'fa-moon',    load:P.loadZhiwei,  save:P.saveZhiwei },
+            { id:'hatter',name:'帽匠（奇想工坊）',   sub:'造物工坊店主 · 只管聊天',  icon:'fa-hat-wizard', load:P.loadHatter, save:P.saveHatter },
             { id:'world', name:'奧瑞亞世界觀',    sub:'主世界觀補充設定',   icon:'fa-globe',          load:P.loadWorld,   save:P.saveWorld },
         ];
 
@@ -2018,7 +2105,7 @@
             // 🏙 快轉地圖：每個走得到的場景都要有（404 進出走完整轉場流程，見 _openCityMap 的 jump）
             //    room＝住家／房客的房／公寓走廊。廣場鎖上之後那裡面唯一的出路是走到門口，
             //    別的地方都能一鍵跳、只有屋裡要用走的說不過去。
-            (['cafe', 'hall', 'exchange', 'city', 'room404', 'room', 'tarot'].indexOf(S.scene) >= 0
+            (['cafe', 'hall', 'exchange', 'city', 'room404', 'room', 'tarot', 'workshop'].indexOf(S.scene) >= 0
                 ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
             // ☕ 書咖櫃檯入口=跟瀅瀅開聊(startTalk 掛鉤,同白兔成例);獨立鈕已退役
         left.appendChild(root);
@@ -2089,6 +2176,7 @@
     //    hs.to＝切場景；hs.open＝呼叫 HOTSPOT_ACTIONS 裡的動作
     const HOTSPOT_ACTIONS = {
         tarot: () => _openTarotPanel(),
+        workshop: () => _openWorkshopPanel(),
     };
     function _mountHotspots() {
         (SCENES[S.scene].hotspots || []).forEach(hs => {
@@ -2413,6 +2501,7 @@
         plotOccupied: _plotOccupied,
         openCityMap: _openCityMap,          // 🧭 快轉地圖（lobby_places 的統一入口在舞台模式下走這條）
         openTarotPanel: _openTarotPanel,    // 🔮 占卜面板（立繪模式沒有小屋可以走進去，直接開面板）
+        openWorkshopPanel: _openWorkshopPanel,   // 🎩 造物工坊面板（同上：立繪模式沒有工坊可以走進去）
         rollGuestPool: () => window.LobbyNpcs?.rollGuestPool(),   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個；懶解析到 lobby_npcs.js，async 透傳）
         pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
         openDressRoom: (a) => window.LobbyDress?.openRoom(a),   // console 診斷用：直接開某個角色的裝扮室（傳 _S.npcs 裡的物件）

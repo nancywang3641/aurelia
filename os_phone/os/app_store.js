@@ -66,13 +66,8 @@
     // 素材圖：GPT 工坊插畫，host 在獨立 sound-files 素材庫（code repo 有 jsdelivr 50MB 上限、aseets 不追蹤）
     const ASSET_BASE = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/';
     const ASSET_MAP = {
-        'im-icon': 'workshop-import.png',   // 匯入應用（資料箱）
-        'vn-icon': 'studio-panel.png',      // VN 組件清單（卷軸面板）
-        // 創作室四鈕素材（沿用創作室首頁四張卡的插畫）
-        'panel-icon': 'studio-panel.png',       // 製作互動面板
-        'theme-icon': 'studio-theme.png',       // 設計劇情主題
+        'im-icon': 'workshop-import.png',   // 匯入應用（資料箱；卡片搬去帽匠工坊後這張只剩匯入頁的頭圖在用）
         'wb-icon': 'studio-worldbook.png',      // 整理世界書
-        'fx-icon': 'studio-fx.png',             // 特效工坊（素材未上傳前自動隱藏、卡片文字照常）
         'persona-icon': 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/我的角色_ying.png'   // 我的角色（在 aseets 根，非 studio-ui）
     };
     function _applyAssets(c) {
@@ -90,13 +85,9 @@
       // ── 首頁 ──
       +     '<div class="ws-view active" data-view="home">'
       +       '<div class="ws-home-hd"><button class="ws-back ws-home-back" type="button" title="返回桌面"><i class="fa-solid fa-chevron-left"></i></button><div class="ws-home-hd-tx"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div></div>'
-      +       '<div class="ws-top-row">'
-      +         '<button class="ws-mini ws-mini-im" data-go="import" type="button"><img class="ws-mini-ic" data-asset="im-icon" alt=""><span class="ws-mini-t">匯入應用</span><span class="ws-mini-d">貼上現成 HTML</span></button>'
-      +         '<button class="ws-mini ws-mini-vn" data-go="vncomp" type="button"><img class="ws-mini-ic" data-asset="vn-icon" alt=""><span class="ws-mini-t">VN 組件清單</span><span class="ws-mini-d">整理、打包組件</span></button>'
-      +       '</div>'
-      +       '<button class="ws-card ws-card-sm ws-card-panel" data-studio="vn_ui" type="button"><img class="ws-card-ic" data-asset="panel-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">製作互動面板</span><span class="ws-card-d">狀態欄、角色卡、好感度…這類劇情面板</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
-      +       '<button class="ws-card ws-card-sm ws-card-fx" data-studio="fx" type="button"><img class="ws-card-ic" data-asset="fx-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">特效工坊</span><span class="ws-card-d">下雪、滴血、劍光…劇情畫面特效</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
-      +       '<button class="ws-card ws-card-sm ws-card-theme" data-studio="theme" type="button"><img class="ws-card-ic" data-asset="theme-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">設計劇情主題</span><span class="ws-card-d">對話框、名牌、頂部牌的外觀風格</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      // 🎩 創作那半（匯入 HTML／VN 組件／製作互動面板／特效工坊／劇情主題）2026-08-26 搬去廣場的
+      //    帽匠工坊（core/void/lobby_workshop.js）＝走得進去的一間店；手機這邊只留「我的應用」與安裝流程，
+      //    做好的 app 本來就住手機桌面。世界書／我的角色照舊留在這裡（書咖還沒做，現在搬過去會變孤兒）。
       +       '<button class="ws-card ws-card-sm ws-card-wb" data-studio="worldbook" type="button"><img class="ws-card-ic" data-asset="wb-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">整理世界書</span><span class="ws-card-d">建／改世界書條目，AI 幫你寫規則</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-sm ws-card-persona" data-studio="persona" type="button"><img class="ws-card-ic" data-asset="persona-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">我的角色</span><span class="ws-card-d">寫／改你扮演的主角人設，對標不同世界</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +     '</div>'
@@ -138,10 +129,19 @@
       +   '<div class="ws-toast" id="as-toast"></div>'
       + '</div>';
 
-    function launch(c) {
+    // opts.view  ＝ 直接落在某一頁（帽匠工坊的「匯入 HTML」卡借的就是匯入頁）
+    // opts.onExit＝ 借用模式下按返回要去哪（沒給就照舊回首頁）；借用時底部 nav 與首頁都收起來，
+    //               那邊一頁只做一件事，不該冒出手機工坊的首頁與分頁列。
+    function launch(c, opts) {
         if (!c) return;
+        opts = opts || {};
         c.innerHTML = STORE_HTML;
         _applyAssets(c);
+        var embed = !!opts.view;
+        if (embed) {
+            var app = c.querySelector('.ws-app');
+            if (app) app.classList.add('ws-embed');
+        }
         // 首頁返回鈕：退出工坊 app 回手機桌面（phone_shell 已把 PhoneSystem.goHome 接成回桌面）
         var _homeBack = c.querySelector('.ws-home-back');
         if (_homeBack) _homeBack.addEventListener('click', function () {
@@ -150,7 +150,10 @@
         });
         // 導覽：所有 data-go（卡片/返回/查看全部/底部 nav）
         c.querySelectorAll('[data-go]').forEach(function (b) {
-            b.addEventListener('click', function () { _go(c, b.dataset.go); });
+            b.addEventListener('click', function () {
+                if (embed && opts.onExit && b.dataset.go === 'home') { opts.onExit(); return; }   // 借用模式：回首頁＝把面板還給借方
+                _go(c, b.dataset.go);
+            });
         });
         // 創作室四鈕：直接開創作室並落到對應工作（vn_ui/theme/worldbook/persona），跳過創作室首頁
         c.querySelectorAll('[data-studio]').forEach(function (el) {
@@ -160,18 +163,8 @@
                 else _toast(c, '❌ 創作室未載入');
             });
         });
-        // 「VN 組件清單」入口：開獨立 VN 組件區（乾淨四頁，不進創作室的聊天/預覽窗；繼續編輯才橋接創作室）
-        (function () {
-            c.querySelectorAll('[data-go="vncomp"]').forEach(function (el) {
-                el.setAttribute('data-go', '');            // 解除路由，避免 _go 切到不存在的 view
-                el.addEventListener('click', function (e) {
-                    if (e) e.stopPropagation();
-                    if (win.OS_STUDIO && win.OS_STUDIO.openVnComponents) win.OS_STUDIO.openVnComponents(c);
-                    else _toast(c, '❌ 創作室未載入');
-                });
-            });
-        })();
         _bindImport(c);
+        if (opts.view) _go(c, opts.view);
     }
 
     // 切換視圖

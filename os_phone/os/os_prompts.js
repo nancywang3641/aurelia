@@ -456,6 +456,9 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     const ZHIWEI_KEY = 'os_zhiwei_persona';
     function loadZhiwei()   { return localStorage.getItem(ZHIWEI_KEY) || ''; }
     function saveZhiwei(v)  { localStorage.setItem(ZHIWEI_KEY, v); }
+    const HATTER_KEY = 'os_hatter_persona';
+    function loadHatter()   { return localStorage.getItem(HATTER_KEY) || ''; }
+    function saveHatter(v)  { localStorage.setItem(HATTER_KEY, v); }
     const WORLD_KEY = 'os_lobby_world';
     function loadWorld()    { return localStorage.getItem(WORLD_KEY)  || ''; }
     function saveWorld(v)   { localStorage.setItem(WORLD_KEY, v); }
@@ -649,7 +652,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         getEntries: loadEntries,
         getBundles: loadBundles,
         // 大廳人設補充（瀅瀅 / 柴郡 / 世界觀）— 給 os_settings「大廳人設」分頁讀寫用
-        loadIris, saveIris, loadCheshire, saveCheshire, loadAlice, saveAlice, loadRabbit, saveRabbit, loadZhiwei, saveZhiwei, loadWorld, saveWorld,
+        loadIris, saveIris, loadCheshire, saveCheshire, loadAlice, saveAlice, loadRabbit, saveRabbit, loadZhiwei, saveZhiwei, loadHatter, saveHatter, loadWorld, saveWorld,
         PANELS,
         launchApp: null
     };

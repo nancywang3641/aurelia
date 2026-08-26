@@ -70,6 +70,13 @@
             openIn: (c) => _mountTarot(c),
         },
         {
+            id: 'workshop', name: '奇想工坊', flatName: '造物工坊', icon: 'fa-hat-wizard', npc: 'hatter',
+            obj: 'hatter_shop', scene: 'workshop',
+            ready: () => !!(win.LobbyWorkshop?.ready?.()),
+            open: () => _stage()?.openWorkshopPanel?.(),
+            openIn: (c) => win.LobbyWorkshop.mount(c),   // 面板本來就吃容器，直接畫進窗格
+        },
+        {
             id: 'myhome', name: '我的家', icon: 'fa-house-chimney',
             obj: 'player_house',
             when: () => !!_stage()?.plotOccupied?.('player'),

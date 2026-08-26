@@ -37,27 +37,12 @@
 .ws-card-d { font-size: 12px; color: #8a6a5a; line-height: 1.45; }
 .ws-card-go { font-size: 18px; color: rgba(122,36,50,0.45); flex-shrink: 0; }
 
-/* 上段：匯入應用 + VN 組件清單，左右並排的小卡 */
-.ws-top-row { display: flex; gap: 12px; }
-.ws-top-row .ws-mini {
-    flex: 1; min-width: 0;
-    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 5px;
-    padding: 14px 10px; border: 1px solid rgba(110,80,40,0.18); border-radius: 18px; cursor: pointer;
-    background: #fffdf7; box-shadow: 0 1px 3px rgba(83,49,20,0.07); white-space: normal; font-size: 14px;
-}
-.ws-top-row .ws-mini:active { transform: scale(0.98); }
-.ws-mini-im, .ws-mini-vn { background: #fffdf7; }
-/* 固定高度（非固定寬度）：兩張圖長寬比不同時高度才會一致，下面標題/副標才對得齊 */
-.ws-mini-ic { height: clamp(54px, 18vw, 72px); width: auto; max-width: 90%; object-fit: contain; pointer-events: none; user-select: none; }
-.ws-mini-t { font-size: 14px; font-weight: 800; color: #4a2a24; }
-.ws-mini-d { font-size: 11px; color: #8a6a5a; }
-
-/* 下段：創作室四鈕，直排的橫向小卡 */
+/* 首頁的橫向小卡（創作那半搬去帽匠工坊後，這裡剩世界書／我的角色兩張）*/
 .ws-card-sm { padding: 12px; border-radius: 16px; gap: 10px; }
 .ws-card-sm .ws-card-ic { width: clamp(52px, 18vw, 70px); max-height: 70px; }
 .ws-card-sm .ws-card-t { font-size: 15px; }
 /* 統一米白底 + 線框（不再一張一色）；如需區分靠圖標 */
-.ws-card-panel, .ws-card-theme, .ws-card-wb, .ws-card-persona { background: #fffdf7; }
+.ws-card-wb, .ws-card-persona { background: #fffdf7; }
 
 /* ── 匯入 共用欄位 ── */
 .ws-hero { display: flex; justify-content: center; padding: 6px 0 4px; }
@@ -154,3 +139,7 @@ select.ws-input { appearance: none; -webkit-appearance: none; -moz-appearance: n
 /* ── toast ── */
 .ws-toast { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%) translateY(12px); background: rgba(58,30,15,0.9); color: #fffdf7; padding: 8px 18px; border-radius: 20px; font-size: 12px; opacity: 0; pointer-events: none; transition: 0.25s; white-space: nowrap; z-index: 40; }
 .ws-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── 借用模式：帽匠工坊的「匯入 HTML」卡把這支的匯入頁借過去用（安裝流程只有這一份）──
+   借方自己有標題與返回，所以底部分頁列收起來，免得在那邊多冒一排手機工坊的分頁。 */
+.ws-app.ws-embed .ws-nav { display: none; }
