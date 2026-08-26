@@ -858,6 +858,18 @@
 .lws.is-tool .studio-tab { color:rgba(239,231,246,.78); }
 .lws.is-tool .studio-tab.active { color:#fff0f8; }
 .lws.is-tool .studio-tab:hover { color:#ffd9ea; }
+/* 🚨 這四顆（複製創建說明書／匯入面板／匯入包／組件卡上的小鈕）在原皮裡連底帶字都是 !important，
+   class 規則蓋不過去 → 這裡也只能用 !important 對衝；字色本來吃 --jrpg-wine-dark，
+   我把那顆翻亮之後就變成亮字配米底＝整顆看不到字（Rae 2026-08-26 回報） */
+.lws.is-tool .sgc-btn, .lws.is-tool .studio-pack-btn,
+.lws.is-tool #studio-spec-copy-btn, .lws.is-tool #studio-import-btn {
+  background:rgba(255,255,255,.07) !important; background-image:none !important;
+  border-color:var(--lwt-line) !important; color:var(--lwt-ink) !important; box-shadow:none; }
+.lws.is-tool .sgc-btn:hover, .lws.is-tool .studio-pack-btn:hover,
+.lws.is-tool #studio-spec-copy-btn:hover, .lws.is-tool #studio-import-btn:hover {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)) !important;
+  border-color:var(--lwt-hot) !important; color:#fff !important; }
+
 /* 掃出來的兩塊漏網米色底：待處理提示條與「介面已隱藏」提示 */
 .lws.is-tool .mc-pend, .lws.is-tool .studio-hidden-ui {
   background:rgba(58,47,84,.55); background-image:none; border-color:var(--lwt-line); color:var(--lwt-ink); }
