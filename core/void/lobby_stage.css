@@ -561,30 +561,55 @@
 .lobby-left:has(.lstage-wswin) .lstage-talk-portrait { z-index:3400; }
 .lobby-left.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait { bottom:0; height:82%; }
 
-/* ── 面板本體（lobby_workshop.js 掛進來；地點視圖的窗格也是這一份）── */
-.lws { position:relative; width:100%; height:100%; display:flex; flex-direction:column; overflow:hidden;
-  border-radius:22px; color:#efe7f6;
-  background:radial-gradient(120% 90% at 50% 30%, #2c2540 0%, #241e33 55%, #1d1829 100%);
-  border:1px solid rgba(198,96,148,.34); box-shadow:0 16px 44px rgba(0,0,0,.6);
+/* ── 面板本體（lobby_workshop.js 掛進來；地點視圖的窗格也是這一份）──
+   🚨 框是 CSS 畫的，不是把阿洛那張整框圖裁下來貼：
+      整張框圖一拉伸就把角落的貓與高帽扯歪，裁成角落貼圖又得做 alpha 漸隱＝邊緣糊掉。
+   畫法＝兩層，不是「在角落塗一塊酒紅」：
+      外層 .lws        ＝框本體，右上與右下帶酒紅（框的邊條顏色）
+      內層 .lws::before ＝真正的暗紫面板，內縮 9px、四個角圓角不一樣大
+                         → 圓角大的那兩角（右上、左下）就讓底下的框色露出來，成為那道彎角邊條
+   任何長寬比都不變形；角落玩偶（貓／高帽／徽章）另外出透明底小圖貼進 .lws-doll-*。 */
+.lws { position:relative; width:100%; height:100%; display:flex; flex-direction:column; overflow:visible;
+  border-radius:26px; color:#efe7f6;
+  background:
+    radial-gradient(120% 150% at 100% 0%, #c8477a 0%, #a02f60 12%, #6d1f46 26%, rgba(56,40,72,0) 52%),
+    radial-gradient(95% 130% at 100% 100%, #bd4073 0%, #8c2757 16%, rgba(56,40,72,0) 44%),
+    linear-gradient(155deg, #382f52 0%, #2b2440 42%, #241d33 100%);
+  border:1px solid rgba(222,212,234,.42);
+  box-shadow:0 18px 48px rgba(0,0,0,.62);
   font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif; }
-/* 三個角落的手繪裝飾（貓／高帽／徽章）：只是貼圖，不吃滑鼠 */
-.lws-deco { position:absolute; pointer-events:none; background-repeat:no-repeat; background-size:100% 100%; z-index:2; }
-.lws-deco-tr { right:0; top:0; width:240px; height:158px;
-  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_deco_tr_v1.webp); }
-.lws-deco-bl { left:0; bottom:0; width:240px; height:143px;
-  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_deco_bl_v1.webp); }
-.lws-deco-br { right:0; bottom:0; width:195px; height:128px;
-  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_deco_br_v1.webp); }
+/* 內面板：圓角 = 左上 / 右上 / 右下 / 左下，右上與左下故意做大＝框色露出來的那道彎 */
+.lws::before { content:""; position:absolute; inset:9px; z-index:0; pointer-events:none;
+  border-radius:20px 58px 34px 58px;
+  background:radial-gradient(130% 110% at 50% 0%, #322a49 0%, #272038 46%, #1e1829 100%);
+  box-shadow:inset 0 0 0 1px rgba(226,186,138,.14), 0 0 22px rgba(0,0,0,.45); }
 
-.lws-hd { position:relative; z-index:3; flex:0 0 auto; padding:40px 22px 12px; }
-.lws-title { width:min(52%,300px); height:52px; margin:0 auto;
+/* 點陣小裝飾（阿洛框上那兩片小點點） */
+.lws-dots { position:absolute; z-index:2; width:56px; height:32px; pointer-events:none;
+  background-image:radial-gradient(circle, rgba(216,192,228,.22) 1px, transparent 1.4px);
+  background-size:11px 11px; }
+.lws-dots-l { left:34px; top:34px; }
+.lws-dots-r { right:34px; top:88px; }
+
+/* 🎎 角落玩偶（貓／高帽＋徽章／菱形＋貓頭）：阿洛另外出透明底小圖，
+   之後只要在這三條補 background-image 就會出現；還沒有素材時是空的，不會有破圖。 */
+.lws-doll { position:absolute; z-index:5; pointer-events:none;
+  background-repeat:no-repeat; background-position:center bottom; background-size:contain; }
+.lws-doll-tr { right:74px; top:-44px; width:124px; height:78px; }   /* 兩隻貓坐在上緣 */
+.lws-doll-bl { left:20px; bottom:8px; width:150px; height:50px; }   /* 高帽＋餅乾徽章 */
+.lws-doll-br { right:74px; bottom:8px; width:104px; height:48px; }  /* 菱形＋貓頭 */
+
+.lws-hd { position:relative; z-index:3; flex:0 0 auto; padding:24px 22px 12px; }
+.lws-title { width:min(48%,280px); height:48px; margin:0 auto;
   background:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_title_v1.webp) center / contain no-repeat; }
-.lws-x { position:absolute; right:20px; top:38px; width:46px; height:46px; padding:0; border:none; cursor:pointer;
-  background:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_close_v1.webp) center / contain no-repeat;
-  filter:drop-shadow(0 2px 6px rgba(0,0,0,.5)); transition:transform .14s ease; }
-.lws-x:hover { transform:scale(1.08); }
+.lws-x { position:absolute; right:26px; top:24px; width:42px; height:42px; padding:0; cursor:pointer;
+  border:1px solid rgba(240,202,152,.42); border-radius:50%;
+  background:radial-gradient(70% 70% at 50% 32%, #3d2242 0%, #251527 100%);
+  color:#f2dcc4; font-size:18px; line-height:1;
+  box-shadow:0 3px 10px rgba(0,0,0,.45); transition:transform .14s ease, border-color .14s ease; }
+.lws-x:hover { transform:scale(1.07); border-color:rgba(240,202,152,.8); }
 
-/* 下緣留白＝給底下兩個角落的裝飾（貓／高帽）站的位置，卡片不要壓上去 */
+/* 下緣留白＝給角落玩偶（高帽／貓頭）站的位置，卡片不要壓上去 */
 .lws-body { position:relative; z-index:3; flex:1; min-height:0; overflow-y:auto;
   padding:6px 26px 52px; display:flex; flex-direction:column; gap:13px; }
 .lws-row { display:flex; gap:13px; }
@@ -602,9 +627,9 @@
 .lws-card.is-mini { flex:1; min-width:0; padding:14px 16px; }
 .lws-card-art { position:relative; z-index:1; flex:0 0 auto; width:118px; height:88px;
   background-position:center; background-size:contain; background-repeat:no-repeat; }
-.lws-card.is-mini .lws-card-art { width:104px; height:100px; }
+.lws-card.is-mini .lws-card-art { width:86px; height:84px; }
 .lws-card-tx { position:relative; z-index:1; flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
-.lws-card-t { font-size:19px; font-weight:800; letter-spacing:2px; color:#2b2340; }
+.lws-card-t { font-size:18px; font-weight:800; letter-spacing:1px; color:#2b2340; white-space:nowrap; }
 .lws-card-d { font-size:12.5px; color:#5d5478; letter-spacing:.5px; }
 /* 標題底下那條四色小記號（照阿洛的稿） */
 .lws-card-bar { width:66px; height:3px; border-radius:2px; margin-top:2px;
@@ -632,11 +657,12 @@
 .lws-fail { padding:24px; color:#e8b6c8; font-size:13px; }
 
 /* 📱 手機：面板貼底吃滿（版位由 lobby.css 的 void-dock-open 那組給），
-   角落裝飾是固定尺寸的貼圖、窄螢幕會蓋掉半張卡 → 收起來，留標題與卡片。 */
+   角落玩偶與點陣是固定尺寸、窄螢幕會蓋掉半張卡 → 收起來，只留上緣那道酒紅角片。 */
 @media (max-width:760px) {
-  .lws-deco { display:none; }
+  .lws-doll, .lws-dots { display:none; }
+  .lws::before { inset:7px; border-radius:16px 36px 24px 36px; }
   .lws-hd { padding:16px 16px 8px; }
-  .lws-x { top:14px; right:12px; width:38px; height:38px; }
+  .lws-x { top:12px; right:12px; width:36px; height:36px; font-size:16px; }
   .lws-title { height:40px; width:min(64%,240px); }
   .lws-body { padding:4px 14px 18px; gap:10px; }
   .lws-row { flex-direction:column; }

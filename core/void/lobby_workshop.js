@@ -73,12 +73,16 @@
         const root = document.createElement('div');
         root.className = 'lws';
         root.innerHTML =
-            '<div class="lws-deco lws-deco-tr"></div>' +
-            '<div class="lws-deco lws-deco-bl"></div>' +
-            '<div class="lws-deco lws-deco-br"></div>' +
+            // 框整個是 CSS 畫的（見 lobby_stage.css 那段的說明），這裡只有兩片點陣裝飾
+            '<div class="lws-dots lws-dots-l"></div>' +
+            '<div class="lws-dots lws-dots-r"></div>' +
+            // 角落玩偶的空位：素材（阿洛畫的貓／高帽／徽章）補進 CSS 就會出現，沒有時是空的
+            '<div class="lws-doll lws-doll-tr"></div>' +
+            '<div class="lws-doll lws-doll-bl"></div>' +
+            '<div class="lws-doll lws-doll-br"></div>' +
             '<div class="lws-hd">' +
               '<div class="lws-title" role="heading" aria-level="2" aria-label="視差造物工坊"></div>' +
-              (opts.onClose ? '<button class="lws-x" type="button" aria-label="離開"></button>' : '') +
+              (opts.onClose ? '<button class="lws-x" type="button" aria-label="離開"><i class="fa-solid fa-xmark"></i></button>' : '') +
             '</div>' +
             '<div class="lws-body">' +
               '<div class="lws-row">' + CARDS.filter(c => c.mini).map(_card).join('') + '</div>' +
