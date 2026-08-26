@@ -13,6 +13,8 @@
         .studio-container.top-theme .studio-left { display: none; }
         .studio-container.top-theme .studio-right { display: none; }
         .studio-container.top-theme .studio-theme-pane { display: block; }
+        /* 🎨 劇情主題吃創作室的版型：兩欄要吃滿高度、各自捲動（單欄時交還給 overflow-y:auto 那條）*/
+        .studio-container:not(.studio-mobile).top-theme .studio-theme-pane { display: flex; overflow: hidden; padding: 14px; }
         /* 🌍 世界書＝頂層 mode（仿 top-theme：隱藏 chat+preview、顯示世界書全區） */
         .studio-worldbook-pane { display: none; flex: 1; min-height: 0; overflow: hidden; }
         .studio-container.top-worldbook .studio-left { display: none; }

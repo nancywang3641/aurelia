@@ -210,7 +210,14 @@
 .vth-mini.danger { color:#ff8a8a; border-color:rgba(255,138,138,0.4); }
 
 /* 主題工坊：生成 → 即時預覽 → 主題庫 */
-.vth-wrap { display:flex; flex-direction:column; gap:11px; }
+/* 版型照創作室那套：左邊工作欄（世界／AI／CSS／主題庫）、右邊即時預覽固定在側邊。
+   容器窄（手機殼、或創作室判成單欄）就收回上下排，預覽在上。 */
+.vth-wrap { display:flex; flex-direction:row; gap:14px; align-items:stretch; height:100%; min-height:0; }
+.vth-col-work { flex:1; min-width:280px; display:flex; flex-direction:column; gap:11px; min-height:0; overflow-y:auto; }
+.vth-col-prev { flex:1.15; min-width:300px; display:flex; flex-direction:column; gap:10px; min-height:0; overflow-y:auto; }
+.studio-mobile .vth-wrap, .vth-wrap.is-narrow { flex-direction:column; height:auto; }
+.studio-mobile .vth-col-work, .studio-mobile .vth-col-prev { overflow:visible; min-height:0; }
+@media (max-width:768px) { .vth-wrap { flex-direction:column; height:auto; } .vth-col-work, .vth-col-prev { overflow:visible; } }
 .vth-prev-head { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
 .vth-prev-label { font-size:12px; color:#d4af37; font-weight:700; }
 .vth-mode-tabs { display:flex; gap:4px; }

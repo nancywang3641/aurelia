@@ -1035,6 +1035,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - #top-badge：左上角的「場景牌」，顯示當前時間・地點（例如「黃昏 南城舊巷」，文字兩側有金色短線裝飾，那是 ::before / ::after）。可重新設計它的外觀（底色/漸隱/邊框/圓角/字體/裝飾線）配合主題，但「位置不要動」（固定左上）。註：直播模式時同樣內容會改顯示在 #stream-scene-row（內含 #stream-scene-label），請一併配合上色。
 - #vn-panel-controls 與 .vn-panel-btn：對話框上方的 SKIP / LOG / AUTO 控制按鈕（.vn-panel-btn.active 為啟用態）。「位置不要動」，只重新上色/造型配合主題。
 - #btn-home、#btn-settings、#btn-phone：畫面右上角的頂部按鈕（返回 / 設定 / 應用）。「位置不要動」，只重新統一它們的外觀配合主題。
+- #vn-chapter-card 與 #vncc-box：章節卡（每一章開頭浮出來的那張卡：故事名 #vncc-story、章號 #vncc-num、章名 #vncc-title、分隔線 #vncc-rule、引言 #vncc-preface、資訊格 .vncc-cell/.vncc-cell-k/.vncc-cell-v、開始閱讀鈕 #vncc-enter）。⚠️這張卡預設會「抄對話框當下的皮」，所以你只寫對話框它也會跟著變；要單獨設計它，對 #vncc-box 的宣告一律加 !important 才蓋得過去。版型維持置中單欄，只重新設計外觀。
 
 【最重要的鐵則 — 配件一律不准移動】
 - 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
@@ -1100,11 +1101,32 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 #btn-settings{top:48px;right:8px;padding:6px 12px;font-size:0.78rem;min-width:56px;box-sizing:border-box;text-align:center;}
 #btn-phone{top:86px;right:8px;padding:6px 10px;font-size:0.78rem;min-width:56px;box-sizing:border-box;text-align:center;}
 }
+/* 📖 章節卡（跟 css/vn_styles.css 那份同一套數值；卡片的皮預設是開卡前抄對話框的，見 _vthSkinCard） */
+#vn-chapter-card{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);}
+#vn-chapter-card.hidden{display:none;}
+#vncc-box{width:100%;max-width:520px;box-sizing:border-box;padding:38px 42px 32px;text-align:center;border-radius:4px;background:var(--vn-dialog-bg, linear-gradient(180deg, rgba(12,12,16,0.88) 0%, rgba(4,4,6,0.95) 100%));border:1px solid rgba(255,255,255,0.08);box-shadow:0 20px 50px rgba(0,0,0,0.9);-webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px);}
+#vncc-story{font-family:var(--font-classic);font-size:0.8rem;letter-spacing:4px;color:var(--text-color,#b8b4ac);opacity:0.55;margin-bottom:22px;}
+#vncc-num{font-family:var(--font-classic);font-size:0.82rem;letter-spacing:5px;color:var(--gold,#d4af37);text-transform:uppercase;margin-bottom:10px;}
+#vncc-title{font-family:var(--font-classic);font-size:2rem;font-weight:700;letter-spacing:4px;color:var(--text-color,#f0e8d0);line-height:1.3;}
+#vncc-rule{width:46px;height:1px;margin:20px auto;background:var(--gold,#d4af37);opacity:0.5;}
+#vncc-preface{font-size:0.95rem;font-style:italic;line-height:1.9;color:var(--text-color,#b8b4ac);opacity:0.78;margin-bottom:26px;}
+#vncc-meta{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:28px;}
+.vncc-cell{min-width:92px;padding:9px 14px;border:1px solid rgba(255,255,255,0.10);border-radius:3px;background:rgba(255,255,255,0.03);}
+.vncc-cell-k{display:block;font-family:var(--font-classic);font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-color,#b8b4ac);opacity:0.45;margin-bottom:4px;}
+.vncc-cell-v{display:block;font-size:0.85rem;color:var(--text-color,#e8e4dc);}
+#vncc-enter{padding:12px 42px;cursor:pointer;font-family:var(--font-classic);font-size:0.9rem;letter-spacing:3px;color:var(--gold,#d4af37);background:transparent;border:1px solid var(--gold,#d4af37);border-radius:2px;}
+@media(max-width:600px){
+#vncc-box{padding:30px 24px 26px;}
+#vncc-title{font-size:1.6rem;letter-spacing:3px;}
+#vncc-preface{font-size:0.9rem;}
+.vncc-cell{min-width:80px;padding:8px 12px;}
+}
 `;
     let _vthMode = 'char-mode';
 
     function _vthBuildSrcdoc(css, mode, thumb) {
         const m = mode || _vthMode;
+        const card = m === 'chapter';   // 📖 章節卡：卡片浮在對話框上（真實 VN 也是這個疊法）
         const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-phone,#vn-panel-controls,#top-badge{display:none;}' : '';
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${css || ''}</style></head><body>
 <div id="game-bg"></div>
@@ -1112,14 +1134,52 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 <button id="btn-home">⌂ 返回</button>
 <button id="btn-settings">設定</button>
 <button id="btn-phone">📱</button>
+<div id="vn-chapter-card"${card ? '' : ' class="hidden"'}>
+<div id="vncc-box">
+<div id="vncc-story">霧港無眠</div>
+<div id="vncc-num">CHAPTER 03</div>
+<div id="vncc-title">霧散之後</div>
+<div id="vncc-rule"></div>
+<div id="vncc-preface">雨停了，碼頭的燈一盞一盞亮起來，像有人在替這座城數著還剩幾個夜晚。</div>
+<div id="vncc-meta"><div class="vncc-cell"><span class="vncc-cell-k">地點</span><span class="vncc-cell-v">南城舊巷</span></div><div class="vncc-cell"><span class="vncc-cell-k">時間</span><span class="vncc-cell-v">黃昏</span></div><div class="vncc-cell"><span class="vncc-cell-k">同行</span><span class="vncc-cell-v">兩人</span></div></div>
+<button id="vncc-enter" type="button">開始閱讀</button>
+</div>
+</div>
 <div id="text-panel-wrapper">
 <div id="vn-panel-controls"><div class="vn-panel-btn">SKIP</div><div class="vn-panel-btn">LOG</div><div class="vn-panel-btn">AUTO</div></div>
-<div id="text-panel" class="${m}">
+<div id="text-panel" class="${card ? 'nar-mode' : m}">
 <div id="speaker-name">角色</div>
 <div id="dialogue-text">範例對白，用來預覽主題的字體、顏色與框線。<em>斜體強調</em>與<strong>粗體重點</strong>也會跟著套用。</div>
 </div>
 </div>
 </body></html>`;
+    }
+
+    // 📖 章節卡在真實 VN 裡是「開卡前把對話框當下算出來的皮抄過來」（vn_core._ccSkin），
+    //    預覽必須做同一件事，否則主題只改了對話框、預覽裡的卡片還是預設皮＝看了會誤判。
+    //    iframe 沒有 allow-scripts，所以由這邊在 load 之後伸進去抄（同源可讀）。
+    function _vthSkinCard(doc) {
+        try {
+            const panel = doc.getElementById('text-panel');
+            const box = doc.getElementById('vncc-box');
+            if (!panel || !box) return;
+            const had = panel.className;
+            panel.className = 'nar-mode';                  // 卡片借的是旁白態（跟真實 VN 一致）
+            const cs = doc.defaultView.getComputedStyle(panel);
+            const bgImg = cs.backgroundImage, bgColor = cs.backgroundColor;
+            const border = cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor;
+            const radius = cs.borderRadius, shadow = cs.boxShadow, color = cs.color;
+            const font = cs.fontFamily, blur = cs.backdropFilter;
+            panel.className = had;
+            if (bgImg && bgImg !== 'none') box.style.backgroundImage = bgImg;
+            if (bgColor) box.style.backgroundColor = bgColor;
+            if (border && !/^0px/.test(border)) box.style.border = border;
+            if (radius) box.style.borderRadius = radius;
+            if (shadow && shadow !== 'none') box.style.boxShadow = shadow;
+            if (color) box.style.setProperty('--text-color', color);   // 卡片內每個字都吃這顆變數
+            if (font) box.style.fontFamily = font;
+            if (blur && blur !== 'none') box.style.backdropFilter = blur;
+        } catch (e) { /* 抄不到就用預設皮，不影響預覽 */ }
     }
 
     function _vthGalleryLoad() { try { return JSON.parse(localStorage.getItem('vn_theme_gallery') || '[]'); } catch (e) { return []; } }
@@ -1146,8 +1206,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const ph = '手寫 / 貼上，或用上面的「AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
+        const ph = '手寫 / 貼上，或用上面的「AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n#vn-chapter-card / #vncc-box（章節卡；預設抄對話框的皮，要單獨設計就對 #vncc-box 寫規則加 !important）\n  #vncc-story #vncc-num #vncc-title #vncc-rule #vncc-preface｜.vncc-cell .vncc-cell-k .vncc-cell-v｜#vncc-enter（開始閱讀鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
         host.innerHTML = `<div class="vth-wrap">
+            <div class="vth-col-work">
             <div class="vth-css-bar">
                 <span class="vth-css-world"><i class="fa-solid fa-globe"></i> ${esc(chatId || '(未知，先進 VN 一次)')}</span>
                 <button class="vth-mini primary" id="vth-css-apply"><i class="fa-solid fa-floppy-disk"></i> 套用到此世界</button>
@@ -1157,6 +1218,20 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 <input id="vth-ai-desc" class="vth-ai-desc" placeholder="描述風格讓 AI 生成（例：賽博夜雨霓虹 / 古典宮廷燙金 / 陰森廢墟舊紙）">
                 <button class="vth-mini primary" id="vth-ai-gen"><i class="fa-solid fa-robot"></i> AI 生成</button>
             </div>
+            <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
+            <div class="vth-css-hint">左邊寫 CSS、右邊即時預覽。「套用到此世界」存進當前世界、VN 開播自動套；「收藏目前」存進主題庫可跨世界重用。AI 用「寫作→API 設置」的副模型。</div>
+            <div class="vth-gal">
+                <div class="vth-gal-head">
+                    <span class="vth-gal-label"><i class="fa-solid fa-swatchbook"></i> 我的主題庫</span>
+                    <div class="vth-gal-save">
+                        <input id="vth-gal-name" class="vth-gal-name" placeholder="主題命名…">
+                        <button class="vth-mini primary" id="vth-gal-add"><i class="fa-solid fa-bookmark"></i> 收藏目前</button>
+                    </div>
+                </div>
+                <div class="vth-gal-list" id="vth-gal-list"></div>
+            </div>
+            </div>
+            <div class="vth-col-prev">
             <div class="vth-prev-head">
                 <span class="vth-prev-label"><i class="fa-solid fa-eye"></i> 即時預覽</span>
                 <div class="vth-vp-tabs">
@@ -1169,20 +1244,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     <button class="vth-mode active" data-mode="char-mode">角色對話</button>
                     <button class="vth-mode" data-mode="nar-mode">旁白</button>
                     <button class="vth-mode" data-mode="inner-mode">內心</button>
+                    <button class="vth-mode" data-mode="chapter">章節卡</button>
                 </div>
             </div>
             <div class="vth-preview-wrap" id="vth-preview-wrap"><div class="vth-preview-box" id="vth-preview-box"><iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe></div></div>
-            <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
-            <div class="vth-css-hint">改框內 CSS，上方即時預覽。「套用到此世界」存進當前世界、VN 開播自動套；「收藏目前」存進下方主題庫可跨世界重用。AI 用「寫作→API 設置」的副模型。</div>
-            <div class="vth-gal">
-                <div class="vth-gal-head">
-                    <span class="vth-gal-label"><i class="fa-solid fa-swatchbook"></i> 我的主題庫</span>
-                    <div class="vth-gal-save">
-                        <input id="vth-gal-name" class="vth-gal-name" placeholder="主題命名…">
-                        <button class="vth-mini primary" id="vth-gal-add"><i class="fa-solid fa-bookmark"></i> 收藏目前</button>
-                    </div>
-                </div>
-                <div class="vth-gal-list" id="vth-gal-list"></div>
             </div>
         </div>`;
 
@@ -1227,7 +1292,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             if (_curVp === 'center') applyVp();
         };
         let _t = null;
-        const refreshPreview = () => { try { frame.srcdoc = _vthBuildSrcdoc(area.value); } catch (e) {} };
+        const refreshPreview = () => {
+            try {
+                frame.srcdoc = _vthBuildSrcdoc(area.value);
+                // 章節卡要等 iframe 畫完才抄得到對話框的皮（同 vn_core 開卡前那一步）
+                frame.onload = () => { if (_vthMode === 'chapter') _vthSkinCard(frame.contentDocument); };
+            } catch (e) {}
+        };
         refreshPreview();
         applyVp();
         area.oninput = () => { if (_t) clearTimeout(_t); _t = setTimeout(refreshPreview, 250); };
