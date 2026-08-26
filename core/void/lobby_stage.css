@@ -745,6 +745,103 @@
 .lws.is-tool .studio-container, .lws.is-tool .studio-container * { scrollbar-color:rgba(226,150,190,.45) transparent; }
 .lws.is-tool .studio-container ::-webkit-scrollbar-thumb { background:rgba(226,150,190,.4); }
 
+/* ── 工坊裡的工具：把創作室那套「羊皮紙」皮整組換掉 ──
+   創作室的暖色皮有兩種寫法，兩種都要處理：
+   ① 變數驅動（--jrpg-*）：這裡整組重新定義就一次翻完。
+      🚨 要 !important——VN 組件庫那層把變數寫在元素的 style 上（os_studio_vn_gallery.js），
+         不加的話 class 規則永遠輸給 inline。順手把羊皮紙紋 --jrpg-paper-texture 設成 none，
+         不然每塊底都還鋪著米色紙紋。
+   ② 硬寫死的米白底（rgba(255,249,235,.88) 那種）：只能點名蓋，下面那幾組就是全部名單。 */
+.lws.is-tool .studio-container, .lws.is-tool .vncomp-app {
+  --jrpg-paper:rgba(38,31,56,.92) !important;
+  --jrpg-paper-light:rgba(58,47,84,.62) !important;
+  --jrpg-paper-deep:rgba(30,24,44,.9) !important;
+  --jrpg-ink:#efe7f6 !important;
+  --jrpg-muted:rgba(239,231,246,.62) !important;
+  --jrpg-wine:#a12f66 !important;
+  --jrpg-wine-dark:#6d1f46 !important;
+  --jrpg-gold:#e0a86a !important;
+  --jrpg-gold-light:#f0cfa0 !important;
+  --jrpg-line:rgba(214,150,190,.3) !important;
+  --jrpg-paper-texture:none !important;
+}
+/* 面：所有本來鋪紙底的區塊 */
+.lws.is-tool .studio-header,
+.lws.is-tool .studio-input-wrap,
+.lws.is-tool .studio-right-header,
+.lws.is-tool .studio-action-area,
+.lws.is-tool .studio-mode-tabs,
+.lws.is-tool .studio-card,
+.lws.is-tool .studio-gallery-card,
+.lws.is-tool .studio-chip-box,
+.lws.is-tool .studio-chip-litem,
+.lws.is-tool .studio-pending-img,
+.lws.is-tool #studio-vn-toolbar,
+.lws.is-tool #vn-studio-history-area,
+.lws.is-tool .vn-history-item,
+.lws.is-tool .fx-lib-row,
+.lws.is-tool .fx-grp-row,
+.lws.is-tool .sgc-format-box,
+.lws.is-tool .sgc-grouprow,
+.lws.is-tool .sgc-preview,
+.lws.is-tool .vc-font-preview,
+.lws.is-tool .studio-bubble.render-bubble,
+.lws.is-tool .studio-bubble.choices-bubble,
+.lws.is-tool .studio-choice-btn,
+.lws.is-tool .swb-card,
+.lws.is-tool .swb-op-body {
+  background-color:rgba(58,47,84,.5); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); box-shadow:none; }
+/* 輸入類：底再深一階，才看得出是可以打字的地方 */
+.lws.is-tool .studio-chip-input, .lws.is-tool .studio-chip-ta,
+.lws.is-tool .sgc-format-input, .lws.is-tool .swb-field, .lws.is-tool .mc-block-text,
+.lws.is-tool .mc-block-label {
+  background-color:rgba(22,17,34,.75); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); }
+/* 下拉選單本身寫了 background:#EEF0F6 !important（原生 select 在某些瀏覽器會吃系統色，所以它加了 important）
+   → 這裡也只能用 important 對衝 */
+.lws.is-tool .studio-mode-select {
+  background-color:rgba(22,17,34,.9) !important; background-image:none !important;
+  border-color:var(--lwt-line); color:var(--lwt-ink) !important; }
+/* 酒紅底上的字：這幾處原本吃 --jrpg-paper-light 當字色，而那顆變數在這裡被我改成深色的面
+   （它在原皮裡一顆兩用：淺色的面＋酒紅底上的字）→ 這幾條要單獨指定亮字，不然酒紅底配深字看不見 */
+.lws.is-tool .swb-user, .lws.is-tool .mc-msg.me, .lws.is-tool .mc-active-tag { color:#fff; }
+/* 主色鈕（酒紅）：送出／確定創建／收藏／啟用中的分頁與 chip */
+.lws.is-tool .studio-chip-savebtn,
+.lws.is-tool .studio-mode-tab.active,
+.lws.is-tool .studio-pv.active,
+.lws.is-tool .swb-primary,
+.lws.is-tool .swb-seg-btn.on,
+.lws.is-tool .fx-lib-btn:not(.danger),
+.lws.is-tool .studio-choice-selected,
+.lws.is-tool .mc-optbtn.primary, .lws.is-tool .mc-usebtn.on {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); background-image:linear-gradient(135deg,#8f3a76,var(--lwt-hot));
+  border-color:var(--lwt-hot); color:#fff; }
+/* 次要鈕與標籤 */
+.lws.is-tool .studio-mode-tab, .lws.is-tool .swb-iconbtn, .lws.is-tool .studio-back-btn,
+.lws.is-tool .fx-lib-act, .lws.is-tool .vn-history-item .h-btn, .lws.is-tool .studio-history-btn,
+.lws.is-tool .fx-lib-kind, .lws.is-tool .fx-lib-grp, .lws.is-tool .swb-tag {
+  background-color:rgba(255,255,255,.07); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); }
+.lws.is-tool .studio-attach-btn:hover, .lws.is-tool .studio-back-btn:hover,
+.lws.is-tool .studio-mode-tab:hover, .lws.is-tool .fx-lib-act:hover,
+.lws.is-tool .studio-choice-btn:hover, .lws.is-tool .swb-card:hover {
+  background-color:rgba(255,255,255,.16); background-image:none; color:var(--lwt-ink); }
+/* 危險色統一 */
+.lws.is-tool .fx-lib-btn.danger, .lws.is-tool .fx-lib-act.danger, .lws.is-tool .studio-chip-del {
+  background-color:rgba(226,110,150,.14); border-color:rgba(226,110,150,.45); color:#f0a8bd; }
+/* 字：泡泡裡的標題／粗體／行內碼原本是深墨色，暗底上等於看不見 */
+.lws.is-tool .studio-bubble h1, .lws.is-tool .studio-bubble h2,
+.lws.is-tool .studio-bubble h3, .lws.is-tool .studio-bubble strong {
+  color:#ffd9ea; border-bottom-color:var(--lwt-line); }
+.lws.is-tool .studio-bubble code {
+  background:rgba(16,12,24,.72); color:#9ff0c8; }
+.lws.is-tool .studio-bubble a { color:#e79ec4; }
+.lws.is-tool .fx-lib-desc, .lws.is-tool .fx-pv-desc, .lws.is-tool .studio-chip-litem-text,
+.lws.is-tool .studio-chip-empty, .lws.is-tool .swb-muted, .lws.is-tool .studio-card-title {
+  color:var(--lwt-dim); }
+.lws.is-tool .fx-lib-name, .lws.is-tool .studio-chip-litem-label { color:var(--lwt-ink); }
+
 /* 劇情主題那一頁（.vth-*）也換工坊的皮：它原本吃創作室的米色紙底，
    在工坊裡會跟暗紫框打架。權重比創作室那份高一級（多一個 .lws.is-tool）就蓋得過去。 */
 .lws.is-tool .studio-theme-pane { background:transparent; background-image:none; color:var(--lwt-ink); }
