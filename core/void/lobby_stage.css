@@ -556,7 +556,18 @@
 .lstage-hotspot.hs-workshop .lstage-hotspot-chip i { color:#ffd98a; font-size:11px; }
 
 .lstage-wswin { position:absolute; right:max(78px,calc(50% - 660px)); top:50%; transform:translateY(-50%);
-  z-index:3350; width:min(920px,72%); height:min(680px,calc(100% - 130px)); }
+  z-index:3350; width:min(920px,72%); height:min(680px,calc(100% - 130px));
+  transition:left .22s ease, width .22s ease, height .22s ease; }
+/* 🔧 開了工具（創作室／VN 組件／匯入）就把窗放寬吃滿左欄：
+   創作室的「即時預覽」是靠容器寬度自己決定要不要當側邊欄——容器 >768px 就是左右兩欄，
+   ≤768px 才收成單欄＋👁 抽屜（手機維持那個）。五張卡的首頁不需要這麼寬，收工就縮回去。
+   窗一放寬會蓋到帽匠的立繪，工作中不需要那張臉擋在上面 → 一起收掉。 */
+/* 🚨 只在桌機放寬：手機的窗位是 lobby.css 的 void-dock-open 那組在管（貼底、左右各留 10px），
+   這條的權重跟它一樣、又載得比較晚，不圈起來會把手機版位蓋掉。斷點對齊 lobby.css 的 760px。 */
+@media (min-width:761px) {
+  .lstage-wswin:has(> .lws.is-tool) { left:16px; width:auto; height:min(820px,calc(100% - 96px)); }
+}
+.lobby-left:has(.lws.is-tool) .lstage-talk-portrait { display:none; }
 /* 面板開著時立繪要壓在窗下面、且站回地面（同占卜浮窗） */
 .lobby-left:has(.lstage-wswin) .lstage-talk-portrait { z-index:3400; }
 .lobby-left.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait { bottom:0; height:82%; }

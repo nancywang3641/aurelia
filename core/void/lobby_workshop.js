@@ -39,14 +39,34 @@
                '</button>';
     }
 
+    // 🔧 開工具＝面板掛 is-tool，浮窗照這個放寬（見 lobby_stage.css）。
+    //    創作室的「即時預覽」是看容器寬度決定要不要當側邊欄（>768px 兩欄、≤768px 才收成 👁 抽屜），
+    //    五張卡的首頁不必那麼寬，所以是「開工具才放寬、收工自己縮回去」。
+    // 🚨 工具是自己把覆蓋層 remove 掉走人的（不會通知我們）→ 用 MutationObserver 看那層還在不在，
+    //    不在了就把 is-tool 拿掉；輪詢跟 rAF 都不適合（分頁在背景時 rAF 不會 fire）。
+    let _toolObs = null;
+    function _enterTool(root) {
+        root.classList.add('is-tool');
+        if (_toolObs) { _toolObs.disconnect(); _toolObs = null; }
+        if (!window.MutationObserver) return;
+        _toolObs = new MutationObserver(() => {
+            if (root.querySelector('#os_studio_app, .vncomp-app, .lws-overlay')) return;
+            root.classList.remove('is-tool');
+            if (_toolObs) { _toolObs.disconnect(); _toolObs = null; }
+        });
+        _toolObs.observe(root, { childList: true, subtree: true });
+    }
+
     // 卡片點下去＝那件事整個蓋上來（創作室與 VN 組件本來就是這個作法：
     // 自己生一層 absolute 覆蓋層蓋住容器，它們的返回鈕把自己移除，底下的五張卡就回來了）。
     function _openStudio(root, mode) {
         if (!win.OS_STUDIO || !win.OS_STUDIO.launch) return _fail(root, '創作室還沒載入');
+        _enterTool(root);
         win.OS_STUDIO.launch(root, mode);
     }
     function _openVnComponents(root) {
         if (!win.OS_STUDIO || !win.OS_STUDIO.openVnComponents) return _fail(root, '創作室還沒載入');
+        _enterTool(root);
         win.OS_STUDIO.openVnComponents(root);
     }
     // 匯入：借手機應用工坊那份的匯入頁（安裝到桌面的流程只有那一份）。
@@ -55,6 +75,7 @@
         if (!win.APP_STORE || !win.APP_STORE.launch) return _fail(root, '應用工坊還沒載入');
         const ov = document.createElement('div');
         ov.className = 'lws-overlay';
+        _enterTool(root);
         root.appendChild(ov);
         win.APP_STORE.launch(ov, { view: 'import', onExit: () => ov.remove() });
     }
@@ -102,7 +123,10 @@
         if (opts.onClose) root.querySelector('.lws-x').addEventListener('click', opts.onClose);
 
         host.appendChild(root);
-        return () => { try { root.remove(); } catch (e) {} };
+        return () => {
+            if (_toolObs) { _toolObs.disconnect(); _toolObs = null; }
+            try { root.remove(); } catch (e) {}
+        };
     }
 
     win.LobbyWorkshop = { mount, ready, CARDS };
