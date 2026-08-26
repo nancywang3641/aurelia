@@ -688,7 +688,6 @@
 .lws.is-tool #os_studio_app, .lws.is-tool .vncomp-app, .lws.is-tool .lws-overlay {
   inset:14px !important; width:auto !important; height:auto !important;
   background:transparent !important; border-radius:18px; overflow:hidden; }
-.lws.is-tool .lws-overlay { background:#f4ecde !important; }   /* 匯入頁是米色紙皮，留它自己的底 */
 .lws.is-tool { --lwt-ink:#efe7f6; --lwt-dim:rgba(239,231,246,.62); --lwt-line:rgba(214,150,190,.26);
   --lwt-pane:rgba(38,31,56,.92); --lwt-card:rgba(58,47,84,.55); --lwt-hot:#c9407a; }
 .lws.is-tool .studio-container { background:transparent; color:var(--lwt-ink); }
@@ -843,6 +842,48 @@
 .lws.is-tool .studio-chip-empty, .lws.is-tool .swb-muted, .lws.is-tool .studio-card-title {
   color:var(--lwt-dim); }
 .lws.is-tool .fx-lib-name, .lws.is-tool .studio-chip-litem-label { color:var(--lwt-ink); }
+
+/* 🚨 酒紅那顆變數在原皮裡是「紙上的墨」：43 處拿它當文字色、只有 18 處當底色。
+   暗紫底上照抄就變成粉字配紫底、整片糊掉（Rae 2026-08-26 回報）→ 這裡把它翻成「暗底上的亮墨」，
+   再把那 18 處當底色的單獨補回酒紅（下面幾組 + 前面那批主色鈕）。 */
+.lws.is-tool .studio-container, .lws.is-tool .vncomp-app {
+  --jrpg-wine:#f4a8cd !important; --jrpg-wine-dark:#e888b3 !important; }
+.lws.is-tool .vc-chip.on, .lws.is-tool .swb-primary:hover,
+.lws.is-tool #vn-studio-history-btn:hover, .lws.is-tool .vn-history-item .h-btn:hover,
+.lws.is-tool .studio-icon-btn.danger:hover {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+.lws.is-tool .studio-tab.active::after, .lws.is-tool .studio-drawer-handle::after,
+.lws.is-tool .studio-typing-dot { background:var(--lwt-hot); }
+/* 分頁字：原本吃暗色墨，在暗底上跟底融在一起 */
+.lws.is-tool .studio-tab { color:rgba(239,231,246,.78); }
+.lws.is-tool .studio-tab.active { color:#fff0f8; }
+.lws.is-tool .studio-tab:hover { color:#ffd9ea; }
+/* 掃出來的兩塊漏網米色底：待處理提示條與「介面已隱藏」提示 */
+.lws.is-tool .mc-pend, .lws.is-tool .studio-hidden-ui {
+  background:rgba(58,47,84,.55); background-image:none; border-color:var(--lwt-line); color:var(--lwt-ink); }
+
+/* 匯入頁（借手機那份的 .ws-*）也換暗紫皮：整頁米色紙貼在工坊裡完全是另一個世界 */
+.lws.is-tool .lws-overlay { background:rgba(30,24,44,.96) !important; }
+.lws.is-tool .ws-app { background:transparent; color:var(--lwt-ink); }
+.lws.is-tool .ws-vhd { background:rgba(46,37,68,.9); border-bottom-color:var(--lwt-line); }
+.lws.is-tool .ws-vhd-t, .lws.is-tool .ws-field-t, .lws.is-tool .ws-home-title { color:#ffd9ea; }
+.lws.is-tool .ws-back { color:#f4a8cd; }
+.lws.is-tool .ws-field-lab, .lws.is-tool .ws-field-d, .lws.is-tool .ws-home-sub,
+.lws.is-tool .ws-mine-sub, .lws.is-tool .ws-empty, .lws.is-tool .ws-prev-lab { color:var(--lwt-dim); }
+.lws.is-tool .ws-input, .lws.is-tool .ws-ta {
+  background:rgba(22,17,34,.75); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.lws.is-tool .ws-input::placeholder, .lws.is-tool .ws-ta::placeholder { color:rgba(239,231,246,.4); }
+.lws.is-tool .ws-file-btn { border-color:rgba(226,150,190,.5); color:#f4a8cd; background:rgba(255,255,255,.05); }
+.lws.is-tool .ws-btn-ok, .lws.is-tool .ws-btn-main {
+  background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff; }
+.lws.is-tool .ws-btn-line { background:rgba(255,255,255,.06); color:#f4a8cd; border-color:var(--lwt-line); }
+.lws.is-tool .ws-card, .lws.is-tool .ws-mine-row, .lws.is-tool .ws-act-row,
+.lws.is-tool .ws-act-group, .lws.is-tool .ws-prev-wrap, .lws.is-tool .ws-prev {
+  background:rgba(58,47,84,.5); border-color:var(--lwt-line); color:var(--lwt-ink); box-shadow:none; }
+.lws.is-tool .ws-card-t, .lws.is-tool .ws-mine-name, .lws.is-tool .ws-act-label { color:var(--lwt-ink); }
+.lws.is-tool .ws-card-d { color:var(--lwt-dim); }
+.lws.is-tool .ws-card-go, .lws.is-tool .ws-mine-go, .lws.is-tool .ws-act-go, .lws.is-tool .ws-act-ico { color:#f4a8cd; }
+.lws.is-tool .ws-act-row.danger, .lws.is-tool .ws-act-row.danger .ws-act-ico { color:#f0a8bd; }
 
 /* 劇情主題那一頁（.vth-*）也換工坊的皮：它原本吃創作室的米色紙底，
    在工坊裡會跟暗紫框打架。權重比創作室那份高一級（多一個 .lws.is-tool）就蓋得過去。 */
