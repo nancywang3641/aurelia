@@ -591,16 +591,21 @@
 .lws-dots-l { left:34px; top:34px; }
 .lws-dots-r { right:34px; top:88px; }
 
-/* 🎎 角落玩偶（貓／高帽＋徽章／菱形＋貓頭）：阿洛另外出透明底小圖，
-   之後只要在這三條補 background-image 就會出現；還沒有素材時是空的，不會有破圖。 */
+/* 🎎 角落玩偶（貓／高帽＋徽章／菱形＋貓頭）：阿洛另外出的透明底小圖，貼在 CSS 框上。
+   寬度用百分比、高度交給 aspect-ratio → 面板放大縮小玩偶跟著等比例走，永遠不會被拉扁。
+   位置照阿洛原圖上它們在框上的位置換算（貓在右上、略微探出上緣；另兩組坐在下緣）。 */
 .lws-doll { position:absolute; z-index:5; pointer-events:none;
-  background-repeat:no-repeat; background-position:center bottom; background-size:contain; }
-.lws-doll-tr { right:74px; top:-44px; width:124px; height:78px; }   /* 兩隻貓坐在上緣 */
-.lws-doll-bl { left:20px; bottom:8px; width:150px; height:50px; }   /* 高帽＋餅乾徽章 */
-.lws-doll-br { right:74px; bottom:8px; width:104px; height:48px; }  /* 菱形＋貓頭 */
+  background-repeat:no-repeat; background-position:center bottom; background-size:contain;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.45)); }
+.lws-doll-tr { right:92px; top:-14px; width:13.2%; min-width:76px; max-width:150px; aspect-ratio:360/260;
+  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_doll_cats_v1.webp); }
+.lws-doll-bl { left:2.4%; bottom:1.4%; width:13.6%; min-width:84px; max-width:158px; aspect-ratio:420/164;
+  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_doll_hat_v1.webp); }
+.lws-doll-br { right:4.2%; bottom:1.2%; width:10.2%; min-width:64px; max-width:118px; aspect-ratio:400/214;
+  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_doll_gem_v1.webp); }
 
 .lws-hd { position:relative; z-index:3; flex:0 0 auto; padding:24px 22px 12px; }
-.lws-title { width:min(48%,280px); height:48px; margin:0 auto;
+.lws-title { width:min(44%,272px); height:46px; margin:0 auto;
   background:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_title_v1.webp) center / contain no-repeat; }
 .lws-x { position:absolute; right:26px; top:24px; width:42px; height:42px; padding:0; cursor:pointer;
   border:1px solid rgba(240,202,152,.42); border-radius:50%;
@@ -611,7 +616,7 @@
 
 /* 下緣留白＝給角落玩偶（高帽／貓頭）站的位置，卡片不要壓上去 */
 .lws-body { position:relative; z-index:3; flex:1; min-height:0; overflow-y:auto;
-  padding:6px 26px 52px; display:flex; flex-direction:column; gap:13px; }
+  padding:6px 26px 64px; display:flex; flex-direction:column; gap:13px; }
 .lws-row { display:flex; gap:13px; }
 
 .lws-card { position:relative; overflow:hidden; display:flex; align-items:center; gap:14px; width:100%;
