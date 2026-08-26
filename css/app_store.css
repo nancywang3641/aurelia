@@ -42,7 +42,7 @@
 .ws-card-sm .ws-card-ic { width: clamp(52px, 18vw, 70px); max-height: 70px; }
 .ws-card-sm .ws-card-t { font-size: 15px; }
 /* 統一米白底 + 線框（不再一張一色）；如需區分靠圖標 */
-.ws-card-wb, .ws-card-persona { background: #fffdf7; }
+.ws-card-im, .ws-card-wb, .ws-card-persona { background: #fffdf7; }
 
 /* ── 匯入 共用欄位 ── */
 .ws-hero { display: flex; justify-content: center; padding: 6px 0 4px; }
@@ -139,7 +139,3 @@ select.ws-input { appearance: none; -webkit-appearance: none; -moz-appearance: n
 /* ── toast ── */
 .ws-toast { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%) translateY(12px); background: rgba(58,30,15,0.9); color: #fffdf7; padding: 8px 18px; border-radius: 20px; font-size: 12px; opacity: 0; pointer-events: none; transition: 0.25s; white-space: nowrap; z-index: 40; }
 .ws-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-/* ── 借用模式：帽匠工坊的「匯入 HTML」卡把這支的匯入頁借過去用（安裝流程只有這一份）──
-   借方自己有標題與返回，所以底部分頁列收起來，免得在那邊多冒一排手機工坊的分頁。 */
-.ws-app.ws-embed .ws-nav { display: none; }

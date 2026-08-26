@@ -85,9 +85,11 @@
       // ── 首頁 ──
       +     '<div class="ws-view active" data-view="home">'
       +       '<div class="ws-home-hd"><button class="ws-back ws-home-back" type="button" title="返回桌面"><i class="fa-solid fa-chevron-left"></i></button><div class="ws-home-hd-tx"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div></div>'
-      // 🎩 創作那半（匯入 HTML／VN 組件／製作互動面板／特效工坊／劇情主題）2026-08-26 搬去廣場的
-      //    帽匠工坊（core/void/lobby_workshop.js）＝走得進去的一間店；手機這邊只留「我的應用」與安裝流程，
-      //    做好的 app 本來就住手機桌面。世界書／我的角色照舊留在這裡（書咖還沒做，現在搬過去會變孤兒）。
+      // 🎩 做給劇情用的那半（VN 組件／製作互動面板／特效工坊／劇情主題）2026-08-26 搬去廣場的
+      //    帽匠工坊（core/void/lobby_workshop.js）＝走得進去的一間店。
+      //    匯入應用留在這裡：匯進來的是「手機上的應用」，安裝完就住手機桌面，入口跟著東西走。
+      //    世界書／我的角色照舊留在這裡（書咖還沒做，現在搬過去會變孤兒）。
+      +       '<button class="ws-card ws-card-sm ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上或載入現成 HTML，安裝到手機桌面</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-sm ws-card-wb" data-studio="worldbook" type="button"><img class="ws-card-ic" data-asset="wb-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">整理世界書</span><span class="ws-card-d">建／改世界書條目，AI 幫你寫規則</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +       '<button class="ws-card ws-card-sm ws-card-persona" data-studio="persona" type="button"><img class="ws-card-ic" data-asset="persona-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">我的角色</span><span class="ws-card-d">寫／改你扮演的主角人設，對標不同世界</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +     '</div>'
@@ -129,19 +131,10 @@
       +   '<div class="ws-toast" id="as-toast"></div>'
       + '</div>';
 
-    // opts.view  ＝ 直接落在某一頁（帽匠工坊的「匯入 HTML」卡借的就是匯入頁）
-    // opts.onExit＝ 借用模式下按返回要去哪（沒給就照舊回首頁）；借用時底部 nav 與首頁都收起來，
-    //               那邊一頁只做一件事，不該冒出手機工坊的首頁與分頁列。
-    function launch(c, opts) {
+    function launch(c) {
         if (!c) return;
-        opts = opts || {};
         c.innerHTML = STORE_HTML;
         _applyAssets(c);
-        var embed = !!opts.view;
-        if (embed) {
-            var app = c.querySelector('.ws-app');
-            if (app) app.classList.add('ws-embed');
-        }
         // 首頁返回鈕：退出工坊 app 回手機桌面（phone_shell 已把 PhoneSystem.goHome 接成回桌面）
         var _homeBack = c.querySelector('.ws-home-back');
         if (_homeBack) _homeBack.addEventListener('click', function () {
@@ -150,10 +143,7 @@
         });
         // 導覽：所有 data-go（卡片/返回/查看全部/底部 nav）
         c.querySelectorAll('[data-go]').forEach(function (b) {
-            b.addEventListener('click', function () {
-                if (embed && opts.onExit && b.dataset.go === 'home') { opts.onExit(); return; }   // 借用模式：回首頁＝把面板還給借方
-                _go(c, b.dataset.go);
-            });
+            b.addEventListener('click', function () { _go(c, b.dataset.go); });
         });
         // 創作室四鈕：直接開創作室並落到對應工作（vn_ui/theme/worldbook/persona），跳過創作室首頁
         c.querySelectorAll('[data-studio]').forEach(function (el) {
@@ -164,7 +154,6 @@
             });
         });
         _bindImport(c);
-        if (opts.view) _go(c, opts.view);
     }
 
     // 切換視圖

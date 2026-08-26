@@ -1,35 +1,36 @@
 // ----------------------------------------------------------------
 // [檔案] core/void/lobby_workshop.js — 🎩 視差造物工坊（帽匠工坊裡點造物儀開的面板）
-// 職責：五張卡的首頁 → 路由到創作室與匯入流程。面板本體只在這裡，兩個入口共用同一份：
+// 職責：四張卡的首頁 → 路由到創作室。面板本體只在這裡，兩個入口共用同一份：
 //   舞台模式＝走進工坊、點中央的造物儀（lobby_stage 開浮窗）
 //   立繪模式＝地點視圖的「造物工坊」窗格（lobby_places 的 openIn）
 //
 // 🚨 獨立成檔：面板跟舞台沒關係，塞進 lobby_stage 只是把那支撐得更大。
-// 🚨 五張卡的行為跟手機應用工坊那份一模一樣（換皮不是重寫）：
+// 🚨 四張卡的行為跟手機應用工坊那份一模一樣（換皮不是重寫）：
 //      製作互動面板／特效工坊／劇情主題 → OS_STUDIO.launch(容器, 模式)
 //      VN 組件                        → OS_STUDIO.openVnComponents(容器)
-//      匯入 HTML                      → APP_STORE.launch(容器, { view:'import' })
-//    安裝流程仍然只有手機那一份——做好的 app 本來就住手機桌面，這裡搬的是入口不是流程。
-// 🚨 卡片美術（標題／三個角落／五張卡的圖標與底紋）全部寫在 lobby_stage.css，
+//    匯入 HTML 不在這裡——它匯的是「手機上的應用」，入口留在手機的應用工坊。
+// 🚨 卡片美術（標題／三個角落／每張卡的圖標與底紋）全部寫在 lobby_stage.css，
 //    JS 只給 class；素材都是固定網址，不需要走 CSS 變數。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
     const win = window;
 
-    // 五張卡：上排兩張並排小卡，下面三張長條卡（照阿洛的稿）
+    // 四張長條卡。
+    // 🚨「匯入 HTML」2026-08-26 搬回手機的應用工坊：匯進來的是「手機上的應用」，
+    //    做好的 app 住手機桌面、安裝流程也只有那一份，入口跟著東西走才不會兩邊都有一半。
+    //    工坊這邊只留「做給劇情用的東西」。
     const CARDS = [
-        { id: 'import', mini: true,  title: '匯入 HTML', desc: '貼上或載入已有應用' },
-        { id: 'vn',     mini: true,  title: 'VN 組件',   desc: '整理、預覽與打包組件' },
-        { id: 'panel',  studio: 'vn_ui', title: '製作互動面板', desc: '狀態欄、角色卡與劇情面板' },
-        { id: 'fx',     studio: 'fx',    title: '特效工坊',     desc: '下雪、滴血、劍光與畫面特效' },
-        { id: 'theme',  studio: 'theme', title: '劇情主題',     desc: '對話框、名牌與場景牌外觀' },
+        { id: 'vn',    title: 'VN 組件',      desc: '整理、預覽與打包組件' },
+        { id: 'panel', studio: 'vn_ui', title: '製作互動面板', desc: '狀態欄、角色卡與劇情面板' },
+        { id: 'fx',    studio: 'fx',    title: '特效工坊',     desc: '下雪、滴血、劍光與畫面特效' },
+        { id: 'theme', studio: 'theme', title: '劇情主題',     desc: '對話框、名牌與場景牌外觀' },
     ];
 
     function ready() { return !!(win.OS_STUDIO && win.OS_STUDIO.launch); }
 
     function _card(c) {
-        return '<button class="lws-card' + (c.mini ? ' is-mini' : '') + ' lws-' + c.id + '" type="button" data-card="' + c.id + '">' +
+        return '<button class="lws-card lws-' + c.id + '" type="button" data-card="' + c.id + '">' +
                  '<span class="lws-card-art"></span>' +
                  '<span class="lws-card-tx">' +
                    '<span class="lws-card-t">' + c.title + '</span>' +
@@ -50,7 +51,7 @@
         if (_toolObs) { _toolObs.disconnect(); _toolObs = null; }
         if (!window.MutationObserver) return;
         _toolObs = new MutationObserver(() => {
-            if (root.querySelector('#os_studio_app, .vncomp-app, .lws-overlay')) return;
+            if (root.querySelector('#os_studio_app, .vncomp-app')) return;
             root.classList.remove('is-tool');
             if (_toolObs) { _toolObs.disconnect(); _toolObs = null; }
         });
@@ -73,16 +74,6 @@
         if (!win.OS_STUDIO || !win.OS_STUDIO.openVnComponents) return _fail(root, '創作室還沒載入');
         _enterTool(root);
         win.OS_STUDIO.openVnComponents(root);
-    }
-    // 匯入：借手機應用工坊那份的匯入頁（安裝到桌面的流程只有那一份）。
-    // APP_STORE.launch 會把容器內容整個換掉 → 給它一層自己的覆蓋層，返回時整層移除。
-    function _openImport(root) {
-        if (!win.APP_STORE || !win.APP_STORE.launch) return _fail(root, '應用工坊還沒載入');
-        const ov = document.createElement('div');
-        ov.className = 'lws-overlay';
-        _enterTool(root);
-        root.appendChild(ov);
-        win.APP_STORE.launch(ov, { view: 'import', onExit: () => ov.remove() });
     }
     function _fail(root, msg) {
         const t = root.querySelector('.lws-note');
@@ -110,10 +101,7 @@
               '<div class="lws-title" role="heading" aria-level="2" aria-label="視差造物工坊"></div>' +
               (opts.onClose ? '<button class="lws-x" type="button" aria-label="離開"><i class="fa-solid fa-xmark"></i></button>' : '') +
             '</div>' +
-            '<div class="lws-body">' +
-              '<div class="lws-row">' + CARDS.filter(c => c.mini).map(_card).join('') + '</div>' +
-              CARDS.filter(c => !c.mini).map(_card).join('') +
-            '</div>' +
+            '<div class="lws-body">' + CARDS.map(_card).join('') + '</div>' +
             '<div class="lws-note"></div>';
 
         root.addEventListener('click', (e) => {
@@ -123,7 +111,6 @@
             if (!c) return;
             if (c.studio) _openStudio(root, c.studio, c.title);
             else if (c.id === 'vn') _openVnComponents(root);
-            else if (c.id === 'import') _openImport(root);
         });
         if (opts.onClose) root.querySelector('.lws-x').addEventListener('click', opts.onClose);
 
