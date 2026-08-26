@@ -440,7 +440,10 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
         // 優先用 DOM 祖先判斷（在手機殼內＝必手機版），再用實際容器寬度當後備，掛 .studio-mobile。
         try {
             const _cont = appDiv.querySelector('.studio-container');
-            const _inPhone = !!(root && root.closest && root.closest('#aps-app-body, #aurelia-phone-screen, .aps-app'));
+            // 🚨 只認「手機殼的 app 內容區」(#aps-app-body/.aps-app)。
+            //    不能認 #aurelia-phone-screen——那是整個擴展的螢幕，大廳也在它底下，
+            //    認了就變成「在大廳開的創作室一律當手機版」，再寬也是單欄＋👁 抽屜（2026-08-26 抓到）。
+            const _inPhone = !!(root && root.closest && root.closest('#aps-app-body, .aps-app'));
             const _applyMobile = () => {
                 if (!_cont) return;
                 const w = (root && root.getBoundingClientRect ? root.getBoundingClientRect().width : 0) || appDiv.offsetWidth || 0;

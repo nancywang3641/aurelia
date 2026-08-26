@@ -59,10 +59,15 @@
 
     // 卡片點下去＝那件事整個蓋上來（創作室與 VN 組件本來就是這個作法：
     // 自己生一層 absolute 覆蓋層蓋住容器，它們的返回鈕把自己移除，底下的五張卡就回來了）。
-    function _openStudio(root, mode) {
+    function _openStudio(root, mode, label) {
         if (!win.OS_STUDIO || !win.OS_STUDIO.launch) return _fail(root, '創作室還沒載入');
         _enterTool(root);
         win.OS_STUDIO.launch(root, mode);
+        // 標題改成「帽匠創作室 · 你點的那張卡」：在工坊裡就該講工坊的話，
+        // 只改這一份的字（手機殼那份還是叫創作室），所以在這裡改 DOM、不動創作室的模板。
+        const ttl = root.querySelector('#os_studio_app .studio-title');
+        const tn = ttl && Array.prototype.find.call(ttl.childNodes, n => n.nodeType === 3 && n.textContent.trim());
+        if (tn) tn.textContent = ' 帽匠創作室' + (label ? ' · ' + label : '');
     }
     function _openVnComponents(root) {
         if (!win.OS_STUDIO || !win.OS_STUDIO.openVnComponents) return _fail(root, '創作室還沒載入');
@@ -116,7 +121,7 @@
             if (!b) return;
             const c = CARDS.find(x => x.id === b.dataset.card);
             if (!c) return;
-            if (c.studio) _openStudio(root, c.studio);
+            if (c.studio) _openStudio(root, c.studio, c.title);
             else if (c.id === 'vn') _openVnComponents(root);
             else if (c.id === 'import') _openImport(root);
         });

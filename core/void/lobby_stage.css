@@ -672,6 +672,85 @@
 .lws-note.on { opacity:1; transform:translateX(-50%) translateY(0); }
 .lws-fail { padding:24px; color:#e8b6c8; font-size:13px; }
 
+/* ── 🎩 工坊裡的創作室／VN 組件庫：換成工坊的皮（照阿洛的稿）──
+   只在工坊面板裡生效（.lws.is-tool 底下），手機殼裡的那份維持原本的米色紙皮，
+   兩邊是同一支程式、只有這裡多一層皮。
+   🚨 VN 組件庫是把配色寫在元素的 style 上的（vncomp-app 那段 cssText），
+      所以那幾條只能用 !important 才蓋得過去，其餘一律不用。 */
+/* 工具是自己貼滿容器的覆蓋層（#os_studio_app 連底色都寫在 style 上）→ 這幾條要 !important：
+   ① 底色拿掉，讓工坊面板的暗紫透上來（不拿掉會跟半透明的欄位疊成一片灰）
+   ② 內縮 14px、切圓角＝框留在外面當畫框，角落玩偶照樣看得到（阿洛的稿就是這個樣子）
+   工具開著時面板自己的標題列收起來，不然標題會疊兩層、離開鈕也會跟工具的返回鈕打架。 */
+.lws.is-tool > .lws-hd { display:none; }
+.lws.is-tool > .lws-body { visibility:hidden; }
+.lws.is-tool #os_studio_app, .lws.is-tool .vncomp-app, .lws.is-tool .lws-overlay {
+  inset:14px !important; width:auto !important; height:auto !important;
+  background:transparent !important; border-radius:18px; overflow:hidden; }
+.lws.is-tool .lws-overlay { background:#f4ecde !important; }   /* 匯入頁是米色紙皮，留它自己的底 */
+.lws.is-tool { --lwt-ink:#efe7f6; --lwt-dim:rgba(239,231,246,.62); --lwt-line:rgba(214,150,190,.26);
+  --lwt-pane:rgba(38,31,56,.92); --lwt-card:rgba(58,47,84,.55); --lwt-hot:#c9407a; }
+.lws.is-tool .studio-container { background:transparent; color:var(--lwt-ink); }
+.lws.is-tool .studio-body { background:transparent; }
+/* 標題列：跟面板的框同一種暗紫，底線走酒紅 */
+.lws.is-tool .studio-header { background:linear-gradient(180deg, rgba(58,47,84,.75), rgba(38,31,56,.6));
+  border-bottom:1px solid var(--lwt-line); }
+.lws.is-tool .studio-title { color:var(--lwt-ink); letter-spacing:2px; }
+.lws.is-tool .studio-title i { color:#e79ec4; }
+.lws.is-tool .studio-back-btn { color:var(--lwt-ink); background:rgba(255,255,255,.08); border:1px solid var(--lwt-line); }
+.lws.is-tool .studio-back-btn:hover { background:rgba(255,255,255,.16); }
+.lws.is-tool .studio-icon-btn { background:rgba(255,255,255,.07); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+.lws.is-tool .studio-icon-btn:hover { background:rgba(255,255,255,.15); }
+.lws.is-tool .studio-icon-btn.danger { color:#f0a8bd; border-color:rgba(226,110,150,.45); }
+/* 左右兩欄 */
+.lws.is-tool .studio-left { background:rgba(30,24,44,.55); border-right:1px solid var(--lwt-line); }
+.lws.is-tool .studio-right { background:var(--lwt-pane); }
+.lws.is-tool .studio-right-header { background:rgba(46,37,68,.9); border-bottom:1px solid var(--lwt-line); }
+.lws.is-tool .studio-tab { color:var(--lwt-dim); }
+.lws.is-tool .studio-tab.active { color:#ffd9ea; }
+.lws.is-tool .studio-tab.active::after { background:linear-gradient(90deg,#8f7ce0,var(--lwt-hot)); }
+/* 對話泡泡 */
+.lws.is-tool .studio-chat-history { background:transparent; }
+.lws.is-tool .studio-bubble.user { background:rgba(120,52,96,.42); border-color:rgba(226,140,180,.32); color:var(--lwt-ink); }
+.lws.is-tool .studio-bubble.ai { background:var(--lwt-card); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.lws.is-tool .studio-bubble code, .lws.is-tool .studio-bubble pre {
+  background:rgba(16,12,24,.7); color:#ffd9ea; border-color:var(--lwt-line); }
+.lws.is-tool .studio-typing-dot { background:#e79ec4; }
+/* 輸入區與 chip */
+.lws.is-tool .studio-input-wrap { background:rgba(46,37,68,.92); border-top:1px solid var(--lwt-line); }
+.lws.is-tool .studio-type-label { color:var(--lwt-dim); }
+.lws.is-tool .studio-type, .lws.is-tool .studio-chip {
+  border-color:var(--lwt-line); color:var(--lwt-ink); background:rgba(255,255,255,.05); }
+.lws.is-tool .studio-type:hover, .lws.is-tool .studio-chip:hover { background:rgba(255,255,255,.12); }
+.lws.is-tool .studio-type.active, .lws.is-tool .studio-chip-feature.active {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+.lws.is-tool .studio-chip-manage { color:var(--lwt-dim); }
+.lws.is-tool .studio-textarea, .lws.is-tool .studio-attach-btn {
+  background:rgba(22,17,34,.75); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+.lws.is-tool .studio-textarea::placeholder { color:rgba(239,231,246,.42); }
+.lws.is-tool .studio-send-btn { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff;
+  box-shadow:0 4px 14px rgba(180,50,110,.4); }
+.lws.is-tool .studio-history-btn { background:rgba(255,255,255,.07); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+/* 預覽區與雜項 */
+.lws.is-tool .studio-preview-main, .lws.is-tool .studio-preview-content { background:transparent; }
+.lws.is-tool .studio-empty { color:rgba(239,231,246,.4); }
+.lws.is-tool .studio-card { background:var(--lwt-card); border-color:var(--lwt-line); }
+.lws.is-tool .studio-card-title { color:var(--lwt-ink); border-bottom-color:var(--lwt-line); }
+.lws.is-tool .studio-pv { background:rgba(255,255,255,.06); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.lws.is-tool .studio-pv.active { background:var(--lwt-hot); border-color:var(--lwt-hot); color:#fff; }
+.lws.is-tool .studio-pv-wrap { border-color:var(--lwt-line); }
+.lws.is-tool .studio-action-area { background:rgba(46,37,68,.92); border-top:1px solid var(--lwt-line); }
+.lws.is-tool .studio-export-btn { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff; border:none; }
+.lws.is-tool .studio-preview-fab { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff; }
+/* 捲軸配合暗底 */
+.lws.is-tool .studio-container, .lws.is-tool .studio-container * { scrollbar-color:rgba(226,150,190,.45) transparent; }
+.lws.is-tool .studio-container ::-webkit-scrollbar-thumb { background:rgba(226,150,190,.4); }
+
+/* VN 組件庫（獨立浮層；它的底色寫在 style 上→這幾條必須 !important） */
+.lws.is-tool .vncomp-app { background:transparent !important; color:var(--lwt-ink) !important;
+  --jrpg-paper:rgba(46,37,68,.9); --jrpg-paper-light:rgba(58,47,84,.85); --jrpg-paper-deep:rgba(30,24,44,.9);
+  --jrpg-ink:#efe7f6; --jrpg-muted:rgba(239,231,246,.6); --jrpg-wine:#a12f66; --jrpg-wine-dark:#6d1f46;
+  --jrpg-gold:#e0a86a; --jrpg-gold-light:#f0cfa0; --jrpg-line:rgba(214,150,190,.3); }
+
 /* 📱 手機：面板貼底吃滿（版位由 lobby.css 的 void-dock-open 那組給），
    角落玩偶與點陣是固定尺寸、窄螢幕會蓋掉半張卡 → 收起來，只留上緣那道酒紅角片。 */
 @media (max-width:760px) {
