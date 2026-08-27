@@ -5,7 +5,7 @@
     <!-- ⚠️ 這四行必須跟 index.html 的 head 完全一致，否則量到的不是同一個環境 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="PROBE" />
     <link rel="apple-touch-icon" href="https://files.catbox.moe/l5hl69.png" />
@@ -64,6 +64,8 @@
 
     <script>
     (function () {
+        // ⚠️ iOS 在 standalone 下第一次佈局完才把 safe-area 值填進 env()，同步跑會全部量到 0
+        //    （上一版就是這樣，表格印 0 但畫面上的黃青色塊明明有厚度）。延後再量一次。
         function measure(prop) {
             var el = document.createElement('div');
             el.style.cssText = 'position:fixed;top:0;left:0;width:0;visibility:hidden;height:env(' + prop + ',0px);';
@@ -73,6 +75,7 @@
             return h;
         }
 
+        function render() {
         var dpr = window.devicePixelRatio || 1;
         var vv  = window.visualViewport || {};
         var cov = document.getElementById('cover').getBoundingClientRect();
@@ -109,6 +112,12 @@
             html += '<tr><td>' + r[0] + '</td><td class="' + cls + '">' + r[1] + '</td></tr>';
         });
         document.getElementById('out').innerHTML = html;
+        }
+
+        render();
+        setTimeout(render, 700);                        // 等 iOS 把 safe-area 填進 env()
+        window.addEventListener('resize', render);
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', render);
     })();
     </script>
 </body>

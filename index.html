@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- ⚠️ 不要改回 black-translucent。實測(iPhone 932pt)：translucent 下頁面畫布佔滿整個
+         932，內容確實壓在狀態列底下，但版面視口只有 873(innerHeight/clientHeight/visualViewport
+         三個都是 873)，而且是從螢幕頂端 0 開始算 —— 於是螢幕最底下 59pt 落在所有
+         position:fixed inset:0 的盒子外面，只有 html/body 的畫布底色塗得到，就是底部那條。
+         那 59 跟 home indicator 的安全區(34)不是同一件事，用 env(safe-area-inset-bottom)
+         永遠補不到。改成不透明 black：視口與畫布對齊，fixed 盒子才真的到底。 -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="奧瑞亞" />
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="apple-touch-icon" href="https://files.catbox.moe/l5hl69.png" />
