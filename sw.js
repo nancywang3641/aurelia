@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 209;                         // ← 每次部署 +1
+const CACHE_VERSION = 210;                         // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -138,4 +138,49 @@ self.addEventListener('fetch', event => {
             })
         );
     }
+});
+
+// ─────────────────────────────────────────────────────────────
+// 推播：丹醒來寫紙條時叮一下
+// 橫幅能顯示多少字是 iOS 決定的，這裡不強求；重點是點下去要落回自己的前端，
+// 直接開到該看的那一頁（payload 的 url），而不是丟進別人的 app。
+// ─────────────────────────────────────────────────────────────
+const PUSH_ICON = 'https://files.catbox.moe/l5hl69.png';
+
+self.addEventListener('push', event => {
+    let data = {};
+    try {
+        data = event.data ? event.data.json() : {};
+    } catch (_) {
+        // 不是 JSON 就當成純文字
+        data = { body: event.data ? event.data.text() : '' };
+    }
+    const title = data.title || '奧瑞亞';
+    event.waitUntil(
+        self.registration.showNotification(title, {
+            body: data.body || '',
+            icon: PUSH_ICON,
+            badge: PUSH_ICON,
+            tag: data.tag || 'aurelia',
+            renotify: true,
+            data: { url: data.url || './' },
+        })
+    );
+});
+
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const target = (event.notification.data && event.notification.data.url) || './';
+    event.waitUntil((async () => {
+        const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        // 已經開著就直接帶過去，不要每次都開新視窗
+        for (const w of wins) {
+            try {
+                await w.focus();
+                if ('navigate' in w) await w.navigate(target);
+                return;
+            } catch (_) {}
+        }
+        if (self.clients.openWindow) await self.clients.openWindow(target);
+    })());
 });
