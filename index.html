@@ -10,7 +10,11 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="apple-touch-icon" href="https://files.catbox.moe/l5hl69.png" />
     <link rel="icon" type="image/png" href="https://files.catbox.moe/l5hl69.png" />
-    <link rel="manifest" href="pwa.json" />
+    <!-- ⚠️ 有 manifest 時 iOS 會照 manifest 的 display 走，apple-mobile-web-app-status-bar-style
+         的 black-translucent 會被忽略 → webview 不再滿版，上下各被系統吃掉一條，頁面裡的
+         env(safe-area-inset-*) 也一起塌成 0。拿掉 manifest 才會回到 black-translucent 的滿版路徑。
+         pwa.json 檔案保留（推播那條線之後要用），只是不掛上來。
+    <link rel="manifest" href="pwa.json" /> -->
     <title>奧瑞亞 | Aurelia</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
