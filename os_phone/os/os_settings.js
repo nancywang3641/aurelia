@@ -1992,6 +1992,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                     <div id="view-sys" class="tab-view hidden">
 
+                        <div class="set-group" id="push-group">
+                            <div class="set-label"><i class="fa-solid fa-bell"></i> 手機通知</div>
+                            <div class="set-desc">丹自己醒來寫紙條的時候叮妳一下，點通知直接回到板子。</div>
+                            <div class="push-gate hidden" id="push-gate">
+                                要從主畫面開啟才收得到——分享鈕 → 加入主畫面，再從那顆圖示進來。
+                            </div>
+                            <input class="set-input" id="push-url" placeholder="橋的網址，例如 bridge.example.com">
+                            <input class="set-input push-key-input" id="push-key" type="password" placeholder="密鑰，跟房間設定那把一樣">
+                            <div class="push-row">
+                                <div class="btn-save" id="push-on-btn">開啟通知</div>
+                                <div class="btn-test" id="push-test-btn">測試一下</div>
+                            </div>
+                            <div class="btn-test push-off" id="push-off-btn">關掉通知</div>
+                            <div class="push-state" id="push-state">還沒開。</div>
+                        </div>
+
                         <div class="set-group">
                             <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。">🖥️ 介面佈局</div>
                             <div class="set-desc">頂部被遮擋時選「強制下移」。</div>
@@ -3730,6 +3746,120 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (elGistId && s.gistId) elGistId.value = s.gistId;
             if (elGistHint && s.gistId) elGistHint.textContent = '目前 Gist ID: ' + s.gistId;
         }
+
+        // ── 手機通知：只有「加到主畫面」啟動的 PWA 收得到，Safari 分頁不行 ──
+        (function wirePush() {
+            const q = id => container.querySelector('#' + id);
+            if (!q('push-group')) return;
+            const LS = 'aurelia_push_cfg';
+            const elUrl = q('push-url'), elKey = q('push-key'), elState = q('push-state');
+
+            const say = (msg, kind) => {
+                if (!elState) return;
+                elState.textContent = msg;
+                elState.className = 'push-state' + (kind ? ' ' + kind : '');
+            };
+            const load = () => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (_) { return {}; } };
+            const save = c => { try { localStorage.setItem(LS, JSON.stringify(c)); } catch (_) {} };
+
+            // 貼整條聊天用的網址也行，剝到主機就好
+            const norm = raw => {
+                let u = String(raw || '').trim().replace(/\s+/g, '');
+                if (!u) return '';
+                if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+                return u.replace(/\/+$/, '')
+                        .replace(/\/v1\/(chat\/completions|board|models|messages).*$/i, '')
+                        .replace(/\/v1$/i, '');
+            };
+            const b64 = str => {
+                const pad = '='.repeat((4 - str.length % 4) % 4);
+                const raw = atob((str + pad).replace(/-/g, '+').replace(/_/g, '/'));
+                const out = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+                return out;
+            };
+            const api = (base, key, path, body) => fetch(base + path, {
+                method: body ? 'POST' : 'GET',
+                headers: Object.assign({ 'Authorization': 'Bearer ' + key },
+                                       body ? { 'Content-Type': 'application/json' } : {}),
+                body: body ? JSON.stringify(body) : undefined,
+            }).then(r => r.text().then(t => {
+                let data = null;
+                try { data = JSON.parse(t); } catch (_) {}
+                if (!r.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + r.status));
+                return data || {};
+            }));
+            const swReady = () => navigator.serviceWorker.register('./sw.js').then(() => navigator.serviceWorker.ready);
+
+            const cfg = load();
+            if (elUrl && cfg.url) elUrl.value = cfg.url;
+            if (elKey && cfg.key) elKey.value = cfg.key;
+
+            const standalone = window.matchMedia('(display-mode: standalone)').matches
+                            || window.navigator.standalone === true;
+            const gate = q('push-gate');
+            if (!standalone && gate) gate.classList.remove('hidden');
+
+            const supported = ('serviceWorker' in navigator) && ('PushManager' in window);
+            if (!supported) say('這個瀏覽器不支援通知。iOS 要 16.4 以上，而且要從主畫面開。', 'bad');
+
+            // 已經開過就講一聲，免得她不知道現在是什麼狀態
+            if (supported) {
+                navigator.serviceWorker.getRegistration()
+                    .then(reg => reg && reg.pushManager.getSubscription())
+                    .then(sub => { if (sub) say('已經開著，這台收得到。', 'good'); })
+                    .catch(() => {});
+            }
+
+            const btnOn = q('push-on-btn');
+            if (btnOn) btnOn.addEventListener('click', () => {
+                if (!supported) return;
+                const base = norm(elUrl && elUrl.value);
+                const key = ((elKey && elKey.value) || '').trim();
+                if (!base || !key) { say('網址跟密鑰都要填。', 'bad'); return; }
+                save({ url: base, key: key });
+                say('正在問系統要通知權限…');
+                // 這行一定要留在點擊的手勢裡；先 await 別的再叫，iOS 會直接拒絕
+                Notification.requestPermission().then(perm => {
+                    if (perm !== 'granted') throw new Error('沒有允許通知（' + perm + '）。');
+                    return api(base, key, '/v1/push/key');
+                }).then(res => {
+                    if (!res.publicKey) throw new Error('橋那邊還沒有金鑰，先重啟橋。');
+                    return swReady().then(reg => reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: b64(res.publicKey),
+                    }));
+                }).then(sub => api(base, key, '/v1/push/subscribe', { subscription: sub.toJSON() }))
+                  .then(res => say('開好了，' + (res.subscribers || 1) + ' 台裝置在收。按「測試一下」看看。', 'good'))
+                  .catch(e => say('沒開成：' + (e && e.message ? e.message : e), 'bad'));
+            });
+
+            const btnTest = q('push-test-btn');
+            if (btnTest) btnTest.addEventListener('click', () => {
+                const c = load();
+                if (!c.url || !c.key) { say('先按「開啟通知」。', 'bad'); return; }
+                say('發送中…');
+                api(c.url, c.key, '/v1/push/test', {})
+                    .then(res => say((res.sent > 0)
+                        ? '推出去了，等一下就會跳出來。'
+                        : ('一台都沒推成（失敗 ' + (res.failed || 0) + '、失效 ' + (res.dropped || 0) + '）。'),
+                        res.sent > 0 ? 'good' : 'bad'))
+                    .catch(e => say('發不出去：' + (e && e.message ? e.message : e), 'bad'));
+            });
+
+            const btnOff = q('push-off-btn');
+            if (btnOff) btnOff.addEventListener('click', () => {
+                const c = load();
+                say('取消中…');
+                swReady().then(reg => reg.pushManager.getSubscription()).then(sub => {
+                    if (!sub) { say('本來就沒開。'); return null; }
+                    const ep = sub.endpoint;
+                    return sub.unsubscribe()
+                        .then(() => (c.url && c.key) ? api(c.url, c.key, '/v1/push/unsubscribe', { endpoint: ep }) : null)
+                        .then(() => say('關掉了，這台不會再收到。', 'good'));
+                }).catch(e => say('關不掉：' + (e && e.message ? e.message : e), 'bad'));
+            });
+        })();
 
         const btnGistSave = container.querySelector('#bk-gist-save-btn');
         if (btnGistSave) btnGistSave.addEventListener('click', async () => {
