@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <!-- ⚠️ 這四行必須跟 index.html 的 head 完全一致，否則量到的不是同一個環境 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="PROBE" />
+    <link rel="apple-touch-icon" href="https://files.catbox.moe/l5hl69.png" />
+    <title>PROBE</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* 洋紅＝沒有被任何東西蓋到的地方。畫面上只要出現洋紅，那塊就是頁面內部的破洞。 */
+        html, body { background: #ff00aa; height: 100%; overflow: hidden; }
+
+        /* 跟 .aps-overlay 同樣的寫法：body 直屬子層 + position:fixed + inset:0 */
+        #cover {
+            position: fixed; inset: 0; background: #101014; color: #e8eaf3;
+            font: 13px/1.5 -apple-system, monospace;
+            padding: 8px 10px; overflow: auto;
+        }
+        /* 四邊描線：這條線畫在哪，fixed inset:0 的邊界就在哪 */
+        #cover::before {
+            content: ''; position: absolute; inset: 0;
+            border: 3px solid #00ff88; pointer-events: none;
+        }
+        /* 底部安全區厚度：青色那塊有多高，env(safe-area-inset-bottom) 就是多少 */
+        #sab {
+            position: fixed; left: 0; right: 0; bottom: 0;
+            height: env(safe-area-inset-bottom, 0px);
+            background: rgba(0, 200, 255, 0.55);
+        }
+        #sat {
+            position: fixed; left: 0; right: 0; top: 0;
+            height: env(safe-area-inset-top, 0px);
+            background: rgba(255, 200, 0, 0.45);
+        }
+        h1 { font-size: 15px; margin: 2px 0 8px; color: #00ff88; }
+        table { border-collapse: collapse; width: 100%; }
+        td { padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,0.08); vertical-align: top; }
+        td:first-child { color: #8a90a8; white-space: nowrap; }
+        td:last-child { text-align: right; font-weight: 700; }
+        .bad { color: #ff5c7a; }
+        .ok  { color: #00ff88; }
+        .note { margin-top: 10px; color: #8a90a8; font-size: 11px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div id="cover">
+        <h1>SAFE AREA PROBE</h1>
+        <table id="out"></table>
+        <div class="note">
+            綠框＝position:fixed inset:0 的邊界。<br />
+            黃＝上安全區厚度，青＝下安全區厚度。<br />
+            出現<b>洋紅</b>＝那塊是頁面內部沒被蓋到的破洞。<br />
+            綠框到螢幕邊還有一段黑／別的顏色＝那段不歸網頁管，是系統畫的。
+        </div>
+    </div>
+    <div id="sat"></div>
+    <div id="sab"></div>
+
+    <script>
+    (function () {
+        function measure(prop) {
+            var el = document.createElement('div');
+            el.style.cssText = 'position:fixed;top:0;left:0;width:0;visibility:hidden;height:env(' + prop + ',0px);';
+            document.body.appendChild(el);
+            var h = el.getBoundingClientRect().height;
+            document.body.removeChild(el);
+            return h;
+        }
+
+        var dpr = window.devicePixelRatio || 1;
+        var vv  = window.visualViewport || {};
+        var cov = document.getElementById('cover').getBoundingClientRect();
+        var bottomEl = document.elementFromPoint(
+            Math.round(window.innerWidth / 2),
+            Math.round(window.innerHeight - 1)
+        );
+
+        var rows = [
+            ['screen.height',            screen.height],
+            ['window.innerHeight',       window.innerHeight],
+            ['visualViewport.height',    vv.height != null ? Math.round(vv.height) : 'n/a'],
+            ['docEl.clientHeight',       document.documentElement.clientHeight],
+            ['devicePixelRatio',         dpr],
+            ['-- 螢幕 vs 視口差 --',      screen.height - window.innerHeight],
+            ['safe-area-inset-top',      measure('safe-area-inset-top')],
+            ['safe-area-inset-bottom',   measure('safe-area-inset-bottom')],
+            ['fixed inset:0 top',        Math.round(cov.top)],
+            ['fixed inset:0 bottom',     Math.round(cov.bottom)],
+            ['fixed inset:0 height',     Math.round(cov.height)],
+            ['視口最底那點是誰',           bottomEl ? (bottomEl.tagName + (bottomEl.id ? '#' + bottomEl.id : '')) : 'null'],
+            ['navigator.standalone',     ('standalone' in navigator) ? String(navigator.standalone) : 'undefined'],
+            ['display-mode:standalone',  String(matchMedia('(display-mode: standalone)').matches)],
+            ['display-mode:fullscreen',  String(matchMedia('(display-mode: fullscreen)').matches)],
+            ['display-mode:browser',     String(matchMedia('(display-mode: browser)').matches)],
+            ['UA',                       navigator.userAgent.slice(0, 60)]
+        ];
+
+        var html = '';
+        rows.forEach(function (r) {
+            var cls = '';
+            if (r[0] === '-- 螢幕 vs 視口差 --') cls = (r[1] > 0) ? 'bad' : 'ok';
+            if (r[0] === 'safe-area-inset-bottom') cls = (r[1] > 0) ? 'ok' : 'bad';
+            html += '<tr><td>' + r[0] + '</td><td class="' + cls + '">' + r[1] + '</td></tr>';
+        });
+        document.getElementById('out').innerHTML = html;
+    })();
+    </script>
+</body>
+</html>
