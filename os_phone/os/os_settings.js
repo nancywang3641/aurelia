@@ -392,13 +392,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
     }
     window.OS_AVATAR_LOOKS_OPEN = _openCharLooksEditor;
 
-    window.OS_SETTINGS = {
+    // 合併而不是整份蓋掉:claude-codex-room 擴展會先在 OS_SETTINGS 掛
+    // getClaudeRoomConfig 那組 shim,本檔載入比它晚時整份指派會把人家抹掉
+    // (症狀:房間底部欄按了沒反應、設置分頁顯示「設定模組未載入」)。
+    window.OS_SETTINGS = Object.assign(window.OS_SETTINGS || {}, {
         getConfig: loadLlmConfig,
         getSecondaryConfig: loadSecLlmConfig,
         getImageConfig: loadImageConfig,
         getMinimaxConfig: loadMinimaxConfig,
         saveConfig: saveConfig
-    };
+    });
 
     const getSTContext = () => { try { return window.parent.SillyTavern ? window.parent.SillyTavern.getContext() : null; } catch (e) { return null; } };
 
