@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>手機通知</title>
-<link rel="manifest" href="./pwa.json">
+<link rel="manifest" href="./push.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="通知">
 <style>
     :root {
         --paper: #fdf7ec;
@@ -101,8 +104,10 @@
     <div id="gate" class="card warn" hidden>
         <h2>要先加到主畫面</h2>
         <div class="note">
-            iOS 只讓「加到主畫面」啟動的網頁收通知，Safari 分頁不行。<br>
-            分享鈕 → <b>加入主畫面</b> → 從桌面的圖示開啟這頁，再回來按下面那顆。
+            iOS 只讓「加到主畫面」啟動的網頁收通知，Safari 分頁不行。<br><br>
+            用 Safari 開<b>這一頁</b>（網址結尾是 <b>push.html</b>）→ 分享鈕 → <b>加入主畫面</b>，
+            名字會是「<b>通知</b>」→ 從桌面那顆新圖示開啟，再按下面那顆。<br><br>
+            開好之後這顆圖示就可以刪掉，訂閱不會跟著消失。
         </div>
     </div>
 
