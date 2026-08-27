@@ -652,7 +652,7 @@
     /* 立繪螢幕佔大部分 */
     .lobby-left { flex:1 1 auto; border-right:none; border-bottom:1px solid var(--lb-line); min-height:0; }
     /* 📱 直立手機：對話框抬離底部（貼底反拇指、又壓到搖桿）→ 落在拇指順手的下三分之一 */
-    .lobby-left .void-dialogue-wrap { bottom:96px; }
+    .lobby-left .void-dialogue-wrap { bottom:calc(96px + env(safe-area-inset-bottom, 0px)); }
     /* 大廳右欄 3 個 main menu 按鈕並排，緊湊小 */
     .lobby-right {
         flex:0 0 auto;
@@ -865,7 +865,7 @@
        💬 浮鈕要浮在面板之上才點得到（面板 z-index 3350） */
     .lobby-left.void-dock-open.lstage-dlg-hidden .oc-win,
     .lobby-left.void-dock-open.lstage-dlg-hidden .wg-win,
-    .lobby-left.void-dock-open.lstage-dlg-hidden .os-pt-dock { top:12%; bottom:14px; }
+    .lobby-left.void-dock-open.lstage-dlg-hidden .os-pt-dock { top:12%; bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
     .lobby-left.void-dock-open .lstage-chat-fab { z-index:3500; }
     /* 交易所面板原本 z-index:80（另兩個是 3350）→ 抬齊，三個面板行為才一致 */
     .lobby-left.void-dock-open .os-pt-dock { z-index:3350; }

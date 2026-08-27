@@ -325,13 +325,17 @@ body.mode-404 { background: #000000; }
 .avs-header  { padding-top: calc(15px + env(safe-area-inset-top, 0px)) !important; }
 .ps-header   { height: calc(56px + env(safe-area-inset-top, 0px)) !important; padding-top: env(safe-area-inset-top, 0px) !important; }
 
-/* tab 容器：獨立模式用 absolute 填滿整個視口（底部 rail 已移除 2026-06-12，只留 home indicator 安全區）*/
+/* tab 容器：獨立模式用 absolute 填滿整個視口（底部 rail 已移除 2026-06-12）
+   ⚠️ bottom 一定要 0，不要縮 env(safe-area-inset-bottom)。縮了等於在畫面最底留一條沒人畫的縫，
+   只剩 html/body 的 #EEF0F6 塗得到 —— 在設置那類淺色頁面看不出來（底色幾乎同色），
+   一到大廳的暖色像素場景就整條跳出來。安全區要讓的是「可點的東西」，不是背景：
+   背景照native做法出血到底，貼底的控制項各自加 env(safe-area-inset-bottom) 抬上來。*/
 #aurelia-standalone-root #aurelia-tab-container {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: env(safe-area-inset-bottom, 0px) !important;
+    bottom: 0 !important;
     flex: none !important;
     height: auto !important;
 }

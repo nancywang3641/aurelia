@@ -458,24 +458,17 @@
                 const tabCont = document.getElementById('aurelia-tab-container');
                 if (!tabCont) return false;
 
-                // 讀取真實 safe-area（iOS home indicator 區域）
-                const safeAreaBottom = (() => {
-                    const el = document.createElement('div');
-                    el.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);width:0;pointer-events:none;visibility:hidden;';
-                    document.body.appendChild(el);
-                    const h = el.offsetHeight || 0;
-                    document.body.removeChild(el);
-                    return h;
-                })();
-
-                // tab 容器：position:absolute 填滿整個視口，只留 home indicator 安全區
-                tabCont.style.setProperty('position', 'absolute',          'important');
-                tabCont.style.setProperty('top',    '0px',                 'important');
-                tabCont.style.setProperty('left',   '0px',                 'important');
-                tabCont.style.setProperty('right',  '0px',                 'important');
-                tabCont.style.setProperty('bottom', safeAreaBottom + 'px', 'important');
-                tabCont.style.setProperty('flex',   'none',                'important');
-                tabCont.style.setProperty('height', 'auto',                'important');
+                // tab 容器：position:absolute 填滿整個視口，一路鋪到底
+                // ⚠️ bottom 不要縮 home indicator 安全區（原本會讀 env 再縮）。縮了就是在畫面最底
+                //    留一條沒人畫的縫，只剩 html/body 底色塗得到；而且這裡是 inline !important、
+                //    每次 resize 重套，CSS 那邊怎麼改都會被這行蓋回去。安全區由貼底的控制項自己讓。
+                tabCont.style.setProperty('position', 'absolute', 'important');
+                tabCont.style.setProperty('top',    '0px',        'important');
+                tabCont.style.setProperty('left',   '0px',        'important');
+                tabCont.style.setProperty('right',  '0px',        'important');
+                tabCont.style.setProperty('bottom', '0px',        'important');
+                tabCont.style.setProperty('flex',   'none',       'important');
+                tabCont.style.setProperty('height', 'auto',       'important');
                 return true;
             }
 

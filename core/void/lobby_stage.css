@@ -37,7 +37,8 @@
 @keyframes lstage-hint-float { 0%,100%{transform:translate(-50%,-100%) translateY(0)} 50%{transform:translate(-50%,-100%) translateY(-5px)} }
 .lstage-click { position:absolute; inset:0; cursor:pointer; z-index:1; }
 /* 🕹️ 手機虛擬搖桿（左下角；只觸控裝置由 JS 建立） */
-.lstage-joy { position:absolute; left:40px; bottom:58px; width:132px; height:132px; border-radius:50%;
+/* 貼底的控制項自己讓開 home indicator：舞台容器已鋪到螢幕底(背景出血)，安全區不再由容器代讓 */
+.lstage-joy { position:absolute; left:40px; bottom:calc(58px + env(safe-area-inset-bottom, 0px)); width:132px; height:132px; border-radius:50%;
   background:rgba(20,18,16,.32); border:2px solid rgba(243,234,216,.3); z-index:3000; touch-action:none; }
 .lstage-joy-knob { position:absolute; left:50%; top:50%; width:58px; height:58px; margin:-29px 0 0 -29px;
   border-radius:50%; background:rgba(243,234,216,.72); box-shadow:0 2px 8px rgba(0,0,0,.45);
@@ -55,7 +56,7 @@
 .lobby-left.lstage-on.lstage-dlg-hidden .void-chat-input-row { display:none !important; }
 
 /* 💬 聊天符號浮鈕：自由漫遊（對話框收起）時顯示，點了浮出對話框＋輸入列 */
-.lstage-chat-fab { display:none; position:absolute; right:14px; bottom:16px; width:46px; height:46px;
+.lstage-chat-fab { display:none; position:absolute; right:14px; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); width:46px; height:46px;
   border:none; border-radius:50%; background:rgba(26,24,20,.85); color:#f3ead8; cursor:pointer;
   font-size:19px; align-items:center; justify-content:center; z-index:6;
   box-shadow:0 3px 10px rgba(0,0,0,.4); transition:background .2s, transform .2s; }
