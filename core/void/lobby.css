@@ -870,38 +870,21 @@
        💬 浮鈕要浮在面板之上才點得到（面板 z-index 3350） */
     .lobby-left.void-dock-open.lstage-dlg-hidden .oc-win,
     .lobby-left.void-dock-open.lstage-dlg-hidden .wg-win,
+    .lobby-left.void-dock-open.lstage-dlg-hidden .lstage-tarotwin,
+    .lobby-left.void-dock-open.lstage-dlg-hidden .lstage-wswin,
     .lobby-left.void-dock-open.lstage-dlg-hidden .os-pt-dock { top:12%; bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
 
-    /* =====================================================
-       🔮🎩 占卜小屋與造物工坊：只有「立繪＋面板」兩件事
-       這兩扇窗一開就把對話整條收掉（同一個人不能一邊在面板裡講話、底下對話框也在講話，
-       lobby_stage 的 _openTarotPanel/_openWorkshopPanel 各自 endTalk+hideDialog），
-       但人要留著（Rae 2026-08-21）→ 畫面上永遠沒有泡泡也沒有輸入列，
-       所以面板不必像書咖那樣讓出右半跟底部那條，一路吃到底。
-       ===================================================== */
-
-    /* 面板吃滿：上緣只留一道給立繪的頭，下緣貼到安全區。
-       🚨 頂端不用另外三個面板的 12%：那三個在這個狀態下立繪是躲在面板後面的（z-index 4），
-          這兩個立繪要看得見，12% 讓出來的縫扣掉場景牌就只剩四十幾 px＝一撮頭髮。
-          18% 是「場景牌下緣(約 50px)之下還能露出頭與肩」量出來的最小值。 */
-    .lobby-left.void-dock-open.lstage-dlg-hidden .lstage-tarotwin,
-    .lobby-left.void-dock-open.lstage-dlg-hidden .lstage-wswin {
-        top:18%; bottom:calc(14px + env(safe-area-inset-bottom, 0px));
-    }
-
-    /* 立繪：置中、壓在面板底下、貼著場景牌下緣露出頭與肩。
-       ① 置中＝右邊沒有泡泡要讓，靠左會空一大片（同地點視圖對話模式 .lb-pv.is-talk 那條）。
-       ② 壓回面板底下＝桌機把她抬到 3400 是因為窗只佔右半、她站在窗外的左邊；
-          手機的窗吃滿寬，照抬等於整張立繪蓋在面板上（標題與卡片全被擋住）。
-       ③ top:56px＝場景牌（top:14px、高約 37px）的下緣，不讓頭跟牌子疊在一起。
-       ④ object-position:center top＋max-width 收窄＝contain 之後圖變矮，
-          露出來的那道剛好是頭到肩，不是只有一撮頭髮。 */
+    /* 🔮🎩 占卜與造物工坊：面板開著時手機不放立繪。
+       手機的停靠面板是「對話」與「面板」兩態分開的（走近瀅瀅／愛麗絲先出岔路，選了面板
+       就整個畫面給面板，立繪根本沒被建出來），所以書咖與世界門的面板上是沒有人的。
+       這兩個是從桌機那套帶過來的例外：桌機的窗只佔右半、人站在窗外的左邊剛好，
+       所以 _openTarotPanel/_openWorkshopPanel 在收掉對話之後又用 _showPortraitOnly 把人掛回來，
+       lobby_stage.css 還把她抬到 z-index:3400 站到窗前面。手機的窗吃滿寬，
+       照這樣做＝整張立繪蓋在面板上（標題、卡片、牌陣全被擋住）。
+       桌機那套原封不動，只有手機的「面板單獨一態」收人：按 💬 浮鈕把對話叫回來時
+       （lstage-dlg-hidden 拿掉）立繪照樣回來，跟書咖邊看面板邊講話那態一致。 */
     .lobby-left.void-dock-open.lstage-dlg-hidden:has(.lstage-tarotwin) .lstage-talk-portrait,
-    .lobby-left.void-dock-open.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait {
-        left:50%; right:auto; transform:translateX(-50%);
-        top:56px; bottom:auto; height:calc(100% - 56px); max-width:38%;
-        object-position:center top; z-index:3340;
-    }
+    .lobby-left.void-dock-open.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait { display:none; }
     .lobby-left.void-dock-open .lstage-chat-fab { z-index:3500; }
     /* 交易所面板原本 z-index:80（另兩個是 3350）→ 抬齊，三個面板行為才一致 */
     .lobby-left.void-dock-open .os-pt-dock { z-index:3350; }
