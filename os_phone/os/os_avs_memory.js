@@ -78,9 +78,18 @@
         if (!mems.length) {
             return `<div class="avs-mem-empty">還沒有記憶。<br>把上面的開關打開、在「⚙️ 進階」設好記憶服務後，跑團存章節時系統會自動把重點記在這裡。</div>`;
         }
+        // 份量只在夠重時標出來（門檻同 os_vector_inject 的 HEAVY_MIN）。每張卡都掛數字會吵，
+        // 而且看不出重點；只標重的，一眼就知道副模型把哪些事判成「還沒收尾」。數字照實印，
+        // 判得準不準要靠她看得到原始值——全部都標成懸著本身就是個訊號。
+        const _weightTag = (m) => {
+            const w = Number(m && m.weight);
+            if (!Number.isFinite(w) || w < 0.7) return '';
+            return `<span class="avs-mem-tag" title="這條被判成之後還會被牽動，召回時會留位置給它">懸著 ${w.toFixed(1)}</span>`;
+        };
         return mems.map(m => `<div class="avs-mem-card" data-id="${esc(m.id)}">
             <div class="avs-mem-card-top">
                 <span class="avs-mem-type">${esc(_typeLabel(m.type))}</span>
+                ${_weightTag(m)}
                 <button class="avs-mem-del" data-del="${esc(m.id)}" title="刪掉這條">×</button>
             </div>
             <div class="avs-mem-text">${esc(m.text)}</div>

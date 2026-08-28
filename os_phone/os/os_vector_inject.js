@@ -83,6 +83,13 @@
     // 下一輪補上(見 _captureAndStripRecall)。每行都是看得懂的摘要、不是噪音 tag，prompt 也大幅縮水。
     const MEM_SUM_MAX = 28;      // 索引每條摘要最多幾字
     const PICK_POOL_K = 40;      // 🔎 向量粗篩給導演的候選池大小（取代 2000 行全目錄常駐：只把語意相關的這幾條交給副模型挑）
+    // ⚖️ 候選池留給「份量重但跟當下劇情不相似」的格數。
+    //    粗篩只認相似度，所以二十輪前埋的線只要話題轉開就再也撈不出來——它不是被忘了，
+    //    是永遠不會被問到。留位置而不是去調相似度的打分：把「重要」折算成「相似」需要一個
+    //    換算率，那個換算率沒有正確答案，調它就是在調一個說不清的旋鈕。
+    //    按缺口補（粗篩自己撈進來幾條重的就少補幾條），且不超過候選池的一半。
+    const HEAVY_SLOTS  = 5;
+    const HEAVY_MIN    = 0.7;    // 多重才算「還懸著」。0.5 是副模型拿不準時的預設值，門檻要高於它
 
     async function injectMemories() {
         try {
@@ -354,13 +361,27 @@
 
             // 🔎 向量粗篩：有「當下劇情」當 query + 向量回填到位 → 只把語意相關的 top-K 候選交給導演挑（取代 2000 行全目錄常駐）。
             //    沒給 query / 還沒回填到位(vectorReady=false) / 搜尋空 → 退回全目錄(早/中/近)，回填空窗期照舊能召回、不開天窗、不會只丟給導演零星幾條。
-            let pool = null, segmented = true;
+            let pool = null, segmented = true, heavy = [];
             const q = String(queryText || '').replace(/<[^>]+>/g, ' ').trim();
             if (q && typeof win.OS_VECTOR_ENGINE?.search === 'function' && win.OS_VECTOR_ENGINE?.vectorReady?.(all)) {
                 try {
                     const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, PICK_POOL_K);
                     const picked = (hits || []).filter(m => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged);
-                    if (picked.length) { pool = picked; segmented = false; }   // 候選池＝相關片段，不再分三段
+                    if (picked.length) {
+                        pool = picked; segmented = false;   // 候選池＝相關片段，不再分三段
+                        // ⚖️ 按缺口補重的：粗篩自己撈到幾條 weight 夠高的就少補幾條，
+                        //    上限同時受 HEAVY_SLOTS 與「不超過候選池一半」夾住——預留不能變成霸佔。
+                        const _w = (m) => { const n = Number(m && m.weight); return Number.isFinite(n) ? n : 0.5; };
+                        const already = picked.filter(m => _w(m) >= HEAVY_MIN).length;
+                        const room = Math.min(HEAVY_SLOTS - already, Math.floor(picked.length / 2));
+                        if (room > 0) {
+                            const inPool = new Set(picked.map(m => m && m.id));
+                            heavy = facts
+                                .filter(m => !inPool.has(m.id) && _w(m) >= HEAVY_MIN)
+                                .sort((a, b) => (_w(b) - _w(a)) || ((b.createdAt || 0) - (a.createdAt || 0)))
+                                .slice(0, room);
+                        }
+                    }
                 } catch (e) {}
             }
             if (!pool) pool = facts.slice();
@@ -391,6 +412,13 @@
                 const lines = [];
                 pool.forEach(m => _emit(m, lines));
                 if (lines.length) text += `\n〔與當前劇情相關的記憶〕\n` + lines.join('\n');
+                // 另立一區，不混進上面那組：這些是「跟現在的話題不相關」才需要特別撈出來的，
+                // 併在一起的話導演會把它們讀成當下相關而照樣挑不出重點。
+                if (heavy.length) {
+                    const hl = [];
+                    heavy.forEach(m => _emit(m, hl));
+                    if (hl.length) text += `\n〔還懸著、跟當前劇情無關但沒收尾的事〕\n` + hl.join('\n');
+                }
             }
             if (!idx) return null;
             return { text: text.trim(), map };
