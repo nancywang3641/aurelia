@@ -405,12 +405,47 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
     const getSTContext = () => { try { return window.parent.SillyTavern ? window.parent.SillyTavern.getContext() : null; } catch (e) { return null; } };
 
+    // ── 酒館擴展設置（「一般」分頁最上面那兩格）─────────────────────────────
+    //   這兩格原本住在酒館 Extensions 抽屜的 settings.html，那是酒館的地盤、跟她其他設定分兩處。
+    //   搬進來之後 settings.html 只剩「啟用」與狀態。存的還是同一個 extension_settings['多功能面板系統']，
+    //   讀的人（index.js 的掛載、html_extractor、story_extractor、ui_utilities 的收合）一行都沒動。
+    //   ⚠️ 手機殼可能跑在 iframe 裡：extension_settings / toastr / .mes 全都在主頁面，一律走 _tvWin()。
+    const _tvWin = () => { try { return (window.parent && window.parent !== window && window.parent.SillyTavern) ? window.parent : window; } catch (e) { return window; } };
+    const TAVERN_EXT_KEY = '多功能面板系統';
+
+    function loadTavernExtSettings() {
+        const W = _tvWin();
+        if (typeof W.extension_settings === 'undefined') W.extension_settings = {};
+        let st = W.extension_settings[TAVERN_EXT_KEY];
+        if (!st) {
+            try {
+                const saved = W.localStorage.getItem('extension_settings');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && parsed[TAVERN_EXT_KEY]) { st = parsed[TAVERN_EXT_KEY]; W.extension_settings[TAVERN_EXT_KEY] = st; }
+                }
+            } catch (e) {}
+        }
+        return st || {};
+    }
+
+    function saveTavernExtSettings(patch) {
+        const W = _tvWin();
+        if (typeof W.extension_settings === 'undefined') W.extension_settings = {};
+        if (!W.extension_settings[TAVERN_EXT_KEY]) W.extension_settings[TAVERN_EXT_KEY] = {};
+        Object.assign(W.extension_settings[TAVERN_EXT_KEY], patch);
+        if (typeof W.saveSettingsDebounced === 'function') W.saveSettingsDebounced();
+        else if (typeof W.saveSettings === 'function') W.saveSettings();
+        else { try { W.localStorage.setItem('extension_settings', JSON.stringify(W.extension_settings)); } catch (e) {} }
+    }
+
     function launchApp(container, mode) {
         const llmConfig = loadLlmConfig();
         const secLlmConfig = loadSecLlmConfig();
         const imgConfig = loadImageConfig();
         const minimaxConfig = loadMinimaxConfig();
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
+        const tavernExt = loadTavernExtSettings();
 
         // 畫廊子 tab 切換 helper（含 avatar/bg 列表 lazy load）
         if (!window._switchOsGalTab) {
@@ -949,7 +984,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div class="set-tab active" data-tab="api">API</div>
                     <div class="set-tab" data-tab="img">圖片</div>
                     <div class="set-tab" data-tab="voice">語音</div>
-                    <div class="set-tab" data-tab="vn">素材</div>
+                    <div class="set-tab" data-tab="vn">一般</div>
                     <!-- ⛔ 「記憶向量」分頁已移除：它跟 📝 記憶（變數工坊→記憶）是同一個系統、同一份 os_vector_config，
                          但欄位少了本地模型/記憶來源/主模型只注入近期那幾個，而它存檔是整份覆蓋 →
                          每按一次「保存所有設定」就把那幾個設定清掉（本地模型的勾會自己不見就是這個）。 -->
@@ -1985,8 +2020,25 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
                     </div>
 
-                    <!-- ── VN 系統設置（由 vn_settings.js 提供） ── -->
+                    <!-- ── 一般：酒館那兩格 + 素材目錄與章節（由 vn_settings.js 提供） ── -->
                     <div id="view-vn" class="tab-view hidden">
+                        <div class="set-group"${stHide}>
+                            <div class="set-label">🏰 顯示位置</div>
+                            <select class="set-select" id="mp-mount-selector">
+                                <option value="#sheld" ${(tavernExt.mount?.selector || '#sheld') === '#sheld' ? 'selected' : ''}>整個對話框（推薦）</option>
+                                <option value="#chat" ${(tavernExt.mount?.selector || '#sheld') === '#chat' ? 'selected' : ''}>只在訊息區</option>
+                            </select>
+                            <div class="set-desc">換了要重整酒館才會挪過去。</div>
+                        </div>
+
+                        <div class="set-group"${stHide}>
+                            <div class="set-label">
+                                <span>📄 訊息可收合</span>
+                                <label class="toggle-switch"><input type="checkbox" id="mp-message-collapse" ${tavernExt.messageCollapse !== false ? 'checked' : ''}><span class="slider"></span></label>
+                            </div>
+                            <div class="set-desc">為每則訊息加上收合按鈕，太長的訊息可以收起來。</div>
+                        </div>
+
                         ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getHTML() : '<div class="set-desc" style="padding:20px; text-align:center;">⚠️ vn_settings.js 尚未載入</div>'}
                     </div>
 
@@ -2152,6 +2204,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // 備份分頁
         bindBackupTab(container);
+
+        // 「一般」分頁最上面那兩格（酒館專用，PWA 那邊本來就被 stHide 藏起來）
+        bindTavernTab(container);
 
         // 綁定元素 (主模型)
         const elSystemApi = container.querySelector('#os-system-api');
@@ -3723,6 +3778,62 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             }
         };
 
+    }
+
+    // ── 「一般」分頁：顯示位置 / 訊息可收合 ──────────────────────────────
+    //   跟這頁其他設定不同，這兩格不走底部「保存所有設定」——它們原本在酒館抽屜就是改完當場生效，
+    //   搬過來保持一樣，免得她改完以為生效了、其實還要再按一顆按鈕。
+    function bindTavernTab(container) {
+        const W = _tvWin();
+
+        const elMount = container.querySelector('#mp-mount-selector');
+        if (elMount) {
+            elMount.onchange = () => {
+                const st = loadTavernExtSettings();
+                const mount = { ...(st.mount || {}), selector: elMount.value };
+                saveTavernExtSettings({ mount });
+                if (W.toastr) W.toastr.success('重整酒館之後挪過去');
+            };
+        }
+
+        const elCollapse = container.querySelector('#mp-message-collapse');
+        if (elCollapse) {
+            elCollapse.onchange = () => {
+                const on = elCollapse.checked;
+                saveTavernExtSettings({ messageCollapse: on });
+
+                const UI = W.AureliaUIUtils || window.AureliaUIUtils;
+                if (!UI || !UI.reinitializeCollapse) {
+                    if (W.toastr) W.toastr.info('設置已保存，重整酒館後生效');
+                    return;
+                }
+                if (on) {
+                    UI.reinitializeCollapse();
+                    if (W.toastr) W.toastr.success('已開啟訊息收合');
+                    return;
+                }
+                // 關閉：拔掉所有收合鈕、清掉每則訊息的收合記憶、把藏起來的內容還原
+                try {
+                    W.document.querySelectorAll('.mes-collapse-btn').forEach(btn => btn.remove());
+                    const chat = W.document.querySelector('#chat');
+                    if (chat) {
+                        chat.querySelectorAll('.mes').forEach(msg => {
+                            const mesid = msg.getAttribute('mesid');
+                            if (mesid) { try { W.localStorage.removeItem(`mes-collapse-${mesid}`); } catch (e) {} }
+                            const block = msg.querySelector('.mes_block');
+                            if (block) {
+                                Array.from(block.children).forEach(child => {
+                                    if (!child.classList.contains('ch_name') && !child.classList.contains('mes_edit_buttons')) child.style.display = '';
+                                });
+                            }
+                            const avatar = msg.querySelector('.mesAvatarWrapper');
+                            if (avatar) avatar.style.display = '';
+                        });
+                    }
+                } catch (e) { console.warn('[Settings] 還原收合狀態失敗', e); }
+                if (W.toastr) W.toastr.success('已關閉訊息收合');
+            };
+        }
     }
 
     function bindBackupTab(container) {
