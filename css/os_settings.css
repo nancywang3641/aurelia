@@ -71,6 +71,11 @@
         .avl-btn.primary { background:#1A1C28; color:#EEF0F6; border-color:#1A1C28; }
         .avl-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
         .avl-tip { font-size:12px; color:#1a8f4f; }
+        /* 「一般」分頁的高度欄：數字框後面貼一個 % */
+        .mp-height-row { display: flex; align-items: center; gap: 8px; }
+        .mp-height-row .set-input { width: 110px; flex: 0 0 auto; }
+        .mp-height-unit { font-size: 13px; color: #3A3F5C; font-weight: 800; }
+
         .set-input, .set-select, .set-textarea { background: #EEF0F6 !important; border: 1px solid rgba(26,28,40,0.20); color: #1A1C28 !important; padding: 12px; border-radius: 4px; font-size: 13px; outline: none; width: 100%; box-sizing: border-box; transition: all 0.2s; color-scheme: light; }
         .set-input:focus, .set-textarea:focus, .set-select:focus { border-color: #1A1C28; background: #EEF0F6 !important; box-shadow: 0 0 0 2px rgba(26,28,40,0.10); }
         .set-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }

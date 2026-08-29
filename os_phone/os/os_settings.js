@@ -2029,6 +2029,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <option value="#chat" ${(tavernExt.mount?.selector || '#sheld') === '#chat' ? 'selected' : ''}>只在訊息區</option>
                             </select>
                             <div class="set-desc">換了要重整酒館才會挪過去。</div>
+
+                            <div class="set-label" style="margin-top:14px;">高度</div>
+                            <div class="mp-height-row">
+                                <input class="set-input" type="number" id="mp-panel-height" min="30" max="100" step="5" placeholder="100" value="${tavernExt.panelHeight ?? ''}">
+                                <span class="mp-height-unit">%</span>
+                            </div>
+                            <div class="set-desc">100 就是跟對話框一樣高。調矮的話上面那截會露出聊天，改完當場就變。</div>
                         </div>
 
                         <div class="set-group"${stHide}>
@@ -3793,6 +3800,32 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const mount = { ...(st.mount || {}), selector: elMount.value };
                 saveTavernExtSettings({ mount });
                 if (W.toastr) W.toastr.success('重整酒館之後挪過去');
+            };
+        }
+
+        const elHeight = container.querySelector('#mp-panel-height');
+        if (elHeight) {
+            // 邊打邊套：她要看得到窗變矮才知道數字對不對，等她離開欄位才生效等於要來回猜。
+            //   夾在 30–100 之後才存，避免她中途打出的半截數字（打「5」要打「50」）把窗縮到看不見。
+            const applyHeight = () => {
+                const raw = elHeight.value.trim();
+                let val = '';
+                if (raw !== '') {
+                    const n = Math.round(Number(raw));
+                    if (!isFinite(n)) return;
+                    val = Math.min(100, Math.max(30, n));
+                }
+                saveTavernExtSettings({ panelHeight: val });
+                try { (W.AureliaControlCenter || window.AureliaControlCenter)?.applyEmbeddedHeight?.(); } catch (e) {}
+            };
+            elHeight.oninput = applyHeight;
+            // 離開欄位才把夾過的值寫回輸入框，打字中途不跳數字搶她的游標
+            elHeight.onblur = () => {
+                const raw = elHeight.value.trim();
+                if (raw === '') return;
+                const n = Math.round(Number(raw));
+                elHeight.value = isFinite(n) ? Math.min(100, Math.max(30, n)) : '';
+                applyHeight();
             };
         }
 

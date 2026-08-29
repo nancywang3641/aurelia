@@ -26,6 +26,8 @@
     let embedObserver = null;
     let _hiddenChatEl = null;   // 「只在訊息區」模式下被收起的 #chat，卸載時還原
     let _extractPeek = false;   // extractor 抓取時暫時把 #chat 拉回可見(讓 TH 煮 html 卡)，observer 這期間別強制藏
+    let _embedKind = null;      // 這次是怎麼掛的：'standalone' | 'messagesOnly' | 'sheld'，改高度時要照原掛法改
+    let _embedChatEl = null;    // messagesOnly 模式的 #chat（不論當下藏沒藏），撐滿↔不撐滿來回切要拿它
     let syncTargetSelector = '#sheld';
     let _vnWasOpenBeforeTabSwitch = false;
     let _readerWasOpenBeforeTabSwitch = false;
@@ -341,6 +343,27 @@
         delete el.dataset.aureliaPrevCss;
     }
 
+    // ── 面板高度（%，30–100；100＝撐滿宿主容器）────────────────────────────
+    //   上限鎖 100 就是「最高等於 #chat / #sheld、不會凸出去」，而且兩條掛法各自都出不了容器：
+    //   #sheld 那條是 absolute 貼底、height 給 %，百分比本來就相對 #sheld；
+    //   #chat 那條是 #sheld 的 flex 兄弟，flex-basis 給 % 再配 max-height:100%，撐不破 #sheld。
+    //   ⚠️ 100 時三個分支的樣式與 #chat 的處理跟改動前逐字一致——沒設過的人行為一格不變。
+    const PANEL_H_MIN = 30, PANEL_H_MAX = 100;
+    function _readPanelHeight() {
+        try {
+            let st = window.extension_settings && window.extension_settings['多功能面板系統'];
+            if (!st) {
+                const saved = localStorage.getItem('extension_settings');
+                if (saved) st = JSON.parse(saved)['多功能面板系統'];
+            }
+            const v = st && st.panelHeight;
+            if (v == null || v === '') return PANEL_H_MAX;
+            const n = Math.round(Number(v));
+            if (!isFinite(n)) return PANEL_H_MAX;
+            return Math.min(PANEL_H_MAX, Math.max(PANEL_H_MIN, n));
+        } catch (e) { return PANEL_H_MAX; }
+    }
+
     AureliaControlCenter.mountEmbedded = function(containerEl, placement = 'bottom') {
         if (!phoneModal) phoneModal = createPhoneModal();
         stopSyncing();
@@ -354,6 +377,10 @@
         //   把 #chat 收起，輸入框 #form_sheld 留在底部照常可用。
         const messagesOnly = !isStandalone && containerEl && containerEl.id === 'chat';
         const sheld = messagesOnly ? (containerEl.closest('#sheld') || containerEl.parentElement) : null;
+        const heightPct = _readPanelHeight();
+        const isFullHeight = heightPct >= PANEL_H_MAX;
+        _embedKind = isStandalone ? 'standalone' : (messagesOnly ? 'messagesOnly' : 'sheld');
+        _embedChatEl = messagesOnly ? containerEl : null;
 
         if (!embeddedRoot) {
             embeddedRoot = document.createElement('div');
@@ -368,8 +395,9 @@
             `;
         } else if (messagesOnly) {
             // flex 兄弟：撐滿訊息區空間，輸入框留在下方
+            //   調矮時改用 flex-basis：#chat 不再收起、自己佔上面剩下的，露出來的是真的能捲的聊天
             embeddedRoot.style.cssText = `
-                position: relative; flex: 1 1 auto; min-height: 0; width: 100%;
+                position: relative; ${isFullHeight ? 'flex: 1 1 auto;' : `flex: 0 0 ${heightPct}%; max-height: 100%;`} min-height: 0; width: 100%;
                 z-index: 999;
                 background: #fff;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.08);
@@ -378,8 +406,9 @@
             `;
         } else if (isMobile) {
             // 用 absolute 占滿 #sheld 整個區域，z-index 蓋過 form_sheld (z-index:30)
+            //   調矮時貼底、height 給 %，上面那截露出 #sheld 原本的聊天
             embeddedRoot.style.cssText = `
-                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                position: absolute; ${isFullHeight ? 'top: 0;' : `top: auto; height: ${heightPct}%;`} left: 0; right: 0; bottom: 0;
                 width: 100%;
                 z-index: 999;
                 background: #fff;
@@ -390,7 +419,7 @@
         } else {
             // desktop：跟 mobile 一樣 absolute 占滿 #sheld，z-index 蓋過 form_sheld
             embeddedRoot.style.cssText = `
-                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                position: absolute; ${isFullHeight ? 'top: 0;' : `top: auto; height: ${heightPct}%;`} left: 0; right: 0; bottom: 0;
                 width: 100%;
                 z-index: 999;
                 background: #fff;
@@ -408,9 +437,16 @@
         embeddedRoot.appendChild(phoneFrame);
 
         if (messagesOnly) {
-            // 收起 #chat（off-screen 隱藏、保 layout 給 extractor 讀），把奧瑞亞插在輸入框前面
-            _hiddenChatEl = containerEl;
-            _applyChatHidden(containerEl);
+            // 撐滿時收起 #chat（off-screen 隱藏、保 layout 給 extractor 讀），把奧瑞亞插在輸入框前面。
+            //   調矮時不收：收了上面那截就是一片沒人畫的空白，而不收 #chat 自己會被 flex 壓成剩下的高度，
+            //   露出來的是能捲能點的真聊天——「只在訊息區」本來就是這個意思。
+            if (isFullHeight) {
+                _hiddenChatEl = containerEl;
+                _applyChatHidden(containerEl);
+            } else if (_hiddenChatEl) {
+                _restoreChat(_hiddenChatEl);
+                _hiddenChatEl = null;
+            }
             const form = sheld.querySelector('#form_sheld');
             if (form) sheld.insertBefore(embeddedRoot, form);
             else sheld.appendChild(embeddedRoot);
@@ -645,6 +681,30 @@
 
     AureliaControlCenter.toggle = () => isVisible ? AureliaControlCenter.hide() : AureliaControlCenter.show();
     AureliaControlCenter.isVisible = () => isVisible;
+    // 設定頁改了高度時當場重套：只動 embeddedRoot 的幾個樣式，不重跑 mountEmbedded——
+    //   重跑會把 phoneFrame 再 appendChild 一次，iframe 一被重新插進 DOM 就整個重載，
+    //   她正開著的那頁會被打回首頁。
+    AureliaControlCenter.applyEmbeddedHeight = function () {
+        if (!isEmbedded || !embeddedRoot || _embedKind === 'standalone') return false;
+        const pct = _readPanelHeight();
+        const full = pct >= PANEL_H_MAX;
+
+        if (_embedKind === 'messagesOnly') {
+            embeddedRoot.style.flex      = full ? '1 1 auto' : `0 0 ${pct}%`;
+            embeddedRoot.style.maxHeight = full ? ''         : '100%';
+            if (full) {
+                if (!_hiddenChatEl && _embedChatEl) { _hiddenChatEl = _embedChatEl; _applyChatHidden(_embedChatEl); }
+            } else if (_hiddenChatEl) {
+                _restoreChat(_hiddenChatEl);
+                _hiddenChatEl = null;
+            }
+        } else {
+            embeddedRoot.style.top    = full ? '0' : 'auto';
+            embeddedRoot.style.height = full ? ''  : `${pct}%`;
+        }
+        return true;
+    };
+
     AureliaControlCenter.isEmbeddedMounted = () => isEmbedded;
     AureliaControlCenter.isFullscreen = () => isFullscreen;
     AureliaControlCenter.switchPage = switchPage;
