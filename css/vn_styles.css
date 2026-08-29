@@ -779,6 +779,18 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         @media (min-width: 769px) {
             #game-char.vn-avatar   { left: auto; right: calc(50% + 5%); }
             #game-char-2.vn-avatar { right: auto; left:  calc(50% + 5%); }
+            /* 立繪同一套：本來 left:0/right:0 是貼死畫面兩邊，中間空一大片、兩人像各站一角。
+               錨在中央兩側之後間距不再跟著螢幕寬度長——圖高由舞台高決定、寬跟著高走，
+               所以超寬螢幕上中間也只多出那 2×6%，不會又被拉開。
+               ⚠️ object-position 必須一起翻成貼內側：盒子是 max-width:60% 的大盒、圖比它窄，
+               還留 left/right bottom 的話圖會黏在盒子外緣，錨點白改。
+               vn-solo(獨角置中) 與 vn-avatar 都是 id+class、特異性比這兩條高，不受影響。 */
+            #game-char   { left: auto; right: calc(50% + 6%); object-position: right bottom; }
+            #game-char-2 { right: auto; left:  calc(50% + 6%); object-position: left bottom; }
+            /* 雙擊讓位：改錨點之後「往外滑開」要順著新的定位屬性推，
+               還照基礎規則設 left 會變成 right:auto→left 的屬性互換，過渡接不上、直接瞬移。 */
+            #game-char.vn-cc-shift-l   { right: calc(50% + 20%); left: auto; }
+            #game-char-2.vn-cc-shift-r { left:  calc(50% + 20%); right: auto; }
         }
         /* 📱 手機直立：改回雙格（2026-07-02）。左格貼左下、右格貼右下，各稍微加寬→中間重疊一點
            （左角右緣 × 右角左緣）；object-position 讓各自貼外側，重疊自然。單人在場仍置中滿版。
