@@ -2035,7 +2035,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <input class="set-input" type="number" id="mp-panel-height" min="30" max="100" step="5" placeholder="100" value="${tavernExt.panelHeight ?? ''}">
                                 <span class="mp-height-unit">%</span>
                             </div>
-                            <div class="set-desc">100 就是跟對話框一樣高。調矮的話上面那截會露出聊天，改完當場就變。</div>
+                            <div class="set-desc">100 就是跟對話框一樣高。調矮的話窗留在正中間，上下兩截露出聊天，改完當場就變。</div>
                         </div>
 
                         <div class="set-group"${stHide}>

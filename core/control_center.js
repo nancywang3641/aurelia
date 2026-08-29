@@ -27,7 +27,6 @@
     let _hiddenChatEl = null;   // 「只在訊息區」模式下被收起的 #chat，卸載時還原
     let _extractPeek = false;   // extractor 抓取時暫時把 #chat 拉回可見(讓 TH 煮 html 卡)，observer 這期間別強制藏
     let _embedKind = null;      // 這次是怎麼掛的：'standalone' | 'messagesOnly' | 'sheld'，改高度時要照原掛法改
-    let _embedChatEl = null;    // messagesOnly 模式的 #chat（不論當下藏沒藏），撐滿↔不撐滿來回切要拿它
     let syncTargetSelector = '#sheld';
     let _vnWasOpenBeforeTabSwitch = false;
     let _readerWasOpenBeforeTabSwitch = false;
@@ -378,9 +377,7 @@
         const messagesOnly = !isStandalone && containerEl && containerEl.id === 'chat';
         const sheld = messagesOnly ? (containerEl.closest('#sheld') || containerEl.parentElement) : null;
         const heightPct = _readPanelHeight();
-        const isFullHeight = heightPct >= PANEL_H_MAX;
         _embedKind = isStandalone ? 'standalone' : (messagesOnly ? 'messagesOnly' : 'sheld');
-        _embedChatEl = messagesOnly ? containerEl : null;
 
         if (!embeddedRoot) {
             embeddedRoot = document.createElement('div');
@@ -394,59 +391,69 @@
                 width: 100%; z-index: 100; overflow: hidden;
             `;
         } else if (messagesOnly) {
-            // flex 兄弟：撐滿訊息區空間，輸入框留在下方
-            //   調矮時改用 flex-basis：#chat 不再收起、自己佔上面剩下的，露出來的是真的能捲的聊天
+            // flex 兄弟：吃滿訊息區空間，輸入框留在下方。窗調矮時這一格不縮——它是那個「框」，
+            //   縮的是框裡的 phoneFrame，靠 justify-content 置中（見下方 phoneFrame 那段）
             embeddedRoot.style.cssText = `
-                position: relative; ${isFullHeight ? 'flex: 1 1 auto;' : `flex: 0 0 ${heightPct}%; max-height: 100%;`} min-height: 0; width: 100%;
+                position: relative; flex: 1 1 auto; min-height: 0; width: 100%;
                 z-index: 999;
-                background: #fff;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-                border-radius: 8px;
+                display: flex; flex-direction: column; justify-content: center;
+                pointer-events: none;
                 overflow: hidden;
             `;
         } else if (isMobile) {
             // 用 absolute 占滿 #sheld 整個區域，z-index 蓋過 form_sheld (z-index:30)
-            //   調矮時貼底、height 給 %，上面那截露出 #sheld 原本的聊天
             embeddedRoot.style.cssText = `
-                position: absolute; ${isFullHeight ? 'top: 0;' : `top: auto; height: ${heightPct}%;`} left: 0; right: 0; bottom: 0;
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
                 width: 100%;
                 z-index: 999;
-                background: #fff;
-                box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
-                border-radius: 12px;
+                display: flex; flex-direction: column; justify-content: center;
+                pointer-events: none;
                 overflow: hidden;
             `;
         } else {
             // desktop：跟 mobile 一樣 absolute 占滿 #sheld，z-index 蓋過 form_sheld
             embeddedRoot.style.cssText = `
-                position: absolute; ${isFullHeight ? 'top: 0;' : `top: auto; height: ${heightPct}%;`} left: 0; right: 0; bottom: 0;
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
                 width: 100%;
                 z-index: 999;
-                background: #fff;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-                border-radius: 8px;
+                display: flex; flex-direction: column; justify-content: center;
+                pointer-events: none;
                 overflow: hidden;
             `;
         }
 
-        phoneFrame.style.cssText = `
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            border: none; border-radius: 0; padding: 0;
-            box-shadow: none; display: block; background: #fff;
-        `;
+        // 嵌入模式下 embeddedRoot 是「吃滿宿主可用區的透明定位框」，phoneFrame 才是看得到的那扇窗——
+        //   所以背景/圓角/陰影掛在 phoneFrame 上。窗調矮時框不縮，由框的 justify-content:center
+        //   把窗留在正中間；調矮不該讓它掉到底下去。框不吃指標事件、窗吃，窗以外那圈透明區域
+        //   點得到、捲得到底下的東西（#sheld 那條的聊天就在下面）。
+        //   ⚠️ 獨立(PWA)全螢幕那條不走這裡的置中：它本來就是滿版，沒有「窗多高」這回事。
+        if (isStandalone) {
+            phoneFrame.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                border: none; border-radius: 0; padding: 0;
+                box-shadow: none; display: block; background: #fff;
+            `;
+        } else {
+            const _radius = isMobile && !messagesOnly ? '12px' : '8px';
+            const _shadow = isMobile && !messagesOnly ? '0 -4px 15px rgba(0,0,0,0.12)' : '0 4px 15px rgba(0,0,0,0.08)';
+            phoneFrame.style.cssText = `
+                position: relative; width: 100%;
+                height: ${heightPct}%; flex: 0 0 ${heightPct}%;
+                border: none; padding: 0; display: block; background: #fff;
+                border-radius: ${_radius}; box-shadow: ${_shadow};
+                pointer-events: auto;
+            `;
+        }
         embeddedRoot.appendChild(phoneFrame);
 
         if (messagesOnly) {
-            // 撐滿時收起 #chat（off-screen 隱藏、保 layout 給 extractor 讀），把奧瑞亞插在輸入框前面。
-            //   調矮時不收：收了上面那截就是一片沒人畫的空白，而不收 #chat 自己會被 flex 壓成剩下的高度，
-            //   露出來的是能捲能點的真聊天——「只在訊息區」本來就是這個意思。
-            if (isFullHeight) {
-                _hiddenChatEl = containerEl;
-                _applyChatHidden(containerEl);
-            } else if (_hiddenChatEl) {
-                _restoreChat(_hiddenChatEl);
-                _hiddenChatEl = null;
-            }
+            // 收起 #chat（off-screen 隱藏、保 layout 給 extractor 讀），把奧瑞亞插在輸入框前面。
+            //   置中要靠「框吃滿訊息區、窗在框裡置中」，#chat 得整個讓位，所以調矮時也照收——
+            //   窗上下那兩截露出來的是收起後墊在底下的 #chat，看得到但捲不動（它 pointer-events:none）。
+            //   那個 none 不能拿掉：#chat 收起時是 absolute inset:0、連輸入框那塊也蓋著，
+            //   放開就會擋住 #form_sheld 的點擊。要能捲得選「整個對話框」那條。
+            _hiddenChatEl = containerEl;
+            _applyChatHidden(containerEl);
             const form = sheld.querySelector('#form_sheld');
             if (form) sheld.insertBefore(embeddedRoot, form);
             else sheld.appendChild(embeddedRoot);
@@ -681,27 +688,14 @@
 
     AureliaControlCenter.toggle = () => isVisible ? AureliaControlCenter.hide() : AureliaControlCenter.show();
     AureliaControlCenter.isVisible = () => isVisible;
-    // 設定頁改了高度時當場重套：只動 embeddedRoot 的幾個樣式，不重跑 mountEmbedded——
+    // 設定頁改了高度時當場重套：只改窗的高，不重跑 mountEmbedded——
     //   重跑會把 phoneFrame 再 appendChild 一次，iframe 一被重新插進 DOM 就整個重載，
-    //   她正開著的那頁會被打回首頁。
+    //   她正開著的那頁會被打回首頁。框不動、置中是框的 justify-content 在管，所以這裡改高就夠了。
     AureliaControlCenter.applyEmbeddedHeight = function () {
-        if (!isEmbedded || !embeddedRoot || _embedKind === 'standalone') return false;
+        if (!isEmbedded || !embeddedRoot || !phoneFrame || _embedKind === 'standalone') return false;
         const pct = _readPanelHeight();
-        const full = pct >= PANEL_H_MAX;
-
-        if (_embedKind === 'messagesOnly') {
-            embeddedRoot.style.flex      = full ? '1 1 auto' : `0 0 ${pct}%`;
-            embeddedRoot.style.maxHeight = full ? ''         : '100%';
-            if (full) {
-                if (!_hiddenChatEl && _embedChatEl) { _hiddenChatEl = _embedChatEl; _applyChatHidden(_embedChatEl); }
-            } else if (_hiddenChatEl) {
-                _restoreChat(_hiddenChatEl);
-                _hiddenChatEl = null;
-            }
-        } else {
-            embeddedRoot.style.top    = full ? '0' : 'auto';
-            embeddedRoot.style.height = full ? ''  : `${pct}%`;
-        }
+        phoneFrame.style.height = `${pct}%`;
+        phoneFrame.style.flex   = `0 0 ${pct}%`;
         return true;
     };
 
