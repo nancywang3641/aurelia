@@ -532,6 +532,9 @@
                     //    整塊內容刪光 → 背景/BGM/左上角場景 tag 全沒（立繪還在，因為早鳥直接掃原文）。
                     //    列進來＝內容原樣保留，標籤行留給 VN 組件收走做章節卡片；沒做組件時由 next() 跳過。
                     'chaptercard',
+                    // ⚙️ 系統框區塊版：同上，內容要原樣留給 next() 的攔截收走。
+                    //    不列白名單＝<system> 到 </system> 之間整塊被當作者的 HTML 刪掉，框永遠是空的。
+                    'system',
                     'battlestart',   // ⚔️ 戰鬥設定區塊：內容要完整留給播放時的攔截收走；不加的話這裡會把 [Foe|…] 全刪光，攔截收到空區塊靜默跳過＝戰鬥永遠不開
                     'p','div','span','br','hr','b','i','em','strong','a','img',
                     'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
@@ -2211,6 +2214,22 @@
                 return;
             }
 
+            // ⚙️ 系統框（區塊版）：<system>…</system> 整塊收走。跟 <BattleStart> 同理，
+            //    必須攔在下面「自訂區塊過濾」之前，否則會被當成作者的 HTML 卡片彈掉、系統框永遠不開。
+            //    <system name="未知管理員"> 帶標題；沒帶就是無標題（等同 [Sys|內文]）。
+            {
+                const _sysOpen = line.match(/^<system(?:\s+name\s*=\s*["']?([^"'>]*?)["']?\s*)?>$/i);
+                if (_sysOpen) {
+                    const _sLines = [];
+                    let _si = this.index + 1;
+                    while (_si < this.script.length && !/^<\/system>\s*$/i.test(this.script[_si])) { _sLines.push(this.script[_si]); _si++; }
+                    if (_si < this.script.length) this.index = _si;   // 找到閉合→停在閉合行；找不到→只跳 opener，別把 index 推到劇本末
+                    this._showSysBlock((_sysOpen[1] || '').trim(), _sLines);
+                    return;
+                }
+                if (/^<\/system>\s*$/i.test(line)) { this.next(); return; }
+            }
+
             // 🔥 【動態積木攔截 - 最優先，必須在 DOM block 過濾之前】
             if (window.VN_DynamicParser && window.VN_DynamicParser.processLine(line, this)) {
                 return;
@@ -2247,7 +2266,7 @@
 
             // --- 自訂區塊過濾 ---
             {
-                const _sysXml = ['content','call','chat','status','summary','avatar','scene',
+                const _sysXml = ['content','call','chat','status','summary','avatar','scene','system',
                     'p','div','span','br','hr','b','i','em','strong','a','img',
                     'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
                     'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
@@ -2549,19 +2568,11 @@
             if (line.startsWith('[Sys|')) {
                 const parts = line.slice(5, -1).split('|');
                 const bodyText = parts.length >= 2 ? parts.slice(1).join('|') : parts[0];
-                if (bodyText.includes('成就解鎖') || bodyText.includes('成就：') || bodyText.includes('Achievement')) {
-                    this.next(); return;
-                }
-                const titleEl = document.getElementById('sys-title');
-                const textEl  = document.getElementById('sys-text');
-                if (parts.length >= 2) { titleEl.innerText = parts[0]; titleEl.style.display = 'block'; }
-                else { titleEl.style.display = 'none'; }
-                document.getElementById('sys-overlay').classList.add('active');
-                this.hideVNPanel();
-                this.typewriter(textEl, this._sysBreakSentences(this.parseMarkdown(bodyText)));
-                this.addLog("系統", bodyText);
-                // 🖥️ 系統語音：依系統名（parts[0]）抽對應的音；無系統名 → 預設系統音
-                this._vnSysVoicePlay(parts.length >= 2 ? parts[0] : '', bodyText);
+                if (this._sysIsAchievement(bodyText)) { this.next(); return; }
+                // 單行格式塞不進換行 → 只能照句末標點機械斷。要自己決定哪裡斷就用 <system> 區塊版。
+                this._showSysBox(parts.length >= 2 ? parts[0] : '',
+                                 this._sysBreakSentences(this.parseMarkdown(bodyText)),
+                                 bodyText);
                 return;
             }
 
@@ -3082,6 +3093,39 @@
                 return true;
             }
             return false;
+        },
+        // 系統框：兩種格式最後都走這裡，差別只在 bodyHtml 是誰決定怎麼斷行的。
+        _showSysBox: function (title, bodyHtml, plainText) {
+            const titleEl = document.getElementById('sys-title');
+            const textEl  = document.getElementById('sys-text');
+            if (title) { titleEl.innerText = title; titleEl.style.display = 'block'; }
+            else { titleEl.style.display = 'none'; }
+            // 多行才靠左。拿完整內容判斷而不是看當下打到哪——看當下的話會打到第一個換行時
+            //   對齊方式突然從置中跳成靠左，整段字瞬間位移。
+            textEl.classList.toggle('sys-multiline', bodyHtml.includes('<br>'));
+            document.getElementById('sys-overlay').classList.add('active');
+            this.hideVNPanel();
+            this.typewriter(textEl, bodyHtml);
+            this.addLog("系統", plainText);
+            // 🖥️ 系統語音：依系統名抽對應的音；無系統名 → 預設系統音
+            this._vnSysVoicePlay(title || '', plainText);
+        },
+        // 成就是走成就系統彈的，系統框不重複播一次
+        _sysIsAchievement: function (t) {
+            return t.includes('成就解鎖') || t.includes('成就：') || t.includes('Achievement');
+        },
+        // ⚙️ 系統框區塊版：<system> … </system>，AI 自己決定哪裡換行。
+        //   單行的 [Sys|…] 塞不進換行，只能靠句末標點機械斷——斷在哪是語意問題，
+        //   寫的人知道、標點不知道，所以區塊版把那個決定交回去，這裡一行就是一行、不再自動斷。
+        //   空行照留（連兩個 <br>），段落間距就是這麼來的。
+        _showSysBlock: function (title, lines) {
+            const body = lines.slice();
+            while (body.length && !body[0].trim()) body.shift();          // 開頭結尾的空行是排版殘留
+            while (body.length && !body[body.length - 1].trim()) body.pop();
+            const plain = body.join('\n');
+            if (this._sysIsAchievement(plain)) { this.next(); return; }
+            if (!plain.trim()) { console.warn('[VN] <system> 區塊是空的（內容被上游過濾掉？），跳過'); this.next(); return; }
+            this._showSysBox(title, body.map(l => this.parseMarkdown(l)).join('<br>'), plain);
         },
         // 系統框專用：一句一行。整段黏成一團在固定寬的框裡讀起來像一堵牆，
         //   斷在句末標點之後最自然——那本來就是說話換氣的地方。

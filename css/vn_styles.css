@@ -1324,7 +1324,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px; 
             border: 1px solid rgba(0, 210, 211, 0.15); pointer-events: none; border-radius: 2px;
         }
-        #sys-title { 
+        /* 多行才靠左：長短不一的行置中會排成鋸齒，而且自動折行的續行居中之後看起來像獨立的一行
+           （「赢。」那種孤字就是這樣冒出來的）。單行短訊息置中比較穩，所以按行數分。
+           class 在開打之前就依完整內容決定，不會打到一半才換對齊方式。 */
+        #sys-text.sys-multiline { text-align: left; }
+        #sys-title {
             font-size: 0.95rem; color: var(--cyan); letter-spacing: 5px; margin-bottom: 20px; 
             display: none; font-weight: bold; text-transform: uppercase; 
             border-bottom: 1px solid rgba(0, 210, 211, 0.3); padding-bottom: 10px; 
