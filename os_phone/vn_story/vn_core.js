@@ -2558,7 +2558,7 @@
                 else { titleEl.style.display = 'none'; }
                 document.getElementById('sys-overlay').classList.add('active');
                 this.hideVNPanel();
-                this.typewriter(textEl, this.parseMarkdown(bodyText));
+                this.typewriter(textEl, this._sysBreakSentences(this.parseMarkdown(bodyText)));
                 this.addLog("系統", bodyText);
                 // 🖥️ 系統語音：依系統名（parts[0]）抽對應的音；無系統名 → 預設系統音
                 this._vnSysVoicePlay(parts.length >= 2 ? parts[0] : '', bodyText);
@@ -3082,6 +3082,22 @@
                 return true;
             }
             return false;
+        },
+        // 系統框專用：一句一行。整段黏成一團在固定寬的框裡讀起來像一堵牆，
+        //   斷在句末標點之後最自然——那本來就是說話換氣的地方。
+        //   ⚠️ 只在標籤外動手：parseMarkdown 留下的 <em> 被切開就壞了，所以 tag 整段跳過。
+        //   收尾的引號/括號跟著前一句走（『樂園』！」不能斷在 ！ 跟 」 中間）；
+        //   最後那個斷點沒有下一句可斷，拿掉，否則框底下多一條空行。
+        //   只給 [Sys| 用：對話框寬度本來就是固定的、沒有這個毛病，也不動她習慣的斷句。
+        _sysBreakSentences: function (html) {
+            const MARK = ' ';
+            const marked = String(html).replace(
+                /(<[^>]+>)|([。！？…‼⁇]+[」』）】》”’"']*)/g,
+                (m, tag, sent) => tag ? tag : sent + MARK
+            );
+            return marked
+                .replace(new RegExp(MARK + '(?=(?:<[^>]*>|\s)*$)', 'g'), '')
+                .split(MARK).join('<br>');
         },
         parseMarkdown: function(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'<em>$1</em>'); },
         renderVN: function(n, t, mode) {

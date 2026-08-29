@@ -1314,7 +1314,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             box-shadow: 0 20px 60px rgba(0,0,0,0.9);
             padding: 40px 50px; text-align: center; position: relative;
             color: var(--text-light); font-size: 1.2rem; letter-spacing: 2px;
-            min-width: 320px; max-width: calc(100% - 60px); max-height: calc(100% - 40px); overflow-y: auto; box-sizing: border-box;
+            /* 固定寬：沒給 width 的話盒子是 shrink-to-fit，打字機每多一個字就重算一次寬度、框一直抽動。
+               max-width 只在窄畫面上把它夾回來，寬畫面一律就是這個寬度。 */
+            width: 920px; min-width: 320px; max-width: calc(100% - 60px); max-height: calc(100% - 40px); overflow-y: auto; box-sizing: border-box;
             border-radius: 4px; font-family: var(--font-sans);
         }
         /* 系統提示框的細線內框 */
@@ -1908,7 +1910,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #vn-log-content { padding: 0 30px; }
 
             /* 系統提示框 */
-            #sys-box { padding: 30px 35px; font-size: 1.1rem; }
+            #sys-box { padding: 30px 35px; font-size: 1.1rem; width: calc(100% - 60px); }
 
             /* 物品彈窗 */
             #item-caption { width: 86%; }
@@ -1953,7 +1955,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             #dialogue-text { font-size: 1rem; line-height: 1.75; letter-spacing: 0.5px; }
 
             /* 系統提示框 */
-            #sys-box { padding: 25px 22px; font-size: 1rem; letter-spacing: 1px; min-width: unset; width: auto; max-width: calc(100% - 40px); box-sizing: border-box; }
+            #sys-box { padding: 25px 22px; font-size: 1rem; letter-spacing: 1px; min-width: unset; width: calc(100% - 40px); max-width: calc(100% - 40px); box-sizing: border-box; }
             #sys-title { font-size: 0.8rem; letter-spacing: 3px; }
 
             /* 轉場文字 */
