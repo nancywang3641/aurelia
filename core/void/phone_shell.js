@@ -73,7 +73,6 @@
             else frame.style.removeProperty(THEME_VARS[k]);   // 沒設 = 用 CSS 預設
         });
         // 字體「硬套用」：有設且非預設 → 加 class，CSS 用 !important 蓋掉所有 app(連寫死的)、只放過 fa 圖標
-        _ensureFontCdn(t.font);   // 選的是網路字體 → 補上 <link>；重開之後也是走這裡接回來
         frame.classList.toggle('aps-font-on', !!(t.font && t.font !== 'inherit'));
         _applyIcons();
     }
@@ -159,41 +158,36 @@
         { name: '海藍', css: 'linear-gradient(160deg,#4facfe,#00f2fe)' },
         { name: '純白', css: '#eef0f6' },
     ];
-    // 前四個是系統字體：本機有就有、沒有就退回預設，別人的電腦看到的不一定一樣。
-    // 帶 cdn 的是網路字體（中文網字計劃的免費 CDN）：本機沒裝也看得到，所有人長一樣。
-    //   那份 CSS 是「按需分包」——一款字體切成上百個 woff2，瀏覽器只抓畫面上真的用到的那幾包，
-    //   不是一次吞十幾 MB。css 值一律留系統字體當 fallback：CDN 掛了就退回去，不會變成空白。
-    const CDN = 'https://cn-font.claude-code-best.win/packages/';
+    // 這排是系統字體：本機有就有、沒有就退回預設。要別的字體用下面那格自己填。
     const FONTS = [
         { name: '預設',  css: 'inherit' },
         { name: '思源宋', css: "'Noto Serif TC',serif" },
         { name: '優雅',  css: "'Playfair Display','Noto Serif TC',serif" },
         { name: '黑體',  css: "system-ui,'PingFang TC','Microsoft JhengHei',sans-serif" },
         { name: '等寬',  css: "'Courier New',monospace" },
-        { name: '文楷',  css: "'LXGWWenKaiScreen','Noto Serif TC',serif",       cdn: CDN + 'lywkpmydb/dist/LXGWWenKaiScreen/result.css' },
-        { name: '仿宋',  css: "'ZhuqueFangsong-Regular','Noto Serif TC',serif", cdn: CDN + 'zqfs/dist/ZhuqueFangsong-Regular/result.css' },
-        { name: '正楷',  css: "'GuanKiapTsingKhai-T','DFKai-SB',serif",         cdn: CDN + 'GuanKiapTsingKhai/dist/GuanKiapTsingKhai-T/result.css' },
-        { name: '明朝',  css: "'汇文明朝体','Noto Serif TC',serif",              cdn: CDN + 'hwmct/dist/%E6%B1%87%E6%96%87%E6%98%8E%E6%9C%9D%E4%BD%93/result.css' },
-        { name: '糖圓',  css: "'MaoKenTangYuan','PingFang TC',sans-serif",      cdn: CDN + 'mkwtyt/dist/MaoKenTangYuan/result.css' },
     ];
-    // 網路字體按需插 <link>：同一份只插一次（data 屬性當記號），插過就不再動。
-    function _ensureFontCdn(cssVal) {
-        if (!cssVal) return;
-        const f = FONTS.find(function (x) { return x.css === cssVal; });
-        if (!f || !f.cdn) return;
-        if (document.querySelector('link[data-aps-font="' + f.cdn + '"]')) return;
-        const l = document.createElement('link');
-        l.rel = 'stylesheet';
-        l.href = f.cdn;
-        l.setAttribute('data-aps-font', f.cdn);
-        document.head.appendChild(l);
+    // 電腦裡裝好的字體：填名字就用，完全不連外、只有這台看得到。
+    //   這個字串會直接進 CSS，所以走白名單不走黑名單——只留字體名真的會用到的字元
+    //   （中日韓、英數、空格、- _ .）。黑名單剃引號分號還會漏掉 url( 這種，白名單一次擋完。
+    function _fontCssFromName(name) {
+        const clean = String(name || '')
+            .replace(/[^\w一-鿿぀-ヿㇰ-ㇿ가-힯㐀-䶿 .\-]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!clean) return '';
+        return "'" + clean + "',system-ui,sans-serif";
     }
+    // 反查：目前存的字體是不是「自己填的」（不在上面清單裡）→ 是的話把名字挖回來填進輸入框
+    function _customFontName(cssVal) {
+        if (!cssVal || cssVal === 'inherit') return '';
+        if (FONTS.some(function (f) { return f.css === cssVal; })) return '';
+        const m = String(cssVal).match(/^'([^']+)'/);
+        return m ? m[1] : '';
+    }
+
     function _urlOf(v) { return (v && String(v).indexOf('url(') === 0) ? String(v).slice(4).split(')')[0] : ''; }
     function _renderSettings(c) {
         const t = _loadTheme();
-        // 預覽 chip 要用該字體寫自己的名字 → 開這頁時把網路字體都接上。
-        //   CSS 本身很小，字體檔是按需的，chip 上就那兩個字，只會抓到那兩包。
-        FONTS.forEach(function (f) { if (f.cdn) _ensureFontCdn(f.css); });
         const sw = function (arr, key) { return arr.map(function (w) { return '<button class="aps-set-sw" data-k="' + key + '" data-css="' + _esc(w.css) + '" type="button" style="background:' + w.css + '"><span>' + _esc(w.name) + '</span></button>'; }).join(''); };
         const ftCh = FONTS.map(function (f) { return '<button class="aps-set-chip" data-k="font" data-css="' + _esc(f.css) + '" type="button" style="font-family:' + f.css + '">' + _esc(f.name) + '</button>'; }).join('');
         const icHintRows = APPS.map(function (a) {
@@ -213,6 +207,8 @@
           +   '<div class="aps-set-subnote">把圖放進這資料夾、用下方代號當檔名(.png/.webp/.jpg 都行)。建議<b>正方形、120×120px 以上</b>(顯示成圓角方塊、會裁切，太小會糊)；沒放的自動用預設符號：</div>'
           +   '<div class="aps-set-iclist">' + icHintRows + '</div>'
           +   '<div class="aps-set-sec">字體（套用到所有 app）</div><div class="aps-set-chips">' + ftCh + '</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-fontname" class="aps-set-input" type="text" placeholder="或填你電腦裡的字體名，例如 微軟正黑體" value="' + _esc(_customFontName(t.font)) + '"><button id="aps-set-fontname-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-subnote">先在電腦裡把字體<b>安裝好</b>再填它的名字。這條完全不連網，只有你這台看得到；換台電腦沒裝就會變回預設。留空＝改用上面那排。</div>'
           +   '<div class="aps-set-row"><button id="aps-set-reset" class="aps-set-btn ghost" type="button">還原全部預設</button></div>'
           +   '<div class="aps-set-note">字體會「硬套用」蓋掉所有 app(連寫死字體的也蓋)，只放過 fa 圖標不破壞。</div>'
           + '</div>';
@@ -222,6 +218,11 @@
         });
         const wpBtn = c.querySelector('#aps-set-wpurl-btn');
         if (wpBtn) wpBtn.addEventListener('click', function () { const u = (c.querySelector('#aps-set-wpurl').value || '').trim(); _saveTheme({ wallpaper: u ? ('url(' + u + ') center/cover no-repeat') : '' }); });
+        const fnBtn = c.querySelector('#aps-set-fontname-btn');
+        if (fnBtn) fnBtn.addEventListener('click', function () {
+            const css = _fontCssFromName(c.querySelector('#aps-set-fontname').value);
+            _saveTheme({ font: css || 'inherit' });   // 清空＝退回預設，不然會卡在上一個自訂字體
+        });
         const icfBtn = c.querySelector('#aps-set-icf-btn');
         if (icfBtn) icfBtn.addEventListener('click', function () { _saveIconFolder((c.querySelector('#aps-set-icfolder').value || '').trim()); });
         const reset = c.querySelector('#aps-set-reset');
