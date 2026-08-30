@@ -3020,10 +3020,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         replyText = response?.choices?.[0]?.message?.content || JSON.stringify(response);
                     } else {
                         const headers = context.getRequestHeaders();
+                        // 沒選連接設定檔 → 直連組 body（不經 sendRequest）；同樣要擋掉 top_k=0，否則測試永遠 400
+                        const _tbody = { messages: [{ role: 'user', content: 'Hi' }], max_tokens: 50, stream: false };
+                        try { win.OS_API?._dropZeroTopK?.(context, _tbody); } catch (e) {}
                         const res = await fetch('/api/backends/chat-completions/generate', {
                             method: 'POST',
                             headers: { ...headers, 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ messages: [{ role: 'user', content: 'Hi' }], max_tokens: 50, stream: false })
+                            body: JSON.stringify(_tbody)
                         });
                         if (!res.ok) throw new Error(`HTTP ${res.status}`);
                         const data = await res.json();

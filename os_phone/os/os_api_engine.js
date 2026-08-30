@@ -250,7 +250,15 @@
     function _dropZeroTopK(ctx, ov) {
         try {
             const oai = (ctx && ctx.oai_settings) || win.oai_settings || (win.parent && win.parent.oai_settings) || {};
-            if (!Number(oai.top_k_openai)) ov.top_k = undefined;
+            if (Number(oai.top_k_openai)) return ov;          // 使用者真的填了值 → 一個字都不動
+            ov.top_k = undefined;                             // ①前端這層先拿掉（設 undefined → JSON 序列化會省略）
+            // ②後端那層再保一次：自訂端點的「排除請求主體參數」是請求送出前最後一道手續
+            //   （後端 excludeKeysByYaml 直接 delete 掉那個 key），不管 top_k 是哪一層塞進來的都刪得掉。
+            //   ①單獨不夠：奧瑞亞有好幾條送出路徑（選了設定檔的走 sendRequest、沒選的走直連 /generate），
+            //   合併順序不是每條都一樣，只靠前端覆蓋會有路徑漏掉。沿用她既有的排除清單、只補這一行、不覆蓋。
+            const cur = String((ov.custom_exclude_body != null ? ov.custom_exclude_body : oai.custom_exclude_body) || '');
+            if (!/^\s*-\s*top_k\s*$/m.test(cur)) ov.custom_exclude_body = (cur.trim() ? cur.replace(/\s+$/, '') + '\n' : '') + '- top_k';
+            else ov.custom_exclude_body = cur;
         } catch (e) {}
         return ov;
     }
@@ -307,6 +315,7 @@
         // 只修生成不修測試＝「測試失敗但實際能生成」，那正是這條路一直在犯的錯。
         _vertexOverride: (ctx, profileId, base) => _dropZeroTopK(ctx, _vertexOverride(ctx, profileId, base)),
         _causeText: (err) => _causeText(err),
+        _dropZeroTopK: (ctx, obj) => _dropZeroTopK(ctx, obj),   // 自己組 body 的直連路徑也要能用同一道
 
         isStandalone: function() {
             try {
@@ -830,6 +839,7 @@
                                 _body.vertexai_auth_mode = _oai.vertexai_auth_mode || 'full';   // 讀不到全域 → 保底服務帳號(full)；express 用戶全域是 'express' 會讀到、不誤觸
                                 if (_oai.vertexai_express_project_id) _body.vertexai_express_project_id = _oai.vertexai_express_project_id;
                             }
+                            _dropZeroTopK(_ctx, _body);   // 這條直連自己組 body，不經 sendRequest → 同樣要擋掉 top_k=0
                             const _resp = await fetch('/api/backends/chat-completions/generate', {
                                 method: 'POST',
                                 headers: { ..._ctx.getRequestHeaders(), 'Content-Type': 'application/json' },
