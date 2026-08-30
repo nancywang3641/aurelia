@@ -131,8 +131,10 @@
                 target.isActive = true;
                 await win.OS_DB.saveUITemplate(target);
                 const all = await win.OS_DB.getAllUITemplates();
-                localStorage.setItem('avs_active_ui_templates',
-                    JSON.stringify(all.filter(t => t.isActive)));
+                // 走 OS_AVS 的守衛寫入：面板內容很肥，裸 setItem 撞 localStorage 額度會把這條流程整個帶走
+                const _act = all.filter(t => t.isActive);
+                if (win.OS_AVS?.saveActiveTplCache) win.OS_AVS.saveActiveTplCache(_act);
+                else { try { localStorage.setItem('avs_active_ui_templates', JSON.stringify(_act)); } catch (e) { console.warn('[QB] 啟用面板快取寫不進去:', e); } }
                 console.log('[QB] 自動啟用煉丹爐面板:', target.id);
             }
         } catch(e) { console.warn('[QB] 自動綁定變數包失敗:', e); }

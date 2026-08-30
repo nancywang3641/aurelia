@@ -311,8 +311,12 @@
             " ${hasReroll ? '' : 'disabled'}>↩ 回朔上一章節${hasReroll ? '' : '（無紀錄）'}</button>`;
 
             // 當前狀態面板（煉丹爐模板 or 原始變數）
-            let activeTpls = [];
-            try { activeTpls = JSON.parse(localStorage.getItem('avs_active_ui_templates') || '[]'); } catch(e) {}
+            // 以 IDB 為準（面板本體幾百 KB，localStorage 那份只是鏡像、額度滿的時候會過期甚至寫不進去）；
+            // 真的拿不到 OS_DB 才退回讀快取——不是「IDB 回空就退」，那會讓已取消啟用的面板從快取裡復活。
+            let activeTpls = null;
+            try { if (win.OS_DB?.getAllUITemplates) activeTpls = ((await win.OS_DB.getAllUITemplates()) || []).filter(t => t.isActive); }
+            catch (e) { activeTpls = null; }
+            if (!activeTpls) { try { activeTpls = JSON.parse(localStorage.getItem('avs_active_ui_templates') || '[]'); } catch (e) { activeTpls = []; } }
 
             let panelHtml = '';
             if (activeTpls.length > 0) {

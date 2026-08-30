@@ -676,20 +676,33 @@
                     );
                 } catch (e) {}
 
-                uiArea.querySelector('.btn-toggle-active').onclick = async () => {
-                    // 同一個 pack 只能有一個 active
-                    if (!activeTpl.isActive) {
-                        const otherActive = currentTemplates.find(t => t.packId === activeTpl.packId && t.isActive && t.id !== activeTpl.id);
-                        if (otherActive) {
-                            otherActive.isActive = false;
-                            await win.OS_DB.saveUITemplate(otherActive);
+                const _tglBtn = uiArea.querySelector('.btn-toggle-active');
+                _tglBtn.onclick = async () => {
+                    // 重畫整份清單要跑每個面板的預覽，慢的時候看起來像當機 → 按下就先換字，讓她知道有收到
+                    if (_tglBtn.dataset.busy) return;
+                    const _was = _tglBtn.textContent;
+                    _tglBtn.dataset.busy = '1'; _tglBtn.textContent = '處理中…';
+                    try {
+                        // 同一個 pack 只能有一個 active
+                        if (!activeTpl.isActive) {
+                            const otherActive = currentTemplates.find(t => t.packId === activeTpl.packId && t.isActive && t.id !== activeTpl.id);
+                            if (otherActive) {
+                                otherActive.isActive = false;
+                                await win.OS_DB.saveUITemplate(otherActive);
+                            }
                         }
+                        activeTpl.isActive = !activeTpl.isActive;
+                        await win.OS_DB.saveUITemplate(activeTpl);
+                        currentTemplates = await win.OS_DB.getAllUITemplates();
+                        updateActiveTemplatesCache();
+                        renderPackList(container);   // 成功：整塊重畫，這顆按鈕連同狀態一起被換掉
+                    } catch (e) {
+                        // 以前這裡沒有網子：鏈上任何一步炸掉都只是靜靜結束，按鈕停在原字＝「沒反應」
+                        activeTpl.isActive = (_was.indexOf('取消') >= 0);   // 畫面退回按之前的樣子
+                        _tglBtn.textContent = _was; delete _tglBtn.dataset.busy;
+                        console.error('[AVS] 切換啟用失敗:', e);
+                        _wskSay('切換啟用沒成功：' + ((e && e.message) || e), false);
                     }
-                    activeTpl.isActive = !activeTpl.isActive;
-                    await win.OS_DB.saveUITemplate(activeTpl);
-                    currentTemplates = await win.OS_DB.getAllUITemplates();
-                    updateActiveTemplatesCache();
-                    renderPackList(container);
                 };
                 uiArea.querySelector('.btn-wsk-tune')?.addEventListener('click', () => _openStickerTuner(container, activeTpl, pack));
                 uiArea.querySelector('.btn-refine-tpl').onclick = () => openFurnaceModal(container, pack.id, activeTpl);
@@ -951,7 +964,7 @@
                             isActive: !_hasActive, isDefault: true, createdAt: Date.now()
                         });
                         const _all2 = (await win.OS_DB.getAllUITemplates?.()) || [];
-                        localStorage.setItem('avs_active_ui_templates', JSON.stringify(_all2.filter(t => t.isActive)));
+                        _saveActiveTplCache(_all2.filter(t => t.isActive));
                     }
                 } catch(e) { console.warn('[AVS] 內建簡單面板安裝失敗:', e); }
                 if (_appContainer) await loadAllData(_appContainer);
@@ -1059,7 +1072,7 @@
                     }
                 }
                 const _all3 = (await win.OS_DB.getAllUITemplates?.()) || [];
-                localStorage.setItem('avs_active_ui_templates', JSON.stringify(_all3.filter(t => t.isActive)));
+                _saveActiveTplCache(_all3.filter(t => t.isActive));
             } catch (e) { console.warn('[AVS] 視差面板皮安裝失敗:', e); }
 
             if (_appContainer) await loadAllData(_appContainer);
@@ -2678,9 +2691,27 @@
         });
     }
 
+    // 啟用中的面板鏡一份進 localStorage，給 vn_inspect 在拿不到 OS_DB 時當退路。
+    // ⚠️ 面板的 html/css 動輒幾百 KB（這個 key 實測量到 861KB），localStorage 是全站共用 5MB。
+    //    這裡以前是裸的 setItem：額度一滿就 QuotaExceeded 當場炸，把呼叫它的整條 handler 一起帶走
+    //    → 「設為啟用」按了完全沒反應（IDB 其實已經存進去了，只是畫面永遠不重畫）。
+    //    真資料在 IDB，這份只是快取 → 寧可沒有，也不准拖死呼叫端。
+    function _saveActiveTplCache(list) {
+        const K = 'avs_active_ui_templates';
+        const arr = Array.isArray(list) ? list : [];
+        try { localStorage.setItem(K, JSON.stringify(arr)); return true; } catch (e) {}
+        try {   // 塞不下 → 先剝掉內嵌的 base64 圖（貼紙/背景，最肥的就是它們）再試一次
+            const _strip = v => String(v || '').replace(/data:image\/[^;]+;base64,[^"'()\s]+/g, '');
+            localStorage.setItem(K, JSON.stringify(arr.map(t => ({ ...t, cssContent: _strip(t.cssContent), htmlContent: _strip(t.htmlContent) }))));
+            console.warn('[AVS] 啟用面板快取塞不下 localStorage → 已剝掉內嵌圖片存簡版（IDB 那份仍是完整的）');
+            return true;
+        } catch (e) {}
+        try { localStorage.removeItem(K); } catch (e) {}
+        console.warn('[AVS] localStorage 已滿，啟用面板快取寫不進去 → 已清掉這個 key，面板一律改從 IDB 讀');
+        return false;
+    }
     function updateActiveTemplatesCache() {
-        const activeTpls = currentTemplates.filter(t => t.isActive);
-        localStorage.setItem('avs_active_ui_templates', JSON.stringify(activeTpls));
+        _saveActiveTplCache(currentTemplates.filter(t => t.isActive));
         console.log('[AVS] 已更新全域活動模板快取。');
     }
 
@@ -2703,7 +2734,7 @@
 
             // 更新 localStorage 快取
             const updated = await win.OS_DB.getAllUITemplates?.() || [];
-            localStorage.setItem('avs_active_ui_templates', JSON.stringify(updated.filter(t => t.isActive)));
+            _saveActiveTplCache(updated.filter(t => t.isActive));
             console.log(`[AVS] 自動啟用展廳面板：packId=${packId}`);
         } catch(e) {
             console.warn('[AVS] activateTemplateForPack 失敗:', e);
@@ -2766,6 +2797,7 @@
         // V3：規則 modal helper（給 inline onclick 呼叫）
         _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,
         activateTemplateForPack,
+        saveActiveTplCache: _saveActiveTplCache,   // 啟用面板快取的唯一寫入口（會擋 localStorage 額度炸掉呼叫端）
         /** 還原上一個 AVS 快照（可在 reroll/重試 時外部呼叫） */
         restoreSnapshot: () => win._AVS_ENGINE?.restore?.() ?? null,
         /** 取當前故事的 AVS 狀態 */

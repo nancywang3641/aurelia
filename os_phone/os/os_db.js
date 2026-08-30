@@ -1474,6 +1474,9 @@
                     const tx = db.transaction(STORE_NAME_UI_TEMPLATES, 'readwrite');
                     tx.objectStore(STORE_NAME_UI_TEMPLATES).put(templateData);
                     tx.oncomplete = () => r(templateData.id);
+                    // ⚠️ 只接 oncomplete 的話，交易一中止（配額不足等）這個 Promise 永遠不 settle
+                    //    → await 它的 handler 就這樣掛在半路，畫面既不更新也不報錯，看起來像當機
+                    tx.onerror = tx.onabort = () => j(tx.error || new Error('面板存檔失敗（資料庫交易中止）'));
                 } catch(e) { j(e); }
             });
         },
@@ -1483,6 +1486,7 @@
                 try {
                     const req = db.transaction(STORE_NAME_UI_TEMPLATES, 'readonly').objectStore(STORE_NAME_UI_TEMPLATES).getAll();
                     req.onsuccess = () => r((req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                    req.onerror = () => j(req.error || new Error('讀取面板清單失敗'));
                 } catch(e) { j(e); }
             });
         },
@@ -1493,6 +1497,7 @@
                     const tx = db.transaction(STORE_NAME_UI_TEMPLATES, 'readwrite');
                     tx.objectStore(STORE_NAME_UI_TEMPLATES).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onerror = tx.onabort = () => j(tx.error || new Error('刪除面板失敗（資料庫交易中止）'));
                 } catch(e) { j(e); }
             });
         },
