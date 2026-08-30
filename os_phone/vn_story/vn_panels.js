@@ -240,14 +240,15 @@
         for (const entry of entries) {
             done++;
             if (entry.compressed || !_vngHasImg(entry)) { skipped++; continue; }   // 壓過/沒圖 → 跳過(免越壓越糊)
-            const full = await VN_Cache.getRaw(cfg.store, entry.key);   // 列表只有中繼資料 → 壓的時候才撈這一張的圖
+            const _st = _vngStoreOf(cfg, entry);
+            const full = await VN_Cache.getRaw(_st, entry.key);   // 列表只有中繼資料 → 壓的時候才撈這一張的圖
             const url = full && full.url;
             if (!url || typeof url !== 'string' || !url.startsWith('data:') || url.indexOf('image/webp') !== -1) { skipped++; continue; }
             if (btn) btn.textContent = `壓縮中 ${done}/${entries.length}…`;
             const out = await _imgCompressDataUrl(url, 0.85);
             if (out && out.length < url.length * 0.92) {   // 至少省 8% 才換，免反而變大
                 saved += (url.length - out.length);
-                await VN_Cache.setRaw(cfg.store, entry.key, { ...full, url: out, compressed: 1 });
+                await VN_Cache.setRaw(_st, entry.key, { ...full, url: out, compressed: 1 });
                 entry.compressed = 1;
             } else { skipped++; }
             await new Promise(r => setTimeout(r, 0));   // 讓出主執行緒 + 讓上一張的 canvas/img 被 GC
@@ -314,7 +315,7 @@
     }
     function _vngCardMenu(anchor, cfg, entry, curWorld, st, rerender) {
         _closeCardMenus();
-        const store = cfg.store, fullKey = entry.key, bare = VN_Cache.bareKeyOf(entry);
+        const store = _vngStoreOf(cfg, entry), fullKey = entry.key, bare = VN_Cache.bareKeyOf(entry);
         // 畫廊列表只帶中繼資料（大圖不進記憶體）→ 動作當下才回 IDB 撈完整值。
         // ⚠️ 寫回絕不能用列表的 entry 展開（沒有 url，會把圖洗掉），一律以 _fullVal() 為底。
         const _fullVal = async () => { const v = await VN_Cache.getRaw(store, fullKey); return (v && typeof v === 'object') ? v : {}; };
@@ -350,7 +351,7 @@
         }
         add('🗑 刪除', async () => {
             await VN_Cache.deleteRaw(store, fullKey);
-            if (cfg.kind === 'avatar' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; } catch (e) {} }
+            if (store === 'avatar_cache' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; } catch (e) {} }
             if (cfg.kind === 'scene' && window.VN_Core) { try { delete window.VN_Core._sceneMemCache[bare]; } catch (e) {} }
             rerender();
         }, true);
@@ -392,7 +393,7 @@
                 if (rec.isIntersecting) {
                     if (card._vngLoaded || card._vngLoading) return;
                     card._vngLoading = 1;
-                    const v = await VN_Cache.getRaw(store, card._vngKey);
+                    const v = await VN_Cache.getRaw(card._vngStore || store, card._vngKey);
                     delete card._vngLoading;
                     if (!card.isConnected || !card._vngVisible) return;   // 撈回來時已滑走/已重渲染 → 不塞
                     if (v && v.url) _vngSetCardImg(card, v.url, kind);
@@ -402,17 +403,21 @@
             });
         }, { rootMargin: '500px 0px 500px 0px' });
     }
+    // 卡片可能來自別的 store（立繪 tab 併入 avatar_cache 的直生立繪）→ 一律走這裡取，別直接讀 cfg.store
+    function _vngStoreOf(cfg, entry) { return (entry && entry._st) || cfg.store; }
     function _vngHasImg(entry) { return entry.hasUrl !== undefined ? !!entry.hasUrl : !!(entry.url && !String(entry.url).startsWith('blob:')); }
     function _vngCard(cfg, entry, curWorld, st, rerender) {
         const bare = VN_Cache.bareKeyOf(entry);
         const card = document.createElement('div'); card.className = 'vng-card' + ((cfg.kind === 'bg' || cfg.kind === 'scene') ? ' kind-bg' : '') + (cfg.kind === 'sprite' ? ' kind-sprite' : '');
         card.appendChild(_vngPh(cfg.kind));
         card._vngKey = entry.key;
+        card._vngStore = _vngStoreOf(cfg, entry);
         const hasImg = _vngHasImg(entry);
         if (hasImg) {
             if (st.io) st.io.observe(card);
-            else VN_Cache.getRaw(cfg.store, entry.key).then(v => { if (v && v.url && card.isConnected) _vngSetCardImg(card, v.url, cfg.kind); });   // 沒有 IntersectionObserver 的舊環境退回逐張直載
+            else VN_Cache.getRaw(card._vngStore, entry.key).then(v => { if (v && v.url && card.isConnected) _vngSetCardImg(card, v.url, cfg.kind); });   // 沒有 IntersectionObserver 的舊環境退回逐張直載
         }
+        if (entry._st === 'avatar_cache') { const s2 = document.createElement('div'); s2.className = 'vng-badge src'; s2.textContent = '直生'; card.appendChild(s2); }
         if (entry.favorite) { const b = document.createElement('div'); b.className = 'vng-badge fav'; b.textContent = '★ 收藏'; card.appendChild(b); }
         else if (st.world === '') { const b = document.createElement('div'); b.className = 'vng-badge unclassed'; b.textContent = '未分類'; card.appendChild(b); }
         const foot = document.createElement('div'); foot.className = 'vng-foot'; foot.textContent = bare; card.appendChild(foot);
@@ -421,7 +426,7 @@
         card.appendChild(more);
         card.onclick = async (e) => {
             if (e.target.closest('.vng-more') || !hasImg) return;
-            const v = await VN_Cache.getRaw(cfg.store, entry.key);   // 大圖看的時候才撈
+            const v = await VN_Cache.getRaw(card._vngStore, entry.key);   // 大圖看的時候才撈
             if (v && v.url) _vngLightbox(v.url);
         };
         return card;
@@ -432,6 +437,13 @@
         let all = await VN_Cache.getAllMeta(store);   // 只撈中繼資料，大圖等卡片進視口才逐張載（整庫一次全載會 OOM）
         // spriteDirect(直生立繪)生的圖存同一個 avatar_cache（供遊戲重用、切拉桿不重生＝Rae 拍板），但相簿「頭像」tab 排除它(isSprite)→不再被全身立繪污染
         if (cfg.kind === 'avatar') all = all.filter(e => !e.isSprite);
+        // 直生立繪(spriteDirect)存在 avatar_cache 但被頭像 tab 濾掉、立繪 tab 又只讀 sprite_cache
+        // → 兩邊都不顯示＝孤兒、刪不掉。使用者看到的就是立繪，所以併進立繪 tab（不搬 store，切拉桿仍不重生）
+        else if (cfg.kind === 'sprite') {
+            const _direct = (await VN_Cache.getAllMeta('avatar_cache')).filter(e => e.isSprite);
+            _direct.forEach(e => { e._st = 'avatar_cache'; });
+            all = all.concat(_direct);
+        }
         const groups = {};
         all.forEach(e => { const w = VN_Cache.worldOf(e); (groups[w] = groups[w] || []).push(e); });
         const st = _mgrState[cfg.listId] || (_mgrState[cfg.listId] = { world: curWorld, filter: 'all' });

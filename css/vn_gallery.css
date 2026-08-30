@@ -47,6 +47,7 @@
 }
 .vng-badge.fav { background:#d4af37; color:#1a1a1a; }
 .vng-badge.unclassed { background:rgba(0,0,0,0.6); color:#ffe9b8; border:1px solid rgba(255,221,150,0.5); }
+.vng-badge.src { left:auto; right:36px; background:rgba(0,0,0,0.6); color:#cfe3ff; border:1px solid rgba(150,190,255,0.5); }
 .vng-more {
     position:absolute; top:5px; right:5px; width:26px; height:26px; border-radius:50%;
     border:none; background:rgba(0,0,0,0.5); color:#fff; font-size:15px; line-height:1;
