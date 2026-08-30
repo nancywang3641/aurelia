@@ -5,7 +5,7 @@
 // @author       none
 // @license      MIT
 
-// 🔥 0. 偵測載入來源，決定所有檔案（JS / CSS / settings.html）要從哪裡載
+// 🔥 0. 偵測載入來源，決定所有檔案（JS / CSS）要從哪裡載
 //    ① 原生擴展安裝（酒館 Extensions 直接裝）→ 偵測得到 index.js 的 script 標籤 → 走本地路徑（行為不變）
 //    ② 酒館助手匯入（朋友貼 JSON，從 CDN 載入）→ 偵測不到 → 走 GitHub CDN，113 個檔全部從 repo 載
 //    兩種裝法並存、互不影響；改動只多了一條 CDN fallback。
@@ -389,7 +389,7 @@ function getExtensionSettings() {
         } catch (e) {}
     }
     if (!settings) {
-        settings = { enabled: true, mount: { mode: 'embedded', selector: '#chat', placement: 'bottom' } };
+        settings = { mount: { selector: '#sheld', placement: 'bottom' } };
     }
     return settings;
 }
@@ -540,7 +540,6 @@ async function initializeExtension() {
         }, 1500);
 
         installAPI();
-        registerSettingsPage();
 
         setTimeout(() => {
             if (window.AureliaUIUtils) {
@@ -553,119 +552,43 @@ async function initializeExtension() {
     } catch (e) { console.error('啟動錯誤:', e); }
 }
 
-function registerSettingsPage() {
-    try {
-        if (typeof window.registerSettings === 'function') {
-            window.registerSettings('多功能面板系統', _AURELIA_EXT_BASE + '/settings.html');
-        } else {
-            createManualSettingsPage();
-        }
-    } catch (error) {
-        createManualSettingsPage();
-    }
-}
-
-function createManualSettingsPage() {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', injectSettingsPage);
-    } else {
-        injectSettingsPage();
-    }
-}
-
-function injectSettingsPage() {
-    try {
-        let settingsContainer = document.querySelector('#extensions_settings');
-        if (!settingsContainer) {
-            settingsContainer = document.createElement('div');
-            settingsContainer.id = 'extensions_settings';
-            settingsContainer.style.display = 'none';
-            document.body.appendChild(settingsContainer);
-        }
-        
-        const settingsPageContainer = document.createElement('div');
-        settingsPageContainer.id = 'multi_panel_settings_container';
-        settingsPageContainer.innerHTML = `
-            <div class="extension_settings">
-                <div id="multi_panel_settings_content"></div>
-            </div>
-        `;
-        settingsContainer.appendChild(settingsPageContainer);
-        loadSettingsContent();
-    } catch (error) {}
-}
-
-function loadSettingsContent() {
-    try {
-        fetch(_AURELIA_EXT_BASE + '/settings.html')
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.text();
-            })
-            .then(html => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const settingsContent = doc.querySelector('#multi_panel_settings');
-                const settingsScriptContent = doc.querySelector('script'); 
-
-                if (settingsContent) {
-                    const targetContainer = document.getElementById('multi_panel_settings_content');
-                    targetContainer.innerHTML = settingsContent.outerHTML;
-                    
-                    if (settingsScriptContent) {
-                        const script = document.createElement('script');
-                        if (typeof window.extension_settings === 'undefined') window.extension_settings = {};
-                        script.textContent = settingsScriptContent.textContent;
-                        document.body.appendChild(script);
-                    }
-                }
-            })
-            .catch(e => console.error('無法載入設置頁面', e));
-    } catch (e) {}
-}
-
 function overrideToggleLogic() {
     const originalToggle = window.AureliaControlCenter ? window.AureliaControlCenter.toggle : null;
 
     const smartToggle = () => {
         const settings = getExtensionSettings();
-        const mount = settings.mount || { mode: 'embedded', selector: '#chat', placement: 'bottom' };
+        const mount = settings.mount || { selector: '#sheld', placement: 'bottom' };
+        // 掛載方式只剩內嵌一種（浮窗那條早就移除了）。舊存檔裡殘留的 mount.mode 一律忽略——
+        //   以前那個 modal→embedded 的遷移住在酒館抽屜的 settings.html 裡，要她親手打開那頁才會跑；
+        //   現在不看 mode，存的是什麼都直接走內嵌，不需要誰去點一下才修好。
+        const target = document.querySelector(mount.selector) ||
+                       document.querySelector('#sheld') ||
+                       document.querySelector('#chat') ||
+                       document.querySelector('.chat-body');
 
-        if (mount.mode === 'embedded') {
-            const target = document.querySelector(mount.selector) || 
-                           document.querySelector('#chat') || 
-                           document.querySelector('.chat-body');
-            
-            if (target) {
-                if (window.AureliaControlCenter && window.AureliaControlCenter.mountEmbedded) {
-                    if (!window.AureliaControlCenter.isEmbeddedMounted()) {
-                        const useFixed = mount.placement === 'bottom';
-                        window.AureliaControlCenter.mountEmbedded(target, mount.placement, useFixed);
-                    } else {
-                        if (originalToggle) originalToggle.call(window.AureliaControlCenter);
-                    }
-                    return;
-                }
-            }
-            
-            console.log('[Aurelia] 尚未找到 #chat，啟動監聽器...');
-            const obs = new MutationObserver(() => {
-                const t = document.querySelector(mount.selector) || document.querySelector('#chat');
-                if (t && window.AureliaControlCenter) {
+        if (target) {
+            if (window.AureliaControlCenter && window.AureliaControlCenter.mountEmbedded) {
+                if (!window.AureliaControlCenter.isEmbeddedMounted()) {
                     const useFixed = mount.placement === 'bottom';
-                    window.AureliaControlCenter.mountEmbedded(t, mount.placement, useFixed);
-                    obs.disconnect();
+                    window.AureliaControlCenter.mountEmbedded(target, mount.placement, useFixed);
+                } else {
+                    if (originalToggle) originalToggle.call(window.AureliaControlCenter);
                 }
-            });
-            obs.observe(document.body, { childList: true, subtree: true });
-            setTimeout(() => obs.disconnect(), 10000);
-
-        } else {
-            if (window.AureliaControlCenter && window.AureliaControlCenter.isEmbeddedMounted && window.AureliaControlCenter.isEmbeddedMounted()) {
-                window.AureliaControlCenter.unmountEmbedded();
+                return;
             }
-            if (originalToggle) originalToggle.call(window.AureliaControlCenter);
         }
+
+        console.log('[Aurelia] 尚未找到掛載點，啟動監聽器...');
+        const obs = new MutationObserver(() => {
+            const t = document.querySelector(mount.selector) || document.querySelector('#sheld') || document.querySelector('#chat');
+            if (t && window.AureliaControlCenter) {
+                const useFixed = mount.placement === 'bottom';
+                window.AureliaControlCenter.mountEmbedded(t, mount.placement, useFixed);
+                obs.disconnect();
+            }
+        });
+        obs.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => obs.disconnect(), 10000);
     };
 
     if (window.AureliaControlCenter) window.AureliaControlCenter.toggle = smartToggle;

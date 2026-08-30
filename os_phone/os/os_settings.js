@@ -406,9 +406,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
     const getSTContext = () => { try { return window.parent.SillyTavern ? window.parent.SillyTavern.getContext() : null; } catch (e) { return null; } };
 
     // ── 酒館擴展設置（「一般」分頁最上面那兩格）─────────────────────────────
-    //   這兩格原本住在酒館 Extensions 抽屜的 settings.html，那是酒館的地盤、跟她其他設定分兩處。
-    //   搬進來之後 settings.html 只剩「啟用」與狀態。存的還是同一個 extension_settings['多功能面板系統']，
-    //   讀的人（index.js 的掛載、html_extractor、story_extractor、ui_utilities 的收合）一行都沒動。
+    //   這兩格原本住在酒館 Extensions 抽屜（settings.html），那是酒館的地盤、跟她其他設定分兩處；
+    //   搬進來之後那個抽屜整個撤掉了（啟用開關由酒館助手的腳本清單管）。存的還是同一個
+    //   extension_settings['多功能面板系統']，讀的人（index.js 的掛載、html_extractor、
+    //   story_extractor、ui_utilities 的收合）一行都沒動。
     //   ⚠️ 手機殼可能跑在 iframe 裡：extension_settings / toastr / .mes 全都在主頁面，一律走 _tvWin()。
     const _tvWin = () => { try { return (window.parent && window.parent !== window && window.parent.SillyTavern) ? window.parent : window; } catch (e) { return window; } };
     const TAVERN_EXT_KEY = '多功能面板系統';
