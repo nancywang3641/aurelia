@@ -48,34 +48,66 @@
 .void-tab .void-bubble-layer { display:none; }
 
 /* =========================================================
-   🧭 前往面板（立繪模式）：舞台關著時沒有地圖可以畫，就把地點列成按鈕。
-   舞台模式按同一顆「前往」開的是快轉地圖，不會走到這裡。
-   ⚠️ 做成浮層而不是常駐側欄：立繪模式的底圖是使用者可換的（--void-bg-url），
-      佔死畫面邊緣會蓋到人物，而那張圖長怎樣我們管不到。
+   🧭 地點卡（對話模式常駐）：舞台關著時沒有場景可以走，
+   「可以去哪」就直接鋪在主畫面右邊，不再是按了「前往」才展開的浮層。
+   ⚠️ 疊放＋微斜是刻意的：七張同尺寸方塊排成一列會讀成表格，
+      錯開之後才看得出「這是一疊可以抽的票」，也才分得出哪張是當前。
    ========================================================= */
-/* 🚨 捲動只給清單，標題列要釘住：地點一多整個面板捲的話，✕ 會跟著被捲出畫面 */
-.lb-places { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3360;
-  width:min(420px,86%); max-height:78%; overflow:hidden;
-  display:flex; flex-direction:column;
-  background:rgba(255,255,255,.96); border:1px solid rgba(60,80,130,.28); border-radius:18px;
-  box-shadow:0 14px 40px rgba(40,60,110,.3); color:#23315e;
-  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
-.lb-places-hd { display:flex; align-items:center; gap:8px; padding:13px 16px 11px; flex:0 0 auto;
-  font-weight:700; letter-spacing:2px; font-size:13px; border-bottom:1px solid rgba(60,80,130,.14); }
-.lb-places-hd i { color:#4f74c8; }
-.lb-places-x { margin-left:auto; background:none; border:none; color:#8a93ad; cursor:pointer; font-size:16px; padding:2px 4px; }
-.lb-places-x:hover { color:#23315e; }
-.lb-places-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:14px 16px 16px;
-  flex:1 1 auto; min-height:0; overflow-y:auto; align-content:start; }
-.lb-place { display:flex; flex-direction:column; align-items:center; gap:7px; padding:15px 8px 12px;
-  background:rgba(240,244,252,.9); border:1px solid rgba(60,80,130,.2); border-radius:14px;
-  color:#23315e; cursor:pointer; font-family:inherit; font-size:13px; font-weight:600;
-  transition:background .14s ease, border-color .14s ease, transform .14s ease; }
-.lb-place:hover { background:#fff; border-color:#4a78d8; transform:translateY(-2px); }
-.lb-place-ic { display:flex; align-items:center; justify-content:center; width:38px; height:38px;
-  border-radius:50%; background:rgba(79,116,200,.13); color:#4f74c8; font-size:16px; }
-.lb-place:hover .lb-place-ic { background:#4a78d8; color:#fff; }
-.lb-places-empty { grid-column:1/-1; text-align:center; padding:22px 0; color:#8a93ad; font-size:12px; }
+.lb-rail { position:absolute; right:var(--lb-edge); top:64px; bottom:112px; z-index:5;
+  width:var(--lb-rail-w); display:flex; flex-direction:column; justify-content:center; gap:7px;
+  overflow-y:auto; overscroll-behavior:contain; padding:4px 2px; }
+.lb-rail::-webkit-scrollbar { width:0; }
+
+.lb-rail-card { position:relative; display:flex; align-items:stretch; flex:0 0 auto;
+  transform:skewY(-1.6deg) translateX(var(--lb-card-off,0px));
+  transition:transform .16s ease, filter .16s ease; }
+/* 錯開：一疊票的感覺。第 n 張往右推一點點，交錯回來，不做成整齊的一柱 */
+.lb-rail-card:nth-child(2n)   { --lb-card-off:10px; }
+.lb-rail-card:nth-child(3n+1) { --lb-card-off:4px; }
+.lb-rail-card:not(.is-off):hover { transform:skewY(-1.6deg) translateX(calc(var(--lb-card-off,0px) - 8px)); }
+
+.lb-rail-main { flex:1; min-width:0; display:flex; align-items:center; gap:9px; padding:9px 10px;
+  background:rgba(14,10,20,.82); border:1px solid rgba(255,255,255,.16); border-right:none;
+  border-radius:11px 0 0 11px; color:#f2ecff; cursor:pointer; font-family:inherit; text-align:left;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  transition:background .14s ease, border-color .14s ease; }
+.lb-rail-main:hover { background:rgba(46,34,62,.9); border-color:rgba(255,255,255,.42); }
+.lb-rail-ic { flex:0 0 auto; width:28px; height:28px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center; font-size:13px;
+  background:rgba(255,255,255,.09); color:rgba(242,236,255,.9); }
+.lb-rail-tx { min-width:0; display:flex; flex-direction:column; gap:1px; }
+/* 🚨 字距別開太大：四個字的地名（占卜小屋／奇想工坊）在窄欄會被 ellipsis 吃掉尾字 */
+.lb-rail-t { font-size:13px; font-weight:700; letter-spacing:.5px; line-height:1.25;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lb-rail-who { font-size:10px; letter-spacing:1px; color:rgba(242,236,255,.5); line-height:1.25;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* 右邊那半：直接開這個地方的功能（不先進對話） */
+.lb-rail-app { flex:0 0 auto; width:32px; background:rgba(14,10,20,.82);
+  border:1px solid rgba(255,255,255,.16); border-left:1px solid rgba(255,255,255,.1);
+  border-radius:0 11px 11px 0; color:rgba(242,236,255,.62); cursor:pointer; font-size:12px;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  transition:background .14s ease, color .14s ease; }
+.lb-rail-app:hover { background:rgba(70,52,96,.94); color:#fff; }
+/* 沒有功能鈕的卡（例如還沒接容器的地方）：主鈕自己補成完整圓角，不要露出直角缺口 */
+.lb-rail-card:not(:has(.lb-rail-app)) .lb-rail-main { border-right:1px solid rgba(255,255,255,.16); border-radius:11px; }
+
+/* 當前所在：抽出來、亮起來、左緣一道光條 */
+.lb-rail-card.is-cur { --lb-card-off:-14px; }
+.lb-rail-card.is-cur .lb-rail-main { background:rgba(86,64,120,.92); border-color:rgba(214,190,255,.62); }
+.lb-rail-card.is-cur .lb-rail-app { background:rgba(86,64,120,.92); border-color:rgba(214,190,255,.62); color:#fff; }
+.lb-rail-card.is-cur .lb-rail-ic { background:rgba(255,255,255,.22); color:#fff; }
+.lb-rail-card.is-cur .lb-rail-who { color:rgba(242,236,255,.78); }
+.lb-rail-card.is-cur::before { content:''; position:absolute; left:-6px; top:6px; bottom:6px; width:3px;
+  border-radius:2px; background:linear-gradient(180deg,#e8d6ff,#8f6fd6); }
+
+/* 🚨 沒解鎖的照樣列出來、但按不下去：整顆消失＝玩家不知道以後有東西可以期待，
+   而且清單長度會隨進度跳動，肌肉記憶每次都要重學。 */
+.lb-rail-card.is-off { filter:saturate(.25); }
+.lb-rail-card.is-off .lb-rail-main { background:rgba(10,8,14,.62); border-color:rgba(255,255,255,.09);
+  border-right:1px solid rgba(255,255,255,.09); border-radius:11px; color:rgba(242,236,255,.42); cursor:default; }
+.lb-rail-card.is-off .lb-rail-ic { background:rgba(255,255,255,.05); color:rgba(242,236,255,.35); }
+.lb-rail-card.is-off .lb-rail-who { color:rgba(242,236,255,.3); }
 
 /* =========================================================
    🏛 地點視圖（立繪模式）：背景＝地點、左＝管理員立繪。
@@ -84,7 +116,14 @@
    🚨 對話不進右容器：Rae 的對話是貼底的 VN 對話框，不是泡泡聊天。
       選「對話」＝畫面只剩背景＋立繪＋原本那個對話框，右容器整個收起來。
    ========================================================= */
-.lb-pv { position:absolute; inset:0; z-index:3355; overflow:hidden; }
+.lb-pv { position:absolute; inset:0; z-index:3355; overflow:hidden;
+  /* 🚨 版位一律從這條鏈算出來，別再另外給百分比——兩組獨立百分比在中間寬度一定對不齊。
+     --lb-edge 是 dock 那側的留白；地點卡貼在留白內側；窗格再往左讓開卡片的寬度。 */
+  --lb-edge:max(78px, calc(50% - 620px));
+  /* 卡片牆吃掉的寬度直接從立繪身上扣 → 百分比要保守，不然 800~1000 這段立繪只剩一條 */
+  --lb-rail-w:min(212px, 22%);
+  --lb-pane-w:min(560px, 40%);
+  --lb-pane-right:calc(var(--lb-edge) + var(--lb-rail-w) + 14px); }
 .lb-pv-bg { position:absolute; inset:0; background:#1b1524 center/cover no-repeat; }
 .lb-pv-bg::after { content:''; position:absolute; inset:0;
   background:linear-gradient(90deg, rgba(12,8,16,.15) 0%, rgba(12,8,16,.45) 52%, rgba(12,8,16,.72) 100%); }
@@ -93,40 +132,27 @@
   padding:12px 16px; color:#f2ecff; font-size:14px; font-weight:700; letter-spacing:2px;
   background:linear-gradient(180deg, rgba(10,6,14,.72), rgba(10,6,14,0)); }
 .lb-pv-sub { font-size:11px; font-weight:400; letter-spacing:1px; color:rgba(242,236,255,.62); }
-.lb-pv-back, .lb-pv-x { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.24);
-  color:#f2ecff; width:30px; height:30px; border-radius:50%; cursor:pointer; flex-shrink:0;
+/* ✕ 收起窗格 → 退回「只有立繪＋對話框」；主頁沒有「關掉」這件事，所以它不在標題列 */
+.lb-pv-x { position:absolute; right:8px; top:8px; z-index:2;
+  background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.24);
+  color:#f2ecff; width:28px; height:28px; border-radius:50%; cursor:pointer;
   display:flex; align-items:center; justify-content:center; font-size:13px; }
-.lb-pv-back:hover, .lb-pv-x:hover { background:rgba(255,255,255,.24); }
-.lb-pv-x { margin-left:auto; }
+.lb-pv-x:hover { background:rgba(255,255,255,.24); }
 
 /* 立繪：貼左下、不吃點擊。
    🚨 寬度直接從「窗格左緣」算出來，不要另外給一個百分比——
       兩組獨立百分比在中間寬度一定會對不齊（試過 46/58 與 38/56，1280 跟 967 都還是撞）。
       這裡的算式跟 .lb-pv-pane 的 right/width 用同一組值，數學上不可能重疊。 */
 .lb-pv-portrait { position:absolute; left:0; bottom:0; height:88%; z-index:2;
-  max-width:calc(100% - max(78px, 50% - 620px) - min(720px, 56%) - 12px);
+  max-width:calc(100% - var(--lb-pane-right) - var(--lb-pane-w) - 12px);
   object-fit:contain; object-position:left bottom; pointer-events:none; user-select:none;
   filter:drop-shadow(0 8px 22px rgba(0,0,0,.5)); }
 /* 半身圖（比例<1.7，例如丹/雷伊 640x896）站小一點；class 由 JS 讀原生比例掛上，不用手動標 */
 .lb-pv-portrait.is-half { height:62%; }
 
-/* 岔路：先問要幹嘛（對話／應用），選了才進去那件事。照手機 .lstage-pick 的體感。
-   🚨 不做成分頁——對話走的是貼底的 VN 對話框，根本不需要右邊容器（Rae 2026-08-24）。 */
-.lb-pv-pick { position:absolute; right:max(78px,calc(50% - 620px)); top:50%; transform:translateY(-50%);
-  z-index:5; width:min(300px,42%); display:flex; flex-direction:column; gap:10px; }
-.lb-pv:not(.is-pick) .lb-pv-pick { display:none; }
-.lb-pv-pick-who { text-align:center; color:rgba(242,236,255,.72); font-size:12px; letter-spacing:2px; margin-bottom:2px; }
-.lb-pv-pick-btn { display:flex; align-items:center; justify-content:center; gap:10px; padding:16px 14px;
-  background:rgba(14,10,20,.82); border:1px solid rgba(255,255,255,.18); border-radius:14px;
-  color:#f2ecff; cursor:pointer; font-family:inherit; font-size:15px; font-weight:600; letter-spacing:2px;
-  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-  transition:background .14s ease, border-color .14s ease, transform .14s ease; }
-.lb-pv-pick-btn:hover { background:rgba(40,30,54,.9); border-color:rgba(255,255,255,.4); transform:translateY(-2px); }
-.lb-pv-pick-btn i { font-size:17px; opacity:.85; }
-
 /* 右容器：只有「應用」才出現，對話不進來 */
-.lb-pv-pane { position:absolute; right:max(78px,calc(50% - 620px)); top:64px; bottom:20px; z-index:4;
-  width:min(720px,56%); display:flex; flex-direction:column; overflow:hidden;
+.lb-pv-pane { position:absolute; right:var(--lb-pane-right); top:64px; bottom:20px; z-index:4;
+  width:var(--lb-pane-w); display:flex; flex-direction:column; overflow:hidden;
   background:rgba(14,10,20,.82); border:1px solid rgba(255,255,255,.14); border-radius:16px;
   box-shadow:0 16px 44px rgba(0,0,0,.5); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
 .lb-pv:not(.is-app) .lb-pv-pane { display:none; }
@@ -160,18 +186,40 @@
    靠左那套是給「應用」用的——那邊右半被面板佔走，靠左才對。
    下緣一律貼底，讓對話框蓋住腿／切口，全身半身都成立。 */
 .lb-pv.is-talk .lb-pv-portrait {
-  left:50%; right:auto; transform:translateX(-50%);
-  max-width:none; object-position:center bottom; height:92%; }
+  left:calc((100% - var(--lb-edge) - var(--lb-rail-w) - 14px) / 2); right:auto; transform:translateX(-50%);
+  max-width:calc(100% - var(--lb-edge) - var(--lb-rail-w) - 28px);
+  object-position:center bottom; height:92%; }
+/* 沒有立繪的地方（例如我的家）：不要留一塊空白，也不要 alt 文字破圖 */
+.lb-pv.no-portrait .lb-pv-portrait { display:none; }
 .lb-pv.is-talk .lb-pv-portrait.is-half { height:66%; }
 /* 🚨 地點視圖是 inset:0 / z-index:3355 蓋滿整個大廳，而對話框平常只有 z-index:3
    → 不抬起來的話選「對話」會被地點背景整個蓋住，看起來像沒反應。位置不動，只抬層級。 */
 .lobby-left:has(.lb-pv.is-talk) .void-dialogue-wrap { z-index:3358; }
+/* 🚨 地點視圖 inset:0 / z-index:3355 蓋滿整個大廳，而 dock 只有 z-index:40
+   → 視圖以前是「開了就關」所以看不出來；現在它是對話模式的常駐主畫面，
+     不把 dock 抬上來的話，藏書/章節/日誌/成就/應用/房產/出門會整排永遠消失。
+   只在視圖掛著時抬（＝只有對話模式），舞台模式的層級一個字都不動。 */
+.lobby-left:has(.lb-pv) .lb-dock { z-index:3357; }
 
 /* 📱 窄畫面：兩欄擠不下 → 窗格吃滿寬，立繪退到後面當氛圍（窗格是半透明＋毛玻璃，人還看得見） */
 @media (max-width:760px) {
+    /* 🚨 --lb-edge 是「dock 佔掉的那條」，窄畫面不能縮到 0——dock 還是釘在 right:10px，
+       縮了卡片就直接疊在藏書/章節那排上面（實測 712px 寬時整條重疊）。 */
+    /* dock 釘在 right:10px、寬 58 → 它佔掉右邊 68px。--lb-edge 要大於這個數才不會疊上去
+       （量過：66 會差 2px 剛好壓到）。 */
+    .lb-pv { --lb-edge:76px; --lb-rail-w:48px; }
+    /* 卡片牆縮成一排圖標（名字擠不下就別擠，長字串會把版面撐爆）；窗格吃滿寬蓋過去 */
+    .lb-rail { top:56px; bottom:104px; gap:6px; }
+    .lb-rail-card, .lb-rail-card.is-cur, .lb-rail-card:not(.is-off):hover { --lb-card-off:0px; transform:none; }
+    .lb-rail-main { padding:8px 0; justify-content:center; border-right:1px solid rgba(255,255,255,.16); border-radius:11px; }
+    .lb-rail-tx, .lb-rail-app { display:none; }
+    .lb-rail-card.is-cur::before { left:-4px; }
     .lb-pv-pane { left:12px; right:12px; width:auto; top:58px; bottom:14px; }
     .lb-pv-portrait { max-width:66%; height:78%; }
-    .lb-pv-pick { left:12px; right:12px; width:auto; }
+    /* 🚨 別在這裡另外寫死數字：桌機那條算式已經是對的，窄畫面只是 var 換了值 */
+    .lb-pv.is-talk .lb-pv-portrait {
+      left:calc((100% - var(--lb-edge) - var(--lb-rail-w) - 14px) / 2);
+      max-width:calc(100% - var(--lb-edge) - var(--lb-rail-w) - 28px); }
 }
 
 /* ─────────────────────────────────────────────

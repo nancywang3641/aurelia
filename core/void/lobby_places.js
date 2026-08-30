@@ -109,64 +109,26 @@
     }
     function get(id) { return PLACES.find(p => p.id === id) || null; }
 
-    // ── 立繪模式的地點面板 ──────────────────────────────────────
-    // 只列「開得起來」的地點（有 open）。走路才有意義的（廣場）不列。
-    let _close = null;
-    function closeFlat() { if (_close) { try { _close(); } catch (e) {} _close = null; } }
-
-    function openFlat() {
-        closeFlat();
-        const host = document.querySelector('.lobby-left') || document.body;
-        const items = list().filter(p => typeof p.open === 'function');
-
-        const box = document.createElement('div');
-        box.className = 'lb-places';
-        box.innerHTML =
-            '<div class="lb-places-hd"><i class="fa-solid fa-compass"></i> 前往' +
-              '<button class="lb-places-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
-            '<div class="lb-places-grid">' +
-              (items.length
-                ? items.map(p =>
-                    '<button class="lb-place" type="button" data-id="' + p.id + '">' +
-                      '<span class="lb-place-ic"><i class="fa-solid ' + p.icon + '"></i></span>' +
-                      '<span class="lb-place-t">' + (p.flatName || p.name) + '</span>' +
-                    '</button>').join('')
-                : '<div class="lb-places-empty">還沒有能去的地方</div>') +
-            '</div>';
-
-        const close = () => { box.remove(); if (_close === close) _close = null; };
-        box.querySelector('.lb-places-x').addEventListener('click', close);
-        box.addEventListener('click', (e) => {
-            const b = e.target.closest('.lb-place');
-            if (!b) return;
-            const p = get(b.dataset.id);
-            close();
-            // 有管理員的地方→開地點視圖(背景+立繪+窗格)；沒有的(例如我的家)照舊直接開
-            if (p && p.npc) { openView(p.id); return; }
-            try { p && p.open && p.open(); } catch (err) { console.warn('[LobbyPlaces] 開啟失敗', b.dataset.id, err); }
-        });
-        host.appendChild(box);
-        _close = close;
-        return box;
-    }
-
-    // ── 🏛 地點視圖（立繪模式）──────────────────────────────────
-    //   背景換成那個地點、左邊站管理員的立繪、右邊一個窗格。
+    // ── 🏛 地點視圖（立繪模式的主畫面）──────────────────────────
+    //   對話模式沒有場景可以走，所以「主頁」本身就是一個地點：
+    //   背景是那個地方、左邊站它的管理員、右邊一排常駐的地點卡、底下是既有的對話框。
+    //   🚨 地點卡是常駐的，不是按了「前往」才展開——Rae 2026-08-31：「我就是嫌前往還得展開」。
+    //      所以 dock 那顆前往整顆拿掉了（舞台模式它跟右上的快轉地圖重複，對話模式它變成這排卡）。
     //   🚨 窗格「要嘛對話、要嘛應用」，不同時存在——同一個人一邊在面板裡講話、
-    //      底下對話框也在講話＝很割裂（紫薇那次已經治過一輪，這裡是通用版）。
-    //   對話那半是把既有的 .void-dialogue-wrap 用 CSS 搬進窗格，不動 DOM、不另做一套聊天。
+    //      底下對話框也在講話＝很割裂。對話那半是把既有的 .void-dialogue-wrap 用 CSS
+    //      搬進版位，不動 DOM、不另做一套聊天。
     const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
-    let _view = null;
-    let _toPick = null;   // openView 設定：面板內部的返回鈕要回「岔路」，跟標題列那顆一致
+    const HOME_ID = 'hall';      // 主頁預設站的地方（愛麗絲＋視差大廳）
+    let _view = null;            // 關掉整個視圖
+    let _paint = null;           // 換到別的地點（不重建外殼）
 
     // 🔮 把塔羅畫進窗格：OS_TAROT.launch 本來就吃容器，只差它的 ❮ 返回鈕。
-    //    那顆鈕寫死呼叫 PhoneSystem.goHome（它原本住手機殼裡）→ 暫借成「回岔路」，關掉時還原。
-    //    🚨 要跟標題列那顆 ‹ 去同一個地方,不然兩顆長得像卻行為不同=一定按錯(Rae 2026-08-24 回報)。
-    //    面板內那顆本身也用 CSS 藏起來了(一頁只留一顆返回鈕),這裡的接線是保險。
+    //    那顆鈕寫死呼叫 PhoneSystem.goHome（它原本住手機殼裡）→ 暫借成「回主頁」，關掉時還原。
+    //    面板內那顆本身也用 CSS 藏起來了（一頁只留一顆返回鈕），這裡的接線是保險。
     function _mountTarot(c) {
         const PS = win.PhoneSystem;
         const saved = PS ? PS.goHome : undefined;
-        const back = () => { if (_toPick) _toPick(); else { closeView(); openFlat(); } };
+        const back = () => { if (_paint) _paint(HOME_ID); };
         if (PS) PS.goHome = back; else win.PhoneSystem = { goHome: back, __pvShim: true };
         c._pvRestore = () => {
             if (PS) { if (saved === undefined) delete PS.goHome; else PS.goHome = saved; }
@@ -175,108 +137,106 @@
         win.OS_TAROT.launch(c);
     }
 
-    // 🪟 把「自己開浮窗」的面板搬進容器（原本是 phone_shell 搬黑市的成例；那個手機 app 退役後成例活在這裡）：
-    //    開它 → 等它的視窗生出來 → appendChild 進容器 → 離開時關掉/搬回原位。
-    //    這樣四個既有面板（世界門/交易所/書咖櫃檯/黑市）一行程式都不用改。
-    //    🚨 它們是 async 生成的，呼叫完當下抓不到元素 → 用 rAF 輪詢等它出現。
-    function _mountFloating(c, open, sel, close) {
-        const place = () => {
-            const el = document.querySelector(sel);
-            if (!el) return false;
-            const orig = el.parentElement;
-            c.appendChild(el);
-            c._pvRestore = () => {
-                try { close && close(); } catch (e) {}
-                // close 通常會把它移除；萬一沒有就搬回原位，別留在已經消失的容器裡
-                if (el.isConnected && orig) { try { orig.appendChild(el); } catch (e) {} }
-            };
-            return true;
-        };
-        let tries = 0;
-        const tick = () => {
-            if (place()) return;
-            if (++tries > 40) { c.innerHTML = '<div class="lb-pv-fail">面板沒開起來</div>'; return; }
-            // 🚨 用 setTimeout 不用 requestAnimationFrame：等的是「DOM 生出來沒」不是畫面，
-            //    而 rAF 在頁面沒在合成時（分頁切到背景、視窗被遮住）根本不會 fire，
-            //    面板就永遠搬不進來、離開時也不會被清掉（實測抓到）。
-            setTimeout(tick, 30);
-        };
-        try { open(); } catch (e) { console.warn('[LobbyPlaces] 面板開啟失敗', sel, e); }
-        tick();
+    // 這個地點現在進得去嗎（沒解鎖／模組沒載入都算進不去）
+    function _usable(p) {
+        try {
+            if (p.when && !p.when()) return false;
+            if (p.ready && !p.ready()) return false;
+            return typeof p.open === 'function';
+        } catch (e) { return false; }
     }
 
-    function closeView() {
-        if (!_view) return;
-        try { _view(); } catch (e) {}
-        _view = null;
+    // 🚨 沒解鎖的地方照樣列出來、但鎖著：整顆消失＝玩家不知道以後有東西可以期待，
+    //    而且清單長度會隨進度跳來跳去，肌肉記憶每次都要重學。
+    //    廣場不列——它只有走路才有意義，立繪模式沒有「站在廣場上」這件事。
+    function _cards() {
+        return PLACES.filter(p => p.id !== 'city').map(p => ({
+            p,
+            on: _usable(p),
+            npc: (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null,
+        }));
     }
+
+    function _railHtml(curId) {
+        return _cards().map(c => {
+            const p = c.p;
+            const cls = 'lb-rail-card' + (p.id === curId ? ' is-cur' : '') + (c.on ? '' : ' is-off');
+            return '<div class="' + cls + '" data-id="' + p.id + '">' +
+                '<button class="lb-rail-main" type="button" data-go="talk"' + (c.on ? '' : ' disabled') + '>' +
+                    '<span class="lb-rail-ic"><i class="fa-solid ' + (c.on ? p.icon : 'fa-lock') + '"></i></span>' +
+                    '<span class="lb-rail-tx">' +
+                        '<span class="lb-rail-t">' + p.name + '</span>' +
+                        '<span class="lb-rail-who">' + (c.on ? ((c.npc && c.npc.name) || '　') + '' : '尚未開放') + '</span>' +
+                    '</span>' +
+                '</button>' +
+                (c.on ? '<button class="lb-rail-app" type="button" data-go="app" title="' + (p.flatName || p.name) + '">' +
+                    '<i class="fa-solid fa-arrow-right-to-bracket"></i></button>' : '') +
+            '</div>';
+        }).join('');
+    }
+
+    function closeView() { if (_view) { try { _view(); } catch (e) {} _view = null; } }
+
+    // 對話模式的主頁：進來就站在預設地點，不必按任何東西
+    function openHome() { return openView(HOME_ID); }
 
     function openView(id) {
-        const p = get(id);
-        if (!p) return;
-        closeFlat(); closeView();
-        const host = document.querySelector('.lobby-left');
-        if (!host) { try { p.open && p.open(); } catch (e) {} return; }   // 沒有大廳外殼就退回單開面板
+        // 已經開著就地換一個地方，不要拆掉重建（重建會讓背景閃一下、對話框也跟著重掛）
+        if (_view && _paint) { _paint(id); return null; }
 
-        const npc = (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null;
-        const appLabel = p.flatName || p.name;
+        const host = document.querySelector('.lobby-left');
+        if (!host) { const p0 = get(id); try { p0 && p0.open && p0.open(); } catch (e) {} return null; }   // 沒有大廳外殼就退回單開面板
+
         const box = document.createElement('div');
-        box.className = 'lb-pv is-pick';
+        box.className = 'lb-pv';
         box.innerHTML =
-            (p.bg ? '<div class="lb-pv-bg" style="background-image:url(' + CDN + p.bg + ')"></div>' : '<div class="lb-pv-bg"></div>') +
+            '<div class="lb-pv-bg"></div>' +
             '<div class="lb-pv-hd">' +
-              '<button class="lb-pv-back" type="button"><i class="fa-solid fa-chevron-left"></i></button>' +
-              '<span class="lb-pv-title">' + p.name + '</span>' +
-              (npc ? '<span class="lb-pv-sub">' + (npc.subTitle || '') + '</span>' : '') +
-              '<button class="lb-pv-x" type="button" aria-label="離開"><i class="fa-solid fa-xmark"></i></button>' +
+              '<span class="lb-pv-title"></span>' +
+              '<span class="lb-pv-sub"></span>' +
             '</div>' +
-            (npc && npc.portrait ? '<img class="lb-pv-portrait" src="' + npc.portrait + '" alt="">' : '') +
-            // 岔路：先問要幹嘛，選了才進去那件事（照手機那套 lstage-pick 的體感）
-            '<div class="lb-pv-pick">' +
-              (npc ? '<div class="lb-pv-pick-who">' + npc.name + '</div>' : '') +
-              '<button class="lb-pv-pick-btn" data-go="talk" type="button">' +
-                '<i class="fa-solid fa-comment-dots"></i><span>對話</span></button>' +
-              '<button class="lb-pv-pick-btn" data-go="app" type="button">' +
-                '<i class="fa-solid ' + p.icon + '"></i><span>' + appLabel + '</span></button>' +
-            '</div>' +
-            '<div class="lb-pv-pane"><div class="lb-pv-body"></div></div>';
+            '<img class="lb-pv-portrait" alt="">' +
+            '<div class="lb-rail"></div>' +
+            '<div class="lb-pv-pane"><button class="lb-pv-x" type="button" aria-label="收起"><i class="fa-solid fa-xmark"></i></button><div class="lb-pv-body"></div></div>';
+
+        const bg      = box.querySelector('.lb-pv-bg');
+        const titleEl = box.querySelector('.lb-pv-title');
+        const subEl   = box.querySelector('.lb-pv-sub');
+        const pimg    = box.querySelector('.lb-pv-portrait');
+        const rail    = box.querySelector('.lb-rail');
+        const body    = box.querySelector('.lb-pv-body');
+
+        const restorePanel = () => {
+            try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}
+        };
+        const talkOff = () => { try { win.LobbyStage?.endTalk?.(); } catch (e) {} };
 
         // 🧍 立繪大小依「圖片原生比例」自動決定，不必為了不同人準備不同資產：
         //    細長(比例≥1.7)＝全身站高貼底，下緣讓對話框蓋掉＝自然的半身效果；
         //    方(比例<1.7)＝本來就是半身(丹/雷伊 640x896)，放小一點、切口一樣藏進對話框。
-        //    🚨 所以全身圖不用砍半——對話框本身就是裁刀（Rae 2026-08-24 討論）。
-        const pimg = box.querySelector('.lb-pv-portrait');
-        if (pimg) {
-            const kind = () => {
-                const r = pimg.naturalWidth ? (pimg.naturalHeight / pimg.naturalWidth) : 0;
-                if (r) pimg.classList.toggle('is-half', r < 1.7);
-            };
-            if (pimg.complete && pimg.naturalWidth) kind();
-            else pimg.addEventListener('load', kind, { once: true });
-        }
-
-        const body = box.querySelector('.lb-pv-body');
-        const restorePanel = () => {
-            try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}
+        //    🚨 所以全身圖不用砍半——對話框本身就是裁刀。
+        const sizePortrait = () => {
+            const r = pimg.naturalWidth ? (pimg.naturalHeight / pimg.naturalWidth) : 0;
+            if (r) pimg.classList.toggle('is-half', r < 1.7);
         };
+        pimg.addEventListener('load', sizePortrait);
 
-        // 🚨 對話走既有的對話框（VN 版位、貼底），不塞進右邊容器——
-        //    Rae 2026-08-24：「我的對話是對話框，不是泡泡聊天」。右容器只給應用用。
-        const talkOff = () => { try { win.LobbyStage?.endTalk?.(); } catch (e) {} };
+        let curId = null;
 
-        // mode: 'pick' 岔路 / 'talk' 對話 / 'app' 應用
-        const toPick = () => go('pick');
-        _toPick = toPick;
-
+        // mode: 'talk' 對話 / 'app' 應用（兩者互斥，見檔頭）
         const go = (mode) => {
             restorePanel();
             body.innerHTML = '';
-            box.classList.remove('is-pick', 'is-talk', 'is-app');
-            if (mode === 'pick') { talkOff(); box.classList.add('is-pick'); return; }
-            if (mode === 'talk') {
+            box.classList.remove('is-talk', 'is-app');
+            const p = get(curId);
+            if (!p) return;
+            if (mode === 'talk' && p.npc) {
                 box.classList.add('is-talk');
                 // 對話對象＝這個地方的管理員；沒有舞台也設得起來，void_terminal 讀的是 talkTarget
-                try { if (npc) win.LobbyStage?.setTalkTarget?.(npc); } catch (e) {}
+                try {
+                    const npc = win.LobbyNpcs?.staff?.(p.npc);
+                    if (npc) win.LobbyStage?.setTalkTarget?.(npc);
+                } catch (e) {}
                 try { win.LobbyStage?.showDialog?.(); } catch (e) {}
                 return;
             }
@@ -289,30 +249,54 @@
                 p.open && p.open();
             } catch (e) {
                 body.innerHTML = '<div class="lb-pv-fail">這個面板現在打不開</div>';
-                console.warn('[LobbyPlaces] 面板開啟失敗', id, e);
+                console.warn('[LobbyPlaces] 面板開啟失敗', curId, e);
             }
         };
 
+        // 換到某個地點：背景／立繪／標題／卡片高亮一起換，外殼不動
+        const paint = (nextId, mode) => {
+            const p = get(nextId);
+            if (!p || !_usable(p)) return;
+            restorePanel(); talkOff();
+            curId = nextId;
+            const npc = (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null;
+            // 🚨 沒有平視背景的地方（奇想工坊／我的家還沒出圖）不要清成純黑：
+            //    這裡以前是「開了就關」的浮層所以無所謂，現在它是常駐主畫面，
+            //    切過去整片黑會讀成「壞掉了」。留著上一張，等素材補上就自動換。
+            if (p.bg) bg.style.backgroundImage = 'url(' + CDN + p.bg + ')';
+            titleEl.textContent = p.name;
+            subEl.textContent = (npc && npc.subTitle) || '';
+            // 🚨 顯示/隱藏走 class 不走 inline style（專案鐵律）；背景圖是動態 URL，只能直接設 backgroundImage
+            if (npc && npc.portrait) {
+                box.classList.remove('no-portrait');
+                if (pimg.getAttribute('src') !== npc.portrait) pimg.src = npc.portrait; else sizePortrait();
+            } else { box.classList.add('no-portrait'); pimg.removeAttribute('src'); }
+            rail.innerHTML = _railHtml(curId);
+            go(mode || (p.npc ? 'talk' : 'app'));
+        };
+        _paint = paint;
+
+        rail.addEventListener('click', (e) => {
+            const b = e.target.closest('.lb-rail-main, .lb-rail-app');
+            if (!b || b.disabled) return;
+            const card = b.closest('.lb-rail-card');
+            if (!card) return;
+            paint(card.dataset.id, b.dataset.go);
+        });
+
+        // ✕ 只收起右邊的窗格（回到單純看立繪講話），不是關掉整個主頁——主頁沒有「關掉」這件事
+        box.querySelector('.lb-pv-x').addEventListener('click', () => go('talk'));
+
         const close = () => {
-            restorePanel();
-            talkOff();
-            if (_toPick === toPick) _toPick = null;
+            restorePanel(); talkOff();
+            if (_paint === paint) _paint = null;
             box.remove();
             if (_view === close) _view = null;
         };
-        box.querySelector('.lb-pv-x').addEventListener('click', close);
-        // ‹返回：在對話/應用裡→退回岔路；已經在岔路→退回地點清單（巢狀只有最外層是 ✕）
-        box.querySelector('.lb-pv-back').addEventListener('click', () => {
-            if (box.classList.contains('is-pick')) { close(); openFlat(); return; }
-            go('pick');
-        });
-        box.addEventListener('click', (e) => {
-            const b = e.target.closest('.lb-pv-pick-btn');
-            if (b) go(b.dataset.go);
-        });
 
         host.appendChild(box);
         _view = close;
+        paint(_usable(get(id)) ? id : HOME_ID);
         return box;
     }
 
@@ -322,9 +306,9 @@
     function open() {
         const st = _stage();
         if (st && st.isActive && st.isActive() && st.openCityMap) { st.openCityMap(); return; }
-        openFlat();
+        openHome();
     }
 
-    win.LobbyPlaces = { list, get, open, openFlat, closeFlat, openView, closeView, PLACES };
+    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, HOME_ID, PLACES };
     console.log('✅ LobbyPlaces（地點清單）模組就緒');
 })();

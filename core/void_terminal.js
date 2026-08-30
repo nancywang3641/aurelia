@@ -617,10 +617,6 @@ const IRIS_IDLE = [
                             <i class="fa-solid fa-building-columns"></i>
                             <span class="lb-dock-label" data-cn-404="違章建築">房產</span>
                         </button>
-                        <button class="lb-dock-btn" id="lb-dock-places" title="前往">
-                            <i class="fa-solid fa-compass"></i>
-                            <span class="lb-dock-label" data-cn-404="座標">前往</span>
-                        </button>
                         <div class="lb-dock-sep"></div>
                         <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-depart-flat.png" alt="">
@@ -1016,9 +1012,6 @@ const IRIS_IDLE = [
             if (lbDock) lbDock.addEventListener('click', function (e) {
                 const b = e.target.closest('.lb-dock-btn');
                 if (!b) return;
-                // 🧭 前往：兩個模式共用同一顆。舞台掛著→開快轉地圖；立繪模式→開地點按鈕清單。
-                //    地點只定義在 lobby_places.js 那一份，兩種畫法讀同一個清單。
-                if (b.id === 'lb-dock-places') { window.LobbyPlaces && window.LobbyPlaces.open(); return; }
                 if (!b.dataset.proxy) return;
                 const proxy = tab.querySelector('#' + b.dataset.proxy);
                 if (proxy) proxy.click();
@@ -1101,7 +1094,14 @@ const IRIS_IDLE = [
             });
 
             // 🎮 書咖俯視舞台：掛載＋頂欄開關鈕
-            if (window.LobbyStage) window.LobbyStage.tryMount();
+            //    🧭 對話模式（舞台關著）沒有場景可以走 → 主畫面改成常駐的地點視圖
+            //       （預設站在世界門，左邊愛麗絲、右邊一排地點卡）。兩個模式各有各的主畫面，
+            //       所以 dock 不再需要「前往」那顆。
+            const _syncLobbyMain = () => {
+                if (window.LobbyStage && window.LobbyStage.isOn()) { window.LobbyPlaces?.closeView?.(); window.LobbyStage.tryMount(); }
+                else { window.LobbyStage?.unmount?.(); window.LobbyPlaces?.openHome?.(); }
+            };
+            _syncLobbyMain();
             const lstageBtn = tab.querySelector('#lstage-toggle');
             if (lstageBtn) {
                 const _syncLstageBtn = () => lstageBtn.classList.toggle('off', !window.LobbyStage?.isOn());
@@ -1110,7 +1110,7 @@ const IRIS_IDLE = [
                     if (!window.LobbyStage) return;
                     const on = window.LobbyStage.isOn();
                     try { localStorage.setItem('lobby_stage_on', on ? '0' : '1'); } catch(e) {}
-                    if (on) window.LobbyStage.unmount(); else window.LobbyStage.tryMount();
+                    _syncLobbyMain();
                     _syncLstageBtn();
                 });
             }
