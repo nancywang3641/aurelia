@@ -242,6 +242,19 @@
         return ov;
     }
 
+    // sendRequest 會把「連接設定檔的預設」整份展開成生成參數，其中 top_k 就算是 0 也照樣進請求主體。
+    // 酒館自己的生成路徑不送這個欄位（實測同一個站、同一個模型：酒館那筆沒有 top_k，走這裡的有 top_k:0），
+    // 而 0 是 Gemini 明文拒絕的值（合法範圍 1~64）→ 轉發站原封不動轉給 Google 就吃 400 INVALID_ARGUMENT，
+    // 變成「酒館聊天正常、奧瑞亞一律失敗」。0 是酒館 UI 表示「不啟用」的意思,不是使用者真的要 topK=0。
+    // 只在它是 0/沒設的時候拿掉（設成 undefined → JSON.stringify 直接省略）；有真的填值的人不動。
+    function _dropZeroTopK(ctx, ov) {
+        try {
+            const oai = (ctx && ctx.oai_settings) || win.oai_settings || (win.parent && win.parent.oai_settings) || {};
+            if (!Number(oai.top_k_openai)) ov.top_k = undefined;
+        } catch (e) {}
+        return ov;
+    }
+
     // profile 沒設 model（靠激活時的當前 model/preset 決定）→ sendRequest 直接送 profile.model=''（shared.js line448）→
     // vertex/gemini 報「Gemini request is missing model」(Model=? 就是這個)。補：profile 無 model 時把奧瑞亞 config.model
     // 塞進 overridePayload（shared.js line460 ...overridePayload 在 model 之後 → 蓋過空的 profile.model）。有設 model 的 profile 不動。
@@ -289,8 +302,10 @@
     win.OS_API = {
 
         // 測試連線那邊也要用同一份（vertex 服務帳號少了 auth_mode 就會被當 API Key 找不到金鑰；
-        // 錯誤訊息也要同樣攤平，不然只看得到酒館包的那句 API request failed）
-        _vertexOverride: (ctx, profileId, base) => _vertexOverride(ctx, profileId, base),
+        // 錯誤訊息也要同樣攤平，不然只看得到酒館包的那句 API request failed）。
+        // 這支現在連 top_k=0 一起處理：測試鈕跟生成走同一條 sendRequest、就會踩同一顆地雷，
+        // 只修生成不修測試＝「測試失敗但實際能生成」，那正是這條路一直在犯的錯。
+        _vertexOverride: (ctx, profileId, base) => _dropZeroTopK(ctx, _vertexOverride(ctx, profileId, base)),
         _causeText: (err) => _causeText(err),
 
         isStandalone: function() {
@@ -759,6 +774,7 @@
                             const _streamOn = options.stream === true;
                             let _ov = _vertexOverride(_ctx, config.stProfileId, { temperature, stream: _streamOn, ...extraParams });
                             _ov = _ensureModelOverride(_ctx, config.stProfileId, _ov, config.model);
+                            _ov = _dropZeroTopK(_ctx, _ov);
                             const _response = await _ctx.ConnectionManagerRequestService.sendRequest(
                                 config.stProfileId, cleanMessages, maxTokens, { signal: options.signal, stream: _streamOn }, _ov   // 帶 abort signal→停止鈕(創作室等)才停得了；undefined 時 signal=undefined 不影響
                             );
@@ -862,6 +878,7 @@
                         const _streamOn = options.stream === true;
                         let _ov = _vertexOverride(context, stProfileId, { temperature, stream: _streamOn, ...extraParams });
                         _ov = _ensureModelOverride(context, stProfileId, _ov, config.model);
+                        _ov = _dropZeroTopK(context, _ov);
                         const response = await context.ConnectionManagerRequestService.sendRequest(
                             stProfileId, cleanMessages, maxTokens, { signal: options.signal, stream: _streamOn }, _ov   // 帶 abort signal→停止鈕才停得了
                         );
