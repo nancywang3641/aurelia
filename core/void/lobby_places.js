@@ -70,17 +70,21 @@
             openIn: (c) => _mountTarot(c),
         },
         {
-            id: 'workshop', name: '奇想工坊', flatName: '造物工坊', icon: 'fa-hat-wizard', npc: 'hatter',
+            id: 'workshop', name: '奇想工坊', flatName: '造物工坊', icon: 'fa-hat-wizard', npc: 'hatter', bg: 'lobby_pv_bg_workshop_v1.jpg',
             obj: 'hatter_shop', scene: 'workshop',
             ready: () => !!(win.LobbyWorkshop?.ready?.()),
             open: () => _stage()?.openWorkshopPanel?.(),
             openIn: (c) => win.LobbyWorkshop.mount(c),   // 面板本來就吃容器，直接畫進窗格
         },
         {
-            id: 'myhome', name: '我的家', icon: 'fa-house-chimney',
+            // 舞台上＝走進去擺家具的場景（要先有房子）；對話模式＝一張家的背景＋你請進來的看板娘（不必有房子）
+            id: 'myhome', name: '我的家', icon: 'fa-house-chimney', bg: 'lobby_pv_bg_myhome_v1.jpg',
             obj: 'player_house',
             when: () => !!_stage()?.plotOccupied?.('player'),
+            flatWhen: () => true,
+            guest: () => _guestNpc(),
             open: () => _fire('lstage-open-myhome'),
+            openIn: (c) => _mountHomeGuest(c),
         },
         {
             id: 'room404', name: '404', flatName: '黑市', icon: 'fa-ghost', npc: 'cheshire', bg: 'lobby_pv_bg_room404_v1.jpg',
@@ -137,10 +141,118 @@
         win.OS_TAROT.launch(c);
     }
 
+    // ── 🏠 我的家 · 看板娘 ──────────────────────────────────────
+    //   我的家在舞台上是「走進去擺家具」的場景，那整套建立在小人有地板可以走；
+    //   對話模式沒有地板，所以這裡是另一件事：一張家的背景，加一個你請進來站著的人。
+    //   🚨 舞台那條一個字都不動——open() 照舊發 lstage-open-myhome，走進去擺家具是它的事。
+    const GUEST_KEY = 'lobby_home_guest';
+
+    function _guestGet() {
+        try { const v = JSON.parse(localStorage.getItem(GUEST_KEY) || 'null'); return (v && v.key) ? v : null; }
+        catch (e) { return null; }
+    }
+    // 🚨 只存「是誰」，不存圖。頭像是 base64 大圖，寫進 localStorage 會啃掉全站共用的 5MB
+    //    （這個專案為了同一件事壞過四次）。圖留在 IDB，這裡只放引用。
+    function _guestSet(v) {
+        try {
+            if (v) localStorage.setItem(GUEST_KEY, JSON.stringify({ src: v.src, key: v.key, name: v.name }));
+            else localStorage.removeItem(GUEST_KEY);
+            return true;
+        } catch (e) { console.warn('[LobbyPlaces] 看板娘存不下來', e); return false; }
+    }
+
+    // 目前請進來的那位 → 組成跟 staff 同形狀的對話對象（setTalkTarget 吃這個形狀）
+    async function _guestNpc() {
+        const g = _guestGet();
+        if (!g) return null;
+        if (g.src === 'staff') return win.LobbyNpcs?.staff?.(g.key) || null;
+        let url = '';
+        try { const v = await win.VN_Cache?.getRaw?.('avatar_cache', g.key); url = (v && v.url) || ''; } catch (e) {}
+        return { key: 'home_guest_' + g.key, name: g.name || '客人', subTitle: '我的家 · 看板娘', portrait: url };
+    }
+
+    // 可以請誰：大廳的管理員 ＋ 這個故事裡出現過、而且有頭像的角色（自建的 OC 出場過就在裡面）
+    async function _guestCandidates() {
+        const out = (win.LobbyNpcs?.staffKeys?.() || []).map(k => {
+            const s = win.LobbyNpcs.staff(k) || {};
+            return { src: 'staff', key: k, name: s.name || k, sub: s.subTitle || '', portrait: s.portrait || '' };
+        });
+        try {
+            const C = win.VN_Cache;
+            if (C && C.getAllMeta) {
+                const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
+                const all = (await C.getAllMeta('avatar_cache')) || [];
+                all.filter(e => e.hasUrl && !e.isSprite && C.worldOf(e) === world)
+                   .forEach(e => out.push({ src: 'cache', key: e.key, name: C.bareKeyOf(e), sub: '', portrait: '' }));
+            }
+        } catch (e) { console.warn('[LobbyPlaces] 讀角色名冊失敗', e); }
+        return out;
+    }
+
+    // 看板娘面板：上面是現在站著的人，下面是可以請的人
+    // 🚨 頭像逐張從 IDB 撈、面板關掉就停：一次把整庫 base64 塞進 DOM 是相簿當初 OOM 的原因。
+    function _mountHomeGuest(c) {
+        let alive = true;
+        c._pvRestore = () => { alive = false; };
+
+        const render = async () => {
+            const cur = _guestGet();
+            const cands = await _guestCandidates();
+            if (!alive) return;
+            c.innerHTML =
+                '<div class="lb-guest">' +
+                  '<div class="lb-guest-now">' +
+                    (cur
+                      ? '<span class="lb-guest-now-t">現在站在家裡的是 <b>' + cur.name + '</b></span>' +
+                        '<button class="lb-guest-out" type="button">請他離開</button>'
+                      : '<span class="lb-guest-now-t">家裡現在沒有人。挑一個請進來。</span>') +
+                  '</div>' +
+                  '<div class="lb-guest-grid">' +
+                    cands.map(x =>
+                      '<button class="lb-guest-c' + (cur && cur.src === x.src && cur.key === x.key ? ' is-cur' : '') + '"' +
+                        ' type="button" data-src="' + x.src + '" data-key="' + String(x.key).replace(/"/g, '&quot;') + '"' +
+                        ' data-name="' + String(x.name).replace(/"/g, '&quot;') + '">' +
+                        '<span class="lb-guest-pic"' + (x.portrait ? ' style="background-image:url(' + x.portrait + ')"' : '') + '></span>' +
+                        '<span class="lb-guest-n">' + x.name + '</span>' +
+                      '</button>').join('') +
+                  '</div>' +
+                '</div>';
+
+            // 故事角色的頭像在 IDB 裡，逐張撈上來（撈一張畫一張，關掉就停）
+            (async () => {
+                for (const x of cands) {
+                    if (!alive) return;
+                    if (x.src !== 'cache') continue;
+                    let url = '';
+                    try { const v = await win.VN_Cache.getRaw('avatar_cache', x.key); url = (v && v.url) || ''; } catch (e) {}
+                    if (!alive || !url) continue;
+                    const el = c.querySelector('.lb-guest-c[data-key="' + String(x.key).replace(/"/g, '\\"') + '"] .lb-guest-pic');
+                    if (el) el.style.backgroundImage = 'url(' + url + ')';
+                }
+            })();
+        };
+
+        c.addEventListener('click', (e) => {
+            const out = e.target.closest('.lb-guest-out');
+            if (out) { _guestSet(null); if (_paint) _paint('myhome', 'app'); return; }
+            const b = e.target.closest('.lb-guest-c');
+            if (!b) return;
+            const pick = { src: b.dataset.src, key: b.dataset.key, name: b.dataset.name };
+            const same = (() => { const g = _guestGet(); return g && g.src === pick.src && g.key === pick.key; })();
+            _guestSet(same ? null : pick);        // 再點一次同一個人＝請他離開（不用特地去按那顆）
+            if (_paint) _paint('myhome', 'app');
+        });
+
+        render();
+    }
+
     // 這個地點現在進得去嗎（沒解鎖／模組沒載入都算進不去）
     function _usable(p) {
         try {
-            if (p.when && !p.when()) return false;
+            // flatWhen＝「對話模式進不進得去」。我的家在舞台要先有房子才走得進去，
+            // 但對話模式只是一張背景＋看板娘，不該被房子擋住 → 兩邊的條件分開判。
+            const gate = p.flatWhen || p.when;
+            if (gate && !gate()) return false;
             if (p.ready && !p.ready()) return false;
             return typeof p.open === 'function';
         } catch (e) { return false; }
@@ -149,11 +261,17 @@
     // 🚨 沒解鎖的地方照樣列出來、但鎖著：整顆消失＝玩家不知道以後有東西可以期待，
     //    而且清單長度會隨進度跳來跳去，肌肉記憶每次都要重學。
     //    廣場不列——它只有走路才有意義，立繪模式沒有「站在廣場上」這件事。
+    // 這個地點現在站著誰。一般地點是固定的管理員；我的家是動態的——看你請了誰進來。
+    function _npcMeta(p) {
+        if (p.guest) { const g = _guestGet(); return g ? { name: g.name } : null; }
+        return (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null;
+    }
+    const _hasNpc = (p) => !!_npcMeta(p);
     function _cards() {
         return PLACES.filter(p => p.id !== 'city').map(p => ({
-            p,
-            on: _usable(p),
-            npc: (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null,
+            p, on: _usable(p), npc: _npcMeta(p),
+            // 我的家沒人的時候要明講，不然那行空白看起來像沒載出來
+            emptyWho: p.guest ? '還沒有人' : '',
         }));
     }
 
@@ -166,7 +284,7 @@
                     '<span class="lb-rail-ic"><i class="fa-solid ' + (c.on ? p.icon : 'fa-lock') + '"></i></span>' +
                     '<span class="lb-rail-tx">' +
                         '<span class="lb-rail-t">' + p.name + '</span>' +
-                        '<span class="lb-rail-who">' + (c.on ? ((c.npc && c.npc.name) || '　') + '' : '尚未開放') + '</span>' +
+                        '<span class="lb-rail-who">' + (c.on ? ((c.npc && c.npc.name) || c.emptyWho || '　') : '尚未開放') + '</span>' +
                     '</span>' +
                 '</button>' +
                 (c.on ? '<button class="lb-rail-app" type="button" data-go="app" title="' + (p.flatName || p.name) + '">' +
@@ -222,6 +340,8 @@
         pimg.addEventListener('load', sizePortrait);
 
         let curId = null;
+        let curNpc = null;      // 這個地點現在站著誰（我的家那位是非同步撈回來的）
+        let paintTok = 0;       // 連點換地點時，晚回來的那張不准蓋掉新的
 
         // mode: 'talk' 對話 / 'app' 應用（兩者互斥，見檔頭）
         const go = (mode) => {
@@ -230,13 +350,11 @@
             box.classList.remove('is-talk', 'is-app');
             const p = get(curId);
             if (!p) return;
-            if (mode === 'talk' && p.npc) {
+            if (mode === 'talk' && _hasNpc(p)) {
                 box.classList.add('is-talk');
-                // 對話對象＝這個地方的管理員；沒有舞台也設得起來，void_terminal 讀的是 talkTarget
-                try {
-                    const npc = win.LobbyNpcs?.staff?.(p.npc);
-                    if (npc) win.LobbyStage?.setTalkTarget?.(npc);
-                } catch (e) {}
+                // 對話對象＝這裡站著的人（管理員，或我的家請進來的那位）；
+                // 沒有舞台也設得起來，void_terminal 讀的是 talkTarget
+                try { if (curNpc) win.LobbyStage?.setTalkTarget?.(curNpc); } catch (e) {}
                 try { win.LobbyStage?.showDialog?.(); } catch (e) {}
                 return;
             }
@@ -259,20 +377,31 @@
             if (!p || !_usable(p)) return;
             restorePanel(); talkOff();
             curId = nextId;
-            const npc = (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null;
-            // 🚨 沒有平視背景的地方（奇想工坊／我的家還沒出圖）不要清成純黑：
-            //    這裡以前是「開了就關」的浮層所以無所謂，現在它是常駐主畫面，
-            //    切過去整片黑會讀成「壞掉了」。留著上一張，等素材補上就自動換。
+            const tok = ++paintTok;
+            // 🚨 沒有平視背景的地方不要清成純黑：這裡以前是「開了就關」的浮層所以無所謂，
+            //    現在它是常駐主畫面，切過去整片黑會讀成「壞掉了」。留著上一張，素材補上就自動換。
             if (p.bg) bg.style.backgroundImage = 'url(' + CDN + p.bg + ')';
             titleEl.textContent = p.name;
-            subEl.textContent = (npc && npc.subTitle) || '';
             // 🚨 顯示/隱藏走 class 不走 inline style（專案鐵律）；背景圖是動態 URL，只能直接設 backgroundImage
-            if (npc && npc.portrait) {
-                box.classList.remove('no-portrait');
-                if (pimg.getAttribute('src') !== npc.portrait) pimg.src = npc.portrait; else sizePortrait();
-            } else { box.classList.add('no-portrait'); pimg.removeAttribute('src'); }
+            const applyNpc = (npc) => {
+                curNpc = npc || null;
+                subEl.textContent = (npc && npc.subTitle) || '';
+                if (npc && npc.portrait) {
+                    box.classList.remove('no-portrait');
+                    if (pimg.getAttribute('src') !== npc.portrait) pimg.src = npc.portrait; else sizePortrait();
+                } else { box.classList.add('no-portrait'); pimg.removeAttribute('src'); }
+            };
+            applyNpc((win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null);
+            // 我的家的看板娘：名字在 localStorage（同步，上面已經拿來決定要不要直接進對話），圖在 IDB（非同步）
+            if (p.guest) {
+                p.guest().then(g => {
+                    if (tok !== paintTok) return;   // 已經換去別的地方了，晚到的這張不算數
+                    applyNpc(g);
+                    if (g && box.classList.contains('is-talk')) { try { win.LobbyStage?.setTalkTarget?.(g); } catch (e) {} }
+                }).catch(() => {});
+            }
             rail.innerHTML = _railHtml(curId);
-            go(mode || (p.npc ? 'talk' : 'app'));
+            go(mode || (_hasNpc(p) ? 'talk' : 'app'));
         };
         _paint = paint;
 

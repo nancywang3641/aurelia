@@ -947,3 +947,33 @@
         color:#1A1C28; font-size:11px;
     }
 }
+
+/* =========================================================
+   🏠 我的家 · 看板娘：家在舞台上是「走進去擺家具」的場景，
+   對話模式沒有地板 → 它變成一張家的背景，加一個你請進來站著的人。
+   面板只做一件事：現在是誰、可以換成誰。
+   ========================================================= */
+.lb-guest { padding:16px 18px 20px; color:#f2ecff; }
+.lb-guest-now { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:12px 14px; margin-bottom:16px; border-radius:12px;
+  background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); }
+.lb-guest-now-t { font-size:13px; letter-spacing:1px; color:rgba(242,236,255,.82); }
+.lb-guest-now-t b { color:#fff; }
+.lb-guest-out { margin-left:auto; padding:6px 12px; border-radius:8px; cursor:pointer;
+  background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.24);
+  color:#f2ecff; font-family:inherit; font-size:12px; letter-spacing:1px; }
+.lb-guest-out:hover { background:rgba(255,255,255,.22); }
+/* 名字長度差很多（管理員三四個字、故事角色可能一長串）→ 用 auto-fill 讓它自己排，不要寫死欄數 */
+.lb-guest-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:10px; }
+.lb-guest-c { display:flex; flex-direction:column; align-items:center; gap:7px; padding:10px 6px 9px;
+  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.14); border-radius:12px;
+  color:#f2ecff; cursor:pointer; font-family:inherit;
+  transition:background .14s ease, border-color .14s ease, transform .14s ease; }
+.lb-guest-c:hover { background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.4); transform:translateY(-2px); }
+.lb-guest-c.is-cur { background:rgba(86,64,120,.92); border-color:rgba(214,190,255,.62); }
+/* 頭像用背景圖：來源有 CDN 網址也有 IDB 的 dataURL，統一走 background-image 就不必分兩種寫法 */
+.lb-guest-pic { width:56px; height:56px; border-radius:50%; flex-shrink:0;
+  background:rgba(255,255,255,.08) center top/cover no-repeat;
+  border:1px solid rgba(255,255,255,.18); }
+.lb-guest-n { font-size:11px; letter-spacing:.5px; line-height:1.3; text-align:center;
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
