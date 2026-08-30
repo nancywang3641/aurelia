@@ -73,6 +73,7 @@
             else frame.style.removeProperty(THEME_VARS[k]);   // 沒設 = 用 CSS 預設
         });
         // 字體「硬套用」：有設且非預設 → 加 class，CSS 用 !important 蓋掉所有 app(連寫死的)、只放過 fa 圖標
+        _ensureFontCdn(t.font);   // 選的是網路字體 → 補上 <link>；重開之後也是走這裡接回來
         frame.classList.toggle('aps-font-on', !!(t.font && t.font !== 'inherit'));
         _applyIcons();
     }
@@ -158,16 +159,41 @@
         { name: '海藍', css: 'linear-gradient(160deg,#4facfe,#00f2fe)' },
         { name: '純白', css: '#eef0f6' },
     ];
+    // 前四個是系統字體：本機有就有、沒有就退回預設，別人的電腦看到的不一定一樣。
+    // 帶 cdn 的是網路字體（中文網字計劃的免費 CDN）：本機沒裝也看得到，所有人長一樣。
+    //   那份 CSS 是「按需分包」——一款字體切成上百個 woff2，瀏覽器只抓畫面上真的用到的那幾包，
+    //   不是一次吞十幾 MB。css 值一律留系統字體當 fallback：CDN 掛了就退回去，不會變成空白。
+    const CDN = 'https://cn-font.claude-code-best.win/packages/';
     const FONTS = [
         { name: '預設',  css: 'inherit' },
         { name: '思源宋', css: "'Noto Serif TC',serif" },
         { name: '優雅',  css: "'Playfair Display','Noto Serif TC',serif" },
         { name: '黑體',  css: "system-ui,'PingFang TC','Microsoft JhengHei',sans-serif" },
         { name: '等寬',  css: "'Courier New',monospace" },
+        { name: '文楷',  css: "'LXGWWenKaiScreen','Noto Serif TC',serif",       cdn: CDN + 'lywkpmydb/dist/LXGWWenKaiScreen/result.css' },
+        { name: '仿宋',  css: "'ZhuqueFangsong-Regular','Noto Serif TC',serif", cdn: CDN + 'zqfs/dist/ZhuqueFangsong-Regular/result.css' },
+        { name: '正楷',  css: "'GuanKiapTsingKhai-T','DFKai-SB',serif",         cdn: CDN + 'GuanKiapTsingKhai/dist/GuanKiapTsingKhai-T/result.css' },
+        { name: '明朝',  css: "'汇文明朝体','Noto Serif TC',serif",              cdn: CDN + 'hwmct/dist/%E6%B1%87%E6%96%87%E6%98%8E%E6%9C%9D%E4%BD%93/result.css' },
+        { name: '糖圓',  css: "'MaoKenTangYuan','PingFang TC',sans-serif",      cdn: CDN + 'mkwtyt/dist/MaoKenTangYuan/result.css' },
     ];
+    // 網路字體按需插 <link>：同一份只插一次（data 屬性當記號），插過就不再動。
+    function _ensureFontCdn(cssVal) {
+        if (!cssVal) return;
+        const f = FONTS.find(function (x) { return x.css === cssVal; });
+        if (!f || !f.cdn) return;
+        if (document.querySelector('link[data-aps-font="' + f.cdn + '"]')) return;
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = f.cdn;
+        l.setAttribute('data-aps-font', f.cdn);
+        document.head.appendChild(l);
+    }
     function _urlOf(v) { return (v && String(v).indexOf('url(') === 0) ? String(v).slice(4).split(')')[0] : ''; }
     function _renderSettings(c) {
         const t = _loadTheme();
+        // 預覽 chip 要用該字體寫自己的名字 → 開這頁時把網路字體都接上。
+        //   CSS 本身很小，字體檔是按需的，chip 上就那兩個字，只會抓到那兩包。
+        FONTS.forEach(function (f) { if (f.cdn) _ensureFontCdn(f.css); });
         const sw = function (arr, key) { return arr.map(function (w) { return '<button class="aps-set-sw" data-k="' + key + '" data-css="' + _esc(w.css) + '" type="button" style="background:' + w.css + '"><span>' + _esc(w.name) + '</span></button>'; }).join(''); };
         const ftCh = FONTS.map(function (f) { return '<button class="aps-set-chip" data-k="font" data-css="' + _esc(f.css) + '" type="button" style="font-family:' + f.css + '">' + _esc(f.name) + '</button>'; }).join('');
         const icHintRows = APPS.map(function (a) {
