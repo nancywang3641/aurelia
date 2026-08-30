@@ -1,61 +1,57 @@
-/* ===== 控制室（SoVITS + ComfyUI 監控遙控）===== */
-.cr-root { position: relative; width: 100%; height: 100%; overflow-y: auto; box-sizing: border-box; padding: 18px 16px 24px; background: #0a0906; color: #e8dcc0; font-family: 'Noto Sans TC', sans-serif; }
-.cr-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
-.cr-header-text { flex: 1; min-width: 0; }
-.cr-title { font-size: 18px; font-weight: 900; letter-spacing: 3px; color: #d4af37; }
-.cr-sub { font-size: 11px; color: rgba(232,220,192,0.45); margin-top: 4px; letter-spacing: 1px; }
-.cr-help-btn { flex: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(212,175,55,0.35); background: rgba(212,175,55,0.1); color: #d4af37; font-size: 15px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-.cr-help-btn:hover { background: rgba(212,175,55,0.22); }
+/* ===== 控制室（SoVITS + ComfyUI 監控遙控）=====
+   骨架與配色一律沿用系統設置那套：外框 .set-container / .set-header / .set-content、
+   卡片 .set-group、按鈕 .set-btn / .btn-save / .btn-danger、說明字 .set-desc。
+   這支只留控制室自己才有的東西（狀態燈、引擎二選一、VRAM 條、說明書排版），
+   而且色值一律取 os_settings.css 的那組（#1A1C28 墨、#3A3F5C 次要字、rgba(26,28,40,*) 網），
+   不再自帶一套黑金——顏色只有一個出處，系統設置改了這裡才不會落單。
+   .cr-btn 留著純粹是 JS 的事件掛勾（.cr-btn[data-act]），視覺全交給 .set-btn。 */
 
-/* ===== 設定說明書（蓋在控制室上的一頁）===== */
-.cr-help { position: absolute; inset: 0; background: #0a0906; overflow-y: auto; box-sizing: border-box; padding: 14px 16px 28px; z-index: 5; }
-.cr-help-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.cr-help-back { flex: none; padding: 7px 12px; font-size: 12px; cursor: pointer; border-radius: 6px; border: 1px solid rgba(212,175,55,0.35); background: rgba(212,175,55,0.1); color: #d4af37; transition: all 0.2s; }
-.cr-help-back:hover { background: rgba(212,175,55,0.22); }
-.cr-help-htitle { font-size: 15px; font-weight: 800; letter-spacing: 2px; color: #d4af37; }
-.cr-help-body { font-size: 13px; line-height: 1.9; color: rgba(232,220,192,0.85); }
-.cr-help-lead { margin: 0 0 16px; }
-.cr-help-lead b { color: #d4af37; }
-.cr-help-note { font-size: 11.5px; color: rgba(232,220,192,0.5); }
-.cr-help-sect { margin-top: 18px; }
-.cr-help-sect p { margin: 6px 0 0; }
-.cr-help-h { font-size: 13.5px; font-weight: 800; letter-spacing: 1px; color: #e8dcc0; padding-left: 9px; border-left: 3px solid #d4af37; }
-.cr-help-sect b { color: #d4af37; }
-.cr-step { display: flex; gap: 10px; margin-top: 12px; }
-.cr-step-no { flex: none; width: 22px; height: 22px; border-radius: 50%; background: #d4af37; color: #0a0906; font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
-.cr-step-txt { flex: 1; }
-.cr-help-code { margin: 8px 0; padding: 10px 12px; background: rgba(212,175,55,0.06); border: 1px solid rgba(212,175,55,0.2); border-radius: 8px; font-family: 'Consolas', monospace; font-size: 12px; color: rgba(232,220,192,0.7); line-height: 1.8; }
+.cr-root { position: relative; }   /* 說明書那頁 absolute 疊在上面，要有定位錨點 */
 
-.cr-tower-down { border: 1px solid rgba(252,129,129,0.35); background: rgba(252,129,129,0.08); border-radius: 10px; padding: 16px; text-align: center; font-size: 14px; line-height: 2; margin-bottom: 14px; }
-.cr-tower-hint { font-size: 11px; color: rgba(232,220,192,0.55); }
+.cr-tower-down { border: 1px solid rgba(252,129,129,0.5); background: rgba(252,129,129,0.12); color: #b03030; border-radius: 8px; padding: 16px; text-align: center; font-size: 14px; line-height: 2; margin-bottom: 20px; }
+.cr-tower-hint { font-size: 11px; color: rgba(26,28,40,0.65); }
 
-.cr-dim { opacity: 0.35; pointer-events: none; }
+.cr-dim { opacity: 0.4; pointer-events: none; }
 
-.cr-card { border: 1px solid rgba(212,175,55,0.22); background: rgba(212,175,55,0.05); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
-.cr-card-head { display: flex; align-items: center; gap: 8px; }
-.cr-dot { font-size: 12px; }
-.cr-card-name { font-size: 14px; font-weight: 800; letter-spacing: 1px; }
-.cr-card-tag { margin-left: auto; font-size: 10px; color: rgba(232,220,192,0.4); letter-spacing: 1px; }
-.cr-card-body { font-size: 12px; color: rgba(232,220,192,0.75); margin: 8px 0 2px; min-height: 16px; }
+/* 卡片標題那排的狀態燈與右側標記 */
+.cr-dot { font-size: 11px; margin-right: 2px; }
+.cr-card-tag { font-size: 10px; font-weight: 400; color: rgba(26,28,40,0.5); letter-spacing: 1px; }
+.cr-card-body { min-height: 16px; margin: 0; }
 
 /* 語音引擎二選一（顯存只夠開一套） */
-.cr-seg { display: flex; gap: 4px; margin-top: 8px; padding: 3px; border-radius: 7px; background: rgba(255,255,255,0.05); }
-.cr-seg-btn { flex: 1; padding: 6px 8px; font-size: 11px; letter-spacing: 1px; cursor: pointer; border-radius: 5px; border: 1px solid transparent; background: transparent; color: rgba(232,220,192,0.45); transition: all 0.2s; }
-.cr-seg-btn:hover { color: rgba(232,220,192,0.8); }
-.cr-seg-btn.on { border-color: rgba(212,175,55,0.45); background: rgba(212,175,55,0.16); color: #d4af37; font-weight: 800; }
+.cr-seg { display: flex; gap: 4px; padding: 3px; border-radius: 7px; background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.12); }
+.cr-seg-btn { flex: 1; padding: 7px 8px; font: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; border-radius: 5px; border: 1px solid transparent; background: transparent; color: rgba(26,28,40,0.55); transition: all 0.2s; }
+.cr-seg-btn:hover { color: #1A1C28; }
+.cr-seg-btn.on { border-color: rgba(26,28,40,0.35); background: #EEF0F6; color: #1A1C28; font-weight: 800; }
 
-.cr-vram { margin-top: 8px; }
-.cr-vram-label { font-size: 10px; color: rgba(232,220,192,0.5); margin-bottom: 4px; letter-spacing: 1px; }
-.cr-vram-track { height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
-.cr-vram-bar { height: 100%; width: 0%; background: #d4af37; border-radius: 3px; transition: width 0.6s ease; }
+.cr-vram-label { font-size: 10px; color: rgba(26,28,40,0.6); margin-bottom: 5px; letter-spacing: 1px; }
+.cr-vram-track { height: 5px; background: rgba(26,28,40,0.10); border-radius: 3px; overflow: hidden; }
+.cr-vram-bar { height: 100%; width: 0%; background: #1A1C28; border-radius: 3px; transition: width 0.6s ease; }
 .cr-vram-bar.cr-vram-hot { background: #fc8181; }
 
-.cr-card-btns { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-.cr-btn { flex: 1; min-width: 56px; padding: 8px 10px; font-size: 12px; letter-spacing: 1px; cursor: pointer; border-radius: 6px; border: 1px solid rgba(212,175,55,0.35); background: rgba(212,175,55,0.1); color: #d4af37; transition: all 0.2s; }
-.cr-btn:hover { background: rgba(212,175,55,0.22); }
-.cr-btn-danger { border-color: rgba(252,129,129,0.4); background: rgba(252,129,129,0.08); color: #fc8181; }
-.cr-btn-danger:hover { background: rgba(252,129,129,0.18); }
-.cr-btn-big { padding: 12px; font-size: 13px; font-weight: 800; }
-.cr-all-btns { display: flex; gap: 8px; margin-top: 2px; }
+/* 按鈕：視覺來自 .set-btn / .btn-save / .btn-danger，這裡只排版 */
+.cr-card-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+/* min-width 抓寬一點是刻意的：生圖那張有五顆，擠成一排時「釋顯存」會斷成兩行，
+   寧可讓它換行成兩排也不要字被折。 */
+.cr-card-btns .set-btn { flex: 1 1 auto; min-width: 78px; padding: 9px 8px; font-size: 13px; white-space: nowrap; }
+/* 這幾條都跟 .set-btn / .btn-save 同特異性，靠 CSS 載入順序決勝負太脆——
+   誰先誰後改一次就翻臉，所以一律寫成兩層選擇器把自己墊高。 */
+.set-btn.cr-btn-danger { color: #b03030; border-color: rgba(252,129,129,0.55); background: rgba(252,129,129,0.10); }
+.set-btn.cr-btn-danger:hover { background: rgba(252,129,129,0.20); border-color: #b03030; }
+.cr-all-btns { display: flex; gap: 8px; margin-top: 4px; }
+.cr-all-btns > .btn-save, .cr-all-btns > .btn-test { flex: 1; margin-top: 0; }
 
-.cr-foot { margin-top: 14px; text-align: center; font-size: 10px; color: rgba(232,220,192,0.35); letter-spacing: 1px; }
+/* ===== 設定說明書（蓋在控制室上的一頁）===== */
+.cr-help { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: #EEF0F6; }
+.cr-help-body { font-size: 13px; line-height: 1.9; color: #1A1C28; }
+.cr-help-lead { margin: 0 0 18px; }
+.cr-help-lead b { font-weight: 800; }
+.cr-help-note { font-size: 11.5px; color: #3A3F5C; }
+.cr-help-sect { margin-top: 20px; }
+.cr-help-sect p { margin: 8px 0 0; }
+.cr-help-h { font-size: 13.5px; font-weight: 800; letter-spacing: 1px; color: #1A1C28; padding-left: 9px; border-left: 3px solid #1A1C28; }
+.cr-help-sect b { font-weight: 800; }
+.cr-step { display: flex; gap: 10px; margin-top: 12px; }
+.cr-step-no { flex: none; width: 22px; height: 22px; border-radius: 50%; background: #1A1C28; color: #EEF0F6; font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center; margin-top: 3px; }
+.cr-step-txt { flex: 1; }
+.cr-help-code { margin: 8px 0; padding: 10px 12px; background: rgba(26,28,40,0.05); border: 1px solid rgba(26,28,40,0.18); border-radius: 6px; font-family: 'Consolas', monospace; font-size: 12px; color: #3A3F5C; line-height: 1.8; }

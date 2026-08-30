@@ -17,68 +17,68 @@
 
         launchApp(container) {
             container.innerHTML = `
-                <div class="cr-root">
-                    <div class="cr-header">
-                        <div class="cr-header-text">
-                            <div class="cr-title">🎛️ 控制室</div>
-                            <div class="cr-sub">語音 ＋ 生圖都在這裡管，不用看黑窗</div>
+                <div class="set-container cr-root">
+                    <div class="set-header">
+                        <div class="set-back-btn" id="cr-nav-home">‹</div>
+                        <div class="set-title">控制室</div>
+                        <div class="set-back-btn" id="cr-help-open" title="怎麼設定？看說明書"><i class="fa-solid fa-circle-question"></i></div>
+                    </div>
+
+                    <div class="set-content">
+                        <div id="cr-tower-down" class="cr-tower-down hidden">
+                            🔴 控制塔未啟動<br>
+                            <span class="cr-tower-hint">雙擊桌面的「奧瑞亞控制塔」捷徑，這裡就會亮起來</span>
                         </div>
-                        <button class="cr-help-btn" id="cr-help-open" title="怎麼設定？看說明書"><i class="fa-solid fa-circle-question"></i></button>
-                    </div>
-                    <div id="cr-tower-down" class="cr-tower-down hidden">
-                        🔴 控制塔未啟動<br>
-                        <span class="cr-tower-hint">雙擊桌面的「奧瑞亞控制塔」捷徑，這裡就會亮起來</span>
-                    </div>
-                    <div id="cr-cards">
-                        <div class="cr-card" id="cr-card-voice">
-                            <div class="cr-card-head">
-                                <span class="cr-dot" id="cr-dot-voice">🔴</span>
-                                <span class="cr-card-name">🎙️ 語音引擎</span>
-                                <span class="cr-card-tag" id="cr-tag-voice">—</span>
+                        <div id="cr-cards">
+                            <div class="set-group cr-card" id="cr-card-voice">
+                                <div class="set-label">
+                                    <span><span class="cr-dot" id="cr-dot-voice">🔴</span> 🎙️ 語音引擎</span>
+                                    <span class="cr-card-tag" id="cr-tag-voice">—</span>
+                                </div>
+                                <div class="cr-seg" id="cr-voice-seg">
+                                    <button class="cr-seg-btn" data-engine="index">IndexTTS</button>
+                                    <button class="cr-seg-btn" data-engine="sovits">SoVITS</button>
+                                </div>
+                                <div class="set-desc cr-card-body" id="cr-info-voice">—</div>
+                                <div class="cr-card-btns">
+                                    <button class="set-btn cr-btn" data-act="start" data-svc="voice">啟動</button>
+                                    <button class="set-btn cr-btn" data-act="restart" data-svc="voice">重啟</button>
+                                    <button class="set-btn cr-btn cr-btn-danger" data-act="stop" data-svc="voice">停止</button>
+                                </div>
                             </div>
-                            <div class="cr-seg" id="cr-voice-seg">
-                                <button class="cr-seg-btn" data-engine="index">IndexTTS</button>
-                                <button class="cr-seg-btn" data-engine="sovits">SoVITS</button>
-                            </div>
-                            <div class="cr-card-body" id="cr-info-voice">—</div>
-                            <div class="cr-card-btns">
-                                <button class="cr-btn" data-act="start" data-svc="voice">啟動</button>
-                                <button class="cr-btn" data-act="restart" data-svc="voice">重啟</button>
-                                <button class="cr-btn cr-btn-danger" data-act="stop" data-svc="voice">停止</button>
-                            </div>
-                        </div>
-                        <div class="cr-card" id="cr-card-comfy">
-                            <div class="cr-card-head">
-                                <span class="cr-dot" id="cr-dot-comfy">🔴</span>
-                                <span class="cr-card-name">🎨 生圖引擎</span>
-                                <span class="cr-card-tag">ComfyUI · 8188</span>
-                            </div>
-                            <div class="cr-card-body" id="cr-info-comfy">—</div>
-                            <div class="cr-vram hidden" id="cr-vram-wrap">
-                                <div class="cr-vram-label" id="cr-vram-label">VRAM</div>
-                                <div class="cr-vram-track"><div class="cr-vram-bar" id="cr-vram-bar"></div></div>
-                            </div>
-                            <div class="cr-card-btns">
-                                <button class="cr-btn" data-act="start" data-svc="comfy">啟動</button>
-                                <button class="cr-btn" data-act="restart" data-svc="comfy">重啟</button>
-                                <button class="cr-btn cr-btn-danger" data-act="stop" data-svc="comfy">停止</button>
-                                <button class="cr-btn" id="cr-free-vram" title="卸載快取的模型、清空顯存（不重啟；下次生圖會重載模型，多花十幾秒）">🧹 釋顯存</button>
-                                <button class="cr-btn" id="cr-open-web">開網頁</button>
+                            <div class="set-group cr-card" id="cr-card-comfy">
+                                <div class="set-label">
+                                    <span><span class="cr-dot" id="cr-dot-comfy">🔴</span> 🎨 生圖引擎</span>
+                                    <span class="cr-card-tag">ComfyUI · 8188</span>
+                                </div>
+                                <div class="set-desc cr-card-body" id="cr-info-comfy">—</div>
+                                <div class="cr-vram hidden" id="cr-vram-wrap">
+                                    <div class="cr-vram-label" id="cr-vram-label">VRAM</div>
+                                    <div class="cr-vram-track"><div class="cr-vram-bar" id="cr-vram-bar"></div></div>
+                                </div>
+                                <div class="cr-card-btns">
+                                    <button class="set-btn cr-btn" data-act="start" data-svc="comfy">啟動</button>
+                                    <button class="set-btn cr-btn" data-act="restart" data-svc="comfy">重啟</button>
+                                    <button class="set-btn cr-btn cr-btn-danger" data-act="stop" data-svc="comfy">停止</button>
+                                    <button class="set-btn cr-btn" id="cr-free-vram" title="卸載快取的模型、清空顯存（不重啟；下次生圖會重載模型，多花十幾秒）">🧹 釋顯存</button>
+                                    <button class="set-btn cr-btn" id="cr-open-web">開網頁</button>
+                                </div>
                             </div>
                         </div>
+                        <div class="cr-all-btns">
+                            <div class="btn-save cr-btn" data-act="start" data-svc="all">▶ 全部啟動</div>
+                            <div class="btn-test cr-btn" data-act="stop" data-svc="all">■ 全部停止</div>
+                        </div>
+                        <div class="set-status" id="cr-foot">連線中…</div>
                     </div>
-                    <div class="cr-all-btns">
-                        <button class="cr-btn cr-btn-big" data-act="start" data-svc="all">▶ 全部啟動</button>
-                        <button class="cr-btn cr-btn-big cr-btn-danger" data-act="stop" data-svc="all">■ 全部停止</button>
-                    </div>
-                    <div class="cr-foot" id="cr-foot">連線中…</div>
 
                     <div class="cr-help hidden" id="cr-help">
-                        <div class="cr-help-bar">
-                            <button class="cr-help-back" id="cr-help-close"><i class="fa-solid fa-chevron-left"></i> 返回</button>
-                            <div class="cr-help-htitle">設定說明書</div>
+                        <div class="set-header">
+                            <div class="set-back-btn" id="cr-help-close">‹</div>
+                            <div class="set-title">設定說明書</div>
+                            <div style="width:32px"></div>
                         </div>
-                        <div class="cr-help-body">
+                        <div class="set-content cr-help-body">
                             <p class="cr-help-lead">這個「控制室」是一支遙控器，讓你電腦上的<b>語音</b>跟<b>生圖</b>縮在螢幕右下角、安靜地在背景跑，不用一直開著一堆黑色小視窗。<br><span class="cr-help-note">不需要任何帳號或會員，它只是遙控你自己電腦裡已經裝好的程式。</span></p>
 
                             <div class="cr-help-sect">
@@ -126,6 +126,9 @@
             });
             const openBtn = container.querySelector('#cr-open-web');
             if (openBtn) openBtn.onclick = () => { this._post('/open'); };
+
+            const backBtn = container.querySelector('#cr-nav-home');
+            if (backBtn) backBtn.onclick = () => { if (win.PhoneSystem) win.PhoneSystem.goHome(); };
 
             const help = container.querySelector('#cr-help');
             const helpOpen = container.querySelector('#cr-help-open');
