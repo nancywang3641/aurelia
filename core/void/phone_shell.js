@@ -109,12 +109,44 @@
     }
 
     // ── 狀態列時鐘 ──
+    const _WEEK = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
     function _tickClock() {
         if (!_el) return;
-        const el = _el.querySelector('#aps-sb-time');
-        if (!el) return;
         const d = new Date();
-        el.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        const hhmm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        const sb = _el.querySelector('#aps-sb-time');
+        if (sb) sb.textContent = hhmm;
+        const big = _el.querySelector('#aps-lock-time');
+        if (big) big.textContent = hhmm;
+        const date = _el.querySelector('#aps-lock-date');
+        if (date) date.textContent = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + _WEEK[d.getDay()];
+    }
+
+    // ── 今日心情：點一下換下一個，記在 localStorage ──────────────────────
+    //   跟日期綁在一起：換一天就回到第一個，不然昨天挑的心情會一直掛在那。
+    const MOODS = ['☀️', '⛅', '🌧️', '🌙', '✨', '🌸', '☕', '😴', '🔥', '🫧'];
+    const MOOD_KEY = 'aurelia_phone_mood';
+    function _todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+    function _loadMood() {
+        try {
+            const m = JSON.parse(win.localStorage.getItem(MOOD_KEY));
+            if (m && m.day === _todayKey() && MOODS.indexOf(m.em) >= 0) return m.em;
+        } catch (e) {}
+        return MOODS[0];
+    }
+    function _saveMood(em) {
+        try { win.localStorage.setItem(MOOD_KEY, JSON.stringify({ day: _todayKey(), em: em })); } catch (e) {}
+    }
+    function _paintMood() {
+        if (!_el) return;
+        const el = _el.querySelector('#aps-mood-em');
+        if (el) el.textContent = _loadMood();
+    }
+    function _cycleMood() {
+        const i = MOODS.indexOf(_loadMood());
+        const next = MOODS[(i + 1) % MOODS.length];
+        _saveMood(next);
+        _paintMood();
     }
 
     // ── 設置 app：手機主題（先做背景；圖標/字體之後照同模式加，零衝突）──
@@ -311,7 +343,13 @@
           +   '<div class="aps-notch"></div>'
           +   '<div class="aps-screen">'
           +     '<div class="aps-statusbar"><span class="aps-sb-time" id="aps-sb-time">--:--</span><span class="aps-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>'
-          +     '<div class="aps-home" id="aps-home"><div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div></div>'
+          +     '<div class="aps-home" id="aps-home">'
+          +       '<div class="aps-lock">'
+          +         '<div class="aps-lock-time" id="aps-lock-time">--:--</div>'
+          +         '<div class="aps-lock-date" id="aps-lock-date"></div>'
+          +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情：<span class="aps-mood-em" id="aps-mood-em">☀️</span></button>'
+          +       '</div>'
+          +       '<div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div></div>'
           +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'
           +   '</div>'
           +   '<div class="aps-homebar"><button class="aps-home-btn" id="aps-home-btn" type="button" title="回主畫面"></button></div>'
@@ -326,7 +364,11 @@
         _addWritingTools();        // 寫作工具（系統設置/變數工坊/創作室＋standalone:世界書/提示詞）
         _restoreInstalledApps();   // 從 localStorage 補回已安裝 app
         _renderGrid();             // 統一畫圖標格 + 綁定 + 套圖庫圖標
-        try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列時鐘
+        const moodBtn = ov.querySelector('#aps-mood');
+        if (moodBtn) moodBtn.addEventListener('click', _cycleMood);
+        _paintMood();
+        _tickClock();                                              // 先畫一次，別讓主畫面停在 --:--
+        try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列＋主畫面時鐘
         return ov;
     }
 
@@ -370,6 +412,7 @@
         _home();
         _applyTheme();
         _tickClock();
+        _paintMood();   // 心情是綁日期的，每次開都要重讀——只在 _build 畫一次的話跨日還掛著昨天那個
         ov.style.display = 'flex';
     }
     function close() {

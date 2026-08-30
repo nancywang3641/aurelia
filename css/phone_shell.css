@@ -54,6 +54,35 @@
     font-family: var(--aps-font);
     overflow: hidden;
 }
+/* 主畫面頂端：時間 / 日期 / 今日心情。桌布深淺不定，所以白字一律配陰影，
+   心情膠囊沿用圖標名字那顆的毛玻璃（同一個桌布上只該有一種玻璃）。 */
+.aps-lock { flex-shrink: 0; padding: 6px 2px 18px; color: var(--aps-label-color); }
+/* 桌布可以是任何一張圖，也可以是「純白」——裸白字在淺桌布上會整個消失。
+   疊三層由近到遠的暗影當底暈，再加一道極細描邊：深桌布上看起來就是普通陰影，
+   淺桌布上這圈暗影撐出輪廓，字才讀得出來。膠囊那招不用在這裡：參考圖的時間就是裸字，
+   加了玻璃底就變成另一個東西。 */
+.aps-lock-time {
+    font-size: 46px; font-weight: 300; line-height: 1.05; letter-spacing: 1px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.45), 0 2px 12px rgba(0,0,0,0.38), 0 0 26px rgba(0,0,0,0.30);
+    -webkit-text-stroke: 0.4px rgba(0,0,0,0.18);
+}
+.aps-lock-date {
+    font-size: 14px; font-weight: 500; letter-spacing: 1px; margin-top: 2px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.50), 0 1px 8px rgba(0,0,0,0.38), 0 0 18px rgba(0,0,0,0.28);
+}
+.aps-mood {
+    margin-top: 12px; display: inline-flex; align-items: center; gap: 4px;
+    font: inherit; font-size: 12px; letter-spacing: 0.5px; color: var(--aps-label-color); cursor: pointer;
+    padding: 5px 14px; border-radius: 14px;
+    background: rgba(30,32,44,0.24);
+    -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3);
+    border: 0.5px solid rgba(255,255,255,0.16);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    transition: background 0.15s, transform 0.12s;
+}
+.aps-mood:hover { background: rgba(30,32,44,0.34); }
+.aps-mood:active { transform: scale(0.96); }
+.aps-mood-em { font-size: 14px; line-height: 1; }
 .aps-grid {
     display: grid; grid-template-columns: repeat(4, 1fr);
     gap: 18px 8px; align-content: start;
