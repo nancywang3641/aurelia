@@ -215,6 +215,14 @@ const VN_TTS = {
         return String(t || '').replace(/\s+/g, ' ').trim();
     },
 
+    // 🚨 清法必須跟著「這句要用哪顆音色」走，不能在還不知道音色之前就先清。
+    //    SoVITS：她的模型看到逗號會發出古怪的呼吸聲 → cleanText 把逗號換成空格（原始理由，別拿掉）。
+    //    IndexTTS：靠標點斷句，逗號被換成空格就整段黏在一起、無法斷句 → 要原文標點。
+    //    ⚠️ 快取鍵是用清完的字算的，所以預熱／清快取也要用同一支，否則預熱好的音檔對不上鍵＝白生。
+    _cleanForModel(model, raw) {
+        return (model && model.engine === 'index') ? this._cleanForKokoro(raw) : this.cleanText(raw);
+    },
+
     _cacheKey(modelId, text) { return `${modelId}\x00${text}`; },
 
     // 🔬 診斷（預設關）：印出語音快取命中/現生/換模型/預熱耗時。
@@ -514,11 +522,10 @@ const VN_TTS = {
     // ── 播放入口 ────────────────────────────────────────────────────────
     async play(charName, rawText, emotion, typeHint) {
         if (!this.config.enabled) return;
-        const text = this.cleanText(rawText);
-        if (!text) return;
-
         const model = this._resolveModel(charName, typeHint);
         if (!model) return;
+        const text = this._cleanForModel(model, rawText);
+        if (!text) return;
 
         return this._speakWithModel(model, text, emotion);
     },
@@ -542,11 +549,10 @@ const VN_TTS = {
     // ── 系統語音播放入口 ────────────────────────────────────────────────
     async playSystem(sysName, rawText, emotion) {
         if (!this.config.enabled) return;
-        const text = this.cleanText(rawText);
-        if (!text) return;
-
         const model = this._resolveSystemModel(sysName);
         if (!model) return;
+        const text = this._cleanForModel(model, rawText);
+        if (!text) return;
 
         return this._speakWithModel(model, text, emotion);
     },
@@ -563,9 +569,10 @@ const VN_TTS = {
         if (!this.config.enabled) return;
         const mid = this.config.narratorModel;
         if (!mid || !this.config.models[mid]) return;   // 沒指派旁白音色 → 靜默（不像系統音退預設）
-        const text = this.cleanText(rawText);
+        const _nm = { id: mid, ...this.config.models[mid] };
+        const text = this._cleanForModel(_nm, rawText);
         if (!text) return;
-        return this._speakWithModel({ id: mid, ...this.config.models[mid] }, text, emotion);
+        return this._speakWithModel(_nm, text, emotion);
     },
 
     // ── Kokoro 旁白合成（OpenAI 相容 /v1/audio/speech；獨立服務，不進 GPU 佇列）─
@@ -747,10 +754,10 @@ const VN_TTS = {
     prewarm(lines) {
         if (!this.config.enabled) return;
         for (const { charName, text, emotion, typeHint } of lines) {
-            const cleaned = this.cleanText(text);
-            if (!cleaned) continue;
             const model = this._resolveModel(charName, typeHint);
             if (!model) continue;
+            const cleaned = this._cleanForModel(model, text);
+            if (!cleaned) continue;
             const k = this._cacheKey(model.id, cleaned);
             if (this._cache[k] || this._pending.has(k)) continue;
             this._pending.add(k);
@@ -821,7 +828,7 @@ const VN_TTS = {
     clearCache(charName, text) {
         const model = this._resolveModel(charName);
         if (!model) return;
-        const k = this._cacheKey(model.id, this.cleanText(text));
+        const k = this._cacheKey(model.id, this._cleanForModel(model, text));
         if (this._cache[k]) { URL.revokeObjectURL(this._cache[k]); delete this._cache[k]; }
         this._pending.delete(k);
         this._prewarmQueue = this._prewarmQueue.filter(t => t.key !== k);
