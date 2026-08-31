@@ -48,8 +48,9 @@
         c.innerHTML = '<div class="aps-fail">正在確認 AI 助手…</div>';
 
         // 只認拉起房間的那一支。房間自己會再插一批 core/*.js 進來，光比對資料夾名會連那些一起中，
+        // 而網址有兩種長相（本機 claude-codex-room/index.js、CDN claude-codex-room@<commit>/index.js），
         // 於是「標籤根本不在」的情況也被判成「載了沒啟動」——診斷自己說錯話比沒有診斷更糟。
-        const tag = document.querySelector('script[src*="claude-codex-room/index.js"]');
+        const tag = document.querySelector('script[src*="claude-codex-room"][src*="/index.js"]');
         if (!tag) {
             c.innerHTML =
                 '<div class="aps-diag">'

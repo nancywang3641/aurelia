@@ -246,15 +246,24 @@
     <script src="os_phone/qb/qb_bookshelf.js"></script>
     <script src="os_phone/qb/os_404_chaos.js"></script>
 
-    <!-- 🤖 AI 助手（Claude / Codex 房間）—— 住在隔壁資料夾的獨立擴展 claude-codex-room（獨立 git repo）。
+    <!-- 🤖 AI 助手（Claude / Codex 房間）—— 獨立擴展 claude-codex-room，自己一個 git repo。
          它的核心零酒館依賴（只吃 OS_SETTINGS / OS_DB / fetch），所以獨立版直接載得起來；
-         手機殼那顆「AI 助手」app 找的就是 window.ChatWindow，沒載到會顯示「未安裝」。
-         ⚠️ 它自己會載自己的 core/css（帶 ?v=VER 破快取、順序自己管），這裡只拉 index.js 一支，
+         手機殼那顆「AI 助手」app 找的就是 window.ChatWindow，沒載到 app 會顯示為什麼。
+         🚨 走 CDN 鎖 commit，不要改回 "../claude-codex-room/index.js"。這份 index.html 有兩個家：
+            VPS 的酒館（隔壁真的有那個資料夾）跟 GitHub Pages（她手機上的 PWA 是這個）。
+            Pages 上「隔壁」是另一個 repo 的 Pages 站，沒開＝404，相對路徑只有一半的場合成立。
+            CDN 這條在兩邊都一樣，是唯一同時成立的寫法。
+         🚨 房間改版要同時把下面兩處的 commit 換掉（__CCR_BASE__ 與 script src 必須同一個），
+            換完先用瀏覽器打一次新網址預熱，不然手機第一次會等 jsDelivr 回源。
+         ⚠️ 它自己會載自己的 core/css（帶 ?v=VER、順序自己管），這裡只拉 index.js 一支，
             也不要把它的檔案抄進本 repo 的載入清單 —— 那邊改版跟這邊是兩條 git 線。
          ⚠️ 位置必須在 os_settings.js / os_db.js 之後：房間會先看這兩個在不在，
             在就沿用（設定與對話存檔跟奧瑞亞共用同一份），不在才自己裝一份 shim。 -->
-    <script>window.__CCR_NO_LAUNCHER__ = true;   /* 入口是手機殼的「AI 助手」app，不要右下角再多一顆浮球 */</script>
-    <script src="../claude-codex-room/index.js"></script>
+    <script>
+        window.__CCR_NO_LAUNCHER__ = true;   /* 入口是手機殼的「AI 助手」app，不要右下角再多一顆浮球 */
+        window.__CCR_BASE__ = "https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@31e264a/";
+    </script>
+    <script src="https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@31e264a/index.js"></script>
 
 
     <script>
