@@ -1232,18 +1232,18 @@
                         else _tr.warning('NAI 生圖失敗（非併發）：' + _emsg, 'NAI 錯誤', { timeOut: 8000 });
                     }
                 } catch (_) {}
-                // 🎯 插圖(scene)：NAI 失敗「不」回退 Pollinations —— NAI 是 Danbooru tag、Pollinations 是自然語言，
-                //    格式不相容、硬退會生出垃圾圖。寧可這張略過（上游 _doFetchScene/顯示端都 if(url) 判空、不插破圖；可按 🔄 重生）。
-                if (type === 'scene') {
-                    console.warn('[ImageManager] scene 插圖 NAI 失敗 → 不回退 Pollinations（提示詞不相容），略過此張');
+                // 🎯 人物圖（scene 插圖 / char 頭像立繪）：NAI 失敗「不」回退 Pollinations。
+                //    NAI 吃 Danbooru tag、Pollinations 吃自然語言，格式不相容 —— 硬退生出來的是
+                //    畫風完全不同的另一張圖，貼到舞台上比沒有更糟。寧可這張略過：
+                //    上游（_doFetchScene / 立繪解析鏈）都判空，會落到使用者自己設的預設立繪，
+                //    也可以按 🔄 重生。（char 那條 2026-08-31 由 Rae 拍板拿掉，理由同 scene。）
+                if (type === 'scene' || type === 'char') {
+                    console.warn('[ImageManager] ' + type + ' NAI 失敗 → 不回退 Pollinations（提示詞不相容），略過此張');
                     return null;
                 }
-                // 回退時補上 Pollinations 底詞，確保風格一致
-                let fallbackPrompt = prompt;
-                if (type === 'char' && this.config.pollinations.charBasePrompt) {
-                    fallbackPrompt = this.config.pollinations.charBasePrompt + ', ' + prompt;
-                }
-                return this._genPollinations(fallbackPrompt, type);
+                // 死物（背景／物品／寵物）仍回退：那類圖 Pollinations 出得堪用，
+                // 而且背景缺圖會整片黑，比畫風不一致嚴重。
+                return this._genPollinations(prompt, type);
             }
         },
 
