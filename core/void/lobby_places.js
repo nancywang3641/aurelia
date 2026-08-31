@@ -275,22 +275,40 @@
         }));
     }
 
+    // 一張地點卡。withApp＝右半那顆「直接進去」的鈕：只有「當前區域」那張給，
+    // 附近地點是兩欄格，每格再塞一顆箭頭會把四個字的地名擠掉尾字。
+    // 去別的地方＝點那張卡（走過去），到了之後再用當前區域那顆箭頭進去。
+    function _cardHtml(c, curId, withApp) {
+        const p = c.p;
+        const cls = 'lb-rail-card' + (p.id === curId ? ' is-cur' : '') + (c.on ? '' : ' is-off');
+        return '<div class="' + cls + '" data-id="' + p.id + '">' +
+            '<button class="lb-rail-main" type="button" data-go="talk"' + (c.on ? '' : ' disabled') + '>' +
+                '<span class="lb-rail-ic"><i class="fa-solid ' + (c.on ? p.icon : 'fa-lock') + '"></i></span>' +
+                '<span class="lb-rail-tx">' +
+                    '<span class="lb-rail-t">' + p.name + '</span>' +
+                    '<span class="lb-rail-who">' + (c.on ? ((c.npc && c.npc.name) || c.emptyWho || '　') : '尚未開放') + '</span>' +
+                '</span>' +
+            '</button>' +
+            ((c.on && withApp) ? '<button class="lb-rail-app" type="button" data-go="app" title="' + (p.flatName || p.name) + '">' +
+                '<i class="fa-solid fa-arrow-right-to-bracket"></i></button>' : '') +
+        '</div>';
+    }
+
+    // 右欄分兩張卡：現在站在哪、旁邊有什麼。
+    // 舊版是七張同尺寸的斜票疊成一直排 —— 那個排法高度跟項目數綁在一起，
+    // 而畫面下緣還有對話框，項目一多最後一張就被壓在底下看不見。
     function _railHtml(curId) {
-        return _cards().map(c => {
-            const p = c.p;
-            const cls = 'lb-rail-card' + (p.id === curId ? ' is-cur' : '') + (c.on ? '' : ' is-off');
-            return '<div class="' + cls + '" data-id="' + p.id + '">' +
-                '<button class="lb-rail-main" type="button" data-go="talk"' + (c.on ? '' : ' disabled') + '>' +
-                    '<span class="lb-rail-ic"><i class="fa-solid ' + (c.on ? p.icon : 'fa-lock') + '"></i></span>' +
-                    '<span class="lb-rail-tx">' +
-                        '<span class="lb-rail-t">' + p.name + '</span>' +
-                        '<span class="lb-rail-who">' + (c.on ? ((c.npc && c.npc.name) || c.emptyWho || '　') : '尚未開放') + '</span>' +
-                    '</span>' +
-                '</button>' +
-                (c.on ? '<button class="lb-rail-app" type="button" data-go="app" title="' + (p.flatName || p.name) + '">' +
-                    '<i class="fa-solid fa-arrow-right-to-bracket"></i></button>' : '') +
+        const cards = _cards();
+        const cur = cards.filter(c => c.p.id === curId)[0];
+        const rest = cards.filter(c => c.p.id !== curId);
+        return (cur ? '<div class="lb-rail-sec lb-rail-now">' +
+                '<div class="lb-rail-hd">當前區域</div>' +
+                _cardHtml(cur, curId, true) +
+            '</div>' : '') +
+            '<div class="lb-rail-sec lb-rail-near">' +
+                '<div class="lb-rail-hd">附近地點</div>' +
+                '<div class="lb-rail-grid">' + rest.map(c => _cardHtml(c, curId, false)).join('') + '</div>' +
             '</div>';
-        }).join('');
     }
 
     function closeView() { if (_view) { try { _view(); } catch (e) {} _view = null; } }

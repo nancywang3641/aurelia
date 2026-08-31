@@ -110,6 +110,63 @@
 .lb-rail-card.is-off .lb-rail-who { color:rgba(242,236,255,.3); }
 
 /* =========================================================
+   🧭 對話模式的右欄與 dock（2026-08-31 改版，只動對話模式）
+   舊版：地點是一疊斜票直排、dock 另一條直排貼右緣垂直置中。兩條的高度
+   都跟項目數綁在一起 —— dock 加到第八顆（宿舍）之後，最後那顆「出門」
+   在她螢幕上正好落進對話框裡，而對話框 z-index 比 dock 高一階，
+   重疊處一定是 dock 輸（看起來就是那顆鈕消失了）。
+   新版：右欄兩張卡（當前區域／附近地點兩欄格），dock 收成右下角一張橫卡，
+   跟對話框並排。高度不再隨項目數長，再加東西也不會壓到別人。
+   ⚠️ 全部靠 .lb-pv 在不在來判斷 —— 那是對話模式獨有的，舞台模式一個字不改。
+   ========================================================= */
+/* 🚨 這兩個變數要掛在 .lobby-left：地點卡住在 .lb-pv 裡、dock 是 .lobby-left 的直接子元素，
+   只有共同祖先上的變數兩邊才讀得到。掛在 .lb-pv 上時 dock 讀到空字串 → right 整條失效
+   退回 auto，dock 就掉到左下角疊在對話框上。--lb-edge 沿用 .lb-pv 那份（同一個算式）。 */
+.lobby-left:has(.lb-pv) { --lb-rail-wide:352px; --lb-pv-edge:max(78px, calc(50% - 620px)); }
+.lb-pv .lb-rail {
+    top:72px; bottom:255px;   /* 下緣讓開右下角那張 dock 卡（兩排鈕約 155 高 + 貼底 84） */
+    justify-content:flex-start; gap:12px; padding:0;
+    width:var(--lb-rail-wide);
+}
+.lb-rail-sec {
+    background:rgba(14,10,20,.72); border:1px solid rgba(255,255,255,.14);
+    border-radius:14px; padding:12px;
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+.lb-rail-hd {
+    font-size:11px; font-weight:700; letter-spacing:2px;
+    color:rgba(242,236,255,.55); margin-bottom:10px;
+}
+.lb-rail-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+/* 格子裡不再斜、不再錯開：斜疊是「一疊可以抽的票」的語言，
+   兩欄格配上「附近地點」那行標題已經讀得出是一組卡，再斜就只是歪。 */
+.lb-pv .lb-rail .lb-rail-card { transform:none; }
+.lb-pv .lb-rail .lb-rail-card:not(.is-off):hover { transform:translateY(-2px); }
+.lb-rail-grid .lb-rail-main { border-right:1px solid rgba(255,255,255,.16); border-radius:11px; }
+.lb-rail-now .lb-rail-card.is-cur::before { left:0; }
+
+/* dock：右下角一張橫卡。四顆一排，八顆剛好兩排。 */
+@media (min-width:761px) {
+    .lobby-left:has(.lb-pv) .lb-dock {
+        top:auto; bottom:84px; right:var(--lb-pv-edge); transform:none;
+        flex-direction:row; flex-wrap:wrap; justify-content:flex-end;
+        width:var(--lb-rail-wide); gap:8px; padding:12px; border-radius:14px;
+        background:rgba(14,10,20,.72); border:1px solid rgba(255,255,255,.14);
+        -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    }
+    .lobby-left:has(.lb-pv) .lb-dock-sep { display:none; }
+    .lobby-left:has(.lb-pv) .lb-dock-btn { width:70px; }
+    .lobby-left:has(.lb-pv) .lb-dock-btn:hover { transform:translateY(-2px); }
+    /* 對話框讓開右下角那張卡；輸入列不動，照樣吃滿寬 */
+    .lobby-left:has(.lb-pv) .void-dialogue-box {
+        /* dock 貼的是 --lb-pv-edge，不是 wrap 自己那 16px padding；
+           少算那一段對話框右緣就會伸進 dock 底下（實測壓了 32px）。 */
+        margin-right:calc(var(--lb-pv-edge) + var(--lb-rail-wide) + 16px);
+    }
+}
+
+/* =========================================================
    🏛 地點視圖（立繪模式）：背景＝地點、左＝管理員立繪。
    進來先給岔路「對話／應用」，選了才進去那件事——不是分頁、不並存。
    對話＝貼底的 VN 對話框（右容器收起來）；應用＝右容器開，對話框收起來。
@@ -208,6 +265,23 @@
     /* dock 釘在 right:10px、寬 58 → 它佔掉右邊 68px。--lb-edge 要大於這個數才不會疊上去
        （量過：66 會差 2px 剛好壓到）。 */
     .lb-pv { --lb-edge:76px; --lb-rail-w:48px; }
+    /* 🚨 窄畫面的 dock 照舊是一直排，但不能再對「整個畫面」垂直置中 ——
+       畫面下緣有對話框，而且它的層級比 dock 高一階，重疊處一定是 dock 輸。
+       八顆的時候最後那顆「出門」正好落進去被吃掉一半（她回報的就是這個，桌機窄機都會）。
+       改成把可用範圍夾在對話框上面再置中；真的擠不下就讓它捲，而不是把鈕藏起來。 */
+    .lobby-left:has(.lb-pv) .lb-dock {
+      top:56px; bottom:240px; transform:none; justify-content:center; overflow-y:auto;
+    }
+    .lobby-left:has(.lb-pv) .lb-dock::-webkit-scrollbar { width:0; }
+    /* 🚨 對話模式的兩張卡是桌機版型，窄畫面照舊收成一排圖標。
+       這裡一定要用 .lb-pv .lb-rail 重寫 —— 桌機那條也是兩層選擇器，
+       只寫 .lb-rail 權重輸給它，寬度會留在 352 直接衝出畫面外（實測 390 寬時左緣 -38）。
+       名字本來就藏起來了，分區標題與卡框在 48px 裡放不下，一併收掉。 */
+    .lb-pv .lb-rail { width:var(--lb-rail-w); top:56px; bottom:104px; gap:6px; }
+    .lb-rail-sec { background:none; border:none; padding:0;
+      -webkit-backdrop-filter:none; backdrop-filter:none; }
+    .lb-rail-hd { display:none; }
+    .lb-rail-grid { display:flex; flex-direction:column; gap:6px; }
     /* 卡片牆縮成一排圖標（名字擠不下就別擠，長字串會把版面撐爆）；窗格吃滿寬蓋過去 */
     .lb-rail { top:56px; bottom:104px; gap:6px; }
     .lb-rail-card, .lb-rail-card.is-cur, .lb-rail-card:not(.is-off):hover { --lb-card-off:0px; transform:none; }
