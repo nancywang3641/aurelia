@@ -617,6 +617,10 @@ const IRIS_IDLE = [
                             <i class="fa-solid fa-building-columns"></i>
                             <span class="lb-dock-label" data-cn-404="違章建築">房產</span>
                         </button>
+                        <button class="lb-dock-btn lb-entry-off" id="lb-dock-ai" data-proxy="void-ai-btn" title="宿舍">
+                            <i class="fa-solid fa-door-open"></i>
+                            <span class="lb-dock-label" data-cn-404="收容所">宿舍</span>
+                        </button>
                         <div class="lb-dock-sep"></div>
                         <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-depart-flat.png" alt="">
@@ -709,6 +713,16 @@ const IRIS_IDLE = [
                             <div class="lb-menu-txt">
                                 <span class="lb-menu-cn" data-cn-404="違章建築">房產手帳</span>
                                 <span class="lb-menu-en" data-en-404="ROGUE BLOCKS">ESTATE BOOK</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn lb-entry-off" id="void-ai-btn" title="宿舍" onclick="if(window.VoidTerminal) window.VoidTerminal.openAiDorm();">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-door-open"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="收容所">宿舍</span>
+                                <span class="lb-menu-en" data-en-404="CONTAINMENT">DORM</span>
                             </div>
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
@@ -1016,6 +1030,9 @@ const IRIS_IDLE = [
                 const proxy = tab.querySelector('#' + b.dataset.proxy);
                 if (proxy) proxy.click();
             });
+
+            // 宿舍那條：房間是獨立擴展，沒裝就不要在 dock 上留一顆死鈕
+            try { VoidTerminal.refreshAiEntry(); } catch (e) {}
 
             // ===== 右上角人設頭像 + 下拉（取代舊「我」TAB，內容＝ OS_PERSONA 人設管理）=====
             (function setupPersonaAvatar() {
@@ -2344,6 +2361,149 @@ ${sections}`;
             }
         }
     }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🚪 宿舍（AI 助手）—— 大廳 dock 是唯一入口
+    // ------------------------------------------------------------------
+    // 房間本體是隔壁的獨立擴展 claude-codex-room：跟奧瑞亞兩條 git 線，
+    // 酒館那邊也是分開的兩個腳本。沒裝它的人不該在 dock 上看到一顆死鈕，
+    // 所以入口是「有打算載房間才出現」，而不是永遠在、按了才說沒裝。
+    //
+    // 「有沒有打算載」用兩個訊號，缺一就漏掉一個宿主：
+    //   __CCR_LOADED__ —— 房間 index.js 第一行就設。酒館用 import 載擴展，
+    //                     不會留下 script 標籤，只有這個認得出來。
+    //   script 標籤    —— PWA 是自己在 index.html 拉 CDN 那支。房間要是 404，
+    //                     前者永遠不會被設，但標籤在＝她本來就要它 →
+    //                     鈕要出現，按下去才有人告訴她斷在哪一段。
+    // ══════════════════════════════════════════════════════════════════
+    function _aiRoomIntended() {
+        if (window.__CCR_LOADED__) return true;
+        try { return !!document.querySelector('script[src*="claude-codex-room"][src*="/index.js"]'); }
+        catch (e) { return false; }
+    }
+
+    // dock 那顆與 MAIN MENU 那條一起開關。房間是非同步載進來的，
+    // 所以房間載完會自己再叫一次這支（大廳先畫好也沒關係）。
+    VoidTerminal.refreshAiEntry = function () {
+        const on = _aiRoomIntended();
+        try {
+            const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
+            for (let i = 0; i < els.length; i++) els[i].classList.toggle('lb-entry-off', !on);
+        } catch (e) {}
+    };
+
+    // 留言板上有新東西時，宿舍那顆點一下 —— 房間查到之後叫這支（它以前是畫在自己的浮球上，
+    // 浮球收掉之後那個提醒就沒地方站了）。最軟的提醒：不彈窗、不出聲，進去看過就消失。
+    VoidTerminal.markAiNews = function (kind) {
+        try {
+            const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
+            for (let i = 0; i < els.length; i++) {
+                els[i].classList.add(kind === 'prop' ? 'lb-ai-news-prop' : 'lb-ai-news');
+            }
+        } catch (e) {}
+    };
+
+    function _clearAiNews() {
+        try {
+            const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
+            for (let i = 0; i < els.length; i++) els[i].classList.remove('lb-ai-news', 'lb-ai-news-prop');
+        } catch (e) {}
+    }
+    VoidTerminal.openAiDorm = function () {
+        if (window.ChatWindow && typeof window.ChatWindow.toggleLauncherMenu === 'function') {
+            _clearAiNews();
+            window.ChatWindow.toggleLauncherMenu(document.body);
+            return;
+        }
+        _openAiDiag();
+    };
+
+    function _aiEsc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // 房間叫不出來的原因不只一種，一律寫「沒裝」等於挑一個猜給她看。
+    // 三段各查一次，講斷在哪一段（原本住在手機殼那顆 app 裡，入口收攏後跟著搬過來）。
+    function _openAiDiag() {
+        const old = document.getElementById('vt-aidiag');
+        if (old) old.remove();
+        const box = document.createElement('div');
+        box.id = 'vt-aidiag';
+        box.className = 'vt-aidiag';
+        box.innerHTML =
+            '<div class="vt-aidiag-card">'
+            + '<div class="vt-aidiag-body">正在確認宿舍…</div>'
+            + '<button type="button" class="vt-aidiag-close">關閉</button>'
+            + '</div>';
+        document.body.appendChild(box);
+        box.addEventListener('click', function (e) { if (e.target === box) box.remove(); });
+        box.querySelector('.vt-aidiag-close').addEventListener('click', function () { box.remove(); });
+        _fillAiDiag(box.querySelector('.vt-aidiag-body'));
+    }
+
+    function _fillAiDiag(c) {
+        if (!c) return;
+        // 只認拉起房間的那一支。房間自己會再插一批 core/*.js 進來，光比對資料夾名會連那些一起中；
+        // 而網址有兩種長相（本機 claude-codex-room/index.js、CDN claude-codex-room@<commit>/index.js）。
+        const tag = document.querySelector('script[src*="claude-codex-room"][src*="/index.js"]');
+        if (!tag) {
+            c.innerHTML =
+                '<div class="vt-aidiag-title">這個畫面是舊的</div>'
+                + '<div class="vt-aidiag-line">手機上存下來的這份還沒有宿舍，換成最新版就會出現。</div>'
+                + '<button type="button" class="vt-aidiag-btn">抓最新版重開</button>';
+            const b = c.querySelector('.vt-aidiag-btn');
+            if (b) b.addEventListener('click', _aiHardReload);
+            return;
+        }
+        const url = tag.src;
+        fetch(url, { cache: 'no-store' }).then(function (r) {
+            if (!r.ok) {
+                c.innerHTML =
+                    '<div class="vt-aidiag-title">找不到宿舍的檔案</div>'
+                    + '<div class="vt-aidiag-line">它是另一個資料夾裡的東西，這台可能沒放。</div>'
+                    + '<div class="vt-aidiag-tech">' + _aiEsc(url) + '<br>回應 ' + r.status + '</div>';
+                return;
+            }
+            c.innerHTML =
+                '<div class="vt-aidiag-title">宿舍讀進來了，但沒開起來</div>'
+                + '<div class="vt-aidiag-line">檔案抓得到，房間卻沒啟動 —— 它自己載到一半出錯了。</div>'
+                + '<div class="vt-aidiag-tech">' + _aiEsc(url) + '<br>回應 200</div>'
+                + '<button type="button" class="vt-aidiag-btn">抓最新版重開</button>';
+            const b2 = c.querySelector('.vt-aidiag-btn');
+            if (b2) b2.addEventListener('click', _aiHardReload);
+        }).catch(function (e) {
+            c.innerHTML =
+                '<div class="vt-aidiag-title">連不到宿舍的檔案</div>'
+                + '<div class="vt-aidiag-line">網路那一段就斷了，不是房間本身的問題。</div>'
+                + '<div class="vt-aidiag-tech">' + _aiEsc(url) + '<br>' + _aiEsc(e && e.message || e) + '</div>';
+        });
+    }
+
+    // 清掉存下來的那份再重載。加到主畫面的 PWA 單純下拉重整常常還是拿到同一份。
+    function _aiHardReload() {
+        const jobs = [];
+        try {
+            if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+                    return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                }));
+            }
+        } catch (e) {}
+        try {
+            if (window.caches && caches.keys) {
+                jobs.push(caches.keys().then(function (ks) {
+                    return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+                }));
+            }
+        } catch (e) {}
+        Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
+    }
+
+    // 宿主自己有入口了 → 叫房間別再掛它預設的右下角浮球。
+    // 兩邊誰先載都可能（酒館的擴展清單順序不固定），所以旗標與重畫兩件事都做：
+    // 房間後到會自己讀旗標，房間先到就靠這一叫把已經掛上去的收掉。
+    window.__CCR_NO_LAUNCHER__ = true;
+    try { if (window.CCR_LAUNCHER && window.CCR_LAUNCHER.refresh) window.CCR_LAUNCHER.refresh(); } catch (e) {}
 
     // ===== 導出全局介面 =====
     // 暴露到外層，讓其他面板 (如 QB_CORE, IDOL_CORE) 能夠調用

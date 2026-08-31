@@ -248,7 +248,7 @@
 
     <!-- 🤖 AI 助手（Claude / Codex 房間）—— 獨立擴展 claude-codex-room，自己一個 git repo。
          它的核心零酒館依賴（只吃 OS_SETTINGS / OS_DB / fetch），所以獨立版直接載得起來；
-         手機殼那顆「AI 助手」app 找的就是 window.ChatWindow，沒載到 app 會顯示為什麼。
+         大廳 dock 那顆「宿舍」找的就是 window.ChatWindow，沒載到按了會顯示斷在哪一段。
          🚨 走 CDN 鎖 commit，不要改回 "../claude-codex-room/index.js"。這份 index.html 有兩個家：
             VPS 的酒館（隔壁真的有那個資料夾）跟 GitHub Pages（她手機上的 PWA 是這個）。
             Pages 上「隔壁」是另一個 repo 的 Pages 站，沒開＝404，相對路徑只有一半的場合成立。
@@ -260,10 +260,11 @@
          ⚠️ 位置必須在 os_settings.js / os_db.js 之後：房間會先看這兩個在不在，
             在就沿用（設定與對話存檔跟奧瑞亞共用同一份），不在才自己裝一份 shim。 -->
     <script>
-        window.__CCR_NO_LAUNCHER__ = true;   /* 入口是手機殼的「AI 助手」app，不要右下角再多一顆浮球 */
-        window.__CCR_BASE__ = "https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@31e264a/";
+        /* 浮球不用在這裡關 —— void_terminal.js 一載入就會設 __CCR_NO_LAUNCHER__，
+           因為入口已經收攏成大廳 dock 的「宿舍」那一顆。 */
+        window.__CCR_BASE__ = "https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@5c27f38/";
     </script>
-    <script src="https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@31e264a/index.js"></script>
+    <script src="https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@5c27f38/index.js"></script>
 
 
     <script>

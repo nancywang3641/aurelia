@@ -413,6 +413,50 @@
     position:absolute; right:10px; top:50%; transform:translateY(-50%);
     z-index:40; display:flex; flex-direction:column; align-items:center; gap:9px;
 }
+/* dock 與 MAIN MENU 上「這台沒裝就不該出現」的入口（目前只有宿舍）。
+   用 class 藏而不是不畫出來：房間是非同步載進來的，載完再叫 refreshAiEntry 就會現身。
+   🚨 用 id 寫。這兩顆的 display 分別來自 .lb-dock-btn 與 .lobby-right .void-btn，
+      都是一或兩個 class；同權重時誰寫在後面誰贏，而它們散在本檔與 aurelia_core.css，
+      光靠位置壓不住。id 一定贏，而且要藏的就是這兩顆具名的東西。 */
+#lb-dock-ai.lb-entry-off,
+#void-ai-btn.lb-entry-off { display: none; }
+
+/* 留言板有新紙條時宿舍那顆右上角的點。房間查到就叫 markAiNews，進去看過就清掉。
+   刻意只有一顆點：不彈窗、不出聲，錯過也不會怎樣。 */
+#lb-dock-ai, #void-ai-btn { position: relative; }
+#lb-dock-ai.lb-ai-news::after, #lb-dock-ai.lb-ai-news-prop::after,
+#void-ai-btn.lb-ai-news::after, #void-ai-btn.lb-ai-news-prop::after {
+    content: ""; position: absolute; top: 6px; right: 6px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #8fb6ff; box-shadow: 0 0 6px rgba(143, 182, 255, 0.9);
+}
+#lb-dock-ai.lb-ai-news-prop::after, #void-ai-btn.lb-ai-news-prop::after {
+    background: #ffcf6b; box-shadow: 0 0 7px rgba(255, 207, 107, 0.95);
+}
+
+/* 宿舍叫不出來時的說明卡。只在壞掉的時候出現，所以直接掛 body、蓋在最上層。 */
+.vt-aidiag {
+    position: fixed; inset: 0; z-index: 99999;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.55); padding: 20px;
+}
+.vt-aidiag-card {
+    width: min(420px, 100%); max-height: 80vh; overflow: auto;
+    padding: 26px 22px 20px; border-radius: 14px;
+    background: #f7f6f2; color: #4a4e69; text-align: center;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.vt-aidiag-title { font-size: 15px; font-weight: bold; color: #2b2d42; margin-bottom: 10px; }
+.vt-aidiag-line { font-size: 13px; line-height: 1.7; color: #5a5f78; }
+.vt-aidiag-tech { margin-top: 14px; font-size: 11px; line-height: 1.6; color: #8a8fa3; word-break: break-all; }
+.vt-aidiag-btn, .vt-aidiag-close {
+    margin-top: 18px; padding: 10px 20px; border: 1px solid rgba(43, 45, 66, 0.24);
+    border-radius: 8px; background: rgba(43, 45, 66, 0.06); color: #2b2d42;
+    font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.vt-aidiag-btn:hover, .vt-aidiag-close:hover { background: rgba(43, 45, 66, 0.12); }
+.vt-aidiag-close { display: block; margin-left: auto; margin-right: auto; }
+
 .lb-dock-btn {
     position:relative; width:58px; padding:7px 4px 6px;
     display:flex; flex-direction:column; align-items:center; gap:3px;
