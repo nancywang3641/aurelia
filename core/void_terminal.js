@@ -618,11 +618,11 @@ const IRIS_IDLE = [
                              要連帶預熱一百多支檔（沒預熱＝她會看到滿屏載入失敗），為了兩顆圖不划算。
                              下次真的要升 v2 時，這兩支跟著一起換掉就好。 -->
                         <button class="lb-dock-btn" data-proxy="void-estate-btn" title="房產手帳">
-                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@dbccb75/aseets/menu_dock/icon-estate-flat.png" alt="">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@f409f7e/aseets/menu_dock/icon-estate-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="違章建築">房產</span>
                         </button>
                         <button class="lb-dock-btn lb-entry-off" id="lb-dock-ai" data-proxy="void-ai-btn" title="宿舍">
-                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@dbccb75/aseets/menu_dock/icon-dorm-flat.png" alt="">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@f409f7e/aseets/menu_dock/icon-dorm-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="收容所">宿舍</span>
                         </button>
                         <div class="lb-dock-sep"></div>
