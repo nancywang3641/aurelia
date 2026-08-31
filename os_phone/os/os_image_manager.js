@@ -432,15 +432,17 @@
             const body = { model: model, prompt: prompt, n: 1, size: width + 'x' + height };
             if (options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略
 
-            try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (key) headers['Authorization'] = 'Bearer ' + key;
+            const headers = { 'Content-Type': 'application/json' };
+            if (key) headers['Authorization'] = 'Bearer ' + key;
+
+            // 一次送出（不重試）。回傳圖片網址／data URL；失敗就 throw，由外層決定要不要再來一次。
+            const _once = async () => {
                 const resp = await fetch(endpoint, {
                     method: 'POST', headers: headers, body: JSON.stringify(body),
                     signal: options.signal || undefined,
                 });
                 const text = await resp.text();
-                if (!resp.ok) throw new Error(resp.status + ' ' + text.slice(0, 300));
+                if (!resp.ok) { const e = new Error(resp.status + ' ' + text.slice(0, 300)); e.status = resp.status; throw e; }
 
                 let data;
                 try { data = JSON.parse(text); }
@@ -451,6 +453,22 @@
                 if (first.b64_json) return 'data:image/png;base64,' + first.b64_json;
                 if (first.url) return first.url;
                 throw new Error('回應的格式看不懂：' + JSON.stringify(first).slice(0, 200));
+            };
+
+            try {
+                try {
+                    return await _once();
+                } catch (e1) {
+                    // 🔁 只對「站方那邊的問題」重試一次：5xx＝上游沒吐圖／逾時／忙（公益站很常見），
+                    //    網路錯誤沒有 status。4xx 不重試 —— 那是網址、Key、型號名或內容被擋，
+                    //    再送一次只會拿到同一個答案，還多燒她一次額度。
+                    const st = e1 && e1.status;
+                    const worthRetry = (!st || st >= 500);
+                    if (!worthRetry || options.signal?.aborted) throw e1;
+                    console.warn('[ImageManager] 自訂接口第一次沒成功，等 2 秒重試一次：' + ((e1 && e1.message) || e1));
+                    await new Promise(r => setTimeout(r, 2000));
+                    return await _once();
+                }
             } catch (e) {
                 const msg = (e && e.message) || String(e);
                 console.error('[ImageManager] ❌ 自訂接口生圖失敗:', msg);
