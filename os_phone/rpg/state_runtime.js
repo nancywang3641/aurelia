@@ -702,6 +702,7 @@ ${_fieldChecklist}
 - 新角色首次登場：按 desc 的「基礎屬性組」補齊每一個基礎屬性初值，之後才依劇情加特有屬性
 - 「初遇」錨點（防 NPC 失憶）：只要某角色**與 MC 當面見過 / 互動過**，首次登場時就給它一個「初遇」屬性，記「第一次與 MC 相遇的時序＋地點＋怎麼遇上的」（例：{ "角色狀態.某人.初遇": "第4輪・城門口・替MC指路認識" }）。**即使該角色只是短暫出場、戲份很少，只要見過 MC 就一定要記**——這是為了讓他很久以後再登場時，不會被當成第一次見 MC。
 - 「初遇」一旦寫入＝**永久錨點**：之後視為固定、不要再寫進 updates、不可改寫或刪除（角色消失幾百輪後再出現，初遇仍在）。若【當下狀態】裡某個見過 MC 的角色「缺」初遇，這輪順手回補（從劇情回推第一次相遇）。
+- 「當前目標」＝**現在進行式、會過期的欄位**：只更新**本輪有戲份**的角色——他的目標達成了／破局了／被更急的事取代，這輪就換成他眼下真正在謀劃的那件事；真的無事可謀就填「無」。本輪沒出場的角色**不要動他的目標**（沒有新資訊，改了就是編的），那句話會由系統自動標成「最後動向」再餵給正文模型。
 - 「退場刪除」removes（嚴格、寧缺勿濫）：只有**劇情明確寫死了或永久退場**（死亡且無復活可能／徹底離開故事不會再出現）**且沒有未了牽扯**（沒有進行中任務、債務、物品往來或懸念掛在他身上）的實體，才把「容器.實體名」整條列進 removes。主角／MC／{{user}} **絕不可列**；只能刪整個實體、不能刪單一屬性；**不確定就保留**（頂多在 updates 把他的狀態改成死亡）；沒有要刪就省略 removes。`;
     }
 
@@ -1973,6 +1974,23 @@ _directorSpec(castNames);
         }
     }
 
+    // 離場角色的「當前目標」→ 改標「最後動向」（只改注入給主模型的那份，權威資料不動）。
+    // 「當前目標」是現在進行式的措辭：人走了幾十輪、那句話還原封不動掛在狀態裡，主模型會讀成
+    // 「他此刻正在做這件事」——於是憑空把人拉回場，或讓在場的人談一件早就過期的盤算。
+    // 副模型抽取讀的仍是原始的「當前目標」，所以只在這裡換標籤、不落盤。
+    function _relabelOffstageGoals(node, keyName, active) {
+        if (Array.isArray(node)) {
+            return { node: node.map(v => (v && typeof v === 'object') ? _relabelOffstageGoals(v, null, active).node : v), hit: false };
+        }
+        let hit = false; const out = {};
+        for (const [k, v] of Object.entries(node)) {
+            if (k === '當前目標' && keyName && !active.has(keyName)) { out['最後動向'] = v; hit = true; continue; }
+            if (v && typeof v === 'object') { const r = _relabelOffstageGoals(v, k, active); out[k] = r.node; hit = hit || r.hit; }
+            else out[k] = v;
+        }
+        return { node: out, hit };
+    }
+
     // --- inject：把 current 塞進下一輪主模型 system prompt ---
     async function injectCurrent() {
         try {
@@ -1992,12 +2010,17 @@ _directorSpec(castNames);
             try { if (win.OS_AVS?.buildVarDefsContent) defsBlock = (await win.OS_AVS.buildVarDefsContent(chatId)) || ''; } catch (e) {}
 
             const data = await win.OS_DB.getStateData(chatId);
+            const _active = new Set(_activeCastNames());   // 掃不到在場名單（非 VN 格式）→ 一個都不改標
             let stateBlock = '';
             if (data && data.current && Object.keys(data.current).length) {
-                const lines = Object.entries(data.current)
+                const _rl = _active.size ? _relabelOffstageGoals(data.current, null, _active) : { node: data.current, hit: false };
+                const lines = Object.entries(_rl.node)
                     .map(([k, v]) => `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
                     .join('\n');
-                stateBlock = `<世界狀態 規則="權威資料·寫作前必讀·不得矛盾·唯讀嚴禁複述">\n以下是當前劇情的權威狀態，由系統自動追蹤，屬於給你的唯讀背景。你接下來的寫作必須與這些數值、身分、關係完全一致，嚴禁與之矛盾或擅自更改。同時嚴禁在任何輸出（包括 <summary> 摘要）中複述、抄寫或整理本區塊內容——狀態由系統追蹤與保存，不需要也不允許你記錄。\n${lines}\n</世界狀態>`;
+                const offstageNote = _rl.hit
+                    ? '\n不在場角色標的是「最後動向」＝他離開視線前在盤算的事，不是他此刻正在做的事；別寫成正在發生，也別為了呼應它把人硬拉回場。'
+                    : '';
+                stateBlock = `<世界狀態 規則="權威資料·寫作前必讀·不得矛盾·唯讀嚴禁複述">\n以下是當前劇情的權威狀態，由系統自動追蹤，屬於給你的唯讀背景。你接下來的寫作必須與這些數值、身分、關係完全一致，嚴禁與之矛盾或擅自更改。同時嚴禁在任何輸出（包括 <summary> 摘要）中複述、抄寫或整理本區塊內容——狀態由系統追蹤與保存，不需要也不允許你記錄。${offstageNote}\n${lines}\n</世界狀態>`;
             }
 
             // 關係階段：在場角色的好感度數字 → preset 5 階（權威階段，演法交給 preset 的情感发展逻辑）
@@ -2006,9 +2029,8 @@ _directorSpec(castNames);
                 if (data && data.current) {
                     const all = {};
                     _collectAffinity(data.current, null, all);
-                    const active = new Set(_activeCastNames());
                     const lines = Object.keys(all)
-                        .filter(name => active.has(name))
+                        .filter(name => _active.has(name))
                         .map(name => { const st = _affinityStage(all[name]); return st ? `- ${name}：好感度 ${all[name]} → ${st} 阶段` : null; })
                         .filter(Boolean);
                     if (lines.length) {
