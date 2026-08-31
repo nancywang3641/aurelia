@@ -106,6 +106,9 @@
             serviceChar: 'pollinations',      // 頭像桶：char（角色頭像／立繪）
             serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖／CG）
             serviceMap: 'pollinations',       // 小地圖桶：map（場景俯視小地圖底板，畫風跟背景分開）
+            // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API。
+            //    三格全部自己填，不內建站台清單——每個站的型號都不一樣，清單只會過期。
+            customApi: { url: '', apiKey: '', model: '' },
             pollinations: {
                 url: 'https://gen.pollinations.ai/image', // API 端點
                 apiKey: '', // Pollen API Key
@@ -303,9 +306,12 @@
 
             // 🔥 步驟 2: 路由判斷（依 type 桶取接口：活物桶 char/scene、死物桶 bg/item/pet）
             // options.provider 可「單次」覆蓋桶選擇（給 VN 面板各自選 NAI / POLL AI 用）；沒給就走該 type 的桶
-            const service = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct'].includes(options.provider)) ? options.provider : this.serviceFor(type);
+            const service = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider : this.serviceFor(type);
             let result;
-            if (service === 'tavern_sd') {
+            if (service === 'custom_api') {
+                console.log('[ImageManager] Final Prompt [' + type + '→自訂接口]: ' + englishPrompt);
+                result = await this._genCustomApi(englishPrompt, type, options);
+            } else if (service === 'tavern_sd') {
                 // 酒館原生 /sd：raw prompt（不塞奧瑞亞底詞，尊重朋友的 SD 設定）；失敗回 null，不偷偷換來源
                 console.log(`[ImageManager] Final Prompt [${type}→TavernSD]: ${englishPrompt}`);
                 result = await this._genTavernSd(englishPrompt, type, options);
@@ -381,6 +387,61 @@
 
         // --- 酒館原生 /sd 生成：走使用者在酒館 Image Generation 擴展設好的後端 ---
         // 不塞奧瑞亞底詞/負詞（尊重朋友的 SD 設定）；失敗回 null 並用 toastr 提示，不偷偷換來源。
+        // 🌐 自訂接口（OpenAI 格式的生圖 API）
+        // ------------------------------------------------------------------
+        // 給「公益站／自架站」用：它們多半提供一條 OpenAI 相容的位址，
+        // 送 JSON、回 JSON，跟 Pollinations「提示詞塞網址、GET 回圖」完全是兩回事，
+        // 所以不能共用那格、只換網址。
+        // 模型名一律使用者自己填 —— 每個站支援的型號都不一樣，內建清單只會過期。
+        _genCustomApi: async function(prompt, type, options = {}) {
+            // options.customApi：設置頁的「測試」鈕用的——讓她還沒按儲存就能試，不必先存壞設定
+            const cfg = options.customApi || (this.config && this.config.customApi) || {};
+            const rawUrl = String(cfg.url || '').trim();
+            const key = String(cfg.apiKey || '').trim();
+            const model = String(options.model || cfg.model || '').trim();
+            if (!rawUrl) { console.warn('[ImageManager] 自訂接口沒填網址'); return null; }
+
+            // 網址容錯：站方通常給到 .../v1，但她也可能整條貼進來
+            const base = rawUrl.replace(/\/+$/, '');
+            const endpoint = /\/images\/generations$/.test(base) ? base : (base + '/images/generations');
+
+            const width = options.width || 1024;
+            const height = options.height || 1024;
+            const body = { model: model, prompt: prompt, n: 1, size: width + 'x' + height };
+            if (options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (key) headers['Authorization'] = 'Bearer ' + key;
+                const resp = await fetch(endpoint, {
+                    method: 'POST', headers: headers, body: JSON.stringify(body),
+                    signal: options.signal || undefined,
+                });
+                const text = await resp.text();
+                if (!resp.ok) throw new Error(resp.status + ' ' + text.slice(0, 300));
+
+                let data;
+                try { data = JSON.parse(text); }
+                catch (e) { throw new Error('回應不是 JSON（多半是網址填錯，指到了網頁而不是 API）：' + text.slice(0, 120)); }
+
+                const first = data && Array.isArray(data.data) ? data.data[0] : null;
+                if (!first) throw new Error('回應裡沒有圖：' + text.slice(0, 200));
+                if (first.b64_json) return 'data:image/png;base64,' + first.b64_json;
+                if (first.url) return first.url;
+                throw new Error('回應的格式看不懂：' + JSON.stringify(first).slice(0, 200));
+            } catch (e) {
+                const msg = (e && e.message) || String(e);
+                console.error('[ImageManager] ❌ 自訂接口生圖失敗:', msg);
+                // 她的 console 是唯讀的，錯誤要彈到畫面上才看得到（跟 NAI 那條同款）
+                try {
+                    const _tr = (win.toastr || window.toastr || (window.parent && window.parent.toastr));
+                    if (_tr) _tr.error(msg, '自訂接口生圖失敗', { timeOut: 9000 });
+                } catch (_) {}
+                this._lastCustomApiError = { msg: msg, at: Date.now() };
+                return null;   // 不偷偷換來源
+            }
+        },
+
         _genTavernSd: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
 
@@ -1320,6 +1381,10 @@
                     return await this._genComfyuiDirect(optimizedPrompt, _tp, _bgOpts);
                 } else if (_bgSvc === 'tavern_sd') {
                     return await this._genTavernSd(optimizedPrompt, _tp, _bgOpts);
+                } else if (_bgSvc === 'custom_api') {
+                    // 🚨 背景是獨立路徑、不走 generate()，新接口一定要在這裡也接一次，
+                    //    否則選了它背景會靜靜掉回 Pollinations（這個坑背景踩過兩次）。
+                    return await this._genCustomApi(optimizedPrompt, _tp, _bgOpts);
                 }
                 // 接口未就緒(例如 NAI 沒填 token) → 往下 fall through 回 Pollinations，不讓背景生不出來
             }

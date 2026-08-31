@@ -75,6 +75,9 @@
             serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖/CG）
             serviceMap: 'pollinations',       // 小地圖桶：map（場景俯視底板）
             imgSourceSynced: true,            // 背景來源是否同步頭像（true＝沿用頭像接口）
+            // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API（送 JSON 回 JSON）。
+            //    三格全部自己填，不內建站台清單——每個站支援的型號都不一樣，清單只會過期。
+            customApi: { url: '', apiKey: '', model: '' },
             pollinations: {
                 url: 'https://gen.pollinations.ai/image',
                 apiKey: '',
@@ -239,6 +242,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         ...config.novelai,
                         ...(savedConfig.novelai || {})
                     },
+                    customApi: {
+                        ...config.customApi,
+                        ...(savedConfig.customApi || {})
+                    },
                     sceneGen: (function () {
                         const _sg = { ...config.sceneGen, ...(savedConfig.sceneGen || {}) };
                         const _saved = savedConfig.sceneGen || {};
@@ -320,6 +327,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 win.OS_IMAGE_MANAGER.config.novelai = {
                     ...win.OS_IMAGE_MANAGER.config.novelai,
                     ...imgData.novelai
+                };
+            }
+            if (imgData.customApi) {
+                win.OS_IMAGE_MANAGER.config.customApi = {
+                    ...win.OS_IMAGE_MANAGER.config.customApi,
+                    ...imgData.customApi
                 };
             }
             if (imgData.comfyuiDirect) {
@@ -1211,6 +1224,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="pollinations" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
                                     <option value="tavern_sd" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="custom_api" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>🌐 自訂接口</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。</div>
@@ -1241,6 +1255,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
                                     <option value="tavern_sd" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="custom_api" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>🌐 自訂接口</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">場景插圖／CG 用這個來源。</div>
@@ -1255,6 +1270,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="pollinations" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
                                     <option value="tavern_sd" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="custom_api" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>🌐 自訂接口</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。</div>
@@ -1326,6 +1342,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
                                     <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
+                                    <option value="custom_api" ${(imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>🌐 自訂接口</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
                                 </select>
                             </div>
@@ -1531,6 +1548,29 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         </select>
                                     </div>
                                     <div class="set-desc" title="角色頭像在「🎭 頭像」、背景在「🌄 背景」、場景在「🎬 插圖」分頁各自調。">📐 尺寸已改到各部位分頁各自調。</div>
+                                </div>
+                            </div>
+
+                            <div id="img-group-customapi" class="${[(imgConfig.serviceInanimate || imgConfig.service), (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service), (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service), (imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service)].includes('custom_api') ? '' : 'hidden'}">
+                                <div class="iface-section-title is-first">🔌 連線設定</div>
+                                <div class="set-group">
+                                    <div class="field-row">
+                                        <div class="set-label" title="站方給的那條位址，通常以 /v1 結尾。整條貼進來也可以。">接口位址 <span class="lbl-req">(必填)</span></div>
+                                        <input class="set-input" id="img-capi-url" type="text" placeholder="https://……/v1" value="${(imgConfig.customApi?.url || '').replace(/"/g,'&quot;')}">
+                                    </div>
+                                    <div class="field-row">
+                                        <div class="set-label">Key</div>
+                                        <input class="set-input" id="img-capi-key" type="password" placeholder="站方給你的那把" value="${imgConfig.customApi?.apiKey || ''}">
+                                    </div>
+                                    <div class="field-row">
+                                        <div class="set-label" title="照站方寫的型號名一字不差地填。每個站支援的型號都不一樣，所以這裡不給清單。">模型 <span class="lbl-req">(必填)</span></div>
+                                        <input class="set-input" id="img-capi-model" type="text" placeholder="例：nano-banana-2" value="${(imgConfig.customApi?.model || '').replace(/"/g,'&quot;')}">
+                                    </div>
+                                    <div class="field-row">
+                                        <button class="set-btn" id="img-capi-test" type="button">🔌 測試</button>
+                                        <div class="set-desc" id="img-capi-status" style="margin-top:6px;"></div>
+                                    </div>
+                                    <div class="set-desc" style="margin-top:6px;">吃 OpenAI 格式的生圖接口（送 JSON、回 JSON）。跟上面的 Pollinations 不是同一種送法，所以各佔一格、不能只換網址。</div>
                                 </div>
                             </div>
 
@@ -2477,6 +2517,34 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elImgPolPrompts = container.querySelector('#img-pol-prompts-group');
         const elTavGroup      = container.querySelector('#img-group-tavernsd');
         const elCfdGroup      = container.querySelector('#img-group-comfyui');
+        const elCapiGroup     = container.querySelector('#img-group-customapi');
+
+        // 自訂接口「測試」：用畫面上當下的三格去打一張小圖，不必先按儲存。
+        // 錯誤原文直接寫在鈕下面 —— 接口填錯八成是網址少一段或型號名不對，要看得到才改得動。
+        (function bindCustomApiTest() {
+            const btn = container.querySelector('#img-capi-test');
+            const st  = container.querySelector('#img-capi-status');
+            if (!btn) return;
+            btn.addEventListener('click', async function () {
+                const url   = (container.querySelector('#img-capi-url')?.value   || '').trim();
+                const key   = (container.querySelector('#img-capi-key')?.value   || '').trim();
+                const model = (container.querySelector('#img-capi-model')?.value || '').trim();
+                if (!url)   { if (st) st.textContent = '請先填接口位址'; return; }
+                if (!model) { if (st) st.textContent = '請先填模型名（照站方寫的一字不差）'; return; }
+                const IM = win.OS_IMAGE_MANAGER;
+                if (!IM || typeof IM._genCustomApi !== 'function') { if (st) st.textContent = '生圖模組還沒載入'; return; }
+                btn.disabled = true; if (st) st.textContent = '測試中…（生一張小圖，可能要等十幾秒）';
+                const prev = IM._lastCustomApiError; IM._lastCustomApiError = null;
+                try {
+                    const out = await IM._genCustomApi('a cat sitting on a wooden table', 'bg',
+                        { width: 512, height: 512, customApi: { url: url, apiKey: key, model: model } });
+                    if (out) { if (st) st.textContent = '✅ 通了，這個接口生得出圖'; }
+                    else { if (st) st.textContent = '❌ ' + ((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'); }
+                } catch (e) {
+                    if (st) st.textContent = '❌ ' + ((e && e.message) || e);
+                } finally { btn.disabled = false; if (!IM._lastCustomApiError) IM._lastCustomApiError = prev; }
+            });
+        })();
         const srcTabBtnChar   = container.querySelector('#img-srctab-char');
         const srcTabBtnScene  = container.querySelector('#img-srctab-scene');
         const srcTabBtnBg     = container.querySelector('#img-srctab-bg');
@@ -2501,6 +2569,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (elPolGroup) elPolGroup.classList.toggle('hidden', !set.has('pollinations'));
             if (elTavGroup) elTavGroup.classList.toggle('hidden', !set.has('tavern_sd'));
             if (elCfdGroup) elCfdGroup.classList.toggle('hidden', !set.has('comfyui_direct'));
+            if (elCapiGroup) elCapiGroup.classList.toggle('hidden', !set.has('custom_api'));
         }
 
         const refreshImgPanel = () => {
@@ -2833,6 +2902,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         charNegPrompt: elCharNegPrompt.value.trim(),
                         itemBasePrompt: imgConfig.pollinations.itemBasePrompt,
                         itemNegPrompt: imgConfig.pollinations.itemNegPrompt
+                    },
+                    customApi: {
+                        url:    (container.querySelector('#img-capi-url')?.value   || '').trim(),
+                        apiKey: (container.querySelector('#img-capi-key')?.value   || '').trim(),
+                        model:  (container.querySelector('#img-capi-model')?.value || '').trim(),
                     },
                     novelai: {
                         token: elNaiToken.value.trim(),
