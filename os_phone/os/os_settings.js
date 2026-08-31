@@ -2540,12 +2540,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             //    而 handler 是 async，丟出來的例外變成沒人接的 rejection：按了完全沒反應、console 也不紅。
             const IM = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
             if (!IM || typeof IM._genCustomApi !== 'function') { say('生圖模組還沒載入'); return; }
-            btn.disabled = true; say('測試中…（生一張小圖，可能要等十幾秒）');
+            // 🚨 用她實際要生的尺寸去測，不要寫死一個好過的方形 ——
+            //    有些站只吃固定幾種長寬比，測 512×512（1:1）過了不代表 1024×768 也過，
+            //    那種「測試通過但實際生圖失敗」比沒有測試更誤導。
+            const sizeStr = (q('#img-bg-size')?.value || '1024x1024');
+            const wh = sizeStr.split('x').map(Number);
+            const tw = wh[0] || 1024, th = wh[1] || 1024;
+            btn.disabled = true; say('測試中…（用 ' + tw + '×' + th + ' 生一張，可能要等十幾秒）');
             const prev = IM._lastCustomApiError; IM._lastCustomApiError = null;
             try {
                 const out = await IM._genCustomApi('a cat sitting on a wooden table', 'bg',
-                    { width: 512, height: 512, customApi: { url: url, apiKey: key, model: model } });
-                if (out) say('✅ 通了，這個接口生得出圖');
+                    { width: tw, height: th, customApi: { url: url, apiKey: key, model: model } });
+                if (out) say('✅ 通了，' + tw + '×' + th + ' 這個尺寸生得出圖');
                 else say('❌ ' + ((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'));
             } catch (e) {
                 say('❌ ' + ((e && e.message) || e));
