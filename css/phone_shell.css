@@ -132,6 +132,19 @@
 .aps-app-body .ps-header { padding-top: 0 !important; height: 56px !important; }
 .aps-mount { position: relative; width: 100%; height: 100%; }
 .aps-fail { padding: 30px; text-align: center; color: #999; font-size: 13px; }
+
+/* 「AI 助手」開不起來時的說明頁：講斷在哪一段，不是一句「未安裝」打發 */
+/* app 區塊的底是 .aps-app 的白，字一律用深色（照 .aps-set 那組），別照深色底配 */
+.aps-diag { padding: 28px 22px; text-align: center; color: #4a4e69; }
+.aps-diag-title { font-size: 15px; font-weight: bold; color: #2b2d42; margin-bottom: 10px; }
+.aps-diag-line { font-size: 13px; line-height: 1.7; color: #5a5f78; }
+.aps-diag-tech { margin-top: 14px; font-size: 11px; line-height: 1.6; color: #8a8fa3; word-break: break-all; }
+.aps-diag-btn {
+    margin-top: 20px; padding: 10px 20px; border: 1px solid rgba(43,45,66,0.24);
+    border-radius: 8px; background: rgba(43,45,66,0.06); color: #2b2d42;
+    font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.aps-diag-btn:hover { background: rgba(43,45,66,0.12); }
 .aps-loading { padding: 30px; text-align: center; color: #999; font-size: 13px; }
 /* app 商店裝的功能型 app（iframe 執行）—— 填滿容器、無邊框 */
 .app-iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }

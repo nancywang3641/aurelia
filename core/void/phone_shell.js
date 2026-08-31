@@ -25,8 +25,9 @@
         { id: 'appstore', name: '應用商城', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
         { id: 'ctrlroom', name: '控制室', emoji: '🎛️', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
         { id: 'aichat', name: 'AI 助手', emoji: '🤖', mode: 'inside', go: function (c) {
-            // 房間本體已獨立成 claude-codex-room 擴展；沒裝就顯示提示（純 optional，不影響其他 app）
-            if (!win.ChatWindow || !win.ChatWindow.mountInside) { if (c) c.innerHTML = '<div class="aps-fail">AI 助手未安裝</div>'; return; }
+            // 房間本體是隔壁的獨立擴展 claude-codex-room（獨立 git repo），由 index.html 拉它的 index.js。
+            // 開不起來的原因不只一種，一律寫「未安裝」等於猜一個給她看 —— 改成當場查清楚再說。
+            if (!win.ChatWindow || !win.ChatWindow.mountInside) { _diagnoseAiChat(c); return; }
             win.ChatWindow.mountInside(c);
             // 離開回呼：恢復大廳活動/BGM（窗本身留著，下次大廳鈕或再開 app 會復原狀態）
             return function () { try { if (win.VoidTerminal && win.VoidTerminal.resumeLobbyActivity) win.VoidTerminal.resumeLobbyActivity(); } catch (e) {} };
@@ -36,6 +37,81 @@
     let _el = null;
     let _savedGoHome = null;   // app 內部「返回」會呼叫 PhoneSystem.goHome，開 app 時暫借、回主畫面/關閉時還原
     let _leaveApp = null;      // 需要善後的 app(如 AI 助手要恢復大廳活動)離開時 → 存回呼，清空前先跑
+
+    // 「AI 助手」開不起來的原因不只一種，一律寫「未安裝」＝挑一個講給她聽，而且多半是錯的。
+    // 這裡當場把三段各查一次，講斷在哪一段：
+    //   ① index.html 裡沒有房間的 script 標籤 → 手機拿到的是舊快取那份，程式再新也到不了她眼前
+    //   ② 標籤在、檔案抓不到 → 伺服器上沒有那個資料夾（隔壁是獨立 repo，會漏部署）
+    //   ③ 檔案抓得到、卻沒發布 ChatWindow → 房間自己載到一半掛了，去看它的錯誤
+    function _diagnoseAiChat(c) {
+        if (!c) return;
+        c.innerHTML = '<div class="aps-fail">正在確認 AI 助手…</div>';
+
+        // 只認拉起房間的那一支。房間自己會再插一批 core/*.js 進來，光比對資料夾名會連那些一起中，
+        // 於是「標籤根本不在」的情況也被判成「載了沒啟動」——診斷自己說錯話比沒有診斷更糟。
+        const tag = document.querySelector('script[src*="claude-codex-room/index.js"]');
+        if (!tag) {
+            c.innerHTML =
+                '<div class="aps-diag">'
+                + '<div class="aps-diag-title">這個畫面是舊的</div>'
+                + '<div class="aps-diag-line">手機上存下來的這份還沒有 AI 助手，換成最新版就會出現。</div>'
+                + '<button type="button" class="aps-diag-btn" id="aps-diag-reload">抓最新版重開</button>'
+                + '</div>';
+            const b = c.querySelector('#aps-diag-reload');
+            if (b) b.onclick = _hardReload;
+            return;
+        }
+
+        const url = tag.src;
+        fetch(url, { cache: 'no-store' }).then(function (r) {
+            if (!r.ok) {
+                c.innerHTML =
+                    '<div class="aps-diag">'
+                    + '<div class="aps-diag-title">找不到 AI 助手的檔案</div>'
+                    + '<div class="aps-diag-line">它住在奧瑞亞隔壁的資料夾，這台伺服器上可能沒放。</div>'
+                    + '<div class="aps-diag-tech">' + _esc(url) + '<br>回應 ' + r.status + '</div>'
+                    + '</div>';
+                return;
+            }
+            c.innerHTML =
+                '<div class="aps-diag">'
+                + '<div class="aps-diag-title">AI 助手讀進來了，但沒啟動</div>'
+                + '<div class="aps-diag-line">檔案抓得到，房間卻沒開起來 —— 它自己載到一半出錯了。</div>'
+                + '<div class="aps-diag-tech">' + _esc(url) + '<br>回應 200</div>'
+                + '<button type="button" class="aps-diag-btn" id="aps-diag-reload">抓最新版重開</button>'
+                + '</div>';
+            const b2 = c.querySelector('#aps-diag-reload');
+            if (b2) b2.onclick = _hardReload;
+        }).catch(function (e) {
+            c.innerHTML =
+                '<div class="aps-diag">'
+                + '<div class="aps-diag-title">連不到 AI 助手的檔案</div>'
+                + '<div class="aps-diag-line">網路那一段就斷了，不是房間本身的問題。</div>'
+                + '<div class="aps-diag-tech">' + _esc(url) + '<br>' + _esc(e && e.message || e) + '</div>'
+                + '</div>';
+        });
+    }
+
+    // 清掉存下來的那份再重載。「這個畫面是舊的」唯一真的有效的解法 ——
+    // 單純重新整理在已加到主畫面的 PWA 上常常還是拿到同一份。
+    function _hardReload() {
+        const jobs = [];
+        try {
+            if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+                    return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                }));
+            }
+        } catch (e) {}
+        try {
+            if (window.caches && caches.keys) {
+                jobs.push(caches.keys().then(function (ks) {
+                    return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+                }));
+            }
+        } catch (e) {}
+        Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
+    }
 
     function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
