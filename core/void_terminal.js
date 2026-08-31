@@ -613,12 +613,16 @@ const IRIS_IDLE = [
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-apps-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="終端機">應用</span>
                         </button>
+                        <!-- 🚨 這兩顆的圖鎖 commit 不是 @v1：它們是後來才加進素材庫的，v1 那個 tag 裡沒有。
+                             移動既有 tag 會讓 jsdelivr 繼續吐舊快取，而把全站 52 處 @v1 一起升版
+                             要連帶預熱一百多支檔（沒預熱＝她會看到滿屏載入失敗），為了兩顆圖不划算。
+                             下次真的要升 v2 時，這兩支跟著一起換掉就好。 -->
                         <button class="lb-dock-btn" data-proxy="void-estate-btn" title="房產手帳">
-                            <i class="fa-solid fa-building-columns"></i>
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@dbccb75/aseets/menu_dock/icon-estate-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="違章建築">房產</span>
                         </button>
                         <button class="lb-dock-btn lb-entry-off" id="lb-dock-ai" data-proxy="void-ai-btn" title="宿舍">
-                            <i class="fa-solid fa-door-open"></i>
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@dbccb75/aseets/menu_dock/icon-dorm-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="收容所">宿舍</span>
                         </button>
                         <div class="lb-dock-sep"></div>
