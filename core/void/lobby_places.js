@@ -246,13 +246,27 @@
         render();
     }
 
-    // 這個地點現在進得去嗎（沒解鎖／模組沒載入都算進不去）
-    function _usable(p) {
+    // 「站得住」跟「面板開得起來」是兩個問題，本來混在同一個判斷裡。
+    // 🚨 對話模式的主畫面就是這個視圖，而它只需要一張背景＋一個看板娘 ——
+    //    那個地方的功能面板有沒有載好，跟你能不能站在那裡無關。
+    //    混在一起的後果：大廳的閘是 OS_WORLDGATE，而大廳的視圖在慢速載入時會早於
+    //    那支 script 被建出來（control_center 用 setTimeout(0) 掛手機殼，parser 卡在
+    //    下載後面的 script 時那顆計時器就插隊跑了），於是整個主畫面拒絕畫，變成一片黑。
+    //    這條分法跟 flatWhen 是同一個道理（下面那段註解寫的就是它），只是 ready 當時漏掉了。
+    function _standable(p) {
         try {
             // flatWhen＝「對話模式進不進得去」。我的家在舞台要先有房子才走得進去，
             // 但對話模式只是一張背景＋看板娘，不該被房子擋住 → 兩邊的條件分開判。
             const gate = p.flatWhen || p.when;
             if (gate && !gate()) return false;
+            return true;
+        } catch (e) { return false; }
+    }
+
+    // 這個地點的功能面板現在開得起來嗎（模組還沒載進來就還不行）
+    function _usable(p) {
+        try {
+            if (!_standable(p)) return false;
             if (p.ready && !p.ready()) return false;
             return typeof p.open === 'function';
         } catch (e) { return false; }
@@ -269,7 +283,9 @@
     const _hasNpc = (p) => !!_npcMeta(p);
     function _cards() {
         return PLACES.filter(p => p.id !== 'city').map(p => ({
-            p, on: _usable(p), npc: _npcMeta(p),
+            // on＝站得住（能不能走過去），不是「它的面板現在開得起來」——
+            // 模組晚一步載好不該讓地點看起來像沒解鎖，按進去那一刻自然會知道開不開得了。
+            p, on: _standable(p), npc: _npcMeta(p),
             // 我的家沒人的時候要明講，不然那行空白看起來像沒載出來
             emptyWho: p.guest ? '還沒有人' : '',
         }));
@@ -378,6 +394,12 @@
             }
             talkOff();
             box.classList.add('is-app');
+            // 站得住不等於面板開得起來：模組可能還在載（慢速開機時很常見）。
+            // 這裡講「還在載」而不是「打不開」——前者等一下就好，後者聽起來像壞了。
+            if (!_usable(p)) {
+                body.innerHTML = '<div class="lb-pv-note">這個地方還在載入，等一下再按一次</div>';
+                return;
+            }
             try {
                 if (p.openIn) { p.openIn(body); return; }
                 // 還沒改成吃容器的地方：照舊自己開浮窗，容器說明一下免得看起來像壞了
@@ -394,12 +416,10 @@
             const p = get(nextId);
             // 🚨 這裡以前是靜靜 return：畫不出來時外殼留著、裡面全空＝整片黑，
             //    而且沒有任何線索說是誰擋的。要壞就要說得出是哪一關沒過。
-            if (!p || !_usable(p)) {
+            if (!p || !_standable(p)) {
                 const gate = p && (p.flatWhen || p.when);
                 const why = !p ? '沒有這個地點'
-                    : (gate && !gate()) ? '還沒解鎖'
-                    : (p.ready && !p.ready()) ? '面板模組還沒就緒'
-                    : (typeof p.open !== 'function') ? '沒有可開的面板' : '未知';
+                    : (gate && !gate()) ? '還沒解鎖' : '未知';
                 win.__LP_LASTFAIL__ = { id: nextId, why: why, at: Math.round(performance.now()) };
                 console.warn('[LobbyPlaces] 畫不出「' + nextId + '」：' + why);
                 return;
@@ -454,7 +474,7 @@
 
         host.appendChild(box);
         _view = close;
-        paint(_usable(get(id)) ? id : HOME_ID);
+        paint(_standable(get(id)) ? id : HOME_ID);
         return box;
     }
 
