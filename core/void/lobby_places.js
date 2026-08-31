@@ -392,7 +392,18 @@
         // 換到某個地點：背景／立繪／標題／卡片高亮一起換，外殼不動
         const paint = (nextId, mode) => {
             const p = get(nextId);
-            if (!p || !_usable(p)) return;
+            // 🚨 這裡以前是靜靜 return：畫不出來時外殼留著、裡面全空＝整片黑，
+            //    而且沒有任何線索說是誰擋的。要壞就要說得出是哪一關沒過。
+            if (!p || !_usable(p)) {
+                const gate = p && (p.flatWhen || p.when);
+                const why = !p ? '沒有這個地點'
+                    : (gate && !gate()) ? '還沒解鎖'
+                    : (p.ready && !p.ready()) ? '面板模組還沒就緒'
+                    : (typeof p.open !== 'function') ? '沒有可開的面板' : '未知';
+                win.__LP_LASTFAIL__ = { id: nextId, why: why, at: Math.round(performance.now()) };
+                console.warn('[LobbyPlaces] 畫不出「' + nextId + '」：' + why);
+                return;
+            }
             restorePanel(); talkOff();
             curId = nextId;
             const tok = ++paintTok;
