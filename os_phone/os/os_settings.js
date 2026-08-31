@@ -1568,9 +1568,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                     <div class="field-row">
                                         <button class="set-btn" id="img-capi-test" type="button">🔌 測試</button>
-                                        <div class="set-desc" id="img-capi-status" style="margin-top:6px;"></div>
+                                        <div class="set-desc" id="img-capi-status"></div>
                                     </div>
-                                    <div class="set-desc" style="margin-top:6px;">吃 OpenAI 格式的生圖接口（送 JSON、回 JSON）。跟上面的 Pollinations 不是同一種送法，所以各佔一格、不能只換網址。</div>
+                                    <div class="set-desc">吃 OpenAI 格式的生圖接口（送 JSON、回 JSON）。跟上面的 Pollinations 不是同一種送法，所以各佔一格、不能只換網址。</div>
                                 </div>
                             </div>
 
@@ -2521,30 +2521,39 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // 自訂接口「測試」：用畫面上當下的三格去打一張小圖，不必先按儲存。
         // 錯誤原文直接寫在鈕下面 —— 接口填錯八成是網址少一段或型號名不對，要看得到才改得動。
-        (function bindCustomApiTest() {
-            const btn = container.querySelector('#img-capi-test');
-            const st  = container.querySelector('#img-capi-status');
-            if (!btn) return;
-            btn.addEventListener('click', async function () {
-                const url   = (container.querySelector('#img-capi-url')?.value   || '').trim();
-                const key   = (container.querySelector('#img-capi-key')?.value   || '').trim();
-                const model = (container.querySelector('#img-capi-model')?.value || '').trim();
-                if (!url)   { if (st) st.textContent = '請先填接口位址'; return; }
-                if (!model) { if (st) st.textContent = '請先填模型名（照站方寫的一字不差）'; return; }
-                const IM = win.OS_IMAGE_MANAGER;
-                if (!IM || typeof IM._genCustomApi !== 'function') { if (st) st.textContent = '生圖模組還沒載入'; return; }
-                btn.disabled = true; if (st) st.textContent = '測試中…（生一張小圖，可能要等十幾秒）';
-                const prev = IM._lastCustomApiError; IM._lastCustomApiError = null;
-                try {
-                    const out = await IM._genCustomApi('a cat sitting on a wooden table', 'bg',
-                        { width: 512, height: 512, customApi: { url: url, apiKey: key, model: model } });
-                    if (out) { if (st) st.textContent = '✅ 通了，這個接口生得出圖'; }
-                    else { if (st) st.textContent = '❌ ' + ((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'); }
-                } catch (e) {
-                    if (st) st.textContent = '❌ ' + ((e && e.message) || e);
-                } finally { btn.disabled = false; if (!IM._lastCustomApiError) IM._lastCustomApiError = prev; }
-            });
-        })();
+        // 🚨 用委派綁在 container 上，不要直接綁那顆鈕：設定面板在這批 querySelector 之後
+        //    還會把 DOM 重建一次（clone 會帶走屬性但不帶監聽器），直接綁等於綁在被丟掉的那顆上，
+        //    症狀是「鈕在、看得見、點得到，就是沒反應」，而且完全不報錯。
+        container.addEventListener('click', async function (ev) {
+            const btn = ev.target && ev.target.closest && ev.target.closest('#img-capi-test');
+            if (!btn || btn.disabled) return;
+            // 這幾格一律點下去當場再查一次，理由同上：綁定當時抓的參照可能已經不是畫面上那顆
+            const q = (sel) => container.querySelector(sel);
+            const st = q('#img-capi-status');
+            const say = (t) => { if (st) st.textContent = t; };
+            const url   = (q('#img-capi-url')?.value   || '').trim();
+            const key   = (q('#img-capi-key')?.value   || '').trim();
+            const model = (q('#img-capi-model')?.value || '').trim();
+            if (!url)   { say('請先填接口位址'); return; }
+            if (!model) { say('請先填模型名（照站方寫的一字不差）'); return; }
+            // 🚨 這裡不能用 win —— 那個別名只存在於本檔某幾個函式裡，在這個 scope 是 ReferenceError。
+            //    而 handler 是 async，丟出來的例外變成沒人接的 rejection：按了完全沒反應、console 也不紅。
+            const IM = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
+            if (!IM || typeof IM._genCustomApi !== 'function') { say('生圖模組還沒載入'); return; }
+            btn.disabled = true; say('測試中…（生一張小圖，可能要等十幾秒）');
+            const prev = IM._lastCustomApiError; IM._lastCustomApiError = null;
+            try {
+                const out = await IM._genCustomApi('a cat sitting on a wooden table', 'bg',
+                    { width: 512, height: 512, customApi: { url: url, apiKey: key, model: model } });
+                if (out) say('✅ 通了，這個接口生得出圖');
+                else say('❌ ' + ((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'));
+            } catch (e) {
+                say('❌ ' + ((e && e.message) || e));
+            } finally {
+                btn.disabled = false;
+                if (!IM._lastCustomApiError) IM._lastCustomApiError = prev;
+            }
+        });
         const srcTabBtnChar   = container.querySelector('#img-srctab-char');
         const srcTabBtnScene  = container.querySelector('#img-srctab-scene');
         const srcTabBtnBg     = container.querySelector('#img-srctab-bg');
