@@ -246,6 +246,16 @@
     <script src="os_phone/qb/qb_bookshelf.js"></script>
     <script src="os_phone/qb/os_404_chaos.js"></script>
 
+    <!-- 🤖 AI 助手（Claude / Codex 房間）—— 住在隔壁資料夾的獨立擴展 claude-codex-room（獨立 git repo）。
+         它的核心零酒館依賴（只吃 OS_SETTINGS / OS_DB / fetch），所以獨立版直接載得起來；
+         手機殼那顆「AI 助手」app 找的就是 window.ChatWindow，沒載到會顯示「未安裝」。
+         ⚠️ 它自己會載自己的 core/css（帶 ?v=VER 破快取、順序自己管），這裡只拉 index.js 一支，
+            也不要把它的檔案抄進本 repo 的載入清單 —— 那邊改版跟這邊是兩條 git 線。
+         ⚠️ 位置必須在 os_settings.js / os_db.js 之後：房間會先看這兩個在不在，
+            在就沿用（設定與對話存檔跟奧瑞亞共用同一份），不在才自己裝一份 shim。 -->
+    <script>window.__CCR_NO_LAUNCHER__ = true;   /* 入口是手機殼的「AI 助手」app，不要右下角再多一顆浮球 */</script>
+    <script src="../claude-codex-room/index.js"></script>
+
 
     <script>
     (function () {
