@@ -146,6 +146,16 @@
 .lb-rail-grid .lb-rail-main { border-right:1px solid rgba(255,255,255,.16); border-radius:11px; }
 .lb-rail-now .lb-rail-card.is-cur::before { left:0; }
 
+/* 🚨 對話框的外框是滿版的（left:0;right:0），縮窄的只有裡面那個框 ——
+   它的層級比 dock 高一階，所以外框右半那片「什麼都沒有」的透明區域會整片吃掉點擊，
+   dock 第二排四顆按了完全沒反應（第一排在它上緣之上所以是好的，看起來像只壞一半）。
+   外框整個不收點擊，真正要點的東西自己收回來 —— 中間那層純排版的 div 會繼承 none，
+   不必也不該另外點名它（`> div` 的 div 是型別選擇器、會多一分特異度，
+   反而把下面 re-enable 那條壓掉，輸入框就跟著點不到了）。 */
+.lobby-left:has(.lb-pv) .void-dialogue-wrap { pointer-events:none; }
+.lobby-left:has(.lb-pv) .void-dialogue-box,
+.lobby-left:has(.lb-pv) .void-chat-input-row { pointer-events:auto; }
+
 /* dock：右下角一張橫卡。四顆一排，八顆剛好兩排。 */
 @media (min-width:761px) {
     .lobby-left:has(.lb-pv) .lb-dock {
