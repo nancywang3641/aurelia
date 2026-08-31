@@ -18,6 +18,8 @@
     const K_WORLDS = 'worlds';   // [{id,name,concept,genre,style,lure,danger,crisis,keys,entryText,travelers:[{name,job,persona,origin,skill,fit,goal,weakness,recruited}],visits,ts}]
     const K_CURRENT = 'current'; // 這個聊天室目前在哪個世界（世界 id；撤離清空）— world_rules_injector 依此翻模組條目
     const BOOK_PARA = '【奧瑞亞-視差】';
+    const BOOK_CORE = '【奧瑞亞-人物核心】';   // 她的熟人檔案庫（視差模式刻意不掛這本＝認知隔離，
+                                              //   所以帶熟人同行是把那一條的內容「複製」進世界條目，只有點名的人會進去）
     const MAX_TRAVELER_SPAWN = 4;
 
     function _db() { return win.OS_DB || window.OS_DB; }
@@ -888,7 +890,9 @@
         //   留在大廳的人的弱點/翻臉條件也等於白白劇透。隊伍在按下 DIVE 那刻定案(之後就清場),
         //   所以 _dive 會在注入開場指令前重寫一次條目。
         // 旅人區塊帶上目標/弱點/翻臉條件——這是給主持AI看的底牌,玩家在身分卡上看不到這幾欄
-        const recruited = (w.travelers || []).filter(t => t && t.recruited && !t.gone);
+        const recruitedAll = (w.travelers || []).filter(t => t && t.recruited && !t.gone);
+        const recruited = recruitedAll.filter(t => !t.home);
+        const home = recruitedAll.filter(t => t.home);
         const trav = recruited
             .map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ' ' + t.origin +
             (t.skill ? ';擅長' + t.skill : '') + (t.fit ? ';與這個世界的關係:' + t.fit : '') +
@@ -904,11 +908,25 @@
               '- 隊伍不必黏在一起:可以分頭去辦自己的事、缺席幾場、之後再會合;隔一陣子就讓某位旅人的個人目標真的往前一步,與玩家路線無關、甚至相撞都可以。\n' +
               '- 意見不合就讓它不合:拒絕、唱反調、各走各的都是正常選項,不要替他們改立場來讓劇情變順。\n'
             : '';
+        // 🏠 玩家從奧瑞亞帶進來的熟人：跟陌生旅人是完全不同的兩種人，混在同一區寫，
+        //   主持AI 會把熟人也當成大廳剛湊在一起的陌生人，從頭建立關係、寫成初次見面。
+        //   視差模式不掛人物核心（認知隔離），所以他們的檔案只有這裡有，必須整份帶著走。
+        const homeBlock = home.length
+            ? '\n\n## 你從奧瑞亞帶來的人(玩家的熟人,不是本世界NPC,也不是大廳招募的陌生旅人)\n' +
+              home.map(t => '### ' + t.name + '\n' + (t.dossier || t.persona || '') +
+                  (t.bring ? '\n這趟同行的理由:' + t.bring : '')).join('\n\n') +
+              '\n\n### 熟人的演法(每一輪都適用)\n' +
+              '- 他們跟玩家有既定的過去與關係,不是初次見面:稱呼、講話方式、態度、彼此的心結一律照上面的檔案,不要重新自我介紹、不要重新建立關係。\n' +
+              '- 上面沒寫到的異世界細節可以補,但不可以改掉他既有的性格、立場、能力與人際關係;檔案與這個世界的常識衝突時,改寫的是這個世界怎麼稱呼他,不是改掉他。\n' +
+              '- 他們同樣在抵達時被這個世界的法則改造成能在這裡生存的形態,但為人不變。\n' +
+              '- 熟人不是玩家的部下:交情深不等於服從,該吐槽就吐槽、該有自己的事要辦就去辦,意見不合照樣不合。\n'
+            : '';
         return '# 視差世界檔案:' + w.name + '\n' +
             '一句話:' + w.concept + '(' + (w.genre ? '題材:' + w.genre + ' ' : '') + '風格:' + w.style + ')\n' +
             (w.genre ? '本世界的一切描寫都必須維持在「' + w.genre + '」的題材裡,不得混入不屬於此題材的科技或現代說法。\n' : '') +
             (w.twist ? '核心法則:' + w.twist + '\n' : '') + '\n' + entryText +
             (trav ? '\n\n## 這趟同行的旅人(視差玩家,非本世界NPC)\n' + trav + '\n' + travRules : '') +
+            homeBlock +
             _lookBlock(recruited) + _pcBlock(w) + _achvBlock(w);
     }
     async function _writeEntry(w, entryText) {
@@ -1502,6 +1520,7 @@
     function _profRows(t) {
         const row = (k, v) => v ? '<div class="wg-prof-row"><span>' + k + '</span><b>' + _esc(v) + '</b></div>' : '';
         return row('年齡', t.age ? (t.age + ' 歲') : '') + row('定位', t.job) + row('外貌', t.look) + row('性格', t.persona) +
+            row('這趟為什麼跟來', t.bring) +
             row('來歷', t.origin) + row('資歷', t.record) + row('擅長', t.skill) + row('動機', t.reason) +
             row('目標', t.goal) + row('對這個世界', t.fit) + row('弱點', t.weakness);
     }
@@ -1885,7 +1904,7 @@
     async function _makeLaunchArt(w) {
         const team = (w.travelers || []).filter(t => t && t.recruited && !t.gone);
         if (!team.length) return { ok: false, msg: '隊伍還沒有人，先去大廳找人同行' };
-        const who = team.map(t => '- ' + t.name + '：' + (t.sprite || t.look || t.job || '')).join('\n');
+        const who = team.map(t => '- ' + t.name + '：' + (t.sprite || t.look || t.persona || t.job || '')).join('\n');
         const prompt =
             '照下面的世界與隊伍，寫一張「出發前的合照」的生圖關鍵詞。只回傳純 JSON：\n' +
             '{"bg":"{場景的英文關鍵詞，逗號分隔}","chars":"{每個人的外觀英文關鍵詞，同一行逗號分隔}"}\n' +
@@ -2053,17 +2072,24 @@
     _initChatHook();
 
     function _divePrompt(w) {
-        const team = (w.travelers || []).filter(t => t.recruited && !t.gone);
+        const teamAll = (w.travelers || []).filter(t => t.recruited && !t.gone);
+        const team = teamAll.filter(t => !t.home);
+        const homeTeam = teamAll.filter(t => t.home);
         const teamStr = team.length
             ? team.map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ';擅長' + t.skill).join('\n')
-            : '(單人行動)';
+            : '(沒有大廳招募的旅人)';
+        // 熟人只點名＋一句理由:完整檔案在世界條目裡常駐,開場指令再抄一份等於同一份資料餵兩遍
+        const homeStr = homeTeam.length
+            ? homeTeam.map(t => '- ' + t.name + (t.bring ? '(' + t.bring + ')' : '')).join('\n')
+            : '';
         // 外觀基準跟著開場指令一起送：[Avatar] 那幾行就是在這一輪輸出的,慢一步就定型成另一個人了
         const lookStr = team.filter(t => t.sprite).map(t => '- ' + t.name + ':' + t.sprite).join('\n');
         return '🌌 NEXUS PARALLAX · 世界啟動\n' +
             '━━━━━━━━━━━━━━━━━━━━━\n' +
             '[System:玩家從純白大廳進入視差世界「' + w.name + '」]\n' +
             '世界概念:' + w.concept + '(' + (w.genre ? '題材:' + w.genre + ' ' : '') + '風格:' + w.style + ')\n' +
-            '同行旅人:\n' + teamStr + '\n' +
+            (team.length || !homeTeam.length ? '同行旅人:\n' + teamStr + '\n' : '') +
+            (homeStr ? '玩家從奧瑞亞帶來的熟人(有共同過去,不是初次見面,檔案見世界條目):\n' + homeStr + '\n' : '') +
             (lookStr ? '\n旅人的視差原樣(外觀基準,跨世界固定):\n' + lookStr + '\n' : '') +
             (w.spawn ? '降生地:' + w.spawn + '(玩家指定,開場就從這裡起)\n' : '') + '\n' +
             '【指令】\n' +
@@ -2088,6 +2114,8 @@
             '世界檔案裡的法則與危機是這個地方的背景質地,不是玩家的任務——不要拿它當開場鉤子逼玩家表態或選邊,玩家要在這裡做生意、找人、閒晃都可以。\n' +
             // 🚨不講的話模型會套「玩家＝主角＝隊長」的預設,四個旅人變成等指令的工具人。
             //   他們是各自報名、在大廳湊在一起的陌生人,身上本來就有自己的目標與翻臉條件(條目裡都寫了)。
+            (homeTeam.length ? '2-2. 玩家帶來的熟人跟玩家早就認識,開場不要寫成初次見面、不要重新自我介紹;' +
+                '稱呼、講話方式、彼此的心結照世界條目裡他們的檔案寫。他們也不是玩家的部下,交情不等於服從。\n' : '') +
             (team.length ? '2-1. 同行旅人不是玩家的部下,也沒有推舉玩家當隊長。他們各自有自己的目標與底線,' +
                 '對玩家的信任要靠相處累積,不會因為玩家開口就照做。' +
                 '不要讓他們主動請示、等候指令、或把決定權推給玩家;他們有意見會自己講,不同意會自己說,' +
@@ -2570,6 +2598,14 @@
             '.wgt-rec-btn.on .wgt-rec-caret{transform:translateY(-50%) rotate(180deg);}' +
             '.wgt-recruit{display:flex;flex-direction:column;gap:7px;padding:10px;background:#fff;border:1.2px solid rgba(42,74,128,.45);}' +
             '.wgt-recruit[hidden]{display:none;}' +
+            '.wgh-list{max-height:184px;overflow:auto;display:flex;flex-direction:column;gap:1px;padding:4px;background:rgba(255,255,255,.72);border:1.2px solid rgba(42,74,128,.28);}' +
+            '.wgh-grp{font-size:10px;font-weight:800;letter-spacing:.08em;color:rgba(42,74,128,.72);padding:6px 4px 3px;}' +
+            '.wgh-row{display:flex;align-items:center;gap:7px;padding:4px 6px;cursor:pointer;font-size:12px;}' +
+            '.wgh-row:hover{background:rgba(42,74,128,.09);}' +
+            '.wgh-row.dim{opacity:.45;cursor:default;}' +
+            '.wgh-row input{margin:0;flex:0 0 auto;accent-color:#2a4a80;}' +
+            '.wgh-nm{flex:1;font-weight:700;color:#16223a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+            '.wgh-src{flex:0 0 auto;font-size:10px;color:rgba(22,34,58,.5);}' +
             '.wgt-rec-hint{font-size:10.5px;color:#46639b;letter-spacing:.08em;}' +
             '.wgt-recruit .wg-btn{margin-top:2px;}' +
             '.wg-win.wgbp .wg-card{border-radius:0;border:1.2px solid rgba(42,74,128,.45);background:#fff;box-shadow:none;}' +
@@ -2981,7 +3017,8 @@
         if (!t) return;
         b.innerHTML =
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-id-card"></i> ' + _esc(t.name) + '</span>' +
-              '<span class="wg-section-note">' + (t.recruited ? '已入隊' : '旅人') + '・' + _esc(t.job || '') + '</span></div>' +
+              '<span class="wg-section-note">' + (t.recruited ? '已入隊' : '旅人') +
+              (t.home ? '・奧瑞亞' + (t.homeFrom ? '·' + _esc(t.homeFrom) : '') : (t.job ? '・' + _esc(t.job) : '')) + '</span></div>' +
             '<div class="wg-card">' + _profRows(t) + '</div>' +
             // 退隊＝回到候選池,人還在大廳,聊得順還能再入隊一次(不是把人刪掉)
             (t.recruited ? '<button class="wg-btn danger" data-act="leave"><i class="fa-solid fa-user-minus"></i> 請他離隊</button>' : '') +
@@ -3003,6 +3040,73 @@
             _toast(t.name + ' 離開了隊伍，回大廳等下一趟');
             _renderDetail(w, 2);
         });
+    }
+
+    // ── 🏠 從奧瑞亞帶人：熟人名冊 ──
+    // 兩個來源都是她自己維護的資料，不是我內建的名單：
+    //   ①【奧瑞亞-人物核心】的人物條目（一人一條，內容就是完整人設）
+    //   ② 各張角色卡最新一輪的大總結角色表（書咖顧客名冊那份，同一支 cafeRoster）
+    // 資料條目（素材-／手机-／配對／世界狀態）不是人，濾掉。
+    const _HOME_SKIP = /素材-|手机-|手機-|配對|配对|世界狀態|世界状态/;
+    const _HOME_PREFIX = /^【?(?:角色團隊|SN|放養群|放养群|E區|E区|奧瑞亞|奥瑞亚)[-－]/;
+    function _homeLabel(comment) {
+        return String(comment || '').replace(/[【】]/g, '').replace(_HOME_PREFIX, '').replace(/^【?/, '').trim();
+    }
+    // 一句話摘要：給名冊列與身分卡的「性格」欄用，不是餵給 AI 的那份
+    function _homeBrief(text) {
+        const s0 = String(text || '').replace(/\s+/g, ' ').trim();
+        const m = s0.match(/[^。；;\n]{6,60}[。；;]/);
+        return (m ? m[0] : s0.slice(0, 60)).replace(/[。；;]$/, '');
+    }
+    // 外貌單獨抽出來：啟航群像那支只吃 sprite/look/job，熟人三個都空的話它會憑空編一張臉
+    //   ——她的熟人長相是定的，編出來的比沒有更糟。她的人設條目都有「外貌：」這一欄。
+    function _homeLook(text) {
+        const m = String(text || '').match(/外貌[：:]\s*([^\n]{4,160})/);
+        return m ? String(m[1]).split(/[。；;]/)[0].trim() : '';
+    }
+    let _homeCache = null;
+    async function _homefolkList(force) {
+        if (_homeCache && !force) return _homeCache;
+        const out = [];
+        // ① 人物核心世界書
+        try {
+            const entries = (await _th()?.getLorebookEntries?.(BOOK_CORE)) || [];
+            entries.forEach(e => {
+                const cm = String((e && e.comment) || '').trim();
+                const ct = String((e && e.content) || '').trim();
+                if (!cm || !ct || ct.length < 80) return;
+                if (_HOME_SKIP.test(cm)) return;
+                if ((e.keys || e.key || []).some(k => /仅存放数据|僅存放資料/.test(String(k)))) return;
+                out.push({ src: 'core', name: _homeLabel(cm), from: '人物核心', dossier: ct, brief: _homeBrief(ct) });
+            });
+        } catch (err) { console.warn('[Worldgate] 讀不到' + BOOK_CORE, err); }
+        // ② 故事角色（書咖顧客名冊）：persona 後半是整份大總結，帶進世界條目會爆量，切掉只留角色本體
+        try {
+            const LN = win.LobbyNpcs || window.LobbyNpcs;
+            const roster = LN?.cafeRoster ? await LN.cafeRoster() : [];
+            roster.forEach(g => {
+                if (!g || String(g.key || '').slice(0, 3) !== 'jr_') return;   // 前面那兩位是 SN 住民，核心書裡已經有
+                const body = String(g.persona || '').split('【這一輪的完整大總結')[0].trim();
+                if (!body) return;
+                const st = body.match(/《([^》]+)》/);
+                out.push({ src: 'story', name: String(g.name || '').trim(), from: st ? st[1] : '故事', dossier: body, brief: _homeBrief(body) });
+            });
+        } catch (err) { console.warn('[Worldgate] 讀不到故事角色名冊', err); }
+        _homeCache = out.filter(x => x.name);
+        return _homeCache;
+    }
+    // 熟人 → 旅人物件：同一份 w.travelers，槽位／身分卡／離隊／戰鬥隊友／條目全部照舊接得上。
+    //   home=true 是唯一的分水嶺：不考核、直接入隊、不生立姿、條目另開一區。
+    function _mkHomefolk(x, bring) {
+        return {
+            name: x.name, age: 0, job: '',
+            persona: x.brief || '', origin: '', skill: '', look: _homeLook(x.dossier), record: '', reason: '',
+            fit: '', weakness: '', goal: '', clash: '', breakup: '',
+            greet: '', sprite: '', quiz: [], accept: '', refuse: '',
+            home: true, homeFrom: x.from || '', dossier: String(x.dossier || '').slice(0, 800),
+            bring: String(bring || '').trim().slice(0, 60),
+            recruited: true, gone: false,
+        };
     }
 
     // ── 🧍 出發編成槽位 ──
@@ -3212,7 +3316,7 @@
             return '<div class="wgt-person' + (t.recruited ? ' on' : '') + '">' +
                 '<span class="wgt-p-main" data-prof="' + i + '">' +
                     '<span class="wgt-p-nm">' + _esc(t.name) + (t.age ? '<i>' + t.age + '</i>' : '') + '</span>' +
-                    '<span class="wgt-p-job">' + _esc(t.job || '旅人') + '</span>' +
+                    '<span class="wgt-p-job">' + _esc(t.job || (t.home ? '奧瑞亞的人' : '旅人')) + '</span>' +
                 '</span>' +
                 (t.recruited
                     ? '<span class="wgt-p-on"><i class="fa-solid fa-circle-check"></i> 同行中</span>'
@@ -3254,6 +3358,16 @@
                     '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
                     '<span>歲</span></div>' +
                   '<button class="wg-btn" data-act="more-trav"><i class="fa-solid fa-wand-magic-sparkles"></i> 請愛麗絲找人</button>' +
+                '</div>' +
+                // 🏠 帶自己的人進去:熟人不必考核(考題是拿來認識陌生人的),勾了就直接同行
+                '<button class="wg-btn ghost wgt-rec-btn" data-act="home-toggle">' +
+                  '<i class="fa-solid fa-house-user"></i> 從奧瑞亞帶人' +
+                  '<i class="fa-solid fa-chevron-down wgt-rec-caret"></i></button>' +
+                '<div class="wgt-recruit" data-wgt-home hidden>' +
+                  '<div class="wgt-rec-hint">你自己的角色，不用考核，勾了就同行</div>' +
+                  '<div class="wgh-list" data-wgh-list><div class="wgt-empty">讀取中…</div></div>' +
+                  '<input class="wg-input" data-wg-bring maxlength="60" placeholder="這趟為什麼跟來（可留空）">' +
+                  '<button class="wg-btn" data-act="add-home"><i class="fa-solid fa-user-check"></i> 帶他們一起走</button>' +
                 '</div>' +
               '</div>' +
             '</div>';
@@ -3373,6 +3487,56 @@
                 try { r = await _makeLaunchArt(w); } catch (e) { r = { ok: false, msg: (e && e.message) || '生成失敗' }; }
                 _busy = false;
                 _toast(r.msg);
+                _renderDetail(w, 2);
+            });
+            // 🏠 從奧瑞亞帶人：展開才讀名冊(開面板不必每次去翻世界書＋大總結)
+            const _homeBox = b.querySelector('[data-wgt-home]');
+            const _renderHomeList = function (list) {
+                const box = b.querySelector('[data-wgh-list]');
+                if (!box) return;
+                if (!list.length) {
+                    box.innerHTML = '<div class="wgt-empty">找不到可以帶的人。<br>' + _esc(BOOK_CORE) + ' 沒匯入，或裡面還沒有人物條目。</div>';
+                    return;
+                }
+                const had = new Set((w.travelers || []).filter(t => t && !t.gone).map(t => String(t.name || '').trim()));
+                let grp = '';
+                box.innerHTML = list.map((x, i) => {
+                    const head = (x.from !== grp) ? ((grp = x.from), '<div class="wgh-grp">' + _esc(x.from) + '</div>') : '';
+                    const dup = had.has(x.name);
+                    return head + '<label class="wgh-row' + (dup ? ' dim' : '') + '" title="' + _esc(x.brief) + '">' +
+                        '<input type="checkbox" data-wgh="' + i + '"' + (dup ? ' disabled' : '') + '>' +
+                        '<span class="wgh-nm">' + _esc(x.name) + '</span>' +
+                        '<span class="wgh-src">' + (dup ? '已在隊上' : _esc(x.brief).slice(0, 14)) + '</span></label>';
+                }).join('');
+            };
+            b.querySelector('[data-act="home-toggle"]')?.addEventListener('click', async () => {
+                if (!_homeBox) return;
+                const show = _homeBox.hasAttribute('hidden');
+                if (!show) { _homeBox.setAttribute('hidden', ''); return; }
+                _homeBox.removeAttribute('hidden');
+                _renderHomeList(await _homefolkList());
+            });
+            b.querySelector('[data-act="add-home"]')?.addEventListener('click', async () => {
+                if (_busy) return;
+                const list = await _homefolkList();
+                const picks = [...b.querySelectorAll('[data-wgh]:checked')].map(el => list[Number(el.dataset.wgh)]).filter(Boolean);
+                if (!picks.length) { _toast('先勾要帶的人'); return; }
+                // 編成只有四格,超收的人在槽位上看不到,寧可先擋下來講清楚
+                const now = (w.travelers || []).filter(t => t && t.recruited && !t.gone).length;
+                if (now + picks.length > MAX_TRAVELER_SPAWN) {
+                    _toast('編成只有 ' + MAX_TRAVELER_SPAWN + ' 格,現在已經 ' + now + ' 位,先請人離隊');
+                    return;
+                }
+                const bring = (b.querySelector('[data-wg-bring]')?.value || '').trim().slice(0, 60);
+                const had = new Set((w.travelers || []).filter(t => t && !t.gone).map(t => String(t.name || '').trim()));
+                const add = picks.filter(x => !had.has(x.name)).map(x => _mkHomefolk(x, bring));
+                if (!add.length) { _toast('這些人已經在隊上了'); return; }
+                w.travelers = (w.travelers || []).concat(add);
+                await _saveWorld(w);
+                // 隊伍名單即時寫回條目：玩到一半才把人帶進來時，主持AI 讀到的不能還是舊名單
+                if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
+                _spawnTravelers(w, true);
+                _toast(add.map(t => t.name).join('、') + ' 跟你一起走');
                 _renderDetail(w, 2);
             });
             // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
