@@ -53,6 +53,7 @@
     if (!win.AURELIA_GPU_QUEUE) {
         win.AURELIA_GPU_QUEUE = {
             _q: [], _running: false, _seq: 0,
+            _lastImgTag: '',   // 剛跑完的圖片單是哪一桶（'img:char' 等）：同桶的單優先接續，LoRA 補丁不必拆掉重貼
             // maxMs：單項逾時保險（預設 240 秒）。一項卡死（SoVITS 沒開、連線懸掛…）不准堵死整條隊，
             // 逾時就放行後面的單，孤兒請求留在背景自生自滅。
             // 🔬 診斷（預設關）：印出每件工作的等待/執行時間與隊列深度
@@ -71,7 +72,18 @@
             _pump: function() {
                 const self = this;
                 if (self._running) return;
-                const item = self._q.shift();
+                if (!self._q.length) return;
+                // 同桶連跑（只動圖片單）：立繪/插圖/背景三桶各掛不同 LoRA 組，交錯跑等於每張都把整組補丁
+                // 拆掉重貼；剛跑完哪桶就優先撿同桶的單，換桶時才付一次重貼。只在「跟隊頭同優先序」的
+                // 範圍內找——語音(prio 0)永遠先走，且語音自己不套用（播放順序敏感，維持嚴格先到先跑）。
+                let _idx = 0;
+                if (self._lastImgTag) {
+                    for (let i = 0; i < self._q.length; i++) {
+                        if (self._q[i].prio !== self._q[0].prio) break;
+                        if (self._q[i].prio === 1 && self._q[i].tag === self._lastImgTag) { _idx = i; break; }
+                    }
+                }
+                const item = self._q.splice(_idx, 1)[0];
                 if (!item) return;
                 self._running = true;
                 const _tr = self._trace();
@@ -82,6 +94,7 @@
                     if (done) return;
                     done = true;
                     clearTimeout(timer);
+                    if (item.prio === 1 && String(item.tag).slice(0, 4) === 'img:') self._lastImgTag = item.tag;
                     if (_tr) console.log('[GPU佇列] ■ 完成 ' + item.tag + '　佔用 ' + ((Date.now() - _tStart) / 1000).toFixed(1) + 's　（等待 ' + ((_tStart - item.tQueued) / 1000).toFixed(1) + 's）');
                     cb(v);
                     self._running = false;
@@ -493,7 +506,7 @@
                 } finally {
                     try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
                 }
-            }, 1);
+            }, 1, undefined, 'img:sd');   // 酒館 /sd 後端只有一套設定，全部算同一桶
         },
 
         // 底詞污染偵測：底詞(basePrompt)會附加到「每一張」圖，只該放品質/風格/LoRA trigger。
@@ -522,18 +535,36 @@
             return final;
         },
 
+        // --- ComfyUI 暖機（vn_core「故事撰寫中」幕布呼叫）---
+        // 「起步慢」的錢全花在冷載入＋貼 LoRA 補丁、不在採樣（實測：冷 22 秒、熱 7 秒，採樣只佔 3 秒）。
+        // 趁 AI 還在寫劇本的空檔先丟一張極小圖，把即將用到那桶的模型整組拉上顯卡；
+        // 進的是同一條 GPU 佇列、同一個桶 tag，所以正式批次到時直接接在它後面連跑。
+        // 沒有桶走 ComfyUI 直連＝無事可做；十分鐘內剛生過圖＝模型還熱著，也不浪費這張。
+        _lastComfyJobAt: 0,
+        warmup: function() {
+            try {
+                const t = ['char', 'scene', 'bg'].find((x) => this.serviceFor(x) === 'comfyui_direct');
+                if (!t) return;
+                if (Date.now() - this._lastComfyJobAt < 10 * 60 * 1000) return;
+                this._lastComfyJobAt = Date.now();   // 先佔位：幕布短時間亮兩次也只排一張暖機單
+                console.log('[ImageManager] 🔥 ComfyUI 暖機（' + t + ' 桶）：趁寫稿空檔先把模型拉上顯卡');
+                this._genComfyuiDirect('warmup', t, { width: 128, height: 128, warmup: true }).catch(() => {});
+            } catch (e) {}
+        },
+
         // --- ComfyUI 直連：奧瑞亞內部自動組 workflow → 走酒館伺服器代理(/api/sd/comfy/generate) → 回 base64 ---
         // 不依賴 ST 的 workflow 檔；LoRA/參數全由 config.comfyuiDirect（奧瑞亞 UI）控制。
         _genComfyuiDirect: async function(prompt, type, options = {}) {
-            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+            // options.warmup＝暖機單（warmup()）：不計生圖數、不套場景高清/修臉、失敗全靜默——它只為了把模型拉上顯卡
+            if (!options.warmup) { try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {} }
             const cfg = this._comfyCfgFor(type);   // 按桶取設定（char/scene/bg/map 各自一份，沒設過退共用）
             const url = (cfg.url || '').trim();
             if (!url) {
-                try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {}
+                if (!options.warmup) { try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {} }
                 return null;
             }
             if (!cfg.model && cfg.workflowMode !== 'custom') {
-                try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」選一個模型', 'ComfyUI 直連'); } catch (e) {}
+                if (!options.warmup) { try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」選一個模型', 'ComfyUI 直連'); } catch (e) {} }
                 return null;
             }
 
@@ -555,7 +586,7 @@
                 // 自動組：場景插圖(type==='scene')依設定自動套高清修復 + FaceDetailer 修臉
                 // （頭像每輪生不套以免變慢；立繪走自己的開關，不經這裡）
                 let _opts = options;
-                if (type === 'scene') {
+                if (type === 'scene' && !options.warmup) {
                     _opts = Object.assign({}, options);
                     // 預設開：config 沒這欄位(舊存檔/沒開過設定)也視為開，除非使用者明確存成 false
                     if (cfg.sceneHires !== false && !_opts.comfyHires) _opts.comfyHires = { scale: parseFloat(cfg.sceneHiresScale) || 1.5, denoise: 0.45 };
@@ -580,7 +611,7 @@
                     if (!res.ok) {
                         const t = await res.text().catch(() => '');
                         console.error('[ImageManager] ComfyUI 直連失敗:', res.status, t);
-                        try { win.toastr && win.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {}
+                        if (!options.warmup) { try { win.toastr && win.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {} }
                         return null;
                     }
                     const j = await res.json();
@@ -592,13 +623,14 @@
                 } catch (error) {
                     const _msg = (error && error.name === 'AbortError') ? '生成逾時(180秒)，已放棄這張讓後面的繼續' : (error.message || error);
                     console.error('[ImageManager] ComfyUI 直連錯誤:', _msg);
-                    try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {}
+                    if (!options.warmup) { try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {} }
                     return null;
                 } finally {
                     if (_timer) clearTimeout(_timer);
                     try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
+                    this._lastComfyJobAt = Date.now();   // 記下「剛用過 ComfyUI」：十分鐘內模型還熱著，暖機可免
                 }
-            }, 1);
+            }, 1, undefined, 'img:' + this._comfyBucketOf(type));   // 桶當 tag：佇列靠它把同 LoRA 組的單連著跑
         },
 
         // PWA/手機沒有酒館後端 → 瀏覽器直接打 ComfyUI；酒館內(有 SillyTavern.getContext)走代理免 CORS
