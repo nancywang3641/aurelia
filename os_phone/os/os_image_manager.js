@@ -182,6 +182,11 @@
                     const savedConfig = JSON.parse(saved);
                     this.config = {
                         ...this.config,
+                        // 🚨 先把存檔整份帶進來，再用下面那幾條覆蓋需要特殊處理的。
+                        //    原本是「逐個列舉子物件」，名單上沒有的欄位在每次開機都會被預設值蓋回去 ——
+                        //    自訂接口就是這樣掉的：設定存進 localStorage 了，但這裡沒讀回來，
+                        //    於是當場按存能用、一重新整理就變回沒填網址（她第一章成功、第二章黃字）。
+                        ...savedConfig,
                         service: savedConfig.service || this.config.service,
                         // 向後相容：舊用戶只有單一 service → 各桶都繼承它，現狀不變
                         serviceInanimate: savedConfig.serviceInanimate || savedConfig.service || this.config.service,
@@ -199,6 +204,10 @@
                         novelai: {
                             ...this.config.novelai,
                             ...savedConfig.novelai
+                        },
+                        customApi: {
+                            ...this.config.customApi,
+                            ...(savedConfig.customApi || {})
                         },
                         tavernSd: {
                             ...this.config.tavernSd,
