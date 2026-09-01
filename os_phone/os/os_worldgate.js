@@ -16,6 +16,9 @@
     const win = window.parent || window;
     const APP_ID = 'worldgate';
     const K_WORLDS = 'worlds';   // [{id,name,concept,genre,style,lure,danger,crisis,keys,entryText,travelers:[{name,job,persona,origin,skill,fit,goal,weakness,recruited}],visits,ts}]
+    const K_FOLK = 'folk';       // 她自己在面板裡加的角色簿（跨聊天室共用，跟 K_WORLDS 同層）
+                                 // 🚨刻意不存世界書：她討厭的就是建條目那套儀式（開書、填 comment、
+                                 //   填鑰匙、選插入位置，然後條目一多就再也找不到）。這裡建完立刻能勾。
     const K_CURRENT = 'current'; // 這個聊天室目前在哪個世界（世界 id；撤離清空）— world_rules_injector 依此翻模組條目
     const BOOK_PARA = '【奧瑞亞-視差】';
     const BOOK_CORE = '【奧瑞亞-人物核心】';   // 她的熟人檔案庫（視差模式刻意不掛這本＝認知隔離，
@@ -2598,14 +2601,21 @@
             '.wgt-rec-btn.on .wgt-rec-caret{transform:translateY(-50%) rotate(180deg);}' +
             '.wgt-recruit{display:flex;flex-direction:column;gap:7px;padding:10px;background:#fff;border:1.2px solid rgba(42,74,128,.45);}' +
             '.wgt-recruit[hidden]{display:none;}' +
-            '.wgh-list{max-height:184px;overflow:auto;display:flex;flex-direction:column;gap:1px;padding:4px;background:rgba(255,255,255,.72);border:1.2px solid rgba(42,74,128,.28);}' +
+            '.wgh-list{max-height:min(52vh,420px);overflow:auto;display:flex;flex-direction:column;gap:1px;' +
+              'margin:9px 0;padding:5px;background:#fff;border:1.2px solid rgba(42,74,128,.45);}' +
+            '.wgh-list+.wg-input{margin-bottom:7px;}' +
             '.wgh-grp{font-size:10px;font-weight:800;letter-spacing:.08em;color:rgba(42,74,128,.72);padding:6px 4px 3px;}' +
-            '.wgh-row{display:flex;align-items:center;gap:7px;padding:4px 6px;cursor:pointer;font-size:12px;}' +
+            '.wgh-row{display:flex;align-items:center;gap:8px;padding:6px 7px;cursor:pointer;font-size:12.5px;}' +
             '.wgh-row:hover{background:rgba(42,74,128,.09);}' +
             '.wgh-row.dim{opacity:.45;cursor:default;}' +
             '.wgh-row input{margin:0;flex:0 0 auto;accent-color:#2a4a80;}' +
             '.wgh-nm{flex:1;font-weight:700;color:#16223a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
             '.wgh-src{flex:0 0 auto;font-size:10px;color:rgba(22,34,58,.5);}' +
+            '.wgh-x{flex:0 0 auto;width:16px;text-align:center;color:rgba(22,34,58,.35);font-size:11px;cursor:pointer;}' +
+            '.wgh-x:hover{color:#b3402f;}' +
+            '.wgh-new{display:flex;flex-direction:column;gap:6px;margin-top:13px;padding-top:11px;border-top:1px dashed rgba(42,74,128,.3);}' +
+            '.wgh-new-hd{font-size:11px;font-weight:800;letter-spacing:.06em;color:rgba(42,74,128,.8);}' +
+            '.wgh-new .area{resize:vertical;min-height:56px;line-height:1.55;}' +
             '.wgt-rec-hint{font-size:10.5px;color:#46639b;letter-spacing:.08em;}' +
             '.wgt-recruit .wg-btn{margin-top:2px;}' +
             '.wg-win.wgbp .wg-card{border-radius:0;border:1.2px solid rgba(42,74,128,.45);background:#fff;box-shadow:none;}' +
@@ -3065,9 +3075,28 @@
         return m ? String(m[1]).split(/[。；;]/)[0].trim() : '';
     }
     let _homeCache = null;
+    async function _getFolk() { return (await _get(K_FOLK, [])) || []; }
+    async function _addFolk(name, dossier) {
+        const list = await _getFolk();
+        list.unshift({ id: _mkId(), name: String(name || '').trim().slice(0, 24), dossier: String(dossier || '').trim(), ts: Date.now() });
+        await _set(K_FOLK, list);
+        _homeCache = null;
+        return list;
+    }
+    async function _delFolk(id) {
+        await _set(K_FOLK, (await _getFolk()).filter(x => x && x.id !== id));
+        _homeCache = null;
+    }
     async function _homefolkList(force) {
         if (_homeCache && !force) return _homeCache;
         const out = [];
+        // ⓪ 她自己加的（排最前面：臨時想到的人、剛拿到手想試試的人都在這裡）
+        try {
+            (await _getFolk()).forEach(f => {
+                if (!f || !f.name) return;
+                out.push({ src: 'folk', fid: f.id, name: f.name, from: '我加的', dossier: f.dossier || '', brief: _homeBrief(f.dossier) });
+            });
+        } catch (err) { console.warn('[Worldgate] 角色簿讀取失敗', err); }
         // ① 人物核心世界書
         try {
             const entries = (await _th()?.getLorebookEntries?.(BOOK_CORE)) || [];
@@ -3080,7 +3109,18 @@
                 out.push({ src: 'core', name: _homeLabel(cm), from: '人物核心', dossier: ct, brief: _homeBrief(ct) });
             });
         } catch (err) { console.warn('[Worldgate] 讀不到' + BOOK_CORE, err); }
-        // ② 故事角色（書咖顧客名冊）：persona 後半是整份大總結，帶進世界條目會爆量，切掉只留角色本體
+        // ② 酒館裡已經裝著的角色卡：「剛拿到手只是想試試」的那種人本來就在這裡，
+        //    不必為了帶他進去先把卡匯成一個故事、更不必替他建條目。
+        try {
+            const ctx = win.SillyTavern?.getContext?.();
+            (ctx && Array.isArray(ctx.characters) ? ctx.characters : []).forEach(c => {
+                const nm = String((c && c.name) || '').trim();
+                const body = [c && c.description, c && c.personality].map(x => String(x || '').trim()).filter(Boolean).join('\n');
+                if (!nm || body.length < 40) return;
+                out.push({ src: 'card', name: nm, from: '角色卡', dossier: body, brief: _homeBrief(body) });
+            });
+        } catch (err) { console.warn('[Worldgate] 讀不到角色卡清單', err); }
+        // ③ 故事角色（書咖顧客名冊）：persona 後半是整份大總結，帶進世界條目會爆量，切掉只留角色本體
         try {
             const LN = win.LobbyNpcs || window.LobbyNpcs;
             const roster = LN?.cafeRoster ? await LN.cafeRoster() : [];
@@ -3107,6 +3147,93 @@
             bring: String(bring || '').trim().slice(0, 60),
             recruited: true, gone: false,
         };
+    }
+
+    // ── 🏠 從奧瑞亞帶人（面板內第二層頁，同身分卡那層）──
+    //   一進來清單就是攤開的：這一頁只有「挑誰跟我走」這一件事，沒有需要展開的東西。
+    function _homeRows(w, list) {
+        if (!list.length) {
+            return '<div class="wgt-empty">還沒有人可以帶。<br>用下面那格自己加一個，或把人寫進 ' + _esc(BOOK_CORE) + '。</div>';
+        }
+        const had = new Set((w.travelers || []).filter(t => t && !t.gone).map(t => String(t.name || '').trim()));
+        let grp = '';
+        return list.map((x, i) => {
+            const head = (x.from !== grp) ? ((grp = x.from), '<div class="wgh-grp">' + _esc(x.from) + '</div>') : '';
+            const dup = had.has(x.name);
+            return head + '<label class="wgh-row' + (dup ? ' dim' : '') + '" title="' + _esc(x.brief) + '">' +
+                '<input type="checkbox" data-wgh="' + i + '"' + (dup ? ' disabled' : '') + '>' +
+                '<span class="wgh-nm">' + _esc(x.name) + '</span>' +
+                '<span class="wgh-src">' + (dup ? '已在隊上' : _esc(x.brief).slice(0, 16)) + '</span>' +
+                (x.fid ? '<b class="wgh-x" data-wgh-del="' + x.fid + '" title="從名冊刪掉他">✕</b>' : '') +
+                '</label>';
+        }).join('');
+    }
+    async function _renderHomePage(w) {
+        const b = _body(); if (!b) return;
+        const now = (w.travelers || []).filter(t => t && t.recruited && !t.gone).length;
+        b.innerHTML =
+            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-house-user"></i> 從奧瑞亞帶人</span>' +
+              '<span class="wg-section-note">編成 ' + now + ' / ' + MAX_TRAVELER_SPAWN + '・不用考核</span></div>' +
+            '<div class="wgh-list" data-wgh-list><div class="wgt-empty">讀取中…</div></div>' +
+            '<input class="wg-input" data-wg-bring maxlength="60" placeholder="這趟為什麼跟來（可留空）">' +
+            '<button class="wg-btn" data-act="add-home"><i class="fa-solid fa-user-check"></i> 帶他們一起走</button>' +
+            // 臨時想到的人常常是看著名冊才想起來要加，所以這格就跟清單放同一頁、不再往下藏一層
+            '<div class="wgh-new">' +
+              '<div class="wgh-new-hd">這裡沒有的人</div>' +
+              '<input class="wg-input" data-wg-newname maxlength="24" placeholder="名字">' +
+              '<textarea class="wg-input area" data-wg-newdoc rows="3" ' +
+                'placeholder="他是誰（貼上就好；想把好幾個人寫成一份也可以）"></textarea>' +
+              '<button class="wg-btn ghost" data-act="save-folk"><i class="fa-solid fa-plus"></i> 加進名冊</button>' +
+            '</div>' +
+            '<button class="wg-btn ghost" data-act="back">返回</button>';
+
+        const box = b.querySelector('[data-wgh-list]');
+        const paint = async () => { if (box) box.innerHTML = _homeRows(w, await _homefolkList()); };
+
+        b.querySelector('[data-act="back"]').addEventListener('click', () => _renderDetail(w, 2));
+        b.querySelector('[data-act="save-folk"]').addEventListener('click', async () => {
+            const nm = (b.querySelector('[data-wg-newname]')?.value || '').trim();
+            const doc = (b.querySelector('[data-wg-newdoc]')?.value || '').trim();
+            if (!nm) { _toast('先給他一個名字'); return; }
+            if (!doc) { _toast('寫一句他是誰,不然主持AI 只拿得到一個名字'); return; }
+            await _addFolk(nm, doc);
+            const n1 = b.querySelector('[data-wg-newname]'); if (n1) n1.value = '';
+            const n2 = b.querySelector('[data-wg-newdoc]'); if (n2) n2.value = '';
+            await paint();
+            _toast(nm + ' 進名冊了,勾起來就能帶走');
+        });
+        // 刪除鍵在 <label> 裡面，不擋掉冒泡會順手把勾選也切掉
+        box?.addEventListener('click', async (ev) => {
+            const x = ev.target.closest?.('[data-wgh-del]');
+            if (!x) return;
+            ev.preventDefault(); ev.stopPropagation();
+            await _delFolk(x.dataset.wghDel);
+            await paint();
+        });
+        b.querySelector('[data-act="add-home"]').addEventListener('click', async () => {
+            if (_busy) return;
+            const list = await _homefolkList();
+            const picks = [...b.querySelectorAll('[data-wgh]:checked')].map(el => list[Number(el.dataset.wgh)]).filter(Boolean);
+            if (!picks.length) { _toast('先勾要帶的人'); return; }
+            // 編成只有四格,超收的人在槽位上看不到,寧可先擋下來講清楚
+            const cur = (w.travelers || []).filter(t => t && t.recruited && !t.gone).length;
+            if (cur + picks.length > MAX_TRAVELER_SPAWN) {
+                _toast('編成只有 ' + MAX_TRAVELER_SPAWN + ' 格,現在已經 ' + cur + ' 位,先請人離隊');
+                return;
+            }
+            const bring = (b.querySelector('[data-wg-bring]')?.value || '').trim().slice(0, 60);
+            const had = new Set((w.travelers || []).filter(t => t && !t.gone).map(t => String(t.name || '').trim()));
+            const add = picks.filter(x => !had.has(x.name)).map(x => _mkHomefolk(x, bring));
+            if (!add.length) { _toast('這些人已經在隊上了'); return; }
+            w.travelers = (w.travelers || []).concat(add);
+            await _saveWorld(w);
+            // 隊伍名單即時寫回條目：玩到一半才把人帶進來時，主持AI 讀到的不能還是舊名單
+            if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
+            _spawnTravelers(w, true);
+            _toast(add.map(t => t.name).join('、') + ' 跟你一起走');
+            _renderDetail(w, 2);
+        });
+        await paint();
     }
 
     // ── 🧍 出發編成槽位 ──
@@ -3359,16 +3486,11 @@
                     '<span>歲</span></div>' +
                   '<button class="wg-btn" data-act="more-trav"><i class="fa-solid fa-wand-magic-sparkles"></i> 請愛麗絲找人</button>' +
                 '</div>' +
-                // 🏠 帶自己的人進去:熟人不必考核(考題是拿來認識陌生人的),勾了就直接同行
-                '<button class="wg-btn ghost wgt-rec-btn" data-act="home-toggle">' +
-                  '<i class="fa-solid fa-house-user"></i> 從奧瑞亞帶人' +
-                  '<i class="fa-solid fa-chevron-down wgt-rec-caret"></i></button>' +
-                '<div class="wgt-recruit" data-wgt-home hidden>' +
-                  '<div class="wgt-rec-hint">你自己的角色，不用考核，勾了就同行</div>' +
-                  '<div class="wgh-list" data-wgh-list><div class="wgt-empty">讀取中…</div></div>' +
-                  '<input class="wg-input" data-wg-bring maxlength="60" placeholder="這趟為什麼跟來（可留空）">' +
-                  '<button class="wg-btn" data-act="add-home"><i class="fa-solid fa-user-check"></i> 帶他們一起走</button>' +
-                '</div>' +
+                // 🏠 帶自己的人進去:熟人不必考核(考題是拿來認識陌生人的),勾了就直接同行。
+                //   🚨這顆是換頁不是展開:名冊攤在這一欄會把「誰跟我走」整頁撐爆,收成摺疊又看不見裡面有誰
+                //   (Rae 兩邊都否掉了)。挑人是一件獨立的事,就給它一整頁——同身分卡那層頁的成例。
+                '<button class="wg-btn ghost" data-act="home-page">' +
+                  '<i class="fa-solid fa-house-user"></i> 從奧瑞亞帶人</button>' +
               '</div>' +
             '</div>';
 
@@ -3489,56 +3611,7 @@
                 _toast(r.msg);
                 _renderDetail(w, 2);
             });
-            // 🏠 從奧瑞亞帶人：展開才讀名冊(開面板不必每次去翻世界書＋大總結)
-            const _homeBox = b.querySelector('[data-wgt-home]');
-            const _renderHomeList = function (list) {
-                const box = b.querySelector('[data-wgh-list]');
-                if (!box) return;
-                if (!list.length) {
-                    box.innerHTML = '<div class="wgt-empty">找不到可以帶的人。<br>' + _esc(BOOK_CORE) + ' 沒匯入，或裡面還沒有人物條目。</div>';
-                    return;
-                }
-                const had = new Set((w.travelers || []).filter(t => t && !t.gone).map(t => String(t.name || '').trim()));
-                let grp = '';
-                box.innerHTML = list.map((x, i) => {
-                    const head = (x.from !== grp) ? ((grp = x.from), '<div class="wgh-grp">' + _esc(x.from) + '</div>') : '';
-                    const dup = had.has(x.name);
-                    return head + '<label class="wgh-row' + (dup ? ' dim' : '') + '" title="' + _esc(x.brief) + '">' +
-                        '<input type="checkbox" data-wgh="' + i + '"' + (dup ? ' disabled' : '') + '>' +
-                        '<span class="wgh-nm">' + _esc(x.name) + '</span>' +
-                        '<span class="wgh-src">' + (dup ? '已在隊上' : _esc(x.brief).slice(0, 14)) + '</span></label>';
-                }).join('');
-            };
-            b.querySelector('[data-act="home-toggle"]')?.addEventListener('click', async () => {
-                if (!_homeBox) return;
-                const show = _homeBox.hasAttribute('hidden');
-                if (!show) { _homeBox.setAttribute('hidden', ''); return; }
-                _homeBox.removeAttribute('hidden');
-                _renderHomeList(await _homefolkList());
-            });
-            b.querySelector('[data-act="add-home"]')?.addEventListener('click', async () => {
-                if (_busy) return;
-                const list = await _homefolkList();
-                const picks = [...b.querySelectorAll('[data-wgh]:checked')].map(el => list[Number(el.dataset.wgh)]).filter(Boolean);
-                if (!picks.length) { _toast('先勾要帶的人'); return; }
-                // 編成只有四格,超收的人在槽位上看不到,寧可先擋下來講清楚
-                const now = (w.travelers || []).filter(t => t && t.recruited && !t.gone).length;
-                if (now + picks.length > MAX_TRAVELER_SPAWN) {
-                    _toast('編成只有 ' + MAX_TRAVELER_SPAWN + ' 格,現在已經 ' + now + ' 位,先請人離隊');
-                    return;
-                }
-                const bring = (b.querySelector('[data-wg-bring]')?.value || '').trim().slice(0, 60);
-                const had = new Set((w.travelers || []).filter(t => t && !t.gone).map(t => String(t.name || '').trim()));
-                const add = picks.filter(x => !had.has(x.name)).map(x => _mkHomefolk(x, bring));
-                if (!add.length) { _toast('這些人已經在隊上了'); return; }
-                w.travelers = (w.travelers || []).concat(add);
-                await _saveWorld(w);
-                // 隊伍名單即時寫回條目：玩到一半才把人帶進來時，主持AI 讀到的不能還是舊名單
-                if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
-                _spawnTravelers(w, true);
-                _toast(add.map(t => t.name).join('、') + ' 跟你一起走');
-                _renderDetail(w, 2);
-            });
+            b.querySelector('[data-act="home-page"]')?.addEventListener('click', () => _renderHomePage(w));
             // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
             //   世界檔案與旅人本來就是分兩次生的（旅人那次掛掉時世界照樣存下來），所以這顆同時也是
             //   「一個旅人都沒有」時的補救按鈕，不必另外做一顆。
