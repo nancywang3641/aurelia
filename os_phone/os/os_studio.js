@@ -1452,7 +1452,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             </div>
             <div class="vth-pane vth-pane-css">
                 <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
-                <div class="vth-css-hint">左邊跟 AI 講、或直接在這裡改，右邊即時預覽。AI 每次回的是完整的最新 CSS，會自動套進當前世界；改壞了按「還原上一版」。AI 用「寫作→API 設置」的副模型。</div>
+                <div class="vth-css-hint">左邊跟 AI 講、或直接在這裡改，右邊即時預覽。AI 每次回的是完整的最新 CSS，會自動套進當前世界；改壞了按「還原上一版」。主題是設計工作，用「寫作→API 設置」的主模型。</div>
             </div>
             <div class="vth-pane vth-pane-gal">
                 <div class="vth-gal">
@@ -1602,7 +1602,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const text = (sayEl.value || '').trim();
             if (!text || _sending) return;
             const api = (window.parent || window).OS_API || window.OS_API;
-            if (!api || typeof api.chatSecondary !== 'function') { alert('AI（副模型）不可用，請先到「寫作 → API 設置」設好副模型'); return; }
+            // 🚨主題走「主模型」：這是設計工作，不是照規格填欄位。
+            //   這個 repo 的分工本來就寫在世界門那支的註解裡——旅人的身分卡走副模型（填欄位），
+            //   世界檔案留給主模型（整個世界的地基，後面所有東西都長在它上面）。
+            //   VN 主題是整個畫面的視覺地基，同一個道理；副模型做這個做不出設計，
+            //   出來就是「同一個矩形換顏色」。慢一點貴一點，換的是它真的會設計。
+            const chat = (typeof api?.chatMain === 'function') ? api.chatMain.bind(api)
+                : (typeof api?.chatSecondary === 'function') ? api.chatSecondary.bind(api) : null;
+            if (!chat) { alert('AI 不可用，請先到「寫作 → API 設置」設好主模型'); return; }
             sayEl.value = '';
             if (!chatLog.length) chatBox.innerHTML = '';
             chatLog.push({ role: 'user', text });
@@ -1648,7 +1655,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 addBubble('ai', say, true);
                 if (newCss) applyCss(newCss);
             };
-            api.chatSecondary(msgs, () => {}, done,
+            chat(msgs, () => {}, done,
                 (err) => {
                     _sending = false; sendBtn.disabled = false; wait.remove();
                     _studioConfirmRetry((err && err.message) || err, () => { sayEl.value = text; send(); });
