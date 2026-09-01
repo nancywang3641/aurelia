@@ -220,7 +220,8 @@
 .vth-chat { flex:1; min-height:120px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:4px 2px; }
 .vth-chat-empty { font-size:12px; line-height:1.7; color:#8a8a8a; padding:10px 4px; }
 .vth-undo-row { display:none; }
-.vth-undo-row.on { display:flex; justify-content:flex-end; }
+.vth-undo-row.on { display:flex; justify-content:flex-end; gap:8px; }
+.vth-undo-row [hidden] { display:none; }
 .vth-say-wrap { padding:0; gap:8px; align-items:flex-end; }
 .vth-say-wrap .studio-textarea { min-height:46px; max-height:120px; }
 /* 右欄三個分頁：即時預覽／CSS／主題庫（一次只看一件事，不再一長條疊下去） */

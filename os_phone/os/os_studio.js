@@ -1276,11 +1276,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <div class="vth-css-bar">
                 <span class="vth-css-world"><i class="fa-solid fa-globe"></i> ${esc(chatId || '(未知，先進 VN 一次)')}</span>
                 <button class="vth-mini primary" id="vth-css-apply"><i class="fa-solid fa-floppy-disk"></i> 套用到此世界</button>
-                <button class="vth-mini" id="vth-css-clear">清空</button>
+                <button class="vth-mini" id="vth-css-clear">清空 CSS</button>
             </div>
             <div class="vth-chat" id="vth-chat"></div>
             <div class="vth-undo-row" id="vth-undo-row">
                 <button class="vth-mini" id="vth-undo"><i class="fa-solid fa-clock-rotate-left"></i> 還原上一版 (<span id="vth-undo-n">0</span>)</button>
+                <button class="vth-mini" id="vth-chat-clear"><i class="fa-solid fa-broom"></i> 清空對話</button>
             </div>
             <div class="studio-input-area vth-say-wrap">
                 <textarea class="studio-textarea" id="vth-say" placeholder="想要什麼風格、或哪裡要改，直接說（例：章節卡的標題再大一點、對話框換成暗紅燙金）"></textarea>
@@ -1418,9 +1419,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         let chatLog = _vthChatLoad(chatId);      // [{role:'user'|'ai', text}]
         let undoLog = _vthUndoLoad(chatId);      // 每次 AI 改動前的舊 CSS
 
+        const undoBtnWrap = host.querySelector('#vth-undo');
+        const chatClearBtn = host.querySelector('#vth-chat-clear');
+        // 🚨這一列原本只在「有還原版本」時才出現，而清對話的入口只有它 →
+        //   主題頁等於沒有地方清聊天紀錄（頭上那顆垃圾桶只在「製作互動面板」才露出來）。
+        //   現在有對話或有還原版本都要顯示，兩顆各自按自己的條件出現。
         const syncUndo = () => {
             undoN.textContent = String(undoLog.length);
-            undoRow.classList.toggle('on', undoLog.length > 0);   // 用 class 不用 style：CSS 預設就是 none,設成 '' 會退回 none
+            undoBtnWrap.hidden = undoLog.length === 0;
+            chatClearBtn.hidden = chatLog.length === 0;
+            // 用 class 不用 style：CSS 預設就是 none,設成 '' 會退回 none
+            undoRow.classList.toggle('on', undoLog.length > 0 || chatLog.length > 0);
         };
         const addBubble = (role, text, animate) => {
             const b = document.createElement('div');
@@ -1504,6 +1513,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         };
         sendBtn.onclick = send;
         sayEl.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+        _armOnce(chatClearBtn, '<i class="fa-solid fa-broom"></i> 再按一次清空', () => {
+            chatLog = [];
+            _vthChatSave(chatId, chatLog);
+            renderChat();
+            syncUndo();
+        });
         undoBtn.onclick = () => {
             if (!undoLog.length) return;
             const prev = undoLog.pop();
