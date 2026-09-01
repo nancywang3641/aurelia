@@ -1191,6 +1191,33 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 - 如果使用者問的是問題、或你需要先確認才知道怎麼改，就「只回話、不要輸出 CSS」。
 `;
 
+    // 🚨從 AI 回覆裡挑出 CSS。舊寫法只認「成對的 ```」，漏掉兩種很常見的情況：
+    //   ① 回覆被輸出上限截斷 → 只有開頭那個 ```，收尾那個永遠等不到
+    //   ② 模型直接吐純 CSS，一個 ``` 都沒有
+    //   兩種都會讓 newCss 變成空字串 → 主題沒被套用，而整包 CSS 被當成「說明文字」
+    //   原封不動貼進對話泡泡（Rae：AI 直接給我一大串代碼，不太懂）。
+    function _vthPickCss(raw) {
+        const s0 = String(raw || '');
+        const looksCss = (t) => /\{[\s\S]*?\}/.test(t) && (t.match(/\}/g) || []).length >= 2;
+        let m = s0.match(/```(?:css)?\s*([\s\S]*?)```/i);
+        if (m) return { css: m[1].trim(), note: s0.replace(/```[\s\S]*?```/g, '').trim(), cut: false };
+        m = s0.match(/```(?:css)?\s*([\s\S]*)$/i);
+        if (m && looksCss(m[1])) return { css: m[1].trim(), note: s0.slice(0, m.index).trim(), cut: true };
+        if (looksCss(s0)) return { css: s0.trim(), note: '', cut: false };
+        return { css: '', note: s0.trim(), cut: false };
+    }
+    // 用了卻沒定義的自訂變數：模型偶爾會在微調時把 :root 那段整個漏掉，
+    //   var() 讀不到值 → 顏色與字體整組失效，畫面看起來就是「主題壞了」。
+    //   預覽底稿本來就有的那幾顆不算缺。
+    const VTH_BASE_VARS = ['--gold', '--gold-light', '--gold-dark', '--em-color', '--text-color',
+        '--name-color', '--font-classic', '--font-sans', '--vn-name-bg', '--vn-dialog-bg'];
+    function _vthMissingVars(css) {
+        const t = String(css || '');
+        const used = [...new Set((t.match(/var\(\s*--[\w-]+/g) || []).map(x => x.replace(/var\(\s*/, '')))];
+        const def = new Set((t.match(/--[\w-]+\s*:/g) || []).map(x => x.replace(/\s*:$/, '').trim()));
+        return used.filter(v => !def.has(v) && VTH_BASE_VARS.indexOf(v) < 0);
+    }
+
     // 對話紀錄與版本備份都按世界分開存（改 A 世界的主題不該影響 B 世界）
     function _vthChatKey(w) { return 'vn_theme_chat::' + (w || 'lobby_default'); }
     function _vthChatLoad(w) { try { return JSON.parse(localStorage.getItem(_vthChatKey(w)) || '[]'); } catch (e) { return []; } }
@@ -1432,10 +1459,16 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 const bad = _studioBadReply(String(full || ''));
                 if (bad.bad) { _studioConfirmRetry(bad.reason, () => { sayEl.value = text; send(); }); return; }
                 const raw = String(full || '');
-                const m = raw.match(/```(?:css)?\s*([\s\S]*?)```/i);
-                const note = raw.replace(/```[\s\S]*?```/g, '').trim();
-                const newCss = m ? m[1].trim() : '';
-                const say = note || (newCss ? '好了，右邊看看。' : raw.trim());
+                const got = _vthPickCss(raw);
+                const newCss = got.css;
+                const warn = [];
+                if (newCss && got.cut) warn.push('（這次的回覆看起來被截斷了，主題可能不完整——不對就按還原上一版，再讓他重寫一次。）');
+                if (newCss) {
+                    const miss = _vthMissingVars(newCss);
+                    if (miss.length) warn.push('（這份用到 ' + miss.slice(0, 4).join('、') + ' 卻沒有定義，那幾處的顏色或字體會失效。跟他說「補上變數定義」就好。）');
+                }
+                const say = [got.note, newCss ? '' : null, warn.join('\n')].filter(x => x).join('\n')
+                    || (newCss ? '好了，右邊看看。' : raw.trim());
                 chatLog.push({ role: 'ai', text: say });
                 _vthChatSave(chatId, chatLog);
                 addBubble('ai', say, true);
