@@ -660,24 +660,22 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         if (drawerBackdrop) drawerBackdrop.addEventListener('click', () => togglePreviewDrawer(false));
         if (drawerHandle)   drawerHandle.addEventListener('click', () => togglePreviewDrawer(false));
 
-        document.getElementById('studio-clear-btn').onclick = async () => {
-            const channelName = '當前頻道';
-            if (confirm(`確定要清空 [${channelName}] 的對話紀錄嗎？`)) {
-                const chatId = getChatSessionId();
-                // chatMessages 重置時也順便砍掉 latest panel marker（雖然 chatMessages 整個被重設了）
-                chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
-                currentParsedData = null;
-                // 清空 IDB
-                if (win.OS_DB && win.OS_DB.clearStudioChat) {
-                    win.OS_DB.clearStudioChat(chatId).catch(e=>e);
-                }
-                // 清空 localStorage 備份（聊天歷史 + 預覽狀態快照）
-                localStorage.removeItem(`os_studio_chat_${chatId}`);
-                _clearParsedCache(chatId);
-                renderChatHistory();
-                renderPreviewPanel();
+        _armOnce(document.getElementById('studio-clear-btn'),
+            '<i class="fa-solid fa-trash"></i> <span>再按一次</span>', () => {
+            const chatId = getChatSessionId();
+            // chatMessages 重置時也順便砍掉 latest panel marker（雖然 chatMessages 整個被重設了）
+            chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
+            currentParsedData = null;
+            // 清空 IDB
+            if (win.OS_DB && win.OS_DB.clearStudioChat) {
+                win.OS_DB.clearStudioChat(chatId).catch(e=>e);
             }
-        };
+            // 清空 localStorage 備份（聊天歷史 + 預覽狀態快照）
+            localStorage.removeItem(`os_studio_chat_${chatId}`);
+            _clearParsedCache(chatId);
+            renderChatHistory();
+            renderPreviewPanel();
+        });
 
         const inputEl = document.getElementById('studio-input');
         const sendBtn = document.getElementById('studio-send-btn');
@@ -1234,6 +1232,28 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     //   面板入口走 win.OS_STUDIO_WB?.renderWorldbookPanel()（懶解析，見 switchTopMode）。
     //   _wbTH/_wbToast 留核心：經 _b 橋供子模組（世界書/我的角色）取用。
     // ══════════════════════════════════════════════════════════════
+    // 🚨 window.confirm 在 Tauri 會被攔掉：對話框根本不彈，函式直接回 false，
+    //   使用者看到的就是「按了完全沒反應」（Rae 實測創作室的『清空』）。
+    //   一律改兩段式：第一下把按鈕換成「再按一次」，第二下才真的做；4 秒沒動作自己解除，
+    //   免得按了一下走開、下次回來誤觸。
+    function _armOnce(btn, armedHtml, fn) {
+        if (!btn) return;
+        const orig = btn.innerHTML;
+        let armed = false, timer = 0;
+        const reset = () => { armed = false; clearTimeout(timer); btn.innerHTML = orig; btn.classList.remove('is-arm'); };
+        btn.onclick = async () => {
+            if (!armed) {
+                armed = true;
+                btn.innerHTML = armedHtml;
+                btn.classList.add('is-arm');
+                timer = setTimeout(reset, 4000);
+                return;
+            }
+            reset();
+            try { await fn(); } catch (e) { console.warn('[Studio] 兩段式動作失敗', e); }
+        };
+    }
+
     const _wbTH = () => (window.parent || window).TavernHelper || window.TavernHelper;
     function _wbToast(msg) { try { const w = (window.parent || window); w.toastr && w.toastr.success(msg); } catch (e) {} }
 
@@ -1384,7 +1404,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             VT.setCss(chatId, area.value);
             const b = host.querySelector('#vth-css-apply'); const o = b.textContent; b.textContent = '✓ 已套用'; setTimeout(() => { b.textContent = o; }, 1200);
         };
-        host.querySelector('#vth-css-clear').onclick = () => { if (confirm('清空此世界的自訂 CSS？')) { VT.clear(chatId); area.value = ''; refreshPreview(); } };
+        _armOnce(host.querySelector('#vth-css-clear'), '再按一次清空', () => {
+            VT.clear(chatId); area.value = ''; refreshPreview();
+        });
 
         // ── 💬 對話式修改（照 VN 組件那套的體感：講一句改一次，改壞了還原上一版）──
         const chatBox = host.querySelector('#vth-chat');
@@ -1512,7 +1534,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     const bb = card.querySelector('[data-act="apply"]'); const oo = bb.textContent; bb.textContent = '✓'; setTimeout(() => { bb.textContent = oo; }, 1000);
                 };
                 card.querySelector('[data-act="edit"]').onclick = () => { area.value = t.css || ''; refreshPreview(); area.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
-                card.querySelector('[data-act="del"]').onclick = () => { if (confirm('刪除主題「' + t.name + '」？')) { _vthGallerySave(_vthGalleryLoad().filter(x => x.id !== t.id)); renderGal(); } };
+                _armOnce(card.querySelector('[data-act="del"]'), '再按一次', () => {
+                    _vthGallerySave(_vthGalleryLoad().filter(x => x.id !== t.id)); renderGal();
+                });
             });
         };
         host.querySelector('#vth-gal-add').onclick = () => {
@@ -1943,8 +1967,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // 一次性 AI 流程（匯入整理/對標世界/換皮/主題生成）的統一壞回覆處置：問一聲就能重試，不用重走整個入口
     //（聊天流不用這個——世界書/人設聊天各自有錯誤泡泡＋重試鈕）
     function _studioConfirmRetry(reason, retryFn, fallbackFn) {
-        if (confirm('AI 回覆有問題：' + String(reason || '未知錯誤').slice(0, 140) + '\n\n要重試嗎？')) retryFn();
-        else if (fallbackFn) fallbackFn();
+        // 🚨 confirm 在 Tauri 不會彈、直接回 false → 這裡原本等於「永遠走 else」：
+        //   主題那條沒有傳 fallbackFn，於是送出失敗後什麼都不做，連打的字都不見了，
+        //   看起來就是按了沒反應。這裡沒有按鈕可掛兩段式，改成講一聲然後自己重試。
+        try { (window.parent || window).toastr?.warning('AI 回覆有問題（' + String(reason || '未知錯誤').slice(0, 80) + '），正在重試…'); } catch (e) {}
+        if (typeof retryFn === 'function') retryFn();
+        else if (typeof fallbackFn === 'function') fallbackFn();
     }
 
     // 判斷 API「表面成功、實則錯誤/空/截斷」的回應：OS_API 只在「完全空」才 throw，
@@ -3050,22 +3078,21 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             };
         });
         container.querySelectorAll('[data-fx-del]').forEach(btn => {
-            btn.onclick = async () => {
-                const row = shown[Number(btn.dataset.fxDel)];
-                if (!row || !row.dbId) return;
-                if (!confirm(`刪除特效「${row.recipe.name}」？劇情 AI 之後就不會再用它了`)) return;
+            const row = shown[Number(btn.dataset.fxDel)];
+            if (!row || !row.dbId) return;
+            _armOnce(btn, '再按一次', async () => {
                 try {
                     await win.OS_DB.deleteUITemplate(row.dbId);
                     try { await fxEngine.reloadSaved(); } catch (e) {}
                     _renderFxLibrary(container);
-                } catch (e) { alert('刪除失敗: ' + (e && e.message || e)); }
-            };
+                } catch (e) { _studioToast('刪除失敗：' + ((e && e.message) || e), 'error', '特效'); }
+            });
         });
         // ⚡ 匯出／匯入／清空「自製」特效（內建的不動）；匯入同 fxId 覆蓋、新的新增（fxId 穩定→PC轉手機不重複）
         const _expBtn = container.querySelector('[data-fx-export]');
         if (_expBtn) _expBtn.onclick = () => _exportFxPack();
         const _clrBtn = container.querySelector('[data-fx-clear]');
-        if (_clrBtn) _clrBtn.onclick = () => _clearAllFx(container);
+        _armOnce(_clrBtn, '再按一次清空', () => _clearAllFx(container));
         const _impBtn = container.querySelector('[data-fx-import]');
         const _impFile = container.querySelector('#fx-lib-import-file');
         if (_impBtn && _impFile) {
@@ -3129,7 +3156,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const all = await win.OS_DB.getAllUITemplates();
             const mine = (all || []).filter(t => t && t.isFX && t.fxRecipe);
             if (!mine.length) { _studioToast('沒有自製特效可以清空（內建的不受影響）。', 'warning', '清空'); return; }
-            if (!confirm(`確定刪除全部 ${mine.length} 個自製特效？\n（內建特效不受影響；此動作無法復原）`)) return;
+            // 把關在呼叫這支的按鈕上（兩段式）：window.confirm 在 Tauri 會被攔掉，不能靠它
             for (const t of mine) { try { await win.OS_DB.deleteUITemplate(t.id); } catch (e) {} }
             const fxEngine = window.OS_FX || win.OS_FX;
             try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}

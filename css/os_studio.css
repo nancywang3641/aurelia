@@ -1574,3 +1574,12 @@ html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { co
 .studio-container .fx-switch input:checked + .fx-sw-knob::after {
     transform: translateX(16px);
 }
+
+/* 🚨 兩段式確認的中間態（window.confirm 在 Tauri 會被攔掉，一律用這個代替）：
+   按第一下按鈕自己變成「再按一次」，4 秒沒動作會自己還原。 */
+.studio-icon-btn.is-arm,
+.vth-mini.is-arm {
+    background: #c0392b;
+    border-color: #c0392b;
+    color: #fff;
+}
