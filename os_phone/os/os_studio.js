@@ -1045,13 +1045,26 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - 名牌跟對話框的接合方式要選定一種並貫徹到底：嵌進框內、掛在框外、或切進框上的缺口。
 - 這一區不給例外、不給「不是非這樣不可」。長相隨你，形狀關係照這裡走。
 
-【底板 — 造型畫在這上面。這幾行照抄，不然底板不存在，框會變成透明的空殼】
+【底板 — 對話框的「形狀」由它決定。這幾行照抄，不然底板不存在，框會變成透明的空殼】
 #text-panel{position:relative;}
-#text-panel::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;}
+#text-panel::before{content:'';position:absolute;z-index:0;pointer-events:none;}
 #speaker-name,#dialogue-text{position:relative;z-index:1;}
-- 背景、斜切輪廓、材質、紋理、外框造型全部畫在 ::before 上。它可以用 clip-path、可以用負的 inset 溢出框外——這就是「不裁框也能做出非直角輪廓」的方法。
+- 底板的 inset「不要寫 0」：inset:0 等於一塊跟框一樣大的矩形，那就是每次都長一樣的原因。
+  它可以四邊各給不同的值、可以是負的讓它溢出框外、可以只從某一邊探出去。
+- 底板不會裁到任何子元素（名牌是 #text-panel 的孩子，不是底板的），所以它身上「隨便你怎麼裁」：
+  clip-path 任意多邊形、border-radius 四角各不同、transform 旋轉或傾斜、border-image、
+  conic/repeating 漸層畫出的鋸齒與斜紋邊界——全部合法。
+- ::after 是第二塊造型，跟底板不同層次：可以是探出上緣的簷、掛在某一角的牌、貫穿一側的直欄。
 - ⚠️ 底板承擔了背景，就要真的把背景畫在底板上；不要把 #text-panel 三態的 background 設成 transparent 之後，底板卻只畫了一條邊——那樣文字底下什麼都沒有，字直接壓在背景圖上。
 - 「文字底下那一層必須不透明」這條算在底板頭上：不管底是寫在 #text-panel 三態還是 ::before，文字覆蓋的範圍內一定要有實心色或 alpha ≥ 0.82 的底。
+
+【形狀 — 位置固定，不代表長相要一樣】
+- 「配件不准移動」講的是位置，不是形狀。名牌、控制鈕、頂部鈕待在原地，但它們各自「長什麼樣」完全開放：
+  #speaker-name、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone、#top-badge 這些元素
+  「自己」用 clip-path 是安全的——它裁的是自己，不會影響別人，鼓勵用來做非矩形的牌、籤、標、章。
+  它們也各自有 ::before / ::after 可以長出缺角、缺口、缺齒、掛耳。
+- 不安全的只有一個：#text-panel 本身（名牌浮在它的框外，裁它就等於裁名牌）。它的形狀交給底板。
+- 這一份裡，對話框的輪廓與名牌的輪廓不可以都是四個直角的矩形。
 
 【骨架的護欄 — 比骨架本身更優先，違反了整份就算壞的】
 - #text-panel「本身」不准 clip-path，也不准 overflow:hidden。名牌是它的子元素、而且刻意浮在框的上緣外面，框一被裁，名牌就跟著被切掉半個。造型一律畫在上面那塊底板上，框本身保持完整。
@@ -1081,7 +1094,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 2. 「絕對不要」對 #game-char / #game-char-container（角色立繪）或 #game-bg（全螢幕背景圖層，會被劇情背景圖蓋掉、改了也看不到）寫任何樣式——它們不歸主題管。
 3. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條。
 4. #dialogue-text（含三態）一律保持預設的「靠左」對齊，「絕對不要」設 text-align:center 或任何置中——劇情有逐字打字機效果，置中會讓字從中間往兩邊跑，既難看又難讀。
-5. 輸出前自檢一次：把你的設計想像疊在一張明亮、雜亂的背景圖上——文字一眼可讀嗎？有沒有元素跑出畫面或互相遮住？有沒有不小心把內文置中？另外逐項確認：文字底下那一層真的有底嗎（三態的 background，或 ::before 底板上實際畫了背景）——只有一條邊、中間透空就是壞的？#text-panel 身上有沒有 clip-path 或 overflow:hidden（有就是名牌會被切掉）？頂部鈕與控制鈕的字還是單行嗎？內文的可用寬度還有八成嗎？有問題就修好再輸出。
+5. 輸出前自檢一次：把你的設計想像疊在一張明亮、雜亂的背景圖上——文字一眼可讀嗎？有沒有元素跑出畫面或互相遮住？有沒有不小心把內文置中？另外逐項確認：對話框與名牌的輪廓，是不是又都退回四個直角的矩形了（底板的 inset 還是 0、身上沒有任何 clip-path／不對稱圓角／border-image）？文字底下那一層真的有底嗎（三態的 background，或 ::before 底板上實際畫了背景）——只有一條邊、中間透空就是壞的？#text-panel 身上有沒有 clip-path 或 overflow:hidden（有就是名牌會被切掉）？頂部鈕與控制鈕的字還是單行嗎？內文的可用寬度還有八成嗎？有問題就修好再輸出。
 6. 先輸出 <版面骨架>…</版面骨架>，接著才是 CSS，CSS 用 \`\`\`css 包起來。骨架那段之外不要別的解釋文字。
 用戶想要的風格：`;
 
@@ -1252,6 +1265,21 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // 會把配件切掉的寫法：光靠 prompt 講不夠，套用時直接掃出來講給她聽。
     //   名牌 #speaker-name 是 #text-panel 的子元素、而且刻意浮在框的上緣外面，
     //   框上只要有 clip-path 或 overflow:hidden，名牌就被切掉半個（Rae 實機撞過）。
+    // 整份都沒有任何塑形宣告 ＝ 又退回「同一個矩形換顏色」。這條不是錯誤，是提醒。
+    function _vthFlat(css) {
+        const t = String(css || '');
+        const hasClip = /clip-path\s*:\s*(?!none)/i.test(t);
+        const hasBorderImage = /border-image\s*:/i.test(t);
+        // 四角不同、或明顯不是「小圓角」的 border-radius 才算塑形
+        const hasShapeRadius = /border-radius\s*:\s*[^;}]*(?:\d{2,}(?:px|%)[^;}]*){2,}/i.test(t)
+            || /border-radius\s*:\s*[^;}]*\/[^;}]*/i.test(t);
+        const hasMask = /-webkit-mask|(?:^|[^-])mask(?:-image)?\s*:/i.test(t);
+        const plateFlat = /#text-panel\s*::?before[^{}]*\{[^}]*inset\s*:\s*0(?:px)?\s*[;}]/i.test(t);
+        const out = [];
+        if (!hasClip && !hasBorderImage && !hasShapeRadius && !hasMask) out.push('整份沒有任何塑形：輪廓還是四個直角的矩形');
+        else if (plateFlat) out.push('底板的 inset 還是 0：那塊底跟框一樣大、一樣方');
+        return out;
+    }
     function _vthRisky(css) {
         const out = [];
         // 框沒有底：三態的背景被設成透明、底板又沒真的畫背景 → 文字直接壓在背景圖上
@@ -1554,7 +1582,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     const miss = _vthMissingVars(newCss);
                     if (miss.length) warn.push('（這份用到 ' + miss.slice(0, 4).join('、') + ' 卻沒有定義，那幾處的顏色或字體會失效。跟他說「補上變數定義」就好。）');
                     const risky = _vthRisky(newCss);
-                    if (risky.length) warn.push('（' + risky.join('、') + '。跟他說「底板要 position:absolute;inset:0 並把背景畫在它身上，框本身不要裁」。）');
+                    if (risky.length) warn.push('（' + risky.join('、') + '。跟他說「底板要 position:absolute 並把背景畫在它身上，框本身不要裁」。）');
+                    const flat = _vthFlat(newCss);
+                    if (flat.length) warn.push('（' + flat.join('、') + '。跟他說「對話框的形狀畫在 ::before 底板上，inset 別給 0，底板可以裁成任何輪廓；名牌自己也可以 clip-path」。）');
                 }
                 const say = [got.note, newCss ? '' : null, warn.join('\n')].filter(x => x).join('\n')
                     || (newCss ? '好了，右邊看看。' : raw.trim());
