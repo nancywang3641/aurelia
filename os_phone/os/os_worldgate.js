@@ -2415,12 +2415,23 @@
             '.wg-prof-row{display:flex;gap:12px;padding:9px 2px;border-bottom:1px dashed rgba(20,36,61,.14);}.wg-prof-row:last-child{border-bottom:none;}' +
             '.wg-prof-row span{flex:none;width:64px;color:var(--party-muted);font-size:12px;font-weight:700;padding-top:2px;}' +
             '.wg-prof-row b{color:#22334c;font-weight:600;line-height:1.6;font-size:14px;}' +
-            // 頁籤軌是整條斜切金邊的墨藍條(獨立素材);左右尖端是造型,按鈕靠 padding 讓開不要壓上去
+            // 頁籤軌＝斜切金邊的墨藍條。🚨這條是幾何圖形，一律 CSS 畫，不用素材圖：
+            //   圖是 background-size:100% 100% 拉伸的，尖端與中線落在圖自己的百分比上，
+            //   按鈕是 flex 平分容器算出來的，兩套座標系永遠對不齊（Rae：跟圖片對不齊好難受）。
+            //   改成 clip-path 之後尖端與中線都由同一個盒子決定，怎麼縮放都自動對上。
             // 用 top/bottom 定高、不用 height:四邊都是可拖的量,微調模式吐出來的 CSS 才貼得回來
             //   (同時設 height 跟 top+bottom 會打架,height 贏、bottom 被忽略)
-            '.wg-tabs{position:absolute;left:0.2%;right:26.1%;top:93%;bottom:-0.3%;display:flex;padding:0 4%;' +
-              'background:url("' + _WG_ART + 'tab-rail.png") center/100% 100% no-repeat;}' +
-            '.wg-tab{position:relative;flex:1;padding:13px 4px;background:none;border:none;cursor:pointer;' +
+            '.wg-tabs{position:absolute;left:0.2%;right:26.1%;top:93%;bottom:-0.3%;display:flex;padding:0 30px;' +
+              'background:linear-gradient(90deg,rgba(201,170,114,.92),rgba(122,160,205,.6) 30%,rgba(122,160,205,.6) 70%,rgba(201,170,114,.92));' +
+              'clip-path:polygon(22px 0,calc(100% - 22px) 0,100% 50%,calc(100% - 22px) 100%,22px 100%,0 50%);}' +
+            // 內層＝墨藍面本體。外層那片漸層只從 inset 的縫隙露出來當邊框（clip-path 會把 border 一起裁掉，所以邊框只能這樣做）
+            '.wg-tabs::before{content:"";position:absolute;inset:1.6px;' +
+              'background:linear-gradient(180deg,#17294a,#0b1728);' +
+              'clip-path:polygon(21px 0,calc(100% - 21px) 0,100% 50%,calc(100% - 21px) 100%,21px 100%,0 50%);}' +
+            // 內緣那兩條細亮線：純裝飾，沿著上下內縮，跟著盒子走所以不會脫節
+            '.wg-tabs::after{content:"";position:absolute;inset:5px 26px;pointer-events:none;' +
+              'border-top:1px solid rgba(53,201,232,.26);border-bottom:1px solid rgba(53,201,232,.26);}' +
+            '.wg-tab{position:relative;z-index:1;flex:1;padding:13px 4px;background:none;border:none;cursor:pointer;' +
               'color:rgba(233,240,250,.7);font-size:14px;font-weight:700;letter-spacing:3px;font-family:inherit;}' +
             '.wg-tab+.wg-tab{border-left:1px solid rgba(201,170,114,.5);}' +
             '.wg-tab:hover{color:#fff;}.wg-tab.on{color:#fff;}' +
