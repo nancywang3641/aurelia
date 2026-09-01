@@ -2193,13 +2193,16 @@
         if (!sel || !note) return;
         if (!S) { if (wrap) wrap.style.display = 'none'; _furnaceArt = null; return; }   // 風格庫沒載入就當沒這功能
         if (!sel.options.length) {
-            sel.innerHTML = '<option value="auto">隨機挑一種（避開最近用過的）</option>' +
-                '<option value="none">不用，只照下面的文字</option>' +
+            // 🚨預設是「不套」：沒選就自動隨機挑一包＝她填的文字要跟一包沒點過的風格打架，
+            //   生出來的味道也不是她要的（Rae：我要空的，我自己上面輸入）。
+            //   拿風格庫治「每次都同一種味道」是主動的選擇，不該替她決定。
+            sel.innerHTML = '<option value="none">不套，只照下面填的文字</option>' +
+                '<option value="auto">隨機挑一種（避開最近用過的）</option>' +
                 // 只標風格調性，不標用途：那是風格分類，不是「這個風格只能做任務／成就」的項目清單
                 S.packs().filter(p => p.cssOnly).map(p =>
                     '<option value="' + p.id + '">' + p.name + (p.tone ? '｜' + p.tone : '') + '</option>').join('');
         }
-        const v = sel.value || 'auto';
+        const v = sel.value || 'none';
         if (v === 'none') { _furnaceArt = null; note.textContent = '這次不套風格庫，只照下面填的文字。'; return; }
         if (v === 'auto') {
             if (reroll || !_furnaceArt || !_furnaceArt.auto) _furnaceArt = Object.assign({ auto: true }, S.pick({ cssOnly: true }));

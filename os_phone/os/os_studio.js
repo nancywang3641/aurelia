@@ -1035,8 +1035,19 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - #btn-home、#btn-settings、#btn-phone：畫面右上角的頂部按鈕（返回 / 設定 / 應用）。「位置不要動」，只重新統一它們的外觀配合主題。
 - #vn-chapter-card 與 #vncc-box：章節卡（每一章開頭浮出來的那張卡：故事名 #vncc-story、章號 #vncc-num、章名 #vncc-title、分隔線 #vncc-rule、引言 #vncc-preface、資訊格 .vncc-cell/.vncc-cell-k/.vncc-cell-v、開始閱讀鈕 #vncc-enter）。⚠️這張卡預設會「抄對話框當下的皮」，所以你只寫對話框它也會跟著變；要單獨設計它，對 #vncc-box 的宣告一律加 !important 才蓋得過去。版型維持置中單欄，只重新設計外觀。
 
+【版面骨架 — 先寫下來，再動手寫 CSS】
+先輸出一段 <版面骨架>…</版面骨架>，60~90 字，講清楚四件事：這次的對話框是什麼實體物件、它的邊界是怎麼來的、左右內距哪一側寬而那一側被什麼佔住、三態靠什麼結構差異分開。想過跟寫下來是兩回事，寫下來才會照著做。寫完才開始寫 CSS。
+
+【骨架 — 這一區是關係、不是建議，每一條都要能在你寫的 CSS 裡驗出來】
+- 對話框的輪廓至少有一條邊界不是水平也不是垂直。
+- 左右內距不可以相等，寬的那側至少是窄側的 1.6 倍，而且那一側要被東西佔住，不能是空白。
+- 三態的差別不可以只有顏色：至少一態的輪廓、或某一條邊的厚度，跟另外兩態差三倍以上。
+- 名牌跟對話框的接合方式要選定一種並貫徹到底：嵌進框內、掛在框外、或切進框上的缺口。
+- 這一區不給例外、不給「不是非這樣不可」。長相隨你，形狀關係照這裡走。
+
 【最重要的鐵則 — 配件一律不准移動】
 - 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
+- 不能移動，但要接得起來：配件與對話框之間至少有一處形狀是互相呼應的——同一個切角、同一種邊界語言、或同一組厚度比例。位置固定不等於各做各的。
 
 【可讀性 — 最優先】
 - 對話框「文字所在那層」的底必須夠不透明：實心色，或 alpha ≥ 0.82。要玻璃感就把透明留外緣，文字正下方壓一層實底，確保字不被背景圖洗掉。
@@ -1058,7 +1069,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 3. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條。
 4. #dialogue-text（含三態）一律保持預設的「靠左」對齊，「絕對不要」設 text-align:center 或任何置中——劇情有逐字打字機效果，置中會讓字從中間往兩邊跑，既難看又難讀。
 5. 輸出前自檢一次：把你的設計想像疊在一張明亮、雜亂的背景圖上——文字一眼可讀嗎？有沒有元素跑出畫面或互相遮住？有沒有不小心把內文置中？有問題就修好再輸出。
-6. 只輸出 CSS，用 \`\`\`css 包起來，不要任何解釋文字。
+6. 先輸出 <版面骨架>…</版面骨架>，接著才是 CSS，CSS 用 \`\`\`css 包起來。骨架那段之外不要別的解釋文字。
 用戶想要的風格：`;
 
     // ── 🎨 劇情面板主題工坊（生成 → 即時預覽 → 主題庫收藏；像 VN UI 那套）──
@@ -1189,6 +1200,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 - 只改使用者這次講的地方，沒被提到的部分「原封不動」保留，不要順手重做。
 - CSS 之外可以用一兩句話說你改了什麼，不要長篇解釋。
 - 如果使用者問的是問題、或你需要先確認才知道怎麼改，就「只回話、不要輸出 CSS」。
+- 微調時不必再寫 <版面骨架>——除非這次要改的就是版面結構本身（輪廓、內距配置、三態的分法、名牌的接合方式），那就重寫一次再改。
 `;
 
     // 🚨從 AI 回覆裡挑出 CSS。舊寫法只認「成對的 ```」，漏掉兩種很常見的情況：
@@ -1199,12 +1211,18 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     function _vthPickCss(raw) {
         const s0 = String(raw || '');
         const looksCss = (t) => /\{[\s\S]*?\}/.test(t) && (t.match(/\}/g) || []).length >= 2;
+        // 骨架宣告是寫給人看的設計說明，標籤本身不必露出來
+        const clean = (t) => String(t || '').replace(/<\/?版面骨架>/g, '').trim();
         let m = s0.match(/```(?:css)?\s*([\s\S]*?)```/i);
-        if (m) return { css: m[1].trim(), note: s0.replace(/```[\s\S]*?```/g, '').trim(), cut: false };
+        if (m) return { css: m[1].trim(), note: clean(s0.replace(/```[\s\S]*?```/g, '')), cut: false };
         m = s0.match(/```(?:css)?\s*([\s\S]*)$/i);
-        if (m && looksCss(m[1])) return { css: m[1].trim(), note: s0.slice(0, m.index).trim(), cut: true };
-        if (looksCss(s0)) return { css: s0.trim(), note: '', cut: false };
-        return { css: '', note: s0.trim(), cut: false };
+        if (m && looksCss(m[1])) return { css: m[1].trim(), note: clean(s0.slice(0, m.index)), cut: true };
+        // 完全沒有圍欄時：骨架宣告那段要先撕下來當說明，剩下的才可能是 CSS
+        //   （它在 CSS 裡是無效選擇器，混進去會把緊接著的第一條規則一起吃掉）
+        const bm = s0.match(/<版面骨架>([\s\S]*?)<\/版面骨架>/);
+        const body = bm ? s0.replace(bm[0], '').trim() : s0;
+        if (looksCss(body)) return { css: body, note: bm ? clean(bm[1]) : '', cut: false };
+        return { css: '', note: clean(s0), cut: false };
     }
     // 用了卻沒定義的自訂變數：模型偶爾會在微調時把 :root 那段整個漏掉，
     //   var() 讀不到值 → 顏色與字體整組失效，畫面看起來就是「主題壞了」。
