@@ -662,6 +662,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 
         _armOnce(document.getElementById('studio-clear-btn'),
             '<i class="fa-solid fa-trash"></i> <span>再按一次</span>', () => {
+            // 主題頁有自己的聊天室與版本堆疊，清的是那一份
+            const cont = document.querySelector('#os_studio_app .studio-container');
+            if (cont && cont.classList.contains('top-theme')) { try { _themeClear && _themeClear(); } catch (e) {} return; }
             const chatId = getChatSessionId();
             // chatMessages 重置時也順便砍掉 latest panel marker（雖然 chatMessages 整個被重設了）
             chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
@@ -978,14 +981,19 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         }
         _updateStudioHeader();
     }
-    // header 的 👁️預覽／🗑清空 只在「製作互動面板」(vn_ui) 有意義；首頁/主題/世界書藏起來別佔空間
+    // 主題頁掛上來的「清空這一輪」：header 那顆清空鈕按當前分頁分流，不必各自長一顆
+    let _themeClear = null;
+    // header 的 👁️預覽 只在「製作互動面板」(vn_ui) 有意義；🗑清空 只要那一頁有聊天室就該有
     function _updateStudioHeader() {
         const cont = document.querySelector('#os_studio_app .studio-container');
         // vn_ui＝沒有任何 top-* class（首頁/主題/世界書各有 top-home/theme/worldbook）。讀 DOM 不靠變數，防 desync。
         const vnui = !!cont && !cont.classList.contains('top-home') && !cont.classList.contains('top-theme') && !cont.classList.contains('top-worldbook') && !cont.classList.contains('top-persona');
         const clearBtn = document.getElementById('studio-clear-btn');
         const prevBtn = document.getElementById('studio-header-preview-btn');
-        if (clearBtn) clearBtn.style.display = vnui ? '' : 'none';
+        const theme = !!cont && cont.classList.contains('top-theme');
+        // 🚨主題頁也是一個聊天室（跟 AI 講風格），它一樣要能整輪清掉。
+        //   藏著這顆的時候，那一頁只好自己長一顆「清空對話」浮在中間——跟其他創作室完全不像。
+        if (clearBtn) clearBtn.style.display = (vnui || theme) ? '' : 'none';
         if (prevBtn) prevBtn.style.display = vnui ? '' : 'none';   // '' = 交回 CSS（手機才顯示）
     }
 
@@ -1444,15 +1452,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const ph = '手寫 / 貼上，或用上面的「AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n#vn-chapter-card / #vncc-box（章節卡；預設抄對話框的皮，要單獨設計就對 #vncc-box 寫規則加 !important）\n  #vncc-story #vncc-num #vncc-title #vncc-rule #vncc-preface｜.vncc-cell .vncc-cell-k .vncc-cell-v｜#vncc-enter（開始閱讀鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
         host.innerHTML = `<div class="vth-wrap">
             <div class="vth-col-work">
+            <!-- 🚨版面照其他創作室排：左欄＝聊天室＋輸入列，右欄＝分頁＋內容＋右下動作列。
+                 清紀錄走 header 那顆垃圾桶（跟別的分頁同一顆），這裡不再自己長一顆浮在中間；
+                 套用／移除是「對這個世界動手」的動作，收到右下角，同其他創作室的「確定創建」。 -->
             <div class="vth-css-bar">
                 <span class="vth-css-world"><i class="fa-solid fa-globe"></i> ${esc(chatId || '(未知，先進 VN 一次)')}</span>
-                <button class="vth-mini primary" id="vth-css-apply"><i class="fa-solid fa-floppy-disk"></i> 套用到此世界</button>
-                <button class="vth-mini" id="vth-css-clear">清空 CSS</button>
             </div>
             <div class="vth-chat" id="vth-chat"></div>
             <div class="vth-undo-row" id="vth-undo-row">
                 <button class="vth-mini" id="vth-undo"><i class="fa-solid fa-clock-rotate-left"></i> 還原上一版 (<span id="vth-undo-n">0</span>)</button>
-                <button class="vth-mini" id="vth-chat-clear"><i class="fa-solid fa-broom"></i> 清空對話</button>
             </div>
             <div class="studio-input-area vth-say-wrap">
                 <textarea class="studio-textarea" id="vth-say" placeholder="想要什麼風格、或哪裡要改，直接說（例：章節卡的標題再大一點、對話框換成暗紅燙金）"></textarea>
@@ -1497,6 +1505,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     </div>
                     <div class="vth-gal-list" id="vth-gal-list"></div>
                 </div>
+            </div>
+            <div class="vth-act-bar">
+                <button class="vth-mini" id="vth-css-clear">移除主題</button>
+                <button class="vth-mini primary" id="vth-css-apply"><i class="fa-solid fa-floppy-disk"></i> 套用到此世界</button>
             </div>
             </div>
         </div>`;
@@ -1576,7 +1588,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             VT.setCss(chatId, area.value);
             const b = host.querySelector('#vth-css-apply'); const o = b.textContent; b.textContent = '✓ 已套用'; setTimeout(() => { b.textContent = o; }, 1200);
         };
-        _armOnce(host.querySelector('#vth-css-clear'), '再按一次清空', () => {
+        // 這顆跟聊天室無關：把這個世界身上已經套著的主題拿掉，畫面回到預設外觀
+        _armOnce(host.querySelector('#vth-css-clear'), '再按一次移除', () => {
             VT.clear(chatId); area.value = ''; refreshPreview();
         });
 
@@ -1590,17 +1603,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         let chatLog = _vthChatLoad(chatId);      // [{role:'user'|'ai', text}]
         let undoLog = _vthUndoLoad(chatId);      // 每次 AI 改動前的舊 CSS
 
-        const undoBtnWrap = host.querySelector('#vth-undo');
-        const chatClearBtn = host.querySelector('#vth-chat-clear');
-        // 🚨這一列原本只在「有還原版本」時才出現，而清對話的入口只有它 →
-        //   主題頁等於沒有地方清聊天紀錄（頭上那顆垃圾桶只在「製作互動面板」才露出來）。
-        //   現在有對話或有還原版本都要顯示，兩顆各自按自己的條件出現。
+        // 這一列只管 CSS 的版本回退；清紀錄走 header 那顆垃圾桶
         const syncUndo = () => {
             undoN.textContent = String(undoLog.length);
-            undoBtnWrap.hidden = undoLog.length === 0;
-            chatClearBtn.hidden = chatLog.length === 0;
             // 用 class 不用 style：CSS 預設就是 none,設成 '' 會退回 none
-            undoRow.classList.toggle('on', undoLog.length > 0 || chatLog.length > 0);
+            undoRow.classList.toggle('on', undoLog.length > 0);
         };
         const addBubble = (role, text, animate) => {
             const b = document.createElement('div');
@@ -1698,12 +1705,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         };
         sendBtn.onclick = send;
         sayEl.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
-        _armOnce(chatClearBtn, '<i class="fa-solid fa-broom"></i> 再按一次清空', () => {
+        // 🚨「清空」＝這一輪整個重來：對話紀錄與還原版本一起清（Rae 定案）。
+        //   還原堆疊是「這一輪 AI 每次改動前的備份」，跟對話同生同滅；留著它等於清了一半。
+        //   它不動已經套用的 CSS——那是這個世界的成品，要拿掉走右下角的「移除主題」。
+        _themeClear = () => {
             chatLog = [];
+            undoLog = [];
             _vthChatSave(chatId, chatLog);
+            _vthUndoSave(chatId, undoLog);
             renderChat();
             syncUndo();
-        });
+        };
         undoBtn.onclick = () => {
             if (!undoLog.length) return;
             const prev = undoLog.pop();
