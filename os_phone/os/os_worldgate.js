@@ -2640,6 +2640,7 @@
               'padding:16px 16px 14px;background:#f7fafd;border:1.4px solid #2a4a80;box-shadow:0 18px 44px rgba(16,26,45,.4);}' +
             '.wg-modal-hd{font-size:13px;font-weight:800;letter-spacing:.06em;color:#1f3a68;}' +
             '.wg-modal-card .area{resize:vertical;min-height:96px;line-height:1.55;}' +
+            '.wg-modal-card .area.tall{min-height:min(46vh,300px);}' +
             '.wg-modal-row{display:flex;gap:8px;margin-top:2px;}' +
             '.wg-modal-row .wg-btn{flex:1;margin:0;}' +
             '.wgh-grp{font-size:10px;font-weight:800;letter-spacing:.08em;color:rgba(42,74,128,.72);padding:6px 4px 3px;}' +
@@ -3076,9 +3077,31 @@
               '<span class="wg-section-note">' + (t.recruited ? '已入隊' : '旅人') +
               (t.home ? '・奧瑞亞' + (t.homeFrom ? '·' + _esc(t.homeFrom) : '') : (t.job ? '・' + _esc(t.job) : '')) + '</span></div>' +
             '<div class="wg-card">' + _profRows(t) + '</div>' +
+            // 挑錯條目、想把兩條併成一份、或條目本來就寫得不夠——都在這裡改，不必回去動世界書
+            (t.home ? '<button class="wg-btn ghost" data-act="edit-dossier"><i class="fa-solid fa-pen"></i> 改他的檔案</button>' : '') +
             // 退隊＝回到候選池,人還在大廳,聊得順還能再入隊一次(不是把人刪掉)
             (t.recruited ? '<button class="wg-btn danger" data-act="leave"><i class="fa-solid fa-user-minus"></i> 請他離隊</button>' : '') +
             '<button class="wg-btn ghost" data-act="back">返回</button>';
+        b.querySelector('[data-act="edit-dossier"]')?.addEventListener('click', () => {
+            _openWgModal('改「' + _esc(t.name) + '」的檔案',
+                '<input class="wg-input" data-wg-dname maxlength="24" value="' + _esc(t.name) + '" placeholder="名字">' +
+                '<textarea class="wg-input area tall" data-wg-ddoc placeholder="他是誰">' + _esc(t.dossier || t.persona || '') + '</textarea>',
+                '<i class="fa-solid fa-check"></i> 存起來',
+                async (m) => {
+                    const nm = (m.querySelector('[data-wg-dname]')?.value || '').trim();
+                    const doc = (m.querySelector('[data-wg-ddoc]')?.value || '').trim();
+                    if (!nm || !doc) { _toast('名字與檔案都要有'); return false; }
+                    t.name = nm.slice(0, 24);
+                    t.dossier = doc.slice(0, DOSSIER_MAX);
+                    t.persona = _homeBrief(t.dossier);
+                    t.look = _homeLook(t.dossier);
+                    await _saveWorld(w);
+                    // 條目要立刻跟上：主持AI 讀的是條目，不是這張卡
+                    if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
+                    _toast('檔案已更新');
+                    _renderProfilePage(w, ti);
+                }, '[data-wg-ddoc]');
+        });
         b.querySelector('[data-act="back"]').addEventListener('click', () => _renderDetail(w, 2));   // 身分卡是從旅人那一步進來的
         // 兩段確認：這顆會改動世界書裡的隊伍名單，不做成一點就走
         let _leaveArm = 0;
@@ -3103,10 +3126,18 @@
     //   ①【奧瑞亞-人物核心】的人物條目（一人一條，內容就是完整人設）
     //   ② 各張角色卡最新一輪的大總結角色表（書咖顧客名冊那份，同一支 cafeRoster）
     // 資料條目（素材-／手机-／配對／世界狀態）不是人，濾掉。
+    const DOSSIER_MAX = 2600;   // 一個人帶進世界條目的檔案上限（她的個人角色卡最長 2048 字）
     const _HOME_SKIP = /素材-|手机-|手機-|配對|配对|世界狀態|世界状态/;
-    const _HOME_PREFIX = /^【?(?:角色團隊|SN|放養群|放养群|E區|E区|奧瑞亞|奥瑞亚)[-－]/;
+    const _HOME_PREFIX = /^(?:角色團隊|SN|放養群|放养群|E區|E区|奧瑞亞|奥瑞亚)[-－]/;
+    // 🚨清單上要看到「完整的條目名」，前綴不能剝：同一個人常常有好幾條，
+    //   剝掉之後【角色團隊-丹尼爾·卡萊爾】(其實是他那支團隊的名冊)跟【放養群-丹·卡莱尔】(本人的角色卡)
+    //   會變成兩個長得差不多的名字，選錯了也看不出來（Rae：選了丹，人設完全不對）。
     function _homeLabel(comment) {
-        return String(comment || '').replace(/[【】]/g, '').replace(_HOME_PREFIX, '').replace(/^【?/, '').trim();
+        return String(comment || '').replace(/[【】]/g, '').trim();
+    }
+    // 帶進世界時用的角色名：這裡才剝前綴（條目名的分類是給她認條目的，不是角色的一部分）
+    function _homeName(label) {
+        return String(label || '').replace(_HOME_PREFIX, '').trim() || String(label || '').trim();
     }
     // 一句話摘要：給名冊列與身分卡的「性格」欄用，不是餵給 AI 的那份
     function _homeBrief(text) {
@@ -3152,7 +3183,8 @@
                 if (!cm || !ct || ct.length < 80) return;
                 if (_HOME_SKIP.test(cm)) return;
                 if ((e.keys || e.key || []).some(k => /仅存放数据|僅存放資料/.test(String(k)))) return;
-                out.push({ src: 'core', name: _homeLabel(cm), from: '人物核心', dossier: ct, brief: _homeBrief(ct) });
+                const lb = _homeLabel(cm);
+                out.push({ src: 'core', label: lb, name: _homeName(lb), from: '人物核心', dossier: ct, brief: _homeBrief(ct) });
             });
         } catch (err) { console.warn('[Worldgate] 讀不到' + BOOK_CORE, err); }
         // ② 酒館裡已經裝著的角色卡：「剛拿到手只是想試試」的那種人本來就在這裡，
@@ -3189,7 +3221,10 @@
             persona: x.brief || '', origin: '', skill: '', look: _homeLook(x.dossier), record: '', reason: '',
             fit: '', weakness: '', goal: '', clash: '', breakup: '',
             greet: '', sprite: '', quiz: [], accept: '', refuse: '',
-            home: true, homeFrom: x.from || '', dossier: String(x.dossier || '').slice(0, 800),
+            // 🚨上限不能訂在「一段人設剛好被砍掉一半」的地方：她的個人角色卡最長 2048 字，
+            //   舊的 800 只帶得到基本信息與性格開頭，關鍵關係、口癖、禁忌全被丟掉——
+            //   那才是「人設完全不對」的另一半。帶進來之後也可以在身分卡直接改。
+            home: true, homeFrom: x.from || '', dossier: String(x.dossier || '').slice(0, DOSSIER_MAX),
             bring: String(bring || '').trim().slice(0, 60),
             recruited: true, gone: false,
         };
@@ -3206,10 +3241,13 @@
         return list.map((x, i) => {
             const head = (x.from !== grp) ? ((grp = x.from), '<div class="wgh-grp">' + _esc(x.from) + '</div>') : '';
             const dup = had.has(x.name);
-            return head + '<label class="wgh-row' + (dup ? ' dim' : '') + '" title="' + _esc(x.brief) + '">' +
+            const len = (x.dossier || '').length;
+            // 滑過去看得到這一條真正的開頭：光看名字分不出「某人的角色卡」跟「某人那支團隊的名冊」
+            const tip = len + ' 字\n' + String(x.dossier || '').replace(/\s+/g, ' ').slice(0, 200);
+            return head + '<label class="wgh-row' + (dup ? ' dim' : '') + '" title="' + _esc(tip) + '">' +
                 '<input type="checkbox" data-wgh="' + i + '"' + (dup ? ' disabled' : '') + '>' +
-                '<span class="wgh-nm">' + _esc(x.name) + '</span>' +
-                '<span class="wgh-src">' + (dup ? '已在隊上' : _esc(x.brief).slice(0, 16)) + '</span>' +
+                '<span class="wgh-nm">' + _esc(x.label || x.name) + '</span>' +
+                '<span class="wgh-src">' + (dup ? '已在隊上' : (len > DOSSIER_MAX ? '⚠ ' : '') + len + ' 字') + '</span>' +
                 (x.fid ? '<b class="wgh-x" data-wgh-del="' + x.fid + '" title="從名冊刪掉他">✕</b>' : '') +
                 '</label>';
         }).join('');
