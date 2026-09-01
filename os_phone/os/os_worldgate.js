@@ -2201,6 +2201,8 @@
             '.wg-card.sel{border-color:#1A1C28;box-shadow:0 0 0 1px #1A1C28;background:#fff;}' +
             // 檔案庫管理模式:標題列右邊的小鈕(管理/全選),勾選框直接借用卡片標題原本那顆圖示的位置
             '.wg-head-acts{display:flex;align-items:center;gap:7px;}' +
+            '.wg-section-head .wg-head-acts{margin-left:10px;}' +
+            '.wg-section-head .wg-head-acts+.wg-section-note{margin-left:auto;}' +
             // 🩺 體檢提示列：只在「世界書沒掛在這張卡上」時出現
             '.wg-warn{display:flex;align-items:center;gap:8px;margin:0 1px 9px;padding:9px 11px;border-radius:10px;' +
               'background:rgba(180,80,60,.09);border:1px solid rgba(180,80,60,.28);color:#a05040;font-size:11px;line-height:1.55;}' +
@@ -2582,11 +2584,10 @@
             '.wgd-pc-col .area{flex:1;min-height:96px;resize:none;line-height:1.6;}' +
             // 詳情頁把右下的圖紙標題欄收掉:那塊在檔案庫是裝飾,在這裡會壓住內容(空間留給正文)
             '.wg-win.wgbp.wgbp-sub .wgbp-tb{display:none;}' +
-            // 底部三顆:刪除靠左、返回/繼續靠右,各自照內容寬(滿寬平分會變兩條大長條)
-            '.wg-btn-row.wgd-foot1{justify-content:flex-end;gap:10px;}' +
+            // 底部兩顆:靠右、各自照內容寬(滿寬平分會變兩條大長條)
+            '.wg-steps-foot{justify-content:flex-end;gap:10px;}' +
             // 🚨 width:auto 不能省:.wg-btn 本身是 width:100%,只寫 flex:0 0 auto 的話 basis 讀的還是那個 100%
-            '.wg-btn-row.wgd-foot1 .wg-btn{flex:0 0 auto;width:auto;min-width:132px;padding-left:18px;padding-right:18px;}' +
-            '.wg-btn-row.wgd-foot1 .wgd-del{margin-right:auto;min-width:0;}' +
+            '.wg-steps-foot .wg-btn{flex:0 0 auto;width:auto;min-width:132px;padding-left:18px;padding-right:18px;}' +
             // ── 🧑‍🤝‍🧑 旅人頁:左編成、右名冊(可直接去找人)+召集(收合) ──
             '.wgt-split{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start;}' +
             '.wgt-left,.wgt-side{display:flex;flex-direction:column;gap:8px;min-width:0;}' +
@@ -2857,6 +2858,13 @@
                           '<button class="wg-mgr-btn" data-op="achv" data-id="' + w.id + '">' +
                             (w.achv ? '重擬' : '設計') + '</button>' +
                           (w.achv ? '<button class="wg-mgr-btn" data-op="achv-x" data-id="' + w.id + '">移除</button>' : '') +
+                        '</div>' +
+                        // 啟航群像也搬進來（原本掛在出發編成那一頁）：它跟結束畫面、成就一樣是
+                        //   難得動一次的維護動作，出發時每次都看到自己用不到的按鈕才是噪音。
+                        '<div class="wg-ops-row"><span class="wg-ops-k">啟航群像</span>' +
+                          '<button class="wg-mgr-btn" data-op="launch" data-id="' + w.id + '">' +
+                            ((w.launchArt && w.launchArt.url) ? '換一張' : '拍一張') + '</button>' +
+                          ((w.launchArt && w.launchArt.url) ? '<button class="wg-mgr-btn" data-op="launch-x" data-id="' + w.id + '">移除</button>' : '') +
                         '</div>' +
                       '</div>'
                     : '') +
@@ -3391,7 +3399,6 @@
     }
 
     // ── P3 世界詳情(隊伍狀態+DIVE) ──
-    let _delArm = 0;   // 刪除兩段式確認(不用 window.confirm,Tauri 會攔)
     // 檔案庫管理模式裡那幾顆維護鈕。放在這裡而不是詳情頁:詳情頁是出發用的,
     //   把難得動一次的東西擺在那,等於每次出發都要看一遍自己用不到的按鈕。
     async function _worldOp(id, op) {
@@ -3412,6 +3419,10 @@
             if (w.entryText) { try { await _writeEntry(w, w.entryText); } catch (e) {} }
             _toast('成就已移除'); _renderList(); return;
         }
+        if (op === 'launch-x') {
+            delete w.launchArt; await _saveWorld(w);
+            _toast('啟航群像已移除'); _renderList(); return;
+        }
         _busy = true;
         try {
             if (op === 'panel') {
@@ -3420,6 +3431,14 @@
                 if (!panel) { _toast('結束畫面沒做出來,再試一次'); return; }
                 w.panel = panel; await _saveWorld(w);
                 _toast('結束畫面已換上,下次劇情演完就看得到');
+            } else if (op === 'launch') {
+                // 群像畫的是「這趟隊伍」，沒人可畫就直接說，不要跑一趟 API 回來才失敗
+                if (!(w.travelers || []).some(t => t && t.recruited && !t.gone)) {
+                    _toast('這個世界還沒有人同行，先去編隊'); return;
+                }
+                _loading('正在拍「' + _esc(w.name) + '」的啟航群像…');
+                const r = await _makeLaunchArt(w).catch(() => ({ ok: false, msg: '生成失敗' }));
+                _toast(r.msg);
             } else if (op === 'achv') {
                 _loading('正在擬定「' + _esc(w.name) + '」的成就…');
                 const achv = await _expandAchv(src, text).catch(() => null);
@@ -3449,7 +3468,6 @@
         const b = _body(); if (!b) return;
         _winEl?.classList.add('wgbp', 'wgbp-sub');   // 同一疊圖紙抽出的窄單頁
         const st = Math.min(3, Math.max(1, Number(step) || 1));
-        _delArm = 0;
         _mgrOff();   // 離開檔案庫=管理模式歸零,回來時不會還停在勾選狀態
         _curDetailId = w.id;
         if (await _salvageWorld(w)) _fillArt(w);   // 🩹 那四行沒被認出來的舊世界:補回欄位後順手把圖補生
@@ -3494,8 +3512,6 @@
                         '<div class="wg-entry-text">' + _esc(_corePreview(entryText)) + '</div></div>'
                     : '<div class="wgd-doc"><div class="wgd-doc-hd">世界檔案</div>' +
                         '<div class="wg-entry-text">這個世界還沒有寫進條目。</div></div>') +
-                '<button class="wg-btn ghost" data-act="remake-panel"><i class="fa-solid fa-wand-magic-sparkles"></i> ' +
-                  (w.panel ? '重生結束畫面' : '生成結束畫面') + '</button>' +
               '</div>' +
             '</div>';
 
@@ -3523,28 +3539,22 @@
                 '<div class="wg-section-head"><span class="wg-section-title">出發編成</span>' +
                   '<span class="wg-section-note">' + team.length + ' / ' + MAX_TRAVELER_SPAWN + '</span></div>' +
                 _slotsHtml(team) +
-                // 啟航群像＝末尾畫面的底圖。主持AI 寫了啟航段落才會自動生，忘了就手動補；
-                //   已經有圖時也要留著這顆——想換一張(例如換了插圖接口、或就是不喜歡)總得有路可走。
-                (team.length
-                    ? '<button class="wg-btn ghost" data-act="make-launch"><i class="fa-solid fa-camera-retro"></i> ' +
-                      (_needLaunchArt(w) ? '生成啟航群像' : '重生啟航群像') + '</button>'
-                    : '') +
               '</div>' +
               '<div class="wgt-side">' +
+                // 🚨兩顆入口收到標題列右邊(同檔案庫的「管理」鈕)：攤在名冊底下時它們是兩條滿寬長條，
+                //   把名冊往上擠、自己又佔掉兩行——這一欄的主角是名單，不是按鈕。字也一併縮到兩三個字。
                 '<div class="wg-section-head"><span class="wg-section-title">大廳裡的旅人</span>' +
+                  '<span class="wg-head-acts">' +
+                    '<button class="wg-mgr-btn" data-act="rec-modal"><i class="fa-solid fa-user-plus"></i> 再召集</button>' +
+                    '<button class="wg-mgr-btn" data-act="home-page"><i class="fa-solid fa-house-user"></i> 奧瑞亞</button>' +
+                  '</span>' +
                   '<span class="wg-section-note">' + (roster.length ? roster.length + ' 人' : '還沒有人') + '</span></div>' +
                 '<div class="wgt-roster" data-wgt-roster>' +
                   (roster.length
                     ? roster.map(_personRow).join('')
                     : '<div class="wgt-empty">這個世界還沒召集過旅人。<br>用下面那顆按鈕請愛麗絲找幾位。</div>') +
                 '</div>' +
-                '<button class="wg-btn ghost" data-act="rec-modal">' +
-                  '<i class="fa-solid fa-user-plus"></i> ' + ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>' +
-                // 🏠 帶自己的人進去:熟人不必考核(考題是拿來認識陌生人的),勾了就直接同行。
-                //   🚨這顆是換頁不是展開:名冊攤在這一欄會把「誰跟我走」整頁撐爆,收成摺疊又看不見裡面有誰
-                //   (Rae 兩邊都否掉了)。挑人是一件獨立的事,就給它一整頁——同身分卡那層頁的成例。
-                '<button class="wg-btn ghost" data-act="home-page">' +
-                  '<i class="fa-solid fa-house-user"></i> 從奧瑞亞帶人</button>' +
+
               '</div>' +
             '</div>';
 
@@ -3573,9 +3583,10 @@
                   '<span class="wg-section-note">進入 ' + (w.visits || 0) + ' 次</span></div>') +
             _stepBar(st) +
             (st === 1 ? page1 : st === 2 ? page2 : page3) +
-            // step1 的三顆併成一行:刪除靠左、返回/繼續靠右(滿寬下平分會拉成兩條超長按鈕)
-            '<div class="wg-btn-row wg-steps-foot' + (st === 1 ? ' wgd-foot1' : '') + '">' +
-              (st === 1 ? '<button class="wg-btn danger wgd-del" data-act="del"><i class="fa-solid fa-trash-can"></i> 刪除世界</button>' : '') +
+            // 刪除世界改由檔案庫的管理模式一次處理（批次刪除本來就在那）：詳情頁是出發用的，
+            //   一顆紅色的刪除鈕擺在出發動線上，難得用一次卻每次都看到。
+            '<div class="wg-btn-row wg-steps-foot">' +
+
               '<button class="wg-btn ghost" data-act="prev">' + (st === 1 ? '返回' : '上一步') + '</button>' +
               (st < 3
                 ? '<button class="wg-btn" data-act="next">繼續 ›</button>'
@@ -3586,20 +3597,6 @@
         b.querySelectorAll('.wg-step').forEach(el => el.addEventListener('click', () => _renderDetail(w, Number(el.dataset.step))));
         b.querySelector('[data-act="prev"]').addEventListener('click', () => { if (st === 1) _renderList(); else _renderDetail(w, st - 1); });
         b.querySelector('[data-act="next"]')?.addEventListener('click', () => _renderDetail(w, st + 1));
-        // 重生結束畫面(世界頁那顆):跟管理模式那顆同一條生成路,就地重畫、畫完留在這一頁
-        b.querySelector('[data-act="remake-panel"]')?.addEventListener('click', async () => {
-            if (_busy) return;
-            _busy = true;
-            _loading('正在佈置「' + _esc(w.name) + '」的結束畫面…');
-            let ok = false;
-            try {
-                const src = { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept };
-                const panel = await _expandPanel(src, entryText || w.concept || w.name).catch(() => null);
-                if (panel) { w.panel = panel; await _saveWorld(w); ok = true; }
-            } finally { _busy = false; }
-            _toast(ok ? '結束畫面已換上,下次劇情演完就看得到' : '結束畫面沒做出來,再試一次');
-            _renderDetail(w, 1);
-        });
 
         if (st === 2) {
             b.querySelectorAll('.wg-slot.on').forEach(el => el.addEventListener('click', () => {
@@ -3652,16 +3649,6 @@
                     _toast(t2.name + ' 已從這個世界刪掉');
                     _renderDetail(w, 2);
                 });
-            });
-            b.querySelector('[data-act="make-launch"]')?.addEventListener('click', async () => {
-                if (_busy) return;
-                _busy = true;
-                _loading('正在拍「' + _esc(w.name) + '」的啟航群像…');
-                let r = { ok: false, msg: '生成失敗' };
-                try { r = await _makeLaunchArt(w); } catch (e) { r = { ok: false, msg: (e && e.message) || '生成失敗' }; }
-                _busy = false;
-                _toast(r.msg);
-                _renderDetail(w, 2);
             });
             b.querySelector('[data-act="home-page"]')?.addEventListener('click', () => _renderHomePage(w));
             // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
@@ -3754,16 +3741,6 @@
             });
         }
 
-        b.querySelector('[data-act="del"]')?.addEventListener('click', async (ev) => {
-            if (_delArm === 0) {
-                _delArm = 1;
-                ev.currentTarget.innerHTML = '<i class="fa-solid fa-trash-can"></i> 再按一次確認刪除';
-                return;
-            }
-            await _deleteWorlds([w]);
-            _toast('「' + w.name + '」已從檔案庫移除');
-            _renderList();
-        });
         _spawnTravelers(w);   // 點開世界=旅人自動陸續上線(非大廳場景時靜默跳過)
     }
 
