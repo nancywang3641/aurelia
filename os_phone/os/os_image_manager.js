@@ -425,12 +425,23 @@
 
             // 網址容錯：站方通常給到 .../v1，但她也可能整條貼進來
             const base = rawUrl.replace(/\/+$/, '');
-            const endpoint = /\/images\/generations$/.test(base) ? base : (base + '/images/generations');
+            // 兩種格式，看網址自己判斷 —— 她只要貼站方給的那條，不必再選一次「這是哪一種」。
+            //   .../sdapi/... → Stable Diffusion WebUI 格式（POST /sdapi/v1/txt2img，回 {images:[base64]}）
+            //                   模型是伺服器端設定、請求裡不帶；她本機的 antigravity2api 走這條。
+            //   其餘（通常 .../v1）→ OpenAI 格式（POST /v1/images/generations，回 {data:[{url|b64_json}]}）
+            const isSd = /\/sdapi(\/|$)/.test(base);
+            const endpoint = isSd
+                ? (/\/txt2img$/.test(base) ? base
+                    : (/\/sdapi\/v1$/.test(base) ? base + '/txt2img'
+                        : base.replace(/\/sdapi.*$/, '') + '/sdapi/v1/txt2img'))
+                : (/\/images\/generations$/.test(base) ? base : base + '/images/generations');
 
             const width = options.width || 1024;
             const height = options.height || 1024;
-            const body = { model: model, prompt: prompt, n: 1, size: width + 'x' + height };
-            if (options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略
+            const body = isSd
+                ? { prompt: prompt, negative_prompt: options.negativePrompt || '', width: width, height: height }
+                : { model: model, prompt: prompt, n: 1, size: width + 'x' + height };
+            if (!isSd && options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略
 
             const headers = { 'Content-Type': 'application/json' };
             if (key) headers['Authorization'] = 'Bearer ' + key;
@@ -448,6 +459,11 @@
                 try { data = JSON.parse(text); }
                 catch (e) { throw new Error('回應不是 JSON（多半是網址填錯，指到了網頁而不是 API）：' + text.slice(0, 120)); }
 
+                if (isSd) {
+                    const b64 = data && Array.isArray(data.images) ? data.images[0] : null;
+                    if (!b64) throw new Error('回應裡沒有圖：' + text.slice(0, 200));
+                    return /^data:/.test(b64) ? b64 : ('data:image/png;base64,' + b64);
+                }
                 const first = data && Array.isArray(data.data) ? data.data[0] : null;
                 if (!first) throw new Error('回應裡沒有圖：' + text.slice(0, 200));
                 if (first.b64_json) return 'data:image/png;base64,' + first.b64_json;

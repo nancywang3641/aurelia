@@ -1563,14 +1563,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <input class="set-input" id="img-capi-key" type="password" placeholder="站方給你的那把" value="${imgConfig.customApi?.apiKey || ''}">
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label" title="照站方寫的型號名一字不差地填。每個站支援的型號都不一樣，所以這裡不給清單。">模型 <span class="lbl-req">(必填)</span></div>
+                                        <div class="set-label" title="照站方寫的型號名一字不差地填。每個站支援的型號都不一樣，所以這裡不給清單。網址帶 /sdapi 的站不用填，它自己決定。">模型</div>
                                         <input class="set-input" id="img-capi-model" type="text" placeholder="例：nano-banana-2" value="${(imgConfig.customApi?.model || '').replace(/"/g,'&quot;')}">
                                     </div>
                                     <div class="field-row">
                                         <button class="set-btn" id="img-capi-test" type="button">🔌 測試</button>
                                         <div class="set-desc" id="img-capi-status"></div>
                                     </div>
-                                    <div class="set-desc">吃 OpenAI 格式的生圖接口（送 JSON、回 JSON）。跟上面的 Pollinations 不是同一種送法，所以各佔一格、不能只換網址。</div>
+                                    <div class="set-desc">貼站方給的位址就好，兩種送法會自己認：網址帶 <b>/sdapi</b> 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟上面的 Pollinations 都不是同一種送法，所以各佔一格、不能只換網址。</div>
                                 </div>
                             </div>
 
@@ -2535,7 +2535,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const key   = (q('#img-capi-key')?.value   || '').trim();
             const model = (q('#img-capi-model')?.value || '').trim();
             if (!url)   { say('請先填接口位址'); return; }
-            if (!model) { say('請先填模型名（照站方寫的一字不差）'); return; }
+            // SD WebUI 格式的站（網址帶 /sdapi）模型是伺服器端設定，請求裡不帶 → 不強迫她填
+            const _isSd = /\/sdapi(\/|$)/.test(url);
+            if (!model && !_isSd) { say('請先填模型名（照站方寫的一字不差）'); return; }
             // 🚨 這裡不能用 win —— 那個別名只存在於本檔某幾個函式裡，在這個 scope 是 ReferenceError。
             //    而 handler 是 async，丟出來的例外變成沒人接的 rejection：按了完全沒反應、console 也不紅。
             const IM = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
