@@ -1092,7 +1092,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 【底板 — 對話框的「形狀」由它決定。這幾行照抄，不然底板不存在，框會變成透明的空殼】
 #text-panel{position:relative;}
 #text-panel::before{content:'';position:absolute;z-index:0;pointer-events:none;}
-#speaker-name,#dialogue-text{position:relative;z-index:1;}
+#dialogue-text{position:relative;z-index:1;}
+（名牌不必也不可以碰：它本來就是絕對定位、層級已經在底板之上。給它 position:relative 會讓它掉回文件流，位置就飛了。）
 - 底板的 inset「不要寫 0」：inset:0 等於一塊跟框一樣大的矩形，那就是每次都長一樣的原因。
   它可以四邊各給不同的值、可以是負的讓它溢出框外、可以只從某一邊探出去。
 - 底板不會裁到任何子元素（名牌是 #text-panel 的孩子，不是底板的），所以它身上「隨便你怎麼裁」：
@@ -1114,6 +1115,15 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - #text-panel「本身」不准 clip-path，也不准 overflow:hidden。名牌是它的子元素、而且刻意浮在框的上緣外面，框一被裁，名牌就跟著被切掉半個。造型一律畫在上面那塊底板上，框本身保持完整。
 - 頂部鈕（返回／設定／應用）與控制鈕（SKIP／LOG／AUTO）上的字一律維持單行。改完 padding 或字級自己檢查一次：字被擠成直排、或被截掉，就是壞的。
 - 內文的可用寬度不可以被裝飾吃掉：對話框內、文字實際能佔的寬度至少要有整個框的八成。
+
+【版位是契約 — 這幾個屬性一個字都不准寫在那些選擇器上】
+下列選擇器的規則裡，「絕對不可以出現」position / top / left / right / bottom / display / float / flex 這些屬性
+（transform 只准出現在 :hover / :active 這種互動狀態裡）：
+  #btn-home、#btn-settings、#btn-phone、#top-badge、#stream-scene-row、
+  #speaker-name、#vn-panel-controls、.vn-panel-btn、#text-panel-wrapper
+它們的位置是底稿用絕對定位釘好的。你只要寫了其中任何一個屬性——哪怕是 position:relative——
+就會把那份定位打掉，元素會掉回文件流、整排疊到畫面中間。這不是「移動」，是「毀掉版位」。
+唯一的例外是 #text-panel 自己可以寫 position:relative（底板需要它當定位錨點），別的位移屬性一樣不准。
 
 【最重要的鐵則 — 配件一律不准移動】
 - 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
@@ -1324,6 +1334,23 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         if (!hasClip && !hasBorderImage && !hasShapeRadius && !hasMask) out.push('整份沒有任何塑形：輪廓還是四個直角的矩形');
         else if (plateFlat) out.push('底板的 inset 還是 0：那塊底跟框一樣大、一樣方');
         return out;
+    }
+    // 版位契約：底稿用絕對定位把配件釘在各自的角落，主題只要碰到 position/top/... 就會把它們
+    //   打回文件流、整排疊到畫面中間（Rae 實機撞過三顆功能鍵飄到對話框上面）。
+    //   這種是硬約束，講不聽就直接剝掉——留著它畫面一定壞。
+    const VTH_LOCKED = ['#btn-home', '#btn-settings', '#btn-phone', '#top-badge', '#stream-scene-row',
+        '#speaker-name', '#vn-panel-controls', '.vn-panel-btn', '#text-panel-wrapper'];
+    const VTH_LOCK_PROPS = /(^|;)\s*(position|top|left|right|bottom|display|float|flex(?:-[a-z]+)?)\s*:[^;}]*/gi;
+    function _vthStripLayout(css) {
+        let hit = 0;
+        const out = String(css || '').replace(/([^{}]+)\{([^}]*)\}/g, (whole, sel, body) => {
+            const sl = sel.trim();
+            if (/:hover|:active|:focus/.test(sl)) return whole;            // 互動狀態不碰
+            if (!VTH_LOCKED.some(k => sl.indexOf(k) >= 0)) return whole;   // 不在契約名單裡的自由發揮
+            const nb = body.replace(VTH_LOCK_PROPS, (m, p1) => { hit++; return p1 || ''; });
+            return sel + '{' + nb + '}';
+        });
+        return { css: hit ? out : String(css || ''), hit };
     }
     function _vthRisky(css) {
         const out = [];
@@ -1637,8 +1664,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 if (bad.bad) { _studioConfirmRetry(bad.reason, () => { sayEl.value = text; send(); }); return; }
                 const raw = String(full || '');
                 const got = _vthPickCss(raw);
-                const newCss = got.css;
+                // 版位契約先過一遍：碰到那幾個屬性就地剝掉，別讓它把配件甩到畫面中間
+                const _lk = _vthStripLayout(got.css);
+                const newCss = _lk.css;
                 const warn = [];
+                if (_lk.hit) warn.push('（它動了配件的位置屬性 ' + _lk.hit + ' 處，已經幫你拿掉——那幾顆的位置是釘死的，改了會整排掉到畫面中間。）');
                 if (newCss && got.cut) warn.push('（這次的回覆看起來被截斷了，主題可能不完整——不對就按還原上一版，再讓他重寫一次。）');
                 if (newCss) {
                     const miss = _vthMissingVars(newCss);
