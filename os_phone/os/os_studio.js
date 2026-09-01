@@ -1081,6 +1081,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 #text-panel{position:relative;padding:26px 30px;min-height:96px;border-radius:4px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
 #text-panel.nar-mode{background:linear-gradient(180deg,rgba(12,12,16,0.88),rgba(4,4,6,0.95));border:1px solid rgba(255,255,255,0.08);border-top:1px dashed rgba(255,255,255,0.15);box-shadow:0 20px 50px rgba(0,0,0,0.9);}
 #text-panel.char-mode{background:rgba(4,4,6,0.92);border:none;border-top:1px solid rgba(212,175,55,0.18);box-shadow:0 20px 50px rgba(0,0,0,0.9);border-radius:0;}
+/* 🚨內心態一定要有自己的底：#text-panel 基底只有 blur 沒有背景，少了這條框就是全透明的（跟真實 VN 同步補上） */
+#text-panel.inner-mode{background:var(--vn-dialog-bg-inner,linear-gradient(180deg,rgba(10,10,14,0.72) 0%,rgba(4,4,6,0.88) 100%));border:1px solid rgba(255,255,255,0.06);box-shadow:0 20px 50px rgba(0,0,0,0.85);}
 #text-panel::after{content:'\\2727';position:absolute;bottom:12px;right:16px;color:var(--gold-dark);font-size:1.1rem;font-family:var(--font-classic);}
 #speaker-name{position:absolute;top:-18px;left:26px;background:var(--vn-name-bg,#050505);border:1px solid var(--gold);color:var(--name-color);font-family:var(--font-classic);font-size:1rem;padding:5px 22px;display:inline-block;letter-spacing:2px;z-index:12;box-shadow:0 5px 15px rgba(0,0,0,0.8);border-radius:2px;}
 .nar-mode #speaker-name{opacity:0;}

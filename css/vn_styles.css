@@ -1195,6 +1195,14 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #text-panel.char-mode #dialogue-text { color: var(--text-color, #e8e2d8); font-style: normal; }
 
         /* === 內心獨白模式：斜體，顏色跟隨 --em-color 設置 === */
+        /* 🚨這一態原本只設了文字、沒有設框：#text-panel 基底只有 blur 沒有背景，
+           所以內心獨白的對話框整個是透明的，字直接飄在背景圖上（Rae：顯示不出來）。
+           底比旁白更輕、保留「獨白比較飄」的語氣，但要看得見。 */
+        #text-panel.inner-mode {
+            background: var(--vn-dialog-bg-inner, linear-gradient(180deg, rgba(10,10,14,0.72) 0%, rgba(4,4,6,0.88) 100%));
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.85);
+        }
         #text-panel.inner-mode #dialogue-text { color: var(--em-color); font-style: italic; letter-spacing: 1px; }
 
         /* 角落裝飾 ✧ */
