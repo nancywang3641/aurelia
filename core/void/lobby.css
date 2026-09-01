@@ -920,6 +920,13 @@
 }
 .lstage-pick-btn i { font-size: 19px; color: #a8845c; }
 .lstage-pick-btn:active { transform: scale(0.97); background: rgba(240, 231, 218, 0.95); }
+/* 桌機也走這條岔路（2026-09-01）：那邊不缺空間，但「面板裡辦事、底下同時在講話」一樣割裂。
+   版型換成貼底置中的一張小卡——舞台與立繪都在畫面中間，橫跨整條會把人整個蓋掉。
+   🚨這段一定要在 .lstage-pick 基礎規則「之後」：同權重時後寫的贏，寫在前面等於沒改。
+   keyframes 用了 transform，所以不能再拿 translateX 置中，改用 left 算好的值。 */
+@media (min-width: 761px) {
+    .lstage-pick { left: calc(50% - 170px); right: auto; width: 340px; bottom: 26px; }
+}
 /* 404 房是黑底綠字，米白卡片在那裡會刺眼 */
 .void-tab.mode-404 .lstage-pick {
     background: rgba(8, 12, 8, 0.95); border-color: rgba(74, 222, 128, 0.35);

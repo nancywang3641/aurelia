@@ -1289,10 +1289,12 @@
     }
 
     // ── 停靠面板型 NPC：走近他們是為了「講話」或「辦事」，桌機兩件事並排放得下，手機放不下 ──
+    // win＝這個面板的浮窗選擇器。有寫的是右側停靠窗（左邊空著），面板態把立繪留下來，
+    //   跟占卜／造物工坊同一套長相；沒寫的（黑市）是蓋滿畫面的 overlay，留了人也看不到。
     const PANEL_OF = {
-        alice:  { label: '世界門',   icon: 'fa-globe',   open: () => window.OS_WORLDGATE?.openGate?.() },
-        rabbit: { label: '交易所',   icon: 'fa-house',   open: () => window.OS_PT?.openExchange?.() },
-        ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
+        alice:  { label: '世界門',   icon: 'fa-globe',   win: '.wg-win',     open: () => window.OS_WORLDGATE?.openGate?.() },
+        rabbit: { label: '交易所',   icon: 'fa-house',   win: '.os-pt-dock', open: () => window.OS_PT?.openExchange?.() },
+        ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
         cheshire: { label: '黑市', icon: 'fa-store', open: () => window.VoidPanels?.openStore?.() },   // 🏪 黑市攤位在他身上（手機 app 那個門 2026-08-25 退役）
         // 🔮 紫薇沒有面板鈕：走近她＝純聊天，占卜要點桌子（Rae 2026-08-21 定案）。
         //    兩件事分開才不會「面板裡在解牌、底下對話框也在講話」。
@@ -1333,6 +1335,9 @@
             if (!b) return;
             _closeTalkPick();
             if (b.dataset.go === 'talk') { _enterTalk(npc); return; }
+            // 🧍 桌機的面板態把人留著：右側停靠窗只佔右半，左邊空著本來就是給立繪站的
+            //    （同占卜／造物工坊）。手機的窗吃滿寬，留了整張臉會蓋住面板 → 維持沒有人。
+            if (panel.win && !_narrowScreen()) _showPortraitOnly(npc);
             try { panel.open(); } catch (err) { console.warn('[LobbyStage] 開面板失敗', err); }
         });
         left.appendChild(box);
@@ -1367,10 +1372,13 @@
         if (tagSpan) tagSpan.textContent = npc.name;
         if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
 
+        // 🚪 兩個口子：走近有面板的管理員（愛麗絲／瀅瀅／白兔／柴郡）先問要哪一件事。
+        //    桌機原本是「對話框與面板同時浮出來」——同一個人一邊在面板裡辦事、一邊在底下對話框
+        //    講話，跟占卜／造物工坊當初被否掉的是同一種割裂（Rae 2026-09-01：桌機跟隨手機）。
+        //    要邊看面板邊講話仍然按 💬 浮鈕，跟手機一樣。
         const panel = _panelFor(npc);
-        if (panel && _narrowScreen()) { _showTalkPick(npc, panel); return; }   // 📱 先岔路
+        if (panel) { _showTalkPick(npc, panel); return; }
         _enterTalk(npc);
-        if (panel) { try { panel.open(); } catch (e) {} }                      // 🖥 桌機照舊：右側浮出面板、對話框同時在
     }
     function endTalk() {
         _closeTalkPick();   // 還停在岔路就走開 → 岔路跟著收

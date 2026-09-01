@@ -325,7 +325,14 @@
    立繪本來就 pointer-events:none，抬高不會擋到面板的點擊。 */
 .lobby-left:has(.lstage-tarotwin) .lstage-talk-portrait { z-index:3400; }
 /* 對話框收起時立繪原本靠 bottom:128px 讓開白框；白框收了就讓她站回地面 */
-.lobby-left.lstage-dlg-hidden:has(.lstage-tarotwin) .lstage-talk-portrait { bottom:0; height:82%; }
+/* 🧍 面板態（對話框收起、人留著）的立繪定位。占卜／造物工坊／世界門／書咖櫃檯／交易所
+   五扇窗都是右側停靠、左邊空著給立繪，長相一致 → 同一條規則帶著走，別各寫各的會漂。
+   黑市不在裡面：那是蓋滿畫面的 overlay，沒有留人的位置。 */
+.lobby-left.lstage-dlg-hidden:has(.lstage-tarotwin) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(.wg-win) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(.oc-win) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(.os-pt-dock) .lstage-talk-portrait { bottom:0; height:82%; }
 
 /* 🔮 占卜桌熱點：
    ① 預設熱點是藍色方框(科幻白大地圖用的)，小屋是暗紫酒紅金 → 換一套金的
@@ -571,7 +578,7 @@
 .lobby-left:has(.lws.is-tool) .lstage-talk-portrait { display:none; }
 /* 面板開著時立繪要壓在窗下面、且站回地面（同占卜浮窗） */
 .lobby-left:has(.lstage-wswin) .lstage-talk-portrait { z-index:3400; }
-.lobby-left.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait { bottom:0; height:82%; }
+/* （面板態的立繪定位已併進占卜那條，五扇窗共用） */
 
 /* ── 面板本體（lobby_workshop.js 掛進來；地點視圖的窗格也是這一份）──
    🚨 框是 CSS 畫的，不是把阿洛那張整框圖裁下來貼：
