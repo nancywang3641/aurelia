@@ -692,13 +692,70 @@
             .replace(/\s(?:src|href|xlink:href)\s*=\s*'(?:https?:)?\/\/[^']*'/gi, '')
             .trim();
     }
+    // 🎨 顏色對比：規則裡寫了背景色，文字色就必須跟它分得開。
+    //   prompt 裡早就有這條（還註明是實測最常壞的一項），但結束畫面是一次性生成、
+    //   沒有對話可以叫它改——黑底黑字、白底白字就這樣直接上了畫面（Rae：很常這樣）。
+    //   所以出口自己算一次：拆得出顏色的就補、就換；拆不出來（var()、圖片、漸層以外的值）一律不碰。
+    function _cssColor(v) {
+        const t = String(v || '').trim();
+        let m = /^#([0-9a-f]{3})$/i.exec(t);
+        if (m) return [parseInt(m[1][0] + m[1][0], 16), parseInt(m[1][1] + m[1][1], 16), parseInt(m[1][2] + m[1][2], 16), 1];
+        m = /^#([0-9a-f]{6})$/i.exec(t);
+        if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16), 1];
+        m = /^rgba?\(([^)]+)\)$/i.exec(t);
+        if (m) {
+            const p = m[1].split(',').map(x => parseFloat(x));
+            if (p.length >= 3 && p.slice(0, 3).every(n => isFinite(n))) return [p[0], p[1], p[2], (p.length > 3 && isFinite(p[3])) ? p[3] : 1];
+        }
+        const NAMED = { black: '#000000', white: '#ffffff', red: '#ff0000', gray: '#808080', grey: '#808080' };
+        if (NAMED[t.toLowerCase()]) return _cssColor(NAMED[t.toLowerCase()]);
+        return null;
+    }
+    // 相對亮度（WCAG）：拿來決定該配深字還是淺字，也拿來量兩色分不分得開
+    function _lum(c) {
+        const f = (x) => { x = x / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+        return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+    }
+    function _contrast(a, b) {
+        const l1 = _lum(a), l2 = _lum(b);
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    }
+    // 從 background 那串值裡撈出「文字實際壓在上面」的那個顏色：純色直接用，漸層取第一個色標
+    function _bgColorOf(val) {
+        const t = String(val || '');
+        if (/var\(|url\(/i.test(t)) return null;             // 變數與圖片：算不出來就不要亂改
+        const grad = /gradient\(([^)]*(?:\([^)]*\))?[^)]*)\)/i.exec(t);
+        const src = grad ? grad[1] : t;
+        const m = src.match(/#[0-9a-f]{3,6}\b|rgba?\([^)]+\)|\b(?:black|white|gray|grey)\b/i);
+        return m ? _cssColor(m[0]) : null;
+    }
+    function _fixPanelContrast(css) {
+        let fixed = 0;
+        const out = String(css || '').replace(/([^{}]+)\{([^}]*)\}/g, (whole, sel, body) => {
+            const bgm = /(?:^|;)\s*background(?:-color)?\s*:([^;}]+)/i.exec(body);
+            if (!bgm) return whole;                            // 沒給背景＝文字疊在別人的底上，不歸這條管
+            const bg = _bgColorOf(bgm[1]);
+            if (!bg || bg[3] < 0.5) return whole;              // 拆不出來、或幾乎透明：不動
+            const want = _lum(bg) > 0.45 ? [17, 17, 17] : [245, 245, 245];
+            const wantStr = _lum(bg) > 0.45 ? '#111' : '#f5f5f5';
+            const cm = /(?:^|;)\s*color\s*:([^;}]+)/i.exec(body);
+            if (!cm) { fixed++; return sel + '{' + body.replace(/;\s*$/, '') + ';color:' + wantStr + ';}'; }
+            const fg = _cssColor(cm[1].trim());
+            if (!fg) return whole;                             // 用了 var() 之類：不碰
+            if (_contrast(bg, fg) >= 3) return whole;          // 分得開就別動它的設計
+            fixed++;
+            return sel + '{' + body.replace(/((?:^|;)\s*color\s*:)[^;}]+/i, '$1' + wantStr) + '}';
+        });
+        if (fixed) console.log('[Worldgate③] 🎨 結束畫面有 ' + fixed + ' 處字色跟底色分不開，已就地補上對比色');
+        return out;
+    }
     function _cleanPanelCss(s) {
-        return String(s || '')
+        return _fixPanelContrast(String(s || '')
             .replace(/@import[^;]*;/gi, '')
             .replace(/url\(\s*['"]?(?:https?:)?\/\/[^)]*\)/gi, 'none')
             .replace(/\s*!\s*important/gi, '')
             .replace(/position\s*:\s*fixed/gi, 'position:absolute')
-            .trim();
+            .trim());
     }
     // 生成當下把玩家的裝置與實際畫面尺寸一起告訴它:同一份規則在手機上排出來的桌機版面沒法用。
     //   判斷沿用專案既有那套(UA 比對 + 視窗寬度,同 control_center.isMobileDevice)。
@@ -3839,7 +3896,9 @@
             if (!w) return null;
             return {
                 id: w.id, name: w.name, concept: w.concept || '', style: w.style || '',
-                panel: w.panel || null,          // {html,css,styleId,layoutId} — 面板外觀
+                // 🎨 舊世界的面板早就存在 DB 裡、不會再走一次生成時的清理管線 →
+                //   讀出來的時候補跑對比修正，之前生成的那些黑底黑字也一起救回來（不寫回 DB，純顯示層）
+                panel: w.panel ? Object.assign({}, w.panel, { css: _cleanPanelCss(w.panel.css || '') }) : null,
                 achv: w.achv || null,            // 這個世界的成就清單
                 achvDone: w.achvDone || null,    // {成就名:達成時間}——名字對得上清單的那幾條
                 launchArt: w.launchArt || null,  // {teamKey,url} — 這趟隊伍的啟航群像
