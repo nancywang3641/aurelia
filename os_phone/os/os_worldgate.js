@@ -2601,9 +2601,24 @@
             '.wgt-rec-btn.on .wgt-rec-caret{transform:translateY(-50%) rotate(180deg);}' +
             '.wgt-recruit{display:flex;flex-direction:column;gap:7px;padding:10px;background:#fff;border:1.2px solid rgba(42,74,128,.45);}' +
             '.wgt-recruit[hidden]{display:none;}' +
-            '.wgh-list{max-height:min(52vh,420px);overflow:auto;display:flex;flex-direction:column;gap:1px;' +
+            // 🚨這一頁的高度是圖紙窗給的，不是內容決定的：頁面自己撐滿(flex:1/min-height:0)，
+            //    清單吃掉剩下的全部，底下那一列與輸入框一律 flex:none 不准壓縮清單。
+            '.wgh-page{flex:1;min-height:0;display:flex;flex-direction:column;}' +
+            '.wgh-page>.wg-section-head,.wgh-page>.wg-input,.wgh-page>.wg-btn,.wgh-foot{flex:none;}' +
+            '.wgh-list{flex:1 1 auto;min-height:64px;overflow:auto;display:flex;flex-direction:column;gap:1px;' +
               'margin:9px 0;padding:5px;background:#fff;border:1.2px solid rgba(42,74,128,.45);}' +
+            '.wgh-foot{display:flex;gap:8px;margin-top:8px;}' +
+            '.wgh-foot .wg-btn{flex:1;margin:0;}' +
             '.wgh-list+.wg-input{margin-bottom:7px;}' +
+            // 疊在圖紙上的小卡：只有這一件事，關掉就回到清單
+            '.wg-modal{position:absolute;inset:0;z-index:40;display:grid;place-items:center;padding:18px;' +
+              'background:rgba(16,26,45,.42);backdrop-filter:blur(2px);}' +
+            '.wg-modal-card{width:min(420px,100%);max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:8px;' +
+              'padding:16px 16px 14px;background:#f7fafd;border:1.4px solid #2a4a80;box-shadow:0 18px 44px rgba(16,26,45,.4);}' +
+            '.wg-modal-hd{font-size:13px;font-weight:800;letter-spacing:.06em;color:#1f3a68;}' +
+            '.wg-modal-card .area{resize:vertical;min-height:96px;line-height:1.55;}' +
+            '.wg-modal-row{display:flex;gap:8px;margin-top:2px;}' +
+            '.wg-modal-row .wg-btn{flex:1;margin:0;}' +
             '.wgh-grp{font-size:10px;font-weight:800;letter-spacing:.08em;color:rgba(42,74,128,.72);padding:6px 4px 3px;}' +
             '.wgh-row{display:flex;align-items:center;gap:8px;padding:6px 7px;cursor:pointer;font-size:12.5px;}' +
             '.wgh-row:hover{background:rgba(42,74,128,.09);}' +
@@ -2613,9 +2628,7 @@
             '.wgh-src{flex:0 0 auto;font-size:10px;color:rgba(22,34,58,.5);}' +
             '.wgh-x{flex:0 0 auto;width:16px;text-align:center;color:rgba(22,34,58,.35);font-size:11px;cursor:pointer;}' +
             '.wgh-x:hover{color:#b3402f;}' +
-            '.wgh-new{display:flex;flex-direction:column;gap:6px;margin-top:13px;padding-top:11px;border-top:1px dashed rgba(42,74,128,.3);}' +
-            '.wgh-new-hd{font-size:11px;font-weight:800;letter-spacing:.06em;color:rgba(42,74,128,.8);}' +
-            '.wgh-new .area{resize:vertical;min-height:56px;line-height:1.55;}' +
+
             '.wgt-rec-hint{font-size:10.5px;color:#46639b;letter-spacing:.08em;}' +
             '.wgt-recruit .wg-btn{margin-top:2px;}' +
             '.wg-win.wgbp .wg-card{border-radius:0;border:1.2px solid rgba(42,74,128,.45);background:#fff;box-shadow:none;}' +
@@ -3168,40 +3181,78 @@
                 '</label>';
         }).join('');
     }
+    // 🪟 疊在圖紙上的小卡。這具殼給兩個地方用：召集旅人、加一個名冊裡沒有的人。
+    //   兩者都是「偶爾按一次、要填幾格」的動作——攤在頁面上就是從清單身上扣高度
+    //   （圖紙窗是固定高的），收成摺疊又看不見裡面有什麼（Rae 兩種都否掉了）。
+    //   onOk 回傳 false＝留著窗（欄位沒填完之類），其餘情況自己關掉。
+    function _openWgModal(title, bodyHtml, okLabel, onOk, focusSel) {
+        const host = _winEl || document.querySelector('.lobby-left');
+        if (!host) return null;
+        host.querySelector('.wg-modal')?.remove();
+        const m = document.createElement('div');
+        m.className = 'wg-modal';
+        m.innerHTML =
+            '<div class="wg-modal-card">' +
+              '<div class="wg-modal-hd">' + title + '</div>' +
+              bodyHtml +
+              '<div class="wg-modal-row">' +
+                '<button class="wg-btn ghost" data-m="x">取消</button>' +
+                '<button class="wg-btn" data-m="ok">' + okLabel + '</button>' +
+              '</div>' +
+            '</div>';
+        const close = () => m.remove();
+        m.addEventListener('click', async (ev) => {
+            if (ev.target === m || ev.target.closest('[data-m="x"]')) { close(); return; }   // 點卡外＝取消
+            if (!ev.target.closest('[data-m="ok"]')) return;
+            let r;
+            try { r = await onOk(m, close); } catch (e) { console.warn('[Worldgate] modal 動作失敗', e); }
+            if (r !== false) close();
+        });
+        host.appendChild(m);
+        if (focusSel) m.querySelector(focusSel)?.focus();
+        return m;
+    }
+    function _openFolkModal(onSaved) {
+        _openWgModal('這裡沒有的人',
+            '<input class="wg-input" data-wg-newname maxlength="24" placeholder="名字">' +
+            '<textarea class="wg-input area" data-wg-newdoc rows="5" ' +
+              'placeholder="他是誰（貼上就好；想把好幾個人寫成一份也可以）"></textarea>',
+            '<i class="fa-solid fa-plus"></i> 加進名冊',
+            async (m) => {
+                const nm = (m.querySelector('[data-wg-newname]')?.value || '').trim();
+                const doc = (m.querySelector('[data-wg-newdoc]')?.value || '').trim();
+                if (!nm) { _toast('先給他一個名字'); return false; }
+                if (!doc) { _toast('寫一句他是誰,不然主持AI 只拿得到一個名字'); return false; }
+                await _addFolk(nm, doc);
+                _toast(nm + ' 進名冊了,勾起來就能帶走');
+                try { await onSaved?.(); } catch (e) {}
+            }, '[data-wg-newname]');
+    }
     async function _renderHomePage(w) {
         const b = _body(); if (!b) return;
         const now = (w.travelers || []).filter(t => t && t.recruited && !t.gone).length;
+        // 🚨圖紙窗是固定高的（height:min(620px,...)），這一頁能用的高度就那麼多：
+        //   清單必須吃掉全部剩餘空間、其餘一律不壓縮，不然 .wg-body 是直向 flex，
+        //   清單當 flex item 會被底下每一樣東西擠扁（Rae 實機截到只剩一行）。
+        //   建新角色那組因此不留在頁面上，改由 modal 承接。
         b.innerHTML =
-            '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-house-user"></i> 從奧瑞亞帶人</span>' +
-              '<span class="wg-section-note">編成 ' + now + ' / ' + MAX_TRAVELER_SPAWN + '・不用考核</span></div>' +
-            '<div class="wgh-list" data-wgh-list><div class="wgt-empty">讀取中…</div></div>' +
-            '<input class="wg-input" data-wg-bring maxlength="60" placeholder="這趟為什麼跟來（可留空）">' +
-            '<button class="wg-btn" data-act="add-home"><i class="fa-solid fa-user-check"></i> 帶他們一起走</button>' +
-            // 臨時想到的人常常是看著名冊才想起來要加，所以這格就跟清單放同一頁、不再往下藏一層
-            '<div class="wgh-new">' +
-              '<div class="wgh-new-hd">這裡沒有的人</div>' +
-              '<input class="wg-input" data-wg-newname maxlength="24" placeholder="名字">' +
-              '<textarea class="wg-input area" data-wg-newdoc rows="3" ' +
-                'placeholder="他是誰（貼上就好；想把好幾個人寫成一份也可以）"></textarea>' +
-              '<button class="wg-btn ghost" data-act="save-folk"><i class="fa-solid fa-plus"></i> 加進名冊</button>' +
-            '</div>' +
-            '<button class="wg-btn ghost" data-act="back">返回</button>';
+            '<div class="wgh-page">' +
+              '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-house-user"></i> 從奧瑞亞帶人</span>' +
+                '<span class="wg-section-note">編成 ' + now + ' / ' + MAX_TRAVELER_SPAWN + '・不用考核</span></div>' +
+              '<div class="wgh-list" data-wgh-list><div class="wgt-empty">讀取中…</div></div>' +
+              '<input class="wg-input" data-wg-bring maxlength="60" placeholder="這趟為什麼跟來（可留空）">' +
+              '<button class="wg-btn" data-act="add-home"><i class="fa-solid fa-user-check"></i> 帶他們一起走</button>' +
+              '<div class="wgh-foot">' +
+                '<button class="wg-btn ghost" data-act="new-folk"><i class="fa-solid fa-plus"></i> 這裡沒有的人</button>' +
+                '<button class="wg-btn ghost" data-act="back">返回</button>' +
+              '</div>' +
+            '</div>';
 
         const box = b.querySelector('[data-wgh-list]');
         const paint = async () => { if (box) box.innerHTML = _homeRows(w, await _homefolkList()); };
 
         b.querySelector('[data-act="back"]').addEventListener('click', () => _renderDetail(w, 2));
-        b.querySelector('[data-act="save-folk"]').addEventListener('click', async () => {
-            const nm = (b.querySelector('[data-wg-newname]')?.value || '').trim();
-            const doc = (b.querySelector('[data-wg-newdoc]')?.value || '').trim();
-            if (!nm) { _toast('先給他一個名字'); return; }
-            if (!doc) { _toast('寫一句他是誰,不然主持AI 只拿得到一個名字'); return; }
-            await _addFolk(nm, doc);
-            const n1 = b.querySelector('[data-wg-newname]'); if (n1) n1.value = '';
-            const n2 = b.querySelector('[data-wg-newdoc]'); if (n2) n2.value = '';
-            await paint();
-            _toast(nm + ' 進名冊了,勾起來就能帶走');
-        });
+        b.querySelector('[data-act="new-folk"]').addEventListener('click', () => _openFolkModal(paint));
         // 刪除鍵在 <label> 裡面，不擋掉冒泡會順手把勾選也切掉
         box?.addEventListener('click', async (ev) => {
             const x = ev.target.closest?.('[data-wgh-del]');
@@ -3473,19 +3524,8 @@
                     ? roster.map(_personRow).join('')
                     : '<div class="wgt-empty">這個世界還沒召集過旅人。<br>用下面那顆按鈕請愛麗絲找幾位。</div>') +
                 '</div>' +
-                '<button class="wg-btn ghost wgt-rec-btn" data-act="rec-toggle">' +
-                  '<i class="fa-solid fa-user-plus"></i> ' + ((w.travelers || []).length ? '再召集一批' : '召集旅人') +
-                  '<i class="fa-solid fa-chevron-down wgt-rec-caret"></i></button>' +
-                '<div class="wgt-recruit" data-wgt-rec hidden>' +
-                  '<div class="wgt-rec-hint">加人，不會換掉現有的</div>' +
-                  '<input class="wg-input" data-wg-travnote maxlength="80" placeholder="想找什麼樣的旅人（可留空）" value="' + _esc((w.travPref && w.travPref.note) || '') + '">' +
-                  '<div class="wg-age-row"><span>年齡</span>' +
-                    '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((w.travPref && w.travPref.ageMin) || '') + '">' +
-                    '<span>～</span>' +
-                    '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
-                    '<span>歲</span></div>' +
-                  '<button class="wg-btn" data-act="more-trav"><i class="fa-solid fa-wand-magic-sparkles"></i> 請愛麗絲找人</button>' +
-                '</div>' +
+                '<button class="wg-btn ghost" data-act="rec-modal">' +
+                  '<i class="fa-solid fa-user-plus"></i> ' + ((w.travelers || []).length ? '再召集一批' : '召集旅人') + '</button>' +
                 // 🏠 帶自己的人進去:熟人不必考核(考題是拿來認識陌生人的),勾了就直接同行。
                 //   🚨這顆是換頁不是展開:名冊攤在這一欄會把「誰跟我走」整頁撐爆,收成摺疊又看不見裡面有誰
                 //   (Rae 兩邊都否掉了)。挑人是一件獨立的事,就給它一整頁——同身分卡那層頁的成例。
@@ -3557,7 +3597,7 @@
                     free.scrollIntoView({ block: 'nearest' });
                     _toast('從右邊挑一位「去找他」，聊得投機才會答應同行');
                 } else {
-                    const rec = b.querySelector('[data-act="rec-toggle"]');
+                    const rec = b.querySelector('[data-act="rec-modal"]');
                     if (rec) rec.click();
                     _toast('大廳裡沒有還沒入隊的人了，先召集一批');
                 }
@@ -3567,15 +3607,7 @@
                 ev.stopPropagation();
                 _goMeet(w, Number(el.dataset.meet));
             }));
-            // 召集區:預設收起(偶爾才用一次的動作不該常駐佔版面)
-            const recBtn = b.querySelector('[data-act="rec-toggle"]');
-            const recBox = b.querySelector('[data-wgt-rec]');
-            if (recBtn && recBox) recBtn.addEventListener('click', () => {
-                const open = recBox.hasAttribute('hidden');
-                if (open) recBox.removeAttribute('hidden'); else recBox.setAttribute('hidden', '');
-                recBtn.classList.toggle('on', open);
-                if (open) recBox.querySelector('[data-wg-travnote]')?.focus();
-            });
+
             // 小人皮膚是動態網址(IDB blob/dataURL),只能在這裡掛成 CSS 變數(HTML 字串裡不寫 style)
             b.querySelectorAll('[data-fig]').forEach(el => {
                 const f = figs[Number(el.dataset.fig)];
@@ -3615,14 +3647,25 @@
             // 再召集一批：往池子裡「加人」，不動已入隊的、也不動先前的候選。
             //   世界檔案與旅人本來就是分兩次生的（旅人那次掛掉時世界照樣存下來），所以這顆同時也是
             //   「一個旅人都沒有」時的補救按鈕，不必另外做一顆。
-            b.querySelector('[data-act="more-trav"]')?.addEventListener('click', async () => {
+            b.querySelector('[data-act="rec-modal"]')?.addEventListener('click', () => _openWgModal(
+                (w.travelers || []).length ? '再召集一批' : '召集旅人',
+                '<div class="wgt-rec-hint">加人，不會換掉現有的</div>' +
+                '<input class="wg-input" data-wg-travnote maxlength="80" placeholder="想找什麼樣的旅人（可留空）" value="' + _esc((w.travPref && w.travPref.note) || '') + '">' +
+                '<div class="wg-age-row"><span>年齡</span>' +
+                  '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((w.travPref && w.travPref.ageMin) || '') + '">' +
+                  '<span>～</span>' +
+                  '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
+                  '<span>歲</span></div>',
+                '<i class="fa-solid fa-wand-magic-sparkles"></i> 請愛麗絲找人',
+                async (m, closeModal) => {
                 if (_busy) return;
+                closeModal();   // 召集要跑兩百多秒，窗留著只會擋住底下的載入動畫
                 // 偏好在按下去這刻收（她可能填完直接按，沒有離開輸入框的動作）＋存起來，下次打開還在
                 const _clampAge = (v) => { const n = parseInt(v, 10); return (isFinite(n) && n > 0 && n < 130) ? n : 0; };
                 let pref = {
-                    note: (b.querySelector('[data-wg-travnote]')?.value || '').trim().slice(0, 80),
-                    ageMin: _clampAge(b.querySelector('[data-wg-agemin]')?.value),
-                    ageMax: _clampAge(b.querySelector('[data-wg-agemax]')?.value),
+                    note: (m.querySelector('[data-wg-travnote]')?.value || '').trim().slice(0, 80),
+                    ageMin: _clampAge(m.querySelector('[data-wg-agemin]')?.value),
+                    ageMax: _clampAge(m.querySelector('[data-wg-agemax]')?.value),
                 };
                 if (pref.ageMin && pref.ageMax && pref.ageMin > pref.ageMax) {   // 填反了就自己轉回來
                     const t0 = pref.ageMin; pref.ageMin = pref.ageMax; pref.ageMax = t0;
@@ -3658,7 +3701,7 @@
                     (dropped > 0 ? '（' + dropped + ' 位年齡不合已略過）' : '') +
                     (dropped < 0 ? '（這批年齡都不在範圍內,還是先收下了）' : ''));
                 _renderDetail(w, 2);
-            });
+            }, '[data-wg-travnote]'));
         }
 
         if (st === 3) {
