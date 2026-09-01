@@ -2266,6 +2266,13 @@
             // 🚨底圖不走 var()：自訂屬性的值超過約 1MB 會被瀏覽器丟掉（方位圖那種 dataURL 一定超過），
             //   設了不報錯、讀回來是空的 → 圖靜靜地不見。改由 JS 直接設 style.backgroundImage。
             '.wg-spawn-grid.has-map{background-size:cover;background-position:center;padding:5px;border-radius:11px;}' +
+            // 🚨方位圖是 1024×1024 的正方（_MAP_W/_MAP_H），格線卻攤成滿寬扁條＝約 6:1，
+            //    cover 只留得下圖中間那一橫，看不出是張方位圖（Rae：降生地壓扁了）。
+            //    格線改成吃掉這一頁的剩餘高度、再用 aspect-ratio 反推寬度置中 → 永遠是正方，
+            //    高度自己貼合窗（圖紙窗是固定高的，寫死尺寸不是超出就是留白）。
+            '.wg-spawn-grid.has-map{flex:1 1 auto;min-height:132px;max-height:100%;aspect-ratio:1;width:auto;margin-inline:auto;}' +
+            // 沒有方位圖時不必硬撐成正方（那只是一組文字格），照原本的自然高度
+            '.wg-spawn-grid:not(.has-map){flex:none;}' +
             '.wg-spawn-grid.has-map .wg-spawn{background:rgba(255,255,255,.86);}' +
             '.wg-spawn-grid.has-map .wg-spawn-empty{border-color:rgba(255,255,255,.42);}' +
             '.wg-spawn-empty{border-radius:9px;border:1px dashed rgba(26,28,40,.07);min-height:44px;}' +
@@ -2569,6 +2576,10 @@
             // 桌機:海報頁自己不捲,圖與檔案都在一眼內(要捲的是右邊那份檔案)
             '.wg-win.wgbp.wgbp-sub .wg-body.wgd-st1{overflow:hidden;padding-bottom:18px;}' +
             '.wg-body.wgd-st1 .wgd-split{flex:1;min-height:0;}' +
+            // 出發頁的兩欄：整塊撐滿這一頁，左欄的九宮格與右欄的身分欄各自吃滿自己那欄的高度
+            '.wgd-split3{flex:1;min-height:0;}' +
+            '.wgd-spawn-col,.wgd-pc-col{display:flex;flex-direction:column;min-height:0;}' +
+            '.wgd-pc-col .area{flex:1;min-height:96px;resize:none;line-height:1.6;}' +
             // 詳情頁把右下的圖紙標題欄收掉:那塊在檔案庫是裝飾,在這裡會壓住內容(空間留給正文)
             '.wg-win.wgbp.wgbp-sub .wgbp-tb{display:none;}' +
             // 底部三顆:刪除靠左、返回/繼續靠右,各自照內容寬(滿寬平分會變兩條大長條)
@@ -2659,6 +2670,9 @@
               '.wgbp-cc{min-height:0;}' +
               // 窄容器:海報收單欄,整頁改回可捲(圖佔一段、檔案接在下面)
               '.wgd-split{grid-template-columns:1fr;}' +
+              '.wgd-split3{flex:none;}' +
+              '.wg-spawn-grid.has-map{flex:none;aspect-ratio:auto;width:auto;}' +
+              '.wgd-pc-col .area{flex:none;min-height:72px;}' +
               '.wg-win.wgbp.wgbp-sub .wg-body.wgd-st1{overflow-y:auto;}' +
               '.wg-body.wgd-st1 .wgd-split{flex:none;}' +
               '.wgd-art{min-height:0;aspect-ratio:16/9;}' +
@@ -3534,15 +3548,21 @@
               '</div>' +
             '</div>';
 
-        // ── ③ 出發設定：降生地 + 我的身分
+        // ── ③ 出發設定：左=降生地、右=我的身分
+        //   🚨兩件事上下堆疊時，九宮格只分得到一小條高度，而方位圖是 1024×1024 的正方——
+        //   攤成扁條等於只看得到圖中間那一橫（Rae：降生地壓扁了）。拆成兩欄，格子就能吃滿整頁高度。
         const page3 =
-            _spawnHtml(w, entryText) +
-            // 🎭 玩家在這個世界要當什麼。不做選單:每個世界的職業與種族體系都不一樣,
-            //   給清單等於把它變成題庫,而且清單外的東西就填不了。自由填寫最不設限。
-            '<div class="wg-section-head"><span class="wg-section-title">我的身分</span>' +
-              '<span class="wg-section-note">' + (w.pc ? '已指定' : '沒填＝由主持AI安排') + '</span></div>' +
-            '<textarea class="wg-input area" data-wg-pc maxlength="200" rows="2" ' +
-              'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>';
+            '<div class="wgd-split wgd-split3">' +
+              '<div class="wgd-spawn-col">' + _spawnHtml(w, entryText) + '</div>' +
+              '<div class="wgd-pc-col">' +
+                // 🎭 玩家在這個世界要當什麼。不做選單:每個世界的職業與種族體系都不一樣,
+                //   給清單等於把它變成題庫,而且清單外的東西就填不了。自由填寫最不設限。
+                '<div class="wg-section-head"><span class="wg-section-title">我的身分</span>' +
+                  '<span class="wg-section-note">' + (w.pc ? '已指定' : '沒填＝由主持AI安排') + '</span></div>' +
+                '<textarea class="wg-input area" data-wg-pc maxlength="200" ' +
+                  'placeholder="想當什麼、長什麼樣(可留空)">' + _esc(w.pc || '') + '</textarea>' +
+              '</div>' +
+            '</div>';
 
         // 詳情三頁都吃滿寬;step1 另外走海報版型(名字在海報上,不再重複一行標題)
         b.classList.remove('wgd-narrow');
