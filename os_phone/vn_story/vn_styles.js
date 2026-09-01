@@ -86,12 +86,17 @@
                     <div id="text-panel">
                         <div id="speaker-name">System</div>
 
+                        <!-- 🍔 手機上五顆橫排會擠成一團：常用的兩顆留在外面，其餘收進上拉浮窗（阿洛的提案）。
+                             浮窗裡的鈕沿用同一個 .vn-panel-btn，主題套什麼它們就長什麼，不必為它另外設計。 -->
                         <div id="vn-panel-controls">
                             <button class="vn-panel-btn" id="vn-btn-log" onclick="window.VN_Core.showLog(); event.stopPropagation();">LOG</button>
-                            <button class="vn-panel-btn" id="vn-btn-think" onclick="window.VN_PLAYER.showThinkPopup(); event.stopPropagation();" title="本章思考鏈">COT</button>
                             <button class="vn-panel-btn" id="vn-btn-skip" onclick="window.VN_Core.toggleSkip(); event.stopPropagation();">SKIP</button>
-                            <button class="vn-panel-btn" id="vn-btn-ctx" onclick="window.VN_Core.toggleCtx(); event.stopPropagation();">CTX</button>
-                            <button class="vn-panel-btn" id="vn-btn-regen" style="display:none;color:#f6ad55;" onclick="window.VN_Core.regenCurrentTTS(); event.stopPropagation();" title="清除快取並重新生成當前語音">↺ TTS</button>
+                            <button class="vn-panel-btn" id="vn-btn-more" onclick="window.VN_Core.toggleMore(); event.stopPropagation();" title="其他">☰</button>
+                            <div id="vn-more-menu" onclick="event.stopPropagation()">
+                                <button class="vn-panel-btn" id="vn-btn-think" onclick="window.VN_PLAYER.showThinkPopup(); window.VN_Core.closeMore(); event.stopPropagation();" title="本章思考鏈">COT</button>
+                                <button class="vn-panel-btn" id="vn-btn-ctx" onclick="window.VN_Core.toggleCtx(); window.VN_Core.closeMore(); event.stopPropagation();">CTX</button>
+                                <button class="vn-panel-btn" id="vn-btn-regen" style="display:none;color:#f6ad55;" onclick="window.VN_Core.regenCurrentTTS(); window.VN_Core.closeMore(); event.stopPropagation();" title="清除快取並重新生成當前語音">↺ TTS</button>
+                            </div>
                         </div>
 
                         <div id="dialogue-text"></div>

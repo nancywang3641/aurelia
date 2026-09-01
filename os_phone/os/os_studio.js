@@ -1033,7 +1033,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 右上角三顆功能鍵：回主選單、開設定、打開遊戲裡的手機。
 畫面正下方橫著一條對話框，貼著底、佔畫面寬度的八成多。玩家點一下跳一句話，就這樣一句一句把整個故事讀完——幾百輪都在看這一條。
 對話框的左上角掛著一塊名牌，寫著現在是誰在說話；輪到旁白時它會自己隱形。
-對話框的上緣浮著三顆小鈕：跳過、翻對話紀錄、自動播放。
+對話框的上緣浮著三顆小鈕：翻對話紀錄、跳過、還有一顆漢堡；按漢堡會往上浮出一小疊其他功能。
 每一章開頭，畫面中央會浮出一張章節卡：故事名、第幾章、章名、一段引言、幾格資訊、一顆「開始閱讀」；玩家按了才進正文。
 你要做的是把這一整套變成「同一個世界裡真的會有的介面」——那個世界的材質、工藝、時代、階級都該看得出來，而不是在遊戲上套一層皮。
 
@@ -1043,8 +1043,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
   #top-badge ............... 左上的時間地點小牌
   #btn-home / #btn-settings / #btn-phone ... 右上三顆功能鍵
   #text-panel-wrapper ...... 貼在畫面底部、水平置中，寬約畫面的 88%、上限 560px
-    #vn-panel-controls ..... 三顆小鈕（SKIP／LOG／AUTO），浮在對話框「上緣外側」
-      .vn-panel-btn ×3
+    #vn-panel-controls ..... 浮在對話框「上緣外側」的一排小鈕：LOG／SKIP／☰
+      .vn-panel-btn .......... 這三顆
+      #vn-more-menu .......... 按 ☰ 往上浮出的小選單，裡面也是 .vn-panel-btn（COT／CTX／↺TTS）
     #text-panel ............ 對話框本體。它身上一定帶三個 class 之一：
                              .char-mode（有人說話）／.nar-mode（旁白）／.inner-mode（內心獨白）
                              同一個框換 class，不是三個不同的框
@@ -1074,7 +1075,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - #dialogue-text：對話內文（字體 / 字色 / 行距），配合對話框設計。⚠️文字對齊保持預設靠左，不要置中（見下方鐵則）。
 - #speaker-name：角色名牌（固定浮在對話框左上，旁白時自動隱藏）。只重新設計它的外觀（底色/邊框/圓角/字體/造型）配合對話框，「位置不要動」。
 - #top-badge：左上角的「場景牌」，顯示當前時間・地點（例如「黃昏 南城舊巷」，文字兩側有金色短線裝飾，那是 ::before / ::after）。可重新設計它的外觀（底色/漸隱/邊框/圓角/字體/裝飾線）配合主題，但「位置不要動」（固定左上）。註：直播模式時同樣內容會改顯示在 #stream-scene-row（內含 #stream-scene-label），請一併配合上色。
-- #vn-panel-controls 與 .vn-panel-btn：對話框上方的 SKIP / LOG / AUTO 控制按鈕（.vn-panel-btn.active 為啟用態）。「位置不要動」，只重新上色/造型配合主題。
+- #vn-panel-controls 與 .vn-panel-btn：對話框上緣那排小鈕。外面只有三顆：LOG（翻對話紀錄）、SKIP（跳過）、☰（其他功能）；按 ☰ 會往上浮出 #vn-more-menu，裡面是同款的 .vn-panel-btn。你只要把 .vn-panel-btn 設計好，浮窗裡的鈕自動跟著。（.vn-panel-btn.active 為啟用態。）「位置不要動」，只重新上色/造型配合主題。
 - #btn-home、#btn-settings、#btn-phone：畫面右上角的頂部按鈕（返回 / 設定 / 應用）。「位置不要動」，只重新統一它們的外觀配合主題。
 - #vn-chapter-card 與 #vncc-box：章節卡（每一章開頭浮出來的那張卡：故事名 #vncc-story、章號 #vncc-num、章名 #vncc-title、分隔線 #vncc-rule、引言 #vncc-preface、資訊格 .vncc-cell/.vncc-cell-k/.vncc-cell-v、開始閱讀鈕 #vncc-enter）。⚠️這張卡預設會「抄對話框當下的皮」，所以你只寫對話框它也會跟著變；要單獨設計它，對 #vncc-box 的宣告一律加 !important 才蓋得過去。版型維持置中單欄，只重新設計外觀。
 
@@ -1179,6 +1180,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 #speaker-name{position:absolute;top:-18px;left:26px;background:var(--vn-name-bg,#050505);border:1px solid var(--gold);color:var(--name-color);font-family:var(--font-classic);font-size:1rem;padding:5px 22px;display:inline-block;letter-spacing:2px;z-index:12;box-shadow:0 5px 15px rgba(0,0,0,0.8);border-radius:2px;}
 .nar-mode #speaker-name{opacity:0;}
 #vn-panel-controls{position:absolute;top:-16px;right:15px;display:flex;gap:8px;z-index:12;}
+#vn-more-menu{display:none;position:absolute;right:0;bottom:calc(100% + 8px);flex-direction:column;gap:6px;z-index:14;}
+#vn-more-menu.show{display:flex;}
+#vn-more-menu .vn-panel-btn{justify-content:flex-end;min-width:96px;}
 .vn-panel-btn{background:#0a0a0c;border:1px solid rgba(255,255,255,0.2);color:#aaa;padding:0 13px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.7rem;font-family:var(--font-sans);border-radius:4px;letter-spacing:1px;}
 .vn-panel-btn.active{background:rgba(212,175,55,0.1);color:var(--gold);border-color:var(--gold);}
 #dialogue-text{font-family:var(--font-classic);font-size:1.05rem;line-height:1.75;letter-spacing:1px;color:var(--text-color);font-weight:300;}
@@ -1238,7 +1242,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 </div>
 </div>
 <div id="text-panel-wrapper">
-<div id="vn-panel-controls"><div class="vn-panel-btn">SKIP</div><div class="vn-panel-btn">LOG</div><div class="vn-panel-btn">AUTO</div></div>
+<div id="vn-panel-controls"><div class="vn-panel-btn">LOG</div><div class="vn-panel-btn">SKIP</div><div class="vn-panel-btn">☰</div>
+<div id="vn-more-menu"><div class="vn-panel-btn">COT</div><div class="vn-panel-btn">CTX</div></div></div>
 <div id="text-panel" class="${card ? 'nar-mode' : m}">
 <div id="speaker-name">角色</div>
 <div id="dialogue-text">範例對白，用來預覽主題的字體、顏色與框線。<em>斜體強調</em>與<strong>粗體重點</strong>也會跟著套用。</div>
@@ -1339,7 +1344,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     //   打回文件流、整排疊到畫面中間（Rae 實機撞過三顆功能鍵飄到對話框上面）。
     //   這種是硬約束，講不聽就直接剝掉——留著它畫面一定壞。
     const VTH_LOCKED = ['#btn-home', '#btn-settings', '#btn-phone', '#top-badge', '#stream-scene-row',
-        '#speaker-name', '#vn-panel-controls', '.vn-panel-btn', '#text-panel-wrapper'];
+        '#speaker-name', '#vn-panel-controls', '#vn-more-menu', '.vn-panel-btn', '#text-panel-wrapper'];
     const VTH_LOCK_PROPS = /(^|;)\s*(position|top|left|right|bottom|display|float|flex(?:-[a-z]+)?)\s*:[^;}]*/gi;
     function _vthStripLayout(css) {
         let hit = 0;

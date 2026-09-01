@@ -1751,7 +1751,12 @@
             } finally { this._imgScanEnd(); }
         },
 
-        handlePanelClick: function() { if (this.isSkip) this.toggleSkip(); this.next(); },
+        // 🍔 浮窗開著時，點對話框只把它收起來，不推進劇情（不然點一下就跳句、選單也沒了）
+        handlePanelClick: function() {
+            if (this.closeMore()) return;
+            if (this.isSkip) this.toggleSkip();
+            this.next();
+        },
 
         playSFX: function(sfxId) {
             // ⚡ fx- 開頭 = 畫面特效（AI 偶爾會塞進尾格 SFX 欄）→ 轉交 OS_FX，別當音效檔去 404
@@ -2926,6 +2931,33 @@
 
         /* --- Skip / Log --- */
         checkAutoNext: function() { if (this.isSkip) this._autoTimer = setTimeout(() => this.next(), this.skipDelay); },
+        /* --- 🍔 其他功能（COT / CTX / ↺TTS 收在這裡；手機上五顆橫排會擠成一團）--- */
+        toggleMore: function() {
+            const menu = document.getElementById('vn-more-menu');
+            const btn = document.getElementById('vn-btn-more');
+            if (!menu) return;
+            const open = menu.classList.toggle('show');
+            if (btn) btn.classList.toggle('active', open);
+            // 點畫面上別的地方也要收：VN 只有對話框接點擊，點背景不會走 handlePanelClick
+            if (open) {
+                if (this._moreAway) document.removeEventListener('click', this._moreAway, true);
+                this._moreAway = (ev) => {
+                    if (ev.target.closest && ev.target.closest('#vn-more-menu, #vn-btn-more')) return;
+                    this.closeMore();
+                };
+                setTimeout(() => document.addEventListener('click', this._moreAway, true), 0);
+            }
+        },
+        // 回傳「剛剛真的收了一個開著的選單」，給 handlePanelClick 判斷要不要吃掉這一下點擊
+        closeMore: function() {
+            const menu = document.getElementById('vn-more-menu');
+            if (!menu || !menu.classList.contains('show')) return false;
+            menu.classList.remove('show');
+            const btn = document.getElementById('vn-btn-more');
+            if (btn) btn.classList.remove('active');
+            if (this._moreAway) { document.removeEventListener('click', this._moreAway, true); this._moreAway = null; }
+            return true;
+        },
         toggleCtx: function() {
             const popup = document.getElementById('vn-ctx-popup');
             const btn   = document.getElementById('vn-btn-ctx');

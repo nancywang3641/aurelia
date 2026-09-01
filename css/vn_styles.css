@@ -1219,6 +1219,15 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         /* --- 面板右上角控制按鈕 (無括號, 俐落風) --- */
         #vn-panel-controls { position: absolute; top: -16px; right: 15px; display: flex; gap: 8px; z-index: 12; }
+        /* 🍔 其他功能：往「上」開，不往下——往下會蓋住正在讀的那句話 */
+        #vn-more-menu {
+            display: none; position: absolute; right: 0; bottom: calc(100% + 8px);
+            flex-direction: column; gap: 6px; z-index: 14;
+        }
+        #vn-more-menu.show { display: flex; }
+        /* 浮窗裡的鈕跟外面同一款(主題只要顧 .vn-panel-btn)，只是改成整排靠右對齊 */
+        #vn-more-menu .vn-panel-btn { justify-content: flex-end; min-width: 96px; }
+        #vn-btn-more.active { color: var(--gold); border-color: var(--gold); }
         .vn-panel-btn { background: #0a0a0c; border: 1px solid rgba(255,255,255,0.2); color: #aaa; padding: 0 15px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; font-size: 0.8rem; font-family: var(--font-sans); border-radius: 4px; letter-spacing: 1px; }
         .vn-panel-btn:hover { color: var(--gold); border-color: var(--gold); }
         .vn-panel-btn.active { background: rgba(212,175,55,0.1); color: var(--gold); border-color: var(--gold); }
