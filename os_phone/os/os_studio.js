@@ -1039,11 +1039,16 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 先輸出一段 <版面骨架>…</版面骨架>，60~90 字，講清楚四件事：這次的對話框是什麼實體物件、它的邊界是怎麼來的、左右內距哪一側寬而那一側被什麼佔住、三態靠什麼結構差異分開。想過跟寫下來是兩回事，寫下來才會照著做。寫完才開始寫 CSS。
 
 【骨架 — 這一區是關係、不是建議，每一條都要能在你寫的 CSS 裡驗出來】
-- 對話框的輪廓至少有一條邊界不是水平也不是垂直。
-- 左右內距不可以相等，寬的那側至少是窄側的 1.6 倍，而且那一側要被東西佔住，不能是空白。
+- 對話框的輪廓至少有一條邊界不是水平也不是垂直。做法是把那個形狀畫在 #text-panel::before 的底板上、或用漸層／border-image 畫出邊界——**不要裁 #text-panel 本身**（見下面那條）。
+- 左右內距不可以相等，寬的那側至少是窄側的 1.6 倍，而且那一側要被東西佔住，不能是空白。佔用物的寬度不超過對話框寬度的一成，而且不可以壓在文字上：它是骨架的一部分，不是來跟內文搶地方的。
 - 三態的差別不可以只有顏色：至少一態的輪廓、或某一條邊的厚度，跟另外兩態差三倍以上。
 - 名牌跟對話框的接合方式要選定一種並貫徹到底：嵌進框內、掛在框外、或切進框上的缺口。
 - 這一區不給例外、不給「不是非這樣不可」。長相隨你，形狀關係照這裡走。
+
+【骨架的護欄 — 比骨架本身更優先，違反了整份就算壞的】
+- #text-panel「本身」不准 clip-path，也不准 overflow:hidden。名牌是它的子元素、而且刻意浮在框的上緣外面，框一被裁，名牌就跟著被切掉半個。造型一律畫在偽元素底板上，框本身保持完整。
+- 頂部鈕（返回／設定／應用）與控制鈕（SKIP／LOG／AUTO）上的字一律維持單行。改完 padding 或字級自己檢查一次：字被擠成直排、或被截掉，就是壞的。
+- 內文的可用寬度不可以被裝飾吃掉：對話框內、文字實際能佔的寬度至少要有整個框的八成。
 
 【最重要的鐵則 — 配件一律不准移動】
 - 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
@@ -1068,7 +1073,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 2. 「絕對不要」對 #game-char / #game-char-container（角色立繪）或 #game-bg（全螢幕背景圖層，會被劇情背景圖蓋掉、改了也看不到）寫任何樣式——它們不歸主題管。
 3. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條。
 4. #dialogue-text（含三態）一律保持預設的「靠左」對齊，「絕對不要」設 text-align:center 或任何置中——劇情有逐字打字機效果，置中會讓字從中間往兩邊跑，既難看又難讀。
-5. 輸出前自檢一次：把你的設計想像疊在一張明亮、雜亂的背景圖上——文字一眼可讀嗎？有沒有元素跑出畫面或互相遮住？有沒有不小心把內文置中？有問題就修好再輸出。
+5. 輸出前自檢一次：把你的設計想像疊在一張明亮、雜亂的背景圖上——文字一眼可讀嗎？有沒有元素跑出畫面或互相遮住？有沒有不小心把內文置中？另外逐項確認：#text-panel 身上有沒有 clip-path 或 overflow:hidden（有就是名牌會被切掉）？頂部鈕與控制鈕的字還是單行嗎？內文的可用寬度還有八成嗎？有問題就修好再輸出。
 6. 先輸出 <版面骨架>…</版面骨架>，接著才是 CSS，CSS 用 \`\`\`css 包起來。骨架那段之外不要別的解釋文字。
 用戶想要的風格：`;
 
@@ -1234,6 +1239,22 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const used = [...new Set((t.match(/var\(\s*--[\w-]+/g) || []).map(x => x.replace(/var\(\s*/, '')))];
         const def = new Set((t.match(/--[\w-]+\s*:/g) || []).map(x => x.replace(/\s*:$/, '').trim()));
         return used.filter(v => !def.has(v) && VTH_BASE_VARS.indexOf(v) < 0);
+    }
+
+    // 會把配件切掉的寫法：光靠 prompt 講不夠，套用時直接掃出來講給她聽。
+    //   名牌 #speaker-name 是 #text-panel 的子元素、而且刻意浮在框的上緣外面，
+    //   框上只要有 clip-path 或 overflow:hidden，名牌就被切掉半個（Rae 實機撞過）。
+    function _vthRisky(css) {
+        const out = [];
+        const re = /(?:^|\})\s*([^{}]*#text-panel[^{},]*)\{([^}]*)\}/g;
+        let m;
+        while ((m = re.exec(String(css || '')))) {
+            const sel = m[1], body = m[2];
+            if (/::\s*(before|after)/.test(sel)) continue;   // 畫在偽元素底板上是對的做法，不算
+            if (/clip-path\s*:/i.test(body) && !/clip-path\s*:\s*none/i.test(body)) out.push('對話框本身用了 clip-path');
+            if (/overflow\s*:\s*hidden/i.test(body)) out.push('對話框本身用了 overflow:hidden');
+        }
+        return [...new Set(out)];
     }
 
     // 對話紀錄與版本備份都按世界分開存（改 A 世界的主題不該影響 B 世界）
@@ -1517,6 +1538,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 if (newCss) {
                     const miss = _vthMissingVars(newCss);
                     if (miss.length) warn.push('（這份用到 ' + miss.slice(0, 4).join('、') + ' 卻沒有定義，那幾處的顏色或字體會失效。跟他說「補上變數定義」就好。）');
+                    const risky = _vthRisky(newCss);
+                    if (risky.length) warn.push('（' + risky.join('、') + '——名牌浮在框外，會被切掉半個。跟他說「造型改畫在 #text-panel::before 的底板上，框本身不要裁」。）');
                 }
                 const say = [got.note, newCss ? '' : null, warn.join('\n')].filter(x => x).join('\n')
                     || (newCss ? '好了，右邊看看。' : raw.trim());
