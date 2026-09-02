@@ -563,6 +563,22 @@
 .lstage-hotspot.hs-workshop:hover .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
 .lstage-hotspot.hs-workshop .lstage-hotspot-chip i { color:#ffd98a; font-size:11px; }
 
+/* 🏪 404 房的熱點（圓桌＝黑市；電腦桌＝之後的混沌片場）：
+   預設熱點是科幻藍，404 整間是螢光綠終端機皮 → 換一套綠的。
+   還沒有描邊圖（--hs-hover-img）＝先用綠框；Rae 畫好沿家具輪廓的圖再加上 hoverImg，
+   規矩同占卜桌：中間必須透明，不然熱點在 z:1500 會蓋掉桌上的東西跟走到桌前的小人。 */
+.lstage-hotspot.hs-404 { padding-bottom:16px; }
+.lstage-hotspot.hs-404:hover {
+  background:var(--hs-hover-img, rgba(0,255,120,.10)) center / 100% 100% no-repeat;
+  box-shadow:0 0 0 2px rgba(0,255,120,.55) inset, 0 0 18px rgba(0,255,120,.25); }
+.lstage-hotspot.hs-404 .lstage-hotspot-chip {
+  background:rgba(4,20,10,.86); color:#8effb8; border:1px solid rgba(0,255,120,.45);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(0,0,0,.6);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-404:hover .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-404 .lstage-hotspot-chip i { color:#00cc33; font-size:11px; }
+
 .lstage-wswin { position:absolute; right:max(78px,calc(50% - 660px)); top:50%; transform:translateY(-50%);
   z-index:3350; width:min(920px,72%); height:min(680px,calc(100% - 130px));
   transition:left .22s ease, width .22s ease, height .22s ease; }

@@ -143,6 +143,14 @@
             walls: [],
             doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
+            // 🏪 圓桌＝黑市攤位（點桌子開黑市面板；走近柴郡是純聊天，兩件事分開＝占卜小屋那條規則）。
+            //    obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上，不用回來改座標。
+            // 🖥 混沌片場(CHAOS_DIRECTOR.exe)的入場之後掛在電腦桌上，家具做好再補一顆：
+            //    { obj: 'lobby_404_obj_desk', label: '混沌片場', icon: 'fa-tv', open: 'chaos', cls: 'hs-404' }
+            //    在那之前它沒有入口（原本掛在「禁庫」上＝佔掉共用的視差入場規劃窗口，已還回去）。
+            hotspots: [
+                { obj: 'lobby_404_obj_table', label: '黑市', icon: 'fa-store', open: 'store', cls: 'hs-404' },
+            ],
         },
         exchange: {   // 🏦 交易所：純白大廳左門進的一間房；白兔先生站櫃台，點他開買房面板（家具粗擺，擺設模式可拖）
             base: 'lobby_exchange_base_v2.png',   // v2=Rae 修正版（換檔名防快取）
@@ -1290,14 +1298,14 @@
 
     // ── 停靠面板型 NPC：走近他們是為了「講話」或「辦事」，桌機兩件事並排放得下，手機放不下 ──
     // win＝這個面板的浮窗選擇器。有寫的是右側停靠窗（左邊空著），面板態把立繪留下來，
-    //   跟占卜／造物工坊同一套長相；沒寫的（黑市）是蓋滿畫面的 overlay，留了人也看不到。
+    //   跟占卜／造物工坊同一套長相。
     const PANEL_OF = {
         alice:  { label: '世界門',   icon: 'fa-globe',   win: '.wg-win',     open: () => window.OS_WORLDGATE?.openGate?.() },
         rabbit: { label: '交易所',   icon: 'fa-house',   win: '.os-pt-dock', open: () => window.OS_PT?.openExchange?.() },
         ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
-        cheshire: { label: '黑市', icon: 'fa-store', open: () => window.VoidPanels?.openStore?.() },   // 🏪 黑市攤位在他身上（手機 app 那個門 2026-08-25 退役）
         // 🔮 紫薇沒有面板鈕：走近她＝純聊天，占卜要點桌子（Rae 2026-08-21 定案）。
         //    兩件事分開才不會「面板裡在解牌、底下對話框也在講話」。
+        // 🏪 柴郡同上（Rae 2026-09-02 定案）：走近他＝純聊天，黑市改點 404 房那張圓桌。
     };
     function _panelFor(npc) {
         const p = npc && PANEL_OF[npc.key];
@@ -1365,6 +1373,7 @@
         _closeTarotPanel();   // 🔮 開聊＝收掉占卜面板：同一個人不能一邊在面板裡解牌、一邊在底下對話框講話
         _closeWorkshopPanel();   // 🎩 同上：開聊＝收掉造物工坊面板
         if (S.theater && (npc === S.theater.a || npc === S.theater.b)) window.LobbyTheater?.end();   // 🎭 跟配對當事人開聊→收掉配對（清泡泡+解凍）免凍結卡死；跟旁人聊不打斷等待中的小劇場
+        _closeStorePanel();   // 🏪 同上：開聊＝收掉黑市（黑市改掛在圓桌上，不再跟著柴郡走）
         S.talkTarget = npc;
         S.npcs.forEach(n => { n.hint.style.display = 'none'; });
         const tagSpan = document.querySelector('#iris-name-tag span');
@@ -1396,7 +1405,7 @@
         try { window.OS_CAFE?.closeWorkshop?.(); } catch (e) {}   // 離開瀅瀅→收起書咖櫃檯
         try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {}   // 離開愛麗絲→收起世界門
         try { window.OS_WORLDGATE?.closeMeet?.(); } catch (e) {}   // 離開旅人→收起組隊卡(身分卡不動,右鍵開的可獨立看)
-        try { window.VoidPanels?.closeStore?.(); } catch (e) {}   // 離開柴郡→收起黑市
+        // 🏪 黑市不在這裡收：它已經不是柴郡的面板，改掛在圓桌熱點上，關窗走 _winClosers（離場/開別的窗都會收）
     }
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {
@@ -1949,6 +1958,17 @@
         else box.innerHTML = '<div class="lws-fail">造物工坊面板載入失敗</div>';
     }
 
+    // ── 🏪 黑市（404 房點圓桌）：面板本體是蓋滿畫面的 overlay（panels.js 的 store-panel-overlay），
+    //    這裡只負責開關與互斥圈。跟占卜／造物工坊的差別是它蓋滿畫面＝留立繪也看不到，所以不留人。
+    function _closeStorePanel() { try { window.VoidPanels?.closeStore?.(); } catch (e) {} }
+    function _openStorePanel() {
+        _closeWins();
+        endTalk();      // 正在跟柴郡聊 → 結束（同占卜桌那條：辦事跟講話不同時發生）
+        hideDialog();   // 沒在聊但框還浮著 → 也收掉
+        try { window.VoidPanels?.openStore?.(); }
+        catch (e) { console.warn('[LobbyStage] 黑市面板開啟失敗', e); }
+    }
+
     // ── ⚙️ 大廳設置小面板（舞台上，仿裝扮室）──
     function _closeLobbySettings() { S.setEl?.remove(); S.setEl = null; }
     function _openLobbySettings() {
@@ -2185,6 +2205,8 @@
     const HOTSPOT_ACTIONS = {
         tarot: () => _openTarotPanel(),
         workshop: () => _openWorkshopPanel(),
+        store: () => _openStorePanel(),
+        chaos: () => { try { window.OS_CHAOS?.openModal?.(); } catch (e) { console.warn('[LobbyStage] 混沌片場沒載到', e); } },
     };
     function _mountHotspots() {
         (SCENES[S.scene].hotspots || []).forEach(hs => {
@@ -2484,7 +2506,7 @@
     // ── 🔌 拆檔橋＋窗口互斥登記制 ──
     //    子模組（lobby_theater.js…）經 window.LobbyStage._b 借核心狀態/工具，載入順序=lobby_stage 先。
     //    各小窗把自己的 close 函式 regWin() 進互斥圈；誰要開窗先 closeWins() 全關（含自己的舊窗）。
-    const _winClosers = [_closeLobbySettings];   // 裝扮室三小窗在 lobby_dress.js 自己 regWin
+    const _winClosers = [_closeLobbySettings, _closeStorePanel];   // 裝扮室三小窗在 lobby_dress.js 自己 regWin
     function _regWin(fn) { _winClosers.push(fn); return fn; }
     function _closeWins() { _winClosers.forEach(fn => { try { fn(); } catch (e) {} }); }
 

@@ -912,30 +912,27 @@ const IRIS_IDLE = [
             const questBtn = tab.querySelector('#void-quest-btn');
             const bookshelfOverlay = tab.querySelector('#qb-bookshelf-overlay');
             const closeBookshelfBtn = tab.querySelector('#close-bookshelf-btn');
+            // 🚨 這顆鈕（藏書／404 皮叫「禁庫」）是共用的視差入場規劃窗口：快速把其他角色卡的開場白
+            //    融進來的那個區塊。它在哪個房間都是同一件事，不分岔（Rae 2026-09-02）。
+            //    混沌片場(CHAOS_DIRECTOR.exe)曾經佔著 404 這條分支＝把共用窗口換掉了，已經拿掉；
+            //    它之後掛在 404 房的電腦桌熱點上（見 lobby_stage.js room404.hotspots 的註記）。
             if (questBtn && bookshelfOverlay) {
                 questBtn.onclick = () => {
-                    if (is404Room) {
-                        // 404 房間：直接開啟柴郡混沌片場
-                        if (window.OS_CHAOS && typeof window.OS_CHAOS.openModal === 'function') {
-                            window.OS_CHAOS.openModal();
-                        } else {
-                            playIrisSequence(`[Char|柴郡|glitch|*(發出惱人的嗶嗶聲)* 混沌引擎故障了，不關我的事。]`);
+                    const isStandalone = window.OS_API?.isStandalone?.() ?? false;
+                    if (!isStandalone) {
+                        // 酒館模式：直接開 VN panel 並觸發故事提取
+                        if (window.AureliaControlCenter && typeof window.AureliaControlCenter.showVnPanel === 'function') {
+                            window.AureliaControlCenter.showVnPanel('story');
                         }
                     } else {
-                        const isStandalone = window.OS_API?.isStandalone?.() ?? false;
-                        if (!isStandalone) {
-                            // 酒館模式：直接開 VN panel 並觸發故事提取
-                            if (window.AureliaControlCenter && typeof window.AureliaControlCenter.showVnPanel === 'function') {
-                                window.AureliaControlCenter.showVnPanel('story');
-                            }
-                        } else {
-                            // 獨立模式：開書架
-                            const isOpening = bookshelfOverlay.style.display === 'none';
-                            bookshelfOverlay.style.display = isOpening ? 'flex' : 'none';
-                            if (isOpening) {
-                                window.QbBookshelf?.render();
-                                playIrisSequence(`[Char|瀅瀅|smile|「想幫我搜集什麼樣的故事素材？請從書架上挑選一本書吧！」]`);
-                            }
+                        // 獨立模式：開書架
+                        const isOpening = bookshelfOverlay.style.display === 'none';
+                        bookshelfOverlay.style.display = isOpening ? 'flex' : 'none';
+                        if (isOpening) {
+                            window.QbBookshelf?.render();
+                            playIrisSequence(`[Char|${is404Room ? '柴郡' : '瀅瀅'}|${is404Room ? 'smirk' : 'smile'}|${is404Room
+                                ? '「翻吧。別人的開場白而已，又不會咬人。」'
+                                : '「想幫我搜集什麼樣的故事素材？請從書架上挑選一本書吧！」'}]`);
                         }
                     }
                 };
