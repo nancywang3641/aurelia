@@ -143,11 +143,8 @@
             walls: [],
             doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
-            // 🏪 圓桌＝黑市攤位（點桌子開黑市面板；走近柴郡是純聊天，兩件事分開＝占卜小屋那條規則）。
-            //    obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上，不用回來改座標。
-            // 🖥 混沌片場(CHAOS_DIRECTOR.exe)的入場之後掛在電腦桌上，家具做好再補一顆：
-            //    { obj: 'lobby_404_obj_desk', label: '混沌片場', icon: 'fa-tv', open: 'chaos', cls: 'hs-404' }
-            //    在那之前它沒有入口（原本掛在「禁庫」上＝佔掉共用的視差入場規劃窗口，已還回去）。
+            // 🏪 圓桌＝黑市攤位（點桌子開黑市面板）。obj 讓熱點跟著桌子走：擺設模式挪桌子，
+            //    熱點自己跟上，不用回來改座標。混沌片場則掛在柴郡身上（走近他→岔路，見 PANEL_OF）。
             hotspots: [
                 { obj: 'lobby_404_obj_table', label: '黑市', icon: 'fa-store', open: 'store', cls: 'hs-404' },
             ],
@@ -1303,9 +1300,12 @@
         alice:  { label: '世界門',   icon: 'fa-globe',   win: '.wg-win',     open: () => window.OS_WORLDGATE?.openGate?.() },
         rabbit: { label: '交易所',   icon: 'fa-house',   win: '.os-pt-dock', open: () => window.OS_PT?.openExchange?.() },
         ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
+        // 🎬 柴郡＝混沌片場（他是那台導演機的主人）。窗位與規矩照世界門那扇：右側停靠、左邊留立繪。
+        //    他身上原本掛的是黑市，2026-09-02 黑市改點 404 房的圓桌，這個位置讓給片場。
+        cheshire: { label: '混沌片場', icon: 'fa-clapperboard', win: '#chaos-modal-root.chaos-dock',
+                    open: () => window.OS_CHAOS?.openModal?.() },
         // 🔮 紫薇沒有面板鈕：走近她＝純聊天，占卜要點桌子（Rae 2026-08-21 定案）。
         //    兩件事分開才不會「面板裡在解牌、底下對話框也在講話」。
-        // 🏪 柴郡同上（Rae 2026-09-02 定案）：走近他＝純聊天，黑市改點 404 房那張圓桌。
     };
     function _panelFor(npc) {
         const p = npc && PANEL_OF[npc.key];
@@ -1405,6 +1405,7 @@
         try { window.OS_CAFE?.closeWorkshop?.(); } catch (e) {}   // 離開瀅瀅→收起書咖櫃檯
         try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {}   // 離開愛麗絲→收起世界門
         try { window.OS_WORLDGATE?.closeMeet?.(); } catch (e) {}   // 離開旅人→收起組隊卡(身分卡不動,右鍵開的可獨立看)
+        try { window.OS_CHAOS?.closeModal?.(); } catch (e) {}   // 離開柴郡→收起混沌片場
         // 🏪 黑市不在這裡收：它已經不是柴郡的面板，改掛在圓桌熱點上，關窗走 _winClosers（離場/開別的窗都會收）
     }
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
@@ -2206,7 +2207,6 @@
         tarot: () => _openTarotPanel(),
         workshop: () => _openWorkshopPanel(),
         store: () => _openStorePanel(),
-        chaos: () => { try { window.OS_CHAOS?.openModal?.(); } catch (e) { console.warn('[LobbyStage] 混沌片場沒載到', e); } },
     };
     function _mountHotspots() {
         (SCENES[S.scene].hotspots || []).forEach(hs => {

@@ -324,14 +324,16 @@
    照世界門那條成例(.lobby-left:has(.wg-win.wgbp) .lstage-talk-portrait) 抬上來。
    立繪本來就 pointer-events:none，抬高不會擋到面板的點擊。 */
 .lobby-left:has(.lstage-tarotwin) .lstage-talk-portrait { z-index:3400; }
+.lobby-left:has(#chaos-modal-root.chaos-dock.active) .lstage-talk-portrait { z-index:3400; }
 /* 對話框收起時立繪原本靠 bottom:128px 讓開白框；白框收了就讓她站回地面 */
-/* 🧍 面板態（對話框收起、人留著）的立繪定位。占卜／造物工坊／世界門／書咖櫃檯／交易所
-   五扇窗都是右側停靠、左邊空著給立繪，長相一致 → 同一條規則帶著走，別各寫各的會漂。
+/* 🧍 面板態（對話框收起、人留著）的立繪定位。占卜／造物工坊／世界門／書咖櫃檯／交易所／混沌片場
+   六扇窗都是右側停靠、左邊空著給立繪，長相一致 → 同一條規則帶著走，別各寫各的會漂。
    黑市不在裡面：那是蓋滿畫面的 overlay，沒有留人的位置。 */
 .lobby-left.lstage-dlg-hidden:has(.lstage-tarotwin) .lstage-talk-portrait,
 .lobby-left.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait,
 .lobby-left.lstage-dlg-hidden:has(.wg-win) .lstage-talk-portrait,
 .lobby-left.lstage-dlg-hidden:has(.oc-win) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(#chaos-modal-root.chaos-dock.active) .lstage-talk-portrait,
 .lobby-left.lstage-dlg-hidden:has(.os-pt-dock) .lstage-talk-portrait { bottom:0; height:82%; }
 
 /* 🔮 占卜桌熱點：

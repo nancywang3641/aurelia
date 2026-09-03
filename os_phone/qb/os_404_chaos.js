@@ -136,16 +136,26 @@
     `;
 
     // === 4. 核心邏輯 ===
+    // 面板要掛在哪：大廳舞台上有 .lobby-left 就掛那裡＝右側停靠窗，左邊留給柴郡的立繪
+    //   （跟世界門同一個位置與規矩，見 lobby_stage.js 的 PANEL_OF）。
+    //   沒有 .lobby-left（手機 OS 那條路）才回到 #aurelia-home-tab 當蓋滿畫面的 overlay。
+    function _host() {
+        return document.querySelector('.lobby-left')
+            || document.getElementById('aurelia-home-tab')
+            || document.body;
+    }
     function init() {
-        if (!document.getElementById('chaos-modal-root')) {
-            const homeTab = document.getElementById('aurelia-home-tab');
-            const container = homeTab || document.body;
-            if (homeTab) homeTab.style.position = 'relative';
-            const root = document.createElement('div');
+        const host = _host();
+        let root = document.getElementById('chaos-modal-root');
+        if (!root) {
+            root = document.createElement('div');
             root.id = 'chaos-modal-root';
             root.innerHTML = htmlTemplate;
-            container.appendChild(root);
         }
+        // 換入口＝搬過去，不重建：已經勾好的任務跟打好的字留著
+        if (root.parentElement !== host) host.appendChild(root);
+        if (host.id === 'aurelia-home-tab') host.style.position = 'relative';
+        root.classList.toggle('chaos-dock', host.classList.contains('lobby-left'));
         renderLists();
     }
 
@@ -216,12 +226,16 @@
     function openModal() {
         init();
         const root = document.getElementById('chaos-modal-root');
-        if (root) root.classList.add('active');
+        if (!root) return;
+        root.classList.add('active');
+        // 停靠態的手機版位由 .lobby-left.void-dock-open 那組給（同世界門／交易所／占卜）
+        if (root.classList.contains('chaos-dock')) root.parentElement?.classList.add('void-dock-open');
     }
 
     function closeModal() {
         const root = document.getElementById('chaos-modal-root');
         if (root) root.classList.remove('active');
+        try { document.querySelector('.lobby-left')?.classList.remove('void-dock-open'); } catch (e) {}
     }
 
     // === 5. AI API 極速合併生成 ===
