@@ -107,3 +107,20 @@
         .btn-gen-chaos { background: #003344; color: #00e5ff; border-color: #0099bb; }
         .btn-gen-chaos:hover:not(:disabled) { background: #005577; border-color: #00e5ff; box-shadow: 0 0 8px rgba(0,229,255,0.4); }
         .btn-random:disabled, .btn-gen-chaos:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* =========================================================
+           停靠態（大廳舞台上點柴郡進來的那條）：跟世界門同一個窗位——
+           右側靠邊、左邊空著給柴郡的立繪，不再蓋滿整個畫面。
+           位置數字直接對齊 os_worldgate.js 的 .wg-win，兩扇窗長相要一致。
+           ========================================================= */
+        #chaos-modal-root.chaos-dock {
+            position: absolute; inset: auto;
+            right: max(2.2%, calc(50% - 410px)); top: 50%; transform: translateY(-50%);
+            z-index: 3350; width: 400px; max-width: 52%;
+            height: min(680px, 80%);
+            background: none; backdrop-filter: none; display: block;
+        }
+        #chaos-modal-root.chaos-dock .chaos-box {
+            width: 100%; max-width: none; height: 100%; max-height: none;
+            border-radius: 10px;
+        }
