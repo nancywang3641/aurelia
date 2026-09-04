@@ -658,8 +658,11 @@ const VN_TTS_Panel = {
     _refPlayer: null, // 用來裝載試聽聲音的容器
     _savedListScroll: 0, // 👈 新增這行，用來記住高度
 
-    // 目前是哪個引擎：選過就用選過的，沒選過就看實際有哪種音色
+    // 目前是哪個引擎。🚨 唯一真相在 VN_TTS：面板、控制室、播放端看的必須是同一個值，
+    //   面板自己記一份就會出現「設定頁顯示 SoVITS、實際還在唸 IndexTTS」。
     _eng() {
+        const tts = this._tts();
+        if (tts && tts._eng) { this._engine = tts._eng(); return this._engine; }
         if (this._engine) return this._engine;
         const cfg = this._cfg() || {};
         if (cfg.localEngine === 'index' || cfg.localEngine === 'sovits') {
@@ -667,9 +670,7 @@ const VN_TTS_Panel = {
             return this._engine;
         }
         const models = Object.values(cfg.models || {});
-        this._engine = models.length && models.every(m => m.engine === 'index') ? 'index'
-                     : models.some(m => m.engine === 'index') && !models.some(m => m.engine !== 'index') ? 'index'
-                     : models.some(m => m.engine === 'index') ? 'index' : 'sovits';
+        this._engine = models.some(m => m.engine === 'index') && !models.some(m => m.engine !== 'index') ? 'index' : 'sovits';
         return this._engine;
     },
 
@@ -678,7 +679,9 @@ const VN_TTS_Panel = {
         this._engine = id;
         this._currentTab = 'main';
         const tts = this._tts();
-        if (tts) { tts.config.localEngine = id; tts.save(); }
+        // 🚨 走 setLocalEngine：換引擎＝換掉整套指派（VN_TTS 的 charMappings 等欄位是那一套的視窗），
+        //    順便清掉本局抽到的音與待預熱佇列。以前這裡只寫 config.localEngine，播放端根本不看。
+        if (tts) { if (tts.setLocalEngine) tts.setLocalEngine(id); else { tts.config.localEngine = id; tts.save(); } }
         this._renderNav();
         this._renderBody('main');
     },
@@ -1132,26 +1135,34 @@ const VN_TTS_Panel = {
     deleteAllModels() {
         const tts = this._tts();
         if (!tts) return;
-        const modelCount = Object.keys(tts.config.models).length;
-        
-        if (modelCount === 0) {
-            this._toast('⚠️ 已經沒有模型可以刪除了');
+        // 🚨 只清「你現在看的這個引擎」。這顆鈕以前是 models = {} 整份砍，
+        //    面板改成分引擎之後，站在 IndexTTS 那頁按下去會把 SoVITS 的音色一起帶走。
+        const eng = this._eng();
+        const label = eng === 'index' ? 'IndexTTS' : 'SoVITS';
+        const mine = Object.entries(tts.config.models || {})
+            .filter(([, m]) => ((m && m.engine === 'index') ? 'index' : 'sovits') === eng)
+            .map(([id]) => id);
+
+        if (!mine.length) {
+            this._toast(`⚠️ ${label} 這邊已經沒有模型可以刪除了`);
             return;
         }
-        
-        if (!confirm(`確定要「一鍵清空」所有 ${modelCount} 個模型嗎？\n注意：這會同時清空所有角色的語音綁定！`)) return;
-        
+
+        if (!confirm(`確定要清空 ${label} 的 ${mine.length} 個模型嗎？\n注意：這會同時清空 ${label} 這邊所有角色的語音綁定。\n另一個引擎的音色與綁定不受影響。`)) return;
+
         // 記住當下高度
         const body = document.getElementById(this._bodyId);
         const currentScroll = body ? body.scrollTop : 0;
 
-        // 核心：清空模型與關聯數據
-        tts.config.models = {};
+        // 核心：清空這個引擎的模型與它那一套指派（charMappings/npcCategories 都是現行引擎那一套的視窗）
+        mine.forEach(id => { delete tts.config.models[id]; });
         tts.config.charMappings = {};
+        tts.config.systemMappings = {};
+        tts.config.narratorModel = '';
         tts.config.npcCategories.forEach(cat => {
             cat.modelIds = [];
         });
-        
+
         tts.save();
         this._renderBody('models');
         
@@ -1161,7 +1172,7 @@ const VN_TTS_Panel = {
             if (b) b.scrollTop = currentScroll;
         });
         
-        this._toast('✓ 所有模型已清空');
+        this._toast(`✓ ${label} 的模型已清空`);
     },
 
     // ── 🖥️ 系統語音對應 ────────────────────────────────────────────────

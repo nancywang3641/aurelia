@@ -178,6 +178,13 @@
         async _switchEngine(engine, container) {
             this._starting.voice = Date.now();
             await this._post('/voice?engine=' + engine);
+            // 🚨 這顆以前只叫控制塔換服務，沒告訴前端一聲：服務換成 SoVITS 之後，
+            //    角色還指著另一個引擎的音色，VN_TTS 照樣去打那邊的埠，整場「服務沒開？」。
+            //    VN_TTS 每個引擎各記一套指派，切過去就是換那一套。
+            try {
+                const V = (window.parent || window).VN_TTS || window.VN_TTS;
+                V?.setLocalEngine?.(engine);
+            } catch (e) { console.warn('[控制室] 同步語音引擎失敗', e); }
             this._tick(container);
         },
 

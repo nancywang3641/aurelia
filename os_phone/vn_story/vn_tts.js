@@ -25,6 +25,17 @@ const VN_TTS = {
         // 模型庫: id → { name, gptPath, sovitsPath, refAudioPath, refText, refLang, emotions: {...} }
         models: {},
 
+        // 現行本機引擎（'sovits' | 'index'）。顯存只夠開一套，所以本機語音是二選一。
+        //   語音設定上層那兩顆大鈕、控制室的切換、播放時挑音色，全部認這一個值。
+        //   🚨 以前只有面板讀它，播放端完全不看 → 服務換成 SoVITS 之後，角色還指著 idx_* 的音色，
+        //      VN_TTS 照樣去打 IndexTTS 的埠，整場噴「服務沒開？」。
+        localEngine: 'sovits',
+
+        // 每個引擎各記一套指派。下面 charMappings / systemMappings / npcCategories /
+        //   narratorModel / npcLocks 這五個欄位是「現行引擎那一套」的視窗（存取器，見 _setupEngineSets），
+        //   存檔只存 engineSets 這一份。換引擎＝換一整套指派，不必重指派、也不會蓋掉另一邊。
+        engineSets: null,
+
         // 角色對應: charName → modelId
         charMappings: {},
 
@@ -99,7 +110,101 @@ const VN_TTS = {
                 if (this._dedupeIndexEmotions()) this.save();
             }
         } catch (e) {}
-        console.log('[VN_TTS] 初始化, 啟用:', this.config.enabled);
+        // 🚨 一定要在 try 外面：讀檔失敗也得把存取器裝上，否則 charMappings 這些欄位會停在
+        //    預設的空物件，寫進去的東西存不到 engineSets 裡。
+        this._setupEngineSets();
+        console.log('[VN_TTS] 初始化, 啟用:', this.config.enabled, '｜引擎:', this._eng());
+    },
+
+    // ── 兩套指派（每個引擎各一套）─────────────────────────────────────────
+    //   顯存只夠開一套本機語音，所以 IndexTTS 與 SoVITS 是二選一。以前指派只有一份，
+    //   把角色改綁 IndexTTS 音色就等於把 SoVITS 那套蓋掉，換回去只剩「服務沒開？」。
+    //   現在兩套各存各的，engineSets[引擎] 底下那一份才是真資料；
+    //   config.charMappings 這些同名欄位是「現行引擎那一套」的存取器，所有既有讀寫都不用改。
+    _ENGINE_SCOPED: ['charMappings', 'systemMappings', 'npcCategories', 'narratorModel', 'npcLocks'],
+    _emptySet() { return { charMappings: {}, systemMappings: {}, npcCategories: [], narratorModel: '', npcLocks: {} }; },
+    _eng() { return this.config.localEngine === 'index' ? 'index' : 'sovits'; },
+    _engineOfModel(id) {
+        const m = id && this.config.models && this.config.models[id];
+        return (m && m.engine === 'index') ? 'index' : 'sovits';
+    },
+    _set() {
+        const C = this.config;
+        if (!C.engineSets) C.engineSets = { index: this._emptySet(), sovits: this._emptySet() };
+        const e = this._eng();
+        if (!C.engineSets[e]) C.engineSets[e] = this._emptySet();
+        return C.engineSets[e];
+    },
+    // 只認現行引擎的音色：指到另一套的 id 一律當作「沒有這個指派」，
+    //   免得服務已經換掉了還照著舊指派去打另一個引擎的埠。
+    _curModel(id) {
+        const m = id && this.config.models && this.config.models[id];
+        if (!m) return null;
+        return ((m.engine === 'index' ? 'index' : 'sovits') === this._eng()) ? m : null;
+    },
+    _setupEngineSets() {
+        const C = this.config;
+        // 首次升級：把原本那一份指派，依「每個 id 自己屬於哪個引擎」歸位到兩個艙裡。
+        //   一筆都不丟：對不到音色的（音色被刪過）留在 sovits 那艙，跟升級前看到的一樣。
+        if (!C.engineSets) {
+            const sets = { index: this._emptySet(), sovits: this._emptySet() };
+            const bk = (id) => this._engineOfModel(id);
+            for (const [name, mid] of Object.entries(C.charMappings || {})) if (mid) sets[bk(mid)].charMappings[name] = mid;
+            for (const [name, mid] of Object.entries(C.systemMappings || {})) if (mid) sets[bk(mid)].systemMappings[name] = mid;
+            for (const [card, locks] of Object.entries(C.npcLocks || {})) {
+                for (const [name, mid] of Object.entries(locks || {})) {
+                    if (!mid) continue;
+                    const nl = sets[bk(mid)].npcLocks;
+                    (nl[card] || (nl[card] = {}))[name] = mid;
+                }
+            }
+            // 分類本身跟引擎無關（「男_少年」是個概念），兩邊各留一份，音色各自過濾到自己那邊
+            for (const cat of (C.npcCategories || [])) {
+                for (const e of ['index', 'sovits']) {
+                    sets[e].npcCategories.push(Object.assign({}, cat, {
+                        modelIds: (cat.modelIds || []).filter(id => bk(id) === e),
+                    }));
+                }
+            }
+            if (C.narratorModel) sets[bk(C.narratorModel)].narratorModel = C.narratorModel;
+            C.engineSets = sets;
+            // 升級當下停在哪個引擎：預設 sovits，但這邊一顆 SoVITS 音色都沒有、
+            //   而 IndexTTS 有的話就停在 IndexTTS，免得一升級整頁空白（同面板原本的推斷）。
+            const all = Object.values(C.models || {});
+            if (this._eng() === 'sovits'
+                && !all.some(m => m && m.engine !== 'index')
+                && all.some(m => m && m.engine === 'index')) C.localEngine = 'index';
+            console.log('[VN_TTS] 指派已分成兩套：SoVITS',
+                Object.keys(sets.sovits.charMappings).length, '個角色 /',
+                sets.sovits.npcCategories.reduce((n, c) => n + (c.modelIds || []).length, 0), '顆NPC音；IndexTTS',
+                Object.keys(sets.index.charMappings).length, '個角色 /',
+                sets.index.npcCategories.reduce((n, c) => n + (c.modelIds || []).length, 0), '顆NPC音');
+        }
+        // 裝上存取器。enumerable:false ＝ JSON.stringify 不會把它們再存一份，
+        //   否則下次載入 Object.assign 會把「上次那個引擎的表」倒進「這次這個引擎」的艙裡。
+        this._ENGINE_SCOPED.forEach(k => {
+            try { delete C[k]; } catch (e) {}
+            try {
+                Object.defineProperty(C, k, {
+                    configurable: true, enumerable: false,
+                    get: () => this._set()[k],
+                    set: (v) => { this._set()[k] = v; },
+                });
+            } catch (e) { console.warn('[VN_TTS] 裝存取器失敗', k, e); }
+        });
+        this.save();
+    },
+    // 換引擎（語音設定上層兩顆大鈕、控制室的切換都走這裡）
+    setLocalEngine(id) {
+        const e = (id === 'index') ? 'index' : 'sovits';
+        if (this._eng() === e) return e;
+        this.config.localEngine = e;
+        this._npcSessionCache = {};   // 本局抽到的音屬於上一個引擎 → 清掉重抽
+        this._prewarmQueue = [];      // 還沒生的預熱是舊引擎的，別再送出去
+        try { this._pending.clear(); } catch (e) {}   // 那些 key 沒人會去完成它，留著會讓同一句以後預熱不到
+        this.save();
+        console.log('[VN_TTS] 引擎切到', e);
+        return e;
     },
 
     // 匯入時代每顆 index 音色都存了一份一模一樣的情緒表 → 只留一份在 indexEmoShared，
@@ -260,7 +365,7 @@ const VN_TTS = {
     // 從池子隨機抽一個「沒被占用」的聲音；全被占用時才退回整池（總比沒聲音好）
     _pickAvailable(modelIds, usedIds) {
         if (!modelIds || !modelIds.length) return null;
-        const valid = modelIds.filter(id => this.config.models[id]);
+        const valid = modelIds.filter(id => this._curModel(id));
         const free  = valid.filter(id => !usedIds || !usedIds.has(id));
         const pool  = free.length ? free : valid;
         if (!pool.length) return null;
@@ -281,23 +386,29 @@ const VN_TTS = {
             }
         }
 
+        // 🚨 以下每一段都走 _curModel：只認現行引擎的音色。指到另一套的（換引擎前留下的、
+        //    或本局稍早抽到的）一律當作沒有，繼續往下找，不會拿去打另一個引擎的埠。
+
         // 1. 直接對應 (最優先：你手動綁死的角色，全域、面板顯示)
         const mid = this.config.charMappings[lookupName];
-        if (mid && this.config.models[mid]) {
-            return { id: mid, ...this.config.models[mid] };
+        const midM = this._curModel(mid);
+        if (midM) {
+            return { id: mid, ...midM };
         }
 
         // 1.5 本卡 NPC 聲線鎖（立繪 save CV，按角色卡 id；換卡不算）
         const lid = this._cardLocks()[charName] || this._cardLocks()[lookupName];
-        if (lid && this.config.models[lid]) {
-            return { id: lid, ...this.config.models[lid] };
+        const lidM = this._curModel(lid);
+        if (lidM) {
+            return { id: lid, ...lidM };
         }
 
         // 2. 檢查記憶體：這個 NPC 剛剛是不是已經抽過聲音了？
         if (this._npcSessionCache[charName]) {
             const cachedId = this._npcSessionCache[charName];
-            if (this.config.models[cachedId]) {
-                return { id: cachedId, ...this.config.models[cachedId] };
+            const cachedM = this._curModel(cachedId);
+            if (cachedM) {
+                return { id: cachedId, ...cachedM };
             }
         }
 
@@ -317,9 +428,10 @@ const VN_TTS = {
 
                 if (hit && cat.modelIds && cat.modelIds.length) {
                     const rid = this._pickAvailable(cat.modelIds, _usedIds);
-                    if (rid && this.config.models[rid]) {
-                        this._npcSessionCache[charName] = rid; 
-                        return { id: rid, ...this.config.models[rid] };
+                    const ridM = this._curModel(rid);
+                    if (ridM) {
+                        this._npcSessionCache[charName] = rid;
+                        return { id: rid, ...ridM };
                     }
                 }
             }
@@ -336,12 +448,14 @@ const VN_TTS = {
             });
 
             if (hit && cat.modelIds && cat.modelIds.length) {
-                // 隨機抽一個聲音
-                const rid = cat.modelIds[Math.floor(Math.random() * cat.modelIds.length)];
-                if (this.config.models[rid]) {
+                // 隨機抽一個聲音（先濾掉不屬於現行引擎的，否則抽到舊引擎那顆就整個分類放棄）
+                const pool = cat.modelIds.filter(id => this._curModel(id));
+                const rid = pool[Math.floor(Math.random() * pool.length)];
+                const ridM = this._curModel(rid);
+                if (ridM) {
                     // 鎖定這個聲音！記在腦子裡，下次同一個名字直接用它
-                    this._npcSessionCache[charName] = rid; 
-                    return { id: rid, ...this.config.models[rid] };
+                    this._npcSessionCache[charName] = rid;
+                    return { id: rid, ...ridM };
                 }
             }
         }
@@ -542,7 +656,8 @@ const VN_TTS = {
             }
         }
         if (!mid) mid = sm[''] || sm['*'];   // 預設系統音
-        if (mid && this.config.models[mid]) return { id: mid, ...this.config.models[mid] };
+        const m = this._curModel(mid);
+        if (m) return { id: mid, ...m };
         return null;
     },
 
@@ -560,16 +675,19 @@ const VN_TTS = {
     // ── 旁白語音播放入口 ─────────────────────────────────────────────────
     //   IndexTTS / Kokoro 開了優先（獨立小服務、不碰 SoVITS GPU 佇列）；否則退 SoVITS 旁白音色（指派了才念）
     async playNarration(rawText, emotion) {
+        // 🚨 IndexTTS 旁白只在引擎是 IndexTTS 時才算數：本機二選一，服務換成 SoVITS 之後
+        //    這條還開著的話，旁白會繼續去打 8881（Kokoro／MiniMax 是另外的服務，不受影響）。
         const ic = this.config.narratorIndex || {};
-        if (ic.enabled && ic.url) return this._speakIndex(rawText);
+        if (this._eng() === 'index' && ic.enabled && ic.url) return this._speakIndex(rawText);
         const kc = this.config.narratorKokoro || {};
         if (kc.enabled && kc.url) return this._speakKokoro(rawText);
         const nm = this.config.narratorMinimax || {};
         if (nm.enabled) return this._speakMinimax(rawText);
         if (!this.config.enabled) return;
         const mid = this.config.narratorModel;
-        if (!mid || !this.config.models[mid]) return;   // 沒指派旁白音色 → 靜默（不像系統音退預設）
-        const _nm = { id: mid, ...this.config.models[mid] };
+        const midM = this._curModel(mid);
+        if (!midM) return;   // 沒指派旁白音色 → 靜默（不像系統音退預設）
+        const _nm = { id: mid, ...midM };
         const text = this._cleanForModel(_nm, rawText);
         if (!text) return;
         return this._speakWithModel(_nm, text, emotion);
