@@ -2098,7 +2098,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="push-gate hidden" id="push-gate">
                                 要從主畫面開啟才收得到——分享鈕 → 加入主畫面，再從那顆圖示進來。
                             </div>
-                            <input class="set-input" id="push-url" placeholder="橋的網址，例如 bridge.example.com">
+                            <input class="set-input" id="push-url" placeholder="橋的網址，不含 https://">
                             <input class="set-input push-key-input" id="push-key" type="password" placeholder="密鑰，跟房間設定那把一樣">
                             <div class="push-row">
                                 <div class="btn-save" id="push-on-btn">開啟通知</div>
