@@ -126,7 +126,7 @@
         /* 寬度鎖到剛好三格，寬窗才不會排成 4+2；槽高跟著視窗高縮，矮螢幕第二排才不會被牌堆壓到 */
         .tr-slots-wrapper.n6 { gap: 50px 12px; margin-top: 16px; max-width: 300px; }
         .tr-slots-wrapper.n6 .tr-slot { width: clamp(58px, 9.2vh, 76px); height: clamp(95px, 15vh, 124px); }
-        .tr-slots-wrapper.n6 .tr-card-label { font-size: 10px; bottom: -22px; }
+        .tr-slots-wrapper.n6 .tr-card-label { font-size: 10px; }
         .tr-stage.six .tr-deck-scroll { height: 130px; bottom: 60px; }
 
         .tr-slot {
@@ -201,12 +201,14 @@
         .tr-card-obj.flipped { transform: rotateY(180deg); }
         .tr-card-obj.flipped.reversed .tr-face.front { transform: rotateY(180deg) rotateZ(180deg); }
 
+        /* 寬度只比牌寬一點點、從牌底往下長：150% 寬的長牌名會蓋到隔壁那張 */
         .tr-card-label {
-            position: absolute; bottom: -25px; width: 150%; left: -25%; text-align: center;
-            font-size: 11px; color: #fff; text-shadow: 0 0 3px #000;
+            position: absolute; top: calc(100% + 4px); width: 110%; left: -5%; text-align: center;
+            font-size: 11px; line-height: 1.25; color: #fff; text-shadow: 0 0 3px #000;
             opacity: 0; transition: 0.5s; pointer-events: none;
         }
-        .tr-card-obj.flipped .tr-card-label { opacity: 1; }
+        /* 標籤掛在牌本體裡，牌翻 180 度它會跟著翻成鏡像字：翻牌後把它反向轉回來 */
+        .tr-card-obj.flipped .tr-card-label { opacity: 1; transform: rotateY(180deg); }
         .label-rev { color: var(--tr-danger) !important; }
 
         /* Reveal Button */
