@@ -116,13 +116,19 @@
         }
         .tr-btn-main:hover { filter: brightness(1.2); box-shadow: inset 0 1px 0 rgba(230,200,138,.5), 0 4px 16px rgba(0,0,0,.55), 0 0 16px rgba(168,130,60,.4); }
 
-        /* 三卡槽區域 */
+        /* 牌槽區：一張／三張一排，六張兩排三張 */
         .tr-slots-wrapper {
-            display: flex; gap: 12px; justify-content: center; align-items: center;
+            display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center;
             width: 100%; padding: 0 10px; box-sizing: border-box;
-            margin-top: 20px; z-index: 5; transition: 0.3s;
+            margin-top: 24px; z-index: 5; transition: 0.3s;
         }
-        
+        /* 六張：槽縮小，兩排之間留位給上面的位置名＋下面的牌名 */
+        /* 寬度鎖到剛好三格，寬窗才不會排成 4+2；槽高跟著視窗高縮，矮螢幕第二排才不會被牌堆壓到 */
+        .tr-slots-wrapper.n6 { gap: 50px 12px; margin-top: 16px; max-width: 300px; }
+        .tr-slots-wrapper.n6 .tr-slot { width: clamp(58px, 9.2vh, 76px); height: clamp(95px, 15vh, 124px); }
+        .tr-slots-wrapper.n6 .tr-card-label { font-size: 10px; bottom: -22px; }
+        .tr-stage.six .tr-deck-scroll { height: 130px; bottom: 60px; }
+
         .tr-slot {
             width: 110px; height: 180px;
             border: 1px dashed rgba(212, 175, 55, 0.32);
@@ -132,6 +138,20 @@
             font-size: 12px; color: rgba(230,200,138,.35); perspective: 1000px;
         }
         .tr-slot.filled { border-color: transparent; background: none; }
+        /* 位置名掛在槽上緣外面（牌名在下緣，兩邊不打架）；槽的內容被牌蓋掉也不影響 */
+        .tr-slot[data-pos]::before {
+            content: attr(data-pos); position: absolute; top: -17px; left: -20%; width: 140%;
+            text-align: center; font-size: 10px; letter-spacing: 1px; color: rgba(230,200,138,.6);
+            pointer-events: none; white-space: nowrap;
+        }
+
+        /* 紫薇看完題目那句話（攤幾張、為什麼） */
+        .tr-spread-note {
+            min-height: 16px; margin-top: 6px; padding: 0 16px; text-align: center;
+            font-size: 12px; line-height: 16px; color: rgba(240,226,196,.78); letter-spacing: 1px;
+            opacity: 0; transition: opacity .4s; z-index: 5;
+        }
+        .tr-spread-note.show { opacity: 1; }
 
         /* 橫向選牌區 */
         .tr-deck-scroll {

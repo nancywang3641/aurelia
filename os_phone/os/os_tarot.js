@@ -158,6 +158,92 @@
     }
 
     // =================================================================
+    // 2.5 牌陣：一個問題攤幾張、每張放什麼位置，由紫薇看題目決定
+    //   以前不管問什麼都是「過去/現在/未來」三張，問「他怎麼想我」也硬套時間線。
+    //   塔羅本來就是一題一陣、陣型看問題：快答一張、看走向三張、感情六張。
+    // =================================================================
+    const SPREADS = {
+        one:      { count: 1, name: '單張直覺',   positions: ['答案'],
+                    use: '是非題、今天運氣、只要一個方向的簡單問題' },
+        time:     { count: 3, name: '時間之流',   positions: ['根源', '現況', '走向'],
+                    use: '某件事會怎麼發展、會不會發生、為什麼變成這樣' },
+        action:   { count: 3, name: '處境與行動', positions: ['處境', '該做的', '結果'],
+                    use: '該不該做某件事、要不要開口、怎麼辦' },
+        choice:   { count: 3, name: '兩條路',     positions: ['選前者', '選後者', '提醒'],
+                    use: '兩個選項二選一、A還是B' },
+        relation: { count: 6, name: '關係全貌',   positions: ['你的立場', '對方的立場', '你的心裡', '對方的心裡', '卡在哪', '走向'],
+                    use: '感情、人際、對方怎麼想、我們之間會怎樣' }
+    };
+    const DEFAULT_SPREAD = 'time';
+
+    function spreadMenuText() {
+        return Object.entries(SPREADS).map(([id, s]) =>
+            `${id}：${s.name}（${s.count}張：${s.positions.join('／')}）— 適合${s.use}`).join('\n');
+    }
+
+    // 模型回的第一行要是 SPREAD=<id>，後面可以跟一句紫薇口吻的話。認不出來就回預設。
+    function parseSpreadReply(text) {
+        const m = String(text || '').match(/SPREAD\s*=\s*([a-z]+)/i);
+        const hit = !!(m && SPREADS[m[1].toLowerCase()]);
+        const id = hit ? m[1].toLowerCase() : DEFAULT_SPREAD;
+        // 代號都認不出來，後面那句話也不能信（多半是模型在自由發揮），一起丟掉
+        const note = hit ? String(text).replace(/SPREAD\s*=\s*[a-z]+/i, '').replace(/^[\s:：\-—]+/, '').trim().split('\n')[0].slice(0, 40) : '';
+        return { id, note };
+    }
+
+    async function chooseSpread(question) {
+        const messages = [{
+            role: 'system',
+            content: `你是占卜師紫薇。客人剛講了問題，你要決定攤哪個牌陣。可用的牌陣：\n${spreadMenuText()}\n\n` +
+                     `規則：問題明確講了想抽幾張或想用哪種陣，照客人的意思。感情和人際用 relation；二選一用 choice；` +
+                     `問該不該、怎麼辦用 action；問會怎樣、會不會用 time；一句話能答完的用 one。\n` +
+                     `只輸出兩行：第一行寫 SPREAD=牌陣代號；第二行用紫薇的口吻講一句話告訴客人攤幾張、為什麼，十五字以內，不加標點修飾。`
+        }, { role: 'user', content: `客人的問題：${question}` }];
+        const config = win.OS_SETTINGS ? win.OS_SETTINGS.getConfig() : {};
+        let out = '';
+        try {
+            await Promise.race([
+                new Promise((resolve, reject) => {
+                    win.OS_API.chat(messages, config, (chunk) => {
+                        if (typeof chunk === 'string' && chunk.length >= out.length && out.length > 0 && chunk.startsWith(out)) out = chunk;
+                        else out += String(chunk);
+                    }, (final) => { out = final || out; resolve(); }, reject);
+                }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 20000))
+            ]);
+        } catch (e) {
+            console.warn('[Tarot] 選牌陣失敗，退回預設三張:', e && e.message);
+            return { id: DEFAULT_SPREAD, note: '' };
+        }
+        return parseSpreadReply(out);
+    }
+
+    // 依牌陣重蓋槽位。每個槽上方標位置名（用 data-pos 讓 ::after 畫，槽的 innerHTML 被牌蓋掉也不會掉）
+    function buildSlots(count, positions) {
+        const wrap = document.getElementById('tr-slots');
+        if (!wrap) return;
+        wrap.className = 'tr-slots-wrapper n' + count;
+        const stage = document.getElementById('tr-stage');
+        if (stage) stage.classList.toggle('six', count === 6);   // 六張時牌堆矮一截，第二排才不被壓到
+        wrap.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'tr-slot';
+            slot.id = `slot-${i}`;
+            slot.textContent = String(i + 1);
+            if (positions && positions[i]) slot.dataset.pos = positions[i];
+            wrap.appendChild(slot);
+        }
+    }
+
+    function setSpreadNote(text) {
+        const el = document.getElementById('tr-spread-note');
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.toggle('show', !!text);
+    }
+
+    // =================================================================
     // 3. 邏輯狀態管理
     // =================================================================
     let STATE = {
@@ -169,10 +255,14 @@
         chatHistory: [],    
         isAnalyzing: false, 
         singleCardMode: false,
-        // 🃏 這輪已經攤在桌上的牌(三張牌陣＋之後補抽的)。selectedCards 在補抽時會被清空,
-        //    不能拿它當桌面現況——不然補抽完模型就忘了原本那三張。
-        tableCards: []
+        // 🃏 這輪已經攤在桌上的牌(牌陣＋之後補抽的)。selectedCards 在補抽時會被清空,
+        //    不能拿它當桌面現況——不然補抽完模型就忘了原本那幾張。
+        tableCards: [],
+        // 這一題用的牌陣 { id, count, name, positions }，紫薇看完題目才定
+        spread: null,
+        spreadNote: ''
     };
+    function spreadCount() { return STATE.spread ? STATE.spread.count : 3; }
 
     function initDeck() {
         let tempDeck = [...FULL_DECK_DEF];
@@ -189,6 +279,8 @@
         STATE.isRevealed = false;
         STATE.chatHistory = [];
         STATE.question = "";
+        STATE.spread = null;
+        STATE.spreadNote = '';
     }
 
     function launch(container) {
@@ -207,11 +299,12 @@
                 </div>
 
                 <div class="tr-stage" id="tr-stage">
-                    <div class="tr-slots-wrapper">
+                    <div class="tr-spread-note" id="tr-spread-note"></div>
+                    <div class="tr-slots-wrapper n3" id="tr-slots">
                         <div class="tr-slot" id="slot-0">1</div>
                         <div class="tr-slot" id="slot-1">2</div>
                         <div class="tr-slot" id="slot-2">3</div>
-                </div>
+                    </div>
 
                     <div class="tr-input-area" id="tr-input-box">
                         <div style="text-align:center; color:#aaa; font-size:12px; margin-bottom:5px;">連接命運數據庫...</div>
@@ -252,12 +345,24 @@
     }
 
     // 開始選牌
-    function startSelection() {
+    async function startSelection() {
         const input = document.getElementById('tr-question');
         if (!input.value.trim()) { alert("請輸入問題以建立連結。"); return; }
+        if (STATE.isAnalyzing) return;
         STATE.question = input.value.trim();
         document.getElementById('tr-input-box').classList.add('hidden');
-        
+
+        // 先讓紫薇看題目決定攤幾張，槽位才蓋出來；沒等到就退回三張時間之流
+        STATE.isAnalyzing = true;
+        setSpreadNote('……');
+        const picked = await chooseSpread(STATE.question);
+        STATE.isAnalyzing = false;
+        const def = SPREADS[picked.id] || SPREADS[DEFAULT_SPREAD];
+        STATE.spread = { id: picked.id, count: def.count, name: def.name, positions: def.positions.slice() };
+        STATE.spreadNote = picked.note;
+        buildSlots(def.count, def.positions);
+        setSpreadNote(picked.note || `${def.name}，${def.count}張。`);
+
         const scrollArea = document.getElementById('tr-scroll-area');
         scrollArea.innerHTML = '';
         STATE.deck.forEach((card, index) => {
@@ -285,7 +390,7 @@
         if (STATE.singleCardMode) {
             if (STATE.selectedCards.length >= 1) return;
         } else {
-            if (STATE.selectedCards.length >= 3) return;
+            if (STATE.selectedCards.length >= spreadCount()) return;
         }
         
         element.classList.add('picked');
@@ -317,20 +422,21 @@
                 if (cardObj) cardObj.classList.add('flipped');
                 setTimeout(() => { analyzeSingleCard(); }, 1000);
             }, 300);
-        } else if (!STATE.singleCardMode && STATE.selectedCards.length === 3) {
+        } else if (!STATE.singleCardMode && STATE.selectedCards.length === spreadCount()) {
             document.getElementById('tr-scroll-area').classList.remove('active');
             document.getElementById('tr-reveal-btn').classList.add('show');
         }
     }
 
-    // 揭牌 (3卡) - 執行無縫轉移
+    // 揭牌 (整個牌陣) - 執行無縫轉移
     function revealCards() {
         if (STATE.isRevealed) return;
         STATE.isRevealed = true;
         document.getElementById('tr-reveal-btn').classList.remove('show');
-        
+
         // 1. 先執行翻牌動畫 (讓用戶看到儀式)
-        [0, 1, 2].forEach((i, delay) => {
+        const n = spreadCount();
+        Array.from({ length: n }, (_, i) => i).forEach((i, delay) => {
             setTimeout(() => {
                 const slot = document.getElementById(`slot-${i}`);
                 if (slot) {
@@ -347,8 +453,8 @@
             // 顯示聊天面板
             document.getElementById('tr-panel').classList.add('active');
             // 開始分析
-            initialAnalyze(); 
-        }, 1800); // 等待翻牌動畫結束
+            initialAnalyze();
+        }, n * 500 + 300); // 等最後一張翻完（六張要三秒，不能寫死 1.8 秒）
     }
 
     // 將卡牌快照存入聊天記錄
@@ -384,13 +490,9 @@
         document.getElementById('tr-stage').classList.remove('hidden-mode');
         document.getElementById('tr-stage').classList.remove('compact');
         
-        // 3. 清空頂部舞台
-        [0, 1, 2].forEach(i => {
-             const slot = document.getElementById(`slot-${i}`);
-             slot.className = 'tr-slot'; 
-             slot.innerHTML = i + 1;     
-             slot.style.display = 'flex'; // 確保顯示
-        });
+        // 3. 清空頂部舞台：槽位重蓋成三格空位（下一題攤幾張要等紫薇看過題目）
+        buildSlots(3, null);
+        setSpreadNote('');
 
         // 4. 重置 UI 元素
         const inputBox = document.getElementById('tr-input-box');
@@ -415,6 +517,8 @@
         STATE.question = "";
         STATE.isAnalyzing = false;
         STATE.singleCardMode = false;
+        STATE.spread = null;
+        STATE.spreadNote = '';
     }
 
     function getCurrentTime() {
@@ -472,15 +576,14 @@
         renderCardsToHistory(STATE.selectedCards);
         STATE.tableCards = STATE.selectedCards.slice();
 
-        const card1 = STATE.selectedCards[0];
-        const card2 = STATE.selectedCards[1];
-        const card3 = STATE.selectedCards[2];
-
+        const sp = STATE.spread || { count: 3, name: SPREADS.time.name, positions: SPREADS.time.positions };
         const cardInfo = `
-牌陣數據 (時間之流牌陣：1=根源/過去, 2=現況/癥結, 3=走向/結果):
-1. ${card1.name} [${card1.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(card1)}
-2. ${card2.name} [${card2.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(card2)}
-3. ${card3.name} [${card3.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(card3)}`;
+牌陣數據（${sp.name}，共${sp.count}張）:
+` + STATE.selectedCards.map((c, i) =>
+            `${i + 1}. 【${sp.positions[i] || ''}】${c.name} [${c.isReversed ? '逆位 (Reversed)' : '正位 (Upright)'}]${cardBrief(c)}`).join('\n');
+        const readingHint = sp.count === 1
+            ? '只有一張牌，直接回答問題，不要硬拆成前因後果。'
+            : `按每張牌的【位置】去讀，位置之間串成一件事講，不要一張一段分開講。`;
 
         let systemPrompt = "你現在是 Pythia，一位神秘、溫柔且富有洞察力的塔羅占卜師(姊姊)。";
         if (win.OS_PROMPTS) {
@@ -498,9 +601,9 @@
 
 【當前時間】${currentTime.formatted}
 
-請根據以下三張牌為用戶解讀：${cardInfo}
+請根據以下牌陣為用戶解讀：${cardInfo}
 用戶的問題是: "${STATE.question}"。
-請先進行整體的牌陣解讀 (三張牌沿位置串成一條因果線)。牌義參考只是你的內部依據，禁止照抄條列，必須揉進用戶的具體問題。語氣要自然，像在對話，不要像寫論文。`
+${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須揉進用戶的具體問題。語氣要自然，像在對話，不要像寫論文。`
         });
 
         await streamResponse(STATE.chatHistory);
@@ -511,8 +614,9 @@
     //    只把「不准自己生牌」寫在最初的系統提示裡壓不住——聊個兩三輪模型就會自己抽一張出來講
     //    (Rae 2026-08-23 回報)。狀態要放在最靠近生成的位置才有效。
     function tableStateNote() {
+        const pos = (STATE.spread && STATE.spread.positions) || [];
         const list = (STATE.tableCards || []).map((c, i) =>
-            `${i + 1}. ${c.name} [${c.isReversed ? '逆位' : '正位'}]`).join('；');
+            `${i + 1}.${pos[i] ? '【' + pos[i] + '】' : '【補抽】'}${c.name} [${c.isReversed ? '逆位' : '正位'}]`).join('；');
         return `【桌面現況】現在攤開的牌只有：${list || '（還沒有任何牌）'}。\n` +
                `你沒有抽新牌，也不知道牌堆裡任何一張沒攤開的牌是什麼。\n` +
                `要補抽就只講一句提議，然後在訊息最後放 [drew a card] 就停住——` +
@@ -625,18 +729,10 @@
         stage.classList.remove('compact');
         document.getElementById('tr-panel').classList.remove('active'); // 暫時隱藏面板
         
-        [0, 1, 2].forEach(i => {
-            const slot = document.getElementById(`slot-${i}`);
-            if (i === 0) {
-                slot.className = 'tr-slot';
-                slot.innerHTML = '1';
-                slot.style.display = 'flex';
-            } else {
-                slot.className = 'tr-slot';
-                slot.style.display = 'none';
-            }
-        });
-        
+        // 補抽只要一個槽
+        buildSlots(1, ['補抽']);
+        setSpreadNote('');
+
         const scrollArea = document.getElementById('tr-scroll-area');
         scrollArea.innerHTML = '';
         STATE.deck.forEach((card, index) => {
@@ -698,12 +794,7 @@
             streamResponse(STATE.chatHistory).then(() => {
                 STATE.singleCardMode = false;
                 STATE.isAnalyzing = false;
-                
-                // 恢復槽位顯示 (為下次做準備，雖然現在是隱藏的)
-                [1, 2].forEach(i => {
-                    const slot = document.getElementById(`slot-${i}`);
-                    if (slot) slot.style.display = 'flex';
-                });
+                // 槽位不用在這裡復原：問下一題時 startNewReading 會重蓋
             });
         }
     }
