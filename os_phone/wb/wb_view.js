@@ -15,6 +15,22 @@
             return `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(name || 'User')}`;
         },
 
+        // 卡片上的時間：AI 寫的換不動的原字優先，否則按真實時間戳算「多久以前」，會隨時間老去
+        fmtTime: function(post) {
+            if (post && post.whenText) return post.whenText;
+            const ts = post && post.timestamp;
+            if (!ts) return post && post.time ? post.time : '剛剛';
+            const diff = Date.now() - ts;
+            if (diff < 60e3) return '剛剛';
+            if (diff < 3600e3) return Math.floor(diff / 60e3) + ' 分鐘前';
+            if (diff < 86400e3) return Math.floor(diff / 3600e3) + ' 小時前';
+            const d = new Date(ts);
+            const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            if (diff < 2 * 86400e3) return '昨天 ' + hm;
+            if (diff < 7 * 86400e3) return Math.floor(diff / 86400e3) + ' 天前';
+            return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
+        },
+
         getMyDisplayName: function() {
             let nickname = '我';
             let realName = 'User';
@@ -145,10 +161,10 @@
                     <div class="wb-user-row">
                         <div class="wb-avatar" style="background-image: url('${avatar}')"></div>
                         <div class="wb-user-info">
-                            <div class="wb-username">${displayName} <span class="wb-vip-icon">V</span> ${deleteBtn}</div>
-                            <div class="wb-time">${post.time || '剛剛'} · 來自 PhoneOS</div>
+                            <div class="wb-username">${displayName}${post.verified ? ' <i class="fa-solid fa-circle-check wb-verified"></i>' : ''} ${deleteBtn}</div>
+                            <div class="wb-time">${this.fmtTime(post)} · 來自 PhoneOS</div>
                         </div>
-                        ${post.isMe ? '<div style="font-size:10px; color:#ff8200; border:1px solid #ff8200; padding:1px 4px; border-radius:4px;">本人</div>' : ''}
+                        ${post.isMe ? '<div class="wb-me-badge">本人</div>' : ''}
                     </div>
                     <div class="wb-text">${contentHtml.trim()}</div>
                     ${tagsHtml}

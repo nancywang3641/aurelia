@@ -24,7 +24,8 @@
             .wb-avatar { width: 40px; height: 40px; border-radius: 50%; background-size: cover; margin-right: 10px; border: 1px solid #eee; flex-shrink: 0; background-color: #eee; }
             .wb-user-info { flex: 1; display: flex; flex-direction: column; }
             .wb-username { font-weight: bold; font-size: 15px; color: #333; display: flex; align-items: center; gap: 4px; }
-            .wb-vip-icon { color: #ff8200; font-size: 12px; }
+            .wb-verified { color: #ff8200; font-size: 13px; }
+            .wb-me-badge { font-size: 10px; color: #ff8200; border: 1px solid #ff8200; padding: 1px 4px; border-radius: 4px; }
             .wb-time { font-size: 11px; color: #939393; }
             .wb-text { font-size: 15px; line-height: 1.6; color: #333; margin-bottom: 10px; white-space: pre-wrap; word-break: break-word; }
             
@@ -229,7 +230,7 @@
             .wb-dark .wb-vote-count { color: #555 !important; }
             .wb-dark .wb-img-item { background-color: #252525 !important; }
             .wb-dark .wb-empty { color: #555 !important; }
-            .wb-dark .wb-vip-icon { color: #ff8200; }
+            .wb-dark .wb-verified { color: #ff8200; }
         `,
         inject: function(doc) {
             if (doc.getElementById('wb-theme-style')) {

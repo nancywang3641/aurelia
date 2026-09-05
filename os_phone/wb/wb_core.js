@@ -188,8 +188,8 @@
                 user: name,
                 content: text,
                 avatar: avatar || win.WB_VIEW.getAvatar(name),
-                time: '剛剛',
                 likes: 0,
+                verified: false,
                 comments: [],
                 media: c.media || null,
                 isMe: true,
@@ -622,6 +622,28 @@
             return filteredComments.join(' | ');
         },
 
+        // AI 寫的 When（剛剛／35分鐘前／3小時前／昨天／3天前／上週…）換算成毫秒；換不動回 null
+        _whenToOffset: function(str) {
+            const t = String(str || '').trim();
+            if (!t) return null;
+            if (/^(剛剛|刚刚|just now|now|現在|现在)$/i.test(t)) return 0;
+            const num = (x) => { const map = { 零: 0, 一: 1, 二: 2, 兩: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 半: 0.5 }; if (/^\d+(\.\d+)?$/.test(x)) return parseFloat(x); if (x in map) return map[x]; if (x === '十一') return 11; if (x === '十二') return 12; if (x === '幾' || x === '几' || x === 'a few' || x === 'several') return 3; return NaN; };
+            let m = t.match(/^(\d+|[零一二兩两三四五六七八九十半幾几]+|a few|several|a|an)\s*(分鐘|分钟|分|min|minute|小時|小时|hour|hr|天|日|day|週|周|week|wk|個月|个月|month)s?\s*(前|以前|ago)?$/i);
+            if (m) {
+                const n = num(m[1] === 'a' || m[1] === 'an' ? '1' : m[1]);
+                if (isNaN(n)) return null;
+                const u = m[2];
+                const unit = /分/.test(u) || /min/i.test(u) ? 60e3 : /小時|小时|hour|hr/i.test(u) ? 3600e3 : /天|日|day/i.test(u) ? 86400e3 : /週|周|week|wk/i.test(u) ? 7 * 86400e3 : 30 * 86400e3;
+                return Math.round(n * unit);
+            }
+            if (/^(昨天|昨晚|昨日|yesterday)/i.test(t)) return 86400e3;
+            if (/^(前天)/.test(t)) return 2 * 86400e3;
+            if (/^(上週|上周|last week)/i.test(t)) return 7 * 86400e3;
+            if (/^(上個月|上个月|last month)/i.test(t)) return 30 * 86400e3;
+            if (/^(今天|今早|今天早上|今晚|today|this morning|tonight)/i.test(t)) return 2 * 3600e3;
+            return null;
+        },
+
         // 真照片（data URL）最多夾最近這幾張給 AI 看；更早的退成文字，免得每輪拖一疊圖
         _PHOTO_LIMIT: 3,
         _collectPhotos: function(posts) {
@@ -656,7 +678,7 @@
             return recent.map(p => {
                 let comms = (p.comments && p.comments.length > 0) ? this._filterComments(p.comments) : "None";
                 const who = p.isMe ? `${p.user} (the player's own account)` : p.user;
-                return `[ID: ${p.id}] [Author: ${who}] [Content: ${p.content}]${this._describeMedia(p, photos)} [Recent Comments: ${comms}]`;
+                return `[ID: ${p.id}] [Author: ${who}] [Posted: ${win.WB_VIEW.fmtTime(p)}] [Content: ${p.content}]${this._describeMedia(p, photos)} [Recent Comments: ${comms}]`;
             }).join('\n\n');
         },
         // 把真照片夾進訊息末尾（multimodal 陣列；OS_API 三條路都吃）
@@ -674,7 +696,7 @@
             let comms = (p.comments && p.comments.length > 0) ? this._filterComments(p.comments) : "None";
             const photos = this._collectPhotos([p]);
             const who = p.isMe ? `${p.user} (the player's own account)` : p.user;
-            return `[TARGET POST - FOCUS ONLY ON THIS]\n[ID: ${p.id}] [Author: ${who}] [Content: ${p.content}]${this._describeMedia(p, photos)} [Recent Comments: ${comms}]`;
+            return `[TARGET POST - FOCUS ONLY ON THIS]\n[ID: ${p.id}] [Author: ${who}] [Posted: ${win.WB_VIEW.fmtTime(p)}] [Content: ${p.content}]${this._describeMedia(p, photos)} [Recent Comments: ${comms}]`;
         },
 
         triggerPost: async function() {
@@ -758,21 +780,25 @@
 
             if (result.newPosts.length > 0) {
                 for (let p of result.newPosts.reverse()) {
+                    // When 能換算成「多久以前」就把時間戳往回推，卡片上的時間會自己隨真實時間老去；換不動的保留原字
+                    const offset = this._whenToOffset(p.when);
                     const newPost = {
                         id: 'post_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
                         user: p.author,
                         content: p.content,
                         avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(p.author)}`,
-                        time: "剛剛",
                         likes: Math.floor(Math.random() * 2000) + 50,
-                        comments: p.comments, 
+                        comments: p.comments,
                         media: p.media,
+                        verified: !!p.verified,
+                        whenText: offset == null ? (p.when || '') : '',
                         isMe: false,
-                        timestamp: Date.now()
+                        timestamp: Date.now() - (offset || 0)
                     };
                     GLOBAL_POSTS.unshift(newPost);
                     await win.OS_DB.saveWbPost(newPost);
                 }
+                GLOBAL_POSTS.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             }
             if (result.replies.length > 0) {
                 let updatedCount = 0;
@@ -805,14 +831,16 @@
                 const block = match[1];
                 const res = { author: '匿名', content: '', media: null, comments: [] };
 
-                // 🔥 改进：使用更智能的正则，匹配到下一个标签或结尾
-                // 匹配模式：[Author: ...] 后面可能跟着换行或其他内容，直到遇到下一个 [ 开头的标签
                 const authM = block.match(/\[Author:\s*([^\]]+)\]/i);
                 if (authM) res.author = authM[1].trim();
+                const typeM = block.match(/\[Type:\s*([^\]]+)\]/i);
+                res.verified = !!(typeM && /official|media|官方|媒體|媒体|機構|机构/i.test(typeM[1]));
+                const whenM = block.match(/\[When:\s*([^\]]+)\]/i);
+                res.when = whenM ? whenM[1].trim() : '';
 
                 // 🔥 关键修复：[Post: ...] 可能包含嵌套的方括号（如 [系統公告]）
                 // 使用负向前瞻：匹配到下一个 [标签名: 或 [/wb_post] 为止
-                const postM = block.match(/\[Post:\s*([\s\S]*?)(?=\[(?:Img|Video|Vote|Comments|\/wb_post)|\s*$)/i);
+                const postM = block.match(/\[Post:\s*([\s\S]*?)(?=\[(?:Img|Video|Vote|Location|When|Type|Comments|\/wb_post)|\s*$)/i);
                 if (postM) {
                     res.content = postM[1].trim().replace(/\]$/, ''); // 移除可能的尾部 ]
                 }
