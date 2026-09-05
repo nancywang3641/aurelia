@@ -63,24 +63,16 @@
                 } else if (post.media.type === 'video') {
                     const title = post.media.title || '視頻';
                     const desc = post.media.desc || '';
-                    const escapedTitle = (title || '').replace(/'/g, "\\'");
-                    const escapedDesc = (desc || '').replace(/'/g, "\\'");
-
-                    // 点击展开完整描述（支持移动端）
-                    const clickHandler = desc
-                        ? `event.stopPropagation(); alert('${escapedTitle}\\n\\n${escapedDesc}');`
-                        : `event.stopPropagation(); window.open('https://www.bilibili.com/results?search_query=${encodeURIComponent(title)}')`;
-
-                    videoHtml = `<div class="wb-video-card" onclick="${clickHandler}">
+                    videoHtml = `<div class="wb-video-card" onclick="event.stopPropagation(); this.classList.toggle('wb-video-card--open')">
                         <div class="wb-video-overlay"></div>
                         <div class="wb-play-icon"><div class="wb-play-arrow"></div></div>
                         <div class="wb-video-tag">03:45</div>
-                        <div style="position:absolute; bottom:10px; left:10px; right:10px; color:white; font-size:12px; font-weight:bold; z-index:2; text-shadow:0 1px 2px rgba(0,0,0,0.5);">
-                            <div style="margin-bottom:3px;">${title}</div>
-                            ${desc ? `<div style="font-size:10px; font-weight:normal; opacity:0.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${desc.substring(0, 30)}${desc.length > 30 ? '...' : ''}</div>` : ''}
-                        </div>
-                        ${desc ? '<div style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.6); color:white; padding:4px 8px; border-radius:12px; font-size:11px; z-index:3;">點擊查看</div>' : ''}
+                        <div class="wb-video-caption"><div class="wb-video-title">${title}</div>${desc ? `<div class="wb-video-desc">${desc}</div>` : ''}</div>
                     </div>`;
+                } else if (post.media.type === 'location') {
+                    const name = post.media.name || '';
+                    const desc = post.media.desc || '';
+                    videoHtml = `<div class="wb-loc-card"><i class="fa-solid fa-location-dot"></i><div class="wb-loc-text"><div class="wb-loc-name">${name}</div>${desc ? `<div class="wb-loc-desc">${desc}</div>` : ''}</div></div>`;
                 } else if (post.media.type === 'image' || post.media.type === 'images') {
                     // 圖片走三個手機 app 共用的管道；ref = 貼文 id｜第幾張，生完寫回 post.media
                     const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
@@ -259,10 +251,13 @@
             const st = state || {};
             const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             let attach = '';
-            if (st.photo) {
-                attach = `<div class="wb-compose-preview"><img src="${esc(st.photo)}"><div class="wb-compose-preview-x" onclick="${appRef}.composeClearImage()"><i class="fa-solid fa-xmark"></i></div></div>`;
-            } else if (st.imgDesc) {
-                attach = `<div class="wb-compose-chip" onclick="${appRef}.composeDescribe()"><i class="fa-regular fa-image"></i><span class="wb-compose-chip-text">${esc(st.imgDesc)}</span><i class="fa-solid fa-xmark wb-compose-chip-x" onclick="event.stopPropagation(); ${appRef}.composeClearImage()"></i></div>`;
+            const m = st.media;
+            if (m && m.type === 'image' && String(m.desc || '').startsWith('data:')) {
+                attach = `<div class="wb-compose-preview"><img src="${esc(m.desc)}"><div class="wb-compose-preview-x" onclick="${appRef}.composeClearImage()"><i class="fa-solid fa-xmark"></i></div></div>`;
+            } else if (m) {
+                const icon = { image: 'fa-regular fa-image', video: 'fa-solid fa-video', vote: 'fa-solid fa-square-poll-horizontal', location: 'fa-solid fa-location-dot' }[m.type] || 'fa-solid fa-paperclip';
+                const label = m.type === 'image' ? m.desc : (m.type === 'location' ? m.name : m.title);
+                attach = `<div class="wb-compose-chip" onclick="${appRef}.composeEditMedia()"><i class="${icon}"></i><span class="wb-compose-chip-text">${esc(label)}</span><i class="fa-solid fa-xmark wb-compose-chip-x" onclick="event.stopPropagation(); ${appRef}.composeClearImage()"></i></div>`;
             }
             return `<div class="wb-compose-mask" onclick="if (event.target === this) ${appRef}.closeCompose()">
                     <div class="wb-compose-card">

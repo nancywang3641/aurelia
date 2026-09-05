@@ -36,6 +36,14 @@
             .wb-play-icon { width: 50px; height: 50px; background: rgba(0,0,0,0.6); border-radius: 50%; border: 2px solid #fff; display: flex; align-items: center; justify-content: center; z-index: 2; }
             .wb-play-arrow { width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px; }
             .wb-video-tag { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.6); color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 4px; z-index: 2; }
+            .wb-video-caption { position: absolute; left: 10px; right: 10px; bottom: 10px; color: #fff; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+            .wb-video-title { font-size: 12px; font-weight: bold; margin-bottom: 3px; }
+            .wb-video-desc { font-size: 10px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .wb-video-card--open .wb-video-desc { white-space: normal; }
+            .wb-loc-card { display: flex; align-items: center; gap: 10px; background: #f8f8f8; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+            .wb-loc-card i { color: #ff8200; font-size: 18px; }
+            .wb-loc-name { font-size: 13px; font-weight: bold; color: #333; }
+            .wb-loc-desc { font-size: 11px; color: #999; margin-top: 2px; }
 
             /* 投票卡片 */
             .wb-vote-card { background: #f8f8f8; border-radius: 8px; padding: 12px; margin-bottom: 10px; border: 1px solid #eee; }
@@ -153,6 +161,8 @@
             .wb-prompt-mask { position: absolute; inset: 0; z-index: 330; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 24px; animation: wbFadeIn 0.15s; }
             .wb-prompt-card { width: 100%; background: #fff; border-radius: 14px; padding: 18px 16px 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 12px; }
             .wb-prompt-title { font-size: 15px; font-weight: bold; color: #1a1a1a; text-align: center; }
+            .wb-prompt-field { display: flex; flex-direction: column; gap: 5px; }
+            .wb-prompt-label { font-size: 12px; color: #888; padding-left: 2px; }
             .wb-prompt-input { width: 100%; box-sizing: border-box; border: none; outline: none; font-size: 15px; color: #1a1a1a; background: #f7f7f7; border-radius: 10px; padding: 11px 12px; font-family: inherit; }
             .wb-prompt-ok { background: linear-gradient(135deg, #ffae00, #ff8200); color: #fff; font-weight: bold; }
 
@@ -176,6 +186,8 @@
             .wb-dark .wb-sheet-item { border-bottom-color: #2f2f32; }
             .wb-dark .wb-sheet-item:active, .wb-dark .wb-sheet-cancel:active { background: #2a2a2a; }
             .wb-dark .wb-sheet-label, .wb-dark .wb-prompt-title { color: #f0f0f0; }
+            .wb-dark .wb-loc-card { background: #1c1c1e; border-color: #2a2a2a; }
+            .wb-dark .wb-loc-name { color: #f0f0f0; }
             .wb-dark .wb-sheet-cancel { color: #aaa; }
             .wb-dark .wb-ask-text { color: #f0f0f0; }
             .wb-dark .wb-ask-cancel { background: #2a2a2a; color: #ddd; }

@@ -94,7 +94,7 @@
         },
 
         // --- 發文 ---
-        _compose: null,   // { text, imgDesc, photo }；null = 沒開
+        _compose: null,   // { text, media }；media 跟貼文的 media 同一種形狀（image/video/vote/location），null = 沒附件
 
         _renderCompose: function() {
             const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER;
@@ -114,7 +114,7 @@
             if (ta) this._compose.text = ta.value;
         },
         openCompose: function() {
-            this._compose = { text: '', imgDesc: '', photo: '' };
+            this._compose = { text: '', media: null };
             this._renderCompose();
         },
         closeCompose: function() {
@@ -124,20 +124,40 @@
         composePickImage: async function() {
             this._readCompose();
             const pick = await this._sheet([
-                { key: 'desc', icon: 'fa-regular fa-image', label: '寫一句描述', hint: '之後可展開生成' },
-                { key: 'photo', icon: 'fa-solid fa-camera', label: '選一張照片', hint: '相簿或相機' },
+                { key: 'desc',     icon: 'fa-regular fa-image',       label: '寫一句描述', hint: '之後可展開生成' },
+                { key: 'photo',    icon: 'fa-solid fa-camera',        label: '選一張照片', hint: '相簿或相機' },
+                { key: 'video',    icon: 'fa-solid fa-video',         label: '影片',       hint: '標題與一句描述' },
+                { key: 'vote',     icon: 'fa-solid fa-square-poll-horizontal', label: '投票', hint: '題目與幾個選項' },
+                { key: 'location', icon: 'fa-solid fa-location-dot', label: '位置',       hint: '在哪裡' },
             ]);
-            if (pick === 'desc') return this.composeDescribe();
+            if (!pick || !this._compose) return;
             if (pick === 'photo') return this.composePickPhoto();
-        },
-        composeDescribe: async function() {
-            this._readCompose();
-            if (!this._compose) return;
-            const v = await this._prompt('描述這張圖', this._compose.imgDesc || '', '例如：桌上一盤咖哩飯，窗邊有陽光');
+            const cur = this._compose.media || {};
+            let fields = [], build = null;
+            if (pick === 'desc') {
+                fields = [{ key: 'desc', label: '', value: cur.type === 'image' && !String(cur.desc || '').startsWith('data:') ? cur.desc : '', placeholder: '例如：桌上一盤咖哩飯，窗邊有陽光' }];
+                build = (v) => v.desc ? { type: 'image', desc: v.desc } : null;
+            } else if (pick === 'video') {
+                fields = [{ key: 'title', label: '標題', value: cur.type === 'video' ? cur.title : '', placeholder: '影片叫什麼' }, { key: 'desc', label: '一句描述', value: cur.type === 'video' ? cur.desc : '', placeholder: '拍了什麼' }];
+                build = (v) => v.title ? { type: 'video', title: v.title, desc: v.desc } : null;
+            } else if (pick === 'vote') {
+                fields = [{ key: 'title', label: '題目', value: cur.type === 'vote' ? cur.title : '', placeholder: '想問大家什麼' }, { key: 'options', label: '選項', value: cur.type === 'vote' ? (cur.options || []).join('，') : '', placeholder: '用逗號分開，例如：去，不去' }];
+                build = (v) => { const opts = String(v.options || '').split(/[,，]/).map(x => x.trim()).filter(Boolean); return (v.title && opts.length >= 2) ? { type: 'vote', title: v.title, options: opts } : null; };
+            } else if (pick === 'location') {
+                fields = [{ key: 'name', label: '地點', value: cur.type === 'location' ? cur.name : '', placeholder: '在哪裡' }, { key: 'desc', label: '一句話', value: cur.type === 'location' ? cur.desc : '', placeholder: '可不填' }];
+                build = (v) => v.name ? { type: 'location', name: v.name, desc: v.desc } : null;
+            }
+            const titles = { desc: '描述這張圖', video: '影片', vote: '投票', location: '位置' };
+            const v = await this._form(titles[pick] || '', fields);
             if (v == null || !this._compose) return;
-            this._compose.imgDesc = String(v).trim();
-            if (this._compose.imgDesc) this._compose.photo = '';
+            const media = build(v);
+            if (!media) { this._showToast(pick === 'vote' ? '題目和至少兩個選項' : '還沒填'); return; }
+            this._compose.media = media;
             this._renderCompose();
+        },
+        composeEditMedia: function() {
+            // 點標籤＝重新開單選（各型別的欄位會帶入現值）
+            return this.composePickImage();
         },
         composePickPhoto: async function() {
             this._readCompose();
@@ -146,15 +166,13 @@
             let url = '';
             try { url = await PI.pickPhoto(); } catch (e) { console.warn('[Weibo] 選照片失敗:', e); this._showToast('照片讀不進來'); }
             if (!url || !this._compose) return;
-            this._compose.photo = url;
-            this._compose.imgDesc = '';
+            this._compose.media = { type: 'image', desc: url };
             this._renderCompose();
         },
         composeClearImage: function() {
             this._readCompose();
             if (!this._compose) return;
-            this._compose.photo = '';
-            this._compose.imgDesc = '';
+            this._compose.media = null;
             this._renderCompose();
         },
         submitCompose: async function() {
@@ -162,8 +180,7 @@
             const c = this._compose;
             if (!c) return;
             const text = String(c.text || '').trim();
-            const imgDesc = String(c.imgDesc || '').trim();
-            if (!text && !c.photo && !imgDesc) { this._showToast('先寫點什麼'); return; }
+            if (!text && !c.media) { this._showToast('先寫點什麼'); return; }
             let name = 'User', avatar = '';
             try { const acc = win.WB_ACCOUNT.getCurrentAccount(); name = acc.weiboNickname || acc.realName || 'User'; avatar = acc.avatar || ''; } catch (e) {}
             const post = {
@@ -174,7 +191,7 @@
                 time: '剛剛',
                 likes: 0,
                 comments: [],
-                media: c.photo ? { type: 'image', desc: c.photo } : (imgDesc ? { type: 'image', desc: imgDesc } : null),
+                media: c.media || null,
                 isMe: true,
                 timestamp: Date.now()
             };
@@ -522,27 +539,41 @@
             });
         },
 
-        // 單行輸入小視窗：回字串；取消回 null
-        _prompt: function(title, value, placeholder) {
+        // 多欄輸入小視窗：fields = [{key, label, value, placeholder}]；回 {key: 值}，取消回 null
+        _form: function(title, fields) {
             return new Promise((resolve) => {
                 const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER || doc.body;
                 const old = host.querySelector('.wb-prompt-mask');
                 if (old) old.remove();
                 const mask = doc.createElement('div');
                 mask.className = 'wb-prompt-mask';
-                mask.innerHTML = `<div class="wb-prompt-card"><div class="wb-prompt-title"></div><input type="text" class="wb-prompt-input"><div class="wb-ask-btns"><div class="wb-ask-btn wb-ask-cancel">取消</div><div class="wb-ask-btn wb-prompt-ok">確定</div></div></div>`;
+                const rows = (fields || []).map(() => `<div class="wb-prompt-field"><div class="wb-prompt-label"></div><input type="text" class="wb-prompt-input"></div>`).join('');
+                mask.innerHTML = `<div class="wb-prompt-card"><div class="wb-prompt-title"></div>${rows}<div class="wb-ask-btns"><div class="wb-ask-btn wb-ask-cancel">取消</div><div class="wb-ask-btn wb-prompt-ok">確定</div></div></div>`;
                 mask.querySelector('.wb-prompt-title').textContent = title || '';
-                const inp = mask.querySelector('.wb-prompt-input');
-                inp.value = value == null ? '' : String(value);
-                inp.placeholder = placeholder || '';
+                const inputs = Array.from(mask.querySelectorAll('.wb-prompt-input'));
+                (fields || []).forEach((f, k) => {
+                    const row = mask.querySelectorAll('.wb-prompt-field')[k];
+                    const lab = row.querySelector('.wb-prompt-label');
+                    lab.textContent = f.label || '';
+                    if (!f.label) lab.remove();
+                    inputs[k].value = f.value == null ? '' : String(f.value);
+                    inputs[k].placeholder = f.placeholder || '';
+                });
+                const collect = () => { const out = {}; (fields || []).forEach((f, k) => { out[f.key] = inputs[k].value.trim(); }); return out; };
                 const done = (v) => { mask.remove(); resolve(v); };
-                mask.querySelector('.wb-prompt-ok').onclick = (e) => { e.stopPropagation(); done(inp.value); };
+                mask.querySelector('.wb-prompt-ok').onclick = (e) => { e.stopPropagation(); done(collect()); };
                 mask.querySelector('.wb-ask-cancel').onclick = (e) => { e.stopPropagation(); done(null); };
-                inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); done(inp.value); } };
+                inputs.forEach((inp, k) => { inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (k < inputs.length - 1) inputs[k + 1].focus(); else done(collect()); } }; });
                 mask.onclick = (e) => { if (e.target === mask) done(null); };
                 host.appendChild(mask);
-                setTimeout(() => { try { inp.focus(); inp.select(); } catch (e) {} }, 30);
+                setTimeout(() => { try { inputs[0].focus(); inputs[0].select(); } catch (e) {} }, 30);
             });
+        },
+
+        // 單欄版：回字串；取消回 null
+        _prompt: async function(title, value, placeholder) {
+            const v = await this._form(title, [{ key: 'v', value: value, placeholder: placeholder }]);
+            return v == null ? null : v.v;
         },
 
         _showToast: function(msg) {
@@ -614,8 +645,9 @@
                 return ` [Image: ${d}]`;
             }
             if (m.type === 'images') return ` [Images: ${(m.list || []).map(x => (String(x).startsWith('http') || String(x).startsWith('data:')) ? 'a photo' : x).join(' | ')}]`;
-            if (m.type === 'video') return ` [Video: ${m.title || ''} ${m.desc || ''}]`;
-            if (m.type === 'vote') return ` [Vote: ${m.title || ''}]`;
+            if (m.type === 'video') return ` [Video: ${m.title || ''}${m.desc ? ' | ' + m.desc : ''}]`;
+            if (m.type === 'vote') return ` [Vote: ${m.title || ''} | ${(m.options || []).join(', ')}]`;
+            if (m.type === 'location') return ` [Location: ${m.name || ''}${m.desc ? ' | ' + m.desc : ''}]`;
             return '';
         },
         serializeFeedForAI: function() {
@@ -814,9 +846,15 @@
                         res.media = {
                             type: 'vote',
                             title: parts[0].trim(),
-                            options: parts[1].split(',').map(o => o.trim())
+                            options: parts[1].split(/[,，]/).map(o => o.trim()).filter(Boolean)
                         };
                     }
+                }
+
+                const locM = block.match(/\[Location:\s*([^\]]+)\]/i);
+                if (locM) {
+                    const parts = locM[1].split('|').map(x => x.trim());
+                    res.media = { type: 'location', name: parts[0] || '', desc: parts[1] || '' };
                 }
 
                 // 🔥 Comments 也可能包含方括号，使用同样的技巧
