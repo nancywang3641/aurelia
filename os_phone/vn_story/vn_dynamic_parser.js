@@ -301,15 +301,24 @@
                 }, 300);
             };
 
-            // 跳過/繼續：點擊卡片外的暗背景或空白處 → 收掉繼續。
-            // 純顯示卡（如 ChapterCard）沒自帶按鈕時的退路，對齊舊 _showDomBlock 的「點擊背景關閉」。
+            // 跳過/繼續：背景點擊兩段式，跟 vn_core._showDomBlock 的裸卡同一套。
+            // 第一下只浮出「再點一次關閉」提示（1.6 秒沒續點就淡出歸位），短窗內再點才真的收掉繼續。
+            // 手殘單擊不會誤跳過，右上✕也不用了（組件沒做真正關閉鈕時，這條就是逃生口）。
             // 只認 overlay/panel 本身（暗區、空白 padding），點到卡片內容（子元素）不關 → 不影響互動卡。
-            // 防手殘誤觸：這裡都是註冊的創作室 block 組件(多半自帶關閉鈕)→不再「點背景關閉」，改右上✕當保底逃生(某些組件沒做真正關閉鈕時的退路)
-            const _cx = document.createElement('div');
-            _cx.textContent = '✕'; _cx.title = '關閉';
-            _cx.style.cssText = 'position:absolute;top:14px;right:16px;z-index:2;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.82);font-size:20px;line-height:1;cursor:pointer;border-radius:50%;background:rgba(0,0,0,0.4);';
-            _cx.addEventListener('click', (e) => { e.stopPropagation(); onComplete(); });
-            overlay.appendChild(_cx);
+            // overlay 每次新建、關閉即拆，待確認狀態跟著 overlay 走，不會帶到下一張卡。
+            const _hint = document.createElement('div');
+            _hint.textContent = '再點一次關閉';
+            _hint.style.cssText = 'position:absolute;left:0;right:0;bottom:14px;z-index:2;text-align:center;color:rgba(180,180,180,0.45);font-size:11px;letter-spacing:1px;pointer-events:none;opacity:0;transition:opacity .25s;';
+            overlay.appendChild(_hint);
+            let _bgArmed = false, _bgTimer = null;
+            overlay.addEventListener('click', (e) => {
+                if (e.target !== overlay && e.target !== panel) return;
+                if (_bgArmed) { clearTimeout(_bgTimer); _bgArmed = false; onComplete(); return; }
+                _bgArmed = true;
+                _hint.style.opacity = '1';
+                clearTimeout(_bgTimer);
+                _bgTimer = setTimeout(() => { _bgArmed = false; _hint.style.opacity = '0'; }, 1600);
+            });
 
             // 沙盒執行 AI 生成的 JS
             try {
