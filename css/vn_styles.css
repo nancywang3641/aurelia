@@ -1320,7 +1320,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* =========================================
            系統提示框 / 轉場 / Log
            ========================================= */
-        #sys-overlay, #trans-overlay, #item-overlay, #vn-log-overlay, #vn-summary-overlay, #quest-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: 0.35s ease; backdrop-filter: blur(5px); }
+        #sys-overlay, #trans-overlay, #item-overlay, #vn-log-overlay, #vn-summary-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: 0.35s ease; backdrop-filter: blur(5px); }
         #sys-overlay { background: rgba(0,0,0,0.7); }
         #sys-overlay.active, #trans-overlay.active, #item-overlay.active, #vn-log-overlay.active, #vn-summary-overlay.active { opacity: 1; pointer-events: auto; }
         
@@ -1351,56 +1351,18 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             border-bottom: 1px solid rgba(0, 210, 211, 0.3); padding-bottom: 10px; 
         }
         
-        /* 📋 委託面板 (Quest) - 黑金羊皮紙風 */
-        #quest-overlay { background: rgba(0,0,0,0.82); z-index: 25; backdrop-filter: blur(8px); }
-        #quest-overlay.active { opacity: 1; pointer-events: auto; }
-        #quest-card {
-            background: linear-gradient(160deg, #0d0900 0%, #1a1200 50%, #0a0800 100%);
-            border: 1px solid rgba(212,175,55,0.45);
-            box-shadow: 0 0 60px rgba(212,175,55,0.12), 0 20px 60px rgba(0,0,0,0.95);
-            padding: 38px 44px 32px; position: relative; border-radius: 4px;
-            min-width: 300px; max-width: calc(100% - 60px); max-height: calc(100% - 40px); overflow-y: auto; box-sizing: border-box;
-            font-family: var(--font-sans);
-        }
-        #quest-card::before {
-            content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px;
-            border: 1px solid rgba(212,175,55,0.12); pointer-events: none; border-radius: 2px;
-        }
-        #quest-header {
-            text-align: center; font-size: 0.72rem; color: var(--gold-dark);
-            letter-spacing: 6px; text-transform: uppercase; margin-bottom: 6px;
-            font-family: var(--font-classic);
-        }
-        #quest-title {
-            text-align: center; font-size: 1.25rem; color: var(--gold);
-            font-family: var(--font-classic); font-weight: bold; letter-spacing: 2px;
-            margin-bottom: 18px; padding-bottom: 14px;
-            border-bottom: 1px solid rgba(212,175,55,0.25);
-        }
-        #quest-requester {
-            font-size: 0.78rem; color: rgba(212,175,55,0.6); letter-spacing: 2px;
-            text-transform: uppercase; margin-bottom: 14px;
-        }
-        #quest-requester span { color: var(--gold-light); font-size: 0.9rem; letter-spacing: 1px; }
-        #quest-desc {
-            font-size: 0.95rem; color: var(--text-light); line-height: 1.8;
-            margin-bottom: 20px; padding: 12px 14px;
-            background: rgba(212,175,55,0.04); border-left: 2px solid rgba(212,175,55,0.3);
-        }
-        #quest-reward-row {
-            display: flex; align-items: center; gap: 10px;
-            padding-top: 14px; border-top: 1px solid rgba(212,175,55,0.2);
-        }
-        #quest-reward-label { font-size: 0.75rem; color: var(--gold-dark); letter-spacing: 3px; text-transform: uppercase; white-space: nowrap; }
-        #quest-reward { font-size: 0.95rem; color: var(--gold-light); }
-        #quest-confirm {
-            display: block; margin: 22px auto 0;
-            background: transparent; border: 1px solid rgba(212,175,55,0.4);
-            color: var(--gold); padding: 9px 40px; font-size: 0.85rem;
-            letter-spacing: 3px; text-transform: uppercase; cursor: pointer;
-            font-family: var(--font-classic); border-radius: 2px; transition: all 0.25s;
-        }
-        #quest-confirm:hover { background: rgba(212,175,55,0.1); border-color: var(--gold); box-shadow: 0 0 12px rgba(212,175,55,0.2); }
+        /* 🧭 支線提示小卡 (Quest toast)：上方置中滑入、停幾秒自己走，pointer-events 全關不擋也不吃點擊 */
+        #quest-toast-stack { position: absolute; top: 56px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 26; }
+        .quest-toast { display: flex; align-items: flex-start; gap: 12px; max-width: min(78%, 420px); padding: 10px 16px 11px 14px; background: linear-gradient(160deg, rgba(20,14,4,0.92), rgba(10,8,2,0.92)); border: 1px solid rgba(212,175,55,0.45); border-left: 3px solid var(--gold); border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 24px rgba(212,175,55,0.1); backdrop-filter: blur(6px); font-family: var(--font-sans); pointer-events: none; animation: quest-toast-in 0.45s cubic-bezier(.22,1,.36,1) both; }
+        .quest-toast.leaving { animation: quest-toast-out 0.5s ease forwards; }
+        .quest-toast-icon { color: var(--gold); font-size: 1.05rem; margin-top: 3px; flex-shrink: 0; }
+        .quest-toast-body { min-width: 0; }
+        .quest-toast-head { display: flex; align-items: baseline; gap: 8px; }
+        .quest-toast-label { font-size: 0.68rem; color: var(--gold-dark); letter-spacing: 3px; font-family: var(--font-classic); flex-shrink: 0; }
+        .quest-toast-name { font-size: 1rem; color: var(--gold-light); font-weight: bold; letter-spacing: 1px; }
+        .quest-toast-hint { margin-top: 3px; font-size: 0.86rem; line-height: 1.55; color: var(--text-light); opacity: 0.9; }
+        @keyframes quest-toast-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes quest-toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } }
 
         #trans-overlay { background: radial-gradient(circle, #1a1a24, #000); z-index: 50; transition: opacity 0.8s ease; }
         #trans-text { font-size: 1.6rem; letter-spacing: 6px; color: #fff; text-shadow: 0 0 15px rgba(255,255,255,0.5); padding: 0 48px; box-sizing: border-box; text-align: center; }

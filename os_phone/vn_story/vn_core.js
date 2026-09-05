@@ -2556,21 +2556,17 @@
                 this.next(); return;
             }
 
-            // 📋 委託面板
+            // 🧭 支線提示：[Quest|支線名|一句線索]
+            //    跟成就/彈幕同一路：飄一張小卡、幾秒後自己走、不吃點擊、立刻 next()。
+            //    舊的「委託面板」整張卡（委託人/獎勵/接受委託鈕，會卡住劇情等按）已拆，AI 從來沒被教過寫它。
+            //    劇情裡總有路人鬼鬼祟祟晃過又沒下文、之後再冒頭玩家已忘了他是誰→這張卡就是那個「這是一條線」的標記；同時進日誌好回頭查。
             if (line.startsWith('[Quest|')) {
                 const parts = line.slice(7, -1).split('|');
-                const qtitle  = parts[0] || '';
-                const qnpc    = parts[1] || '';
-                const qdesc   = parts[2] || '';
-                const qreward = parts[3] || '';
-                document.getElementById('quest-title').innerText          = qtitle;
-                document.getElementById('quest-requester-name').innerText = qnpc;
-                document.getElementById('quest-desc').innerText           = qdesc;
-                document.getElementById('quest-reward').innerText         = qreward;
-                document.getElementById('quest-overlay').classList.add('active');
-                this.hideVNPanel();
-                this.addLog("委託", `【${qtitle}】${qnpc ? ' — ' + qnpc : ''}${qreward ? ' 獎勵：' + qreward : ''}`);
-                return;
+                const qname = (parts[0] || '').trim();
+                const qhint = parts.slice(1).join('|').trim();
+                this.launchQuestToast(qname, qhint);
+                this.addLog("支線", `【${qname}】${qhint ? ' ' + qhint : ''}`);
+                this.next(); return;
             }
 
             if (line.startsWith('[Sys|')) {
@@ -2864,7 +2860,7 @@
 
         /* --- UI 切換與渲染 --- */
         hideOverlays: function() {
-            ['sys-overlay', 'trans-overlay', 'item-overlay', 'quest-overlay'].forEach(id => { const _el = document.getElementById(id); if (_el) _el.classList.remove('active'); });
+            ['sys-overlay', 'trans-overlay', 'item-overlay'].forEach(id => { const _el = document.getElementById(id); if (_el) _el.classList.remove('active'); });
             // 🎬 scene-cg-overlay 走鋪底式：linger>0 期間留著（由 renderVN 計數淡出），不被每句 next 的 hideOverlays 秒關
             if (this._sceneCgLinger <= 0 && !this._sceneCgHold) { const _sc = document.getElementById('scene-cg-overlay'); if (_sc) _sc.classList.remove('active'); }
             // 章節卡接管畫面時別把對話框叫回來：卡片出場前後還有早鳥生圖／立繪這些非同步的活，
@@ -2906,6 +2902,28 @@
             item.style.animationDuration = (baseDur + Math.random() * 3).toFixed(1) + 's';
             container.appendChild(item);
             item.addEventListener('animationend', () => item.remove());
+        },
+        // 🧭 支線提示小卡：上方置中滑入、停幾秒、自己淡出。pointer-events 全關，不擋點擊也不吃點擊。
+        //    連續幾張就往下堆（容器是 column flex），各自到點各自走；離開動畫走 CSS class，animationend 後拆節點。
+        launchQuestToast: function(name, hint) {
+            const stack = document.getElementById('quest-toast-stack');
+            if (!stack) return;
+            const card = document.createElement('div');
+            card.className = 'quest-toast';
+            const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            card.innerHTML =
+                `<i class="fa-solid fa-signs-post quest-toast-icon"></i>` +
+                `<div class="quest-toast-body">` +
+                    `<div class="quest-toast-head"><span class="quest-toast-label">支線</span><span class="quest-toast-name">${esc(name)}</span></div>` +
+                    (hint ? `<div class="quest-toast-hint">${esc(hint)}</div>` : '') +
+                `</div>`;
+            stack.appendChild(card);
+            const hold = 4200 + Math.min(2400, (hint || '').length * 60);   // 字多停久一點，封頂 6.6 秒
+            setTimeout(() => {
+                card.classList.add('leaving');
+                card.addEventListener('animationend', () => card.remove(), { once: true });
+                setTimeout(() => card.remove(), 800);   // animationend 沒來（分頁隱藏時動畫不跑）的保底
+            }, hold);
         },
         hideVNPanel: function() {
             document.getElementById('text-panel-wrapper').style.display = 'none';

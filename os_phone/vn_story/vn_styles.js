@@ -196,19 +196,7 @@
                     </div>
                 </div>
 
-                <div id="quest-overlay" onclick="window.VN_Core.next()">
-                    <div id="quest-card">
-                        <div id="quest-header">✦ Quest ✦</div>
-                        <div id="quest-title"></div>
-                        <div id="quest-requester">委託人 · <span id="quest-requester-name"></span></div>
-                        <div id="quest-desc"></div>
-                        <div id="quest-reward-row">
-                            <span id="quest-reward-label">🏆 Reward</span>
-                            <span id="quest-reward"></span>
-                        </div>
-                        <button id="quest-confirm" onclick="window.VN_Core.next(); event.stopPropagation();">接受委託</button>
-                    </div>
-                </div>
+                <div id="quest-toast-stack"></div>
 
                 <div id="trans-overlay" onclick="window.VN_Core.next()">
                     <div id="trans-text"></div>
