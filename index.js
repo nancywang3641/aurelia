@@ -188,6 +188,7 @@ const PHONE_FILES = [
     'os/os_minimax.js',
     'os/translation_manager.js',
     'os/os_image_manager.js',
+    'os/os_phone_image.js',       // 手機類 app 共用的圖片描述→卡片→生圖管道
     'os/os_control_room.js',     // 🎛️ 控制室：監控/遙控桌面控制塔（SoVITS+ComfyUI）
 
     'os/os_achievement.js',

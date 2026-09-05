@@ -2761,6 +2761,12 @@ _directorSpec(castNames);
 
     win.OS_STATE_RUNTIME = {
         isEnabled, setEnabled,
+        // 手機類 app（VN 手機／微信／微博）的圖片描述也用同一份登記表展開 ##角色名## / ##C1##，外觀跟劇情插圖一致
+        expandLooks: async function (str) {
+            if (!str || String(str).indexOf('##') < 0) return str;
+            const map = await _buildLooksMap(null);
+            return _expandSceneNames(str, map, null);
+        },
         forceExtract, clearPatches, deepConsolidate,
         injectCurrent, injectRules, extractOnce,
         reconcile: _reconcilePatches,   // 對帳回滾：不靠刪除事件，任何「要用狀態」的入口都可以先叫它

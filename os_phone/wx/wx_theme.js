@@ -148,7 +148,6 @@
             .wx-grid-icon { width: 55px; height: 55px; background: #fff; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1px solid #e0e0e0; color: #444; }
             .wx-grid-label { font-size: 11px; color: #666; }
             .wx-img-block { max-width: 100%; border-radius: 4px; cursor: pointer; display:block; }
-            .wx-img-placeholder { background: #f0f0f0; color: #666; padding: 15px; text-align: center; border: 1px solid #ddd; border-radius: 4px; min-width: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
             .wx-time-stamp { text-align: center; font-size: 12px; color: #cecece; margin: 10px 0; width: 100%; clear:both; }
             .wx-voice-wrapper { display: flex; flex-direction: column; gap: 5px; cursor: pointer; }
             .wx-trans-box { font-size: 13px; padding: 8px; border-top: 1px solid rgba(0,0,0,0.1); display: none; background:rgba(0,0,0,0.05); }
@@ -294,7 +293,6 @@
             .wx-dark .wx-grid-icon { background: #1c1c1e; border-color: #2a2a2a; color: #ccc; }
             .wx-dark .wx-file-card, .wx-dark .wx-wb-share-card { background: #1c1c1e; border-color: #2a2a2a; }
             .wx-dark .wx-file-name, .wx-dark .wx-wb-share-text { color: #ccc; }
-            .wx-dark .wx-img-placeholder { background: #2a2a2c; border-color: #3a3a3c; color: #aaa; }
             .wx-dark .wx-settings-panel { background: #000; }
             .wx-dark .wx-set-group { background: #1c1c1e; border-top-color: #2a2a2a; border-bottom-color: #2a2a2a; }
             .wx-dark .wx-set-label { color: #f0f0f0; }

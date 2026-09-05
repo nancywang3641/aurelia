@@ -422,7 +422,8 @@
                 }
                 return `<div class="wx-gift-card-blue ${extraClass}" style="opacity:${opacity}" ${clickAction}><div class="wx-gift-top"><div class="wx-gift-icon-gold">${icon}</div><div class="wx-gift-title-text">${memo || '送你一份心意'}</div></div><div class="wx-gift-footer">${statusLabel}</div></div>`;
             });
-            html = html.replace(/\[\s*(图片|圖片|Img)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => { content = content.trim(); if (content.match(/^(https?:\/\/|data:|blob:)/i)) { return `<img src="${content}" class="wx-img-block" onclick="${app}.bigImg(this.src)">`; } return `<div class="wx-img-placeholder"><span style="font-size:24px; display:block; margin-bottom:5px;"><i class="fa-solid fa-image"></i></span><span style="font-size:13px; line-height:1.4;">${content}</span></div>`; });
+            // 圖片走三個手機 app 共用的管道；ref 帶 chatId，訊息位置由 .wx-msg-row 的 data-msg-idx 補上
+            html = html.replace(/\[\s*(图片|圖片|Img)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), { app: 'wx', ref: safeId }) : content; });
             html = html.replace(/\[\s*(语音|語音|Voice)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, txt) => { const cleanTxt = txt.replace(/['"]/g, ''); const sec = Math.min(60, Math.max(2, Math.ceil(cleanTxt.length/2))); return `<div class="wx-voice-wrapper" onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"><div class="wx-voice-box" style="width:${60+sec*2}px"><span style="margin:0 5px">((</span><span>${sec}"</span></div><div class="wx-trans-box"></div></div>`; });
             html = html.replace(/\[\s*(红包|RedPacket)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => {
                 // 解析內容：支持 [金額|備註|紅包ID] 或舊格式

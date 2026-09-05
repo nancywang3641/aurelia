@@ -761,6 +761,15 @@
         _scrollToBottom();
     }
 
+    // 共用圖片管道生完 → 寫回訊息；訊息位置從卡片所在那列的 data-msg-idx 拿
+    if (win.OS_PHONE_IMAGE && win.OS_PHONE_IMAGE.onDone) {
+        win.OS_PHONE_IMAGE.onDone('wx', (chatId, url, imgEl, desc) => {
+            const row = imgEl && imgEl.closest ? imgEl.closest('.wx-msg-row') : null;
+            const idx = row && row.dataset.msgIdx != null ? parseInt(row.dataset.msgIdx, 10) : -1;
+            return win.wxApp.setImageUrl(chatId, idx, desc, url);
+        });
+    }
+
     win.wxApp = {
         get GLOBAL_ACTIVE_ID() { return GLOBAL_ACTIVE_ID; },
         set GLOBAL_ACTIVE_ID(v) { GLOBAL_ACTIVE_ID = v; },   // 📞 電話 app 撥通時暫借 active id（buildContext 靠它抓該聯絡人 DB 歷史）；無 setter 會在 strict mode 拋 TypeError → 通話卡死不調 API
@@ -1032,6 +1041,20 @@
         },
         
         bigImg: function(src) { win.open(src, '_blank'); },
+
+        // 圖片生完寫回訊息：[图片:描述] → [图片:網址]，下次開這段對話直接顯示、不再重生
+        setImageUrl: async function(chatId, msgIdx, desc, url) {
+            const chat = GLOBAL_CHATS[chatId];
+            if (!chat || !Array.isArray(chat.messages) || !url) return false;
+            const tagRe = /\[\s*(图片|圖片|Img)\s*[:：]?\s*([\s\S]*?)\s*\]/i;
+            const hits = (m) => m && typeof m.content === 'string' && tagRe.test(m.content) && (!desc || m.content.indexOf(desc) >= 0);
+            let idx = Number.isInteger(msgIdx) ? msgIdx : -1;
+            if (!(idx >= 0 && hits(chat.messages[idx]))) idx = chat.messages.findIndex(hits);
+            if (idx < 0) return false;
+            chat.messages[idx].content = chat.messages[idx].content.replace(tagRe, `[图片:${url}]`);
+            if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { try { await win.WX_DB.saveApiChat(chatId, chat); } catch (e) { console.warn('[wx] 圖片網址寫回失敗:', e); } }
+            return true;
+        },
         
         toggleVoice: function(el, txt) { const box = el.querySelector('.wx-trans-box'); if(box.style.display==='block') { box.style.display='none'; } else { box.style.display='block'; box.innerText = ''; const t = decodeURIComponent(txt); let i=0; const timer = setInterval(()=>{ box.innerText += t.charAt(i); i++; if(i>=t.length) clearInterval(timer); }, 30); } },
         

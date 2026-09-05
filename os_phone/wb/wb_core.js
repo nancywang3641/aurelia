@@ -398,6 +398,19 @@
             });
         },
 
+        // 圖片生完寫回貼文：ref = 貼文 id｜第幾張；下次開微博直接顯示、不再重生
+        setImageUrl: async function(ref, url) {
+            const [postId, idxStr] = String(ref || '').split('|');
+            const post = GLOBAL_POSTS.find(p => p.id === postId);
+            if (!post || !post.media || !url) return false;
+            const idx = parseInt(idxStr, 10) || 0;
+            if (post.media.type === 'images' && Array.isArray(post.media.list)) post.media.list[idx] = url;
+            else if (post.media.type === 'image') post.media.desc = url;
+            else return false;
+            try { await win.OS_DB.saveWbPost(post); } catch (e) { console.warn('[Weibo] 圖片網址寫回失敗:', e); }
+            return true;
+        },
+
         _showToast: function(msg) {
             const old = doc.getElementById('wb-toast-el');
             if (old) old.remove();
@@ -694,5 +707,6 @@
             } else { setTimeout(win.wbApp.install, 500); }
         }
     };
+    if (win.OS_PHONE_IMAGE && win.OS_PHONE_IMAGE.onDone) win.OS_PHONE_IMAGE.onDone('wb', (ref, url) => win.wbApp.setImageUrl(ref, url));
     win.wbApp.install();
 })();

@@ -81,46 +81,14 @@
                         </div>
                         ${desc ? '<div style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.6); color:white; padding:4px 8px; border-radius:12px; font-size:11px; z-index:3;">點擊查看</div>' : ''}
                     </div>`;
-                } else if (post.media.type === 'image') {
-                    const desc = post.media.desc || '';
-                    if (desc.startsWith('http')) {
-                        // 真实图片 URL
-                        imagesHtml = `<div class="wb-img-grid" style="grid-template-columns: 1fr;"><div class="wb-img-item" style="background-image:url('${desc}')" onclick="event.stopPropagation(); window.open('${desc}')"></div></div>`;
-                    } else {
-                        // 图片描述文字：显示在灰色占位框里
-                        imagesHtml = `<div class="wb-img-grid" style="grid-template-columns: 1fr;">
-                            <div class="wb-img-item" style="background:#e8e8e8; display:flex; align-items:center; justify-content:center; padding:15px; min-height:120px;" onclick="event.stopPropagation();">
-                                <div style="text-align:center; color:#666; font-size:13px; line-height:1.5;">
-                                    <div style="font-size:28px; margin-bottom:8px;">🖼️</div>
-                                    <div>${desc}</div>
-                                </div>
-                            </div>
-                        </div>`;
-                    }
-                } else if (post.media.type === 'images') {
-                    // 🔥 多图展示
-                    const images = post.media.list || [];
-                    const count = images.length;
-
-                    // 决定网格列数：1图=1列，2-4图=2列，5-9图=3列
+                } else if (post.media.type === 'image' || post.media.type === 'images') {
+                    // 圖片走三個手機 app 共用的管道；ref = 貼文 id｜第幾張，生完寫回 post.media
+                    const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+                    const list = post.media.type === 'images' ? (post.media.list || []) : [post.media.desc || ''];
+                    const count = list.length;
                     const cols = count === 1 ? 1 : (count <= 4 ? 2 : 3);
-
-                    const imageItems = images.map((desc, idx) => {
-                        const isUrl = desc.startsWith('http');
-                        if (isUrl) {
-                            return `<div class="wb-img-item" style="background-image:url('${desc}')" onclick="event.stopPropagation(); window.open('${desc}')"></div>`;
-                        } else {
-                            // 多图时：只显示序号和图标，不显示完整描述（太挤）
-                            const shortDesc = desc.length > 20 ? desc.substring(0, 20) + '...' : desc;
-                            return `<div class="wb-img-item" style="background:#e8e8e8; display:flex; align-items:center; justify-content:center; flex-direction:column; padding:8px;" onclick="event.stopPropagation();" title="${desc}">
-                                <div style="font-size:20px; margin-bottom:4px;">🖼️</div>
-                                <div style="font-size:11px; color:#999; text-align:center; line-height:1.3;">${idx + 1}/${count}</div>
-                                <div style="font-size:10px; color:#aaa; text-align:center; margin-top:2px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${shortDesc}</div>
-                            </div>`;
-                        }
-                    }).join('');
-
-                    imagesHtml = `<div class="wb-img-grid" style="grid-template-columns: repeat(${cols}, 1fr);">${imageItems}</div>`;
+                    const items = list.map((desc, idx) => `<div class="wb-img-item">${PI ? PI.render(desc, { app: 'wb', ref: `${post.id}|${idx}`, fill: true }) : ''}</div>`).join('');
+                    imagesHtml = `<div class="wb-img-grid" style="grid-template-columns: repeat(${cols}, 1fr);">${items}</div>`;
                 }
             }
 

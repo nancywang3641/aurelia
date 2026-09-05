@@ -274,17 +274,9 @@
             let inner = '';
             if (imgM) {
                 const desc = imgM[2] || '圖片';
-                if (desc.match(/^(https?:\/\/|data:|blob:)/i)) { inner = `<img src="${desc}" style="max-width:185px; border-radius:6px; display:block; cursor:pointer;" onclick="window.open(this.src)">`; }
-                else {
-                    // 完整 desc 保留給 AI 生圖（含 (角色:外貌) 括號）；顯示用版本剝掉半形括號內容
-                    const escDescFull = String(desc).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-                    const displayDesc = String(desc).replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-                    inner = `<div class="wx-img-msg" data-prompt="${escDescFull}">
-                        <span class="wx-img-icon"></span>
-                        <span class="wx-img-desc">${displayDesc}</span>
-                        <button class="wx-img-gen" onclick="window.VN_Phone._genImg(this); event.stopPropagation();">展開圖片</button>
-                    </div>`;
-                }
+                // 圖片走三個手機 app 共用的管道（佔位卡＋展開鈕＋頭像桶生圖＋##角色名##展開）；VN 手機沒有資料層，生完只換畫面
+                const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+                inner = PI ? PI.render(desc, { app: 'vn_phone' }) : `<div class="chat-sys">${desc}</div>`;
             } else if (vocM) {
                 const txt = vocM[2] || ''; const sec = Math.min(60, Math.max(2, Math.ceil(txt.length / 2)));
                 const escVS = String(sender).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
@@ -372,47 +364,6 @@
             const core = win.VN_Core || (win.parent && win.parent.VN_Core);
             try { if (core && core._vnSoVITSPlay) core._vnSoVITSPlay(sender, text, '', ''); } catch (e) {}
             try { const mm = win.OS_MINIMAX || (win.parent && win.parent.OS_MINIMAX); if (mm && mm.playForChar) mm.playForChar(sender, text, { expression: '' }); } catch (e) {}
-        },
-
-        // ==========================================
-        //  ✨ 點按「生成圖片」鈕：呼叫 VN_Image.getScene 補真實圖
-        // ==========================================
-        _genImg: async function(btnEl) {
-            const card = btnEl.closest('.wx-img-msg');
-            if (!card || card.dataset.gening === '1') return;
-            const prompt = card.dataset.prompt || card.querySelector('.wx-img-desc')?.textContent || '';
-            if (!prompt.trim()) return;
-
-            card.dataset.gening = '1';
-            const origText = btnEl.textContent;
-            btnEl.textContent = '載入中…';
-            btnEl.disabled = true;
-            card.classList.add('wx-img-loading');
-
-            try {
-                const _mgr = win.OS_IMAGE_MANAGER || (win.parent && win.parent.OS_IMAGE_MANAGER);
-                if (!_mgr?.generate) throw new Error('OS_IMAGE_MANAGER 未載入');
-                // 聊天裡的「圖片」走角色那條接口（type='char'）— scene 是 VN 場景插圖獨立系統不共用
-                // type='char' 時：Pollinations 自動套 pollinations.charBasePrompt/charNegPrompt；NAI 自動套 novelai.charBasePrompt/charNegPrompt
-                const url = await _mgr.generate(prompt, 'char', { width: 1024, height: 1024 });
-                if (!url) throw new Error('未取得圖片');
-                const safeUrl = String(url).replace(/"/g, '%22');
-                // 先預載完才替換，避免容器立即消失留空白
-                await new Promise((resolve, reject) => {
-                    const pre = new Image();
-                    pre.onload = resolve;
-                    pre.onerror = reject;
-                    pre.src = safeUrl;
-                });
-                card.outerHTML = `<img src="${safeUrl}" style="max-width:240px; border-radius:8px; display:block; cursor:pointer;" onclick="window.open(this.src)">`;
-            } catch(e) {
-                console.warn('[wx-img-gen] 失敗:', e);
-                btnEl.textContent = '失敗，重試';
-                btnEl.disabled = false;
-                card.classList.remove('wx-img-loading');
-                card.dataset.gening = '0';
-                setTimeout(() => { if (btnEl.isConnected) btnEl.textContent = origText; }, 2000);
-            }
         },
 
         // ==========================================
