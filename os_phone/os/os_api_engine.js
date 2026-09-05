@@ -197,6 +197,9 @@
             rawContent = msg.content || '';
         }
         else if (typeof data === 'string') rawContent = data;
+        // 有 content 欄位就用它，空字串也算：以前 "" 會落到下面的 JSON.stringify，
+        // 把 {"content":"","reasoning":""} 整包當成模型的回答（DEBUG 綠勾、內容是一串 JSON）
+        else if (typeof data.content === 'string') rawContent = data.content;
         else if (data.content) rawContent = data.content;
         else rawContent = JSON.stringify(data);
 
@@ -989,7 +992,22 @@
                     fullText = normalizeResponse(data, _keepFences);
                 }
 
-                if (!fullText) throw new Error("API 返回內容為空 (可能被過濾或生成失敗)");
+                if (!fullText) {
+                    // 把上游給的線索帶出來：finish_reason 跟用量。用量全零＝對方根本沒跑模型
+                    // （公益站額度用完、被擋），跟「模型跑了但輸出被過濾」是兩回事，錯誤訊息要分得出來。
+                    let _why = '';
+                    try {
+                        const _r = rawApiResponse || {};
+                        const _fr = _r.choices?.[0]?.finish_reason || _r.candidates?.[0]?.finishReason || '';
+                        const _u = _r.usage || _r.usageMetadata || null;
+                        const _pt = _u ? (_u.prompt_tokens ?? _u.promptTokenCount) : undefined;
+                        if (_fr) _why += 'finish_reason=' + _fr;
+                        if (_pt !== undefined) _why += (_why ? '，' : '') + 'prompt_tokens=' + _pt;
+                        if (_pt === 0) _why += '（用量為零，上游沒有真的跑模型：多半是額度用完或被站方擋下）';
+                        else if (/safety|prohibited|recitation|blocklist/i.test(_fr)) _why += '（內容被上游安全過濾）';
+                    } catch (e) {}
+                    throw new Error('API 返回內容為空' + (_why ? '：' + _why : '（可能被過濾或生成失敗）'));
+                }
 
                 try { window._OS_DBG_RESPONSE?.(_dbgId, 200, rawApiResponse || fullText, Date.now() - _dbgStart); } catch(e) {}
 
