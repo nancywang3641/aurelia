@@ -44,9 +44,9 @@
                         }
                     });
                 } else {
-                    // 同步真名
+                    // 同步真名（通訊錄只有 upsert，會保留原本的 wx/wb 欄位只蓋根屬性）
                     if (contact.realName !== realName) {
-                        osContacts.update(userId, { realName: realName });
+                        osContacts.upsert({ id: userId, realName: realName });
                         contact.realName = realName;
                     }
                 }
