@@ -138,6 +138,12 @@ RedPacket領取格式注意:
 | [Trans|描述] | 過場：時間/回憶/夢境/視角轉換 |
 | [Exit|角色名] | 移除立繪 |
 
+## 主角狀態（每回合末尾）
+| [Date|月/日|時:分] | 故事時鐘。每回合末尾必寫，時間只能往前走；開場那回合由你定下第一個日期。時刻可寫傍晚、深夜這類字。 |
+| [HP|數值] | 主角體力。每回合末尾寫一行，沒變也照寫。 |
+| [Buff|名稱|持續回合] | 主角身上新出現或改變的狀態效果，增益減益都用這行。之後每回合系統自動遞減、歸零自動消失，不用重寫；提前解除寫 0。 |
+| [Event|月/日|一句話] | 劇情裡立下的約定、期限、預定行程。系統收進日曆、臨近時提醒你；已經在名單裡的不要重寫。 |
+
 ## 視差系統 TAG 表
 | [Sys|系統名|「訊息」] | 視差系統提示（一行寫得完的短訊息） |
 - 訊息不只一句就改用區塊寫法：一行就是一行，斷在哪由你決定。單行的 [Sys| 塞不進換行，腳本只能照句號機械斷，斷點常常不是你要的地方。
@@ -500,6 +506,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         // 這兩格在酒館是 injectPrompts 的 depth 2 / depth 1（貼著正文結尾）→ 出廠排在歷史之後，位置等價
         { type: 'sys', id: 'app_memory' },
         { type: 'sys', id: 'npc_dossier' },
+        { type: 'sys', id: 'mc_status' },
         { type: 'sys', id: 'memory_recall' },
         { type: 'sys', id: 'avs_vars' },
     ];
@@ -550,7 +557,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                         _dirty = true;
                     }
                     // 手機近況／NPC 人物檔案：酒館貼著正文結尾注入 → 補在 vn_history 後面，別掉到召回/變數之後
-                    for (const id of ['npc_dossier', 'app_memory']) {   // 反序插同一點 → 落地順序＝手機近況、人物檔案
+                    for (const id of ['mc_status', 'npc_dossier', 'app_memory']) {   // 反序插同一點 → 落地順序＝手機近況、人物檔案
                         if (_has(id)) continue;
                         const _hi = _items.findIndex(i => i.type === 'sys' && i.id === 'vn_history');
                         _items.splice(_hi < 0 ? _items.length : _hi + 1, 0, { type: 'sys', id });
@@ -678,6 +685,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         // 酒館靠 injectPrompts 每輪臨時插的注入源，獨立版沒有那條路 → 一樣收進這張順序表當一格。
         'npc_dossier':  { label: 'NPC 人物檔案',  icon: '📌', desc: '登場過的人物名冊，被提到的加注完整檔案', type: 'placeholder' },
         'app_memory':   { label: '手機近況',      icon: '📌', desc: '在場角色最近在手機 app 上跟你的互動', type: 'placeholder' },
+        'mc_status':    { label: '主角狀態',      icon: '📌', desc: '故事時鐘、HP、狀態效果剩幾回合、近期約定', type: 'placeholder' },
     };
     const _LATE_SYS_SLOTS = ['grand_summary', 'memory_recall', 'avs_vars'];   // 舊包遷移用：補進來時要放的位置見 loadBundles
 

@@ -447,6 +447,8 @@
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
+            // 🕰 主角狀態：每則新訊息讓狀態效果倒數一回合（同一則重播不重數），順便把畫面上的狀態列畫出來
+            try { const _S = win.OS_MC_STATUS || window.OS_MC_STATUS; if (_S) _S.onMessage(messageId).then(function () { _S.renderHud(); }); } catch (e) {}
             // 這份劇本的原文：區塊內容等一下會被「未知 XML 區塊過濾器」刪掉，
             //   彈卡片時要回原文撈整顆 <tag>…</tag>（PWA 沒有酒館訊息可讀，只能靠這份）。
             this._scriptRawText = String(txt || '');
@@ -2553,6 +2555,22 @@
                         .catch(() => _unlock(name, desc));
                 } else _unlock(name, desc);
                 // VN 內舊的成就 overlay 貼紙已移除（展示改由 VN 組件卡片負責）；這裡只記錄+繼續，不顯示、不卡劇情。
+                this.next(); return;
+            }
+
+            // 🕰 主角狀態：[Date|月/日|時:分] [HP|數值] [Buff|名|回合] [Event|月/日|一句話]
+            //    模型只回報變化，程式記住、倒數、下一輪再塞回去（os_phone/rpg/mc_status.js）。不顯示、不卡劇情。
+            if (/^\[(Date|HP|Buff|Debuff|Event)\|/i.test(line)) {
+                const _in = line.slice(1, -1).split('|');
+                const _tag = (_in[0] || '').trim().toLowerCase();
+                const _a = (_in[1] || '').trim(), _b = _in.slice(2).join('|').trim();
+                const _S = win.OS_MC_STATUS || window.OS_MC_STATUS;
+                if (_S) {
+                    if (_tag === 'date') _S.setDate(_a, _b);
+                    else if (_tag === 'hp') _S.setHp(_a);
+                    else if (_tag === 'buff' || _tag === 'debuff') { _S.setBuff(_a, _b); this.addLog('狀態', `${_a}${_b ? '（' + _b + ' 回合）' : ''}`); }
+                    else if (_tag === 'event') { _S.addEvent(_a, _b, '', 'ai'); this.addLog('約定', `${_a} ${_b}`); }
+                }
                 this.next(); return;
             }
 

@@ -197,6 +197,7 @@
                 </div>
 
                 <div id="quest-toast-stack"></div>
+                <div id="mc-status-hud" hidden></div>
 
                 <div id="trans-overlay" onclick="window.VN_Core.next()">
                     <div id="trans-text"></div>

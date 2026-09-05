@@ -10,6 +10,7 @@
     const APPS = [
         { id: 'wx',     name: '微信', emoji: '💬',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微信'] && win.__PHONE_APPS['微信'](c); } },
         { id: 'wb',     name: '微薄', emoji: '👁️',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微博'] && win.__PHONE_APPS['微博'](c); } },
+        { id: 'cal',    name: '日曆', emoji: '📅',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['日曆'] && win.__PHONE_APPS['日曆'](c); } },
         // 🔮 塔羅已搬進廣場的占卜小屋（快轉地圖→占卜小屋→點紫薇→占卜）；手機不再重複開一個門。
         //    PWA 獨立版還是走手機那條（那邊沒有廣場），見 index.js / index.html 的 PhoneSystem.install。
         { id: 'rpg',    name: 'RPG',  emoji: '🛡️', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },

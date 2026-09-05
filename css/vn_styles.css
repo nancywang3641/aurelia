@@ -1353,6 +1353,15 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         
         /* 🧭 支線提示小卡 (Quest toast)：上方置中滑入、停幾秒自己走，pointer-events 全關不擋也不吃點擊 */
         #quest-toast-stack { position: absolute; top: 56px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 26; }
+        /* 🕰 主角狀態列：日期時間、HP、狀態效果剩餘回合。上方置中一條窄 pill，不吃點擊。 */
+        #mc-status-hud { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; max-width: 86%; padding: 4px 10px; background: rgba(10,8,2,0.72); border: 1px solid rgba(212,175,55,0.35); border-radius: 999px; backdrop-filter: blur(6px); font-family: var(--font-sans); font-size: 0.72rem; color: rgba(255,248,230,0.92); pointer-events: none; z-index: 25; white-space: nowrap; overflow: hidden; }
+        #mc-status-hud[hidden] { display: none; }
+        .mc-hud-item { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-left: 1px solid rgba(212,175,55,0.25); }
+        .mc-hud-item:first-child { border-left: none; padding-left: 0; }
+        .mc-hud-item i { font-size: 0.68rem; color: var(--gold); }
+        .mc-hud-hp i { color: #e06a6a; }
+        .mc-hud-buff { color: rgba(255,220,160,0.95); }
+        .mc-hud-buff b { font-weight: 600; color: var(--gold); margin-left: 2px; }
         .quest-toast { display: flex; align-items: flex-start; gap: 12px; max-width: min(78%, 420px); padding: 10px 16px 11px 14px; background: linear-gradient(160deg, rgba(20,14,4,0.92), rgba(10,8,2,0.92)); border: 1px solid rgba(212,175,55,0.45); border-left: 3px solid var(--gold); border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 24px rgba(212,175,55,0.1); backdrop-filter: blur(6px); font-family: var(--font-sans); pointer-events: none; animation: quest-toast-in 0.45s cubic-bezier(.22,1,.36,1) both; }
         .quest-toast.leaving { animation: quest-toast-out 0.5s ease forwards; }
         .quest-toast-icon { color: var(--gold); font-size: 1.05rem; margin-top: 3px; flex-shrink: 0; }

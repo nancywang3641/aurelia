@@ -244,6 +244,7 @@ const PHONE_FILES = [
     // === 🛡️ RPG 狀態系統 ===
     'rpg/state_schema.js',         // Stage 1：主模型生 schema
     'rpg/npc_dossier.js',          // 📇 NPC 長期人物檔案（群像卡防失憶；state_runtime 搭便車建檔＋名冊/名字觸發注入）
+    'rpg/mc_status.js',           // 🕰 主角狀態與故事時鐘：模型回報變化、程式記住倒數、下一輪塞回去；日曆 app 讀同一份
     'rpg/state_runtime.js',        // Stage 2：副模型抽 + patch + injectPrompts
     'rpg/blacklist_injector.js',   // 每輪 inject 黑名單條目（避免世界書 keys 觸發漏掉）
     'rpg/avatar_rules_injector.js', // 依選的頭像產圖器，自動翻「-VN小說家-」世界書三條目(依名字)的開關
@@ -278,7 +279,8 @@ const PHONE_FILES = [
 
     // === 🟣 微薄 (Weibo) — 搬回酒館（順序同 PWA index.html）===
     'wb/wb_user_profile.js', 'wb/wb_account.js', 'wb/wb_theme.js',
-    'wb/wb_view.js', 'wb/wb_core.js'
+    'wb/wb_view.js', 'wb/wb_core.js',
+    'os/os_calendar.js',         // 📅 日曆 app（讀 OS_MC_STATUS）
 ];
 
 // CSS 內相對 url() 改寫成絕對(相對 CSS 檔自己的目錄)。
