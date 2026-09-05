@@ -310,32 +310,6 @@ B. 發布新帖子:
 2. 人物必須符合世界觀設定，不得憑空創造
 3. 只輸出 JSON，不輸出任何標籤或說明`,
 
-        'quest_list_gen': `[系統指令：任務委託過濾協議]
-你是 NEXUS PARALLAX 官方系統導覽員 Iris。
-用戶已選擇前往「{{worldName}}」({{worldDesc}})。
-你需要生成 6 個該世界的冒險委託任務。
-
-【輸出規則：絕對禁止使用 JSON】
-1. 導覽員對話：格式：[Char|Iris|表情|「對話內容」]
-2. 數據標籤：格式：[Quest|任務ID(如Q01)|任務標題|等級(S/A/B/C/D)|任務簡報說明|報酬|地點|危險度1-10]
-
-【標籤範例】
-[Char|Iris|normal|「資料庫同步完成，『{{worldName}}』的委託名單已載入。」]
-[Quest|Q01|討伐變異巨獸|A|在迷霧森林深處發現了狂暴的巨獸，威脅到周邊村莊的安全。|2000G|迷霧森林|8]`,
-
-        'quest_recruit_gen': `[系統指令：組隊信號攔截協議]
-你是 視差系統導覽員，視差書咖店長兼駐店小說家「瀅瀅」。
-用戶正在為任務「{{questTitle}}」（等級 {{questRank}}）尋找隊友。
-請生成 4 名潛在的 AI 隊友候選人。
-
-【輸出規則：絕對禁止使用 JSON】
-1. 導覽員對話：格式：[Char|瀅瀅|表情|「對話內容」]
-2. 數據標籤：格式：[Recruit|名字|職業|等級(整數)|性別|主要技能|簡短背景與性格描述|AvatarPrompt]
-
-【標籤範例】
-[Char|瀅瀅|smile|「描述」]
-[Recruit|亞瑟|重裝戰士|25|男|巨盾防禦,嘲諷|前皇家衛隊成員，因為抗命被開除，性格沉穩死板。|portrait, bust shot, young man age 25, short brown hair, heavy armor, plain dark background]`,
-
         'map_scan': `[系統指令：深度環境掃描]
 你是本世界的探索系統 AI。請使用繁體中文生成探索數據。
 
@@ -479,20 +453,18 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     //   而勾不生效的樣子跟「提示詞沒寫好」一模一樣，最難查。
     //   ⛔ 已移除：刑偵(inv)/看護(child)/直播(livestream) 模組整包不在了；
     //      寵物(pet)/不夜城(host) 本來就沒有勾選格。
-    //   🔧 QB 委託的 key 從 'qb' 改成 'quest'：它實際發的是 quest_list_gen / quest_recruit_gen，
-    //      'qb' 前綴一條都對不上 → 這格從以前到現在都是沒作用的。
+    //   ⛔ 2026-09-06 視差委託板(QB)整包拆了：quest_list_gen / quest_recruit_gen 不在了，'qb'/'quest' 進 PANEL_DEAD。
     const PANELS = [
         { key: 'vn_story',   label: 'VN',     icon: 'fa-gamepad',        color: '#7c3aed' },
         { key: 'wx',         label: '微信',    icon: 'fa-comment',        color: '#07c160' },
         { key: 'wb',         label: '微薄',    icon: 'fa-hashtag',        color: '#e8450a' },
         { key: 'call',       label: '電話',    icon: 'fa-phone',          color: '#38bdf8' },
-        { key: 'quest',      label: 'QB委託',  icon: 'fa-clipboard-list', color: '#d4af37' },
         { key: 'map',        label: '地圖',    icon: 'fa-map',            color: '#10b981' },
         { key: 'tarot',      label: '塔羅',    icon: 'fa-wand-sparkles',  color: '#a855f7' },
     ];
     const PANEL_KEYS = PANELS.map(p => p.key);
-    const PANEL_MIGRATE = { qb: 'quest' };                      // 舊 key → 新 key
-    const PANEL_DEAD = ['inv', 'child', 'livestream', 'pet', 'host'];   // 模組已不存在，勾了也沒有路由
+    const PANEL_MIGRATE = {};                                    // 舊 key → 新 key（目前沒有）
+    const PANEL_DEAD = ['inv', 'child', 'livestream', 'pet', 'host', 'qb', 'quest'];   // 模組已不存在，勾了也沒有路由
 
     // ── 預設包 (Bundle) 存儲 ──
     const BUNDLE_KEY = 'os_prompt_bundles';

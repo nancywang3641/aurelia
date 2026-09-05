@@ -26,7 +26,6 @@
     const PANEL_MAP = {
         'child': () => win.CHILD_CORE,
         'pet':   () => win.PET_HOME,
-        'quest': () => win.QB_CORE,
         'case':  () => win.INV_CORE,
     };
 

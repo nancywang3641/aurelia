@@ -720,7 +720,6 @@
 
     AureliaControlCenter.launchGameApp = function(key) {
         const GAME_APP_MAP = {
-            qb:         () => window.OS_QUEST_BOARD?.launchApp,
             pet:        () => window.PET_SHOP?.launch,
             pet_home:   () => window.PET_HOME?.launch,
             tarot:      () => window.OS_TAROT?.launch,
@@ -795,7 +794,6 @@
                 'think': window.OS_THINK,
                 '系統診斷': window.OS_MONITOR,
                 'RPG 狀態': window.RPG_PANEL,
-                '視差引擎': window.OS_QUEST_BOARD,
                 'avs': window.OS_AVS,
                 '變數工坊': window.OS_AVS,
                 '地圖': window.OS_MAP,

@@ -10,7 +10,7 @@
  * 4. 解析 [LaunchApp|xxx] 標籤，與 Control Center 連動打開外部面板。
  * 5. 導出全局登入資訊 (getUserName / setUserName)，供其他面板 (App) 讀取。
  * 6. 管理 iOS 動態島/瀏海的安全區域與強制下移佈局。
- * 7. [新增] 渲染大廳專屬的「世界館藏書櫃」，並將開書事件拋給 QB_CORE。
+ * 7. 渲染大廳專屬的「世界館藏書櫃」（書架本體在 os_phone/qb/qb_bookshelf.js）。
  */
 
 (function(VoidTerminal) {
@@ -29,7 +29,7 @@
     }
     applyLayoutMode(); // 初始化執行
 
-    // ===== 全域世界館藏 (供 QB_CORE 共用) =====
+    // ===== 全域世界館藏 (書架 QbBookshelf 讀) =====
     const BASE_IMG_URL = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/home-page/';
     window.AURELIA_WORLDS = {
         xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: '⚔️', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: BASE_IMG_URL + '蒼泱神州.png' },
@@ -2507,7 +2507,7 @@ ${sections}`;
     try { if (window.CCR_LAUNCHER && window.CCR_LAUNCHER.refresh) window.CCR_LAUNCHER.refresh(); } catch (e) {}
 
     // ===== 導出全局介面 =====
-    // 暴露到外層，讓其他面板 (如 QB_CORE, IDOL_CORE) 能夠調用
+    // 暴露到外層，讓其他面板 (如書架 QbBookshelf) 能夠調用
     VoidTerminal.playSequence = playIrisSequence;
     VoidTerminal.recompactNpcMemory = recompactNpcMemory;   // 大廳 NPC 記憶手動整理（actor menu 呼叫）
     VoidTerminal.primeStageDialog = primeStageDialog;       // 開聊/切換 NPC 清殘留對話框（lobby_stage 呼叫）

@@ -3,7 +3,7 @@
 // 職責：書架視窗模組 — 書脊渲染、書封面展開、撰寫新書、刪除確認彈窗
 // 從 void_terminal.js 抽出，完全無狀態，依賴全域物件：
 //   window.AURELIA_WORLDS / AURELIA_CUSTOM_WORLDS
-//   window.QB_CORE        (createCustomWorld / openBook)
+//   window.OS_API_ENGINE  (generateText — 撰寫新書用)
 //   window.OS_DB          (deleteVarPack / worldbook CRUD)
 //   window.OS_WORLDBOOK   (getAvailablePacks)
 //   window.OS_API         (isStandalone)
@@ -373,6 +373,116 @@
     }
 
     // ── 撰寫新書面板 ─────────────────────────────────────────────
+    // ── 撰寫新書（＋書脊）─────────────────────────────────────
+    //   2026-09-06 從已拆掉的視差委託板 qb_core.js 搬過來：書脊「＋」建自訂世界這件事是書架的，
+    //   跟挑任務那層殼無關。AI 叫用改走 OS_API_ENGINE，店長台詞走 VoidTerminal.playSequence。
+    async function _askAI(msg) {
+        try {
+            if (window.OS_API_ENGINE && typeof window.OS_API_ENGINE.generateText === 'function') return await window.OS_API_ENGINE.generateText('general_assistant', msg);
+            console.warn('[書架] 尚未掛載獨立 API 引擎 (OS_API_ENGINE)。'); return null;
+        } catch (e) { console.error('[書架] API 崩潰:', e); return null; }
+    }
+    async function createCustomWorld(keyword, lorebookContext) {
+        if (!keyword && !lorebookContext) return null;
+
+        // 有世界書內容時，把它加進提示
+        const loreBlock = lorebookContext
+            ? `\n\n以下是已知的世界書資料，請參考融入設計：\n${lorebookContext.slice(0, 2000)}`
+            : '';
+
+        // 1. 生成世界觀描述
+        const promptMsg = keyword
+            ? `請根據關鍵字「${keyword}」設計一個視差宇宙的RPG世界。${loreBlock}\n請直接輸出一段50字以內的精簡描述，不要任何多餘的對話或格式。`
+            : `請根據以下世界書資料，用50字以內總結這個世界的氛圍與背景，直接輸出描述，不要任何格式：${loreBlock}`;
+        const desc = await _askAI(promptMsg) || `這是一個由「${keyword || '世界書'}」構成的奇妙世界，充滿未知的挑戰與機遇。`;
+
+        // 2. 自動生成 AVS 變數包
+        let autoPackId = null;
+        try {
+            const varPrompt = `根據這個世界觀：「${desc}」${loreBlock}
+請列出 5～8 個在這個世界跑團時最值得追蹤的數值變數，每行一個，格式為「變數名 = 預設值」。
+規則：
+- 變數名用英文或中文都可以，簡短清楚
+- 預設值只能是數字或帶引號的字串
+- 不要任何說明文字，直接輸出清單
+
+範例格式：
+hp = 100
+gold = 0
+好感度 = 0
+status = "正常"`;
+
+            const varRaw = await _askAI(varPrompt) || '';
+
+            const variables = [];
+            varRaw.split('\n').forEach(line => {
+                const m = line.trim().match(/^([^\s=]+)\s*=\s*(.+)$/);
+                if (!m) return;
+                const name = m[1].trim();
+                const raw  = m[2].trim().replace(/^["']|["']$/g, '');
+                if (name) variables.push({ name, defaultValue: raw });
+            });
+
+            if (variables.length > 0 && window.OS_DB?.saveVarPack) {
+                autoPackId = 'pack_' + Date.now();
+                const worldId = 'custom_' + Date.now(); // 先生成 worldId，後面建世界用同一個
+                await window.OS_DB.saveVarPack({
+                    id:        autoPackId,
+                    name:      keyword || '自訂世界',
+                    notes:     `由 AI 根據《${keyword || '世界書條目'}》世界觀自動生成`,
+                    variables
+                });
+                console.log(`[AVS] 自動建立變數包「${keyword}」，共 ${variables.length} 個變數`);
+
+                // 自動生成條件規則（按世界綁定）
+                if (window.OS_AVS_RULES?.generateRulesForWorld) {
+                    await window.OS_AVS_RULES.generateRulesForWorld({
+                        worldId,
+                        worldTitle: keyword || '自訂世界',
+                        worldDesc:  desc.replace(/<[^>]*>/g, '').trim() + (loreBlock ? loreBlock.slice(0, 500) : ''),
+                        variables,
+                        callApi: (k, m) => window.OS_API_ENGINE?.generateText?.(k, m)
+                    });
+                }
+                // 把 worldId 記下來，等下建世界物件時用
+                window._pendingAutoWorldId = worldId;
+            }
+        } catch(e) { console.warn('[AVS] 自動建立變數包失敗（不影響建世界）:', e); }
+
+        // 3. 生成書本封面 (調用 OS_IMAGE_MANAGER)
+        let coverUrl = '';
+        if (window.OS_IMAGE_MANAGER && typeof window.OS_IMAGE_MANAGER.generateItem === 'function') {
+            try {
+                coverUrl = await window.OS_IMAGE_MANAGER.generateItem(`book cover, ${keyword}, cinematic lighting, highly detailed, masterpiece, no text`, { width: 512, height: 768 });
+            } catch(e) { console.warn('書封生成失敗', e); }
+        }
+
+        // 沿用自動生成規則時建好的 worldId，確保規則與世界 ID 一致
+        const newId = window._pendingAutoWorldId || ('custom_' + Date.now());
+        delete window._pendingAutoWorldId;
+        const worldTitle = keyword || desc.slice(0, 12).replace(/[，。！？\s]/g, '') || '自訂世界';
+        const newWorld = {
+            id: newId,
+            title: worldTitle,
+            icon: '📘',
+            desc: desc.replace(/<[^>]*>/g, '').trim(),
+            danger: Math.floor(Math.random() * 5) + 3,
+            cover: coverUrl || 'https://files.catbox.moe/3ub4va.png',
+            custom: true,
+            autoPackId  // 記錄對應的自動變數包 ID，供以後快速初始化用
+        };
+
+        // 存入全域供大廳書櫃讀取
+        window.AURELIA_CUSTOM_WORLDS = window.AURELIA_CUSTOM_WORLDS || [];
+        window.AURELIA_CUSTOM_WORLDS.push(newWorld);
+        // 持久化到 localStorage
+        try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
+
+        const packNote = autoPackId ? '，變數包也幫你備好了！' : '！';
+        window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|smile|「寫好了！這本《${worldTitle}》絕對是我本月的得意之作，快打開看看吧${packNote}」]`);
+        return newWorld;
+    }
+
     function openCreate() {
         const panel   = document.getElementById('qb-book-cover-panel');
         const shelves = _getShelves();
@@ -483,16 +593,12 @@
                 setTimeout(() => { input.style.borderColor = 'rgba(239,227,208,0.16)'; }, 1500);
                 return;
             }
-            if (window.QB_CORE && typeof window.QB_CORE.createCustomWorld === 'function') {
-                submit.textContent = '撰寫中…';
-                submit.disabled = true;
-                await window.QB_CORE.createCustomWorld(keyword || lore.slice(0, 20), lore);
-                panel.style.display = 'none';
-                shelves.forEach(s => s.style.display = 'flex');
-                render();
-            } else {
-                window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|think|「哎呀，我的鋼筆好像沒水了 (QB_CORE 未連線)。」]`);
-            }
+            submit.textContent = '撰寫中…';
+            submit.disabled = true;
+            await createCustomWorld(keyword || lore.slice(0, 20), lore);
+            panel.style.display = 'none';
+            shelves.forEach(s => s.style.display = 'flex');
+            render();
         };
 
         input.onkeydown = (e) => { if (e.key === 'Enter') doCreate(); };
@@ -1660,7 +1766,7 @@
                     return;
                 }
 
-                // ── 一般世界路徑（QB 任務板）───────────────────────
+                // ── 一般世界路徑：踏入＝直接開這個世界的故事（挑任務那層殼已拆）───────────────────────
                 try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
                 // 這條路以前沒寫 vn_current_world_id，留著上一次 dive 的舊值 →
                 //   「這本書」的設定（立繪模式、AVS 條件規則的 worldId）全部認錯書。
@@ -1691,11 +1797,17 @@
                 shelves.forEach(s => s.style.display = 'flex');
 
                 if (isStandalone) {
-                    if (window.QB_CORE?.openBook) {
-                        window.QB_CORE.openBook(w.id);
-                    } else {
-                        window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|think|「哎呀，這本書好像還沒準備好 (QB_CORE 模組未連線)。」]`);
-                    }
+                    // 視差委託板（挑任務→組隊→LINK START 那層殼）2026-09-06 拆了，被世界門＋創作室組件取代。
+                    //   踏入一本書＝直接開這個世界的故事：走跟自由劇情同一條生成路，世界名與簡介當請求。
+                    //   舞台 DOM 要先由 showVnPanel 建出來（同角色卡那條的教訓），生成器掛在 VN_PLAYER。
+                    const _req = `世界背景：${w.title}（${w.desc || ''}）`;
+                    if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                    if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel();
+                    setTimeout(() => {
+                        const P = window.VN_PLAYER || window.VN_Core;
+                        if (P && P.runFreeDive) P.runFreeDive({ title: w.title, request: _req });
+                        else console.warn('[書架] 生成器還沒就緒，這次踏入沒跑起來');
+                    }, 0);
                 } else {
                     if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
                     if (window.StoryExtractor?.show) window.StoryExtractor.show();

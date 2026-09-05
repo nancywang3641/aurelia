@@ -3558,16 +3558,6 @@
                 console.log('[VN] 自由書籍 Dive 觸發生成:', _free.title || '（無標題）');
             }, 300);
         }
-
-        // QB Dive：直接觸發生成（獨立路徑）
-        if (window._pendingQBPayload && (win.OS_API?.isStandalone?.() ?? false)) {
-            const _qbPayload = window._pendingQBPayload;
-            window._pendingQBPayload = null;
-            setTimeout(() => {
-                runFreeDive({ title: _qbPayload.title || '', request: _qbPayload.startPrompt });
-                console.log('[VN] QB Dive 觸發生成:', _qbPayload.title);
-            }, 300);
-        }
     }
 
     function install() {
@@ -3577,17 +3567,6 @@
         } else { setTimeout(install, 1000); }
     }
     install();
-
-    // === 7. QB 劇本包接收（來自 qb_core diveQuest） ===
-    window._pendingQBPayload = window._pendingQBPayload || null;
-    win.addEventListener('VN_STORY_STARTED', function(e) {
-        const isStandalone = win.OS_API?.isStandalone?.() ?? false;
-        if (!isStandalone) return; // 只在獨立模式有效，確保不污染酒館模式
-        const payload = e.detail;
-        if (!payload || !payload.startPrompt) return;
-        window._pendingQBPayload = payload;
-        console.log('[VN] 收到 VN_STORY_STARTED，暫存 QB 劇本包:', payload.title);
-    });
 
     // ⚠️ 截斷／API 錯誤橫幅（兩版共用同一份 UI，重試行為由呼叫端給）
     //    酒館：/regenerate 與 /continue 交給酒館助手；獨立版：生成器自己重跑或接續（沒有 slash 指令可用）。
