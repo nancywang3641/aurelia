@@ -140,7 +140,9 @@
             Object.keys(z.facilities || {}).forEach(fKey => {
                 const f = z.facilities[fKey];
                 const sceneId = f.sceneId || `${zKey}_${fKey}`;
-                lines.push(`- ${sceneId} (${z.name} / ${f.name})`);
+                // 地點說明與常客一起餵：排程才排得出「誰本來就會在哪」，而不是把人隨機撒進格子
+                const extra = [f.desc ? f.desc : '', Array.isArray(f.regulars) && f.regulars.length ? `常客：${f.regulars.join('、')}` : ''].filter(Boolean).join('；');
+                lines.push(`- ${sceneId} (${z.name} / ${f.name})${extra ? '：' + extra : ''}`);
             });
         });
         return lines.join('\n');

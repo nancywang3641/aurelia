@@ -717,7 +717,7 @@ ${facilityText}
         title.innerText = (world && world.name ? world.name : 'AUREALIS').toUpperCase();
 
         const zoneIds = WORLD() ? WORLD().getZoneIds() : [];
-        const labels = { 'A': 'Central', 'B': 'Nocturne', 'C': 'Horizon', 'D': 'Ivory', 'E': 'Spire' };
+        const labels = { 'A': 'Central', 'B': 'Nocturne', 'C': 'Horizon', 'D': 'Ivory', 'E': 'Spire', 'F': 'Aetherdock', 'G': 'Mirage' };
         const dynamicId = win.WORLD_RUNTIME ? win.WORLD_RUNTIME.DYNAMIC_ZONE_ID : 'Z_DYNAMIC';
 
         // 動態區永遠排最後
@@ -785,8 +785,8 @@ ${facilityText}
                 </div>`;
             }
 
-            // 奧瑞亞 5 區用單字母（A-E 是設計感）；其他用 zone.icon；都沒有就 fallback emoji
-            const aurealisLetters = { A: true, B: true, C: true, D: true, E: true };
+            // 奧瑞亞 7 區用單字母（A-G 是設計感）；其他用 zone.icon；都沒有就 fallback emoji
+            const aurealisLetters = { A: true, B: true, C: true, D: true, E: true, F: true, G: true };
             const isAurealisLetter = aurealisLetters[id] === true && id.length === 1;
             const zoneIcon = (zone && zone.icon) ? zone.icon : '';
             const zoneName = (zone && zone.name) ? zone.name : 'ZONE';
@@ -1926,6 +1926,12 @@ ${facilityText}
         // 使用 OS_API
         try {
             let prompt = `請為地點「${fac.name}」生成 2-3 位路人角色與一段環境描寫。`;
+            // 📍 地點自己的說明與常客（map_data 的 desc / regulars）：探索不再憑空造人。
+            //   常客是「這裡的人本來就會出現的名單」，AI 依時段與劇情決定誰在場；不是要它每次全塞進來。
+            if (fac.desc) prompt += `\n【這個地點】${fac.desc}`;
+            if (Array.isArray(fac.regulars) && fac.regulars.length) {
+                prompt += `\n【常客】${fac.regulars.join('、')}\n規則：在場人物優先從常客裡挑符合當下時段與劇情的，其餘才是新路人；常客是正文既有角色時直接用本名與既有人設，不要重新編造。`;
+            }
             // 🕒 時間一致性：讓 AI 從跑團上下文自己判定當下時段，別生出不合時宜的活動
             prompt += '\n【時間一致性】從對話上下文判斷當前劇情的時段與情境，生成的人物與活動必須符合該時段。';
             // 🧑‍🤝‍🧑 跨設施名冊：同區其他地點已掃出的人物唸給 AI 聽，防撞名/行蹤矛盾（A在食堂吃飯就別在B教室出現）
