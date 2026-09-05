@@ -108,8 +108,21 @@
             @keyframes wbToastIn { from { opacity:0; transform: translateX(-50%) translateY(8px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
             @keyframes wbToastOut { to { opacity:0; } }
 
+            /* === 確認視窗（刪除／清空） === */
+            .wb-ask-mask { position: absolute; inset: 0; z-index: 300; background: rgba(0,0,0,0.45); display: flex; align-items: flex-end; justify-content: center; padding: 16px; animation: wbFadeIn 0.15s; }
+            .wb-ask-card { width: 100%; background: #fff; border-radius: 14px; padding: 18px 16px 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); }
+            .wb-ask-text { font-size: 15px; color: #1a1a1a; text-align: center; line-height: 1.5; margin-bottom: 14px; }
+            .wb-ask-btns { display: flex; gap: 10px; }
+            .wb-ask-btn { flex: 1; text-align: center; padding: 11px 0; border-radius: 10px; font-size: 15px; cursor: pointer; user-select: none; }
+            .wb-ask-cancel { background: #f2f2f2; color: #333; }
+            .wb-ask-ok { background: #ff4444; color: #fff; font-weight: bold; }
+            .wb-ask-btn:active { opacity: 0.75; }
+
             /* === 黑夜模式 === */
             .wb-dark { background: #111 !important; }
+            .wb-dark .wb-ask-card { background: #1c1c1e; }
+            .wb-dark .wb-ask-text { color: #f0f0f0; }
+            .wb-dark .wb-ask-cancel { background: #2a2a2a; color: #ddd; }
             .wb-dark .wb-header { background: #1c1c1e !important; border-bottom-color: #2a2a2a !important; }
             .wb-dark .wb-header-title { color: #f0f0f0; }
             .wb-dark .wb-header-btn { color: #f0f0f0; }

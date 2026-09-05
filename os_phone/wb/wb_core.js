@@ -126,7 +126,7 @@
         },
 
         deleteComment: async function(postId, commentIndex) {
-            if(!confirm('確定刪除這條評論嗎？')) return;
+            if (!(await this._ask('刪除這條評論？', '刪除'))) return;
             const post = GLOBAL_POSTS.find(p => p.id === postId);
             if (post && post.comments) {
                 post.comments.splice(commentIndex, 1);
@@ -136,7 +136,7 @@
         },
 
         deletePost: async function(postId) {
-            if(!confirm('確定刪除這條微博嗎？')) return;
+            if (!(await this._ask('刪除這條微博？', '刪除'))) return;
             GLOBAL_POSTS = GLOBAL_POSTS.filter(p => p.id !== postId);
             await win.OS_DB.deleteWbPost(postId);
             if (CURRENT_OPEN_POST_ID === postId) {
@@ -147,12 +147,12 @@
         },
 
         clearAllData: async function() {
-            if (confirm('⚠️ 確定要清空所有微博數據嗎？')) {
-                await win.OS_DB.clearWbPosts();
-                GLOBAL_POSTS = [];
-                this.render();
-                alert('已清空。');
-            }
+            const n = GLOBAL_POSTS.length;
+            if (!(await this._ask(`清空全部 ${n} 條微博？刪了就回不來。`, '清空'))) return;
+            await win.OS_DB.clearWbPosts();
+            GLOBAL_POSTS = [];
+            this.render();
+            this._showToast('已清空');
         },
 
         // --- 編輯功能區 ---
@@ -270,7 +270,7 @@
         deleteSelectedContacts: async function() {
             const checkboxes = doc.querySelectorAll('.wb-contact-chk:checked');
             if (checkboxes.length === 0) { alert('請先勾選要刪除的聯繫人'); return; }
-            if (!confirm(`確定要刪除選中的 ${checkboxes.length} 個聯繫人嗎？\n此操作無法恢復。`)) return;
+            if (!(await this._ask(`刪除選中的 ${checkboxes.length} 個聯繫人？刪了就回不來。`, '刪除'))) return;
 
             const osContacts = win.OS_CONTACTS;
             if (!osContacts) return;
@@ -376,6 +376,26 @@
             } else {
                 alert('轉發失敗');
             }
+        },
+
+        // 微博自己畫的確認視窗：瀏覽器原生 confirm 在她的環境擋不住手滑，改成兩顆鈕的底部卡片。
+        // 回 Promise<boolean>；點背景或取消都算否。掛在 .wb-shell 裡，詳情頁疊在上面時也蓋得住。
+        _ask: function(text, okLabel) {
+            return new Promise((resolve) => {
+                const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER || doc.body;
+                const old = host.querySelector('.wb-ask-mask');
+                if (old) old.remove();
+                const mask = doc.createElement('div');
+                mask.className = 'wb-ask-mask';
+                mask.innerHTML = `<div class="wb-ask-card"><div class="wb-ask-text"></div><div class="wb-ask-btns"><div class="wb-ask-btn wb-ask-cancel">取消</div><div class="wb-ask-btn wb-ask-ok"></div></div></div>`;
+                mask.querySelector('.wb-ask-text').textContent = text;
+                mask.querySelector('.wb-ask-ok').textContent = okLabel || '確定';
+                const done = (v) => { mask.remove(); resolve(v); };
+                mask.querySelector('.wb-ask-ok').onclick = (e) => { e.stopPropagation(); done(true); };
+                mask.querySelector('.wb-ask-cancel').onclick = (e) => { e.stopPropagation(); done(false); };
+                mask.onclick = (e) => { if (e.target === mask) done(false); };
+                host.appendChild(mask);
+            });
         },
 
         _showToast: function(msg) {
