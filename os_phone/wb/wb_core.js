@@ -79,7 +79,7 @@
                                 const loadMoreBtn = doc.getElementById('wb-load-more-btn');
                                 if (loadMoreBtn) {
                                     loadMoreBtn.classList.remove('wb-load-more-loading');
-                                    loadMoreBtn.innerHTML = '↻ 載入更多評論';
+                                    loadMoreBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 載入更多評論';
                                     loadMoreBtn.style.pointerEvents = '';
                                 }
                             }
@@ -91,6 +91,81 @@
                 // 正常渲染主頁面
                 APP_CONTAINER.innerHTML = win.WB_VIEW.renderApp(GLOBAL_POSTS, CURRENT_TAB, this.isLoading, DARK_MODE);
             }
+        },
+
+        // --- 發文 ---
+        _compose: null,   // { text, imgDesc, photo }；null = 沒開
+
+        _renderCompose: function() {
+            const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER;
+            if (!host) return;
+            const old = host.querySelector('.wb-compose-mask');
+            if (old) old.remove();
+            if (!this._compose) return;
+            const holder = doc.createElement('div');
+            holder.innerHTML = win.WB_VIEW.renderCompose(this._compose);
+            host.appendChild(holder.firstElementChild);
+            const ta = host.querySelector('#wb-compose-text');
+            if (ta) ta.focus();
+        },
+        _readCompose: function() {
+            if (!this._compose) return;
+            const ta = doc.getElementById('wb-compose-text');
+            const dsc = doc.getElementById('wb-compose-imgdesc');
+            if (ta) this._compose.text = ta.value;
+            if (dsc) this._compose.imgDesc = dsc.value;
+        },
+        openCompose: function() {
+            this._compose = { text: '', imgDesc: '', photo: '' };
+            this._renderCompose();
+        },
+        closeCompose: function() {
+            this._compose = null;
+            this._renderCompose();
+        },
+        composePickPhoto: async function() {
+            this._readCompose();
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            if (!PI || !PI.pickPhoto) return;
+            let url = '';
+            try { url = await PI.pickPhoto(); } catch (e) { console.warn('[Weibo] 選照片失敗:', e); this._showToast('照片讀不進來'); }
+            if (!url || !this._compose) return;
+            this._compose.photo = url;
+            this._compose.imgDesc = '';
+            this._renderCompose();
+        },
+        composeClearImage: function() {
+            this._readCompose();
+            if (!this._compose) return;
+            this._compose.photo = '';
+            this._renderCompose();
+        },
+        submitCompose: async function() {
+            this._readCompose();
+            const c = this._compose;
+            if (!c) return;
+            const text = String(c.text || '').trim();
+            const imgDesc = String(c.imgDesc || '').trim();
+            if (!text && !c.photo && !imgDesc) { this._showToast('先寫點什麼'); return; }
+            let name = 'User', avatar = '';
+            try { const acc = win.WB_ACCOUNT.getCurrentAccount(); name = acc.weiboNickname || acc.realName || 'User'; avatar = acc.avatar || ''; } catch (e) {}
+            const post = {
+                id: 'post_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                user: name,
+                content: text,
+                avatar: avatar || win.WB_VIEW.getAvatar(name),
+                time: '剛剛',
+                likes: 0,
+                comments: [],
+                media: c.photo ? { type: 'image', desc: c.photo } : (imgDesc ? { type: 'image', desc: imgDesc } : null),
+                isMe: true,
+                timestamp: Date.now()
+            };
+            GLOBAL_POSTS.unshift(post);
+            await win.OS_DB.saveWbPost(post);
+            this._compose = null;
+            this.render();
+            this._showToast('發佈了');
         },
 
         // --- 互動邏輯 ---
@@ -247,7 +322,7 @@
                     <div style="background:${modalBg}; width:90%; max-width:400px; max-height:80vh; border-radius:12px; overflow:hidden; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
                         <div style="padding:12px 15px; background:linear-gradient(to bottom,#ffae00,#ff8200); color:#fff; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
                             <span style="font-weight:bold; font-size:16px;">關注列表 (${contactList.length})</span>
-                            <span style="cursor:pointer; font-size:22px; line-height:1;" onclick="document.getElementById('wb-contacts-modal').remove()">×</span>
+                            <span style="cursor:pointer; font-size:22px; line-height:1;" onclick="document.getElementById('wb-contacts-modal').remove()"><i class="fa-solid fa-xmark"></i></span>
                         </div>
                         <div style="padding:10px 15px; background:${toolbarBg}; border-bottom:1px solid ${toolbarBdr}; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
                             <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:${subTextC};">
@@ -345,7 +420,7 @@
                         <div style="padding:14px 15px 0; flex-shrink:0;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <span style="font-size:16px; font-weight:bold; color:${textC};">轉發到微信</span>
-                                <span style="font-size:22px; color:${subC}; cursor:pointer; line-height:1;" onclick="document.getElementById('wb-share-modal').remove()">×</span>
+                                <span style="font-size:22px; color:${subC}; cursor:pointer; line-height:1;" onclick="document.getElementById('wb-share-modal').remove()"><i class="fa-solid fa-xmark"></i></span>
                             </div>
                             ${previewHtml}
                             <div style="margin:12px 0 0; padding-bottom:8px; font-size:12px; color:${subC}; padding-left:2px;">選擇聯繫人</div>
@@ -363,7 +438,7 @@
             if (!wxApp || typeof wxApp.shareFromWeibo !== 'function') return;
 
             // 視覺反饋：禁用按鈕
-            if (btnEl) { btnEl.textContent = '✓'; btnEl.style.background = '#aaa'; btnEl.style.pointerEvents = 'none'; }
+            if (btnEl) { btnEl.innerHTML = '<i class="fa-solid fa-check"></i>'; btnEl.style.background = '#aaa'; btnEl.style.pointerEvents = 'none'; }
 
             const ok = await wxApp.shareFromWeibo(contactId, post);
             if (ok) {
@@ -372,7 +447,7 @@
                 // 獲取聯繫人名稱
                 const contact = win.OS_CONTACTS ? win.OS_CONTACTS.getById(contactId) : null;
                 const name = contact ? (contact.wx?.nickname || contact.realName) : contactId;
-                this._showToast(`✓ 已轉發給 ${name}`);
+                this._showToast(`已轉發給 ${name}`);
             } else {
                 alert('轉發失敗');
             }
@@ -445,8 +520,10 @@
             const filteredComments = [];
             const recentComments = comments.slice(-5);
             recentComments.forEach((c, index) => {
-                let author = (typeof c === 'object') ? c.author : 'Unknown';
-                let content = (typeof c === 'object') ? c.content : c;
+                // 舊格式的字串評論本身就是「名字: 內容」，直接送；只有物件才拆 author/content
+                if (typeof c !== 'object') { filteredComments.push(String(c)); return; }
+                let author = c.author || 'Unknown';
+                let content = c.content;
                 const isMe = (author === myName || author === myRealName || author === '我' || author === 'User');
                 const isLastItem = (index === recentComments.length - 1);
                 if (isMe && !isLastItem) { return; }
@@ -455,19 +532,58 @@
             return filteredComments.join(' | ');
         },
 
+        // 真照片（data URL）最多夾最近這幾張給 AI 看；更早的退成文字，免得每輪拖一疊圖
+        _PHOTO_LIMIT: 3,
+        _collectPhotos: function(posts) {
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            const out = [];
+            for (const p of posts) {
+                const d = p && p.media && p.media.type === 'image' ? String(p.media.desc || '') : '';
+                if (p && p.isMe && d.startsWith('data:') && PI && PI.isUrl(d)) out.push({ postId: p.id, url: d });
+                if (out.length >= this._PHOTO_LIMIT) break;
+            }
+            return out;
+        },
+        _describeMedia: function(p, photos) {
+            const m = p && p.media;
+            if (!m) return '';
+            if (m.type === 'image') {
+                const d = String(m.desc || '');
+                const idx = photos.findIndex(x => x.postId === p.id);
+                if (idx >= 0) return ` [Image: see attached photo #${idx + 1}]`;
+                if (d.startsWith('data:') || d.startsWith('http')) return ' [Image: a photo]';
+                return ` [Image: ${d}]`;
+            }
+            if (m.type === 'images') return ` [Images: ${(m.list || []).map(x => (String(x).startsWith('http') || String(x).startsWith('data:')) ? 'a photo' : x).join(' | ')}]`;
+            if (m.type === 'video') return ` [Video: ${m.title || ''} ${m.desc || ''}]`;
+            if (m.type === 'vote') return ` [Vote: ${m.title || ''}]`;
+            return '';
+        },
         serializeFeedForAI: function() {
             const recent = GLOBAL_POSTS.slice(0, 6);
+            const photos = this._collectPhotos(recent);
             return recent.map(p => {
                 let comms = (p.comments && p.comments.length > 0) ? this._filterComments(p.comments) : "None";
-                return `[ID: ${p.id}] [Author: ${p.user}] [Content: ${p.content}] [Recent Comments: ${comms}]`;
+                const who = p.isMe ? `${p.user} (the player's own account)` : p.user;
+                return `[ID: ${p.id}] [Author: ${who}] [Content: ${p.content}]${this._describeMedia(p, photos)} [Recent Comments: ${comms}]`;
             }).join('\n\n');
+        },
+        // 把真照片夾進訊息末尾（multimodal 陣列；OS_API 三條路都吃）
+        _attachPhotos: function(messages, photos) {
+            if (!photos || !photos.length) return messages;
+            const parts = [{ type: 'text', text: `Attached photos from the player's own posts, numbered in order (#1..#${photos.length}). Look at them; NPC replies should react to what is actually in the photo.` }];
+            photos.forEach(ph => parts.push({ type: 'image_url', image_url: { url: ph.url } }));
+            messages.push({ role: 'user', content: parts });
+            return messages;
         },
 
         serializeSinglePostForAI: function(postId) {
             const p = GLOBAL_POSTS.find(post => post.id === postId);
             if (!p) return "Target post not found.";
             let comms = (p.comments && p.comments.length > 0) ? this._filterComments(p.comments) : "None";
-            return `[TARGET POST - FOCUS ONLY ON THIS]\n[ID: ${p.id}] [Author: ${p.user}] [Content: ${p.content}] [Recent Comments: ${comms}]`;
+            const photos = this._collectPhotos([p]);
+            const who = p.isMe ? `${p.user} (the player's own account)` : p.user;
+            return `[TARGET POST - FOCUS ONLY ON THIS]\n[ID: ${p.id}] [Author: ${who}] [Content: ${p.content}]${this._describeMedia(p, photos)} [Recent Comments: ${comms}]`;
         },
 
         triggerPost: async function() {
@@ -484,10 +600,11 @@
                     let prompt = win.OS_PROMPTS.get('wb_world_continue');
                     messages = await win.OS_API.buildContext("System Request: Continue World Feed.", 'wb_world_continue');
                     messages.forEach(m => {
-                        if (m.role === 'system' && m.content.includes('{{context}}')) {
+                        if (m.role === 'system' && typeof m.content === 'string' && m.content.includes('{{context}}')) {
                             m.content = m.content.replace('{{context}}', feedContext);
                         }
                     });
+                    this._attachPhotos(messages, this._collectPhotos(GLOBAL_POSTS.slice(0, 6)));
                 }
                 // 設定：直接用主模型完整設定（含 useSystemApi/useGenerateRaw/stProfileId/url/key）跟創作室同源。
                 // 🚨別再用 wx_phone_api_config 覆蓋——舊 wx 設定會把「跟隨酒館/generateRaw」旗標蓋成直連→報「無 URL/Key」。
@@ -513,7 +630,7 @@
                 const singleContext = this.serializeSinglePostForAI(postId);
                 let messages = await win.OS_API.buildContext("System Request: Generate comments for specific post.", 'wb_world_continue');
                 messages.forEach(m => {
-                    if (m.role === 'system' && m.content.includes('{{context}}')) {
+                    if (m.role === 'system' && typeof m.content === 'string' && m.content.includes('{{context}}')) {
                         m.content = m.content.replace('{{context}}', singleContext);
                         m.content += `\n\n[SYSTEM IMPORTANT INSTRUCTION]\nUser is focusing on Post ID: ${postId}.\n1. DO NOT generate new [wb_post].\n2. ONLY generate [wb_reply] for [Target: ${postId}].\n3. Generate 2-3 interesting replies from different NPCs.`;
                     }
@@ -697,7 +814,7 @@
         install: async function() {
             if (win.PhoneSystem) {
                 await win.wbApp.init();
-                win.PhoneSystem.install('微博', '<span style="font-weight:bold; font-size:28px;">👁️</span>', '#ff8200', (c) => {
+                win.PhoneSystem.install('微博', '<i class="fa-solid fa-eye"></i>', '#ff8200', (c) => {
                     APP_CONTAINER = c;
                     win.wbApp.render();
                     // 這個 callback 每次開微博 app 都會跑：interval 必須單例，否則輪詢一支一支疊上去越玩越卡

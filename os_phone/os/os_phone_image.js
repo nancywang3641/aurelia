@@ -81,6 +81,45 @@
             return this.isUrl(desc) ? this.photo(desc, opts) : this.card(desc, opts);
         },
 
+        // 選一張照片（手機會跳相機／相簿），壓成 JPEG 回 data URL；取消回空字串。
+        //   邊長壓到 1280、品質 0.82：一張手機照約 150～300KB，夠 AI 看、也不撐爆 IndexedDB 與請求。
+        pickPhoto: function (opts) {
+            const o = Object.assign({ maxSide: 1280, quality: 0.82 }, opts || {});
+            return new Promise((resolve, reject) => {
+                const input = doc.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.style.display = 'none';
+                doc.body.appendChild(input);
+                const done = (v) => { input.remove(); resolve(v); };
+                input.onchange = () => {
+                    const file = input.files && input.files[0];
+                    if (!file) return done('');
+                    const img = new Image();
+                    const url = URL.createObjectURL(file);
+                    img.onload = () => {
+                        try {
+                            let { width, height } = img;
+                            if (width > o.maxSide || height > o.maxSide) {
+                                if (width >= height) { height = Math.round(height * o.maxSide / width); width = o.maxSide; }
+                                else { width = Math.round(width * o.maxSide / height); height = o.maxSide; }
+                            }
+                            const canvas = doc.createElement('canvas');
+                            canvas.width = width; canvas.height = height;
+                            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                            URL.revokeObjectURL(url);
+                            done(canvas.toDataURL('image/jpeg', o.quality));
+                        } catch (e) { URL.revokeObjectURL(url); input.remove(); reject(e); }
+                    };
+                    img.onerror = () => { URL.revokeObjectURL(url); input.remove(); reject(new Error('圖片載入失敗')); };
+                    img.src = url;
+                };
+                // 使用者按取消不會觸發 change：視窗回焦後沒選到就收掉
+                win.addEventListener('focus', function onFocus() { win.removeEventListener('focus', onFocus); setTimeout(() => { if (input.isConnected && !(input.files && input.files.length)) done(''); }, 800); });
+                input.click();
+            });
+        },
+
         // 各 app 登記「生完寫回」：fn(ref, url, cardEl) 可為 async
         onDone: function (app, fn) { this._handlers[app] = fn; },
 

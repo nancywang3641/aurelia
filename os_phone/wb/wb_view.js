@@ -163,9 +163,9 @@
                     ${voteHtml} ${videoHtml} ${imagesHtml}
                     
                     <div class="wb-actions">
-                        <div class="wb-act-btn" onclick="event.stopPropagation(); ${appRef}.shareToWx('${post.id}')"><span>↗</span> 轉發</div>
-                        <div class="wb-act-btn"><span>💬</span> ${post.comments ? post.comments.length : 0}</div>
-                        <div class="wb-act-btn" onclick="event.stopPropagation(); this.innerHTML='<span>👍</span> ' + (${(post.likes||0)} + 1); this.style.color='#ff8200';"><span>👍</span> ${post.likes || 0}</div>
+                        <div class="wb-act-btn" onclick="event.stopPropagation(); ${appRef}.shareToWx('${post.id}')"><i class="fa-solid fa-retweet"></i> 轉發</div>
+                        <div class="wb-act-btn"><i class="fa-regular fa-comment"></i> ${post.comments ? post.comments.length : 0}</div>
+                        <div class="wb-act-btn" onclick="event.stopPropagation(); if (!this.classList.contains('wb-liked')) { this.classList.add('wb-liked'); const b = this.querySelector('b'); b.textContent = (parseInt(b.textContent, 10) || 0) + 1; }"><i class="fa-solid fa-thumbs-up"></i> <b>${post.likes || 0}</b></div>
                     </div>
                 </div>
             `;
@@ -232,7 +232,7 @@
             return `
                 <div class="wb-detail-page">
                     <div class="wb-header">
-                        <div class="wb-header-btn" onclick="${appRef}.closeDetail()">‹</div>
+                        <div class="wb-header-btn" onclick="${appRef}.closeDetail()"><i class="fa-solid fa-chevron-left"></i></div>
                         <div class="wb-header-title">微博正文</div>
                     </div>
                     <div class="wb-detail-content">
@@ -240,7 +240,7 @@
                         <div class="wb-comment-sec">
                             <div class="wb-comment-header">評論 ${post.comments ? post.comments.length : 0}</div>
                             <div id="wb-comment-list">${commentsHtml}</div>
-                            <div class="wb-load-more" id="wb-load-more-btn" onclick="${appRef}.startLoadMore(this, '${post.id}')">↻ 載入更多評論</div>
+                            <div class="wb-load-more" id="wb-load-more-btn" onclick="${appRef}.startLoadMore(this, '${post.id}')"><i class="fa-solid fa-rotate-right"></i> 載入更多評論</div>
                         </div>
                     </div>
                     <div class="wb-input-bar">
@@ -251,6 +251,32 @@
                     </div>
                 </div>
             `;
+        },
+
+        // --- 發文卡：底部浮出，寫字＋（描述 或 照片）擇一 ---
+        renderCompose: function(state) {
+            const appRef = "(window.parent.wbApp || window.wbApp)";
+            const st = state || {};
+            const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            let imgArea = '';
+            if (st.photo) {
+                imgArea = `<div class="wb-compose-preview"><img src="${esc(st.photo)}"><div class="wb-compose-preview-x" onclick="${appRef}.composeClearImage()"><i class="fa-solid fa-xmark"></i></div></div>`;
+            } else {
+                imgArea = `<div class="wb-compose-imgrow">
+                        <input type="text" class="wb-compose-imgdesc" id="wb-compose-imgdesc" placeholder="描述一張圖（之後可展開生成）" value="${esc(st.imgDesc)}">
+                        <div class="wb-compose-photo" onclick="${appRef}.composePickPhoto()" title="選照片"><i class="fa-solid fa-camera"></i></div>
+                    </div>`;
+            }
+            return `<div class="wb-compose-mask" onclick="if (event.target === this) ${appRef}.closeCompose()">
+                    <div class="wb-compose-card">
+                        <textarea class="wb-compose-text" id="wb-compose-text" placeholder="說點什麼…" rows="4">${esc(st.text)}</textarea>
+                        ${imgArea}
+                        <div class="wb-compose-btns">
+                            <div class="wb-compose-btn wb-compose-cancel" onclick="${appRef}.closeCompose()">取消</div>
+                            <div class="wb-compose-btn wb-compose-send" onclick="${appRef}.submitCompose()">發佈</div>
+                        </div>
+                    </div>
+                </div>`;
         },
 
         renderMePage: function(isDark = false) {
@@ -284,11 +310,11 @@
                     </div>
                     <div style="padding: 10px;">
                         <div style="background: ${cardBg}; border-radius: 8px; ${shadowStyle} overflow: hidden;">
-                            <div class="wb-cell" onclick="${appRef}.showContacts()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><span style="font-size:20px;">👥</span><span style="font-size:14px; font-weight:500; color:${textColor};">關注列表</span></div><span style="color:${subColor};">›</span></div>
-                            <div class="wb-cell" onclick="${appRef}.editNickname()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><span style="font-size:20px;">🏷️</span><span style="font-size:14px; font-weight:500; color:${textColor};">編輯暱稱</span></div><span style="color:${subColor};">›</span></div>
-                            <div class="wb-cell" onclick="${appRef}.editBio()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><span style="font-size:20px;">✏️</span><span style="font-size:14px; font-weight:500; color:${textColor};">編輯個性簽名</span></div><span style="color:${subColor};">›</span></div>
-                            <div class="wb-cell" onclick="${appRef}.toggleDarkMode()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><span style="font-size:20px;">🌙</span><span style="font-size:14px; font-weight:500; color:${textColor};">黑夜模式</span></div>${darkBadge}</div>
-                            <div class="wb-cell" onclick="${appRef}.clearAllData()" style="padding: 15px; border-top: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><span style="font-size:20px;">🗑️</span><span style="font-size:14px; font-weight:500; color:#ff4444;">清空所有微博</span></div></div>
+                            <div class="wb-cell" onclick="${appRef}.showContacts()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-user-group"></i><span style="font-size:14px; font-weight:500; color:${textColor};">關注列表</span></div><span style="color:${subColor};">›</span></div>
+                            <div class="wb-cell" onclick="${appRef}.editNickname()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-tag"></i><span style="font-size:14px; font-weight:500; color:${textColor};">編輯暱稱</span></div><span style="color:${subColor};">›</span></div>
+                            <div class="wb-cell" onclick="${appRef}.editBio()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-pen-to-square"></i><span style="font-size:14px; font-weight:500; color:${textColor};">編輯個性簽名</span></div><span style="color:${subColor};">›</span></div>
+                            <div class="wb-cell" onclick="${appRef}.toggleDarkMode()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-moon"></i><span style="font-size:14px; font-weight:500; color:${textColor};">黑夜模式</span></div>${darkBadge}</div>
+                            <div class="wb-cell" onclick="${appRef}.clearAllData()" style="padding: 15px; border-top: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-trash"></i><span style="font-size:14px; font-weight:500; color:#ff4444;">清空所有微博</span></div></div>
                         </div>
                         <div style="margin-top:20px; text-align:center; color:${verColor}; font-size:12px;">PhoneOS Weibo V3.7</div>
                     </div>
@@ -305,7 +331,7 @@
 
             if (activeTab === 'home') {
                 if ((!posts || posts.length === 0) && !isLoading) {
-                    contentArea = `<div style="text-align:center; padding:50px; color:#999;">暫無動態<br>點擊右下角按鈕生成</div>`;
+                    contentArea = `<div class="wb-empty">還沒有動態<br>按右上角刷新，讓世界動起來</div>`;
                 } else {
                     contentArea = posts.map(p => this.renderCard(p, false)).join('');
                     contentArea = loadingHtml + contentArea;
@@ -318,11 +344,12 @@
             return `
                 <div class="wb-shell${isDark ? ' wb-dark' : ''}">
                     <div class="wb-header">
-                        <div class="wb-header-btn" onclick="(window.parent.PhoneSystem || window.PhoneSystem).goHome()">‹</div>
+                        <div class="wb-header-btn" onclick="(window.parent.PhoneSystem || window.PhoneSystem).goHome()"><i class="fa-solid fa-chevron-left"></i></div>
                         <div class="wb-header-title">微博</div>
+                        <div class="wb-header-btn wb-header-btn--right${isLoading ? ' wb-spinning' : ''}" onclick="${appRef}.triggerPost()"><i class="fa-solid fa-rotate"></i></div>
                     </div>
                     <div class="wb-content" id="wb-feed">${contentArea}</div>
-                    <div class="wb-fab" onclick="${appRef}.triggerPost()" style="${fabStyle}">✨</div>
+                    <div class="wb-fab" onclick="${appRef}.openCompose()" style="${fabStyle}"><i class="fa-solid fa-pen"></i></div>
                     <div class="wb-tab-bar">
                         <div class="wb-tab ${activeTab === 'home' ? 'active' : ''}" onclick="${appRef}.switchTab('home')"><i class="wb-tab-icon fa-solid fa-house"></i><span class="wb-tab-label">首頁</span></div>
                         <div class="wb-tab ${activeTab === 'me' ? 'active' : ''}" onclick="${appRef}.switchTab('me')"><i class="wb-tab-icon fa-solid fa-user"></i><span class="wb-tab-label">我</span></div>
