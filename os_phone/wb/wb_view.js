@@ -253,24 +253,24 @@
             `;
         },
 
-        // --- 發文卡：底部浮出，寫字＋（描述 或 照片）擇一 ---
+        // --- 發文卡：大字框；圖片只有一顆相機鈕，按了上拉單選「寫描述／選照片」，選完在字框下方掛一枚附件 ---
         renderCompose: function(state) {
             const appRef = "(window.parent.wbApp || window.wbApp)";
             const st = state || {};
             const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            let imgArea = '';
+            let attach = '';
             if (st.photo) {
-                imgArea = `<div class="wb-compose-preview"><img src="${esc(st.photo)}"><div class="wb-compose-preview-x" onclick="${appRef}.composeClearImage()"><i class="fa-solid fa-xmark"></i></div></div>`;
-            } else {
-                imgArea = `<div class="wb-compose-imgrow">
-                        <input type="text" class="wb-compose-imgdesc" id="wb-compose-imgdesc" placeholder="描述一張圖（之後可展開生成）" value="${esc(st.imgDesc)}">
-                        <div class="wb-compose-photo" onclick="${appRef}.composePickPhoto()" title="選照片"><i class="fa-solid fa-camera"></i></div>
-                    </div>`;
+                attach = `<div class="wb-compose-preview"><img src="${esc(st.photo)}"><div class="wb-compose-preview-x" onclick="${appRef}.composeClearImage()"><i class="fa-solid fa-xmark"></i></div></div>`;
+            } else if (st.imgDesc) {
+                attach = `<div class="wb-compose-chip" onclick="${appRef}.composeDescribe()"><i class="fa-regular fa-image"></i><span class="wb-compose-chip-text">${esc(st.imgDesc)}</span><i class="fa-solid fa-xmark wb-compose-chip-x" onclick="event.stopPropagation(); ${appRef}.composeClearImage()"></i></div>`;
             }
             return `<div class="wb-compose-mask" onclick="if (event.target === this) ${appRef}.closeCompose()">
                     <div class="wb-compose-card">
-                        <textarea class="wb-compose-text" id="wb-compose-text" placeholder="說點什麼…" rows="4">${esc(st.text)}</textarea>
-                        ${imgArea}
+                        <textarea class="wb-compose-text" id="wb-compose-text" placeholder="說點什麼…">${esc(st.text)}</textarea>
+                        <div class="wb-compose-tools">
+                            <div class="wb-compose-attach">${attach}</div>
+                            <div class="wb-compose-photo" onclick="${appRef}.composePickImage()"><i class="fa-solid fa-camera"></i></div>
+                        </div>
                         <div class="wb-compose-btns">
                             <div class="wb-compose-btn wb-compose-cancel" onclick="${appRef}.closeCompose()">取消</div>
                             <div class="wb-compose-btn wb-compose-send" onclick="${appRef}.submitCompose()">發佈</div>

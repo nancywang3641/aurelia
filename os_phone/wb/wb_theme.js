@@ -121,12 +121,15 @@
             /* === 發文卡 === */
             .wb-compose-mask { position: absolute; inset: 0; z-index: 300; background: rgba(0,0,0,0.45); display: flex; align-items: flex-end; justify-content: center; padding: 12px; animation: wbFadeIn 0.15s; }
             .wb-compose-card { width: 100%; background: #fff; border-radius: 14px; padding: 14px 14px 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 10px; }
-            .wb-compose-text { width: 100%; box-sizing: border-box; border: none; outline: none; resize: none; font-size: 15px; line-height: 1.5; color: #1a1a1a; background: #f7f7f7; border-radius: 10px; padding: 10px 12px; font-family: inherit; }
-            .wb-compose-imgrow { display: flex; gap: 8px; align-items: center; }
-            .wb-compose-imgdesc { flex: 1; min-width: 0; border: none; outline: none; font-size: 13px; color: #333; background: #f7f7f7; border-radius: 10px; padding: 9px 12px; font-family: inherit; }
-            .wb-compose-photo { width: 38px; height: 38px; border-radius: 10px; background: #f7f7f7; color: #ff8200; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+            .wb-compose-text { width: 100%; box-sizing: border-box; border: none; outline: none; resize: none; font-size: 16px; line-height: 1.6; color: #1a1a1a; background: #f7f7f7; border-radius: 10px; padding: 12px 14px; font-family: inherit; height: 42vh; min-height: 200px; }
+            .wb-compose-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; }
+            .wb-compose-attach { flex: 1; min-width: 0; display: flex; align-items: center; }
+            .wb-compose-photo { width: 38px; height: 38px; border-radius: 50%; background: #f7f7f7; color: #ff8200; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; }
             .wb-compose-photo:active { opacity: 0.7; }
-            .wb-compose-preview { position: relative; width: 96px; height: 96px; border-radius: 10px; overflow: hidden; background: #eee; }
+            .wb-compose-chip { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; background: #fff4e5; color: #b35a00; border-radius: 999px; padding: 7px 10px 7px 12px; font-size: 13px; cursor: pointer; }
+            .wb-compose-chip-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .wb-compose-chip-x { color: #c98a4a; padding: 2px 2px 2px 4px; }
+            .wb-compose-preview { position: relative; width: 72px; height: 72px; border-radius: 10px; overflow: hidden; background: #eee; }
             .wb-compose-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
             .wb-compose-preview-x { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; }
             .wb-compose-btns { display: flex; gap: 10px; }
@@ -134,6 +137,24 @@
             .wb-compose-cancel { background: #f2f2f2; color: #333; }
             .wb-compose-send { background: linear-gradient(135deg, #ffae00, #ff8200); color: #fff; font-weight: bold; }
             .wb-compose-btn:active { opacity: 0.75; }
+
+            /* === 上拉單選 === */
+            .wb-sheet-mask { position: absolute; inset: 0; z-index: 320; background: rgba(0,0,0,0.35); display: flex; align-items: flex-end; justify-content: center; padding: 12px; animation: wbFadeIn 0.15s; }
+            .wb-sheet { width: 100%; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.25); }
+            .wb-sheet-item { display: flex; align-items: center; gap: 14px; padding: 15px 18px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+            .wb-sheet-item:active { background: #f7f7f7; }
+            .wb-sheet-item i { width: 22px; text-align: center; font-size: 18px; color: #ff8200; }
+            .wb-sheet-label { font-size: 15px; color: #1a1a1a; }
+            .wb-sheet-hint { font-size: 12px; color: #999; margin-top: 2px; }
+            .wb-sheet-cancel { text-align: center; padding: 13px; font-size: 15px; color: #666; cursor: pointer; }
+            .wb-sheet-cancel:active { background: #f7f7f7; }
+
+            /* === 單行輸入小視窗 === */
+            .wb-prompt-mask { position: absolute; inset: 0; z-index: 330; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 24px; animation: wbFadeIn 0.15s; }
+            .wb-prompt-card { width: 100%; background: #fff; border-radius: 14px; padding: 18px 16px 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 12px; }
+            .wb-prompt-title { font-size: 15px; font-weight: bold; color: #1a1a1a; text-align: center; }
+            .wb-prompt-input { width: 100%; box-sizing: border-box; border: none; outline: none; font-size: 15px; color: #1a1a1a; background: #f7f7f7; border-radius: 10px; padding: 11px 12px; font-family: inherit; }
+            .wb-prompt-ok { background: linear-gradient(135deg, #ffae00, #ff8200); color: #fff; font-weight: bold; }
 
             /* === 確認視窗（刪除／清空） === */
             .wb-ask-mask { position: absolute; inset: 0; z-index: 300; background: rgba(0,0,0,0.45); display: flex; align-items: flex-end; justify-content: center; padding: 16px; animation: wbFadeIn 0.15s; }
@@ -147,9 +168,15 @@
 
             /* === 黑夜模式 === */
             .wb-dark { background: #111 !important; }
-            .wb-dark .wb-ask-card, .wb-dark .wb-compose-card { background: #232326; box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08); }
-            .wb-dark .wb-compose-text, .wb-dark .wb-compose-imgdesc, .wb-dark .wb-compose-photo { background: #2a2a2a; color: #f0f0f0; }
+            .wb-dark .wb-ask-card, .wb-dark .wb-compose-card, .wb-dark .wb-sheet, .wb-dark .wb-prompt-card { background: #232326; box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08); }
+            .wb-dark .wb-compose-text, .wb-dark .wb-compose-photo, .wb-dark .wb-prompt-input { background: #2a2a2a; color: #f0f0f0; }
             .wb-dark .wb-compose-cancel { background: #2a2a2a; color: #ddd; }
+            .wb-dark .wb-compose-chip { background: #3a2a14; color: #ffb866; }
+            .wb-dark .wb-compose-chip-x { color: #c98a4a; }
+            .wb-dark .wb-sheet-item { border-bottom-color: #2f2f32; }
+            .wb-dark .wb-sheet-item:active, .wb-dark .wb-sheet-cancel:active { background: #2a2a2a; }
+            .wb-dark .wb-sheet-label, .wb-dark .wb-prompt-title { color: #f0f0f0; }
+            .wb-dark .wb-sheet-cancel { color: #aaa; }
             .wb-dark .wb-ask-text { color: #f0f0f0; }
             .wb-dark .wb-ask-cancel { background: #2a2a2a; color: #ddd; }
             .wb-dark .wb-header { background: #1c1c1e !important; border-bottom-color: #2a2a2a !important; }

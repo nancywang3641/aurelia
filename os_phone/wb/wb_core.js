@@ -111,9 +111,7 @@
         _readCompose: function() {
             if (!this._compose) return;
             const ta = doc.getElementById('wb-compose-text');
-            const dsc = doc.getElementById('wb-compose-imgdesc');
             if (ta) this._compose.text = ta.value;
-            if (dsc) this._compose.imgDesc = dsc.value;
         },
         openCompose: function() {
             this._compose = { text: '', imgDesc: '', photo: '' };
@@ -121,6 +119,24 @@
         },
         closeCompose: function() {
             this._compose = null;
+            this._renderCompose();
+        },
+        composePickImage: async function() {
+            this._readCompose();
+            const pick = await this._sheet([
+                { key: 'desc', icon: 'fa-regular fa-image', label: '寫一句描述', hint: '之後可展開生成' },
+                { key: 'photo', icon: 'fa-solid fa-camera', label: '選一張照片', hint: '相簿或相機' },
+            ]);
+            if (pick === 'desc') return this.composeDescribe();
+            if (pick === 'photo') return this.composePickPhoto();
+        },
+        composeDescribe: async function() {
+            this._readCompose();
+            if (!this._compose) return;
+            const v = await this._prompt('描述這張圖', this._compose.imgDesc || '', '例如：桌上一盤咖哩飯，窗邊有陽光');
+            if (v == null || !this._compose) return;
+            this._compose.imgDesc = String(v).trim();
+            if (this._compose.imgDesc) this._compose.photo = '';
             this._renderCompose();
         },
         composePickPhoto: async function() {
@@ -138,6 +154,7 @@
             this._readCompose();
             if (!this._compose) return;
             this._compose.photo = '';
+            this._compose.imgDesc = '';
             this._renderCompose();
         },
         submitCompose: async function() {
@@ -232,11 +249,11 @@
 
         // --- 編輯功能區 ---
 
-        editBio: function() {
+        editBio: async function() {
             const wbAccount = win.WB_ACCOUNT || window.WB_ACCOUNT;
             if (!wbAccount) return;
             const account = wbAccount.getCurrentAccount();
-            const newBio = prompt('請輸入你的個性簽名：', account.bio || '');
+            const newBio = await this._prompt('個性簽名', account.bio || '', '寫一句');
             if (newBio !== null) {
                 wbAccount.updateCurrentBio(newBio.trim());
                 this.render(); 
@@ -244,16 +261,16 @@
         },
 
         // 🔥 新增：編輯暱稱 (這是解決你問題的關鍵！)
-        editNickname: function() {
+        editNickname: async function() {
             const wbAccount = win.WB_ACCOUNT || window.WB_ACCOUNT;
             if (!wbAccount) return;
             const account = wbAccount.getCurrentAccount();
-            const newName = prompt('請輸入你的微博暱稱 (例如: 小廢物)：', account.weiboNickname || '');
-            
+            const newName = await this._prompt('微博暱稱', account.weiboNickname || '', '想叫什麼');
+
             if (newName !== null && newName.trim() !== '') {
                 wbAccount.updateCurrentNickname(newName.trim());
-                alert(`修改成功！\n暱稱已更新為：${newName}\n真名保持為：${account.realName}`);
-                this.render(); 
+                this._showToast(`暱稱改成 ${newName.trim()}`);
+                this.render();
             }
         },
 
@@ -484,6 +501,48 @@
             else return false;
             try { await win.OS_DB.saveWbPost(post); } catch (e) { console.warn('[Weibo] 圖片網址寫回失敗:', e); }
             return true;
+        },
+
+        // 上拉單選：items = [{key, icon, label, hint}]；回 key，點背景或取消回 null
+        _sheet: function(items) {
+            return new Promise((resolve) => {
+                const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER || doc.body;
+                const old = host.querySelector('.wb-sheet-mask');
+                if (old) old.remove();
+                const mask = doc.createElement('div');
+                mask.className = 'wb-sheet-mask';
+                const rows = (items || []).map(it => `<div class="wb-sheet-item" data-key="${String(it.key)}"><i class="${it.icon || 'fa-solid fa-circle'}"></i><div class="wb-sheet-text"><div class="wb-sheet-label"></div><div class="wb-sheet-hint"></div></div></div>`).join('');
+                mask.innerHTML = `<div class="wb-sheet">${rows}<div class="wb-sheet-cancel">取消</div></div>`;
+                (items || []).forEach((it, i) => { const el = mask.querySelectorAll('.wb-sheet-item')[i]; el.querySelector('.wb-sheet-label').textContent = it.label || ''; el.querySelector('.wb-sheet-hint').textContent = it.hint || ''; });
+                const done = (v) => { mask.remove(); resolve(v); };
+                mask.querySelectorAll('.wb-sheet-item').forEach(el => { el.onclick = (e) => { e.stopPropagation(); done(el.dataset.key); }; });
+                mask.querySelector('.wb-sheet-cancel').onclick = (e) => { e.stopPropagation(); done(null); };
+                mask.onclick = (e) => { if (e.target === mask) done(null); };
+                host.appendChild(mask);
+            });
+        },
+
+        // 單行輸入小視窗：回字串；取消回 null
+        _prompt: function(title, value, placeholder) {
+            return new Promise((resolve) => {
+                const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER || doc.body;
+                const old = host.querySelector('.wb-prompt-mask');
+                if (old) old.remove();
+                const mask = doc.createElement('div');
+                mask.className = 'wb-prompt-mask';
+                mask.innerHTML = `<div class="wb-prompt-card"><div class="wb-prompt-title"></div><input type="text" class="wb-prompt-input"><div class="wb-ask-btns"><div class="wb-ask-btn wb-ask-cancel">取消</div><div class="wb-ask-btn wb-prompt-ok">確定</div></div></div>`;
+                mask.querySelector('.wb-prompt-title').textContent = title || '';
+                const inp = mask.querySelector('.wb-prompt-input');
+                inp.value = value == null ? '' : String(value);
+                inp.placeholder = placeholder || '';
+                const done = (v) => { mask.remove(); resolve(v); };
+                mask.querySelector('.wb-prompt-ok').onclick = (e) => { e.stopPropagation(); done(inp.value); };
+                mask.querySelector('.wb-ask-cancel').onclick = (e) => { e.stopPropagation(); done(null); };
+                inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); done(inp.value); } };
+                mask.onclick = (e) => { if (e.target === mask) done(null); };
+                host.appendChild(mask);
+                setTimeout(() => { try { inp.focus(); inp.select(); } catch (e) {} }, 30);
+            });
         },
 
         _showToast: function(msg) {
