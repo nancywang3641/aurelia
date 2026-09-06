@@ -41,7 +41,7 @@
         .cal-ev { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #f3f3f3; }
         .cal-ev-bar { width: 3px; height: 28px; border-radius: 2px; background: #e05a3d; flex-shrink: 0; }
         .cal-ev.cal-ev-me .cal-ev-bar { background: #3d8be0; }
-        .cal-ev-text { flex: 1; min-width: 0; }
+        .cal-ev-text { flex: 1; min-width: 0; cursor: pointer; }
         .cal-ev-title { font-size: 14px; color: #1a1a1a; word-break: break-word; }
         .cal-ev-src { font-size: 11px; color: #999; margin-top: 2px; }
         .cal-ev-del { color: #ccc; padding: 6px; cursor: pointer; font-size: 14px; }
@@ -113,7 +113,7 @@
         const evHtml = evs.length ? evs.map(e => `
             <div class="cal-ev${e.src === 'me' ? ' cal-ev-me' : ''}">
                 <div class="cal-ev-bar"></div>
-                <div class="cal-ev-text"><div class="cal-ev-title">${esc(e.title)}</div><div class="cal-ev-src">${e.src === 'me' ? '自己記的' : '劇情裡說好的'}</div></div>
+                <div class="cal-ev-text" data-edit="${esc(e.id)}"><div class="cal-ev-title">${esc(e.title)}</div><div class="cal-ev-src">${e.src === 'me' ? '自己記的' : (e.edited ? '劇情裡說好的，改過' : '劇情裡說好的')}</div></div>
                 <div class="cal-ev-del" data-id="${esc(e.id)}"><i class="fa-solid fa-trash"></i></div>
             </div>`).join('') : '<div class="cal-empty-note">這天沒有約定</div>';
 
@@ -157,6 +157,17 @@
         if (cell) { _sel = { y: _view.y, m: _view.m, d: parseInt(cell.dataset.d, 10) }; render(); return; }
         const del = e.target.closest('.cal-ev-del');
         if (del) { await S().removeEvent(del.dataset.id); _state = await S().load(); render(); return; }
+        const edit = e.target.closest('[data-edit]');
+        if (edit) {
+            const ev = (_state.events || []).find(x => x.id === edit.dataset.edit);
+            if (!ev) return;
+            const v = await prompt('改一下', ev.title, '');
+            if (v == null || !v.trim()) return;
+            await S().updateEvent(ev.id, { title: v.trim() });
+            _state = await S().load();
+            render();
+            return;
+        }
         const act = e.target.closest('[data-act]');
         if (!act) return;
         const a = act.dataset.act;

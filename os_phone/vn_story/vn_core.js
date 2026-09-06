@@ -447,8 +447,18 @@
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
-            // 🕰 主角狀態：每則新訊息讓狀態效果倒數一回合（同一則重播不重數），順便把畫面上的狀態列畫出來
-            try { const _S = win.OS_MC_STATUS || window.OS_MC_STATUS; if (_S) _S.onMessage(messageId).then(function () { _S.renderHud(); }); } catch (e) {}
+            // 🕰 主角狀態：每則訊息處理前存快照、讓效果倒數一回合；同一則再進來（swipe／重生）先退回快照。
+            //    她自己那套 <os_status> 區塊也在這裡整塊撈給狀態模組（動作都排隊，一定在下面的標籤之前跑），
+            //    然後從劇本剝掉——不然會被當旁白念出來、或被未知區塊過濾器吃掉。
+            try {
+                const _S = win.OS_MC_STATUS || window.OS_MC_STATUS;
+                if (_S) {
+                    _S.onMessage(messageId).then(function () { _S.renderHud(); });
+                    const _blocks = String(txt || '').match(/<os_status>[\s\S]*?<\/os_status>/gi);
+                    if (_blocks) _blocks.forEach(function (b) { _S.applyStatusBlock(b, messageId); });
+                }
+            } catch (e) {}
+            txt = String(txt || '').replace(/<os_status>[\s\S]*?<\/os_status>\s*/gi, '');
             // 這份劇本的原文：區塊內容等一下會被「未知 XML 區塊過濾器」刪掉，
             //   彈卡片時要回原文撈整顆 <tag>…</tag>（PWA 沒有酒館訊息可讀，只能靠這份）。
             this._scriptRawText = String(txt || '');
@@ -2569,7 +2579,7 @@
                     if (_tag === 'date') _S.setDate(_a, _b);
                     else if (_tag === 'hp') _S.setHp(_a);
                     else if (_tag === 'buff' || _tag === 'debuff') { _S.setBuff(_a, _b); this.addLog('狀態', `${_a}${_b ? '（' + _b + ' 回合）' : ''}`); }
-                    else if (_tag === 'event') { _S.addEvent(_a, _b, '', 'ai'); this.addLog('約定', `${_a} ${_b}`); }
+                    else if (_tag === 'event') { _S.addEvent(_a, _b, '', 'ai', this._currentMessageId); this.addLog('約定', `${_a} ${_b}`); }
                 }
                 this.next(); return;
             }

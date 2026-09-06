@@ -160,6 +160,7 @@
         s = s.replace(/\[Char\|([^|]+)\|[^|]*\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, n, d) => `${n.trim()}：${d.trim()}`);
         s = s.replace(/\[Nar\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, t) => `　　${t.trim()}`);
         s = s.replace(/\[Inner\|[^|]+\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, t) => `（${t.trim()}）`);
+        s = s.replace(/<os_status>[\s\S]*?<\/os_status>\s*/gi, '');
         s = s.replace(/\[(Story|Chapter|Protagonist|Area|BGM|Bg|Trans|Item|SessionEnd|Achievement|Choice|Quest|Date|HP|Buff|Debuff|Event)[^\]]*\]/gi, '');
         s = s.replace(/\[[^\[\]\n]{1,80}\]/g, '');
         s = s.replace(/<[^>]+>/g, '');
@@ -555,6 +556,12 @@
                     out.patches = (await win.OS_STATE_RUNTIME?.rollbackByIds?.(deadPatches)) || 0;
                     console.log('🧾 [VN Reader] 孤兒對帳：退掉 ' + deadPatches.length + ' 筆指向已刪章節的 patch（' + out.patches + ' 個欄位）');
                 }
+                // 🕰 主角狀態的快照也對帳：指向已刪章節的一併退回
+                try {
+                    const _S = win.OS_MC_STATUS; await _S?.load?.();
+                    const deadSnaps = ((_S?.listSnapshotIds?.()) || []).filter(id => !alive.has(String(id)));
+                    if (deadSnaps.length) await _S.rollbackByIds(deadSnaps);
+                } catch (e) { console.warn('[VN Reader] 主角狀態對帳失敗:', e); }
             } catch (e) { console.warn('[VN Reader] patch 孤兒回滾失敗:', e); }
 
             // ② 人物檔案／登場帳：以「還活著的章節正文」為唯一真相重掃
@@ -581,6 +588,7 @@
         //    只做下面的 <vars> 重放會漏掉它 —— 章沒了、它記的數值卻留在 current 裡。
         let _rolled = 0;
         try { _rolled = (await win.OS_STATE_RUNTIME?.rollbackByIds?.([id])) || 0; } catch (e) { console.warn('[VN Reader] patch 回滾失敗:', e); }
+        try { await win.OS_MC_STATUS?.rollbackByIds?.([id]); } catch (e) { console.warn('[VN Reader] 主角狀態回朔失敗:', e); }
 
         // 重放要用「被刪那章的 before」當底，但它已經不在名單裡 → 拿刪除前的完整名單，
         // 底本索引 idx、重放範圍是 idx+1 之後（＝跳過被刪的那章本身）
