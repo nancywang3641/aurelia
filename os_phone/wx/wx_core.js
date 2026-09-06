@@ -19,10 +19,6 @@
     let GLOBAL_CHATS = {};
     let GLOBAL_ACTIVE_ID = null;
     let GLOBAL_TAB = 'chat';
-    // 「發現」tab 的跑團手機記錄檢視器狀態（唯讀，讀酒館正文 <chat> 區塊）
-    let _vnLogRooms = null;      // 解析快取：{房名: {name, members[], msgs:[{sender,content,isMe,type}]}}
-    let _vnLogView = 'list';     // list | room
-    let _vnLogRoom = null;       // 當前看的房名
     let RENDER_QUEUE = [];
     let APP_CONTAINER = null;
     let PENDING_ACTION_TYPE = null;
@@ -684,6 +680,7 @@
                 if (!nameM) return;
                 let rawName = nameM[1].trim();
                 if (/[:：]/.test(rawName)) return;                         // [图片:…]/[Chat:…]/[Time…] 等不是發話人 → 略過
+                if (/^(Time|時間|时间|Chat|With)$/i.test(rawName)) return;   // [Time] 22:10 這種沒冒號的標頭行也不是發話人
                 if (rawName.indexOf('|') >= 0) rawName = rawName.split('|').pop().trim() || rawName;   // [Char|红石]→红石
                 const content = (nameM[2] || '').trim();
                 if (!content) return;
@@ -693,6 +690,241 @@
             });
         }
         return rooms;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 📖 跑團同步：酒館正文裡的 <chat chatroom id> 區塊 → 聊天列表 + 通訊錄（取代舊「發現」唯讀檢視）
+    //   ・劇情訊息帶 _story=樓號，每次整份從正文重建 → swipe / 編輯 / 刪樓 / 回朔自然跟上。
+    //   ・你在同一間房用微信自己打的話沒有 _story，保留；位置靠 _afterFloor（送出當時正文到第幾樓）釘住。
+    //   ・私聊房：對方名字對到通訊錄同一位聯絡人，chat id 就是聯絡人 id → 跟手動加 / AI 搜尋加的是同一個人。
+    //   ・群：id 用故事 id + 房間 key 組（不同卡同名房不撞），成員各自註冊成聯絡人。
+    //   ・注入主模型的手機記憶會跳過 _story 訊息（正文本來就有，不重講）。
+    // ══════════════════════════════════════════════════════════════════════
+    let _storyLastFloor = -1;      // 最後一次同步時正文最後一樓
+    let _storySyncTimer = null;
+    let _storySyncing = false;
+    let _storySyncAgain = false;
+    let _storyStat = { rooms: 0, contacts: 0, floor: -1, at: 0 };
+
+    function _storyHash(s) { let h = 5381; s = String(s || ''); for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
+    function _storyCid() { try { const c = win.OS_DB && win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null; return c == null ? '' : String(c); } catch (e) { return ''; } }
+    function _storyMyName() { try { const u = win.WX_USER && win.WX_USER.getInfo ? win.WX_USER.getInfo() : null; return (u && u.name) || 'User'; } catch (e) { return 'User'; } }
+    function _isMeName(n) { return /^(User|我|主角|You|Self|Me)$/i.test(String(n || '')); }
+
+    // 逐樓解析：沿用 _parseVnChatBlocks 的區塊規則，但每則訊息帶樓號；[With] 成員與房名跨樓累積
+    async function _parseStoryRoomsByFloor() {
+        const rooms = {};
+        let msgs = null;
+        try { msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null; } catch (e) {}
+        if (!Array.isArray(msgs)) return { rooms: rooms, lastFloor: -1, ok: false };
+        for (let f = 0; f < msgs.length; f++) {
+            const m = msgs[f];
+            const text = (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || '');
+            if (!text || text.indexOf('<chat') < 0) continue;
+            const part = _parseVnChatBlocks(text);
+            Object.keys(part).forEach(function (key) {
+                const r = part[key];
+                if (!rooms[key]) rooms[key] = { id: key, name: r.name, members: [], msgs: [] };
+                if (r.name) rooms[key].name = r.name;
+                if (r.members && r.members.length) rooms[key].members = r.members.slice();
+                (r.msgs || []).forEach(function (x) { rooms[key].msgs.push({ type: x.type, sender: x.sender, content: x.content, isMe: x.isMe, floor: f }); });
+            });
+        }
+        // 「我」跨樓補判：某樓沒寫 [With] 時 _parseVnChatBlocks 不知道誰是我 → 用整間房累積的成員首位（規範：With 首位＝主角）再判一次
+        const myName = _storyMyName();
+        Object.keys(rooms).forEach(function (key) {
+            const r = rooms[key];
+            const me = r.members[0] || '';
+            r.msgs.forEach(function (x) { if (!x.isMe && ((me && x.sender === me) || x.sender === myName)) x.isMe = true; });
+        });
+        return { rooms: rooms, lastFloor: msgs.length - 1, ok: true };
+    }
+
+    // 房間的「對方們」：[With] 首位是主角、其餘是對方；沒寫 [With] 就拿發話人湊
+    function _storyOthers(room) {
+        const myName = _storyMyName();
+        let list = (room.members || []).slice(1).filter(function (n) { return n && n !== myName && !_isMeName(n); });
+        if (!list.length) {
+            const seen = {};
+            room.msgs.forEach(function (x) { if (x.type === 'msg' && !x.isMe && x.sender && !_isMeName(x.sender) && x.sender !== myName && !seen[x.sender]) { seen[x.sender] = 1; list.push(x.sender); } });
+        }
+        return list;
+    }
+
+    // 劇情訊息 + 微信自己打的訊息 → 依樓號交錯回同一串
+    function _storyMergeMessages(existing, storyMsgs, roomName, isGroup) {
+        const myName = _storyMyName();
+        const natives = (existing && Array.isArray(existing.messages) ? existing.messages : []).filter(function (m) { return m && m._story == null; });
+        const stamped = natives.map(function (m) { return { m: m, f: (m._afterFloor == null ? Infinity : m._afterFloor) }; });
+        let ni = 0;
+        const out = [];
+        storyMsgs.forEach(function (x) {
+            while (ni < stamped.length && stamped[ni].f < x.floor) { out.push(stamped[ni].m); ni++; }
+            const sender = x.isMe ? myName : (isGroup ? x.sender : (x.sender || roomName));
+            out.push({ type: x.type === 'system' ? 'system' : 'msg', isMe: !!x.isMe, content: x.content, sender: sender, senderName: sender, _story: x.floor });
+        });
+        while (ni < stamped.length) { out.push(stamped[ni].m); ni++; }
+        return out;
+    }
+
+    // 主流程：整份正文 → 房間 → 聊天室記錄 + 聯絡人；只存有變動的
+    async function _storySyncNow() {
+        if (_storySyncing) { _storySyncAgain = true; return; }
+        _storySyncing = true;
+        try {
+            const cid = _storyCid();
+            if (!cid || !win.WX_DB || !win.WX_CONTACTS) return;
+            const parsed = await _parseStoryRoomsByFloor();
+            if (!parsed.ok) return;
+            const rooms = parsed.rooms;
+            const keys = Object.keys(rooms);
+            const liveIds = {};
+            let contactCount = 0;
+            const contactSeen = {};
+            let rebuildActive = false;
+
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i];
+                const room = rooms[key];
+                if (!room.msgs.length) continue;
+                const others = _storyOthers(room);
+                const isGroup = others.length >= 2;
+                let chatId, members, realName;
+                if (isGroup) {
+                    chatId = 'grp_story_' + _storyHash(cid) + '_' + String(key).replace(/[^\w一-鿿-]/g, '_').slice(0, 40);
+                    members = others.map(function (n) { return win.WX_CONTACTS.getOrCreateContactID(n, 'user', true); });
+                    others.forEach(function (n, j) { if (!contactSeen[n]) { contactSeen[n] = 1; contactCount++; } _storyEnsureContactChat(members[j], n, ''); });
+                    win.WX_CONTACTS.addContactToStorage({ id: chatId, name: room.name || key, isGroup: true, members: members });
+                } else {
+                    realName = others[0] || room.name || key;
+                    chatId = win.WX_CONTACTS.getOrCreateContactID(realName, 'user', true);
+                    if (chatId === 'User') continue;
+                    members = [realName];
+                    if (!contactSeen[realName]) { contactSeen[realName] = 1; contactCount++; }
+                    _storyUpsertUnified(chatId, realName, '');
+                }
+                liveIds[chatId] = key;
+
+                let existing = GLOBAL_CHATS[chatId];
+                if (!existing) { try { existing = await win.WX_DB.getApiChat(chatId); } catch (e) { existing = null; } }
+                const sig = key + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
+                if (existing && existing._storySig === sig) { GLOBAL_CHATS[chatId] = existing; continue; }
+
+                const prevStoryCount = existing ? (existing.messages || []).filter(function (m) { return m && m._story != null; }).length : 0;
+                const messages = _storyMergeMessages(existing, room.msgs, isGroup ? (room.name || key) : realName, isGroup);
+                const rec = Object.assign({}, existing || {}, {
+                    id: chatId,
+                    name: isGroup ? (room.name || key) : ((existing && existing.name) || realName),
+                    isGroup: isGroup,
+                    members: members,
+                    messages: messages,
+                    storyKey: key,
+                    _storySig: sig,
+                    lastTime: (existing && existing.lastTime) || '',
+                    unread: chatId !== GLOBAL_ACTIVE_ID && room.msgs.length > prevStoryCount,
+                    pushedCount: messages.length,
+                    renderedCount: messages.length
+                });
+                if (isGroup) delete rec.realName; else rec.realName = realName;
+                GLOBAL_CHATS[chatId] = rec;
+                try { await win.WX_DB.saveApiChat(chatId, rec); } catch (e) { console.warn('[wx 跑團同步] 存檔失敗:', chatId, e); }
+                if (chatId === GLOBAL_ACTIVE_ID) rebuildActive = true;
+            }
+
+            // 正文裡已經不存在的房（回朔 / 刪樓）：拆掉劇情訊息；空了的群整筆移除、私聊保留成一般聯絡人
+            let all = {};
+            try { all = (win.WX_DB.getApiChatsForCurrentCard ? await win.WX_DB.getApiChatsForCurrentCard() : {}) || {}; } catch (e) {}
+            const seenIds = Object.assign({}, all, GLOBAL_CHATS);
+            for (const id in seenIds) {
+                const c = GLOBAL_CHATS[id] || all[id];
+                if (!c || !c.storyKey || liveIds[id]) continue;
+                const natives = (c.messages || []).filter(function (m) { return m && m._story == null; });
+                if (!natives.length && c.isGroup) {
+                    delete GLOBAL_CHATS[id];
+                    try { await win.WX_DB.deleteApiChat(id); } catch (e) {}
+                    if (GLOBAL_ACTIVE_ID === id) GLOBAL_ACTIVE_ID = null;
+                    continue;
+                }
+                const rec = Object.assign({}, c, { messages: natives, pushedCount: natives.length, renderedCount: natives.length });
+                delete rec.storyKey; delete rec._storySig;
+                GLOBAL_CHATS[id] = rec;
+                try { await win.WX_DB.saveApiChat(id, rec); } catch (e) {}
+                if (id === GLOBAL_ACTIVE_ID) rebuildActive = true;
+            }
+
+            _storyLastFloor = parsed.lastFloor;
+            _storyStat = { rooms: keys.filter(function (k) { return rooms[k].msgs.length; }).length, contacts: contactCount, floor: parsed.lastFloor, at: Date.now() };
+
+            if (APP_CONTAINER) {
+                if (GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) {
+                    if (rebuildActive) { _rebuildRoomContent(GLOBAL_CHATS[GLOBAL_ACTIVE_ID]); _scrollToBottom(); }
+                } else if (GLOBAL_TAB === 'chat') { updateAppUI(); }
+                else { win.wxApp.render(); }
+            }
+        } catch (e) { console.warn('[wx 跑團同步] 失敗:', (e && e.message) || e); }
+        finally {
+            _storySyncing = false;
+            if (_storySyncAgain) { _storySyncAgain = false; setTimeout(_storySyncNow, 300); }
+        }
+    }
+    function _storySyncDebounced(ms) { clearTimeout(_storySyncTimer); _storySyncTimer = setTimeout(_storySyncNow, ms == null ? 1200 : ms); }
+
+    // 群成員 / 大總結角色：要在通訊錄看得到就得有一筆 api_chat（通訊錄是照聊天記錄列的）
+    function _storyEnsureContactChat(id, name, desc) {
+        if (!id || id === 'User') return;
+        _storyUpsertUnified(id, name, desc);
+        if (GLOBAL_CHATS[id]) { if (desc && !GLOBAL_CHATS[id].desc) GLOBAL_CHATS[id].desc = desc; return; }
+        const rec = { id: id, name: name, realName: name, members: [name], isGroup: false, messages: [], lastTime: '', unread: false, pushedCount: 0, renderedCount: 0, desc: desc || '' };
+        GLOBAL_CHATS[id] = rec;
+        try { win.WX_DB && win.WX_DB.saveApiChat(id, rec); } catch (e) {}
+    }
+    function _storyUpsertUnified(id, name, desc) {
+        try {
+            if (!win.OS_CONTACTS || !win.OS_CONTACTS.upsert) return;
+            const cur = win.OS_CONTACTS.getById ? win.OS_CONTACTS.getById(id) : null;
+            const wx = Object.assign({}, (cur && cur.wx) || {}, { nickname: name });
+            if (desc && !wx.bio) wx.bio = desc;
+            win.OS_CONTACTS.upsert({ id: id, realName: (cur && cur.realName) || name, isNPC: true, wx: wx });
+        } catch (e) {}
+    }
+
+    // 你在跑團房自己打的話：生成開始那一刻把它釘在「目前正文最後一樓」之後（下一樓進來時才不會排錯）
+    async function _storyStampNatives() {
+        if (_storyLastFloor < 0) return;
+        for (const id in GLOBAL_CHATS) {
+            const c = GLOBAL_CHATS[id];
+            if (!c || !c.storyKey || !Array.isArray(c.messages)) continue;
+            let changed = false;
+            c.messages.forEach(function (m) { if (m && m._story == null && m._afterFloor == null) { m._afterFloor = _storyLastFloor; changed = true; } });
+            if (changed) { try { await win.WX_DB.saveApiChat(id, c); } catch (e) {} }
+        }
+    }
+
+    // 大總結存檔後：角色表 → 通訊錄（零 API；身分欄當個性簽名、頭像走 VN 頭像庫照名字對）
+    function _storyImportSummaryContacts(rows, headerLine) {
+        try {
+            if (!Array.isArray(rows) || !rows.length || !win.WX_CONTACTS) return 0;
+            const heads = String(headerLine || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+            let bioIdx = -1;
+            heads.forEach(function (h, i) { if (bioIdx < 0 && /身分|身份|職業|职业|定位/.test(h)) bioIdx = i; });
+            let n = 0;
+            rows.forEach(function (r) {
+                const name = String((r && r.name) || '').trim();
+                if (!name || name.length > 12) return;
+                if (/路人|未具名|不明|某[人男女]|眾$|们$|們$|\?|？/.test(name)) return;
+                const cols = String((r && r.row) || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+                const bio = bioIdx >= 0 && cols[bioIdx] ? cols[bioIdx].slice(0, 40) : '';
+                const id = win.WX_CONTACTS.getOrCreateContactID(name, 'user', true);
+                if (!id || id === 'User') return;
+                if (bio) win.WX_CONTACTS.addContactToStorage({ id: id, name: name, desc: bio });
+                _storyEnsureContactChat(id, name, bio);
+                n++;
+            });
+            if (n && APP_CONTAINER && !GLOBAL_ACTIVE_ID) { try { win.wxApp.render(); } catch (e) {} }
+            console.log('[wx 跑團同步] 大總結角色表進通訊錄：' + n + ' 位');
+            return n;
+        } catch (e) { console.warn('[wx 跑團同步] 角色表進通訊錄失敗:', e); return 0; }
     }
 
     function handleNewMessages(chats, messageId) {
@@ -919,25 +1151,19 @@
             this.render();
         },
         
-        switchTab: function(tabName) { if (tabName === 'discover' && GLOBAL_TAB !== 'discover') { _vnLogView = 'list'; _vnLogRoom = null; } GLOBAL_TAB = tabName; this.render(); },
+        switchTab: function(tabName) { GLOBAL_TAB = tabName; this.render(); },
 
-        // ── 發現 tab：跑團手機記錄（唯讀，讀酒館正文 <chat chatroom> 區塊，重用 renderBubble 顯示）──
-        vnLogRefresh: function() { _vnLogRooms = null; _vnLogView = 'list'; _vnLogRoom = null; this._fillVnLog(); },
-        openVnLogRoom: function(encName) { try { _vnLogRoom = decodeURIComponent(encName); } catch (e) { _vnLogRoom = encName; } _vnLogView = 'room'; this._fillVnLog(); },
-        vnLogBack: function() { _vnLogView = 'list'; _vnLogRoom = null; this._fillVnLog(); },
+        // ── 發現 tab：跑團同步（正文 <chat> 區塊 → 聊天列表 + 通訊錄）──
+        storySync: function() { _storySyncDebounced(0); },
+        importSummaryContacts: function(rows, header) { return _storyImportSummaryContacts(rows, header); },
 
         // 🧹 AI 整理：叫副模型判斷「哪些房間其實是同一間」(先前上下文壓縮→同房被編多個亂 id)，
-        //    產出「舊id→統一id」對應表存起來；不動歷史正文，解析/注入時自動套用。
-        vnLogTidyAi: async function() {
+        //    產出「舊id→統一id」對應表存起來；不動歷史正文，同步時自動套用。
+        storyTidyAi: async function() {
             const tr = win.toastr;
             if (!win.OS_API || typeof win.OS_API.chatSecondary !== 'function') { try { tr && tr.warning('副模型未就緒，無法整理', '發現'); } catch (e) {} return; }
-            // 確保已解析房間
-            if (!_vnLogRooms) {
-                let text = '';
-                try { const msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null; if (Array.isArray(msgs)) text = msgs.map(function (m) { return (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || ''); }).join('\n'); } catch (e) {}
-                _vnLogRooms = _parseVnChatBlocks(text);
-            }
-            const rooms = _vnLogRooms || {};
+            const parsed = await _parseStoryRoomsByFloor();
+            const rooms = parsed.rooms || {};
             const keys = Object.keys(rooms);
             if (keys.length < 2) { try { tr && tr.info('房間太少，不需整理', '發現'); } catch (e) {} return; }
             // 給副模型的精簡清單：id / 名 / 成員 / 訊息數 / 最後兩句樣本（夠它判斷同不同間）
@@ -965,46 +1191,32 @@
                         });
                         if (!merged) { try { tr && tr.info('沒有偵測到需要合併的重複房間', '發現'); } catch (e) {} return; }
                         _saveRoomRemap(remap);
-                        _vnLogRooms = null;
-                        await self._fillVnLog();
+                        await _storySyncNow();
+                        self._fillStorySyncStatus();
                         try { tr && tr.success('整理完成：把 ' + merged + ' 個重複 id 收斂進 ' + groups.length + ' 間', '發現'); } catch (e) {}
                     } catch (e) { try { tr && tr.error('整理失敗：AI 回傳格式不對', '發現'); } catch (e2) {} console.warn('[發現整理] 解析失敗:', e, resp); }
                 }, function (err) { try { tr && tr.error('整理失敗：' + ((err && err.message) || err), '發現'); } catch (e) {} });
             } catch (e) { try { tr && tr.error('整理失敗：' + ((e && e.message) || e), '發現'); } catch (e2) {} }
         },
 
-        // 清掉本聊天的 AI 整理對應表（還原成原始亂 id 分群）
-        vnLogTidyReset: function() {
+        // 清掉本聊天的 AI 整理對應表（還原成原始分群）再重新同步
+        storyTidyReset: async function() {
             try { _saveRoomRemap({}); } catch (e) {}
-            _vnLogRooms = null; this._fillVnLog();
+            await _storySyncNow();
+            this._fillStorySyncStatus();
             try { win.toastr && win.toastr.info('已清除整理結果、還原原始分群', '發現'); } catch (e) {}
         },
-        _fillVnLog: async function() {
-            if (!(APP_CONTAINER && APP_CONTAINER.querySelector('#wx-vnlog-mount'))) return;
-            try {
-                if (!_vnLogRooms) {
-                    let text = '';
-                    try {
-                        const msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null;
-                        if (Array.isArray(msgs)) text = msgs.map(function (m) { return (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || ''); }).join('\n');
-                    } catch (e) {}
-                    _vnLogRooms = _parseVnChatBlocks(text);
-                }
-                const mount = APP_CONTAINER && APP_CONTAINER.querySelector('#wx-vnlog-mount');   // 重抓(可能已被 render 換掉)
-                if (!mount) return;
-                const page = APP_CONTAINER.querySelector('#wx-discover-page');   // is-room=第二層整頁(藏工具列、header 釘死、只捲訊息)
-                if (_vnLogView === 'room' && _vnLogRoom && _vnLogRooms[_vnLogRoom]) {
-                    if (page) page.classList.add('is-room');
-                    mount.innerHTML = window.WX_VIEW.vnLogRoomHTML(_vnLogRooms[_vnLogRoom], DARK_MODE);
-                    const sc = mount.querySelector('.wx-vnlog-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
-                } else {
-                    _vnLogView = 'list';
-                    if (page) page.classList.remove('is-room');
-                    mount.innerHTML = window.WX_VIEW.vnLogListHTML(_vnLogRooms);
-                }
-            } catch (e) {
-                try { var mt = APP_CONTAINER.querySelector('#wx-vnlog-mount'); if (mt) mt.innerHTML = '<div class="wx-vnlog-empty">載入失敗：' + (e.message || e) + '</div>'; } catch (e2) {}
-            }
+        storyResync: async function() {
+            await _storySyncNow();
+            this._fillStorySyncStatus();
+        },
+        _fillStorySyncStatus: function() {
+            const mount = APP_CONTAINER && APP_CONTAINER.querySelector('#wx-story-status');
+            if (!mount) return;
+            const st = _storyStat || {};
+            if (!st.at) { mount.innerHTML = '<div class="wx-vnlog-empty">還沒同步過。<br>劇情裡出現 &lt;chat chatroom=&quot;…&quot;&gt; 的對話會自動進聊天列表與通訊錄。</div>'; return; }
+            const when = new Date(st.at); const hh = ('0' + when.getHours()).slice(-2), mi = ('0' + when.getMinutes()).slice(-2);
+            mount.innerHTML = '<div class="wx-vnlog-empty">已同步 ' + st.rooms + ' 間聊天室、' + st.contacts + ' 位聯絡人<br>讀到第 ' + (st.floor + 1) + ' 樓・' + hh + ':' + mi + '</div>';
         },
 
         toggleDarkMode: function() {
@@ -1027,8 +1239,8 @@
             const html = window.WX_VIEW.renderShell(GLOBAL_ACTIVE_ID, GLOBAL_CHATS, GLOBAL_TAB, DARK_MODE);
             APP_CONTAINER.innerHTML = html;
 
-            // 「發現」tab：非同步填入跑團手機記錄(讀酒館正文 <chat> 區塊)
-            if (GLOBAL_TAB === 'discover') { try { this._fillVnLog(); } catch (e) {} }
+            // 「發現」tab：跑團同步狀態
+            if (GLOBAL_TAB === 'discover') { try { this._fillStorySyncStatus(); } catch (e) {} }
 
             const room = APP_CONTAINER.querySelector('.wx-room-scroll');
             if (room && GLOBAL_ACTIVE_ID) {
@@ -1604,6 +1816,8 @@
                     //    這裡不再戳 WX_TAVERN_API_BRIDGE.poll() 去掃酒館正文 —— 它認的是早已淘汰的
                     //    [wx_os] 格式（現在酒館手機聊天是 <chat chatroom>），掃不到只會印出騙人的
                     //    「已清空面板」log（其實什麼都沒清）。橋接程式碼保留休眠、可逆。
+                    // 📖 跑團同步：開面板先把正文裡的聊天室收進來再畫（PWA 沒有酒館事件，就靠這一下）
+                    try { await _storySyncNow(); } catch (e) {}
                     win.wxApp.render();
                 });
             } else { setTimeout(win.wxApp.installToPhone, 500); }
@@ -1713,6 +1927,24 @@
     } catch (e) {}
 
     win.wxApp.installToPhone();
+
+    // 📖 跑團同步的事件掛鉤（酒館才有；PWA 靠開面板那一下）
+    (function _hookStorySync() {
+        let tries = 0;
+        const tick = function () {
+            if (typeof win.eventOn === 'function' && win.tavern_events) {
+                const ev = win.tavern_events;
+                const resync = function () { _storySyncDebounced(1200); };
+                ['MESSAGE_RECEIVED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED'].forEach(function (k) { if (ev[k]) win.eventOn(ev[k], resync); });
+                if (ev.CHAT_CHANGED) win.eventOn(ev.CHAT_CHANGED, function () { _storyLastFloor = -1; _storyStat = { rooms: 0, contacts: 0, floor: -1, at: 0 }; _storySyncDebounced(800); });
+                if (ev.GENERATION_STARTED) win.eventOn(ev.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; _storyStampNatives(); });
+                _storySyncDebounced(2000);
+                return;
+            }
+            if (++tries < 40) setTimeout(tick, 500);
+        };
+        tick();
+    })();
 
     setTimeout(() => {
         const configStr = localStorage.getItem('wx_phone_api_config');

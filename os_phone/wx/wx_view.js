@@ -47,54 +47,21 @@
 
     window.WX_VIEW = {
         
-        // 「發現」tab：跑團手機記錄（唯讀檢視 VN 劇情裡手機上發生過的對話）。內容由 wxApp._fillVnLog() 非同步填入。
-        // 版型＝細工具列(標題+動作鈕一排) + 聊天室列表吃滿剩餘高；不再用三張大 cell 疊著擠壓列表。
+        // 「發現」tab：跑團同步狀態。劇情裡的 <chat> 聊天室已直接進聊天列表與通訊錄，這頁只放同步與整理。
         getDiscoverHTML: function() {
             const app = '(window.parent.wxApp || window.wxApp)';
             return ''
               + '<div class="wx-discover" id="wx-discover-page">'
               +   '<div class="wx-vnlog-toolbar">'
-              +     '<div class="wx-vnlog-toolbar-t"><i class="fa-solid fa-comments"></i>跑團手機記錄</div>'
+              +     '<div class="wx-vnlog-toolbar-t"><i class="fa-solid fa-book-open"></i>跑團同步</div>'
               +     '<div class="wx-vnlog-tools">'
-              +       '<button class="wx-vnlog-tool" onclick="' + app + '.vnLogTidyAi && ' + app + '.vnLogTidyAi()"><i class="fa-solid fa-wand-magic-sparkles"></i>AI 整理</button>'
-              +       '<button class="wx-vnlog-tool" onclick="' + app + '.vnLogTidyReset && ' + app + '.vnLogTidyReset()"><i class="fa-solid fa-arrow-rotate-left"></i>還原</button>'
-              +       '<button class="wx-vnlog-tool" title="重新讀取" onclick="' + app + '.vnLogRefresh && ' + app + '.vnLogRefresh()"><i class="fa-solid fa-rotate-right"></i></button>'
+              +       '<button class="wx-vnlog-tool" onclick="' + app + '.storyTidyAi && ' + app + '.storyTidyAi()"><i class="fa-solid fa-wand-magic-sparkles"></i>AI 整理</button>'
+              +       '<button class="wx-vnlog-tool" onclick="' + app + '.storyTidyReset && ' + app + '.storyTidyReset()"><i class="fa-solid fa-arrow-rotate-left"></i>還原</button>'
+              +       '<button class="wx-vnlog-tool" title="重新同步" onclick="' + app + '.storyResync && ' + app + '.storyResync()"><i class="fa-solid fa-rotate-right"></i></button>'
               +     '</div>'
               +   '</div>'
-              +   '<div class="wx-vnlog" id="wx-vnlog-mount"><div class="wx-vnlog-empty">載入跑團手機記錄…</div></div>'
+              +   '<div class="wx-vnlog" id="wx-story-status"></div>'
               + '</div>';
-        },
-        // 房間列表（第一層）
-        vnLogListHTML: function(rooms) {
-            const app = '(window.parent.wxApp || window.wxApp)';
-            const names = Object.keys(rooms || {});
-            if (!names.length) return '<div class="wx-vnlog-empty">這個跑團還沒有手機對話記錄。<br>（劇情裡出現 &lt;chat chatroom=&quot;…&quot;&gt; 的對話才會收進來）</div>';
-            const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; };
-            return names.map(function(n) {
-                const r = rooms[n];
-                const last = (r.msgs && r.msgs.length) ? r.msgs[r.msgs.length - 1] : null;
-                let preview = last ? (last.type === 'system' ? last.content : ((last.sender ? last.sender + '：' : '') + last.content)) : '';
-                preview = preview.replace(/\[[^\]]*\]/g, '[訊息]');
-                return ''
-                  + '<div class="wx-vnlog-room" onclick="' + app + '.openVnLogRoom(\'' + encodeURIComponent(n) + '\')">'
-                  +   '<div class="wx-vnlog-room-ic">' + esc(((r.name || n) || '?').charAt(0)) + '</div>'
-                  +   '<div class="wx-vnlog-room-body"><div class="wx-vnlog-room-name">' + esc(r.name || n) + '</div><div class="wx-vnlog-room-prev">' + esc(preview).slice(0, 40) + '</div></div>'
-                  +   '<div class="wx-vnlog-room-cnt">' + (r.msgs ? r.msgs.length : 0) + '</div>'
-                  + '</div>';
-            }).join('');
-        },
-        // 房間泡泡（第二層）：重用 renderBubble
-        vnLogRoomHTML: function(room, isDark) {
-            const app = '(window.parent.wxApp || window.wxApp)';
-            const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; };
-            const chatObj = { name: room.name, id: room.id || room.name, isGroup: !!(room.members && room.members.length > 2), members: room.members || [] };
-            const self = this;
-            const bubbles = (room.msgs || []).map(function(m, i) {
-                return self.renderBubble({ content: m.content, sender: m.sender, senderName: m.sender, isMe: m.isMe, type: m.type === 'system' ? 'system' : 'msg' }, chatObj, false, i);
-            }).join('');
-            return ''
-              + '<div class="wx-vnlog-bar"><button class="wx-vnlog-back" onclick="' + app + '.vnLogBack()"><i class="fa-solid fa-chevron-left"></i> 返回</button><span class="wx-vnlog-bar-t">' + esc(room.name) + '</span></div>'
-              + '<div class="wx-room-scroll wx-vnlog-scroll"><div id="wxVnLogContent">' + (bubbles || '<div class="wx-vnlog-empty">（無訊息）</div>') + '</div></div>';
         },
 
         // 假收款碼：程式畫「QR 樣式」SVG（三角定位框 + 依 seed 隨機黑塊），跑團用、不可掃也不用生圖
@@ -534,7 +501,7 @@
 
         // --- 3. 聊天列表渲染 (保持 V108.5 邏輯) ---
         getListHTML: function(chats, activeId) {
-            const chatIds = Object.keys(chats).filter(k => k !== 'unknown_chat');
+            const chatIds = Object.keys(chats).filter(k => k !== 'unknown_chat' && chats[k] && Array.isArray(chats[k].messages) && chats[k].messages.length > 0);   // 沒聊過的只在通訊錄
             if (chatIds.length === 0 && chats['unknown_chat'] && chats['unknown_chat'].messages.length > 0) chatIds.push('unknown_chat');
             return chatIds.map(id => {
                 const c = chats[id];
@@ -574,7 +541,7 @@
                 <div class="wx-contact-item" id="static-tags"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div></div>
                 <div class="wx-contact-item" id="static-official"><div class="wx-contact-icon icon-official"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg></div><div class="wx-contact-name">官方帳號</div></div>
             `;
-            let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat').map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar }));
+            let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat').map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].isGroup ? '' : (chats[id].realName || '') }));
             contacts.sort((a, b) => a.name.localeCompare(b.name));
             if (contacts.length > 0) {
                 html += `<div class="wx-contact-section">A</div>`;
@@ -594,6 +561,8 @@
                             avatarStyle = `width:38px; height:38px; margin-right:12px; background-image: url('${c.customAvatar}')`;
                             dataAttr = `class="wx-avatar"`;
                         }
+                    } else if (c.realName) {
+                        dataAttr = `data-vn-name="${c.realName}" class="wx-avatar vn-load-target"`;   // 跑團來的人：照名字對 VN 頭像庫
                     } else {
                         dataAttr = `class="wx-avatar"`;
                     }

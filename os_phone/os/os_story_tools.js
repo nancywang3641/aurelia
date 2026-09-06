@@ -844,6 +844,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             }
 
             async function _doSave() {
+            let _sumChars = [], _sumHeader = '';   // 角色表解析結果留給下面「進通訊錄」用
             // 大總結搬出世界書：全文存 OS_DB(key=chatId、一卡一筆覆蓋更新)。注入改走程式壓縮(os_summary_inject)，
             // 不再寫 lorebook、不再塞觸發 KEY；故事管理直接編這筆 OS_DB 記錄。
             try {
@@ -923,6 +924,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                             characters.push({ name, row: trimmed });
                         }
                     }
+                    _sumChars = characters; _sumHeader = charHeader;
                     console.log('[lobby_summary_index] parsed:', { brief: brief?.slice(0, 60), charsCount: characters.length, firstChar: characters[0] });
 
                     const cardName = (helper.getCharData?.()?.name) || helper.getCurrentCharPrimaryLorebook?.() || '';
@@ -989,6 +991,8 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
 
             // 大總結存檔後 → 自動補齊缺的頭像(中文角色表→副模型轉英文tag→生圖、每次最多N張)。fire-and-forget、不擋存檔；sp_autoavatar_on='0' 可關。
             try { if (localStorage.getItem('sp_autoavatar_on') !== '0') API.fillMissingAvatars(finalContent); } catch (e) {}
+            // 角色表 → 微信通訊錄（零 API、程式直接寫；頭像用上面補好的那些照名字對）
+            try { const _wx = window.parent.wxApp || window.wxApp; if (_wx && _wx.importSummaryContacts) _wx.importSummaryContacts(_sumChars, _sumHeader); } catch (e) {}
             } // end _doSave
 
             // 生成完先跳「預覽窗」給用戶檢查（可直接編輯）；滿意按儲存才寫世界書，不滿意可重新生成

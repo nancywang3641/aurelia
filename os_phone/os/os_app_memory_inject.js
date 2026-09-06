@@ -64,6 +64,7 @@
     // 一條 微信/電話 訊息 → 一行（只取一般文字訊息，跳過紅包/貼圖/系統等）
     function _chatLine(m, userName, charName) {
         if (!m || (m.type && m.type !== 'msg')) return '';
+        if (m._story != null) return '';   // 📖 跑團同步進來的劇情訊息：正文裡本來就有，不重講
         const t = _cut(m.content);
         if (!t) return '';
         const who = m.isMe ? userName : (m.senderName || m.sender || charName);
