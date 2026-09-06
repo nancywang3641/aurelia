@@ -254,7 +254,7 @@
                     try { await syncActiveTagsToLocal(); } catch (e) {}
                     if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
                     try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {}   // 連酒館正則+主世界書殘留一起清
-                    try { await _purgeLinkedPhoneApp(tpl.id); } catch (e) {}            // 連對應的手機 app + 資料一起清（共用＝整個移除）
+                    try { await _purgeLinkedPhoneApp(tpl.id, tpl.tagId); } catch (e) {}            // 連對應的手機 app + 資料一起清（共用＝整個移除）
                     renderVnComponents();
                 };
                 ob.appendChild(row);
@@ -355,7 +355,7 @@
             await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal();
             if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
             try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {}   // 連酒館正則+主世界書殘留一起清，不留孤兒
-            try { await _purgeLinkedPhoneApp(tpl.id); } catch (e) {}            // 連對應的手機 app + 資料一起清（共用＝整個移除）
+            try { await _purgeLinkedPhoneApp(tpl.id, tpl.tagId); } catch (e) {}            // 連對應的手機 app + 資料一起清（共用＝整個移除）
             _vcTpl = null; _vcView = 'browse'; renderVnComponents();
         };
         _activatePreview(listEl, tpl, safeTagId);
@@ -659,7 +659,7 @@
             for (const t of templates) {
                 try { await db.deleteUITemplate(t.id); } catch (e) {}
                 try { await _removeTavernPanelArtifacts(t.tagId); } catch (e) {}
-                try { await _purgeLinkedPhoneApp(t.id); } catch (e) {}
+                try { await _purgeLinkedPhoneApp(t.id, t.tagId); } catch (e) {}
             }
             try { await syncActiveTagsToLocal(); } catch (e) {}
             if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }

@@ -107,8 +107,10 @@
         _buildSt: function(lines, tpl) {
             const imgManager = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
             // 共用面板：dbSave/dbLoad 要對到「該模板對應的手機 app id」，跟桌面 app 端存進同一個桶 → 兩邊讀同一份。
-            // 沒對應 app（未裝成 app／純展示）就退回 'pwa_panel' 通用桶。
-            const shareAppId = (tpl && tpl.id && this._tplAppMap && this._tplAppMap[tpl.id]) || 'pwa_panel';
+            // 沒對應 app（未裝成 app／純展示）就用這個面板自己的桶 vnpanel:<tagId>（刪組件時一起清；舊制 pwa_panel 通用桶已廢）。
+            const shareAppId = (tpl && tpl.id && this._tplAppMap && this._tplAppMap[tpl.id]) || ('vnpanel:' + ((tpl && tpl.tagId) || ''));
+            const feedTag = (tpl && tpl.tagId) || '';
+            const FEED = () => window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED) || null;
             return {
                 md: function(text) {
                     if (!text) return '';
@@ -201,6 +203,11 @@
                         host.__stLoad = ov; host.appendChild(ov);
                     } catch (e) {}
                 },
+                // 📖 資料接口（共用面板）：正文全樓層 <tagId> 區塊 + 應用裡新增的，程式合併好給面板畫；面板不自己存清單
+                feed: function(o) { try { const F = FEED(); return F ? F.feed(feedTag, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch (e) { return Promise.resolve([]); } },
+                feedAdd: function(tag, fields) { try { const F = FEED(); return F ? F.add(feedTag, tag, fields) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } },
+                feedUpdate: function(id, fields) { try { const F = FEED(); return F ? F.update(feedTag, id, fields) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },
+                feedRemove: function(id) { try { const F = FEED(); return F ? F.remove(feedTag, id) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },
                 dbSave: async function(k, v, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.saveAppData(shareAppId, k, v, cid); } catch (e) { return false; } },
                 dbLoad: async function(k, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.getAppData(shareAppId, k, cid); } catch (e) { return null; } },
                 setImage: async function(el, prompt, type, provider) {

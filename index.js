@@ -223,6 +223,7 @@ const PHONE_FILES = [
     'vn_story/vn_sticker.js',
     'vn_story/vn_panels.js',
     'vn_story/vn_generator.js',
+    'vn_story/vn_panel_feed.js',       // 📖 VN 組件（共用面板）資料接口：正文全樓層區塊 + app 新增，程式合併給面板畫
     'vn_story/vn_dynamic_parser.js',   // 創作室（展廳）動態標籤引擎 — 原本只有 PWA(index.html) 載，酒館漏載害自建 tag 摸不到 → 補上
     'vn_story/vn_theme.js',            // VN 劇情面板主題（[World|] 驅動換樣式）— 須在 vn_core 前
     'vn_story/vn_fx.js',               // ⚡ 畫面特效引擎（#fx-id# 標記由 vn_core 抽取路由過來）

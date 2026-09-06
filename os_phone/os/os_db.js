@@ -236,6 +236,22 @@
                 } catch (e) { reject(e); }
             });
         },
+        // 刪掉某個聊天在所有 app 底下的 app_data（id = appId::chat:<chatId>::key）。
+        deleteAppDataByChat: async function(chatId) {
+            const db = await this.init();
+            const want = 'chat:' + String(chatId || '');
+            if (!chatId) return 0;
+            return new Promise((resolve, reject) => {
+                try {
+                    let n = 0;
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_APP_DATA).openCursor();
+                    req.onsuccess = (e) => { const cur = e.target.result; if (cur) { const p = String(cur.key).split('::'); if (p.length >= 3 && p[1] === want) { cur.delete(); n++; } cur.continue(); } };
+                    tx.oncomplete = () => resolve(n);
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
         // 整批讀某 app 的 app_data（給「記憶回傳酒館」統一注入用）：回 [{key,scope,value}]，只收 global + 指定 chat。
         getAppDataByApp: async function(appId, chatId) {
             const db = await this.init();
@@ -1263,6 +1279,8 @@
             await _safe('微信/電話', () => _purge(STORE_NAME_CHATS, v => v && v.data && _inSet(v.data.tavernChatId)));
             await _safe('微博', () => _purge(STORE_NAME_WB, v => v && _inSet(v.tavernChatId)));
             await _safe('大廳總結索引', () => _purge(STORE_NAME_LOBBY_SUM_IDX, v => v && _inSet(v.chatId)));
+            // app_data：id = appId::chat:<chatId>::key → 綁這個聊天的整批刪（創作室面板、主角狀態、世界門等都在這）
+            await _safe('app資料', () => _purge(STORE_NAME_APP_DATA, v => { const p = String(v && v.id || '').split('::'); return p.length >= 3 && p[1].indexOf('chat:') === 0 && _inSet(p[1].slice(5)); }));
 
             // 三、app_memory：entries 內逐條過濾(留別卡的)；整筆空了才刪
             await _safe('app記憶', () => new Promise((res, rej) => {

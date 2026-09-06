@@ -186,14 +186,12 @@
 - 共用（真雙用：同一份面板，劇情裡會像純展示那樣跳出來渲染 ＋ 也裝成手機 App，兩邊都跑、讀同一份資料）：
   · isBlock 必須 true、必須產出 demoFormat（同純展示那套）——劇本 AI 才會在正文用 <tagId> 區塊餵新資料、面板才會在劇情裡自動跳出來渲染。
   · 版型「兩邊都好看」：根容器 width:100% + min-height:100% + flex 直向撐滿（劇情裡蓋在置中遮罩上、桌面填滿手機框，兩種都填滿不留白）。別做 max-width 置中小卡（那只給純展示）。
-  · 🔑 資料一律「自存一份、兩邊讀同一份」——面板永遠從自己的 DB 畫，不是只靠當下 lines。init 流程固定：
-      ① const list = (await st.dbLoad('資料key','chat')) || [];   // 先讀回自存的
-      ② const fed = st.parse();   // 劇情裡跳出來時這有 AI 餵的新資料；桌面開 app 時是空的
-      ③ 把 fed 每筆「去重後」併進 list：每筆配一個穩定 id（用內容關鍵欄組出，或讓 AI 在格式裡帶一個識別欄）＋ ts:Date.now()；list 已有同 id 就跳過、不重複加
-      ④ await st.dbSave('資料key', list, 'chat');   // 存回（scope 一律 'chat'）
-      ⑤ 一律「按 ts 排序」後渲染，每筆把時間印出來（讓人看得出先後、不亂序）
-  · 🚫 嚴禁 st.remember：共用面板的資料只進自己的 DB(st.dbSave)、是展示用、絕不進記憶桶、絕不注入酒館 AI（否則面板讀的劇情會被推回 AI → 重複數據迴圈）。要持久化只能 st.dbSave／st.dbLoad（scope 一律 'chat'）。
-  · 不要整碗 st.getStory 撈歷史塞進清單（會吃進一堆重複舊資料）——資料以「AI 在 <tagId> 區塊主動寫的新條目」為準、靠上面的 id 去重。
+  · 🔑 資料不是面板自己存的，是程式給的。面板永遠只做一件事：const rows = await st.feed(); 然後把 rows 畫出來。
+      rows 每筆 { id, src:'story'|'app', tag, fields:[…], floor }：src 'story' 是劇本 AI 在正文 <tagId> 區塊寫的（程式掃整個故事、自動去重、自動綁當前聊天、劇情回朔就自動消失），src 'app' 是使用者在 app 裡新增的；順序已經排好（照劇情先後），直接照順序畫、不要自己排序、不要自己去重、不要自己存清單。
+      使用者在 app 裡新增：await st.feedAdd('標籤名', [欄1, 欄2…]) 存好回一筆 row；改：await st.feedUpdate(id, [欄…])；刪：await st.feedRemove(id)（只有 src 'app' 的能改能刪）。做完重新 await st.feed() 重畫。
+      🚫 這類清單資料不准再用 st.dbSave／st.dbLoad／st.saveData 自己存一份（會累積、會混到別的聊天）；那幾個只留給跟清單無關的小設定（例如篩選條件、展開狀態）。
+  · 🚫 嚴禁 st.remember：共用面板是展示用、絕不進記憶桶、絕不注入酒館 AI（否則面板讀的劇情會被推回 AI → 重複數據迴圈）。
+  · 不要用 st.getStory 撈歷史塞進清單——正文那份 st.feed 已經給了。
   · 一樣能用 st.callAI／st.setImage 做按鈕生成（守生圖紀律＋「不自動生成」規則）。
 
 ## 🚫 禁止清單
@@ -239,7 +237,8 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.esc(文字) → 把文字轉成安全 HTML。**用 innerHTML 塞用戶或 AI 產的文字前先 st.esc()**，防內容夾壞版面或 XSS。
 - st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。**第三參 scope**：不填＝全域（整個 app 一份）；填 'chat'＝綁當前聊天室（每個故事/聊天室各自一份，像 AVS）→ st.saveData(k,v,'chat')、st.loadData(k,'chat')。**跟劇情走的 app（論壇、日記、跟當前故事有關的資料）一律用 'chat'**；個人工具（記事本、計算機、設定）用全域不填。（要拿聊天室 id 自己分流也可 st.getChatId()）純展示卡不需要持久化。
 - 📚 **記錄／檔案型 app（論壇、日記、動態、事件記錄…使用者會「之後回來翻看過去」的）＝資料一律「累積」、絕不覆蓋**：生成新內容時，先 st.loadData 讀回舊清單 → 把新的 append 上去（別直接「整個變數＝新資料」蓋掉）→ st.saveData(…, 'chat') 存回。這樣使用者打開 app 就能看到「從第一章到現在的全部歷史」，不必回劇情裡翻到準確那一樓。每筆可附時間／章節標記方便瀏覽，舊的可往下滑。**這類 app 的本質＝內容的永久家，不是每次洗掉重生。**（除非使用者明說「只看最新」才覆蓋。）
-- st.dbSave(key, value[, 'chat']) / st.dbLoad(key[, 'chat']) → **存進 DB（async、要 await）**，scope 同 saveData。**資料量大／會一直累積的（論壇歷史、日記、長清單）一律用這個**（localStorage 有上限、塞多會爆，DB 不會）；小設定／少量資料用 st.saveData 即可。用法：init 時 const data = await st.dbLoad('forum','chat') 取回（沒有就給預設）、存時 await st.dbSave('forum', data, 'chat')。
+- st.feed([{tag}]) → Promise，回這個面板的全部資料 [{ id, src:'story'|'app', tag, fields:[…], floor }]，已照劇情先後排好；正文 <tagId> 區塊寫的（src 'story'）與 app 裡新增的（src 'app'）都在裡面。**共用面板的清單資料只從這裡拿**，不自己存。傳 {tag:'標籤名'} 只拿某一種。st.feedAdd(tag, fields) / st.feedUpdate(id, fields) / st.feedRemove(id) → 在 app 裡新增／改／刪自己那份（都是 Promise）。
+- st.dbSave(key, value[, 'chat']) / st.dbLoad(key[, 'chat']) → **存進 DB（async、要 await）**，scope 同 saveData。（共用面板的清單資料不走這個、走 st.feed。）**資料量大／會一直累積的（論壇歷史、日記、長清單）一律用這個**（localStorage 有上限、塞多會爆，DB 不會）；小設定／少量資料用 st.saveData 即可。用法：init 時 const data = await st.dbLoad('forum','chat') 取回（沒有就給預設）、存時 await st.dbSave('forum', data, 'chat')。
 
 ## 語言
 ECoT 與正文輸出用 zh-CN（代碼例外）。
@@ -2376,7 +2375,19 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ── st helper builder（給「預覽器」「展廳」兩處共用；酒館 wrapper 內另有一份） ──
     function _buildPreviewSt(lines) {
         const imgManager = window.OS_IMAGE_MANAGER || (window.parent && window.parent.OS_IMAGE_MANAGER);
+        // 📖 資料接口（預覽版）：正文那份＝預覽貼進來的 lines；新增的只留在記憶體、不落地
+        const _pvFeed = () => window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED) || null;
+        const _pvAdded = [];
         return {
+            feed: async function (o) {
+                const F = _pvFeed();
+                const recs = (F ? F.parseRecords(lines) : []).map((r, i) => ({ id: 's:0:' + i, src: 'story', tag: r.tag, fields: r.fields, floor: 0 }));
+                const all = recs.concat(_pvAdded);
+                return (o && o.tag) ? all.filter(r => r.tag === o.tag) : all;
+            },
+            feedAdd: async function (tag, fields) { const rec = { id: 'a:pv:' + _pvAdded.length, src: 'app', tag: String(tag || ''), fields: (fields || []).map(x => String(x == null ? '' : x)), floor: 0, ts: Date.now() }; _pvAdded.push(rec); return rec; },
+            feedUpdate: async function (id, fields) { const rec = _pvAdded.find(r => r.id === id); if (!rec) return false; rec.fields = (fields || []).map(x => String(x == null ? '' : x)); return true; },
+            feedRemove: async function (id) { const i = _pvAdded.findIndex(r => r.id === id); if (i < 0) return false; _pvAdded.splice(i, 1); return true; },
             md(text) {
                 if (!text) return '';
                 try {
@@ -2532,6 +2543,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'dbSave:function(k,v,s){try{return window.dbSave?window.dbSave(k,v,s):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
             +   'dbLoad:function(k,s){try{return window.dbLoad?window.dbLoad(k,s):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
             +   'getChatId:function(){try{return window.getChatId?window.getChatId():"";}catch(e){return "";}},'
+            // 📖 資料接口（共用面板）：走上層 VN_PANEL_FEED，跟劇情彈出那邊讀同一份
+            +   'feed:function(o){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.feed(' + JSON.stringify(String(tpl.tagId || '')) + ',o||{}):Promise.resolve([]);}catch(e){return Promise.resolve([]);}},'
+            +   'feedAdd:function(t,fl){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.add(' + JSON.stringify(String(tpl.tagId || '')) + ',t,fl):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
+            +   'feedUpdate:function(id,fl){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.update(' + JSON.stringify(String(tpl.tagId || '')) + ',id,fl):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'feedRemove:function(id){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.remove(' + JSON.stringify(String(tpl.tagId || '')) + ',id):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
             +   'toChat:function(t,o){try{return window.toChat?window.toChat(t,o):false;}catch(e){return false;}},'
             +   'toSystem:function(t){try{return window.toSystem?window.toSystem(t):false;}catch(e){return false;}},'
             + '};'
@@ -2671,6 +2687,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         var R = window.VN_READER || (window.parent && window.parent.VN_READER);
         return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
       },
+      feed: function(o){ try { var F = ctx.VN_PANEL_FEED; return F ? F.feed(${JSON.stringify(String(data.tagId || ''))}, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
+      feedAdd: function(t, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.add(${JSON.stringify(String(data.tagId || ''))}, t, fl) : Promise.resolve(null); } catch(e){ return Promise.resolve(null); } },
+      feedUpdate: function(id, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.update(${JSON.stringify(String(data.tagId || ''))}, id, fl) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      feedRemove: function(id){ try { var F = ctx.VN_PANEL_FEED; return F ? F.remove(${JSON.stringify(String(data.tagId || ''))}, id) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
       saveData: function(k, v){ try { if (window.saveData) window.saveData(k, v); } catch(e){} },
       loadData: function(k){ try { return window.loadData ? window.loadData(k) : null; } catch(e){ return null; } }
     };
@@ -2783,7 +2803,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
     // 刪除 VN 組件時，連它對應的手機 app（srcTplId 反查）＋ app 的四桶資料一起清。
     // 共用＝一個東西：從展廳刪＝整個面板移除（app 那側也清乾淨，不留我的應用孤兒）。
-    async function _purgeLinkedPhoneApp(tplId) {
+    async function _purgeLinkedPhoneApp(tplId, tagId) {
+        try { if (tagId && win.VN_PANEL_FEED && win.VN_PANEL_FEED.purgeTag) await win.VN_PANEL_FEED.purgeTag(tagId); } catch (e) {}   // 📖 面板自己的資料桶（所有聊天）
         try {
             const apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? (await win.OS_DB.getAllPhoneApps()) : [];
             const rec = (apps || []).find(a => a && a.srcTplId === tplId);
@@ -3572,6 +3593,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 try { await syncActiveTagsToLocal(); } catch (e) {}
                 if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
                 if (tpl && tpl.tagId) { try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {} }
+                if (tpl && tpl.tagId) { try { if (win.VN_PANEL_FEED && win.VN_PANEL_FEED.purgeTag) await win.VN_PANEL_FEED.purgeTag(tpl.tagId); } catch (e) {} }   // 📖 面板自己的資料桶
             } catch (e) { console.warn('[OS_STUDIO] purgeTemplateFully', e); }
         }
     };
