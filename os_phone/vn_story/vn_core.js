@@ -456,9 +456,24 @@
                     _S.onMessage(messageId).then(function () { _S.renderHud(); });
                     const _blocks = String(txt || '').match(/<os_status>[\s\S]*?<\/os_status>/gi);
                     if (_blocks) _blocks.forEach(function (b) { _S.applyStatusBlock(b, messageId); });
+                    // 標籤寫法也在這裡撈：AI 常把 [Date|][HP|][Buff|] 放在 </content> 之後（回覆末尾），
+                    //   劇本只取 <content> 裡面的行，放外面的就永遠讀不到 → 不管寫在哪都認，撈完從原文剝掉。
+                    const _noCot = String(txt || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                    const _tagLines = _noCot.match(/^[ \t]*\[(?:Date|HP|Buff|Debuff|Event)\|[^\]\n]*\][ \t]*$/gim);
+                    if (_tagLines) _tagLines.forEach(function (ln) {
+                        const _in = ln.trim().slice(1, -1).split('|');
+                        const _tag = (_in[0] || '').trim().toLowerCase();
+                        const _a = (_in[1] || '').trim(), _b = _in.slice(2).join('|').trim();
+                        if (_tag === 'date') _S.setDate(_a, _b);
+                        else if (_tag === 'hp') _S.setHp(_a);
+                        else if (_tag === 'buff' || _tag === 'debuff') _S.setBuff(_a, _b);
+                        else if (_tag === 'event') _S.addEvent(_a, _b, '', 'ai', messageId);
+                    });
                 }
             } catch (e) {}
-            txt = String(txt || '').replace(/<os_status>[\s\S]*?<\/os_status>\s*/gi, '');
+            txt = String(txt || '')
+                .replace(/<os_status>[\s\S]*?<\/os_status>\s*/gi, '')
+                .replace(/^[ \t]*\[(?:Date|HP|Buff|Debuff|Event)\|[^\]\n]*\][ \t]*\r?\n?/gim, '');
             // 這份劇本的原文：區塊內容等一下會被「未知 XML 區塊過濾器」刪掉，
             //   彈卡片時要回原文撈整顆 <tag>…</tag>（PWA 沒有酒館訊息可讀，只能靠這份）。
             this._scriptRawText = String(txt || '');

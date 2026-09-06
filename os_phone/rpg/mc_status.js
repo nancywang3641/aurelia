@@ -329,7 +329,7 @@
         if (up.length) L.push('近期約定：' + up.map(e => fmtDate(e.date) + ' ' + e.title).join('；'));
         const past = st.date ? st.events.filter(e => dayDiff(st.date, e.date) < 0).slice(-3) : [];
         if (past.length) L.push('已過的約定：' + past.map(e => fmtDate(e.date) + ' ' + e.title).join('；'));
-        L.push('回合末尾照你的格式回報日期、HP、狀態效果與新的約定；狀態效果的剩餘回合以這裡為準往下數，時間只能往前走，已在名單裡的約定不要重寫。');
+        L.push('（狀態效果的剩餘回合以這裡為準往下數；時間只能往前走。）');
         return L.join('\n');
     }
 
