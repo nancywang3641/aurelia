@@ -374,7 +374,7 @@
             var table = order.map(function (id) { return map[id] + '｜' + id; }).join('、');
             var result = th.injectPrompts([{
                 id: WX_CHATROOM_INJECT_ID,
-                content: '\n\n【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器時用對 ID：可放 chatroom 旁的 id="…" 屬性，或容器內的 [Chat: 名|ID] 那行）；就算你改了群名也「絕不可」改 ID，只有全新房間才給新 ID：\n' + table + '\n\n',
+                content: '\n\n【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器時用對 ID：可放 chatroom 旁的 id="…" 屬性，或容器內的 [Chat: 名|ID] 那行）；就算你改了群名也「絕不可」改 ID，只有全新房間才給新 ID。手機預設是主角的；只有換視角（這段是別人在用手機）才在 <chat> 加 owner="那個人的名字"，[With] 只是名單、順序無所謂：\n' + table + '\n\n',
                 position: 'in_chat',
                 depth: 0,
                 role: 'system'

@@ -23,6 +23,7 @@
 
         resetState: function() {
             this.chatParticipants = [];
+            this.chatOwner = '';
             this.isGroupChat = false;
             this.currentChatroom = '';
             this.chatroomCache = {};
@@ -39,6 +40,8 @@
             const newName = line.match(/chatroom="([^"]+)"/)?.[1] || 'Chat';
             const newId   = line.match(/\bid\s*=\s*"([^"]+)"/)?.[1] || '';   // VN PHONE <chat ... id="穩定id"> 的接續 id
             const newKey  = newId || newName;   // 接續 key：ID 優先（AI 改群名也接得回同一間），沒 id 才退回房名
+            // 📱 誰的手機（右邊泡泡）：owner="名" 屬性明寫才換視角；沒寫＝主角。不再看 [With] 的排序（AI 守不住順序）
+            this.chatOwner = (line.match(/\bowner\s*=\s*"([^"]*)"/)?.[1] || '').trim();
             document.getElementById('chat-title').innerText = newName;       // 標題永遠顯示房名（給玩家看）
 
             if (newKey !== this.currentChatroom) {
@@ -130,8 +133,9 @@
                 if (/^(系統|系统|System|旁白|Narrator)$/i.test(sender)) {
                     chatBody.innerHTML += `<div class="chat-sys">${content}</div>`;
                 } else {
-                    const me = this.chatParticipants[0] || 'You';
-                    const isMe = (sender === me || sender === 'You' || sender === '主角' || sender === '我');
+                    // 右邊泡泡＝①You/主角/我/使用者人設名 ②<chat owner="名"> 點名的人。[With] 只當名單，順序不算數
+                    const mc = (win.OS_PERSONA && win.OS_PERSONA.getName && win.OS_PERSONA.getName()) || (win.OS_API && win.OS_API.getGlobalUserName && win.OS_API.getGlobalUserName()) || '';
+                    const isMe = /^(You|主角|我|User|Self|Me)$/i.test(sender) || (!!mc && mc !== 'User' && sender === mc) || (!!this.chatOwner && sender === this.chatOwner);
                     const parts = this._splitStickerContent(content);
                     for (const part of parts) {
                         chatBody.innerHTML += this._buildChatBubbleHTML(sender, part, isMe, core);

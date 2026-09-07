@@ -668,14 +668,18 @@
             let key = roomId || roomName;
             key = _remap[key] || key;   // AI 整理過：舊亂 id（或名）→ 統一 id，同一間合回一張卡
             const dispName = nameFromHdr || roomName;
-            if (!rooms[key]) rooms[key] = { id: key, name: dispName, members: [], msgs: [] };
+            // 📱 誰的手機：owner="名" 屬性明寫才換視角，沒寫＝主角（使用者人設名）。[With] 只當名單，順序不算數
+            const attrOwner = (attrs.match(/(?:^|\s)owner\s*=\s*["']?([^"'>]*)["']?/i)?.[1] || '').trim();
+            if (!rooms[key]) rooms[key] = { id: key, name: dispName, members: [], msgs: [], owner: '' };
             else if (dispName) rooms[key].name = dispName;   // 名字以最新一次為準
-            let me = rooms[key].members[0] || '';
+            if (attrOwner) rooms[key].owner = attrOwner;
+            const me = rooms[key].owner || '';
+            const myName = _storyMyName();
             rawLines.forEach(function (line) {
                 line = line.trim();
                 if (!line) return;
                 const withM = line.match(/^\[\s*With\s*[:：]\s*(.*?)\s*\]/i);
-                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean); if (ppl.length) { rooms[key].members = ppl; me = ppl[0]; } return; }
+                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean); if (ppl.length) rooms[key].members = ppl; return; }
                 const nameM = line.match(/^\[([^\]]+?)\]\s*([\s\S]*)$/);   // [名] 內容
                 if (!nameM) return;
                 let rawName = nameM[1].trim();
@@ -685,7 +689,7 @@
                 const content = (nameM[2] || '').trim();
                 if (!content) return;
                 if (/^(系統|系统|System|Notice)$/i.test(rawName)) { rooms[key].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
-                const isMe = (me && rawName === me) || /^(User|我|主角|You|Self|Me)$/i.test(rawName);
+                const isMe = (me && rawName === me) || (myName && myName !== 'User' && rawName === myName) || /^(User|我|主角|You|Self|Me)$/i.test(rawName);
                 rooms[key].msgs.push({ type: 'msg', sender: rawName, content: content, isMe: isMe });
             });
         }
@@ -725,26 +729,27 @@
             const part = _parseVnChatBlocks(text);
             Object.keys(part).forEach(function (key) {
                 const r = part[key];
-                if (!rooms[key]) rooms[key] = { id: key, name: r.name, members: [], msgs: [] };
+                if (!rooms[key]) rooms[key] = { id: key, name: r.name, members: [], msgs: [], owner: '' };
                 if (r.name) rooms[key].name = r.name;
+                if (r.owner) rooms[key].owner = r.owner;
                 if (r.members && r.members.length) rooms[key].members = r.members.slice();
                 (r.msgs || []).forEach(function (x) { rooms[key].msgs.push({ type: x.type, sender: x.sender, content: x.content, isMe: x.isMe, floor: f }); });
             });
         }
-        // 「我」跨樓補判：某樓沒寫 [With] 時 _parseVnChatBlocks 不知道誰是我 → 用整間房累積的成員首位（規範：With 首位＝主角）再判一次
+        // 「我」跨樓補判：某樓沒寫 owner 時用整間房累積的 owner 再判一次（換視角的房，後面幾樓 AI 常省略屬性）
         const myName = _storyMyName();
         Object.keys(rooms).forEach(function (key) {
             const r = rooms[key];
-            const me = r.members[0] || '';
+            const me = r.owner || '';
             r.msgs.forEach(function (x) { if (!x.isMe && ((me && x.sender === me) || x.sender === myName)) x.isMe = true; });
         });
         return { rooms: rooms, lastFloor: msgs.length - 1, ok: true };
     }
 
-    // 房間的「對方們」：[With] 首位是主角、其餘是對方；沒寫 [With] 就拿發話人湊
+    // 房間的「對方們」：[With] 名單扣掉「我」（使用者人設名、owner、You/主角 這類）；順序不算數。沒寫 [With] 就拿發話人湊
     function _storyOthers(room) {
         const myName = _storyMyName();
-        let list = (room.members || []).slice(1).filter(function (n) { return n && n !== myName && !_isMeName(n); });
+        let list = (room.members || []).filter(function (n) { return n && n !== myName && n !== (room.owner || '') && !_isMeName(n); });
         if (!list.length) {
             const seen = {};
             room.msgs.forEach(function (x) { if (x.type === 'msg' && !x.isMe && x.sender && !_isMeName(x.sender) && x.sender !== myName && !seen[x.sender]) { seen[x.sender] = 1; list.push(x.sender); } });
@@ -788,6 +793,8 @@
                 const key = keys[i];
                 const room = rooms[key];
                 if (!room.msgs.length) continue;
+                // 換視角的房（owner 是別人）是別人的手機，主角的微信裡不該有；正文那邊 VN 照樣播，這裡不收
+                if (room.owner && room.owner !== _storyMyName() && !_isMeName(room.owner)) continue;
                 const others = _storyOthers(room);
                 const isGroup = others.length >= 2;
                 let chatId, members, realName;
