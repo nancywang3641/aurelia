@@ -197,7 +197,8 @@
   · 不要用 st.getStory 撈歷史塞進清單——正文那份 st.feed 已經給了。
   · 🔑 **生成鈕（必須有）**：app 裡至少一顆會叫 AI 產「新的」內容的按鈕。它的名字與造型跟面板主題走（使用者這次叫它什麼就是什麼，不同面板不一樣）；使用者要求「加一顆按鈕來調用生成／叫 API」時就是指這顆，別做成只重畫畫面或重新讀取的按鈕。按下後固定流程：
       ① st.loading(按鈕或清單, true, '生成中…')
-      ② const text = await st.callAI(系統提示)：提示裡講清楚面板主題、要幾筆、**輸出格式嚴格照 demoFormat 那幾行 [標籤|欄…]、一行一筆、除此之外不輸出任何字**；可把目前 rows 的關鍵欄摘要附上叫它別重複（st.callAI 已自動帶角色卡與最近劇情，不必重述劇情）
+      ② const text = await st.callAI(系統提示)：提示裡講清楚面板主題、要幾筆、**輸出格式嚴格照 demoFormat 那幾行 [標籤|欄…]、一行一筆、除此之外不輸出任何字**。
+         🚨 **必須把面板現況一起帶給它**：先 await st.feed() 拿目前全部 rows，把「使用者自己發的（src 'app'）全部」＋「最近的幾筆」原樣列進提示，明講「這是面板上已經有的內容，使用者剛發的在最後，新內容要接著這些寫、該回應的要回應（留言就回留言、貼文就有人跟）、不要重複已有的」。少了這步，AI 不知道使用者剛才留了什麼，生出來的東西跟面板脫節。（st.callAI 只自動帶角色卡與最近劇情，**不會**自動帶面板內容。）
       ③ const recs = st.parseText(text)   // 回 [{tag, fields}]，跟 st.parse 同一套解析
       ④ for (const r of recs) await st.feedAdd(r.tag, r.fields)   // 生成的內容進應用那條、src 'app'
       ⑤ st.loading(…, false)；重新 await st.feed() 重畫
