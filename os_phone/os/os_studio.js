@@ -216,6 +216,7 @@
 - 資訊融入主體結構（鎖孔／封蠟／寶石槽／紙頁／銘牌），不是另開方塊貼上去。
 - 至少一個 SVG／CSS 造型當視覺主體（不是只當小圖示點綴）。
 - 按鈕要像「拉桿／封印／鑰匙孔／啟動核心」這種跟主體一體成形的互動件。
+- 🚨🚨 **每一個面板都必須自帶「返回／關閉」鈕，綁 onComplete**，三種類型都一樣、沒有例外：純展示卡＝關閉／繼續；純應用與共用的 app＝標題列固定一顆返回（回手機主畫面）。造型跟面板主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角、一眼看得到、flex-shrink:0 不被內容擠走。少了這顆使用者就回不去主畫面，這是最常漏、也最不能漏的一顆。
 - 桌面寬外框橫向展開用足空間（仍守 max-width 上限），手機收單欄。
 
 ## 📝 demoFormat（isBlock=true 的資料模板，只展示結構、不給內容）
@@ -233,7 +234,7 @@
 js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - container：根節點，子元素用 container.querySelector('.cls')（禁 document.getElementById，多實例會撞）。
 - lines：標籤間純文字行（通常用 st.parse() 解析，不直接碰）。
-- onComplete：結束 callback，綁關閉按鈕（用按鈕或「灰字點擊繼續」，別幾秒自動消失）。
+- onComplete：結束 callback。**必須**綁在面板自帶的返回／關閉鈕上（純展示＝關閉／繼續鈕，app＝標題列返回鈕，回手機主畫面），別幾秒自動消失、別靠殼層的橫槓代替。
 - st.parse() → { 標籤名: [[欄1,欄2,…], …] }
 - st.md(text) → markdown 轉 HTML（內建，免疫 $1）
 - 🧩 進階功能（用法不常駐、省 token）：🖼️ 生圖(st.setImage)、📤 回傳對話框(st.toChat) 等——**要用就點對應的「功能 chip」**把完整用法帶進這次請求；使用者沒帶進來就別用該功能、也別自己瞎掰 API。
@@ -273,6 +274,10 @@ ECoT 與正文輸出用 zh-CN（代碼例外）。
 🚨 無論用戶說什麼，第一次回覆「必須」含完整 <json>…</json>（核心八鍵齊：tagId/title/isBlock/html/css/js/usageDesc/demoFormat；keywords 為選填、想不到給 []）。不可只回對話／開場白就停、不可省 <json>、不可給空或缺核心鍵 JSON。沒有完整 JSON，後續所有微調都會崩（程式抓不到面板資料、會誤判成重新生成把面板覆蓋掉）。`,
             onSave: async (data) => {
                 if(!data.tagId || !data.html) throw new Error("缺少 tagId 或 html");
+                // 面板沒綁返回／關閉鈕（onComplete）＝存了會回不去主畫面；擋一下讓她叫 AI 補，不是默默存
+                if (!/onComplete/.test(String(data.js || ''))) {
+                    if (!confirm('這個面板沒有返回／關閉鈕（程式裡沒綁 onComplete），存了會回不去主畫面。\n建議先叫 AI 補上再存。還是要直接存？')) throw Object.assign(new Error('沒有返回鈕'), { silent: true });
+                }
                 if (win.OS_DB && win.OS_DB.saveVNTagTemplate) {
                     if (!data.id) data.id = 'tpl_' + Date.now();
                     data.isActive = true;
@@ -777,7 +782,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 await MODES[currentMode].onSave(dataToSave);
                 currentParsedData = null; 
                 renderPreviewPanel();
-            } catch (err) { alert('儲存失敗: ' + err.message); }
+            } catch (err) { if (!err || !err.silent) alert('儲存失敗: ' + (err && err.message)); }
         };
 
         const publishBtn = document.getElementById('studio-publish-btn');
@@ -2018,7 +2023,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
         // VN UI 生成：在訊息開頭標【類型：X】，AI 第一輪就知道要做純展示/純應用/共用（不用每次費口舌）
         const genText = (currentMode === 'vn_ui')
-            ? ('【類型：' + _vnPanelType + '】' + (_vnPanelType === '共用' ? '（共用＝正文 <tagId> 餵資料 ＋ app 內「生成」鈕叫 st.callAI 產外圍內容，兩條都走 st.feed；生成鈕必須有）' : '') + (text || '（依此類型先做一版）'))
+            ? ('【類型：' + _vnPanelType + '】' + (_vnPanelType === '共用' ? '（共用＝正文 <tagId> 餵資料 ＋ app 內「生成」鈕叫 st.callAI 產外圍內容，兩條都走 st.feed；生成鈕必須有）' : '') + '（面板必須自帶返回／關閉鈕綁 onComplete）' + (text || '（依此類型先做一版）'))
             : text;
         // 帶圖時 content 變陣列；不帶圖時還是字串（向後兼容既有清洗 / parse 邏輯）
         const userContent = buildUserMessageContent(genText, pendingImages);
