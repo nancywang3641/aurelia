@@ -688,8 +688,8 @@
                 if (rawName.indexOf('|') >= 0) rawName = rawName.split('|').pop().trim() || rawName;   // [Char|红石]→红石
                 const content = (nameM[2] || '').trim();
                 if (!content) return;
-                if (/^(系統|系统|System|Notice)$/i.test(rawName)) { rooms[key].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
-                const isMe = (me && rawName === me) || (myName && myName !== 'User' && rawName === myName) || /^(User|我|主角|You|Self|Me)$/i.test(rawName);
+                if (/^(系統|系统|System|Notice|附加信息|附加訊息|验证信息|驗證信息|验证消息|驗證消息)$/i.test(rawName)) { rooms[key].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
+                const isMe = (me && rawName === me) || (myName && myName !== 'User' && rawName === myName) || _isMeName(rawName);
                 rooms[key].msgs.push({ type: 'msg', sender: rawName, content: content, isMe: isMe });
             });
         }
@@ -714,7 +714,41 @@
     function _storyHash(s) { let h = 5381; s = String(s || ''); for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
     function _storyCid() { try { const c = win.OS_DB && win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null; return c == null ? '' : String(c); } catch (e) { return ''; } }
     function _storyMyName() { try { const u = win.WX_USER && win.WX_USER.getInfo ? win.WX_USER.getInfo() : null; return (u && u.name) || 'User'; } catch (e) { return 'User'; } }
-    function _isMeName(n) { return /^(User|我|主角|You|Self|Me)$/i.test(String(n || '')); }
+    // 「我」的所有叫法：人設名、微信暱稱、AI 在主角狀態裡自己寫的主角名（它常寫簡體或不帶星號，跟人設名對不上）、去掉頭尾星號的版本
+    let _storyMeAliases = null;
+    async function _storyRefreshMeAliases() {
+        const set = new Set();
+        const add = function (n) { n = String(n || '').trim(); if (!n || n === 'User') return; set.add(n); const bare = n.replace(/^[*＊_]+|[*＊_]+$/g, '').trim(); if (bare) set.add(bare); };
+        add(_storyMyName());
+        try { const P = win.OS_PERSONA || win.OS_USER; if (P && P.getName) add(P.getName()); } catch (e) {}
+        try { const W = win.WX_PROFILE; if (W && W.get) add(W.get().nickname); } catch (e) {}
+        try { const M = win.OS_MC_STATUS; if (M && M.load) { const st = await M.load(); if (st && st.name) add(st.name); } } catch (e) {}
+        _storyMeAliases = set;
+    }
+    function _isMeName(n) {
+        n = String(n || '').trim();
+        if (/^(User|我|主角|You|Self|Me)$/i.test(n)) return true;
+        if (_storyMeAliases && _storyMeAliases.has(n)) return true;
+        const bare = n.replace(/^[*＊_]+|[*＊_]+$/g, '').trim();
+        return !!(bare && _storyMeAliases && _storyMeAliases.has(bare));
+    }
+    // 好友申請：[系統] "X" 请求添加你为朋友 ＋ 下一行 [附加信息]: … → 回 [{name, bio}]
+    const _FRIEND_REQ_RE = /["“「『']?\s*([^"”」』'\s：:]{1,24})\s*["”」』']?\s*(?:请求添加你为朋友|請求添加你為朋友|请求加你为好友|請求加你為好友|请求添加你为好友|請求添加你為好友|发来好友申请|發來好友申請|申请添加你为好友|申請添加你為好友|想加你为好友|想加你為好友)/;
+    function _storyFriendRequests(room) {
+        const out = [];
+        const msgs = room.msgs || [];
+        for (let i = 0; i < msgs.length; i++) {
+            const m = msgs[i];
+            if (!m || m.type !== 'system') continue;
+            const hit = String(m.content || '').match(_FRIEND_REQ_RE);
+            if (!hit) continue;
+            let bio = '';
+            const nx = msgs[i + 1];
+            if (nx && nx.type === 'system' && /^(附加信息|附加訊息|验证信息|驗證信息|验证消息|驗證消息)/.test(String(nx.sender || ''))) bio = String(nx.content || '').replace(/^[:：\s]+/, '').trim().slice(0, 60);
+            out.push({ name: hit[1].trim(), bio: bio });
+        }
+        return out;
+    }
 
     // 逐樓解析：沿用 _parseVnChatBlocks 的區塊規則，但每則訊息帶樓號；[With] 成員與房名跨樓累積
     async function _parseStoryRoomsByFloor() {
@@ -741,7 +775,7 @@
         Object.keys(rooms).forEach(function (key) {
             const r = rooms[key];
             const me = r.owner || '';
-            r.msgs.forEach(function (x) { if (!x.isMe && ((me && x.sender === me) || x.sender === myName)) x.isMe = true; });
+            r.msgs.forEach(function (x) { if (!x.isMe && ((me && x.sender === me) || x.sender === myName || _isMeName(x.sender))) x.isMe = true; });
         });
         return { rooms: rooms, lastFloor: msgs.length - 1, ok: true };
     }
@@ -780,6 +814,7 @@
         try {
             const cid = _storyCid();
             if (!cid || !win.WX_DB || !win.WX_CONTACTS) return;
+            await _storyRefreshMeAliases();
             const parsed = await _parseStoryRoomsByFloor();
             if (!parsed.ok) return;
             const rooms = parsed.rooms;
@@ -795,7 +830,16 @@
                 if (!room.msgs.length) continue;
                 // 換視角的房（owner 是別人）是別人的手機，主角的微信裡不該有；正文那邊 VN 照樣播，這裡不收
                 if (room.owner && room.owner !== _storyMyName() && !_isMeName(room.owner)) continue;
+                // 好友申請（AI 常寫成「新的朋友」系統房）：申請人進通訊錄、簡介用附加信息；這種房本身不建聊天室
+                _storyFriendRequests(room).forEach(function (fr) {
+                    const fid = win.WX_CONTACTS.getOrCreateContactID(fr.name, 'user', true);
+                    if (!fid || fid === 'User') return;
+                    if (fr.bio) win.WX_CONTACTS.addContactToStorage({ id: fid, name: fr.name, desc: fr.bio });
+                    _storyEnsureContactChat(fid, fr.name, fr.bio);
+                    if (!contactSeen[fr.name]) { contactSeen[fr.name] = 1; contactCount++; }
+                });
                 const others = _storyOthers(room);
+                if (!others.length) continue;   // 只有我跟系統的房（新的朋友、系統通知）不建聊天室
                 const isGroup = others.length >= 2;
                 let chatId, members, realName;
                 if (isGroup) {
@@ -847,9 +891,12 @@
                 const c = GLOBAL_CHATS[id] || all[id];
                 if (!c || !c.storyKey || liveIds[id]) continue;
                 const natives = (c.messages || []).filter(function (m) { return m && m._story == null; });
-                if (!natives.length && c.isGroup) {
+                // 空掉的群整筆移除；「聯絡人是我自己」的空私聊也移除（之前簡體名沒認出來時建錯的）
+                if (!natives.length && (c.isGroup || _isMeName(c.realName || c.name))) {
                     delete GLOBAL_CHATS[id];
                     try { await win.WX_DB.deleteApiChat(id); } catch (e) {}
+                    // 通訊錄裡這個群的登記也拿掉，不留同名殘影
+                    try { const list = win.WX_CONTACTS.getAllCustomContacts(); const kept = list.filter(function (x) { return x && x.id !== id; }); if (kept.length !== list.length) localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(kept)); } catch (e) {}
                     if (GLOBAL_ACTIVE_ID === id) GLOBAL_ACTIVE_ID = null;
                     continue;
                 }
@@ -860,6 +907,12 @@
                 if (id === GLOBAL_ACTIVE_ID) rebuildActive = true;
             }
 
+            // 通訊錄裡名字是「我」的自訂聯絡人（簡體名沒認出來時註冊錯的）一併拿掉
+            try {
+                const list = win.WX_CONTACTS.getAllCustomContacts();
+                const kept = list.filter(function (c) { return !(c && !c.isGroup && _isMeName(c.name)); });
+                if (kept.length !== list.length) localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(kept));
+            } catch (e) {}
             _storyLastFloor = parsed.lastFloor;
             _storyStat = { rooms: keys.filter(function (k) { return rooms[k].msgs.length; }).length, contacts: contactCount, floor: parsed.lastFloor, at: Date.now() };
 

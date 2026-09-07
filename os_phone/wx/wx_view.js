@@ -7,6 +7,7 @@
 // 2. [完整性] 確保聊天列表、通訊錄、對話氣泡都能正確從 IndexedDB 讀取圖片。
 // ----------------------------------------------------------------
 (function() {
+    const win = window.parent || window;   // 模組層級的 win：processModules 等沒自己宣告的地方用（之前圖片訊息那行裸用 win → 房裡一有圖就打不開）
 
     // VN 頭像串接查詢：lorebook → mem cache → VN IndexedDB（最多到第4步，不生成）
     async function _resolveVNAvatar(name) {
