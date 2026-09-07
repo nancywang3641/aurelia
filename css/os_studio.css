@@ -228,10 +228,6 @@
         .studio-chip { flex-shrink: 0; padding: 3px 12px; font-size: 11px; border-radius: 12px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; font-family: inherit; white-space: nowrap; }
         .studio-chip:hover { background: rgba(26,28,40,0.06); }
         .studio-chip:active { transform: scale(0.96); }
-        /* 預覽報錯條：紅字 + 丟給 AI 修 */
-        .studio-pv-err { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 8px 10px; color: #fc8181; font-size: 12px; background: rgba(252,129,129,0.1); border-radius: 6px; }
-        .studio-pv-err-btn { flex-shrink: 0; padding: 4px 10px; font-size: 12px; border-radius: 12px; border: 1px solid rgba(252,129,129,0.6); background: transparent; color: #fc8181; cursor: pointer; font-family: inherit; white-space: nowrap; }
-        .studio-pv-err-btn:hover { background: rgba(252,129,129,0.18); }
         .studio-chip-manage { border-style: dashed; color: rgba(26,28,40,0.55); }
         /* chip 選起來＝實心高亮：功能 chip 跨輪記住、元素 chip 送出即清；兩種都不碰輸入框 */
         .studio-chip.active { background: #1A1C28; border-color: #1A1C28; color: #EEF0F6; }
