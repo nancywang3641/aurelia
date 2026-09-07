@@ -417,9 +417,26 @@
                 if (!app || app.id == null) continue;
                 if (!_pluginEnabled(app.id)) continue;                      // 該 app「記憶回傳酒館」開關沒開
                 const tpl = (app.srcTplId != null) ? tplById[app.srcTplId] : null;
-                if (tpl && tpl.isBlock) continue;                           // 共用/展示型→跳(防迴圈)
 
                 const parts = [];
+                // 共用面板（isBlock）：資料由 VN_PANEL_FEED 管，桶是 vnpanel:<tagId>。只回傳「應用那條」（使用者發的、生成鈕生的），
+                // 正文那條本來就在正文裡、不落地，所以不會迴圈；舊制在這裡整個跳過是因為那時面板把正文資料也存進自己桶。
+                if (tpl && tpl.isBlock) {
+                    try {
+                        const tagId = String(tpl.tagId || '').trim();
+                        const ents = (tagId && win.OS_DB.getAppData) ? (await win.OS_DB.getAppData('vnpanel:' + tagId, 'entries', curCid)) : null;
+                        (Array.isArray(ents) ? ents : []).forEach(function (e) {
+                            if (!e || !e.tag) return;
+                            const f = Array.isArray(e.fields) ? e.fields.map(function (x) { return String(x == null ? '' : x).replace(/\|/g, '｜'); }) : [];
+                            parts.push('[' + e.tag + '|' + f.join('|') + ']');
+                        });
+                    } catch (e) {}
+                    if (!parts.length) continue;
+                    let body = parts.join('\n').trim();
+                    if (body.length > PER_APP_MAX) body = body.slice(0, PER_APP_MAX) + '…';
+                    blocks.push('〔' + (app.name || tpl.tagId || 'App') + '〕（使用者在這個 app 裡發的與生成的內容）\n' + body);
+                    continue;
+                }
                 // dbSave（OS_DB app_data：global + 當前 chat）
                 try {
                     if (win.OS_DB.getAppDataByApp) {
