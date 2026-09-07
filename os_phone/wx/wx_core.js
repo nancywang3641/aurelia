@@ -783,11 +783,12 @@
     // 房間的「對方們」：[With] 名單扣掉「我」（使用者人設名、owner、You/主角 這類）；順序不算數。沒寫 [With] 就拿發話人湊
     function _storyOthers(room) {
         const myName = _storyMyName();
-        let list = (room.members || []).filter(function (n) { return n && n !== myName && n !== (room.owner || '') && !_isMeName(n); });
-        if (!list.length) {
-            const seen = {};
-            room.msgs.forEach(function (x) { if (x.type === 'msg' && !x.isMe && x.sender && !_isMeName(x.sender) && x.sender !== myName && !seen[x.sender]) { seen[x.sender] = 1; list.push(x.sender); } });
-        }
+        const seen = {};
+        const list = [];
+        const push = function (n) { n = String(n || '').trim(); if (!n || n === myName || n === (room.owner || '') || _isMeName(n) || seen[n]) return; seen[n] = 1; list.push(n); };
+        (room.members || []).forEach(push);
+        // 名單之外發過話的人也算（AI 常只列幾個人，群裡實際說話的更多）
+        room.msgs.forEach(function (x) { if (x.type === 'msg' && !x.isMe) push(x.sender); });
         return list;
     }
 

@@ -83,6 +83,13 @@
 
         // --- 1. 氣泡渲染 (保持 V108.5 邏輯) ---
         renderBubble: function(msg, chatObj, withAnim, msgIndex) {
+            // 貼圖寫法跟 VN 手機對齊：[貼紙:]/[贴纸:]/[表情:]/[Emote:] 都算表情包；[xxx.gif] 這種只有檔名的也算（跑團正文常這樣寫）
+            if (msg && typeof msg.content === 'string' && /\[/.test(msg.content)) {
+                const norm = msg.content
+                    .replace(/\[\s*(貼紙|贴纸|表情|Emote)\s*[:：]\s*/gi, function () { return '[表情包: '; })
+                    .replace(/\[([^\]\[:：]+\.(?:gif|jpg|jpeg|png))\]/gi, function (_, f) { return '[表情包: ' + f + ']'; });
+                if (norm !== msg.content) msg = Object.assign({}, msg, { content: norm });
+            }
             const blockRegex = /(\[\s*(?:表情包|Sticker|图片|圖片|Img|视频|視頻|Video|文件|File|位置|Location|定位|转账|轉帳|Transfer|红包|RedPacket|礼品|礼物|Gift|语音|語音|Voice|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|收款码|收款碼|收款|付款码|付款碼|WbShare).*?\])/gi;
             if (msg.content && typeof msg.content === 'string' && blockRegex.test(msg.content)) {
                 const pureContent = msg.content.replace(blockRegex, '').trim();
@@ -466,10 +473,16 @@
                 let src = null;
                 if (content.match(/^(https?:\/\/|data:|blob:)/i)) {
                     src = content.replace(/[^\x00-\x7F]/g, c => encodeURIComponent(c));
-                } else if (_w.WX_STICKER) {
-                    src = _w.WX_STICKER.lookup(content);
+                } else {
+                    // 查貼圖庫（wx 與 VN 同一份）；查不到退 VN 的 stickerBase 拼網址（VN 手機就是這樣找到的，wx 以前少了這步→同一張圖 VN 有、微信變文字）
+                    try { if (_w.WX_STICKER) src = _w.WX_STICKER.lookup(content); } catch (e) {}
+                    try { if (!src && _w.VN_Sticker && _w.VN_Sticker.lookup) src = _w.VN_Sticker.lookup(content); } catch (e) {}
+                    if (!src) {
+                        const base = String((_w.VN_Config && _w.VN_Config.data && _w.VN_Config.data.stickerBase) || '').replace(/\/?$/, '/');
+                        if (base && base !== '/') src = base + encodeURIComponent(content);
+                    }
                 }
-                const label = content.replace(/^.*\//, '') || content;
+                const label = content.replace(/^.*\//, '').replace(/\.(gif|jpg|jpeg|png)$/i, '') || content;
                 const safeLabel = label.replace(/</g,'&lt;').replace(/"/g,'&quot;');
                 if (src) {
                     return `<img src="${src}" class="wx-img-block" data-stk-label="${safeLabel}" style="max-width:120px; border-radius:4px;" alt="${safeLabel}" onerror="(function(el){el.style.display='none';var d=el.ownerDocument.createElement('div');d.className='wx-stk-fallback-box';d.textContent=el.dataset.stkLabel;el.parentNode.insertBefore(d,el.nextSibling);})(this)">`;
