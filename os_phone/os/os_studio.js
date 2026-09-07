@@ -145,7 +145,7 @@
             <div class="studio-chip-box">
                 <div class="studio-chip-mhead"><span><i class="fa-solid fa-bolt"></i> 快捷話術</span><button class="studio-chip-x" id="studio-chip-close"><i class="fa-solid fa-xmark"></i></button></div>
                 <input class="studio-chip-input" id="studio-chip-label" placeholder="標籤（例：兩層結構）" maxlength="12">
-                <textarea class="studio-chip-ta" id="studio-chip-text" placeholder="這個快捷要送給 AI 的話術…"></textarea>
+                <textarea class="studio-chip-ta" id="studio-chip-text" placeholder="補充說明（選填，留空就只送名字）"></textarea>
                 <button class="studio-chip-savebtn" id="studio-chip-save"><i class="fa-solid fa-plus"></i> 新增這個快捷</button>
                 <div class="studio-chip-mlist" id="studio-chip-list"></div>
             </div>
@@ -563,13 +563,14 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         const ld = document.getElementById('studio-import-load'); if (ld) ld.onclick = _doImportLoad;
     }
 
-    // ⚡ 組件快捷：常用 UI 話術 chip，點一下塞進輸入框（可改再送）。內建幾個 + 使用者自存(localStorage)
+    // ⚡ 組件快捷：常用 UI 元素 chip。點一下＝選取（不碰輸入框），送出時接在使用者文字後面一行「[用戶指定元素] A、B」，送完自動清掉。
+    //    內建的只有名字（AI 看得懂 TAB 分頁是什麼，不用解釋）；使用者自存的 chip 有填話術就送話術、沒填就送名字。
     const STUDIO_CHIP_BUILTIN = [
-        { label: '兩層結構', text: '做成兩層結構：第一層列表瀏覽，點項目進第二層看詳情，有返回鈕。' },
-        { label: 'TAB 分頁', text: '頂部加一排 TAB 分頁，點不同 TAB 切換下面的內容區。' },
-        { label: '固定標題', text: '頂部標題列固定不動，只有下面的內容區可以捲動。' },
-        { label: '卡片列表', text: '內容用一張張卡片直列呈現，每張資訊清楚、可點。' },
-        { label: '深色主題', text: '用深色背景配色、字體清楚，沉穩不刺眼。' },
+        { label: '兩層結構' },
+        { label: 'TAB 分頁' },
+        { label: '固定標題' },
+        { label: '卡片列表' },
+        { label: '深色主題' },
         { label: '🖼️ 生圖', feature: true, key: 'img', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct，用戶有指定才填、否則不傳）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
         { label: '📤 回傳對話框', feature: true, key: 'tochat', text: '【回傳對話框功能】兩種回傳法，依需求選一個：\n① st.toChat(文字, opts)＝貼回「輸入框（送出框）」：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「要讓使用者挑一條、可再編輯後送進劇情當輸入／指令」（例：隨機事件生 5 條、選 1 條 toChat）。\n② st.toSystem(文字)＝不經輸入框，直接把文字當「system 訊息」插進聊天室成最新一則（旁白/系統公告式，不用再按送出）。用在「app 的結果要直接顯示在劇情流裡」（例：擲骰結果、系統宣告、事件觸發）。' }
     ];
@@ -586,21 +587,21 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     }
     function _studioLoadChips() { try { return JSON.parse(localStorage.getItem('studio_quick_chips') || '[]') || []; } catch (e) { return []; } }
     function _studioSaveChips(list) { try { localStorage.setItem('studio_quick_chips', JSON.stringify(list)); } catch (e) {} }
-    function _studioInsertChip(text) {
-        const ta = document.getElementById('studio-input');
-        if (!ta) return;
-        const cur = (ta.value || '').replace(/\s+$/, '');
-        ta.value = cur ? (cur + '\n' + text) : text;
-        try { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px'; } catch (e) {}
-        ta.focus();
+    // 元素 chip 的選取狀態（一次性：送出即清）；存的是要送給 AI 的字
+    const _studioSelectedChips = new Set();
+    function _studioTakeSelectedChips() {
+        const list = [..._studioSelectedChips];
+        _studioSelectedChips.clear();
+        return list.length ? ('[用戶指定元素] ' + list.join('、')) : '';
     }
     function renderStudioChips() {
         const row = document.getElementById('studio-chips-row');
         if (!row) return;
         const all = STUDIO_CHIP_BUILTIN.concat(_studioLoadChips());
+        const sendTextOf = c => (c.text && String(c.text).trim()) || c.label;
         row.innerHTML = all.map((c, i) => {
             const feat = !!c.feature;
-            const on = feat && _studioActiveFeatures.has(c.key);
+            const on = feat ? _studioActiveFeatures.has(c.key) : _studioSelectedChips.has(sendTextOf(c));
             return `<button class="studio-chip${feat ? ' studio-chip-feature' : ''}${on ? ' active' : ''}" data-ci="${i}">${_sgcEsc(c.label)}</button>`;
         }).join('')
             + '<button class="studio-chip studio-chip-manage" id="studio-chip-manage"><i class="fa-solid fa-sliders"></i> 管理</button>';
@@ -608,12 +609,15 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             const c = all[parseInt(b.getAttribute('data-ci'), 10)];
             if (!c) return;
             if (c.feature) {
-                // 功能 chip：toggle 啟用，用法送出時才併進請求、不貼進輸入框（不再擠爆輸入框）
+                // 功能 chip：toggle 啟用（跨輪記住），用法送出時才併進請求
                 if (_studioActiveFeatures.has(c.key)) _studioActiveFeatures.delete(c.key); else _studioActiveFeatures.add(c.key);
                 _studioSaveActiveFeatures();
                 b.classList.toggle('active', _studioActiveFeatures.has(c.key));
             } else {
-                _studioInsertChip(c.text);   // 話術 chip：照舊貼進輸入框可改再送
+                // 元素 chip：toggle 選取（這一輪有效），送出時接在使用者文字後面，不碰輸入框
+                const k = sendTextOf(c);
+                if (_studioSelectedChips.has(k)) _studioSelectedChips.delete(k); else _studioSelectedChips.add(k);
+                b.classList.toggle('active', _studioSelectedChips.has(k));
             }
         });
         const mg = row.querySelector('#studio-chip-manage');
@@ -643,8 +647,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     function _studioSaveNewChip() {
         const labEl = document.getElementById('studio-chip-label'), txtEl = document.getElementById('studio-chip-text');
         const lab = ((labEl && labEl.value) || '').trim(), txt = ((txtEl && txtEl.value) || '').trim();
-        if (!lab || !txt) { alert('標籤跟話術都要填'); return; }
-        const u = _studioLoadChips(); u.push({ label: lab.slice(0, 12), text: txt }); _studioSaveChips(u);
+        if (!lab) { alert('要有名字'); return; }
+        const u = _studioLoadChips(); u.push({ label: lab.slice(0, 12), text: txt }); _studioSaveChips(u);   // 說明留空＝送出時只送名字
         if (labEl) labEl.value = ''; if (txtEl) txtEl.value = '';
         _studioRenderChipList(); renderStudioChips();
     }
@@ -1969,7 +1973,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
     async function handleSend() {
         const inputEl = document.getElementById('studio-input');
-        const text = inputEl.value.trim();
+        let text = inputEl.value.trim();
+        // 選起來的元素 chip 接在使用者文字後面一行送出（VN 組件模式才有這排），送完 chip 自動清掉
+        if (currentMode === 'vn_ui') {
+            const chipLine = _studioTakeSelectedChips();
+            if (chipLine) { text = text ? (text + '\n' + chipLine) : chipLine; try { renderStudioChips(); } catch (e) {} }
+        }
         if (!text && pendingImages.length === 0) return;
 
         // === VN 模式：發送前 currentParsedData 空（存檔後 / 重整 / parse 失敗）→ 救回，才能走 diff 不還原 ===
