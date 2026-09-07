@@ -655,6 +655,10 @@
                     <div class="wx-cell"><div class="wx-cell-icon">${iconFace}</div><div class="wx-cell-text">表情</div><div class="wx-cell-arrow">›</div></div>
                 </div>
                 <div class="wx-cell-group">
+                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).editNickname()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-pen"></i></span></div><div class="wx-cell-text">編輯暱稱</div><div class="wx-cell-arrow">›</div></div>
+                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).editSignature()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-pen-to-square"></i></span></div><div class="wx-cell-text">編輯個性簽名</div><div class="wx-cell-arrow">›</div></div>
+                </div>
+                <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-moon"></i></span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
                     <div class="wx-cell" onclick="(window.parent.PhoneSystem || window.PhoneSystem).install('設置', '⚙️', '#4c4c4c', null); alert('請前往桌面點擊 [設置] App');"><div class="wx-cell-icon">${iconSet}</div><div class="wx-cell-text">設置</div><div class="wx-cell-arrow">›</div></div>
                 </div>

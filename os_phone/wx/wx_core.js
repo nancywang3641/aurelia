@@ -1219,6 +1219,23 @@
             mount.innerHTML = '<div class="wx-vnlog-empty">已同步 ' + st.rooms + ' 間聊天室、' + st.contacts + ' 位聯絡人<br>讀到第 ' + (st.floor + 1) + ' 樓・' + hh + ':' + mi + '</div>';
         },
 
+        // 「我」頁：暱稱與簽名。這是整支手機的暱稱（st.user() 的 nickname），論壇、微博以外的面板都跟它走；留空＝退回人設真名
+        editNickname: function() {
+            const P = win.WX_PROFILE; if (!P || !P.get) return;
+            const cur = P.get();
+            const v = prompt('暱稱（留空＝用人設真名）', cur.nickname || '');
+            if (v == null) return;
+            P.update({ nickname: v.trim() });
+            this.render();
+        },
+        editSignature: function() {
+            const P = win.WX_PROFILE; if (!P || !P.get) return;
+            const cur = P.get();
+            const v = prompt('個性簽名', cur.signature || '');
+            if (v == null) return;
+            P.update({ signature: v.trim() });
+            this.render();
+        },
         toggleDarkMode: function() {
             DARK_MODE = !DARK_MODE;
             localStorage.setItem('wx_dark_mode', DARK_MODE);
