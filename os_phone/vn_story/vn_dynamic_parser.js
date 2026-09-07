@@ -206,7 +206,12 @@
                 // 📖 資料接口（共用面板）：正文全樓層 <tagId> 區塊 + 應用裡新增的，程式合併好給面板畫；面板不自己存清單
                 feed: function(o) { try { const F = FEED(); return F ? F.feed(feedTag, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch (e) { return Promise.resolve([]); } },
                 parseText: function(text) { try { const F = FEED(); return F ? F.parseRecords(String(text == null ? '' : text).split('\n')) : []; } catch (e) { return []; } },
-                user: function() { try { const F = FEED(); return F ? F.user() : Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } catch (e) { return Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } },
+                user: (function() {
+                    // 正確用法 await st.user()；欄位同時掛在函式上，AI 手滑寫 st.user.name 也讀得到（頭像存 DB 的在這條會是空）
+                    const fn = function() { try { const F = FEED(); return F ? F.user() : Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } catch (e) { return Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } };
+                    try { const F = FEED(); if (F && F.userSync) Object.assign(fn, F.userSync()); } catch (e) {}
+                    return fn;
+                })(),
                 feedAdd: function(tag, fields) { try { const F = FEED(); return F ? F.add(feedTag, tag, fields) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } },
                 feedUpdate: function(id, fields) { try { const F = FEED(); return F ? F.update(feedTag, id, fields) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },
                 feedRemove: function(id) { try { const F = FEED(); return F ? F.remove(feedTag, id) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },

@@ -174,6 +174,27 @@
     async function clear(tagId) { return await _saveEntries(tagId, []); }
 
     // 使用者身分：酒館人設（名字／頭像／簡介）＋微信「我」頁的暱稱與簽名；面板裡凡是「我」發的東西都用這個，不准寫死 User、不用做登入頁
+    // 同步版：不換頭像網址（存在手機 DB 的頭像回空字串）。給各執行處把欄位掛在 st.user 函式上，AI 手滑寫 st.user.name 也讀得到
+    function userSync() {
+        const out = { name: 'User', nickname: '', avatar: '', signature: '', desc: '' };
+        try {
+            const P = win.OS_PERSONA || win.OS_USER || (win.parent && (win.parent.OS_PERSONA || win.parent.OS_USER));
+            const c = P && P.getInfo ? P.getInfo() : null;
+            if (c) { if (c.name) out.name = String(c.name); if (c.avatar) out.avatar = String(c.avatar); if (c.desc) out.desc = String(c.desc); }
+        } catch (e) {}
+        try {
+            const W = win.WX_PROFILE || (win.parent && win.parent.WX_PROFILE);
+            const pr = W && W.get ? W.get() : null;
+            if (pr) {
+                if (pr.nickname && pr.nickname !== 'User') out.nickname = String(pr.nickname);
+                if (pr.signature) out.signature = String(pr.signature);
+                if (pr.avatar && !out.avatar) out.avatar = String(pr.avatar);
+            }
+        } catch (e) {}
+        if (!out.nickname) out.nickname = out.name;
+        if (/^(img_|avt_)/.test(out.avatar)) out.avatar = '';
+        return out;
+    }
     async function user() {
         const out = { name: 'User', nickname: '', avatar: '', signature: '', desc: '' };
         try {
@@ -233,7 +254,7 @@
     setTimeout(_purgeLegacyOnce, 3000);
 
     win.VN_PANEL_FEED = {
-        feed: feed, add: add, update: update, remove: remove, clear: clear, user: user,
+        feed: feed, add: add, update: update, remove: remove, clear: clear, user: user, userSync: userSync,
         storyRecords: storyRecords, parseRecords: parseRecords, parseMap: parseMap,
         purgeTag: purgeTag, invalidate: invalidate, chatId: _chatId, appId: _appId
     };
