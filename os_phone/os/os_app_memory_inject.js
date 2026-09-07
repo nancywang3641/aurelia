@@ -30,8 +30,8 @@
     const LINE_MAX = 80;        // 單行截斷字數
     let _lastUninject = null;
 
-    // 📲 統一「app 資料回傳酒館」：開關開的「純應用」app → 程式自動把它存的資料(saveData/dbSave)注入酒館，
-    //    不靠 app 自己呼叫 remember、不用教生成 AI。共用/展示型(isBlock)會在劇情渲染→跳過防迴圈。
+    // 📲 統一「app 資料回傳酒館」：開關開的 app → 程式自動把它存的資料注入酒館，不靠 app 自己呼叫 remember、不用教生成 AI。
+    //    純應用：讀它自己 saveData/dbSave 的桶。共用面板：讀 vnpanel:<tagId> 桶裡「應用那條」（使用者發的、生成的）；正文那條不落地、不回傳。
     const APPDATA_INJECT_ID = 'aurelia_app_data';
     const MAX_APPS = 6;          // 最多回傳幾個 app（防爆 token）
     const PER_APP_MAX = 1500;    // 每個 app 回傳字數上限
@@ -404,7 +404,7 @@
             const apps = (await win.OS_DB.getAllPhoneApps()) || [];
             if (!apps.length) return;
 
-            // 模板表查 isBlock：共用/展示(isBlock=true)會在劇情渲染→回傳會迴圈，跳過；只回純應用(isBlock=false)
+            // 模板表查 isBlock：isBlock 的走共用面板那條（vnpanel 桶），其餘走 app 自己的桶
             let tplById = {};
             try {
                 const tpls = (win.OS_DB.getAllUITemplates ? (await win.OS_DB.getAllUITemplates()) : []) || [];
@@ -424,7 +424,9 @@
                 if (tpl && tpl.isBlock) {
                     try {
                         const tagId = String(tpl.tagId || '').trim();
-                        const ents = (tagId && win.OS_DB.getAppData) ? (await win.OS_DB.getAppData('vnpanel:' + tagId, 'entries', curCid)) : null;
+                        // 桶的 chat 鍵要跟 VN_PANEL_FEED 存的同一支（OS_DB.currentChatId，已正規化），別用這裡的 curCid
+                        const feedCid = (win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null) || curCid;
+                        const ents = (tagId && win.OS_DB.getAppData) ? (await win.OS_DB.getAppData('vnpanel:' + tagId, 'entries', feedCid)) : null;
                         (Array.isArray(ents) ? ents : []).forEach(function (e) {
                             if (!e || !e.tag) return;
                             const f = Array.isArray(e.fields) ? e.fields.map(function (x) { return String(x == null ? '' : x).replace(/\|/g, '｜'); }) : [];

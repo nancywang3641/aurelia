@@ -13,7 +13,8 @@
         opts = opts || {};
         var preview = opts.preview ? 'true' : 'false';
         var appId = String(opts.appId || 'preview').replace(/[^a-zA-Z0-9_-]/g, '') || 'preview';
-        var provider = (opts.provider === 'novelai') ? 'novelai' : 'pollinations';
+        // 生圖來源：app 記錄有指定才帶；沒指定就留空，讓 OS_IMAGE_MANAGER 照使用者的圖片設定按類型分桶（以前寫死退回 pollinations，等於無視她的設定）
+        var provider = String(opts.provider || '').replace(/[^a-z0-9_-]/gi, '');
         return '<scr' + 'ipt>(function(){'
             + 'var P; try { P = window.parent; } catch(e){ return; }'
             + 'try {'
@@ -42,7 +43,7 @@
             // ── 不經輸入框：直接把文字當「system 訊息」插進聊天成最新一則（旁白/系統公告式；使用者不用再按送出）。 ──
             +   'window.toSystem = function(text){ try { if(window.__IS_PREVIEW) return false; text=String(text==null?"":text); if(!text) return false; var ST=window.SillyTavern||(P&&P.SillyTavern); var ctx=ST&&ST.getContext&&ST.getContext(); if(!ctx||!ctx.chat||!ctx.addOneMessage) return false; var ts=(typeof ctx.getMessageTimeStamp==="function")?ctx.getMessageTimeStamp():new Date().toISOString(); var msg={ name:"System", is_user:false, is_system:true, mes:text, send_date:ts, extra:{} }; ctx.chat.push(msg); ctx.addOneMessage(msg,{scroll:true}); try{ if(typeof ctx.saveChat==="function") ctx.saveChat(); }catch(e){} return true; } catch(e){ console.error("[app toSystem]",e); return false; } };'
             // ── 生圖(預覽走佔位省額度) ──
-            +   'window.genImg = async function(p, type, provider){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", {provider: provider || window.__APP_PROVIDER__}); } catch(e){ console.error("[app genImg]",e); return ""; } };'
+            +   'window.genImg = async function(p, type, provider){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", (provider || window.__APP_PROVIDER__) ? {provider: provider || window.__APP_PROVIDER__} : {}); } catch(e){ console.error("[app genImg]",e); return ""; } };'
             // ── 文字生成：走 OS_API.chat(直接打 API、不發酒館 GENERATION 事件→不觸發記憶/狀態抽取)。
             //    上下文手動組：角色卡 + 當前角色綁定世界書 + 最近劇情；不吃 preset、不吃全域世界書。
             +   'window.callAI = async function(sys){ try {'

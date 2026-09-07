@@ -306,7 +306,7 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
                     if (_vnPanelType !== '純展示') {
                         _aid = await _installTemplateAsPhoneApp(data);   // 先裝 app，下面 init 才抓得到它的 id 建「模板→app」對照
                     }
-                    // init 放在裝 app 之後：重建對照表，共用面板「當次劇情渲染」的 dbSave 才對得到同一個桶（不然首存當session會落到 pwa_panel）
+                    // init 放在裝 app 之後：重建「模板 → app id」對照表（共用面板的 dbSave 小設定兩邊才對到同一桶；清單資料走 VN_PANEL_FEED 不經此）
                     if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
                     if (_vnPanelType === '純展示') {
                         alert(`🎉 [${data.tagId}] 已建立！已存進「VN組件」。`);
