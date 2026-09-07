@@ -248,6 +248,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.esc(文字) → 把文字轉成安全 HTML。**用 innerHTML 塞用戶或 AI 產的文字前先 st.esc()**，防內容夾壞版面或 XSS。
 - st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。**第三參 scope**：不填＝全域（整個 app 一份）；填 'chat'＝綁當前聊天室（每個故事/聊天室各自一份，像 AVS）→ st.saveData(k,v,'chat')、st.loadData(k,'chat')。**跟劇情走的 app（論壇、日記、跟當前故事有關的資料）一律用 'chat'**；個人工具（記事本、計算機、設定）用全域不填。（要拿聊天室 id 自己分流也可 st.getChatId()）純展示卡不需要持久化。
 - 📚 **記錄／檔案型 app（論壇、日記、動態、事件記錄…使用者會「之後回來翻看過去」的）＝資料一律「累積」、絕不覆蓋**：生成新內容時，先 st.loadData 讀回舊清單 → 把新的 append 上去（別直接「整個變數＝新資料」蓋掉）→ st.saveData(…, 'chat') 存回。這樣使用者打開 app 就能看到「從第一章到現在的全部歷史」，不必回劇情裡翻到準確那一樓。每筆可附時間／章節標記方便瀏覽，舊的可往下滑。**這類 app 的本質＝內容的永久家，不是每次洗掉重生。**（除非使用者明說「只看最新」才覆蓋。）
+- st.user() → Promise，回使用者本人 { name 真名, nickname 手機暱稱, avatar 頭像網址(可能空), signature 簽名, desc 人設簡介 }。**面板裡凡是「我」發的東西（留言、貼文、發言、簽到、上傳）作者一律用這個**：顯示名用 nickname、沒有再用 name；頭像用 avatar、空的就畫首字圓框。**禁止寫死 User／我／匿名、禁止做登入或選身分頁面**——身分手機已經有了，直接拿。
 - st.parseText(文字) → 把一段文字（通常是 st.callAI 回來的）照 demoFormat 規則拆成 [{tag, fields}]；共用面板生成鈕拿到回覆後用這個拆、再逐筆 st.feedAdd。
 - st.feed([{tag}]) → Promise，回這個面板的全部資料 [{ id, src:'story'|'app', tag, fields:[…], floor }]，已照劇情先後排好；正文 <tagId> 區塊寫的（src 'story'）與 app 裡新增的（src 'app'）都在裡面。**共用面板的清單資料只從這裡拿**，不自己存。傳 {tag:'標籤名'} 只拿某一種。st.feedAdd(tag, fields) / st.feedUpdate(id, fields) / st.feedRemove(id) → 在 app 裡新增／改／刪自己那份（都是 Promise）。
 - st.dbSave(key, value[, 'chat']) / st.dbLoad(key[, 'chat']) → **存進 DB（async、要 await）**，scope 同 saveData。（共用面板的清單資料不走這個、走 st.feed。）**資料量大／會一直累積的（論壇歷史、日記、長清單）一律用這個**（localStorage 有上限、塞多會爆，DB 不會）；小設定／少量資料用 st.saveData 即可。用法：init 時 const data = await st.dbLoad('forum','chat') 取回（沒有就給預設）、存時 await st.dbSave('forum', data, 'chat')。
@@ -2411,6 +2412,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 return (o && o.tag) ? all.filter(r => r.tag === o.tag) : all;
             },
             parseText: function (text) { const F = _pvFeed(); return F ? F.parseRecords(String(text || '').split('\n')) : []; },
+            user: async function () { const F = _pvFeed(); return F ? F.user() : { name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }; },
             feedAdd: async function (tag, fields) { const rec = { id: 'a:pv:' + _pvAdded.length, src: 'app', tag: String(tag || ''), fields: (fields || []).map(x => String(x == null ? '' : x)), floor: 0, ts: Date.now() }; _pvAdded.push(rec); return rec; },
             feedUpdate: async function (id, fields) { const rec = _pvAdded.find(r => r.id === id); if (!rec) return false; rec.fields = (fields || []).map(x => String(x == null ? '' : x)); return true; },
             feedRemove: async function (id) { const i = _pvAdded.findIndex(r => r.id === id); if (i < 0) return false; _pvAdded.splice(i, 1); return true; },
@@ -2572,6 +2574,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             // 📖 資料接口（共用面板）：走上層 VN_PANEL_FEED，跟劇情彈出那邊讀同一份
             +   'feed:function(o){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.feed(' + JSON.stringify(String(tpl.tagId || '')) + ',o||{}):Promise.resolve([]);}catch(e){return Promise.resolve([]);}},'
             +   'parseText:function(x){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.parseRecords(String(x==null?"":x).split("\\n")):[];}catch(e){return [];}},'
+            +   'user:function(){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.user():Promise.resolve({name:"User",nickname:"User",avatar:"",signature:"",desc:""});}catch(e){return Promise.resolve({name:"User",nickname:"User",avatar:"",signature:"",desc:""});}},'
             +   'feedAdd:function(t,fl){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.add(' + JSON.stringify(String(tpl.tagId || '')) + ',t,fl):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
             +   'feedUpdate:function(id,fl){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.update(' + JSON.stringify(String(tpl.tagId || '')) + ',id,fl):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
             +   'feedRemove:function(id){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.remove(' + JSON.stringify(String(tpl.tagId || '')) + ',id):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
@@ -2716,6 +2719,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
       },
       feed: function(o){ try { var F = ctx.VN_PANEL_FEED; return F ? F.feed(${JSON.stringify(String(data.tagId || ''))}, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
       parseText: function(x){ try { var F = ctx.VN_PANEL_FEED; return F ? F.parseRecords(String(x == null ? '' : x).split('\\n')) : []; } catch(e){ return []; } },
+      user: function(){ try { var F = ctx.VN_PANEL_FEED; return F ? F.user() : Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } catch(e){ return Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } },
       feedAdd: function(t, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.add(${JSON.stringify(String(data.tagId || ''))}, t, fl) : Promise.resolve(null); } catch(e){ return Promise.resolve(null); } },
       feedUpdate: function(id, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.update(${JSON.stringify(String(data.tagId || ''))}, id, fl) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
       feedRemove: function(id){ try { var F = ctx.VN_PANEL_FEED; return F ? F.remove(${JSON.stringify(String(data.tagId || ''))}, id) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
