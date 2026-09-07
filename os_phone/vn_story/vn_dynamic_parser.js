@@ -205,6 +205,7 @@
                 },
                 // 📖 資料接口（共用面板）：正文全樓層 <tagId> 區塊 + 應用裡新增的，程式合併好給面板畫；面板不自己存清單
                 feed: function(o) { try { const F = FEED(); return F ? F.feed(feedTag, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch (e) { return Promise.resolve([]); } },
+                parseText: function(text) { try { const F = FEED(); return F ? F.parseRecords(String(text == null ? '' : text).split('\n')) : []; } catch (e) { return []; } },
                 feedAdd: function(tag, fields) { try { const F = FEED(); return F ? F.add(feedTag, tag, fields) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } },
                 feedUpdate: function(id, fields) { try { const F = FEED(); return F ? F.update(feedTag, id, fields) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },
                 feedRemove: function(id) { try { const F = FEED(); return F ? F.remove(feedTag, id) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },

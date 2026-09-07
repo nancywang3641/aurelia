@@ -183,7 +183,10 @@
   · 🚨 內容再少也要「撐滿整個手機框」：根容器 min-height:100% + display:flex + flex-direction:column，中間內容區 flex:1 撐開（必要時內容置中或頂部對齊），絕不能讓 App 打開後下方留一大片空白。這是 Rae 點名的問題。
   · 不要做響應式三尺寸、不要 max-width 置中小卡、不要當「嵌劇情的卡片」。
   · 用 st.callAI（生文字）／st.setImage（生圖）做功能（按鈕一點即生）。
-- 共用（真雙用：同一份面板，劇情裡會像純展示那樣跳出來渲染 ＋ 也裝成手機 App，兩邊都跑、讀同一份資料）：
+- 共用（真雙用：同一份面板，劇情裡會像純展示那樣跳出來渲染 ＋ 也裝成手機 App，兩邊都跑、讀同一份資料）。共用的資料有**兩條進料、缺一不可**：
+  ① 正文那條：劇本 AI 在正文用 <tagId> 區塊寫的（劇情演到相關內容時自然出現）。
+  ② 應用那條：使用者在 app 裡按「生成」鈕，面板自己呼叫 st.callAI 產出外圍內容（劇情現在沒演到這個主題也能生：例如論壇的路人貼文、新聞、榜單、留言）。
+  兩條都進同一份 st.feed，劇情彈出與 app 裡看到的是同一份。**沒有②的共用面板就是做錯了**。
   · isBlock 必須 true、必須產出 demoFormat（同純展示那套）——劇本 AI 才會在正文用 <tagId> 區塊餵新資料、面板才會在劇情裡自動跳出來渲染。
   · 版型「兩邊都好看」：根容器 width:100% + min-height:100% + flex 直向撐滿（劇情裡蓋在置中遮罩上、桌面填滿手機框，兩種都填滿不留白）。別做 max-width 置中小卡（那只給純展示）。
   · 🔑 資料不是面板自己存的，是程式給的。面板永遠只做一件事：const rows = await st.feed(); 然後把 rows 畫出來。
@@ -192,7 +195,14 @@
       🚫 這類清單資料不准再用 st.dbSave／st.dbLoad／st.saveData 自己存一份（會累積、會混到別的聊天）；那幾個只留給跟清單無關的小設定（例如篩選條件、展開狀態）。
   · 🚫 嚴禁 st.remember：共用面板是展示用、絕不進記憶桶、絕不注入酒館 AI（否則面板讀的劇情會被推回 AI → 重複數據迴圈）。
   · 不要用 st.getStory 撈歷史塞進清單——正文那份 st.feed 已經給了。
-  · 一樣能用 st.callAI／st.setImage 做按鈕生成（守生圖紀律＋「不自動生成」規則）。
+  · 🔑 **生成鈕（必須有）**：app 裡至少一顆明確的「生成」類按鈕。使用者說「生成／刷新／更新／rotate／再來一批／換一批」都是指這顆（叫 AI 產「新的」內容），**不是**重畫畫面、也不是重新讀取。按下後固定流程：
+      ① st.loading(按鈕或清單, true, '生成中…')
+      ② const text = await st.callAI(系統提示)：提示裡講清楚面板主題、要幾筆、**輸出格式嚴格照 demoFormat 那幾行 [標籤|欄…]、一行一筆、除此之外不輸出任何字**；可把目前 rows 的關鍵欄摘要附上叫它別重複（st.callAI 已自動帶角色卡與最近劇情，不必重述劇情）
+      ③ const recs = st.parseText(text)   // 回 [{tag, fields}]，跟 st.parse 同一套解析
+      ④ for (const r of recs) await st.feedAdd(r.tag, r.fields)   // 生成的內容進應用那條、src 'app'
+      ⑤ st.loading(…, false)；重新 await st.feed() 重畫
+      生成出來的東西只進 st.feed，不回傳酒館、不進記憶。一樣守「不自動生成」規則：只有使用者按了才生。
+  · st.setImage 生圖照生圖紀律。
 
 ## 🚫 禁止清單
 - 禁 position:fixed、position:absolute 配 top/left 自定位、100vw、100vh、在 body／html 設樣式（樣式只能寫在 .vn-dynamic-panel-xxx 前綴下）；禁寫死固定像素寬（用 width:100%／響應式）。（全屏與否依類型：劇情卡禁吃滿、手機 App 反而要填滿手機框，見【三種類型】）
@@ -237,6 +247,7 @@ js 被 new Function('container','lines','onComplete','st', tpl.js) 包執行：
 - st.esc(文字) → 把文字轉成安全 HTML。**用 innerHTML 塞用戶或 AI 產的文字前先 st.esc()**，防內容夾壞版面或 XSS。
 - st.saveData(key, value) / st.loadData(key) → 純應用／共用 的持久化（存進手機、跨關閉重開都還在）。🚨 凡是「用戶會新增/編輯、要留著的資料」（日記、清單、筆記、收藏、設定…）一律用 st.saveData 存；而且 init 一進面板就先 st.loadData 把資料讀回來重畫 UI。少了這步，App 一關掉再開資料就全消失（用戶踩過這雷）。別自己用 localStorage（沒正確命名空間、不穩）。**第三參 scope**：不填＝全域（整個 app 一份）；填 'chat'＝綁當前聊天室（每個故事/聊天室各自一份，像 AVS）→ st.saveData(k,v,'chat')、st.loadData(k,'chat')。**跟劇情走的 app（論壇、日記、跟當前故事有關的資料）一律用 'chat'**；個人工具（記事本、計算機、設定）用全域不填。（要拿聊天室 id 自己分流也可 st.getChatId()）純展示卡不需要持久化。
 - 📚 **記錄／檔案型 app（論壇、日記、動態、事件記錄…使用者會「之後回來翻看過去」的）＝資料一律「累積」、絕不覆蓋**：生成新內容時，先 st.loadData 讀回舊清單 → 把新的 append 上去（別直接「整個變數＝新資料」蓋掉）→ st.saveData(…, 'chat') 存回。這樣使用者打開 app 就能看到「從第一章到現在的全部歷史」，不必回劇情裡翻到準確那一樓。每筆可附時間／章節標記方便瀏覽，舊的可往下滑。**這類 app 的本質＝內容的永久家，不是每次洗掉重生。**（除非使用者明說「只看最新」才覆蓋。）
+- st.parseText(文字) → 把一段文字（通常是 st.callAI 回來的）照 demoFormat 規則拆成 [{tag, fields}]；共用面板生成鈕拿到回覆後用這個拆、再逐筆 st.feedAdd。
 - st.feed([{tag}]) → Promise，回這個面板的全部資料 [{ id, src:'story'|'app', tag, fields:[…], floor }]，已照劇情先後排好；正文 <tagId> 區塊寫的（src 'story'）與 app 裡新增的（src 'app'）都在裡面。**共用面板的清單資料只從這裡拿**，不自己存。傳 {tag:'標籤名'} 只拿某一種。st.feedAdd(tag, fields) / st.feedUpdate(id, fields) / st.feedRemove(id) → 在 app 裡新增／改／刪自己那份（都是 Promise）。
 - st.dbSave(key, value[, 'chat']) / st.dbLoad(key[, 'chat']) → **存進 DB（async、要 await）**，scope 同 saveData。（共用面板的清單資料不走這個、走 st.feed。）**資料量大／會一直累積的（論壇歷史、日記、長清單）一律用這個**（localStorage 有上限、塞多會爆，DB 不會）；小設定／少量資料用 st.saveData 即可。用法：init 時 const data = await st.dbLoad('forum','chat') 取回（沒有就給預設）、存時 await st.dbSave('forum', data, 'chat')。
 
@@ -1998,7 +2009,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
         // VN UI 生成：在訊息開頭標【類型：X】，AI 第一輪就知道要做純展示/純應用/共用（不用每次費口舌）
         const genText = (currentMode === 'vn_ui')
-            ? ('【類型：' + _vnPanelType + '】' + (text || '（依此類型先做一版）'))
+            ? ('【類型：' + _vnPanelType + '】' + (_vnPanelType === '共用' ? '（共用＝正文 <tagId> 餵資料 ＋ app 內「生成」鈕叫 st.callAI 產外圍內容，兩條都走 st.feed；生成鈕必須有）' : '') + (text || '（依此類型先做一版）'))
             : text;
         // 帶圖時 content 變陣列；不帶圖時還是字串（向後兼容既有清洗 / parse 邏輯）
         const userContent = buildUserMessageContent(genText, pendingImages);
@@ -2385,6 +2396,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 const all = recs.concat(_pvAdded);
                 return (o && o.tag) ? all.filter(r => r.tag === o.tag) : all;
             },
+            parseText: function (text) { const F = _pvFeed(); return F ? F.parseRecords(String(text || '').split('\n')) : []; },
             feedAdd: async function (tag, fields) { const rec = { id: 'a:pv:' + _pvAdded.length, src: 'app', tag: String(tag || ''), fields: (fields || []).map(x => String(x == null ? '' : x)), floor: 0, ts: Date.now() }; _pvAdded.push(rec); return rec; },
             feedUpdate: async function (id, fields) { const rec = _pvAdded.find(r => r.id === id); if (!rec) return false; rec.fields = (fields || []).map(x => String(x == null ? '' : x)); return true; },
             feedRemove: async function (id) { const i = _pvAdded.findIndex(r => r.id === id); if (i < 0) return false; _pvAdded.splice(i, 1); return true; },
@@ -2545,6 +2557,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'getChatId:function(){try{return window.getChatId?window.getChatId():"";}catch(e){return "";}},'
             // 📖 資料接口（共用面板）：走上層 VN_PANEL_FEED，跟劇情彈出那邊讀同一份
             +   'feed:function(o){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.feed(' + JSON.stringify(String(tpl.tagId || '')) + ',o||{}):Promise.resolve([]);}catch(e){return Promise.resolve([]);}},'
+            +   'parseText:function(x){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.parseRecords(String(x==null?"":x).split("\\n")):[];}catch(e){return [];}},'
             +   'feedAdd:function(t,fl){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.add(' + JSON.stringify(String(tpl.tagId || '')) + ',t,fl):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
             +   'feedUpdate:function(id,fl){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.update(' + JSON.stringify(String(tpl.tagId || '')) + ',id,fl):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
             +   'feedRemove:function(id){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.remove(' + JSON.stringify(String(tpl.tagId || '')) + ',id):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
@@ -2688,6 +2701,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
       },
       feed: function(o){ try { var F = ctx.VN_PANEL_FEED; return F ? F.feed(${JSON.stringify(String(data.tagId || ''))}, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
+      parseText: function(x){ try { var F = ctx.VN_PANEL_FEED; return F ? F.parseRecords(String(x == null ? '' : x).split('\\n')) : []; } catch(e){ return []; } },
       feedAdd: function(t, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.add(${JSON.stringify(String(data.tagId || ''))}, t, fl) : Promise.resolve(null); } catch(e){ return Promise.resolve(null); } },
       feedUpdate: function(id, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.update(${JSON.stringify(String(data.tagId || ''))}, id, fl) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
       feedRemove: function(id){ try { var F = ctx.VN_PANEL_FEED; return F ? F.remove(${JSON.stringify(String(data.tagId || ''))}, id) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
