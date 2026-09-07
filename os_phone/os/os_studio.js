@@ -3432,7 +3432,47 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         } catch (e) { _studioToast('清空失敗：' + ((e && e.message) || e), 'error', '清空'); }
     }
 
+    // 預覽報錯：紅字 + 「丟給 AI 修」。錯誤原文與堆疊第一行直接送進對話，AI 自己改，使用者不用看程式碼。
+    //   同步錯誤由 try/catch 進來；面板 init 裡 async 的錯誤（await 之後炸的）靠全域 error/unhandledrejection 接（只在預覽跑的時候收）。
+    let _studioPreviewErrSeen = new Set();
+    function _studioShowPreviewError(host, err) {
+        try {
+            const message = String((err && err.message) || err || '未知錯誤');
+            const stackLine = String((err && err.stack) || '').split('\n').slice(1).find(l => /<anonymous>|Function/.test(l)) || '';
+            const key = message + '|' + stackLine;
+            if (_studioPreviewErrSeen.has(key)) return;
+            _studioPreviewErrSeen.add(key);
+            host = host || document.getElementById('studio-preview-content');
+            if (!host) return;
+            const errBox = document.createElement('div');
+            errBox.className = 'studio-pv-err';
+            const txt = document.createElement('div');
+            txt.textContent = '⚠️ 預覽腳本錯誤: ' + message;
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'studio-pv-err-btn';
+            btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 丟給 AI 修';
+            btn.onclick = () => {
+                const ta = document.getElementById('studio-input');
+                if (!ta) return;
+                const line = /at\s+(.*)$/.exec(stackLine.trim());
+                ta.value = '預覽跑你的面板程式時報錯，請找出原因修好：\n' + message + (line ? '\n位置：' + line[1] : '') + '\n只准用教學列出的 st API，沒列的不存在。';
+                try { handleSend(); } catch (e) {}
+                errBox.remove();
+            };
+            errBox.appendChild(txt); errBox.appendChild(btn);
+            host.appendChild(errBox);
+        } catch (e) {}
+    }
+    function _studioHookAsyncPreviewErrors() {
+        if (window.__studioPvErrHooked) return; window.__studioPvErrHooked = true;
+        const inPreview = () => window.__IS_PREVIEW && document.getElementById('studio-preview-content') && document.getElementById('os_studio_app');
+        window.addEventListener('unhandledrejection', (ev) => { if (inPreview()) _studioShowPreviewError(null, ev.reason); });
+        window.addEventListener('error', (ev) => { if (inPreview() && ev && ev.error) _studioShowPreviewError(null, ev.error); });
+    }
+
     function renderPreviewPanel() {
+        _studioPreviewErrSeen = new Set();   // 每次重畫預覽，錯誤去重從頭來
+        _studioHookAsyncPreviewErrors();
         const previewMain = document.getElementById('studio-preview-main');
         const sourceEl = document.getElementById('studio-source-content');
         const exportBtn = document.getElementById('studio-export-btn');
@@ -3542,10 +3582,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         runMicroApp(container, lines, onComplete, st);
                     } catch (e) {
                         console.warn('[Studio 預覽錯誤] JS 執行失敗:', e);
-                        const errBox = document.createElement('div');
-                        errBox.style.cssText = 'color:#fc8181; font-size:12px; margin-top:10px; padding:10px; background:rgba(252,129,129,0.1); border-radius: 4px;';
-                        errBox.innerText = `⚠️ 預覽腳本錯誤: ${e.message}`;
-                        previewMain.appendChild(errBox);
+                        _studioShowPreviewError(previewMain, e);
                     }
                 }, 50); 
             }
