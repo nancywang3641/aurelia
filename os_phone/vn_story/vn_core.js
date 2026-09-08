@@ -589,36 +589,50 @@
                 // 不能讓格式B過濾器（[Timeline]、[Hot] 等節區標記）誤判為 DOM Block 並刪除後續內容。
                 let _inBlock = false, _bCloseTag = '';
                 let _inDynBlock = false, _dynCloseTag = '';
-                this.script = this.script.filter(l => {
+                // 🚨 沒有對應結尾的標籤絕不能進區塊模式：以前 [Arrive]、[撤回] 這種整行單一標籤一出現，
+                //    後面整份劇本會被當「區塊內原始文字」刪光（</nav>、台詞、旁白全沒），關窗就直接跳到末尾。
+                const _scriptAll = this.script;
+                const _hasCloseAfter = (fromIdx, closeTag) => {
+                    const want = String(closeTag).toLowerCase();
+                    for (let k = fromIdx + 1; k < _scriptAll.length; k++) if (String(_scriptAll[k]).trim().toLowerCase() === want) return true;
+                    return false;
+                };
+                this.script = this.script.filter((l, _li) => {
                     // ── 優先：動態 Parser 區塊保護層 ──────────────────────────
                     if (_inDynBlock) {
-                        if (l === _dynCloseTag) { _inDynBlock = false; _dynCloseTag = ''; }
+                        if (l.toLowerCase() === _dynCloseTag.toLowerCase()) { _inDynBlock = false; _dynCloseTag = ''; }
                         return true; // 區塊內所有行（含節區標記與結束標籤）一律保留
                     }
 
                     if (!_inBlock) {
-                        // 格式A 開頭 <XXX>
+                        // 格式A 開頭 <XXX>；帶屬性的白名單容器（<chat chatroom=…>、<call character=…>、<nav to=…>、<browser query=…>）也算
                         const _oA = l.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
+                        const _oAttr = _oA ? null : l.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)\s[^>]*>$/);
+                        if (_oAttr && _skipSys.includes(_oAttr[1].toLowerCase())) {
+                            _inDynBlock = true; _dynCloseTag = `</${_oAttr[1]}>`;
+                            return true;
+                        }
                         if (_oA) {
                             if (_skipSys.includes(_oA[1].toLowerCase())) {
                                 // 這是已知的動態 Parser 區塊 → 切換到保護模式，完整保留
                                 _inDynBlock = true; _dynCloseTag = `</${_oA[1]}>`;
                                 return true;
-                            } else {
-                                // 未知 XML 區塊 → 走原本的 DOM Block 過濾
+                            } else if (_hasCloseAfter(_li, `</${_oA[1]}>`)) {
+                                // 未知 XML 區塊而且真的有結尾 → 走原本的 DOM Block 過濾
                                 _inBlock = true; _bCloseTag = `</${_oA[1]}>`;
                                 return true; // 保留開頭標籤行
                             }
+                            return true; // 沒結尾＝不是區塊，當普通行留著（播放時 next() 會自己跳過）
                         }
-                        // 格式B 開頭 [XXX]（僅在非動態區塊時觸發）
+                        // 格式B 開頭 [XXX]（僅在非動態區塊時觸發，而且要真的有 [/XXX]）
                         const _oB = l.match(/^\[([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)\]$/);
-                        if (_oB) {
+                        if (_oB && _hasCloseAfter(_li, `[/${_oB[1]}]`)) {
                             _inBlock = true; _bCloseTag = `[/${_oB[1]}]`;
                             return true; // 保留開頭標籤行
                         }
                         return true; // 正常 VN 行，保留
                     } else {
-                        if (l === _bCloseTag) { _inBlock = false; _bCloseTag = ''; return true; } // 保留閉合標籤
+                        if (l.toLowerCase() === _bCloseTag.toLowerCase()) { _inBlock = false; _bCloseTag = ''; return true; } // 保留閉合標籤
                         return false; // 區塊內的原始文字，過濾掉
                     }
                 });
@@ -2338,7 +2352,7 @@
 
             // --- 自訂區塊過濾 ---
             {
-                const _sysXml = ['content','call','chat','status','summary','avatar','scene','system',
+                const _sysXml = ['content','call','chat','browser','nav','status','summary','avatar','scene','system',
                     'p','div','span','br','hr','b','i','em','strong','a','img',
                     'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
                     'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
