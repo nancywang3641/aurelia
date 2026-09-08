@@ -109,12 +109,14 @@
             /* === 表情包面板 === */
             .wx-sticker-panel { height: 0; overflow: hidden; transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); background: #f5f5f5; border-top: 1px solid #ededed; display: flex; flex-direction: column; }
             .wx-sticker-panel.open { height: 260px; }
+            /* 管理區打開時面板加高，格子縮、管理區自己捲，上傳列與 TXT 說明才不會被手機底切掉 */
+            .wx-sticker-panel.open:has(.wx-stk-manage-area.open) { height: 360px; }
             .wx-stk-panel-header { display: flex; align-items: center; padding: 6px 10px; background: #fff; border-bottom: 1px solid #ededed; flex-shrink: 0; }
             .wx-stk-tabs-wrap { display: flex; flex: 1; gap: 6px; overflow-x: auto; scrollbar-width: none; }
             .wx-stk-tab { border: none; background: none; font-size: 12px; color: #666; padding: 3px 10px; border-radius: 20px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
             .wx-stk-tab.active { background: #07c160; color: #fff; }
             .wx-stk-manage-toggle { font-size: 18px; color: #bbb; cursor: pointer; padding: 4px; margin-left: 6px; line-height: 1; }
-            .wx-sticker-grid { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 62px; gap: 4px; padding: 8px; overflow-y: auto; min-height: 0; }
+            .wx-sticker-grid { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 62px; gap: 4px; padding: 8px; overflow-y: auto; min-height: 78px; }
             .wx-stk-item { height: 62px; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; cursor: pointer; border: 1px solid #ededed; }
             .wx-stk-item img { width: 100%; height: 100%; object-fit: contain; }
             .wx-stk-item:active { opacity: 0.6; }
@@ -122,7 +124,7 @@
             .wx-stk-fallback-box { background: #fff; border: 1px solid #ededed; border-radius: 6px; padding: 8px 12px; font-size: 13px; color: #333; display: inline-block; max-width: 150px; }
             .wx-stk-empty { grid-column: 1/-1; text-align: center; color: #bbb; font-size: 12px; padding: 20px; }
             .wx-stk-manage-area { max-height: 0; overflow: hidden; transition: max-height 0.2s ease; background: #fff; border-top: 1px solid #ededed; }
-            .wx-stk-manage-area.open { max-height: 120px; }
+            .wx-stk-manage-area.open { max-height: 210px; overflow-y: auto; flex-shrink: 0; }
             .wx-stk-manage-inner { padding: 8px 10px; }
             .wx-stk-lib-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid #f5f5f5; }
             .wx-stk-lib-name { flex: 1; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
