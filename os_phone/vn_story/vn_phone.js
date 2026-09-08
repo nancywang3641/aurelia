@@ -183,9 +183,10 @@
         // 把混在文字裡的「圖片/語音/表情包」tag 拆成單獨一條（描述式 [X: 描述] 或檔案式 [x.gif] 都拆）
         // 例: "加油！[表情包: 小猫打滚]" → ["加油！","[表情包: 小猫打滚]"]；"我到了[图片: 街道照]" → ["我到了","[图片: 街道照]"]
         // 通用：抓任何 [別名: 描述]，用 _isAliasTag 判類型，只拆三類媒體；[文件:]/[22:35] 等非媒體不動。
+        _SPECIAL_CARD_RE: /^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|收款码|收款碼|收款|付款码|付款碼)[：:]/i,
         _splitStickerContent: function(content) {
-            // 其他特殊類型(轉賬/紅包/視頻/位置/文件…)維持整條、不拆
-            if (/^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|收款码|收款碼|收款|付款码|付款碼)[：:]/i.test(content)) return [content];   // 文件移出名單→改走下面拆分(獨立文件卡、跟內容分開)
+            // 轉賬/紅包/視頻/位置/收款碼這些判定卡也拆：AI 常把「[收款碼: 任意] 沒留。要不贊助點？」寫成一條，
+            // 卡跟話黏在一起 buildBubble 的 ^\[…\]$ 就對不上，整條變成原始文字。卡自己一條、話自己一條。
             if (content.startsWith('[撤回]')) return [content];
 
             const re = /\[[^\]\[：:]+[：:][^\]]*\]|\[[^\]]+\.(?:gif|jpg|jpeg|png)\]/gi;
@@ -198,12 +199,13 @@
                 const tag = m[0];
                 const isFile = /\.(?:gif|jpg|jpeg|png)\]$/i.test(tag) && !/[：:]/.test(tag);
                 const isStk  = this._isAliasTag(tag, this._STICKER_ALIAS);
+                const isSpecial = this._SPECIAL_CARD_RE.test(tag);   // 轉賬/紅包/視頻/位置/收款碼 判定卡
                 const isMedia = isFile || isStk ||
                     this._isAliasTag(tag, this._IMAGE_ALIAS) ||
                     this._isAliasTag(tag, this._VOICE_ALIAS) ||
                     this._isAliasTag(tag, this._LINK_ALIAS) ||
                     this._isAliasTag(tag, this._FILE_ALIAS);   // [文件:xxx] 也拆成獨立卡(buildBubble fileM 渲染文件卡)
-                if (!isMedia) continue;   // 非媒體 tag（[22:35] 時間戳等）→ 不拆、留在文字裡
+                if (!isMedia && !isSpecial) continue;   // 非媒體 tag（[22:35] 時間戳等）→ 不拆、留在文字裡
 
                 const before = content.slice(last, m.index).trim();
                 if (before) parts.push(before);
