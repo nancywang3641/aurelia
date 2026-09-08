@@ -239,6 +239,7 @@ const PHONE_FILES = [
     'vn_story/vn_end_panel.js',        // 🎴 劇情末尾的視差世界活動面板（渲染 AI 生成的外觀；沒資料就退回原本那四顆鍵）
     'vn_story/vn_inspect.js',
     'vn_story/vn_phone.js',
+    'vn_story/vn_browser.js',
     'vn_story/vn_reader.js',
     'vn_story/vn_ui_workshop.js',
 

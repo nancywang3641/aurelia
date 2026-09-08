@@ -273,6 +273,25 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="phone-browser" class="hidden" onclick="window.VN_Browser && window.VN_Browser.tap()">
+                            <div id="br-home">
+                                <div id="br-clock"></div>
+                                <div id="br-date"></div>
+                                <div id="br-pill"><i class="fa-solid fa-magnifying-glass"></i><span>搜尋</span></div>
+                            </div>
+                            <div id="br-app">
+                                <div id="br-bar">
+                                    <button id="br-back" onclick="window.VN_Browser.back(); event.stopPropagation()"><i class="fa-solid fa-chevron-left"></i></button>
+                                    <div id="br-url"><i class="fa-solid fa-magnifying-glass"></i><span id="br-q"></span></div>
+                                </div>
+                                <div id="br-results"></div>
+                                <div id="br-page">
+                                    <div id="br-page-head"><div id="br-page-site"></div><div id="br-page-title"></div></div>
+                                    <div id="br-page-body"></div>
+                                </div>
+                                <div id="br-nar" class="hidden"></div>
+                            </div>
+                        </div>
                         <div id="phone-call" class="hidden">
                             <div id="call-status">來電</div>
                             <div id="call-caller">
