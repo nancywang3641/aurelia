@@ -43,6 +43,34 @@
         .am-red-dot { position: absolute; top: 8px; right: 8px; width: 10px; height: 10px; background: #ff453a; border-radius: 50%; box-shadow: 0 0 8px #ff453a; animation: pulse 2s infinite; pointer-events: none; }
         .am-zone-dot { position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; background: #ff453a; border-radius: 50%; border: 2px solid #000; z-index: 10; animation: pulse 2s infinite; }
 
+        /* === 圖片地圖（map_image.js）：全城／七區斜俯視圖 + 直立圖釘 === */
+        .am-zone-selector.am-imap-mode { display: block; position: absolute; inset: 0; max-width: none; padding: 0; animation: none; }
+        .am-inner-layer.am-imap-full { padding: 0; }
+        .am-grid-view.am-imap-mode { display: block; position: relative; padding: 0; overflow: hidden; }
+        .am-imap-stage { position: absolute; inset: 0; }
+        .am-imap { position: absolute; inset: 0; overflow: hidden; touch-action: none; background: #050505; cursor: grab; user-select: none; -webkit-user-select: none; }
+        .am-imap.dragging { cursor: grabbing; }
+        .am-imap-plane { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+        .am-imap-plane img { display: block; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; }
+        .am-imap-pins { position: absolute; inset: 0; pointer-events: none; }
+        .am-imap-pin { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 0 12px; margin: 0; background: none; border: 0; color: #D4AF37; font-family: inherit; cursor: pointer; pointer-events: auto; }
+        .am-imap-pin::after { content: ""; position: absolute; bottom: 0; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: #D4AF37; box-shadow: 0 0 0 3px rgba(0,0,0,0.6), 0 0 10px rgba(212,175,55,0.8); }
+        .am-imap-pin-icon { font-size: 20px; line-height: 1; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.9)); }
+        .am-imap-pin-letter { font-family: 'Cinzel', serif; font-size: 20px; font-weight: 700; line-height: 1; text-shadow: 0 1px 4px #000, 0 0 12px rgba(0,0,0,0.9); }
+        .am-imap-pin-label { background: rgba(0,0,0,0.78); border: 1px solid rgba(212,175,55,0.55); border-radius: 12px; padding: 2px 8px; font-size: 11px; line-height: 1.4; white-space: nowrap; color: #f0e4c0; font-family: 'Noto Sans TC', sans-serif; }
+        .am-imap-pin:hover .am-imap-pin-label { background: rgba(212,175,55,0.92); color: #000; }
+        .am-imap-pin:hover { z-index: 5; }
+        .am-imap-pin .am-red-dot, .am-imap-pin .am-zone-dot { top: -4px; right: -8px; left: auto; }
+        .am-imap-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; letter-spacing: 4px; color: rgba(212,175,55,0.7); pointer-events: none; }
+        .am-imap-time { position: absolute; left: 12px; bottom: 12px; font-size: 11px; letter-spacing: 3px; color: rgba(212,175,55,0.8); background: rgba(0,0,0,0.55); border: 1px solid rgba(212,175,55,0.25); padding: 3px 9px; border-radius: 10px; pointer-events: none; }
+        .am-imap-time:empty { display: none; }
+        .am-imap-strip { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; overflow-x: auto; padding: 10px 12px; background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0)); z-index: 3; }
+        .am-imap-strip .am-fac-card { min-width: 110px; flex: 0 0 auto; }
+        .am-fac-card-dyn { border-style: dashed; border-color: rgba(255,140,66,0.6); background: rgba(20,10,5,0.6); }
+        .am-imap-dyn { position: absolute; right: 14px; bottom: 14px; z-index: 3; }
+        .am-zone-entrance-dyn { border-style: dashed; border-color: rgba(255,140,66,0.6); background: rgba(40,15,5,0.6); }
+        .am-zone-entrance-dyn .am-zone-label { color: #ffaa50; }
+
         /* 詳情頁覆蓋層 */
         .am-detail-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 100; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 0.4s; background-size: cover; background-position: center; }
         .am-detail-overlay.active { opacity: 1; pointer-events: auto; }

@@ -259,6 +259,7 @@ const PHONE_FILES = [
     'map/world_generator.js',
     'map/schedule_engine.js',
     'map/scene_map_engine.js',
+    'map/map_image.js',     // 🗺 奧瑞亞預設世界的斜俯視圖片地圖（全城＋七區，五時段），map_core 前載
     'map/map_core.js',
 
     // === 🔵 微信 (WeChat) ===

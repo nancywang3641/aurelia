@@ -1,9 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] map_core.js (V4.2 - World Runtime Container)
+// [檔案] map_core.js (V4.3 - World Runtime Container + 圖片地圖)
 // 路徑：scripts/os_phone/map/map_core.js
 // 職責：地圖導覽 + 隨機事件系統 + 酒館跑團接口
 // 更新：地圖資料來源改走 WORLD_RUNTIME 容器（為動態世界鋪路）
 //        AUREALIS_DATA 仍在背景作為「預設世界」，不破壞原行為
+//        2026-09-09：奧瑞亞預設世界的首頁與區內改走 map_image.js 的斜俯視圖片地圖（圖釘＝入口／設施），
+//        動態世界與圖載不到時仍是原本的字母格與設施格。
 // ----------------------------------------------------------------
 (function() {
     console.log('[PhoneOS] 載入奧瑞亞地圖系統 (V4.2 World Runtime)...');
@@ -495,6 +497,7 @@ ${facilityText}
 
     function exitMap() {
         _clearAnimationTimers(); // 關面板前先把走路 / 冒泡定時器清掉，避免洩漏
+        _imapUnmount();          // 圖片地圖的指標事件、ResizeObserver 一起拆
         if (window.PhoneSystem && typeof window.PhoneSystem.goHome === 'function') {
             window.PhoneSystem.goHome();
         } else if (STATE.container) {
@@ -578,6 +581,7 @@ ${facilityText}
     }
 
     function renderHome() {
+        _imapUnmount();
         const bg = document.getElementById('am-bg');
         const homeLayer = document.getElementById('am-home-layer');
         const innerLayer = document.getElementById('am-inner-layer');
@@ -766,8 +770,61 @@ ${facilityText}
             return;
         }
 
-        // === fallback：卡片 grid 模式（奧瑞亞 / 舊存檔沒 mapX/mapY 用這個）===
+        // === 圖片地圖：奧瑞亞預設世界用全城斜俯視圖 + 七區入口圖釘（map_image.js）===
+        if (_imapHomeReady(world)) {
+            _renderHomeImage(selector, sortedIds, dynamicId, labels, () => _renderHomeCards(selector, sortedIds, dynamicId, labels));
+            return;
+        }
+        _renderHomeCards(selector, sortedIds, dynamicId, labels);
+    }
+
+    // === 圖片地圖（map_image.js）：只給奧瑞亞預設世界；圖載不到就退回原本的格子 ===
+    function _imap() { return win.AUREALIS_MAP_IMAGE || window.AUREALIS_MAP_IMAGE || null; }
+    function _imapUnmount() { const m = _imap(); if (m) m.destroyActive(); }
+    function _imapHomeReady(world) { const m = _imap(); return !!(m && world && world.isDefault && m.has('CITY')); }
+    function _imapZoneReady(zoneId) {
+        const m = _imap();
+        const world = WORLD() ? WORLD().getCurrentWorld() : null;
+        return !!(m && world && world.isDefault && m.has(zoneId));
+    }
+
+    function _renderHomeImage(selector, sortedIds, dynamicId, labels, onFail) {
         selector.classList.remove('am-marker-mode');
+        selector.classList.add('am-imap-mode');
+        selector.style.backgroundImage = '';
+        selector.innerHTML = '<div class="am-imap-stage" id="am-imap-home"></div>';
+        const stage = document.getElementById('am-imap-home');
+        const m = _imap();
+        const coords = {};
+        m.pinsOf('CITY').forEach(p => { coords[p.id] = p; });
+        const pins = [];
+        sortedIds.forEach(id => {
+            const zone = WORLD().getZone(id);
+            const isDynamic = (id === dynamicId) || (zone && zone.isDynamic);
+            const hasEvent = Object.values(STATE.activeEvents).some(ev => ev.zoneId === id);
+            const safeId = String(id).replace(/'/g, "\\'");
+            if (isDynamic || !coords[id]) {
+                // 圖上沒座標的區（動態漂流區）→ 右下角一張原本的入口卡
+                const facCount = zone && zone.facilities ? Object.keys(zone.facilities).length : 0;
+                const chip = document.createElement('div');
+                chip.className = 'am-imap-dyn';
+                chip.innerHTML = `<div class="am-zone-entrance am-zone-entrance-dyn" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">${hasEvent ? '<div class="am-zone-dot"></div>' : ''}<div class="am-zone-emoji">🌀</div><div class="am-zone-label">DRIFT · ${facCount}</div></div>`;
+                selector.appendChild(chip);
+                return;
+            }
+            const name = (zone && zone.name) ? zone.name : (labels[id] || id);
+            pins.push({
+                id, x: coords[id].x, y: coords[id].y,
+                html: `${hasEvent ? '<span class="am-zone-dot"></span>' : ''}<span class="am-imap-pin-letter">${id}</span><span class="am-imap-pin-label">${name}</span>`,
+                onClick: (zid) => enterZone(zid),
+            });
+        });
+        m.mount(stage, { mapId: 'CITY', pins, onFail: () => { selector.classList.remove('am-imap-mode'); selector.querySelectorAll('.am-imap-dyn').forEach(n => n.remove()); onFail(); } });
+    }
+
+    function _renderHomeCards(selector, sortedIds, dynamicId, labels) {
+        // === fallback：卡片 grid 模式（動態世界 / 舊存檔沒 mapX/mapY / 圖片載不到 用這個）===
+        selector.classList.remove('am-marker-mode', 'am-imap-mode');
         selector.style.backgroundImage = '';
         selector.innerHTML = sortedIds.map(id => {
             const hasEvent = Object.values(STATE.activeEvents).some(ev => ev.zoneId === id);
@@ -1344,6 +1401,7 @@ ${facilityText}
     }
 
     function enterZone(zoneId) {
+        _imapUnmount();
         STATE.currentZoneId = zoneId;
         STATE.view = 'zone';
 
@@ -1365,8 +1423,47 @@ ${facilityText}
 
         const gridEl = document.getElementById('am-grid');
         if (gridEl && zoneData) {
-            const facs = zoneData.facilities || {};
-            gridEl.innerHTML = Object.keys(facs).map(key => {
+            if (_imapZoneReady(zoneId)) { _renderZoneImage(gridEl, innerLayer, zoneId, zoneData); return; }
+            _renderZoneCards(gridEl, innerLayer, zoneId, zoneData);
+        }
+    }
+
+    // 區內：這區有斜俯視圖 → 設施當圖釘貼在圖上；圖上沒座標的（動態長出來的設施）排在底下一條
+    function _renderZoneImage(gridEl, innerLayer, zoneId, zoneData) {
+        const m = _imap();
+        innerLayer.classList.add('am-imap-full');
+        gridEl.classList.add('am-imap-mode');
+        gridEl.innerHTML = '<div class="am-imap-stage" id="am-imap-zone"></div><div class="am-imap-strip" id="am-imap-strip"></div>';
+        const stage = document.getElementById('am-imap-zone');
+        const strip = document.getElementById('am-imap-strip');
+        const coords = {};
+        m.pinsOf(zoneId).forEach(p => { coords[p.id] = p; });
+        const facs = zoneData.facilities || {};
+        const pins = [];
+        let stripHtml = '';
+        Object.keys(facs).forEach(key => {
+            const f = facs[key];
+            const hasEvent = !!STATE.activeEvents[`${zoneId}_${key}`];
+            const c = f.sceneId ? coords[f.sceneId] : null;
+            if (!c) {
+                stripHtml += `<div class="am-fac-card${f.isDynamic ? ' am-fac-card-dyn' : ''}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">${hasEvent ? '<div class="am-red-dot"></div>' : ''}<div class="am-fac-icon">${f.icon || '📍'}</div><div class="am-fac-name">${f.shortName || f.name}</div></div>`;
+                return;
+            }
+            pins.push({
+                id: key, x: c.x, y: c.y,
+                html: `${hasEvent ? '<span class="am-red-dot"></span>' : ''}<span class="am-imap-pin-icon">${f.icon || '📍'}</span><span class="am-imap-pin-label">${f.shortName || f.name}</span>`,
+                onClick: (k) => openFacilityDetail(k),
+            });
+        });
+        if (stripHtml) strip.innerHTML = stripHtml; else strip.remove();
+        m.mount(stage, { mapId: zoneId, pins, onFail: () => _renderZoneCards(gridEl, innerLayer, zoneId, zoneData) });
+    }
+
+    function _renderZoneCards(gridEl, innerLayer, zoneId, zoneData) {
+        innerLayer.classList.remove('am-imap-full');
+        gridEl.classList.remove('am-imap-mode');
+        const facs = zoneData.facilities || {};
+        gridEl.innerHTML = Object.keys(facs).map(key => {
                 const f = facs[key];
                 const eventKey = `${zoneId}_${key}`;
                 const hasEvent = STATE.activeEvents[eventKey];
@@ -1390,7 +1487,6 @@ ${facilityText}
                     </div>
                 `;
             }).join('');
-        }
     }
 
     function handleBack() {
