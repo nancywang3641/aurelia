@@ -337,6 +337,7 @@
 
             if (win.VN_Phone) win.VN_Phone.resetState();
             if (win.VN_Browser) win.VN_Browser.resetState();
+            if (win.VN_Nav) win.VN_Nav.resetState();
 
             this.updateControlUI();
 
@@ -552,13 +553,17 @@
                 const mBr = l.match(/^\[browser\s+(?:query|q|search|url)\s*=\s*["']?([^"'\]]+?)["']?\s*\]$/i);
                 if (mBr) return `<browser query="${mBr[1]}">`;
                 if (/^\[\/browser\s*\]$/i.test(l)) return '</browser>';
+                // 導航同一套：[Nav to="X" from="Y"] / [/Nav]
+                const mNv = l.match(/^\[nav\s+([^\]]*?)\]$/i);
+                if (mNv && /\bto\s*=/i.test(mNv[1])) return `<nav ${mNv[1].trim()}>`;
+                if (/^\[\/nav\s*\]$/i.test(l)) return '</nav>';
                 return l;
             });
 
             // 預處理：移除外部作者區塊標籤內的原始文字行
             // 這些行的內容由 DOM 渲染版本呈現（_showDomBlock），原文不需出現在對話框
             {
-                const _skipSys = ['content','call','chat','browser','status','summary','avatar','scene',
+                const _skipSys = ['content','call','chat','browser','nav','status','summary','avatar','scene',
                     // 🚨 章節卡：prompt 規定每輪必出，裡面裝的是 [Story|/[Chapter|/[BGM|/[Bg|/[Avatar|。
                     //    不列白名單的話會被下面的「未知 XML 區塊過濾器」當成作者的 HTML 美化區塊，
                     //    整塊內容刪光 → 背景/BGM/左上角場景 tag 全沒（立繪還在，因為早鳥直接掃原文）。
@@ -2193,6 +2198,8 @@
             if (line.startsWith('</call>')) { if(win.VN_Phone) win.VN_Phone.exitCall(this); return; }
             if (line.startsWith('<browser')) { if(win.VN_Browser) win.VN_Browser.initBrowser(this, line); else this.next(); return; }
             if (line.startsWith('</browser>')) { if(win.VN_Browser) win.VN_Browser.exitBrowser(this); else this.next(); return; }
+            if (/^<nav\b/i.test(line)) { if(win.VN_Nav) win.VN_Nav.initNav(this, line); else this.next(); return; }
+            if (line.startsWith('</nav>')) { if(win.VN_Nav) win.VN_Nav.exitNav(this); else this.next(); return; }
 
             // ── <scene>...</scene> 場景插圖 block ───────────────────────
             if (line === '<scene>') {
@@ -2363,6 +2370,7 @@
             if (this.mode === 'chat') { if(win.VN_Phone) win.VN_Phone.handleChatLine(line, this); return; }
             if (this.mode === 'call') { if(win.VN_Phone) win.VN_Phone.handleCallLine(line, this); return; }
             if (this.mode === 'browser') { if(win.VN_Browser) win.VN_Browser.handleBrowserLine(line, this); return; }
+            if (this.mode === 'nav') { if(win.VN_Nav) win.VN_Nav.handleNavLine(line, this); return; }
 
             // === VN 模式核心渲染 ===
             this.toggleUI('vn');
@@ -2990,6 +2998,7 @@
                 document.getElementById('phone-chat').classList.toggle('hidden', target !== 'phone-chat');
                 document.getElementById('phone-call').classList.toggle('hidden', target !== 'phone-call');
                 const pb = document.getElementById('phone-browser'); if (pb) pb.classList.toggle('hidden', target !== 'phone-browser');
+                const pn = document.getElementById('phone-nav'); if (pn) pn.classList.toggle('hidden', target !== 'phone-nav');
             }
         },
 

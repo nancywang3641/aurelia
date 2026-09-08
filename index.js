@@ -240,6 +240,7 @@ const PHONE_FILES = [
     'vn_story/vn_inspect.js',
     'vn_story/vn_phone.js',
     'vn_story/vn_browser.js',
+    'vn_story/vn_nav.js',
     'vn_story/vn_reader.js',
     'vn_story/vn_ui_workshop.js',
 

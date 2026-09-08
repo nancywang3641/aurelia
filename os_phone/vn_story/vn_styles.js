@@ -292,6 +292,23 @@
                                 <div id="br-nar" class="hidden"></div>
                             </div>
                         </div>
+                        <div id="phone-nav" class="hidden" onclick="window.VN_Nav && window.VN_Nav.tap()">
+                            <div id="nv-home">
+                                <div id="nv-clock"></div>
+                                <div id="nv-date"></div>
+                                <div id="nv-apps"><span class="nv-app"></span><span class="nv-app nv-app-map"><i class="fa-solid fa-location-dot"></i></span><span class="nv-app"></span></div>
+                            </div>
+                            <div id="nv-map">
+                                <svg id="nv-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 600" preserveAspectRatio="xMidYMid slice"></svg>
+                                <button id="nv-back" onclick="window.VN_Nav.back(); event.stopPropagation()"><i class="fa-solid fa-chevron-left"></i></button>
+                                <div id="nv-nar" class="hidden"></div>
+                                <div id="nv-card">
+                                    <div id="nv-eta"></div>
+                                    <div id="nv-meta"></div>
+                                    <div id="nv-step"></div>
+                                </div>
+                            </div>
+                        </div>
                         <div id="phone-call" class="hidden">
                             <div id="call-status">來電</div>
                             <div id="call-caller">

@@ -1629,6 +1629,55 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #br-nar b { color: #fbbf24; margin-right: 6px; }
         #br-nar.hidden { display: none; }
 
+        /* --- Nav 模式（手機導航；程式畫的通用向量地圖＋路線；開場：慢推近→圖釘落→描邊帶光頭相機跟→拉遠出卡） --- */
+        #phone-nav { display: flex; flex-direction: column; height: 100%; background: #e9ecef; color: #111; position: relative; overflow: hidden; }
+        #nv-home { position: absolute; inset: 0; background: #f4f5f7; display: flex; flex-direction: column; align-items: center; padding-top: 150px; z-index: 3; transition: opacity 0.4s; }
+        #nv-clock { font-size: 3rem; font-weight: 300; letter-spacing: 1px; }
+        #nv-date { font-size: 0.85rem; color: #6b7280; margin-top: 4px; }
+        #nv-apps { display: flex; gap: 18px; margin-top: 60px; }
+        .nv-app { width: 54px; height: 54px; border-radius: 14px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.4rem; }
+        .nv-app-map { background: linear-gradient(135deg, #34d399, #60a5fa); }
+        #phone-nav.nv-map-on #nv-home { opacity: 0; pointer-events: none; }
+        #nv-map { position: absolute; inset: 0; opacity: 0; transition: opacity 0.5s; }
+        #phone-nav.nv-map-on #nv-map { opacity: 1; }
+        #nv-svg { width: 100%; height: 100%; display: block; }
+        #nv-cam { transform-origin: 0 0; transition-property: transform; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+        .nv-ground { fill: #e9ecef; }
+        .nv-road { stroke: #fff; fill: none; stroke-linecap: round; stroke-width: 4.5; }
+        .nv-road.nv-main { stroke-width: 9; }
+        .nv-park { fill: #cfe8cf; }
+        .nv-water { fill: none; stroke: #bcd8f2; stroke-width: 16; stroke-linecap: round; }
+        .nv-route-under { fill: none; stroke: #fff; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; opacity: 0.9; transition: stroke-dashoffset 1.7s cubic-bezier(0.4, 0, 0.2, 1); }
+        .nv-route { fill: none; stroke: #2563eb; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; transition: stroke-dashoffset 1.7s cubic-bezier(0.4, 0, 0.2, 1); }
+        .nv-head { fill: #fff; stroke: #2563eb; stroke-width: 3; filter: drop-shadow(0 0 6px rgba(37,99,235,0.9)); opacity: 0; }
+        .nv-head.nv-on { opacity: 1; }
+        .nv-dot { fill: #2563eb; stroke: #fff; stroke-width: 3; }
+        .nv-halo { fill: #2563eb; opacity: 0.25; transform-box: fill-box; transform-origin: center; animation: nv-breathe 1.8s ease-in-out infinite; }
+        @keyframes nv-breathe { 0%, 100% { transform: scale(1); opacity: 0.25; } 50% { transform: scale(1.9); opacity: 0.05; } }
+        .nv-pin { transform-box: fill-box; transform-origin: 50% 100%; opacity: 0; }
+        .nv-pin.nv-drop { opacity: 1; animation: nv-drop 0.6s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; }   /* opacity 寫死 1：到達時換成脈動動畫，落下動畫的終態就沒了，不寫會消失 */
+        @keyframes nv-drop { from { transform: translateY(-80px) scale(0.8); opacity: 0; } 60% { opacity: 1; } to { transform: none; opacity: 1; } }
+        #phone-nav.nv-arrived .nv-pin { animation: nv-pin-pulse 0.7s ease-out both; }
+        @keyframes nv-pin-pulse { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1.1); } }
+        .nv-pin-body { fill: #ef4444; }
+        .nv-pin-hole { fill: #fff; }
+        #nv-back { position: absolute; top: 48px; left: 10px; width: 36px; height: 36px; border-radius: 50%; border: none; background: rgba(255,255,255,0.92); color: #374151; box-shadow: 0 2px 8px rgba(0,0,0,0.12); cursor: pointer; z-index: 4; display: flex; align-items: center; justify-content: center; padding: 0; }
+        #nv-card { position: absolute; left: 12px; right: 12px; bottom: 14px; background: #fff; border-radius: 16px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); transform: translateY(130%); transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 4; text-align: left; }
+        #phone-nav.nv-card-on #nv-card { transform: none; }
+        #nv-eta { font-size: 1.3rem; font-weight: 700; color: #16a34a; }
+        #phone-nav.nv-arrived #nv-eta { color: #2563eb; }
+        #nv-meta { font-size: 0.78rem; color: #6b7280; margin-top: 2px; }
+        #nv-step { margin-top: 8px; font-size: 0.85rem; color: #111; border-top: 1px solid #eee; padding-top: 8px; display: flex; gap: 8px; align-items: center; min-height: 22px; }
+        #nv-step.nv-swap { animation: nv-swap 0.35s ease both; }
+        @keyframes nv-swap { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        .nv-arrow { width: 24px; height: 24px; border-radius: 6px; background: #2563eb; color: #fff; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .nv-arrow-done { background: #16a34a; }
+        .nv-step-text { line-height: 1.35; }
+        #nv-nar { position: absolute; left: 12px; right: 12px; bottom: 132px; background: rgba(17,17,17,0.82); color: #fff; font-size: 0.82rem; line-height: 1.5; padding: 10px 12px; border-radius: 10px; backdrop-filter: blur(6px); z-index: 4; }
+        #nv-nar b { color: #fbbf24; margin-right: 6px; }
+        #nv-nar.hidden { display: none; }
+        #phone-nav.nv-nomotion, #phone-nav.nv-nomotion * { transition: none !important; animation: none !important; }
+
         /* --- 表情包面板 --- */
         #sticker-panel { position: absolute; bottom: 0; left: 0; right: 0; background: #f7f7f7; border-top: 1px solid #ddd; z-index: 20; transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.2,0.8,0.2,1); display: flex; flex-direction: column; max-height: 55%; }
         #sticker-panel.open { transform: translateY(0); }
@@ -1935,6 +1984,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                 transform: translateY(110%);
             }
             #phone-overlay.active #phone-device { transform: translateY(0); }
+
+            /* Nav 模式 */
+            #nv-home { padding-top: 120px; }
+            #nv-clock { font-size: 2.6rem; }
+            #nv-back { top: 40px; }
 
             /* Browser 模式 */
             #br-home { padding-top: 96px; }
