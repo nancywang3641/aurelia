@@ -2022,6 +2022,9 @@
             VN_TTS.playNarration(rawText);
         },
 
+        // 手機四個面（chat/call/browser/nav）裡不該出現的正文層行：看到就當容器已關（見 next 裡的逃生口）
+        _phoneEscapeRe: /^(?:\[(?:Choice|Bg|BGM|Scene|Area|Exit|Item|Date|HP|Buff|Event|Quest|Achievement|Story|Chapter|Preface|Protagonist|World|Sys|EventText|HtmlCard)\||<\/?(?:content|summary|ChapterCard|status|scene|system|BattleStart|live_popup)\b|<(?:chat|call|browser|nav)\b)/i,
+
         next: function () {
             this.clearTimers();
             if (this.skipTypewriter()) { this.checkAutoNext(); return; }
@@ -2197,9 +2200,29 @@
             if (line.startsWith('<call')) { if(win.VN_Phone) win.VN_Phone.initCall(this, line); return; }
             if (line.startsWith('</call>')) { if(win.VN_Phone) win.VN_Phone.exitCall(this); return; }
             if (line.startsWith('<browser')) { if(win.VN_Browser) win.VN_Browser.initBrowser(this, line); else this.next(); return; }
-            if (line.startsWith('</browser>')) { if(win.VN_Browser) win.VN_Browser.exitBrowser(this); else this.next(); return; }
+            if (/^<\/browser\s*>/i.test(line)) { if(win.VN_Browser) win.VN_Browser.exitBrowser(this); else this.next(); return; }
             if (/^<nav\b/i.test(line)) { if(win.VN_Nav) win.VN_Nav.initNav(this, line); else this.next(); return; }
-            if (line.startsWith('</nav>')) { if(win.VN_Nav) win.VN_Nav.exitNav(this); else this.next(); return; }
+            if (/^<\/nav\s*>/i.test(line)) { if(win.VN_Nav) win.VN_Nav.exitNav(this); else this.next(); return; }
+
+            // ── 手機殼四個面的逃生口＋瀏覽器/導航的提前分派（必須在所有區塊過濾之前）──
+            //    逃生口：正文層才會出現的行（選項、背景、場景、章節卡、狀態、摘要、另一個容器…）跑進手機裡，
+            //    代表 AI 忘了寫關門那行；當作關門，這一行退回去用 VN 模式重播，後面的劇情才不會整段被手機吃掉。
+            //    提前分派：導航/瀏覽器裡的 [Arrive]、[Page] 這種整行單一標籤，會被下面「格式B：[XXX]」
+            //    當成自訂區塊找不到閉合而跳過，所以這兩個模式的行在這裡就交出去。
+            if (this.mode === 'chat' || this.mode === 'call' || this.mode === 'browser' || this.mode === 'nav') {
+                if (this._phoneEscapeRe.test(line)) {
+                    const _pm = this.mode;
+                    this.index--;   // exit 會 next() 一次，剛好回到這一行
+                    if (_pm === 'chat' && win.VN_Phone) win.VN_Phone.exitChat(this);
+                    else if (_pm === 'call' && win.VN_Phone) win.VN_Phone.exitCall(this);
+                    else if (_pm === 'browser' && win.VN_Browser) win.VN_Browser.exitBrowser(this);
+                    else if (_pm === 'nav' && win.VN_Nav) win.VN_Nav.exitNav(this);
+                    else { this.mode = 'vn'; this.toggleUI('vn'); this.next(); }
+                    return;
+                }
+                if (this.mode === 'browser') { if(win.VN_Browser) win.VN_Browser.handleBrowserLine(line, this); else this.next(); return; }
+                if (this.mode === 'nav') { if(win.VN_Nav) win.VN_Nav.handleNavLine(line, this); else this.next(); return; }
+            }
 
             // ── <scene>...</scene> 場景插圖 block ───────────────────────
             if (line === '<scene>') {
@@ -2369,8 +2392,6 @@
 
             if (this.mode === 'chat') { if(win.VN_Phone) win.VN_Phone.handleChatLine(line, this); return; }
             if (this.mode === 'call') { if(win.VN_Phone) win.VN_Phone.handleCallLine(line, this); return; }
-            if (this.mode === 'browser') { if(win.VN_Browser) win.VN_Browser.handleBrowserLine(line, this); return; }
-            if (this.mode === 'nav') { if(win.VN_Nav) win.VN_Nav.handleNavLine(line, this); return; }
 
             // === VN 模式核心渲染 ===
             this.toggleUI('vn');

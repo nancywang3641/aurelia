@@ -79,6 +79,7 @@
         busy: false,
         steps: 0, stepIdx: 0, arrived: false,
         _core: null, _seq: 0, _route: null, _len: 0, _eta: null,
+        _opened: {},   // 已經演過開場的 <nav> 行：同一則訊息重載（酒館寫回摘要/狀態時會重載）就直接到位不重演
 
         resetState: function () {
             this._seq++;
@@ -141,7 +142,31 @@
             this._hideNar();
             core.toggleUI('phone-nav');
             core.addLog('手機', `導航到「${o.to}」`);
+            const key = `${(core.script || []).length}|${core.index}|${line}`;
+            if (this._opened[key] || core.isSkip) { this._instantOpen(core); return; }
+            this._opened[key] = true;
             this._playOpening(core);
+        },
+
+        // 不演開場：地圖、圖釘、路線、卡片一次到位
+        _instantOpen: function (core) {
+            const root = $('phone-nav');
+            if (!root) { core.next(); return; }
+            this._seq++;
+            this.busy = false;
+            root.classList.add('nv-nomotion');
+            root.classList.remove('nv-arrived');
+            this._drawMap();
+            root.classList.add('nv-map-on', 'nv-card-on');
+            const pin = $('nv-pin'); if (pin) pin.classList.add('nv-drop');
+            const route = $('nv-route'), under = $('nv-route-under');
+            if (route) route.setAttribute('stroke-dashoffset', '0');
+            if (under) under.setAttribute('stroke-dashoffset', '0');
+            this._camFit(0);
+            this._renderCard();
+            void root.offsetHeight;
+            root.classList.remove('nv-nomotion');
+            core.next();
         },
 
         _playOpening: async function (core) {

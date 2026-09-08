@@ -30,6 +30,7 @@
         resultCount: 0,
         _core: null,
         _openingSeq: 0,
+        _opened: {},   // 已經演過開場的 <browser> 行：同一則訊息重載就直接到位不重演
 
         resetState: function () {
             this.query = '';
@@ -100,7 +101,27 @@
             this._hideNar();
             core.toggleUI('phone-browser');
             core.addLog('手機', `搜尋「${query}」`);
+            const key = `${(core.script || []).length}|${core.index}|${line}`;
+            if (this._opened[key] || core.isSkip) { this._instantOpen(core, query); return; }
+            this._opened[key] = true;
             this._playOpening(core, query);
+        },
+
+        // 不演開場：網址列、查詢字、骨架一次到位
+        _instantOpen: function (core, query) {
+            const root = $('phone-browser');
+            if (!root) { core.next(); return; }
+            this._openingSeq++;
+            this.busy = false;
+            root.classList.add('br-nomotion');
+            root.classList.remove('br-page-on');
+            root.classList.add('br-grow', 'br-app-on');
+            textOnly($('br-q'), String(query));
+            this._showSkeleton();
+            this.view = 'results';
+            void root.offsetHeight;
+            root.classList.remove('br-nomotion');
+            core.next();
         },
 
         _playOpening: async function (core, query) {
