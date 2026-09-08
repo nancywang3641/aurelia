@@ -248,11 +248,11 @@
                             </div>
 
                             <div id="chat-footer" onclick="event.stopPropagation()">
-                                <button id="chat-plus-btn" onclick="window.VN_Sticker.togglePanel(); event.stopPropagation()">+</button>
+                                <button id="chat-plus-btn" onclick="window.VN_Sticker.togglePanel(); event.stopPropagation()"><i class="fa-solid fa-plus"></i></button>
                                 <div id="chat-input-wrap">
                                     <input type="text" id="chat-input" placeholder="發送消息..." readonly>
                                 </div>
-                                <button id="chat-mic-btn">🎤</button>
+                                <button id="chat-mic-btn"><i class="fa-solid fa-microphone"></i></button>
                             </div>
 
                             <div id="chat-bg-panel" onclick="event.stopPropagation()">

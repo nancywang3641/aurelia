@@ -103,13 +103,13 @@
             }
             if (line.startsWith('[Time]') || line.match(/^\[Time[：:]/i)) {
                 const t = line.replace(/^\[Time[：:\]]\s*/i,'').replace(/\]$/,'').trim();
-                chatBody.innerHTML += `<div class="chat-sys">${t}</div>`;
+                chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${t}</div>`);
                 this.scrollChat(); core.checkAutoNext(); return;
             }
             // TTIME 格式：[22:45] 純時間標記
             if (line.match(/^\[\d{1,2}:\d{2}\]$/)) {
                 const t = line.slice(1, -1);
-                chatBody.innerHTML += `<div class="chat-sys">${t}</div>`;
+                chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${t}</div>`);
                 this.scrollChat(); core.checkAutoNext(); return;
             }
             // 系統/旁白訊息：容忍 AI 常見變體 ——
@@ -119,7 +119,7 @@
             const _sysWrap = line.match(/^(?:\[[^\]]+\]\s*)?\[(?:系統|系统|System|旁白|Narrator)([：:\]])([\s\S]*)$/i);
             if (_sysWrap) {
                 const t = (_sysWrap[1] === ']' ? _sysWrap[2] : _sysWrap[2].replace(/\]\s*$/, '')).trim();
-                chatBody.innerHTML += `<div class="chat-sys">${t}</div>`;
+                chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${t}</div>`);
                 this.scrollChat(); core.checkAutoNext(); return;
             }
 
@@ -129,11 +129,11 @@
                 const content = match[2].trim();
                 // 只有 [XXXX] 沒有後續內容 → 視為系統提示
                 if (content === '') {
-                    chatBody.innerHTML += `<div class="chat-sys">${sender}</div>`;
+                    chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${sender}</div>`);
                     this.scrollChat(); core.checkAutoNext(); return;
                 }
                 if (/^(系統|系统|System|旁白|Narrator)$/i.test(sender)) {
-                    chatBody.innerHTML += `<div class="chat-sys">${content}</div>`;
+                    chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${content}</div>`);
                 } else {
                     // 右邊泡泡＝①You/主角/我/使用者人設名 ②<chat owner="名"> 點名的人。[With] 只當名單，順序不算數
                     const mc = (win.OS_PERSONA && win.OS_PERSONA.getName && win.OS_PERSONA.getName()) || (win.OS_API && win.OS_API.getGlobalUserName && win.OS_API.getGlobalUserName()) || '';
@@ -144,7 +144,7 @@
                         || (!!this.chatOwner && sender === this.chatOwner);
                     const parts = this._splitStickerContent(content);
                     for (const part of parts) {
-                        chatBody.innerHTML += this._buildChatBubbleHTML(sender, part, isMe, core);
+                        chatBody.insertAdjacentHTML('beforeend', this._buildChatBubbleHTML(sender, part, isMe, core));
                     }
                     core.addLog(sender, content);
                 }
@@ -294,9 +294,11 @@
                 const escVS = String(sender).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
                 const escVT = String(txt).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
                 const transHTML = txt ? `<div class="wx-voice-trans">${txt}</div>` : '';
+                // 長度分四檔決定泡泡寬度（不用 inline style）；播放中 .playing 讓音波動起來
+                const lenCls = sec <= 5 ? 'wx-voice-len1' : sec <= 15 ? 'wx-voice-len2' : sec <= 30 ? 'wx-voice-len3' : 'wx-voice-len4';
                 inner = `<div class="wx-voice-wrap">
-                    <div class="wx-voice-msg" data-vsender="${escVS}" data-vtext="${escVT}" onclick="event.stopPropagation(); window.VN_Phone._playVoice(this); var t=this.nextElementSibling; if(t) t.classList.toggle('open');">
-                        <span class="wx-voice-wave">🔊 ≡≡≡</span><span class="wx-voice-dur">${sec}"</span>
+                    <div class="wx-voice-msg ${lenCls}" data-vsender="${escVS}" data-vtext="${escVT}" data-vsec="${sec}" onclick="event.stopPropagation(); window.VN_Phone._playVoice(this); var t=this.nextElementSibling; if(t) t.classList.toggle('open');">
+                        <span class="wx-voice-icon"><i class="fa-solid fa-volume-high"></i></span><span class="wx-voice-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="wx-voice-dur">${sec}"</span>
                     </div>
                     ${transHTML}
                 </div>`;
@@ -373,6 +375,13 @@
             const sender = el.dataset.vsender || '';
             const text = el.dataset.vtext || '';
             if (!text) return;
+            // 音波跟著「秒數」動，跟語音引擎有沒有真的在放無關（引擎那邊沒有結束回呼可接）
+            try {
+                if (this._voiceTimer) { clearTimeout(this._voiceTimer); if (this._voiceEl) this._voiceEl.classList.remove('playing'); }
+                el.classList.add('playing'); this._voiceEl = el;
+                const sec = Math.min(60, Math.max(2, parseInt(el.dataset.vsec || '3', 10)));
+                this._voiceTimer = setTimeout(() => { el.classList.remove('playing'); this._voiceTimer = null; this._voiceEl = null; }, sec * 1000);
+            } catch (e) {}
             const core = win.VN_Core || (win.parent && win.parent.VN_Core);
             try { if (core && core._vnSoVITSPlay) core._vnSoVITSPlay(sender, text, '', ''); } catch (e) {}
             try { const mm = win.OS_MINIMAX || (win.parent && win.parent.OS_MINIMAX); if (mm && mm.playForChar) mm.playForChar(sender, text, { expression: '' }); } catch (e) {}
