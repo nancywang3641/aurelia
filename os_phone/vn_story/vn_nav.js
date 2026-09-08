@@ -3,10 +3,10 @@
 // 路徑：os_phone/vn_story/vn_nav.js
 // 職責：VN 播放器裡的手機導航分支（跟 Chat / Call / Browser 同一個手機殼的第四個面）
 //   正文：<nav to="目的地" from="出發地" mode="步行"> … </nav>
-//   每行一項：[Route: 時間|距離]（可省，程式會算）、[Step: 怎麼走]、[Arrive]、[Nar|…]、[Char|…]
+//   每行一項：[Route: 時間|距離]（可省，程式會算）、[Step: 怎麼走]、[Nar|…]、[Char|…]；</nav> 就是到達（[Arrive] 仍認得，但教學不再教：整行單一標籤跟載入層的區塊過濾天生相沖）
 //   地圖是程式畫的通用向量圖（白街道格、綠地、一條水），用出發地＋目的地當種子，同一趟路每次同一張。
 //   開場動效（她選的「電影」版）：主畫面點開地圖 → 慢推近到藍點 → 目的地圖釘軟落 → 路線描邊帶光頭、相機跟線頭 → 拉遠看全程、底部卡滑上
-//   之後每個 [Step] 藍點沿線滑到下一段、相機跟、卡片換字；[Arrive] 或收尾圖釘放大、卡片變「已到達」。
+//   之後每個 [Step] 藍點沿線滑到下一段、相機跟、卡片換字；</nav> 收尾時圖釘放大、卡片變「已到達」，停一拍再回 VN。
 // ⚠️ 請確保在載入 vn_core.js 之後載入此檔案
 // ----------------------------------------------------------------
 (function () {
@@ -206,7 +206,19 @@
             if (alive()) core.next();
         },
 
+        // </nav> 就是到達：還沒到就先演到達那一下（藍點到終點、圖釘脈動、卡片變已到達），停一拍再回 VN
         exitNav: function (core) {
+            if (!this.arrived && this._route && $('phone-nav')) {
+                this._arrive('');
+                this.busy = true;
+                const seq = ++this._seq;
+                const self = this;
+                setTimeout(() => { if (seq !== self._seq) return; self.busy = false; self._leave(core); }, 900);
+                return;
+            }
+            this._leave(core);
+        },
+        _leave: function (core) {
             this.busy = false;
             this._hideNar();
             core.mode = 'vn';
