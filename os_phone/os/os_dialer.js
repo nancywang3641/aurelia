@@ -187,12 +187,18 @@
     }
 
     // 對方不接：只有一通電話的第一句能這樣回（後面講到一半不會突然變拒接，那是掛斷）
-    const _REFUSE_RE = /^\s*[\[［【]\s*(?:不接|拒接|不想接|沒接|未接|NoAnswer|Reject|Decline|Busy)\s*[\]］】]\s*$/i;
-    function _isRefusal(s) { return _REFUSE_RE.test(String(s == null ? '' : s)); }
+    // 標記可以帶一句話：[不接|在忙，晚點回你] —— 不接，但補一則訊息過來（很像真人）。
+    // 不帶就只是單純不接。那句話寫進同一份聊天記錄，她去微信找那個人就看得到、還是未讀。
+    const _REFUSE_RE = /^\s*[\[［【]\s*(?:不接|拒接|不想接|沒接|未接|NoAnswer|Reject|Decline|Busy)\s*(?:[|｜]\s*([^\]］】]*))?\s*[\]］】]\s*$/i;
+    function _refusalOf(s) {
+        const m = String(s == null ? '' : s).match(_REFUSE_RE);
+        return m ? { note: String(m[1] == null ? '' : m[1]).trim() } : null;
+    }
+    function _isRefusal(s) { return !!_refusalOf(s); }
 
-    function _noAnswer(contact) { return _dialEnd(contact, '對方沒有接聽 📵', true); }
+    function _noAnswer(contact, note) { return _dialEnd(contact, '對方沒有接聽 📵', true, note); }
     function _dialFailed(contact) { return _dialEnd(contact, '沒接通 —— 到「設置 → 主模型」確認 API 有設好', false); }
-    async function _dialEnd(contact, statusText, writeMissed) {
+    async function _dialEnd(contact, statusText, writeMissed, note) {
         if (!_root) return;
         _clearTimer();
         _root.innerHTML =
@@ -201,6 +207,7 @@
           +   '<div class="dlr-call-name">' + _esc(contact.name) + '</div>'
           +   '<div class="dlr-call-num">' + _esc(_num(contact.id)) + '</div>'
           +   '<div class="dlr-call-status">' + _esc(statusText) + '</div>'
+          +   (note ? '<div class="dlr-call-note">傳了訊息給你：<span>' + _esc(_cut(note, 40)) + '</span></div>' : '')
           +   '<button class="dlr-hang" id="dlr-hang" type="button">結束</button>'
           + '</div>';
         const b = _root.querySelector('#dlr-hang');
@@ -212,10 +219,15 @@
                 const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
                 if (!Array.isArray(rec.messages)) rec.messages = [];
                 rec.messages.push({ type: 'system', content: '未接聽', _missed: true, timestamp: Date.now() });
+                // 不接但補一句：當成他傳來的訊息寫進同一份記錄，微信那邊也看得到、標成未讀
+                if (note) {
+                    rec.messages.push({ type: 'msg', isMe: false, content: note, sender: contact.name, senderName: contact.name, timestamp: Date.now(), _afterMissed: true });
+                    rec.unread = true; rec.lastTime = Date.now();
+                }
                 await OS_DB.saveApiChat(contact.id, rec);
             }
         } catch (e) { console.warn('[dialer] 寫未接聽失敗', e); }
-        _timer = setTimeout(_renderHistory, 2200);
+        _timer = setTimeout(_renderHistory, note ? 3200 : 2200);   // 有補訊息就多停一下讓她讀完
     }
 
     // ── 撥通：VN call 字幕通話 UI；對話直讀寫 OS_DB（與微信同一份記憶）──
@@ -390,7 +402,8 @@
                     // 響鈴那一句：對方可以不接（系統提示教它只回 [不接]）。接了才進通話畫面；
                     // _inCall 裡的 _renderCallLog 會整份重畫對話區，所以要等它畫完再冒這句泡泡。
                     if (opts.firstRing) {
-                        if (_isRefusal(reply)) { restore(); _noAnswer(contact); return; }
+                        const _ref = _refusalOf(reply);
+                        if (_ref) { restore(); _noAnswer(contact, _ref.note); return; }
                         await _inCall(contact, true);
                     }
                     _appendCallBubble(false, reply, contact.name);

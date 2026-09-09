@@ -195,6 +195,9 @@
 .dlr-call-name { font-size: 24px; font-weight: 600; }
 .dlr-call-num { font-size: 14px; opacity: 0.6; letter-spacing: 1px; }
 .dlr-call-status { font-size: 14px; opacity: 0.75; margin-top: 4px; }
+/* 沒接、但補了一則訊息過來：那句話就寫在未接聽下面，她不用切去微信才知道 */
+.dlr-call-note { margin-top: 14px; max-width: 78%; font-size: 12px; line-height: 1.5; opacity: 0.6; text-align: center; }
+.dlr-call-note span { display: block; margin-top: 4px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,0.10); opacity: 0.95; word-break: break-word; }
 .dlr-dots { animation: dlr-blink 1.2s steps(1) infinite; }
 @keyframes dlr-blink { 50% { opacity: 0.2; } }
 .dlr-hang { margin-top: 30px; width: 66px; height: 66px; border-radius: 50%; border: none; background: #ff3b30; color: #fff; font-size: 13px; cursor: pointer; box-shadow: 0 6px 16px rgba(255,59,48,0.4); }
