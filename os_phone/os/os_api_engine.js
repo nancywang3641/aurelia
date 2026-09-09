@@ -412,7 +412,28 @@
                 '──────────────────────────────────────────────────────────────────'
             ].join('\n');
 
-            const sysPrompt = _taskInstruction + '\n' + specPrompt;
+            // ── 自訂接口（她接的是 OpenAI 官方那條）：站方會拒畫的段落，這裡就不要選 ──
+            // 選了也生不出來，那一段落空；不如一開始就挑別的落點。這段只在插圖來源是自訂接口時加，
+            // 其他來源（Pollinations／NAI／ComfyUI）什麼都畫得出來，不該被這條綁住。
+            // 寫給不認識這個故事的人看：只講判準與替代做法，不給例句、不給關鍵詞清單——
+            // 給了它會照著造句，也會把清單當成「要避開的詞」在提示裡繞著寫。
+            const _needsSafe = _globalSvc === 'custom_api';
+            const _safeRules = _needsSafe ? [
+                '',
+                'PICKING MOMENTS FOR THIS RUN:',
+                'The image service used here refuses to draw sexual content and graphic bodily harm.',
+                'A refused prompt produces nothing, so a refused moment is a wasted slot, not a picture.',
+                '• Do not choose a moment whose image would be the sexual act or the bodily harm itself.',
+                '• When such a moment is the dramatic peak, choose the beat just before it or just after it,',
+                '  and let the image carry the same weight through what surrounds it — the place, the light,',
+                '  the aftermath, a face, an object, what the body is doing that is not the wound.',
+                '• Judge the picture, not the words: a violent passage can hold a perfectly drawable image,',
+                '  and a calm passage can imply one that will be refused.',
+                '• Never soften the story to fit this. Skip the slot instead — illustrations are optional here,',
+                '  and fewer good ones beat a row of empty spots.',
+            ].join('\n') : '';
+
+            const sysPrompt = _taskInstruction + _safeRules + '\n' + specPrompt;
 
             const messages = [
                 { role: 'system', content: sysPrompt },
