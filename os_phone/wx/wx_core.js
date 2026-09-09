@@ -957,6 +957,45 @@
                 }
             } catch (e) { console.warn('[wx 跑團同步] 清理群成員殘留失敗:', (e && e.message) || e); }
 
+            // 同一個窗裡同名多筆：通訊錄清單跟聊天室的章以前用兩把不同的尺（見 wx_contacts 的 _storyId），
+            // 同一個人在不同時機查不到自己就再拿一個新的 char_ 亂數 id，畫面上同一個名字於是出現好幾次。
+            // 尺已經統一，這裡把留下來的空殼收掉：同名的只留有訊息的，一則訊息都沒有的多餘分身刪掉；
+            // 全部都有訊息就一筆都不動（不替她合併對話）。
+            try {
+                const byName = {};
+                const pool = Object.assign({}, all, GLOBAL_CHATS);
+                for (const pid in pool) {
+                    const pc = pool[pid];
+                    if (!pc || pc.isGroup || pid === 'User') continue;
+                    const nm = String(pc.realName || pc.name || '').trim();
+                    if (!nm) continue;
+                    (byName[nm] = byName[nm] || []).push({ id: pid, msgs: (pc.messages || []).length });
+                }
+                const dupDrop = [];
+                for (const nm in byName) {
+                    const arr = byName[nm];
+                    if (arr.length < 2) continue;
+                    const withMsg = arr.filter(function (x) { return x.msgs > 0; });
+                    const empties = arr.filter(function (x) { return x.msgs === 0; });
+                    if (!empties.length) continue;                     // 全都有訊息 → 一筆都不動
+                    const keep = withMsg.length ? null : empties[0];    // 全空 → 留第一筆當本尊
+                    empties.forEach(function (x) { if (!keep || x.id !== keep.id) dupDrop.push(x.id); });
+                }
+                if (dupDrop.length) {
+                    const dropSet = {}; dupDrop.forEach(function (i) { dropSet[i] = 1; });
+                    const list2 = win.WX_CONTACTS.getAllCustomContacts();
+                    localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(list2.filter(function (c) { return !dropSet[c.id]; })));
+                    for (let qi = 0; qi < dupDrop.length; qi++) {
+                        const qid = dupDrop[qi];
+                        delete GLOBAL_CHATS[qid];
+                        try { await win.WX_DB.deleteApiChat(qid); } catch (e) {}
+                        try { if (win.OS_CONTACTS && win.OS_CONTACTS.deleteContact) win.OS_CONTACTS.deleteContact(qid); } catch (e) {}
+                        if (GLOBAL_ACTIVE_ID === qid) GLOBAL_ACTIVE_ID = null;
+                    }
+                    console.log('[wx 跑團同步] 收掉同名重複的空殼聯絡人 ' + dupDrop.length + ' 筆');
+                }
+            } catch (e) { console.warn('[wx 跑團同步] 收斂同名重複失敗:', (e && e.message) || e); }
+
             _storyLastFloor = parsed.lastFloor;
             _storyStat = { rooms: keys.filter(function (k) { return rooms[k].msgs.length; }).length, contacts: contactCount, floor: parsed.lastFloor, at: Date.now() };
 

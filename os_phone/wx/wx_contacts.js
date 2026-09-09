@@ -12,7 +12,14 @@
     const targetDoc = win.document;
     // 通訊錄按「當前卡(storyId)」隔離——別張角色卡的聯絡人不再混進來(跟 AVS/大總結同一把 getStoryId 鑰匙)。
     const CONTACTS_BASE_KEY = 'wx_custom_contacts_v1';
+    // 🚨 這把尺必須跟 api_chats 存檔時蓋的 tavernChatId 章、跟跑團同步用的 cid 是同一把。
+    //    以前這裡走 OS_AVS_ADAPTER.getStoryId()，拿不到時退回 localStorage 的 vn_current_story_id（那是 PWA 的鍵），
+    //    於是通訊錄清單可能分在 A 桶而聊天室蓋的是 B 桶的章；同一個人在不同時機查不到自己、
+    //    就再拿一個新的 char_ 亂數 id，同一個窗裡因此冒出同名多筆。
+    //    4edfc4d 讓跑團同步開始自動建一對一聊天室之後這件事才看得出來（在那之前只有手動加好友會建）。
+    //    OS_DB.currentChatId() 就是蓋章那支本人；它在 PWA 下自己會退回 storyId，兩邊都對得上。
     function _storyId() {
+        try { const c = win.OS_DB && win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null; if (c != null && String(c)) return String(c); } catch (e) {}
         try { const s = win.OS_AVS_ADAPTER && win.OS_AVS_ADAPTER.getStoryId && win.OS_AVS_ADAPTER.getStoryId(); if (s) return String(s); } catch (e) {}
         try { return localStorage.getItem('vn_current_story_id') || ''; } catch (e) { return ''; }
     }
