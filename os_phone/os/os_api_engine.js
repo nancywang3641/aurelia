@@ -1289,17 +1289,60 @@
                     if (currentChatId) {
                         const apiChat = await win.WX_DB.getApiChat(currentChatId);
                         if (apiChat && apiChat.messages) {
-                            const rawPhoneMsgs = apiChat.messages.map(msg => ({
-                                role: msg.isMe ? 'user' : 'assistant',
-                                // 📞 通話餵乾淨口語(content)，不帶 [Chat:|With:][名] 標頭的 raw → 免 AI 學歷史去用聊天格式
-                                content: (promptKey === 'call_voice_system') ? (msg.content || "") : (msg.raw || msg.content || ""),
-                                _source: 'phone'
-                            }));
+                            // 🚨 分隔（通話開始／結束／未接聽）不是誰講的話。以前它們被當成 assistant，
+                            //    模型會讀到自己說「通話開始 · 9/10」；更糟的是整串歷史完全沒有時間標記，
+                            //    它把上一通當成剛剛才發生 —— 前天借了車、途中就還了，隔兩天再打去，
+                            //    它還在接著問那台車要不要再去別家吃晚飯。
+                            //    這裡把分隔轉成 system 旁註（不是對話，模型也不會模仿成輸出格式），
+                            //    並且用故事時鐘標出那通是哪一天、距今幾天。拿不到故事日期就只寫「之前」。
+                            let _stNow = null;
+                            try { const S = win.OS_MC_STATUS; if (S && S.load) { const _st = await S.load(); _stNow = (_st && _st.date) || null; } } catch (e) {}
+                            const _whenText = (d) => {
+                                try {
+                                    const S = win.OS_MC_STATUS;
+                                    if (!d || !S || !S.fmtDate) return '';
+                                    if (!_stNow || !S.dayDiff) return S.fmtDate(d);
+                                    const n = S.dayDiff(d, _stNow);
+                                    if (n <= 0) return '今天稍早';
+                                    if (n === 1) return '昨天';
+                                    if (n === 2) return '前天';
+                                    return n + ' 天前（' + S.fmtDate(d) + '）';
+                                } catch (e) { return ''; }
+                            };
+                            const _noteOf = (msg) => {
+                                const w = _whenText(msg._storyDate);
+                                if (msg._callStart) return '（以下是' + (w || '之前') + '的一通電話）';
+                                if (msg._callEnd)   return '（那通電話到這裡結束）';
+                                if (msg._missed)    return '（' + (w || '之前') + '有一通沒接到的來電）';
+                                const t = String(msg.content || '').trim();
+                                return t ? '（' + t + '）' : '';
+                            };
+                            const rawPhoneMsgs = [];
+                            apiChat.messages.forEach(msg => {
+                                if (!msg) return;
+                                if (msg.type === 'system') {
+                                    const _note = _noteOf(msg);
+                                    if (_note) rawPhoneMsgs.push({ role: 'system', content: _note, _source: 'phone' });
+                                    return;
+                                }
+                                rawPhoneMsgs.push({
+                                    role: msg.isMe ? 'user' : 'assistant',
+                                    // 📞 通話餵乾淨口語(content)，不帶 [Chat:|With:][名] 標頭的 raw → 免 AI 學歷史去用聊天格式
+                                    content: (promptKey === 'call_voice_system') ? (msg.content || "") : (msg.raw || msg.content || ""),
+                                    _source: 'phone'
+                                });
+                            });
                             const mergedPhoneMsgs = smartMergeMessages(rawPhoneMsgs);
                             mergedPhoneMsgs.forEach(msg => {
-                                let content = sanitizeContent(msg.content); 
+                                let content = sanitizeContent(msg.content);
                                 if (content) apiMessages.push({ role: msg.role, content: content });
                             });
+                            // 收尾：講清楚上面全是過去的事，這一通／這一則是新的
+                            if (rawPhoneMsgs.length) {
+                                apiMessages.push({ role: 'system', content: (promptKey === 'call_voice_system')
+                                    ? '（以上都是以前發生過的對話與通話，不是現在。現在是新接起來的一通電話：先想清楚距離上次過了多久、這段時間裡發生過什麼，不要假設上次沒講完的話還在繼續，也不要假設上次借走、約好、拿走的東西還維持當時的狀態。）'
+                                    : '（以上都是以前的訊息，不是現在。回覆時先想清楚距離上一則過了多久，不要假設當時的情況還沒變。）' });
+                            }
                         }
                         
                         if (apiChat && !apiChat.isGroup && apiChat.linkedGroupChats && Array.isArray(apiChat.linkedGroupChats) && apiChat.linkedGroupChats.length > 0) {

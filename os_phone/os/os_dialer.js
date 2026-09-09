@@ -210,6 +210,18 @@
         const s = Math.max(0, Math.round((ms || 0) / 1000));
         return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
     }
+    // 分隔上寫的時間要是「故事裡的時間」，不是她電腦的時間 —— 劇情裡的前天、後天才有意義。
+    // 拿得到故事時鐘就用它，順便把結構化日期一起存下來，之後算「隔了幾天」要用。
+    async function _storyStamp() {
+        try {
+            const S = _w('OS_MC_STATUS');
+            if (S && S.load && S.fmtDate) {
+                const st = await S.load();
+                if (st && st.date) return { text: S.fmtDate(st.date) + (st.time ? ' ' + st.time : ''), date: st.date };
+            }
+        } catch (e) {}
+        return { text: _stamp(), date: null };
+    }
     async function _writeCallMark(id, content, extra) {
         try {
             const OS_DB = _w('OS_DB');
@@ -224,7 +236,9 @@
     async function _markCallStart() {
         if (!_curCall || _curCall.wroteStart) return;
         _curCall.wroteStart = true;
-        await _writeCallMark(_curCall.id, '通話開始 · ' + _stamp(_curCall.startedAt), { _callStart: true });
+        const sp = await _storyStamp();
+        _curCall.stampText = sp.text;
+        await _writeCallMark(_curCall.id, '通話開始 · ' + sp.text, { _callStart: true, _storyDate: sp.date });
     }
     // 掛斷：有接通過才寫結束與時長，沒講到話就不留痕跡
     async function _hangUp(contact) {
@@ -351,7 +365,8 @@
             if (OS_DB && OS_DB.getApiChat && OS_DB.saveApiChat) {
                 const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
                 if (!Array.isArray(rec.messages)) rec.messages = [];
-                rec.messages.push({ type: 'system', content: '未接聽', _missed: true, timestamp: Date.now() });
+                const spM = await _storyStamp();
+                rec.messages.push({ type: 'system', content: '未接聽 · ' + spM.text, _missed: true, _storyDate: spM.date, timestamp: Date.now() });
                 // 不接但補一句：當成他傳來的訊息寫進同一份記錄，微信那邊也看得到、標成未讀
                 if (note) {
                     rec.messages.push({ type: 'msg', isMe: false, content: note, sender: contact.name, senderName: contact.name, timestamp: Date.now(), _afterMissed: true });
@@ -552,7 +567,7 @@
                         _enableSay(true);
                         // 接通了才算一通：寫進記錄，畫面上也補一條，第一句就落在分隔線下面
                         await _markCallStart();
-                        _appendCallMark('通話開始 · ' + _stamp(_curCall && _curCall.startedAt));
+                        _appendCallMark('通話開始 · ' + ((_curCall && _curCall.stampText) || _stamp()));
                     }
                     // 講電話不是一問一答：一次可以連著講好幾句（一句一行），也可以講完自己掛。
                     const said = _splitSpeech(reply);
