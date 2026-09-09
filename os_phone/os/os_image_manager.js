@@ -478,7 +478,7 @@
                     // 沒額度／被限流要講得很清楚：她會以為是內容被擋，其實是錢用完了。
                     const _quota = /insufficient_quota|billing_hard_limit|exceeded your current quota/i.test(text);
                     const e = new Error(_blocked
-                        ? '這張的內容被站方擋掉了'
+                        ? '這張的內容被站方擋掉了（站方會記重複違規，常出現就回頭調插圖落點指令）'
                         : _quota
                             ? '生圖的額度用完了（或是這個月的上限到了），去 OpenAI 的帳單頁看一下。'
                             : (resp.status + ' ' + text.slice(0, 300)));
@@ -521,11 +521,11 @@
                 const msg = (e && e.message) || String(e);
                 console.error('[ImageManager] ❌ 自訂接口生圖失敗:', msg);
                 // 她的 console 是唯讀的，錯誤要彈到畫面上才看得到（跟 NAI 那條同款）。
-                // 但「內容被擋」不彈紅框：插圖是點綴不是必要，被擋就是這張沒有；看故事看到一半
-                // 跳一個九秒的錯誤才是真的干擾。設定壞了、沒額度那些照舊要吵——不講的話她會一直等圖。
+                // 內容被擋也要彈：一直被擋代表落點指令沒擋住，而站方會把重複違規記在帳號上，
+                // 她要看得到次數才知道該回頭調指令。真正的防線在指令那邊，紅框只負責讓她知道。
                 try {
                     const _tr = (win.toastr || window.toastr || (window.parent && window.parent.toastr));
-                    if (_tr && !e.blocked) _tr.error(msg, '自訂接口生圖失敗', { timeOut: 9000 });
+                    if (_tr) _tr.error(msg, '自訂接口生圖失敗', { timeOut: 9000 });
                 } catch (_) {}
                 this._lastCustomApiError = { msg: msg, at: Date.now(), blocked: !!e.blocked };
                 return null;   // 不偷偷換來源
