@@ -414,6 +414,9 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
     let _landedDirect = false; // (保留兼容) launch 仍會設；返回鈕已統一直接退出，不再讀它
     let chatMessages = [];
     let _vnPanelType = '純展示';   // 面板類型：純展示 / 純應用 / 共用（開頭就選，注入生成訊息）
+    let _pvLastJsError = null;     // 預覽層跑面板 js 時抓到的同步錯誤（自檢引擎 os_studio_selfcheck.js 過橋讀）
+    let _lastParseError = null;    // 最近一次 <json> 解析失敗的原因（自檢用來叫模型重出）
+    let _autoFixRound = 0;         // 自檢自動修正輪數：她每送一次歸零，程式最多自動追加一輪，不無限循環
     let currentParsedData = null;
     let _studioAbortCtrl = null;
     let pendingImages = []; // [{ dataUrl, mime, sizeKB }] — 用戶選好還沒發送的圖
@@ -1982,11 +1985,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return segs.length;
     }
 
-    async function handleSend() {
+    // autoText 是字串＝自檢引擎自動追加的修正輪（不讀輸入框、泡泡標成自動檢查）；按鈕點來的是事件物件，照舊讀輸入框
+    async function handleSend(autoText) {
         const inputEl = document.getElementById('studio-input');
-        let text = inputEl.value.trim();
+        const isAuto = (typeof autoText === 'string');
+        if (!isAuto) _autoFixRound = 0;   // 她親手送＝新一輪，自動修正額度歸零
+        let text = isAuto ? autoText.trim() : inputEl.value.trim();
         // 選起來的元素 chip 接在使用者文字後面一行送出（VN 組件模式才有這排），送完 chip 自動清掉
-        if (currentMode === 'vn_ui') {
+        if (currentMode === 'vn_ui' && !isAuto) {
             const chipLine = _studioTakeSelectedChips();
             if (chipLine) { text = text ? (text + '\n' + chipLine) : chipLine; try { renderStudioChips(); } catch (e) {} }
         }
@@ -2009,7 +2015,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         // === VN 模式：已有面板時，走 diff-based refine（AI 給 find/replace pair，前端套用） ===
         // 用戶完全不接觸技術術語；AI 沒指定的原文物理上動不到 → 真正做到「只改改的、保留沒改的」
         if (currentMode === 'vn_ui' && currentParsedData && !Array.isArray(currentParsedData)) {
-            return handleDiffVNRefine(text);
+            return handleDiffVNRefine(text, isAuto);
         }
 
         // full 生成路徑（只剩「還沒有 currentParsedData 的首次生成」會到這；大改已由 diff 路徑的整包 <json> 處理）
@@ -2019,8 +2025,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         }
 
         const sendBtn = document.getElementById('studio-send-btn');
-        inputEl.value = '';
-        inputEl.style.height = '50px';
+        if (!isAuto) { inputEl.value = ''; inputEl.style.height = '50px'; }   // 自動輪不動她打到一半的字
         inputEl.disabled = true;
         sendBtn.disabled = false;
         sendBtn.innerText = '⏹ 停止';
@@ -2034,6 +2039,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         // 帶圖時 content 變陣列；不帶圖時還是字串（向後兼容既有清洗 / parse 邏輯）
         const userContent = buildUserMessageContent(genText, pendingImages);
         const userMsg = { role: 'user', content: userContent };
+        if (isAuto) userMsg._auto = true;   // 自檢自動追加的修正輪：泡泡畫成「自動檢查」而不是她說的話
         // 標記是否來自選項按鈕點擊（重整後可恢復「已選展示」狀態）
         if (window.__nextUserMsgFromChoice) {
             userMsg._fromChoice = true;
@@ -2171,8 +2177,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         chatMessages.push({ role: 'assistant', content: finalText });
                         _studioSave(lockedChatId);
                         appendSegmentBubbles(container, finalText);
-                        extractAndParseJson(finalText);
+                        const parsedOk = extractAndParseJson(finalText);
                         resolve();
+                        // 做完自己驗一輪（VN 組件模式）：預覽畫出來後檢查，有問題自動追加一輪修正
+                        if (currentMode === 'vn_ui') _studioAfterGenerate(finalText, parsedOk);
                     },
                     reject,
                     { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
@@ -2194,6 +2202,75 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             sendBtn.onclick = handleSend; // 恢復發送功能
             inputEl.focus();
         }
+    }
+
+    // ── 做完自己驗一輪（VN 組件模式）─────────────────────────────
+    // 模型吐完面板、預覽畫出來之後，交給自檢引擎（os_studio_selfcheck.js）跑一組檢查。
+    // 有問題：自動再送一通（走原本的 diff 路徑；沒面板時走整包重出），泡泡畫成「自動檢查」。
+    // 最多自動追加一輪：修完再驗一次，還有剩就寫在聊天裡告訴她，不再自己跑第二輪。
+    // 她看到的還是一次發送、一個結果；背後最多兩通。
+    function _studioAfterGenerate(finalText, parsedOk) {
+        const CK = win.OS_STUDIO_CHECK;
+        if (!CK || currentMode !== 'vn_ui') return;
+        const isAutoRound = _autoFixRound > 0;
+        const chatIdAtStart = getChatSessionId();
+        const stillHere = () => (currentMode === 'vn_ui' && getChatSessionId() === chatIdAtStart && !_studioAbortCtrl);
+
+        // 有 <json> 卻解析不了：叫模型重出一份完整的（沒 <json> 的回覆是它在講話，不算錯）
+        if (!parsedOk) {
+            if (!/<json>/i.test(String(finalText || ''))) return;
+            const why = _lastParseError || '格式不合法';
+            if (isAutoRound) { _autoFixRound = 0; _studioNoteBubble('自動檢查：重出了一次還是解析不了（' + why + '）。你可以叫它「重新輸出完整 JSON」。'); return; }
+            _autoFixRound = 1;
+            _studioNoteBubble('自動檢查：回覆裡的面板資料解析不了（' + why + '），正在叫它重出一份。');
+            setTimeout(() => { if (stillHere()) handleSend('上一則回覆裡的 <json> 無法解析（JSON.parse 錯誤：' + why + '）。請重新輸出一份完整、合法的 <json>，內容照原本的設計，不要改設計。'); }, 80);
+            return;
+        }
+
+        CK.run({ data: currentParsedData, panelType: _vnPanelType, previewRoot: document.getElementById('studio-preview-main') })
+            .then(rep => {
+                if (!stillHere()) return;
+                const issues = (rep && rep.issues) || [];
+                if (issues.length === 0) {
+                    if (isAutoRound) _studioNoteBubble('自動檢查：修好了，這一輪通過。');
+                    else _studioCheckOkLine();
+                    _autoFixRound = 0;
+                    return;
+                }
+                if (isAutoRound) {
+                    _autoFixRound = 0;
+                    _studioNoteBubble('自動檢查：修過一輪還剩下這些，你可以直接叫它改：\n' + issues.map((it, i) => (i + 1) + '. ' + it.msg).join('\n'));
+                    return;
+                }
+                _autoFixRound = 1;
+                console.log('[Studio] 🔍 自檢發現 ' + issues.length + ' 個問題，自動追加一輪修正', issues);
+                handleSend(CK.describe(issues));
+            })
+            .catch(e => console.warn('[Studio] 自檢失敗:', e));
+    }
+
+    // 自檢的說明泡泡：進聊天歷史（重整還在、模型下一輪也看得到），畫成檢查單樣式
+    function _studioNoteBubble(text) {
+        const container = document.getElementById('studio-chat-history');
+        chatMessages.push({ role: 'assistant', content: text, _note: true });
+        _studioSave(getChatSessionId());
+        if (!container) return;
+        const b = document.createElement('div');
+        b.className = 'studio-bubble auto studio-bubble-enter';
+        b.textContent = text;
+        container.appendChild(b);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // 首次就通過：只給一行小字，不進歷史
+    function _studioCheckOkLine() {
+        const container = document.getElementById('studio-chat-history');
+        if (!container) return;
+        const line = document.createElement('div');
+        line.className = 'studio-check-ok';
+        line.innerHTML = '<i class="fa-solid fa-check"></i> 自動檢查通過';
+        container.appendChild(line);
+        container.scrollTop = container.scrollHeight;
     }
 
     // 渲染錯誤泡泡 + 重試按鈕
@@ -2253,6 +2330,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         chatMessages.splice(lastUserIdx, 1);
         // 砍錯誤泡泡
         errBubble.remove();
+        if (lastUserMsg._auto) { _autoFixRound = 1; handleSend(textOnly); return; }   // 重試的是自檢那輪：不填輸入框、身分照舊、額度照舊
         // 填回輸入框 + 重新發送
         const inputEl = document.getElementById('studio-input');
         if (inputEl) {
@@ -2283,7 +2361,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             }
             if (msg.role === 'user') {
                 const bubble = document.createElement('div');
-                bubble.className = 'studio-bubble user';
+                bubble.className = msg._auto ? 'studio-bubble auto' : 'studio-bubble user';   // 自檢自動追加的修正輪：畫成檢查單，不冒充她說的話
                 // 兼容 multimodal content（陣列）→ 文字 + 圖片縮圖一起渲染
                 if (Array.isArray(msg.content)) {
                     const textPart = msg.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n');
@@ -2308,6 +2386,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 } else {
                     bubble.textContent = msg.content || '';
                 }
+                container.appendChild(bubble);
+            } else if (msg._note) {
+                // 自檢的說明泡泡：檢查單樣式、不走 segment 解析
+                const bubble = document.createElement('div');
+                bubble.className = 'studio-bubble auto';
+                bubble.textContent = messageContentToString(msg.content);
                 container.appendChild(bubble);
             } else {
                 // AI 訊息：解析成多泡泡，歷史重建不帶入場動畫
@@ -2384,6 +2468,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 // 反引號在 JSON 本就不用跳脫；奇數個反斜線+反引號＝最後那個是誤escape→補一個反斜線(parse 後得到合法 JS 逸出反引號 \`)。
                 cleanStr = cleanStr.replace(/(\\+)`/g, (m, s) => (s.length % 2 ? s + '\\' + '`' : m));
                 const parsed = JSON.parse(cleanStr);
+                _lastParseError = null;
 
                 // 🔪 VN 模式：保留 history（本地 metadata，AI 不該動到）
                 if (currentMode === 'vn_ui' && currentParsedData && currentParsedData.history && !Array.isArray(parsed)) {
@@ -2396,6 +2481,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 renderPreviewPanel();
                 return true;
             } catch (e) {
+                _lastParseError = String((e && e.message) || e);
                 console.warn('[Studio] JSON 解析失敗，這傢伙可能連括號都沒閉合：', e);
                 return false;
             }
@@ -3020,10 +3106,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // 主聊天送出鏈薄呼叫層（handleDiffVNRefine/_retryLastDiffRefine）留在下面、不搬。
     // ────────────────────────────────────────────────────────────────
 
-    async function handleDiffVNRefine(refineMsg) {
+    async function handleDiffVNRefine(refineMsg, isAuto) {
         const inputEl = document.getElementById('studio-input');
         const sendBtn = document.getElementById('studio-send-btn');
         const container = document.getElementById('studio-chat-history');
+        isAuto = !!isAuto;   // 自檢引擎自動追加的修正輪
 
         // 診斷 log：發送 diff 前印當前面板狀態（重整 / cache miss 的問題可從這裡看出來）
         const _d = currentParsedData || {};
@@ -3033,8 +3120,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         win.OS_STUDIO_DIFF?.snapshotCurrentVNState(refineMsg, 'diff');   // 拆檔：os_studio_diff_engine.js
         win.OS_STUDIO_DIFF?.renderVNHistoryArea();
 
-        inputEl.value = '';
-        inputEl.style.height = '50px';
+        if (!isAuto) { inputEl.value = ''; inputEl.style.height = '50px'; }   // 自動輪不動她打到一半的字
         inputEl.disabled = true;
         sendBtn.disabled = false;
         sendBtn.innerText = '⏹ 停止';
@@ -3044,7 +3130,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         // 帶圖時 content 變陣列；同時把圖也塞給 AI 看
         const userContent = buildUserMessageContent(refineMsg, pendingImages);
         const imagesForAI = pendingImages.slice(); // diff prompt 是單條 user message，圖片直接帶上
-        chatMessages.push({ role: 'user', content: userContent });
+        const _userMsg = { role: 'user', content: userContent };
+        if (isAuto) _userMsg._auto = true;
+        chatMessages.push(_userMsg);
         pendingImages = [];
         renderPendingImages();
         _studioSave(getChatSessionId());
@@ -3128,6 +3216,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                                 container.appendChild(fb);
                                 container.scrollTop = container.scrollHeight;
                                 resolve();
+                                _studioAfterGenerate(finalText, true);   // 整包重做完也驗一輪
                                 return;
                             }
                             // 整包解析失敗 → 落回下面的 diff 流程當保底
@@ -3159,6 +3248,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         container.scrollTop = container.scrollHeight;
 
                         resolve();
+                        // 修補套上去了才驗；套失敗（too_big／find 不唯一）面板沒動，沒東西好驗
+                        if (Array.isArray(results) && !summary.failed) _studioAfterGenerate(null, true);
                     },
                     reject,
                     { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
@@ -3199,6 +3290,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         }
         chatMessages.splice(lastUserIdx, 1);
         errBubble.remove();
+        if (lastUserMsg._auto) { _autoFixRound = 1; handleDiffVNRefine(textOnly, true); return; }   // 重試的是自檢那輪：身分照舊、額度照舊
         handleDiffVNRefine(textOnly);
     }
 
@@ -3542,8 +3634,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         window.__IS_PREVIEW = true;
                         const st = _buildPreviewSt(lines);
                         const runMicroApp = new Function('container', 'lines', 'onComplete', 'st', safeJs);
+                        _pvLastJsError = null;
                         runMicroApp(container, lines, onComplete, st);
                     } catch (e) {
+                        _pvLastJsError = String((e && e.message) || e);
                         console.warn('[Studio 預覽錯誤] JS 執行失敗:', e);
                         const errBox = document.createElement('div');
                         errBox.style.cssText = 'color:#fc8181; font-size:12px; margin-top:10px; padding:10px; background:rgba(252,129,129,0.1); border-radius: 4px;';
@@ -3597,6 +3691,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             renderPreviewPanel,
             get currentParsedData() { return currentParsedData; },   // 可變 let → getter 即時取
             set activePreviewData(v) { activePreviewData = v; },     // 可變 let → setter 回寫（restoreFromVNSnapshot 用）
+            // ↓ 自檢引擎（os_studio_selfcheck.js）用：預覽層跑面板 js 抓到的同步錯誤
+            get lastPreviewJsError() { return _pvLastJsError; },
         },
         // 給「應用工坊 · 我的應用」的管理按鈕用：靠 srcTplId 操作該 app 的可編輯底稿
         openEditApp: async function (tplId, c) {

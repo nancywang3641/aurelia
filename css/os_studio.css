@@ -185,6 +185,11 @@
         .studio-bubble { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; position: relative; }
         .studio-bubble.user { align-self: flex-end; background: rgba(210,215,235,0.3); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-bottom-right-radius: 2px; }
         .studio-bubble.ai { align-self: flex-start; background: rgba(228,232,245,0.65); border: 1px solid rgba(26,28,40,0.12); color: #1A1C28; border-bottom-left-radius: 2px; }
+        /* 自動檢查：模型做完、程式驗過再追加的那一輪。畫成檢查單，跟她說的話、模型的回話都分開 */
+        .studio-bubble.auto { align-self: stretch; max-width: 100%; background: rgba(46,139,87,0.07); border: 1px dashed rgba(46,139,87,0.45); color: rgba(26,28,40,0.82); font-size: 12px; }
+        .studio-bubble.auto::before { content: '自動檢查'; display: block; font-size: 11px; font-weight: bold; letter-spacing: 1px; color: rgba(46,139,87,0.95); margin-bottom: 4px; }
+        .studio-check-ok { align-self: flex-start; font-size: 11px; color: rgba(46,139,87,0.85); padding: 0 6px; margin-top: -8px; }
+        .studio-check-ok i { margin-right: 4px; }
         .studio-input-wrap { padding: 10px 15px 0; background: rgba(228,232,245,0.96); border-top: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
         .studio-pending-images { display: none; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
         .studio-pending-images.active { display: flex; }
@@ -536,6 +541,8 @@ html:has(.mode-404) .studio-right-header { background: rgba(0,15,5,0.80) !import
 html:has(.mode-404) .studio-bubble { background: rgba(0,18,0,0.80) !important; border: 1px solid rgba(0,255,65,0.20) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
 html:has(.mode-404) .studio-bubble.ai { background: rgba(0,15,5,0.82) !important; border-color: rgba(0,255,65,0.25) !important; }
 html:has(.mode-404) .studio-bubble.user { background: rgba(0,40,10,0.78) !important; border-color: rgba(0,255,65,0.30) !important; }
+html:has(.mode-404) .studio-bubble.auto { background: rgba(0,25,5,0.80) !important; border-color: rgba(0,255,65,0.35) !important; color: #b8ffcb !important; }
+html:has(.mode-404) .studio-bubble.auto::before, html:has(.mode-404) .studio-check-ok { color: #00ff41 !important; }
 html:has(.mode-404) .studio-summary-bubble { background: rgba(0,25,5,0.80) !important; border-color: rgba(0,255,65,0.30) !important; color: #b8ffcb !important; }
 html:has(.mode-404) .studio-error-bubble { background: rgba(40,5,5,0.85) !important; border-color: rgba(255,128,128,0.40) !important; color: #ff8080 !important; }
 html:has(.mode-404) .studio-error-msg { color: #ff8080 !important; }
