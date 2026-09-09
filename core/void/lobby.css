@@ -953,15 +953,20 @@
    ========================================================= */
 @media (max-width:760px) {
 
-    /* 面板：貼底對齊（底邊剛好在輸入框上方），上方留給立繪與泡泡。
-       top+bottom 一起給＝高度固定，不隨內容縮。 */
+    /* 面板：上到頂部那排工具鈕下面、下到輸入列上面，中間全部給面板。
+       top+bottom 一起給＝高度固定，不隨內容縮。
+       🚨 這裡原本是 top:34%，把上面三分之一留給立繪與台詞泡泡。實際在手機上那塊多半是空的
+          （視差世界根本沒有立繪，而開面板時本來就先 endTalk 收掉對話），等於三分之一螢幕拿去放背景。
+          她的原話：「手機空間本來就小，又不全屏也太難受了」。
+          泡泡沒有因此消失——它的 z-index 3400 比面板的 3350 高，NPC 真的說話時會浮在面板上，
+          說完就收；輸入列也照樣留在最下面可以打字。52px＝頂部那排鈕（top:10 高 34）再讓 8px。 */
     .lobby-left.void-dock-open .oc-win,
     .lobby-left.void-dock-open .wg-win,
     .lobby-left.void-dock-open .lstage-tarotwin,
     .lobby-left.void-dock-open .lstage-wswin,
     .lobby-left.void-dock-open #chaos-modal-root.chaos-dock,
     .lobby-left.void-dock-open .os-pt-dock {
-        top:34%; bottom:74px; left:10px; right:10px; width:auto; max-width:none;
+        top:8px; bottom:74px; left:10px; right:10px; width:auto; max-width:none;
         transform:none; max-height:none; min-height:0;
         border-radius:20px;
         /* 🚨 height:auto 一定要給：占卜(.lstage-tarotwin)與造物工坊(.lstage-wswin)自己寫死
@@ -1056,7 +1061,7 @@
     .lobby-left.void-dock-open.lstage-dlg-hidden .wg-win,
     .lobby-left.void-dock-open.lstage-dlg-hidden .lstage-tarotwin,
     .lobby-left.void-dock-open.lstage-dlg-hidden .lstage-wswin,
-    .lobby-left.void-dock-open.lstage-dlg-hidden .os-pt-dock { top:12%; bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
+    .lobby-left.void-dock-open.lstage-dlg-hidden .os-pt-dock { top:8px; bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
 
     /* 🔮🎩 占卜與造物工坊：面板開著時手機不放立繪。
        手機的停靠面板是「對話」與「面板」兩態分開的（走近瀅瀅／愛麗絲先出岔路，選了面板
