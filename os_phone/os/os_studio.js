@@ -67,6 +67,8 @@
                             <button class="studio-type active" data-type="純展示" title="只把劇情資料漂亮顯示出來，不生成">純展示</button>
                             <button class="studio-type" data-type="純應用" title="會用 AI 生成內容/圖的功能面板（按一下即生）">純應用</button>
                             <button class="studio-type" data-type="共用" title="既展示資料、又能生成">共用</button>
+                            <!-- 誰來做：主接口／宿舍住戶。只有宿舍接上橋時才出現（沒小機的人看不到這格）-->
+                            <span class="studio-iface-wrap" id="studio-iface-wrap" hidden><span class="studio-type-label">誰來做</span><select class="studio-iface" id="studio-iface" title="主接口是設置裡的主模型；宿舍住戶是你電腦上的小機，做得慢但有工具"></select></span>
                         </div>
 
                         <!-- ⚡ 組件快捷：常用 UI 話術 chip，點一下塞進輸入框可改再送（只 vn_ui 顯示）-->
@@ -417,6 +419,7 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
     let _pvLastJsError = null;     // 預覽層跑面板 js 時抓到的同步錯誤（自檢引擎 os_studio_selfcheck.js 過橋讀）
     let _lastParseError = null;    // 最近一次 <json> 解析失敗的原因（自檢用來叫模型重出）
     let _autoFixRound = 0;         // 自檢自動修正輪數：她每送一次歸零，程式最多自動追加一輪，不無限循環
+    let _vnInterface = (function () { try { return localStorage.getItem('studio_vn_interface') || 'main'; } catch (e) { return 'main'; } })();   // 誰來做：'main'＝主接口；其他＝宿舍住戶 id
     let currentParsedData = null;
     let _studioAbortCtrl = null;
     let pendingImages = []; // [{ dataUrl, mime, sizeKB }] — 用戶選好還沒發送的圖
@@ -719,6 +722,10 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             _vnPanelType = b.dataset.type;
             document.querySelectorAll('#studio-type-row .studio-type').forEach(x => x.classList.toggle('active', x === b));
         });
+        // 誰來做（主接口／宿舍住戶）
+        renderStudioIface();
+        const ifaceSel = document.getElementById('studio-iface');
+        if (ifaceSel) ifaceSel.onchange = () => { _vnInterface = ifaceSel.value || 'main'; try { localStorage.setItem('studio_vn_interface', _vnInterface); } catch (e) {} };
         // 自適應高度：先 reset height=auto 讓瀏覽器算對 scrollHeight，再 set 新高（min 50 / max 200，超出走內部 scroll）
         const autosizeTextarea = () => {
             inputEl.style.height = 'auto';
@@ -2152,7 +2159,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const useRealStream = !pureConfig.useSystemApi && !!pureConfig.url && !!pureConfig.key;
 
             await new Promise((resolve, reject) => {
-                apiEngine.chat(apiPayload, pureConfig,
+                _studioChat(apiPayload, pureConfig,
                     () => {
                         if (!aiBubble._typingSet) {
                             aiBubble._typingSet = true;
@@ -2183,7 +2190,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         if (currentMode === 'vn_ui') _studioAfterGenerate(finalText, parsedOk);
                     },
                     reject,
-                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
+                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }, aiBubble   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
                 );
             });
 
@@ -2202,6 +2209,81 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             sendBtn.onclick = handleSend; // 恢復發送功能
             inputEl.focus();
         }
+    }
+
+    // ── 誰來做：主接口／宿舍住戶 ─────────────────────────────────
+    // 宿舍（claude-codex-room 擴展）接上橋之後，創作室多一格「誰來做」：主接口照舊走設置裡的主模型；
+    // 選宿舍住戶就把同一份對話交給她電腦上的小機（透過房間現成的 ClaudeTerminal.sendRaw：指定住戶、
+    // 他自己的家當工作目錄、串流、取消）。回來的還是一包 <json>，後面解析／預覽／diff／自檢全部照舊。
+    // 沒裝房間、沒設橋的人：這格根本不出現，一切照原本的 API 路徑。
+    function _studioCT() { const ct = win.ClaudeTerminal || window.ClaudeTerminal; return (ct && typeof ct.sendRaw === 'function' && typeof ct.listResidents === 'function') ? ct : null; }
+    function _studioIfaceAvailable() {
+        const ct = _studioCT(); if (!ct) return false;
+        try { const c = ct.getConfig && ct.getConfig(); return !!(c && c.url && c.key); } catch (e) { return false; }
+    }
+    // 能接活的住戶：claude／codex（有工具、有自己的家）；只聊天的分身沒工具、蘇景明（CodeWhale）丟 system，都不列
+    function _studioResidents() {
+        const ct = _studioCT(); if (!ct) return [];
+        try { return (ct.listResidents() || []).filter(r => r && (r.provider === 'claude' || r.provider === 'codex') && !r.chatOnly); } catch (e) { return []; }
+    }
+    function _studioIfaceResident() {
+        if (_vnInterface === 'main') return null;
+        return _studioResidents().find(r => r.id === _vnInterface) || null;
+    }
+    function renderStudioIface() {
+        const wrap = document.getElementById('studio-iface-wrap');
+        const sel = document.getElementById('studio-iface');
+        if (!wrap || !sel) return;
+        const list = _studioIfaceAvailable() ? _studioResidents() : [];
+        if (list.length === 0) { wrap.hidden = true; _vnInterface = 'main'; return; }
+        if (_vnInterface !== 'main' && !list.some(r => r.id === _vnInterface)) _vnInterface = 'main';   // 住戶被刪了就退回主接口
+        sel.innerHTML = '<option value="main">主接口</option>' + list.map(r => '<option value="' + _sgcEsc(r.id) + '">宿舍 · ' + _sgcEsc(r.name || r.id) + '</option>').join('');
+        sel.value = _vnInterface;
+        wrap.hidden = false;
+    }
+    // 統一出口：主接口走 OS_API.chat；住戶走 sendRaw。介面跟 OS_API.chat 一樣（onChunk／onFinish／onError／options），呼叫端不用分。
+    function _studioChat(apiPayload, pureConfig, onChunk, onFinish, onError, options, aiBubble) {
+        const r = _studioIfaceResident();
+        const ct = _studioCT();
+        if (!r || !ct) {
+            const apiEngine = win.OS_API || window.OS_API;
+            return apiEngine.chat(apiPayload, pureConfig, onChunk, onFinish, onError, options);
+        }
+        // 小機那邊吃純文字：帶圖的訊息只留文字，圖丟掉並提醒一次
+        let dropped = 0;
+        const messages = apiPayload.map(m => {
+            if (Array.isArray(m.content)) { if (m.content.some(p => p && p.type === 'image_url')) dropped++; return { role: m.role, content: messageContentToString(m.content) }; }
+            return { role: m.role, content: String(m.content == null ? '' : m.content) };
+        });
+        if (dropped) _studioToast('附圖送不到宿舍住戶那邊，這次只送了文字', 'warning', '誰來做');
+        messages.unshift({ role: 'system', content: '這件事是在使用者自己的電腦上交給你做的，你有工具可以用；面板的規格全在後面的說明裡，照它做，做完只要把 <json> 交回來，不用另外存檔。' });
+        const status = _studioResidentStatus(aiBubble, r.name || r.id);
+        let home = ''; try { home = ct.residentHome ? (ct.residentHome(r.id) || '') : ''; } catch (e) {}
+        ct.sendRaw({
+            provider: r.provider,
+            model: r.modelId || undefined,
+            messages,
+            cwd: home || undefined,
+            signal: options && options.signal,
+            onProgress: (ev) => { try { if (ev && ev.type === 'tool_use') status.tool(ev.tool); if (onChunk) onChunk(); } catch (e) {} }
+        }).then(res => { status.stop(); onFinish((res && res.reply) || ''); })
+          .catch(err => { status.stop(); onError(err); });
+    }
+    // 住戶做事時泡泡下面那行：誰在做、幾秒了、正在用什麼工具
+    function _studioResidentStatus(aiBubble, who) {
+        const line = document.createElement('div');
+        line.className = 'studio-resident-status';
+        if (aiBubble) aiBubble.appendChild(line);
+        const t0 = Date.now();
+        let toolText = '';
+        const TOOL_CN = { Read: '讀檔', Write: '寫檔', Edit: '改檔', MultiEdit: '改檔', Bash: '跑指令', Grep: '找東西', Glob: '找東西', WebFetch: '查資料', WebSearch: '查資料' };
+        const paint = () => { line.textContent = who + ' 在做 · ' + Math.round((Date.now() - t0) / 1000) + ' 秒' + (toolText ? ' · ' + toolText : ''); };
+        paint();
+        const timer = setInterval(paint, 1000);
+        return {
+            tool(t) { const name = (t && (t.name || t.tool || t.type)) || ''; toolText = '正在' + (TOOL_CN[name] || '用工具'); paint(); },
+            stop() { clearInterval(timer); try { line.remove(); } catch (e) {} }
+        };
     }
 
     // ── 做完自己驗一輪（VN 組件模式）─────────────────────────────
@@ -3170,7 +3252,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const useRealStream = !pureConfig.useSystemApi && !!pureConfig.url && !!pureConfig.key;
 
             await new Promise((resolve, reject) => {
-                apiEngine.chat(apiPayload, pureConfig,
+                _studioChat(apiPayload, pureConfig,
                     () => {
                         if (!aiBubble._typingSet) {
                             aiBubble._typingSet = true;
@@ -3252,7 +3334,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         if (Array.isArray(results) && !summary.failed) _studioAfterGenerate(null, true);
                     },
                     reject,
-                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
+                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }, aiBubble   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
                 );
             });
         } catch (err) {
@@ -3677,6 +3759,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ===== 預設模板安裝器 =====
     win.OS_STUDIO = {
         launch, attachVpScaler: _attachVpScaler,
+        refreshIface: renderStudioIface,   // 宿舍（房間擴展）是非同步載進來的，載完可以叫這支把「誰來做」那格補出來
         // 展廳拆檔（os_studio_vn_gallery.js）：對外契約不變，懶委派到 win.OS_STUDIO_VC
         openVnComponents: function (c) { return win.OS_STUDIO_VC?.openVnComponents(c); },
         // ── _b 橋：專供拆檔子模組（os_studio_worldbook.js / os_studio_persona.js / os_studio_vn_gallery.js / os_studio_diff_engine.js）取用核心內部工具，外部勿碰 ──
