@@ -1005,31 +1005,6 @@
         }
     }
 
-    // 大總結存檔後：角色表 → 通訊錄（零 API；身分欄當個性簽名、頭像走 VN 頭像庫照名字對）
-    function _storyImportSummaryContacts(rows, headerLine) {
-        try {
-            if (!Array.isArray(rows) || !rows.length || !win.WX_CONTACTS) return 0;
-            const heads = String(headerLine || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
-            let bioIdx = -1;
-            heads.forEach(function (h, i) { if (bioIdx < 0 && /身分|身份|職業|职业|定位/.test(h)) bioIdx = i; });
-            let n = 0;
-            rows.forEach(function (r) {
-                const name = String((r && r.name) || '').trim();
-                if (!name || name.length > 12) return;
-                if (/路人|未具名|不明|某[人男女]|眾$|们$|們$|\?|？/.test(name)) return;
-                const cols = String((r && r.row) || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
-                const bio = bioIdx >= 0 && cols[bioIdx] ? cols[bioIdx].slice(0, 40) : '';
-                const id = win.WX_CONTACTS.getOrCreateContactID(name, 'user', true);
-                if (!id || id === 'User') return;
-                if (bio) win.WX_CONTACTS.addContactToStorage({ id: id, name: name, desc: bio });
-                _storyEnsureContactChat(id, name, bio);
-                n++;
-            });
-            if (n && APP_CONTAINER && !GLOBAL_ACTIVE_ID) { try { win.wxApp.render(); } catch (e) {} }
-            console.log('[wx 跑團同步] 大總結角色表進通訊錄：' + n + ' 位');
-            return n;
-        } catch (e) { console.warn('[wx 跑團同步] 角色表進通訊錄失敗:', e); return 0; }
-    }
 
     function handleNewMessages(chats, messageId) {
         const configStr = localStorage.getItem('wx_phone_api_config');
@@ -1259,7 +1234,6 @@
 
         // ── 發現 tab：跑團同步（正文 <chat> 區塊 → 聊天列表 + 通訊錄）──
         storySync: function() { _storySyncDebounced(0); },
-        importSummaryContacts: function(rows, header) { return _storyImportSummaryContacts(rows, header); },
 
         // 🧹 AI 整理：叫副模型判斷「哪些房間其實是同一間」(先前上下文壓縮→同房被編多個亂 id)，
         //    產出「舊id→統一id」對應表存起來；不動歷史正文，同步時自動套用。
