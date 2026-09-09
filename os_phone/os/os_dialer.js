@@ -405,6 +405,10 @@
                         const _ref = _refusalOf(reply);
                         if (_ref) { restore(); _noAnswer(contact, _ref.note); return; }
                         await _inCall(contact, true);
+                        // 🚨 done() 在上面就跑過了，但它那時通話畫面還不存在（響鈴階段還在撥號畫面），
+                        //    解鎖輸入框那一下等於打在空氣上。畫面建好之後要再解一次，
+                        //    不然對方明明回話了，輸入框卻是鎖的。
+                        _enableSay(true);
                     }
                     _appendCallBubble(false, reply, contact.name);
                     _speak(contact, reply);                   // 念出來（當前開哪個引擎就用哪個）
