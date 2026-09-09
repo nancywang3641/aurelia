@@ -77,7 +77,7 @@
             imgSourceSynced: true,            // 背景來源是否同步頭像（true＝沿用頭像接口）
             // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API（送 JSON 回 JSON）。
             //    三格全部自己填，不內建站台清單——每個站支援的型號都不一樣，清單只會過期。
-            customApi: { url: '', apiKey: '', model: '' },
+            customApi: { url: '', apiKey: '', model: '', quality: 'medium' },
             pollinations: {
                 url: 'https://gen.pollinations.ai/image',
                 apiKey: '',
@@ -1567,6 +1567,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <input class="set-input" id="img-capi-model" type="text" placeholder="例：nano-banana-2" value="${(imgConfig.customApi?.model || '').replace(/"/g,'&quot;')}">
                                     </div>
                                     <div class="field-row">
+                                        <div class="set-label" title="只有支援分檔的型號會照這個送，其他站一律不送、由站方自己決定。">畫質</div>
+                                        <select class="set-select" id="img-capi-quality">
+                                            <option value="low" ${(imgConfig.customApi?.quality || 'medium') === 'low' ? 'selected' : ''}>低</option>
+                                            <option value="medium" ${(imgConfig.customApi?.quality || 'medium') === 'medium' ? 'selected' : ''}>中</option>
+                                            <option value="high" ${(imgConfig.customApi?.quality || 'medium') === 'high' ? 'selected' : ''}>高</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-row">
                                         <button class="set-btn" id="img-capi-test" type="button">🔌 測試</button>
                                         <div class="set-desc" id="img-capi-status"></div>
                                     </div>
@@ -2552,7 +2560,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const prev = IM._lastCustomApiError; IM._lastCustomApiError = null;
             try {
                 const out = await IM._genCustomApi('a cat sitting on a wooden table', 'bg',
-                    { width: tw, height: th, customApi: { url: url, apiKey: key, model: model } });
+                    { width: tw, height: th, customApi: { url: url, apiKey: key, model: model,
+                        quality: (q('#img-capi-quality')?.value || 'medium') } });
                 if (out) say('✅ 通了，' + tw + '×' + th + ' 這個尺寸生得出圖');
                 else say('❌ ' + ((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'));
             } catch (e) {
@@ -2924,6 +2933,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         url:    (container.querySelector('#img-capi-url')?.value   || '').trim(),
                         apiKey: (container.querySelector('#img-capi-key')?.value   || '').trim(),
                         model:  (container.querySelector('#img-capi-model')?.value || '').trim(),
+                        quality: (container.querySelector('#img-capi-quality')?.value || 'medium'),
                     },
                     novelai: {
                         token: elNaiToken.value.trim(),

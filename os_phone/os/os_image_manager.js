@@ -121,7 +121,7 @@
             serviceMap: 'pollinations',       // 小地圖桶：map（場景俯視小地圖底板，畫風跟背景分開）
             // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API。
             //    三格全部自己填，不內建站台清單——每個站的型號都不一樣，清單只會過期。
-            customApi: { url: '', apiKey: '', model: '' },
+            customApi: { url: '', apiKey: '', model: '', quality: 'medium' },
             pollinations: {
                 url: 'https://gen.pollinations.ai/image', // API 端點
                 apiKey: '', // Pollen API Key
@@ -459,6 +459,14 @@
             // gpt-image-1 唯一能調鬆的一格：預設 auto 連刀光血跡都可能擋，low 是官方允許的下限。
             // 它不解禁情色，只是別讓劇情裡的打鬥整批生不出來。dall-e 不收這個參數，不能一律加。
             if (!isSd && /^gpt-image/i.test(model)) body.moderation = 'low';
+            // 畫質分檔：只有認得出來的型號才送，而且每家的值不一樣（gpt-image 是 low/medium/high、
+            // dall-e-3 是 standard/hd）。公益站、代理、Banana 那些一律不送 —— 它們多半沒有這一格，
+            // 送一個沒見過的欄位輕則被忽略、重則整包 400，跟 negative_prompt 那次一樣。
+            if (!isSd) {
+                const _q = String(cfg.quality || 'medium').toLowerCase();
+                if (/^gpt-image/i.test(model)) body.quality = (_q === 'low' || _q === 'high') ? _q : 'medium';
+                else if (/^dall-e-3/i.test(model)) body.quality = (_q === 'high') ? 'hd' : 'standard';
+            }
             if (!isSd && !_official && options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略；官方不吃且會擋
 
             const headers = { 'Content-Type': 'application/json' };
