@@ -177,9 +177,45 @@
                 if (st) st.innerHTML = '查無此人 📵';
                 _timer = setTimeout(_renderList, 1600);
             } else {
-                _inCall(contact);
+                // 響鈴：留在這個畫面問對方的第一句。它可以不接（見 _isRefusal），
+                // 所以接通與否要等回覆才知道 —— 先進通話畫面再被掛掉不像打電話。
+                const st = _root && _root.querySelector('#dlr-call-status');
+                if (st) st.innerHTML = '響鈴中<span class="dlr-dots">…</span>';
+                _say(contact, null, { firstRing: true });
             }
         }, 1800);
+    }
+
+    // 對方不接：只有一通電話的第一句能這樣回（後面講到一半不會突然變拒接，那是掛斷）
+    const _REFUSE_RE = /^\s*[\[［【]\s*(?:不接|拒接|不想接|沒接|未接|NoAnswer|Reject|Decline|Busy)\s*[\]］】]\s*$/i;
+    function _isRefusal(s) { return _REFUSE_RE.test(String(s == null ? '' : s)); }
+
+    function _noAnswer(contact) { return _dialEnd(contact, '對方沒有接聽 📵', true); }
+    function _dialFailed(contact) { return _dialEnd(contact, '沒接通 —— 到「設置 → 主模型」確認 API 有設好', false); }
+    async function _dialEnd(contact, statusText, writeMissed) {
+        if (!_root) return;
+        _clearTimer();
+        _root.innerHTML =
+            '<div class="dlr-call dlr-call-dialing">'
+          +   '<div class="dlr-call-ava">' + _esc(_avatarBg(contact)) + '</div>'
+          +   '<div class="dlr-call-name">' + _esc(contact.name) + '</div>'
+          +   '<div class="dlr-call-num">' + _esc(_num(contact.id)) + '</div>'
+          +   '<div class="dlr-call-status">' + _esc(statusText) + '</div>'
+          +   '<button class="dlr-hang" id="dlr-hang" type="button">結束</button>'
+          + '</div>';
+        const b = _root.querySelector('#dlr-hang');
+        if (b) b.addEventListener('click', _renderHistory);
+        // 通話紀錄留一筆，她才看得到自己打過（像 iPhone 的「已取消」）。接不通是設定問題，不留。
+        if (writeMissed) try {
+            const OS_DB = _w('OS_DB');
+            if (OS_DB && OS_DB.getApiChat && OS_DB.saveApiChat) {
+                const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
+                if (!Array.isArray(rec.messages)) rec.messages = [];
+                rec.messages.push({ type: 'system', content: '未接聽', _missed: true, timestamp: Date.now() });
+                await OS_DB.saveApiChat(contact.id, rec);
+            }
+        } catch (e) { console.warn('[dialer] 寫未接聽失敗', e); }
+        _timer = setTimeout(_renderHistory, 2200);
     }
 
     // ── 撥通：VN call 字幕通話 UI；對話直讀寫 OS_DB（與微信同一份記憶）──
@@ -253,7 +289,7 @@
         try { const mm = _w('OS_MINIMAX'); if (mm && mm.playForChar) mm.playForChar(contact.name, text, { expression: '' }); } catch (e) {}
     }
 
-    function _inCall(contact) {
+    function _inCall(contact, skipFirst) {
         if (!_root) return;
         _clearTimer();
         _sayBusy = false;
@@ -296,11 +332,13 @@
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); fire(); } });
 
         // 先把這個人之前的對話載成泡泡（有記憶），再讓對方接起來說第一句
-        _renderCallLog(contact).then(function () { _say(contact, null); });
+        // skipFirst＝第一句已經在響鈴階段拿到了（見 _dialing），這裡不要再問一次
+        return _renderCallLog(contact).then(function () { if (!skipFirst) _say(contact, null); });
     }
 
     // 一輪對話：使用者的話先冒泡 → 對方「輸入中…」泡泡 → buildContext + OS_API.chat → 回覆冒泡 + 念出 + 寫回同一份 DB
-    async function _say(contact, userText) {
+    async function _say(contact, userText, opts) {
+        opts = opts || {};
         if (!_root) return;
         const OS_API = _w('OS_API'), OS_DB = _w('OS_DB');
         if (!OS_API || !OS_API.buildContext || !OS_API.chat || !OS_DB) { _appendCallBubble(false, '（通話引擎未載入）', contact.name); return; }
@@ -325,6 +363,7 @@
         // 看門狗：40 秒沒回 → 別乾等，給提示
         watchdog = setTimeout(function () {
             done();
+            if (opts.firstRing) { restore(); _dialFailed(contact); return; }   // 還在響鈴：沒有通話畫面可以冒泡
             _appendCallBubble(false, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）', contact.name);
             restore();
         }, 40000);
@@ -348,6 +387,12 @@
                 async function (finalText) {
                     const reply = _extractSpoken(finalText) || '……';
                     done();                                   // 先收掉「輸入中…」泡泡
+                    // 響鈴那一句：對方可以不接（系統提示教它只回 [不接]）。接了才進通話畫面；
+                    // _inCall 裡的 _renderCallLog 會整份重畫對話區，所以要等它畫完再冒這句泡泡。
+                    if (opts.firstRing) {
+                        if (_isRefusal(reply)) { restore(); _noAnswer(contact); return; }
+                        await _inCall(contact, true);
+                    }
                     _appendCallBubble(false, reply, contact.name);
                     _speak(contact, reply);                   // 念出來（當前開哪個引擎就用哪個）
                     // 寫回「同一份」DB 記錄（微信那邊也讀得到 → 真共用記憶）
@@ -360,11 +405,17 @@
                     } catch (e) { console.warn('[dialer] 寫回 DB 失敗', e); }
                     restore();
                 },
-                function (err) { done(); _appendCallBubble(false, '（接不通：' + ((err && err.message) || '錯誤') + '）', contact.name); restore(); },
+                function (err) {
+                    done();
+                    if (opts.firstRing) { restore(); _dialFailed(contact); return; }
+                    _appendCallBubble(false, '（接不通：' + ((err && err.message) || '錯誤') + '）', contact.name); restore();
+                },
                 { disableTyping: cfg.disableTyping !== false }
             );
         } catch (e) {
-            done(); _appendCallBubble(false, '（通話失敗）', contact.name); restore();
+            done();
+            if (opts.firstRing) { restore(); _dialFailed(contact); return; }
+            _appendCallBubble(false, '（通話失敗）', contact.name); restore();
         }
     }
 
@@ -373,7 +424,9 @@
         const ms = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
         for (let i = ms.length - 1; i >= 0; i--) {
             const m = ms[i];
-            if (m && (!m.type || m.type === 'msg') && m.content) return (m.isMe ? '我：' : '') + String(m.content);
+            if (!m) continue;
+            if (m._missed) return '未接聽';
+            if ((!m.type || m.type === 'msg') && m.content) return (m.isMe ? '我：' : '') + String(m.content);
         }
         return '（無對話內容）';
     }
@@ -394,7 +447,8 @@
             const d = map[id] || {};
             if (d.isGroup) return;
             const ms = Array.isArray(d.messages) ? d.messages : [];
-            if (!ms.some(function (m) { return m && (!m.type || m.type === 'msg') && m.content; })) return;   // 沒實質對話的略過
+            // 沒實質對話的略過；但「未接聽」那筆要留著，她才看得到自己打過
+            if (!ms.some(function (m) { return m && (((!m.type || m.type === 'msg') && m.content) || m._missed); })) return;
             out.push({ id: id, name: d.name || id, messages: ms, lastTime: d.lastTime || '' });
         });
         return out;
