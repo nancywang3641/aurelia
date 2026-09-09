@@ -454,10 +454,43 @@
         btn.disabled = inp.disabled || (!hasText && !waiting);
     }
     // 念出對方台詞 —— 跟 VN 一樣「當前開哪個引擎就念哪個」（SoVITS／MiniMax 各自看自己的開關）
+    // 現在開著的是哪個語音引擎（沒開就回空字串）。分句要等多久完全看這個：
+    // 真的在念就得等它念完，只有字幕的話等那麼久只是乾坐著。
+    function _voiceEngine() {
+        try { const mm = _w('OS_MINIMAX'); if (mm && mm.getConfig && mm.getConfig().enabled) return 'minimax'; } catch (e) {}
+        try { const T = _w('VN_TTS'); if (T && T.config && T.config.enabled) return 'sovits'; } catch (e) {}
+        return '';
+    }
     function _speak(contact, text) {
-        if (!text) return;
+        if (!text) return '';
         try { const VNC = _w('VN_Core'); if (VNC && VNC._vnSoVITSPlay) VNC._vnSoVITSPlay(contact.name, text, '', ''); } catch (e) {}
         try { const mm = _w('OS_MINIMAX'); if (mm && mm.playForChar) mm.playForChar(contact.name, text, { expression: '' }); } catch (e) {}
+        return _voiceEngine();
+    }
+    // 等這一句「講完」再接下一句。
+    // 🚨 以前只照字數估一個很短的秒數（那是照閱讀速度抓的），語音根本還沒念完就被下一句蓋掉，
+    //    每一句都只出得了半句。MiniMax 有播放狀態可以問，就等它真的停；
+    //    SoVITS 問不到，只能估 —— 但要照「念出來」的長度估，中文一個字大約 0.23 秒。
+    function _gapFor(text, engine) {
+        const len = String(text || '').length;
+        if (engine) return Math.max(700, Math.min(9000, 300 + len * 230));
+        return Math.max(500, Math.min(2200, 380 + len * 75));
+    }
+    async function _waitSpoken(text, engine) {
+        if (!engine) { await _sleep(_gapFor(text, '')); return; }
+        if (engine === 'minimax') {
+            const mm = _w('OS_MINIMAX');
+            if (mm && typeof mm.isPlaying === 'function') {
+                const t0 = Date.now();
+                while (Date.now() - t0 < 6000 && !mm.isPlaying()) await _sleep(120);   // 合成要時間，先等它開口
+                if (mm.isPlaying()) {
+                    const cap = Date.now() + _gapFor(text, engine) + 6000;             // 真的卡住也別無限等
+                    while (Date.now() < cap && mm.isPlaying()) await _sleep(150);
+                    return;
+                }
+            }
+        }
+        await _sleep(_gapFor(text, engine));
     }
 
     function _inCall(contact, skipFirst) {
@@ -571,13 +604,7 @@
                     }
                     // 講電話不是一問一答：一次可以連著講好幾句（一句一行），也可以講完自己掛。
                     const said = _splitSpeech(reply);
-                    for (let si = 0; si < said.lines.length; si++) {
-                        if (si) await _sleep(_gapFor(said.lines[si - 1]));   // 上一句「講完」才接下一句
-                        if (!_root) return;                                  // 中途離開 app
-                        _appendCallBubble(false, said.lines[si], contact.name);
-                        _speak(contact, said.lines[si]);                     // 念出來（當前開哪個引擎就用哪個）
-                    }
-                    // 寫回「同一份」DB 記錄（微信那邊也讀得到 → 真共用記憶）；分幾句就存幾則
+                    // 先寫進 DB 再開始播：一句一句念要花好幾秒，中途她關掉 app 的話這幾句不能跟著消失
                     try {
                         const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
                         if (!Array.isArray(rec.messages)) rec.messages = [];
@@ -588,6 +615,12 @@
                         await OS_DB.saveApiChat(contact.id, rec);
                     } catch (e) { console.warn('[dialer] 寫回 DB 失敗', e); }
                     restore();
+                    for (let si = 0; si < said.lines.length; si++) {
+                        if (!_root) return;                                  // 中途離開 app
+                        _appendCallBubble(false, said.lines[si], contact.name);
+                        const _eng = _speak(contact, said.lines[si]);        // 念出來（當前開哪個引擎就用哪個）
+                        await _waitSpoken(said.lines[si], _eng);             // 這句真的講完才接下一句
+                    }
                     if (said.hangup) { await _remoteHangUp(contact); return; }   // 他講完自己掛了
                 },
                 function (err) {
