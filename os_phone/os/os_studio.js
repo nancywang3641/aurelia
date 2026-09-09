@@ -176,7 +176,7 @@
 - 版型：置中、有份量的一張卡。加 max-width（約 520~760）和 max-height，絕不吃滿外框。三種外框寬都不破版：手機約 390、桌面中間約 1000、桌面全屏約 1920。長內容在卡內捲。
 - 資料：只來自這一次區塊裡的行，用 st.parse() 拿。不持久化、不讀劇情、不叫 AI。
 - 互動：只做純前端（展開、切換、排序）。禁 st.callAI、st.setImage。
-- 返回：一顆「關閉／繼續」鈕綁 onComplete。
+- 出口：一顆綁 onComplete 的鈕，讓使用者看完離開。鈕上的字與造型跟這張卡一體（卡是什麼，這顆鈕就是那個東西上會有的東西），別用「返回」這種手機 App 的介面詞——這裡不是 App。
 - 外層容器 .vn-dynamic-panel-<tagId> 的位置與寬高由引擎寫死，改它的 margin 或 width 沒用；只調卡片內部。
 
 ### 2b. 純應用：裝在手機桌面的一個 App
@@ -208,7 +208,7 @@
 
 ## 3. 所有類型都要守的鐵律
 - 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.user、st.getStory。
-- 每個面板都必須自帶返回／關閉鈕綁 onComplete，三種類型都一樣。造型跟主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角，一眼看得到，flex-shrink:0 不被內容擠走。別幾秒自動消失、別靠手機殼的橫槓代替。少了這顆使用者回不去主畫面。
+- 每個面板都必須自帶一顆綁 onComplete 的出口鈕，三種類型都一樣。造型跟主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角，一眼看得到，flex-shrink:0 不被內容擠走。別幾秒自動消失、別靠手機殼的橫槓代替。少了這顆使用者回不去主畫面。
 - 捲動與溢出：只有「會變長的那一個內容區」給 flex:1; min-height:0; overflow-y:auto；標題、圖示、裝飾、按鈕一律 flex-shrink:0；父容器 display:flex; flex-direction:column，卡本體 overflow:hidden。否則內容一多，固定元素被擠出去。同一個盒子不能又要內部捲動裁切又要讓某元素溢出邊緣；真要溢出裝飾就拆兩層：外層 overflow:visible 放 position:absolute 的裝飾，內層 overflow:hidden 負責捲動。
 - CSS 只能寫在 .vn-dynamic-panel-<tagId> 前綴底下。禁 position:fixed、禁 position:absolute 配 top/left 自定位、禁 100vw、100vh、禁在 body／html 設樣式、禁寫死固定像素寬。
 - 主題化：外形跟面板用途綁定（寶箱、卷軸、通訊終端、檔案夾、契約書、地圖板、懸賞令，依用途挑、別每次同一個）；資訊融進主體結構（鎖孔、封蠟、寶石槽、紙頁、銘牌），不是另開方塊貼上去；至少一個 SVG 或 CSS 造型當視覺主體；按鈕像拉桿、封印、鑰匙孔這種跟主體一體的互動件。
@@ -224,7 +224,7 @@ st 只有下面這些，一個不多。沒列的一律不存在，不准自己�
 執行環境：你的 js 被 new Function('container', 'lines', 'onComplete', 'st', 你的js) 包起來跑。
 - container：面板根節點。找子元素用 container.querySelector('.cls')，禁 document.getElementById（多實例會撞）。
 - lines：這次區塊裡的純文字行，通常不直接碰，交給 st.parse()。
-- onComplete()：關閉面板。必須綁在返回／關閉鈕上。
+- onComplete()：關閉面板。必須綁在那顆出口鈕上。
 
 讀資料
 - st.parse() → { 標籤名: [[欄1, 欄2…], …] }。把 lines 拆成資料。
@@ -2089,7 +2089,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
         // VN UI 生成：在訊息開頭標【類型：X】，AI 第一輪就知道要做純展示/純應用/共用（不用每次費口舌）
         const genText = (currentMode === 'vn_ui')
-            ? ('【類型：' + _vnPanelType + '】' + (_vnPanelType === '共用' ? '（共用＝正文 <tagId> 餵資料 ＋ app 內「生成」鈕叫 st.callAI 產外圍內容，兩條都走 st.feed；生成鈕必須有）' : '') + '（面板必須自帶返回／關閉鈕綁 onComplete）' + (text || '（依此類型先做一版）'))
+            ? ('【類型：' + _vnPanelType + '】' + (_vnPanelType === '共用' ? '（共用＝正文 <tagId> 餵資料 ＋ app 內「生成」鈕叫 st.callAI 產外圍內容，兩條都走 st.feed；生成鈕必須有）' : '') + '（面板必須自帶一顆綁 onComplete 的出口鈕；鈕上的字與造型照這個面板的內容取，別沿用這句話裡的字）' + (text || '（依此類型先做一版）'))
             : text;
         // 帶圖時 content 變陣列；不帶圖時還是字串（向後兼容既有清洗 / parse 邏輯）
         const userContent = buildUserMessageContent(genText, pendingImages);
