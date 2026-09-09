@@ -240,12 +240,17 @@
     // 一起送給模型（多句用換行接起來，跟他分句講話同一個格式）。
     // 沒有多一顆「說完了」的按鈕 —— 送出鍵本身就是說完一句，停手就是說完一段；
     // 而且到點時如果她還在打字（輸入框有字），就再等一輪，不會把她打到一半的話丟下。
-    const _SAY_WAIT = 2200;
+    // 等多久算「說完了」：這是「送出一句之後、手完全停下來」的空檔 —— 想下一句、切輸入法、找字都算。
+    // 一開始設 2.2 秒被她罵得對（那是打字機器人的速度）。八秒是「想不出下一句就先讓他回應」的界線；
+    // 真的在打字不受這個數字影響（見下面 tick：輸入框有字就再等一輪），
+    // 想立刻要回應也不必等 —— 框空著時送出鍵會變成「說完了」，按下去馬上送。
+    const _SAY_WAIT = 8000;
     let _pendingSay = [];
     let _pendingTimer = null;
     function _clearPending() {
         if (_pendingTimer) { clearTimeout(_pendingTimer); _pendingTimer = null; }
         _pendingSay = [];
+        _updateSayBtn();
     }
     // 她說的話先寫進記錄，不等模型回（逾時、掛斷都不會弄丟）
     async function _writeMyLine(contact, text) {
@@ -259,19 +264,26 @@
             await OS_DB.saveApiChat(contact.id, rec);
         } catch (e) { console.warn('[dialer] 先寫我說的話失敗', e); }
     }
+    // 把累積的幾句一次送出去（時間到、或她按了「說完了」）
+    function _flushSay(contact) {
+        if (_pendingTimer) { clearTimeout(_pendingTimer); _pendingTimer = null; }
+        if (!_pendingSay.length) return;
+        const merged = _pendingSay.join('\n');
+        _pendingSay = [];
+        _updateSayBtn();
+        _say(contact, merged, { alreadyShown: true });
+    }
     function _queueSay(contact, text) {
         _pendingSay.push(text);
         _appendCallBubble(true, text, _userName());
         _writeMyLine(contact, text);
+        _updateSayBtn();
         if (_pendingTimer) { clearTimeout(_pendingTimer); _pendingTimer = null; }
         const tick = function () {
             const el = _root && _root.querySelector('#dlr-say');
             if (el && String(el.value || '').trim()) { _pendingTimer = setTimeout(tick, _SAY_WAIT); return; }   // 還在打，再等一輪
             _pendingTimer = null;
-            if (!_pendingSay.length) return;
-            const merged = _pendingSay.join('\n');
-            _pendingSay = [];
-            _say(contact, merged, { alreadyShown: true });
+            _flushSay(contact);
         };
         _pendingTimer = setTimeout(tick, _SAY_WAIT);
     }
@@ -410,10 +422,21 @@
     }
     function _enableSay(on) {
         const inp = _root && _root.querySelector('#dlr-say');
-        const btn = _root && _root.querySelector('#dlr-say-btn');
         if (inp) inp.disabled = !on;
-        if (btn) btn.disabled = !on;
+        _updateSayBtn();
         if (on && inp) { try { inp.focus(); } catch (e) {} }
+    }
+    // 送出鍵一鍵兩用：輸入框有字＝「送」；已經送過幾句、框空著＝「說完了」，按下去不必等那幾秒。
+    // 她原本問要不要加一顆 hold 按鈕，這樣就不用多一顆 —— 同一顆鈕看狀況換字。
+    function _updateSayBtn() {
+        const btn = _root && _root.querySelector('#dlr-say-btn');
+        const inp = _root && _root.querySelector('#dlr-say');
+        if (!btn || !inp) return;
+        const hasText = !!String(inp.value || '').trim();
+        const waiting = _pendingSay.length > 0;
+        btn.textContent = (!hasText && waiting) ? '說完了' : '送';
+        btn.classList.toggle('done', !hasText && waiting);
+        btn.disabled = inp.disabled || (!hasText && !waiting);
     }
     // 念出對方台詞 —— 跟 VN 一樣「當前開哪個引擎就念哪個」（SoVITS／MiniMax 各自看自己的開關）
     function _speak(contact, text) {
@@ -458,12 +481,15 @@
         const fire = function () {
             if (_sayBusy) return;                 // 對方正在講話，等他講完
             const txt = (inp.value || '').trim();
-            if (!txt) return;
+            if (!txt) { _flushSay(contact); return; }   // 框空著又按送出＝「說完了」，不必等那幾秒
             inp.value = '';
             _queueSay(contact, txt);              // 先排隊：她可以連著講好幾句，停手才一起送出去
+            _updateSayBtn();
         };
         _root.querySelector('#dlr-say-btn').addEventListener('click', fire);
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); fire(); } });
+        inp.addEventListener('input', _updateSayBtn);   // 開始打字→鈕變回「送」，清空→變「說完了」
+        _updateSayBtn();
 
         // 先把這個人之前的對話載成泡泡（有記憶），再讓對方接起來說第一句
         // skipFirst＝第一句已經在響鈴階段拿到了（見 _dialing），這裡不要再問一次

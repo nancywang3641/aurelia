@@ -215,6 +215,8 @@
 .dlr-say:disabled { opacity: 0.5; }
 .dlr-say-btn { flex-shrink: 0; padding: 0 20px; height: 42px; border-radius: 21px; border: none; background: linear-gradient(135deg,#34c759,#28a048); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
 .dlr-say-btn:disabled { opacity: 0.5; cursor: default; }
+/* 已經送過幾句、輸入框空著時，同一顆鈕變成「說完了」：換個顏色，一眼看得出按下去是把話交出去 */
+.dlr-say-btn.done { background: linear-gradient(135deg,#0a84ff,#0060df); padding: 0 16px; }
 
 /* 通話紀錄（歷史對話）列表 + 多選清除 */
 .dlr-sel-actions { display: flex; align-items: center; }
