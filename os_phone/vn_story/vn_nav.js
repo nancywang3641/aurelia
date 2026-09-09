@@ -281,7 +281,19 @@
             const route = $('nv-route'), under = $('nv-route-under');
             const len = route.getTotalLength ? route.getTotalLength() : rt.len;
             this._len = len;
-            [route, under].forEach(p => { p.setAttribute('stroke-dasharray', String(len)); p.setAttribute('stroke-dashoffset', String(len)); });
+            // 🚨 這兩條線在 CSS 上掛著 1.7s 的 stroke-dashoffset 過渡。剛用 innerHTML 建出來時它們沒有這個
+            //    屬性（＝0＝整條路線本來就是畫好的），下面這行把它設成 len 等於叫瀏覽器「從畫好的狀態倒著
+            //    縮回起點」，而它會老實演完那 1.7 秒。開場推近鏡頭的那幾秒剛好蓋在上面，看起來就是線一開始
+            //    已經在中間、接著倒退回起跑線、然後才重新畫一次 —— 起跑線偷跑的感覺就是這麼來的。
+            //    設這個起始狀態的當下必須沒有過渡：關掉 → 設值 → 讀一次 layout 讓它定案 → 把過渡還給 CSS。
+            //    （_instantOpen 那條路上 root 有 .nv-nomotion 的 !important，還原成空字串不會把它蓋掉。）
+            [route, under].forEach(p => {
+                p.style.transition = 'none';
+                p.setAttribute('stroke-dasharray', String(len));
+                p.setAttribute('stroke-dashoffset', String(len));
+            });
+            route.getBoundingClientRect();
+            [route, under].forEach(p => { p.style.transition = ''; });
             this._camInstant(W / 2, H / 2, 1);
         },
 
