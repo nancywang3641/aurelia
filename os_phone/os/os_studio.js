@@ -1800,6 +1800,51 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         renderGal();
     }
 
+    // 把「沒包 <json> 的面板資料」整段換成那張已生成卡片。
+    // 為什麼不用正則：面板的 css/js 欄位裡本來就有大量 { }，非貪婪會停在第一個 }、貪婪又會吃掉後面
+    // 她真正想看的話。這裡改成從物件開頭走括號計數，而且認得字串與跳脫字元（"a { b }" 裡的括號不算），
+    // 所以不管 css 有幾層巢狀、js 裡有沒有樣板字面，都能切在真正的結尾。
+    // 前後若被 ``` 圍欄包著，圍欄一起收掉；沒收完（回覆被截斷）就收到結尾，行為同 <json> 那條。
+    function _hideLoosePanelJson(s, hiddenUI) {
+        const KEYS = /^\s*[\[\{]\s*(?:\{\s*)?"(?:category|tagId|id)"\s*:/;
+        let out = '', i = 0;
+        while (i < s.length) {
+            const ch = s[i];
+            if (ch !== '{' && ch !== '[') { out += ch; i++; continue; }
+            // 這個括號是不是面板資料的開頭？看它後面緊接著是不是那幾個特徵鍵
+            if (!KEYS.test(s.slice(i, i + 120))) { out += ch; i++; continue; }
+            const end = _scanBalanced(s, i);
+            // 連同前後的 ``` 圍欄一起吃掉，不然圍欄會單獨留在畫面上
+            let from = i, to = (end === -1) ? s.length : end;
+            const beforeFence = out.match(/```[a-zA-Z]*[ \t]*\n?[ \t]*$/);
+            if (beforeFence) out = out.slice(0, out.length - beforeFence[0].length);
+            const afterFence = s.slice(to).match(/^[ \t]*\n?[ \t]*```/);
+            if (afterFence) to += afterFence[0].length;
+            out += hiddenUI;
+            i = to;
+        }
+        return out;
+    }
+
+    // 從 s[start] 的 { 或 [ 走到配對的收尾，回傳收尾的下一個位置；沒收完回 -1。
+    // 認字串與跳脫：JSON 字串裡的括號不算數（面板的 css 全靠這個才切得對）。
+    function _scanBalanced(s, start) {
+        let depth = 0, inStr = false, esc = false;
+        for (let k = start; k < s.length; k++) {
+            const c = s[k];
+            if (inStr) {
+                if (esc) { esc = false; continue; }
+                if (c === '\\') { esc = true; continue; }
+                if (c === '"') inStr = false;
+                continue;
+            }
+            if (c === '"') { inStr = true; continue; }
+            if (c === '{' || c === '[') depth++;
+            else if (c === '}' || c === ']') { depth--; if (depth === 0) return k + 1; }
+        }
+        return -1;
+    }
+
     function renderMarkdown(raw) {
         if (!raw) return '';
         let s = raw;
@@ -1810,10 +1855,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         
         // 原本的 <json> 攔截
         s = s.replace(/<json>[\s\S]*?(<\/json>|$)/gi, hiddenUI);
-        // 新增：攔截不聽話裸奔的 Array (特徵是裡面有 category 或 tagId)
-        s = s.replace(/\[\s*\{[\s\S]*?"(?:category|tagId|id)"[\s\S]*\}\s*\]/g, hiddenUI);
-        // 新增：攔截不聽話裸奔的 Object
-        s = s.replace(/\{\s*"(?:category|tagId|id)"[\s\S]*?\}/g, hiddenUI);
+        // 裸奔的面板資料（模型沒包 <json>、改用 ```json 圍欄或什麼都沒包）→ 用括號計數收乾淨。
+        // 🚨 這裡以前是非貪婪正則，而面板 JSON 的 css/js 裡有一大堆大括號，
+        //    正則會停在第一個 }，後面整段原始碼就漏進聊天室變成一大片文字（她 09-09 回報）。
+        s = _hideLoosePanelJson(s, hiddenUI);
         
         s = s.replace(/^---+$/gm, '<hr>');
         s = s.replace(/^###\s+(.*)/gm, (_, t) => `<h3>${t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</h3>`);
@@ -1834,13 +1879,16 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         let s = raw.replace(/<(script|iframe)[^>]*>[\s\S]*?<\/\1>/gi, '');
         
         // ── 優化：遇到 <json> 開頭直接截斷後方文字，換成炫酷 Loading ──
-        if (s.match(/<json>/i)) {
-            s = s.replace(/<json>[\s\S]*/i, `
+        // 🚨 模型不一定用 <json>：有時改用 ```json 圍欄、有時整包裸奔。串流時一樣要切，
+        //    不然她會看著一整片面板原始碼跑過去（跟最終畫面漏碼是同一個病）。
+        const _cut = s.search(/<json>|```[ \t]*json|(?:^|\n)\s*[\[\{]\s*(?:\{\s*)?"(?:category|tagId|id)"\s*:/i);
+        if (_cut !== -1) {
+            s = s.slice(0, _cut) + `
                 <div style="margin-top:10px; padding:10px 15px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.15); border-radius:8px; display:flex; align-items:center; gap:10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
                     <div class="os-studio-spinner"></div>
                     <span style="color:#1A1C28; font-weight:bold; font-size:13px; letter-spacing:0.5px;">The Mirage 正在為您鑄造頂級 JSON 面板中... 🎨</span>
                 </div>
-            `);
+            `;
         }
         
         return s.replace(/\n/g, '<br>');
