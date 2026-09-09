@@ -718,11 +718,47 @@
     }
 
     // ── 歷史對話 transcript（唯讀檢視）──
+    // 逐字稿按「一通」切段：撥通那筆分隔開一段，收線那筆收尾。
+    // 沒有分隔的（微信打字的訊息、還有加分隔之前留下的舊資料）自成一段，標成「更早的對話」。
+    // 一條一條刪太瑣碎——她要的是一次清掉一整通。
+    function _groupByCall(ms) {
+        const groups = [];
+        let cur = null;
+        const open = function (title, from) { cur = { title: title, from: from, to: from, idx: [] }; groups.push(cur); };
+        ms.forEach(function (m, i) {
+            if (!m) return;
+            if (m._callStart) { open(String(m.content || '通話'), i); cur.idx.push(i); cur.to = i; return; }
+            if (!cur) open('更早的對話', i);
+            cur.idx.push(i); cur.to = i;
+            if (m._callEnd) cur = null;   // 收線＝這段結束，後面的另開一段
+        });
+        return groups;
+    }
+    async function _deleteCallGroup(rec, g) {
+        try {
+            const OS_DB = _w('OS_DB');
+            if (!OS_DB || !OS_DB.saveApiChat) return;
+            const drop = {}; g.idx.forEach(function (i) { drop[i] = 1; });
+            const kept = (rec.messages || []).filter(function (_, i) { return !drop[i]; });
+            const next = Object.assign({}, rec, { messages: kept, pushedCount: kept.length, renderedCount: kept.length });
+            await OS_DB.saveApiChat(rec.id, next);
+            // 記憶體那份也要跟上，不然切回微信還看得到
+            try { const wx = _w('wxApp'); if (wx && wx.GLOBAL_CHATS && wx.GLOBAL_CHATS[rec.id]) wx.GLOBAL_CHATS[rec.id] = next; } catch (e) {}
+            _renderTranscript(next);
+        } catch (e) { console.warn('[dialer] 刪除這通失敗', e); }
+    }
     function _renderTranscript(rec) {
         if (!_root) return;
         _clearTimer();
         const ms = Array.isArray(rec.messages) ? rec.messages : [];
-        const body = ms.map(function (m) { return _bubbleHTML(m, rec.name); }).join('');
+        const groups = _groupByCall(ms);
+        const body = groups.map(function (g, gi) {
+            return '<div class="dlr-tx-group" data-g="' + gi + '">'
+                 + '<div class="dlr-tx-ghead"><span>' + _esc(g.title) + '</span>'
+                 + '<button class="dlr-tx-gdel" data-g="' + gi + '" type="button" title="刪掉這一整段">🗑</button></div>'
+                 + g.idx.map(function (i) { return _bubbleHTML(ms[i], rec.name); }).join('')
+                 + '</div>';
+        }).join('');
         _root.innerHTML =
             '<div class="dlr-wrap">'
           +   '<div class="dlr-tx-head">'
@@ -737,6 +773,15 @@
         if (callBtn) callBtn.addEventListener('click', function () {
             const c = _contacts().find(function (x) { return x.id === rec.id; }) || { id: rec.id, name: rec.name };
             _dialing(c);
+        });
+        _root.querySelectorAll('.dlr-tx-gdel').forEach(function (b) {
+            b.addEventListener('click', function () {
+                const g = groups[parseInt(b.dataset.g, 10)];
+                if (!g) return;
+                const n = g.idx.filter(function (i) { const m = ms[i]; return m && (!m.type || m.type === 'msg'); }).length;
+                if (!win.confirm('刪掉「' + g.title + '」這一段？\n' + n + ' 則對話，微信那邊也會一起消失，無法復原。')) return;
+                _deleteCallGroup(rec, g);
+            });
         });
     }
 
