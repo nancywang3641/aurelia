@@ -234,6 +234,38 @@
         _renderHistory();
     }
 
+    // ── 對方講的話：分句 ＋ 他自己掛斷 ──────────────────────────────
+    // 真的講電話不是一問一答：一口氣講三句、或講完就掛，都是常態。
+    // 模型一次回的內容用換行分句，程式一句一顆泡泡、中間留說話的時間差；
+    // 最後一行是 [掛斷] 就代表他講完自己收線（也可以寫成 [掛斷|最後那句話]）。
+    const _HANGUP_RE = /^\s*[\[［【]\s*(?:掛斷|挂断|收線|收线|結束通話|结束通话|Hangup|HangUp|EndCall|Bye)\s*(?:[|｜]\s*([^\]］】]*))?\s*[\]］】]\s*$/i;
+    function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    // 一句話「講完」大概要多久：字數估，夾在 0.5～2.2 秒之間，太快像洗版、太慢像當機
+    function _gapFor(text) { return Math.max(500, Math.min(2200, 380 + String(text || '').length * 75)); }
+    function _splitSpeech(raw) {
+        const out = { lines: [], hangup: false };
+        String(raw == null ? '' : raw).split(/\r?\n+/).forEach(function (ln) {
+            const t = ln.trim();
+            if (!t) return;
+            const m = t.match(_HANGUP_RE);
+            if (m) { out.hangup = true; const tail = String(m[1] == null ? '' : m[1]).trim(); if (tail) out.lines.push(tail); return; }
+            out.lines.push(t);
+        });
+        if (!out.lines.length && !out.hangup) out.lines.push('……');
+        return out;
+    }
+    // 對方自己掛斷：畫面上講清楚是他掛的，停一拍再照正常收線流程走（會寫通話結束與時長）
+    async function _remoteHangUp(contact) {
+        if (!_root) return;
+        _enableSay(false);
+        _appendCallMark('對方掛斷了');
+        const st = _root.querySelector('#dlr-call-timer');
+        if (st) st.textContent = '已結束';
+        await _sleep(1600);
+        if (!_root) return;
+        await _hangUp(contact);
+    }
+
     // 標記可以帶一句話：[不接|在忙，晚點回你] —— 不接，但補一則訊息過來（很像真人）。
     // 不帶就只是單純不接。那句話寫進同一份聊天記錄，她去微信找那個人就看得到、還是未讀。
     const _REFUSE_RE = /^\s*[\[［【]\s*(?:不接|拒接|不想接|沒接|未接|NoAnswer|Reject|Decline|Busy)\s*(?:[|｜]\s*([^\]］】]*))?\s*[\]］】]\s*$/i;
@@ -462,17 +494,26 @@
                         await _markCallStart();
                         _appendCallMark('通話開始 · ' + _stamp(_curCall && _curCall.startedAt));
                     }
-                    _appendCallBubble(false, reply, contact.name);
-                    _speak(contact, reply);                   // 念出來（當前開哪個引擎就用哪個）
-                    // 寫回「同一份」DB 記錄（微信那邊也讀得到 → 真共用記憶）
+                    // 講電話不是一問一答：一次可以連著講好幾句（一句一行），也可以講完自己掛。
+                    const said = _splitSpeech(reply);
+                    for (let si = 0; si < said.lines.length; si++) {
+                        if (si) await _sleep(_gapFor(said.lines[si - 1]));   // 上一句「講完」才接下一句
+                        if (!_root) return;                                  // 中途離開 app
+                        _appendCallBubble(false, said.lines[si], contact.name);
+                        _speak(contact, said.lines[si]);                     // 念出來（當前開哪個引擎就用哪個）
+                    }
+                    // 寫回「同一份」DB 記錄（微信那邊也讀得到 → 真共用記憶）；分幾句就存幾則
                     try {
                         const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
                         if (!Array.isArray(rec.messages)) rec.messages = [];
                         // 她說的那句在送出時就寫進去了（見上面），這裡只補對方的回覆
-                        rec.messages.push({ type: 'msg', isMe: false, content: reply, sender: contact.name, senderName: contact.name, raw: _rawFor(contact, reply) });
+                        said.lines.forEach(function (t) {
+                            rec.messages.push({ type: 'msg', isMe: false, content: t, sender: contact.name, senderName: contact.name, raw: _rawFor(contact, t) });
+                        });
                         await OS_DB.saveApiChat(contact.id, rec);
                     } catch (e) { console.warn('[dialer] 寫回 DB 失敗', e); }
                     restore();
+                    if (said.hangup) { await _remoteHangUp(contact); return; }   // 他講完自己掛了
                 },
                 function (err) {
                     done();
