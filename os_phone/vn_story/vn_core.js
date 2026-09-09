@@ -1879,8 +1879,15 @@
         //   表情格、寫成什麼都不管——認不得的表情本來就會退到預設圖／生成，不會壞。
         _normCharParts: function(p) {
             if (!Array.isArray(p) || p.length < 2) return p;
+            // 🚨 第五欄的站位狀態 Stay/Leave 不算內容欄，得先扣掉再數格數。
+            //    自由模式寫的是 [Char|名|台詞|Stay]，扣掉站位其實只有「名＋台詞」兩格、沒有表情格；
+            //    以前直接用 p.length 去數就變成三格，於是不補表情格，slice(2) 只剩 ["Stay"] ——
+            //    而剝站位那支有「只剩一格就不剝」的守衛，Stay 就這樣變成台詞本身，
+            //    通話紀錄裡那筆的內容整個變成 Stay。四欄舊格式的判斷完全不受影響。
+            const last = String(p[p.length - 1] == null ? '' : p[p.length - 1]).trim().toLowerCase();
+            const eff = (last === 'stay' || last === 'leave') ? p.length - 1 : p.length;
             // 名字後面只剩一格＝那格一定是台詞（沒有表情格）；兩格以上才需要分辨第二格是哪個
-            if (p.length <= 2 || this._looksLikeDialogue(p[1])) p.splice(1, 0, 'Neutral');
+            if (eff <= 2 || this._looksLikeDialogue(p[1])) p.splice(1, 0, 'Neutral');
             return p;
         },
 
