@@ -739,9 +739,15 @@
 /* 輸入區與 chip */
 .lws.is-tool .studio-input-wrap { background:rgba(46,37,68,.92); border-top:1px solid var(--lwt-line); }
 .lws.is-tool .studio-type-label { color:var(--lwt-dim); }
-.lws.is-tool .studio-type, .lws.is-tool .studio-chip {
+.lws.is-tool .studio-type, .lws.is-tool .studio-chip, .lws.is-tool .studio-iface {
   border-color:var(--lwt-line); color:var(--lwt-ink); background:rgba(255,255,255,.05); }
-.lws.is-tool .studio-type:hover, .lws.is-tool .studio-chip:hover { background:rgba(255,255,255,.12); }
+.lws.is-tool .studio-type:hover, .lws.is-tool .studio-chip:hover, .lws.is-tool .studio-iface:hover { background:rgba(255,255,255,.12); }
+/* 誰來做：底色靠上一條，但下拉箭頭是 background-image、選單本體是原生控制項，兩個都要單獨換成淺色 */
+.lws.is-tool .studio-iface {
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='6'><path d='M0 0h8L4 6z' fill='%23efe7f6' fill-opacity='.75'/></svg>");
+  background-repeat:no-repeat; background-position:right 9px center; }
+.lws.is-tool .studio-iface option { background:#2a2240; color:var(--lwt-ink); }
+.lws.is-tool .studio-resident-status { color:var(--lwt-dim); }
 .lws.is-tool .studio-type.active, .lws.is-tool .studio-chip-feature.active {
   background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
 .lws.is-tool .studio-chip-manage { color:var(--lwt-dim); }

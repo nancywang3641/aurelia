@@ -908,6 +908,26 @@ html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { co
     background: rgba(235, 216, 181, 0.72);
 }
 
+/* 誰來做：跟左邊那排類型鈕同一組配色。
+   🚨 新的元件每加一個主題層就要補一次 —— 只寫基底樣式的話，在視差世界（.lws.is-tool，深紫）
+   跟這層羊皮紙上都會是「近黑字疊在自己的底色上」，她看到的是一格灰灰的東西。 */
+.studio-container .studio-iface {
+    color: #6f5846;
+    border-color: rgba(142, 101, 51, 0.34);
+    background-color: rgba(255, 250, 239, 0.52);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='6'><path d='M0 0h8L4 6z' fill='%236f5846' fill-opacity='.75'/></svg>");
+    font-family: inherit;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.30);
+}
+
+.studio-container .studio-iface:hover {
+    color: var(--jrpg-wine);
+    border-color: var(--jrpg-gold);
+    background-color: rgba(235, 216, 181, 0.72);
+}
+
+.studio-container .studio-resident-status { color: #806b58; }
+
 .studio-container .studio-type.active {
     color: #fff8e7;
     border-color: var(--jrpg-gold-light);
