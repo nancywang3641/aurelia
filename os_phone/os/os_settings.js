@@ -1820,12 +1820,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     { svc: 'pollinations',   sfx: 'pollinations', hint: '✨ Pollinations（自然語言英文句子）',     val: imgConfig.sceneGen?.extractPromptPollinations },
                                     { svc: 'tavern_sd',      sfx: 'tavern',       hint: '🎨 酒館原生（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptTavern },
                                     { svc: 'comfyui_direct', sfx: 'comfy',        hint: '🧩 ComfyUI 直連（自然語言英文句子）',    val: imgConfig.sceneGen?.extractPromptComfy },
-                                    // 🚨 這排是「哪個來源就顯示哪一格」，來源不在清單裡＝四格全被藏起來、她會看到指令框整個不見。
-                                    //    加新的插圖來源時這裡一定要跟著加一列。
+                                    // 🚨 這排是「哪個來源就顯示哪一格」，來源不在這份清單裡＝那格永遠不顯示。
+                                    //    加新的插圖來源時只要加在這裡就好 —— 切換時是掃 data-svc，不再有第二份對照表。
                                     { svc: 'custom_api',     sfx: 'custom',       hint: '🌐 自訂接口（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptCustom },
                                 ];
                                 return _rows.map(r => `
-                            <div id="img-scene-extract-row-${r.sfx}" class="scene-extract-row${_ss === r.svc ? '' : ' hidden'}">
+                            <div id="img-scene-extract-row-${r.sfx}" data-svc="${r.svc}" class="scene-extract-row${_ss === r.svc ? '' : ' hidden'}">
                                 <div class="scene-extract-hint">${r.hint}</div>
                                 <textarea class="set-textarea scene-extract-ta" id="img-scene-extract-${r.sfx}">${_esc(r.val)}</textarea>
                             </div>`).join('');
@@ -2664,11 +2664,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = '';
                 if (elImgSceneExtract) elImgSceneExtract.style.display = '';
                 if (elImgPixabay)      elImgPixabay.style.display = 'none';
-                // 副模型插圖指令：每接口一份，只顯示對應「插圖來源」那欄
-                const _exSfx = { novelai: 'novelai', pollinations: 'pollinations', tavern_sd: 'tavern', comfyui_direct: 'comfy' };
-                Object.keys(_exSfx).forEach(s => {
-                    const _row = container.querySelector('#img-scene-extract-row-' + _exSfx[s]);
-                    if (_row) _row.classList.toggle('hidden', s !== sceneSvc);
+                // 副模型插圖指令：每接口一份，只顯示對應「插圖來源」那欄。
+                // 🚨 直接掃 DOM 的 data-svc，這裡不再維護第二份來源清單 —— 上面 _rows 是唯一那份。
+                //    以前這裡有一份對照表，加自訂接口時漏了同步：切到自訂接口它那格永遠不出現，
+                //    切回別的來源時它又不會被藏起來，畫面上兩格並存 → 看起來就像「指令框全接口共用」。
+                container.querySelectorAll('.scene-extract-row').forEach(_row => {
+                    _row.classList.toggle('hidden', _row.dataset.svc !== sceneSvc);
                 });
             } else if (imgSrcTab === 'map') {
                 // 小地圖分頁：小地圖桶接口設定（畫風跟背景分開，ComfyUI 桶在下面選「小地圖」）
