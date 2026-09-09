@@ -51,6 +51,16 @@
         for (let i = 0; i < all.length; i++) { if (_digits(all[i].id) === d) return all[i]; }
         return null;
     }
+    // ── 跟模型約好的控制標記：一份清單，三個地方共用 ────────────────
+    // 🚨 剝「[名字] 這樣的說話人前綴」那條會把行首整組方括號都吃掉，控制標記剛好也長那樣。
+    //    她看到模型明明寫了 [掛斷|少拿你的破事來噁心我。] 卻沒掛斷、那句也不見，就是這裡吃掉的
+    //    （拒接的 [不接|…] 同一個病，只是還沒撞上）。清單放一份，加新寫法只改這裡。
+    const _HANGUP_WORDS = '掛斷|挂断|收線|收线|結束通話|结束通话|Hangup|HangUp|EndCall|Bye';
+    const _REFUSE_WORDS = '不接|拒接|不想接|沒接|未接|NoAnswer|Reject|Decline|Busy';
+    const _CTRL_WORDS   = _HANGUP_WORDS + '|' + _REFUSE_WORDS;
+    // 說話人前綴：行首整組方括號，但控制標記（後面接 | 或直接收尾的）不算
+    const _NAME_PREFIX_RE = new RegExp('^\\s*\\[(?!\\s*(?:' + _CTRL_WORDS + ')\\s*[|｜\\]])[^\\]]+\\]\\s*', 'gim');
+
     function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function _avatarBg(c) {
         // 通訊錄頭像存 avatarId(進 OS_DB) → 先用首字佔位，圖庫之後再接
@@ -306,7 +316,7 @@
     // 真的講電話不是一問一答：一口氣講三句、或講完就掛，都是常態。
     // 模型一次回的內容用換行分句，程式一句一顆泡泡、中間留說話的時間差；
     // 最後一行是 [掛斷] 就代表他講完自己收線（也可以寫成 [掛斷|最後那句話]）。
-    const _HANGUP_RE = /^\s*[\[［【]\s*(?:掛斷|挂断|收線|收线|結束通話|结束通话|Hangup|HangUp|EndCall|Bye)\s*(?:[|｜]\s*([^\]］】]*))?\s*[\]］】]\s*$/i;
+    const _HANGUP_RE = new RegExp('^\\s*[\\[［【]\\s*(?:' + _HANGUP_WORDS + ')\\s*(?:[|｜]\\s*([^\\]］】]*))?\\s*[\\]］】]\\s*$', 'i');
     function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     // 一句話「講完」大概要多久：字數估，夾在 0.5～2.2 秒之間，太快像洗版、太慢像當機
     function _gapFor(text) { return Math.max(500, Math.min(2200, 380 + String(text || '').length * 75)); }
@@ -336,7 +346,7 @@
 
     // 標記可以帶一句話：[不接|在忙，晚點回你] —— 不接，但補一則訊息過來（很像真人）。
     // 不帶就只是單純不接。那句話寫進同一份聊天記錄，她去微信找那個人就看得到、還是未讀。
-    const _REFUSE_RE = /^\s*[\[［【]\s*(?:不接|拒接|不想接|沒接|未接|NoAnswer|Reject|Decline|Busy)\s*(?:[|｜]\s*([^\]］】]*))?\s*[\]］】]\s*$/i;
+    const _REFUSE_RE = new RegExp('^\\s*[\\[［【]\\s*(?:' + _REFUSE_WORDS + ')\\s*(?:[|｜]\\s*([^\\]］】]*))?\\s*[\\]］】]\\s*$', 'i');
     function _refusalOf(s) {
         const m = String(s == null ? '' : s).match(_REFUSE_RE);
         return m ? { note: String(m[1] == null ? '' : m[1]).trim() } : null;
@@ -394,7 +404,7 @@
         t = t.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
         t = t.replace(/\[(?:Chat|With|Time|System|Notice|CoT|Thinking)[:：][^\]]*\]/gi, '');
         t = t.replace(/\[表情包[:：][^\]]*\]/g, '');
-        t = t.replace(/^\s*\[[^\]]+\]\s*/gm, '');
+        t = t.replace(_NAME_PREFIX_RE, '');   // 控制標記不在此列（見 _NAME_PREFIX_RE），不然掛斷會被吃掉
         return t.replace(/\n{2,}/g, '\n').trim();
     }
     function _rawFor(contact, text) {
