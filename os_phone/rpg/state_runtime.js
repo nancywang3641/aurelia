@@ -1093,6 +1093,7 @@ ${numberedText}`;
             pollinations:   cfg.extractPromptPollinations,
             tavern_sd:      cfg.extractPromptTavern,
             comfyui_direct: cfg.extractPromptComfy,
+            custom_api:     cfg.extractPromptCustom,
         })[svc];
         const picked = (perIface || '').trim();
         if (picked) return picked;
@@ -1572,8 +1573,16 @@ ${numberedText}`;
             // 系統訊息 = 你貼的完整規範 + 對接層（只動我這邊：佔位用 ##名##、輸出 scenes JSON）；大佬規範的 {{}} 權重一概不碰
             const _override = `\n\n────────\n【本系統對接（最高優先，覆蓋上面規範裡衝突的部分，含覆蓋「每個角色一律用代號」這種說法）】\n- 你只生成插圖提示詞、不寫劇情正文、不續寫、不解釋。\n- 下面 user 會給「已登記角色清單」(每個附代號 C1/C2…)。**只有清單裡的角色才有代號**：畫到他→**只寫 ##代號##**(如 ##C1##；系統自動填外觀、跟頭像一致)，不要自己寫這些人的固定長相/DNA，只寫動作/姿勢/表情/服裝/裸露/站位/互動。\n- **清單裡「沒有」的角色(沒代號)→ 直接用英文寫他的完整外觀(種族/年齡/髮色/眼色/體型/服裝)，他的名字「絕對不要」用 ## 包起來**——沒代號就沒得填，包了系統認不得、會把 ##名字## 原樣送進 NAI 壞掉。一句話：**有代號才用 ##，沒代號就寫外觀、不准包名字**。\n- 只有「代號」要用井號 ## 包(如 ##C1##)，**不要用 {{ }}**——{{ }} 是 NAI 權重語法、會壞；## 跟你規範裡的 {{}} 權重互不衝突。\n- 只輸出一個 JSON、前後不要任何文字：{ "scenes": [ { "after_paragraph": 數字, "prompt": "..." } ] }。after_paragraph 從用戶給的編號段落挑數字、不要抄原文。上方規範若要求每張插圖先輸出 summary/pov 等思考欄位，照規範加進每個 scene、放在 "prompt" 之前（系統只讀 after_paragraph 與 prompt，多的欄位無害）。`;
             const userMsg = `【已登記角色（畫到就用 ##代號## 或 ##角色名##，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
+            // 插圖來源是自訂接口時，補上「哪些落點不要選」——跟搭便車那條共用同一份（OS_API.sceneSafeRules）。
+            // 這條路的系統訊息是她貼的規範＋對接層，不會經過 os_api_engine 的組裝，所以要自己接上，
+            // 漏了的話開著獨立插圖副模型就等於這條規則沒生效。
+            let _safe = '';
+            try {
+                const _svc = (win.OS_IMAGE_MANAGER?.serviceFor?.('scene')) || win.OS_IMAGE_MANAGER?.config?.service || '';
+                _safe = win.OS_API?.sceneSafeRules ? win.OS_API.sceneSafeRules(_svc) : '';
+            } catch (e) {}
             const messages = [
-                { role: 'system', content: spec + _override },
+                { role: 'system', content: spec + _override + _safe },
                 { role: 'user', content: userMsg }
             ];
             const raw = await new Promise((res, rej) => {

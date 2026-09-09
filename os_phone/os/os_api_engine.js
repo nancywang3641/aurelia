@@ -312,6 +312,30 @@
     // --- 3. OS API 主對象 ---
     win.OS_API = {
 
+        // ── 插圖落點的「哪些不要選」：兩條插圖路共用一份 ──
+        // 搭便車那條（本檔 extractScenes）與獨立插圖副模型那條（state_runtime 的 extractScenesStandalone）
+        // 都叫這支，別各寫各的——兩份會漂，她改了一邊另一邊還是舊的。
+        // 只有自訂接口要（她接的是 OpenAI 官方，站方會拒畫）；Pollinations／NAI／ComfyUI 什麼都畫得出來，回空字串。
+        // 寫給不認識這個故事的人看：只講判準與替代做法，不給例句、不給關鍵詞清單——
+        // 給了它會照著造句，也會把清單當成「要避開的詞」在提示裡繞著寫。
+        sceneSafeRules: function (svc) {
+            if (String(svc || '') !== 'custom_api') return '';
+            return [
+                '',
+                'PICKING MOMENTS FOR THIS RUN:',
+                'The image service used here refuses to draw sexual content and graphic bodily harm.',
+                'A refused prompt produces nothing, so a refused moment is a wasted slot, not a picture.',
+                '• Do not choose a moment whose image would be the sexual act or the bodily harm itself.',
+                '• When such a moment is the dramatic peak, choose the beat just before it or just after it,',
+                '  and let the image carry the same weight through what surrounds it — the place, the light,',
+                '  the aftermath, a face, an object, what the body is doing that is not the wound.',
+                '• Judge the picture, not the words: a violent passage can hold a perfectly drawable image,',
+                '  and a calm passage can imply one that will be refused.',
+                '• Never soften the story to fit this. Skip the slot instead — illustrations are optional here,',
+                '  and fewer good ones beat a row of empty spots.',
+            ].join('\n');
+        },
+
         // 測試連線那邊也要用同一份（vertex 服務帳號少了 auth_mode 就會被當 API Key 找不到金鑰；
         // 錯誤訊息也要同樣攤平，不然只看得到酒館包的那句 API request failed）。
         // 這支現在連 top_k=0 一起處理：測試鈕跟生成走同一條 sendRequest、就會踩同一顆地雷，
@@ -417,21 +441,9 @@
             // 其他來源（Pollinations／NAI／ComfyUI）什麼都畫得出來，不該被這條綁住。
             // 寫給不認識這個故事的人看：只講判準與替代做法，不給例句、不給關鍵詞清單——
             // 給了它會照著造句，也會把清單當成「要避開的詞」在提示裡繞著寫。
-            const _needsSafe = _globalSvc === 'custom_api';
-            const _safeRules = _needsSafe ? [
-                '',
-                'PICKING MOMENTS FOR THIS RUN:',
-                'The image service used here refuses to draw sexual content and graphic bodily harm.',
-                'A refused prompt produces nothing, so a refused moment is a wasted slot, not a picture.',
-                '• Do not choose a moment whose image would be the sexual act or the bodily harm itself.',
-                '• When such a moment is the dramatic peak, choose the beat just before it or just after it,',
-                '  and let the image carry the same weight through what surrounds it — the place, the light,',
-                '  the aftermath, a face, an object, what the body is doing that is not the wound.',
-                '• Judge the picture, not the words: a violent passage can hold a perfectly drawable image,',
-                '  and a calm passage can imply one that will be refused.',
-                '• Never soften the story to fit this. Skip the slot instead — illustrations are optional here,',
-                '  and fewer good ones beat a row of empty spots.',
-            ].join('\n') : '';
+            // 這段兩條插圖路共用（搭便車在這裡、獨立插圖副模型在 state_runtime 的 extractScenesStandalone），
+            // 所以放在 OS_API.sceneSafeRules 一份，別各寫各的會漂。
+            const _safeRules = this.sceneSafeRules(_globalSvc);
 
             const sysPrompt = _taskInstruction + _safeRules + '\n' + specPrompt;
 

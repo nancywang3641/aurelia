@@ -218,6 +218,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         config.sceneGen.extractPromptPollinations = config.sceneGen.extractPromptNatural;
         config.sceneGen.extractPromptComfy        = config.sceneGen.extractPromptNatural;
         config.sceneGen.extractPromptTavern       = config.sceneGen.extractPromptNatural;
+        config.sceneGen.extractPromptCustom       = config.sceneGen.extractPromptNatural;   // 自訂接口：OpenAI 那種格式吃自然語言
         if (saved) {
             try {
                 const savedConfig = JSON.parse(saved);
@@ -258,6 +259,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         if (_saved.extractPromptPollinations === undefined && _oldNat)  _sg.extractPromptPollinations = _oldNat;
                         if (_saved.extractPromptComfy        === undefined && _oldNat)  _sg.extractPromptComfy        = _oldNat;
                         if (_saved.extractPromptTavern       === undefined && _oldNat)  _sg.extractPromptTavern       = _oldNat;
+                        if (_saved.extractPromptCustom       === undefined && _oldNat)  _sg.extractPromptCustom       = _oldNat;
                         return _sg;
                     })(),
                     comfyuiDirect: {
@@ -1814,6 +1816,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     { svc: 'pollinations',   sfx: 'pollinations', hint: '✨ Pollinations（自然語言英文句子）',     val: imgConfig.sceneGen?.extractPromptPollinations },
                                     { svc: 'tavern_sd',      sfx: 'tavern',       hint: '🎨 酒館原生（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptTavern },
                                     { svc: 'comfyui_direct', sfx: 'comfy',        hint: '🧩 ComfyUI 直連（自然語言英文句子）',    val: imgConfig.sceneGen?.extractPromptComfy },
+                                    // 🚨 這排是「哪個來源就顯示哪一格」，來源不在清單裡＝四格全被藏起來、她會看到指令框整個不見。
+                                    //    加新的插圖來源時這裡一定要跟著加一列。
+                                    { svc: 'custom_api',     sfx: 'custom',       hint: '🌐 自訂接口（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptCustom },
                                 ];
                                 return _rows.map(r => `
                             <div id="img-scene-extract-row-${r.sfx}" class="scene-extract-row${_ss === r.svc ? '' : ' hidden'}">
@@ -3008,6 +3013,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         extractPromptPollinations: (container.querySelector('#img-scene-extract-pollinations')?.value || '').trim(),
                         extractPromptTavern:       (container.querySelector('#img-scene-extract-tavern')?.value || '').trim(),
                         extractPromptComfy:        (container.querySelector('#img-scene-extract-comfy')?.value || '').trim(),
+                        extractPromptCustom:       (container.querySelector('#img-scene-extract-custom')?.value || '').trim(),
                     },
                     pixabayKey:    (container.querySelector('#img-pixabay-key')?.value || '').trim(),
                     fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false,
