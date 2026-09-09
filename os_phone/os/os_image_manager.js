@@ -438,10 +438,25 @@
 
             const width = options.width || 1024;
             const height = options.height || 1024;
+            // OpenAI 官方那條只收固定幾個尺寸，別的一律 400；而奧瑞亞各處要圖時給的是自己的尺寸
+            // （地圖 1024×512、立繪 512×768…）。認出官方就把尺寸吸附到最接近的比例，別讓她每張都失敗。
+            // 只認官方網址或官方型號 —— 公益站／代理照原樣送，行為不變。
+            const _official = /(^|\.)api\.openai\.com$/i.test((function () {
+                try { return new URL(endpoint).hostname; } catch (e) { return ''; }
+            })()) || /^(gpt-image|dall-e)/i.test(model);
+            const _snapSize = function () {
+                const r = width / height;
+                if (/^dall-e-2/i.test(model)) return '1024x1024';                       // 只有正方形三種，取最大
+                if (/^dall-e-3/i.test(model)) return r > 1.2 ? '1792x1024' : (r < 0.83 ? '1024x1792' : '1024x1024');
+                return r > 1.2 ? '1536x1024' : (r < 0.83 ? '1024x1536' : '1024x1024');  // gpt-image-1 與其後續
+            };
             const body = isSd
                 ? { prompt: prompt, negative_prompt: options.negativePrompt || '', width: width, height: height }
-                : { model: model, prompt: prompt, n: 1, size: width + 'x' + height };
-            if (!isSd && options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略
+                : { model: model, prompt: prompt, n: 1, size: _official ? _snapSize() : (width + 'x' + height) };
+            // dall-e 回的是一小時就過期的網址，存進聊天記錄隔天就是破圖 → 要它直接回圖檔本體。
+            // gpt-image-1 本來就只回圖檔本體，而且不收這個參數，所以不能一律加。
+            if (!isSd && /^dall-e/i.test(model)) body.response_format = 'b64_json';
+            if (!isSd && !_official && options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略；官方不吃且會擋
 
             const headers = { 'Content-Type': 'application/json' };
             if (key) headers['Authorization'] = 'Bearer ' + key;
