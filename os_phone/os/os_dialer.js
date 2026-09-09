@@ -169,7 +169,8 @@
           +   '<div class="dlr-call-status" id="dlr-call-status">撥號中<span class="dlr-dots">…</span></div>'
           +   '<button class="dlr-hang" id="dlr-hang" type="button">掛斷</button>'
           + '</div>';
-        _root.querySelector('#dlr-hang').addEventListener('click', _renderList);
+        // 掛斷 → 回通話紀錄（剛講完的那通就在最上面）。以前掉回通訊錄，看起來像紀錄沒更新
+        _root.querySelector('#dlr-hang').addEventListener('click', _renderHistory);
         _timer = setTimeout(function () {
             if (unknown) {
                 const st = _root && _root.querySelector('#dlr-call-status');
@@ -281,7 +282,7 @@
             sec++;
             if (tEl) tEl.textContent = '通話中 ' + String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
         }, 1000);
-        _root.querySelector('#dlr-hang2').addEventListener('click', _renderList);
+        _root.querySelector('#dlr-hang2').addEventListener('click', _renderHistory);
 
         const inp = _root.querySelector('#dlr-say');
         const fire = function () {
@@ -328,6 +329,18 @@
             restore();
         }, 40000);
 
+        // 🚨 她說的話先存，不等 AI 回。以前只在「成功拿到回覆」那條路上才一起寫進去，
+        //    於是逾時、接不通、或她講完就掛斷的那幾句全部不見 —— 看起來就是「聊了一會，歷史沒更新」。
+        if (userText) {
+            try {
+                const rec0 = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
+                if (!Array.isArray(rec0.messages)) rec0.messages = [];
+                const un0 = _userName();
+                rec0.messages.push({ type: 'msg', isMe: true, content: userText, sender: un0, senderName: un0 });
+                await OS_DB.saveApiChat(contact.id, rec0);
+            } catch (e) { console.warn('[dialer] 先寫我說的話失敗', e); }
+        }
+
         try {
             const messages = await OS_API.buildContext(userText || null, 'call_voice_system');
             await OS_API.chat(messages, cfg,
@@ -341,7 +354,7 @@
                     try {
                         const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
                         if (!Array.isArray(rec.messages)) rec.messages = [];
-                        if (userText) { const un = _userName(); rec.messages.push({ type: 'msg', isMe: true, content: userText, sender: un, senderName: un }); }
+                        // 她說的那句在送出時就寫進去了（見上面），這裡只補對方的回覆
                         rec.messages.push({ type: 'msg', isMe: false, content: reply, sender: contact.name, senderName: contact.name, raw: _rawFor(contact, reply) });
                         await OS_DB.saveApiChat(contact.id, rec);
                     } catch (e) { console.warn('[dialer] 寫回 DB 失敗', e); }
@@ -366,9 +379,16 @@
     }
     async function _loadRecords() {
         const OS_DB = _w('OS_DB');
-        if (!OS_DB || !OS_DB.getAllApiChats) return [];
+        if (!OS_DB) return [];
         let map = {};
-        try { map = (await OS_DB.getAllApiChats()) || {}; } catch (e) { return []; }
+        // 🚨 只列當前這張劇情卡的：以前這裡拿 getAllApiChats（整個資料庫），所以每張舊卡通過話的人
+        //    全部堆在同一份通話紀錄裡。旁邊的通訊錄分頁本來就走 ForCurrentCard，只有這裡沒跟上。
+        //    沒蓋章的舊資料照樣看得到（那條規則在 OS_DB 裡，刻意不弄丟舊東西）。
+        try {
+            map = (OS_DB.getApiChatsForCurrentCard
+                ? (await OS_DB.getApiChatsForCurrentCard())
+                : (OS_DB.getAllApiChats ? await OS_DB.getAllApiChats() : {})) || {};
+        } catch (e) { return []; }
         const out = [];
         Object.keys(map).forEach(function (id) {
             const d = map[id] || {};
