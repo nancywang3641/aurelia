@@ -96,7 +96,7 @@
     // ── ① 聯絡列表 ──────────────────────────────────────────────
     async function _renderList() {
         if (!_root) return;
-        _ringToken = null; _curCall = null;
+        _ringToken = null; _curCall = null; _clearPending();
         _clearTimer();
         const list = await _loadContacts();
         if (!_root) return;   // 載入期間 app 可能被關掉
@@ -122,7 +122,7 @@
     // ── ② 撥號鍵盤 ──────────────────────────────────────────────
     function _renderPad(typed) {
         if (!_root) return;
-        _ringToken = null; _curCall = null;
+        _ringToken = null; _curCall = null; _clearPending();
         _clearTimer();
         const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
         _root.innerHTML =
@@ -234,6 +234,48 @@
         _renderHistory();
     }
 
+    // ── 她講的話：連著講好幾句 ────────────────────────────────────
+    // 講電話的時候一句沒講完就接下一句是常態，可是以前送出一句就馬上打一次 API、還把輸入框鎖住，
+    // 等於逼她把整段擠成一句。改成排隊：送出先冒泡、先寫進記錄，停手一會兒才把累積的幾句
+    // 一起送給模型（多句用換行接起來，跟他分句講話同一個格式）。
+    // 沒有多一顆「說完了」的按鈕 —— 送出鍵本身就是說完一句，停手就是說完一段；
+    // 而且到點時如果她還在打字（輸入框有字），就再等一輪，不會把她打到一半的話丟下。
+    const _SAY_WAIT = 2200;
+    let _pendingSay = [];
+    let _pendingTimer = null;
+    function _clearPending() {
+        if (_pendingTimer) { clearTimeout(_pendingTimer); _pendingTimer = null; }
+        _pendingSay = [];
+    }
+    // 她說的話先寫進記錄，不等模型回（逾時、掛斷都不會弄丟）
+    async function _writeMyLine(contact, text) {
+        try {
+            const OS_DB = _w('OS_DB');
+            if (!OS_DB || !OS_DB.getApiChat || !OS_DB.saveApiChat) return;
+            const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
+            if (!Array.isArray(rec.messages)) rec.messages = [];
+            const un = _userName();
+            rec.messages.push({ type: 'msg', isMe: true, content: text, sender: un, senderName: un });
+            await OS_DB.saveApiChat(contact.id, rec);
+        } catch (e) { console.warn('[dialer] 先寫我說的話失敗', e); }
+    }
+    function _queueSay(contact, text) {
+        _pendingSay.push(text);
+        _appendCallBubble(true, text, _userName());
+        _writeMyLine(contact, text);
+        if (_pendingTimer) { clearTimeout(_pendingTimer); _pendingTimer = null; }
+        const tick = function () {
+            const el = _root && _root.querySelector('#dlr-say');
+            if (el && String(el.value || '').trim()) { _pendingTimer = setTimeout(tick, _SAY_WAIT); return; }   // 還在打，再等一輪
+            _pendingTimer = null;
+            if (!_pendingSay.length) return;
+            const merged = _pendingSay.join('\n');
+            _pendingSay = [];
+            _say(contact, merged, { alreadyShown: true });
+        };
+        _pendingTimer = setTimeout(tick, _SAY_WAIT);
+    }
+
     // ── 對方講的話：分句 ＋ 他自己掛斷 ──────────────────────────────
     // 真的講電話不是一問一答：一口氣講三句、或講完就掛，都是常態。
     // 模型一次回的內容用換行分句，程式一句一顆泡泡、中間留說話的時間差；
@@ -257,7 +299,7 @@
     // 對方自己掛斷：畫面上講清楚是他掛的，停一拍再照正常收線流程走（會寫通話結束與時長）
     async function _remoteHangUp(contact) {
         if (!_root) return;
-        _enableSay(false);
+        _clearPending(); _enableSay(false);   // 他掛了，她還沒送出去的那幾句就別再送
         _appendCallMark('對方掛斷了');
         const st = _root.querySelector('#dlr-call-timer');
         if (st) st.textContent = '已結束';
@@ -414,11 +456,11 @@
 
         const inp = _root.querySelector('#dlr-say');
         const fire = function () {
-            if (_sayBusy) return;
+            if (_sayBusy) return;                 // 對方正在講話，等他講完
             const txt = (inp.value || '').trim();
             if (!txt) return;
             inp.value = '';
-            _say(contact, txt);
+            _queueSay(contact, txt);              // 先排隊：她可以連著講好幾句，停手才一起送出去
         };
         _root.querySelector('#dlr-say-btn').addEventListener('click', fire);
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); fire(); } });
@@ -436,7 +478,7 @@
         if (!OS_API || !OS_API.buildContext || !OS_API.chat || !OS_DB) { _appendCallBubble(false, '（通話引擎未載入）', contact.name); return; }
         if (_sayBusy) return;
         _sayBusy = true; _enableSay(false);
-        if (userText) _appendCallBubble(true, userText, _userName());
+        if (userText && !opts.alreadyShown) _appendCallBubble(true, userText, _userName());   // 排隊那條已經冒過泡泡了
         const typing = _appendTyping();
 
         // config：用主模型設定（跟 os_studio st.callAI 同源 → 能正確帶 useSystemApi 或 url/key）
@@ -460,17 +502,9 @@
             restore();
         }, 40000);
 
-        // 🚨 她說的話先存，不等 AI 回。以前只在「成功拿到回覆」那條路上才一起寫進去，
-        //    於是逾時、接不通、或她講完就掛斷的那幾句全部不見 —— 看起來就是「聊了一會，歷史沒更新」。
-        if (userText) {
-            try {
-                const rec0 = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
-                if (!Array.isArray(rec0.messages)) rec0.messages = [];
-                const un0 = _userName();
-                rec0.messages.push({ type: 'msg', isMe: true, content: userText, sender: un0, senderName: un0 });
-                await OS_DB.saveApiChat(contact.id, rec0);
-            } catch (e) { console.warn('[dialer] 先寫我說的話失敗', e); }
-        }
+        // 🚨 她說的話在「送出的當下」就寫進記錄，不等模型回（逾時、掛斷都不會弄丟）。
+        //    走排隊那條的已經寫過了（見 _writeMyLine），這裡只補沒走排隊的情況。
+        if (userText && !opts.alreadyShown) await _writeMyLine(contact, userText);
 
         try {
             const messages = await OS_API.buildContext(userText || null, 'call_voice_system');
@@ -566,7 +600,7 @@
 
     function _renderHistory() {
         if (!_root) return;
-        _ringToken = null;
+        _ringToken = null; _clearPending();
         _clearTimer();
         _hsel = { on: false, ids: new Set() };
         _root.innerHTML =
