@@ -86,6 +86,22 @@
             .wx-bubble-avatar { width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; background-size: cover; background-color: #ccc; }
             .wx-bubble-content { max-width: 100%; padding: 10px 14px; border-radius: 6px; position: relative; font-size: 15px; line-height: 1.5; word-wrap: break-word; color: #000; display: flex; flex-direction: column; gap: 5px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
             .wx-group-name { font-size: 10px; color: #999; margin-bottom: 2px; margin-left: 10px; }
+            /* 引用回覆：照微信擺在泡泡內、正文下面的一條灰塊。結構由 OS_API.chatQuote 產，兩個 app 共用 */
+            .wx-quote { display: flex; gap: 4px; align-items: baseline; margin-top: 2px; padding: 5px 8px; border-radius: 4px; background: rgba(0,0,0,0.06); font-size: 11px; line-height: 1.4; color: #8a8a8a; cursor: pointer; }
+            .wx-quote .chat-quote-name { flex-shrink: 0; color: #576b95; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .wx-quote .chat-quote-name::after { content: '：'; }
+            .wx-quote .chat-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .wx-dark .wx-quote { background: rgba(255,255,255,0.10); color: #9a9a9e; }
+            .wx-dark .wx-quote .chat-quote-name { color: #7d90b8; }
+            /* 正在回覆：輸入列上方那條，帶一顆取消 */
+            .wx-replying { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(0,0,0,0.05); border-top: 1px solid rgba(0,0,0,0.06); font-size: 11px; color: #8a8a8a; }
+            .wx-replying .wx-replying-body { flex: 1; min-width: 0; display: flex; gap: 4px; }
+            .wx-replying .chat-quote-name { flex-shrink: 0; color: #576b95; }
+            .wx-replying .chat-quote-name::after { content: '：'; }
+            .wx-replying .chat-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .wx-replying .wx-replying-x { flex-shrink: 0; padding: 2px 6px; cursor: pointer; color: #999; }
+            .wx-dark .wx-replying { background: rgba(255,255,255,0.08); border-top-color: rgba(255,255,255,0.10); color: #9a9a9e; }
+            .wx-dark .wx-replying .chat-quote-name { color: #7d90b8; }
             .wx-msg-row.you .wx-bubble-content { background: #fff; margin-left: 10px; border: 1px solid #ededed; }
             .wx-msg-row.you .wx-bubble-content::before { content: ''; position: absolute; left: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 6px solid #fff; }
             .wx-msg-row.me .wx-bubble-content { background: #95ec69; margin-right: 10px; border: 1px solid #86d45a; }

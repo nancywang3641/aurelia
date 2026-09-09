@@ -690,7 +690,15 @@
                 if (!content) return;
                 if (/^(系統|系统|System|Notice|附加信息|附加訊息|验证信息|驗證信息|验证消息|驗證消息)$/i.test(rawName)) { rooms[key].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
                 const isMe = (me && rawName === me) || (myName && myName !== 'User' && rawName === myName) || _isMeName(rawName);
-                rooms[key].msgs.push({ type: 'msg', sender: rawName, content: content, isMe: isMe });
+                // 引用回覆：標記在內容最前面，解析規則跟 VN 手機共用同一份（OS_API.chatQuote）。
+                // 引用完後面沒東西就當它沒引用——只有一個引用塊沒正文不是一則訊息。
+                const _qp = (win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.parse(content) : null;
+                const _hasQ = !!(_qp && _qp.name && _qp.text && _qp.rest);
+                rooms[key].msgs.push({
+                    type: 'msg', sender: rawName, isMe: isMe,
+                    content: _hasQ ? _qp.rest : content,
+                    quoteName: _hasQ ? _qp.name : '', quoteText: _hasQ ? _qp.text : ''
+                });
             });
         }
         return rooms;
@@ -767,7 +775,7 @@
                 if (r.name) rooms[key].name = r.name;
                 if (r.owner) rooms[key].owner = r.owner;
                 if (r.members && r.members.length) rooms[key].members = r.members.slice();
-                (r.msgs || []).forEach(function (x) { rooms[key].msgs.push({ type: x.type, sender: x.sender, content: x.content, isMe: x.isMe, floor: f }); });
+                (r.msgs || []).forEach(function (x) { rooms[key].msgs.push({ type: x.type, sender: x.sender, content: x.content, isMe: x.isMe, floor: f, quoteName: x.quoteName || '', quoteText: x.quoteText || '' }); });
             });
         }
         // 「我」跨樓補判：某樓沒寫 owner 時用整間房累積的 owner 再判一次（換視角的房，後面幾樓 AI 常省略屬性）
@@ -802,7 +810,7 @@
         storyMsgs.forEach(function (x) {
             while (ni < stamped.length && stamped[ni].f < x.floor) { out.push(stamped[ni].m); ni++; }
             const sender = x.isMe ? myName : (isGroup ? x.sender : (x.sender || roomName));
-            out.push({ type: x.type === 'system' ? 'system' : 'msg', isMe: !!x.isMe, content: x.content, sender: sender, senderName: sender, _story: x.floor });
+            out.push({ type: x.type === 'system' ? 'system' : 'msg', isMe: !!x.isMe, content: x.content, sender: sender, senderName: sender, _story: x.floor, quoteName: x.quoteName || '', quoteText: x.quoteText || '' });
         });
         while (ni < stamped.length) { out.push(stamped[ni].m); ni++; }
         return out;
@@ -1087,7 +1095,49 @@
 
     // ── DOM helpers：避免 this.render() 全量重建導致背景閃爍 ──
     function _getScrollEl()  { return APP_CONTAINER ? APP_CONTAINER.querySelector('.wx-room-scroll') : null; }
-    function _getRoomContent(){ return APP_CONTAINER ? APP_CONTAINER.querySelector('#wxRoomContent') : null; }
+    function _getRoomContent(){ const rc = APP_CONTAINER ? APP_CONTAINER.querySelector('#wxRoomContent') : null; if (rc) _bindQuoteGestures(rc); return rc; }
+
+    // 長按任一則訊息＝引用它。桌面右鍵同一條路。
+    // 事件綁在整個訊息區上做委派，泡泡是每次重畫的，逐顆綁會漏掉重畫後的那些。
+    let _replyTo = null;   // { name, text }：正在回覆誰的哪句話；送出或取消就清掉
+    function _bindQuoteGestures(rc) {
+        if (!rc || rc.dataset.quoteBound === '1') return;
+        rc.dataset.quoteBound = '1';
+        let timer = null, startY = 0;
+        const rowOf = function (e) {
+            const t = (e.target && e.target.closest) ? e.target.closest('.wx-msg-row') : null;
+            return (t && t.dataset && t.dataset.msgIdx != null) ? t : null;
+        };
+        const fire = function (row) {
+            const i = parseInt(row.dataset.msgIdx, 10);
+            if (!isNaN(i) && win.wxApp && win.wxApp.quoteMsg) win.wxApp.quoteMsg(i);
+        };
+        const cancel = function () { if (timer) { clearTimeout(timer); timer = null; } };
+        rc.addEventListener('pointerdown', function (e) {
+            const row = rowOf(e); if (!row) return;
+            startY = e.clientY; cancel();
+            timer = setTimeout(function () { timer = null; fire(row); }, 480);
+        });
+        rc.addEventListener('pointerup', cancel);
+        rc.addEventListener('pointercancel', cancel);
+        rc.addEventListener('pointerleave', cancel);
+        rc.addEventListener('pointermove', function (e) { if (Math.abs(e.clientY - startY) > 8) cancel(); });   // 在捲動就不是長按
+        rc.addEventListener('contextmenu', function (e) {
+            const row = rowOf(e); if (!row) return;
+            e.preventDefault(); fire(row);
+        });
+    }
+    function _renderReplyingBar() {
+        if (!APP_CONTAINER) return;
+        const bar = APP_CONTAINER.querySelector('#wxReplying');
+        if (!bar) return;
+        if (!_replyTo) { bar.classList.add('hidden'); return; }
+        const n = APP_CONTAINER.querySelector('#wxReplyingName');
+        const t = APP_CONTAINER.querySelector('#wxReplyingText');
+        if (n) n.textContent = _replyTo.name;
+        if (t) t.textContent = _replyTo.text;
+        bar.classList.remove('hidden');
+    }
     function _scrollToBottom(){ const r = _getScrollEl(); if (r) r.scrollTop = r.scrollHeight; }
     function _appendBubble(msg, chatObj) {
         const rc = _getRoomContent();
@@ -1406,6 +1456,22 @@
         
         onInputCheck: function(el) { const btn = el.parentElement.querySelector('.wx-send-btn'); const plus = el.parentElement.querySelector('.wx-icon-btn:nth-child(4)'); if (el.value.trim()) { btn.classList.add('show'); plus.style.display = 'none'; } else { btn.classList.remove('show'); plus.style.display = 'block'; } },
         onInputKey: function(e, el) { if(e.key==='Enter') this.sendMsg(el); },
+
+        // 長按（或右鍵）某一則 → 引用它。只記「誰＋前幾個字」，送出時組成標記接在訊息最前面。
+        quoteMsg: function (idx) {
+            const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
+            const m = (chat && Array.isArray(chat.messages)) ? chat.messages[idx] : null;
+            if (!m || m.type === 'system' || m.isLoading) return;
+            const who = String(m.senderName || m.sender || '').trim()
+                     || (m.isMe ? ((win.WX_USER && win.WX_USER.getInfo && win.WX_USER.getInfo().name) || '我') : (chat.realName || chat.name || ''));
+            const raw = String(m.content || '').replace(/\s+/g, ' ').trim();   // 媒體訊息就引用它的標籤本身，看得出引用的是什麼
+            if (!who || !raw) return;
+            _replyTo = { name: who, text: raw.slice(0, 30) };
+            _renderReplyingBar();
+            const inputEl = APP_CONTAINER ? APP_CONTAINER.querySelector('.wx-input-real') : null;
+            if (inputEl) inputEl.focus();
+        },
+        cancelQuote: function () { _replyTo = null; _renderReplyingBar(); },
         
         togglePanel: function() {
             const panel = APP_CONTAINER.querySelector('.wx-action-panel');
@@ -1682,7 +1748,10 @@
             const safeMembers = (currentChat.members && Array.isArray(currentChat.members)) ? currentChat.members : [];
             const memberNames = convertMemberIdsToNames(safeMembers);
             const memberStr = memberNames.length > 0 ? memberNames.join(', ') : (chatName || "User");
-            const fullProtocolMessage = `\n[Chat: ${chatName}|${chatId}]\n[With: ${memberStr}]\n[${myName}] ${text}`;
+            // 引用回覆：畫面上存成欄位，送進正文的那份帶標記（AI 才知道她在回誰的哪句）
+            const _q = _replyTo;
+            const _qMark = (_q && win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.build(_q.name, _q.text) : '';
+            const fullProtocolMessage = `\n[Chat: ${chatName}|${chatId}]\n[With: ${memberStr}]\n[${myName}] ${_qMark}${text}`;
 
             const sentMsg = {
                 type: 'msg',
@@ -1691,10 +1760,13 @@
                 sender: myName,
                 senderName: myName,
                 timestamp: Date.now(),
-                raw: fullProtocolMessage
+                raw: fullProtocolMessage,
+                quoteName: _q ? _q.name : '',
+                quoteText: _q ? _q.text : ''
             };
             currentChat.messages.push(sentMsg);
             _appendBubble(sentMsg, currentChat);
+            _replyTo = null; _renderReplyingBar();
             if(inputEl) { inputEl.value=''; this.onInputCheck(inputEl); }
 
             const configStr = localStorage.getItem('wx_phone_api_config');

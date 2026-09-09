@@ -312,6 +312,65 @@
     // --- 3. OS API 主對象 ---
     win.OS_API = {
 
+        // ── 聊天引用回覆：微信與 VN 手機共用同一份 ──────────────────────────
+        // 兩邊吃的是同一種行格式（[名字] 內容），所以解析、組裝、灰塊 HTML 都放這一份，
+        // 別各寫各的——兩份一定會漂（通訊錄那次就是兩把尺分家造成的）。
+        //
+        // 寫法：引用標記放在「內容的最前面」，不動發話人那一格。
+        //   [阿華] 今晚要不要去看那場
+        //   [小明] [引用|阿華:今晚要不要去] 我剛好也想問這個
+        // 為什麼不寫成 [小明:引用…]：解析器有一條硬規矩「方括號裡有冒號就不是發話人」
+        //   （[圖片:…]、[Chat:…] 靠它擋），寫進去那行會整個不算一則訊息。
+        // 為什麼帶 `|`：VN 標籤一律要帶 | 或 :，整行單一 [XXX] 會被載入層的區塊過濾整段吃掉。
+        // 模型寫不出穩定的訊息 id，所以引用的是「說話人＋前幾個字」，靠 findTarget 往回找最近一則；
+        // 找不到就照樣把灰塊畫出來（純文字），不會壞掉也不會擋住正文。
+        chatQuote: {
+            RE: /^\[\s*(?:引用|引用回覆|引用回复|Quote|Re)\s*[|｜]\s*([^\]:：]{1,24})\s*[:：]\s*([^\]]{0,60})\]\s*/,
+
+            // 內容 → { name, text, rest }；沒有引用就 name/text 是空字串、rest 原樣
+            parse: function (content) {
+                const s = String(content == null ? '' : content);
+                const m = s.match(this.RE);
+                if (!m) return { name: '', text: '', rest: s };
+                return { name: (m[1] || '').trim(), text: (m[2] || '').trim(), rest: s.slice(m[0].length) };
+            },
+
+            // 組回標記（她在微信裡手動引用時用）。片段截短，太長的引用塊在手機上會佔掉整個畫面
+            build: function (name, text) {
+                const n = String(name || '').trim().replace(/[\]|｜:：]/g, '').slice(0, 24);
+                let t = String(text || '').replace(/\s+/g, ' ').trim().replace(/[\]]/g, '').slice(0, 30);
+                if (!n || !t) return '';
+                return '[引用|' + n + ':' + t + '] ';
+            },
+
+            // 往回找被引用的那一則：同一個人說的、內容從那段片段開頭。找不到回 -1。
+            // 由後往前找，取最近的一則——同一句話重複出現時，引用的一定是剛剛那次。
+            findTarget: function (msgs, quoteName, quoteText, beforeIdx) {
+                if (!Array.isArray(msgs) || !quoteName || !quoteText) return -1;
+                const end = (typeof beforeIdx === 'number' && beforeIdx >= 0) ? Math.min(beforeIdx, msgs.length) : msgs.length;
+                const key = quoteText.replace(/\s+/g, '');
+                for (let i = end - 1; i >= 0; i--) {
+                    const m = msgs[i];
+                    if (!m || m.type === 'system') continue;
+                    const who = String(m.sender || '').trim();
+                    if (who !== String(quoteName).trim()) continue;
+                    const body = String(m.content || '').replace(/\s+/g, '');
+                    if (body.indexOf(key) === 0 || body.indexOf(key) > -1) return i;
+                }
+                return -1;
+            },
+
+            // 灰塊 HTML。cls 讓兩邊各自套自己的主題（微信一套、VN 手機一套），結構共用
+            html: function (name, text, cls) {
+                if (!name || !text) return '';
+                const esc = function (s) {
+                    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                };
+                return '<div class="' + (cls || 'chat-quote') + '"><span class="chat-quote-name">' + esc(name)
+                     + '</span><span class="chat-quote-text">' + esc(text) + '</span></div>';
+            },
+        },
+
         // ── 插圖落點的「哪些不要選」：兩條插圖路共用一份 ──
         // 搭便車那條（本檔 extractScenes）與獨立插圖副模型那條（state_runtime 的 extractScenesStandalone）
         // 都叫這支，別各寫各的——兩份會漂，她改了一邊另一邊還是舊的。

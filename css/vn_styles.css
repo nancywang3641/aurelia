@@ -1720,6 +1720,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .chat-row.you .chat-content { align-items: flex-end; }
         .chat-row.other .chat-content { align-items: flex-start; }
         .chat-sender-name { font-size: 0.75rem; color: #888; margin-bottom: 3px; padding: 0 4px; }
+        /* 引用回覆：照微信擺在泡泡內、正文下面的一條灰塊。結構由 OS_API.chatQuote 產，跟微信 app 共用 */
+        .vnp-quote { display: flex; gap: 4px; align-items: baseline; margin-top: 6px; padding: 5px 8px; border-radius: 4px; background: rgba(0,0,0,0.07); font-size: 0.72rem; line-height: 1.4; color: #6b6b6b; }
+        .vnp-quote .chat-quote-name { flex-shrink: 0; color: #4a6ea9; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vnp-quote .chat-quote-name::after { content: '：'; }
+        .vnp-quote .chat-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .chat-bubble { padding: 10px 14px; font-size: 0.9rem; line-height: 1.5; color: #111; word-break: break-word; box-shadow: 0 1px 3px rgba(0,0,0,0.08); position: relative; }
         .chat-row.you .chat-bubble { background: #95ec69; border-radius: 12px 4px 12px 12px; }
         .chat-row.you .chat-bubble::after { content: ''; position: absolute; top: 10px; right: -7px; border: 7px solid transparent; border-left-color: #95ec69; border-right: 0; }

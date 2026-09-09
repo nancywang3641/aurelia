@@ -96,8 +96,10 @@
                 if (pureContent.length > 0 || msg.content.match(blockRegex).length > 1) {
                     const parts = msg.content.split(blockRegex).filter(p => p && p.trim().length > 0);
                     if (parts.length > 1) {
-                        return parts.map(part => {
+                        return parts.map((part, pi) => {
                             let subMsg = { ...msg, content: part.trim() };
+                            // 一則訊息被媒體標籤切成好幾個泡泡時，引用塊只掛在第一個，不然會重複出現
+                            if (pi > 0) { subMsg.quoteName = ''; subMsg.quoteText = ''; }
                             return this.renderBubble(subMsg, chatObj, withAnim, msgIndex);
                         }).join('');
                     }
@@ -214,7 +216,11 @@
                 nameHTML = `<div class="wx-group-name">${msg.sender}</div>`;
             }
             
-            return `<div class="wx-msg-row ${side} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${dbDataAttr}></div><div style="max-width: 70%;">${nameHTML}<div class="wx-bubble-content" style="${bubbleStyle}">${html}</div></div></div>`;
+            // 引用回覆的灰塊：照微信擺在泡泡內、正文下面。解析與 HTML 跟 VN 手機共用 OS_API.chatQuote
+            const quoteHTML = (msg.quoteName && msg.quoteText && win.OS_API && win.OS_API.chatQuote)
+                ? win.OS_API.chatQuote.html(msg.quoteName, msg.quoteText, 'wx-quote') : '';
+
+            return `<div class="wx-msg-row ${side} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${dbDataAttr}></div><div style="max-width: 70%;">${nameHTML}<div class="wx-bubble-content" style="${bubbleStyle}">${html}${quoteHTML}</div></div></div>`;
         },
 
         generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },
@@ -836,6 +842,7 @@
                     <div class="wx-rp-overlay" id="wxRedPacketOverlay" onclick="this.classList.remove('show')"><div class="wx-rp-box" onclick="event.stopPropagation()"><div class="wx-rp-header"><div class="wx-rp-avatar" id="wxRpAvatar"></div><div class="wx-rp-sender" id="wxRpSender">的紅包</div><div class="wx-rp-memo" id="wxRpMemo">恭喜發財，大吉大利</div></div><div class="wx-rp-divider"></div><div class="wx-rp-info" id="wxRpInfoBar">暫無人領取</div><div class="wx-rp-list" id="wxRpList"></div><div class="wx-rp-close" onclick="document.getElementById('wxRedPacketOverlay').classList.remove('show')">關閉</div></div></div>
 
                     <div class="wx-footer-wrapper" style="display:${inputDisplay}">
+                        <div class="wx-replying hidden" id="wxReplying"><div class="wx-replying-body"><span class="chat-quote-name" id="wxReplyingName"></span><span class="chat-quote-text" id="wxReplyingText"></span></div><span class="wx-replying-x" onclick="${app}.cancelQuote()"><i class="fa-solid fa-xmark"></i></span></div>
                         <div class="wx-input-bar">
                             ${triggerBtn}
                             <input class="wx-input-real" placeholder="" oninput="${app}.onInputCheck(this)" onkeydown="${app}.onInputKey(event, this)">

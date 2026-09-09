@@ -142,11 +142,17 @@
                         || (!!mc && mc !== 'User' && (sender === mc || bare(sender) === bare(mc)))
                         || (!!this._mcAlias && (sender === this._mcAlias || bare(sender) === bare(this._mcAlias)))
                         || (!!this.chatOwner && sender === this.chatOwner);
-                    const parts = this._splitStickerContent(content);
-                    for (const part of parts) {
-                        chatBody.insertAdjacentHTML('beforeend', this._buildChatBubbleHTML(sender, part, isMe, core));
-                    }
-                    core.addLog(sender, content);
+                    // 引用回覆：標記在內容最前面，解析跟微信共用同一份（OS_API.chatQuote）。
+                    // 引用完後面沒東西就當它沒引用。灰塊只掛在被貼圖切開後的第一個泡泡上。
+                    const _qp = (win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.parse(content) : null;
+                    const _hasQ = !!(_qp && _qp.name && _qp.text && _qp.rest);
+                    const body = _hasQ ? _qp.rest : content;
+                    const parts = this._splitStickerContent(body);
+                    parts.forEach((part, pi) => {
+                        const q = (_hasQ && pi === 0) ? { name: _qp.name, text: _qp.text } : null;
+                        chatBody.insertAdjacentHTML('beforeend', this._buildChatBubbleHTML(sender, part, isMe, core, q));
+                    });
+                    core.addLog(sender, body);
                 }
                 this.scrollChat();
             }
@@ -248,7 +254,7 @@
             return palette[Math.abs(h) % palette.length];
         },
 
-        _buildChatBubbleHTML: function(sender, content, isMe, core) {
+        _buildChatBubbleHTML: function(sender, content, isMe, core, quote) {
             if (content.startsWith('[撤回]')) { return `<div class="chat-sys">${sender} 撤回了一條消息</div>`; }
             const nameHTML = (!isMe && this.isGroupChat) ? `<div class="chat-sender-name">${sender}</div>` : '';
 
@@ -364,6 +370,12 @@
                 inner = `<div class="wx-receive-msg"><div class="wx-receive-head"><i class="fa-solid fa-wallet"></i> 微信收款</div><div class="wx-receive-qr">${this._fakeQrSvg(recvM[2] || 'qr')}</div><div class="wx-receive-amt">${amtDisp}</div><div class="wx-receive-foot">${memoDisp}</div></div>`;
             } else {
                 inner = `<div class="chat-bubble">${content}</div>`;
+            }
+            // 引用回覆的灰塊：照微信擺在泡泡內、正文下面。結構跟微信共用 OS_API.chatQuote
+            if (quote && quote.name && quote.text && win.OS_API && win.OS_API.chatQuote) {
+                const qh = win.OS_API.chatQuote.html(quote.name, quote.text, "vnp-quote");
+                const cut = inner.lastIndexOf('</div>');
+                if (qh && cut > -1) inner = inner.slice(0, cut) + qh + inner.slice(cut);
             }
             const rowHTML = `<div class="chat-row ${isMe ? 'you' : 'other'}"><div class="chat-avatar" style="${avatarStyle}">${avatarHTML}</div><div class="chat-content">${inner}</div></div>`;
             return nameHTML ? `<div class="chat-outer">${nameHTML}${rowHTML}</div>` : rowHTML;
