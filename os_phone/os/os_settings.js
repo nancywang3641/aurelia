@@ -77,7 +77,7 @@
             imgSourceSynced: true,            // 背景來源是否同步頭像（true＝沿用頭像接口）
             // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API（送 JSON 回 JSON）。
             //    三格全部自己填，不內建站台清單——每個站支援的型號都不一樣，清單只會過期。
-            customApi: { url: '', apiKey: '', model: '', quality: 'medium' },
+            customApi: { url: '', apiKey: '', model: '', quality: 'medium', basePrompt: '' },
             pollinations: {
                 url: 'https://gen.pollinations.ai/image',
                 apiKey: '',
@@ -1577,6 +1577,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         </select>
                                     </div>
                                     <div class="field-row">
+                                        <div class="set-label" title="選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。">底詞</div>
+                                        <textarea class="set-textarea" id="img-capi-base" placeholder="每張圖都要帶的固定描述，例如畫風">${(imgConfig.customApi?.basePrompt || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                                    </div>
+                                    <div class="field-row">
                                         <button class="set-btn" id="img-capi-test" type="button">🔌 測試</button>
                                         <div class="set-desc" id="img-capi-status"></div>
                                     </div>
@@ -2566,7 +2570,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try {
                 const out = await IM._genCustomApi('a cat sitting on a wooden table', 'bg',
                     { width: tw, height: th, customApi: { url: url, apiKey: key, model: model,
-                        quality: (q('#img-capi-quality')?.value || 'medium') } });
+                        quality: (q('#img-capi-quality')?.value || 'medium'),
+                        basePrompt: (q('#img-capi-base')?.value || '').trim() } });
                 if (out) say('✅ 通了，' + tw + '×' + th + ' 這個尺寸生得出圖');
                 else say('❌ ' + ((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'));
             } catch (e) {
@@ -2939,6 +2944,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         apiKey: (container.querySelector('#img-capi-key')?.value   || '').trim(),
                         model:  (container.querySelector('#img-capi-model')?.value || '').trim(),
                         quality: (container.querySelector('#img-capi-quality')?.value || 'medium'),
+                        basePrompt: (container.querySelector('#img-capi-base')?.value || '').trim(),
                     },
                     novelai: {
                         token: elNaiToken.value.trim(),

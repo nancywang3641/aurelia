@@ -121,7 +121,7 @@
             serviceMap: 'pollinations',       // 小地圖桶：map（場景俯視小地圖底板，畫風跟背景分開）
             // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API。
             //    三格全部自己填，不內建站台清單——每個站的型號都不一樣，清單只會過期。
-            customApi: { url: '', apiKey: '', model: '', quality: 'medium' },
+            customApi: { url: '', apiKey: '', model: '', quality: 'medium', basePrompt: '' },
             pollinations: {
                 url: 'https://gen.pollinations.ai/image', // API 端點
                 apiKey: '', // Pollen API Key
@@ -423,6 +423,10 @@
             const model = String(options.model || cfg.model || '').trim();
             if (!rawUrl) { console.warn('[ImageManager] 自訂接口沒填網址'); return null; }
 
+            // 底詞：跟別家接口一樣有一格，接在每張提示詞後面。畫風放這裡由程式保證每張都帶，
+            // 不必靠副模型每次記得寫（它會漏、會改寫）。options.raw 是「原樣送」的呼叫（她按原圖重生那種），不套。
+            const _basePrompt = String(cfg.basePrompt || '').trim();
+
             // 網址容錯：站方通常給到 .../v1，但她也可能整條貼進來
             const base = rawUrl.replace(/\/+$/, '');
             // 兩種格式，看網址自己判斷 —— 她只要貼站方給的那條，不必再選一次「這是哪一種」。
@@ -450,9 +454,12 @@
                 if (/^dall-e-3/i.test(model)) return r > 1.2 ? '1792x1024' : (r < 0.83 ? '1024x1792' : '1024x1024');
                 return r > 1.2 ? '1536x1024' : (r < 0.83 ? '1024x1536' : '1024x1024');  // gpt-image-1 與其後續
             };
+            // 底詞接在後面：SD 那種吃逗號串接，OpenAI 那種吃自然語言、隔一個空行讀起來才是「另一句要求」。
+            const _p = (!_basePrompt || options.raw) ? prompt
+                : (isSd ? (prompt + ', ' + _basePrompt) : (prompt + '\n\n' + _basePrompt));
             const body = isSd
-                ? { prompt: prompt, negative_prompt: options.negativePrompt || '', width: width, height: height }
-                : { model: model, prompt: prompt, n: 1, size: _official ? _snapSize() : (width + 'x' + height) };
+                ? { prompt: _p, negative_prompt: options.negativePrompt || '', width: width, height: height }
+                : { model: model, prompt: _p, n: 1, size: _official ? _snapSize() : (width + 'x' + height) };
             // dall-e 回的是一小時就過期的網址，存進聊天記錄隔天就是破圖 → 要它直接回圖檔本體。
             // gpt-image-1 本來就只回圖檔本體，而且不收這個參數，所以不能一律加。
             if (!isSd && /^dall-e/i.test(model)) body.response_format = 'b64_json';
