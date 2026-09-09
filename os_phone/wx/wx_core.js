@@ -823,6 +823,9 @@
             const liveIds = {};
             let contactCount = 0;
             const contactSeen = {};
+            // 同群不等於加好友：只在群裡出現過的名字記在這，真的該進通訊錄的（好友申請、一對一聊過的）記在那邊。
+            // 收尾時拿這兩份對照，把以前「隱形註冊」留下來的路人清掉。
+            const groupOnlyNames = {}, realContactNames = {};
             let rebuildActive = false;
 
             for (let i = 0; i < keys.length; i++) {
@@ -837,6 +840,7 @@
                     if (!fid || fid === 'User') return;
                     if (fr.bio) win.WX_CONTACTS.addContactToStorage({ id: fid, name: fr.name, desc: fr.bio });
                     _storyEnsureContactChat(fid, fr.name, fr.bio);
+                    realContactNames[fr.name] = 1;   // 好友申請＝她真的加了這個人，該留
                     if (!contactSeen[fr.name]) { contactSeen[fr.name] = 1; contactCount++; }
                 });
                 const others = _storyOthers(room);
@@ -845,14 +849,20 @@
                 let chatId, members, realName;
                 if (isGroup) {
                     chatId = 'grp_story_' + _storyHash(cid) + '_' + String(key).replace(/[^\w一-鿿-]/g, '_').slice(0, 40);
-                    members = others.map(function (n) { return win.WX_CONTACTS.getOrCreateContactID(n, 'user', true); });
-                    others.forEach(function (n, j) { if (!contactSeen[n]) { contactSeen[n] = 1; contactCount++; } _storyEnsureContactChat(members[j], n, ''); });
+                    // 🚨 同群不等於加好友。這裡只拿「現成的」聯絡人 id：本來就在通訊錄裡的人照樣對得上，
+                    //    不在的路人就用名字當 id —— 群成員名照樣顯示得出來（wx_contacts 那邊查不到 id 就用 id 當名字）。
+                    //    以前這行是 saveToStorage=true，光取個 id 就把人隱形註冊進通訊錄，後面再補一間空的一對一
+                    //    聊天室；於是劇情裡出現過的每個路人都成了她的微信聯絡人。而那種空房身上沒有 storyKey，
+                    //    下面回收舊房的迴圈永遠掃不到，只會越積越多。
+                    members = others.map(function (n) { return win.WX_CONTACTS.getOrCreateContactID(n, 'user', false); });
+                    others.forEach(function (n) { groupOnlyNames[n] = 1; });
                     win.WX_CONTACTS.addContactToStorage({ id: chatId, name: room.name || key, isGroup: true, members: members });
                 } else {
                     realName = others[0] || room.name || key;
                     chatId = win.WX_CONTACTS.getOrCreateContactID(realName, 'user', true);
                     if (chatId === 'User') continue;
                     members = [realName];
+                    realContactNames[realName] = 1;   // 一對一聊過＝真的是聯絡人
                     if (!contactSeen[realName]) { contactSeen[realName] = 1; contactCount++; }
                     _storyUpsertUnified(chatId, realName, '');
                 }
@@ -914,6 +924,39 @@
                 const kept = list.filter(function (c) { return !(c && !c.isGroup && _isMeName(c.name)); });
                 if (kept.length !== list.length) localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(kept));
             } catch (e) {}
+            // 舊帳：以前「同群就隱形註冊」留下來的路人（出租車司機、老張那種），要三個條件同時成立才動手 ——
+            //   ① 這一輪只以群成員身分出現，沒在好友申請裡、也沒有一對一的房
+            //   ② 通訊錄那筆是隱形註冊的：簡介還是預設那句、沒頭像、沒人設
+            //   ③ 它的一對一聊天室一則訊息都沒有
+            // 她自己加的、AI 搜出來的、好友申請進來的，會在②或③擋下來，不會被掃到。
+            try {
+                const DEFAULT_DESC = '這個人很懶，什麼都沒寫';
+                const list = win.WX_CONTACTS.getAllCustomContacts();
+                const drop = {};
+                list.forEach(function (c) {
+                    if (!c || c.isGroup || c.id === 'User') return;
+                    if (!groupOnlyNames[c.name] || realContactNames[c.name]) return;
+                    if ((c.desc || '') !== DEFAULT_DESC) return;
+                    if (c.avatarId || c.avatar || c.persona) return;
+                    if (c.aiKeyword && c.aiKeyword !== 'user') return;
+                    const chat = GLOBAL_CHATS[c.id] || all[c.id];
+                    if (chat && (chat.messages || []).length) return;
+                    drop[c.id] = c.name;
+                });
+                const dropIds = Object.keys(drop);
+                if (dropIds.length) {
+                    localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(list.filter(function (c) { return !drop[c.id]; })));
+                    for (let di = 0; di < dropIds.length; di++) {
+                        const did = dropIds[di];
+                        delete GLOBAL_CHATS[did];
+                        try { await win.WX_DB.deleteApiChat(did); } catch (e) {}
+                        try { if (win.OS_CONTACTS && win.OS_CONTACTS.deleteContact) win.OS_CONTACTS.deleteContact(did); } catch (e) {}
+                        if (GLOBAL_ACTIVE_ID === did) GLOBAL_ACTIVE_ID = null;
+                    }
+                    console.log('[wx 跑團同步] 清掉只因同群被隱形註冊的聯絡人 ' + dropIds.length + ' 位：' + dropIds.map(function (i) { return drop[i]; }).join('、'));
+                }
+            } catch (e) { console.warn('[wx 跑團同步] 清理群成員殘留失敗:', (e && e.message) || e); }
+
             _storyLastFloor = parsed.lastFloor;
             _storyStat = { rooms: keys.filter(function (k) { return rooms[k].msgs.length; }).length, contacts: contactCount, floor: parsed.lastFloor, at: Date.now() };
 
