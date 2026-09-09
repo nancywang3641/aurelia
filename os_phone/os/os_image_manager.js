@@ -456,6 +456,9 @@
             // dall-e 回的是一小時就過期的網址，存進聊天記錄隔天就是破圖 → 要它直接回圖檔本體。
             // gpt-image-1 本來就只回圖檔本體，而且不收這個參數，所以不能一律加。
             if (!isSd && /^dall-e/i.test(model)) body.response_format = 'b64_json';
+            // gpt-image-1 唯一能調鬆的一格：預設 auto 連刀光血跡都可能擋，low 是官方允許的下限。
+            // 它不解禁情色，只是別讓劇情裡的打鬥整批生不出來。dall-e 不收這個參數，不能一律加。
+            if (!isSd && /^gpt-image/i.test(model)) body.moderation = 'low';
             if (!isSd && !_official && options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略；官方不吃且會擋
 
             const headers = { 'Content-Type': 'application/json' };
@@ -468,7 +471,17 @@
                     signal: options.signal || undefined,
                 });
                 const text = await resp.text();
-                if (!resp.ok) { const e = new Error(resp.status + ' ' + text.slice(0, 300)); e.status = resp.status; throw e; }
+                if (!resp.ok) {
+                    // 內容被擋是最常撞到的一種，而站方回的是一整包英文 JSON，彈出來看不出是被擋還是設定錯。
+                    // 認出來就講人話：那張圖不會有了，但不是她設定壞了，也不用重試。
+                    const _blocked = /safety system|content[_ ]policy|moderation_blocked|image_generation_user_error/i.test(text);
+                    const e = new Error(_blocked
+                        ? '這張的內容被站方擋掉了（畫面太血腥或太露骨都會）。這張不會有圖，換個說法或這桶改用別的來源。'
+                        : (resp.status + ' ' + text.slice(0, 300)));
+                    e.status = resp.status;
+                    e.blocked = _blocked;
+                    throw e;
+                }
 
                 let data;
                 try { data = JSON.parse(text); }
