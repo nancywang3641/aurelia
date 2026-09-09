@@ -96,6 +96,7 @@
     // ── ① 聯絡列表 ──────────────────────────────────────────────
     async function _renderList() {
         if (!_root) return;
+        _ringToken = null; _curCall = null;
         _clearTimer();
         const list = await _loadContacts();
         if (!_root) return;   // 載入期間 app 可能被關掉
@@ -121,6 +122,7 @@
     // ── ② 撥號鍵盤 ──────────────────────────────────────────────
     function _renderPad(typed) {
         if (!_root) return;
+        _ringToken = null; _curCall = null;
         _clearTimer();
         const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
         _root.innerHTML =
@@ -181,12 +183,57 @@
                 // 所以接通與否要等回覆才知道 —— 先進通話畫面再被掛掉不像打電話。
                 const st = _root && _root.querySelector('#dlr-call-status');
                 if (st) st.innerHTML = '響鈴中<span class="dlr-dots">…</span>';
-                _say(contact, null, { firstRing: true });
+                _ringToken = {};
+                _say(contact, null, { firstRing: true, token: _ringToken });
             }
         }, 1800);
     }
 
     // 對方不接：只有一通電話的第一句能這樣回（後面講到一半不會突然變拒接，那是掛斷）
+    // ── 一通電話的頭尾分隔 ────────────────────────────────────────
+    // 通話畫面與微信共用同一份聊天記錄，所以上面看得到以前的訊息。那份裡面混著打字的訊息與
+    // 好幾通電話，全部連在一起就分不出哪句是哪通、隔了多久。撥通與掛斷各寫一筆帶時間的分隔，
+    // 通話畫面與逐字稿都靠它斷句。
+    let _curCall = null;    // { id, name, startedAt, wroteStart }
+    let _ringToken = null;  // 響鈴中的憑證：她中途離開就作廢，回覆晚到也不會把畫面拉回通話
+    function _appendCallMark(text) {
+        const l = _callLogEl(); if (!l || !text) return;
+        l.insertAdjacentHTML('beforeend', _bubbleHTML({ type: 'system', content: text }, ''));
+        _scrollCallLog();
+    }
+    function _stamp(ts) {
+        const d = new Date(ts || Date.now());
+        return (d.getMonth() + 1) + '/' + d.getDate() + ' '
+             + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+    function _dur(ms) {
+        const s = Math.max(0, Math.round((ms || 0) / 1000));
+        return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    }
+    async function _writeCallMark(id, content, extra) {
+        try {
+            const OS_DB = _w('OS_DB');
+            if (!OS_DB || !OS_DB.getApiChat || !OS_DB.saveApiChat) return;
+            const rec = (await OS_DB.getApiChat(id)) || { id: id, name: (_curCall && _curCall.name) || id, members: [], isGroup: false, messages: [] };
+            if (!Array.isArray(rec.messages)) rec.messages = [];
+            rec.messages.push(Object.assign({ type: 'system', content: content, timestamp: Date.now() }, extra || {}));
+            await OS_DB.saveApiChat(id, rec);
+        } catch (e) { console.warn('[dialer] 寫通話分隔失敗', e); }
+    }
+    // 接通的那一刻才寫「通話開始」（響鈴被拒接不算一通）
+    async function _markCallStart() {
+        if (!_curCall || _curCall.wroteStart) return;
+        _curCall.wroteStart = true;
+        await _writeCallMark(_curCall.id, '通話開始 · ' + _stamp(_curCall.startedAt), { _callStart: true });
+    }
+    // 掛斷：有接通過才寫結束與時長，沒講到話就不留痕跡
+    async function _hangUp(contact) {
+        const c = _curCall;
+        _curCall = null;
+        if (c && c.wroteStart) await _writeCallMark(c.id, '通話結束 · ' + _dur(Date.now() - c.startedAt), { _callEnd: true });
+        _renderHistory();
+    }
+
     // 標記可以帶一句話：[不接|在忙，晚點回你] —— 不接，但補一則訊息過來（很像真人）。
     // 不帶就只是單純不接。那句話寫進同一份聊天記錄，她去微信找那個人就看得到、還是未讀。
     const _REFUSE_RE = /^\s*[\[［【]\s*(?:不接|拒接|不想接|沒接|未接|NoAnswer|Reject|Decline|Busy)\s*(?:[|｜]\s*([^\]］】]*))?\s*[\]］】]\s*$/i;
@@ -323,14 +370,15 @@
           +     '<button class="dlr-hang big" id="dlr-hang2" type="button">掛斷</button>'
           +   '</div>'
           + '</div>';
-        // 計時
+        // 計時。開始時間記在 _curCall 上，掛斷時要拿它算時長、寫分隔
+        _curCall = { id: contact.id, name: contact.name, startedAt: Date.now(), wroteStart: false };
         let sec = 0;
         const tEl = _root.querySelector('#dlr-call-timer');
         _timer = setInterval(function () {
             sec++;
             if (tEl) tEl.textContent = '通話中 ' + String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
         }, 1000);
-        _root.querySelector('#dlr-hang2').addEventListener('click', _renderHistory);
+        _root.querySelector('#dlr-hang2').addEventListener('click', function () { _hangUp(contact); });
 
         const inp = _root.querySelector('#dlr-say');
         const fire = function () {
@@ -403,12 +451,16 @@
                     // _inCall 裡的 _renderCallLog 會整份重畫對話區，所以要等它畫完再冒這句泡泡。
                     if (opts.firstRing) {
                         const _ref = _refusalOf(reply);
-                        if (_ref) { restore(); _noAnswer(contact, _ref.note); return; }
+                        if (_ref) { restore(); if (opts.token && opts.token !== _ringToken) return; _noAnswer(contact, _ref.note); return; }
+                        if (opts.token && opts.token !== _ringToken) { restore(); return; }   // 響鈴中她已經離開這通了
                         await _inCall(contact, true);
                         // 🚨 done() 在上面就跑過了，但它那時通話畫面還不存在（響鈴階段還在撥號畫面），
                         //    解鎖輸入框那一下等於打在空氣上。畫面建好之後要再解一次，
                         //    不然對方明明回話了，輸入框卻是鎖的。
                         _enableSay(true);
+                        // 接通了才算一通：寫進記錄，畫面上也補一條，第一句就落在分隔線下面
+                        await _markCallStart();
+                        _appendCallMark('通話開始 · ' + _stamp(_curCall && _curCall.startedAt));
                     }
                     _appendCallBubble(false, reply, contact.name);
                     _speak(contact, reply);                   // 念出來（當前開哪個引擎就用哪個）
@@ -473,6 +525,7 @@
 
     function _renderHistory() {
         if (!_root) return;
+        _ringToken = null;
         _clearTimer();
         _hsel = { on: false, ids: new Set() };
         _root.innerHTML =

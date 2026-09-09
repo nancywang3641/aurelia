@@ -243,7 +243,14 @@
 .dlr-tx-who { font-size: 11px; color: rgba(26,28,40,0.45); margin: 0 4px 3px; }
 .dlr-tx-bubble { padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.5; background: #fff; color: #1a1c28; box-shadow: 0 1px 2px rgba(26,28,40,0.06); white-space: pre-wrap; word-break: break-word; }
 .dlr-tx-msg.me .dlr-tx-bubble { background: linear-gradient(135deg,#34c759,#28a048); color: #fff; }
-.dlr-tx-time { align-self: center; font-size: 11px; color: rgba(26,28,40,0.4); margin: 4px 0; }
+/* 通話開始／結束、未接聽這些分隔：置中小字，左右各拉一條細線，一眼看得出「這裡換一通了」 */
+.dlr-tx-time {
+    align-self: stretch; display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: rgba(26,28,40,0.4); margin: 10px 0; text-align: center;
+}
+.dlr-tx-time::before, .dlr-tx-time::after {
+    content: ''; flex: 1; height: 1px; background: rgba(26,28,40,0.12);
+}
 
 /* 正在通話：泡泡聊天式（與通話紀錄/微信一致） */
 .dlr-incall { display: flex; flex-direction: column; height: 100%; background: #f4f5f8; color: #1a1c28; }
