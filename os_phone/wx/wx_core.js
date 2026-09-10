@@ -565,16 +565,15 @@
                 const tag = nameMatch[1];
                 if (!_isMediaTag(tag)) {
                     sender = tag; content = nameMatch[2].trim();
-                    if (sender.match(/^(You|Me|我|Self|主角|User)$/i)) {
-                        isMe = true;
-                    } else if (ctx.members.length > 0) {
-                        // With 清單 members[0] 永遠是主角（用戶），不論私聊還是群聊
-                        isMe = (sender === ctx.members[0]);
-                    } else {
-                        // 沒有 With 清單時才用舊邏輯（sender 不是聊天室同名角色 = 用戶）
-                        const chatObj = GLOBAL_CHATS[ctx.chatId];
-                        isMe = (chatObj && !chatObj.isGroup) ? (sender !== ctx.chatName) : false;
-                    }
+                    // 🚨🚨這裡「一律不是她」，不做任何判斷。
+                    //   微信是她自己的手機，視角是固定的：這條路走的是 AI 的回覆，
+                    //   AI 扮的一定是對方，右邊那一側只留給她自己按送出的訊息。
+                    //   VN 手機才需要分左右——那邊劇情會演到別人的手機（owner 點名制）。
+                    //   舊寫法看發話人的名字猜，最寬鬆那條是「私聊裡名字不等於聊天室名＝她」，
+                    //   於是 AI 寫 [系統]、[User] 或任何自創的名字都會跑到她那一側，
+                    //   變成「AI 冒充她說話」（她實測看到系統通知出現在自己的綠泡泡裡）。
+                    //   sender 照樣留著：群聊要顯示是誰說的。
+                    isMe = false;
                 } else { content = line; }
             }
 
@@ -1299,15 +1298,15 @@
                 const totalGrabbed = list.reduce((acc, cur) => acc + cur.amount, 0);
                 const remainingAmount = totalAmount - totalGrabbed;
                 
-                // 顯示紅包總金額、已領取金額、剩餘金額
-                let infoText = `總金額: ¥${totalAmount.toFixed(2)}`;
-                if (count > 0) {
-                    infoText += ` | 已領取: ¥${totalGrabbed.toFixed(2)} (${count}個)`;
-                }
-                if (remainingAmount > 0) {
-                    infoText += ` | 剩餘: ¥${remainingAmount.toFixed(2)}`;
-                }
-                doc.getElementById('wxRpInfoBar').innerText = infoText;
+                // 總金額／已領／剩餘：三欄，數字在上、名目在下。
+                // 🚨不要串成「總金額: ¥100 | 已領取: ¥92.31 (2個) | 剩餘: ¥7.69」——
+                //   用冒號跟直線把欄位串成一行是程式印 log 的排法，擺在 UI 上就是格式感（她的原話：
+                //   「這是 AI 格式展示方式，在 UI 是忌諱的東西」）。數字該有自己的位置，不是被標點分隔。
+                const _stat = (v, label) => `<div class="wx-rp-stat"><b>¥${v.toFixed(2)}</b><span>${label}</span></div>`;
+                doc.getElementById('wxRpInfoBar').innerHTML =
+                    _stat(totalAmount, '總金額')
+                    + _stat(totalGrabbed, count > 0 ? `已領 ${count} 個` : '已領')
+                    + _stat(Math.max(0, remainingAmount), '剩餘');
                 
                 const sortedList = [...list].sort((a, b) => b.amount - a.amount);
                 const listContainer = doc.getElementById('wxRpList');

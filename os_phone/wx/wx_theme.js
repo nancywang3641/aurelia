@@ -197,7 +197,8 @@
             .wx-transfer-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 110; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); animation: fadeIn 0.2s; }
             .wx-transfer-overlay.show { display: flex; }
             .wx-transfer-box { background: #fff; width: 260px; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 25px rgba(0,0,0,0.2); animation: popIn 0.3s; display: flex; flex-direction: column; text-align: center; }
-            .wx-transfer-header { background: #fa9d3b; padding: 30px 20px; color: white; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+            /* 🚨同紅包：亮橘配白字只有 2.11:1。加深到 5.02:1，橘色的身分還在 */
+            .wx-transfer-header { background: #b45309; padding: 30px 20px; color: white; display: flex; flex-direction: column; align-items: center; gap: 10px; }
             .wx-transfer-icon { width: 50px; height: 50px; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; }
             .wx-transfer-amount { font-size: 32px; font-weight: bold; font-family: 'Arial', sans-serif; }
             .wx-transfer-actions { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
@@ -224,20 +225,29 @@
             .wx-rp-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 110; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); animation: fadeIn 0.2s; }
             .wx-rp-overlay.show { display: flex; }
             .wx-rp-box { background: #fff; width: 280px; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 25px rgba(0,0,0,0.3); animation: popIn 0.3s; display: flex; flex-direction: column; max-height: 80vh; }
-            .wx-rp-header { background: linear-gradient(135deg, #f6d147 0%, #fa9d3b 100%); padding: 25px 20px; color: white; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; }
-            .wx-rp-avatar { width: 50px; height: 50px; border-radius: 50%; background-size: cover; background-position: center; border: 3px solid rgba(255,255,255,0.3); margin-bottom: 5px; }
+            /* 🚨可讀性：原本是亮黃漸層配白字，實測對比只有 1.49:1（4.5 才及格）——她說「非常難看清」。
+               改成紅包本來的深紅，白字拿到 5.4~7.7:1；金色留給頭像框與金額，紅配金還是紅包的樣子。 */
+            .wx-rp-header { background: linear-gradient(135deg, #c0392b 0%, #96301c 100%); padding: 25px 20px; color: white; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; }
+            .wx-rp-avatar { width: 50px; height: 50px; border-radius: 50%; background-size: cover; background-position: center; border: 3px solid rgba(246,209,71,0.6); margin-bottom: 5px; }
             .wx-rp-sender { font-size: 16px; font-weight: bold; }
-            .wx-rp-memo { font-size: 13px; opacity: 0.9; line-height: 1.4; }
+            /* 層次靠字級與顏色做，不靠 opacity——透明度一壓，對比就掉到不及格 */
+            .wx-rp-memo { font-size: 13px; color: #ffeede; line-height: 1.4; }
             .wx-rp-divider { width: 90%; border-bottom: 1px solid #e6e6e6; margin: 15px auto; }
-            .wx-rp-info { font-size: 13px; color: #999; text-align: center; padding: 0 20px 10px; }
+            /* 總金額／已領／剩餘：三欄，數字在上、名目在下，中間一道細分隔。
+               不是「A: 1 | B: 2 | C: 3」那種一行串到底的印法——那是 log 不是 UI。 */
+            .wx-rp-info { display: flex; justify-content: center; padding: 0 12px 14px; font-size: 13px; color: #6b6b6b; }
+            .wx-rp-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; min-width: 0; }
+            .wx-rp-stat + .wx-rp-stat::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 1px; background: #ececec; }
+            .wx-rp-stat b { font-size: 15px; font-weight: 600; color: #2b2b2b; font-variant-numeric: tabular-nums; letter-spacing: -0.2px; }
+            .wx-rp-stat span { font-size: 11px; color: #6b6b6b; }
             .wx-rp-list { flex: 1; overflow-y: auto; padding: 10px 15px; max-height: 300px; }
             .wx-rp-item { display: flex; align-items: center; padding: 12px 10px; border-bottom: 1px solid #f5f5f5; }
             .wx-rp-item:last-child { border-bottom: none; }
             .wx-rp-item-avatar { width: 40px; height: 40px; border-radius: 50%; background-size: cover; background-position: center; margin-right: 12px; flex-shrink: 0; }
             .wx-rp-item-info { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
             .wx-rp-item-name { font-size: 14px; font-weight: 500; color: #333; }
-            .wx-rp-item-time { font-size: 11px; color: #999; }
-            .wx-rp-item-amount { font-size: 15px; font-weight: bold; color: #fa9d3b; flex-shrink: 0; }
+            .wx-rp-item-time { font-size: 11px; color: #6b6b6b; }
+            .wx-rp-item-amount { font-size: 15px; font-weight: bold; color: #c2410c; flex-shrink: 0; }   /* 橘金在白底只有 2.11:1，這是最該看清的數字 */
             .wx-rp-close { text-align: center; padding: 15px; font-size: 14px; color: #576b95; cursor: pointer; border-top: 1px solid #f0f0f0; font-weight: 500; }
 
             /* ========== 微博分享卡片 ========== */
