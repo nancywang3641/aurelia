@@ -20,7 +20,10 @@
         other_radiusTL: 6, other_radiusTR: 6, other_radiusBR: 6, other_radiusBL: 6,
         other_borderEnabled: false, other_borderWidth: 1, other_borderColor: '#dddddd',
         
-        customCSS: `/* 尚未設定 */`
+        customCSS: `/* 尚未設定 */`,
+        // 🤖 AI 主題跟手寫 CSS 分開存：她 AI 生一版不滿意想切回自己那份時，
+        //    兩邊都還在（共用一格的話，切過去就把手寫那份洗掉了）
+        aiCSS: ''
     };
 
     let currentEditTarget = 'me';
@@ -48,7 +51,30 @@
 
         // [核心] 根據當前 chatId 產生 CSS 並注入
         applyStyle: function(chatId) {
-            const config = this.getConfig(chatId);
+            this.injectConfig(this.getConfig(chatId));
+        },
+
+        // VN 劇情裡演出來的手機聊天：那邊的聊天室只有房名（或 AI 自己寫的 id），
+        // 跟微信的聯絡人 id 不是同一個空間。用房名去聯絡人裡找同名的人，
+        // 找到就吃他在微信那邊設好的泡泡——同一個人，兩邊長一樣。
+        // 找不到（群聊、路人、還沒建聯絡人）就回預設外觀，不要留著上一間的皮。
+        applyStyleForRoom: function(roomName) {
+            let id = '';
+            try {
+                const C = win.WX_CONTACTS;
+                const list = (C && C.getAllCustomContacts) ? C.getAllCustomContacts() : [];
+                const hit = (list || []).find(c => c && c.name === roomName);
+                id = (hit && hit.id) || '';
+            } catch (e) {}
+            if (id) this.applyStyle(id); else this.injectConfig(DEFAULT_CONFIG);
+            return id;
+        },
+
+        // 用一份 config 直接產 CSS 注入（不經 localStorage）。
+        // 設置面板拿它做「還沒按保存就看得到」的即時預覽；預覽用的是真實結構與真實選擇器，
+        // 所以這裡看到什麼，套用之後就是什麼。
+        injectConfig: function(config) {
+            config = config || DEFAULT_CONFIG;
             let css = '';
 
             if (config.mode === 'general') {
@@ -85,6 +111,13 @@
                         ${config.other_borderEnabled ? 'display: none;' : ''}
                     }
                 `;
+            } else if (config.mode === 'ai') {
+                // 🤖 AI 主題：底稿先鋪（統一兩個 app 的尖角與變數），AI 的 CSS 接在後面覆蓋。
+                //    底稿只在這個模式注入——微調與手寫 CSS 那兩條路完全不受影響。
+                // 🚨存的是 AI 的原文，注入前才提權（boost）——兩個 app 的預設泡泡
+                //   特異性比 AI 寫的高，不提權會變成「字色變了、底色沒變」。
+                const AI = win.WX_BUBBLE_AI || window.WX_BUBBLE_AI;
+                css = (AI ? AI.BASE_CSS : '') + '\n' + (AI && AI.boost ? AI.boost(config.aiCSS || '') : (config.aiCSS || ''));
             } else {
                 css = config.customCSS;
             }
@@ -100,6 +133,7 @@
 
         open: function(chatId) {
             if (!chatId) { alert("無法識別聊天室 ID"); return; }
+            this._curChatId = chatId;      // 關閉時要拿它把即時預覽還原回已存的設定
             const config = this.getConfig(chatId);
             currentEditTarget = 'me';
 
@@ -108,18 +142,21 @@
                 <div style="font-size:11px; text-align:center; color:#999; margin-bottom:10px;">此設定僅對本聊天室生效</div>
 
                 <div style="display:flex; border-bottom:1px solid #eee; margin-bottom:10px;">
-                    <div id="tab-general" class="wx-tab-btn ${config.mode === 'general' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px; cursor:pointer; font-weight:bold; color:${config.mode==='general'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='general'?'#07c160':'transparent'};">一般設置</div>
-                    <div id="tab-custom" class="wx-tab-btn ${config.mode === 'custom' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px; cursor:pointer; font-weight:bold; color:${config.mode==='custom'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='custom'?'#07c160':'transparent'};">CSS 代碼</div>
+                    <div id="tab-general" class="wx-tab-btn ${config.mode === 'general' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='general'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='general'?'#07c160':'transparent'};">微調</div>
+                    <div id="tab-ai" class="wx-tab-btn ${config.mode === 'ai' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='ai'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='ai'?'#07c160':'transparent'};">交給 AI</div>
+                    <div id="tab-custom" class="wx-tab-btn ${config.mode === 'custom' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='custom'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='custom'?'#07c160':'transparent'};">CSS 代碼</div>
                 </div>
 
-                <div style="background:#f5f5f5; padding:15px; border-radius:8px; margin-bottom:10px; display:flex; flex-direction:column; gap:10px; height:80px; justify-content:center;">
-                    <div style="display:flex; align-items:flex-start;">
-                        <div style="width:30px; height:30px; background:#ddd; border-radius:4px; margin-right:5px;"></div>
-                        <div id="preview-other" style="padding:8px 12px; font-size:14px; position:relative; max-width:70%;">Hi!</div>
+                <!-- 預覽照真實聊天畫面的結構做（同一組 class），主題怎麼套在這裡就怎麼套在真畫面上。
+                     底色用淺格紋：聊天背景是她自己挑的圖，深淺未知，格紋比純白更容易看出泡泡有沒有底。 -->
+                <div class="wx-bubble-preview-stage" style="background:#eaeaea; background-image:linear-gradient(45deg,rgba(0,0,0,0.04) 25%,transparent 25%,transparent 75%,rgba(0,0,0,0.04) 75%),linear-gradient(45deg,rgba(0,0,0,0.04) 25%,transparent 25%,transparent 75%,rgba(0,0,0,0.04) 75%); background-size:16px 16px; background-position:0 0,8px 8px; padding:14px 6px; border-radius:8px; margin-bottom:10px; overflow:hidden;">
+                    <div class="wx-msg-row you pbub-row pbub-other" style="margin:0 12px 12px;">
+                        <div class="wx-bubble-avatar pbub-avatar" style="background:#ccc;"></div>
+                        <div style="max-width:70%;"><div class="wx-bubble-content pbub-bubble" id="preview-other">今晚要不要出來？</div></div>
                     </div>
-                    <div style="display:flex; align-items:flex-start; justify-content:flex-end;">
-                        <div id="preview-me" style="padding:8px 12px; font-size:14px; position:relative; max-width:70%;">Hello~</div>
-                        <div style="width:30px; height:30px; background:#a5e6aa; border-radius:4px; margin-left:5px;"></div>
+                    <div class="wx-msg-row me pbub-row pbub-me" style="margin:0 12px;">
+                        <div class="wx-bubble-avatar pbub-avatar" style="background:#a5e6aa;"></div>
+                        <div style="max-width:70%;"><div class="wx-bubble-content pbub-bubble" id="preview-me">好啊，老地方。</div></div>
                     </div>
                 </div>
 
@@ -158,6 +195,18 @@
                     </div>
                 </div>
 
+                <!-- 🤖 交給 AI：跟他說一句要什麼風格，他出一整套；不滿意再說一句就改。
+                     生成完直接套用（不用先按保存），改壞了按還原。 -->
+                <div id="panel-ai" style="display:${config.mode === 'ai' ? 'block' : 'none'};">
+                    <div id="ai-log" style="max-height:150px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; margin-bottom:8px; padding:2px;"></div>
+                    <textarea id="ai-say" class="wx-modal-input" style="height:56px; font-size:13px; resize:none;" placeholder="想要什麼風格？例：深夜霓虹的賽博終端、牛皮紙寫的手寫信"></textarea>
+                    <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+                        <button id="ai-send" class="wx-btn" style="flex:1; background:#07c160; color:#fff; border:none; padding:8px;">送出</button>
+                        <button id="ai-undo" class="wx-btn" style="background:#f0f0f0; color:#666; border:1px solid #ddd; padding:8px 10px; display:none;"><i class="fa-solid fa-clock-rotate-left"></i> 還原</button>
+                        <button id="ai-clear" class="wx-btn" style="background:#f0f0f0; color:#999; border:1px solid #ddd; padding:8px 10px;"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+
                 <div id="panel-custom" style="display:${config.mode === 'custom' ? 'block' : 'none'};">
                     <textarea id="inp-css" class="wx-modal-input" style="height:150px; font-family:monospace; font-size:11px; white-space:pre;">${config.customCSS}</textarea>
                 </div>
@@ -178,6 +227,15 @@
             const previewOther = doc.getElementById('preview-other');
 
             const updatePreview = () => {
+                // 三個分頁都即時預覽：把編輯中的 config 直接注入，預覽用的是真實結構與真實選擇器。
+                this.injectConfig(tempConfig);
+                if (tempConfig.mode !== 'general') {
+                    // 🚨inline style 壓得過任何選擇器。微調那頁靠它即時反應，
+                    //   但 AI 主題與手寫 CSS 是靠選擇器命中的，留著 inline 就永遠看不到效果。
+                    previewMe.style.cssText = '';
+                    previewOther.style.cssText = '';
+                    return;
+                }
                 // Me
                 previewMe.style.background = tempConfig.me_bgColor;
                 previewMe.style.color = tempConfig.me_textColor;
@@ -241,14 +299,19 @@
             const switchTab = (mode) => {
                 tempConfig.mode = mode;
                 doc.getElementById('panel-general').style.display = mode === 'general' ? 'block' : 'none';
+                doc.getElementById('panel-ai').style.display = mode === 'ai' ? 'block' : 'none';
                 doc.getElementById('panel-custom').style.display = mode === 'custom' ? 'block' : 'none';
                 const tabs = doc.querySelectorAll('.wx-tab-btn');
                 tabs.forEach(t => { t.style.color = '#999'; t.style.borderBottomColor = 'transparent'; });
                 const activeTab = doc.getElementById(`tab-${mode}`);
                 activeTab.style.color = '#07c160'; activeTab.style.borderBottomColor = '#07c160';
+                updatePreview();
             };
             doc.getElementById('tab-general').onclick = () => switchTab('general');
+            doc.getElementById('tab-ai').onclick = () => switchTab('ai');
             doc.getElementById('tab-custom').onclick = () => switchTab('custom');
+
+            this.bindAI(chatId, tempConfig, updatePreview);
 
             doc.getElementById('inp-css').oninput = (e) => { tempConfig.customCSS = e.target.value; };
             doc.getElementById('wx-bubble-close').onclick = () => { doc.getElementById('wxActionModal').classList.remove('show'); };
@@ -259,6 +322,119 @@
             
             loadValuesToInputs();
             updatePreview();
+        },
+
+        // 🤖 交給 AI 那一頁：對話式。說一句 → 出一整套 → 直接套用 → 不滿意再說一句。
+        //    生成完就套用（不用先按保存），因為她要的是「講完馬上看到」；改壞了按還原。
+        bindAI: function(chatId, tempConfig, updatePreview) {
+            const AI = win.WX_BUBBLE_AI || window.WX_BUBBLE_AI;
+            const logBox = doc.getElementById('ai-log');
+            const sayEl = doc.getElementById('ai-say');
+            const sendBtn = doc.getElementById('ai-send');
+            const undoBtn = doc.getElementById('ai-undo');
+            const clearBtn = doc.getElementById('ai-clear');
+            if (!logBox || !sayEl || !sendBtn) return;
+            if (!AI) { logBox.innerHTML = '<div style="font-size:12px;color:#fa5151;">泡泡主題 AI 模組沒載入到，重整一次看看</div>'; return; }
+
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            let log = AI.chatLoad(chatId);
+            let undo = AI.undoLoad(chatId);
+            let sending = false;
+
+            const syncUndo = () => { undoBtn.style.display = undo.length ? 'block' : 'none'; };
+            const bubble = (role, text) => {
+                const b = doc.createElement('div');
+                const mine = role === 'user';
+                b.style.cssText = 'font-size:12px; line-height:1.5; padding:6px 9px; border-radius:8px; max-width:85%; white-space:pre-wrap; word-break:break-word;'
+                    + (mine ? 'align-self:flex-end; background:#95ec69; color:#000;' : 'align-self:flex-start; background:#fff; color:#333; border:1px solid #eee;');
+                b.innerHTML = esc(text).replace(/\n/g, '<br>');
+                logBox.appendChild(b);
+                logBox.scrollTop = logBox.scrollHeight;
+                return b;
+            };
+            const render = () => {
+                logBox.innerHTML = '';
+                if (!log.length) {
+                    logBox.innerHTML = '<div style="font-size:12px; color:#999; line-height:1.6;">'
+                        + '跟他說你要什麼風格，他會把兩邊的泡泡跟頭像框一起做成一套。'
+                        + '做好直接套上去，想改哪裡再說一句就好（例：對方那邊的字太小、尖角拿掉）。</div>';
+                    return;
+                }
+                log.forEach(m => bubble(m.role, m.text));
+            };
+            render(); syncUndo();
+
+            const applyCss = (css) => {
+                undo.push(tempConfig.aiCSS || '');
+                AI.undoSave(chatId, undo); syncUndo();
+                tempConfig.aiCSS = css;
+                tempConfig.mode = 'ai';
+                this.saveConfig(chatId, tempConfig);   // 邊講邊套：存下去並立刻生效
+                updatePreview();
+            };
+
+            const send = () => {
+                const text = (sayEl.value || '').trim();
+                if (!text || sending) return;
+                sayEl.value = '';
+                if (!log.length) logBox.innerHTML = '';
+                log.push({ role: 'user', text }); AI.chatSave(chatId, log);
+                bubble('user', text);
+
+                sending = true; sendBtn.disabled = true; sendBtn.textContent = '設計中…';
+                const wait = bubble('ai', '在想了…');
+
+                AI.ask({
+                    chatId, text, currentCss: tempConfig.aiCSS || '', log,
+                    onDone: (res) => {
+                        sending = false; sendBtn.disabled = false; sendBtn.textContent = '送出';
+                        wait.remove();
+                        if (!res.css) {
+                            // 他只回話沒給 CSS（在問你問題，或這次不需要改）——原樣顯示
+                            const t = res.note || '（這次沒有給新的樣式）';
+                            log.push({ role: 'ai', text: t }); AI.chatSave(chatId, log); bubble('ai', t);
+                            return;
+                        }
+                        applyCss(res.css);
+                        let msg = res.note ? res.note.slice(0, 200) : '好了，套上去了。';
+                        if (res.cut) msg += '\n⚠️這一版可能被截斷了，看起來怪的話叫他重出一次。';
+                        if (res.stripped) msg += '\n（有幾條會把左右分邊弄壞的寫法，已經拿掉了）';
+                        if (res.warns && res.warns.length) msg += '\n⚠️' + res.warns.join('；');
+                        log.push({ role: 'ai', text: msg }); AI.chatSave(chatId, log); bubble('ai', msg);
+                    },
+                    onError: (err) => {
+                        sending = false; sendBtn.disabled = false; sendBtn.textContent = '送出';
+                        wait.remove();
+                        bubble('ai', '沒接上：' + ((err && err.message) || err || '未知錯誤'));
+                    }
+                });
+            };
+            sendBtn.onclick = send;
+            sayEl.onkeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } };
+
+            undoBtn.onclick = () => {
+                if (!undo.length) return;
+                const prev = undo.pop();
+                AI.undoSave(chatId, undo); syncUndo();
+                tempConfig.aiCSS = prev;
+                this.saveConfig(chatId, tempConfig);
+                updatePreview();
+                bubble('ai', '退回上一版了。');
+            };
+
+            // 🚨window.confirm 在 Tauri 會被攔掉（按了完全沒反應），一律兩段式
+            let armed = false, armTimer = 0;
+            clearBtn.onclick = () => {
+                if (!armed) {
+                    armed = true;
+                    clearBtn.innerHTML = '再按一次';
+                    armTimer = setTimeout(() => { armed = false; clearBtn.innerHTML = '<i class="fa-solid fa-trash"></i>'; }, 4000);
+                    return;
+                }
+                armed = false; clearTimeout(armTimer);
+                clearBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                log = []; AI.chatClear(chatId); render();
+            };
         },
 
         showModal: function(innerHtml) {
@@ -277,6 +453,9 @@
             if (this._modalObserver) this._modalObserver.disconnect();
             this._modalObserver = new MutationObserver(() => {
                 if (!modal.classList.contains('show')) {
+                    // 面板關掉（按關閉、點遮罩都算）→ 把即時預覽注入的那份丟掉，
+                    // 回到真正存下來的設定。不然「看了一下沒保存」會留在畫面上。
+                    try { if (this._curChatId) this.applyStyle(this._curChatId); } catch (e) {}
                     customContainer.innerHTML = '';
                     ['wxModalTitle', 'wxModalInput'].forEach(id => { const el = doc.getElementById(id); if(el) el.style.display = 'block'; });
                     if(footer) footer.style.display = 'flex';

@@ -220,7 +220,15 @@
             const quoteHTML = (msg.quoteName && msg.quoteText && win.OS_API && win.OS_API.chatQuote)
                 ? win.OS_API.chatQuote.html(msg.quoteName, msg.quoteText, 'wx-quote') : '';
 
-            return `<div class="wx-msg-row ${side} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${dbDataAttr}></div><div style="max-width: 70%;">${nameHTML}<div class="wx-bubble-content" style="${bubbleStyle}">${html}${quoteHTML}</div></div></div>`;
+            // 泡泡主題的共用 class：這一組（.pbub-row / .pbub-me / .pbub-other / .pbub-avatar / .pbub-bubble）
+            // 微信跟 VN 手機都會掛，主題 CSS 只認它們——兩邊原本的 class 一個叫 .me 一個叫 .you 而且意思相反，
+            // 沒有這層 AI 不可能寫出一份兩邊都對的 CSS。詳見 wx_bubble_ai.js。
+            const sideCls = msg.isMe ? 'pbub-me' : 'pbub-other';
+            const avatarAttr = /class="/.test(dbDataAttr) ? dbDataAttr.replace('class="', 'class="pbub-avatar ') : `${dbDataAttr} class="pbub-avatar"`;
+            // 貼圖／圖片／轉帳這些卡片，泡泡本來就被 bubbleStyle 設成透明無邊（卡片自己就是造型），
+            // 掛上去只會讓主題把卡片外面又糊一層底 → 只有純文字泡泡才吃主題
+            const plainBubble = !(isSpecial || isImageTag || isSticker);
+            return `<div class="wx-msg-row ${side} pbub-row ${sideCls} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${avatarAttr}></div><div style="max-width: 70%;">${nameHTML}<div class="wx-bubble-content${plainBubble ? ' pbub-bubble' : ''}" style="${bubbleStyle}">${html}${quoteHTML}</div></div></div>`;
         },
 
         generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },

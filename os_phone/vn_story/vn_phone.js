@@ -54,6 +54,9 @@
                 chatBody.innerHTML = this.chatroomCache[newKey] || '';
                 this.currentChatroom = newKey;
             }
+            // 泡泡主題：這間聊天室對到哪個聯絡人，就吃他在微信那邊設好的泡泡——同一個人，兩邊長一樣。
+            // 對不到人（群聊、路人）會自己回預設，不會留著上一間的皮。
+            try { const B = win.WX_BUBBLE_SETTINGS; if (B && B.applyStyleForRoom) B.applyStyleForRoom(newName); } catch (e) {}
             core.toggleUI('phone-chat');
             core.next();
         },
@@ -369,7 +372,9 @@
                 const memoDisp = (memo || '掃碼支付給對方').replace(/&/g,'&amp;').replace(/</g,'&lt;');
                 inner = `<div class="wx-receive-msg"><div class="wx-receive-head"><i class="fa-solid fa-wallet"></i> 微信收款</div><div class="wx-receive-qr">${this._fakeQrSvg(recvM[2] || 'qr')}</div><div class="wx-receive-amt">${amtDisp}</div><div class="wx-receive-foot">${memoDisp}</div></div>`;
             } else {
-                inner = `<div class="chat-bubble">${content}</div>`;
+                // .pbub-bubble＝泡泡主題的共用 class（跟微信同一組，見 wx_bubble_ai.js）。
+                // 只有純文字泡泡掛，上面那些卡片自己就是造型，不吃主題。
+                inner = `<div class="chat-bubble pbub-bubble">${content}</div>`;
             }
             // 引用回覆的灰塊：照微信擺在泡泡內、正文下面。結構跟微信共用 OS_API.chatQuote
             if (quote && quote.name && quote.text && win.OS_API && win.OS_API.chatQuote) {
@@ -377,7 +382,9 @@
                 const cut = inner.lastIndexOf('</div>');
                 if (qh && cut > -1) inner = inner.slice(0, cut) + qh + inner.slice(cut);
             }
-            const rowHTML = `<div class="chat-row ${isMe ? 'you' : 'other'}"><div class="chat-avatar" style="${avatarStyle}">${avatarHTML}</div><div class="chat-content">${inner}</div></div>`;
+            // 🚨這裡的 .you 是「我」、.other 是對方，微信那邊卻是 .me 才是我——名字剛好相反。
+            //    泡泡主題一律只認 .pbub-me / .pbub-other，兩邊在這層對齊。
+            const rowHTML = `<div class="chat-row ${isMe ? 'you' : 'other'} pbub-row ${isMe ? 'pbub-me' : 'pbub-other'}"><div class="chat-avatar pbub-avatar" style="${avatarStyle}">${avatarHTML}</div><div class="chat-content">${inner}</div></div>`;
             return nameHTML ? `<div class="chat-outer">${nameHTML}${rowHTML}</div>` : rowHTML;
         },
 
