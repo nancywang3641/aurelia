@@ -63,6 +63,24 @@
         return null;
     }
 
+    // 讀狀態：先問帳本，帳本裡沒有這張卡（還沒被畫過、或舊世界留下的）才退回舊鍵。
+    // 🚨 這支是為了「只有一個判斷來源」。狀態搬進帳本之後，禮物彈窗還在讀 localStorage 的舊鍵，
+    //    可是那個鍵從此不再被寫（_setCardStatus 只有在帳本查不到時才寫），於是她收下之後
+    //    底下系統訊息說收到了、卡片點開卻還是兩顆可以按的按鈕。轉帳彈窗更是從頭到尾沒判斷過。
+    function _getCardStatus(chatId, kind, alias, legacyKey) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (C && cid) {
+            // 🚨 這裡一定要用 findByAlias，不能用 find。find 是給模型寫的單號用的模糊查找——
+            //    單號對不上會退回號碼、再退回「最近一張」，拿來問「這一張處理過沒」會抓到別人的卡：
+            //    舊世界那種帳本裡根本沒有的卡，就會借用最近一張的狀態，判斷整個歪掉。
+            const card = C.findByAlias(cid, kind, alias);
+            // 帳本裡有這張卡就以帳本為準：還是 pending 就是真的還沒處理，不要再去問舊鍵
+            if (card) return (card.status && card.status !== 'pending') ? card.status : null;
+        }
+        if (legacyKey) { try { return localStorage.getItem(legacyKey) || null; } catch (e) {} }
+        return null;
+    }
+
     // 轉帳單本身（金額、對象、時效）也按聊天室分開存，理由同紅包
     function _txnLoad(chatId, txnId) {
         const C = _cards(); const cid = _cardChat(chatId);
@@ -1432,6 +1450,10 @@
                     else { GLOBAL_CHATS[chatId] = { name: chatId, id: chatId, members: [], isGroup: false, messages: [], lastTime: '', unread: false, pushedCount: 0, renderedCount: 0 }; }
                 }
                 GLOBAL_CHATS[chatId].unread = false;
+                // 🚨 開聊天室的時候要把這個人的泡泡樣式貼回畫面。以前只有「按下保存的那一刻」會注入
+                //    （saveConfig 自己呼叫 applyStyle），openChat 從來沒叫過——所以她調好的樣式
+                //    一重開酒館就沒人再貼，看起來像被還原成預設，其實設定一直好好躺在 localStorage 裡。
+                try { const B = win.WX_BUBBLE_SETTINGS; if (B && B.applyStyle) B.applyStyle(chatId); } catch (e) {}
             }
             this.render();
         },
@@ -1720,7 +1742,7 @@
             this.closeModal(); 
         },
         
-        openGift: function(info, price, hashId, el) { const overlay = doc.querySelector('#wxGiftOverlay'); const nameEl = doc.querySelector('#wxGiftName'); const priceEl = doc.querySelector('#wxGiftPrice'); const iconEl = doc.querySelector('#wxGiftIcon'); const btnGroup = doc.querySelector('#wxGiftBtnGroup'); const closeBtn = doc.querySelector('#wxGiftClose'); const acceptBtn = doc.querySelector('#wxGiftAccept'); const refuseBtn = doc.querySelector('#wxGiftRefuse'); if (overlay && nameEl) { let fullInfo = decodeURIComponent(info); let icon = "🎁"; let name = fullInfo; const emojiMatch = fullInfo.match(/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF])/); if (emojiMatch) { icon = emojiMatch[0]; name = fullInfo.replace(icon, '').trim(); } nameEl.innerText = name; priceEl.innerText = decodeURIComponent(price); iconEl.innerText = icon; const status = localStorage.getItem(hashId); if (hashId === 'VIEW_ONLY' || status) { if(btnGroup) btnGroup.style.display = 'none'; if(closeBtn) closeBtn.style.display = 'block'; } else { if(btnGroup) btnGroup.style.display = 'flex'; if(closeBtn) closeBtn.style.display = 'block'; if(acceptBtn) acceptBtn.onclick = () => this.resolveGift('accepted', name, hashId); if(refuseBtn) refuseBtn.onclick = () => this.resolveGift('returned', name, hashId); } overlay.classList.add('show'); } },
+        openGift: function(info, price, hashId, el) { const overlay = doc.querySelector('#wxGiftOverlay'); const nameEl = doc.querySelector('#wxGiftName'); const priceEl = doc.querySelector('#wxGiftPrice'); const iconEl = doc.querySelector('#wxGiftIcon'); const btnGroup = doc.querySelector('#wxGiftBtnGroup'); const closeBtn = doc.querySelector('#wxGiftClose'); const acceptBtn = doc.querySelector('#wxGiftAccept'); const refuseBtn = doc.querySelector('#wxGiftRefuse'); if (overlay && nameEl) { let fullInfo = decodeURIComponent(info); let icon = "🎁"; let name = fullInfo; const emojiMatch = fullInfo.match(/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF])/); if (emojiMatch) { icon = emojiMatch[0]; name = fullInfo.replace(icon, '').trim(); } nameEl.innerText = name; priceEl.innerText = decodeURIComponent(price); iconEl.innerText = icon; const status = _getCardStatus(null, 'gift', String(hashId || '').replace(/^ID_/i, ''), hashId); if (hashId === 'VIEW_ONLY' || status) { if(btnGroup) btnGroup.style.display = 'none'; if(closeBtn) closeBtn.style.display = 'block'; } else { if(btnGroup) btnGroup.style.display = 'flex'; if(closeBtn) closeBtn.style.display = 'block'; if(acceptBtn) acceptBtn.onclick = () => this.resolveGift('accepted', name, hashId); if(refuseBtn) refuseBtn.onclick = () => this.resolveGift('returned', name, hashId); } overlay.classList.add('show'); } },
         resolveGift: function(action, name, hashId) {
             const _gid = String(hashId || '').replace(/^ID_/i, '');
             _setCardStatus(null, 'gift', _gid, action, hashId);
@@ -1753,7 +1775,35 @@
             }
         },
         
-        openTransfer: function(amount, hashId, el) { const overlay = doc.querySelector('#wxTransferOverlay'); const amountEl = doc.querySelector('#wxTransferAmount'); const btnReceive = doc.querySelector('#wxBtnReceive'); const btnReturn = doc.querySelector('#wxBtnReturn'); if(overlay && amountEl) { amountEl.innerText = '¥' + amount; if(btnReceive) btnReceive.onclick = () => this.resolveTransfer('accepted', amount, hashId); if(btnReturn) btnReturn.onclick = () => this.resolveTransfer('returned', amount, hashId); overlay.classList.add('show'); } },
+        // 🚨 已經收過／退過／過期的轉帳，點開只能看，不能再按。以前這裡完全沒判斷狀態，
+        //    所以她收了款、底下系統訊息也寫了，卡片點開那兩顆還是照按（按下去會再送一次協議給模型）。
+        openTransfer: function(amount, hashId, el) {
+            const overlay = doc.querySelector('#wxTransferOverlay');
+            const amountEl = doc.querySelector('#wxTransferAmount');
+            const btnReceive = doc.querySelector('#wxBtnReceive');
+            const btnReturn = doc.querySelector('#wxBtnReturn');
+            const actions = doc.querySelector('#wxTransferOverlay .wx-transfer-actions');
+            const stateEl = doc.querySelector('#wxTransferState');
+            if (!overlay || !amountEl) return;
+            amountEl.innerText = '¥' + amount;
+
+            const _tid = String(hashId || '').replace(/^ID_/i, '');
+            let status = _getCardStatus(null, 'transfer', _tid, hashId);
+            // 轉帳單自己也記著狀態（十分鐘沒收就過期），兩邊有一邊說處理過就是處理過
+            if (!status) { try { const d = _txnLoad(null, _tid); if (d && d.status && d.status !== 'pending') status = d.status; } catch (e) {} }
+
+            const DONE = { accepted: '已收款', returned: '已退回', expired: '已過期' };
+            if (status && DONE[status]) {
+                if (actions) actions.style.display = 'none';
+                if (stateEl) stateEl.innerText = DONE[status];
+            } else {
+                if (actions) actions.style.display = '';
+                if (stateEl) stateEl.innerText = '待收款金額';
+                if (btnReceive) btnReceive.onclick = () => this.resolveTransfer('accepted', amount, hashId);
+                if (btnReturn) btnReturn.onclick = () => this.resolveTransfer('returned', amount, hashId);
+            }
+            overlay.classList.add('show');
+        },
         closeTransfer: function() { doc.querySelector('#wxTransferOverlay').classList.remove('show'); },
         resolveTransfer: function(action, amount, hashId) {
             // 提取Transaction ID（去掉ID_前缀）
