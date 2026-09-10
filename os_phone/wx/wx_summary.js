@@ -39,7 +39,10 @@
     const DEF_MIN  = 20;
     const KEEP_MIN = 5;      // 保留再少也要有這麼多，否則模型接不上話
     const KEEP_MAX = 500;
-    const FEED_MAX_CHARS = 12000;   // 單次餵給副模型的上限；超過就只折最舊的那一段，下次再折
+    const STREAM_KEY = 'wx_sum_stream';      // '0' = 關掉串流（端點不支援串流時用）
+    // 單次餵給副模型的上限。原本 12000，實測她按下去撞閘道逾時 524——輸入太長、
+    // 模型還沒吐第一個字連線就被切掉。砍半＋開串流兩手一起。超過就只折最舊那一段，下次再折。
+    const FEED_MAX_CHARS = 6000;
 
     function _int(v, d) { const n = parseInt(v); return (isNaN(n) || n < 0) ? d : n; }
     function _clampKeep(n) { return Math.max(KEEP_MIN, Math.min(KEEP_MAX, n)); }
@@ -162,12 +165,17 @@
                     reject(new Error('副模型還沒就緒'));
                     return;
                 }
+                // 🚨 開串流。副模型預設不開（有些便宜端點不支援串流會回 404），但這條路的輸入很長，
+                //    非串流要等整篇生完才回第一個位元組，中間的閘道會在 100 秒左右直接切線 → 524。
+                //    端點真的不吃串流就把 wx_sum_stream 設成 '0' 關回去。
+                let _stream = true;
+                try { _stream = localStorage.getItem(STREAM_KEY) !== '0'; } catch (e) {}
                 win.OS_API.chatSecondary(
                     [{ role: 'system', content: prompt }],
                     null,
                     function (txt) { resolve(String(txt || '')); },
                     function (err) { reject(err || new Error('副模型沒有回應')); },
-                    { label: label || '聊天室記憶整理' }
+                    { label: label || '聊天室記憶整理', stream: _stream }
                 );
             } catch (e) { reject(e); }
         });
@@ -236,8 +244,12 @@
         try {
             out = await _askSecondary(prompt, '聊天室記憶整理｜' + taName);
         } catch (e) {
-            console.warn('[WX_SUMMARY] 整理失敗（' + taName + '）:', (e && e.message) || e);
-            return { ok: false, reason: (e && e.message) || '副模型沒回應' };
+            const raw = (e && e.message) ? String(e.message) : '';
+            console.warn('[WX_SUMMARY] 整理失敗（' + taName + '）:', raw || e);
+            // 閘道逾時不要把代碼丟到她臉上，而且這種情況再按一次是有用的：
+            // 失敗時什麼都沒寫回去，成功那次才會把進度往前推，所以按第二次是接著整理不是重來。
+            const timeout = /(?:502|504|524|408)|timeout|timed out|逾時|超時/i.test(raw);
+            return { ok: false, reason: timeout ? '副模型太久沒回應，這次沒整理完。再按一次會接著整理。' : (raw || '副模型沒回應') };
         }
         const text = String(out || '').replace(/<[^>]+>/g, ' ').replace(/\s{3,}/g, '\n').trim();
         if (!text) return { ok: false, reason: '副模型回了空的' };

@@ -571,7 +571,7 @@
                         <div style="font-size:12px; color:#999; line-height:1.6; margin-bottom:10px;">
                             這個聊天室一共 ${p.total} 則訊息。送給 AI 的時候會帶最近 ${p.keep} 則原文，更早以前的就靠下面這段。大總結的時候會自動整理一次。
                         </div>
-                        <textarea id="ws-sum-text" style="width:100%; min-height:220px; box-sizing:border-box; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px; line-height:1.7; resize:vertical;" placeholder="還沒有整理過。按下面的「現在整理」，讓它讀完早前的訊息寫成一段。">${cur.replace(/</g, '&lt;')}</textarea>
+                        <textarea id="ws-sum-text" style="width:100%; min-height:220px; box-sizing:border-box; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px; line-height:1.7; resize:vertical; background:#fff; color:#000;" placeholder="還沒有整理過。按下面的「現在整理」，讓它讀完早前的訊息寫成一段。">${cur.replace(/</g, '&lt;')}</textarea>
                     `;
                     ov.classList.add('show');
 

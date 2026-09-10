@@ -48,9 +48,11 @@
         /* 群聊記憶彈窗 */
         .ws-memory-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 600; display: none; align-items: center; justify-content: center; }
         .ws-memory-overlay.show { display: flex; }
-        .ws-memory-panel { background: #fff; width: 90%; max-width: 500px; max-height: 80vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+        /* 🚨 小窗的字色不能靠繼承：容器是白的，外面（手機殼／深色主題）的 color 繼承進來就變白字白底。
+           標題原本兩個小窗都沒寫 color，早前記錄那個被她拍到整行看不見。 */
+        .ws-memory-panel { background: #fff; color: #000; width: 90%; max-width: 500px; max-height: 80vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
         .ws-memory-header { padding: 15px 20px; border-bottom: 1px solid #e5e5e5; display: flex; align-items: center; justify-content: space-between; }
-        .ws-memory-title { font-size: 18px; font-weight: bold; }
+        .ws-memory-title { font-size: 18px; font-weight: bold; color: #000; }
         .ws-memory-close { font-size: 24px; color: #999; cursor: pointer; }
         .ws-memory-body { flex: 1; overflow-y: auto; padding: 15px; }
         .ws-memory-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0; }
@@ -67,9 +69,9 @@
         /* 人設設置彈窗 */
         .ws-persona-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 600; display: none; align-items: center; justify-content: center; }
         .ws-persona-overlay.show { display: flex; }
-        .ws-persona-panel { background: #fff; width: 90%; max-width: 600px; max-height: 80vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+        .ws-persona-panel { background: #fff; color: #000; width: 90%; max-width: 600px; max-height: 80vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
         .ws-persona-header { padding: 15px 20px; border-bottom: 1px solid #e5e5e5; display: flex; align-items: center; justify-content: space-between; }
-        .ws-persona-title { font-size: 18px; font-weight: bold; }
+        .ws-persona-title { font-size: 18px; font-weight: bold; color: #000; }
         .ws-persona-close { font-size: 24px; color: #999; cursor: pointer; }
         .ws-persona-body { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 20px; }
         .ws-persona-section { border-bottom: 1px solid #f0f0f0; padding-bottom: 15px; }
