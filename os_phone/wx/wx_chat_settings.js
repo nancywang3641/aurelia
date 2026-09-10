@@ -87,6 +87,29 @@
                 doc.getElementById('ws-memory-close').onclick = () => { memoryOverlay.classList.remove('show'); };
                 doc.getElementById('ws-memory-cancel').onclick = () => { memoryOverlay.classList.remove('show'); };
             }
+
+            // 早前記錄（聊天室長期記憶）彈窗
+            if (!doc.getElementById('ws-sum-overlay')) {
+                const sumOverlay = doc.createElement('div');
+                sumOverlay.id = 'ws-sum-overlay';
+                sumOverlay.className = 'ws-memory-overlay';   // 只借它的版面樣式，內容與 id 各自獨立
+                sumOverlay.innerHTML = `
+                    <div class="ws-memory-panel">
+                        <div class="ws-memory-header">
+                            <div class="ws-memory-title">早前記錄</div>
+                            <div class="ws-memory-close" id="ws-sum-close">×</div>
+                        </div>
+                        <div class="ws-memory-body" id="ws-sum-body"></div>
+                        <div class="ws-memory-footer">
+                            <button class="ws-memory-btn ws-memory-btn-cancel" id="ws-sum-clear">清除</button>
+                            <button class="ws-memory-btn ws-memory-btn-cancel" id="ws-sum-run">現在整理</button>
+                            <button class="ws-memory-btn ws-memory-btn-save" id="ws-sum-save">保存</button>
+                        </div>
+                    </div>
+                `;
+                if (container) container.appendChild(sumOverlay);
+                doc.getElementById('ws-sum-close').onclick = () => { sumOverlay.classList.remove('show'); };
+            }
             
             // 初始化人設設置彈窗
             if (!doc.getElementById('ws-persona-overlay')) {
@@ -151,6 +174,11 @@
             if (typeof groupMemoryMessageLimit !== 'number' || groupMemoryMessageLimit < 1) {
                 groupMemoryMessageLimit = 50;
             }
+
+            // 讀取「保留最近幾條」（聊天室長期記憶）。空白＝跟隨全域預設。
+            let summaryKeepRecent = (chat.summaryKeepRecent != null && chat.summaryKeepRecent !== '') ? chat.summaryKeepRecent : '';
+            let defKeep = (win.WX_SUMMARY && win.WX_SUMMARY.DEF_KEEP) ? win.WX_SUMMARY.DEF_KEEP : 40;
+            try { const _g = parseInt(localStorage.getItem((win.WX_SUMMARY && win.WX_SUMMARY.KEEP_KEY) || 'wx_sum_keep_recent')); if (!isNaN(_g) && _g > 0) defKeep = _g; } catch (e) {}
             
             // 讀取人設設置（僅私聊）
             let personaFromLorebook = chat.personaFromLorebook || null; // 選中的世界書條目UID
@@ -369,6 +397,24 @@
                 </div>
                 ` : ''}
                 
+                <div class="ws-section-header">聊天記憶</div>
+                <div class="ws-group">
+                    <div class="ws-cell" id="btn-chat-summary" style="cursor:pointer;">
+                        <div class="ws-label">早前記錄</div>
+                        <div class="ws-right">
+                            <div id="chat-summary-state" style="font-size:14px; margin-right:5px; color:#999;">—</div>
+                            <div class="ws-arrow">›</div>
+                        </div>
+                    </div>
+                    <div class="ws-cell">
+                        <div class="ws-label">保留最近</div>
+                        <div class="ws-right">
+                            <input class="ws-input" id="inp-summary-keep" type="number" min="5" max="500" value="${summaryKeepRecent}" placeholder="${defKeep}" style="text-align: right; width: 80px;">
+                            <div style="font-size:14px; margin-left: 5px; color: #999;">條</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="ws-group">
                     <div class="ws-cell" id="btn-clear-chat" style="cursor:pointer;">
                         <div class="ws-label" style="color: #fa5151;">清空聊天記錄</div>
@@ -489,6 +535,80 @@
             doc.getElementById('btn-bubble-settings').onclick = () => {
                 if (win.WX_BUBBLE_SETTINGS && win.WX_BUBBLE_SETTINGS.open) win.WX_BUBBLE_SETTINGS.open(chatId);
             };
+
+            // 早前記錄（聊天室長期記憶）：看狀態、手動整理、改字、清除
+            (function () {
+                const S = win.WX_SUMMARY;
+                const stateEl = doc.getElementById('chat-summary-state');
+                const refreshState = () => {
+                    if (!stateEl) return;
+                    if (!S) { stateEl.textContent = '尚未載入'; return; }
+                    const p = S.plan(chat);
+                    const has = chat.wxSummary && chat.wxSummary.text;
+                    if (has) {
+                        stateEl.textContent = '已整理 ' + (chat.wxSummary.coveredCount || 0) + '／' + p.total + ' 則';
+                        stateEl.style.color = '#07c160';
+                    } else if (p.total > p.keep) {
+                        stateEl.textContent = '還沒整理';
+                        stateEl.style.color = '#fa9d3b';
+                    } else {
+                        stateEl.textContent = '還不用整理';
+                        stateEl.style.color = '#999';
+                    }
+                };
+                refreshState();
+
+                const sumBtn = doc.getElementById('btn-chat-summary');
+                if (!sumBtn) return;
+                sumBtn.onclick = () => {
+                    const ov = doc.getElementById('ws-sum-overlay');
+                    const body = doc.getElementById('ws-sum-body');
+                    if (!ov || !body) return;
+                    if (!S) { if (win.toastr) win.toastr.info('記憶模塊還沒載入完，等一下再試'); return; }
+                    const p = S.plan(chat);
+                    const cur = (chat.wxSummary && chat.wxSummary.text) ? chat.wxSummary.text : '';
+                    body.innerHTML = `
+                        <div style="font-size:12px; color:#999; line-height:1.6; margin-bottom:10px;">
+                            這個聊天室一共 ${p.total} 則訊息。送給 AI 的時候會帶最近 ${p.keep} 則原文，更早以前的就靠下面這段。大總結的時候會自動整理一次。
+                        </div>
+                        <textarea id="ws-sum-text" style="width:100%; min-height:220px; box-sizing:border-box; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px; line-height:1.7; resize:vertical;" placeholder="還沒有整理過。按下面的「現在整理」，讓它讀完早前的訊息寫成一段。">${cur.replace(/</g, '&lt;')}</textarea>
+                    `;
+                    ov.classList.add('show');
+
+                    doc.getElementById('ws-sum-run').onclick = async () => {
+                        const b = doc.getElementById('ws-sum-run');
+                        const t0 = b.textContent;
+                        b.disabled = true; b.textContent = '整理中…';
+                        try {
+                            const r = await S.summarizeChat(chatId, { force: true });
+                            const ta = doc.getElementById('ws-sum-text');
+                            if (ta) ta.value = (chat.wxSummary && chat.wxSummary.text) || ta.value;
+                            refreshState();
+                            if (win.toastr) {
+                                if (r && r.ok) win.toastr.success('整理好了', '早前記錄');
+                                else win.toastr.info((r && r.reason) || '這次沒有整理', '早前記錄');
+                            }
+                        } catch (e) {
+                            if (win.toastr) win.toastr.error((e && e.message) || '整理失敗', '早前記錄');
+                        } finally { b.disabled = false; b.textContent = t0; }
+                    };
+
+                    doc.getElementById('ws-sum-clear').onclick = async () => {
+                        await S.clearSummary(chatId);
+                        const ta = doc.getElementById('ws-sum-text');
+                        if (ta) ta.value = '';
+                        refreshState();
+                        if (win.toastr) win.toastr.success('清掉了', '早前記錄');
+                    };
+
+                    doc.getElementById('ws-sum-save').onclick = async () => {
+                        const ta = doc.getElementById('ws-sum-text');
+                        await S.setSummaryText(chatId, ta ? ta.value : '');
+                        refreshState();
+                        ov.classList.remove('show');
+                    };
+                };
+            })();
             
             // 群聊記憶按鈕（僅私聊）
             if (!isGroup) {
@@ -935,6 +1055,23 @@
                                     hasChanges = true;
                                 }
                             }
+                        }
+                    }
+
+                    // 保存「保留最近幾條」（聊天室長期記憶；留白＝跟隨全域預設）
+                    const keepInput = doc.getElementById('inp-summary-keep');
+                    if (keepInput) {
+                        const raw = String(keepInput.value || '').trim();
+                        let next;
+                        if (raw === '') { next = null; }
+                        else {
+                            const v = parseInt(raw);
+                            next = (!isNaN(v) && v >= 5 && v <= 500) ? v : null;
+                        }
+                        const prev = (chat.summaryKeepRecent != null) ? chat.summaryKeepRecent : null;
+                        if (next !== prev) {
+                            if (next === null) delete chat.summaryKeepRecent; else chat.summaryKeepRecent = next;
+                            hasChanges = true;
                         }
                     }
 

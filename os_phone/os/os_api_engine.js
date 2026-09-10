@@ -1340,8 +1340,22 @@
                                 const t = String(msg.content || '').trim();
                                 return t ? '（' + t + '）' : '';
                             };
+                            // 📒 聊天室長期記憶：早前的訊息壓成一段摘要先注入，原文只帶最近幾則。
+                            //    以前這裡是整串 apiChat.messages 全帶——一則都沒切，聊久了又貴又慢，
+                            //    真正要緊的事會被埋在幾百則寒暄裡。（可調的「每群聊消息數」管的是關聯群聊，不是這裡。）
+                            //    🚨 切窗口一律走 WX_SUMMARY.recentWindow：它只認「最後 N 則」、不吃已摘要指標，
+                            //    所以使用者從中間刪過訊息也不可能把「還沒摘要過的」一起跳掉。
+                            try {
+                                const _sumTxt = win.WX_SUMMARY?.injectionText?.(apiChat);
+                                if (_sumTxt) {
+                                    apiMessages.push({ role: 'system', content: _sumTxt });
+                                    console.log('[OS_API.buildContext] 附上聊天室長期記憶 ' + _sumTxt.length + ' 字');
+                                }
+                            } catch (e) { console.warn('[OS_API.buildContext] 聊天室記憶注入失敗（不影響送出）:', e); }
+                            const _histMsgs = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
+                                ? win.WX_SUMMARY.recentWindow(apiChat) : apiChat.messages;
                             const rawPhoneMsgs = [];
-                            apiChat.messages.forEach(msg => {
+                            _histMsgs.forEach(msg => {
                                 if (!msg) return;
                                 if (msg.type === 'system') {
                                     const _note = _noteOf(msg);
@@ -1868,8 +1882,19 @@
 
                     const apiChat = await win.WX_DB.getApiChat(win.wxApp.GLOBAL_ACTIVE_ID);
                     if (apiChat?.messages?.length) {
-                        const _cut = _keepN === null ? -1 : apiChat.messages.length - _keepN;
-                        apiChat.messages.forEach((msg, _i) => {
+                        // 📒 聊天室長期記憶：跟酒館那條路共用同一份（存在 apiChat.wxSummary）。
+                        //    這邊本來就有「保留最近幾則」的上限（OS_APP_CTX_MSGS），窗口機制不動，只把摘要補上。
+                        try {
+                            const _sumTxt = win.WX_SUMMARY?.injectionText?.(apiChat);
+                            if (_sumTxt) apiMessages.push({ role: 'system', content: _sumTxt });
+                        } catch (e) { console.warn('[OS_API standalone] 聊天室記憶注入失敗:', e); }
+                        // 🚨 先用聊天室記憶切窗口再說。上面那個 _keepN 只是把舊訊息換成它自己的
+                        //    <summary> 標籤，而微信訊息根本沒有那種標籤 → sumExtract 抓不到就退回全文，
+                        //    等於完全沒有上限（實測 120 則全帶）。窗口一定要在這之前先切。
+                        const _histMsgs = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
+                            ? win.WX_SUMMARY.recentWindow(apiChat) : apiChat.messages;
+                        const _cut = _keepN === null ? -1 : _histMsgs.length - _keepN;
+                        _histMsgs.forEach((msg, _i) => {
                             const useSummary = _i < _cut;
                             let content = msg.raw || msg.content || '';
                             if (!content) return;

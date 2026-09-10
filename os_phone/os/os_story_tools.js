@@ -869,6 +869,10 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 try { window.parent.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}   // 讓注入器丟掉快取、下輪重抓壓縮版
                 // 🏦 PT 結算（fire-and-forget，不擋存檔）：副模型估值→加 PT→浮結算卡。去重同一份只算一次。
                 try { const _pt = window.parent.OS_PT || window.OS_PT; if (_pt?.settleSummary) _pt.settleSummary(finalContent, { chatId, summaryCount }); } catch (e) {}
+
+                // 📒 大總結順便整理各聊天室的早前記錄（她要的「大總結順便總結聊天室」就是這個）。
+                //    fire-and-forget：整理是背景工作，副模型慢或失敗都不該擋住大總結存檔。
+                try { const _ws = window.parent.WX_SUMMARY || window.WX_SUMMARY; if (_ws?.summarizeAll) _ws.summarizeAll({ reason: 'grand_summary' }); } catch (e) {}
             } catch (e) { console.error('[大總結] 存 OS_DB 失敗:', e); throw e; }
 
             // 🔒 自動隱藏已總結樓層，但預留最新 N 樓可見(近期上下文 + 末樓帶觸發 KEY)。
