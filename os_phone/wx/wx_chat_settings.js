@@ -1063,7 +1063,19 @@
                     const newAlias = doc.getElementById('inp-alias').value.trim();
                     let hasChanges = false;
 
-                    if (newName && newName !== chatName) { chat.name = newName; hasChanges = true; }
+                    // 🚨 群名跟私聊備註是兩件事，通知與否照現實微信走：
+                    //   私聊那個是「你給對方的備註」，只有你看得到，改了不會通知任何人；
+                    //   群名是全群都看得到的東西，微信會在群裡留一條灰字。
+                    //   「我的暱稱」（群名片）改了也不通知——現實微信同樣不通知，所以這裡不動它。
+                    if (newName && newName !== chatName) {
+                        if (isGroup) {
+                            let _me = 'User';
+                            try { if (win.WX_USER && win.WX_USER.getInfo) _me = win.WX_USER.getInfo().name || 'User'; } catch (e) {}
+                            if (!Array.isArray(chat.messages)) chat.messages = [];
+                            chat.messages.push({ type: 'system', content: _me + ' 把群名改成「' + newName + '」', isMe: false });
+                        }
+                        chat.name = newName; hasChanges = true;
+                    }
                     if (newBio !== chatDesc) { chat.desc = newBio; chat.bio = newBio; hasChanges = true; }
                     if (newAlias !== myAlias) { chat.userAlias = newAlias; hasChanges = true; }
                     
