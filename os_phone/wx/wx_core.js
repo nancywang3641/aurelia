@@ -337,6 +337,23 @@
     function processSystemIntent(content, ctx) {
         if (!content || !ctx.chatId) return null;
 
+        // 處理 [System: 換頭像 描述]。跟更改簽名同一家族：AI 動的是自己的門面。
+        // 🚨 這是權限，預設關著。關著的時候連教學都不會進 prompt，所以正常不會收到這行；
+        //    真收到了（舊對話殘留、或她剛關掉）就當普通系統訊息，不生圖也不報錯。
+        const avatarMatch = content.match(/^\s*(?:更換|更换|換|换|改|換個|换个)\s*(?:頭像|头像|大頭貼|大头贴|avatar)\s*[:：]?\s*(.+)$/i);
+        if (avatarMatch) {
+            const _av = win.WX_AVATAR_AI || window.WX_AVATAR_AI;
+            const _desc = String(avatarMatch[1] || '').replace(/\]+\s*$/, '').trim();
+            if (_av && _av.isEnabled() && _desc) {
+                // 生圖是慢動作，不擋這一輪的訊息流；換好了它自己會重畫。
+                _av.apply(ctx.chatId, _desc);
+                return { type: 'system', content: `${ctx.chatName} 換了頭像`, isMe: false };
+            }
+            // 關著（或沒描述）：頭像根本沒換，就不要印「換了頭像」——那是假的。
+            // 回一個空的系統訊息，推入端看到空的就丟掉，畫面上什麼都不會出現。
+            return { type: 'system', content: '', isMe: false };
+        }
+
         // 處理 [System: 更改簽名 to XXX]
         const bioMatch = content.match(/(?:更改|修改|更新|换|變更|changed?|updated?|set).{0,6}(?:簽名|签名|Bio|Signature|狀態|status).{0,6}[:：为為to]\s*(.*)/i);
         if (bioMatch) {
@@ -687,6 +704,7 @@
                 content = content.replace(/\]+\s*$/, '').trim();
                 if (content) {
                     const sysMsgObj = processSystemIntent(content, ctx);
+                    if (sysMsgObj && sysMsgObj.content === '') { return; }   // 解析過但刻意不顯示（例如權限關著的換頭像）
                     if (sysMsgObj) {
                         // 返回處理後的系統消息對象，加入到extractedMessages以保持順序
                         extractedMessages.push(sysMsgObj);
@@ -727,6 +745,7 @@
                 // 移除末尾的 ] 字符（如果存在）
                 sysContent = sysContent.replace(/\]+\s*$/, '').trim();
                 const sysMsgObj = processSystemIntent(sysContent, ctx);
+                if (sysMsgObj && sysMsgObj.content === '') return;   // 同上
                 if (sysMsgObj) {
                     extractedMessages.push(sysMsgObj);
                     return;
@@ -1488,6 +1507,20 @@
         },
         
         switchTab: function(tabName) { GLOBAL_TAB = tabName; this.render(); },
+
+        // 🖼 換頭像是給角色的權限，預設關著：開了才會生圖（花錢花時間），也才會把用法教給 AI。
+        toggleAvatarAi: function () {
+            const A = win.WX_AVATAR_AI;
+            if (!A) { try { win.toastr && win.toastr.info('模塊還沒載入完，等一下再試'); } catch (e) {} return; }
+            const next = !A.isEnabled();
+            A.setEnabled(next);
+            this.render();
+            try { win.toastr && (next ? win.toastr.success('角色可以自己換頭像了', '微信') : win.toastr.info('已關閉', '微信')); } catch (e) {}
+        },
+        setAvatarAiSource: function (v) {
+            const A = win.WX_AVATAR_AI;
+            if (A && A.setProvider) A.setProvider(v);
+        },
 
         // ── 發現 tab：跑團同步（正文 <chat> 區塊 → 聊天列表 + 通訊錄）──
         storySync: function() { _storySyncDebounced(0); },

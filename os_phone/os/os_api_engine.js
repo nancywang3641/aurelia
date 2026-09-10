@@ -1215,6 +1215,16 @@
                 }
             } catch (e) { console.warn('[OS_API.buildContext] 大總結注入失敗:', e); }
 
+            // 🖼 換頭像是權限，預設關著。開了才把用法教給它——關著就一個字都不提，
+            //    免得它學了卻用不出來（程式那端也會忽略）。
+            if (promptKey === 'wx_chat_system') {
+                try {
+                    const _av = win.WX_AVATAR_AI || window.WX_AVATAR_AI;
+                    const _t = (_av && _av.instruction) ? _av.instruction() : '';
+                    if (_t) apiMessages.push({ role: 'system', content: _t });
+                } catch (e) {}
+            }
+
             if ((promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
                 try {
                     const currentChatId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;

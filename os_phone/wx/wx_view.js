@@ -724,6 +724,18 @@
             let walletAmount = '';
             try { const W = win.WX_WALLET; if (W && W.getBalance) walletAmount = W.money(W.getBalance()); } catch (e) {}
 
+            // 換頭像權限：開關 ＋ 來源。來源留白＝跟著「圖片設置 → 頭像」那個桶走，不要她再設一次。
+            const _AV = win.WX_AVATAR_AI;
+            const avOn = !!(_AV && _AV.isEnabled && _AV.isEnabled());
+            const avSrc = (_AV && _AV.getProvider) ? _AV.getProvider() : '';
+            const avBadge = avOn
+                ? '<span style="background:#07c160; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
+                : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
+            const AV_SRC_LABEL = { '': '跟著圖片設置', pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館原生', custom_api: '自訂接口', comfyui_direct: 'ComfyUI 直連' };
+            const avOptions = Object.keys(AV_SRC_LABEL).map(function (v) {
+                return '<option value="' + v + '"' + (avSrc === v ? ' selected' : '') + '>' + AV_SRC_LABEL[v] + '</option>';
+            }).join('');
+
             const pageBg      = isDark ? '#111'    : '#f2f2f2';
             const headerBg    = isDark ? '#1c1c1e' : '#fff';
             const cellGroupBg = isDark ? '#1c1c1e' : '#fff';
@@ -792,6 +804,20 @@
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).editNickname()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-pen"></i></span></div><div class="wx-cell-text">編輯暱稱</div><div class="wx-cell-arrow">›</div></div>
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).editSignature()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-pen-to-square"></i></span></div><div class="wx-cell-text">編輯個性簽名</div><div class="wx-cell-arrow">›</div></div>
                 </div>
+                <div class="wx-cell-group">
+                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleAvatarAi()">
+                        <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-user-pen"></i></span></div>
+                        <div class="wx-cell-text">允許角色換頭像</div>
+                        ${avBadge}
+                    </div>
+                    <div class="wx-cell" style="${avOn ? '' : 'display:none;'}">
+                        <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-wand-magic-sparkles"></i></span></div>
+                        <div class="wx-cell-text">頭像來源</div>
+                        <select id="wx-av-src" style="border:none; background:transparent; font-size:15px; color:${idColor}; text-align:right; max-width:150px;"
+                                onchange="(window.parent.wxApp || window.wxApp).setAvatarAiSource(this.value)">${avOptions}</select>
+                    </div>
+                </div>
+
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-moon"></i></span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
                     <div class="wx-cell" onclick="(window.parent.PhoneSystem || window.PhoneSystem).install('設置', '⚙️', '#4c4c4c', null); alert('請前往桌面點擊 [設置] App');"><div class="wx-cell-icon">${iconSet}</div><div class="wx-cell-text">設置</div><div class="wx-cell-arrow">›</div></div>
