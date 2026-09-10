@@ -9,6 +9,19 @@
 (function() {
     const win = window.parent || window;   // 模組層級的 win：processModules 等沒自己宣告的地方用（之前圖片訊息那行裸用 win → 房裡一有圖就打不開）
 
+    // 訊息裡「自帶造型」的區塊標籤。切區塊（blockRegex）與泡泡讓位（bubbleStyle）共用這一份。
+    // 🚨兩邊各寫各的就會漂移：實測讓位那份漏了繁體「圖片」跟「視頻」，於是繁體寫的圖片卡
+    //   外面套了一層泡泡框——白泡泡時幾乎看不出來，換上深色泡泡主題就很明顯（Rae 實機抓到）。
+    //   語音刻意不算在 CARD 裡：微信原生的語音訊息本來就是裝在泡泡裡的，它該吃泡泡樣式。
+    // ⚠️只放「字串」不放編譯好的 regex：blockRegex 帶 g 旗標，共用同一個實例會被 lastIndex 咬。
+    const MSG_TAG = {
+        STICKER: '表情包|Sticker',
+        IMAGE: '图片|圖片|Img',
+        VOICE: '语音|語音|Voice',
+        CARD: '视频|視頻|Video|文件|File|位置|Location|定位|转账|轉帳|Transfer|红包|RedPacket|礼品|礼物|Gift|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|收款码|收款碼|收款|付款码|付款碼|WbShare'
+    };
+    MSG_TAG.ALL = [MSG_TAG.STICKER, MSG_TAG.IMAGE, MSG_TAG.CARD, MSG_TAG.VOICE].join('|');
+
     // VN 頭像串接查詢：lorebook → mem cache → VN IndexedDB（最多到第4步，不生成）
     async function _resolveVNAvatar(name) {
         const win = window.parent || window;
@@ -90,7 +103,7 @@
                     .replace(/\[([^\]\[:：]+\.(?:gif|jpg|jpeg|png))\]/gi, function (_, f) { return '[表情包: ' + f + ']'; });
                 if (norm !== msg.content) msg = Object.assign({}, msg, { content: norm });
             }
-            const blockRegex = /(\[\s*(?:表情包|Sticker|图片|圖片|Img|视频|視頻|Video|文件|File|位置|Location|定位|转账|轉帳|Transfer|红包|RedPacket|礼品|礼物|Gift|语音|語音|Voice|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|收款码|收款碼|收款|付款码|付款碼|WbShare).*?\])/gi;
+            const blockRegex = new RegExp('(\\[\\s*(?:' + MSG_TAG.ALL + ').*?\\])', 'gi');
             if (msg.content && typeof msg.content === 'string' && blockRegex.test(msg.content)) {
                 const pureContent = msg.content.replace(blockRegex, '').trim();
                 if (pureContent.length > 0 || msg.content.match(blockRegex).length > 1) {
@@ -206,9 +219,11 @@
             }
             
             const side = msg.isMe ? 'me' : 'you';
-            const isSpecial = msg.content.match(/^\[\s*(转账|轉帳|Transfer|位置|Location|定位|视频|Video|红包|RedPacket|文件|File|礼品|Gift|礼物|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|收款码|收款碼|收款|付款码|付款碼|WbShare)/i);
-            const isImageTag = msg.content.match(/^\[\s*(图片|Img).*?\]$/i); 
-            const isSticker = msg.content.match(/^\[\s*(表情包|Sticker).*?\]$/i);
+            // 🚨清單一律取自 MSG_TAG（見檔案開頭）：這三條以前是各自手打的，漏了繁體字
+            //   就會讓自帶造型的卡片外面多一層泡泡框
+            const isSpecial = new RegExp('^\\[\\s*(?:' + MSG_TAG.CARD + ')', 'i').test(msg.content);
+            const isImageTag = new RegExp('^\\[\\s*(?:' + MSG_TAG.IMAGE + ').*?\\]$', 'i').test(msg.content);
+            const isSticker = new RegExp('^\\[\\s*(?:' + MSG_TAG.STICKER + ').*?\\]$', 'i').test(msg.content);
             const bubbleStyle = (isSpecial || isImageTag || isSticker) ? 'padding:0; border:none; background:transparent; box-shadow:none;' : '';
             
             let nameHTML = "";
