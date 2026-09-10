@@ -401,10 +401,24 @@
                 sending = true; sendBtn.disabled = true; sendBtn.textContent = '設計中…';
                 const wait = bubble('ai', '在想了…');
 
+                // 🚨保險：她實測撞過「AI 回來了但畫面永遠停在設計中」（那次是參數錯位，onFinish 從沒被叫到）。
+                //   根因修了，但只要有任何一條路沒回呼，她就只能關掉面板重來、而且不知道發生什麼事。
+                //   三分鐘沒動靜就解鎖並講一聲——生成本來就要三五十秒，這個門檻不會誤觸。
+                let timeout = 0;
+                const settle = () => {
+                    sending = false; sendBtn.disabled = false; sendBtn.textContent = '送出';
+                    clearTimeout(timeout); timeout = 0;
+                };
+                timeout = setTimeout(() => {
+                    if (!sending) return;
+                    settle(); wait.remove();
+                    bubble('ai', '等太久沒有回應，可能是模型卡住或連線斷了。再送一次看看。');
+                }, 180000);
+
                 AI.ask({
                     chatId, text, currentCss: tempConfig.aiCSS || '', log,
                     onDone: (res) => {
-                        sending = false; sendBtn.disabled = false; sendBtn.textContent = '送出';
+                        settle();
                         wait.remove();
                         if (!res.css) {
                             // 他只回話沒給 CSS（在問你問題，或這次不需要改）——原樣顯示
@@ -420,7 +434,7 @@
                         log.push({ role: 'ai', text: msg }); AI.chatSave(chatId, log); bubble('ai', msg);
                     },
                     onError: (err) => {
-                        sending = false; sendBtn.disabled = false; sendBtn.textContent = '送出';
+                        settle();
                         wait.remove();
                         bubble('ai', '沒接上：' + ((err && err.message) || err || '未知錯誤'));
                     }

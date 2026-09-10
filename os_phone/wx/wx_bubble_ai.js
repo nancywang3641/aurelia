@@ -29,7 +29,16 @@
     //   AI 那份再由 boost() 提到 0,4,0 以上蓋過底稿。
     const BASE_CSS = `
 /* 泡泡主題底稿（程式產生，AI 的 CSS 接在後面覆蓋） */
-.pbub-row.pbub-row .pbub-bubble::after { content: none !important; }
+/* 🚨收掉 VN 手機那邊原生的 ::after 尖角。content:none 不夠——原生那條還寫了
+   border（微信綠的三角）跟 top/right 定位，AI 拿 ::after 做裝飾時通常只設
+   background 與自己要的邊，那些沒被覆蓋的宣告就留在裝飾層上：
+   實測是一條 6.4px 的綠邊掛在深海主題的泡泡上，還往右溢出 7px。所以一起歸零。
+   **不准加 !important**：
+   AI 很自然會拿 ::after 去做裝飾（她第一次生的海洋主題兩側 SVG 就都畫在這裡），
+   加了 important 誰也蓋不過，裝飾整個不見、而且完全看不出原因。
+   靠特異性就夠了：這條 0,3,0 注入在原生之後 → 收得掉原生；
+   AI 那份提權後 0,4,0 → 蓋得回來。 */
+.pbub-row.pbub-row .pbub-bubble::after { content: none; border: 0; top: auto; right: auto; bottom: auto; left: auto; }
 .pbub-row.pbub-row .pbub-bubble { position: relative; }
 .pbub-row.pbub-other .pbub-bubble { background: var(--pbub-other-bg, #ffffff); color: var(--pbub-other-fg, #000000); border-radius: var(--pbub-other-radius, 6px); }
 .pbub-row.pbub-me .pbub-bubble { background: var(--pbub-me-bg, #95ec69); color: var(--pbub-me-fg, #000000); border-radius: var(--pbub-me-radius, 6px); }
@@ -70,6 +79,9 @@
   跟 .pbub-other .pbub-bubble::before 這兩條，或把 --pbub-tail-size 設成 0 讓它消失。
   ⚠️泡泡底色如果用漸層或圖片，尖角吃不到——那就別留尖角（--pbub-tail-size:0），或者自己把
   ::before 改成用 background 畫的小方塊旋轉 45 度。底色是漸層、尖角是純色，接縫會很明顯。
+- 裝飾用 ::after：泡泡的 ::before 已經被尖角佔走了，要加花紋、浪線、紋理、角飾就寫在
+  .pbub-me .pbub-bubble::after 跟 .pbub-other .pbub-bubble::after 上（記得 content:'' 跟 position:absolute，
+  泡泡本身已經是 position:relative）。頭像框的 ::before / ::after 兩個都空著，也可以借。
 - 沒有外部圖片可用：圖案只能用漸層、內聯 SVG 的 data URI，或 CSS 畫。字體用 @import 從 Google Fonts 載。
 - 同一份 CSS 兩個地方都會用到（手機 app 裡的聊天、故事劇情裡演出來的手機畫面），所以只准寫 .pbub-* 這組選擇器。
 
@@ -297,9 +309,12 @@ body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hi
             content: '【目前的 CSS】\n```css\n' + (o.currentCss || '(還沒有，這是第一版)') + '\n```\n\n【這次要改】' + (o.text || '')
         });
 
-        let config = {};
-        try { config = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig) ? win.OS_SETTINGS.getConfig() : {}; } catch (e) {}
-        chat(msgs, config, null,
+        // 🚨🚨簽章是 (messages, onChunk, onFinish, onError, options)——**沒有 config**，
+        //   chatMain / chatSecondary 自己去拿 OS_SETTINGS。多塞一個 config 進去，
+        //   後面每一個都往後錯一格：onFinish 變成 null、我的完成處理被當成 onError。
+        //   症狀是 AI 明明回來了（DEBUG 有完整回覆），畫面永遠停在「設計中…」。
+        //   跟 OS_API.chat 不一樣，那支才吃 config，別照著它寫。
+        chat(msgs, null,
             (full) => {
                 const got = pickCss(String(full || ''));
                 const lk = stripLayout(got.css);
