@@ -85,7 +85,7 @@
     //   下次模型又寫同一個 ID——測試腳本會，模型自己也常用固定編號——卡片一出現就是「已接收」。
     //   她實測：清空重試之後，禮物與轉帳直接顯示已接收、已收款。
     //   所以刪訊息的時候，把那幾則帶的 ID 一起清掉。
-    function purgeProtocolState(messages) {
+    function purgeProtocolState(chatId, messages) {
         let n = 0;
         const seen = new Set();
         (messages || []).forEach(m => {
@@ -99,6 +99,11 @@
                 });
             });
         });
+        // 帳本那邊也要跟著走（wx_cards.js：一個聊天室一本帳）
+        try {
+            const C = (window.parent || window).WX_CARDS || window.WX_CARDS;
+            if (C && chatId && seen.size) n += C.removeByAliases(chatId, [...seen]);
+        } catch (e) {}
         if (n) console.log('[MessageManager] 順手清掉 ' + n + ' 筆紅包/禮物/轉帳狀態');
         return n;
     }
@@ -123,7 +128,7 @@
             sortedIndices.forEach(index => {
                 currentChat.messages.splice(index, 1);
             });
-            purgeProtocolState(doomed);
+            purgeProtocolState(activeId, doomed);
 
             // 更新預覽
             if (currentChat.messages.length > 0) {
@@ -164,7 +169,12 @@
 
         const currentChat = wxApp.GLOBAL_CHATS?.[activeId];
         if (currentChat) {
-            purgeProtocolState(currentChat.messages);   // 清空＝真的乾淨，狀態不留
+            // 清空＝真的乾淨：舊鍵掃一遍，這一室的帳本整本丟掉
+            purgeProtocolState(activeId, currentChat.messages);
+            try {
+                const C = (targetWin.WX_CARDS || window.WX_CARDS);
+                if (C) C.clear(activeId);
+            } catch (e) {}
             currentChat.messages = [];
             currentChat.lastPreview = '';
             currentChat.renderedCount = 0;

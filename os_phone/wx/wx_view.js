@@ -227,7 +227,7 @@
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(display)}</div>`;
             }
 
-            html = this.processModules(html, String(chatId), msg.isMe);
+            html = this.processModules(html, String(chatId), msg.isMe, msgIndex);
             
             let avatarSeed = chatName; 
             let avatarUrl = "";
@@ -297,7 +297,13 @@
         generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },
 
         // --- 2. 模塊解析 ---
-        processModules: function(html, chatId, isMe) {
+        processModules: function(html, chatId, isMe, msgIndex) {
+            // 🚨模型沒給單號時，以前是現場擲一個隨機數（紅包甚至只有三位數）。
+            //   每次重畫都會擲出不一樣的，狀態當場跟丟；三位數還會撞到別人的紅包、
+            //   直接繼承對方的金額與領取紀錄。改成用「第幾則訊息＋這則裡的第幾張卡」當身分，
+            //   重畫幾次都一樣，也不會跟別則撞。
+            let _autoN = 0;
+            const autoRef = (kind) => 'auto_' + kind + '_' + (msgIndex == null ? 'x' : msgIndex) + '_' + (_autoN++);
             const app = "(window.parent.wxApp || window.wxApp)"; const safeId = String(chatId);
             html = html.replace(tagRe(MSG_TAG.TRANSFER), (match, tag, content) => {
                 // 解析新格式：[转账: 价格|指定人物|備註|Tnx_ID]
@@ -345,12 +351,15 @@
                 }
                 
                 // 如果沒有ID，生成一個
-                if (!txnId) {
-                    txnId = 'Txn' + Math.floor(Math.random() * 90 + 10);
-                }
+                if (!txnId) txnId = autoRef('txn');
                 const uniqueId = txnId.startsWith('ID_') ? txnId : ('ID_' + txnId);
                 const displayId = txnId;
-                const status = localStorage.getItem(uniqueId);
+                // 狀態走「這個聊天室的帳本」（wx_cards.js），不再拿模型寫的單號當全域鍵。
+                // 第一次畫到這張卡時把舊世界那份接過來，所以既有對話不會突然變回未讀。
+                const _CARDS = win.WX_CARDS || window.WX_CARDS;
+                const _card = _CARDS ? _CARDS.adopt(safeId, 'transfer', txnId,
+                    { amount: amount, targetName: targetName, memo: memo }, localStorage.getItem(uniqueId)) : null;
+                const status = _card ? _card.status : localStorage.getItem(uniqueId);
                 let bgColor = "#fa9d3b";
                 let textColor = "white";
                 let borderColor = "white";
@@ -436,11 +445,13 @@
                 }
                 
                 // 如果沒有ID，生成一個
-                if (!giftId) {
-                    giftId = 'gft_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                }
+                if (!giftId) giftId = autoRef('gft');
                 const uniqueId = 'ID_' + giftId;
-                const status = localStorage.getItem(uniqueId);
+                // 同轉帳：狀態走這個聊天室的帳本，第一次畫到時接手舊世界那份
+                const _CARDS = win.WX_CARDS || window.WX_CARDS;
+                const _card = _CARDS ? _CARDS.adopt(safeId, 'gift', giftId,
+                    { itemName: giftName, price: price }, localStorage.getItem(uniqueId)) : null;
+                const status = _card ? _card.status : localStorage.getItem(uniqueId);
                 
                 let opacity = "1";
                 let extraClass = "";
@@ -499,12 +510,7 @@
                     amount = parts[0];
                 }
                 
-                // 如果沒有ID，生成一個
-                if (!packetId) {
-                    // 生成紅包ID（3位數字）
-                    const randomNum = Math.floor(Math.random() * 1000);
-                    packetId = 'rp_' + String(randomNum).padStart(3, '0');
-                }
+                if (!packetId) packetId = autoRef('rp');
                 
                 // 保存紅包數據（如果還沒有保存過）
                 const win = window.parent || window;

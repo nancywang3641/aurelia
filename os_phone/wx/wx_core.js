@@ -43,20 +43,75 @@
         return decoded;
     }
 
-    // --- 紅包數據管理 (🔥 新增) ---
-    function saveRedPacketData(packetId, data) {
-        try {
-            const key = `wx_redpacket_${packetId}`;
-            localStorage.setItem(key, JSON.stringify(data));
-        } catch(e) { console.error('[RedPacket] 保存失敗:', e); }
+    // --- 紅包數據管理 ---
+    // 🚨改走「這個聊天室的帳本」（wx_cards.js）。以前是拿模型寫的單號當 localStorage 的全域鍵，
+    //   結果不同聊天室共用同一份、清空聊天也清不掉、程式自己補的三位數 ID 還會撞到別人的紅包
+    //   直接繼承對方的金額與領取紀錄。帳本按聊天室分開，清空時一起走。
+    //   第一次讀到舊世界那筆時會接手過來，既有對話不會突然變空。
+    function _cards() { return win.WX_CARDS || window.WX_CARDS; }
+    function _cardChat(chatId) { return chatId || GLOBAL_ACTIVE_ID; }
+
+    // 狀態寫進這個聊天室的帳本。帳本裡還沒有這張卡（卡片還沒被畫過）就先寫舊鍵，
+    // 等畫到的那一刻 adopt 會接手進來——順序不管誰先誰後都對得上。
+    function _setCardStatus(chatId, kind, alias, status, legacyKey) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (C && cid) {
+            const card = C.find(cid, kind, alias);
+            if (card) { C.update(cid, card.key, { status: status }); return card; }
+        }
+        if (legacyKey) { try { localStorage.setItem(legacyKey, status); } catch (e) {} }
+        return null;
     }
-    
-    function getRedPacketData(packetId) {
+
+    // 轉帳單本身（金額、對象、時效）也按聊天室分開存，理由同紅包
+    function _txnLoad(chatId, txnId) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (C && cid) {
+            const card = C.findByAlias(cid, 'transfer', txnId);
+            if (card && card.data && card.data.amount != null) return card.data;
+        }
+        try { const raw = localStorage.getItem('wx_transfer_' + txnId); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+    }
+    function _txnSave(chatId, txnId, data) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (C && cid) {
+            const card = C.adopt(cid, 'transfer', txnId, data, null);
+            C.update(cid, card.key, { data: data, status: data && data.status ? data.status : undefined });
+            return;
+        }
+        try { localStorage.setItem('wx_transfer_' + txnId, JSON.stringify(data)); } catch (e) {}
+    }
+
+    function saveRedPacketData(packetId, data, chatId) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (C && cid) {
+            const card = C.adopt(cid, 'redpacket', packetId, data, null);
+            C.update(cid, card.key, { data: data });
+            return;
+        }
+        try { localStorage.setItem(`wx_redpacket_${packetId}`, JSON.stringify(data)); } catch(e) { console.error('[RedPacket] 保存失敗:', e); }
+    }
+
+    function getRedPacketData(packetId, chatId) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (C && cid) {
+            const card = C.findByAlias(cid, 'redpacket', packetId);
+            if (card && card.data && card.data.totalAmount != null) return card.data;
+            // 帳本裡還沒有 → 看看舊世界留了什麼，有就接手進來
+            try {
+                const raw = localStorage.getItem(`wx_redpacket_${packetId}`);
+                if (raw) {
+                    const old = JSON.parse(raw);
+                    const c = C.adopt(cid, 'redpacket', packetId, old, null);
+                    C.update(cid, c.key, { data: old });
+                    return old;
+                }
+            } catch(e) {}
+            return null;
+        }
         try {
-            const key = `wx_redpacket_${packetId}`;
-            const data = localStorage.getItem(key);
-            const result = data ? JSON.parse(data) : null;
-            return result;
+            const data = localStorage.getItem(`wx_redpacket_${packetId}`);
+            return data ? JSON.parse(data) : null;
         } catch(e) { console.error('[RedPacket] 讀取失敗:', e, { packetId }); return null; }
     }
     
@@ -90,11 +145,9 @@
             amount = parts[0];
         }
         
-        // 如果沒有ID，生成一個
+        // 🚨沒單號時別擲三位數：只有一千種，撞到既有的會直接繼承對方的金額與領取紀錄
         if (!packetId) {
-            // 生成紅包ID（3位數字）
-            const randomNum = Math.floor(Math.random() * 1000);
-            packetId = 'rp_' + String(randomNum).padStart(3, '0');
+            packetId = 'rp_auto_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
         }
         
         // 保存紅包數據（如果還沒有保存過）
@@ -315,7 +368,7 @@
             const giftId = giftActionMatch1[3].trim();
             const isAccept = action === 'accept' || action === '接收' || action === '接收了' || action === '收下' || action === '收下了';
             const uniqueId = giftId.startsWith('ID_') ? giftId : ('ID_' + giftId);
-            localStorage.setItem(uniqueId, isAccept ? 'accepted' : 'returned');
+            _setCardStatus(ctx.chatId, 'gift', giftId, isAccept ? 'accepted' : 'returned', uniqueId);
             // 口徑跟轉帳那條一致：講「對方做了什麼」，禮物名帶引號，ID 不露出來
             const _giftWhat = itemName ? `「${itemName}」` : '禮物';
             return { type: 'system', content: isAccept ? `對方已收下${_giftWhat}` : `對方已退回${_giftWhat}`, isMe: false };
@@ -327,7 +380,7 @@
             const giftId = giftActionMatch2[2].trim();
             const isAccept = actionText.includes('接收') || actionText.includes('收下') || actionText.includes('accept');
             const uniqueId = giftId.startsWith('ID_') ? giftId : ('ID_' + giftId);
-            localStorage.setItem(uniqueId, isAccept ? 'accepted' : 'returned');
+            _setCardStatus(ctx.chatId, 'gift', giftId, isAccept ? 'accepted' : 'returned', uniqueId);
             // actionText 是動詞前面那段，通常就是人名；沒抓到就用「對方」
             const _giftWho = giftActionMatch2[1].trim().replace(/[\[\]|｜]/g, '').trim();
             return { type: 'system', content: `${_giftWho || '對方'}${isAccept ? '收下了禮物' : '退回了禮物'}`, isMe: false };
@@ -345,12 +398,9 @@
             txnId = txnId.replace(/\]+\s*$/, '').trim();
             const isAccept = action === 'accept' || action === '接收' || action === '接收了' || action === '收下' || action === '收下了';
             const uniqueId = txnId.startsWith('ID_') ? txnId : ('ID_' + txnId);
-            const transferKey = `wx_transfer_${txnId}`;
-            
-            // 🔥 檢查轉帳狀態和時效性
-            const transferDataStr = localStorage.getItem(transferKey);
-            if (transferDataStr) {
-                const transferData = JSON.parse(transferDataStr);
+            // 轉帳單與狀態都走這個聊天室的帳本（見檔案上方 _txnLoad/_setCardStatus 的說明）
+            const transferData = _txnLoad(ctx.chatId, txnId);
+            if (transferData) {
                 const now = Date.now();
                 const elapsed = now - transferData.timestamp;
                 const tenMinutes = 10 * 60 * 1000;
@@ -365,42 +415,42 @@
                             if (success) {
                                 // 更新轉帳狀態
                                 transferData.status = 'accepted';
-                                localStorage.setItem(transferKey, JSON.stringify(transferData));
-                                localStorage.setItem(uniqueId, 'accepted');
+                                _txnSave(ctx.chatId, txnId, transferData);
+                                _setCardStatus(ctx.chatId, 'transfer', txnId, 'accepted', uniqueId);
                             } else {
                                 // 餘額不足，視為拒絕
                                 transferData.status = 'returned';
-                                localStorage.setItem(transferKey, JSON.stringify(transferData));
-                                localStorage.setItem(uniqueId, 'returned');
+                                _txnSave(ctx.chatId, txnId, transferData);
+                                _setCardStatus(ctx.chatId, 'transfer', txnId, 'returned', uniqueId);
                                 const displayContent = `轉帳失敗：餘額不足`;
                                 return { type: 'system', content: displayContent, isMe: false };
                             }
                         } else {
                             // 沒有經濟系統，直接標記為接收
                             transferData.status = 'accepted';
-                            localStorage.setItem(transferKey, JSON.stringify(transferData));
-                            localStorage.setItem(uniqueId, 'accepted');
+                            _txnSave(ctx.chatId, txnId, transferData);
+                            _setCardStatus(ctx.chatId, 'transfer', txnId, 'accepted', uniqueId);
                         }
                     } else if (transferData.status === 'expired' || elapsed > tenMinutes) {
                         // 已過期，視為拒絕
                         transferData.status = 'expired';
-                        localStorage.setItem(transferKey, JSON.stringify(transferData));
-                        localStorage.setItem(uniqueId, 'expired');
+                        _txnSave(ctx.chatId, txnId, transferData);
+                        _setCardStatus(ctx.chatId, 'transfer', txnId, 'expired', uniqueId);
                         const displayContent = `轉帳已過期（10分鐘）`;
                         return { type: 'system', content: displayContent, isMe: false };
                     } else if (transferData.status !== 'pending') {
                         // 已經處理過（accepted/returned），不重複處理
-                        localStorage.setItem(uniqueId, transferData.status);
+                        _setCardStatus(ctx.chatId, 'transfer', txnId, transferData.status, uniqueId);
                     }
                 } else {
                     // 拒絕：不扣款，只更新狀態
                     transferData.status = 'returned';
-                    localStorage.setItem(transferKey, JSON.stringify(transferData));
-                    localStorage.setItem(uniqueId, 'returned');
+                    _txnSave(ctx.chatId, txnId, transferData);
+                    _setCardStatus(ctx.chatId, 'transfer', txnId, 'returned', uniqueId);
                 }
             } else {
                 // 沒有找到轉帳記錄，可能是舊格式或手動輸入，直接標記狀態
-                localStorage.setItem(uniqueId, isAccept ? 'accepted' : 'returned');
+                _setCardStatus(ctx.chatId, 'transfer', txnId, isAccept ? 'accepted' : 'returned', uniqueId);
             }
             
             // 更新系統消息內容，使用統一的顯示格式
@@ -422,7 +472,7 @@
             const txnId = transferActionMatch2[2].trim();
             const isAccept = actionText.includes('接收') || actionText.includes('收下') || actionText.includes('accept');
             const uniqueId = txnId.startsWith('ID_') ? txnId : ('ID_' + txnId);
-            localStorage.setItem(uniqueId, isAccept ? 'accepted' : 'returned');
+            _setCardStatus(ctx.chatId, 'transfer', txnId, isAccept ? 'accepted' : 'returned', uniqueId);
             const _txnWho = transferActionMatch2[1].trim().replace(/[\[\]|｜]/g, '').trim();
             return { type: 'system', content: `${_txnWho || '對方'}${isAccept ? '已接收轉帳' : '已退回轉帳'}`, isMe: false };
         }
@@ -1597,20 +1647,19 @@
                         status: 'pending',
                         memo: val2 || ''
                     };
-                    const transferKey = `wx_transfer_${txnId}`;
-                    localStorage.setItem(transferKey, JSON.stringify(transferData));
+                    const _txnChat = GLOBAL_ACTIVE_ID;   // 定時器晚十分鐘才跑，那時她可能已經切到別間，先記起來
+                    _txnSave(_txnChat, txnId, transferData);
                     
                     // 🔥 設置10分鐘過期定時器
                     setTimeout(() => {
-                        const stored = localStorage.getItem(transferKey);
-                        if (stored) {
-                            const data = JSON.parse(stored);
+                        const data = _txnLoad(_txnChat, txnId);
+                        if (data) {
                             if (data.status === 'pending') {
                                 data.status = 'expired';
-                                localStorage.setItem(transferKey, JSON.stringify(data));
+                                _txnSave(_txnChat, txnId, data);
                                 // 更新轉帳卡片狀態
                                 const uniqueId = 'ID_' + txnId;
-                                localStorage.setItem(uniqueId, 'expired');
+                                _setCardStatus(_txnChat, 'transfer', txnId, 'expired', uniqueId);
                                 // 觸發重新渲染
                                 if (win.wxApp && typeof win.wxApp.render === 'function') {
                                     win.wxApp.render();
@@ -1629,7 +1678,8 @@
         
         openGift: function(info, price, hashId, el) { const overlay = doc.querySelector('#wxGiftOverlay'); const nameEl = doc.querySelector('#wxGiftName'); const priceEl = doc.querySelector('#wxGiftPrice'); const iconEl = doc.querySelector('#wxGiftIcon'); const btnGroup = doc.querySelector('#wxGiftBtnGroup'); const closeBtn = doc.querySelector('#wxGiftClose'); const acceptBtn = doc.querySelector('#wxGiftAccept'); const refuseBtn = doc.querySelector('#wxGiftRefuse'); if (overlay && nameEl) { let fullInfo = decodeURIComponent(info); let icon = "🎁"; let name = fullInfo; const emojiMatch = fullInfo.match(/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF])/); if (emojiMatch) { icon = emojiMatch[0]; name = fullInfo.replace(icon, '').trim(); } nameEl.innerText = name; priceEl.innerText = decodeURIComponent(price); iconEl.innerText = icon; const status = localStorage.getItem(hashId); if (hashId === 'VIEW_ONLY' || status) { if(btnGroup) btnGroup.style.display = 'none'; if(closeBtn) closeBtn.style.display = 'block'; } else { if(btnGroup) btnGroup.style.display = 'flex'; if(closeBtn) closeBtn.style.display = 'block'; if(acceptBtn) acceptBtn.onclick = () => this.resolveGift('accepted', name, hashId); if(refuseBtn) refuseBtn.onclick = () => this.resolveGift('returned', name, hashId); } overlay.classList.add('show'); } },
         resolveGift: function(action, name, hashId) {
-            localStorage.setItem(hashId, action);
+            const _gid = String(hashId || '').replace(/^ID_/i, '');
+            _setCardStatus(null, 'gift', _gid, action, hashId);
             doc.querySelector('#wxGiftOverlay').classList.remove('show');
             
             // 提取Gift ID（去掉ID_前缀）
@@ -1664,11 +1714,9 @@
         resolveTransfer: function(action, amount, hashId) {
             // 提取Transaction ID（去掉ID_前缀）
             const txnId = hashId.startsWith('ID_') ? hashId.substring(3) : hashId;
-            const transferKey = `wx_transfer_${txnId}`;
-            const transferDataStr = localStorage.getItem(transferKey);
+            const transferData = _txnLoad(null, txnId);
             
-            if (transferDataStr) {
-                const transferData = JSON.parse(transferDataStr);
+            if (transferData) {
                 const now = Date.now();
                 const elapsed = now - transferData.timestamp;
                 const tenMinutes = 10 * 60 * 1000;
@@ -1690,29 +1738,29 @@
                         
                         // 更新轉帳狀態
                         transferData.status = 'accepted';
-                        localStorage.setItem(transferKey, JSON.stringify(transferData));
-                        localStorage.setItem(hashId, 'accepted');
+                        _txnSave(null, txnId, transferData);
+                        _setCardStatus(null, 'transfer', txnId, 'accepted', hashId);
                     } else if (transferData.status === 'expired' || elapsed > tenMinutes) {
                         // 已過期
                         alert('轉帳已過期（10分鐘）');
                         transferData.status = 'expired';
-                        localStorage.setItem(transferKey, JSON.stringify(transferData));
-                        localStorage.setItem(hashId, 'expired');
+                        _txnSave(null, txnId, transferData);
+                        _setCardStatus(null, 'transfer', txnId, 'expired', hashId);
                         this.closeTransfer();
                         return;
                     } else {
                         // 已經處理過
-                        localStorage.setItem(hashId, transferData.status);
+                        _setCardStatus(null, 'transfer', txnId, transferData.status, hashId);
                     }
                 } else {
                     // 拒絕：不扣款，只更新狀態
                     transferData.status = 'returned';
-                    localStorage.setItem(transferKey, JSON.stringify(transferData));
-                    localStorage.setItem(hashId, 'returned');
+                    _txnSave(null, txnId, transferData);
+                    _setCardStatus(null, 'transfer', txnId, 'returned', hashId);
                 }
             } else {
                 // 沒有找到轉帳記錄，可能是舊格式，直接標記狀態
-                localStorage.setItem(hashId, action);
+                _setCardStatus(null, 'transfer', txnId, action, hashId);
                 // 舊格式：直接給接收方加錢（如果接收）
                 if (win.OS_ECONOMY && action === 'accepted') {
                     const amountNum = parseFloat(amount);
