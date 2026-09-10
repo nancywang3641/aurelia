@@ -140,6 +140,35 @@
         },
 
         // --- 1. 氣泡渲染 (保持 V108.5 邏輯) ---
+        // 🚨 把頭像貼上去。以前這段寫死在整頁重建的尾巴、而且掃整份文件，
+        //    所以「追加一顆新泡泡」那條路完全沒有人貼——AI 每回一次，新泡泡的頭像就是
+        //    預設那張，要整頁重建（例如退出去再進聊天室）才會變回來。她實測就是撞到這個。
+        //    抽成一支、兩邊都呼叫；貼過的打一個記號，重掃不會重做也不會漏。
+        hydrateAvatars: function (root) {
+            const win = window.parent || window;
+            if (!win.OS_DB || !root || !root.querySelectorAll) return;
+            root.querySelectorAll('.db-load-target:not([data-avt-done])').forEach(async function (el) {
+                const id = el.getAttribute('data-db-bg');
+                if (!id) return;
+                el.setAttribute('data-avt-done', '1');
+                try {
+                    const url = await win.OS_DB.getImage(id);
+                    if (url) el.style.backgroundImage = "url('" + url + "')";
+                    else el.removeAttribute('data-avt-done');   // 這次沒拿到，下次還能再試
+                } catch (e) { el.removeAttribute('data-avt-done'); }
+            });
+            root.querySelectorAll('.vn-load-target:not([data-avt-done])').forEach(async function (el) {
+                const name = el.getAttribute('data-vn-name');
+                if (!name) return;
+                el.setAttribute('data-avt-done', '1');
+                try {
+                    const url = await _resolveVNAvatar(name);
+                    if (url) el.style.backgroundImage = "url('" + url + "')";
+                    else el.removeAttribute('data-avt-done');
+                } catch (e) { el.removeAttribute('data-avt-done'); }
+            });
+        },
+
         renderBubble: function(msg, chatObj, withAnim, msgIndex) {
             // 貼圖寫法跟 VN 手機對齊：[貼紙:]/[贴纸:]/[表情:]/[Emote:] 都算表情包；[xxx.gif] 這種只有檔名的也算（跑團正文常這樣寫）
             if (msg && typeof msg.content === 'string' && /\[/.test(msg.content)) {
@@ -1084,28 +1113,8 @@
                     });
                 }
                 
-                // B. 加載列表/氣泡中的頭像（DB）
-                const targets = doc.querySelectorAll('.db-load-target');
-                targets.forEach(async el => {
-                    const id = el.getAttribute('data-db-bg');
-                    if (id) {
-                        try {
-                            const url = await win.OS_DB.getImage(id);
-                            if (url) el.style.backgroundImage = `url('${url}')`;
-                        } catch(e) {}
-                    }
-                });
-
-                // C. 從 VN 串接獲取頭像：lorebook → mem cache → VN IndexedDB
-                const vnTargets = doc.querySelectorAll('.vn-load-target');
-                vnTargets.forEach(async el => {
-                    const name = el.getAttribute('data-vn-name');
-                    if (!name) return;
-                    try {
-                        const url = await _resolveVNAvatar(name);
-                        if (url) el.style.backgroundImage = `url('${url}')`;
-                    } catch(e) {}
-                });
+                // B + C. 頭像（圖庫的與 VN 串接的）→ 走共用那一支
+                this.hydrateAvatars(doc);
             }, 50);
 
             return html;

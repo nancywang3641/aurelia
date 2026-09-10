@@ -1359,6 +1359,9 @@
         if (rc && window.WX_VIEW) {
             const idx = chatObj.messages.length - 1;
             rc.insertAdjacentHTML('beforeend', window.WX_VIEW.renderBubble(msg, chatObj, true, idx));
+            // 🚨 追加進來的泡泡也要把頭像貼上。以前只有整頁重建會貼，所以 AI 每回一次，
+            //    新泡泡的頭像就停在預設那張，退出去再進來才會變回來。
+            try { window.WX_VIEW.hydrateAvatars && window.WX_VIEW.hydrateAvatars(rc); } catch (e) {}
             _scrollToBottom();
         }
     }
