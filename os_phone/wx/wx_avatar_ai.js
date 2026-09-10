@@ -115,12 +115,25 @@
             + '只有真的講定了才寫；還在問、還在猶豫、只是隨口提一句，都不要寫。同一件事寫過就別再寫。';
     }
 
+    // 🪪 改名與改簽名：程式端本來就接得住簽名（跟大家共用同一條系統訊息），
+    //    但從來沒有人把用法教給 AI，所以它只能瞎猜格式，猜不中就變成一顆普通泡泡。
+    //    改名以前連程式都沒有，這次一起補。兩件都不花錢也不生東西，所以不設開關、一律教。
+    function profileInstruction() {
+        return '[改自己的名字與簽名]\n'
+            + '你可以改自己在這支手機上顯示的名字，也可以改個性簽名。要改的時候，'
+            + '在訊息之外單獨一行寫：\n'
+            + '[系統: 改名 新的名字]\n'
+            + '[系統: 改簽名 新的簽名]\n'
+            + '這兩行都不會變成聊天泡泡。改了對方就會在聊天列表跟資料頁看到。\n'
+            + '有理由才改：換了心境、想避人耳目、跟誰鬧翻了。不要每次聊天都改，也不要一次連改好幾次。';
+    }
     win.WX_AVATAR_AI = {
         isEnabled: isEnabled, setEnabled: setEnabled,
         getProvider: getProvider, setProvider: setProvider,
         PROVIDERS: PROVIDERS,
         instruction: instruction,
         eventInstruction: eventInstruction,
+        profileInstruction: profileInstruction,
         apply: apply,
         ON_KEY: ON_KEY, SRC_KEY: SRC_KEY
     };

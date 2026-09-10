@@ -354,8 +354,28 @@
             return { type: 'system', content: '', isMe: false };
         }
 
+        // 處理 [System: 改名 XXX]。以前完全沒有這條，AI 想改名只能寫成一句話、變成一顆泡泡。
+        // 做的事跟她在資料頁手動改名一模一樣：改顯示名、重畫、存檔。不碰通訊錄，跟手動那條一致。
+        const renameMatch = content.match(/^\s*(?:改名|更名|改暱稱|改昵称|換名字|换名字|改個名字|改个名字|rename)\s*(?:為|为|成|to)?\s*[:：]?\s*(.+)$/i);
+        if (renameMatch) {
+            let _newName = String(renameMatch[1] || '').replace(/\]+\s*$/, '').replace(/^["'「『]+|["'」』]+$/g, '').trim();
+            if (_newName && _newName.length <= 24 && GLOBAL_CHATS[ctx.chatId]) {
+                const _old = GLOBAL_CHATS[ctx.chatId].name || ctx.chatName;
+                GLOBAL_CHATS[ctx.chatId].name = _newName;
+                try { if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(ctx.chatId, GLOBAL_CHATS[ctx.chatId]); } catch (e) {}
+                try { if (win.wxApp && win.wxApp.saveChats) win.wxApp.saveChats(); } catch (e) {}
+                setTimeout(function () { try { win.wxApp && win.wxApp.render && win.wxApp.render(); } catch (e) {} }, 100);
+                return { type: 'system', content: _old + ' 改名為「' + _newName + '」', isMe: false };
+            }
+            return { type: 'system', content: '', isMe: false };   // 名字空的或太長：什麼都不做，也不要印假訊息
+        }
+
         // 處理 [System: 更改簽名 to XXX]
-        const bioMatch = content.match(/(?:更改|修改|更新|换|變更|changed?|updated?|set).{0,6}(?:簽名|签名|Bio|Signature|狀態|status).{0,6}[:：为為to]\s*(.*)/i);
+        // 🚨 動詞清單以前沒有單獨的「改」，而且一定要有冒號或「為」才收。
+        //    所以 AI 寫「改簽名 最近很煩」會整條漏掉，變成一顆印著協議原文的泡泡——
+        //    她實測就是撞到這個（頭像改成功、簽名沒改到）。現在「改／換」也算動詞，
+        //    中間的「個性」可有可無，後面接空白也行，不強迫寫冒號。
+        const bioMatch = content.match(/(?:改|更改|修改|更新|換|换|變更|变更|changed?|updated?|set)\s*(?:個性|个性)?\s*(?:簽名|签名|Bio|Signature|狀態|status)\s*(?:為|为|成|to)?\s*[:：]?\s*(.+)/i);
         if (bioMatch) {
             let newBio = bioMatch[1].replace(/["']/g, "").trim();
             if (newBio.endsWith(']')) newBio = newBio.slice(0, -1);

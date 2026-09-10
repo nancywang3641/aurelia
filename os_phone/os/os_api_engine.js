@@ -1225,6 +1225,9 @@
                     // 📅 約定不設開關：不花錢也不生東西，而且兩邊寫進同一本日曆才對得上。
                     const _ev = (_av && _av.eventInstruction) ? _av.eventInstruction() : '';
                     if (_ev) apiMessages.push({ role: 'system', content: _ev });
+                    // 🪪 改名與改簽名同理：不花錢，一律教。
+                    const _pf = (_av && _av.profileInstruction) ? _av.profileInstruction() : '';
+                    if (_pf) apiMessages.push({ role: 'system', content: _pf });
                 } catch (e) {}
             }
 
