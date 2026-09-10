@@ -870,6 +870,12 @@
                             keysToDelete.push(key);
                             deletedCount++;
                         }
+                        // 🚨轉帳本身那筆（金額、對象、時效）以前漏掉了：狀態清了、資料還在，
+                        //   同一個單號再出現時又被當成有效的待收款
+                        else if (key.startsWith('wx_transfer_')) {
+                            keysToDelete.push(key);
+                            deletedCount++;
+                        }
                     }
                     
                     // 執行刪除

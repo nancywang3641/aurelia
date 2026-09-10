@@ -80,6 +80,29 @@
         updateHeaderButtons();
     }
 
+    // 🚨紅包／禮物／轉帳的「已領取／已接收」狀態存在 localStorage 的頂層，鍵名就是那串 ID
+    //   （ID_Gft_999、wx_redpacket_rp_1、wx_transfer_Txn_88）。訊息刪掉了、狀態卻留著，
+    //   下次模型又寫同一個 ID——測試腳本會，模型自己也常用固定編號——卡片一出現就是「已接收」。
+    //   她實測：清空重試之後，禮物與轉帳直接顯示已接收、已收款。
+    //   所以刪訊息的時候，把那幾則帶的 ID 一起清掉。
+    function purgeProtocolState(messages) {
+        let n = 0;
+        const seen = new Set();
+        (messages || []).forEach(m => {
+            const text = String((m && (m.content || m.raw)) || '');
+            const ids = text.match(/(?:Gft|Gift|rp|RedPacket|Txn|Tnx|Transfer)[_-][A-Za-z0-9_]+/gi) || [];
+            ids.forEach(id => {
+                if (seen.has(id)) return;
+                seen.add(id);
+                ['ID_' + id, 'wx_redpacket_' + id, 'wx_transfer_' + id].forEach(k => {
+                    try { if (localStorage.getItem(k) !== null) { localStorage.removeItem(k); n++; } } catch (e) {}
+                });
+            });
+        });
+        if (n) console.log('[MessageManager] 順手清掉 ' + n + ' 筆紅包/禮物/轉帳狀態');
+        return n;
+    }
+
     async function deleteSelectedMessages() {
         if (selectedMessages.size === 0) {
             alert('❌ 請先選擇要刪除的消息');
@@ -94,11 +117,13 @@
             const activeId = wxApp.GLOBAL_ACTIVE_ID;
             const currentChat = wxApp.GLOBAL_CHATS?.[activeId];
             
-            // 倒序刪除
+            // 倒序刪除。刪掉的那幾則帶的紅包/禮物/轉帳 ID，狀態要跟著走
             const sortedIndices = Array.from(selectedMessages).sort((a, b) => b - a);
+            const doomed = sortedIndices.map(i => currentChat.messages[i]).filter(Boolean);
             sortedIndices.forEach(index => {
                 currentChat.messages.splice(index, 1);
             });
+            purgeProtocolState(doomed);
 
             // 更新預覽
             if (currentChat.messages.length > 0) {
@@ -139,6 +164,7 @@
 
         const currentChat = wxApp.GLOBAL_CHATS?.[activeId];
         if (currentChat) {
+            purgeProtocolState(currentChat.messages);   // 清空＝真的乾淨，狀態不留
             currentChat.messages = [];
             currentChat.lastPreview = '';
             currentChat.renderedCount = 0;
