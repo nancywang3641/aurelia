@@ -268,7 +268,7 @@ const PHONE_FILES = [
     // === 🔵 微信 (WeChat) ===
     'wx/wx_user_profile.js', 'wx/wx_theme.js',
     'wx/wx_contacts.js', 'wx/wx_chat_settings.js', 'wx/wx_bubble_settings.js', 'wx/wx_bubble_ai.js',
-    'wx/wx_summary.js', 'wx/wx_cards.js', 'wx/wx_message_manager.js', 'wx/wx_view.js', 'wx/wx_core.js',
+    'wx/wx_summary.js', 'wx/wx_wallet.js', 'wx/wx_cards.js', 'wx/wx_message_manager.js', 'wx/wx_view.js', 'wx/wx_core.js',
     'wx/wx_tavern_api_bridge.js',
 
     // === 📞 電話 (dialer) ===

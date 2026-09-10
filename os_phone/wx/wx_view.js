@@ -702,6 +702,11 @@
 
             const wxId = 'wxid_' + profile.nickname.replace(/\s+/g, '_');
 
+            // 錢包餘額（同步讀快取，getMePageHTML 本身不是 async）。模塊還沒載好就留白，
+            // 不要印 ¥0.00 誤導成「錢不見了」。
+            let walletAmount = '';
+            try { const W = win.WX_WALLET; if (W && W.getBalance) walletAmount = W.money(W.getBalance()); } catch (e) {}
+
             const pageBg      = isDark ? '#111'    : '#f2f2f2';
             const headerBg    = isDark ? '#1c1c1e' : '#fff';
             const cellGroupBg = isDark ? '#1c1c1e' : '#fff';
@@ -750,8 +755,15 @@
                         <div class="wx-me-signature">${profile.signature}</div>
                     </div>
                 </div>
+                <!-- 💰 錢包：餘額直接印在格子右邊。她點開錢包的時機是「發紅包之前看夠不夠」，
+                     那就不該還要再點進去一層才看得到。原本這格是不會動的「服務」裝飾。 -->
                 <div class="wx-cell-group">
-                    <div class="wx-cell"><div class="wx-cell-icon">${iconPay}</div><div class="wx-cell-text">服務</div><div class="wx-cell-arrow">›</div></div>
+                    <div class="wx-cell" onclick="(window.parent.WX_WALLET || window.WX_WALLET) && (window.parent.WX_WALLET || window.WX_WALLET).open()">
+                        <div class="wx-cell-icon">${iconPay}</div>
+                        <div class="wx-cell-text">錢包</div>
+                        <div id="wx-wallet-cell-amount" style="font-size:15px; color:${idColor}; margin-right:6px;">${walletAmount}</div>
+                        <div class="wx-cell-arrow">›</div>
+                    </div>
                 </div>
                 <div class="wx-cell-group">
                     <div class="wx-cell"><div class="wx-cell-icon">${iconFav}</div><div class="wx-cell-text">收藏</div><div class="wx-cell-arrow">›</div></div>

@@ -287,9 +287,9 @@
         }
         
         // 只有當領取者是當前用戶時，才增加餘額
-        if (win.OS_ECONOMY && grabAmount > 0 && cleanGrabberName === currentUserName) {
+        if (win.WX_WALLET && grabAmount > 0 && cleanGrabberName === currentUserName) {
             const senderName = data.sender || '未知';
-            win.OS_ECONOMY.transaction(grabAmount, `微信紅包 - 來自${senderName}`);
+            win.WX_WALLET.transaction(grabAmount, `微信紅包 - 來自${senderName}`);
         }
 
         // 保存數據
@@ -471,9 +471,9 @@
                     // 接收：檢查是否在10分鐘內且狀態為pending
                     if (transferData.status === 'pending' && elapsed <= tenMinutes) {
                         // 扣款並轉帳給對方
-                        if (win.OS_ECONOMY) {
+                        if (win.WX_WALLET) {
                             const amountNum = parseFloat(amount);
-                            const success = win.OS_ECONOMY.transaction(-amountNum, `微信轉帳給 ${transferData.targetName}`);
+                            const success = win.WX_WALLET.transaction(-amountNum, `微信轉帳給 ${transferData.targetName}`);
                             if (success) {
                                 // 更新轉帳狀態
                                 transferData.status = 'accepted';
@@ -1667,15 +1667,15 @@
                         return;
                     }
                     // 🔥 檢查餘額並扣款
-                    if (win.OS_ECONOMY) {
-                        const currentBalance = win.OS_ECONOMY.getBalance();
+                    if (win.WX_WALLET) {
+                        const currentBalance = win.WX_WALLET.getBalance();
                         if (currentBalance < redPacketAmount) {
                             alert('餘額不足，無法發送紅包！');
                             this.closeModal();
                             return;
                         }
                         // 立即扣款（紅包發送時就扣款）
-                        win.OS_ECONOMY.transaction(-redPacketAmount, `微信紅包`);
+                        win.WX_WALLET.transaction(-redPacketAmount, `微信紅包`);
                     }
                     // 生成紅包ID（3位數字）
                     const randomNum = Math.floor(Math.random() * 1000);
@@ -1695,8 +1695,8 @@
                         return;
                     }
                     // 🔥 檢查餘額（但不扣款，等接收時才扣）
-                    if (win.OS_ECONOMY) {
-                        const currentBalance = win.OS_ECONOMY.getBalance();
+                    if (win.WX_WALLET) {
+                        const currentBalance = win.WX_WALLET.getBalance();
                         if (currentBalance < amountNum) {
                             alert('餘額不足，無法轉帳！');
                             this.closeModal();
@@ -1820,13 +1820,13 @@
                     if (transferData.status === 'pending' && elapsed <= tenMinutes) {
                         // 接收方收款（這裡是接收方，所以是加錢）
                         // 發送方扣款會在 processSystemIntent 中處理（當AI輸出Accept時）
-                        if (win.OS_ECONOMY) {
+                        if (win.WX_WALLET) {
                             const amountNum = parseFloat(amount);
                             if (!isNaN(amountNum)) {
                                 const chatName = GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]
                                     ? GLOBAL_CHATS[GLOBAL_ACTIVE_ID].name
                                     : '未知聊天';
-                                win.OS_ECONOMY.transaction(amountNum, `微信收款 - ${chatName}`);
+                                win.WX_WALLET.transaction(amountNum, `微信收款 - ${chatName}`);
                             }
                         }
                         
@@ -1856,13 +1856,13 @@
                 // 沒有找到轉帳記錄，可能是舊格式，直接標記狀態
                 _setCardStatus(null, 'transfer', txnId, action, hashId);
                 // 舊格式：直接給接收方加錢（如果接收）
-                if (win.OS_ECONOMY && action === 'accepted') {
+                if (win.WX_WALLET && action === 'accepted') {
                     const amountNum = parseFloat(amount);
                     if (!isNaN(amountNum)) {
                         const chatName = GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]
                             ? GLOBAL_CHATS[GLOBAL_ACTIVE_ID].name
                             : '未知聊天';
-                        win.OS_ECONOMY.transaction(amountNum, `微信收款 - ${chatName}`);
+                        win.WX_WALLET.transaction(amountNum, `微信收款 - ${chatName}`);
                     }
                 }
             }
@@ -2296,6 +2296,9 @@
         }
     };
     WX_STICKER.init();
+    // 💰 錢包：先把餘額載進快取。發紅包那條路是同步問 getBalance()（「發之前看夠不夠」等不了 await），
+    //    沒先載就永遠讀到 0、每次都說餘額不足。
+    try { if (win.WX_WALLET && win.WX_WALLET.init) win.WX_WALLET.init(); } catch (e) {}
     win.WX_STICKER = WX_STICKER;
 
     // 🔧 退役酒館橋接：記憶已改走 prompt 注入(os_app_memory_inject，唯讀、不寫進酒館正文)，
