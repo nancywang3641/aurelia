@@ -82,6 +82,37 @@
         try { localStorage.setItem('wx_transfer_' + txnId, JSON.stringify(data)); } catch (e) {}
     }
 
+    // 🧾 送給模型的「現在還沒處理完的」清單。序號是程式發的（wx_cards.js），保證不重複，
+    //    而且同時通常只有一兩張，模型很難指錯——它因此不用自己編單號，也不用把單號印在畫面上
+    //    跟自己對帳。沒有待處理的就回空字串，一個字都不加。
+    function _pendingBrief(chatId) {
+        const C = _cards();
+        const pend = (C && chatId) ? C.pending(chatId) : [];
+        if (!pend.length) return '';
+        const NAME = { redpacket: '紅包', gift: '禮物', transfer: '轉帳' };
+        const money = (v) => '¥' + (Number(v) || 0).toFixed(2);
+        const lines = pend.map(c => {
+            const d = c.data || {};
+            let desc;
+            if (c.kind === 'redpacket') {
+                const total = Number(d.totalAmount) || 0;
+                const got = (d.list || []).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+                desc = (d.sender ? d.sender + '發的，' : '') + '共 ' + money(total)
+                    + '，已被領走 ' + money(got) + '，還剩 ' + money(Math.max(0, total - got));
+            } else if (c.kind === 'transfer') {
+                desc = money(d.amount) + (d.targetName ? '，給 ' + d.targetName : '') + '，還沒被收下';
+            } else {
+                desc = (d.itemName || '一份禮物') + '，還沒被收下';
+            }
+            return c.seq + ' 號　' + (NAME[c.kind] || c.kind) + '：' + desc;
+        });
+        return ['【現在還沒處理完的】'].concat(lines).concat([
+            '',
+            '要讓誰領紅包、或收下退回禮物與轉帳時，用上面的號碼指名就好（例如「小明領取了紅包 4.44元|1」的最後一段寫 1）。不必自己編單號。',
+            '上面沒列出來的就是已經處理完了，別再動它。'
+        ]).join('\n');
+    }
+
     function saveRedPacketData(packetId, data, chatId) {
         const C = _cards(); const cid = _cardChat(chatId);
         if (C && cid) {
@@ -171,7 +202,12 @@
     }
     
     function processRedPacketGrab(packetId, grabberName, specifiedAmount = null) {
-        const data = getRedPacketData(packetId);
+        // 🚨這裡要寬鬆查找：模型可能寫原本的單號，也可能照我們給它的清單寫「1」「#1」「1號」。
+        //   畫卡片那邊必須嚴格（不然會把 A 的紅包畫成 B 的），但「領哪一個」用寬鬆的才對——
+        //   指涉不清時就是剛剛那一張。找到之後記住是哪張卡，等下把領取紀錄寫回它身上。
+        const _C = _cards(); const _cid = _cardChat(null);
+        const _card = (_C && _cid) ? _C.find(_cid, 'redpacket', packetId) : null;
+        const data = (_card && _card.data && _card.data.totalAmount != null) ? _card.data : getRedPacketData(packetId);
         if (!data) {
             console.warn('[RedPacket Grab] 紅包數據不存在:', packetId);
             return null;
@@ -215,6 +251,8 @@
             amount: grabAmount,
             time: new Date().toLocaleString('zh-TW')
         });
+        // 寫回「那張卡」而不是 packetId——模型用序號指的時候，packetId 根本不是這張卡的單號
+        if (_C && _cid && _card) _C.update(_cid, _card.key, { data: data });
 
         // 🔥 連動經濟系統（只有當前用戶領取時才增加餘額）
         // 獲取當前用戶名稱
@@ -1942,6 +1980,16 @@
                     (currentChat.messages || []).filter(m => m && (!m.type || m.type === 'msg') && !m.isLoading && m.content)
                         .slice(-15).forEach(m => messages.push({ role: m.isMe ? 'user' : 'assistant', content: String(m.raw || m.content) }));
                 }
+                // 🧾 把「還沒處理完的紅包／禮物／轉帳」列給模型看（見 _pendingBrief）。
+                //    組裝失敗絕不能擋住送出——這只是幫模型指得更準，不是必要條件。
+                try {
+                    const _brief = _pendingBrief(GLOBAL_ACTIVE_ID);
+                    if (_brief) {
+                        messages.push({ role: 'system', content: _brief });
+                        console.log('[WX] 附上待處理清單');
+                    }
+                } catch (e) { console.warn('[WX] 待處理清單組裝失敗（不影響送出）', e); }
+
                 console.log('[WX] 呼叫 OS_API.chat…');
                 try {
                     await win.WX_API.chat(messages, apiConfig,
