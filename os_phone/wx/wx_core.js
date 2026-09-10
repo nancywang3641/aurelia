@@ -384,7 +384,10 @@
                 if (grabAmount !== null) {
                     // 🚨講人話，別把協議原文攤在畫面上：AI 寫的是「丹領取了紅包 4.44元|rp_001」，
                     //   原樣顯示就把紅包 ID 也印出來了（她實測看到這種技術字串，說「格式跑出來就是不對」）
-                    return { type: 'system', content: `${grabberName || '對方'}領取了紅包 ¥${specifiedAmount}`, isMe: false };
+                    // 🚨 名字要剝掉引號再上畫面。協議模板寫的就是 [系統: "Char"領取了紅包…]，模型照抄，
+                    //    於是畫面上出現「"測試系統"領取了紅包」——引號是協議的東西，不是人話。
+                    const _who = String(grabberName || '').replace(/^["'「『]+|["'」』]+$/g, '').trim();
+                    return { type: 'system', content: `${_who || '對方'}領取了紅包 ¥${specifiedAmount}`, isMe: false };
                 } else {
                     console.warn('[SystemIntent] processRedPacketGrab 返回 null，領取失敗');
                 }
@@ -417,14 +420,30 @@
                 
                 const grabAmount = processRedPacketGrab(packetId, grabberName, specifiedAmount);
                 if (grabAmount !== null) {
-                    return { type: 'system', content: `${grabberName || '對方'}領取了紅包 ¥${specifiedAmount}`, isMe: false };
+                    // 🚨 名字要剝掉引號再上畫面。協議模板寫的就是 [系統: "Char"領取了紅包…]，模型照抄，
+                    //    於是畫面上出現「"測試系統"領取了紅包」——引號是協議的東西，不是人話。
+                    const _who = String(grabberName || '').replace(/^["'「『]+|["'」』]+$/g, '').trim();
+                    return { type: 'system', content: `${_who || '對方'}領取了紅包 ¥${specifiedAmount}`, isMe: false };
                 }
             }
         }
         
         // 處理 [System: Accept 物品名|Gft_ID] 或 [System: Return 物品名|Gft_ID]
         const giftActionMatch1 = content.match(/^\s*(Accept|Return|接收|接收了|收下|收下了|退回|退回了|拒绝|拒絕)\s+(.+?)\s*[|｜](.+)$/i);
-        if (giftActionMatch1) {
+        // 🚨 禮物是 [Accept 物品名|單號]，轉帳是 [Accept 金額|單號]——兩條長得一模一樣，
+        //    差別只在中間那段是不是純數字。禮物這條排在轉帳前面，於是以前每一筆轉帳的收下／退回
+        //    都被這裡先吃掉：轉帳狀態沒被改、錢沒動、卡片還能再按一次，畫面上還寫「對方已收下「200」」
+        //    （把金額當成禮物名）。連協議文件裡的範例 Accept 520|Txn_88 也一樣中。
+        //    畫面那端本來就用「純數字＝轉帳」在分，這裡照同一條規則，單號自己表明身分時以單號為準。
+        const _giftIsActuallyTransfer = (function () {
+            if (!giftActionMatch1) return false;
+            const _item = String(giftActionMatch1[2] || '').trim();
+            const _id = String(giftActionMatch1[3] || '').trim();
+            if (/^(?:ID_)?T(?:xn|nx)/i.test(_id)) return true;      // 單號自己說是轉帳
+            if (/^(?:ID_)?Gft/i.test(_id)) return false;            // 單號自己說是禮物
+            return /^\d+(?:\.\d+)?$/.test(_item);                  // 都沒說 → 純數字就是金額
+        })();
+        if (giftActionMatch1 && !_giftIsActuallyTransfer) {
             const action = giftActionMatch1[1].trim().toLowerCase();
             const itemName = giftActionMatch1[2].trim();
             const giftId = giftActionMatch1[3].trim();
@@ -459,9 +478,19 @@
             // 移除末尾可能存在的 ] 字符
             txnId = txnId.replace(/\]+\s*$/, '').trim();
             const isAccept = action === 'accept' || action === '接收' || action === '接收了' || action === '收下' || action === '收下了';
-            const uniqueId = txnId.startsWith('ID_') ? txnId : ('ID_' + txnId);
+            // 🚨 模型現在多半寫「號碼」（待處理清單就是教它這樣寫），不是原本的單號。
+            //    要領哪一張用寬鬆查找（跟紅包同一個道理，指涉不清就是剛剛那張），但找到之後
+            //    必須記住那張卡的真名——後面讀單據、存單據、寫狀態都得用真名，否則會在旁邊
+            //    另外長出一張叫「20」的新卡，原本那張永遠停在待處理、卡片也一直能按。
+            let _txnRef = txnId;
+            try {
+                const _C3 = _cards(); const _cid3 = _cardChat(ctx.chatId);
+                const _tc = (_C3 && _cid3) ? _C3.find(_cid3, 'transfer', txnId) : null;
+                if (_tc && _tc.alias) _txnRef = String(_tc.alias);
+            } catch (e) {}
+            const uniqueId = _txnRef.startsWith('ID_') ? _txnRef : ('ID_' + _txnRef);
             // 轉帳單與狀態都走這個聊天室的帳本（見檔案上方 _txnLoad/_setCardStatus 的說明）
-            const transferData = _txnLoad(ctx.chatId, txnId);
+            const transferData = _txnLoad(ctx.chatId, _txnRef);
             if (transferData) {
                 const now = Date.now();
                 const elapsed = now - transferData.timestamp;
@@ -477,42 +506,42 @@
                             if (success) {
                                 // 更新轉帳狀態
                                 transferData.status = 'accepted';
-                                _txnSave(ctx.chatId, txnId, transferData);
-                                _setCardStatus(ctx.chatId, 'transfer', txnId, 'accepted', uniqueId);
+                                _txnSave(ctx.chatId, _txnRef, transferData);
+                                _setCardStatus(ctx.chatId, 'transfer', _txnRef, 'accepted', uniqueId);
                             } else {
                                 // 餘額不足，視為拒絕
                                 transferData.status = 'returned';
-                                _txnSave(ctx.chatId, txnId, transferData);
-                                _setCardStatus(ctx.chatId, 'transfer', txnId, 'returned', uniqueId);
+                                _txnSave(ctx.chatId, _txnRef, transferData);
+                                _setCardStatus(ctx.chatId, 'transfer', _txnRef, 'returned', uniqueId);
                                 const displayContent = `轉帳失敗：餘額不足`;
                                 return { type: 'system', content: displayContent, isMe: false };
                             }
                         } else {
                             // 沒有經濟系統，直接標記為接收
                             transferData.status = 'accepted';
-                            _txnSave(ctx.chatId, txnId, transferData);
-                            _setCardStatus(ctx.chatId, 'transfer', txnId, 'accepted', uniqueId);
+                            _txnSave(ctx.chatId, _txnRef, transferData);
+                            _setCardStatus(ctx.chatId, 'transfer', _txnRef, 'accepted', uniqueId);
                         }
                     } else if (transferData.status === 'expired' || elapsed > tenMinutes) {
                         // 已過期，視為拒絕
                         transferData.status = 'expired';
-                        _txnSave(ctx.chatId, txnId, transferData);
-                        _setCardStatus(ctx.chatId, 'transfer', txnId, 'expired', uniqueId);
+                        _txnSave(ctx.chatId, _txnRef, transferData);
+                        _setCardStatus(ctx.chatId, 'transfer', _txnRef, 'expired', uniqueId);
                         const displayContent = `轉帳已過期（10分鐘）`;
                         return { type: 'system', content: displayContent, isMe: false };
                     } else if (transferData.status !== 'pending') {
                         // 已經處理過（accepted/returned），不重複處理
-                        _setCardStatus(ctx.chatId, 'transfer', txnId, transferData.status, uniqueId);
+                        _setCardStatus(ctx.chatId, 'transfer', _txnRef, transferData.status, uniqueId);
                     }
                 } else {
                     // 拒絕：不扣款，只更新狀態
                     transferData.status = 'returned';
-                    _txnSave(ctx.chatId, txnId, transferData);
-                    _setCardStatus(ctx.chatId, 'transfer', txnId, 'returned', uniqueId);
+                    _txnSave(ctx.chatId, _txnRef, transferData);
+                    _setCardStatus(ctx.chatId, 'transfer', _txnRef, 'returned', uniqueId);
                 }
             } else {
                 // 沒有找到轉帳記錄，可能是舊格式或手動輸入，直接標記狀態
-                _setCardStatus(ctx.chatId, 'transfer', txnId, isAccept ? 'accepted' : 'returned', uniqueId);
+                _setCardStatus(ctx.chatId, 'transfer', _txnRef, isAccept ? 'accepted' : 'returned', uniqueId);
             }
             
             // 更新系統消息內容，使用統一的顯示格式

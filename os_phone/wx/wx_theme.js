@@ -81,7 +81,13 @@
             .wx-last-msg { font-size: 13px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .wx-meta { font-size: 11px; color: #b2b2b2; text-align: right; min-width: 35px; }
             .wx-msg-row { display: flex; margin: 15px 12px; align-items: flex-start; }
-            .wx-msg-row.animate { animation: popIn 0.3s ease-out forwards; }
+            /* 🚨 追加渲染時泡泡是 opacity:0 靠這條動畫淡進來。以前只寫給 .wx-msg-row，
+               系統通知與時間戳畫出來是 .wx-system-notice / .wx-time-stamp，套不到這條動畫，
+               於是就永遠停在透明——她的症狀是「AI 收了紅包但系統訊息看不到，重開微信才冒出來」
+               （重開走整頁重建，那條路 opacity 是 1）。三個都要涵蓋。 */
+            .wx-msg-row.animate,
+            .wx-system-notice.animate,
+            .wx-time-stamp.animate { animation: popIn 0.3s ease-out forwards; }
             .wx-msg-row.me { flex-direction: row-reverse; }
             .wx-bubble-avatar { width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; background-size: cover; background-color: #ccc; }
             .wx-bubble-content { max-width: 100%; padding: 10px 14px; border-radius: 6px; position: relative; font-size: 15px; line-height: 1.5; word-wrap: break-word; color: #000; display: flex; flex-direction: column; gap: 5px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
