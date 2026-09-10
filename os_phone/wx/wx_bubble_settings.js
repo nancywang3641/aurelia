@@ -144,7 +144,9 @@
                 <div style="display:flex; border-bottom:1px solid #eee; margin-bottom:10px;">
                     <div id="tab-general" class="wx-tab-btn ${config.mode === 'general' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='general'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='general'?'#07c160':'transparent'};">微調</div>
                     <div id="tab-ai" class="wx-tab-btn ${config.mode === 'ai' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='ai'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='ai'?'#07c160':'transparent'};">交給 AI</div>
-                    <div id="tab-custom" class="wx-tab-btn ${config.mode === 'custom' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='custom'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='custom'?'#07c160':'transparent'};">CSS 代碼</div>
+                    <div id="tab-custom" class="wx-tab-btn ${config.mode === 'custom' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='custom'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='custom'?'#07c160':'transparent'};">CSS</div>
+                    <!-- 🚨主題庫是「瀏覽」不是一種樣式模式：切到它不會改變現在生效的是哪一套 -->
+                    <div id="tab-gal" class="wx-tab-btn" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:#999; border-bottom:2px solid transparent;">主題庫</div>
                 </div>
 
                 <!-- 預覽照真實聊天畫面的結構做（同一組 class），主題怎麼套在這裡就怎麼套在真畫面上。
@@ -209,6 +211,16 @@
 
                 <div id="panel-custom" style="display:${config.mode === 'custom' ? 'block' : 'none'};">
                     <textarea id="inp-css" class="wx-modal-input" style="height:150px; font-family:monospace; font-size:11px; white-space:pre;">${config.customCSS}</textarea>
+                </div>
+
+                <!-- 📚 主題庫：全域，收藏一次之後任何人的聊天室都能套。
+                     縮圖是 iframe，內容＝預覽骨架＋底稿＋提權後的主題，看到什麼套上去就是什麼。 -->
+                <div id="panel-gal" style="display:none;">
+                    <div style="display:flex; gap:6px; margin-bottom:10px;">
+                        <input id="gal-name" class="wx-modal-input" style="flex:1; padding:8px; font-size:13px;" placeholder="幫這一套取個名字">
+                        <button id="gal-add" class="wx-btn" style="background:#07c160; color:#fff; border:none; padding:8px 12px; white-space:nowrap;"><i class="fa-solid fa-bookmark"></i> 收藏目前</button>
+                    </div>
+                    <div id="gal-list" style="max-height:240px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
                 </div>
 
                 <div class="wx-modal-footer">
@@ -296,22 +308,27 @@
             doc.getElementById('btn-target-me').onclick = () => { currentEditTarget = 'me'; loadValuesToInputs(); };
             doc.getElementById('btn-target-other').onclick = () => { currentEditTarget = 'other'; loadValuesToInputs(); };
 
-            const switchTab = (mode) => {
-                tempConfig.mode = mode;
-                doc.getElementById('panel-general').style.display = mode === 'general' ? 'block' : 'none';
-                doc.getElementById('panel-ai').style.display = mode === 'ai' ? 'block' : 'none';
-                doc.getElementById('panel-custom').style.display = mode === 'custom' ? 'block' : 'none';
+            const switchTab = (tab) => {
+                // 🚨主題庫是瀏覽用的分頁，不是一種樣式模式——切過去不能改掉現在生效的那一套，
+                //   不然她只是想翻翻庫，回來就發現套用的東西被換掉了。
+                if (tab !== 'gal') tempConfig.mode = tab;
+                doc.getElementById('panel-general').style.display = tab === 'general' ? 'block' : 'none';
+                doc.getElementById('panel-ai').style.display = tab === 'ai' ? 'block' : 'none';
+                doc.getElementById('panel-custom').style.display = tab === 'custom' ? 'block' : 'none';
+                doc.getElementById('panel-gal').style.display = tab === 'gal' ? 'block' : 'none';
                 const tabs = doc.querySelectorAll('.wx-tab-btn');
                 tabs.forEach(t => { t.style.color = '#999'; t.style.borderBottomColor = 'transparent'; });
-                const activeTab = doc.getElementById(`tab-${mode}`);
+                const activeTab = doc.getElementById(`tab-${tab}`);
                 activeTab.style.color = '#07c160'; activeTab.style.borderBottomColor = '#07c160';
                 updatePreview();
             };
             doc.getElementById('tab-general').onclick = () => switchTab('general');
             doc.getElementById('tab-ai').onclick = () => switchTab('ai');
             doc.getElementById('tab-custom').onclick = () => switchTab('custom');
+            doc.getElementById('tab-gal').onclick = () => switchTab('gal');
 
             this.bindAI(chatId, tempConfig, updatePreview);
+            this.bindGallery(chatId, tempConfig, updatePreview, switchTab);
 
             doc.getElementById('inp-css').oninput = (e) => { tempConfig.customCSS = e.target.value; };
             doc.getElementById('wx-bubble-close').onclick = () => { doc.getElementById('wxActionModal').classList.remove('show'); };
@@ -434,6 +451,84 @@
                 armed = false; clearTimeout(armTimer);
                 clearBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
                 log = []; AI.chatClear(chatId); render();
+            };
+        },
+
+        // 📚 主題庫：全域的，收藏一次之後任何人的聊天室都能一鍵套上去。
+        //    三個分頁調出來的都收得進來——微調那頁的參數會先轉成主題 CSS。
+        bindGallery: function(chatId, tempConfig, updatePreview, switchTab) {
+            const AI = win.WX_BUBBLE_AI || window.WX_BUBBLE_AI;
+            const listEl = doc.getElementById('gal-list');
+            const nameEl = doc.getElementById('gal-name');
+            const addBtn = doc.getElementById('gal-add');
+            if (!listEl || !addBtn) return;
+            if (!AI) { listEl.innerHTML = '<div style="font-size:12px;color:#fa5151;">泡泡主題模組沒載入到，重整一次看看</div>'; return; }
+
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const hint = (msg, color) => { nameEl.placeholder = msg; nameEl.style.borderColor = color || '#fa5151'; setTimeout(() => { nameEl.placeholder = '幫這一套取個名字'; nameEl.style.borderColor = ''; }, 2600); };
+            const flash = (btn, txt) => { const o = btn.innerHTML; btn.innerHTML = txt; setTimeout(() => { btn.innerHTML = o; }, 1100); };
+
+            // 現在生效的是哪一段 CSS。微調那頁存的是一堆參數不是 CSS，先轉過來——
+            // 不轉的話她在微調頁試出來的配色就收不進庫，而那本來就是她最常用的入口。
+            const currentCss = () => {
+                if (tempConfig.mode === 'ai') return tempConfig.aiCSS || '';
+                if (tempConfig.mode === 'custom') return tempConfig.customCSS || '';
+                return AI.fromGeneral(tempConfig);
+            };
+
+            const render = () => {
+                const arr = AI.galLoad();
+                if (!arr.length) {
+                    listEl.innerHTML = '<div style="font-size:12px; color:#999; line-height:1.7; padding:14px 4px; text-align:center;">'
+                        + '還沒收藏過。<br>調好一套之後在上面取個名字、按「收藏目前」，<br>以後換到誰的聊天室都能一鍵套上去。</div>';
+                    return;
+                }
+                listEl.innerHTML = arr.map(t => `<div class="wx-bubble-gal-card" style="border:1px solid #e5e5e5; border-radius:8px; overflow:hidden; background:#fff;">
+                    <iframe sandbox="allow-same-origin" scrolling="no" style="width:100%; height:88px; border:none; display:block; background:#eaeaea;"></iframe>
+                    <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-top:1px solid #f0f0f0;">
+                        <span style="flex:1; min-width:0; font-size:13px; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(t.name)}</span>
+                        <button data-act="apply" class="wx-btn" style="background:#07c160; color:#fff; border:none; padding:5px 12px; font-size:12px;">套用</button>
+                        <button data-act="del" class="wx-btn" style="background:#f7f7f7; color:#999; border:1px solid #e5e5e5; padding:5px 9px; font-size:12px;"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>`).join('');
+
+                const cards = listEl.querySelectorAll('.wx-bubble-gal-card');
+                arr.forEach((t, i) => {
+                    const card = cards[i]; if (!card) return;
+                    try { card.querySelector('iframe').srcdoc = AI.buildThumb(t.css); } catch (e) {}
+                    card.querySelector('[data-act="apply"]').onclick = (e) => {
+                        tempConfig.aiCSS = t.css || '';
+                        tempConfig.mode = 'ai';
+                        this.saveConfig(chatId, tempConfig);
+                        updatePreview();
+                        flash(e.currentTarget, '✓ 套好了');
+                    };
+                    // 🚨window.confirm 在 Tauri 會被攔掉（按了完全沒反應），一律兩段式
+                    const delBtn = card.querySelector('[data-act="del"]');
+                    let armed = false, timer = 0;
+                    delBtn.onclick = () => {
+                        if (!armed) {
+                            armed = true; delBtn.innerHTML = '再按一次';
+                            timer = setTimeout(() => { armed = false; delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>'; }, 4000);
+                            return;
+                        }
+                        armed = false; clearTimeout(timer);
+                        AI.galRemove(t.id); render();
+                    };
+                });
+            };
+            render();
+
+            addBtn.onclick = () => {
+                const name = (nameEl.value || '').trim();
+                if (!name) { hint('先取個名字再收藏'); nameEl.focus(); return; }
+                const css = currentCss();
+                if (!css.trim() || /^\/\*\s*尚未設定\s*\*\/$/.test(css.trim())) { hint('現在這頁還沒有東西可以收'); return; }
+                // 🚨localStorage 撞上限時是靜默失敗的，存不進去一定要講，不然她以為收好了
+                if (!AI.galAdd(name, css)) { hint('存不進去，瀏覽器的空間滿了'); return; }
+                nameEl.value = '';
+                render();
+                flash(addBtn, '✓ 收好了');
             };
         },
 

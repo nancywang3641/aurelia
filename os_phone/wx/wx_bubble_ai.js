@@ -211,6 +211,64 @@
         return [...new Set(out)];
     }
 
+    // ── 主題庫：全域，跟聊天室無關 ─────────────────────────────────
+    // 全域才有意義：收藏一次，之後任何一個人的聊天室都能一鍵套上去。
+    // 存的是主題 CSS 原文（跟 aiCSS 同一種東西），套用時照樣走底稿＋提權。
+    function galLoad() { try { return JSON.parse(localStorage.getItem('wx_bubble_gallery') || '[]'); } catch (e) { return []; } }
+    function galSave(arr) { try { localStorage.setItem('wx_bubble_gallery', JSON.stringify(arr || [])); return true; } catch (e) { return false; } }
+    function galAdd(name, css) {
+        const arr = galLoad();
+        arr.unshift({
+            id: 'bt_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+            name: String(name || '沒有名字'), css: String(css || ''), ts: Date.now()
+        });
+        return galSave(arr) ? arr : null;
+    }
+    function galRemove(id) { const arr = galLoad().filter(x => x.id !== id); galSave(arr); return arr; }
+
+    // 微調那頁的參數 → 主題 CSS。
+    // 有這條，三個分頁調出來的東西才都收得進同一個庫（不然微調的配色存不了，
+    // 而她本來就是先在微調那邊試顏色的）。
+    function fromGeneral(c) {
+        c = c || {};
+        const rad = (p) => `${c[p + '_radiusTL'] || 0}px ${c[p + '_radiusTR'] || 0}px ${c[p + '_radiusBR'] || 0}px ${c[p + '_radiusBL'] || 0}px`;
+        const border = (p) => c[p + '_borderEnabled']
+            ? `border: ${c[p + '_borderWidth'] || 1}px solid ${c[p + '_borderColor'] || '#000'};` : '';
+        return `:root{
+  --pbub-me-bg: ${c.me_bgColor || '#95ec69'}; --pbub-me-fg: ${c.me_textColor || '#000000'}; --pbub-me-radius: ${rad('me')};
+  --pbub-other-bg: ${c.other_bgColor || '#ffffff'}; --pbub-other-fg: ${c.other_textColor || '#000000'}; --pbub-other-radius: ${rad('other')};
+}
+.pbub-me .pbub-bubble{ ${border('me')} }
+.pbub-other .pbub-bubble{ ${border('other')} }`;
+    }
+
+    // 縮圖：複刻兩則訊息的預設外觀，主題疊上去 → 卡片上看到的就是套用後的樣子。
+    // 這份骨架的特異性刻意壓低（0,1,0 / 0,2,0），底稿(0,3,0)與提權後的主題(0,4,0)都蓋得過。
+    const PREVIEW_BASE = `
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hidden;
+  background:#eaeaea;
+  background-image:linear-gradient(45deg,rgba(0,0,0,.05) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.05) 75%),
+                   linear-gradient(45deg,rgba(0,0,0,.05) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.05) 75%);
+  background-size:14px 14px;background-position:0 0,7px 7px}
+.pbub-row{display:flex;align-items:flex-start;gap:6px;margin:0 6px 8px}
+.pbub-row.pbub-me{flex-direction:row-reverse}
+.pbub-avatar{width:24px;height:24px;border-radius:5px;flex-shrink:0;background:#c4c4c4}
+.pbub-me .pbub-avatar{background:#a5e6aa}
+.pbub-bubble{max-width:72%;padding:6px 9px;border-radius:6px;position:relative;
+  font-size:10.5px;line-height:1.45;color:#000;background:#fff;word-break:break-word}
+.pbub-me .pbub-bubble{background:#95ec69}
+`;
+    function buildThumb(css) {
+        return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
+            + PREVIEW_BASE + '\n' + BASE_CSS + '\n' + boost(css || '')
+            + '</style></head><body>'
+            + '<div class="pbub-row pbub-other"><div class="pbub-avatar"></div><div class="pbub-bubble">今晚要不要出來？</div></div>'
+            + '<div class="pbub-row pbub-me"><div class="pbub-avatar"></div><div class="pbub-bubble">好啊，老地方。</div></div>'
+            + '</body></html>';
+    }
+
     // ── 對話紀錄與還原堆疊：跟設定一樣按聊天室分開 ─────────────────
     const _chatKey = (id) => 'wx_bubble_chat::' + (id || 'default');
     const _undoKey = (id) => 'wx_bubble_undo::' + (id || 'default');
@@ -260,7 +318,8 @@
 
     win.WX_BUBBLE_AI = {
         BASE_CSS, PROMPT, CHAT_PROMPT,
-        pickCss, stripLayout, risky, boost, ask,
+        pickCss, stripLayout, risky, boost, ask, PREVIEW_BASE, buildThumb,
+        galLoad, galSave, galAdd, galRemove, fromGeneral,
         chatLoad, chatSave, chatClear, undoLoad, undoSave
     };
     window.WX_BUBBLE_AI = win.WX_BUBBLE_AI;
