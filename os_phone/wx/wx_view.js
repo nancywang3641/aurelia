@@ -1083,7 +1083,7 @@
                                     <div class="wx-grid-item" onclick="${app}.action('photo')"><div class="wx-grid-icon"><i class="fa-solid fa-image"></i></div><div class="wx-grid-label">照片</div></div>
                                     <div class="wx-grid-item" onclick="${app}.action('video_file')"><div class="wx-grid-icon"><i class="fa-solid fa-video"></i></div><div class="wx-grid-label">視頻</div></div>
                                     <div class="wx-grid-item" onclick="${app}.action('voice_msg')"><div class="wx-grid-icon"><i class="fa-solid fa-microphone"></i></div><div class="wx-grid-label">語音</div></div>
-                                    <div class="wx-grid-item" onclick="${app}.action('call')"><div class="wx-grid-icon"><i class="fa-solid fa-phone"></i></div><div class="wx-grid-label">通話</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.startCall()"><div class="wx-grid-icon"><i class="fa-solid fa-phone"></i></div><div class="wx-grid-label">通話</div></div>
                                     <div class="wx-grid-item" onclick="${app}.action('location')"><div class="wx-grid-icon"><i class="fa-solid fa-location-dot"></i></div><div class="wx-grid-label">定位</div></div>
                                     <div class="wx-grid-item" onclick="${app}.action('redpacket')"><div class="wx-grid-icon"><i class="fa-solid fa-money-bill-wave"></i></div><div class="wx-grid-label">紅包</div></div>
                                     <div class="wx-grid-item" onclick="${app}.action('transfer')"><div class="wx-grid-icon"><i class="fa-solid fa-money-bill-transfer"></i></div><div class="wx-grid-label">轉帳</div></div>

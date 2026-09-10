@@ -72,6 +72,22 @@
     let _hsel = { on: false, ids: new Set() };   // 通話紀錄多選狀態
     let _hrecs = [];                              // 已載入的通話紀錄（給 transcript 查）
 
+    // 📞 給別的 app 用的入口（微信的通話鍵）。同一套通話畫面，差別只有兩件事：
+    //    微信打電話不顯示號碼（現實也不會），掛斷之後回哪裡由呼叫端決定，不要掉進電話 app 的通話紀錄。
+    let _exitTo = null;    // 掛斷後回哪：null＝電話 app 自己的通話紀錄
+    let _hideNum = false;  // 從微信進來時把號碼那行藏掉
+    function _afterCall() { if (typeof _exitTo === 'function') { const f = _exitTo; _exitTo = null; _hideNum = false; f(); return; } _renderHistory(); }
+    function callContact(container, contact, opts) {
+        opts = opts || {};
+        if (!container || !contact || !contact.id) return false;
+        _root = container;
+        _clearTimer();
+        _exitTo = (typeof opts.onExit === 'function') ? opts.onExit : null;
+        _hideNum = !!opts.hideNumber;
+        _dialing(contact);
+        return true;
+    }
+
     function launch(container) {
         _root = container;
         _clearTimer();
@@ -177,17 +193,17 @@
             '<div class="dlr-call dlr-call-dialing">'
           +   '<div class="dlr-call-ava">' + _esc(unknown ? '?' : _avatarBg(contact)) + '</div>'
           +   '<div class="dlr-call-name">' + _esc(contact.name) + '</div>'
-          +   '<div class="dlr-call-num">' + _esc(num) + '</div>'
+          +   (_hideNum ? '' : '<div class="dlr-call-num">' + _esc(num) + '</div>')
           +   '<div class="dlr-call-status" id="dlr-call-status">撥號中<span class="dlr-dots">…</span></div>'
           +   '<button class="dlr-hang" id="dlr-hang" type="button">掛斷</button>'
           + '</div>';
         // 掛斷 → 回通話紀錄（剛講完的那通就在最上面）。以前掉回通訊錄，看起來像紀錄沒更新
-        _root.querySelector('#dlr-hang').addEventListener('click', _renderHistory);
+        _root.querySelector('#dlr-hang').addEventListener('click', _afterCall);
         _timer = setTimeout(function () {
             if (unknown) {
                 const st = _root && _root.querySelector('#dlr-call-status');
                 if (st) st.innerHTML = '查無此人 📵';
-                _timer = setTimeout(_renderList, 1600);
+                _timer = setTimeout(_afterCall, 1600);
             } else {
                 // 響鈴：留在這個畫面問對方的第一句。它可以不接（見 _isRefusal），
                 // 所以接通與否要等回覆才知道 —— 先進通話畫面再被掛掉不像打電話。
@@ -255,7 +271,7 @@
         const c = _curCall;
         _curCall = null;
         if (c && c.wroteStart) await _writeCallMark(c.id, '通話結束 · ' + _dur(Date.now() - c.startedAt), { _callEnd: true });
-        _renderHistory();
+        _afterCall();
     }
 
     // ── 她講的話：連著講好幾句 ────────────────────────────────────
@@ -368,7 +384,7 @@
           +   '<button class="dlr-hang" id="dlr-hang" type="button">結束</button>'
           + '</div>';
         const b = _root.querySelector('#dlr-hang');
-        if (b) b.addEventListener('click', _renderHistory);
+        if (b) b.addEventListener('click', _afterCall);
         // 通話紀錄留一筆，她才看得到自己打過（像 iPhone 的「已取消」）。接不通是設定問題，不留。
         if (writeMissed) try {
             const OS_DB = _w('OS_DB');
@@ -385,7 +401,7 @@
                 await OS_DB.saveApiChat(contact.id, rec);
             }
         } catch (e) { console.warn('[dialer] 寫未接聽失敗', e); }
-        _timer = setTimeout(_renderHistory, note ? 3200 : 2200);   // 有補訊息就多停一下讓她讀完
+        _timer = setTimeout(_afterCall, note ? 3200 : 2200);   // 有補訊息就多停一下讓她讀完
     }
 
     // ── 撥通：VN call 字幕通話 UI；對話直讀寫 OS_DB（與微信同一份記憶）──
@@ -843,5 +859,5 @@
         });
     }
 
-    win.OS_DIALER = { launch: launch };
+    win.OS_DIALER = { launch: launch, callContact: callContact };
 })();

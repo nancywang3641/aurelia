@@ -1579,6 +1579,35 @@
             this.render();
             try { win.toastr && win.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
         },
+        // 📞 微信的通話鍵：直接接通，不是留記錄。用的是電話 app 那套通話畫面——
+        //    頭像、名字、計時、掛斷、逐字稿都在，而且對話讀寫同一份聊天記錄，跟微信共用記憶。
+        //    差別只有兩件：微信不顯示號碼，掛斷回這個聊天室而不是電話 app 的通話紀錄。
+        startCall: function () {
+            const id = GLOBAL_ACTIVE_ID;
+            const chat = id ? GLOBAL_CHATS[id] : null;
+            const D = win.OS_DIALER || window.OS_DIALER;
+            if (!chat || !D || !D.callContact) { try { win.toastr && win.toastr.info('通話還沒就緒'); } catch (e) {} return; }
+            if (chat.isGroup) { try { win.toastr && win.toastr.info('群聊還不能通話'); } catch (e) {} return; }
+            this.togglePanel();
+            const host = doc.createElement('div');
+            host.id = 'wx-call-host';
+            host.style.cssText = 'position:absolute; inset:0; z-index:560; background:#111;';
+            (APP_CONTAINER || doc.body).appendChild(host);
+            const back = async function () {
+                const h = doc.getElementById('wx-call-host');
+                if (h && h.parentNode) h.parentNode.removeChild(h);
+                // 🚨 通話是電話 app 直接寫進 OS_DB 的，記憶體裡這份還是撥出去之前的。
+                //    不重讀就會「講完回來聊天室什麼都沒有」——內容其實在，只是畫面拿的是舊的。
+                try {
+                    if (win.OS_DB && win.OS_DB.getApiChat) {
+                        const fresh = await win.OS_DB.getApiChat(id);
+                        if (fresh && Array.isArray(fresh.messages)) GLOBAL_CHATS[id] = fresh;
+                    }
+                } catch (e) { console.warn('[WX] 通話後重讀失敗:', e); }
+                try { win.wxApp && win.wxApp.render && win.wxApp.render(); } catch (e) {}
+            };
+            D.callContact(host, { id: id, name: chat.name || id }, { hideNumber: true, onExit: back });
+        },
         setAvatarAiSource: function (v) {
             const A = win.WX_AVATAR_AI;
             if (A && A.setProvider) A.setProvider(v);
