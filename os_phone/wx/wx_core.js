@@ -361,7 +361,7 @@
         if (seenMatch) {
             try {
                 const _avS = win.WX_AVATAR_AI || window.WX_AVATAR_AI;
-                if (_avS && _avS.rememberSeen) _avS.rememberSeen(String(seenMatch[1] || '').replace(/\]+\s*$/, '').trim());
+                if (_avS && _avS.rememberSeen) _avS.rememberSeen(ctx.chatId, String(seenMatch[1] || '').replace(/\]+\s*$/, '').trim());
             } catch (e) {}
             return { type: 'system', content: '', isMe: false };
         }
@@ -1573,9 +1573,10 @@
             this.render();
             try { win.toastr && (next ? win.toastr.success('下次換頭像時它會看一眼', '微信') : win.toastr.info('已關閉', '微信')); } catch (e) {}
         },
-        forgetMyAvatar: function () {
+        // 忘掉「這一間」記住的樣子，下次進來會重看一次。頭像是一間一個，記憶當然也是。
+        forgetMyAvatar: function (chatId) {
             const A = win.WX_AVATAR_AI;
-            if (A && A.clearSeeMemory) A.clearSeeMemory();
+            if (A && A.clearSeeMemory) A.clearSeeMemory(chatId || GLOBAL_ACTIVE_ID);
             this.render();
             try { win.toastr && win.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
         },
@@ -2203,7 +2204,7 @@
                 try {
                     const _avSee = win.WX_AVATAR_AI;
                     if (_avSee && _avSee.seeOnceMessage) {
-                        const _seeMsg = await _avSee.seeOnceMessage();
+                        const _seeMsg = await _avSee.seeOnceMessage(GLOBAL_ACTIVE_ID);
                         if (_seeMsg) { messages.push(_seeMsg); console.log('[WX] 這輪夾了頭像給它看'); }
                     }
                 } catch (e) { console.warn('[WX] 頭像夾帶失敗（不影響送出）:', e); }

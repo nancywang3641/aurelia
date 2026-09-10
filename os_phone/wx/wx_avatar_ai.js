@@ -134,35 +134,45 @@
     //    創作室早就為了同一件事做了「只保留最近幾條帶圖訊息」的修剪器。
     //    判斷「換過了沒」不靠事件，靠比對「描述是哪張圖生的」，所以怎麼換都不會漏。
     const SEE_ON_KEY = 'wx_seeme_enabled';
-    const SEE_MEM_KEY = 'wx_seeme_memory';   // { src: 當時那張圖的識別, desc: 它寫的描述 }
+    const SEE_MEM_KEY = 'wx_seeme_memory';   // 後面接 ::聊天室，一間一份
     const SEE_MAX_PX = 256;                  // 送出去之前縮到這個邊長，頭像不需要更大
 
     function seeEnabled() { try { return localStorage.getItem(SEE_ON_KEY) === '1'; } catch (e) { return false; } }
     function setSeeEnabled(on) { try { localStorage.setItem(SEE_ON_KEY, on ? '1' : '0'); } catch (e) {} }
-    function seeMemory() {
-        try { const o = JSON.parse(localStorage.getItem(SEE_MEM_KEY) || 'null'); return (o && typeof o === 'object') ? o : null; } catch (e) { return null; }
-    }
-    function setSeeMemory(src, desc) {
-        try { localStorage.setItem(SEE_MEM_KEY, JSON.stringify({ src: String(src || ''), desc: String(desc || ''), ts: Date.now() })); } catch (e) {}
-    }
-    function clearSeeMemory() { try { localStorage.removeItem(SEE_MEM_KEY); } catch (e) {} }
 
-    function myAvatarSrc() {
+    // 🚨 頭像是「每間聊天室各自一個」（聊天詳情裡的『我的頭像』＝chat.userAvatar），
+    //    不是人設那顆。她第一次測就撞到：在聊天室換了自己的頭像，角色看到的還是預設問號，
+    //    因為這裡本來讀的是人設系統那顆。沒設過的聊天室才退回人設頭像當底。
+    //    既然頭像一間一個，它記住的描述當然也要一間一份，不然換間就對不上。
+    function _memKey(chatId) { return SEE_MEM_KEY + '::' + String(chatId || 'default'); }
+    function seeMemory(chatId) {
+        try { const o = JSON.parse(localStorage.getItem(_memKey(chatId)) || 'null'); return (o && typeof o === 'object') ? o : null; } catch (e) { return null; }
+    }
+    function setSeeMemory(chatId, src, desc) {
+        try { localStorage.setItem(_memKey(chatId), JSON.stringify({ src: String(src || ''), desc: String(desc || ''), ts: Date.now() })); } catch (e) {}
+    }
+    function clearSeeMemory(chatId) { try { localStorage.removeItem(_memKey(chatId)); } catch (e) {} }
+
+    function myAvatarSrc(chatId) {
+        try {
+            const c = (win.wxApp && win.wxApp.GLOBAL_CHATS) ? win.wxApp.GLOBAL_CHATS[chatId] : null;
+            if (c && c.userAvatar) return String(c.userAvatar);
+        } catch (e) {}
         try { const P = win.WX_PROFILE; if (P && P.get) return String(P.get().avatar || ''); } catch (e) {}
         return '';
     }
-    // 這張圖它看過了沒？沒有頭像就當作沒事要做。
-    function seePending() {
+    // 這間聊天室裡，它看過我現在這張頭像了沒？
+    function seePending(chatId) {
         if (!seeEnabled()) return false;
-        const src = myAvatarSrc();
+        const src = myAvatarSrc(chatId);
         if (!src) return false;
-        const m = seeMemory();
+        const m = seeMemory(chatId);
         return !(m && m.src === src && m.desc);
     }
 
     // 把頭像變成可以送出去的 data 網址，順便縮小。拿不到就回空的，讓呼叫端安靜跳過。
-    async function myAvatarDataUrl() {
-        const src = myAvatarSrc();
+    async function myAvatarDataUrl(chatId) {
+        const src = myAvatarSrc(chatId);
         if (!src) return '';
         let url = src;
         if (/^(img_|avt_)/.test(src)) {
@@ -186,25 +196,25 @@
             return c.toDataURL('image/jpeg', 0.82);
         } catch (e) {
             // 畫不進 canvas（多半是跨網域）。本來就是 data 網址的話直接送就好——
-            //    它已經是可以送出去的東西，只是沒縮到而已，不該因為縮不了就整個丟掉。
+            //    它已經是可以送出去的東西，只是沒縮到，不該因為縮不了就整個丟掉。
             if (/^data:image/i.test(url)) return url;
             return /^https?:/i.test(url) ? url : '';
         }
     }
 
     // 平時注入的那句話（便宜）。還沒看過就回空的。
-    function seeMemoryText() {
+    function seeMemoryText(chatId) {
         if (!seeEnabled()) return '';
-        const m = seeMemory();
+        const m = seeMemory(chatId);
         if (!m || !m.desc) return '';
-        if (m.src !== myAvatarSrc()) return '';   // 換過了，舊描述先不用
+        if (m.src !== myAvatarSrc(chatId)) return '';   // 換過了，舊描述先不用
         return '[對方的大頭貼]\n' + m.desc + '\n這是他現在的大頭貼，你看過。除非他提起，不然不用主動講。';
     }
 
     // 只在「換了還沒看過」那一輪用：一則帶圖的訊息，順便要它寫一句回來。
-    async function seeOnceMessage() {
-        if (!seePending()) return null;
-        const data = await myAvatarDataUrl();
+    async function seeOnceMessage(chatId) {
+        if (!seePending(chatId)) return null;
+        const data = await myAvatarDataUrl(chatId);
         if (!data) return null;
         return {
             role: 'user',
@@ -217,10 +227,10 @@
         };
     }
     // 它寫回來的描述：存起來，並記住是哪張圖生的
-    function rememberSeen(desc) {
+    function rememberSeen(chatId, desc) {
         const d = String(desc || '').trim();
         if (!d) return false;
-        setSeeMemory(myAvatarSrc(), d);
+        setSeeMemory(chatId, myAvatarSrc(chatId), d);
         return true;
     }
 

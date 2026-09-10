@@ -772,11 +772,9 @@
                 ? '<span style="background:#07c160; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
                 : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
             const seeOn = !!(_AV && _AV.seeEnabled && _AV.seeEnabled());
-            const seeMem = (_AV && _AV.seeMemory) ? _AV.seeMemory() : null;
             const seeBadge = seeOn
                 ? '<span style="background:#07c160; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
                 : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
-            const seeText = (seeMem && seeMem.desc) ? String(seeMem.desc) : '還沒看過';
             const AV_SRC_LABEL = { '': '跟著圖片設置', pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館原生', custom_api: '自訂接口', comfyui_direct: 'ComfyUI 直連' };
             const avOptions = Object.keys(AV_SRC_LABEL).map(function (v) {
                 return '<option value="' + v + '"' + (avSrc === v ? ' selected' : '') + '>' + AV_SRC_LABEL[v] + '</option>';
@@ -871,12 +869,6 @@
                         <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-eye"></i></span></div>
                         <div class="wx-cell-text">讓角色看我的頭像</div>
                         ${seeBadge}
-                    </div>
-                    <div class="wx-cell" style="${seeOn ? '' : 'display:none;'}" onclick="(window.parent.wxApp || window.wxApp).forgetMyAvatar()">
-                        <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-quote-left"></i></span></div>
-                        <div class="wx-cell-text is-fixed">它記得的樣子</div>
-                        <div class="wx-cell-sub">${seeText}</div>
-                        <div class="wx-cell-arrow">›</div>
                     </div>
                 </div>
 

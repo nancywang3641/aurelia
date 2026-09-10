@@ -1230,7 +1230,8 @@
                     if (_pf) apiMessages.push({ role: 'system', content: _pf });
                     // 👁 讓角色看我的頭像：平時只注入它自己寫過的那句描述（便宜）；
                     //    只有「換了還沒看過」那一輪才把圖夾進去，看完它會寫一句回來取代掉。
-                    const _seeTxt = (_av && _av.seeMemoryText) ? _av.seeMemoryText() : '';
+                    const _seeCid = (win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID) || '';
+                    const _seeTxt = (_av && _av.seeMemoryText) ? _av.seeMemoryText(_seeCid) : '';
                     if (_seeTxt) apiMessages.push({ role: 'system', content: _seeTxt });
                 } catch (e) {}
             }

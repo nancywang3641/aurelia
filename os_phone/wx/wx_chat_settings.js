@@ -177,6 +177,11 @@
 
             // 讀取「保留最近幾條」（聊天室長期記憶）。空白＝跟隨全域預設。
             let summaryKeepRecent = (chat.summaryKeepRecent != null && chat.summaryKeepRecent !== '') ? chat.summaryKeepRecent : '';
+            // 👁 它在這間記住的我的樣子。頭像是一間一個，所以這格也是一間一個。
+            const _AVS = win.WX_AVATAR_AI;
+            const seeOn = !!(_AVS && _AVS.seeEnabled && _AVS.seeEnabled());
+            const _seeM = (_AVS && _AVS.seeMemory) ? _AVS.seeMemory(chatId) : null;
+            const seeText = (_seeM && _seeM.desc) ? String(_seeM.desc) : '還沒看過';
             let defKeep = (win.WX_SUMMARY && win.WX_SUMMARY.DEF_KEEP) ? win.WX_SUMMARY.DEF_KEEP : 40;
             try { const _g = parseInt(localStorage.getItem((win.WX_SUMMARY && win.WX_SUMMARY.KEEP_KEY) || 'wx_sum_keep_recent')); if (!isNaN(_g) && _g > 0) defKeep = _g; } catch (e) {}
             
@@ -397,6 +402,17 @@
                 </div>
                 ` : ''}
                 
+                ${seeOn ? `
+                <div class="ws-group">
+                    <div class="ws-cell" id="btn-forget-avatar" style="cursor:pointer;">
+                        <div class="ws-label">它記得我的樣子</div>
+                        <div class="ws-right">
+                            <div id="see-mem-text" style="font-size:14px; margin-right:5px; color:#999; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${seeText}</div>
+                            <div class="ws-arrow">›</div>
+                        </div>
+                    </div>
+                </div>` : ``}
+
                 <div class="ws-group">
                     <div class="ws-cell" id="btn-chat-media" style="cursor:pointer;">
                         <div class="ws-label">這裡發過的東西</div>
@@ -545,6 +561,19 @@
             doc.getElementById('btn-bubble-settings').onclick = () => {
                 if (win.WX_BUBBLE_SETTINGS && win.WX_BUBBLE_SETTINGS.open) win.WX_BUBBLE_SETTINGS.open(chatId);
             };
+
+            // 忘掉它記住的我的樣子 → 下次進來會重看一次
+            (function () {
+                const btn = doc.getElementById('btn-forget-avatar');
+                if (!btn) return;
+                btn.onclick = function () {
+                    const A = win.WX_AVATAR_AI;
+                    if (A && A.clearSeeMemory) A.clearSeeMemory(chatId);
+                    const t = doc.getElementById('see-mem-text');
+                    if (t) t.textContent = '還沒看過';
+                    try { win.toastr && win.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
+                };
+            })();
 
             // 這裡發過的東西：把這間聊天室的圖片／檔案／連結／位置攤出來
             (function () {
