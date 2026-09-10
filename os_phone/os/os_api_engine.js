@@ -1283,6 +1283,29 @@
                 apiMessages.push({ role: "system", content: realityText });
             }
 
+            // 🧭 AVS 當背景給手機聊天與通話用（唯讀）。
+            //   為什麼要：正文有寫「剛吃完牛肉麵、手上拿著誰的衣服」，但「這個角色現在對主角是什麼態度」
+            //   是數值、不會寫在正文裡——沒有它，模型只能靠上下文猜語氣，同一個人一下熱情一下冷淡。
+            //   為什麼整包：實測整包 1599 字（角色狀態 1359／劇情目標 89／當前場景 63／持有物品 41／暗流 2），
+            //   相對於這條路一次送三萬字只佔 5%，切開反而容易切錯人。角色狀態哪天長大了再說。
+            //   🚨唯讀：這裡只給它看，不要求回報，也明令不准把數字或欄位名寫進訊息——
+            //   一寫出來就是原始格式跑到畫面上。
+            if (promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') {
+                try {
+                    const _avsBg = (win._AVS_ENGINE && win._AVS_ENGINE.read) ? win._AVS_ENGINE.read() : null;
+                    if (_avsBg && Object.keys(_avsBg).length) {
+                        apiMessages.push({
+                            role: 'system',
+                            content: '[現在的世界狀態｜背景參考]\n' + JSON.stringify(_avsBg)
+                                + '\n\n上面是主角此刻的處境，以及各個角色現在的狀態。用它決定你這幾則訊息該是什麼態度、'
+                                + '講到剛發生的事情時對得上。這是背景，不是要你回報的東西：'
+                                + '訊息裡不要提到上面的欄位名或數字，也不要輸出任何狀態、變數之類的格式。'
+                        });
+                        console.log('[OS_API.buildContext] 附上 AVS 背景 ' + JSON.stringify(_avsBg).length + ' 字');
+                    }
+                } catch (e) { console.warn('[OS_API.buildContext] AVS 背景注入失敗（不影響送出）:', e); }
+            }
+
             if ((promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
                  try {
                     const currentChatId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
