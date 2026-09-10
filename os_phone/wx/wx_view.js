@@ -171,10 +171,6 @@
             const opacityStyle = withAnim ? 'opacity:0;' : 'opacity:1;'; 
             const dataAttr = (typeof msgIndex === 'number') ? `data-msg-idx="${msgIndex}"` : '';
             
-            if (msg.isLoading) {
-                const senderLabel = msg.sender ? `<span class="wx-typing-label">${msg.sender}</span>` : '';
-                return `<div class="wx-typing-indicator" data-loading="true"><div class="wx-typing-dots-wrap"><span></span><span></span><span></span></div>${senderLabel}</div>`;
-            }
 
             if (msg.type === 'system') {
                 let displayContent = msg.content || '';
@@ -266,6 +262,17 @@
                 }
             }
             
+            // 「正在輸入」也是對方的一則訊息，就照對方訊息的樣子畫：頭像＋泡泡＋尖角。
+            // 🚨以前是三個灰點直接漂在聊天背景圖上，沒有底、沒有頭像、名字還裸著一行——
+            //    她說「灰字、有點裸露、有背景的情況下看不太到」。做成真泡泡就有底了，
+            //    而且掛上 .pbub-* 之後會自動吃她設的泡泡主題，跟其他訊息同一套皮。
+            //    擺在這裡是因為頭像要等上面那段算完才拿得到。
+            if (msg.isLoading) {
+                const _tAvatar = /class="/.test(dbDataAttr) ? dbDataAttr.replace('class="', 'class="pbub-avatar ') : `${dbDataAttr} class="pbub-avatar"`;
+                const _tWho = (safeChat.isGroup && msg.sender) ? `<div class="wx-group-name">${msg.sender}</div>` : '';
+                return `<div class="wx-msg-row you pbub-row pbub-other ${animClass}" style="${opacityStyle}" data-loading="true"><div style="${avatarStyle}" ${_tAvatar}></div><div style="max-width: 70%;">${_tWho}<div class="wx-bubble-content pbub-bubble wx-typing-indicator"><div class="wx-typing-dots-wrap"><span></span><span></span><span></span></div></div></div></div>`;
+            }
+
             const side = msg.isMe ? 'me' : 'you';
             // 🚨清單一律取自 MSG_TAG（見檔案開頭）：這三條以前是各自手打的，漏了繁體字
             //   就會讓自帶造型的卡片外面多一層泡泡框

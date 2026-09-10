@@ -107,13 +107,14 @@
             .wx-msg-row.me .wx-bubble-content { background: #95ec69; margin-right: 10px; border: 1px solid #86d45a; }
             .wx-msg-row.me .wx-bubble-content::before { content: ''; position: absolute; right: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 6px solid #95ec69; }
             .wx-system-notice { text-align: center; font-size: 12px; color: #b2b2b2; margin: 15px 20px; padding: 4px 10px; clear: both; width: auto; align-self: center; border-radius: 4px; }
-            .wx-typing-indicator { display:flex; align-items:center; gap:7px; padding:5px 14px 5px 18px; }
+            /* 它現在是一顆真泡泡（.wx-bubble-content），只要調泡泡內的排版就好 */
+            .wx-typing-indicator { display:flex; align-items:center; gap:7px; padding:12px 14px; }
             .wx-typing-dots-wrap { display:flex; gap:4px; align-items:center; }
-            .wx-typing-dots-wrap span { width:6px; height:6px; border-radius:50%; background:#bbb; display:inline-block; animation:wx-dot-bounce 1.1s infinite ease-in-out; }
+            .wx-typing-dots-wrap span { width:6px; height:6px; border-radius:50%; background:currentColor; opacity:0.5; display:inline-block; animation:wx-dot-bounce 1.1s infinite ease-in-out; }
             .wx-typing-dots-wrap span:nth-child(2) { animation-delay:0.18s; }
             .wx-typing-dots-wrap span:nth-child(3) { animation-delay:0.36s; }
-            @keyframes wx-dot-bounce { 0%,80%,100%{transform:translateY(0); opacity:0.35} 40%{transform:translateY(-4px); opacity:1} }
-            .wx-typing-label { font-size:12px; color:#aaa; }
+            @keyframes wx-dot-bounce { 0%,80%,100%{transform:translateY(0); opacity:0.35} 40%{transform:translateY(-4px); opacity:0.85} }
+            /* .wx-typing-label 已停用：群聊要顯示誰在打字改用 .wx-group-name，跟一般訊息同一條 */
             .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: #f7f7f7; border-top: 1px solid #dcdcdc; z-index: 5; transition: bottom 0.2s; }
             .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; }
             .wx-input-real { flex: 1; height: 36px; background: #fff !important; border-radius: 6px; border: 1px solid #ddd; margin: 0 10px; padding: 0 10px; font-size: 14px; outline: none; color: #000 !important; opacity: 1 !important; -webkit-text-fill-color: #000 !important; }
