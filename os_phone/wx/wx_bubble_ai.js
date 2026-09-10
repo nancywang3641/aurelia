@@ -106,7 +106,10 @@
 等於在寫列，同一份禁令照算。要改泡泡就寫 .pbub-me .pbub-bubble（中間有空格），別漏掉後面那半。
 左右分邊是靠 flex-direction 做的（自己那側是 row-reverse），你寫了就會把兩邊的訊息全部推到同一側。
 .pbub-bubble 上不准寫 position:absolute / fixed、不准寫 float，也不准用 margin-left/right 的負值
-把泡泡拖出畫面。max-width 不要超過 78%，泡泡貼到邊會很難讀。
+把泡泡拖出畫面。
+泡泡的寬度上限在 .pbub-wrap 這一層（預設 70%），不在泡泡身上。想讓泡泡更寬或更窄，改 .pbub-wrap
+的 max-width；不要寫在 .pbub-bubble 上——那裡的百分比是相對 .pbub-wrap 再算一次，兩邊都寫會疊兩次，
+結果比你以為的窄很多。上限不要超過 78%，泡泡貼到邊會很難讀。
 
 【骨架 — 這一區是關係，每一條都要能在你寫的 CSS 裡驗出來】
 - 兩側的差別不可以只有顏色：圓角的形狀、邊框的有無或厚度、陰影的方向，至少有一項明顯不同。
@@ -188,7 +191,7 @@
             // 只鎖「列」本身；泡泡與頭像身上的 position/display 是正當用法。
             // 🚨.pbub-me / .pbub-other 跟 .pbub-row 掛在同一個元素上（列身上一定帶其中一個），
             //   所以 .pbub-me{display:block} 一樣會把左右分邊弄壞——三個都要鎖，只鎖 .pbub-row 有漏。
-            if (!/\.pbub-(?:row|me|other)/.test(sl) || /\.pbub-bubble|\.pbub-avatar|::/.test(sl)) return whole;
+            if (!/\.pbub-(?:row|me|other)/.test(sl) || /\.pbub-bubble|\.pbub-avatar|\.pbub-wrap|::/.test(sl)) return whole;
             const nb = body.replace(LOCK_PROPS, (m, p1) => { hit++; return p1 || ''; });
             return sel + '{' + nb + '}';
         });
@@ -268,7 +271,8 @@ body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hi
 .pbub-row.pbub-me{flex-direction:row-reverse}
 .pbub-avatar{width:24px;height:24px;border-radius:5px;flex-shrink:0;background:#c4c4c4}
 .pbub-me .pbub-avatar{background:#a5e6aa}
-.pbub-bubble{max-width:72%;padding:6px 9px;border-radius:6px;position:relative;
+.pbub-wrap{max-width:70%;min-width:0}
+.pbub-bubble{max-width:100%;padding:6px 9px;border-radius:6px;position:relative;
   font-size:10.5px;line-height:1.45;color:#000;background:#fff;word-break:break-word}
 .pbub-me .pbub-bubble{background:#95ec69}
 `;
@@ -276,8 +280,8 @@ body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hi
         return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
             + PREVIEW_BASE + '\n' + BASE_CSS + '\n' + boost(css || '')
             + '</style></head><body>'
-            + '<div class="pbub-row pbub-other"><div class="pbub-avatar"></div><div class="pbub-bubble">今晚要不要出來？</div></div>'
-            + '<div class="pbub-row pbub-me"><div class="pbub-avatar"></div><div class="pbub-bubble">好啊，老地方。</div></div>'
+            + '<div class="pbub-row pbub-other"><div class="pbub-avatar"></div><div class="pbub-wrap"><div class="pbub-bubble">今晚要不要出來？</div></div></div>'
+            + '<div class="pbub-row pbub-me"><div class="pbub-avatar"></div><div class="pbub-wrap"><div class="pbub-bubble">好啊，老地方。</div></div></div>'
             + '</body></html>';
     }
 

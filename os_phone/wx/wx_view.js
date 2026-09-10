@@ -270,7 +270,7 @@
             if (msg.isLoading) {
                 const _tAvatar = /class="/.test(dbDataAttr) ? dbDataAttr.replace('class="', 'class="pbub-avatar ') : `${dbDataAttr} class="pbub-avatar"`;
                 const _tWho = (safeChat.isGroup && msg.sender) ? `<div class="wx-group-name">${msg.sender}</div>` : '';
-                return `<div class="wx-msg-row you pbub-row pbub-other ${animClass}" style="${opacityStyle}" data-loading="true"><div style="${avatarStyle}" ${_tAvatar}></div><div style="max-width: 70%;">${_tWho}<div class="wx-bubble-content pbub-bubble wx-typing-indicator"><div class="wx-typing-dots-wrap"><span></span><span></span><span></span></div></div></div></div>`;
+                return `<div class="wx-msg-row you pbub-row pbub-other ${animClass}" style="${opacityStyle}" data-loading="true"><div style="${avatarStyle}" ${_tAvatar}></div><div class="pbub-wrap wx-bubble-wrap">${_tWho}<div class="wx-bubble-content pbub-bubble wx-typing-indicator"><div class="wx-typing-dots-wrap"><span></span><span></span><span></span></div></div></div></div>`;
             }
 
             const side = msg.isMe ? 'me' : 'you';
@@ -298,7 +298,7 @@
             // 貼圖／圖片／轉帳這些卡片，泡泡本來就被 bubbleStyle 設成透明無邊（卡片自己就是造型），
             // 掛上去只會讓主題把卡片外面又糊一層底 → 只有純文字泡泡才吃主題
             const plainBubble = !(isSpecial || isImageTag || isSticker);
-            return `<div class="wx-msg-row ${side} pbub-row ${sideCls} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${avatarAttr}></div><div style="max-width: 70%;">${nameHTML}<div class="wx-bubble-content${plainBubble ? ' pbub-bubble' : ''}" style="${bubbleStyle}">${html}${quoteHTML}</div></div></div>`;
+            return `<div class="wx-msg-row ${side} pbub-row ${sideCls} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${avatarAttr}></div><div class="pbub-wrap wx-bubble-wrap">${nameHTML}<div class="wx-bubble-content${plainBubble ? ' pbub-bubble' : ''}" style="${bubbleStyle}">${html}${quoteHTML}</div></div></div>`;
         },
 
         generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },
