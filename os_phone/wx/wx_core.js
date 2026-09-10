@@ -267,8 +267,9 @@
                 // AI指定了金額，使用AI的金額更新紅包數據
                 const grabAmount = processRedPacketGrab(packetId, grabberName, specifiedAmount);
                 if (grabAmount !== null) {
-                    // 保持AI的原始內容（包含AI指定的金額）
-                    return { type: 'system', content: content, isMe: false };
+                    // 🚨講人話，別把協議原文攤在畫面上：AI 寫的是「丹領取了紅包 4.44元|rp_001」，
+                    //   原樣顯示就把紅包 ID 也印出來了（她實測看到這種技術字串，說「格式跑出來就是不對」）
+                    return { type: 'system', content: `${grabberName || '對方'}領取了紅包 ¥${specifiedAmount}`, isMe: false };
                 } else {
                     console.warn('[SystemIntent] processRedPacketGrab 返回 null，領取失敗');
                 }
@@ -301,8 +302,7 @@
                 
                 const grabAmount = processRedPacketGrab(packetId, grabberName, specifiedAmount);
                 if (grabAmount !== null) {
-                    // 保持AI的原始內容
-                    return { type: 'system', content: content, isMe: false };
+                    return { type: 'system', content: `${grabberName || '對方'}領取了紅包 ¥${specifiedAmount}`, isMe: false };
                 }
             }
         }
@@ -316,7 +316,9 @@
             const isAccept = action === 'accept' || action === '接收' || action === '接收了' || action === '收下' || action === '收下了';
             const uniqueId = giftId.startsWith('ID_') ? giftId : ('ID_' + giftId);
             localStorage.setItem(uniqueId, isAccept ? 'accepted' : 'returned');
-            return { type: 'system', content: content, isMe: false };
+            // 口徑跟轉帳那條一致：講「對方做了什麼」，禮物名帶引號，ID 不露出來
+            const _giftWhat = itemName ? `「${itemName}」` : '禮物';
+            return { type: 'system', content: isAccept ? `對方已收下${_giftWhat}` : `對方已退回${_giftWhat}`, isMe: false };
         }
         // 兼容格式：[系統] XXX接收了禮物 (Gft_423) 或 [系統] XXX拒絕了禮物 (Gft_423)
         const giftActionMatch2 = content.match(/(.*?)(?:接收|接收了|收下|收下了|Accept|退回|退回了|拒绝|拒絕|Return).*?(?:禮物|礼物|Gift).*?[\(（]([a-zA-Z0-9_]+)[\)）]/i);
@@ -326,7 +328,9 @@
             const isAccept = actionText.includes('接收') || actionText.includes('收下') || actionText.includes('accept');
             const uniqueId = giftId.startsWith('ID_') ? giftId : ('ID_' + giftId);
             localStorage.setItem(uniqueId, isAccept ? 'accepted' : 'returned');
-            return { type: 'system', content: content, isMe: false };
+            // actionText 是動詞前面那段，通常就是人名；沒抓到就用「對方」
+            const _giftWho = giftActionMatch2[1].trim().replace(/[\[\]|｜]/g, '').trim();
+            return { type: 'system', content: `${_giftWho || '對方'}${isAccept ? '收下了禮物' : '退回了禮物'}`, isMe: false };
         }
         
         // 處理 [System: Accept 金額|Txn_ID] 或 [System: Return 金額|Txn_ID]
@@ -419,7 +423,8 @@
             const isAccept = actionText.includes('接收') || actionText.includes('收下') || actionText.includes('accept');
             const uniqueId = txnId.startsWith('ID_') ? txnId : ('ID_' + txnId);
             localStorage.setItem(uniqueId, isAccept ? 'accepted' : 'returned');
-            return { type: 'system', content: content, isMe: false };
+            const _txnWho = transferActionMatch2[1].trim().replace(/[\[\]|｜]/g, '').trim();
+            return { type: 'system', content: `${_txnWho || '對方'}${isAccept ? '已接收轉帳' : '已退回轉帳'}`, isMe: false };
         }
         
         // 處理舊格式 [System: 領取紅包]（兼容）

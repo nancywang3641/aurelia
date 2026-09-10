@@ -36,6 +36,29 @@
         MSG_TAG.VIDEO, MSG_TAG.FILE, MSG_TAG.LINK, MSG_TAG.PAYCODE, MSG_TAG.WBSHARE].join('|');
     MSG_TAG.ALL = [MSG_TAG.STICKER, MSG_TAG.IMAGE, MSG_TAG.CARD, MSG_TAG.VOICE].join('|');
 
+    // 🚨系統訊息的最後一道：畫面上不准出現原始協議格式。
+    //   每條 intent 在 wx_core 那邊都已經改講人話了，這裡負責接住三種漏網的：
+    //   ①舊資料裡存著協議原文的 ②沒被任何 intent 認出來的 ③模型直接照協議寫的。
+    //   她的原話：「不能把格式搞出來，拍給你就是他出現了格式樣式，這就不對」。
+    function sysText(raw) {
+        let t = String(raw == null ? '' : raw).trim();
+        const hadPrefix = /^\[\s*(?:系統|系统|System|Notice)\s*[:：]/i.test(t);
+        t = t.replace(/^\[\s*(?:系統|系统|System|Notice)\s*[:：]\s*/i, '').trim();
+        if (hadPrefix) t = t.replace(/\]+\s*$/, '').trim();   // 只有剝過前綴才收尾巴，免得誤砍正常內容的 ]
+        // Accept/Return ＋ 東西 ＋（可有可無的 |ID）→ 翻成人話。數字當轉帳、文字當禮物。
+        const m = t.match(/^(Accept|Return|接收|接收了|收下|收下了|退回|退回了|拒絕|拒绝)\s+(.+?)\s*(?:[|｜]\s*([A-Za-z0-9_]+))?\s*$/i);
+        if (m) {
+            const isAccept = /^(?:accept|接收了?|收下了?)$/i.test(m[1]);
+            const what = m[2].trim();
+            if (/^\d+(?:\.\d+)?$/.test(what)) return isAccept ? `對方已接收轉帳 ${what}元` : `對方已退回轉帳 ${what}元`;
+            return isAccept ? `對方已收下「${what}」` : `對方已退回「${what}」`;
+        }
+        // 翻不出來也要把尾巴掛的協議 ID 拿掉，那串英數字對她沒有任何意義
+        t = t.replace(/\s*[|｜]\s*(?:ID_)?(?:Gft|Gift|rp|RedPacket|Txn|Tnx|Transfer)[_-]?[A-Za-z0-9_]*\s*$/i, '');
+        t = t.replace(/\s*[\(（]\s*(?:ID_)?(?:Gft|Gift|rp|RedPacket|Txn|Tnx|Transfer)[_-]?[A-Za-z0-9_]*\s*[\)）]\s*$/i, '');
+        return t.trim();
+    }
+
     // 「[標籤: 內容]」的比對式。捕獲組固定兩個（$1 標籤本身、$2 內容），
     // 各條 replace 的 callback 簽名維持原樣。每次呼叫都給新實例——帶 g 旗標不能共用。
     const tagRe = (tags) => new RegExp('\\[\\s*(' + tags + ')\\s*[:：]?\\s*(.*?)\\s*\\]', 'gi');
@@ -173,13 +196,16 @@
                         displayContent = isAccept ? `對方已接收轉帳 ${amount}元` : `對方已拒絕轉帳 ${amount}元`;
                     }
                 }
-                return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${displayContent}</div>`;
+                return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(displayContent)}</div>`;
             }
             if (msg.type === 'time') return `<div class="wx-time-stamp ${animClass}" style="${opacityStyle}" ${dataAttr}>${msg.content}</div>`;
             
             let html = msg.content || "";
             // 處理統一格式的系統消息：[系統: Accept/Return 物品名|ID] 或 [系統: Accept/Return 金額|ID]
-            if (!msg.isMe && html.match(/^\[\s*系統|系统|System\s*[:：]\s*(Accept|Return|接收|退回)\s+/i)) {
+            // 🚨舊寫法 /^\[\s*系統|系统|System\s*[:：]\s*(Accept|…)/ 少了括號，三個分支各自獨立：
+            //   第一支只要開頭是 [系統 就中，第二支「內容裡任何地方出現系统」就中——正文提到系統兩個字
+            //   的普通訊息會被當成系統通知。現在括起來，並且凡是長成 [系統: …] 的都收進來剝掉外框。
+            if (!msg.isMe && /^\[\s*(?:系統|系统|System|Notice)\s*[:：]/i.test(html)) {
                 let display = html.replace(/^\[\s*(系統|系统|System)\s*[:：]\s*/i, '').replace(/\]$/, '');
                 const actionMatch = display.match(/^(Accept|Return|接收|退回)\s+(.+?)\s*[|｜](.+)$/i);
                 if (actionMatch) {
@@ -198,7 +224,7 @@
                         display = isAccept ? `對方已接收 ${item}` : `對方已拒絕 ${item}`;
                     }
                 }
-                return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${display}</div>`;
+                return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(display)}</div>`;
             }
 
             html = this.processModules(html, String(chatId), msg.isMe);
