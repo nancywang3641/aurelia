@@ -1222,6 +1222,9 @@
                     const _av = win.WX_AVATAR_AI || window.WX_AVATAR_AI;
                     const _t = (_av && _av.instruction) ? _av.instruction() : '';
                     if (_t) apiMessages.push({ role: 'system', content: _t });
+                    // 📅 約定不設開關：不花錢也不生東西，而且兩邊寫進同一本日曆才對得上。
+                    const _ev = (_av && _av.eventInstruction) ? _av.eventInstruction() : '';
+                    if (_ev) apiMessages.push({ role: 'system', content: _ev });
                 } catch (e) {}
             }
 

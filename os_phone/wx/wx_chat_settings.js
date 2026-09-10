@@ -397,6 +397,16 @@
                 </div>
                 ` : ''}
                 
+                <div class="ws-group">
+                    <div class="ws-cell" id="btn-chat-media" style="cursor:pointer;">
+                        <div class="ws-label">這裡發過的東西</div>
+                        <div class="ws-right">
+                            <div id="chat-media-count" style="font-size:14px; margin-right:5px; color:#999;"></div>
+                            <div class="ws-arrow">›</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="ws-section-header">聊天記憶</div>
                 <div class="ws-group">
                     <div class="ws-cell" id="btn-chat-summary" style="cursor:pointer;">
@@ -535,6 +545,22 @@
             doc.getElementById('btn-bubble-settings').onclick = () => {
                 if (win.WX_BUBBLE_SETTINGS && win.WX_BUBBLE_SETTINGS.open) win.WX_BUBBLE_SETTINGS.open(chatId);
             };
+
+            // 這裡發過的東西：把這間聊天室的圖片／檔案／連結／位置攤出來
+            (function () {
+                const M = win.WX_CHAT_MEDIA;
+                const btn = doc.getElementById('btn-chat-media');
+                const cnt = doc.getElementById('chat-media-count');
+                if (cnt && M && M.counts) {
+                    const n = M.counts(chat);
+                    const total = Object.keys(n).reduce(function (a, k) { return a + n[k]; }, 0);
+                    cnt.textContent = total ? String(total) + ' 件' : '還沒有';
+                }
+                if (btn) btn.onclick = function () {
+                    if (!M) { if (win.toastr) win.toastr.info('模塊還沒載入完，等一下再試'); return; }
+                    M.open(chatId);
+                };
+            })();
 
             // 早前記錄（聊天室長期記憶）：看狀態、手動整理、改字、清除
             (function () {

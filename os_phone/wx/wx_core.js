@@ -665,6 +665,18 @@
             line = line.trim(); 
             if (!line) return;
 
+            // 📅 在微信裡約好的事 → 寫進日曆。用的是正文那邊同一個標籤，不另外發明一套，
+            //    兩邊寫進同一本主角狀態，AI 之後在正文才對得上「上禮拜在微信說好的」。
+            //    以前這行會被下面的發話人判斷當成一個叫「Event|6/25|…」的人，內容是空的就靜默丟掉。
+            const evMatch = line.match(/^\[\s*Event\s*[|｜]\s*([^|｜\]]+)\s*[|｜]\s*([^\]]+)\]/i);
+            if (evMatch) {
+                try {
+                    const M = win.OS_MC_STATUS;
+                    if (M && M.addEvent) M.addEvent(evMatch[1].trim(), evMatch[2].trim(), '', 'wx');
+                } catch (e) { console.warn('[WX] 約定寫進日曆失敗（不影響訊息）:', e); }
+                return;   // 這是給日曆的，不是一顆泡泡
+            }
+
             // 處理 [Chat: ID] 標頭
             const chatMatch = line.match(/^\[\s*Chat\s*[:：]\s*([^|\]\n]+)(?:\|\s*([^\]\n]+))?\s*\]/i);
             if (chatMatch) {

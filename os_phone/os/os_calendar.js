@@ -113,7 +113,7 @@
         const evHtml = evs.length ? evs.map(e => `
             <div class="cal-ev${e.src === 'me' ? ' cal-ev-me' : ''}">
                 <div class="cal-ev-bar"></div>
-                <div class="cal-ev-text" data-edit="${esc(e.id)}"><div class="cal-ev-title">${esc(e.title)}</div><div class="cal-ev-src">${e.src === 'me' ? '自己記的' : (e.edited ? '劇情裡說好的，改過' : '劇情裡說好的')}</div></div>
+                <div class="cal-ev-text" data-edit="${esc(e.id)}"><div class="cal-ev-title">${esc(e.title)}</div><div class="cal-ev-src">${e.src === 'me' ? '自己記的' : (e.src === 'wx' ? (e.edited ? '在微信說好的，改過' : '在微信說好的') : (e.edited ? '劇情裡說好的，改過' : '劇情裡說好的'))}</div></div>
                 <div class="cal-ev-del" data-id="${esc(e.id)}"><i class="fa-solid fa-trash"></i></div>
             </div>`).join('') : '<div class="cal-empty-note">這天沒有約定</div>';
 

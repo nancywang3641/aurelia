@@ -105,11 +105,22 @@
         return { ok: true, id: id };
     }
 
+    // 📅 約定：在微信裡說好的事寫進日曆。這個不設開關——它不花錢也不生東西，
+    //    而且兩邊寫進同一本，AI 之後在正文才對得上「上禮拜在微信說好的」。
+    //    標籤沿用正文那套，不另外發明。
+    function eventInstruction() {
+        return '[把約定記下來]\n'
+            + '聊到「什麼時候要做什麼」而且雙方講定了，就在訊息之外單獨一行寫：[Event|月/日|一句話]，'
+            + '日期像 6/25 這樣寫，後面那句寫清楚是什麼事。這一行不會變成聊天泡泡，是寫進行事曆的。\n'
+            + '只有真的講定了才寫；還在問、還在猶豫、只是隨口提一句，都不要寫。同一件事寫過就別再寫。';
+    }
+
     win.WX_AVATAR_AI = {
         isEnabled: isEnabled, setEnabled: setEnabled,
         getProvider: getProvider, setProvider: setProvider,
         PROVIDERS: PROVIDERS,
         instruction: instruction,
+        eventInstruction: eventInstruction,
         apply: apply,
         ON_KEY: ON_KEY, SRC_KEY: SRC_KEY
     };
