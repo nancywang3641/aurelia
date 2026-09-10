@@ -51,12 +51,14 @@
         // 發一張卡。alias 是模型寫的單號（可有可無）。
         // 同一個別名如果已經有一張「還沒處理完」的，視為同一張（模型常在同一輪重複提到同一個紅包）；
         // 已經處理完的就另開一張——同一個人連發兩個同單號的紅包是兩件事。
-        attach(chatId, kind, alias, data) {
+        attach(chatId, kind, alias, data, slot) {
             const book = load(chatId);
             const a = norm(alias);
             if (a) {
-                const live = book.list.find(c => c.kind === kind && norm(c.alias) === a && c.status === 'pending');
-                if (live) return live;
+                // 同單號、還沒處理完、而且位置對得上（或還沒認領）→ 就是同一張，別重複開
+                const live = book.list.find(c => c.kind === kind && norm(c.alias) === a && c.status === 'pending'
+                    && (slot == null || c.slot == null || c.slot === slot));
+                if (live) { if (slot != null && live.slot == null) { live.slot = slot; save(chatId, book); } return live; }
             }
             book.seq += 1;
             const card = {
@@ -64,6 +66,7 @@
                 seq: book.seq,
                 kind,
                 alias: String(alias == null ? '' : alias).trim(),
+                slot: (slot == null ? null : slot),
                 status: 'pending',
                 at: Date.now(),
                 data: data || {}
@@ -93,29 +96,57 @@
         },
 
         // 只認單號，對不上就是沒有。畫卡片時用這個——退回「最近一張」會把別人的紅包認成自己的。
-        findByAlias(chatId, kind, alias) {
+        //
+        // 🚨🚨slot＝這張卡長在第幾則訊息上。為什麼需要它：模型很愛重複用同一個單號
+        //    （測試腳本寫死 Txn_test_001 是最極端的例子）。只認單號的話，第二輪那則新訊息
+        //    會對應到第一輪那張「已接收」的卡，畫出來一出現就是已收款——她實測撞到兩次。
+        //    加上 slot 之後：重畫同一則＝同一張；不同則訊息就算單號一樣也是不同張。
+        //
+        //    認領機制：紅包在「解析的第一遍掃描」就先建卡了（同一輪 A 發 B 領要靠它），
+        //    那時還不知道會落在第幾則，slot 是空的。等真的畫到那一則時，
+        //    這裡會把 slot 補上去（認領）。之後別則訊息用同一個單號就配不上、自己開新的。
+        findByAlias(chatId, kind, alias, slot) {
             const a = norm(alias);
             if (!a) return null;
-            const mine = load(chatId).list.filter(c => c.kind === kind && norm(c.alias) === a);
+            const book = load(chatId);
+            const mine = book.list.filter(c => c.kind === kind && norm(c.alias) === a);
             if (!mine.length) return null;
-            return mine.find(c => c.status === 'pending') || mine[mine.length - 1];
+            const pick = (arr) => arr.find(c => c.status === 'pending') || arr[arr.length - 1];
+            if (slot == null) return pick(mine);                       // 沒給位置（解析時）→ 照舊
+            const sameSlot = mine.filter(c => c.slot === slot);
+            if (sameSlot.length) return pick(sameSlot);                // 同一則訊息重畫
+            const unclaimed = mine.filter(c => c.slot == null);
+            if (unclaimed.length) {                                    // 還沒認領的（第一遍掃描先建的）
+                const c = pick(unclaimed);
+                c.slot = slot;
+                save(chatId, book);
+                return c;
+            }
+            return null;                                               // 單號一樣但長在別則訊息上 → 不是同一張
         },
 
         // 畫卡片時用：這張卡在帳本裡就拿出來，不在就開一張。
         // 每次重畫都會經過這裡，所以一定要走嚴格比對，不然重畫一次就多一張。
-        findOrAttach(chatId, kind, alias, data) {
-            return this.findByAlias(chatId, kind, alias) || this.attach(chatId, kind, alias, data);
+        findOrAttach(chatId, kind, alias, data, slot) {
+            return this.findByAlias(chatId, kind, alias, slot) || this.attach(chatId, kind, alias, data, slot);
         },
 
-        // 同上，但第一次見到這張卡時把舊世界的狀態接過來（legacyStatus 傳舊的全域鍵讀到的值）。
+        // 同上，但第一次見到這張卡時把舊世界的狀態接過來（legacyKey 是舊的全域鍵名）。
         // 遷移就發生在畫卡片的那一刻——只有真的出現在畫面上的卡才需要狀態，
         // 不必先跑一輪全量搬家，也不會把別室的東西拖進來。
-        adopt(chatId, kind, alias, data, legacyStatus) {
-            const found = this.findByAlias(chatId, kind, alias);
+        //
+        // 🚨接手完就把舊鍵刪掉，這一步不能省：舊鍵是全域的，留著的話下一輪
+        //    新開的卡又會去接同一個「已接收」，畫面看起來就像永遠清不掉（她實測撞到）。
+        adopt(chatId, kind, alias, data, legacyKey, slot) {
+            const found = this.findByAlias(chatId, kind, alias, slot);
             if (found) return found;
-            const card = this.attach(chatId, kind, alias, data);
-            if (legacyStatus && legacyStatus !== 'pending') {
-                return this.update(chatId, card.key, { status: String(legacyStatus) }) || card;
+            const card = this.attach(chatId, kind, alias, data, slot);
+            let legacy = null;
+            if (legacyKey) {
+                try { legacy = localStorage.getItem(legacyKey); localStorage.removeItem(legacyKey); } catch (e) {}
+            }
+            if (legacy && legacy !== 'pending') {
+                return this.update(chatId, card.key, { status: String(legacy) }) || card;
             }
             return card;
         },

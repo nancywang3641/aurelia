@@ -364,8 +364,9 @@
                 // 狀態走「這個聊天室的帳本」（wx_cards.js），不再拿模型寫的單號當全域鍵。
                 // 第一次畫到這張卡時把舊世界那份接過來，所以既有對話不會突然變回未讀。
                 const _CARDS = win.WX_CARDS || window.WX_CARDS;
+                //   msgIndex 一起帶：同一個單號長在不同則訊息上就是不同張卡（模型很愛重用單號）
                 const _card = _CARDS ? _CARDS.adopt(safeId, 'transfer', txnId,
-                    { amount: amount, targetName: targetName, memo: memo }, localStorage.getItem(uniqueId)) : null;
+                    { amount: amount, targetName: targetName, memo: memo }, uniqueId, msgIndex) : null;
                 const status = _card ? _card.status : localStorage.getItem(uniqueId);
                 let bgColor = "#fa9d3b";
                 let textColor = "white";
@@ -457,7 +458,7 @@
                 // 同轉帳：狀態走這個聊天室的帳本，第一次畫到時接手舊世界那份
                 const _CARDS = win.WX_CARDS || window.WX_CARDS;
                 const _card = _CARDS ? _CARDS.adopt(safeId, 'gift', giftId,
-                    { itemName: giftName, price: price }, localStorage.getItem(uniqueId)) : null;
+                    { itemName: giftName, price: price }, uniqueId, msgIndex) : null;
                 const status = _card ? _card.status : localStorage.getItem(uniqueId);
                 
                 let opacity = "1";
