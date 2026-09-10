@@ -29,12 +29,16 @@
         FILE: '文件|File',
         LINK: '链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|Url',
         PAYCODE: '收款码|收款碼|收款|付款码|付款碼',   // ⚠️「收款」要排在帶「码/碼」的後面
+        // 📞 通話記錄。以前微信那顆「通話」送的是 [Voice: 發起通話 - 備註]，於是被畫成一顆語音訊息
+        //    （喇叭、音波條、秒數）——看起來像「一則語音」，不是「一通通話」。她說感覺做一半就是這個。
+        //    真的能講話的通話在電話 app，微信這顆本來就只是留個記錄，那就讓它長得像記錄。
+        CALL: '通话|通話|Call',
         WBSHARE: 'WbShare'
     };
     // 自帶造型、泡泡要讓位的那些（語音刻意不在內：微信原生語音本來就裝在泡泡裡）
     MSG_TAG.CARD = [MSG_TAG.TRANSFER, MSG_TAG.GIFT, MSG_TAG.REDPACKET, MSG_TAG.LOCATION,
         MSG_TAG.VIDEO, MSG_TAG.FILE, MSG_TAG.LINK, MSG_TAG.PAYCODE, MSG_TAG.WBSHARE].join('|');
-    MSG_TAG.ALL = [MSG_TAG.STICKER, MSG_TAG.IMAGE, MSG_TAG.CARD, MSG_TAG.VOICE].join('|');
+    MSG_TAG.ALL = [MSG_TAG.STICKER, MSG_TAG.IMAGE, MSG_TAG.CARD, MSG_TAG.VOICE, MSG_TAG.CALL].join('|');
 
     // 🚨系統訊息的最後一道：畫面上不准出現原始協議格式。
     //   每條 intent 在 wx_core 那邊都已經改講人話了，這裡負責接住三種漏網的：
@@ -524,6 +528,13 @@
             });
             // 圖片走三個手機 app 共用的管道；ref 帶 chatId，訊息位置由 .wx-msg-row 的 data-msg-idx 補上
             html = html.replace(tagRe(MSG_TAG.IMAGE), (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), { app: 'wx', ref: safeId }) : content; });
+            // 📞 通話記錄：一個電話圖示加一句話，裝在泡泡裡（微信原生就是這樣）。
+            //    她填的備註原樣顯示，沒填就寫「通話已結束」。
+            html = html.replace(tagRe(MSG_TAG.CALL), (m, t, txt) => {
+                const note = String(txt || '').replace(/['"]/g, '').trim();
+                return '<span class="wx-call-rec"><i class="fa-solid fa-phone"></i>'
+                    + (note || '通話已結束') + '</span>';
+            });
             html = html.replace(tagRe(MSG_TAG.VOICE), (m, t, txt) => { const cleanTxt = txt.replace(/['"]/g, ''); const sec = Math.min(60, Math.max(2, Math.ceil(cleanTxt.length/2))); return `<div class="wx-voice-wrapper" onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"><div class="wx-voice-box" style="width:${60+sec*2}px"><span style="margin:0 5px">((</span><span>${sec}"</span></div><div class="wx-trans-box"></div></div>`; });
             html = html.replace(tagRe(MSG_TAG.REDPACKET), (match, tag, content) => {
                 // 解析內容：支持 [金額|備註|紅包ID] 或舊格式

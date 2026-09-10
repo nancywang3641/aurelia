@@ -95,6 +95,9 @@
                這層無形的 70% 夾住 → 她說「預覽正常，套用後偏移，而且泡泡張不開」。
                .pbub-bubble 的 max-width 是相對這一層算的，兩邊都寫百分比會疊兩次。 */
             .wx-bubble-wrap { max-width: 70%; min-width: 0; }
+            /* 📞 通話記錄：電話圖示加一句話，跟一般訊息一樣裝在泡泡裡 */
+            .wx-call-rec { display: inline-flex; align-items: center; gap: 7px; }
+            .wx-call-rec i { font-size: 15px; opacity: 0.75; }
             .wx-bubble-content { max-width: 100%; padding: 10px 14px; border-radius: 6px; position: relative; font-size: 15px; line-height: 1.5; word-wrap: break-word; color: #000; display: flex; flex-direction: column; gap: 5px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
             .wx-group-name { font-size: 10px; color: #999; margin-bottom: 2px; margin-left: 10px; }
             /* 引用回覆：照微信擺在泡泡內、正文下面的一條灰塊。結構由 OS_API.chatQuote 產，兩個 app 共用 */
