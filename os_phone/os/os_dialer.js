@@ -300,7 +300,11 @@
             const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
             if (!Array.isArray(rec.messages)) rec.messages = [];
             const un = _userName();
-            rec.messages.push({ type: 'msg', isMe: true, content: text, sender: un, senderName: un });
+            // 🚨 通話裡講的話蓋一個章。記錄是跟微信共用的（那是刻意的，AI 才記得電話裡說過什麼），
+            //    但微信的聊天室不該把通話逐字稿當成聊天訊息鋪出來——她說「掛斷後通話的數據也會跑到聊天室」。
+            //    蓋了章之後，資料照樣在、AI 照樣讀得到，只是微信畫面上收起來，留通話開始與結束那兩筆。
+            //    順帶：聊天列表本來就有一條「整間都是通話記錄就不浮上來」的過濾，但從來沒有人蓋過這個章，那條等於是死的。
+            rec.messages.push({ type: 'msg', isMe: true, content: text, sender: un, senderName: un, _viaCall: true });
             await OS_DB.saveApiChat(contact.id, rec);
         } catch (e) { console.warn('[dialer] 先寫我說的話失敗', e); }
     }
@@ -395,7 +399,7 @@
                 rec.messages.push({ type: 'system', content: '未接聽 · ' + spM.text, _missed: true, _storyDate: spM.date, timestamp: Date.now() });
                 // 不接但補一句：當成他傳來的訊息寫進同一份記錄，微信那邊也看得到、標成未讀
                 if (note) {
-                    rec.messages.push({ type: 'msg', isMe: false, content: note, sender: contact.name, senderName: contact.name, timestamp: Date.now(), _afterMissed: true });
+                    rec.messages.push({ type: 'msg', isMe: false, content: note, sender: contact.name, senderName: contact.name, timestamp: Date.now(), _afterMissed: true, _viaCall: true });
                     rec.unread = true; rec.lastTime = Date.now();
                 }
                 await OS_DB.saveApiChat(contact.id, rec);
@@ -430,15 +434,29 @@
     // 通話畫面用「泡泡」顯示（與通話紀錄/微信一致），不再用單行字幕
     function _callLogEl() { return _root ? _root.querySelector('#dlr-call-log') : null; }
     function _scrollCallLog() { const l = _callLogEl(); if (l) l.scrollTop = l.scrollHeight; }
+    // 通話裡有兩種東西不准上畫面：媒體標籤的原文，跟協議裡那些不是人名的發話人標記。
+    // 她拍到的畫面上就寫著「Char」跟表情包標籤的原文——那是協議字串跑到畫面上，本身就是壞的。
+    const _PROTO_WHO = /^(Char|User|System|Notice|系統|系统|Assistant|AI)$/i;
+    function _stripTags(t) {
+        let s0 = String(t == null ? '' : t);
+        try {
+            const V = _w('WX_VIEW');
+            const all = (V && V.MSG_TAG && V.MSG_TAG.ALL) ? V.MSG_TAG.ALL : '';
+            if (all) s0 = s0.replace(new RegExp('\\[\\s*(?:' + all + ')\\s*[:：][^\\]]*\\]', 'gi'), ' ');
+        } catch (e) {}
+        return s0.replace(/^\[[^\]\n]{1,40}\]\s*/, '').replace(/\s{2,}/g, ' ').trim();
+    }
     function _bubbleHTML(m, name) {
         if (!m) return '';
         if (m.type && m.type !== 'msg') { const tx = m.content || m.time || ''; return tx ? '<div class="dlr-tx-time">' + _esc(_cut(String(tx), 40)) + '</div>' : ''; }
         if (!m.content) return '';
+        if (!_stripTags(m.content)) return '';   // 整則只有標籤（純貼圖之類）→ 通話裡不用出現
         const me = !!m.isMe;
-        const who = me ? '' : _esc(m.senderName || m.sender || name || '');
+        const rawWho = String(m.senderName || m.sender || '').trim();
+        const who = me ? '' : _esc((rawWho && !_PROTO_WHO.test(rawWho)) ? rawWho : (name || ''));
         return '<div class="dlr-tx-msg' + (me ? ' me' : '') + '">'
              + (who ? '<div class="dlr-tx-who">' + who + '</div>' : '')
-             + '<div class="dlr-tx-bubble">' + _esc(String(m.content)) + '</div></div>';
+             + '<div class="dlr-tx-bubble">' + _esc(_stripTags(m.content)) + '</div></div>';
     }
     function _appendCallBubble(isMe, content, name) {
         const l = _callLogEl(); if (!l) return;
@@ -458,7 +476,16 @@
         const OS_DB = _w('OS_DB'); const l = _callLogEl(); if (!l) return;
         let rec = null; try { if (OS_DB && OS_DB.getApiChat) rec = await OS_DB.getApiChat(contact.id); } catch (e) {}
         const ms = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
-        l.innerHTML = ms.map(function (m) { return _bubbleHTML(m, contact.name); }).join('');
+        // 🚨 只顯示「這一通」，不是整串聊天記錄。這份記錄跟微信共用，裡面混著打字的訊息與
+        //    好幾通電話；全部倒出來的話，講電話的畫面上會出現微信的訊息、貼圖、卡片——
+        //    她的原話是「通話面板怎麼有聊天室內容」。真的在講電話本來也看不到對方的聊天記錄。
+        //    從最後一筆「通話開始」切；切不到（舊資料沒有那筆）就只留最後幾則。
+        let from = -1;
+        for (let i = ms.length - 1; i >= 0; i--) { if (ms[i] && ms[i]._callStart) { from = i; break; } }
+        //    切不到就給空的：那代表這一通還沒接起來（通話開始是接通那一刻才寫的），
+        //    畫面上本來就不該有東西。退回「最後幾則」會把剛剛在微信打的字撈進來。
+        const seg = (from >= 0) ? ms.slice(from) : [];
+        l.innerHTML = seg.map(function (m) { return _bubbleHTML(m, contact.name); }).join('');
         _scrollCallLog();
     }
     function _enableSay(on) {
@@ -636,7 +663,7 @@
                         if (!Array.isArray(rec.messages)) rec.messages = [];
                         // 她說的那句在送出時就寫進去了（見上面），這裡只補對方的回覆
                         said.lines.forEach(function (t) {
-                            rec.messages.push({ type: 'msg', isMe: false, content: t, sender: contact.name, senderName: contact.name, raw: _rawFor(contact, t) });
+                            rec.messages.push({ type: 'msg', isMe: false, content: t, sender: contact.name, senderName: contact.name, raw: _rawFor(contact, t), _viaCall: true });
                         });
                         await OS_DB.saveApiChat(contact.id, rec);
                     } catch (e) { console.warn('[dialer] 寫回 DB 失敗', e); }

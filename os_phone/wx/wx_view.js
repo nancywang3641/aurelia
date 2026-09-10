@@ -953,7 +953,11 @@
                 const c = chats[activeId];
                 headerTitle = c.name + (c.isGroup ? ` (${c.members.length})` : '');
                 const msgs = c.messages;
-                roomContent = msgs.map((msg, index) => this.renderBubble(msg, c, false, index)).join('');
+                // 📞 通話裡講的話不畫成聊天泡泡。它們跟微信共用同一份記錄（刻意的，AI 才記得
+                //    電話裡說過什麼），但那是另一個管道的東西，鋪在聊天室裡會很怪。
+                //    留下的是「通話開始／結束」那兩筆系統訊息，就像現實微信只留一條通話記錄。
+                //    回傳空字串而不是先過濾，是為了讓索引跟訊息陣列對齊（引用與編輯靠它定位）。
+                roomContent = msgs.map((msg, index) => (msg && msg._viaCall) ? '' : this.renderBubble(msg, c, false, index)).join('');
 
                 // 嘗試讀取背景圖設定
                 const storageKey = `wx_chat_settings_${activeId}`;
