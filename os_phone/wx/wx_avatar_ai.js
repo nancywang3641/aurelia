@@ -127,6 +127,103 @@
             + '這兩行都不會變成聊天泡泡。改了對方就會在聊天列表跟資料頁看到。\n'
             + '有理由才改：換了心境、想避人耳目、跟誰鬧翻了。不要每次聊天都改，也不要一次連改好幾次。';
     }
+    // ── 讓角色看我的頭像 ────────────────────────────────────────
+    // 🚨 圖只送一次。她換頭像那一輪把圖夾進去，同時要角色寫一句描述回來；
+    //    描述存起來當長期記憶，之後每輪只注入那句文字，圖再也不送。
+    //    這是她跟角色討論出來的做法，理由是對的：圖留在歷史裡會越積越重——
+    //    創作室早就為了同一件事做了「只保留最近幾條帶圖訊息」的修剪器。
+    //    判斷「換過了沒」不靠事件，靠比對「描述是哪張圖生的」，所以怎麼換都不會漏。
+    const SEE_ON_KEY = 'wx_seeme_enabled';
+    const SEE_MEM_KEY = 'wx_seeme_memory';   // { src: 當時那張圖的識別, desc: 它寫的描述 }
+    const SEE_MAX_PX = 256;                  // 送出去之前縮到這個邊長，頭像不需要更大
+
+    function seeEnabled() { try { return localStorage.getItem(SEE_ON_KEY) === '1'; } catch (e) { return false; } }
+    function setSeeEnabled(on) { try { localStorage.setItem(SEE_ON_KEY, on ? '1' : '0'); } catch (e) {} }
+    function seeMemory() {
+        try { const o = JSON.parse(localStorage.getItem(SEE_MEM_KEY) || 'null'); return (o && typeof o === 'object') ? o : null; } catch (e) { return null; }
+    }
+    function setSeeMemory(src, desc) {
+        try { localStorage.setItem(SEE_MEM_KEY, JSON.stringify({ src: String(src || ''), desc: String(desc || ''), ts: Date.now() })); } catch (e) {}
+    }
+    function clearSeeMemory() { try { localStorage.removeItem(SEE_MEM_KEY); } catch (e) {} }
+
+    function myAvatarSrc() {
+        try { const P = win.WX_PROFILE; if (P && P.get) return String(P.get().avatar || ''); } catch (e) {}
+        return '';
+    }
+    // 這張圖它看過了沒？沒有頭像就當作沒事要做。
+    function seePending() {
+        if (!seeEnabled()) return false;
+        const src = myAvatarSrc();
+        if (!src) return false;
+        const m = seeMemory();
+        return !(m && m.src === src && m.desc);
+    }
+
+    // 把頭像變成可以送出去的 data 網址，順便縮小。拿不到就回空的，讓呼叫端安靜跳過。
+    async function myAvatarDataUrl() {
+        const src = myAvatarSrc();
+        if (!src) return '';
+        let url = src;
+        if (/^(img_|avt_)/.test(src)) {
+            try { url = await win.OS_DB.getImage(src); } catch (e) { return ''; }
+        }
+        if (!url) return '';
+        try {
+            const img = await new Promise(function (res, rej) {
+                const i = new Image();
+                i.onload = function () { res(i); };
+                i.onerror = rej;
+                // crossOrigin 只對遠端網址有意義；掛在 data: 或 blob: 上反而會擋住載入
+                if (/^https?:/i.test(url)) i.crossOrigin = 'anonymous';
+                i.src = url;
+            });
+            const scale = Math.min(1, SEE_MAX_PX / Math.max(img.width || 1, img.height || 1));
+            const c = win.document.createElement('canvas');
+            c.width = Math.max(1, Math.round((img.width || SEE_MAX_PX) * scale));
+            c.height = Math.max(1, Math.round((img.height || SEE_MAX_PX) * scale));
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            return c.toDataURL('image/jpeg', 0.82);
+        } catch (e) {
+            // 畫不進 canvas（多半是跨網域）。本來就是 data 網址的話直接送就好——
+            //    它已經是可以送出去的東西，只是沒縮到而已，不該因為縮不了就整個丟掉。
+            if (/^data:image/i.test(url)) return url;
+            return /^https?:/i.test(url) ? url : '';
+        }
+    }
+
+    // 平時注入的那句話（便宜）。還沒看過就回空的。
+    function seeMemoryText() {
+        if (!seeEnabled()) return '';
+        const m = seeMemory();
+        if (!m || !m.desc) return '';
+        if (m.src !== myAvatarSrc()) return '';   // 換過了，舊描述先不用
+        return '[對方的大頭貼]\n' + m.desc + '\n這是他現在的大頭貼，你看過。除非他提起，不然不用主動講。';
+    }
+
+    // 只在「換了還沒看過」那一輪用：一則帶圖的訊息，順便要它寫一句回來。
+    async function seeOnceMessage() {
+        if (!seePending()) return null;
+        const data = await myAvatarDataUrl();
+        if (!data) return null;
+        return {
+            role: 'user',
+            content: [
+                { type: 'text', text: '（這是我現在的大頭貼，看一眼就好。'
+                    + '看完在回覆的最後單獨一行寫：[系統: 頭像 一句話描述]，把你看到的寫下來，'
+                    + '之後就不用再看圖了。那一行不會變成聊天訊息。不要在對話裡特地提這件事。）' },
+                { type: 'image_url', image_url: { url: data } }
+            ]
+        };
+    }
+    // 它寫回來的描述：存起來，並記住是哪張圖生的
+    function rememberSeen(desc) {
+        const d = String(desc || '').trim();
+        if (!d) return false;
+        setSeeMemory(myAvatarSrc(), d);
+        return true;
+    }
+
     win.WX_AVATAR_AI = {
         isEnabled: isEnabled, setEnabled: setEnabled,
         getProvider: getProvider, setProvider: setProvider,
@@ -134,6 +231,10 @@
         instruction: instruction,
         eventInstruction: eventInstruction,
         profileInstruction: profileInstruction,
+        seeEnabled: seeEnabled, setSeeEnabled: setSeeEnabled,
+        seeMemory: seeMemory, clearSeeMemory: clearSeeMemory,
+        seePending: seePending, seeMemoryText: seeMemoryText,
+        seeOnceMessage: seeOnceMessage, rememberSeen: rememberSeen,
         apply: apply,
         ON_KEY: ON_KEY, SRC_KEY: SRC_KEY
     };

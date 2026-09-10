@@ -1228,6 +1228,10 @@
                     // 🪪 改名與改簽名同理：不花錢，一律教。
                     const _pf = (_av && _av.profileInstruction) ? _av.profileInstruction() : '';
                     if (_pf) apiMessages.push({ role: 'system', content: _pf });
+                    // 👁 讓角色看我的頭像：平時只注入它自己寫過的那句描述（便宜）；
+                    //    只有「換了還沒看過」那一輪才把圖夾進去，看完它會寫一句回來取代掉。
+                    const _seeTxt = (_av && _av.seeMemoryText) ? _av.seeMemoryText() : '';
+                    if (_seeTxt) apiMessages.push({ role: 'system', content: _seeTxt });
                 } catch (e) {}
             }
 

@@ -771,6 +771,12 @@
             const avBadge = avOn
                 ? '<span style="background:#07c160; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
                 : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
+            const seeOn = !!(_AV && _AV.seeEnabled && _AV.seeEnabled());
+            const seeMem = (_AV && _AV.seeMemory) ? _AV.seeMemory() : null;
+            const seeBadge = seeOn
+                ? '<span style="background:#07c160; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
+                : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
+            const seeText = (seeMem && seeMem.desc) ? String(seeMem.desc) : '還沒看過';
             const AV_SRC_LABEL = { '': '跟著圖片設置', pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館原生', custom_api: '自訂接口', comfyui_direct: 'ComfyUI 直連' };
             const avOptions = Object.keys(AV_SRC_LABEL).map(function (v) {
                 return '<option value="' + v + '"' + (avSrc === v ? ' selected' : '') + '>' + AV_SRC_LABEL[v] + '</option>';
@@ -805,6 +811,11 @@
                 .wx-cell-icon svg { width: 22px; height: 22px; }
                 .wx-cell-text { flex: 1; font-size: 16px; color: ${cellText}; }
                 .wx-cell-arrow { font-size: 18px; color: ${arrowColor}; }
+                /* 🚨 右邊帶一段長文字的格子：標籤要保持一行，讓右邊那段自己縮。
+                   不設的話 .wx-cell-text 的 flex:1 會被長文字擠成一字一行。 */
+                .wx-cell-text.is-fixed { flex: 0 0 auto; white-space: nowrap; }
+                .wx-cell-sub { flex: 1; min-width: 0; margin-right: 6px; text-align: right;
+                    font-size: 13px; color: ${idColor}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             `;
             const iconPay = `<svg viewBox="0 0 24 24" fill="#07c160"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V19h-2.67v-1.07H9.27v-1.6h1.47v-1.73H9.41c-1.39 0-2.28-.96-2.28-2.31 0-1.44.97-2.33 2.6-2.33V9h2.67v1.07h1.47v1.6h-1.47v1.73h1.33c1.39 0 2.28.96 2.28 2.31 0 1.44-.97 2.38-2.6 2.38zM12 12.27c-.63 0-.93-.28-.93-.76 0-.49.33-.76.93-.76v1.52zm-1.33 2.53v1.52c.63 0 .93.28.93.76 0 .49-.33.76-.93.76z"/></svg>`;
             const iconFav = `<svg viewBox="0 0 24 24" fill="#fa9d3b"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/><path d="M7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/></svg>`;
@@ -855,6 +866,17 @@
                         <div class="wx-cell-text">頭像來源</div>
                         <select id="wx-av-src" style="border:none; background:transparent; font-size:15px; color:${idColor}; text-align:right; max-width:150px;"
                                 onchange="(window.parent.wxApp || window.wxApp).setAvatarAiSource(this.value)">${avOptions}</select>
+                    </div>
+                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleSeeMe()">
+                        <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-eye"></i></span></div>
+                        <div class="wx-cell-text">讓角色看我的頭像</div>
+                        ${seeBadge}
+                    </div>
+                    <div class="wx-cell" style="${seeOn ? '' : 'display:none;'}" onclick="(window.parent.wxApp || window.wxApp).forgetMyAvatar()">
+                        <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-quote-left"></i></span></div>
+                        <div class="wx-cell-text is-fixed">它記得的樣子</div>
+                        <div class="wx-cell-sub">${seeText}</div>
+                        <div class="wx-cell-arrow">›</div>
                     </div>
                 </div>
 

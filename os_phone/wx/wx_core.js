@@ -354,6 +354,18 @@
             return { type: 'system', content: '', isMe: false };
         }
 
+        // 👁 它看完我的頭像之後寫回來的那一句 → 存起來當長期記憶，之後就不用再送圖。
+        //    這一行不給她看：她要確認的話在「我」那頁看得到它記住了什麼。
+        //    ⚠️ 排在換頭像那條之前也沒關係——那條規定動詞在前（換／改頭像），這條是光禿禿的「頭像」開頭。
+        const seenMatch = content.match(/^\s*(?:頭像|头像|大頭貼|大头贴)\s*[:：]?\s*(.+)$/);
+        if (seenMatch) {
+            try {
+                const _avS = win.WX_AVATAR_AI || window.WX_AVATAR_AI;
+                if (_avS && _avS.rememberSeen) _avS.rememberSeen(String(seenMatch[1] || '').replace(/\]+\s*$/, '').trim());
+            } catch (e) {}
+            return { type: 'system', content: '', isMe: false };
+        }
+
         // 處理 [System: 改名 XXX]。以前完全沒有這條，AI 想改名只能寫成一句話、變成一顆泡泡。
         // 做的事跟她在資料頁手動改名一模一樣：改顯示名、重畫、存檔。不碰通訊錄，跟手動那條一致。
         const renameMatch = content.match(/^\s*(?:改名|更名|改暱稱|改昵称|換名字|换名字|改個名字|改个名字|rename)\s*(?:為|为|成|to)?\s*[:：]?\s*(.+)$/i);
@@ -1552,6 +1564,21 @@
             this.render();
             try { win.toastr && (next ? win.toastr.success('角色可以自己換頭像了', '微信') : win.toastr.info('已關閉', '微信')); } catch (e) {}
         },
+        // 👁 讓角色看我的頭像：開了之後，換頭像的下一輪會夾一張圖給它，看完它自己寫一句記著。
+        toggleSeeMe: function () {
+            const A = win.WX_AVATAR_AI;
+            if (!A) { try { win.toastr && win.toastr.info('模塊還沒載入完，等一下再試'); } catch (e) {} return; }
+            const next = !A.seeEnabled();
+            A.setSeeEnabled(next);
+            this.render();
+            try { win.toastr && (next ? win.toastr.success('下次換頭像時它會看一眼', '微信') : win.toastr.info('已關閉', '微信')); } catch (e) {}
+        },
+        forgetMyAvatar: function () {
+            const A = win.WX_AVATAR_AI;
+            if (A && A.clearSeeMemory) A.clearSeeMemory();
+            this.render();
+            try { win.toastr && win.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
+        },
         setAvatarAiSource: function (v) {
             const A = win.WX_AVATAR_AI;
             if (A && A.setProvider) A.setProvider(v);
@@ -2142,6 +2169,15 @@
                         console.log('[WX] 附上待處理清單');
                     }
                 } catch (e) { console.warn('[WX] 待處理清單組裝失敗（不影響送出）', e); }
+                // 👁 換了頭像但它還沒看過 → 這一輪夾一張進去。看完它會寫一句描述回來，
+                //    之後每輪只送那句文字，圖再也不送——不然圖留在歷史裡會越積越重。
+                try {
+                    const _avSee = win.WX_AVATAR_AI;
+                    if (_avSee && _avSee.seeOnceMessage) {
+                        const _seeMsg = await _avSee.seeOnceMessage();
+                        if (_seeMsg) { messages.push(_seeMsg); console.log('[WX] 這輪夾了頭像給它看'); }
+                    }
+                } catch (e) { console.warn('[WX] 頭像夾帶失敗（不影響送出）:', e); }
 
                 console.log('[WX] 呼叫 OS_API.chat…');
                 try {
