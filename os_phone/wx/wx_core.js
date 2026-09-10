@@ -429,6 +429,16 @@
         return null;
     }
 
+    // 🚨行首的 [xxx] 是發話人還是媒體標籤？清單跟 wx_view 共用同一份（繁簡都齊）。
+    //   以前這裡兩處各自手打、繁體全缺，AI 寫 [視頻] 這種裸標籤會被當成某個人在說話。
+    //   保底那份只是防 wx_view 還沒載入，正常情況一律走共用的。
+    function _isMediaTag(tag) {
+        const V = win.WX_VIEW || window.WX_VIEW;
+        const tags = (V && V.MSG_TAG && V.MSG_TAG.ALL) ? V.MSG_TAG.ALL
+            : '语音|語音|Voice|图片|圖片|照片|Img|红包|紅包|RedPacket|表情包|Sticker|转账|轉帳|轉賬|Transfer|位置|Location|定位|视频|視頻|影片|Video|文件|File|礼品|礼物|禮品|禮物|Gift';
+        return new RegExp('^(?:' + tags + ')$', 'i').test(String(tag == null ? '' : tag).trim());
+    }
+
     // --- 解析邏輯 (將長文本切成陣列) ---
     function parseAndProcess(fullText) {
         let cleanText = fullText.trim();
@@ -480,7 +490,7 @@
                 if (content && content.match(/\[\s*(?:紅包|RedPacket)\s*[:：]/i)) {
                     // 獲取發送者名稱
                     let senderName = tempCtx.chatName || "User";
-                    if (!tag.match(/^(语音|Voice|图片|Img|红包|RedPacket|表情包|Sticker|转账|Transfer|位置|Location|定位|视频|Video|文件|File|礼品|Gift|礼物)$/i)) {
+                    if (!_isMediaTag(tag)) {
                         senderName = tag;
                     }
                     ensureRedPacketData(content, senderName);
@@ -548,7 +558,7 @@
 
             if (nameMatch) {
                 const tag = nameMatch[1];
-                if (!tag.match(/^(语音|Voice|图片|Img|红包|RedPacket|表情包|Sticker|转账|Transfer|位置|Location|定位|视频|Video|文件|File|礼品|Gift|礼物)$/i)) {
+                if (!_isMediaTag(tag)) {
                     sender = tag; content = nameMatch[2].trim();
                     if (sender.match(/^(You|Me|我|Self|主角|User)$/i)) {
                         isMe = true;
@@ -585,16 +595,25 @@
             const singleRaw = `[Chat: ${ctx.chatName}|${ctx.chatId}]\n[With: ${memberStr}]\n[${sender}] ${content}`;
 
             if (GLOBAL_CHATS[ctx.chatId]) {
+                // 引用回覆：標記在內容最前面，解析規則跟跑團同步、VN 手機共用同一份（OS_API.chatQuote）。
+                // 🚨這條路（AI 在 app 裡直接回覆）以前漏了解析，所以 AI 寫的 [引用|誰:那句話]
+                //   只會原樣留在泡泡開頭當文字，不會變成正文下面那條灰塊（她實測看到的就是這個）。
+                //   引用完後面沒東西就當它沒引用——只有一個引用塊沒正文不是一則訊息。
+                //   raw 保持原樣（含引用標記），重建時才還原得回來。
+                const _qp = (win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.parse(content) : null;
+                const _hasQ = !!(_qp && _qp.name && _qp.text && _qp.rest);
                 // 🔥 [Fix] NPC 訊息也打上 senderName 快照，防止 NPC 改名後歷史錯亂
-                const msgObj = { 
-                    type: 'msg', 
-                    isMe: isMe, 
-                    content: content, 
-                    sender: sender, 
+                const msgObj = {
+                    type: 'msg',
+                    isMe: isMe,
+                    content: _hasQ ? _qp.rest : content,
+                    sender: sender,
                     senderName: sender, // <--- 新增
-                    raw: singleRaw 
+                    quoteName: _hasQ ? _qp.name : '',
+                    quoteText: _hasQ ? _qp.text : '',
+                    raw: singleRaw
                 };
-                extractedMessages.push(msgObj); 
+                extractedMessages.push(msgObj);
             }
         });
         return extractedMessages;

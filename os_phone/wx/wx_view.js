@@ -14,13 +14,31 @@
     //   外面套了一層泡泡框——白泡泡時幾乎看不出來，換上深色泡泡主題就很明顯（Rae 實機抓到）。
     //   語音刻意不算在 CARD 裡：微信原生的語音訊息本來就是裝在泡泡裡的，它該吃泡泡樣式。
     // ⚠️只放「字串」不放編譯好的 regex：blockRegex 帶 g 旗標，共用同一個實例會被 lastIndex 咬。
+    // 🚨🚨繁簡兩種寫法都要列：模型愛寫哪種是它的事，她的世界觀是繁體所以繁體更常出現。
+    //   漏一個字的下場是那則訊息整條變成裸文字（她實測 [視頻: …] 與 [轉賬: …] 就這樣掉在畫面上）。
+    //   「轉賬」跟「轉帳」是同一個詞的兩種繁體寫法，兩個都要。
     const MSG_TAG = {
         STICKER: '表情包|Sticker',
-        IMAGE: '图片|圖片|Img',
+        IMAGE: '图片|圖片|照片|Img',
         VOICE: '语音|語音|Voice',
-        CARD: '视频|視頻|Video|文件|File|位置|Location|定位|转账|轉帳|Transfer|红包|RedPacket|礼品|礼物|Gift|链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|收款码|收款碼|收款|付款码|付款碼|WbShare'
+        TRANSFER: '转账|轉帳|轉賬|转賬|Transfer',
+        GIFT: '礼品|礼物|禮品|禮物|Gift',
+        REDPACKET: '红包|紅包|RedPacket',
+        LOCATION: '位置|Location|定位',
+        VIDEO: '视频|視頻|影片|Video',
+        FILE: '文件|File',
+        LINK: '链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|Url',
+        PAYCODE: '收款码|收款碼|收款|付款码|付款碼',   // ⚠️「收款」要排在帶「码/碼」的後面
+        WBSHARE: 'WbShare'
     };
+    // 自帶造型、泡泡要讓位的那些（語音刻意不在內：微信原生語音本來就裝在泡泡裡）
+    MSG_TAG.CARD = [MSG_TAG.TRANSFER, MSG_TAG.GIFT, MSG_TAG.REDPACKET, MSG_TAG.LOCATION,
+        MSG_TAG.VIDEO, MSG_TAG.FILE, MSG_TAG.LINK, MSG_TAG.PAYCODE, MSG_TAG.WBSHARE].join('|');
     MSG_TAG.ALL = [MSG_TAG.STICKER, MSG_TAG.IMAGE, MSG_TAG.CARD, MSG_TAG.VOICE].join('|');
+
+    // 「[標籤: 內容]」的比對式。捕獲組固定兩個（$1 標籤本身、$2 內容），
+    // 各條 replace 的 callback 簽名維持原樣。每次呼叫都給新實例——帶 g 旗標不能共用。
+    const tagRe = (tags) => new RegExp('\\[\\s*(' + tags + ')\\s*[:：]?\\s*(.*?)\\s*\\]', 'gi');
 
     // VN 頭像串接查詢：lorebook → mem cache → VN IndexedDB（最多到第4步，不生成）
     async function _resolveVNAvatar(name) {
@@ -60,7 +78,11 @@
     }
 
     window.WX_VIEW = {
-        
+
+        // 媒體標籤清單對外開放：wx_core 判斷「[xxx] 是發話人還是媒體標籤」時要用同一份，
+        // 各寫各的就會像這次一樣漂在繁體字上。
+        MSG_TAG: MSG_TAG,
+
         // 「發現」tab：跑團同步狀態。劇情裡的 <chat> 聊天室已直接進聊天列表與通訊錄，這頁只放同步與整理。
         getDiscoverHTML: function() {
             const app = '(window.parent.wxApp || window.wxApp)';
@@ -251,7 +273,7 @@
         // --- 2. 模塊解析 ---
         processModules: function(html, chatId, isMe) {
             const app = "(window.parent.wxApp || window.wxApp)"; const safeId = String(chatId);
-            html = html.replace(/\[\s*(转账|轉帳|Transfer)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => {
+            html = html.replace(tagRe(MSG_TAG.TRANSFER), (match, tag, content) => {
                 // 解析新格式：[转账: 价格|指定人物|備註|Tnx_ID]
                 // 兼容舊格式：[转账: 价格|備註|Tnx_ID] 或 [转账: 价格|Txn_ID]
                 let amount = '0', targetName = '', memo = '', txnId = '';
@@ -349,7 +371,7 @@
                     }
                 }
                 return `<div style="background:${bgColor}; padding:15px; border-radius:4px; color:${textColor}; min-width:210px; display:flex; flex-direction:column; gap:5px; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" ${clickAction}><div style="display:flex; align-items:center; gap:10px;"><div style="border:2px solid ${borderColor}; border-radius:50%; width:35px; height:35px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; flex-shrink:0;">${icon}</div><div style="overflow:hidden;"><div style="font-size:15px; font-weight:500; white-space:nowrap;">${title}</div><div style="font-size:12px; opacity:0.8; white-space:nowrap;">${sub}${(!isMe && !status) ? ' ¥' + amount : ''}</div></div></div><div style="font-size:10px; opacity:0.6; text-align:right; margin-top:4px; font-family:monospace; letter-spacing:1px; border-top:1px dashed rgba(255,255,255,0.3); padding-top:2px;">單號: ${displayId}</div></div>`; });
-            html = html.replace(/\[\s*(礼品|礼物|Gift)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => {
+            html = html.replace(tagRe(MSG_TAG.GIFT), (m, t, content) => {
                 // 解析新格式：[Gift: emoji+物品名|備註|Gft_ID] 或舊格式 [Gift: 物品名-价格]
                 let giftName = '', memo = '', giftId = '', price = "心意無價";
                 const parts = content.split(/[|｜]/).map(s => s.trim()).filter(s => s);
@@ -427,9 +449,9 @@
                 return `<div class="wx-gift-card-blue ${extraClass}" style="opacity:${opacity}" ${clickAction}><div class="wx-gift-top"><div class="wx-gift-icon-gold">${icon}</div><div class="wx-gift-title-text">${memo || '送你一份心意'}</div></div><div class="wx-gift-footer">${statusLabel}</div></div>`;
             });
             // 圖片走三個手機 app 共用的管道；ref 帶 chatId，訊息位置由 .wx-msg-row 的 data-msg-idx 補上
-            html = html.replace(/\[\s*(图片|圖片|Img)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), { app: 'wx', ref: safeId }) : content; });
-            html = html.replace(/\[\s*(语音|語音|Voice)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, txt) => { const cleanTxt = txt.replace(/['"]/g, ''); const sec = Math.min(60, Math.max(2, Math.ceil(cleanTxt.length/2))); return `<div class="wx-voice-wrapper" onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"><div class="wx-voice-box" style="width:${60+sec*2}px"><span style="margin:0 5px">((</span><span>${sec}"</span></div><div class="wx-trans-box"></div></div>`; });
-            html = html.replace(/\[\s*(红包|RedPacket)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => {
+            html = html.replace(tagRe(MSG_TAG.IMAGE), (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), { app: 'wx', ref: safeId }) : content; });
+            html = html.replace(tagRe(MSG_TAG.VOICE), (m, t, txt) => { const cleanTxt = txt.replace(/['"]/g, ''); const sec = Math.min(60, Math.max(2, Math.ceil(cleanTxt.length/2))); return `<div class="wx-voice-wrapper" onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"><div class="wx-voice-box" style="width:${60+sec*2}px"><span style="margin:0 5px">((</span><span>${sec}"</span></div><div class="wx-trans-box"></div></div>`; });
+            html = html.replace(tagRe(MSG_TAG.REDPACKET), (match, tag, content) => {
                 // 解析內容：支持 [金額|備註|紅包ID] 或舊格式
                 let amount = '0', memo = '恭喜發財，大吉大利', packetId = '';
                 const parts = content.split(/[|｜]/).map(s => s.trim()).filter(s => s);
@@ -493,10 +515,10 @@
                 
                 return `<div style="width: 220px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; font-family: sans-serif;" onclick="${app}.openRedPacketById('${packetId}')"><div style="background: #fa9d3b; padding: 15px; display: flex; align-items: center;"><div style="width: 32px; height: 42px; background: #e64340; border-radius: 4px; position: relative; margin-right: 12px; flex-shrink: 0; display:flex; justify-content:center; align-items:center; border:1px solid #f8b97a;"><div style="width:18px; height:18px; background:#f6d147; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#e64340; font-weight:bold; font-size:11px;">¥</div></div><div style="color: white; flex: 1; overflow:hidden;"><div style="font-size: 15px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${memo}</div><div style="font-size: 12px; opacity: 0.8;">領取紅包</div></div></div><div style="background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display:flex; justify-content:space-between; align-items:center;"><span>微信紅包</span></div></div>`;
             });
-            html = html.replace(/\[\s*(位置|Location|定位)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; return `<div style="width:230px; border-radius:6px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.1); background:#fff; cursor:default; font-family: sans-serif;"><div style="height:120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; position:relative; background-color:#e6e6e6;"><div style="width:100%; height:100%; background:rgba(0,0,0,0.05);"></div><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -80%); font-size:32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color:#e64340;"><i class="fa-solid fa-location-dot"></i></div></div><div style="background:#55d967; padding:10px 12px; color:white; display:flex; flex-direction:column; justify-content:center;"><div style="font-size:15px; font-weight:bold; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div><div style="font-size:11px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${address}</div></div></div>`; });
-            html = html.replace(/\[\s*(视频|Video)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${content}')"` : ''; return `<div ${vidClick} style="margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: ${isUrl ? 'pointer' : 'default'}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><div style="position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8;"></div><div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2;"><div style="width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px;"></div></div><div style="position: absolute; bottom: 10px; left: 12px; color: #fff; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div style="position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2;">00:15</div></div>`; });
-            html = html.replace(/\[\s*(文件|File)\s*[:：]?\s*(.*?)\s*\]/gi, (m, t, filename) => { filename = filename.trim(); let ext = filename.split('.').pop().toLowerCase(); let iconColor = '#999'; let iconText = '?'; if (ext.match(/ppt|pptx/)) { iconColor = '#f4511e'; iconText = 'P'; } else if (ext.match(/doc|docx/)) { iconColor = '#4b89dc'; iconText = 'W'; } else if (ext.match(/xls|xlsx/)) { iconColor = '#2e7d32'; iconText = 'X'; } else if (ext.match(/pdf/)) { iconColor = '#e53935'; iconText = '<span style="font-size:10px">PDF</span>'; } else if (ext.match(/txt/)) { iconColor = '#999'; iconText = 'T'; } let size = (Math.random() * 5 + 1).toFixed(1) + " MB"; return `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${filename}</div><div class="wx-file-size">${size}</div></div><div class="wx-file-icon" style="background:${iconColor}">${iconText}</div></div>`; });
-            html = html.replace(/\[\s*(表情包|Sticker)\s*[:：]?\s*(.*?)\s*\]/gi, (match, tag, content) => {
+            html = html.replace(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; return `<div style="width:230px; border-radius:6px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.1); background:#fff; cursor:default; font-family: sans-serif;"><div style="height:120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; position:relative; background-color:#e6e6e6;"><div style="width:100%; height:100%; background:rgba(0,0,0,0.05);"></div><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -80%); font-size:32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color:#e64340;"><i class="fa-solid fa-location-dot"></i></div></div><div style="background:#55d967; padding:10px 12px; color:white; display:flex; flex-direction:column; justify-content:center;"><div style="font-size:15px; font-weight:bold; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div><div style="font-size:11px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${address}</div></div></div>`; });
+            html = html.replace(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${content}')"` : ''; return `<div ${vidClick} style="margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: ${isUrl ? 'pointer' : 'default'}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><div style="position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8;"></div><div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2;"><div style="width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px;"></div></div><div style="position: absolute; bottom: 10px; left: 12px; color: #fff; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div style="position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2;">00:15</div></div>`; });
+            html = html.replace(tagRe(MSG_TAG.FILE), (m, t, filename) => { filename = filename.trim(); let ext = filename.split('.').pop().toLowerCase(); let iconColor = '#999'; let iconText = '?'; if (ext.match(/ppt|pptx/)) { iconColor = '#f4511e'; iconText = 'P'; } else if (ext.match(/doc|docx/)) { iconColor = '#4b89dc'; iconText = 'W'; } else if (ext.match(/xls|xlsx/)) { iconColor = '#2e7d32'; iconText = 'X'; } else if (ext.match(/pdf/)) { iconColor = '#e53935'; iconText = '<span style="font-size:10px">PDF</span>'; } else if (ext.match(/txt/)) { iconColor = '#999'; iconText = 'T'; } let size = (Math.random() * 5 + 1).toFixed(1) + " MB"; return `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${filename}</div><div class="wx-file-size">${size}</div></div><div class="wx-file-icon" style="background:${iconColor}">${iconText}</div></div>`; });
+            html = html.replace(tagRe(MSG_TAG.STICKER), (match, tag, content) => {
                 content = content.trim();
                 const _w = window.parent || window;
                 let src = null;
@@ -518,7 +540,7 @@
                 }
                 return `<div class="wx-stk-fallback-box">${safeLabel}</div>`;
             });
-            html = html.replace(/\[\s*WbShare\s*[:：]?\s*(.*?)\s*\]/gi, (match, content) => {
+            html = html.replace(tagRe(MSG_TAG.WBSHARE), (match, _tag, content) => {
                 const parts = content.split('|');
                 const author = (parts[0] || '').trim();
                 const text   = (parts[1] || '').trim();
@@ -526,12 +548,12 @@
                 return `<div class="wx-wb-share-card"><div class="wx-wb-share-top"><span class="wx-wb-share-logo">微博</span><span style="font-size:11px; opacity:0.8; margin-left:4px;">分享</span></div><div class="wx-wb-share-body"><div class="wx-wb-share-author">@${author}</div><div class="wx-wb-share-text">${short || '（查看原貼）'}</div></div></div>`;
             });
             // 鏈接/網頁分享卡（跑團用、不帶網址；重用 vn_styles.css 的 .wx-link-msg）
-            html = html.replace(/\[\s*(?:链接|連結|连结|鏈接|网址|網址|網頁|网页|Link|URL|Url)\s*[:：]?\s*(.*?)\s*\]/gi, (m, title) => {
+            html = html.replace(tagRe(MSG_TAG.LINK), (m, _tag, title) => {
                 const safe = (String(title || '').trim() || '網頁連結').replace(/&/g,'&amp;').replace(/</g,'&lt;');
                 return `<div class="wx-link-msg"><div class="wx-link-body"><div class="wx-link-title">${safe}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
             });
             // 收款碼（假容器：程式畫 QR 樣式 SVG，跑團用、不用生圖；重用 vn_styles.css 的 .wx-receive-msg）
-            html = html.replace(/\[\s*(?:收款码|收款碼|收款|付款码|付款碼)\s*[:：]?\s*(.*?)\s*\]/gi, (m, body) => {
+            html = html.replace(tagRe(MSG_TAG.PAYCODE), (m, _tag, body) => {
                 const parts = String(body || '').split('|'); const amt = (parts[0] || '').trim(); const memo = (parts[1] || '').trim();
                 const isNum = /^\d+(\.\d+)?$/.test(amt);
                 const amtDisp = (isNum ? '¥' + amt : (amt || '金額任意')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
