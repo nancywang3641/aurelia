@@ -35,6 +35,8 @@
                     <i class="fa-solid fa-palette"></i> 創作室
                 </div>
                 <div style="display:flex; gap:8px;">
+                    <!-- 還原舊版：對整輪作品的動作，跟清空放一起（以前是輸入框上方一顆淡淡的鈕、點了原地展開一大塊） -->
+                    <button class="studio-icon-btn" id="vn-studio-history-btn" hidden title="每次修改前會自動存一份舊版，可以還原到任一個"><i class="fa-solid fa-clock-rotate-left"></i> <span>還原舊版 <span id="vn-studio-history-count">0</span></span></button>
                     <button class="studio-icon-btn studio-preview-toggle" id="studio-header-preview-btn" title="預覽面板"><i class="fa-solid fa-eye"></i> <span>預覽</span></button>
                     <button class="studio-icon-btn danger" id="studio-clear-btn" title="清空當前頻道的對話紀錄"><i class="fa-solid fa-trash"></i> <span>清空</span></button>
                 </div>
@@ -47,32 +49,48 @@
 
                 <!-- ② 聊天區 -->
                 <div class="studio-left">
+                    <!-- 設定列：只顯示「現在選了什麼」，要改點「設定」換頁（只 vn_ui 顯示）。
+                         🚨 以前面板類型、誰來做、一整排要求 chip 全攤在輸入框上方，看不出哪個是什麼、怎麼調 -->
+                    <div class="studio-set-bar" id="studio-set-bar">
+                        <span class="studio-set-pill" id="studio-set-type">純展示</span>
+                        <span class="studio-set-pill" id="studio-set-iface" hidden></span>
+                        <button class="studio-set-open" id="studio-set-open" type="button"><i class="fa-solid fa-sliders"></i> 設定 <i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+
                     <div class="studio-chat-history" id="studio-chat-history"></div>
                     <button id="studio-preview-fab" class="studio-preview-fab" style="display:none;">
                         <span><i class="fa-solid fa-eye"></i></span><span id="studio-fab-label">查看預覽</span>
                     </button>
 
-                    <!-- VN 煉丹專用工具列：歷史快照 + 整體重做 -->
-                    <div id="studio-vn-toolbar">
-                        <div class="vn-toolbar-row">
-                            <button class="studio-history-btn" id="vn-studio-history-btn" title="每次修改前會自動存一份舊版；點開可看歷次版本、一鍵還原到任一個"><i class="fa-solid fa-clock-rotate-left"></i> 還原舊版 (<span id="vn-studio-history-count">0</span>)</button>
+                    <!-- 設定頁：蓋住左半邊（聊天那一欄），右邊作品照樣看得到。換頁不是展開 -->
+                    <div class="studio-set-page" id="studio-set-page" hidden>
+                        <div class="studio-set-hd">
+                            <button class="studio-set-back" id="studio-set-back" type="button" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>
+                            <span>設定</span>
                         </div>
-                        <div id="vn-studio-history-area"></div>
+                        <div class="studio-set-body">
+                            <div class="studio-set-sec">面板類型</div>
+                            <div class="studio-type-row" id="studio-type-row">
+                                <button class="studio-type active" data-type="純展示" type="button"><b>純展示</b><span>把劇情資料漂亮顯示出來</span></button>
+                                <button class="studio-type" data-type="純應用" type="button"><b>純應用</b><span>按一下就生成內容或圖</span></button>
+                                <button class="studio-type" data-type="共用" type="button"><b>共用</b><span>既顯示資料，又能生成</span></button>
+                            </div>
+                            <!-- 誰來做：主接口／宿舍住戶。只有宿舍接上橋時才出現（沒小機的人看不到這格）-->
+                            <div class="studio-iface-wrap" id="studio-iface-wrap" hidden>
+                                <div class="studio-set-sec">誰來做</div>
+                                <select class="studio-iface" id="studio-iface"></select>
+                                <div class="studio-set-note">主接口是設置裡的主模型；宿舍住戶是你電腦上的小機，做得慢但有工具</div>
+                            </div>
+                            <div class="studio-set-sec">要求 <small>點了會跟著下一句一起送</small></div>
+                            <div class="studio-chips-row" id="studio-chips-row"></div>
+                            <div class="studio-set-sec">功能 <small>開著的每一輪都會帶上</small></div>
+                            <div class="studio-feat-list" id="studio-feat-list"></div>
+                        </div>
                     </div>
 
                     <div class="studio-input-wrap">
-                        <!-- 面板類型：開頭就選好，AI 第一輪就知道要做哪種（只在 VN UI 模式顯示）-->
-                        <div class="studio-type-row" id="studio-type-row">
-                            <span class="studio-type-label">面板類型</span>
-                            <button class="studio-type active" data-type="純展示" title="只把劇情資料漂亮顯示出來，不生成">純展示</button>
-                            <button class="studio-type" data-type="純應用" title="會用 AI 生成內容/圖的功能面板（按一下即生）">純應用</button>
-                            <button class="studio-type" data-type="共用" title="既展示資料、又能生成">共用</button>
-                            <!-- 誰來做：主接口／宿舍住戶。只有宿舍接上橋時才出現（沒小機的人看不到這格）-->
-                            <span class="studio-iface-wrap" id="studio-iface-wrap" hidden><span class="studio-type-label">誰來做</span><select class="studio-iface" id="studio-iface" title="主接口是設置裡的主模型；宿舍住戶是你電腦上的小機，做得慢但有工具"></select></span>
-                        </div>
-
-                        <!-- ⚡ 組件快捷：常用 UI 話術 chip，點一下塞進輸入框可改再送（只 vn_ui 顯示）-->
-                        <div class="studio-chips-row" id="studio-chips-row"></div>
+                        <!-- 已選的要求與開著的功能：可以直接按 × 拿掉（只 vn_ui、有選才出現）-->
+                        <div class="studio-picked" id="studio-picked"></div>
 
                         <!-- 待發送的圖片縮圖列（有圖才顯示） -->
                         <div class="studio-pending-images" id="studio-pending-images"></div>
@@ -91,6 +109,8 @@
                     <div class="studio-drawer-handle" id="studio-drawer-handle"></div>
                     <div class="studio-right-header">
                         <div class="studio-tab active" data-tab="preview"><i class="fa-solid fa-eye"></i> 畫布預覽</div>
+                        <!-- 格式與說明：標籤、給劇本 AI 的說明、資料格式。以前疊在預覽上面，把作品推到下面去 -->
+                        <div class="studio-tab" data-tab="info" id="studio-tab-info" hidden><i class="fa-solid fa-file-lines"></i> 格式與說明</div>
                         <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;"><i class="fa-solid fa-puzzle-piece"></i> VN組件</div>
                     </div>
                     <div class="studio-preview-content" id="studio-preview-content">
@@ -98,6 +118,7 @@
                             <div class="studio-empty">尚未生成任何內容。<br><br>請輸入您的點子，讓 AI 為您創作。</div>
                         </div>
                     </div>
+                    <div class="studio-info-content" id="studio-info-content" hidden></div>
                     <div class="studio-source-content" id="studio-source-content"></div>
                     <div id="studio-gallery-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
                         <div id="studio-gallery-toolbar" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
@@ -111,6 +132,15 @@
                     <div class="studio-action-area">
                         <button class="studio-export-btn" id="studio-export-btn"><i class="fa-solid fa-check"></i> 確定創建</button>
                         <button class="studio-export-btn" id="studio-publish-btn" style="background:linear-gradient(135deg,#e67e22,#d35400); border-color:#d35400; margin-left:10px; display:none;"><i class="fa-solid fa-rocket"></i> 發布至世界書</button>
+                    </div>
+                </div>
+                <!-- 還原舊版：清單開在彈窗裡（以前在輸入框上方原地展開，把聊天擠掉一大塊）。
+                     #vn-studio-history-area 由 os_studio_diff_engine.js 的 renderVNHistoryArea 畫 -->
+                <div class="studio-hist-modal" id="studio-hist-modal" hidden>
+                    <div class="studio-hist-card">
+                        <div class="studio-hist-hd"><span><i class="fa-solid fa-clock-rotate-left"></i> 還原舊版</span>
+                            <button class="studio-hist-x" id="studio-hist-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>
+                        <div id="vn-studio-history-area"></div>
                     </div>
                 </div>
                 <!-- 🎨 劇情面板主題 view（頂層 mode，獨立全區，由 .top-theme 控制顯示） -->
@@ -615,34 +645,81 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         _studioSelectedChips.clear();
         return list.length ? ('[用戶指定元素] ' + list.join('、')) : '';
     }
+    // 設定頁裡分兩區：「要求」＝元素 chip（這一輪有效，送出即清）、「功能」＝開關（跨輪記住）。
+    // 輸入框上方只放「已選的」，每個有 × 可以直接拿掉——主畫面不再攤開整排 chip。
+    // 🚨 以前兩種混在同一排、長一樣，看不出哪個點了會一直開著、哪個送一次就沒了。
+    const _chipLabel = c => String(c.label || '').replace(/^[^\p{L}\p{N}]+/u, '').trim();   // 內建功能名前面有 emoji，畫面上用 FA 圖示
+    const _chipSendText = c => (c.text && String(c.text).trim()) || c.label;
+    const _FEAT_ICON = { img: 'fa-image', tochat: 'fa-share-from-square' };
     function renderStudioChips() {
         const row = document.getElementById('studio-chips-row');
-        if (!row) return;
-        const all = STUDIO_CHIP_BUILTIN.concat(_studioLoadChips());
-        const sendTextOf = c => (c.text && String(c.text).trim()) || c.label;
-        row.innerHTML = all.map((c, i) => {
-            const feat = !!c.feature;
-            const on = feat ? _studioActiveFeatures.has(c.key) : _studioSelectedChips.has(sendTextOf(c));
-            return `<button class="studio-chip${feat ? ' studio-chip-feature' : ''}${on ? ' active' : ''}" data-ci="${i}">${_sgcEsc(c.label)}</button>`;
-        }).join('')
-            + '<button class="studio-chip studio-chip-manage" id="studio-chip-manage"><i class="fa-solid fa-sliders"></i> 管理</button>';
-        row.querySelectorAll('[data-ci]').forEach(b => b.onclick = () => {
-            const c = all[parseInt(b.getAttribute('data-ci'), 10)];
-            if (!c) return;
-            if (c.feature) {
-                // 功能 chip：toggle 啟用（跨輪記住），用法送出時才併進請求
-                if (_studioActiveFeatures.has(c.key)) _studioActiveFeatures.delete(c.key); else _studioActiveFeatures.add(c.key);
-                _studioSaveActiveFeatures();
-                b.classList.toggle('active', _studioActiveFeatures.has(c.key));
-            } else {
-                // 元素 chip：toggle 選取（這一輪有效），送出時接在使用者文字後面，不碰輸入框
-                const k = sendTextOf(c);
+        const feats = document.getElementById('studio-feat-list');
+        const elems = STUDIO_CHIP_BUILTIN.filter(c => !c.feature).concat(_studioLoadChips());
+        const featList = STUDIO_CHIP_BUILTIN.filter(c => c.feature);
+        if (row) {
+            row.innerHTML = elems.map((c, i) =>
+                `<button class="studio-chip${_studioSelectedChips.has(_chipSendText(c)) ? ' active' : ''}" type="button" data-ei="${i}">${_sgcEsc(_chipLabel(c))}</button>`).join('')
+                + '<button class="studio-chip studio-chip-manage" id="studio-chip-manage" type="button"><i class="fa-solid fa-plus"></i> 自訂</button>';
+            row.querySelectorAll('[data-ei]').forEach(b => b.onclick = () => {
+                const c = elems[parseInt(b.getAttribute('data-ei'), 10)];
+                if (!c) return;
+                const k = _chipSendText(c);
                 if (_studioSelectedChips.has(k)) _studioSelectedChips.delete(k); else _studioSelectedChips.add(k);
-                b.classList.toggle('active', _studioSelectedChips.has(k));
-            }
+                renderStudioChips();
+            });
+            const mg = row.querySelector('#studio-chip-manage');
+            if (mg) mg.onclick = _studioOpenChipModal;
+        }
+        if (feats) {
+            feats.innerHTML = featList.map(c => {
+                const on = _studioActiveFeatures.has(c.key);
+                return `<button class="studio-feat${on ? ' on' : ''}" type="button" data-fk="${_sgcEsc(c.key)}">`
+                    + `<i class="fa-solid ${_FEAT_ICON[c.key] || 'fa-bolt'}"></i><span>${_sgcEsc(_chipLabel(c))}</span>`
+                    + `<span class="studio-feat-sw" aria-hidden="true"></span></button>`;
+            }).join('');
+            feats.querySelectorAll('[data-fk]').forEach(b => b.onclick = () => {
+                const k = b.getAttribute('data-fk');
+                if (_studioActiveFeatures.has(k)) _studioActiveFeatures.delete(k); else _studioActiveFeatures.add(k);
+                _studioSaveActiveFeatures();
+                renderStudioChips();
+            });
+        }
+        _studioRenderPicked(elems, featList);
+    }
+    function _studioRenderPicked(elems, featList) {
+        const box = document.getElementById('studio-picked');
+        if (!box) return;
+        const picked = elems.filter(c => _studioSelectedChips.has(_chipSendText(c))).map(c => ({ kind: 'e', key: _chipSendText(c), label: _chipLabel(c) }))
+            .concat(featList.filter(c => _studioActiveFeatures.has(c.key)).map(c => ({ kind: 'f', key: c.key, label: _chipLabel(c), icon: _FEAT_ICON[c.key] })));
+        box.innerHTML = picked.map((p, i) =>
+            `<span class="studio-picked-tag${p.kind === 'f' ? ' is-feat' : ''}">`
+            + (p.icon ? `<i class="fa-solid ${p.icon}"></i>` : '') + `<span>${_sgcEsc(p.label)}</span>`
+            + `<button type="button" data-pi="${i}" aria-label="拿掉"><i class="fa-solid fa-xmark"></i></button></span>`).join('');
+        box.querySelectorAll('[data-pi]').forEach(b => b.onclick = () => {
+            const p = picked[parseInt(b.getAttribute('data-pi'), 10)];
+            if (!p) return;
+            if (p.kind === 'e') _studioSelectedChips.delete(p.key);
+            else { _studioActiveFeatures.delete(p.key); _studioSaveActiveFeatures(); }
+            renderStudioChips();
         });
-        const mg = row.querySelector('#studio-chip-manage');
-        if (mg) mg.onclick = _studioOpenChipModal;
+    }
+    // 設定列上的兩顆標籤＝現在選了什麼
+    function _studioSyncSetBar() {
+        const t = document.getElementById('studio-set-type');
+        if (t) t.textContent = _vnPanelType;
+        const f = document.getElementById('studio-set-iface');
+        const wrap = document.getElementById('studio-iface-wrap');
+        const sel = document.getElementById('studio-iface');
+        if (f) {
+            const show = !!(wrap && !wrap.hidden && sel);
+            f.hidden = !show;
+            if (show) f.textContent = (sel.options[sel.selectedIndex] || {}).text || '主接口';
+        }
+    }
+    function _studioSetPage(open) {
+        const pg = document.getElementById('studio-set-page');
+        if (pg) pg.hidden = !open;
+        if (open) renderStudioChips();
     }
     function _studioOpenChipModal() {
         const m = document.getElementById('studio-chip-modal'); if (!m) return;
@@ -654,7 +731,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     function _studioRenderChipList() {
         const list = document.getElementById('studio-chip-list'); if (!list) return;
         const user = _studioLoadChips();
-        if (!user.length) { list.innerHTML = '<div class="studio-chip-empty">還沒有自訂快捷。上面填一個存起來，就會出現在輸入框上方。</div>'; return; }
+        if (!user.length) { list.innerHTML = '<div class="studio-chip-empty">還沒有自訂的要求。上面填一個存起來，就會出現在設定頁的「要求」裡。</div>'; return; }
         list.innerHTML = user.map((c, i) => `<div class="studio-chip-litem">
             <span class="studio-chip-litem-label">${_sgcEsc(c.label)}</span>
             <span class="studio-chip-litem-text">${_sgcEsc(c.text)}</span>
@@ -721,15 +798,20 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         // Enter 發送、Shift+Enter 換行（恢復原邏輯）
         inputEl.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
 
-        // 面板類型選擇器（純展示 / 純應用 / 共用）
+        // 面板類型選擇器（純展示 / 純應用 / 共用）——在設定頁裡；設定列那顆標籤跟著換
         document.querySelectorAll('#studio-type-row .studio-type').forEach(b => b.onclick = () => {
             _vnPanelType = b.dataset.type;
             document.querySelectorAll('#studio-type-row .studio-type').forEach(x => x.classList.toggle('active', x === b));
+            _studioSyncSetBar();
         });
         // 誰來做（主接口／宿舍住戶）
         renderStudioIface();
         const ifaceSel = document.getElementById('studio-iface');
-        if (ifaceSel) ifaceSel.onchange = () => { _vnInterface = ifaceSel.value || 'main'; try { localStorage.setItem('studio_vn_interface', _vnInterface); } catch (e) {} };
+        if (ifaceSel) ifaceSel.onchange = () => { _vnInterface = ifaceSel.value || 'main'; try { localStorage.setItem('studio_vn_interface', _vnInterface); } catch (e) {} _studioSyncSetBar(); };
+        _studioSyncSetBar();
+        // 設定頁：設定列的「設定 ›」進去、左上 ‹ 回來（換頁，不是原地展開）
+        { const so = document.getElementById('studio-set-open'); if (so) so.onclick = () => _studioSetPage(true); }
+        { const sb = document.getElementById('studio-set-back'); if (sb) sb.onclick = () => _studioSetPage(false); }
         // 自適應高度：先 reset height=auto 讓瀏覽器算對 scrollHeight，再 set 新高（min 50 / max 200，超出走內部 scroll）
         const autosizeTextarea = () => {
             inputEl.style.height = 'auto';
@@ -768,14 +850,17 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         }
 
         // === VN 工具列：還原舊版按鈕（重新設計按鈕已移除：大改現在直接打字發送、diff 路徑會自動整包重做、不用重發）===
+        // 還原舊版：標題列那顆 → 彈窗（以前在輸入框上方原地展開，把聊天擠掉一大塊）
         const vnHistBtn = document.getElementById('vn-studio-history-btn');
-        if (vnHistBtn) {
+        const histModal = document.getElementById('studio-hist-modal');
+        const closeHist = () => { if (histModal) histModal.hidden = true; };
+        if (vnHistBtn && histModal) {
             vnHistBtn.onclick = () => {
-                const area = document.getElementById('vn-studio-history-area');
-                const isOpen = area.style.display === 'block';
-                area.style.display = isOpen ? 'none' : 'block';
-                if (!isOpen) win.OS_STUDIO_DIFF?.renderVNHistoryArea();   // 拆檔：os_studio_diff_engine.js
+                win.OS_STUDIO_DIFF?.renderVNHistoryArea();   // 拆檔：os_studio_diff_engine.js
+                histModal.hidden = false;
             };
+            histModal.onclick = (e) => { if (e.target === histModal) closeHist(); };
+            const hx = document.getElementById('studio-hist-x'); if (hx) hx.onclick = closeHist;
         }
 
         const tabs = document.querySelectorAll('.studio-tab');
@@ -786,6 +871,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 document.getElementById('studio-preview-content').style.display  = tab.dataset.tab === 'preview' ? 'flex'   : 'none';
                 document.getElementById('studio-source-content').style.display   = tab.dataset.tab === 'source'  ? 'block'  : 'none';
                 document.getElementById('studio-gallery-content').style.display  = tab.dataset.tab === 'gallery' ? 'block'  : 'none';
+                { const _ic = document.getElementById('studio-info-content'); if (_ic) _ic.hidden = tab.dataset.tab !== 'info'; }
                 // 「✅ 確定創建」footer 只在「預覽」分頁顯示（原碼/VN組件 不該看到）
                 { const _aa = document.querySelector('.studio-action-area'); if (_aa) _aa.style.display = tab.dataset.tab === 'preview' ? 'flex' : 'none'; }
                 if (tab.dataset.tab === 'gallery') {
@@ -1054,10 +1140,13 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 : '<i class="fa-solid fa-puzzle-piece"></i> VN組件';
         }
         if (sourceTab)  sourceTab.style.display  = modeId === 'vn_ui' ? '' : 'none';
-        const typeRow = document.getElementById('studio-type-row');
-        if (typeRow) typeRow.style.display = modeId === 'vn_ui' ? 'flex' : 'none';
-        const chipsRow = document.getElementById('studio-chips-row');
-        if (chipsRow) chipsRow.style.display = modeId === 'vn_ui' ? 'flex' : 'none';
+        // 設定列、已選要求、格式與說明分頁：只有「製作互動面板」(vn_ui) 有這些東西
+        { const sbar = document.getElementById('studio-set-bar'); if (sbar) sbar.hidden = modeId !== 'vn_ui'; }
+        { const pk = document.getElementById('studio-picked'); if (pk) pk.hidden = modeId !== 'vn_ui'; }
+        { const it = document.getElementById('studio-tab-info'); if (it) it.hidden = modeId !== 'vn_ui'; }
+        { const ic = document.getElementById('studio-info-content'); if (ic) ic.hidden = true; }
+        _studioSetPage(false);
+        { const hm = document.getElementById('studio-hist-modal'); if (hm) hm.hidden = true; }
 
         // 切 mode 一律重置到 preview tab
         document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
@@ -2032,6 +2121,22 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return bubble;
     }
 
+    // 🎩 在帽匠的工坊裡打開時（外面包著 .lws），AI 的每一輪回話前面掛「頭像＋帽匠」：
+    //    帽匠還在陪你做，但是當聊天裡的協作者，不是站在面板旁邊的一條窄立繪。手機殼那份創作室不掛。
+    function _studioAppendWho(container) {
+        const app = document.getElementById('os_studio_app');
+        if (!container || !app || !app.closest('.lws')) return;
+        const s = (win.LobbyNpcs || window.LobbyNpcs)?.staff?.('hatter');
+        const el = document.createElement('div');
+        el.className = 'studio-ai-who';
+        const ava = document.createElement('span');
+        ava.className = 'studio-ai-ava';
+        if (s && s.portrait) ava.style.backgroundImage = 'url("' + s.portrait + '")';   // 動態 URL，只能直接設
+        el.appendChild(ava);
+        el.appendChild(document.createTextNode((s && s.name) || '帽匠'));
+        container.appendChild(el);
+    }
+
     // 將 AI 回應爆成多個泡泡，依序錯開出現
     function appendSegmentBubbles(container, text, delayBase = 0) {
         const segs = parseSegments(text);
@@ -2120,6 +2225,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <span class="studio-typing-dot"></span>
             <span class="studio-typing-dot"></span>
         </div>`;
+        _studioAppendWho(container);   // 打字三點上面就先掛名字：泡泡換成回話時名字留著
         container.appendChild(aiBubble);
         container.scrollTop = container.scrollHeight;
 
@@ -2287,11 +2393,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const sel = document.getElementById('studio-iface');
         if (!wrap || !sel) return;
         const list = _studioIfaceAvailable() ? _studioResidents() : [];
-        if (list.length === 0) { wrap.hidden = true; _vnInterface = 'main'; return; }
+        if (list.length === 0) { wrap.hidden = true; _vnInterface = 'main'; _studioSyncSetBar(); return; }
         if (_vnInterface !== 'main' && !list.some(r => r.id === _vnInterface)) _vnInterface = 'main';   // 住戶被刪了就退回主接口
         sel.innerHTML = '<option value="main">主接口</option>' + list.map(r => '<option value="' + _sgcEsc(r.id) + '">宿舍 · ' + _sgcEsc(r.name || r.id) + '</option>').join('');
         sel.value = _vnInterface;
         wrap.hidden = false;
+        _studioSyncSetBar();   // 宿舍晚一步接上橋時，設定列才多出「誰來做」那顆
     }
     // 統一出口：主接口走 OS_API.chat；住戶走 sendRaw。介面跟 OS_API.chat 一樣（onChunk／onFinish／onError／options），呼叫端不用分。
     function _studioChat(apiPayload, pureConfig, onChunk, onFinish, onError, options, aiBubble) {
@@ -2540,6 +2647,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     }
                     if (next.role === 'assistant') break;
                 }
+                _studioAppendWho(container);
                 parseSegments(messageContentToString(msg.content)).forEach(seg => {
                     container.appendChild(createSegmentBubble(seg, false, { selectedLabel }));
                 });
@@ -3281,6 +3389,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             <span class="studio-typing-dot"></span>
             <span class="studio-typing-dot"></span>
         </div>`;
+        _studioAppendWho(container);   // 打字三點上面就先掛名字：泡泡換成回話時名字留著
         container.appendChild(aiBubble);
         container.scrollTop = container.scrollHeight;
 
@@ -3431,12 +3540,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // 歷史快照（snapshotCurrentVNState/restoreFromVNSnapshot/formatSnapTime/renderVNHistoryArea）
     // → 已拆到 os_studio_diff_engine.js（win.OS_STUDIO_DIFF）
 
+    // 還原舊版那顆（在標題列）：有作品才出現；清單內容開彈窗時才畫，這裡只更新數字
     function updateVNToolbarVisibility() {
-        const toolbar = document.getElementById('studio-vn-toolbar');
-        if (!toolbar) return;
+        const btn = document.getElementById('vn-studio-history-btn');
+        if (!btn) return;
         const shouldShow = currentMode === 'vn_ui' && !!currentParsedData && !Array.isArray(currentParsedData);
-        toolbar.classList.toggle('active', shouldShow);
-        if (shouldShow) win.OS_STUDIO_DIFF?.renderVNHistoryArea();   // 拆檔：os_studio_diff_engine.js
+        btn.hidden = !shouldShow;
+        if (shouldShow) win.OS_STUDIO_DIFF?.renderVNHistoryArea();   // 拆檔：os_studio_diff_engine.js（順便更新數字）
+        else { const hm = document.getElementById('studio-hist-modal'); if (hm) hm.hidden = true; }
     }
 
     // 展示尺寸縮放器（畫布預覽 / 展廳卡共用）：手機390 / 中間1000 / 全屏=螢幕寬。
@@ -3668,6 +3779,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const publishBtn = document.getElementById('studio-publish-btn');
 
         let displayData = currentParsedData || activePreviewData;
+        // 格式與說明分頁：先清成空狀態，有作品時下面 vn_ui 那段會填上
+        { const _ie = document.getElementById('studio-info-content'); if (_ie) _ie.innerHTML = '<div class="studio-empty">還沒有作品。做好之後，這裡會列出它的標籤、給劇本 AI 的說明和資料格式。</div>'; }
 
         const fabEl = document.getElementById('studio-preview-fab');
         if (fabEl) fabEl.style.display = 'none';   // 浮動 FAB 退役：改用 header 的 👁️ 預覽鈕
@@ -3723,11 +3836,18 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const safeFormat = (data.demoFormat || '無結構定義').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const safeTagId = (data.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
 
+            // 標籤／給劇本 AI 的說明／資料格式 → 「格式與說明」分頁。
+            // 🚨 以前疊在預覽卡最上面，作品本人被推到下面去，一打開預覽先看到的是一堆格式字
+            const infoEl = document.getElementById('studio-info-content');
+            if (infoEl) {
+                const _e = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                infoEl.innerHTML = `
+                    <div class="studio-info-sec"><div class="studio-info-k">標籤</div><div class="studio-info-v studio-info-mono">[${_e(data.tagId || '未命名')}]</div></div>
+                    <div class="studio-info-sec"><div class="studio-info-k">給劇本 AI 的使用說明</div><div class="studio-info-v">${_e(data.usageDesc || '無特別說明')}</div></div>
+                    <div class="studio-info-sec"><div class="studio-info-k">資料格式</div><pre class="studio-info-v studio-info-mono">${safeFormat}</pre></div>`;
+            }
             previewMain.innerHTML = `
                 <div class="studio-card">
-                    <div class="studio-card-title">標籤 ID: [${data.tagId || '未命名'}]</div>
-                    <div style="font-size:12px; color:rgba(26,28,40,0.80); margin-bottom:8px; padding:6px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.30);">💡 <b>給劇本 AI 的使用說明：</b><br>${data.usageDesc || '無特別說明'}</div>
-                    <div style="font-size:12px; color:rgba(26,28,40,0.68); margin-bottom:10px;">資料格式示範：<br><span style="font-family:monospace; color:#FFF;">${safeFormat}</span></div>
                     <div class="studio-pv-tabs">
                         <button class="studio-pv active" data-pv="phone" title="手機端（外框約 390）">手機</button>
                         <button class="studio-pv" data-pv="center" title="桌面·中間聊天區（外框約 1000）">中間</button>

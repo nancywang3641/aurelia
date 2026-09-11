@@ -1328,7 +1328,8 @@
 /* 🎯 應用開著＝專注在那個面板（2026-09-11）。
    以前開面板時右欄（當前地點／常用功能／附近地點）照樣留著，面板只能擠在它左邊的一小格；
    舞台模式的面板會直接蓋住右側按鈕，對話模式卻一定要讓位——兩邊不一致，也不專注。
-   現在開面板時右欄與常用功能整塊收起來，面板往右撐滿，左邊只留管理員立繪；按 ✕ 收回來。
+   現在開面板時右欄、常用功能、管理員立繪整塊退場，面板撐滿；按 ✕ 收回來。
+   （立繪原本留在左邊一條，實際看是又小又卡在旁邊，專注就是全屏，人等你收工再回來站）
    🚨 常用功能用 id 藏：桌機那條 display:grid 是六層 class，class 寫不過它。
    🚨 看 .is-focus 不看 .is-app：沒人可以對話的地方（我的家還沒請人）不進專注，見 lobby_places.js go()。 */
 .lb-pv.is-focus .lb-rail { display:none; }
@@ -1341,11 +1342,10 @@
    外層是 overflow:auto 就會長出兩條捲軸（面板底下那條灰條就是它）。
    只限這四個：塔羅、工坊、我的家是畫進容器的，可能要靠外層捲。 */
 .lb-pv-body:has(> .wg-win, > #os-pt-shop-dock, > #store-panel-overlay, > .oc-win) { overflow:hidden; }
+.lb-pv.is-focus .lb-pv-portrait { display:none; }
 @media (min-width:761px) {
-    /* 立繪那一欄的寬度；面板從它右邊一路撐到畫面右緣（沿用 --lb-edge 那條留白） */
-    .lb-pv.is-focus { --lb-app-left:clamp(240px, 28%, 460px); }
-    .lb-pv.is-focus .lb-pv-pane { left:var(--lb-app-left); right:var(--lb-edge); width:auto; }
-    .lb-pv.is-focus .lb-pv-portrait { max-width:calc(var(--lb-app-left) - 16px); }
+    /* 面板左右都貼 --lb-edge 那條留白，整個撐滿 */
+    .lb-pv.is-focus .lb-pv-pane { left:var(--lb-edge); right:var(--lb-edge); width:auto; }
 }
 
 /* 📱 手機的「開啟」：跟在左上地名後面。桌機的開啟鈕在右欄「當前地點」卡上，這顆只給手機。

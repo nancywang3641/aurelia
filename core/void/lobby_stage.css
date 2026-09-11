@@ -754,6 +754,11 @@
 .lws.is-tool .studio-type.active, .lws.is-tool .studio-chip-feature.active {
   background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
 .lws.is-tool .studio-chip-manage { color:var(--lwt-dim); }
+/* 🚨 元素 chip 的「選了」以前在工坊裡看不出來：上面那條 .lws.is-tool .studio-chip 權重比 .studio-chip.active 高，
+   選取的底色被蓋回透明，選了跟沒選長一樣 */
+.lws.is-tool .studio-chip.active { background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+/* 設定頁與還原舊版彈窗要實心底：--jrpg-paper 在這裡是 .92 透明，蓋在聊天上會把底下的輸入列透出來 */
+.lws.is-tool .studio-set-page, .lws.is-tool .studio-hist-card { background:#262038; }
 .lws.is-tool .studio-textarea, .lws.is-tool .studio-attach-btn {
   background:rgba(22,17,34,.75); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
 .lws.is-tool .studio-textarea::placeholder { color:rgba(239,231,246,.42); }
@@ -806,7 +811,6 @@
 .lws.is-tool .studio-chip-box,
 .lws.is-tool .studio-chip-litem,
 .lws.is-tool .studio-pending-img,
-.lws.is-tool #studio-vn-toolbar,
 .lws.is-tool #vn-studio-history-area,
 .lws.is-tool .vn-history-item,
 .lws.is-tool .fx-lib-row,
@@ -878,7 +882,7 @@
 .lws.is-tool .studio-container, .lws.is-tool .vncomp-app {
   --jrpg-wine:#f4a8cd !important; --jrpg-wine-dark:#e888b3 !important; }
 .lws.is-tool .vc-chip.on, .lws.is-tool .swb-primary:hover,
-.lws.is-tool #vn-studio-history-btn:hover, .lws.is-tool .vn-history-item .h-btn:hover,
+.lws.is-tool .vn-history-item .h-btn:hover,
 .lws.is-tool .studio-icon-btn.danger:hover {
   background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
 .lws.is-tool .studio-tab.active::after, .lws.is-tool .studio-drawer-handle::after,
