@@ -125,6 +125,7 @@
     const HOME_ID = 'hall';      // 主頁預設站的地方（愛麗絲＋視差大廳）
     let _view = null;            // 關掉整個視圖
     let _paint = null;           // 換到別的地點（不重建外殼）
+    let _curId = null;           // 現在站在哪（換場景面板要標「使用中」）
 
     // 🔮 把塔羅畫進窗格：OS_TAROT.launch 本來就吃容器，只差它的 ❮ 返回鈕。
     //    那顆鈕寫死呼叫 PhoneSystem.goHome（它原本住手機殼裡）→ 暫借成「回主頁」，關掉時還原。
@@ -425,7 +426,7 @@
                 return;
             }
             restorePanel(); talkOff();
-            curId = nextId;
+            curId = nextId; _curId = nextId;
             const tok = ++paintTok;
             // 🚨 沒有平視背景的地方不要清成純黑：這裡以前是「開了就關」的浮層所以無所謂，
             //    現在它是常駐主畫面，切過去整片黑會讀成「壞掉了」。留著上一張，素材補上就自動換。
@@ -466,8 +467,8 @@
         box.querySelector('.lb-pv-x').addEventListener('click', () => go('talk'));
 
         const close = () => {
-            restorePanel(); talkOff();
-            if (_paint === paint) _paint = null;
+            restorePanel(); talkOff(); closeScenePicker();
+            if (_paint === paint) { _paint = null; _curId = null; }
             box.remove();
             if (_view === close) _view = null;
         };
@@ -478,6 +479,105 @@
         return box;
     }
 
+    // ── 🏞 換場景（窄畫面）───────────────────────────────────────
+    //   窄畫面放不下地點欄（以前收成一排沒有名字的深色方塊，看不出哪顆是哪裡），
+    //   改成右側欄一顆「換場景」→ 這張卡片面板：每個地點一張縮圖＋名字，現在在的打勾，沒解鎖的灰掉加鎖。
+    //   清單跟桌機的地點欄同一份（_cards），點一張就走過去（_paint），跟點地點欄是同一件事。
+    //
+    // 🚨 縮圖不能直接塞背景原圖：一張 1440×810，七張同時解碼在 iPhone 上就是三十幾 MB
+    //    （章節面板就是這樣卡死過）。逐張抓下來縮成 320×180 小圖、原圖馬上放掉；
+    //    縮好的留在記憶體裡，這次開著的期間再打開就不用重縮。
+    const THUMB_W = 320, THUMB_H = 180;
+    const _thumbs = new Map();   // 背景檔名 → Promise<objectURL>
+    function _thumb(file) {
+        if (_thumbs.has(file)) return _thumbs.get(file);
+        const job = (async () => {
+            const r = await fetch(CDN + file, { mode: 'cors' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const raw = URL.createObjectURL(await r.blob());
+            try {
+                const img = new Image();
+                img.src = raw;
+                await img.decode();
+                const cv = document.createElement('canvas');
+                cv.width = THUMB_W; cv.height = THUMB_H;
+                // 等比裁滿 16:9（背景本來就是這個比例，其他比例也不會變形）
+                const s = Math.max(THUMB_W / img.naturalWidth, THUMB_H / img.naturalHeight);
+                const w = img.naturalWidth * s, h = img.naturalHeight * s;
+                cv.getContext('2d').drawImage(img, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
+                const out = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.82));
+                cv.width = cv.height = 0;
+                return out ? URL.createObjectURL(out) : '';
+            } finally { URL.revokeObjectURL(raw); }
+        })();
+        _thumbs.set(file, job);
+        job.catch(() => _thumbs.delete(file));   // 沒抓到的下次打開再試，不要永遠卡在失敗
+        return job;
+    }
+
+    let _scn = null;
+    function closeScenePicker() { if (_scn) { _scn.remove(); _scn = null; } }
+
+    function openScenePicker() {
+        if (!_paint) return;                       // 只在對話模式的主畫面有意義
+        const host = document.querySelector('.lobby-left');
+        if (!host) return;
+        closeScenePicker();
+
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const el = document.createElement('div');
+        el.className = 'lb-scn';
+        el.innerHTML =
+            '<div class="lb-scn-card" role="dialog" aria-label="換場景">' +
+              '<div class="lb-scn-hd"><span class="lb-scn-title">換場景</span>' +
+                '<button class="lb-scn-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
+              '<div class="lb-scn-grid">' +
+                _cards().map(c => {
+                    const p = c.p, cur = p.id === _curId;
+                    return '<button class="lb-scn-item' + (cur ? ' is-cur' : '') + (c.on ? '' : ' is-off') + '" type="button" data-id="' + esc(p.id) + '"' + (c.on ? '' : ' aria-disabled="true"') + '>' +
+                        '<span class="lb-scn-pic"><img alt="" data-bg="' + esc(p.bg || '') + '">' +
+                          (c.on ? '' : '<span class="lb-scn-lock"><i class="fa-solid fa-lock"></i></span>') + '</span>' +
+                        '<span class="lb-scn-name">' + esc(p.name) + '</span>' +
+                        '<span class="lb-scn-who">' + esc(c.on ? ((c.npc && c.npc.name) || c.emptyWho || '　') : '尚未開放') + '</span>' +
+                        (cur ? '<span class="lb-scn-check"><i class="fa-solid fa-check"></i></span>' : '') +
+                    '</button>';
+                }).join('') +
+              '</div>' +
+            '</div>';
+
+        el.addEventListener('click', (e) => {
+            // 點暗掉的外面或 ✕ ＝ 不換，關掉
+            if (e.target === el || e.target.closest('.lb-scn-x')) { closeScenePicker(); return; }
+            const b = e.target.closest('.lb-scn-item');
+            if (!b || b.classList.contains('is-off')) return;
+            const id = b.dataset.id;
+            closeScenePicker();
+            if (id !== _curId && _paint) _paint(id);
+        });
+
+        host.appendChild(el);
+        _scn = el;
+
+        // 縮圖一張一張來（同一時間只解碼一張原圖）；面板關了就停
+        (async () => {
+            for (const img of el.querySelectorAll('img[data-bg]')) {
+                const f = img.dataset.bg;
+                if (!f) continue;
+                let url = '';
+                try { url = await _thumb(f); } catch (e) { continue; }   // 沒抓到就留底色，不擋其他張
+                if (_scn !== el) return;
+                if (!url) continue;
+                img.onload = () => img.classList.add('is-in');
+                img.src = url;
+            }
+        })();
+    }
+
+    // 右側欄那顆鈕沒有 data-proxy（void_terminal 的 dock 代理會略過它），在這裡接
+    document.addEventListener('click', (e) => {
+        if (e.target && e.target.closest && e.target.closest('#lb-dock-scene')) openScenePicker();
+    });
+
     // ── 統一入口：同一顆鈕，兩種畫法 ────────────────────────────
     //   舞台掛著 → 開快轉地圖（空間感，看得到廣場長怎樣）
     //   舞台關著 → 開按鈕清單（沒有場景可以畫，就直接列能辦的事）
@@ -487,6 +587,6 @@
         openHome();
     }
 
-    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, HOME_ID, PLACES };
+    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, openScenePicker, closeScenePicker, HOME_ID, PLACES };
     console.log('✅ LobbyPlaces（地點清單）模組就緒');
 })();

@@ -626,6 +626,21 @@ const IRIS_IDLE = [
                             <span class="lb-dock-label" data-cn-404="收容所">宿舍</span>
                         </button>
                         <div class="lb-dock-sep"></div>
+                        <!-- 換場景：只在手機的對話模式出現（那時地點欄收掉了，改從這裡叫場景卡片）。
+                             沒有 data-proxy，點擊由 lobby_places.js 接。
+                             素材庫沒有這顆圖，照同一套配色（深藍描邊／天藍／金點）直接畫 -->
+                        <button class="lb-dock-btn" id="lb-dock-scene" type="button" title="換場景">
+                            <svg class="lb-dock-ic" viewBox="0 0 512 512" aria-hidden="true">
+                                <g stroke="#12305e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
+                                    <rect x="170" y="62" width="290" height="226" rx="30" fill="#bfe3f7" transform="rotate(9 315 175)"/>
+                                    <rect x="52" y="150" width="340" height="286" rx="32" fill="#f5f9fd"/>
+                                    <rect x="94" y="192" width="256" height="202" rx="14" fill="#e3f3fc" stroke-width="16"/>
+                                    <path d="M104 384 L186 280 L236 338 L276 298 L340 384 Z" fill="#1ea7e8" stroke-width="16"/>
+                                    <circle cx="288" cy="244" r="22" fill="#f2b632" stroke-width="12"/>
+                                </g>
+                            </svg>
+                            <span class="lb-dock-label" data-cn-404="跳轉">換場景</span>
+                        </button>
                         <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-depart-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="墜入404">出門</span>
