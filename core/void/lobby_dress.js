@@ -129,20 +129,42 @@
     }
     function _openNpcHistory(a) {
         _closeNpcHistory(); _closeDressRoom();
-        const box = document.createElement('div');
-        box.className = 'lstage-dress lstage-history';
-        box.innerHTML =
-            '<div class="lsd-title"><i class="fa-solid fa-comment-dots"></i> 對話紀錄 — ' + (a.name || '角色') + '<span class="lsh-count"></span></div>' +
-            '<div class="lsh-list"></div>' +
-            '<button class="lep-btn lep-danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空（徹底遺忘）</button>' +
-            '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
-        // 對話模式（沒有舞台）也要看得到：S.root 只在舞台掛著時才有，沒有就掛在大廳外框上、抬過地點視圖與對話框。
-        // 🚨 以前寫死 S.root → 對話模式在愛麗絲那裡按紀錄鈕，只能退回去開瀅瀅的紀錄。
+        // 兩種模式兩套長相，紀錄內容（_renderNpcHistoryBody）共用：
+        //   舞台＝走路畫面上的深色小窗（原樣）。
+        //   對話模式（沒有舞台，S.root 是 null）＝跟霧白右欄同一套的大卡，蓋一層遮罩在大廳上。
+        //   🚨 以前對話模式直接借舞台那個 300px 深色小窗，在桌面上又小又黑、跟整個主畫面不搭。
+        const flat = !S.root;
         const host = S.root || document.querySelector('.lobby-left');
         if (!host) return;
-        if (!S.root) box.classList.add('is-flat');
-        host.appendChild(box);
-        S.histEl = box;
+        let box, root;
+        if (flat) {
+            root = document.createElement('div');
+            root.className = 'lsh-pv';
+            root.innerHTML =
+                '<div class="lsh-pv-card" role="dialog">' +
+                  '<div class="lsh-pv-hd">' +
+                    '<span class="lsh-pv-title"><i class="fa-solid fa-comment-dots"></i> <span class="lsh-pv-name"></span> 的對話紀錄</span>' +
+                    '<span class="lsh-count"></span>' +
+                    '<button class="lsh-pv-x" data-act="close" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button>' +
+                  '</div>' +
+                  '<div class="lsh-list"></div>' +
+                  '<div class="lsh-pv-ft"><button class="lsh-pv-clear" data-act="clear" type="button"><i class="fa-solid fa-trash"></i> 清空（徹底遺忘）</button></div>' +
+                '</div>';
+            root.querySelector('.lsh-pv-name').textContent = a.name || '這位';
+            box = root.querySelector('.lsh-pv-card');
+            // 點遮罩（卡片外面）＝關掉
+            root.addEventListener('click', (e) => { if (e.target === root) _closeNpcHistory(); });
+        } else {
+            root = box = document.createElement('div');
+            box.className = 'lstage-dress lstage-history';
+            box.innerHTML =
+                '<div class="lsd-title"><i class="fa-solid fa-comment-dots"></i> 對話紀錄 — ' + (a.name || '角色') + '<span class="lsh-count"></span></div>' +
+                '<div class="lsh-list"></div>' +
+                '<button class="lep-btn lep-danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空（徹底遺忘）</button>' +
+                '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+        }
+        host.appendChild(root);
+        S.histEl = root;
         _renderNpcHistoryBody(box, a);
         // 🚨 window.confirm 在 Tauri 會被攔掉（按了完全沒反應）→ 兩段式：第一下變「再按一次」，4 秒內再按才清
         let clearArmed = false, clearTimer = 0;

@@ -1355,6 +1355,8 @@
 @media (max-width:760px) {
     .lb-pv-hd { right:var(--lb-edge); }
     .lb-pv-sub { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* 地名不准被擠成兩行（四個字的「奇想工坊」會斷成「奇想工／坊」）：要讓位的是副標，它自己會省略 */
+    .lb-pv-title { white-space:nowrap; flex-shrink:0; }
     .lb-pv:not(.is-app) .lb-pv-open {
         display:inline-flex; align-items:center; gap:5px; flex-shrink:0;
         padding:5px 11px; border-radius:999px; cursor:pointer; font-family:inherit;
@@ -1371,3 +1373,49 @@
    用 id 寫：這兩顆的 display 來自 .lb-icon-btn 與 .lobby-right .void-btn。 */
 #aurelia-standalone-root #aurelia-global-close-btn,
 #aurelia-standalone-root #void-close-btn { display:none; }
+
+
+/* 💬 對話模式的 NPC 對話紀錄（lobby_dress _openNpcHistory 的 flat 分支）
+   跟霧白右欄同一套：遮罩蓋在大廳上、中間一張白色大卡、聊天式排版（你在右、對方在左）。
+   舞台那個 300px 深色小窗不動——這套只給對話模式。
+   層級壓過地點視圖(3355)、右側欄(3357)、對話框(3358)。 */
+.lsh-pv { position:absolute; inset:0; z-index:3359; display:flex; align-items:center; justify-content:center;
+  padding:24px; background:rgba(20,18,36,.38); }
+.lsh-pv-card { width:min(620px, 100%); max-height:min(78%, 760px); display:flex; flex-direction:column; overflow:hidden;
+  border-radius:18px; background:rgba(249,249,255,.97); border:1px solid rgba(255,255,255,.9);
+  box-shadow:0 18px 50px rgba(30,28,60,.28); color:#343962; }
+.lsh-pv-hd { display:flex; align-items:center; gap:10px; padding:16px 18px 14px; border-bottom:1px solid rgba(86,92,145,.14); }
+.lsh-pv-title { font-size:16px; font-weight:700; letter-spacing:1px; color:#343962; }
+.lsh-pv-title i { color:#8586bc; margin-right:2px; }
+.lsh-pv .lsh-count { font-size:12px; color:#8a8ea8; font-weight:400; margin-left:0; }
+.lsh-pv-x { margin-left:auto; width:32px; height:32px; border-radius:50%; border:none; cursor:pointer; font-family:inherit;
+  display:flex; align-items:center; justify-content:center; background:#eef0f7; color:#5b6080; font-size:14px; }
+.lsh-pv-x:hover { background:#e2e5f2; }
+.lsh-pv .lsh-list { flex:1; min-height:120px; max-height:none; overflow-y:auto; padding:16px 18px;
+  display:flex; flex-direction:column; gap:12px; }
+.lsh-pv .lsh-empty { color:#9a9eb6; font-size:13px; padding:28px 0; text-align:center; }
+/* 一則＝名字在上、泡泡在下；你說的靠右、不必寫名字 */
+.lsh-pv .lsh-row { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:4px;
+  max-width:82%; padding:0; background:none; border-radius:0; }
+.lsh-pv .lsh-row.me { align-self:flex-end; align-items:flex-end; background:none; }
+.lsh-pv .lsh-who { min-width:0; font-size:12px; color:#8a8ea8; padding:0 4px; }
+.lsh-pv .lsh-row.me .lsh-who { display:none; }
+.lsh-pv .lsh-text { font-size:14px; line-height:1.75; color:#343962; padding:10px 14px; border-radius:14px 14px 14px 4px;
+  background:#fff; border:1px solid rgba(86,92,145,.16); }
+.lsh-pv .lsh-row.me .lsh-text { background:#444677; border-color:#444677; color:#fff; border-radius:14px 14px 4px 14px; }
+/* 刪單則：滑過那則才出現在泡泡旁邊（手機沒有滑過，一律淡淡地顯示） */
+.lsh-pv .lsh-del { position:absolute; top:22px; right:-28px; width:22px; height:22px; padding:0; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; color:#a3a7bf; background:none; opacity:0; transition:opacity .15s ease; }
+.lsh-pv .lsh-row.me .lsh-del { right:auto; left:-28px; top:2px; }
+.lsh-pv .lsh-row:hover .lsh-del { opacity:1; }
+.lsh-pv .lsh-del:hover { color:#d0566f; background:rgba(208,86,111,.08); }
+@media (hover:none) { .lsh-pv .lsh-del { opacity:.6; } }
+.lsh-pv-ft { display:flex; justify-content:flex-start; padding:12px 18px 16px; border-top:1px solid rgba(86,92,145,.14); }
+.lsh-pv-clear { border:1px solid rgba(208,86,111,.35); background:transparent; color:#c0475f; cursor:pointer; font-family:inherit;
+  padding:7px 14px; border-radius:10px; font-size:13px; }
+.lsh-pv-clear:hover { background:rgba(208,86,111,.08); }
+@media (max-width:760px) {
+  .lsh-pv { padding:14px; }
+  .lsh-pv-card { max-height:86%; }
+  .lsh-pv .lsh-row { max-width:86%; }
+}
