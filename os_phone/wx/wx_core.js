@@ -777,6 +777,8 @@
                     //   變成「AI 冒充她說話」（她實測看到系統通知出現在自己的綠泡泡裡）。
                     //   sender 照樣留著：群聊要顯示是誰說的。
                     isMe = false;
+                    // 格式說明寫的是 [Char]（代表對方），AI 常照字面抄 → 私聊裡換回聊天室那位，別存成一個叫 Char 的人
+                    if (/^\s*(?:\{\{\s*char\s*\}\}|char)\s*$/i.test(tag) && GLOBAL_CHATS[ctx.chatId] && !GLOBAL_CHATS[ctx.chatId].isGroup) sender = ctx.chatName;
                 } else { content = line; }
             }
 

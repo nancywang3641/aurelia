@@ -23,7 +23,9 @@
     const INJECT_ID = 'aurelia_app_memory';
     const FLAG_KEY = 'os_app_mem_inject_enabled';
     const RECENT_SCAN = 8;      // 掃最近幾樓酒館對話，找「在場角色」
-    const PER_CHAR_MSGS = 6;    // 每個在場角色帶最近幾條 微信/電話 對話
+    const PER_CHAT_CHARS = 700; // 每個聊天室從最新往回帶，累積到這麼多字為止（聊天一句很短，只數句數會截在話題中間）
+    const PER_CHAT_MSGS = 30;   // 同上，句數上限
+    const PER_CHAR_MSGS = 6;    // 插件記憶桶每個角色帶最近幾條
     const PER_CHAR_POSTS = 3;   // 每個在場角色帶最近幾則 微薄 動態
     const POST_COMMENTS = 3;    // 每則動態帶最近幾條留言
     const MAX_CHARS = 6;        // 最多注入幾個角色（防爆 token）
@@ -40,7 +42,12 @@
     function _enabled() { try { return localStorage.getItem(FLAG_KEY) !== '0'; } catch (e) { return true; } }
     function _clean(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
     function _cut(s) { s = _clean(s); return s.length > LINE_MAX ? s.slice(0, LINE_MAX) + '…' : s; }
-    function _userName() { try { if (win.OS_API && win.OS_API.getGlobalUserName) return win.OS_API.getGlobalUserName() || '你'; } catch (e) {} return '你'; }
+    function _userName() {
+        let n = '';
+        try { if (win.OS_API && win.OS_API.getGlobalUserName) n = win.OS_API.getGlobalUserName() || ''; } catch (e) {}
+        n = String(n).replace(/\*+/g, '').trim();   // 使用者角色名帶了 markdown 粗體記號就剝掉，別原樣送進 prompt
+        return n || '你';
+    }
 
     // 抓最近幾樓酒館對話文字（找在場角色用）
     async function _recentChatText() {
@@ -63,17 +70,37 @@
 
     // 這條是不是「在手機上真的發生、正文裡沒有」的訊息（跳過紅包/貼圖/系統，也跳過跑團同步進來的劇情訊息）
     function _isAppMsg(m) { return !!(m && (!m.type || m.type === 'msg') && m._story == null && _clean(m.content)); }
+    // 格式說明裡的佔位字（AI 常照字面寫 [Char] 當發話人，存下來就變成一個叫 Char 的人）
+    function _isPlaceholderName(n) { return /^\s*(?:\{\{\s*(?:char|user)\s*\}\}|char|user)\s*$/i.test(String(n == null ? '' : n)); }
     // 一條 微信/電話 訊息 → 一行
-    function _chatLine(m, userName, charName) {
+    function _chatLine(m, userName, charName, isGroup) {
         if (!_isAppMsg(m)) return '';
-        const who = m.isMe ? userName : (m.senderName || m.sender || charName);
+        let who;
+        if (m.isMe) who = userName;
+        else if (!isGroup) who = charName;   // 私聊對面只有聊天室那一位；存下來的發話人可能是 AI 照抄的「Char」，不可信
+        else {
+            who = m.senderName || m.sender || '';
+            if (!who || _isPlaceholderName(who)) who = '群裡有人';
+        }
         return `・${who}：${_cut(m.content)}`;
     }
     // 🚨 先挑出「手機上發生的」再取最後幾條。以前反過來（先取最後 6 條再濾）：
     //    跑團同步把正文裡的聊天室也塞進同一串，最後 6 條常常全是劇情訊息 → 濾完變空，你在微信打的話永遠回不去酒館。
+    //    從最新往回帶到 PER_CHAT_CHARS 字：以前固定 6 句，一問一答加兩個表情包就用完了，
+    //    「約吃飯」只剩後半段「下課來接」，主模型看不懂接什麼。
     function _appLines(chat, userName, name) {
         const ms = (chat && Array.isArray(chat.messages)) ? chat.messages.filter(_isAppMsg) : [];
-        return ms.slice(-PER_CHAR_MSGS).map(function (m) { return _chatLine(m, userName, name); }).filter(Boolean);
+        const isGroup = !!(chat && chat.isGroup);
+        const out = [];
+        let used = 0;
+        for (let i = ms.length - 1; i >= 0 && out.length < PER_CHAT_MSGS; i--) {
+            const l = _chatLine(ms[i], userName, name, isGroup);
+            if (!l) continue;
+            if (out.length && used + l.length > PER_CHAT_CHARS) break;
+            out.unshift(l);
+            used += l.length;
+        }
+        return out;
     }
     // 最近有沒有在手機上聊過：劇情房看「送出時正文到第幾樓」、還沒蓋樓號的＝上一輪之後才打的；
     //   一般聯絡人沒有樓號，看送出時間（RECENT_HOURS 小時內）
