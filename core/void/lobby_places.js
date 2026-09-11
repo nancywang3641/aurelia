@@ -499,6 +499,12 @@
             }
             restorePanel(); talkOff();
             curId = nextId; _curId = nextId;
+            // 404 地點＝套上 404 皮：對話換成柴郡的軌道（人設、紀錄），離開就脫掉。
+            // 🚨 舞台模式由 lstage-scene 事件做這件事，對話模式以前沒人做 → 在 404 跟柴郡講話其實是跟瀅瀅講。
+            //    要在 go() 之前：primeTalk 看的是套好皮之後的狀態。
+            try { win.VoidTerminal?.sync404?.(nextId === 'room404'); } catch (e) {}
+            // 上一位的對話紀錄窗開著就收掉，不然換了地方還掛著別人的紀錄
+            try { win.LobbyDress?.closeHistory?.(); } catch (e) {}
             const tok = ++paintTok;
             // 🚨 沒有平視背景的地方不要清成純黑：這裡以前是「開了就關」的浮層所以無所謂，
             //    現在它是常駐主畫面，切過去整片黑會讀成「壞掉了」。留著上一張，素材補上就自動換。
@@ -563,6 +569,9 @@
 
         const close = () => {
             restorePanel(); talkOff(); closeScenePicker();
+            try { win.LobbyDress?.closeHistory?.(); } catch (e) {}
+            // 離開對話模式時站在 404 的話把皮脫掉；接著掛舞台的話，舞台的 lstage-scene 會照它的場景再套一次
+            if (_curId === 'room404') { try { win.VoidTerminal?.sync404?.(false); } catch (e) {} }
             desktopRail.removeEventListener('change', loadRailThumbs);
             if (_paint === paint) { _paint = null; _curId = null; _speakerOf = null; _reprime = null; }
             box.remove();

@@ -136,14 +136,29 @@
             '<div class="lsh-list"></div>' +
             '<button class="lep-btn lep-danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空（徹底遺忘）</button>' +
             '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
-        S.root.appendChild(box);
+        // 對話模式（沒有舞台）也要看得到：S.root 只在舞台掛著時才有，沒有就掛在大廳外框上、抬過地點視圖與對話框。
+        // 🚨 以前寫死 S.root → 對話模式在愛麗絲那裡按紀錄鈕，只能退回去開瀅瀅的紀錄。
+        const host = S.root || document.querySelector('.lobby-left');
+        if (!host) return;
+        if (!S.root) box.classList.add('is-flat');
+        host.appendChild(box);
         S.histEl = box;
         _renderNpcHistoryBody(box, a);
+        // 🚨 window.confirm 在 Tauri 會被攔掉（按了完全沒反應）→ 兩段式：第一下變「再按一次」，4 秒內再按才清
+        let clearArmed = false, clearTimer = 0;
+        const clearBtn = box.querySelector('[data-act="clear"]');
+        const clearLabel = clearBtn.innerHTML;
         box.addEventListener('click', (e) => {
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (act === 'close') { _closeNpcHistory(); return; }
             if (act === 'clear') {
-                if (!window.confirm('清空「' + (a.name || '這位') + '」的全部對話紀錄？\n連同長期記憶一起清空＝徹底遺忘，不可復原。')) return;
+                if (!clearArmed) {
+                    clearArmed = true;
+                    clearBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 再按一次：連長期記憶一起清空，不可復原';
+                    clearTimer = setTimeout(() => { clearArmed = false; clearBtn.innerHTML = clearLabel; }, 4000);
+                    return;
+                }
+                clearArmed = false; clearTimeout(clearTimer); clearBtn.innerHTML = clearLabel;
                 _b.setNpcHistory(a.key, []);
                 try { (window.OS_DB || (window.parent || window).OS_DB)?.saveNpcMemory?.(a.key, { name: a.name || '', summary: '', lastCompactAt: 0 }); } catch (e) {}
                 _renderNpcHistoryBody(box, a);
@@ -443,7 +458,8 @@
     window.LobbyDress = {
         openMenu: _openActorMenu,       // 右鍵/長按角色→下拉單（lobby_stage tryMount 呼叫）
         openRoom: _openDressRoom,       // 裝扮室（LobbyStage.openDressRoom 轉呼叫）
-        openHistory: _openNpcHistory,   // NPC 對話紀錄窗
+        openHistory: _openNpcHistory,   // NPC 對話紀錄窗（對話模式沒有舞台時掛在 .lobby-left）
+        closeHistory: _closeNpcHistory, // 對話模式換地點時收掉（不然會留著上一位的紀錄）
         genSpriteInto,                  // 無人值守生立姿（世界門旅人自動補圖；與裝扮室同一條管線）
         listPresets: _dressPresetsOf,   // 給設置頁列預設包（免得那邊再抄一份取法）
         presetKeyOf: _dressPresetKey,

@@ -92,6 +92,9 @@
 .lstage-dress .lep-btn[disabled] { opacity:.35; cursor:default; }
 /* 💬 NPC 對話紀錄小面板（複用 lstage-dress 容器樣式） */
 .lstage-history { width:300px; }
+/* 對話模式（沒有舞台）掛在 .lobby-left 上：要壓過地點視圖(3355)、右側欄(3357)、對話框(3358)，
+   但低於換場景面板(3360 以上的彈窗)；手機上寬度不能超過畫面 */
+.lstage-dress.is-flat { z-index:3359; max-width:calc(100% - 24px); }
 .lsh-count { color:#c8bfa6; font-size:11px; font-weight:normal; margin-left:4px; }
 .lsh-list { display:flex; flex-direction:column; gap:6px; overflow-y:auto; max-height:52vh; padding-right:2px; }
 .lsh-empty { color:#d8cdb4; font-size:12px; text-align:center; padding:16px; }

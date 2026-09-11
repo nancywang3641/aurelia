@@ -1028,7 +1028,14 @@ const IRIS_IDLE = [
 
             const irisHistBtn = tab.querySelector('#iris-hist-btn');
             const cheshireHistBtn = tab.querySelector('#cheshire-hist-btn');
-            if (irisHistBtn) irisHistBtn.addEventListener('click', () => openHistoryPanel('iris'));
+            if (irisHistBtn) irisHistBtn.addEventListener('click', () => {
+                // 對話模式站在別人面前（愛麗絲／白兔／紫薇／帽匠／我的家的客人）→ 開那位自己的紀錄；
+                // 以前這顆只會開瀅瀅的（故事素材紀錄），在誰面前按都一樣
+                const sp = window.LobbyPlaces?.speaker?.();
+                const t = (sp && sp !== 'ying' && sp !== 'cheshire') ? window.LobbyStage?.getTalkTarget?.() : null;
+                if (t && window.LobbyDress?.openHistory) { window.LobbyDress.openHistory(t); return; }
+                openHistoryPanel('iris');
+            });
             if (cheshireHistBtn) cheshireHistBtn.addEventListener('click', () => openHistoryPanel('cheshire'));
 
             const achievementHistBtn = tab.querySelector('#achievement-hist-btn');
@@ -2055,13 +2062,18 @@ ${sections}`;
     //    → 走到哪都掛著瀅瀅的名牌、「與瀅瀅對話」、書咖的開場旁白。
     //    框裡那句＝這位自己的最後一句，沒聊過就是「和 X 說點什麼吧」——不寫死任何人的台詞。
     function primeTalk(npc) {
-        if (!npc || is404Room) return;
+        if (!npc) return;
+        // 404 皮底下只有柴郡這一位（對話模式走進 404 地點時 lobby_places 會先把皮套上，見 sync404）
+        if (is404Room && npc.key !== 'cheshire') return;
         // 還在打字的那段（通常是書咖的開場旁白）停掉，不然打字機會把它繼續打回框裡
         if (IRIS_STATE.timer) { clearInterval(IRIS_STATE.timer); IRIS_STATE.timer = null; }
         IRIS_STATE.queue = []; IRIS_STATE.isTyping = false; IRIS_STATE._onComplete = null;
         primeStageDialog(npc);
         const input = document.getElementById('iris-input');
-        if (input) input.placeholder = npc.key === 'ying' ? '提供故事素材或與瀅瀅對話...' : ('和' + npc.name + '聊聊…');
+        if (input) input.placeholder = npc.key === 'cheshire' ? '...你最好有話說。'
+            : npc.key === 'ying' ? '提供故事素材或與瀅瀅對話...' : ('和' + npc.name + '聊聊…');
+        const hb = document.getElementById('iris-hist-btn');
+        if (hb) hb.title = npc.name + ' 對話紀錄';
     }
 
     async function sendIrisMessage() {
@@ -2554,6 +2566,8 @@ ${sections}`;
     VoidTerminal.recompactNpcMemory = recompactNpcMemory;   // 大廳 NPC 記憶手動整理（actor menu 呼叫）
     VoidTerminal.primeStageDialog = primeStageDialog;       // 開聊/切換 NPC 清殘留對話框（lobby_stage 呼叫）
     VoidTerminal.primeTalk = primeTalk;                     // 對話模式換對象：名牌／提示字／框裡那句一起換（lobby_places 呼叫）
+    // 對話模式走進／離開 404 地點：跟舞台的 lstage-scene 同一件事（換皮＋對話紀錄換成柴郡那份），不放儀式
+    VoidTerminal.sync404 = (on) => _sync404Chrome(on);
 
     VoidTerminal.logout = function() {
         // 登入頁已移除：重新依當前人設同步並刷新大廳
