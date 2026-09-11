@@ -210,15 +210,15 @@
         const headerRight = doc.querySelector('.wx-header > div:last-child');
         
         if (!controlGroup && headerRight) {
+            // 顏色在 wx_theme.js（.wx-multi-btn）：以前寫死 #333，深色模式的標題列上等於看不到
             controlGroup = doc.createElement('div');
             controlGroup.id = 'wx-multi-controls';
-            controlGroup.style.display = 'none';
-            controlGroup.style.alignItems = 'center';
-            controlGroup.style.gap = '8px';
+            controlGroup.className = 'wx-multi-controls';
+            controlGroup.hidden = true;
             controlGroup.innerHTML = `
-                <div id="wx-btn-cancel-multi" style="font-size:14px; color:#333; cursor:pointer; padding:4px;">取消</div>
-                <div id="wx-btn-select-all" style="font-size:14px; color:#333; cursor:pointer; padding:4px;">全選</div>
-                <div id="wx-btn-confirm-delete" style="font-size:14px; color:#fa5151; font-weight:bold; cursor:pointer; padding:4px;">刪除</div>
+                <div id="wx-btn-cancel-multi" class="wx-multi-btn">取消</div>
+                <div id="wx-btn-select-all" class="wx-multi-btn">全選</div>
+                <div id="wx-btn-confirm-delete" class="wx-multi-btn wx-multi-btn-danger">刪除</div>
             `;
             headerRight.appendChild(controlGroup);
             
@@ -239,20 +239,20 @@
         if (isMultiSelectMode) {
             if(deleteBtn) deleteBtn.style.display = 'none';
             if(menuBtn) menuBtn.style.display = 'none';
-            if(controlGroup) controlGroup.style.display = 'flex';
-            
+            if(controlGroup) controlGroup.hidden = false;
+
             if (selectAllBtn) {
                 selectAllBtn.innerText = (selectedMessages.size > 0 && selectedMessages.size === totalMsg) ? '全不選' : '全選';
             }
             if (confirmBtn) {
                 confirmBtn.innerText = selectedMessages.size > 0 ? `刪除(${selectedMessages.size})` : '刪除';
-                confirmBtn.style.opacity = selectedMessages.size > 0 ? '1' : '0.5';
+                confirmBtn.classList.toggle('is-idle', selectedMessages.size === 0);
             }
 
         } else {
             if(deleteBtn) deleteBtn.style.display = 'block';
             if(menuBtn) menuBtn.style.display = 'block';
-            if(controlGroup) controlGroup.style.display = 'none';
+            if(controlGroup) controlGroup.hidden = true;
         }
     }
 
@@ -314,7 +314,8 @@
         enterMultiSelectMode,
         exitMultiSelectMode,
         deleteSelectedMessages,
-        clearCurrentChat, 
+        clearCurrentChat,
+        purgeProtocolState,
         _updateUI: updateUI
     };
 

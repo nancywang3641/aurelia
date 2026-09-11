@@ -1725,7 +1725,11 @@
             this.render();
         },
         
-        deleteChat: function(chatId) { if (GLOBAL_CHATS[chatId]) { delete GLOBAL_CHATS[chatId]; if (GLOBAL_ACTIVE_ID === chatId) { GLOBAL_ACTIVE_ID = null; } this.render(); } },
+        deleteChat: function(chatId) { if (GLOBAL_CHATS[chatId]) {
+            // 紅包／轉帳／禮物的已領狀態跟著聊天一起走（刪訊息、清空也是同一套，見 wx_message_manager.purgeProtocolState）
+            try { const MM = win.WX_MESSAGE_MANAGER; if (MM && MM.purgeProtocolState) MM.purgeProtocolState(chatId, GLOBAL_CHATS[chatId].messages); } catch (e) {}
+            try { if (win.WX_CARDS) win.WX_CARDS.clear(chatId); } catch (e) {}
+            delete GLOBAL_CHATS[chatId]; if (GLOBAL_ACTIVE_ID === chatId) { GLOBAL_ACTIVE_ID = null; } this.render(); } },
         
         reloadApiChats: async function() { /* ... */ },
         

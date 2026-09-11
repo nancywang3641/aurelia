@@ -17,6 +17,13 @@
 
             .wx-header { background: #ededed; height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid #dcdcdc; z-index: 20; }
             .wx-header-title { font-weight: 600; font-size: 16px; color: #000; }
+            /* 多選刪除時標題列右邊那組：取消／全選／刪除 */
+            .wx-multi-controls { display: flex; align-items: center; gap: 8px; }
+            .wx-multi-controls[hidden] { display: none; }
+            .wx-multi-btn { font-size: 14px; color: #333; cursor: pointer; padding: 4px; white-space: nowrap; }
+            .wx-dark .wx-multi-btn { color: #f0f0f0; }
+            .wx-multi-btn.wx-multi-btn-danger { color: #fa5151; font-weight: bold; }
+            .wx-multi-btn.wx-multi-btn-danger.is-idle { opacity: 0.5; }
             .wx-back-btn { cursor: pointer; display: flex; align-items: center; font-size: 15px; color: #000; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 0.2s;}
             .wx-back-btn.show { opacity: 1; pointer-events: auto; }
             .wx-back-btn:before { content: '‹'; margin-right: 2px; font-size: 28px; line-height: 20px; position: relative; top: -2px;}

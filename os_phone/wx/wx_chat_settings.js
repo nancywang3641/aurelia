@@ -453,7 +453,6 @@
                 <div class="ws-footer">
                     <button class="ws-btn-save" id="btn-save">保存更改</button>
                     <button class="ws-btn-del" id="btn-delete-chat">刪除此聊天</button>
-                    <button class="ws-btn-del" id="btn-clear-redpacket-data" style="margin-top: 10px;">清除紅包/轉帳/禮物數據</button>
                 </div>
             `;
 
@@ -1013,6 +1012,9 @@
             // 清空與刪除
             doc.getElementById('btn-clear-chat').onclick = async () => {
                 if (await AUI.confirm('確定要清空記錄嗎？')) {
+                    // 紅包／轉帳／禮物的已領狀態跟著記錄一起清，不然同一個單號再出現會直接顯示已領
+                    try { const MM = win.WX_MESSAGE_MANAGER; if (MM && MM.purgeProtocolState) MM.purgeProtocolState(chatId, chat.messages); } catch (e) {}
+                    try { if (win.WX_CARDS) win.WX_CARDS.clear(chatId); } catch (e) {}
                     chat.messages = []; chat.pushedCount = 0; chat.renderedCount = 0;
                     if (app.GLOBAL_ACTIVE_ID === chatId && app.render) app.render();
                     if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
@@ -1028,41 +1030,8 @@
                 }
             };
             
-            // 清除紅包/轉帳/禮物數據
-            doc.getElementById('btn-clear-redpacket-data').onclick = async () => {
-                if (await AUI.confirm('確定要清除所有紅包/轉帳/禮物數據嗎？此操作不可恢復。')) {
-                    let deletedCount = 0;
-                    
-                    // 遍歷所有 localStorage 鍵
-                    const keysToDelete = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        if (!key) continue;
-                        
-                        // 刪除紅包數據：wx_redpacket_*
-                        if (key.startsWith('wx_redpacket_')) {
-                            keysToDelete.push(key);
-                            deletedCount++;
-                        }
-                        // 刪除轉帳和禮物數據：ID_* (存儲 'accepted' 或 'returned')
-                        else if (key.startsWith('ID_')) {
-                            keysToDelete.push(key);
-                            deletedCount++;
-                        }
-                        // 🚨轉帳本身那筆（金額、對象、時效）以前漏掉了：狀態清了、資料還在，
-                        //   同一個單號再出現時又被當成有效的待收款
-                        else if (key.startsWith('wx_transfer_')) {
-                            keysToDelete.push(key);
-                            deletedCount++;
-                        }
-                    }
-                    
-                    // 執行刪除
-                    keysToDelete.forEach(key => localStorage.removeItem(key));
-                    
-                    AUI.alert(`已清除 ${deletedCount} 條數據（${keysToDelete.filter(k => k.startsWith('wx_redpacket_')).length} 個紅包，${keysToDelete.filter(k => k.startsWith('ID_')).length} 個轉帳/禮物）`);
-                }
-            };
+            // 「清除紅包/轉帳/禮物數據」那顆單獨的鈕拿掉了：它一按是全部聊天室一起清。
+            //   現在刪訊息、清空聊天記錄、刪除此聊天都會把那幾則帶的紅包/轉帳/禮物狀態一起清（purgeProtocolState）。
 
             // --- 保存邏輯 (DB + 全域同步) ---
             doc.getElementById('btn-save').onclick = async () => {
