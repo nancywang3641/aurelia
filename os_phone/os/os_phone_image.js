@@ -32,6 +32,7 @@
         @keyframes osImgPulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
         .os-img-photo { max-width: 240px; max-height: 320px; border-radius: 8px; display: block; cursor: pointer; }
         .os-img-photo--fill { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; border-radius: 0; }
+        .os-img-db:not([src]) { width: 160px; height: 120px; background: rgba(0,0,0,0.08); }
     `;
 
     const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -76,9 +77,32 @@
             return `<img class="${cls}" src="${esc(url)}" onclick="event.stopPropagation(); var V = (window.parent.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER); if (V) V.openFrom(this); else window.open(this.src);">`;
         },
 
-        // 描述是網址就放圖、否則放卡；三個 app 渲染時都只呼叫這一個
+        // 圖庫編號（img_／avt_ 開頭，存在 OS_DB）：先放一個空的 <img>，hydrate 再把圖貼上。
+        //   她從相簿上傳的照片走這條——訊息裡只存短短一個編號，不把整張圖的編碼塞進訊息
+        //   （塞進去的話，送給 AI 的聊天歷史、摘要、回傳酒館都會把那一大串當文字送出去）。
+        isDbId: function (s) { return /^(img_|avt_)[A-Za-z0-9_]+$/.test(String(s || '').trim()); },
+        dbPhoto: function (id, opts) {
+            const o = opts || {};
+            const cls = 'os-img-photo os-img-db' + (o.fill ? ' os-img-photo--fill' : '') + (o.cls ? ' ' + o.cls : '');
+            return `<img class="${cls}" data-db-img="${esc(String(id).trim())}" alt="" onclick="event.stopPropagation(); if (!this.src) return; var V = (window.parent.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER); if (V) V.openFrom(this); else window.open(this.src);">`;
+        },
+        hydrate: function (root) {
+            const db = win.OS_DB || window.OS_DB;
+            if (!db || !db.getImage || !root || !root.querySelectorAll) return;
+            root.querySelectorAll('img[data-db-img]:not([data-img-done])').forEach(async function (el) {
+                el.setAttribute('data-img-done', '1');
+                try {
+                    const url = await db.getImage(el.getAttribute('data-db-img'));
+                    if (url) el.src = url; else el.removeAttribute('data-img-done');
+                } catch (e) { el.removeAttribute('data-img-done'); }
+            });
+        },
+
+        // 描述是網址就放圖、圖庫編號就從圖庫拿、否則放卡；三個 app 渲染時都只呼叫這一個
         render: function (desc, opts) {
-            return this.isUrl(desc) ? this.photo(desc, opts) : this.card(desc, opts);
+            if (this.isUrl(desc)) return this.photo(desc, opts);
+            if (this.isDbId(desc)) return this.dbPhoto(desc, opts);
+            return this.card(desc, opts);
         },
 
         // 選一張照片（手機會跳相機／相簿），壓成 JPEG 回 data URL；取消回空字串。

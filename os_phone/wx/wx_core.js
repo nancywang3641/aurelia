@@ -205,6 +205,66 @@
         return ['【' + who + '在這個聊天室傳過的連結｜程式已經替你打開，下面是網頁上的內容】'].concat(parts).join('\n\n');
     }
 
+    // 📷 她從相簿傳的照片：跟「讓角色看我的頭像」同一套——圖只送一次。
+    //    傳了還沒看過的那幾張（最多 3 張）在下一次回覆時夾進去，要它每張寫一句描述回來；
+    //    描述存在那則訊息的 photoDesc，之後的聊天歷史只送那句文字，圖再也不送（圖留在歷史裡會越積越重）。
+    //    它沒寫回描述的話下一輪再試一次，試 2 次還是沒寫就不再送了。
+    const PHOTO_ID_RE = /\bimg_wx_[A-Za-z0-9_]+/;
+    const PHOTO_ONCE_MAX = 3;
+    const PHOTO_TRIES = 2;
+    let _photoBatch = { chatId: '', msgs: [] };   // 這一輪夾了哪幾張（照順序＝它回的編號）
+
+    function _photoIdOf(m) {
+        if (!m || !m.isMe || (m.type && m.type !== 'msg')) return '';
+        const x = String(m.content || '').match(PHOTO_ID_RE);
+        return x ? x[0] : '';
+    }
+    async function _photoDataUrl(id) {
+        const blobUrl = await win.OS_DB.getImage(id);
+        if (!blobUrl) return '';
+        try {
+            const blob = await (await fetch(blobUrl)).blob();
+            return await new Promise(function (res, rej) { const rd = new FileReader(); rd.onload = function () { res(String(rd.result || '')); }; rd.onerror = rej; rd.readAsDataURL(blob); });
+        } finally { try { URL.revokeObjectURL(blobUrl); } catch (e) {} }
+    }
+    async function _photoOnceMessage(chat) {
+        _photoBatch = { chatId: (chat && chat.id) || '', msgs: [] };
+        if (!chat || !win.OS_DB || !win.OS_DB.getImage) return null;
+        const pend = (chat.messages || []).filter(function (m) { return _photoIdOf(m) && !m.photoDesc && (m.photoTries || 0) < PHOTO_TRIES; }).slice(-PHOTO_ONCE_MAX);
+        const used = [], parts = [];
+        for (const m of pend) {
+            let url = '';
+            try { url = await _photoDataUrl(_photoIdOf(m)); } catch (e) {}
+            if (!url) continue;
+            m.photoTries = (m.photoTries || 0) + 1;
+            used.push(m);
+            parts.push({ type: 'image_url', image_url: { url: url } });
+        }
+        if (!used.length) return null;
+        _photoBatch.msgs = used;
+        const n = used.length;
+        const text = '（' + (n > 1 ? '這是我剛傳給你的 ' + n + ' 張照片，照順序是第 1 到第 ' + n + ' 張' : '這是我剛傳給你的照片') + '。'
+            + '看完在回覆的最後，' + (n > 1 ? '每張各' : '') + '單獨一行寫：[系統: 照片 ' + (n > 1 ? '編號' : '1') + ' 一句話描述]，'
+            + '把你看到的寫下來，之後就不用再看圖了。那一行不會變成聊天訊息。照片本身就照平常聊天那樣反應。）';
+        return { role: 'user', content: [{ type: 'text', text: text }].concat(parts) };
+    }
+    function _rememberPhoto(chatId, num, desc) {
+        const d = String(desc || '').trim();
+        // 不比對 chatId：它回覆時常自己寫一行 [Chat: 名字|代號]，代號不一定跟這間一樣；
+        //   同一時間只會有一則回覆在跑（IS_STREAMING_REPLY 鎖著），這一批就是這間的
+        if (!d || !_photoBatch.msgs.length) return false;
+        const m = (num >= 1 && num <= _photoBatch.msgs.length) ? _photoBatch.msgs[num - 1] : _photoBatch.msgs.find(function (x) { return !x.photoDesc; });
+        if (!m) return false;
+        m.photoDesc = d;
+        return true;
+    }
+    // 文字歷史用（聊天歷史、回傳酒館）：圖庫編號換成它看過的那句；還沒看過就只說是一張照片
+    function photoContextText(msg, text) {
+        const s = String(text == null ? '' : text);
+        if (!PHOTO_ID_RE.test(s)) return s;
+        return s.replace(new RegExp(PHOTO_ID_RE.source, 'g'), (msg && msg.photoDesc) ? ('照片｜' + msg.photoDesc) : '照片');
+    }
+
     function saveRedPacketData(packetId, data, chatId) {
         const C = _cards(); const cid = _cardChat(chatId);
         if (C && cid) {
@@ -431,6 +491,13 @@
                 const _avS = win.WX_AVATAR_AI || window.WX_AVATAR_AI;
                 if (_avS && _avS.rememberSeen) _avS.rememberSeen(ctx.chatId, String(seenMatch[1] || '').replace(/\]+\s*$/, '').trim());
             } catch (e) {}
+            return { type: 'system', content: '', isMe: false };
+        }
+
+        // 📷 它看完她傳的照片寫回來的描述：[系統: 照片 1 描述] → 存到那則照片訊息上，之後只送文字（見 _photoOnceMessage）
+        const photoSeenMatch = content.match(/^\s*(?:照片|相片)\s*(\d+)?\s*[:：]?\s*(.+)$/);
+        if (photoSeenMatch) {
+            try { _rememberPhoto(ctx.chatId, parseInt(photoSeenMatch[1], 10), String(photoSeenMatch[2] || '').replace(/\]+\s*$/, '').trim()); } catch (e) {}
             return { type: 'system', content: '', isMe: false };
         }
 
@@ -1477,6 +1544,7 @@
         const rc = _getRoomContent();
         if (!rc || !window.WX_VIEW) return;
         rc.innerHTML = chatObj.messages.map((m, i) => window.WX_VIEW.renderBubble(m, chatObj, false, i)).join('');
+        try { window.WX_VIEW.hydrateAvatars && window.WX_VIEW.hydrateAvatars(rc); } catch (e) {}   // 頭像與相簿照片（圖庫編號）
         _scrollToBottom();
     }
 
@@ -1490,6 +1558,7 @@
     }
 
     win.wxApp = {
+        photoContextText: photoContextText,   // 聊天歷史（os_api_engine）與回傳酒館（os_app_memory_inject）把照片編號換成文字
         get GLOBAL_ACTIVE_ID() { return GLOBAL_ACTIVE_ID; },
         set GLOBAL_ACTIVE_ID(v) { GLOBAL_ACTIVE_ID = v; },   // 📞 電話 app 撥通時暫借 active id（buildContext 靠它抓該聯絡人 DB 歷史）；無 setter 會在 strict mode 拋 TypeError → 通話卡死不調 API
         get APP_CONTAINER() { return APP_CONTAINER; },
@@ -1892,7 +1961,29 @@
         },
         onScrollDot: function(el) { const dots = APP_CONTAINER.querySelectorAll('.wx-dot'); const pageIndex = Math.round(el.scrollLeft / el.clientWidth); dots.forEach((d, i) => { if(i === pageIndex) d.classList.add('active'); else d.classList.remove('active'); }); },
         
-        action: function(type) { PENDING_ACTION_TYPE = type; const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } let hint = "請輸入..."; switch(type) { case 'photo': hint = "請輸入圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } modal.classList.add('show'); input1.focus(); this.togglePanel(); },
+        action: function(type) { PENDING_ACTION_TYPE = type; const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus(); this.togglePanel(); },
+
+        // 📷 從相簿選一張照片傳出去：壓成 JPEG 存進圖庫，訊息裡只放圖庫編號。
+        //    對方要「看」這張照片的話，在 triggerReply 那邊照頭像的做法只送一次（_photoOnceMessage）。
+        pickPhotoAndSend: async function () {
+            const PI = win.OS_PHONE_IMAGE;
+            const btn = doc.querySelector('#wxModalPick');
+            if (!PI || !PI.pickPhoto || !win.OS_DB || !win.OS_DB.saveImage) { AUI.toast('這裡還不能傳照片'); return; }
+            let dataUrl = '';
+            try { dataUrl = await PI.pickPhoto(); } catch (e) { console.warn('[WX] 選照片失敗:', e); AUI.toast('照片讀不進來'); return; }
+            if (!dataUrl) return;   // 取消
+            if (btn) btn.disabled = true;
+            try {
+                const blob = await (await fetch(dataUrl)).blob();
+                const id = 'img_wx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                await win.OS_DB.saveImage(id, blob);
+                this.closeModal();
+                await this.sendMsg(null, `[图片:${id}]`);
+            } catch (e) {
+                console.warn('[WX] 照片存檔失敗:', e);
+                AUI.toast('照片存不進去');
+            } finally { if (btn) btn.disabled = false; }
+        },
         closeModal: function() { const modal = doc.querySelector('#wxActionModal'); if(modal) modal.classList.remove('show'); PENDING_ACTION_TYPE = null; },
         confirmModal: function() { 
             const input1 = doc.querySelector('#wxModalInput'); 
@@ -2305,6 +2396,11 @@
                     const _links = _linkBrief(currentChat, _me);
                     if (_links) { messages.push({ role: 'system', content: _links }); console.log('[WX] 附上連結內容'); }
                 } catch (e) { console.warn('[WX] 連結內容組裝失敗（不影響送出）', e); }
+                // 📷 她從相簿傳、它還沒看過的照片 → 這一輪夾進去（看完它會寫描述回來，之後只送文字）
+                try {
+                    const _ph = await _photoOnceMessage(currentChat);
+                    if (_ph) { messages.push(_ph); console.log('[WX] 這輪夾了 ' + _photoBatch.msgs.length + ' 張照片給它看'); }
+                } catch (e) { console.warn('[WX] 照片夾帶失敗（不影響送出）:', e); }
                 // 👁 換了頭像但它還沒看過 → 這一輪夾一張進去。看完它會寫一句描述回來，
                 //    之後每輪只送那句文字，圖再也不送——不然圖留在歷史裡會越積越重。
                 try {

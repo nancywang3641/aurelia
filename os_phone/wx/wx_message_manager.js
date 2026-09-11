@@ -133,9 +133,10 @@
             // 更新預覽
             if (currentChat.messages.length > 0) {
                 const lastMsg = currentChat.messages[currentChat.messages.length - 1];
-                currentChat.lastPreview = (lastMsg.type === 'msg' && lastMsg.content) 
-                    ? (lastMsg.content.substring(0, 30) + (lastMsg.content.length>30?'...':'')) 
-                    : '';
+                const _pv = String((lastMsg.type === 'msg' && lastMsg.content) || '');
+                // 圖片訊息顯示 [圖片]，別把圖庫編號或網址露在聊天列表上
+                currentChat.lastPreview = /^\[\s*(?:图片|圖片|照片|Img)\s*[:：]/i.test(_pv) ? '[圖片]'
+                    : (_pv.substring(0, 30) + (_pv.length > 30 ? '...' : ''));
             } else {
                 currentChat.lastPreview = '';
             }

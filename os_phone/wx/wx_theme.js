@@ -64,6 +64,10 @@
             .wx-modal-input { width: 100%; padding: 10px; border: 1px solid #ddd; background: #f9f9f9; border-radius: 6px; box-sizing: border-box; font-size: 14px; outline: none; transition: border 0.2s; color:#000; }
             .wx-modal-input:focus { border-color: #07c160; background: #fff; }
             .wx-modal-input.hidden { display: none; }
+            /* 照片：從相簿選（手機會跳相簿／相機），底下的輸入框留給貼網址 */
+            .wx-modal-pick { width: 100%; padding: 11px; margin-bottom: 8px; border: none; border-radius: 6px; background: #07c160; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+            .wx-modal-pick:disabled { opacity: 0.6; cursor: wait; }
+            .wx-modal-pick.hidden { display: none; }
             .wx-modal-footer { display: flex; gap: 10px; margin-top: 10px; }
             .wx-btn { flex: 1; padding: 10px 0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; text-align: center; }
             .wx-btn-cancel { background: #f2f2f2; color: #333; }

@@ -82,7 +82,10 @@
             who = m.senderName || m.sender || '';
             if (!who || _isPlaceholderName(who)) who = '群裡有人';
         }
-        return `・${who}：${_cut(m.content)}`;
+        let text = m.content;
+        // 📷 相簿照片在訊息裡只是圖庫編號 → 換成對方看過寫下的那句
+        try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) text = _pt(m, text); } catch (e) {}
+        return `・${who}：${_cut(text)}`;
     }
     // 🚨 先挑出「手機上發生的」再取最後幾條。以前反過來（先取最後 6 條再濾）：
     //    跑團同步把正文裡的聊天室也塞進同一串，最後 6 條常常全是劇情訊息 → 濾完變空，你在微信打的話永遠回不去酒館。

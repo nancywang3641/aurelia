@@ -1383,10 +1383,13 @@
                                     if (_note) rawPhoneMsgs.push({ role: 'system', content: _note, _source: 'phone' });
                                     return;
                                 }
+                                // 📞 通話餵乾淨口語(content)，不帶 [Chat:|With:][名] 標頭的 raw → 免 AI 學歷史去用聊天格式
+                                let _hc = (promptKey === 'call_voice_system') ? (msg.content || "") : (msg.raw || msg.content || "");
+                                // 📷 她從相簿傳的照片在訊息裡只是圖庫編號 → 換成它看過寫下的那句（沒看過就只說是照片）
+                                try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) _hc = _pt(msg, _hc); } catch (e) {}
                                 rawPhoneMsgs.push({
                                     role: msg.isMe ? 'user' : 'assistant',
-                                    // 📞 通話餵乾淨口語(content)，不帶 [Chat:|With:][名] 標頭的 raw → 免 AI 學歷史去用聊天格式
-                                    content: (promptKey === 'call_voice_system') ? (msg.content || "") : (msg.raw || msg.content || ""),
+                                    content: _hc,
                                     _source: 'phone'
                                 });
                             });
@@ -1919,6 +1922,8 @@
                             const useSummary = _i < _cut;
                             let content = msg.raw || msg.content || '';
                             if (!content) return;
+                            // 📷 相簿照片的圖庫編號 → 它看過寫下的那句（跟酒館版 buildContext 同一支）
+                            try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) content = _pt(msg, content); } catch (e) {}
                             content = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
 
                             if (useSummary) {
