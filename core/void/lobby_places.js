@@ -127,6 +127,36 @@
     let _paint = null;           // 換到別的地點（不重建外殼）
     let _curId = null;           // 現在站在哪（換場景面板要標「使用中」）
 
+    // 🪟 把既有的浮窗（世界門／交易所／書咖櫃檯／黑市）搬進窗格：照常叫它開，
+    //    等它的 DOM 生出來就整個搬進容器；離開時叫它關，關不掉就搬回原位。
+    //    🚨 08-31 地點視圖改版（44666a1）時這支被整段刪掉，四個地點的 openIn 卻還在叫它
+    //       → 對話模式點「開啟」一律 ReferenceError、顯示「這個面板現在打不開」。原樣補回。
+    function _mountFloating(c, open, sel, close) {
+        const place = () => {
+            const el = document.querySelector(sel);
+            if (!el) return false;
+            const orig = el.parentElement;
+            c.appendChild(el);
+            c._pvRestore = () => {
+                try { close && close(); } catch (e) {}
+                // close 通常會把它移除；萬一沒有就搬回原位，別留在已經消失的容器裡
+                if (el.isConnected && orig) { try { orig.appendChild(el); } catch (e) {} }
+            };
+            return true;
+        };
+        let tries = 0;
+        const tick = () => {
+            if (place()) return;
+            if (++tries > 40) { c.innerHTML = '<div class="lb-pv-fail">面板沒開起來</div>'; return; }
+            // 🚨 用 setTimeout 不用 requestAnimationFrame：等的是「DOM 生出來沒」不是畫面，
+            //    而 rAF 在頁面沒在合成時（分頁切到背景、視窗被遮住）根本不會 fire，
+            //    面板就永遠搬不進來、離開時也不會被清掉。
+            setTimeout(tick, 30);
+        };
+        try { open(); } catch (e) { console.warn('[LobbyPlaces] 面板開啟失敗', sel, e); }
+        tick();
+    }
+
     // 🔮 把塔羅畫進窗格：OS_TAROT.launch 本來就吃容器，只差它的 ❮ 返回鈕。
     //    那顆鈕寫死呼叫 PhoneSystem.goHome（它原本住手機殼裡）→ 暫借成「回主頁」，關掉時還原。
     //    面板內那顆本身也用 CSS 藏起來了（一頁只留一顆返回鈕），這裡的接線是保險。
@@ -297,17 +327,19 @@
     // 去別的地方＝點那張卡（走過去），到了之後再用當前區域那顆箭頭進去。
     function _cardHtml(c, curId, withApp) {
         const p = c.p;
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const cls = 'lb-rail-card' + (p.id === curId ? ' is-cur' : '') + (c.on ? '' : ' is-off');
         return '<div class="' + cls + '" data-id="' + p.id + '">' +
-            '<button class="lb-rail-main" type="button" data-go="talk"' + (c.on ? '' : ' disabled') + '>' +
+            '<button class="lb-rail-main" type="button" data-go="talk"' + (p.id === curId ? ' aria-current="location"' : '') + (c.on ? '' : ' disabled') + '>' +
+                '<span class="lb-rail-thumb" aria-hidden="true"><img alt="" data-bg="' + esc(p.bg || '') + '"></span>' +
                 '<span class="lb-rail-ic"><i class="fa-solid ' + (c.on ? p.icon : 'fa-lock') + '"></i></span>' +
                 '<span class="lb-rail-tx">' +
-                    '<span class="lb-rail-t">' + p.name + '</span>' +
-                    '<span class="lb-rail-who">' + (c.on ? ((c.npc && c.npc.name) || c.emptyWho || '　') : '尚未開放') + '</span>' +
+                    '<span class="lb-rail-t">' + esc(p.name) + '</span>' +
+                    '<span class="lb-rail-who">' + esc(c.on ? ((c.npc && c.npc.name) || c.emptyWho || '　') : '尚未開放') + '</span>' +
                 '</span>' +
             '</button>' +
             ((c.on && withApp) ? '<button class="lb-rail-app" type="button" data-go="app" title="' + (p.flatName || p.name) + '">' +
-                '<i class="fa-solid fa-arrow-right-to-bracket"></i></button>' : '') +
+                '<i class="fa-solid fa-arrow-right-to-bracket"></i><span class="lb-rail-app-label">開啟</span></button>' : '') +
         '</div>';
     }
 
@@ -377,6 +409,23 @@
         let curId = null;
         let curNpc = null;      // 這個地點現在站著誰（我的家那位是非同步撈回來的）
         let paintTok = 0;       // 連點換地點時，晚回來的那張不准蓋掉新的
+        const desktopRail = win.matchMedia('(min-width:761px)');
+        const loadRailThumbs = () => {
+            if (!desktopRail.matches) return;
+            const tok = paintTok;
+            // 共用場景選擇器快取；窄畫面不抓隱藏圖片，旋轉回桌面寬度時補載。
+            rail.querySelectorAll('.lb-rail-thumb img[data-bg]:not([src])').forEach(async img => {
+                if (!img.dataset.bg) return;
+                try {
+                    const url = await _thumb(img.dataset.bg);
+                    if (url && tok === paintTok && img.isConnected) {
+                        img.src = url;
+                        img.parentElement.classList.add('is-loaded');
+                    }
+                } catch (e) { /* 保留圖示與文字入口，不影響導航 */ }
+            });
+        };
+        desktopRail.addEventListener('change', loadRailThumbs);
 
         // mode: 'talk' 對話 / 'app' 應用（兩者互斥，見檔頭）
         const go = (mode) => {
@@ -451,6 +500,7 @@
                 }).catch(() => {});
             }
             rail.innerHTML = _railHtml(curId);
+            loadRailThumbs();
             go(mode || (_hasNpc(p) ? 'talk' : 'app'));
         };
         _paint = paint;
@@ -468,6 +518,7 @@
 
         const close = () => {
             restorePanel(); talkOff(); closeScenePicker();
+            desktopRail.removeEventListener('change', loadRailThumbs);
             if (_paint === paint) { _paint = null; _curId = null; }
             box.remove();
             if (_view === close) _view = null;
