@@ -1326,6 +1326,25 @@
     function _getScrollEl()  { return APP_CONTAINER ? APP_CONTAINER.querySelector('.wx-room-scroll') : null; }
     function _getRoomContent(){ const rc = APP_CONTAINER ? APP_CONTAINER.querySelector('#wxRoomContent') : null; if (rc) _bindQuoteGestures(rc); return rc; }
 
+    // 點聊天內容區＝收起「＋」功能面板與表情包面板（跟微信一樣）。
+    //   綁在整個 app 容器上做委派：聊天室每次重畫都是新的 DOM，逐次綁會漏。
+    function _closePanels() {
+        if (!APP_CONTAINER) return;
+        let closed = false;
+        APP_CONTAINER.querySelectorAll('.wx-action-panel.open, .wx-sticker-panel.open').forEach(function (p) { p.classList.remove('open'); closed = true; });
+        const scroll = _getScrollEl();
+        if (closed && scroll) scroll.style.paddingBottom = '70px';
+    }
+    function _bindPanelDismiss(container) {
+        if (!container || container.dataset.wxPanelDismiss === '1') return;
+        container.dataset.wxPanelDismiss = '1';
+        container.addEventListener('pointerdown', function (e) {
+            if (container !== APP_CONTAINER) return;
+            const t = e.target;
+            if (t && t.closest && t.closest('.wx-page-room')) _closePanels();
+        });
+    }
+
     // 長按任一則訊息＝引用它。桌面右鍵同一條路。
     // 事件綁在整個訊息區上做委派，泡泡是每次重畫的，逐顆綁會漏掉重畫後的那些。
     let _replyTo = null;   // { name, text }：正在回覆誰的哪句話；送出或取消就清掉
@@ -2332,6 +2351,7 @@
             if (win.PhoneSystem) {
                 win.PhoneSystem.install('微信', '💬', '#07c160', async (container) => {
                     APP_CONTAINER = container;
+                    _bindPanelDismiss(container);
                     console.log('[Core] 微信面板已打開');
                     try {
                         // 🔒 chatId 隔離：只載入「當前劇情卡」自己的聯絡人（按 tavernChatId 章濾，與注入器同款）→

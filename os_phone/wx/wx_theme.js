@@ -100,6 +100,11 @@
             .wx-call-rec { display: inline-flex; align-items: center; gap: 7px; }
             .wx-call-rec i { font-size: 15px; opacity: 0.75; }
             .wx-bubble-content { max-width: 100%; padding: 10px 14px; border-radius: 6px; position: relative; font-size: 15px; line-height: 1.5; word-wrap: break-word; color: #000; display: flex; flex-direction: column; gap: 5px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+            /* 🚨 圖片／影片／定位卡片是寫死寬度（230～240px），外層被上面 70% 夾窄時卡片會往右溢出；
+               自己這側頭像在右邊 → 卡片整張壓在頭像上。卡片一律不准比泡泡寬，縮窄照比例。 */
+            .wx-bubble-content > * { max-width: 100%; box-sizing: border-box; }
+            /* 卡片自己就是造型（泡泡透明無邊），不要泡泡的小尖角 */
+            .wx-msg-row .wx-bubble-content.wx-bubble-bare::before { display: none; }
             .wx-group-name { font-size: 10px; color: #999; margin-bottom: 2px; margin-left: 10px; }
             /* 引用回覆：照微信擺在泡泡內、正文下面的一條灰塊。結構由 OS_API.chatQuote 產，兩個 app 共用 */
             .wx-quote { display: flex; gap: 4px; align-items: baseline; margin-top: 2px; padding: 5px 8px; border-radius: 4px; background: rgba(0,0,0,0.06); font-size: 11px; line-height: 1.4; color: #8a8a8a; cursor: pointer; }

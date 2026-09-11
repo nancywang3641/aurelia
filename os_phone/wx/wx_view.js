@@ -331,7 +331,7 @@
             // 貼圖／圖片／轉帳這些卡片，泡泡本來就被 bubbleStyle 設成透明無邊（卡片自己就是造型），
             // 掛上去只會讓主題把卡片外面又糊一層底 → 只有純文字泡泡才吃主題
             const plainBubble = !(isSpecial || isImageTag || isSticker);
-            return `<div class="wx-msg-row ${side} pbub-row ${sideCls} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${avatarAttr}></div><div class="pbub-wrap wx-bubble-wrap">${nameHTML}<div class="wx-bubble-content${plainBubble ? ' pbub-bubble' : ''}" style="${bubbleStyle}">${html}${quoteHTML}</div></div></div>`;
+            return `<div class="wx-msg-row ${side} pbub-row ${sideCls} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${avatarAttr}></div><div class="pbub-wrap wx-bubble-wrap">${nameHTML}<div class="wx-bubble-content${plainBubble ? ' pbub-bubble' : ' wx-bubble-bare'}" style="${bubbleStyle}">${html}${quoteHTML}</div></div></div>`;
         },
 
         generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },
