@@ -707,7 +707,9 @@
 
     // 收掉整個奧瑞亞（大廳 MAIN MENU 的「關閉」走這條）。
     // #form_sheld 的還原已統一收進 hide()，這裡直接委派即可。
+    // 🚨 PWA（standalone）後面沒有酒館可以回去，收掉就只剩一片白 → 不動作；那兩顆鈕在 PWA 也藏起來了（lobby.css）。
     AureliaControlCenter.requestClose = function() {
+        if (_embedKind === 'standalone') return;
         AureliaControlCenter.hide();
     };
 

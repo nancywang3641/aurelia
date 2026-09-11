@@ -1365,3 +1365,9 @@
     .lb-pv:not(.is-app) .lb-pv-open[hidden] { display:none; }
     .lb-pv-open i { font-size:11px; }
 }
+
+/* ⏻ 關閉奧瑞亞：在酒館裡是收起奧瑞亞、回到酒館；PWA（掛在 #aurelia-standalone-root）後面沒有酒館，
+   點了只剩一片白。右上角那顆與主選單的「關閉」在 PWA 都不放（requestClose 本身也擋了）。
+   用 id 寫：這兩顆的 display 來自 .lb-icon-btn 與 .lobby-right .void-btn。 */
+#aurelia-standalone-root #aurelia-global-close-btn,
+#aurelia-standalone-root #void-close-btn { display:none; }
