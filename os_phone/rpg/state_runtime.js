@@ -2631,16 +2631,20 @@ _directorSpec(castNames);
                 _genStopped = false;  // 新一輪真生成開始 → 清掉上輪的「手動停止」旗標
                 console.log('[State Runtime] 🔎 GENERATION_STARTED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷
                 if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結生成不是劇情輪 → 別注入 state/rules
+                const jobs = [];
                 // state 摘要受「即時抽取總開關」控制
-                if (isEnabled()) injectCurrent();
+                if (isEnabled()) jobs.push(injectCurrent);
                 // AVS rules 永遠評估（不受抽取開關影響；沒命中規則就不 inject）
-                injectRules();
+                jobs.push(injectRules);
                 // 缺頭像提醒（永遠評估；一個都不缺就不 inject）
-                injectAvatarReminder();
+                jobs.push(injectAvatarReminder);
                 // 成就乾旱提醒（近期 VN 劇情連續零成就才 inject）
-                injectAchievementReminder();
+                jobs.push(injectAchievementReminder);
                 // 🎬 導演稿（自己看 sp_director_on；沒稿就不注入）
-                injectDirector();
+                jobs.push(injectDirector);
+                // 五支一起跑、把 Promise 交回去 → 酒館 emit 會等全部注入完才組 prompt；最多等 2.5 秒，免得資料庫卡住連生成一起卡
+                const all = Promise.all(jobs.map((fn) => Promise.resolve().then(fn).catch(() => {})));
+                return Promise.race([all, new Promise((r) => setTimeout(r, 2500))]);
             });
         }
 

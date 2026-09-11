@@ -101,9 +101,13 @@
         }
     }
 
+    // 監聽器把 Promise 交回去 → 酒館 emit 會等注入完才組 prompt；最多等 2.5 秒，免得資料庫卡住連生成一起卡
+    const WAIT_MS = 2500;
+    function _waitFor(fn) { return Promise.race([Promise.resolve().then(fn).catch(function () {}), new Promise(function (r) { setTimeout(r, WAIT_MS); })]); }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
-        if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectSummary(); });   // dryRun 空跑不注入(once 會被空跑吃掉)
+        if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectSummary); });   // dryRun 空跑不注入(once 會被空跑吃掉)
         // preset 並排制的 setExtensionPrompt 是持久值 → 生成一結束就清(仿 once)，
         // 免得殘值被後續的大總結 generateRaw / 其他工具生成一起吃進去
         const _clearAfterGen = () => { try { _lastUninject?.(); } catch (e) {} _lastUninject = null; };

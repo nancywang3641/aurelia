@@ -395,13 +395,17 @@ ${list}
     }
 
     // ── 事件接線 ───────────────────────────────────────────────────────
+    // 監聽器把 Promise 交回去 → 酒館 emit 會等注入完才組 prompt；最多等 2.5 秒，免得資料庫卡住連生成一起卡
+    const WAIT_MS = 2500;
+    function _waitFor(fn) { return Promise.race([Promise.resolve().then(fn).catch(function () {}), new Promise(function (r) { setTimeout(r, WAIT_MS); })]); }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) {
             win.eventOn(win.tavern_events.GENERATION_STARTED, (type, opts, dryRun) => {
                 if (dryRun) return;   // 🚫 dryRun 空跑會吃掉 once 注入，真生成反而沒有
                 if (win.__AURELIA_SUMMARIZING) return;
-                injectDossiers();
+                return _waitFor(injectDossiers);
             });
         }
         if (win.tavern_events.CHAT_CHANGED) {
