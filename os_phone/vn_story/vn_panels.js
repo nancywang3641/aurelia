@@ -161,7 +161,13 @@
     /* =========================================
        📱 聊天背景面板
        ========================================= */
-    async function openChatBgPanel() { await _refreshChatBgThumbs(); document.getElementById('chat-bg-panel').classList.add('active'); }
+    async function openChatBgPanel() {
+        await _refreshChatBgThumbs();
+        // 停在泡泡分頁時要重畫：換了一間聊天室，「使用中」那張就不一樣了
+        const bub = document.getElementById('chat-more-bubble');
+        if (bub && !bub.hidden) _renderBubbleList();
+        document.getElementById('chat-bg-panel').classList.add('active');
+    }
     function closeChatBgPanel() { document.getElementById('chat-bg-panel').classList.remove('active'); }
     async function _refreshChatBgThumbs() {
         const grid = document.getElementById('chat-bg-grid'); const addBtn = grid.querySelector('.chat-bg-add');
@@ -196,6 +202,59 @@
     async function loadSavedChatBg() {
         const current = await VN_Cache.get('chat_bg', '_current');
         if (current && current.url) { const img = document.getElementById('chat-bg-img'); img.src = current.url; img.style.display = 'block'; document.getElementById('phone-chat').classList.add('has-bg'); }
+    }
+
+    /* =========================================
+       📱 聊天泡泡：從微信的主題庫挑一套給這間
+       主題庫、注入、提權都在微信那邊（WX_BUBBLE_SETTINGS / WX_BUBBLE_AI），這裡只畫清單。
+       對得到同名聯絡人的聊天室，挑了會寫進他的微信設定——同一個人兩邊同款。
+       ========================================= */
+    function switchChatMoreTab(tab) {
+        const isBub = tab === 'bubble';
+        document.getElementById('chat-more-bg').hidden = isBub;
+        document.getElementById('chat-more-bubble').hidden = !isBub;
+        document.querySelectorAll('.chat-more-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+        if (isBub) _renderBubbleList();
+    }
+    function _vnRoom() {
+        const P = window.VN_Phone || win.VN_Phone;
+        const name = (document.getElementById('chat-title')?.innerText || '').trim();
+        return { name, key: (P && P.currentChatroom) || name };
+    }
+    function _renderBubbleList() {
+        const list = document.getElementById('chat-bubble-list');
+        const hint = document.getElementById('chat-bubble-hint');
+        const B = win.WX_BUBBLE_SETTINGS, AI = win.WX_BUBBLE_AI;
+        hint.classList.remove('error'); hint.textContent = '';
+        if (!B || !AI || !B.roomState) { list.innerHTML = '<div class="chat-bubble-empty">泡泡主題沒載入到，重整一次看看</div>'; return; }
+
+        const room = _vnRoom();
+        const st = B.roomState(room.name, room.key);
+        if (st.via === 'contact') hint.textContent = `跟微信的「${room.name}」同一套，這裡換了那邊也會換`;
+
+        const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const gal = AI.galLoad();
+        // 第一張是預設；其餘照主題庫的順序
+        const items = [{ id: '', name: '預設', css: '' }].concat(gal);
+        const isOn = (t) => t.id ? (st.mode === 'ai' && st.css === t.css) : st.mode === 'default';
+        list.innerHTML = items.map(t => `<div class="chat-bubble-card${isOn(t) ? ' selected' : ''}">
+                <iframe sandbox="allow-same-origin" scrolling="no" tabindex="-1"></iframe>
+                <div class="chat-bubble-name"><span>${esc(t.name)}</span>${isOn(t) ? '<i class="fa-solid fa-check"></i>' : ''}</div>
+            </div>`).join('')
+            + (gal.length ? '' : '<div class="chat-bubble-empty">在微信的氣泡設置裡收藏過的主題，會出現在這裡</div>');
+
+        const cards = list.querySelectorAll('.chat-bubble-card');
+        items.forEach((t, i) => {
+            const card = cards[i]; if (!card) return;
+            try { card.querySelector('iframe').srcdoc = AI.buildThumb(t.css); } catch (e) {}
+            card.onclick = () => {
+                if (!B.setRoomTheme(room.name, room.key, t.id ? t : null)) {
+                    hint.classList.add('error'); hint.textContent = '存不進去，瀏覽器的空間滿了';
+                    return;
+                }
+                closeChatBgPanel();
+            };
+        });
     }
 
     /* =========================================
@@ -1012,7 +1071,7 @@
     window.VN_Settings = VN_Settings;
     window.VN_Panels = {
         openGameSettings, closeGameSettings,
-        openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg,
+        openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg, switchChatMoreTab,
         loadAvatarManager, regenerateAvatarEntry, deleteAvatarEntry,
         loadBgManager, regenerateBgEntry, deleteBgEntry, loadSpriteManager,
         loadSceneManager,

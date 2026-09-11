@@ -61,6 +61,7 @@
             .wx-btn { flex: 1; padding: 10px 0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; text-align: center; }
             .wx-btn-cancel { background: #f2f2f2; color: #333; }
             .wx-btn-confirm { background: #07c160; color: #fff; }
+            .wx-btn-reset { background: #f2f2f2; color: #fa5151; }
 
             .wx-page-container { flex: 1; position: relative; overflow: hidden; width: 100%; display: flex; flex-direction: column; height: calc(100% - 45px); }
             .wx-page-list { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow-y: auto; background: #fff; transition: transform 0.3s; z-index: 1; }
@@ -344,6 +345,7 @@
             .wx-dark .wx-modal-input { background: #2a2a2c; border-color: #3a3a3c; color: #f0f0f0; }
             .wx-dark .wx-context-item { color: #f0f0f0; border-bottom-color: #2a2a2a; }
             .wx-dark .wx-btn-cancel { background: #2a2a2c; color: #ccc; }
+            .wx-dark .wx-btn-reset { background: #2a2a2c; color: #ff6b6b; }
             .wx-dark .wx-source-details { background: #1c1c1e; border-color: #3a3a3c; color: #aaa; }
             .wx-dark .wx-code-content { background: #0d0d0d; border-color: #2a2a2a; color: #9acd9a; }
 

@@ -10,8 +10,11 @@
     const STYLE_ID = 'wx-bubble-custom-style';
 
     // 預設樣式 (若該角色未設定，使用此樣式)
+    // 🚨mode 'default'＝什麼都不注入，讓 app 自己的樣式說話。
+    //   以前沒設過的聊天室也照微調那條注入一份綠白泡泡、還帶 !important，
+    //   看起來跟預設一樣，其實把深色模式的對方泡泡壓成白的——「還原」回到這個狀態才是真的還原。
     const DEFAULT_CONFIG = {
-        mode: 'general',
+        mode: 'default',
         me_bgColor: '#95ec69', me_textColor: '#000000',
         me_radiusTL: 6, me_radiusTR: 6, me_radiusBR: 6, me_radiusBL: 6,
         me_borderEnabled: false, me_borderWidth: 1, me_borderColor: '#000000',
@@ -54,20 +57,70 @@
             this.injectConfig(this.getConfig(chatId));
         },
 
+        // 還原預設：回到「什麼都不注入」。交給 AI 與 CSS 那兩頁的內容留著——
+        // 她之後想切回去，點那個分頁再保存就回來了；主題庫本來就是全域的，不受影響。
+        resetConfig: function(chatId) {
+            if (!chatId) return;
+            const cur = this.getConfig(chatId);
+            this.saveConfig(chatId, { ...DEFAULT_CONFIG, aiCSS: cur.aiCSS || '', customCSS: cur.customCSS || DEFAULT_CONFIG.customCSS });
+        },
+
         // VN 劇情裡演出來的手機聊天：那邊的聊天室只有房名（或 AI 自己寫的 id），
         // 跟微信的聯絡人 id 不是同一個空間。用房名去聯絡人裡找同名的人，
         // 找到就吃他在微信那邊設好的泡泡——同一個人，兩邊長一樣。
-        // 找不到（群聊、路人、還沒建聯絡人）就回預設外觀，不要留著上一間的皮。
-        applyStyleForRoom: function(roomName) {
-            let id = '';
+        _contactIdByName: function(roomName) {
             try {
                 const C = win.WX_CONTACTS;
                 const list = (C && C.getAllCustomContacts) ? C.getAllCustomContacts() : [];
                 const hit = (list || []).find(c => c && c.name === roomName);
-                id = (hit && hit.id) || '';
-            } catch (e) {}
-            if (id) this.applyStyle(id); else this.injectConfig(DEFAULT_CONFIG);
-            return id;
+                return (hit && hit.id) || '';
+            } catch (e) { return ''; }
+        },
+
+        // 對不到聯絡人的 VN 聊天室（群聊、路人）自己記一份，從主題庫挑的。
+        // key 用 VN 那邊的接續 key（id 優先、退回房名），跟聊天記錄接續同一套。
+        _roomKey: (roomKey) => 'vn_bubble_room::' + roomKey,
+        getRoomTheme: function(roomKey) {
+            if (!roomKey) return null;
+            try { return JSON.parse(localStorage.getItem(this._roomKey(roomKey)) || 'null'); } catch (e) { return null; }
+        },
+
+        // 這間現在是哪一套：{ via:'contact'|'room'|'default', galId }——VN 那邊的面板拿它標「使用中」
+        roomState: function(roomName, roomKey) {
+            const id = this._contactIdByName(roomName);
+            if (id) {
+                const c = this.getConfig(id);
+                return { via: 'contact', contactId: id, mode: c.mode, css: c.mode === 'ai' ? (c.aiCSS || '') : '' };
+            }
+            const t = this.getRoomTheme(roomKey);
+            return t ? { via: 'room', mode: 'ai', css: t.css || '' } : { via: 'default', mode: 'default', css: '' };
+        },
+
+        // 在 VN 手機裡從主題庫挑一套（theme=null＝還原預設）。
+        // 對得到聯絡人就寫進他的微信設定——不然兩邊又不一樣了；對不到才記在這間 VN 聊天室。
+        setRoomTheme: function(roomName, roomKey, theme) {
+            const id = this._contactIdByName(roomName);
+            if (id) {
+                if (!theme) this.resetConfig(id);
+                else this.saveConfig(id, { ...this.getConfig(id), mode: 'ai', aiCSS: theme.css || '' });
+            } else if (roomKey) {
+                try {
+                    if (!theme) localStorage.removeItem(this._roomKey(roomKey));
+                    else localStorage.setItem(this._roomKey(roomKey), JSON.stringify({ id: theme.id || '', name: theme.name || '', css: theme.css || '' }));
+                } catch (e) { return false; }   // 🚨撞 localStorage 上限是靜默失敗，回 false 讓面板講出來
+            }
+            this.applyStyleForRoom(roomName, roomKey);
+            return true;
+        },
+
+        // 優先序：同名聯絡人（微信那邊設的）→ 這間 VN 聊天室自己挑的 → 預設。
+        // 都沒有就回預設外觀，不要留著上一間的皮。
+        applyStyleForRoom: function(roomName, roomKey) {
+            const id = this._contactIdByName(roomName);
+            if (id) { this.applyStyle(id); return id; }
+            const t = this.getRoomTheme(roomKey);
+            this.injectConfig(t ? { mode: 'ai', aiCSS: t.css || '' } : DEFAULT_CONFIG);
+            return '';
         },
 
         // 用一份 config 直接產 CSS 注入（不經 localStorage）。
@@ -77,7 +130,9 @@
             config = config || DEFAULT_CONFIG;
             let css = '';
 
-            if (config.mode === 'general') {
+            if (config.mode === 'default') {
+                css = '';
+            } else if (config.mode === 'general') {
                 // --- Me ---
                 const meBorder = config.me_borderEnabled ? 
                     `border: ${config.me_borderWidth}px solid ${config.me_borderColor} !important;` : 
@@ -136,15 +191,19 @@
             this._curChatId = chatId;      // 關閉時要拿它把即時預覽還原回已存的設定
             const config = this.getConfig(chatId);
             currentEditTarget = 'me';
+            // 預設狀態沒有自己的分頁：攤開微調那頁（上面填的就是預設色），但不算「用微調」，
+            // 要等她真的動了哪一格才切成微調。
+            const tab = config.mode === 'default' ? 'general' : config.mode;
+            const on = (t) => tab === t;
 
             const html = `
                 <div class="wx-modal-title">氣泡設置 (${chatId})</div>
                 <div style="font-size:11px; text-align:center; color:#999; margin-bottom:10px;">此設定僅對本聊天室生效</div>
 
                 <div style="display:flex; border-bottom:1px solid #eee; margin-bottom:10px;">
-                    <div id="tab-general" class="wx-tab-btn ${config.mode === 'general' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='general'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='general'?'#07c160':'transparent'};">微調</div>
-                    <div id="tab-ai" class="wx-tab-btn ${config.mode === 'ai' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='ai'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='ai'?'#07c160':'transparent'};">交給 AI</div>
-                    <div id="tab-custom" class="wx-tab-btn ${config.mode === 'custom' ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${config.mode==='custom'?'#07c160':'#999'}; border-bottom:2px solid ${config.mode==='custom'?'#07c160':'transparent'};">CSS</div>
+                    <div id="tab-general" class="wx-tab-btn ${on('general') ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${on('general')?'#07c160':'#999'}; border-bottom:2px solid ${on('general')?'#07c160':'transparent'};">微調</div>
+                    <div id="tab-ai" class="wx-tab-btn ${on('ai') ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${on('ai')?'#07c160':'#999'}; border-bottom:2px solid ${on('ai')?'#07c160':'transparent'};">交給 AI</div>
+                    <div id="tab-custom" class="wx-tab-btn ${on('custom') ? 'active' : ''}" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:${on('custom')?'#07c160':'#999'}; border-bottom:2px solid ${on('custom')?'#07c160':'transparent'};">CSS</div>
                     <!-- 🚨主題庫是「瀏覽」不是一種樣式模式：切到它不會改變現在生效的是哪一套 -->
                     <div id="tab-gal" class="wx-tab-btn" style="flex:1; text-align:center; padding:10px 4px; cursor:pointer; font-weight:bold; font-size:13px; color:#999; border-bottom:2px solid transparent;">主題庫</div>
                 </div>
@@ -162,7 +221,7 @@
                     </div>
                 </div>
 
-                <div id="panel-general" style="display:${config.mode === 'general' ? 'block' : 'none'};">
+                <div id="panel-general" style="display:${on('general') ? 'block' : 'none'};">
                     <div style="display:flex; gap:10px; margin-bottom:10px; justify-content:center;">
                         <button id="btn-target-other" class="wx-btn" style="background:#f0f0f0; color:#333; border:1px solid #ddd; padding:5px 15px;"><i class="fa-solid fa-circle"></i> 編輯對方</button>
                         <button id="btn-target-me" class="wx-btn" style="background:#07c160; color:#fff; border:1px solid #07c160; padding:5px 15px;"><i class="fa-solid fa-circle"></i> 編輯我</button>
@@ -224,6 +283,7 @@
                 </div>
 
                 <div class="wx-modal-footer">
+                    <button class="wx-btn wx-btn-reset" id="wx-bubble-reset">還原預設</button>
                     <button class="wx-btn wx-btn-cancel" id="wx-bubble-close">關閉</button>
                     <button class="wx-btn wx-btn-confirm" id="wx-bubble-save">保存</button>
                 </div>
@@ -288,6 +348,7 @@
                 const el = doc.getElementById(id);
                 if(!el) return;
                 el.oninput = () => {
+                    tempConfig.mode = 'general';   // 動了哪一格才算開始用微調（原本可能停在預設）
                     const fullKey = currentEditTarget + '_' + keySuffix;
                     tempConfig[fullKey] = isNum ? (parseInt(el.value) || 0) : el.value;
                     updatePreview();
@@ -300,6 +361,7 @@
 
             const checkBorder = doc.getElementById('inp-border-en');
             checkBorder.onchange = () => {
+                tempConfig.mode = 'general';
                 tempConfig[currentEditTarget + '_borderEnabled'] = checkBorder.checked;
                 doc.getElementById('border-settings').style.display = checkBorder.checked ? 'flex' : 'none';
                 updatePreview();
@@ -311,7 +373,8 @@
             const switchTab = (tab) => {
                 // 🚨主題庫是瀏覽用的分頁，不是一種樣式模式——切過去不能改掉現在生效的那一套，
                 //   不然她只是想翻翻庫，回來就發現套用的東西被換掉了。
-                if (tab !== 'gal') tempConfig.mode = tab;
+                // 預設狀態點微調只是攤開來看，還沒動任何一格就還是預設（見 open 那段）。
+                if (tab !== 'gal' && !(tab === 'general' && tempConfig.mode === 'default')) tempConfig.mode = tab;
                 doc.getElementById('panel-general').style.display = tab === 'general' ? 'block' : 'none';
                 doc.getElementById('panel-ai').style.display = tab === 'ai' ? 'block' : 'none';
                 doc.getElementById('panel-custom').style.display = tab === 'custom' ? 'block' : 'none';
@@ -332,11 +395,34 @@
 
             doc.getElementById('inp-css').oninput = (e) => { tempConfig.customCSS = e.target.value; };
             doc.getElementById('wx-bubble-close').onclick = () => { doc.getElementById('wxActionModal').classList.remove('show'); };
-            doc.getElementById('wx-bubble-save').onclick = () => { 
-                this.saveConfig(chatId, tempConfig); 
-                doc.getElementById('wxActionModal').classList.remove('show'); 
+            doc.getElementById('wx-bubble-save').onclick = () => {
+                this.saveConfig(chatId, tempConfig);
+                doc.getElementById('wxActionModal').classList.remove('show');
             };
-            
+
+            // 還原預設：直接生效（跟主題庫的套用一樣，不用再按保存）。
+            // 🚨window.confirm 在 Tauri 會被攔掉（按了完全沒反應），一律兩段式
+            const resetBtn = doc.getElementById('wx-bubble-reset');
+            let resetArmed = false, resetTimer = 0;
+            resetBtn.onclick = () => {
+                if (!resetArmed) {
+                    resetArmed = true; resetBtn.textContent = '再按一次';
+                    resetTimer = setTimeout(() => { resetArmed = false; resetBtn.textContent = '還原預設'; }, 4000);
+                    return;
+                }
+                resetArmed = false; clearTimeout(resetTimer);
+                this.resetConfig(chatId);
+                // tempConfig 要原地改：交給 AI／主題庫那兩頁手上拿的是同一個物件
+                const fresh = this.getConfig(chatId);
+                Object.keys(tempConfig).forEach(k => { delete tempConfig[k]; });
+                Object.assign(tempConfig, fresh);
+                currentEditTarget = 'me';
+                loadValuesToInputs();
+                switchTab('general');
+                resetBtn.textContent = '✓ 還原了';
+                resetTimer = setTimeout(() => { resetBtn.textContent = '還原預設'; }, 1400);
+            };
+
             loadValuesToInputs();
             updatePreview();
         },
@@ -485,6 +571,7 @@
             // 現在生效的是哪一段 CSS。微調那頁存的是一堆參數不是 CSS，先轉過來——
             // 不轉的話她在微調頁試出來的配色就收不進庫，而那本來就是她最常用的入口。
             const currentCss = () => {
+                if (tempConfig.mode === 'default') return '';   // 預設外觀沒什麼好收的
                 if (tempConfig.mode === 'ai') return tempConfig.aiCSS || '';
                 if (tempConfig.mode === 'custom') return tempConfig.customCSS || '';
                 return AI.fromGeneral(tempConfig);

@@ -258,18 +258,28 @@
                             <div id="chat-bg-panel" onclick="event.stopPropagation()">
                                 <div id="chat-bg-window">
                                     <div id="chat-bg-titlebar">
-                                        <div id="chat-bg-title">聊天背景</div>
+                                        <div id="chat-more-tabs">
+                                            <button class="chat-more-tab active" data-tab="bg" onclick="window.VN_Panels.switchChatMoreTab('bg')">背景</button>
+                                            <button class="chat-more-tab" data-tab="bubble" onclick="window.VN_Panels.switchChatMoreTab('bubble')">泡泡</button>
+                                        </div>
                                         <button id="chat-bg-close" onclick="window.VN_PLAYER.closeChatBgPanel()">✕</button>
                                     </div>
-                                    <div id="chat-bg-grid">
-                                        <input type="file" id="chat-bg-file" accept="image/*" style="display:none;" onchange="window.VN_PLAYER.handleChatBgFile(this)">
-                                        <div class="chat-bg-add" onclick="document.getElementById('chat-bg-file').click()">+</div>
+                                    <div id="chat-more-bg">
+                                        <div id="chat-bg-grid">
+                                            <input type="file" id="chat-bg-file" accept="image/*" style="display:none;" onchange="window.VN_PLAYER.handleChatBgFile(this)">
+                                            <div class="chat-bg-add" onclick="document.getElementById('chat-bg-file').click()">+</div>
+                                        </div>
+                                        <div id="chat-bg-url-row">
+                                            <input type="text" id="chat-bg-url-input" placeholder="輸入圖片 URL...">
+                                            <button id="chat-bg-url-btn" onclick="window.VN_PLAYER.applyChatBgUrl()">確定</button>
+                                        </div>
+                                        <button id="chat-bg-clear-btn" onclick="window.VN_PLAYER.clearChatBg()">清除背景</button>
                                     </div>
-                                    <div id="chat-bg-url-row">
-                                        <input type="text" id="chat-bg-url-input" placeholder="輸入圖片 URL...">
-                                        <button id="chat-bg-url-btn" onclick="window.VN_PLAYER.applyChatBgUrl()">確定</button>
+                                    <!-- 泡泡：從微信氣泡設置的主題庫挑一套給這間聊天室 -->
+                                    <div id="chat-more-bubble" hidden>
+                                        <div id="chat-bubble-hint"></div>
+                                        <div id="chat-bubble-list"></div>
                                     </div>
-                                    <button id="chat-bg-clear-btn" onclick="window.VN_PLAYER.clearChatBg()">清除背景</button>
                                 </div>
                             </div>
                         </div>
