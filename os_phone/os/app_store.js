@@ -55,12 +55,19 @@
         return Object.keys(out);
     }
     // 掃出「孤兒」：三個資料桶裡出現過、但已不在已安裝清單的 appId（排除 preview 預覽暫存）
+    // 🚨🚨 只認應用的 id 格式（app_<時間>_<亂碼>，os_db.js 安裝時唯一的產生方式）。
+    //    app_data 這個桶不只應用在用：PT 餘額(pt_wallet)、房產與藍圖(landlord)、書咖櫃檯(book_cafe)、
+    //    主角狀態(mc_status)、世界門(worldgate)、微信錢包(wx_wallet)、家具(furniture)、角色卡正則(aurelia_card_regex)、
+    //    VN 組件的資料(vnpanel:<tag>)、創作室預覽(studio_preview) 全都住在這裡。
+    //    以前任何「不在已安裝清單」的 id 都算孤兒 → 這些系統資料全被列進「清理殘留資料」，一按就刪光，
+    //    而且因為它們永遠不會是已安裝的應用，那一條永遠清不掉、一直冒出來。
+    const APP_ID_RE = /^app_\d+_[a-z0-9]+$/;
     async function _scanOrphans(installedSet) {
         const ids = {};
         try { if (win.OS_DB && win.OS_DB.listAppDataAppIds) (await win.OS_DB.listAppDataAppIds()).forEach(function (x) { ids[String(x)] = 1; }); } catch (e) {}
         try { if (win.OS_DB && win.OS_DB.getAllAppMemory) (await win.OS_DB.getAllAppMemory()).forEach(function (r) { if (r && r.appId) ids[String(r.appId)] = 1; }); } catch (e) {}
         _lsAppIds().forEach(function (x) { ids[x] = 1; });
-        return Object.keys(ids).filter(function (id) { return id && id !== 'preview' && !installedSet.has(id); });
+        return Object.keys(ids).filter(function (id) { return APP_ID_RE.test(id) && !installedSet.has(id); });
     }
 
     // 素材圖：GPT 工坊插畫，host 在獨立 sound-files 素材庫（code repo 有 jsdelivr 50MB 上限、aseets 不追蹤）
@@ -276,7 +283,20 @@
         }
 
         mkGroup([
-            mkRow('fa-trash', '卸載', function () { var _msg = a.srcTplId ? ('卸載「' + (a.name || 'App') + '」？\n這是創作室面板：桌面圖標、資料、以及它在 VN 組件/劇情裡的版本會一起移除。') : ('卸載「' + (a.name || 'App') + '」？(桌面圖標移除、內容刪除)'); if (confirm(_msg)) { _uninstall(a.id, c); _go(c, 'mine'); } }, { danger: true, noChev: true })
+            // 🚨 window.confirm 在 Tauri 會被攔掉（按了完全沒反應＝在酒館裡卸載不掉）→ 兩段式：第一下把後果寫在鈕上，4 秒內再按才卸
+            mkRow('fa-trash', '卸載', function (e) {
+                const row = e.currentTarget, lab = row.querySelector('.ws-act-label');
+                if (!row._armed) {
+                    row._armed = true;
+                    lab.textContent = a.srcTplId
+                        ? '再按一次：連資料、VN 組件與劇情裡的版本一起移除'
+                        : '再按一次：桌面圖標與資料一起刪除';
+                    row._armT = setTimeout(function () { row._armed = false; lab.textContent = '卸載'; }, 4000);
+                    return;
+                }
+                row._armed = false; clearTimeout(row._armT);
+                _uninstall(a.id, c); _go(c, 'mine');
+            }, { danger: true, noChev: true })
         ]);
 
         _go(c, 'appdetail');
@@ -312,14 +332,25 @@
         g.className = 'ws-act-group';
         const r = document.createElement('div');
         r.className = 'ws-act-row danger';
-        r.innerHTML = '<i class="fa-solid fa-broom ws-act-ico"></i><span class="ws-act-label">清理殘留資料（' + orphans.length + '）</span><span class="ws-act-go"></span>';
-        r.addEventListener('click', function () { _confirmPurgeOrphans(c, orphans); });
+        const label0 = '清理已卸載應用的資料（' + orphans.length + '）';
+        r.innerHTML = '<i class="fa-solid fa-broom ws-act-ico"></i><span class="ws-act-label">' + label0 + '</span><span class="ws-act-go"></span>';
+        // 🚨 window.confirm 在 Tauri 會被攔掉（按了完全沒反應）→ 兩段式：第一下變「再按一次」，4 秒內再按才清
+        let armed = false, armT = 0;
+        const lab = r.querySelector('.ws-act-label');
+        r.addEventListener('click', function () {
+            if (!armed) {
+                armed = true; lab.textContent = '再按一次：清除 ' + orphans.length + ' 個已卸載應用的資料，無法復原';
+                armT = setTimeout(function () { armed = false; lab.textContent = label0; }, 4000);
+                return;
+            }
+            armed = false; clearTimeout(armT);
+            _purgeOrphans(c, orphans);
+        });
         g.appendChild(r);
         list.appendChild(g);
     }
-    async function _confirmPurgeOrphans(c, orphans) {
+    async function _purgeOrphans(c, orphans) {
         if (!orphans || !orphans.length) { _toast(c, '沒有殘留資料'); return; }
-        if (!confirm('發現 ' + orphans.length + ' 個已卸載應用留下的資料，全部清除？\n此動作無法復原。')) return;
         for (var i = 0; i < orphans.length; i++) { await _purgeAppData(orphans[i]); }
         _toast(c, '已清除 ' + orphans.length + ' 筆殘留資料');
         renderMine(c);

@@ -302,7 +302,7 @@ demoFormat 是給劇本 AI 看的範本，它會照抄格式在正文寫資料�
 <json>
 {
   "tagId": "英文標籤名",
-  "title": "中文顯示名，簡短，例如小地圖、交易結算",
+  "title": "繁體中文顯示名，最多四個字；裝成手機應用時就是桌面上的名字",
   "isBlock": true 或 false,
   "html": "骨架 HTML，不填資料，由 js 渲染",
   "css": "全部 CSS，含 .vn-dynamic-panel-xxx 前綴",
@@ -3272,6 +3272,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         };
     }
 
+    // 手機 app 的名字＝模板的中文顯示名（title，最多四個字）；沒有才退回標籤 tagId。
+    // 🚨 以前一律拿 tagId：它是劇本裡的標籤（<CampusForum>）與 CSS 前綴，只能是英文，
+    //    於是每個應用裝進手機都叫英文，得自己一個個改。title 欄位規格裡早就有，只是從沒被用上。
+    function _appNameOf(tpl) {
+        const t = String((tpl && tpl.title) || '').trim();
+        if (t) return Array.from(t).slice(0, 4).join('');   // Array.from：不把 emoji／罕用字切成半個
+        return (tpl && tpl.tagId) || '面板';
+    }
+
     // 把一個「應用/共用」模板裝成手機 app（進「應用工坊·我的應用」+ 桌面圖標）。
     // 以 srcTplId 去重：已裝過就更新內容(編輯後重存會更新)，沒裝過才新增。回傳 app id。
     async function _installTemplateAsPhoneApp(tpl) {
@@ -3282,11 +3291,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const existing = apps.find(a => a && a.srcTplId === tpl.id);
             const rec = existing
                 ? { ...existing }
-                : { name: tpl.tagId || '面板', emoji: '🧩', iconUrl: '', source: 'studio', srcTplId: tpl.id };
+                : { name: _appNameOf(tpl), emoji: '🧩', iconUrl: '', source: 'studio', srcTplId: tpl.id };
+            // 已裝過、名字還是當初的英文標籤（沒被她改過）→ 重存時換成中文名；她自己改過的名字不動
+            if (existing && existing.name === tpl.tagId && tpl.title) rec.name = _appNameOf(tpl);
             rec.html = _templateToPhoneHtml(tpl);   // 內容一律更新（編輯後重存即同步）
             const newId = await win.OS_DB.savePhoneApp(rec);
             try {
                 if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) {
+                    // addApp 遇到同 id 不會更新 → 名字換了要先拿掉再放回，桌面圖標才會跟著改名
+                    if (existing && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(newId);
                     win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
                 }
             } catch (e) {}
@@ -3939,7 +3952,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         _b: {
             _sgcEsc, renderMarkdown, _studioBadReply, _wbTH, _wbToast, _studioConfirmRetry,
             // ↓ 展廳（os_studio_vn_gallery.js）用
-            _studioToast, syncActiveTagsToLocal, _templateToPhoneHtml, _buildPreviewSt, _attachVpScaler,
+            _studioToast, syncActiveTagsToLocal, _templateToPhoneHtml, _appNameOf, _buildPreviewSt, _attachVpScaler,
             importToSillyTavern, openRawEditModal, _removeTavernPanelArtifacts, _purgeLinkedPhoneApp,
             _enterEditMode, _getTplById, launch,
             // ↓ 煉丹 Diff-refine 引擎（os_studio_diff_engine.js）用

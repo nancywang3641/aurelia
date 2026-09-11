@@ -51,10 +51,12 @@
 .ws-field-t { font-size: 17px; font-weight: 700; text-align: center; color: #5e1d25; }
 .ws-field-d { font-size: 12px; color: #8c7a66; text-align: center; margin-bottom: 4px; }
 .ws-field-lab { font-size: 12px; color: #8c7a66; margin-top: 4px; }
-.ws-input { width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid rgba(110,80,40,0.20); border-radius: 11px; font-size: 13px; outline: none; background: #fffdf7; color: #3a2a1a; text-align: left; }
-.ws-input:focus { border-color: #b68a45; }
-select.ws-input { appearance: none; -webkit-appearance: none; -moz-appearance: none; padding-right: 34px; cursor: pointer; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%237a2432" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; }
-.ws-emoji { width: 64px; flex-shrink: 0; align-self: flex-start; text-align: center; }
+/* 🚨 .ws-input 跟微信聊天詳情（wx_chat_settings.css）撞名，那份較晚載入、靠右對齊又沒框，會把這裡的輸入框整個蓋掉
+   （匯入應用打字從右邊冒出來）→ 這幾條都掛在 .ws-app 底下，權重贏過它 */
+.ws-app .ws-input { width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid rgba(110,80,40,0.20); border-radius: 11px; font-size: 13px; outline: none; background: #fffdf7; color: #3a2a1a; text-align: left; }
+.ws-app .ws-input:focus { border-color: #b68a45; }
+.ws-app select.ws-input { appearance: none; -webkit-appearance: none; -moz-appearance: none; padding-right: 34px; cursor: pointer; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%237a2432" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; }
+.ws-app .ws-emoji { width: 64px; flex-shrink: 0; align-self: flex-start; text-align: center; }
 .ws-ta { width: 100%; box-sizing: border-box; min-height: 92px; padding: 11px 13px; border: 1px solid rgba(110,80,40,0.20); border-radius: 12px; font-size: 13px; outline: none; resize: vertical; background: #fffdf7; color: #3a2a1a; }
 .ws-ta:focus { border-color: #b68a45; }
 .ws-ta-code { min-height: 120px; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.4; }

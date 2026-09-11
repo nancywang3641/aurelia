@@ -20,6 +20,7 @@
     const _studioToast = _b._studioToast;
     const syncActiveTagsToLocal = _b.syncActiveTagsToLocal;
     const _templateToPhoneHtml = _b._templateToPhoneHtml;
+    const _appNameOf = _b._appNameOf || (tpl => (tpl && tpl.tagId) || '面板');   // 手機 app 名＝中文顯示名（最多四字），沒有才用標籤
     const _buildPreviewSt = _b._buildPreviewSt;
     const _attachVpScaler = _b._attachVpScaler;
     const importToSillyTavern = _b.importToSillyTavern;
@@ -604,7 +605,7 @@
                 await db.deletePhoneApp(rec.id);
                 if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(rec.id);
             } else if (!rec && want) {
-                const r = { name: tpl.tagId || '面板', emoji: '🧩', iconUrl: '', html: _templateToPhoneHtml(tpl), source: 'studio', srcTplId: tpl.id };
+                const r = { name: _appNameOf(tpl), emoji: '🧩', iconUrl: '', html: _templateToPhoneHtml(tpl), source: 'studio', srcTplId: tpl.id };
                 const nid = await db.savePhoneApp(r);
                 if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: nid, name: r.name, emoji: r.emoji, iconUrl: '' });
             }
