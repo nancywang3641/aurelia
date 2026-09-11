@@ -417,7 +417,7 @@
 
                 <div class="ws-group">
                     <div class="ws-cell" id="btn-chat-media" style="cursor:pointer;">
-                        <div class="ws-label">這裡發過的東西</div>
+                        <div class="ws-label">聊天媒體</div>
                         <div class="ws-right">
                             <div id="chat-media-count" style="font-size:14px; margin-right:5px; color:#999;"></div>
                             <div class="ws-arrow">›</div>
@@ -579,7 +579,7 @@
                 };
             })();
 
-            // 這裡發過的東西：把這間聊天室的圖片／檔案／連結／位置攤出來
+            // 聊天媒體：把這間聊天室的圖片／檔案／連結／位置攤出來
             (function () {
                 const M = win.WX_CHAT_MEDIA;
                 const btn = doc.getElementById('btn-chat-media');

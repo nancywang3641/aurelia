@@ -73,7 +73,7 @@
         photo: function (url, opts) {
             const o = opts || {};
             const cls = 'os-img-photo' + (o.fill ? ' os-img-photo--fill' : '') + (o.cls ? ' ' + o.cls : '');
-            return `<img class="${cls}" src="${esc(url)}" onclick="event.stopPropagation(); window.open(this.src)">`;
+            return `<img class="${cls}" src="${esc(url)}" onclick="event.stopPropagation(); var V = (window.parent.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER); if (V) V.openFrom(this); else window.open(this.src);">`;
         },
 
         // 描述是網址就放圖、否則放卡；三個 app 渲染時都只呼叫這一個
@@ -132,6 +132,17 @@
             return prompt;
         },
 
+        // 描述 → 生圖網址（卡片上的「展開圖片」和看圖器裡那顆都走這條）
+        makeUrl: async function (raw) {
+            const mgr = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+            if (!mgr || typeof mgr.generate !== 'function') throw new Error('OS_IMAGE_MANAGER 未載入');
+            const prompt = await this.expand(raw);
+            const url = await mgr.generate(prompt, this.TYPE, { width: this.SIZE.width, height: this.SIZE.height });
+            if (!url) throw new Error('未取得圖片');
+            await new Promise((resolve, reject) => { const pre = new Image(); pre.onload = resolve; pre.onerror = reject; pre.src = url; });
+            return url;
+        },
+
         generate: async function (btnEl) {
             const card = btnEl && btnEl.closest('.os-img-card');
             if (!card || card.dataset.gening === '1') return;
@@ -145,12 +156,7 @@
             card.classList.add('os-img-loading');
 
             try {
-                const mgr = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
-                if (!mgr || typeof mgr.generate !== 'function') throw new Error('OS_IMAGE_MANAGER 未載入');
-                const prompt = await this.expand(raw);
-                const url = await mgr.generate(prompt, this.TYPE, { width: this.SIZE.width, height: this.SIZE.height });
-                if (!url) throw new Error('未取得圖片');
-                await new Promise((resolve, reject) => { const pre = new Image(); pre.onload = resolve; pre.onerror = reject; pre.src = url; });
+                const url = await this.makeUrl(raw);
 
                 const fill = card.classList.contains('os-img-card--fill');
                 const app = card.dataset.app || '';

@@ -1,0 +1,211 @@
+/* ========================
+ * 看圖器（os_phone/os/os_photo_viewer.js）：iOS 相簿那樣的全螢幕看圖
+ * class 一律 opv- 開頭。層級壓在手機殼、各面板之上，但在提示條／確認窗（AUI）之下。
+ * ======================== */
+
+.opv-root {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', 'PingFang TC', sans-serif;
+}
+.opv-root .opv-bg {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    transition: opacity .28s ease;
+}
+.opv-root.opv-on .opv-bg { opacity: 1; }
+
+/* 一張一格，整排左右滑 */
+.opv-root .opv-track {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    transition: transform .32s cubic-bezier(.2, .8, .2, 1);
+    will-change: transform;
+}
+.opv-root .opv-slide {
+    position: relative;
+    flex: 0 0 100%;
+    height: 100%;
+    overflow: hidden;
+}
+.opv-root .opv-zoom {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: 50% 50%;
+    transition: transform .3s cubic-bezier(.2, .8, .2, 1);
+    will-change: transform;
+}
+.opv-root .opv-img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    -webkit-user-drag: none;
+}
+
+/* 開場／收場 */
+.opv-root.opv-fadein .opv-zoom { animation: opvIn .26s ease backwards; }   /* 🚨 不能用 both：結束後 transform:none 會一直蓋住縮放 */
+@keyframes opvIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+.opv-root.opv-fadeout .opv-zoom { opacity: 0; transform: scale(.92) !important; transition: opacity .22s ease, transform .22s ease; }
+.opv-root.opv-closing .opv-bg { transition: opacity .26s ease; }
+.opv-root.opv-closing .opv-top,
+.opv-root.opv-closing .opv-bottom { opacity: 0; }
+
+/* 還沒生成的圖：顯示描述的相片卡 */
+.opv-root .opv-ph {
+    width: min(86vw, 420px);
+    aspect-ratio: 4 / 3;
+    border-radius: 16px;
+    padding: 22px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, .16) 0%, transparent 38%, rgba(0, 0, 0, .18) 100%),
+        linear-gradient(160deg, #6f6152 0%, #9c8a76 45%, #4f4236 100%);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+}
+.opv-root .opv-ph-ic { font-size: 26px; opacity: .7; }
+.opv-root .opv-ph-tx {
+    font-size: 15px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, .95);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+    word-break: break-word;
+    max-height: 60%;
+    overflow-y: auto;
+}
+.opv-root .opv-ph-note { font-size: 12px; color: rgba(255, 255, 255, .6); }
+.opv-root .opv-gen {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 4px 0 0;
+    padding: 8px 20px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, .5);
+    background: rgba(255, 255, 255, .18);
+    color: #fff;
+    font: inherit;
+    font-size: 14px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+.opv-root .opv-gen:disabled { opacity: .6; cursor: wait; }
+.opv-root .opv-slide.opv-loading .opv-ph { animation: opvPulse 1.4s ease-in-out infinite; }
+@keyframes opvPulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.2); } }
+
+/* 上方：返回＋誰發的／第幾張 */
+.opv-root .opv-top {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    background: linear-gradient(rgba(0, 0, 0, .55), transparent);
+    transition: opacity .2s ease;
+    z-index: 2;
+}
+.opv-root .opv-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+    font-size: 17px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.opv-root .opv-top-sp { flex: none; width: 40px; }
+.opv-root .opv-meta { flex: 1; min-width: 0; text-align: center; line-height: 1.3; }
+.opv-root .opv-who { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opv-root .opv-sub { font-size: 12px; color: rgba(255, 255, 255, .7); }
+
+/* 下方：描述＋小縮圖一排 */
+.opv-root .opv-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px 0;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(transparent, rgba(0, 0, 0, .6));
+    transition: opacity .2s ease;
+    z-index: 2;
+}
+.opv-root .opv-cap {
+    margin: 0 16px 10px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, .88);
+    max-height: 4.8em;
+    overflow-y: auto;
+}
+.opv-root .opv-strip {
+    display: flex;
+    justify-content: safe center;
+    gap: 3px;
+    padding: 0 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.opv-root .opv-strip::-webkit-scrollbar { display: none; }
+.opv-root .opv-th {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, .15);
+    color: rgba(255, 255, 255, .7);
+    font-size: 13px;
+    opacity: .55;
+    cursor: pointer;
+    transition: opacity .15s ease, width .2s ease;
+}
+.opv-root .opv-th.on { opacity: 1; width: 52px; }
+.opv-root .opv-th img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+
+/* 點一下收起上下列；放大／往下拉時也收起來 */
+.opv-root.opv-bare .opv-top,
+.opv-root.opv-bare .opv-bottom,
+.opv-root.opv-zoomed .opv-bottom,
+.opv-root.opv-dragging .opv-top,
+.opv-root.opv-dragging .opv-bottom { opacity: 0; pointer-events: none; }
+.opv-root.opv-single .opv-strip { display: none; }

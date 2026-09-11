@@ -31,11 +31,14 @@
 - 設施名稱必須符合該世界觀的認知框架（中世紀世界禁用「捷運站」「網咖」；末日廢土禁用「皇家城堡」；魔法學院禁用「便利商店」）
 - 層級結構：世界 → 區域 (zone) → 設施 (facility)
 - 各區域之間應有功能 / 氛圍差異（鬧區 vs 隱秘 vs 邊陲），避免同質化
-- 每個區域 (zone) 需給一個能代表該區的 emoji icon
+- 每個區域 (zone) 需給一個能代表該區的 icon：從下方【圖示清單】挑一個英文名照抄，不要寫 emoji
 - 每個區域需給 mapX / mapY（0-100 整數座標，標出該區在「世界大地圖」上的位置；依世界書地理描述合理擺放——港口靠近邊緣、商業中心放中央、山區放角落、不同 zone 不可重疊）
-- 每個設施需給一個 emoji icon、短名 (shortName, 4 字內)、英文背景圖 prompt (background_prompt)
+- 每個設施需給一個 icon（同樣從【圖示清單】挑英文名，不要寫 emoji）、短名 (shortName, 4 字內)、英文背景圖 prompt (background_prompt)
 - 整個世界另需一張「大地圖底板」，吐 world_map_prompt 欄位（英文關鍵詞，描述全景俯視構圖）
 - 🌏 **文化畫風必寫明（重要）**：每個 background_prompt 與 world_map_prompt 的**英文關鍵詞開頭第一個詞**，就要標出本世界的文化／時代畫風，別讓它預設成歐洲中世紀。依世界觀選：中式武俠／仙俠／古代中國→\`ancient chinese, wuxia\`；日式和風→\`traditional japanese\`；現代都市→\`modern\`；科幻賽博→\`sci-fi, cyberpunk\`；西方奇幻→\`medieval european fantasy\`；末日廢土→\`post-apocalyptic\`。例：武俠酒館寫 \`ancient chinese wuxia tavern, wooden...\` 而**不是** \`rough sailor tavern\`。下面範例是「西方奇幻」世界，換世界觀時整組文化詞要跟著換。
+
+【圖示清單】icon 只能填下面這些英文名之一（照抄，不加 fa- 前綴）；挑最貼近那個地方的一個：
+${(win.MAP_ICONS && win.MAP_ICONS.promptList()) || ''}
 
 【⚠ 世界類型判定（world_genre 欄位）— 影響大地圖視覺風格】
 請先讀世界書與角色卡，判定本世界類型，輸出在頂層的 world_genre 欄位：
@@ -61,38 +64,38 @@
   "zones": {
     "noble_quarter": {
       "name": "貴族街",
-      "icon": "👑",
+      "icon": "crown",
       "mapX": 50, "mapY": 45,
       "background_prompt": "majestic baroque mansions, gas lamps, marble pavement, twilight",
       "facilities": {
-        "marble_palace": { "name": "白瑩王宮", "shortName": "王宮", "icon": "🏰", "background_prompt": "white marble palace, throne hall, gilded pillars" },
-        "opera_house":   { "name": "金紗歌劇院", "shortName": "歌劇院", "icon": "🎭", "background_prompt": "ornate opera hall, red velvet, chandeliers" },
-        "rose_garden":   { "name": "玫瑰庭園", "shortName": "庭園", "icon": "🌹", "background_prompt": "manicured rose garden, stone fountains, dusk light" },
-        "knight_barracks": { "name": "騎士團駐地", "shortName": "騎士團", "icon": "⚔️", "background_prompt": "stone barracks, armored knights, training yard" },
-        "high_cathedral":  { "name": "至高大教堂", "shortName": "教堂", "icon": "⛪", "background_prompt": "gothic cathedral, stained glass, candle light" }
+        "marble_palace": { "name": "白瑩王宮", "shortName": "王宮", "icon": "chess-rook", "background_prompt": "white marble palace, throne hall, gilded pillars" },
+        "opera_house":   { "name": "金紗歌劇院", "shortName": "歌劇院", "icon": "masks-theater", "background_prompt": "ornate opera hall, red velvet, chandeliers" },
+        "rose_garden":   { "name": "玫瑰庭園", "shortName": "庭園", "icon": "seedling", "background_prompt": "manicured rose garden, stone fountains, dusk light" },
+        "knight_barracks": { "name": "騎士團駐地", "shortName": "騎士團", "icon": "shield-halved", "background_prompt": "stone barracks, armored knights, training yard" },
+        "high_cathedral":  { "name": "至高大教堂", "shortName": "教堂", "icon": "church", "background_prompt": "gothic cathedral, stained glass, candle light" }
       }
     },
     "harbor_docks": {
       "name": "風暴港埠",
-      "icon": "⚓",
+      "icon": "anchor",
       "mapX": 78, "mapY": 22,
       "background_prompt": "stormy harbor, wooden ships, lighthouse, fog",
       "facilities": {
-        "salty_tavern":   { "name": "鹹風酒館", "shortName": "酒館", "icon": "🍻", "background_prompt": "rough sailor tavern, oil lamps, wooden barrels" },
-        "fish_market":    { "name": "晨霧魚市", "shortName": "魚市", "icon": "🐟", "background_prompt": "busy fish market, wet stone, morning fog" },
-        "smuggler_pier":  { "name": "走私者碼頭", "shortName": "暗碼頭", "icon": "🪝", "background_prompt": "dark wooden pier, hooded figures, lantern" }
+        "salty_tavern":   { "name": "鹹風酒館", "shortName": "酒館", "icon": "beer-mug-empty", "background_prompt": "rough sailor tavern, oil lamps, wooden barrels" },
+        "fish_market":    { "name": "晨霧魚市", "shortName": "魚市", "icon": "fish", "background_prompt": "busy fish market, wet stone, morning fog" },
+        "smuggler_pier":  { "name": "走私者碼頭", "shortName": "暗碼頭", "icon": "ship", "background_prompt": "dark wooden pier, hooded figures, lantern" }
       }
     },
     "shadow_alleys": {
       "name": "影巷區",
-      "icon": "🗡️",
+      "icon": "user-secret",
       "mapX": 22, "mapY": 70,
       "background_prompt": "narrow shadowy alleys, gas lamps, cobblestone, fog",
       "facilities": {
-        "thieves_den":    { "name": "影爪賊巢", "shortName": "賊巢", "icon": "🗝️", "background_prompt": "underground thieves hideout, candles, daggers" },
-        "black_apothecary": { "name": "黑漆藥房", "shortName": "藥房", "icon": "⚗️", "background_prompt": "dim apothecary, glass vials, herbs hanging" },
-        "card_house":     { "name": "命運牌館", "shortName": "牌館", "icon": "🃏", "background_prompt": "smoky gambling hall, oil lamps, gold coins" },
-        "underground_arena": { "name": "深淵鬥技場", "shortName": "鬥技場", "icon": "🩸", "background_prompt": "underground fighting pit, torchlight, blood stains" }
+        "thieves_den":    { "name": "影爪賊巢", "shortName": "賊巢", "icon": "key", "background_prompt": "underground thieves hideout, candles, daggers" },
+        "black_apothecary": { "name": "黑漆藥房", "shortName": "藥房", "icon": "flask", "background_prompt": "dim apothecary, glass vials, herbs hanging" },
+        "card_house":     { "name": "命運牌館", "shortName": "牌館", "icon": "dice", "background_prompt": "smoky gambling hall, oil lamps, gold coins" },
+        "underground_arena": { "name": "深淵鬥技場", "shortName": "鬥技場", "icon": "hand-fist", "background_prompt": "underground fighting pit, torchlight, blood stains" }
       }
     }
   }
@@ -179,7 +182,7 @@
                     sceneId,
                     name: f.name || fKey,
                     shortName: f.shortName || f.name || fKey,
-                    icon: f.icon || '📍',
+                    icon: win.MAP_ICONS ? win.MAP_ICONS.name(f.icon) : (f.icon || ''),   // 存成圖示名；AI 還是寫了 emoji 也換得過來
                     className: `facility-${fKey.toLowerCase()}`,
                     characters: [],
                     imageUrl: imageUrl || genLoremFlickrUrl(bgPrompt),
@@ -194,7 +197,7 @@
 
             zones[zKey] = {
                 name: z.name || zKey,
-                icon: z.icon || '',
+                icon: z.icon ? (win.MAP_ICONS ? win.MAP_ICONS.name(z.icon) : z.icon) : '',
                 mapX,
                 mapY,
                 background: (await genFacilityImage(z.background_prompt || z.name)) || genLoremFlickrUrl(z.background_prompt || z.name),

@@ -96,7 +96,7 @@
                     const count = list.length;
                     const cols = count === 1 ? 1 : (count <= 4 ? 2 : 3);
                     const items = list.map((desc, idx) => `<div class="wb-img-item">${PI ? PI.render(desc, { app: 'wb', ref: `${post.id}|${idx}`, fill: true }) : ''}</div>`).join('');
-                    imagesHtml = `<div class="wb-img-grid" style="grid-template-columns: repeat(${cols}, 1fr);">${items}</div>`;
+                    imagesHtml = `<div class="wb-img-grid" data-photo-scope style="grid-template-columns: repeat(${cols}, 1fr);">${items}</div>`;
                 }
             }
 
@@ -136,7 +136,7 @@
                         contentHtml = contentHtml.replace(tag, '');
                     });
                     if (imgList.length > 0) {
-                        imagesHtml = `<div class="wb-img-grid" style="grid-template-columns: repeat(${Math.min(3, imgList.length)}, 1fr);">${imgList.map(url => { const bg = url ? `background-image:url('${url}')` : `background:#ddd; display:flex; align-items:center; justify-content:center; color:#999; font-size:20px;`; const inner = url ? '' : '<i class="fa-solid fa-image"></i>'; return `<div class="wb-img-item" style="${bg}" onclick="event.stopPropagation(); window.open('${url}')">${inner}</div>`; }).join('')}</div>`;
+                        imagesHtml = `<div class="wb-img-grid" data-photo-scope style="grid-template-columns: repeat(${Math.min(3, imgList.length)}, 1fr);">${imgList.map(url => { const bg = url ? `background-image:url('${url}')` : `background:#ddd; display:flex; align-items:center; justify-content:center; color:#999; font-size:20px;`; const inner = url ? '' : '<i class="fa-solid fa-image"></i>'; return `<div class="wb-img-item" style="${bg}"${url ? ` data-photo="${url}"` : ''} onclick="event.stopPropagation(); var V = (window.parent.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER); if (V && this.dataset.photo) V.openFrom(this);">${inner}</div>`; }).join('')}</div>`;
                     }
                 }
             }

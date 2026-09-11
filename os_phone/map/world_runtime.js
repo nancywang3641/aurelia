@@ -396,7 +396,7 @@
             sceneId,
             name,
             shortName: name.length > 6 ? name.substring(0, 5) + '…' : name,
-            icon: '🌀',
+            icon: 'hurricane',
             className: 'facility-dynamic',
             characters: [],
             imageUrl: _loremFlickrUrl(name),

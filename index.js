@@ -191,6 +191,7 @@ const PHONE_FILES = [
     'os/translation_manager.js',
     'os/os_image_manager.js',
     'os/os_phone_image.js',       // 手機類 app 共用的圖片描述→卡片→生圖管道
+    'os/os_photo_viewer.js',      // 點圖放大看（iOS 相簿那樣：滑動換張、縮放、下拉關閉）
     'os/os_control_room.js',     // 🎛️ 控制室：監控/遙控桌面控制塔（SoVITS+ComfyUI）
 
     'os/os_achievement.js',
@@ -258,6 +259,7 @@ const PHONE_FILES = [
     'rpg/status_panel.js',
 
     // === 🗺️ MAP 地圖系統 ===
+    'map/map_icons.js',     // 地圖區域／設施／地標圖示統一走 FA（舊世界的 emoji 也在這換），map_data 前載
     'map/map_data.js',
     'map/world_runtime.js',
     'map/world_generator.js',
@@ -501,7 +503,8 @@ async function initializeExtension() {
 
         // 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後才蓋得掉各自的舊頭
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_sys_chrome.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_dialog.css');   // 全站提示條/對話窗（取代原生 alert/confirm/prompt）
+        await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_dialog.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_photo_viewer.css');   // 點圖放大看   // 全站提示條/對話窗（取代原生 alert/confirm/prompt）
 
         if (_AURELIA_EXT_NAME) {
             // 本機：維持原樣(本地讀檔極快、且已驗證穩定，不動)

@@ -1,7 +1,8 @@
 // ----------------------------------------------------------------
 // [檔案] wx_chat_media.js (V1)
 // 路徑：os_phone/wx/wx_chat_media.js
-// 職責：「這裡發過的東西」——把一間聊天室發過的圖片、影片、檔案、連結、位置攤出來看。
+// 職責：「聊天媒體」——把一間聊天室發過的圖片、影片、檔案、連結、位置攤出來看。
+//   圖片那格點下去開看圖器（os_photo_viewer.js）：左右滑、縮放、還沒生成的也能在裡面展開。
 //
 // 資料不另外存：來源就是那間聊天室自己的訊息串（chat.messages），現掃現出。
 //   所以它天然是「每間各自的」，也不會有第二份資料要跟著同步或清理；
@@ -14,7 +15,7 @@
 // ----------------------------------------------------------------
 (function () {
     'use strict';
-    console.log('[WX] 載入聊天室素材模塊 (wx_chat_media V1)...');
+    console.log('[WX] 載入聊天媒體模塊 (wx_chat_media V1)...');
     const win = window.parent || window;
     const doc = win.document;
 
@@ -41,7 +42,7 @@
 
     function _msgs(chat) { return (chat && Array.isArray(chat.messages)) ? chat.messages : []; }
 
-    // 掃出某一類的所有東西。回 [{ raw, who, idx, when }]
+    // 掃出某一類的所有東西。回 [{ body, who, idx, when, kind }]
     function collect(chat, catKey) {
         const cat = CATS.find(function (c) { return c.key === catKey; });
         if (!cat) return [];
@@ -49,6 +50,8 @@
         if (!re) return [];
         const out = [];
         const list = _msgs(chat);
+        const T = _tags();
+        const videoRe = T && T.VIDEO ? new RegExp('^\\[\\s*(?:' + T.VIDEO + ')\\s*[:：]', 'i') : null;
         const taName = (chat && chat.name) || '對方';
         let me = '我';
         try { if (win.WX_USER && win.WX_USER.getInfo) me = win.WX_USER.getInfo().name || '我'; } catch (e) {}
@@ -65,7 +68,8 @@
                     body: body,
                     who: m.isMe ? me : (m.senderName || m.sender || taName),
                     idx: i,
-                    when: m.time || ''
+                    when: m.time || '',
+                    kind: (videoRe && videoRe.test(hit[0])) ? 'video' : 'image'
                 });
             }
         });
@@ -103,6 +107,8 @@
         .wxmed-cellimg img { width:100%; height:100%; object-fit:cover; display:block; }
         .wxmed-celltx { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
             padding:8px; font-size:11px; color:#888; text-align:center; line-height:1.4; }
+        .wxmed-cellic { position:absolute; top:7px; left:7px; font-size:12px; color:rgba(0,0,0,.35); }
+        .wxmed-dark .wxmed-cellic { color:rgba(255,255,255,.4); }
         .wxmed-who { position:absolute; left:0; right:0; bottom:0; padding:3px 6px; font-size:10px;
             color:#fff; background:linear-gradient(transparent,rgba(0,0,0,.55)); }
         .wxmed-list { background:#fff; border-radius:12px; overflow:hidden; }
@@ -133,17 +139,58 @@
     function _isUrl(s) { return /^(https?:\/\/|data:|blob:)/i.test(String(s || '').trim()); }
 
     // 圖片那格：是網址就直接放，是圖庫 id 就交給既有的載圖器，其餘（AI 只寫了描述）就顯示描述
-    function _imgCell(it) {
+    //   每格都帶 data-i（在這一類清單裡的位置），點下去從那張開看圖器
+    function _imgCell(it, i) {
         const b = it.body;
         const who = '<div class="wxmed-who">' + _esc(it.who) + '</div>';
+        const di = ' data-i="' + i + '"';
         if (_isUrl(b)) {
-            return '<div class="wxmed-cellimg" data-big="' + encodeURIComponent(b) + '">'
+            return '<div class="wxmed-cellimg"' + di + '>'
                 + '<img src="' + _esc(b) + '" loading="lazy">' + who + '</div>';
         }
         if (/^(img_|avt_)/.test(b)) {
-            return '<div class="wxmed-cellimg db-load-target" data-db-bg="' + _esc(b) + '" data-big="' + encodeURIComponent(b) + '">' + who + '</div>';
+            return '<div class="wxmed-cellimg db-load-target" data-db-bg="' + _esc(b) + '"' + di + '>' + who + '</div>';
         }
-        return '<div class="wxmed-cellimg"><div class="wxmed-celltx">' + _esc(b.slice(0, 40)) + '</div>' + who + '</div>';
+        const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+        const txt = PI && PI.displayText ? PI.displayText(b) : b;
+        return '<div class="wxmed-cellimg"' + di + '>'
+            + (it.kind === 'video' ? '<i class="fa-solid fa-video wxmed-cellic"></i>' : '')
+            + '<div class="wxmed-celltx">' + _esc(txt.slice(0, 40)) + '</div>' + who + '</div>';
+    }
+
+    // 看圖器要的清單：圖庫 id 先換成網址；只有描述的圖給一個「展開圖片」——生完寫回那則訊息
+    async function _viewerItems(chat, items) {
+        const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+        return Promise.all(items.map(async function (it) {
+            const o = { who: it.who, when: it.when, kind: it.kind };
+            const b = it.body;
+            if (_isUrl(b)) { o.src = b; return o; }
+            if (/^(img_|avt_)/.test(b)) {
+                try { o.src = await win.OS_DB.getImage(b); } catch (e) {}
+                if (!o.src) o.desc = '這張圖找不到了';
+                return o;
+            }
+            o.desc = b;
+            if (it.kind !== 'video' && PI && PI.makeUrl && win.wxApp && win.wxApp.setImageUrl) {
+                const chatId = _cur.chatId;
+                o.gen = async function () {
+                    const url = await PI.makeUrl(b);
+                    await win.wxApp.setImageUrl(chatId, it.idx, b, url);
+                    if (_cur.chatId === chatId) _render();   // 底下的格子也換成真的圖
+                    return url;
+                };
+            }
+            return o;
+        }));
+    }
+
+    async function _openViewer(i) {
+        const V = win.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER;
+        const chat = win.wxApp && win.wxApp.GLOBAL_CHATS ? win.wxApp.GLOBAL_CHATS[_cur.chatId] : null;
+        if (!V || !chat) return;
+        const items = await _viewerItems(chat, collect(chat, 'image'));
+        const cellOf = function (k) { return doc.querySelector('#wx-chat-media-page .wxmed-cellimg[data-i="' + k + '"]'); };
+        V.open(items, i, { fromEl: cellOf(i), thumbOf: cellOf });
     }
 
     function _rowsHtml(items, icon) {
@@ -167,7 +214,7 @@
                 + '這裡還沒有' + cat.label + '。</div>';
         }
         if (catKey === 'image') {
-            return '<div class="wxmed-grid">' + items.map(_imgCell).join('') + '</div>';
+            return '<div class="wxmed-grid">' + items.map(function (it, i) { return _imgCell(it, i); }).join('') + '</div>';
         }
         return _rowsHtml(items, cat.icon);
     }
@@ -186,7 +233,7 @@
 
         el.innerHTML = '<div class="wxmed-head">'
             + '<div class="wxmed-back" data-wxmed="close"><i class="fa-solid fa-chevron-left"></i></div>'
-            + '<div class="wxmed-title">這裡發過的東西</div>'
+            + '<div class="wxmed-title">聊天媒體</div>'
             + '<div style="width:44px"></div>'
             + '</div>'
             + (allEmpty ? '' : ('<div class="wxmed-tabs">' + live.map(function (c) {
@@ -201,20 +248,17 @@
         el.querySelectorAll('[data-cat]').forEach(function (t) {
             t.onclick = function () { _cur.cat = t.getAttribute('data-cat'); _render(); };
         });
-        el.querySelectorAll('[data-big]').forEach(function (c) {
-            c.onclick = function () {
-                const src = decodeURIComponent(c.getAttribute('data-big') || '');
-                try { if (win.wxApp && win.wxApp.bigImg) win.wxApp.bigImg(src); } catch (e) {}
-            };
+        el.querySelectorAll('.wxmed-cellimg[data-i]').forEach(function (c) {
+            c.onclick = function () { _openViewer(parseInt(c.getAttribute('data-i'), 10) || 0); };
         });
         // 圖庫 id 那種自己貼底圖。wx_view 那支掃 .db-load-target 的動作寫死在它自己的 render 裡，
-        // 這頁不在那條路上，掃不到。順便把解出來的網址記在元素上，點開放大才有東西可以放。
+        // 這頁不在那條路上，掃不到。
         el.querySelectorAll('.db-load-target').forEach(async function (t) {
             const id = t.getAttribute('data-db-bg');
             if (!id) return;
             try {
                 const url = await win.OS_DB.getImage(id);
-                if (url) { t.style.backgroundImage = "url('" + url + "')"; t.style.backgroundSize = 'cover'; t.style.backgroundPosition = 'center'; t.setAttribute('data-big', encodeURIComponent(url)); }
+                if (url) { t.style.backgroundImage = "url('" + url + "')"; t.style.backgroundSize = 'cover'; t.style.backgroundPosition = 'center'; }
             } catch (e) {}
         });
     }

@@ -10,6 +10,8 @@
 (function() {
     console.log('[PhoneOS] 載入奧瑞亞地圖系統 (V4.2 World Runtime)...');
     const win = window.parent || window;
+    // 區域／設施／地標的圖示一律過 MAP_ICONS（圖示名、舊的 emoji 都吃，認不出來畫定位針）
+    const _mi = (v) => (win.MAP_ICONS ? win.MAP_ICONS.html(v) : String(v || ''));
 
     // 統一從 WORLD_RUNTIME 取資料（容器內已包奧瑞亞當預設世界）
     const WORLD = () => win.WORLD_RUNTIME;
@@ -756,7 +758,7 @@ ${facilityText}
                 // 沒座標的動態區放右下角，避免疊在主要 zone 上
                 const mx = (zone && typeof zone.mapX === 'number') ? zone.mapX : (isDynamic ? 92 : 50);
                 const my = (zone && typeof zone.mapY === 'number') ? zone.mapY : (isDynamic ? 88 : 50);
-                const icon = (zone && zone.icon) ? zone.icon : (isDynamic ? '<i class="fa-solid fa-hurricane"></i>' : '<i class="fa-solid fa-globe"></i>');   // 區域圖示是 AI 給的 emoji；沒給才用 FA
+                const icon = (zone && zone.icon) ? _mi(zone.icon) : (isDynamic ? '<i class="fa-solid fa-hurricane"></i>' : '<i class="fa-solid fa-globe"></i>');   // 區域圖示是 AI 給的 emoji；沒給才用 FA
                 const labelText = (zone && zone.name) ? zone.name : 'ZONE';
 
                 return `
@@ -842,10 +844,10 @@ ${facilityText}
                 </div>`;
             }
 
-            // 奧瑞亞 7 區用單字母（A-G 是設計感）；其他用 zone.icon；都沒有就 fallback emoji
+            // 奧瑞亞 7 區用單字母（A-G 是設計感）；其他用 zone.icon；都沒有就用地球圖示
             const aurealisLetters = { A: true, B: true, C: true, D: true, E: true, F: true, G: true };
             const isAurealisLetter = aurealisLetters[id] === true && id.length === 1;
-            const zoneIcon = (zone && zone.icon) ? zone.icon : '';
+            const zoneIcon = (zone && zone.icon) ? _mi(zone.icon) : '';
             const zoneName = (zone && zone.name) ? zone.name : 'ZONE';
             const labelText = labels[id] || zoneName;
             const safeId = String(id).replace(/'/g, "\\'");
@@ -1442,12 +1444,12 @@ ${facilityText}
             const hasEvent = !!STATE.activeEvents[`${zoneId}_${key}`];
             const c = f.sceneId ? coords[f.sceneId] : null;
             if (!c) {
-                stripHtml += `<div class="am-fac-card${f.isDynamic ? ' am-fac-card-dyn' : ''}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">${hasEvent ? '<div class="am-red-dot"></div>' : ''}<div class="am-fac-icon">${f.icon || '<i class="fa-solid fa-location-dot"></i>'}</div><div class="am-fac-name">${f.shortName || f.name}</div></div>`;
+                stripHtml += `<div class="am-fac-card${f.isDynamic ? ' am-fac-card-dyn' : ''}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">${hasEvent ? '<div class="am-red-dot"></div>' : ''}<div class="am-fac-icon">${_mi(f.icon)}</div><div class="am-fac-name">${f.shortName || f.name}</div></div>`;
                 return;
             }
             pins.push({
                 id: key, x: c.x, y: c.y,
-                html: `${hasEvent ? '<span class="am-red-dot"></span>' : ''}<span class="am-imap-pin-icon">${f.icon || '<i class="fa-solid fa-location-dot"></i>'}</span><span class="am-imap-pin-label">${f.shortName || f.name}</span>`,
+                html: `${hasEvent ? '<span class="am-red-dot"></span>' : ''}<span class="am-imap-pin-icon">${_mi(f.icon)}</span><span class="am-imap-pin-label">${f.shortName || f.name}</span>`,
                 onClick: (k) => openFacilityDetail(k),
             });
         });
@@ -1478,7 +1480,7 @@ ${facilityText}
                     <div class="am-fac-card" style="${cardStyle}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">
                         ${dotHtml}
                         ${dynBadge}
-                        <div class="am-fac-icon">${f.icon}</div>
+                        <div class="am-fac-icon">${_mi(f.icon)}</div>
                         <div class="am-fac-name">${f.shortName || f.name}</div>
                     </div>
                 `;
@@ -1509,7 +1511,7 @@ ${facilityText}
         const zoneText = document.getElementById('am-detail-zone-text');
         const facText = document.getElementById('am-detail-facility-text');
         if (zoneText) zoneText.textContent = zoneData.name || STATE.currentZoneId || '';
-        if (facText) facText.textContent = `${facility.icon ? facility.icon + ' ' : ''}${facility.name || ''}`;
+        if (facText) facText.innerHTML = _mi(facility.icon) + ' ' + String(facility.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
         // 切換設施先把 stage 整個清乾淨:背景圖 + 內容(避免上一個設施的 landmark / 小人殘留到新設施)
         const charGridReset = document.getElementById('am-char-grid');
@@ -1653,7 +1655,7 @@ ${facilityText}
                     return `
                     <div class="${sideClasses.join(' ')}" style="left:${lm.x}%; top:${lm.y}%;" title="${escAttr(lm.label)}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
                         ${popupHtml}
-                        <div class="am-landmark-emoji">${lm.emoji || '<i class="fa-solid fa-location-dot"></i>'}</div>
+                        <div class="am-landmark-emoji">${_mi(lm.emoji)}</div>
                         <div class="am-landmark-label">${escHtml(lm.label) || ''}</div>
                     </div>
                     `;

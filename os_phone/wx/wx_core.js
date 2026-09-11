@@ -1731,13 +1731,15 @@
             if (win.WX_MESSAGE_MANAGER && typeof win.WX_MESSAGE_MANAGER._updateUI === 'function') { setTimeout(() => win.WX_MESSAGE_MANAGER._updateUI(), 100); }
         },
         
-        bigImg: function(src) { win.open(src, '_blank'); },
+        bigImg: function(src) { const V = win.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER; if (V) V.open([{ src: src }], 0); else win.open(src, '_blank'); },
 
         // 圖片生完寫回訊息：[图片:描述] → [图片:網址]，下次開這段對話直接顯示、不再重生
         setImageUrl: async function(chatId, msgIdx, desc, url) {
             const chat = GLOBAL_CHATS[chatId];
             if (!chat || !Array.isArray(chat.messages) || !url) return false;
-            const tagRe = /\[\s*(图片|圖片|Img)\s*[:：]?\s*([\s\S]*?)\s*\]/i;
+            // 🚨 標籤清單吃 WX_VIEW.MSG_TAG 那一份（以前手打的少了「照片」→ 那種圖生完寫不回去）
+            const _IMG = (win.WX_VIEW && win.WX_VIEW.MSG_TAG && win.WX_VIEW.MSG_TAG.IMAGE) || '图片|圖片|照片|Img';
+            const tagRe = new RegExp('\\[\\s*(' + _IMG + ')\\s*[:：]?\\s*([\\s\\S]*?)\\s*\\]', 'i');
             const hits = (m) => m && typeof m.content === 'string' && tagRe.test(m.content) && (!desc || m.content.indexOf(desc) >= 0);
             let idx = Number.isInteger(msgIdx) ? msgIdx : -1;
             if (!(idx >= 0 && hits(chat.messages[idx]))) idx = chat.messages.findIndex(hits);

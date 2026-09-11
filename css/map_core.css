@@ -213,7 +213,7 @@
         .am-mode-opt.active { border-color: #D4AF37; background: #D4AF37; color: #000; font-weight: bold; }
 
         /* 刷新按鈕 */
-        .am-refresh-btn { font-size: 12px; border: 1px solid #333; padding: 5px 10px; border-radius: 15px; background: rgba(0,0,0,0.5); cursor: pointer; color: #888; margin-right: 10px; }
+        .am-refresh-btn { font-size: 12px; border: 1px solid #333; padding: 5px 10px; border-radius: 15px; background: rgba(0,0,0,0.5); cursor: pointer; color: #888; margin-right: 10px; white-space: nowrap; flex-shrink: 0; }
         .am-refresh-btn:hover { color: #fff; border-color: #fff; }
 
         @keyframes floatUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
