@@ -442,7 +442,7 @@
         const go = (mode) => {
             restorePanel();
             body.innerHTML = '';
-            box.classList.remove('is-talk', 'is-app');
+            box.classList.remove('is-talk', 'is-app', 'is-focus');
             const p = get(curId);
             if (!p) return;
             if (mode === 'talk' && _hasNpc(p)) {
@@ -455,6 +455,10 @@
             }
             talkOff();
             box.classList.add('is-app');
+            // 專注：右欄與常用功能收起來、面板撐滿（CSS 看 .is-focus）。
+            // 🚨 只給「有人可以回去對話」的地方：沒人的地方（我的家還沒請人）按 ✕ 會回到這個面板本身，
+            //    右欄一收就再也回不來、哪裡都去不了。
+            if (_hasNpc(p)) box.classList.add('is-focus');
             // 站得住不等於面板開得起來：模組可能還在載（慢速開機時很常見）。
             // 這裡講「還在載」而不是「打不開」——前者等一下就好，後者聽起來像壞了。
             if (!_usable(p)) {
@@ -533,7 +537,7 @@
             const p = get(curId);
             if (p && _hasNpc(p)) { go('talk'); return; }
             body.innerHTML = '';
-            box.classList.remove('is-app');
+            box.classList.remove('is-app', 'is-focus');
         });
 
         const close = () => {
