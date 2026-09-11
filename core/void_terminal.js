@@ -242,6 +242,10 @@ const IRIS_IDLE = [
             const homeTab = document.getElementById('aurelia-home-tab');
             if (!homeTab || homeTab.style.display === 'none') return;
             if (IRIS_STATE.isTyping || IRIS_STATE.queue.length > 0) return;
+            // 🚨 對話模式：放置台詞是瀅瀅的，只有站在她面前（書咖、正在對話）才讓她說。
+            //    以前不管走到大廳、交易所還是工坊，三分鐘一到就是瀅瀅在框裡自言自語。
+            const _sp = window.LobbyPlaces?.speaker?.();
+            if (_sp !== undefined && !is404Room && _sp !== 'ying') return;
             const pool = is404Room ? CHESHIRE_IDLE : IRIS_IDLE;
             const pick = pool[Math.floor(Math.random() * pool.length)];
             playVoiceReaction(pick);
@@ -492,6 +496,9 @@ const IRIS_IDLE = [
             }
         }
         setSceneBadge(is404Room ? '404號房' : '視差書咖');
+        // 對話模式的主畫面已經站在某個地方了（預設是大廳）：上面那段是書咖的開場，
+        // 會把名牌與框裡的字蓋成瀅瀅的 → 換回眼前這位。舞台模式與 404 不走這條。
+        if (!is404Room) { try { window.LobbyPlaces?.reprime?.(); } catch (e) {} }
     }
 
     // 取代舊登入頁：直接依當前人設自動進場（酒館抓 ST persona／PWA 用 OS_PERSONA 預設 USER）
@@ -2043,6 +2050,20 @@ ${sections}`;
         } catch (e) {}
     }
 
+    // 💬 對話模式換對象：地點視圖換到誰那裡就叫這支（lobby_places go('talk')）。
+    //    對話框只有一個、大家共用，舞台模式靠 startTalk 換名牌與提示字，對話模式以前沒人換
+    //    → 走到哪都掛著瀅瀅的名牌、「與瀅瀅對話」、書咖的開場旁白。
+    //    框裡那句＝這位自己的最後一句，沒聊過就是「和 X 說點什麼吧」——不寫死任何人的台詞。
+    function primeTalk(npc) {
+        if (!npc || is404Room) return;
+        // 還在打字的那段（通常是書咖的開場旁白）停掉，不然打字機會把它繼續打回框裡
+        if (IRIS_STATE.timer) { clearInterval(IRIS_STATE.timer); IRIS_STATE.timer = null; }
+        IRIS_STATE.queue = []; IRIS_STATE.isTyping = false; IRIS_STATE._onComplete = null;
+        primeStageDialog(npc);
+        const input = document.getElementById('iris-input');
+        if (input) input.placeholder = npc.key === 'ying' ? '提供故事素材或與瀅瀅對話...' : ('和' + npc.name + '聊聊…');
+    }
+
     async function sendIrisMessage() {
         const input = document.getElementById('iris-input');
         if (!input) return;
@@ -2068,9 +2089,15 @@ ${sections}`;
 
         clearInput();
         // 🎮 書咖舞台 NPC 對話：歷史/人設走 NPC 自己的軌道，其餘管線共用
-        const _stageTarget = (!is404Room && window.LobbyStage?.isActive?.())
-            ? (window.LobbyStage.getTalkTarget() || window.LobbyStage.getDefaultTarget?.() || null) : null;
-        const npcTarget = (_stageTarget && _stageTarget.key !== 'ying') ? _stageTarget : null;   // 瀅瀅走原本 iris 軌道；大廳預設對象=愛麗絲
+        // 🚨 對話模式（沒有舞台）也要認對象：地點視圖換到誰那裡就 setTalkTarget 誰（lobby_places go('talk')）。
+        //    以前這裡只在「舞台掛著」時才讀 talkTarget → 對話模式在大廳跟愛麗絲講話，
+        //    其實是送給瀅瀅（她的人設、她的歷史），回來的也是瀅瀅。
+        const _onStageNow = !!window.LobbyStage?.isActive?.();
+        const _pvSpeaker = window.LobbyPlaces?.speaker?.();          // undefined＝地點視圖沒開
+        const _stageTarget = (!is404Room && (_onStageNow || _pvSpeaker))
+            ? (window.LobbyStage?.getTalkTarget?.() || (_onStageNow ? window.LobbyStage.getDefaultTarget?.() : null) || null) : null;
+        // 瀅瀅／柴郡走原本 iris 軌道（她們的人設在 buildSysPrompt，NPC 那條拿不到）；大廳預設對象=愛麗絲
+        const npcTarget = (_stageTarget && _stageTarget.key !== 'ying' && _stageTarget.key !== 'cheshire') ? _stageTarget : null;
         if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, { role: 'user', content: text, ts: Date.now() });
         else IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
         if (!is404Room && window.LobbyStage?.isActive?.()) window.LobbyStage.showDialog();   // 舞台模式：發話才浮出對話框+立繪
@@ -2526,6 +2553,7 @@ ${sections}`;
     VoidTerminal.playSequence = playIrisSequence;
     VoidTerminal.recompactNpcMemory = recompactNpcMemory;   // 大廳 NPC 記憶手動整理（actor menu 呼叫）
     VoidTerminal.primeStageDialog = primeStageDialog;       // 開聊/切換 NPC 清殘留對話框（lobby_stage 呼叫）
+    VoidTerminal.primeTalk = primeTalk;                     // 對話模式換對象：名牌／提示字／框裡那句一起換（lobby_places 呼叫）
 
     VoidTerminal.logout = function() {
         // 登入頁已移除：重新依當前人設同步並刷新大廳

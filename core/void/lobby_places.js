@@ -126,6 +126,8 @@
     let _view = null;            // 關掉整個視圖
     let _paint = null;           // 換到別的地點（不重建外殼）
     let _curId = null;           // 現在站在哪（換場景面板要標「使用中」）
+    let _speakerOf = null;       // 現在在跟誰講話（對話框的主人）；沒開視圖時是 null
+    let _reprime = null;         // 把對話框重新換成眼前這位的（開場流程晚一步蓋掉時用）
 
     // 🪟 把既有的浮窗（世界門／交易所／書咖櫃檯／黑市）搬進窗格：照常叫它開，
     //    等它的 DOM 生出來就整個搬進容器；離開時叫它關，關不掉就搬回原位。
@@ -454,6 +456,9 @@
                 // 沒有舞台也設得起來，void_terminal 讀的是 talkTarget
                 try { if (curNpc) win.LobbyStage?.setTalkTarget?.(curNpc); } catch (e) {}
                 try { win.LobbyStage?.showDialog?.(); } catch (e) {}
+                // 對話框只有一個、大家共用：換到誰這裡，名牌／提示字／框裡那句都要換成他的，
+                // 不然會一直掛著瀅瀅的（書咖開場旁白、她的名牌、「與瀅瀅對話」）。
+                if (curNpc) { try { win.VoidTerminal?.primeTalk?.(curNpc); } catch (e) {} }
                 return;
             }
             talkOff();
@@ -517,7 +522,10 @@
                 p.guest().then(g => {
                     if (tok !== paintTok) return;   // 已經換去別的地方了，晚到的這張不算數
                     applyNpc(g);
-                    if (g && box.classList.contains('is-talk')) { try { win.LobbyStage?.setTalkTarget?.(g); } catch (e) {} }
+                    if (g && box.classList.contains('is-talk')) {
+                        try { win.LobbyStage?.setTalkTarget?.(g); } catch (e) {}
+                        try { win.VoidTerminal?.primeTalk?.(g); } catch (e) {}
+                    }
                 }).catch(() => {});
             }
             rail.innerHTML = _railHtml(curId);
@@ -525,6 +533,12 @@
             go(mode || (_hasNpc(p) ? 'talk' : 'app'));
         };
         _paint = paint;
+        _speakerOf = () => (box.classList.contains('is-talk') && curNpc) ? curNpc.key : '';
+        _reprime = () => {
+            if (!box.classList.contains('is-talk') || !curNpc) return false;
+            try { win.VoidTerminal?.primeTalk?.(curNpc); } catch (e) {}
+            return true;
+        };
 
         rail.addEventListener('click', (e) => {
             const b = e.target.closest('.lb-rail-main, .lb-rail-app');
@@ -550,7 +564,7 @@
         const close = () => {
             restorePanel(); talkOff(); closeScenePicker();
             desktopRail.removeEventListener('change', loadRailThumbs);
-            if (_paint === paint) { _paint = null; _curId = null; }
+            if (_paint === paint) { _paint = null; _curId = null; _speakerOf = null; _reprime = null; }
             box.remove();
             if (_view === close) _view = null;
         };
@@ -669,6 +683,11 @@
         openHome();
     }
 
-    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, openScenePicker, closeScenePicker, HOME_ID, PLACES };
+    // speaker()：對話模式的主畫面開著時，回傳現在對話框的主人 key（沒在對話＝''）；沒開視圖回 undefined。
+    //   void_terminal 靠它決定話要送給誰、放置台詞該不該由瀅瀅說。
+    // reprime()：把對話框換回眼前這位的（大廳開場流程比地點視圖晚一步時，會把書咖的開場旁白蓋上來）。
+    const speaker = () => (_speakerOf ? _speakerOf() : undefined);
+    const reprime = () => (_reprime ? _reprime() : false);
+    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, openScenePicker, closeScenePicker, speaker, reprime, HOME_ID, PLACES };
     console.log('✅ LobbyPlaces（地點清單）模組就緒');
 })();
