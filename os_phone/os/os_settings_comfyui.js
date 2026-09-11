@@ -98,10 +98,10 @@
             if (testBtn) testBtn.addEventListener('click', async function(){
                 const url = (container.querySelector('#img-cfd-url')?.value || '').trim();
                 if (!url) { if (statusEl) statusEl.textContent = '請先填網址'; return; }
-                if (statusEl) statusEl.textContent = '⏳ 連線中…';
+                if (statusEl) statusEl.textContent = '連線中…';
                 const W = window.parent || window;
                 const IM = W.OS_IMAGE_MANAGER;
-                if (!IM || !IM.fetchComfyLists) { if (statusEl) statusEl.textContent = '❌ 圖片引擎未載入'; return; }
+                if (!IM || !IM.fetchComfyLists) { if (statusEl) statusEl.textContent = '圖片引擎未載入'; return; }
                 const fillDatalist = function(id, arr, useValue){
                     const dl = container.querySelector('#' + id);
                     if (!dl || !Array.isArray(arr)) return 0;
@@ -123,10 +123,10 @@
                     const lists = await IM.fetchComfyLists(url);
                     models = lists.models; samplers = lists.samplers; schedulers = lists.schedulers; vaes = lists.vaes; loras = lists.loras;
                 } catch (e) {
-                    if (statusEl) statusEl.textContent = '❌ 連不上：' + (e.message || e) + '（瀏覽器直連需 ComfyUI 開 --enable-cors-header）';
+                    if (statusEl) statusEl.textContent = '連不上：' + (e.message || e) + '（瀏覽器直連需 ComfyUI 開 --enable-cors-header）';
                     return;
                 }
-                if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '❌ 連不上（檢查網址、ComfyUI 開著沒）'; return; }
+                if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '連不上（檢查網址、ComfyUI 開著沒）'; return; }
                 lastModels = models || [];
                 refreshModels();
                 const mc = (Array.isArray(models) ? models.length : 0);
@@ -134,7 +134,7 @@
                 if (schedulers) fillSelect('img-cfd-scheduler', schedulers, false, false);
                 if (vaes) fillSelect('img-cfd-vae', vaes, false, true);
                 const lc = fillDatalist('img-cfd-lora-list', loras || [], false);
-                if (statusEl) statusEl.textContent = '✅ 連上！模型 ' + mc + ' 個' + (loras ? ('、LoRA ' + lc + ' 個可下拉') : '（LoRA 清單酒館未提供→手打檔名）');
+                if (statusEl) statusEl.textContent = '連上！模型 ' + mc + ' 個' + (loras ? ('、LoRA ' + lc + ' 個可下拉') : '（LoRA 清單酒館未提供→手打檔名）');
             });
 
             // ── 預設包：modal + grid + 風格預覽縮圖 ──
@@ -364,8 +364,8 @@
                 const grid = container.querySelector('#img-cfd-preset-grid');
                 if (!grid) return;
                 const openBtn = container.querySelector('#img-cfd-preset-open');
-                if (openBtn) openBtn.textContent = '📦 打開預設包（' + cfdPresets.length + ' 個）';
-                if (!cfdPresets.length) { grid.innerHTML = '<div class="cfd-pack-empty">還沒有預設包。把面板調好後，按下面「➕ 從目前設定另存」。</div>'; return; }
+                if (openBtn) openBtn.textContent = '打開預設包（' + cfdPresets.length + ' 個）';
+                if (!cfdPresets.length) { grid.innerHTML = '<div class="cfd-pack-empty">還沒有預設包。把面板調好後，按下面「<i class="fa-solid fa-plus"></i> 從目前設定另存」。</div>'; return; }
                 grid.innerHTML = cfdPresets.map(function(p, i){
                     const thumb = p.preview
                         ? '<img class="cfd-pack-thumb" src="' + p.preview + '">'
@@ -469,7 +469,7 @@
                     applyPresetToPanel(p);
                     try { if (window._cfdSetActivePreset) window._cfdSetActivePreset(p.name || ''); } catch(e){}   // 狀態列顯示目前套用的預設名
                     this.close();
-                    if (statusEl) statusEl.textContent = '✅ 已套用預設包「' + (p.name || '') + '」（要正式生圖記得按底部保存）';
+                    if (statusEl) statusEl.textContent = '已套用預設包「' + (p.name || '') + '」（要正式生圖記得按底部保存）';
                 },
                 // 就地改名：點名字或 ✏️ → 那格變輸入框。Enter/移開焦點＝改，Esc＝不改。
                 renameIdx: function(i){
@@ -493,15 +493,15 @@
                         const norm = function(s){ return String(s == null ? '' : s).trim().toLowerCase(); };
                         if (cfdPresets.some(function(x, j){ return j !== i && norm(x.name) === norm(nn); })) {
                             renderPresetGrid();
-                            cardStatus(i, '⚠️ 已經有同名的包了，沒有改');
+                            cardStatus(i, '已經有同名的包了，沒有改');
                             return;
                         }
                         cfdPresets[i].name = nn;
                         const r = _renamePresetEverywhere(oldName, nn);
                         renderPresetGrid();
                         cardStatus(i, r.ok
-                            ? ('✅ 已改名' + (r.touched ? '，套用它的地方也一起換了' : ''))
-                            : ('⚠️ 名字改了但存不進本機空間（' + r.err + '），關掉重開會變回原名'));
+                            ? ('已改名' + (r.touched ? '，套用它的地方也一起換了' : ''))
+                            : ('名字改了但存不進本機空間（' + r.err + '），關掉重開會變回原名'));
                     };
                     inp.addEventListener('keydown', function(e){
                         if (e.key === 'Enter') { e.preventDefault(); finish(true); }
@@ -532,9 +532,9 @@
                     const W = window.parent || window;
                     const RECIPE = W.NAI_RECIPE || window.NAI_RECIPE;
                     if (!RECIPE || !RECIPE.extractComfyWorkflow){ self._setImgStatus('解析模組未就緒（重進一次設定再試）', true); return; }
-                    self._setImgStatus('⏳ 讀取圖片工作流…');
+                    self._setImgStatus('讀取圖片工作流…');
                     let res; try { res = await RECIPE.extractComfyWorkflow(file); } catch(e){ res = { ok:false, error: String((e && e.message) || e) }; }
-                    if (!res || !res.ok){ self._setImgStatus('❌ ' + ((res && res.error) || '讀不到工作流'), true); return; }
+                    if (!res || !res.ok){ self._setImgStatus((res && res.error) || '讀不到工作流', true); return; }
                     // 預設名：檔名去副檔名；同名自動加序號
                     let base = String(file.name || 'ComfyUI').replace(/\.[a-z0-9]+$/i, '').trim() || 'ComfyUI';
                     let name = base, n = 2;
@@ -564,11 +564,11 @@
                         } catch (e) { return ''; }
                     })();
                     const _polluteMsg = _polluteHit
-                        ? '　⚠️ 這張圖的正向詞裡有具體人物／場景字樣（' + _polluteHit + '），已被存成這張卡的「底詞」。底詞會加到每一張圖 → 套用前先把底詞清成只剩畫質／風格／LoRA 觸發詞，否則舊背景舊人物會跟著跑。'
+                        ? '　這張圖的正向詞裡有具體人物／場景字樣（' + _polluteHit + '），已被存成這張卡的「底詞」。底詞會加到每一張圖 → 套用前先把底詞清成只剩畫質／風格／LoRA 觸發詞，否則舊背景舊人物會跟著跑。'
                         : '';
                     self._setImgStatus((miss
-                        ? '⚠️ 已建卡「' + name + '」，但這張圖的工作流結構特殊、只抓到少數欄位 → 套用後請自己在面板核對補齊。記得按底部「保存」。'
-                        : '✅ 已拆進預設卡「' + name + '」：' + (got.join('、') || '基本設定') + '。點「套用」就能在面板逐格微調，改完按底部「保存」。') + _polluteMsg, miss || !!_polluteHit);
+                        ? '已建卡「' + name + '」，但這張圖的工作流結構特殊、只抓到少數欄位 → 套用後請自己在面板核對補齊。記得按底部「保存」。'
+                        : '已拆進預設卡「' + name + '」：' + (got.join('、') || '基本設定') + '。點「套用」就能在面板逐格微調，改完按底部「保存」。') + _polluteMsg, miss || !!_polluteHit);
                 },
                 overwriteIdx: async function(i){
                     const old = cfdPresets[i]; if (!old) return;
@@ -587,15 +587,15 @@
                     const W = window.parent || window;
                     const mgr = W.OS_IMAGE_MANAGER;
                     if (!mgr || typeof mgr.previewComfyPreset !== 'function') { cardStatus(i, '生圖模組未就緒'); return; }
-                    cardStatus(i, '⏳ 生成中…(15-40秒)');
+                    cardStatus(i, '生成中…(15-40秒)');
                     try {
                         const url = await mgr.previewComfyPreset(p, getPreviewPrompt());
-                        if (!url) { cardStatus(i, '❌ 失敗（檢查 ComfyUI 連線/模型）'); return; }
+                        if (!url) { cardStatus(i, '失敗（檢查 ComfyUI 連線/模型）'); return; }
                         const thumb = await toThumb(url);
                         if (cfdPresets[i]) cfdPresets[i].preview = thumb;
                         renderPresetGrid();
-                        cardStatus(i, '✅ 完成（記得按底部保存）');
-                    } catch(e){ cardStatus(i, '❌ ' + (e && e.message || e)); }
+                        cardStatus(i, '完成（記得按底部保存）');
+                    } catch(e){ cardStatus(i, String(e && e.message || e)); }
                 },
                 exportPack: function(){
                     if (!cfdPresets.length) { AUI.alert('還沒有預設包可以匯出。'); return; }
@@ -647,10 +647,10 @@
                         try {
                             const j = JSON.parse(String(reader.result));
                             const arr = Array.isArray(j) ? j : (Array.isArray(j.presets) ? j.presets : null);
-                            if (!arr || !arr.length) { AUI.alert('❌ 這個檔案裡找不到預設包，確認拿到的是畫風包檔（.json）再試一次。'); return; }
+                            if (!arr || !arr.length) { AUI.alert('這個檔案裡找不到預設包，確認拿到的是畫風包檔（.json）再試一次。'); return; }
                             // 收斂＋濾掉沒名字的，暫存等使用者選「覆蓋同名 / 全部新增」
                             const clean = arr.filter(function(p){ return p && String(p.name || '').trim(); }).map(function(p){ return self._sanitizePreset(p); });
-                            if (!clean.length) { AUI.alert('❌ 檔案裡的預設包都沒有名稱，讀不進來。'); return; }
+                            if (!clean.length) { AUI.alert('檔案裡的預設包都沒有名稱，讀不進來。'); return; }
                             self._pendingImport = clean;
                             // 牆上還沒有任何包 → 不用問，直接全部加
                             if (!cfdPresets.length) { self._applyImport('append'); return; }
@@ -658,7 +658,7 @@
                             if (msg) msg.textContent = '讀到 ' + clean.length + ' 個預設包。要怎麼放進現有的 ' + cfdPresets.length + ' 個裡？';
                             const box = container.querySelector('#img-cfd-import-choice');
                             if (box) box.style.display = 'block';
-                        } catch(e) { AUI.alert('❌ 這個檔案讀不出來，確認是畫風包檔（.json）再試一次。'); }
+                        } catch(e) { AUI.alert('這個檔案讀不出來，確認是畫風包檔（.json）再試一次。'); }
                     };
                     reader.readAsText(file);
                 },
@@ -692,14 +692,14 @@
                     });
                     this._pendingImport = null;
                     renderPresetGrid();
-                    AUI.alert('✅ 匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部「保存」才會真的存住。');
+                    AUI.alert('匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部「保存」才會真的存住。');
                 },
                 clearAll: async function(){
                     if (!cfdPresets.length) { AUI.alert('目前沒有預設包可以清空。'); return; }
                     if (!await AUI.confirm('確定清空全部 ' + cfdPresets.length + ' 個預設包？\n（要按底部「保存」後才真的生效；沒保存前重進設定就會復原）')) return;
                     cfdPresets.length = 0;
                     renderPresetGrid();
-                    if (statusEl) statusEl.textContent = '🗑️ 預設包已清空（記得按底部「保存」才會真的存住）';
+                    if (statusEl) statusEl.textContent = '預設包已清空（記得按底部「保存」才會真的存住）';
                 }
             };
             // 匯入用的隱藏檔案選擇器

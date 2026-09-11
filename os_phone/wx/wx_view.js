@@ -477,7 +477,7 @@
                 }
                 
                 // 提取emoji和物品名
-                let icon = "🎁";
+                let icon = '<i class="fa-solid fa-gift"></i>';   // 沒帶 emoji 的禮物用 FA 圖示；帶了就用它自己的
                 let name = giftName;
                 const emojiMatch = giftName.match(/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF])/);
                 if (emojiMatch) {
@@ -897,7 +897,7 @@
                             Object.keys(w.wxApp.GLOBAL_CHATS).forEach(id => { delete w.wxApp.GLOBAL_CHATS[id]; });
                             if (w.wxApp.render) w.wxApp.render();
                         }
-                        AUI.alert('✅ 通訊錄已清空');
+                        AUI.alert('通訊錄已清空');
                     })()">
                         <div class="wx-cell-icon"><svg viewBox="0 0 24 24" fill="#e74c3c"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></div>
                         <div class="wx-cell-text" style="color:#e74c3c;">清空通訊錄</div>
@@ -905,7 +905,7 @@
                     </div>
                     <div class="wx-cell" onclick="(async function(){
                         const w = window.parent || window;
-                        if (!await AUI.confirm('⚠️ 確定清空所有微信數據？\\n（通訊錄 + 全部聊天記錄將永久刪除）')) return;
+                        if (!await AUI.confirm('確定清空所有微信數據？\\n（通訊錄 + 全部聊天記錄將永久刪除）')) return;
                         localStorage.removeItem((w.WX_CONTACTS && w.WX_CONTACTS._key && w.WX_CONTACTS._key()) || 'wx_custom_contacts_v1');
                         if (w.OS_CONTACTS && w.OS_CONTACTS.getAllContacts) {
                             const all = w.OS_CONTACTS.getAllContacts();
@@ -919,7 +919,7 @@
                         if (w.WX_DB && w.WX_DB.deleteApiChat) {
                             ids.forEach(id => w.WX_DB.deleteApiChat(id));
                         }
-                        AUI.alert('✅ 微信數據已全部清空');
+                        AUI.alert('微信數據已全部清空');
                     })()">
                         <div class="wx-cell-icon"><svg viewBox="0 0 24 24" fill="#c0392b"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg></div>
                         <div class="wx-cell-text" style="color:#c0392b;">清空全部微信數據</div>
@@ -1054,7 +1054,7 @@
                     </div>
                     
                     <div class="wx-modal-overlay" id="wxActionModal"><div class="wx-modal-box"><div class="wx-modal-title" id="wxModalTitle">輸入內容</div><input type="text" class="wx-modal-input" id="wxModalInput" autocomplete="off"><input type="text" class="wx-modal-input hidden" id="wxModalInput2" autocomplete="off" style="margin-top:5px;"><select class="wx-modal-input hidden" id="wxModalSelect" style="margin-top:5px;"></select><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" onclick="${app}.closeModal()">取消</button><button class="wx-btn wx-btn-confirm" onclick="${app}.confirmModal()">發送</button></div></div></div>
-                    <div class="wx-gift-overlay" id="wxGiftOverlay" onclick="this.classList.remove('show')"><div class="wx-receipt-box" onclick="event.stopPropagation()"><div class="wx-receipt-header"></div><div class="wx-receipt-content"><div class="wx-receipt-icon" id="wxGiftIcon">🎁</div><div class="wx-receipt-name" id="wxGiftName">禮物名稱</div><div class="wx-receipt-divider"></div><div class="wx-receipt-price-label">價值</div><div class="wx-receipt-price" id="wxGiftPrice">¥0</div><div class="wx-receipt-btn-group" id="wxGiftBtnGroup" style="display:none;"><div class="wx-receipt-btn-accept" id="wxGiftAccept">收下禮物</div><div class="wx-receipt-btn-refuse" id="wxGiftRefuse">殘忍拒絕</div></div><div class="wx-receipt-close" id="wxGiftClose" onclick="document.getElementById('wxGiftOverlay').classList.remove('show')">關閉</div></div></div></div>
+                    <div class="wx-gift-overlay" id="wxGiftOverlay" onclick="this.classList.remove('show')"><div class="wx-receipt-box" onclick="event.stopPropagation()"><div class="wx-receipt-header"></div><div class="wx-receipt-content"><div class="wx-receipt-icon" id="wxGiftIcon"><i class="fa-solid fa-gift"></i></div><div class="wx-receipt-name" id="wxGiftName">禮物名稱</div><div class="wx-receipt-divider"></div><div class="wx-receipt-price-label">價值</div><div class="wx-receipt-price" id="wxGiftPrice">¥0</div><div class="wx-receipt-btn-group" id="wxGiftBtnGroup" style="display:none;"><div class="wx-receipt-btn-accept" id="wxGiftAccept">收下禮物</div><div class="wx-receipt-btn-refuse" id="wxGiftRefuse">殘忍拒絕</div></div><div class="wx-receipt-close" id="wxGiftClose" onclick="document.getElementById('wxGiftOverlay').classList.remove('show')">關閉</div></div></div></div>
                     <div class="wx-transfer-overlay" id="wxTransferOverlay" onclick="${app}.closeTransfer()"><div class="wx-transfer-box" onclick="event.stopPropagation()"><div class="wx-transfer-header"><div class="wx-transfer-icon"><i class="fa-solid fa-check"></i></div><div style="font-size:14px;" id="wxTransferState">待收款金額</div><div class="wx-transfer-amount" id="wxTransferAmount">¥0.00</div></div><div class="wx-transfer-actions"><button class="wx-btn-receive" id="wxBtnReceive" onclick="">確認收款</button><button class="wx-btn-return" id="wxBtnReturn" onclick="">退回轉帳</button><div style="font-size:12px; color:#6b6b6b; margin-top:5px;">收款後將存入餘額</div></div></div></div>
                     <div class="wx-rp-overlay" id="wxRedPacketOverlay" onclick="this.classList.remove('show')"><div class="wx-rp-box" onclick="event.stopPropagation()"><div class="wx-rp-header"><div class="wx-rp-avatar" id="wxRpAvatar"></div><div class="wx-rp-sender" id="wxRpSender">的紅包</div><div class="wx-rp-memo" id="wxRpMemo">恭喜發財，大吉大利</div></div><div class="wx-rp-divider"></div><div class="wx-rp-info" id="wxRpInfoBar">暫無人領取</div><div class="wx-rp-list" id="wxRpList"></div><div class="wx-rp-close" onclick="document.getElementById('wxRedPacketOverlay').classList.remove('show')">關閉</div></div></div>
 

@@ -2,7 +2,7 @@
 // [檔案] os_control_room.js
 // 職責：「控制室」手機 App — 監控/遙控 桌面控制塔（SoVITS + ComfyUI）
 //   • 每 4 秒輪詢 http://127.0.0.1:9890/status（控制塔自帶 CORS header，跨埠 OK）
-//   • 狀態燈 🟢🟡🔴、GPU/VRAM、生圖佇列
+//   • 狀態燈（綠／黃／紅，CSS 畫的圓點）、GPU/VRAM、生圖佇列
 //   • 按鈕對接 /start /stop /restart /open
 // 控制塔本體：tools/aurelia_tower.ps1（桌面捷徑「奧瑞亞控制塔」）
 // ----------------------------------------------------------------
@@ -26,13 +26,13 @@
 
                     <div class="set-content">
                         <div id="cr-tower-down" class="cr-tower-down hidden">
-                            🔴 控制塔未啟動<br>
+                            <span class="cr-dot" data-st="down"></span> 控制塔未啟動<br>
                             <span class="cr-tower-hint">雙擊桌面的「奧瑞亞控制塔」捷徑，這裡就會亮起來</span>
                         </div>
                         <div id="cr-cards">
                             <div class="set-group cr-card" id="cr-card-voice">
                                 <div class="set-label">
-                                    <span><span class="cr-dot" id="cr-dot-voice">🔴</span> 🎙️ 語音引擎</span>
+                                    <span><span class="cr-dot" id="cr-dot-voice" data-st="down"></span> <i class="fa-solid fa-microphone"></i> 語音引擎</span>
                                     <span class="cr-card-tag" id="cr-tag-voice">—</span>
                                 </div>
                                 <div class="cr-seg" id="cr-voice-seg">
@@ -48,7 +48,7 @@
                             </div>
                             <div class="set-group cr-card" id="cr-card-comfy">
                                 <div class="set-label">
-                                    <span><span class="cr-dot" id="cr-dot-comfy">🔴</span> 🎨 生圖引擎</span>
+                                    <span><span class="cr-dot" id="cr-dot-comfy" data-st="down"></span> <i class="fa-solid fa-palette"></i> 生圖引擎</span>
                                     <span class="cr-card-tag">ComfyUI · 8188</span>
                                 </div>
                                 <div class="set-desc cr-card-body" id="cr-info-comfy">—</div>
@@ -60,13 +60,13 @@
                                     <button class="set-btn cr-btn" data-act="start" data-svc="comfy">啟動</button>
                                     <button class="set-btn cr-btn" data-act="restart" data-svc="comfy">重啟</button>
                                     <button class="set-btn cr-btn cr-btn-danger" data-act="stop" data-svc="comfy">停止</button>
-                                    <button class="set-btn cr-btn" id="cr-free-vram" title="卸載快取的模型、清空顯存（不重啟；下次生圖會重載模型，多花十幾秒）">🧹 釋顯存</button>
+                                    <button class="set-btn cr-btn" id="cr-free-vram" title="卸載快取的模型、清空顯存（不重啟；下次生圖會重載模型，多花十幾秒）"><i class="fa-solid fa-broom"></i> 釋顯存</button>
                                     <button class="set-btn cr-btn" id="cr-open-web">開網頁</button>
                                 </div>
                             </div>
                         </div>
                         <div class="cr-all-btns">
-                            <div class="btn-save cr-btn" data-act="start" data-svc="all">▶ 全部啟動</div>
+                            <div class="btn-save cr-btn" data-act="start" data-svc="all"><i class="fa-solid fa-play"></i> 全部啟動</div>
                             <div class="btn-test cr-btn" data-act="stop" data-svc="all">■ 全部停止</div>
                         </div>
                         <div class="set-status" id="cr-foot">連線中…</div>
@@ -138,22 +138,22 @@
             const freeBtn = container.querySelector('#cr-free-vram');
             if (freeBtn) freeBtn.onclick = async () => {
                 const foot = container.querySelector('#cr-foot');
-                if (foot) foot.textContent = '🧹 正在卸載模型、釋放顯存…';
+                if (foot) foot.textContent = '正在卸載模型、釋放顯存…';
                 try {
                     const r = await fetch(TOWER + '/free', { method: 'POST' });
                     if (r.status === 404) {
                         // 舊版控制塔沒有 /free 端點 → 明講，別裝死
-                        if (foot) foot.textContent = '⚠️ 控制塔是舊版（沒有釋放端點）— 托盤右鍵「結束控制塔(服務照跑)」再雙擊桌面捷徑重開';
+                        if (foot) foot.textContent = '控制塔是舊版（沒有釋放端點）— 托盤右鍵「結束控制塔(服務照跑)」再雙擊桌面捷徑重開';
                         return;
                     }
                     const j = await r.json().catch(() => null);
                     if (j && j.ok === false) {
-                        if (foot) foot.textContent = '⚠️ 釋放失敗：' + (j.error === 'comfy not running' ? 'ComfyUI 沒在跑' : (j.error || '未知原因'));
+                        if (foot) foot.textContent = '釋放失敗：' + (j.error === 'comfy not running' ? 'ComfyUI 沒在跑' : (j.error || '未知原因'));
                         return;
                     }
-                    if (foot) foot.textContent = '✅ 已卸載模型；下次生圖會重載（多花十幾秒）';
+                    if (foot) foot.textContent = '已卸載模型；下次生圖會重載（多花十幾秒）';
                 } catch (e) {
-                    if (foot) foot.textContent = '⚠️ 連不到控制塔';
+                    if (foot) foot.textContent = '連不到控制塔';
                 }
                 setTimeout(() => this._tick(container), 1200);   // 稍等再刷，VRAM 條會看到掉下來
             };
@@ -219,9 +219,9 @@
             if (cards) cards.classList.remove('cr-dim');
 
             const dot = (up, key) => {
-                if (up) { this._starting[key] = 0; return '🟢'; }
-                if (this._starting[key] && (Date.now() - this._starting[key]) < 120000) return '🟡';   // 啟動中（兩分鐘窗口）
-                return '🔴';
+                if (up) { this._starting[key] = 0; return 'up'; }
+                if (this._starting[key] && (Date.now() - this._starting[key]) < 120000) return 'starting';   // 啟動中（兩分鐘窗口）
+                return 'down';
             };
 
             // 語音：兩套引擎共用一張卡，顯示的是「目前選中的那套」的狀態
@@ -239,7 +239,7 @@
             const voiceUp = !!cur?.up && (!isIdx || cur.ready !== false);
             // 載入中就是黃燈：不管是誰啟動的（控制塔自己帶起來時 _starting 是空的）
             const voiceLoading = isIdx && !!cur?.up && cur.ready === false;
-            if (dv) dv.textContent = voiceLoading ? '🟡' : dot(voiceUp, 'voice');
+            if (dv) dv.dataset.st = voiceLoading ? 'starting' : dot(voiceUp, 'voice');
             const iv = $('#cr-info-voice');
             if (iv) {
                 if (cur?.installed === false) {
@@ -258,15 +258,15 @@
             // 另一套如果還醒著就提醒，兩套一起吃顯存會撐爆
             const other = isIdx ? st.sovits : st.index;
             if (iv && other?.up) {
-                iv.textContent += isIdx ? '　⚠️ SoVITS 也還開著' : '　⚠️ IndexTTS 也還開著';
+                iv.textContent += isIdx ? '　（SoVITS 也還開著）' : '　（IndexTTS 也還開著）';
             }
 
-            const dc = $('#cr-dot-comfy'); if (dc) dc.textContent = dot(st.comfy?.up, 'comfy');
+            const dc = $('#cr-dot-comfy'); if (dc) dc.dataset.st = dot(st.comfy?.up, 'comfy');
             const ic = $('#cr-info-comfy');
             const vramWrap = $('#cr-vram-wrap');
             if (st.comfy?.up) {
                 const run = st.comfy.queue_running || 0, pend = st.comfy.queue_pending || 0;
-                if (ic) ic.textContent = (run > 0 ? `🔥 生圖中（佇列還有 ${pend} 張排隊）` : (pend > 0 ? `排隊 ${pend} 張` : '待命中，佇列乾淨'));
+                if (ic) ic.textContent = (run > 0 ? `生圖中（佇列還有 ${pend} 張排隊）` : (pend > 0 ? `排隊 ${pend} 張` : '待命中，佇列乾淨'));
                 if (vramWrap && st.comfy.vram_total) {
                     vramWrap.classList.remove('hidden');
                     const used = Math.max(0, st.comfy.vram_total - (st.comfy.vram_free || 0));

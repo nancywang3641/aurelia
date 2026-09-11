@@ -113,7 +113,7 @@
                 <div class="chaos-section">
                     <div class="chaos-section-title">
                         &gt; 02. CURE_TASK // 解藥任務 (解除狀態的唯一方法)
-                        <button class="chaos-btn btn-random btn-gen-chaos" id="btn-gen-chaos" style="width:auto; margin-left:auto; margin-right:5px;" onclick="OS_CHAOS.generateChaosAPI()">✨ AI 生成素材</button>
+                        <button class="chaos-btn btn-random btn-gen-chaos" id="btn-gen-chaos" style="width:auto; margin-left:auto; margin-right:5px;" onclick="OS_CHAOS.generateChaosAPI()"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 生成素材</button>
                         <button class="chaos-btn btn-random" style="width:auto;" onclick="OS_CHAOS.randomTasks()">&#x1F3B2; 隨機</button>
                     </div>
                     <div class="chaos-task-list" id="chaos-task-container"></div>
@@ -176,7 +176,7 @@
             penaltySelect.innerHTML = DB_PENALTIES.map((pen, index) => `
                 <option value="${index}">${pen}</option>
             `).join('');
-            penaltySelect.innerHTML += `<option value="custom">✍️ [自定義] 我是魔鬼，我要自己打字...</option>`;
+            penaltySelect.innerHTML += `<option value="custom">[自定義] 我是魔鬼，我要自己打字...</option>`;
             
             if (selectedPenalty < DB_PENALTIES.length) {
                 penaltySelect.value = selectedPenalty;
@@ -243,7 +243,7 @@
         if (isProcessingAPI) return;
         const btn = document.getElementById('btn-gen-chaos');
         if (!win.TavernHelper || typeof win.TavernHelper.generateRaw !== 'function') {
-            AUI.alert("⚠️ 找不到 TavernHelper.generateRaw，無法使用極速生成功能。請確認你的擴展是否支援。");
+            AUI.alert("找不到 TavernHelper.generateRaw，無法使用極速生成功能。請確認你的擴展是否支援。");
             return;
         }
 
@@ -289,17 +289,17 @@
                 if (tCount > 0 || pCount > 0) {
                     renderLists();
                 } else {
-                    AUI.alert("⚠️ AI 生成的格式錯誤，請再試一次。\nAI 回覆內容：" + res);
+                    AUI.alert("AI 生成的格式錯誤，請再試一次。\nAI 回覆內容：" + res);
                 }
             } else {
-                AUI.alert("⚠️ 生成回傳為空，請檢查 API 連線狀態。");
+                AUI.alert("生成回傳為空，請檢查 API 連線狀態。");
             }
         } catch (e) {
             console.error("[Chaos] API 崩潰:", e);
-            AUI.alert("⚠️ 生成失敗，請查看控制台 (F12)。");
+            AUI.alert("生成失敗，請查看控制台 (F12)。");
         } finally {
             isProcessingAPI = false;
-            if (btn) { btn.textContent = "✨ AI 生成素材"; btn.disabled = false; }
+            if (btn) { btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> AI 生成素材'; btn.disabled = false; }
         }
     }
 
@@ -311,7 +311,7 @@
         const targetName = document.getElementById('chaos-goal-input').value.trim();
 
         if (selectedTasks.size === 0) {
-            AUI.alert("⚠️ 導演，至少選一張解藥任務卡！");
+            AUI.alert("導演，至少選一張解藥任務卡！");
             return;
         }
 

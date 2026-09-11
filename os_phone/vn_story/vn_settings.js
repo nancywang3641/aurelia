@@ -96,12 +96,12 @@
             //    別再為 app 另開一格。幾百輪的量本來就不可能吃全文，預設就是「幾層之後轉摘要」。
             const ctxChaptersBlock = `
         <div class="set-group">
-            <div class="set-label">📚 保留最近幾章全文 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">更舊的自動縮成摘要</span></div>
+            <div class="set-label"><i class="fa-solid fa-book"></i> 保留最近幾章全文 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">更舊的自動縮成摘要</span></div>
             <input class="set-input" type="number" id="vncfg-ctx-chapters" min="0" max="50" placeholder="5" value="${d.ctxChapters ?? 5}" style="width:120px;">
             <div class="set-desc">建議 3–6 章。手機 app 讀劇情時也吃這一格。設 0 ＝ 全部只讀摘要（最省）；清空 ＝ 全送不限制（很吃 Token）。</div>
         </div>
         <div class="set-group">
-            <div class="set-label">🔖 摘要標記 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">換了別家 preset 之後填新的</span></div>
+            <div class="set-label"><i class="fa-solid fa-bookmark"></i> 摘要標記 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">換了別家 preset 之後填新的</span></div>
             <div class="set-desc" style="margin-bottom:8px;">上面那格要「縮成摘要」時，是靠這對標記把摘要從正文裡撈出來。用別人的 preset 時標籤常常不是 &lt;summary&gt;（有的叫 &lt;meow_FM&gt;、有的叫 &lt;draft&gt;），填錯就撈不到。</div>
             <label class="set-label" style="font-size:11px;">開頭</label>
             <input class="set-input" type="text" id="vncfg-sum-open" spellcheck="false" placeholder="${_sumDef.open}" value="${_sumEsc(_sumNow.open)}" oninput="window.VN_SETTINGS_PANEL.trySum()">
@@ -114,32 +114,32 @@
             return /* html */`
 <div style="padding-bottom:4px;">
     <div class="set-group">
-        <div class="set-label">🎵 遊戲 BGM 目錄</div>
+        <div class="set-label"><i class="fa-solid fa-music"></i> 遊戲 BGM 目錄</div>
         <input class="set-input" id="vncfg-bgm" placeholder="./bgm/" value="${d.bgm}">
     </div>
 
     <div class="set-group">
-        <div class="set-label">🔊 音效目錄</div>
+        <div class="set-label"><i class="fa-solid fa-volume-high"></i> 音效目錄</div>
         <input class="set-input" id="vncfg-sfx" placeholder="./sfx/" value="${d.sfx}">
     </div>
 
     <div class="set-group">
-        <div class="set-label">🖼️ 立繪目錄</div>
+        <div class="set-label"><i class="fa-solid fa-image"></i> 立繪目錄</div>
         <input class="set-input" id="vncfg-sprite" placeholder="./sprites/" value="${d.spriteBase}">
     </div>
 
     <div class="set-group">
-        <div class="set-label">😄 表情包資料夾</div>
+        <div class="set-label"><i class="fa-solid fa-face-laugh"></i> 表情包資料夾</div>
         <input class="set-input" id="vncfg-sticker" placeholder="https://cdn.com/stickers/ 或 ./stickers/" value="${d.stickerBase}">
     </div>
 
     <div class="set-group">
-        <div class="set-label">🧍 角色預設圖目錄 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">Fallback 1 — 自動拼接 角色名_presets.png</span></div>
+        <div class="set-label"><i class="fa-solid fa-person"></i> 角色預設圖目錄 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">Fallback 1 — 自動拼接 角色名_presets.png</span></div>
         <input class="set-input" id="vncfg-char-default-base" placeholder="./presets/" value="${d.charDefaultBase}">
     </div>
 
     <div class="set-group">
-        <div class="set-label">🌑 最終預設立繪 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">Fallback 2 — 所有渠道失敗時顯示</span></div>
+        <div class="set-label"><i class="fa-solid fa-moon"></i> 最終預設立繪 <span style="font-weight:normal; color:rgba(26,28,40,0.72); font-size:11px;">Fallback 2 — 所有渠道失敗時顯示</span></div>
         <input class="set-input" id="vncfg-final-fallback" placeholder="https://files.catbox.moe/9je7j2.png" value="${d.finalFallbackSprite}">
         <div class="set-desc">建議用透明背景 PNG 剪影。</div>
     </div>

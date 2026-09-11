@@ -234,7 +234,7 @@
             return null;
         }
         if (typeof win.OS_API.chatSecondary !== 'function') {
-            if (progressCb) progressCb('error', '副模型未啟用，請至「設置 → ⚡ 副模型」配置');
+            if (progressCb) progressCb('error', '副模型未啟用，請至「設置 → 副模型」配置');
             return null;
         }
         const zone = win.WORLD_RUNTIME.getZone(zoneId);

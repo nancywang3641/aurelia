@@ -28,7 +28,7 @@
             price:   500,
             keyword: '【觀測者模式啟動】',
             desc:    '取得完全隱身資格。進入任何場景時，NPC 無法察覺你的存在，可偷觀獨處時的秘密行動與內心獨白。',
-            icon:    '👁️'
+            icon:    'fa-eye'
         },
         {
             id:      'cheshire_prank',
@@ -36,7 +36,7 @@
             price:   200,
             keyword: '【柴郡干擾訊號已注入】',
             desc:    '下次劇情中，柴郡會悄悄植入一段搞亂官方劇情的異常代碼，強制引發一場隱藏支線。效果一次性。',
-            icon:    '😈'
+            icon:    'fa-face-grin-tongue-wink'
         },
         {
             id:      'logic_bomb',
@@ -44,7 +44,7 @@
             price:   350,
             keyword: '【邏輯炸彈預埋中】',
             desc:    '在劇情中預埋一顆邏輯炸彈。當敘事出現矛盾或 NPC 撒謊時，炸彈引爆，強制揭露隱藏真相。',
-            icon:    '💣'
+            icon:    'fa-bomb'
         },
         {
             id:      'black_pass',
@@ -52,7 +52,7 @@
             price:   150,
             keyword: '【黑市通行證持有者】',
             desc:    '偽造一份足以通過絕大多數門檻的身份文件，可無視等級與會員卡條件強制進入受限區域。',
-            icon:    '🪪'
+            icon:    'fa-id-card'
         },
         {
             id:      'abyss_extractor',
@@ -60,7 +60,7 @@
             price:   300,
             keyword: '【深淵頻率共鳴中】',
             desc:    '與底層異常代碼共鳴，使劇情朝向更黑暗、更混沌的走向傾斜。適合想體驗 Bad End 路線的玩家。',
-            icon:    '🌀'
+            icon:    'fa-hurricane'
         }
     ];
 
@@ -177,7 +177,7 @@
 
         const content =
 `[柴郡黑市 - 數位碎片帳戶]
-持有碎片：${shards} 💎
+持有碎片：${shards} 
 已購道具：${ownedItems.length ? ownedItems.map(i => i.name).join('、') : '無'}
 啟用中道具：${activeItems.length ? activeItems.map(i => `${i.name}（${i.keyword}）`).join('、') : '無'}
 最後更新：${new Date().toLocaleString()}
@@ -328,18 +328,18 @@ ${JSON.stringify({ shards, items: itemsState })}`;
 
         // 同步更新 header 碎片顯示
         const shardsDisplay = container.closest?.('#store-panel-overlay')?.querySelector('#store-shards-display');
-        if (shardsDisplay) shardsDisplay.textContent = `💎 ${shards} FRAGMENTS`;
+        if (shardsDisplay) shardsDisplay.innerHTML = `<i class="fa-solid fa-gem"></i> ${shards} FRAGMENTS`;
         const itemsState = getItemsState();
         const pendingCount = _cheshirePending().length;   // 黑市只數異常系
 
         container.innerHTML = `
 ${ pendingCount > 0 ? `
 <div class="store-eval-bar">
-    <span>📋 ${pendingCount} 個異常成就待估值</span>
+    <span><i class="fa-solid fa-clipboard"></i> ${pendingCount} 個異常成就待估值</span>
     <button class="store-eval-btn" id="cheshire-eval-btn">找柴郡估值</button>
 </div>` : `
 <div class="store-eval-bar empty">
-    <span>✅ 沒有待估值的異常成就</span>
+    <span><i class="fa-solid fa-circle-check"></i> 沒有待估值的異常成就</span>
 </div>`}
 
 <div class="store-item-list">
@@ -350,21 +350,21 @@ ${ SHOP_CATALOG.map(item => {
     const canAfford   = shards >= item.price;
     return `
 <div class="store-item ${ownedClass} ${activeClass}" data-id="${item.id}">
-    <div class="store-item-icon">${item.icon}</div>
+    <div class="store-item-icon"><i class="fa-solid ${item.icon}"></i></div>
     <div class="store-item-info">
         <div class="store-item-name">${item.name}
             ${ s.owned  ? '<span class="store-badge owned-badge">已購買</span>' : '' }
             ${ s.active ? '<span class="store-badge active-badge">啟用中</span>' : '' }
         </div>
         <div class="store-item-desc">${item.desc}</div>
-        <div class="store-item-keyword">🔑 關鍵字：<code>${item.keyword}</code></div>
+        <div class="store-item-keyword"><i class="fa-solid fa-key"></i> 關鍵字：<code>${item.keyword}</code></div>
     </div>
     <div class="store-item-action">
         ${ !s.owned
             ? `<button class="store-buy-btn ${ canAfford ? '' : 'disabled'}"
                        data-action="buy" data-id="${item.id}"
                        ${ canAfford ? '' : 'disabled'}>
-                   💎 ${item.price}
+                   <i class="fa-solid fa-gem"></i> ${item.price}
                </button>`
             : `<button class="store-toggle-btn ${ s.active ? 'active' : ''}"
                        data-action="toggle" data-id="${item.id}">
@@ -377,7 +377,7 @@ ${ SHOP_CATALOG.map(item => {
 </div>
 
 <div class="store-footer">
-    <span>⚠️ 購買後永久保留 · 啟用道具關鍵字將傳入劇情提示詞</span>
+    <span><i class="fa-solid fa-triangle-exclamation"></i> 購買後永久保留 · 啟用道具關鍵字將傳入劇情提示詞</span>
 </div>`;
 
         // 綁定事件
@@ -386,9 +386,9 @@ ${ SHOP_CATALOG.map(item => {
                 const id = btn.dataset.id;
                 const res = buyItem(id);
                 if (!res.ok) {
-                    _showMsg(container, `❌ ${res.msg}`);
+                    _showMsg(container, `${res.msg}`);
                 } else {
-                    _showMsg(container, `✅ 購買成功！`);
+                    _showMsg(container, `購買成功！`);
                     renderStorePanel(container);
                 }
             });
@@ -409,7 +409,7 @@ ${ SHOP_CATALOG.map(item => {
                 evalBtn.textContent = '估值中...';
                 const res = await evaluateAchievements();
                 if (res.ok) {
-                    _showMsg(container, `💎 兌換成功！獲得 ${res.totalShards} 碎片`);
+                    _showMsg(container, `兌換成功！獲得 ${res.totalShards} 碎片`);
                     renderStorePanel(container);
                     // 觸發柴郡對話
                     const comment = res.results?.[0]?.comment;
@@ -417,7 +417,7 @@ ${ SHOP_CATALOG.map(item => {
                         win.VoidTerminal.cheshireSay(comment || `哼，${res.totalShards} 碎片。別以為我在誇你。`);
                     }
                 } else {
-                    _showMsg(container, `❌ ${res.msg}`);
+                    _showMsg(container, `${res.msg}`);
                     evalBtn.disabled = false;
                     evalBtn.textContent = '找柴郡估值';
                 }

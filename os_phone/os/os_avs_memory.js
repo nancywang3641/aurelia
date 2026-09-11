@@ -33,7 +33,7 @@
         return (win.VN_Core && win.VN_Core._currentStoryId) || localStorage.getItem('vn_current_story_id') || '';
     }
     function _typeLabel(t) {
-        const M = { npc: '👤 角色', event: '📅 事件', item: '🎒 物品', location: '🗺️ 地點', rule: '📜 規則', relationship: '💞 關係', sex: '🔞 性事', dialogue: '🗨️ 語氣' };
+        const M = { npc: '角色', event: '事件', item: '物品', location: '地點', rule: '規則', relationship: '關係', sex: '性事', dialogue: '語氣' };
         return M[t] || ('• ' + (t || '記憶'));
     }
 
@@ -76,7 +76,7 @@
 
     function _renderList(mems) {
         if (!mems.length) {
-            return `<div class="avs-mem-empty">還沒有記憶。<br>把上面的開關打開、在「⚙️ 進階」設好記憶服務後，跑團存章節時系統會自動把重點記在這裡。</div>`;
+            return `<div class="avs-mem-empty">還沒有記憶。<br>把上面的開關打開、在「<i class="fa-solid fa-gear"></i> 進階」設好記憶服務後，跑團存章節時系統會自動把重點記在這裡。</div>`;
         }
         // 份量只在夠重時標出來（門檻同 os_vector_inject 的 HEAVY_MIN）。每張卡都掛數字會吵，
         // 而且看不出重點；只標重的，一眼就知道副模型把哪些事判成「還沒收尾」。數字照實印，
@@ -128,16 +128,16 @@
         } catch (e) {}
         // 記憶改用 chatId 隔離後，舊的 storyId 桶記憶不會自動出現在這 → 提示去「轉入記憶」搬過來（保留向量、不丟）
         const _migrateHint = (mems.length === 0 && _otherTotal > 0)
-            ? `<div class="avs-mem-srchint avs-mem-migrate">⚠️ 這個聊天目前 0 條，但偵測到 ${_otherTotal} 條記憶在「別的識別碼」下（可能是改用聊天室隔離前存的）。到下面「⚙️ 進階 → 轉入記憶」把它搬到目前聊天就回來了，向量會一起保留。</div>`
+            ? `<div class="avs-mem-srchint avs-mem-migrate"><i class="fa-solid fa-triangle-exclamation"></i> 這個聊天目前 0 條，但偵測到 ${_otherTotal} 條記憶在「別的識別碼」下（可能是改用聊天室隔離前存的）。到下面「<i class="fa-solid fa-gear"></i> 進階 → 轉入記憶」把它搬到目前聊天就回來了，向量會一起保留。</div>`
             : '';
 
         const statusTxt = !engOk
-            ? '⚠️ 記憶引擎未載入'
+            ? '記憶引擎未載入'
             : (!on
                 ? '目前關閉中 — 打開開關並設好服務才會開始記'
                 : ((!_standalone || cfg.embeddingUrl)
                     ? `已記 ${mems.length} 條　·　目前故事：${sid ? esc(sid) : '（未開故事）'}`
-                    : '已開啟，但還沒設定記憶服務（去下面「⚙️ 進階」填）'));
+                    : '已開啟，但還沒設定記憶服務（去下面「進階」填）'));
 
         _host.innerHTML = `<div class="avs-mem">
             <div class="avs-card avs-mem-top">
@@ -152,18 +152,18 @@
             ${_migrateHint}
 
             <div class="avs-st-btn-grid">
-                <button class="avs-btn avs-btn-outline" id="avs-mem-tidy">🗜️ 整理舊記憶</button>
-                <button class="avs-btn avs-btn-outline" id="avs-mem-reconcile">🧹 對齊劇情</button>
-                ${_noVec > 0 ? `<button class="avs-btn avs-btn-outline" id="avs-mem-backfill">🔢 建立記憶向量（${_noVec} 待補）</button>` : ''}
+                <button class="avs-btn avs-btn-outline" id="avs-mem-tidy"><i class="fa-solid fa-compress"></i> 整理舊記憶</button>
+                <button class="avs-btn avs-btn-outline" id="avs-mem-reconcile"><i class="fa-solid fa-broom"></i> 對齊劇情</button>
+                ${_noVec > 0 ? `<button class="avs-btn avs-btn-outline" id="avs-mem-backfill"><i class="fa-solid fa-list-ol"></i> 建立記憶向量（${_noVec} 待補）</button>` : ''}
             </div>
             <div class="avs-mem-srchint" id="avs-mem-tidy-result">把舊的零碎記憶併成精簡版，省效能；重要角色與關係不會動。</div>
 
-            <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn">⚙️ 進階：記憶服務設定</button>
+            <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn"><i class="fa-solid fa-gear"></i> 進階：記憶服務設定</button>
             <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
                 <div class="avs-st-adv-sec">
                     <div class="avs-st-adv-hd">記憶服務（embeddings）<span class="avs-st-adv-hint">${cfg.embeddingLocal ? '本地模型在你電腦裡算、文字不外流' : 'SiliconFlow 等 OpenAI 相容服務；免費 BAAI/bge-m3 即可'}</span></div>
                     <div class="avs-mem-cfg">
-                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-local" ${cfg.embeddingLocal ? 'checked' : ''}><span>🔒 用本地模型（在你電腦裡算，文字不外流、最安心、零封號風險；首次要下載 30–60MB）</span></label>
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-local" ${cfg.embeddingLocal ? 'checked' : ''}><span><i class="fa-solid fa-lock"></i> 用本地模型（在你電腦裡算，文字不外流、最安心、零封號風險；首次要下載 30–60MB）</span></label>
                         ${cfg.embeddingLocal ? `<label class="avs-mem-fld"><span>本地模型</span>
                             <select class="avs-input" id="avs-mem-localmodel">
                                 <option value="Xenova/bge-small-zh-v1.5"${(cfg.localModel || 'Xenova/bge-small-zh-v1.5') === 'Xenova/bge-small-zh-v1.5' ? ' selected' : ''}>中文小模型（快、約 30MB）</option>
@@ -187,8 +187,8 @@
                         <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-main-recent" ${cfg.mainRecentOnly ? 'checked' : ''}><span>主模型只注入「近期＋角色」記憶（省 token；舊記憶的精準召回交副模型導演。沒跑副模型導演的別勾）</span></label>
                     </div>
                     <div class="avs-st-btn-grid">
-                        <button class="avs-btn avs-btn-primary" id="avs-mem-save">💾 儲存設定</button>
-                        ${cfg.embeddingLocal ? `<button class="avs-btn avs-btn-outline" id="avs-mem-local-test">🔒 測試本地模型</button>` : `<button class="avs-btn avs-btn-outline" id="avs-mem-test">🔌 測試連線</button>`}
+                        <button class="avs-btn avs-btn-primary" id="avs-mem-save"><i class="fa-solid fa-floppy-disk"></i> 儲存設定</button>
+                        ${cfg.embeddingLocal ? `<button class="avs-btn avs-btn-outline" id="avs-mem-local-test"><i class="fa-solid fa-lock"></i> 測試本地模型</button>` : `<button class="avs-btn avs-btn-outline" id="avs-mem-test"><i class="fa-solid fa-plug"></i> 測試連線</button>`}
                     </div>
                     <div class="avs-mem-test-result" id="avs-mem-test-result"></div>
                 </div>
@@ -205,10 +205,10 @@
             </div>
 
             <div class="avs-mem-list-hd-row">
-                <div class="avs-mem-list-hd">📝 記住的事</div>
+                <div class="avs-mem-list-hd"><i class="fa-solid fa-pen-to-square"></i> 記住的事</div>
                 <div class="avs-mem-filter">
                     <select class="avs-input avs-mem-filter-sel" id="avs-mem-filter">${_memTypeOpts(mems)}</select>
-                    <input class="avs-input avs-mem-filter-search" id="avs-mem-search" placeholder="🔍 搜尋…" value="${esc(_memSearch)}">
+                    <input class="avs-input avs-mem-filter-search" id="avs-mem-search" placeholder="搜尋…" value="${esc(_memSearch)}">
                 </div>
             </div>
             <div class="avs-mem-list" id="avs-mem-list">${_renderList(_filterMems(mems))}</div>
@@ -275,10 +275,10 @@
             if (res) { res.className = 'avs-mem-test-result'; res.textContent = '測試中…首次要下載模型(30–60MB)，可能 1–2 分鐘，請別關面板'; }
             try {
                 const r = await win.OS_VECTOR_ENGINE.testLocal();
-                if (r.ok) { if (res) { res.className = 'avs-mem-test-result ok'; res.textContent = `✅ 本地模型可用！向量維度 ${r.dim}、耗時 ${r.ms}ms　→ 現在可以「建立記憶向量」`; } }
-                else { if (res) { res.className = 'avs-mem-test-result err'; res.textContent = `❌ 卡在「${r.stage}」：${r.error}`; } }
+                if (r.ok) { if (res) { res.className = 'avs-mem-test-result ok'; res.textContent = `本地模型可用！向量維度 ${r.dim}、耗時 ${r.ms}ms　→ 現在可以「建立記憶向量」`; } }
+                else { if (res) { res.className = 'avs-mem-test-result err'; res.textContent = `卡在「${r.stage}」：${r.error}`; } }
             } catch (e) {
-                if (res) { res.className = 'avs-mem-test-result err'; res.textContent = '❌ ' + (e?.message || e); }
+                if (res) { res.className = 'avs-mem-test-result err'; res.textContent = String(e?.message || e); }
             }
             localTestBtn.textContent = _o; localTestBtn.disabled = false;
         };
@@ -293,9 +293,9 @@
             if (res) { res.className = 'avs-mem-test-result'; res.textContent = '測試中…'; }
             try {
                 const v = await win.OS_VECTOR_ENGINE.embed('測試文字');
-                if (res) { res.className = 'avs-mem-test-result ok'; res.textContent = `✅ 連線成功！向量維度：${v.length}`; }
+                if (res) { res.className = 'avs-mem-test-result ok'; res.textContent = `連線成功！向量維度：${v.length}`; }
             } catch (e) {
-                if (res) { res.className = 'avs-mem-test-result err'; res.textContent = '❌ ' + (e?.message || e); }
+                if (res) { res.className = 'avs-mem-test-result err'; res.textContent = String(e?.message || e); }
             }
         };
 
@@ -311,7 +311,7 @@
             moveBtn.disabled = true; const _o = moveBtn.textContent; moveBtn.textContent = '轉入中…';
             try {
                 const n = await win.OS_DB?.copyVnMemoriesToStory?.(src, target);
-                AUI.alert(`✅ 已轉入 ${n || 0} 條記憶到目前世界`);
+                AUI.alert(`已轉入 ${n || 0} 條記憶到目前世界`);
             } catch (e) { AUI.alert('轉入失敗：' + (e?.message || e)); moveBtn.textContent = _o; moveBtn.disabled = false; }
             _build();
         };
@@ -327,7 +327,7 @@
             tidyBtn.disabled = true; const _o = tidyBtn.textContent; tidyBtn.textContent = '整理中…';
             try {
                 const r = await win.OS_STATE_RUNTIME.compressOldMemories({ storyId: sid, onProgress: (m) => { if (res) res.textContent = m; } });
-                AUI.alert(`✅ 整理完成\n把 ${r.mergedCount} 條舊記憶併成 ${r.madeCount} 條\n目前共 ${r.after} 條`);
+                AUI.alert(`整理完成\n把 ${r.mergedCount} 條舊記憶併成 ${r.madeCount} 條\n目前共 ${r.after} 條`);
             } catch (e) {
                 AUI.alert('整理失敗：' + (e?.message || e));
             }
@@ -343,7 +343,7 @@
             recBtn.disabled = true; const _o = recBtn.textContent; recBtn.textContent = '對齊中…';
             try {
                 const r = await win.OS_VECTOR_INJECT.reconcileToStory();
-                if (r.ok) AUI.alert(`✅ 對齊完成\n清掉 ${r.removed} 條已刪內容的記憶（目前劇情 ${r.total} 樓、共掃 ${r.scanned} 條）`);
+                if (r.ok) AUI.alert(`對齊完成\n清掉 ${r.removed} 條已刪內容的記憶（目前劇情 ${r.total} 樓、共掃 ${r.scanned} 條）`);
                 else AUI.alert('未執行：' + (r.msg || '未知原因'));
             } catch (e) { AUI.alert('對齊失敗：' + (e?.message || e)); }
             recBtn.textContent = _o; recBtn.disabled = false;
@@ -364,7 +364,7 @@
                     if (res) res.textContent = `建立記憶向量中… ${done}/${total}`;
                     bfBtn.textContent = `建立中… ${done}/${total}`;
                 });
-                AUI.alert(`✅ 完成\n已建立 ${r.ok}/${r.total} 條記憶向量` + (r.ok < r.total ? '\n（部分沒成功，可再按一次補剩下的）' : ''));
+                AUI.alert(`完成\n已建立 ${r.ok}/${r.total} 條記憶向量` + (r.ok < r.total ? '\n（部分沒成功，可再按一次補剩下的）' : ''));
             } catch (e) {
                 AUI.alert('建立失敗：' + (e?.message || e));
             }

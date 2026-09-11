@@ -140,11 +140,11 @@
 
           <div class="wb-tool-bar">
             <div class="wb-book-row">
-              <span style="font-size:18px; color:#1A1C28;" title="當前書包">📚</span>
+              <span style="font-size:18px; color:#1A1C28;" title="當前書包"><i class="fa-solid fa-book"></i></span>
               <select id="wb-book-select" class="wb-book-select"></select>
               <button id="wb-global-btn" class="wb-book-btn"><i class="fa-regular fa-bookmark"></i> 每本都用</button>
               <button id="wb-new-book-btn" class="wb-book-btn" title="創建新世界書包">＋ 創建</button>
-              <button id="wb-del-book-btn" class="wb-book-btn danger" title="刪除當前書包">🗑️</button>
+              <button id="wb-del-book-btn" class="wb-book-btn danger" title="刪除當前書包"><i class="fa-solid fa-trash-can"></i></button>
             </div>
             <input class="wb-search" id="wb-search" placeholder="搜尋條目或關鍵字..." />
           </div>
@@ -175,9 +175,9 @@
                     <label>位置</label>
                     <select id="wb-f-pos">
                       <option value="">角色定義之前／之後（不用 @D）</option>
-                      <option value="0">@D ⚙ 在系統深度</option>
-                      <option value="1">@D 👤 在使用者深度</option>
-                      <option value="2">@D 🤖 在 AI 深度</option>
+                      <option value="0">@D 在系統深度</option>
+                      <option value="1">@D 在使用者深度</option>
+                      <option value="2">@D 在 AI 深度</option>
                     </select>
                   </div>
                   <div class="wb-field-cell">
@@ -193,7 +193,7 @@
                     <input type="text" class="wb-tag-input" id="wb-f-keys-input" placeholder="新增標籤..." autocomplete="off" />
                   </div>
                   <details class="wb-tag-fold">
-                    <summary class="wb-tag-fold-sum">📚 點擊快速加入<span class="wb-tag-fold-n" id="wb-tag-sug-count"></span></summary>
+                    <summary class="wb-tag-fold-sum"><i class="fa-solid fa-book"></i> 點擊快速加入<span class="wb-tag-fold-n" id="wb-tag-sug-count"></span></summary>
                     <div class="wb-tag-sug-area" id="wb-tag-suggestions"></div>
                   </details>
                 </div>
@@ -215,19 +215,19 @@
           <div class="wb-overlay hidden" id="wb-cfg-overlay">
             <div class="wb-form">
               <div class="wb-form-header">
-                <span class="wb-form-title-text">⚙️ 系統管理</span>
+                <span class="wb-form-title-text"><i class="fa-solid fa-gear"></i> 系統管理</span>
                 <button class="wb-form-cancel" id="wb-cfg-close">關閉</button>
               </div>
               <div class="wb-settings">
                 <div class="wb-section">
-                  <div class="wb-section-title">📂 匯入 / 匯出</div>
-                  <button class="wb-btn wb-btn-secondary" id="wb-import-st-btn">📥 匯入世界書 JSON</button>
-                  <button class="wb-btn wb-btn-secondary" id="wb-export-btn">📤 匯出書包…</button>
+                  <div class="wb-section-title"><i class="fa-solid fa-folder-open"></i> 匯入 / 匯出</div>
+                  <button class="wb-btn wb-btn-secondary" id="wb-import-st-btn"><i class="fa-solid fa-download"></i> 匯入世界書 JSON</button>
+                  <button class="wb-btn wb-btn-secondary" id="wb-export-btn"><i class="fa-solid fa-upload"></i> 匯出書包…</button>
                   <input type="file" id="wb-file-input" accept=".json" style="display:none" />
                 </div>
                 <div class="wb-section">
-                  <div class="wb-section-title" style="color:#fc8181">⚠️ 危險操作</div>
-                  <button class="wb-btn wb-btn-danger" id="wb-clear-all-btn">🗑 銷毀所有書包與條目</button>
+                  <div class="wb-section-title" style="color:#fc8181"><i class="fa-solid fa-triangle-exclamation"></i> 危險操作</div>
+                  <button class="wb-btn wb-btn-danger" id="wb-clear-all-btn"><i class="fa-solid fa-trash-can"></i> 銷毀所有書包與條目</button>
                 </div>
               </div>
             </div>
@@ -294,7 +294,7 @@
         if (filtered.length === 0) {
             list.innerHTML = `
                 <div class="wb-empty">
-                    <div class="wb-empty-icon">📭</div>
+                    <div class="wb-empty-icon"><i class="fa-solid fa-inbox"></i></div>
                     <div>${_searchQuery ? '找不到符合的條目' : `「${escHtml(_activeBook)}」書包目前是空的<br>點擊右下角 ＋ 開始建立`}</div>
                 </div>`;
             return;
@@ -303,7 +303,7 @@
         list.innerHTML = filtered.map(e => {
             // 關鍵字只先亮 KEY_PREVIEW 個，其餘收在「+N」後面。
             // 一條動輒五六十個關鍵字，全攤開會把單張卡撐成整頁，整份書就只剩滾軸可看。
-            let keysHtml = '<div class="wb-entry-keys-wrap"><span class="wb-entry-keys wb-keys-const">📌 常駐</span></div>';
+            let keysHtml = '<div class="wb-entry-keys-wrap"><span class="wb-entry-keys wb-keys-const"><i class="fa-solid fa-thumbtack"></i> 常駐</span></div>';
             // 🔥 修復：強制轉成字串，防止舊資料格式報錯
             const keyList = e.keys ? String(e.keys).split(',').map(k => k.trim()).filter(k => k) : [];
             if (keyList.length) {
@@ -320,7 +320,7 @@
                 keysHtml = `<div class="wb-entry-keys-wrap${hitBySearch ? ' open' : ''}">${chips}${moreBtn}</div>`;
             }
             const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${e.order}</span>` : '';
-            const _roleIcon = ['⚙', '👤', '🤖'][_entryRole(e)] || '⚙';
+            const _roleIcon = '<i class="fa-solid ' + (['fa-gear', 'fa-user', 'fa-robot'][_entryRole(e)] || 'fa-gear') + '"></i>';
             const depthLabel = (_entryDepth(e) !== null) ? `<span class="wb-entry-depth">@D${_roleIcon}${_entryDepth(e)}</span>` : '';
 
             return `
@@ -340,8 +340,8 @@
                     ${keysHtml}
                 </div>
                 <div style="display:flex; gap:2px; flex-shrink:0;">
-                    <button class="wb-entry-edit" data-id="${e.id}" title="編輯">✏️</button>
-                    <button class="wb-entry-del" data-id="${e.id}" title="刪除">🗑️</button>
+                    <button class="wb-entry-edit" data-id="${e.id}" title="編輯"><i class="fa-solid fa-pen"></i></button>
+                    <button class="wb-entry-del" data-id="${e.id}" title="刪除"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
             </div>`;
         }).join('');
@@ -537,12 +537,12 @@
         modal.className = 'wb-export-modal';
         modal.innerHTML = `
             <div class="wb-export-sheet">
-                <div class="wb-export-title">📤 選擇要匯出的書包</div>
+                <div class="wb-export-title"><i class="fa-solid fa-upload"></i> 選擇要匯出的書包</div>
                 <div class="wb-export-list">
                     ${books.map(b => `
                     <label class="wb-export-row${b === _activeBook ? ' checked' : ''}">
                         <input type="checkbox" value="${escHtml(b)}"${b === _activeBook ? ' checked' : ''}>
-                        <span class="wb-export-row-name">📚 ${escHtml(b)}</span>
+                        <span class="wb-export-row-name"><i class="fa-solid fa-book"></i> ${escHtml(b)}</span>
                         <span class="wb-export-row-count">${bookCounts[b]} 條</span>
                     </label>`).join('')}
                 </div>
@@ -661,7 +661,7 @@
         _activeBook = newBookName;
         root.querySelector('#wb-cfg-overlay').classList.add('hidden');
         await reload(root);
-        AUI.alert('✅ 匯入完成，共 ' + entries.length + ' 個條目已加入書包「' + newBookName + '」');
+        AUI.alert('匯入完成，共 ' + entries.length + ' 個條目已加入書包「' + newBookName + '」');
     }
 
     // 🚨 沒有 book 的條目＝生成時 getContextByPacks 撈不到（它濾的是 book，不是 category）。
@@ -772,7 +772,7 @@
         root.querySelector('#wb-export-btn').addEventListener('click', () => exportJSON(root));
 
         root.querySelector('#wb-clear-all-btn').addEventListener('click', async () => {
-            if (!await AUI.confirm('🚨 確定要銷毀所有世界書包與條目嗎？此操作不可撤銷！')) return;
+            if (!await AUI.confirm('確定要銷毀所有世界書包與條目嗎？此操作不可撤銷！')) return;
             await win.OS_DB.clearWorldbookEntries();
             saveBooks([...DEFAULT_BOOKS]);
             saveGlobalPacks([]);

@@ -32,12 +32,12 @@
     // ===== 全域世界館藏 (書架 QbBookshelf 讀) =====
     const BASE_IMG_URL = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/home-page/';
     window.AURELIA_WORLDS = {
-        xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: '⚔️', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: BASE_IMG_URL + '蒼泱神州.png' },
-        fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: '🗡️', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: BASE_IMG_URL + '艾斯蘭登大陸.png' },
-        scifi:      { id: 'scifi',      title: '裂縫紀元·新伊甸都市', icon: '🤖', desc: '科技高度發達的未來。賽博朋克的霓虹燈。', danger: 4, cover: BASE_IMG_URL + '裂縫紀元·新伊甸都市.png' },
-        superpower: { id: 'superpower', title: '臨界都市·異時頻界', icon: '⚡', desc: '現代社會的背面，潛藏著覺醒者。', danger: 3, cover: BASE_IMG_URL + '臨界都市·異時頻界.png' },
-        apocalypse: { id: 'apocalypse', title: '塵土紀元·零號廢土', icon: '☢️', desc: '文明崩塌後的荒原。喪屍橫行、輻射遍地。', danger: 5, cover: BASE_IMG_URL + '塵土紀元·零號廢土.png' },
-        horror:     { id: 'horror',     title: '午夜詭談·歸路電台', icon: '📻', desc: '午夜電台亮起紅燈。每段故事的主角都已埋骨——你的任務是把他從結局裡帶回。', danger: 5, cover: BASE_IMG_URL + '午夜詭談·歸路電台.png' }
+        xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: 'fa-yin-yang', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: BASE_IMG_URL + '蒼泱神州.png' },
+        fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: 'fa-dragon', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: BASE_IMG_URL + '艾斯蘭登大陸.png' },
+        scifi:      { id: 'scifi',      title: '裂縫紀元·新伊甸都市', icon: 'fa-robot', desc: '科技高度發達的未來。賽博朋克的霓虹燈。', danger: 4, cover: BASE_IMG_URL + '裂縫紀元·新伊甸都市.png' },
+        superpower: { id: 'superpower', title: '臨界都市·異時頻界', icon: 'fa-bolt', desc: '現代社會的背面，潛藏著覺醒者。', danger: 3, cover: BASE_IMG_URL + '臨界都市·異時頻界.png' },
+        apocalypse: { id: 'apocalypse', title: '塵土紀元·零號廢土', icon: 'fa-radiation', desc: '文明崩塌後的荒原。喪屍橫行、輻射遍地。', danger: 5, cover: BASE_IMG_URL + '塵土紀元·零號廢土.png' },
+        horror:     { id: 'horror',     title: '午夜詭談·歸路電台', icon: 'fa-radio', desc: '午夜電台亮起紅燈。每段故事的主角都已埋骨——你的任務是把他從結局裡帶回。', danger: 5, cover: BASE_IMG_URL + '午夜詭談·歸路電台.png' }
     };
     // 從 localStorage 恢復用戶自建世界
     try {
@@ -553,10 +553,10 @@ const IRIS_IDLE = [
         // 🔥 判斷是否為獨立模式，用來決定要不要印出多餘的 App 按鈕
         const isStandalone = !(window.parent || window).SillyTavern;
         const extraAppsHtml = isStandalone ? `
-                    <button class="void-hist-btn" data-app-launch="pet" title="寵物店"><span class="vhb-em">🐾</span><span>寵物</span></button>
-                    <button class="void-hist-btn" data-app-launch="pet_home" title="我的寵物"><span class="vhb-em">🏠</span><span>我的寵物</span></button>
-                    <button class="void-hist-btn" data-os-launch="微博" title="微博"><span class="vhb-em">👁️</span><span>微博</span></button>
-                    <button class="void-hist-btn" data-os-launch="電子錢包" title="電子錢包"><span class="vhb-em">💳</span><span>錢包</span></button>
+                    <button class="void-hist-btn" data-app-launch="pet" title="寵物店"><span class="vhb-em"><i class="fa-solid fa-paw"></i></span><span>寵物</span></button>
+                    <button class="void-hist-btn" data-app-launch="pet_home" title="我的寵物"><span class="vhb-em"><i class="fa-solid fa-house"></i></span><span>我的寵物</span></button>
+                    <button class="void-hist-btn" data-os-launch="微博" title="微博"><span class="vhb-em"><i class="fa-solid fa-eye"></i></span><span>微博</span></button>
+                    <button class="void-hist-btn" data-os-launch="電子錢包" title="電子錢包"><span class="vhb-em"><i class="fa-solid fa-credit-card"></i></span><span>錢包</span></button>
         ` : '';
 
         tab.innerHTML = `
@@ -572,9 +572,9 @@ const IRIS_IDLE = [
                     </div>
                 </div>
                 <div class="lb-top-ctrls">
-                    <button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏">⛶</button>
+                    <button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏"><i class="fa-solid fa-expand"></i></button>
                     <button class="lb-icon-btn lstage-toggle-btn" id="lstage-toggle" title="書咖舞台"><i class="fa-solid fa-gamepad"></i></button>
-                    <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關">🔊</button>
+                    <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關"><i class="fa-solid fa-volume-high"></i></button>
                     <button class="lb-icon-btn" id="aurelia-global-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">⏻</button>
                     <audio id="lobby-bgm-player" loop style="display:none;"></audio>
                 </div>
@@ -867,7 +867,7 @@ const IRIS_IDLE = [
                 <div class="store-header">
                     <span class="store-title">_THE STRAY NODE_ // BLACK_MARKET</span>
                     <div style="display:flex;align-items:center;gap:10px;">
-                        <span class="store-shards" id="store-shards-display">💎 0 FRAGMENTS</span>
+                        <span class="store-shards" id="store-shards-display"><i class="fa-solid fa-gem"></i> 0 FRAGMENTS</span>
                         <button class="store-close" id="store-close-btn">✕</button>
                     </div>
                 </div>
@@ -881,7 +881,7 @@ const IRIS_IDLE = [
             <div id="lobby-canvas-overlay" style="display:none; position:absolute; inset:0; z-index:25; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
                 <div id="lobby-canvas-area" class="lobby-canvas-area">
                     <div class="lca-header" style="display:none;">
-                        <span class="lca-title" id="lca-title">🎮 互動面板</span>
+                        <span class="lca-title" id="lca-title"><i class="fa-solid fa-gamepad"></i> 互動面板</span>
                         <button class="lca-close" id="lca-close">✕</button>
                     </div>
                     <div class="lca-content" id="lca-content"></div>
@@ -998,14 +998,14 @@ const IRIS_IDLE = [
 
             const bgmBtn = tab.querySelector('#lobby-bgm-toggle');
             if (bgmBtn) {
-                bgmBtn.textContent = VoidAmbient.isEnabled() ? '🔊' : '🔇';
+                bgmBtn.innerHTML = VoidAmbient.isEnabled() ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
                 bgmBtn.onclick = VoidAmbient.toggleBgm;
             }
 
             const fsBtn = tab.querySelector('#aurelia-fullscreen-btn');
             if (fsBtn) {
                 const inFs = !!(window.AureliaControlCenter?.isFullscreen?.());
-                fsBtn.textContent = inFs ? '🗗' : '⛶';
+                fsBtn.innerHTML = inFs ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
                 fsBtn.title = inFs ? '退出全屏 (ESC)' : '進入全屏';
                 fsBtn.onclick = (e) => {
                     e.preventDefault();
@@ -1337,8 +1337,8 @@ const IRIS_IDLE = [
                 <span class="hist-role-badge" style="${badgeStyle}">${roleLabel}</span>
                 <div class="hist-item-body"><div class="hist-item-text" style="color:#3A3F5C;">${safeText}</div></div>
                 <div class="hist-item-actions">
-                    <button class="hist-icon-btn edit" title="編輯此條" style="color:rgba(26,28,40,0.72);">✎</button>
-                    <button class="hist-icon-btn rollback" title="回退到此點" style="color:rgba(26,28,40,0.72);">↩</button>
+                    <button class="hist-icon-btn edit" title="編輯此條" style="color:rgba(26,28,40,0.72);"><i class="fa-solid fa-pen"></i></button>
+                    <button class="hist-icon-btn rollback" title="回退到此點" style="color:rgba(26,28,40,0.72);"><i class="fa-solid fa-rotate-left"></i></button>
                 </div>`;
 
             const textEl = item.querySelector('.hist-item-text');
@@ -1389,7 +1389,7 @@ const IRIS_IDLE = [
 
         const msgSpan = document.createElement('span');
         msgSpan.style.cssText = `font-size:11px;color:${textClr};flex:1;`;
-        msgSpan.textContent = `⚠️ ${message}`;
+        msgSpan.textContent = String(message);
 
         const confirmBtn = document.createElement('button');
         confirmBtn.textContent = '確認';
@@ -1637,7 +1637,7 @@ const IRIS_IDLE = [
             
             if (nextInd) {
                 if (IRIS_STATE.queue.length > 0) { nextInd.textContent = '▼'; nextInd.style.display = 'block'; }
-                else if (pendingRestoreLobby) { nextInd.textContent = '↩ 點擊返回書咖'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
+                else if (pendingRestoreLobby) { nextInd.textContent = '點擊返回書咖'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
             }
             if (IRIS_STATE.queue.length === 0 && IRIS_STATE._onComplete) { const cb = IRIS_STATE._onComplete; IRIS_STATE._onComplete = null; cb(); }
             return;
@@ -1675,7 +1675,7 @@ const IRIS_IDLE = [
                 clearInterval(IRIS_STATE.timer); IRIS_STATE.isTyping = false;
                 if (nextInd) {
                     if (IRIS_STATE.queue.length > 0) { nextInd.textContent = '▼'; nextInd.style.display = 'block'; }
-                    else if (pendingRestoreLobby) { nextInd.textContent = '↩ 點擊返回書咖'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
+                    else if (pendingRestoreLobby) { nextInd.textContent = '點擊返回書咖'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
                 }
                 if (IRIS_STATE.queue.length === 0 && !pendingRestoreLobby && IRIS_STATE._onComplete) {
                     const cb = IRIS_STATE._onComplete; IRIS_STATE._onComplete = null; cb();
@@ -1764,7 +1764,7 @@ const IRIS_IDLE = [
             const _sum = script.match(/<theater_summary>([\s\S]*?)<\/theater_summary>/i);
             if (_sum) brief = _sum[1].replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
             // ephemeral 播：不 saveVnChapter（免觸發 ingest/抽取）；autoload 讀 _lobbyPendingChapter.content 直接 _startWithLoader
-            const ch = { title: '🎭 小劇場：' + npcA.name + ' & ' + npcB.name, storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: content, createdAt: Date.now() };
+            const ch = { title: '小劇場：' + npcA.name + ' & ' + npcB.name, storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: content, createdAt: Date.now() };
             try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
             window._lobbyPendingChapter = ch;
             if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
@@ -2324,7 +2324,7 @@ ${sections}`;
                                 if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = styleId; document.head.appendChild(styleEl); }
                                 styleEl.textContent = capturedTpl.css || '';
                                 content.innerHTML = capturedTpl.html || '';
-                                if (titleEl) titleEl.textContent = capturedTpl.usageDesc || `🎮 ${capturedTpl.tagId}`;
+                                if (titleEl) titleEl.textContent = capturedTpl.usageDesc || capturedTpl.tagId;
                                 overlay.style.display = 'flex';
                                 const area = document.getElementById('lobby-canvas-area');
                                 if (area) area.style.animation = 'lcaSlideIn 0.3s ease';
@@ -2400,7 +2400,7 @@ ${sections}`;
             if (isAbort) {
                 // 使用者主動停止：靜默處理，思考中文字換成已停止提示
                 const txtBox = document.getElementById('iris-text');
-                if (txtBox) txtBox.innerHTML = `<span style="color:${is404Room ? '#15a82f' : '#9c9083'}; font-style:italic; font-size:12px;">⏹ 已停止</span>`;
+                if (txtBox) txtBox.innerHTML = `<span style="color:${is404Room ? '#15a82f' : '#9c9083'}; font-style:italic; font-size:12px;"><i class="fa-solid fa-stop"></i> 已停止</span>`;
             } else {
                 console.error("[VoidTerminal Chat Error]", e);
                 if (is404Room) playIrisSequence(`[Nar|(馬賽克雜訊劇烈閃爍)]\n[Char|柴郡|glitch|*(眼神滿是嫌棄)* 連線爛掉了，不是我的問題。]`);

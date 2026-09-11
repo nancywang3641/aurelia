@@ -46,6 +46,8 @@
         .vn-ws-history-item.pinned { border-color: rgba(241,196,15,0.6); background: rgba(40,30,5,0.6); }
         .vn-ws-history-item .h-btn { background: transparent; border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; font-size: 11px; padding: 3px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
         .vn-ws-history-item .h-btn:hover { background: rgba(26,28,40,0.08); }
+        /* 釘住鈕：沒釘時淡一點，釘住時實心 */
+        .vn-ws-history-item .h-btn.btn-pin:not(.is-on) i { opacity: 0.35; }
         .vn-ws-history-item .h-btn.danger { border-color: rgba(231,76,60,0.5); color: #e74c3c; }
         .vn-ws-history-item .h-btn.danger:hover { background: rgba(231,76,60,0.15); }
         .vn-ws-history-hint { font-size: 11px; color: #aaa; margin-bottom: 8px; line-height: 1.4; }

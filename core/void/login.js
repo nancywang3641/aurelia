@@ -58,12 +58,12 @@
                         <label>委託人代號 (USER NAME)</label>
                         <div class="void-login-name-row">
                             <input type="text" id="void-login-name" value="${savedName}" placeholder="例如: 約翰" autocomplete="off">
-                            <button class="void-persona-pick-btn" id="void-layout-btn" title="介面佈局與人設設定">⚙️</button>
+                            <button class="void-persona-pick-btn" id="void-layout-btn" title="介面佈局與人設設定"><i class="fa-solid fa-gear"></i></button>
                         </div>
                         <div id="void-layout-dropdown" class="void-persona-dropdown"></div>
                     </div>
-                    <button class="void-login-btn" id="void-login-submit">▶ 進入書咖</button>
-                    <button class="void-login-alt-btn" id="void-login-sessions">📂 管理歷史素材</button>
+                    <button class="void-login-btn" id="void-login-submit"><i class="fa-solid fa-caret-right"></i> 進入書咖</button>
+                    <button class="void-login-alt-btn" id="void-login-sessions"><i class="fa-solid fa-folder-open"></i> 管理歷史素材</button>
                 </div>
             </div>
             <div id="void-session-manager" style="display:none; width:100%; height:100%;"></div>
@@ -145,7 +145,7 @@
         }
 
         async function _renderDropdown() {
-            dropdown.innerHTML = '<div class="void-persona-empty">⏳ 讀取中...</div>';
+            dropdown.innerHTML = '<div class="void-persona-empty"><i class="fa-solid fa-hourglass-half"></i> 讀取中...</div>';
             dropdown.style.display = 'block';
 
             const isStandalone = !(window.parent || window).SillyTavern;
@@ -153,16 +153,16 @@
 
             // 佈局設定區塊 (iOS 解決方案)
             const currentMode = localStorage.getItem('aurelia_layout_mode') || 'auto';
-            html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96);">🖥️ 介面佈局 (解決頂部遮擋)</div>`;
-            html += `<div class="void-persona-item ${currentMode === 'auto' ? 'is-selected' : ''}" data-layout="auto"><span>📱 自動適配 (Auto/預設)</span></div>`;
-            html += `<div class="void-persona-item ${currentMode === 'pad-ios' ? 'is-selected' : ''}" data-layout="pad-ios"><span>🍎 強制下移 (iOS 動態島/瀏海)</span></div>`;
+            html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96);"><i class="fa-solid fa-desktop"></i> 介面佈局 (解決頂部遮擋)</div>`;
+            html += `<div class="void-persona-item ${currentMode === 'auto' ? 'is-selected' : ''}" data-layout="auto"><span><i class="fa-solid fa-mobile-screen"></i> 自動適配 (Auto/預設)</span></div>`;
+            html += `<div class="void-persona-item ${currentMode === 'pad-ios' ? 'is-selected' : ''}" data-layout="pad-ios"><span>強制下移 (iOS 動態島/瀏海)</span></div>`;
 
             // 角色切換區塊 (僅酒館模式顯示)
             if (!isStandalone) {
-                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96); margin-top: 5px;">👤 酒館人設 (Persona)</div>`;
+                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96); margin-top: 5px;"><i class="fa-solid fa-user"></i> 酒館人設 (Persona)</div>`;
                 const list = await _fetchPersonaList();
                 if (!list.length) {
-                    html += '<div class="void-persona-empty">⚠ 未找到酒館人設</div>';
+                    html += '<div class="void-persona-empty"><i class="fa-solid fa-triangle-exclamation"></i> 未找到酒館人設</div>';
                 } else {
                     list.forEach(p => {
                         html += `<div class="void-persona-item persona-pick ${p.isSelected ? 'is-selected' : ''}" data-name="${p.name}">
@@ -171,7 +171,7 @@
                     });
                 }
             } else {
-                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96); margin-top: 5px;">👤 獨立模式</div>`;
+                html += `<div style="padding: 8px 12px; font-size: 10px; font-weight: bold; color:rgba(26,28,40,0.72); background: rgba(228,232,245,0.96); margin-top: 5px;"><i class="fa-solid fa-user"></i> 獨立模式</div>`;
                 html += `<div class="void-persona-empty" style="padding:8px 14px;">獨立 API 模式下，請直接在上方輸入您的代號。</div>`;
             }
 
@@ -225,7 +225,7 @@
                     <button class="void-session-back-btn">‹ 返回登入</button>
                 </div>
                 <div class="void-session-body">
-                    <div id="vss-list"><div class="void-session-spinner">⚙ 載入存檔...</div></div>
+                    <div id="vss-list"><div class="void-session-spinner"><i class="fa-solid fa-gear"></i> 載入存檔...</div></div>
                 </div>
             </div>
         `;

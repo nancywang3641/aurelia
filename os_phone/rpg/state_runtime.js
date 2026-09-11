@@ -598,7 +598,7 @@ ${list}`;
                 for (const d of groupAll) {
                     if (d === keep || !cont[d]) continue;
                     _mergeEntity(cont[keep], cont[d]); delete cont[d]; mergedHere++; total++;
-                    console.log('🔁 [State Runtime] 角色去重(搭便車)：「' + d + '」併入「' + keep + '」(' + p.contKey + ')');
+                    console.log('[State Runtime] 角色去重(搭便車)：「' + d + '」併入「' + keep + '」(' + p.contKey + ')');
                 }
             });
             if (mergedHere === 0) _dedupeSeen.set(p.contKey, p.sig);   // 沒併 → 記住別再問同一組
@@ -1242,7 +1242,7 @@ ${numberedText}`;
                             return v === undefined || v === null || v === ''
                                 || (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
                         });
-                        if (_miss.length) console.log('🛰️ [State Runtime] 這輪要補初值的欄位（' + _miss.length + '）：' + _miss.join('、'));
+                        if (_miss.length) console.log('[State Runtime] 這輪要補初值的欄位（' + _miss.length + '）：' + _miss.join('、'));
                     } catch (e) {}
                 }
                 // 📜 大總結參照（唯讀）：早期劇情被總結收走後最近樓層看不到 → 副模型對不到帳，
@@ -1684,7 +1684,7 @@ _directorSpec(castNames);
         list.push({ id: anchor, text: clean });
         while (list.length > DIRECTOR_MAX_PATCHES) list.shift();
         await win.OS_DB.saveStateData(chatId, { ...fresh, director: { patches: list, updatedAt: Date.now() } });
-        console.log('🎬 [Director] 導演稿已更新（錨 ' + anchor + '，' + clean.length + ' 字）');
+        console.log('[Director] 導演稿已更新（錨 ' + anchor + '，' + clean.length + ' 字）');
         try { win.eventEmit?.('AURELIA_DIRECTOR_UPDATED', { chatId, msgId: lastId }); } catch (e) {}
         return true;
     }
@@ -1799,7 +1799,7 @@ _directorSpec(castNames);
         const data = (await win.OS_DB.getStateData(chatId)) || {};
         // 手改稿一樣錨在最後一筆 patch 的 id 上（沒有 patch 可錨 → 存不了，同 _saveDirectorPatch）
         const pl = _patchList(data.patches);
-        if (!pl.length) { showToast('⚠ 目前沒有可錨定的逐輪紀錄，導演稿無法存檔', 'warning'); return false; }
+        if (!pl.length) { showToast('目前沒有可錨定的逐輪紀錄，導演稿無法存檔', 'warning'); return false; }
         const anchor = String(pl[pl.length - 1].id);
         const list = (Array.isArray(data.director?.patches) ? data.director.patches : []).filter(d => String(d.id) !== anchor);
         list.push({ id: anchor, text: String(text || '').trim() });
@@ -2285,7 +2285,7 @@ _directorSpec(castNames);
             const _bn = data.base ? Object.keys(data.base).length : 0;
             console.log(`🛰️ [State Runtime] 對帳(${tag})：chatId=${chatId}｜逐輪紀錄 ${list.length} 筆｜當前狀態 ${_cn} 個頂層欄位｜底 ${_bn}`);
             if (!list.length) {
-                console.warn(`🛰️ [State Runtime] 對帳(${tag})：沒有逐輪紀錄可回滾（patches 空）。`
+                console.warn(`[State Runtime] 對帳(${tag})：沒有逐輪紀錄可回滾（patches 空）。`
                     + `current 有 ${_cn} 個欄位表示狀態是別的路徑寫的——例如跑過「深度整理」(會清空 patches)、`
                     + `或狀態由主模型 <vars> 直接寫入。這種資料無法自動回溯，只能用面板「還原上一步」。`);
                 return;
@@ -2369,10 +2369,10 @@ _directorSpec(castNames);
 
             const n = await _rollbackPatches(chatId, data, dead);
             console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(${dead.join(',')})，回復 ${n} 個欄位`);
-            if (n) showToast(`↩ 狀態已回溯（${dead.length} 輪、${n} 個欄位）`, 'success');
+            if (n) showToast(`狀態已回溯（${dead.length} 輪、${n} 個欄位）`, 'success');
         } catch (e) {
             console.warn('[State Runtime] 對帳回滾失敗:', e);
-            showToast('⚠ 狀態回溯失敗，請用狀態面板「還原上一步」', 'warning');
+            showToast('狀態回溯失敗，請用狀態面板「還原上一步」', 'warning');
         }
     }
 
@@ -2400,7 +2400,7 @@ _directorSpec(castNames);
             }
             const n = await _rollbackPatches(chatId, data, _dead);
             console.log(`🛰️ [State Runtime] 砍 patch msg#${msgId} → 已回滾 ${n} 個欄位`);
-            if (n) showToast(`↩ 狀態已回溯（${n} 個欄位）`, 'success');
+            if (n) showToast(`狀態已回溯（${n} 個欄位）`, 'success');
         } catch(e) {
             console.warn('[State Runtime] 砍 patch 失敗:', e);
         }
@@ -2418,19 +2418,19 @@ _directorSpec(castNames);
             base: {},
             current: {}
         });
-        showToast('🧹 已清空 patches，副模型即將重新初始化', 'info');
+        showToast('已清空 patches，副模型即將重新初始化', 'info');
         // 自動跑一次 extract（current 已清空 → 進初始化模式 → 重新填齊全部欄位）
         setTimeout(() => extractOnce(), 500);
     }
 
     async function forceExtract() {
         if (!isEnabled()) {
-            showToast('⚠️ 請先開啟「副模型抽取」開關', 'warning');
+            showToast('請先開啟「副模型抽取」開關', 'warning');
             return;
         }
-        showToast('🛰️ 立即抽取一次...', 'info');
+        showToast('立即抽取一次...', 'info');
         await extractOnce({ force: true });   // 面板手動重抽＝無視「這樓已抽過」守門，用當下副模型重來
-        showToast('✅ 抽取完成', 'success');
+        showToast('抽取完成', 'success');
     }
 
     // ♻️ 深度整理（狀態面板手動、低頻）：用「主模型」把整份狀態清一輪——合併重複角色(繁簡/別名)、

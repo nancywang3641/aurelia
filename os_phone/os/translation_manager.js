@@ -337,7 +337,7 @@
     // 暴露到全局
     if (typeof window !== 'undefined') {
         window.TranslationManager = TranslationManager;
-        logger.info('✅ 翻译管理器已加载');
+        logger.info('翻译管理器已加载');
     }
 
     // 如果是在 Node.js 环境中

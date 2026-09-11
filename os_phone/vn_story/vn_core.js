@@ -2974,7 +2974,7 @@
             if (!toast) return;
             document.getElementById('vn-bgm-name').textContent = name;
             document.getElementById('vn-bgm-label').textContent = found ? 'NOW PLAYING' : 'BGM NOT FOUND';
-            document.getElementById('vn-bgm-icon').textContent  = found ? '🎵' : '🔇';
+            document.getElementById('vn-bgm-icon').innerHTML  = found ? '<i class="fa-solid fa-music"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
             toast.classList.remove('found', 'notfound', 'active');
             void toast.offsetWidth; // reflow
             toast.classList.add(found ? 'found' : 'notfound', 'active');
@@ -3089,7 +3089,7 @@
             //   不然 PWA 按下去跑的是大總結、標題卻寫故事管理。
             if (isOpen) {
                 const sb = document.getElementById('ctx-summary-btn');
-                if (sb) sb.textContent = ((win.OS_API?.isStandalone?.()) ?? false) ? '📝 大總結' : '🛠️ 故事管理';
+                if (sb) sb.textContent = ((win.OS_API?.isStandalone?.()) ?? false) ? '大總結' : '故事管理';
             }
             if (isOpen) VN_CtxMonitor.poll();
         },
@@ -3204,7 +3204,7 @@
                     console.warn('[VN] MiniMax TTS 未啟用或未載入');
                     return;
                 }
-                if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+                if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true; }
                 const hit = await _mm.replayLast(charName, text, { expression });
                 if (!hit) await _mm.playForChar(charName, text, { expression });
                 if (btn) { btn.textContent = '↺ TTS'; btn.disabled = false; }
@@ -3215,7 +3215,7 @@
             const VN_TTS = (window.parent || window).VN_TTS;
             if (!VN_TTS?.config?.enabled) { console.warn('[VN] VN_TTS 不可用或未啟用'); return; }
 
-            if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+            if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true; }
             VN_TTS.clearCache(charName, text);
             VN_TTS.play(charName, text, emotion);
             if (btn) { btn.textContent = '↺ TTS'; btn.disabled = false; }
@@ -3565,7 +3565,7 @@
         async backupAvatarsToWorldbook(btn) {
             const tr = AUI.toastr;
             const _orig = btn ? btn.textContent : '';
-            if (btn) { btn.disabled = true; btn.textContent = '⏳ 備份中…'; }
+            if (btn) { btn.disabled = true; btn.textContent = '備份中…'; }
             try {
                 const r = await window.VN_Core.backupAvatarsToCharLorebook();
                 if (r && r.ok) { tr && tr.success(r.msg, '頭像備份'); }
@@ -3694,7 +3694,7 @@
                 '</div>';
             document.body.appendChild(b);
         }
-        b.querySelector('.vn-trunc-msg').textContent = opts.title || '⚠️ 正文被截斷';
+        b.querySelector('.vn-trunc-msg').textContent = opts.title || '正文被截斷';
         b.querySelector('.vn-trunc-sub').textContent = opts.sub || '沒收到結尾（缺 </content>）';
         const _regen = b.querySelector('#vn-trunc-regen');
         const _cont  = b.querySelector('#vn-trunc-cont');
@@ -3775,7 +3775,7 @@
             function _showTruncBanner(messageId) {
                 _truncMsgId = messageId;
                 _vnTruncBannerShow({
-                    title: '⚠️ 正文被截斷',
+                    title: '正文被截斷',
                     sub: '沒收到結尾（缺 </content> 或 </summary>）',
                     onRegen: _rerollTrunc,
                     onContinue: _continueTrunc,

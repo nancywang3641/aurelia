@@ -401,7 +401,7 @@
                     else settings.targetBio = newBio;
                     localStorage.setItem(key, JSON.stringify(settings));
                 } catch(e) {}
-                return { type: 'system', content: `📝 ${ctx.chatName} 更新了簽名：${newBio}`, isMe: false }; 
+                return { type: 'system', content: `${ctx.chatName} 更新了簽名：${newBio}`, isMe: false }; 
             }
         }
         // 處理 [System: XXX領取了紅包|紅包ID] 或 [System: XXX領取了紅包 4.44元|紅包ID]
@@ -1898,7 +1898,7 @@
             this.closeModal(); 
         },
         
-        openGift: function(info, price, hashId, el) { const overlay = doc.querySelector('#wxGiftOverlay'); const nameEl = doc.querySelector('#wxGiftName'); const priceEl = doc.querySelector('#wxGiftPrice'); const iconEl = doc.querySelector('#wxGiftIcon'); const btnGroup = doc.querySelector('#wxGiftBtnGroup'); const closeBtn = doc.querySelector('#wxGiftClose'); const acceptBtn = doc.querySelector('#wxGiftAccept'); const refuseBtn = doc.querySelector('#wxGiftRefuse'); if (overlay && nameEl) { let fullInfo = decodeURIComponent(info); let icon = "🎁"; let name = fullInfo; const emojiMatch = fullInfo.match(/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF])/); if (emojiMatch) { icon = emojiMatch[0]; name = fullInfo.replace(icon, '').trim(); } nameEl.innerText = name; priceEl.innerText = decodeURIComponent(price); iconEl.innerText = icon; const status = _getCardStatus(null, 'gift', String(hashId || '').replace(/^ID_/i, ''), hashId); if (hashId === 'VIEW_ONLY' || status) { if(btnGroup) btnGroup.style.display = 'none'; if(closeBtn) closeBtn.style.display = 'block'; } else { if(btnGroup) btnGroup.style.display = 'flex'; if(closeBtn) closeBtn.style.display = 'block'; if(acceptBtn) acceptBtn.onclick = () => this.resolveGift('accepted', name, hashId); if(refuseBtn) refuseBtn.onclick = () => this.resolveGift('returned', name, hashId); } overlay.classList.add('show'); } },
+        openGift: function(info, price, hashId, el) { const overlay = doc.querySelector('#wxGiftOverlay'); const nameEl = doc.querySelector('#wxGiftName'); const priceEl = doc.querySelector('#wxGiftPrice'); const iconEl = doc.querySelector('#wxGiftIcon'); const btnGroup = doc.querySelector('#wxGiftBtnGroup'); const closeBtn = doc.querySelector('#wxGiftClose'); const acceptBtn = doc.querySelector('#wxGiftAccept'); const refuseBtn = doc.querySelector('#wxGiftRefuse'); if (overlay && nameEl) { let fullInfo = decodeURIComponent(info); let icon = "🎁"; let name = fullInfo; const emojiMatch = fullInfo.match(/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF])/); if (emojiMatch) { icon = emojiMatch[0]; name = fullInfo.replace(icon, '').trim(); } nameEl.innerText = name; priceEl.innerText = decodeURIComponent(price); if (icon !== '🎁') iconEl.innerText = icon; else iconEl.innerHTML = '<i class="fa-solid fa-gift"></i>'; const status = _getCardStatus(null, 'gift', String(hashId || '').replace(/^ID_/i, ''), hashId); if (hashId === 'VIEW_ONLY' || status) { if(btnGroup) btnGroup.style.display = 'none'; if(closeBtn) closeBtn.style.display = 'block'; } else { if(btnGroup) btnGroup.style.display = 'flex'; if(closeBtn) closeBtn.style.display = 'block'; if(acceptBtn) acceptBtn.onclick = () => this.resolveGift('accepted', name, hashId); if(refuseBtn) refuseBtn.onclick = () => this.resolveGift('returned', name, hashId); } overlay.classList.add('show'); } },
         resolveGift: function(action, name, hashId) {
             const _gid = String(hashId || '').replace(/^ID_/i, '');
             _setCardStatus(null, 'gift', _gid, action, hashId);
@@ -2219,7 +2219,7 @@
                         (error) => {
                             const idx = currentChat.messages.findIndex(m => m.isLoading);
                             if (idx !== -1) currentChat.messages.splice(idx, 1);
-                            const errMsg = { type:'msg', isMe:false, content:`⚠️ AI 回應失敗：${error?.message || '未知錯誤'}`, sender: currentChat.name, senderName: currentChat.name };
+                            const errMsg = { type:'msg', isMe:false, content:`AI 回應失敗：${error?.message || '未知錯誤'}`, sender: currentChat.name, senderName: currentChat.name };
                             currentChat.messages.push(errMsg);
                             IS_STREAMING_REPLY = false;
                             _rebuildRoomContent(currentChat);
@@ -2231,7 +2231,7 @@
                     console.error('[WX] OS_API.chat 例外:', ce);
                     const idx = currentChat.messages.findIndex(m => m.isLoading);
                     if (idx !== -1) currentChat.messages.splice(idx, 1);
-                    currentChat.messages.push({ type:'msg', isMe:false, content:'⚠️ 引擎例外：' + ((ce && ce.message) || ce), sender: currentChat.name, senderName: currentChat.name });
+                    currentChat.messages.push({ type:'msg', isMe:false, content:'引擎例外：' + ((ce && ce.message) || ce), sender: currentChat.name, senderName: currentChat.name });
                     IS_STREAMING_REPLY = false;
                     _rebuildRoomContent(currentChat);
                 }
@@ -2442,7 +2442,7 @@
         renderGrid(id) {
             const lib = id ? this._libs.find(l => l.id === id) : null;
             const grid = document.getElementById('wxStickerGrid'); if (!grid) return;
-            if (!lib || !lib.stickers.length) { grid.innerHTML = `<div class="wx-stk-empty">尚無表情包，點 ⚙ 匯入 TXT</div>`; return; }
+            if (!lib || !lib.stickers.length) { grid.innerHTML = `<div class="wx-stk-empty">尚無表情包，點 <i class="fa-solid fa-gear"></i> 匯入 TXT</div>`; return; }
             grid.innerHTML = lib.stickers.map(s => {
                 const url = this._resolveUrl(lib, s.file).replace(/[^\x00-\x7F]/g, c => encodeURIComponent(c));
                 const safe = url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");

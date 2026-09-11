@@ -65,7 +65,7 @@
                     const _p = (prio == null ? 1 : prio);
                     self._q.push({ fn: fn, prio: _p, maxMs: (maxMs || 240000), seq: self._seq++, resolve: resolve, reject: reject, tag: (tag || ('prio' + _p)), tQueued: Date.now() });
                     self._q.sort(function(a, b) { return (a.prio - b.prio) || (a.seq - b.seq); });
-                    if (self._trace()) console.log('[GPU佇列] ＋排入 ' + (tag || ('prio' + _p)) + '(prio' + _p + ')　隊列深度=' + self._q.length + (self._running ? '　⚠️ 目前有工作在跑，得等它做完' : ''));
+                    if (self._trace()) console.log('[GPU佇列] ＋排入 ' + (tag || ('prio' + _p)) + '(prio' + _p + ')　隊列深度=' + self._q.length + (self._running ? '　目前有工作在跑，得等它做完' : ''));
                     self._pump();
                 });
             },
@@ -1411,7 +1411,7 @@
                             const _now = Date.now();
                             if (_now - _last429ToastAt > 30000) {
                                 _last429ToastAt = _now;
-                                _tr.error('NAI 併發衝突（多半是拼車同時生圖）→ 錯開幾秒按 🔄 重試', 'NAI 429 併發', { timeOut: 8000 });
+                                _tr.error('NAI 併發衝突（多半是拼車同時生圖）→ 錯開幾秒按「重試」', 'NAI 429 併發', { timeOut: 8000 });
                             }
                         }
                         else _tr.warning('NAI 生圖失敗（非併發）：' + _emsg, 'NAI 錯誤', { timeOut: 8000 });

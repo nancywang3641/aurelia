@@ -17,7 +17,7 @@
     // ========================
     const PANEL_CONFIG = {
         TYPES: {
-            VN: { id: 'vn-panel', name: 'VN面板', icon: '📖' } // 🔥 不再使用 iframe，改由 VN_PLAYER.launchApp 注入
+            VN: { id: 'vn-panel', name: 'VN面板', icon: 'fa-book-open' } // 🔥 不再使用 iframe，改由 VN_PLAYER.launchApp 注入
         },
         BASE_PATH: (window.AURELIA_EXT_BASE || './scripts/extensions/third-party/my-tavern-extension') + '/panels/',
         Z_INDEX: 99999
@@ -130,7 +130,7 @@
                 padding: 0 15px; cursor: move; user-select: none; color: #eee;
             `;
             header.innerHTML = `
-                <div>${config.icon} ${config.name}</div>
+                <div><i class="fa-solid ${config.icon}"></i> ${config.name}</div>
                 <div class="close-btn" style="cursor: pointer; padding: 5px;">✕</div>
             `;
             panel.appendChild(header);

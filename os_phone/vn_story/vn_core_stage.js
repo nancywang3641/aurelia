@@ -378,7 +378,7 @@
             const setT = (t) => { if (btn) btn.textContent = t; };
             try {
                 if (btn) btn.disabled = true;
-                setT('🎨 生成中…');
+                setT('生成中…');
                 // 跟頭像 tab 的🎨同一套：套「全身框」前後綴(full body…) + 剝掉頭像特寫詞，512×896 直立全身比例
                 const DEF_PREFIX = 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ';
                 const DEF_SUFFIX = 'simple bright background, straight view, no shading';
@@ -425,7 +425,7 @@
                 const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: _bw, height: _bh, raw: !useNAI, extraNegative: _spriteNeg });
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
-                setT('🪄 去背中…');
+                setT('去背中…');
                 const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
                 const removed = await m.removeBackground(blob, { model: 'isnet_fp16', output: { format: 'image/png', quality: 1.0 } });
                 const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(removed); });
@@ -434,11 +434,11 @@
                 // 立繪即時換上：該角色所在格重渲染
                 this._stageInit();
                 for (let i = 0; i < 2; i++) { if (this._stage[i] && this._stage[i].name === name) { const el = this._slotEl(i); if (el) el.classList.remove('vn-avatar'); this._renderSlot(i, name, this._stage[i].exp); } }
-                setT('✅ 完成');
+                setT('完成');
                 setTimeout(() => { setT(orig); if (btn) btn.disabled = false; }, 1500);
             } catch (e) {
                 console.error('[CharCard] 一鍵生立繪失敗:', e);
-                setT('❌ ' + (e && e.message ? e.message : '失敗'));
+                setT(e && e.message ? e.message : '失敗');
                 setTimeout(() => { setT(orig); if (btn) btn.disabled = false; }, 2600);
             }
         },
@@ -474,11 +474,11 @@
             const cvText = cv ? (esc(cv.name) + _cvTag) : '—';
             // session=還沒鎖→「💾保存(本卡)」；cardlock=已鎖→「🔓解除」；manual=全域綁定→面板管、這裡不出按鈕
             let _cvBtn = '';
-            if (cv && cv.source === 'session') _cvBtn = '<button class="vn-cc-mini" id="vn-cc-cv-save">💾 保存</button>';
-            else if (cv && cv.source === 'cardlock') _cvBtn = '<button class="vn-cc-mini" id="vn-cc-cv-unlock">🔓 解除</button>';
+            if (cv && cv.source === 'session') _cvBtn = '<button class="vn-cc-mini" id="vn-cc-cv-save"><i class="fa-solid fa-floppy-disk"></i> 保存</button>';
+            else if (cv && cv.source === 'cardlock') _cvBtn = '<button class="vn-cc-mini" id="vn-cc-cv-unlock"><i class="fa-solid fa-lock-open"></i> 解除</button>';
             card.innerHTML =
                 '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' +
-                '<button class="vn-cc-btn" id="vn-cc-gen">🎨 一鍵生立繪（去背）</button>' +
+                '<button class="vn-cc-btn" id="vn-cc-gen"><i class="fa-solid fa-palette"></i> 一鍵生立繪（去背）</button>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + _cvBtn + '</div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">形象</span><span class="vn-cc-v">' + esc(st['形象'] || '—') + '</span></div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">身分</span><span class="vn-cc-v">' + esc(st['身分'] || st['身份'] || '—') + '</span></div>' +

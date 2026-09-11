@@ -280,7 +280,7 @@
         // 更新碎片顯示
         const shardsDisplay = overlay.querySelector('#store-shards-display');
         if (shardsDisplay && window.OS_404_STORE) {
-            shardsDisplay.textContent = `💎 ${window.OS_404_STORE.getShards()} FRAGMENTS`;
+            shardsDisplay.innerHTML = `<i class="fa-solid fa-gem"></i> ${window.OS_404_STORE.getShards()} FRAGMENTS`;
         }
         // 渲染商品列表
         const body = overlay.querySelector('#store-panel-body') || overlay;
@@ -297,7 +297,7 @@
             window.OS_404_STORE.renderStorePanel(contentArea);
             // 同步碎片顯示（renderStorePanel 可能更新）
             if (shardsDisplay) {
-                shardsDisplay.textContent = `💎 ${window.OS_404_STORE.getShards()} FRAGMENTS`;
+                shardsDisplay.innerHTML = `<i class="fa-solid fa-gem"></i> ${window.OS_404_STORE.getShards()} FRAGMENTS`;
             }
         }
     }

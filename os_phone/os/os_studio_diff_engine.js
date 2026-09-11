@@ -239,7 +239,7 @@ ${d.usageDesc || ''}
 
         // === AI 主動逃生 / 前端全局長度檢查 abort ===
         if (results && !Array.isArray(results) && results.status === 'too_big') {
-            return { text: appendConv('⚠️ ' + results.message), failed: true };
+            return { text: appendConv(results.message), failed: true };
         }
 
         if (!Array.isArray(results) || results.length === 0) {
@@ -247,7 +247,7 @@ ${d.usageDesc || ''}
             if (conv) {
                 return { text: conv, failed: false, conversational: true };
             }
-            return { text: '⚠️ AI 沒給出可套用的修改，預覽未更新。請把需求描述清楚一點再發一次（大改會自動整包重做）', failed: true };
+            return { text: 'AI 沒給出可套用的修改，預覽未更新。請把需求描述清楚一點再發一次（大改會自動整包重做）', failed: true };
         }
         const applied = results.filter(r => r.status === 'applied');
         const failed = results.filter(r => r.status !== 'applied');
@@ -261,11 +261,11 @@ ${d.usageDesc || ''}
                 if (r.status === 'empty_find') return 'find 是空的';
                 return r.status;
             });
-            return { text: appendConv(`⚠️ AI 給了 ${results.length} 條修改指令但全部失敗：${reasons.join('；')}。請把需求描述清楚一點再發一次（大改會自動整包重做）`), failed: true };
+            return { text: appendConv(`AI 給了 ${results.length} 條修改指令但全部失敗：${reasons.join('；')}。請把需求描述清楚一點再發一次（大改會自動整包重做）`), failed: true };
         }
 
         const appliedTargets = applied.map(r => r.target);
-        let text = `✅ 已套用 ${applied.length} 處修改：${humanizeScopeKeys(appliedTargets)}`;
+        let text = `已套用 ${applied.length} 處修改：${humanizeScopeKeys(appliedTargets)}`;
         if (failed.length > 0) {
             text += `（另有 ${failed.length} 處定位失敗）`;
         }
@@ -344,11 +344,11 @@ ${d.usageDesc || ''}
         if (countEl) countEl.textContent = list.length;
 
         if (list.length === 0) {
-            area.innerHTML = '<div class="vn-history-empty">尚無快照。每次發送修改建議前會自動拍一張，最多保留 ' + VN_HISTORY_LIMIT + ' 張（📌 釘住的不計入）。</div>';
+            area.innerHTML = '<div class="vn-history-empty">尚無快照。每次發送修改建議前會自動拍一張，最多保留 ' + VN_HISTORY_LIMIT + ' 張（<i class="fa-solid fa-thumbtack"></i> 釘住的不計入）。</div>';
             return;
         }
 
-        area.innerHTML = '<div class="vn-history-hint">📸 由新到舊。點「還原」可回到該版本（會先自動備份當前）。釘住的快照不會被自動清理。聊天歷史不會跟著動。</div>';
+        area.innerHTML = '<div class="vn-history-hint"><i class="fa-solid fa-camera"></i> 由新到舊。點「還原」可回到該版本（會先自動備份當前）。釘住的快照不會被自動清理。聊天歷史不會跟著動。</div>';
 
         list.forEach((snap, idx) => {
             const item = document.createElement('div');
@@ -360,9 +360,9 @@ ${d.usageDesc || ''}
             item.innerHTML = `
                 <span class="h-time">${formatSnapTime(snap.ts)}</span>
                 <span class="h-note" title="${noteText}">${noteText}</span>
-                <button class="h-btn btn-restore">⏪ 還原</button>
-                <button class="h-btn btn-pin">${snap.pinned ? '📌' : '📍'}</button>
-                <button class="h-btn danger btn-del">✖</button>
+                <button class="h-btn btn-restore">還原</button>
+                <button class="h-btn btn-pin${snap.pinned ? ' is-on' : ''}" title="${snap.pinned ? '取消釘住' : '釘住'}"><i class="fa-solid fa-thumbtack"></i></button>
+                <button class="h-btn danger btn-del"><i class="fa-solid fa-xmark"></i></button>
             `;
             item.querySelector('.btn-restore').onclick = async () => {
                 if (await AUI.confirm('要還原到這個版本嗎？目前的狀態會先拍進快照，可以再還原回來。')) {

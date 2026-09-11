@@ -167,7 +167,7 @@ LINE:[用角色風格說一句話，10-20字]`;
 
         // 渲染 HTML
         content.innerHTML = panelData.html || '';
-        if (titleEl) titleEl.textContent = panelData.title || '🎮 互動面板';
+        if (titleEl) titleEl.textContent = panelData.title || '互動面板';
 
         // 顯示覆蓋層
         overlay.style.display = 'flex';
@@ -182,7 +182,7 @@ LINE:[用角色風格說一句話，10-20字]`;
                 fn(content, LP);
             } catch(e) {
                 console.error('[LobbyPanel] JS 執行錯誤:', e);
-                content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;">⚠️ 面板 JS 錯誤: ${e.message}</div>`;
+                content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;"><i class="fa-solid fa-triangle-exclamation"></i> 面板 JS 錯誤: ${e.message}</div>`;
             }
         }
         // 重綁所有 onclick，讓閉包函數在有 LP 的作用域內執行
@@ -252,7 +252,7 @@ LINE:[用角色風格說一句話，10-20字]`;
                 return;
             }
             _renderLobbyPanel({
-                title: tpl.usageDesc || `🎮 ${tpl.tagId}`,
+                title: tpl.usageDesc || tpl.tagId,
                 html:  tpl.html || '',
                 css:   tpl.css  || '',
                 js:    tpl.js   || ''
@@ -285,7 +285,7 @@ LINE:[用角色風格說一句話，10-20字]`;
                 if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = styleId; document.head.appendChild(styleEl); }
                 styleEl.textContent = tpl.css || '';
                 content.innerHTML = tpl.html || '';
-                if (titleEl) titleEl.textContent = tpl.usageDesc || `🎮 ${tpl.tagId}`;
+                if (titleEl) titleEl.textContent = tpl.usageDesc || tpl.tagId;
                 area.style.display = 'flex';
                 area.style.animation = 'lcaSlideIn 0.3s ease';
                 const LP2 = _makeLobbyPanelAPI();
@@ -296,7 +296,7 @@ LINE:[用角色風格說一句話，10-20字]`;
                         fn(content, lines, _closeLobbyCanvas, LP2);
                     } catch(e) {
                         console.error('[VNBlock] JS 執行錯誤:', e);
-                        content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;">⚠️ ${e.message}</div>`;
+                        content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</div>`;
                     }
                 }
                 _rewireOnclicks(content, LP2);

@@ -685,19 +685,19 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     // ── 系統固定槽定義 ──
     const ORDER_KEY = 'vn_prompt_order';
     const SYS_SLOTS = {
-        'cot':          { label: 'CoT 思考鏈',  icon: '🔷', desc: '引導 AI 先思考再輸出', type: 'system' },
-        'panel_prompt': { label: '面板提示詞',   icon: '📋', desc: '當前面板的格式協議（依面板自動切換）', type: 'placeholder' },
-        'worldbook':    { label: '世界書',       icon: '📌', desc: '動態注入 World Info', type: 'placeholder' },
-        'persona':      { label: '用戶人設',     icon: '📌', desc: '動態注入 User Info', type: 'placeholder' },
-        'vn_history':   { label: 'VN 劇情歷史',  icon: '📌', desc: '動態注入對話歷史', type: 'placeholder' },
+        'cot':          { label: 'CoT 思考鏈',  icon: 'fa-diamond', desc: '引導 AI 先思考再輸出', type: 'system' },
+        'panel_prompt': { label: '面板提示詞',   icon: 'fa-clipboard', desc: '當前面板的格式協議（依面板自動切換）', type: 'placeholder' },
+        'worldbook':    { label: '世界書',       icon: 'fa-thumbtack', desc: '動態注入 World Info', type: 'placeholder' },
+        'persona':      { label: '用戶人設',     icon: 'fa-thumbtack', desc: '動態注入 User Info', type: 'placeholder' },
+        'vn_history':   { label: 'VN 劇情歷史',  icon: 'fa-thumbtack', desc: '動態注入對話歷史', type: 'placeholder' },
         // 這三格以前是寫死在「所有包之後」的，排不進來也拖不動 → 收進同一張順序表，跟上面幾格同級。
-        'grand_summary':{ label: '大總結',       icon: '📌', desc: '到目前為止的劇情長期記憶', type: 'placeholder' },
-        'memory_recall':{ label: '劇情記憶召回',  icon: '📌', desc: '依這次輸入撈出相關的舊事', type: 'placeholder' },
-        'avs_vars':     { label: '狀態變數',     icon: '📌', desc: '目前的角色與世界數值', type: 'placeholder' },
+        'grand_summary':{ label: '大總結',       icon: 'fa-thumbtack', desc: '到目前為止的劇情長期記憶', type: 'placeholder' },
+        'memory_recall':{ label: '劇情記憶召回',  icon: 'fa-thumbtack', desc: '依這次輸入撈出相關的舊事', type: 'placeholder' },
+        'avs_vars':     { label: '狀態變數',     icon: 'fa-thumbtack', desc: '目前的角色與世界數值', type: 'placeholder' },
         // 酒館靠 injectPrompts 每輪臨時插的注入源，獨立版沒有那條路 → 一樣收進這張順序表當一格。
-        'npc_dossier':  { label: 'NPC 人物檔案',  icon: '📌', desc: '登場過的人物名冊，被提到的加注完整檔案', type: 'placeholder' },
-        'app_memory':   { label: '手機近況',      icon: '📌', desc: '在場角色最近在手機 app 上跟你的互動', type: 'placeholder' },
-        'mc_status':    { label: '主角狀態',      icon: '📌', desc: '故事時鐘、HP、狀態效果剩幾回合、近期約定', type: 'placeholder' },
+        'npc_dossier':  { label: 'NPC 人物檔案',  icon: 'fa-thumbtack', desc: '登場過的人物名冊，被提到的加注完整檔案', type: 'placeholder' },
+        'app_memory':   { label: '手機近況',      icon: 'fa-thumbtack', desc: '在場角色最近在手機 app 上跟你的互動', type: 'placeholder' },
+        'mc_status':    { label: '主角狀態',      icon: 'fa-thumbtack', desc: '故事時鐘、HP、狀態效果剩幾回合、近期約定', type: 'placeholder' },
     };
     const _LATE_SYS_SLOTS = ['grand_summary', 'memory_recall', 'avs_vars'];   // 舊包遷移用：補進來時要放的位置見 loadBundles
 
@@ -750,7 +750,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
 
             if (isSys) {
                 row.innerHTML = `<span class="pm-bi-handle">⠿</span>
-                    <span class="pm-bi-icon">${slotDef?.icon || '📌'}</span>
+                    <span class="pm-bi-icon"><i class="fa-solid ${slotDef?.icon || 'fa-thumbtack'}"></i></span>
                     <span class="pm-bi-label">${slotDef?.label || item.id}</span>
                     <span class="pm-bi-desc">${slotDef?.desc || ''}</span>`;
             } else {
@@ -854,7 +854,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         modal.innerHTML = `
             <div class="pm-bmodal-hd">
                 <button class="pm-bmodal-back">‹</button>
-                <span class="pm-bmodal-title">📦 ${(bundle.name || '(未命名包)').replace(/</g,'&lt;')}</span>
+                <span class="pm-bmodal-title"><i class="fa-solid fa-box"></i> ${(bundle.name || '(未命名包)').replace(/</g,'&lt;')}</span>
                 <button class="pm-bundle-save pm-bmodal-sv">保存</button>
             </div>
             <div class="pm-bmodal-body">
@@ -876,7 +876,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             bl[bi].name   = newName;
             bl[bi].panels = [...modal.querySelectorAll('.pm-panel-check:checked')].map(cb => cb.dataset.panel);
             saveBundles(bl);
-            modal.querySelector('.pm-bmodal-title').textContent = `📦 ${newName}`;
+            modal.querySelector('.pm-bmodal-title').innerHTML = '<i class="fa-solid fa-box"></i> ' + newName.replace(/&/g, '&amp;').replace(/</g, '&lt;');
             renderUnified(bodyEl);
             const btn = modal.querySelector('.pm-bmodal-sv');
             btn.textContent = '已保存 ✓'; btn.style.background = '#6b8e23'; btn.style.color = '#1A1C28';
@@ -898,12 +898,12 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         const cotVal = loadUniversalCot();
         gcot.innerHTML = `
             <div class="pm-gcot-head">
-                <span class="pm-gcot-title">🔷 全域 CoT 思考鏈</span>
+                <span class="pm-gcot-title"><i class="fa-solid fa-diamond"></i> 全域 CoT 思考鏈</span>
                 <span class="pm-gcot-badge">${cotVal.trim() ? '已設定' : '未設定'} · 所有未配置面板的 fallback</span>
             </div>
             <div class="pm-gcot-body">
                 <textarea class="pm-gcot-ta" placeholder="在此輸入通用 CoT 指令…">${cotVal.replace(/</g,'&lt;')}</textarea>
-                <button class="pm-gcot-save">💾 保存</button>
+                <button class="pm-gcot-save"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
             </div>`;
         gcot.querySelector('.pm-gcot-head').onclick = () => gcot.querySelector('.pm-gcot-body').classList.toggle('open');
         gcot.querySelector('.pm-gcot-save').onclick = () => {
@@ -912,7 +912,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             gcot.querySelector('.pm-gcot-badge').textContent = (val.trim() ? '已設定' : '未設定') + ' · 所有未配置面板的 fallback';
             const btn = gcot.querySelector('.pm-gcot-save');
             btn.textContent = '✓ 已保存'; btn.style.background = '#6b8e23'; btn.style.color = '#1A1C28'; 
-            setTimeout(() => { btn.textContent = '💾 保存'; btn.style.background = ''; btn.style.color = ''; }, 1200);
+            setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存'; btn.style.background = ''; btn.style.color = ''; }, 1200);
         };
         body.appendChild(gcot);
 
@@ -980,16 +980,16 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 // 預設包（Layer 1 — 純列表行，無折疊）
                 const bPanels = bundle.panels || [];
                 const chips   = bPanels.map(pk => {
-                    const pd = PANELS.find(p => p.key === pk) || { icon: pk, color: '#888', label: pk };
-                    return `<span class="pm-panel-chip" style="background:${pd.color}20;border-color:${pd.color};color:${pd.color}" title="${pd.label}">${pd.icon} ${pd.label}</span>`;
+                    const pd = PANELS.find(p => p.key === pk) || { icon: 'fa-puzzle-piece', color: '#888', label: pk };
+                    return `<span class="pm-panel-chip" style="background:${pd.color}20;border-color:${pd.color};color:${pd.color}" title="${pd.label}"><i class="fa-solid ${pd.icon}"></i> ${pd.label}</span>`;
                 }).join('');
                 item.innerHTML = `<div class="pm-uni-head">
                     <span class="pm-uni-handle">⠿</span>
                     <input type="checkbox" class="pm-bundle-toggle" ${bundle.enabled !== false ? 'checked' : ''}>
-                    <span class="pm-uni-label">📦 ${bundle.name || '(未命名包)'}</span>
+                    <span class="pm-uni-label"><i class="fa-solid fa-box"></i> ${bundle.name || '(未命名包)'}</span>
                     <div class="pm-panel-chips">${chips}</div>
-                    <button class="pm-icon-btn pm-bundle-edit">✏️</button>
-                    <button class="pm-icon-btn del pm-bundle-del">🗑️</button>
+                    <button class="pm-icon-btn pm-bundle-edit"><i class="fa-solid fa-pen"></i></button>
+                    <button class="pm-icon-btn del pm-bundle-del"><i class="fa-solid fa-trash-can"></i></button>
                 </div>`;
 
                 item.querySelector('.pm-bundle-toggle').onchange = function() {
@@ -1045,7 +1045,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         modal.innerHTML = `
             <div class="pm-bmodal-hd">
                 <button class="pm-bmodal-back">‹</button>
-                <span class="pm-bmodal-title">✏️ 編輯條目</span>
+                <span class="pm-bmodal-title"><i class="fa-solid fa-pen"></i> 編輯條目</span>
                 <button class="pm-bundle-save pm-emodal-sv">保存</button>
             </div>
             <div class="pm-bmodal-body pm-entry-edit">
@@ -1084,8 +1084,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             card.innerHTML = `<div class="pm-staging-head">
                 <input type="checkbox" class="pm-entry-toggle" ${entry.enabled !== false ? 'checked' : ''}>
                 <span class="pm-staging-name">${entry.name || '(未命名)'}</span>
-                <button class="pm-icon-btn pm-st-edit">✏️ 編輯</button>
-                <button class="pm-icon-btn del pm-st-del">🗑️</button>
+                <button class="pm-icon-btn pm-st-edit"><i class="fa-solid fa-pen"></i> 編輯</button>
+                <button class="pm-icon-btn del pm-st-del"><i class="fa-solid fa-trash-can"></i></button>
             </div>`;
 
             card.querySelector('.pm-entry-toggle').onchange = function() {
@@ -1161,7 +1161,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         let html = `
             <div class="pm-bmodal-hd">
                 <button class="pm-bmodal-back" id="st-modal-close">‹</button>
-                <span class="pm-bmodal-title">📥 發現酒館(ST)預設包</span>
+                <span class="pm-bmodal-title"><i class="fa-solid fa-download"></i> 發現酒館(ST)預設包</span>
                 <button class="pm-bundle-save" id="st-modal-import">匯入選中</button>
             </div>
             <div class="pm-bmodal-body">
@@ -1176,7 +1176,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                     <div class="pm-staging-head">
                         <input type="checkbox" class="st-block-cb" data-idx="${idx}" checked style="width:16px; height:16px; accent-color:#1A1C28;">
                         <span class="pm-staging-name" style="color:#1A1C28;">${b.title}</span>
-                        <button class="pm-icon-btn" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">👁️ 預覽</button>
+                        <button class="pm-icon-btn" onclick="this.parentElement.nextElementSibling.classList.toggle('open')"><i class="fa-solid fa-eye"></i> 預覽</button>
                     </div>
                     <div class="pm-staging-body" style="padding:0 10px 10px; display:none;">
                         <textarea class="pm-entry-ta" readonly style="height:100px; color:#3A3F5C; border-color:rgba(26,28,40,0.15);">${b.content.replace(/</g, '&lt;')}</textarea>
@@ -1205,7 +1205,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 });
             });
             saveEntries(entries);
-            AUI.alert(`✅ 成功匯入 ${checkedBoxes.length} 個條目！請在「條目庫」中查看。`);
+            AUI.alert(`成功匯入 ${checkedBoxes.length} 個條目！請在「條目庫」中查看。`);
             modal.classList.remove('open');
             refreshCallback();
         };
@@ -1250,7 +1250,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                         if(data.cheshire !== undefined) saveCheshire(data.cheshire);
                         if(data.globalCot !== undefined) saveUniversalCot(data.globalCot);
                     }
-                    AUI.alert('✅ 提示詞匯入成功！');
+                    AUI.alert('提示詞匯入成功！');
                     refreshCallback();
                     return;
                 }
@@ -1274,7 +1274,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                     if (stBlocks.length > 0) {
                         openSTPresetModal(stBlocks, wrapperBody, refreshCallback);
                     } else {
-                        AUI.alert('⚠️ 在這個 ST 預設包中沒有找到可提取的提示詞內容。');
+                        AUI.alert('在這個 ST 預設包中沒有找到可提取的提示詞內容。');
                     }
                     return;
                 }
@@ -1282,7 +1282,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 throw new Error("無法識別的 JSON 格式！既不是 os_prompts 備份，也不是 ST Preset。");
                 
             } catch(err) {
-                AUI.alert('❌ 匯入失敗：' + err.message);
+                AUI.alert('匯入失敗：' + err.message);
             }
         };
         reader.readAsText(file);

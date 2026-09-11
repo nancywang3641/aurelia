@@ -11,14 +11,14 @@
         <div class="vn-ws-container">
             <div class="vn-ws-header">
                 <div class="vn-ws-title">
-                    ✨ 視覺展廳 & 煉丹爐
-                    <button class="vn-ws-idea-btn" id="vn-ws-btn-idea" title="呼叫點子 AI 幫你配藥材">💡</button>
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> 視覺展廳 & 煉丹爐
+                    <button class="vn-ws-idea-btn" id="vn-ws-btn-idea" title="呼叫點子 AI 幫你配藥材"><i class="fa-solid fa-lightbulb"></i></button>
                 </div>
-                <button class="vn-ws-close" id="vn-ws-btn-close">✖</button>
+                <button class="vn-ws-close" id="vn-ws-btn-close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="vn-ws-tabs">
-                <div class="vn-ws-tab active" data-tab="gallery">🖼️ 展廳</div>
-                <div class="vn-ws-tab" data-tab="furnace">🔥 煉丹爐</div>
+                <div class="vn-ws-tab active" data-tab="gallery"><i class="fa-solid fa-image"></i> 展廳</div>
+                <div class="vn-ws-tab" data-tab="furnace"><i class="fa-solid fa-fire"></i> 煉丹爐</div>
             </div>
 
             <div class="vn-ws-body">
@@ -59,18 +59,18 @@
 
                     <div id="vn-ws-refine-area">
                         <div class="vn-ws-group">
-                            <label style="color:#e67e22;">💡 效果不滿意？告訴 AI 怎麼修改：</label>
+                            <label style="color:#e67e22;"><i class="fa-solid fa-lightbulb"></i> 效果不滿意？告訴 AI 怎麼修改：</label>
                             <textarea class="vn-ws-textarea" id="vn-ws-refine-desc" placeholder="例如：背景顏色改暗一點..."></textarea>
                             <label style="color:#e67e22; font-size:12px; margin-top:4px;">修改範圍（限縮範圍可大幅省 token、避免改壞其他部分）</label>
                             <div class="vn-ws-scope-row" id="vn-ws-scope-row">
                                 <label><input type="radio" name="vn-ws-scope" value="all" checked> 全部</label>
-                                <label><input type="radio" name="vn-ws-scope" value="css"> 🎨 CSS</label>
-                                <label><input type="radio" name="vn-ws-scope" value="js"> ⚙️ JS</label>
-                                <label><input type="radio" name="vn-ws-scope" value="html"> 🧱 HTML</label>
-                                <label><input type="radio" name="vn-ws-scope" value="demoFormat"> 📋 格式</label>
+                                <label><input type="radio" name="vn-ws-scope" value="css"> <i class="fa-solid fa-palette"></i> CSS</label>
+                                <label><input type="radio" name="vn-ws-scope" value="js"> <i class="fa-solid fa-gear"></i> JS</label>
+                                <label><input type="radio" name="vn-ws-scope" value="html"> <i class="fa-solid fa-cubes"></i> HTML</label>
+                                <label><input type="radio" name="vn-ws-scope" value="demoFormat"> <i class="fa-solid fa-clipboard"></i> 格式</label>
                             </div>
-                            <button class="vn-ws-btn" id="vn-ws-btn-refine" style="background: rgba(230,126,34,0.1); color:#e67e22; border-color:#e67e22; margin-top:8px;">🛠️ 根據建議進行微調</button>
-                            <button class="vn-ws-btn" id="vn-ws-btn-history" style="background: rgba(155,89,182,0.1); color:#9b59b6; border-color:#9b59b6; margin-top:6px;">⏪ 歷史快照 (<span id="vn-ws-history-count">0</span>)</button>
+                            <button class="vn-ws-btn" id="vn-ws-btn-refine" style="background: rgba(230,126,34,0.1); color:#e67e22; border-color:#e67e22; margin-top:8px;"><i class="fa-solid fa-screwdriver-wrench"></i> 根據建議進行微調</button>
+                            <button class="vn-ws-btn" id="vn-ws-btn-history" style="background: rgba(155,89,182,0.1); color:#9b59b6; border-color:#9b59b6; margin-top:6px;"><i class="fa-solid fa-backward"></i> 歷史快照 (<span id="vn-ws-history-count">0</span>)</button>
                             <div id="vn-ws-history-area"></div>
                         </div>
                     </div>
@@ -79,17 +79,17 @@
                         <label>底層代碼 (JSON)</label>
                         <div class="vn-ws-code-box" id="vn-ws-code">等待生成...</div>
                     </div>
-                    <button class="vn-ws-btn" id="vn-ws-btn-save" style="display: none; background: rgba(46, 204, 113, 0.15); color: #2ecc71; border-color: #2ecc71;">💾 儲存並收錄至展廳</button>
+                    <button class="vn-ws-btn" id="vn-ws-btn-save" style="display: none; background: rgba(46, 204, 113, 0.15); color: #2ecc71; border-color: #2ecc71;"><i class="fa-solid fa-floppy-disk"></i> 儲存並收錄至展廳</button>
                 </div>
             </div>
 
             <div id="vn-ws-idea-overlay">
                 <div class="vn-ws-idea-modal">
-                    <h3 style="color:#1A1C28; margin:0; display:flex; align-items:center; gap:8px;">💡 點子 AI 助手</h3>
+                    <h3 style="color:#1A1C28; margin:0; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-lightbulb"></i> 點子 AI 助手</h3>
                     <p style="font-size:12px; color:#aaa; margin:0; line-height:1.5;">不會寫 UI 指令嗎？直接用大白話許願！</p>
                     <textarea id="vn-ws-idea-input" class="vn-ws-textarea" placeholder="請用白話文描述你想做的介面..." style="min-height: 100px;"></textarea>
                     <div style="display:flex; flex-direction:column; gap:10px; margin-top:5px;">
-                        <button id="vn-ws-idea-submit" class="vn-ws-btn" style="background:rgba(52, 152, 219, 0.15); border-color:#3498db; color:#3498db;">🤖 幫我生成煉丹配方</button>
+                        <button id="vn-ws-idea-submit" class="vn-ws-btn" style="background:rgba(52, 152, 219, 0.15); border-color:#3498db; color:#3498db;"><i class="fa-solid fa-robot"></i> 幫我生成煉丹配方</button>
                         <button id="vn-ws-idea-cancel" class="vn-ws-btn" style="border-color:#666; color:#aaa;">取消</button>
                     </div>
                 </div>
@@ -208,7 +208,7 @@
         };
 
         document.getElementById('vn-ws-btn-save').onclick = async () => {
-            if (!generatedData || !generatedData.tagId) return AUI.alert('❌ 無法儲存：缺少標籤 ID！請重新生成。');
+            if (!generatedData || !generatedData.tagId) return AUI.alert('無法儲存：缺少標籤 ID！請重新生成。');
             const db = win.OS_DB || window.OS_DB;
             if (db && typeof db.saveVNTagTemplate === 'function') {
                 try {
@@ -219,9 +219,9 @@
                     
                     await db.saveVNTagTemplate(generatedData);
                     if (typeof syncActiveTagsToLocal === 'function') await syncActiveTagsToLocal();
-                    AUI.alert('🎉 標籤已成功收錄！即將為您切換至展廳。');
+                    AUI.alert('標籤已成功收錄！即將為您切換至展廳。');
                     document.querySelector('.vn-ws-tab[data-tab="gallery"]').click();
-                } catch (err) { AUI.alert('❌ 儲存失敗: ' + err.message); }
+                } catch (err) { AUI.alert('儲存失敗: ' + err.message); }
             }
         };
     }
@@ -262,7 +262,7 @@
     async function importToSillyTavern(data) {
         const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
         if (!th) {
-            AUI.alert('❌ 找不到 TavernHelper！請確保你在酒館環境內，且已安裝酒館助手腳本。');
+            AUI.alert('找不到 TavernHelper！請確保你在酒館環境內，且已安裝酒館助手腳本。');
             return;
         }
 
@@ -298,12 +298,12 @@
             
             // 使用說明走自動注入、不再寫世界書條目；順手掃掉舊制殘留的同名條目
             let wbMsg = "";
-            try { if (await _deleteWbUsageEntry(th, safeTagId)) wbMsg = "\n🧹 已清掉舊版留在世界書的使用說明條目（說明現在自動注入、不佔世界書）。"; } catch (e) {}
+            try { if (await _deleteWbUsageEntry(th, safeTagId)) wbMsg = "\n已清掉舊版留在世界書的使用說明條目（說明現在自動注入、不佔世界書）。"; } catch (e) {}
 
-            AUI.alert(`🎉 匯入成功！已將標籤 [${safeTagId}] 寫入全局正則。${wbMsg}\n請發送新訊息或重新載入聊天查看效果。`);
+            AUI.alert(`匯入成功！已將標籤 [${safeTagId}] 寫入全局正則。${wbMsg}\n請發送新訊息或重新載入聊天查看效果。`);
         } catch (err) {
             console.error('[TavernHelper Regex Import]', err);
-            AUI.alert('❌ 匯入失敗: ' + err.message);
+            AUI.alert('匯入失敗: ' + err.message);
         }
     }
 
@@ -337,7 +337,7 @@
                     </div>
                     
                     <div style="font-size:12px; color:#2ecc71; margin-bottom:10px; padding:8px 12px; background:rgba(46,204,113,0.08); border-left:3px solid #2ecc71; border-radius: 0 4px 4px 0; line-height: 1.5;">
-                        💡 <b>AI 使用說明：</b><br>${tpl.usageDesc || '無特別說明'}
+                        <i class="fa-solid fa-lightbulb"></i> <b>AI 使用說明：</b><br>${tpl.usageDesc || '無特別說明'}
                     </div>
 
                     <div class="format-display-box" style="margin-bottom:15px; padding:12px; background:rgba(0,0,0,0.6); border-left:3px solid rgba(26,28,40,0.40); border-radius:4px; position:relative;">
@@ -345,9 +345,9 @@
                         <textarea class="format-input" style="display:none; width:100%; min-height:100px; background:rgba(0,0,0,0.8); color:#FFF; border:1px solid rgba(26,28,40,0.25); font-family:monospace; line-height:1.4; font-size:12px; padding:8px; border-radius:4px; box-sizing:border-box;">${tpl.demoFormat || ''}</textarea>
                         
                         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-                            <button class="vn-ws-btn btn-edit-format" style="padding:4px 12px; font-size:12px; background:rgba(52, 152, 219, 0.1); border-color:#3498db; color:#3498db;">✏️ 編輯格式</button>
-                            <button class="vn-ws-btn btn-save-format" style="display:none; padding:4px 12px; font-size:12px; background:rgba(46,204,113,0.15); border-color:#2ecc71; color:#2ecc71;">💾 儲存</button>
-                            <button class="vn-ws-btn btn-cancel-format" style="display:none; padding:4px 12px; font-size:12px; border-color:#e74c3c; color:#e74c3c;">✖ 取消</button>
+                            <button class="vn-ws-btn btn-edit-format" style="padding:4px 12px; font-size:12px; background:rgba(52, 152, 219, 0.1); border-color:#3498db; color:#3498db;"><i class="fa-solid fa-pen"></i> 編輯格式</button>
+                            <button class="vn-ws-btn btn-save-format" style="display:none; padding:4px 12px; font-size:12px; background:rgba(46,204,113,0.15); border-color:#2ecc71; color:#2ecc71;"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+                            <button class="vn-ws-btn btn-cancel-format" style="display:none; padding:4px 12px; font-size:12px; border-color:#e74c3c; color:#e74c3c;"><i class="fa-solid fa-xmark"></i> 取消</button>
                         </div>
                     </div>
                     
@@ -359,10 +359,10 @@
 
                     <div style="display:flex; gap:12px; margin-top: 5px;">
                         <div class="vn-ws-btn btn-import-st" style="flex:2; background:rgba(46, 204, 113, 0.12); border-color:#2ecc71; color:#2ecc71; font-size: 14px; box-shadow: 0 0 10px rgba(46,204,113,0.1);" title="一鍵將此面板邏輯寫入酒館全局正則">
-                            📥 注入酒館正則
+                            <i class="fa-solid fa-download"></i> 注入酒館正則
                         </div>
                         <div class="vn-ws-btn btn-del" style="flex:1; background:rgba(231,76,60,0.1); border-color:#e74c3c; color:#e74c3c; font-size: 14px;">
-                            🗑️ 銷毀
+                            <i class="fa-solid fa-trash-can"></i> 銷毀
                         </div>
                     </div>
                 `;
@@ -767,11 +767,11 @@ ${desc}
         if (countEl) countEl.textContent = list.length;
 
         if (list.length === 0) {
-            area.innerHTML = '<div class="vn-ws-history-empty">尚無快照。每次「微調」前會自動拍一張，最多保留 ' + HISTORY_LIMIT + ' 張（📌 釘住的不計入）。</div>';
+            area.innerHTML = '<div class="vn-ws-history-empty">尚無快照。每次「微調」前會自動拍一張，最多保留 ' + HISTORY_LIMIT + ' 張（<i class="fa-solid fa-thumbtack"></i> 釘住的不計入）。</div>';
             return;
         }
 
-        area.innerHTML = '<div class="vn-ws-history-hint">📸 由新到舊。點「還原」可回到該版本（會先自動備份當前）。釘住的快照不會被自動清理。</div>';
+        area.innerHTML = '<div class="vn-ws-history-hint"><i class="fa-solid fa-camera"></i> 由新到舊。點「還原」可回到該版本（會先自動備份當前）。釘住的快照不會被自動清理。</div>';
 
         list.forEach((snap, idx) => {
             const item = document.createElement('div');
@@ -781,9 +781,9 @@ ${desc}
             item.innerHTML = `
                 <span class="h-time">${formatSnapTime(snap.ts)}</span>
                 <span class="h-note" title="${noteText}">${noteText}</span>
-                <button class="h-btn btn-restore">⏪ 還原</button>
-                <button class="h-btn btn-pin">${snap.pinned ? '📌' : '📍'}</button>
-                <button class="h-btn danger btn-del">✖</button>
+                <button class="h-btn btn-restore"><i class="fa-solid fa-backward"></i> 還原</button>
+                <button class="h-btn btn-pin${snap.pinned ? ' is-on' : ''}" title="${snap.pinned ? '取消釘住' : '釘住'}"><i class="fa-solid fa-thumbtack"></i></button>
+                <button class="h-btn danger btn-del"><i class="fa-solid fa-xmark"></i></button>
             `;
             item.querySelector('.btn-restore').onclick = async () => {
                 if (await AUI.confirm('要還原到這個版本嗎？目前未儲存的修改會先拍進快照，可以再還原回來。')) {
@@ -831,7 +831,7 @@ ${desc}
                 const onComplete = () => { 
                     const msg = document.createElement('div');
                     msg.style.cssText = 'position:absolute; top:5px; right:5px; background:rgba(46,204,113,0.8); color:white; padding:4px 8px; font-size:12px; border-radius:4px; z-index:999;';
-                    msg.innerText = '✅ 腳本已觸發 onComplete()';
+                    msg.innerText = '腳本已觸發 onComplete()';
                     previewBox.appendChild(msg);
                 };
 

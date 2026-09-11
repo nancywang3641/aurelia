@@ -37,9 +37,9 @@
             const header = document.createElement('div');
             header.style.cssText = 'display:flex; align-items:center; gap:8px; padding:10px 14px; cursor:pointer; user-select:none;';
             header.innerHTML = `
-                <span class="mm-p-arrow" style="color:rgba(26,28,40,0.72); font-size:12px; transition:transform 0.2s; flex-shrink:0;">${expanded ? '▼' : '▶'}</span>
+                <span class="mm-p-arrow" style="color:rgba(26,28,40,0.72); font-size:12px; transition:transform 0.2s; flex-shrink:0;">${expanded ? '<i class="fa-solid fa-caret-down"></i>' : '<i class="fa-solid fa-caret-right"></i>'}</span>
                 <span class="mm-p-name-display" style="flex:1; font-weight:600; color:#1A1C28; font-size:14px;">${profile.label || '（未命名）'}</span>
-                <span style="flex-shrink:0; cursor:pointer; color:#fc8181; font-size:18px; padding:2px 4px;" title="刪除此音色">🗑</span>
+                <span style="flex-shrink:0; cursor:pointer; color:#fc8181; font-size:18px; padding:2px 4px;" title="刪除此音色"><i class="fa-solid fa-trash-can"></i></span>
             `;
             header.querySelector('span[title]').onclick = (e) => { e.stopPropagation(); card.remove(); };
             card.appendChild(header);
@@ -95,7 +95,7 @@
                 if (e.target.title === '刪除此音色') return;
                 const isOpen = body.style.display !== 'none';
                 body.style.display = isOpen ? 'none' : 'flex';
-                header.querySelector('.mm-p-arrow').textContent = isOpen ? '▶' : '▼';
+                header.querySelector('.mm-p-arrow').innerHTML = isOpen ? '<i class="fa-solid fa-caret-right"></i>' : '<i class="fa-solid fa-caret-down"></i>';
             };
 
             return card;
@@ -163,7 +163,7 @@
                     return;
                 }
                 mmVoiceModal.style.display = 'flex';
-                mmVoiceList.innerHTML = '<div style="text-align:center; color:rgba(26,28,40,0.72); padding:20px;">⏳ 載入中...</div>';
+                mmVoiceList.innerHTML = '<div style="text-align:center; color:rgba(26,28,40,0.72); padding:20px;"><i class="fa-solid fa-hourglass-half"></i> 載入中...</div>';
                 mmVoiceSearch.value = '';
                 if (mmVoiceCount) mmVoiceCount.textContent = '';
 
@@ -182,7 +182,7 @@
                     if (mmVoiceCount) mmVoiceCount.textContent = `（共 ${_fetchedVoices.length} 個）`;
                     renderVoiceList(_fetchedVoices);
                 } catch(err) {
-                    mmVoiceList.innerHTML = `<div style="color:#fc8181; padding:10px;">❌ 載入失敗：${err.message}</div>`;
+                    mmVoiceList.innerHTML = `<div style="color:#fc8181; padding:10px;"><i class="fa-solid fa-circle-xmark"></i> 載入失敗：${err.message}</div>`;
                 }
             };
 
@@ -218,21 +218,21 @@
                 if (!groupId || !apiKey) {
                     mmResult.style.display = 'block';
                     mmResult.style.color = '#fc8181';
-                    mmResult.textContent = '❌ 請先填寫 Group ID 與 API Key';
+                    mmResult.textContent = '請先填寫 Group ID 與 API Key';
                     return;
                 }
                 if (!voiceId) {
                     mmResult.style.display = 'block';
                     mmResult.style.color = '#fc8181';
-                    mmResult.textContent = '❌ 請輸入語音 ID（如 male-01）';
+                    mmResult.textContent = '請輸入語音 ID（如 male-01）';
                     return;
                 }
 
                 mmTestBtn.style.opacity = '0.5';
-                mmTestBtn.textContent = '⏳ 合成中...';
+                mmTestBtn.textContent = '合成中...';
                 mmResult.style.display = 'block';
                 mmResult.style.color = 'rgba(26,28,40,0.40)';
-                mmResult.textContent = '⏳ 正在呼叫 Minimax TTS API...';
+                mmResult.textContent = '正在呼叫 Minimax TTS API...';
 
                 const win = window.parent || window;
                 if (win.OS_MINIMAX) {
@@ -241,18 +241,18 @@
                     const ok = await win.OS_MINIMAX.play(text, voiceId);
                     if (ok) {
                         mmResult.style.color = 'rgba(26,28,40,0.25)';
-                        mmResult.textContent = '✅ 語音播放中...';
+                        mmResult.textContent = '語音播放中...';
                         if (mmStopBtn) mmStopBtn.style.display = 'block';
                     } else {
                         mmResult.style.color = '#fc8181';
-                        mmResult.textContent = '❌ 播放失敗，請檢查 Group ID / API Key / 語音 ID 是否正確';
+                        mmResult.textContent = '播放失敗，請檢查 Group ID / API Key / 語音 ID 是否正確';
                     }
                 } else {
                     mmResult.style.color = '#fc8181';
-                    mmResult.textContent = '❌ OS_MINIMAX 模組尚未載入，請確認 os_minimax.js 已加入載入列表';
+                    mmResult.textContent = 'OS_MINIMAX 模組尚未載入，請確認 os_minimax.js 已加入載入列表';
                 }
                 mmTestBtn.style.opacity = '1';
-                mmTestBtn.textContent = '🎵 播放測試語音';
+                mmTestBtn.textContent = '播放測試語音';
             };
         }
         if (mmStopBtn) {

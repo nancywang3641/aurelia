@@ -9,7 +9,7 @@ function buildPanelHTML() {
     return `
 <div id="vn-tts-overlay" class="hidden">
   <div class="vtts-header">
-    <h2>🎙 語音配置</h2>
+    <h2><i class="fa-solid fa-microphone"></i> 語音配置</h2>
     <button class="vtts-close" onclick="VN_TTS_Panel.close()">✕</button>
   </div>
 
@@ -36,8 +36,8 @@ function ttsPick(models, eng) {
 // 上層：引擎二選一（顯存只夠一套，本來就該擇一）
 // 下層：選中引擎自己的頁，兩邊永遠不會同時出現在畫面上
 const TTS_ENGINES = [
-    { id: 'index',  label: '🎙️ IndexTTS', tabs: [['main','服務'], ['voices','音色'], ['chars','角色'], ['npc','NPC']] },
-    { id: 'sovits', label: '📡 SoVITS',   tabs: [['main','連線'], ['voices','模型'], ['chars','角色'], ['npc','NPC']] },
+    { id: 'index',  label: 'IndexTTS', tabs: [['main','服務'], ['voices','音色'], ['chars','角色'], ['npc','NPC']] },
+    { id: 'sovits', label: 'SoVITS',   tabs: [['main','連線'], ['voices','模型'], ['chars','角色'], ['npc','NPC']] },
 ];
 
 function renderEngineBar(engine) {
@@ -65,7 +65,7 @@ function renderBasic(cfg) {
 <input type="checkbox" id="vtts-enabled" style="display:none" ${cfg.enabled ? 'checked' : ''}>
 
 <div class="vtts-card">
-  <div class="vtts-card-title">📡 GPT-SoVITS 連線</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-satellite-dish"></i> GPT-SoVITS 連線</div>
   <div class="vtts-field">
     <label class="vtts-label">API 地址</label>
     <input class="vtts-input" id="vtts-server" type="text" value="${esc(cfg.serverUrl)}" placeholder="http://127.0.0.1:9880">
@@ -80,7 +80,7 @@ function renderBasic(cfg) {
   </div>
 
 <div class="vtts-card">
-  <div class="vtts-card-title">🗣 語音基礎參數</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-comment-dots"></i> 語音基礎參數</div>
   <div class="vtts-field">
     <label class="vtts-label">預設語言</label>
     <select class="vtts-input" id="vtts-lang">
@@ -97,7 +97,7 @@ function renderBasic(cfg) {
 </div>
 
 <div class="vtts-card">
-  <div class="vtts-card-title">🎭 情緒張力控制 (WebUI 參數)</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-masks-theater"></i> 情緒張力控制 (WebUI 參數)</div>
   <div class="vtts-field">
     <label class="vtts-label">語速 (Speed) <span id="vtts-spd-val">${cfg.speed ?? 1}</span></label>
     <input class="vtts-input" id="vtts-spd" type="range" min="0.5" max="2" step="0.1"
@@ -133,17 +133,17 @@ function renderBasic(cfg) {
 </div>
 
 <div class="vtts-card">
-  <div class="vtts-card-title">💾 跨裝置轉移 (備份與還原)</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-floppy-disk"></i> 跨裝置轉移 (備份與還原)</div>
   <div class="vtts-row">
-    <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.exportConfig()">📤 匯出目前配置</button>
-    <button class="vtts-btn vtts-btn-cyan" onclick="document.getElementById('vtts-import-file').click()">📥 從檔案匯入</button>
+    <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.exportConfig()"><i class="fa-solid fa-upload"></i> 匯出目前配置</button>
+    <button class="vtts-btn vtts-btn-cyan" onclick="document.getElementById('vtts-import-file').click()"><i class="fa-solid fa-download"></i> 從檔案匯入</button>
     <input type="file" id="vtts-import-file" style="display:none" accept=".json" onchange="VN_TTS_Panel.importConfig(this)">
   </div>
   <div class="vtts-hint">將此處下載的 .json 傳到手機上，再從手機端匯入，即可無縫繼承所有的模型與角色綁定。</div>
 </div>
 
 <div class="vtts-save-bar">
-  <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.testConnection()">🔗 測試連線</button>
+  <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.testConnection()"><i class="fa-solid fa-link"></i> 測試連線</button>
   <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.saveBasic()">儲存</button>
 </div>`;
 }
@@ -157,20 +157,20 @@ function renderIndexTab(cfg) {
     const url = (models[0] && models[0].url) || (cfg.narratorIndex && cfg.narratorIndex.url) || 'http://127.0.0.1:8881';
     return `
 <div class="vtts-card">
-  <div class="vtts-card-title">🎙️ 語音服務</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-microphone"></i> 語音服務</div>
   <div class="vtts-field">
     <label class="vtts-label">服務網址</label>
     <input class="vtts-input" id="vtts-index-url" type="text" value="${esc(url)}" placeholder="http://127.0.0.1:8881">
     <div class="vtts-hint">語音服務跑起來後的位址。改了要按「套用」才會寫進每個音色。</div>
   </div>
   <div class="vtts-row">
-    <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.testIndexUrl()">🔗 測試連線</button>
+    <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.testIndexUrl()"><i class="fa-solid fa-link"></i> 測試連線</button>
     <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.applyIndexUrl()">套用到全部音色</button>
   </div>
 </div>
 
 <div class="vtts-card">
-  <div class="vtts-card-title">🗣 播放與語氣</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-comment-dots"></i> 播放與語氣</div>
   <div class="vtts-field">
     <label class="vtts-label">播放音量 <span id="vtts-vol-val">${Math.round((cfg.volume ?? 1)*100)}%</span></label>
     <input class="vtts-input" id="vtts-vol" type="range" min="0" max="1" step="0.05"
@@ -188,10 +188,10 @@ function renderIndexTab(cfg) {
 </div>
 
 <div class="vtts-card">
-  <div class="vtts-card-title">💾 跨裝置轉移</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-floppy-disk"></i> 跨裝置轉移</div>
   <div class="vtts-row">
-    <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.exportConfig()">📤 匯出目前配置</button>
-    <button class="vtts-btn vtts-btn-cyan" onclick="document.getElementById('vtts-import-file-idx').click()">📥 從檔案匯入</button>
+    <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.exportConfig()"><i class="fa-solid fa-upload"></i> 匯出目前配置</button>
+    <button class="vtts-btn vtts-btn-cyan" onclick="document.getElementById('vtts-import-file-idx').click()"><i class="fa-solid fa-download"></i> 從檔案匯入</button>
     <input type="file" id="vtts-import-file-idx" class="vtts-file-hidden" accept=".json" onchange="VN_TTS_Panel.importConfig(this)">
   </div>
   <div class="vtts-hint">音色與角色綁定都在裡面，換裝置時匯出再匯入即可。</div>
@@ -211,7 +211,7 @@ function renderIndexVoices(cfg) {
   <div class="vtts-model-card-head">
     <span class="vtts-model-name">${esc(m.name || id)}${ec ? ` <span class="vtts-model-emo-badge">${ec} 情緒</span>` : ''}</span>
     <div class="vtts-model-actions">
-      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.playNpcModel('${escJs(id)}')">▶ 試聽</button>
+      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.playNpcModel('${escJs(id)}')"><i class="fa-solid fa-caret-right"></i> 試聽</button>
       <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
     </div>
   </div>
@@ -219,9 +219,9 @@ function renderIndexVoices(cfg) {
     }).join('');
     return `
 <div class="vtts-card">
-  <div class="vtts-card-title">🎨 音色</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-palette"></i> 音色</div>
   <div class="vtts-row">
-    <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()">🔄 從服務匯入音色</button>
+    <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()"><i class="fa-solid fa-rotate"></i> 從服務匯入音色</button>
   </div>
   <div class="vtts-hint">把音檔丟進語音服務的 voices 資料夾，再按這裡就會出現。檔名就是音色名，不用練模型。</div>
 </div>
@@ -238,11 +238,11 @@ function renderModels(cfg, eng) {
     return `
 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
   <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addModel()">＋ 新增模型</button>
-  <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.loadLocalConfig()" title="執行 scan_models.py 後點此，從 models/tts_models.json 批次匯入所有模型">📥 載入配置</button>
-  <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()" title="從 IndexTTS 服務把所有音色抓進來，情緒自動掛好">🎙️ 匯入 IndexTTS 音色</button>
-  <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteAllModels()">🗑 一鍵清空</button>
+  <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.loadLocalConfig()" title="執行 scan_models.py 後點此，從 models/tts_models.json 批次匯入所有模型"><i class="fa-solid fa-download"></i> 載入配置</button>
+  <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()" title="從 IndexTTS 服務把所有音色抓進來，情緒自動掛好"><i class="fa-solid fa-microphone"></i> 匯入 IndexTTS 音色</button>
+  <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteAllModels()"><i class="fa-solid fa-trash-can"></i> 一鍵清空</button>
 </div>
-<div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:10px;">💡 有多個模型？先執行擴展目錄裡的 <code style="color:rgba(26,28,40,0.55)">scan_models.bat</code>，再點「載入配置」一次匯入全部。</div>
+<div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:10px;"><i class="fa-solid fa-lightbulb"></i> 有多個模型？先執行擴展目錄裡的 <code style="color:rgba(26,28,40,0.55)">scan_models.bat</code>，再點「載入配置」一次匯入全部。</div>
 ${cards}`;
 }
 
@@ -256,9 +256,9 @@ function renderModelCard(id, m) {
         return `
 <div class="vtts-model-card vtts-model-card-compact" id="vtts-mc-${esc(id)}">
   <div class="vtts-model-card-head">
-    <span class="vtts-model-name">🎙️ ${esc(m.name || id)}${emoCount ? ` <span class="vtts-model-emo-badge">${emoCount} 情緒</span>` : ''}</span>
+    <span class="vtts-model-name"><i class="fa-solid fa-microphone"></i> ${esc(m.name || id)}${emoCount ? ` <span class="vtts-model-emo-badge">${emoCount} 情緒</span>` : ''}</span>
     <div class="vtts-model-actions">
-      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.playNpcModel('${escJs(id)}')">▶ 試聽</button>
+      <button class="vtts-btn vtts-btn-ghost" onclick="VN_TTS_Panel.playNpcModel('${escJs(id)}')"><i class="fa-solid fa-caret-right"></i> 試聽</button>
       <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteModel('${escJs(id)}')">刪除</button>
     </div>
   </div>
@@ -282,14 +282,14 @@ function renderEmotionBlock(emoKey, emData) {
     return `
     <div class="vtts-emo-block" style="border-left: 2px solid rgba(26,28,40,0.25); padding-left: 10px; margin-bottom: 12px; background: rgba(26,28,40,0.04); padding: 8px;">
       <div class="vtts-row" style="margin-bottom: 8px;">
-        <span style="font-size: 12px; color: #1A1C28; white-space: nowrap;">🎭 觸發標籤：</span>
+        <span style="font-size: 12px; color: #1A1C28; white-space: nowrap;"><i class="fa-solid fa-masks-theater"></i> 觸發標籤：</span>
         <input class="vtts-input vtts-emo-key" type="text" value="${esc(emoKey)}" placeholder="例：Surprise, 哭腔, 撒嬌">
         <button class="vtts-btn vtts-btn-danger" onclick="this.closest('.vtts-emo-block').remove()" style="padding: 4px 8px;" title="刪除此情緒">✕</button>
       </div>
       
       <div class="vtts-row" style="margin-bottom: 4px;">
         <input class="vtts-input vtts-emo-path" type="text" value="${esc(emData.refAudioPath||'')}" placeholder="參考音頻路徑 (.wav)">
-        <button class="vtts-btn vtts-btn-ghost" style="padding: 6px 10px; flex-shrink: 0;" onclick="VN_TTS_Panel.playRefAudio(this.previousElementSibling.value)">▶ 試聽</button>
+        <button class="vtts-btn vtts-btn-ghost" style="padding: 6px 10px; flex-shrink: 0;" onclick="VN_TTS_Panel.playRefAudio(this.previousElementSibling.value)"><i class="fa-solid fa-caret-right"></i> 試聽</button>
       </div>
       <div class="vtts-row" style="margin-top:4px;">
         <input class="vtts-input vtts-emo-txt" type="text" value="${esc(emData.refText||'')}" placeholder="對應參考文字">
@@ -310,7 +310,7 @@ function renderModelForm(id, m) {
 
     return `
 <div class="vtts-card">
-  <div class="vtts-card-title">${isNew ? '➕ 新增模型' : '✏️ 編輯模型'}</div>
+  <div class="vtts-card-title">${isNew ? '新增模型' : '編輯模型'}</div>
   <div class="vtts-field">
     <label class="vtts-label">模型 ID（唯一識別碼）</label>
     <input class="vtts-input" id="vtts-mf-id" type="text" value="${esc(id||'')}" ${isNew?'':'readonly'} placeholder="例：雷伊">
@@ -329,7 +329,7 @@ function renderModelForm(id, m) {
   </div>
   
   <div style="margin-top:20px; margin-bottom:8px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 4px;">
-    <span style="font-size: 13px; color: #1A1C28; font-weight: 600;">🔈 預設參考音頻（必填）</span>
+    <span style="font-size: 13px; color: #1A1C28; font-weight: 600;"><i class="fa-solid fa-volume-low"></i> 預設參考音頻（必填）</span>
   </div>
   <div class="vtts-field">
     <label class="vtts-label">預設參考音頻路徑（.wav）</label>
@@ -350,7 +350,7 @@ function renderModelForm(id, m) {
 
   <div style="margin-top:24px; margin-bottom:12px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-end;">
     <div>
-        <span style="font-size: 13px; color: #1A1C28; font-weight: 600;">✨ 自訂多情緒語音（選填）</span>
+        <span style="font-size: 13px; color: #1A1C28; font-weight: 600;"><i class="fa-solid fa-wand-magic-sparkles"></i> 自訂多情緒語音（選填）</span>
         <div style="font-size: 11px; color: rgba(26,28,40,0.55); margin-top: 4px;">當腳本表情與「觸發標籤」一致時自動替換。<br>留空或無匹配時將使用上方預設音頻。</div>
     </div>
     <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addEmotionSlot()" style="padding: 5px 12px; font-size: 11px; flex-shrink: 0;">＋ 新增情緒</button>
@@ -376,7 +376,7 @@ function renderVoice(cfg) {
         const label = sname === '' ? '（預設系統音）' : esc(sname);
         return `
 <div class="vtts-char-row" style="display:flex;align-items:center;gap:8px;">
-  <span class="vtts-char-name" style="flex:0 0 auto;">🖥️ ${label}</span>
+  <span class="vtts-char-name" style="flex:0 0 auto;"><i class="fa-solid fa-desktop"></i> ${label}</span>
   <select class="vtts-input" onchange="VN_TTS_Panel.updateSystemMapping('${escJs(sname)}',this.value)" style="flex:1;">
     <option value="">（未綁定）</option>
     ${Object.entries(cfg.models).map(([id,m]) =>
@@ -404,12 +404,12 @@ function renderVoice(cfg) {
 
     return `
 <div class="vtts-card">
-  <div class="vtts-card-title">📜 旁白音色</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-scroll"></i> 旁白音色</div>
   <select class="vtts-input" onchange="VN_TTS_Panel.updateNarratorSource(this.value)">
     <option value="" ${narrVal===''?'selected':''}>不念旁白</option>
-    <option value="__minimax__" ${narrVal==='__minimax__'?'selected':''}>🔊 MiniMax</option>
-    <option value="__kokoro__" ${narrVal==='__kokoro__'?'selected':''}>🐦 Kokoro</option>
-    <option value="__index__" ${narrVal==='__index__'?'selected':''}>🎙️ IndexTTS</option>
+    <option value="__minimax__" ${narrVal==='__minimax__'?'selected':''}>MiniMax</option>
+    <option value="__kokoro__" ${narrVal==='__kokoro__'?'selected':''}>Kokoro</option>
+    <option value="__index__" ${narrVal==='__index__'?'selected':''}>IndexTTS</option>
     ${Object.entries(cfg.models).map(([id,m]) =>
         `<option value="${esc(id)}" ${narrVal===id?'selected':''}>SoVITS：${esc(m.name||id)}</option>`
     ).join('')}
@@ -419,7 +419,7 @@ function renderVoice(cfg) {
     <select class="vtts-input" onchange="VN_TTS_Panel.updateMinimaxNarrVoice(this.value)">
       ${mmVoices.map(([v,label]) => `<option value="${v}" ${(mcfg.voice||'audiobook_female_1')===v?'selected':''}>${v}（${label}）</option>`).join('')}
     </select>
-    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testMinimax()" style="align-self:flex-start;">🔊 試聽</button>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testMinimax()" style="align-self:flex-start;"><i class="fa-solid fa-volume-high"></i> 試聽</button>
     <div class="vtts-hint">SoVITS 對白＋MiniMax 旁白：先切 MiniMax 模式填好 key，再切回 SoVITS（key 會留著）。</div>
   </div>` : ''}
   ${narrVal==='__kokoro__' ? `
@@ -428,7 +428,7 @@ function renderVoice(cfg) {
     <select class="vtts-input" onchange="VN_TTS_Panel.updateKokoroVoice(this.value)">
       ${['zf_xiaoxiao','zf_xiaobei','zf_xiaoni','zf_xiaoyi','zm_yunxi','zm_yunjian','zm_yunxia','zm_yunyang'].map(v => `<option value="${v}" ${(kcfg.voice||'zf_xiaoxiao')===v?'selected':''}>${v}${v.indexOf('zf_')===0?'（女）':'（男）'}</option>`).join('')}
     </select>
-    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testKokoro()" style="align-self:flex-start;">🔊 試聽</button>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testKokoro()" style="align-self:flex-start;"><i class="fa-solid fa-volume-high"></i> 試聽</button>
   </div>` : ''}
   ${narrVal==='__index__' ? `
   <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
@@ -446,12 +446,12 @@ function renderVoice(cfg) {
       <option value="" ${iCurE===''?'selected':''}>（不指定情緒）</option>
       ${iEmos.map(e => `<option value="${esc(e)}" ${iCurE===e?'selected':''}>${esc(e)}</option>`).join('')}
     </select>` : ''}
-    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testIndex()" style="align-self:flex-start;">🔊 試聽</button>
+    <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.testIndex()" style="align-self:flex-start;"><i class="fa-solid fa-volume-high"></i> 試聽</button>
     <div class="vtts-hint">音色＝服務資料夾裡的檔名，丟一段人聲進去就多一個音色，不用練模型。</div>
   </div>` : ''}
 </div>
 <div class="vtts-card">
-  <div class="vtts-card-title">🖥️ 系統語音</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-desktop"></i> 系統語音</div>
   <div class="vtts-row">
     <input class="vtts-input" id="vtts-new-sys" type="text" placeholder="系統名（留空＝預設）">
     <select class="vtts-input" id="vtts-new-sys-model">
@@ -500,7 +500,7 @@ function renderChars(cfg, eng) {
 
     return `
 <div class="vtts-card">
-  <div class="vtts-card-title">➕ 新增角色對應</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-plus"></i> 新增角色對應</div>
   <div class="vtts-row">
     <input class="vtts-input" id="vtts-new-char" type="text" placeholder="角色名稱（與腳本 [Char|名稱|...] 一致）">
     <select class="vtts-input" id="vtts-new-char-model">
@@ -511,7 +511,7 @@ function renderChars(cfg, eng) {
   </div>
 </div>
 <div class="vtts-card">
-  <div class="vtts-card-title">📋 角色對應列表</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-clipboard"></i> 角色對應列表</div>
   ${rows || '<div class="vtts-empty">尚無角色對應</div>'}
 </div>
 ${(() => {
@@ -524,13 +524,13 @@ ${(() => {
         return `<div style="display:flex;align-items:center;gap:8px;">
       <span class="vtts-char-name" style="flex:1;">${esc(char)}</span>
       <span style="flex:0 0 auto;font-size:11px;color:rgba(26,28,40,0.6);">${esc(mname)}</span>
-      <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.unlockNpc('${escJs(char)}')">🔓 解除</button>
+      <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.unlockNpc('${escJs(char)}')"><i class="fa-solid fa-lock-open"></i> 解除</button>
     </div>`;
     }).join('');
     return `
 <div class="vtts-card">
-  <div class="vtts-card-title">🔒 本卡 NPC 聲線鎖${keys.length ? ` <button class="vtts-btn vtts-btn-danger" style="float:right;" onclick="VN_TTS_Panel.clearCardLocks()">清空本卡</button>` : ''}</div>
-  <div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:8px;">立繪雙擊「💾 保存 CV」鎖住的 NPC 音；只在這張卡有效、換卡自動回歸抽池、同卡重玩還在。與上面的手動對應分開、互不干擾。</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-lock"></i> 本卡 NPC 聲線鎖${keys.length ? ` <button class="vtts-btn vtts-btn-danger" style="float:right;" onclick="VN_TTS_Panel.clearCardLocks()">清空本卡</button>` : ''}</div>
+  <div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:8px;">立繪雙擊「<i class="fa-solid fa-floppy-disk"></i> 保存 CV」鎖住的 NPC 音；只在這張卡有效、換卡自動回歸抽池、同卡重玩還在。與上面的手動對應分開、互不干擾。</div>
   ${lockRows || '<div class="vtts-empty">本卡尚無 NPC 聲線鎖</div>'}
 </div>`;
 })()}`;
@@ -578,7 +578,7 @@ function renderNpcCard(cat, models) {
         const m = models[mid];
         const nm = esc(m.name || mid);
         return `<span class="vtts-model-chip" data-mid="${esc(mid)}">${nm}
-  <span class="vtts-model-chip-play" onclick="VN_TTS_Panel.playNpcModel('${escJs(mid)}')" title="試聽">▶</span>
+  <span class="vtts-model-chip-play" onclick="VN_TTS_Panel.playNpcModel('${escJs(mid)}')" title="試聽"><i class="fa-solid fa-caret-right"></i></span>
   <span class="vtts-model-chip-del" onclick="VN_TTS_Panel.removeNpcModel('${escJs(cat.id)}','${escJs(mid)}')">✕</span>
 </span>`;
     }).join('');
@@ -591,13 +591,13 @@ function renderNpcCard(cat, models) {
             const nm = esc(m.name || id);
             const lname = esc(String(m.name || id).toLowerCase());
             return `<span class="vtts-pool-chip" data-mid="${esc(id)}" data-name="${lname}" onclick="VN_TTS_Panel.addNpcModel('${escJs(cat.id)}','${escJs(id)}')" title="點一下加入">
-  <span class="vtts-pool-play" onclick="event.stopPropagation();VN_TTS_Panel.playNpcModel('${escJs(id)}')" title="試聽">▶</span>${nm}</span>`;
+  <span class="vtts-pool-play" onclick="event.stopPropagation();VN_TTS_Panel.playNpcModel('${escJs(id)}')" title="試聽"><i class="fa-solid fa-caret-right"></i></span>${nm}</span>`;
         }).join('');
 
     return `
 <div class="vtts-npc-card" id="vtts-npc-${esc(cat.id)}">
   <div class="vtts-npc-head">
-    <span class="vtts-npc-label">🗂 ${esc(cat.name)}</span>
+    <span class="vtts-npc-label"><i class="fa-solid fa-folder-tree"></i> ${esc(cat.name)}</span>
     <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteNpcCategory('${escJs(cat.id)}')">刪除分類</button>
   </div>
 
@@ -612,9 +612,9 @@ function renderNpcCard(cat, models) {
   </div>
 
   <div>
-      <div class="vtts-label">套用模型（隨機抽選其中一個）· 點下方卡片即加入、▶ 試聽</div>
+      <div class="vtts-label">套用模型（隨機抽選其中一個）· 點下方卡片即加入、<i class="fa-solid fa-caret-right"></i> 試聽</div>
       <div class="vtts-model-chips" id="vtts-chips-${esc(cat.id)}">${chips || '<span class="vtts-pool-empty">尚未指定模型</span>'}</div>
-      <input class="vtts-input vtts-pool-search" id="vtts-pool-search-${esc(cat.id)}" type="text" placeholder="🔍 搜尋模型加入（如：青年、女、角色名）" oninput="VN_TTS_Panel.filterNpcPool('${escJs(cat.id)}')">
+      <input class="vtts-input vtts-pool-search" id="vtts-pool-search-${esc(cat.id)}" type="text" placeholder="搜尋模型加入（如：青年、女、角色名）" oninput="VN_TTS_Panel.filterNpcPool('${escJs(cat.id)}')">
       <div class="vtts-model-pool" id="vtts-pool-${esc(cat.id)}">${pool || '<span class="vtts-pool-empty">模型庫是空的，先到「模型庫」加語音</span>'}</div>
   </div>
   </div>`;
@@ -623,7 +623,7 @@ function renderNpcCard(cat, models) {
 function renderNpcForm() {
     return `
 <div class="vtts-card">
-  <div class="vtts-card-title">➕ 新增 NPC 分類</div>
+  <div class="vtts-card-title"><i class="fa-solid fa-plus"></i> 新增 NPC 分類</div>
   <div class="vtts-field">
     <label class="vtts-label">分類 ID（唯一）</label>
     <input class="vtts-input" id="vtts-nf-id" type="text" placeholder="例：old_woman">
@@ -753,7 +753,7 @@ const VN_TTS_Panel = {
         this._refPlayer.volume = 0.6;
         
         this._refPlayer.play().then(() => {
-            this._toast('🎵 試聽播放中...');
+            this._toast('試聽播放中...');
         }).catch(e => {
             console.error('[VN_TTS] 試聽失敗:', e);
             this._toast('✗ 播放失敗：路徑對不上或格式不對');
@@ -996,7 +996,7 @@ const VN_TTS_Panel = {
         if (!tts.save()) return;
 
         if (!imported) {
-            this._toast('⚠️ 未找到模型（子資料夾需含 .ckpt 或 .pth）');
+            this._toast('未找到模型（子資料夾需含 .ckpt 或 .pth）');
         } else if (!basePath) {
             this._toast(`✓ 已新增 ${imported} 個模型（請在基礎配置填根目錄以補全路徑）`);
         } else {
@@ -1069,7 +1069,7 @@ const VN_TTS_Panel = {
         this._renderBody('models');
 
         if (newCount === 0 && updateCount === 0) {
-            this._toast('⚠️ 配置檔內無模型資料');
+            this._toast('配置檔內無模型資料');
         } else {
             this._toast(`✓ 新增 ${newCount} 個、更新 ${updateCount} 個模型`, 3000);
         }
@@ -1144,7 +1144,7 @@ const VN_TTS_Panel = {
             .map(([id]) => id);
 
         if (!mine.length) {
-            this._toast(`⚠️ ${label} 這邊已經沒有模型可以刪除了`);
+            this._toast(`${label} 這邊已經沒有模型可以刪除了`);
             return;
         }
 
@@ -1224,7 +1224,7 @@ const VN_TTS_Panel = {
     testMinimax() {
         const W = (window.parent || window);
         const voice = (this._cfg().narratorMinimax || {}).voice || 'audiobook_female_1';
-        if (W.OS_MINIMAX && W.OS_MINIMAX.play) { W.OS_MINIMAX.play('這是旁白語音的試聽，聽聽聲音和速度。', voice); this._toast('🔊 試聽中…（需先設定 MiniMax API key）'); }
+        if (W.OS_MINIMAX && W.OS_MINIMAX.play) { W.OS_MINIMAX.play('這是旁白語音的試聽，聽聽聲音和速度。', voice); this._toast('試聽中…（需先設定 MiniMax API key）'); }
         else this._toast('✗ MiniMax 未載入');
     },
 
@@ -1241,7 +1241,7 @@ const VN_TTS_Panel = {
     },
     testKokoro() {
         const tts = this._tts(); if (!tts) return;
-        if (typeof tts._speakKokoro === 'function') { tts._speakKokoro('這是旁白語音的試聽，聽聽聲音和速度。'); this._toast('🔊 試聽中…（服務沒開會沒聲音）'); }
+        if (typeof tts._speakKokoro === 'function') { tts._speakKokoro('這是旁白語音的試聽，聽聽聲音和速度。'); this._toast('試聽中…（服務沒開會沒聲音）'); }
     },
 
     // ── IndexTTS 服務網址（配置頁；音色各自存一份，這裡統一改）─────────
@@ -1320,7 +1320,7 @@ const VN_TTS_Panel = {
     },
     testIndex() {
         const tts = this._tts(); if (!tts) return;
-        if (typeof tts._speakIndex === 'function') { tts._speakIndex('這是旁白語音的試聽，聽聽聲音和速度。'); this._toast('🔊 試聽中…（服務沒開會沒聲音）'); }
+        if (typeof tts._speakIndex === 'function') { tts._speakIndex('這是旁白語音的試聽，聽聽聲音和速度。'); this._toast('試聽中…（服務沒開會沒聲音）'); }
     },
 
     // 腳本的表情會先被轉成這六個基礎情緒，這裡把它們接到服務端對應的情緒檔上
@@ -1564,7 +1564,7 @@ const VN_TTS_Panel = {
             const m = tts.config.models[mid];
             const nm = esc(m ? (m.name || mid) : mid);
             box.insertAdjacentHTML('beforeend',
-                `<span class="vtts-model-chip" data-mid="${esc(mid)}">${nm}<span class="vtts-model-chip-play" onclick="VN_TTS_Panel.playNpcModel('${escJs(mid)}')" title="試聽">▶</span><span class="vtts-model-chip-del" onclick="VN_TTS_Panel.removeNpcModel('${escJs(catId)}','${escJs(mid)}')">✕</span></span>`);
+                `<span class="vtts-model-chip" data-mid="${esc(mid)}">${nm}<span class="vtts-model-chip-play" onclick="VN_TTS_Panel.playNpcModel('${escJs(mid)}')" title="試聽"><i class="fa-solid fa-caret-right"></i></span><span class="vtts-model-chip-del" onclick="VN_TTS_Panel.removeNpcModel('${escJs(catId)}','${escJs(mid)}')">✕</span></span>`);
         }
     },
 
@@ -1584,7 +1584,7 @@ const VN_TTS_Panel = {
             const nm = esc(m ? (m.name || modelId) : modelId);
             const lname = esc(String(m ? (m.name || modelId) : modelId).toLowerCase());
             pool.insertAdjacentHTML('beforeend',
-                `<span class="vtts-pool-chip" data-mid="${esc(modelId)}" data-name="${lname}" onclick="VN_TTS_Panel.addNpcModel('${escJs(catId)}','${escJs(modelId)}')" title="點一下加入"><span class="vtts-pool-play" onclick="event.stopPropagation();VN_TTS_Panel.playNpcModel('${escJs(modelId)}')" title="試聽">▶</span>${nm}</span>`);
+                `<span class="vtts-pool-chip" data-mid="${esc(modelId)}" data-name="${lname}" onclick="VN_TTS_Panel.addNpcModel('${escJs(catId)}','${escJs(modelId)}')" title="點一下加入"><span class="vtts-pool-play" onclick="event.stopPropagation();VN_TTS_Panel.playNpcModel('${escJs(modelId)}')" title="試聽"><i class="fa-solid fa-caret-right"></i></span>${nm}</span>`);
             this.filterNpcPool(catId);
         }
     },
@@ -1609,7 +1609,7 @@ const VN_TTS_Panel = {
         // IndexTTS 音色沒有參考音頻可放，直接合成一句來聽
         if (m.engine === 'index') {
             tts._speakWithModel({ id: modelId, ...m }, '這是這個角色的聲音試聽。', '');
-            this._toast('🔊 試聽中…（服務沒開會沒聲音）');
+            this._toast('試聽中…（服務沒開會沒聲音）');
             return;
         }
         if (!m.refAudioPath) { this._toast('✗ 這聲音沒有參考音頻，沒得播'); return; }

@@ -507,7 +507,7 @@
                 if (usVal && this.unsum) {
                     const _u = this.unsum;
                     if (_u.uncounted > 0 && _u.start <= _u.end) usVal.textContent = `${_u.uncounted} 樓（第 ${_u.start}–${_u.end}）`;
-                    else if (_u.lastSummarized > _u.currentLast) usVal.textContent = `⚠️ 已總結到 #${_u.lastSummarized}、目前剩 #${_u.currentLast}（刪過訊息）`;
+                    else if (_u.lastSummarized > _u.currentLast) usVal.textContent = `已總結到 #${_u.lastSummarized}、目前剩 #${_u.currentLast}（刪過訊息）`;
                     else usVal.textContent = `0（已最新）`;
                 }
 
@@ -600,7 +600,7 @@
                     if (ctxBtn) {
                         if (level === 'danger') {
                             ctxBtn.style.color  = '#ff6b6b';
-                            ctxBtn.title        = '⚠️ 已超過警戒 Token！建議立即總結';
+                            ctxBtn.title        = '已超過警戒 Token！建議立即總結';
                         } else if (level === 'warn') {
                             ctxBtn.style.color  = '#f6ad55';
                             ctxBtn.title        = '注意：Token 用量已達 70%';

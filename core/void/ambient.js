@@ -110,12 +110,12 @@
         const btn = document.getElementById('lobby-bgm-toggle');
         if (!audio || !btn) return;
         if (bgmEnabled) {
-            btn.textContent = '🔊';
+            btn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
             _bgmRetryCount = 0;
             audio.load();
             if (!(_bridge() && _bridge().isActivitySuspended())) audio.play().catch(() => {});
         } else {
-            btn.textContent = '🔇';
+            btn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
             clearTimeout(_bgmRetryTimer);
             audio.pause();
         }

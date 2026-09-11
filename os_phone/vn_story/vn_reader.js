@@ -554,7 +554,7 @@
                 const deadPatches = ids.filter(id => !alive.has(String(id)));
                 if (deadPatches.length) {
                     out.patches = (await win.OS_STATE_RUNTIME?.rollbackByIds?.(deadPatches)) || 0;
-                    console.log('🧾 [VN Reader] 孤兒對帳：退掉 ' + deadPatches.length + ' 筆指向已刪章節的 patch（' + out.patches + ' 個欄位）');
+                    console.log('[VN Reader] 孤兒對帳：退掉 ' + deadPatches.length + ' 筆指向已刪章節的 patch（' + out.patches + ' 個欄位）');
                 }
                 // 🕰 主角狀態的快照也對帳：指向已刪章節的一併退回
                 try {

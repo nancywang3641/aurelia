@@ -3304,7 +3304,7 @@
             return head + '<label class="wgh-row' + (dup ? ' dim' : '') + '" title="' + _esc(tip) + '">' +
                 '<input type="checkbox" data-wgh="' + i + '"' + (dup ? ' disabled' : '') + '>' +
                 '<span class="wgh-nm">' + _esc(x.label || x.name) + '</span>' +
-                '<span class="wgh-src">' + (dup ? '已在隊上' : (len > DOSSIER_MAX ? '⚠ ' : '') + len + ' 字') + '</span>' +
+                '<span class="wgh-src">' + (dup ? '已在隊上' : (len > DOSSIER_MAX ? '<i class="fa-solid fa-triangle-exclamation"></i> ' : '') + len + ' 字') + '</span>' +
                 (x.fid ? '<b class="wgh-x" data-wgh-del="' + x.fid + '" title="從名冊刪掉他">✕</b>' : '') +
                 '</label>';
         }).join('');

@@ -303,7 +303,7 @@
     function updateFullscreenBtnIcon() {
         const btn = document.getElementById('aurelia-fullscreen-btn');
         if (!btn) return;
-        btn.textContent = isFullscreen ? '🗗' : '⛶';
+        btn.innerHTML = isFullscreen ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
         btn.title = isFullscreen ? '退出全屏 (ESC)' : '進入全屏';
     }
 

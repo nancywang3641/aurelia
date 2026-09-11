@@ -252,7 +252,7 @@ ${list}
                 npcLedger: { lastMsgId: msgs.length - 1, chars: nowChars },
                 npcDossiers: nextDossiers
             });
-            console.log(`📇 [NPC Dossier] 對帳(${tag})：正文現存 ${Object.keys(nowChars).length} 人`
+            console.log(`[NPC Dossier] 對帳(${tag})：正文現存 ${Object.keys(nowChars).length} 人`
                 + (dead.length ? `，移除已不在正文的檔案 [${dead.join('、')}]` : '，無檔案需移除')
                 + `｜登場次數已依正文重算`);
         } catch (e) {
@@ -297,7 +297,7 @@ ${list}
             }
 
             // 🔬 chatId 一起印：查「新聊天室卻冒出舊角色」時，這串直接告訴你檔案是從哪一格 DB 撈的
-            console.log(`📇 [NPC Dossier] 名冊 ${rosterNames.length} 人` + (mentioned.length ? `＋完整檔案 [${mentioned.join('、')}]` : '（本輪無名字命中）') + `｜讀自 chatId=${chatId}`);
+            console.log(`[NPC Dossier] 名冊 ${rosterNames.length} 人` + (mentioned.length ? `＋完整檔案 [${mentioned.join('、')}]` : '（本輪無名字命中）') + `｜讀自 chatId=${chatId}`);
             return parts.join('\n');
         } catch (e) {
             console.warn('[NPC Dossier] 組注入文字失敗:', e?.message || e);

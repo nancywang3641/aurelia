@@ -397,9 +397,9 @@ ${materials.headMessages || '（無）'}
     // --- 對外 API ---
     async function generate(opts = {}) {
         const chatId = getChatId();
-        if (!chatId) { showToast('⚠️ 沒有 chatId，無法生成 schema', 'warning'); return null; }
+        if (!chatId) { showToast('沒有 chatId，無法生成 schema', 'warning'); return null; }
 
-        showToast('🧬 主模型正在分析世界 → 生成 schema...', 'info');
+        showToast('主模型正在分析世界 → 生成 schema...', 'info');
         try {
             const [worldbook, userPersona, charCard, headMessages] = await Promise.all([
                 gatherWorldbookText(),
@@ -415,13 +415,13 @@ ${materials.headMessages || '（無）'}
             // V3：同時返回 fields 跟 rules（AI 生成階段同步出條件規則，跟變數包綁定）
             const count = Object.keys(json.fields).length;
             const ruleCount = Array.isArray(json.rules) ? json.rules.length : 0;
-            showToast(`✅ Schema 生成完成（${count} 個欄位 / ${ruleCount} 條規則）`, 'success');
+            showToast(`Schema 生成完成（${count} 個欄位 / ${ruleCount} 條規則）`, 'success');
             try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: json.fields, rules: json.rules }); } catch(e) {}
 
             return { fields: json.fields, rules: Array.isArray(json.rules) ? json.rules : [] };
         } catch(e) {
             console.error('[State Schema] 生成失敗:', e);
-            showToast(`❌ Schema 生成失敗：${e.message || e}`, 'error');
+            showToast(`Schema 生成失敗：${e.message || e}`, 'error');
             return null;
         }
     }
@@ -437,10 +437,10 @@ ${materials.headMessages || '（無）'}
     async function addField(name, def) {
         const chatId = getChatId();
         if (!chatId || !win.OS_DB?.getStateData) return false;
-        if (!name || !name.trim()) { showToast('⚠️ 欄位名不能空', 'warning'); return false; }
+        if (!name || !name.trim()) { showToast('欄位名不能空', 'warning'); return false; }
         const data = (await win.OS_DB.getStateData(chatId)) || {};
         const schema = { ...(data.schema || {}) };
-        if (schema[name]) { showToast(`⚠️ 欄位「${name}」已存在`, 'warning'); return false; }
+        if (schema[name]) { showToast(`欄位「${name}」已存在`, 'warning'); return false; }
         schema[name] = {
             type: (def && def.type) || 'string',
             desc: (def && def.desc) || '',
@@ -454,7 +454,7 @@ ${materials.headMessages || '（無）'}
             current: data.current || {}
         });
         try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
-        showToast(`✅ 新增欄位「${name}」`, 'success');
+        showToast(`新增欄位「${name}」`, 'success');
         return true;
     }
 
@@ -476,7 +476,7 @@ ${materials.headMessages || '（無）'}
             current: data.current || {}
         });
         try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
-        showToast(`✏️ 已更新「${name}」`, 'success');
+        showToast(`已更新「${name}」`, 'success');
         return true;
     }
 
@@ -500,7 +500,7 @@ ${materials.headMessages || '（無）'}
             .filter(p => Object.keys(p.updates).length > 0);
         await win.OS_DB.saveStateData(chatId, { ...data, schema, patches, current });
         try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
-        showToast(`🗑 已刪除欄位「${name}」`, 'info');
+        showToast(`已刪除欄位「${name}」`, 'info');
         return true;
     }
 

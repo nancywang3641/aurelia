@@ -25,9 +25,9 @@
     panelEl.id = 'os-dbg-panel';
     panelEl.innerHTML = `
         <div id="os-dbg-header">
-            <span id="os-dbg-title">🔍 奧瑞亞 API 觀測樞紐</span>
+            <span id="os-dbg-title"><i class="fa-solid fa-magnifying-glass"></i> 奧瑞亞 API 觀測樞紐</span>
             <span id="os-dbg-count"></span>
-            <button class="os-dbg-hbtn danger" id="os-dbg-clear">🗑️ 清除</button>
+            <button class="os-dbg-hbtn danger" id="os-dbg-clear"><i class="fa-solid fa-trash-can"></i> 清除</button>
             <button class="os-dbg-hbtn" id="os-dbg-close">✕</button>
         </div>
         <div id="os-dbg-body"></div>
@@ -43,7 +43,7 @@
     // Toggle button — 優先插在 #lobby-bgm-toggle 旁邊，找不到才 fixed fallback
     const toggleBtn = pDoc.createElement('button');
     toggleBtn.id = 'os-dbg-toggle';
-    toggleBtn.textContent = '🔍';
+    toggleBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i>';
     toggleBtn.title = 'Aurelia API Inspector';
 
     function _placeToggleBtn() {
@@ -75,7 +75,7 @@
     const header = panelEl.querySelector('#os-dbg-header');
     let dragState = null;
     header.addEventListener('mousedown', e => {
-        if (window.innerWidth <= 600 || e.target.tagName === 'BUTTON') return;
+        if (window.innerWidth <= 600 || (e.target.closest && e.target.closest('button'))) return;
         dragState = { startX: e.clientX - panelEl.offsetLeft, startY: e.clientY - panelEl.offsetTop };
     });
     pDoc.addEventListener('mousemove', e => {
@@ -100,7 +100,7 @@
             if (content.length > 500) {
                 return `<div class="os-dbg-prompt-block">
                     <div class="os-dbg-prompt-title" onclick="this.parentElement.classList.toggle('open')">
-                        <span class="os-dbg-prompt-icon">▶</span> 📜 [點擊展開] 完整長內容 (${content.length} 字)
+                        <span class="os-dbg-prompt-icon"><i class="fa-solid fa-caret-right"></i></span> <i class="fa-solid fa-scroll"></i> [點擊展開] 完整長內容 (${content.length} 字)
                     </div>
                     <div class="os-dbg-prompt-content">${escHtml(content)}</div>
                 </div>`;
@@ -115,17 +115,17 @@
             // 抓取自訂條目
             winNode.OS_PROMPTS.getEntries().forEach(e => {
                 if (e.content && e.content.trim()) {
-                    knownPrompts.push({ name: '📝 條目: ' + e.name, content: e.content.trim() });
+                    knownPrompts.push({ name: '條目: ' + e.name, content: e.content.trim() });
                 }
             });
             // 抓取全域 CoT
             const uCot = winNode.OS_PROMPTS.get('universal_cot');
-            if (uCot && uCot.trim()) knownPrompts.push({ name: '🔷 全域 CoT 思考鏈', content: uCot.trim() });
+            if (uCot && uCot.trim()) knownPrompts.push({ name: '全域 CoT 思考鏈', content: uCot.trim() });
             // 抓取人設
             const iris = winNode.OS_PROMPTS.get('iris_system');
-            if (iris && iris.trim()) knownPrompts.push({ name: '🌸 愛麗絲 (Iris) 人設', content: iris.trim() });
+            if (iris && iris.trim()) knownPrompts.push({ name: '愛麗絲 (Iris) 人設', content: iris.trim() });
             const chess = winNode.OS_PROMPTS.get('cheshire_system');
-            if (chess && chess.trim()) knownPrompts.push({ name: '😸 柴郡貓 (Cheshire) 人設', content: chess.trim() });
+            if (chess && chess.trim()) knownPrompts.push({ name: '柴郡貓 (Cheshire) 人設', content: chess.trim() });
         }
 
         // 找出所有匹配的段落
@@ -145,7 +145,7 @@
         if (matches.length === 0) {
             return `<div class="os-dbg-prompt-block">
                 <div class="os-dbg-prompt-title" onclick="this.parentElement.classList.toggle('open')">
-                    <span class="os-dbg-prompt-icon">▶</span> ⚙️ 系統提示詞 (System Prompt)
+                    <span class="os-dbg-prompt-icon"><i class="fa-solid fa-caret-right"></i></span> <i class="fa-solid fa-gear"></i> 系統提示詞 (System Prompt)
                 </div>
                 <div class="os-dbg-prompt-content">${escHtml(content)}</div>
             </div>`;
@@ -160,7 +160,7 @@
                 if (before) {
                     html += `<div class="os-dbg-prompt-block">
                         <div class="os-dbg-prompt-title" onclick="this.parentElement.classList.toggle('open')">
-                            <span class="os-dbg-prompt-icon">▶</span> ⚙️ [面板預設/硬編碼格式]
+                            <span class="os-dbg-prompt-icon"><i class="fa-solid fa-caret-right"></i></span> <i class="fa-solid fa-gear"></i> [面板預設/硬編碼格式]
                         </div>
                         <div class="os-dbg-prompt-content">${escHtml(before)}</div>
                     </div>`;
@@ -169,7 +169,7 @@
                 // 找到的主標題區塊
                 html += `<div class="os-dbg-prompt-block">
                     <div class="os-dbg-prompt-title" onclick="this.parentElement.classList.toggle('open')">
-                        <span class="os-dbg-prompt-icon">▶</span> ${escHtml(m.name)}
+                        <span class="os-dbg-prompt-icon"><i class="fa-solid fa-caret-right"></i></span> ${escHtml(m.name)}
                     </div>
                     <div class="os-dbg-prompt-content">${escHtml(m.content)}</div>
                 </div>`;
@@ -182,7 +182,7 @@
         if (after) {
             html += `<div class="os-dbg-prompt-block">
                 <div class="os-dbg-prompt-title" onclick="this.parentElement.classList.toggle('open')">
-                    <span class="os-dbg-prompt-icon">▶</span> ⚙️ [未命名尾端/硬編碼格式]
+                    <span class="os-dbg-prompt-icon"><i class="fa-solid fa-caret-right"></i></span> <i class="fa-solid fa-gear"></i> [未命名尾端/硬編碼格式]
                 </div>
                 <div class="os-dbg-prompt-content">${escHtml(after)}</div>
             </div>`;
@@ -198,7 +198,7 @@
         count.textContent = logs.length ? `(${logs.length}/${MAX_LOGS})` : '';
 
         if (!logs.length) {
-            body.innerHTML = '<div class="os-dbg-empty">🌌 觀測樞紐目前為空<br><span style="font-size:10px; opacity:0.6; margin-top:8px; display:inline-block;">等待系統發出 API 請求...</span></div>';
+            body.innerHTML = '<div class="os-dbg-empty"><i class="fa-solid fa-star"></i> 觀測樞紐目前為空<br><span style="font-size:10px; opacity:0.6; margin-top:8px; display:inline-block;">等待系統發出 API 請求...</span></div>';
             return;
         }
 
@@ -222,7 +222,7 @@
                     <span class="os-dbg-badge ${badgeClass}">${badgeText}</span>
                     <span class="os-dbg-model" title="${log.model}">${log.model}</span>
                     <span class="os-dbg-meta">${log.messageCount} msgs · ${dur}</span>
-                    <span class="os-dbg-arrow">▶</span>
+                    <span class="os-dbg-arrow"><i class="fa-solid fa-caret-right"></i></span>
                 </div>
                 <div class="os-dbg-detail">
                     ${renderRequest(log)}
@@ -242,7 +242,7 @@
                         ? JSON.stringify(log.request, null, 2)
                         : (typeof log.response === 'object' ? JSON.stringify(log.response, null, 2) : String(log.responseText || ''));
                     navigator.clipboard?.writeText(text).catch(() => {});
-                    btn.textContent = '✓ 成功'; setTimeout(() => { btn.textContent = '複製'; }, 1200);
+                    btn.textContent = '✓ 成功'; setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-clipboard"></i> 複製'; }, 1200);
                 });
             });
 
@@ -261,7 +261,7 @@
         }).join('');
         const meta = JSON.stringify({ model: log.request.model, temperature: log.request.temperature, max_tokens: log.request.max_tokens, stream: log.request.stream }, null, 2);
         return `<div class="os-dbg-section">
-            <div class="os-dbg-sec-label">📤 Request Payload (${msgs.length} msgs)<span style="flex:1"></span><button class="os-dbg-copy" data-copy="req">📋 複製 JSON</button></div>
+            <div class="os-dbg-sec-label"><i class="fa-solid fa-upload"></i> Request Payload (${msgs.length} msgs)<span style="flex:1"></span><button class="os-dbg-copy" data-copy="req"><i class="fa-solid fa-clipboard"></i> 複製 JSON</button></div>
             <div class="os-dbg-pre" style="margin-bottom:8px;max-height:80px;">${escHtml(meta)}</div>
             <div class="os-dbg-msg-list">${msgsHtml}</div>
         </div>`;
@@ -269,13 +269,13 @@
 
     function renderResponse(log) {
         if (log.status === 'pending') {
-            return `<div class="os-dbg-section"><div class="os-dbg-sec-label">📥 Response Stream</div><div style="color:#fbd38d;font-size:11px;padding:8px 0;">🧬 系統等待神經網絡回傳中…</div></div>`;
+            return `<div class="os-dbg-section"><div class="os-dbg-sec-label"><i class="fa-solid fa-download"></i> Response Stream</div><div style="color:#fbd38d;font-size:11px;padding:8px 0;"><i class="fa-solid fa-dna"></i> 系統等待神經網絡回傳中…</div></div>`;
         }
         const display = typeof log.response === 'object' && log.response !== null
             ? JSON.stringify(log.response, null, 2)
             : String(log.responseText || log.response || '(empty)');
         return `<div class="os-dbg-section">
-            <div class="os-dbg-sec-label">📥 Response Data${log.error ? ' <span style="color:#fc8181;margin-left:8px;">❌ ' + escHtml(log.error) + '</span>' : ''}<span style="flex:1"></span><button class="os-dbg-copy" data-copy="res">📋 複製</button></div>
+            <div class="os-dbg-sec-label"><i class="fa-solid fa-download"></i> Response Data${log.error ? ' <span style="color:#fc8181;margin-left:8px;"><i class="fa-solid fa-circle-xmark"></i> ' + escHtml(log.error) + '</span>' : ''}<span style="flex:1"></span><button class="os-dbg-copy" data-copy="res"><i class="fa-solid fa-clipboard"></i> 複製</button></div>
             <div class="os-dbg-pre">${escHtml(display)}</div>
         </div>`;
     }
@@ -307,7 +307,7 @@
         const statusText = panelEl.querySelector('#os-dbg-status-text');
         const lastUrl    = panelEl.querySelector('#os-dbg-last-url');
         const urlShort   = (url || '').replace(/^https?:\/\/[^/]+/, '') || url;
-        if (statusText) statusText.textContent = '⏳ 網路請求交涉中…';
+        if (statusText) statusText.textContent = '網路請求交涉中…';
         if (lastUrl)    lastUrl.textContent    = urlShort;
 
         const log = {
@@ -348,8 +348,8 @@
         const statusText = panelEl.querySelector('#os-dbg-status-text');
         if (statusText) {
             statusText.textContent = status === 'error'
-                ? `❌ 網路中斷或異常 · ${(duration/1000).toFixed(1)}s`
-                : `✅ 數據接收完畢 (${status}) · ${(duration/1000).toFixed(1)}s`;
+                ? `網路中斷或異常 · ${(duration/1000).toFixed(1)}s`
+                : `數據接收完畢 (${status}) · ${(duration/1000).toFixed(1)}s`;
         }
         updateLog(log);
     };

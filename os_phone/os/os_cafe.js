@@ -544,7 +544,7 @@
             body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-users"></i> 訪客手札</span><span class="oc-section-note">最近 ' + logs.length + ' 筆</span></div>' + (logs.length
                 ? logs.map(l => {
                     if (l.ev) {   // 🎬 事件卡:角色親口說的,直接攤開
-                        return '<div class="oc-item ev"><span><span class="oc-name">⭐ ' + md(l.day) + '・' + l.name + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + l.item + '」' : '') + '</span>' +
+                        return '<div class="oc-item ev"><span><span class="oc-name"><i class="fa-solid fa-star"></i> ' + md(l.day) + '・' + l.name + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + l.item + '」' : '') + '</span>' +
                             '<span class="oc-said">「' + l.line + '」</span></span></div>';
                     }
                     return '<div class="oc-item oc-click" data-id="' + l.id + '"><span><span class="oc-name">' + md(l.day) + '・' + l.name + '</span>' +
@@ -827,7 +827,7 @@
                 }
                 menu.unshift({ id: 'free_' + Date.now(), key: 'free_' + Date.now(), name: r.name, blurb: r.blurb, tier: r.tier, price: CAFE_CFG.prices[r.tier], tags: r.tags, ings: picked.slice(), free: true, ts: Date.now(), sold: 0 });
                 await _set(K_MENU, menu);
-                shelfBtn.outerHTML = '<div class="oc-note">✨「' + r.name + '」上架了!到「菜單」頁看看。</div>';
+                shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-wand-magic-sparkles"></i>「' + r.name + '」上架了!到「菜單」頁看看。</div>';
             });
         });
     }
@@ -888,7 +888,7 @@
                     fresh.unshift({ id: 'drink_' + Date.now(), key, name: named.name, blurb: named.blurb, tier, price: CAFE_CFG.prices[tier], tags, ings: ings.map(x => x.id), ts: Date.now(), sold: 0 });
                     await _set(K_MENU, fresh);
                 }
-                shelfBtn.outerHTML = '<div class="oc-note">☕「' + named.name + '」上架了!到「菜單」頁看看。</div>';
+                shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-mug-hot"></i>「' + named.name + '」上架了!到「菜單」頁看看。</div>';
             });
         });
     }

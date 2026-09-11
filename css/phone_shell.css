@@ -83,6 +83,17 @@
 .aps-mood:hover { background: rgba(30,32,44,0.34); }
 .aps-mood:active { transform: scale(0.96); }
 .aps-mood-em { font-size: 14px; line-height: 1; }
+.aps-mood-em > i { font-size: 13px; }
+.aps-mood-em[data-mood="0"] > i { color: #ffc53d; }
+.aps-mood-em[data-mood="1"] > i { color: #dfe6ef; }
+.aps-mood-em[data-mood="2"] > i { color: #8cc4f5; }
+.aps-mood-em[data-mood="3"] > i { color: #ffe08a; }
+.aps-mood-em[data-mood="4"] > i { color: #ffd95a; }
+.aps-mood-em[data-mood="5"] > i { color: #ff9cc6; }
+.aps-mood-em[data-mood="6"] > i { color: #e2b48c; }
+.aps-mood-em[data-mood="7"] > i { color: #c4bff0; }
+.aps-mood-em[data-mood="8"] > i { color: #ff8a4c; }
+.aps-mood-em[data-mood="9"] > i { color: #9fdcff; }
 .aps-grid {
     display: grid; grid-template-columns: repeat(4, 1fr);
     gap: 18px 8px; align-content: start;
@@ -112,6 +123,22 @@
 }
 .aps-icon:active .aps-icon-em { transform: scale(0.9); }
 .aps-icon-em.aps-icon-img { font-size: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
+/* 內建 app 的圖標是 Font Awesome（使用者自己裝的 app 還是它挑的 emoji）；換了圖庫圖片就把圖示藏掉 */
+.aps-icon-em > i { font-size: 25px; line-height: 1; }
+.aps-icon-em.aps-icon-img > i { display: none; }
+.aps-set-icprev > i { font-size: 17px; }
+[data-ic="wx"] > i, [data-ic="phone"] > i { color: #22b35e; }
+[data-ic="wb"] > i { color: #e8582f; }
+[data-ic="cal"] > i { color: #e5484d; }
+[data-ic="rpg"] > i, [data-ic="appstore"] > i { color: #2f7cf6; }
+[data-ic="reader"] > i { color: #d9822b; }
+[data-ic="ctrlroom"] > i, [data-ic="avsvar"] > i { color: #6d5bd6; }
+[data-ic="lorebook"] > i { color: #1f9d74; }
+[data-ic="prompts"] > i { color: #b7791f; }
+[data-ic="sysset"] > i { color: #6b7280; }
+[data-ic="settings"] > i { color: #e0508f; }
+[data-ic="album"] > i { color: #f29d0b; }
+.aps-icon-em > i.fa-cube { color: #7b8194; }
 /* iOS 毛玻璃小膠囊：半透明微暗玻璃 + backdrop blur 把桌布糊掉，白字清楚又有玻璃質感 */
 /* 🚨 名字一律單行、放不下就尾端省略 —— 跟 iOS 一樣。
    格子是 grid，而 grid 的列高由那一列最高的格子決定：只要有一個 app 的名字折成兩行，
@@ -172,13 +199,13 @@
 .dlr-row-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dlr-row-name { font-size: 15px; font-weight: 600; }
 .dlr-row-num { font-size: 12px; color: rgba(26,28,40,0.45); letter-spacing: 0.5px; }
-.dlr-row-call { font-size: 18px; flex-shrink: 0; opacity: 0.6; }
+.dlr-row-call { font-size: 16px; flex-shrink: 0; color: #22b35e; opacity: 0.85; }
 .dlr-pad-inner { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-y: auto; padding: 10px 0; }
 /* 底部分頁列（iOS 風：通訊錄 / 鍵盤）*/
 .dlr-tabbar { flex-shrink: 0; display: flex; border-top: 0.5px solid rgba(26,28,40,0.12); background: rgba(244,245,248,0.97); }
 .dlr-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 10px; background: transparent; border: none; cursor: pointer; color: rgba(26,28,40,0.45); }
 .dlr-tab.on { color: #2a6ad0; }
-.dlr-tab-ic { font-size: 20px; line-height: 1; }
+.dlr-tab-ic { font-size: 19px; line-height: 1; }
 .dlr-tab-tx { font-size: 10px; }
 .dlr-num-disp { font-size: 30px; font-weight: 300; letter-spacing: 2px; min-height: 44px; margin: 18px 0 6px; word-break: break-all; text-align: center; padding: 0 16px; }
 .dlr-keys { display: grid; grid-template-columns: repeat(3, 72px); gap: 16px; justify-content: center; margin-top: 8px; }
@@ -241,13 +268,13 @@
 .dlr-tx-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px; border-bottom: 0.5px solid rgba(26,28,40,0.1); flex-shrink: 0; background: #f4f5f8; }
 .dlr-tx-back { background: transparent; border: none; color: #2a6ad0; font-size: 15px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
 .dlr-tx-title { flex: 1; text-align: center; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #1a1c28; }
-.dlr-tx-call { background: transparent; border: none; font-size: 18px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
+.dlr-tx-call { background: transparent; border: none; font-size: 17px; color: #22b35e; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
 .dlr-tx-wrap { flex: 1; overflow-y: auto; padding: 14px 14px 24px; display: flex; flex-direction: column; gap: 12px; background: #f4f5f8; }
 /* 逐字稿按「一通」分段：每段自己一張淺卡，右上角一顆垃圾桶，整段一起刪 */
 .dlr-tx-group { display: flex; flex-direction: column; gap: 12px; padding: 10px 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.55); border: 0.5px solid rgba(26,28,40,0.08); }
 .dlr-tx-ghead { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(26,28,40,0.45); }
 .dlr-tx-ghead span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dlr-tx-gdel { flex-shrink: 0; border: none; background: transparent; font-size: 14px; line-height: 1; padding: 4px 6px; border-radius: 8px; cursor: pointer; opacity: 0.5; }
+.dlr-tx-gdel { flex-shrink: 0; border: none; background: transparent; color: #d64545; font-size: 13px; line-height: 1; padding: 4px 6px; border-radius: 8px; cursor: pointer; opacity: 0.5; }
 .dlr-tx-gdel:hover { opacity: 1; background: rgba(255,59,48,0.12); }
 /* 段落內的分隔線本來就置中，在卡片裡不用再拉長線 */
 .dlr-tx-group .dlr-tx-time { margin: 2px 0; }

@@ -103,9 +103,9 @@
     // 底部分頁列（iOS 風：通話紀錄 / 通訊錄 / 鍵盤）
     function _tabbar(active) {
         return '<div class="dlr-tabbar">'
-          +   '<button class="dlr-tab' + (active === 'hist' ? ' on' : '') + '" data-tab="hist" type="button"><span class="dlr-tab-ic">🕐</span><span class="dlr-tab-tx">通話紀錄</span></button>'
-          +   '<button class="dlr-tab' + (active === 'list' ? ' on' : '') + '" data-tab="list" type="button"><span class="dlr-tab-ic">👥</span><span class="dlr-tab-tx">通訊錄</span></button>'
-          +   '<button class="dlr-tab' + (active === 'pad' ? ' on' : '') + '" data-tab="pad" type="button"><span class="dlr-tab-ic">⌨️</span><span class="dlr-tab-tx">鍵盤</span></button>'
+          +   '<button class="dlr-tab' + (active === 'hist' ? ' on' : '') + '" data-tab="hist" type="button"><span class="dlr-tab-ic"><i class="fa-solid fa-clock-rotate-left"></i></span><span class="dlr-tab-tx">通話紀錄</span></button>'
+          +   '<button class="dlr-tab' + (active === 'list' ? ' on' : '') + '" data-tab="list" type="button"><span class="dlr-tab-ic"><i class="fa-solid fa-address-book"></i></span><span class="dlr-tab-tx">通訊錄</span></button>'
+          +   '<button class="dlr-tab' + (active === 'pad' ? ' on' : '') + '" data-tab="pad" type="button"><span class="dlr-tab-ic"><i class="fa-solid fa-table-cells"></i></span><span class="dlr-tab-tx">鍵盤</span></button>'
           + '</div>';
     }
     function _bindTabs() {
@@ -131,7 +131,7 @@
                  + '<span class="dlr-ava">' + _esc(_avatarBg(c)) + '</span>'
                  + '<span class="dlr-row-main"><span class="dlr-row-name">' + _esc(c.name) + '</span>'
                  + '<span class="dlr-row-num">' + _esc(_num(c.id)) + '</span></span>'
-                 + '<span class="dlr-row-call">📞</span></button>';
+                 + '<span class="dlr-row-call"><i class="fa-solid fa-phone"></i></span></button>';
         }).join('');
         _root.innerHTML =
             '<div class="dlr-wrap">'
@@ -160,7 +160,7 @@
           +       keys.map(function (k) { return '<button class="dlr-key" data-k="' + k + '" type="button">' + k + '</button>'; }).join('')
           +     '</div>'
           +     '<div class="dlr-pad-actions">'
-          +       '<button class="dlr-call-btn" id="dlr-call-btn" type="button">📞 撥號</button>'
+          +       '<button class="dlr-call-btn" id="dlr-call-btn" type="button"><i class="fa-solid fa-phone"></i> 撥號</button>'
           +       '<button class="dlr-del" id="dlr-del" type="button">⌫</button>'
           +     '</div>'
           +   '</div>'
@@ -202,7 +202,7 @@
         _timer = setTimeout(function () {
             if (unknown) {
                 const st = _root && _root.querySelector('#dlr-call-status');
-                if (st) st.innerHTML = '查無此人 📵';
+                if (st) st.textContent = '查無此人';
                 _timer = setTimeout(_afterCall, 1600);
             } else {
                 // 響鈴：留在這個畫面問對方的第一句。它可以不接（見 _isRefusal），
@@ -373,7 +373,7 @@
     }
     function _isRefusal(s) { return !!_refusalOf(s); }
 
-    function _noAnswer(contact, note) { return _dialEnd(contact, '對方沒有接聽 📵', true, note); }
+    function _noAnswer(contact, note) { return _dialEnd(contact, '對方沒有接聽', true, note); }
     function _dialFailed(contact) { return _dialEnd(contact, '沒接通 —— 到「設置 → 主模型」確認 API 有設好', false); }
     async function _dialEnd(contact, statusText, writeMissed, note) {
         if (!_root) return;
@@ -858,7 +858,7 @@
         const body = groups.map(function (g, gi) {
             return '<div class="dlr-tx-group" data-g="' + gi + '">'
                  + '<div class="dlr-tx-ghead"><span>' + _esc(g.title) + '</span>'
-                 + '<button class="dlr-tx-gdel" data-g="' + gi + '" type="button" title="刪掉這一整段">🗑</button></div>'
+                 + '<button class="dlr-tx-gdel" data-g="' + gi + '" type="button" title="刪掉這一整段"><i class="fa-solid fa-trash-can"></i></button></div>'
                  + g.idx.map(function (i) { return _bubbleHTML(ms[i], rec.name); }).join('')
                  + '</div>';
         }).join('');
@@ -867,7 +867,7 @@
           +   '<div class="dlr-tx-head">'
           +     '<button class="dlr-tx-back" id="dlr-tx-back" type="button">‹ 通話紀錄</button>'
           +     '<span class="dlr-tx-title">' + _esc(rec.name) + '</span>'
-          +     '<button class="dlr-tx-call" id="dlr-tx-call" type="button">📞</button>'
+          +     '<button class="dlr-tx-call" id="dlr-tx-call" type="button"><i class="fa-solid fa-phone"></i></button>'
           +   '</div>'
           +   '<div class="dlr-tx-wrap">' + (body || '<div class="dlr-empty">這通沒有對話內容</div>') + '</div>'
           + '</div>';

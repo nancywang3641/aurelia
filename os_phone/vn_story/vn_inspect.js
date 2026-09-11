@@ -79,7 +79,7 @@
             // 若有待處理選擇，優先顯示選擇頁
             const hasChoices = this._pendingChoices && this._pendingChoices.length > 0;
             if (hasChoices) {
-                this._addTab(tabBar, contentArea, 'choices', '🎯 做出選擇', this._choicesHtml(), true, _dropCards);
+                this._addTab(tabBar, contentArea, 'choices', '做出選擇', this._choicesHtml(), true, _dropCards);
             }
             // 🎴 卡片自帶的美化面板：一個面板一個分頁、名字取卡片的 <title>（跟酒館資訊中心同一條規則）
             const cards = await this._cardPanels();
@@ -87,7 +87,7 @@
                 this._addTab(tabBar, contentArea, 'card' + i, c.title, '', !hasChoices && i === 0,
                     (pane) => this._mountCard(contentArea, pane, c.html));
             });
-            this._addTab(tabBar, contentArea, 'avs',      '📊 狀態',      await this._avsHtml(),       !hasChoices && !cards.length, _dropCards);
+            this._addTab(tabBar, contentArea, 'avs',      '狀態',      await this._avsHtml(),       !hasChoices && !cards.length, _dropCards);
             // 💰 錢包分頁已移除：OS_ECONOMY 早就退役到 _archive/dead-code、任何載入清單都不再載它，
             //    這頁在畫面上永遠只有一行「OS_ECONOMY 未載入」。經濟現在是 OS_PT（視差城市 PT）那一套。
 
@@ -103,13 +103,14 @@
             // 回朔按鈕（事件委派，動態插入後仍可觸發）
             if (this._rerollHandler) overlay.removeEventListener('click', this._rerollHandler);
             this._rerollHandler = async (e) => {
-                if (e.target && e.target.id === 'avs-reroll-btn' && !e.target.disabled) {
-                    e.target.disabled = true;
-                    e.target.textContent = '回朔中...';
+                const _btn = e.target && e.target.closest ? e.target.closest('button') : null;   // 按鈕裡有圖示時 e.target 會是 <i>
+                if (_btn && _btn.id === 'avs-reroll-btn' && !_btn.disabled) {
+                    _btn.disabled = true;
+                    _btn.textContent = '回朔中...';
                     await this._avsReroll();
                     const pane = overlay.querySelector('#tab-pane-avs');
                     if (pane) pane.innerHTML = await this._avsHtml();
-                } else if (e.target && e.target.id === 'avs-copy-extract-btn') {
+                } else if (_btn && _btn.id === 'avs-copy-extract-btn') {
                     // 匯出全部診斷數據(引擎當前狀態 + 本輪抽取 + 持久化 patches/base) → 貼給工程師查覆蓋根因
                     try {
                         const dump = {
@@ -118,11 +119,11 @@
                             persisted: (win.OS_STATE_RUNTIME?.getStateDataDump) ? await win.OS_STATE_RUNTIME.getStateDataDump() : null
                         };
                         await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
-                        e.target.textContent = '✅ 已複製';
+                        _btn.textContent = '已複製';
                     } catch (err) {
-                        e.target.textContent = '❌ 複製失敗（手動選取下方文字）';
+                        _btn.textContent = '複製失敗（手動選取下方文字）';
                     }
-                    setTimeout(() => { e.target.textContent = '📋 複製全部診斷數據（貼給工程師看）'; }, 1800);
+                    setTimeout(() => { _btn.innerHTML = '<i class="fa-solid fa-clipboard"></i> 複製全部診斷數據（貼給工程師看）'; }, 1800);
                 }
             };
             overlay.addEventListener('click', this._rerollHandler);
@@ -282,7 +283,7 @@
                                    cursor:pointer;font-size:0.84rem;white-space:nowrap;
                                    transition:background 0.2s;font-family:inherit;"
                             onmouseover="this.style.background='rgba(212,175,55,0.32)'"
-                            onmouseout="this.style.background='rgba(212,175,55,0.18)'">發送 ▶</button>
+                            onmouseout="this.style.background='rgba(212,175,55,0.18)'">發送 <i class="fa-solid fa-caret-right"></i></button>
                     </div>
                 </div>`;
         },
@@ -308,7 +309,7 @@
                 background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);
                 color:${hasReroll ? '#d4af37' : '#555'};font-size:12px;cursor:${hasReroll ? 'pointer' : 'not-allowed'};
                 letter-spacing:1px;
-            " ${hasReroll ? '' : 'disabled'}>↩ 回朔上一章節${hasReroll ? '' : '（無紀錄）'}</button>`;
+            " ${hasReroll ? '' : 'disabled'}>回朔上一章節${hasReroll ? '' : '（無紀錄）'}</button>`;
 
             // 當前狀態面板（煉丹爐模板 or 原始變數）
             // 以 IDB 為準（面板本體幾百 KB，localStorage 那份只是鏡像、額度滿的時候會過期甚至寫不進去）；
@@ -399,7 +400,7 @@
                         }).join('');
                         const chTitle = ch.title || '未命名章節';
                         return `<div style="padding:10px 0;border-bottom:1px solid rgba(212,175,55,0.08);">
-                            <div style="font-size:11px;color:#888;margin-bottom:6px;">📖 ${chTitle}</div>
+                            <div style="font-size:11px;color:#888;margin-bottom:6px;"><i class="fa-solid fa-book-open"></i> ${chTitle}</div>
                             ${changeLines}
                         </div>`;
                     }).join('');
@@ -425,10 +426,10 @@
                 const memN = (le && le.memories) ? `・記憶 ${le.memories.length} 條` : '';
                 lastExtractHtml = `<details style="margin-top:16px;">
                     <summary style="cursor:pointer;font-size:11px;color:#888;letter-spacing:2px;list-style:none;display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid rgba(212,175,55,0.15);">
-                        <span>▼</span><span>🔬 診斷：當前狀態 + 本次更新${le ? `（msg#${le.msgId ?? '—'}${memN}）` : ''}</span>
+                        <span>▼</span><span><i class="fa-solid fa-microscope"></i> 診斷：當前狀態 + 本次更新${le ? `（msg#${le.msgId ?? '—'}${memN}）` : ''}</span>
                     </summary>
                     <div style="padding-top:6px;">
-                        <button id="avs-copy-extract-btn" style="width:100%;padding:7px 0;margin-bottom:8px;border-radius:6px;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-size:12px;cursor:pointer;">📋 複製全部診斷數據（貼給工程師看）</button>
+                        <button id="avs-copy-extract-btn" style="width:100%;padding:7px 0;margin-bottom:8px;border-radius:6px;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-size:12px;cursor:pointer;"><i class="fa-solid fa-clipboard"></i> 複製全部診斷數據（貼給工程師看）</button>
                         <div style="font-size:10px;color:#666;margin:6px 0 2px;">① 當前完整狀態（引擎裡實際有的——看舊角色在不在）：</div>
                         <pre style="white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,0.3);border-radius:6px;padding:8px;font-size:10px;color:#cbb;max-height:220px;overflow:auto;margin:0;">${_esc(JSON.stringify(engState, null, 2))}</pre>
                         <div style="font-size:10px;color:#666;margin:8px 0 2px;">② 本輪副模型 updates：</div>

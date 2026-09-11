@@ -202,7 +202,7 @@
             if (this._scanning) return;   // 防連點刷新疊兩條等待迴圈
             this._scanning = true;
             contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
-                <div style="font-size:40px; margin-bottom:10px;">⏳</div>讀取劇情數據中...
+                <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-hourglass-half"></i></div>讀取劇情數據中...
             </div>`;
             tabBar.innerHTML = '';
 
@@ -216,7 +216,7 @@
             if (!lastMes) {
                 this._restoreChatScroll(doc);
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
-                    <div style="font-size:40px; margin-bottom:10px;">📭</div>無對話數據。
+                    <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-inbox"></i></div>無對話數據。
                 </div>`;
                 return;
             }
@@ -279,7 +279,7 @@
 
             if (tabOrder.length === 0) {
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
-                    <div style="font-size:40px; margin-bottom:10px;">🔍</div>
+                    <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-magnifying-glass"></i></div>
                     未提取到符合規格的內容或面板。
                 </div>`;
                 return;
@@ -350,7 +350,7 @@
             } else {
                 _updBody = _le ? '本輪沒有更新任何欄位' : '本輪沒有抽取記錄（可能用 <vars> 或尚未生成）';
             }
-            html = html + '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#a99;padding:8px 0;">🔬 本輪更新了什麼（點開看）</summary><pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.18);border-radius:8px;padding:10px;font-size:11px;line-height:1.7;color:#ccc;margin:6px 0 0;max-height:280px;overflow:auto;">' + _updBody + '</pre></details>';
+            html = html + '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#a99;padding:8px 0;"><i class="fa-solid fa-microscope"></i> 本輪更新了什麼（點開看）</summary><pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.18);border-radius:8px;padding:10px;font-size:11px;line-height:1.7;color:#ccc;margin:6px 0 0;max-height:280px;overflow:auto;">' + _updBody + '</pre></details>';
 
             // 建 tab（重複建立會留下舊的，先清掉）
             const doc = win.document || document;
@@ -361,7 +361,7 @@
             if (oldBtn)  oldBtn.remove();
             if (oldPane) oldPane.remove();
 
-            this.createTab('aurelia_state_panel', '🎲 狀態面板', html);
+            this.createTab('aurelia_state_panel', '狀態面板', html);
 
             // 把這個 tab 推到第一個位置（不在預設 tabOrder 內，加完是最後一個）
             const tabBar = overlay.querySelector('#ue-tab-bar');

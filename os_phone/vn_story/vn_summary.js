@@ -80,7 +80,7 @@
             const content = document.getElementById('vn-summary-content');
             const title   = document.getElementById('vn-summary-title');
             if (!overlay || !content) return;
-            if (title) title.textContent = `📝 大總結（第 ${count} 次）`;
+            if (title) title.textContent = `大總結（第 ${count} 次）`;
             // 轉換 markdown 表格為 HTML table，其餘保留 pre-wrap
             content.innerHTML = this._renderMarkdownTables(text);
             overlay.classList.add('active');
@@ -169,7 +169,7 @@
 
             if (!contentToSummarize.trim()) {
                 AUI.alert(latest ? '沒有新章節需要總結（上次大總結之後沒有新增章節）' : '章節中找不到 <content> 內容');
-                if (btn) { btn.textContent = '📝 大總結'; btn.disabled = false; }
+                if (btn) { btn.textContent = '大總結'; btn.disabled = false; }
                 return;
             }
 
@@ -188,7 +188,7 @@
             const osSet = win.OS_SETTINGS;
             if (!osApi) { AUI.alert('找不到 OS_API，請確認已載入獨立版核心'); return; }
 
-            if (btn) { btn.textContent = '⏳ 生成中...'; btn.disabled = true; }
+            if (btn) { btn.textContent = '生成中...'; btn.disabled = true; }
 
             try {
                 let generated = '';
@@ -218,7 +218,7 @@
             } catch(e) {
                 AUI.alert('生成失敗: ' + (e.message || e));
             } finally {
-                if (btn) { btn.textContent = '📝 大總結'; btn.disabled = false; }
+                if (btn) { btn.textContent = '大總結'; btn.disabled = false; }
             }
         }
     };

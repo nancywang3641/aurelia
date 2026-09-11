@@ -309,13 +309,13 @@
                     <div class="tr-input-area" id="tr-input-box">
                         <div style="text-align:center; color:#aaa; font-size:12px; margin-bottom:5px;">連接命運數據庫...</div>
                         <input class="tr-input" type="text" id="tr-question" placeholder="心中默念問題..." autocomplete="off">
-                        <button class="tr-btn-main" onclick="window.OS_TAROT.startSelection()">⚡ 開始儀式 (START) ⚡</button>
+                        <button class="tr-btn-main" onclick="window.OS_TAROT.startSelection()"><i class="fa-solid fa-bolt"></i> 開始儀式 (START) <i class="fa-solid fa-bolt"></i></button>
                     </div>
 
                     <div class="tr-deck-scroll" id="tr-scroll-area"></div>
                     
                     <div class="tr-action-bar">
-                        <button class="tr-btn-reveal" id="tr-reveal-btn" onclick="window.OS_TAROT.revealCards()">🔮 揭示命運 (REVEAL)</button>
+                        <button class="tr-btn-reveal" id="tr-reveal-btn" onclick="window.OS_TAROT.revealCards()"><i class="fa-solid fa-hat-wizard"></i> 揭示命運 (REVEAL)</button>
                     </div>
                 </div>
 
@@ -329,7 +329,7 @@
                     </div>
 
                     <div class="tr-panel-footer">
-                         <span class="tr-link-btn" style="color:#00e676; font-weight:bold;" onclick="window.OS_TAROT.startNewReading()">🔄 問下一個問題 (NEXT)</span>
+                         <span class="tr-link-btn" style="color:#00e676; font-weight:bold;" onclick="window.OS_TAROT.startNewReading()"><i class="fa-solid fa-rotate"></i> 問下一個問題 (NEXT)</span>
                     </div>
                 </div>
             </div>
@@ -553,7 +553,7 @@
         const msgDiv = document.createElement('div');
         msgDiv.className = `tr-msg-block ${role === 'user' ? 'user' : 'ai'}`;
         
-        const roleName = role === 'user' ? 'User' : '🔮 Pythia';
+        const roleName = role === 'user' ? 'User' : 'Pythia';
         const roleClass = role === 'user' ? 'role-user' : 'role-pythia';
         
         msgDiv.innerHTML = `
@@ -640,7 +640,7 @@ ${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須
     }
 
     async function streamResponse(messages) {
-        const textEl = appendMessage('ai', '<span style="opacity:0.6;">⚡ 正在解析中...</span>');
+        const textEl = appendMessage('ai', '<span style="opacity:0.6;"><i class="fa-solid fa-bolt"></i> 正在解析中...</span>');
         let fullResponse = "";
         const log = document.getElementById('tr-log');
 
@@ -694,7 +694,7 @@ ${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須
         buttonDiv.style.cssText = 'text-align:center; margin:15px 0;';
         buttonDiv.innerHTML = `
             <button class="tr-draw-card-btn" onclick="window.OS_TAROT.triggerSingleCardDraw()">
-                ✨ 抽一張牌
+                <i class="fa-solid fa-wand-magic-sparkles"></i> 抽一張牌
             </button>
         `;
         log.appendChild(buttonDiv);
@@ -747,7 +747,7 @@ ${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須
         const log = document.getElementById('tr-log');
         const tipDiv = document.createElement('div');
         tipDiv.style.cssText = 'text-align:center; color:var(--tr-primary); margin:15px 0; font-size:13px; font-style:italic;';
-        tipDiv.innerHTML = '✨ 請從上方選擇一張牌...';
+        tipDiv.innerHTML = '請從上方選擇一張牌...';
         log.appendChild(tipDiv);
         log.scrollTop = log.scrollHeight;
     }

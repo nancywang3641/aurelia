@@ -639,7 +639,7 @@
             if (this.isStandalone() && config.useSystemApi) {
                 config = { ...config, useSystemApi: false };
                 if (!config.url || !config.key) {
-                    const err = new Error('獨立模式需填入 API URL 與 Key（設置 → 🧠 主模型）');
+                    const err = new Error('獨立模式需填入 API URL 與 Key（設置 → 主模型）');
                     console.error('[OS_API]', err.message);
                     if (onError) onError(err);
                     return;
@@ -686,7 +686,7 @@
             } catch(e) { totalTokens = Math.ceil(totalChars * 0.5) || 0; }
 
             try {
-                const typeLabel = config._isSecondary ? "⚡ 副模型 (Secondary)" : "🧠 主模型 (Primary)";
+                const typeLabel = config._isSecondary ? "副模型 (Secondary)" : "主模型 (Primary)";
                 console.group(`📊 [OS_API] ${typeLabel} 發送檢查 (Token: ${totalTokens} | Chars: ${totalChars})`);
                 let modelDisplay = config.model;
                 if (useSystemApi) {
@@ -718,41 +718,41 @@
                         imgCount = msg.content.filter(p => p && p.type === 'image_url').length;
                     }
                     const content = textContent || "";
-                    const imgTag = imgCount > 0 ? ` [📎×${imgCount}]` : '';
+                    const imgTag = imgCount > 0 ? ` [圖×${imgCount}]` : '';
                     let preview = content.length > 80 ? content.substring(0, 80).replace(/\n/g, ' ') + "..." : content.replace(/\n/g, ' ');
                     preview += imgTag;
 
                     const item = { "#": index, "Role": msg.role, "預覽": preview, "Length": content.length };
                     
                     if (msg.role === 'system') {
-                        if (content.includes('Reality Context')) { item["類型"] = "🔥 線下劇情"; groups.reality.push(item); } 
+                        if (content.includes('Reality Context')) { item["類型"] = "線下劇情"; groups.reality.push(item); } 
                         else if (content.includes('[World Info:') || (content.includes('World Info') && !content.includes('[Character Persona (Private Chat)]'))) {
                             const matches = content.match(/\[World Info: (.*?)\]/g);
-                            item["📖 觸發條目"] = matches ? matches.map(s => s.replace(/\[World Info: |\]/g, '')).join(', ') : "(無)";
+                            item["觸發條目"] = matches ? matches.map(s => s.replace(/\[World Info: |\]/g, '')).join(', ') : "(無)";
                             groups.lore.push(item);
                         }
                         else if (content.includes('[User Info (') || content.includes('[User Persona (')) {
-                            item["類型"] = "👤 玩家本人"; groups.char.push(item);
+                            item["類型"] = "玩家本人"; groups.char.push(item);
                         }
                         else if (content.includes('[Character Persona (Private Chat)]')) { 
-                            item["類型"] = "🎭 私聊人設"; 
+                            item["類型"] = "私聊人設"; 
                             item["來源"] = content.includes('---') ? "混合（自定義+世界書）" : "已設置";
                             groups.persona.push(item); 
                         }
                         else if (content.includes('[Group Note]')) { 
-                            item["類型"] = "📝 群聊備註"; 
+                            item["類型"] = "群聊備註"; 
                             item["來源"] = content.includes('---') ? "混合（自定義+世界書）" : "已設置";
                             groups.persona.push(item); 
                         } 
                         else if (content.includes('Character Info') || content.includes('Scenario')) {
-                            item["類型"] = "👤 角色/場景"; groups.char.push(item);
+                            item["類型"] = "角色/場景"; groups.char.push(item);
                         }
                         else if (content.includes('Roleplay Instruction') || content.includes('Chain of Thought')) {
-                            item["類型"] = "📝 指令/CoT"; groups.prompts.push(item);
+                            item["類型"] = "指令/CoT"; groups.prompts.push(item);
                         }
-                        else { item["類型"] = "⚙️ 其他"; groups.prompts.push(item); }
+                        else { item["類型"] = "其他"; groups.prompts.push(item); }
                     } else {
-                        item["來源"] = msg._source === 'phone' ? "📱 手機" : "💬 輸入";
+                        item["來源"] = msg._source === 'phone' ? "手機" : "輸入";
                         groups.chat.push(item);
                     }
                 });
@@ -761,8 +761,8 @@
                 if(groups.char.length) { console.group("👤 角色與用戶"); console.table(groups.char); console.groupEnd(); }
                 if(groups.lore.length) { console.group("📖 世界書"); console.table(groups.lore); console.groupEnd(); }
                 if(groups.persona.length) { 
-                    const privatePersona = groups.persona.filter(p => p["類型"] === "🎭 私聊人設");
-                    const groupNote = groups.persona.filter(p => p["類型"] === "📝 群聊備註");
+                    const privatePersona = groups.persona.filter(p => p["類型"] === "私聊人設");
+                    const groupNote = groups.persona.filter(p => p["類型"] === "群聊備註");
                     if (privatePersona.length) { console.group("🎭 私聊人設"); console.table(privatePersona); console.groupEnd(); }
                     if (groupNote.length) { console.group("📝 群聊備註"); console.table(groupNote); console.groupEnd(); }
                 }

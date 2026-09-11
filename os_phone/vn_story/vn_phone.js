@@ -338,18 +338,18 @@
             } else if (giftM) {
                 const gParts = giftM[2].split('|'); const gName = gParts[0] || ''; const gMemo = gParts[1] || '送你一份心意'; const gId = gParts[2] || '';
                 const emojiRe = /^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF\u2300-\u23FF\u{1F300}-\u{1F9FF}])/u;
-                const eMatch = gName.includes('+') ? gName.split('+', 2) : (emojiRe.test(gName) ? [gName.match(emojiRe)[0], gName.replace(emojiRe, '').trim()] : ['🎁', gName]);
-                const gEmoji = eMatch[0] || '🎁'; const gTitle = eMatch[1] || gName;
+                const eMatch = gName.includes('+') ? gName.split('+', 2) : (emojiRe.test(gName) ? [gName.match(emojiRe)[0], gName.replace(emojiRe, '').trim()] : ['', gName]);
+                const gEmoji = eMatch[0] || '<i class="fa-solid fa-gift"></i>'; const gTitle = eMatch[1] || gName;
                 inner = `<div class="wx-gift-msg"><div class="wx-g-main"><span class="wx-g-icon">${gEmoji}</span><div class="wx-g-body"><div class="wx-g-title">${gMemo}</div><div class="wx-g-sub">${gTitle || '微信禮物'}</div></div></div><div class="wx-g-footer">微信禮物${gId ? ' · ' + gId : ''}</div></div>`;
             } else if (rpM) {
                 const rParts = rpM[2].split('|'); const rAmt = rParts[0] || ''; const rNote = rParts[1] || '恭喜發財，大吉大利';
                 inner = `<div class="wx-redpacket-msg"><div class="wx-rp-main"><div class="wx-rp-icon"><div style="width:18px;height:18px;background:#f6d147;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#e64340;font-weight:bold;font-size:11px;">¥</div></div><div class="wx-rp-body"><div class="wx-rp-amount">${rNote}</div><div class="wx-rp-label">領取紅包${rAmt ? ' ¥' + rAmt : ''}</div></div></div><div class="wx-rp-footer">微信紅包</div></div>`;
             } else if (vidM) {
                 const vDesc = vidM[2] || 'Video';
-                inner = `<div class="wx-video-msg"><div class="wx-video-play"></div><div class="wx-video-title">📹 ${vDesc}</div></div>`;
+                inner = `<div class="wx-video-msg"><div class="wx-video-play"></div><div class="wx-video-title"><i class="fa-solid fa-video"></i> ${vDesc}</div></div>`;
             } else if (locM) {
                 const lParts = locM[2].split(/[-－]/); const lName = lParts[0].trim(); const lAddr = lParts[1] ? lParts[1].trim() : lName;
-                inner = `<div class="wx-location-msg"><div class="wx-location-map">📍</div><div class="wx-location-info"><div class="wx-location-name">${lName}</div><div class="wx-location-addr">${lAddr}</div></div></div>`;
+                inner = `<div class="wx-location-msg"><div class="wx-location-map"><i class="fa-solid fa-location-dot"></i></div><div class="wx-location-info"><div class="wx-location-name">${lName}</div><div class="wx-location-addr">${lAddr}</div></div></div>`;
             } else if (fileM) {
                 const fName = fileM[2].trim() || 'file.txt'; const fExt = fName.split('.').pop().toLowerCase();
                 const fColors = { ppt:'#f4511e', pptx:'#f4511e', doc:'#4b89dc', docx:'#4b89dc', xls:'#2e7d32', xlsx:'#2e7d32', pdf:'#e53935', zip:'#fa9d3b', rar:'#fa9d3b', '7z':'#fa9d3b' };
@@ -504,7 +504,7 @@
                         });
                         if (!rec.name) rec.name = callName;
                         await OS_DB.saveApiChat(callId, rec);
-                        console.log('📞 [VN Call] 通話台詞寫進統一記憶 ' + callId + '（+' + lines.length + ' 句）');
+                        console.log('[VN Call] 通話台詞寫進統一記憶 ' + callId + '（+' + lines.length + ' 句）');
                     } catch (e) { console.warn('[VN Call] 寫統一記憶失敗', (e && e.message) || e); }
                 })();
             } catch (e) {}

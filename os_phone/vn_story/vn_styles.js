@@ -15,22 +15,22 @@
             <div id="page-game" class="page hidden">
                 <button id="btn-home" onclick="window.VN_PLAYER.stopGame()" title="Home">退出</button>
                 <button id="btn-settings" onclick="window.VN_PLAYER.openGameSettings()" title="Config">設定</button>
-                <button id="btn-phone" onclick="window.VoidPhoneShell && window.VoidPhoneShell.open()" title="應用面板（系統設置 / API 調整）">📱</button>
+                <button id="btn-phone" onclick="window.VoidPhoneShell && window.VoidPhoneShell.open()" title="應用面板（系統設置 / API 調整）"><i class="fa-solid fa-mobile-screen"></i></button>
                 <div id="stream-header" class="hidden">
                     <div id="stream-live-badge"><div class="stream-live-dot"></div><span id="stream-live-text">LIVE</span></div>
                     <span id="stream-title-text"></span>
                     <div class="stream-divider"></div>
                     <span id="stream-host-text"></span>
                     <div id="stream-stats">
-                        <span class="stream-stat"><span class="stream-stat-icon">👁</span><span class="stream-stat-val" id="stream-viewers"></span></span>
-                        <span class="stream-stat"><span class="stream-stat-icon">❤</span><span class="stream-stat-val" id="stream-followers"></span></span>
-                        <span class="stream-stat"><span class="stream-stat-icon">🏆</span><span class="stream-rank-val" id="stream-rank"></span></span>
+                        <span class="stream-stat"><span class="stream-stat-icon"><i class="fa-solid fa-eye"></i></span><span class="stream-stat-val" id="stream-viewers"></span></span>
+                        <span class="stream-stat"><span class="stream-stat-icon"><i class="fa-solid fa-heart"></i></span><span class="stream-stat-val" id="stream-followers"></span></span>
+                        <span class="stream-stat"><span class="stream-stat-icon"><i class="fa-solid fa-trophy"></i></span><span class="stream-rank-val" id="stream-rank"></span></span>
                     </div>
                 </div>
                 <div id="stream-rank-panel" class="hidden">
-                    <div id="stream-rank-header">🎖 粉絲榜</div>
+                    <div id="stream-rank-header"><i class="fa-solid fa-medal"></i> 粉絲榜</div>
                     <div class="stream-rank-row">
-                        <span class="stream-rank-medal">🥇</span>
+                        <span class="stream-rank-medal"><i class="fa-solid fa-medal"></i></span>
                         <div class="stream-rank-info">
                             <span class="stream-rank-name" id="sr-name-1"></span>
                             <span class="stream-rank-title" id="sr-title-1"></span>
@@ -38,7 +38,7 @@
                         <span class="stream-rank-score">▲<span id="sr-score-1"></span></span>
                     </div>
                     <div class="stream-rank-row">
-                        <span class="stream-rank-medal">🥈</span>
+                        <span class="stream-rank-medal"><i class="fa-solid fa-medal"></i></span>
                         <div class="stream-rank-info">
                             <span class="stream-rank-name" id="sr-name-2"></span>
                             <span class="stream-rank-title" id="sr-title-2"></span>
@@ -46,7 +46,7 @@
                         <span class="stream-rank-score">▲<span id="sr-score-2"></span></span>
                     </div>
                     <div class="stream-rank-row">
-                        <span class="stream-rank-medal">🥉</span>
+                        <span class="stream-rank-medal"><i class="fa-solid fa-medal"></i></span>
                         <div class="stream-rank-info">
                             <span class="stream-rank-name" id="sr-name-3"></span>
                             <span class="stream-rank-title" id="sr-title-3"></span>
@@ -54,13 +54,13 @@
                         <span class="stream-rank-score">▲<span id="sr-score-3"></span></span>
                     </div>
                     <div id="stream-scene-row" class="hidden">
-                        <span id="stream-scene-icon">📍</span>
+                        <span id="stream-scene-icon"><i class="fa-solid fa-location-dot"></i></span>
                         <span id="stream-scene-label"></span>
                     </div>
                 </div>
                 <div id="game-bg"></div>
                 <div id="game-char-container"><img id="game-char" src="" alt="character" onerror="window.VN_Core.handleImgError(this)" ondblclick="window.VN_Core.openCharCard(0)" ontouchend="window.VN_Core._spriteTap(0,event)"><img id="game-char-2" src="" alt="character" onerror="window.VN_Core.handleImgError(this)" ondblclick="window.VN_Core.openCharCard(1)" ontouchend="window.VN_Core._spriteTap(1,event)"></div>
-                <div id="scene-cg-overlay" onclick="window.VN_Core.next()"><img id="scene-cg-img" src="" alt="scene cg"><button id="scene-cg-retry" onclick="event.stopPropagation(); window.VN_Core.retrySceneCg()" title="重新生成這張插圖（不重跑劇情 AI，只重生圖）">🔄</button></div>
+                <div id="scene-cg-overlay" onclick="window.VN_Core.next()"><img id="scene-cg-img" src="" alt="scene cg"><button id="scene-cg-retry" onclick="event.stopPropagation(); window.VN_Core.retrySceneCg()" title="重新生成這張插圖（不重跑劇情 AI，只重生圖）"><i class="fa-solid fa-rotate"></i></button></div>
 
                 <div id="top-badge"></div>
 
@@ -91,7 +91,7 @@
                         <div id="vn-panel-controls">
                             <button class="vn-panel-btn" id="vn-btn-log" onclick="window.VN_Core.showLog(); event.stopPropagation();">LOG</button>
                             <button class="vn-panel-btn" id="vn-btn-skip" onclick="window.VN_Core.toggleSkip(); event.stopPropagation();">SKIP</button>
-                            <button class="vn-panel-btn" id="vn-btn-more" onclick="window.VN_Core.toggleMore(); event.stopPropagation();" title="其他">☰</button>
+                            <button class="vn-panel-btn" id="vn-btn-more" onclick="window.VN_Core.toggleMore(); event.stopPropagation();" title="其他"><i class="fa-solid fa-bars"></i></button>
                             <div id="vn-more-menu" onclick="event.stopPropagation()">
                                 <button class="vn-panel-btn" id="vn-btn-think" onclick="window.VN_PLAYER.showThinkPopup(); window.VN_Core.closeMore(); event.stopPropagation();" title="本章思考鏈">COT</button>
                                 <button class="vn-panel-btn" id="vn-btn-ctx" onclick="window.VN_Core.toggleCtx(); window.VN_Core.closeMore(); event.stopPropagation();">CTX</button>
@@ -106,7 +106,7 @@
 
                 <!-- 📊 CTX 浮窗：移出對話面板(會被隱藏)，當 #page-game 直屬置中 modal；對話/末尾 CTX 共用、不再搬元素 -->
                 <div id="vn-ctx-popup" onclick="event.stopPropagation()">
-                    <div class="ctx-title"><span>📊 上下文</span><span class="ctx-close" onclick="window.VN_Core.closeCtx(); event.stopPropagation();">✕</span></div>
+                    <div class="ctx-title"><span><i class="fa-solid fa-chart-simple"></i> 上下文</span><span class="ctx-close" onclick="window.VN_Core.closeCtx(); event.stopPropagation();">✕</span></div>
                     <div class="ctx-bar-wrap">
                         <div class="ctx-bar-track"><div class="ctx-bar-fill" id="ctx-bar-fill"></div></div>
                         <div class="ctx-usage-text" id="ctx-usage-text">—</div>
@@ -119,7 +119,7 @@
                     <div class="ctx-row" id="ctx-unsum-row"><span class="ctx-label">未總結樓層</span><span class="ctx-val" id="ctx-unsum">—</span></div>
                     <div class="ctx-row" id="ctx-sumcount-row"><span class="ctx-label">總結次數</span><span class="ctx-val" id="ctx-sumcount">—</span></div>
                     <div class="ctx-autosum-row off" id="ctx-autosum-row">
-                        <span class="ctx-limit-label">🔁 自動總結</span>
+                        <span class="ctx-limit-label"><i class="fa-solid fa-arrows-rotate"></i> 自動總結</span>
                         <input type="checkbox" class="ctx-autosum-on" id="ctx-autosum-on" onchange="window.VN_CtxMonitor._setAutoSum('on', this.checked)" />
                         <span class="ctx-autosum-unit">每</span>
                         <input class="ctx-limit-input ctx-autosum-every" id="ctx-autosum-every" type="number" min="2" max="200" value="20" onchange="window.VN_CtxMonitor._setAutoSum('every', this.value)" />
@@ -141,14 +141,14 @@
                         <div class="ctx-bd-total"><span class="ctx-bd-label">合計</span><span class="ctx-bd-val" id="ctx-bd-total-val">—</span></div>
                     </div>
                     <div class="ctx-limit-row">
-                        <span class="ctx-limit-label">⚠️ 警戒 Tokens</span>
+                        <span class="ctx-limit-label"><i class="fa-solid fa-triangle-exclamation"></i> 警戒 Tokens</span>
                         <input class="ctx-limit-input" id="ctx-limit-input" type="number" min="1000" max="2000000" value="50000" onchange="window.VN_Core._saveCtxLimit(this.value)" />
                     </div>
                     <div class="ctx-time" id="ctx-time">尚未偵測到數據</div>
                     <div id="ctx-summary-wrap" style="display:none; margin-top:9px; border-top:1px solid rgba(246,173,85,0.2); padding-top:9px;">
                         <div style="font-size:10px; color:#888; letter-spacing:0.5px;">Token 已達警戒，建議執行大總結</div>
                     </div>
-                    <button id="ctx-summary-btn" onclick="window.VN_Core.openStoryTools(); event.stopPropagation();" style="width:100%; margin-top:9px; padding:8px 4px; background:rgba(246,173,85,0.08); border:1px solid rgba(246,173,85,0.35); border-radius:4px; color:#f6ad55; font-size:12px; cursor:pointer; font-family:inherit; letter-spacing:1px; transition:0.2s;">🛠️ 故事管理</button>
+                    <button id="ctx-summary-btn" onclick="window.VN_Core.openStoryTools(); event.stopPropagation();" style="width:100%; margin-top:9px; padding:8px 4px; background:rgba(246,173,85,0.08); border:1px solid rgba(246,173,85,0.35); border-radius:4px; color:#f6ad55; font-size:12px; cursor:pointer; font-family:inherit; letter-spacing:1px; transition:0.2s;"><i class="fa-solid fa-screwdriver-wrench"></i> 故事管理</button>
                 </div>
 
                 <div id="vn-end-overlay">
@@ -173,7 +173,7 @@
                 <!-- 📝 大總結 overlay -->
                 <div id="vn-summary-overlay">
                     <div id="vn-summary-header">
-                        <div id="vn-summary-title">📝 大總結</div>
+                        <div id="vn-summary-title"><i class="fa-solid fa-pen-to-square"></i> 大總結</div>
                         <div class="vn-log-close" onclick="window.VN_Summary.hideResult()">✕</div>
                     </div>
                     <div id="vn-summary-content"></div>
@@ -219,7 +219,7 @@
 
                 <div id="vn-bgm-toast">
                     <div id="vn-bgm-card">
-                        <div id="vn-bgm-icon">🎵</div>
+                        <div id="vn-bgm-icon"><i class="fa-solid fa-music"></i></div>
                         <div id="vn-bgm-body">
                             <div id="vn-bgm-label">NOW PLAYING</div>
                             <div id="vn-bgm-name"></div>
@@ -336,15 +336,15 @@
                                     <button class="c-btn btn-red" onclick="window.VN_Core.rejectCall()">✕</button>
                                 </div>
                                 <div class="call-btn-wrap">
-                                    <button class="c-btn btn-green" onclick="window.VN_Core.answerCall()">📞</button>
+                                    <button class="c-btn btn-green" onclick="window.VN_Core.answerCall()"><i class="fa-solid fa-phone"></i></button>
                                 </div>
                             </div>
                             <div class="call-btn-group hidden" id="call-active-btns">
                                 <div class="call-btn-wrap">
-                                    <button class="c-btn btn-gray" onclick="window.VN_Core.next()">🔇</button>
+                                    <button class="c-btn btn-gray" onclick="window.VN_Core.next()"><i class="fa-solid fa-volume-xmark"></i></button>
                                 </div>
                                 <div class="call-btn-wrap">
-                                    <button class="c-btn btn-gray" onclick="window.VN_Core.next()">📢</button>
+                                    <button class="c-btn btn-gray" onclick="window.VN_Core.next()"><i class="fa-solid fa-bullhorn"></i></button>
                                 </div>
                                 <div class="call-btn-wrap">
                                     <button class="c-btn btn-red" onclick="window.VN_Core.hangUpCall()">✕</button>
@@ -366,7 +366,7 @@
                             <button class="gs-close" onclick="window.VN_PLAYER.closeGameSettings()">✕</button>
                         </div>
                         <div id="gs-body">
-                            <div class="gs-section-title">⚙ 基礎設置</div>
+                            <div class="gs-section-title"><i class="fa-solid fa-gear"></i> 基礎設置</div>
                             <div class="gs-row"><span class="gs-label">字體大小</span><input type="range" class="gs-slider" id="gs-font-size" min="12" max="24" value="19" oninput="window.VN_Settings.applyFontSize(this.value)"><span class="gs-val" id="gs-font-size-val">19px</span></div>
                             <div class="gs-row"><span class="gs-label">打字速度</span><input type="range" class="gs-slider" id="gs-tw-speed" min="10" max="100" value="30" oninput="window.VN_Settings.applyTwSpeed(this.value)"><span class="gs-val" id="gs-tw-speed-val">30ms</span></div>
                             <div class="gs-row"><span class="gs-label">彈幕速度</span><input type="range" class="gs-slider" id="gs-danmu-speed" min="6" max="30" value="18" oninput="window.VN_Settings.applyDanmuSpeed(this.value)"><span class="gs-val" id="gs-danmu-speed-val">18s</span></div>
@@ -374,10 +374,10 @@
                             <div class="gs-row"><span class="gs-label">音效音量</span><input type="range" class="gs-slider" id="gs-sfx-vol" min="0" max="100" value="50" oninput="window.VN_Settings.applySfxVol(this.value)"><span class="gs-val" id="gs-sfx-vol-val">50%</span></div>
                             <div class="gs-row"><span class="gs-label">語音音量</span><input type="range" class="gs-slider" id="gs-tts-vol" min="0" max="100" value="80" oninput="window.VN_Settings.applyTtsVol(this.value)"><span class="gs-val" id="gs-tts-vol-val">80%</span></div>
                             <div class="gs-row" style="margin-top:4px;">
-                                <button class="gs-reset-btn" style="width:100%; text-align:center;" onclick="window.VN_PLAYER.closeGameSettings(); (window.VoidPhoneShell && window.VoidPhoneShell.open());">⚙ 開啟應用（語音設置 / 相簿）</button>
+                                <button class="gs-reset-btn" style="width:100%; text-align:center;" onclick="window.VN_PLAYER.closeGameSettings(); (window.VoidPhoneShell && window.VoidPhoneShell.open());"><i class="fa-solid fa-gear"></i> 開啟應用（語音設置 / 相簿）</button>
                             </div>
                             <hr class="gs-divider">
-                            <div class="gs-section-title">🎨 字體顏色設置</div>
+                            <div class="gs-section-title"><i class="fa-solid fa-palette"></i> 字體顏色設置</div>
                             <div class="gs-color-row"><span class="gs-color-label">文章字體顏色</span><input type="color" class="gs-color-input" id="gs-text-color" value="#dcd8d0" oninput="window.VN_Settings.applyTextColor(this.value)"></div>
                             <div class="gs-color-row"><span class="gs-color-label">內心獨白顏色</span><input type="color" class="gs-color-input" id="gs-inner-color" value="#d4af37" oninput="window.VN_Settings.applyInnerColor(this.value)"></div>
                             <div class="gs-color-row"><span class="gs-color-label">名稱標籤字體顏色</span><input type="color" class="gs-color-input" id="gs-name-color" value="#d4af37" oninput="window.VN_Settings.applyNameColor(this.value)"></div>

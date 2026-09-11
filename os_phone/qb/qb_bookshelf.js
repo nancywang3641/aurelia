@@ -24,7 +24,7 @@
         id: FREE_SCRIPT_WID,
         isFreeScript: true,
         title: '自由劇情',
-        icon: '✍️',
+        icon: 'fa-pen-nib',
         cover: '',
         desc: '不限角色，自由輸入劇情指令',
         wbPacks: [],
@@ -35,6 +35,13 @@
     //    兩個入口合併成一個之後，你以前在那邊存的那幾筆直接就在這裡看得到，不用重打。
     //    它跟下面的「過往開場」語意不同：這份是你主動命名收藏的，那份是每次踏入自動記的。
     const GEN_PRESETS_KEY = 'os_vn_gen_presets';
+    // 書脊／書封上的圖示：新資料存 FA 類名；舊資料是 emoji（✍️ 📘 👤 這幾個預設值換成對應圖示，其他照舊顯示）
+    const _OLD_ICON = { '✍️': 'fa-pen-nib', '📘': 'fa-book', '👤': 'fa-user' };
+    function _wIcon(w) {
+        const i = String((w && w.icon) || '');
+        const fa = /^fa-[a-z0-9-]+$/.test(i) ? i : _OLD_ICON[i];
+        return fa ? '<i class="fa-solid ' + fa + '"></i>' : i.replace(/</g, '&lt;');
+    }
     function _getPresets() {
         try { const a = JSON.parse(localStorage.getItem(GEN_PRESETS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
         catch(e) { return []; }
@@ -98,7 +105,7 @@
                 border-radius:10px;padding:24px 28px;max-width:340px;width:90%;
                 box-shadow:0 8px 40px rgba(0,0,0,0.8);color:var(--qbk-ink);font-family:'Noto Sans TC',sans-serif;
             ">
-                <div style="font-size:15px;font-weight:700;margin-bottom:8px;">📕 刪除《${cardName}》</div>
+                <div style="font-size:15px;font-weight:700;margin-bottom:8px;"><i class="fa-solid fa-book"></i> 刪除《${cardName}》</div>
                 <div style="font-size:12px;color:var(--qbk-ink);margin-bottom:18px;line-height:1.6;">
                     請選擇刪除範圍：
                 </div>
@@ -223,7 +230,7 @@
             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:8px 0;">
                 <span style="writing-mode:vertical-rl;text-orientation:mixed;color:${w.isFreeScript ? 'rgba(150,200,255,0.95)' : 'var(--qbk-ink)'};font-size:11px;font-weight:700;letter-spacing:3px;text-shadow:0 1px 4px #000;max-height:78%;overflow:hidden;line-height:1.3;">${w.title}</span>
             </div>
-            <div style="position:absolute;top:6px;left:0;right:0;text-align:center;font-size:14px;line-height:1;">${w.icon}</div>
+            <div style="position:absolute;top:6px;left:0;right:0;text-align:center;font-size:14px;line-height:1;">${_wIcon(w)}</div>
             ${!w.isFreeScript ? `<div style="position:absolute;bottom:4px;left:0;right:0;text-align:center;color:rgba(229,62,62,0.9);font-size:8px;font-weight:bold;text-shadow:0 0 4px #000;">▲${w.danger}</div>` : ''}
             ${w.custom ? `<button class="qb-spine-del" title="下架" style="position:absolute;top:4px;right:3px;background:rgba(180,30,30,0.75);border:none;color:#fff;font-size:9px;width:16px;height:16px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;z-index:5;">✕</button>` : ''}
         `;
@@ -464,7 +471,7 @@ status = "正常"`;
         const newWorld = {
             id: newId,
             title: worldTitle,
-            icon: '📘',
+            icon: 'fa-book',
             desc: desc.replace(/<[^>]*>/g, '').trim(),
             danger: Math.floor(Math.random() * 5) + 3,
             cover: coverUrl || 'https://files.catbox.moe/3ub4va.png',
@@ -496,7 +503,7 @@ status = "正常"`;
             <button id="qb-create-back" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);border:1px solid var(--qbk-line);color:var(--qbk-ink);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;letter-spacing:1px;z-index:30;">返回書架</button>
 
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 28px 28px;z-index:2;gap:0;overflow-y:auto;">
-                <div style="font-size:30px;margin-bottom:14px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">✒️</div>
+                <div style="font-size:30px;margin-bottom:14px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));"><i class="fa-solid fa-pen-nib"></i></div>
                 <div style="font-size:16px;font-weight:800;color:var(--qbk-ink);letter-spacing:2px;margin-bottom:6px;">撰寫新書</div>
                 <div style="font-size:11px;color:var(--qbk-ink-dim);letter-spacing:1px;margin-bottom:18px;">描述你想前往的世界</div>
 
@@ -635,7 +642,7 @@ status = "正常"`;
                 padding:20px 20px 32px;text-align:center;z-index:2;
                 display:flex;flex-direction:column;align-items:center;">
 
-                <div style="font-size:48px;margin-bottom:8px;filter:drop-shadow(0 2px 12px rgba(100,180,255,0.5));">✍️</div>
+                <div style="font-size:48px;margin-bottom:8px;filter:drop-shadow(0 2px 12px rgba(100,180,255,0.5));"><i class="fa-solid fa-pen-nib"></i></div>
                 <div style="font-size:24px;font-weight:900;color:rgba(150,210,255,0.95);
                             letter-spacing:3px;text-shadow:0 2px 16px rgba(0,0,0,0.9);
                             margin-bottom:6px;font-family:'Noto Sans TC',sans-serif;">自由劇情</div>
@@ -655,7 +662,7 @@ status = "正常"`;
                             display:flex;align-items:center;justify-content:space-between;
                             background:rgba(0,0,0,0.3);flex-shrink:0;">
                     <div style="font-size:13px;font-weight:bold;color:rgba(150,210,255,0.9);letter-spacing:1px;">
-                        ✍️ 自由劇情 · 指令輸入
+                        <i class="fa-solid fa-pen-nib"></i> 自由劇情 · 指令輸入
                     </div>
                     <button id="qb-free-inner-close" style="
                         background:none;border:none;color:rgba(150,200,255,0.5);
@@ -975,7 +982,7 @@ status = "正常"`;
                 padding:20px 20px 32px;text-align:center;z-index:2;
                 display:flex;flex-direction:column;align-items:center;">
                 
-                <div style="font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">${w.icon}</div>
+                <div style="font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">${_wIcon(w)}</div>
                 <div style="font-size:24px;font-weight:900;color:var(--qbk-ink);
                             letter-spacing:3px;text-shadow:0 2px 16px rgba(0,0,0,0.9);
                             margin-bottom:14px;font-family:'Noto Sans TC',sans-serif;line-height:1.3;">${w.title}</div>
@@ -1123,7 +1130,7 @@ status = "正常"`;
                         <div class="qb-greet-slide" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 10px 12px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
                             <div style="border:1px solid rgba(100,160,255,0.3); background:rgba(20,45,100,0.4); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
                                 <input type="radio" name="qb-greeting" value="-1" style="display:none;">
-                                <div style="font-size:48px; margin-bottom:20px; filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));">🎲</div>
+                                <div style="font-size:48px; margin-bottom:20px; filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));"><i class="fa-solid fa-dice"></i></div>
                                 <span style="font-size:18px;color:rgba(150,200,255,0.9);font-weight:bold;letter-spacing:3px;">讓 AI 自由發揮</span>
                                 <div style="font-size:13px;color:rgba(150,200,255,0.6);margin-top:12px;text-align:center;line-height:1.6;">無預設開場故事<br>直接踏入這個世界的未知領域</div>
                                 <div class="qb-greet-go-row">
@@ -1140,12 +1147,12 @@ status = "正常"`;
                             background:rgba(0,0,0,0.4);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:10px;">
                     
                     <div style="display:flex;align-items:center;justify-content:center;gap:14px;width:100%;">
-                    <button id="qb-greet-prev-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;">◀</button>
+                    <button id="qb-greet-prev-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;"><i class="fa-solid fa-caret-left"></i></button>
                     <div id="qb-greet-dots" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:70%;">
                         ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:#1A1C28;opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
                         <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:#4a9eff;opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
                     </div>
-                    <button id="qb-greet-next-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;">▶</button>
+                    <button id="qb-greet-next-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;"><i class="fa-solid fa-caret-right"></i></button>
                     </div>
                 </div>
 
@@ -1660,7 +1667,7 @@ status = "正常"`;
                     // 儲存這條規則
                     _addRule(find, repl);
                     _renderRules();
-                    if (replMsg) { replMsg.textContent = `✅ 已取代 ${count} 個開場白，規則已儲存`; replMsg.style.color = 'rgba(150,220,130,0.9)'; }
+                    if (replMsg) { replMsg.textContent = `已取代 ${count} 個開場白，規則已儲存`; replMsg.style.color = 'rgba(150,220,130,0.9)'; }
                 } else {
                     if (replMsg) { replMsg.textContent = '未找到匹配文字'; replMsg.style.color = 'rgba(255,160,100,0.8)'; }
                 }

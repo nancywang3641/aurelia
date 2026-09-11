@@ -143,7 +143,7 @@
 
         // ── 2. 儲存世界書條目（不需要 AI）────────────────────────
         // 使用確定性 ID（角色名 + 條目 key 的 hash），重複匯入自動覆蓋，不產生重複條目
-        _setProgress(panelEl, '📚 匯入世界書條目…', 20);
+        _setProgress(panelEl, '匯入世界書條目…', 20);
         let importedEntryCount = 0;
         const cardCategory = card.name; // 用角色名當書包，多角色卡各自獨立
         // 書包名要註冊進清單，否則世界書面板的下拉看不到這一本
@@ -212,11 +212,11 @@
         //    匯入回歸純資料搬運（世界書條目／開場白／封面），省掉一次大 AI 呼叫。
 
         // ── 3. 建立世界物件並持久化 ────────────────────────────
-        _setProgress(panelEl, '📖 建立世界…', 70);
+        _setProgress(panelEl, '建立世界…', 70);
         const newWorld = {
             id:          worldId,
             title:       card.name,
-            icon:        '👤',
+            icon:        'fa-user',
             desc:        worldDesc,
             danger:      Math.floor(Math.random() * 4) + 3,
             cover:       coverDataUrl || null,
@@ -279,7 +279,7 @@
         } catch (e) { console.warn('[CardImport] 自帶正則存入失敗', e); }
 
         // ── 4. 完成 ────────────────────────────────────────────
-        _setProgress(panelEl, `✅ 完成！`, 100);
+        _setProgress(panelEl, `完成！`, 100);
         setTimeout(() => {
             _showSuccess(panelEl, {
                 name: card.name,
@@ -309,7 +309,7 @@
             <div style="position:absolute;inset:0;background:linear-gradient(160deg,#0e2a1a 0%,#061a0e 100%);"></div>
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
                         justify-content:center;padding:28px;z-index:2;gap:14px;text-align:center;">
-                <div style="font-size:48px;filter:drop-shadow(0 2px 12px rgba(0,200,100,0.5));">✅</div>
+                <div style="font-size:48px;filter:drop-shadow(0 2px 12px rgba(0,200,100,0.5));"><i class="fa-solid fa-circle-check"></i></div>
                 <div style="font-size:18px;font-weight:900;color:#a8ffcc;letter-spacing:2px;">匯入成功</div>
                 <div style="font-size:15px;font-weight:700;color:#1A1C28;">${_esc(name)}</div>
                 <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.7;max-width:260px;">
@@ -317,14 +317,14 @@
                 </div>
                 <div style="font-size:11px;color:rgba(168,255,204,0.8);line-height:2.4;
                             background:rgba(0,0,0,0.3);padding:10px 18px;border-radius:6px;">
-                    📚 世界書條目　${importedEntryCount} 條${regexCount ? `<br>✨ 自帶美化面板　${regexCount} 條` : ''}
+                    <i class="fa-solid fa-book"></i> 世界書條目　${importedEntryCount} 條${regexCount ? `<br><i class="fa-solid fa-wand-magic-sparkles"></i> 自帶美化面板　${regexCount} 條` : ''}
                 </div>
                 <button id="ci-go-back" style="
                     margin-top:8px;background:linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030);
                     color:#1a0a04;font-weight:900;font-size:14px;padding:12px 36px;
                     border:none;border-radius:3px;cursor:pointer;letter-spacing:2px;
                     box-shadow:0 4px 20px rgba(26,28,40,0.15);
-                ">📖 回到書架</button>
+                "><i class="fa-solid fa-book-open"></i> 回到書架</button>
             </div>
         `;
 
@@ -371,7 +371,7 @@
                         padding:20px 28px;z-index:2;gap:0;">
 
                 <div style="font-size:30px;margin-bottom:14px;
-                            filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">📥</div>
+                            filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));"><i class="fa-solid fa-download"></i></div>
                 <div style="font-size:16px;font-weight:800;color:#1A1C28;
                             letter-spacing:2px;margin-bottom:6px;">匯入角色卡</div>
                 <div style="font-size:11px;color:rgba(26,28,40,0.30);
@@ -386,7 +386,7 @@
                     background:rgba(30,60,120,0.2);
                     transition:background 0.2s,border-color 0.2s;
                     display:flex;flex-direction:column;align-items:center;gap:10px;">
-                    <div style="font-size:32px;">🖼️</div>
+                    <div style="font-size:32px;"><i class="fa-solid fa-image"></i></div>
                     <div style="font-size:13px;color:rgba(255,255,255,0.7);">拖放角色卡 PNG 到此處</div>
                     <div style="font-size:11px;color:rgba(255,255,255,0.35);">或點擊選擇文件</div>
                     <input id="ci-file-input" type="file" accept=".png,image/png" style="display:none;">
@@ -426,7 +426,7 @@
                     transition:opacity 0.2s;"
                     onmouseover="this.style.opacity='0.85'"
                     onmouseout="this.style.opacity='1'">
-                    🚀 開始匯入
+                    <i class="fa-solid fa-rocket"></i> 開始匯入
                 </button>
             </div>
         `;
@@ -479,7 +479,7 @@
                 await importCard(parsedCard, railEl, panel, coverDataUrl);
             } catch (e) {
                 console.error('[CardImport] 匯入出錯', e);
-                _setProgress(panel, '❌ 匯入失敗：' + e.message, 0);
+                _setProgress(panel, '匯入失敗：' + e.message, 0);
             }
         };
 
@@ -527,12 +527,12 @@
                         <div style="position:absolute;bottom:0;left:0;right:0;
                                     background:linear-gradient(transparent,rgba(0,0,0,0.7));
                                     padding:6px 8px;font-size:11px;color:rgba(150,255,180,0.9);">
-                            ✅ ${_esc(file.name)}
+                            <i class="fa-solid fa-circle-check"></i> ${_esc(file.name)}
                         </div>
                     `;
                     dropZone.style.position = 'relative';
                 } catch (err) {
-                    AUI.alert('⚠️ 讀取失敗：' + err.message);
+                    AUI.alert('讀取失敗：' + err.message);
                     console.error('[CardImport]', err);
                 }
             };
@@ -561,7 +561,7 @@
             scroll-snap-align:start;
         `;
         spine.innerHTML = `
-            <span style="color:rgba(100,160,255,0.6);font-size:18px;line-height:1;">📥</span>
+            <span style="color:rgba(100,160,255,0.6);font-size:18px;line-height:1;"><i class="fa-solid fa-download"></i></span>
             <span style="writing-mode:vertical-rl;color:rgba(100,160,255,0.4);
                          font-size:10px;letter-spacing:3px;">匯入角色卡</span>
         `;

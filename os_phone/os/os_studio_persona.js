@@ -279,7 +279,7 @@
             return `<div class="mc-msg ${m.role === 'user' ? 'me' : 'ai'}">${renderMarkdown(body) || '…'}</div>`;
         }).join('');
         // 錯誤泡泡＋重試（API錯誤頁/空回應/截斷不進歷史，同世界書聊天）
-        if (_mcLastError) html += `<div class="mc-msg ai studio-error-bubble"><div class="studio-error-msg">❌ 錯誤：${String(_mcLastError).replace(/</g, '&lt;').slice(0, 200)}</div><button class="studio-retry-btn">🔄 重試</button></div>`;
+        if (_mcLastError) html += `<div class="mc-msg ai studio-error-bubble"><div class="studio-error-msg"><i class="fa-solid fa-circle-xmark"></i> 錯誤：${String(_mcLastError).replace(/</g, '&lt;').slice(0, 200)}</div><button class="studio-retry-btn"><i class="fa-solid fa-rotate"></i> 重試</button></div>`;
         box.innerHTML = html;
         const rb = box.querySelector('.studio-retry-btn');
         if (rb) rb.onclick = () => { _mcLastError = null; _mcPaintChat(host); _mcCall(host); };

@@ -264,7 +264,7 @@
                     const header = document.createElement('div');
                     header.style.cssText = `height: 40px; background: rgba(0,0,0,0.5); display: flex; align-items: center; padding: 0 15px; justify-content: space-between; color: white;`;
                     header.innerHTML = `
-                        <div style="font-size:14px">📖 開場白提取</div>
+                        <div style="font-size:14px"><i class="fa-solid fa-book-open"></i> 開場白提取</div>
                         <div style="cursor:pointer; padding:5px;" onclick="
                             window.StoryExtractor && window.StoryExtractor.hide();
                             const home=document.getElementById('aurelia-home-tab');
@@ -432,7 +432,7 @@
 
             if (!firstMes) {
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
-                    <div style="font-size:40px; margin-bottom:10px;">📭</div>
+                    <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-inbox"></i></div>
                     找不到開場白<br><small>請先開啟一個角色卡對話</small>
                 </div>`;
                 this._lastRenderSig = null;
@@ -450,7 +450,7 @@
 
             if (!this.renderOpeningInto(contentArea, sig)) {
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
-                    <div style="font-size:40px; margin-bottom:10px;">📭</div>
+                    <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-inbox"></i></div>
                     開場白內容為空
                 </div>`;
                 return;

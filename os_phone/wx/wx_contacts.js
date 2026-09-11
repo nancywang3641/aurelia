@@ -98,7 +98,7 @@
             if (!win.OS_API) { AUI.alert('錯誤：OS_API 未載入'); return; }
             let metaInfo = { charName: "系統", bookName: "無", userName: "User" };
 
-            const html = `<div class="wx-modal-title">AI 搜尋好友</div><div style="background:#f0f9eb; border:1px solid #e1f3d8; border-radius:4px; padding:8px; margin-bottom:10px; font-size:11px; color:#2e7d32;"><div style="display:flex; justify-content:space-between;"><span>👤 鎖定角色: <b id="wx-meta-char">...</b></span></div><div style="display:flex; justify-content:space-between; margin-top:2px;"><span>😎 當前扮演: <b id="wx-meta-user">...</b></span></div><div style="margin-top:2px;"><span>📖 世界觀: <b id="wx-meta-book">...</b></span></div></div><div style="font-size:12px; color:#666; margin-bottom:5px;">AI 將根據世界觀與您的人設，推薦潛在好友。</div><div id="wx-search-status" style="padding:10px; background:#f2f2f2; border-radius:4px; min-height:50px; font-size:12px; color:#333;">準備中...</div><div id="wx-token-status" style="margin-top:5px; font-size:11px; color:#888; text-align:right;">📊 計算中...</div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-close">關閉</button><button class="wx-btn wx-btn-confirm" id="wx-btn-search-start" disabled>加載中...</button></div>`;
+            const html = `<div class="wx-modal-title">AI 搜尋好友</div><div style="background:#f0f9eb; border:1px solid #e1f3d8; border-radius:4px; padding:8px; margin-bottom:10px; font-size:11px; color:#2e7d32;"><div style="display:flex; justify-content:space-between;"><span><i class="fa-solid fa-user"></i> 鎖定角色: <b id="wx-meta-char">...</b></span></div><div style="display:flex; justify-content:space-between; margin-top:2px;"><span><i class="fa-solid fa-user-secret"></i> 當前扮演: <b id="wx-meta-user">...</b></span></div><div style="margin-top:2px;"><span><i class="fa-solid fa-book-open"></i> 世界觀: <b id="wx-meta-book">...</b></span></div></div><div style="font-size:12px; color:#666; margin-bottom:5px;">AI 將根據世界觀與您的人設，推薦潛在好友。</div><div id="wx-search-status" style="padding:10px; background:#f2f2f2; border-radius:4px; min-height:50px; font-size:12px; color:#333;">準備中...</div><div id="wx-token-status" style="margin-top:5px; font-size:11px; color:#888; text-align:right;"><i class="fa-solid fa-chart-simple"></i> 計算中...</div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-close">關閉</button><button class="wx-btn wx-btn-confirm" id="wx-btn-search-start" disabled>加載中...</button></div>`;
             this.showModal(html);
             targetDoc.getElementById('wx-btn-close').onclick = () => targetDoc.getElementById('wxActionModal').classList.remove('show');
             const statusEl = targetDoc.getElementById('wx-search-status');
@@ -136,14 +136,14 @@
                 let count = win.SillyTavern?.getTokenCountAsync
                     ? await win.SillyTavern.getTokenCountAsync(fullText)
                     : Math.ceil(fullText.length * 0.7);
-                tokenEl.innerHTML = `<span style="color:#07c160">📊 預估 Token: ${count} (完整上下文)</span>`;
+                tokenEl.innerHTML = `<span style="color:#07c160"><i class="fa-solid fa-chart-simple"></i> 預估 Token: ${count} (完整上下文)</span>`;
                 statusEl.innerText = `準備就緒 (為 ${metaInfo.userName} 搜尋)`;
                 btn.innerText = '開始搜尋';
                 btn.disabled = false;
 
                 btn.onclick = async () => {
                     btn.disabled = true;
-                    statusEl.innerText = '📡 正在連線 AI...';
+                    statusEl.innerText = '正在連線 AI...';
                     const config = win.OS_SETTINGS?.getConfig?.()
                         || (localStorage.getItem('wx_phone_api_config') ? JSON.parse(localStorage.getItem('wx_phone_api_config')) : {});
                     const apiModule = win.OS_API || win.WX_API;
@@ -202,7 +202,7 @@
                                         }
                                     });
 
-                                    statusEl.innerHTML = `<div style="color:#07c160">✅ 成功找到 ${filtered.length} 位好友！</div>`;
+                                    statusEl.innerHTML = `<div style="color:#07c160"><i class="fa-solid fa-circle-check"></i> 成功找到 ${filtered.length} 位好友！</div>`;
 
                                     const createdChats = [];
                                     filtered.forEach(c => {
@@ -269,13 +269,13 @@
                                 }
                             } catch (e) { 
                                 console.error("[WX_CONTACTS] JSON Parse Error:", e);
-                                statusEl.innerText = "❌ 解析失敗: " + e.message; 
+                                statusEl.innerText = "解析失敗: " + e.message; 
                             }
                             btn.disabled = false;
-                        }, (err) => { statusEl.innerText = "❌ 連線失敗: " + err.message; btn.disabled = false; }, { disableTyping: true });
-                    } else { statusEl.innerText = "❌ 錯誤: API 模塊未加載"; }
+                        }, (err) => { statusEl.innerText = "連線失敗: " + err.message; btn.disabled = false; }, { disableTyping: true });
+                    } else { statusEl.innerText = "錯誤: API 模塊未加載"; }
                 };
-            } catch (e) { targetDoc.getElementById('wx-search-status').innerText = "❌ 初始化失敗: " + e.message; }
+            } catch (e) { targetDoc.getElementById('wx-search-status').innerText = "初始化失敗: " + e.message; }
         },
 
         addContactToStorage: function(contactObj) {
@@ -375,7 +375,7 @@
             menu.innerHTML = `<div class="wx-context-item danger" id="wx-ctx-delete">刪除 (永久)</div>`;
             let x = e.clientX; let y = e.clientY; if (x + 120 > win.innerWidth) x = win.innerWidth - 130; if (y + 100 > win.innerHeight) y = win.innerHeight - 110;
             menu.style.left = x + 'px'; menu.style.top = y + 'px'; targetDoc.body.appendChild(menu);
-            menu.querySelector('#wx-ctx-delete').onclick = async () => { if(await AUI.confirm(`⚠️ 確定要永久刪除「${contactName}」嗎？\nID: ${contactId}`)) { this.deleteContact(contactId); } menu.remove(); };
+            menu.querySelector('#wx-ctx-delete').onclick = async () => { if(await AUI.confirm(`確定要永久刪除「${contactName}」嗎？\nID: ${contactId}`)) { this.deleteContact(contactId); } menu.remove(); };
             setTimeout(() => { targetDoc.addEventListener('click', function closeCtx() { menu.remove(); targetDoc.removeEventListener('click', closeCtx); }); }, 0);
         },
         

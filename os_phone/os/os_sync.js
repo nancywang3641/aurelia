@@ -33,13 +33,13 @@
         // --- 核心功能：執行同步 ---
         run: async function() {
             try {
-                if (!win.TavernHelper) { AUI.alert("❌ 找不到 TavernHelper"); return; }
+                if (!win.TavernHelper) { AUI.alert("找不到 TavernHelper"); return; }
 
                 const bookName = win.TavernHelper.getCurrentCharPrimaryLorebook();
-                if (!bookName) { AUI.alert("⚠️ 請先綁定世界書 (點擊地球儀)"); return; }
+                if (!bookName) { AUI.alert("請先綁定世界書 (點擊地球儀)"); return; }
 
                 const allChats = await win.OS_DB.getAllApiChats();
-                if (!allChats || Object.keys(allChats).length === 0) { AUI.alert("📱 手機內尚無記錄"); return; }
+                if (!allChats || Object.keys(allChats).length === 0) { AUI.alert("手機內尚無記錄"); return; }
 
                 // 1. 準備當前用戶名 (備案)
                 let currentUserFallback = "User";
@@ -104,16 +104,16 @@
                             return entry; 
                         });
                     });
-                    AUI.alert(`✅ 同步完成！\n聊天記錄已更新，其他條目保持不變。`);
+                    AUI.alert(`同步完成！\n聊天記錄已更新，其他條目保持不變。`);
                 } else {
                     console.log("[OS_SYNC] 創建新條目...");
                     await win.TavernHelper.createLorebookEntries(bookName, [newEntryData]);
-                    AUI.alert(`✅ 同步完成！已創建新條目。`);
+                    AUI.alert(`同步完成！已創建新條目。`);
                 }
 
             } catch (e) {
                 console.error("[OS_SYNC] Error:", e);
-                AUI.alert("❌ 同步失敗: " + e.message);
+                AUI.alert("同步失敗: " + e.message);
             }
         }
     };

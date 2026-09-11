@@ -263,9 +263,9 @@
        ========================================= */
     const _mgrState = {};   // listId -> { world, filter }
     function _worldLabel(world, curWorld) {
-        if (!world) return '📦 未分類（舊資料）';
+        if (!world) return '未分類（舊資料）';
         const short = world.length > 24 ? ('…' + world.slice(-22)) : world;
-        return (world === curWorld ? '★ 當前世界 · ' : '') + short;
+        return (world === curWorld ? '當前世界 · ' : '') + short;
     }
     async function _imgToDataUrl(raw) {
         try {
@@ -381,10 +381,10 @@
         const hasImg = _vngHasImg(entry);
         const menu = document.createElement('div'); menu.className = 'vng-menu';
         const add = (txt, fn, danger) => { const b = document.createElement('button'); if (danger) b.className = 'danger'; b.textContent = txt; b.onclick = (e) => { e.stopPropagation(); _closeCardMenus(); fn(); }; menu.appendChild(b); };
-        if (hasImg) add('🔍 查看大圖', async () => { const v = await _fullVal(); if (v.url) _vngLightbox(v.url); });
+        if (hasImg) add('查看大圖', async () => { const v = await _fullVal(); if (v.url) _vngLightbox(v.url); });
         if (!cfg.noRegen) {
             // 重生只換這一張卡的圖(_vngSetCardImg)，不呼叫 rerender() 整庫重渲染 → 不再把整庫大圖重 decode 害 OOM
-            add('✏️ 編輯重生', () => _vngEditModal(entry.prompt, async (p) => {
+            add('編輯重生', () => _vngEditModal(entry.prompt, async (p) => {
                 const card = anchor.closest('.vng-card');
                 const newUrl = await _vngRegen(cfg, fullKey, await _fullVal(), p);
                 if (newUrl) { entry.prompt = p; _vngSetCardImg(card, newUrl, cfg.kind); }
@@ -396,19 +396,19 @@
                 if (newUrl) _vngSetCardImg(card, newUrl, cfg.kind);
             });
             // 從頭像快取轉立繪：把這張頭像設成同名同世界的立繪（VN 顯示時最優先用立繪）
-            if (cfg.kind === 'avatar' && hasImg) add('🎭 設為立繪', async () => {
+            if (cfg.kind === 'avatar' && hasImg) add('設為立繪', async () => {
                 const v = await _fullVal(); if (!v.url) return;
                 await VN_Cache.setRaw('sprite_cache', fullKey, { url: v.url, prompt: v.prompt || entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
                 AUI.alert('已把「' + bare + '」設為立繪（限此世界）。\nVN 會優先用立繪顯示；要透明去背可到「立繪面板」處理。');
             });
         }
-        add(entry.favorite ? '★ 取消收藏' : '☆ 加入收藏', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, fullKey, { ...v, favorite: !entry.favorite }); rerender(); });
+        add(entry.favorite ? '取消收藏' : '☆ 加入收藏', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, fullKey, { ...v, favorite: !entry.favorite }); rerender(); });
         if (st.world === '') {
             add('→ 移到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); await VN_Cache.deleteRaw(store, fullKey); rerender(); });
         } else if (st.world !== curWorld) {
             add('⧉ 複製到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); AUI.alert('已複製到當前世界'); });
         }
-        add('🗑 刪除', async () => {
+        add('刪除', async () => {
             await VN_Cache.deleteRaw(store, fullKey);
             if (store === 'avatar_cache' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; } catch (e) {} }
             if (cfg.kind === 'scene' && window.VN_Core) { try { delete window.VN_Core._sceneMemCache[bare]; } catch (e) {} }
@@ -423,7 +423,7 @@
     }
     function _vngPh(kind) {
         const d = document.createElement('div'); d.className = 'vng-ph';
-        d.textContent = kind === 'bg' ? '🌄' : (kind === 'scene' ? '🎬' : (kind === 'sprite' ? '🎭' : '👤'));
+        d.innerHTML = '<i class="fa-solid ' + (kind === 'bg' ? 'fa-mountain-sun' : (kind === 'scene' ? 'fa-clapperboard' : (kind === 'sprite' ? 'fa-masks-theater' : 'fa-user'))) + '"></i>';
         return d;
     }
     function _vngImg(url, kind) {
@@ -477,7 +477,7 @@
             else VN_Cache.getRaw(card._vngStore, entry.key).then(v => { if (v && v.url && card.isConnected) _vngSetCardImg(card, v.url, cfg.kind); });   // 沒有 IntersectionObserver 的舊環境退回逐張直載
         }
         if (entry._st === 'avatar_cache') { const s2 = document.createElement('div'); s2.className = 'vng-badge src'; s2.textContent = '直生'; card.appendChild(s2); }
-        if (entry.favorite) { const b = document.createElement('div'); b.className = 'vng-badge fav'; b.textContent = '★ 收藏'; card.appendChild(b); }
+        if (entry.favorite) { const b = document.createElement('div'); b.className = 'vng-badge fav'; b.textContent = '收藏'; card.appendChild(b); }
         else if (st.world === '') { const b = document.createElement('div'); b.className = 'vng-badge unclassed'; b.textContent = '未分類'; card.appendChild(b); }
         const foot = document.createElement('div'); foot.className = 'vng-foot'; foot.textContent = bare; card.appendChild(foot);
         const more = document.createElement('button'); more.className = 'vng-more'; more.textContent = '⋯';
@@ -546,7 +546,7 @@
         }
         // 🗜️ 壓縮鈕：把目前這個世界的圖批次轉成更小的 WebP（省空間/記憶體；輕微失真、畫質幾乎不變）
         const compressBtn = document.createElement('button');
-        compressBtn.className = 'vng-chip'; compressBtn.textContent = '🗜️ 壓縮';
+        compressBtn.className = 'vng-chip'; compressBtn.textContent = '壓縮';
         compressBtn.title = '把這個世界的圖片壓成更小的 WebP，省空間與記憶體（畫質幾乎看不出差別、輕微失真）';
         compressBtn.onclick = async () => {
             if (compressBtn.dataset.busy) return;
@@ -556,7 +556,7 @@
                 const r = await _vngCompressEntries(cfg, entries, compressBtn);
                 const mb = (r.saved * 0.75 / 1048576);
                 const win = window.parent || window;
-                const msg = `🗜️ 壓縮完成：${r.done - r.skipped} 張壓縮、${r.skipped} 張略過，約省 ${mb.toFixed(1)} MB`;
+                const msg = `壓縮完成：${r.done - r.skipped} 張壓縮、${r.skipped} 張略過，約省 ${mb.toFixed(1)} MB`;
                 try { if (AUI.toastr) AUI.toastr.success(msg); else AUI.alert(msg); } catch (e) { AUI.alert(msg); }
             } catch (e) { AUI.alert('壓縮失敗：' + (e.message || e)); }
             delete compressBtn.dataset.busy;

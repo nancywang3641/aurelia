@@ -22,7 +22,7 @@
 
     // --- 核心診斷邏輯 ---
     async function runDiagnostics(ui) {
-        ui.log("🚀 開始系統診斷 (V3.7)...", true);
+        ui.log("開始系統診斷 (V3.7)...", true);
 
         // 1. 檢查模塊存在性
         const modules = [
@@ -122,7 +122,7 @@
 
             } catch (e) {
                 ui.updateSection('data-status', `<div class="mon-row"><span>讀取失敗</span><span class="mon-val err">${e.message}</span></div>`);
-                ui.log("❌ 錯誤: " + e.message);
+                ui.log("錯誤: " + e.message);
             }
         } else {
             ui.updateSection('data-status', '<div class="mon-row"><span>狀態</span><span class="mon-val err">橋接器不可用</span></div>');
@@ -142,7 +142,7 @@
                 <div class="mon-header">
                     <div class="mon-title-group">
                         <div class="mon-back-btn" id="nav-home">‹</div>
-                        <span class="mon-title">📊 系統診斷 (V3.7)</span>
+                        <span class="mon-title"><i class="fa-solid fa-chart-simple"></i> 系統診斷 (V3.7)</span>
                     </div>
                     <button class="mon-btn green" id="mon-run">重新檢測</button>
                 </div>

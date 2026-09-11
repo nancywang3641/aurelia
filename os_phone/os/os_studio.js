@@ -188,7 +188,7 @@
 
     const MODES = {
         'vn_ui': {
-            name: '✨ VN UI 煉丹',
+            name: 'VN UI 煉丹',
             prompt: `你是 UI 工程師，替一個視覺小說引擎做「面板」。你看不到引擎的程式碼，你能用的東西全部寫在這份說明裡；沒寫的就是沒有。
 
 使用者每則訊息開頭會標【類型：X】，X 是 純展示／純應用／共用 之一。三種類型的規則各自完整寫在第 2 節，照那一段做，別問；沒標＝純展示。
@@ -345,12 +345,12 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
                     // init 放在裝 app 之後：重建「模板 → app id」對照表（共用面板的 dbSave 小設定兩邊才對到同一桶；清單資料走 VN_PANEL_FEED 不經此）
                     if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
                     if (_vnPanelType === '純展示') {
-                        AUI.alert(`🎉 [${data.tagId}] 已建立！已存進「VN組件」。`);
+                        AUI.alert(`[${data.tagId}] 已建立！已存進「VN組件」。`);
                         document.getElementById('studio-tab-gallery')?.click();
                     } else if (_vnPanelType === '共用') {
-                        AUI.alert(`🎉 [${data.tagId}] 已建立（共用）！劇情裡會自動跳出渲染、也裝進手機「應用工坊 · 我的應用」、並在「VN組件」可見，兩邊讀同一份資料。` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
+                        AUI.alert(`[${data.tagId}] 已建立（共用）！劇情裡會自動跳出渲染、也裝進手機「應用工坊 · 我的應用」、並在「VN組件」可見，兩邊讀同一份資料。` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
                     } else {
-                        AUI.alert(`🎉 [${data.tagId}] 已建立，並裝進手機 →「應用工坊 · 我的應用」！` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
+                        AUI.alert(`[${data.tagId}] 已建立，並裝進手機 →「應用工坊 · 我的應用」！` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
                     }
                 }
             }
@@ -440,7 +440,7 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
                     createdAt: existing ? existing.createdAt : Date.now(),
                 });
                 try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
-                AUI.alert(`🎉 特效「${norm.name}」已存好！劇情 AI 之後就會在合適時機用它`);
+                AUI.alert(`特效「${norm.name}」已存好！劇情 AI 之後就會在合適時機用它`);
             }
         }
     };
@@ -574,7 +574,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     }
     function _copyCreationSpec() {
         const btn = document.getElementById('studio-spec-copy-btn');
-        const done = () => { if (btn) { const t = btn.dataset._t || btn.textContent; btn.dataset._t = t; btn.textContent = '✅ 已複製！貼進你的 Claude／GPT'; setTimeout(() => { btn.textContent = btn.dataset._t; }, 1900); } };
+        const done = () => { if (btn) { const t = btn.dataset._t || btn.textContent; btn.dataset._t = t; btn.textContent = '已複製！貼進你的 Claude／GPT'; setTimeout(() => { btn.textContent = btn.dataset._t; }, 1900); } };
         try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(STUDIO_CREATION_SPEC).then(done, () => _fallbackCopy(STUDIO_CREATION_SPEC, done));
@@ -585,15 +585,15 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         const ta = document.getElementById('studio-import-textarea');
         const status = document.getElementById('studio-import-status');
         const raw = (ta && ta.value || '').trim();
-        if (!raw) { if (status) status.textContent = '⚠️ 先把 <json> 內容貼進來'; return; }
+        if (!raw) { if (status) status.textContent = '先把 <json> 內容貼進來'; return; }
         currentParsedData = null;   // 匯入是「新面板」，別繼承上一個的 history
         const ok = extractAndParseJson(raw);   // 解析成功會 set currentParsedData + 跑 renderPreviewPanel
         if (ok && currentParsedData && !Array.isArray(currentParsedData) && currentParsedData.tagId && currentParsedData.html) {
-            if (status) status.textContent = '✅ 已載入！這視窗會自動關 → 上方切「預覽」檢查 → 按「✅ 確定創建」存起來。';
+            if (status) status.textContent = '已載入！這視窗會自動關 → 上方切「預覽」檢查 → 按「確定創建」存起來。';
             try { document.querySelector('.studio-tab[data-tab="preview"]') && document.querySelector('.studio-tab[data-tab="preview"]').click(); } catch (e) {}
             setTimeout(() => { const m = document.getElementById('studio-import-modal'); if (m) m.style.display = 'none'; }, 1000);
         } else {
-            if (status) status.textContent = '❌ 解析失敗或缺 tagId／html。確認貼的是完整 <json>{…}</json>（含七個鍵），再試一次。';
+            if (status) status.textContent = '解析失敗或缺 tagId／html。確認貼的是完整 <json>{…}</json>（含七個鍵），再試一次。';
         }
     }
     function _setupImportEvents() {
@@ -622,8 +622,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         { label: '固定標題' },
         { label: '卡片列表' },
         { label: '深色主題' },
-        { label: '🖼️ 生圖', feature: true, key: 'img', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct，用戶有指定才填、否則不傳）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
-        { label: '📤 回傳對話框', feature: true, key: 'tochat', text: '【回傳對話框功能】兩種回傳法，依需求選一個：\n① st.toChat(文字, opts)＝貼回「輸入框（送出框）」：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「要讓使用者挑一條、可再編輯後送進劇情當輸入／指令」（例：隨機事件生 5 條、選 1 條 toChat）。\n② st.toSystem(文字)＝不經輸入框，直接把文字當「system 訊息」插進聊天室成最新一則（旁白/系統公告式，不用再按送出）。用在「app 的結果要直接顯示在劇情流裡」（例：擲骰結果、系統宣告、事件觸發）。' }
+        { label: '生圖', feature: true, key: 'img', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct，用戶有指定才填、否則不傳）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
+        { label: '回傳對話框', feature: true, key: 'tochat', text: '【回傳對話框功能】兩種回傳法，依需求選一個：\n① st.toChat(文字, opts)＝貼回「輸入框（送出框）」：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「要讓使用者挑一條、可再編輯後送進劇情當輸入／指令」（例：隨機事件生 5 條、選 1 條 toChat）。\n② st.toSystem(文字)＝不經輸入框，直接把文字當「system 訊息」插進聊天室成最新一則（旁白/系統公告式，不用再按送出）。用在「app 的結果要直接顯示在劇情流裡」（例：擲骰結果、系統宣告、事件觸發）。' }
     ];
     // 功能 chip（feature:true）＝toggle 啟用：用法在送出時併進請求(apiPayload 的 system)、不貼輸入框；話術 chip 照舊貼輸入框
     const _studioActiveFeatures = new Set();
@@ -998,7 +998,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             chip.innerHTML = `
                 <img src="${img.dataUrl}" alt="參考圖">
                 <div class="pi-size">${img.sizeKB}KB</div>
-                <div class="pi-del" title="移除">✖</div>
+                <div class="pi-del" title="移除"><i class="fa-solid fa-xmark"></i></div>
             `;
             chip.querySelector('.pi-del').onclick = () => {
                 pendingImages.splice(idx, 1);
@@ -1855,7 +1855,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const renderGal = () => {
             const list = host.querySelector('#vth-gal-list');
             const arr = _vthGalleryLoad();
-            if (!arr.length) { list.innerHTML = '<div class="vth-gal-empty">還沒收藏。調好一個主題後按「💾 收藏目前」存起來，之後任何世界都能一鍵套用。</div>'; return; }
+            if (!arr.length) { list.innerHTML = '<div class="vth-gal-empty">還沒收藏。調好一個主題後按「<i class="fa-solid fa-floppy-disk"></i> 收藏目前」存起來，之後任何世界都能一鍵套用。</div>'; return; }
             list.innerHTML = arr.map(t => `<div class="vth-gal-card" data-id="${esc(t.id)}">
                 <div class="vth-gal-thumb-wrap"><iframe class="vth-gal-thumb" sandbox="allow-same-origin" scrolling="no"></iframe></div>
                 <div class="vth-gal-name-row"><span class="vth-gal-cname">${esc(t.name)}</span></div>
@@ -1979,7 +1979,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             s = s.slice(0, _cut) + `
                 <div style="margin-top:10px; padding:10px 15px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.15); border-radius:8px; display:flex; align-items:center; gap:10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
                     <div class="os-studio-spinner"></div>
-                    <span style="color:#1A1C28; font-weight:bold; font-size:13px; letter-spacing:0.5px;">The Mirage 正在為您鑄造頂級 JSON 面板中... 🎨</span>
+                    <span style="color:#1A1C28; font-weight:bold; font-size:13px; letter-spacing:0.5px;">The Mirage 正在為您鑄造頂級 JSON 面板中... <i class="fa-solid fa-palette"></i></span>
                 </div>
             `;
         }
@@ -2055,10 +2055,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         bubble.innerHTML = `<img src="${url}" alt="generated" />
                             <div style="font-size:10px;color:rgba(26,28,40,0.72);margin-top:4px;padding:0 4px;">${seg.content.slice(0,60)}</div>`;
                     } else {
-                        bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;">⚠️ 圖片生成失敗</span>`;
+                        bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> 圖片生成失敗</span>`;
                     }
                 } catch(e) {
-                    bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;">⚠️ ${e.message}</span>`;
+                    bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</span>`;
                 }
             })();
 
@@ -2082,7 +2082,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 return bubble;
             }
 
-            bubble.innerHTML = '<div class="studio-choices-hint">🤔 你的選擇：</div>';
+            bubble.innerHTML = '<div class="studio-choices-hint">你的選擇：</div>';
             const btnRow = document.createElement('div');
             btnRow.className = 'studio-choices-row';
 
@@ -2105,9 +2105,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             // 加「✏️ 其他...」按鈕
             const otherBtn = document.createElement('button');
             otherBtn.className = 'studio-choice-btn studio-choice-other';
-            otherBtn.textContent = '✏️ 其他想法...';
+            otherBtn.textContent = '其他想法...';
             otherBtn.onclick = () => {
-                collapseToSelected('✏️ 自己輸入');
+                collapseToSelected('自己輸入');
                 const inputEl = document.getElementById('studio-input');
                 if (inputEl) {
                     inputEl.focus();
@@ -2192,7 +2192,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         if (!isAuto) { inputEl.value = ''; inputEl.style.height = '50px'; }   // 自動輪不動她打到一半的字
         inputEl.disabled = true;
         sendBtn.disabled = false;
-        sendBtn.innerText = '⏹ 停止';
+        sendBtn.innerText = '停止';
         sendBtn.onclick = () => { if (_studioAbortCtrl) _studioAbortCtrl.abort(); };
         _studioAbortCtrl = new AbortController();
 
@@ -2355,7 +2355,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         } catch (err) {
             if (err.name === 'AbortError' || err.message?.includes('abort')) {
                 // 使用者主動停止：保留打字泡泡改成已停止提示
-                aiBubble.innerHTML = '<span style="color:rgba(26,28,40,0.72); font-size:12px;">⏹ 已停止</span>';
+                aiBubble.innerHTML = '<span style="color:rgba(26,28,40,0.72); font-size:12px;"><i class="fa-solid fa-stop"></i> 已停止</span>';
             } else {
                 _renderErrorBubble(aiBubble, err, () => _retryLastSend(aiBubble));
             }
@@ -2518,8 +2518,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     function _renderErrorBubble(bubble, err, onRetry) {
         bubble.classList.add('studio-error-bubble');
         bubble.innerHTML = `
-            <div class="studio-error-msg">❌ 錯誤：${(err.message || err || '未知錯誤').replace(/</g, '&lt;')}</div>
-            <button class="studio-retry-btn">🔄 重試</button>
+            <div class="studio-error-msg"><i class="fa-solid fa-circle-xmark"></i> 錯誤：${(err.message || err || '未知錯誤').replace(/</g, '&lt;')}</div>
+            <button class="studio-retry-btn"><i class="fa-solid fa-rotate"></i> 重試</button>
         `;
         bubble.querySelector('.studio-retry-btn').onclick = onRetry;
     }
@@ -2591,7 +2591,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             if (msg._isSummary) {
                 const bubble = document.createElement('div');
                 bubble.className = 'studio-bubble studio-summary-bubble';
-                const headerText = `📌 摘要 #${msg._summaryNum}　·　壓縮了 ${msg._compressedCount} 條早期對話`;
+                const headerText = `摘要 #${msg._summaryNum}　·　壓縮了 ${msg._compressedCount} 條早期對話`;
                 bubble.innerHTML = `
                     <div class="summary-header">${headerText}</div>
                     <div class="summary-content">${renderMarkdown(messageContentToString(msg.content))}</div>
@@ -3075,7 +3075,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     async function importToSillyTavern(data) {
         const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
         if (!th) {
-            AUI.alert('❌ 找不到酒館（TavernHelper）。需要在酒館環境內 + 已安裝酒館助手腳本才能用這個功能。\n\nPWA 獨立模式不支援此功能。');
+            AUI.alert('找不到酒館（TavernHelper）。需要在酒館環境內 + 已安裝酒館助手腳本才能用這個功能。\n\nPWA 獨立模式不支援此功能。');
             return;
         }
 
@@ -3113,12 +3113,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
             // 使用說明走自動注入、不再寫世界書條目；順手掃掉舊制殘留的同名條目
             let wbMsg = "";
-            try { if (await _deleteWbUsageEntry(th, safeTagId)) wbMsg = "\n🧹 已清掉舊版留在世界書的使用說明條目（說明現在自動注入、不佔世界書）。"; } catch (e) {}
+            try { if (await _deleteWbUsageEntry(th, safeTagId)) wbMsg = "\n已清掉舊版留在世界書的使用說明條目（說明現在自動注入、不佔世界書）。"; } catch (e) {}
 
-            AUI.alert(`🎉 匯入成功！已將標籤 [${safeTagId}] 寫入酒館全局正則。${wbMsg}\n\n請發送新訊息或重新載入聊天查看效果。`);
+            AUI.alert(`匯入成功！已將標籤 [${safeTagId}] 寫入酒館全局正則。${wbMsg}\n\n請發送新訊息或重新載入聊天查看效果。`);
         } catch (err) {
             console.error('[Studio] 酒館正則匯入失敗:', err);
-            AUI.alert('❌ 匯入失敗: ' + err.message);
+            AUI.alert('匯入失敗: ' + err.message);
         }
     }
 
@@ -3220,11 +3220,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             try {
                 parsed = JSON.parse(textarea.value);
             } catch(e) {
-                if (statusEl) statusEl.textContent = '❌ JSON 格式錯誤：' + e.message;
+                if (statusEl) statusEl.textContent = 'JSON 格式錯誤：' + e.message;
                 return;
             }
             if (!parsed.tagId) {
-                if (statusEl) statusEl.textContent = '❌ 缺少 tagId 欄位';
+                if (statusEl) statusEl.textContent = '缺少 tagId 欄位';
                 return;
             }
             // 保留原本 id（避免改 id 製造孤兒）
@@ -3233,13 +3233,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 await win.OS_DB.saveVNTagTemplate(parsed);
                 if (typeof syncActiveTagsToLocal === 'function') await syncActiveTagsToLocal();
                 if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
-                if (statusEl) statusEl.textContent = '✅ 已儲存';
+                if (statusEl) statusEl.textContent = '已儲存';
                 setTimeout(() => {
                     modal.style.display = 'none';
                     win.OS_STUDIO_VC?.loadStudioGallery();   // 展廳拆檔：os_studio_vn_gallery.js
                 }, 600);
             } catch(e) {
-                if (statusEl) statusEl.textContent = '❌ 儲存失敗：' + e.message;
+                if (statusEl) statusEl.textContent = '儲存失敗：' + e.message;
             }
         };
     }
@@ -3263,7 +3263,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const existing = apps.find(a => a && a.srcTplId === tpl.id);
             const rec = existing
                 ? { ...existing }
-                : { name: _appNameOf(tpl), emoji: '🧩', iconUrl: '', source: 'studio', srcTplId: tpl.id };
+                : { name: _appNameOf(tpl), emoji: '', icon: 'fa-puzzle-piece', iconUrl: '', source: 'studio', srcTplId: tpl.id };
             // 已裝過、名字還是當初的英文標籤（沒被她改過）→ 重存時換成中文名；她自己改過的名字不動
             if (existing && existing.name === tpl.tagId && tpl.title) rec.name = _appNameOf(tpl);
             rec.html = _templateToPhoneHtml(tpl);   // 內容一律更新（編輯後重存即同步）
@@ -3272,7 +3272,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) {
                     // addApp 遇到同 id 不會更新 → 名字換了要先拿掉再放回，桌面圖標才會跟著改名
                     if (existing && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(newId);
-                    win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
+                    win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, icon: rec.icon || '', iconUrl: rec.iconUrl || '' });
                 }
             } catch (e) {}
             return newId;
@@ -3288,7 +3288,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
         chatMessages.push({
             role: 'assistant',
-            content: `📋 已載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n要整個換風格也行——直接描述新風格、發送就會自動整包重做，不用按任何按鈕、不用重發。`
+            content: `已載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n要整個換風格也行——直接描述新風格、發送就會自動整包重做，不用按任何按鈕、不用重發。`
         });
         _studioSave(chatId);
         document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
@@ -3348,7 +3348,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         if (!isAuto) { inputEl.value = ''; inputEl.style.height = '50px'; }   // 自動輪不動她打到一半的字
         inputEl.disabled = true;
         sendBtn.disabled = false;
-        sendBtn.innerText = '⏹ 停止';
+        sendBtn.innerText = '停止';
         sendBtn.onclick = () => { if (_studioAbortCtrl) _studioAbortCtrl.abort(); };
         _studioAbortCtrl = new AbortController();
 
@@ -3432,7 +3432,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                                 renderPreviewPanel();
                                 win.OS_STUDIO_DIFF?.renderVNHistoryArea();
                                 const conv = win.OS_STUDIO_DIFF?.extractConversationalText(finalText);
-                                const msg = '🔄 這次改動較大，已直接幫你整個重做（沒用小修補）。舊版已存進「⏪ 還原舊版」，不滿意可一鍵還原——你不用重發。' + (conv ? '\n\n' + conv : '');
+                                const msg = '這次改動較大，已直接幫你整個重做（沒用小修補）。舊版已存進「還原舊版」，不滿意可一鍵還原——你不用重發。' + (conv ? '\n\n' + conv : '');
                                 chatMessages.push({ role: 'assistant', content: msg });
                                 _studioSave(lockedChatId);
                                 const fb = document.createElement('div');
@@ -3483,7 +3483,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             });
         } catch (err) {
             if (err.name === 'AbortError' || err.message?.includes('abort')) {
-                aiBubble.innerHTML = '<span style="color:rgba(26,28,40,0.72); font-size:12px;">⏹ 已停止</span>';
+                aiBubble.innerHTML = '<span style="color:rgba(26,28,40,0.72); font-size:12px;"><i class="fa-solid fa-stop"></i> 已停止</span>';
             } else {
                 _renderErrorBubble(aiBubble, err, () => _retryLastDiffRefine(aiBubble));
             }
@@ -3705,7 +3705,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             a.download = 'aurelia-特效包_' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.json';
             document.body.appendChild(a); a.click();
             setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} a.remove(); }, 0);
-            _studioToast(`✅ 已匯出 ${mine.length} 個自製特效，已下載到本機。`, 'success', '匯出');
+            _studioToast(`已匯出 ${mine.length} 個自製特效，已下載到本機。`, 'success', '匯出');
         } catch (e) { _studioToast('匯出失敗：' + ((e && e.message) || e), 'error', '匯出'); }
     }
 
@@ -3736,7 +3736,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             }
             try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
             _renderFxLibrary(container);
-            _studioToast(`✅ 匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個` + (bad ? `（${bad} 個格式不對跳過）` : '') + '。', 'success', '匯入');
+            _studioToast(`匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個` + (bad ? `（${bad} 個格式不對跳過）` : '') + '。', 'success', '匯入');
         } catch (e) { _studioToast('匯入失敗：' + ((e && e.message) || e), 'error', '匯入'); }
     }
 
@@ -3751,7 +3751,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const fxEngine = window.OS_FX || win.OS_FX;
             try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
             _renderFxLibrary(container);
-            _studioToast(`🗑️ 已清空 ${mine.length} 個自製特效。`, 'success', '清空');
+            _studioToast(`已清空 ${mine.length} 個自製特效。`, 'success', '清空');
         } catch (e) { _studioToast('清空失敗：' + ((e && e.message) || e), 'error', '清空'); }
     }
 
@@ -3863,7 +3863,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         const onComplete = () => { 
                             const msg = document.createElement('div');
                             msg.style.cssText = 'position:absolute; top:5px; right:5px; background:rgba(46,204,113,0.8); color:white; padding:4px 8px; font-size:12px; border-radius:4px; z-index:999;';
-                            msg.innerText = '✅ 腳本已觸發 onComplete()';
+                            msg.innerText = '腳本已觸發 onComplete()';
                             container.parentElement.appendChild(msg);
                         };
 
@@ -3878,7 +3878,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         console.warn('[Studio 預覽錯誤] JS 執行失敗:', e);
                         const errBox = document.createElement('div');
                         errBox.style.cssText = 'color:#fc8181; font-size:12px; margin-top:10px; padding:10px; background:rgba(252,129,129,0.1); border-radius: 4px;';
-                        errBox.innerText = `⚠️ 預覽腳本錯誤: ${e.message}`;
+                        errBox.innerText = `預覽腳本錯誤: ${e.message}`;
                         previewMain.appendChild(errBox);
                     }
                 }, 50); 
@@ -3895,7 +3895,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
             previewMain.innerHTML = `
                 <div class="studio-card">
-                    <div class="studio-card-title">🎲 [${data.id || '未知ID'}] ${data.name || '未命名變數包'}</div>
+                    <div class="studio-card-title"><i class="fa-solid fa-dice"></i> [${data.id || '未知ID'}] ${data.name || '未命名變數包'}</div>
                     <div style="font-size:13px; color:#1A1C28;">${varsHtml}</div>
                 </div>
             `;

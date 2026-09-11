@@ -605,9 +605,9 @@
                 await db.deletePhoneApp(rec.id);
                 if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(rec.id);
             } else if (!rec && want) {
-                const r = { name: _appNameOf(tpl), emoji: '🧩', iconUrl: '', html: _templateToPhoneHtml(tpl), source: 'studio', srcTplId: tpl.id };
+                const r = { name: _appNameOf(tpl), emoji: '', icon: 'fa-puzzle-piece', iconUrl: '', html: _templateToPhoneHtml(tpl), source: 'studio', srcTplId: tpl.id };
                 const nid = await db.savePhoneApp(r);
-                if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: nid, name: r.name, emoji: r.emoji, iconUrl: '' });
+                if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: nid, name: r.name, emoji: r.emoji, icon: r.icon, iconUrl: '' });
             }
             _vcAllPhoneApps = db.getAllPhoneApps ? ((await db.getAllPhoneApps()) || []) : _vcAllPhoneApps;
         } catch (e) { console.error('[studio] 裝手機切換失敗', e); }
@@ -665,7 +665,7 @@
             try { await syncActiveTagsToLocal(); } catch (e) {}
             if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
             _vcPackSel.clear();
-            _studioToast(`🗑️ 已清空 ${templates.length} 個 VN 組件。`, 'success', '清空');
+            _studioToast(`已清空 ${templates.length} 個 VN 組件。`, 'success', '清空');
             _vcView = 'browse'; renderVnComponents();
         };
         go.onclick = () => {
@@ -854,7 +854,7 @@
             const safe = ((tpl.tagId || 'panel').replace(/[^a-zA-Z0-9_-]/g, '')) || 'panel';
             const fname = `aurelia-vn-ui-${safe}.json`;
             _downloadVnUiPack([tpl], fname);
-            _studioToast(`✅ 已匯出面板「${tpl.tagId || safe}」，已下載到本機：${fname}`, 'success', '匯出');
+            _studioToast(`已匯出面板「${tpl.tagId || safe}」，已下載到本機：${fname}`, 'success', '匯出');
         } catch (e) { _studioToast('匯出失敗：' + ((e && e.message) || e), 'error', '匯出'); }
     }
 
@@ -882,7 +882,7 @@
             await syncActiveTagsToLocal();
             if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
             _vcView = 'browse'; renderVnComponents();
-            _studioToast(`✅ 匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個。`, 'success', '匯入包');
+            _studioToast(`匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個。`, 'success', '匯入包');
         } catch (e) { _studioToast('匯入失敗：' + ((e && e.message) || e), 'error', '匯入包'); }
     }
 

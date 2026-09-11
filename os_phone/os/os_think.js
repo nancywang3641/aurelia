@@ -60,7 +60,7 @@
         _panel.id = 'os-think-panel';
         _panel.innerHTML = `
             <div id="os-think-head">
-                <span id="os-think-head-title">💭 AI 思考過程</span>
+                <span id="os-think-head-title"><i class="fa-solid fa-comment-dots"></i> AI 思考過程</span>
                 <span id="os-think-clear">清空</span>
                 <span id="os-think-close">×</span>
             </div>
@@ -76,8 +76,8 @@
         // 浮動按鈕
         _toggle = doc.createElement('div');
         _toggle.id = 'os-think-btn';
-        _toggle.title = '💭 AI 思考過程';
-        _toggle.innerHTML = `💭<span class="think-badge">0</span>`;
+        _toggle.title = 'AI 思考過程';
+        _toggle.innerHTML = `<i class="fa-solid fa-comment-dots"></i><span class="think-badge">0</span>`;
         _toggle.onclick = toggle;
         frame.appendChild(_toggle);
         _badge = _toggle.querySelector('.think-badge');
@@ -91,7 +91,7 @@
     function entryHtml(e, idx, total) {
         const uid = `think-${e.timestamp || idx}`;
         const panelTag  = e.panel     ? `<span class="think-entry-panel">${esc(e.panel)}</span>` : '';
-        const inputTag  = e.userInput ? `<span class="think-entry-input">▶ ${esc(e.userInput.slice(0, 60))}${e.userInput.length > 60 ? '…' : ''}</span>` : '';
+        const inputTag  = e.userInput ? `<span class="think-entry-input"><i class="fa-solid fa-caret-right"></i> ${esc(e.userInput.slice(0, 60))}${e.userInput.length > 60 ? '…' : ''}</span>` : '';
         const rawBlock  = e.rawOutput ? `
             <span class="think-entry-raw-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ 收起 AI 原始輸出':'▼ 展開 AI 原始輸出'">▼ 展開 AI 原始輸出</span>
             <div class="think-entry-raw">${esc(e.rawOutput)}</div>` : '';
@@ -165,7 +165,7 @@
             <div class="think-launch-wrap">
                 <div class="think-launch-head">
                     <span class="think-launch-back pm-back-btn">‹</span>
-                    <span class="think-launch-title">💭 AI 思考過程</span>
+                    <span class="think-launch-title"><i class="fa-solid fa-comment-dots"></i> AI 思考過程</span>
                     <span class="think-launch-clr" id="think-launch-clr">清空</span>
                 </div>
                 <div class="think-launch-body" id="think-launch-body"></div>

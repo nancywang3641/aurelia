@@ -78,7 +78,7 @@
                 if (icon.parentElement === leftSendForm) return;
 
                 icon.className = '';
-                icon.innerHTML = '🏰';
+                icon.innerHTML = '<i class="fa-solid fa-chess-rook"></i>';
                 Object.assign(icon.style, {
                     position: 'static',
                     width: '30px',

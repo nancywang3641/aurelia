@@ -366,7 +366,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const modal = doc.createElement('div');
         modal.id = 'avl-modal'; modal.className = 'avl-modal';
         modal.innerHTML = `<div class="avl-card">
-            <div class="avl-title">🏷️ 角色外觀登記表<span class="avl-sub">（##角色名## 佔位展開用的頭像生成詞；改這裡＝改插圖會套的外觀）</span></div>
+            <div class="avl-title"><i class="fa-solid fa-tag"></i> 角色外觀登記表<span class="avl-sub">（##角色名## 佔位展開用的頭像生成詞；改這裡＝改插圖會套的外觀）</span></div>
             <div class="avl-list" id="avl-list"></div>
             <div class="avl-addrow"><input class="avl-name-input" id="avl-new-name" placeholder="新角色名…"><button class="avl-btn" id="avl-add">＋ 新增</button></div>
             <div class="avl-actions"><span class="avl-tip" id="avl-tip"></span><button class="avl-btn primary" id="avl-close">完成</button></div>
@@ -568,14 +568,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 state.selectedName = name;
                 state.selectedPrompt = finalPrompt;  // 存用戶最終確認的版本（供 spriteSave）
                 document.getElementById('sprite-selected-info').innerHTML =
-                    '🎯 當前：<b style="color:#1A1C28;">' + name + '</b>';
+                    '<i class="fa-solid fa-bullseye"></i> 當前：<b style="color:#1A1C28;">' + name + '</b>';
 
                 // 🚨 三段之間一定要逗號（同 VN_Image.getSprite / autoGenSprite）：直接相接會把角色描述的最後一個 tag
                 //    跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"），一次毀掉兩個 tag
                 const _JT = win2.VN_Image && win2.VN_Image._joinTags;
                 if (!_JT) { setStatus('生圖模組（vn_config.js）尚未載入，請先進一次 VN 再回來', true); return; }
                 let fullPrompt = _JT(document.getElementById('sprite-tpl-prefix').value, finalPrompt, document.getElementById('sprite-tpl-suffix').value);
-                setStatus('⏳ 為「' + name + '」生立繪中（5–30 秒）...');
+                setStatus('為「' + name + '」生立繪中（5–30 秒）...');
                 document.getElementById('sprite-preview').innerHTML = '<span style="color:#666;font-size:11px;">生成中...</span>';
                 enableBtn('sprite-removebg-btn', false);
                 enableBtn('sprite-removebg-canvas-btn', false);
@@ -608,7 +608,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     let _opts;
                     if (_hiresOn) {
                         _opts = { force: true, width: _bw, height: _bh, raw: !_useNAI, extraNegative: _spriteNeg, comfyHires: { scale: _ratio, denoise: 0.45 } };
-                        setStatus('⏳ 為「' + name + '」生立繪中（高清修復，較久 15–60 秒）...');
+                        setStatus('為「' + name + '」生立繪中（高清修復，較久 15–60 秒）...');
                     } else {
                         const _sw = Math.round(_bw * _ratio / 8) * 8;
                         const _sh = Math.round(_bh * _ratio / 8) * 8;
@@ -626,13 +626,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     state.isRemoved = false;
 
                     document.getElementById('sprite-preview').innerHTML = '<img src="' + state.blobUrl + '" style="max-width:100%;max-height:300px;border-radius:4px;">';
-                    setStatus('✅ 生成完成');
+                    setStatus('生成完成');
                     enableBtn('sprite-removebg-btn', true);
                     enableBtn('sprite-removebg-canvas-btn', true);
                     enableBtn('sprite-save-btn', true);
                 } catch (e) {
                     console.error('[Sprite] 生成失敗:', e);
-                    setStatus('❌ ' + e.message, true);
+                    setStatus(e.message, true);
                     document.getElementById('sprite-preview').innerHTML = '<span style="color:#fc8181;font-size:11px;">生成失敗</span>';
                 }
             }
@@ -654,7 +654,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const wkeys = Object.keys(groups).sort((a, b) => { if (a === cur) return -1; if (b === cur) return 1; if (a === '') return 1; if (b === '') return -1; return a < b ? -1 : 1; });
                     if (!wkeys.includes(cur)) wkeys.unshift(cur);
                     if (state.pickerWorld == null || (groups[state.pickerWorld] === undefined && state.pickerWorld !== cur)) state.pickerWorld = cur;
-                    const wlabel = w => !w ? '📦 未分類（舊頭像）' : (w === cur ? '★ 當前世界' : (w.length > 20 ? '…' + w.slice(-18) : w));
+                    const wlabel = w => !w ? '未分類（舊頭像）' : (w === cur ? '當前世界' : (w.length > 20 ? '…' + w.slice(-18) : w));
                     let html = '<select class="vng-sel" id="sprite-picker-world" style="margin-bottom:10px;">'
                         + wkeys.map(w => '<option value="' + esc(w) + '"' + (w === state.pickerWorld ? ' selected' : '') + '>' + wlabel(w) + ' (' + (groups[w] || []).length + ')</option>').join('')
                         + '</select>';
@@ -694,23 +694,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!state.blob) { setStatus('沒圖可去背', true); return; }
                 if (state.isRemoved) { setStatus('已經去過背了', true); return; }
                 enableBtn('sprite-removebg-btn', false);
-                setStatus('⏳ 載入 AI 模型（第一次 ~40MB，之後快）...');
+                setStatus('載入 AI 模型（第一次 ~40MB，之後快）...');
                 try {
                     if (!state.bgRemover) {
                         const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
                         state.bgRemover = m.removeBackground;
                     }
-                    setStatus('🪄 AI 去背中（單執行緒約 10–30 秒）...');
+                    setStatus('AI 去背中（單執行緒約 10–30 秒）...');
                     const removed = await state.bgRemover(state.blob, {
                         model: 'isnet_fp16',
                         output: { format: 'image/png', quality: 1.0 },
-                        progress: (k, c, t) => { if (t > 0) setStatus('🪄 ' + k + ': ' + Math.round(c/t*100) + '%'); }
+                        progress: (k, c, t) => { if (t > 0) setStatus(k + ': ' + Math.round(c/t*100) + '%'); }
                     });
                     _applyRemovedBlob(removed);
-                    setStatus('✅ AI 去背完成');
+                    setStatus('AI 去背完成');
                 } catch (e) {
                     console.error('[Sprite] AI 去背失敗:', e);
-                    setStatus('❌ AI 去背失敗: ' + e.message, true);
+                    setStatus('AI 去背失敗: ' + e.message, true);
                     enableBtn('sprite-removebg-btn', true);
                     enableBtn('sprite-removebg-canvas-btn', true);
                 }
@@ -736,7 +736,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (state.isRemoved) { setStatus('已經去過背了（要換方式請重新生成）', true); return; }
                 enableBtn('sprite-removebg-btn', false);
                 enableBtn('sprite-removebg-canvas-btn', false);
-                setStatus('✂️ 純色去背中...');
+                setStatus('純色去背中...');
                 try {
                     const bmp = await createImageBitmap(state.blob);
                     const W = bmp.width, H = bmp.height;
@@ -792,10 +792,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const removed = await new Promise(res => cv.toBlob(res, 'image/png'));
                     if (!removed) throw new Error('canvas 轉檔失敗');
                     _applyRemovedBlob(removed);
-                    setStatus('✅ 純色去背完成');
+                    setStatus('純色去背完成');
                 } catch (e) {
                     console.error('[Sprite] 純色去背失敗:', e);
-                    setStatus('❌ 純色去背失敗: ' + e.message, true);
+                    setStatus('純色去背失敗: ' + e.message, true);
                     enableBtn('sprite-removebg-btn', true);
                     enableBtn('sprite-removebg-canvas-btn', true);
                 }
@@ -807,7 +807,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!name) { setStatus('沒有選中的角色', true); return; }
                 if (!state.blob) { setStatus('沒圖可存', true); return; }
                 if (!win2.VN_Cache) { setStatus('VN_Cache 未就緒，請先進 VN 一次再回來', true); return; }
-                setStatus('⏳ 儲存中...');
+                setStatus('儲存中...');
                 try {
                     const dataUrl = await new Promise((res, rej) => {
                         const r = new FileReader();
@@ -826,11 +826,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         isRemoved: state.isRemoved,
                         createdAt: Date.now()
                     });
-                    setStatus('✅ 已存「' + name + '」立繪');
+                    setStatus('已存「' + name + '」立繪');
                     refreshList();
                 } catch (e) {
                     console.error('[Sprite] 儲存失敗:', e);
-                    setStatus('❌ 儲存失敗: ' + e.message, true);
+                    setStatus('儲存失敗: ' + e.message, true);
                 }
             }
 
@@ -975,11 +975,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         const buildProfileOptions = (currentId) => {
             const resolvedId = currentId || stActiveProfileId;
-            let opts = `<option value=""${!resolvedId ? ' selected' : ''}>(🚀 當前激活的連接 / Current Active)</option>`;
+            let opts = `<option value=""${!resolvedId ? ' selected' : ''}>(當前激活的連接 / Current Active)</option>`;
             stProfiles.forEach(p => {
                 const isSelected = p.id === resolvedId ? 'selected' : '';
                 const safeName = p.name ? p.name.replace(/</g, "&lt;") : "Unknown";
-                opts += `<option value="${p.id}" ${isSelected}>📂 ${safeName.substring(0,25)}</option>`;
+                opts += `<option value="${p.id}" ${isSelected}><i class="fa-solid fa-folder-open"></i> ${safeName.substring(0,25)}</option>`;
             });
             return opts;
         };
@@ -1017,7 +1017,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-llm" class="api-subview">
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span>🔗 用酒館的連線</span>
+                                <span><i class="fa-solid fa-link"></i> 用酒館的連線</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-system-api" ${llmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc">關掉就用下面自己填的網址與金鑰。</div>
@@ -1026,7 +1026,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <select class="set-select" id="os-st-profile">${primaryProfileOpts}</select>
                                 <div id="st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72); word-break:break-all; line-height:1.6;"></div>
                                 <details style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
-                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在所有訊息最前面；只在用酒館連線時生效，自己填網址那條與副模型不受影響。">📝 自訂前置指令</summary>
+                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在所有訊息最前面；只在用酒館連線時生效，自己填網址那條與副模型不受影響。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
                                     <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                                     <div class="set-desc">留空＝不注入。</div>
                                 </details>
@@ -1041,17 +1041,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label">選擇模型</div>
                             <div id="model-system-notice" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; font-size:12px; color:#1A1C28; border:1px solid rgba(26,28,40,0.15);">
-                                🔗 模型由酒館決定，在酒館切換即可。
+                                <i class="fa-solid fa-link"></i> 模型由酒館決定，在酒館切換即可。
                             </div>
                             <div class="model-row ${llmConfig.useSystemApi ? 'hidden' : ''}" id="model-row">
                                 <select class="set-select" id="os-api-model"><option value="${llmConfig.model}">${llmConfig.model} (當前)</option></select>
-                                <div class="btn-fetch" id="os-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從酒館同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '🔄'}</div>
+                                <div class="btn-fetch" id="os-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從酒館同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '<i class="fa-solid fa-rotate"></i>'}</div>
                             </div>
                         </div>
 
                         <div class="set-group"${stHide}>
                             <div class="set-label" title="把指定 Preset 的自訂條目當系統提示詞注入（排除佔位符）。需安裝 TavernHelper 插件。">
-                                <span>📋 注入 Preset 自訂條目</span>
+                                <span><i class="fa-solid fa-clipboard"></i> 注入 Preset 自訂條目</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-use-preset-prompts" ${llmConfig.usePresetPrompts ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc">注入指定 Preset 的自訂條目。</div>
@@ -1059,7 +1059,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <select class="set-select" id="os-preset-name" style="flex:1;">
                                     <option value="">（使用當前 in_use Preset）</option>
                                 </select>
-                                <div class="btn-fetch" id="os-preset-refresh-btn" title="重新整理 Preset 列表" style="flex-shrink:0;">🔄</div>
+                                <div class="btn-fetch" id="os-preset-refresh-btn" title="重新整理 Preset 列表" style="flex-shrink:0;"><i class="fa-solid fa-rotate"></i></div>
                             </div>
                         </div>
 
@@ -1088,7 +1088,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group">
                             <div class="set-label" title="讓模型回傳思考過程。需模型支援（Gemini 2.5 / Claude 3.5+）；開啟後 Temperature 自動設為 1。">
-                                <span>💭 請求模型思維鏈</span>
+                                <span><i class="fa-solid fa-comment-dots"></i> 請求模型思維鏈</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-enable-thinking" ${llmConfig.enableThinking ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div style="margin-top:10px;" id="thinking-budget-group" class="${llmConfig.enableThinking ? '' : 'hidden'}">
@@ -1098,7 +1098,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">🔌 測試 API 連線</div>
+                            <div class="set-label"><i class="fa-solid fa-plug"></i> 測試 API 連線</div>
                             <div class="btn-test" id="os-test-btn">發送測試訊息</div>
                             <div id="os-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#3A3F5C; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
@@ -1107,7 +1107,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-sec-llm" class="api-subview" style="display:none;">
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span>🔗 用酒館的連線</span>
+                                <span><i class="fa-solid fa-link"></i> 用酒館的連線</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-system-api" ${secLlmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc">關掉就用下面自己填的網址與金鑰。</div>
@@ -1120,7 +1120,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group" id="sec-sync-primary-group" style="${secLlmConfig.useSystemApi ? 'display:none;' : ''}">
                              <div class="set-label" title="自動共用主模型的 API 地址與密鑰，模型仍可獨立選擇。">
-                                <span>🔗 同步主模型 URL 與 Key</span>
+                                <span><i class="fa-solid fa-link"></i> 同步主模型 URL 與 Key</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-sync-primary" ${secLlmConfig.syncWithPrimary ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc">共用主模型的網址與密鑰。</div>
@@ -1134,11 +1134,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label">選擇模型</div>
                             <div id="sec-model-system-notice" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; font-size:12px; color:#1A1C28; border:1px solid rgba(26,28,40,0.15);">
-                                🔗 模型由酒館決定，在酒館切換即可。
+                                <i class="fa-solid fa-link"></i> 模型由酒館決定，在酒館切換即可。
                             </div>
                             <div class="model-row ${secLlmConfig.useSystemApi ? 'hidden' : ''}" id="sec-model-row">
                                 <select class="set-select" id="sec-api-model"><option value="${secLlmConfig.model}">${secLlmConfig.model} (當前)</option></select>
-                                <div class="btn-fetch" id="sec-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從端點同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '🔄'}</div>
+                                <div class="btn-fetch" id="sec-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從端點同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '<i class="fa-solid fa-rotate"></i>'}</div>
                             </div>
                         </div>
 
@@ -1147,7 +1147,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group">
                             <details>
-                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／🍎）都生效。">📝 自訂前置指令</summary>
+                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／）都生效。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
                                 <textarea class="set-input" id="sec-custom-cot" rows="7" placeholder="貼上要放在副模型訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(secLlmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                                 <div class="set-desc">留空＝不注入。</div>
                             </details>
@@ -1155,14 +1155,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span>📋 注入 Preset 自訂條目</span>
+                                <span><i class="fa-solid fa-clipboard"></i> 注入 Preset 自訂條目</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-use-preset-prompts" ${secLlmConfig.usePresetPrompts ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div id="sec-preset-name-group" style="margin-top:10px; display:${secLlmConfig.usePresetPrompts ? 'flex' : 'none'}; gap:8px; align-items:center;">
                                 <select class="set-select" id="sec-preset-name" style="flex:1;">
                                     <option value="">（使用當前 in_use Preset）</option>
                                 </select>
-                                <div class="btn-fetch" id="sec-preset-refresh-btn" title="重新整理 Preset 列表" style="flex-shrink:0;">🔄</div>
+                                <div class="btn-fetch" id="sec-preset-refresh-btn" title="重新整理 Preset 列表" style="flex-shrink:0;"><i class="fa-solid fa-rotate"></i></div>
                             </div>
                         </div>
 
@@ -1190,7 +1190,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">🔌 測試 API 連線</div>
+                            <div class="set-label"><i class="fa-solid fa-plug"></i> 測試 API 連線</div>
                             <div class="btn-test" id="sec-test-btn">發送測試訊息</div>
                             <div id="sec-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#3A3F5C; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
@@ -1221,18 +1221,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🎭 頭像 分頁 body（char：角色頭像／立繪）── -->
                         <div id="img-tab-char" class="img-srctab-body">
                             <div class="set-group">
-                                <div class="set-label" title="角色頭像／立繪用這個來源。插圖在「插圖」分頁另選，可走不同渠道。">🎭 頭像 來源</div>
+                                <div class="set-label" title="角色頭像／立繪用這個來源。插圖在「插圖」分頁另選，可走不同渠道。"><i class="fa-solid fa-masks-theater"></i> 頭像 來源</div>
                                 <select class="set-select" id="img-service-living">
-                                    <option value="pollinations" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
-                                    <option value="custom_api" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>🌐 自訂接口</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
+                                    <option value="pollinations" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>酒館原生</option>
+                                    <option value="custom_api" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。</div>
                             </div>
                             <div class="set-group">
-                                <div class="set-label" title="設了＝所有接口都用這格（蓋過預設包）。留空＝交給接口：ComfyUI 用基本參數/預設包調的寬高、Pollinations 512、NovelAI 1024。">📐 角色頭像尺寸</div>
+                                <div class="set-label" title="設了＝所有接口都用這格（蓋過預設包）。留空＝交給接口：ComfyUI 用基本參數/預設包調的寬高、Pollinations 512、NovelAI 1024。"><i class="fa-solid fa-ruler-combined"></i> 角色頭像尺寸</div>
                                 <select class="set-select" id="img-avatar-size" style="font-size:12px;">
                                     <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設（ComfyUI＝預設包尺寸）</option>
                                     <option value="512x768"   ${imgConfig.avatarSize==='512x768'   ? 'selected':''}>512×768（直式小圖，舊預設）</option>
@@ -1243,7 +1243,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </select>
                             </div>
                             <div class="set-group">
-                                <div class="set-label" title="關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像；適合繪圖模型生全身穩定的情況。">🧍 立繪模式</div>
+                                <div class="set-label" title="關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像；適合繪圖模型生全身穩定的情況。">立繪模式</div>
                                 <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${vnD.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
                                 <div class="set-desc">開＝直接生全身立繪、不生頭像。</div>
                             </div>
@@ -1252,13 +1252,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🎬 插圖 分頁 body（scene：場景插圖／CG 來源，可與頭像不同渠道）── -->
                         <div id="img-tab-scene" class="img-srctab-body" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label" title="場景插圖／CG 用這個來源，可跟頭像不同渠道（例如頭像走 Anima、插圖走 Pollinations）。">🎬 插圖 來源</div>
+                                <div class="set-label" title="場景插圖／CG 用這個來源，可跟頭像不同渠道（例如頭像走 Anima、插圖走 Pollinations）。"><i class="fa-solid fa-clapperboard"></i> 插圖 來源</div>
                                 <select class="set-select" id="img-service-scene">
-                                    <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
-                                    <option value="custom_api" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>🌐 自訂接口</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
+                                    <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>酒館原生</option>
+                                    <option value="custom_api" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">場景插圖／CG 用這個來源。</div>
                             </div>
@@ -1267,13 +1267,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🗺️ 小地圖 分頁 body（map：場景俯視小地圖底板，畫風跟背景分開）── -->
                         <div id="img-tab-map" class="img-srctab-body" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label" title="場景俯視小地圖底板用這個來源，畫風跟背景分開（例：俯視平面圖模型）。">🗺️ 小地圖 來源</div>
+                                <div class="set-label" title="場景俯視小地圖底板用這個來源，畫風跟背景分開（例：俯視平面圖模型）。"><i class="fa-solid fa-map"></i> 小地圖 來源</div>
                                 <select class="set-select" id="img-service-map">
-                                    <option value="pollinations" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
-                                    <option value="custom_api" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>🌐 自訂接口</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
+                                    <option value="pollinations" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>酒館原生</option>
+                                    <option value="custom_api" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
                                 </select>
                                 <div class="set-desc" style="margin-top:6px;">場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。</div>
                             </div>
@@ -1283,7 +1283,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="img-tab-misc" class="img-srctab-body" style="display:none;">
                             <!-- 🏠 房間畫風：房客的房間整間生出來時用哪個畫風包。選了就存(localStorage)、不用按底部保存。 -->
                             <div class="set-group" id="img-room-style-block">
-                                <div class="set-label" title="包租婆的房客房間是「整間一次畫出來」，用這裡選的畫風。">🏠 房間畫風</div>
+                                <div class="set-label" title="包租婆的房客房間是「整間一次畫出來」，用這裡選的畫風。"><i class="fa-solid fa-house"></i> 房間畫風</div>
                                 <select class="set-select" id="img-room-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">
                                     ${(() => {
                                         const _w = window.parent || window;
@@ -1303,7 +1303,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                             <!-- 🚪 世界門旅人畫風：展開世界後，大廳那四個旅人的小人自動用這個畫風生出來（不選＝維持剪影） -->
                             <div class="set-group" id="img-wg-sprite-block">
-                                <div class="set-label" title="展開世界後，大廳的旅人小人會自動用這個畫風生成，不用一個一個進裝扮室。">🚪 世界門旅人畫風</div>
+                                <div class="set-label" title="展開世界後，大廳的旅人小人會自動用這個畫風生成，不用一個一個進裝扮室。"><i class="fa-solid fa-door-open"></i> 世界門旅人畫風</div>
                                 <select class="set-select" id="img-wg-sprite" onchange="window._saveWgSpritePack && window._saveWgSpritePack(this.value)">
                                     ${(() => {
                                         const _w = window.parent || window;
@@ -1333,26 +1333,26 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="img-tab-bg" class="img-srctab-body" style="display:none;">
                             <div class="set-group">
                                 <div class="set-label">
-                                    <span>🔗 同步角色來源</span>
+                                    <span><i class="fa-solid fa-link"></i> 同步角色來源</span>
                                     <label class="toggle-switch"><input type="checkbox" id="img-sync-bg-to-char"><span class="slider"></span></label>
                                 </div>
                                 <div class="set-desc">開啟後，背景和角色用同一個來源，不用再貼一次帳號。</div>
                             </div>
                             <div class="set-group" id="img-bg-source-group">
-                                <div class="set-label">🌄 背景・📦 物品 來源</div>
+                                <div class="set-label"><i class="fa-solid fa-mountain-sun"></i> 背景・<i class="fa-solid fa-box"></i> 物品 來源</div>
                                 <select class="set-select" id="img-service-inanimate">
-                                    <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>✨ Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>💎 NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>🎨 酒館原生</option>
-                                    <option value="custom_api" ${(imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>🌐 自訂接口</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>🧩 ComfyUI 直連</option>
+                                    <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
+                                    <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
+                                    <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>酒館原生</option>
+                                    <option value="custom_api" ${(imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
+                                    <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
                                 </select>
                             </div>
                             <div class="set-group" id="img-bg-synced-note" style="display:none;">
                                 <div class="set-desc" id="img-bg-synced-note-text">（與角色相同）</div>
                             </div>
                             <div class="set-group">
-                                <div class="set-label" title="所有接口共用。">📐 背景尺寸</div>
+                                <div class="set-label" title="所有接口共用。"><i class="fa-solid fa-ruler-combined"></i> 背景尺寸</div>
                                 <select class="set-select" id="img-bg-size" style="font-size:12px;">
                                     <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅 4:3，預設）</option>
                                     <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅 3:2）</option>
@@ -1362,9 +1362,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="768x1344"  ${(imgConfig.bgSize||'1024x768')==='768x1344'  ? 'selected':''}>768×1344（直立，手機全螢幕）</option>
                                 </select>
                                 <div class="set-desc">全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。</div>
-                                <div class="set-label" style="margin-top:12px;">🌄 背景生圖底詞</div>
+                                <div class="set-label" style="margin-top:12px;">背景生圖底詞</div>
                                 <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:55px;">${vnD.bgBasePrompt || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;">🚫 背景 Negative</div>
+                                <div class="set-label" style="margin-top:8px;"><i class="fa-solid fa-ban"></i> 背景 Negative</div>
                                 <textarea class="set-textarea" id="vncfg-bg-neg" style="min-height:45px;">${vnD.bgNegPrompt || ''}</textarea>
                             </div>
                         </div>
@@ -1373,42 +1373,42 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="img-iface-groups">
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
-                                <div class="iface-section-title is-first">🔌 連線設定（連接你電腦上的 ComfyUI）</div>
+                                <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定（連接你電腦上的 ComfyUI）</div>
                                 <div class="set-group">
                                     <div class="set-label">ComfyUI 網址</div>
                                     <div style="display:flex; gap:8px;">
                                         <input class="set-input" id="img-cfd-url" type="text" placeholder="http://127.0.0.1:8188" value="${imgConfig.comfyuiDirect?.url || 'http://127.0.0.1:8188'}" style="flex:1;">
-                                        <button class="set-btn" id="img-cfd-test" type="button" style="white-space:nowrap;">🔌 測試 / 抓清單</button>
+                                        <button class="set-btn" id="img-cfd-test" type="button" style="white-space:nowrap;"><i class="fa-solid fa-plug"></i> 測試 / 抓清單</button>
                                     </div>
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label" title="把整組設定存起來，一鍵切換。每個包存一組設定，可存預覽圖、套用、刪除。改完記得到底部按儲存。">📦 預設包</div>
-                                    <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;">📦 打開預設包 · ${(imgConfig.comfyuiDirect?.presets || []).length} 個</button>
+                                    <div class="set-label" title="把整組設定存起來，一鍵切換。每個包存一組設定，可存預覽圖、套用、刪除。改完記得到底部按儲存。"><i class="fa-solid fa-box"></i> 預設包</div>
+                                    <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;"><i class="fa-solid fa-box"></i> 打開預設包 · ${(imgConfig.comfyuiDirect?.presets || []).length} 個</button>
                                 </div>
                                 <!-- 預設包 modal（可視化卡片牆） -->
                                 <div id="img-cfd-preset-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
                                     <div style="background:#f5f3ee; width:min(560px,92vw); max-height:86vh; border-radius:12px; padding:16px; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
                                         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                                            <div style="font-size:15px; font-weight:700; color:#1A1C28;">📦 預設包</div>
+                                            <div style="font-size:15px; font-weight:700; color:#1A1C28;"><i class="fa-solid fa-box"></i> 預設包</div>
                                             <span style="cursor:pointer; font-size:18px; color:#1A1C28; padding:0 6px;" onclick="window._cfdPreset.close()">✕</span>
                                         </div>
-                                        <div style="font-size:11px; color:rgba(26,28,40,0.7); margin-bottom:4px;">🎨 預覽測試詞（每個包都用這句生縮圖，只比風格差異）</div>
+                                        <div style="font-size:11px; color:rgba(26,28,40,0.7); margin-bottom:4px;"><i class="fa-solid fa-palette"></i> 預覽測試詞（每個包都用這句生縮圖，只比風格差異）</div>
                                         <input id="img-cfd-preview-prompt" class="set-input" style="width:100%; margin-bottom:12px;" value="${(imgConfig.comfyuiDirect?.previewPrompt || '1 person, upper body portrait, looking at viewer, simple background').replace(/"/g,'&quot;')}">
                                         <div id="img-cfd-preset-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px;"></div>
                                         <div style="display:flex; gap:6px; align-items:center; margin-top:14px; border-top:1px solid rgba(26,28,40,0.12); padding-top:12px;">
                                             <input id="img-cfd-preset-newname" class="set-input" placeholder="新預設包名稱（如：日常動漫）" style="flex:1;">
-                                            <button class="set-btn" type="button" onclick="window._cfdPreset.saveNew()" style="white-space:nowrap;">➕ 從目前設定另存</button>
+                                            <button class="set-btn" type="button" onclick="window._cfdPreset.saveNew()" style="white-space:nowrap;"><i class="fa-solid fa-plus"></i> 從目前設定另存</button>
                                         </div>
                                         <div class="cfd-wf-restore">
-                                            <div class="cfd-wf-restore-drop" id="img-cfd-wf-drop">🖼️ 拖一張以前用 ComfyUI 生的圖進來（或點這裡選檔）<br>自動把模型／LoRA／採樣器／提示詞拆進一張預設卡，套用後每格都能調</div>
+                                            <div class="cfd-wf-restore-drop" id="img-cfd-wf-drop"><i class="fa-solid fa-image"></i> 拖一張以前用 ComfyUI 生的圖進來（或點這裡選檔）<br>自動把模型／LoRA／採樣器／提示詞拆進一張預設卡，套用後每格都能調</div>
                                             <input type="file" id="img-cfd-wf-img" accept="image/png" class="cfd-pack-file-hidden">
                                             <div class="cfd-wf-restore-status" id="img-cfd-wf-status"></div>
                                         </div>
                                         <div class="cfd-pack-io-row">
-                                            <button class="set-btn" type="button" onclick="window._cfdPreset.importPack()">📥 匯入預設包檔</button>
-                                            <button class="set-btn" type="button" onclick="window._cfdPreset.exportPack()">📤 匯出全部</button>
-                                            <button class="set-btn cfd-pack-clear" type="button" onclick="window._cfdPreset.clearAll()">🗑️ 清空</button>
+                                            <button class="set-btn" type="button" onclick="window._cfdPreset.importPack()"><i class="fa-solid fa-download"></i> 匯入預設包檔</button>
+                                            <button class="set-btn" type="button" onclick="window._cfdPreset.exportPack()"><i class="fa-solid fa-upload"></i> 匯出全部</button>
+                                            <button class="set-btn cfd-pack-clear" type="button" onclick="window._cfdPreset.clearAll()"><i class="fa-solid fa-trash-can"></i> 清空</button>
                                             <input type="file" id="img-cfd-preset-file" accept=".json,application/json" class="cfd-pack-file-hidden">
                                         </div>
                                         <div class="cfd-pack-io-hint">拿到別人分享的畫風包檔，按「匯入」讀進來；「匯出」會把整面卡片牆存成一個檔，可以分享給朋友。匯入時會問你要「覆蓋同名」還是「全部新增」。「清空」把整牆清掉（要按底部保存才真的生效）。</div>
@@ -1470,25 +1470,25 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="set-label" title="開關 ☑ + 名字 + 模型/CLIP 強度。LoRA 要跟模型同架構（SDXL 配 SDXL）。名字可下拉選或手打檔名。">LoRA</div>
                                     <datalist id="img-cfd-lora-list"></datalist>
                                     <div id="img-cfd-loras"></div>
-                                    <button class="set-btn" id="img-cfd-add-lora" type="button" style="margin-top:6px;">➕ 加 LoRA</button>
+                                    <button class="set-btn" id="img-cfd-add-lora" type="button" style="margin-top:6px;"><i class="fa-solid fa-plus"></i> 加 LoRA</button>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label" title="只在「場景插圖」自動套用，頭像不套；會變慢。">🖼️ 場景插圖品質</div>
+                                    <div class="set-label" title="只在「場景插圖」自動套用，頭像不套；會變慢。"><i class="fa-solid fa-image"></i> 場景插圖品質</div>
                                     <div class="cfd-scene-row">
                                         <label class="cfd-scene-chk">
-                                            <input type="checkbox" id="img-cfd-scene-hires" ${imgConfig.comfyuiDirect?.sceneHires !== false ? 'checked' : ''}>🔬 高清修復
+                                            <input type="checkbox" id="img-cfd-scene-hires" ${imgConfig.comfyuiDirect?.sceneHires !== false ? 'checked' : ''}><i class="fa-solid fa-microscope"></i> 高清修復
                                         </label>
                                         <select class="set-select cfd-scene-scale" id="img-cfd-scene-hires-scale">
                                             <option value="1.5" ${String(imgConfig.comfyuiDirect?.sceneHiresScale ?? 1.5)==='1.5'?'selected':''}>1.5x</option>
                                             <option value="2" ${String(imgConfig.comfyuiDirect?.sceneHiresScale)==='2'?'selected':''}>2x</option>
                                         </select>
                                         <label class="cfd-scene-chk">
-                                            <input type="checkbox" id="img-cfd-scene-facedetailer" ${imgConfig.comfyuiDirect?.sceneFaceDetailer !== false ? 'checked' : ''}>🎯 FaceDetailer 修臉
+                                            <input type="checkbox" id="img-cfd-scene-facedetailer" ${imgConfig.comfyuiDirect?.sceneFaceDetailer !== false ? 'checked' : ''}><i class="fa-solid fa-bullseye"></i> FaceDetailer 修臉
                                         </label>
                                     </div>
                                     <div class="set-desc" title="需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。">場景小臉/遠景眼睛會清楚很多，但較慢。</div>
                                 </div>
-                                <div class="iface-section-title">📝 提示詞（底詞）</div>
+                                <div class="iface-section-title"><i class="fa-solid fa-pen-to-square"></i> 提示詞（底詞）</div>
                                 <div class="set-group">
                                     <div class="field-row">
                                         <div class="set-label" title="選填，可空。">底詞</div>
@@ -1499,7 +1499,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <textarea class="set-textarea" id="img-cfd-neg">${imgConfig.comfyuiDirect?.negPrompt || ''}</textarea>
                                     </div>
                                 </div>
-                                <div class="iface-section-title">⚙️ 進階：自訂工作流</div>
+                                <div class="iface-section-title"><i class="fa-solid fa-gear"></i> 進階：自訂工作流</div>
                                 <div class="set-group">
                                     <div class="set-label" title="想用自己的工作流再開，否則不用碰。">工作流模式</div>
                                     <select class="set-select" id="img-cfd-wfmode">
@@ -1516,14 +1516,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
 
                             <div id="img-group-tavernsd" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd') ? '' : 'hidden'}">
-                                <div class="iface-section-title is-first">🔌 連線設定</div>
+                                <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
                                 <div class="set-group">
                                     <div class="set-desc" title="用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。前提：先在酒館「圖像生成」擴展設好一個後端來源；沒設好會跳提示，不會偷偷換成別的來源。">用酒館原生「圖像生成」擴展的後端生圖。</div>
                                 </div>
                             </div>
 
                             <div id="img-group-pollinations" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
-                                <div class="iface-section-title is-first">🔌 連線設定</div>
+                                <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
                                 <div class="set-group">
                                     <div class="field-row">
                                         <div class="set-label" title="現在已無免費方案，需儲值，請至官網獲取 Key。">API Key <span class="lbl-req">(必填)</span></div>
@@ -1532,29 +1532,29 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="field-row">
                                         <div class="set-label" title="按價格排序。">模型</div>
                                         <select class="set-select" id="img-pol-model">
-                                            <option value="zimage" ${imgConfig.pollinations.model === 'zimage' ? 'selected' : ''}>🟢 Z-Image Turbo (0.002p)</option>
-                                            <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>🟢 Flux Schnell (0.00175p)</option>
-                                            <option value="p-image" ${imgConfig.pollinations.model === 'p-image' ? 'selected' : ''}>🟢 Pruna p-image (0.005p)</option>
-                                            <option value="klein" ${imgConfig.pollinations.model === 'klein' ? 'selected' : ''}>🟡 FLUX.2 Klein 4B (0.01p)</option>
-                                            <option value="grok-imagine" ${imgConfig.pollinations.model === 'grok-imagine' ? 'selected' : ''}>🟡 Grok Imagine (0.02p)</option>
-                                            <option value="qwen-image" ${imgConfig.pollinations.model === 'qwen-image' ? 'selected' : ''}>🟠 Qwen Image Plus (0.03p)</option>
-                                            <option value="seedream" ${imgConfig.pollinations.model === 'seedream' ? 'selected' : ''}>🟠 Seedream 4.0 (0.03p)</option>
-                                            <option value="seedream5" ${imgConfig.pollinations.model === 'seedream5' ? 'selected' : ''}>🟠 Seedream 5.0 Lite (0.035p)</option>
-                                            <option value="seedream-pro" ${imgConfig.pollinations.model === 'seedream-pro' ? 'selected' : ''}>🟠 Seedream 4.5 Pro (0.04p)</option>
-                                            <option value="ideogram-v4-turbo" ${imgConfig.pollinations.model === 'ideogram-v4-turbo' ? 'selected' : ''}>🟠 Ideogram 4 Turbo (0.03p)</option>
-                                            <option value="nanobanana" ${imgConfig.pollinations.model === 'nanobanana' ? 'selected' : ''}>🔵 NanoBanana</option>
-                                            <option value="nanobanana-pro" ${imgConfig.pollinations.model === 'nanobanana-pro' ? 'selected' : ''}>🔵 NanoBanana Pro</option>
-                                            <option value="gptimage" ${imgConfig.pollinations.model === 'gptimage' ? 'selected' : ''}>🔴 GPT Image 1 Mini</option>
-                                            <option value="gpt-image-2" ${imgConfig.pollinations.model === 'gpt-image-2' ? 'selected' : ''}>🔴 GPT Image 2</option>
-                                            <option value="kontext" ${imgConfig.pollinations.model === 'kontext' ? 'selected' : ''}>🔴 FLUX.1 Kontext (0.04p)</option>
+                                            <option value="zimage" ${imgConfig.pollinations.model === 'zimage' ? 'selected' : ''}>Z-Image Turbo (0.002p)</option>
+                                            <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>Flux Schnell (0.00175p)</option>
+                                            <option value="p-image" ${imgConfig.pollinations.model === 'p-image' ? 'selected' : ''}>Pruna p-image (0.005p)</option>
+                                            <option value="klein" ${imgConfig.pollinations.model === 'klein' ? 'selected' : ''}>FLUX.2 Klein 4B (0.01p)</option>
+                                            <option value="grok-imagine" ${imgConfig.pollinations.model === 'grok-imagine' ? 'selected' : ''}>Grok Imagine (0.02p)</option>
+                                            <option value="qwen-image" ${imgConfig.pollinations.model === 'qwen-image' ? 'selected' : ''}>Qwen Image Plus (0.03p)</option>
+                                            <option value="seedream" ${imgConfig.pollinations.model === 'seedream' ? 'selected' : ''}>Seedream 4.0 (0.03p)</option>
+                                            <option value="seedream5" ${imgConfig.pollinations.model === 'seedream5' ? 'selected' : ''}>Seedream 5.0 Lite (0.035p)</option>
+                                            <option value="seedream-pro" ${imgConfig.pollinations.model === 'seedream-pro' ? 'selected' : ''}>Seedream 4.5 Pro (0.04p)</option>
+                                            <option value="ideogram-v4-turbo" ${imgConfig.pollinations.model === 'ideogram-v4-turbo' ? 'selected' : ''}>Ideogram 4 Turbo (0.03p)</option>
+                                            <option value="nanobanana" ${imgConfig.pollinations.model === 'nanobanana' ? 'selected' : ''}>NanoBanana</option>
+                                            <option value="nanobanana-pro" ${imgConfig.pollinations.model === 'nanobanana-pro' ? 'selected' : ''}>NanoBanana Pro</option>
+                                            <option value="gptimage" ${imgConfig.pollinations.model === 'gptimage' ? 'selected' : ''}>GPT Image 1 Mini</option>
+                                            <option value="gpt-image-2" ${imgConfig.pollinations.model === 'gpt-image-2' ? 'selected' : ''}>GPT Image 2</option>
+                                            <option value="kontext" ${imgConfig.pollinations.model === 'kontext' ? 'selected' : ''}>FLUX.1 Kontext (0.04p)</option>
                                         </select>
                                     </div>
-                                    <div class="set-desc" title="角色頭像在「🎭 頭像」、背景在「🌄 背景」、場景在「🎬 插圖」分頁各自調。">📐 尺寸已改到各部位分頁各自調。</div>
+                                    <div class="set-desc" title="角色頭像在「頭像」、背景在「背景」、場景在「插圖」分頁各自調。">尺寸已改到各部位分頁各自調。</div>
                                 </div>
                             </div>
 
                             <div id="img-group-customapi" class="${[(imgConfig.serviceInanimate || imgConfig.service), (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service), (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service), (imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service)].includes('custom_api') ? '' : 'hidden'}">
-                                <div class="iface-section-title is-first">🔌 連線設定</div>
+                                <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
                                 <div class="set-group">
                                     <div class="field-row">
                                         <div class="set-label" title="站方給的那條位址，通常以 /v1 結尾。整條貼進來也可以。">接口位址 <span class="lbl-req">(必填)</span></div>
@@ -1581,7 +1581,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <textarea class="set-textarea" id="img-capi-base" placeholder="每張圖都要帶的固定描述，例如畫風">${(imgConfig.customApi?.basePrompt || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
                                     </div>
                                     <div class="field-row">
-                                        <button class="set-btn" id="img-capi-test" type="button">🔌 測試</button>
+                                        <button class="set-btn" id="img-capi-test" type="button"><i class="fa-solid fa-plug"></i> 測試</button>
                                         <div class="set-desc" id="img-capi-status"></div>
                                     </div>
                                     <div class="set-desc">貼站方給的位址就好，兩種送法會自己認：網址帶 <b>/sdapi</b> 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟上面的 Pollinations 都不是同一種送法，所以各佔一格、不能只換網址。</div>
@@ -1589,14 +1589,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
 
                             <div id="img-group-nai" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'novelai' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai') ? '' : 'hidden'}">
-                                <div class="iface-section-title is-first">🔌 連線設定</div>
+                                <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
                                 <div class="set-group">
                                     <div class="field-row">
                                         <div class="set-label">NovelAI Token <span class="lbl-req">(必填)</span></div>
                                         <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label" title="開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。"><span>🛡️ 防超免費尺寸</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
+                                        <div class="set-label" title="開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。"><span><i class="fa-solid fa-shield-halved"></i> 防超免費尺寸</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
                                         <div class="set-desc">超過免費上限自動縮回。</div>
                                     </div>
                                     <div class="field-row">
@@ -1610,7 +1610,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                     <div class="nai-adv">
                                         <div class="nai-adv-head" onclick="this.closest('.nai-adv').classList.toggle('open')">
-                                            <span title="不懂可不動，預設跟官方一致。">⚙️ 進階參數</span>
+                                            <span title="不懂可不動，預設跟官方一致。"><i class="fa-solid fa-gear"></i> 進階參數</span>
                                             <span class="nai-adv-arrow"></span>
                                         </div>
                                         <div class="nai-adv-body">
@@ -1662,11 +1662,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                 </div>
 
-                                <div class="iface-section-title">📝 提示詞（底詞）</div>
+                                <div class="iface-section-title"><i class="fa-solid fa-pen-to-square"></i> 提示詞（底詞）</div>
                                 <div class="set-group">
                                     <div class="nai-preset-box">
                                         <div class="nai-preset-head">
-                                            <div class="set-label" title="含底詞、負詞、Sampler、Scale。">📋 提示詞預設</div>
+                                            <div class="set-label" title="含底詞、負詞、Sampler、Scale。"><i class="fa-solid fa-clipboard"></i> 提示詞預設</div>
                                         </div>
                                         <div class="row-inline">
                                             <select id="img-nai-preset-sel" class="set-select">
@@ -1678,7 +1678,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             <span class="nai-mini-btn is-danger" onclick="window._naiPreset.del()">刪除</span>
                                         </div>
                                         <div class="row-inline nai-pack-open-row">
-                                            <span class="nai-pack-open-btn" onclick="window._naiPreset.open()">📦 拖圖生預設・看預覽圖</span>
+                                            <span class="nai-pack-open-btn" onclick="window._naiPreset.open()"><i class="fa-solid fa-box"></i> 拖圖生預設・看預覽圖</span>
                                         </div>
                                         <div id="img-nai-preset-name-row" class="nai-preset-name-row">
                                             <div class="row-inline">
@@ -1695,30 +1695,30 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                          放在 set-group 裡會讓整個 modal 縮到那一格設定的框裡（畫面上就是「被鎖在小窗」、右半截被裁掉）。 -->
 
                                     <div class="field-row">
-                                        <div class="set-label" title="Danbooru tag 格式，逗號分隔。">🎨 角色底詞</div>
+                                        <div class="set-label" title="Danbooru tag 格式，逗號分隔。"><i class="fa-solid fa-palette"></i> 角色底詞</div>
                                         <textarea class="set-textarea" id="img-nai-char-base">${imgConfig.novelai.charBasePrompt || ''}</textarea>
                                         <div class="field-reset"><span onclick="document.getElementById('img-nai-char-base').value='masterpiece, best quality, very aesthetic, absurdres, anime style, detailed face'">[重置]</span></div>
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label">🚫 角色負詞</div>
+                                        <div class="set-label"><i class="fa-solid fa-ban"></i> 角色負詞</div>
                                         <textarea class="set-textarea" id="img-nai-char-neg">${imgConfig.novelai.charNegPrompt || ''}</textarea>
                                         <div class="field-reset"><span onclick="document.getElementById('img-nai-char-neg').value='nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry'">[重置]</span></div>
                                     </div>
                                     <div id="img-nai-item-block" class="nai-item-stack">
                                         <div class="field-row">
-                                            <div class="set-label">📦 物品底詞</div>
+                                            <div class="set-label"><i class="fa-solid fa-box"></i> 物品底詞</div>
                                             <textarea class="set-textarea" id="img-nai-item-base">${imgConfig.novelai.itemBasePrompt || ''}</textarea>
                                             <div class="field-reset"><span onclick="document.getElementById('img-nai-item-base').value='masterpiece, best quality, white background, simple background, no background, product image, detailed'">[重置]</span></div>
                                         </div>
                                         <div class="field-row">
-                                            <div class="set-label">🚫 物品負詞</div>
+                                            <div class="set-label"><i class="fa-solid fa-ban"></i> 物品負詞</div>
                                             <textarea class="set-textarea" id="img-nai-item-neg">${imgConfig.novelai.itemNegPrompt || ''}</textarea>
                                             <div class="field-reset"><span onclick="document.getElementById('img-nai-item-neg').value='person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text'">[重置]</span></div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="iface-section-title">🎨 氛圍轉印（Vibe Transfer）</div>
+                                <div class="iface-section-title"><i class="fa-solid fa-palette"></i> 氛圍轉印（Vibe Transfer）</div>
                                 <div class="set-group">
                                     <div id="img-nai-vibe-drop" class="nai-vibe-drop">
                                         <div class="nai-pack-drop-hint">把 NovelAI 匯出的 <b>.naiv4vibe</b> 檔拖進來（或點這裡選檔）<br>生圖就會帶上那張參考圖的色調氛圍，可同時掛多個</div>
@@ -1738,16 +1738,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div id="img-pol-prompts-group" class="${((imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
-                        <div class="iface-section-title">📝 提示詞（底詞）</div>
+                        <div class="iface-section-title"><i class="fa-solid fa-pen-to-square"></i> 提示詞（底詞）</div>
                         <div class="set-group">
                             <div class="field-row">
-                                <div class="set-label" title="全模組共用：夜店 / 偵探 / 寶寶 / VN頭像。這裡的詞會自動加在所有角色頭像生圖最前面，VN 背景不受影響。">🎨 角色頭像通用底詞</div>
+                                <div class="set-label" title="全模組共用：夜店 / 偵探 / 寶寶 / VN頭像。這裡的詞會自動加在所有角色頭像生圖最前面，VN 背景不受影響。"><i class="fa-solid fa-palette"></i> 角色頭像通用底詞</div>
                                 <textarea class="set-textarea" id="img-style-prompt">${imgConfig.pollinations.charBasePrompt}</textarea>
                                 <div class="field-hint">↑ 這裡設定的詞會自動加在所有角色頭像生圖的最前面。VN背景不受影響。VN頭像可在 VN 設定裡追加額外詞。</div>
                                 <div class="field-reset"><span onclick="document.getElementById('img-style-prompt').value='anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines'">[重置為預設]</span></div>
                             </div>
                             <div class="field-row">
-                                <div class="set-label">🚫 角色負詞</div>
+                                <div class="set-label"><i class="fa-solid fa-ban"></i> 角色負詞</div>
                                 <textarea class="set-textarea" id="img-char-neg-prompt">${imgConfig.pollinations.charNegPrompt}</textarea>
                                 <div class="field-reset"><span onclick="document.getElementById('img-char-neg-prompt').value='bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text'">[重置為預設]</span></div>
                             </div>
@@ -1757,29 +1757,29 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🧑‍🎨 頭像追加詞（按接口，屬「頭像」分頁；放在底詞區下方，不再頂在連線設定上面）── -->
                         <div id="img-avatar-add-zone">
                             <div class="set-group" id="img-avatar-add-main">
-                                <div class="set-label" title="插在通用底詞與角色描述之間。">🧑‍🎨 頭像追加詞</div>
+                                <div class="set-label" title="插在通用底詞與角色描述之間。"><i class="fa-solid fa-palette"></i> 頭像追加詞</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:55px;">${vnD.avatarBasePrompt || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;">🚫 頭像 Negative</div>
+                                <div class="set-label" style="margin-top:8px;"><i class="fa-solid fa-ban"></i> 頭像 Negative</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:45px;">${vnD.avatarNegPrompt || ''}</textarea>
                             </div>
                             <div class="set-group" id="img-avatar-add-tav">
-                                <div class="set-label" title="酒館原生 / ComfyUI 專用。">🎨 頭像追加詞</div>
+                                <div class="set-label" title="酒館原生 / ComfyUI 專用。"><i class="fa-solid fa-palette"></i> 頭像追加詞</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-prompt-tavern" style="min-height:55px;">${vnD.avatarBasePromptTavern || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;" title="酒館原生 / ComfyUI 專用。">🚫 頭像 Negative</div>
+                                <div class="set-label" style="margin-top:8px;" title="酒館原生 / ComfyUI 專用。"><i class="fa-solid fa-ban"></i> 頭像 Negative</div>
                                 <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:45px;">${vnD.avatarNegPromptTavern || ''}</textarea>
                             </div>
                         </div>
 
                         <!-- ── 🎬 場景插圖（共用設定）｜屬「插圖」分頁 ── -->
                         <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
-                            <div class="set-label" style="font-size:13px;" title="尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。">🎬 場景插圖</div>
+                            <div class="set-label" style="font-size:13px;" title="尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。"><i class="fa-solid fa-clapperboard"></i> 場景插圖</div>
                             <div class="set-desc" style="margin-top:6px;">設定套用於所有場景插圖。</div>
 
                             <div id="img-scene-body" style="margin-top:14px;">
 
                                 <!-- ── 場景插圖尺寸（獨立於主圖片尺寸）── -->
                                 <div style="margin-bottom:12px;">
-                                    <div class="set-label" style="font-size:11px;">📐 場景插圖尺寸</div>
+                                    <div class="set-label" style="font-size:11px;"><i class="fa-solid fa-ruler-combined"></i> 場景插圖尺寸</div>
                                     <select class="set-select" id="img-scene-size" style="font-size:12px;" onchange="document.getElementById('img-scene-size-custom').style.display=(this.value==='custom')?'':'none';">
                                         <option value="512x512"   ${(imgConfig.sceneGen?.size||'1024x1024')==='512x512'   ? 'selected':''}>512×512（最快最省，較糊）</option>
                                         <option value="768x768"   ${(imgConfig.sceneGen?.size||'1024x1024')==='768x768'   ? 'selected':''}>768×768（平衡）</option>
@@ -1788,41 +1788,41 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <option value="768x1024"  ${(imgConfig.sceneGen?.size||'1024x1024')==='768x1024'  ? 'selected':''}>768×1024（直幅）</option>
                                         <option value="1216x832"  ${(imgConfig.sceneGen?.size||'1024x1024')==='1216x832'  ? 'selected':''}>1216×832（NAI 橫幅）</option>
                                         <option value="832x1216"  ${(imgConfig.sceneGen?.size||'1024x1024')==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
-                                        <option value="custom"    ${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? 'selected':''}>✏️ 自訂…</option>
+                                        <option value="custom"    ${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? 'selected':''}>自訂…</option>
                                     </select>
                                     <input class="set-input" id="img-scene-size-custom" type="text" placeholder="寬x高，例如 1020x1020" value="${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? (imgConfig.sceneGen?.size||'') : ''}" style="font-size:12px; margin-top:6px; display:${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? '' : 'none'};">
                                     <div style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:3px;">← 越大越清晰但越耗點數。自訂填「寬x高」(數字)；多數模型建議用 64 的倍數(如 1024)。</div>
                                 </div>
 
-                                <div class="set-desc" style="margin-bottom:12px; font-size:11px;" title="插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。">🎨 插圖底詞／負詞在接口設定區調整。</div>
+                                <div class="set-desc" style="margin-bottom:12px; font-size:11px;" title="插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。"><i class="fa-solid fa-palette"></i> 插圖底詞／負詞在接口設定區調整。</div>
                             </div>
                         </div>
 
                         <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
                             <div style="display:flex; align-items:center; justify-content:space-between;" title="開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會順便依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。其它觸發：主模型直接吐 [Scene|]（世界書開規則，最省）。">
-                                <span>🖼️ 自動插圖</span>
+                                <span><i class="fa-solid fa-image"></i> 自動插圖</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">每輪記憶抽取時順便吐插圖、自動生圖。</div>
                             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;" title="開啟：副模型寫插圖 prompt 時只用 ##角色名##（或 ##代號##）代表角色，外觀由系統用該角色頭像生成詞自動填入（沒頭像退 AVS 簡易形象、再沒有留原名）。副模型 prompt 不用塞整塊外觀、不會越積越肥，外觀又跟頭像一致。關閉＝改回把近期角色外觀整塊塞給副模型。">
-                                <span>🏷️ 角色名佔位</span>
+                                <span><i class="fa-solid fa-tag"></i> 角色名佔位</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">副模型只寫 ##角色名##＋動作場景，外觀由系統用頭像自動填。</div>
-                            <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()">✏️ 編輯角色外觀登記表</button>
+                            <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()"><i class="fa-solid fa-pen"></i> 編輯角色外觀登記表</button>
                             <div class="set-desc" style="margin-top:4px;">列出每個角色的外觀（頭像生成詞），可直接改／刪／新增——修你之前的資料。</div>
                             <div class="set-label" style="font-size:12px; margin-top:10px;" title="跟著上面選的「插圖來源」自動切換：選哪個接口就顯示哪個接口的指令，各自獨立、互不影響。">副模型插圖指令（跟著插圖來源）</div>
                             ${(() => {
                                 const _ss = imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service;
                                 const _esc = t => (t || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                                 const _rows = [
-                                    { svc: 'novelai',        sfx: 'novelai',      hint: '💎 NovelAI（Danbooru 標籤・五層系統）',  val: imgConfig.sceneGen?.extractPromptNovelai },
-                                    { svc: 'pollinations',   sfx: 'pollinations', hint: '✨ Pollinations（自然語言英文句子）',     val: imgConfig.sceneGen?.extractPromptPollinations },
-                                    { svc: 'tavern_sd',      sfx: 'tavern',       hint: '🎨 酒館原生（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptTavern },
-                                    { svc: 'comfyui_direct', sfx: 'comfy',        hint: '🧩 ComfyUI 直連（自然語言英文句子）',    val: imgConfig.sceneGen?.extractPromptComfy },
+                                    { svc: 'novelai',        sfx: 'novelai',      hint: 'NovelAI（Danbooru 標籤・五層系統）',  val: imgConfig.sceneGen?.extractPromptNovelai },
+                                    { svc: 'pollinations',   sfx: 'pollinations', hint: 'Pollinations（自然語言英文句子）',     val: imgConfig.sceneGen?.extractPromptPollinations },
+                                    { svc: 'tavern_sd',      sfx: 'tavern',       hint: '酒館原生（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptTavern },
+                                    { svc: 'comfyui_direct', sfx: 'comfy',        hint: 'ComfyUI 直連（自然語言英文句子）',    val: imgConfig.sceneGen?.extractPromptComfy },
                                     // 🚨 這排是「哪個來源就顯示哪一格」，來源不在這份清單裡＝那格永遠不顯示。
                                     //    加新的插圖來源時只要加在這裡就好 —— 切換時是掃 data-svc，不再有第二份對照表。
-                                    { svc: 'custom_api',     sfx: 'custom',       hint: '🌐 自訂接口（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptCustom },
+                                    { svc: 'custom_api',     sfx: 'custom',       hint: '自訂接口（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptCustom },
                                 ];
                                 return _rows.map(r => `
                             <div id="img-scene-extract-row-${r.sfx}" data-svc="${r.svc}" class="scene-extract-row${_ss === r.svc ? '' : ' hidden'}">
@@ -1834,7 +1834,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                             <!-- 🎯 獨立插圖副模型：另開一通 chatSecondary、只吃規範、不背 AVS/記憶 -->
                             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px; border-top:1px dashed rgba(26,28,40,0.10); padding-top:12px;" title="開啟：插圖改走「獨立一通副模型」(用 API 設定區的副模型接口)、只吃下方規範、不背 AVS/記憶，插圖更準。關閉＝走上面搭便車路(跟記憶/AVS 同一通)。">
-                                <span>🎯 獨立插圖副模型</span>
+                                <span><i class="fa-solid fa-bullseye"></i> 獨立插圖副模型</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-standalone-enabled" ${imgConfig.sceneGen?.standaloneEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">插圖另開一通副模型（用副模型接口）、只吃下方規範、不背 AVS/記憶；開了上面的搭便車插圖就停。</div>
@@ -1845,7 +1845,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label">測試生成</div>
                             <input class="set-input" id="img-test-prompt" type="text" placeholder="輸入描述..." value="a handsome man holding a rose">
-                            <div class="btn-test" id="img-test-btn" style="margin-top:10px;">🎨 生成預覽</div>
+                            <div class="btn-test" id="img-test-btn" style="margin-top:10px;"><i class="fa-solid fa-palette"></i> 生成預覽</div>
                             <div id="img-test-preview" style="margin-top:15px; display:none; text-align:center;">
                                 <img id="img-test-image" style="max-width:100%; border-radius:4px; border:1px solid rgba(26,28,40,0.15);" />
                                 <div id="img-test-url" style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:8px; word-break:break-all;"></div>
@@ -1853,12 +1853,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
-                            <div class="set-label" title="主來源卡住或逾時時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。">🆘 退路圖庫</div>
+                            <div class="set-label" title="主來源卡住或逾時時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。"><i class="fa-solid fa-life-ring"></i> 退路圖庫</div>
                             <div class="set-desc" style="margin-bottom:8px;">免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:#1A1C28;">pixabay.com/api/docs</a></div>
                             <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${imgConfig.pixabayKey || ''}">
                             <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
                                 <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
-                                <span style="font-size:12px; color:#1A1C28;">🧪 強制走退路圖庫（測試用，不去 Pollinations）</span>
+                                <span style="font-size:12px; color:#1A1C28;"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去 Pollinations）</span>
                             </div>
                         </div>
 
@@ -1868,16 +1868,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
                             <!-- 內層子 tab：頭像快取 vs 角色立繪 -->
                             <div style="display:flex;gap:6px;padding:0 0 10px;border-bottom:1px solid rgba(26,28,40,0.06);margin-bottom:10px;">
-                                <div class="av-sub active" data-avsub="cache"  style="cursor:pointer;padding:4px 10px;font-size:12px;color:#1A1C28;border:1px solid rgba(26,28,40,0.25);border-radius:4px;background:rgba(26,28,40,0.06);" onclick="_switchAvatarSub(this,'cache')">📦 頭像快取</div>
-                                <div class="av-sub"        data-avsub="sprite" style="cursor:pointer;padding:4px 10px;font-size:12px;color:rgba(26,28,40,0.72);border:1px solid #444;border-radius:4px;"                              onclick="_switchAvatarSub(this,'sprite')">🎨 角色立繪</div>
+                                <div class="av-sub active" data-avsub="cache"  style="cursor:pointer;padding:4px 10px;font-size:12px;color:#1A1C28;border:1px solid rgba(26,28,40,0.25);border-radius:4px;background:rgba(26,28,40,0.06);" onclick="_switchAvatarSub(this,'cache')"><i class="fa-solid fa-box"></i> 頭像快取</div>
+                                <div class="av-sub"        data-avsub="sprite" style="cursor:pointer;padding:4px 10px;font-size:12px;color:rgba(26,28,40,0.72);border:1px solid #444;border-radius:4px;"                              onclick="_switchAvatarSub(this,'sprite')"><i class="fa-solid fa-palette"></i> 角色立繪</div>
                             </div>
 
                             <!-- 子: 頭像快取 -->
                             <div id="avatar-sub-cache" class="avatar-sub-view">
                                 <div class="set-group">
-                                    <div class="set-label" title="防重複生圖。">🎭 角色頭像快取</div>
+                                    <div class="set-label" title="防重複生圖。"><i class="fa-solid fa-masks-theater"></i> 角色頭像快取</div>
                                     <div id="vncfg-avatar-mgr-list" style="margin-top:8px;"></div>
-                                    <button class="set-btn" type="button" onclick="window.VN_PLAYER && window.VN_PLAYER.backupAvatarsToWorldbook && window.VN_PLAYER.backupAvatarsToWorldbook(this)">💾 備份頭像到角色世界書</button>
+                                    <button class="set-btn" type="button" onclick="window.VN_PLAYER && window.VN_PLAYER.backupAvatarsToWorldbook && window.VN_PLAYER.backupAvatarsToWorldbook(this)"><i class="fa-solid fa-floppy-disk"></i> 備份頭像到角色世界書</button>
                                 </div>
                                 <div class="set-desc" style="margin-top:4px;" title="備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。">備份後本地快取清空也能讀回。</div>
                             </div>
@@ -1885,7 +1885,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <!-- 子: 角色立繪（去背工作室）-->
                             <div id="avatar-sub-sprite" class="avatar-sub-view" style="display:none;">
                                 <div class="set-group">
-                                    <div class="set-label" title="點角色 → 生立繪 → 去背 → 存。只顯示當前世界。">🎨 從頭像快取轉立繪</div>
+                                    <div class="set-label" title="點角色 → 生立繪 → 去背 → 存。只顯示當前世界。"><i class="fa-solid fa-palette"></i> 從頭像快取轉立繪</div>
 
                                     <div id="sprite-picker-list" style="margin-top:10px;max-height:300px;overflow-y:auto;">載入中...</div>
 
@@ -1905,11 +1905,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                                 <option value="2">高清 2x（1024×1792）</option>
                                             </select>
                                             <label id="sprite-hires-row" style="display:none;align-items:center;gap:4px;font-size:11px;color:#1A1C28;white-space:nowrap;cursor:pointer;" title="ComfyUI 直連專屬：base 生完→潛空間放大→二次低重繪採樣，真的補出細節（比單純放大清晰）。較慢。">
-                                                <input type="checkbox" id="sprite-hires" style="margin:0;">🔬 高清修復
+                                                <input type="checkbox" id="sprite-hires" style="margin:0;"><i class="fa-solid fa-microscope"></i> 高清修復
                                             </label>
-                                            <button class="vng-studio-gen" id="sprite-gen-btn">✨ 生立繪</button>
+                                            <button class="vng-studio-gen" id="sprite-gen-btn"><i class="fa-solid fa-wand-magic-sparkles"></i> 生立繪</button>
                                             <details class="vng-studio-tpl">
-                                                <summary title="立繪 prompt 的前綴與後綴。">📜 Prompt 模板</summary>
+                                                <summary title="立繪 prompt 的前綴與後綴。"><i class="fa-solid fa-scroll"></i> Prompt 模板</summary>
                                                 <div class="set-label" style="margin-top:8px;font-size:11px;">前綴</div>
                                                 <textarea class="set-input" id="sprite-tpl-prefix" style="margin-top:4px;min-height:48px;font-family:inherit;font-size:12px;"></textarea>
                                                 <div class="set-label" style="margin-top:8px;font-size:11px;">後綴</div>
@@ -1924,9 +1924,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div id="sprite-preview" class="vng-studio-preview"><span style="color:#888;font-size:11px;">生立繪後在這裡預覽、去背</span></div>
 
                                     <div class="vng-studio-bar">
-                                        <button class="vng-studio-act" id="sprite-removebg-canvas-btn" style="opacity:0.5;pointer-events:none;">✂️ 純色去背</button>
-                                        <button class="vng-studio-act" id="sprite-removebg-btn" style="opacity:0.5;pointer-events:none;">🪄 AI 去背</button>
-                                        <button class="vng-studio-act primary" id="sprite-save-btn" style="opacity:0.5;pointer-events:none;">💾 存立繪</button>
+                                        <button class="vng-studio-act" id="sprite-removebg-canvas-btn" style="opacity:0.5;pointer-events:none;"><i class="fa-solid fa-scissors"></i> 純色去背</button>
+                                        <button class="vng-studio-act" id="sprite-removebg-btn" style="opacity:0.5;pointer-events:none;"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 去背</button>
+                                        <button class="vng-studio-act primary" id="sprite-save-btn" style="opacity:0.5;pointer-events:none;"><i class="fa-solid fa-floppy-disk"></i> 存立繪</button>
                                     </div>
                                     <div class="vng-studio-strength">
                                         <span>純色去背強度</span>
@@ -1937,22 +1937,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </div>
 
                                 <div class="set-group" style="margin-top:14px;">
-                                    <div class="set-label">📚 已存立繪</div>
+                                    <div class="set-label"><i class="fa-solid fa-book"></i> 已存立繪</div>
                                     <div id="sprite-list" style="margin-top:8px;">載入中...</div>
                                 </div>
 
-                                <div class="set-desc" style="margin-top:6px;" title="✂️ 純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。🪄 AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。">✂️ 純色去背快、適合純色背景；🪄 AI 去背適合雜背景。</div>
+                                <div class="set-desc" style="margin-top:6px;" title="純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。"><i class="fa-solid fa-scissors"></i> 純色去背快、適合純色背景；<i class="fa-solid fa-wand-magic-sparkles"></i> AI 去背適合雜背景。</div>
                             </div>
                         </div>
                         <div id="view-img-bg" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label" title="防重複生圖。">🌄 場景背景快取</div>
+                                <div class="set-label" title="防重複生圖。"><i class="fa-solid fa-mountain-sun"></i> 場景背景快取</div>
                                 <div id="vncfg-bg-mgr-list" style="margin-top:8px;"></div>
                             </div>
                         </div>
                         <div id="view-img-scene" class="img-subtab-view" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label" title="劇情全螢幕 CG；「⋯」可看大圖 / 編輯重生 / 刪除。提示詞在「⋯ → 編輯重生」裡查看與修改。">🎬 場景插圖快取</div>
+                                <div class="set-label" title="劇情全螢幕 CG；「⋯」可看大圖 / 編輯重生 / 刪除。提示詞在「⋯ → 編輯重生」裡查看與修改。"><i class="fa-solid fa-clapperboard"></i> 場景插圖快取</div>
                                 <div id="vncfg-scene-mgr-list" style="margin-top:8px;"></div>
                             </div>
                         </div>
@@ -1974,7 +1974,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="voice-area-minimax" class="voice-area" style="display:${currentTtsMode==='minimax' ? 'block' : 'none'};">
 
                         <div style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.10); font-size:12px; color:#1A1C28;">
-                            🎵 <b>Minimax TTS</b>：配置後，VN 面板 [Char|...] 對話自動合成語音。請至 Minimax 平台取得 API Key。
+                            <i class="fa-solid fa-music"></i> <b>Minimax TTS</b>：配置後，VN 面板 [Char|...] 對話自動合成語音。請至 Minimax 平台取得 API Key。
                         </div>
 
                         <!-- mm-enabled 已被三選一頂端按鈕取代，隱藏但保留以維持 save / 切換邏輯 -->
@@ -1984,7 +1984,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-label">服務區域</div>
                             <select class="set-select" id="mm-provider">
                                 <option value="cn" ${minimaxConfig.provider === 'cn' ? 'selected' : ''}>🇨🇳 國內版 (api.minimaxi.com)</option>
-                                <option value="io" ${minimaxConfig.provider === 'io' ? 'selected' : ''}>🌍 海外版 (api.minimax.io)</option>
+                                <option value="io" ${minimaxConfig.provider === 'io' ? 'selected' : ''}>海外版 (api.minimax.io)</option>
                             </select>
                         </div>
 
@@ -2002,8 +2002,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label">語音模型</div>
                             <select class="set-select" id="mm-speech-model">
-                                <option value="speech-2.8-hd"    ${minimaxConfig.speechModel === 'speech-2.8-hd'    ? 'selected' : ''}>speech-2.8-hd ✨ (支援語氣詞)</option>
-                                <option value="speech-2.8-turbo" ${minimaxConfig.speechModel === 'speech-2.8-turbo' ? 'selected' : ''}>speech-2.8-turbo ✨ (支援語氣詞)</option>
+                                <option value="speech-2.8-hd"    ${minimaxConfig.speechModel === 'speech-2.8-hd'    ? 'selected' : ''}>speech-2.8-hd (支援語氣詞)</option>
+                                <option value="speech-2.8-turbo" ${minimaxConfig.speechModel === 'speech-2.8-turbo' ? 'selected' : ''}>speech-2.8-turbo (支援語氣詞)</option>
                                 <option value="speech-2.6-hd"    ${minimaxConfig.speechModel === 'speech-2.6-hd'    ? 'selected' : ''}>speech-2.6-hd</option>
                                 <option value="speech-2.6-turbo" ${minimaxConfig.speechModel === 'speech-2.6-turbo' ? 'selected' : ''}>speech-2.6-turbo</option>
                                 <option value="speech-02-hd"     ${minimaxConfig.speechModel === 'speech-02-hd'     ? 'selected' : ''}>speech-02-hd</option>
@@ -2031,19 +2031,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="VN / wx 面板通用。每個角色可設定顯示名稱、Minimax 音色ID 與多個別名；VN 輸出的角色名會自動比對別名（大小寫不敏感）後播放對應音色。">🎭 音色設定檔</div>
+                            <div class="set-label" title="VN / wx 面板通用。每個角色可設定顯示名稱、Minimax 音色ID 與多個別名；VN 輸出的角色名會自動比對別名（大小寫不敏感）後播放對應音色。"><i class="fa-solid fa-masks-theater"></i> 音色設定檔</div>
                             <div class="set-desc">每個角色設定顯示名、音色ID 與別名。</div>
                             <div id="mm-profile-list" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
                             <div style="display:flex; gap:8px; margin-top:12px;">
                                 <div class="btn-test" id="mm-add-profile-btn" style="flex:1;">＋ 新增音色設定檔</div>
-                                <div class="btn-test" id="mm-browse-voices-btn" style="flex:1; background:rgba(228,232,245,0.96);">🔍 瀏覽官方音色庫</div>
+                                <div class="btn-test" id="mm-browse-voices-btn" style="flex:1; background:rgba(228,232,245,0.96);"><i class="fa-solid fa-magnifying-glass"></i> 瀏覽官方音色庫</div>
                             </div>
                         </div>
 
                         <div id="mm-voice-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(26,13,10,0.85); align-items:center; justify-content:center;">
                             <div style="background:rgba(228,232,245,0.97); border:1px solid rgba(26,28,40,0.20); border-radius:8px; padding:16px; width:92%; max-width:480px; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                                    <div style="font-weight:bold; color:#1A1C28; font-size:14px;">🎵 官方音色庫 <span id="mm-voice-count" style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;"></span></div>
+                                    <div style="font-weight:bold; color:#1A1C28; font-size:14px;"><i class="fa-solid fa-music"></i> 官方音色庫 <span id="mm-voice-count" style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;"></span></div>
                                     <span id="mm-voice-modal-close" style="cursor:pointer; color:#1A1C28; font-size:20px; line-height:1; padding:0 4px;">✕</span>
                                 </div>
                                 <input id="mm-voice-search" class="set-input" placeholder="搜尋 voice_id 或描述..." style="margin-bottom:8px;">
@@ -2052,13 +2052,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">🔌 測試語音</div>
+                            <div class="set-label"><i class="fa-solid fa-plug"></i> 測試語音</div>
                             <div style="display:flex; gap:8px; margin-bottom:10px;">
                                 <input class="set-input" id="mm-test-voice-id" type="text" placeholder="語音 ID，例如：male-01" style="flex:1;">
                             </div>
                             <input class="set-input" id="mm-test-text" type="text" placeholder="測試文字" value="你好，我是AI語音助手，測試一下。" style="margin-bottom:10px;">
-                            <div class="btn-test" id="mm-test-btn">🎵 播放測試語音</div>
-                            <div class="btn-test" id="mm-stop-btn" style="margin-top:8px; display:none;">⏹ 停止播放</div>
+                            <div class="btn-test" id="mm-test-btn"><i class="fa-solid fa-music"></i> 播放測試語音</div>
+                            <div class="btn-test" id="mm-stop-btn" style="margin-top:8px; display:none;"><i class="fa-solid fa-stop"></i> 停止播放</div>
                             <div id="mm-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#1A1C28; font-family:monospace; word-break:break-all;"></div>
                         </div>
 
@@ -2072,7 +2072,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- 全關閉 -->
                         <div id="voice-area-off" class="voice-area" style="display:${currentTtsMode==='off' ? 'block' : 'none'};">
                             <div style="background:rgba(26,28,40,0.04);padding:24px;border-radius:6px;text-align:center;color:rgba(26,28,40,0.72);font-size:13px;line-height:1.9;border:1px solid rgba(26,28,40,0.06);">
-                                🔇 已關閉所有語音合成<br>
+                                <i class="fa-solid fa-volume-xmark"></i> 已關閉所有語音合成<br>
                                 <span style="font-size:11px;color:#888;">VN 面板對話將不會自動朗讀<br>點上方按鈕切換語音引擎</span>
                             </div>
                         </div>
@@ -2081,7 +2081,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <!-- ── 一般：酒館那兩格 + 素材目錄與章節（由 vn_settings.js 提供） ── -->
                     <div id="view-vn" class="tab-view hidden">
                         <div class="set-group"${stHide}>
-                            <div class="set-label">🏰 顯示位置</div>
+                            <div class="set-label"><i class="fa-solid fa-chess-rook"></i> 顯示位置</div>
                             <select class="set-select" id="mp-mount-selector">
                                 <option value="#sheld" ${(tavernExt.mount?.selector || '#sheld') === '#sheld' ? 'selected' : ''}>整個對話框（推薦）</option>
                                 <option value="#chat" ${(tavernExt.mount?.selector || '#sheld') === '#chat' ? 'selected' : ''}>只在訊息區</option>
@@ -2098,13 +2098,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span>📄 訊息可收合</span>
+                                <span><i class="fa-solid fa-file-lines"></i> 訊息可收合</span>
                                 <label class="toggle-switch"><input type="checkbox" id="mp-message-collapse" ${tavernExt.messageCollapse !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc">為每則訊息加上收合按鈕，太長的訊息可以收起來。</div>
                         </div>
 
-                        ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getHTML() : '<div class="set-desc" style="padding:20px; text-align:center;">⚠️ vn_settings.js 尚未載入</div>'}
+                        ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getHTML() : '<div class="set-desc" style="padding:20px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> vn_settings.js 尚未載入</div>'}
                     </div>
 
                     <div id="view-sys" class="tab-view hidden">
@@ -2126,51 +2126,51 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。">🖥️ 介面佈局</div>
+                            <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。"><i class="fa-solid fa-desktop"></i> 介面佈局</div>
                             <div class="set-desc">頂部被遮擋時選「強制下移」。</div>
                             <select class="set-select" id="os-layout-mode">
-                                <option value="auto" ${localStorage.getItem('aurelia_layout_mode') !== 'pad-ios' ? 'selected' : ''}>📱 自動適配 (Auto/預設)</option>
-                                <option value="pad-ios" ${localStorage.getItem('aurelia_layout_mode') === 'pad-ios' ? 'selected' : ''}>🍎 強制下移 (iOS 動態島/瀏海)</option>
+                                <option value="auto" ${localStorage.getItem('aurelia_layout_mode') !== 'pad-ios' ? 'selected' : ''}>自動適配 (Auto/預設)</option>
+                                <option value="pad-ios" ${localStorage.getItem('aurelia_layout_mode') === 'pad-ios' ? 'selected' : ''}>強制下移 (iOS 動態島/瀏海)</option>
                             </select>
                         </div>
 
                         <div style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.10); font-size:12px; color:#1A1C28;">
-                            ☁️ 備份會將世界書、寵物、成就、App 設定等<b>輕量資料</b>同步至 GitHub Gist。
+                            <i class="fa-solid fa-cloud"></i> 備份會將世界書、寵物、成就、App 設定等<b>輕量資料</b>同步至 GitHub Gist。
                             大型資料（寵物日誌、未來 VN 存檔等）請使用「本地全量匯出」。
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="申請 gist 權限的 Personal Access Token（Settings → Developer settings → Fine-grained tokens）。首次備份後 Gist ID 自動保存。">🔑 GitHub Gist 設定</div>
+                            <div class="set-label" title="申請 gist 權限的 Personal Access Token（Settings → Developer settings → Fine-grained tokens）。首次備份後 Gist ID 自動保存。"><i class="fa-solid fa-key"></i> GitHub Gist 設定</div>
                             <div class="set-desc">填 gist 權限的 Token，首次備份後自動存 ID。</div>
                             <input class="set-input" id="bk-token" type="password" placeholder="ghp_xxxxxxxxxxxx（不會備份 Token 本身）" />
                             <input class="set-input" id="bk-gist-id" placeholder="Gist ID（首次留空，備份後自動填入）" style="margin-top:8px;" />
                             <div id="bk-gist-hint" style="font-size:11px; color:#1A1C28; margin-top:6px; word-break:break-all;"></div>
                             <div style="display:flex; gap:8px; margin-top:10px;">
-                                <div class="btn-save" id="bk-gist-save-btn" style="flex:1; padding:12px; font-size:13px;">☁️ 備份到 Gist</div>
-                                <div class="btn-test" id="bk-gist-restore-btn" style="flex:1;">⬇️ 從 Gist 還原</div>
+                                <div class="btn-save" id="bk-gist-save-btn" style="flex:1; padding:12px; font-size:13px;"><i class="fa-solid fa-cloud"></i> 備份到 Gist</div>
+                                <div class="btn-test" id="bk-gist-restore-btn" style="flex:1;"><i class="fa-solid fa-download"></i> 從 Gist 還原</div>
                             </div>
                         </div>
 
                         <div class="set-group">
                             <div class="set-label">
-                                📊 本地儲存空間
+                                <i class="fa-solid fa-chart-simple"></i> 本地儲存空間
                                 <span class="btn-test" id="bk-scan-btn" style="padding:4px 12px; font-size:11px; cursor:pointer; margin:0;">掃描</span>
                             </div>
                             <div id="bk-storage-info" style="font-size:12px; color:rgba(26,28,40,0.72); margin-top:8px;">點擊「掃描」查看各資料佔用量</div>
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。">💾 本地全量備份</div>
+                            <div class="set-label" title="匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。"><i class="fa-solid fa-floppy-disk"></i> 本地全量備份</div>
                             <div class="set-desc">匯出所有資料成 JSON 檔。</div>
-                            <div class="btn-save" id="bk-export-btn" style="padding:12px; font-size:13px;">📤 匯出完整備份 JSON</div>
-                            <div class="btn-test" id="bk-import-btn" style="margin-top:8px;">📥 從本地 JSON 還原</div>
+                            <div class="btn-save" id="bk-export-btn" style="padding:12px; font-size:13px;"><i class="fa-solid fa-upload"></i> 匯出完整備份 JSON</div>
+                            <div class="btn-test" id="bk-import-btn" style="margin-top:8px;"><i class="fa-solid fa-download"></i> 從本地 JSON 還原</div>
                             <input type="file" id="bk-file-input" accept=".json" style="display:none;" />
                         </div>
 
                         <div class="danger-zone">
                             <h3><i class="fa-solid fa-triangle-exclamation"></i> 危險區域：一鍵格式化</h3>
                             <p>此操作將徹底刪除所有本地資料庫（包含角色、對話、長線劇情、變數工坊、寵物與系統設定）。操作後將自動重整網頁。請務必先進行備份！</p>
-                            <div class="btn-danger" id="bk-format-btn">💥 格式化並清空所有數據</div>
+                            <div class="btn-danger" id="bk-format-btn"><i class="fa-solid fa-burst"></i> 格式化並清空所有數據</div>
                         </div>
 
                         <div id="bk-status" style="font-size:12px; color:rgba(26,28,40,0.72); text-align:center; padding:10px 0; min-height:20px;"></div>
@@ -2181,17 +2181,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 <div id="img-nai-pack-modal" class="nai-pack-modal">
                     <div class="nai-pack-box">
                         <div class="nai-pack-head">
-                            <div class="nai-pack-title">📦 NAI 預設包（拖圖生成・含預覽）</div>
+                            <div class="nai-pack-title"><i class="fa-solid fa-box"></i> NAI 預設包（拖圖生成・含預覽）</div>
                             <button type="button" class="nai-pack-close" onclick="window._naiPreset.close()">✕</button>
                         </div>
                         <div class="nai-pack-io">
                             <div class="cfd-pack-io-row">
-                                <button type="button" class="set-btn" onclick="window._naiPreset.importPack()">📥 匯入預設包檔</button>
-                                <button type="button" class="set-btn" onclick="window._naiPreset.exportPack()">📤 匯出全部</button>
-                                <button type="button" class="set-btn cfd-pack-clear" onclick="window._naiPreset.clearAll()">🗑️ 清空</button>
+                                <button type="button" class="set-btn" onclick="window._naiPreset.importPack()"><i class="fa-solid fa-download"></i> 匯入預設包檔</button>
+                                <button type="button" class="set-btn" onclick="window._naiPreset.exportPack()"><i class="fa-solid fa-upload"></i> 匯出全部</button>
+                                <button type="button" class="set-btn cfd-pack-clear" onclick="window._naiPreset.clearAll()"><i class="fa-solid fa-trash-can"></i> 清空</button>
                                 <input type="file" id="img-nai-pack-import-file" accept="application/json,.json" class="nai-pack-file-hidden">
                             </div>
-                            <div class="cfd-pack-io-hint">匯出會把整牆預設（含預覽圖）存成一個檔分享；匯入時會問你要「覆蓋同名」還是「全部新增」。「清空」把整牆清掉（要按底部 💾 保存才生效）。</div>
+                            <div class="cfd-pack-io-hint">匯出會把整牆預設（含預覽圖）存成一個檔分享；匯入時會問你要「覆蓋同名」還是「全部新增」。「清空」把整牆清掉（要按底部「保存」才生效）。</div>
                             <div id="img-nai-import-choice" class="cfd-import-choice" style="display:none;">
                                 <div class="cfd-import-choice-msg" id="img-nai-import-msg"></div>
                                 <div class="cfd-import-choice-btns">
@@ -2203,7 +2203,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
                         <div id="img-nai-pack-drop" class="nai-pack-drop">
                             <input type="file" id="img-nai-pack-file" accept="image/png,image/webp,image/*" multiple class="nai-pack-file-hidden">
-                            <div class="nai-pack-drop-hint">把下載的 <b>NAI 原圖</b>拖進來（可一次多張），或 <span class="nai-pack-pick" onclick="document.getElementById('img-nai-pack-file').click()">點此選圖</span><br>自動讀出底詞 / 負詞 / sampler / CFG / steps，存成預設，並用這張圖當預覽。<br><span class="nai-pack-warn">⚠️ 要原圖，截圖或被轉成 JPG 的讀不到。</span></div>
+                            <div class="nai-pack-drop-hint">把下載的 <b>NAI 原圖</b>拖進來（可一次多張），或 <span class="nai-pack-pick" onclick="document.getElementById('img-nai-pack-file').click()">點此選圖</span><br>自動讀出底詞 / 負詞 / sampler / CFG / steps，存成預設，並用這張圖當預覽。<br><span class="nai-pack-warn"><i class="fa-solid fa-triangle-exclamation"></i> 要原圖，截圖或被轉成 JPG 的讀不到。</span></div>
                         </div>
                         <div id="img-nai-pack-status" class="nai-pack-status"></div>
                         <div id="img-nai-pack-grid" class="nai-pack-grid"></div>
@@ -2460,7 +2460,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (!infoEl) return;
             const selectedId = selectEl.value;
             if (!selectedId) {
-                infoEl.innerHTML = '<span>ℹ️ 使用當前激活的 ST 連接</span>';
+                infoEl.innerHTML = '<span><i class="fa-solid fa-circle-info"></i> 使用當前激活的 ST 連接</span>';
                 return;
             }
             const p = stProfiles.find(x => x.id === selectedId);
@@ -2478,7 +2478,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const liveModel = (() => { try { return getSTContext()?.getChatCompletionModel?.() || ''; } catch(_) { return ''; } })();
             const model = liveModel || p.model || '(模型未記錄)';
             const api = p.api ? ` <span>[${p.api}]</span>` : '';
-            infoEl.innerHTML = `🌐 ${url}<br>🤖 ${model}${api}`;
+            infoEl.innerHTML = `<i class="fa-solid fa-globe"></i> ${url}<br><i class="fa-solid fa-robot"></i> ${model}${api}`;
         }
 
         const profileInfoEl = container.querySelector('#st-profile-info');
@@ -2514,10 +2514,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // ── 圖片設置：背景／角色 兩個子分頁，一次只顯示一邊（取代舊「兩桶聯集」） ──
         const SVC_DISP = {
-            pollinations: '✨ Pollinations',
-            novelai: '💎 NovelAI',
-            tavern_sd: '🎨 酒館原生',
-            comfyui_direct: '🧩 ComfyUI 直連'
+            pollinations: 'Pollinations',
+            novelai: 'NovelAI',
+            tavern_sd: '酒館原生',
+            comfyui_direct: 'ComfyUI 直連'
         };
         const elImgSyncBg     = container.querySelector('#img-sync-bg-to-char');
         const elImgBgSrcGroup = container.querySelector('#img-bg-source-group');
@@ -2572,10 +2572,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     { width: tw, height: th, customApi: { url: url, apiKey: key, model: model,
                         quality: (q('#img-capi-quality')?.value || 'medium'),
                         basePrompt: (q('#img-capi-base')?.value || '').trim() } });
-                if (out) say('✅ 通了，' + tw + '×' + th + ' 這個尺寸生得出圖');
-                else say('❌ ' + ((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'));
+                if (out) say('通了，' + tw + '×' + th + ' 這個尺寸生得出圖');
+                else say(((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'));
             } catch (e) {
-                say('❌ ' + ((e && e.message) || e));
+                say(((e && e.message) || e));
             } finally {
                 btn.disabled = false;
                 if (!IM._lastCustomApiError) IM._lastCustomApiError = prev;
@@ -2743,7 +2743,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // Fetch Logic (Primary)
         btnFetch.onclick = async () => {
             btnFetch.style.animation = "spin 1s linear infinite";
-            status.innerText = "⏳ 正在獲取模型列表...";
+            status.innerText = "正在獲取模型列表...";
             
             try {
                 if (elSystemApi.checked) {
@@ -2755,7 +2755,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     }
                     if (foundModel) {
                         elModel.innerHTML = `<option value="${foundModel}" selected>${foundModel}</option>`;
-                        status.innerText = `✅ 已同步 (系統): ${foundModel}`;
+                        status.innerText = `已同步 (系統): ${foundModel}`;
                     } else {
                         throw new Error("無法讀取酒館模型");
                     }
@@ -2779,14 +2779,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             const id = m.id || m;
                             elModel.innerHTML += `<option value="${id}">${id}</option>`; 
                         });
-                        status.innerText = `✅ 成功獲取 ${models.length} 個模型`;
+                        status.innerText = `成功獲取 ${models.length} 個模型`;
                     } else {
                         throw new Error("API 返回了空列表");
                     }
                 }
             } catch (e) {
                 console.error(e);
-                status.innerText = `❌ 同步失敗: ${e.message}`;
+                status.innerText = `同步失敗: ${e.message}`;
             } finally {
                 btnFetch.style.animation = "none";
             }
@@ -2795,7 +2795,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // Fetch Logic (Secondary)
         secFetch.onclick = async () => {
             secFetch.style.animation = "spin 1s linear infinite";
-            status.innerText = "⏳ 正在獲取副模型列表...";
+            status.innerText = "正在獲取副模型列表...";
             
             try {
                 if (secSystemApi.checked) {
@@ -2807,7 +2807,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     }
                     if (foundModel) {
                         secModel.innerHTML = `<option value="${foundModel}" selected>${foundModel}</option>`;
-                        status.innerText = `✅ 副模型已同步 (系統): ${foundModel}`;
+                        status.innerText = `副模型已同步 (系統): ${foundModel}`;
                     } else {
                         throw new Error("無法讀取酒館模型");
                     }
@@ -2834,7 +2834,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             const id = m.id || m;
                             secModel.innerHTML += `<option value="${id}">${id}</option>`; 
                         });
-                        status.innerText = `✅ 副模型列表更新成功 (${models.length})`;
+                        status.innerText = `副模型列表更新成功 (${models.length})`;
                     } else {
                         throw new Error("API 返回空列表");
                     }
@@ -2842,7 +2842,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
             } catch (e) {
                 console.error(e);
-                status.innerText = `❌ 副模型同步失敗: ${e.message}`;
+                status.innerText = `副模型同步失敗: ${e.message}`;
             } finally {
                 secFetch.style.animation = "none";
             }
@@ -3069,11 +3069,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 // VN 設置由外部模組統一存入 vn_cfg_v4
                 if (window.VN_SETTINGS_PANEL) window.VN_SETTINGS_PANEL.save(container);
                 btnSave.innerText = "已保存 ✓";
-                status.innerText = "✅ 設置已生效";
+                status.innerText = "設置已生效";
                 setTimeout(() => { btnSave.innerText = "保存所有設定"; }, 2000);
             } catch (e) {
                 console.error("保存失敗:", e);
-                status.innerText = `❌ 保存失敗: ${e.message}`; 
+                status.innerText = `保存失敗: ${e.message}`; 
             }
         };
 
@@ -3081,7 +3081,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         async function runApiTest(cfg, modelVal, resultEl) {
             resultEl.style.display = 'block';
             resultEl.style.color = 'rgba(26,28,40,0.40)';
-            resultEl.textContent = '⏳ 測試中...';
+            resultEl.textContent = '測試中...';
             try {
                 let replyText = '';
                 const win = window.parent || window;
@@ -3161,31 +3161,31 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 }
 
                 resultEl.style.color = 'rgba(26,28,40,0.25)';
-                resultEl.textContent = '✅ 回應: ' + replyText;
-                status.innerText = '✅ API 連線成功';
+                resultEl.textContent = '回應: ' + replyText;
+                status.innerText = 'API 連線成功';
             } catch (e) {
                 // 酒館把所有失敗都包成 `API request failed`，真正的原因在 cause 裡 → 攤平顯示
                 let _msg = e.message;
                 try { _msg = (window.parent || window).OS_API?._causeText?.(e) || _msg; } catch (_) {}
                 resultEl.style.color = '#fc8181';
-                resultEl.textContent = '❌ 錯誤: ' + _msg;
-                status.innerText = '❌ API 測試失敗';
+                resultEl.textContent = '錯誤: ' + _msg;
+                status.innerText = 'API 測試失敗';
             }
         }
 
         btnTest.onclick = async () => {
-            btnTest.style.opacity = '0.5'; btnTest.textContent = '⏳ 測試中...';
+            btnTest.style.opacity = '0.5'; btnTest.textContent = '測試中...';
             await runApiTest(
                 { useSystemApi: elSystemApi.checked, stProfileId: elStProfile.value, url: elUrl.value.trim(), key: elKey.value.trim() },
                 elModel.value,
                 container.querySelector('#os-test-result')
             );
-            btnTest.style.opacity = '1'; btnTest.textContent = '🔌 發送測試訊息';
+            btnTest.style.opacity = '1'; btnTest.textContent = '發送測試訊息';
         };
 
         // 🔥 副模型測試：自動判斷是否使用同步的 URL/Key
         secTestBtn.onclick = async () => {
-            secTestBtn.style.opacity = '0.5'; secTestBtn.textContent = '⏳ 測試中...';
+            secTestBtn.style.opacity = '0.5'; secTestBtn.textContent = '測試中...';
             const isSecSync = secSyncPrimary && secSyncPrimary.checked;
             const testUrl = isSecSync ? elUrl.value.trim() : secUrl.value.trim();
             const testKey = isSecSync ? elKey.value.trim() : secKey.value.trim();
@@ -3194,7 +3194,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 secModel.value,
                 container.querySelector('#sec-test-result')
             );
-            secTestBtn.style.opacity = '1'; secTestBtn.textContent = '🔌 發送測試訊息';
+            secTestBtn.style.opacity = '1'; secTestBtn.textContent = '發送測試訊息';
         };
 
 
@@ -3369,16 +3369,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     try {
                         const j = JSON.parse(String(reader.result));
                         const arr = Array.isArray(j) ? j : (Array.isArray(j.presets) ? j.presets : null);
-                        if (!arr || !arr.length) { AUI.alert('❌ 這個檔案裡找不到 NAI 預設，確認拿到的是 NAI 預設包檔（.json）。'); return; }
+                        if (!arr || !arr.length) { AUI.alert('這個檔案裡找不到 NAI 預設，確認拿到的是 NAI 預設包檔（.json）。'); return; }
                         const clean = arr.filter(p => p && String(p.name || '').trim());
-                        if (!clean.length) { AUI.alert('❌ 檔案裡的預設都沒有名稱，讀不進來。'); return; }
+                        if (!clean.length) { AUI.alert('檔案裡的預設都沒有名稱，讀不進來。'); return; }
                         self._pendingImport = clean;
                         if (!naiPresets.length) { self._applyImport('append'); return; }   // 牆空→直接加、不問
                         const msg = container.querySelector('#img-nai-import-msg');
                         if (msg) msg.textContent = '讀到 ' + clean.length + ' 個預設。要怎麼放進現有的 ' + naiPresets.length + ' 個裡？';
                         const box = container.querySelector('#img-nai-import-choice');
                         if (box) box.style.display = 'block';
-                    } catch (e) { AUI.alert('❌ 這個檔案讀不出來，確認是 NAI 預設包檔（.json）。'); }
+                    } catch (e) { AUI.alert('這個檔案讀不出來，確認是 NAI 預設包檔（.json）。'); }
                 };
                 reader.readAsText(file);
             },
@@ -3428,18 +3428,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 this._pendingImport = null;
                 refreshNaiPresetDropdown();
                 self.renderGrid();
-                AUI.alert('✅ 匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部 💾 保存才會存住。');
+                AUI.alert('匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部「保存」才會存住。');
             },
             async clearAll() {
                 if (!naiPresets.length) { AUI.alert('目前沒有 NAI 預設可以清空。'); return; }
-                if (!await AUI.confirm('確定清空全部 ' + naiPresets.length + ' 個 NAI 預設？\n（要按底部 💾 保存後才真的生效）')) return;
+                if (!await AUI.confirm('確定清空全部 ' + naiPresets.length + ' 個 NAI 預設？\n（要按底部「保存」後才真的生效）')) return;
                 const OSDB = (window.parent || window).OS_DB;
                 if (OSDB && OSDB.deleteNaiThumb) { for (const p of naiPresets) { if (p.thumbId) { try { await OSDB.deleteNaiThumb(p.thumbId); } catch (e) {} } } }
                 naiPresets.length = 0;
                 refreshNaiPresetDropdown();
                 this.renderGrid();
                 const st = container.querySelector('#img-nai-pack-status');
-                if (st) st.textContent = '🗑️ 已清空（記得按底部 💾 保存才會存住）';
+                if (st) st.textContent = '已清空（記得按底部「保存」才會存住）';
             },
 
             // ── 拖圖預設包（卡片牆 + 縮圖預覽）──
@@ -3481,7 +3481,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 let ok = 0, fail = 0;
                 for (let fi = 0; fi < files.length; fi++) {
                     const f = files[fi];
-                    if (statusEl) statusEl.textContent = `⏳ 解析中 ${fi + 1}/${files.length}…`;
+                    if (statusEl) statusEl.textContent = `解析中 ${fi + 1}/${files.length}…`;
                     let res = null;
                     try { res = await RECIPE.parseFile(f); } catch (e) { res = null; }
                     if (!res || !res.ok) { fail++; continue; }
@@ -3508,7 +3508,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 }
                 refreshNaiPresetDropdown();
                 this.renderGrid();
-                if (statusEl) statusEl.textContent = `✅ 成功加入 ${ok} 個${fail ? `（${fail} 張讀不到資訊：截圖 / JPG / 被平台洗過）` : ''} · 記得按底部 💾 保存`;
+                if (statusEl) statusEl.textContent = `成功加入 ${ok} 個${fail ? `（${fail} 張讀不到資訊：截圖 / JPG / 被平台洗過）` : ''} · 記得按底部「保存」`;
             },
             async renderGrid() {
                 const grid = container.querySelector('#img-nai-pack-grid');
@@ -3528,8 +3528,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="nai-pack-meta">${naiEscAttr(meta)}</div>
                         <div class="nai-pack-actions">
                             <span class="nai-pack-act" onclick="window._naiPreset.applyIdx(${i})">套用</span>
-                            <span class="nai-pack-act" onclick="window._naiPreset.renameIdx(${i})" title="改名">✏️</span>
-                            <span class="nai-pack-act is-danger" onclick="window._naiPreset.delIdx(${i})" title="刪除">🗑️</span>
+                            <span class="nai-pack-act" onclick="window._naiPreset.renameIdx(${i})" title="改名"><i class="fa-solid fa-pen"></i></span>
+                            <span class="nai-pack-act is-danger" onclick="window._naiPreset.delIdx(${i})" title="刪除"><i class="fa-solid fa-trash-can"></i></span>
                         </div>
                     </div>`;
                 }).join('');
@@ -3557,7 +3557,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (p.ucPreset != null) set('#img-nai-uc-preset', p.ucPreset);
                 this.close();
                 const W = window.parent || window;
-                if (AUI.toastr) AUI.toastr.success(`已套用「${p.name || ''}」，記得按底部 💾 保存`);
+                if (AUI.toastr) AUI.toastr.success(`已套用「${p.name || ''}」，記得按底部「保存」`);
             },
             async renameIdx(i) {
                 const p = naiPresets[i]; if (!p) return;
@@ -3647,7 +3647,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     if (!got) fail++;
                 }
                 this.renderList();
-                if (statusEl) statusEl.textContent = `✅ 新增 ${ok} 個${upd ? `、更新 ${upd} 個` : ''}${fail ? `（${fail} 個檔讀不懂：要 NovelAI 匯出的 .naiv4vibe）` : ''} · 記得按底部 💾 保存`;
+                if (statusEl) statusEl.textContent = `新增 ${ok} 個${upd ? `、更新 ${upd} 個` : ''}${fail ? `（${fail} 個檔讀不懂：要 NovelAI 匯出的 .naiv4vibe）` : ''} · 記得按底部「保存」`;
             },
             async renderList() {
                 const listEl = container.querySelector('#img-nai-vibe-list');
@@ -3665,7 +3665,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <input type="range" min="0.05" max="1" step="0.05" value="${typeof v.strength === 'number' ? v.strength : 0.6}" oninput="window._naiVibe.setStrength(${i}, this.value, this)">
                             <span class="nai-vibe-strength-val">${(typeof v.strength === 'number' ? v.strength : 0.6).toFixed(2)}</span>
                         </div>
-                        <span class="nai-pack-act is-danger nai-vibe-del" onclick="window._naiVibe.del(${i})" title="刪除">🗑️</span>
+                        <span class="nai-pack-act is-danger nai-vibe-del" onclick="window._naiVibe.del(${i})" title="刪除"><i class="fa-solid fa-trash-can"></i></span>
                     </div>`).join('');
                 const OSDB = (window.parent || window).OS_DB;
                 listEl.querySelectorAll('img[data-vibe-thumb]').forEach(async img => {
@@ -3780,9 +3780,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         btnImgTest.onclick = async () => {
             const testPrompt = elImgTestPrompt.value.trim();
             if (!testPrompt) return;
-            btnImgTest.innerText = "⏳ 生成中...";
+            btnImgTest.innerText = "生成中...";
             btnImgTest.style.opacity = "0.5";
-            status.innerText = "⏳ 正在生成圖片...";
+            status.innerText = "正在生成圖片...";
 
             try {
                 const win = window.parent || window;
@@ -3888,17 +3888,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const imageUrl = await imageManager.generate(_testPrompt, _tabCfg.type, _genOpts);
 
                 imgTestImage.src = imageUrl;
-                imgTestUrl.textContent = /^(data:|blob:)/.test(imageUrl) ? '✅ 圖片已生成（內嵌資料，省略顯示）' : `URL: ${imageUrl}`;
+                imgTestUrl.textContent = /^(data:|blob:)/.test(imageUrl) ? '圖片已生成（內嵌資料，省略顯示）' : `URL: ${imageUrl}`;
                 imgTestPreview.style.display = 'block';
 
-                imgTestImage.onload = () => { status.innerText = "✅ 圖片加載成功"; };
-                imgTestImage.onerror = () => { status.innerText = "❌ 圖片加載失敗 (請檢查 API Key / Token)"; };
+                imgTestImage.onload = () => { status.innerText = "圖片加載成功"; };
+                imgTestImage.onerror = () => { status.innerText = "圖片加載失敗 (請檢查 API Key / Token)"; };
 
             } catch(e) {
                 console.error(e);
-                status.innerText = `❌ 錯誤: ${e.message}`;
+                status.innerText = `錯誤: ${e.message}`;
             } finally {
-                btnImgTest.innerText = "🎨 生成預覽";
+                btnImgTest.innerHTML = '<i class="fa-solid fa-palette"></i> 生成預覽';
                 btnImgTest.style.opacity = "1";
             }
         };
@@ -3999,8 +3999,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         function setStatus(msg, color) {
             if (elStatus) { elStatus.textContent = msg; elStatus.style.color = color || 'rgba(26,28,40,0.40)'; }
         }
-        function setBtnLoading(btn, text) { if (btn) { btn.textContent = text; btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; } }
-        function setBtnDone(btn, text) { if (btn) { btn.textContent = text; btn.style.opacity = '1'; btn.style.pointerEvents = ''; } }
+        // 忙完還原成原本的樣子（含圖示）：第一次變忙時先記下原本的 HTML
+        function setBtnLoading(btn, text) { if (btn) { if (btn.__html0 == null) btn.__html0 = btn.innerHTML; btn.textContent = text; btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; } }
+        function setBtnDone(btn, text) { if (btn) { if (btn.__html0 != null) btn.innerHTML = btn.__html0; else btn.textContent = text; btn.style.opacity = '1'; btn.style.pointerEvents = ''; } }
 
         if (BACKUP) {
             const s = BACKUP.getSettings();
@@ -4125,39 +4126,39 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         const btnGistSave = container.querySelector('#bk-gist-save-btn');
         if (btnGistSave) btnGistSave.addEventListener('click', async () => {
-            if (!BACKUP) { setStatus('❌ OS_BACKUP 模組未載入', '#fc8181'); return; }
+            if (!BACKUP) { setStatus('OS_BACKUP 模組未載入', '#fc8181'); return; }
             const token = elToken?.value.trim();
             const gistId = elGistId?.value.trim() || null;
             if (!token) { setStatus('請先填入 GitHub Token', '#fc8181'); return; }
             BACKUP.saveSettings({ token, gistId });
             setBtnLoading(btnGistSave, '備份中...');
-            setStatus('⏳ 正在備份到 GitHub Gist...', 'rgba(26,28,40,0.25)');
+            setStatus('正在備份到 GitHub Gist...', 'rgba(26,28,40,0.25)');
             try {
                 const result = await BACKUP.gistBackup();
                 if (elGistId) elGistId.value = result.gistId;
-                if (elGistHint) elGistHint.textContent = '✅ 備份成功！Gist ID: ' + result.gistId + '（' + result.sizeKB + ' KB）';
+                if (elGistHint) elGistHint.textContent = '備份成功！Gist ID: ' + result.gistId + '（' + result.sizeKB + ' KB）';
                 BACKUP.saveSettings({ token, gistId: result.gistId });
-                setStatus('✅ 備份完成（' + result.sizeKB + ' KB）', 'rgba(26,28,40,0.25)');
-            } catch(e) { setStatus('❌ 備份失敗：' + e.message, '#fc8181'); }
-            setBtnDone(btnGistSave, '☁️ 備份到 Gist');
+                setStatus('備份完成（' + result.sizeKB + ' KB）', 'rgba(26,28,40,0.25)');
+            } catch(e) { setStatus('備份失敗：' + e.message, '#fc8181'); }
+            setBtnDone(btnGistSave, '備份到 Gist');
         });
 
         const btnGistRestore = container.querySelector('#bk-gist-restore-btn');
         if (btnGistRestore) btnGistRestore.addEventListener('click', async () => {
-            if (!BACKUP) { setStatus('❌ OS_BACKUP 模組未載入', '#fc8181'); return; }
+            if (!BACKUP) { setStatus('OS_BACKUP 模組未載入', '#fc8181'); return; }
             const token = elToken?.value.trim();
             const gistId = elGistId?.value.trim() || null;
             if (!token || !gistId) { setStatus('請先填入 Token 與 Gist ID', '#fc8181'); return; }
             if (!await AUI.confirm('從 Gist 還原將合併資料（不清空現有），確定繼續？', { danger: false })) return;
             BACKUP.saveSettings({ token, gistId });
             setBtnLoading(btnGistRestore, '還原中...');
-            setStatus('⏳ 正在從 GitHub Gist 還原...', 'rgba(26,28,40,0.25)');
+            setStatus('正在從 GitHub Gist 還原...', 'rgba(26,28,40,0.25)');
             try {
                 const data = await BACKUP.gistRestore();
                 const result = await BACKUP.applyData(data);
-                setStatus(`✅ 還原完成：世界書 ${result.worldbook} 條、寵物 ${result.pets} 隻、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
-            } catch(e) { setStatus('❌ 還原失敗：' + e.message, '#fc8181'); }
-            setBtnDone(btnGistRestore, '⬇️ 從 Gist 還原');
+                setStatus(`還原完成：世界書 ${result.worldbook} 條、寵物 ${result.pets} 隻、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
+            } catch(e) { setStatus('還原失敗：' + e.message, '#fc8181'); }
+            setBtnDone(btnGistRestore, '從 Gist 還原');
         });
 
         const btnScan = container.querySelector('#bk-scan-btn');
@@ -4180,14 +4181,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         const btnExport = container.querySelector('#bk-export-btn');
         if (btnExport) btnExport.addEventListener('click', async () => {
-            if (!BACKUP) { setStatus('❌ OS_BACKUP 模組未載入', '#fc8181'); return; }
+            if (!BACKUP) { setStatus('OS_BACKUP 模組未載入', '#fc8181'); return; }
             setBtnLoading(btnExport, '準備中...');
-            setStatus('⏳ 正在打包資料...', 'rgba(26,28,40,0.25)');
+            setStatus('正在打包資料...', 'rgba(26,28,40,0.25)');
             try {
                 const sizeKB = await BACKUP.exportLocal();
-                setStatus('✅ 匯出完成（' + sizeKB + ' KB），請儲存至安全位置', 'rgba(26,28,40,0.25)');
-            } catch(e) { setStatus('❌ 匯出失敗：' + e.message, '#fc8181'); }
-            setBtnDone(btnExport, '📤 匯出完整備份 JSON');
+                setStatus('匯出完成（' + sizeKB + ' KB），請儲存至安全位置', 'rgba(26,28,40,0.25)');
+            } catch(e) { setStatus('匯出失敗：' + e.message, '#fc8181'); }
+            setBtnDone(btnExport, '匯出完整備份 JSON');
         });
 
         const btnImport = container.querySelector('#bk-import-btn');
@@ -4197,11 +4198,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const file = e.target.files?.[0];
             if (!file || !BACKUP) return;
             if (!await AUI.confirm('從本地 JSON 還原將合併資料，確定繼續？')) return;
-            setStatus('⏳ 正在匯入...', 'rgba(26,28,40,0.25)');
+            setStatus('正在匯入...', 'rgba(26,28,40,0.25)');
             try {
                 const result = await BACKUP.importLocal(file);
-                setStatus(`✅ 匯入完成：世界書 ${result.worldbook} 條、寵物 ${result.pets} 隻、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
-            } catch(e) { setStatus('❌ 匯入失敗：' + e.message, '#fc8181'); }
+                setStatus(`匯入完成：世界書 ${result.worldbook} 條、寵物 ${result.pets} 隻、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
+            } catch(e) { setStatus('匯入失敗：' + e.message, '#fc8181'); }
             e.target.value = '';
         });
 
@@ -4209,14 +4210,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const btnFormat = container.querySelector('#bk-format-btn');
         if (btnFormat) {
             btnFormat.addEventListener('click', async () => {
-                const firstConfirm = await AUI.confirm('⚠️ 警告：即將清空所有系統數據！這將徹底刪除你的所有劇情、對話、變數和設定！\n\n確定要繼續嗎？');
+                const firstConfirm = await AUI.confirm('警告：即將清空所有系統數據！這將徹底刪除你的所有劇情、對話、變數和設定！\n\n確定要繼續嗎？');
                 if (!firstConfirm) return;
                 
-                const secondConfirm = await AUI.confirm('🛑 最終防線：資料刪除後無法恢復（宛如物理超渡）。\n請確保你已經匯出了備份檔。\n\n真的要徹底格式化嗎？');
+                const secondConfirm = await AUI.confirm('最終防線：資料刪除後無法恢復（宛如物理超渡）。\n請確保你已經匯出了備份檔。\n\n真的要徹底格式化嗎？');
                 if (!secondConfirm) return;
 
                 setBtnLoading(btnFormat, '格式化中...');
-                setStatus('💥 正在執行全系統格式化，請勿關閉網頁...', '#fc8181');
+                setStatus('正在執行全系統格式化，請勿關閉網頁...', '#fc8181');
                 
                 try {
                     // 清除 LocalStorage
@@ -4230,13 +4231,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         console.warn('[PhoneOS] 找不到 OS_DB.factoryReset，僅執行 localStorage 清理');
                     }
                     
-                    setStatus('✅ 格式化完成！系統即將重生...', '#b8ffcb');
+                    setStatus('格式化完成！系統即將重生...', '#b8ffcb');
                     setTimeout(() => {
                         window.location.reload();
                     }, 1500);
                 } catch (e) {
-                    setStatus('❌ 格式化失敗：' + e.message, '#fc8181');
-                    setBtnDone(btnFormat, '💥 格式化並清空所有數據');
+                    setStatus('格式化失敗：' + e.message, '#fc8181');
+                    setBtnDone(btnFormat, '格式化並清空所有數據');
                 }
             });
         }

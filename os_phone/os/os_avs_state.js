@@ -56,12 +56,12 @@
     function _isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
     function _scalar(v) { return (v === null || v === undefined || v === '') ? '—' : String(v); }
     function _icon(k) {
-        if (/系[統统]|時間|时间|場景|场景|地[點点]|世界|環境|环境/.test(k)) return '🗺️';
-        if (/角色|人物|npc|character/i.test(k)) return '🎭';
-        if (/玩家|主角|自己|player|我/i.test(k)) return '🙂';
-        if (/背包|道具|物品|裝備|装备|inventory|item/i.test(k)) return '🎒';
-        if (/任務|任务|目標|目标|quest|mission/i.test(k)) return '🎯';
-        if (/關係|关系|好感|relation/i.test(k)) return '💞';
+        if (/系[統统]|時間|时间|場景|场景|地[點点]|世界|環境|环境/.test(k)) return '<i class="fa-solid fa-map"></i>';
+        if (/角色|人物|npc|character/i.test(k)) return '<i class="fa-solid fa-masks-theater"></i>';
+        if (/玩家|主角|自己|player|我/i.test(k)) return '<i class="fa-solid fa-face-smile"></i>';
+        if (/背包|道具|物品|裝備|装备|inventory|item/i.test(k)) return '<i class="fa-solid fa-suitcase"></i>';
+        if (/任務|任务|目標|目标|quest|mission/i.test(k)) return '<i class="fa-solid fa-bullseye"></i>';
+        if (/關係|关系|好感|relation/i.test(k)) return '<i class="fa-solid fa-heart"></i>';
         return '•';
     }
     function _renderRows(obj) {
@@ -227,7 +227,7 @@
                     ${desc ? `<div class="avs-st-field-desc">${esc(desc)}</div>` : ''}
                 </div>
                 <div class="avs-st-field-acts">
-                    <button class="avs-st-field-act" onclick="window.OS_AVS_STATE.startEditField('${esc(name).replace(/'/g, '&#39;')}')" title="編輯">✏</button>
+                    <button class="avs-st-field-act" onclick="window.OS_AVS_STATE.startEditField('${esc(name).replace(/'/g, '&#39;')}')" title="編輯"><i class="fa-solid fa-pen"></i></button>
                     <button class="avs-st-field-act danger" onclick="window.OS_AVS_STATE.deleteFieldConfirm('${esc(name).replace(/'/g, '&#39;')}')" title="刪除">×</button>
                 </div></div>`;
         }).join('');
@@ -300,20 +300,20 @@
         const directorCardHtml = `<div class="avs-card avs-st-director-card">
             <div class="avs-st-toggle-row">
                 <div class="avs-st-toggle-text">
-                    <div class="avs-st-toggle-name">🎬 導演模式</div>
+                    <div class="avs-st-toggle-name"><i class="fa-solid fa-clapperboard"></i> 導演模式</div>
                     <div class="avs-st-toggle-desc">開啟後，每輪劇情結束由「主模型接口」整理一份導演稿（誰知道什麼、誰在隱瞞、可用的衝突點），下一輪自動給寫正文的 AI 參考</div>
                 </div>
                 <div class="avs-st-toggle${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' on' : ''}" id="avs-st-director-toggle" role="switch"></div>
             </div>
             <div class="avs-st-director-tools${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' is-visible' : ''}" id="avs-st-director-tools">
                 <div class="avs-st-btn-grid col1">
-                    <button class="avs-btn avs-btn-outline" id="avs-st-director-view">📜 查看／編輯導演稿</button>
-                    <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿">🎬 立刻產一份</button>
+                    <button class="avs-btn avs-btn-outline" id="avs-st-director-view"><i class="fa-solid fa-scroll"></i> 查看／編輯導演稿</button>
+                    <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿"><i class="fa-solid fa-clapperboard"></i> 立刻產一份</button>
                 </div>
                 <div class="avs-st-director-editor" id="avs-st-director-editor">
                     <textarea class="avs-textarea avs-st-director-text" id="avs-st-director-text"></textarea>
                     <div class="avs-st-btn-grid avs-st-director-actions">
-                        <button class="avs-btn avs-btn-primary" id="avs-st-director-save">💾 儲存（下一輪生效）</button>
+                        <button class="avs-btn avs-btn-primary" id="avs-st-director-save"><i class="fa-solid fa-floppy-disk"></i> 儲存（下一輪生效）</button>
                         <button class="avs-btn avs-btn-outline" id="avs-st-director-close">收起</button>
                     </div>
                 </div>
@@ -328,7 +328,7 @@
         const adoptHtml = _adoptable.length ? `
             <div class="avs-st-adv-sec">
                 <div class="avs-st-adv-hd">沿用其他故事的設定<span class="avs-st-adv-hint">追蹤欄位、條件規則、UI 面板一起搬過來，不會帶入舊數值</span></div>
-                <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-adopt-open">📋 從其他故事挑一份（${_adoptable.length}）</button>
+                <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-adopt-open"><i class="fa-solid fa-clipboard"></i> 從其他故事挑一份（${_adoptable.length}）</button>
             </div>` : '';
 
         if (!hasSchema) {
@@ -337,18 +337,18 @@
                 ${directorCardHtml}
                 ${adoptHtml ? `<div class="avs-card">${adoptHtml}</div>` : ''}
                 <div class="avs-card avs-st-init">
-                    <div class="avs-st-init-icon">🛰️</div>
+                    <div class="avs-st-init-icon"><i class="fa-solid fa-satellite"></i></div>
                     <div class="avs-st-init-title">這個世界還沒開始追蹤狀態</div>
                     <div class="avs-st-init-desc">AI 會讀你的世界設定，預設追蹤下面這些；不要的點 × 刪掉、想加的打在輸入框，全留著＝交給 AI 自動判斷。</div>
                     <div class="avs-st-init-tags">
                         <div class="avs-st-chips" id="avs-st-tags">
-                            <span class="avs-st-chip removable" data-k="角色外貌：髮色/眼色/體型" data-warn="1">🎭 角色外貌<i class="fa-solid fa-xmark chip-x"></i></span>
-                            <span class="avs-st-chip removable" data-k="每個角色對主角的好感度">💗 好感度<i class="fa-solid fa-xmark chip-x"></i></span>
-                            <span class="avs-st-chip removable" data-k="劇情目標：長期目標＋短期待辦">🎯 劇情目標<i class="fa-solid fa-xmark chip-x"></i></span>
-                            <span class="avs-st-chip removable" data-k="每個角色眼下在謀劃什麼（不要開時限／倒數欄位）">📋 角色待辦<i class="fa-solid fa-xmark chip-x"></i></span>
-                            <span class="avs-st-chip removable" data-k="當前場景／地點">📍 當前場景<i class="fa-solid fa-xmark chip-x"></i></span>
-                            <span class="avs-st-chip removable" data-k="主角攜帶／持有的物品（只有主角一份 list，NPC 不要開物品欄）">🎒 物品攜帶<i class="fa-solid fa-xmark chip-x"></i></span>
-                            <span class="avs-st-chip removable" data-k="題材專屬數值（HP／理智／倒計時等）">⚙️ 題材數值<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="角色外貌：髮色/眼色/體型" data-warn="1"><i class="fa-solid fa-masks-theater"></i> 角色外貌<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="每個角色對主角的好感度"><i class="fa-solid fa-heart"></i> 好感度<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="劇情目標：長期目標＋短期待辦"><i class="fa-solid fa-bullseye"></i> 劇情目標<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="每個角色眼下在謀劃什麼（不要開時限／倒數欄位）"><i class="fa-solid fa-clipboard"></i> 角色待辦<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="當前場景／地點"><i class="fa-solid fa-location-dot"></i> 當前場景<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="主角攜帶／持有的物品（只有主角一份 list，NPC 不要開物品欄）"><i class="fa-solid fa-suitcase"></i> 物品攜帶<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="題材專屬數值（HP／理智／倒計時等）"><i class="fa-solid fa-gear"></i> 題材數值<i class="fa-solid fa-xmark chip-x"></i></span>
                             ${_loadMyChips().map(v => `<span class="avs-st-chip removable is-mine" data-k="${esc(v)}" title="${esc(v)}">${esc(_chipLabel(v))}<i class="fa-solid fa-xmark chip-x"></i></span>`).join('')}
                         </div>
                     </div>
@@ -357,12 +357,12 @@
                     <button class="avs-btn avs-btn-primary avs-st-init-btn" id="avs-st-init">開始追蹤狀態 ▸</button>
                     <div class="avs-st-init-foot">第一次生成大約 5–30 秒；不想等 AI 就用下面兩個</div>
                     <div class="avs-st-init-alt">
-                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset" title="不叫 AI，直接套形象／身分／好感度三欄">🪶 簡易預設</button>
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset" title="不叫 AI，直接套形象／身分／好感度三欄"><i class="fa-solid fa-feather"></i> 簡易預設</button>
                         <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-manual" title="自己填欄位名／型別／預設值／說明"><i class="fa-solid fa-pen-to-square"></i> 自己建</button>
                     </div>
                     <div class="avs-st-init-alt">
-                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-px-prism" title="世界門專用：所在世界／本趟目標／當地貨幣／角色形態，面板走量子白稜鏡">🌌 視差預設・稜鏡</button>
-                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-px-cheshire" title="欄位與稜鏡完全相同，只有面板外觀換成柴郡貼紙">🐈‍⬛ 視差預設・柴郡</button>
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-px-prism" title="世界門專用：所在世界／本趟目標／當地貨幣／角色形態，面板走量子白稜鏡"><i class="fa-solid fa-star"></i> 視差預設・稜鏡</button>
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-px-cheshire" title="欄位與稜鏡完全相同，只有面板外觀換成柴郡貼紙"><i class="fa-solid fa-cat"></i> 視差預設・柴郡</button>
                     </div>
                 </div>
             </div>`;
@@ -422,7 +422,7 @@
                 if (_mine.length) _up += (_up ? '\n' : '') + '【使用者指定一定要追蹤這些】' + _mine.join('、');
                 if (_custom) _up += (_up ? '\n' : '') + '【額外要求】' + _custom;
                 const orig = ib.textContent;
-                ib.textContent = '🧬 AI 分析中…';
+                ib.textContent = 'AI 分析中…';
                 ib.style.pointerEvents = 'none';
                 try {
                     const r = await win.OS_AVS.generateAndSaveSchema(_up);   // 生成 schema + 存進變數包（帶 TAG 取捨＋選填要求）
@@ -458,30 +458,30 @@
         }
 
         // 「複製狀態數據」小按鈕：搬進「目前狀態」操作頁
-        const copyBtnHtml = `<button class="avs-btn avs-btn-outline avs-st-sm" id="avs-st-copy-diag">🔬 複製狀態數據</button>`;
+        const copyBtnHtml = `<button class="avs-btn avs-btn-outline avs-st-sm" id="avs-st-copy-diag"><i class="fa-solid fa-microscope"></i> 複製狀態數據</button>`;
 
         // ── 第二層：📊 目前狀態 操作頁 ──────────────────────────────
         if (_page === 'current') {
             _host.innerHTML = `<div class="avs-st avs-st-l2">
                 <div class="avs-st-l2hd">
                     <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
-                    <div class="avs-st-l2title">📊 目前狀態</div>
+                    <div class="avs-st-l2title"><i class="fa-solid fa-chart-simple"></i> 目前狀態</div>
                 </div>
                 <div class="avs-st-cur-editbar">
                     ${copyBtnHtml}
                     <div class="avs-st-editbar-r">
                         ${_editingValues
-                            ? `<button class="avs-btn avs-btn-primary avs-st-fe-btn" id="avs-st-val-save">💾 儲存</button><button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-cancel">取消</button>`
-                            : `<button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-edit">✏️ 改數值</button><span class="avs-st-editbar-hint">AI 偶爾填錯？點這手動改</span>`}
+                            ? `<button class="avs-btn avs-btn-primary avs-st-fe-btn" id="avs-st-val-save"><i class="fa-solid fa-floppy-disk"></i> 儲存</button><button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-cancel">取消</button>`
+                            : `<button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-edit"><i class="fa-solid fa-pen"></i> 改數值</button><span class="avs-st-editbar-hint">AI 偶爾填錯？點這手動改</span>`}
                     </div>
                 </div>
                 <div class="avs-st-current-body">${_editingValues ? _humanizeEditable(cur) : _humanize(cur)}</div>
                 <div class="avs-st-adv-sec">
                     <div class="avs-st-adv-hd">更新這份狀態${patchesCount ? `（已記 ${patchesCount} 筆）` : ''}</div>
                     <div class="avs-st-btn-grid col3">
-                        <button class="avs-btn avs-btn-outline" id="avs-st-extract">🛰️ 立即抽一次</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-st-deep" title="用主模型把整份狀態清一輪：合併重複角色、移除純路人、按大總結修正過期欄位。整理前自動快照，可還原上一步。">♻️ 深度整理</button>
-                        <button class="avs-btn avs-btn-outline${snapCount === 0 ? ' disabled' : ''}" id="avs-st-rollback">↩ 還原上一步${snapCount ? ` (${snapCount})` : ''}</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-extract"><i class="fa-solid fa-satellite"></i> 立即抽一次</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-deep" title="用主模型把整份狀態清一輪：合併重複角色、移除純路人、按大總結修正過期欄位。整理前自動快照，可還原上一步。"><i class="fa-solid fa-arrows-rotate"></i> 深度整理</button>
+                        <button class="avs-btn avs-btn-outline${snapCount === 0 ? ' disabled' : ''}" id="avs-st-rollback"><i class="fa-solid fa-rotate-left"></i> 還原上一步${snapCount ? ` (${snapCount})` : ''}</button>
                     </div>
                 </div>
             </div>`;
@@ -494,13 +494,13 @@
             _host.innerHTML = `<div class="avs-st avs-st-l2">
                 <div class="avs-st-l2hd">
                     <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
-                    <div class="avs-st-l2title">⚙️ 追蹤欄位</div>
+                    <div class="avs-st-l2title"><i class="fa-solid fa-gear"></i> 追蹤欄位</div>
                 </div>
                 <div class="avs-st-adv is-page">
                     <div class="avs-st-adv-sec">
                         <div class="avs-st-adv-hd">追蹤欄位（${Object.keys(fields).length}）<span class="avs-st-adv-hint">AI 會盯著這些東西記錄</span></div>
                         <div class="avs-st-field-list">${_renderSchemaList(fields)}</div>
-                        <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-regen">🧬 重新生成欄位</button>
+                        <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-regen"><i class="fa-solid fa-dna"></i> 重新生成欄位</button>
                     </div>
                 </div>
             </div>`;
@@ -513,7 +513,7 @@
             _host.innerHTML = `<div class="avs-st avs-st-l2">
                 <div class="avs-st-l2hd">
                     <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
-                    <div class="avs-st-l2title">🗂️ 資料管理</div>
+                    <div class="avs-st-l2title"><i class="fa-solid fa-folder-tree"></i> 資料管理</div>
                 </div>
                 <div class="avs-st-adv is-page">
                     ${adoptHtml}
@@ -533,8 +533,8 @@
                     </div>
                     <div class="avs-st-adv-sec">
                         <div class="avs-st-adv-hd">所有世界</div>
-                        <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-cross">🌐 跨世界管理 — 所有已追蹤的世界</button>
-                        <button class="avs-btn avs-btn-outline avs-st-wide avs-st-gc" id="avs-st-gc">🧹 清理已刪除世界的殘留資料</button>
+                        <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-cross"><i class="fa-solid fa-globe"></i> 跨世界管理 — 所有已追蹤的世界</button>
+                        <button class="avs-btn avs-btn-outline avs-st-wide avs-st-gc" id="avs-st-gc"><i class="fa-solid fa-broom"></i> 清理已刪除世界的殘留資料</button>
                     </div>
                 </div>
             </div>`;
@@ -559,15 +559,15 @@
             ${directorCardHtml}
 
             <button class="avs-st-nav" id="avs-st-nav-cur">
-                <span class="avs-st-nav-txt">📊 目前狀態<span class="avs-st-nav-sub">角色數值、任務、物品；抽取與還原也在裡面</span></span>
+                <span class="avs-st-nav-txt"><i class="fa-solid fa-chart-simple"></i> 目前狀態<span class="avs-st-nav-sub">角色數值、任務、物品；抽取與還原也在裡面</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
             <button class="avs-st-nav" id="avs-st-nav-data">
-                <span class="avs-st-nav-txt">🗂️ 資料管理<span class="avs-st-nav-sub">初始化、清空、所有已追蹤的世界</span></span>
+                <span class="avs-st-nav-txt"><i class="fa-solid fa-folder-tree"></i> 資料管理<span class="avs-st-nav-sub">初始化、清空、所有已追蹤的世界</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
             <button class="avs-st-nav" id="avs-st-nav-fields">
-                <span class="avs-st-nav-txt">⚙️ 追蹤欄位<span class="avs-st-nav-sub">AI 要盯著記錄哪些東西</span></span>
+                <span class="avs-st-nav-txt"><i class="fa-solid fa-gear"></i> 追蹤欄位<span class="avs-st-nav-sub">AI 要盯著記錄哪些東西</span></span>
                 <span class="avs-st-nav-chev">›</span>
             </button>
         </div>`;
@@ -605,16 +605,16 @@
             if (!ta) return;
             let ok = false;
             try { ok = await win.OS_STATE_RUNTIME?.director?.saveText?.(ta.value); } catch (e) {}
-            dirSaveBtn.textContent = ok ? '✅ 已儲存' : '❌ 存失敗';
-            setTimeout(() => { dirSaveBtn.textContent = '💾 儲存（下一輪生效）'; }, 1800);
+            dirSaveBtn.textContent = ok ? '已儲存' : '存失敗';
+            setTimeout(() => { dirSaveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 儲存（下一輪生效）'; }, 1800);
         };
         const dirCloseBtn = q('#avs-st-director-close');
         if (dirCloseBtn) dirCloseBtn.onclick = () => { const ed = q('#avs-st-director-editor'); if (ed) ed.classList.remove('open'); };
         const dirNowBtn = q('#avs-st-director-now');
         if (dirNowBtn) dirNowBtn.onclick = async () => {
-            dirNowBtn.textContent = '🎬 產稿中…'; dirNowBtn.classList.add('disabled');
+            dirNowBtn.textContent = '產稿中…'; dirNowBtn.classList.add('disabled');
             try { await win.OS_STATE_RUNTIME?.director?.extractNow?.(); } catch (e) {}
-            dirNowBtn.textContent = '🎬 立刻產一份'; dirNowBtn.classList.remove('disabled');
+            dirNowBtn.innerHTML = '<i class="fa-solid fa-clapperboard"></i> 立刻產一份'; dirNowBtn.classList.remove('disabled');
             const ed = q('#avs-st-director-editor');
             if (ed && ed.classList.contains('open')) await _dirLoadText();
         };
@@ -666,7 +666,7 @@
         m.id = 'avs-adopt-modal';
         m.className = 'avs-sm-modal';
         m.innerHTML = `<div class="avs-sm-card">
-            <div class="avs-sm-title">📋 沿用其他故事的設定</div>
+            <div class="avs-sm-title"><i class="fa-solid fa-clipboard"></i> 沿用其他故事的設定</div>
             <div class="avs-sm-desc">追蹤欄位、條件規則、UI 面板會一起搬到目前這個故事；不會帶入舊數值，來源故事也完全不受影響。</div>
             <div id="avs-adopt-list" class="avs-sm-list"></div>
             <div class="avs-sm-actions"><button class="avs-btn avs-btn-outline avs-sm-close-btn" id="avs-adopt-close">關閉</button></div>
@@ -777,7 +777,7 @@
             } catch (e) { console.warn('[AVS State] UI 面板沿用失敗', e); }
             _packs = (_packs || []).concat([copy]);
             try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
-            AUI.alert(`✅ 已沿用「${src.name}」\n\n・追蹤欄位 ${(copy.variables || []).length} 項\n・條件規則 ${nRules} 條\n・UI 面板 ${nTpl} 個\n\n數值從空白開始，推進劇情就會自動記錄。`);
+            AUI.alert(`已沿用「${src.name}」\n\n・追蹤欄位 ${(copy.variables || []).length} 項\n・條件規則 ${nRules} 條\n・UI 面板 ${nTpl} 個\n\n數值從空白開始，推進劇情就會自動記錄。`);
             _build({ fresh: true });
         } catch (e) {
             AUI.alert('沿用失敗：' + ((e && e.message) || e));
@@ -825,20 +825,20 @@
                     persisted: (win.OS_STATE_RUNTIME?.getStateDataDump) ? await win.OS_STATE_RUNTIME.getStateDataDump() : null
                 };
                 await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
-                if (b) { b.textContent = '✅ 已複製'; setTimeout(() => { b.textContent = '🔬 複製狀態數據'; }, 2200); }
+                if (b) { b.textContent = '已複製'; setTimeout(() => { b.innerHTML = '<i class="fa-solid fa-microscope"></i> 複製狀態數據'; }, 2200); }
             } catch (e) {
-                if (b) b.textContent = '❌ 複製失敗：' + (e?.message || e);
+                if (b) b.textContent = '複製失敗：' + (e?.message || e);
             }
         });
         bind('#avs-st-extract', () => win.OS_STATE_RUNTIME?.forceExtract?.());
         bind('#avs-st-deep', async () => {
             if (!await AUI.confirm('用主模型深度整理目前狀態？\n・合併重複角色（繁簡／別名）\n・移除無關係、無物品、任務無牽扯的純路人\n・按大總結修正過期欄位（如任務其實已完成）\n\n整理前會自動快照，事後可按「還原上一步」撤銷。')) return;
-            const b = q('#avs-st-deep'); if (b) { b.textContent = '♻️ 整理中…'; b.classList.add('disabled'); }
+            const b = q('#avs-st-deep'); if (b) { b.textContent = '整理中…'; b.classList.add('disabled'); }
             try {
                 const r = await win.OS_STATE_RUNTIME?.deepConsolidate?.();
-                if (r && r.ok) AUI.alert(`✅ 整理完成：合併 ${r.merged}、移除 ${r.removed}、修正 ${r.fixed}`);
-                else AUI.alert('❌ 整理失敗：' + ((r && r.msg) || '未知錯誤') + '\n（狀態未被更動）');
-            } catch (e) { AUI.alert('❌ 整理失敗：' + (e?.message || e) + '\n（狀態未被更動）'); }
+                if (r && r.ok) AUI.alert(`整理完成：合併 ${r.merged}、移除 ${r.removed}、修正 ${r.fixed}`);
+                else AUI.alert('整理失敗：' + ((r && r.msg) || '未知錯誤') + '\n（狀態未被更動）');
+            } catch (e) { AUI.alert('整理失敗：' + (e?.message || e) + '\n（狀態未被更動）'); }
             _build({ fresh: true });
         });
         bind('#avs-st-regen', async () => { if (await AUI.confirm('重新生成追蹤欄位？已記錄的內容會保留。')) win.OS_STATE_SCHEMA?.generate?.(); });
@@ -882,7 +882,7 @@
                     }
                 }
                 del.forEach(k => localStorage.removeItem(k));
-                setTimeout(() => { AUI.alert(`✅ 清理完成，回收了 ${del.length} 筆殘留資料。`); _build({ fresh: true }); }, 200);
+                setTimeout(() => { AUI.alert(`清理完成，回收了 ${del.length} 筆殘留資料。`); _build({ fresh: true }); }, 200);
             } catch (e) {
                 AUI.alert('清理失敗：' + (e?.message || e));
                 _build({ fresh: true });
@@ -936,8 +936,8 @@
         modal.id = 'avs-state-manager-modal';
         modal.className = 'avs-sm-modal';
         modal.innerHTML = `<div class="avs-sm-card">
-            <div class="avs-sm-title">🌐 跨世界管理</div>
-            <div class="avs-sm-desc">所有曾經開始追蹤過的世界。⭐ = 你現在這個 · 🗑 刪掉單筆</div>
+            <div class="avs-sm-title"><i class="fa-solid fa-globe"></i> 跨世界管理</div>
+            <div class="avs-sm-desc">所有曾經開始追蹤過的世界。<i class="fa-solid fa-star"></i> = 你現在這個 · <i class="fa-solid fa-trash-can"></i> 刪掉單筆</div>
             <div id="avs-state-manager-list" class="avs-sm-list"></div>
             <div class="avs-sm-actions"><button class="avs-btn avs-btn-outline avs-sm-close-btn" id="avs-sm-close">關閉</button></div>
         </div>`;
@@ -961,10 +961,10 @@
                 const date = e.timestamp ? new Date(e.timestamp).toLocaleString() : '—';
                 return `<div class="avs-sm-row${isCur ? ' cur' : ''}">
                     <div class="avs-sm-row-main">
-                        <div class="avs-sm-row-id">${isCur ? '⭐ ' : ''}${esc(e.chatId)}</div>
+                        <div class="avs-sm-row-id">${isCur ? '<i class="fa-solid fa-star"></i> ' : ''}${esc(e.chatId)}</div>
                         <div class="avs-sm-row-meta">欄位 ${e.schemaCount} · 紀錄 ${e.patchesCount} · 目前 ${e.currentCount} 項　·　${date}</div>
                     </div>
-                    <button class="avs-sm-del" data-state-del="${esc(e.chatId)}" title="刪除這個世界的狀態資料">🗑</button>
+                    <button class="avs-sm-del" data-state-del="${esc(e.chatId)}" title="刪除這個世界的狀態資料"><i class="fa-solid fa-trash-can"></i></button>
                 </div>`;
             }).join('');
             listEl.querySelectorAll('[data-state-del]').forEach(btn => btn.addEventListener('click', async () => {

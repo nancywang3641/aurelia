@@ -401,7 +401,7 @@
             const afterFull = finalContent.length;
             const afterInject = (API.buildInjectionPayload ? API.buildInjectionPayload(finalContent) : finalContent).length;
             console.log(`[大總結] ✅ 重壓完成 全文 ${beforeFull}→${afterFull}、注入 ${beforeInject}→${afterInject}`);
-            AUI.alert(`✅ 重壓完成！\n存檔全文：${beforeFull} → ${afterFull} 字\n每輪實際注入：${beforeInject} → ${afterInject} 字\n角色 / 關係全保留、物品表已移除。`);
+            AUI.alert(`重壓完成！\n存檔全文：${beforeFull} → ${afterFull} 字\n每輪實際注入：${beforeInject} → ${afterInject} 字\n角色 / 關係全保留、物品表已移除。`);
             try { const sb = document.querySelector('#ost-panel .ost-hide-btn[title="重新整理"]'); if (sb) API._refreshStatus(sb); } catch (e) {}
         } catch (e) {
             console.error('[大總結] 重壓失敗:', e);
@@ -565,7 +565,7 @@
                 row.appendChild(cb); row.appendChild(text);
                 listEl.appendChild(row);
             });
-        } catch (e) { listEl.innerHTML = `<div style="color:#ff4444; padding:10px;">❌ 載入失敗: ${e.message}</div>`; }
+        } catch (e) { listEl.innerHTML = `<div style="color:#ff4444; padding:10px;"><i class="fa-solid fa-circle-xmark"></i> 載入失敗: ${e.message}</div>`; }
     };
 
     API.executeMergeSummaries = async function () {
@@ -651,7 +651,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
             const newEntry = { comment: `[大总结] - ${chatId} - 第${newCount}次(合并) - ${now}`, keys: [`[SUMMARY_${chatId}_MERGE_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
             await helper.createLorebookEntries(bookName, [newEntry]);
-            AUI.alert(`✅ 合併完成！第 ${newCount} 次（合并版）——角色/關係全保留；事件/物品/記憶/性事/結算/代辦已濃縮整理。確認沒問題後可手動刪掉舊的 ${selected.length} 份。`);
+            AUI.alert(`合併完成！第 ${newCount} 次（合并版）——角色/關係全保留；事件/物品/記憶/性事/結算/代辦已濃縮整理。確認沒問題後可手動刪掉舊的 ${selected.length} 份。`);
         } catch (e) { AUI.alert('合併失敗: ' + e.message); }
         finally { if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); } }
     };
@@ -1003,14 +1003,14 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 modal.className = 'ost-modal active';
                 modal.innerHTML = `
                     <div class="ost-modal-card ost-modal-wide">
-                        <div class="ost-modal-title">📝 大總結預覽（第 ${summaryCount} 次）</div>
+                        <div class="ost-modal-title"><i class="fa-solid fa-pen-to-square"></i> 大總結預覽（第 ${summaryCount} 次）</div>
                         <div class="ost-opt-desc">檢查內容、可直接編輯。滿意按「儲存」才會存進故事日誌（本機、綁這個聊天室）；不滿意可「重新生成」。</div>
                         <textarea id="rpg-sum-preview-area" class="ost-textarea ost-sum-preview-area" spellcheck="false"></textarea>
                         <div class="ost-sum-preview-status" id="rpg-sum-preview-status"></div>
                         <div class="ost-modal-btns">
                             <button class="ost-btn" id="rpg-sum-cancel">取消</button>
-                            <button class="ost-btn" id="rpg-sum-regen">🔄 重新生成</button>
-                            <button class="ost-btn ost-btn-primary" id="rpg-sum-save">💾 儲存</button>
+                            <button class="ost-btn" id="rpg-sum-regen"><i class="fa-solid fa-rotate"></i> 重新生成</button>
+                            <button class="ost-btn ost-btn-primary" id="rpg-sum-save"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
                         </div>
                     </div>`;
                 document.body.appendChild(modal);
@@ -1038,14 +1038,14 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 const _v = _validateSummary(finalContent);
                 if (!_v.ok) {
                     console.warn('[自動總結] ⚠️ 生成結果未通過驗證，放棄存檔、保留舊總結：' + _v.reason);
-                    try { AUI.toastr?.error('這次自動總結格式異常（' + _v.reason + '），已保留舊總結、沒有覆蓋。請到故事管理手動「生成 / 更新大總結」檢查。', '🛑 自動總結已攔截', { timeOut: 9000 }); } catch (e) {}
+                    try { AUI.toastr?.error('這次自動總結格式異常（' + _v.reason + '），已保留舊總結、沒有覆蓋。請到故事管理手動「生成 / 更新大總結」檢查。', '自動總結已攔截', { timeOut: 9000 }); } catch (e) {}
                     return;
                 }
                 await _doSave(); console.log('[自動總結] ✅ 背景總結完成並存檔');
             }
             else _showSummaryPreview();
         } catch (e) { if (auto) console.warn('[自動總結] 失敗:', e); else AUI.alert("生成失敗: " + e.message); } finally {
-            if (btn) { btn.innerText = "📝 生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning'); }
+            if (btn) { btn.innerText = "生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning'); }
         }
     };
 
@@ -1083,9 +1083,9 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
     };
     API._withBtnFeedback = async function (btn, action, successText = '✓') {
         if (!btn) return action();
-        const orig = btn.textContent;
+        const orig = btn.innerHTML;   // 用 HTML 存：按鈕上可能有圖示
         const wasDisabled = btn.disabled;
-        btn.textContent = '⏳';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
         btn.disabled = true;
         btn.classList.add('busy');
         try {
@@ -1094,7 +1094,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             btn.classList.remove('busy');
             btn.classList.add('ok');
             setTimeout(() => {
-                btn.textContent = orig;
+                btn.innerHTML = orig;
                 btn.disabled = wasDisabled;
                 btn.classList.remove('ok');
             }, 1200);
@@ -1105,7 +1105,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             btn.classList.add('err');
             console.error('[OS_STORY_TOOLS] 操作失敗:', e);
             setTimeout(() => {
-                btn.textContent = orig;
+                btn.innerHTML = orig;
                 btn.disabled = wasDisabled;
                 btn.classList.remove('err');
             }, 1500);
@@ -1225,26 +1225,26 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             </div>
             <div id="rpg-merge-modal" class="ost-modal">
                 <div class="ost-modal-card ost-modal-wide">
-                    <div class="ost-modal-title">🔀 合併大總結</div>
+                    <div class="ost-modal-title"><i class="fa-solid fa-shuffle"></i> 合併大總結</div>
                     <label class="ost-modal-lab">備註 / 調整要求（發給 AI）</label>
                     <textarea id="sp-merge-note" class="ost-textarea" style="height:60px;" placeholder="例：請特別保留角色A與B的關係細節，合併後去掉重複的物品記錄..."></textarea>
                     <div class="ost-modal-lab" style="margin-top:10px;">勾選要合併的條目</div>
                     <div id="sp-merge-list" class="ost-merge-list">載入中...</div>
                     <div class="ost-modal-btns">
                         <button class="ost-btn" onclick="document.getElementById('rpg-merge-modal').classList.remove('active')">取消</button>
-                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.executeMergeSummaries()">🔀 開始合併</button>
+                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.executeMergeSummaries()"><i class="fa-solid fa-shuffle"></i> 開始合併</button>
                     </div>
                 </div>
             </div>
             <div id="rpg-summary-tpl-modal" class="ost-modal">
                 <div class="ost-modal-card ost-modal-wide">
-                    <div class="ost-modal-title">✏️ 大總結 生成模板</div>
+                    <div class="ost-modal-title"><i class="fa-solid fa-pen"></i> 大總結 生成模板</div>
                     <div class="ost-opt-desc" style="margin-bottom:8px;">編輯後點保存，下次生成大總結時使用此模板。可用佔位符：{{count}}（第幾次）</div>
                     <textarea id="sp-summary-tpl-area" class="ost-textarea" style="height:360px; font-family:monospace;"></textarea>
                     <div class="ost-modal-btns">
                         <button class="ost-btn" onclick="window.OS_STORY_TOOLS.resetSummaryTemplate()">↺ 還原預設</button>
                         <button class="ost-btn" onclick="document.getElementById('rpg-summary-tpl-modal').classList.remove('active')">關閉</button>
-                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.saveSummaryTemplate()">💾 保存</button>
+                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.saveSummaryTemplate()"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                     </div>
                 </div>
             </div>`;
@@ -1267,23 +1267,23 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         ov.innerHTML = `
             <div class="ost-card">
                 <div class="ost-head">
-                    <span class="ost-title">🛠️ 故事管理</span>
+                    <span class="ost-title"><i class="fa-solid fa-screwdriver-wrench"></i> 故事管理</span>
                     <button class="ost-close" title="關閉">✕</button>
                 </div>
                 <div class="ost-body">
                     <div class="ost-section">
-                        <div class="ost-section-title">📝 大總結</div>
+                        <div class="ost-section-title"><i class="fa-solid fa-pen-to-square"></i> 大總結</div>
                         <div class="ost-note">${latest
                             ? `目前是第 ${latest.count} 次，涵蓋 ${(latest.coveredChapterIds || []).length} 章${ts ? '　·　' + esc(ts) : ''}`
                             : '還沒有大總結。玩幾章之後按下面那顆，系統會把劇情壓成一份長期記憶。'}</div>
-                        <button class="ost-btn ost-btn-primary" id="ost-sa-gen">📝 生成 / 更新大總結</button>
+                        <button class="ost-btn ost-btn-primary" id="ost-sa-gen"><i class="fa-solid fa-pen-to-square"></i> 生成 / 更新大總結</button>
                         <div class="ost-hint">拿上一版當底稿，只把「上次之後的新章節」合併進去</div>
                     </div>
                     ${latest ? `
                     <div class="ost-section">
-                        <div class="ost-section-title">✏️ 內容</div>
+                        <div class="ost-section-title"><i class="fa-solid fa-pen"></i> 內容</div>
                         <textarea id="ost-sa-text" class="ost-sa-text" spellcheck="false">${esc(latest.content)}</textarea>
-                        <button class="ost-btn" id="ost-sa-save">💾 儲存修改</button>
+                        <button class="ost-btn" id="ost-sa-save"><i class="fa-solid fa-floppy-disk"></i> 儲存修改</button>
                         <div class="ost-hint">改完存回去，下一輪劇情就照新的走</div>
                     </div>` : ''}
                 </div>
@@ -1321,22 +1321,22 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         ov.innerHTML = `
             <div class="ost-card">
                 <div class="ost-head">
-                    <span class="ost-title">🛠️ 故事管理</span>
+                    <span class="ost-title"><i class="fa-solid fa-screwdriver-wrench"></i> 故事管理</span>
                     <button class="ost-close" title="關閉">✕</button>
                 </div>
                 <div class="ost-body">
                     <div class="ost-note">以下工具作用於「<b>目前開啟的對話</b>」。點故事卡片只是看該故事的總結；要生成大總結 / 隱藏，請先確定酒館開的是這個對話。</div>
                     <div class="ost-section">
-                        <div class="ost-section-title">📝 大總結</div>
-                        <button class="ost-btn ost-btn-primary" id="btn-grand-summary" onclick="window.OS_STORY_TOOLS.showRangeModal()">📝 生成 / 更新大總結 (Grand Summary)</button>
+                        <div class="ost-section-title"><i class="fa-solid fa-pen-to-square"></i> 大總結</div>
+                        <button class="ost-btn ost-btn-primary" id="btn-grand-summary" onclick="window.OS_STORY_TOOLS.showRangeModal()"><i class="fa-solid fa-pen-to-square"></i> 生成 / 更新大總結 (Grand Summary)</button>
                         <div class="ost-hint">將最近的劇情壓縮成永久記憶</div>
-                        <button class="ost-btn" id="btn-recompress-summary" onclick="window.OS_STORY_TOOLS.recompressSummary()">🔀 重壓目前大總結</button>
+                        <button class="ost-btn" id="btn-recompress-summary" onclick="window.OS_STORY_TOOLS.recompressSummary()"><i class="fa-solid fa-shuffle"></i> 重壓目前大總結</button>
                         <div class="ost-hint">把目前累積的總結再濃縮一次（不新增劇情）</div>
-                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()">✏️ 編輯大總結生成模板</button>
+                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()"><i class="fa-solid fa-pen"></i> 編輯大總結生成模板</button>
                         <div class="ost-hint">查看 / 編輯 / 清空各段劇情 → 大廳「瀅瀅的故事日誌」</div>
                     </div>
                     <div class="ost-section">
-                        <div class="ost-section-title">🙈 隱藏對話</div>
+                        <div class="ost-section-title"><i class="fa-solid fa-eye-slash"></i> 隱藏對話</div>
                         <div class="ost-hide">
                             <div class="ost-hide-row">
                                 <span class="ost-hide-label">樓層</span>
@@ -1346,7 +1346,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                                 <button class="ost-hide-btn" onclick="window.OS_STORY_TOOLS._slashHide(this)">隱藏</button>
                                 <button class="ost-hide-btn primary" onclick="window.OS_STORY_TOOLS._slashUnhide(this)">取消</button>
                                 <button class="ost-hide-btn danger" onclick="window.OS_STORY_TOOLS._slashShowAll(this)">全顯示</button>
-                                <button class="ost-hide-btn" onclick="window.OS_STORY_TOOLS._refreshStatus(this)" title="重新整理">🔄</button>
+                                <button class="ost-hide-btn" onclick="window.OS_STORY_TOOLS._refreshStatus(this)" title="重新整理"><i class="fa-solid fa-rotate"></i></button>
                             </div>
                             <div class="ost-hide-status">
                                 <span class="ost-hide-stat-lab">最後樓層</span><span class="ost-hide-stat-val" id="vrs-last-id">—</span>
@@ -1389,7 +1389,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             try {
                 console.log(`[自動總結] 未總結 ${info.uncounted} ≥ ${every} → 背景總結 #${info.start}~${info.end}`);
                 await API._generateSummary(info.start, info.end, 'content', true, true);   // auto=true → 直接存、不跳預覽
-                try { const t = AUI.toastr; if (t) t.success(`已自動總結（到 #${info.end}）`, '🔁 自動總結', { timeOut: 2500 }); } catch (e) {}
+                try { const t = AUI.toastr; if (t) t.success(`已自動總結（到 #${info.end}）`, '自動總結', { timeOut: 2500 }); } catch (e) {}
             } finally { _autoSumming = false; }
         } catch (e) { _autoSumming = false; console.warn('[自動總結] check 失敗:', e); }
     };
@@ -1514,7 +1514,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             console.log(`[補頭像] ✅ 完成 ${done} 張`);
             try {
                 const t = AUI.toastr;
-                if (t && done) t.success(`已自動補 ${done} 張頭像` + (missing.length > done ? `（還缺 ${missing.length - done} 個、下次大總結再補）` : ''), '🪪 補頭像', { timeOut: 3000 });
+                if (t && done) t.success(`已自動補 ${done} 張頭像` + (missing.length > done ? `（還缺 ${missing.length - done} 個、下次大總結再補）` : ''), '補頭像', { timeOut: 3000 });
             } catch (e) {}
         } catch (e) {
             console.warn('[補頭像] 失敗:', e?.message || e);

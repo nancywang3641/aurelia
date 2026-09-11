@@ -127,6 +127,8 @@
         
         .bg-db-type-btn { background: transparent; border: 1px solid #444; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 13px; line-height: 1; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
         .bg-db-type-btn:hover { border-color: var(--gold-s); background: rgba(212,175,55,0.1); }
+        .bg-db-type-btn .bg-db-dot-const { color: #4f8ef7; }
+        .bg-db-type-btn .bg-db-dot-sel { color: #3cc26b; }
         
         .bg-db-subtab { padding: 6px 12px; font-size: 12px; cursor: pointer; border-radius: 4px; border: 1px solid #333; background: transparent; color: #888; transition: 0.2s; user-select: none; display: flex; align-items: center; gap: 6px; font-family: 'Cinzel'; }
         .bg-db-subtab:hover { border-color: var(--gold-s); color: #ccc; }

@@ -14,7 +14,9 @@
 .cr-dim { opacity: 0.4; pointer-events: none; }
 
 /* 卡片標題那排的狀態燈與右側標記 */
-.cr-dot { font-size: 11px; margin-right: 2px; }
+.cr-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; background: #d64545; box-shadow: 0 0 0 2px rgba(214,69,69,.18); }
+.cr-dot[data-st="up"] { background: #2fbf6a; box-shadow: 0 0 0 2px rgba(47,191,106,.2); }
+.cr-dot[data-st="starting"] { background: #e0a82e; box-shadow: 0 0 0 2px rgba(224,168,46,.2); }
 .cr-card-tag { font-size: 10px; font-weight: 400; color: rgba(26,28,40,0.5); letter-spacing: 1px; }
 .cr-card-body { min-height: 16px; margin: 0; }
 

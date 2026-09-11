@@ -82,7 +82,7 @@
         // 要叫出 debug 面板：在 console 或任意處呼叫 window.AureliaDebug.show()。
         btn = document.createElement('div');
         btn.id = 'aurelia-dbg-btn';
-        btn.textContent = '🐛';
+        btn.innerHTML = '<i class="fa-solid fa-bug"></i>';
         btn.title = 'Debug Console';
         btn.style.display = 'none'; // 一律隱藏，不靠 localStorage 開關（避免殘留旗標害它冒出來）
         btn.addEventListener('click', function () { open ? hide() : show(); });

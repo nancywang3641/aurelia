@@ -54,7 +54,7 @@
         box.className = 'vn-dive-loading';
         const g = String(greeting || ''), r = String(userReply || '');
         box.innerHTML =
-            '<div class="vdl-icon">' + _esc((w && w.icon) || '📖') + '</div>' +
+            '<div class="vdl-icon">' + (!(w && w.icon) ? '<i class="fa-solid fa-book-open"></i>' : /^fa-[a-z0-9-]+$/.test(String(w.icon)) ? '<i class="fa-solid ' + w.icon + '"></i>' : _esc(w.icon)) + '</div>' +
             '<div class="vdl-title">' + _esc((w && w.title) || '') + '</div>' +
             (g ? '<div class="vdl-quote">「' + _esc(g.slice(0, 90)) + (g.length > 90 ? '…' : '') + '」</div>' : '') +
             (r ? '<div class="vdl-reply">你：「' + _esc(r.slice(0, 60)) + (r.length > 60 ? '…' : '') + '」</div>' : '') +
@@ -208,7 +208,7 @@
         const targetPackId = options.targetPackId || null;
 
         if (!win.OS_API) {
-            statusEl.textContent = '❌ OS_API 未載入，請重整頁面';
+            statusEl.textContent = 'OS_API 未載入，請重整頁面';
             statusEl.className = 'err';
             return;
         }
@@ -262,7 +262,7 @@
                 console.log('[VN_Gen] ✅ 角色卡開場白直通成功，變數已透過參數直接初始化');
             } catch(e) {
                 console.error('[VN_Gen] 開場白載入失敗:', e);
-                statusEl.textContent = `❌ 載入失敗：${e.message}`;
+                statusEl.textContent = `載入失敗：${e.message}`;
                 statusEl.className = 'err';
                 submitBtn.disabled = false;
             }
@@ -271,7 +271,7 @@
 
         const config = (win.OS_SETTINGS?.getConfig?.()) || {};
         if (!config.url && !config.useSystemApi) {
-            statusEl.innerHTML = '❌ 尚未設定 API。請先到 <b>設置 → 🧠 主模型</b> 填入 API URL 與 Key。';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 尚未設定 API。請先到 <b>設置 → <i class="fa-solid fa-brain"></i> 主模型</b> 填入 API URL 與 Key。';
             statusEl.className = 'err';
             return;
         }
@@ -310,7 +310,7 @@
                         if (_bad.bad) {
                             console.warn('[VN_Gen] ⚠️ 這輪回覆有問題（' + _bad.kind + '）：' + _bad.reason);
                             _showBadReplyBanner(_bad, fullText, options);
-                            statusEl.textContent = '⚠️ ' + _bad.reason;
+                            statusEl.textContent = _bad.reason;
                             statusEl.className = 'err';
                             submitBtn.disabled = false;
                             try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
@@ -392,7 +392,7 @@
 
         } catch (err) {
             console.error('[VN_Gen] 生成失敗:', err);
-            statusEl.textContent = `❌ 生成失敗：${err.message || '未知錯誤'}`;
+            statusEl.textContent = `生成失敗：${err.message || '未知錯誤'}`;
             statusEl.className = 'err';
             submitBtn.disabled = false;
             window.VN_Core._setStoryId(_prevStoryId, _prevStoryTitle);
@@ -416,7 +416,7 @@
         const VC = window.VN_Core;
         if (!VC?.showTruncBanner) { AUI.alert(bad.reason); return; }
         VC.showTruncBanner({
-            title: bad.kind === 'trunc' ? '⚠️ 正文被截斷' : '⚠️ 這輪沒生成成功',
+            title: bad.kind === 'trunc' ? '正文被截斷' : '這輪沒生成成功',
             sub: bad.reason,
             onRegen: handlers?.onRegen || null,
             onContinue: (bad.kind === 'trunc' && handlers?.onContinue) ? handlers.onContinue : null,

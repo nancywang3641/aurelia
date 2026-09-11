@@ -20,6 +20,13 @@
         return Math.floor(d / day) + ' 天前';
     }
     function _toast(c, msg) { AUI.toast(msg); }
+    // 應用圖示：自己挑的 emoji 照用；沒挑的用 FA（創作室做的記在 icon 欄）。📦／🧩 是舊版塞的預設值，當作沒挑
+    function _appEm(a) { const e = String((a && a.emoji) || '').trim(); return (e && e !== '📦' && e !== '🧩') ? e : ''; }
+    function _appIcHTML(a) {
+        if (_appEm(a)) return _esc(_appEm(a));
+        const i = /^fa-[a-z0-9-]+$/.test(String(a && a.icon || '')) ? a.icon : ((a && a.emoji === '🧩') ? 'fa-puzzle-piece' : 'fa-cube');
+        return '<i class="fa-solid ' + i + '"></i>';
+    }
 
     // ── 孤兒數據清理：app 自己存的資料散在四處（localStorage aurelia_appdata_<id>_*、
     //    OS_DB app_data 的 <id>::、OS_DB app_memory 的 <id>::、記憶開關旗標 os_app_mem_plugin_<id>）。
@@ -104,7 +111,7 @@
       +         '<div class="ws-field-lab">應用名稱</div>'
       +         '<input class="ws-input" id="as-im-name" type="text" placeholder="例：恐怖電台">'
       +         '<div class="ws-field-lab">圖標 emoji</div>'
-      +         '<input class="ws-input ws-emoji" id="as-im-emoji" type="text" maxlength="2" placeholder="📦">'
+      +         '<input class="ws-input ws-emoji" id="as-im-emoji" type="text" maxlength="2" placeholder="可留空">'
       +         '<div class="ws-field-lab">貼上完整 HTML（或上傳 .html 檔）</div>'
       +         '<label class="ws-file-btn" for="as-im-file"><i class="fa-solid fa-folder-open"></i> 選擇 .html 檔</label><input class="ws-file" id="as-im-file" type="file" accept=".html,.htm,text/html">'
       +         '<textarea class="ws-ta ws-ta-code" id="as-im-html" placeholder="&lt;!DOCTYPE html&gt; ... &lt;/html&gt;"></textarea>'
@@ -152,7 +159,7 @@
             el.addEventListener('click', function (e) {
                 if (e) e.stopPropagation();
                 if (win.OS_STUDIO && win.OS_STUDIO.launch) win.OS_STUDIO.launch(c, el.dataset.studio);
-                else _toast(c, '❌ 創作室未載入');
+                else _toast(c, '創作室未載入');
             });
         });
         _bindImport(c);
@@ -172,14 +179,14 @@
 
     // ── 安裝 / 卸載（共用）──
     async function _install(c, rec) {
-        if (!win.OS_DB || !win.OS_DB.savePhoneApp) { _toast(c, '❌ 儲存層未就緒'); return; }
+        if (!win.OS_DB || !win.OS_DB.savePhoneApp) { _toast(c, '儲存層未就緒'); return; }
         const id = await win.OS_DB.savePhoneApp(rec);
         rec.id = id;
         const list = _loadList().filter(function (m) { return m.id !== id; });
         list.push({ id: id, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
         _saveList(list);
         _markOpened(id);
-        if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: id, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
+        if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: id, name: rec.name, emoji: rec.emoji, icon: rec.icon || '', iconUrl: rec.iconUrl || '' });
         _showSuccess(c, rec.name);
     }
     async function _uninstall(id, c) {
@@ -207,7 +214,7 @@
         const row = document.createElement('div');
         row.className = 'ws-mine-row ws-mine-row-clean';
         row.innerHTML =
-            '<span class="ws-mine-ic">' + _esc(a.emoji || '📦') + '</span>'
+            '<span class="ws-mine-ic">' + _appIcHTML(a) + '</span>'
           + '<span class="ws-mine-info"><span class="ws-mine-name">' + _esc(a.name || 'App') + '</span><span class="ws-mine-sub">' + _esc(_relTime(opened[a.id])) + '</span></span>'
           + '<span class="ws-mine-go"><i class="fa-solid fa-chevron-right"></i></span>';
         row.addEventListener('click', function () { _openAppDetail(c, a); });
@@ -219,7 +226,7 @@
         const body = c.querySelector('#as-detail-body');
         const titleEl = c.querySelector('#as-detail-title');
         if (!body) return;
-        if (titleEl) titleEl.textContent = (a.emoji ? a.emoji + ' ' : '') + (a.name || '應用');
+        if (titleEl) titleEl.innerHTML = _appIcHTML(a) + ' ' + _esc(a.name || '應用');
         body.innerHTML = '';
         const isStudio = !!a.srcTplId;
         const S = win.OS_STUDIO || {};
@@ -252,12 +259,12 @@
             mkRow('fa-pen', '改名', async function () {
                 const nm = await AUI.prompt('新名稱', a.name || ''); if (nm == null) return;
                 a.name = nm.trim() || a.name; await win.OS_DB.savePhoneApp(a); _syncMeta(a);
-                if (titleEl) titleEl.textContent = (a.emoji ? a.emoji + ' ' : '') + a.name;
+                if (titleEl) titleEl.innerHTML = _appIcHTML(a) + ' ' + _esc(a.name);
             }),
             mkRow('fa-face-smile', '換圖標', async function () {
-                const em = await AUI.prompt('新圖標 emoji（單一符號）', a.emoji || '📦'); if (em == null) return;
+                const em = await AUI.prompt('新圖標 emoji（單一符號）', _appEm(a)); if (em == null) return;
                 a.emoji = (em.trim() || a.emoji).slice(0, 2); await win.OS_DB.savePhoneApp(a); _syncMeta(a);
-                if (titleEl) titleEl.textContent = a.emoji + ' ' + (a.name || '應用');
+                if (titleEl) titleEl.innerHTML = _appIcHTML(a) + ' ' + _esc(a.name || '應用');
             })
         ]);
 
@@ -339,9 +346,9 @@
     // 首頁的「我的應用」預覽（最近 3 個 + 查看全部）
     // 改名/換圖標後同步 localStorage 清單 + 重註冊桌面 meta
     function _syncMeta(a) {
-        const list = _loadList().map(function (m) { return m.id === a.id ? { id: a.id, name: a.name, emoji: a.emoji, iconUrl: a.iconUrl || '' } : m; });
+        const list = _loadList().map(function (m) { return m.id === a.id ? { id: a.id, name: a.name, emoji: a.emoji, icon: a.icon || '', iconUrl: a.iconUrl || '' } : m; });
         _saveList(list);
-        if (win.VoidPhoneShell) { win.VoidPhoneShell.removeApp(a.id); win.VoidPhoneShell.addApp({ id: a.id, name: a.name, emoji: a.emoji, iconUrl: a.iconUrl || '' }); }
+        if (win.VoidPhoneShell) { win.VoidPhoneShell.removeApp(a.id); win.VoidPhoneShell.addApp({ id: a.id, name: a.name, emoji: a.emoji, icon: a.icon || '', iconUrl: a.iconUrl || '' }); }
     }
 
     // ── 匯入 ──
@@ -367,7 +374,7 @@
         });
         installBtn.addEventListener('click', function () {
             const name = (c.querySelector('#as-im-name').value || '').trim();
-            const emoji = (c.querySelector('#as-im-emoji').value || '📦').trim().slice(0, 2) || '📦';
+            const emoji = (c.querySelector('#as-im-emoji').value || '').trim().slice(0, 2);   // 空的＝桌面用盒子圖示
             const html = (c.querySelector('#as-im-html').value || '').trim();
             if (!name) { _toast(c, '請填應用名稱'); return; }
             if (!/<body|<html|<div|<!doctype/i.test(html)) { _toast(c, '請貼上完整 HTML'); return; }

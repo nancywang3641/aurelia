@@ -229,7 +229,7 @@
         if (!story) {
             return `
                 <div class="jrnl-empty">
-                    <div class="jrnl-empty-icon">📖</div>
+                    <div class="jrnl-empty-icon"><i class="fa-solid fa-book-open"></i></div>
                     <div class="jrnl-empty-txt">
                         左邊還沒有故事線。<br>
                         去酒館生成大總結後，這裡會自動同步。
@@ -289,17 +289,17 @@
             </div>
 
             <div class="jrnl-d-foot">
-                <button class="jrnl-view-full">📖 查看完整總結內容
+                <button class="jrnl-view-full"><i class="fa-solid fa-book-open"></i> 查看完整總結內容
                     <span class="jrnl-view-full-sub">回顧更多細節，重溫完整故事</span>
                 </button>
                 <div class="jrnl-foot-acts">
                     <button class="jrnl-act-btn jrnl-pin-npc ${pinned ? 'active' : ''}"
-                            data-on-label="★ 書咖常客來源（點擊取消）" data-off-label="☕ 設為書咖常客"
+                            data-on-label="書咖常客來源（點擊取消）" data-off-label="設為書咖常客"
                             title="書咖舞台的客人會從這一輪的角色裡挑（同一張卡只認一輪，沒指定就用最新的）">
-                        ${pinned ? '★ 書咖常客來源（點擊取消）' : '☕ 設為書咖常客'}
+                        ${pinned ? '書咖常客來源（點擊取消）' : '設為書咖常客'}
                     </button>
-                    <button class="jrnl-act-btn jrnl-edit-full">✏️ 編輯總結</button>
-                    <button class="jrnl-act-btn jrnl-act-danger jrnl-wipe-story">🗑️ 清空這段劇情</button>
+                    <button class="jrnl-act-btn jrnl-edit-full"><i class="fa-solid fa-pen"></i> 編輯總結</button>
+                    <button class="jrnl-act-btn jrnl-act-danger jrnl-wipe-story"><i class="fa-solid fa-trash-can"></i> 清空這段劇情</button>
                 </div>
             </div>
 
@@ -381,7 +381,7 @@
         if (!container) return;
         const osDb = win.OS_DB;
         if (!osDb || !osDb.getLobbySummaryForPrompt) {
-            container.innerHTML = `<div style="padding:40px; text-align:center; color:#9a8678;">⚠️ OS_DB 未載入</div>`;
+            container.innerHTML = `<div style="padding:40px; text-align:center; color:#9a8678;"><i class="fa-solid fa-triangle-exclamation"></i> OS_DB 未載入</div>`;
             return;
         }
 
@@ -678,7 +678,7 @@
                     <div class="jrnl-cm-photo" data-avatar-key="${_escape(rawName)}" data-world="${_escape(world || '')}"><span class="jrnl-char-img-fallback">✿</span></div>
                     <div class="jrnl-cm-side">
                         <div class="jrnl-cm-name">${_escape(disp)}</div>
-                        <div class="jrnl-cm-sub">👤 ${_escape(rawName)}</div>
+                        <div class="jrnl-cm-sub"><i class="fa-solid fa-user"></i> ${_escape(rawName)}</div>
                         <div class="jrnl-cm-fields">${fieldsHtml}</div>
                     </div>
                 </div>
@@ -773,7 +773,7 @@
                 modal.innerHTML = `
                     <div class="jrnl-modal-card">
                         <div class="jrnl-modal-head">
-                            <span class="jrnl-modal-title">✏️ 編輯總結 — ${_escape(title)}</span>
+                            <span class="jrnl-modal-title"><i class="fa-solid fa-pen"></i> 編輯總結 — ${_escape(title)}</span>
                             <button class="jrnl-modal-close" title="關閉">✕</button>
                         </div>
                         <div class="jrnl-modal-body">
@@ -781,7 +781,7 @@
                             <div class="jrnl-modal-foot">
                                 <span class="jrnl-modal-status"></span>
                                 <button class="jrnl-mbtn jrnl-edit-cancel">取消</button>
-                                <button class="jrnl-mbtn jrnl-mbtn-primary jrnl-edit-save">💾 儲存</button>
+                                <button class="jrnl-mbtn jrnl-mbtn-primary jrnl-edit-save"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
                             </div>
                         </div>
                     </div>`;
@@ -841,7 +841,7 @@
             modal.innerHTML = `
                 <div class="jrnl-modal-card">
                     <div class="jrnl-modal-head">
-                        <span class="jrnl-modal-title">🗑️ 清空「${_escape(title)}」</span>
+                        <span class="jrnl-modal-title"><i class="fa-solid fa-trash-can"></i> 清空「${_escape(title)}」</span>
                         <button class="jrnl-modal-close" title="關閉">✕</button>
                     </div>
                     <div class="jrnl-modal-body">
@@ -852,7 +852,7 @@
                         <div class="jrnl-modal-foot">
                             <span class="jrnl-modal-status"></span>
                             <button class="jrnl-mbtn jrnl-wipe-cancel">取消</button>
-                            <button class="jrnl-mbtn jrnl-mbtn-danger jrnl-wipe-go" disabled>🗑️ 永久清除</button>
+                            <button class="jrnl-mbtn jrnl-mbtn-danger jrnl-wipe-go" disabled><i class="fa-solid fa-trash-can"></i> 永久清除</button>
                         </div>
                     </div>
                 </div>`;
@@ -882,7 +882,7 @@
                     console.log('[OS_JOURNAL] 🗑️ 清空', story.chatId, report);
                     allStories = allStories.filter(s => !((s.cardName || '') === (story.cardName || '') && (s.chatId || '') === (story.chatId || '')));
                     activeKey = allStories[0] ? `${allStories[0].cardName}|||${allStories[0].chatId}` : null;
-                    status.textContent = '✅ 已清空';
+                    status.textContent = '已清空';
                     setTimeout(() => { close(); _renderList(); }, 600);
                 } catch (e) { status.textContent = '清除失敗：' + (e.message || e); go.disabled = false; }
             };

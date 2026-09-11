@@ -527,7 +527,7 @@ ${facilityText}
 
                 <div id="am-preview-banner" style="display:none; position:absolute; top:0; left:0; right:0; z-index:30; background:linear-gradient(90deg, rgba(255,140,0,0.85), rgba(220,80,0,0.85)); color:#fff; padding:6px 12px; font-size:11px; font-family:'Cinzel'; letter-spacing:2px; text-align:center; cursor:pointer;"
                      onclick="window.AUREALIS_MAP.exitPreview()">
-                    👁️ PREVIEW MODE — <span id="am-preview-name"></span> · 點此返回當前世界
+                    <i class="fa-solid fa-eye"></i> PREVIEW MODE — <span id="am-preview-name"></span> · 點此返回當前世界
                 </div>
 
                 <div class="am-header">
@@ -536,11 +536,11 @@ ${facilityText}
                         <div class="am-title" id="am-main-title">AUREALIS</div>
                     </div>
                     <div style="display:flex; align-items:center;">
-                        <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.showMapSettings()" title="地圖設置">⚙️</div>
-                        <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.showWorldManager()" title="多世界管理">🌐</div>
-                        <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.generateSchedules()" title="生成/重生角色排程">📋 排程</div>
+                        <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.showMapSettings()" title="地圖設置"><i class="fa-solid fa-gear"></i></div>
+                        <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.showWorldManager()" title="多世界管理"><i class="fa-solid fa-globe"></i></div>
+                        <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.generateSchedules()" title="生成/重生角色排程"><i class="fa-solid fa-clipboard"></i> 排程</div>
                         <div class="am-refresh-btn" onclick="window.AUREALIS_MAP.refreshEvents()">⟳ 情報</div>
-                        <div class="am-btn-icon" onclick="window.AUREALIS_MAP.clearAllData()" style="font-size:16px;">🗑️</div>
+                        <div class="am-btn-icon" onclick="window.AUREALIS_MAP.clearAllData()" style="font-size:16px;"><i class="fa-solid fa-trash-can"></i></div>
                     </div>
                 </div>
 
@@ -569,8 +569,8 @@ ${facilityText}
                         </div>
                     </div>
                     <div class="am-detail-footer">
-                        <button id="am-scan-btn" class="am-scan-btn" onclick="window.AUREALIS_MAP.scanForCharacters()"><span>🔍</span> 探索此地</button>
-                        <button id="am-theater-btn" class="am-scan-btn" onclick="window.AUREALIS_MAP.playFacilityTheater()"><span>🎭</span> 小劇場</button>
+                        <button id="am-scan-btn" class="am-scan-btn" onclick="window.AUREALIS_MAP.scanForCharacters()"><span><i class="fa-solid fa-magnifying-glass"></i></span> 探索此地</button>
+                        <button id="am-theater-btn" class="am-scan-btn" onclick="window.AUREALIS_MAP.playFacilityTheater()"><span><i class="fa-solid fa-masks-theater"></i></span> 小劇場</button>
                     </div>
                 </div>
 
@@ -607,7 +607,7 @@ ${facilityText}
                 <div class="am-navi-entry">
                     <div class="am-navi-left">
                         <div class="am-navi-block">
-                            <div class="am-navi-section-label">▶ NAVIGATION TERMINAL</div>
+                            <div class="am-navi-section-label"><i class="fa-solid fa-caret-right"></i> NAVIGATION TERMINAL</div>
                             <h2 class="am-navi-cn-title">出門導航終端</h2>
                             <div class="am-navi-en-sub">AUREALIS NAVI SYS_01</div>
                             <p class="am-navi-desc">尚未建立當前世界地圖資料。<br>LUNA-VII 將根據當前角色卡、世界書與劇情上下文，生成可探索的區域、設施與角色排程。</p>
@@ -615,7 +615,7 @@ ${facilityText}
                         <div class="am-navi-letter">
                             <div class="am-navi-letter-head">
                                 <span class="am-navi-letter-title">瀅瀅的話</span>
-                                <span class="am-navi-letter-clip">📎</span>
+                                <span class="am-navi-letter-clip"><i class="fa-solid fa-paperclip"></i></span>
                             </div>
                             <p class="am-navi-letter-body">還沒決定去哪裡嗎？<br>沒關係，<br>我們先把世界的門牌<br>找出來。</p>
                             <div class="am-navi-letter-sign">— Yingying ♡</div>
@@ -644,28 +644,28 @@ ${facilityText}
                         <div class="am-navi-block">
                             <div class="am-navi-section-label-r">INITIALIZATION INFO</div>
                             <div class="am-navi-info-card">
-                                <div class="am-navi-info-icon">👤</div>
+                                <div class="am-navi-info-icon"><i class="fa-solid fa-user"></i></div>
                                 <div class="am-navi-info-body">
                                     <div class="am-navi-info-title">角色卡</div>
                                     <div class="am-navi-info-val" id="am-navi-info-chars">未連接</div>
                                 </div>
                             </div>
                             <div class="am-navi-info-card">
-                                <div class="am-navi-info-icon">📖</div>
+                                <div class="am-navi-info-icon"><i class="fa-solid fa-book-open"></i></div>
                                 <div class="am-navi-info-body">
                                     <div class="am-navi-info-title">世界書</div>
                                     <div class="am-navi-info-val" id="am-navi-info-wb">未綁定</div>
                                 </div>
                             </div>
                             <div class="am-navi-info-card">
-                                <div class="am-navi-info-icon">📋</div>
+                                <div class="am-navi-info-icon"><i class="fa-solid fa-clipboard"></i></div>
                                 <div class="am-navi-info-body">
                                     <div class="am-navi-info-title">劇情上下文</div>
                                     <div class="am-navi-info-val" id="am-navi-info-chapter">尚未開始</div>
                                 </div>
                             </div>
                             <div class="am-navi-info-card">
-                                <div class="am-navi-info-icon">💠</div>
+                                <div class="am-navi-info-icon"><i class="fa-solid fa-diamond"></i></div>
                                 <div class="am-navi-info-body">
                                     <div class="am-navi-info-title">系統模型</div>
                                     <div class="am-navi-info-val">LUNA-VII v3.2.7</div>
@@ -674,7 +674,7 @@ ${facilityText}
                         </div>
                         <div class="am-navi-tips">
                             <div class="am-navi-tips-label">TIPS</div>
-                            <p class="am-navi-tips-body">💡 地圖生成時間會依據世界複雜度約需 10-30 秒，請稍候片刻。</p>
+                            <p class="am-navi-tips-body"><i class="fa-solid fa-lightbulb"></i> 地圖生成時間會依據世界複雜度約需 10-30 秒，請稍候片刻。</p>
                         </div>
                     </div>
 
@@ -688,7 +688,7 @@ ${facilityText}
                             <span class="am-navi-btn-arrow">›</span>
                         </button>
                         <button class="am-navi-btn secondary" onclick="window.AUREALIS_MAP.useAurealisFallback()">
-                            <span class="am-navi-btn-icon">🏙</span>
+                            <span class="am-navi-btn-icon"><i class="fa-solid fa-city"></i></span>
                             <div class="am-navi-btn-text">
                                 <div class="am-navi-btn-title">使用奧瑞亞預設城市</div>
                                 <div class="am-navi-btn-sub">載入 Aurelia Core 預設區域</div>
@@ -756,7 +756,7 @@ ${facilityText}
                 // 沒座標的動態區放右下角，避免疊在主要 zone 上
                 const mx = (zone && typeof zone.mapX === 'number') ? zone.mapX : (isDynamic ? 92 : 50);
                 const my = (zone && typeof zone.mapY === 'number') ? zone.mapY : (isDynamic ? 88 : 50);
-                const icon = (zone && zone.icon) ? zone.icon : (isDynamic ? '🌀' : '🌐');
+                const icon = (zone && zone.icon) ? zone.icon : (isDynamic ? '<i class="fa-solid fa-hurricane"></i>' : '<i class="fa-solid fa-globe"></i>');   // 區域圖示是 AI 給的 emoji；沒給才用 FA
                 const labelText = (zone && zone.name) ? zone.name : 'ZONE';
 
                 return `
@@ -808,7 +808,7 @@ ${facilityText}
                 const facCount = zone && zone.facilities ? Object.keys(zone.facilities).length : 0;
                 const chip = document.createElement('div');
                 chip.className = 'am-imap-dyn';
-                chip.innerHTML = `<div class="am-zone-entrance am-zone-entrance-dyn" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">${hasEvent ? '<div class="am-zone-dot"></div>' : ''}<div class="am-zone-emoji">🌀</div><div class="am-zone-label">DRIFT · ${facCount}</div></div>`;
+                chip.innerHTML = `<div class="am-zone-entrance am-zone-entrance-dyn" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">${hasEvent ? '<div class="am-zone-dot"></div>' : ''}<div class="am-zone-emoji"><i class="fa-solid fa-hurricane"></i></div><div class="am-zone-label">DRIFT · ${facCount}</div></div>`;
                 selector.appendChild(chip);
                 return;
             }
@@ -837,7 +837,7 @@ ${facilityText}
                 return `
                 <div class="am-zone-entrance" onclick="window.AUREALIS_MAP.enterZone('${id}')"
                      style="border-style:dashed; border-color:rgba(255,140,66,0.6); background:rgba(40,15,5,0.4);">
-                    <div style="font-size:32px;">🌀</div>
+                    <div style="font-size:32px;"><i class="fa-solid fa-hurricane"></i></div>
                     <div class="am-zone-label" style="color:#ffaa50;">DRIFT · ${facCount}</div>
                 </div>`;
             }
@@ -854,7 +854,7 @@ ${facilityText}
                 ? `<div class="am-zone-emoji">${zoneIcon}</div>`
                 : isAurealisLetter
                     ? `<div class="am-zone-letter">${id}</div>`
-                    : `<div class="am-zone-emoji">🌐</div>`;
+                    : `<div class="am-zone-emoji"><i class="fa-solid fa-globe"></i></div>`;
 
             return `
             <div class="am-zone-entrance" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">
@@ -916,7 +916,7 @@ ${facilityText}
     // 🔥 V4.0：預覽模式守門 — 互動操作呼叫前先檢查
     function blockIfPreview(actionName) {
         if (win.WORLD_RUNTIME && win.WORLD_RUNTIME.isPreview && win.WORLD_RUNTIME.isPreview()) {
-            const msg = `🔒 預覽模式：「${actionName || '此操作'}」需要你切到對應角色卡才能執行（不同角色卡是獨立世界書）`;
+            const msg = `預覽模式：「${actionName || '此操作'}」需要你切到對應角色卡才能執行（不同角色卡是獨立世界書）`;
             if (AUI.toastr) AUI.toastr.warning(msg, 'Map');
             else AUI.alert(msg);
             return true;
@@ -957,7 +957,7 @@ ${facilityText}
             <div class="am-modal-card" style="max-width:380px; max-height:85vh; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
                 <div style="padding:14px 16px 10px; border-bottom:1px solid #222;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h3 style="margin:0; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px;">⚙️ 地圖設置</h3>
+                        <h3 style="margin:0; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px;"><i class="fa-solid fa-gear"></i> 地圖設置</h3>
                         <span class="am-btn-icon" onclick="window.AUREALIS_MAP.closeModal()" style="font-size:18px;">×</span>
                     </div>
                 </div>
@@ -977,7 +977,7 @@ ${facilityText}
                     </div>
                     <button class="amt-entry" onclick="window.AUREALIS_MAP.showMapTheaterLog()">
                         <span class="amt-entry-tx">
-                            <span class="amt-entry-title">🎭 番外記事</span>
+                            <span class="amt-entry-title"><i class="fa-solid fa-masks-theater"></i> 番外記事</span>
                             <span class="amt-entry-sub">設施小劇場的記事，會回饋給正文</span>
                         </span>
                         <span class="amt-entry-arrow">›</span>
@@ -986,7 +986,7 @@ ${facilityText}
 
                 <div style="padding:10px 16px; border-top:1px solid #222; display:flex; gap:6px;">
                     <button class="am-btn-full am-btn-main" style="padding:8px; border-radius:4px; cursor:pointer; font-size:11px;"
-                            onclick="window.AUREALIS_MAP._mapSaveSettings()">💾 儲存並關閉</button>
+                            onclick="window.AUREALIS_MAP._mapSaveSettings()"><i class="fa-solid fa-floppy-disk"></i> 儲存並關閉</button>
                 </div>
             </div>
         `;
@@ -1007,7 +1007,7 @@ ${facilityText}
             const back = document.createElement('span'); back.className = 'am-btn-icon'; back.textContent = '‹';
             back.onclick = () => showMapSettings();
             const title = document.createElement('h3'); title.className = 'amt-title';
-            title.textContent = '🎭 番外記事';
+            title.innerHTML = '<i class="fa-solid fa-masks-theater"></i> 番外記事';
             const count = document.createElement('span'); count.className = 'amt-count'; count.textContent = list.length + ' 條';
             const close = document.createElement('span'); close.className = 'am-btn-icon'; close.textContent = '×';
             close.onclick = () => closeModal();
@@ -1022,7 +1022,8 @@ ${facilityText}
                 const row = document.createElement('div'); row.className = 'amt-row' + (e.merged ? ' merged' : '');
                 const rh = document.createElement('div'); rh.className = 'amt-row-head';
                 const tt = document.createElement('span'); tt.className = 'amt-row-title';
-                tt.textContent = (e.merged ? '♻️ ' : '') + (e.fac ? '〔' + e.fac + '〕' : '') + (e.pair || '');
+                tt.textContent = (e.fac ? '〔' + e.fac + '〕' : '') + (e.pair || '');
+                if (e.merged) tt.insertAdjacentHTML('afterbegin', '<i class="fa-solid fa-arrows-rotate"></i> ');
                 const del = document.createElement('span'); del.className = 'amt-row-del'; del.textContent = '×'; del.title = '刪除這條';
                 del.onclick = () => { const l = _mapTheaterList(); l.splice(idx, 1); _mapTheaterSaveList(l); render(); };
                 rh.append(tt, del);
@@ -1033,16 +1034,16 @@ ${facilityText}
             });
             const acts = document.createElement('div'); acts.className = 'amt-actions';
             const rec = document.createElement('button'); rec.className = 'am-btn-full am-btn-main';
-            rec.textContent = '♻️ 重壓縮';
+            rec.textContent = '重壓縮';
             rec.onclick = async () => {
                 rec.disabled = true; rec.textContent = '整理中…';
                 const res = await _recompressMapTheaterLog();
-                rec.disabled = false; rec.textContent = '♻️ 重壓縮';
+                rec.disabled = false; rec.textContent = '重壓縮';
                 if (AUI.toastr) AUI.toastr[res.ok ? 'success' : 'info'](res.msg, 'Map');
                 render();
             };
             const clr = document.createElement('button'); clr.className = 'am-btn-full amt-danger';
-            clr.textContent = '🗑️ 清空全部';
+            clr.textContent = '清空全部';
             clr.onclick = async () => {
                 if (!(await AUI.confirm('清空全部小劇場？\n不可復原。', { okText: '清空' }))) return;
                 _mapTheaterSaveList([]);
@@ -1121,8 +1122,8 @@ ${facilityText}
         const cardsHtml = cards.map(c => {
             const isCurrent = c.worldId === currentId;
             const isReal = c.worldId === realChatId;
-            const tag = isReal ? '⭐ 當前 chatId 對應'
-                              : (isCurrent && inPreview ? '👁️ 預覽中' : '');
+            const tag = isReal ? '當前 chatId 對應'
+                              : (isCurrent && inPreview ? '預覽中' : '');
             const tagColor = isReal ? '#FFD700' : '#ff8c42';
             return `
                 <div style="background:rgba(20,20,20,0.7); border:1px solid ${isReal?'#D4AF37':'#333'}; border-radius:8px; padding:10px 12px; margin-bottom:8px;">
@@ -1134,21 +1135,21 @@ ${facilityText}
                         </div>
                     </div>
                     <div style="display:flex; gap:10px; font-size:10px; color:#aaa; margin-bottom:8px;">
-                        <span>🗺️ ${c.zoneCount} 區</span>
-                        <span>📍 ${c.facilityCount} 設施</span>
-                        <span>📋 ${c.scheduleCount} 排程</span>
-                        ${c.isDefault ? '<span>（內建）</span>' : `<span>🕒 ${fmtDate(c.timestamp)}</span>`}
+                        <span><i class="fa-solid fa-map"></i> ${c.zoneCount} 區</span>
+                        <span><i class="fa-solid fa-location-dot"></i> ${c.facilityCount} 設施</span>
+                        <span><i class="fa-solid fa-clipboard"></i> ${c.scheduleCount} 排程</span>
+                        ${c.isDefault ? '<span>（內建）</span>' : `<span><i class="fa-solid fa-clock"></i> ${fmtDate(c.timestamp)}</span>`}
                     </div>
                     <div style="display:flex; gap:6px;">
                         <button class="am-btn-full" style="padding:6px 8px; border-radius:4px; cursor:pointer; font-size:11px; background:${isCurrent?'#222':'#D4AF37'}; color:${isCurrent?'#666':'#000'}; border:none; ${isCurrent?'cursor:not-allowed;':''}"
                                 ${isCurrent?'disabled':''}
                                 onclick="window.AUREALIS_MAP._previewWorld('${String(c.worldId).replace(/'/g, "\\'")}')">
-                            ${isCurrent?'（已顯示）':'👁️ 切換顯示'}
+                            ${isCurrent?'（已顯示）':'切換顯示'}
                         </button>
                         ${c.isDefault ? '' : `
                             <button class="am-btn-full" style="padding:6px 8px; border-radius:4px; cursor:pointer; font-size:11px; background:#3a1010; color:#ff453a; border:1px solid #5a2020;"
                                     onclick="window.AUREALIS_MAP._deleteWorld('${String(c.worldId).replace(/'/g, "\\'")}')">
-                                🗑️ 刪除
+                                <i class="fa-solid fa-trash-can"></i> 刪除
                             </button>`}
                     </div>
                 </div>
@@ -1160,18 +1161,18 @@ ${facilityText}
             <div class="am-modal-card" style="max-width:420px; max-height:85vh; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
                 <div style="padding:14px 16px 10px; border-bottom:1px solid #222;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h3 style="margin:0; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px;">🌐 多世界管理</h3>
+                        <h3 style="margin:0; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px;"><i class="fa-solid fa-globe"></i> 多世界管理</h3>
                         <span class="am-btn-icon" onclick="window.AUREALIS_MAP.closeModal()" style="font-size:18px;">×</span>
                     </div>
                     ${overflow ? `<div style="margin-top:8px; padding:6px 8px; background:rgba(255,140,0,0.15); border:1px solid rgba(255,140,0,0.4); border-radius:4px; color:#ffaa50; font-size:11px;">
-                        ⚠️ 已有 ${cards.length - 1} 個動態世界，建議清理舊資料
+                        <i class="fa-solid fa-triangle-exclamation"></i> 已有 ${cards.length - 1} 個動態世界，建議清理舊資料
                     </div>` : ''}
-                    <div style="font-size:10px; color:#666; margin-top:6px;">⭐ 當前 chatId 對應的世界 · 👁️ 預覽其他世界（不可互動）</div>
+                    <div style="font-size:10px; color:#666; margin-top:6px;"><i class="fa-solid fa-star"></i> 當前 chatId 對應的世界 · <i class="fa-solid fa-eye"></i> 預覽其他世界（不可互動）</div>
                 </div>
                 <div style="padding:12px 14px; overflow-y:auto; flex:1;">${cardsHtml}</div>
                 <div style="padding:10px 16px; border-top:1px solid #222; display:flex; gap:8px;">
                     <button class="am-btn-full" style="background:#3a1010; color:#ff7755; border:1px solid #5a2020; padding:8px; border-radius:4px; cursor:pointer; font-size:11px;"
-                            onclick="window.AUREALIS_MAP._wipeAllDynamicWorlds()">🧹 清空所有動態世界（保留奧瑞亞）</button>
+                            onclick="window.AUREALIS_MAP._wipeAllDynamicWorlds()"><i class="fa-solid fa-broom"></i> 清空所有動態世界（保留奧瑞亞）</button>
                     <button class="am-btn-full am-btn-main" style="padding:8px; border-radius:4px; cursor:pointer; font-size:11px;"
                             onclick="window.AUREALIS_MAP.closeModal()">關閉</button>
                 </div>
@@ -1189,7 +1190,7 @@ ${facilityText}
         closeModal();
         if (AUI.toastr) {
             const inP = win.WORLD_RUNTIME.isPreview();
-            AUI.toastr.info(inP ? '👁️ 已切換到預覽模式' : '已切回當前世界', 'Map');
+            AUI.toastr.info(inP ? '已切換到預覽模式' : '已切回當前世界', 'Map');
         }
     }
 
@@ -1290,7 +1291,7 @@ ${facilityText}
             });
         }
         const locName = (locId) => {
-            if (!locId || locId === 'Home') return '🏠 家';
+            if (!locId || locId === 'Home') return '家';
             return facMap[locId] || locId;
         };
 
@@ -1301,7 +1302,7 @@ ${facilityText}
                 onclick="window.AUREALIS_MAP._switchScheduleTab('${p}')"
                 style="position:relative; ${isNow?'border-color:#FFD700; box-shadow:0 0 6px rgba(255,215,0,0.4);':''}">
                 ${p}<div style="font-size:9px; opacity:0.6;">${periodHours[p]}</div>
-                ${isNow?'<span style="position:absolute; top:-4px; right:-4px; font-size:10px;">🕒</span>':''}
+                ${isNow?'<span style="position:absolute; top:-4px; right:-4px; font-size:10px;"><i class="fa-solid fa-clock"></i></span>':''}
             </div>`;
         }).join('');
 
@@ -1310,17 +1311,17 @@ ${facilityText}
             ? world.liveStates : null;
         const liveHtml = liveStates ? `
             <div style="background:rgba(40,15,5,0.5); border:1px solid rgba(255,140,0,0.4); border-radius:6px; padding:10px; margin-bottom:10px;">
-                <div style="color:#ffaa50; font-weight:bold; font-size:12px; margin-bottom:6px;">📡 即時狀態（VN 抽取，覆蓋排程）</div>
+                <div style="color:#ffaa50; font-weight:bold; font-size:12px; margin-bottom:6px;"><i class="fa-solid fa-satellite-dish"></i> 即時狀態（VN 抽取，覆蓋排程）</div>
                 ${Object.keys(liveStates).map(name => {
                     const s = liveStates[name];
-                    const loc = s.location_id === 'Home' ? '🏠 家'
+                    const loc = s.location_id === 'Home' ? '家'
                         : (s.location_id && s.location_id.startsWith('DYNAMIC:'))
-                            ? `🌀 ${s.location_id.substring(8)}（地圖外）`
+                            ? `<i class="fa-solid fa-hurricane"></i> ${s.location_id.substring(8)}（地圖外）`
                             : (facMap[s.location_id] || s.location_id);
                     const until = s.until_period ? `· 直到 ${s.until_period}` : '';
                     return `<div style="border-left:2px solid #ff8c42; padding:4px 0 4px 8px; margin-bottom:4px;">
                         <div style="font-size:11px;"><span style="color:#ffaa50; font-weight:bold;">${name}</span>
-                            <span style="color:#aaa; margin-left:6px;">📍 ${loc}</span>
+                            <span style="color:#aaa; margin-left:6px;"><i class="fa-solid fa-location-dot"></i> ${loc}</span>
                             <span style="color:#888; margin-left:6px; font-size:10px;">${until}</span></div>
                         ${s.action ? `<div style="color:#ddd; font-size:11px; margin-top:2px; font-style:italic;">${s.action}</div>` : ''}
                         ${s.dialogue ? `<div style="color:#fff; font-size:11px; margin-top:2px;">「${s.dialogue}」</div>` : ''}
@@ -1333,7 +1334,7 @@ ${facilityText}
             const periodData = schedules[name][_scheduleViewerTab];
             if (!Array.isArray(periodData) || periodData.length === 0) {
                 return `<div style="background:rgba(20,20,20,0.6); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
-                    <div style="color:#D4AF37; font-weight:bold; margin-bottom:4px;">⭐ ${name}</div>
+                    <div style="color:#D4AF37; font-weight:bold; margin-bottom:4px;"><i class="fa-solid fa-star"></i> ${name}</div>
                     <div style="color:#666; font-size:11px;">（此時段無排程）</div>
                 </div>`;
             }
@@ -1346,7 +1347,7 @@ ${facilityText}
                     <div style="font-size:11px;">
                         <span style="color:${catColor}; font-weight:bold;">${b.category}</span>
                         <span style="color:#999; margin-left:6px;">${b.prob}%</span>
-                        <span style="color:#aaa; margin-left:6px;">📍 ${locName(b.location_id)}</span>
+                        <span style="color:#aaa; margin-left:6px;"><i class="fa-solid fa-location-dot"></i> ${locName(b.location_id)}</span>
                     </div>
                     <div style="color:#ddd; font-size:11px; margin-top:3px; font-style:italic;">${b.action || ''}</div>
                     <div style="color:#fff; font-size:11px; margin-top:2px;">「${b.dialogue || '...'}」</div>
@@ -1354,7 +1355,7 @@ ${facilityText}
                 </div>`;
             }).join('');
             return `<div style="background:rgba(20,20,20,0.6); border:1px solid #333; border-radius:6px; padding:10px; margin-bottom:8px;">
-                <div style="color:#D4AF37; font-weight:bold; margin-bottom:6px;">⭐ ${name}</div>
+                <div style="color:#D4AF37; font-weight:bold; margin-bottom:6px;"><i class="fa-solid fa-star"></i> ${name}</div>
                 ${branches}
             </div>`;
         }).join('');
@@ -1364,16 +1365,16 @@ ${facilityText}
             <div class="am-modal-card" style="max-width:380px; max-height:85vh; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
                 <div style="padding:14px 16px 8px; border-bottom:1px solid #222;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <h3 style="margin:0; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px;">📅 角色時刻表</h3>
+                        <h3 style="margin:0; color:#D4AF37; font-family:'Cinzel'; letter-spacing:2px;"><i class="fa-solid fa-calendar-days"></i> 角色時刻表</h3>
                         <span class="am-btn-icon" onclick="window.AUREALIS_MAP.closeModal()" style="font-size:18px;">×</span>
                     </div>
-                    <div style="font-size:11px; color:#888;">當前時段：<span style="color:#FFD700;">🕒 ${nowPeriod}</span> · ${charNames.length} 個角色</div>
+                    <div style="font-size:11px; color:#888;">當前時段：<span style="color:#FFD700;"><i class="fa-solid fa-clock"></i> ${nowPeriod}</span> · ${charNames.length} 個角色</div>
                     <div class="am-mode-selector" style="flex-wrap:wrap; gap:5px; margin-top:10px;">${tabsHtml}</div>
                 </div>
                 <div style="padding:12px 16px; overflow-y:auto; flex:1;">${charsHtml}</div>
                 <div style="padding:10px 16px; border-top:1px solid #222; display:flex; gap:8px;">
                     <button class="am-btn-full" style="background:#444; color:#aaa; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size:12px;"
-                        onclick="window.AUREALIS_MAP._regenerateSchedules()">🔄 重新生成</button>
+                        onclick="window.AUREALIS_MAP._regenerateSchedules()"><i class="fa-solid fa-rotate"></i> 重新生成</button>
                     <button class="am-btn-full am-btn-main" style="padding:8px; border-radius:4px; cursor:pointer; font-size:12px;"
                         onclick="window.AUREALIS_MAP.closeModal()">關閉</button>
                 </div>
@@ -1441,12 +1442,12 @@ ${facilityText}
             const hasEvent = !!STATE.activeEvents[`${zoneId}_${key}`];
             const c = f.sceneId ? coords[f.sceneId] : null;
             if (!c) {
-                stripHtml += `<div class="am-fac-card${f.isDynamic ? ' am-fac-card-dyn' : ''}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">${hasEvent ? '<div class="am-red-dot"></div>' : ''}<div class="am-fac-icon">${f.icon || '📍'}</div><div class="am-fac-name">${f.shortName || f.name}</div></div>`;
+                stripHtml += `<div class="am-fac-card${f.isDynamic ? ' am-fac-card-dyn' : ''}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">${hasEvent ? '<div class="am-red-dot"></div>' : ''}<div class="am-fac-icon">${f.icon || '<i class="fa-solid fa-location-dot"></i>'}</div><div class="am-fac-name">${f.shortName || f.name}</div></div>`;
                 return;
             }
             pins.push({
                 id: key, x: c.x, y: c.y,
-                html: `${hasEvent ? '<span class="am-red-dot"></span>' : ''}<span class="am-imap-pin-icon">${f.icon || '📍'}</span><span class="am-imap-pin-label">${f.shortName || f.name}</span>`,
+                html: `${hasEvent ? '<span class="am-red-dot"></span>' : ''}<span class="am-imap-pin-icon">${f.icon || '<i class="fa-solid fa-location-dot"></i>'}</span><span class="am-imap-pin-label">${f.shortName || f.name}</span>`,
                 onClick: (k) => openFacilityDetail(k),
             });
         });
@@ -1470,7 +1471,7 @@ ${facilityText}
                     ? 'border-style:dashed; border-color:rgba(255,140,66,0.6); background:rgba(20,10,5,0.6);'
                     : '';
                 const dynBadge = isDynamic
-                    ? '<div style="position:absolute; top:6px; left:6px; font-size:11px; opacity:0.8;">🌀</div>'
+                    ? '<div style="position:absolute; top:6px; left:6px; font-size:11px; opacity:0.8;"><i class="fa-solid fa-hurricane"></i></div>'
                     : '';
 
                 return `
@@ -1508,7 +1509,7 @@ ${facilityText}
         const zoneText = document.getElementById('am-detail-zone-text');
         const facText = document.getElementById('am-detail-facility-text');
         if (zoneText) zoneText.textContent = zoneData.name || STATE.currentZoneId || '';
-        if (facText) facText.textContent = `${facility.icon || '📍'} ${facility.name || ''}`;
+        if (facText) facText.textContent = `${facility.icon ? facility.icon + ' ' : ''}${facility.name || ''}`;
 
         // 切換設施先把 stage 整個清乾淨:背景圖 + 內容(避免上一個設施的 landmark / 小人殘留到新設施)
         const charGridReset = document.getElementById('am-char-grid');
@@ -1568,7 +1569,7 @@ ${facilityText}
                 <div class="am-mission-title">${event.title}</div>
                 <div class="am-mission-body">${event.desc}<br><br><b>目標：</b>${event.objective}</div>
                 <div class="am-mission-reward">報酬: $${event.money}</div>
-                <button class="am-accept-btn" onclick="window.AUREALIS_MAP.acceptMission('${eventKey}')">⚡ 接取委託</button>
+                <button class="am-accept-btn" onclick="window.AUREALIS_MAP.acceptMission('${eventKey}')"><i class="fa-solid fa-bolt"></i> 接取委託</button>
             `;
         } else {
             missionCard.classList.remove('active');
@@ -1652,7 +1653,7 @@ ${facilityText}
                     return `
                     <div class="${sideClasses.join(' ')}" style="left:${lm.x}%; top:${lm.y}%;" title="${escAttr(lm.label)}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
                         ${popupHtml}
-                        <div class="am-landmark-emoji">${lm.emoji || '📍'}</div>
+                        <div class="am-landmark-emoji">${lm.emoji || '<i class="fa-solid fa-location-dot"></i>'}</div>
                         <div class="am-landmark-label">${escHtml(lm.label) || ''}</div>
                     </div>
                     `;
@@ -1668,8 +1669,8 @@ ${facilityText}
                 const liveColor = '#ff8c42';     // VN 即時用橘紅
                 const charColor = char.isLive ? liveColor : (char.isResident ? residentColor : colors[idx % colors.length]);
                 const shortDialogue = char.dialogue ? char.dialogue.substring(0, 15) + (char.dialogue.length > 15 ? '...' : '') : '...';
-                const residentBadge = char.isLive ? `<span style="margin-right:3px;">📡</span>`
-                                    : char.isResident ? `<span style="margin-right:3px;">⭐</span>` : '';
+                const residentBadge = char.isLive ? `<span style="margin-right:3px;"><i class="fa-solid fa-satellite-dish"></i></span>`
+                                    : char.isResident ? `<span style="margin-right:3px;"><i class="fa-solid fa-star"></i></span>` : '';
 
                 const avatarUrl = char.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${char.name}&backgroundColor=000000`;
 
@@ -1696,7 +1697,7 @@ ${facilityText}
                 || STATE.generatedChars.some(c => !c.isResident && !c.isLive);
             document.getElementById('am-scan-btn').innerHTML = reallyScanned
                 ? '<span>↻</span> 重新掃描'
-                : '<span>🔍</span> 探索此地';
+                : '<span><i class="fa-solid fa-magnifying-glass"></i></span> 探索此地';
             // 🎭 小劇場鈕：在場 ≥2 位（VN 即時角色不算）才亮
             const theaterBtn = document.getElementById('am-theater-btn');
             if (theaterBtn) theaterBtn.classList.toggle('on', STATE.generatedChars.filter(c => c && c.name && !c.isLive).length >= 2);
@@ -1706,7 +1707,7 @@ ${facilityText}
         } else {
             _clearAnimationTimers(); // 沒角色就把舊定時器收乾淨
             resultsDiv.classList.remove('active');
-            document.getElementById('am-scan-btn').innerHTML = '<span>🔍</span> 探索此地';
+            document.getElementById('am-scan-btn').innerHTML = '<span><i class="fa-solid fa-magnifying-glass"></i></span> 探索此地';
             const theaterBtn = document.getElementById('am-theater-btn');
             if (theaterBtn) theaterBtn.classList.remove('on');
         }
@@ -1924,7 +1925,7 @@ ${facilityText}
         let j = Math.floor(Math.random() * (pool.length - 1)); if (j >= i) j++;
         const a = pool[i], b = pool[j];
         const fac = STATE.activeFacility;
-        if (btn) { btn.disabled = true; btn.innerHTML = '<span>🎭</span> 偷聽中...'; }
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span><i class="fa-solid fa-masks-theater"></i></span> 偷聽中...'; }
         STATE._scanBusyUntil = Date.now() + 120000;   // 生成期間擋過期清空（🍎模式下這次生成也會發 GENERATION_ENDED）
         const _prevSum = win.__AURELIA_SUMMARIZING;
         try {
@@ -1960,16 +1961,16 @@ ${facilityText}
                 if (brief && brief.length >= 20) _saveMapTheaterBrief({ fac: (fac && fac.name) || '', pair: a.name + ' × ' + b.name, brief: brief, ts: Date.now() });
                 else console.warn('[MapTheater] 本次回覆沒附 <theater_summary>，這場番外不留記事');
             } catch (e) {}
-            const ch = { title: '🎭 ' + ((fac && fac.name) || '') + '番外：' + a.name + ' & ' + b.name, storyId: 'map_theater', storyTitle: '地圖小劇場', content: content, createdAt: Date.now() };
+            const ch = { title: ((fac && fac.name) || '') + '番外：' + a.name + ' & ' + b.name, storyId: 'map_theater', storyTitle: '地圖小劇場', content: content, createdAt: Date.now() };
             try { if (win.VN_Core && win.VN_Core._setStoryId) win.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
             win._lobbyPendingChapter = ch;
             try { win.PhoneSystem?.goHome?.(); } catch (e) {}   // 先收掉地圖面板（從 VN 末尾開的話面板還蓋在 VN 上面）
             if (win.AureliaControlCenter && win.AureliaControlCenter.showVnPanel) win.AureliaControlCenter.showVnPanel('autoload');
             else if (win.VN_Core && win.VN_Core._startWithLoader) win.VN_Core._startWithLoader(content, null);
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span>🎭</span> 小劇場'; }
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span><i class="fa-solid fa-masks-theater"></i></span> 小劇場'; }
         } catch (e) {
             console.warn('[MapTheater] 小劇場生成失敗:', e);
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span>🎭</span> 失敗，再試一次'; }
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span><i class="fa-solid fa-masks-theater"></i></span> 失敗，再試一次'; }
         } finally {
             setTimeout(() => { win.__AURELIA_SUMMARIZING = _prevSum; }, 4000);   // 撐過 GENERATION_ENDED debounce 再還原
             STATE._scanBusyUntil = Date.now() + 8000;
@@ -2003,7 +2004,7 @@ ${facilityText}
     async function scanForCharacters() {
         if (blockIfPreview('探索此地')) return;
         const btn = document.getElementById('am-scan-btn');
-        btn.innerHTML = '<span>📡</span> 掃描中...';
+        btn.innerHTML = '<span><i class="fa-solid fa-satellite-dish"></i></span> 掃描中...';
         btn.disabled = true;
 
         const fac = STATE.activeFacility;

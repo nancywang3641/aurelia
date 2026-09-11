@@ -8,23 +8,23 @@
 
     // mode: 'inside' = 渲染進手機螢幕(吃容器 div)；'out' = 開它自己的全屏面板(從手機啟動)
     const APPS = [
-        { id: 'wx',     name: '微信', emoji: '💬',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微信'] && win.__PHONE_APPS['微信'](c); } },
-        { id: 'wb',     name: '微薄', emoji: '👁️',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微博'] && win.__PHONE_APPS['微博'](c); } },
-        { id: 'cal',    name: '日曆', emoji: '📅',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['日曆'] && win.__PHONE_APPS['日曆'](c); } },
+        { id: 'wx',     name: '微信', icon: 'fa-comment',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微信'] && win.__PHONE_APPS['微信'](c); } },
+        { id: 'wb',     name: '微薄', icon: 'fa-eye',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微博'] && win.__PHONE_APPS['微博'](c); } },
+        { id: 'cal',    name: '日曆', icon: 'fa-calendar-days',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['日曆'] && win.__PHONE_APPS['日曆'](c); } },
         // 🔮 塔羅已搬進廣場的占卜小屋（快轉地圖→占卜小屋→點紫薇→占卜）；手機不再重複開一個門。
         //    PWA 獨立版還是走手機那條（那邊沒有廣場），見 index.js / index.html 的 PhoneSystem.install。
-        { id: 'rpg',    name: 'RPG',  emoji: '🛡️', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },
+        { id: 'rpg',    name: 'RPG',  icon: 'fa-shield-halved', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },
         // 🏢 房產/家具已移出手機：合併成「房產手帳」獨立窗口（大廳右側 dock 的房產鈕）
-        { id: 'reader', name: '閱讀', emoji: '📖',  mode: 'inside', go: function (c) {
+        { id: 'reader', name: '閱讀', icon: 'fa-book-open',  mode: 'inside', go: function (c) {
             if (!win.VN_READER || !win.VN_READER.show) return;
             win.VN_READER.show(c);
             const x = document.getElementById('vn-reader-sa-close');
             if (x) x.onclick = _home;   // 統一返回：閱讀 ✕ → 回手機主畫面
         } },
         // 🏪 黑市已搬到 404 號房的柴郡身上（快轉地圖→404→點柴郡→黑市；立繪模式走前往→黑市）；手機不再重複開一個門。
-        { id: 'settings', name: '樣式', emoji: '🖌️', mode: 'inside', go: function (c) { _renderSettings(c); } },
-        { id: 'appstore', name: '應用商城', emoji: '🛒', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
-        { id: 'ctrlroom', name: '控制室', emoji: '🎛️', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
+        { id: 'settings', name: '樣式', icon: 'fa-paintbrush', mode: 'inside', go: function (c) { _renderSettings(c); } },
+        { id: 'appstore', name: '應用商城', icon: 'fa-bag-shopping', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
+        { id: 'ctrlroom', name: '控制室', icon: 'fa-sliders', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
         // 🤖 AI 助手已移出手機：入口收攏成大廳 dock 的「宿舍」一顆（房間是獨立擴展，
         //    分兩個入口＝朋友沒裝時要顧兩處，而且以後住戶要站到舞台上也只該有一個門）。
     ];
@@ -74,14 +74,14 @@
     }
 
     // icon pack（VN 素材式）：給一個圖庫資料夾網址，每個 app 自動抓 <資料夾>/<代號>.png
-    // (試 .png/.webp/.jpg；<代號> 抓不到時也試中文名)。全抓不到 → 維持 emoji 預設。
+    // (試 .png/.webp/.jpg；<代號> 抓不到時也試中文名)。全抓不到 → 維持預設圖示。
     const _ICON_EXTS = ['png', 'webp', 'jpg'];
     function _applyIcons() {
         if (!_el) return;
         const folder = (_loadTheme().iconFolder || '').trim();
         const base = folder ? (folder.replace(/\/+$/, '') + '/') : '';
         _el.querySelectorAll('.aps-icon-em[data-app-em]').forEach(function (em) {
-            em.style.backgroundImage = ''; em.classList.remove('aps-icon-img');   // 先還原 emoji
+            em.style.backgroundImage = ''; em.classList.remove('aps-icon-img');   // 先還原預設圖示
             if (!base) return;
             const id = em.dataset.appEm;
             const app = APPS.find(function (a) { return a.id === id; });
@@ -89,7 +89,7 @@
             const cands = [];
             names.forEach(function (n) { _ICON_EXTS.forEach(function (e) { cands.push(base + encodeURIComponent(n) + '.' + e); }); });
             (function tryNext(i) {
-                if (i >= cands.length) return;   // 全失敗 → 維持 emoji
+                if (i >= cands.length) return;   // 全失敗 → 維持預設圖示
                 const img = new Image();
                 img.onload = function () { em.style.backgroundImage = 'url("' + cands[i] + '")'; em.classList.add('aps-icon-img'); };
                 img.onerror = function () { tryNext(i + 1); };
@@ -121,6 +121,8 @@
     // ── 今日心情：點一下換下一個，記在 localStorage ──────────────────────
     //   跟日期綁在一起：換一天就回到第一個，不然昨天挑的心情會一直掛在那。
     const MOODS = ['☀️', '⛅', '🌧️', '🌙', '✨', '🌸', '☕', '😴', '🔥', '🫧'];
+    // 畫面用的圖示（MOODS 本身是存檔的鍵，舊資料照讀，所以不改）；顏色在 phone_shell.css 照 data-mood 上
+    const MOOD_ICONS = ['fa-sun', 'fa-cloud-sun', 'fa-cloud-rain', 'fa-moon', 'fa-star', 'fa-spa', 'fa-mug-hot', 'fa-bed', 'fa-fire', 'fa-soap'];
     const MOOD_KEY = 'aurelia_phone_mood';
     function _todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
     function _loadMood() {
@@ -136,7 +138,10 @@
     function _paintMood() {
         if (!_el) return;
         const el = _el.querySelector('#aps-mood-em');
-        if (el) el.textContent = _loadMood();
+        if (!el) return;
+        const i = Math.max(0, MOODS.indexOf(_loadMood()));
+        el.dataset.mood = String(i);
+        el.innerHTML = '<i class="fa-solid ' + MOOD_ICONS[i] + '"></i>';
     }
     function _cycleMood() {
         const i = MOODS.indexOf(_loadMood());
@@ -188,7 +193,7 @@
         const ftCh = FONTS.map(function (f) { return '<button class="aps-set-chip" data-k="font" data-css="' + _esc(f.css) + '" type="button" style="font-family:' + f.css + '">' + _esc(f.name) + '</button>'; }).join('');
         const icHintRows = APPS.map(function (a) {
             return '<div class="aps-set-icrow">'
-                 + '<span class="aps-set-icprev">' + a.emoji + '</span>'
+                 + '<span class="aps-set-icprev" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
                  + '<span class="aps-set-icname">' + _esc(a.name) + '</span>'
                  + '<span class="aps-set-ichint">' + a.id + '.png</span>'
                  + '</div>';
@@ -226,10 +231,12 @@
     }
 
     // ── 已安裝 app（app 商店裝的功能型 HTML app）──
+    // 圖標：內建 app 用 Font Awesome（顏色在 phone_shell.css 照 data-ic 上）；使用者 app 用它自己挑的 emoji
+    function _icHTML(a) { return a.icon ? '<i class="fa-solid ' + a.icon + '"></i>' : _esc(a.emoji || ''); }
     const INSTALLED_KEY = 'aurelia_phone_apps';   // 與 app_store.js 同 key：[{id,name,emoji,iconUrl}]
     function _loadInstalled() { try { return JSON.parse(win.localStorage.getItem(INSTALLED_KEY)) || []; } catch (e) { return []; } }
     function _saveInstalled(list) { try { win.localStorage.setItem(INSTALLED_KEY, JSON.stringify(list || [])); } catch (e) {} }
-    function _cacheInstalled(meta) { try { var l = _loadInstalled().filter(function (m) { return m && m.id !== meta.id; }); l.push({ id: meta.id, name: meta.name || 'App', emoji: meta.emoji || '📦', iconUrl: meta.iconUrl || '' }); _saveInstalled(l); } catch (e) {} }
+    function _cacheInstalled(meta) { try { var l = _loadInstalled().filter(function (m) { return m && m.id !== meta.id; }); l.push({ id: meta.id, name: meta.name || 'App', emoji: meta.emoji || '', icon: meta.icon || '', iconUrl: meta.iconUrl || '' }); _saveInstalled(l); } catch (e) {} }
 
     // 使用者 app 啟動：點開才從 OS_DB 撈 HTML，丟給 AppRuntime 跑成 iframe
     function _userAppGo(id) {
@@ -246,8 +253,11 @@
             // iframe 由 _home 清空容器時一併移除，無需回傳 cleanup
         };
     }
+    // 使用者 app 的圖標：自己挑的 emoji 照用；沒挑的用 FA（創作室做的記在 icon 欄）。舊資料的 📦／🧩 是當年塞的預設值，當作沒挑
+    function _userEm(meta) { const e = String((meta && meta.emoji) || '').trim(); return (e && e !== '📦' && e !== '🧩') ? e : ''; }
+    function _userIc(meta) { const i = String((meta && meta.icon) || ''); if (/^fa-[a-z0-9-]+$/.test(i)) return i; return (meta && meta.emoji === '🧩') ? 'fa-puzzle-piece' : 'fa-cube'; }
     function _makeUserApp(meta) {
-        return { id: meta.id, name: meta.name || 'App', emoji: meta.emoji || '📦', iconUrl: meta.iconUrl || '', mode: 'inside', go: _userAppGo(meta.id) };
+        return { id: meta.id, name: meta.name || 'App', emoji: _userEm(meta), icon: _userEm(meta) ? '' : _userIc(meta), iconUrl: meta.iconUrl || '', mode: 'inside', go: _userAppGo(meta.id) };
     }
     // 首次建殼/開機：從 localStorage 把已安裝 app 補回 APPS（去重）
     function _restoreInstalledApps() {
@@ -295,15 +305,15 @@
     function _addWritingTools() {
         const standalone = !!document.getElementById('aurelia-standalone-root');
         const tools = [
-            { id: 'sysset', name: '設置', emoji: '⚙️', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
-            { id: 'album',  name: '相簿',   emoji: '📷', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
-            { id: 'avsvar', name: '狀態檔案', emoji: '🎲', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
+            { id: 'sysset', name: '設置', icon: 'fa-gear', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
+            { id: 'album',  name: '相簿',   icon: 'fa-images', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
+            { id: 'avsvar', name: '狀態檔案', icon: 'fa-dice', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
             // 創作室獨立 app 已移除：所有創作功能都從「應用商城」進(工坊首頁已內含 製作面板/主題/世界書/我的角色 等入口)
-            { id: 'phone',  name: '電話',   emoji: '📞', mode: 'inside', go: function (c) { if (win.OS_DIALER && win.OS_DIALER.launch) { win.OS_DIALER.launch(c); } else { c.innerHTML = '<div class="aps-fail">📞 電話模組未載入</div>'; } } },
+            { id: 'phone',  name: '電話',   icon: 'fa-phone', mode: 'inside', go: function (c) { if (win.OS_DIALER && win.OS_DIALER.launch) { win.OS_DIALER.launch(c); } else { c.innerHTML = '<div class="aps-fail">電話模組未載入</div>'; } } },
         ];
         if (standalone) {
-            tools.push({ id: 'lorebook', name: '世界書', emoji: '📚', mode: 'inside', go: function (c) { _mountTool(win.OS_WORLDBOOK && (win.OS_WORLDBOOK.launchApp || win.OS_WORLDBOOK.launch), c); } });
-            tools.push({ id: 'prompts',  name: '提示詞', emoji: '🎚️', mode: 'inside', go: function (c) { _mountTool(win.OS_PROMPTS && (win.OS_PROMPTS.launchApp || win.OS_PROMPTS.launch), c); } });
+            tools.push({ id: 'lorebook', name: '世界書', icon: 'fa-book-atlas', mode: 'inside', go: function (c) { _mountTool(win.OS_WORLDBOOK && (win.OS_WORLDBOOK.launchApp || win.OS_WORLDBOOK.launch), c); } });
+            tools.push({ id: 'prompts',  name: '提示詞', icon: 'fa-scroll', mode: 'inside', go: function (c) { _mountTool(win.OS_PROMPTS && (win.OS_PROMPTS.launchApp || win.OS_PROMPTS.launch), c); } });
         }
         tools.forEach(function (t) { if (!APPS.find(function (a) { return a.id === t.id; })) APPS.push(t); });
     }
@@ -317,7 +327,7 @@
             const a = APPS.find(function (x) { return x.id === id; });
             if (!a) return '';
             return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
-                 + '<span class="aps-icon-em" data-app-em="' + a.id + '">' + a.emoji + '</span>'
+                 + '<span class="aps-icon-em" data-app-em="' + a.id + '" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
                  + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
         }).join('');
         dockEl.querySelectorAll('.aps-icon').forEach(function (b) {
@@ -331,7 +341,7 @@
         if (!gridEl) return;
         gridEl.innerHTML = APPS.filter(function (a) { return DOCK_IDS.indexOf(a.id) < 0; }).map(function (a) {
             return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
-                 + '<span class="aps-icon-em" data-app-em="' + a.id + '">' + a.emoji + '</span>'
+                 + '<span class="aps-icon-em" data-app-em="' + a.id + '" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
                  + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
         }).join('');
         gridEl.querySelectorAll('.aps-icon').forEach(function (b) {
@@ -370,7 +380,7 @@
           +       '<div class="aps-lock">'
           +         '<div class="aps-lock-time" id="aps-lock-time">--:--</div>'
           +         '<div class="aps-lock-date" id="aps-lock-date"></div>'
-          +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情：<span class="aps-mood-em" id="aps-mood-em">☀️</span></button>'
+          +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情：<span class="aps-mood-em" id="aps-mood-em" data-mood="0"><i class="fa-solid fa-sun"></i></span></button>'
           +       '</div>'
           +       '<div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div></div>'
           +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'

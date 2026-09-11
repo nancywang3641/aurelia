@@ -73,12 +73,12 @@
         const isCopy = String(name).startsWith('[VN副本]');
         const acts = [];
         if (!isCopy) acts.push({ label: '<i class="fa-solid fa-copy"></i> 建立安全副本後編輯', cls: 'safe', onClick: () => _wbCopyBook(name) });
-        acts.push({ label: isCopy ? '<i class="fa-solid fa-pen"></i> 編輯這份副本' : '<i class="fa-solid fa-pen"></i> 直接改原檔', cls: isCopy ? '' : 'danger', onClick: async () => { if (isCopy || await AUI.confirm(`⚠️ 直接改原檔「${name}」？確定？`)) _wbEnter(name); } });
+        acts.push({ label: isCopy ? '<i class="fa-solid fa-pen"></i> 編輯這份副本' : '<i class="fa-solid fa-pen"></i> 直接改原檔', cls: isCopy ? '' : 'danger', onClick: async () => { if (isCopy || await AUI.confirm(`直接改原檔「${name}」？確定？`)) _wbEnter(name); } });
         acts.push({ label: '<i class="fa-solid fa-trash"></i> 刪除世界書', cls: 'danger', onClick: () => _wbDeleteBook(name) });
         _wbSheet(`「${name}」`, acts);
     }
     async function _wbDeleteBook(name) {
-        if (!await AUI.confirm(`⚠️ 刪除世界書「${name}」？此動作無法復原。`)) return;
+        if (!await AUI.confirm(`刪除世界書「${name}」？此動作無法復原。`)) return;
         const TH = _wbTH();
         if (!TH || !TH.deleteLorebook) { AUI.alert('酒館助手未就緒'); return; }
         try { await TH.deleteLorebook(name); _wbToast('已刪除「' + name + '」'); renderWorldbookPanel(); }
@@ -142,7 +142,7 @@
                     const clones = entries.map(e => { const c = { ...e }; delete c.uid; delete c.display_index; return c; });
                     await TH.createLorebookEntries(copyName, clones);
                 }
-                AUI.alert(`✅ 已複製成「${copyName}」（${entries.length} 條），改它不會動到原檔。`);
+                AUI.alert(`已複製成「${copyName}」（${entries.length} 條），改它不會動到原檔。`);
             } else {
                 if (!await AUI.confirm(`「${copyName}」已存在，直接打開上次那份副本繼續編輯嗎？`)) return;
             }
@@ -307,11 +307,11 @@
         if (!_wbChat.length && !_wbLastError) { el.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-comment-dots"></i></div><div>跟 AI 說你想怎麼整理這本世界書<br>它幫你改／加條目，你確認後才寫入</div></div>`; return; }
         let html = _wbChat.map(m => {
             let body = m.content;
-            if (m.role === 'assistant') { body = _wbStripOps(m.content); if (!body) body = '✏️ 我擬好了改動，點下方「查看建議」確認。'; }
+            if (m.role === 'assistant') { body = _wbStripOps(m.content); if (!body) body = '我擬好了改動，點下方「查看建議」確認。'; }
             return `<div class="swb-bubble swb-${m.role}">${renderMarkdown(body)}</div>`;
         }).join('');
         // 錯誤泡泡＋重試（API錯誤頁/空回應/截斷都會落在這，不會再被當正常回覆收進對話）
-        if (_wbLastError) html += `<div class="swb-bubble swb-assistant studio-error-bubble"><div class="studio-error-msg">❌ 錯誤：${String(_wbLastError).replace(/</g, '&lt;').slice(0, 200)}</div><button class="studio-retry-btn">🔄 重試</button></div>`;
+        if (_wbLastError) html += `<div class="swb-bubble swb-assistant studio-error-bubble"><div class="studio-error-msg"><i class="fa-solid fa-circle-xmark"></i> 錯誤：${String(_wbLastError).replace(/</g, '&lt;').slice(0, 200)}</div><button class="studio-retry-btn"><i class="fa-solid fa-rotate"></i> 重試</button></div>`;
         el.innerHTML = html;
         const rb = el.querySelector('.studio-retry-btn');
         if (rb) rb.onclick = () => { _wbLastError = null; _wbPaintChat(host); _wbCall(host); };

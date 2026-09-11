@@ -186,7 +186,7 @@ ${varList}
         catch(e) {
             console.error('[AVSR] ❌ _renderList 崩潰:', e.message, e.stack);
             el.innerHTML = `<div style="padding:20px;color:#e74c3c;font-size:12px;">
-                ⚠️ 條件規則渲染錯誤<br><code style="font-size:10px;">${e.message}</code>
+                <i class="fa-solid fa-triangle-exclamation"></i> 條件規則渲染錯誤<br><code style="font-size:10px;">${e.message}</code>
             </div>`;
         }
     }
@@ -218,7 +218,7 @@ ${varList}
         const _cardHtml = (r) => {
             const condStr = `${r.path} ${r.op} ${r.value}`;
             const preview = (r.content || '').slice(0, 40) + ((r.content||'').length > 40 ? '…' : '');
-            const folderTag = r.folder ? `<span class="avsr-folder-tag">📁 ${_esc(r.folder)}</span>` : '';
+            const folderTag = r.folder ? `<span class="avsr-folder-tag"><i class="fa-solid fa-folder"></i> ${_esc(r.folder)}</span>` : '';
             return `<div class="avsr-card${r.enabled === false ? ' disabled' : ''}" data-id="${r.id}">
                 <span class="avsr-toggle" data-toggle="${r.id}">${r.enabled === false ? '○' : '●'}</span>
                 <div class="avsr-info">
@@ -242,18 +242,18 @@ ${varList}
                 const groupRules = groups[key];
                 const isGlobal   = key === '__global__';
                 const title      = isGlobal ? '全局規則' : (worldMap[key] || `世界 ${key.slice(-6)}`);
-                const icon       = isGlobal ? '🌐' : '📖';
+                const icon       = isGlobal ? '<i class="fa-solid fa-globe"></i>' : '<i class="fa-solid fa-book-open"></i>';
                 const isCollapsed = !!collapsed[key];
                 listHtml += `
                 <div class="avsr-group">
                     <div class="avsr-group-header" data-collapse="${_esc(key)}">
-                        <span class="avsr-group-arrow">${isCollapsed ? '▶' : '▼'}</span>
+                        <span class="avsr-group-arrow">${isCollapsed ? '<i class="fa-solid fa-caret-right"></i>' : '<i class="fa-solid fa-caret-down"></i>'}</span>
                         <span class="avsr-group-title">${icon} ${_esc(title)}</span>
                         <span class="avsr-group-count">${groupRules.length}</span>
                         <button class="avsr-btn-sm danger avsr-del-group"
                             data-del-group="${_esc(key)}"
                             style="margin-left:auto;font-size:10px;padding:2px 8px;"
-                            title="刪除此群組所有規則">🗑 全刪</button>
+                            title="刪除此群組所有規則"><i class="fa-solid fa-trash-can"></i> 全刪</button>
                     </div>
                     <div class="avsr-group-body" style="display:${isCollapsed ? 'none' : 'flex'}">
                         ${groupRules.map(_cardHtml).join('')}

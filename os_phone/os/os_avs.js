@@ -31,7 +31,7 @@
                 <!-- 使用說明遮罩 -->
                 <div id="avs-help-overlay" style="display:none;position:absolute;inset:0;background:rgba(238,240,246,0.98);z-index:200;overflow-y:auto;padding:20px 18px 80px;box-sizing:border-box;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-                        <div style="font-size:16px;font-weight:bold;color:#1A1C28;">📖 使用說明</div>
+                        <div style="font-size:16px;font-weight:bold;color:#1A1C28;"><i class="fa-solid fa-book-open"></i> 使用說明</div>
                         <div id="avs-help-close" style="font-size:22px;color:rgba(26,28,40,0.25);cursor:pointer;padding:4px 8px;">✕</div>
                     </div>
                     <div style="font-size:13px;color:#3A3F5C;line-height:1.9;">
@@ -42,7 +42,7 @@
                             AI 每次回覆時，會一起更新這些數字，你不用自己手動記。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">📦 第一步：建立「檔案」</div>
+                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-box"></i> 第一步：建立「檔案」</div>
                         <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">先決定你的故事要追蹤哪些東西，給它們取個名字和初始值。</p>
                         <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;margin-bottom:16px;font-family:monospace;font-size:12px;color:#1A1C28;">
                             hp = 100　　← 血量，從100開始<br>
@@ -50,12 +50,12 @@
                             好感度 = 0　← 名字可以用中文
                         </div>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">🔥 第二步：用「煉丹爐」做美化面板（可選）</div>
+                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-fire"></i> 第二步：用「煉丹爐」做美化面板（可選）</div>
                         <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;">
                             選好檔案後，描述你想要的風格（例如「暗黑奇幻、血紅色」），讓 AI 自動幫你做一個好看的狀態面板。做好後到「展廳」開啟它，跑團時就會顯示漂亮的面板而不是純數字。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">⚡ 第三步：設定「條件規則」（可選）</div>
+                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-bolt"></i> 第三步：設定「條件規則」（可選）</div>
                         <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">
                             你可以設定「當某個數值達到某個條件時，自動告訴 AI 要怎麼做」。
                         </p>
@@ -66,13 +66,13 @@
                             這樣你就不用在每次對話裡重複解釋角色行為，系統會自動根據數值切換說明，省下很多字數。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">📊 跑團中：看目前狀態</div>
+                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-chart-simple"></i> 跑團中：看目前狀態</div>
                         <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;">
-                            跑團時打開右側「資料中心」→「📊 狀態」，就可以看到目前所有數值，以及每一章改了什麼。<br>
-                            如果 AI 這章亂改了數值，也可以點「↩ 回朔上一章節」撤銷。
+                            跑團時打開右側「資料中心」→「<i class="fa-solid fa-chart-simple"></i> 狀態」，就可以看到目前所有數值，以及每一章改了什麼。<br>
+                            如果 AI 這章亂改了數值，也可以點「<i class="fa-solid fa-rotate-left"></i> 回朔上一章節」撤銷。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">💡 提示：告訴 AI 怎麼更新數值</div>
+                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-lightbulb"></i> 提示：告訴 AI 怎麼更新數值</div>
                         <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">在你的 Prompt 裡加上這段說明，AI 就知道要輸出數值變化了：</p>
                         <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;font-family:monospace;font-size:12px;color:#1A1C28;">
                             每次回覆結束後，如果有數值改變，請在最後加上：<br>
@@ -93,7 +93,7 @@
                     <div id="avs-view-memory" class="avs-view"></div>
                     <div id="avs-view-state" class="avs-view active"></div>
                     <div id="avs-view-packs" class="avs-view">
-                        <div class="avs-packs-title">📦 我的檔案</div>
+                        <div class="avs-packs-title"><i class="fa-solid fa-box"></i> 我的檔案</div>
                         <div id="avs-pack-list" style="display:flex; flex-direction:column; gap:10px;"></div>
                         <div id="avs-pack-editor" class="avs-card" style="display:none;">
                             <div class="avs-label">檔案名稱</div>
@@ -114,7 +114,7 @@
                 <div id="avs-furnace-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
                     <div style="max-width:600px; width:100%; background:#EEF0F6; border:1px solid rgba(26,28,40,0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(26,28,40,0.10); margin:auto;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(26,28,40,0.15);">
-                            <strong id="furnace-modal-title" style="font-size:16px; color:#1A1C28;">🔥 煉丹爐 · 為檔案煉個 UI 面板</strong>
+                            <strong id="furnace-modal-title" style="font-size:16px; color:#1A1C28;"><i class="fa-solid fa-fire"></i> 煉丹爐 · 為檔案煉個 UI 面板</strong>
                             <div style="color:#1A1C28; cursor:pointer; font-size:20px;" id="avs-furnace-close">✕</div>
                         </div>
                         <div class="avs-card" id="furnace-card" style="background:transparent; border:none; padding:0;">
@@ -127,7 +127,7 @@
 
                             <!-- 風格建議下拉（有建議時才顯示） -->
                             <div id="furnace-presets-wrap" style="display:none;margin-bottom:14px;">
-                                <div class="avs-label" style="margin-bottom:6px;">💡 載入風格建議</div>
+                                <div class="avs-label" style="margin-bottom:6px;"><i class="fa-solid fa-lightbulb"></i> 載入風格建議</div>
                                 <div id="furnace-presets-list" style="display:flex;flex-direction:column;gap:6px;"></div>
                             </div>
 
@@ -153,7 +153,7 @@
 
                             <div class="avs-label">視覺風格要求</div>
                             <textarea class="avs-textarea" id="furnace-style-prompt" placeholder="例如：賽博龐克風格、霓虹發光、半透明玻璃&#10;可留空，交給上面的美術方向決定" style="margin-bottom:15px;"></textarea>
-                            <div class="avs-btn avs-btn-primary" id="furnace-start-btn" style="width:100%;">🔥 開始煉丹</div>
+                            <div class="avs-btn avs-btn-primary" id="furnace-start-btn" style="width:100%;"><i class="fa-solid fa-fire"></i> 開始煉丹</div>
                             <div class="furnace-log" id="furnace-log-output" style="margin-top:15px;">等待點火...</div>
                         </div>
                     </div>
@@ -163,7 +163,7 @@
                 <div id="avs-rules-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; overflow-y:auto;">
                     <div style="max-width:600px; margin:20px auto; background:#EEF0F6; border:1px solid rgba(26,28,40,0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(26,28,40,0.10);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(26,28,40,0.15);">
-                            <strong style="font-size:16px; color:#1A1C28;">⚡ <span id="avs-rules-modal-title">檔案</span> · 條件規則</strong>
+                            <strong style="font-size:16px; color:#1A1C28;"><i class="fa-solid fa-bolt"></i> <span id="avs-rules-modal-title">檔案</span> · 條件規則</strong>
                             <div style="color:#1A1C28; cursor:pointer; font-size:20px;" id="avs-rules-modal-close">✕</div>
                         </div>
                         <div style="font-size:11px; color:rgba(26,28,40,0.30); margin-bottom:12px; line-height:1.6;">
@@ -327,7 +327,7 @@
         }
         await syncVarPackToLorebook();
         try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
-        if (AUI.toastr) AUI.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 個項目 / ${savedRuleCount} 條規則），世界書已同步`);
+        if (AUI.toastr) AUI.toastr.success(`已生成「${pack.name}」（${variables.length} 個項目 / ${savedRuleCount} 條規則），世界書已同步`);
         if (win.OS_STATE_RUNTIME?.extractOnce) {
             setTimeout(() => {
                 try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch(e) {
@@ -466,15 +466,15 @@
         //   模型會照著新風格重寫、find 全部定位不到 → 看起來就是「按了沒反應」。所以微調模式整區收起來。
         if (artEl) artEl.style.display = _furnaceRefineTpl ? 'none' : '';
         if (_furnaceRefineTpl) {
-            if (titleEl)  titleEl.textContent = '✏️ 微調面板 · 只改你說的、其他不動';
+            if (titleEl)  titleEl.innerHTML = '<i class="fa-solid fa-pen"></i> 微調面板 · 只改你說的、其他不動';
             if (styleEl)  { styleEl.value = ''; styleEl.placeholder = '說你要改哪裡，例如：標題字大一點、邊框改金色、血條改紅色（只動你說的，其他保留）'; }
-            if (startEl)  startEl.textContent = '✏️ 套用微調';
+            if (startEl)  startEl.innerHTML = '<i class="fa-solid fa-pen"></i> 套用微調';
             if (presetEl) presetEl.style.display = 'none';   // 微調不需要風格預設
             if (logEl)    logEl.innerHTML = '說一句要改的地方，我只動那裡、不重做整份。';
         } else {
-            if (titleEl)  titleEl.textContent = '🔥 煉丹爐 · 為檔案煉個 UI 面板';
+            if (titleEl)  titleEl.innerHTML = '<i class="fa-solid fa-fire"></i> 煉丹爐 · 為檔案煉個 UI 面板';
             if (styleEl)  styleEl.placeholder = '例如：賽博龐克風格、霓虹發光、半透明玻璃\n或點上方「載入風格建議」快速填入';
-            if (startEl)  startEl.textContent = '🔥 開始煉丹';
+            if (startEl)  startEl.innerHTML = '<i class="fa-solid fa-fire"></i> 開始煉丹';
             if (logEl)    logEl.innerHTML = '等待點火...';
             try { _refreshFurnacePresets(container, packId); } catch (e) {}   // 重評風格建議顯示（剛從微調模式切回來時把它復原）
             try { _refreshFurnaceArt(container, true); } catch (e) {}          // 每次開爐重擲一次美術方向
@@ -517,7 +517,7 @@
     // 解析 <patch> 並對 tpl 的 cssContent / htmlContent 做字串替換（find 須唯一，否則放棄該條保護面板）。回 { applied, msg? }
     function _applyFurnaceDiffPatches(responseText, tpl) {
         if (/<too_big\s*\/?\s*>/i.test(responseText)) {
-            return { applied: 0, msg: 'AI 認為這次要改的範圍太大、不適合微調，請按「🔄 重新煉丹」整份重做。' };
+            return { applied: 0, msg: 'AI 認為這次要改的範圍太大、不適合微調，請按「重新煉丹」整份重做。' };
         }
         const FIELD = { css: 'cssContent', html: 'htmlContent' };
         const patchRegex = /<patch\s+target=["']([^"']+)["']\s*>([\s\S]*?)<\/patch>/gi;
@@ -544,9 +544,9 @@
         const log = container.querySelector('#furnace-log-output');
         const btn = container.querySelector('#furnace-start-btn');
         const refineMsg = (container.querySelector('#furnace-style-prompt').value || '').trim();
-        if (!tpl) { if (log) log.innerHTML = '⚠️ 沒有可微調的面板'; return; }
-        if (!refineMsg) { if (log) log.innerHTML = '⚠️ 說一句你要改哪裡'; return; }
-        if (log) log.innerHTML = '✏️ 微調中…只動你說的地方';
+        if (!tpl) { if (log) log.innerHTML = '沒有可微調的面板'; return; }
+        if (!refineMsg) { if (log) log.innerHTML = '說一句你要改哪裡'; return; }
+        if (log) log.innerHTML = '微調中…只動你說的地方';
         if (btn) btn.disabled = true;
         try {
             const prompt = _buildFurnaceDiffPrompt(tpl.cssContent || '', tpl.htmlContent || '', refineMsg);
@@ -557,18 +557,18 @@
             if (!full) throw new Error('AI 回傳空白');
             const res = _applyFurnaceDiffPatches(full, tpl);
             if (res.applied === 0) {
-                if (log) log.innerHTML = '⚠️ ' + (res.msg || '沒改到（AI 沒給有效修改、或定位不到原文）。換更具體的說法，或按「🔄 重新煉丹」整份重做。');
+                if (log) log.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + (res.msg || '沒改到（AI 沒給有效修改、或定位不到原文）。換更具體的說法，或按「重新煉丹」整份重做。');
                 return;
             }
             await win.OS_DB.saveUITemplate(tpl);   // 同 id 覆寫、只改了 css/html
-            if (log) log.innerHTML = `🎉 已微調 ${res.applied} 處！`;
+            if (log) log.innerHTML = `已微調 ${res.applied} 處！`;
             currentTemplates = await win.OS_DB.getAllUITemplates();
             try { updateActiveTemplatesCache(); } catch (e) {}
             renderPackList(container);
             setTimeout(() => closeFurnaceModal(container), 1200);
         } catch (e) {
             console.error('[AVS Furnace Refine]', e);
-            if (log) log.innerHTML = `❌ 微調失敗：${e.message}`;
+            if (log) log.innerHTML = `微調失敗：${e.message}`;
         } finally {
             if (btn) btn.disabled = false;
         }
@@ -594,7 +594,7 @@
         // 有檔案、但沒有一個是這個故事的（例如舊版在 PWA 生的包 chatId 是空的）→ 這裡以前是整片空白，
         //   看起來像「生成失敗」。明講一句，並指去看得到它們的地方。
         if (!_mine.length) {
-            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">這個故事還沒有自己的檔案<br><br>已有的 ' + currentPacks.length + ' 份屬於別的故事<br>回上方建檔畫面用「📋 沿用其他故事的設定」搬過來</div>';
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">這個故事還沒有自己的檔案<br><br>已有的 ' + currentPacks.length + ' 份屬於別的故事<br>回上方建檔畫面用「<i class="fa-solid fa-clipboard"></i> 沿用其他故事的設定」搬過來</div>';
             return;
         }
         _mine.forEach(pack => {
@@ -608,10 +608,10 @@
             card.innerHTML = `
                 <strong style="color:#1A1C28;">${pack.name}</strong>
                 <p style="font-size:12px; color:rgba(26,28,40,0.25);">${pack.variables.length} 個項目${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
-                <div style="font-size:11px; margin:1px 0 2px;">${pack.chatId ? `🔒 <span style="color:#2e9e6b;">綁定此卡</span> <span style="color:rgba(26,28,40,0.45);">${String(pack.chatId).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : `🌐 <span style="color:#c9920f;">全域 · 所有卡共用 ⚠️</span>`}</div>
+                <div style="font-size:11px; margin:1px 0 2px;">${pack.chatId ? `<i class="fa-solid fa-lock"></i> <span style="color:#2e9e6b;">綁定此卡</span> <span style="color:rgba(26,28,40,0.45);">${String(pack.chatId).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : `<i class="fa-solid fa-globe"></i> <span style="color:#c9920f;">全域 · 所有卡共用 <i class="fa-solid fa-triangle-exclamation"></i></span>`}</div>
                 <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
                     <div class="avs-btn avs-btn-outline btn-edit" style="flex:1; min-width:60px; padding:6px;">編輯</div>
-                    <div class="avs-btn avs-btn-outline btn-rules" style="flex:1; min-width:90px; padding:6px;">⚡ 規則${rulesCount ? ` (${rulesCount})` : ''}</div>
+                    <div class="avs-btn avs-btn-outline btn-rules" style="flex:1; min-width:90px; padding:6px;"><i class="fa-solid fa-bolt"></i> 規則${rulesCount ? ` (${rulesCount})` : ''}</div>
                     <div class="avs-btn avs-btn-danger btn-del" style="padding:6px 12px;">刪除</div>
                 </div>
                 <div class="pack-ui-area" style="margin-top:14px; padding-top:12px; border-top:1px dashed rgba(26,28,40,0.10);"></div>
@@ -621,8 +621,8 @@
             const uiArea = card.querySelector('.pack-ui-area');
             if (!activeTpl) {
                 uiArea.innerHTML = `
-                    <div style="font-size:12px; color:rgba(26,28,40,0.25); margin-bottom:8px;">🖼️ UI 面板：<span style="color:#888;">無</span></div>
-                    <div class="avs-btn avs-btn-outline btn-go-furnace" style="width:100%; padding:8px; font-size:12px;">✨ 為這個檔案煉個 UI 面板</div>
+                    <div style="font-size:12px; color:rgba(26,28,40,0.25); margin-bottom:8px;"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:#888;">無</span></div>
+                    <div class="avs-btn avs-btn-outline btn-go-furnace" style="width:100%; padding:8px; font-size:12px;"><i class="fa-solid fa-wand-magic-sparkles"></i> 為這個檔案煉個 UI 面板</div>
                 `;
                 uiArea.querySelector('.btn-go-furnace').onclick = () => openFurnaceModal(container, pack.id);
             } else {
@@ -643,7 +643,7 @@
 
                 uiArea.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <span style="font-size:12px; color:rgba(26,28,40,0.68);">🖼️ UI 面板：<span style="color:#1A1C28;">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
+                        <span style="font-size:12px; color:rgba(26,28,40,0.68);"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:#1A1C28;">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
                     </div>
                     ${scopedCssText ? `<style>${scopedCssText}</style>` : ''}
                     <div class="avs-pv-tabs">
@@ -657,13 +657,13 @@
                         </div>
                     </div>
                     <div style="display:flex; gap:8px; margin-bottom:6px;">
-                        <div class="avs-btn avs-btn-primary btn-refine-tpl" style="flex:1; padding:6px; font-size:12px;">✏️ 微調</div>
-                        <div class="avs-btn avs-btn-outline btn-refurnace" style="flex:1; padding:6px; font-size:12px;">🔄 重新煉丹</div>
+                        <div class="avs-btn avs-btn-primary btn-refine-tpl" style="flex:1; padding:6px; font-size:12px;"><i class="fa-solid fa-pen"></i> 微調</div>
+                        <div class="avs-btn avs-btn-outline btn-refurnace" style="flex:1; padding:6px; font-size:12px;"><i class="fa-solid fa-rotate"></i> 重新煉丹</div>
                     </div>
-                    ${/\bwsk\b/.test(activeTpl.htmlContent || '') ? `<div class="avs-btn avs-btn-outline btn-wsk-tune" style="width:100%; padding:6px; font-size:12px; margin-bottom:6px;">🐚 調整貼紙位置</div>` : ''}
+                    ${/\bwsk\b/.test(activeTpl.htmlContent || '') ? `<div class="avs-btn avs-btn-outline btn-wsk-tune" style="width:100%; padding:6px; font-size:12px; margin-bottom:6px;"><i class="fa-solid fa-shapes"></i> 調整貼紙位置</div>` : ''}
                     <div style="display:flex; gap:8px;">
                         <div class="avs-btn avs-btn-outline btn-toggle-active" style="flex:1; padding:6px; font-size:12px;">${activeTpl.isActive ? '✓ 取消啟用' : '設為啟用'}</div>
-                        <div class="avs-btn avs-btn-danger btn-del-tpl" style="padding:6px 12px; font-size:12px;">🗑</div>
+                        <div class="avs-btn avs-btn-danger btn-del-tpl" style="padding:6px 12px; font-size:12px;"><i class="fa-solid fa-trash-can"></i></div>
                     </div>
                 `;
 
@@ -727,7 +727,7 @@
                 const warn = [];
                 if (orphanedTpls.length)  warn.push(`${orphanedTpls.length} 個展廳 UI 模板`);
                 if (orphanedRules.length) warn.push(`${orphanedRules.length} 條條件規則`);
-                const tplWarning = warn.length ? `\n\n⚠️ 同時會刪除這個檔案對應的：\n  · ${warn.join('\n  · ')}` : '';
+                const tplWarning = warn.length ? `\n\n同時會刪除這個檔案對應的：\n  · ${warn.join('\n  · ')}` : '';
                 if (!await AUI.confirm(`刪除檔案「${pack.name}」？${tplWarning}\n\n世界書內狀態說明條目會自動更新（沒其他項目時也會被刪）。`)) return;
 
                 // 1. 刪變數包本體
@@ -796,7 +796,7 @@
                 callApi
             });
             if (n > 0) {
-                if (AUI.toastr) AUI.toastr.success('✅ AI 生成 ' + n + ' 條條件規則');
+                if (AUI.toastr) AUI.toastr.success('AI 生成 ' + n + ' 條條件規則');
                 _editingRuleIdInModal = null;
                 renderRulesModalList(container);
             } else if (AUI.toastr) {
@@ -874,7 +874,7 @@
                     <div style="display:flex; gap:6px; flex-shrink:0;">
                         <div class="avs-btn avs-btn-outline" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._toggleRule?.('${escapeAttr(r.id)}')">${enabled ? '啟用' : '停用'}</div>
                         <div class="avs-btn avs-btn-outline" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._editRule?.('${escapeAttr(r.id)}')">編輯</div>
-                        <div class="avs-btn avs-btn-danger" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._delRule?.('${escapeAttr(r.id)}')">✖</div>
+                        <div class="avs-btn avs-btn-danger" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._delRule?.('${escapeAttr(r.id)}')"><i class="fa-solid fa-xmark"></i></div>
                     </div>
                 </div>
                 <div style="font-size:12px; margin-top:6px; color:rgba(26,28,40,0.68); font-family:monospace;">
@@ -951,7 +951,7 @@
                 } catch(e) {}
                 // 附一個「內建簡單面板」：沒有美化面板時自動裝+啟用，朋友/測試期不用每次叫 AI 生（有 AI 面板就不搶）
                 try {
-                    const _DEF_HTML = '<div class="avsdef-wrap"><div class="avsdef-quest">🎯 主線目標：{{主線目標}}</div><div class="avsdef-title">📋 角色狀態</div><div class="avsdef-grid">{{#each 角色狀態}}<div class="avsdef-card"><div class="avsdef-hd"><img class="avsdef-ava" src="{{@avatar}}"><div class="avsdef-name">{{@key}}</div></div><div class="avsdef-row"><span class="avsdef-k">身分</span><span class="avsdef-v">{{身分}}</span></div><div class="avsdef-row"><span class="avsdef-k">好感度</span><span class="avsdef-v avsdef-fav">{{好感度}}</span></div><div class="avsdef-sep"></div><div class="avsdef-row"><span class="avsdef-k">髮色</span><span class="avsdef-v">{{髮色}}</span></div><div class="avsdef-row"><span class="avsdef-k">眼色</span><span class="avsdef-v">{{眼色}}</span></div><div class="avsdef-row"><span class="avsdef-k">體型</span><span class="avsdef-v">{{體型}}</span></div></div>{{/each}}</div></div>';
+                    const _DEF_HTML = '<div class="avsdef-wrap"><div class="avsdef-quest"><i class="fa-solid fa-bullseye"></i> 主線目標：{{主線目標}}</div><div class="avsdef-title"><i class="fa-solid fa-clipboard"></i> 角色狀態</div><div class="avsdef-grid">{{#each 角色狀態}}<div class="avsdef-card"><div class="avsdef-hd"><img class="avsdef-ava" src="{{@avatar}}"><div class="avsdef-name">{{@key}}</div></div><div class="avsdef-row"><span class="avsdef-k">身分</span><span class="avsdef-v">{{身分}}</span></div><div class="avsdef-row"><span class="avsdef-k">好感度</span><span class="avsdef-v avsdef-fav">{{好感度}}</span></div><div class="avsdef-sep"></div><div class="avsdef-row"><span class="avsdef-k">髮色</span><span class="avsdef-v">{{髮色}}</span></div><div class="avsdef-row"><span class="avsdef-k">眼色</span><span class="avsdef-v">{{眼色}}</span></div><div class="avsdef-row"><span class="avsdef-k">體型</span><span class="avsdef-v">{{體型}}</span></div></div>{{/each}}</div></div>';
                     const _DEF_CSS = '.avsdef-wrap{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;padding:4px 0;}.avsdef-quest{font-size:12px;color:#5a4a78;background:rgba(120,90,160,0.10);border:1px solid rgba(120,90,160,0.18);border-radius:8px;padding:8px 10px;margin:0 0 10px;line-height:1.5;}.avsdef-title{font-size:15px;font-weight:700;color:#7a5fb0;letter-spacing:1px;margin:0 0 10px 2px;}.avsdef-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}.avsdef-card{background:#fff;border:1px solid rgba(120,90,160,0.18);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px rgba(120,90,160,0.08);}.avsdef-hd{display:flex;align-items:center;gap:9px;margin-bottom:8px;border-bottom:1px dashed rgba(120,90,160,0.25);padding-bottom:8px;}.avsdef-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;background:rgba(120,90,160,0.08);border:1px solid rgba(120,90,160,0.2);}.avsdef-name{font-size:15px;font-weight:800;color:#5a4a78;}.avsdef-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12px;}.avsdef-k{color:#9a90b0;flex-shrink:0;}.avsdef-v{color:#3a3450;font-weight:600;text-align:right;word-break:break-word;}.avsdef-fav{color:#e0608a;}.avsdef-sep{height:1px;background:rgba(120,90,160,0.10);margin:5px 0;}';
                     const _allTpls = (await win.OS_DB.getAllUITemplates?.()) || [];
                     const _mine = _allTpls.filter(t => t.packId === pack.id);
@@ -969,7 +969,7 @@
                 } catch(e) { console.warn('[AVS] 內建簡單面板安裝失敗:', e); }
                 if (_appContainer) await loadAllData(_appContainer);
                 await syncVarPackToLorebook();
-                if (AUI.toastr) AUI.toastr.success('✅ 已套用簡易預設檔案');
+                if (AUI.toastr) AUI.toastr.success('已套用簡易預設檔案');
                 try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}   // 從狀態面板初始引導觸發時，套用後刷新該面板（init 卡 → 追蹤視圖）
                 if (win.OS_STATE_RUNTIME?.extractOnce) {
                     setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
@@ -1077,7 +1077,7 @@
 
             if (_appContainer) await loadAllData(_appContainer);
             await syncVarPackToLorebook();
-            if (AUI.toastr) AUI.toastr.success('✅ 已套用視差預設（' + (SK[want]?.label || want) + '）；想換另一張皮到 UI 面板切換');
+            if (AUI.toastr) AUI.toastr.success('已套用視差預設（' + (SK[want]?.label || want) + '）；想換另一張皮到 UI 面板切換');
             try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}
             if (win.OS_STATE_RUNTIME?.extractOnce) {
                 setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
@@ -1265,7 +1265,7 @@
                     if (v && typeof v === 'object') return k + '{' + Object.keys(v).join('・') + '}';
                     return k;
                 });
-                console.warn('🧪 [AVS UI] 這張面板有 ' + _eaten.length + ' 個佔位符對不上資料、被顯示成「—」：'
+                console.warn('[AVS UI] 這張面板有 ' + _eaten.length + ' 個佔位符對不上資料、被顯示成「—」：'
                     + [...new Set(_eaten)].join(' ')
                     + '\n   資料實際有的鍵：' + (_keys.join('｜') || '（空）')
                     + '\n   ↑ 名字對得上就是真的沒值；對不上＝面板是舊 schema 煉的、資料已經換成新變數包了'
@@ -1349,11 +1349,11 @@
         el.className = 'avs-obj-leaf';
         el.style.cssText = 'display:flex; gap:6px; align-items:center; margin:3px 0;';
         el.innerHTML = `
-            <span style="flex-shrink:0;">🏷️</span>
+            <span style="flex-shrink:0;"><i class="fa-solid fa-tag"></i></span>
             <input class="avs-input avs-obj-key" placeholder="名稱" style="flex:1; font-size:12px;">
             <span style="flex-shrink:0; color:#888;">=</span>
             <input class="avs-input avs-obj-val" placeholder="值（數字/文字/{}）" style="flex:1; font-size:12px;">
-            <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;">✖</span>
+            <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;"><i class="fa-solid fa-xmark"></i></span>
         `;
         el.querySelector('.avs-obj-key').value = key != null ? String(key) : '';
         el.querySelector('.avs-obj-val').value = _avsValToStr(val);
@@ -1369,9 +1369,9 @@
         el.style.cssText = 'margin:4px 0; border:1px solid rgba(26,28,40,0.10); border-radius:4px; padding:4px 6px; background:rgba(0,0,0,0.15);';
         el.innerHTML = `
             <div class="avs-obj-folder-head" style="display:flex; gap:6px; align-items:center;">
-                <span style="flex-shrink:0;">📁</span>
+                <span style="flex-shrink:0;"><i class="fa-solid fa-folder"></i></span>
                 <input class="avs-input avs-obj-key" placeholder="項目名" style="flex:1; font-size:12px; font-weight:600;">
-                <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;">✖</span>
+                <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;"><i class="fa-solid fa-xmark"></i></span>
             </div>
             <div class="avs-obj-children" style="margin-left:14px; border-left:1px solid rgba(26,28,40,0.08); padding-left:8px; margin-top:2px;"></div>
         `;
@@ -1388,8 +1388,8 @@
         bar.className = 'avs-obj-addbar';
         bar.style.cssText = 'display:flex; gap:6px; margin:4px 0;';
         bar.innerHTML = `
-            <button type="button" class="avs-obj-add-folder" style="font-size:11px; padding:2px 8px; background:rgba(26,28,40,0.12); border:1px solid rgba(26,28,40,0.15); color:#1A1C28; border-radius:3px; cursor:pointer;">+ 📁 資料夾</button>
-            <button type="button" class="avs-obj-add-leaf" style="font-size:11px; padding:2px 8px; background:rgba(26,28,40,0.12); border:1px solid rgba(26,28,40,0.15); color:#1A1C28; border-radius:3px; cursor:pointer;">+ 🏷️ 數值</button>
+            <button type="button" class="avs-obj-add-folder" style="font-size:11px; padding:2px 8px; background:rgba(26,28,40,0.12); border:1px solid rgba(26,28,40,0.15); color:#1A1C28; border-radius:3px; cursor:pointer;">+ <i class="fa-solid fa-folder"></i> 資料夾</button>
+            <button type="button" class="avs-obj-add-leaf" style="font-size:11px; padding:2px 8px; background:rgba(26,28,40,0.12); border:1px solid rgba(26,28,40,0.15); color:#1A1C28; border-radius:3px; cursor:pointer;">+ <i class="fa-solid fa-tag"></i> 數值</button>
         `;
         bar.querySelector('.avs-obj-add-folder').addEventListener('click', () => {
             childrenEl.insertBefore(_avsMakeFolder('', {}), bar);
@@ -1430,7 +1430,7 @@
                     <option value="enum">枚舉</option>
                     <option value="object">物件（巢狀結構）</option>
                 </select>
-                <div style="color:#e74c3c; cursor:pointer; flex-shrink:0; padding:0 4px;" onclick="this.closest('.avs-var-row').remove()">✖</div>
+                <div style="color:#e74c3c; cursor:pointer; flex-shrink:0; padding:0 4px;" onclick="this.closest('.avs-var-row').remove()"><i class="fa-solid fa-xmark"></i></div>
             </div>
             <div class="var-obj-gui" style="display:none; margin-top:6px; padding:6px; background:rgba(0,0,0,0.2); border-radius:4px;">
                 <div class="avs-obj-children"></div>
@@ -1439,7 +1439,7 @@
                 <summary style="cursor:pointer; color:rgba(26,28,40,0.72); font-size:11px;">▸ 進階：直接編 JSON（老手用，平常不用碰）</summary>
                 <textarea class="avs-textarea var-default-obj" placeholder="{}" style="font-size:11px; min-height:80px; font-family:monospace; white-space:pre; line-height:1.4; margin-top:4px;"></textarea>
             </details>
-            <textarea class="avs-textarea var-desc" placeholder="📝 說明（AI 跑團看這個約束這個項目，例：好感度 0-100，互動正面 +1~5）" style="font-size:12px; min-height:40px; opacity:0.7;" onfocus="this.style.opacity=1; this.style.minHeight='60px';" onblur="this.style.opacity=0.7;"></textarea>
+            <textarea class="avs-textarea var-desc" placeholder="說明（AI 跑團看這個約束這個項目，例：好感度 0-100，互動正面 +1~5）" style="font-size:12px; min-height:40px; opacity:0.7;" onfocus="this.style.opacity=1; this.style.minHeight='60px';" onblur="this.style.opacity=0.7;"></textarea>
         `;
         const typeSel  = row.querySelector('.var-type');
         const defInput = row.querySelector('.var-default');
@@ -1777,7 +1777,7 @@
         if (!imgPrompt || imgPrompt.length < 40) return null;
         const info = _parseSticker(imgPrompt);
         if (!info) { console.warn('[AVS 貼紙] 版面讀不出來，這次不放貼紙'); return null; }
-        if (log) log.innerHTML = '🐚 正在畫 ' + (info.cols * info.rows) + ' 張貼紙…';
+        if (log) log.innerHTML = '正在畫 ' + (info.cols * info.rows) + ' 張貼紙…';
         let url = '';
         // 尺寸跟著版面走：每格固定 384px，格子才不會被拉扁（一張圖切幾格由 AI 決定）
         try { url = await _stkRender(imgPrompt, src, preset, info.cols * 384, info.rows * 384); }
@@ -2053,7 +2053,7 @@
         back.className = 'wsk-tuner';
         back.innerHTML =
             '<div class="wsk-tuner-win">' +
-              '<div class="wsk-tuner-bar"><strong>🐚 調整貼紙</strong>' +
+              '<div class="wsk-tuner-bar"><strong><i class="fa-solid fa-shapes"></i> 調整貼紙</strong>' +
                 '<span class="wsk-tuner-hint">拖曳搬位置，選中後用下面兩條調大小與角度</span>' +
                 '<button class="wsk-tuner-x">✕</button></div>' +
               '<div class="wsk-stage-wrap"><div class="wsk-stage"></div></div>' +
@@ -2343,7 +2343,7 @@
                 } catch (e) { console.warn('[AVS] 美術方向組字失敗', e); }
             }
             // 兩個都空才擋：有選美術方向就不必再打字
-            if (!stylePromptVal && !artText) { log.innerHTML = '⚠️ 請先選一個美術方向，或填寫風格要求'; return; }
+            if (!stylePromptVal && !artText) { log.innerHTML = '請先選一個美術方向，或填寫風格要求'; return; }
             // 按鈕在這裡就鎖：貼紙那段也要跑一趟文字模型加一次生圖，不鎖的話這段期間可以連按
             const btn = container.querySelector('#furnace-start-btn');
             btn.disabled = true;
@@ -2356,10 +2356,10 @@
             if (_stkSrc !== 'none') {
                 const _pi = parseInt(container.querySelector('#furnace-sticker-preset')?.value, 10);
                 _stkPreset = _stkPresets(_stkSrc)[_pi];
-                if (!_stkPreset) { log.innerHTML = '⚠️ 貼紙要先選一個預設包（或把上面的貼紙改成「不用」）'; btn.disabled = false; return; }
+                if (!_stkPreset) { log.innerHTML = '貼紙要先選一個預設包（或把上面的貼紙改成「不用」）'; btn.disabled = false; return; }
             }
 
-            log.innerHTML = '🔥 火力全開，煉製中…';
+            log.innerHTML = '火力全開，煉製中…';
 
             try {
                 const flatVars = pack.variables.filter(v => v.type !== 'object');
@@ -2577,11 +2577,11 @@
                 // 使用者手上沒有任何線索可以判斷是資料還沒進來、還是模板寫錯。
                 const _esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
                 log.innerHTML = _issues.length
-                    ? '⚠️ 煉好了，但這張面板有幾個地方接不到資料：\n' +
+                    ? '煉好了，但這張面板有幾個地方接不到資料：\n' +
                       _issues.slice(0, 6).map(s => '　• ' + _esc(s)).join('\n') +
                       (_issues.length > 6 ? '\n　…還有 ' + (_issues.length - 6) + ' 項' : '') +
-                      '\n→ 按「🔄 重新煉丹」再來一次通常就好。'
-                    : '🎉 煉丹完成！已嵌入到檔案卡片中。';
+                      '\n→ 按「重新煉丹」再來一次通常就好。'
+                    : '煉丹完成！已嵌入到檔案卡片中。';
 
                 // 刷新變數包列表（卡片底部 UI 面板區會自動顯示新煉的）
                 win.OS_DB.getAllUITemplates().then(tpls => {
@@ -2592,7 +2592,7 @@
                 if (!_issues.length) setTimeout(() => closeFurnaceModal(container), 1500);   // 有問題就留著視窗，別讓警告一閃而過
             } catch (e) {
                 console.error('[AVS Furnace]', e);
-                log.innerHTML = `❌ 炸鍋了：${e.message}`;
+                log.innerHTML = `炸鍋了：${e.message}`;
             } finally {
                 btn.disabled = false;
             }
@@ -2660,7 +2660,7 @@
                 </div>
                 <div style="display:flex; gap:10px;">
                     <div class="avs-btn avs-btn-primary btn-toggle" style="flex:1;">${tpl.isActive ? '取消啟用' : '設為啟用'}</div>
-                    <div class="avs-btn avs-btn-danger btn-del">✖</div>
+                    <div class="avs-btn avs-btn-danger btn-del"><i class="fa-solid fa-xmark"></i></div>
                 </div>
             `;
             

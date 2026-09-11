@@ -25,16 +25,16 @@
 
 
             <div class="bg-tabs-header">
-                <button class="bg-tab-btn active" data-tab="WORLD">🌍 小世界</button>
-                <button class="bg-tab-btn" data-tab="CLAN">📊 數據庫</button>
-                <button class="bg-tab-btn" data-tab="LOGS">📋 記錄</button>
-                <button class="bg-tab-btn" data-tab="SET" style="flex:0.6; border-left:1px solid #222;">⚙️ 操作</button>
+                <button class="bg-tab-btn active" data-tab="WORLD"><i class="fa-solid fa-globe"></i> 小世界</button>
+                <button class="bg-tab-btn" data-tab="CLAN"><i class="fa-solid fa-chart-simple"></i> 數據庫</button>
+                <button class="bg-tab-btn" data-tab="LOGS"><i class="fa-solid fa-clipboard"></i> 記錄</button>
+                <button class="bg-tab-btn" data-tab="SET" style="flex:0.6; border-left:1px solid #222;"><i class="fa-solid fa-gear"></i> 操作</button>
             </div>
             
             <div class="bg-sys-body">
                 <div class="bg-tab-content active" data-content="WORLD">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:10px;">
-                        <span style="font-size:14px; color:var(--gold-p); font-family:'Cinzel'; font-weight:bold;">🌍 SAVED WORLDS / 已保存的小世界</span>
+                        <span style="font-size:14px; color:var(--gold-p); font-family:'Cinzel'; font-weight:bold;"><i class="fa-solid fa-globe"></i> SAVED WORLDS / 已保存的小世界</span>
                         <div style="display:flex; gap:8px;">
                             <button onclick="document.getElementById('rpg-world-gen-modal').classList.add('active'); document.getElementById('world-gen-status').textContent='';" title="生成小世界" style="background:rgba(212,175,55,0.1); border:1px solid var(--gold-s); color:var(--gold-p); font-size:12px; cursor:pointer; padding:6px 12px; border-radius:4px; transition:0.2s;">＋ 生成小世界</button>
                             <button onclick="window.RPG_PANEL.renderWorldList()" title="重新載入" style="background:transparent; border:1px solid #444; color:#aaa; font-size:14px; cursor:pointer; padding:4px 10px; border-radius:4px; transition:0.2s;">↻</button>
@@ -77,11 +77,11 @@
                     <div style="font-size:14px; color:var(--gold-p); margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:6px; font-family:'Cinzel'; font-weight:bold;">STORY ACTIONS / 劇情操作</div>
                     
                     <div style="padding:12px 14px; background:rgba(212,175,55,0.06); border:1px solid rgba(212,175,55,0.2); border-radius:6px; font-size:12px; color:#b89b4a; line-height:1.6; margin-bottom:15px;">
-                        📝 大總結（生成 / 模板 / 合併）已移至<br><b style="color:var(--gold-p);">瀅瀅的故事日誌 → 🛠️ 故事管理</b>
+                        <i class="fa-solid fa-pen-to-square"></i> 大總結（生成 / 模板 / 合併）已移至<br><b style="color:var(--gold-p);">瀅瀅的故事日誌 → <i class="fa-solid fa-screwdriver-wrench"></i> 故事管理</b>
                     </div>
 
                     <button class="bg-btn-action" onclick="window.RPG_PANEL.openBlacklistModal()">
-                        🚫 黑名單管理
+                        <i class="fa-solid fa-ban"></i> 黑名單管理
                     </button>
 
                     <div style="margin-top:20px; font-size:14px; color:var(--gold-p); margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:6px; font-family:'Cinzel'; font-weight:bold;">SYSTEM / 系統設置</div>
@@ -95,7 +95,7 @@
 
             <div id="rpg-blacklist-modal" class="rpg-modal-overlay">
                 <div class="rpg-modal-card">
-                    <div class="rpg-modal-title">🚫 黑名單管理</div>
+                    <div class="rpg-modal-title"><i class="fa-solid fa-ban"></i> 黑名單管理</div>
                     <div style="display:flex; gap:8px; margin-bottom:15px;">
                         <input type="text" id="blacklist-input" class="rpg-range-input" style="margin:0;" placeholder="輸入要封鎖的角色名...">
                         <button class="bg-btn-action gold" style="width:50px; margin:0; font-size:20px;" onclick="window.RPG_PANEL.addBlacklistCharacter()" title="加入黑名單">+</button>
@@ -107,10 +107,10 @@
 
             <div id="world-template-modal" class="rpg-modal-overlay">
                 <div class="rpg-modal-card" style="max-width: 600px;">
-                    <div class="rpg-modal-title">📋 模板管理 (Templates)</div>
+                    <div class="rpg-modal-title"><i class="fa-solid fa-clipboard"></i> 模板管理 (Templates)</div>
                     <div id="template-list" style="flex:1; overflow-y:auto; margin-bottom:15px; display:flex; flex-direction:column; gap:10px; text-align:left; background:#0f0f0f; border:1px solid #222; padding:10px; border-radius:4px;"></div>
                     <div style="display:flex; gap:10px;">
-                        <button class="bg-btn-action gold" style="flex:1; margin:0;" onclick="window.WORLD_TEMPLATES.openEditor()">➕ 新增模板</button>
+                        <button class="bg-btn-action gold" style="flex:1; margin:0;" onclick="window.WORLD_TEMPLATES.openEditor()"><i class="fa-solid fa-plus"></i> 新增模板</button>
                         <button class="bg-btn-action" style="flex:1; margin:0;" onclick="document.getElementById('world-template-modal').classList.remove('active')">關閉</button>
                     </div>
                 </div>
@@ -118,7 +118,7 @@
 
             <div id="world-template-editor" class="rpg-modal-overlay">
                 <div class="rpg-modal-card" style="max-width: 700px;">
-                    <div class="rpg-modal-title" id="template-editor-title">✏️ 新增模板</div>
+                    <div class="rpg-modal-title" id="template-editor-title"><i class="fa-solid fa-pen"></i> 新增模板</div>
                     <div style="flex:1; overflow-y:auto; text-align:left;">
                         <label style="display:block; font-size:12px; color:#aaa; margin-bottom:5px;">模板名稱 *</label>
                         <input type="text" id="template-name-input" class="rpg-range-input" placeholder="例如：太空科幻、校園日常...">
@@ -126,7 +126,7 @@
                         <textarea id="template-content-input" class="rpg-range-input" style="min-height:300px; resize:vertical; font-family:monospace; font-size:12px; line-height:1.5;" placeholder="在這裡輸入模板格式..."></textarea>
                     </div>
                     <div style="display:flex; gap:10px; margin-top:15px;">
-                        <button class="bg-btn-action gold" style="flex:1; margin:0;" onclick="window.WORLD_TEMPLATES.saveTemplate()">💾 保存</button>
+                        <button class="bg-btn-action gold" style="flex:1; margin:0;" onclick="window.WORLD_TEMPLATES.saveTemplate()"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                         <button class="bg-btn-action" style="flex:1; margin:0;" onclick="document.getElementById('world-template-editor').classList.remove('active')">取消</button>
                     </div>
                 </div>
@@ -136,11 +136,11 @@
                 <div class="rpg-modal-card" style="width:100%; max-width:800px; height:100%; max-height:none; padding:0; border-radius:8px; overflow:hidden; display:flex; flex-direction:column;">
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid #333; background:#111; flex-shrink:0;">
                         <div style="display:flex; align-items:center; gap:10px;">
-                            <span style="color:var(--gold-p); font-size:16px; font-weight:bold; font-family:'Cinzel';">✏️ 編輯世界書條目</span>
+                            <span style="color:var(--gold-p); font-size:16px; font-weight:bold; font-family:'Cinzel';"><i class="fa-solid fa-pen"></i> 編輯世界書條目</span>
                             <span id="bg-db-edit-bookname" style="font-size:11px; color:#666; background:#222; padding:3px 8px; border-radius:4px;"></span>
                         </div>
                         <div style="display:flex; gap:10px;">
-                            <button id="bg-db-edit-save" class="bg-btn-action gold" style="margin:0; padding:8px 20px; width:auto;">💾 儲存</button>
+                            <button id="bg-db-edit-save" class="bg-btn-action gold" style="margin:0; padding:8px 20px; width:auto;"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
                             <button id="bg-db-edit-close" class="bg-btn-action" style="margin:0; padding:8px 15px; width:auto;">✕ 關閉</button>
                         </div>
                     </div>
@@ -166,15 +166,15 @@
 
             <div id="bg-db-addcat-modal" class="rpg-modal-overlay">
                 <div class="rpg-modal-card" style="max-width:400px; text-align:left;">
-                    <div class="rpg-modal-title" style="text-align:center;">➕ 新增數據庫分類</div>
+                    <div class="rpg-modal-title" style="text-align:center;"><i class="fa-solid fa-plus"></i> 新增數據庫分類</div>
                     
                     <label style="font-size:12px; color:#aaa; display:block; margin-bottom:6px;">選擇分類模式：</label>
                     <div class="rpg-opt-group" style="margin-bottom:15px; padding:10px;">
                         <label class="rpg-opt-label">
-                            <input type="radio" name="db_cat_match_type" value="comment_starts" checked><span>📝 依「備注名稱 (Comment)」開頭配對</span>
+                            <input type="radio" name="db_cat_match_type" value="comment_starts" checked><span><i class="fa-solid fa-pen-to-square"></i> 依「備注名稱 (Comment)」開頭配對</span>
                         </label>
                         <label class="rpg-opt-label" style="margin-top:8px;">
-                            <input type="radio" name="db_cat_match_type" value="key_includes"><span>🔑 依「觸發關鍵字 (Key)」包含配對</span>
+                            <input type="radio" name="db_cat_match_type" value="key_includes"><span><i class="fa-solid fa-key"></i> 依「觸發關鍵字 (Key)」包含配對</span>
                         </label>
                     </div>
 
@@ -183,7 +183,7 @@
                     
                     <div class="rpg-btn-group">
                         <button class="bg-btn-action" id="bg-db-addcat-cancel">取消</button>
-                        <button class="bg-btn-action gold" id="bg-db-addcat-confirm">✔ 確認新增</button>
+                        <button class="bg-btn-action gold" id="bg-db-addcat-confirm"><i class="fa-solid fa-check"></i> 確認新增</button>
                     </div>
                 </div>
             </div>
@@ -191,7 +191,7 @@
             <div id="bg-world-detail-modal" class="rpg-modal-overlay">
                 <div class="bg-wd-card">
                     <div class="bg-wd-header">
-                        <span id="bg-wd-title" class="bg-wd-title">🌍 小世界</span>
+                        <span id="bg-wd-title" class="bg-wd-title"><i class="fa-solid fa-globe"></i> 小世界</span>
                         <button id="bg-wd-close" class="bg-wd-close-btn" title="關閉">✕</button>
                     </div>
                     <div id="bg-wd-map" class="bg-wd-map-area">
@@ -203,7 +203,7 @@
 
             <div id="rpg-char-gen-modal" class="rpg-modal-overlay">
                 <div class="rpg-modal-card" style="max-width: 520px; text-align: left;">
-                    <div class="rpg-modal-title" style="text-align:center;">👥 角色卡生成器</div>
+                    <div class="rpg-modal-title" style="text-align:center;"><i class="fa-solid fa-users"></i> 角色卡生成器</div>
                     <div style="font-size:12px; color:#666; margin-bottom:12px; text-align:center;">基於選定的小世界，AI 生成 10 個群像角色卡</div>
                     <div style="margin-bottom:12px; background:rgba(212,175,55,0.05); border:1px solid #2a2a2a; border-radius:4px; padding:8px 12px;">
                         <span style="font-size:11px; color:#666;">世界：</span>
@@ -214,10 +214,10 @@
                         <label style="display:block; font-size:12px; color:#aaa; margin-bottom:6px;">備註 / 偏好（可選）</label>
                         <textarea id="char-gen-note" class="rpg-range-input" style="margin:0; padding:8px; min-height:60px; resize:vertical;" placeholder="例：需要反派、三位女性角色、有師徒關係..."></textarea>
                     </div>
-                    <button class="bg-btn-action gold" style="width:100%; font-size:14px; padding:12px;" onclick="window.RPG_PANEL.generateCharCards()">👥 生成 10 個角色卡</button>
+                    <button class="bg-btn-action gold" style="width:100%; font-size:14px; padding:12px;" onclick="window.RPG_PANEL.generateCharCards()"><i class="fa-solid fa-users"></i> 生成 10 個角色卡</button>
                     <div id="char-gen-status" style="font-size:12px; color:#888; margin-top:10px; min-height:20px; text-align:center;"></div>
                     <div style="display:flex; gap:8px; margin-top:10px;">
-                        <button class="bg-btn-action" style="flex:1; font-size:12px;" onclick="window.RPG_PANEL.openCharCardTemplateModal()">✏️ 編輯角色卡模板</button>
+                        <button class="bg-btn-action" style="flex:1; font-size:12px;" onclick="window.RPG_PANEL.openCharCardTemplateModal()"><i class="fa-solid fa-pen"></i> 編輯角色卡模板</button>
                         <button class="bg-btn-action" style="flex:1;" onclick="document.getElementById('rpg-char-gen-modal').classList.remove('active')">關閉</button>
                     </div>
                 </div>
@@ -225,27 +225,27 @@
 
             <div id="rpg-char-tpl-modal" class="rpg-modal-overlay" style="z-index: 1000002;">
                 <div class="rpg-modal-card" style="max-width: 640px;">
-                    <div class="rpg-modal-title">✏️ 角色卡生成模板</div>
+                    <div class="rpg-modal-title"><i class="fa-solid fa-pen"></i> 角色卡生成模板</div>
                     <div style="font-size:11px; color:#666; margin-bottom:8px;">編輯後點保存，下次生成角色卡時使用此模板。</div>
                     <textarea id="sp-char-tpl-area" style="width:100%; height:380px; background:#0d0d0d; border:1px solid #333; color:#ccc; font-size:11px; padding:8px; border-radius:3px; resize:vertical; box-sizing:border-box; font-family:'Microsoft YaHei',monospace;"></textarea>
                     <div class="rpg-btn-group" style="margin-top:12px;">
                         <button class="bg-btn-action" onclick="window.RPG_PANEL.resetCharCardTemplate()">↺ 還原預設</button>
                         <button class="bg-btn-action" onclick="document.getElementById('rpg-char-tpl-modal').classList.remove('active')">關閉</button>
-                        <button class="bg-btn-action gold" onclick="window.RPG_PANEL.saveCharCardTemplate()">💾 保存</button>
+                        <button class="bg-btn-action gold" onclick="window.RPG_PANEL.saveCharCardTemplate()"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                     </div>
                 </div>
             </div>
 
             <div id="rpg-world-gen-modal" class="rpg-modal-overlay">
                 <div class="rpg-modal-card" style="max-width: 500px; text-align: left;">
-                    <div class="rpg-modal-title" style="text-align:center;">🌍 WORLD GENERATOR / 小世界生成器</div>
+                    <div class="rpg-modal-title" style="text-align:center;"><i class="fa-solid fa-globe"></i> WORLD GENERATOR / 小世界生成器</div>
                     <div style="margin-bottom:12px;">
                         <label style="display:block; font-size:12px; color:#aaa; margin-bottom:6px;">選擇模板 (Template)</label>
                         <div style="display:flex; gap:8px;">
                             <select id="world-template-select" class="rpg-range-input" style="flex:1; margin:0; padding:8px; cursor:pointer;">
                                 <option value="default">預設通用模板</option>
                             </select>
-                            <button class="bg-btn-action" style="margin:0; width:auto; padding:8px 15px;" onclick="window.WORLD_TEMPLATES.openManager()" title="管理模板">⚙️</button>
+                            <button class="bg-btn-action" style="margin:0; width:auto; padding:8px 15px;" onclick="window.WORLD_TEMPLATES.openManager()" title="管理模板"><i class="fa-solid fa-gear"></i></button>
                         </div>
                     </div>
                     <div style="margin-bottom:12px;">
@@ -256,7 +256,7 @@
                         <label style="display:block; font-size:12px; color:#aaa; margin-bottom:6px;">備註（可選）</label>
                         <textarea id="world-user-note" class="rpg-range-input" style="margin:0; padding:8px; min-height:60px; resize:vertical;" placeholder="描述你的偏好、風格..."></textarea>
                     </div>
-                    <button class="bg-btn-action gold" style="width:100%; font-size:14px; padding:12px;" onclick="window.RPG_PANEL.generateWorldFromTab()">🚀 生成小世界</button>
+                    <button class="bg-btn-action gold" style="width:100%; font-size:14px; padding:12px;" onclick="window.RPG_PANEL.generateWorldFromTab()"><i class="fa-solid fa-rocket"></i> 生成小世界</button>
                     <div id="world-gen-status" style="font-size:12px; color:#888; margin-top:10px; min-height:20px; text-align:center;"></div>
                     
                     <button class="bg-btn-action" style="margin-top:15px;" onclick="document.getElementById('rpg-world-gen-modal').classList.remove('active')">關閉</button>
@@ -390,8 +390,8 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:4px; border-left:4px solid ${t.isDefault ? 'var(--gold-p)' : '#4a9eff'};">
                     <div><div style="font-size:14px; color:#ddd; font-weight:bold; font-family:'Cinzel';">${t.name}</div><div style="font-size:11px; color:#666; margin-top:2px;">${t.isDefault ? '內建模板' : '自定義模板'}</div></div>
                     <div style="display:flex; gap:8px;">
-                        <button class="bg-btn-action" style="margin:0; width:auto; padding:6px 12px; font-size:11px;" onclick="window.WORLD_TEMPLATES.openEditor('${t.id}')">✏️ 編輯</button>
-                        ${!t.isDefault ? `<button class="bg-btn-action" style="margin:0; width:auto; padding:6px 12px; font-size:11px; color:#ff6b6b;" onclick="window.WORLD_TEMPLATES.confirmDelete('${t.id}', '${t.name}')">🗑️</button>` : ''}
+                        <button class="bg-btn-action" style="margin:0; width:auto; padding:6px 12px; font-size:11px;" onclick="window.WORLD_TEMPLATES.openEditor('${t.id}')"><i class="fa-solid fa-pen"></i> 編輯</button>
+                        ${!t.isDefault ? `<button class="bg-btn-action" style="margin:0; width:auto; padding:6px 12px; font-size:11px; color:#ff6b6b;" onclick="window.WORLD_TEMPLATES.confirmDelete('${t.id}', '${t.name}')"><i class="fa-solid fa-trash-can"></i></button>` : ''}
                     </div>
                 </div>
             `).join('');
@@ -405,10 +405,10 @@
             const nameInput = document.getElementById('template-name-input');
             const contentInput = document.getElementById('template-content-input');
             if (templateId) {
-                title.textContent = '✏️ 編輯模板';
+                title.innerHTML = '<i class="fa-solid fa-pen"></i> 編輯模板';
                 getTemplate(templateId).then(t => { nameInput.value = t.name; contentInput.value = t.content; nameInput.disabled = t.isDefault; });
             } else {
-                title.textContent = '➕ 新增模板';
+                title.innerHTML = '<i class="fa-solid fa-pen"></i> 新增模板';
                 nameInput.value = ''; nameInput.disabled = false; contentInput.value = DEFAULT_TEMPLATE.content;
             }
             modal.classList.add('active');
@@ -426,7 +426,7 @@
         async function saveTemplateFromEditor() {
             const name = document.getElementById('template-name-input').value.trim();
             const content = document.getElementById('template-content-input').value.trim();
-            if (!name || !content) return AUI.alert('❌ 請填寫完整名稱與內容');
+            if (!name || !content) return AUI.alert('請填寫完整名稱與內容');
             let template;
             if (editingTemplateId) {
                 template = await getTemplate(editingTemplateId);
@@ -488,9 +488,9 @@
                 if (!list.length) return div.innerHTML = '<div style="color:#666; text-align:center; padding:20px;">暫無名單</div>';
                 div.innerHTML = list.map(e => {
                     const names = _blNamesOf(e.content);
-                    return `<div class="rpg-blacklist-item"><span>🚫 ${names.join(', ') || '未知'}</span><button onclick="window.RPG_PANEL.removeCharacterFromBlacklist('${e.id}')" title="刪除">🗑️</button></div>`;
+                    return `<div class="rpg-blacklist-item"><span><i class="fa-solid fa-ban"></i> ${names.join(', ') || '未知'}</span><button onclick="window.RPG_PANEL.removeCharacterFromBlacklist('${e.id}')" title="刪除"><i class="fa-solid fa-trash-can"></i></button></div>`;
                 }).join('');
-            } catch (e) { div.innerHTML = `<div style="color:#ff4444; padding:10px;">❌ 讀取失敗: ${e.message}</div>`; }
+            } catch (e) { div.innerHTML = `<div style="color:#ff4444; padding:10px;"><i class="fa-solid fa-circle-xmark"></i> 讀取失敗: ${e.message}</div>`; }
             return;
         }
         try {
@@ -508,10 +508,10 @@
             blEntries.forEach(e => {
                 let names = e.keys ? e.keys.filter(k => k && !k.includes('[')) : [];
                 if(names.length === 0 && e.content) names = e.content.split('\n').map(l=>l.trim()).filter(l=>l && !l.startsWith('[') && !l.includes('規則'));
-                html += `<div class="rpg-blacklist-item"><span>🚫 ${names.join(', ') || '未知'}</span><button onclick="window.RPG_PANEL.removeCharacterFromBlacklist('${e.uid}')" title="刪除">🗑️</button></div>`;
+                html += `<div class="rpg-blacklist-item"><span><i class="fa-solid fa-ban"></i> ${names.join(', ') || '未知'}</span><button onclick="window.RPG_PANEL.removeCharacterFromBlacklist('${e.uid}')" title="刪除"><i class="fa-solid fa-trash-can"></i></button></div>`;
             });
             div.innerHTML = html;
-        } catch(e) { div.innerHTML = `<div style="color:#ff4444; padding:10px;">❌ 讀取失敗: ${e.message}</div>`; }
+        } catch(e) { div.innerHTML = `<div style="color:#ff4444; padding:10px;"><i class="fa-solid fa-circle-xmark"></i> 讀取失敗: ${e.message}</div>`; }
     };
 
     API.addBlacklistCharacter = async function() {
@@ -614,7 +614,7 @@
             worldview = entries.filter(e => e.enabled && (e.constant || e.type === 'constant' || (e.keys||[]).includes('ALWAYS_ON'))).map(e => e.content).join('\n\n');
             if(!worldview) throw new Error("找不到常駐 (constant) 世界觀設定");
 
-            status.textContent = "🤖 生成小世界設定中..."; status.style.color = 'var(--gold-p)';
+            status.textContent = "生成小世界設定中..."; status.style.color = 'var(--gold-p)';
             const prompt = `你是【世界觀生成系統】。當用戶要求進入 ${scene} 時，AI生成詳細設定。\n保持一致性。${note ? '\n偏好：'+note : ''}\n\n【世界觀基礎】\n${worldview}\n\n請為「${scene}」生成設定，格式：\n${templateContent}`;
             
             const osApi = window.parent.OS_API;
@@ -623,7 +623,7 @@
             let generated = await new Promise((res, rej) => {
                 let text = "";
                 osApi.chat([{role:'system', content:'世界觀生成助手'}, {role:'user', content:prompt}], window.parent.OS_SETTINGS.getConfig(),
-                    (c) => { text = c; status.textContent = `🤖 生成中... (${text.length} 字)`; }, (f) => res(f), (e) => rej(e), {disableTyping:true});
+                    (c) => { text = c; status.textContent = `生成中... (${text.length} 字)`; }, (f) => res(f), (e) => rej(e), {disableTyping:true});
             });
 
             const smMatch = generated.match(/<small_world>([\s\S]*?)<\/small_world>/i);
@@ -631,7 +631,7 @@
             
             const mapMatch = generated.match(/<scene-map>([\s\S]*?)<\/scene-map>/i);
             if(mapMatch) {
-                status.textContent = "🗺️ 生成小地圖中...";
+                status.textContent = "生成小地圖中...";
                 try {
                     const bpMatch = mapMatch[1].match(/\[地標底板\|([^\]]+)\]/);
                     const prompt = `${bpMatch ? bpMatch[1] : scene}, RPG, top-down view, flat style, game minimap, high quality`;
@@ -641,15 +641,15 @@
                 } catch(e) { console.warn("地圖生成失敗", e); }
             }
 
-            status.textContent = "💾 保存至世界書...";
+            status.textContent = "保存至世界書...";
             const chatId = getChatIdentifier();
             const now = new Date().toISOString().replace(/[:.]/g,'-').slice(0,-5);
             const worldKey = `[WORLD_${chatId}_${now}]`;
             await helper.createLorebookEntries(bookName, [{ comment: `[小世界] - ${scene} - ${now}`, keys: [worldKey], content: contentToSave, enabled: true, position: 'at_depth_as_system', depth: 1, order: 997 }]);
             
-            status.textContent = `✅ 小世界「${scene}」生成完畢！`; status.style.color = '#52c41a';
+            status.textContent = `小世界「${scene}」生成完畢！`; status.style.color = '#52c41a';
             API.renderWorldList();
-        } catch(e) { status.textContent = "❌ 失敗: " + e.message; status.style.color = '#ff4444'; }
+        } catch(e) { status.textContent = "失敗: " + e.message; status.style.color = '#ff4444'; }
     };
 
     API.renderWorldList = async function() {
@@ -669,13 +669,13 @@
                 const hasMap = /\[MAP_IMAGE_URL\]:/.test(w.content);
                 return `
                     <div class="bg-world-card" onclick="window.RPG_PANEL.openWorldDetail(${w.uid})" style="cursor:pointer;">
-                        <div class="bg-world-card-icon">${hasMap ? '🗺️' : '🌍'}</div>
+                        <div class="bg-world-card-icon"><i class="fa-solid ${hasMap ? 'fa-map' : 'fa-earth-asia'}"></i></div>
                         <div class="bg-world-card-info">
                             <div class="bg-world-card-name">${escapeHtml(name)}</div>
                             <div class="bg-world-card-meta">${escapeHtml((w.comment||'').replace(/\[小世界\]\s*-\s*/,''))}</div>
                         </div>
-                        <button class="bg-world-card-chargen" onclick="event.stopPropagation(); window.RPG_PANEL.openCharGenModal(${w.uid}, '${name.replace(/'/g,"\\'")}')">👥</button>
-                        <button class="bg-world-card-del" onclick="event.stopPropagation(); window.RPG_PANEL.deleteWorld(${w.uid}, '${name}')">🗑</button>
+                        <button class="bg-world-card-chargen" onclick="event.stopPropagation(); window.RPG_PANEL.openCharGenModal(${w.uid}, '${name.replace(/'/g,"\\'")}')"><i class="fa-solid fa-users"></i></button>
+                        <button class="bg-world-card-del" onclick="event.stopPropagation(); window.RPG_PANEL.deleteWorld(${w.uid}, '${name}')"><i class="fa-solid fa-trash-can"></i></button>
                     </div>`;
             }).join('')}</div>`;
         } catch(e) {}
@@ -693,7 +693,7 @@
             const body = mapUrl ? entry.content.replace(/\n*\[MAP_IMAGE_URL\]:.+$/m, '').trim() : entry.content;
             const nameMatch = (entry.comment||'').match(/\[小世界\]\s*-\s*(.+?)\s*-/);
 
-            document.getElementById('bg-wd-title').textContent = `🌍 ${nameMatch ? nameMatch[1] : '小世界'}`;
+            document.getElementById('bg-wd-title').innerHTML = '<i class="fa-solid fa-earth-asia"></i> ' + escapeHtml(nameMatch ? nameMatch[1] : '小世界');
             const mapArea = document.getElementById('bg-wd-map');
             if(mapUrl) { mapArea.style.display = 'flex'; mapArea.querySelector('img').src = mapUrl; } else mapArea.style.display = 'none';
             document.getElementById('bg-wd-body').textContent = body;
@@ -776,7 +776,7 @@
             const worldEntry = entries.find(e => e.uid === uid);
             if (!worldEntry) throw new Error("找不到對應的小世界條目");
 
-            status.textContent = "🤖 生成角色卡中..."; status.style.color = 'var(--gold-p)';
+            status.textContent = "生成角色卡中..."; status.style.color = 'var(--gold-p)';
 
             const prompt = `你是【角色設計系統】，根據以下小世界設定，為這個世界生成 10 個豐富多樣的群像角色卡。
 要求：
@@ -800,12 +800,12 @@ ${getCharCardTemplate()}`;
                     [{role:'system', content:'你是專業的角色設計師，擅長為 RPG 世界創作有深度的群像角色。'},
                      {role:'user', content: prompt}],
                     window.parent.OS_SETTINGS.getConfig(),
-                    (c) => { text = c; status.textContent = `🤖 生成中... (${text.length} 字)`; },
+                    (c) => { text = c; status.textContent = `生成中... (${text.length} 字)`; },
                     (f) => res(f), (e) => rej(e), {disableTyping: true}
                 );
             });
 
-            status.textContent = "💾 保存至世界書...";
+            status.textContent = "保存至世界書...";
             const chatId = getChatIdentifier();
             const now = new Date().toISOString().replace(/[:.]/g,'-').slice(0,-5);
             const charKey = `[CHARS_${chatId}_${now}]`;
@@ -819,8 +819,8 @@ ${getCharCardTemplate()}`;
                 order: 996
             }]);
 
-            status.textContent = `✅ 完成！已生成並保存 (${generated.length} 字)`; status.style.color = '#52c41a';
-        } catch(e) { status.textContent = "❌ 失敗: " + e.message; status.style.color = '#ff4444'; }
+            status.textContent = `完成！已生成並保存 (${generated.length} 字)`; status.style.color = '#52c41a';
+        } catch(e) { status.textContent = "失敗: " + e.message; status.style.color = '#ff4444'; }
     };
 
 
@@ -875,9 +875,9 @@ ${getCharCardTemplate()}`;
                 if(matchedEntries.length === 0) return list.innerHTML = `<div style="text-align:center;padding:30px;color:#555;">無匹配「${cat.keyword}」的條目</div>`;
 
                 const TYPE_MAP = {
-                    constant:   { icon: '🔵', label: 'constant',   title: '恆定（藍燈）' },
-                    selective:  { icon: '🟢', label: 'selective',  title: '正常（綠燈）' },
-                    vectorized: { icon: '🔗', label: 'vectorized', title: '向量化' },
+                    constant:   { icon: '<i class="fa-solid fa-circle bg-db-dot-const"></i>', label: 'constant',   title: '恆定（藍燈）' },
+                    selective:  { icon: '<i class="fa-solid fa-circle bg-db-dot-sel"></i>', label: 'selective',  title: '正常（綠燈）' },
+                    vectorized: { icon: '<i class="fa-solid fa-link"></i>', label: 'vectorized', title: '向量化' },
                 };
                 const TYPE_CYCLE = ['constant', 'selective', 'vectorized'];
 
@@ -910,7 +910,7 @@ ${getCharCardTemplate()}`;
                         const nextInfo = TYPE_MAP[nextType];
 
                         // 樂觀更新 UI
-                        this.textContent = nextInfo.icon;
+                        this.innerHTML = nextInfo.icon;
                         this.title = nextInfo.title;
                         if (item) item.dataset.type = nextType;
 
@@ -919,7 +919,7 @@ ${getCharCardTemplate()}`;
                             await helper.setLorebookEntries(book, [{ uid, type: nextType }]);
                         } catch(e) {
                             console.error('[數據庫] type 更新失敗:', e);
-                            this.textContent = TYPE_MAP[curType].icon;
+                            this.innerHTML = TYPE_MAP[curType].icon;
                             this.title = TYPE_MAP[curType].title;
                             if (item) item.dataset.type = curType;
                         }
@@ -959,7 +959,7 @@ ${getCharCardTemplate()}`;
                 renderDbEntries(); 
                 document.getElementById('bg-db-addcat-modal').classList.remove('active');
             } else {
-                AUI.alert("❌ 請輸入分類字串！");
+                AUI.alert("請輸入分類字串！");
             }
         };
 
@@ -970,7 +970,7 @@ ${getCharCardTemplate()}`;
             const entry = (await editHelper.getLorebookEntries(editBook)).find(e => e.uid === uid);
             if(!entry) return;
             editUid = uid; editKeys = [...(entry.keys||[])];
-            document.getElementById('bg-db-edit-bookname').textContent = `📖 ${editBook}`;
+            document.getElementById('bg-db-edit-bookname').innerHTML = '<i class="fa-solid fa-book-open"></i> ' + escapeHtml(editBook);
             document.getElementById('bg-db-edit-comment').value = entry.comment || '';
             document.getElementById('bg-db-edit-content').value = entry.content || '';
             const keyWrap = document.getElementById('bg-db-edit-keys-wrap');
@@ -1004,8 +1004,8 @@ ${getCharCardTemplate()}`;
                 const entries = await helper.getLorebookEntries(helper.getCurrentCharPrimaryLorebook());
                 // 定義群組，加入自訂 match 函數來支援多前綴篩選
                 const grps = [
-                    { id:'child', label:'👶 寶寶 (CHILD) 養成記錄', match: (e) => e.comment && e.comment.startsWith('【角色-') },
-                    { id:'inv', label:'🕵️ 刑偵 (INV) 辦案記錄', match: (e) => e.comment && (e.comment.startsWith('調查進度：') || e.comment.startsWith('刑偵卷宗：') || e.comment.startsWith('刑偵探員檔案：')) },
+                    { id:'child', label:'寶寶 (CHILD) 養成記錄', match: (e) => e.comment && e.comment.startsWith('【角色-') },
+                    { id:'inv', label:'刑偵 (INV) 辦案記錄', match: (e) => e.comment && (e.comment.startsWith('調查進度：') || e.comment.startsWith('刑偵卷宗：') || e.comment.startsWith('刑偵探員檔案：')) },
                     { id:'profile', label:'[Character_Profiles] 角色檔案', p:'[Character_Profiles]' },
                     { id:'log', label:'[RPG_LOG] 摘要日誌', p:'[RPG_LOG]' },
                     { id:'sum', label:'[大总结] 長線記憶', p:'[大总结]' },
@@ -1028,7 +1028,7 @@ ${getCharCardTemplate()}`;
                                     <div class="bg-logs-entry">
                                         <input type="checkbox" class="bg-logs-checkbox" data-uid="${e.uid}" title="選取以刪除">
                                         <div class="bg-logs-entry-name" onclick="window._DB_EDIT(${e.uid})" title="點擊預覽或編輯">${escapeHtml(e.comment)}</div>
-                                        <button class="bg-logs-del-btn" onclick="AUI.confirm('刪除這個條目？').then(ok => { if (!ok) return; window.parent.TavernHelper.deleteLorebookEntries(window.parent.TavernHelper.getCurrentCharPrimaryLorebook(), [${e.uid}]); setTimeout(()=>document.getElementById('bg-logs-refresh').click(), 300); })">🗑</button>
+                                        <button class="bg-logs-del-btn" onclick="AUI.confirm('刪除這個條目？').then(ok => { if (!ok) return; window.parent.TavernHelper.deleteLorebookEntries(window.parent.TavernHelper.getCurrentCharPrimaryLorebook(), [${e.uid}]); setTimeout(()=>document.getElementById('bg-logs-refresh').click(), 300); })"><i class="fa-solid fa-trash-can"></i></button>
                                     </div>`).join('')}
                             </div>
                         </div>`;

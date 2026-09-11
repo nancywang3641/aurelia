@@ -350,7 +350,7 @@
         if (!currentWorld.zones) currentWorld.zones = {};
         if (!currentWorld.zones[DYNAMIC_ZONE_ID]) {
             currentWorld.zones[DYNAMIC_ZONE_ID] = {
-                name: '🌀 DRIFT',
+                name: 'DRIFT',
                 background: '',
                 bgPrompt: '',
                 isDynamic: true,
