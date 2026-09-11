@@ -1419,3 +1419,27 @@
   .lsh-pv-card { max-height:86%; }
   .lsh-pv .lsh-row { max-width:86%; }
 }
+
+
+/* 📱 PWA 的宿舍／房間視窗＝全屏（像手機 app）。
+   房間（claude-codex-room）的主視窗是 JS 算好尺寸寫在元素上的浮窗：桌機 480×700、手機螢幕寬減 20，
+   在 PWA 裡看起來就是一個小窗，還能拖來拖去。PWA 整個畫面本來就是奧瑞亞，沒有要跟別的東西並排，直接撐滿。
+   只在 PWA 生效（畫面裡有 #aurelia-standalone-root）；酒館那份照舊是浮窗。
+   寫在奧瑞亞這邊、不動房間 repo：房間是 CDN 鎖版本載入的，改它要走一整套重新鎖版本的發布。
+   尺寸是 inline style → 要 !important；手機殼裡那份（.cw-embedded）本來就填滿容器，不碰。
+   狀態列是不透明的（index.html 的 meta），畫面從它下面開始算；底部讓開 iPhone 的橫條。 */
+html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedded) {
+    left:0 !important; top:0 !important; right:0 !important; bottom:0 !important;
+    width:auto !important; height:auto !important;
+    border-radius:0; box-shadow:none;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+}
+/* 全屏了就不必拖 */
+html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedded) .cw-titlebar { cursor:default; }
+/* 桌機的 PWA：標題列照樣滿寬，底下的宿舍與對話限寬置中，不然一行字會拉到一千多 px */
+@media (min-width:1100px) {
+    html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedded) > .cw-dorm,
+    html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedded) > .cw-body {
+        width:100%; max-width:980px; margin-left:auto; margin-right:auto;
+    }
+}
