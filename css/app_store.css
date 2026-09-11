@@ -107,6 +107,11 @@
 .ws-mine-row-clean { cursor: pointer; }
 .ws-mine-row-clean:active { background: #faf3e6; }
 .ws-mine-go { margin-left: auto; color: #b68a45; font-size: 15px; line-height: 1; flex-shrink: 0; }
+/* 我的應用：分區小標（不在桌面上／已安裝）與「放回桌面」鈕 */
+.ws-mine-sec { margin: 6px 4px 0; font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #a08a72; }
+.ws-mine-sec:first-child { margin-top: 0; }
+.ws-mine-back { margin-left: auto; flex-shrink: 0; padding: 7px 12px; border: 1px solid rgba(122,36,50,0.3); border-radius: 999px; background: transparent; color: #7a2432; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.ws-mine-back:active { background: rgba(122,36,50,0.08); }
 /* 第二層 app 操作頁：分組乾淨列 + toggle */
 .ws-act-group { background: #fffdf7; border: 1px solid rgba(110,80,40,0.12); border-radius: 14px; box-shadow: 0 2px 8px rgba(83,49,20,0.05); overflow: hidden; margin-bottom: 12px; }
 .ws-act-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; font-size: 15px; color: #3a2a1a; cursor: pointer; border-top: 1px solid rgba(110,80,40,0.10); }

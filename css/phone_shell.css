@@ -139,6 +139,37 @@
 [data-ic="settings"] > i { color: #e0508f; }
 [data-ic="album"] > i { color: #f29d0b; }
 .aps-icon-em > i.fa-cube { color: #7b8194; }
+.aps-icon-em > i.fa-puzzle-piece { color: #8a6fd8; }
+
+/* ── 長按編輯主畫面：圖標搖晃、左上角「−」、右上角「完成」、拖著換位置 ── */
+.aps-icon { position: relative; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.aps-icon-del {
+    position: absolute; top: 0; left: calc(50% - 37px); z-index: 3;
+    width: 21px; height: 21px; border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+    font-size: 10px; color: #fff; background: rgba(58, 60, 72, 0.86);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.aps-home.aps-editing .aps-icon-del { display: flex; }
+.aps-home.aps-editing .aps-icon { touch-action: none; }   /* 編輯中從圖標起手＝拖，不捲動 */
+.aps-home.aps-editing .aps-icon-em { animation: apsJiggle 0.26s ease-in-out infinite alternate; }
+.aps-home.aps-editing .aps-icon:nth-child(2n) .aps-icon-em { animation-duration: 0.3s; animation-delay: -0.13s; }
+.aps-home.aps-editing .aps-icon:nth-child(3n) .aps-icon-em { animation-duration: 0.28s; animation-delay: -0.07s; }
+.aps-home.aps-editing .aps-icon:active .aps-icon-em { transform: none; }
+@keyframes apsJiggle { from { transform: rotate(-2.2deg); } to { transform: rotate(2.2deg); } }
+.aps-edit-done {
+    position: absolute; top: 14px; right: 16px; z-index: 5;
+    display: none; padding: 6px 16px; border: 0; border-radius: 999px;
+    font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 1px;
+    color: #1a1c28; background: rgba(255, 255, 255, 0.88); cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.aps-home.aps-editing .aps-edit-done { display: block; }
+.aps-icon.aps-drag-src { visibility: hidden; }            /* 拖走的那格留一個空位 */
+.aps-drag-ghost { position: absolute; z-index: 20; pointer-events: none; margin: 0; }
+.aps-drag-ghost .aps-icon-em { animation: none !important; transform: scale(1.12); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
+.aps-drag-ghost .aps-icon-del { display: none !important; }
 /* iOS 毛玻璃小膠囊：半透明微暗玻璃 + backdrop blur 把桌布糊掉，白字清楚又有玻璃質感 */
 /* 🚨 名字一律單行、放不下就尾端省略 —— 跟 iOS 一樣。
    格子是 grid，而 grid 的列高由那一列最高的格子決定：只要有一個 app 的名字折成兩行，

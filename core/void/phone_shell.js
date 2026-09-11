@@ -317,36 +317,55 @@
         }
         tools.forEach(function (t) { if (!APPS.find(function (a) { return a.id === t.id; })) APPS.push(t); });
     }
-    // 底部 dock 固定 4 個：設置 / 樣式 / 相簿 / 電話（不重複進 grid）
-    const DOCK_IDS = ['sysset', 'settings', 'album', 'phone'];
+    // ── 主畫面排列：她自己排的順序、放進 dock 的、從桌面拿掉的，都記在這裡 ──
+    //   { grid:[id…], dock:[id…], hidden:[id…] }；沒記過的 app（新裝的）排在最後面。
+    //   「從桌面移除」只是不擺出來，不是刪除：拿掉的都在應用商城「我的應用」最上面，可以放回來。
+    const LAYOUT_KEY = 'aurelia_phone_layout';
+    const DOCK_IDS = ['sysset', 'settings', 'album', 'phone'];   // 第一次開的 dock
+    const DOCK_MAX = 4;
+    // 不能從桌面拿掉的：應用商城是「放回桌面」的地方，設置是退路——拿掉這兩個就回不來了
+    const PINNED = ['appstore', 'sysset'];
+    function _loadLayout() {
+        let l = null;
+        try { l = JSON.parse(win.localStorage.getItem(LAYOUT_KEY)); } catch (e) {}
+        l = l || {};
+        return {
+            grid: Array.isArray(l.grid) ? l.grid : [],
+            dock: Array.isArray(l.dock) ? l.dock : DOCK_IDS.slice(),
+            hidden: Array.isArray(l.hidden) ? l.hidden.filter(function (id) { return PINNED.indexOf(id) < 0; }) : []
+        };
+    }
+    function _saveLayout(l) { try { win.localStorage.setItem(LAYOUT_KEY, JSON.stringify(l)); } catch (e) {} }
+    function _has(id) { return APPS.some(function (a) { return a.id === id; }); }
+    function _dockApps(L) {
+        L = L || _loadLayout();
+        return L.dock.filter(function (id) { return _has(id) && L.hidden.indexOf(id) < 0; }).slice(0, DOCK_MAX)
+            .map(function (id) { return APPS.find(function (a) { return a.id === id; }); });
+    }
+    function _gridApps(L) {
+        L = L || _loadLayout();
+        const inDock = _dockApps(L).map(function (a) { return a.id; });
+        const pos = function (a) { const i = L.grid.indexOf(a.id); return i < 0 ? 1e6 + APPS.indexOf(a) : i; };
+        return APPS.filter(function (a) { return inDock.indexOf(a.id) < 0 && L.hidden.indexOf(a.id) < 0; })
+            .sort(function (a, b) { return pos(a) - pos(b); });
+    }
+    function _iconBtn(a) {
+        return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
+             + (PINNED.indexOf(a.id) < 0 ? '<span class="aps-icon-del" data-del="' + a.id + '" title="從桌面移除"><i class="fa-solid fa-minus"></i></span>' : '')
+             + '<span class="aps-icon-em" data-app-em="' + a.id + '" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
+             + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
+    }
     function _renderDock() {
         if (!_el) return;
         const dockEl = _el.querySelector('.aps-dock');
-        if (!dockEl) return;
-        dockEl.innerHTML = DOCK_IDS.map(function (id) {
-            const a = APPS.find(function (x) { return x.id === id; });
-            if (!a) return '';
-            return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
-                 + '<span class="aps-icon-em" data-app-em="' + a.id + '" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
-                 + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
-        }).join('');
-        dockEl.querySelectorAll('.aps-icon').forEach(function (b) {
-            b.addEventListener('click', function () { _openApp(b.dataset.app); });
-        });
+        if (dockEl) dockEl.innerHTML = _dockApps().map(_iconBtn).join('');
     }
-    // 重畫主畫面圖標格（APPS 變動後呼叫）
+    // 重畫主畫面圖標格（APPS 或排列變動後呼叫）；點擊／長按走 _bindHome 的事件委派，這裡不綁
     function _renderGrid() {
         if (!_el) return;
         const gridEl = _el.querySelector('.aps-grid');
         if (!gridEl) return;
-        gridEl.innerHTML = APPS.filter(function (a) { return DOCK_IDS.indexOf(a.id) < 0; }).map(function (a) {
-            return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
-                 + '<span class="aps-icon-em" data-app-em="' + a.id + '" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
-                 + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
-        }).join('');
-        gridEl.querySelectorAll('.aps-icon').forEach(function (b) {
-            b.addEventListener('click', function () { _openApp(b.dataset.app); });
-        });
+        gridEl.innerHTML = _gridApps().map(_iconBtn).join('');
         _renderDock();
         _applyIcons();
     }
@@ -361,7 +380,176 @@
         const i = APPS.findIndex(function (a) { return a.id === id; });
         if (i >= 0) APPS.splice(i, 1);
         try { _saveInstalled(_loadInstalled().filter(function (m) { return m && m.id !== id; })); } catch (e) {}
+        const L = _loadLayout();   // 卸載了就連排列裡的位置一起清掉
+        ['grid', 'dock', 'hidden'].forEach(function (k) { L[k] = L[k].filter(function (x) { return x !== id; }); });
+        _saveLayout(L);
         _renderGrid();
+    }
+    // 對外：應用商城「不在桌面上」那一區用
+    function hiddenApps() {
+        const L = _loadLayout();
+        return APPS.filter(function (a) { return L.hidden.indexOf(a.id) >= 0; })
+            .map(function (a) { return { id: a.id, name: a.name, icon: a.icon || '', emoji: a.emoji || '' }; });
+    }
+    function unhide(id) {
+        const L = _loadLayout();
+        L.hidden = L.hidden.filter(function (x) { return x !== id; });
+        L.grid = L.grid.filter(function (x) { return x !== id; }).concat([id]);   // 放回來排在最後面
+        _saveLayout(L);
+        _renderGrid();
+    }
+    async function _hideApp(id) {
+        const a = APPS.find(function (x) { return x.id === id; });
+        if (!a || PINNED.indexOf(id) >= 0) return;
+        const ok = await AUI.confirm('把「' + a.name + '」從桌面移除？\n不會刪掉，想要時到應用商城「我的應用」放回桌面。', { okText: '移除', danger: false });
+        if (!ok) return;
+        const L = _loadLayout();
+        if (L.hidden.indexOf(id) < 0) L.hidden.push(id);
+        L.dock = L.dock.filter(function (x) { return x !== id; });
+        _saveLayout(L);
+        _renderGrid();
+    }
+
+    // ── 長按進入編輯：圖標搖晃、可以拖著換位置、左上角「−」從桌面移除 ──
+    //   跟 iOS 一樣：長按一下進去，點「完成」或點空白處出來。拖到 dock 上：dock 滿了就跟那格互換。
+    const LONG_PRESS_MS = 450;
+    let _editing = false, _press = null, _drag = null, _eatUntil = 0;
+    // 長按／拖完放開那一下，瀏覽器可能會補一個 click（也可能不會）→ 只吃掉緊接著的那一下，不能一直掛著
+    function _eatNextClick() { _eatUntil = Date.now() + 400; }
+    function _setEditing(on) {
+        _editing = !!on;
+        const home = _el && _el.querySelector('#aps-home');
+        if (home) home.classList.toggle('aps-editing', _editing);
+    }
+    function _saveFromDom() {
+        const L = _loadLayout();
+        const ids = function (sel) { return [..._el.querySelectorAll(sel + ' > .aps-icon')].map(function (b) { return b.dataset.app; }); };
+        const grid = ids('.aps-grid'), dock = ids('.aps-dock');
+        // 格子裡的排在前面，其他（沒擺出來的）照舊保留在後面
+        L.grid = grid.concat(L.grid.filter(function (x) { return grid.indexOf(x) < 0 && dock.indexOf(x) < 0; }));
+        L.dock = dock;
+        _saveLayout(L);
+    }
+    // 位置換了的格子滑過去，不要瞬移
+    function _flip(mutate) {
+        const els = [..._el.querySelectorAll('.aps-grid > .aps-icon, .aps-dock > .aps-icon')];
+        const before = new Map(els.map(function (e) { return [e, e.getBoundingClientRect()]; }));
+        mutate();
+        els.forEach(function (e) {
+            const a = before.get(e), b = e.getBoundingClientRect();
+            const dx = a.left - b.left, dy = a.top - b.top;
+            if (!dx && !dy) return;
+            e.style.transition = 'none';
+            e.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+            void e.offsetWidth;
+            e.style.transition = 'transform .22s ease';
+            e.style.transform = '';
+        });
+    }
+    function _homeScale(home) { const r = home.getBoundingClientRect(); return { r: r, k: r.width / (home.offsetWidth || 1) }; }
+    function _startDrag(btn, ev) {
+        const home = _el.querySelector('#aps-home');
+        const hs = _homeScale(home);
+        const br = btn.getBoundingClientRect();
+        const ghost = btn.cloneNode(true);
+        ghost.classList.add('aps-drag-ghost');
+        ghost.style.width = (br.width / hs.k) + 'px';
+        home.appendChild(ghost);
+        _drag = { btn: btn, ghost: ghost, dx: (ev.clientX - br.left) / hs.k, dy: (ev.clientY - br.top) / hs.k, last: null };
+        btn.classList.add('aps-drag-src');
+        _moveGhost(ev);
+    }
+    function _moveGhost(ev) {
+        const home = _el.querySelector('#aps-home');
+        const hs = _homeScale(home);
+        _drag.ghost.style.left = ((ev.clientX - hs.r.left) / hs.k - _drag.dx) + 'px';
+        _drag.ghost.style.top = ((ev.clientY - hs.r.top) / hs.k - _drag.dy) + 'px';
+    }
+    function _dragOver(ev) {
+        const src = _drag.btn;
+        const grid = _el.querySelector('.aps-grid'), dock = _el.querySelector('.aps-dock');
+        // 拖到格子上下緣就捲一下
+        const gr = grid.getBoundingClientRect();
+        if (ev.clientY < gr.top + 24) grid.scrollTop -= 8; else if (ev.clientY > gr.bottom - 24 && ev.clientY < gr.bottom + 4) grid.scrollTop += 8;
+        const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+        if (!hit) return;
+        const t = hit.closest('.aps-icon');
+        const inDock = !!hit.closest('.aps-dock'), inGrid = !!hit.closest('.aps-grid');
+        const key = t ? t.dataset.app : (inDock ? '#dock' : (inGrid ? '#grid' : ''));
+        if (!key || key === _drag.last || t === src) return;
+        _drag.last = key;
+        const dockCount = dock.querySelectorAll(':scope > .aps-icon:not(.aps-drag-src)').length;
+        const srcInDock = src.parentElement === dock;
+        _flip(function () {
+            if (t && t.parentElement === dock && !srcInDock && dockCount >= DOCK_MAX) {
+                // dock 滿了：跟那一格互換（拖的那個佔它的位置，它回到拖的那個原本的位置）
+                const srcNext = src.nextSibling;
+                dock.insertBefore(src, t);
+                grid.insertBefore(t, srcNext);
+                return;
+            }
+            if (t) {
+                const r = t.getBoundingClientRect();
+                const same = t.parentElement === src.parentElement;
+                const sibs = [...t.parentElement.children];
+                const after = same ? sibs.indexOf(src) < sibs.indexOf(t) : ev.clientX > r.left + r.width / 2;
+                t.parentElement.insertBefore(src, after ? t.nextSibling : t);
+            } else if (inDock && !srcInDock && dockCount < DOCK_MAX) {
+                dock.appendChild(src);
+            } else if (inGrid && srcInDock) {
+                grid.appendChild(src);
+            }
+        });
+    }
+    function _endDrag() {
+        if (!_drag) return;
+        _drag.ghost.remove();
+        _drag.btn.classList.remove('aps-drag-src');
+        _drag = null;
+        _saveFromDom();
+    }
+    function _bindHome(home) {
+        home.addEventListener('contextmenu', function (e) { if (e.target.closest('.aps-icon')) e.preventDefault(); });
+        home.addEventListener('pointerdown', function (e) {
+            const btn = e.target.closest('.aps-icon');
+            if (!btn || e.target.closest('.aps-icon-del') || (e.button != null && e.button > 0)) return;
+            _press = { btn: btn, x: e.clientX, y: e.clientY, id: e.pointerId, timer: 0 };
+            if (!_editing) {
+                _press.timer = setTimeout(function () {
+                    if (!_press) return;
+                    _setEditing(true);
+                    _eatUntil = Date.now() + 1e9;   // 手指還按著：放開那一下不要開 app（放開時再改成只吃 400ms）
+                    try { navigator.vibrate && navigator.vibrate(12); } catch (err) {}
+                }, LONG_PRESS_MS);
+            }
+        });
+        home.addEventListener('pointermove', function (e) {
+            if (!_press || e.pointerId !== _press.id) return;
+            const moved = Math.hypot(e.clientX - _press.x, e.clientY - _press.y);
+            if (_drag) { e.preventDefault(); _moveGhost(e); _dragOver(e); return; }
+            if (!_editing) { if (moved > 8) { clearTimeout(_press.timer); _press = null; } return; }
+            if (moved > 6) {
+                try { home.setPointerCapture(e.pointerId); } catch (err) {}
+                _startDrag(_press.btn, e);
+            }
+        });
+        const up = function (e) {
+            if (_press && e.pointerId === _press.id) { clearTimeout(_press.timer); _press = null; }
+            const dragged = !!_drag;
+            if (_drag) _endDrag();
+            if (dragged || _eatUntil > Date.now()) _eatNextClick();   // 拖完／長按完放開：只吃接下來 400ms 內那一下 click
+        };
+        home.addEventListener('pointerup', up);
+        home.addEventListener('pointercancel', up);
+        home.addEventListener('click', function (e) {
+            const del = e.target.closest('.aps-icon-del');
+            if (del && _editing) { e.stopPropagation(); _hideApp(del.dataset.del); return; }
+            if (e.target.closest('.aps-edit-done')) { _setEditing(false); return; }
+            const btn = e.target.closest('.aps-icon');
+            if (Date.now() < _eatUntil) { _eatUntil = 0; return; }
+            if (_editing) { if (!btn) _setEditing(false); return; }   // 編輯中點空白處＝完成
+            if (btn) _openApp(btn.dataset.app);
+        });
     }
 
     function _build() {
@@ -382,7 +570,9 @@
           +         '<div class="aps-lock-date" id="aps-lock-date"></div>'
           +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情：<span class="aps-mood-em" id="aps-mood-em" data-mood="0"><i class="fa-solid fa-sun"></i></span></button>'
           +       '</div>'
-          +       '<div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div></div>'
+          +       '<div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div>'
+          +       '<button class="aps-edit-done" type="button">完成</button>'
+          +     '</div>'
           +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'
           +   '</div>'
           +   '<div class="aps-homebar"><button class="aps-home-btn" id="aps-home-btn" type="button" title="回主畫面"></button></div>'
@@ -393,6 +583,7 @@
         ov.addEventListener('click', function (e) { if (e.target === ov) close(); });   // 點背景關閉
         ov.querySelector('#aps-close').addEventListener('click', close);
         ov.querySelector('#aps-home-btn').addEventListener('click', _home);
+        _bindHome(ov.querySelector('#aps-home'));
         _el = ov;
         _addWritingTools();        // 寫作工具（系統設置/變數工坊/創作室＋standalone:世界書/提示詞）
         _restoreInstalledApps();   // 從 localStorage 補回已安裝 app
@@ -408,6 +599,7 @@
     // 回手機主畫面（清空目前 app）
     function _home() {
         if (!_el) return;
+        _setEditing(false);
         _runLeave();
         _restoreGoHome();
         const body = _el.querySelector('#aps-app-body');
@@ -450,6 +642,7 @@
     }
     function close() {
         if (!_el) return;
+        _setEditing(false);
         _runLeave();
         _restoreGoHome();
         const body = _el.querySelector('#aps-app-body');
@@ -459,6 +652,6 @@
     }
     function toggle() { if (_el && _el.style.display !== 'none') close(); else open(); }
 
-    win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home };
+    win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide };
     console.log('✅ VoidPhoneShell（大廳手機殼浮窗）模組就緒');
 })();

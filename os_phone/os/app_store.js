@@ -304,12 +304,42 @@
         try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; appsOk = true; } catch (e) { appsOk = false; }
         const opened = _loadOpened();
         list.innerHTML = '';
+        _appendHidden(c, list);   // 從桌面拿掉的（長按圖標按「−」）排最上面，可以放回去
         if (!apps.length) {
-            list.innerHTML = '<div class="ws-empty">還沒安裝任何應用。<br>去工坊生成、或從匯入貼一個吧。</div>';
+            list.insertAdjacentHTML('beforeend', '<div class="ws-empty">還沒安裝任何應用。<br>去工坊生成、或從匯入貼一個吧。</div>');   // 用 append：上面可能已經放了「不在桌面上」那一區
         } else {
             apps.forEach(function (a) { list.appendChild(_mineRow(c, a, opened)); });
         }
         _appendMaintenance(c, list, apps, appsOk);   // 殘留資料清理入口（有孤兒才顯示）；即使一個 app 都沒裝也能清
+    }
+
+    // ── 不在桌面上的：主畫面長按圖標按「−」拿掉的（內建的也算），一條一條，按「放回桌面」就回去 ──
+    //   沒有拿掉任何東西就整區不出現。
+    function _appendHidden(c, list) {
+        const PS = win.VoidPhoneShell;
+        const hidden = (PS && PS.hiddenApps) ? PS.hiddenApps() : [];
+        if (!hidden.length) return;
+        const hd = document.createElement('div');
+        hd.className = 'ws-mine-sec';
+        hd.textContent = '不在桌面上';
+        list.appendChild(hd);
+        hidden.forEach(function (a) {
+            const row = document.createElement('div');
+            row.className = 'ws-mine-row';
+            row.innerHTML = '<span class="ws-mine-ic" data-ic="' + _esc(a.id) + '">' + _appIcHTML(a) + '</span>'
+                + '<span class="ws-mine-info"><span class="ws-mine-name">' + _esc(a.name || 'App') + '</span></span>'
+                + '<button class="ws-mine-back" type="button"><i class="fa-solid fa-arrow-rotate-left"></i> 放回桌面</button>';
+            row.querySelector('.ws-mine-back').addEventListener('click', function () {
+                PS.unhide(a.id);
+                _toast(c, '「' + (a.name || 'App') + '」放回桌面了');
+                renderMine(c);
+            });
+            list.appendChild(row);
+        });
+        const hd2 = document.createElement('div');
+        hd2.className = 'ws-mine-sec';
+        hd2.textContent = '已安裝';
+        list.appendChild(hd2);
     }
 
     // ── 殘留資料清理入口：掃到「已卸載卻留著資料」的孤兒就在底部顯示一條，點了確認後全清 ──
