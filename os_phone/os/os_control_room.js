@@ -18,10 +18,10 @@
         launchApp(container) {
             container.innerHTML = `
                 <div class="set-container cr-root">
-                    <div class="set-header">
-                        <div class="set-back-btn" id="cr-nav-home">‹</div>
-                        <div class="set-title">控制室</div>
-                        <div class="set-back-btn" id="cr-help-open" title="怎麼設定？看說明書"><i class="fa-solid fa-circle-question"></i></div>
+                    <div class="set-header sysh">
+                        <div class="set-back-btn sysh-back" id="cr-nav-home">‹</div>
+                        <div class="set-title sysh-title">控制室</div>
+                        <div class="set-back-btn sysh-act" id="cr-help-open" title="怎麼設定？看說明書"><i class="fa-solid fa-circle-question"></i></div>
                     </div>
 
                     <div class="set-content">
@@ -73,9 +73,9 @@
                     </div>
 
                     <div class="cr-help hidden" id="cr-help">
-                        <div class="set-header">
-                            <div class="set-back-btn" id="cr-help-close">‹</div>
-                            <div class="set-title">設定說明書</div>
+                        <div class="set-header sysh">
+                            <div class="set-back-btn sysh-back" id="cr-help-close">‹</div>
+                            <div class="set-title sysh-title">設定說明書</div>
                             <div style="width:32px"></div>
                         </div>
                         <div class="set-content cr-help-body">

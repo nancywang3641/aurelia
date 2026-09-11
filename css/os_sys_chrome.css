@@ -1,29 +1,36 @@
 /* ═══════════════════════════════════════════════════════════════════
-   系統性面板的統一外殼（基準＝系統設置 .set-header / .set-tabs）
+   系統性面板的統一外殼（2026-09-11 改成三格骨架）
 
-   微信、微薄、QB 那種「應用」可以有自己的皮；
-   系統性面板（系統設置、狀態檔案、提示詞、世界書、電話、手機設置）
-   一律長同一個樣，不然一路點下去每一頁的頭都不一樣，很割裂：
+   微信、微博、QB 那種「應用」可以有自己的皮；
+   系統性面板（系統設置／相簿、控制室、狀態檔案、提示詞、世界書、電話、手機設置、日曆）
+   一律長同一個樣，不然一路點下去每一頁的頭都不一樣，很割裂。
 
-     ‹ 返回(32×32 圓形)  ／  置中標題 18px‧800‧字距2  ／  右側動作(32×32)
-     底下若有分頁列 → 一律 3px 主色底線＋淡陰影
+   🚨 只套「明確掛了 .sysh」的標頭（opt-in）。以前是一長串各面板的 class 一起蓋，
+      其中 .wb-header 同時是世界書與微博的名字 → 微博也被套上系統外殼，兩邊互相打架。
+      新的系統面板：標頭掛 .sysh、返回 .sysh-back、標題 .sysh-title、右側動作 .sysh-act。
 
-   這支排在載入清單最後，蓋掉各面板自己那套舊的頭。
-   新的系統面板只要把 header 掛上 .sysh、標題 .sysh-title、返回 .sysh-back
-   就自動長成一樣，不必再抄一次數值。
+   骨架：左槽／置中標題／右槽，左右等寬（--sysh-side）。標題在中間那一欄，永遠真的置中；
+   以前是 space-between＋右邊不等寬，右側一多（電話的「取消 全選 清除」）標題就被擠偏，
+   沒有動作的面板還得靠 ::after 或空 div 假佔位。現在右槽空著也照樣佔位。
+   權重寫成 .sysh.sysh：日曆的樣式是執行時才注入、各面板舊的頭也還在，同權重時誰後載誰贏，
+   兩個 class 才壓得住它們，不必一條條 !important。
    ═══════════════════════════════════════════════════════════════════ */
 
 /* ── 標頭列 ── */
-.sysh,
-.set-header, .avs-header, .pm-header, .wb-header, .dlr-head, .aps-set-top {
-    display: flex;
+.sysh.sysh {
+    --sysh-side: 76px;          /* 右槽要放得下兩顆 36px 動作鈕（提示詞的匯出／匯入） */
+    display: grid;
+    grid-template-columns: var(--sysh-side) minmax(0, 1fr) var(--sysh-side);
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    /* 不寫 width:100%：手機設置那條是靠負邊距撐回滿版的，寫死 100% 會讓它右邊少一截 */
+    column-gap: 8px;
+    justify-content: stretch;
+    position: relative;
     box-sizing: border-box;
-    padding: 15px 20px;
-    padding-top: calc(15px + env(safe-area-inset-top, 0px));
+    /* 不寫 width:100%：手機設置那條是靠負邊距撐回滿版的，寫死 100% 會讓它右邊少一截 */
+    height: auto;
+    min-height: calc(56px + env(safe-area-inset-top, 0px));
+    padding: 6px 10px;   /* 44px 觸控區＋上下 6＋底線 1 ≈ 57，接近 56 那個基準 */
+    padding-top: calc(6px + env(safe-area-inset-top, 0px));
     background: rgba(228, 232, 245, 0.88);
     border-bottom: 1px solid rgba(26, 28, 40, 0.15);
     flex-shrink: 0;
@@ -33,47 +40,49 @@
     font-weight: 400;
     letter-spacing: normal;
 }
-body.layout-pad-ios .sysh,
-body.layout-pad-ios .set-header,
-body.layout-pad-ios .avs-header,
-body.layout-pad-ios .pm-header,
-body.layout-pad-ios .wb-header,
-body.layout-pad-ios .dlr-head,
-body.layout-pad-ios .aps-set-top { padding-top: 55px; }
+/* 手動「iOS 動態島」版位：讓出固定高度 */
+body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
+/* 手機殼裡：狀態列由殼讓（.aps-app 已經 top:30px），不再加裝置安全區，否則上方多一塊白 */
+.aps-app-body .sysh.sysh { padding-top: 6px; min-height: 56px; }
+
+/* 三格定位：第一個子元素進左槽、第二個進中間、其餘進右槽。
+   各面板舊樣式把按鈕寫成 position:absolute（日曆）或帶 margin（提示詞），在骨架裡一律歸零。 */
+.sysh.sysh > * { position: static; margin: 0; }
+.sysh.sysh > :nth-child(1) { grid-column: 1; justify-self: start; }
+.sysh.sysh > :nth-child(2) { grid-column: 2; justify-self: stretch; }
+.sysh.sysh > :nth-child(n+3) { grid-column: 3; justify-self: end; }
 
 /* 手機設置的標頭包在有內距的頁面裡 → 負邊距吃回去，才跟其他面板一樣是滿版一條 */
-.aps-set-top { margin: -18px -16px 12px; }
+.aps-set-top.sysh { margin: -18px -16px 12px; }
 
 /* ── 標題（置中、單行、過長省略）── */
-.sysh-title,
-.set-title, .avs-title, .pm-title, .wb-title, .dlr-head-title, .aps-set-h {
-    flex: 1 1 auto;
+.sysh.sysh > .sysh-title {
     min-width: 0;
     text-align: center;
     font-size: 18px;
-    font-weight: 800;
-    letter-spacing: 2px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    line-height: 1.25;
     color: #1A1C28;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 /* 狀態檔案的標題本來是 flex（標題旁掛圖標）→ 保住排版、只把它推到中間 */
-.avs-title { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.sysh.sysh > .avs-title { display: flex; align-items: center; justify-content: center; gap: 8px; }
 
-/* ── 返回鈕 ── */
-.sysh-back,
-.set-back-btn, .avs-back-btn, .pm-back-btn, .wb-back-btn, .dlr-back, .aps-set-back {
-    flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
+/* ── 返回鈕：一律同一個 FA 箭頭、44×44 觸控區 ──
+   以前有的寫字元「‹」、有的放 FA 圖示；「‹」還會被手機殼的自訂字型換掉，字形、粗細、基線都對不齊。
+   原本的字元或圖示藏起來，改由 ::before 畫同一顆箭頭。 */
+.sysh.sysh > .sysh-back {
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
-    font-size: 24px;
+    font-size: 0;
     line-height: 1;
-    font-weight: 400;
     color: rgba(26, 28, 40, 0.72);
     background: none;
     border: none;
@@ -81,19 +90,20 @@ body.layout-pad-ios .aps-set-top { padding-top: 55px; }
     cursor: pointer;
     transition: background .2s, color .2s;
 }
-.sysh-back:hover,
-.set-back-btn:hover, .avs-back-btn:hover, .pm-back-btn:hover,
-.wb-back-btn:hover, .dlr-back:hover, .aps-set-back:hover {
-    background: rgba(26, 28, 40, 0.08);
-    color: #1A1C28;
+.sysh.sysh > .sysh-back > * { display: none; }
+.sysh.sysh > .sysh-back::before {
+    content: "\f053";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    font-size: 18px;
+    line-height: 1;
 }
+.sysh.sysh > .sysh-back:hover { background: rgba(26, 28, 40, 0.08); color: #1A1C28; }
 
-/* ── 右側動作鈕（沒有動作的面板補一格佔位，標題才會真的在正中間）── */
-.sysh-act,
-.wb-settings-btn, .pm-header-action {
-    flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
+/* ── 右側動作鈕 ── */
+.sysh.sysh .sysh-act {
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -107,13 +117,9 @@ body.layout-pad-ios .aps-set-top { padding-top: 55px; }
     cursor: pointer;
     transition: background .2s, color .2s;
 }
-.sysh-act:hover,
-.wb-settings-btn:hover, .pm-header-action:hover {
-    background: rgba(26, 28, 40, 0.08);
-    color: #1A1C28;
-}
-.pm-header-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
-.dlr-head::after, .aps-set-top::after { content: ''; flex: 0 0 32px; }
+.sysh.sysh .sysh-act:hover { background: rgba(26, 28, 40, 0.08); color: #1A1C28; }
+/* 右槽放兩顆以上（提示詞的匯出／匯入）：包在一個容器裡並排 */
+.sysh.sysh .sysh-acts { display: flex; align-items: center; gap: 4px; }
 
 /* ── 分頁列 ── */
 .sysh-tabs,

@@ -6,10 +6,11 @@
     window.WB_THEME = {
         css: `
             /* === 全局容器 === */
+            /* 🚨 標頭那幾條限定在 .wb-shell：世界書的標頭也叫 .wb-header，不限定會被這裡的置中＋45px 蓋掉 */
             .wb-shell { width: 100%; height: 100%; background: #f5f5f5; display: flex; flex-direction: column; font-family: sans-serif; overflow: hidden; position: relative; }
-            .wb-header { background: #fff; height: calc(45px + env(safe-area-inset-top, 0px)); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #e6e6e6; flex-shrink: 0; position: relative; z-index: 10; padding-top: env(safe-area-inset-top, 0px); }
-            .wb-header-title { font-weight: bold; font-size: 17px; color: #1a1a1a; }
-            .wb-header-btn { position: absolute; left: 15px; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 100%; color: #333; }
+            .wb-shell .wb-header { background: #fff; height: calc(45px + env(safe-area-inset-top, 0px)); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #e6e6e6; flex-shrink: 0; position: relative; z-index: 10; padding-top: env(safe-area-inset-top, 0px); }
+            .wb-shell .wb-header-title { font-weight: bold; font-size: 17px; color: #1a1a1a; }
+            .wb-shell .wb-header-btn { position: absolute; left: 15px; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 100%; color: #333; }
             .wb-content { flex: 1; overflow-y: auto; padding: 0; -webkit-overflow-scrolling: touch; }
             
             /* === Loading 狀態條 (新增) === */
@@ -118,8 +119,8 @@
             @keyframes wbToastOut { to { opacity:0; } }
 
             /* === 標頭右鈕（刷新世界）、圖標 === */
-            .wb-header-btn--right { left: auto; right: 15px; font-size: 18px; }
-            .wb-header-btn i { font-size: 18px; }
+            .wb-shell .wb-header-btn--right { left: auto; right: 15px; font-size: 18px; }
+            .wb-shell .wb-header-btn i { font-size: 18px; }
             .wb-spinning i { animation: wbSpin 1s linear infinite; }
             .wb-fab i { font-size: 20px; }
             .wb-act-btn i { font-size: 14px; margin-right: 4px; }

@@ -134,7 +134,7 @@
 .aps-app-body::-webkit-scrollbar, .aps-app-body *::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }
 /* 手機殼內：app 自己的 header 已在手機殼狀態列下方，不該再加 device 安全區(env safe-area-inset-top)，
    否則 header 上方會留一大塊白。歸零(高優先級蓋過 wx/wb theme 與 aurelia_core 的 env padding)。 */
-.aps-app-body .wx-header, .aps-app-body .wb-header { padding-top: 0 !important; height: 45px !important; }
+.aps-app-body .wx-header, .aps-app-body .wb-shell .wb-header { padding-top: 0 !important; height: 45px !important; }   /* 只限微博：世界書也叫 .wb-header，它的頭歸 .sysh 管 */
 .aps-app-body .ps-header { padding-top: 0 !important; height: 56px !important; }
 .aps-mount { position: relative; width: 100%; height: 100%; }
 .aps-fail { padding: 30px; text-align: center; color: #999; font-size: 13px; }
@@ -221,9 +221,12 @@
 /* 通話紀錄（歷史對話）列表 + 多選清除 */
 .dlr-sel-actions { display: flex; align-items: center; }
 .dlr-sel-toggle { background: transparent; border: none; color: #2a6ad0; font-size: 14px; font-weight: 500; cursor: pointer; padding: 4px 2px; }
-.dlr-sel-bar { display: none; align-items: center; gap: 14px; }
+.dlr-sel-cancel { display: none; }
 .dlr-wrap.selmode .dlr-sel-toggle { display: none; }
-.dlr-wrap.selmode .dlr-sel-bar { display: flex; }
+.dlr-wrap.selmode .dlr-sel-cancel { display: inline-block; }
+/* 選取中的第二列：全選／清除（標頭右邊只留「取消」，標題才不會被擠偏） */
+.dlr-sel-tools { display: none; align-items: center; justify-content: space-between; padding: 8px 18px; flex-shrink: 0; background: rgba(228,232,245,0.6); border-bottom: 1px solid rgba(26,28,40,0.1); }
+.dlr-wrap.selmode .dlr-sel-tools { display: flex; }
 .dlr-sel-btn { background: transparent; border: none; font-size: 14px; cursor: pointer; padding: 4px 2px; color: #1a1c28; }
 .dlr-sel-btn.danger { color: #ff3b30; font-weight: 600; }
 .dlr-sel-btn:disabled { opacity: 0.4; cursor: default; }

@@ -990,9 +990,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // HTML 結構
         container.innerHTML = `
             <div class="set-container">
-                <div class="set-header">
-                    <div class="set-back-btn" id="nav-home">‹</div>
-                    <div class="set-title">系統設置</div>
+                <div class="set-header sysh">
+                    <div class="set-back-btn sysh-back" id="nav-home">‹</div>
+                    <div class="set-title sysh-title">系統設置</div>
                     <div style="width:32px"></div>
                 </div>
                 

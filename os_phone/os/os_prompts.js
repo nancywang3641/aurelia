@@ -1291,12 +1291,12 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     function launchApp(container) {
         container.innerHTML = `
             <div class="pm-wrap">
-                <div class="pm-header">
-                    <span class="pm-back-btn" id="pm-nav-home">‹</span>
-                    <span class="pm-title">提示詞管理</span>
-                    <div class="pm-header-actions">
-                        <span class="pm-header-action" id="pm-export" title="匯出提示詞包"><i class="fa-solid fa-file-export"></i></span>
-                        <span class="pm-header-action" id="pm-import" title="匯入提示詞/ST預設包"><i class="fa-solid fa-file-import"></i></span>
+                <div class="pm-header sysh">
+                    <span class="pm-back-btn sysh-back" id="pm-nav-home">‹</span>
+                    <span class="pm-title sysh-title">提示詞管理</span>
+                    <div class="pm-header-actions sysh-acts">
+                        <span class="pm-header-action sysh-act" id="pm-export" title="匯出提示詞包"><i class="fa-solid fa-file-export"></i></span>
+                        <span class="pm-header-action sysh-act" id="pm-import" title="匯入提示詞/ST預設包"><i class="fa-solid fa-file-import"></i></span>
                         <input type="file" id="pm-import-file" accept=".json" style="display:none">
                     </div>
                 </div>

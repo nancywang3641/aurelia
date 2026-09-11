@@ -23,10 +23,10 @@
         _appContainer = container;
         container.innerHTML = `
             <div class="avs-container">
-                <div class="avs-header">
-                    <div class="avs-back-btn" id="avs-nav-home">‹</div>
-                    <div class="avs-title">狀態檔案</div>
-                    <div class="avs-back-btn" id="avs-btn-help" style="font-size:16px;font-weight:bold;">?</div>
+                <div class="avs-header sysh">
+                    <div class="avs-back-btn sysh-back" id="avs-nav-home">‹</div>
+                    <div class="avs-title sysh-title">狀態檔案</div>
+                    <div class="avs-back-btn sysh-act" id="avs-btn-help" style="font-size:16px;font-weight:bold;">?</div>
                 </div>
                 <!-- 使用說明遮罩 -->
                 <div id="avs-help-overlay" style="display:none;position:absolute;inset:0;background:rgba(238,240,246,0.98);z-index:200;overflow-y:auto;padding:20px 18px 80px;box-sizing:border-box;">

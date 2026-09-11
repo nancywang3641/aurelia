@@ -195,7 +195,7 @@
         }).join('');
         c.innerHTML =
             '<div class="aps-set">'
-          +   '<div class="aps-set-top"><button class="aps-set-back" id="aps-set-back" type="button" title="返回">‹</button><span class="aps-set-h">手機設置</span></div>'
+          +   '<div class="aps-set-top sysh"><button class="aps-set-back sysh-back" id="aps-set-back" type="button" title="返回">‹</button><span class="aps-set-h sysh-title">手機設置</span></div>'
           +   '<div class="aps-set-sec">背景</div><div class="aps-set-swgrid">' + sw(WALLPAPERS, 'wallpaper') + '</div>'
           +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(_urlOf(t.wallpaper)) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
           +   '<div class="aps-set-sec">APP 圖標（一個圖庫資料夾、自動對名）</div>'

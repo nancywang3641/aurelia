@@ -132,10 +132,10 @@
     function buildHTML() {
         return `
         <div class="wb-app" id="wb-root">
-          <div class="wb-header">
-            <button onclick="goHome()" title="返回大廳" class="wb-back-btn wb-header-btn-hover">‹</button>
-            <span class="wb-title">世界書工坊</span>
-            <button id="wb-settings-btn" title="系統管理" class="wb-settings-btn wb-header-btn-hover"><i class="fa-solid fa-gear"></i></button>
+          <div class="wb-header sysh">
+            <button onclick="goHome()" title="返回大廳" class="wb-back-btn sysh-back wb-header-btn-hover">‹</button>
+            <span class="wb-title sysh-title">世界書工坊</span>
+            <button id="wb-settings-btn" title="系統管理" class="wb-settings-btn sysh-act wb-header-btn-hover"><i class="fa-solid fa-gear"></i></button>
           </div>
 
           <div class="wb-tool-bar">

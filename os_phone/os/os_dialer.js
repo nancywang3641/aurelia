@@ -98,7 +98,7 @@
     // 返回手機主畫面（手機殼開 app 時把 PhoneSystem.goHome 暫接成「回主畫面」）
     function _goHome() { try { const PS = _w('PhoneSystem'); if (PS && typeof PS.goHome === 'function') PS.goHome(); } catch (e) {} }
     function _bindHome() { const b = _root && _root.querySelector('#dlr-home'); if (b) b.addEventListener('click', _goHome); }
-    function _headHTML(title) { return '<button class="dlr-back" id="dlr-home" type="button" title="返回主畫面">‹</button><span class="dlr-head-title">' + _esc(title) + '</span>'; }
+    function _headHTML(title) { return '<button class="dlr-back sysh-back" id="dlr-home" type="button" title="返回主畫面">‹</button><span class="dlr-head-title sysh-title">' + _esc(title) + '</span>'; }
 
     // 底部分頁列（iOS 風：通話紀錄 / 通訊錄 / 鍵盤）
     function _tabbar(active) {
@@ -135,7 +135,7 @@
         }).join('');
         _root.innerHTML =
             '<div class="dlr-wrap">'
-          +   '<div class="dlr-head">' + _headHTML('電話') + '</div>'
+          +   '<div class="dlr-head sysh">' + _headHTML('電話') + '</div>'
           +   '<div class="dlr-list">' + (rows || '<div class="dlr-empty">通訊錄是空的<br>到微信加聯絡人、或跟人通過電話後這裡就有了</div>') + '</div>'
           +   _tabbar('list')
           + '</div>';
@@ -153,7 +153,7 @@
         const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
         _root.innerHTML =
             '<div class="dlr-wrap dlr-pad">'
-          +   '<div class="dlr-head">' + _headHTML('鍵盤') + '</div>'
+          +   '<div class="dlr-head sysh">' + _headHTML('鍵盤') + '</div>'
           +   '<div class="dlr-pad-inner">'
           +     '<div class="dlr-num-disp" id="dlr-num-disp">' + _esc(typed || '') + '</div>'
           +     '<div class="dlr-keys">'
@@ -732,15 +732,17 @@
         _hsel = { on: false, ids: new Set() };
         _root.innerHTML =
             '<div class="dlr-wrap">'
-          +   '<div class="dlr-head">' + _headHTML('通話紀錄')
+          +   '<div class="dlr-head sysh">' + _headHTML('通話紀錄')
+          // 右上只放一顆：平常「選取」、選取中「取消」。全選／清除放到下面一條工具列——
+          // 🚨 以前三顆全擠在標頭右邊，右側一變寬，標題就被推離中間
           +     '<div class="dlr-sel-actions">'
           +       '<button class="dlr-sel-toggle" id="dlr-sel-toggle" type="button">選取</button>'
-          +       '<div class="dlr-sel-bar">'
-          +         '<button class="dlr-sel-btn" id="dlr-sel-cancel" type="button">取消</button>'
-          +         '<button class="dlr-sel-btn" id="dlr-sel-all" type="button">全選</button>'
-          +         '<button class="dlr-sel-btn danger" id="dlr-sel-clear" type="button">清除</button>'
-          +       '</div>'
+          +       '<button class="dlr-sel-btn dlr-sel-cancel" id="dlr-sel-cancel" type="button">取消</button>'
           +     '</div>'
+          +   '</div>'
+          +   '<div class="dlr-sel-tools">'
+          +     '<button class="dlr-sel-btn" id="dlr-sel-all" type="button">全選</button>'
+          +     '<button class="dlr-sel-btn danger" id="dlr-sel-clear" type="button">清除</button>'
           +   '</div>'
           +   '<div class="dlr-list" id="dlr-hist-list"><div class="dlr-empty">載入中…</div></div>'
           +   _tabbar('hist')

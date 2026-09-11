@@ -293,10 +293,7 @@ body { --safe-top: 0px; }   /* studio-header / vn-ws-header 走 var(--safe-top, 
 .void-login-overlay { padding-top: 0; }
 
 /* 各子面板 header — 酒館不加安全區(ST 已處理) */
-.set-header  { padding-top: 15px !important; }
-.wb-header   { padding-top: 12px !important; height: 44px !important; }
-.pm-header   { padding-top: 12px !important; height: 48px !important; }
-.avs-header  { padding-top: 15px !important; }
+.wb-shell .wb-header   { padding-top: 12px !important; height: 44px !important; }
 .ps-header   { height: 56px !important; padding-top: 0 !important; }
 .wb-form-header { padding-top: 12px !important; }
 .pm-bmodal-hd { padding-top: 0 !important; height: 48px !important; }
@@ -308,10 +305,7 @@ body.layout-pad-ios .void-panel-overlay { top: 130px !important; }
 body.layout-pad-ios #achievement-panel-overlay { top: 15% !important; }
 body.layout-pad-ios #store-panel-overlay { top: 12% !important; }
 body.layout-pad-ios .void-login-overlay { padding-top: 44px !important; }
-body.layout-pad-ios .set-header  { padding-top: 62px !important; }
-body.layout-pad-ios .wb-header   { padding-top: 50px !important; height: 94px !important; }
-body.layout-pad-ios .pm-header   { padding-top: 50px !important; height: 92px !important; }
-body.layout-pad-ios .avs-header  { padding-top: 62px !important; }
+body.layout-pad-ios .wb-shell .wb-header   { padding-top: 50px !important; height: 94px !important; }
 body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !important; }
 
 /* 登入介面外框 */
