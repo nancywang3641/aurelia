@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 416;                        // ← 每次部署 +1
+const CACHE_VERSION = 417;                        // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -56,6 +56,7 @@ const SHELL_ASSETS = [
     './os_phone/os/os_db.js',
     './os_phone/os/os_api_engine.js',
     './os_phone/os/os_relay.js',
+    './os_phone/os/os_heartbeat.js',
     './os_phone/os/os_avs_engine.js',
     './os_phone/os/os_avs_rules.js',
     './os_phone/os/os_avs.js',

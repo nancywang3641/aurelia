@@ -1776,6 +1776,7 @@
 
     win.wxApp = {
         photoContextText: photoContextText,   // 聊天歷史（os_api_engine）與回傳酒館（os_app_memory_inject）把照片編號換成文字
+        applyIncoming: _applyRelayReply,      // 💓 心跳：角色主動開口那一則也走同一條（她人在那間就冒出來，不在就標未讀）
         // 🗑 刪好友記號：通訊錄刪人時記下（markRemoved），她重新加人時撤掉（clearRemoved）
         markRemoved: function (idOrChat, name) {
             const c = (idOrChat && typeof idOrChat === 'object') ? idOrChat : (GLOBAL_CHATS[idOrChat] || (name ? { name: name, realName: name } : null));

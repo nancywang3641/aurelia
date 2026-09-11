@@ -134,6 +134,22 @@
             }
     }
 
+    // 💓 心跳「多久來一次」滑桿：分鐘數不是線性的（十分鐘到一天），所以做成一排檔位
+    const HB_STEPS = [10, 20, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
+    function _hbMinsIdx(mins) {
+        const m = parseInt(mins, 10);
+        if (!isFinite(m)) return HB_STEPS.indexOf(180);
+        let best = 0;
+        for (let i = 1; i < HB_STEPS.length; i++) if (Math.abs(HB_STEPS[i] - m) < Math.abs(HB_STEPS[best] - m)) best = i;
+        return best;
+    }
+    function _hbMinsText(mins) {
+        const m = parseInt(mins, 10) || 180;
+        if (m < 60) return m + ' 分鐘';
+        if (m % 60 === 0) return (m / 60) + ' 小時';
+        return Math.floor(m / 60) + ' 小時 ' + (m % 60) + ' 分';
+    }
+
     // --- 主邏輯 ---
     win.WX_CHAT_SETTINGS = {
         open: function(chatId) {
@@ -432,6 +448,26 @@
                     </label>
                 </div>
                 <div class="ws-note">開了之後你傳網址，對方會先讀過那個網頁再回你。要登入才看得到的網站讀不到。</div>
+
+                ${!isGroup ? `
+                <div class="ws-group">
+                    <label class="ws-cell ws-cell-switch">
+                        <div class="ws-label">他會主動找我</div>
+                        <input type="checkbox" class="ws-switch" id="chk-hb-on" ${chat.hbOn ? 'checked' : ''}>
+                    </label>
+                    <div class="ws-cell ws-cell-slider">
+                        <div class="ws-label">多久來一次</div>
+                        <div class="ws-slider-val" id="hb-mins-val"></div>
+                    </div>
+                    <input type="range" class="ws-range" id="hb-mins" min="0" max="12" step="1" value="${_hbMinsIdx(chat.hbMins)}">
+                    <div class="ws-cell ws-cell-slider">
+                        <div class="ws-label">來的機率</div>
+                        <div class="ws-slider-val" id="hb-chance-val"></div>
+                    </div>
+                    <input type="range" class="ws-range" id="hb-chance" min="10" max="100" step="10" value="${(chat.hbChance == null ? 60 : chat.hbChance)}">
+                </div>
+                <div class="ws-note">時間到而且你們也有一陣子沒講話，才會擲一次機率決定他要不要開口。手機關著時由伺服器代跑（要先開「回覆交給伺服器跑」）。</div>
+                ` : ''}
 
                 <div class="ws-section-header">聊天記憶</div>
                 <div class="ws-group">
@@ -1030,6 +1066,26 @@
                     panel.classList.remove('show');
                 }
             };
+            // 💓 他會主動找我：一間一組（開關＋多久一次＋機率），動一下就存。引擎在 os_heartbeat.js
+            {
+                const _on = doc.getElementById('chk-hb-on');
+                const _mins = doc.getElementById('hb-mins'), _minsV = doc.getElementById('hb-mins-val');
+                const _ch = doc.getElementById('hb-chance'), _chV = doc.getElementById('hb-chance-val');
+                const _saveHb = () => {
+                    if (app.saveChats) app.saveChats();
+                    if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
+                };
+                const _paint = () => {
+                    if (_minsV && _mins) _minsV.textContent = _hbMinsText(HB_STEPS[parseInt(_mins.value, 10)] || 180);
+                    if (_chV && _ch) _chV.textContent = _ch.value + '%';
+                };
+                if (_on) _on.onchange = () => { if (_on.checked) chat.hbOn = true; else delete chat.hbOn; _saveHb(); };
+                if (_mins) _mins.oninput = () => { _paint(); };
+                if (_mins) _mins.onchange = () => { chat.hbMins = HB_STEPS[parseInt(_mins.value, 10)] || 180; _saveHb(); };
+                if (_ch) _ch.oninput = () => { _paint(); };
+                if (_ch) _ch.onchange = () => { chat.hbChance = parseInt(_ch.value, 10); _saveHb(); };
+                _paint();
+            }
             // 🔗 打開我傳的連結：一間一個開關，切了就存（不用再按保存）。實際讀網頁在 wx_core 的 _prepareLinks
             {
                 const _rl = doc.getElementById('chk-read-links');
