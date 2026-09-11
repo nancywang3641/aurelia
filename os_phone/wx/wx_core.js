@@ -137,6 +137,74 @@
         ]).join('\n');
     }
 
+    // 🔗 打開她傳的連結（聊天設置「打開我傳的連結」，一間一個開關，存在 chat.readLinks）。
+    //    模型自己打不開網址，只看到一串字，還常照網址裡的字編一段假裝看過——所以送出前程式先替它讀。
+    //    讀網頁走 Jina Reader：網址前面接 r.jina.ai/，回整頁純文字，而且允許網頁直接呼叫，
+    //    PWA（沒有伺服器）跟酒館版都能用同一條。讀過的結果存在那則訊息的 linkReads 上，
+    //    同一個網址不會每輪重抓；最近幾個讀過的每輪都帶，聊到後面也還記得內容。
+    const LINK_READER = 'https://r.jina.ai/';
+    const LINK_RE = /https?:\/\/[^\s<>"'\]\[（）【】「」『』，。！？、]+/gi;
+    const LINK_TEXT_MAX = 2500;   // 每個網頁給模型的字數
+    const LINK_KEEP = 3;          // 帶最近幾個網址
+    const LINK_TIMEOUT = 15000;
+
+    function _linksIn(text) { return Array.from(new Set(String(text || '').match(LINK_RE) || [])); }
+
+    async function _readOneLink(url) {
+        const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timer = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} }, LINK_TIMEOUT);
+        try {
+            const res = await fetch(LINK_READER + url, ctl ? { signal: ctl.signal } : {});
+            if (!res.ok) return { url: url, ok: false };
+            const raw = await res.text();
+            // 回來的樣子：Title: …／URL Source: …／Markdown Content: 底下才是正文
+            const title = ((raw.match(/^Title:\s*(.+)$/m) || [])[1] || '').trim();
+            let body = raw.split(/^Markdown Content:\s*$/m)[1];
+            if (body == null) body = raw;
+            body = body.replace(/!\[[^\]]*\]\([^)]*\)/g, '')          // 圖片
+                       .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')        // 連結只留字
+                       .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+            if (!body) return { url: url, ok: false };
+            if (body.length > LINK_TEXT_MAX) body = body.slice(0, LINK_TEXT_MAX) + '…';
+            return { url: url, ok: true, title: title, text: body };
+        } catch (e) {
+            return { url: url, ok: false };
+        } finally { clearTimeout(timer); }
+    }
+
+    // 送出前：她這間傳過、還沒讀過的網址（只挑最近的幾個）讀起來，掛回訊息上
+    async function _prepareLinks(chat) {
+        if (!chat || !chat.readLinks) return;
+        const jobs = [];
+        (chat.messages || []).forEach(function (m) {
+            if (!m || !m.isMe || (m.type && m.type !== 'msg') || !m.content) return;
+            const done = (m.linkReads || []).map(function (r) { return r.url; });
+            _linksIn(m.content).forEach(function (u) { if (done.indexOf(u) < 0) jobs.push({ m: m, url: u }); });
+        });
+        const todo = jobs.slice(-LINK_KEEP);
+        if (!todo.length) return;
+        const results = await Promise.all(todo.map(function (j) { return _readOneLink(j.url); }));
+        todo.forEach(function (j, i) { (j.m.linkReads = j.m.linkReads || []).push(Object.assign({ at: Date.now() }, results[i])); });
+        console.log('[WX] 讀了 ' + todo.length + ' 個連結，成功 ' + results.filter(function (r) { return r.ok; }).length + ' 個');
+    }
+
+    // 給模型看的那段：最近讀過的網址＋內容；打不開的也講明，免得它假裝看過
+    function _linkBrief(chat, userName) {
+        if (!chat || !chat.readLinks) return '';
+        const reads = [];
+        (chat.messages || []).forEach(function (m) {
+            if (m && m.isMe && Array.isArray(m.linkReads)) m.linkReads.forEach(function (r) { reads.push(r); });
+        });
+        const recent = reads.slice(-LINK_KEEP);
+        if (!recent.length) return '';
+        const who = userName || '對方';
+        const parts = recent.map(function (r) {
+            if (!r.ok) return '〔' + r.url + '〕\n這個網頁打不開（可能要登入或被擋），你看不到內容，別假裝看過。';
+            return '〔' + r.url + '〕' + (r.title ? '\n標題：' + r.title : '') + '\n' + r.text;
+        });
+        return ['【' + who + '在這個聊天室傳過的連結｜程式已經替你打開，下面是網頁上的內容】'].concat(parts).join('\n\n');
+    }
+
     function saveRedPacketData(packetId, data, chatId) {
         const C = _cards(); const cid = _cardChat(chatId);
         if (C && cid) {
@@ -2203,6 +2271,10 @@
                         if (!apiConfig.maxTokens && mainCfg.maxTokens) apiConfig.maxTokens = mainCfg.maxTokens;
                     } catch(e) {}
                 }
+                // 🔗 這間開了「打開我傳的連結」→ 先把她傳的網址讀好（讀不到也不擋送出）
+                try {
+                    await Promise.race([_prepareLinks(currentChat), new Promise(r => setTimeout(r, LINK_TIMEOUT + 1000))]);
+                } catch (e) { console.warn('[WX] 讀連結失敗（不影響送出）:', e); }
                 // buildContext 加逾時 + 失敗用精簡上下文續跑（不讓它卡住/丟錯就整個不回又鎖死）
                 let messages;
                 try {
@@ -2228,6 +2300,11 @@
                         console.log('[WX] 附上待處理清單');
                     }
                 } catch (e) { console.warn('[WX] 待處理清單組裝失敗（不影響送出）', e); }
+                try {
+                    const _me = (win.WX_USER && win.WX_USER.getInfo) ? (win.WX_USER.getInfo().name || '') : '';
+                    const _links = _linkBrief(currentChat, _me);
+                    if (_links) { messages.push({ role: 'system', content: _links }); console.log('[WX] 附上連結內容'); }
+                } catch (e) { console.warn('[WX] 連結內容組裝失敗（不影響送出）', e); }
                 // 👁 換了頭像但它還沒看過 → 這一輪夾一張進去。看完它會寫一句描述回來，
                 //    之後每輪只送那句文字，圖再也不送——不然圖留在歷史裡會越積越重。
                 try {

@@ -425,6 +425,14 @@
                     </div>
                 </div>
 
+                <div class="ws-group">
+                    <label class="ws-cell ws-cell-switch">
+                        <div class="ws-label">打開我傳的連結</div>
+                        <input type="checkbox" class="ws-switch" id="chk-read-links" ${chat.readLinks ? 'checked' : ''}>
+                    </label>
+                </div>
+                <div class="ws-note">開了之後你傳網址，對方會先讀過那個網頁再回你。要登入才看得到的網站讀不到。</div>
+
                 <div class="ws-section-header">聊天記憶</div>
                 <div class="ws-group">
                     <div class="ws-cell" id="btn-chat-summary" style="cursor:pointer;">
@@ -1022,6 +1030,15 @@
                     panel.classList.remove('show');
                 }
             };
+            // 🔗 打開我傳的連結：一間一個開關，切了就存（不用再按保存）。實際讀網頁在 wx_core 的 _prepareLinks
+            {
+                const _rl = doc.getElementById('chk-read-links');
+                if (_rl) _rl.onchange = () => {
+                    if (_rl.checked) chat.readLinks = true; else delete chat.readLinks;
+                    if (app.saveChats) app.saveChats();
+                    if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
+                };
+            }
             doc.getElementById('btn-delete-chat').onclick = async () => {
                 if (await AUI.confirm('確定要刪除聊天室嗎？')) {
                     if (win.wxApp && win.wxApp.deleteChat) win.wxApp.deleteChat(chatId);
