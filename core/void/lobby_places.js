@@ -390,6 +390,8 @@
             '<div class="lb-pv-hd">' +
               '<span class="lb-pv-title"></span>' +
               '<span class="lb-pv-sub"></span>' +
+              // 手機的「開啟」：桌機的開啟鈕在右欄「當前地點」那張卡上，手機沒有右欄，一直打不開面板
+              '<button class="lb-pv-open" type="button"><i class="fa-solid fa-arrow-right-to-bracket"></i><span></span></button>' +
             '</div>' +
             '<img class="lb-pv-portrait" alt="">' +
             '<div class="lb-rail"></div>' +
@@ -398,6 +400,7 @@
         const bg      = box.querySelector('.lb-pv-bg');
         const titleEl = box.querySelector('.lb-pv-title');
         const subEl   = box.querySelector('.lb-pv-sub');
+        const openBtn = box.querySelector('.lb-pv-open');
         const pimg    = box.querySelector('.lb-pv-portrait');
         const rail    = box.querySelector('.lb-rail');
         const body    = box.querySelector('.lb-pv-body');
@@ -496,6 +499,9 @@
             //    現在它是常駐主畫面，切過去整片黑會讀成「壞掉了」。留著上一張，素材補上就自動換。
             if (p.bg) bg.style.backgroundImage = 'url(' + CDN + p.bg + ')';
             titleEl.textContent = p.name;
+            // 鈕上寫要開的是什麼（書咖櫃檯／世界門／交易所…），比「開啟」兩個字好懂；沒有這個名字才寫開啟
+            openBtn.querySelector('span').textContent = p.flatName || '開啟';
+            openBtn.hidden = !(p.openIn || p.open);
             // 🚨 顯示/隱藏走 class 不走 inline style（專案鐵律）；背景圖是動態 URL，只能直接設 backgroundImage
             const applyNpc = (npc) => {
                 curNpc = npc || null;
@@ -530,6 +536,7 @@
 
         // ✕ 只收起右邊的窗格（回到單純看立繪講話），不是關掉整個主頁——主頁沒有「關掉」這件事
         box.querySelector('.lb-pv-x').addEventListener('click', () => go('talk'));
+        openBtn.addEventListener('click', () => go('app'));
 
         // 窗格裡的面板按了它自己的 ✕（見 _mountFloating）：跟按窗格這顆 ✕ 是同一件事，回到對話。
         // 這裡沒人可以講話的話不能叫 go('talk')——它會退回應用、把剛關掉的面板又開一次。

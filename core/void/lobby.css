@@ -1339,3 +1339,21 @@
     .lb-pv.is-focus .lb-pv-pane { left:var(--lb-app-left); right:var(--lb-edge); width:auto; }
     .lb-pv.is-focus .lb-pv-portrait { max-width:calc(var(--lb-app-left) - 16px); }
 }
+
+/* 📱 手機的「開啟」：跟在左上地名後面。桌機的開啟鈕在右欄「當前地點」卡上，這顆只給手機。
+   白色膠囊跟右側欄同一套；面板開著時藏起來（已經開了）。
+   標題列右緣讓開右側欄那條（--lb-edge），不然鈕會跑到右側欄底下；副標太長就省略，鈕不縮。 */
+.lb-pv-open { display:none; }
+@media (max-width:760px) {
+    .lb-pv-hd { right:var(--lb-edge); }
+    .lb-pv-sub { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lb-pv:not(.is-app) .lb-pv-open {
+        display:inline-flex; align-items:center; gap:5px; flex-shrink:0;
+        padding:5px 11px; border-radius:999px; cursor:pointer; font-family:inherit;
+        font-size:12px; font-weight:700; letter-spacing:1px; color:#2b3652; text-shadow:none;
+        background:rgba(255,255,255,.9); border:1px solid rgba(60,80,130,.28);
+        box-shadow:0 3px 10px rgba(40,60,110,.22);
+    }
+    .lb-pv:not(.is-app) .lb-pv-open[hidden] { display:none; }
+    .lb-pv-open i { font-size:11px; }
+}
