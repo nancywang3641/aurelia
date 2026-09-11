@@ -1333,6 +1333,10 @@
    🚨 看 .is-focus 不看 .is-app：沒人可以對話的地方（我的家還沒請人）不進專注，見 lobby_places.js go()。 */
 .lb-pv.is-focus .lb-rail { display:none; }
 .lobby-left:has(.lb-pv.is-focus) #lb-dock { display:none; }
+/* 對話區也收起來：面板（世界門等）打開時會在外層掛 void-dock-open，那是走路模式「邊講話邊開面板」的手機排法——
+   對話框縮成右上角小泡泡、輸入列留在底部、層級 3400 抬到面板上面。專注時不要它們擋路。
+   🚨 用 visibility 不用 display：對話框裡的主線框／反應框是靠程式切 inline display 互斥的，不去碰。 */
+.lobby-left:has(.lb-pv.is-focus) .void-dialogue-wrap { visibility:hidden; pointer-events:none; }
 /* 搬進來的四個浮窗自己會捲，外層不必捲。世界門「底下疊的圖紙」那兩層裝飾會往右下多伸十幾 px，
    外層是 overflow:auto 就會長出兩條捲軸（面板底下那條灰條就是它）。
    只限這四個：塔羅、工坊、我的家是畫進容器的，可能要靠外層捲。 */
