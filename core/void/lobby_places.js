@@ -137,7 +137,18 @@
             if (!el) return false;
             const orig = el.parentElement;
             c.appendChild(el);
+            // 🚨 這四個面板都有自己的 ✕，按了是把自己從畫面上拿掉——但沒人告訴外面這個窗格，
+            //    窗格就留著、裡面空了，變成一個空的黑窗。盯著它：一離開容器就通知窗格收起來。
+            //    （交易所是先淡出、250ms 後才拿掉，所以窗格會晚那一下才收，是正常的）
+            const mo = new MutationObserver(() => {
+                if (c.contains(el)) return;
+                mo.disconnect();
+                c._pvRestore = null;
+                try { c.dispatchEvent(new CustomEvent('pv-panel-gone')); } catch (e) {}
+            });
+            mo.observe(c, { childList: true });
             c._pvRestore = () => {
+                mo.disconnect();   // 是我們自己在收（換地點／回對話），不算它自己關掉
                 try { close && close(); } catch (e) {}
                 // close 通常會把它移除；萬一沒有就搬回原位，別留在已經消失的容器裡
                 if (el.isConnected && orig) { try { orig.appendChild(el); } catch (e) {} }
@@ -515,6 +526,15 @@
 
         // ✕ 只收起右邊的窗格（回到單純看立繪講話），不是關掉整個主頁——主頁沒有「關掉」這件事
         box.querySelector('.lb-pv-x').addEventListener('click', () => go('talk'));
+
+        // 窗格裡的面板按了它自己的 ✕（見 _mountFloating）：跟按窗格這顆 ✕ 是同一件事，回到對話。
+        // 這裡沒人可以講話的話不能叫 go('talk')——它會退回應用、把剛關掉的面板又開一次。
+        body.addEventListener('pv-panel-gone', () => {
+            const p = get(curId);
+            if (p && _hasNpc(p)) { go('talk'); return; }
+            body.innerHTML = '';
+            box.classList.remove('is-app');
+        });
 
         const close = () => {
             restorePanel(); talkOff(); closeScenePicker();
