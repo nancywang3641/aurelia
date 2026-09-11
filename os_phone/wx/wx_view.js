@@ -738,7 +738,7 @@
         },
 
         // --- 5. "我" 的頁面 ---
-        getMePageHTML: function(isDark = false) {
+        getMePageHTML: function(isDark = false, sub = '') {
             const win = window.parent || window;
             const profile = (win.WX_PROFILE && win.WX_PROFILE.get) ? win.WX_PROFILE.get() : { nickname: 'User', signature: '這個人很懶，什麼都沒寫', avatar: '' };
 
@@ -812,6 +812,8 @@
                 /* 🚨 右邊帶一段長文字的格子：標籤要保持一行，讓右邊那段自己縮。
                    不設的話 .wx-cell-text 的 flex:1 會被長文字擠成一字一行。 */
                 .wx-cell-text.is-fixed { flex: 0 0 auto; white-space: nowrap; }
+                /* 設置頁的分組小標題（頭像／通用／數據管理） */
+                .wx-set-label { padding: 14px 20px 6px; font-size: 12px; color: ${idColor}; }
                 .wx-cell-sub { flex: 1; min-width: 0; margin-right: 6px; text-align: right;
                     font-size: 13px; color: ${idColor}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             `;
@@ -822,9 +824,7 @@
             const iconFace = `<svg viewBox="0 0 24 24" fill="#fa9d3b"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>`;
             const iconSet = `<svg viewBox="0 0 24 24" fill="#576b95"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
 
-            return `
-                <style>${style}</style>
-                <div style="background:${pageBg}; min-height:100%;">
+            const mainHTML = `
                 <div class="wx-me-header">
                     <div style="${avatarStyle}" ${dataAttr}></div>
                     <div class="wx-me-info">
@@ -854,6 +854,13 @@
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).editSignature()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-pen-to-square"></i></span></div><div class="wx-cell-text">編輯個性簽名</div><div class="wx-cell-arrow">›</div></div>
                 </div>
                 <div class="wx-cell-group">
+                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).openMeSettings()"><div class="wx-cell-icon">${iconSet}</div><div class="wx-cell-text">設置</div><div class="wx-cell-arrow">›</div></div>
+                </div>
+            `;
+            const settingsHTML = `
+                <!-- ⚙️ 設置頁（「我」底下的第二頁）：以前這些開關直接攤在「我」上面，現實微信都收在「設置」裡 -->
+                <div class="wx-set-label">頭像</div>
+                <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleAvatarAi()">
                         <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-user-pen"></i></span></div>
                         <div class="wx-cell-text">允許角色換頭像</div>
@@ -872,12 +879,12 @@
                     </div>
                 </div>
 
+                <div class="wx-set-label">通用</div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-moon"></i></span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
-                    <div class="wx-cell" onclick="(window.parent.PhoneSystem || window.PhoneSystem).install('設置', '⚙️', '#4c4c4c', null); alert('請前往桌面點擊 [設置] App');"><div class="wx-cell-icon">${iconSet}</div><div class="wx-cell-text">設置</div><div class="wx-cell-arrow">›</div></div>
                 </div>
-                <div class="wx-cell-group" style="margin-top:10px;">
-                    <div style="padding:8px 20px 4px; font-size:11px; color:#aaa;">數據管理</div>
+                <div class="wx-set-label">數據管理</div>
+                <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(function(){
                         const w = window.parent || window;
                         if (!confirm('確定清空全部通訊錄？\\n（聊天記錄保留，但聯繫人及隱形成員全部刪除）')) return;
@@ -919,6 +926,11 @@
                         <div class="wx-cell-arrow">›</div>
                     </div>
                 </div>
+            `;
+            return `
+                <style>${style}</style>
+                <div style="background:${pageBg}; min-height:100%;">
+                ${sub === 'settings' ? settingsHTML : mainHTML}
                 </div>
             `;
         },
@@ -935,11 +947,13 @@
             if (activeTab === 'contacts') headerTitle = '通訊錄';
             if (activeTab === 'discover') headerTitle = '發現';
             if (activeTab === 'me') headerTitle = '我';
+            if (activeTab === 'me_set') headerTitle = '設置';   // 「我」底下的第二頁
             
             // 列表內容
             let listContent = '';
             if (activeTab === 'contacts') listContent = this.getContactListHTML(chats);
             else if (activeTab === 'me') listContent = this.getMePageHTML(isDark);
+            else if (activeTab === 'me_set') listContent = this.getMePageHTML(isDark, 'settings');
             else if (activeTab === 'discover') listContent = this.getDiscoverHTML();
             else listContent = this.getListHTML(chats, activeId);
             
@@ -985,13 +999,18 @@
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.deleteSelectedMessages();">刪除</div>
                     </div>
                 `;
+            } else if (activeTab === 'me_set') {
+                headerRightBtn = '<div style="width:30px;"></div>';   // 設置頁右上不放「＋」，留同寬空位讓標題置中
             } else {
                 headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer; color:${isDark ? '#f0f0f0' : '#000'};" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)"><i class="fa-solid fa-circle-plus"></i></div>`;
             }
             
             const isInChat = !!activeId;
-            const backBtnText = isInChat ? '微信' : '主頁';
-            const backAction = "(window.parent.wxApp || window.wxApp).onBack()"; 
+            // 設置頁的返回＝回「我」，不是回手機主頁
+            const backBtnText = isInChat ? '微信' : (activeTab === 'me_set' ? '我' : '主頁');
+            const backAction = activeTab === 'me_set' && !isInChat
+                ? "(window.parent.wxApp || window.wxApp).switchTab('me')"
+                : "(window.parent.wxApp || window.wxApp).onBack()"; 
             const backBtnClass = 'wx-back-btn show'; 
             const inputDisplay = activeId ? 'flex' : 'none';
             const tabDisplay = activeId ? 'none' : 'flex';
@@ -1010,7 +1029,7 @@
             const darkShellStyle = isDark ? 'background:#111;' : '';
             const darkHeaderStyle = isDark ? 'background:#1c1c1e; border-bottom:1px solid #2a2a2a;' : '';
             const darkTabStyle = isDark ? 'background:#1c1c1e; border-top:1px solid #2a2a2a;' : '';
-            const darkListBg = isDark ? '#111' : (activeTab === 'me' ? '#f2f2f2' : '#fff');
+            const darkListBg = isDark ? '#111' : ((activeTab === 'me' || activeTab === 'me_set') ? '#f2f2f2' : '#fff');
 
             const html = `
                 <div class="wx-shell${isDark ? ' wx-dark' : ''}" style="${darkShellStyle}">
@@ -1114,7 +1133,7 @@
                             </div>
                             <div class="wx-tab-txt">發現</div>
                         </div>
-                        <div class="wx-tab ${activeTab === 'me' ? 'active' : ''}" onclick="${app}.switchTab('me')">
+                        <div class="wx-tab ${(activeTab === 'me' || activeTab === 'me_set') ? 'active' : ''}" onclick="${app}.switchTab('me')">
                             <div class="wx-tab-icon-box">
                                 <div class="wx-tab-icon">${iconMe}</div>
                             </div>

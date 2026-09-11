@@ -8,8 +8,8 @@
         @keyframes wsSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
         
         .ws-header { height: 50px; background: #fff; display: flex; align-items: center; justify-content: center; padding: 0 15px; border-bottom: 1px solid #e5e5e5; flex-shrink: 0; position: relative; }
-        .ws-title { font-weight: bold; font-size: 17px; color: #000; }
-        .ws-close { position: absolute; left: 10px; font-size: 16px; color: #000; cursor: pointer; display: flex; align-items: center; height: 100%; font-weight: 500; }
+        .ws-title { font-weight: bold; font-size: 17px; color: #000; max-width: calc(100% - 110px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }   /* 標題是聊天室名字，名字長就省略，別撞到左邊的返回 */
+        .ws-close { position: absolute; left: 10px; min-width: 44px; font-size: 16px; color: #000; cursor: pointer; display: flex; align-items: center; height: 100%; font-weight: 500; }
         .ws-close:before { content: '‹'; font-size: 26px; margin-right: 2px; margin-top: -3px; font-weight: 300; }
         
         .ws-body { flex: 1; overflow-y: auto; padding-bottom: 40px; }

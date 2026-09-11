@@ -1554,6 +1554,8 @@
         },
         
         switchTab: function(tabName) { GLOBAL_TAB = tabName; this.render(); },
+        // 「我」→「設置」：當成「我」底下的第二頁（GLOBAL_TAB='me_set'），開關按了照舊 render，不會跳回「我」
+        openMeSettings: function() { GLOBAL_TAB = 'me_set'; this.render(); },
 
         // 🖼 換頭像是給角色的權限，預設關著：開了才會生圖（花錢花時間），也才會把用法教給 AI。
         toggleAvatarAi: function () {

@@ -55,9 +55,8 @@
         panel.className = 'ws-overlay';
         panel.innerHTML = `
             <div class="ws-header">
-                <div class="ws-close" id="ws-close-btn">聊天詳情</div>
-                <div class="ws-title" id="ws-title-text">聊天信息</div>
-                <div style="width: 60px;"></div>
+                <div class="ws-close" id="ws-close-btn" role="button" aria-label="返回"></div>
+                <div class="ws-title" id="ws-title-text"></div>
             </div>
             <div class="ws-body" id="ws-content"></div>
         `;
@@ -152,8 +151,11 @@
             const chatName = chat.name || chatId;
             const chatDesc = chat.desc || chat.bio || "";
             
-            // 標題變化
-            titleEl.innerText = isGroup ? `群聊資訊 (${chat.members ? chat.members.length : 1})` : "聊天詳情";
+            // 標題＝這間聊天室的名字（群聊後面帶人數）。
+            // 🚨 以前左上返回鈕寫「聊天詳情」、標題又寫「聊天詳情」，兩個一樣的字並排，看不出在誰的詳情裡。
+            const _memberN = isGroup ? (chat.members ? chat.members.length : 1) : 0;
+            const _setTitle = (name) => { titleEl.textContent = (name || chatId) + (isGroup ? ` (${_memberN})` : ''); };
+            _setTitle(chatName);
 
             // 讀取設定
             const storageKey = `wx_chat_settings_${chatId}`;
@@ -456,6 +458,8 @@
             `;
 
             panel.classList.add('show');
+            // 改備註名／群名時標題跟著變（還沒按保存也先看得到新名字；沒存就關掉，下次打開照舊）
+            { const _ni = doc.getElementById('inp-name'); if (_ni) _ni.addEventListener('input', () => _setTitle(_ni.value.trim() || chatName)); }
 
             // --- 異步載入圖片 (DB) ---
             if (avatarUrl) loadPreview('preview-avatar', avatarUrl);
