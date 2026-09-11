@@ -51,16 +51,6 @@
         .cal-add-input { flex: 1; min-width: 0; border: none; outline: none; font-size: 14px; background: #f5f5f7; border-radius: 10px; padding: 10px 12px; font-family: inherit; color: #1a1a1a; }
         .cal-add-btn { width: 40px; border-radius: 10px; background: #e05a3d; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; }
         .cal-add-btn:active { opacity: 0.75; }
-        .cal-prompt-mask { position: absolute; inset: 0; z-index: 50; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 24px; }
-        .cal-prompt-card { width: 100%; background: #fff; border-radius: 14px; padding: 18px 16px 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 12px; }
-        .cal-prompt-title { font-size: 15px; font-weight: bold; color: #1a1a1a; text-align: center; }
-        .cal-prompt-hint { font-size: 12px; color: #999; text-align: center; margin-top: -6px; }
-        .cal-prompt-input { width: 100%; box-sizing: border-box; border: none; outline: none; font-size: 15px; color: #1a1a1a; background: #f5f5f7; border-radius: 10px; padding: 11px 12px; font-family: inherit; }
-        .cal-prompt-btns { display: flex; gap: 10px; }
-        .cal-prompt-btn { flex: 1; text-align: center; padding: 11px 0; border-radius: 10px; font-size: 15px; cursor: pointer; user-select: none; }
-        .cal-prompt-cancel { background: #f2f2f2; color: #333; }
-        .cal-prompt-ok { background: #e05a3d; color: #fff; font-weight: bold; }
-        .cal-prompt-btn:active { opacity: 0.75; }
     `;
     function injectCss(d) {
         if (!d || d.getElementById('os-calendar-css')) return;
@@ -199,33 +189,9 @@
         render();
     }
 
-    // 小輸入視窗：回字串，取消回 null
-    function prompt(title, value, hint) {
-        return new Promise(resolve => {
-            const host = _root.querySelector('.cal-shell') || _root;
-            const mask = doc.createElement('div');
-            mask.className = 'cal-prompt-mask';
-            mask.innerHTML = `<div class="cal-prompt-card"><div class="cal-prompt-title"></div><div class="cal-prompt-hint"></div><input type="text" class="cal-prompt-input"><div class="cal-prompt-btns"><div class="cal-prompt-btn cal-prompt-cancel">取消</div><div class="cal-prompt-btn cal-prompt-ok">確定</div></div></div>`;
-            mask.querySelector('.cal-prompt-title').textContent = title || '';
-            mask.querySelector('.cal-prompt-hint').textContent = hint || '';
-            const inp = mask.querySelector('.cal-prompt-input');
-            inp.value = value || '';
-            const done = v => { mask.remove(); resolve(v); };
-            mask.querySelector('.cal-prompt-ok').onclick = ev => { ev.stopPropagation(); done(inp.value); };
-            mask.querySelector('.cal-prompt-cancel').onclick = ev => { ev.stopPropagation(); done(null); };
-            inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); done(inp.value); } };
-            mask.onclick = ev => { if (ev.target === mask) done(null); };
-            host.appendChild(mask);
-            setTimeout(() => { try { inp.focus(); inp.select(); } catch (e) {} }, 30);
-        });
-    }
-    function toast(msg) {
-        const t = doc.createElement('div');
-        t.className = 'wb-toast';   // 跟微博同一款提示條（wb_theme 已注入全域）
-        t.textContent = msg;
-        doc.body.appendChild(t);
-        setTimeout(() => t.remove(), 2100);
-    }
+    // 小輸入視窗／提示條：走全站同一套（core/aurelia_dialog.js）
+    function prompt(title, value, hint) { return AUI.prompt(title, value, { placeholder: hint || '' }); }
+    function toast(msg) { AUI.toast(msg); }
 
     async function launch(container) {
         if (!container) return;

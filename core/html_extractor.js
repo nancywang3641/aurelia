@@ -46,7 +46,7 @@
             if (!parentEl) {
                 const phoneFrame = doc.getElementById('phone-frame-hardware');
                 if (!phoneFrame) {
-                    return alert('找不到顯示目標！請確認 VN 面板或手機系統已開啟。');
+                    return AUI.alert('找不到顯示目標！請確認 VN 面板或手機系統已開啟。');
                 }
                 parentEl = phoneFrame.querySelector('.phone-screen');
                 if (!parentEl) return;

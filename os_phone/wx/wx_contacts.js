@@ -95,7 +95,7 @@
 
         // --- AI 搜尋核心 ---
         openSearchWindow: async function() {
-            if (!win.OS_API) { alert('錯誤：OS_API 未載入'); return; }
+            if (!win.OS_API) { AUI.alert('錯誤：OS_API 未載入'); return; }
             let metaInfo = { charName: "系統", bookName: "無", userName: "User" };
 
             const html = `<div class="wx-modal-title">AI 搜尋好友</div><div style="background:#f0f9eb; border:1px solid #e1f3d8; border-radius:4px; padding:8px; margin-bottom:10px; font-size:11px; color:#2e7d32;"><div style="display:flex; justify-content:space-between;"><span>👤 鎖定角色: <b id="wx-meta-char">...</b></span></div><div style="display:flex; justify-content:space-between; margin-top:2px;"><span>😎 當前扮演: <b id="wx-meta-user">...</b></span></div><div style="margin-top:2px;"><span>📖 世界觀: <b id="wx-meta-book">...</b></span></div></div><div style="font-size:12px; color:#666; margin-bottom:5px;">AI 將根據世界觀與您的人設，推薦潛在好友。</div><div id="wx-search-status" style="padding:10px; background:#f2f2f2; border-radius:4px; min-height:50px; font-size:12px; color:#333;">準備中...</div><div id="wx-token-status" style="margin-top:5px; font-size:11px; color:#888; text-align:right;">📊 計算中...</div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-close">關閉</button><button class="wx-btn wx-btn-confirm" id="wx-btn-search-start" disabled>加載中...</button></div>`;
@@ -292,13 +292,13 @@
         openInviteWindow: function(chatId, currentMemberIds, callback) {
             const allContacts = this.getAllCustomContacts().filter(c => !c.isGroup);
             const candidates = allContacts.filter(c => !currentMemberIds.includes(c.id));
-            if (candidates.length === 0) { alert('通訊錄裡沒有其他好友可邀請了！'); return; }
+            if (candidates.length === 0) { AUI.alert('通訊錄裡沒有其他好友可邀請了！'); return; }
             let listHtml = candidates.map(c => `<label style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; cursor:pointer;"><input type="checkbox" class="wx-invite-check" value="${c.id}" style="margin-right:10px;"><div style="font-weight:bold;">${c.name}</div></label>`).join('');
             const html = `<div class="wx-modal-title">邀請成員</div><div style="padding:10px;"><div style="max-height:250px; overflow-y:auto; border:1px solid #eee; border-radius:4px;">${listHtml}</div></div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-cancel">取消</button><button class="wx-btn wx-btn-confirm" id="wx-btn-invite-confirm">邀請</button></div>`;
             this.showModal(html);
             targetDoc.getElementById('wx-btn-cancel').onclick = () => targetDoc.getElementById('wxActionModal').classList.remove('show');
             targetDoc.getElementById('wx-btn-invite-confirm').onclick = () => {
-                const checks = targetDoc.querySelectorAll('.wx-invite-check:checked'); if (checks.length === 0) { alert('請至少選擇一位好友'); return; }
+                const checks = targetDoc.querySelectorAll('.wx-invite-check:checked'); if (checks.length === 0) { AUI.alert('請至少選擇一位好友'); return; }
                 const newIds = Array.from(checks).map(c => c.value); const finalMembers = [...currentMemberIds, ...newIds];
                 if (win.wxApp && win.wxApp.GLOBAL_CHATS[chatId]) {
                     const chat = win.wxApp.GLOBAL_CHATS[chatId];
@@ -365,7 +365,7 @@
                     }
                 }
                 
-                alert(`成功邀請 ${newIds.length} 位成員！`); targetDoc.getElementById('wxActionModal').classList.remove('show'); if (callback) callback(finalMembers);
+                AUI.alert(`成功邀請 ${newIds.length} 位成員！`); targetDoc.getElementById('wxActionModal').classList.remove('show'); if (callback) callback(finalMembers);
             };
         },
         showContextMenu: function(e, contactId, contactName) {
@@ -375,7 +375,7 @@
             menu.innerHTML = `<div class="wx-context-item danger" id="wx-ctx-delete">刪除 (永久)</div>`;
             let x = e.clientX; let y = e.clientY; if (x + 120 > win.innerWidth) x = win.innerWidth - 130; if (y + 100 > win.innerHeight) y = win.innerHeight - 110;
             menu.style.left = x + 'px'; menu.style.top = y + 'px'; targetDoc.body.appendChild(menu);
-            menu.querySelector('#wx-ctx-delete').onclick = () => { if(confirm(`⚠️ 確定要永久刪除「${contactName}」嗎？\nID: ${contactId}`)) { this.deleteContact(contactId); } menu.remove(); };
+            menu.querySelector('#wx-ctx-delete').onclick = async () => { if(await AUI.confirm(`⚠️ 確定要永久刪除「${contactName}」嗎？\nID: ${contactId}`)) { this.deleteContact(contactId); } menu.remove(); };
             setTimeout(() => { targetDoc.addEventListener('click', function closeCtx() { menu.remove(); targetDoc.removeEventListener('click', closeCtx); }); }, 0);
         },
         
@@ -420,14 +420,14 @@
         },
         openCreateGroupWindow: function() {
             const allContacts = this.getAllCustomContacts().filter(c => !c.isGroup);
-            if (allContacts.length === 0) { alert('通訊錄目前沒有好友，無法建群！'); return; }
+            if (allContacts.length === 0) { AUI.alert('通訊錄目前沒有好友，無法建群！'); return; }
             let listHtml = allContacts.map(c => `<label style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; cursor:pointer;"><input type="checkbox" class="wx-group-check" value="${c.id}" style="margin-right:10px;"><div style="font-weight:bold;">${c.name}</div></label>`).join('');
             const html = `<div class="wx-modal-title">發起群聊</div><div style="padding:10px;"><input type="text" id="wx-group-create-name" class="wx-modal-input" placeholder="請輸入群聊名稱"><div style="margin-top:10px; font-size:12px; color:#888;">選擇群成員:</div><div style="max-height:200px; overflow-y:auto; border:1px solid #eee; border-radius:4px; margin-top:5px;">${listHtml}</div></div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-cancel">取消</button><button class="wx-btn wx-btn-confirm" id="wx-btn-create-group">創建</button></div>`;
             this.showModal(html);
             targetDoc.getElementById('wx-btn-cancel').onclick = () => targetDoc.getElementById('wxActionModal').classList.remove('show');
             targetDoc.getElementById('wx-btn-create-group').onclick = () => {
                 const name = targetDoc.getElementById('wx-group-create-name').value.trim(); const checks = targetDoc.querySelectorAll('.wx-group-check:checked');
-                if (!name) { alert('群名不能為空'); return; } if (checks.length === 0) { alert('至少選擇一個成員'); return; }
+                if (!name) { AUI.alert('群名不能為空'); return; } if (checks.length === 0) { AUI.alert('至少選擇一個成員'); return; }
                 const groupId = 'group_' + Date.now(); const memberIds = Array.from(checks).map(c => c.value); memberIds.push("User");
                 this.addContactToStorage({ id: groupId, name: name, isGroup: true, members: memberIds });
                 if (win.wxApp && win.wxApp.GLOBAL_CHATS) { win.wxApp.GLOBAL_CHATS[groupId] = { id: groupId, name: name, isGroup: true, members: memberIds, messages: [], lastTime: Date.now(), unread: false }; win.wxApp.render(); }
@@ -514,7 +514,7 @@
                 const name    = targetDoc.getElementById('wx-add-name').value.trim();
                 const desc    = targetDoc.getElementById('wx-add-desc').value.trim();
                 const persona = targetDoc.getElementById('wx-add-persona').value.trim();
-                if (!name) { alert('名稱不能為空'); return; }
+                if (!name) { AUI.alert('名稱不能為空'); return; }
                 let avatarId = null;
                 if (selectedFile && win.WX_DB) { avatarId = 'avt_' + Date.now(); await win.WX_DB.saveImage(avatarId, selectedFile); }
                 const newContact = { id: 'char_' + Date.now(), name, desc: desc || '這個人很懶，什麼都沒寫', avatarId, isGroup: false, persona: persona || '' };

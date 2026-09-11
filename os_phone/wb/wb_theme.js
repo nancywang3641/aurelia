@@ -114,9 +114,6 @@
             .wb-dark .wb-load-more:active { background: #252525; }
 
             /* === Toast 通知 === */
-            .wb-toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(30,30,30,0.88); color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 13px; z-index: 99999; pointer-events: none; white-space: nowrap; animation: wbToastIn 0.25s ease, wbToastOut 0.3s ease 1.7s forwards; }
-            @keyframes wbToastIn { from { opacity:0; transform: translateX(-50%) translateY(8px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
-            @keyframes wbToastOut { to { opacity:0; } }
 
             /* === 標頭右鈕（刷新世界）、圖標 === */
             .wb-shell .wb-header-btn--right { left: auto; right: 15px; font-size: 18px; }

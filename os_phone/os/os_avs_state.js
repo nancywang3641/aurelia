@@ -373,10 +373,10 @@
             let _totalTags = _tagWrap ? _tagWrap.querySelectorAll('.avs-st-chip').length : 0;
             // ×：預設項＝這次不用；自己存的(.is-mine)＝連常用清單一起拿掉（要復原就再打一次按 ＋）
             const _bindChipX = (x) => {
-                x.onclick = () => {
+                x.onclick = async () => {
                     const chip = x.closest('.avs-st-chip');
                     if (!chip) return;
-                    if (chip.dataset.warn === '1' && !confirm('刪掉「角色外貌」後，AI 不會記角色的髮色/眼色/體型——之後生圖角色長相每次可能都不一樣。確定要刪？')) return;
+                    if (chip.dataset.warn === '1' && !await AUI.confirm('刪掉「角色外貌」後，AI 不會記角色的髮色/眼色/體型——之後生圖角色長相每次可能都不一樣。確定要刪？')) return;
                     if (chip.classList.contains('is-mine')) _saveMyChips(_loadMyChips().filter(v => v !== chip.dataset.k));
                     chip.remove();
                 };
@@ -405,12 +405,12 @@
             // ✏️ 自己建欄位：不叫 AI，直接開檔案編輯器自己填欄位名／型別／預設值／說明
             const _manualBtn = _host.querySelector('#avs-st-manual');
             if (_manualBtn) _manualBtn.onclick = () => {
-                if (!win.OS_AVS?.openNewPackEditor?.()) alert('檔案編輯器還沒載入完，請稍候再試');
+                if (!win.OS_AVS?.openNewPackEditor?.()) AUI.alert('檔案編輯器還沒載入完，請稍候再試');
             };
 
             const ib = _host.querySelector('#avs-st-init');
             if (ib) ib.onclick = async () => {
-                if (!win.OS_AVS?.generateAndSaveSchema) { alert('AVS 模組未就緒，請稍候再試'); return; }
+                if (!win.OS_AVS?.generateAndSaveSchema) { AUI.alert('AVS 模組未就緒，請稍候再試'); return; }
                 // 組指令：有刪 TAG 才告訴 AI「只追蹤保留的」；全留＝不送排除指令(純自動)。再加輸入框自訂。
                 const _kept = [...(_tagWrap?.querySelectorAll('.avs-st-chip') || [])].map(c => c.dataset.k).filter(Boolean);
                 const _custom = (_host.querySelector('#avs-st-init-prompt')?.value || '').trim();
@@ -429,7 +429,7 @@
                     if (r) _build({ fresh: true });   // 重繪：此時變數包已有剛生成的 schema → 顯示追蹤狀態
                 } catch (e) {
                     console.error('[AVS State] AI 生成失敗:', e);
-                    alert('生成失敗：' + (e?.message || e));
+                    AUI.alert('生成失敗：' + (e?.message || e));
                 } finally {
                     ib.textContent = orig;
                     ib.style.pointerEvents = '';
@@ -440,7 +440,7 @@
             const pb = _host.querySelector('#avs-st-preset');
             if (pb) pb.onclick = () => {
                 if (win.OS_AVS?.applySimplePreset) win.OS_AVS.applySimplePreset(pb);
-                else alert('簡易預設未就緒，請稍候再試');
+                else AUI.alert('簡易預設未就緒，請稍候再試');
             };
             // 🌌 視差預設：兩張皮各一顆按鈕。不彈確認窗——TauriTavern 會擋原生 confirm，
             //    點下去就是決定；兩張皮都會裝進同一個包，之後在 UI 面板還能切換。
@@ -449,7 +449,7 @@
                 if (!b) return;
                 b.onclick = () => {
                     if (win.OS_AVS?.applyParallaxPreset) win.OS_AVS.applyParallaxPreset(b, skin);
-                    else alert('視差預設未就緒，請稍候再試');
+                    else AUI.alert('視差預設未就緒，請稍候再試');
                 };
             });
             _bindDirector();   // 🎬 導演卡片在 init 畫面也露出，綁定它的開關與按鈕
@@ -745,9 +745,9 @@
     async function _doAdopt(srcId) {
         const src = (_packs || []).find(p => p.id === srcId);
         const chatId = _curChatId();
-        if (!src) { alert('找不到這個故事的設定'); return; }
-        if (!chatId) { alert('還沒有進行中的故事'); return; }
-        if (!confirm(`把「${src.name}」的設定沿用到這個故事？\n\n・追蹤欄位、條件規則、UI 面板都會複製過來\n・不會帶入舊故事的數值，從空白開始記錄\n・原本那個故事完全不受影響`)) return;
+        if (!src) { AUI.alert('找不到這個故事的設定'); return; }
+        if (!chatId) { AUI.alert('還沒有進行中的故事'); return; }
+        if (!await AUI.confirm(`把「${src.name}」的設定沿用到這個故事？\n\n・追蹤欄位、條件規則、UI 面板都會複製過來\n・不會帶入舊故事的數值，從空白開始記錄\n・原本那個故事完全不受影響`)) return;
         try {
             const newPackId = 'pack_' + Date.now();
             const copy = JSON.parse(JSON.stringify(src));
@@ -777,10 +777,10 @@
             } catch (e) { console.warn('[AVS State] UI 面板沿用失敗', e); }
             _packs = (_packs || []).concat([copy]);
             try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
-            alert(`✅ 已沿用「${src.name}」\n\n・追蹤欄位 ${(copy.variables || []).length} 項\n・條件規則 ${nRules} 條\n・UI 面板 ${nTpl} 個\n\n數值從空白開始，推進劇情就會自動記錄。`);
+            AUI.alert(`✅ 已沿用「${src.name}」\n\n・追蹤欄位 ${(copy.variables || []).length} 項\n・條件規則 ${nRules} 條\n・UI 面板 ${nTpl} 個\n\n數值從空白開始，推進劇情就會自動記錄。`);
             _build({ fresh: true });
         } catch (e) {
-            alert('沿用失敗：' + ((e && e.message) || e));
+            AUI.alert('沿用失敗：' + ((e && e.message) || e));
         }
     }
 
@@ -832,17 +832,17 @@
         });
         bind('#avs-st-extract', () => win.OS_STATE_RUNTIME?.forceExtract?.());
         bind('#avs-st-deep', async () => {
-            if (!confirm('用主模型深度整理目前狀態？\n・合併重複角色（繁簡／別名）\n・移除無關係、無物品、任務無牽扯的純路人\n・按大總結修正過期欄位（如任務其實已完成）\n\n整理前會自動快照，事後可按「還原上一步」撤銷。')) return;
+            if (!await AUI.confirm('用主模型深度整理目前狀態？\n・合併重複角色（繁簡／別名）\n・移除無關係、無物品、任務無牽扯的純路人\n・按大總結修正過期欄位（如任務其實已完成）\n\n整理前會自動快照，事後可按「還原上一步」撤銷。')) return;
             const b = q('#avs-st-deep'); if (b) { b.textContent = '♻️ 整理中…'; b.classList.add('disabled'); }
             try {
                 const r = await win.OS_STATE_RUNTIME?.deepConsolidate?.();
-                if (r && r.ok) alert(`✅ 整理完成：合併 ${r.merged}、移除 ${r.removed}、修正 ${r.fixed}`);
-                else alert('❌ 整理失敗：' + ((r && r.msg) || '未知錯誤') + '\n（狀態未被更動）');
-            } catch (e) { alert('❌ 整理失敗：' + (e?.message || e) + '\n（狀態未被更動）'); }
+                if (r && r.ok) AUI.alert(`✅ 整理完成：合併 ${r.merged}、移除 ${r.removed}、修正 ${r.fixed}`);
+                else AUI.alert('❌ 整理失敗：' + ((r && r.msg) || '未知錯誤') + '\n（狀態未被更動）');
+            } catch (e) { AUI.alert('❌ 整理失敗：' + (e?.message || e) + '\n（狀態未被更動）'); }
             _build({ fresh: true });
         });
-        bind('#avs-st-regen', () => { if (confirm('重新生成追蹤欄位？已記錄的內容會保留。')) win.OS_STATE_SCHEMA?.generate?.(); });
-        bind('#avs-st-clearpatches', () => { if (confirm('清空抽取紀錄？追蹤欄位保留。')) win.OS_STATE_RUNTIME?.clearPatches?.(); });
+        bind('#avs-st-regen', async () => { if (await AUI.confirm('重新生成追蹤欄位？已記錄的內容會保留。')) win.OS_STATE_SCHEMA?.generate?.(); });
+        bind('#avs-st-clearpatches', async () => { if (await AUI.confirm('清空抽取紀錄？追蹤欄位保留。')) win.OS_STATE_RUNTIME?.clearPatches?.(); });
         bind('#avs-st-cross', () => openStateManagerModal());
 
         // 還原上一步
@@ -851,23 +851,23 @@
             if (eng.restore()) _build();
         });
         // 清空目前狀態
-        bind('#avs-st-clearstate', () => {
-            if (!confirm('確定清空這個故事目前的所有狀態數值？')) return;
+        bind('#avs-st-clearstate', async () => {
+            if (!await AUI.confirm('確定清空這個故事目前的所有狀態數值？')) return;
             try { eng?.write?.({}); } catch (e) {}   // 酒館模式權威庫在 OS_DB(經 adapter 寫回)——只清 localStorage 清不掉、重開又冒回來
             try { localStorage.removeItem(stateKey); localStorage.removeItem(`avs_snap_${stateKey}`); } catch (e) {}
             _build();
         });
         // 從變數包初始化
-        bind('#avs-st-initpack-btn', () => {
+        bind('#avs-st-initpack-btn', async () => {
             const sel = q('#avs-st-initpack-sel'); if (!sel) return;
             const pack = (_packs || []).find(p => p.id === sel.value);
             if (!pack || !eng) return;
-            if (!confirm(`用「${pack.name}」的預設值初始化目前狀態？原本的數值會被覆蓋。`)) return;
+            if (!await AUI.confirm(`用「${pack.name}」的預設值初始化目前狀態？原本的數值會被覆蓋。`)) return;
             eng.initFromPack(pack); _build({ fresh: true });
         });
         // 清理孤兒
         bind('#avs-st-gc', async () => {
-            if (!confirm('比對現有劇本，自動刪掉「已被刪除的故事」殘留的狀態資料。\n確定執行？')) return;
+            if (!await AUI.confirm('比對現有劇本，自動刪掉「已被刪除的故事」殘留的狀態資料。\n確定執行？')) return;
             const btn = q('#avs-st-gc'); if (btn) { btn.textContent = '掃描中…'; btn.classList.add('disabled'); }
             try {
                 const chapters = (await win.OS_DB?.getAllVnChapters?.()) || [];
@@ -882,9 +882,9 @@
                     }
                 }
                 del.forEach(k => localStorage.removeItem(k));
-                setTimeout(() => { alert(`✅ 清理完成，回收了 ${del.length} 筆殘留資料。`); _build({ fresh: true }); }, 200);
+                setTimeout(() => { AUI.alert(`✅ 清理完成，回收了 ${del.length} 筆殘留資料。`); _build({ fresh: true }); }, 200);
             } catch (e) {
-                alert('清理失敗：' + (e?.message || e));
+                AUI.alert('清理失敗：' + (e?.message || e));
                 _build({ fresh: true });
             }
         });
@@ -915,13 +915,13 @@
         const name = (card.querySelector('[data-edit-key="name"]')?.value || '').trim();
         const type = (card.querySelector('[data-edit-key="type"]')?.value || 'string').trim();
         const desc = (card.querySelector('[data-edit-key="desc"]')?.value || '').trim();
-        if (isNew && !name) { alert('請輸入欄位名'); return; }
+        if (isNew && !name) { AUI.alert('請輸入欄位名'); return; }
         if (isNew) { const ok = await win.OS_STATE_SCHEMA?.addField?.(name, { type, desc }); if (!ok) return; }
         else { await win.OS_STATE_SCHEMA?.updateField?.(originalName, { type, desc }); }
         _editingFieldName = null; _build({ fresh: true });
     }
     async function deleteFieldConfirm(name) {
-        if (!confirm(`刪除欄位「${name}」？\n會從追蹤設定、目前狀態、所有紀錄一起清掉，不可復原。`)) return;
+        if (!await AUI.confirm(`刪除欄位「${name}」？\n會從追蹤設定、目前狀態、所有紀錄一起清掉，不可復原。`)) return;
         await win.OS_STATE_SCHEMA?.deleteField?.(name);
         if (_editingFieldName === name) _editingFieldName = null;
         _build({ fresh: true });
@@ -969,7 +969,7 @@
             }).join('');
             listEl.querySelectorAll('[data-state-del]').forEach(btn => btn.addEventListener('click', async () => {
                 const id = btn.getAttribute('data-state-del');
-                if (!confirm(`刪除 [${id}] 的狀態資料？\n追蹤欄位 + 紀錄 + 目前狀態全部清掉，不可復原。`)) return;
+                if (!await AUI.confirm(`刪除 [${id}] 的狀態資料？\n追蹤欄位 + 紀錄 + 目前狀態全部清掉，不可復原。`)) return;
                 await win.OS_STATE_RUNTIME.removeStateData(id);
                 renderStateManager(); _build({ fresh: true });
             }));

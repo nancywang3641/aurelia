@@ -885,9 +885,9 @@
                 </div>
                 <div class="wx-set-label">數據管理</div>
                 <div class="wx-cell-group">
-                    <div class="wx-cell" onclick="(function(){
+                    <div class="wx-cell" onclick="(async function(){
                         const w = window.parent || window;
-                        if (!confirm('確定清空全部通訊錄？\\n（聊天記錄保留，但聯繫人及隱形成員全部刪除）')) return;
+                        if (!await AUI.confirm('確定清空全部通訊錄？\\n（聊天記錄保留，但聯繫人及隱形成員全部刪除）')) return;
                         localStorage.removeItem((w.WX_CONTACTS && w.WX_CONTACTS._key && w.WX_CONTACTS._key()) || 'wx_custom_contacts_v1');
                         if (w.OS_CONTACTS && w.OS_CONTACTS.getAllContacts) {
                             const all = w.OS_CONTACTS.getAllContacts();
@@ -897,15 +897,15 @@
                             Object.keys(w.wxApp.GLOBAL_CHATS).forEach(id => { delete w.wxApp.GLOBAL_CHATS[id]; });
                             if (w.wxApp.render) w.wxApp.render();
                         }
-                        alert('✅ 通訊錄已清空');
+                        AUI.alert('✅ 通訊錄已清空');
                     })()">
                         <div class="wx-cell-icon"><svg viewBox="0 0 24 24" fill="#e74c3c"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></div>
                         <div class="wx-cell-text" style="color:#e74c3c;">清空通訊錄</div>
                         <div class="wx-cell-arrow">›</div>
                     </div>
-                    <div class="wx-cell" onclick="(function(){
+                    <div class="wx-cell" onclick="(async function(){
                         const w = window.parent || window;
-                        if (!confirm('⚠️ 確定清空所有微信數據？\\n（通訊錄 + 全部聊天記錄將永久刪除）')) return;
+                        if (!await AUI.confirm('⚠️ 確定清空所有微信數據？\\n（通訊錄 + 全部聊天記錄將永久刪除）')) return;
                         localStorage.removeItem((w.WX_CONTACTS && w.WX_CONTACTS._key && w.WX_CONTACTS._key()) || 'wx_custom_contacts_v1');
                         if (w.OS_CONTACTS && w.OS_CONTACTS.getAllContacts) {
                             const all = w.OS_CONTACTS.getAllContacts();
@@ -919,7 +919,7 @@
                         if (w.WX_DB && w.WX_DB.deleteApiChat) {
                             ids.forEach(id => w.WX_DB.deleteApiChat(id));
                         }
-                        alert('✅ 微信數據已全部清空');
+                        AUI.alert('✅ 微信數據已全部清空');
                     })()">
                         <div class="wx-cell-icon"><svg viewBox="0 0 24 24" fill="#c0392b"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg></div>
                         <div class="wx-cell-text" style="color:#c0392b;">清空全部微信數據</div>

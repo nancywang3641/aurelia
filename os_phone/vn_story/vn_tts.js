@@ -251,7 +251,7 @@ const VN_TTS = {
             } catch (e2) {}
             try {
                 const w = window.parent || window;
-                const t = w.toastr || window.toastr;
+                const t = AUI.toastr;
                 if (t && t.error) t.error('瀏覽器儲存空間滿了，語音設定存不進去（重整後會消失）', 'TTS 存檔失敗');
                 const P = w.VN_TTS_Panel || window.VN_TTS_Panel;
                 if (P && P._toast) P._toast('✗ 存檔失敗：瀏覽器空間滿了');

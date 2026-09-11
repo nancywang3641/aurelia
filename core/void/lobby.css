@@ -202,12 +202,14 @@
 /* ✕ 收起窗格 → 退回「只有立繪＋對話框」；主頁沒有「關掉」這件事，所以它不在標題列 */
 /* 🚨 z-index 要壓過畫進容器的面板自己的層級：工坊的標題列（.lws-hd）自帶層級，
    以前這顆 2 會被它蓋住——畫面上看得到 ✕、點下去點到的是工坊標題，關不掉。
+   工坊的子頁（VN 組件等 .vncomp-app）自帶 z-index:9000，50 也不夠 → 拉到 9990。
    自帶 ✕ 的四個浮窗（書咖櫃檯／世界門／交易所／黑市）則把這顆藏起來，一頁只留一顆 ✕（見下面 :has 那條）。 */
-.lb-pv-x { position:absolute; right:8px; top:8px; z-index:50;
-  background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.24);
-  color:#f2ecff; width:28px; height:28px; border-radius:50%; cursor:pointer;
+.lb-pv-x { position:absolute; right:8px; top:8px; z-index:9990;
+  background:rgba(255,255,255,.92); border:1px solid rgba(26,28,40,.12);
+  color:#1a1c28; width:28px; height:28px; border-radius:50%; cursor:pointer;
+  box-shadow:0 2px 8px rgba(20,22,40,.14);
   display:flex; align-items:center; justify-content:center; font-size:13px; }
-.lb-pv-x:hover { background:rgba(255,255,255,.24); }
+.lb-pv-x:hover { background:#fff; }
 .lb-pv-pane:has(> .lb-pv-body > .wg-win, > .lb-pv-body > #os-pt-shop-dock, > .lb-pv-body > #store-panel-overlay, > .lb-pv-body > .oc-win) .lb-pv-x { display:none; }
 
 /* 立繪：貼左下、不吃點擊。
@@ -224,9 +226,12 @@
 /* 右容器：只有「應用」才出現，對話不進來 */
 .lb-pv-pane { position:absolute; right:var(--lb-pane-right); top:64px; bottom:20px; z-index:4;
   width:var(--lb-pane-w); display:flex; flex-direction:column; overflow:hidden;
-  background:rgba(14,10,20,.82); border:1px solid rgba(255,255,255,.14); border-radius:16px;
-  box-shadow:0 16px 44px rgba(0,0,0,.5); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+  /* 霧白底：跟手機系統頁、提示窗同一套；面板沒填滿時底下露出來的也是白，不再是一塊黑 */
+  background:rgba(246,247,252,.97); border:1px solid rgba(255,255,255,.7); border-radius:16px;
+  box-shadow:0 16px 44px rgba(0,0,0,.32); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
 .lb-pv:not(.is-app) .lb-pv-pane { display:none; }
+/* 自帶整片深色皮的面板（工坊、占卜）自己就是底，窗格退成透明——不然圓角對不上會露出一圈白邊 */
+.lb-pv-pane:has(> .lb-pv-body > .lws, > .lb-pv-body > .tr-container) { background:transparent; border-color:transparent; -webkit-backdrop-filter:none; backdrop-filter:none; }
 .lb-pv-body { flex:1; min-height:0; position:relative; overflow:auto; }
 /* 🚨 面板自己的返回鈕在地點視圖裡藏起來：標題列已經有一顆 ‹，兩顆疊在左上角長得又像
    → 一定會按錯(Rae 2026-08-24 回報按到塔羅那顆、以為回大廳)。一頁只留一顆返回鈕。

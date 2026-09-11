@@ -399,14 +399,14 @@
             if (cfg.kind === 'avatar' && hasImg) add('🎭 設為立繪', async () => {
                 const v = await _fullVal(); if (!v.url) return;
                 await VN_Cache.setRaw('sprite_cache', fullKey, { url: v.url, prompt: v.prompt || entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
-                alert('已把「' + bare + '」設為立繪（限此世界）。\nVN 會優先用立繪顯示；要透明去背可到「立繪面板」處理。');
+                AUI.alert('已把「' + bare + '」設為立繪（限此世界）。\nVN 會優先用立繪顯示；要透明去背可到「立繪面板」處理。');
             });
         }
         add(entry.favorite ? '★ 取消收藏' : '☆ 加入收藏', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, fullKey, { ...v, favorite: !entry.favorite }); rerender(); });
         if (st.world === '') {
             add('→ 移到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); await VN_Cache.deleteRaw(store, fullKey); rerender(); });
         } else if (st.world !== curWorld) {
-            add('⧉ 複製到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); alert('已複製到當前世界'); });
+            add('⧉ 複製到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); AUI.alert('已複製到當前世界'); });
         }
         add('🗑 刪除', async () => {
             await VN_Cache.deleteRaw(store, fullKey);
@@ -550,15 +550,15 @@
         compressBtn.title = '把這個世界的圖片壓成更小的 WebP，省空間與記憶體（畫質幾乎看不出差別、輕微失真）';
         compressBtn.onclick = async () => {
             if (compressBtn.dataset.busy) return;
-            if (!confirm('把目前這個世界的圖片壓成更小的 WebP？\n畫質幾乎看不出差別，但能省下不少空間與記憶體、也比較不會卡。\n（輕微失真壓縮，已壓過的會自動略過）')) return;
+            if (!await AUI.confirm('把目前這個世界的圖片壓成更小的 WebP？\n畫質幾乎看不出差別，但能省下不少空間與記憶體、也比較不會卡。\n（輕微失真壓縮，已壓過的會自動略過）')) return;
             compressBtn.dataset.busy = '1';
             try {
                 const r = await _vngCompressEntries(cfg, entries, compressBtn);
                 const mb = (r.saved * 0.75 / 1048576);
                 const win = window.parent || window;
                 const msg = `🗜️ 壓縮完成：${r.done - r.skipped} 張壓縮、${r.skipped} 張略過，約省 ${mb.toFixed(1)} MB`;
-                try { if (win.toastr) win.toastr.success(msg); else alert(msg); } catch (e) { alert(msg); }
-            } catch (e) { alert('壓縮失敗：' + (e.message || e)); }
+                try { if (AUI.toastr) AUI.toastr.success(msg); else AUI.alert(msg); } catch (e) { AUI.alert(msg); }
+            } catch (e) { AUI.alert('壓縮失敗：' + (e.message || e)); }
             delete compressBtn.dataset.busy;
             rerender();
         };
@@ -777,7 +777,7 @@
 
                 header.querySelector('.ch-story-del').onclick = async (e) => {
                     e.stopPropagation();
-                    if (!confirm(`確定刪除「${storyTitle}」的所有章節？\n（開場白預設不受影響）`)) return;
+                    if (!await AUI.confirm(`確定刪除「${storyTitle}」的所有章節？\n（開場白預設不受影響）`)) return;
                     // 🚨 統一走 VN_Core.deleteStoryLine：章節、向量記憶、人物檔案、AVS 數值與快照、
                     //    書架「歷史篇章」的索引一次清乾淨。少一環就會留下打開來是空的幽靈篇章。
                     await window.VN_Core.deleteStoryLine(currentStoryId);
@@ -805,13 +805,13 @@
                     // 刪除單章
                     item.querySelector('button[data-id]').onclick = async (e) => {
                         e.stopPropagation();
-                        if (!confirm(`確定刪除「${ch.title}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
+                        if (!await AUI.confirm(`確定刪除「${ch.title}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
                         // 🚨 一律走 VN_READER.deleteChapter：直接叫 OS_DB.deleteVnChapter 會漏掉
                         //    記憶清理 / 人物檔案對帳 / 數值重放（被刪的角色下一輪會原樣復活）。
                         //    所以模組不在就「不刪」，不留那條會把資料刪成半套的退路。
-                        if (!win.VN_READER?.deleteChapter) { alert('劇情閱讀器模組還沒載入，先進一次閱讀器再回來刪。'); return; }
+                        if (!win.VN_READER?.deleteChapter) { AUI.alert('劇情閱讀器模組還沒載入，先進一次閱讀器再回來刪。'); return; }
                         const r = await win.VN_READER.deleteChapter(ch.id);
-                        if (!r || !r.ok) { alert('刪不掉：' + ((r && r.why) || '未知原因')); return; }
+                        if (!r || !r.ok) { AUI.alert('刪不掉：' + ((r && r.why) || '未知原因')); return; }
                         item.remove();
                         const remaining = body.querySelectorAll('.ch-item').length;
                         header.querySelector('.ch-story-meta').textContent = `${dateStr}${dateStr ? ' · ' : ''}${remaining} 章`;
@@ -898,9 +898,9 @@
                 try { doLoad(); } catch (e) {
                     console.error('[VN_PLAYER] 章節載入失敗', e);
                     try {
-                        const T = win.toastr || window.toastr;
+                        const T = AUI.toastr;
                         if (T && T.error) T.error('章節載入失敗：' + e.message, '', { timeOut: 12000 });
-                        else alert('章節載入失敗：' + e.message);
+                        else AUI.alert('章節載入失敗：' + e.message);
                     } catch (_) {}
                 }
             }

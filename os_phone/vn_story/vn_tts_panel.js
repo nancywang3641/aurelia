@@ -1132,7 +1132,7 @@ const VN_TTS_Panel = {
         this._restoreListScroll(); // 👈 儲存後恢復高度
     },
 
-    deleteAllModels() {
+    async deleteAllModels() {
         const tts = this._tts();
         if (!tts) return;
         // 🚨 只清「你現在看的這個引擎」。這顆鈕以前是 models = {} 整份砍，
@@ -1148,7 +1148,7 @@ const VN_TTS_Panel = {
             return;
         }
 
-        if (!confirm(`確定要清空 ${label} 的 ${mine.length} 個模型嗎？\n注意：這會同時清空 ${label} 這邊所有角色的語音綁定。\n另一個引擎的音色與綁定不受影響。`)) return;
+        if (!await AUI.confirm(`確定要清空 ${label} 的 ${mine.length} 個模型嗎？\n注意：這會同時清空 ${label} 這邊所有角色的語音綁定。\n另一個引擎的音色與綁定不受影響。`)) return;
 
         // 記住當下高度
         const body = document.getElementById(this._bodyId);
@@ -1516,10 +1516,10 @@ const VN_TTS_Panel = {
         this._renderBody('npc');
     },
 
-    deleteNpcCategory(id) {
+    async deleteNpcCategory(id) {
         const tts = this._tts();
         if (!tts) return;
-        if (!confirm('確定刪除此 NPC 分類？')) return;
+        if (!await AUI.confirm('確定刪除此 NPC 分類？')) return;
         tts.config.npcCategories = tts.config.npcCategories.filter(c => c.id !== id);
         tts.save();
         this._renderBody('npc');

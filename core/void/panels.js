@@ -199,7 +199,7 @@
             clearBtn._bound = true;
             clearBtn.onclick = async () => {
                 const n = (window.OS_ACHIEVEMENT?.getAll?.() || []).length;
-                if (!confirm(`確定要清空全部 ${n} 筆成就？此動作無法復原。`)) return;
+                if (!await AUI.confirm(`確定要清空全部 ${n} 筆成就？此動作無法復原。`)) return;
                 if (window.OS_DB && window.OS_DB.clearAchievements) await window.OS_DB.clearAchievements();
                 if (window.OS_ACHIEVEMENT && window.OS_ACHIEVEMENT.load) await window.OS_ACHIEVEMENT.load();
                 renderAchievementList();

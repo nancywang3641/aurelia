@@ -150,7 +150,7 @@
                         : all.filter(ch => !ch.storyId);
                 } catch(e) { console.warn('[VN_Summary] 讀取章節失敗:', e); }
             }
-            if (!chapters.length) { alert('找不到劇情章節，請確認已儲存至少一章'); return; }
+            if (!chapters.length) { AUI.alert('找不到劇情章節，請確認已儲存至少一章'); return; }
 
             const prevList  = await this._getFromDB(storyId);
             const count     = prevList.length + 1;
@@ -168,7 +168,7 @@
             }).filter(Boolean).join('\n\n---\n\n');
 
             if (!contentToSummarize.trim()) {
-                alert(latest ? '沒有新章節需要總結（上次大總結之後沒有新增章節）' : '章節中找不到 <content> 內容');
+                AUI.alert(latest ? '沒有新章節需要總結（上次大總結之後沒有新增章節）' : '章節中找不到 <content> 內容');
                 if (btn) { btn.textContent = '📝 大總結'; btn.disabled = false; }
                 return;
             }
@@ -186,7 +186,7 @@
 
             const osApi = win.OS_API;
             const osSet = win.OS_SETTINGS;
-            if (!osApi) { alert('找不到 OS_API，請確認已載入獨立版核心'); return; }
+            if (!osApi) { AUI.alert('找不到 OS_API，請確認已載入獨立版核心'); return; }
 
             if (btn) { btn.textContent = '⏳ 生成中...'; btn.disabled = true; }
 
@@ -208,7 +208,7 @@
                 const _v = win.OS_STORY_TOOLS?.validateSummary?.(generated) || { ok: true };
                 if (!_v.ok) {
                     console.warn('[VN_Summary] 生成結果未通過驗證，放棄存檔、保留舊總結：' + _v.reason);
-                    alert('這次生成的內容不像總結（' + _v.reason + '）\n已保留上一版，沒有覆蓋掉。可以再按一次重試。');
+                    AUI.alert('這次生成的內容不像總結（' + _v.reason + '）\n已保留上一版，沒有覆蓋掉。可以再按一次重試。');
                     return;
                 }
                 await this._saveToDB(storyId, { count, content: generated, coveredChapterIds });
@@ -216,7 +216,7 @@
                 try { document.getElementById('vn-ctx-popup')?.classList.remove('show'); } catch (e) {}   // 生完才收 CTX：生成中要留著給那顆鈕顯示進度
                 this.showResult(generated, count);
             } catch(e) {
-                alert('生成失敗: ' + (e.message || e));
+                AUI.alert('生成失敗: ' + (e.message || e));
             } finally {
                 if (btn) { btn.textContent = '📝 大總結'; btn.disabled = false; }
             }

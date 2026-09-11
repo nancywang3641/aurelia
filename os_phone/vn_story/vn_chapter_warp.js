@@ -121,9 +121,9 @@
             try { doLoad(); } catch (e) {
                 console.error('[ChapterWarp] 載入回呼失敗', e);
                 try {
-                    const T = window.toastr || (window.parent && window.parent.toastr);
+                    const T = AUI.toastr;
                     if (T && T.error) T.error('章節載入失敗：' + (e && e.message ? e.message : e), '', { timeOut: 12000 });
-                    else alert('章節載入失敗：' + (e && e.message ? e.message : e));
+                    else AUI.alert('章節載入失敗：' + (e && e.message ? e.message : e));
                 } catch (_) {}
             }
         };

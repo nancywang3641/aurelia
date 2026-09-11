@@ -353,7 +353,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const W = window.parent || window;
         const C = W.VN_Cache || window.VN_Cache;
         const doc = W.document || document;
-        if (!C || !C.getAll) { alert('VN_Cache 未就緒（先進一次 VN）'); return; }
+        if (!C || !C.getAll) { AUI.alert('VN_Cache 未就緒（先進一次 VN）'); return; }
         const _e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
         let all = [];
@@ -385,21 +385,21 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const i = +ta.getAttribute('data-i'); const r = rows[i]; const v = ta.value.trim();
                 if (v === r.prompt) return;
                 try { const cur = (await C.get('avatar_cache', r.name)) || {}; await C.set('avatar_cache', r.name, { ...cur, prompt: v }); r.prompt = v; tip('已存「' + r.name + '」'); }
-                catch (e) { alert('存失敗：' + (e && e.message || e)); }
+                catch (e) { AUI.alert('存失敗：' + (e && e.message || e)); }
             });
             listEl.querySelectorAll('.avl-del').forEach(b => b.onclick = async () => {
                 const i = +b.getAttribute('data-i'); const r = rows[i];
-                if (!confirm('刪除「' + r.name + '」的外觀資料？（不影響已生成的頭像圖，只刪外觀詞）')) return;
+                if (!await AUI.confirm('刪除「' + r.name + '」的外觀資料？（不影響已生成的頭像圖，只刪外觀詞）')) return;
                 try { await C.delete('avatar_cache', r.name); rows.splice(i, 1); render(); tip('已刪「' + r.name + '」'); }
-                catch (e) { alert('刪失敗：' + (e && e.message || e)); }
+                catch (e) { AUI.alert('刪失敗：' + (e && e.message || e)); }
             });
         }
         modal.querySelector('#avl-add').onclick = async () => {
             const ni = modal.querySelector('#avl-new-name'); const name = (ni.value || '').trim();
-            if (!name) { alert('先輸入角色名'); return; }
-            if (rows.some(r => r.name === name)) { alert('已有同名角色'); return; }
+            if (!name) { AUI.alert('先輸入角色名'); return; }
+            if (rows.some(r => r.name === name)) { AUI.alert('已有同名角色'); return; }
             try { await C.set('avatar_cache', name, { prompt: '' }); rows.push({ name, prompt: '' }); ni.value = ''; render(); tip('已新增「' + name + '」，填上外觀詞'); }
-            catch (e) { alert('新增失敗：' + (e && e.message || e)); }
+            catch (e) { AUI.alert('新增失敗：' + (e && e.message || e)); }
         };
         modal.querySelector('#avl-close').onclick = () => modal.remove();
         modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -3256,7 +3256,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         window._naiPreset = {
             apply() {
                 const sel = container.querySelector('#img-nai-preset-sel');
-                if (!sel || sel.value === '') { alert('請先選擇預設'); return; }
+                if (!sel || sel.value === '') { AUI.alert('請先選擇預設'); return; }
                 const p = naiPresets[parseInt(sel.value)];
                 if (!p) return;
                 const set = (id, v) => { const el = container.querySelector(id); if (el) el.value = v; };
@@ -3277,7 +3277,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             confirmSave() {
                 const nameInput = container.querySelector('#img-nai-preset-name-input');
                 const name = nameInput?.value.trim();
-                if (!name) { alert('請輸入預設名稱'); return; }
+                if (!name) { AUI.alert('請輸入預設名稱'); return; }
                 const get = id => (container.querySelector(id)?.value || '').trim();
                 const getNum = (id, def) => parseFloat(container.querySelector(id)?.value ?? def);
                 const getInt = (id, def) => parseInt(container.querySelector(id)?.value ?? def);
@@ -3306,12 +3306,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const nameInput = container.querySelector('#img-nai-preset-name-input');
                 if (nameInput) nameInput.value = '';
             },
-            del() {
+            async del() {
                 const sel = container.querySelector('#img-nai-preset-sel');
-                if (!sel || sel.value === '') { alert('請先選擇要刪除的預設'); return; }
+                if (!sel || sel.value === '') { AUI.alert('請先選擇要刪除的預設'); return; }
                 const idx = parseInt(sel.value);
                 const name = naiPresets[idx]?.name || '';
-                if (!confirm(`刪除預設「${name}」？`)) return;
+                if (!await AUI.confirm(`刪除預設「${name}」？`)) return;
                 const tid = naiPresets[idx]?.thumbId;
                 if (tid) { try { (window.parent || window).OS_DB?.deleteNaiThumb(tid); } catch (e) {} }
                 naiPresets.splice(idx, 1);
@@ -3335,7 +3335,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 };
             },
             async exportPack() {
-                if (!naiPresets.length) { alert('還沒有預設可以匯出。'); return; }
+                if (!naiPresets.length) { AUI.alert('還沒有預設可以匯出。'); return; }
                 const OSDB = (window.parent || window).OS_DB;
                 const out = [];
                 for (const p of naiPresets) {
@@ -3369,16 +3369,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     try {
                         const j = JSON.parse(String(reader.result));
                         const arr = Array.isArray(j) ? j : (Array.isArray(j.presets) ? j.presets : null);
-                        if (!arr || !arr.length) { alert('❌ 這個檔案裡找不到 NAI 預設，確認拿到的是 NAI 預設包檔（.json）。'); return; }
+                        if (!arr || !arr.length) { AUI.alert('❌ 這個檔案裡找不到 NAI 預設，確認拿到的是 NAI 預設包檔（.json）。'); return; }
                         const clean = arr.filter(p => p && String(p.name || '').trim());
-                        if (!clean.length) { alert('❌ 檔案裡的預設都沒有名稱，讀不進來。'); return; }
+                        if (!clean.length) { AUI.alert('❌ 檔案裡的預設都沒有名稱，讀不進來。'); return; }
                         self._pendingImport = clean;
                         if (!naiPresets.length) { self._applyImport('append'); return; }   // 牆空→直接加、不問
                         const msg = container.querySelector('#img-nai-import-msg');
                         if (msg) msg.textContent = '讀到 ' + clean.length + ' 個預設。要怎麼放進現有的 ' + naiPresets.length + ' 個裡？';
                         const box = container.querySelector('#img-nai-import-choice');
                         if (box) box.style.display = 'block';
-                    } catch (e) { alert('❌ 這個檔案讀不出來，確認是 NAI 預設包檔（.json）。'); }
+                    } catch (e) { AUI.alert('❌ 這個檔案讀不出來，確認是 NAI 預設包檔（.json）。'); }
                 };
                 reader.readAsText(file);
             },
@@ -3428,11 +3428,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 this._pendingImport = null;
                 refreshNaiPresetDropdown();
                 self.renderGrid();
-                alert('✅ 匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部 💾 保存才會存住。');
+                AUI.alert('✅ 匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部 💾 保存才會存住。');
             },
             async clearAll() {
-                if (!naiPresets.length) { alert('目前沒有 NAI 預設可以清空。'); return; }
-                if (!confirm('確定清空全部 ' + naiPresets.length + ' 個 NAI 預設？\n（要按底部 💾 保存後才真的生效）')) return;
+                if (!naiPresets.length) { AUI.alert('目前沒有 NAI 預設可以清空。'); return; }
+                if (!await AUI.confirm('確定清空全部 ' + naiPresets.length + ' 個 NAI 預設？\n（要按底部 💾 保存後才真的生效）')) return;
                 const OSDB = (window.parent || window).OS_DB;
                 if (OSDB && OSDB.deleteNaiThumb) { for (const p of naiPresets) { if (p.thumbId) { try { await OSDB.deleteNaiThumb(p.thumbId); } catch (e) {} } } }
                 naiPresets.length = 0;
@@ -3557,11 +3557,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (p.ucPreset != null) set('#img-nai-uc-preset', p.ucPreset);
                 this.close();
                 const W = window.parent || window;
-                if (W.toastr) W.toastr.success(`已套用「${p.name || ''}」，記得按底部 💾 保存`);
+                if (AUI.toastr) AUI.toastr.success(`已套用「${p.name || ''}」，記得按底部 💾 保存`);
             },
-            renameIdx(i) {
+            async renameIdx(i) {
                 const p = naiPresets[i]; if (!p) return;
-                const nn = prompt('改名：', p.name || '');
+                const nn = await AUI.prompt('改名：', p.name || '');
                 if (nn == null) return;
                 p.name = nn.trim() || p.name;
                 refreshNaiPresetDropdown();
@@ -3569,7 +3569,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             },
             async delIdx(i) {
                 const p = naiPresets[i]; if (!p) return;
-                if (!confirm(`刪除預設「${p.name || ''}」？`)) return;
+                if (!await AUI.confirm(`刪除預設「${p.name || ''}」？`)) return;
                 if (p.thumbId) { try { await (window.parent || window).OS_DB?.deleteNaiThumb(p.thumbId); } catch (e) {} }
                 naiPresets.splice(i, 1);
                 refreshNaiPresetDropdown();
@@ -3684,7 +3684,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             },
             async del(i) {
                 const v = naiVibes[i]; if (!v) return;
-                if (!confirm(`刪除 Vibe「${v.name || ''}」？`)) return;
+                if (!await AUI.confirm(`刪除 Vibe「${v.name || ''}」？`)) return;
                 try { await (window.parent || window).OS_DB?.deleteNaiVibe(v.id); } catch (e) {}
                 naiVibes.splice(i, 1);
                 this.renderList();
@@ -3717,7 +3717,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         window._sceneSpec = {
             apply() {
                 const sel = container.querySelector('#img-scene-spec-sel');
-                if (!sel || sel.value === '') { alert('請先選擇模板'); return; }
+                if (!sel || sel.value === '') { AUI.alert('請先選擇模板'); return; }
                 const t = sceneSpecTemplates[parseInt(sel.value)];
                 if (!t) return;
                 const ta = container.querySelector('#img-scene-spec-prompt');
@@ -3731,7 +3731,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             confirmSave() {
                 const nameInput = container.querySelector('#img-scene-spec-name-input');
                 const name = nameInput?.value.trim();
-                if (!name) { alert('請輸入模板名稱'); return; }
+                if (!name) { AUI.alert('請輸入模板名稱'); return; }
                 const ta = container.querySelector('#img-scene-spec-prompt');
                 sceneSpecTemplates.push({ name, prompt: ta?.value.trim() || '' });
                 refreshSceneSpecDropdown();
@@ -3747,19 +3747,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const nameInput = container.querySelector('#img-scene-spec-name-input');
                 if (nameInput) nameInput.value = '';
             },
-            del() {
+            async del() {
                 const sel = container.querySelector('#img-scene-spec-sel');
-                if (!sel || sel.value === '') { alert('請先選擇要刪除的模板'); return; }
+                if (!sel || sel.value === '') { AUI.alert('請先選擇要刪除的模板'); return; }
                 const idx = parseInt(sel.value);
                 const name = sceneSpecTemplates[idx]?.name || '';
-                if (!confirm(`刪除模板「${name}」？`)) return;
+                if (!await AUI.confirm(`刪除模板「${name}」？`)) return;
                 sceneSpecTemplates.splice(idx, 1);
                 refreshSceneSpecDropdown();
             },
             // 從 NAI 預設包複製底詞到場景底詞框
             applyPreset() {
                 const sel = container.querySelector('#img-scene-preset-ref');
-                if (!sel || sel.value === '') { alert('請先選擇 NAI 預設包'); return; }
+                if (!sel || sel.value === '') { AUI.alert('請先選擇 NAI 預設包'); return; }
                 const p = naiPresets[parseInt(sel.value)];
                 if (!p) return;
                 const base = container.querySelector('#img-scene-base-prompt');
@@ -3917,7 +3917,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const st = loadTavernExtSettings();
                 const mount = { ...(st.mount || {}), selector: elMount.value };
                 saveTavernExtSettings({ mount });
-                if (W.toastr) W.toastr.success('重整酒館之後挪過去');
+                if (AUI.toastr) AUI.toastr.success('重整酒館之後挪過去');
             };
         }
 
@@ -3955,12 +3955,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                 const UI = W.AureliaUIUtils || window.AureliaUIUtils;
                 if (!UI || !UI.reinitializeCollapse) {
-                    if (W.toastr) W.toastr.info('設置已保存，重整酒館後生效');
+                    if (AUI.toastr) AUI.toastr.info('設置已保存，重整酒館後生效');
                     return;
                 }
                 if (on) {
                     UI.reinitializeCollapse();
-                    if (W.toastr) W.toastr.success('已開啟訊息收合');
+                    if (AUI.toastr) AUI.toastr.success('已開啟訊息收合');
                     return;
                 }
                 // 關閉：拔掉所有收合鈕、清掉每則訊息的收合記憶、把藏起來的內容還原
@@ -3982,7 +3982,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         });
                     }
                 } catch (e) { console.warn('[Settings] 還原收合狀態失敗', e); }
-                if (W.toastr) W.toastr.success('已關閉訊息收合');
+                if (AUI.toastr) AUI.toastr.success('已關閉訊息收合');
             };
         }
     }
@@ -4148,7 +4148,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const token = elToken?.value.trim();
             const gistId = elGistId?.value.trim() || null;
             if (!token || !gistId) { setStatus('請先填入 Token 與 Gist ID', '#fc8181'); return; }
-            if (!confirm('從 Gist 還原將合併資料（不清空現有），確定繼續？')) return;
+            if (!await AUI.confirm('從 Gist 還原將合併資料（不清空現有），確定繼續？', { danger: false })) return;
             BACKUP.saveSettings({ token, gistId });
             setBtnLoading(btnGistRestore, '還原中...');
             setStatus('⏳ 正在從 GitHub Gist 還原...', 'rgba(26,28,40,0.25)');
@@ -4196,7 +4196,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         if (fileInput) fileInput.addEventListener('change', async (e) => {
             const file = e.target.files?.[0];
             if (!file || !BACKUP) return;
-            if (!confirm('從本地 JSON 還原將合併資料，確定繼續？')) return;
+            if (!await AUI.confirm('從本地 JSON 還原將合併資料，確定繼續？')) return;
             setStatus('⏳ 正在匯入...', 'rgba(26,28,40,0.25)');
             try {
                 const result = await BACKUP.importLocal(file);
@@ -4209,10 +4209,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const btnFormat = container.querySelector('#bk-format-btn');
         if (btnFormat) {
             btnFormat.addEventListener('click', async () => {
-                const firstConfirm = confirm('⚠️ 警告：即將清空所有系統數據！這將徹底刪除你的所有劇情、對話、變數和設定！\n\n確定要繼續嗎？');
+                const firstConfirm = await AUI.confirm('⚠️ 警告：即將清空所有系統數據！這將徹底刪除你的所有劇情、對話、變數和設定！\n\n確定要繼續嗎？');
                 if (!firstConfirm) return;
                 
-                const secondConfirm = confirm('🛑 最終防線：資料刪除後無法恢復（宛如物理超渡）。\n請確保你已經匯出了備份檔。\n\n真的要徹底格式化嗎？');
+                const secondConfirm = await AUI.confirm('🛑 最終防線：資料刪除後無法恢復（宛如物理超渡）。\n請確保你已經匯出了備份檔。\n\n真的要徹底格式化嗎？');
                 if (!secondConfirm) return;
 
                 setBtnLoading(btnFormat, '格式化中...');

@@ -139,5 +139,3 @@
 @keyframes wsFade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── toast ── */
-.ws-toast { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%) translateY(12px); background: rgba(58,30,15,0.9); color: #fffdf7; padding: 8px 18px; border-radius: 20px; font-size: 12px; opacity: 0; pointer-events: none; transition: 0.25s; white-space: nowrap; z-index: 40; }
-.ws-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

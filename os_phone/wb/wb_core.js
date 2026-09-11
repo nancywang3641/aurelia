@@ -299,7 +299,7 @@
 
         showContacts: function() {
             const osContacts = win.OS_CONTACTS;
-            if (!osContacts) { alert("錯誤：無法讀取 OS_CONTACTS 模塊"); return; }
+            if (!osContacts) { AUI.alert("錯誤：無法讀取 OS_CONTACTS 模塊"); return; }
 
             // 移除已存在的 modal
             const existing = doc.getElementById('wb-contacts-modal');
@@ -315,7 +315,7 @@
                 }
             }
             if (contactList.length === 0) {
-                alert('暂无关注的好友\n\n提示：在微信中使用 AI 搜索添加好友后，这里会自动同步显示！');
+                AUI.alert('暂无关注的好友\n\n提示：在微信中使用 AI 搜索添加好友后，这里会自动同步显示！');
                 return;
             }
 
@@ -378,7 +378,7 @@
 
         deleteSelectedContacts: async function() {
             const checkboxes = doc.querySelectorAll('.wb-contact-chk:checked');
-            if (checkboxes.length === 0) { alert('請先勾選要刪除的聯繫人'); return; }
+            if (checkboxes.length === 0) { AUI.alert('請先勾選要刪除的聯繫人'); return; }
             if (!(await this._ask(`刪除選中的 ${checkboxes.length} 個聯繫人？刪了就回不來。`, '刪除'))) return;
 
             const osContacts = win.OS_CONTACTS;
@@ -390,7 +390,7 @@
             const modal = doc.getElementById('wb-contacts-modal');
             if (modal) modal.remove();
 
-            alert(`已刪除 ${ids.length} 個聯繫人`);
+            AUI.alert(`已刪除 ${ids.length} 個聯繫人`);
             this.showContacts(); // 重新開啟以刷新列表
         },
 
@@ -401,12 +401,12 @@
 
             const wxApp = win.wxApp;
             if (!wxApp || typeof wxApp.shareFromWeibo !== 'function') {
-                alert('微信面板尚未載入，請先開啟微信');
+                AUI.alert('微信面板尚未載入，請先開啟微信');
                 return;
             }
 
             const osContacts = win.OS_CONTACTS;
-            if (!osContacts) { alert('無法讀取聯繫人'); return; }
+            if (!osContacts) { AUI.alert('無法讀取聯繫人'); return; }
 
             const existing = doc.getElementById('wb-share-modal');
             if (existing) existing.remove();
@@ -419,7 +419,7 @@
             }
 
             if (contactList.length === 0) {
-                alert('尚無微信聯繫人可分享');
+                AUI.alert('尚無微信聯繫人可分享');
                 return;
             }
 
@@ -483,7 +483,7 @@
                 const name = contact ? (contact.wx?.nickname || contact.realName) : contactId;
                 this._showToast(`已轉發給 ${name}`);
             } else {
-                alert('轉發失敗');
+                AUI.alert('轉發失敗');
             }
         },
 
@@ -576,16 +576,7 @@
             return v == null ? null : v.v;
         },
 
-        _showToast: function(msg) {
-            const old = doc.getElementById('wb-toast-el');
-            if (old) old.remove();
-            const t = doc.createElement('div');
-            t.id = 'wb-toast-el';
-            t.className = 'wb-toast';
-            t.textContent = msg;
-            doc.body.appendChild(t);
-            setTimeout(() => { if (t.parentNode) t.remove(); }, 2100);
-        },
+        _showToast: function(msg) { AUI.toast(msg); },   // 走全站同一套提示條（core/aurelia_dialog.js）
 
         // --- 載入更多評論 (帶 Loading 狀態) ---
         startLoadMore: function(btn, postId) {
@@ -700,7 +691,7 @@
         },
 
         triggerPost: async function() {
-            if (!win.OS_API) { alert("API 引擎未載入"); return; }
+            if (!win.OS_API) { AUI.alert("API 引擎未載入"); return; }
             this.isLoading = true;
             this.render();
             try {
@@ -728,7 +719,7 @@
                      await this.processWorldResponse(finalText);
                 }, (err) => {
                     console.error(err);
-                    alert("生成失敗: " + err.message);
+                    AUI.alert("生成失敗: " + err.message);
                     this.isLoading = false; 
                     this.render();
                 });
@@ -736,7 +727,7 @@
         },
 
         triggerSinglePostAI: async function(postId) {
-            if (!win.OS_API) { alert("API 引擎未載入"); return; }
+            if (!win.OS_API) { AUI.alert("API 引擎未載入"); return; }
             this.isLoading = true;
             this.render();
             try {
@@ -757,7 +748,7 @@
                      await this.processWorldResponse(finalText);
                 }, (err) => {
                     console.error(err);
-                    alert("生成失敗: " + err.message);
+                    AUI.alert("生成失敗: " + err.message);
                     this.isLoading = false; 
                     this.render();
                 });

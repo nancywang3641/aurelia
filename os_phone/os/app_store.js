@@ -19,11 +19,7 @@
         if (d < day) return Math.floor(d / h) + ' 小時前';
         return Math.floor(d / day) + ' 天前';
     }
-    function _toast(c, msg) {
-        const t = c.querySelector('#as-toast'); if (!t) return;
-        t.textContent = msg; t.classList.add('show');
-        clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 2400);
-    }
+    function _toast(c, msg) { AUI.toast(msg); }
 
     // ── 孤兒數據清理：app 自己存的資料散在四處（localStorage aurelia_appdata_<id>_*、
     //    OS_DB app_data 的 <id>::、OS_DB app_memory 的 <id>::、記憶開關旗標 os_app_mem_plugin_<id>）。
@@ -135,7 +131,6 @@
       +   '</div>'
       // ── 安裝成功覆蓋 + toast ──
       +   '<div class="ws-success hidden" id="ws-success"><div class="ws-suc-check"><i class="fa-solid fa-check"></i></div><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
-      +   '<div class="ws-toast" id="as-toast"></div>'
       + '</div>';
 
     function launch(c) {
@@ -255,12 +250,12 @@
                 _go(c, 'import'); _toast(c, '原始碼已載入「匯入」框，可全選複製');
             }),
             mkRow('fa-pen', '改名', async function () {
-                const nm = prompt('新名稱', a.name || ''); if (nm == null) return;
+                const nm = await AUI.prompt('新名稱', a.name || ''); if (nm == null) return;
                 a.name = nm.trim() || a.name; await win.OS_DB.savePhoneApp(a); _syncMeta(a);
                 if (titleEl) titleEl.textContent = (a.emoji ? a.emoji + ' ' : '') + a.name;
             }),
             mkRow('fa-face-smile', '換圖標', async function () {
-                const em = prompt('新圖標 emoji（單一符號）', a.emoji || '📦'); if (em == null) return;
+                const em = await AUI.prompt('新圖標 emoji（單一符號）', a.emoji || '📦'); if (em == null) return;
                 a.emoji = (em.trim() || a.emoji).slice(0, 2); await win.OS_DB.savePhoneApp(a); _syncMeta(a);
                 if (titleEl) titleEl.textContent = a.emoji + ' ' + (a.name || '應用');
             })
@@ -283,18 +278,11 @@
         }
 
         mkGroup([
-            // 🚨 window.confirm 在 Tauri 會被攔掉（按了完全沒反應＝在酒館裡卸載不掉）→ 兩段式：第一下把後果寫在鈕上，4 秒內再按才卸
-            mkRow('fa-trash', '卸載', function (e) {
-                const row = e.currentTarget, lab = row.querySelector('.ws-act-label');
-                if (!row._armed) {
-                    row._armed = true;
-                    lab.textContent = a.srcTplId
-                        ? '再按一次：連資料、VN 組件與劇情裡的版本一起移除'
-                        : '再按一次：桌面圖標與資料一起刪除';
-                    row._armT = setTimeout(function () { row._armed = false; lab.textContent = '卸載'; }, 4000);
-                    return;
-                }
-                row._armed = false; clearTimeout(row._armT);
+            mkRow('fa-trash', '卸載', async function () {
+                const ok = await AUI.confirm('卸載「' + (a.name || '這個應用') + '」？\n' + (a.srcTplId
+                    ? '資料、VN 組件與劇情裡的版本會一起移除。'
+                    : '桌面圖標與資料會一起刪除。'), { okText: '卸載' });
+                if (!ok) return;
                 _uninstall(a.id, c); _go(c, 'mine');
             }, { danger: true, noChev: true })
         ]);
@@ -334,16 +322,8 @@
         r.className = 'ws-act-row danger';
         const label0 = '清理已卸載應用的資料（' + orphans.length + '）';
         r.innerHTML = '<i class="fa-solid fa-broom ws-act-ico"></i><span class="ws-act-label">' + label0 + '</span><span class="ws-act-go"></span>';
-        // 🚨 window.confirm 在 Tauri 會被攔掉（按了完全沒反應）→ 兩段式：第一下變「再按一次」，4 秒內再按才清
-        let armed = false, armT = 0;
-        const lab = r.querySelector('.ws-act-label');
-        r.addEventListener('click', function () {
-            if (!armed) {
-                armed = true; lab.textContent = '再按一次：清除 ' + orphans.length + ' 個已卸載應用的資料，無法復原';
-                armT = setTimeout(function () { armed = false; lab.textContent = label0; }, 4000);
-                return;
-            }
-            armed = false; clearTimeout(armT);
+        r.addEventListener('click', async function () {
+            if (!(await AUI.confirm('清除 ' + orphans.length + ' 個已卸載應用留下的資料？\n無法復原。', { okText: '清除' }))) return;
             _purgeOrphans(c, orphans);
         });
         g.appendChild(r);

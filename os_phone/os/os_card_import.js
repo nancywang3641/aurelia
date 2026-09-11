@@ -486,7 +486,7 @@
         // ── 處理上傳的文件 ────────────────────────────────────
         function _handleFile(file) {
             if (!file.name.toLowerCase().endsWith('.png') && file.type !== 'image/png') {
-                alert('請選擇 PNG 格式的角色卡文件！');
+                AUI.alert('請選擇 PNG 格式的角色卡文件！');
                 return;
             }
 
@@ -532,11 +532,11 @@
                     `;
                     dropZone.style.position = 'relative';
                 } catch (err) {
-                    alert('⚠️ 讀取失敗：' + err.message);
+                    AUI.alert('⚠️ 讀取失敗：' + err.message);
                     console.error('[CardImport]', err);
                 }
             };
-            bufReader.onerror = () => alert('文件讀取失敗，請重試');
+            bufReader.onerror = () => AUI.alert('文件讀取失敗，請重試');
             bufReader.readAsArrayBuffer(file);
         }
     }

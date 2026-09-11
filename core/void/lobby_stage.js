@@ -970,7 +970,7 @@
             console.warn('[LobbyStage] 皮膚存檔失敗' + (full ? '（本機空間滿了）' : '') + '：', key, e);
             if (full) {
                 try {
-                    const T = window.toastr || (window.parent && window.parent.toastr);
+                    const T = AUI.toastr;
                     T && T.error('本機儲存空間滿了，小人的新造型存不下來', '大廳');
                 } catch (_) {}
             }
@@ -2483,8 +2483,8 @@
         } catch (e) { console.warn('[LobbyStage] _pixelify 失敗', e); return null; }
     }
 
-    function _askImage(cb) {
-        const url = window.prompt('貼上圖片網址；或留空按「確定」改為從電腦選擇圖片');
+    async function _askImage(cb) {
+        const url = await AUI.prompt('貼上圖片網址；或留空按「確定」改為從電腦選擇圖片');
         if (url === null) return;
         if (url.trim()) { cb({ url: url.trim() }); return; }
         const inp = document.createElement('input');

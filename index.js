@@ -117,6 +117,7 @@ window.PANEL_COMMUNICATION = {
 const MODULE_LOAD_ORDER = [
     { name: 'debug_console', path: _AURELIA_EXT_BASE + '/core/debug_console.js', key: 'debugConsole' }, // 🐛 螢幕 console（無 devtools 環境用）— 最先載才攔得到後續 log
     { name: 'aurelia_api', path: _AURELIA_EXT_BASE + '/core/aurelia_api.js', key: 'aureliaApi' }, // 📦 統一資料入口(備用版插座)— 必須最先載
+    { name: 'aurelia_dialog', path: _AURELIA_EXT_BASE + '/core/aurelia_dialog.js', key: 'aureliaDialog' },   // 💬 全站提示條/對話窗 AUI（取代原生 alert/confirm/prompt；酒館會攔 confirm），排前面讓各模組都用得到
     { name: 'loader_core', path: _AURELIA_EXT_BASE + '/core/loader_core.js', key: 'core' },
     { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
     { name: 'tavern_bridge', path: _AURELIA_EXT_BASE + '/core/tavern_bridge.js', key: 'bridge' },
@@ -500,6 +501,7 @@ async function initializeExtension() {
 
         // 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後才蓋得掉各自的舊頭
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_sys_chrome.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_dialog.css');   // 全站提示條/對話窗（取代原生 alert/confirm/prompt）
 
         if (_AURELIA_EXT_NAME) {
             // 本機：維持原樣(本地讀檔極快、且已驗證穩定，不動)

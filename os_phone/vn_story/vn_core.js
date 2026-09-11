@@ -3108,14 +3108,14 @@
                 const S = win.VN_Summary || window.VN_Summary;
                 if (S && typeof S.generate === 'function') { S.generate(); return; }   // CTX 先不收：那顆鈕要留著顯示「⏳ 生成中…」
                 this.closeCtx();
-                alert('大總結模組尚未載入');
+                AUI.alert('大總結模組尚未載入');
                 return;
             }
             this.closeCtx();
             const st = window.OS_STORY_TOOLS || (window.parent && window.parent.OS_STORY_TOOLS);
             const cont = document.getElementById('page-game') || document.body;
             if (st && typeof st.openPanel === 'function') st.openPanel(cont);
-            else alert('故事管理工具尚未載入');
+            else AUI.alert('故事管理工具尚未載入');
         },
         _saveCtxLimit: function(val) {
             VN_CtxMonitor.saveLimit(val);
@@ -3563,7 +3563,7 @@
         resetPromptOrder() { VN_PromptOrder.reset(); },
         loadAvatarManager,   // 供 vn_settings.js 外接調用（接受自定義 listId）
         async backupAvatarsToWorldbook(btn) {
-            const tr = win.toastr || window.toastr;
+            const tr = AUI.toastr;
             const _orig = btn ? btn.textContent : '';
             if (btn) { btn.disabled = true; btn.textContent = '⏳ 備份中…'; }
             try {
@@ -3765,7 +3765,7 @@
             function _retryTrunc(cmd) {
                 _hideTruncBanner();
                 const th = window.TavernHelper || (window.parent && window.parent.TavernHelper) || (window.top && window.top.TavernHelper);
-                if (!th || typeof th.triggerSlash !== 'function') { try { (window.toastr || (window.parent && window.parent.toastr)).warning('找不到酒館助手，請回酒館手動操作'); } catch (e) {} return; }
+                if (!th || typeof th.triggerSlash !== 'function') { try { AUI.toastr.warning('找不到酒館助手，請回酒館手動操作'); } catch (e) {} return; }
                 _lastApplied = null;
                 try { window.VN_Core._showWriterCurtain(); } catch (e) {}
                 th.triggerSlash(cmd).catch(function () {});

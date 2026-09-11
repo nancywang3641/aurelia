@@ -73,16 +73,16 @@
         const isCopy = String(name).startsWith('[VN副本]');
         const acts = [];
         if (!isCopy) acts.push({ label: '<i class="fa-solid fa-copy"></i> 建立安全副本後編輯', cls: 'safe', onClick: () => _wbCopyBook(name) });
-        acts.push({ label: isCopy ? '<i class="fa-solid fa-pen"></i> 編輯這份副本' : '<i class="fa-solid fa-pen"></i> 直接改原檔', cls: isCopy ? '' : 'danger', onClick: () => { if (isCopy || confirm(`⚠️ 直接改原檔「${name}」？確定？`)) _wbEnter(name); } });
+        acts.push({ label: isCopy ? '<i class="fa-solid fa-pen"></i> 編輯這份副本' : '<i class="fa-solid fa-pen"></i> 直接改原檔', cls: isCopy ? '' : 'danger', onClick: async () => { if (isCopy || await AUI.confirm(`⚠️ 直接改原檔「${name}」？確定？`)) _wbEnter(name); } });
         acts.push({ label: '<i class="fa-solid fa-trash"></i> 刪除世界書', cls: 'danger', onClick: () => _wbDeleteBook(name) });
         _wbSheet(`「${name}」`, acts);
     }
     async function _wbDeleteBook(name) {
-        if (!confirm(`⚠️ 刪除世界書「${name}」？此動作無法復原。`)) return;
+        if (!await AUI.confirm(`⚠️ 刪除世界書「${name}」？此動作無法復原。`)) return;
         const TH = _wbTH();
-        if (!TH || !TH.deleteLorebook) { alert('酒館助手未就緒'); return; }
+        if (!TH || !TH.deleteLorebook) { AUI.alert('酒館助手未就緒'); return; }
         try { await TH.deleteLorebook(name); _wbToast('已刪除「' + name + '」'); renderWorldbookPanel(); }
-        catch (e) { alert('刪除失敗：' + (e && e.message || e)); }
+        catch (e) { AUI.alert('刪除失敗：' + (e && e.message || e)); }
     }
     // ① 選世界書（乾淨瀏覽：書名＋條目數＋›＋⋮）
     async function _wbRenderPicker(host) {
@@ -121,18 +121,18 @@
     }
     async function _wbCreateNew(name) {
         name = String(name || '').trim();
-        if (!name) { alert('先輸入世界書名稱'); return; }
+        if (!name) { AUI.alert('先輸入世界書名稱'); return; }
         const TH = _wbTH();
-        if (!TH || !TH.createLorebook) { alert('酒館助手未就緒'); return; }
+        if (!TH || !TH.createLorebook) { AUI.alert('酒館助手未就緒'); return; }
         try {
             const ok = await TH.createLorebook(name);
-            if (ok === false) { if (!confirm(`「${name}」可能已存在，要直接打開它編輯嗎？`)) return; }
+            if (ok === false) { if (!await AUI.confirm(`「${name}」可能已存在，要直接打開它編輯嗎？`)) return; }
             _wbEnter(name);
-        } catch (e) { alert('建立失敗：' + (e && e.message || e)); }
+        } catch (e) { AUI.alert('建立失敗：' + (e && e.message || e)); }
     }
     async function _wbCopyBook(src) {
         const TH = _wbTH();
-        if (!TH || !TH.createLorebook) { alert('酒館助手未就緒'); return; }
+        if (!TH || !TH.createLorebook) { AUI.alert('酒館助手未就緒'); return; }
         const copyName = `[VN副本]-${src}`;
         try {
             const created = await TH.createLorebook(copyName);
@@ -142,12 +142,12 @@
                     const clones = entries.map(e => { const c = { ...e }; delete c.uid; delete c.display_index; return c; });
                     await TH.createLorebookEntries(copyName, clones);
                 }
-                alert(`✅ 已複製成「${copyName}」（${entries.length} 條），改它不會動到原檔。`);
+                AUI.alert(`✅ 已複製成「${copyName}」（${entries.length} 條），改它不會動到原檔。`);
             } else {
-                if (!confirm(`「${copyName}」已存在，直接打開上次那份副本繼續編輯嗎？`)) return;
+                if (!await AUI.confirm(`「${copyName}」已存在，直接打開上次那份副本繼續編輯嗎？`)) return;
             }
             _wbEnter(copyName);
-        } catch (e) { alert('複製失敗：' + (e && e.message || e)); }
+        } catch (e) { AUI.alert('複製失敗：' + (e && e.message || e)); }
     }
     // ② 瀏覽條目（搜尋＋篩選＋條目卡；底部 AI整理／新增條目）
     async function _wbRenderEntries(host) {
@@ -219,7 +219,7 @@
             ev.stopPropagation();
             const uid = parseInt(cb.getAttribute('data-en'), 10);
             try { await _wbTH().setLorebookEntries(_wbWorking, [{ uid, enabled: cb.checked }]); const e = _wbEntries.find(x => x.uid === uid); if (e) e.enabled = cb.checked; }
-            catch (err) { alert('改啟用失敗：' + (err && err.message || err)); cb.checked = !cb.checked; }
+            catch (err) { AUI.alert('改啟用失敗：' + (err && err.message || err)); cb.checked = !cb.checked; }
         });
     }
     // ③ 條目詳情／編輯（手動完整編輯；新增也走這頁）
@@ -253,7 +253,7 @@
     }
     async function _wbSaveDetail(host, isNew) {
         const TH = _wbTH();
-        if (!TH) { alert('酒館助手未就緒'); return; }
+        if (!TH) { AUI.alert('酒館助手未就緒'); return; }
         const comment = host.querySelector('#swb-f-title').value.trim();
         const keys = host.querySelector('#swb-f-keys').value.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean);
         const content = host.querySelector('#swb-f-content').value;
@@ -265,14 +265,14 @@
             else await TH.setLorebookEntries(_wbWorking, [{ uid: _wbEntryEditing, comment, keys, content, enabled, type }]);
             _wbToast(isNew ? '已新增條目 ✓' : '已儲存 ✓');
             _wbView = 'entries'; renderWorldbookPanel();
-        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = isNew ? '建立條目' : '儲存'; } alert('儲存失敗：' + (e && e.message || e)); }
+        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = isNew ? '建立條目' : '儲存'; } AUI.alert('儲存失敗：' + (e && e.message || e)); }
     }
     async function _wbDeleteEntry() {
         if (_wbEntryEditing == null) return;
         const e = _wbEntries.find(x => x.uid === _wbEntryEditing);
-        if (!confirm(`刪除條目「${e ? (e.comment || '(無標題)') : ''}」？`)) return;
+        if (!await AUI.confirm(`刪除條目「${e ? (e.comment || '(無標題)') : ''}」？`)) return;
         try { await _wbTH().deleteLorebookEntries(_wbWorking, [_wbEntryEditing]); _wbToast('已刪除條目'); _wbView = 'entries'; renderWorldbookPanel(); }
-        catch (err) { alert('刪除失敗：' + (err && err.message || err)); }
+        catch (err) { AUI.alert('刪除失敗：' + (err && err.message || err)); }
     }
     // ④ 和 AI 討論（只剩對話＋輸入；模型切換收進右上⚙️；有建議冒「查看 N 項」）
     function _wbRenderChat(host) {
@@ -355,7 +355,7 @@
         const ta = host.querySelector('#swb-msg'); const msg = (ta.value || '').trim();
         if (!msg) return;
         const api = (window.parent || window).OS_API || window.OS_API;
-        if (!api || (typeof api.chatSecondary !== 'function' && typeof api.chatMain !== 'function')) { alert('AI 不可用，請先到「寫作 → API 設置」設好模型'); return; }
+        if (!api || (typeof api.chatSecondary !== 'function' && typeof api.chatMain !== 'function')) { AUI.alert('AI 不可用，請先到「寫作 → API 設置」設好模型'); return; }
         _wbChat.push({ role: 'user', content: msg }); ta.value = '';
         _wbLastError = null;
         _wbPaintChat(host);
@@ -515,7 +515,7 @@
             try { _wbEntries = (await TH.getLorebookEntries(_wbWorking)) || []; } catch (e) {}
             _wbToast('已套用 ' + n + ' 項 ✓');
             _wbView = 'chat'; renderWorldbookPanel();
-        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '套用 ' + n + ' 項'; } alert('套用失敗：' + (e && e.message || e)); }
+        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '套用 ' + n + ' 項'; } AUI.alert('套用失敗：' + (e && e.message || e)); }
     }
 
     // ── 對外入口：核心 switchTopMode 懶解析呼叫 ──

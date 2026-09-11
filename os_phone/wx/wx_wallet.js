@@ -226,12 +226,12 @@
         } catch (e) {}
     }
 
-    function _askAmount() {
+    async function _askAmount() {
         const cur = getBalance();
-        const raw = win.prompt('現在錢包裡有多少？', String(cur));
+        const raw = await AUI.prompt('現在錢包裡有多少？', String(cur));
         if (raw == null) return;
         const n = Number(String(raw).replace(/[^\d.\-]/g, ''));
-        if (!isFinite(n) || n < 0) { try { win.toastr && win.toastr.warning('請填一個不是負數的金額', '錢包'); } catch (e) {} return; }
+        if (!isFinite(n) || n < 0) { try { AUI.toastr && AUI.toastr.warning('請填一個不是負數的金額', '錢包'); } catch (e) {} return; }
         setBalance(n);
     }
 

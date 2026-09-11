@@ -767,10 +767,10 @@
             const btnBar = document.querySelector('#vrd-edit-wrap .vrd-edit-bar');
             if (btnBar) btnBar.classList.add('busy');
             const r = await updateChapter(ch.id, ta.value);
-            if (!r.ok) { alert('存不進去：' + (r.why || '未知原因')); if (btnBar) btnBar.classList.remove('busy'); return; }
+            if (!r.ok) { AUI.alert('存不進去：' + (r.why || '未知原因')); if (btnBar) btnBar.classList.remove('busy'); return; }
             ch.content = ta.value; delete ch._plain; delete ch._sum;
             if (r.avs && r.avs.ok === false && !r.avs.skipped) {
-                alert('內容已存起來。這章沒有留下開始時的數值（舊章節），所以數值沒有重算。');
+                AUI.alert('內容已存起來。這章沒有留下開始時的數值（舊章節），所以數值沒有重算。');
             }
             this._editCancel();
             _openChapter(i);
@@ -778,9 +778,9 @@
         async _deleteChapter(i) {
             const ch = _readerSorted[i];
             if (!ch) return;
-            if (!confirm(`刪掉「${ch.title || '這一章'}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
+            if (!await AUI.confirm(`刪掉「${ch.title || '這一章'}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
             const r = await deleteChapter(ch.id);
-            if (!r.ok) { alert('刪不掉：' + (r.why || '未知原因')); return; }
+            if (!r.ok) { AUI.alert('刪不掉：' + (r.why || '未知原因')); return; }
             _readerSorted.splice(i, 1);
             if (_readerSorted.length) _renderChapters(_readerSorted, _readerBody || document.getElementById('vn-reader-sa-body'));
             else {

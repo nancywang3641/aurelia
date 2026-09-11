@@ -57,7 +57,7 @@
     }
 
     function showToast(msg, type = 'info') {
-        if (win.toastr) win.toastr[type](msg);
+        if (AUI.toastr) AUI.toastr[type](msg);
         else console.log('[State Schema Toast]', msg);
     }
 

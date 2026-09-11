@@ -1411,7 +1411,7 @@
         openRedPacketById: function(packetId) {
             const data = getRedPacketData(packetId);
             if (!data) {
-                alert('紅包數據不存在');
+                AUI.alert('紅包數據不存在');
                 return;
             }
             
@@ -1525,7 +1525,7 @@
                 overlay.classList.add('show');
             } catch (e) {
                 console.error("打開紅包失敗:", e);
-                alert("紅包數據錯誤");
+                AUI.alert("紅包數據錯誤");
             }
         },
         
@@ -1560,27 +1560,27 @@
         // 🖼 換頭像是給角色的權限，預設關著：開了才會生圖（花錢花時間），也才會把用法教給 AI。
         toggleAvatarAi: function () {
             const A = win.WX_AVATAR_AI;
-            if (!A) { try { win.toastr && win.toastr.info('模塊還沒載入完，等一下再試'); } catch (e) {} return; }
+            if (!A) { try { AUI.toastr && AUI.toastr.info('模塊還沒載入完，等一下再試'); } catch (e) {} return; }
             const next = !A.isEnabled();
             A.setEnabled(next);
             this.render();
-            try { win.toastr && (next ? win.toastr.success('角色可以自己換頭像了', '微信') : win.toastr.info('已關閉', '微信')); } catch (e) {}
+            try { AUI.toastr && (next ? AUI.toastr.success('角色可以自己換頭像了', '微信') : AUI.toastr.info('已關閉', '微信')); } catch (e) {}
         },
         // 👁 讓角色看我的頭像：開了之後，換頭像的下一輪會夾一張圖給它，看完它自己寫一句記著。
         toggleSeeMe: function () {
             const A = win.WX_AVATAR_AI;
-            if (!A) { try { win.toastr && win.toastr.info('模塊還沒載入完，等一下再試'); } catch (e) {} return; }
+            if (!A) { try { AUI.toastr && AUI.toastr.info('模塊還沒載入完，等一下再試'); } catch (e) {} return; }
             const next = !A.seeEnabled();
             A.setSeeEnabled(next);
             this.render();
-            try { win.toastr && (next ? win.toastr.success('下次換頭像時它會看一眼', '微信') : win.toastr.info('已關閉', '微信')); } catch (e) {}
+            try { AUI.toastr && (next ? AUI.toastr.success('下次換頭像時它會看一眼', '微信') : AUI.toastr.info('已關閉', '微信')); } catch (e) {}
         },
         // 忘掉「這一間」記住的樣子，下次進來會重看一次。頭像是一間一個，記憶當然也是。
         forgetMyAvatar: function (chatId) {
             const A = win.WX_AVATAR_AI;
             if (A && A.clearSeeMemory) A.clearSeeMemory(chatId || GLOBAL_ACTIVE_ID);
             this.render();
-            try { win.toastr && win.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
+            try { AUI.toastr && AUI.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
         },
         // 📞 微信的通話鍵：直接接通，不是留記錄。用的是電話 app 那套通話畫面——
         //    頭像、名字、計時、掛斷、逐字稿都在，而且對話讀寫同一份聊天記錄，跟微信共用記憶。
@@ -1589,8 +1589,8 @@
             const id = GLOBAL_ACTIVE_ID;
             const chat = id ? GLOBAL_CHATS[id] : null;
             const D = win.OS_DIALER || window.OS_DIALER;
-            if (!chat || !D || !D.callContact) { try { win.toastr && win.toastr.info('通話還沒就緒'); } catch (e) {} return; }
-            if (chat.isGroup) { try { win.toastr && win.toastr.info('群聊還不能通話'); } catch (e) {} return; }
+            if (!chat || !D || !D.callContact) { try { AUI.toastr && AUI.toastr.info('通話還沒就緒'); } catch (e) {} return; }
+            if (chat.isGroup) { try { AUI.toastr && AUI.toastr.info('群聊還不能通話'); } catch (e) {} return; }
             this.togglePanel();
             const host = doc.createElement('div');
             host.id = 'wx-call-host';
@@ -1622,7 +1622,7 @@
         // 🧹 AI 整理：叫副模型判斷「哪些房間其實是同一間」(先前上下文壓縮→同房被編多個亂 id)，
         //    產出「舊id→統一id」對應表存起來；不動歷史正文，同步時自動套用。
         storyTidyAi: async function() {
-            const tr = win.toastr;
+            const tr = AUI.toastr;
             if (!win.OS_API || typeof win.OS_API.chatSecondary !== 'function') { try { tr && tr.warning('副模型未就緒，無法整理', '發現'); } catch (e) {} return; }
             const parsed = await _parseStoryRoomsByFloor();
             const rooms = parsed.rooms || {};
@@ -1666,7 +1666,7 @@
             try { _saveRoomRemap({}); } catch (e) {}
             await _storySyncNow();
             this._fillStorySyncStatus();
-            try { win.toastr && win.toastr.info('已清除整理結果、還原原始分群', '發現'); } catch (e) {}
+            try { AUI.toastr && AUI.toastr.info('已清除整理結果、還原原始分群', '發現'); } catch (e) {}
         },
         storyResync: async function() {
             await _storySyncNow();
@@ -1682,18 +1682,18 @@
         },
 
         // 「我」頁：暱稱與簽名。這是整支手機的暱稱（st.user() 的 nickname），論壇、微博以外的面板都跟它走；留空＝退回人設真名
-        editNickname: function() {
+        editNickname: async function() {
             const P = win.WX_PROFILE; if (!P || !P.get) return;
             const cur = P.get();
-            const v = prompt('暱稱（留空＝用人設真名）', cur.nickname || '');
+            const v = await AUI.prompt('暱稱（留空＝用人設真名）', cur.nickname || '');
             if (v == null) return;
             P.update({ nickname: v.trim() });
             this.render();
         },
-        editSignature: function() {
+        editSignature: async function() {
             const P = win.WX_PROFILE; if (!P || !P.get) return;
             const cur = P.get();
-            const v = prompt('個性簽名', cur.signature || '');
+            const v = await AUI.prompt('個性簽名', cur.signature || '');
             if (v == null) return;
             P.update({ signature: v.trim() });
             this.render();
@@ -1818,7 +1818,7 @@
                 case 'redpacket': 
                     const redPacketAmount = parseFloat(val1);
                     if (isNaN(redPacketAmount) || redPacketAmount <= 0) {
-                        alert('請輸入有效的紅包金額！');
+                        AUI.alert('請輸入有效的紅包金額！');
                         this.closeModal();
                         return;
                     }
@@ -1826,7 +1826,7 @@
                     if (win.WX_WALLET) {
                         const currentBalance = win.WX_WALLET.getBalance();
                         if (currentBalance < redPacketAmount) {
-                            alert('餘額不足，無法發送紅包！');
+                            AUI.alert('餘額不足，無法發送紅包！');
                             this.closeModal();
                             return;
                         }
@@ -1846,7 +1846,7 @@
                 case 'transfer': 
                     const amountNum = parseFloat(val1);
                     if (isNaN(amountNum) || amountNum <= 0) {
-                        alert('請輸入有效的轉帳金額！');
+                        AUI.alert('請輸入有效的轉帳金額！');
                         this.closeModal();
                         return;
                     }
@@ -1854,7 +1854,7 @@
                     if (win.WX_WALLET) {
                         const currentBalance = win.WX_WALLET.getBalance();
                         if (currentBalance < amountNum) {
-                            alert('餘額不足，無法轉帳！');
+                            AUI.alert('餘額不足，無法轉帳！');
                             this.closeModal();
                             return;
                         }
@@ -1992,7 +1992,7 @@
                         _setCardStatus(null, 'transfer', txnId, 'accepted', hashId);
                     } else if (transferData.status === 'expired' || elapsed > tenMinutes) {
                         // 已過期
-                        alert('轉帳已過期（10分鐘）');
+                        AUI.alert('轉帳已過期（10分鐘）');
                         transferData.status = 'expired';
                         _txnSave(null, txnId, transferData);
                         _setCardStatus(null, 'transfer', txnId, 'expired', hashId);

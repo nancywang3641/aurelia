@@ -75,7 +75,7 @@
             if (act === 'img' || act === 'sheet') {
                 _b.askImage(async (ref, dataUrl) => {
                     // 🧊 單張立姿可選「壓成像素小小人」：格點化+單色背景變透明（取消=原圖直接用；走路圖不處理）
-                    if (act === 'img' && window.confirm('要幫這張圖壓成像素小小人嗎？\n會變成大顆粒的復古小人，單色背景也會自動變透明。\n按「取消」就原圖直接用。')) {
+                    if (act === 'img' && await AUI.confirm('要幫這張圖壓成像素小小人嗎？\n會變成大顆粒的復古小人，單色背景也會自動變透明。', { okText: '壓成小小人', cancelText: '原圖直接用', danger: false })) {
                         try {
                             const src = dataUrl || await _b.resolveRef(ref);
                             const out = src ? await _b.pixelify(src) : null;
@@ -84,7 +84,7 @@
                                 await _b.idbPut(id, out);
                                 ref = { idb: id };
                             } else {
-                                window.alert('這張圖處理不了（多半是圖床不給讀），先原圖直接用。');
+                                AUI.alert('這張圖處理不了（多半是圖床不給讀），先原圖直接用。');
                             }
                         } catch (e) { console.warn('[LobbyDress] 小小人壓製失敗，改用原圖', e); }
                     }
@@ -166,21 +166,11 @@
         host.appendChild(root);
         S.histEl = root;
         _renderNpcHistoryBody(box, a);
-        // 🚨 window.confirm 在 Tauri 會被攔掉（按了完全沒反應）→ 兩段式：第一下變「再按一次」，4 秒內再按才清
-        let clearArmed = false, clearTimer = 0;
-        const clearBtn = box.querySelector('[data-act="clear"]');
-        const clearLabel = clearBtn.innerHTML;
-        box.addEventListener('click', (e) => {
+        box.addEventListener('click', async (e) => {
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (act === 'close') { _closeNpcHistory(); return; }
             if (act === 'clear') {
-                if (!clearArmed) {
-                    clearArmed = true;
-                    clearBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 再按一次：連長期記憶一起清空，不可復原';
-                    clearTimer = setTimeout(() => { clearArmed = false; clearBtn.innerHTML = clearLabel; }, 4000);
-                    return;
-                }
-                clearArmed = false; clearTimeout(clearTimer); clearBtn.innerHTML = clearLabel;
+                if (!(await AUI.confirm('清空跟' + (a.name || '這位') + '的紀錄？\n連長期記憶一起清空，不可復原。', { okText: '清空' }))) return;
                 _b.setNpcHistory(a.key, []);
                 try { (window.OS_DB || (window.parent || window).OS_DB)?.saveNpcMemory?.(a.key, { name: a.name || '', summary: '', lastCompactAt: 0 }); } catch (e) {}
                 _renderNpcHistoryBody(box, a);
@@ -417,10 +407,10 @@
         const doGen = (kind, btn) => (async () => {
             if (btn.disabled) return;
             const M = _imgMgr();
-            if (!M) { window.alert('生圖引擎還沒載入，稍等一下再按。'); return; }
+            if (!M) { AUI.alert('生圖引擎還沒載入，稍等一下再按。'); return; }
             const preset = _dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)];
-            if (!preset) { window.alert('先到「圖片設置」把這個接口的預設包存一個，這裡才有得選。'); return; }
-            if (!a.avatarPrompt) { window.alert('這位還沒有頭像資料。'); return; }
+            if (!preset) { AUI.alert('先到「圖片設置」把這個接口的預設包存一個，這裡才有得選。'); return; }
+            if (!a.avatarPrompt) { AUI.alert('這位還沒有頭像資料。'); return; }
             const label = btn.innerHTML;
             btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 生成中…';
             try {
@@ -441,7 +431,7 @@
                 });
             } catch (e) {
                 console.warn('[LobbyDress] 裝扮室生成失敗', e);
-                window.alert('生成失敗：' + (e && e.message || e));
+                AUI.alert('生成失敗：' + (e && e.message || e));
                 btn.innerHTML = label; btn.disabled = false;
             }
         })();
@@ -456,7 +446,7 @@
             btnSprite.addEventListener('click', async () => {
                 if (busy || btnSprite.disabled) return;
                 const VN = window.VN_Core || (window.parent || window).VN_Core;
-                if (!VN || typeof VN.autoGenSprite !== 'function') { window.alert('劇情引擎還沒載入，稍等一下再按。'); return; }
+                if (!VN || typeof VN.autoGenSprite !== 'function') { AUI.alert('劇情引擎還沒載入，稍等一下再按。'); return; }
                 busy = true;
                 const orig = btnSprite.innerHTML;
                 const key = a.avatarCacheKey || a.name;

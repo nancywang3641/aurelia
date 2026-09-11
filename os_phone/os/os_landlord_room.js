@@ -523,7 +523,7 @@
 
     // 進不了房間就講一聲（現在所有入口都是舞台/手帳來的,一律 toast,不再畫回手機面板）
     function _sorry(container, msg) {
-        try { win.toastr && win.toastr.info(msg); } catch (e) {}
+        try { AUI.toastr && AUI.toastr.info(msg); } catch (e) {}
     }
 
     // ── 房間掛好了 → 在場景右下角放「布置這間房」 ──
@@ -625,7 +625,7 @@
                 const r = await LL.setListing(_ctx.unitId, rent, true).catch(function (e) {
                     console.warn('[LandlordRoom] 掛招租失敗', e); return { ok: false, reason: 'save' };
                 });
-                if (r && r.ok) { close(); try { win.toastr && win.toastr.info('已經掛上招租，每日 ' + r.rent + '。'); } catch (e) {} return; }
+                if (r && r.ok) { close(); try { AUI.toastr && AUI.toastr.info('已經掛上招租，每日 ' + r.rent + '。'); } catch (e) {} return; }
                 msg.className = 'llr-msg is-bad';
                 msg.textContent = r && r.reason === 'occupied' ? '這間已經有房客了。' : '這次沒存起來，再按一次就好。';
                 go.disabled = false; if (off) off.disabled = false;
@@ -633,7 +633,7 @@
             if (off) off.onclick = async function () {
                 go.disabled = true; off.disabled = true;
                 const r = await LL.setListing(_ctx.unitId, rent, false).catch(function () { return { ok: false }; });
-                if (r && r.ok) { close(); try { win.toastr && win.toastr.info('招租撤下來了。'); } catch (e) {} return; }
+                if (r && r.ok) { close(); try { AUI.toastr && AUI.toastr.info('招租撤下來了。'); } catch (e) {} return; }
                 msg.className = 'llr-msg is-bad'; msg.textContent = '這次沒存起來，再按一次就好。';
                 go.disabled = false; off.disabled = false;
             };
@@ -655,7 +655,7 @@
             await _runDeliver(_ctx.room.order, root, { layout: _ctx.room.layout });
         } catch (e) {
             btns.forEach(function (b) { b.disabled = false; });
-            try { win.toastr && win.toastr.info((e && e.message) || '這次沒生成，再按一次就好。'); } catch (_) {}
+            try { AUI.toastr && AUI.toastr.info((e && e.message) || '這次沒生成，再按一次就好。'); } catch (_) {}
         }
     }
 

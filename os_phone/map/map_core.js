@@ -244,7 +244,7 @@
 
         console.log('[Map] 🔍 正在聯繫情報網絡，生成隨機事件...');
         
-        if (force && win.toastr) win.toastr.info('正在聯繫情報網絡...', 'System');
+        if (force && AUI.toastr) AUI.toastr.info('正在聯繫情報網絡...', 'System');
 
         STATE.isGeneratingEvents = true; // 設置標誌
         STATE.eventResponseProcessed = false; // 重置響應處理標誌
@@ -389,15 +389,15 @@ ${facilityText}
                     else if (STATE.view === 'zone') enterZone(STATE.currentZoneId);
                 }
 
-                if (force && win.toastr) {
-                    win.toastr.success(`已生成 ${events.length} 個新事件`, 'System');
+                if (force && AUI.toastr) {
+                    AUI.toastr.success(`已生成 ${events.length} 個新事件`, 'System');
                 }
                 
                 console.log('[Map] ✅ 事件生成完成:', Object.keys(STATE.activeEvents).length, '個');
                 STATE.isGeneratingEvents = false; // 重置標誌
             }, (error) => {
                 console.error('[Map] ❌ API 調用失敗:', error);
-                if (force && win.toastr) win.toastr.error('情報網絡連接失敗', 'System');
+                if (force && AUI.toastr) AUI.toastr.error('情報網絡連接失敗', 'System');
                 STATE.isGeneratingEvents = false; // 重置標誌
                 STATE.eventResponseProcessed = false; // 重置響應處理標誌
                 
@@ -450,7 +450,7 @@ ${facilityText}
             });
         } catch (e) {
             console.error('[Map] ❌ 事件生成錯誤:', e);
-            if (force && win.toastr) win.toastr.error('事件生成失敗', 'System');
+            if (force && AUI.toastr) AUI.toastr.error('事件生成失敗', 'System');
             STATE.isGeneratingEvents = false;
             STATE.eventResponseProcessed = false;
         }
@@ -869,7 +869,7 @@ ${facilityText}
     async function initCurrentWorld() {
         if (blockIfPreview('初始化世界')) return;
         if (!win.WORLD_GENERATOR) {
-            if (win.toastr) win.toastr.error('世界生成器未就緒', 'Map');
+            if (AUI.toastr) AUI.toastr.error('世界生成器未就緒', 'Map');
             return;
         }
         const selector = document.getElementById('am-zone-selector');
@@ -898,10 +898,10 @@ ${facilityText}
         });
         if (ok) {
             renderHome();
-            if (win.toastr) win.toastr.success('世界已生成', 'Map');
+            if (AUI.toastr) AUI.toastr.success('世界已生成', 'Map');
         } else {
             renderHome();
-            if (win.toastr) win.toastr.error('生成失敗，請看 console', 'Map');
+            if (AUI.toastr) AUI.toastr.error('生成失敗，請看 console', 'Map');
         }
     }
 
@@ -917,8 +917,8 @@ ${facilityText}
     function blockIfPreview(actionName) {
         if (win.WORLD_RUNTIME && win.WORLD_RUNTIME.isPreview && win.WORLD_RUNTIME.isPreview()) {
             const msg = `🔒 預覽模式：「${actionName || '此操作'}」需要你切到對應角色卡才能執行（不同角色卡是獨立世界書）`;
-            if (win.toastr) win.toastr.warning(msg, 'Map');
-            else alert(msg);
+            if (AUI.toastr) AUI.toastr.warning(msg, 'Map');
+            else AUI.alert(msg);
             return true;
         }
         return false;
@@ -946,7 +946,7 @@ ${facilityText}
             await win.WORLD_RUNTIME.exitPreview();
             updatePreviewBanner();
             renderHome();
-            if (win.toastr) win.toastr.info('已返回當前世界', 'Map');
+            if (AUI.toastr) AUI.toastr.info('已返回當前世界', 'Map');
         }
     }
 
@@ -1038,18 +1038,13 @@ ${facilityText}
                 rec.disabled = true; rec.textContent = '整理中…';
                 const res = await _recompressMapTheaterLog();
                 rec.disabled = false; rec.textContent = '♻️ 重壓縮';
-                if (win.toastr) win.toastr[res.ok ? 'success' : 'info'](res.msg, 'Map');
+                if (AUI.toastr) AUI.toastr[res.ok ? 'success' : 'info'](res.msg, 'Map');
                 render();
             };
             const clr = document.createElement('button'); clr.className = 'am-btn-full amt-danger';
             clr.textContent = '🗑️ 清空全部';
-            clr.onclick = () => {
-                if (!clr.dataset.armed) {   // Tauri 擋 window.confirm → 按兩次確認
-                    clr.dataset.armed = '1'; clr.textContent = '再按一次確認清空';
-                    setTimeout(() => { delete clr.dataset.armed; clr.textContent = '🗑️ 清空全部'; }, 3000);
-                    return;
-                }
-                delete clr.dataset.armed;
+            clr.onclick = async () => {
+                if (!(await AUI.confirm('清空全部小劇場？\n不可復原。', { okText: '清空' }))) return;
                 _mapTheaterSaveList([]);
                 render();
             };
@@ -1068,14 +1063,14 @@ ${facilityText}
         if (scenemapBackdrop && win.SCENE_MAP_ENGINE && typeof win.SCENE_MAP_ENGINE.setBackdropAuto === 'function') {
             win.SCENE_MAP_ENGINE.setBackdropAuto(scenemapBackdrop.checked);
         }
-        if (win.toastr) win.toastr.success('設置已儲存', 'Map');
+        if (AUI.toastr) AUI.toastr.success('設置已儲存', 'Map');
         closeModal();
     }
 
     // 🔥 V4.0：多世界管理器
     async function showWorldManager() {
         if (!win.OS_DB || typeof win.OS_DB.listWorlds !== 'function') {
-            if (win.toastr) win.toastr.error('OS_DB 未就緒', 'Map');
+            if (AUI.toastr) AUI.toastr.error('OS_DB 未就緒', 'Map');
             return;
         }
         let worlds = [];
@@ -1192,14 +1187,14 @@ ${facilityText}
         updatePreviewBanner();
         renderHome();
         closeModal();
-        if (win.toastr) {
+        if (AUI.toastr) {
             const inP = win.WORLD_RUNTIME.isPreview();
-            win.toastr.info(inP ? '👁️ 已切換到預覽模式' : '已切回當前世界', 'Map');
+            AUI.toastr.info(inP ? '👁️ 已切換到預覽模式' : '已切回當前世界', 'Map');
         }
     }
 
     async function _deleteWorld(worldId) {
-        const ok = window.confirm('確定刪除這個世界？所有區域、設施、排程都會永久消失。');
+        const ok = await AUI.confirm('確定刪除這個世界？所有區域、設施、排程都會永久消失。');
         if (!ok) return;
         try {
             await win.OS_DB.deleteWorldData(worldId);
@@ -1211,16 +1206,16 @@ ${facilityText}
                 updatePreviewBanner();
                 renderHome();
             }
-            if (win.toastr) win.toastr.success('世界已刪除', 'Map');
+            if (AUI.toastr) AUI.toastr.success('世界已刪除', 'Map');
             await showWorldManager(); // 重開 modal 刷新列表
         } catch (e) {
             console.error('[Map] 刪除世界失敗:', e);
-            if (win.toastr) win.toastr.error('刪除失敗', 'Map');
+            if (AUI.toastr) AUI.toastr.error('刪除失敗', 'Map');
         }
     }
 
     async function _wipeAllDynamicWorlds() {
-        const ok = window.confirm('確定清空「所有動態世界」？奧瑞亞會保留，但所有 AI 生成的世界都會消失。');
+        const ok = await AUI.confirm('確定清空「所有動態世界」？奧瑞亞會保留，但所有 AI 生成的世界都會消失。');
         if (!ok) return;
         try {
             const worlds = await win.OS_DB.listWorlds();
@@ -1231,7 +1226,7 @@ ${facilityText}
             await win.WORLD_RUNTIME.switchTo(win.WORLD_RUNTIME.getRealChatId());
             updatePreviewBanner();
             renderHome();
-            if (win.toastr) win.toastr.success(`已清空 ${worlds.length} 個世界`, 'Map');
+            if (AUI.toastr) AUI.toastr.success(`已清空 ${worlds.length} 個世界`, 'Map');
             await showWorldManager();
         } catch (e) {
             console.error('[Map] 清空失敗:', e);
@@ -1241,11 +1236,11 @@ ${facilityText}
     // 🔥 V3.0：排程按鈕入口 — 有排程開時刻表，沒排程走生成流程
     async function generateSchedules() {
         if (!win.SCHEDULE_ENGINE) {
-            if (win.toastr) win.toastr.error('排程引擎未就緒', 'Map');
+            if (AUI.toastr) AUI.toastr.error('排程引擎未就緒', 'Map');
             return;
         }
         if (!win.WORLD_RUNTIME || !win.WORLD_RUNTIME.getCurrentWorld()) {
-            if (win.toastr) win.toastr.warning('請先初始化此世界', 'Map');
+            if (AUI.toastr) AUI.toastr.warning('請先初始化此世界', 'Map');
             return;
         }
         if (win.WORLD_RUNTIME.hasSchedules()) {
@@ -1258,12 +1253,12 @@ ${facilityText}
 
     async function runScheduleGenerator() {
         if (blockIfPreview('生成排程')) return;
-        if (win.toastr) win.toastr.info('正在生成角色排程...', 'Map');
+        if (AUI.toastr) AUI.toastr.info('正在生成角色排程...', 'Map');
         const result = await win.SCHEDULE_ENGINE.generateSchedules((stage, msg) => {
             console.log('[Map] 排程進度:', stage, msg);
-            if (stage === 'error' && win.toastr) win.toastr.error(msg, 'Map');
+            if (stage === 'error' && AUI.toastr) AUI.toastr.error(msg, 'Map');
         });
-        if (result && win.toastr) win.toastr.success('排程已生成', 'Map');
+        if (result && AUI.toastr) AUI.toastr.success('排程已生成', 'Map');
     }
 
     // === V3.0：時刻表查看器 ===
@@ -1273,7 +1268,7 @@ ${facilityText}
         const schedules = (world && world.schedules) || {};
         const charNames = Object.keys(schedules);
         if (charNames.length === 0) {
-            if (win.toastr) win.toastr.warning('尚無排程資料', 'Map');
+            if (AUI.toastr) AUI.toastr.warning('尚無排程資料', 'Map');
             return;
         }
 
@@ -1394,7 +1389,7 @@ ${facilityText}
     }
 
     async function _regenerateSchedules() {
-        const ok = window.confirm('確定重新生成排程？舊資料會被覆蓋。');
+        const ok = await AUI.confirm('確定重新生成排程？舊資料會被覆蓋。');
         if (!ok) return;
         closeModal();
         await runScheduleGenerator();
@@ -2248,7 +2243,7 @@ ${facilityText}
             // 只清探索快照（非 __world__ key）——世界資料同住 map_data store，刪世界走多世界管理的 _deleteWorld/_wipeAllDynamicWorlds
             try { await win.OS_DB.clearMapScanSnapshots(); } catch (e) {}
         }
-        alert('已清空地圖數據');
+        AUI.alert('已清空地圖數據');
         renderHome();
     }
 

@@ -281,7 +281,7 @@
                     phoneScreen.appendChild(panelContainer);
                     console.log('[StoryExtractor] 容器修復完成');
                 } else {
-                    return alert('無法定位手機介面 (aurelia-phone-screen)，請確認控制中心已開啟。');
+                    return AUI.alert('無法定位手機介面 (aurelia-phone-screen)，請確認控制中心已開啟。');
                 }
             }
 

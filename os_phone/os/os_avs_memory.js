@@ -62,7 +62,7 @@
         if (!_host) return;
         _host.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
             const id = btn.getAttribute('data-del');
-            if (!confirm('刪掉這條記憶？AI 之後就不會再想起它。')) return;
+            if (!await AUI.confirm('刪掉這條記憶？AI 之後就不會再想起它。')) return;
             try { await win.OS_DB?.deleteVnMemory?.(id); } catch (e) {}
             _build();
         });
@@ -303,33 +303,33 @@
         const moveBtn = q('#avs-mem-move-btn');
         if (moveBtn) moveBtn.onclick = async () => {
             const src = q('#avs-mem-src-world')?.value;
-            if (!src) { alert('先選來源世界'); return; }
+            if (!src) { AUI.alert('先選來源世界'); return; }
             const target = _storyId();
-            if (!target) { alert('目前沒有有效的世界（先開著要轉入的那個聊天）'); return; }
-            if (src === target) { alert('來源和目前是同一個世界'); return; }
-            if (!confirm(`把「${src}」的記憶複製到目前世界？\n（來源保留、不會刪）`)) return;
+            if (!target) { AUI.alert('目前沒有有效的世界（先開著要轉入的那個聊天）'); return; }
+            if (src === target) { AUI.alert('來源和目前是同一個世界'); return; }
+            if (!await AUI.confirm(`把「${src}」的記憶複製到目前世界？\n（來源保留、不會刪）`)) return;
             moveBtn.disabled = true; const _o = moveBtn.textContent; moveBtn.textContent = '轉入中…';
             try {
                 const n = await win.OS_DB?.copyVnMemoriesToStory?.(src, target);
-                alert(`✅ 已轉入 ${n || 0} 條記憶到目前世界`);
-            } catch (e) { alert('轉入失敗：' + (e?.message || e)); moveBtn.textContent = _o; moveBtn.disabled = false; }
+                AUI.alert(`✅ 已轉入 ${n || 0} 條記憶到目前世界`);
+            } catch (e) { AUI.alert('轉入失敗：' + (e?.message || e)); moveBtn.textContent = _o; moveBtn.disabled = false; }
             _build();
         };
 
         // 🗜️ 整理舊記憶（合併壓縮）：交副模型把舊的零碎記憶併成精簡版，治長線過載
         const tidyBtn = q('#avs-mem-tidy');
         if (tidyBtn) tidyBtn.onclick = async () => {
-            if (!win.OS_STATE_RUNTIME?.compressOldMemories) { alert('整理功能尚未載入，請重載擴展'); return; }
+            if (!win.OS_STATE_RUNTIME?.compressOldMemories) { AUI.alert('整理功能尚未載入，請重載擴展'); return; }
             const sid = _storyId();
-            if (!sid) { alert('目前沒有有效的世界（先開著要整理的那個聊天）'); return; }
-            if (!confirm('把舊的零碎記憶交副模型併成精簡版？\n\n• 重要角色、關係、代表台詞不會動\n• 最近的記憶保留原樣\n• 原始資料只隱藏不刪、可還原')) return;
+            if (!sid) { AUI.alert('目前沒有有效的世界（先開著要整理的那個聊天）'); return; }
+            if (!await AUI.confirm('把舊的零碎記憶交副模型併成精簡版？\n\n• 重要角色、關係、代表台詞不會動\n• 最近的記憶保留原樣\n• 原始資料只隱藏不刪、可還原')) return;
             const res = q('#avs-mem-tidy-result');
             tidyBtn.disabled = true; const _o = tidyBtn.textContent; tidyBtn.textContent = '整理中…';
             try {
                 const r = await win.OS_STATE_RUNTIME.compressOldMemories({ storyId: sid, onProgress: (m) => { if (res) res.textContent = m; } });
-                alert(`✅ 整理完成\n把 ${r.mergedCount} 條舊記憶併成 ${r.madeCount} 條\n目前共 ${r.after} 條`);
+                AUI.alert(`✅ 整理完成\n把 ${r.mergedCount} 條舊記憶併成 ${r.madeCount} 條\n目前共 ${r.after} 條`);
             } catch (e) {
-                alert('整理失敗：' + (e?.message || e));
+                AUI.alert('整理失敗：' + (e?.message || e));
             }
             tidyBtn.textContent = _o; tidyBtn.disabled = false;
             _build();
@@ -338,14 +338,14 @@
         // 🧹 對齊劇情：清掉「來源訊息已被刪掉」的孤兒記憶（刪劇情後 AI 還一直想起被刪內容時用）
         const recBtn = q('#avs-mem-reconcile');
         if (recBtn) recBtn.onclick = async () => {
-            if (!win.OS_VECTOR_INJECT?.reconcileToStory) { alert('記憶引擎未載入，請重載擴展'); return; }
-            if (!confirm('清掉「已經不在目前劇情裡」的記憶？\n\n• 用在：刪掉劇情後，AI 還一直想起被刪內容\n• 只清「來源訊息已被刪除」的那幾條，現存劇情的記憶不動\n• 讀不到完整劇情會自動中止、不誤刪')) return;
+            if (!win.OS_VECTOR_INJECT?.reconcileToStory) { AUI.alert('記憶引擎未載入，請重載擴展'); return; }
+            if (!await AUI.confirm('清掉「已經不在目前劇情裡」的記憶？\n\n• 用在：刪掉劇情後，AI 還一直想起被刪內容\n• 只清「來源訊息已被刪除」的那幾條，現存劇情的記憶不動\n• 讀不到完整劇情會自動中止、不誤刪')) return;
             recBtn.disabled = true; const _o = recBtn.textContent; recBtn.textContent = '對齊中…';
             try {
                 const r = await win.OS_VECTOR_INJECT.reconcileToStory();
-                if (r.ok) alert(`✅ 對齊完成\n清掉 ${r.removed} 條已刪內容的記憶（目前劇情 ${r.total} 樓、共掃 ${r.scanned} 條）`);
-                else alert('未執行：' + (r.msg || '未知原因'));
-            } catch (e) { alert('對齊失敗：' + (e?.message || e)); }
+                if (r.ok) AUI.alert(`✅ 對齊完成\n清掉 ${r.removed} 條已刪內容的記憶（目前劇情 ${r.total} 樓、共掃 ${r.scanned} 條）`);
+                else AUI.alert('未執行：' + (r.msg || '未知原因'));
+            } catch (e) { AUI.alert('對齊失敗：' + (e?.message || e)); }
             recBtn.textContent = _o; recBtn.disabled = false;
             _build();
         };
@@ -353,20 +353,20 @@
         // 🔢 建立記憶向量（回填）：把已存但沒向量的舊記憶批次補上 embedding —— 啟用向量召回的一次性遷移
         const bfBtn = q('#avs-mem-backfill');
         if (bfBtn) bfBtn.onclick = async () => {
-            if (!win.OS_VECTOR_ENGINE?.backfillVectors) { alert('記憶引擎未載入，請重載擴展'); return; }
+            if (!win.OS_VECTOR_ENGINE?.backfillVectors) { AUI.alert('記憶引擎未載入，請重載擴展'); return; }
             const sid2 = _storyId();
-            if (!sid2) { alert('目前沒有有效的世界（先開著要建立向量的那個聊天）'); return; }
+            if (!sid2) { AUI.alert('目前沒有有效的世界（先開著要建立向量的那個聊天）'); return; }
             const res = q('#avs-mem-tidy-result');
-            if (!confirm('把目前世界還沒建立向量的記憶批次補上？\n\n• 會分批呼叫記憶服務（免費 BGE 友善、有節流）\n• 一次性：完成後召回才改用向量、不再每輪背整份目錄\n• 條數多時需要一點時間，跑完前別關面板')) return;
+            if (!await AUI.confirm('把目前世界還沒建立向量的記憶批次補上？\n\n• 會分批呼叫記憶服務（免費 BGE 友善、有節流）\n• 一次性：完成後召回才改用向量、不再每輪背整份目錄\n• 條數多時需要一點時間，跑完前別關面板')) return;
             bfBtn.disabled = true; const _o = bfBtn.textContent; bfBtn.textContent = '建立中…';
             try {
                 const r = await win.OS_VECTOR_ENGINE.backfillVectors(sid2, (done, total) => {
                     if (res) res.textContent = `建立記憶向量中… ${done}/${total}`;
                     bfBtn.textContent = `建立中… ${done}/${total}`;
                 });
-                alert(`✅ 完成\n已建立 ${r.ok}/${r.total} 條記憶向量` + (r.ok < r.total ? '\n（部分沒成功，可再按一次補剩下的）' : ''));
+                AUI.alert(`✅ 完成\n已建立 ${r.ok}/${r.total} 條記憶向量` + (r.ok < r.total ? '\n（部分沒成功，可再按一次補剩下的）' : ''));
             } catch (e) {
-                alert('建立失敗：' + (e?.message || e));
+                AUI.alert('建立失敗：' + (e?.message || e));
             }
             bfBtn.textContent = _o; bfBtn.disabled = false;
             _build();

@@ -140,7 +140,7 @@
         document.getElementById('vn-ws-idea-cancel').onclick = () => { document.getElementById('vn-ws-idea-overlay').style.display = 'none'; };
         document.getElementById('vn-ws-idea-submit').onclick = async () => {
             const ideaInput = document.getElementById('vn-ws-idea-input').value.trim();
-            if (!ideaInput) return alert('請先輸入你的點子！');
+            if (!ideaInput) return AUI.alert('請先輸入你的點子！');
             const btn = document.getElementById('vn-ws-idea-submit');
             const originalText = btn.innerHTML;
             btn.innerHTML = '配方調製中...';
@@ -157,7 +157,7 @@
 
             const format = document.getElementById('vn-ws-format').value.trim();
             const desc = document.getElementById('vn-ws-desc').value.trim();
-            if (!tagId || !format || !desc) return alert('請完整填寫資訊');
+            if (!tagId || !format || !desc) return AUI.alert('請完整填寫資訊');
 
             document.getElementById('vn-ws-loading').style.display = 'block';
             document.getElementById('vn-ws-btn-generate').disabled = true;
@@ -171,8 +171,8 @@
 
         document.getElementById('vn-ws-btn-refine').onclick = async () => {
             const refineMsg = document.getElementById('vn-ws-refine-desc').value.trim();
-            if (!refineMsg) return alert('請輸入修改建議！');
-            if (!generatedData) return alert('還沒有可微調的對象，請先「全新生成」');
+            if (!refineMsg) return AUI.alert('請輸入修改建議！');
+            if (!generatedData) return AUI.alert('還沒有可微調的對象，請先「全新生成」');
 
             const scopeEl = document.querySelector('input[name="vn-ws-scope"]:checked');
             const scope = scopeEl ? scopeEl.value : 'all';
@@ -208,7 +208,7 @@
         };
 
         document.getElementById('vn-ws-btn-save').onclick = async () => {
-            if (!generatedData || !generatedData.tagId) return alert('❌ 無法儲存：缺少標籤 ID！請重新生成。');
+            if (!generatedData || !generatedData.tagId) return AUI.alert('❌ 無法儲存：缺少標籤 ID！請重新生成。');
             const db = win.OS_DB || window.OS_DB;
             if (db && typeof db.saveVNTagTemplate === 'function') {
                 try {
@@ -219,9 +219,9 @@
                     
                     await db.saveVNTagTemplate(generatedData);
                     if (typeof syncActiveTagsToLocal === 'function') await syncActiveTagsToLocal();
-                    alert('🎉 標籤已成功收錄！即將為您切換至展廳。');
+                    AUI.alert('🎉 標籤已成功收錄！即將為您切換至展廳。');
                     document.querySelector('.vn-ws-tab[data-tab="gallery"]').click();
-                } catch (err) { alert('❌ 儲存失敗: ' + err.message); }
+                } catch (err) { AUI.alert('❌ 儲存失敗: ' + err.message); }
             }
         };
     }
@@ -262,7 +262,7 @@
     async function importToSillyTavern(data) {
         const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
         if (!th) {
-            alert('❌ 找不到 TavernHelper！請確保你在酒館環境內，且已安裝酒館助手腳本。');
+            AUI.alert('❌ 找不到 TavernHelper！請確保你在酒館環境內，且已安裝酒館助手腳本。');
             return;
         }
 
@@ -300,10 +300,10 @@
             let wbMsg = "";
             try { if (await _deleteWbUsageEntry(th, safeTagId)) wbMsg = "\n🧹 已清掉舊版留在世界書的使用說明條目（說明現在自動注入、不佔世界書）。"; } catch (e) {}
 
-            alert(`🎉 匯入成功！已將標籤 [${safeTagId}] 寫入全局正則。${wbMsg}\n請發送新訊息或重新載入聊天查看效果。`);
+            AUI.alert(`🎉 匯入成功！已將標籤 [${safeTagId}] 寫入全局正則。${wbMsg}\n請發送新訊息或重新載入聊天查看效果。`);
         } catch (err) {
             console.error('[TavernHelper Regex Import]', err);
-            alert('❌ 匯入失敗: ' + err.message);
+            AUI.alert('❌ 匯入失敗: ' + err.message);
         }
     }
 
@@ -389,7 +389,7 @@
                 };
                 
                 card.querySelector('.btn-del').onclick = async () => {
-                    if (confirm(`確定要將 [${tpl.tagId}] 模組從庫中徹底銷毀嗎？\n(注意：這不會刪除已寫入酒館的正則，需自行前往酒館設置移除)`)) {
+                    if (await AUI.confirm(`確定要將 [${tpl.tagId}] 模組從庫中徹底銷毀嗎？\n(注意：這不會刪除已寫入酒館的正則，需自行前往酒館設置移除)`)) {
                         await db.deleteUITemplate(tpl.id);
                         if (typeof syncActiveTagsToLocal === 'function') await syncActiveTagsToLocal();
                         loadGallery();
@@ -421,7 +421,7 @@
 
     async function requestIdeaTranslation(ideaText) {
         const apiEngine = win.OS_API || window.OS_API;
-        if (!apiEngine || typeof apiEngine.chat !== 'function') return alert("找不到底層 API 引擎");
+        if (!apiEngine || typeof apiEngine.chat !== 'function') return AUI.alert("找不到底層 API 引擎");
         
         const prompt = `你是一個 VN 視覺小說引擎的「提示詞工程師 (Prompt Engineer)」。
 用戶是一個不會寫程式的玩家，他會用大白話描述想要的遊戲面板。
@@ -489,7 +489,7 @@
                 generatedData.usageDesc = resultObj.usageDesc;
             }
             document.getElementById('vn-ws-idea-overlay').style.display = 'none';
-        } catch (error) { alert('點子轉換失敗，請檢查 API 連線。\n錯誤: ' + error.message); }
+        } catch (error) { AUI.alert('點子轉換失敗，請檢查 API 連線。\n錯誤: ' + error.message); }
     }
 
     // === scope-based partial refine：只重寫指定欄位 ===
@@ -689,7 +689,7 @@ ${desc}
             document.getElementById('vn-ws-refine-area').style.display = 'block';
             renderHistoryArea();
 
-        } catch (error) { alert('API 調用失敗: ' + error.message); }
+        } catch (error) { AUI.alert('API 調用失敗: ' + error.message); }
     }
 
     // ============================================================
@@ -785,8 +785,8 @@ ${desc}
                 <button class="h-btn btn-pin">${snap.pinned ? '📌' : '📍'}</button>
                 <button class="h-btn danger btn-del">✖</button>
             `;
-            item.querySelector('.btn-restore').onclick = () => {
-                if (confirm('要還原到這個版本嗎？目前未儲存的修改會先拍進快照，可以再還原回來。')) {
+            item.querySelector('.btn-restore').onclick = async () => {
+                if (await AUI.confirm('要還原到這個版本嗎？目前未儲存的修改會先拍進快照，可以再還原回來。')) {
                     restoreFromSnapshot(idx);
                 }
             };
@@ -794,8 +794,8 @@ ${desc}
                 snap.pinned = !snap.pinned;
                 renderHistoryArea();
             };
-            item.querySelector('.btn-del').onclick = () => {
-                if (confirm('刪除這張快照？')) {
+            item.querySelector('.btn-del').onclick = async () => {
+                if (await AUI.confirm('刪除這張快照？')) {
                     generatedData.history.splice(idx, 1);
                     renderHistoryArea();
                 }

@@ -155,37 +155,9 @@
                     return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
                 },
                 esc: function(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
-                toast: function(msg, opts) {
-                    try {
-                        opts = opts || {};
-                        var d = document.createElement('div');
-                        var bg = opts.color || (opts.type === 'error' ? 'rgba(180,60,60,0.95)' : 'rgba(28,28,38,0.92)');
-                        d.textContent = String(msg == null ? '' : msg);
-                        d.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);max-width:80%;background:' + bg + ';color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;line-height:1.4;z-index:2147483647;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transition:opacity .2s;pointer-events:none;text-align:center;';
-                        document.body.appendChild(d);
-                        requestAnimationFrame(function(){ d.style.opacity = '1'; });
-                        setTimeout(function(){ d.style.opacity = '0'; setTimeout(function(){ d.remove(); }, 250); }, opts.duration || 2000);
-                    } catch (e) {}
-                },
-                confirm: function(msg, opts) {
-                    return new Promise(function(res){
-                        try {
-                            opts = opts || {};
-                            var ov = document.createElement('div');
-                            ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
-                            var box = document.createElement('div');
-                            box.style.cssText = 'background:#fff;color:#222;border-radius:14px;padding:18px;max-width:300px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.3);font-size:14px;line-height:1.5;';
-                            var m = document.createElement('div'); m.textContent = String(msg == null ? '' : msg); m.style.cssText = 'margin-bottom:14px;white-space:pre-wrap;';
-                            var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
-                            var no = document.createElement('button'); no.textContent = opts.cancelText || '取消'; no.style.cssText = 'padding:8px 14px;border:1px solid rgba(0,0,0,0.2);background:#fff;color:#333;border-radius:8px;font-size:13px;cursor:pointer;';
-                            var yes = document.createElement('button'); yes.textContent = opts.okText || '確定'; yes.style.cssText = 'padding:8px 14px;border:0;background:' + (opts.danger ? '#c0392b' : '#1A1C28') + ';color:#fff;border-radius:8px;font-size:13px;cursor:pointer;';
-                            no.onclick = function(){ ov.remove(); res(false); };
-                            yes.onclick = function(){ ov.remove(); res(true); };
-                            ov.onclick = function(e){ if (e.target === ov) { ov.remove(); res(false); } };
-                            row.appendChild(no); row.appendChild(yes); box.appendChild(m); box.appendChild(row); ov.appendChild(box); document.body.appendChild(ov);
-                        } catch (e) { res(false); }
-                    });
-                },
+                // 提示條／確認窗走全站同一套（core/aurelia_dialog.js）
+                toast: function(msg, opts) { try { return AUI.toast(msg, opts); } catch (e) {} },
+                confirm: function(msg, opts) { try { return AUI.confirm(msg, opts); } catch (e) { return Promise.resolve(false); } },
                 loading: function(target, on, text) {
                     try {
                         var host = (typeof target === 'string') ? document.querySelector(target) : (target || document.body);

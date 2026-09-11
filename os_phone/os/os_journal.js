@@ -606,7 +606,7 @@
             // 🛠️ 總結與隱藏工具：獨立 overlay（作用於目前開啟的對話）
             rightEl.querySelectorAll('.jrnl-open-tools').forEach(b => {
                 b.onclick = () => {
-                    try { win.OS_STORY_TOOLS?.openPanel ? win.OS_STORY_TOOLS.openPanel(container) : alert('故事管理工具尚未載入'); } catch (e) { }
+                    try { win.OS_STORY_TOOLS?.openPanel ? win.OS_STORY_TOOLS.openPanel(container) : AUI.alert('故事管理工具尚未載入'); } catch (e) { }
                 };
             });
 

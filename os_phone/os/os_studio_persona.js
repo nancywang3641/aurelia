@@ -207,12 +207,12 @@
         let ctx = await _mcWorldContext('card');
         let tag = '對標版';
         if (!ctx) {
-            const d = prompt('這張卡沒抓到綁定的世界書。\n用一句話描述要對標的世界（例：古風武俠）：');
+            const d = await AUI.prompt('這張卡沒抓到綁定的世界書。\n用一句話描述要對標的世界（例：古風武俠）：');
             if (!d || !d.trim()) return;
             ctx = '世界觀：' + d.trim(); tag = d.trim().slice(0, 8);
         }
         const api = (window.parent || window).OS_API || window.OS_API;
-        if (!api || (typeof api.chatMain !== 'function' && typeof api.chatSecondary !== 'function')) { alert('AI 不可用'); return; }
+        if (!api || (typeof api.chatMain !== 'function' && typeof api.chatSecondary !== 'function')) { AUI.alert('AI 不可用'); return; }
         _wbToast('AI 對標世界中…');
         const sys = _MC_SYS + '\n\n【任務】下面是使用者現有的人設（一整段散文）。請把它改寫成「貼合下面這個世界」的版本。原則：\n1. 保留核心個性／這個人是誰／與人相處的方式——性格本質不變。\n2. 外觀、說話習慣、出身背景這類「世界皮層」改寫成貼合該世界（例如現代身分改成古代身分）。\n3. ★取捨優先於硬凹：原設定裡若有「在新世界根本不存在或不合理」的東西（某些職業、物品、習慣、背景細節），就「直接捨棄那一項」，不要硬找個對應物去套。寧可這個人在新世界少幾條設定，也不要為了照搬而生出彆扭的拼湊對應。\n4. 只留／改「換了世界仍然成立」的部分；不合的就讓它消失、別硬交代它的去向。\n把結果拆成區塊用 <persona><seg> 輸出。\n\n【現有人設】\n' + desc + '\n\n' + ctx;
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把我的人設改寫成這個世界的版本。' }];
@@ -220,7 +220,7 @@
             const _bad = _studioBadReply(String(full || ''));   // 錯誤頁/空/截斷 → 問重試
             if (_bad.bad) { _studioConfirmRetry(_bad.reason, () => _mcImportToWorld(p)); return; }
             const segs = _mcParseSegs(String(full || ''));
-            if (!segs.length) { alert('AI 沒吐出區塊，再試一次'); return; }
+            if (!segs.length) { AUI.alert('AI 沒吐出區塊，再試一次'); return; }
             _mcImportEnter(p, segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })), 'preview', ((p && p.name) || '我') + '（' + tag + '）');
             _wbToast('已生成世界版，按確定會存成「新的一份」、不動你原本的');
         };
@@ -299,7 +299,7 @@
         const ta = host.querySelector('#mc-msg'); const msg = (ta.value || '').trim();
         if (!msg) return;
         const api = (window.parent || window).OS_API || window.OS_API;
-        if (!api || (typeof api.chatSecondary !== 'function' && typeof api.chatMain !== 'function')) { alert('AI 不可用，請先到「寫作 → API 設置」設好模型'); return; }
+        if (!api || (typeof api.chatSecondary !== 'function' && typeof api.chatMain !== 'function')) { AUI.alert('AI 不可用，請先到「寫作 → API 設置」設好模型'); return; }
         _mcChat.push({ role: 'user', content: msg }); ta.value = '';
         _mcLastError = null;
         _mcPaintChat(host);
@@ -384,10 +384,10 @@
         });
     }
     async function _mcWriteEntry(host) {
-        if (!_mcWorking.name || !_mcWorking.name.trim()) { alert('先給角色取個名字'); return; }
-        if (!_mcWorking.blocks.length) { alert('至少要有一個區塊'); return; }
+        if (!_mcWorking.name || !_mcWorking.name.trim()) { AUI.alert('先給角色取個名字'); return; }
+        if (!_mcWorking.blocks.length) { AUI.alert('至少要有一個區塊'); return; }
         const TH = _wbTH();
-        if (!TH) { alert('酒館助手未就緒'); return; }
+        if (!TH) { AUI.alert('酒館助手未就緒'); return; }
         await _mcEnsureBook();
         const _nm = _mcWorking.name.trim();
         // 主模型只讀條目「內容」、讀不到標題 → 內容開頭標【用戶人設】+角色名，讓它知道這是玩家扮演的主角、別當 NPC/世界設定
@@ -399,11 +399,11 @@
             _wbToast('已寫入世界書 ✓');
             _mcView = 'list'; _mcWorking = null;
             renderPersonaPanel();
-        } catch (e) { alert('寫入失敗：' + (e && e.message || e)); }
+        } catch (e) { AUI.alert('寫入失敗：' + (e && e.message || e)); }
     }
     async function _mcSetActive(uid) {
         const TH = _wbTH();
-        if (!TH || !TH.setLorebookEntries) { alert('酒館助手未就緒'); return; }
+        if (!TH || !TH.setLorebookEntries) { AUI.alert('酒館助手未就緒'); return; }
         try {
             const cur = _mcChars.find(c => c.uid === uid);
             const turnOff = !!(cur && cur.enabled);   // 已是使用中 → 再點＝取消使用（全部關掉、允許一個都不開）
@@ -411,7 +411,7 @@
             await TH.setLorebookEntries(MC_BOOK, updates);
             _wbToast(turnOff ? '已取消使用 ✓' : '已設為使用中 ✓');
             renderPersonaPanel();
-        } catch (e) { alert('切換失敗：' + (e && e.message || e)); }
+        } catch (e) { AUI.alert('切換失敗：' + (e && e.message || e)); }
     }
 
     function _mcSheet(title, actions) {
@@ -436,10 +436,10 @@
         host.appendChild(ov);
     }
     function _mcAdaptToWorld(host) {
-        if (!_mcWorking.blocks.length) { alert('先寫好一個底版人設，再對標世界'); return; }
+        if (!_mcWorking.blocks.length) { AUI.alert('先寫好一個底版人設，再對標世界'); return; }
         _mcSheet('對標哪個世界？', [
             { label: '<i class="fa-solid fa-id-card"></i> 我現在這張卡的世界', onClick: () => _mcDoAdapt(host, 'card') },
-            { label: '<i class="fa-solid fa-pen"></i> 我自己描述一個世界', onClick: () => { const desc = prompt('用一句話描述世界觀（例：古風武俠／賽博龐克…）'); if (desc && desc.trim()) _mcDoAdapt(host, 'desc', desc.trim()); } }
+            { label: '<i class="fa-solid fa-pen"></i> 我自己描述一個世界', onClick: async () => { const desc = await AUI.prompt('用一句話描述世界觀（例：古風武俠／賽博龐克…）'); if (desc && desc.trim()) _mcDoAdapt(host, 'desc', desc.trim()); } }
         ]);
     }
     async function _mcWorldContext(mode, desc) {
@@ -463,9 +463,9 @@
     }
     async function _mcDoAdapt(host, mode, desc) {
         const ctx = await _mcWorldContext(mode, desc);
-        if (!ctx) { alert('拿不到世界資料（這張卡可能沒綁世界書）。改用「我自己描述一個世界」。'); return; }
+        if (!ctx) { AUI.alert('拿不到世界資料（這張卡可能沒綁世界書）。改用「我自己描述一個世界」。'); return; }
         const api = (window.parent || window).OS_API || window.OS_API;
-        if (!api || (typeof api.chatMain !== 'function' && typeof api.chatSecondary !== 'function')) { alert('AI 不可用'); return; }
+        if (!api || (typeof api.chatMain !== 'function' && typeof api.chatSecondary !== 'function')) { AUI.alert('AI 不可用'); return; }
         _wbToast('AI 換皮中…');
         const sys = _MC_SYS + '\n\n【對標世界】使用者要把現有人設改成貼合下面這個世界。請「保留人設的核心個性／這個人是誰」，只把外觀、說話習慣、背景這類「世界皮層」改寫成貼合該世界；不要改掉性格本質。一樣用 <persona><seg> 輸出全部區塊。\n\n【現有人設】\n' + _mcAssembleContent(_mcWorking.blocks) + '\n\n' + ctx;
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: '把我的人設對標到這個世界，重寫全部區塊。' }];
@@ -473,7 +473,7 @@
             const _bad = _studioBadReply(String(full || ''));   // 錯誤頁/空/截斷 → 問重試
             if (_bad.bad) { _studioConfirmRetry(_bad.reason, () => _mcDoAdapt(host, mode, desc)); return; }
             const segs = _mcParseSegs(String(full || ''));
-            if (!segs.length) { alert('AI 沒吐出區塊，再試一次'); return; }
+            if (!segs.length) { AUI.alert('AI 沒吐出區塊，再試一次'); return; }
             const base = _mcWorking.name || '我';
             const tag = mode === 'desc' ? desc : '對標版';
             _mcWorking = { uid: null, name: base + '（' + tag.slice(0, 8) + '）', blocks: segs.map(s => ({ label: s.label, content: s.content, userEdited: false, aiNew: true })) };

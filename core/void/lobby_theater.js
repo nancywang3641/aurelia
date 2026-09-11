@@ -168,8 +168,8 @@
             '<button class="ltw2-act" data-act="recompress"><i class="fa-solid fa-compress"></i> 重壓縮</button>' +
             '<span class="ltw2-act-dot">·</span>' +
             '<button class="ltw2-act danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空全部</button>';
-        acts.querySelector('[data-act="clear"]').addEventListener('click', () => {
-            if (!window.confirm('清空全部小劇場記事？不可復原。')) return;
+        acts.querySelector('[data-act="clear"]').addEventListener('click', async () => {
+            if (!await AUI.confirm('清空全部小劇場記事？不可復原。')) return;
             try { _thl()?.clear?.(); } catch (e) {}
             _twRender();
         });
@@ -183,7 +183,7 @@
             try { res = await vt.recompressTheaterLog(); } catch (e) {}
             btn.disabled = false; btn.innerHTML = old;
             _twRender();
-            try { const T = window.toastr || (window.parent || window).toastr; T?.[res.ok ? 'success' : 'info']?.(res.msg); } catch (e) {}
+            try { const T = AUI.toastr; T?.[res.ok ? 'success' : 'info']?.(res.msg); } catch (e) {}
         });
         const hint = document.createElement('div'); hint.className = 'ltw-hint';
         hint.textContent = '摘要會保留為歷史對話，之後的小劇場會記得。記事變多時「重壓縮」會把往期併成一段綜述。';
@@ -301,7 +301,7 @@
         try { ok = !!(await (window.VoidTerminal && window.VoidTerminal.playDuoScene && window.VoidTerminal.playDuoScene(a, b))); } catch (e) {}
         S._theaterPresenting = false;
         _theaterOverlayHide(ov);
-        if (!ok) { try { (window.toastr || (window.parent || window).toastr)?.warning?.('偷聽失敗了，他們先散場，稍後再試'); } catch (e) {} }
+        if (!ok) { try { AUI.toastr?.warning?.('偷聽失敗了，他們先散場，稍後再試'); } catch (e) {} }
     }
     // 偷窺 Loading 遮罩：全屏半透明黑；中央小舞台＝當前場景底圖裁一塊＋兩位視覺分身左右滑入面對面、頭頂表情圖示輕跳；底部白點循環。
     function _theaterOverlayShow(a, b) {

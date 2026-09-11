@@ -139,7 +139,7 @@
                 console.error('[AVS Adapter] 規則寫入失敗:', e);
                 try {
                     const full = /quota|exceeded/i.test(String(e && (e.name || e.message)));
-                    win.toastr && win.toastr.error(
+                    AUI.toastr && AUI.toastr.error(
                         full ? '瀏覽器空間已滿，條件規則沒能存下來。到書架刪幾本不玩的書再試一次。' : '條件規則存檔失敗，請看 console。',
                         'AVS 規則', { timeOut: 12000 });
                 } catch (e2) {}

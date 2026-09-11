@@ -184,9 +184,9 @@
                 penaltySelect.value = DB_PENALTIES.length - 1;
             }
             
-            penaltySelect.onchange = (e) => {
+            penaltySelect.onchange = async (e) => {
                 if(e.target.value === 'custom') {
-                    let customPen = prompt("請輸入自定義狀態/Debuff：");
+                    let customPen = await AUI.prompt("請輸入自定義狀態/Debuff：");
                     if(customPen) {
                         DB_PENALTIES.push(customPen);
                         selectedPenalty = DB_PENALTIES.length - 1;
@@ -243,7 +243,7 @@
         if (isProcessingAPI) return;
         const btn = document.getElementById('btn-gen-chaos');
         if (!win.TavernHelper || typeof win.TavernHelper.generateRaw !== 'function') {
-            alert("⚠️ 找不到 TavernHelper.generateRaw，無法使用極速生成功能。請確認你的擴展是否支援。");
+            AUI.alert("⚠️ 找不到 TavernHelper.generateRaw，無法使用極速生成功能。請確認你的擴展是否支援。");
             return;
         }
 
@@ -289,14 +289,14 @@
                 if (tCount > 0 || pCount > 0) {
                     renderLists();
                 } else {
-                    alert("⚠️ AI 生成的格式錯誤，請再試一次。\nAI 回覆內容：" + res);
+                    AUI.alert("⚠️ AI 生成的格式錯誤，請再試一次。\nAI 回覆內容：" + res);
                 }
             } else {
-                alert("⚠️ 生成回傳為空，請檢查 API 連線狀態。");
+                AUI.alert("⚠️ 生成回傳為空，請檢查 API 連線狀態。");
             }
         } catch (e) {
             console.error("[Chaos] API 崩潰:", e);
-            alert("⚠️ 生成失敗，請查看控制台 (F12)。");
+            AUI.alert("⚠️ 生成失敗，請查看控制台 (F12)。");
         } finally {
             isProcessingAPI = false;
             if (btn) { btn.textContent = "✨ AI 生成素材"; btn.disabled = false; }
@@ -311,7 +311,7 @@
         const targetName = document.getElementById('chaos-goal-input').value.trim();
 
         if (selectedTasks.size === 0) {
-            alert("⚠️ 導演，至少選一張解藥任務卡！");
+            AUI.alert("⚠️ 導演，至少選一張解藥任務卡！");
             return;
         }
 
@@ -376,13 +376,13 @@
                 }, 800);
             } else {
                 console.error("找不到 TavernHelper");
-                alert("發送失敗：請確認已安裝並啟用 TavernHelper 擴展。");
+                AUI.alert("發送失敗：請確認已安裝並啟用 TavernHelper 擴展。");
                 btn.textContent = originalText;
                 btn.disabled = false;
             }
         } catch (e) {
             console.error("發送任務失敗:", e);
-            alert("發送失敗，請查看控制台。");
+            AUI.alert("發送失敗，請查看控制台。");
         }
     }
 

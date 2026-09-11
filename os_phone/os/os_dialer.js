@@ -806,7 +806,7 @@
     async function _clearSelected() {
         if (!_hsel.ids.size) return;
         const n = _hsel.ids.size;
-        if (!win.confirm('確定清除選取的 ' + n + ' 筆通話紀錄嗎？\n（這份對話與微信共用，會一起清掉，無法復原）')) return;
+        if (!await AUI.confirm('確定清除選取的 ' + n + ' 筆通話紀錄嗎？\n（這份對話與微信共用，會一起清掉，無法復原）')) return;
         const OS_DB = _w('OS_DB');
         const ids = Array.from(_hsel.ids);
         for (let i = 0; i < ids.length; i++) {
@@ -878,11 +878,11 @@
             _dialing(c);
         });
         _root.querySelectorAll('.dlr-tx-gdel').forEach(function (b) {
-            b.addEventListener('click', function () {
+            b.addEventListener('click', async function () {
                 const g = groups[parseInt(b.dataset.g, 10)];
                 if (!g) return;
                 const n = g.idx.filter(function (i) { const m = ms[i]; return m && (!m.type || m.type === 'msg'); }).length;
-                if (!win.confirm('刪掉「' + g.title + '」這一段？\n' + n + ' 則對話，微信那邊也會一起消失，無法復原。')) return;
+                if (!await AUI.confirm('刪掉「' + g.title + '」這一段？\n' + n + ' 則對話，微信那邊也會一起消失，無法復原。')) return;
                 _deleteCallGroup(rec, g);
             });
         });

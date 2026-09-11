@@ -2015,7 +2015,7 @@ ${sections}`;
     async function recompactNpcMemory(npcKey, npcName) {
         try {
             const mem = await window.OS_DB?.getNpcMemory?.(npcKey);
-            if (!mem || !mem.summary) { window.toastr?.info?.('這位還沒有可整理的記憶'); return; }
+            if (!mem || !mem.summary) { AUI.toastr?.info?.('這位還沒有可整理的記憶'); return; }
             const prompt = window.VoidPrompts.buildNpcMemorySummaryPrompt({ name: npcName }, '', mem.summary) +
                 '\n\n（以上是零散的舊記憶，請合併重整成更精簡、不流失重點的一段。）';
             let config = {};
@@ -2026,10 +2026,10 @@ ${sections}`;
             config.route = 'iris_chat';
             const seg = await new Promise((res, rej) => window.OS_API.chat([{ role: 'system', content: prompt }], config, null, res, rej, { label: 'NPC記憶整理:' + npcName }));
             const clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
-            if (!clean || clean === '無') { window.toastr?.warning?.('整理失敗，記憶保持原樣'); return; }
+            if (!clean || clean === '無') { AUI.toastr?.warning?.('整理失敗，記憶保持原樣'); return; }
             await window.OS_DB.saveNpcMemory(npcKey, { name: npcName, summary: clean, lastCompactAt: mem.lastCompactAt || 0 });
-            window.toastr?.success?.('記憶已整理');
-        } catch (e) { window.toastr?.warning?.('整理失敗'); }
+            AUI.toastr?.success?.('記憶已整理');
+        } catch (e) { AUI.toastr?.warning?.('整理失敗'); }
     }
 
     // 開聊/切換 NPC 時：清掉殘留(瀅瀅預設或上一位)的對話框文字，改顯示「這位自己的最後一句」(延續感)、沒有就中性提示。

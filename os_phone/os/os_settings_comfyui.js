@@ -512,7 +512,7 @@
                 saveNew: function(){
                     const ni = container.querySelector('#img-cfd-preset-newname');
                     const name = ni && ni.value.trim();
-                    if (!name) { alert('請先輸入新預設包名稱'); if (ni) ni.focus(); return; }
+                    if (!name) { AUI.alert('請先輸入新預設包名稱'); if (ni) ni.focus(); return; }
                     cfdPresets.push(buildCfdPreset(name));
                     if (ni) ni.value = '';
                     renderPresetGrid();
@@ -570,15 +570,15 @@
                         ? '⚠️ 已建卡「' + name + '」，但這張圖的工作流結構特殊、只抓到少數欄位 → 套用後請自己在面板核對補齊。記得按底部「保存」。'
                         : '✅ 已拆進預設卡「' + name + '」：' + (got.join('、') || '基本設定') + '。點「套用」就能在面板逐格微調，改完按底部「保存」。') + _polluteMsg, miss || !!_polluteHit);
                 },
-                overwriteIdx: function(i){
+                overwriteIdx: async function(i){
                     const old = cfdPresets[i]; if (!old) return;
-                    if (!confirm('用目前面板的設定覆蓋預設包「' + old.name + '」？\n（舊預覽圖會清掉，需重新生成）')) return;
+                    if (!await AUI.confirm('用目前面板的設定覆蓋預設包「' + old.name + '」？\n（舊預覽圖會清掉，需重新生成）')) return;
                     cfdPresets[i] = buildCfdPreset(old.name);  // 沿用原名、預覽清空
                     renderPresetGrid();
                 },
-                delIdx: function(i){
+                delIdx: async function(i){
                     const old = cfdPresets[i]; if (!old) return;
-                    if (!confirm('刪除預設包「' + old.name + '」？')) return;
+                    if (!await AUI.confirm('刪除預設包「' + old.name + '」？')) return;
                     cfdPresets.splice(i, 1);
                     renderPresetGrid();
                 },
@@ -598,7 +598,7 @@
                     } catch(e){ cardStatus(i, '❌ ' + (e && e.message || e)); }
                 },
                 exportPack: function(){
-                    if (!cfdPresets.length) { alert('還沒有預設包可以匯出。'); return; }
+                    if (!cfdPresets.length) { AUI.alert('還沒有預設包可以匯出。'); return; }
                     const data = { type: 'aurelia_image_presets', version: 1, presets: cfdPresets };
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const a = document.createElement('a');
@@ -647,10 +647,10 @@
                         try {
                             const j = JSON.parse(String(reader.result));
                             const arr = Array.isArray(j) ? j : (Array.isArray(j.presets) ? j.presets : null);
-                            if (!arr || !arr.length) { alert('❌ 這個檔案裡找不到預設包，確認拿到的是畫風包檔（.json）再試一次。'); return; }
+                            if (!arr || !arr.length) { AUI.alert('❌ 這個檔案裡找不到預設包，確認拿到的是畫風包檔（.json）再試一次。'); return; }
                             // 收斂＋濾掉沒名字的，暫存等使用者選「覆蓋同名 / 全部新增」
                             const clean = arr.filter(function(p){ return p && String(p.name || '').trim(); }).map(function(p){ return self._sanitizePreset(p); });
-                            if (!clean.length) { alert('❌ 檔案裡的預設包都沒有名稱，讀不進來。'); return; }
+                            if (!clean.length) { AUI.alert('❌ 檔案裡的預設包都沒有名稱，讀不進來。'); return; }
                             self._pendingImport = clean;
                             // 牆上還沒有任何包 → 不用問，直接全部加
                             if (!cfdPresets.length) { self._applyImport('append'); return; }
@@ -658,7 +658,7 @@
                             if (msg) msg.textContent = '讀到 ' + clean.length + ' 個預設包。要怎麼放進現有的 ' + cfdPresets.length + ' 個裡？';
                             const box = container.querySelector('#img-cfd-import-choice');
                             if (box) box.style.display = 'block';
-                        } catch(e) { alert('❌ 這個檔案讀不出來，確認是畫風包檔（.json）再試一次。'); }
+                        } catch(e) { AUI.alert('❌ 這個檔案讀不出來，確認是畫風包檔（.json）再試一次。'); }
                     };
                     reader.readAsText(file);
                 },
@@ -692,11 +692,11 @@
                     });
                     this._pendingImport = null;
                     renderPresetGrid();
-                    alert('✅ 匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部「保存」才會真的存住。');
+                    AUI.alert('✅ 匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部「保存」才會真的存住。');
                 },
-                clearAll: function(){
-                    if (!cfdPresets.length) { alert('目前沒有預設包可以清空。'); return; }
-                    if (!confirm('確定清空全部 ' + cfdPresets.length + ' 個預設包？\n（要按底部「保存」後才真的生效；沒保存前重進設定就會復原）')) return;
+                clearAll: async function(){
+                    if (!cfdPresets.length) { AUI.alert('目前沒有預設包可以清空。'); return; }
+                    if (!await AUI.confirm('確定清空全部 ' + cfdPresets.length + ' 個預設包？\n（要按底部「保存」後才真的生效；沒保存前重進設定就會復原）')) return;
                     cfdPresets.length = 0;
                     renderPresetGrid();
                     if (statusEl) statusEl.textContent = '🗑️ 預設包已清空（記得按底部「保存」才會真的存住）';

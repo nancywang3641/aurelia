@@ -559,7 +559,7 @@
                     });
                 };
             } else if (inviteBtn) {
-                inviteBtn.onclick = () => alert("邀請功能需要更新 WX_CONTACTS 模塊");
+                inviteBtn.onclick = () => AUI.alert("邀請功能需要更新 WX_CONTACTS 模塊");
             }
 
             doc.getElementById('btn-bubble-settings').onclick = () => {
@@ -575,7 +575,7 @@
                     if (A && A.clearSeeMemory) A.clearSeeMemory(chatId);
                     const t = doc.getElementById('see-mem-text');
                     if (t) t.textContent = '還沒看過';
-                    try { win.toastr && win.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
+                    try { AUI.toastr && AUI.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
                 };
             })();
 
@@ -590,7 +590,7 @@
                     cnt.textContent = total ? String(total) + ' 件' : '還沒有';
                 }
                 if (btn) btn.onclick = function () {
-                    if (!M) { if (win.toastr) win.toastr.info('模塊還沒載入完，等一下再試'); return; }
+                    if (!M) { if (AUI.toastr) AUI.toastr.info('模塊還沒載入完，等一下再試'); return; }
                     M.open(chatId);
                 };
             })();
@@ -623,7 +623,7 @@
                     const ov = doc.getElementById('ws-sum-overlay');
                     const body = doc.getElementById('ws-sum-body');
                     if (!ov || !body) return;
-                    if (!S) { if (win.toastr) win.toastr.info('記憶模塊還沒載入完，等一下再試'); return; }
+                    if (!S) { if (AUI.toastr) AUI.toastr.info('記憶模塊還沒載入完，等一下再試'); return; }
                     const p = S.plan(chat);
                     const cur = (chat.wxSummary && chat.wxSummary.text) ? chat.wxSummary.text : '';
                     body.innerHTML = `
@@ -643,12 +643,12 @@
                             const ta = doc.getElementById('ws-sum-text');
                             if (ta) ta.value = (chat.wxSummary && chat.wxSummary.text) || ta.value;
                             refreshState();
-                            if (win.toastr) {
-                                if (r && r.ok) win.toastr.success('整理好了', '早前記錄');
-                                else win.toastr.info((r && r.reason) || '這次沒有整理', '早前記錄');
+                            if (AUI.toastr) {
+                                if (r && r.ok) AUI.toastr.success('整理好了', '早前記錄');
+                                else AUI.toastr.info((r && r.reason) || '這次沒有整理', '早前記錄');
                             }
                         } catch (e) {
-                            if (win.toastr) win.toastr.error((e && e.message) || '整理失敗', '早前記錄');
+                            if (AUI.toastr) AUI.toastr.error((e && e.message) || '整理失敗', '早前記錄');
                         } finally { b.disabled = false; b.textContent = t0; }
                     };
 
@@ -657,7 +657,7 @@
                         const ta = doc.getElementById('ws-sum-text');
                         if (ta) ta.value = '';
                         refreshState();
-                        if (win.toastr) win.toastr.success('清掉了', '早前記錄');
+                        if (AUI.toastr) AUI.toastr.success('清掉了', '早前記錄');
                     };
 
                     doc.getElementById('ws-sum-save').onclick = async () => {
@@ -1011,8 +1011,8 @@
             }
             
             // 清空與刪除
-            doc.getElementById('btn-clear-chat').onclick = () => {
-                if (confirm('確定要清空記錄嗎？')) {
+            doc.getElementById('btn-clear-chat').onclick = async () => {
+                if (await AUI.confirm('確定要清空記錄嗎？')) {
                     chat.messages = []; chat.pushedCount = 0; chat.renderedCount = 0;
                     if (app.GLOBAL_ACTIVE_ID === chatId && app.render) app.render();
                     if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
@@ -1020,8 +1020,8 @@
                     panel.classList.remove('show');
                 }
             };
-            doc.getElementById('btn-delete-chat').onclick = () => {
-                if (confirm('確定要刪除聊天室嗎？')) {
+            doc.getElementById('btn-delete-chat').onclick = async () => {
+                if (await AUI.confirm('確定要刪除聊天室嗎？')) {
                     if (win.wxApp && win.wxApp.deleteChat) win.wxApp.deleteChat(chatId);
                     if (win.OS_DB && win.OS_DB.deleteApiChat) win.OS_DB.deleteApiChat(chatId);
                     panel.classList.remove('show');
@@ -1029,8 +1029,8 @@
             };
             
             // 清除紅包/轉帳/禮物數據
-            doc.getElementById('btn-clear-redpacket-data').onclick = () => {
-                if (confirm('確定要清除所有紅包/轉帳/禮物數據嗎？此操作不可恢復。')) {
+            doc.getElementById('btn-clear-redpacket-data').onclick = async () => {
+                if (await AUI.confirm('確定要清除所有紅包/轉帳/禮物數據嗎？此操作不可恢復。')) {
                     let deletedCount = 0;
                     
                     // 遍歷所有 localStorage 鍵
@@ -1060,7 +1060,7 @@
                     // 執行刪除
                     keysToDelete.forEach(key => localStorage.removeItem(key));
                     
-                    alert(`已清除 ${deletedCount} 條數據（${keysToDelete.filter(k => k.startsWith('wx_redpacket_')).length} 個紅包，${keysToDelete.filter(k => k.startsWith('ID_')).length} 個轉帳/禮物）`);
+                    AUI.alert(`已清除 ${deletedCount} 條數據（${keysToDelete.filter(k => k.startsWith('wx_redpacket_')).length} 個紅包，${keysToDelete.filter(k => k.startsWith('ID_')).length} 個轉帳/禮物）`);
                 }
             };
 
@@ -1183,12 +1183,12 @@
                         if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
                     }
 
-                    alert("保存成功！");
+                    AUI.alert("保存成功！");
                     panel.classList.remove('show');
 
                 } catch (e) {
                     console.error(e);
-                    alert("保存失敗：" + e.message);
+                    AUI.alert("保存失敗：" + e.message);
                 } finally {
                     btn.innerText = "保存更改";
                     btn.disabled = false;

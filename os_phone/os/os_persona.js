@@ -277,8 +277,8 @@
         });
     }
 
-    function deletePersona(id) {
-        if (!confirm('確定要刪除這個設定嗎？')) return;
+    async function deletePersona(id) {
+        if (!await AUI.confirm('確定要刪除這個設定嗎？')) return;
         let list = loadLocalPersonas();
         list = list.filter(x => x.id !== id);
         saveLocalPersonas(list);
@@ -334,7 +334,7 @@
         const fAvatar = _rootContainer.querySelector('#ps-f-avatar').value.trim();
         const fDesc = _rootContainer.querySelector('#ps-f-desc').value.trim();
 
-        if (!fName) { alert('請至少輸入名稱！'); return; }
+        if (!fName) { AUI.alert('請至少輸入名稱！'); return; }
 
         let list = loadLocalPersonas();
 

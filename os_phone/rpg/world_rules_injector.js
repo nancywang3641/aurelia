@@ -157,7 +157,7 @@
                       + ' / 關:' + (closed.join('、') || '無') + '（' + reason + '）');
             // 讓她知道剛剛被動了什麼：這支會覆蓋手動調整，靜悄悄改最難查
             try {
-                const t = win.toastr || window.toastr;
+                const t = AUI.toastr;
                 if (t && t.info) t.info((opened.length ? '開啟 ' + opened.join('、') : '')
                                       + (opened.length && closed.length ? '；' : '')
                                       + (closed.length ? '關閉 ' + closed.join('、') : ''),
@@ -201,7 +201,7 @@
         console.log('🌍 [World Rules] ' + where + ' → 開:' + (r.opened.join('、') || '無')
                   + ' / 關:' + (r.closed.join('、') || '無') + '（獨立版・' + reason + '）');
         try {
-            const t = win.toastr || window.toastr;
+            const t = AUI.toastr;
             if (t && t.info) t.info((r.opened.length ? '開啟 ' + r.opened.join('、') : '')
                                   + (r.opened.length && r.closed.length ? '；' : '')
                                   + (r.closed.length ? '關閉 ' + r.closed.join('、') : ''),

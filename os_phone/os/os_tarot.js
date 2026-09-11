@@ -347,7 +347,7 @@
     // 開始選牌
     async function startSelection() {
         const input = document.getElementById('tr-question');
-        if (!input.value.trim()) { alert("請輸入問題以建立連結。"); return; }
+        if (!input.value.trim()) { AUI.alert("請輸入問題以建立連結。"); return; }
         if (STATE.isAnalyzing) return;
         STATE.question = input.value.trim();
         document.getElementById('tr-input-box').classList.add('hidden');

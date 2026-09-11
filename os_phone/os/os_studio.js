@@ -318,7 +318,7 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
                 if(!data.tagId || !data.html) throw new Error("缺少 tagId 或 html");
                 // 面板沒綁返回／關閉鈕（onComplete）＝存了會回不去主畫面；擋一下讓她叫 AI 補，不是默默存
                 if (!/onComplete/.test(String(data.js || ''))) {
-                    if (!confirm('這個面板沒有返回／關閉鈕（程式裡沒綁 onComplete），存了會回不去主畫面。\n建議先叫 AI 補上再存。還是要直接存？')) throw Object.assign(new Error('沒有返回鈕'), { silent: true });
+                    if (!await AUI.confirm('這個面板沒有返回／關閉鈕（程式裡沒綁 onComplete），存了會回不去主畫面。\n建議先叫 AI 補上再存。還是要直接存？')) throw Object.assign(new Error('沒有返回鈕'), { silent: true });
                 }
                 if (win.OS_DB && win.OS_DB.saveVNTagTemplate) {
                     if (!data.id) data.id = 'tpl_' + Date.now();
@@ -345,12 +345,12 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
                     // init 放在裝 app 之後：重建「模板 → app id」對照表（共用面板的 dbSave 小設定兩邊才對到同一桶；清單資料走 VN_PANEL_FEED 不經此）
                     if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
                     if (_vnPanelType === '純展示') {
-                        alert(`🎉 [${data.tagId}] 已建立！已存進「VN組件」。`);
+                        AUI.alert(`🎉 [${data.tagId}] 已建立！已存進「VN組件」。`);
                         document.getElementById('studio-tab-gallery')?.click();
                     } else if (_vnPanelType === '共用') {
-                        alert(`🎉 [${data.tagId}] 已建立（共用）！劇情裡會自動跳出渲染、也裝進手機「應用工坊 · 我的應用」、並在「VN組件」可見，兩邊讀同一份資料。` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
+                        AUI.alert(`🎉 [${data.tagId}] 已建立（共用）！劇情裡會自動跳出渲染、也裝進手機「應用工坊 · 我的應用」、並在「VN組件」可見，兩邊讀同一份資料。` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
                     } else {
-                        alert(`🎉 [${data.tagId}] 已建立，並裝進手機 →「應用工坊 · 我的應用」！` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
+                        AUI.alert(`🎉 [${data.tagId}] 已建立，並裝進手機 →「應用工坊 · 我的應用」！` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
                     }
                 }
             }
@@ -373,7 +373,7 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
                 if(!data.id || !data.name || !Array.isArray(data.vars)) throw new Error("格式錯誤");
                 if (win.OS_DB && win.OS_DB.saveVarPack) {
                     await win.OS_DB.saveVarPack(data);
-                    alert(`🎉 變數包 [${data.name}] 儲存成功！`);
+                    AUI.alert(`🎉 變數包 [${data.name}] 儲存成功！`);
                 }
             }
         },
@@ -440,7 +440,7 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
                     createdAt: existing ? existing.createdAt : Date.now(),
                 });
                 try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
-                alert(`🎉 特效「${norm.name}」已存好！劇情 AI 之後就會在合適時機用它`);
+                AUI.alert(`🎉 特效「${norm.name}」已存好！劇情 AI 之後就會在合適時機用它`);
             }
         }
     };
@@ -570,7 +570,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             document.body.appendChild(ta); ta.focus(); ta.select();
             document.execCommand('copy'); document.body.removeChild(ta);
             done && done();
-        } catch (e) { alert('複製失敗，請手動全選複製。'); }
+        } catch (e) { AUI.alert('複製失敗，請手動全選複製。'); }
     }
     function _copyCreationSpec() {
         const btn = document.getElementById('studio-spec-copy-btn');
@@ -745,7 +745,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     function _studioSaveNewChip() {
         const labEl = document.getElementById('studio-chip-label'), txtEl = document.getElementById('studio-chip-text');
         const lab = ((labEl && labEl.value) || '').trim(), txt = ((txtEl && txtEl.value) || '').trim();
-        if (!lab) { alert('要有名字'); return; }
+        if (!lab) { AUI.alert('要有名字'); return; }
         const u = _studioLoadChips(); u.push({ label: lab.slice(0, 12), text: txt }); _studioSaveChips(u);   // 說明留空＝送出時只送名字
         if (labEl) labEl.value = ''; if (txtEl) txtEl.value = '';
         _studioRenderChipList(); renderStudioChips();
@@ -831,9 +831,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 const files = Array.from(e.target.files || []);
                 fileInput.value = ''; // 清空以允許再選同檔
                 for (const f of files) {
-                    if (!f.type.startsWith('image/')) { alert(`「${f.name}」不是圖片，跳過`); continue; }
+                    if (!f.type.startsWith('image/')) { AUI.alert(`「${f.name}」不是圖片，跳過`); continue; }
                     if (f.size > IMG_MAX_RAW_MB * 1024 * 1024) {
-                        alert(`「${f.name}」超過 ${IMG_MAX_RAW_MB}MB，請先縮小再上傳`);
+                        AUI.alert(`「${f.name}」超過 ${IMG_MAX_RAW_MB}MB，請先縮小再上傳`);
                         continue;
                     }
                     try {
@@ -842,7 +842,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                         pendingImages.push({ dataUrl, mime: 'image/jpeg', sizeKB });
                     } catch (err) {
                         console.warn('[Studio] 圖片處理失敗:', err);
-                        alert(`「${f.name}」處理失敗：${err.message || err}`);
+                        AUI.alert(`「${f.name}」處理失敗：${err.message || err}`);
                     }
                 }
                 renderPendingImages();
@@ -883,12 +883,12 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 
         document.getElementById('studio-export-btn').onclick = async () => {
             let dataToSave = currentParsedData || activePreviewData;
-            if (!dataToSave) return alert('沒有可儲存的資料！');
+            if (!dataToSave) return AUI.alert('沒有可儲存的資料！');
             try {
                 await MODES[currentMode].onSave(dataToSave);
                 currentParsedData = null; 
                 renderPreviewPanel();
-            } catch (err) { if (!err || !err.silent) alert('儲存失敗: ' + (err && err.message)); }
+            } catch (err) { if (!err || !err.silent) AUI.alert('儲存失敗: ' + (err && err.message)); }
         };
 
         const publishBtn = document.getElementById('studio-publish-btn');
@@ -1562,7 +1562,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     }
 
     const _wbTH = () => (window.parent || window).TavernHelper || window.TavernHelper;
-    function _wbToast(msg) { try { const w = (window.parent || window); w.toastr && w.toastr.success(msg); } catch (e) {} }
+    function _wbToast(msg) { try { const w = (window.parent || window); AUI.toastr && AUI.toastr.success(msg); } catch (e) {} }
 
     // ══════════════════════════════════════════════════════════════
     // 🧑 我的角色（人設寫作）已拆檔 → os/os_studio_persona.js（2026-07-16）
@@ -1776,7 +1776,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             //   出來就是「同一個矩形換顏色」。慢一點貴一點，換的是它真的會設計。
             const chat = (typeof api?.chatMain === 'function') ? api.chatMain.bind(api)
                 : (typeof api?.chatSecondary === 'function') ? api.chatSecondary.bind(api) : null;
-            if (!chat) { alert('AI 不可用，請先到「寫作 → API 設置」設好主模型'); return; }
+            if (!chat) { AUI.alert('AI 不可用，請先到「寫作 → API 設置」設好主模型'); return; }
             sayEl.value = '';
             if (!chatLog.length) chatBox.innerHTML = '';
             chatLog.push({ role: 'user', text });
@@ -1882,8 +1882,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         host.querySelector('#vth-gal-add').onclick = () => {
             const nameEl = host.querySelector('#vth-gal-name');
             const name = (nameEl.value || '').trim();
-            if (!name) { alert('幫主題取個名字'); nameEl.focus(); return; }
-            if (!area.value.trim()) { alert('CSS 是空的，先生成或貼一段再收藏'); return; }
+            if (!name) { AUI.alert('幫主題取個名字'); nameEl.focus(); return; }
+            if (!area.value.trim()) { AUI.alert('CSS 是空的，先生成或貼一段再收藏'); return; }
             const arr = _vthGalleryLoad();
             arr.unshift({ id: 'th_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), name: name, css: area.value });
             _vthGallerySave(arr);
@@ -2530,7 +2530,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         // 🚨 confirm 在 Tauri 不會彈、直接回 false → 這裡原本等於「永遠走 else」：
         //   主題那條沒有傳 fallbackFn，於是送出失敗後什麼都不做，連打的字都不見了，
         //   看起來就是按了沒反應。這裡沒有按鈕可掛兩段式，改成講一聲然後自己重試。
-        try { (window.parent || window).toastr?.warning('AI 回覆有問題（' + String(reason || '未知錯誤').slice(0, 80) + '），正在重試…'); } catch (e) {}
+        try { AUI.toastr?.warning('AI 回覆有問題（' + String(reason || '未知錯誤').slice(0, 80) + '），正在重試…'); } catch (e) {}
         if (typeof retryFn === 'function') retryFn();
         else if (typeof fallbackFn === 'function') fallbackFn();
     }
@@ -2557,7 +2557,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             if (m._isCompressed || m._isSummary) continue;
             if (m.role === 'user') { lastUserIdx = i; break; }
         }
-        if (lastUserIdx === -1) { alert('找不到上次的訊息，請重新輸入'); return; }
+        if (lastUserIdx === -1) { AUI.alert('找不到上次的訊息，請重新輸入'); return; }
         const lastUserMsg = chatMessages[lastUserIdx];
         const textOnly = messageContentToString(lastUserMsg.content);
         // 復原圖片（如果有）
@@ -2816,37 +2816,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             },
             getStory(n) { try { const R = window.VN_READER || (window.parent && window.parent.VN_READER); return (R && R.getStory) ? R.getStory(n) : []; } catch (e) { return []; } },
             esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
-            toast(msg, opts) {
-                try {
-                    opts = opts || {};
-                    const d = document.createElement('div');
-                    const bg = opts.color || (opts.type === 'error' ? 'rgba(180,60,60,0.95)' : 'rgba(28,28,38,0.92)');
-                    d.textContent = String(msg == null ? '' : msg);
-                    d.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);max-width:80%;background:' + bg + ';color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;line-height:1.4;z-index:2147483647;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transition:opacity .2s;pointer-events:none;text-align:center;';
-                    document.body.appendChild(d);
-                    requestAnimationFrame(() => { d.style.opacity = '1'; });
-                    setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 250); }, opts.duration || 2000);
-                } catch (e) {}
-            },
-            confirm(msg, opts) {
-                return new Promise((res) => {
-                    try {
-                        opts = opts || {};
-                        const ov = document.createElement('div');
-                        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
-                        const box = document.createElement('div');
-                        box.style.cssText = 'background:#fff;color:#222;border-radius:14px;padding:18px;max-width:300px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.3);font-size:14px;line-height:1.5;';
-                        const m = document.createElement('div'); m.textContent = String(msg == null ? '' : msg); m.style.cssText = 'margin-bottom:14px;white-space:pre-wrap;';
-                        const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
-                        const no = document.createElement('button'); no.textContent = opts.cancelText || '取消'; no.style.cssText = 'padding:8px 14px;border:1px solid rgba(0,0,0,0.2);background:#fff;color:#333;border-radius:8px;font-size:13px;cursor:pointer;';
-                        const yes = document.createElement('button'); yes.textContent = opts.okText || '確定'; yes.style.cssText = 'padding:8px 14px;border:0;background:' + (opts.danger ? '#c0392b' : '#1A1C28') + ';color:#fff;border-radius:8px;font-size:13px;cursor:pointer;';
-                        no.onclick = () => { ov.remove(); res(false); };
-                        yes.onclick = () => { ov.remove(); res(true); };
-                        ov.onclick = (e) => { if (e.target === ov) { ov.remove(); res(false); } };
-                        row.appendChild(no); row.appendChild(yes); box.appendChild(m); box.appendChild(row); ov.appendChild(box); document.body.appendChild(ov);
-                    } catch (e) { res(false); }
-                });
-            },
+            // 提示條／確認窗走全站同一套（core/aurelia_dialog.js），跟系統其他地方長一樣
+            toast(msg, opts) { try { return AUI.toast(msg, opts); } catch (e) {} },
+            confirm(msg, opts) { try { return AUI.confirm(msg, opts); } catch (e) { return Promise.resolve(false); } },
             loading(target, on, text) {
                 try {
                     const host = (typeof target === 'string') ? document.querySelector(target) : (target || document.body);
@@ -3103,7 +3075,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     async function importToSillyTavern(data) {
         const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
         if (!th) {
-            alert('❌ 找不到酒館（TavernHelper）。需要在酒館環境內 + 已安裝酒館助手腳本才能用這個功能。\n\nPWA 獨立模式不支援此功能。');
+            AUI.alert('❌ 找不到酒館（TavernHelper）。需要在酒館環境內 + 已安裝酒館助手腳本才能用這個功能。\n\nPWA 獨立模式不支援此功能。');
             return;
         }
 
@@ -3143,10 +3115,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             let wbMsg = "";
             try { if (await _deleteWbUsageEntry(th, safeTagId)) wbMsg = "\n🧹 已清掉舊版留在世界書的使用說明條目（說明現在自動注入、不佔世界書）。"; } catch (e) {}
 
-            alert(`🎉 匯入成功！已將標籤 [${safeTagId}] 寫入酒館全局正則。${wbMsg}\n\n請發送新訊息或重新載入聊天查看效果。`);
+            AUI.alert(`🎉 匯入成功！已將標籤 [${safeTagId}] 寫入酒館全局正則。${wbMsg}\n\n請發送新訊息或重新載入聊天查看效果。`);
         } catch (err) {
             console.error('[Studio] 酒館正則匯入失敗:', err);
-            alert('❌ 匯入失敗: ' + err.message);
+            AUI.alert('❌ 匯入失敗: ' + err.message);
         }
     }
 
@@ -3344,13 +3316,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ────────────────────────────────────────────────────────────────
     // HTML 轉義（核心＋全拆檔子模組共用；_b 橋成員）
     function _sgcEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-    // 視覺回饋：用酒館原生 toastr（win.toastr，全擴展通用）；沒有就退回 alert。
+    // 視覺回饋：走全站提示條（core/aurelia_dialog.js）。
     // TauriTavern 下載會直接存本機、但「不彈任何通知」→ 一定要自己給可見回饋。
-    function _studioToast(msg, type, title) {
-        const t = win.toastr || window.toastr;
-        const fn = t && typeof t[type] === 'function' ? t[type] : (t && t.info);
-        if (fn) { try { fn.call(t, msg, title || '創作室'); return; } catch (e) {} }
-        alert(msg);
+    function _studioToast(msg, type) {
+        const t = AUI.toastr;
+        (typeof t[type] === 'function' ? t[type] : t.info)(msg);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -3535,7 +3505,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             if (m._isCompressed || m._isSummary) continue;
             if (m.role === 'user') { lastUserIdx = i; break; }
         }
-        if (lastUserIdx === -1) { alert('找不到上次的訊息'); return; }
+        if (lastUserIdx === -1) { AUI.alert('找不到上次的訊息'); return; }
         const lastUserMsg = chatMessages[lastUserIdx];
         const textOnly = messageContentToString(lastUserMsg.content);
         if (Array.isArray(lastUserMsg.content)) {
@@ -3675,10 +3645,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         });
         // 分組標籤：點了輸入組名（留空=取消分組）
         container.querySelectorAll('[data-fx-grp]').forEach(btn => {
-            btn.onclick = () => {
+            btn.onclick = async () => {
                 const row = shown[Number(btn.dataset.fxGrp)];
                 const cur = row.recipe.group || '';
-                const g = prompt(`「${row.recipe.name}」歸到哪一組？\n（留空＝不分組；輸入新名字＝建新組）`, cur);
+                const g = await AUI.prompt(`「${row.recipe.name}」歸到哪一組？\n（留空＝不分組；輸入新名字＝建新組）`, cur);
                 if (g === null) return;
                 fxEngine.setGroup(row.recipe.fxId, g.trim());
                 _renderFxLibrary(container);
@@ -3966,17 +3936,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         openEditApp: async function (tplId, c) {
             try { if (c) launch(c, 'vn_ui'); } catch (e) {}   // 直接落製作面板編輯器，不經死首頁
             const tpl = await _getTplById(tplId);
-            if (!tpl) { alert('找不到這個應用的可編輯底稿（可能是舊資料，重新生成一次即可）'); return; }
+            if (!tpl) { AUI.alert('找不到這個應用的可編輯底稿（可能是舊資料，重新生成一次即可）'); return; }
             setTimeout(function () { try { _enterEditMode(tpl); } catch (e) { console.warn('[OS_STUDIO] openEditApp', e); } }, 60);
         },
         injectAppToTavern: async function (tplId) {
             const tpl = await _getTplById(tplId);
-            if (!tpl) { alert('找不到底稿'); return; }
-            try { importToSillyTavern(tpl); } catch (e) { alert('載入酒館失敗：' + ((e && e.message) || e)); }
+            if (!tpl) { AUI.alert('找不到底稿'); return; }
+            try { importToSillyTavern(tpl); } catch (e) { AUI.alert('載入酒館失敗：' + ((e && e.message) || e)); }
         },
         exportApp: async function (tplId) {
             const tpl = await _getTplById(tplId);
-            if (!tpl) { alert('找不到底稿'); return; }
+            if (!tpl) { AUI.alert('找不到底稿'); return; }
             try { win.OS_STUDIO_VC?.exportOneVnUiTemplate(tpl); } catch (e) {}   // 展廳拆檔：os_studio_vn_gallery.js
         },
         // 展廳拆檔（os_studio_vn_gallery.js）：群組資料（vn_component_groups/g_lobby）歸展廳管，懶委派

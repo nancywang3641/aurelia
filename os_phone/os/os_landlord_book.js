@@ -24,7 +24,7 @@
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
     }
-    function _toast(msg) { try { win.toastr && win.toastr.info(msg); } catch (e) {} }
+    function _toast(msg) { try { AUI.toastr && AUI.toastr.info(msg); } catch (e) {} }
 
     function _injectStyle() {
         if (d.getElementById('llb-style')) return;

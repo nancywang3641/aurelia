@@ -159,7 +159,7 @@
                 const apiKey  = (container.querySelector('#mm-api-key')?.value  || '').trim();
                 const provider = container.querySelector('#mm-provider')?.value || 'cn';
                 if (!groupId || !apiKey) {
-                    alert('請先填寫 Group ID 與 API Key');
+                    AUI.alert('請先填寫 Group ID 與 API Key');
                     return;
                 }
                 mmVoiceModal.style.display = 'flex';

@@ -414,8 +414,8 @@
             modal.classList.add('active');
         }
 
-        function confirmDelete(id, name) {
-            if (confirm(`確定要刪除模板「${name}」嗎？\n此操作無法撤銷。`)) {
+        async function confirmDelete(id, name) {
+            if (await AUI.confirm(`確定要刪除模板「${name}」嗎？\n此操作無法撤銷。`)) {
                 deleteTemplateData(id).then(() => {
                     openManager(); refreshTemplateSelect();
                     if (getSelectedTemplateId() === id) { setSelectedTemplateId('default'); refreshTemplateSelect(); }
@@ -426,7 +426,7 @@
         async function saveTemplateFromEditor() {
             const name = document.getElementById('template-name-input').value.trim();
             const content = document.getElementById('template-content-input').value.trim();
-            if (!name || !content) return alert('❌ 請填寫完整名稱與內容');
+            if (!name || !content) return AUI.alert('❌ 請填寫完整名稱與內容');
             let template;
             if (editingTemplateId) {
                 template = await getTemplate(editingTemplateId);
@@ -523,7 +523,7 @@
                 const list = await _blEntriesStandalone();
                 const exist = list.find(e => e.title === title);
                 const names = new Set(exist ? _blNamesOf(exist.content) : []);
-                if (names.has(name)) return alert("已在黑名單中");
+                if (names.has(name)) return AUI.alert("已在黑名單中");
                 names.add(name);
                 await window.OS_DB.saveWorldbookEntry({
                     ...(exist || {
@@ -541,7 +541,7 @@
                 });
                 document.getElementById('blacklist-input').value = '';
                 API.renderBlacklist();
-            } catch (e) { alert('失敗:' + e.message); }
+            } catch (e) { AUI.alert('失敗:' + e.message); }
             return;
         }
         try {
@@ -556,7 +556,7 @@
             
             if (existEntry) {
                 const names = new Set(existEntry.content.split('\n').map(l=>l.trim()).filter(l=>l && !l.startsWith('[') && !l.includes('規則')));
-                if(names.has(name)) return alert("已在黑名單中");
+                if(names.has(name)) return AUI.alert("已在黑名單中");
                 names.add(name);
                 await helper.updateLorebookEntriesWith(bookName, list => list.map(e => e.comment === targetComment ? {...e, content: `[當前永不出現名單-黑名單角色]\n黑名單規則：劇情封禁\n\n${Array.from(names).join('\n')}`, keys: [...Array.from(names), blKey]} : e));
             } else {
@@ -573,16 +573,16 @@
             
             document.getElementById('blacklist-input').value = '';
             API.renderBlacklist();
-        } catch(e) { alert('失敗:'+e.message); }
+        } catch(e) { AUI.alert('失敗:'+e.message); }
     };
 
     API.removeCharacterFromBlacklist = async function(uid) {
-        if(!confirm("確定要永遠開放（移出黑名單）嗎？")) return;
+        if(!await AUI.confirm("確定要永遠開放（移出黑名單）嗎？")) return;
         if (_blStandalone()) {
             try {
                 await window.OS_DB.deleteWorldbookEntry(uid);   // 獨立版的 uid＝條目 id（字串）
                 API.renderBlacklist();
-            } catch (e) { alert('失敗:' + e.message); }
+            } catch (e) { AUI.alert('失敗:' + e.message); }
             return;
         }
         try {
@@ -590,7 +590,7 @@
             const bookName = helper.getCurrentCharPrimaryLorebook();
             await helper.deleteLorebookEntries(bookName, [parseInt(uid)]);
             API.renderBlacklist();
-        } catch(e) { alert('失敗:'+e.message); }
+        } catch(e) { AUI.alert('失敗:'+e.message); }
     };
 
     // --- C. 小世界生成器 ---
@@ -598,7 +598,7 @@
         const scene = document.getElementById('world-scene-input').value.trim();
         const note = document.getElementById('world-user-note').value.trim();
         const status = document.getElementById('world-gen-status');
-        if(!scene) return alert("請輸入場景名稱");
+        if(!scene) return AUI.alert("請輸入場景名稱");
         
         let templateContent = '<small_world>\n[請填寫小世界設定]\n</small_world>';
         try { templateContent = (await window.WORLD_TEMPLATES.getTemplate(window.WORLD_TEMPLATES.getSelectedTemplateId())).content; } catch(e){}
@@ -705,7 +705,7 @@
     };
 
     API.deleteWorld = async function(uid, name) {
-        if(!confirm(`確定刪除小世界「${name}」？`)) return;
+        if(!await AUI.confirm(`確定刪除小世界「${name}」？`)) return;
         const helper = window.parent.TavernHelper;
         await helper.deleteLorebookEntries(helper.getCurrentCharPrimaryLorebook(), [uid]);
         API.renderWorldList();
@@ -746,8 +746,8 @@
         document.getElementById('rpg-char-tpl-modal').classList.remove('active');
     };
 
-    API.resetCharCardTemplate = function() {
-        if (!confirm('確定還原為預設模板？')) return;
+    API.resetCharCardTemplate = async function() {
+        if (!await AUI.confirm('確定還原為預設模板？')) return;
         localStorage.removeItem('sp_char_card_tpl');
         document.getElementById('sp-char-tpl-area').value = CHAR_CARD_DEFAULT_TPL;
     };
@@ -842,9 +842,9 @@ ${getCharCardTemplate()}`;
             const el = document.getElementById('bg-db-subtabs');
             if(!el) return;
             el.innerHTML = dbCats.map(c => `<div class="bg-db-subtab ${c.id === activeCatId ? 'active' : ''}" data-id="${c.id}"><span>${escapeHtml(c.label)}</span><span class="bg-db-subtab-del" title="刪除">✕</span></div>`).join('');
-            el.querySelectorAll('.bg-db-subtab').forEach(t => t.onclick = (e) => {
+            el.querySelectorAll('.bg-db-subtab').forEach(t => t.onclick = async (e) => {
                 if(e.target.classList.contains('bg-db-subtab-del')) {
-                    if(!confirm("刪除分類設定？(不影響條目)")) return;
+                    if(!await AUI.confirm("刪除分類設定？(不影響條目)")) return;
                     dbCats = dbCats.filter(x => x.id !== t.dataset.id); localStorage.setItem('bg_database_categories', JSON.stringify(dbCats));
                     activeCatId = dbCats.length > 0 ? dbCats[0].id : null; renderSubtabs(); renderDbEntries(); return;
                 }
@@ -959,7 +959,7 @@ ${getCharCardTemplate()}`;
                 renderDbEntries(); 
                 document.getElementById('bg-db-addcat-modal').classList.remove('active');
             } else {
-                alert("❌ 請輸入分類字串！");
+                AUI.alert("❌ 請輸入分類字串！");
             }
         };
 
@@ -1028,7 +1028,7 @@ ${getCharCardTemplate()}`;
                                     <div class="bg-logs-entry">
                                         <input type="checkbox" class="bg-logs-checkbox" data-uid="${e.uid}" title="選取以刪除">
                                         <div class="bg-logs-entry-name" onclick="window._DB_EDIT(${e.uid})" title="點擊預覽或編輯">${escapeHtml(e.comment)}</div>
-                                        <button class="bg-logs-del-btn" onclick="if(confirm('確定刪除此條目?')){ window.parent.TavernHelper.deleteLorebookEntries(window.parent.TavernHelper.getCurrentCharPrimaryLorebook(), [${e.uid}]); setTimeout(()=>document.getElementById('bg-logs-refresh').click(), 300); }">🗑</button>
+                                        <button class="bg-logs-del-btn" onclick="AUI.confirm('刪除這個條目？').then(ok => { if (!ok) return; window.parent.TavernHelper.deleteLorebookEntries(window.parent.TavernHelper.getCurrentCharPrimaryLorebook(), [${e.uid}]); setTimeout(()=>document.getElementById('bg-logs-refresh').click(), 300); })">🗑</button>
                                     </div>`).join('')}
                             </div>
                         </div>`;
@@ -1047,8 +1047,8 @@ ${getCharCardTemplate()}`;
 
         document.getElementById('bg-logs-delete-selected').onclick = async function() {
             const checkedBoxes = Array.from(document.querySelectorAll('.bg-logs-checkbox:checked'));
-            if (checkedBoxes.length === 0) return alert('請先勾選要刪除的世界書記錄');
-            if (!confirm(`確定要刪除選取的 ${checkedBoxes.length} 條記錄嗎？\n此操作會從酒館 AI 世界書中永久刪除且無法復原。`)) return;
+            if (checkedBoxes.length === 0) return AUI.alert('請先勾選要刪除的世界書記錄');
+            if (!await AUI.confirm(`確定要刪除選取的 ${checkedBoxes.length} 條記錄嗎？\n此操作會從酒館 AI 世界書中永久刪除且無法復原。`)) return;
             
             const btn = this;
             const originalText = btn.textContent;
@@ -1068,7 +1068,7 @@ ${getCharCardTemplate()}`;
                 
                 renderLogs();
             } catch(e) {
-                alert('批次刪除失敗: ' + e.message);
+                AUI.alert('批次刪除失敗: ' + e.message);
             } finally {
                 btn.textContent = originalText;
                 btn.style.pointerEvents = 'auto';

@@ -187,7 +187,7 @@
         },
 
         open: function(chatId) {
-            if (!chatId) { alert("無法識別聊天室 ID"); return; }
+            if (!chatId) { AUI.alert("無法識別聊天室 ID"); return; }
             this._curChatId = chatId;      // 關閉時要拿它把即時預覽還原回已存的設定
             const config = this.getConfig(chatId);
             currentEditTarget = 'me';

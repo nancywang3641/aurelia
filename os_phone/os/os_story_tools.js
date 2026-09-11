@@ -346,12 +346,12 @@
     API.recompressSummary = async function () {
         const chatId = getChatIdentifier();
         const rec = await _loadTavernSummary(chatId);
-        if (!rec || !rec.content) { alert('目前這個對話還沒有大總結，沒得壓縮。'); return; }
+        if (!rec || !rec.content) { AUI.alert('目前這個對話還沒有大總結，沒得壓縮。'); return; }
         const osApi = win.OS_API, osSet = win.OS_SETTINGS, osDb = win.OS_DB;
-        if (!osApi?.chat || !osSet?.getConfig || !osDb?.saveTavernSummary) { alert('找不到 OS_API / OS_SETTINGS / OS_DB'); return; }
+        if (!osApi?.chat || !osSet?.getConfig || !osDb?.saveTavernSummary) { AUI.alert('找不到 OS_API / OS_SETTINGS / OS_DB'); return; }
         const beforeFull = rec.content.length;
         const beforeInject = (API.buildInjectionPayload ? API.buildInjectionPayload(rec.content) : rec.content).length;
-        if (!confirm(`重壓目前大總結？\n\n存檔全文 ${beforeFull} 字、每輪實際注入約 ${beforeInject} 字。\n會把久遠事件壓成階段節點、最近逐筆保留；角色 / 關係全保留、物品表移除。劇情不會新增。`)) return;
+        if (!await AUI.confirm(`重壓目前大總結？\n\n存檔全文 ${beforeFull} 字、每輪實際注入約 ${beforeInject} 字。\n會把久遠事件壓成階段節點、最近逐筆保留；角色 / 關係全保留、物品表移除。劇情不會新增。`)) return;
 
         const btn = document.getElementById('btn-recompress-summary');
         const origText = btn ? btn.innerText : '';
@@ -401,11 +401,11 @@
             const afterFull = finalContent.length;
             const afterInject = (API.buildInjectionPayload ? API.buildInjectionPayload(finalContent) : finalContent).length;
             console.log(`[大總結] ✅ 重壓完成 全文 ${beforeFull}→${afterFull}、注入 ${beforeInject}→${afterInject}`);
-            alert(`✅ 重壓完成！\n存檔全文：${beforeFull} → ${afterFull} 字\n每輪實際注入：${beforeInject} → ${afterInject} 字\n角色 / 關係全保留、物品表已移除。`);
+            AUI.alert(`✅ 重壓完成！\n存檔全文：${beforeFull} → ${afterFull} 字\n每輪實際注入：${beforeInject} → ${afterInject} 字\n角色 / 關係全保留、物品表已移除。`);
             try { const sb = document.querySelector('#ost-panel .ost-hide-btn[title="重新整理"]'); if (sb) API._refreshStatus(sb); } catch (e) {}
         } catch (e) {
             console.error('[大總結] 重壓失敗:', e);
-            alert('重壓失敗：' + (e?.message || e));
+            AUI.alert('重壓失敗：' + (e?.message || e));
         } finally {
             if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); }
             setTimeout(function () { win.__AURELIA_SUMMARIZING = false; }, 3000);
@@ -531,8 +531,8 @@
         document.getElementById('rpg-summary-tpl-modal').classList.remove('active');
     };
 
-    API.resetSummaryTemplate = function () {
-        if (!confirm('確定還原為預設模板？')) return;
+    API.resetSummaryTemplate = async function () {
+        if (!await AUI.confirm('確定還原為預設模板？')) return;
         localStorage.removeItem('sp_summary_tpl');
         document.getElementById('sp-summary-tpl-area').value = SUMMARY_DEFAULT_TPL;
     };
@@ -571,7 +571,7 @@
     API.executeMergeSummaries = async function () {
         const listEl = document.getElementById('sp-merge-list');
         const checked = Array.from(listEl.querySelectorAll('input[type="checkbox"]:checked'));
-        if (checked.length < 2) { alert('請至少勾選 2 個條目進行合併'); return; }
+        if (checked.length < 2) { AUI.alert('請至少勾選 2 個條目進行合併'); return; }
         const userNote = (document.getElementById('sp-merge-note').value || '').trim();
         document.getElementById('rpg-merge-modal').classList.remove('active');
         const btn = document.getElementById('btn-grand-summary');
@@ -651,8 +651,8 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
             const newEntry = { comment: `[大总结] - ${chatId} - 第${newCount}次(合并) - ${now}`, keys: [`[SUMMARY_${chatId}_MERGE_${now}]`], content: finalContent, enabled: true, position: 'at_depth_as_system', depth: 1, order: 998 };
             await helper.createLorebookEntries(bookName, [newEntry]);
-            alert(`✅ 合併完成！第 ${newCount} 次（合并版）——角色/關係全保留；事件/物品/記憶/性事/結算/代辦已濃縮整理。確認沒問題後可手動刪掉舊的 ${selected.length} 份。`);
-        } catch (e) { alert('合併失敗: ' + e.message); }
+            AUI.alert(`✅ 合併完成！第 ${newCount} 次（合并版）——角色/關係全保留；事件/物品/記憶/性事/結算/代辦已濃縮整理。確認沒問題後可手動刪掉舊的 ${selected.length} 份。`);
+        } catch (e) { AUI.alert('合併失敗: ' + e.message); }
         finally { if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); } }
     };
 
@@ -891,7 +891,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 } else if (_autohide) {
                     // 不再靜默：明確提醒+log，免得舊樓沒藏、token 默默飆高(4萬→8萬那種)
                     console.warn(`[大總結] ⚠️ 自動隱藏沒執行：陣列末=${_end}（懶載入截短/讀不到）→ 舊樓沒藏、下輪 token 可能偏高`);
-                    try { win.toastr?.warning('舊樓自動隱藏這次沒跑成功，token 可能偏高——可到故事日誌手動隱藏舊樓'); } catch (e) {}
+                    try { AUI.toastr?.warning('舊樓自動隱藏這次沒跑成功，token 可能偏高——可到故事日誌手動隱藏舊樓'); } catch (e) {}
                 }
             } catch (e) { console.warn('[大總結] 自動隱藏失敗:', e); }
 
@@ -1038,13 +1038,13 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 const _v = _validateSummary(finalContent);
                 if (!_v.ok) {
                     console.warn('[自動總結] ⚠️ 生成結果未通過驗證，放棄存檔、保留舊總結：' + _v.reason);
-                    try { win.toastr?.error('這次自動總結格式異常（' + _v.reason + '），已保留舊總結、沒有覆蓋。請到故事管理手動「生成 / 更新大總結」檢查。', '🛑 自動總結已攔截', { timeOut: 9000 }); } catch (e) {}
+                    try { AUI.toastr?.error('這次自動總結格式異常（' + _v.reason + '），已保留舊總結、沒有覆蓋。請到故事管理手動「生成 / 更新大總結」檢查。', '🛑 自動總結已攔截', { timeOut: 9000 }); } catch (e) {}
                     return;
                 }
                 await _doSave(); console.log('[自動總結] ✅ 背景總結完成並存檔');
             }
             else _showSummaryPreview();
-        } catch (e) { if (auto) console.warn('[自動總結] 失敗:', e); else alert("生成失敗: " + e.message); } finally {
+        } catch (e) { if (auto) console.warn('[自動總結] 失敗:', e); else AUI.alert("生成失敗: " + e.message); } finally {
             if (btn) { btn.innerText = "📝 生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning'); }
         }
     };
@@ -1076,7 +1076,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         const s = parseInt(document.getElementById('vrs-hide-start')?.value);
         const e = parseInt(document.getElementById('vrs-hide-end')?.value);
         if (isNaN(s) || isNaN(e) || s < 0 || e < 0) {
-            alert('請輸入有效樓層號（>= 0）');
+            AUI.alert('請輸入有效樓層號（>= 0）');
             return null;
         }
         return s > e ? `${e}-${s}` : `${s}-${e}`;
@@ -1294,7 +1294,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         const gen = ov.querySelector('#ost-sa-gen');
         if (gen) gen.onclick = () => {
             const S = win.VN_Summary || window.VN_Summary;
-            if (!S?.generate) { alert('大總結模組尚未載入'); return; }
+            if (!S?.generate) { AUI.alert('大總結模組尚未載入'); return; }
             API.closePanel();
             S.generate();
         };
@@ -1306,7 +1306,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 await win.OS_DB?.saveGrandSummary({ ...latest, content: ta.value });
                 const o = sv.textContent; sv.textContent = '✓ 已儲存';
                 setTimeout(() => { sv.textContent = o; }, 1400);
-            } catch (e) { alert('儲存失敗：' + (e.message || e)); }
+            } catch (e) { AUI.alert('儲存失敗：' + (e.message || e)); }
         };
     }
 
@@ -1389,7 +1389,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             try {
                 console.log(`[自動總結] 未總結 ${info.uncounted} ≥ ${every} → 背景總結 #${info.start}~${info.end}`);
                 await API._generateSummary(info.start, info.end, 'content', true, true);   // auto=true → 直接存、不跳預覽
-                try { const t = win.toastr; if (t) t.success(`已自動總結（到 #${info.end}）`, '🔁 自動總結', { timeOut: 2500 }); } catch (e) {}
+                try { const t = AUI.toastr; if (t) t.success(`已自動總結（到 #${info.end}）`, '🔁 自動總結', { timeOut: 2500 }); } catch (e) {}
             } finally { _autoSumming = false; }
         } catch (e) { _autoSumming = false; console.warn('[自動總結] check 失敗:', e); }
     };
@@ -1513,7 +1513,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             }
             console.log(`[補頭像] ✅ 完成 ${done} 張`);
             try {
-                const t = win.toastr;
+                const t = AUI.toastr;
                 if (t && done) t.success(`已自動補 ${done} 張頭像` + (missing.length > done ? `（還缺 ${missing.length - done} 個、下次大總結再補）` : ''), '🪪 補頭像', { timeOut: 3000 });
             } catch (e) {}
         } catch (e) {

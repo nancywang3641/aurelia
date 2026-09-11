@@ -279,11 +279,11 @@ ${varList}
         });
 
         el.querySelectorAll('.avsr-del-group').forEach(btn => {
-            btn.onclick = (e) => {
+            btn.onclick = async (e) => {
                 e.stopPropagation();
                 const key   = btn.dataset.delGroup;
                 const title = btn.closest('.avsr-group')?.querySelector('.avsr-group-title')?.textContent || key;
-                if (!confirm(`刪除「${title}」的所有規則？此操作無法復原。`)) return;
+                if (!await AUI.confirm(`刪除「${title}」的所有規則？此操作無法復原。`)) return;
                 const remaining = _loadRules().filter(r => (r.worldId || '__global__') !== key);
                 _saveRules(remaining);
                 delete collapsed[key];
@@ -310,8 +310,8 @@ ${varList}
         });
 
         el.querySelectorAll('[data-del]').forEach(btn => {
-            btn.onclick = () => {
-                if (!confirm('刪除這條規則？')) return;
+            btn.onclick = async () => {
+                if (!await AUI.confirm('刪除這條規則？')) return;
                 const rules2 = _loadRules().filter(x => x.id !== btn.dataset.del);
                 _saveRules(rules2);
                 _renderList(el);
@@ -433,8 +433,8 @@ ${varList}
             const folder   = editor.querySelector('#avsr-f-folder').value.trim();
             const priority = parseInt(editor.querySelector('#avsr-f-priority').value) || 50;
 
-            if (!path) { alert('請填入項目路徑'); return; }
-            if (!content) { alert('請填入注入文字'); return; }
+            if (!path) { AUI.alert('請填入項目路徑'); return; }
+            if (!content) { AUI.alert('請填入注入文字'); return; }
 
             const n = parseFloat(rawVal);
             const value = isNaN(n) ? rawVal : n;

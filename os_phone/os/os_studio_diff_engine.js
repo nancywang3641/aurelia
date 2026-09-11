@@ -364,8 +364,8 @@ ${d.usageDesc || ''}
                 <button class="h-btn btn-pin">${snap.pinned ? '📌' : '📍'}</button>
                 <button class="h-btn danger btn-del">✖</button>
             `;
-            item.querySelector('.btn-restore').onclick = () => {
-                if (confirm('要還原到這個版本嗎？目前的狀態會先拍進快照，可以再還原回來。')) {
+            item.querySelector('.btn-restore').onclick = async () => {
+                if (await AUI.confirm('要還原到這個版本嗎？目前的狀態會先拍進快照，可以再還原回來。')) {
                     restoreFromVNSnapshot(idx);
                     renderVNHistoryArea();
                 }
@@ -374,8 +374,8 @@ ${d.usageDesc || ''}
                 snap.pinned = !snap.pinned;
                 renderVNHistoryArea();
             };
-            item.querySelector('.btn-del').onclick = () => {
-                if (confirm('刪除這張快照？')) {
+            item.querySelector('.btn-del').onclick = async () => {
+                if (await AUI.confirm('刪除這張快照？')) {
                     _b.currentParsedData.history.splice(idx, 1);   // 點刪當下即時取（保留原 live 語義）
                     renderVNHistoryArea();
                 }

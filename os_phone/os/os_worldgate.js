@@ -2776,7 +2776,7 @@
     let _seeds = [];        // 本次抽出的種子(暫存,不落盤)
     let _busy = false;
     function _toast(msg) {
-        try { win.toastr?.info(msg, '🌌 世界門'); } catch (e) {}
+        try { AUI.toastr?.info(msg, '🌌 世界門'); } catch (e) {}
         console.log('[Worldgate③]', msg);
     }
     function closeGate() {

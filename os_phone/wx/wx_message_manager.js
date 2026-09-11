@@ -25,7 +25,7 @@
 
     function enterMultiSelectMode() {
         if (!isApiMode()) {
-            alert('❌ 刪除功能僅支持 API 模式\n\n酒館模式請在酒館編輯器中刪除消息');
+            AUI.alert('❌ 刪除功能僅支持 API 模式\n\n酒館模式請在酒館編輯器中刪除消息');
             return false;
         }
         isMultiSelectMode = true;
@@ -110,11 +110,11 @@
 
     async function deleteSelectedMessages() {
         if (selectedMessages.size === 0) {
-            alert('❌ 請先選擇要刪除的消息');
+            AUI.alert('❌ 請先選擇要刪除的消息');
             return;
         }
         const count = selectedMessages.size;
-        if (!confirm(`確定要刪除 ${count} 條消息嗎？\n此操作無法撤銷！`)) return;
+        if (!await AUI.confirm(`確定要刪除 ${count} 條消息嗎？\n此操作無法撤銷！`)) return;
 
         try {
             const targetWin = window.parent || window;
@@ -153,19 +153,19 @@
 
         } catch (error) {
             console.error('[MessageManager] 刪除失敗:', error);
-            alert(`❌ 刪除失敗：${error.message}`);
+            AUI.alert(`❌ 刪除失敗：${error.message}`);
         }
     }
 
     async function clearCurrentChat() {
         const targetWin = window.parent || window;
         const wxApp = targetWin.wxApp || window.wxApp;
-        if (!isApiMode()) { alert('僅 API 模式支持清空'); return; }
+        if (!isApiMode()) { AUI.alert('僅 API 模式支持清空'); return; }
         
         const activeId = wxApp.GLOBAL_ACTIVE_ID;
         if (!activeId) return;
         
-        if (!confirm('⚠️ 高能預警\n\n確定要「清空」當前所有聊天記錄嗎？\n此操作絕對無法恢復！')) return;
+        if (!await AUI.confirm('⚠️ 高能預警\n\n確定要「清空」當前所有聊天記錄嗎？\n此操作絕對無法恢復！')) return;
 
         const currentChat = wxApp.GLOBAL_CHATS?.[activeId];
         if (currentChat) {

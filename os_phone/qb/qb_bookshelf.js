@@ -892,11 +892,11 @@ status = "正常"`;
             row.querySelector('.qb-toc-del').onclick = async (ev) => {
                 ev.stopPropagation();
                 // 整條刪掉＝章節、記憶、人物檔案、追蹤數值全走；問清楚再動手
-                if (!confirm(`刪除篇章「${r.title}」？
+                if (!await AUI.confirm(`刪除篇章「${r.title}」？
 
 這條的章節、記憶、人物檔案與追蹤數值都會一起刪掉，救不回來。`)) return;
                 try { await window.VN_Core?.deleteStoryLine?.(r.sid); }
-                catch (e) { console.warn('[書架] 刪除篇章失敗:', e); alert('刪除失敗，請看 console'); return; }
+                catch (e) { console.warn('[書架] 刪除篇章失敗:', e); AUI.alert('刪除失敗，請看 console'); return; }
                 await _renderToc(w, panel);
             };
             listEl.appendChild(row);

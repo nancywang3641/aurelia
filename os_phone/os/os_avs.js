@@ -263,7 +263,7 @@
     // 回傳 { pack, ruleCount } 成功 / null 失敗（generate 內部已 toast 失敗訊息）。
     async function _aiGenerateAndSavePack(userPrompt) {
         if (!win.OS_STATE_SCHEMA?.generate) {
-            alert('OS_STATE_SCHEMA 不可用（請確認 state_schema.js 已載入）');
+            AUI.alert('OS_STATE_SCHEMA 不可用（請確認 state_schema.js 已載入）');
             return null;
         }
         const result = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true, userPrompt });
@@ -327,7 +327,7 @@
         }
         await syncVarPackToLorebook();
         try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
-        if (win.toastr) win.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 個項目 / ${savedRuleCount} 條規則），世界書已同步`);
+        if (AUI.toastr) AUI.toastr.success(`✅ 已生成「${pack.name}」（${variables.length} 個項目 / ${savedRuleCount} 條規則），世界書已同步`);
         if (win.OS_STATE_RUNTIME?.extractOnce) {
             setTimeout(() => {
                 try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch(e) {
@@ -708,7 +708,7 @@
                 uiArea.querySelector('.btn-refine-tpl').onclick = () => openFurnaceModal(container, pack.id, activeTpl);
                 uiArea.querySelector('.btn-refurnace').onclick = () => openFurnaceModal(container, pack.id);
                 uiArea.querySelector('.btn-del-tpl').onclick = async () => {
-                    if (!confirm(`刪除這個檔案對應的 UI 面板？檔案本身保留。`)) return;
+                    if (!await AUI.confirm(`刪除這個檔案對應的 UI 面板？檔案本身保留。`)) return;
                     await win.OS_DB.deleteUITemplate(activeTpl.id);
                     currentTemplates = await win.OS_DB.getAllUITemplates();
                     updateActiveTemplatesCache();
@@ -728,7 +728,7 @@
                 if (orphanedTpls.length)  warn.push(`${orphanedTpls.length} 個展廳 UI 模板`);
                 if (orphanedRules.length) warn.push(`${orphanedRules.length} 條條件規則`);
                 const tplWarning = warn.length ? `\n\n⚠️ 同時會刪除這個檔案對應的：\n  · ${warn.join('\n  · ')}` : '';
-                if (!confirm(`刪除檔案「${pack.name}」？${tplWarning}\n\n世界書內狀態說明條目會自動更新（沒其他項目時也會被刪）。`)) return;
+                if (!await AUI.confirm(`刪除檔案「${pack.name}」？${tplWarning}\n\n世界書內狀態說明條目會自動更新（沒其他項目時也會被刪）。`)) return;
 
                 // 1. 刪變數包本體
                 await win.OS_DB.deleteVarPack(pack.id);
@@ -777,11 +777,11 @@
         const pack = _currentRulesPack;
         if (!pack) return;
         if (!Array.isArray(pack.variables) || !pack.variables.length) {
-            alert('這個檔案還沒有任何項目，先加變數再生成規則');
+            AUI.alert('這個檔案還沒有任何項目，先加變數再生成規則');
             return;
         }
-        if (!win.OS_AVS_RULES?.generateRulesForWorld) { alert('規則引擎未載入'); return; }
-        if (!win.OS_API_ENGINE?.generateText) { alert('主模型 API 引擎未就緒'); return; }
+        if (!win.OS_AVS_RULES?.generateRulesForWorld) { AUI.alert('規則引擎未載入'); return; }
+        if (!win.OS_API_ENGINE?.generateText) { AUI.alert('主模型 API 引擎未就緒'); return; }
         const btn = container.querySelector('#avs-rules-modal-aigen');
         const orig = btn ? btn.textContent : '';
         if (btn) { btn.textContent = '主模型生成中…'; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.6'; }
@@ -796,15 +796,15 @@
                 callApi
             });
             if (n > 0) {
-                if (win.toastr) win.toastr.success('✅ AI 生成 ' + n + ' 條條件規則');
+                if (AUI.toastr) AUI.toastr.success('✅ AI 生成 ' + n + ' 條條件規則');
                 _editingRuleIdInModal = null;
                 renderRulesModalList(container);
-            } else if (win.toastr) {
-                win.toastr.warning('這次沒生出規則，再試一次或檢查主模型連線');
-            } else { alert('這次沒生出規則'); }
+            } else if (AUI.toastr) {
+                AUI.toastr.warning('這次沒生出規則，再試一次或檢查主模型連線');
+            } else { AUI.alert('這次沒生出規則'); }
         } catch (e) {
             console.warn('[AVS] AI 生成條件規則失敗', e);
-            if (win.toastr) win.toastr.error('生成失敗：' + ((e && e.message) || e)); else alert('生成失敗');
+            if (AUI.toastr) AUI.toastr.error('生成失敗：' + ((e && e.message) || e)); else AUI.alert('生成失敗');
         } finally {
             if (btn) { btn.textContent = orig; btn.style.pointerEvents = ''; btn.style.opacity = ''; }
         }
@@ -905,7 +905,7 @@
     // 🪶 簡易預設：一鍵套「角色狀態(形象/身分/好感度)」，跳過 AI 生成。
     //    入口在「狀態檔案」的建檔畫面（os_avs_state.js 的 #avs-st-preset）；這裡是實作本體。
     async function applySimplePreset(btnEl) {
-            if (!confirm('套用「簡易預設」檔案？\n每個角色追蹤：形象(髮色/眼色/體型)、身分、好感度。\n適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。')) return;
+            if (!await AUI.confirm('套用「簡易預設」檔案？\n每個角色追蹤：形象(髮色/眼色/體型)、身分、好感度。\n適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。')) return;
             const _o = btnEl && btnEl.textContent;
             if (btnEl) { btnEl.textContent = '套用中...'; btnEl.style.pointerEvents = 'none'; }
             try {
@@ -969,14 +969,14 @@
                 } catch(e) { console.warn('[AVS] 內建簡單面板安裝失敗:', e); }
                 if (_appContainer) await loadAllData(_appContainer);
                 await syncVarPackToLorebook();
-                if (win.toastr) win.toastr.success('✅ 已套用簡易預設檔案');
+                if (AUI.toastr) AUI.toastr.success('✅ 已套用簡易預設檔案');
                 try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}   // 從狀態面板初始引導觸發時，套用後刷新該面板（init 卡 → 追蹤視圖）
                 if (win.OS_STATE_RUNTIME?.extractOnce) {
                     setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
                 }
             } catch (e) {
                 console.error('[AVS] 套用簡易預設失敗:', e);
-                alert('套用失敗：' + (e?.message || e));
+                AUI.alert('套用失敗：' + (e?.message || e));
         } finally {
             if (btnEl) { btnEl.textContent = _o; btnEl.style.pointerEvents = ''; }
         }
@@ -1077,14 +1077,14 @@
 
             if (_appContainer) await loadAllData(_appContainer);
             await syncVarPackToLorebook();
-            if (win.toastr) win.toastr.success('✅ 已套用視差預設（' + (SK[want]?.label || want) + '）；想換另一張皮到 UI 面板切換');
+            if (AUI.toastr) AUI.toastr.success('✅ 已套用視差預設（' + (SK[want]?.label || want) + '）；想換另一張皮到 UI 面板切換');
             try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}
             if (win.OS_STATE_RUNTIME?.extractOnce) {
                 setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
             }
         } catch (e) {
             console.error('[AVS] 套用視差預設失敗:', e);
-            alert('套用失敗：' + (e?.message || e));
+            AUI.alert('套用失敗：' + (e?.message || e));
         } finally {
             if (btnEl) { btnEl.textContent = _o; btnEl.style.pointerEvents = ''; }
         }
@@ -1991,8 +1991,8 @@
     }
 
     function _wskSay(m, ok) {
-        try { if (win.toastr) return ok ? win.toastr.success(m) : win.toastr.info(m); } catch (e) {}
-        try { alert(m); } catch (e) {}
+        try { if (AUI.toastr) return ok ? AUI.toastr.success(m) : AUI.toastr.info(m); } catch (e) {}
+        try { AUI.alert(m); } catch (e) {}
     }
     // ── 🐚 貼紙微調：拖位置、調大小、轉角度，存回這張面板 ──
     //   AI 放不準是常態（會壓到資料、會縮成小圖），所以留一個手動的最後一哩。
@@ -2683,7 +2683,7 @@
             };
 
             card.querySelector('.btn-del').onclick = async () => {
-                if (confirm('確定要銷毀這個精美的 UI 模板嗎？')) {
+                if (await AUI.confirm('確定要銷毀這個精美的 UI 模板嗎？')) {
                     await win.OS_DB.deleteUITemplate(tpl.id); 
                     currentTemplates = await win.OS_DB.getAllUITemplates();
                     updateActiveTemplatesCache();
@@ -2755,8 +2755,8 @@
         win.OS_AVS_RULES?.toggleRule?.(id);
         renderRulesModalList(_ruleModalContainer());
     }
-    function _delRule(id) {
-        if (!confirm('刪除這條規則？')) return;
+    async function _delRule(id) {
+        if (!await AUI.confirm('刪除這條規則？')) return;
         win.OS_AVS_RULES?.deleteRule?.(id);
         if (_editingRuleIdInModal === id) _editingRuleIdInModal = null;
         renderRulesModalList(_ruleModalContainer());
@@ -2772,8 +2772,8 @@
         const op = (card.querySelector('[data-rule-key="op"]')?.value || '>=').trim();
         const rawVal = (card.querySelector('[data-rule-key="value"]')?.value || '').trim();
         const content = (card.querySelector('[data-rule-key="content"]')?.value || '').trim();
-        if (!path) { alert('請選擇項目'); return; }
-        if (!content) { alert('請填注入內容'); return; }
+        if (!path) { AUI.alert('請選擇項目'); return; }
+        if (!content) { AUI.alert('請填注入內容'); return; }
         const n = parseFloat(rawVal);
         const value = (!isNaN(n) && String(n) === rawVal) ? n : rawVal;
         const data = { name: name || path, path, op, value, content, enabled: true, packId: pack.id };

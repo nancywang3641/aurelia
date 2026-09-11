@@ -359,18 +359,18 @@
         saveCharCV: function(name, btn) {
             try {
                 const cv = this._charCV(name);
-                if (!cv) { alert('這個角色目前沒有語音可保存'); return; }
+                if (!cv) { AUI.alert('這個角色目前沒有語音可保存'); return; }
                 const T = win.VN_TTS;
                 if (typeof T.lockNpcVoice === 'function') T.lockNpcVoice(name, cv.id);
                 if (btn) { btn.textContent = '已鎖定 ✓'; btn.disabled = true; }
-            } catch (e) { alert('保存失敗：' + (e?.message || e)); }
+            } catch (e) { AUI.alert('保存失敗：' + (e?.message || e)); }
         },
         unlockCharCV: function(name, btn) {
             try {
                 const T = win.VN_TTS;
                 if (typeof T.unlockNpcVoice === 'function') T.unlockNpcVoice(name);
                 if (btn) { btn.textContent = '已解除 ✓'; btn.disabled = true; }
-            } catch (e) { alert('解除失敗：' + (e?.message || e)); }
+            } catch (e) { AUI.alert('解除失敗：' + (e?.message || e)); }
         },
         // 真懶人：用角色頭像提示詞 → 生 512×896 立繪 → AI 模型去背 → 存 sprite_cache → 立繪即時換上
         autoGenSprite: async function(name, btn) {

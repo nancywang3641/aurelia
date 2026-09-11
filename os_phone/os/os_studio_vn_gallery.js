@@ -250,7 +250,7 @@
                 const meta = `${(tpl.title && String(tpl.title).trim()) || '(無標題)'} · ${tpl.panelType || '未標類型'}${tpl.isBlock ? ' · 區塊' : ''}`;
                 row.innerHTML = `<span class="vc-orphan-info"><span class="vc-orphan-tag">${_sgcEsc(tpl.tagId || '?')}</span><span class="vc-orphan-meta">${_sgcEsc(meta)}</span></span><button class="vc-orphan-del" type="button" title="刪除"><i class="fa-solid fa-trash"></i></button>`;
                 row.querySelector('.vc-orphan-del').onclick = async () => {
-                    if (!confirm(`刪除隱藏組件 [${tpl.tagId}]？\n刪掉後它會從劇情裡消失、AI 也不再被教著寫它。此動作無法復原。`)) return;
+                    if (!await AUI.confirm(`刪除隱藏組件 [${tpl.tagId}]？\n刪掉後它會從劇情裡消失、AI 也不再被教著寫它。此動作無法復原。`)) return;
                     try { await db.deleteUITemplate(tpl.id); } catch (e) {}
                     try { await syncActiveTagsToLocal(); } catch (e) {}
                     if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
@@ -337,8 +337,8 @@
             </div>`;
         listEl.querySelector('#vc-back').onclick = () => { _vcView = 'browse'; renderVnComponents(); };
         listEl.querySelector('#vc-d-active').onchange = async (e) => { await _setComponentActive(tpl, e.target.checked); };
-        listEl.querySelector('#vc-continue').onclick = () => {
-            if (!confirm(`把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議，AI 只會微調\n• 改完按「確定創建」會覆蓋這個面板\n\n確定嗎？`)) return;
+        listEl.querySelector('#vc-continue').onclick = async () => {
+            if (!await AUI.confirm(`把 [${tpl.tagId}] 載回煉丹爐繼續編輯？\n\n會：\n• 清空當前對話\n• 把這個面板載入預覽\n• 之後在對話框打修改建議，AI 只會微調\n• 改完按「確定創建」會覆蓋這個面板\n\n確定嗎？`)) return;
             if (_vcStandalone) {   // 獨立區：編輯需要創作室編輯器→關浮層、開創作室、進編輯（沿用 openEditApp 模式）
                 const root = _vcStandaloneRoot;
                 if (_vcExit) _vcExit();
@@ -352,7 +352,7 @@
         listEl.querySelector('#vc-export').onclick = () => exportOneVnUiTemplate(tpl);
         listEl.querySelector('#vc-settings').onclick = () => { _vcView = 'settings'; renderVnComponents(); };
         listEl.querySelector('#vc-del').onclick = async () => {
-            if (!confirm(`刪除組件 [${tpl.tagId}]？此操作無法復原。`)) return;
+            if (!await AUI.confirm(`刪除組件 [${tpl.tagId}]？此操作無法復原。`)) return;
             await db.deleteUITemplate(tpl.id); await syncActiveTagsToLocal();
             if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
             try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {}   // 連酒館正則+主世界書殘留一起清，不留孤兒
@@ -656,7 +656,7 @@
         // 🗑️ 清空全部 VN 組件：逐筆走跟單顆刪除同套清理(酒館正則/世界書殘留+連動手機app)，不留孤兒
         listEl.querySelector('#vc-pack-clear').onclick = async () => {
             if (!templates.length) { _studioToast('目前沒有組件可清空。', 'warning', '清空'); return; }
-            if (!confirm(`確定刪除全部 ${templates.length} 個 VN 組件？\n\n建議先「驗證並打包」匯出備份再清。\n此動作會一併清掉注入酒館的正則／世界書殘留與連動的手機 app，無法復原。`)) return;
+            if (!await AUI.confirm(`確定刪除全部 ${templates.length} 個 VN 組件？\n\n建議先「驗證並打包」匯出備份再清。\n此動作會一併清掉注入酒館的正則／世界書殘留與連動的手機 app，無法復原。`)) return;
             for (const t of templates) {
                 try { await db.deleteUITemplate(t.id); } catch (e) {}
                 try { await _removeTavernPanelArtifacts(t.tagId); } catch (e) {}
@@ -732,8 +732,8 @@
         return on === 0 ? 'off' : (on === members.length ? 'on' : 'partial');
     }
 
-    function _createGroup() {
-        const name = (prompt('新群組名稱（例：古代 / 現代 / 賽博龐克）') || '').trim();
+    async function _createGroup() {
+        const name = (await AUI.prompt('新群組名稱（例：古代 / 現代 / 賽博龐克）') || '').trim();
         if (!name) return;
         const groups = _loadGroups();
         const g = { id: _newGroupId(), name };
@@ -783,7 +783,7 @@
             close();
         };
         modal.querySelector('#sgc-grp-del').onclick = async () => {
-            if (!confirm(`刪除群組「${group.name}」？\n組件不會被刪，只會退回未分組。`)) return;
+            if (!await AUI.confirm(`刪除群組「${group.name}」？\n組件不會被刪，只會退回未分組。`)) return;
             _saveGroups(_loadGroups().filter(x => x.id !== group.id));
             for (const t of tpls) { const gids = _tplGroupIds(t); if (gids.includes(group.id)) { t.groupIds = gids.filter(id => id !== group.id); await db.saveVNTagTemplate(t); } }
             _vcFilterGid = 'all';

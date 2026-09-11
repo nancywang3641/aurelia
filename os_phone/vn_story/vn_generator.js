@@ -414,7 +414,7 @@
     //   兩顆按鈕的行為由呼叫端給：只有截斷才給「繼續生成」，API 錯誤頁續寫沒有意義。
     function showBadBanner(bad, handlers) {
         const VC = window.VN_Core;
-        if (!VC?.showTruncBanner) { alert(bad.reason); return; }
+        if (!VC?.showTruncBanner) { AUI.alert(bad.reason); return; }
         VC.showTruncBanner({
             title: bad.kind === 'trunc' ? '⚠️ 正文被截斷' : '⚠️ 這輪沒生成成功',
             sub: bad.reason,

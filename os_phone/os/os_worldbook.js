@@ -439,7 +439,7 @@
 
     function openAddForm(root) {
         if (!_activeBook) {
-            alert('請先選擇或創建一個世界書包！');
+            AUI.alert('請先選擇或創建一個世界書包！');
             return;
         }
         _editingId = null;
@@ -480,7 +480,7 @@
 
     async function saveForm(root) {
         const title = root.querySelector('#wb-f-title').value.trim();
-        if (!title) { alert('請填入條目標題'); return; }
+        if (!title) { AUI.alert('請填入條目標題'); return; }
 
         const pendingInput = root.querySelector('#wb-f-keys-input').value.trim().replace(/,/g, '');
         if (pendingInput && !_currentTags.includes(pendingInput)) {
@@ -515,7 +515,7 @@
     }
 
     async function deleteEntry(root, id) {
-        if (!confirm('確定要刪除這個條目嗎？')) return;
+        if (!await AUI.confirm('確定要刪除這個條目嗎？')) return;
         await win.OS_DB.deleteWorldbookEntry(id);
         root.querySelector('#wb-edit-overlay').classList.add('hidden'); 
         await reload(root);
@@ -572,10 +572,10 @@
 
         modal.querySelector('#wb-ex-confirm').onclick = () => {
             const selected = [...modal.querySelectorAll('.wb-export-row input:checked')].map(cb => cb.value);
-            if (!selected.length) { alert('請至少選擇一個書包'); return; }
+            if (!selected.length) { AUI.alert('請至少選擇一個書包'); return; }
 
             const entriesToExport = _entries.filter(e => selected.includes(e.book));
-            if (!entriesToExport.length) { alert('選中的書包沒有任何條目'); return; }
+            if (!entriesToExport.length) { AUI.alert('選中的書包沒有任何條目'); return; }
 
             const isSingle = selected.length === 1;
             const data = JSON.stringify({
@@ -602,7 +602,7 @@
         try {
             json = JSON.parse(text);
         } catch(e) {
-            alert('無法解析 JSON 檔案'); return;
+            AUI.alert('無法解析 JSON 檔案'); return;
         }
 
         const isSTFormat = json.entries && !Array.isArray(json.entries) && Object.values(json.entries)[0]?.uid !== undefined;
@@ -612,19 +612,19 @@
         let defaultName = json.name || file.name.replace(/\.[^/.]+$/, "");
         
         // 詢問使用者要建立的書包名稱
-        let newBookName = prompt('偵測到世界書，請為這個新的世界書包命名：', defaultName);
+        let newBookName = await AUI.prompt('偵測到世界書，請為這個新的世界書包命名：', defaultName);
         if (!newBookName) return; // 取消
         newBookName = newBookName.trim();
 
         if (isSTFormat) {
             entries = importFromST(json, newBookName);
-            if (!confirm(`偵測到酒館 AI 世界書格式，共 ${entries.length} 個條目。\n將建立書包「${newBookName}」並匯入。`)) return;
+            if (!await AUI.confirm(`偵測到酒館 AI 世界書格式，共 ${entries.length} 個條目。\n將建立書包「${newBookName}」並匯入。`)) return;
         } else if (ourFormat) {
             // 如果是我們自己匯出的，強制覆寫 book 屬性
             entries = json.entries.map(e => ({ ...e, book: newBookName }));
-            if (!confirm(`偵測到奧瑞亞格式，共 ${entries.length} 個條目。\n將建立書包「${newBookName}」並匯入。`)) return;
+            if (!await AUI.confirm(`偵測到奧瑞亞格式，共 ${entries.length} 個條目。\n將建立書包「${newBookName}」並匯入。`)) return;
         } else {
-            alert('無法識別的 JSON 格式'); return;
+            AUI.alert('無法識別的 JSON 格式'); return;
         }
 
         // 🚨 同名書包＝覆蓋，不要疊上去。
@@ -637,7 +637,7 @@
             const _msg = '書包「' + newBookName + '」已經有 ' + _old.length + ' 條條目。' + '\n\n'
                 + '確定＝清掉舊的再匯入（重新匯入同一本用這個）' + '\n'
                 + '取消＝這次不匯入';
-            if (!confirm(_msg)) return;
+            if (!await AUI.confirm(_msg)) return;
             for (const _e of _old) {
                 try { await win.OS_DB.deleteWorldbookEntry(_e.id); }
                 catch (err) { console.warn('[OS_WORLDBOOK] 舊條目刪除失敗', _e.id, err); }
@@ -661,7 +661,7 @@
         _activeBook = newBookName;
         root.querySelector('#wb-cfg-overlay').classList.add('hidden');
         await reload(root);
-        alert('✅ 匯入完成，共 ' + entries.length + ' 個條目已加入書包「' + newBookName + '」');
+        AUI.alert('✅ 匯入完成，共 ' + entries.length + ' 個條目已加入書包「' + newBookName + '」');
     }
 
     // 🚨 沒有 book 的條目＝生成時 getContextByPacks 撈不到（它濾的是 book，不是 category）。
@@ -713,8 +713,8 @@
         });
 
         // 創建新書包
-        root.querySelector('#wb-new-book-btn').addEventListener('click', () => {
-            let name = prompt('請輸入新世界書包名稱：', '新世界書包');
+        root.querySelector('#wb-new-book-btn').addEventListener('click', async () => {
+            let name = await AUI.prompt('請輸入新世界書包名稱：', '新世界書包');
             if (name) {
                 name = name.trim();
                 const books = getBooks();
@@ -731,10 +731,10 @@
         // 刪除當前書包
         root.querySelector('#wb-del-book-btn').addEventListener('click', async () => {
             if (_activeBook === '預設書包') {
-                alert('系統保留的預設書包無法刪除。');
+                AUI.alert('系統保留的預設書包無法刪除。');
                 return;
             }
-            if (!confirm(`確定要刪除書包「${_activeBook}」及其內部所有條目嗎？此操作無法復原！`)) return;
+            if (!await AUI.confirm(`確定要刪除書包「${_activeBook}」及其內部所有條目嗎？此操作無法復原！`)) return;
             
             // 找出並刪除該書包下所有條目
             const toDelete = _entries.filter(e => e.book === _activeBook);
@@ -772,7 +772,7 @@
         root.querySelector('#wb-export-btn').addEventListener('click', () => exportJSON(root));
 
         root.querySelector('#wb-clear-all-btn').addEventListener('click', async () => {
-            if (!confirm('🚨 確定要銷毀所有世界書包與條目嗎？此操作不可撤銷！')) return;
+            if (!await AUI.confirm('🚨 確定要銷毀所有世界書包與條目嗎？此操作不可撤銷！')) return;
             await win.OS_DB.clearWorldbookEntries();
             saveBooks([...DEFAULT_BOOKS]);
             saveGlobalPacks([]);

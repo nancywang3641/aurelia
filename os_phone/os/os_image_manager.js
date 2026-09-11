@@ -539,7 +539,7 @@
                 // 內容被擋也要彈：一直被擋代表落點指令沒擋住，而站方會把重複違規記在帳號上，
                 // 她要看得到次數才知道該回頭調指令。真正的防線在指令那邊，紅框只負責讓她知道。
                 try {
-                    const _tr = (win.toastr || window.toastr || (window.parent && window.parent.toastr));
+                    const _tr = AUI.toastr;
                     if (_tr) _tr.error(msg, '自訂接口生圖失敗', { timeOut: 9000 });
                 } catch (_) {}
                 this._lastCustomApiError = { msg: msg, at: Date.now(), blocked: !!e.blocked };
@@ -553,7 +553,7 @@
             const trigger = (win.TavernHelper && win.TavernHelper.triggerSlash) || win.triggerSlash;
             if (typeof trigger !== 'function') {
                 console.warn('[ImageManager] 找不到 triggerSlash，無法走酒館原生生圖');
-                try { win.toastr && win.toastr.warning('找不到酒館助手，無法使用「酒館原生」生圖', '生圖'); } catch (e) {}
+                try { AUI.toastr && AUI.toastr.warning('找不到酒館助手，無法使用「酒館原生」生圖', '生圖'); } catch (e) {}
                 return null;
             }
 
@@ -586,14 +586,14 @@
                     const url = await trigger(cmd);
                     if (!url || typeof url !== 'string' || !url.trim()) {
                         console.warn('[ImageManager] /sd 回傳空，可能未設定後端');
-                        try { win.toastr && win.toastr.warning('生圖失敗，請先在酒館「圖像生成」擴展設定好後端', '酒館原生生圖'); } catch (e) {}
+                        try { AUI.toastr && AUI.toastr.warning('生圖失敗，請先在酒館「圖像生成」擴展設定好後端', '酒館原生生圖'); } catch (e) {}
                         return null;
                     }
                     console.log('[ImageManager] ✅ 酒館原生生圖成功');
                     return url.trim();
                 } catch (error) {
                     console.error('[ImageManager] ❌ 酒館原生生圖失敗:', error);
-                    try { win.toastr && win.toastr.error('生圖失敗：' + (error.message || error), '酒館原生生圖'); } catch (e) {}
+                    try { AUI.toastr && AUI.toastr.error('生圖失敗：' + (error.message || error), '酒館原生生圖'); } catch (e) {}
                     return null;
                 } finally {
                     try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
@@ -621,7 +621,7 @@
                 console.warn(`[ImageManager] ⚠️ 底詞裡有具體人物/場景字樣「${hit}」——底詞會加到每一張圖，這會造成背景殘留或多出人物。請到 ComfyUI 直連把底詞清成只剩品質/風格/LoRA trigger。`);
                 if (!this.__basePolluteToasted) {
                     this.__basePolluteToasted = true;   // 一次就好，別每張圖都跳
-                    try { win.toastr && win.toastr.warning(`底詞含有具體場景／人物字樣（${hit}），會附加到每張插圖。請到「ComfyUI 直連」清理底詞。`, '底詞可能被污染', { timeOut: 12000 }); } catch (e) {}
+                    try { AUI.toastr && AUI.toastr.warning(`底詞含有具體場景／人物字樣（${hit}），會附加到每張插圖。請到「ComfyUI 直連」清理底詞。`, '底詞可能被污染', { timeOut: 12000 }); } catch (e) {}
                 }
             }
             return final;
@@ -652,11 +652,11 @@
             const cfg = this._comfyCfgFor(type);   // 按桶取設定（char/scene/bg/map 各自一份，沒設過退共用）
             const url = (cfg.url || '').trim();
             if (!url) {
-                if (!options.warmup) { try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {} }
+                if (!options.warmup) { try { AUI.toastr && AUI.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {} }
                 return null;
             }
             if (!cfg.model && cfg.workflowMode !== 'custom') {
-                if (!options.warmup) { try { win.toastr && win.toastr.warning('請先在「ComfyUI 直連」選一個模型', 'ComfyUI 直連'); } catch (e) {} }
+                if (!options.warmup) { try { AUI.toastr && AUI.toastr.warning('請先在「ComfyUI 直連」選一個模型', 'ComfyUI 直連'); } catch (e) {} }
                 return null;
             }
 
@@ -703,7 +703,7 @@
                     if (!res.ok) {
                         const t = await res.text().catch(() => '');
                         console.error('[ImageManager] ComfyUI 直連失敗:', res.status, t);
-                        if (!options.warmup) { try { win.toastr && win.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {} }
+                        if (!options.warmup) { try { AUI.toastr && AUI.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {} }
                         return null;
                     }
                     const j = await res.json();
@@ -715,7 +715,7 @@
                 } catch (error) {
                     const _msg = (error && error.name === 'AbortError') ? '生成逾時(180秒)，已放棄這張讓後面的繼續' : (error.message || error);
                     console.error('[ImageManager] ComfyUI 直連錯誤:', _msg);
-                    if (!options.warmup) { try { win.toastr && win.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {} }
+                    if (!options.warmup) { try { AUI.toastr && AUI.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {} }
                     return null;
                 } finally {
                     if (_timer) clearTimeout(_timer);
@@ -866,7 +866,7 @@
             let obj;
             try { obj = JSON.parse(s); }
             catch (e) {
-                try { win.toastr && win.toastr.error('自訂工作流 JSON 解析失敗：' + (e.message || e), 'ComfyUI 直連'); } catch (_) {}
+                try { AUI.toastr && AUI.toastr.error('自訂工作流 JSON 解析失敗：' + (e.message || e), 'ComfyUI 直連'); } catch (_) {}
                 return null;
             }
             // 解開 {"prompt": {...}} 外殼（有些匯出帶 prompt 鍵）
@@ -1403,7 +1403,7 @@
                 //    併發限制是 429/"concurrent"；500=NAI 伺服器錯誤；400=prompt/參數問題；402=Anlas 不足。各自對策不同。
                 this._lastNaiError = { msg: _emsg, type: type, at: '' };
                 try {
-                    const _tr = (win.toastr || window.toastr || (window.parent && window.parent.toastr));
+                    const _tr = AUI.toastr;
                     if (_tr) {
                         const _concur = /\b429\b|concurrent|conflict|too many|rate.?limit/i.test(_emsg);
                         if (_concur) {

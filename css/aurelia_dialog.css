@@ -1,0 +1,188 @@
+/* ========================
+ * 全站統一的提示條與對話窗（core/aurelia_dialog.js）
+ * 取代瀏覽器原生 alert / confirm / prompt。霧白底，跟手機系統標題列同一套顏色。
+ * class 一律 aud- 開頭，避免被酒館或各面板的同名樣式蓋掉。
+ * ======================== */
+
+.aud-toast-host {
+    position: fixed;
+    left: 50%;
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
+    transform: translateX(-50%);
+    z-index: 2147483600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: min(92vw, 400px);
+    pointer-events: none;
+}
+.aud-toast-host .aud-toast {
+    pointer-events: auto;
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 100%;
+    padding: 11px 16px 11px 13px;
+    border-radius: 14px;
+    background: rgba(250, 251, 255, .94);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+    border: 1px solid rgba(26, 28, 40, .08);
+    box-shadow: 0 10px 30px rgba(20, 22, 40, .16), 0 1px 3px rgba(20, 22, 40, .08);
+    color: #1a1c28;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: .2px;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-10px) scale(.98);
+    transition: opacity .22s ease, transform .26s cubic-bezier(.2, .9, .3, 1.2);
+}
+.aud-toast-host .aud-toast.on { opacity: 1; transform: none; }
+.aud-toast-host .aud-toast-ic { flex: none; font-size: 16px; line-height: 20px; }
+.aud-toast-host .aud-toast-tx { min-width: 0; white-space: pre-wrap; word-break: break-word; }
+
+.aud-t-success .aud-toast-ic, .aud-ic.aud-t-success { color: #2f9e6a; }
+.aud-t-error .aud-toast-ic, .aud-ic.aud-t-error { color: #d64545; }
+.aud-t-warn .aud-toast-ic, .aud-ic.aud-t-warn { color: #d99020; }
+.aud-t-info .aud-toast-ic, .aud-ic.aud-t-info { color: #5a6fd6; }
+
+/* ---------- 對話窗 ---------- */
+.aud-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 24px;
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    background: rgba(18, 20, 32, .38);
+    opacity: 0;
+    transition: opacity .18s ease;
+}
+.aud-mask.on { opacity: 1; }
+.aud-mask .aud-card {
+    box-sizing: border-box;
+    width: min(100%, 340px);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 22px 20px 16px;
+    border-radius: 20px;
+    background: rgba(250, 251, 255, .97);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid rgba(26, 28, 40, .08);
+    box-shadow: 0 24px 60px rgba(14, 16, 32, .28), 0 2px 6px rgba(14, 16, 32, .1);
+    color: #1a1c28;
+    font-family: inherit;
+    text-align: center;
+    transform: translateY(8px) scale(.97);
+    transition: transform .22s cubic-bezier(.2, .9, .3, 1.15);
+}
+.aud-mask.on .aud-card { transform: none; }
+
+.aud-mask .aud-ic {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    background: rgba(26, 28, 40, .05);
+}
+.aud-mask .aud-ic.aud-t-success { background: rgba(47, 158, 106, .12); }
+.aud-mask .aud-ic.aud-t-error { background: rgba(214, 69, 69, .12); }
+.aud-mask .aud-ic.aud-t-warn { background: rgba(217, 144, 32, .13); }
+.aud-mask .aud-ic.aud-t-info { background: rgba(90, 111, 214, .12); }
+
+.aud-mask .aud-title {
+    flex: none;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: .5px;
+    word-break: break-word;
+}
+.aud-mask .aud-body {
+    min-height: 0;
+    overflow-y: auto;
+    margin-top: 6px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #4a4f63;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-align: center;
+}
+.aud-mask .aud-title + .aud-body { margin-top: 8px; }
+/* 長文、條列、超過三行才靠左（JS 判斷後加 class） */
+.aud-mask .aud-body.aud-body-long { text-align: left; }
+
+.aud-mask .aud-input {
+    flex: none;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 14px 0 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(26, 28, 40, .16);
+    background: #fff;
+    color: #1a1c28;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.4;
+    text-align: left;
+    direction: ltr;
+    outline: none;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.aud-mask textarea.aud-input { min-height: 96px; resize: vertical; }
+.aud-mask .aud-input:focus { border-color: #5a6fd6; box-shadow: 0 0 0 3px rgba(90, 111, 214, .16); }
+.aud-mask .aud-hint { flex: none; margin-top: 6px; font-size: 12px; color: #8a8fa3; text-align: left; }
+
+.aud-mask .aud-btns {
+    flex: none;
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+}
+.aud-mask .aud-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 44px;
+    margin: 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    line-height: 44px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow: none;
+    transition: filter .15s ease, background-color .15s ease;
+}
+.aud-mask .aud-btn:focus-visible { outline: 2px solid #5a6fd6; outline-offset: 2px; }
+.aud-mask .aud-btn-ghost { background: rgba(26, 28, 40, .07); color: #1a1c28; }
+.aud-mask .aud-btn-ghost:hover { background: rgba(26, 28, 40, .12); }
+.aud-mask .aud-btn-main { background: #1c1e2a; color: #fff; }
+.aud-mask .aud-btn-danger { background: #d64545; color: #fff; }
+.aud-mask .aud-btn-main:hover, .aud-mask .aud-btn-danger:hover { filter: brightness(1.12); }
