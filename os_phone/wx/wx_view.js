@@ -665,7 +665,7 @@
 
         // --- 3. 聊天列表渲染 (保持 V108.5 邏輯) ---
         getListHTML: function(chats, activeId) {
-            const chatIds = Object.keys(chats).filter(k => k !== 'unknown_chat' && chats[k] && Array.isArray(chats[k].messages) && chats[k].messages.length > 0);   // 沒聊過的只在通訊錄
+            const chatIds = Object.keys(chats).filter(k => k !== 'unknown_chat' && chats[k] && !chats[k].wxRemoved && Array.isArray(chats[k].messages) && chats[k].messages.length > 0);   // 沒聊過的只在通訊錄；刪掉的好友（wxRemoved）都不列
             if (chatIds.length === 0 && chats['unknown_chat'] && chats['unknown_chat'].messages.length > 0) chatIds.push('unknown_chat');
             return chatIds.map(id => {
                 const c = chats[id];
@@ -705,7 +705,7 @@
                 <div class="wx-contact-item" id="static-tags"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div></div>
                 <div class="wx-contact-item" id="static-official"><div class="wx-contact-icon icon-official"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg></div><div class="wx-contact-name">官方帳號</div></div>
             `;
-            let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat').map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].isGroup ? '' : (chats[id].realName || '') }));
+            let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat' && !(chats[k] && chats[k].wxRemoved)).map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].isGroup ? '' : (chats[id].realName || '') }));
             contacts.sort((a, b) => a.name.localeCompare(b.name));
             if (contacts.length > 0) {
                 html += `<div class="wx-contact-section">A</div>`;

@@ -1047,6 +1047,9 @@
                 const nameM = line.match(/^\[([^\]]+?)\]\s*([\s\S]*)$/);   // [名] 內容
                 if (!nameM) return;
                 let rawName = nameM[1].trim();
+                // 🗑 [系統: 你已刪除好友「X」] 這種冒號寫法：只有刪好友／加回好友這類才收成系統行，其他照舊略過
+                const _sysColon = rawName.match(/^(?:系統|系统|System|Notice)\s*[:：]\s*([\s\S]+)$/i);
+                if (_sysColon && _friendEventOf(_sysColon[1])) { rooms[key].msgs.push({ type: 'system', content: _sysColon[1].trim(), sender: '系統', isMe: false }); return; }
                 if (/[:：]/.test(rawName)) return;                         // [图片:…]/[Chat:…]/[Time…] 等不是發話人 → 略過
                 if (/^(Time|時間|时间|Chat|With)$/i.test(rawName)) return;   // [Time] 22:10 這種沒冒號的標頭行也不是發話人
                 if (rawName.indexOf('|') >= 0) rawName = rawName.split('|').pop().trim() || rawName;   // [Char|红石]→红石
@@ -1117,9 +1120,88 @@
             let bio = '';
             const nx = msgs[i + 1];
             if (nx && nx.type === 'system' && /^(附加信息|附加訊息|验证信息|驗證信息|验证消息|驗證消息)/.test(String(nx.sender || ''))) bio = String(nx.content || '').replace(/^[:：\s]+/, '').trim().slice(0, 60);
-            out.push({ name: hit[1].trim(), bio: bio });
+            out.push({ name: hit[1].trim(), bio: bio, floor: m.floor });
         }
         return out;
+    }
+
+    // ── 🗑 刪好友 ─────────────────────────────────────────────────────
+    // 🚨 同步每次都把正文從頭重讀，看到以前跟那個人聊過就會把人跟聊天室建回來 —— 所以「刪了」要有記號。
+    // 「現在是不是刪掉的」每次同步都重算：把跟這個人有關的事件依樓號排好，最後一件說了算。
+    //   劇情事件（每次從正文重新讀，回朔／刪樓／重骰自然跟上）：
+    //     刪除：聊天框裡的系統行「你已刪除好友「X」」「你已將X加入黑名單」…
+    //     加回：系統行「你已添加了X」、好友申請、這間私聊（或群）又有新的訊息
+    //   她手動做的（存起來）：在微信刪聊天室／通訊錄刪人 → 刪除；刪了又自己加回來 → 加回。
+    //     記的樓號＝當時正文最後一樓，排在那一樓所有劇情事件之後；之後正文有更新的事件就換它說了算。
+    // 一個劇情一份：wx_removed::<酒館 chatId>，manual：{ 'p:名字' 或 'g:房key': { kind: 'remove'|'back', floor, at } }
+    //   私聊用名字當鍵（刪了聯絡人再建，id 會換，名字不會）、群用房間 key。
+    function _rmKey() { return 'wx_removed::' + (_storyCid() || 'default'); }
+    function _rmLoad() {
+        try { const o = JSON.parse(localStorage.getItem(_rmKey()) || '{}') || {}; return { manual: o.manual || {} }; }
+        catch (e) { return { manual: {} }; }
+    }
+    function _rmSave(o) { try { localStorage.setItem(_rmKey(), JSON.stringify(o)); } catch (e) {} }
+    let _rmRemovedNow = {};   // 上一次同步算出來「現在是刪掉的」那些鍵
+    function _rmKeyOf(chat) {
+        if (!chat) return '';
+        if (chat.isGroup) return chat.storyKey ? 'g:' + chat.storyKey : '';
+        const n = String(chat.realName || chat.name || '').trim();
+        return n ? 'p:' + n : '';
+    }
+    async function _storyCurrentFloor() {
+        try { if (win.TavernHelper && win.TavernHelper.getLastMessageId) { const n = await win.TavernHelper.getLastMessageId(); if (typeof n === 'number' && n >= 0) return n; } } catch (e) {}
+        if (_storyLastFloor >= 0) return _storyLastFloor;
+        try { const all = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null; if (Array.isArray(all)) return all.length - 1; } catch (e) {}
+        return -1;
+    }
+    // 她在微信刪掉聊天室／聯絡人時呼叫
+    async function _markRemoved(chat) {
+        const k = _rmKeyOf(chat);
+        if (!k) return;
+        const f = await _storyCurrentFloor();
+        const o = _rmLoad();
+        o.manual[k] = { kind: 'remove', floor: f, at: Date.now() };
+        _rmSave(o);
+        _rmRemovedNow[k] = 1;
+    }
+    // 她在微信新加了這個人：只有「現在是刪掉的」才需要記一筆加回（每個新聯絡人都會叫到這裡）
+    function _clearRemoved(name) {
+        const k = 'p:' + String(name || '').trim();
+        const o = _rmLoad();
+        const manRm = o.manual[k] && o.manual[k].kind === 'remove';
+        if (!_rmRemovedNow[k] && !manRm) return;
+        o.manual[k] = { kind: 'back', floor: _storyLastFloor, at: Date.now() };
+        _rmSave(o);
+        delete _rmRemovedNow[k];
+    }
+    // 聊天框裡的系統行 → 刪好友／加回好友。只看系統行：聊天裡有人說「我就拉黑你」是玩笑，不算。
+    const _Q = '[「『“"\'‘]?';
+    const _QE = '[」』”"\'’]?';
+    const _NM = '([^「」『』“”"\'‘’\\s，,。．.！!？?、：:]{1,24}?)';
+    const _FRIEND_RM_RES = [
+        new RegExp('(?:刪除|删除)了?\\s*(?:該|该|此|這位|这位|這個|这个)?\\s*(?:好友|聯絡人|联系人|朋友)\\s*' + _Q + '\\s*' + _NM + '?\\s*' + _QE + '\\s*$'),
+        new RegExp('(?:將|将|把)\\s*' + _Q + '\\s*' + _NM + '\\s*' + _QE + '\\s*(?:從|从)?\\s*(?:好友|通訊錄|通讯录|聯絡人|联系人)?\\s*(?:中|裡|里)?\\s*(?:刪除|删除|刪掉|删掉|刪了|删了|移除)'),
+        new RegExp('(?:將|将|把)\\s*' + _Q + '\\s*' + _NM + '\\s*' + _QE + '\\s*(?:加入|拉進|拉进|列入|移入)\\s*(?:黑名單|黑名单)'),
+        new RegExp('(?:拉黑|封鎖|封锁|屏蔽)了?\\s*' + _Q + '\\s*' + _NM + '?\\s*' + _QE + '\\s*$')
+    ];
+    const _FRIEND_BACK_RE = /(?:已添加了?|已經添加|已经添加|已經是好友|已经是好友|已成為好友|已成为好友|通過了你的朋友驗證|通过了你的朋友验证|你已通過|你已通过|現在可以開始聊天|现在可以开始聊天|移出了?黑名單|移出了?黑名单|解除(?:了)?封鎖|解除(?:了)?封锁)/;
+    function _friendEventOf(text) {
+        const s = String(text || '').trim();
+        if (!s) return null;
+        if (_FRIEND_BACK_RE.test(s)) {
+            // 後面沒有固定字可以擋的那條用貪婪版（不然只抓到一個字）；名字字元本來就排除標點，會停在逗號前
+            const m = s.match(new RegExp(_Q + _NM + _QE + '\\s*(?:通過|通过|已經是|已经是|已成為|已成为)')) || s.match(new RegExp('(?:添加了?|加回)\\s*' + _Q + _NM.replace('}?)', '})') + _QE));
+            return { kind: 'back', name: m ? m[1].trim() : '' };
+        }
+        for (let i = 0; i < _FRIEND_RM_RES.length; i++) {
+            const m = s.match(_FRIEND_RM_RES[i]);
+            if (m) {
+                let n = (m[1] || '').trim();
+                if (/^(?:該|该|此|這個|这个|對方|对方|他|她|它|你|我|好友|聯絡人|联系人)$/.test(n)) n = '';
+                return { kind: 'remove', name: n };
+            }
+        }
+        return null;
     }
 
     // 逐樓解析：沿用 _parseVnChatBlocks 的區塊規則，但每則訊息帶樓號；[With] 成員與房名跨樓累積
@@ -1200,6 +1282,58 @@
             const groupOnlyNames = {}, realContactNames = {};
             let rebuildActive = false;
 
+            // 🗑 刪好友：每個人（群）現在是不是刪掉的 —— 事件依（樓號, 樓內順序）排，最後一件說了算（見 _rmLoad 上面的說明）
+            const rmLast = {};
+            const rmPush = function (k, f, o, kind) {
+                if (!k || f == null) return;
+                const cur = rmLast[k];
+                if (!cur || f > cur.f || (f === cur.f && o >= cur.o)) rmLast[k] = { f: f, o: o, kind: kind };
+            };
+            const rmMan = _rmLoad().manual;
+            const backNames = [];   // 「已添加了X」的 X 可能連著後面的字，等所有刪除都收齊了再對名字
+            keys.forEach(function (key) {
+                const room = rooms[key];
+                if (room.owner && room.owner !== _storyMyName() && !_isMeName(room.owner)) return;
+                const others = _storyOthers(room);
+                const selfKey = others.length >= 2 ? 'g:' + key : (others.length === 1 ? 'p:' + others[0] : '');
+                room.msgs.forEach(function (x, i) {
+                    if (x.type === 'system') {
+                        const ev = _friendEventOf(x.content);
+                        if (!ev) return;
+                        const name = ev.name || (others.length === 1 ? others[0] : '');   // 沒寫名字＝這間私聊的對方
+                        if (!name) return;
+                        if (ev.kind === 'remove') rmPush('p:' + name, x.floor, i, 'remove');
+                        else backNames.push({ name: name, f: x.floor, o: i });
+                        return;
+                    }
+                    if (x.type === 'msg') rmPush(selfKey, x.floor, i, 'back');   // 這間又有人講話＝還是朋友
+                });
+                _storyFriendRequests(room).forEach(function (fr) { rmPush('p:' + fr.name, fr.floor, 1e9, 'back'); });
+            });
+            backNames.forEach(function (b) {
+                const hit = Object.keys(rmLast).find(function (k) { return k.indexOf('p:') === 0 && rmLast[k].kind === 'remove' && b.name.indexOf(k.slice(2)) === 0; });
+                rmPush(hit || ('p:' + b.name), b.f, b.o, 'back');
+            });
+            // 她手動做的排在那一樓所有劇情事件之後
+            Object.keys(rmMan).forEach(function (k) { rmPush(k, rmMan[k].floor, Infinity, rmMan[k].kind); });
+            _rmRemovedNow = {};
+            Object.keys(rmLast).forEach(function (k) { if (rmLast[k].kind === 'remove') _rmRemovedNow[k] = 1; });
+            const rmStillOn = function (k) { return !!_rmRemovedNow[k]; };
+            // 刪掉的房：本來就有記錄的藏起來（資料留著，加回來時原樣回來）；本來沒有的就不建
+            const hideRoom = async function (chatId, key) {
+                let ex = GLOBAL_CHATS[chatId];
+                if (!ex) { try { ex = await win.WX_DB.getApiChat(chatId); } catch (e) { ex = null; } }
+                if (!ex) return;
+                liveIds[chatId] = key;
+                GLOBAL_CHATS[chatId] = ex;
+                if (!ex.wxRemoved) {
+                    ex.wxRemoved = true;
+                    try { await win.WX_DB.saveApiChat(chatId, ex); } catch (e) {}
+                    if (GLOBAL_ACTIVE_ID === chatId) GLOBAL_ACTIVE_ID = null;
+                    rebuildActive = true;
+                }
+            };
+
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
                 const room = rooms[key];
@@ -1208,6 +1342,7 @@
                 if (room.owner && room.owner !== _storyMyName() && !_isMeName(room.owner)) continue;
                 // 好友申請（AI 常寫成「新的朋友」系統房）：申請人進通訊錄、簡介用附加信息；這種房本身不建聊天室
                 _storyFriendRequests(room).forEach(function (fr) {
+                    if (rmStillOn('p:' + fr.name)) return;   // 申請比刪除舊（或之後又被刪）→ 不加回來
                     const fid = win.WX_CONTACTS.getOrCreateContactID(fr.name, 'user', true);
                     if (!fid || fid === 'User') return;
                     if (fr.bio) win.WX_CONTACTS.addContactToStorage({ id: fid, name: fr.name, desc: fr.bio });
@@ -1221,6 +1356,7 @@
                 let chatId, members, realName;
                 if (isGroup) {
                     chatId = 'grp_story_' + _storyHash(cid) + '_' + String(key).replace(/[^\w一-鿿-]/g, '_').slice(0, 40);
+                    if (rmStillOn('g:' + key)) { await hideRoom(chatId, key); continue; }   // 她退掉／刪掉的群
                     // 🚨 同群不等於加好友。這裡只拿「現成的」聯絡人 id：本來就在通訊錄裡的人照樣對得上，
                     //    不在的路人就用名字當 id —— 群成員名照樣顯示得出來（wx_contacts 那邊查不到 id 就用 id 當名字）。
                     //    以前這行是 saveToStorage=true，光取個 id 就把人隱形註冊進通訊錄，後面再補一間空的一對一
@@ -1231,6 +1367,8 @@
                     win.WX_CONTACTS.addContactToStorage({ id: chatId, name: room.name || key, isGroup: true, members: members });
                 } else {
                     realName = others[0] || room.name || key;
+                    // 🗑 刪掉的好友：不重新註冊進通訊錄（查 id 用不存檔的那種），原本的記錄藏起來
+                    if (rmStillOn('p:' + realName)) { await hideRoom(win.WX_CONTACTS.getOrCreateContactID(realName, 'user', false), key); continue; }
                     chatId = win.WX_CONTACTS.getOrCreateContactID(realName, 'user', true);
                     if (chatId === 'User') continue;
                     members = [realName];
@@ -1242,6 +1380,7 @@
 
                 let existing = GLOBAL_CHATS[chatId];
                 if (!existing) { try { existing = await win.WX_DB.getApiChat(chatId); } catch (e) { existing = null; } }
+                if (existing && existing.wxRemoved) { delete existing.wxRemoved; existing._storySig = ''; }   // 加回來了：重建、重新出現在列表
                 const sig = key + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
                 if (existing && existing._storySig === sig) { GLOBAL_CHATS[chatId] = existing; continue; }
 
@@ -1559,6 +1698,12 @@
 
     win.wxApp = {
         photoContextText: photoContextText,   // 聊天歷史（os_api_engine）與回傳酒館（os_app_memory_inject）把照片編號換成文字
+        // 🗑 刪好友記號：通訊錄刪人時記下（markRemoved），她重新加人時撤掉（clearRemoved）
+        markRemoved: function (idOrChat, name) {
+            const c = (idOrChat && typeof idOrChat === 'object') ? idOrChat : (GLOBAL_CHATS[idOrChat] || (name ? { name: name, realName: name } : null));
+            return _markRemoved(c);
+        },
+        clearRemoved: _clearRemoved,
         get GLOBAL_ACTIVE_ID() { return GLOBAL_ACTIVE_ID; },
         set GLOBAL_ACTIVE_ID(v) { GLOBAL_ACTIVE_ID = v; },   // 📞 電話 app 撥通時暫借 active id（buildContext 靠它抓該聯絡人 DB 歷史）；無 setter 會在 strict mode 拋 TypeError → 通話卡死不調 API
         get APP_CONTAINER() { return APP_CONTAINER; },
@@ -1866,6 +2011,8 @@
             // 紅包／轉帳／禮物的已領狀態跟著聊天一起走（刪訊息、清空也是同一套，見 wx_message_manager.purgeProtocolState）
             try { const MM = win.WX_MESSAGE_MANAGER; if (MM && MM.purgeProtocolState) MM.purgeProtocolState(chatId, GLOBAL_CHATS[chatId].messages); } catch (e) {}
             try { if (win.WX_CARDS) win.WX_CARDS.clear(chatId); } catch (e) {}
+            // 🗑 跑團同步別把這個人／這個群又建回來（見 _markRemoved）
+            try { _markRemoved(GLOBAL_CHATS[chatId]); } catch (e) {}
             delete GLOBAL_CHATS[chatId]; if (GLOBAL_ACTIVE_ID === chatId) { GLOBAL_ACTIVE_ID = null; } this.render(); } },
         
         reloadApiChats: async function() { /* ... */ },

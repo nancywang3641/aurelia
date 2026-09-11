@@ -89,6 +89,8 @@
             };
             list.push(newContact);
             localStorage.setItem(_contactsKey(), JSON.stringify(list));
+            // 重新加回來的人：撤掉刪好友記號（跑團同步只會對「沒被刪、或已經恢復」的人走到這裡，不會誤撤）
+            try { if (win.wxApp && win.wxApp.clearRemoved) win.wxApp.clearRemoved(input); } catch (e) {}
             console.log(`[WX_CONTACTS] 自動註冊新成員: ${input} (ID: ${newId})`);
             return newId;
         },
@@ -281,7 +283,11 @@
         addContactToStorage: function(contactObj) {
             let saved = localStorage.getItem(_contactsKey()); let list = saved ? JSON.parse(saved) : [];
             const idx = list.findIndex(c => c.id === contactObj.id);
-            if (idx >= 0) { list[idx] = { ...list[idx], ...contactObj }; } else { list.push(contactObj); }
+            if (idx >= 0) { list[idx] = { ...list[idx], ...contactObj }; } else {
+                list.push(contactObj);
+                // 新加的朋友：撤掉這個名字的刪好友記號（她刪了又手動加回來）
+                if (!contactObj.isGroup && contactObj.name) { try { if (win.wxApp && win.wxApp.clearRemoved) win.wxApp.clearRemoved(contactObj.name); } catch (e) {} }
+            }
             localStorage.setItem(_contactsKey(), JSON.stringify(list));
         },
         getAllCustomContacts: function() { const saved = localStorage.getItem(_contactsKey()); return saved ? JSON.parse(saved) : []; },
@@ -381,6 +387,11 @@
         
         // 🔥 核心修復點：刪除聯絡人時，同步清空全局的 OS_CONTACTS 數據
         deleteContact: async function(id) {
+            // 0. 🗑 記下「刪了這個人」，跑團同步才不會從正文把他建回來（wx_core 的 _markRemoved）
+            try {
+                const _c = this.getAllCustomContacts().find(c => c.id === id);
+                if (win.wxApp && win.wxApp.markRemoved) await win.wxApp.markRemoved(id, _c && _c.name);
+            } catch (e) {}
             // 1. 刪除微信本地儲存的聯絡人
             let saved = localStorage.getItem(_contactsKey());
             if (saved) { 
