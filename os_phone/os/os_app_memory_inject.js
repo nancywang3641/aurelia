@@ -61,14 +61,35 @@
         } catch (e) { return ''; }
     }
 
-    // 一條 微信/電話 訊息 → 一行（只取一般文字訊息，跳過紅包/貼圖/系統等）
+    // 這條是不是「在手機上真的發生、正文裡沒有」的訊息（跳過紅包/貼圖/系統，也跳過跑團同步進來的劇情訊息）
+    function _isAppMsg(m) { return !!(m && (!m.type || m.type === 'msg') && m._story == null && _clean(m.content)); }
+    // 一條 微信/電話 訊息 → 一行
     function _chatLine(m, userName, charName) {
-        if (!m || (m.type && m.type !== 'msg')) return '';
-        if (m._story != null) return '';   // 📖 跑團同步進來的劇情訊息：正文裡本來就有，不重講
-        const t = _cut(m.content);
-        if (!t) return '';
+        if (!_isAppMsg(m)) return '';
         const who = m.isMe ? userName : (m.senderName || m.sender || charName);
-        return `・${who}：${t}`;
+        return `・${who}：${_cut(m.content)}`;
+    }
+    // 🚨 先挑出「手機上發生的」再取最後幾條。以前反過來（先取最後 6 條再濾）：
+    //    跑團同步把正文裡的聊天室也塞進同一串，最後 6 條常常全是劇情訊息 → 濾完變空，你在微信打的話永遠回不去酒館。
+    function _appLines(chat, userName, name) {
+        const ms = (chat && Array.isArray(chat.messages)) ? chat.messages.filter(_isAppMsg) : [];
+        return ms.slice(-PER_CHAR_MSGS).map(function (m) { return _chatLine(m, userName, name); }).filter(Boolean);
+    }
+    // 最近有沒有在手機上聊過：劇情房看「送出時正文到第幾樓」、還沒蓋樓號的＝上一輪之後才打的；
+    //   一般聯絡人沒有樓號，看送出時間（RECENT_HOURS 小時內）
+    const RECENT_HOURS = 6;
+    function _recentlyActive(chat, lastFloor) {
+        const ms = (chat && Array.isArray(chat.messages)) ? chat.messages : [];
+        const since = Date.now() - RECENT_HOURS * 3600 * 1000;
+        for (let i = ms.length - 1; i >= 0; i--) {
+            const m = ms[i];
+            if (!_isAppMsg(m)) continue;
+            if (chat.storyKey) {
+                if (m._afterFloor == null) return true;
+                if (lastFloor >= 0 && m._afterFloor >= lastFloor - RECENT_SCAN) return true;
+            } else if (m.timestamp && m.timestamp >= since) return true;
+        }
+        return false;
     }
 
     // 微薄：依作者(角色)分組（只收別人發的，isMe 是你自己發的不算角色記憶）
@@ -140,27 +161,33 @@
     // 組「手機近況」文字（兩版共用的唯一真相）：recentText＝最近正文＋這次輸入，用來篩「在場角色」。
     //   酒館端由 injectAppMemory 包成 injectPrompts；PWA 端由 _buildStandaloneContext 的
     //   app_memory 那一格取這份塞進 messages（PWA 沒有 injectPrompts）。
-    async function buildAppMemoryBlock(recentText) {
+    async function buildAppMemoryBlock(recentText, lastFloor) {
         try {
             if (!_enabled()) return '';
             if (!win.OS_DB) return '';
+            if (lastFloor == null) lastFloor = -1;
 
             // 🔒 分艙隔離：只注入「當前劇情」的 app 資料（酒館＝chatId、PWA＝storyId，同一支 currentChatId）
             const curCid = (win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
             if (curCid == null) { console.warn('📱 [App Memory Injector] 取不到當前劇情 id → 為免跨卡污染，本輪不注入'); return ''; }
 
-            // 候選角色：名字 → { chat, posts }（微信/電話來自 api_chats、微薄來自 wb_posts）
+            // 候選：名字 → { chat, posts, plugins, active }（微信/電話來自 api_chats、微薄來自 wb_posts）
+            //   群聊用「群聊：群名」當鍵，跟私聊分開放
             const cand = {};
             const chats = (win.OS_DB.getAllApiChats ? (await win.OS_DB.getAllApiChats()) : {}) || {};
             Object.keys(chats).forEach(function (id) {
                 const c = chats[id];
-                if (!c || c.isGroup) return;                  // v1 先不處理群聊
+                if (!c) return;
                 // 🔒 只收當前劇情建立的對話。沒蓋章的一律保留 —— 跟 OS_DB.getApiChatsForCurrentCard 同一把尺：
                 //    PWA 以前根本取不到分艙鑰匙、資料全是沒蓋章的，濾掉就等於這個注入源在 PWA 永遠是空的。
                 if (c.tavernChatId != null && c.tavernChatId !== curCid) return;
                 const name = c.name || c.realName || '';
                 if (!name || name.length < 2) return;
-                (cand[name] = cand[name] || {}).chat = c;
+                const key = c.isGroup ? ('群聊：' + name) : name;
+                const slot = (cand[key] = cand[key] || {});
+                slot.chat = c;
+                slot.match = name;
+                if (_recentlyActive(c, lastFloor)) slot.active = true;
             });
             const wbBy = await _wbByAuthor(curCid);
             Object.keys(wbBy).forEach(function (name) {
@@ -176,13 +203,13 @@
             if (!names.length) return '';
 
             const recent = String(recentText || '');
-            if (!recent) return '';
 
-            // scope：只留「劇情近期有提到名字」的角色
+            // scope：劇情近期有提到名字的，加上最近剛在手機上聊過的（剛傳完微信就回劇情，對方當然記得）
+            //   剛聊過的排前面，總數封頂 MAX_CHARS
             const present = [];
-            for (let i = 0; i < names.length && present.length < MAX_CHARS; i++) {
-                if (recent.includes(names[i])) present.push(names[i]);
-            }
+            names.filter(function (k) { return cand[k].active; })
+                .concat(names.filter(function (k) { return !cand[k].active && recent && recent.includes(cand[k].match || k); }))
+                .forEach(function (k) { if (present.length < MAX_CHARS && present.indexOf(k) < 0) present.push(k); });
             if (!present.length) return '';
 
             const userName = _userName();
@@ -192,11 +219,7 @@
                 const name = present[i];
                 const info = cand[name];
                 const lines = [];
-                if (info.chat && Array.isArray(info.chat.messages)) {
-                    info.chat.messages.slice(-PER_CHAR_MSGS).forEach(function (m) {
-                        const l = _chatLine(m, userName, name); if (l) lines.push(l);
-                    });
-                }
+                if (info.chat) _appLines(info.chat, userName, info.match || name).forEach(function (l) { lines.push(l); });
                 if (info.posts) _wbLines(info.posts).forEach(function (l) { lines.push(l); });
                 if (info.plugins) _pluginLines(info.plugins, curCid).forEach(function (l) { lines.push(l); });
                 if (!lines.length) continue;
@@ -223,7 +246,9 @@
             if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 這條路酒館 only（PWA 走 app_memory 那一格）
             if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
 
-            const content = await buildAppMemoryBlock(await _recentChatText());
+            let lastFloor = -1;
+            try { lastFloor = await win.TavernHelper.getLastMessageId(); } catch (e) {}
+            const content = await buildAppMemoryBlock(await _recentChatText(), lastFloor);
             if (!content) return;
 
             const result = win.TavernHelper.injectPrompts([{
@@ -503,14 +528,20 @@
         } catch (e) { console.warn('[Map Theater Injector] 失敗:', (e && e.message) || e); }
     }
 
+    // 🚨 酒館會 await 監聽器回傳的 Promise，組 prompt 前就等注入做完；以前監聽器沒 return，
+    //    注入是在背景跑，讀資料庫慢一點就趕不上這一輪 prompt（once 的注入還會在下一輪開頭被清掉＝整輪沒送到）。
+    //    現在把 Promise 交回去讓酒館等，但最多等 WAIT_MS，免得資料庫卡住害生成跟著卡。
+    const WAIT_MS = 2500;
+    function _waitFor(fn) { return Promise.race([Promise.resolve().then(fn).catch(function () {}), new Promise(function (r) { setTimeout(r, WAIT_MS); })]); }
+
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) {
-            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppMemory(); });   // dryRun 空跑不注入
-            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectVnTags(); });
-            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectFxList(); });
-            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectWxChatrooms(); });
-            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectAppData(); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectAppMemory); });   // dryRun 空跑不注入
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectVnTags); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectFxList); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectWxChatrooms); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectAppData); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });
         }
         if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; });
