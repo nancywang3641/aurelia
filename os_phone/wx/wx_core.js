@@ -1709,6 +1709,62 @@
         _scrollToBottom();
     }
 
+    // 📡 托管跑完的結果回來了 → 變成訊息。她人在那間就照常一條條冒出來，不在就安靜收進去、標未讀。
+    //    🚨 parseAndProcess 的上下文（房名／房 id／成員）是看 GLOBAL_ACTIVE_ID 的，
+    //       收的可能是別間的結果 → 解析那一下先把它借過去，解析完立刻還回去。
+    async function _applyRelayReply(chat, finalText) {
+        if (!chat) return;
+        const li = chat.messages.findIndex(m => !m.isMe && m.isLoading);
+        if (li !== -1) chat.messages.splice(li, 1);
+        delete chat._relayJob;
+
+        const prev = GLOBAL_ACTIVE_ID;
+        let newMsgs = [];
+        try { GLOBAL_ACTIVE_ID = chat.id; newMsgs = parseAndProcess(finalText) || []; }
+        finally { GLOBAL_ACTIVE_ID = prev; }
+
+        if (!newMsgs.length && finalText) {
+            const memberNames = convertMemberIdsToNames(chat.members || []);
+            const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chat.name;
+            newMsgs.push({
+                type: 'msg', isMe: false, content: finalText, sender: chat.name, senderName: chat.name,
+                raw: `\n[Chat: ${chat.name}|${chat.id}]\n[With: ${memberStr}]\n[${chat.name}] ${finalText}`
+            });
+        }
+
+        if (prev === chat.id && APP_CONTAINER) {
+            await win.wxApp.simulateTypingStream(newMsgs, chat);
+        } else {
+            newMsgs.forEach(function (m) { chat.messages.push(m); });
+            chat.unread = true;
+            chat.pushedCount = chat.messages.length;
+            chat.renderedCount = chat.messages.length;
+            if (APP_CONTAINER) win.wxApp.render();
+        }
+        if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+    }
+
+    // 登記給托管：跑完的結果由這裡收（os_relay.js 回到前台時會叫）
+    if (win.OS_RELAY && win.OS_RELAY.onResult) {
+        win.OS_RELAY.onResult('wx', async function (job) {
+            const chat = GLOBAL_CHATS[job.chat_id] || (win.WX_DB ? await win.WX_DB.getApiChat(job.chat_id) : null);
+            if (!chat) { console.warn('[WX] 托管結果找不到聊天室:', job.chat_id); return; }
+            GLOBAL_CHATS[job.chat_id] = chat;
+            if (job.status !== 'done') {
+                const li = chat.messages.findIndex(m => !m.isMe && m.isLoading);
+                if (li !== -1) chat.messages.splice(li, 1);
+                delete chat._relayJob;
+                chat.messages.push({ type: 'msg', isMe: false, content: 'AI 回應失敗：' + String(job.error || '').slice(0, 120), sender: chat.name, senderName: chat.name });
+                if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+                if (APP_CONTAINER) { if (GLOBAL_ACTIVE_ID === chat.id) _rebuildRoomContent(chat); else win.wxApp.render(); }
+                return;
+            }
+            const text = (win.OS_API && win.OS_API.normalizeRaw) ? win.OS_API.normalizeRaw(job.result) : String(job.result || '');
+            if (!text) { console.warn('[WX] 托管結果是空的'); return; }
+            await _applyRelayReply(chat, text);
+        });
+    }
+
     // 共用圖片管道生完 → 寫回訊息；訊息位置從卡片所在那列的 data-msg-idx 拿
     if (win.OS_PHONE_IMAGE && win.OS_PHONE_IMAGE.onDone) {
         win.OS_PHONE_IMAGE.onDone('wx', (chatId, url, imgEl, desc) => {
@@ -2608,7 +2664,21 @@
                             _rebuildRoomContent(currentChat);
                             console.error('[WX] API 錯誤:', error);
                         },
-                        { disableTyping: apiConfig.disableTyping !== false }
+                        {
+                            disableTyping: apiConfig.disableTyping !== false,
+                            // 📡 開了「回覆交給伺服器跑」就把這一輪丟給伺服器：手機可以切出去、鎖屏，
+                            //    好了推一則通知，回來時 OS_RELAY 把結果收回來走 _applyRelayReply。
+                            relayJob: {
+                                app: 'wx', chatId: GLOBAL_ACTIVE_ID, title: currentChat.name || '',
+                                notify: { title: currentChat.name || '微信', body: '回你訊息了', url: './', tag: 'wx-' + GLOBAL_ACTIVE_ID }
+                            },
+                            onQueued: (jid) => {
+                                currentChat._relayJob = jid;
+                                IS_STREAMING_REPLY = false;   // 交出去了就解鎖，不然她切回來還是卡著
+                                try { if (win.WX_DB && win.WX_DB.saveApiChat) win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat); } catch (e) {}
+                                try { AUI.toast('交給伺服器跑了，好了會通知你'); } catch (e) {}
+                            }
+                        }
                     );
                 } catch (ce) {
                     console.error('[WX] OS_API.chat 例外:', ce);

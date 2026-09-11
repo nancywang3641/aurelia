@@ -2125,6 +2125,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="push-state" id="push-state">還沒開。</div>
                         </div>
 
+                        <div class="set-group" id="relay-group">
+                            <div class="set-label"><i class="fa-solid fa-satellite-dish"></i> 回覆交給伺服器跑</div>
+                            <div class="set-desc">開了之後按送出就可以切出去或鎖屏，回覆由伺服器跑完再通知妳。只對「直連 API」有效，跟著酒館的那種不行。</div>
+                            <input class="set-input" id="relay-url" placeholder="托管網址，例如 relay.你的網域" />
+                            <input class="set-input" id="relay-token" type="password" placeholder="通行碼" style="margin-top:8px;" />
+                            <div style="display:flex; gap:8px; margin-top:10px;">
+                                <div class="btn-save" id="relay-save-btn" style="flex:1; padding:12px; font-size:13px;">開啟並測試</div>
+                                <div class="btn-test" id="relay-off-btn" style="flex:1; padding:12px; font-size:13px;">關掉</div>
+                            </div>
+                            <div id="relay-state" style="font-size:12px; color:#1A1C28; margin-top:8px;">還沒開。</div>
+                        </div>
+
                         <div class="set-group">
                             <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。"><i class="fa-solid fa-desktop"></i> 介面佈局</div>
                             <div class="set-desc">頂部被遮擋時選「強制下移」。</div>
@@ -4009,6 +4021,36 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (elGistId && s.gistId) elGistId.value = s.gistId;
             if (elGistHint && s.gistId) elGistHint.textContent = '目前 Gist ID: ' + s.gistId;
         }
+
+        // ── 📡 回覆交給伺服器跑（請求托管）：實際的送出與收回在 os_relay.js ──
+        (function wireRelay() {
+            const q = id => container.querySelector('#' + id);
+            if (!q('relay-group') || !win.OS_RELAY) return;
+            const elUrl = q('relay-url'), elTok = q('relay-token'), elState = q('relay-state');
+            const say = (msg) => { if (elState) elState.textContent = msg; };
+            const cfg = win.OS_RELAY.cfg();
+            if (elUrl) elUrl.value = cfg.url || '';
+            if (elTok) elTok.value = cfg.token || '';
+            say(win.OS_RELAY.enabled() ? '開著：' + win.OS_RELAY.base() : '還沒開。');
+
+            const btn = q('relay-save-btn');
+            if (btn) btn.onclick = async () => {
+                const url = (elUrl && elUrl.value || '').trim();
+                const token = (elTok && elTok.value || '').trim();
+                if (!url || !token) { say('網址跟通行碼都要填。'); return; }
+                win.OS_RELAY.setCfg({ url: url, token: token, on: true });
+                say('測試中…');
+                try {
+                    await win.OS_RELAY.test();
+                    say('可以用了：' + win.OS_RELAY.base());
+                } catch (e) {
+                    win.OS_RELAY.setCfg({ on: false });
+                    say('連不上或通行碼不對：' + ((e && e.message) || e));
+                }
+            };
+            const off = q('relay-off-btn');
+            if (off) off.onclick = () => { win.OS_RELAY.setCfg({ on: false }); say('關掉了，回覆改回手機自己跑。'); };
+        })();
 
         // ── 手機通知：只有「加到主畫面」啟動的 PWA 收得到，Safari 分頁不行 ──
         (function wirePush() {

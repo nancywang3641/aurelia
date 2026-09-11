@@ -312,6 +312,13 @@
     // --- 3. OS API 主對象 ---
     win.OS_API = {
 
+        // 📡 托管回來的是上游原樣的 JSON 字串 → 交回同一套清洗，結果才跟手機自己跑的一樣
+        normalizeRaw: function (raw, keepFences) {
+            let data = raw;
+            if (typeof raw === 'string') { try { data = JSON.parse(raw); } catch (e) { data = { content: raw }; } }
+            return normalizeResponse(data, keepFences === true);
+        },
+
         // ── 聊天引用回覆：微信與 VN 手機共用同一份 ──────────────────────────
         // 兩邊吃的是同一種行格式（[名字] 內容），所以解析、組裝、灰塊 HTML 都放這一份，
         // 別各寫各的——兩份一定會漂（通訊錄那次就是兩把尺分家造成的）。
@@ -849,6 +856,25 @@
                     // include_reasoning:false 已足以關閉推理輸出，GPT/Claude 也不受影響。
                 }
 
+                // 📡 回覆交給伺服器跑：呼叫端給了 relayJob、而且她開了托管 → 把這一包丟過去，手機就可以睡了。
+                //    擺在 🍎 與直連兩條路之前：伺服器是原生 HTTP 出去的，本來就沒有 iOS 那個 CORS 問題，
+                //    所以只要有 url/key 就走這條。跟著酒館那條沒有 key 可以交給伺服器，不走。
+                if (options.relayJob && !useSystemApi && config.url && config.key && win.OS_RELAY && win.OS_RELAY.enabled()) {
+                    let _rUrl = String(config.url).replace(/\/$/, '');
+                    if (!_rUrl.includes('/chat/completions')) _rUrl += (_rUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
+                    try {
+                        const _jid = await win.OS_RELAY.submit(Object.assign({}, options.relayJob, {
+                            upstream: { url: _rUrl, key: config.key, body: commonBody }
+                        }));
+                        console.log('📡 [OS_API] 這一輪交給伺服器跑了：' + _jid);
+                        if (options.onQueued) options.onQueued(_jid);
+                        return;
+                    } catch (e) {
+                        console.warn('📡 [OS_API] 交給伺服器失敗，改回手機自己跑：', (e && e.message) || e);
+                        if (options.onRelayFail) { try { options.onRelayFail(e); } catch (e2) {} }
+                    }
+                }
+
                 if (config.useGenerateRaw) {
                     // 🍎 generateRaw 模式（iOS 相容）：走酒館原生生成管線。
                     // ordered_prompts 只送這些訊息 → 排除 preset/角色卡/世界書/歷史（文件：未列入的不會使用）。
@@ -1026,6 +1052,7 @@
                 } else {
                     let targetUrl = config.url.replace(/\/$/, '');
                     if (!targetUrl.includes('/chat/completions')) targetUrl += (targetUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
+
 
                     // ── 真實 SSE 串流路徑 ──────────────────────────────────────
                     // 只有呼叫方明確傳入 options.useRealStream:true 才啟用

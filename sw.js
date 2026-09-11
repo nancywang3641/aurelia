@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 415;                        // ← 每次部署 +1
+const CACHE_VERSION = 416;                        // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -55,6 +55,7 @@ const SHELL_ASSETS = [
     './os_phone/os/os_settings_voice.js',
     './os_phone/os/os_db.js',
     './os_phone/os/os_api_engine.js',
+    './os_phone/os/os_relay.js',
     './os_phone/os/os_avs_engine.js',
     './os_phone/os/os_avs_rules.js',
     './os_phone/os/os_avs.js',
@@ -176,10 +177,14 @@ self.addEventListener('notificationclick', event => {
     event.waitUntil((async () => {
         const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         // 已經開著就直接帶過去，不要每次都開新視窗
+        const abs = new URL(target, self.registration.scope).href;
         for (const w of wins) {
             try {
                 await w.focus();
-                if ('navigate' in w) await w.navigate(target);
+                // 已經停在同一頁就只聚焦：再 navigate 一次等於整個 PWA 重載，
+                // 托管跑完的通知每次都重載一遍會讓她等白畫面（回到前台本來就會自己收結果）
+                const same = w.url && (w.url === abs || w.url.split('#')[0] === abs.split('#')[0]);
+                if (!same && 'navigate' in w) await w.navigate(target);
                 return;
             } catch (_) {}
         }
