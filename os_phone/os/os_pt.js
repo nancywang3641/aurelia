@@ -388,22 +388,25 @@
         host.classList.add('void-dock-open');   // 📱 手機:立繪退後變暗、面板站前排
         const dock = document.createElement('div');
         dock.id = 'os-pt-shop-dock';
-        dock.className = 'osx-dock';
+        // os-pt-dock＝大家共用的手機停靠版位（lobby.css）與舞台找白兔面板用的名字；
+        // 🚨 08 月圖片切件版改成只掛 osx-dock，那兩處從此對不上，手機停靠版位一直沒套到交易所。
+        dock.className = 'osx-dock os-pt-dock';
+        // 2026-09-11 起整張面板是 CSS 畫的（樣式在 css/os_exchange.css），不再用圖片切件；
+        // 文字、數字、按鈕都是 DOM，版位靠排版流而不是量出來的百分比。
         dock.innerHTML =
-            '<div class="osx-frame" role="dialog" aria-label="量子交易所">' +
-              '<div class="osx-plate"></div>' +
-              '<button class="osx-close" type="button" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
-              '<div class="osx-title"><span class="zh">量子交易所</span>' +
-                '<span class="en">AURELIA PARALLAX EXCHANGE</span></div>' +
-              '<div class="osx-bal"><span class="osx-bal-coin"></span>' +
-                '<span class="osx-bal-n"><span id="os-pt-shop-bal">…</span>' +
-                '<span class="osx-bal-u">PT</span></span></div>' +
-              '<div class="osx-stage"></div>' +
+            '<div class="osx-frame" role="dialog" aria-label="量子交易所"><div class="osx-inner">' +
+              '<div class="osx-hd">' +
+                '<span class="osx-emblem" aria-hidden="true"></span>' +
+                '<div class="osx-title"><span class="zh">量子交易所</span><span class="en">AURELIA PARALLAX EXCHANGE</span></div>' +
+                '<button class="osx-close" type="button" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
+              '</div>' +
+              '<div class="osx-bal">' +
+                '<span class="osx-coin" aria-hidden="true"><span>PT</span></span>' +
+                '<div class="osx-bal-main"><span class="osx-bal-k">你的 PT</span><span class="osx-bal-n" id="os-pt-shop-bal">…</span></div>' +
+                '<div class="osx-msg"><i class="fa-solid fa-hourglass-half"></i><span class="m" id="os-pt-shop-msg">白兔先生在櫃檯，隨時可以替你估值。</span></div>' +
+              '</div>' +
               '<div class="osx-cards" id="os-pt-shop-items"></div>' +
-              '<div class="osx-rail"><span class="osx-rail-ic"><i class="fa-solid fa-hourglass-half"></i></span>' +
-                '<span class="osx-rail-tx"><span class="t">交易所狀態</span>' +
-                '<span class="m" id="os-pt-shop-msg">白兔先生在櫃檯，隨時可以替你估值。</span></span></div>' +
-            '</div>';
+            '</div></div>';
         host.appendChild(dock);
         requestAnimationFrame(() => dock.classList.add('on'));
         dock.querySelector('.osx-close').addEventListener('click', () => {
@@ -442,20 +445,18 @@
             ? '<button class="osx-card-btn gold" id="os-pt-redeem-ach">兌換 ' + pendingN + ' 個</button>'
             : '<button class="osx-card-btn locked" disabled>沒有待估值</button>';
 
-        itemsEl.innerHTML =
-            '<div class="osx-card left" title="在視差城市擁有一間屬於自己的房子。">' +
-              '<span class="osx-node">1</span>' +
-              '<span class="osx-card-name">蓋你的房</span>' + houseBtn +
-            '</div>' +
-            '<div class="osx-card center" title="異常成就請找 404 號房的柴郡">' +
-              '<span class="osx-node">2</span>' +
-              '<span class="osx-card-name">成就兌換</span>' + achBtn +
-            '</div>' +
-            '<div class="osx-card right locked" title="之後會開">' +
-              '<span class="osx-node">3</span>' +
-              '<span class="osx-card-name">限時商品</span>' +
-              '<button class="osx-card-btn locked" disabled>敬請期待</button>' +
+        // 一張卡＝圖示、名字、一句它是做什麼的、按鈕（插圖圖片退役，圖示用 FA）
+        const card = (cls, icon, name, desc, btn) =>
+            '<div class="osx-card ' + cls + '">' +
+              '<span class="osx-card-ic"><i class="fa-solid ' + icon + '"></i></span>' +
+              '<div class="osx-card-tx"><span class="osx-card-name">' + name + '</span>' +
+                '<span class="osx-card-desc">' + desc + '</span></div>' +
+              btn +
             '</div>';
+        itemsEl.innerHTML =
+            card('house' + (built ? ' done' : ''), 'fa-house-chimney', '蓋你的房', built ? '視差城市裡已經有你的家' : '在視差城市擁有一間自己的房子', houseBtn) +
+            card('ach', 'fa-award', '成就兌換', '成就交給白兔估值換 PT；異常成就找 404 的柴郡', achBtn) +
+            card('soon locked', 'fa-gift', '限時商品', '之後會開', '<button class="osx-card-btn locked" disabled>敬請期待</button>');
 
         if (msgEl) {
             msgEl.className = 'm';

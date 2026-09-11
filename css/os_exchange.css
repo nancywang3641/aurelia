@@ -1,192 +1,141 @@
 /* ================================================================
-   交易所面板 — v3 切件（照 Canva SVG 設計稿重製，2026-08-14）
-   素材：sound-files/aseets/exchange_ui/*.png
-   素材是 v4：用設計稿自帶的灰階 alpha 遮罩合成、子圖層(插圖/凹槽/菱形)疊回容器、外框改用去背版 SVG。
-   版位不是估的：全部量自設計稿（參考資料/exchange_ui_assets/components_v4/README.md），
-   數字直接對應設計稿畫布百分比，畫布比例 1040/957。
-   文字／數字／按鈕全部由 DOM 畫，圖上不留字 → 加商品或改名不用重出圖。
-   微調集中在下面這一區。
+   交易所面板 — 純 CSS 版（2026-09-11）
+   之前是圖片切件版（sound-files/aseets/exchange_ui/*.png：外框、內襯板、光環、三張卡殼、狀態列），
+   位置全靠量出來的百分比對齊。現在整張用 CSS 畫，版位靠排版流：
+   加商品、改名、換尺寸都不用重出圖，也不會因為框的比例跟容器對不上而歪掉。
+   配色跟對話模式的霧白右欄同一套（白底、靛藍字、天藍與金色點綴）。
+
+   三種掛法都要成立：
+   ① 舞台桌機：貼右側、垂直置中、高度照內容（太高就自己捲）
+   ② 舞台手機：大家共用的停靠版位（lobby.css 的 .lobby-left.void-dock-open .os-pt-dock，上下左右都釘死）
+   ③ 對話模式：被搬進地點視圖的窗格，外層以 !important 撐滿（lobby.css 的 .lb-pv-body > #os-pt-shop-dock）
+   → 外框一律吃滿自己的 dock、內容自己捲；內容本身限寬置中，窗格很寬時不會拉成一條。
    ================================================================ */
 .osx-dock {
-    /* 標 W = 相對外框寬、標 H = 相對外框高；數值同設計稿 */
-    --osx-title-x: 12.86%;   /* 量自設計稿的文字實際落點，不是猜的 */
-    --osx-title-y: 8.43%;    /* H，這是行框上緣；設計稿的字面上緣落在 8.36% */
-    --osx-bal-x: 4.8%;         /* 距右 */
-    --osx-bal-y: 6.2%;         /* H */
-    --osx-bal-w: 26.5%;        /* W */
-    --osx-plate-x: 7.8%;       /* 中央內襯板 */
-    --osx-plate-y: 18.7%;      /* H */
-    --osx-plate-w: 84.3%;      /* W */
-    --osx-ring-x: 28.1%;
-    --osx-ring-y: 6.2%;        /* H */
-    --osx-ring-w: 43.7%;       /* W */
-    --osx-card-w: 21.92%;      /* W，三張同寬 */
-    --osx-card-l1: 11.44%;
-    --osx-card-l2: 38.94%;
-    --osx-card-l3: 65.96%;
-    --osx-card-t: 43.68%;      /* H，左右卡 */
-    --osx-card-t-mid: 48.38%;  /* H，中央卡是「下沉」不是上抬 */
-    --osx-rail-x: 4.7%;
-    --osx-rail-y: 81.2%;       /* H */
-    --osx-rail-w: 90.5%;       /* W */
-
     position: absolute; z-index: 80;
     right: 3%; top: 50%;
-    width: min(46%, 540px);
+    width: min(46%, 540px); max-height: calc(100% - 40px);
+    display: flex; flex-direction: column;
     opacity: 0; transform: translate(24px, -50%);
     transition: opacity .28s ease, transform .28s ease;
 }
 .osx-dock.on { opacity: 1; transform: translate(0, -50%); }
 
-/* ⚠️ 百分比 padding 一律是「相對 containing block 的寬」，不是自己的寬 →
-   凡是用 % padding 的元素都必須 border-box，數值也要換算成「相對父層寬」再填。 */
 .osx-frame, .osx-frame * { box-sizing: border-box; }
 
 .osx-frame {
-    position: relative; width: 100%; aspect-ratio: 1040 / 957;
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column;   /* 內容比框矮時上下置中（margin:auto），比框高時照常捲 */
     container-type: inline-size;
-    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-frame-desktop-base.png) center / 100% 100% no-repeat;
-    color: #2f3f66; font-family: inherit;
-    filter: drop-shadow(0 18px 40px rgba(40, 60, 110, 0.3));
+    border-radius: 22px;
+    background:
+        radial-gradient(120% 60% at 50% 0%, rgba(214, 228, 255, .55), rgba(214, 228, 255, 0) 70%),
+        linear-gradient(180deg, #fbfcff, #f1f4fb);
+    border: 1px solid rgba(255, 255, 255, .95);
+    box-shadow: 0 18px 44px rgba(40, 60, 110, .24), inset 0 0 0 5px rgba(255, 255, 255, .45);
+    color: #2b3663; font-family: inherit;
 }
+.osx-inner { width: 100%; max-width: 760px; margin: auto; padding: 22px 22px 24px;
+    display: flex; flex-direction: column; gap: 18px; }
 
-/* 中央內襯板：卡片與軌道環的底，壓在最底層 */
-.osx-plate {
-    position: absolute; left: var(--osx-plate-x); top: var(--osx-plate-y);
-    width: var(--osx-plate-w); aspect-ratio: 880 / 540; z-index: 0;
-    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-inner-plate.png) center / 100% 100% no-repeat;
-    pointer-events: none;
-}
-
-/* 關閉：框右上角，不壓到邊框花紋 */
-.osx-close {
-    position: absolute; right: 1.5%; top: 1.5%; z-index: 5;
-    width: 7%; aspect-ratio: 1; border: none; padding: 0; cursor: pointer;
-    background: transparent; color: #6b7ea8; font-size: clamp(12px, 2.8cqw, 19px);
+/* ── 標題列：菱形徽記＋名字＋關閉 ── */
+.osx-hd { display: flex; align-items: center; gap: 14px; }
+.osx-emblem { position: relative; flex-shrink: 0; width: 34px; height: 34px; margin: 0 4px;
+    transform: rotate(45deg); border-radius: 7px;
+    background: linear-gradient(135deg, #7fb3ff, #3f64cf);
+    box-shadow: 0 4px 12px rgba(63, 100, 207, .35), inset 0 0 0 2px rgba(255, 255, 255, .55); }
+.osx-emblem::after { content: ''; position: absolute; inset: 9px; border-radius: 3px;
+    background: linear-gradient(135deg, #fff, #ffe9b8); box-shadow: 0 0 8px rgba(255, 230, 170, .9); }
+.osx-title { min-width: 0; display: flex; flex-direction: column; gap: 4px; line-height: 1.15; }
+.osx-title .zh { font-size: 20px; font-weight: 800; letter-spacing: .22em; color: #2b3663; white-space: nowrap; }
+.osx-title .en { font-size: 10px; letter-spacing: .2em; color: #8b98bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.osx-close { margin-left: auto; flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+    border: none; cursor: pointer; font-family: inherit; font-size: 15px;
     display: flex; align-items: center; justify-content: center;
-    border-radius: 50%; transition: color .18s, background .18s;
-}
-.osx-close:hover { color: #2f3f66; background: rgba(120, 150, 210, 0.14); }
+    background: #eef1f8; color: #5d6b91; transition: background .18s, color .18s; }
+.osx-close:hover { background: #e1e6f3; color: #2b3663; }
 
-/* ── 標題 ── */
-.osx-title {
-    position: absolute; left: var(--osx-title-x); top: var(--osx-title-y); z-index: 3;
-    max-width: 44%; overflow: hidden; line-height: 1.25;
-}
-/* 設計稿量到：中文 x 14.2~33.07%、y 8.36~11.8%（字高 3.4%H≒3.7cqw）；英文副標 x 12.86%、y 13.4% */
-.osx-title .zh {
-    display: block; margin-left: 1.35cqw; margin-right: -0.22em; line-height: 1;
-    font-size: clamp(11px, 3.15cqw, 18px); font-weight: 800; letter-spacing: 0.22em;
-    color: #2b3a63; white-space: nowrap;
-}
-.osx-title .en {
-    display: block; margin-top: 1.3cqw; line-height: 1;
-    font-size: clamp(5px, 1.35cqw, 9px); letter-spacing: 0.18em;
-    color: #8b9bc0; white-space: nowrap;
-}
-
-/* ── 餘額膠囊 ── */
-.osx-bal {
-    position: absolute; right: var(--osx-bal-x); top: var(--osx-bal-y); z-index: 3;
-    width: var(--osx-bal-w); aspect-ratio: 276 / 90;
-    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-balance-capsule-empty.png) center / 100% 100% no-repeat;
-}
-/* 膠囊內部槽位量自設計稿（相對膠囊自身）：左圓 5.8~29.4%、數字 33.7~70.3%、右圓 70.6~94.2% */
-.osx-bal-coin {
-    position: absolute; left: 5.8%; top: 16.6%; width: 23.6%; height: 67.2%;
-    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-pt-coin-pt-face.png) center / contain no-repeat;
-}
-.osx-bal-n {
-    position: absolute; left: 33.7%; right: 29.7%; top: 0; bottom: 0;
-    display: flex; align-items: center; justify-content: center; gap: 0.3em;
-    font-size: clamp(11px, 3.9cqw, 20px); font-weight: 800; color: #2b3a63;
-    font-variant-numeric: tabular-nums; line-height: 1;
-}
-.osx-bal-u { font-size: 0.5em; color: #8b9bc0; align-self: flex-end; margin-bottom: 0.35em; }
-
-/* ── 中央軌道展台（環與中心幣是同一張圖，不再另疊硬幣） ── */
-.osx-stage {
-    position: absolute; left: var(--osx-ring-x); top: var(--osx-ring-y);
-    width: var(--osx-ring-w); aspect-ratio: 455 / 419; z-index: 1;
-    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-orbit-ring-empty.png) center / 100% 100% no-repeat;
-    pointer-events: none;
-}
-
-/* ── 商品卡：三張各自絕對定位（中央卡下沉），槽位三張共用一組 ── */
-.osx-cards { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-.osx-card {
-    position: absolute; top: var(--osx-card-t);
-    width: var(--osx-card-w); aspect-ratio: 228 / 330;
-    background: center / 100% 100% no-repeat;
-    pointer-events: auto;
-}
-.osx-card.left   { left: var(--osx-card-l1); background-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-product-card-left-empty.png); }
-.osx-card.center { left: var(--osx-card-l2); top: var(--osx-card-t-mid); background-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-product-card-center-empty.png); }
-.osx-card.right  { left: var(--osx-card-l3); background-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-product-card-right-empty.png); }
-
-/* 卡內槽位：三張卡各自量出來的（來源 components_v5/README.md），
-   插圖下緣一律 63.56%，凹槽左中右各有零點幾個百分點的差，別共用同一組。 */
-.osx-node {
-    position: absolute; left: 33.2%; right: 31.12%; top: 0; height: 22.71%;
+/* ── 餘額：一顆 CSS 畫的 PT 幣＋數字，底下一行交易所狀態 ── */
+.osx-bal { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 16px;
+    padding: 16px 18px; border-radius: 18px;
+    background: linear-gradient(135deg, rgba(234, 241, 255, .95), rgba(255, 249, 235, .9));
+    border: 1px solid rgba(110, 140, 210, .18); }
+.osx-coin { grid-row: span 2; position: relative; width: 62px; height: 62px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: clamp(5px, 1.9cqw, 11px); font-weight: 800; color: #f4f8ff;
-    text-shadow: 0 1px 2px rgba(30, 60, 120, 0.55);
-    pointer-events: none;
-}
-.osx-card-name {
-    position: absolute; left: 18.79%; right: 16.85%; top: 63.56%; height: 13.58%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: clamp(8px, 2.9cqw, 14px); font-weight: 800;
-    color: #2b3a63; letter-spacing: 1px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* 按鈕直接坐進卡殼圖自帶的凹槽，不再自己畫底 */
-.osx-card-btn {
-    position: absolute; left: 18.79%; right: 16.85%; top: 77.14%; height: 13.53%;
-    display: flex; align-items: center; justify-content: center;
-    border: none; background: transparent; border-radius: 999px; padding: 0;
-    cursor: pointer; font-family: inherit; font-weight: 700;
-    font-size: clamp(7px, 2.3cqw, 12px); color: #4a6bb5;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    transition: background .18s, color .18s;
-}
-/* 中央卡：菱形較窄、插圖較高、凹槽整體再高一點 */
-.osx-card.center .osx-node { left: 36.18%; right: 35.17%; }
-.osx-card.center .osx-card-name { top: 63.56%; height: 12.22%; }
-.osx-card.center .osx-card-btn { left: 18.35%; right: 17.34%; top: 75.78%; height: 13.52%; }
-/* 右卡：整體比左卡右移約半個百分點 */
-.osx-card.right .osx-node { left: 33.62%; right: 30.76%; }
-.osx-card.right .osx-card-btn { left: 19.24%; right: 16.51%; }
+    background: radial-gradient(circle at 35% 30%, #fff3c4 0%, #f2c55c 38%, #c98f22 78%, #a8731a 100%);
+    box-shadow: 0 6px 16px rgba(180, 130, 30, .35), inset 0 -3px 6px rgba(120, 80, 10, .35), inset 0 3px 5px rgba(255, 255, 255, .6); }
+.osx-coin::before { content: ''; position: absolute; inset: 6px; border-radius: 50%;
+    border: 2px solid rgba(255, 244, 205, .75); box-shadow: inset 0 0 0 2px rgba(150, 100, 20, .25); }
+.osx-coin span { position: relative; font-family: Georgia, 'Times New Roman', serif; font-weight: 900; font-size: 19px;
+    color: #8a5a10; letter-spacing: .02em; text-shadow: 0 1px 0 rgba(255, 240, 190, .9); }
+.osx-bal-main { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.osx-bal-k { font-size: 12px; color: #7c88ac; letter-spacing: .1em; white-space: nowrap; }
+.osx-bal-n { font-size: 34px; font-weight: 800; line-height: 1; color: #2b3663; font-variant-numeric: tabular-nums; }
+.osx-msg { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #6d7ba2; }
+.osx-msg i { color: #6c8fd6; font-size: 12px; flex-shrink: 0; }
+.osx-msg .m { min-width: 0; }
+.osx-msg .m.ok { color: #2f8a58; }
+.osx-msg .m.bad { color: #c2506a; }
 
-.osx-card-btn:hover:not(:disabled) { background: rgba(120, 160, 230, 0.16); color: #2b4f9e; }
-.osx-card-btn:disabled { cursor: default; }
-.osx-card-btn.owned { color: #2f8a58; }
-.osx-card-btn.locked { color: #97a0b5; }
-.osx-card-btn.gold { color: #b8901f; }
+/* ── 三張商品卡：同高、同寬，一排三張 ── */
+.osx-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.osx-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+    padding: 18px 12px 14px; border-radius: 18px;
+    background: #fff; border: 1px solid rgba(110, 140, 210, .2);
+    box-shadow: 0 6px 18px rgba(60, 80, 140, .08); transition: transform .18s ease, box-shadow .18s ease; }
+.osx-card:not(.locked):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(60, 80, 140, .14); }
+.osx-card-ic { width: 58px; height: 58px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
+    background: linear-gradient(135deg, #8cbcff, #4a6fd1); box-shadow: 0 6px 14px rgba(74, 111, 209, .3); }
+.osx-card.ach .osx-card-ic { background: linear-gradient(135deg, #ffd978, #d49a26); box-shadow: 0 6px 14px rgba(212, 154, 38, .32); }
+.osx-card.locked .osx-card-ic { background: linear-gradient(135deg, #d9dde8, #aab2c6); box-shadow: none; }
+.osx-card-tx { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.osx-card-name { font-size: 15px; font-weight: 800; letter-spacing: .08em; color: #2b3663; }
+.osx-card-desc { font-size: 12px; line-height: 1.55; color: #7c88ac; }
+.osx-card.locked .osx-card-name { color: #8f97ad; }
 
-/* ── 底部狀態列 ── */
-.osx-rail {
-    position: absolute; left: var(--osx-rail-x); top: var(--osx-rail-y);
-    width: var(--osx-rail-w); aspect-ratio: 942 / 135; z-index: 1;
-    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/exchange_ui/exchange-status-rail-empty.png) center / 100% 100% no-repeat;
-}
-/* 狀態列內部槽位量自設計稿（相對狀態列自身）：左圓 3.4~13.8%、文字 19.4% 起、右圓 86.2~94.8%
-   左圓素材上本來就有圖案，狀態圖示改放右圓那格。 */
-.osx-rail-ic {
-    position: absolute; right: 5.2%; top: 50%; transform: translateY(-50%);
-    width: 8.6%; text-align: center; color: #6c8fd6; font-size: clamp(7px, 2.2cqw, 12px);
-}
-.osx-rail-tx {
-    position: absolute; left: 19.4%; right: 17%; top: 27.6%; bottom: 34%;
-    min-width: 0; display: flex; flex-direction: column; justify-content: space-between; line-height: 1.15;
-}
-.osx-rail-tx .t { display: block; font-size: clamp(6px, 1.75cqw, 9px); font-weight: 800; color: #2b3a63; letter-spacing: 1px; }
-.osx-rail-tx .m { display: block; font-size: clamp(6px, 1.75cqw, 9.5px); color: #6d7fa4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.osx-rail-tx .m.ok { color: #2f8a58; }
-.osx-rail-tx .m.bad { color: #c2506a; }
+.osx-card-btn { width: 100%; padding: 9px 10px; border-radius: 999px; cursor: pointer; font-family: inherit;
+    font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    border: 1px solid transparent; background: #4a6fd1; color: #fff; transition: background .18s, filter .18s; }
+.osx-card-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.osx-card-btn:disabled { cursor: default; background: #eef1f7; color: #97a0b5; }
+.osx-card-btn.gold { background: linear-gradient(135deg, #e3b243, #c8952c); color: #fff; }
+.osx-card-btn.owned { background: rgba(47, 138, 88, .1); color: #2f8a58; border-color: rgba(47, 138, 88, .25); }
+.osx-card-btn.locked { background: #eef1f7; color: #97a0b5; }
 
-/* ── 手機：這輪沒有直式框，共用桌機框等比縮放、站前排 ──
-   版位百分比全部相對外框，所以只要改 dock 的定位與寬度就好。 */
+/* ── 寬的時候（對話模式整個窗格都給它）：整體放大，不要一小塊浮在大框中間 ── */
+@container (min-width: 900px) {
+    .osx-inner { max-width: 880px; gap: 24px; padding: 30px 30px 32px; }
+    .osx-title .zh { font-size: 24px; }
+    .osx-emblem { width: 40px; height: 40px; }
+    .osx-emblem::after { inset: 11px; }
+    .osx-bal { padding: 22px 26px; gap: 8px 20px; }
+    .osx-coin { width: 78px; height: 78px; }
+    .osx-coin span { font-size: 24px; }
+    .osx-bal-n { font-size: 42px; }
+    .osx-msg { font-size: 14px; }
+    .osx-cards { gap: 16px; }
+    .osx-card { padding: 28px 16px 18px; gap: 12px; }
+    .osx-card-ic { width: 74px; height: 74px; font-size: 30px; }
+    .osx-card-name { font-size: 17px; }
+    .osx-card-desc { font-size: 13px; }
+    .osx-card-btn { padding: 11px 12px; font-size: 14px; }
+}
+
+/* ── 窄的時候（手機、舞台右側窄窗）：卡片改成一列一張，圖示在左、按鈕在右 ── */
+@container (max-width: 470px) {
+    .osx-inner { padding: 18px 16px 20px; gap: 14px; }
+    .osx-title .zh { font-size: 18px; }
+    .osx-coin { width: 52px; height: 52px; }
+    .osx-coin span { font-size: 16px; }
+    .osx-bal-n { font-size: 28px; }
+    .osx-cards { grid-template-columns: 1fr; gap: 10px; }
+    .osx-card { flex-direction: row; text-align: left; gap: 12px; padding: 12px 12px 12px 14px; }
+    .osx-card-ic { width: 44px; height: 44px; font-size: 18px; }
+    .osx-card-btn { width: auto; min-width: 88px; flex-shrink: 0; padding: 8px 14px; }
+}
+
+/* ── 手機（舞台模式）：沒有停靠版位可用時的退路 ── */
 @media (max-width: 680px) {
     .osx-dock { right: 8px; left: 8px; top: 50%; width: auto; }
     .void-dock-open #iris-avatar { opacity: .25; filter: brightness(.55) blur(1px); transition: opacity .25s; }
