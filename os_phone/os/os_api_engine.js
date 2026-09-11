@@ -1378,6 +1378,8 @@
                             const rawPhoneMsgs = [];
                             _histMsgs.forEach(msg => {
                                 if (!msg) return;
+                                // 🚫 對方把她刪了之後她還在打的那幾則：他根本沒收到，不能給他看（連「被對方拒收」那句也是）
+                                if (msg.sentWhileBlocked || msg._blockedNotice) return;
                                 if (msg.type === 'system') {
                                     const _note = _noteOf(msg);
                                     if (_note) rawPhoneMsgs.push({ role: 'system', content: _note, _source: 'phone' });
@@ -1920,6 +1922,7 @@
                         const _cut = _keepN === null ? -1 : _histMsgs.length - _keepN;
                         _histMsgs.forEach((msg, _i) => {
                             const useSummary = _i < _cut;
+                            if (msg && (msg.sentWhileBlocked || msg._blockedNotice)) return;   // 對方沒收到的那幾則（同酒館版）
                             let content = msg.raw || msg.content || '';
                             if (!content) return;
                             // 📷 相簿照片的圖庫編號 → 它看過寫下的那句（跟酒館版 buildContext 同一支）

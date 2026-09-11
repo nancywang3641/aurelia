@@ -1185,9 +1185,20 @@
         new RegExp('(?:拉黑|封鎖|封锁|屏蔽)了?\\s*' + _Q + '\\s*' + _NM + '?\\s*' + _QE + '\\s*$')
     ];
     const _FRIEND_BACK_RE = /(?:已添加了?|已經添加|已经添加|已經是好友|已经是好友|已成為好友|已成为好友|通過了你的朋友驗證|通过了你的朋友验证|你已通過|你已通过|現在可以開始聊天|现在可以开始聊天|移出了?黑名單|移出了?黑名单|解除(?:了)?封鎖|解除(?:了)?封锁)/;
+    // 反過來：對方把主角刪了／拉黑了。真的微信不會通知，是送訊息的時候才看得到那句話，所以就認那幾句
+    const _FRIEND_BLOCKED_RES = [
+        new RegExp(_Q + _NM + _QE + '\\s*(?:開啟了|开启了|已開啟|已开启)\\s*(?:朋友|好友)驗證|(?:開啟了|开启了)(?:朋友|好友)(?:驗證|验证)'),
+        /(?:消息|訊息|信息)已(?:發出|发出)[，,]?\s*(?:但|但是)?\s*被(?:對方|对方)?拒收/,
+        /(?:你已被|已被)(?:對方|对方)?\s*(?:刪除|删除|拉黑|封鎖|封锁|移出(?:好友|通訊錄|通讯录))/,
+        new RegExp('(?:對方|对方)\\s*(?:已)?\\s*(?:將|将|把)?\\s*你\\s*(?:刪除|删除|拉黑|加入(?:黑名單|黑名单))')
+    ];
     function _friendEventOf(text) {
         const s = String(text || '').trim();
         if (!s) return null;
+        for (let i = 0; i < _FRIEND_BLOCKED_RES.length; i++) {
+            const m = s.match(_FRIEND_BLOCKED_RES[i]);
+            if (m) return { kind: 'blocked', name: (m[1] || '').trim() };
+        }
         if (_FRIEND_BACK_RE.test(s)) {
             // 後面沒有固定字可以擋的那條用貪婪版（不然只抓到一個字）；名字字元本來就排除標點，會停在逗號前
             const m = s.match(new RegExp(_Q + _NM + _QE + '\\s*(?:通過|通过|已經是|已经是|已成為|已成为)')) || s.match(new RegExp('(?:添加了?|加回)\\s*' + _Q + _NM.replace('}?)', '})') + _QE));
@@ -1302,23 +1313,30 @@
                         if (!ev) return;
                         const name = ev.name || (others.length === 1 ? others[0] : '');   // 沒寫名字＝這間私聊的對方
                         if (!name) return;
-                        if (ev.kind === 'remove') rmPush('p:' + name, x.floor, i, 'remove');
+                        if (ev.kind === 'remove') rmPush('p:' + name, x.floor, i, 'remove');          // 主角刪了對方
+                        else if (ev.kind === 'blocked') rmPush('b:' + name, x.floor, i, 'blocked');   // 對方刪了主角
                         else backNames.push({ name: name, f: x.floor, o: i });
                         return;
                     }
-                    if (x.type === 'msg') rmPush(selfKey, x.floor, i, 'back');   // 這間又有人講話＝還是朋友
+                    if (x.type !== 'msg') return;
+                    rmPush(selfKey, x.floor, i, 'back');   // 這間又有人講話＝主角沒把人刪掉
+                    // 對方又講得出話＝主角沒被刪（主角自己說的不算，被刪的人照樣打得出字）
+                    if (!x.isMe && others.length === 1) rmPush('b:' + others[0], x.floor, i, 'back');
                 });
-                _storyFriendRequests(room).forEach(function (fr) { rmPush('p:' + fr.name, fr.floor, 1e9, 'back'); });
+                // 好友申請（誰申請都算兩邊重新是朋友）
+                _storyFriendRequests(room).forEach(function (fr) { rmPush('p:' + fr.name, fr.floor, 1e9, 'back'); rmPush('b:' + fr.name, fr.floor, 1e9, 'back'); });
             });
             backNames.forEach(function (b) {
-                const hit = Object.keys(rmLast).find(function (k) { return k.indexOf('p:') === 0 && rmLast[k].kind === 'remove' && b.name.indexOf(k.slice(2)) === 0; });
-                rmPush(hit || ('p:' + b.name), b.f, b.o, 'back');
+                const hit = Object.keys(rmLast).find(function (k) { return (k.indexOf('p:') === 0 || k.indexOf('b:') === 0) && rmLast[k].kind !== 'back' && b.name.indexOf(k.slice(2)) === 0; });
+                const nm = hit ? hit.slice(2) : b.name;
+                rmPush('p:' + nm, b.f, b.o, 'back');
+                rmPush('b:' + nm, b.f, b.o, 'back');
             });
             // 她手動做的排在那一樓所有劇情事件之後
             Object.keys(rmMan).forEach(function (k) { rmPush(k, rmMan[k].floor, Infinity, rmMan[k].kind); });
             _rmRemovedNow = {};
-            Object.keys(rmLast).forEach(function (k) { if (rmLast[k].kind === 'remove') _rmRemovedNow[k] = 1; });
-            const rmStillOn = function (k) { return !!_rmRemovedNow[k]; };
+            Object.keys(rmLast).forEach(function (k) { if (rmLast[k].kind === 'remove' || rmLast[k].kind === 'blocked') _rmRemovedNow[k] = 1; });
+            const rmStillOn = function (k) { return !!_rmRemovedNow[k]; };   // 'p:名' ＝主角刪了他；'b:名' ＝他刪了主角
             // 刪掉的房：本來就有記錄的藏起來（資料留著，加回來時原樣回來）；本來沒有的就不建
             const hideRoom = async function (chatId, key) {
                 let ex = GLOBAL_CHATS[chatId];
@@ -1381,6 +1399,9 @@
                 let existing = GLOBAL_CHATS[chatId];
                 if (!existing) { try { existing = await win.WX_DB.getApiChat(chatId); } catch (e) { existing = null; } }
                 if (existing && existing.wxRemoved) { delete existing.wxRemoved; existing._storySig = ''; }   // 加回來了：重建、重新出現在列表
+                // 對方把主角刪了：聊天室照舊在（真的微信也是這樣，送出去才知道），但送不出去、對方不會回
+                const wantBlocked = !isGroup && rmStillOn('b:' + realName);
+                if (existing && !!existing.wxBlocked !== wantBlocked) existing._storySig = '';
                 const sig = key + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
                 if (existing && existing._storySig === sig) { GLOBAL_CHATS[chatId] = existing; continue; }
 
@@ -1400,6 +1421,7 @@
                     renderedCount: messages.length
                 });
                 if (isGroup) delete rec.realName; else rec.realName = realName;
+                if (wantBlocked) rec.wxBlocked = true; else delete rec.wxBlocked;
                 GLOBAL_CHATS[chatId] = rec;
                 try { await win.WX_DB.saveApiChat(chatId, rec); } catch (e) { console.warn('[wx 跑團同步] 存檔失敗:', chatId, e); }
                 if (chatId === GLOBAL_ACTIVE_ID) rebuildActive = true;
@@ -2418,8 +2440,16 @@
                 quoteName: _q ? _q.name : '',
                 quoteText: _q ? _q.text : ''
             };
+            // 🚫 對方把主角刪了：字打得出去、傳不到。照真的微信在後面補一句「被對方拒收」，
+            //    這幾則標起來（sentWhileBlocked），組上下文時不給對方看——他本來就沒收到。
+            if (currentChat.wxBlocked) sentMsg.sentWhileBlocked = true;
             currentChat.messages.push(sentMsg);
             _appendBubble(sentMsg, currentChat);
+            if (currentChat.wxBlocked) {
+                const _rej = { type: 'system', isMe: false, content: '消息已發出，但被對方拒收了。', timestamp: Date.now(), _blockedNotice: true };
+                currentChat.messages.push(_rej);
+                _appendBubble(_rej, currentChat);
+            }
             _replyTo = null; _renderReplyingBar();
             if(inputEl) { inputEl.value=''; this.onInputCheck(inputEl); }
 
@@ -2448,6 +2478,12 @@
         triggerReply: async function() {
             if(!GLOBAL_ACTIVE_ID || !GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) return;
             if(IS_STREAMING_REPLY) return; // 鎖定
+            // 🚫 對方把主角刪了 → 他收不到、也不會回。等劇情裡重新加回好友才恢復
+            if (GLOBAL_CHATS[GLOBAL_ACTIVE_ID].wxBlocked) {
+                const _n = GLOBAL_CHATS[GLOBAL_ACTIVE_ID].name || '對方';
+                AUI.toast(_n + '把你刪了，訊息傳不過去');
+                return;
+            }
             IS_STREAMING_REPLY = true;
 
             const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
