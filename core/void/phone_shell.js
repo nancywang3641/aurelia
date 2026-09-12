@@ -9,6 +9,29 @@
     // 🚨 底下這些 go 以前一律寫成 `模組 && 模組.fn && 模組.fn(c)`：模組沒載到時**靜靜回 undefined**，
     //    手機螢幕就停在剛被清空的狀態——她看到的是一片白，連一個字都沒有，而她沒有 console 可以查。
     //    圖標清單是寫死的，所以「圖標在」不代表「那支程式在」。改成講清楚是哪一支沒到。
+    // 出事當下的現場：哪些 app 登記了、關鍵的全域在不在、那幾支 js 的標籤在不在。
+    //   標籤在但全域不在＝檔案載進來了卻中途死掉；標籤不在＝根本沒被載（清單或部署的問題）。
+    function _scene() {
+        const L = [];
+        try {
+            const reg = win.__PHONE_APPS ? Object.keys(win.__PHONE_APPS) : null;
+            L.push('已登記的 app：' + (reg ? (reg.join('、') || '（一個都沒有）') : '（沒有 __PHONE_APPS）'));
+        } catch (e) { L.push('已登記的 app：讀不到'); }
+        [['PhoneSystem', 'PhoneSystem'], ['wxApp', '微信'], ['WX_CARDS', '微信卡片'],
+         ['OS_DB', '資料庫'], ['OS_SETTINGS', '設定']].forEach(function (pair) {
+            var here = false;
+            try { here = !!(win[pair[0]] || window[pair[0]]); } catch (e) {}
+            L.push(pair[1] + '：' + (here ? '在' : '不在'));
+        });
+        try {
+            const srcs = Array.prototype.map.call(document.querySelectorAll('script[src]'), function (t) { return t.src || ''; });
+            L.push('頁面上的 js：' + srcs.length + ' 支');
+            ['phone_system.js', 'wx_core.js', 'wx_cards.js'].forEach(function (f) {
+                L.push('　' + f + ' 的標籤：' + (srcs.some(function (u) { return u.indexOf(f) >= 0; }) ? '在' : '不在'));
+            });
+        } catch (e) { L.push('頁面上的 js：讀不到'); }
+        return L.join('\n');
+    }
     function _need(mod, label) {
         if (!mod) throw new Error(label + '：這個 app 的程式沒有登記進手機（它那支 js 沒載到）');
         return mod;
@@ -643,7 +666,9 @@
                 + '<div class="aps-fail-why"></div>'
                 + '<button class="aps-fail-copy" type="button">複製錯誤</button></div>';
             const why = body.querySelector('.aps-fail-why');
-            const text = '[' + id + '] ' + ((e && (e.stack || e.message)) || String(e));
+            // 🚨 光有堆疊還不夠：「沒登記」到底是「那支檔沒載到」還是「載到了但中途死掉」，
+            //    差很多而她沒有 console 可以查。把現場一起印出來，一則訊息就分得出來。
+            const text = '[' + id + '] ' + ((e && (e.stack || e.message)) || String(e)) + '\n\n— 現場 —\n' + _scene();
             if (why) why.textContent = text;
             const cp = body.querySelector('.aps-fail-copy');
             if (cp) cp.onclick = function () {
