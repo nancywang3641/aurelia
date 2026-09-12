@@ -276,7 +276,7 @@ const PHONE_FILES = [
     // === 🔵 微信 (WeChat) ===
     'wx/wx_user_profile.js', 'wx/wx_theme.js',
     'wx/wx_contacts.js', 'wx/wx_chat_settings.js', 'wx/wx_bubble_settings.js', 'wx/wx_bubble_ai.js',
-    'wx/wx_summary.js', 'wx/wx_wallet.js', 'wx/wx_avatar_ai.js', 'wx/wx_chat_media.js', 'wx/wx_cards.js', 'wx/wx_message_manager.js', 'wx/wx_view.js', 'wx/wx_core.js',
+    'wx/wx_summary.js', 'wx/wx_wallet.js', 'wx/wx_avatar_ai.js', 'wx/wx_chat_media.js', 'wx/wx_cards.js', 'wx/wx_message_manager.js', 'wx/wx_view.js', 'wx/wx_profile.js', 'wx/wx_core.js',
     'wx/wx_tavern_api_bridge.js',
 
     // === 📞 電話 (dialer) ===
@@ -479,6 +479,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_control_room.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_dashboard.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_keepalive.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/wx_profile.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_studio.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_worldbook.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_persona.css');

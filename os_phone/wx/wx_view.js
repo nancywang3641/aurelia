@@ -329,7 +329,13 @@
             // 微信跟 VN 手機都會掛，主題 CSS 只認它們——兩邊原本的 class 一個叫 .me 一個叫 .you 而且意思相反，
             // 沒有這層 AI 不可能寫出一份兩邊都對的 CSS。詳見 wx_bubble_ai.js。
             const sideCls = msg.isMe ? 'pbub-me' : 'pbub-other';
-            const avatarAttr = /class="/.test(dbDataAttr) ? dbDataAttr.replace('class="', 'class="pbub-avatar ') : `${dbDataAttr} class="pbub-avatar"`;
+            let avatarAttr = /class="/.test(dbDataAttr) ? dbDataAttr.replace('class="', 'class="pbub-avatar ') : `${dbDataAttr} class="pbub-avatar"`;
+            // 👤 點頭像＝看那個人的個人檔案（LINE 那種）。群聊點誰就開誰，自己那顆不開。
+            //    stopPropagation：聊天區有「點一下收面板」的處理，不擋住會連帶被吃掉。
+            if (!msg.isMe) {
+                const _who = String((safeChat.isGroup && msg.sender) ? msg.sender : (safeChat.name || safeChat.id || '')).replace(/'/g, "\\'");
+                if (_who) avatarAttr += ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${_who}')"`;
+            }
             // 貼圖／圖片／轉帳這些卡片，泡泡本來就被 bubbleStyle 設成透明無邊（卡片自己就是造型），
             // 掛上去只會讓主題把卡片外面又糊一層底 → 只有純文字泡泡才吃主題
             const plainBubble = !(isSpecial || isImageTag || isSticker);
@@ -738,7 +744,9 @@
 
                     const contextAction = `oncontextmenu="(window.parent.WX_CONTACTS || window.WX_CONTACTS).showContextMenu(event, '${c.id}', '${c.name}'); return false;"`;
                     // 注意：這裡將 dataAttr 注入到 div class="wx-avatar..." 結構中
-                    html += `<div class="wx-contact-item" id="contact-item-${c.id}" ${contextAction} onclick="(window.parent.wxApp || window.wxApp).openChat('${c.id}')"><div style="${avatarStyle}" ${dataAttr}></div><div class="wx-contact-name">${c.name}</div></div>`;
+                    // 👤 頭像開個人檔案、整列照舊直接進聊天——最常做的事不要多一步
+                    const avatarTap = ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${c.id}')"`;
+                    html += `<div class="wx-contact-item" id="contact-item-${c.id}" ${contextAction} onclick="(window.parent.wxApp || window.wxApp).openChat('${c.id}')"><div style="${avatarStyle}" ${dataAttr}${avatarTap}></div><div class="wx-contact-name">${c.name}</div></div>`;
                 });
             } else { html += `<div style="text-align:center; padding:30px; color:#ccc;">暫無聯絡人</div>`; }
             return html;
@@ -951,6 +959,7 @@
             for (let id in chats) { if (chats[id].unread && id !== activeId) { totalUnread++; } }
             
             let headerTitle = totalUnread > 0 ? `微信(${totalUnread})` : '微信';
+            let headerTitleAction = 'class="wx-header-title"';
             if (activeTab === 'contacts') headerTitle = '通訊錄';
             if (activeTab === 'discover') headerTitle = '發現';
             if (activeTab === 'me') headerTitle = '我';
@@ -973,6 +982,8 @@
             if (activeId && chats[activeId]) {
                 const c = chats[activeId];
                 headerTitle = c.name + (c.isGroup ? ` (${c.members.length})` : '');
+                // 👤 點標題上的名字也看得到個人檔案（LINE 是點頭像或名字都行）
+                if (!c.isGroup) headerTitleAction = `onclick="const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${String(activeId).replace(/'/g, "\\'")}')" class="wx-header-title wx-header-title-tap"`;
                 const msgs = c.messages;
                 // 📞 通話裡講的話不畫成聊天泡泡。它們跟微信共用同一份記錄（刻意的，AI 才記得
                 //    電話裡說過什麼），但那是另一個管道的東西，鋪在聊天室裡會很怪。
@@ -1042,7 +1053,7 @@
                 <div class="wx-shell${isDark ? ' wx-dark' : ''}" style="${darkShellStyle}">
                     <div class="wx-header" style="${darkHeaderStyle}">
                         <div class="${backBtnClass}" onclick="${backAction}" style="color:${isDark ? '#f0f0f0' : '#000'}">${backBtnText}</div>
-                        <div class="wx-header-title" style="color:${isDark ? '#f0f0f0' : '#000'}">${headerTitle}</div>
+                        <div ${headerTitleAction} style="color:${isDark ? '#f0f0f0' : '#000'}">${headerTitle}</div>
                         ${headerRightBtn}
                     </div>
                     <div class="wx-page-container">
