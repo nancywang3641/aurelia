@@ -297,6 +297,10 @@
 /* 🔌 分流表與通道清單（設置 → API 最下面） */
 .set-row-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(26,28,40,0.08); }
 .set-row-line:last-child { border-bottom: none; }
+/* 自訂接口的底詞包：下拉＋存成包＋刪，一排；下拉吃剩下的寬 */
+.capi-pack-row { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; }
+.capi-pack-row .set-select { flex: 1; min-width: 0; padding: 8px 10px; }
+.capi-pack-row .set-btn { flex-shrink: 0; white-space: nowrap; }
 .set-row-name { font-size: 13px; color: #1A1C28; white-space: nowrap; }
 .set-row-sel { max-width: 55%; }
 .set-channel { border: 1px solid rgba(26,28,40,0.12); border-radius: 6px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }

@@ -20,6 +20,24 @@
     const LLM_STORAGE_KEY = 'os_global_config';
     const SEC_LLM_STORAGE_KEY = 'os_secondary_llm_config';
     const IMG_STORAGE_KEY = 'os_image_config';
+    // 🎨 自訂接口的底詞包：[{ id, name, text }]。🚨 故意不放進 os_image_config.customApi——
+    //    底部「儲存」會照畫面上那幾格整個重組 customApi，放裡面就會被那一下整份蓋掉。
+    //    自己一個鍵，存包／刪包當下就寫，不必再按儲存。用 id 當身分，名字只是給人看的（ComfyUI 那套吃過名字＝身分的虧）。
+    const CAPI_PACKS_KEY = 'os_img_capi_base_packs';
+    function _capiPacks() {
+        try { const v = JSON.parse(localStorage.getItem(CAPI_PACKS_KEY) || '[]'); return Array.isArray(v) ? v.filter(p => p && p.id) : []; }
+        catch (e) { return []; }
+    }
+    function _capiPacksSave(list) { try { localStorage.setItem(CAPI_PACKS_KEY, JSON.stringify(list || [])); } catch (e) {} }
+    function _capiEsc(x) { return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    // 下拉的選項：底詞格裡現在的字剛好等於哪一包，就停在那一包
+    function _capiPackOptionsHTML(currentText, pickId) {
+        const cur = String(currentText || '').trim();
+        const packs = _capiPacks();
+        const on = pickId || ((packs.find(p => String(p.text || '').trim() === cur) || {}).id) || '';
+        return '<option value="">' + (packs.length ? '底詞包…' : '還沒有底詞包') + '</option>' +
+            packs.map(p => '<option value="' + _capiEsc(p.id) + '"' + (p.id === on ? ' selected' : '') + '>' + _capiEsc(p.name) + '</option>').join('');
+    }
     const MINIMAX_STORAGE_KEY = 'os_minimax_config';
     
     // --- 讀取 LLM 設置 ---
@@ -1671,6 +1689,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label" title="選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。">底詞</div>
+                                        <div class="capi-pack-row">
+                                            <select class="set-select" id="img-capi-pack" title="換一包就把那一包的底詞填進下面這格，當下就生效">${_capiPackOptionsHTML(imgConfig.customApi?.basePrompt || '')}</select>
+                                            <button class="set-btn" id="img-capi-pack-save" type="button" title="把下面這格現在的字存成一包"><i class="fa-solid fa-floppy-disk"></i> 存成包</button>
+                                            <button class="set-btn" id="img-capi-pack-del" type="button" title="刪掉選中的那一包（下面這格的字不會動）"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
                                         <textarea class="set-textarea" id="img-capi-base" placeholder="每張圖都要帶的固定描述，例如畫風">${(imgConfig.customApi?.basePrompt || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
                                     </div>
                                     <div class="field-row">
@@ -2789,6 +2812,74 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elTavGroup      = container.querySelector('#img-group-tavernsd');
         const elCfdGroup      = container.querySelector('#img-group-comfyui');
         const elCapiGroup     = container.querySelector('#img-group-customapi');
+
+        // 🎨 自訂接口的底詞包：換包＝把那包的字填進底詞格，而且當下寫進設定（不必再按儲存，免得她以為換了其實沒存）
+        const _capiAUI = () => (window.parent && window.parent.AUI) || window.AUI;
+        const _capiSay = (msg) => { const el = container.querySelector('#img-capi-status'); if (el) el.textContent = msg; };
+        const _capiRefill = (pickId) => {
+            const sel = container.querySelector('#img-capi-pack');
+            const ta = container.querySelector('#img-capi-base');
+            if (sel) sel.innerHTML = _capiPackOptionsHTML(ta ? ta.value : '', pickId);
+        };
+        const _capiApplyBase = (text) => {
+            const ta = container.querySelector('#img-capi-base');
+            if (ta) ta.value = text;
+            try {
+                const saved = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
+                saved.customApi = Object.assign({}, saved.customApi || {}, { basePrompt: text });
+                localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(saved));
+            } catch (e) {}
+            try {
+                const IM = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
+                if (IM && IM.config) IM.config.customApi = Object.assign({}, IM.config.customApi || {}, { basePrompt: text });
+            } catch (e) {}
+        };
+        container.addEventListener('change', function (ev) {
+            const sel = ev.target && ev.target.closest && ev.target.closest('#img-capi-pack');
+            if (!sel) return;
+            const p = _capiPacks().find(x => x.id === sel.value);
+            if (!p) return;
+            _capiApplyBase(String(p.text || ''));
+            _capiSay('換成「' + p.name + '」了');
+        });
+        container.addEventListener('click', async function (ev) {
+            const saveBtn = ev.target && ev.target.closest && ev.target.closest('#img-capi-pack-save');
+            const delBtn = ev.target && ev.target.closest && ev.target.closest('#img-capi-pack-del');
+            if (!saveBtn && !delBtn) return;
+            const A = _capiAUI();
+            const sel = container.querySelector('#img-capi-pack');
+            const packs = _capiPacks();
+            if (saveBtn) {
+                const text = (container.querySelector('#img-capi-base')?.value || '').trim();
+                if (!text) { _capiSay('底詞格是空的，沒東西可以存'); return; }
+                const curPack = packs.find(x => x.id === (sel && sel.value));
+                const name = A && A.prompt ? await A.prompt('這包底詞叫什麼', curPack ? curPack.name : '') : '';
+                if (name == null) return;
+                const n = String(name).trim();
+                if (!n) return;
+                const same = packs.find(x => x.name === n);
+                if (same) {
+                    if (A && A.confirm && !(await A.confirm('已經有一包叫「' + n + '」，要用現在這格的字蓋掉它嗎？'))) return;
+                    same.text = text;
+                    _capiPacksSave(packs);
+                    _capiRefill(same.id);
+                    _capiSay('「' + n + '」更新了');
+                } else {
+                    const p = { id: 'capi_' + Date.now().toString(36), name: n, text: text };
+                    packs.push(p);
+                    _capiPacksSave(packs);
+                    _capiRefill(p.id);
+                    _capiSay('存成「' + n + '」了');
+                }
+                return;
+            }
+            const p = packs.find(x => x.id === (sel && sel.value));
+            if (!p) { _capiSay('先在左邊選要刪哪一包'); return; }
+            if (A && A.confirm && !(await A.confirm('刪掉底詞包「' + p.name + '」？底詞格裡現在的字不會動。'))) return;
+            _capiPacksSave(packs.filter(x => x.id !== p.id));
+            _capiRefill('');
+            _capiSay('「' + p.name + '」刪掉了');
+        });
 
         // 自訂接口「測試」：用畫面上當下的三格去打一張小圖，不必先按儲存。
         // 錯誤原文直接寫在鈕下面 —— 接口填錯八成是網址少一段或型號名不對，要看得到才改得動。
