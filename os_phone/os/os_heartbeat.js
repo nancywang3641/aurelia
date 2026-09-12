@@ -99,6 +99,7 @@
                 function (text) { win.wxApp.applyIncoming(chat, text).then(function () { resolve(true); }); },
                 function (err) { console.warn('[心跳] 生成失敗:', err); resolve(false); },
                 {
+                    task: 'heartbeat',
                     disableTyping: true,
                     relayJob: { app: 'wx', kind: KIND, chatId: chat.id, title: chat.name || '',
                         notify: { title: chat.name || '微信', useResult: true, url: './', tag: 'hb-' + chat.id } },

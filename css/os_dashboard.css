@@ -167,11 +167,9 @@
     padding: 8px 14px; background: #fdfdfc; border: 1px solid rgba(42, 74, 128, .28); border-radius: 24px;
     font-size: 13.5px; letter-spacing: .06em;
 }
-.dsh-sel {
-    width: 100%; padding: 5px 9px; border: 1px solid rgba(42, 74, 128, .35); border-radius: 6px;
-    background: #ffffff !important; color: #1f3a68 !important; font-family: inherit; font-size: 13px;
-    height: auto; cursor: pointer;
-}
+/* 走哪一條：只給看的值（改在設置 → API → 通道） */
+.dsh-route-v { text-align: right; color: #2a4a80; font-weight: 700; letter-spacing: .06em; overflow-wrap: anywhere; }
+.dsh-route-v.off { color: #8b97ae; font-weight: 400; font-size: 12.5px; }
 
 .dsh-chans { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .dsh-chan {
@@ -185,7 +183,6 @@
 .dsh-chan-meta { font-size: 12px; color: #46639b; word-break: break-all; line-height: 1.7; }
 .dsh-chan-meta b { color: #1f3a68 !important; font-weight: 700; text-shadow: none !important; }
 .dsh-chan-use { font-size: 12.5px; color: #7d8aa6; }
-.dsh-chan-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
 
 .dsh-btn {
     padding: 5px 15px; background: #fdfdfc; border: 1px solid rgba(42, 74, 128, .45); border-radius: 18px;
@@ -251,30 +248,6 @@
 .dsh-msg.warn { color: #8a6a2f; }
 .dsh-msg.info { color: #2a5f8a; }
 
-/* ── 小抽屜（新增／編輯通道）── */
-.dsh-sheet {
-    position: fixed; inset: 0; z-index: 99995; display: flex; align-items: center; justify-content: center;
-    background: rgba(10, 13, 20, .55); padding: 20px; box-sizing: border-box;
-}
-.dsh-sheet-card {
-    width: 430px; max-width: 100%; max-height: 86vh; overflow: auto;
-    background: linear-gradient(178deg, #ffffff 0%, #f6f8fc 100%);
-    border: 1.5px solid rgba(42, 74, 128, .5); border-radius: 10px; padding: 20px 22px;
-    display: flex; flex-direction: column; gap: 11px;
-    font-family: 'Noto Serif TC', 'Source Han Serif TC', serif; color: #1f3a68;
-    box-shadow: 0 14px 40px rgba(31, 58, 104, .42);
-}
-.dsh-sheet-h { font-size: 17px; font-weight: 700; letter-spacing: .2em; color: #1f3a68 !important; text-shadow: none !important; }
-.dsh-field { display: flex; flex-direction: column; gap: 4px; }
-.dsh-field span { font-size: 12px; color: #46639b; letter-spacing: .1em; }
-.dsh-field small { font-size: 11px; color: #8b97ae; }
-.dsh-input {
-    width: 100%; box-sizing: border-box; padding: 7px 10px;
-    border: 1px solid rgba(42, 74, 128, .35); border-radius: 6px;
-    background: #ffffff !important; color: #1f3a68 !important; font-family: inherit; font-size: 13px;
-}
-.dsh-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
 .dsh-hide { display: none !important; }
 
 /* ── 手機 ── */
@@ -291,7 +264,6 @@
     .dsh-spark { height: 96px; gap: 4px; }
     .dsh-spark-lbl { font-size: 9px; }
     .dsh-log-model { max-width: 120px; }
-    .dsh-two { grid-template-columns: 1fr; }
 }
 
 /* ── 複製的第三層退路：都不行時彈出來讓她自己按 Ctrl+C ── */

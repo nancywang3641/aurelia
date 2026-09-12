@@ -2200,7 +2200,7 @@
                         self._fillStorySyncStatus();
                         try { tr && tr.success('整理完成：把 ' + merged + ' 個重複 id 收斂進 ' + groups.length + ' 間', '發現'); } catch (e) {}
                     } catch (e) { try { tr && tr.error('整理失敗：AI 回傳格式不對', '發現'); } catch (e2) {} console.warn('[發現整理] 解析失敗:', e, resp); }
-                }, function (err) { try { tr && tr.error('整理失敗：' + ((err && err.message) || err), '發現'); } catch (e) {} });
+                }, function (err) { try { tr && tr.error('整理失敗：' + ((err && err.message) || err), '發現'); } catch (e) {} }, { task: 'extract', label: '聊天室 id 整理' });
             } catch (e) { try { tr && tr.error('整理失敗：' + ((e && e.message) || e), '發現'); } catch (e2) {} }
         },
 
@@ -2825,6 +2825,7 @@
                             console.error('[WX] API 錯誤:', error);
                         },
                         {
+                            task: 'phone_chat',   // 控制台的記錄頁靠它顯示是哪件事（沒帶就是一整排「沒標」）
                             disableTyping: apiConfig.disableTyping !== false,
                             // 📡 開了「回覆交給伺服器跑」就把這一輪丟給伺服器：手機可以切出去、鎖屏，
                             //    好了推一則通知，回來時 OS_RELAY 把結果收回來走 _applyRelayReply。

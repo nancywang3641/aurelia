@@ -604,7 +604,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             allSecs.forEach(secs => secs.forEach(s => { if (!headerOrder.includes(s.header)) headerOrder.push(s.header); }));
             const KEEPFIRST = ['故事標題', '故事标题'], TAKELAST = ['結語', '结语', '場景索引', '场景索引'];
             const bodiesOf = (h) => allSecs.map(secs => { const s = secs.find(x => x.header === h); return s ? s.body : null; }).filter(b => b != null && b !== '');
-            const aiChat = (pr) => new Promise((res, rej) => { let g = ''; osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: pr }], osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { disableTyping: true }); });
+            const aiChat = (pr) => new Promise((res, rej) => { let g = ''; osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: pr }], osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { task: 'summary', label: '總結重壓', disableTyping: true }); });
 
             // 角色表/關係圖譜 → 程式先合出「完整版」(一個都不少)，等下強制蓋回 AI 輸出，保證不漏角色
             const PRESERVE = ['角色表', '關係圖譜', '关系图谱'];
@@ -1486,7 +1486,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 out = await new Promise((res, rej) => {
                     let g = '';
                     osApi.chatSecondary([{ role: 'system', content: sys }, { role: 'user', content: usr }],
-                        (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { disableTyping: true });
+                        (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { task: 'illust', label: '補頭像 tag', disableTyping: true });
                 });
             } catch (e) { console.warn('[補頭像] 副模型轉 tag 失敗:', e?.message || e); _fillingAvatars = false; return; }
 

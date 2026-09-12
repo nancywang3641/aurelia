@@ -2067,7 +2067,7 @@ ${facilityText}
             //   舊環境沒 chatSecondary 才退回主模型
             const _dispatch = (typeof win.OS_API.chatSecondary === 'function')
                 ? (onFin) => win.OS_API.chatSecondary(messages, null, onFin, null, { task: 'map' })
-                : (onFin) => win.OS_API.chat(messages, (win.OS_SETTINGS.getConfigFor ? win.OS_SETTINGS.getConfigFor('map') : win.OS_SETTINGS.getConfig()), null, onFin);
+                : (onFin) => win.OS_API.chat(messages, (win.OS_SETTINGS.getConfigFor ? win.OS_SETTINGS.getConfigFor('map') : win.OS_SETTINGS.getConfig()), null, onFin, null, { task: 'map' });
             _dispatch(async (txt) => {
                 let chars = [];
                 let intro = [];

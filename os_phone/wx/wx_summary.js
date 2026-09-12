@@ -175,7 +175,7 @@
                     null,
                     function (txt) { resolve(String(txt || '')); },
                     function (err) { reject(err || new Error('副模型沒有回應')); },
-                    { label: label || '聊天室記憶整理', stream: _stream }
+                    { task: 'summary', label: label || '聊天室記憶整理', stream: _stream }
                 );
             } catch (e) { reject(e); }
         });

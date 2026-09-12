@@ -23,6 +23,12 @@
 
     // ── 副/主模型輸出記錄環形緩衝（DEBUG 面板「副模型」「主模型」TAB 讀；每次呼叫存 prompt／原始輸出／狀態／耗時）──
     win.AURELIA_API_LOG = win.AURELIA_API_LOG || [];     // 🔥 全局：中央 chat 記「所有」文字呼叫(rec.cat=main/sec/aux + rec.route 用途)
+    // 誰想跟著這份記錄動就掛在這裡（控制台的記錄頁靠它「新的來一筆就補一筆」，不是每幾秒整頁重畫）
+    win.AURELIA_API_LOG_HOOKS = win.AURELIA_API_LOG_HOOKS || [];
+    function _apiLogFire(kind, rec) {
+        const hs = win.AURELIA_API_LOG_HOOKS || [];
+        for (let i = 0; i < hs.length; i++) { try { hs[i](kind, rec); } catch (e) {} }
+    }
     const SEC_LOG_MAX = 120;
     let _secSeq = 0;
     function _apiLogStart(arr, messages) {
@@ -44,6 +50,7 @@
             arr.push(rec);
             while (arr.length > SEC_LOG_MAX) arr.shift();
         } catch (e) {}
+        _apiLogFire('start', rec);
         return rec;
     }
     function _secLogEnd(rec, ok, payload) {
@@ -52,6 +59,7 @@
         rec.ms = Date.now() - rec.t;
         if (ok) rec.raw = (typeof payload === 'string') ? payload : '';
         else rec.err = (payload && payload.message) ? payload.message : String(payload);
+        _apiLogFire('end', rec);
     }
     // token 估算：優先用酒館 tokenizer；PWA/取不到 → 粗估(CJK≈1字1token、其餘≈4字1token)。非阻塞。
     async function _estTok(text) {
@@ -669,7 +677,7 @@
                 _rec.route = (config && config.route) || (options && options.label) || '';
                 _rec.task = (options && options.task) || '';   // 控制台的記錄頁拿它顯示中文的任務名
                 _rec.inTok = null; _rec.outTok = null;   // token 估算(非阻塞，算完面板下次刷新即顯示)
-                const _inP = _estTok(_msgsText(messages)).then(n => { _rec.inTok = n; return n; }).catch(() => 0);
+                const _inP = _estTok(_msgsText(messages)).then(n => { _rec.inTok = n; _apiLogFire('tok', _rec); return n; }).catch(() => 0);
                 _useInP = _inP;
                 // 📊 同一筆也交給用量記錄層存進 IndexedDB（環形緩衝關掉就沒了，這份要長期留著算每天用多少）
                 _useRec = win.OS_USAGE ? win.OS_USAGE.start({
@@ -687,7 +695,7 @@
                 onFinish = (text) => {
                     try {
                         _secLogEnd(_rec, true, text);
-                        const _outP = _estTok(text).then(n => { _rec.outTok = n; return n; }).catch(() => 0);
+                        const _outP = _estTok(text).then(n => { _rec.outTok = n; _apiLogFire('tok', _rec); return n; }).catch(() => 0);
                         if (_use) Promise.all([_inP, _outP]).then(v => win.OS_USAGE.end(_use, { ok: true, inTok: v[0], outTok: v[1], ms: _rec.ms })).catch(() => {});
                     } catch (e) {}
                     if (_of) _of(text);
