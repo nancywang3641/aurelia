@@ -170,12 +170,18 @@
     //    模型自己打不開網址，只看到一串字，還常照網址裡的字編一段假裝看過——所以送出前程式先替它讀。
     //    讀網頁走 Jina Reader：網址前面接 r.jina.ai/，回整頁純文字，而且允許網頁直接呼叫，
     //    PWA（沒有伺服器）跟酒館版都能用同一條。讀過的結果存在那則訊息的 linkReads 上，
-    //    同一個網址不會每輪重抓；最近幾個讀過的每輪都帶，聊到後面也還記得內容。
+    //    同一個網址不會每輪重抓。
+    //    🚨 網頁全文**只送一次**（跟相簿照片、頭像同一套）：那一輪要它單獨一行寫回這頁在講什麼，
+    //    存成 summary，之後每輪只帶那一兩行。以前是每輪把最近 3 篇全文（各 2500 字）重新推一次
+    //    system 進去，聊到後面每一輪都在重付這筆字數，模型也會覺得同一段一直重複出現。
     const LINK_READER = 'https://r.jina.ai/';
     const LINK_RE = /https?:\/\/[^\s<>"'\]\[（）【】「」『』，。！？、]+/gi;
-    const LINK_TEXT_MAX = 2500;   // 每個網頁給模型的字數
+    const LINK_TEXT_MAX = 2500;   // 第一次給模型看的全文字數
+    const LINK_SUM_MAX = 400;     // 之後每輪只帶這麼多字的重點
     const LINK_KEEP = 3;          // 帶最近幾個網址
     const LINK_TIMEOUT = 15000;
+    const LINK_TRIES = 2;         // 它沒寫回重點的話，最多再給一次全文
+    let _linkBatch = [];          // 這一輪給了全文的那幾個（照順序＝它回的編號）
 
     function _linksIn(text) { return Array.from(new Set(String(text || '').match(LINK_RE) || [])); }
 
@@ -217,8 +223,10 @@
         console.log('[WX] 讀了 ' + todo.length + ' 個連結，成功 ' + results.filter(function (r) { return r.ok; }).length + ' 個');
     }
 
-    // 給模型看的那段：最近讀過的網址＋內容；打不開的也講明，免得它假裝看過
+    // 給模型看的那段：已經有重點的只帶重點，這一輪才第一次看到的才給全文並要它寫回重點。
+    // 打不開的照樣講明，免得它假裝看過。
     function _linkBrief(chat, userName) {
+        _linkBatch = [];
         if (!chat || !chat.readLinks) return '';
         const reads = [];
         (chat.messages || []).forEach(function (m) {
@@ -227,11 +235,37 @@
         const recent = reads.slice(-LINK_KEEP);
         if (!recent.length) return '';
         const who = userName || '對方';
-        const parts = recent.map(function (r) {
-            if (!r.ok) return '〔' + r.url + '〕\n這個網頁打不開（可能要登入或被擋），你看不到內容，別假裝看過。';
-            return '〔' + r.url + '〕' + (r.title ? '\n標題：' + r.title : '') + '\n' + r.text;
+        const parts = [];
+        const fresh = [];
+        recent.forEach(function (r) {
+            if (!r.ok) { parts.push('〔' + r.url + '〕\n這個網頁打不開（可能要登入或被擋），你看不到內容，別假裝看過。'); return; }
+            // 要過兩次它都沒寫回來，就自己截前面一段當重點——全文不能一直重送
+            if (!r.summary && (r.tries || 0) >= LINK_TRIES) r.summary = String(r.text || '').slice(0, LINK_SUM_MAX);
+            if (r.summary) { parts.push('〔' + r.url + '〕' + (r.title ? '\n標題：' + r.title : '') + '\n重點：' + r.summary); return; }
+            fresh.push(r);
         });
-        return ['【' + who + '在這個聊天室傳過的連結｜程式已經替你打開，下面是網頁上的內容】'].concat(parts).join('\n\n');
+        fresh.forEach(function (r, i) {
+            r.tries = (r.tries || 0) + 1;
+            _linkBatch.push(r);
+            parts.push('〔網頁 ' + (i + 1) + '｜' + r.url + '〕' + (r.title ? '\n標題：' + r.title : '') + '\n' + r.text);
+        });
+        let tail = '';
+        if (_linkBatch.length) {
+            const n = _linkBatch.length;
+            tail = '\n\n（標了「網頁 編號」的那' + (n > 1 ? ' ' + n + ' 段' : '一段') + '全文只給你看這一次。看完在回覆的最後，'
+                 + (n > 1 ? '每個各' : '') + '單獨一行寫：[系統: 網頁 ' + (n > 1 ? '編號' : '1') + ' 這頁在講什麼]，'
+                 + '之後每輪只會再給你這句。那一行不會變成聊天訊息。）';
+        }
+        return ['【' + who + '在這個聊天室傳過的連結｜程式已經替你打開，下面是網頁上的內容】'].concat(parts).join('\n\n') + tail;
+    }
+    // 它寫回來的那句重點 → 存到那個連結上，之後只送這句
+    function _rememberLink(num, desc) {
+        const d = String(desc || '').trim().slice(0, LINK_SUM_MAX);
+        if (!d || !_linkBatch.length) return false;
+        const r = (num >= 1 && num <= _linkBatch.length) ? _linkBatch[num - 1] : _linkBatch.find(function (x) { return !x.summary; });
+        if (!r) return false;
+        r.summary = d;
+        return true;
     }
 
     // 📷 她從相簿傳的照片：跟「讓角色看我的頭像」同一套——圖只送一次。
@@ -596,6 +630,13 @@
         const photoSeenMatch = content.match(/^\s*(?:照片|相片)\s*(\d+)?\s*[:：]?\s*(.+)$/);
         if (photoSeenMatch) {
             try { _rememberPhoto(ctx.chatId, parseInt(photoSeenMatch[1], 10), String(photoSeenMatch[2] || '').replace(/\]+\s*$/, '').trim()); } catch (e) {}
+            return { type: 'system', content: '', isMe: false };
+        }
+
+        // 🔗 它看完程式替它打開的網頁寫回來的重點：[系統: 網頁 1 …] → 存到那個連結上，之後只送這句（見 _linkBrief）
+        const linkSeenMatch = content.match(/^\s*(?:網頁|网页)\s*(\d+)?\s*[:：]?\s*(.+)$/);
+        if (linkSeenMatch) {
+            try { _rememberLink(parseInt(linkSeenMatch[1], 10), String(linkSeenMatch[2] || '').replace(/\]+\s*$/, '').trim()); } catch (e) {}
             return { type: 'system', content: '', isMe: false };
         }
 
