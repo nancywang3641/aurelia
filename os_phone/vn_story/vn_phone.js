@@ -44,6 +44,9 @@
             this.chatOwner = (line.match(/\bowner\s*=\s*"([^"]*)"/)?.[1] || '').trim();
             // AI 在主角狀態裡自己寫的主角名（常是簡體、不帶星號，跟人設名對不上）也算「我」
             try { const M = win.OS_MC_STATUS; if (M && M.load) M.load().then(st => { this._mcAlias = (st && st.name) ? String(st.name).trim() : ''; }).catch(() => {}); } catch (e) {}
+            // 🚨 畫面上不准出現協議字串：AI 常把 chatroom 寫成 msg_chen、grp_01 這種代號（她：「很無語」）。
+            //    代號就先掛著，等下一行 [With: …] 進來再換成人名（見下面 _titleFromWith）。
+            this._roomSlug = /^[A-Za-z0-9_\-.]+$/.test(newName) ? newName : '';
             document.getElementById('chat-title').innerText = newName;       // 標題永遠顯示房名（給玩家看）
 
             if (newKey !== this.currentChatroom) {
@@ -104,6 +107,7 @@
             if (line.startsWith('[With:')) {
                 this.chatParticipants = line.slice(6, -1).split(',').map(s => s.trim()).filter(Boolean);
                 this.isGroupChat = this.chatParticipants.length > 2;
+                if (this._roomSlug) this._titleFromWith();
                 core.next(); return;
             }
             if (line.startsWith('[Time]') || line.match(/^\[Time[：:]/i)) {
@@ -257,6 +261,25 @@
             const palette = ['#fa9d3b','#3b97fa','#2ecc71','#9b59b6','#e74c3c','#1abc9c','#e67e22','#34495e'];
             let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
             return palette[Math.abs(h) % palette.length];
+        },
+
+        // chatroom 是代號的時候，標題拿 [With] 裡的人名頂上：私聊＝對方那一個，群＝前兩個＋…
+        _titleFromWith: function () {
+            const el = document.getElementById('chat-title');
+            if (!el) return;
+            const mc = (win.OS_PERSONA && win.OS_PERSONA.getName && win.OS_PERSONA.getName())
+                || (win.OS_API && win.OS_API.getGlobalUserName && win.OS_API.getGlobalUserName()) || '';
+            const bare = function (x) { return String(x || '').replace(/^[*＊_]+|[*＊_]+$/g, '').trim(); };
+            const self = this;
+            const others = (this.chatParticipants || []).filter(function (n) {
+                if (/^(You|主角|我|User|Self|Me)$/i.test(n)) return false;
+                if (mc && mc !== 'User' && (n === mc || bare(n) === bare(mc))) return false;
+                if (self._mcAlias && (n === self._mcAlias || bare(n) === bare(self._mcAlias))) return false;
+                return true;
+            });
+            if (!others.length) return;
+            el.innerText = others.length === 1 ? others[0]
+                : (others.slice(0, 2).join('、') + (others.length > 2 ? ' 等 ' + others.length + ' 人' : ''));
         },
 
         _buildChatBubbleHTML: function(sender, content, isMe, core, quote) {
