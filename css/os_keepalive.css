@@ -1,0 +1,60 @@
+/* ================================================================
+   os_keepalive.css —— 後台守候（設置 → 一般 → 後台）
+   只放這支自己的東西：藏起來的音訊/影片、狀態列、支援與否的提示。
+   開關列、按鈕沿用設置頁的 .set-label / .toggle-switch / .btn-test。
+   ================================================================ */
+
+/* 靜音音訊與畫中畫的來源影片：要真的在頁面上才播得動，但不能被看到 */
+.ka-hidden-media {
+    position: fixed;
+    left: -9999px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 現在到底有沒有在守：一行講完 */
+.ka-state {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: rgba(26, 28, 40, 0.06);
+    border: 1px solid rgba(26, 28, 40, 0.12);
+    font-size: 12px;
+    line-height: 1.9;
+    color: #1A1C28;
+}
+.ka-state b { font-weight: 800; color: #1A1C28; }
+.ka-state .on { color: #2f6b4f; font-weight: 800; }
+.ka-state .off { color: rgba(26, 28, 40, 0.5); }
+
+/* 這台不支援的那一招：整列淡掉、開關不給按 */
+.ka-unsupported { opacity: .45; }
+.ka-unsupported .toggle-switch { pointer-events: none; }
+.ka-why {
+    font-size: 11px;
+    color: rgba(26, 28, 40, 0.6);
+    margin-top: 4px;
+}
+
+.ka-btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.ka-btns > * { flex: 1 1 130px; }
+
+/* 狀態列：一行一件事，數字/狀態靠右自己一格（不要串成一行 log） */
+.ka-state-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    padding: 4px 0;
+}
+.ka-state-row + .ka-state-row { border-top: 1px solid rgba(26, 28, 40, 0.08); }
+.ka-state-row > span:first-child { color: rgba(26, 28, 40, 0.62); }
+.ka-note {
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(26, 28, 40, 0.12);
+    color: #1A1C28;
+}

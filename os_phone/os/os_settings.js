@@ -2173,7 +2173,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                     <!-- ── 一般：酒館那兩格 + 素材目錄與章節（由 vn_settings.js 提供） ── -->
                     <div id="view-vn" class="tab-view hidden">
-                        <div class="set-group"${stHide}>
+                        <!-- 一般裡面本來四件不相干的事全疊在一頁（酒館面板、素材目錄、上下文、後台），
+                             切成小分頁；面板那頁只有酒館有，後台那頁只有手機版有，所以兩顆各自會藏。 -->
+                        <div class="api-subtab-row">
+                            <div class="api-subtab gen-subtab" data-gentab="panel"${stHide}>面板</div>
+                            <div class="api-subtab gen-subtab" data-gentab="asset">素材</div>
+                            <div class="api-subtab gen-subtab" data-gentab="ctx">上下文</div>
+                            <div class="api-subtab gen-subtab" data-gentab="back"${!isStandalone ? ' style="display:none"' : ''}>後台</div>
+                        </div>
+
+                        <div id="gview-panel" class="gen-subview"${stHide}>
+                        <div class="set-group">
                             <div class="set-label"><i class="fa-solid fa-chess-rook"></i> 顯示位置</div>
                             <select class="set-select" id="mp-mount-selector">
                                 <option value="#sheld" ${(tavernExt.mount?.selector || '#sheld') === '#sheld' ? 'selected' : ''}>整個對話框（推薦）</option>
@@ -2189,15 +2199,76 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-desc">100 就是跟對話框一樣高。調矮的話窗留在正中間，上下兩截露出聊天，改完當場就變。</div>
                         </div>
 
-                        <div class="set-group"${stHide}>
+                        <div class="set-group">
                             <div class="set-label">
                                 <span><i class="fa-solid fa-file-lines"></i> 訊息可收合</span>
                                 <label class="toggle-switch"><input type="checkbox" id="mp-message-collapse" ${tavernExt.messageCollapse !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc">為每則訊息加上收合按鈕，太長的訊息可以收起來。</div>
                         </div>
+                        </div><!-- /gview-panel -->
 
-                        ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getHTML() : '<div class="set-desc" style="padding:20px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> vn_settings.js 尚未載入</div>'}
+                        <div id="gview-asset" class="gen-subview" style="display:none;">
+                        ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getAssetHTML() : '<div class="set-desc" style="padding:20px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> vn_settings.js 尚未載入</div>'}
+                        </div>
+
+                        <div id="gview-ctx" class="gen-subview" style="display:none;">
+                        ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getCtxHTML() : '<div class="set-desc" style="padding:20px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> vn_settings.js 尚未載入</div>'}
+                        </div>
+
+                        <div id="gview-back" class="gen-subview" style="display:none;">
+                        <div class="set-group" id="relay-group">
+                            <div class="set-label"><i class="fa-solid fa-satellite-dish"></i> 回覆交給伺服器跑</div>
+                            <div class="set-desc">開了之後按送出就可以切出去或鎖屏，回覆由伺服器跑完再通知妳。只對「直連 API」有效，跟著酒館的那種不行。</div>
+                            <input class="set-input" id="relay-url" placeholder="托管網址，例如 relay.你的網域" />
+                            <input class="set-input" id="relay-token" type="password" placeholder="通行碼" style="margin-top:8px;" />
+                            <div style="display:flex; gap:8px; margin-top:10px;">
+                                <div class="btn-save" id="relay-save-btn" style="flex:1; padding:12px; font-size:13px;">開啟並測試</div>
+                                <div class="btn-test" id="relay-off-btn" style="flex:1; padding:12px; font-size:13px;">關掉</div>
+                            </div>
+                            <div id="relay-state" style="font-size:12px; color:#1A1C28; margin-top:8px;">還沒開。</div>
+                        </div>
+
+                            <div class="set-group" id="ka-group">
+                                <div class="set-label"><i class="fa-solid fa-mug-saucer"></i> 沒有伺服器的守候</div>
+                                <div class="set-desc">沒填上面那個網址的時候用這個：想辦法讓手機別把奧瑞亞凍起來，角色才會在妳沒看的時候開口。三招各自獨立，開一個就有效果。這台做不到的那一招會自己淡掉。</div>
+
+                                <div class="ka-item" id="ka-item-audio">
+                                    <div class="set-label" style="margin-top:12px;">
+                                        <span><i class="fa-solid fa-music"></i> 當成在放音樂</span>
+                                        <label class="toggle-switch"><input type="checkbox" id="ka-audio"><span class="slider"></span></label>
+                                    </div>
+                                    <div class="set-desc">播一段完全沒有聲音的音軌，手機就會把奧瑞亞當成音樂 app 留著，鎖屏還會出現一張播放卡。<b>妳自己正在放的音樂會被停掉。</b></div>
+                                </div>
+
+                                <div class="ka-item" id="ka-item-wake">
+                                    <div class="set-label" style="margin-top:12px;">
+                                        <span><i class="fa-solid fa-lightbulb"></i> 螢幕不要自己關</span>
+                                        <label class="toggle-switch"><input type="checkbox" id="ka-wake"><span class="slider"></span></label>
+                                    </div>
+                                    <div class="set-desc">畫面亮著的時候不讓它自動暗掉，同時讓背景的計時器繼續走。比較耗電。</div>
+                                    <div class="ka-why hidden" id="ka-why-wake">這台做不到這一招</div>
+                                </div>
+
+                                <div class="ka-item" id="ka-item-pip">
+                                    <div class="set-label" style="margin-top:12px;"><span><i class="fa-solid fa-clone"></i> 開一個小窗守著</span></div>
+                                    <div class="set-desc">推出一個浮在最上面的小窗，上面寫著已經守了多久。小窗還在，這一頁就不會被凍起來。</div>
+                                    <div class="ka-btns"><div class="btn-test" id="ka-pip-btn">開小窗</div></div>
+                                    <div class="ka-why hidden" id="ka-why-pip">這台做不到這一招</div>
+                                </div>
+
+                                <div class="ka-item" id="ka-item-notify">
+                                    <div class="set-label" style="margin-top:12px;">
+                                        <span><i class="fa-solid fa-bell"></i> 有人找妳就通知</span>
+                                        <label class="toggle-switch"><input type="checkbox" id="ka-notify"><span class="slider"></span></label>
+                                    </div>
+                                    <div class="set-desc">妳沒在看的時候有人開口，就在手機上叮一下。第一次打開會問妳要不要允許通知。</div>
+                                    <div class="ka-why hidden" id="ka-why-notify">這台做不到這一招</div>
+                                </div>
+
+                                <div class="ka-state" id="ka-state">—</div>
+                            </div>
+                        </div><!-- /gview-back -->
                     </div>
 
                     <div id="view-sys" class="tab-view hidden">
@@ -2216,18 +2287,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                             <div class="btn-test push-off" id="push-off-btn">關掉通知</div>
                             <div class="push-state" id="push-state">還沒開。</div>
-                        </div>
-
-                        <div class="set-group" id="relay-group">
-                            <div class="set-label"><i class="fa-solid fa-satellite-dish"></i> 回覆交給伺服器跑</div>
-                            <div class="set-desc">開了之後按送出就可以切出去或鎖屏，回覆由伺服器跑完再通知妳。只對「直連 API」有效，跟著酒館的那種不行。</div>
-                            <input class="set-input" id="relay-url" placeholder="托管網址，例如 relay.你的網域" />
-                            <input class="set-input" id="relay-token" type="password" placeholder="通行碼" style="margin-top:8px;" />
-                            <div style="display:flex; gap:8px; margin-top:10px;">
-                                <div class="btn-save" id="relay-save-btn" style="flex:1; padding:12px; font-size:13px;">開啟並測試</div>
-                                <div class="btn-test" id="relay-off-btn" style="flex:1; padding:12px; font-size:13px;">關掉</div>
-                            </div>
-                            <div id="relay-state" style="font-size:12px; color:#1A1C28; margin-top:8px;">還沒開。</div>
                         </div>
 
                         <div class="set-group">
@@ -4233,6 +4292,97 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             };
             const off = q('relay-off-btn');
             if (off) off.onclick = () => { win.OS_RELAY.setCfg({ on: false }); say('關掉了，回覆改回手機自己跑。'); };
+        })();
+
+        // ── 一般分頁裡的小分頁：面板／素材／上下文／後台 ──
+        //   面板只有酒館有、後台只有手機版有，所以預設停在「第一個看得見的」，不寫死。
+        (function wireGenTabs() {
+            const tabs = Array.prototype.slice.call(container.querySelectorAll('.gen-subtab'));
+            if (!tabs.length) return;
+            const go = function (which) {
+                container.querySelectorAll('.gen-subview').forEach(function (v) {
+                    v.style.display = (v.id === 'gview-' + which) ? '' : 'none';
+                });
+                tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.gentab === which); });
+            };
+            tabs.forEach(function (t) { t.onclick = function () { go(t.dataset.gentab); }; });
+            const first = tabs.find(function (t) { return t.style.display !== 'none'; }) || tabs[0];
+            go(first.dataset.gentab);
+        })();
+
+        // ── 沒有伺服器的守候：三招各自開關 ＋ 通知 ＋ 現在到底有沒有在守 ──
+        (function wireKeepAlive() {
+            const q = function (id) { return container.querySelector('#' + id); };
+            const box = q('ka-group');
+            if (!box || !win.OS_KEEPALIVE) return;
+            const K = win.OS_KEEPALIVE;
+            const caps = K.caps();
+
+            // 這台做不到的那一招：整列淡掉、開關按不動、下面寫一行原因
+            const mark = function (itemId, whyId, ok) {
+                const it = q(itemId);
+                if (it) it.classList.toggle('ka-unsupported', !ok);
+                const w = q(whyId);
+                if (w) w.classList.toggle('hidden', !!ok);
+            };
+            mark('ka-item-wake', 'ka-why-wake', caps.wake);
+            mark('ka-item-pip', 'ka-why-pip', caps.pip);
+            mark('ka-item-notify', 'ka-why-notify', caps.notify);
+
+            const cAudio = q('ka-audio'), cWake = q('ka-wake'), cNotify = q('ka-notify');
+            const cur = K.cfg();
+            if (cAudio) cAudio.checked = !!cur.audio;
+            if (cWake) cWake.checked = !!cur.wake;
+            if (cNotify) cNotify.checked = !!(cur.notify && caps.notify);
+
+            const stateBox = q('ka-state');
+            const pipBtn = q('ka-pip-btn');
+            const row = function (k, on, yes, no) {
+                return '<div class="ka-state-row"><span>' + k + '</span>'
+                     + '<span class="' + (on ? 'on' : 'off') + '">' + (on ? yes : no) + '</span></div>';
+            };
+            const refresh = function () {
+                if (!stateBox) return;
+                const st = K.state();
+                let html = '';
+                if (st.relay) html += '<div class="ka-note">托管開著，切出去那一輪本來就由伺服器跑完，下面這幾招其實用不到。</div>';
+                html += row('當成在放音樂', st.audio, '正在守著',
+                            st.audioWant ? '等妳碰一下畫面才開始' : '沒開');
+                html += row('螢幕不要自己關', st.wake, '鎖著不關',
+                            st.wakeWant ? (caps.wake ? '畫面看不見時系統會收回' : '這台做不到') : '沒開');
+                html += row('小窗', st.pip, '開著', '沒開');
+                html += row('通知', st.notifyPerm === 'granted', '可以叮妳',
+                            st.notifyPerm === 'denied' ? '妳拒絕過，要去手機的設定裡改' : '還沒允許');
+                stateBox.innerHTML = html;
+                if (pipBtn) pipBtn.textContent = st.pip ? '收起小窗' : '開小窗';
+            };
+            refresh();
+
+            if (cAudio) cAudio.onchange = function () { K.setCfg({ audio: cAudio.checked }); refresh(); };
+            if (cWake) cWake.onchange = function () {
+                if (!caps.wake) { cWake.checked = false; return; }
+                K.setCfg({ wake: cWake.checked });
+                refresh();
+            };
+            // 🚨 要權限必須在這個手勢裡直接呼叫，前面不准 await 任何東西（iOS 會判定不是手勢）
+            if (cNotify) cNotify.onchange = function () {
+                if (!cNotify.checked) { K.setCfg({ notify: false }); refresh(); return; }
+                if (!caps.notify) { cNotify.checked = false; return; }
+                K.askNotify().then(function () {
+                    cNotify.checked = !!K.cfg().notify;
+                    refresh();
+                });
+            };
+            if (pipBtn) pipBtn.onclick = function () {
+                if (!caps.pip) return;
+                K.pipToggle().then(refresh);
+            };
+
+            // 開著設置頁的時候讓狀態自己跟上；她離開設置頁、這一塊被拆掉就停
+            const timer = setInterval(function () {
+                if (!container.querySelector('#ka-state')) { clearInterval(timer); return; }
+                refresh();
+            }, 2000);
         })();
 
         // ── 手機通知：只有「加到主畫面」啟動的 PWA 收得到，Safari 分頁不行 ──

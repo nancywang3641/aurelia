@@ -83,8 +83,13 @@
             return data;
         },
 
-        // ── 輸出 HTML 字串（供 os_settings launchApp 嵌入） ──────
-        getHTML(d) {
+        // ── 輸出 HTML 字串（供 os_settings launchApp 嵌入）──────
+        //   設置 → 一般 拆成小分頁之後，素材目錄與上下文是兩頁，所以分兩支給。
+        //   getHTML() 保留＝兩段接起來，給任何還想要一整包的地方用。
+        getAssetHTML(d) { return this._build(d).asset; },
+        getCtxHTML(d)   { return this._build(d).ctx; },
+        getHTML(d)      { const b = this._build(d); return b.asset + b.ctx; },
+        _build(d) {
             d = d || this.load();
 
             // 「Context 保留最近幾章全文」僅獨立(PWA)版本有意義；酒館版由酒館自己管 prompt 注入，隱藏這個設定
@@ -111,7 +116,7 @@
             <div id="vncfg-sum-preview" class="set-desc" style="min-height:34px; padding:8px 10px; border:1px dashed rgba(26,28,40,0.22); border-radius:6px; white-space:pre-wrap; word-break:break-word;">按上面的欄位就會試抓</div>
         </div>`;
 
-            return /* html */`
+            const assetHTML = /* html */`
 <div style="padding-bottom:4px;">
     <div class="set-group">
         <div class="set-label"><i class="fa-solid fa-music"></i> 遊戲 BGM 目錄</div>
@@ -143,9 +148,8 @@
         <input class="set-input" id="vncfg-final-fallback" placeholder="https://files.catbox.moe/9je7j2.png" value="${d.finalFallbackSprite}">
         <div class="set-desc">建議用透明背景 PNG 剪影。</div>
     </div>
-
-    ${ctxChaptersBlock}
 </div>`;
+            return { asset: assetHTML, ctx: ctxChaptersBlock };
         },
 
         // 摘要標記的「試抓」：拿目前欄位去撈最新一章，當場看得到撈不撈得到
