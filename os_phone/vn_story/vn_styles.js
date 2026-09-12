@@ -238,17 +238,10 @@
                             </div>
                             <div id="chat-body"></div>
 
-                            <!-- 表情包面板 -->
-                            <!-- 表情包面板：tabs + grid only，管理移至系統設置 -->
-                            <div id="sticker-panel" onclick="event.stopPropagation()">
-                                <div id="sticker-tabs-row">
-                                    <div id="sticker-tabs"></div>
-                                </div>
-                                <div id="sticker-grid"></div>
-                            </div>
+
 
                             <div id="chat-footer" onclick="event.stopPropagation()">
-                                <button id="chat-plus-btn" onclick="window.VN_Sticker.togglePanel(); event.stopPropagation()"><i class="fa-solid fa-plus"></i></button>
+                                <!-- 劇情手機是展示正文用的，沒有「＋」發東西的面板；輸入框只是樣子 -->
                                 <div id="chat-input-wrap">
                                     <input type="text" id="chat-input" placeholder="發送消息..." readonly>
                                 </div>
@@ -261,6 +254,7 @@
                                         <div id="chat-more-tabs">
                                             <button class="chat-more-tab active" data-tab="bg" onclick="window.VN_Panels.switchChatMoreTab('bg')">背景</button>
                                             <button class="chat-more-tab" data-tab="bubble" onclick="window.VN_Panels.switchChatMoreTab('bubble')">泡泡</button>
+                                            <button class="chat-more-tab" data-tab="sticker" onclick="window.VN_Panels.switchChatMoreTab('sticker')">表情包</button>
                                         </div>
                                         <button id="chat-bg-close" onclick="window.VN_PLAYER.closeChatBgPanel()">✕</button>
                                     </div>
@@ -280,6 +274,11 @@
                                     <div id="chat-more-bubble" hidden>
                                         <div id="chat-bubble-hint"></div>
                                         <div id="chat-bubble-list"></div>
+                                    </div>
+                                    <!-- 表情包：這個故事裡角色的手機用哪一包（一個故事一個選擇，庫本身在微信） -->
+                                    <div id="chat-more-sticker" hidden>
+                                        <div id="chat-sticker-hint"></div>
+                                        <div id="chat-sticker-list"></div>
                                     </div>
                                 </div>
                             </div>

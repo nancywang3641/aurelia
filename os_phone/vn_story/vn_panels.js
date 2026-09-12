@@ -166,6 +166,8 @@
         // 停在泡泡分頁時要重畫：換了一間聊天室，「使用中」那張就不一樣了
         const bub = document.getElementById('chat-more-bubble');
         if (bub && !bub.hidden) _renderBubbleList();
+        const stk = document.getElementById('chat-more-sticker');
+        if (stk && !stk.hidden) _renderStickerPick();   // 換了故事，選的那一包就不一樣
         document.getElementById('chat-bg-panel').classList.add('active');
     }
     function closeChatBgPanel() { document.getElementById('chat-bg-panel').classList.remove('active'); }
@@ -243,12 +245,43 @@
        對得到同名聯絡人的聊天室，挑了會寫進他的微信設定——同一個人兩邊同款。
        ========================================= */
     function switchChatMoreTab(tab) {
-        const isBub = tab === 'bubble';
-        if (!isBub) _paintChatBgHint();
-        document.getElementById('chat-more-bg').hidden = isBub;
-        document.getElementById('chat-more-bubble').hidden = !isBub;
+        const panes = { bg: 'chat-more-bg', bubble: 'chat-more-bubble', sticker: 'chat-more-sticker' };
+        if (!panes[tab]) tab = 'bg';
+        Object.keys(panes).forEach(k => { const el = document.getElementById(panes[k]); if (el) el.hidden = (k !== tab); });
         document.querySelectorAll('.chat-more-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-        if (isBub) _renderBubbleList();
+        if (tab === 'bg') _paintChatBgHint();
+        else if (tab === 'bubble') _renderBubbleList();
+        else _renderStickerPick();
+    }
+
+    /* =========================================
+       😺 表情包：這個故事的角色，手機裡用哪一包
+       一個故事一個選擇（奇幻、古風那種故事根本沒手機，她不會打開這裡＝不選＝不送給 AI）。
+       庫的匯入與管理都在微信；這裡只挑。挑了之後正文生成前才把那一包的名字送給主模型。
+       ========================================= */
+    function _renderStickerPick() {
+        const list = document.getElementById('chat-sticker-list');
+        const hint = document.getElementById('chat-sticker-hint');
+        if (!list || !hint) return;
+        const W = win.WX_STICKER;
+        if (!W || !W.storyLibId) { list.innerHTML = '<div class="chat-bubble-empty">表情包沒載入到，重整一次看看</div>'; hint.textContent = ''; return; }
+        let libs = [];
+        try { libs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]'); } catch (e) {}
+        if (!libs.length) {
+            hint.textContent = '';
+            list.innerHTML = '<div class="chat-bubble-empty">還沒有表情包，去微信的表情包設定匯入</div>';
+            return;
+        }
+        const on = W.storyLibId();
+        hint.textContent = '這個故事裡，角色的手機用哪一包';
+        const esc = x => String(x || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const rows = [{ id: '', name: '不用表情包', count: '' }].concat(libs.map(l => ({ id: l.id, name: l.name, count: (l.stickers || []).length + ' 張' })));
+        list.innerHTML = rows.map(r => `<div class="chat-sticker-row${r.id === on ? ' selected' : ''}" data-id="${esc(r.id)}">` +
+            `<span class="chat-sticker-name">${esc(r.name)}</span><span class="chat-sticker-count">${esc(r.count)}</span>` +
+            `<i class="fa-solid ${r.id === on ? 'fa-circle-check' : 'fa-circle'} chat-sticker-mark"></i></div>`).join('');
+        list.querySelectorAll('.chat-sticker-row').forEach(el => {
+            el.onclick = () => { W.setStoryLib(el.dataset.id || ''); _renderStickerPick(); };
+        });
     }
     function _vnRoom() {
         const P = window.VN_Phone || win.VN_Phone;

@@ -3050,9 +3050,23 @@
             this.renderManage();
             try { AUI.toast(id ? ('AI 之後只會用「' + ((this._libs.find(l => l.id === id) || {}).name || '') + '」裡的表情') : 'AI 不會再發表情包'); } catch (e) {}
         },
-        // 給模型看的那段：只有名字，沒有網址（它寫 [表情包: 名字]，畫面自己去查圖）
-        aiPromptBlock() {
-            const id = this.aiLibId();
+        // 劇情正文裡的手機用哪一包：一個故事一個選擇（在劇情手機「···」→ 表情包 挑）。
+        //   跟上面 aiLibId（微信 app 裡直接聊天用的）分開存——奇幻、古風那種故事沒有手機，
+        //   她不會去挑＝這個故事什麼都不送；現代故事挑了才送。
+        storyLibKey() {
+            let cid = '';
+            try { cid = (win.OS_DB && win.OS_DB.currentChatId) ? String(win.OS_DB.currentChatId() || '') : ''; } catch (e) {}
+            return cid ? ('vn_sticker_ai_lib__' + cid) : '';
+        },
+        storyLibId() { const k = this.storyLibKey(); if (!k) return ''; try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+        setStoryLib(id) {
+            const k = this.storyLibKey(); if (!k) return;
+            try { if (id) localStorage.setItem(k, id); else localStorage.removeItem(k); } catch (e) {}
+        },
+        // 給模型看的那段：只有名字，沒有網址（它寫 [表情包: 名字]，畫面自己去查圖）。
+        //   沒給 libId 就用微信那個選擇；正文那邊傳 storyLibId()。
+        aiPromptBlock(libId) {
+            const id = (libId === undefined) ? this.aiLibId() : libId;
             if (!id) return '';
             if (!this._libs.length) { try { this._libs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]'); } catch (e) {} }
             const lib = this._libs.find(l => l.id === id);

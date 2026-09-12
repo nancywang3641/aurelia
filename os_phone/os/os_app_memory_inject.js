@@ -294,8 +294,9 @@
         }
     }
 
-    // 😺 表情包清單注入：正文裡的手機要發表情，模型得知道手機裡有哪些。跟微信直連那條共用同一份
-    //    （WX_STICKER.aiPromptBlock：只有被指定「給角色用」的那一包，上限 40 個名字）。沒指定就完全不注。
+    // 😺 表情包清單注入：正文裡的手機要發表情，模型得知道手機裡有哪些。
+    //    用的是「這個故事」在劇情手機「···」→ 表情包 挑的那一包（WX_STICKER.storyLibId，一個故事一個），
+    //    不是微信 app 那個選擇。奇幻、古風那種沒手機的故事不會去挑＝完全不注入，不白佔字數。
     var STICKER_INJECT_ID = 'aurelia_sticker_list';
     var _lastStickerUninject = null;
     async function injectStickers() {
@@ -305,7 +306,10 @@
             if (win.__AURELIA_SUMMARIZING) return;
             if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
             var block = '';
-            try { block = (win.WX_STICKER && win.WX_STICKER.aiPromptBlock) ? win.WX_STICKER.aiPromptBlock() : ''; } catch (e) {}
+            try {
+                var W = win.WX_STICKER;
+                block = (W && W.aiPromptBlock && W.storyLibId) ? W.aiPromptBlock(W.storyLibId()) : '';
+            } catch (e) {}
             if (!block) return;
             var result = win.TavernHelper.injectPrompts([{
                 id: STICKER_INJECT_ID, content: block, position: 'in_chat', depth: 2, role: 'system'
