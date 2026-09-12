@@ -6,25 +6,31 @@
     'use strict';
     const win = window;
 
+    // 🚨 底下這些 go 以前一律寫成 `模組 && 模組.fn && 模組.fn(c)`：模組沒載到時**靜靜回 undefined**，
+    //    手機螢幕就停在剛被清空的狀態——她看到的是一片白，連一個字都沒有，而她沒有 console 可以查。
+    //    圖標清單是寫死的，所以「圖標在」不代表「那支程式在」。改成講清楚是哪一支沒到。
+    function _need(mod, label) {
+        if (!mod) throw new Error(label + '：這個 app 的程式沒有登記進手機（它那支 js 沒載到）');
+        return mod;
+    }
     // mode: 'inside' = 渲染進手機螢幕(吃容器 div)；'out' = 開它自己的全屏面板(從手機啟動)
     const APPS = [
-        { id: 'wx',     name: '微信', icon: 'fa-comment',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微信'] && win.__PHONE_APPS['微信'](c); } },
-        { id: 'wb',     name: '微薄', icon: 'fa-eye',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['微博'] && win.__PHONE_APPS['微博'](c); } },
-        { id: 'cal',    name: '日曆', icon: 'fa-calendar-days',  mode: 'inside', go: function (c) { return win.__PHONE_APPS && win.__PHONE_APPS['日曆'] && win.__PHONE_APPS['日曆'](c); } },
+        { id: 'wx',     name: '微信', icon: 'fa-comment',  mode: 'inside', go: function (c) { return _need(win.__PHONE_APPS && win.__PHONE_APPS['微信'], '微信')(c); } },
+        { id: 'wb',     name: '微薄', icon: 'fa-eye',  mode: 'inside', go: function (c) { return _need(win.__PHONE_APPS && win.__PHONE_APPS['微博'], '微薄')(c); } },
+        { id: 'cal',    name: '日曆', icon: 'fa-calendar-days',  mode: 'inside', go: function (c) { return _need(win.__PHONE_APPS && win.__PHONE_APPS['日曆'], '日曆')(c); } },
         // 🔮 塔羅已搬進廣場的占卜小屋（快轉地圖→占卜小屋→點紫薇→占卜）；手機不再重複開一個門。
         //    PWA 獨立版還是走手機那條（那邊沒有廣場），見 index.js / index.html 的 PhoneSystem.install。
-        { id: 'rpg',    name: 'RPG',  icon: 'fa-shield-halved', mode: 'inside', go: function (c) { return win.RPG_PANEL && win.RPG_PANEL.launch && win.RPG_PANEL.launch(c); } },
+        { id: 'rpg',    name: 'RPG',  icon: 'fa-shield-halved', mode: 'inside', go: function (c) { return _need(win.RPG_PANEL && win.RPG_PANEL.launch ? win.RPG_PANEL : null, 'RPG 狀態').launch(c); } },
         // 🏢 房產/家具已移出手機：合併成「房產手帳」獨立窗口（大廳右側 dock 的房產鈕）
         { id: 'reader', name: '閱讀', icon: 'fa-book-open',  mode: 'inside', go: function (c) {
-            if (!win.VN_READER || !win.VN_READER.show) return;
-            win.VN_READER.show(c);
+            _need(win.VN_READER && win.VN_READER.show ? win.VN_READER : null, '閱讀').show(c);
             const x = document.getElementById('vn-reader-sa-close');
             if (x) x.onclick = _home;   // 統一返回：閱讀 ✕ → 回手機主畫面
         } },
         // 🏪 黑市已搬到 404 號房的柴郡身上（快轉地圖→404→點柴郡→黑市；立繪模式走前往→黑市）；手機不再重複開一個門。
         { id: 'settings', name: '樣式', icon: 'fa-paintbrush', mode: 'inside', go: function (c) { _renderSettings(c); } },
-        { id: 'appstore', name: '應用商城', icon: 'fa-bag-shopping', mode: 'inside', go: function (c) { return win.APP_STORE && win.APP_STORE.launch && win.APP_STORE.launch(c); } },
-        { id: 'ctrlroom', name: '控制室', icon: 'fa-sliders', mode: 'inside', go: function (c) { return win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp && win.OS_CONTROL_ROOM.launchApp(c); } },
+        { id: 'appstore', name: '應用商城', icon: 'fa-bag-shopping', mode: 'inside', go: function (c) { return _need(win.APP_STORE && win.APP_STORE.launch ? win.APP_STORE : null, '應用商城').launch(c); } },
+        { id: 'ctrlroom', name: '控制室', icon: 'fa-sliders', mode: 'inside', go: function (c) { return _need(win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp ? win.OS_CONTROL_ROOM : null, '控制室').launchApp(c); } },
         // 🤖 AI 助手已移出手機：入口收攏成大廳 dock 的「宿舍」一顆（房間是獨立擴展，
         //    分兩個入口＝朋友沒裝時要顧兩處，而且以後住戶要站到舞台上也只該有一個門）。
     ];
@@ -647,11 +653,24 @@
                 catch (_) { cp.textContent = '請自己選取上面那段'; }
             };
         };
+        // go() 沒丟錯，但容器到頭來還是空的 → 也算失敗，講一句（純白畫面對她＝零資訊）
+        const _emptyGuard = function () {
+            if (!div.isConnected) return;
+            if (body.querySelector('.aps-fail')) return;
+            if (div.children.length || String(div.innerHTML).trim()) return;
+            fail(new Error(app.name + '：開起來了，但畫面上什麼都沒有（那支程式沒有把東西畫進來）'));
+        };
         try {
             const cleanup = app.go(div);
             if (cleanup && typeof cleanup.then === 'function') {
-                cleanup.then(function (cl) { if (typeof cl === 'function') _leaveApp = cl; }, fail);
-            } else if (typeof cleanup === 'function') { _leaveApp = cleanup; }
+                cleanup.then(function (cl) {
+                    if (typeof cl === 'function') _leaveApp = cl;
+                    setTimeout(_emptyGuard, 600);
+                }, fail);
+            } else {
+                if (typeof cleanup === 'function') _leaveApp = cleanup;
+                setTimeout(_emptyGuard, 1800);   // 同步的 app 也可能自己再去 await 東西，給它久一點
+            }
         } catch (e) { fail(e); }
     }
 
