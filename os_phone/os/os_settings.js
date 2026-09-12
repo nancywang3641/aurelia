@@ -1090,6 +1090,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="api-subtab-row">
                             <div class="api-subtab active" data-apitab="llm" onclick="window._switchApiTab && window._switchApiTab('llm')">主模型</div>
                             <div class="api-subtab" data-apitab="sec-llm" onclick="window._switchApiTab && window._switchApiTab('sec-llm')">副模型</div>
+                            <div class="api-subtab" data-apitab="chan" onclick="window._switchApiTab && window._switchApiTab('chan')">通道</div>
                         </div>
                     <div id="view-llm" class="api-subview">
                         <div class="set-group"${stHide}>
@@ -1273,6 +1274,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
                     </div>
 
+                    <div id="view-chan" class="api-subview" style="display:none;">
                         <div class="set-group" id="route-group">
                             <div class="set-label"><i class="fa-solid fa-shuffle"></i> 哪件事走哪個模型</div>
                             <div class="set-desc">沒動過就跟以前一樣：正文、手機聊天、大總結走主模型，其餘走副模型。要分開再加通道。</div>
@@ -1285,6 +1287,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="channel-list"></div>
                             <div class="btn-test" id="channel-add-btn" style="margin-top:10px;"><i class="fa-solid fa-plus"></i> 加一條通道</div>
                         </div>
+                    </div>
                     </div><!-- /view-api -->
 
                     <div id="view-img" class="tab-view hidden">
