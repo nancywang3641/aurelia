@@ -395,7 +395,6 @@
                 // 如果沒有ID，生成一個
                 if (!txnId) txnId = autoRef('txn');
                 const uniqueId = txnId.startsWith('ID_') ? txnId : ('ID_' + txnId);
-                const displayId = txnId;
                 // 狀態走「這個聊天室的帳本」（wx_cards.js），不再拿模型寫的單號當全域鍵。
                 // 第一次畫到這張卡時把舊世界那份接過來，所以既有對話不會突然變回未讀。
                 const _CARDS = win.WX_CARDS || window.WX_CARDS;
@@ -448,7 +447,7 @@
                         clickAction = "";
                     }
                 }
-                return `<div style="background:${bgColor}; padding:15px; border-radius:4px; color:${textColor}; min-width:210px; display:flex; flex-direction:column; gap:5px; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" ${clickAction}><div style="display:flex; align-items:center; gap:10px;"><div style="border:2px solid ${borderColor}; border-radius:50%; width:35px; height:35px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; flex-shrink:0;">${icon}</div><div style="overflow:hidden;"><div style="font-size:15px; font-weight:500; white-space:nowrap;">${title}</div><div style="font-size:12px; opacity:0.8; white-space:nowrap;">${sub}${(!isMe && !status) ? ' ¥' + amount : ''}</div></div></div><div style="font-size:10px; opacity:0.6; text-align:right; margin-top:4px; font-family:monospace; letter-spacing:1px; border-top:1px dashed rgba(255,255,255,0.3); padding-top:2px;">單號: ${displayId}</div></div>`; });
+                return `<div style="background:${bgColor}; padding:15px; border-radius:4px; color:${textColor}; min-width:210px; display:flex; flex-direction:column; gap:5px; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" ${clickAction}><div style="display:flex; align-items:center; gap:10px;"><div style="border:2px solid ${borderColor}; border-radius:50%; width:35px; height:35px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; flex-shrink:0;">${icon}</div><div style="overflow:hidden;"><div style="font-size:15px; font-weight:500; white-space:nowrap;">${title}</div><div style="font-size:12px; opacity:0.8; white-space:nowrap;">${sub}${(!isMe && !status) ? ' ¥' + amount : ''}</div></div></div></div>`; });
             html = html.replace(tagRe(MSG_TAG.GIFT), (m, t, content) => {
                 // 解析新格式：[Gift: emoji+物品名|備註|Gft_ID] 或舊格式 [Gift: 物品名-价格]
                 let giftName = '', memo = '', giftId = '', price = "心意無價";

@@ -72,6 +72,7 @@
             const p = pending();
             p[id] = { app: job.app || '', chatId: job.chatId || '', at: Date.now() };
             savePending(p);
+            if (!job.runAt) startPolling();   // 預約的（心跳）不用一直問，到點自然會推
         }
         return id;
     }
@@ -108,6 +109,30 @@
 
     function onResult(app, fn) { _handlers[app] = fn; }
 
+    // 🚨 手上還有沒收回來的工作時，留在 app 裡也要去收。
+    //    以前只有「切走再切回來」才收（visibilitychange / focus），所以她一直待在聊天室裡
+    //    的話，伺服器早就跑完了也沒人去拿 —— 畫面就停在「正在輸入」，看起來像生成超慢。
+    //    沒有待收的工作就把輪詢關掉，不留一個永遠在跑的計時器。
+    //    剛送出那幾秒問得密一點（短回覆常常兩三秒就好了），之後拉長到五秒一次。
+    //    不看 visibilityState：手機一進背景計時器本來就停了，多那個判斷只會讓
+    //    「視窗被擋住但其實開著」的情況收不到（桌機分頁、預覽窗都算 hidden）。
+    const POLL_STEPS = [1500, 2000, 3000, 4000, 5000];
+    let _pollTimer = null, _pollStep = 0;
+    function startPolling() {
+        if (_pollTimer || !enabled()) return;
+        _pollStep = 0;
+        const tick = async function () {
+            _pollTimer = null;
+            if (!enabled() || !Object.keys(pending()).length) return;
+            try { await collect(); } catch (e) {}
+            if (!Object.keys(pending()).length) return;
+            const wait = POLL_STEPS[Math.min(_pollStep++, POLL_STEPS.length - 1)];
+            _pollTimer = setTimeout(tick, wait);
+        };
+        _pollTimer = setTimeout(tick, POLL_STEPS[0]);
+    }
+    function stopPolling() { if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null; } }
+
     async function test() {
         const u = base();
         if (!u) throw new Error('還沒填網址');
@@ -124,9 +149,9 @@
         });
         win.addEventListener('focus', function () { setTimeout(collect, 400); });
     } catch (e) {}
-    setTimeout(function () { if (enabled()) collect(); }, 3000);
+    setTimeout(function () { if (enabled()) { collect(); if (Object.keys(pending()).length) startPolling(); } }, 3000);
 
-    win.OS_RELAY = { cfg: cfg, setCfg: setCfg, enabled: enabled, base: base, submit: submit, collect: collect, onResult: onResult, test: test, pending: pending };
+    win.OS_RELAY = { cfg: cfg, setCfg: setCfg, enabled: enabled, base: base, submit: submit, collect: collect, onResult: onResult, test: test, pending: pending, startPolling: startPolling, stopPolling: stopPolling };
     if (win !== window) window.OS_RELAY = win.OS_RELAY;
     console.log('📡 [Relay] 請求托管已載入' + (enabled() ? '（開著）' : '（沒開）'));
 })();
