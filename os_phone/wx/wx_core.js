@@ -1842,12 +1842,12 @@
         if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
 
         // 🔔 她沒在看的時候有人開口 → 本機通知。
-        //    有似服器的人是似服器推（os_relay 的 notify），這一條是給沒有似服器的人用的；
+        //    有伺服器的人是伺服器推（os_relay 的 notify），這一條是給沒有伺服器的人用的；
         //    前提是 app 還活著（設置 → 一般 → 後台的守候）。
         try {
             if (win.document.visibilityState === 'hidden' && win.OS_KEEPALIVE) {
                 const _first = (newMsgs || []).find(function (m) { return m && !m.isMe && typeof m.content === 'string' && m.content.trim(); });
-                const _body = _first ? _first.content : '傳了訊息給妒';
+                const _body = _first ? _first.content : '傳了訊息給妳';
                 win.OS_KEEPALIVE.notify(chat.name || '微信', _body, 'wx-' + chat.id);
             }
         } catch (e) {}
