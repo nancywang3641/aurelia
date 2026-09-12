@@ -2097,6 +2097,49 @@
         },
         
         switchTab: function(tabName) { GLOBAL_TAB = tabName; this.render(); },
+
+        // ── 通訊錄上面那幾顆：新的朋友／僅聊天的朋友／群組／標籤 ──────────
+        //    跟「我 → 設置」同一套：一個 tab 名字就是一頁，返回鍵回上一層（見 wx_view 的 SUB_BACK）。
+        currentTag: '',
+        tagEditing: false,
+        openContactSub: function (tab, tag) {
+            this.currentTag = tag || '';
+            this.tagEditing = false;
+            GLOBAL_TAB = tab;
+            this.render();
+        },
+        tagCreate: async function () {
+            const name = await AUI.prompt('新標籤叫什麼', '');
+            if (name == null) return;
+            const t = String(name).trim();
+            if (!t) return;
+            const C = win.WX_CONTACTS;
+            if (!C.addTag(t)) { AUI.toast('已經有這個標籤了'); return; }
+            this.currentTag = t;
+            this.tagEditing = true;          // 新開的標籤直接進選人，不用再多按一下
+            GLOBAL_TAB = 'c_tag';
+            this.render();
+        },
+        tagEdit: function () { this.tagEditing = !this.tagEditing; this.render(); },
+        tagToggle: function (tag, id) {
+            try { win.WX_CONTACTS.toggleTag(tag, id); } catch (e) {}
+            this.render();
+        },
+        tagDelete: async function (tag) {
+            const ok = await AUI.confirm('把標籤「' + tag + '」刪掉？裡面的人不會有事，只是不再分在這一類。');
+            if (!ok) return;
+            try { win.WX_CONTACTS.removeTag(tag); } catch (e) {}
+            GLOBAL_TAB = 'c_tags';
+            this.render();
+        },
+        // 只在群裡遇到的人 → 加進通訊錄
+        addFriendFromGroup: function (name) {
+            let id = '';
+            try { id = win.WX_CONTACTS.addFriendByName(name); } catch (e) {}
+            if (!id) { AUI.toast('加不進去'); return; }
+            AUI.toast('把「' + name + '」加進通訊錄了');
+            this.render();
+        },
         // 「我」→「設置」：當成「我」底下的第二頁（GLOBAL_TAB='me_set'），開關按了照舊 render，不會跳回「我」
         openMeSettings: function() { GLOBAL_TAB = 'me_set'; this.render(); },
 

@@ -705,12 +705,19 @@
 
         // --- 4. 聯絡人頁面 (🔥 修復：支援 DB 圖片) ---
         getContactListHTML: function(chats) {
+            // 上面這幾顆都是真的會做事的：新的朋友＝還沒開口的人、僅聊天的朋友＝只在群裡遇到還沒加的人、
+            // 群組＝所有群聊、標籤＝自己分的類。原本還有一顆「官方帳號」，奧瑞亞沒有那種東西，拿掉了。
+            const _newN = this._newFriendIds(chats).length;
+            const _onlyN = this._chatOnlyNames(chats).length;
+            const _grpN = Object.keys(chats).filter(function (k) { return chats[k] && chats[k].isGroup && !chats[k].wxRemoved; }).length;
+            let _tagN = 0;
+            try { _tagN = Object.keys((win.WX_CONTACTS || window.WX_CONTACTS).getTags()).length; } catch (e) {}
+            const _cnt = function (n) { return n ? '<div class="wx-contact-count">' + n + '</div>' : ''; };
             let html = `
-                <div class="wx-contact-item" id="static-new-friend"><div class="wx-contact-icon icon-new-friend"><div class="wx-badge" style="top:-6px; right:-6px;">1</div><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M15 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg></div><div class="wx-contact-name">新的朋友</div></div>
-                <div class="wx-contact-item" id="static-chat-only"><div class="wx-contact-icon" style="background:#fa9d3b;"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h2v2H6zm4-4h8v2h-8zm0 4h5v2h-5z"/></svg></div><div class="wx-contact-name">僅聊天的朋友</div></div>
-                <div class="wx-contact-item" id="static-group"><div class="wx-contact-icon icon-group-chat"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5c0-2.3-4.7-3.5-7-3.5zm8 0c-.3 0-.6 0-1 .1.5.5.9 1.1.9 1.9 0 2.3-4.7 3.5-7 3.5h7.1c2.3 0 6.9-1.2 6.9-3.5V13c0-2.3-4.6-3.5-6.9-3.5z"/></svg></div><div class="wx-contact-name">群組</div></div>
-                <div class="wx-contact-item" id="static-tags"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div></div>
-                <div class="wx-contact-item" id="static-official"><div class="wx-contact-icon icon-official"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg></div><div class="wx-contact-name">官方帳號</div></div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_new')"><div class="wx-contact-icon icon-new-friend">${_newN ? '<div class="wx-badge" style="top:-6px; right:-6px;">' + _newN + '</div>' : ''}<svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M15 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg></div><div class="wx-contact-name">新的朋友</div></div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_only')"><div class="wx-contact-icon" style="background:#fa9d3b;"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h2v2H6zm4-4h8v2h-8zm0 4h5v2h-5z"/></svg></div><div class="wx-contact-name">僅聊天的朋友</div>${_cnt(_onlyN)}</div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_group')"><div class="wx-contact-icon icon-group-chat"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5c0-2.3-4.7-3.5-7-3.5zm8 0c-.3 0-.6 0-1 .1.5.5.9 1.1.9 1.9 0 2.3-4.7 3.5-7 3.5h7.1c2.3 0 6.9-1.2 6.9-3.5V13c0-2.3-4.6-3.5-6.9-3.5z"/></svg></div><div class="wx-contact-name">群組</div>${_cnt(_grpN)}</div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_tags')"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div>${_cnt(_tagN)}</div>
             `;
             let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat' && !(chats[k] && chats[k].wxRemoved)).map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].isGroup ? '' : (chats[id].realName || '') }));
             contacts.sort((a, b) => a.name.localeCompare(b.name));
@@ -745,6 +752,137 @@
                     html += `<div class="wx-contact-item" id="contact-item-${c.id}" ${contextAction} onclick="(window.parent.wxApp || window.wxApp).openChat('${c.id}')"><div style="${avatarStyle}" ${dataAttr}${avatarTap}></div><div class="wx-contact-name">${c.name}</div></div>`;
                 });
             } else { html += `<div style="text-align:center; padding:30px; color:#ccc;">暫無聯絡人</div>`; }
+            return html;
+        },
+
+        // ── 通訊錄的四張子頁 ──────────────────────────────────────
+        // 頭像那幾行三個地方在用，抽出來一份：圖庫編號、網址、跑團名字對頭像庫，三種都認
+        _avatarBits: function (name, customAvatar, realName, size) {
+            const px = size || 38;
+            const def = `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(name || '')}&backgroundColor=e6e6e6`;
+            let style = `width:${px}px; height:${px}px; margin-right:12px; background-image: url('${def}')`;
+            let attr = 'class="wx-avatar"';
+            const a = String(customAvatar || '');
+            if (a.startsWith('img_') || a.startsWith('avt_')) attr = `data-db-bg="${a}" class="wx-avatar db-load-target"`;
+            else if (a.startsWith('blob:') || a.startsWith('data:') || a.startsWith('http')) style = `width:${px}px; height:${px}px; margin-right:12px; background-image: url('${a}')`;
+            else if (realName) attr = `data-vn-name="${realName}" class="wx-avatar vn-load-target"`;
+            return { style: style, attr: attr };
+        },
+        _alive: function (chats) {
+            return Object.keys(chats).filter(function (k) { return k !== 'unknown_chat' && chats[k] && !chats[k].wxRemoved; });
+        },
+        // 新的朋友＝通訊錄裡有、但你們一句話都還沒講過的人
+        _newFriendIds: function (chats) {
+            const self = this;
+            return this._alive(chats).filter(function (k) {
+                const c = chats[k];
+                return !c.isGroup && !((c.messages || []).length);
+            });
+        },
+        // 僅聊天的朋友＝只在群裡遇到、通訊錄裡沒有這個人（同群不等於加好友）
+        _chatOnlyNames: function (chats) {
+            const self = this;
+            let known = [];
+            try { known = (win.WX_CONTACTS || window.WX_CONTACTS).getAllCustomContacts() || []; } catch (e) {}
+            const knownIds = {}, knownNames = {};
+            known.forEach(function (c) { if (!c) return; knownIds[c.id] = 1; if (c.name) knownNames[c.name] = 1; });
+            const out = [], seen = {};
+            this._alive(chats).forEach(function (k) {
+                const c = chats[k];
+                if (!c.isGroup) return;
+                (c.members || []).forEach(function (m) {
+                    const key = String(m || '').trim();
+                    if (!key || key === 'User' || key === 'user' || key === '我') return;
+                    if (knownIds[key] || knownNames[key] || chats[key] || seen[key]) return;
+                    try { if ((win.WX_ME || window.WX_ME).isMine(key)) return; } catch (e) {}
+                    seen[key] = 1;
+                    out.push(key);
+                });
+            });
+            return out;
+        },
+        _emptyBox: function (icon, line, small) {
+            return `<div class="wx-sub-empty"><i class="fa-solid ${icon}"></i><div>${line}</div>${small ? `<small>${small}</small>` : ''}</div>`;
+        },
+        _personRow: function (id, name, chats, right) {
+            const c = chats[id] || {};
+            const av = this._avatarBits(name, c.customAvatar, c.isGroup ? '' : (c.realName || ''));
+            return `<div class="wx-contact-item" onclick="${'(window.parent.wxApp || window.wxApp)'}.openChat('${id}')">` +
+                `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${name}</div>${right || ''}</div>`;
+        },
+
+        getNewFriendsHTML: function (chats) {
+            const ids = this._newFriendIds(chats);
+            if (!ids.length) return this._emptyBox('fa-user-check', '沒有還沒開口的人。', '劇情裡有人加你好友、或你自己加了誰，還沒講過話之前都會先待在這裡。');
+            const self = this;
+            return ids.map(function (id) { return self._personRow(id, chats[id].name || id, chats, '<div class="wx-contact-side">還沒聊過</div>'); }).join('');
+        },
+        getChatOnlyHTML: function (chats) {
+            const names = this._chatOnlyNames(chats);
+            if (!names.length) return this._emptyBox('fa-comments', '沒有這種人。', '在群裡遇到、但你沒加成好友的人會出現在這裡。');
+            const self = this;
+            return names.map(function (n) {
+                const av = self._avatarBits(n, '', n);
+                const esc = String(n).replace(/'/g, "\\'");
+                return `<div class="wx-contact-item"><div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${n}</div>` +
+                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); (window.parent.wxApp || window.wxApp).addFriendFromGroup('${esc}')">加為朋友</button></div></div>`;
+            }).join('');
+        },
+        getGroupsHTML: function (chats) {
+            const self = this;
+            const ids = this._alive(chats).filter(function (k) { return chats[k].isGroup; });
+            if (!ids.length) return this._emptyBox('fa-user-group', '還沒有群。', '劇情裡出現的群、或你自己發起的群聊都會列在這裡。');
+            return ids.map(function (id) {
+                const n = (chats[id].members || []).length;
+                return self._personRow(id, chats[id].name || id, chats, n ? `<div class="wx-contact-side">${n} 人</div>` : '');
+            }).join('');
+        },
+        getTagsHTML: function (chats) {
+            let tags = {};
+            try { tags = (win.WX_CONTACTS || window.WX_CONTACTS).getTags(); } catch (e) {}
+            const names = Object.keys(tags);
+            const app = '(window.parent.wxApp || window.wxApp)';
+            let html = `<div class="wx-sub-bar"><button class="wx-sub-btn solid" onclick="${app}.tagCreate()"><i class="fa-solid fa-plus"></i> 新增標籤</button></div>`;
+            if (!names.length) {
+                html += this._emptyBox('fa-tags', '還沒有標籤。', '把人分成幾類——同事、家人、夜蝶那邊的人——分好之後點標籤就只看那一群。');
+                return html;
+            }
+            names.forEach(function (t) {
+                const ids = (tags[t] || []).filter(function (i) { return chats[i] && !chats[i].wxRemoved; });
+                const esc = String(t).replace(/'/g, "\\'");
+                html += `<div class="wx-contact-item" onclick="${app}.openContactSub('c_tag', '${esc}')">` +
+                    `<div class="wx-contact-icon icon-tags" style="margin-right:12px;"><svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div>` +
+                    `<div class="wx-contact-name">${t}</div><div class="wx-contact-side">${ids.length} 人</div></div>`;
+            });
+            return html;
+        },
+        // 標籤裡面：平常列這一類的人，按「編輯」變成整本通訊錄打勾
+        getTagDetailHTML: function (chats, tag, editing) {
+            const self = this;
+            const app = '(window.parent.wxApp || window.wxApp)';
+            let tags = {};
+            try { tags = (win.WX_CONTACTS || window.WX_CONTACTS).getTags(); } catch (e) {}
+            const picked = (tags[tag] || []);
+            const esc = String(tag).replace(/'/g, "\\'");
+            if (editing) {
+                const ids = this._alive(chats).filter(function (k) { return !chats[k].isGroup; });
+                let html = `<div class="wx-sub-bar"><span class="wx-sub-note">點一下加進「${tag}」，再點一下拿掉</span></div>`;
+                if (!ids.length) return html + this._emptyBox('fa-user-slash', '通訊錄還沒有人。', '');
+                html += ids.map(function (id) {
+                    const on = picked.indexOf(id) >= 0;
+                    const c = chats[id];
+                    const av = self._avatarBits(c.name || id, c.customAvatar, c.realName || '');
+                    return `<div class="wx-contact-item" onclick="${app}.tagToggle('${esc}', '${id}')">` +
+                        `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${c.name || id}</div>` +
+                        `<div class="wx-contact-side"><i class="fa-solid ${on ? 'fa-circle-check wx-tag-on' : 'fa-circle'} wx-tag-mark"></i></div></div>`;
+                }).join('');
+                return html;
+            }
+            const alive = picked.filter(function (i) { return chats[i] && !chats[i].wxRemoved; });
+            let html = `<div class="wx-sub-bar"><button class="wx-sub-btn" onclick="${app}.tagEdit()">選人進來</button><span class="sp"></span>` +
+                `<button class="wx-sub-btn warn" onclick="${app}.tagDelete('${esc}')">刪掉這個標籤</button></div>`;
+            if (!alive.length) return html + this._emptyBox('fa-tag', `「${tag}」還沒有人。`, '按上面那顆「選人進來」。');
+            html += alive.map(function (id) { return self._personRow(id, chats[id].name || id, chats); }).join('');
             return html;
         },
 
@@ -960,10 +1098,19 @@
             if (activeTab === 'discover') headerTitle = '發現';
             if (activeTab === 'me') headerTitle = '我';
             if (activeTab === 'me_set') headerTitle = '設置';   // 「我」底下的第二頁
+            // 通訊錄底下的幾張子頁（跟 me_set 同一套：一個 tab 名字＝一頁）
+            const SUB_TITLE = { c_new: '新的朋友', c_only: '僅聊天的朋友', c_group: '群組', c_tags: '標籤' };
+            if (SUB_TITLE[activeTab]) headerTitle = SUB_TITLE[activeTab];
+            if (activeTab === 'c_tag') headerTitle = (win.wxApp && win.wxApp.currentTag) || '標籤';
             
             // 列表內容
             let listContent = '';
             if (activeTab === 'contacts') listContent = this.getContactListHTML(chats);
+            else if (activeTab === 'c_new') listContent = this.getNewFriendsHTML(chats);
+            else if (activeTab === 'c_only') listContent = this.getChatOnlyHTML(chats);
+            else if (activeTab === 'c_group') listContent = this.getGroupsHTML(chats);
+            else if (activeTab === 'c_tags') listContent = this.getTagsHTML(chats);
+            else if (activeTab === 'c_tag') listContent = this.getTagDetailHTML(chats, (win.wxApp && win.wxApp.currentTag) || '', !!(win.wxApp && win.wxApp.tagEditing));
             else if (activeTab === 'me') listContent = this.getMePageHTML(isDark);
             else if (activeTab === 'me_set') listContent = this.getMePageHTML(isDark, 'settings');
             else if (activeTab === 'discover') listContent = this.getDiscoverHTML();
@@ -1020,10 +1167,13 @@
             }
             
             const isInChat = !!activeId;
-            // 設置頁的返回＝回「我」，不是回手機主頁
-            const backBtnText = isInChat ? '微信' : (activeTab === 'me_set' ? '我' : '主頁');
-            const backAction = activeTab === 'me_set' && !isInChat
-                ? "(window.parent.wxApp || window.wxApp).switchTab('me')"
+            // 子頁的返回＝回它上一層，不是回手機主頁
+            const SUB_BACK = { me_set: ['我', 'me'], c_new: ['通訊錄', 'contacts'], c_only: ['通訊錄', 'contacts'],
+                               c_group: ['通訊錄', 'contacts'], c_tags: ['通訊錄', 'contacts'], c_tag: ['標籤', 'c_tags'] };
+            const _sub = (!isInChat && SUB_BACK[activeTab]) ? SUB_BACK[activeTab] : null;
+            const backBtnText = isInChat ? '微信' : (_sub ? _sub[0] : '主頁');
+            const backAction = _sub
+                ? "(window.parent.wxApp || window.wxApp).switchTab('" + _sub[1] + "')"
                 : "(window.parent.wxApp || window.wxApp).onBack()"; 
             const backBtnClass = 'wx-back-btn show'; 
             const inputDisplay = activeId ? 'flex' : 'none';
@@ -1134,7 +1284,7 @@
                             </div>
                             <div class="wx-tab-txt">聊天</div>
                         </div>
-                        <div class="wx-tab ${activeTab === 'contacts' ? 'active' : ''}" onclick="${app}.switchTab('contacts')">
+                        <div class="wx-tab ${(activeTab === 'contacts' || activeTab.indexOf('c_') === 0) ? 'active' : ''}" onclick="${app}.switchTab('contacts')">
                             <div class="wx-tab-icon-box">
                                 <div class="wx-tab-icon">${iconContact}</div>
                             </div>

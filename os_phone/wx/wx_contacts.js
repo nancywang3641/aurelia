@@ -35,6 +35,10 @@
             console.log('[WX_CONTACTS] 通訊錄一次性遷移到當前卡 ' + sid + '（舊全域保留備份）');
         } catch (e) {}
     }
+    // 🏷 標籤：一份 { 標籤名: [聯絡人id] }，跟通訊錄同一個分艙鍵（換一張卡就是另一本）
+    const TAGS_BASE_KEY = 'wx_contact_tags';
+    function _tagsKey() { const sid = _storyId(); return sid ? (TAGS_BASE_KEY + '__' + sid) : TAGS_BASE_KEY; }
+
     function _contactsKey() {
         const sid = _storyId();
         if (!sid) return CONTACTS_BASE_KEY;   // 拿不到 storyId → 退回全域(安全:不隔離也不壞)
@@ -44,6 +48,56 @@
 
     win.WX_CONTACTS = {
         _key: function() { return _contactsKey(); },   // 當前卡的通訊錄 storage key（給 wx_view 清空鈕用）
+
+        // ── 🏷 標籤 ──────────────────────────────────────────────
+        getTags: function () {
+            try { const o = JSON.parse(localStorage.getItem(_tagsKey()) || '{}'); return (o && typeof o === 'object') ? o : {}; }
+            catch (e) { return {}; }
+        },
+        saveTags: function (obj) {
+            try { localStorage.setItem(_tagsKey(), JSON.stringify(obj || {})); } catch (e) {}
+        },
+        tagsOf: function (id) {
+            const all = this.getTags();
+            return Object.keys(all).filter(function (t) { return (all[t] || []).indexOf(id) >= 0; });
+        },
+        addTag: function (name) {
+            name = String(name || '').trim();
+            if (!name) return false;
+            const all = this.getTags();
+            if (all[name]) return false;
+            all[name] = [];
+            this.saveTags(all);
+            return true;
+        },
+        removeTag: function (name) {
+            const all = this.getTags();
+            if (!(name in all)) return;
+            delete all[name];
+            this.saveTags(all);
+        },
+        toggleTag: function (name, id) {
+            const all = this.getTags();
+            const list = all[name] || (all[name] = []);
+            const i = list.indexOf(id);
+            if (i >= 0) list.splice(i, 1); else list.push(id);
+            this.saveTags(all);
+            return i < 0;
+        },
+
+        // 只在群裡遇到、還沒加好友的人 → 真的加進通訊錄，順手開一間一對一
+        addFriendByName: function (name) {
+            name = String(name || '').trim();
+            if (!name) return '';
+            const id = this.getOrCreateContactID(name, 'user', true);
+            try {
+                if (win.wxApp && win.wxApp.GLOBAL_CHATS && !win.wxApp.GLOBAL_CHATS[id]) {
+                    win.wxApp.GLOBAL_CHATS[id] = { id: id, name: name, members: [id], isGroup: false, messages: [], lastTime: '', unread: false };
+                    if (win.WX_DB && win.WX_DB.saveApiChat) win.WX_DB.saveApiChat(id, win.wxApp.GLOBAL_CHATS[id]);
+                }
+            } catch (e) {}
+            return id;
+        },
         init: function(globalChats) {
             const saved = localStorage.getItem(_contactsKey());
             if (saved) {

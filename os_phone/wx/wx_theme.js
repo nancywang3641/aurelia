@@ -221,6 +221,28 @@
             .wx-dark .wx-contact-item:active { background: #2a2a2a; }
             .wx-dark .wx-contact-name { color: #f0f0f0; }
             .wx-dark .wx-contact-section { background: #111; color: #888; }
+            /* 通訊錄子頁（新的朋友／僅聊天的朋友／群組／標籤）：沿用 .wx-contact-item 那一列，右邊多一格 */
+            .wx-contact-side { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #999; }
+            .wx-contact-count { margin-left: auto; font-size: 13px; color: #999; }
+            .wx-sub-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #ededed; border-bottom: 1px solid #e3e3e3; }
+            .wx-sub-bar .sp { flex: 1; }
+            .wx-sub-note { font-size: 12px; color: #888; }
+            .wx-sub-btn { font-family: inherit; font-size: 13px; padding: 6px 14px; border-radius: 16px; border: 1px solid #d0d0d0; background: #fff; color: #333; cursor: pointer; }
+            .wx-sub-btn:active { background: #f0f0f0; }
+            .wx-sub-btn.solid { background: #07c160; border-color: #07c160; color: #fff; }
+            .wx-sub-btn.warn { color: #e64340; border-color: #f0c3c2; }
+            .wx-sub-empty { padding: 48px 32px; text-align: center; color: #999; font-size: 14px; line-height: 1.7; }
+            .wx-sub-empty i { font-size: 30px; color: #d5d5d5; display: block; margin-bottom: 12px; }
+            .wx-sub-empty small { display: block; margin-top: 8px; font-size: 12px; color: #b0b0b0; }
+            .wx-tag-mark { font-size: 20px; color: #d0d0d0; }
+            .wx-tag-mark.wx-tag-on { color: #07c160; }
+            .wx-dark .wx-sub-bar { background: #111; border-bottom-color: #2a2a2a; }
+            .wx-dark .wx-sub-btn { background: #2a2a2a; border-color: #3a3a3a; color: #f0f0f0; }
+            .wx-dark .wx-sub-btn:active { background: #333; }
+            .wx-dark .wx-sub-btn.solid { background: #07c160; border-color: #07c160; color: #fff; }
+            .wx-dark .wx-sub-btn.warn { color: #ff6b68; border-color: #5a2f2e; }
+            .wx-dark .wx-sub-empty i { color: #3a3a3a; }
+            .wx-dark .wx-tag-mark { color: #3a3a3a; }
             .icon-new-friend { background: #fa9d3b; }
             .icon-group-chat { background: #07c160; }
             .icon-tags { background: #2782d7; }
