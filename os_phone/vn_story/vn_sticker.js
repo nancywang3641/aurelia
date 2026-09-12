@@ -18,15 +18,27 @@
         _currentLib: null,
         _panelOpen: false,
 
+        // 🚨 表情包只有一份：以前 VN 存 vn_sticker_libs、微信存 os_sticker_libs，兩邊各自匯入、互相看不到
+        //    （她：「vn_phone 的設置能不能導入當前在微信有載入的表情包」——本來就該是同一份）。
+        //    現在一律讀 os_sticker_libs；舊的 vn_sticker_libs 開機時併過去一次就不再用。
         init() {
-            try { this._libs = JSON.parse(localStorage.getItem('vn_sticker_libs') || '[]'); } catch(e) { this._libs = []; }
+            try { this._libs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]'); } catch(e) { this._libs = []; }
+            try {
+                const old = JSON.parse(localStorage.getItem('vn_sticker_libs') || '[]');
+                if (Array.isArray(old) && old.length) {
+                    old.forEach(l => { if (l && l.name && !this._libs.some(x => x.name === l.name)) this._libs.push(l); });
+                    localStorage.setItem('os_sticker_libs', JSON.stringify(this._libs));
+                    localStorage.removeItem('vn_sticker_libs');
+                    console.log('[VN_Sticker] 舊的 VN 表情包庫已併進共用那一份');
+                }
+            } catch (e) {}
             this._currentLib = this._libs[0]?.id || null;
             this.renderTabs();
             this.renderSettingsLibs();
             if (this._currentLib) this.renderGrid(this._currentLib);
         },
 
-        _save() { localStorage.setItem('vn_sticker_libs', JSON.stringify(this._libs)); },
+        _save() { localStorage.setItem('os_sticker_libs', JSON.stringify(this._libs)); },
 
         // 取完整 URL：file 若已是完整 URL 直接返回，否則拼 baseUrl
         _resolveUrl(lib, file) {

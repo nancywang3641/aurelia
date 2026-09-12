@@ -178,6 +178,9 @@
             .wx-stk-lib-name { flex: 1; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .wx-stk-lib-count { font-size: 11px; color: #999; flex-shrink: 0; }
             .wx-stk-lib-del { border: none; background: none; color: #e74c3c; cursor: pointer; font-size: 14px; padding: 0 4px; }
+            /* 哪一包給角色用：一次只有一包，再按一次就是收回 */
+            .wx-stk-ai { border: 1px solid #d5d5d5; background: #fff; color: #666; border-radius: 12px; font-size: 11px; padding: 2px 9px; cursor: pointer; white-space: nowrap; }
+            .wx-stk-ai.on { background: #07c160; border-color: #07c160; color: #fff; }
             .wx-stk-import-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
             .wx-stk-url-input { flex: 1; font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; min-width: 0; }
             .wx-stk-file-btn { background: #07c160; color: #fff; font-size: 12px; padding: 5px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }

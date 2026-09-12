@@ -294,6 +294,28 @@
         }
     }
 
+    // 😺 表情包清單注入：正文裡的手機要發表情，模型得知道手機裡有哪些。跟微信直連那條共用同一份
+    //    （WX_STICKER.aiPromptBlock：只有被指定「給角色用」的那一包，上限 40 個名字）。沒指定就完全不注。
+    var STICKER_INJECT_ID = 'aurelia_sticker_list';
+    var _lastStickerUninject = null;
+    async function injectStickers() {
+        try {
+            try { _lastStickerUninject && _lastStickerUninject(); } catch (e) {}
+            _lastStickerUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var block = '';
+            try { block = (win.WX_STICKER && win.WX_STICKER.aiPromptBlock) ? win.WX_STICKER.aiPromptBlock() : ''; } catch (e) {}
+            if (!block) return;
+            var result = win.TavernHelper.injectPrompts([{
+                id: STICKER_INJECT_ID, content: block, position: 'in_chat', depth: 2, role: 'system'
+            }], { once: true });
+            _lastStickerUninject = (result && result.uninject) || null;
+        } catch (e) {
+            console.warn('[Sticker Injector] 失敗:', (e && e.message) || e);
+        }
+    }
+
     // 🎴 VN組件說明注入：把「啟用中的 VN組件」使用說明(os_vn_extra_tags_prompt，由 syncActiveTagsToLocal
     //    在 啟用/停用 時即時組好)注入酒館原生生成 → 啟用/停用 = 馬上換注入層，取代手動貼世界書。
     var VN_TAGS_INJECT_ID = 'aurelia_vn_tags';
@@ -570,6 +592,7 @@
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectAppMemory); });   // dryRun 空跑不注入
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectVnTags); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectFxList); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectStickers); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectWxChatrooms); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectAppData); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });

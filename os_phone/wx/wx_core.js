@@ -2838,6 +2838,11 @@
                     const _links = _linkBrief(currentChat, _me);
                     if (_links) { messages.push({ role: 'system', content: _links }); console.log('[WX] 附上連結內容'); }
                 } catch (e) { console.warn('[WX] 連結內容組裝失敗（不影響送出）', e); }
+                // 😺 這支手機裡有哪些表情包（只有被指定給角色用的那一包，見 WX_STICKER.aiPromptBlock）
+                try {
+                    const _stk = WX_STICKER.aiPromptBlock();
+                    if (_stk) { messages.push({ role: 'system', content: _stk }); console.log('[WX] 附上表情包清單'); }
+                } catch (e) { console.warn('[WX] 表情包清單組裝失敗（不影響送出）', e); }
                 // 📷 她從相簿傳、它還沒看過的照片 → 這一輪夾進去（看完它會寫描述回來，之後只送文字）
                 try {
                     const _ph = await _photoOnceMessage(currentChat);
@@ -3034,6 +3039,28 @@
             this._currentLib = this._libs[0]?.id || null;
         },
         _save() { localStorage.setItem('os_sticker_libs', JSON.stringify(this._libs)); },
+
+        // 🚨 表情包不能整批倒給 AI：載十幾包就是幾百個名字，每一輪都在燒字數。
+        //    所以「AI 可以用的」一次只有一包（在表情包設定裡挑），只送那一包的名字，上限 AI_MAX 個。
+        //    她想換口味就換那個選擇，不用刪庫再匯入。
+        AI_MAX: 40,
+        aiLibId() { try { return localStorage.getItem('os_sticker_ai_lib') || ''; } catch (e) { return ''; } },
+        setAiLib(id) {
+            try { localStorage.setItem('os_sticker_ai_lib', id || ''); } catch (e) {}
+            this.renderManage();
+            try { AUI.toast(id ? ('AI 之後只會用「' + ((this._libs.find(l => l.id === id) || {}).name || '') + '」裡的表情') : 'AI 不會再發表情包'); } catch (e) {}
+        },
+        // 給模型看的那段：只有名字，沒有網址（它寫 [表情包: 名字]，畫面自己去查圖）
+        aiPromptBlock() {
+            const id = this.aiLibId();
+            if (!id) return '';
+            if (!this._libs.length) { try { this._libs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]'); } catch (e) {} }
+            const lib = this._libs.find(l => l.id === id);
+            if (!lib || !lib.stickers || !lib.stickers.length) return '';
+            const names = lib.stickers.slice(0, this.AI_MAX).map(s => s.name).filter(Boolean);
+            if (!names.length) return '';
+            return '【手機裡有的表情包】想發表情的時候寫 [表情包: 名字]，名字只能從下面這些裡挑，沒有合適的就別發：\n' + names.join('、');
+        },
         _resolveUrl(lib, file) {
             if (!file) return '';
             if (/^https?:\/\//i.test(file)) return file;
@@ -3107,8 +3134,11 @@
         },
         renderManage() {
             const el = document.getElementById('wxStickerManage'); if (!el) return;
+            const _ai = this.aiLibId();
             el.innerHTML = this._libs.length
-                ? this._libs.map(lib => `<div class="wx-stk-lib-row"><span class="wx-stk-lib-name">${lib.name}</span><span class="wx-stk-lib-count">${lib.stickers.length}張</span><button class="wx-stk-lib-del" onclick="(window.parent||window).WX_STICKER.deleteLib('${lib.id}')">✕</button></div>`).join('')
+                ? this._libs.map(lib => `<div class="wx-stk-lib-row"><span class="wx-stk-lib-name">${lib.name}</span><span class="wx-stk-lib-count">${lib.stickers.length}張</span>` +
+                    `<button class="wx-stk-ai${lib.id === _ai ? ' on' : ''}" onclick="(window.parent||window).WX_STICKER.setAiLib('${lib.id === _ai ? '' : lib.id}')">${lib.id === _ai ? '角色在用這包' : '給角色用'}</button>` +
+                    `<button class="wx-stk-lib-del" onclick="(window.parent||window).WX_STICKER.deleteLib('${lib.id}')">✕</button></div>`).join('')
                 : '<div class="wx-stk-empty">尚無庫</div>';
         },
         pickSticker(name, url) {
