@@ -168,6 +168,13 @@
         };
     }
 
-    win.WX_PROFILE = { open: open, close: close, noteOf: function (id) { try { return localStorage.getItem(NOTE_KEY(id)) || ''; } catch (e) { return ''; } } };
+    // 🚨 WX_PROFILE 這個名字有兩個主人：wx_user_profile.js 放的是「我」自己的暱稱／簽名（get/update），
+    //    這裡放的是別人的檔案卡（open/close）。直接指派會把先載入的那份整個蓋掉——
+    //    「我」頁的暱稱就變回 User、編輯暱稱按鈕點了沒反應。兩邊都用合併寫，誰先誰後都不會互相吃掉。
+    win.WX_PROFILE = Object.assign(win.WX_PROFILE || {}, {
+        open: open,
+        close: close,
+        noteOf: function (id) { try { return localStorage.getItem(NOTE_KEY(id)) || ''; } catch (e) { return ''; } }
+    });
     if (win !== window) { try { window.WX_PROFILE = win.WX_PROFILE; } catch (e) {} }
 })();

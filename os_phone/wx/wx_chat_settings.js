@@ -226,7 +226,10 @@
             let bgImage = settings.bgImage || '';
             let avatarUrl = chat.customAvatar || '';
             let myAvatarUrl = chat.userAvatar || '';
-            let myAlias = chat.userAlias || '';
+            // 「我」在這間顯示的名字＝整支手機的微信暱稱（微信「我」頁那個），一個地方設定、每間都跟著走。
+            // 以前這裡是一間一個 chat.userAlias，但它只有這張設定頁自己讀得到：不畫在氣泡上、也沒送給 AI。
+            let myAlias = '';
+            try { myAlias = win.WX_ME.name(); } catch (e) {}
             
             // 讀取關聯的群聊（僅私聊）
             let linkedGroupChats = chat.linkedGroupChats || [];
@@ -407,13 +410,6 @@
                                 <div class="ws-avatar-icon"><i class="fa-solid fa-camera"></i></div>
                             </div>
                             <input type="file" id="file-my-avatar" class="ws-file-input-hidden" accept="image/*">
-                        </div>
-                    </div>
-                    <div class="ws-cell">
-                        <div class="ws-label">我的暱稱</div>
-                        <div class="ws-right">
-                            <input class="ws-input" id="inp-alias" value="${myAlias}" placeholder="預設 (User)">
-                            <div class="ws-arrow">›</div>
                         </div>
                     </div>
                 </div>
@@ -1241,7 +1237,6 @@
                     // 2. 更新 Chat 對象
                     const newName = doc.getElementById('inp-name').value.trim();
                     const newBio = doc.getElementById('inp-bio').value.trim();
-                    const newAlias = doc.getElementById('inp-alias').value.trim();
                     let hasChanges = false;
 
                     // 🚨 群名跟私聊備註是兩件事，通知與否照現實微信走：
@@ -1251,15 +1246,13 @@
                     if (newName && newName !== chatName) {
                         if (isGroup) {
                             let _me = 'User';
-                            try { if (win.WX_USER && win.WX_USER.getInfo) _me = win.WX_USER.getInfo().name || 'User'; } catch (e) {}
+                            try { _me = win.WX_ME.name() || 'User'; } catch (e) {}
                             if (!Array.isArray(chat.messages)) chat.messages = [];
                             chat.messages.push({ type: 'system', content: _me + ' 把群名改成「' + newName + '」', isMe: false });
                         }
                         chat.name = newName; hasChanges = true;
                     }
                     if (newBio !== chatDesc) { chat.desc = newBio; chat.bio = newBio; hasChanges = true; }
-                    if (newAlias !== myAlias) { chat.userAlias = newAlias; hasChanges = true; }
-                    
                     if (myAvatarUrl !== (chat.userAvatar || "")) { chat.userAvatar = myAvatarUrl; hasChanges = true; }
                     if (avatarUrl !== (chat.customAvatar || "")) { chat.customAvatar = avatarUrl; hasChanges = true; }
                     

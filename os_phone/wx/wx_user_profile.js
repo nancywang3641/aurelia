@@ -15,7 +15,9 @@
         avatar: ''
     };
 
-    win.WX_PROFILE = {
+    // 🚨 別改回直接指派：wx_profile.js（別人的檔案卡）也叫 WX_PROFILE，
+    //    後載入的那份會把這裡的 get/update 整個蓋掉，「我」頁的暱稱就變回 User。
+    win.WX_PROFILE = Object.assign(win.WX_PROFILE || {}, {
         // 獲取個人資料
         get: function() {
             // 先從人設系統獲取真名和頭像
@@ -63,6 +65,26 @@
         // 清除資料（重置為默認）
         reset: function() {
             localStorage.removeItem(STORAGE_KEY);
+        }
+    });
+
+    // 「我」在微信裡叫什麼——整支微信只有這一個出處。
+    //   暱稱優先：真的微信裡別人看到的就是暱稱，不是人設真名；沒設暱稱才退回人設名。
+    //   訊息上的名字、送給 AI 的發話人、群成員名單、紅包領取者，全部走這裡。
+    win.WX_ME = {
+        personaName: function () {
+            try { const u = win.OS_USER || win.WX_USER; const i = (u && u.getInfo) ? u.getInfo() : null; return (i && i.name) || 'User'; }
+            catch (e) { return 'User'; }
+        },
+        name: function () {
+            try { const n = String(win.WX_PROFILE.get().nickname || '').trim(); if (n && n !== 'User') return n; } catch (e) {}
+            return this.personaName();
+        },
+        // 模型寫回來的名字可能是暱稱、也可能是人設名（舊記錄就是人設名），兩個都要認
+        isMine: function (n) {
+            n = String(n || '').trim();
+            if (!n) return false;
+            return n === this.name() || n === this.personaName() || n === 'User' || n === '我';
         }
     };
 })();

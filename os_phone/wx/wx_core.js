@@ -492,15 +492,8 @@
         if (_C && _cid && _card) _C.update(_cid, _card.key, { data: data });
 
         // 🔥 連動經濟系統（只有當前用戶領取時才增加餘額）
-        // 獲取當前用戶名稱
-        let currentUserName = "User";
-        if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') {
-            const userInfo = win.WX_USER.getInfo();
-            currentUserName = userInfo.name || "User";
-        }
-        
-        // 只有當領取者是當前用戶時，才增加餘額
-        if (win.WX_WALLET && grabAmount > 0 && cleanGrabberName === currentUserName) {
+        // 領取者寫暱稱或寫人設名都算是我
+        if (win.WX_WALLET && grabAmount > 0 && _isMyName(cleanGrabberName)) {
             const senderName = data.sender || '未知';
             win.WX_WALLET.transaction(grabAmount, `微信紅包 - 來自${senderName}`);
         }
@@ -520,13 +513,8 @@
             ? win.WX_CONTACTS.getAllCustomContacts() 
             : [];
         
-        // 獲取當前用戶名稱
-        let currentUserName = "User";
-        if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') {
-            const userInfo = win.WX_USER.getInfo();
-            currentUserName = userInfo.name || "User";
-        }
-        
+        const currentUserName = _meName();
+
         return memberIds.map(memberId => {
             // 特殊處理 "User" ID
             if (memberId === "User" || memberId === "user") {
@@ -1198,7 +1186,14 @@
 
     function _storyHash(s) { let h = 5381; s = String(s || ''); for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
     function _storyCid() { try { const c = win.OS_DB && win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null; return c == null ? '' : String(c); } catch (e) { return ''; } }
-    function _storyMyName() { try { const u = win.WX_USER && win.WX_USER.getInfo ? win.WX_USER.getInfo() : null; return (u && u.name) || 'User'; } catch (e) { return 'User'; } }
+    function _storyMyName() { return _personaName(); }
+    // 送給 AI、也寫在訊息上的「我」叫什麼：微信暱稱優先。
+    //   真的微信裡別人看到的就是暱稱，不是人設真名；沒設暱稱才退回人設名。
+    //   暱稱在微信「我」頁 -> 編輯暱稱，一支手機一個，不分聊天室。
+    function _personaName() { try { return win.WX_ME.personaName(); } catch (e) { return 'User'; } }
+    function _meName() { try { return win.WX_ME.name(); } catch (e) { return 'User'; } }
+    function _isMyName(n) { try { return win.WX_ME.isMine(n); } catch (e) { return false; } }
+
     // 「我」的所有叫法：人設名、微信暱稱、AI 在主角狀態裡自己寫的主角名（它常寫簡體或不帶星號，跟人設名對不上）、去掉頭尾星號的版本
     let _storyMeAliases = null;
     async function _storyRefreshMeAliases() {
@@ -1925,15 +1920,10 @@
                 return;
             }
             
-            // 獲取當前用戶名稱
-            let currentUserName = "User";
-            if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') {
-                const userInfo = win.WX_USER.getInfo();
-                currentUserName = userInfo.name || "User";
-            }
-            
-            // 檢查用戶是否已經領取過
-            const userAlreadyGrabbed = data.list && data.list.find(item => item.name === currentUserName);
+            const currentUserName = _meName();
+
+            // 檢查用戶是否已經領取過（舊記錄裡存的可能是人設名）
+            const userAlreadyGrabbed = data.list && data.list.find(item => _isMyName(item.name));
             
             // 如果用戶還沒領取，且紅包還有剩餘，自動為用戶領取
             const totalAmount = data.totalAmount || 0;
@@ -2278,7 +2268,7 @@
             const m = (chat && Array.isArray(chat.messages)) ? chat.messages[idx] : null;
             if (!m || m.type === 'system' || m.isLoading) return;
             const who = String(m.senderName || m.sender || '').trim()
-                     || (m.isMe ? ((win.WX_USER && win.WX_USER.getInfo && win.WX_USER.getInfo().name) || '我') : (chat.realName || chat.name || ''));
+                     || (m.isMe ? _meName() : (chat.realName || chat.name || ''));
             const raw = String(m.content || '').replace(/\s+/g, ' ').trim();   // 媒體訊息就引用它的標籤本身，看得出引用的是什麼
             if (!who || !raw) return;
             _replyTo = { name: who, text: raw.slice(0, 30) };
@@ -2601,11 +2591,8 @@
             if (!GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { GLOBAL_CHATS[GLOBAL_ACTIVE_ID] = { name: GLOBAL_ACTIVE_ID, id: GLOBAL_ACTIVE_ID, members:[], messages: [], lastTime: '', unread: false, pushedCount:0, renderedCount:0 }; }
             const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
             
-            // 強制獲取「我」的名字
-            let myName = "User";
-            if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') {
-                myName = win.WX_USER.getInfo().name || "User";
-            }
+            // 「我」在微信裡叫什麼（暱稱優先）——AI 看到的發話人就是這個名字
+            const myName = _meName();
 
             const chatName = currentChat.name; const chatId = currentChat.id;
             const safeMembers = (currentChat.members && Array.isArray(currentChat.members)) ? currentChat.members : [];
@@ -2763,7 +2750,7 @@
                     }
                 } catch (e) { console.warn('[WX] 待處理清單組裝失敗（不影響送出）', e); }
                 try {
-                    const _me = (win.WX_USER && win.WX_USER.getInfo) ? (win.WX_USER.getInfo().name || '') : '';
+                    const _me = _meName();
                     const _links = _linkBrief(currentChat, _me);
                     if (_links) { messages.push({ role: 'system', content: _links }); console.log('[WX] 附上連結內容'); }
                 } catch (e) { console.warn('[WX] 連結內容組裝失敗（不影響送出）', e); }
@@ -2883,10 +2870,7 @@
                 };
             }
 
-            let myName = "User";
-            if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') {
-                myName = win.WX_USER.getInfo().name || "User";
-            }
+            const myName = _meName();
 
             // 格式：[WbShare: 作者|內容]
             const contentPreview = (post.content || '').replace(/\n/g, ' ').substring(0, 80);

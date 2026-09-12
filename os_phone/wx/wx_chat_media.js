@@ -54,7 +54,7 @@
         const videoRe = T && T.VIDEO ? new RegExp('^\\[\\s*(?:' + T.VIDEO + ')\\s*[:：]', 'i') : null;
         const taName = (chat && chat.name) || '對方';
         let me = '我';
-        try { if (win.WX_USER && win.WX_USER.getInfo) me = win.WX_USER.getInfo().name || '我'; } catch (e) {}
+        try { me = win.WX_ME.name() || '我'; } catch (e) {}
         list.forEach(function (m, i) {
             if (!m || m.type === 'system' || m.isLoading) return;
             const text = String(m.content || m.raw || '');

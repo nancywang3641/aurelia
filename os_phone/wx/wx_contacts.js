@@ -343,9 +343,7 @@
                             const allContactsForNames = this.getAllCustomContacts();
                             const memberNames = (finalMembers || []).map(id => {
                                 if (id === "User" || id === "user") {
-                                    if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') {
-                                        return win.WX_USER.getInfo().name || "User";
-                                    }
+                                    try { return win.WX_ME.name(); } catch (e) {}
                                     return "User";
                                 }
                                 const c = allContactsForNames.find(contact => contact.id === id);

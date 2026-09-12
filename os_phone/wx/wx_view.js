@@ -581,9 +581,7 @@
                         // 獲取發送者名稱
                         let senderName = "User";
                         if (isMe) {
-                            if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') {
-                                senderName = win.WX_USER.getInfo().name || "User";
-                            }
+                            try { senderName = win.WX_ME.name(); } catch (e) {}
                         } else {
                             // 從聊天對象獲取名稱
                             if (win.wxApp && win.wxApp.GLOBAL_CHATS) {
@@ -617,10 +615,8 @@
                         const _got = _list.reduce(function (n, x) { return n + (Number(x && x.amount) || 0); }, 0);
                         const _left = Number(_rd.totalAmount) - _got;
                         const _slots = Number(_rd.totalCount || 1) - _list.length;
-                        let _me = '';
-                        try { if (win.WX_USER && win.WX_USER.getInfo) _me = win.WX_USER.getInfo().name || ''; } catch (e) {}
                         if (_left <= 0.001 || _slots <= 0) { rpSub = '已領完'; rpDim = 'opacity:0.55;'; }
-                        else if (_me && _list.some(function (x) { return x && x.name === _me; })) { rpSub = '已領取'; }
+                        else if (_list.some(function (x) { try { return x && win.WX_ME.isMine(x.name); } catch (e) { return false; } })) { rpSub = '已領取'; }
                     }
                 } catch (e) {}
                 return `<div style="width: 220px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; font-family: sans-serif; ${rpDim}" onclick="${app}.openRedPacketById('${rpRef}')"><div style="background: #fa9d3b; padding: 15px; display: flex; align-items: center;"><div style="width: 32px; height: 42px; background: #e64340; border-radius: 4px; position: relative; margin-right: 12px; flex-shrink: 0; display:flex; justify-content:center; align-items:center; border:1px solid #f8b97a;"><div style="width:18px; height:18px; background:#f6d147; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#e64340; font-weight:bold; font-size:11px;">¥</div></div><div style="color: white; flex: 1; overflow:hidden;"><div style="font-size: 15px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${memo}</div><div style="font-size: 12px; opacity: 0.8;">${rpSub}</div></div></div><div style="background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display:flex; justify-content:space-between; align-items:center;"><span>微信紅包</span></div></div>`;

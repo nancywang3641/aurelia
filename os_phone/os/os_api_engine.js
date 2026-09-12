@@ -1288,6 +1288,14 @@
             const NO_CARD_ROUTES = ['iris_chat', 'cheshire_chat'];
             if (!NO_CARD_ROUTES.includes(promptKey)) {
                 if (userDesc || userName !== "User") contextBlock += `[User Persona — ${userName}]:\n${userDesc || '(玩家本人)'}\n⚠️ ${userName} 就是正在跟你聊天的真實使用者本人；你回覆與稱呼的對象永遠是 ${userName}，絕對不要把他當成劇情裡的其他角色或 NPC。\n\n`;
+                // 微信暱稱：微信裡別人看到的是暱稱，不是人設真名。
+                //   兩個不一樣的時候要講清楚是同一個人，不然 AI 會把 [暱稱] 當成劇情裡另一個角色。
+                if (promptKey === 'wx_chat_system') {
+                    try {
+                        const _nick = win.WX_ME ? String(win.WX_ME.name() || '').trim() : '';
+                        if (_nick && _nick !== userName) contextBlock += `[微信暱稱] ${userName} 在微信裡把自己的名字設成「${_nick}」，訊息前面的 [${_nick}] 就是本人，在微信裡就叫這個名字，不要當成另一個角色。\n\n`;
+                    } catch (e) {}
+                }
                 if (ctx.char.description) contextBlock += `[Character Description]:\n${ctx.char.description}\n\n`;
                 if (ctx.char.personality) contextBlock += `[Personality]:\n${ctx.char.personality}\n\n`;
                 if (ctx.char.scenario) contextBlock += `[Scenario]:\n${ctx.char.scenario}\n\n`;
