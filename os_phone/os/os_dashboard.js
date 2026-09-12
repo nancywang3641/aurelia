@@ -204,11 +204,13 @@
             b.onclick = function () { _switch(b.dataset.tab); };
         });
         _render();
-        // 記錄與訊息會一直有新的進來 → 開著的時候自己跟上
+        // 記錄與訊息會一直有新的進來 → 開著的時候自己跟上。
+        // 內容沒變的那幾輪 _paint 會整個跳過，DOM 一動都不動（見 _paint）。
         _timer = setInterval(function () {
             if (!_root) return;
-            if (_tab === 'log' || _tab === 'msg') _render();
-            else if (_tab === 'today') _render();
+            // 有記錄正展開著＝她正在讀 → 這一輪不要動它，收起來就恢復跟上
+            if (_tab === 'log' && Object.keys(_openLogs).some(function (k) { return _openLogs[k]; })) return;
+            if (_tab === 'log' || _tab === 'msg' || _tab === 'today') _render();
         }, 4000);
     }
     function close() {
@@ -219,7 +221,48 @@
         _tab = tab;
         if (!_root) return;
         _root.querySelectorAll('.dsh-tab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === _tab); });
+        _root.scrollTop = 0;        // 換一頁就從頭看（_paint 會把這個 0 原樣放回去）
         _render();
+    }
+
+    // 🚨 畫內容一律走這裡，不要直接 page.innerHTML＝。
+    //    每 4 秒自動更新一次，而更新的做法是整頁重畫；捲動的容器一被換掉就從頭開始，
+    //    她捲到一半在讀的東西每 4 秒被彈回頂端一次。這裡有兩道：
+    //    ①內容跟上次一模一樣就完全不碰 DOM（閒著的時候等於沒在重畫）。
+    //    ②真的變了才換，換完把捲動位置放回去——外層 #dsh-root 跟裡面每一個捲過的框都算
+    //      （訊息那頁真正在捲的是 .dsh-msgs，展開的記錄是 .dsh-pre，不是只有外層）。
+    //    🚨 兩份清單都是新的在最上面，新東西是從**頂端**長出來的：位置原封不動放回去，
+    //      她眼前的內容會被推下去。所以連高度一起記，還原時補上長高的那一段。
+    //      本來就停在最頂端的（scrollTop 0）不記，讓它照樣跟著新的跑。
+    function _scrollSnap(page) {
+        const snap = [];
+        const add = function (el) {
+            if (!el || !el.scrollTop) return;
+            const cls = String(el.className || '').split(/\s+/)[0];
+            if (!cls) return;
+            const list = Array.prototype.slice.call(page.querySelectorAll('.' + cls));
+            snap.push({ cls: cls, i: list.indexOf(el), top: el.scrollTop, h: el.scrollHeight });
+        };
+        page.querySelectorAll('*').forEach(add);
+        return snap;
+    }
+    function _scrollRestore(page, snap) {
+        snap.forEach(function (s2) {
+            const el = page.querySelectorAll('.' + s2.cls)[s2.i];
+            if (!el) return;
+            el.scrollTop = s2.top + Math.max(0, el.scrollHeight - s2.h);
+        });
+    }
+    function _paint(page, h) {
+        if (!page) return;
+        if (page.__dshHtml === h) return;
+        const snap = _scrollSnap(page);                        // 裡面每一個捲過的框
+        const rootTop = _root ? _root.scrollTop : 0;           // 外層那一層
+        const rootH = _root ? _root.scrollHeight : 0;
+        page.innerHTML = h;
+        page.__dshHtml = h;
+        _scrollRestore(page, snap);
+        if (_root && rootTop) _root.scrollTop = rootTop + Math.max(0, _root.scrollHeight - rootH);
     }
 
     async function _render() {
@@ -274,7 +317,7 @@
 
     async function _renderToday(page) {
         const U = _U();
-        if (!U) { page.innerHTML = '<div class="dsh-empty"><i class="fa-solid fa-plug-circle-xmark"></i>用量記錄還沒啟動。</div>'; return; }
+        if (!U) { _paint(page, '<div class="dsh-empty"><i class="fa-solid fa-plug-circle-xmark"></i>用量記錄還沒啟動。</div>'); return; }
         const today = U.dayKey();
         _days = await U.days(U.shiftDay(today, -13), today);
         if (!_days.some(function (x) { return x.id === _pickDay; })) _pickDay = today;
@@ -327,7 +370,7 @@
             '<div class="dsh-actions"><span class="dsh-note">點柱子看那一天</span><span class="sp"></span>' +
             '<button class="dsh-btn" id="dsh-clear-usage">清空所有用量紀錄</button></div>';
 
-        page.innerHTML = html;
+        _paint(page, html);
         page.querySelectorAll('.dsh-spark-col').forEach(function (c) {
             c.onclick = function () { _pickDay = c.dataset.day; _render(); };
         });
@@ -346,7 +389,7 @@
     // ── 書籤②：通道 ────────────────────────────────────────────────
     async function _renderChannels(page) {
         const S = _S(), U = _U();
-        if (!S) { page.innerHTML = '<div class="dsh-empty"><i class="fa-solid fa-plug-circle-xmark"></i>設定模組還沒載入。</div>'; return; }
+        if (!S) { _paint(page, '<div class="dsh-empty"><i class="fa-solid fa-plug-circle-xmark"></i>設定模組還沒載入。</div>'); return; }
         const routes = S.getRoutes ? S.getRoutes() : {};
         const chans = S.getChannels ? S.getChannels() : [];
         const main = S.getConfig ? S.getConfig() : {};
@@ -395,7 +438,7 @@
         html += '</div>';
         html += '<div class="dsh-actions"><button class="dsh-btn solid" id="dsh-add-chan"><i class="fa-solid fa-plus"></i> 新增一條通道</button></div>';
 
-        page.innerHTML = html;
+        _paint(page, html);
         page.querySelectorAll('.dsh-sel').forEach(function (s) {
             s.onchange = function () {
                 const r = S.getRoutes ? S.getRoutes() : {};
@@ -507,7 +550,7 @@
                     '</div></div>';
             }).join('') + '</div>';
         }
-        page.innerHTML = html;
+        _paint(page, html);
         page.querySelectorAll('[data-f]').forEach(function (c) {
             c.onclick = function () { _logFilter = c.dataset.f; _render(); };
         });
@@ -546,7 +589,7 @@
                 return '<div class="dsh-msg ' + m.ty + '"><span class="ts">' + _clock(m.t) + '</span>' + _esc(m.m) + '</div>';
             }).join('') + '</div>';
         }
-        page.innerHTML = html;
+        _paint(page, html);
         const cp = page.querySelector('#dsh-copy-msgs');
         if (cp) cp.onclick = function () {
             _copy(arr.map(function (m) { return _clock(m.t) + ' [' + m.ty + '] ' + m.m; }).join('\n'), '系統訊息', function (x) { _flash(cp, x); });
