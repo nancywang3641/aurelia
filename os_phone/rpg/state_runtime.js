@@ -422,7 +422,8 @@
             const timer = setTimeout(() => { if (done) return; done = true; reject(new Error('副模型超時')); }, CONFIG.timeoutMs);
             win.OS_API.chatSecondary(messages, null,
                 (text) => { if (done) return; done = true; clearTimeout(timer); resolve(text); },
-                (err) => { if (done) return; done = true; clearTimeout(timer); reject(err); });
+                (err) => { if (done) return; done = true; clearTimeout(timer); reject(err); },
+                { task: 'extract' });
         });
     }
     async function _compressRun(prompt) {
@@ -1590,7 +1591,8 @@ ${numberedText}`;
                 const timer = setTimeout(() => { if (done) return; done = true; rej(new Error('獨立插圖副模型超時')); }, CONFIG.timeoutMs);
                 win.OS_API.chatSecondary(messages, null,
                     (text) => { if (done) return; done = true; clearTimeout(timer); res(text); },
-                    (err) => { if (done) return; done = true; clearTimeout(timer); rej(err); });
+                    (err) => { if (done) return; done = true; clearTimeout(timer); rej(err); },
+                    { task: 'illust' });
             });
             const json = extractJSON(raw);
             if (!json || !Array.isArray(json.scenes) || !json.scenes.length) { console.warn('[獨立插圖] 輸出不含 scenes'); return; }

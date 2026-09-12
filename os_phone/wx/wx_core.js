@@ -2691,7 +2691,8 @@
             console.log('[WX] triggerReply: isApiMode=' + isApiMode + ', WX_API=' + (!!win.WX_API));
             if (isApiMode && win.WX_API) {
                 // 設定：以主模型完整設定當底（含 useSystemApi/stProfileId/url/key，跟創作室 callAI 同源），wx 自己的覆蓋其上
-                try { const _S = win.OS_SETTINGS; if (_S && _S.getConfig) { const _b = _S.getConfig(); if (_b) apiConfig = Object.assign({}, _b, apiConfig); } } catch (e) {}
+                // 分流：手機聊天要用哪個模型由設置決定（沒設就是主模型，跟以前一樣）
+                try { const _S = win.OS_SETTINGS; if (_S) { const _b = _S.getConfigFor ? _S.getConfigFor('phone_chat') : (_S.getConfig && _S.getConfig()); if (_b) apiConfig = Object.assign({}, _b, apiConfig); } } catch (e) {}
                 // 保險：仍缺 url/key 且非 useSystemApi → 從 os_global_config 補
                 if (!apiConfig.useSystemApi && (!apiConfig.url || !apiConfig.key)) {
                     try {

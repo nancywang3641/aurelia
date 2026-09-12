@@ -92,7 +92,7 @@
         chat.hbLast = Date.now();
         let apiConfig = {};
         try { apiConfig = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}'); } catch (e) {}
-        try { const S = win.OS_SETTINGS; if (S && S.getConfig) apiConfig = Object.assign({}, S.getConfig() || {}, apiConfig); } catch (e) {}
+        try { const S = win.OS_SETTINGS; if (S) { const b = S.getConfigFor ? S.getConfigFor('heartbeat') : (S.getConfig && S.getConfig()); if (b) apiConfig = Object.assign({}, b, apiConfig); } } catch (e) {}
         console.log('[心跳] ' + (chat.name || chat.id) + ' 要主動找她了');
         return await new Promise(function (resolve) {
             win.WX_API.chat(messages, apiConfig, null,
@@ -143,7 +143,7 @@
         for (const cd of cands.slice(0, AHEAD_MAX)) {
             let apiConfig = {};
             try { apiConfig = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}'); } catch (e) {}
-            try { const S = win.OS_SETTINGS; if (S && S.getConfig) apiConfig = Object.assign({}, S.getConfig() || {}, apiConfig); } catch (e) {}
+            try { const S = win.OS_SETTINGS; if (S) { const b = S.getConfigFor ? S.getConfigFor('heartbeat') : (S.getConfig && S.getConfig()); if (b) apiConfig = Object.assign({}, b, apiConfig); } } catch (e) {}
             if (!apiConfig.url || !apiConfig.key) continue;               // 跟著酒館的沒有 key 可以交給伺服器
             let url = String(apiConfig.url).replace(RE_TAIL_SLASH, '');
             if (!url.includes('/chat/completions')) url += (url.endsWith('/v1') ? '' : '/v1') + '/chat/completions';

@@ -293,3 +293,13 @@
         .push-state { font-size: 11px; line-height: 1.6; color: #3A3F5C; background: rgba(26,28,40,0.05); border-radius: 6px; padding: 9px 11px; white-space: pre-wrap; word-break: break-word; }
         .push-state.good { background: rgba(47,107,58,0.10); color: #2f6b3a; }
         .push-state.bad { background: rgba(217,81,34,0.10); color: #a33d18; }
+
+/* 🔌 分流表與通道清單（設置 → API 最下面） */
+.set-row-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(26,28,40,0.08); }
+.set-row-line:last-child { border-bottom: none; }
+.set-row-name { font-size: 13px; color: #1A1C28; white-space: nowrap; }
+.set-row-sel { max-width: 55%; }
+.set-channel { border: 1px solid rgba(26,28,40,0.12); border-radius: 6px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.set-channel-row { display: flex; gap: 6px; align-items: center; }
+.set-channel-row .set-input { flex: 1; }
+.set-channel-row .btn-test { flex: 0 0 auto; padding: 8px 14px; margin: 0; }

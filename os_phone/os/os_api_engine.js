@@ -522,6 +522,14 @@
             if (win.OS_SETTINGS?.getSecondaryConfig) secConfig = win.OS_SETTINGS.getSecondaryConfig();
             else if (win.OS_SETTINGS?.getConfig)     secConfig = win.OS_SETTINGS.getConfig();
             secConfig._isSecondary = true;
+            // 🔌 分流：呼叫端說了這是哪件事（options.task），就照設置裡指定的通道走。
+            //    沒指定、或那條通道沒填完 → getConfigFor 自己退回主／副，行為跟以前一樣。
+            try {
+                if (options && options.task && win.OS_SETTINGS && win.OS_SETTINGS.getConfigFor) {
+                    const _routed = win.OS_SETTINGS.getConfigFor(options.task);
+                    if (_routed) secConfig = _routed;
+                }
+            } catch (e) {}
 
             this.chat(
                 messages,
@@ -602,6 +610,12 @@
                 mainConfig = Object.assign({}, win.OS_SETTINGS.getConfig());
             }
             mainConfig._isSecondary = false;   // 明確走主模型連線（防 getConfig 回傳被副模型標過的共用物件）
+            try {
+                if (options && options.task && win.OS_SETTINGS && win.OS_SETTINGS.getConfigFor) {
+                    const _routed = win.OS_SETTINGS.getConfigFor(options.task);   // 🔌 分流（見 chatSecondary）
+                    if (_routed) mainConfig = _routed;
+                }
+            } catch (e) {}
             // 長輸出任務保底：深度整理/重壓要「整份重印」，連線設定的最大輸出若偏低(如2048)，
             // JSON 會印到一半被掐＝解析失敗整趟白跑。這裡強制下限 8192，不動使用者原設定值本身。
             const _mt = parseInt(mainConfig.maxTokens);

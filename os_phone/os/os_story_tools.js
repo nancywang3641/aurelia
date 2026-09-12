@@ -790,7 +790,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 //   依酒館「當前激活的連接預設」取對應破甲(customCotMap，跟設定面板同一套 key)，沒設過退回主模型單格 customCot。在哪條線就帶哪條的破甲。
                 let _cotPrefix = [];
                 try {
-                    const _cfg = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig) ? win.OS_SETTINGS.getConfig() : {};
+                    const _cfg = (win.OS_SETTINGS && win.OS_SETTINGS.getConfigFor) ? win.OS_SETTINGS.getConfigFor('summary') : (win.OS_SETTINGS && win.OS_SETTINGS.getConfig) ? win.OS_SETTINGS.getConfig() : {};
                     const _map = _cfg.customCotMap || {};
                     const _cm = win.SillyTavern?.getContext?.()?.extensionSettings?.connectionManager;
                     const _key = (_cm && _cm.selectedProfile) ? String(_cm.selectedProfile) : '__none__';

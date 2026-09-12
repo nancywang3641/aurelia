@@ -64,6 +64,75 @@
         return config;
     }
 
+    // ── 🔌 通道清單 ＋「哪件事走哪條」──────────────────────────────
+    // 以前只有主／副兩條，所有事情被迫共用：大總結要吐七八千字、狀態抽取只要幾十個字、
+    // 插圖只要照規範寫英文，卻全綁在同一個模型上。這裡讓她自己加通道，再指定哪件事走哪條。
+    // 🚨 預設一律「跟隨主／副」＝行為跟以前完全一樣；她不去動就什麼都沒變。
+    const LLM_CHANNELS_KEY = 'os_llm_channels';   // [{id,name,url,key,model,maxTokens,temperature,...}]
+    const LLM_ROUTES_KEY = 'os_llm_routes';       // { 任務: 'main' | 'sec' | 通道id }
+
+    // 對應表列的是「事情」不是「通道三」——她看得懂自己在調什麼，兩週後也還認得
+    const LLM_TASKS = [
+        { id: 'story',     name: '正文（故事）',       def: 'main' },
+        { id: 'phone_chat',name: '手機聊天',           def: 'main' },
+        { id: 'summary',   name: '大總結',             def: 'main' },
+        { id: 'extract',   name: '狀態抽取 / 人物檔案', def: 'sec'  },
+        { id: 'illust',    name: '插圖描述',           def: 'sec'  },
+        { id: 'map',       name: '地圖探索',           def: 'sec'  },
+        { id: 'heartbeat', name: '主動找我',           def: 'sec'  }
+    ];
+
+    function loadChannels() {
+        try {
+            const raw = JSON.parse(localStorage.getItem(LLM_CHANNELS_KEY) || '[]');
+            return Array.isArray(raw) ? raw.filter(c => c && c.id) : [];
+        } catch (e) { return []; }
+    }
+    function saveChannels(list) {
+        try { localStorage.setItem(LLM_CHANNELS_KEY, JSON.stringify(Array.isArray(list) ? list : [])); } catch (e) {}
+    }
+    function loadRoutes() {
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(LLM_ROUTES_KEY) || '{}') || {}; } catch (e) { saved = {}; }
+        const out = {};
+        LLM_TASKS.forEach(t => { out[t.id] = saved[t.id] || t.def; });
+        return out;
+    }
+    function saveRoutes(routes) {
+        try { localStorage.setItem(LLM_ROUTES_KEY, JSON.stringify(routes || {})); } catch (e) {}
+    }
+
+    // 某件事實際該用哪組設定。指到已經被刪掉的通道就退回預設（不要整個不能跑）。
+    function getConfigForTask(task) {
+        const t = LLM_TASKS.find(x => x.id === task);
+        const routes = loadRoutes();
+        const pick = routes[task] || (t ? t.def : 'main');
+        if (pick === 'main') return loadLlmConfig();
+        if (pick === 'sec') return loadSecLlmConfig();
+        const ch = loadChannels().find(c => c.id === pick);
+        if (!ch) return (t && t.def === 'sec') ? loadSecLlmConfig() : loadLlmConfig();
+        const base = (t && t.def === 'sec') ? loadSecLlmConfig() : loadLlmConfig();
+        // 自訂通道＝直連：把連線那幾欄蓋掉，其餘（串流、思考鏈…）沿用同性質的預設
+        const cfg = Object.assign({}, base, {
+            url: ch.url || '', key: ch.key || '', model: ch.model || '',
+            useSystemApi: false, useGenerateRaw: false, stProfileId: '',
+            maxTokens: parseInt(ch.maxTokens) || base.maxTokens,
+            temperature: isFinite(parseFloat(ch.temperature)) ? parseFloat(ch.temperature) : base.temperature,
+            _channel: ch.id, _channelName: ch.name || ''
+        });
+        if (!cfg.url || !cfg.key) return base;   // 這條還沒填完 → 照舊走預設，不要讓她的對話整個斷掉
+        return cfg;
+    }
+    // 給畫面用：這件事現在實際走誰（顯示名字）
+    function routeLabel(task) {
+        const routes = loadRoutes();
+        const pick = routes[task];
+        if (pick === 'main') return '主模型';
+        if (pick === 'sec') return '副模型';
+        const ch = loadChannels().find(c => c.id === pick);
+        return ch ? (ch.name || '未命名通道') : '（通道已刪，走預設）';
+    }
+
     // --- 讀取 Image 設置 ---
     function loadImageConfig() {
         let saved = localStorage.getItem(IMG_STORAGE_KEY);
@@ -413,6 +482,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
     window.OS_SETTINGS = Object.assign(window.OS_SETTINGS || {}, {
         getConfig: loadLlmConfig,
         getSecondaryConfig: loadSecLlmConfig,
+        // 🔌 哪件事走哪條（通道清單在設置 → API → 分流）
+        getConfigFor: getConfigForTask,
+        getChannels: loadChannels,
+        saveChannels: saveChannels,
+        getRoutes: loadRoutes,
+        saveRoutes: saveRoutes,
+        routeLabel: routeLabel,
+        LLM_TASKS: LLM_TASKS,
         getImageConfig: loadImageConfig,
         getMinimaxConfig: loadMinimaxConfig,
         saveConfig: saveConfig
@@ -1195,6 +1272,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="sec-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#3A3F5C; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
                     </div>
+
+                        <div class="set-group" id="route-group">
+                            <div class="set-label"><i class="fa-solid fa-shuffle"></i> 哪件事走哪個模型</div>
+                            <div class="set-desc">沒動過就跟以前一樣：正文、手機聊天、大總結走主模型，其餘走副模型。要分開再加通道。</div>
+                            <div id="route-table"></div>
+                        </div>
+
+                        <div class="set-group" id="channel-group">
+                            <div class="set-label"><i class="fa-solid fa-plug-circle-plus"></i> 我的通道</div>
+                            <div class="set-desc">主模型、副模型以外的連線，加幾條都行；加完回上面指定哪件事用它。</div>
+                            <div id="channel-list"></div>
+                            <div class="btn-test" id="channel-add-btn" style="margin-top:10px;"><i class="fa-solid fa-plus"></i> 加一條通道</div>
+                        </div>
                     </div><!-- /view-api -->
 
                     <div id="view-img" class="tab-view hidden">
@@ -2364,6 +2454,96 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const btnTest = container.querySelector('#os-test-btn');
         const secTestBtn = container.querySelector('#sec-test-btn');
         const status = container.querySelector('#os-status');
+
+        // ── 🔌 分流表 ＋ 我的通道 ──────────────────────────────────
+        (function wireChannels() {
+            const routeBox = container.querySelector('#route-table');
+            const listBox = container.querySelector('#channel-list');
+            const addBtn = container.querySelector('#channel-add-btn');
+            if (!routeBox || !listBox) return;
+            const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+            function paintRoutes() {
+                const routes = loadRoutes();
+                const chans = loadChannels();
+                routeBox.innerHTML = LLM_TASKS.map(function (t) {
+                    const opts = ['<option value="main"' + (routes[t.id] === 'main' ? ' selected' : '') + '>主模型</option>',
+                                  '<option value="sec"' + (routes[t.id] === 'sec' ? ' selected' : '') + '>副模型</option>']
+                        .concat(chans.map(function (c) {
+                            return '<option value="' + esc(c.id) + '"' + (routes[t.id] === c.id ? ' selected' : '') + '>'
+                                + esc(c.name || '未命名通道') + '</option>';
+                        })).join('');
+                    return '<div class="set-row-line">'
+                        + '<span class="set-row-name">' + t.name + '</span>'
+                        + '<select class="set-select set-row-sel" data-task="' + t.id + '">' + opts + '</select>'
+                        + '</div>';
+                }).join('');
+                routeBox.querySelectorAll('select[data-task]').forEach(function (sel) {
+                    sel.onchange = function () {
+                        const routes2 = loadRoutes();
+                        routes2[sel.getAttribute('data-task')] = sel.value;
+                        saveRoutes(routes2);
+                    };
+                });
+            }
+
+            function paintChannels() {
+                const chans = loadChannels();
+                if (!chans.length) {
+                    listBox.innerHTML = '<div class="set-desc">還沒有自訂通道。</div>';
+                } else {
+                    listBox.innerHTML = chans.map(function (c, i) {
+                        return '<div class="set-channel" data-idx="' + i + '">'
+                            + '<input class="set-input ch-name" placeholder="通道名字（例如 便宜大容量）" value="' + esc(c.name) + '">'
+                            + '<input class="set-input ch-url" placeholder="API 網址" value="' + esc(c.url) + '">'
+                            + '<input class="set-input ch-key" type="password" placeholder="金鑰" value="' + esc(c.key) + '">'
+                            + '<input class="set-input ch-model" placeholder="模型名稱" value="' + esc(c.model) + '">'
+                            + '<div class="set-channel-row">'
+                            +   '<input class="set-input ch-max" type="number" min="256" step="256" placeholder="最大輸出" value="' + esc(c.maxTokens || '') + '">'
+                            +   '<input class="set-input ch-temp" type="number" min="0" max="2" step="0.05" placeholder="溫度" value="' + esc(c.temperature == null ? '' : c.temperature) + '">'
+                            +   '<div class="btn-test ch-del">刪掉</div>'
+                            + '</div></div>';
+                    }).join('');
+                }
+                listBox.querySelectorAll('.set-channel').forEach(function (box) {
+                    const idx = parseInt(box.getAttribute('data-idx'), 10);
+                    const save = function () {
+                        const list = loadChannels();
+                        if (!list[idx]) return;
+                        list[idx].name = box.querySelector('.ch-name').value.trim();
+                        list[idx].url = box.querySelector('.ch-url').value.trim();
+                        list[idx].key = box.querySelector('.ch-key').value.trim();
+                        list[idx].model = box.querySelector('.ch-model').value.trim();
+                        list[idx].maxTokens = box.querySelector('.ch-max').value.trim();
+                        list[idx].temperature = box.querySelector('.ch-temp').value.trim();
+                        saveChannels(list);
+                        paintRoutes();
+                    };
+                    box.querySelectorAll('input').forEach(function (el) { el.onchange = save; });
+                    box.querySelector('.ch-del').onclick = async function () {
+                        const list = loadChannels();
+                        const gone = list[idx];
+                        if (!gone) return;
+                        if (!(await AUI.confirm('刪掉通道「' + (gone.name || '未命名') + '」？指到它的項目會退回預設。', { danger: true }))) return;
+                        list.splice(idx, 1);
+                        saveChannels(list);
+                        const routes = loadRoutes();
+                        Object.keys(routes).forEach(function (k) { if (routes[k] === gone.id) delete routes[k]; });
+                        saveRoutes(routes);
+                        paintChannels(); paintRoutes();
+                    };
+                });
+            }
+
+            if (addBtn) addBtn.onclick = function () {
+                const list = loadChannels();
+                list.push({ id: 'ch_' + Date.now().toString(36), name: '', url: '', key: '', model: '', maxTokens: '', temperature: '' });
+                saveChannels(list);
+                paintChannels(); paintRoutes();
+            };
+            paintChannels();
+            paintRoutes();
+        })();
 
         // Sliders Listeners
         elTemp.oninput = () => valTemp.innerText = parseFloat(elTemp.value).toFixed(2);
