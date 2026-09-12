@@ -1755,6 +1755,10 @@
         const li = chat.messages.findIndex(m => !m.isMe && m.isLoading);
         if (li !== -1) chat.messages.splice(li, 1);
         delete chat._relayJob;
+        // 🚨 資料裡刪掉「正在輸入」還不夠，畫面上那顆也要拔掉。以前只刪資料，
+        //    於是第一則訊息冒出來時舊的點點點還掛在上面，第二則又長一顆新的，
+        //    看起來像兩個人同時在打字；要等 simulateTypingStream 中間那次清理才一起消失。
+        if (APP_CONTAINER && GLOBAL_ACTIVE_ID === chat.id) { try { _removeLoadingBubble(); } catch (e) {} }
 
         const prev = GLOBAL_ACTIVE_ID;
         let newMsgs = [];
