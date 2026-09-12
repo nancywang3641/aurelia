@@ -196,6 +196,7 @@ const PHONE_FILES = [
     'os/os_phone_image.js',       // 手機類 app 共用的圖片描述→卡片→生圖管道
     'os/os_photo_viewer.js',      // 點圖放大看（iOS 相簿那樣：滑動換張、縮放、下拉關閉）
     'os/os_control_room.js',     // 🎛️ 控制室：監控/遙控桌面控制塔（SoVITS+ComfyUI）
+    'os/os_dashboard.js',        // 🎛️ 控制台：大廳 dock 開啟的看板（每日用量／通道／呼叫記錄／系統訊息）
 
     'os/os_achievement.js',
     'os/os_backup.js',
@@ -475,6 +476,7 @@ async function initializeExtension() {
         // os_phone/os 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_control_room.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_dashboard.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_studio.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_worldbook.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_persona.css');

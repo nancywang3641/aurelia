@@ -651,6 +651,7 @@
                 const _rec = _apiLogStart(win.AURELIA_API_LOG, messages);
                 _rec.cat = _cat;
                 _rec.route = (config && config.route) || (options && options.label) || '';
+                _rec.task = (options && options.task) || '';   // 控制台的記錄頁拿它顯示中文的任務名
                 _rec.inTok = null; _rec.outTok = null;   // token 估算(非阻塞，算完面板下次刷新即顯示)
                 const _inP = _estTok(_msgsText(messages)).then(n => { _rec.inTok = n; return n; }).catch(() => 0);
                 _useInP = _inP;

@@ -632,6 +632,18 @@ const IRIS_IDLE = [
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@f409f7e/aseets/menu_dock/icon-dorm-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="收容所">宿舍</span>
                         </button>
+                        <button class="lb-dock-btn" data-proxy="void-dash-btn" title="控制台">
+                            <svg class="lb-dock-ic" viewBox="0 0 512 512" aria-hidden="true">
+                                <g stroke="#12305e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
+                                    <rect x="56" y="86" width="400" height="340" rx="34" fill="#f5f9fd"/>
+                                    <rect x="104" y="134" width="304" height="52" rx="16" fill="#bfe3f7" stroke-width="16"/>
+                                    <rect x="104" y="222" width="120" height="160" rx="16" fill="#1ea7e8" stroke-width="16"/>
+                                    <rect x="252" y="222" width="156" height="70" rx="16" fill="#e3f3fc" stroke-width="16"/>
+                                    <circle cx="330" cy="348" r="34" fill="#f2b632" stroke-width="16"/>
+                                </g>
+                            </svg>
+                            <span class="lb-dock-label" data-cn-404="監控站">控制台</span>
+                        </button>
                         <div class="lb-dock-sep"></div>
                         <!-- 換場景：只在手機的對話模式出現（那時地點欄收掉了，改從這裡叫場景卡片）。
                              沒有 data-proxy，點擊由 lobby_places.js 接。
@@ -759,6 +771,16 @@ const IRIS_IDLE = [
                             <div class="lb-menu-txt">
                                 <span class="lb-menu-cn" data-cn-404="終端機">應用</span>
                                 <span class="lb-menu-en" data-en-404="TERMINAL">APPS</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-dash-btn" title="控制台" onclick="if(window.OS_DASHBOARD) window.OS_DASHBOARD.open();">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-gauge-high"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="監控站">控制台</span>
+                                <span class="lb-menu-en" data-en-404="MONITOR">CONTROL DESK</span>
                             </div>
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>

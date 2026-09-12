@@ -1,0 +1,317 @@
+/* ================================================================
+   os_dashboard.css —— 控制台（大廳 dock 開啟的獨立窗口）
+   白藍視差皮：白理石八角面板 ＋ 深藍 ＋ 金線（同房產手帳／入場精靈）
+   🚨 窗口掛在酒館 body 底下，主題的全域 h1/b/button/select 樣式會蓋進來，
+      所以顏色與字體一律明寫，該加 !important 的加。
+   ================================================================ */
+
+#dsh-root {
+    position: fixed;
+    inset: 0;
+    z-index: 99990;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    overflow-y: auto;
+    background: rgba(10, 13, 20, .72);
+    backdrop-filter: blur(3px);
+    font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
+    color: #1f3a68;
+    padding: 28px 12px 48px;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+}
+
+.dsh-book {
+    position: relative;
+    width: 960px;
+    max-width: 100%;
+    margin: auto;
+    min-height: min(calc(100dvh - 76px), 820px);
+    background: linear-gradient(178deg, #ffffff 0%, #fbfcfe 55%, #f4f6fb 100%);
+    clip-path: polygon(22px 0, calc(100% - 22px) 0, 100% 22px, 100% calc(100% - 22px),
+                       calc(100% - 22px) 100%, 22px 100%, 0 calc(100% - 22px), 0 22px);
+    box-shadow: 0 14px 40px rgba(31, 58, 104, .4);
+    padding: 26px 40px 34px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+.dsh-book::before {
+    content: "";
+    position: absolute;
+    top: 8px; left: 50%;
+    width: 8px; height: 8px;
+    background: #b9924f;
+    transform: translateX(-50%) rotate(45deg);
+    opacity: .85;
+}
+
+.dsh-close {
+    position: absolute;
+    top: 12px; right: 14px;
+    border: none; background: none; cursor: pointer;
+    color: #1e3a76; font-size: 19px; padding: 6px; line-height: 1; z-index: 5;
+}
+.dsh-close:hover { transform: scale(1.12); }
+
+/* 標題列：─◆ 控制台 ◆─ */
+.dsh-title-row { width: 100%; display: flex; align-items: center; gap: 16px; margin-top: 4px; }
+.dsh-wing { flex: 1; height: 2px; position: relative; background: linear-gradient(90deg, transparent, rgba(42, 74, 128, .45)); }
+.dsh-wing::after {
+    content: ""; position: absolute; right: -2px; top: 50%;
+    width: 7px; height: 7px; background: #2a4a80; transform: translateY(-50%) rotate(45deg);
+}
+.dsh-wing.r { background: linear-gradient(270deg, transparent, rgba(42, 74, 128, .45)); }
+.dsh-wing.r::after { right: auto; left: -2px; }
+.dsh-h1 {
+    margin: 0; font-size: 27px; font-weight: 700; letter-spacing: .35em; text-indent: .35em;
+    white-space: nowrap; color: #1f3a68 !important; font-family: inherit; line-height: 1.4;
+    text-shadow: none !important;
+}
+
+/* 書籤列 */
+.dsh-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.dsh-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+.dsh-tab {
+    padding: 7px 24px; background: #fdfdfc; border: 1.5px solid rgba(42, 74, 128, .35); border-radius: 22px;
+    font-size: 14.5px; letter-spacing: .25em; text-indent: .25em; cursor: pointer; white-space: nowrap;
+    font-family: inherit; color: #1f3a68;
+}
+.dsh-tab.on { background: linear-gradient(180deg, #2c4a7e, #1e3554); color: #f4efe3; border-color: #1e3554; }
+.dsh-pill {
+    display: flex; align-items: center; gap: 7px; padding: 6px 16px; background: #fdfdfc;
+    border: 1px solid rgba(42, 74, 128, .35); border-radius: 20px; font-size: 14px; font-weight: 700;
+    color: #1f3a68;
+}
+.dsh-pill i { color: #b9924f; }
+
+.dsh-page { width: 100%; display: flex; flex-direction: column; gap: 14px; }
+
+/* 段落標：─◆ 名 ◆─ */
+.dsh-sec { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.dsh-sec .d { flex: 1; height: 1.2px; position: relative; background: linear-gradient(90deg, transparent, rgba(42, 74, 128, .4)); }
+.dsh-sec .d::after {
+    content: ""; position: absolute; right: 0; top: 50%;
+    width: 5px; height: 5px; background: #2a4a80; transform: translateY(-50%) rotate(45deg);
+}
+.dsh-sec .d.r { background: linear-gradient(270deg, transparent, rgba(42, 74, 128, .4)); }
+.dsh-sec .d.r::after { right: auto; left: 0; }
+.dsh-sec b {
+    font-size: 15px; letter-spacing: .3em; text-indent: .3em; white-space: nowrap;
+    color: #1f3a68 !important; text-shadow: none !important; font-family: inherit;
+}
+
+/* ── 今天：四張大數字 ── */
+.dsh-stats { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.dsh-stat {
+    position: relative; background: #fdfdfc; border: 1.5px solid rgba(42, 74, 128, .5); border-radius: 6px;
+    padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.dsh-stat::before, .dsh-stat::after { content: ""; position: absolute; width: 11px; height: 11px; pointer-events: none; }
+.dsh-stat::before { top: 3px; left: 3px; border-top: 3px solid #2a4a80; border-left: 3px solid #2a4a80; }
+.dsh-stat::after { bottom: 3px; right: 3px; border-bottom: 3px solid #2a4a80; border-right: 3px solid #2a4a80; }
+.dsh-stat-k { font-size: 12px; letter-spacing: .18em; color: #46639b; }
+.dsh-stat-v { font-size: 28px; font-weight: 700; line-height: 1.15; color: #1f3a68; word-break: break-all; }
+.dsh-stat-v small { font-size: 13px; font-weight: 400; margin-left: .3em; color: #46639b; }
+.dsh-stat-sub { font-size: 11.5px; color: #7d8aa6; letter-spacing: .04em; }
+.dsh-stat-sub .up { color: #b5563f; }
+.dsh-stat-sub .down { color: #3f7a5a; }
+
+/* ── 橫條：哪件事最花 ── */
+.dsh-bars { width: 100%; display: flex; flex-direction: column; gap: 9px; }
+.dsh-bar-row { display: grid; grid-template-columns: 118px 1fr auto; align-items: center; gap: 12px; font-size: 13px; }
+.dsh-bar-name { color: #1f3a68; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dsh-bar-track { display: block; height: 12px; background: rgba(42, 74, 128, .09); border-radius: 7px; overflow: hidden; }
+.dsh-bar-fill {
+    /* 寬度是依資料算的比例，只能由 JS 帶進來 → 用 CSS 變數，不寫 inline 樣式 */
+    display: block;
+    width: var(--w, 0%);
+    height: 100%;
+    background: linear-gradient(90deg, #3d6bab, #2a4a80);
+    border-radius: 7px;
+}
+.dsh-bar-num { color: #46639b; font-size: 12.5px; white-space: nowrap; }
+
+/* ── 近 14 天柱狀 ── */
+.dsh-spark { width: 100%; display: flex; align-items: flex-end; gap: 6px; height: 128px; padding: 6px 0 0; }
+.dsh-spark-col {
+    flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+    gap: 5px; cursor: pointer; min-width: 0;
+}
+.dsh-spark-bar {
+    /* 高度＝當天用量比例，同上，只能動態帶 */
+    display: block; width: 100%; height: var(--h, 2px); min-height: 2px;
+    background: linear-gradient(180deg, #6f9bd4, #2a4a80);
+    border-radius: 4px 4px 0 0;
+}
+.dsh-spark-col.on .dsh-spark-bar { background: linear-gradient(180deg, #e0bd74, #b9924f); }
+.dsh-spark-col:hover .dsh-spark-bar { filter: brightness(1.12); }
+.dsh-spark-lbl { font-size: 10.5px; color: #7d8aa6; white-space: nowrap; }
+.dsh-spark-col.on .dsh-spark-lbl { color: #b9924f; font-weight: 700; }
+
+/* ── 空狀態 ── */
+.dsh-empty {
+    width: 100%; padding: 34px 20px; text-align: center; color: #46639b; font-size: 13.5px; line-height: 2;
+    background: #fdfdfc; border: 1px dashed rgba(42, 74, 128, .3); border-radius: 8px;
+}
+.dsh-empty i { display: block; font-size: 26px; color: rgba(42, 74, 128, .35); margin-bottom: 8px; }
+.dsh-empty small { color: #7d8aa6; }
+
+/* ── 通道頁 ── */
+.dsh-routes { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+.dsh-route-row {
+    display: grid; grid-template-columns: 1fr 180px; align-items: center; gap: 10px;
+    padding: 8px 14px; background: #fdfdfc; border: 1px solid rgba(42, 74, 128, .28); border-radius: 24px;
+    font-size: 13.5px; letter-spacing: .06em;
+}
+.dsh-sel {
+    width: 100%; padding: 5px 9px; border: 1px solid rgba(42, 74, 128, .35); border-radius: 6px;
+    background: #ffffff !important; color: #1f3a68 !important; font-family: inherit; font-size: 13px;
+    height: auto; cursor: pointer;
+}
+
+.dsh-chans { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.dsh-chan {
+    position: relative; background: #fdfdfc; border: 1.5px solid rgba(42, 74, 128, .5); border-radius: 6px;
+    padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 7px; min-width: 0;
+}
+.dsh-chan::before, .dsh-chan::after { content: ""; position: absolute; width: 11px; height: 11px; pointer-events: none; }
+.dsh-chan::before { top: 3px; left: 3px; border-top: 3px solid #2a4a80; border-left: 3px solid #2a4a80; }
+.dsh-chan::after { bottom: 3px; right: 3px; border-bottom: 3px solid #2a4a80; border-right: 3px solid #2a4a80; }
+.dsh-chan-name { font-size: 15px; font-weight: 700; color: #1f3a68; letter-spacing: .1em; overflow-wrap: anywhere; }
+.dsh-chan-meta { font-size: 12px; color: #46639b; word-break: break-all; line-height: 1.7; }
+.dsh-chan-meta b { color: #1f3a68 !important; font-weight: 700; text-shadow: none !important; }
+.dsh-chan-use { font-size: 12.5px; color: #7d8aa6; }
+.dsh-chan-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+
+.dsh-btn {
+    padding: 5px 15px; background: #fdfdfc; border: 1px solid rgba(42, 74, 128, .45); border-radius: 18px;
+    color: #1f3a68 !important; font-family: inherit; font-size: 12.5px; letter-spacing: .1em; cursor: pointer;
+}
+.dsh-btn:hover { background: #eef2fa; }
+.dsh-btn.solid { background: linear-gradient(180deg, #2c4a7e, #1e3554); color: #f4efe3 !important; border-color: #1e3554; }
+.dsh-btn.warn { border-color: rgba(168, 68, 52, .5); color: #a84434 !important; }
+.dsh-actions { width: 100%; display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+.dsh-actions .sp { flex: 1; }
+.dsh-note { font-size: 12.5px; color: #7d8aa6; letter-spacing: .1em; }
+
+/* 正在看的是哪一天 */
+.dsh-daybar { width: 100%; display: flex; align-items: baseline; gap: 10px; }
+.dsh-daybar b { font-size: 17px; font-weight: 700; color: #1f3a68 !important; letter-spacing: .2em; text-shadow: none !important; }
+.dsh-daybar .sp { flex: 1; }
+
+/* ── 記錄頁 ── */
+.dsh-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.dsh-chip {
+    padding: 4px 14px; background: #fdfdfc; border: 1px solid rgba(42, 74, 128, .3); border-radius: 18px;
+    font-size: 12.5px; color: #1f3a68; cursor: pointer; font-family: inherit; letter-spacing: .1em;
+}
+.dsh-chip.on { background: linear-gradient(180deg, #2c4a7e, #1e3554); color: #f4efe3; border-color: #1e3554; }
+
+.dsh-logs { width: 100%; display: flex; flex-direction: column; gap: 7px; }
+.dsh-log { background: #fdfdfc; border: 1px solid rgba(42, 74, 128, .28); border-radius: 8px; overflow: hidden; }
+.dsh-log-head {
+    display: flex; align-items: center; gap: 9px; padding: 9px 13px; cursor: pointer;
+    font-size: 12.5px; color: #1f3a68; flex-wrap: wrap;
+}
+.dsh-log-head:hover { background: #f2f5fb; }
+.dsh-log-t { color: #7d8aa6; font-variant-numeric: tabular-nums; }
+.dsh-badge {
+    padding: 1px 9px; border-radius: 11px; font-size: 11px; letter-spacing: .1em;
+    background: rgba(42, 74, 128, .1); color: #2a4a80;
+}
+.dsh-badge.sec { background: rgba(185, 146, 79, .16); color: #8a6a2f; }
+.dsh-badge.aux { background: rgba(125, 138, 166, .16); color: #5c6880; }
+.dsh-log-task { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.dsh-log-model { color: #46639b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.dsh-log-sp { flex: 1; }
+.dsh-log-tok { color: #46639b; font-variant-numeric: tabular-nums; }
+.dsh-log-st.ok { color: #3f7a5a; }
+.dsh-log-st.bad { color: #a84434; font-weight: 700; }
+.dsh-log-body { padding: 0 13px 12px; display: flex; flex-direction: column; gap: 8px; }
+.dsh-pre {
+    margin: 0; padding: 10px 12px; background: #f4f6fb; border: 1px solid rgba(42, 74, 128, .18); border-radius: 6px;
+    font: 11.5px/1.65 ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #2b3d5c;
+    white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto;
+}
+.dsh-pre-k { font-size: 12px; color: #46639b; letter-spacing: .1em; }
+
+/* ── 訊息頁 ── */
+.dsh-msgs {
+    width: 100%; background: #fdfdfc; border: 1px solid rgba(42, 74, 128, .28); border-radius: 8px;
+    padding: 8px 12px; font: 11.5px/1.75 ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    max-height: 60vh; overflow: auto;
+}
+.dsh-msg { padding: 1px 0; white-space: pre-wrap; word-break: break-word; border-bottom: 1px solid rgba(42, 74, 128, .06); color: #2b3d5c; }
+.dsh-msg .ts { color: #9aa6bd; margin-right: .6em; }
+.dsh-msg.error { color: #a84434; }
+.dsh-msg.warn { color: #8a6a2f; }
+.dsh-msg.info { color: #2a5f8a; }
+
+/* ── 小抽屜（新增／編輯通道）── */
+.dsh-sheet {
+    position: fixed; inset: 0; z-index: 99995; display: flex; align-items: center; justify-content: center;
+    background: rgba(10, 13, 20, .55); padding: 20px; box-sizing: border-box;
+}
+.dsh-sheet-card {
+    width: 430px; max-width: 100%; max-height: 86vh; overflow: auto;
+    background: linear-gradient(178deg, #ffffff 0%, #f6f8fc 100%);
+    border: 1.5px solid rgba(42, 74, 128, .5); border-radius: 10px; padding: 20px 22px;
+    display: flex; flex-direction: column; gap: 11px;
+    font-family: 'Noto Serif TC', 'Source Han Serif TC', serif; color: #1f3a68;
+    box-shadow: 0 14px 40px rgba(31, 58, 104, .42);
+}
+.dsh-sheet-h { font-size: 17px; font-weight: 700; letter-spacing: .2em; color: #1f3a68 !important; text-shadow: none !important; }
+.dsh-field { display: flex; flex-direction: column; gap: 4px; }
+.dsh-field span { font-size: 12px; color: #46639b; letter-spacing: .1em; }
+.dsh-field small { font-size: 11px; color: #8b97ae; }
+.dsh-input {
+    width: 100%; box-sizing: border-box; padding: 7px 10px;
+    border: 1px solid rgba(42, 74, 128, .35); border-radius: 6px;
+    background: #ffffff !important; color: #1f3a68 !important; font-family: inherit; font-size: 13px;
+}
+.dsh-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.dsh-hide { display: none !important; }
+
+/* ── 手機 ── */
+@media (max-width: 760px) {
+    #dsh-root { padding: 12px 8px 30px; }
+    .dsh-book { padding: 20px 16px 26px; gap: 12px; min-height: min(calc(100dvh - 42px), 760px); }
+    .dsh-h1 { font-size: 21px; letter-spacing: .25em; text-indent: .25em; }
+    .dsh-tab { padding: 6px 15px; font-size: 13px; letter-spacing: .15em; text-indent: .15em; }
+    .dsh-stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .dsh-stat-v { font-size: 23px; }
+    .dsh-routes, .dsh-chans { grid-template-columns: 1fr; }
+    .dsh-route-row { grid-template-columns: 1fr 140px; padding: 7px 12px; font-size: 13px; }
+    .dsh-bar-row { grid-template-columns: 86px 1fr auto; gap: 8px; font-size: 12.5px; }
+    .dsh-spark { height: 96px; gap: 4px; }
+    .dsh-spark-lbl { font-size: 9px; }
+    .dsh-log-model { max-width: 120px; }
+    .dsh-two { grid-template-columns: 1fr; }
+}
+
+/* ── 複製的第三層退路：都不行時彈出來讓她自己按 Ctrl+C ── */
+.dsh-copybox {
+    position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center;
+    background: rgba(10, 13, 20, .6); padding: 22px; box-sizing: border-box;
+}
+.dsh-copybox-in {
+    width: 620px; max-width: 100%; background: #ffffff; border: 1.5px solid rgba(42, 74, 128, .5);
+    border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
+    font-family: 'Noto Serif TC', 'Source Han Serif TC', serif; color: #1f3a68;
+}
+.dsh-copybox-h { font-size: 13px; color: #46639b; line-height: 1.7; }
+.dsh-copybox-ta {
+    width: 100%; box-sizing: border-box; height: 44vh; resize: none;
+    border: 1px solid rgba(42, 74, 128, .3); border-radius: 6px; padding: 9px 11px;
+    background: #f4f6fb !important; color: #2b3d5c !important;
+    font: 11.5px/1.6 ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+.dsh-copybox-x { align-self: flex-end; }
+
+/* 複製第二層用的離屏 textarea（execCommand 需要它真的在頁面上） */
+.dsh-offscreen { position: fixed; left: -9999px; top: 0; opacity: 0; }
