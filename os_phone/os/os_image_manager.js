@@ -380,6 +380,7 @@
         // --- Pollinations 生成邏輯 ---
         _genPollinations: function(basePrompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'pollinations', type: type }); } catch (e) {}   // 📊 長期用量帳
             let optimizedPrompt = basePrompt;
 
             const seed = options.seed || Math.floor(Math.random() * 100000);
@@ -416,6 +417,7 @@
         // 所以不能共用那格、只換網址。
         // 模型名一律使用者自己填 —— 每個站支援的型號都不一樣，內建清單只會過期。
         _genCustomApi: async function(prompt, type, options = {}) {
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: type }); } catch (e) {}   // 📊 長期用量帳
             // options.customApi：設置頁的「測試」鈕用的——讓她還沒按儲存就能試，不必先存壞設定
             const cfg = options.customApi || (this.config && this.config.customApi) || {};
             const rawUrl = String(cfg.url || '').trim();
@@ -549,6 +551,7 @@
 
         _genTavernSd: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'tavern_sd', type: type }); } catch (e) {}   // 📊 長期用量帳
 
             const trigger = (win.TavernHelper && win.TavernHelper.triggerSlash) || win.triggerSlash;
             if (typeof trigger !== 'function') {
@@ -648,7 +651,10 @@
         // 不依賴 ST 的 workflow 檔；LoRA/參數全由 config.comfyuiDirect（奧瑞亞 UI）控制。
         _genComfyuiDirect: async function(prompt, type, options = {}) {
             // options.warmup＝暖機單（warmup()）：不計生圖數、不套場景高清/修臉、失敗全靜默——它只為了把模型拉上顯卡
-            if (!options.warmup) { try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {} }
+            if (!options.warmup) {
+                try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+                try { win.OS_USAGE && win.OS_USAGE.note({ source: 'comfyui_direct', type: type }); } catch (e) {}   // 📊 長期用量帳
+            }
             const cfg = this._comfyCfgFor(type);   // 按桶取設定（char/scene/bg/map 各自一份，沒設過退共用）
             const url = (cfg.url || '').trim();
             if (!url) {
@@ -1194,6 +1200,7 @@
         // --- NovelAI 生成邏輯（char / item / pet / scene）---
         _genNovelAI: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'novelai', type: type }); } catch (e) {}   // 📊 長期用量帳
             const cfg = this.config.novelai;
             if (!cfg.token) {
                 console.warn('[ImageManager] NAI token 未設定，回退 Pollinations');
@@ -1529,6 +1536,8 @@
                 url += `&private=true&key=${this.config.pollinations.apiKey.trim()}`;
             }
 
+            // 📊 長期用量帳：背景走 Pollinations 是自己組 URL 直接回，不經過 _genPollinations，所以在這裡記
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'pollinations', type: 'bg' }); } catch (e) {}
             return url;
         },
 

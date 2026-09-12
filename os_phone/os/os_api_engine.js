@@ -643,6 +643,7 @@
 
             // ── 🔥 全局 API 記錄：中央 chat 攔「所有」文字呼叫（不論哪個入口、有沒有貼標都記），
             //    按連線分類（main=主模型 / sec=副模型 / aux=未標記的手搭 config）+ 標註用途 route ──
+            let _useRec = null, _useInP = null;   // 用量記錄層的那一筆（托管路徑會提早 return，要在外層拿得到）
             {
                 const _cat = (config && config._isSecondary === false) ? 'main'
                            : (config && config._isSecondary === true)  ? 'sec'
@@ -651,10 +652,36 @@
                 _rec.cat = _cat;
                 _rec.route = (config && config.route) || (options && options.label) || '';
                 _rec.inTok = null; _rec.outTok = null;   // token 估算(非阻塞，算完面板下次刷新即顯示)
-                _estTok(_msgsText(messages)).then(n => { _rec.inTok = n; }).catch(() => {});
+                const _inP = _estTok(_msgsText(messages)).then(n => { _rec.inTok = n; return n; }).catch(() => 0);
+                _useInP = _inP;
+                // 📊 同一筆也交給用量記錄層存進 IndexedDB（環形緩衝關掉就沒了，這份要長期留著算每天用多少）
+                _useRec = win.OS_USAGE ? win.OS_USAGE.start({
+                    kind: 'text',
+                    task: (options && options.task) || '',
+                    label: _rec.route,
+                    cat: _cat,
+                    chan: (config && config._channel) || _cat,
+                    chanName: (config && config._channelName) || (_cat === 'main' ? '主模型' : (_cat === 'sec' ? '副模型' : '其他')),
+                    model: (config && config.model) || '',
+                    via: (config && config.useSystemApi) ? 'st' : 'direct'
+                }) : null;
+                const _use = _useRec;
                 const _of = onFinish, _oe = onError;
-                onFinish = (text) => { try { _secLogEnd(_rec, true, text); _estTok(text).then(n => { _rec.outTok = n; }).catch(() => {}); } catch (e) {} if (_of) _of(text); };
-                onError  = (err)  => { try { _secLogEnd(_rec, false, err); } catch (e) {} if (_oe) _oe(err); };
+                onFinish = (text) => {
+                    try {
+                        _secLogEnd(_rec, true, text);
+                        const _outP = _estTok(text).then(n => { _rec.outTok = n; return n; }).catch(() => 0);
+                        if (_use) Promise.all([_inP, _outP]).then(v => win.OS_USAGE.end(_use, { ok: true, inTok: v[0], outTok: v[1], ms: _rec.ms })).catch(() => {});
+                    } catch (e) {}
+                    if (_of) _of(text);
+                };
+                onError  = (err)  => {
+                    try {
+                        _secLogEnd(_rec, false, err);
+                        if (_use) _inP.then(n => win.OS_USAGE.end(_use, { ok: false, inTok: n, err: err, ms: _rec.ms })).catch(() => {});
+                    } catch (e) {}
+                    if (_oe) _oe(err);
+                };
             }
 
             if (this.isStandalone() && config.useSystemApi) {
@@ -881,6 +908,15 @@
                             upstream: { url: _rUrl, key: config.key, body: commonBody }
                         }));
                         console.log('📡 [OS_API] 這一輪交給伺服器跑了：' + _jid);
+                        // 📊 這一輪的錢是伺服器替她付出去的，帳一樣要記。
+                        //    回來的字數不經過這裡（結果由 os_relay 收回直接交給 app），所以只記送出去的。
+                        if (_useRec) {
+                            try {
+                                _useRec.via = 'relay'; _useRec.relay = true;
+                                const _ms = Date.now() - _useRec.t;
+                                _useInP.then(n => win.OS_USAGE.end(_useRec, { ok: true, inTok: n, outTok: 0, ms: _ms })).catch(() => {});
+                            } catch (e) {}
+                        }
                         if (options.onQueued) options.onQueued(_jid);
                         return;
                     } catch (e) {
