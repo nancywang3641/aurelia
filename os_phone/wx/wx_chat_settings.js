@@ -134,15 +134,9 @@
             }
     }
 
-    // 💓 心跳「多久來一次」滑桿：分鐘數不是線性的（十分鐘到一天），所以做成一排檔位
-    const HB_STEPS = [10, 20, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
-    function _hbMinsIdx(mins) {
-        const m = parseInt(mins, 10);
-        if (!isFinite(m)) return HB_STEPS.indexOf(180);
-        let best = 0;
-        for (let i = 1; i < HB_STEPS.length; i++) if (Math.abs(HB_STEPS[i] - m) < Math.abs(HB_STEPS[best] - m)) best = i;
-        return best;
-    }
+    // 💓 心跳「多久來一次」本來是一排檔位的滑桿（10 分鐘～一天）。她要自己打數字，
+    //    所以檔位表整個拿掉了——想設 47 分鐘就打 47，不必遷就格子。
+    const HB_MIN = 1, HB_MAX = 1440;   // 一分鐘 ～ 一天
     function _hbMinsText(mins) {
         const m = parseInt(mins, 10) || 180;
         if (m < 60) return m + ' 分鐘';
@@ -471,18 +465,22 @@
                         <div class="ws-label">他會主動找我</div>
                         <input type="checkbox" class="ws-switch" id="chk-hb-on" ${chat.hbOn ? 'checked' : ''}>
                     </label>
-                    <div class="ws-cell ws-cell-slider">
+                    <div class="ws-cell">
                         <div class="ws-label">多久來一次</div>
-                        <div class="ws-slider-val" id="hb-mins-val"></div>
+                        <div class="ws-right">
+                            <input type="number" class="ws-input ws-num" id="hb-mins" inputmode="numeric" min="${HB_MIN}" max="${HB_MAX}" step="1" value="${parseInt(chat.hbMins, 10) || 180}">
+                            <span class="ws-unit">分鐘</span>
+                        </div>
                     </div>
-                    <input type="range" class="ws-range" id="hb-mins" min="0" max="12" step="1" value="${_hbMinsIdx(chat.hbMins)}">
-                    <div class="ws-cell ws-cell-slider">
+                    <div class="ws-cell">
                         <div class="ws-label">來的機率</div>
-                        <div class="ws-slider-val" id="hb-chance-val"></div>
+                        <div class="ws-right">
+                            <input type="number" class="ws-input ws-num" id="hb-chance" inputmode="numeric" min="0" max="100" step="1" value="${(chat.hbChance == null ? 60 : chat.hbChance)}">
+                            <span class="ws-unit">%</span>
+                        </div>
                     </div>
-                    <input type="range" class="ws-range" id="hb-chance" min="10" max="100" step="10" value="${(chat.hbChance == null ? 60 : chat.hbChance)}">
                 </div>
-                <div class="ws-note">時間到而且你們也有一陣子沒講話，才會擲一次機率決定他要不要開口。手機關著時由伺服器代跑（要先開「回覆交給伺服器跑」）。</div>
+                <div class="ws-note"><span id="hb-mins-val"></span>時間到而且你們也有一陣子沒講話，才會擲一次機率決定他要不要開口。手機關著時由伺服器代跑（要先開「回覆交給伺服器跑」）。</div>
                 ` : ''}
 
                 <div class="ws-section-header">聊天記憶</div>
@@ -1086,20 +1084,41 @@
             {
                 const _on = doc.getElementById('chk-hb-on');
                 const _mins = doc.getElementById('hb-mins'), _minsV = doc.getElementById('hb-mins-val');
-                const _ch = doc.getElementById('hb-chance'), _chV = doc.getElementById('hb-chance-val');
+                const _ch = doc.getElementById('hb-chance');
                 const _saveHb = () => {
                     if (app.saveChats) app.saveChats();
                     if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
                 };
+                // 打字中不夾、不存：夾了游標會亂跳，存了每按一個鍵寫一次。離開格子或按 Enter 才收。
+                const _clamp = (v, lo, hi, def) => {
+                    const n = parseInt(v, 10);
+                    if (!isFinite(n)) return def;
+                    return Math.min(hi, Math.max(lo, n));
+                };
                 const _paint = () => {
-                    if (_minsV && _mins) _minsV.textContent = _hbMinsText(HB_STEPS[parseInt(_mins.value, 10)] || 180);
-                    if (_chV && _ch) _chV.textContent = _ch.value + '%';
+                    if (!_minsV) return;
+                    const m = parseInt(_mins && _mins.value, 10);
+                    // 超過一小時才換算給她看——「90 分鐘」自己看得懂，「480 分鐘」看不出是八小時
+                    _minsV.textContent = (isFinite(m) && m >= 60) ? ('每 ' + _hbMinsText(m) + '一次。') : '';
                 };
                 if (_on) _on.onchange = () => { if (_on.checked) chat.hbOn = true; else delete chat.hbOn; _saveHb(); };
-                if (_mins) _mins.oninput = () => { _paint(); };
-                if (_mins) _mins.onchange = () => { chat.hbMins = HB_STEPS[parseInt(_mins.value, 10)] || 180; _saveHb(); };
-                if (_ch) _ch.oninput = () => { _paint(); };
-                if (_ch) _ch.onchange = () => { chat.hbChance = parseInt(_ch.value, 10); _saveHb(); };
+                if (_mins) {
+                    _mins.oninput = _paint;
+                    _mins.onchange = () => {
+                        const v = _clamp(_mins.value, HB_MIN, HB_MAX, 180);
+                        _mins.value = v; chat.hbMins = v; _paint(); _saveHb();
+                    };
+                }
+                if (_ch) {
+                    _ch.onchange = () => {
+                        const v = _clamp(_ch.value, 0, 100, 60);
+                        _ch.value = v; chat.hbChance = v; _saveHb();
+                    };
+                }
+                // 手機鍵盤的「完成」不一定送 change，按 Enter 也要收得起來
+                [_mins, _ch].forEach(function (el) {
+                    if (el) el.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } };
+                });
                 _paint();
             }
             // 🔗 打開我傳的連結：一間一個開關，切了就存（不用再按保存）。實際讀網頁在 wx_core 的 _prepareLinks

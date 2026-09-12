@@ -54,6 +54,10 @@
         .ws-switch:checked::after { transform: translateX(18px); }
 
         /* 滑桿（心跳的「多久來一次」「機率」）：數字給自己的位置，不跟標題擠成一行 */
+        /* 自己打的數字格（心跳的多久一次／機率）：右靠、單位跟在後面 */
+        .ws-num { width: 72px; flex: none; color: #07c160; font-variant-numeric: tabular-nums; }
+        .ws-num::-webkit-outer-spin-button, .ws-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .ws-unit { margin-left: 5px; color: #999; font-size: 14px; }
         .ws-cell-slider { padding-bottom: 4px; border-bottom: none; }
         .ws-slider-val { font-size: 15px; color: #07c160; font-variant-numeric: tabular-nums; }
         .ws-range { -webkit-appearance: none; appearance: none; display: block; width: calc(100% - 32px); margin: 0 16px 14px; height: 4px; border-radius: 2px; background: #e5e5e5; outline: none; }
