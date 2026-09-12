@@ -68,6 +68,9 @@
             .wx-modal-pick { width: 100%; padding: 11px; margin-bottom: 8px; border: none; border-radius: 6px; background: #07c160; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
             .wx-modal-pick:disabled { opacity: 0.6; cursor: wait; }
             .wx-modal-pick.hidden { display: none; }
+            .wx-modal-mic:disabled { cursor: progress; }
+            .wx-modal-mic.is-recording { background: #fa5151; animation: wxMicPulse 1.2s ease-in-out infinite; }
+            @keyframes wxMicPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(250,81,81,0.45); } 50% { box-shadow: 0 0 0 6px rgba(250,81,81,0); } }
             .wx-modal-footer { display: flex; gap: 10px; margin-top: 10px; }
             .wx-btn { flex: 1; padding: 10px 0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; text-align: center; }
             .wx-btn-cancel { background: #f2f2f2; color: #333; }

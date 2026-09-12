@@ -13,7 +13,8 @@
 //   start() → stop() 回 { blob, mime, durationSec }；cancel()
 //   prepare(onProgress) 先把目前的轉字方式準備好（sensevoice＝下載＋載入模型）
 //   transcribe(blob, { onProgress, autoPrepare }) 回 { text, lang, emotion, emotionLabel, event, eventLabel, durationSec, engine }
-//   isReady() / unload()（放掉記憶體）/ clearCache()（刪掉下載的模型）
+//   isReady() / isDownloaded() / unload()（放掉記憶體）/ clearCache()（刪掉下載的模型）
+//   用的地方：微信「＋ → 語音」的「按一下說話」（wx_core.js voiceToggle）
 // ----------------------------------------------------------------
 (function () {
     const win = window.parent || window;
@@ -336,6 +337,15 @@
 
         isReady() { return this._ready; },
 
+        // 模型下載過沒（決定要不要先問她 250MB）
+        async isDownloaded() {
+            try {
+                if (!win.caches || !(await win.caches.has(SV.CACHE))) return false;   // 用 has 先看，open 會順手建一個空的
+                const c = await win.caches.open(SV.CACHE);
+                return !!(await c.match(SV.MODEL_BASE + 'model.int8.onnx'));
+            } catch (e) { return false; }
+        },
+
         // 這版引擎沒有「載好後改設定」，換語言＝放掉，下次用到時從快取重載（約一兩秒）
         setLanguage() {
             this.unload();
@@ -418,6 +428,7 @@
         isRecording: () => !!_rec,
         prepare: (onProgress) => _engine().prepare(onProgress),
         isReady: () => _engine().isReady(),
+        isDownloaded: () => (_engine().isDownloaded ? _engine().isDownloaded() : Promise.resolve(true)),
         transcribe,
         unload: () => _engine().unload(),
         clearCache: () => (_engine().clearCache ? _engine().clearCache() : Promise.resolve()),

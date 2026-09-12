@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 437;                        // ← 每次部署 +1
+const CACHE_VERSION = 438;                        // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -96,12 +96,14 @@ self.addEventListener('install', event => {
     );
 });
 
-// ── Activate：刪除所有舊版快取，立刻接管所有分頁 ────────────
+// ── Activate：刪除舊版殼快取，立刻接管所有分頁 ────────────
+// 🚨 只刪自己的 aurelia-shell-*。別的快取不是版本殼（例如 os_voice_input 下載的 250MB 聽寫模型），
+//    全刪的話每次部署她都要重新下載一次。
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys()
             .then(keys => Promise.all(
-                keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+                keys.filter(k => k.startsWith('aurelia-shell-') && k !== CACHE_NAME).map(k => caches.delete(k))
             ))
             .then(() => self.clients.claim())  // 立刻接管，不等重新整理
     );
