@@ -616,7 +616,7 @@ const IRIS_IDLE = [
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-achievements-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="異常蒐集">成就</span>
                         </button>
-                        <button class="lb-dock-btn" data-proxy="void-apps-btn" title="應用">
+                        <button class="lb-dock-btn" id="lb-dock-apps" data-proxy="void-apps-btn" title="應用">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-apps-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="終端機">應用</span>
                         </button>
@@ -2477,6 +2477,16 @@ ${sections}`;
             for (let i = 0; i < els.length; i++) {
                 els[i].classList.add(kind === 'prop' ? 'lb-ai-news-prop' : 'lb-ai-news');
             }
+        } catch (e) {}
+    };
+
+    // 💬 微信有沒有人在等她回：手機在「應用」那顆裡面，她沒開就完全不知道有人講話了。
+    //    最軟的提醒：dock 與 MAIN MENU 的「應用」點一顆小點，開過微信就自己消失。
+    //    由微信算好 true/false 叫進來——大廳只負責標自己的 DOM。
+    VoidTerminal.markPhoneUnread = function (on) {
+        try {
+            const els = document.querySelectorAll('#lb-dock-apps, #void-apps-btn');
+            for (let i = 0; i < els.length; i++) els[i].classList.toggle('has-pending', !!on);
         } catch (e) {}
     };
 

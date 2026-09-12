@@ -605,6 +605,13 @@
     animation:lbDockDot 1.5s ease-in-out infinite;
 }
 @keyframes lbDockDot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+/* MAIN MENU 那一列的小圓點（dock 那顆用上面那條）：微信有人在等她回時亮 */
+.lobby-right .void-btn { position:relative; }
+.lobby-right .void-btn.has-pending::after {
+    content:''; position:absolute; top:10px; right:10px; width:7px; height:7px; border-radius:50%;
+    background:#e0a52e; box-shadow:0 0 6px rgba(224,165,46,0.8);
+    animation:lbDockDot 1.5s ease-in-out infinite;
+}
 /* 404 綠皮：字換黑話、icon 轉綠 */
 .void-tab.mode-404 .lb-dock-btn { background:rgba(0,10,2,0.75); border-color:rgba(0,255,65,0.3); box-shadow:0 4px 14px rgba(0,0,0,0.5); }
 .void-tab.mode-404 .lb-dock-btn:hover { background:rgba(0,18,4,0.9); }

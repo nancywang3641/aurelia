@@ -49,6 +49,22 @@
     //   直接繼承對方的金額與領取紀錄。帳本按聊天室分開，清空時一起走。
     //   第一次讀到舊世界那筆時會接手過來，既有對話不會突然變空。
     function _cards() { return win.WX_CARDS || window.WX_CARDS; }
+
+    // 💬 有沒有人在等她回：大廳「應用」那顆的小圓點。她沒開手機就不知道有人講話了，
+    //    心跳（角色主動找她）在酒館尤其明顯——訊息進去了，畫面上卻一點聲音都沒有。
+    //    只算出 true/false 交給大廳自己標，不要伸手進別人的 DOM。
+    function _refreshLobbyUnread() {
+        try {
+            const V = win.VoidTerminal || window.VoidTerminal;
+            if (!V || !V.markPhoneUnread) return;
+            let any = false;
+            for (const k in GLOBAL_CHATS) {
+                const c = GLOBAL_CHATS[k];
+                if (c && c.unread) { any = true; break; }
+            }
+            V.markPhoneUnread(any);
+        } catch (e) {}
+    }
     // 轉帳時效。🚨 以前寫死十分鐘，但那時「轉帳單上根本沒有時間」所以從來沒真的過期過；
     //    時間補回來之後十分鐘會變成真的——她晚一點才看到那則就收不了。真的微信是一天，照那個。
     const TXN_TTL = 24 * 60 * 60 * 1000;
@@ -1635,6 +1651,7 @@
         } catch (e) { console.warn('[wx 跑團同步] 失敗:', (e && e.message) || e); }
         finally {
             _storySyncing = false;
+            _refreshLobbyUnread();   // 酒館開起來時聊天室是這裡載進來的：上次沒看完的也要亮點
             if (_storySyncAgain) { _storySyncAgain = false; setTimeout(_storySyncNow, 300); }
         }
     }
@@ -1838,6 +1855,7 @@
             chat.pushedCount = chat.messages.length;
             chat.renderedCount = chat.messages.length;
             if (APP_CONTAINER) win.wxApp.render();
+            _refreshLobbyUnread();
         }
         if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
 
@@ -2038,6 +2056,7 @@
                     else { GLOBAL_CHATS[chatId] = { name: chatId, id: chatId, members: [], isGroup: false, messages: [], lastTime: '', unread: false, pushedCount: 0, renderedCount: 0 }; }
                 }
                 GLOBAL_CHATS[chatId].unread = false;
+                setTimeout(_refreshLobbyUnread, 0);
                 // 🚨 開聊天室的時候要把這個人的泡泡樣式貼回畫面。以前只有「按下保存的那一刻」會注入
                 //    （saveConfig 自己呼叫 applyStyle），openChat 從來沒叫過——所以她調好的樣式
                 //    一重開酒館就沒人再貼，看起來像被還原成預設，其實設定一直好好躺在 localStorage 裡。
