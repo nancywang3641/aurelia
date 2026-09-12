@@ -57,6 +57,8 @@
             // 泡泡主題：這間聊天室對到哪個聯絡人，就吃他在微信那邊設好的泡泡——同一個人，兩邊長一樣。
             // 對不到人（群聊、路人）看這間自己在「···」裡從主題庫挑過沒有，都沒有才回預設，不會留著上一間的皮。
             try { const B = win.WX_BUBBLE_SETTINGS; if (B && B.applyStyleForRoom) B.applyStyleForRoom(newName, newKey); } catch (e) {}
+            // 背景同理：對得到聯絡人就用他在微信那邊的聊天背景，對不到才用這裡自己挑的那張
+            try { const P = window.VN_Panels || win.VN_Panels; if (P && P.applyChatBgForRoom) P.applyChatBgForRoom(newName, newKey); } catch (e) {}
             core.toggleUI('phone-chat');
             core.next();
         },

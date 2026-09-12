@@ -265,6 +265,7 @@
                                         <button id="chat-bg-close" onclick="window.VN_PLAYER.closeChatBgPanel()">✕</button>
                                     </div>
                                     <div id="chat-more-bg">
+                                        <div id="chat-bg-hint"></div>
                                         <div id="chat-bg-grid">
                                             <input type="file" id="chat-bg-file" accept="image/*" style="display:none;" onchange="window.VN_PLAYER.handleChatBgFile(this)">
                                             <div class="chat-bg-add" onclick="document.getElementById('chat-bg-file').click()">+</div>

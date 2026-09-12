@@ -152,6 +152,22 @@
 
     // --- 主邏輯 ---
     win.WX_CHAT_SETTINGS = {
+        // 📱 給 VN 劇情手機用：那邊的聊天室對到同名聯絡人時，要吃他在微信這邊設好的聊天背景
+        //    （同一個人兩邊長一樣，跟泡泡主題同一套規矩）。
+        //    存的可能是網址，也可能是圖庫編號（img_…，圖在 OS_DB，避免 dataURL 撐爆 localStorage）。
+        bgUrlFor: async function (chatId) {
+            if (!chatId) return '';
+            let raw = '';
+            try { raw = (JSON.parse(localStorage.getItem('wx_chat_settings_' + chatId) || '{}') || {}).bgImage || ''; }
+            catch (e) { return ''; }
+            if (!raw) return '';
+            if (String(raw).indexOf('img_') === 0) {
+                try { return (win.OS_DB && win.OS_DB.getImage) ? ((await win.OS_DB.getImage(raw)) || '') : ''; }
+                catch (e) { return ''; }
+            }
+            return raw;
+        },
+
         open: function(chatId) {
             initDOM();
             pendingUploads = {}; 

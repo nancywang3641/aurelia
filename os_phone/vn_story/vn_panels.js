@@ -199,6 +199,39 @@
         const img = document.getElementById('chat-bg-img'); img.src = ''; img.style.display = 'none';
         document.getElementById('phone-chat').classList.remove('has-bg'); await VN_Cache.set('chat_bg', '_current', { url: '' }); closeChatBgPanel();
     }
+    // 📱 這間 VN 聊天室的背景：對得到同名聯絡人就吃他在微信那邊設的那張（同一個人兩邊一樣），
+    //    對不到（群聊、路人）才用她在這個面板自己挑的那張。跟泡泡主題同一套優先序。
+    let _chatBgFrom = '';   // 現在這張是跟著微信哪一位來的（空＝這裡自己挑的）
+    async function applyChatBgForRoom(roomName, roomKey) {
+        const img = document.getElementById('chat-bg-img');
+        const box = document.getElementById('phone-chat');
+        if (!img || !box) return '';
+        let url = '', from = '';
+        try {
+            const B = win.WX_BUBBLE_SETTINGS, S = win.WX_CHAT_SETTINGS;
+            const id = (B && B._contactIdByName) ? B._contactIdByName(roomName) : '';
+            if (id && S && S.bgUrlFor) {
+                const u = await S.bgUrlFor(id);
+                if (u) { url = u; from = roomName; }
+            }
+        } catch (e) {}
+        if (!url) {
+            try { const cur = await VN_Cache.get('chat_bg', '_current'); url = (cur && cur.url) || ''; } catch (e) {}
+        }
+        img.src = url; img.style.display = url ? 'block' : 'none';
+        box.classList.toggle('has-bg', !!url);
+        _chatBgFrom = from;
+        _paintChatBgHint();
+        return from;
+    }
+    function _paintChatBgHint() {
+        const h = document.getElementById('chat-bg-hint');
+        if (!h) return;
+        h.textContent = _chatBgFrom
+            ? ('跟微信的「' + _chatBgFrom + '」同一張，要換去那間的聊天設置換')
+            : '';
+    }
+
     async function loadSavedChatBg() {
         const current = await VN_Cache.get('chat_bg', '_current');
         if (current && current.url) { const img = document.getElementById('chat-bg-img'); img.src = current.url; img.style.display = 'block'; document.getElementById('phone-chat').classList.add('has-bg'); }
@@ -211,6 +244,7 @@
        ========================================= */
     function switchChatMoreTab(tab) {
         const isBub = tab === 'bubble';
+        if (!isBub) _paintChatBgHint();
         document.getElementById('chat-more-bg').hidden = isBub;
         document.getElementById('chat-more-bubble').hidden = !isBub;
         document.querySelectorAll('.chat-more-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
@@ -1072,6 +1106,7 @@
     window.VN_Panels = {
         openGameSettings, closeGameSettings,
         openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg, switchChatMoreTab,
+        applyChatBgForRoom,
         loadAvatarManager, regenerateAvatarEntry, deleteAvatarEntry,
         loadBgManager, regenerateBgEntry, deleteBgEntry, loadSpriteManager,
         loadSceneManager,
