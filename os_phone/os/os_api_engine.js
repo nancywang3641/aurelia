@@ -64,6 +64,22 @@
         const cjk = (s.match(/[㐀-鿿豈-﫿぀-ヿ]/g) || []).length;
         return cjk + Math.ceil((s.length - cjk) / 4);
     }
+    // 🧳 隔離開關（微信 → 那間 → 聊天設置）：從別的故事借過來的人，不該讀到「你這本」的
+    //    世界書與劇情。她的話：「要不要吃當前世界書和當前歷史上下文」。
+    //    🚨 只認手機聊天那條路：大廳與工具型呼叫的 GLOBAL_ACTIVE_ID 可能還停在上一間聊天室，
+    //       照著它隔離會誤傷。他們自己那間的對話記錄不受影響，永遠照給。
+    function _wxIsolate(promptKey) {
+        const off = { lore: false, story: false };
+        if (promptKey !== 'wx_chat_system') return off;
+        try {
+            const app = win.wxApp;
+            const id = app && app.GLOBAL_ACTIVE_ID;
+            const c = (id && app.GLOBAL_CHATS) ? app.GLOBAL_CHATS[id] : null;
+            if (!c) return off;
+            return { lore: c.noLore === true, story: c.noHistory === true };
+        } catch (e) { return off; }
+    }
+
     // 把 messages 拼成純文字（多模態只取 text 片段）供估 token
     function _msgsText(messages) {
         try {
@@ -1218,6 +1234,10 @@
             if (win.OS_TAVERN_BRIDGE && typeof win.OS_TAVERN_BRIDGE.getApiContext === 'function') {
                 try { ctx = await win.OS_TAVERN_BRIDGE.getApiContext(); } catch (e) { console.error(e); }
             }
+            // 🧳 這間被隔離就把「這本」的東西拿掉（他們倆自己的對話記錄在後面，不受影響）
+            const _iso = _wxIsolate(promptKey);
+            if (_iso.lore) { ctx.lore = ''; console.log('[OS_API] 這間隔離：不吃當前世界書'); }
+            if (_iso.story) { ctx.history = []; console.log('[OS_API] 這間隔離：不吃當前劇情'); }
 
             let userName = this.getGlobalUserName(); 
             let userDesc = "";
@@ -1284,7 +1304,7 @@
             //   ⚠️ 只給「劇情類 APP」路由：工具型呼叫(煉丹 general_assistant、UI 生成…)不該背劇情總結。關閉：localStorage sp_app_inject_summary='0'。
             const _SUMMARY_ROUTES = new Set(['wx_chat_system', 'call_voice_system', 'wb_world_gen', 'wb_world_continue']);   // 大廳(iris/cheshire)移除：NPC 靠自己的一對一記憶，不吃當前卡大總結(跨卡污染)
             try {
-                if (_SUMMARY_ROUTES.has(promptKey) && localStorage.getItem('sp_app_inject_summary') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
+                if (!_iso.story && _SUMMARY_ROUTES.has(promptKey) && localStorage.getItem('sp_app_inject_summary') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
                     const _sum = await win.OS_STORY_TOOLS.getCurrentInjectionPayload();
                     if (_sum && _sum.trim()) {
                         apiMessages.push({ role: "system", content: `[劇情總結 — 至今為止的劇情長期記憶，延續勿矛盾]\n${_sum}` });
@@ -1323,7 +1343,8 @@
                             let personaText = '';
                             if (apiChat.personaFromLorebook && win.TavernHelper) {
                                 try {
-                                    const currentLorebook = win.TavernHelper.getCurrentCharPrimaryLorebook();
+                                    // 📚 條目是從哪一本挑的就回哪一本讀（她可以指到別的故事那本）；沒記過才用這張卡的主世界書
+                                    const currentLorebook = apiChat.personaLoreBook || win.TavernHelper.getCurrentCharPrimaryLorebook();
                                     if (currentLorebook) {
                                         const entries = await win.TavernHelper.getLorebookEntries(currentLorebook);
                                         const selectedEntry = entries.find(e => e.uid === apiChat.personaFromLorebook);
@@ -1665,6 +1686,7 @@
                 } catch(e) {}
             }
 
+            const _iso = _wxIsolate(promptKey);   // 🧳 這間有沒有被隔離（手機聊天才認）
             let lore = '';
             // 世界書拆成兩半：_lorePre＝沒設深度的（VN 的「世界書」那一格用），
             //   _loreDepths＝設了深度的 [{depth,text}]，等一下插進對話歷史「倒數第 N 則之前」。
@@ -1950,7 +1972,7 @@
             if (!_NO_CARD_STD) {
                 if (userDesc || userName !== 'User') contextBlock += `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}\n\n`;
                 if (charPersona)  contextBlock += `[Character Persona (Private Chat)]:\n${charPersona}\n\n`;
-                if (lore)         contextBlock += `[World Info]:\n${lore}\n\n`;
+                if (lore && !_iso.lore) contextBlock += `[World Info]:\n${lore}\n\n`;
             }
             if (contextBlock) apiMessages.push({ role: 'system', content: contextBlock });
 
@@ -1960,7 +1982,7 @@
             //   正文來源是 OS_DB 章節（PWA 沒有聊天樓），保留幾章全文照全系統唯一那格 ctxChapters。
             const _NO_HISTORY_STD = ['iris_chat', 'cheshire_chat', 'general_assistant'];   // 工具型生成不背劇情
             const _lobbySeeStory = _NO_CARD_STD && localStorage.getItem('lobby_npc_see_current_story') === '1';
-            if (!_NO_HISTORY_STD.includes(promptKey) || _lobbySeeStory) {
+            if (!_iso.story && (!_NO_HISTORY_STD.includes(promptKey) || _lobbySeeStory)) {
                 // 大總結：跟酒館同一支壓縮器、同一顆開關
                 try {
                     if (localStorage.getItem('sp_app_inject_summary') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {

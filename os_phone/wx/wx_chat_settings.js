@@ -137,6 +137,41 @@
     // 💓 心跳「多久來一次」本來是一排檔位的滑桿（10 分鐘～一天）。她要自己打數字，
     //    所以檔位表整個拿掉了——想設 47 分鐘就打 47，不必遷就格子。
     const HB_MIN = 1, HB_MAX = 1440;   // 一分鐘 ～ 一天
+
+    // 📚 世界書清單：關掉「吃這本的世界書」之後，人設要能去別本挑條目（視差那些從別的故事借來的人）。
+    //    酒館助手的 API 名字不只一種，全試一遍；問不到就只剩當前這本，UI 會照實講。
+    async function _bookNames() {
+        const H = win.TavernHelper;
+        const out = [];
+        const add = (n) => { if (n && typeof n === 'string' && out.indexOf(n) < 0) out.push(n); };
+        try {
+            if (H && typeof H.getCharWorldbookNames === 'function') {
+                const b = H.getCharWorldbookNames('current') || {};
+                add(b.primary);
+                (b.additional || []).forEach(add);
+            } else if (H && typeof H.getCurrentCharPrimaryLorebook === 'function') {
+                add(H.getCurrentCharPrimaryLorebook());
+            }
+        } catch (e) {}
+        for (const fn of ['getWorldbookNames', 'getLorebooks', 'getWorldbooks']) {
+            try { if (H && typeof H[fn] === 'function') ((await H[fn]()) || []).forEach(add); } catch (e) {}
+        }
+        return out;
+    }
+    // 一本世界書裡的條目（獨立版走 OS_WORLDBOOK，沒有「哪一本」的概念）
+    async function _bookEntries(bookName) {
+        try {
+            const H = win.TavernHelper;
+            if (!H && win.OS_WORLDBOOK && typeof win.OS_WORLDBOOK.getEnabledEntries === 'function') {
+                const raw = await win.OS_WORLDBOOK.getEnabledEntries();
+                return (raw || []).map(e => ({ uid: e.id, comment: e.title, content: e.content, keys: [e.category || ''] }));
+            }
+            if (!bookName || !H) return [];
+            if (typeof H.getLorebookEntries === 'function') return (await H.getLorebookEntries(bookName)) || [];
+            if (typeof H.getWorldbook === 'function') return (await H.getWorldbook(bookName)) || [];
+        } catch (e) {}
+        return [];
+    }
     function _hbMinsText(mins) {
         const m = parseInt(mins, 10) || 180;
         if (m < 60) return m + ' 分鐘';
@@ -458,6 +493,19 @@
                     </label>
                 </div>
                 <div class="ws-note">開了之後你傳網址，對方會先讀過那個網頁再回你。要登入才看得到的網站讀不到。</div>
+
+                <div class="ws-section-header">隔離</div>
+                <div class="ws-group">
+                    <label class="ws-cell ws-cell-switch">
+                        <div class="ws-label">吃這本的世界書</div>
+                        <input type="checkbox" class="ws-switch" id="chk-iso-lore" ${chat.noLore ? '' : 'checked'}>
+                    </label>
+                    <label class="ws-cell ws-cell-switch">
+                        <div class="ws-label">吃這本的劇情</div>
+                        <input type="checkbox" class="ws-switch" id="chk-iso-story" ${chat.noHistory ? '' : 'checked'}>
+                    </label>
+                </div>
+                <div class="ws-note">兩個都關掉，他就不知道你這本故事在發生什麼，只認得你們倆講過的話——從別的故事借過來的人這樣設。你的人設照舊會帶給他。關掉世界書之後，人設設置可以去別本世界書挑條目。</div>
 
                 ${!isGroup ? `
                 <div class="ws-group">
@@ -816,56 +864,27 @@
                         const personaBody = doc.getElementById('ws-persona-body');
                         if (!personaOverlay || !personaBody) return;
                         
-                        // 獲取當前世界書
-                        let currentLorebook = null;
-                        if (win.TavernHelper && typeof win.TavernHelper.getCurrentCharPrimaryLorebook === 'function') {
-                            currentLorebook = win.TavernHelper.getCurrentCharPrimaryLorebook();
-                        }
-                        
-                        // 構建HTML
+                        // 📚 從哪一本世界書挑：預設是這張卡的主世界書；她可以翻到別本
+                        //    （視差那些從別的故事借過來的人，人設條目本來就不在這本裡）。
+                        let curBook = chat.personaLoreBook || '';
+                        const books = await _bookNames();
+                        if (!curBook || books.indexOf(curBook) < 0) curBook = books[0] || '';
+
+                        const escapeHtml = (t) => { const d = doc.createElement('div'); d.textContent = t; return d.innerHTML; };
+
                         let html = '';
-                        
-                        // 第一欄：世界書條目
                         html += '<div class="ws-persona-section">';
                         html += '<div class="ws-persona-section-title">從世界書選擇</div>';
-                        
-                        // ── 獨立模式：從 OS_WORLDBOOK 讀取；ST 模式：從 TavernHelper 讀取 ──
-                        let _wbEntries = [];
-                        try {
-                            const isStandalone = win.OS_WORLDBOOK && typeof win.OS_WORLDBOOK.getEnabledEntries === 'function' && !win.TavernHelper;
-                            if (isStandalone) {
-                                const raw = await win.OS_WORLDBOOK.getEnabledEntries();
-                                _wbEntries = raw.map(e => ({ uid: e.id, comment: e.title, content: e.content, keys: [e.category || ''] }));
-                            } else if (currentLorebook && win.TavernHelper?.getLorebookEntries) {
-                                _wbEntries = await win.TavernHelper.getLorebookEntries(currentLorebook);
-                            }
-                            // 若 personaFromLorebook 未設定，嘗試用 chat.persona 比對 content 自動勾選
-                            if (!personaFromLorebook && chat.persona) {
-                                const matched = _wbEntries.find(e => (e.content || '').trim() === chat.persona.trim());
-                                if (matched) personaFromLorebook = matched.uid;
-                            }
-                            if (!_wbEntries.length) {
-                                html += '<div style="padding:20px;text-align:center;color:#999;">世界書中沒有條目</div>';
-                            } else {
-                                const escapeHtml = (t) => { const d = doc.createElement('div'); d.textContent = t; return d.innerHTML; };
-                                _wbEntries.forEach(entry => {
-                                    const isSelected = personaFromLorebook === entry.uid;
-                                    let content = (entry.content || '').replace(/<[^>]+>/g, '').trim();
-                                    if (content.length > 200) content = content.substring(0, 200) + '...';
-                                    const comment = (entry.comment || `條目 #${entry.uid}`).trim();
-                                    const keys = entry.keys?.length ? entry.keys.join(', ') : '(無關鍵字)';
-                                    html += `<div class="ws-persona-entry" data-entry-uid="${entry.uid}" data-content="${escapeHtml(entry.content||'')}">
-                                        <input type="radio" name="persona-lorebook" class="ws-persona-entry-checkbox" value="${entry.uid}" id="persona-radio-${entry.uid}" ${isSelected ? 'checked' : ''}>
-                                        <div class="ws-persona-entry-info">
-                                            <div class="ws-persona-entry-name">${escapeHtml(comment)}</div>
-                                            <div class="ws-persona-entry-keys">${escapeHtml(keys)}</div>
-                                            <div class="ws-persona-entry-content">${escapeHtml(content)}</div>
-                                        </div></div>`;
-                                });
-                            }
-                        } catch (e) {
-                            html += '<div style="padding:20px;text-align:center;color:#fa5151;">獲取世界書條目失敗</div>';
+                        if (books.length > 1) {
+                            html += '<select class="ws-persona-book" id="ws-persona-book">'
+                                 + books.map(b => `<option value="${escapeHtml(b)}"${b === curBook ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('')
+                                 + '</select>';
+                        } else if (curBook) {
+                            html += `<div class="ws-persona-booknote">${escapeHtml(curBook)}</div>`;
+                        } else {
+                            html += '<div class="ws-persona-booknote">這台讀不到世界書</div>';
                         }
+                        html += '<div id="ws-persona-entries"></div>';
                         html += '</div>';
 
                         // 第二欄：額外補充（世界書有的不用再填，只補這個聊天室特有的內容）
@@ -879,18 +898,57 @@
                         personaBody.innerHTML = html;
                         personaOverlay.classList.add('show');
 
-                        // 點擊條目（再次點擊取消選擇）
-                        personaBody.querySelectorAll('.ws-persona-entry').forEach(entryEl => {
-                            entryEl.addEventListener('click', (e) => {
-                                const radio = entryEl.querySelector('.ws-persona-entry-checkbox');
-                                if (!radio) return;
-                                if (e.target.type === 'radio') {
-                                    if (radio.checked) { e.preventDefault(); radio.checked = false; }
-                                    return;
-                                }
-                                radio.checked = !radio.checked;
+                        // 條目清單：換一本就重畫（uid 只在自己那本裡有意義，換本等於重選）
+                        const paintEntries = async (bookName) => {
+                            const box = doc.getElementById('ws-persona-entries');
+                            if (!box) return;
+                            box.innerHTML = '<div style="padding:16px;text-align:center;color:#999;">讀取中…</div>';
+                            let entries = [];
+                            try { entries = await _bookEntries(bookName); }
+                            catch (e) { box.innerHTML = '<div style="padding:20px;text-align:center;color:#fa5151;">這本讀不到</div>'; return; }
+                            // 沒設過就拿舊的 chat.persona 回頭比對，把當初那一條勾回來
+                            if (!personaFromLorebook && chat.persona) {
+                                const matched = entries.find(e => (e.content || '').trim() === chat.persona.trim());
+                                if (matched) personaFromLorebook = matched.uid;
+                            }
+                            if (!entries.length) {
+                                box.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">這本沒有條目</div>';
+                                return;
+                            }
+                            box.innerHTML = entries.map(entry => {
+                                const isSelected = personaFromLorebook === entry.uid;
+                                let content = (entry.content || '').replace(/<[^>]+>/g, '').trim();
+                                if (content.length > 200) content = content.substring(0, 200) + '...';
+                                const comment = (entry.comment || entry.name || `條目 #${entry.uid}`).trim();
+                                const keys = (entry.keys && entry.keys.length) ? entry.keys.join(', ') : '(無關鍵字)';
+                                return `<div class="ws-persona-entry" data-entry-uid="${entry.uid}">
+                                        <input type="radio" name="persona-lorebook" class="ws-persona-entry-checkbox" value="${entry.uid}" id="persona-radio-${entry.uid}" ${isSelected ? 'checked' : ''}>
+                                        <div class="ws-persona-entry-info">
+                                            <div class="ws-persona-entry-name">${escapeHtml(comment)}</div>
+                                            <div class="ws-persona-entry-keys">${escapeHtml(keys)}</div>
+                                            <div class="ws-persona-entry-content">${escapeHtml(content)}</div>
+                                        </div></div>`;
+                            }).join('');
+                            // 再點一次取消選擇
+                            box.querySelectorAll('.ws-persona-entry').forEach(entryEl => {
+                                entryEl.addEventListener('click', (e) => {
+                                    const radio = entryEl.querySelector('.ws-persona-entry-checkbox');
+                                    if (!radio) return;
+                                    if (e.target.type === 'radio') {
+                                        if (radio.checked) { e.preventDefault(); radio.checked = false; }
+                                        return;
+                                    }
+                                    radio.checked = !radio.checked;
+                                });
                             });
-                        });
+                        };
+                        await paintEntries(curBook);
+                        const bookSel = doc.getElementById('ws-persona-book');
+                        if (bookSel) bookSel.onchange = async () => {
+                            curBook = bookSel.value;
+                            personaFromLorebook = null;   // 換了一本，原本勾的那條不在這裡了
+                            await paintEntries(curBook);
+                        };
 
                         // 保存按鈕：只存 uid（不複製 content），buildContext 發訊息時即時讀
                         const saveBtn = doc.getElementById('ws-persona-save');
@@ -903,6 +961,7 @@
 
                                 // 只存 uid + 補充文字，content 不複製，發訊息時即時讀世界書
                                 chat.personaFromLorebook = selectedUid;
+                                chat.personaLoreBook = selectedUid ? (curBook || '') : '';   // uid 只在它自己那本裡有意義
                                 chat.personaCustom = customText;
                                 // chat.persona 清空，讓 _buildStandaloneContext 每次都從世界書讀
                                 chat.persona = '';
@@ -1080,6 +1139,18 @@
                     panel.classList.remove('show');
                 }
             };
+            // 🧳 隔離：這間要不要吃「這本」的世界書與劇情。切了就存，發訊息時 os_api_engine 會看。
+            {
+                const _l = doc.getElementById('chk-iso-lore'), _s = doc.getElementById('chk-iso-story');
+                const _saveIso = () => {
+                    if (app.saveChats) app.saveChats();
+                    if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
+                };
+                // 存的是「不吃」：沒動過的舊聊天室一律照舊吃，不會因為新欄位而改行為
+                if (_l) _l.onchange = () => { if (_l.checked) delete chat.noLore; else chat.noLore = true; _saveIso(); };
+                if (_s) _s.onchange = () => { if (_s.checked) delete chat.noHistory; else chat.noHistory = true; _saveIso(); };
+            }
+
             // 💓 他會主動找我：一間一組（開關＋多久一次＋機率），動一下就存。引擎在 os_heartbeat.js
             {
                 const _on = doc.getElementById('chk-hb-on');
