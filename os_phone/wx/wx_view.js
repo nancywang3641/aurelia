@@ -560,11 +560,17 @@
                 }
                 
                 if (!packetId) packetId = autoRef('rp');
-                
-                // 保存紅包數據（如果還沒有保存過）
+
+                // 🚨 同一個單號長在不同則訊息上＝不同的紅包（模型很愛重用單號，重用時第二包會
+                //    讀到第一包的領取紀錄，一發出來就「已領完」）。跟轉帳一樣綁上 msgIndex，
+                //    之後畫面與點擊都用帳本自己的編號當身分。
                 const win = window.parent || window;
+                let rpRef = packetId;
+                try { if (win.wxApp && win.wxApp._rpRef) rpRef = win.wxApp._rpRef(packetId, msgIndex, { alias: packetId }) || packetId; } catch (e) {}
+
+                // 保存紅包數據（如果還沒有保存過）
                 if (win.wxApp && typeof win.wxApp._getRedPacketData === 'function') {
-                    const existing = win.wxApp._getRedPacketData(packetId);
+                    const existing = win.wxApp._getRedPacketData(rpRef);
                     if (!existing) {
                         // 獲取發送者名稱
                         let senderName = "User";
@@ -584,7 +590,7 @@
                         // 默認紅包數量：根據金額計算，最小1個，最大100個，每個至少0.01元
                         const maxCount = Math.floor(totalAmount / 0.01);
                         const totalCount = Math.min(100, Math.max(1, maxCount));
-                        win.wxApp._saveRedPacketData(packetId, {
+                        win.wxApp._saveRedPacketData(rpRef, {
                             sender: senderName,
                             totalAmount: totalAmount,
                             totalCount: totalCount,
@@ -599,7 +605,7 @@
                 //    轉帳跟禮物都有狀態，只有紅包沒有。
                 let rpSub = '領取紅包', rpDim = '';
                 try {
-                    const _rd = (win.wxApp && win.wxApp._getRedPacketData) ? win.wxApp._getRedPacketData(packetId) : null;
+                    const _rd = (win.wxApp && win.wxApp._getRedPacketData) ? win.wxApp._getRedPacketData(rpRef) : null;
                     if (_rd && _rd.totalAmount != null) {
                         const _list = _rd.list || [];
                         const _got = _list.reduce(function (n, x) { return n + (Number(x && x.amount) || 0); }, 0);
@@ -611,7 +617,7 @@
                         else if (_me && _list.some(function (x) { return x && x.name === _me; })) { rpSub = '已領取'; }
                     }
                 } catch (e) {}
-                return `<div style="width: 220px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; font-family: sans-serif; ${rpDim}" onclick="${app}.openRedPacketById('${packetId}')"><div style="background: #fa9d3b; padding: 15px; display: flex; align-items: center;"><div style="width: 32px; height: 42px; background: #e64340; border-radius: 4px; position: relative; margin-right: 12px; flex-shrink: 0; display:flex; justify-content:center; align-items:center; border:1px solid #f8b97a;"><div style="width:18px; height:18px; background:#f6d147; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#e64340; font-weight:bold; font-size:11px;">¥</div></div><div style="color: white; flex: 1; overflow:hidden;"><div style="font-size: 15px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${memo}</div><div style="font-size: 12px; opacity: 0.8;">${rpSub}</div></div></div><div style="background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display:flex; justify-content:space-between; align-items:center;"><span>微信紅包</span></div></div>`;
+                return `<div style="width: 220px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; font-family: sans-serif; ${rpDim}" onclick="${app}.openRedPacketById('${rpRef}')"><div style="background: #fa9d3b; padding: 15px; display: flex; align-items: center;"><div style="width: 32px; height: 42px; background: #e64340; border-radius: 4px; position: relative; margin-right: 12px; flex-shrink: 0; display:flex; justify-content:center; align-items:center; border:1px solid #f8b97a;"><div style="width:18px; height:18px; background:#f6d147; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#e64340; font-weight:bold; font-size:11px;">¥</div></div><div style="color: white; flex: 1; overflow:hidden;"><div style="font-size: 15px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${memo}</div><div style="font-size: 12px; opacity: 0.8;">${rpSub}</div></div></div><div style="background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display:flex; justify-content:space-between; align-items:center;"><span>微信紅包</span></div></div>`;
             });
             html = html.replace(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; return `<div style="width:230px; border-radius:6px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.1); background:#fff; cursor:default; font-family: sans-serif;"><div style="height:120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; position:relative; background-color:#e6e6e6;"><div style="width:100%; height:100%; background:rgba(0,0,0,0.05);"></div><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -80%); font-size:32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color:#e64340;"><i class="fa-solid fa-location-dot"></i></div></div><div style="background:#55d967; padding:10px 12px; color:white; display:flex; flex-direction:column; justify-content:center;"><div style="font-size:15px; font-weight:bold; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div><div style="font-size:11px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${address}</div></div></div>`; });
             html = html.replace(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${content}')"` : ''; return `<div ${vidClick} style="margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: ${isUrl ? 'pointer' : 'default'}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><div style="position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8;"></div><div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2;"><div style="width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px;"></div></div><div style="position: absolute; bottom: 10px; left: 12px; color: #fff; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div style="position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2;">00:15</div></div>`; });

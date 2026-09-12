@@ -1416,6 +1416,8 @@
                                 let _hc = (promptKey === 'call_voice_system') ? (msg.content || "") : (msg.raw || msg.content || "");
                                 // 📷 她從相簿傳的照片在訊息裡只是圖庫編號 → 換成它看過寫下的那句（沒看過就只說是照片）
                                 try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) _hc = _pt(msg, _hc); } catch (e) {}
+                                // 🧾 紅包／轉帳／禮物的單號不給它看：看得到就會照抄，抄到同一個號碼兩張卡會黏在一起
+                                try { const _sc = win.wxApp && win.wxApp.stripCardIds; if (_sc) _hc = _sc(_hc); } catch (e) {}
                                 rawPhoneMsgs.push({
                                     role: msg.isMe ? 'user' : 'assistant',
                                     content: _hc,
@@ -1954,6 +1956,7 @@
                             if (!content) return;
                             // 📷 相簿照片的圖庫編號 → 它看過寫下的那句（跟酒館版 buildContext 同一支）
                             try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) content = _pt(msg, content); } catch (e) {}
+                            try { const _sc = win.wxApp && win.wxApp.stripCardIds; if (_sc) content = _sc(content); } catch (e) {}
                             content = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
 
                             if (useSummary) {

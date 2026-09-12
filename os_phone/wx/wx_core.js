@@ -271,6 +271,43 @@
         m.photoDesc = d;
         return true;
     }
+    // 🧾 送進模型的歷史：**已經處理完**的紅包／轉帳／禮物，把單號拿掉；還沒處理完的留著。
+    //    🚨 它會重用單號，正是因為歷史裡看得到舊的就照抄（她 2026-09-12 實測：第二包一發出來就已領完）。
+    //    但單號是指標：還沒被領完的紅包、還沒收的轉帳與禮物，它得指得到才能讓人去領／去收，
+    //    所以只剝「已經沒事可做」的那些（她說的：已經收掉的隱藏，還沒收掉的繼續給）。
+    const CARD_ID_RE = /(\[\s*(?:紅包|红包|RedPacket|轉帳|转账|轉賬|Transfer|Gift|禮物|礼物|系統|系统|System|Notice)\s*[:：][^\]]*?)\s*[|｜]\s*((?:ID_)?(?:rp|txn|tnx|gft|gift|transfer|redpacket)[_-][A-Za-z0-9_]+)/gi;
+    // 這個單號還有事情可做嗎？（有＝留著給模型指）
+    function _refStillOpen(ref, chatId) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (!C || !cid) return true;              // 沒有帳本就別亂剝
+        const alias = String(ref || '').replace(/^ID_/i, '');
+        let open = false;
+        ['redpacket', 'transfer', 'gift'].forEach(function (kind) {
+            if (open) return;
+            const card = C.findByAlias(cid, kind, alias);
+            if (!card) return;
+            if (kind === 'redpacket') {
+                const d = card.data || {};
+                if (d.totalAmount == null) { open = true; return; }   // 資料還沒建好，先留著
+                const list = d.list || [];
+                const got = list.reduce(function (n, x) { return n + (Number(x && x.amount) || 0); }, 0);
+                const left = Number(d.totalAmount) - got;
+                const slots = Number(d.totalCount || 1) - list.length;
+                if (left > 0.001 && slots > 0) open = true;
+            } else if (!card.status || card.status === 'pending') {
+                open = true;
+            }
+        });
+        return open;
+    }
+    function stripCardIds(text, chatId) {
+        const s = String(text == null ? '' : text);
+        if (s.indexOf('[') < 0) return s;
+        return s.replace(CARD_ID_RE, function (m, head, ref) {
+            return _refStillOpen(ref, chatId) ? m : head;
+        });
+    }
+
     // 文字歷史用（聊天歷史、回傳酒館）：圖庫編號換成它看過的那句；還沒看過就只說是一張照片
     function photoContextText(msg, text) {
         const s = String(text == null ? '' : text);
@@ -278,10 +315,29 @@
         return s.replace(new RegExp(PHOTO_ID_RE.source, 'g'), (msg && msg.photoDesc) ? ('照片｜' + msg.photoDesc) : '照片');
     }
 
+    // 🚨 紅包以前只認「模型寫的單號」。轉帳跟禮物都有綁「長在哪一則訊息」（slot），只有紅包沒有，
+    //    所以模型第二次重用同一個單號時，第二包會直接讀到第一包的領取紀錄 → 一發出來就寫「已領完」。
+    //    她 2026-09-12 實測就是這個（換成不同單號就正常）。現在紅包也綁 slot：
+    //    同一個單號長在不同則訊息上＝兩張不同的卡。畫面與點擊一律用帳本自己的 key 當身分。
+    function rpRef(packetId, slot, seed, chatId) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (!C || !cid) return packetId;
+        const card = C.adopt(cid, 'redpacket', packetId, seed || {}, null, slot);
+        return card ? card.key : packetId;
+    }
+    // 帳本 key（rpRef 給的）或模型單號都收
+    function _rpCard(ref, chatId) {
+        const C = _cards(); const cid = _cardChat(chatId);
+        if (!C || !cid) return null;
+        const byKey = C.byKey ? C.byKey(cid, ref) : null;
+        if (byKey) return byKey;
+        return C.findByAlias(cid, 'redpacket', ref);
+    }
+
     function saveRedPacketData(packetId, data, chatId) {
         const C = _cards(); const cid = _cardChat(chatId);
         if (C && cid) {
-            const card = C.adopt(cid, 'redpacket', packetId, data, null);
+            const card = _rpCard(packetId, chatId) || C.adopt(cid, 'redpacket', packetId, data, null);
             C.update(cid, card.key, { data: data });
             return;
         }
@@ -291,7 +347,7 @@
     function getRedPacketData(packetId, chatId) {
         const C = _cards(); const cid = _cardChat(chatId);
         if (C && cid) {
-            const card = C.findByAlias(cid, 'redpacket', packetId);
+            const card = _rpCard(packetId, chatId);
             if (card && card.data && card.data.totalAmount != null) return card.data;
             // 帳本裡還沒有 → 看看舊世界留了什麼，有就接手進來
             try {
@@ -1817,7 +1873,8 @@
     }
 
     win.wxApp = {
-        photoContextText: photoContextText,   // 聊天歷史（os_api_engine）與回傳酒館（os_app_memory_inject）把照片編號換成文字
+        photoContextText: photoContextText,
+        stripCardIds: stripCardIds,   // 送進模型的歷史不給看舊單號（不然它會照抄）   // 聊天歷史（os_api_engine）與回傳酒館（os_app_memory_inject）把照片編號換成文字
         applyIncoming: _applyRelayReply,      // 💓 心跳：角色主動開口那一則也走同一條（她人在那間就冒出來，不在就標未讀）
         // 🗑 刪好友記號：通訊錄刪人時記下（markRemoved），她重新加人時撤掉（clearRemoved）
         markRemoved: function (idOrChat, name) {
@@ -1953,6 +2010,7 @@
             }
         },
         
+        _rpRef: rpRef,
         _saveRedPacketData: saveRedPacketData,
         _getRedPacketData: getRedPacketData,
         

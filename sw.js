@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 420;                        // ← 每次部署 +1
+const CACHE_VERSION = 421;                        // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）

@@ -105,6 +105,12 @@
         //    認領機制：紅包在「解析的第一遍掃描」就先建卡了（同一輪 A 發 B 領要靠它），
         //    那時還不知道會落在第幾則，slot 是空的。等真的畫到那一則時，
         //    這裡會把 slot 補上去（認領）。之後別則訊息用同一個單號就配不上、自己開新的。
+        // 照帳本自己的 key 查（畫面拿到的身分就是這個，不要走模糊查找）
+        byKey(chatId, key) {
+            const k = String(key == null ? '' : key).trim();
+            if (!k) return null;
+            return load(chatId).list.find(c => c.key === k) || null;
+        },
         findByAlias(chatId, kind, alias, slot) {
             const a = norm(alias);
             if (!a) return null;
