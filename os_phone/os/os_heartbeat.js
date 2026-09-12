@@ -19,8 +19,10 @@
     const TICK_MS = 60 * 1000;
     const DEF = { mins: 180, chance: 60 };     // 沒設過的聊天室：三小時、六成
     const AHEAD_HOURS = 12;                    // 離開前最多排未來幾小時
+    const PER_CHAT_MAX = 6;                    // 同一個人一次最多先排幾則（10 分鐘一次的話＝一小時份）
     const AHEAD_MAX = 3;                       // 一次最多排幾個人（省額度、也省她被連環叫）
     const KIND = 'heartbeat';
+    const RE_TAIL_SLASH = new RegExp(String.fromCharCode(47) + '$');
 
     function _chats() {
         try { return (win.wxApp && win.wxApp.GLOBAL_CHATS) || {}; } catch (e) { return {}; }
@@ -57,7 +59,7 @@
     function roll(chance) { return Math.random() * 100 < chance; }
 
     // 要送出去的那一包：跟她自己按送出時同一條路（buildContext），多一段「現在是你主動開口」
-    async function buildPayload(chat) {
+    async function buildPayload(chat, nth) {
         const app = win.wxApp;
         if (!app || !win.WX_API || !win.OS_API) return null;
         const prev = app.GLOBAL_ACTIVE_ID;
@@ -74,6 +76,7 @@
             role: 'system',
             content: '【現在是你主動傳訊息給她，不是回覆】\n'
                 + (idle ? '你們上一次講話大約是 ' + idle + ' 小時前。\n' : '')
+                + (((nth || 0) > 0) ? '你剛剛已經傳過訊息，她還沒有回。又過了一陣子，你這次想說的是別的事，別重複剛才那幾句。' : '')
                 + '照你的個性、你現在在做的事開口，寫一到三則短訊息。'
                 + '不要提到這是安排好的，也不要問她是不是在等你。'
         });
@@ -138,30 +141,42 @@
         cands.sort(function (a, b) { return a.at - b.at; });
         let n = 0;
         for (const cd of cands.slice(0, AHEAD_MAX)) {
-            const messages = await buildPayload(cd.chat);
-            if (!messages) continue;
             let apiConfig = {};
             try { apiConfig = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}'); } catch (e) {}
             try { const S = win.OS_SETTINGS; if (S && S.getConfig) apiConfig = Object.assign({}, S.getConfig() || {}, apiConfig); } catch (e) {}
             if (!apiConfig.url || !apiConfig.key) continue;               // 跟著酒館的沒有 key 可以交給伺服器
-            let url = String(apiConfig.url).replace(/\/$/, '');
+            let url = String(apiConfig.url).replace(RE_TAIL_SLASH, '');
             if (!url.includes('/chat/completions')) url += (url.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
-            const body = {
-                model: apiConfig.model, messages: messages, stream: false,
-                max_tokens: parseInt(apiConfig.maxTokens) || 2048,
-                temperature: isFinite(parseFloat(apiConfig.temperature)) ? parseFloat(apiConfig.temperature) : 1
-            };
-            try {
-                await R.submit({
-                    app: 'wx', kind: KIND, chatId: cd.chat.id, title: cd.chat.name || '',
-                    runAt: Math.round(cd.at / 1000),
-                    upstream: { url: url, key: apiConfig.key, body: body },
-                    notify: { title: cd.chat.name || '微信', useResult: true, url: './', tag: 'hb-' + cd.chat.id }
-                });
-                cd.chat.hbLast = cd.at;   // 排了就當它會發生，免得回來又排一次
-                try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(cd.chat.id, cd.chat); } catch (e) {}
-                n++;
-            } catch (e) { console.warn('[心跳] 預約失敗:', (e && e.message) || e); }
+
+            // 一次排好接下來幾則，不是只排下一則。
+            // 🚨 以前只排一則：她一直待在背景，那個人就只來過一次再也沒動靜（她說「觸發一次後再也沒有發生」）。
+            //    排到 AHEAD_HOURS 為止、每人最多 PER_CHAT_MAX 則，每一則各擲一次機率。
+            const gapMs = cfgOf(cd.chat).mins * 60 * 1000;
+            const limit = now + AHEAD_HOURS * 3600 * 1000;
+            let at = cd.at, k = 0;
+            while (at <= limit && k < PER_CHAT_MAX) {
+                if (k > 0 && !roll(cfgOf(cd.chat).chance)) { at += gapMs; k++; continue; }
+                const messages = await buildPayload(cd.chat, k);
+                if (!messages) break;
+                const body = {
+                    model: apiConfig.model, messages: messages, stream: false,
+                    max_tokens: parseInt(apiConfig.maxTokens) || 2048,
+                    temperature: isFinite(parseFloat(apiConfig.temperature)) ? parseFloat(apiConfig.temperature) : 1
+                };
+                try {
+                    await R.submit({
+                        app: 'wx', kind: KIND, chatId: cd.chat.id, title: cd.chat.name || '',
+                        runAt: Math.round(at / 1000),
+                        upstream: { url: url, key: apiConfig.key, body: body },
+                        notify: { title: cd.chat.name || '微信', useResult: true, url: './', tag: 'hb-' + cd.chat.id }
+                    });
+                    cd.chat.hbLast = at;   // 排了就當它會發生，免得回來又排一次
+                    n++;
+                } catch (e) { console.warn('[心跳] 預約失敗:', (e && e.message) || e); break; }
+                at += gapMs;
+                k++;
+            }
+            try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(cd.chat.id, cd.chat); } catch (e) {}
         }
         if (n) console.log('[心跳] 預約了 ' + n + ' 個人在她不在的時候開口');
         return n;
