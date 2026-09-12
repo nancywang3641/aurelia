@@ -195,7 +195,19 @@
 .aps-app-body .wx-header, .aps-app-body .wb-shell .wb-header { padding-top: 0 !important; height: 45px !important; }   /* 只限微博：世界書也叫 .wb-header，它的頭歸 .sysh 管 */
 .aps-app-body .ps-header { padding-top: 0 !important; height: 56px !important; }
 .aps-mount { position: relative; width: 100%; height: 100%; }
-.aps-fail { padding: 30px; text-align: center; color: #999; font-size: 13px; }
+.aps-fail { padding: 24px 18px; text-align: center; color: #999; font-size: 13px; }
+.aps-fail b { display: block; color: #c0392b; font-size: 14px; margin-bottom: 10px; }
+.aps-fail-why {
+    margin: 0 0 10px; padding: 9px 11px; max-height: 46vh; overflow: auto;
+    text-align: left; white-space: pre-wrap; word-break: break-word;
+    background: rgba(0, 0, 0, .05); border-radius: 6px;
+    font: 11px/1.6 ui-monospace, Consolas, monospace; color: #444;
+    -webkit-user-select: text; user-select: text;
+}
+.aps-fail-copy {
+    padding: 7px 16px; border: 1px solid rgba(0, 0, 0, .2); border-radius: 16px;
+    background: #fff; color: #333; font-size: 12px; cursor: pointer; font-family: inherit;
+}
 
 .aps-loading { padding: 30px; text-align: center; color: #999; font-size: 13px; }
 /* app 商店裝的功能型 app（iframe 執行）—— 填滿容器、無邊框 */

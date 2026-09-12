@@ -555,7 +555,8 @@
         if (cl) cl.onclick = function () { MSGS.length = 0; _render(); };
     }
 
-    win.OS_DASHBOARD = { open: open, close: close, messages: MSGS };
+    // copy：手機殼 app 載入失敗時也要能一鍵把錯誤複製給我，共用同一套三層退路
+    win.OS_DASHBOARD = { open: open, close: close, messages: MSGS, copy: _copy };
     if (win !== window) { try { window.OS_DASHBOARD = win.OS_DASHBOARD; } catch (e) {} }
     console.log('[PhoneOS] 載入控制台 (OS_DASHBOARD)');
 })();

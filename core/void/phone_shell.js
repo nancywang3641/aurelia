@@ -628,8 +628,31 @@
         if (win.PhoneSystem) { _savedGoHome = win.PhoneSystem.goHome; win.PhoneSystem.goHome = _home; }
         _el.querySelector('#aps-home').style.display = 'none';
         _el.querySelector('#aps-app').style.display = 'flex';
-        try { const cleanup = app.go(div); if (typeof cleanup === 'function') _leaveApp = cleanup; }
-        catch (e) { console.warn('[PhoneShell] 掛載失敗', id, e); body.innerHTML = '<div class="aps-fail">這個 app 載入失敗</div>'; }
+        // 🚨 app 的 go() 可能是 async（微信就是）。以前只 try/catch 同步錯誤 → 非同步炸掉時
+        //    整個 promise 靜靜地 reject，螢幕上只剩那個空的 .aps-mount＝她看到的「白屏」，
+        //    而她沒有 console 可以看是什麼錯。現在兩種都接，並且把錯誤直接印在螢幕上讓她複製。
+        const fail = function (e) {
+            console.warn('[PhoneShell] 掛載失敗', id, e);
+            body.innerHTML = '<div class="aps-fail"><b>這個 app 載入失敗</b>'
+                + '<div class="aps-fail-why"></div>'
+                + '<button class="aps-fail-copy" type="button">複製錯誤</button></div>';
+            const why = body.querySelector('.aps-fail-why');
+            const text = '[' + id + '] ' + ((e && (e.stack || e.message)) || String(e));
+            if (why) why.textContent = text;
+            const cp = body.querySelector('.aps-fail-copy');
+            if (cp) cp.onclick = function () {
+                const D = win.OS_DASHBOARD;
+                if (D && D.copy) { D.copy(text, '載入失敗的錯誤', function (m) { cp.textContent = m; }); return; }
+                try { win.navigator.clipboard.writeText(text); cp.textContent = '已複製'; }
+                catch (_) { cp.textContent = '請自己選取上面那段'; }
+            };
+        };
+        try {
+            const cleanup = app.go(div);
+            if (cleanup && typeof cleanup.then === 'function') {
+                cleanup.then(function (cl) { if (typeof cl === 'function') _leaveApp = cl; }, fail);
+            } else if (typeof cleanup === 'function') { _leaveApp = cleanup; }
+        } catch (e) { fail(e); }
     }
 
     function open() {
