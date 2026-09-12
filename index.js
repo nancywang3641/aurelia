@@ -195,6 +195,7 @@ const PHONE_FILES = [
     'os/os_heartbeat.js',        // 💓 角色主動找她：一間一組開關/節奏/機率
     'os/os_keepalive.js',        // ☕ 沒有伺服器的守候：靜音音訊／螢幕不關／畫中畫小窗＋本機通知
     'os/os_phone_image.js',       // 手機類 app 共用的圖片描述→卡片→生圖管道
+    'os/os_voice_input.js',       // 🎙 麥克風錄音→轉成字（轉字方式可換；SenseVoice 在網頁裡跑，聲音不離開裝置）
     'os/os_photo_viewer.js',      // 點圖放大看（iOS 相簿那樣：滑動換張、縮放、下拉關閉）
     'os/os_control_room.js',     // 🎛️ 控制室：監控/遙控桌面控制塔（SoVITS+ComfyUI）
     'os/os_dashboard.js',        // 🎛️ 控制台：大廳 dock 開啟的看板（每日用量／通道／呼叫記錄／系統訊息）
