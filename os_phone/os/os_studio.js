@@ -823,6 +823,20 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         inputEl.addEventListener('keyup', autosizeTextarea);
 
         // === 📎 圖片上傳 ===
+        // 📋 截完直接在輸入框貼上就附進去，不用先存檔再按迴紋針去選。只有剪貼簿裡真的是圖才攔，貼文字照舊
+        const pasteInput = document.getElementById('studio-input');
+        if (pasteInput) {
+            pasteInput.addEventListener('paste', async (e) => {
+                const items = Array.from((e.clipboardData && e.clipboardData.items) || []);
+                const files = items.filter(it => it.kind === 'file' && /^image\//.test(it.type)).map(it => it.getAsFile()).filter(Boolean);
+                if (!files.length) return;
+                e.preventDefault();
+                for (const f of files) {
+                    try { _pushPendingDataUrl(await _resizeImageToDataUrl(f, IMG_MAX_SIDE, IMG_QUALITY)); }
+                    catch (err) { console.warn('[Studio] 貼上的圖處理失敗:', err); _studioToast('貼上的圖讀不了', 'warning', '截圖'); }
+                }
+            });
+        }
         const attachBtn = document.getElementById('studio-attach-btn');
         const fileInput = document.getElementById('studio-image-input');
         if (attachBtn && fileInput) {
@@ -984,6 +998,60 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('圖片載入失敗')); };
             img.src = url;
         });
+    }
+
+    // 📸 她看到哪裡不對，最省力的講法就是「截給它看」——她不會前端的詞，只會說「左上那顆往旁邊一點」。
+    //    手機沒有 Win+Shift+S，所以截圖由程式做：只截右邊那張預覽（不是整個視窗），放進待送圖片，
+    //    跟她自己按迴紋針附的圖走同一條路。不會自動截、不會每輪送，只有她按下去那一次。
+    //    🚨 程式截的是「重畫一份」不是螢幕像素：毛玻璃、遮罩這類效果可能畫得跟她看到的不一樣。
+    //       指「哪裡疊到、哪裡跑版」夠用；要看質感還是請她用自己的截圖附上來。
+    const SHOT_LIB = 'https://cdn.jsdelivr.net/npm/modern-screenshot@4.6.6/dist/index.js';
+    let _shotLibP = null;
+    function _loadShotLib() {
+        if (window.modernScreenshot && window.modernScreenshot.domToJpeg) return Promise.resolve(window.modernScreenshot);
+        if (_shotLibP) return _shotLibP;
+        _shotLibP = new Promise((resolve, reject) => {
+            const sc = document.createElement('script');
+            sc.src = SHOT_LIB;
+            sc.onload = () => (window.modernScreenshot && window.modernScreenshot.domToJpeg) ? resolve(window.modernScreenshot) : reject(new Error('截圖工具沒有載好'));
+            sc.onerror = () => reject(new Error('截圖工具下載不到'));
+            document.head.appendChild(sc);
+        }).catch(e => { _shotLibP = null; throw e; });   // 失敗不要把壞掉的 promise 留著，下次按還能再試
+        return _shotLibP;
+    }
+    function _pushPendingDataUrl(dataUrl) {
+        const sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
+        pendingImages.push({ dataUrl, mime: 'image/jpeg', sizeKB });
+        renderPendingImages();
+    }
+    async function _capturePreviewToPending(btn) {
+        const box = document.getElementById('studio-pv-box');
+        if (!box) return;
+        if (btn) btn.disabled = true;
+        try {
+            const lib = await _loadShotLib();
+            // 預覽框是用真實外框尺寸畫、再整個縮小塞進右欄的：截的時候拿掉縮放，截它原本的大小
+            const w = parseInt(box.style.width, 10) || box.offsetWidth;
+            const h = parseInt(box.style.height, 10) || box.offsetHeight;
+            const scale = Math.min(1, IMG_MAX_SIDE / Math.max(w, h, 1));
+            const dataUrl = await lib.domToJpeg(box, {
+                width: w, height: h, scale, quality: IMG_QUALITY,
+                backgroundColor: '#000', timeout: 8000,
+                style: { transform: 'none' }
+            });
+            if (!dataUrl || dataUrl.length < 200) throw new Error('截出來是空的');
+            _pushPendingDataUrl(dataUrl);
+            // 手機上預覽是蓋住整個創作室的抽屜：收起來，她才看得到圖已經放進輸入框上面
+            try { togglePreviewDrawer(false); } catch (e) {}
+            const inputEl = document.getElementById('studio-input');
+            if (inputEl) inputEl.focus();
+            _studioToast('截好了，打一句哪裡不對再送出', 'success', '截圖');
+        } catch (e) {
+            console.warn('[Studio] 截預覽失敗:', e);
+            _studioToast('這張截不下來（' + ((e && e.message) || e) + '）。可以用手機或電腦自己截，再按迴紋針附上。', 'warning', '截圖');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 
     function renderPendingImages() {
@@ -3835,6 +3903,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         <button class="studio-pv active" data-pv="phone" title="手機端（外框約 390）">手機</button>
                         <button class="studio-pv" data-pv="center" title="桌面·中間聊天區（外框約 1000）">中間</button>
                         <button class="studio-pv" data-pv="full" title="桌面·全屏（外框＝螢幕寬）">全屏</button>
+                        <button class="studio-pv studio-pv-shot" id="studio-pv-shot" title="把現在這張預覽截下來，附在你下一句話裡"><i class="fa-solid fa-camera"></i> 截圖</button>
                     </div>
                     <div class="studio-pv-wrap" id="studio-pv-wrap">
                         <div class="studio-pv-box" id="studio-pv-box">
@@ -3848,6 +3917,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             `;
 
             _attachVpScaler(previewMain.querySelector('.studio-pv-tabs'), previewMain.querySelector('#studio-pv-wrap'), previewMain.querySelector('#studio-pv-box'));
+            const _shotBtn = previewMain.querySelector('#studio-pv-shot');
+            if (_shotBtn) _shotBtn.onclick = () => _capturePreviewToPending(_shotBtn);
 
             if (data.isBlock && data.js) {
                 setTimeout(() => {

@@ -269,6 +269,10 @@
         .studio-pv-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
         .studio-pv { padding: 4px 11px; font-size: 11px; border-radius: 6px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; }
         .studio-pv.active { background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: 700; }
+        /* 截圖鈕跟尺寸分頁同一排、同一個樣子，靠右站開：它不是尺寸，是動作 */
+        .studio-pv-shot { margin-left: auto; }
+        .studio-pv-shot i { margin-right: 3px; }
+        .studio-pv-shot:disabled { opacity: 0.45; cursor: progress; }
         .studio-pv-wrap { width: 100%; overflow: hidden; background: #000; border: 1px dashed rgba(26,28,40,0.25); border-radius: 6px; }
         .studio-pv-box { background: #000; transform-origin: top left; min-height: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .tree-project { color: #1A1C28; font-weight: bold; font-size: 13px; margin-bottom: 5px; cursor: pointer; padding: 8px; border-radius: 6px; background: rgba(26,28,40,0.06); transition: 0.2s; }
