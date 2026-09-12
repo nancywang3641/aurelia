@@ -426,7 +426,7 @@
                         borderColor = "#999";
                         icon = '<i class="fa-solid fa-reply"></i>';
                         title = status === 'expired' ? "已過期" : "已退還";
-                        sub = status === 'expired' ? "轉帳已過期（10分鐘）" : "對方已退回";
+                        sub = status === 'expired' ? "轉帳已過期" : "對方已退回";
                         clickAction = "";
                     }
                 } else {

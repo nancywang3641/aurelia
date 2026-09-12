@@ -49,11 +49,15 @@
     //   直接繼承對方的金額與領取紀錄。帳本按聊天室分開，清空時一起走。
     //   第一次讀到舊世界那筆時會接手過來，既有對話不會突然變空。
     function _cards() { return win.WX_CARDS || window.WX_CARDS; }
+    // 轉帳時效。🚨 以前寫死十分鐘，但那時「轉帳單上根本沒有時間」所以從來沒真的過期過；
+    //    時間補回來之後十分鐘會變成真的——她晚一點才看到那則就收不了。真的微信是一天，照那個。
+    const TXN_TTL = 24 * 60 * 60 * 1000;
     function _cardChat(chatId) { return chatId || GLOBAL_ACTIVE_ID; }
 
     // 狀態寫進這個聊天室的帳本。帳本裡還沒有這張卡（卡片還沒被畫過）就先寫舊鍵，
     // 等畫到的那一刻 adopt 會接手進來——順序不管誰先誰後都對得上。
     function _setCardStatus(chatId, kind, alias, status, legacyKey) {
+        if (!status) return null;   // 🚨 沒帶狀態就不要動它：以前傳進 undefined 會把卡片原樣存回去，看起來像沒反應
         const C = _cards(); const cid = _cardChat(chatId);
         if (C && cid) {
             const card = C.find(cid, kind, alias);
@@ -86,7 +90,16 @@
         const C = _cards(); const cid = _cardChat(chatId);
         if (C && cid) {
             const card = C.findByAlias(cid, 'transfer', txnId);
-            if (card && card.data && card.data.amount != null) return card.data;
+            // 🚨 帳本那張卡的 data 裡「沒有」status 與 timestamp（狀態在卡身上、時間是卡建立的時候）。
+            //    以前直接回 data → 收款那段的 status/elapsed 全是 undefined：判斷一路落空，
+            //    最後拿 undefined 去更新狀態＝等於沒改。她收了款，卡片還是未收取、按鈕還能按、
+            //    模型那邊的待處理清單也還掛著。補回來，讓「卡片＝唯一的事實來源」。
+            if (card && card.data && card.data.amount != null) {
+                return Object.assign({}, card.data, {
+                    status: card.status || 'pending',
+                    timestamp: card.data.timestamp || card.at || Date.now()
+                });
+            }
         }
         try { const raw = localStorage.getItem('wx_transfer_' + txnId); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
     }
@@ -462,6 +475,22 @@
 
     // --- 系統意圖處理器 ---
     // 返回處理後的系統消息對象，如果不需要處理則返回null
+    // 事後才知道結果的系統訊息（例如換頭像要等生圖）：補一行進那間聊天室
+    function _pushSystemLine(chatId, text) {
+        try {
+            const chat = GLOBAL_CHATS[chatId];
+            if (!chat || !text) return;
+            chat.messages.push({ type: 'system', content: text, isMe: false });
+            chat.pushedCount = chat.messages.length;
+            chat.renderedCount = chat.messages.length;
+            if (win.WX_DB && win.WX_DB.saveApiChat) win.WX_DB.saveApiChat(chatId, chat);
+            if (APP_CONTAINER) {
+                if (GLOBAL_ACTIVE_ID === chatId) _rebuildRoomContent(chat);
+                else win.wxApp.render();
+            }
+        } catch (e) { console.warn('[WX] 補系統訊息失敗:', e); }
+    }
+
     function processSystemIntent(content, ctx) {
         if (!content || !ctx.chatId) return null;
 
@@ -472,13 +501,22 @@
         if (avatarMatch) {
             const _av = win.WX_AVATAR_AI || window.WX_AVATAR_AI;
             const _desc = String(avatarMatch[1] || '').replace(/\]+\s*$/, '').trim();
-            if (_av && _av.isEnabled() && _desc) {
-                // 生圖是慢動作，不擋這一輪的訊息流；換好了它自己會重畫。
-                _av.apply(ctx.chatId, _desc);
-                return { type: 'system', content: `${ctx.chatName} 換了頭像`, isMe: false };
+            if (!_desc) return { type: 'system', content: '', isMe: false };
+            // 🚨 權限關著時以前是「安靜吞掉」：她叫角色換頭像、畫面上什麼都沒有，
+            //    她只會覺得壞了卻不知道要去哪裡開。講一句，並且說清楚開關在哪。
+            if (!_av || !_av.isEnabled()) {
+                return { type: 'system', content: `${ctx.chatName} 想換頭像，但還沒開放（微信 →「我」→ 設置 → 允許角色換頭像）`, isMe: false };
             }
-            // 關著（或沒描述）：頭像根本沒換，就不要印「換了頭像」——那是假的。
-            // 回一個空的系統訊息，推入端看到空的就丟掉，畫面上什麼都不會出現。
+            // 🚨 生圖是慢動作。以前這裡先印「換了頭像」再去生，生失敗也照樣印——那是假訊息。
+            //    改成等結果回來再說話：成功才說換了，失敗就說沒換成、順便講原因。
+            const _cid = ctx.chatId, _cname = ctx.chatName;
+            _av.apply(_cid, _desc).then(function (r) {
+                _pushSystemLine(_cid, (r && r.ok)
+                    ? `${_cname} 換了頭像`
+                    : `${_cname} 想換頭像，但沒換成：${(r && r.reason) || '不知道為什麼'}`);
+            }).catch(function (e) {
+                _pushSystemLine(_cid, `${_cname} 想換頭像，但沒換成：${(e && e.message) || e}`);
+            });
             return { type: 'system', content: '', isMe: false };
         }
 
@@ -678,10 +716,10 @@
             if (transferData) {
                 const now = Date.now();
                 const elapsed = now - transferData.timestamp;
-                const tenMinutes = 10 * 60 * 1000;
+                const tenMinutes = TXN_TTL;
                 
                 if (isAccept) {
-                    // 接收：檢查是否在10分鐘內且狀態為pending
+                    // 接收：檢查是否還在時效內且狀態為pending
                     if (transferData.status === 'pending' && elapsed <= tenMinutes) {
                         // 扣款並轉帳給對方
                         if (win.WX_WALLET) {
@@ -711,7 +749,7 @@
                         transferData.status = 'expired';
                         _txnSave(ctx.chatId, _txnRef, transferData);
                         _setCardStatus(ctx.chatId, 'transfer', _txnRef, 'expired', uniqueId);
-                        const displayContent = `轉帳已過期（10分鐘）`;
+                        const displayContent = `轉帳已過期`;
                         return { type: 'system', content: displayContent, isMe: false };
                     } else if (transferData.status !== 'pending') {
                         // 已經處理過（accepted/returned），不重複處理
@@ -2273,7 +2311,7 @@
                     }
                     const txnId = "Txn" + Math.floor(Math.random() * 90 + 10);
                     const targetName = selectVal || (GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID] ? (GLOBAL_CHATS[GLOBAL_ACTIVE_ID].name || GLOBAL_ACTIVE_ID) : '');
-                    // 🔥 保存轉帳信息（10分鐘時效性）
+                    // 🔥 保存轉帳信息（有時效，見 TXN_TTL）
                     const transferData = {
                         amount: amountNum,
                         timestamp: Date.now(),
@@ -2284,7 +2322,7 @@
                     const _txnChat = GLOBAL_ACTIVE_ID;   // 定時器晚十分鐘才跑，那時她可能已經切到別間，先記起來
                     _txnSave(_txnChat, txnId, transferData);
                     
-                    // 🔥 設置10分鐘過期定時器
+                    // 🔥 到期就自動標過期
                     setTimeout(() => {
                         const data = _txnLoad(_txnChat, txnId);
                         if (data) {
@@ -2300,7 +2338,7 @@
                                 }
                             }
                         }
-                    }, 10 * 60 * 1000); // 10分鐘
+                    }, TXN_TTL);
                     
                     content = val2 ? `[Transfer: ${val1}|${targetName}|${val2}|${txnId}]` : `[Transfer: ${val1}|${targetName}||${txnId}]`;
                     break; 
@@ -2357,7 +2395,7 @@
 
             const _tid = String(hashId || '').replace(/^ID_/i, '');
             let status = _getCardStatus(null, 'transfer', _tid, hashId);
-            // 轉帳單自己也記著狀態（十分鐘沒收就過期），兩邊有一邊說處理過就是處理過
+            // 轉帳單自己也記著狀態（超過時效沒收就過期），兩邊有一邊說處理過就是處理過
             if (!status) { try { const d = _txnLoad(null, _tid); if (d && d.status && d.status !== 'pending') status = d.status; } catch (e) {} }
 
             const DONE = { accepted: '已收款', returned: '已退回', expired: '已過期' };
@@ -2381,10 +2419,10 @@
             if (transferData) {
                 const now = Date.now();
                 const elapsed = now - transferData.timestamp;
-                const tenMinutes = 10 * 60 * 1000;
+                const tenMinutes = TXN_TTL;
                 
                 if (action === 'accepted') {
-                    // 接收：檢查是否在10分鐘內且狀態為pending
+                    // 接收：檢查是否還在時效內且狀態為pending
                     if (transferData.status === 'pending' && elapsed <= tenMinutes) {
                         // 接收方收款（這裡是接收方，所以是加錢）
                         // 發送方扣款會在 processSystemIntent 中處理（當AI輸出Accept時）
@@ -2404,7 +2442,7 @@
                         _setCardStatus(null, 'transfer', txnId, 'accepted', hashId);
                     } else if (transferData.status === 'expired' || elapsed > tenMinutes) {
                         // 已過期
-                        AUI.alert('轉帳已過期（10分鐘）');
+                        AUI.alert('這筆轉帳已經過期了');
                         transferData.status = 'expired';
                         _txnSave(null, txnId, transferData);
                         _setCardStatus(null, 'transfer', txnId, 'expired', hashId);
