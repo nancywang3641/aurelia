@@ -748,6 +748,26 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 遊戲頁面：子元素全為 absolute，不需要捲動，強制關閉滾動條 */
         #page-game { overflow: hidden; }
 
+        /* 📱 共用組件在劇情裡套手機殼（vn_dynamic_parser._renderBlock）：
+           共用組件照手機 app 設計、高度跟著內容長；螢幕給它跟手機 app 同一個盒子（390×844），殼定高不跟內容走，
+           內容多了在螢幕裡捲。畫面比殼小時整支手機縮在畫面內（max-width/max-height），螢幕跟著變矮、照樣捲。 */
+        .vn-dyn-overlay.vn-dyn-shared { padding: 16px; box-sizing: border-box; }
+        .vn-dyn-phone {
+            position: relative; box-sizing: border-box;
+            width: 410px; height: 864px; max-width: 100%; max-height: 100%;
+            padding: 10px; border-radius: 48px;
+            background: #0e0e12;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+            display: flex; flex-direction: column;
+        }
+        .vn-dyn-phone-screen {
+            position: relative; flex: 1; min-height: 0;
+            border-radius: 38px; overflow-x: hidden; overflow-y: auto;
+            background: #fff;
+            -webkit-overflow-scrolling: touch;
+        }
+        .vn-dyn-phone-app { position: relative; box-sizing: border-box; width: 100%; min-height: 100%; }
+
         #game-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #050505; background-size: cover; background-position: center; transition: background-image 0.8s ease; z-index: 1; }
         #game-char-container { position: absolute; bottom: 0; left: 0; width: 100%; height: 85%; z-index: 2; pointer-events: none; }
         /* 雙格立繪：左格貼左下、右格貼右下 */

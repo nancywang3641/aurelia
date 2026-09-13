@@ -253,16 +253,26 @@
             
             const panel = document.createElement('div');
             panel.className = `vn-dynamic-panel-${tpl.tagId}`;
-            // 「共用」面板 app 端設計成吃滿(width/min-height:100%)，但劇情這層 overlay 是全螢幕→會吃滿整個劇情畫面(VN 組件不建議全屏)。
-            // 故劇情裡把共用面板收成「手機 app 卡片」：限寬+限高+圓角陰影、置中浮在暗背景上(app 端不經這裡、照樣全展開)。
-            // 用「定高」而非 max-height，讓面板內 min-height:100%/flex:1 的內部捲動結構正常(標題固定、內容區自己捲)。純 VN 區塊卡維持原樣由內容自己決定尺寸。
+            // 「共用」面板是照手機 app 設計的（寬高吃滿、內容多了往下長），在劇情裡直接放出來沒有邊界可以撐。
+            // 故劇情裡套一個手機殼：殼裡的螢幕跟手機 app 同一個盒子（寬 390、定高），面板在螢幕裡長、螢幕自己捲，
+            // 跟手機桌面打開時是同一種環境。樣式在 css/vn_styles.css 的 .vn-dyn-phone*。純 VN 區塊卡維持原樣由內容自己決定尺寸。
             const _shared = tpl.panelType === '共用';
-            panel.style.cssText = _shared
-                ? 'position:relative; width:100%; max-width:440px; height:82vh; max-height:760px; display:flex; flex-direction:column; overflow:auto; box-sizing:border-box; border-radius:16px; box-shadow:0 16px 50px rgba(0,0,0,0.55);'
-                : 'position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;';
+            let _mount = panel;
+            if (_shared) {
+                overlay.classList.add('vn-dyn-shared');
+                panel.classList.add('vn-dyn-phone-app');
+                const _screen = document.createElement('div');
+                _screen.className = 'vn-dyn-phone-screen';
+                _screen.appendChild(panel);
+                _mount = document.createElement('div');
+                _mount.className = 'vn-dyn-phone';
+                _mount.appendChild(_screen);
+            } else {
+                panel.style.cssText = 'position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;';
+            }
             panel.innerHTML = tpl.html || '';
 
-            overlay.appendChild(panel);
+            overlay.appendChild(_mount);
             // 🔤 面板字體槽：模板 appearFont 蓋過組件自帶字體（留空=跟隨組件）。
             // 治繁簡混排時缺字退回系統字體、同一句有細有粗；style 掛 overlay 上，收卡即回收。
             if (tpl.appearFont) {
@@ -298,7 +308,8 @@
             overlay.appendChild(_hint);
             let _bgArmed = false, _bgTimer = null;
             overlay.addEventListener('click', (e) => {
-                if (e.target !== overlay && e.target !== panel) return;
+                // 共用套了手機殼：螢幕裡的空白是 app 本身，只認殼外的暗區
+                if (e.target !== overlay && (_shared || e.target !== panel)) return;
                 if (_bgArmed) { clearTimeout(_bgTimer); _bgArmed = false; onComplete(); return; }
                 _bgArmed = true;
                 _hint.style.opacity = '1';
