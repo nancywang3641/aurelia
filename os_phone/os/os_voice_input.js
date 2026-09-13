@@ -10,11 +10,11 @@
 //      自己把 SenseVoice 模型寫進它的虛擬檔案系統。換 commit 前要重新確認剝除的標記還在。
 // 入口：window.OS_VOICE_INPUT
 //   isSupported() / getConfig() / setConfig({engine})
-//   start() → stop() 回 { blob, mime, durationSec }；cancel()
+//   start() → stop() 回 { blob, mime, durationSec }；cancel()；level() 錄音中的音量
 //   prepare(onProgress) 先把目前的轉字方式準備好（sensevoice＝下載＋載入模型）
 //   transcribe(blob, { onProgress, autoPrepare }) 回 { text, lang, emotion, emotionLabel, event, eventLabel, durationSec, engine }
 //   isReady() / isDownloaded() / unload()（放掉記憶體）/ clearCache()（刪掉下載的模型）
-//   用的地方：微信「＋ → 語音」的「按一下說話」（wx_core.js voiceToggle）
+//   用的地方：微信「＋ → 語音」的錄音面板（wx_core.js openVoiceSheet）
 // ----------------------------------------------------------------
 (function () {
     const win = window.parent || window;
@@ -60,6 +60,7 @@
 
     function _release(r) {
         try { r.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+        try { if (r.meter) r.meter.ctx.close(); } catch (e) {}
     }
 
     async function start() {
@@ -73,7 +74,32 @@
         const chunks = [];
         mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
         mr.start();
-        _rec = { stream, mr, chunks, t0: Date.now(), mime: mr.mimeType || mime };
+        // 音量表：只給畫面看「有在收音」，拿不到就是 0，不影響錄音
+        let meter = null;
+        try {
+            const AC = win.AudioContext || win.webkitAudioContext;
+            if (AC) {
+                const ctx = new AC();
+                const an = ctx.createAnalyser();
+                an.fftSize = 1024;
+                ctx.createMediaStreamSource(stream).connect(an);
+                if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+                meter = { ctx, an, buf: new Float32Array(an.fftSize) };
+            }
+        } catch (e) { meter = null; }
+        _rec = { stream, mr, chunks, t0: Date.now(), mime: mr.mimeType || mime, meter };
+    }
+
+    // 錄音中的音量（0～1 的 RMS，說話大約落在 0.02～0.2）
+    function level() {
+        const m = _rec && _rec.meter;
+        if (!m) return 0;
+        try {
+            m.an.getFloatTimeDomainData(m.buf);
+            let s = 0;
+            for (let i = 0; i < m.buf.length; i++) s += m.buf[i] * m.buf[i];
+            return Math.sqrt(s / m.buf.length);
+        } catch (e) { return 0; }
     }
 
     function stop() {
@@ -426,6 +452,7 @@
         stop,
         cancel,
         isRecording: () => !!_rec,
+        level,
         prepare: (onProgress) => _engine().prepare(onProgress),
         isReady: () => _engine().isReady(),
         isDownloaded: () => (_engine().isDownloaded ? _engine().isDownloaded() : Promise.resolve(true)),

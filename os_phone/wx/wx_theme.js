@@ -68,9 +68,41 @@
             .wx-modal-pick { width: 100%; padding: 11px; margin-bottom: 8px; border: none; border-radius: 6px; background: #07c160; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
             .wx-modal-pick:disabled { opacity: 0.6; cursor: wait; }
             .wx-modal-pick.hidden { display: none; }
-            .wx-modal-mic:disabled { cursor: progress; }
-            .wx-modal-mic.is-recording { background: #fa5151; animation: wxMicPulse 1.2s ease-in-out infinite; }
-            @keyframes wxMicPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(250,81,81,0.45); } 50% { box-shadow: 0 0 0 6px rgba(250,81,81,0); } }
+            /* 🎙 語音錄音面板：從底部升起，一顆大圓鈕；狀態寫在 data-state，各區塊照狀態顯示 */
+            .wx-vsheet-mask { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 1000005; display: flex; align-items: flex-end; animation: fadeIn 0.2s; }
+            .wx-vsheet-mask[hidden] { display: none !important; }
+            .wx-vsheet { width: 100%; background: #f7f7f7; border-radius: 16px 16px 0 0; padding: 10px 20px calc(18px + env(safe-area-inset-bottom)); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; animation: wxVsheetUp 0.25s ease-out; }
+            @keyframes wxVsheetUp { from { transform: translateY(100%); } to { transform: none; } }
+            .wx-vsheet-grab { width: 36px; height: 4px; border-radius: 2px; background: #d0d0d0; margin-bottom: 14px; }
+            .wx-vsheet-dl, .wx-vsheet-rec { width: 100%; display: none; flex-direction: column; align-items: center; gap: 10px; }
+            .wx-vsheet-mask[data-state="download"] .wx-vsheet-dl, .wx-vsheet-mask[data-state="downloading"] .wx-vsheet-dl { display: flex; }
+            .wx-vsheet-mask[data-state="idle"] .wx-vsheet-rec, .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-rec, .wx-vsheet-mask[data-state="recording"] .wx-vsheet-rec, .wx-vsheet-mask[data-state="sending"] .wx-vsheet-rec { display: flex; }
+            .wx-vsheet-title { font-size: 16px; font-weight: 600; color: #222; }
+            .wx-vsheet-note { font-size: 13px; color: #888; text-align: center; font-variant-numeric: tabular-nums; }
+            .wx-vsheet-bar { width: 100%; height: 6px; -webkit-appearance: none; appearance: none; border: none; border-radius: 3px; overflow: hidden; background: #e5e5e5; }
+            .wx-vsheet-bar::-webkit-progress-bar { background: #e5e5e5; }
+            .wx-vsheet-bar::-webkit-progress-value { background: #07c160; }
+            .wx-vsheet-bar::-moz-progress-bar { background: #07c160; }
+            .wx-vsheet-mask[data-state="download"] .wx-vsheet-bar { visibility: hidden; }
+            .wx-vsheet-dlbtn { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #07c160; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; }
+            .wx-vsheet-mask[data-state="downloading"] .wx-vsheet-dlbtn { display: none; }
+            .wx-vsheet-timer { font-size: 15px; color: #333; font-variant-numeric: tabular-nums; height: 20px; visibility: hidden; }
+            .wx-vsheet-level { display: flex; align-items: center; gap: 4px; height: 28px; visibility: hidden; }
+            .wx-vsheet-level i { display: block; width: 4px; height: 4px; border-radius: 2px; background: #07c160; transition: height 0.12s; }
+            .wx-vsheet-level i:nth-child(even) { opacity: 0.6; }
+            .wx-vsheet-level[data-lv="1"] i { height: 8px; }
+            .wx-vsheet-level[data-lv="2"] i { height: 14px; }
+            .wx-vsheet-level[data-lv="3"] i { height: 20px; }
+            .wx-vsheet-level[data-lv="4"] i { height: 26px; }
+            .wx-vsheet-level[data-lv] i:nth-child(3n+1) { transform: scaleY(0.6); }
+            .wx-vsheet-mask[data-state="recording"] .wx-vsheet-timer, .wx-vsheet-mask[data-state="recording"] .wx-vsheet-level { visibility: visible; }
+            .wx-vsheet-mic { width: 76px; height: 76px; border-radius: 50%; border: none; background: #07c160; color: #fff; font-size: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 14px rgba(7,193,96,0.35); }
+            .wx-vsheet-mic:disabled { background: #b8b8b8; box-shadow: none; cursor: progress; }
+            .wx-vsheet-mask[data-state="recording"] .wx-vsheet-mic { background: #fa5151; animation: wxVsheetPulse 1.2s ease-in-out infinite; }
+            @keyframes wxVsheetPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(250,81,81,0.45); } 50% { box-shadow: 0 0 0 12px rgba(250,81,81,0); } }
+            .wx-vsheet-hint { font-size: 13px; color: #888; }
+            .wx-vsheet-cancel { background: none; border: none; color: #576b95; font-size: 14px; padding: 6px 14px; cursor: pointer; }
+            .wx-vsheet-mask[data-state="sending"] .wx-vsheet-cancel { visibility: hidden; }
             .wx-modal-footer { display: flex; gap: 10px; margin-top: 10px; }
             .wx-btn { flex: 1; padding: 10px 0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; text-align: center; }
             .wx-btn-cancel { background: #f2f2f2; color: #333; }
@@ -205,8 +237,33 @@
             .wx-grid-label { font-size: 11px; color: #666; }
             .wx-img-block { max-width: 100%; border-radius: 4px; cursor: pointer; display:block; }
             .wx-time-stamp { text-align: center; font-size: 12px; color: #cecece; margin: 10px 0; width: 100%; clear:both; }
-            .wx-voice-wrapper { display: flex; flex-direction: column; gap: 5px; cursor: pointer; }
-            .wx-trans-box { font-size: 13px; padding: 8px; border-top: 1px solid rgba(0,0,0,0.1); display: none; background:rgba(0,0,0,0.05); }
+            /* 🎙 語音泡泡：喇叭＋音波＋秒數，長度四檔；字幕點開才出現。顏色跟著泡泡走（currentColor），換皮不用另外寫 */
+            .wx-vmsg { display: flex; flex-direction: column; gap: 6px; cursor: pointer; max-width: 100%; }
+            .wx-vmsg-box { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+            .wx-vmsg--me .wx-vmsg-box { flex-direction: row-reverse; }
+            .wx-vmsg-len1 { min-width: 72px; }
+            .wx-vmsg-len2 { min-width: 100px; }
+            .wx-vmsg-len3 { min-width: 130px; }
+            .wx-vmsg-len4 { min-width: 160px; }
+            .wx-vmsg-icon { font-size: 14px; opacity: 0.85; }
+            .wx-vmsg--me .wx-vmsg-icon { transform: scaleX(-1); }
+            .wx-vmsg-bars { display: flex; align-items: center; gap: 3px; height: 16px; flex: 1; }
+            .wx-vmsg--me .wx-vmsg-bars { justify-content: flex-end; }
+            .wx-vmsg-bars i { display: block; width: 2.5px; height: 6px; border-radius: 2px; background: currentColor; opacity: 0.45; }
+            .wx-vmsg-bars i:nth-child(2) { height: 11px; }
+            .wx-vmsg-bars i:nth-child(3) { height: 8px; }
+            .wx-vmsg-bars i:nth-child(4) { height: 14px; }
+            .wx-vmsg-bars i:nth-child(5) { height: 7px; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i { animation: wxVmsgBar 0.9s ease-in-out infinite; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i:nth-child(2) { animation-delay: 0.15s; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i:nth-child(3) { animation-delay: 0.3s; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i:nth-child(4) { animation-delay: 0.45s; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i:nth-child(5) { animation-delay: 0.6s; }
+            @keyframes wxVmsgBar { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1.3); } }
+            .wx-vmsg.is-playing .wx-vmsg-icon { opacity: 1; }
+            .wx-vmsg-dur { font-size: 13px; font-variant-numeric: tabular-nums; opacity: 0.8; }
+            .wx-vmsg-trans { display: none; font-size: 13px; line-height: 1.5; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.1); word-break: break-word; }
+            .wx-vmsg-trans.open { display: block; }
             .wx-file-card { background: #fff; padding: 12px 15px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; width: 210px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: pointer; }
             .wx-file-info { flex: 1; overflow: hidden; margin-right: 10px; display: flex; flex-direction: column; justify-content: center; }
             .wx-file-name { font-size: 14px; color: #333; line-height: 1.4; max-height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
@@ -387,6 +444,9 @@
             .wx-dark .wx-modal-box, .wx-dark .wx-context-menu { background: #1c1c1e; }
             .wx-dark .wx-modal-title { color: #f0f0f0; }
             .wx-dark .wx-modal-input { background: #2a2a2c; border-color: #3a3a3c; color: #f0f0f0; }
+            .wx-dark .wx-vsheet { background: #1c1c1e; }
+            .wx-dark .wx-vsheet-title, .wx-dark .wx-vsheet-timer { color: #f0f0f0; }
+            .wx-dark .wx-vsheet-grab, .wx-dark .wx-vsheet-bar { background: #3a3a3c; }
             .wx-dark .wx-context-item { color: #f0f0f0; border-bottom-color: #2a2a2a; }
             .wx-dark .wx-btn-cancel { background: #2a2a2c; color: #ccc; }
             .wx-dark .wx-btn-reset { background: #2a2a2c; color: #ff6b6b; }

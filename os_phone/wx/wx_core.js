@@ -1791,6 +1791,9 @@
     // 長按任一則訊息＝引用它。桌面右鍵同一條路。
     // 事件綁在整個訊息區上做委派，泡泡是每次重畫的，逐顆綁會漏掉重畫後的那些。
     let _replyTo = null;   // { name, text }：正在回覆誰的哪句話；送出或取消就清掉
+    let _voicePlaying = null;   // { el, audio, url }：正在播的那段錄音，同一時間只播一段
+    let _vsTick = null;         // 錄音面板的計時器
+    const VOICE_MAX_SEC = 60;   // 跟微信一樣一段最長 60 秒，到了自動送出
     function _bindQuoteGestures(rc) {
         if (!rc || rc.dataset.quoteBound === '1') return;
         rc.dataset.quoteBound = '1';
@@ -2341,7 +2344,50 @@
             return true;
         },
         
-        toggleVoice: function(el, txt) { const box = el.querySelector('.wx-trans-box'); if(box.style.display==='block') { box.style.display='none'; } else { box.style.display='block'; box.innerText = ''; const t = decodeURIComponent(txt); let i=0; const timer = setInterval(()=>{ box.innerText += t.charAt(i); i++; if(i>=t.length) clearInterval(timer); }, 30); } },
+        // 🎙 點語音泡泡：她自己錄的就播真的聲音、字幕跟著打開，播放中再點一下停；
+        //    沒有錄音的（AI 傳的、舊的打字語音）照舊點開看字
+        toggleVoice: async function(el, txt) {
+            const box = el.querySelector('.wx-vmsg-trans');
+            const t = decodeURIComponent(txt || '');
+            const row = el.closest('.wx-msg-row');
+            const idx = (row && row.dataset.msgIdx != null) ? parseInt(row.dataset.msgIdx, 10) : -1;
+            const chat = GLOBAL_ACTIVE_ID ? GLOBAL_CHATS[GLOBAL_ACTIVE_ID] : null;
+            const msg = (chat && chat.messages && idx >= 0) ? chat.messages[idx] : null;
+            if (msg && msg.voiceAudio) {
+                const same = !!(_voicePlaying && _voicePlaying.el === el);
+                this._stopVoicePlay();
+                if (same) return;
+                if (box && t) { box.textContent = t; box.classList.add('open'); }
+                try {
+                    const url = await win.OS_DB.getImage(msg.voiceAudio);
+                    if (!url) { AUI.toast('這段錄音找不到了'); return; }
+                    const audio = new win.Audio(url);
+                    _voicePlaying = { el: el, audio: audio, url: url };
+                    el.classList.add('is-playing');
+                    audio.onended = () => this._stopVoicePlay();
+                    audio.onerror = () => { this._stopVoicePlay(); AUI.toast('這段錄音播不出來'); };
+                    await audio.play();
+                } catch (e) {
+                    console.warn('[WX] 播放語音失敗:', e);
+                    this._stopVoicePlay();
+                }
+                return;
+            }
+            if (!box) return;
+            if (box.classList.contains('open')) { box.classList.remove('open'); return; }
+            box.classList.add('open');
+            box.textContent = '';
+            let i = 0;
+            const timer = setInterval(() => { box.textContent += t.charAt(i); i++; if (i >= t.length) clearInterval(timer); }, 30);
+        },
+        _stopVoicePlay: function () {
+            const p = _voicePlaying;
+            _voicePlaying = null;
+            if (!p) return;
+            try { p.audio.pause(); } catch (e) {}
+            try { win.URL.revokeObjectURL(p.url); } catch (e) {}
+            if (p.el) p.el.classList.remove('is-playing');
+        },
         
         onInputCheck: function(el) { const btn = el.parentElement.querySelector('.wx-send-btn'); const plus = el.parentElement.querySelector('.wx-icon-btn:nth-child(4)'); if (el.value.trim()) { btn.classList.add('show'); plus.style.display = 'none'; } else { btn.classList.remove('show'); plus.style.display = 'block'; } },
         onInputKey: function(e, el) { if(e.key==='Enter') this.sendMsg(el); },
@@ -2391,7 +2437,7 @@
         },
         onScrollDot: function(el) { const dots = APP_CONTAINER.querySelectorAll('.wx-dot'); const pageIndex = Math.round(el.scrollLeft / el.clientWidth); dots.forEach((d, i) => { if(i === pageIndex) d.classList.add('active'); else d.classList.remove('active'); }); },
         
-        action: function(type) { PENDING_ACTION_TYPE = type; const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } const micBtn = doc.querySelector('#wxModalMic'); if (micBtn) { const VI = win.OS_VOICE_INPUT; micBtn.classList.toggle('hidden', !(type === 'voice_msg' && VI && VI.isSupported())); } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus(); this.togglePanel(); },
+        action: function(type) { if (type === 'voice_msg' && win.OS_VOICE_INPUT && win.OS_VOICE_INPUT.isSupported()) { this.togglePanel(); this.openVoiceSheet(); return; } PENDING_ACTION_TYPE = type; const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus(); this.togglePanel(); },
 
         // 📷 從相簿選一張照片傳出去：壓成 JPEG 存進圖庫，訊息裡只放圖庫編號。
         //    對方要「看」這張照片的話，在 triggerReply 那邊照頭像的做法只送一次（_photoOnceMessage）。
@@ -2414,76 +2460,127 @@
                 AUI.toast('照片存不進去');
             } finally { if (btn) btn.disabled = false; }
         },
-        // 🎙 語音訊息「按一下說話」：錄音 → OS_VOICE_INPUT 轉成字 → 填進輸入框，她看過再按發送。
-        //    第一次要下載聽寫檔（約 250MB），先問過才下載；下載過的就直接載入、接著開始錄。
-        _voiceSetBtn: function (state, text) {
-            const btn = doc.querySelector('#wxModalMic');
-            if (!btn) return;
-            const icon = state === 'recording' ? 'fa-stop' : (state === 'busy' ? 'fa-spinner fa-spin' : 'fa-microphone');
-            const label = text || (state === 'recording' ? '說完了' : '按一下說話');
-            btn.innerHTML = `<i class="fa-solid ${icon}"></i>${label}`;
-            btn.classList.toggle('is-recording', state === 'recording');
-            btn.disabled = state === 'busy';
+        // 🎙 語音訊息：底部升起錄音面板，按一下開始、再按一下送出。
+        //    轉出來的字放進 [Voice: …] 給對方讀；錄音本身存進圖庫（aud_wx_…），泡泡點下去播的是她真的聲音。
+        //    第一次要下載聽寫檔（約 250MB），面板自己先顯示下載那一頁。沒有麥克風的瀏覽器才走舊的打字框。
+        _vsEl: function () { return doc.querySelector('#wxVoiceSheet'); },
+        // 模組丟出來的錯誤是中文就照講，瀏覽器的英文錯誤不上畫面
+        _vsWhy: function (e) { const m = String((e && e.message) || ''); return /[一-鿿]/.test(m) ? m : '再試一次'; },
+        _vsState: function (state) {
+            const el = this._vsEl();
+            if (!el) return;
+            el.dataset.state = state;
+            const mic = el.querySelector('#wxVoiceMic');
+            const icon = { idle: 'fa-microphone', recording: 'fa-paper-plane', preparing: 'fa-spinner fa-spin', sending: 'fa-spinner fa-spin' }[state];
+            if (mic && icon) { mic.innerHTML = '<i class="fa-solid ' + icon + '"></i>'; mic.disabled = (state === 'preparing' || state === 'sending'); }
+            const hint = { idle: '點一下開始說話', recording: '說完點一下送出', preparing: '準備中…', sending: '正在轉成字…' }[state];
+            const h = el.querySelector('#wxVoiceHint');
+            if (h && hint) h.textContent = hint;
+            if (state === 'download') {
+                const n = el.querySelector('#wxVoiceNote'); if (n) n.textContent = '大約 250MB，只要下載一次，建議連 Wi-Fi';
+                const b = el.querySelector('#wxVoiceBar'); if (b) b.value = 0;
+            }
         },
-        _voiceReset: function () {
+        _vsStopTick: function () { if (_vsTick) { clearInterval(_vsTick); _vsTick = null; } },
+        openVoiceSheet: async function () {
             const VI = win.OS_VOICE_INPUT;
-            if (VI && VI.isRecording()) VI.cancel();
-            this._voiceSetBtn('idle');
+            const el = this._vsEl();
+            if (!el || !VI) return;
+            this._vsState('preparing');
+            el.hidden = false;
+            if (VI.isReady()) { this._vsState('idle'); return; }
+            if (!(await VI.isDownloaded())) { this._vsState('download'); return; }
+            this._vsPrepare(false);
         },
-        voiceToggle: async function () {
+        voiceDownload: function () { this._vsPrepare(true); },
+        _vsPrepare: async function (fresh) {
             const VI = win.OS_VOICE_INPUT;
-            if (!VI || !VI.isSupported()) { AUI.toast('這裡不能錄音'); return; }
-            // 模組丟出來的錯誤是中文就照講，瀏覽器的英文錯誤不上畫面
-            const why = (e) => { const m = String((e && e.message) || ''); return /[一-鿿]/.test(m) ? m : '再試一次'; };
-            const input = doc.querySelector('#wxModalInput');
-
-            if (VI.isRecording()) {
-                this._voiceSetBtn('busy', '正在轉成字');
-                try {
-                    const rec = await VI.stop();
-                    const out = await VI.transcribe(rec.blob);
-                    if (!out.text) AUI.toast('沒聽到聲音');
-                    else if (input) input.value = input.value.trim() + out.text;
-                } catch (e) {
-                    console.warn('[WX] 語音轉字失敗:', e);
-                    AUI.toast('沒轉成字，' + why(e));
-                }
-                this._voiceSetBtn('idle');
+            const el = this._vsEl();
+            if (!el || !VI) return;
+            this._vsState(fresh ? 'downloading' : 'preparing');
+            const note = el.querySelector('#wxVoiceNote');
+            const bar = el.querySelector('#wxVoiceBar');
+            if (fresh && note) note.textContent = '下載中 0%';
+            try {
+                await VI.prepare((p) => {
+                    if (el.hidden) return;
+                    if (p.stage === 'download' && el.dataset.state === 'downloading') {
+                        if (bar) bar.value = p.percent;
+                        if (note) note.textContent = '下載中 ' + p.percent + '%';
+                    } else if (p.stage === 'loading') {
+                        this._vsState('preparing');
+                    }
+                });
+            } catch (e) {
+                console.warn('[WX] 聽寫準備失敗:', e);
+                if (!el.hidden) { AUI.toast('聽寫沒準備好，' + this._vsWhy(e)); this._vsState('download'); }
                 return;
             }
-
-            if (!VI.isReady()) {
-                const downloaded = await VI.isDownloaded();
-                if (!downloaded) {
-                    const ok = await AUI.confirm('第一次用要先下載聽寫用的檔案，大約 250MB，下載一次就好。建議連 Wi-Fi。要現在下載嗎？');
-                    if (!ok) return;
-                }
-                this._voiceSetBtn('busy', downloaded ? '準備中' : '下載中 0%');
-                try {
-                    await VI.prepare((p) => {
-                        if (p.stage === 'download' && !downloaded) this._voiceSetBtn('busy', '下載中 ' + p.percent + '%');
-                        else if (p.stage === 'loading') this._voiceSetBtn('busy', '準備中');
-                    });
-                } catch (e) {
-                    console.warn('[WX] 聽寫準備失敗:', e);
-                    AUI.toast('聽寫沒準備好，' + why(e));
-                    this._voiceSetBtn('idle');
-                    return;
-                }
-                if (!downloaded) { AUI.toast('下載好了，按一下就能說話'); this._voiceSetBtn('idle'); return; }
-            }
-
-            if (PENDING_ACTION_TYPE !== 'voice_msg') { this._voiceSetBtn('idle'); return; }   // 準備的時候她把框關了
+            if (!el.hidden) this._vsState('idle');
+        },
+        voiceMicTap: async function () {
+            const VI = win.OS_VOICE_INPUT;
+            const el = this._vsEl();
+            if (!VI || !el) return;
+            if (el.dataset.state === 'recording') { this._vsSend(); return; }
+            if (el.dataset.state !== 'idle') return;
             try {
                 await VI.start();
-                this._voiceSetBtn('recording');
             } catch (e) {
                 console.warn('[WX] 開麥克風失敗:', e);
-                AUI.toast(e && e.name === 'NotAllowedError' ? '沒有麥克風權限，要到瀏覽器設定裡允許' : ('麥克風開不起來，' + why(e)));
-                this._voiceSetBtn('idle');
+                AUI.toast(e && e.name === 'NotAllowedError' ? '沒有麥克風權限，要到瀏覽器設定裡允許' : ('麥克風開不起來，' + this._vsWhy(e)));
+                return;
+            }
+            if (el.hidden) { VI.cancel(); return; }   // 等權限框的時候她把面板關了
+            this._vsState('recording');
+            const t0 = Date.now();
+            const timer = el.querySelector('#wxVoiceTimer');
+            const meter = el.querySelector('#wxVoiceLevel');
+            const tick = () => {
+                const s = Math.floor((Date.now() - t0) / 1000);
+                if (timer) timer.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+                if (meter) { const v = VI.level ? VI.level() : 0; meter.dataset.lv = v < 0.01 ? 0 : (v < 0.03 ? 1 : (v < 0.07 ? 2 : (v < 0.14 ? 3 : 4))); }
+                if (s >= VOICE_MAX_SEC) this._vsSend();
+            };
+            this._vsStopTick();
+            tick();
+            _vsTick = setInterval(tick, 120);
+        },
+        _vsSend: async function () {
+            const VI = win.OS_VOICE_INPUT;
+            const el = this._vsEl();
+            if (!el || el.dataset.state !== 'recording') return;
+            this._vsStopTick();
+            this._vsState('sending');
+            try {
+                const rec = await VI.stop();
+                if (rec.durationSec < 0.8) { AUI.toast('說話時間太短'); this._vsState('idle'); return; }
+                const out = await VI.transcribe(rec.blob);
+                const text = String(out.text || '').replace(/\[/g, '［').replace(/\]/g, '］').trim();
+                if (!text) { AUI.toast('沒聽清楚，再說一次'); this._vsState('idle'); return; }
+                const id = 'aud_wx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+                await win.OS_DB.saveImage(id, rec.blob);
+                const sec = Math.round((out.durationSec || rec.durationSec) * 10) / 10;
+                this._vsState('idle');
+                this.closeVoiceSheet();
+                await this.sendMsg(null, '[Voice: ' + text + ']', { voiceAudio: id, voiceSec: sec });
+            } catch (e) {
+                console.warn('[WX] 語音送出失敗:', e);
+                AUI.toast('沒送出去，' + this._vsWhy(e));
+                if (!el.hidden) this._vsState('idle');
             }
         },
-        closeModal: function() { const modal = doc.querySelector('#wxActionModal'); if(modal) modal.classList.remove('show'); PENDING_ACTION_TYPE = null; this._voiceReset(); },
+        closeVoiceSheet: function (ev) {
+            const el = this._vsEl();
+            if (!el) return;
+            if (ev && ev.target !== el) return;          // 點到面板本身不算，點外面那層才關
+            if (el.dataset.state === 'sending') return;  // 正在轉字、要送出了，別半路關掉
+            this._vsStopTick();
+            const VI = win.OS_VOICE_INPUT;
+            if (VI && VI.isRecording()) VI.cancel();
+            el.hidden = true;
+        },
+        closeModal: function() { const modal = doc.querySelector('#wxActionModal'); if(modal) modal.classList.remove('show'); PENDING_ACTION_TYPE = null; },
         confirmModal: function() { 
             const input1 = doc.querySelector('#wxModalInput'); 
             const input2 = doc.querySelector('#wxModalInput2'); 
@@ -2736,7 +2833,8 @@
         },
         
         // --- 發送消息 (🔥 關鍵修復點) ---
-        sendMsg: async function(el, contentOverride = null) {
+        // extra：要一起存在這則訊息上的欄位（語音的 voiceAudio／voiceSec），不進正文
+        sendMsg: async function(el, contentOverride = null, extra = null) {
             let text = contentOverride; let inputEl = null;
             if (!text) { inputEl = APP_CONTAINER.querySelector('.wx-input-real'); if(inputEl) text = inputEl.value.trim(); }
             if(!text || !GLOBAL_ACTIVE_ID) return;
@@ -2770,6 +2868,7 @@
             // 🚫 對方把主角刪了：字打得出去、傳不到。照真的微信在後面補一句「被對方拒收」，
             //    這幾則標起來（sentWhileBlocked），組上下文時不給對方看——他本來就沒收到。
             if (currentChat.wxBlocked) sentMsg.sentWhileBlocked = true;
+            if (extra) Object.assign(sentMsg, extra);
             currentChat.messages.push(sentMsg);
             _appendBubble(sentMsg, currentChat);
             if (currentChat.wxBlocked) {

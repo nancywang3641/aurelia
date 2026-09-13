@@ -258,7 +258,7 @@
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(display)}</div>`;
             }
 
-            html = this.processModules(html, String(chatId), msg.isMe, msgIndex);
+            html = this.processModules(html, String(chatId), msg.isMe, msgIndex, msg);
             
             let avatarSeed = chatName; 
             let avatarUrl = "";
@@ -345,7 +345,7 @@
         generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },
 
         // --- 2. 模塊解析 ---
-        processModules: function(html, chatId, isMe, msgIndex) {
+        processModules: function(html, chatId, isMe, msgIndex, msg) {
             // 🚨模型沒給單號時，以前是現場擲一個隨機數（紅包甚至只有三位數）。
             //   每次重畫都會擲出不一樣的，狀態當場跟丟；三位數還會撞到別人的紅包、
             //   直接繼承對方的金額與領取紀錄。改成用「第幾則訊息＋這則裡的第幾張卡」當身分，
@@ -542,7 +542,14 @@
                 return '<span class="wx-call-rec"><i class="fa-solid fa-phone"></i>'
                     + (note || '通話已結束') + '</span>';
             });
-            html = html.replace(tagRe(MSG_TAG.VOICE), (m, t, txt) => { const cleanTxt = txt.replace(/['"]/g, ''); const sec = Math.min(60, Math.max(2, Math.ceil(cleanTxt.length/2))); return `<div class="wx-voice-wrapper" onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"><div class="wx-voice-box" style="width:${60+sec*2}px"><span style="margin:0 5px">((</span><span>${sec}"</span></div><div class="wx-trans-box"></div></div>`; });
+            // 🎙 語音：她自己錄的（msg.voiceAudio）秒數是真的、點下去播真的聲音；其他語音照字數估秒數、點下去看字
+            html = html.replace(tagRe(MSG_TAG.VOICE), (m, t, txt) => {
+                const cleanTxt = txt.replace(/['"]/g, '').trim();
+                const real = !!(msg && msg.voiceAudio);
+                const sec = real ? Math.max(1, Math.round(msg.voiceSec || 1)) : Math.min(60, Math.max(2, Math.ceil(cleanTxt.length / 2)));
+                const len = sec <= 5 ? 1 : (sec <= 15 ? 2 : (sec <= 30 ? 3 : 4));
+                return `<div class="wx-vmsg${isMe ? ' wx-vmsg--me' : ''}" onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"><div class="wx-vmsg-box wx-vmsg-len${len}"><i class="fa-solid fa-volume-high wx-vmsg-icon"></i><span class="wx-vmsg-bars"><i></i><i></i><i></i><i></i><i></i></span><span class="wx-vmsg-dur">${sec}"</span></div><div class="wx-vmsg-trans"></div></div>`;
+            });
             html = html.replace(tagRe(MSG_TAG.REDPACKET), (match, tag, content) => {
                 // 解析內容：支持 [金額|備註|紅包ID] 或舊格式
                 let amount = '0', memo = '恭喜發財，大吉大利', packetId = '';
@@ -1217,7 +1224,8 @@
 
                     </div>
                     
-                    <div class="wx-modal-overlay" id="wxActionModal"><div class="wx-modal-box"><div class="wx-modal-title" id="wxModalTitle">輸入內容</div><button class="wx-modal-pick hidden" id="wxModalPick" onclick="${app}.pickPhotoAndSend()"><i class="fa-solid fa-images"></i>從相簿選</button><button class="wx-modal-pick wx-modal-mic hidden" id="wxModalMic" onclick="${app}.voiceToggle()"><i class="fa-solid fa-microphone"></i>按一下說話</button><input type="text" class="wx-modal-input" id="wxModalInput" autocomplete="off"><input type="text" class="wx-modal-input hidden" id="wxModalInput2" autocomplete="off" style="margin-top:5px;"><select class="wx-modal-input hidden" id="wxModalSelect" style="margin-top:5px;"></select><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" onclick="${app}.closeModal()">取消</button><button class="wx-btn wx-btn-confirm" onclick="${app}.confirmModal()">發送</button></div></div></div>
+                    <div class="wx-modal-overlay" id="wxActionModal"><div class="wx-modal-box"><div class="wx-modal-title" id="wxModalTitle">輸入內容</div><button class="wx-modal-pick hidden" id="wxModalPick" onclick="${app}.pickPhotoAndSend()"><i class="fa-solid fa-images"></i>從相簿選</button><input type="text" class="wx-modal-input" id="wxModalInput" autocomplete="off"><input type="text" class="wx-modal-input hidden" id="wxModalInput2" autocomplete="off" style="margin-top:5px;"><select class="wx-modal-input hidden" id="wxModalSelect" style="margin-top:5px;"></select><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" onclick="${app}.closeModal()">取消</button><button class="wx-btn wx-btn-confirm" onclick="${app}.confirmModal()">發送</button></div></div></div>
+                    <div class="wx-vsheet-mask" id="wxVoiceSheet" data-state="idle" hidden onclick="${app}.closeVoiceSheet(event)"><div class="wx-vsheet"><div class="wx-vsheet-grab"></div><div class="wx-vsheet-dl"><div class="wx-vsheet-title">先下載聽寫檔案</div><div class="wx-vsheet-note" id="wxVoiceNote">大約 250MB，只要下載一次，建議連 Wi-Fi</div><progress class="wx-vsheet-bar" id="wxVoiceBar" max="100" value="0"></progress><button class="wx-vsheet-dlbtn" onclick="${app}.voiceDownload()">下載</button><button class="wx-vsheet-cancel" onclick="${app}.closeVoiceSheet()">取消</button></div><div class="wx-vsheet-rec"><div class="wx-vsheet-timer" id="wxVoiceTimer">0:00</div><div class="wx-vsheet-level" id="wxVoiceLevel" data-lv="0"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><button class="wx-vsheet-mic" id="wxVoiceMic" onclick="${app}.voiceMicTap()"><i class="fa-solid fa-microphone"></i></button><div class="wx-vsheet-hint" id="wxVoiceHint">點一下開始說話</div><button class="wx-vsheet-cancel" onclick="${app}.closeVoiceSheet()">取消</button></div></div></div>
                     <div class="wx-gift-overlay" id="wxGiftOverlay" onclick="this.classList.remove('show')"><div class="wx-receipt-box" onclick="event.stopPropagation()"><div class="wx-receipt-header"></div><div class="wx-receipt-content"><div class="wx-receipt-icon" id="wxGiftIcon"><i class="fa-solid fa-gift"></i></div><div class="wx-receipt-name" id="wxGiftName">禮物名稱</div><div class="wx-receipt-divider"></div><div class="wx-receipt-price-label">價值</div><div class="wx-receipt-price" id="wxGiftPrice">¥0</div><div class="wx-receipt-btn-group" id="wxGiftBtnGroup" style="display:none;"><div class="wx-receipt-btn-accept" id="wxGiftAccept">收下禮物</div><div class="wx-receipt-btn-refuse" id="wxGiftRefuse">殘忍拒絕</div></div><div class="wx-receipt-close" id="wxGiftClose" onclick="document.getElementById('wxGiftOverlay').classList.remove('show')">關閉</div></div></div></div>
                     <div class="wx-transfer-overlay" id="wxTransferOverlay" onclick="${app}.closeTransfer()"><div class="wx-transfer-box" onclick="event.stopPropagation()"><div class="wx-transfer-header"><div class="wx-transfer-icon"><i class="fa-solid fa-check"></i></div><div style="font-size:14px;" id="wxTransferState">待收款金額</div><div class="wx-transfer-amount" id="wxTransferAmount">¥0.00</div></div><div class="wx-transfer-actions"><button class="wx-btn-receive" id="wxBtnReceive" onclick="">確認收款</button><button class="wx-btn-return" id="wxBtnReturn" onclick="">退回轉帳</button><div style="font-size:12px; color:#6b6b6b; margin-top:5px;">收款後將存入餘額</div></div></div></div>
                     <div class="wx-rp-overlay" id="wxRedPacketOverlay" onclick="this.classList.remove('show')"><div class="wx-rp-box" onclick="event.stopPropagation()"><div class="wx-rp-header"><div class="wx-rp-avatar" id="wxRpAvatar"></div><div class="wx-rp-sender" id="wxRpSender">的紅包</div><div class="wx-rp-memo" id="wxRpMemo">恭喜發財，大吉大利</div></div><div class="wx-rp-divider"></div><div class="wx-rp-info" id="wxRpInfoBar">暫無人領取</div><div class="wx-rp-list" id="wxRpList"></div><div class="wx-rp-close" onclick="document.getElementById('wxRedPacketOverlay').classList.remove('show')">關閉</div></div></div>
