@@ -1163,12 +1163,8 @@
                 headerRightBtn = `
                     <div style="display:flex; align-items:center; gap:8px;">
                         ${(chats[activeId] && chats[activeId].isGroup) ? '' : `<div id="wx-msg-note-btn" class="wxnb-head-btn${isDark ? ' is-dark' : ''}" onclick="event.stopPropagation(); const nb = (window.parent.WX_NOTEBOOK || window.WX_NOTEBOOK); if(nb) nb.open('${activeId}');"><i class="fa-solid fa-book-bookmark"></i></div>`}
-                        <div id="wx-msg-delete-btn" style="display:block; font-size:16px; cursor:pointer; color:#ff453a; padding:4px 8px;"
-                             onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.enterMultiSelectMode();"><i class="fa-solid fa-trash"></i></div>
                         <div id="wx-msg-menu-btn" style="display:block; font-size:22px; cursor:pointer; font-weight:bold; margin-top:-8px; color:${isDark ? '#f0f0f0' : '#000'};"
                              onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${activeId}');"><i class="fa-solid fa-ellipsis"></i></div>
-                        <div id="wx-msg-cancel-btn" style="display:none; font-size:14px; cursor:pointer; color:#999; padding:4px 8px;"
-                             onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.exitMultiSelectMode();">取消</div>
                         <div id="wx-msg-confirm-btn" style="display:none; font-size:14px; cursor:pointer; color:#999; padding:4px 8px; font-weight:bold;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.deleteSelectedMessages();">刪除</div>
                     </div>
@@ -1236,6 +1232,7 @@
                     <div class="wx-transfer-overlay" id="wxTransferOverlay" onclick="${app}.closeTransfer()"><div class="wx-transfer-box" onclick="event.stopPropagation()"><div class="wx-transfer-header"><div class="wx-transfer-icon"><i class="fa-solid fa-check"></i></div><div style="font-size:14px;" id="wxTransferState">待收款金額</div><div class="wx-transfer-amount" id="wxTransferAmount">¥0.00</div></div><div class="wx-transfer-actions"><button class="wx-btn-receive" id="wxBtnReceive" onclick="">確認收款</button><button class="wx-btn-return" id="wxBtnReturn" onclick="">退回轉帳</button><div style="font-size:12px; color:#6b6b6b; margin-top:5px;">收款後將存入餘額</div></div></div></div>
                     <div class="wx-rp-overlay" id="wxRedPacketOverlay" onclick="this.classList.remove('show')"><div class="wx-rp-box" onclick="event.stopPropagation()"><div class="wx-rp-header"><div class="wx-rp-avatar" id="wxRpAvatar"></div><div class="wx-rp-sender" id="wxRpSender">的紅包</div><div class="wx-rp-memo" id="wxRpMemo">恭喜發財，大吉大利</div></div><div class="wx-rp-divider"></div><div class="wx-rp-info" id="wxRpInfoBar">暫無人領取</div><div class="wx-rp-list" id="wxRpList"></div><div class="wx-rp-close" onclick="document.getElementById('wxRedPacketOverlay').classList.remove('show')">關閉</div></div></div>
 
+                    <div class="wx-multi-bar" id="wxMultiBar"><button type="button" class="wx-multi-bar-btn" data-mm="cancel">取消</button><button type="button" class="wx-multi-bar-btn" data-mm="all">全選</button><button type="button" class="wx-multi-bar-btn danger" data-mm="delete" disabled>刪除</button></div>
                     <div class="wx-footer-wrapper" style="display:${inputDisplay}">
                         <div class="wx-replying hidden" id="wxReplying"><div class="wx-replying-body"><span class="chat-quote-name" id="wxReplyingName"></span><span class="chat-quote-text" id="wxReplyingText"></span></div><span class="wx-replying-x" onclick="${app}.cancelQuote()"><i class="fa-solid fa-xmark"></i></span></div>
                         <div class="wx-input-bar">

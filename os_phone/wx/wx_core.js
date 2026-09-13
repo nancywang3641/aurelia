@@ -1839,8 +1839,11 @@
         });
     }
 
-    // 長按任一則訊息＝引用它。桌面右鍵同一條路。
+    // 長按任一則訊息＝跳一個小窗：複製｜引用｜刪除（LINE 那樣）。桌面右鍵同一條路。
+    //   以前長按直接引用、刪除要按標題列的垃圾桶，標題列擠（她說的）。現在刪除也從這裡進：
+    //   按「刪除」＝進多選、這一則先勾好，底下換成「取消｜全選｜刪除(n)」。
     // 事件綁在整個訊息區上做委派，泡泡是每次重畫的，逐顆綁會漏掉重畫後的那些。
+    let _lpAt = 0;         // 長按跳出小窗的時間：手指放開那一下的 click 不要再去點到泡泡（用時間窗，不用旗標）
     let _replyTo = null;   // { name, text }：正在回覆誰的哪句話；送出或取消就清掉
     let _voicePlaying = null;   // { el, audio, url }：正在播的那段錄音，同一時間只播一段
     let _vsTick = null;         // 錄音面板的計時器
@@ -1849,28 +1852,148 @@
         if (!rc || rc.dataset.quoteBound === '1') return;
         rc.dataset.quoteBound = '1';
         let timer = null, startY = 0;
+        // 泡泡、系統那行、時間戳都算一則（它們都直接掛在訊息區底下、帶 data-msg-idx）
         const rowOf = function (e) {
-            const t = (e.target && e.target.closest) ? e.target.closest('.wx-msg-row') : null;
-            return (t && t.dataset && t.dataset.msgIdx != null) ? t : null;
+            const t = (e.target && e.target.closest) ? e.target.closest('[data-msg-idx]') : null;
+            return (t && t.parentElement === rc) ? t : null;
         };
         const fire = function (row) {
             const i = parseInt(row.dataset.msgIdx, 10);
-            if (!isNaN(i) && win.wxApp && win.wxApp.quoteMsg) win.wxApp.quoteMsg(i);
+            if (!isNaN(i)) _openMsgMenu(row, i);
         };
+        const inMulti = function () { const M = _mm(); return !!(M && M.isMultiSelectMode); };
         const cancel = function () { if (timer) { clearTimeout(timer); timer = null; } };
         rc.addEventListener('pointerdown', function (e) {
-            const row = rowOf(e); if (!row) return;
+            const row = rowOf(e); if (!row || inMulti()) return;
             startY = e.clientY; cancel();
             timer = setTimeout(function () { timer = null; fire(row); }, 480);
         });
+        // 長按放開那一下、以及多選時點一則＝勾／取消勾（不必瞄準那顆小圓圈）
+        rc.addEventListener('click', function (e) {
+            if (Date.now() - _lpAt < 700) { e.preventDefault(); e.stopPropagation(); return; }
+            if (!inMulti()) return;
+            const row = rowOf(e); if (!row) return;
+            e.preventDefault(); e.stopPropagation();
+            const M = _mm(); if (M && M.toggleSelect) M.toggleSelect(parseInt(row.dataset.msgIdx, 10));
+        }, true);
         rc.addEventListener('pointerup', cancel);
         rc.addEventListener('pointercancel', cancel);
         rc.addEventListener('pointerleave', cancel);
         rc.addEventListener('pointermove', function (e) { if (Math.abs(e.clientY - startY) > 8) cancel(); });   // 在捲動就不是長按
         rc.addEventListener('contextmenu', function (e) {
-            const row = rowOf(e); if (!row) return;
+            const row = rowOf(e); if (!row || inMulti()) return;
             e.preventDefault(); fire(row);
         });
+    }
+
+    function _mm() { return win.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER; }
+    function _closeMsgMenu() {
+        const m = APP_CONTAINER && APP_CONTAINER.querySelector('.wx-msgmenu');
+        if (m) m.remove();
+    }
+    // 複製的是看得到的字：貼圖、照片、卡片這些標籤不算字，整則只有標籤就不給複製
+    function _msgPlainText(m) {
+        const V = win.WX_VIEW || window.WX_VIEW;
+        const all = V && V.MSG_TAG && V.MSG_TAG.ALL;
+        let s = String((m && m.content) || '');
+        if (all) s = s.replace(new RegExp('\\[\\s*(?:' + all + ')\\s*[:：][^\\]]*\\]', 'gi'), ' ');
+        return s.replace(/[ \t]{2,}/g, ' ').trim();
+    }
+    // 🚨 酒館殼裡 clipboard 會「非同步失敗」，try/catch 抓不到——一定要接 then 的失敗那條再退回 execCommand
+    function _copyText(text) {
+        const A = win.AUI || window.AUI;
+        const say = function (t) { if (A && A.toast) A.toast(t); };
+        // 第三層：兩種自動複製都被擋 → 開一個小框把字放進去全選，讓她自己按複製
+        //   （長按現在會跳訊息小窗，不能叫她「長按選字」）
+        const manual = function () {
+            if (!APP_CONTAINER) return;
+            const shell = APP_CONTAINER.querySelector('.wx-shell') || APP_CONTAINER;
+            const box = doc.createElement('div');
+            box.className = 'wx-modal-overlay show wx-copy-box';
+            box.innerHTML = '<div class="wx-modal-box"><div class="wx-modal-title">自動複製被擋住了，選好按複製</div>'
+                + '<textarea class="wx-modal-input wx-copy-box-ta" rows="5" readonly></textarea>'
+                + '<div class="wx-modal-footer"><button type="button" class="wx-btn wx-btn-confirm">好了</button></div></div>';
+            shell.appendChild(box);
+            const ta = box.querySelector('textarea');
+            ta.value = text;
+            const bye = function () { box.remove(); };
+            box.querySelector('button').onclick = bye;
+            box.addEventListener('click', function (e) { if (e.target === box) bye(); });
+            setTimeout(function () { try { ta.focus(); ta.select(); ta.setSelectionRange(0, text.length); } catch (e) {} }, 30);
+        };
+        const fallback = function () {
+            try {
+                const ta = doc.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.className = 'wx-copy-ta';
+                doc.body.appendChild(ta);
+                ta.select();
+                ta.setSelectionRange(0, text.length);
+                const done = doc.execCommand('copy');
+                ta.remove();
+                if (done) say('已複製'); else manual();
+            } catch (e) { manual(); }
+        };
+        try {
+            const nav = win.navigator;
+            if (nav && nav.clipboard && nav.clipboard.writeText) { nav.clipboard.writeText(text).then(function () { say('已複製'); }, fallback); return; }
+        } catch (e) {}
+        fallback();
+    }
+    function _openMsgMenu(row, idx) {
+        const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
+        const m = (chat && Array.isArray(chat.messages)) ? chat.messages[idx] : null;
+        if (!m || m.isLoading || !APP_CONTAINER) return;
+        _closeMsgMenu();
+        _lpAt = Date.now();
+        const isSys = m.type === 'system' || m.type === 'time';
+        const items = [];
+        if (!isSys && _msgPlainText(m)) items.push(['copy', 'fa-regular fa-copy', '複製']);
+        if (!isSys) items.push(['quote', 'fa-solid fa-reply', '引用']);
+        items.push(['delete', 'fa-regular fa-trash-can', '刪除']);
+        const shell = APP_CONTAINER.querySelector('.wx-shell') || APP_CONTAINER;
+        const menu = doc.createElement('div');
+        menu.className = 'wx-msgmenu';
+        menu.innerHTML = items.map(function (it) {
+            return '<button type="button" class="wx-msgmenu-btn" data-act="' + it[0] + '"><i class="' + it[1] + '"></i><span>' + it[2] + '</span></button>';
+        }).join('') + '<i class="wx-msgmenu-tail"></i>';
+        shell.appendChild(menu);
+        // 位置：蓋在那顆泡泡上方正中，上面放不下就放下面（座標是動態算的，只能直接指派）
+        const anchor = row.querySelector('.wx-bubble-content') || row;
+        const a = anchor.getBoundingClientRect();
+        const s = (menu.offsetParent || shell).getBoundingClientRect();
+        const mr = menu.getBoundingClientRect();
+        let left = a.left + a.width / 2 - mr.width / 2 - s.left;
+        left = Math.max(8, Math.min(left, s.width - mr.width - 8));
+        let top = a.top - s.top - mr.height - 12;
+        const below = top < 8;
+        if (below) top = a.bottom - s.top + 12;
+        menu.style.left = Math.round(left) + 'px';
+        menu.style.top = Math.round(top) + 'px';
+        menu.classList.toggle('below', below);
+        const tail = menu.querySelector('.wx-msgmenu-tail');
+        if (tail) tail.style.left = Math.round(Math.max(16, Math.min(a.left + a.width / 2 - s.left - left, mr.width - 16))) + 'px';
+        menu.addEventListener('click', function (e) {
+            const b = e.target.closest && e.target.closest('[data-act]');
+            if (!b) return;
+            e.stopPropagation();
+            _closeMsgMenu();
+            if (b.dataset.act === 'copy') _copyText(_msgPlainText(m));
+            else if (b.dataset.act === 'quote') { if (win.wxApp && win.wxApp.quoteMsg) win.wxApp.quoteMsg(idx); }
+            else if (b.dataset.act === 'delete') { const M = _mm(); if (M) M.enterMultiSelectMode(idx); }
+        });
+        // 點別的地方、捲動就收起來
+        setTimeout(function () {
+            const off = function (e) {
+                if (menu.contains(e.target)) return;
+                _closeMsgMenu();
+                doc.removeEventListener('pointerdown', off, true);
+            };
+            doc.addEventListener('pointerdown', off, true);
+            const sc = _getScrollEl();
+            if (sc) sc.addEventListener('scroll', function once() { _closeMsgMenu(); sc.removeEventListener('scroll', once); });
+        }, 0);
     }
     function _renderReplyingBar() {
         if (!APP_CONTAINER) return;
@@ -2373,6 +2496,9 @@
                 room.scrollTop = atBottom ? room.scrollHeight : savedTop;
                 const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
                 if (chat) { chat.renderedCount = chat.messages.length; }
+                // 🚨 長按小窗的監聽要在整頁重畫之後就綁上。以前只有「追加一顆泡泡」那條路會綁（_getRoomContent），
+                //    剛打開聊天室、還沒有新訊息進來之前，長按任何一則都沒反應。
+                _getRoomContent();
             }
             if (win.WX_MESSAGE_MANAGER && typeof win.WX_MESSAGE_MANAGER._updateUI === 'function') { setTimeout(() => win.WX_MESSAGE_MANAGER._updateUI(), 100); }
         },

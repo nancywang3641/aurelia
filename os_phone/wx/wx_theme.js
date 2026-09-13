@@ -18,12 +18,30 @@
             .wx-header { background: #ededed; height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid #dcdcdc; z-index: 20; }
             .wx-header-title { font-weight: 600; font-size: 16px; color: #000; }
             /* 多選刪除時標題列右邊那組：取消／全選／刪除 */
-            .wx-multi-controls { display: flex; align-items: center; gap: 8px; }
-            .wx-multi-controls[hidden] { display: none; }
-            .wx-multi-btn { font-size: 14px; color: #333; cursor: pointer; padding: 4px; white-space: nowrap; }
-            .wx-dark .wx-multi-btn { color: #f0f0f0; }
-            .wx-multi-btn.wx-multi-btn-danger { color: #fa5151; font-weight: bold; }
-            .wx-multi-btn.wx-multi-btn-danger.is-idle { opacity: 0.5; }
+            /* 🗑 多選刪除：底下換成一條「取消｜全選｜刪除(n)」，輸入列藏起來（LINE 那樣，標題列不再塞按鈕） */
+            .wx-multi-bar { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; gap: 10px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #f7f7f7; border-top: 1px solid #dcdcdc; box-sizing: border-box; }
+            .wx-shell.wx-multi-on .wx-multi-bar { display: flex; }
+            .wx-shell.wx-multi-on .wx-footer-wrapper { display: none !important; }
+            .wx-shell.wx-multi-on #wx-msg-note-btn, .wx-shell.wx-multi-on #wx-msg-menu-btn { visibility: hidden; }
+            .wx-multi-bar-btn { flex: 1; height: 42px; border-radius: 10px; border: 1px solid #d8d8d8; background: #fff; color: #333; font-size: 15px; font-family: inherit; cursor: pointer; }
+            .wx-multi-bar-btn.danger { flex: 1.4; border: none; background: #fa5151; color: #fff; font-weight: 600; }
+            .wx-multi-bar-btn.danger:disabled { opacity: 0.45; cursor: default; }
+            .wx-dark .wx-multi-bar { background: #1c1c1e; border-top-color: #2a2a2a; }
+            .wx-dark .wx-multi-bar-btn { background: #2a2a2c; border-color: #3a3a3c; color: #f0f0f0; }
+            .wx-dark .wx-multi-bar-btn.danger { background: #fa5151; color: #fff; }
+
+            /* 💬 長按一則訊息跳出來的小窗：複製｜引用｜刪除 */
+            .wx-msgmenu { position: absolute; z-index: 1000003; display: flex; background: rgba(20,20,22,0.94); border-radius: 12px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); animation: popIn 0.12s; }
+            .wx-msgmenu-btn { position: relative; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 12px 8px; border: none; background: none; color: #fff; font-size: 12px; font-family: inherit; cursor: pointer; border-radius: 8px; }
+            .wx-msgmenu-btn + .wx-msgmenu-btn::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 1px; background: rgba(255,255,255,0.14); }
+            .wx-msgmenu-btn i { font-size: 18px; }
+            .wx-msgmenu-btn:active { background: rgba(255,255,255,0.12); }
+            .wx-msgmenu-tail { position: absolute; bottom: -6px; width: 12px; height: 12px; margin-left: -6px; background: rgba(20,20,22,0.94); transform: rotate(45deg); border-radius: 2px; }
+            .wx-msgmenu.below .wx-msgmenu-tail { bottom: auto; top: -6px; }
+            .wx-copy-ta { position: fixed; left: -9999px; top: 0; opacity: 0; }
+            .wx-copy-box-ta { resize: none; line-height: 1.6; }
+            /* 長按要跳自己的小窗，不要跳 iOS 的放大鏡／系統選單 */
+            #wxRoomContent { -webkit-touch-callout: none; }
             .wx-back-btn { cursor: pointer; display: flex; align-items: center; font-size: 15px; color: #000; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 0.2s;}
             .wx-back-btn.show { opacity: 1; pointer-events: auto; }
             .wx-back-btn:before { content: '‹'; margin-right: 2px; font-size: 28px; line-height: 20px; position: relative; top: -2px;}

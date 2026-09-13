@@ -23,13 +23,16 @@
         } catch (e) { return false; }
     }
 
-    function enterMultiSelectMode() {
+    // preIdx：從長按小窗的「刪除」進來時，那一則先勾好
+    function enterMultiSelectMode(preIdx) {
         if (!isApiMode()) {
             AUI.alert('刪除功能僅支持 API 模式\n\n酒館模式請在酒館編輯器中刪除消息');
             return false;
         }
         isMultiSelectMode = true;
         selectedMessages.clear();
+        const _p = parseInt(preIdx, 10);
+        if (!isNaN(_p)) selectedMessages.add(_p);
         updateUI();
         console.log('[MessageManager] 進入多選模式');
         return true;
@@ -199,61 +202,35 @@
             if (isMultiSelectMode) roomPage.classList.add('multi-select-mode');
             else roomPage.classList.remove('multi-select-mode');
         }
+        // 輸入列跟聊天室不在同一層，所以「底下換成刪除那一條」掛在整個殼上
+        const shell = wxApp.APP_CONTAINER.querySelector('.wx-shell');
+        if (shell) shell.classList.toggle('wx-multi-on', isMultiSelectMode);
         updateHeaderButtons();
         updateAllCheckboxes();
     }
 
+    // 多選時底下那一條（取消｜全選｜刪除(n)）。以前這三顆塞在標題列右邊，標題列擠；
+    // 現在跟 LINE 一樣放在輸入列的位置，輸入列在多選時藏起來（wx_theme.js .wx-multi-on）。
     function updateHeaderButtons() {
-        const deleteBtn = doc.getElementById('wx-msg-delete-btn');
-        const menuBtn = doc.getElementById('wx-msg-menu-btn');
-        
-        let controlGroup = doc.getElementById('wx-multi-controls');
-        const headerRight = doc.querySelector('.wx-header > div:last-child');
-        
-        if (!controlGroup && headerRight) {
-            // 顏色在 wx_theme.js（.wx-multi-btn）：以前寫死 #333，深色模式的標題列上等於看不到
-            controlGroup = doc.createElement('div');
-            controlGroup.id = 'wx-multi-controls';
-            controlGroup.className = 'wx-multi-controls';
-            controlGroup.hidden = true;
-            controlGroup.innerHTML = `
-                <div id="wx-btn-cancel-multi" class="wx-multi-btn">取消</div>
-                <div id="wx-btn-select-all" class="wx-multi-btn">全選</div>
-                <div id="wx-btn-confirm-delete" class="wx-multi-btn wx-multi-btn-danger">刪除</div>
-            `;
-            headerRight.appendChild(controlGroup);
-            
-            doc.getElementById('wx-btn-cancel-multi').onclick = (e) => { e.stopPropagation(); exitMultiSelectMode(); };
-            doc.getElementById('wx-btn-select-all').onclick = (e) => { e.stopPropagation(); toggleSelectAll(); };
-            doc.getElementById('wx-btn-confirm-delete').onclick = (e) => { e.stopPropagation(); deleteSelectedMessages(); };
-        }
-
         const targetWin = window.parent || window;
         const wxApp = targetWin.wxApp || window.wxApp;
+        const bar = wxApp && wxApp.APP_CONTAINER ? wxApp.APP_CONTAINER.querySelector('#wxMultiBar') : null;
+        if (!bar) return;
         const activeId = wxApp.GLOBAL_ACTIVE_ID;
         const currentChat = wxApp.GLOBAL_CHATS?.[activeId];
         const totalMsg = currentChat ? currentChat.messages.length : 0;
-        
-        const selectAllBtn = doc.getElementById('wx-btn-select-all');
-        const confirmBtn = doc.getElementById('wx-btn-confirm-delete');
 
-        if (isMultiSelectMode) {
-            if(deleteBtn) deleteBtn.style.display = 'none';
-            if(menuBtn) menuBtn.style.display = 'none';
-            if(controlGroup) controlGroup.hidden = false;
+        const cancelBtn = bar.querySelector('[data-mm="cancel"]');
+        const allBtn = bar.querySelector('[data-mm="all"]');
+        const delBtn = bar.querySelector('[data-mm="delete"]');
+        if (cancelBtn) cancelBtn.onclick = (e) => { e.stopPropagation(); exitMultiSelectMode(); };
+        if (allBtn) allBtn.onclick = (e) => { e.stopPropagation(); toggleSelectAll(); };
+        if (delBtn) delBtn.onclick = (e) => { e.stopPropagation(); deleteSelectedMessages(); };
 
-            if (selectAllBtn) {
-                selectAllBtn.innerText = (selectedMessages.size > 0 && selectedMessages.size === totalMsg) ? '全不選' : '全選';
-            }
-            if (confirmBtn) {
-                confirmBtn.innerText = selectedMessages.size > 0 ? `刪除(${selectedMessages.size})` : '刪除';
-                confirmBtn.classList.toggle('is-idle', selectedMessages.size === 0);
-            }
-
-        } else {
-            if(deleteBtn) deleteBtn.style.display = 'block';
-            if(menuBtn) menuBtn.style.display = 'block';
-            if(controlGroup) controlGroup.hidden = true;
+        if (allBtn) allBtn.textContent = (selectedMessages.size > 0 && selectedMessages.size === totalMsg) ? '全不選' : '全選';
+        if (delBtn) {
+            delBtn.textContent = selectedMessages.size > 0 ? `刪除 (${selectedMessages.size})` : '刪除';
+            delBtn.disabled = selectedMessages.size === 0;
         }
     }
 
@@ -314,6 +291,7 @@
         get isMultiSelectMode() { return isMultiSelectMode; },
         enterMultiSelectMode,
         exitMultiSelectMode,
+        toggleSelect: toggleMessageSelection,
         deleteSelectedMessages,
         clearCurrentChat,
         purgeProtocolState,
