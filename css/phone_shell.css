@@ -287,6 +287,31 @@
 .dlr-say-btn:disabled { opacity: 0.5; cursor: default; }
 /* 已經送過幾句、輸入框空著時，同一顆鈕變成「說完了」：換個顏色，一眼看得出按下去是把話交出去 */
 .dlr-say-btn.done { background: linear-gradient(135deg,#0a84ff,#0060df); padding: 0 16px; }
+/* 🎙 直接說話：左邊一顆切換鈕（麥克風⇄鍵盤），切到說話時打字框換成「正在聽」那一條 */
+.dlr-mode-btn { flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%; border: none; background: rgba(26,28,40,0.06); color: #1a1c28; font-size: 17px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.dlr-say-bar[data-mode="voice"] .dlr-mode-btn { background: rgba(52,199,89,0.14); color: #1f9a47; }
+.dlr-say-bar[data-mode="voice"] .dlr-say, .dlr-say-bar[data-mode="voice"] .dlr-say-btn { display: none; }
+.dlr-listen { display: none; flex: 1; min-width: 0; height: 42px; border-radius: 21px; padding: 0 8px 0 16px; background: rgba(26,28,40,0.06); align-items: center; gap: 10px; }
+.dlr-say-bar[data-mode="voice"] .dlr-listen { display: flex; }
+.dlr-listen-text { flex: 1; min-width: 0; font-size: 14px; color: rgba(26,28,40,0.65); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.dlr-listen-bars { display: none; align-items: center; gap: 3px; height: 22px; flex-shrink: 0; }
+.dlr-listen[data-phase="listening"] .dlr-listen-bars, .dlr-listen[data-phase="heard"] .dlr-listen-bars { display: flex; }
+.dlr-listen-bars i { display: block; width: 3px; height: 4px; border-radius: 2px; background: #34c759; transition: height 0.1s; }
+.dlr-listen-bars[data-lv="1"] i { height: 7px; }
+.dlr-listen-bars[data-lv="2"] i { height: 12px; }
+.dlr-listen-bars[data-lv="3"] i { height: 17px; }
+.dlr-listen-bars[data-lv="4"] i { height: 22px; }
+.dlr-listen-bars[data-lv] i:nth-child(odd) { transform: scaleY(0.6); }
+.dlr-listen[data-phase="listening"] .dlr-listen-bars i { background: rgba(26,28,40,0.3); }
+.dlr-listen[data-phase="heard"] .dlr-listen-text { color: #1f9a47; }
+.dlr-listen[data-phase="error"] .dlr-listen-text { color: #d64545; }
+.dlr-listen-prog { display: none; width: 70px; height: 5px; flex-shrink: 0; -webkit-appearance: none; appearance: none; border: none; border-radius: 3px; overflow: hidden; background: rgba(26,28,40,0.1); }
+.dlr-listen-prog::-webkit-progress-bar { background: rgba(26,28,40,0.1); }
+.dlr-listen-prog::-webkit-progress-value { background: #34c759; }
+.dlr-listen-prog::-moz-progress-bar { background: #34c759; }
+.dlr-listen[data-phase="downloading"] .dlr-listen-prog { display: block; }
+.dlr-listen-dl { display: none; flex-shrink: 0; height: 30px; padding: 0 14px; border-radius: 15px; border: none; background: linear-gradient(135deg,#34c759,#28a048); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+.dlr-listen[data-phase="download"] .dlr-listen-dl { display: block; }
 
 /* 通話紀錄（歷史對話）列表 + 多選清除 */
 .dlr-sel-actions { display: flex; align-items: center; }

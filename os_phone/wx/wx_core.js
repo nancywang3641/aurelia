@@ -359,11 +359,13 @@
     }
 
     // 文字歷史用（聊天歷史、回傳酒館）：圖庫編號換成它看過的那句；還沒看過就只說是一張照片。
-    // 🎙 她錄的語音有聽出語氣（msg.voiceTone）的話，接在 [Voice: …] 後面——字一樣，笑著說跟嘆著氣說意思不同
+    // 🎙 她說的話有聽出語氣（msg.voiceTone）的話接上去——字一樣，笑著說跟嘆著氣說意思不同。
+    //    微信語音接在 [Voice: …] 後面；電話裡講的是一行口語、沒有標籤，就接在句尾
     function photoContextText(msg, text) {
         let s = String(text == null ? '' : text);
         if (msg && msg.voiceTone && s.indexOf('（語音') < 0) {
-            s = s.replace(/\[Voice: [^\]]*\]/, (m) => m + '（語音' + msg.voiceTone + '）');
+            const mark = '（語音' + msg.voiceTone + '）';
+            s = /\[Voice: [^\]]*\]/.test(s) ? s.replace(/\[Voice: [^\]]*\]/, (m) => m + mark) : s + mark;
         }
         if (!PHOTO_ID_RE.test(s)) return s;
         return s.replace(new RegExp(PHOTO_ID_RE.source, 'g'), (msg && msg.photoDesc) ? ('照片｜' + msg.photoDesc) : '照片');
@@ -2574,8 +2576,8 @@
                 const id = 'aud_wx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
                 await win.OS_DB.saveImage(id, rec.blob);
                 const sec = Math.round((out.durationSec || rec.durationSec) * 10) / 10;
-                // 聽出來的語氣：平靜、只有說話聲的時候不寫，免得每句都多一段
-                const tone = [out.emotionLabel ? '聽起來' + out.emotionLabel : '', out.eventLabel ? '聲音裡有' + out.eventLabel : ''].filter(Boolean).join('，');
+                // 聽出來的語氣：平靜、只有說話聲的時候是空的，免得每句都多一段
+                const tone = out.tone || '';
                 const extra = { voiceAudio: id, voiceSec: sec, voiceEmotion: out.emotion || '', voiceEvent: out.event || '' };
                 if (tone) extra.voiceTone = tone;
                 this._vsState('idle');

@@ -10,11 +10,12 @@
 //      自己把 SenseVoice 模型寫進它的虛擬檔案系統。換 commit 前要重新確認剝除的標記還在。
 // 入口：window.OS_VOICE_INPUT
 //   isSupported() / getConfig() / setConfig({engine})
-//   start() → stop() 回 { blob, mime, durationSec }；cancel()；level() 錄音中的音量
+//   start() → stop() 回 { blob, mime, durationSec }；cancel()；level() 目前音量
+//   openMic() / closeMic()：一直開著麥克風（講電話），期間 start/stop 都借這一條
 //   prepare(onProgress) 先把目前的轉字方式準備好（sensevoice＝下載＋載入模型）
 //   transcribe(blob, { onProgress, autoPrepare }) 回 { text, lang, emotion, emotionLabel, event, eventLabel, durationSec, engine }
 //   isReady() / isDownloaded() / unload()（放掉記憶體）/ clearCache()（刪掉下載的模型）
-//   用的地方：微信「＋ → 語音」的錄音面板（wx_core.js openVoiceSheet）
+//   用的地方：微信「＋ → 語音」的錄音面板（wx_core.js openVoiceSheet）、電話 app 的「直接說話」（os_dialer.js _vm*）
 // ----------------------------------------------------------------
 (function () {
     const win = window.parent || window;
@@ -59,41 +60,72 @@
         return '';
     }
 
+    function _stopStream(stream, meter) {
+        try { stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+        try { if (meter) meter.ctx.close(); } catch (e) {}
+    }
     function _release(r) {
-        try { r.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
-        try { if (r.meter) r.meter.ctx.close(); } catch (e) {}
+        if (r.held) return;   // 借用 openMic 開著的麥克風：錄完不關，等 closeMic
+        _stopStream(r.stream, r.meter);
+    }
+
+    function _getStream() {
+        return win.navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+    }
+    // 音量表：畫面看「有在收音」、通話判斷「講完了沒」都靠它；拿不到就是 0，不影響錄音
+    function _makeMeter(stream) {
+        try {
+            const AC = win.AudioContext || win.webkitAudioContext;
+            if (!AC) return null;
+            const ctx = new AC();
+            const an = ctx.createAnalyser();
+            an.fftSize = 1024;
+            ctx.createMediaStreamSource(stream).connect(an);
+            if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+            return { ctx, an, buf: new Float32Array(an.fftSize) };
+        } catch (e) { return null; }
+    }
+
+    // 🎙 一直開著的麥克風（講電話用）：整通電話只要一次權限，一句一句的錄音都借這一條，
+    //    不然每輪都重新要麥克風，iPhone 可能每一輪都跳權限框、狀態列的收音燈也一直閃
+    let _held = null;
+    function _heldLive() {
+        try { return !!(_held && _held.stream.getAudioTracks().some((t) => t.readyState === 'live')); } catch (e) { return false; }
+    }
+    async function openMic() {
+        if (_heldLive()) return;
+        if (_held) { _stopStream(_held.stream, _held.meter); _held = null; }
+        if (!isSupported()) throw new Error('這個瀏覽器不能錄音');
+        const stream = await _getStream();
+        _held = { stream, meter: _makeMeter(stream) };
+    }
+    function closeMic() {
+        cancel();
+        const h = _held;
+        _held = null;
+        if (h) _stopStream(h.stream, h.meter);
     }
 
     async function start() {
         if (_rec) throw new Error('已經在錄了');
         if (!isSupported()) throw new Error('這個瀏覽器不能錄音');
-        const stream = await win.navigator.mediaDevices.getUserMedia({
-            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        });
+        let stream, meter, held = false;
+        if (_held && !_heldLive()) await openMic();   // 開著的那條被系統斷掉了（來電、切 app），重接一次
+        if (_held) { stream = _held.stream; meter = _held.meter; held = true; }
+        else { stream = await _getStream(); meter = _makeMeter(stream); }
         const mime = _pickMime();
         const mr = new win.MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
         const chunks = [];
         mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
         mr.start();
-        // 音量表：只給畫面看「有在收音」，拿不到就是 0，不影響錄音
-        let meter = null;
-        try {
-            const AC = win.AudioContext || win.webkitAudioContext;
-            if (AC) {
-                const ctx = new AC();
-                const an = ctx.createAnalyser();
-                an.fftSize = 1024;
-                ctx.createMediaStreamSource(stream).connect(an);
-                if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
-                meter = { ctx, an, buf: new Float32Array(an.fftSize) };
-            }
-        } catch (e) { meter = null; }
-        _rec = { stream, mr, chunks, t0: Date.now(), mime: mr.mimeType || mime, meter };
+        _rec = { stream, mr, chunks, t0: Date.now(), mime: mr.mimeType || mime, meter, held };
     }
 
-    // 錄音中的音量（0～1 的 RMS，說話大約落在 0.02～0.2）
+    // 目前的音量（0～1 的 RMS，說話大約落在 0.02～0.2）；錄音中、或 openMic 開著時都讀得到
     function level() {
-        const m = _rec && _rec.meter;
+        const m = (_rec && _rec.meter) || (_held && _held.meter);
         if (!m) return 0;
         try {
             m.an.getFloatTimeDomainData(m.buf);
@@ -432,13 +464,17 @@
         const r = await e.transcribe(blob);
         const emo = bareTag(r.emotion);
         const evt = bareTag(r.event);
+        const emotionLabel = EMOTION_LABEL[emo] || '';
+        const eventLabel = EVENT_LABEL[evt] || '';
         return {
             text: r.text || '',
             lang: bareTag(r.lang),
             emotion: emo,
-            emotionLabel: EMOTION_LABEL[emo] || '',
+            emotionLabel,
             event: evt,
-            eventLabel: EVENT_LABEL[evt] || '',
+            eventLabel,
+            // 給對方讀的一句語氣：平靜、只有說話聲就是空字串（微信語音與電話共用這一句）
+            tone: [emotionLabel ? '聽起來' + emotionLabel : '', eventLabel ? '聲音裡有' + eventLabel : ''].filter(Boolean).join('，'),
             durationSec: r.durationSec || 0,
             engine: e.id,
         };
@@ -454,6 +490,8 @@
         cancel,
         isRecording: () => !!_rec,
         level,
+        openMic,
+        closeMic,
         prepare: (onProgress) => _engine().prepare(onProgress),
         isReady: () => _engine().isReady(),
         isDownloaded: () => (_engine().isDownloaded ? _engine().isDownloaded() : Promise.resolve(true)),

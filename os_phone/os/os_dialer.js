@@ -82,6 +82,7 @@
         if (!container || !contact || !contact.id) return false;
         _root = container;
         _clearTimer();
+        _vmStop();
         _exitTo = (typeof opts.onExit === 'function') ? opts.onExit : null;
         _hideNum = !!opts.hideNumber;
         _dialing(contact);
@@ -91,6 +92,7 @@
     function launch(container) {
         _root = container;
         _clearTimer();
+        _vmStop();
         _renderList();
     }
     function _clearTimer() { if (_timer) { clearInterval(_timer); _timer = null; } }
@@ -268,6 +270,7 @@
     }
     // 掛斷：有接通過才寫結束與時長，沒講到話就不留痕跡
     async function _hangUp(contact) {
+        _vmStop();   // 麥克風一定要在掛斷時關掉，不然狀態列的收音燈會一直亮著
         const c = _curCall;
         _curCall = null;
         if (c && c.wroteStart) await _writeCallMark(c.id, '通話結束 · ' + _dur(Date.now() - c.startedAt), { _callEnd: true });
@@ -293,7 +296,8 @@
         _updateSayBtn();
     }
     // 她說的話先寫進記錄，不等模型回（逾時、掛斷都不會弄丟）
-    async function _writeMyLine(contact, text) {
+    // extra：要跟這句一起存的欄位（直接說話聽出來的語氣 voiceTone）
+    async function _writeMyLine(contact, text, extra) {
         try {
             const OS_DB = _w('OS_DB');
             if (!OS_DB || !OS_DB.getApiChat || !OS_DB.saveApiChat) return;
@@ -304,7 +308,7 @@
             //    但微信的聊天室不該把通話逐字稿當成聊天訊息鋪出來——她說「掛斷後通話的數據也會跑到聊天室」。
             //    蓋了章之後，資料照樣在、AI 照樣讀得到，只是微信畫面上收起來，留通話開始與結束那兩筆。
             //    順帶：聊天列表本來就有一條「整間都是通話記錄就不浮上來」的過濾，但從來沒有人蓋過這個章，那條等於是死的。
-            rec.messages.push({ type: 'msg', isMe: true, content: text, sender: un, senderName: un, _viaCall: true });
+            rec.messages.push(Object.assign({ type: 'msg', isMe: true, content: text, sender: un, senderName: un, _viaCall: true }, extra || {}));
             await OS_DB.saveApiChat(contact.id, rec);
         } catch (e) { console.warn('[dialer] 先寫我說的話失敗', e); }
     }
@@ -356,6 +360,7 @@
     async function _remoteHangUp(contact) {
         if (!_root) return;
         _clearPending(); _enableSay(false);   // 他掛了，她還沒送出去的那幾句就別再送
+        _vmStop();
         _appendCallMark('對方掛斷了');
         const st = _root.querySelector('#dlr-call-timer');
         if (st) st.textContent = '已結束';
@@ -546,6 +551,167 @@
         await _sleep(_gapFor(text, engine));
     }
 
+    // ── 🎙 直接說話：不用按，輪到她就自動開始聽，停下來一會兒就送出 ──────────────
+    // 輪流講：對方在想（_sayBusy）或還在念（_speaking）的時候麥克風不收；
+    // 他念完再停一拍才開始聽，免得把喇叭裡他自己的尾音也錄進去。
+    // 開關記在 localStorage，下次打電話照上次的樣子；沒設過就是打字。
+    // 「講完了」的判斷照音量：大聲超過 0.2 秒算開口，之後安靜 1.8 秒算講完；
+    // 已經講超過 8 秒的長段，中間換氣停頓比較長，放寬到 2.8 秒才切，不然一段話會被切成好幾則。
+    const _VM_KEY = 'dlr_voice_mode';
+    const _VM = { START: 0.015, QUIET: 0.008, HEARD_MS: 200, END_MS: 1800, END_LONG_MS: 2800, LONG_TALK_MS: 8000, IDLE_RESET_MS: 30000, MAX_MS: 60000, ECHO_MS: 500 };
+    let _vm = { on: false, phase: '', contact: null, tick: null, busy: false, seq: 0 };
+    let _speaking = false;   // 對方的話還在一句一句念
+
+    function _VI() { return _w('OS_VOICE_INPUT'); }
+    function _vmLoadPref() { try { return win.localStorage.getItem(_VM_KEY) === '1'; } catch (e) { return false; } }
+    function _vmSavePref(on) { try { win.localStorage.setItem(_VM_KEY, on ? '1' : '0'); } catch (e) {} }
+    function _vmPhase(phase, text) {
+        _vm.phase = phase;
+        const box = _root && _root.querySelector('#dlr-listen');
+        if (!box) return;
+        box.dataset.phase = phase;
+        const t = box.querySelector('#dlr-listen-text');
+        const def = { download: '先下載聽寫檔（250MB）', preparing: '準備中…', waiting: '等對方說完…', listening: '輪到你說了', heard: '在聽…說完停一下就送出', sending: '轉成字…' }[phase] || '';
+        if (t) t.textContent = text || def;
+    }
+    function _vmMode(on) {
+        const bar = _root && _root.querySelector('#dlr-say-bar');
+        if (!bar) return;
+        bar.dataset.mode = on ? 'voice' : 'type';
+        const b = bar.querySelector('#dlr-mode');
+        if (b) { b.innerHTML = '<i class="fa-solid ' + (on ? 'fa-keyboard' : 'fa-microphone') + '"></i>'; b.title = on ? '改用打字' : '直接說話'; }
+    }
+    function _vmToggle(contact) {
+        _vm.on = !_vm.on;
+        _vmSavePref(_vm.on);
+        _vmMode(_vm.on);
+        if (_vm.on) { _vmEnter(contact); return; }
+        _vmStop();
+        _enableSay(!_sayBusy);
+    }
+    async function _vmEnter(contact) {
+        _vm.contact = contact;
+        const VI = _VI();
+        if (!VI || !VI.isSupported()) { _vmPhase('error', '這裡不能錄音，請改用打字'); return; }
+        if (VI.isReady()) { _vmAfterTurn(); return; }
+        if (!(await VI.isDownloaded())) { if (_vm.on) _vmPhase('download'); return; }
+        _vmPrepare(false);
+    }
+    async function _vmPrepare(fresh) {
+        const VI = _VI();
+        if (!VI) return;
+        _vmPhase(fresh ? 'downloading' : 'preparing', fresh ? '下載中 0%' : '');
+        try {
+            await VI.prepare(function (p) {
+                if (!_vm.on || !_root) return;
+                if (p.stage === 'download' && _vm.phase === 'downloading') {
+                    const pr = _root.querySelector('#dlr-listen-prog');
+                    if (pr) pr.value = p.percent;
+                    _vmPhase('downloading', '下載中 ' + p.percent + '%');
+                } else if (p.stage === 'loading') {
+                    _vmPhase('preparing');
+                }
+            });
+        } catch (e) {
+            console.warn('[dialer] 聽寫準備失敗', e);
+            if (_vm.on) _vmPhase('download', '沒準備好，再按一次下載');
+            return;
+        }
+        _vmAfterTurn();
+    }
+    // 輪到她了嗎：開著、通話還在、模型好了、對方沒在想也沒在念 → 停一拍開始聽
+    function _vmAfterTurn() {
+        if (!_vm.on || !_root || !_curCall) return;
+        const VI = _VI();
+        if (!VI || !VI.isReady()) return;
+        if (_vm.tick || _vm.busy) return;
+        _vmPhase('waiting');
+        if (_sayBusy || _speaking) return;
+        const token = ++_vm.seq;
+        setTimeout(function () { if (token === _vm.seq) _vmListen(); }, _VM.ECHO_MS);
+    }
+    async function _vmListen() {
+        if (!_vm.on || !_root || !_curCall || _sayBusy || _speaking || _vm.tick || _vm.busy) return;
+        const VI = _VI();
+        const token = _vm.seq;
+        try {
+            await VI.openMic();
+            if (!VI.isRecording()) await VI.start();
+        } catch (e) {
+            console.warn('[dialer] 開麥克風失敗', e);
+            _vmPhase('error', (e && e.name === 'NotAllowedError') ? '沒有麥克風權限，要到瀏覽器設定裡允許' : '麥克風開不起來，請改用打字');
+            return;
+        }
+        // 等權限框的時候情況變了（對方開口、她切回打字、掛斷）
+        if (token !== _vm.seq || !_vm.on || !_curCall || _sayBusy || _speaking) { VI.cancel(); return; }
+        _vmPhase('listening');
+        const bars = _root.querySelector('#dlr-listen-bars');
+        let t0 = Date.now(), loud = 0, heardAt = 0, quietSince = 0;
+        _vm.tick = setInterval(function () {
+            if (!_vm.on || !_root || !_curCall) { _vmStopListen(); return; }
+            const v = VI.level();
+            const now = Date.now();
+            if (bars) bars.dataset.lv = v < 0.008 ? 0 : (v < 0.02 ? 1 : (v < 0.05 ? 2 : (v < 0.1 ? 3 : 4)));
+            if (v >= _VM.START) {
+                loud += 100; quietSince = 0;
+                if (!heardAt && loud >= _VM.HEARD_MS) { heardAt = now; _vmPhase('heard'); }
+            } else if (v < _VM.QUIET) {
+                loud = 0;
+                if (heardAt && !quietSince) quietSince = now;
+            }
+            if (heardAt) {
+                const endMs = (now - heardAt > _VM.LONG_TALK_MS) ? _VM.END_LONG_MS : _VM.END_MS;
+                if ((quietSince && now - quietSince >= endMs) || now - t0 >= _VM.MAX_MS) _vmFinish();
+            } else if (now - t0 >= _VM.IDLE_RESET_MS) {
+                // 一直沒人開口：丟掉這段空白重錄，錄音檔才不會越積越大
+                VI.cancel();
+                t0 = now;
+                VI.start().catch(function () { _vmStopListen(); _vmPhase('error', '麥克風開不起來，請改用打字'); });
+            }
+        }, 100);
+    }
+    async function _vmFinish() {
+        _vmStopTick();
+        const VI = _VI();
+        const contact = _vm.contact;
+        _vm.busy = true;
+        _vmPhase('sending');
+        let out = null;
+        try {
+            const rec = await VI.stop();
+            out = await VI.transcribe(rec.blob);
+        } catch (e) { console.warn('[dialer] 轉字失敗', e); }
+        _vm.busy = false;
+        if (!_vm.on || !_root || !_curCall) return;
+        const text = String((out && out.text) || '').trim();
+        if (!text) { _vmAfterTurn(); return; }   // 沒聽出字（咳嗽、雜音）：繼續聽
+        _voiceSay(contact, text, out.tone || '');
+    }
+    function _vmStopTick() { if (_vm.tick) { clearInterval(_vm.tick); _vm.tick = null; } }
+    function _vmStopListen() {
+        _vmStopTick();
+        _vm.seq++;
+        const VI = _VI();
+        if (VI && VI.isRecording()) VI.cancel();
+    }
+    function _vmStop() {
+        _vmStopListen();
+        _vm.busy = false;
+        const VI = _VI();
+        if (VI && VI.closeMic) VI.closeMic();
+    }
+    // 說話模式送出一句：跟打字那條一樣先冒泡、先寫進記錄，但不排隊——她停下來就是說完了。
+    // 語氣存在那一則上（之後的歷史由 photoContextText 接上），這一輪送出去的也帶著
+    async function _voiceSay(contact, text, tone) {
+        _appendCallBubble(true, text, _userName());
+        await _writeMyLine(contact, text, tone ? { voiceTone: tone } : null);
+        const lines = _pendingSay.concat([text]);   // 切換之前打了還沒送的幾句一起帶上
+        if (_pendingTimer) { clearTimeout(_pendingTimer); _pendingTimer = null; }
+        _pendingSay = [];
+        _updateSayBtn();
+        _say(contact, lines.join('\n') + (tone ? '（語音' + tone + '）' : ''), { alreadyShown: true });
+    }
+
     function _inCall(contact, skipFirst) {
         if (!_root) return;
         _clearTimer();
@@ -561,9 +727,16 @@
           +   '</div>'
           +   '<div class="dlr-call-log" id="dlr-call-log"></div>'
           +   '<div class="dlr-call-foot light">'
-          +     '<div class="dlr-say-bar">'
+          +     '<div class="dlr-say-bar" id="dlr-say-bar" data-mode="type">'
+          +       '<button class="dlr-mode-btn" id="dlr-mode" type="button"><i class="fa-solid fa-microphone"></i></button>'
           +       '<input class="dlr-say" id="dlr-say" type="text" placeholder="說點什麼…" autocomplete="off" disabled>'
           +       '<button class="dlr-say-btn" id="dlr-say-btn" type="button" disabled>送</button>'
+          +       '<div class="dlr-listen" id="dlr-listen" data-phase="">'
+          +         '<div class="dlr-listen-bars" id="dlr-listen-bars" data-lv="0"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>'
+          +         '<span class="dlr-listen-text" id="dlr-listen-text"></span>'
+          +         '<progress class="dlr-listen-prog" id="dlr-listen-prog" max="100" value="0"></progress>'
+          +         '<button class="dlr-listen-dl" id="dlr-listen-dl" type="button">下載</button>'
+          +       '</div>'
           +     '</div>'
           +     '<button class="dlr-hang big" id="dlr-hang2" type="button">掛斷</button>'
           +   '</div>'
@@ -592,6 +765,15 @@
         inp.addEventListener('input', _updateSayBtn);   // 開始打字→鈕變回「送」，清空→變「說完了」
         _updateSayBtn();
 
+        // 🎙 直接說話的開關：照上次的選擇；開著就先把聽寫準備好，輪到她才真的開始聽
+        _vmStop();
+        _vm.on = _vmLoadPref();
+        _vm.contact = contact;
+        _vmMode(_vm.on);
+        _root.querySelector('#dlr-mode').addEventListener('click', function () { _vmToggle(contact); });
+        _root.querySelector('#dlr-listen-dl').addEventListener('click', function () { _vmPrepare(true); });
+        if (_vm.on) _vmEnter(contact);
+
         // 先把這個人之前的對話載成泡泡（有記憶），再讓對方接起來說第一句
         // skipFirst＝第一句已經在響鈴階段拿到了（見 _dialing），這裡不要再問一次
         return _renderCallLog(contact).then(function () { if (!skipFirst) _say(contact, null); });
@@ -605,6 +787,7 @@
         if (!OS_API || !OS_API.buildContext || !OS_API.chat || !OS_DB) { _appendCallBubble(false, '（通話引擎未載入）', contact.name); return; }
         if (_sayBusy) return;
         _sayBusy = true; _enableSay(false);
+        if (_vm.on) { _vmStopListen(); _vmPhase('waiting'); }   // 輪到對方：麥克風不收
         if (userText && !opts.alreadyShown) _appendCallBubble(true, userText, _userName());   // 排隊那條已經冒過泡泡了
         const typing = _appendTyping();
 
@@ -627,6 +810,7 @@
             if (opts.firstRing) { restore(); _dialFailed(contact); return; }   // 還在響鈴：沒有通話畫面可以冒泡
             _appendCallBubble(false, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）', contact.name);
             restore();
+            _vmAfterTurn();
         }, 40000);
 
         // 🚨 她說的話在「送出的當下」就寫進記錄，不等模型回（逾時、掛斷都不會弄丟）。
@@ -668,25 +852,29 @@
                         await OS_DB.saveApiChat(contact.id, rec);
                     } catch (e) { console.warn('[dialer] 寫回 DB 失敗', e); }
                     restore();
-                    for (let si = 0; si < said.lines.length; si++) {
-                        if (!_root) return;                                  // 中途離開 app
-                        _appendCallBubble(false, said.lines[si], contact.name);
-                        const _eng = _speak(contact, said.lines[si]);        // 念出來（當前開哪個引擎就用哪個）
-                        await _waitSpoken(said.lines[si], _eng);             // 這句真的講完才接下一句
-                    }
+                    _speaking = true;
+                    try {
+                        for (let si = 0; si < said.lines.length; si++) {
+                            if (!_root) return;                                  // 中途離開 app
+                            _appendCallBubble(false, said.lines[si], contact.name);
+                            const _eng = _speak(contact, said.lines[si]);        // 念出來（當前開哪個引擎就用哪個）
+                            await _waitSpoken(said.lines[si], _eng);             // 這句真的講完才接下一句
+                        }
+                    } finally { _speaking = false; }
                     if (said.hangup) { await _remoteHangUp(contact); return; }   // 他講完自己掛了
+                    _vmAfterTurn();                                              // 直接說話：換她講
                 },
                 function (err) {
                     done();
                     if (opts.firstRing) { restore(); _dialFailed(contact); return; }
-                    _appendCallBubble(false, '（接不通：' + ((err && err.message) || '錯誤') + '）', contact.name); restore();
+                    _appendCallBubble(false, '（接不通：' + ((err && err.message) || '錯誤') + '）', contact.name); restore(); _vmAfterTurn();
                 },
                 { disableTyping: cfg.disableTyping !== false }
             );
         } catch (e) {
             done();
             if (opts.firstRing) { restore(); _dialFailed(contact); return; }
-            _appendCallBubble(false, '（通話失敗）', contact.name); restore();
+            _appendCallBubble(false, '（通話失敗）', contact.name); restore(); _vmAfterTurn();
         }
     }
 
