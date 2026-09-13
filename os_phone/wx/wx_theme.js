@@ -201,7 +201,7 @@
             /* .wx-typing-label 已停用：群聊要顯示誰在打字改用 .wx-group-name，跟一般訊息同一條 */
             .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: #f7f7f7; border-top: 1px solid #dcdcdc; z-index: 5; transition: bottom 0.2s; }
             .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; }
-            .wx-input-real { flex: 1; height: 36px; background: #fff !important; border-radius: 6px; border: 1px solid #ddd; margin: 0 10px; padding: 0 10px; font-size: 14px; outline: none; color: #000 !important; opacity: 1 !important; -webkit-text-fill-color: #000 !important; }
+            .wx-input-real { flex: 1; min-width: 0; height: 36px; background: #fff !important; border-radius: 6px; border: 1px solid #ddd; margin: 0 10px; padding: 0 10px; font-size: 14px; outline: none; color: #000 !important; opacity: 1 !important; -webkit-text-fill-color: #000 !important; }
             .wx-icon-btn { font-size: 26px; color: #000; cursor: pointer; line-height: 1; margin: 0 2px;}
             .wx-send-btn { background: #07c160; color: #fff; padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; margin-left: 5px; display: none; }
             .wx-send-btn.show { display: block; }
