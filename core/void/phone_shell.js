@@ -337,8 +337,6 @@
             { id: 'sysset', name: '設置', icon: 'fa-gear', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
             { id: 'album',  name: '相簿',   icon: 'fa-images', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
             { id: 'avsvar', name: '狀態檔案', icon: 'fa-dice', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
-            // VN 指令兩邊都要：酒館原本靠全域世界書，搬進應用後只剩這裡能改
-            { id: 'vnrules', name: 'VN 指令', icon: 'fa-feather-pointed', mode: 'inside', go: function (c) { _mountTool(win.OS_VN_RULES && (win.OS_VN_RULES.launchApp || win.OS_VN_RULES.launch), c); } },
             // 創作室獨立 app 已移除：所有創作功能都從「應用商城」進(工坊首頁已內含 製作面板/主題/世界書/我的角色 等入口)
             { id: 'phone',  name: '電話',   icon: 'fa-phone', mode: 'inside', go: function (c) { if (win.OS_DIALER && win.OS_DIALER.launch) { win.OS_DIALER.launch(c); } else { c.innerHTML = '<div class="aps-fail">電話模組未載入</div>'; } } },
         ];

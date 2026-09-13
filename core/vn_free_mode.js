@@ -2,30 +2,26 @@
 // [檔案] vn_free_mode.js — VN「自由模式」（世界卡/純生成卡：[Char] 不寫表情格、省 token）
 // 核心思路（Rae 拍板）：AI 是跟著上下文範例走的，小紙條式的覆蓋指令壓不過總綱＋歷史——
 //   所以自由模式要讓 AI 看到的「規則＋歷史範例」整套自洽：
-//   ① 總綱條目二選一（Rae 定案：兩條條目都是「她的」、腳本**只撥開關、絕不創建/寫入條目**）：
-//      辨識＝名字同時含「VN」+「總綱」（縮寫如「VN總綱-自由版」、完整如「VN正文格式與TAG總綱」都吃）；
-//      自由版＝再含「自由」，固定版＝不含「自由」（她自己維護）。自由版條目不存在 → 不切換、console 提示，絕不代寫。
-//   ② 歷史對齊：一條 promptOnly 正則（跟著模式開關）把歷史裡的表情格從送 AI 的 prompt 剝掉。
+//   ① 總綱二選一：VN 指令（os_vn_rules，程式內建）裡的固定版／自由版總綱，腳本只撥開關。
+//      辨識＝名字同時含「VN」+「總綱」；自由版＝再含「自由」，固定版＝不含「自由」。
+//   ② 歷史對齊：酒館用一條 promptOnly 正則（跟著模式開關）把歷史裡的表情格從送 AI 的 prompt 剝掉；
+//      PWA 的歷史是 os_api_engine 從章節拼的，由它呼叫 stripEmotionCol。
 //   ③ 引擎端表情格容錯常駐（vn_core._normCharParts），三欄四欄都吃。
 // 模式按「storyId=這張卡」記（不是 chatId：同卡開新聊天該記得模式，不用重選）。
-// 只在酒館環境生效（需 TavernHelper）；PWA 靜默不動。
+// 2026-09-14 VN 指令從酒館全域世界書搬進程式，這支不再讀寫世界書。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
     const win = window.parent || window;
 
-    // 總綱條目辨識：名字同時含「VN」與「總綱」即算總綱條目——容她的縮寫命名
-    //   (如「VN總綱-自由版」「VN總綱-固定版」) 與完整命名 (如「VN正文格式與TAG總綱」)，兩種都吃。
-    //   自由版=再含「自由」，固定版=不含「自由」。兩條都Rae自己維護、腳本只撥開關。
+    // 總綱條目辨識：名字同時含「VN」與「總綱」即算總綱條目
+    //   (如「VN總綱-自由版」與「VN正文格式與TAG總綱」)。自由版=再含「自由」。
     const _isCoreName = (nm) => { nm = String(nm || ''); return nm.includes('VN') && nm.includes('總綱'); };
     // 通話/手機條目（call 面板）也分固定版與自由版——call 裡的 [Char] 有沒有表情格得跟總綱同步，
-    //   不然自由模式下 AI 看著固定版範例照樣寫表情格。同一套規矩：兩條都她的、腳本只撥開關。
-    //   跟總綱不同的是這組不是常駐必亮：配對的「總開關」（世界題材/她手動）尊重現況——
+    //   不然自由模式下 AI 看著固定版範例照樣寫表情格。
+    //   跟總綱不同的是這組不是常駐必亮：配對的「總開關」（世界題材）尊重現況——
     //   兩條裡任一條亮著才算在用，腳本只負責挑「亮哪一版」；兩條都暗就整組不碰。
-    //   只有一條（自由版還沒匯入）也不碰，維持舊行為。
     const _isCallName = (nm) => String(nm || '').includes('通話與手機聊天');
-    // 登記給 VN 指令畫面看：總綱與通話那組會跟著自由模式切換（這支比 os_vn_rules 早載入，登記簿掛在 win 上）
-    (win.__VN_RULES_AUTO = win.__VN_RULES_AUTO || []).push({ label: '自由模式', test: nm => _isCoreName(nm) || _isCallName(nm) });
     const CORE_ENTRY_HINT = 'VN…總綱';                 // 只用於 console 提示文字
     const RX_NAME = '[VN自由模式] 歷史表情格剝除';     // promptOnly 正則名
 
@@ -60,33 +56,8 @@
             return !!(g && typeof g.isInParallax === 'function' && g.isInParallax());
         } catch (e) { return false; }
     }
-    // 實際跑的模式（世界書/正則要對齊的是這個，不是 isFree()）
+    // 實際跑的模式（VN 指令/正則要對齊的是這個，不是 isFree()）
     function _effectiveFree(id) { return isFree(id) || _inParallax(); }
-
-    // 找「固定版總綱」所在的世界書與條目（掃全域已選＋角色主/附加）
-    async function _findCoreEntry() {
-        const th = _th();
-        if (!th || !th.getWorldbook) return null;
-        const books = new Set();
-        try {
-            const st = th.getLorebookSettings ? th.getLorebookSettings() : null;
-            (st && st.selected_global_lorebooks || []).forEach(b => books.add(b));
-        } catch (e) {}
-        try {
-            const cl = th.getCharLorebooks ? th.getCharLorebooks() : null;
-            if (cl && cl.primary) books.add(cl.primary);
-            (cl && cl.additional || []).forEach(b => books.add(b));
-        } catch (e) {}
-        for (const book of books) {
-            if (!book) continue;
-            try {
-                const ents = await th.getWorldbook(book);
-                const core = (ents || []).find(e => e && _isCoreName(e.name) && !String(e.name || '').includes('自由'));
-                if (core) return { book, ents };
-            } catch (e) {}
-        }
-        return null;
-    }
 
     // 歷史表情格剝除正則（promptOnly；表情格=純英文字才剝，三欄行不會誤傷台詞）
     // 🚨 鐵則：狀態沒變「絕不」呼叫 updateTavernRegexesWith——寫正則會讓酒館重載聊天(觸發CHAT_CHANGED)，
@@ -123,48 +94,11 @@
         }, { type: 'global' });
     }
 
-    // 把世界書/正則調成當前卡該有的樣子（切模式、換卡、進出視差都走這；狀態沒變就不寫、避免磁碟空轉）
-    // force=true → 略過記憶直接重算：換卡/開機用（也順便修她自己在世界書面板手撥過的燈）。
-    // 獨立版：總綱條目住 OS_DB，用同一套名字判準撥開關。
-    //   規矩跟酒館完全一樣 —— 兩條條目都是她的，腳本只撥 enabled、絕不創建也不寫內容。
-    async function _applyStandalone(free) {
-        const DB = win.OS_DB || window.OS_DB;
-        if (!DB || !DB.getAllWorldbookEntries || !DB.saveWorldbookEntry) return;
-        const all = (await DB.getAllWorldbookEntries()) || [];
-        const cores = all.filter(e => _isCoreName(e && e.title));
-        if (!cores.length) { console.log('[VN自由模式] 獨立版世界書裡沒有總綱條目 → 不動'); return; }
-        const _isFreeEnt = (e) => String(e.title || '').includes('自由');
-        if (free && !cores.some(_isFreeEnt)) {
-            console.warn(`[VN自由模式] 獨立版世界書裡找不到自由版總綱條目（名字需含「${CORE_ENTRY_HINT}」+「自由」）→ 維持固定版、不切換`);
-            return;
-        }
-        let changed = 0;
-        for (const e of cores) {
-            const want = _isFreeEnt(e) ? free : !free;
-            if ((e.enabled !== false) === want) continue;
-            await DB.saveWorldbookEntry({ ...e, enabled: want, updatedAt: Date.now() });
-            changed++;
-        }
-        // 通話/手機配對：任一條亮著才算在用，只挑版本、不動總開關
-        const calls = all.filter(e => _isCallName(e && e.title));
-        if (calls.length >= 2) {
-            const anyOn = calls.some(e => e.enabled !== false);
-            for (const e of calls) {
-                const want = anyOn && (String(e.title || '').includes('自由') === free);
-                if ((e.enabled !== false) === want) continue;
-                await DB.saveWorldbookEntry({ ...e, enabled: want, updatedAt: Date.now() });
-                changed++;
-            }
-        }
-        if (changed) console.log(`[VN自由模式] 獨立版世界書開關已切換 → ${free ? '自由版' : '固定版'}（改了 ${changed} 條）`);
-    }
-
-    // VN 指令分支（os_vn_rules）：酒館與獨立版同一份資料、同一套名字判準，只撥開關。
-    //   回 false＝做不了（缺自由版總綱等），呼叫端就不動歷史表情格正則，跟世界書那條的出口一致。
-    function _applyVnRules(VR, free) {
+    // 撥 VN 指令的總綱與通話那組。回 false＝做不了（缺自由版總綱），呼叫端就不動歷史表情格正則。
+    function _applyRules(VR, free) {
         const all = VR.list();
         const cores = all.filter(e => _isCoreName(e && e.name));
-        if (!cores.length) { console.log('[VN自由模式] VN 指令裡沒有總綱條目 → 不動'); return false; }
+        if (!cores.length) { console.warn('[VN自由模式] VN 指令裡沒有總綱條目 → 不動'); return false; }
         if (free && !cores.some(e => String(e.name || '').includes('自由'))) {
             console.warn(`[VN自由模式] VN 指令裡找不到自由版總綱（名字需含「${CORE_ENTRY_HINT}」+「自由」）→ 維持固定版、不切換`);
             return false;
@@ -181,68 +115,21 @@
         return true;
     }
 
+    // 把 VN 指令／正則調成當前卡該有的樣子（切模式、換卡、進出視差都走這；狀態沒變就不寫）
+    // force=true → 略過記憶直接重算：換卡/開機用。
     let _applying = false;
-    let _lastEff = null;   // 上次真的套用完的實際模式；沒變就連世界書都不用讀（世界門每則訊息會戳這支一次）
+    let _lastEff = null;   // 上次真的套用完的實際模式；沒變就不用再算（世界門每則訊息會戳這支一次）
     async function applyForCurrent(force) {
         if (_applying) return;
         const free = _effectiveFree();
         if (!force && _lastEff === free) return;
+        const VR = win.OS_VN_RULES || window.OS_VN_RULES;
+        if (!VR || !VR.apply) return;   // 開機早期還沒載入：不記 _lastEff，下次再來
         _applying = true;
         try {
-            // 獨立版沒有 TavernHelper：世界書走 OS_DB，歷史表情格的剝除由組 prompt 時做
-            //   （PWA 不吃酒館正則，歷史是 os_api_engine 從章節組出來的）
-            // 🪶 VN 指令已經搬進應用 → 撥那一份；酒館照樣要對齊歷史表情格正則
-            const VR = win.OS_VN_RULES || window.OS_VN_RULES;
-            if (VR && VR.hasAny && VR.hasAny()) {
-                const ok = _applyVnRules(VR, free);
-                if (ok && !_isStandalone()) await _setHistoryRegex(free);
-                _lastEff = free;
-                return;
-            }
-            if (_isStandalone()) { await _applyStandalone(free); _lastEff = free; return; }
-
-            const th = _th();
-            if (!th) return;
-            const hit = await _findCoreEntry();
-            // 🚨這兩條「做不了」的出口也要記下來：世界門每則訊息會戳這支一次，不記＝每則訊息都把
-            //   全部世界書重讀一遍＋刷一行 log。force（換卡/開機/她手動切）還是會重新檢查，
-            //   所以中途補上條目不會永遠卡住。
-            if (!hit) { _lastEff = free; console.log('[VN自由模式] 找不到總綱條目（這張卡可能不掛VN世界書）→ 不動'); return; }
-            const { book, ents } = hit;
-            const core = ents.find(e => _isCoreName(e.name) && !String(e.name || '').includes('自由'));
-            const freeEnt = ents.find(e => { const nm = String(e.name || ''); return _isCoreName(nm) && nm.includes('自由'); });
-
-            // 自由版條目是 Rae 自己維護的；不存在就不切換、絕不代寫（她明令：腳本不注入世界書）
-            if (free && !freeEnt) {
-                _lastEff = free;
-                console.warn(`[VN自由模式] 「${book}」裡找不到自由版總綱條目（名字需含「${CORE_ENTRY_HINT}」+「自由」）→ 維持固定版、不切換`);
-                return;
-            }
-
-            const coreOk = core.enabled === !free;
-            const freeOk = free ? (freeEnt.enabled === true) : (!freeEnt || freeEnt.enabled === false);
-            // 通話/手機配對（同一本書裡）：兩條都在才管，任一條亮＝在用 → 該亮「當前模式那條」
-            const callEnts = ents.filter(e => _isCallName(e.name));
-            let callOk = true;
-            if (callEnts.length >= 2) {
-                const anyOn = callEnts.some(e => e.enabled);
-                callOk = callEnts.every(e => e.enabled === (anyOn && (String(e.name || '').includes('自由') === free)));
-            }
-            if (!(coreOk && freeOk && callOk)) {
-                await th.updateWorldbookWith(book, (list) => {
-                    const callList = list.filter(e => _isCallName(e.name));
-                    const callOn = callList.length >= 2 && callList.some(e => e.enabled);
-                    for (const e of list) {
-                        const nm = String(e.name || '');
-                        if (_isCoreName(nm)) { e.enabled = nm.includes('自由') ? free : !free; continue; }   // 只撥開關，內容永遠是她的
-                        if (callList.length >= 2 && _isCallName(nm)) e.enabled = callOn && (nm.includes('自由') === free);
-                    }
-                    return list;
-                });
-                console.log(`[VN自由模式] 世界書開關已切換 → ${free ? '自由版' : '固定版'}（${book}）`);
-            }
-            await _setHistoryRegex(free);
-            _lastEff = free;   // 世界書＋正則都對齊了才記；中途 return 的（找不到條目等）不記，下次還會再試
+            const ok = _applyRules(VR, free);
+            if (ok && !_isStandalone()) await _setHistoryRegex(free);
+            _lastEff = free;
         } catch (e) {
             console.warn('[VN自由模式] 套用失敗:', e);
         } finally { _applying = false; }
@@ -262,7 +149,7 @@
         return true;
     }
 
-    // 換卡/換聊天 → 世界書狀態跟上這張卡的模式
+    // 換卡/換聊天 → VN 指令開關跟上這張卡的模式
     function _hook() {
         try {
             if (win.eventOn && win.tavern_events && win.tavern_events.CHAT_CHANGED) {
@@ -271,8 +158,6 @@
         } catch (e) {}
         setTimeout(() => applyForCurrent(true), 3000);   // 開機對齊一次
     }
-    // 獨立版沒有 TavernHelper 也要掛：世界書那條路走 OS_DB，開機一樣要對齊一次
-    //   （以前這行只在有 TavernHelper 時執行，所以 PWA 連對齊都不會發生）
     if (_th() || _isStandalone()) _hook();
     else setTimeout(() => { if (_th() || _isStandalone()) _hook(); }, 5000);
 

@@ -3405,7 +3405,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                 saveConfig(llmData, secLlmData, imgData, minimaxData);
 
-                // 換產圖器後：依新 service 自動翻頭像規則三條目的開關（VN 指令，還沒搬就翻世界書；只翻 enabled，不寫內容）
+                // 換產圖器後：依新 service 自動翻頭像規則三條目的開關（VN 指令；只撥開關，不寫內容）
                 try { (window.parent || window).OS_AVATAR_RULES_INJECTOR?.syncAvatarRuleEntries?.(); } catch (e) {}
 
                 // ⛔ 這裡原本會整份覆寫 os_vector_config（只帶 6 個欄位）→ 每按一次保存就把

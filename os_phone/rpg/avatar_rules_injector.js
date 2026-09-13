@@ -1,25 +1,21 @@
 // ----------------------------------------------------------------
-// [檔案] avatar_rules_injector.js (V2 — 世界書條目開關模式)
+// [檔案] avatar_rules_injector.js (V3 — VN 指令開關)
 // 路徑：os_phone/rpg/avatar_rules_injector.js
-// 職責：頭像規則的「內容」由使用者自己維護在世界書「-VN小說家-」的三個條目裡
-//       （依【名字 comment】辨識，不靠 UID、不靠 keyword）：
+// 職責：頭像規則有三條，在 VN 指令（os_vn_rules_data.js）裡，依名字辨識：
 //         [VN-POLLAI]  → Pollinations
 //         [VN-NAI]     → NovelAI
 //         [VN-COMFYUI] → 酒館原生(tavern_sd) 與 ComfyUI 直連(comfyui_direct)
-//       本檔只做一件事：依當前頭像產圖器，把對應那條「啟用」、其餘兩條「停用」，
-//       省掉每次換產圖器要手動去世界書開開關關。
-//
-// ⚠️ 邊界：只改條目的 enabled 開關，不寫內容、不碰角色卡、不動 UID/keyword。
-// 只做酒館版（靠 TavernHelper 世界書 API）。
+//       依當前頭像產圖器，把對應那條打開、其餘兩條關掉。酒館與 PWA 同一條路。
+// ⚠️ 邊界：只撥開關，不寫內容。
+// 2026-09-14 以前撥的是酒館全域世界書「-VN小說家-」（PWA 撥自己的世界書），VN 指令搬進程式後改撥這份。
 // ----------------------------------------------------------------
 (function() {
-    console.log('🪪 [Avatar Rules] V2 載入（世界書條目開關模式）');
+    console.log('🪪 [Avatar Rules] V3 載入（VN 指令開關）');
     const win = window.parent || window;
 
     const CFG_KEY = 'os_image_config';
-    const BOOK = '-VN小說家-';
 
-    // service → 應該「啟用」的世界書條目名字（其餘自動停用）
+    // service → 應該打開的條目（其餘自動關掉）
     const SERVICE_TO_ENTRY = {
         pollinations:   '[VN-POLLAI]',
         novelai:        '[VN-NAI]',
@@ -27,102 +23,29 @@
         comfyui_direct: '[VN-COMFYUI]',
     };
     const ALL_ENTRY_TAGS = ['[VN-POLLAI]', '[VN-NAI]', '[VN-COMFYUI]'];
-    // 登記給 VN 指令畫面看：這三條會跟著頭像產圖器自動切換
-    (win.__VN_RULES_AUTO = win.__VN_RULES_AUTO || []).push({ label: '頭像產圖', test: n => ALL_ENTRY_TAGS.some(t => n.includes(t)) });
 
     function _currentService() {
         try { return (JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {}).service || 'pollinations'; }
         catch (e) { return 'pollinations'; }
     }
 
-    function _isStandalone() {
-        try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; }
-    }
-
-    let _syncing = false;
-
-    // 依當前產圖器：啟用對應條目、停用其餘兩條（找「名字」、只改 enabled）
+    // 依當前產圖器：打開對應條目、關掉其餘兩條
     async function syncAvatarRuleEntries() {
-        if (_syncing) return;
-        _syncing = true;
+        const VR = win.OS_VN_RULES || window.OS_VN_RULES;
+        if (!VR || !VR.setEnabledByName) return;
         try {
             const service = _currentService();
             const wantTag = SERVICE_TO_ENTRY[service] || null;
-
-            // 🪶 VN 指令已經搬進應用（os_vn_rules）→ 撥那一份，酒館與獨立版同一條；還沒搬才走下面的世界書
-            const VR = win.OS_VN_RULES || window.OS_VN_RULES;
-            if (VR && VR.hasAny && VR.hasAny()) {
-                const r = VR.setEnabledByName(ALL_ENTRY_TAGS, wantTag ? [wantTag] : []);
-                if (!r.seen.length) { console.log('🪪 [Avatar Rules] VN 指令裡沒有 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] → 不動'); return; }
-                if (r.opened.length || r.closed.length) console.log(`🪪 [Avatar Rules] ✅ service=${service} → 啟用 ${wantTag}、停用其餘（VN 指令）`);
+            const r = VR.setEnabledByName(ALL_ENTRY_TAGS, wantTag ? [wantTag] : []);
+            if (!r.seen.length) {
+                console.warn('🪪 [Avatar Rules] ⛔ VN 指令裡找不到 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] → 頭像規則沒有東西可切');
                 return;
             }
-
-            // 🟢 獨立版：世界書條目住 OS_DB、沒有 TavernHelper。規則與邊界完全一樣（只改 enabled、只認名字）
-            if (_isStandalone()) {
-                const WB = win.OS_WORLDBOOK || window.OS_WORLDBOOK;
-                if (!WB?.setEnabledByTitle) return;
-                // 一條世界書條目都沒有＝根本還沒匯入世界書，那是正常狀態不是錯誤 → 安靜跳過。
-                //   （這支掛在圖片設置的保存鈕上，每按一次就會叫一次；不擋的話 console 會被洗版）
-                try {
-                    const _all = (await win.OS_DB?.getAllWorldbookEntries?.()) || [];
-                    if (!_all.length) return;
-                } catch (e) { return; }
-                const r = await WB.setEnabledByTitle(ALL_ENTRY_TAGS, wantTag ? [wantTag] : []);
-                if (!r.seen.length) {
-                    console.warn('🪪 [Avatar Rules] ⛔ 世界書裡找不到 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] 任何一條 → 頭像規則沒有東西可切');
-                    return;
-                }
-                if (r.opened.length || r.closed.length) {
-                    console.log(`🪪 [Avatar Rules] ✅ service=${service} → 啟用 ${wantTag}、停用其餘（獨立版，改了 ${r.opened.length + r.closed.length} 條）`);
-                }
-                return;
+            if (r.opened.length || r.closed.length) {
+                console.log(`🪪 [Avatar Rules] ✅ service=${service} → 啟用 ${wantTag}、停用其餘（改了 ${r.opened.length + r.closed.length} 條）`);
             }
-
-            const TH = win.TavernHelper;
-            if (!TH?.getLorebookEntries || !TH?.setLorebookEntries) {
-                console.warn('🪪 [Avatar Rules] ⛔ TavernHelper 世界書 API 不可用 → 跳過');
-                return;
-            }
-
-            let entries;
-            try {
-                entries = await TH.getLorebookEntries(BOOK);
-            } catch (e) {
-                console.warn(`🪪 [Avatar Rules] ⛔ 讀不到世界書「${BOOK}」→ 跳過（請先建好這本、放三條目）`);
-                return;
-            }
-            if (!Array.isArray(entries) || !entries.length) {
-                console.warn(`🪪 [Avatar Rules] ⛔ 世界書「${BOOK}」沒有條目 → 跳過`);
-                return;
-            }
-
-            const updates = [];
-            const seen = [];
-            for (const e of entries) {
-                const cm = String(e?.comment || '');
-                const tag = ALL_ENTRY_TAGS.find(t => cm.includes(t));   // 用名字比對
-                if (!tag) continue;                                     // 不是這三條，完全不碰
-                seen.push(tag);
-                const shouldEnable = (tag === wantTag);
-                if (e.enabled !== shouldEnable) updates.push({ uid: e.uid, enabled: shouldEnable });
-            }
-
-            if (!seen.length) {
-                console.warn(`🪪 [Avatar Rules] ⛔ 「${BOOK}」裡找不到 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] 任何一條（比對名字 comment）`);
-                return;
-            }
-            if (!updates.length) {
-                console.log(`🪪 [Avatar Rules] service=${service} → 該開 ${wantTag}，狀態本來就對、無需變更`);
-                return;
-            }
-
-            await TH.setLorebookEntries(BOOK, updates);
-            console.log(`🪪 [Avatar Rules] ✅ service=${service} → 啟用 ${wantTag}、停用其餘（改了 ${updates.length} 條開關）`);
         } catch (e) {
             console.warn('🪪 [Avatar Rules] sync 失敗:', e?.message || e);
-        } finally {
-            _syncing = false;
         }
     }
 
@@ -131,20 +54,20 @@
             setTimeout(init, 1000);
             return;
         }
-        // 切聊天/角色時同步一次（世界書狀態可能變）
+        // 切聊天/角色時同步一次
         if (win.tavern_events.CHAT_CHANGED) {
             win.eventOn(win.tavern_events.CHAT_CHANGED, () => { syncAvatarRuleEntries(); });
         }
-        // 載入後同步一次，讓條目開關對上目前選的產圖器
+        // 載入後同步一次，讓開關對上目前選的產圖器
         syncAvatarRuleEntries();
-        console.log('🪪 [Avatar Rules] Ready（世界書條目開關模式）');
+        console.log('🪪 [Avatar Rules] Ready（VN 指令開關）');
     }
 
     // 對外：畫廊切產圖器、按「保存」後呼叫 → 立即同步開關
     win.OS_AVATAR_RULES_INJECTOR = {
         syncAvatarRuleEntries,
         sync: syncAvatarRuleEntries,
-        BOOK, SERVICE_TO_ENTRY,
+        SERVICE_TO_ENTRY,
     };
 
     init();

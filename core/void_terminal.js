@@ -1717,32 +1717,10 @@ const IRIS_IDLE = [
         if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
         return '角色「' + (npc.name || '某位') + '」';
     }
-    // 小劇場：抓「-VN小說家-」世界書的「格式類」條目當完整 VN 指令(含 SFX/表情包/Scene)。排除角色/CP 條目(帶當前卡的應子騫等會污染)。抓不到回 '' → 退回手寫格式。
-    let _vnProtocolCache = null;
+    // 小劇場：完整 VN 格式指令(含 SFX/表情包/Scene)＝VN 指令（os_vn_rules，程式內建）開著的那幾條，兩版都有。抓不到回 '' → 退回手寫格式。
     async function _fetchVnProtocol() {
-        // 🪶 VN 指令搬進應用之後讀那一份：每次都讀（她隨時會改、而且只是讀 localStorage），兩版都有
         const VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
-        if (VR && VR.hasAny && VR.hasAny()) return VR.getText();
-        if (_vnProtocolCache !== null) return _vnProtocolCache;
-        _vnProtocolCache = '';
-        try {
-            const TH = window.TavernHelper || (window.parent && window.parent.TavernHelper);
-            const getBook = TH && (TH.getWorldbook || TH.getLorebookEntries);
-            if (!getBook) return '';
-            const entries = await getBook.call(TH, '-VN小說家-');
-            if (!Array.isArray(entries) || !entries.length) return '';
-            // 只拿「藍燈(constant常駐)」條目，排除「綠燈(selective關鍵字)」與 vectorized——藍燈才是正常跑團一定注入的 VN 協議
-            _vnProtocolCache = entries
-                .filter(e => {
-                    if (!e || !e.content || e.enabled === false) return false;
-                    const t = (e.strategy && e.strategy.type) || e.type;   // getWorldbook→strategy.type；getLorebookEntries→type
-                    return t === 'constant';
-                })
-                .map(e => String(e.content).trim())
-                .filter(Boolean)
-                .join('\n\n──────\n\n');
-        } catch (e) { console.warn('[playDuoScene] 抓VN小說家世界書失敗', e); }
-        return _vnProtocolCache;
+        return (VR && VR.getText) ? VR.getText() : '';
     }
     VoidTerminal.getVnProtocol = _fetchVnProtocol;   // 外借：地圖設施小劇場（map_core）等要組 VN 劇本 prompt 時共用同一份協議快取
     // 小劇場：OS_API.chat 走「主模型」生成 VN 劇本 → 攔截不回傳 chat → 丟 VN 播放器 ephemeral 播（不存章節）。
@@ -1753,7 +1731,7 @@ const IRIS_IDLE = [
         const _prevSum = window.__AURELIA_SUMMARIZING;
         try {
             const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
-            const vnProtocol = await _fetchVnProtocol();   // 「-VN小說家-」世界書的完整格式指令(含SFX)；抓不到→buildDuoScenePrompt 用手寫 fallback
+            const vnProtocol = await _fetchVnProtocol();   // VN 指令的完整格式指令(含SFX)；抓不到→buildDuoScenePrompt 用手寫 fallback
             // 大總結去重：兩人同書卡(同 storyKey)→大總結只注一次(共用)；不同故事→各接各的 personaText 後；名冊 NPC 無大總結
             let ptA = _resolveDuoPersona(npcA), ptB = _resolveDuoPersona(npcB);
             const sumA = (npcA.duoSummary || '').trim(), sumB = (npcB.duoSummary || '').trim();

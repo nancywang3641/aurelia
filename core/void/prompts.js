@@ -186,7 +186,7 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
     }
 
     // buildDuoScenePrompt — 給主模型(OS_API.chat,獨立乾淨不吃當前卡) 寫一小段 VN 格式劇本（大廳小劇場）。
-    //   vnProtocol：從「-VN小說家-」世界書抓的完整 VN 格式指令(含 SFX/表情包/Scene)；有就用它、沒有退回手寫 fallback。
+    //   vnProtocol：VN 指令（os_vn_rules，程式內建）開著的那幾條＝完整 VN 格式指令(含 SFX/表情包/Scene)；有就用它、沒有退回手寫 fallback。
     //   theaterCtx：最近幾場小劇場的一句話記事（供自然回扣+避免重複題材）；沒有就略。
     //   輸出交給 VN_Core 播放，立繪/[Scene|]插圖/音效由 VN 引擎處理。npcA/npcB = { name, personaText }。
     function buildDuoScenePrompt(npcA, npcB, worldCtx, vnProtocol, theaterCtx) {
@@ -207,7 +207,7 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 '- 角色名一律簡體中文、對話用全形「」。至少穿插 1～2 張 [Scene|scene_id|tags]（兩人外觀對稱、成年男性加 handsome_male）。輸出從 <content> 開始。\n' +
 '- </content> 收束後，緊接輸出一段 <theater_summary>...</theater_summary>：第三人稱客觀記事 100～200 字（兩人聊了什麼、透露了什麼資訊或情緒、留下什麼約定或梗、關係有無變化）。這段只存檔不播出。除這兩個區塊外，前後不要任何其他文字。\n';
         if (vnProtocol && String(vnProtocol).trim()) {
-            // 用「-VN小說家-」世界書的完整協議當格式規範（含 SFX 音效/表情包/Scene 等，比手寫完整）
+            // 用 VN 指令的完整協議當格式規範（含 SFX 音效/表情包/Scene 等，比手寫完整）
             return head + duoRules + '\n【VN 完整格式協議（照此協議輸出，尤其 TAG／表情／SFX音效／Scene 插畫規則）】\n' + String(vnProtocol).trim();
         }
         // fallback：世界書抓不到 → 手寫精簡格式

@@ -1736,7 +1736,7 @@ status = "正常"`;
                     localStorage.removeItem('vn_pending_first_mes');
                     try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
                     try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}     // 這一刻＝建立聊天室
-                    // 🚨 一定要等：這支會改世界書（VN 總綱固定版/自由版二選一）。
+                    // 🚨 一定要等：這支會撥 VN 指令的總綱開關（固定版/自由版二選一）。
                     //    以前沒 await，切換還在寫 IDB，prompt 就已經組好送出 →
                     //    選了「自由」的第一輪，AI 讀到的還是固定版總綱，照樣每句寫表情格。
                     try { await window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
