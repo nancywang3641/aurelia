@@ -1820,17 +1820,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .wx-cell-text { flex: 1; min-width: 0; font-size: 15px; color: #1a1a1a; }
         .wx-cell-arrow { color: #c8c8c8; font-size: 13px; flex-shrink: 0; }
 
-        /* 發現 tab：跑團同步狀態頁。細工具列(標題+動作) + 狀態區吃滿 */
-        .wx-discover { height: 100%; display: flex; flex-direction: column; min-height: 0; background: #ededed; }
-        .wx-vnlog-toolbar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; background: #fff; border-bottom: 1px solid #eee; }
-        .wx-vnlog-toolbar-t { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #1a1a1a; min-width: 0; }
-        .wx-vnlog-toolbar-t i { color: #07c160; }
-        .wx-vnlog-tools { display: flex; gap: 8px; flex-shrink: 0; }
-        .wx-vnlog-tool { display: flex; align-items: center; gap: 5px; border: 1px solid #e2e2e2; background: #f7f7f7; color: #444; font-size: 12px; border-radius: 14px; padding: 4px 10px; cursor: pointer; }
-        .wx-vnlog-tool:active { background: #ececec; }
-        .wx-vnlog { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: #ededed; }
-        .wx-vnlog-empty { padding: 30px 20px; text-align: center; color: #999; font-size: 13px; line-height: 1.7; }
-
         /* --- Call 模式 (暗黑現代) --- */
         /* 按鈕改為 flex 排版（不再 absolute），高度自適應，不靠 padding-bottom 撐空間 */
         #phone-call { display: flex; flex-direction: column; height: 100%; background: linear-gradient(180deg, #161b2e 0%, #080a12 100%); color: white; align-items: center; padding-top: 55px; padding-bottom: 0; box-sizing: border-box; position: relative; overflow: hidden; transition: padding-top 0.3s ease; }

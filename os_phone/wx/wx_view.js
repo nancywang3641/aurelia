@@ -110,23 +110,6 @@
         // 各寫各的就會像這次一樣漂在繁體字上。
         MSG_TAG: MSG_TAG,
 
-        // 「發現」tab：跑團同步狀態。劇情裡的 <chat> 聊天室已直接進聊天列表與通訊錄，這頁只放同步與整理。
-        getDiscoverHTML: function() {
-            const app = '(window.parent.wxApp || window.wxApp)';
-            return ''
-              + '<div class="wx-discover" id="wx-discover-page">'
-              +   '<div class="wx-vnlog-toolbar">'
-              +     '<div class="wx-vnlog-toolbar-t"><i class="fa-solid fa-book-open"></i>跑團同步</div>'
-              +     '<div class="wx-vnlog-tools">'
-              +       '<button class="wx-vnlog-tool" onclick="' + app + '.storyTidyAi && ' + app + '.storyTidyAi()"><i class="fa-solid fa-wand-magic-sparkles"></i>AI 整理</button>'
-              +       '<button class="wx-vnlog-tool" onclick="' + app + '.storyTidyReset && ' + app + '.storyTidyReset()"><i class="fa-solid fa-arrow-rotate-left"></i>還原</button>'
-              +       '<button class="wx-vnlog-tool" title="重新同步" onclick="' + app + '.storyResync && ' + app + '.storyResync()"><i class="fa-solid fa-rotate-right"></i></button>'
-              +     '</div>'
-              +   '</div>'
-              +   '<div class="wx-vnlog" id="wx-story-status"></div>'
-              + '</div>';
-        },
-
         // 假收款碼：程式畫「QR 樣式」SVG（三角定位框 + 依 seed 隨機黑塊），跑團用、不可掃也不用生圖
         _fakeQrSvg: function(seed) {
             let h = 0; const s = String(seed || 'qr'); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
@@ -1107,7 +1090,6 @@
             let headerTitle = totalUnread > 0 ? `微信(${totalUnread})` : '微信';
             let headerTitleAction = 'class="wx-header-title"';
             if (activeTab === 'contacts') headerTitle = '通訊錄';
-            if (activeTab === 'discover') headerTitle = '發現';
             if (activeTab === 'me') headerTitle = '我';
             if (activeTab === 'me_set') headerTitle = '設置';   // 「我」底下的第二頁
             // 通訊錄底下的幾張子頁（跟 me_set 同一套：一個 tab 名字＝一頁）
@@ -1125,7 +1107,6 @@
             else if (activeTab === 'c_tag') listContent = this.getTagDetailHTML(chats, (win.wxApp && win.wxApp.currentTag) || '', !!(win.wxApp && win.wxApp.tagEditing));
             else if (activeTab === 'me') listContent = this.getMePageHTML(isDark);
             else if (activeTab === 'me_set') listContent = this.getMePageHTML(isDark, 'settings');
-            else if (activeTab === 'discover') listContent = this.getDiscoverHTML();
             else listContent = this.getListHTML(chats, activeId);
             
             let roomContent = '';
@@ -1195,7 +1176,6 @@
 
             const iconChat = `<svg viewBox="0 0 24 24"><path d="M18 13.5c0-2.2-2.3-4-5-4-2.8 0-5 1.8-5 4s2.2 4 5 4c.6 0 1.1-.1 1.6-.2l.1-.1 1.7.5-.4-1.6.1-.1c1.2-1 1.9-1.9 1.9-2.5zm-5 4.5c-3.1 0-5.5-2.1-5.5-4.5S9.9 9 13 9s5.5 2.1 5.5 4.5-2.4 4.5-5.5 4.5zM7.5 7.5h.1c3.1 0 5.8 1.8 6.4 4.3.4-.2.8-.2 1.2-.2 3.6 0 6.5 2.5 6.5 5.5 0 .8-.2 1.6-.6 2.3l.5 2.1-2.2-.6c-1.1.7-2.5 1.2-3.8 1.2-3.6 0-6.5-2.5-6.5-5.5 0-.4 0-.8.1-1.2C5.9 14.8 4 12.9 4 10.5c0-2.8 2.8-5 6.2-5h-2.7z"/></svg>`;
             const iconContact = `<svg viewBox="0 0 24 24"><path d="M4 19h16v-1c0-2.2-1.8-4-4-4h-8c-2.2 0-4 1.8-4 4v1z" opacity=".3"/><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>`;
-            const iconDiscover = `<svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8zm-2-4l-2-6 6 2 2 6-6-2z"/></svg>`;
             const iconMe = `<svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>`;
 
             // 構建主介面
@@ -1300,13 +1280,6 @@
                                 <div class="wx-tab-icon">${iconContact}</div>
                             </div>
                             <div class="wx-tab-txt">通訊錄</div>
-                        </div>
-                        <div class="wx-tab ${activeTab === 'discover' ? 'active' : ''}" onclick="${app}.switchTab('discover')">
-                            <div class="wx-tab-icon-box">
-                                <div class="wx-tab-dot"></div>
-                                <div class="wx-tab-icon">${iconDiscover}</div>
-                            </div>
-                            <div class="wx-tab-txt">發現</div>
                         </div>
                         <div class="wx-tab ${(activeTab === 'me' || activeTab === 'me_set') ? 'active' : ''}" onclick="${app}.switchTab('me')">
                             <div class="wx-tab-icon-box">

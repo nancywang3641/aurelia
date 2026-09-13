@@ -476,11 +476,18 @@
         showMenu: function(btn) {
             const existing = targetDoc.getElementById('wx-plus-menu'); if (existing) { existing.remove(); return; }
             const menu = targetDoc.createElement('div'); menu.id = 'wx-plus-menu'; menu.className = 'wx-plus-menu-pop';
-            menu.innerHTML = `<div class="wx-menu-item" id="wx-menu-create-group"><span class="icon"><i class="fa-solid fa-comments"></i></span> 發起群聊</div><div class="wx-menu-item" id="wx-menu-add"><span class="icon"><i class="fa-solid fa-user-plus"></i></span> 添加朋友</div><div class="wx-menu-item" id="wx-menu-search"><span class="icon"><i class="fa-solid fa-magnifying-glass"></i></span> AI 搜尋</div>`;
+            menu.innerHTML = `<div class="wx-menu-item" id="wx-menu-create-group"><span class="icon"><i class="fa-solid fa-comments"></i></span> 發起群聊</div><div class="wx-menu-item" id="wx-menu-add"><span class="icon"><i class="fa-solid fa-user-plus"></i></span> 添加朋友</div><div class="wx-menu-item" id="wx-menu-search"><span class="icon"><i class="fa-solid fa-magnifying-glass"></i></span> AI 搜尋</div><div class="wx-menu-item" id="wx-menu-tidy"><span class="icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span> 整理聊天室</div>`;
+            // 整理過才有東西可以還原；沒整理過不擺這顆
+            const app = win.wxApp;
+            if (app && app.storyTidyHasRemap && app.storyTidyHasRemap()) menu.innerHTML += `<div class="wx-menu-item" id="wx-menu-tidy-reset"><span class="icon"><i class="fa-solid fa-arrow-rotate-left"></i></span> 還原整理</div>`;
             const rect = btn.getBoundingClientRect(); menu.style.top = (rect.bottom + 5) + 'px'; menu.style.right = (win.innerWidth - rect.right) + 'px'; targetDoc.body.appendChild(menu);
             menu.querySelector('#wx-menu-create-group').onclick = () => this.openCreateGroupWindow();
             menu.querySelector('#wx-menu-add').onclick = () => this.openAddWindow();
             menu.querySelector('#wx-menu-search').onclick = () => this.openSearchWindow();
+            // 跑團正文裡 AI 常把同一間群編成好幾個 id、漏群成員——叫副模型（設置→通道「聊天室整理」）收斂
+            menu.querySelector('#wx-menu-tidy').onclick = () => { menu.remove(); if (app && app.storyTidyAi) app.storyTidyAi(); };
+            const resetBtn = menu.querySelector('#wx-menu-tidy-reset');
+            if (resetBtn) resetBtn.onclick = () => { menu.remove(); if (app && app.storyTidyReset) app.storyTidyReset(); };
             setTimeout(() => { targetDoc.addEventListener('click', function closeMenu(e) { if (!menu.contains(e.target) && e.target !== btn) { menu.remove(); targetDoc.removeEventListener('click', closeMenu); } }); }, 0);
         },
         openCreateGroupWindow: function() {

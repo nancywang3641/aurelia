@@ -152,7 +152,7 @@
     }
     const TASK_FALLBACK = {
         story: '正文（故事）', phone_chat: '手機聊天', summary: '大總結',
-        extract: '狀態抽取 / 人物檔案', illust: '插圖描述', map: '地圖探索', heartbeat: '主動找我'
+        extract: '狀態抽取 / 人物檔案', illust: '插圖描述', map: '地圖探索', heartbeat: '主動找我', wx_tidy: '聊天室整理'
     };
     function _tasks() {
         const S = _S();

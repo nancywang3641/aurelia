@@ -416,7 +416,7 @@
     }
 
     // ── 💬 手機聊天室 ID 對照表：掃最近劇情的 [Chat: 名|ID]，每輪提醒 AI「沿用既有 ID、別因改群名而亂編」──
-    //    （配合 wx 發現 tab 改成按 ID 分群：AI 改名沒關係，ID 不變就合回同一間）
+    //    （配合 wx 跑團同步改成按 ID 分群：AI 改名沒關係，ID 不變就合回同一間）
     var WX_CHATROOM_INJECT_ID = 'aurelia_wx_chatroom_ids';
     var _lastWxRoomUninject = null;
     async function injectWxChatrooms() {
@@ -433,7 +433,7 @@
             var msgs = [];
             try { msgs = (await th.getChatMessages('0-' + lastId)) || []; } catch (e) {}
             var text = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
-            // AI 整理產出的「舊亂id→統一id」對應表（發現 tab 的「AI 整理聊天室」存的，按 tavern chatId 隔離）；套上去同房只剩一筆
+            // AI 整理產出的「舊亂id→統一id」對應表（微信右上「＋」→「整理聊天室」存的，按 tavern chatId 隔離）；套上去同房只剩一筆
             var remap = {};
             try { var _allRemap = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_id_remap')) || '{}'); remap = _allRemap[_appChatId()] || {}; } catch (e) {}
             var map = {}, order = [];

@@ -1199,7 +1199,7 @@
         try { var all = JSON.parse(localStorage.getItem('wx_room_id_remap') || '{}'); all[_wxRemapChatId()] = map || {}; localStorage.setItem('wx_room_id_remap', JSON.stringify(all)); } catch (e) {}
     }
 
-    // 解析酒館正文裡的 <chat chatroom="名">…</chat> 區塊 → {房名:{name,members,msgs}}（給「發現」tab 的跑團手機記錄唯讀檢視）
+    // 解析酒館正文裡的 <chat chatroom="名">…</chat> 區塊 → {房名:{name,members,msgs}}
     function _parseVnChatBlocks(fullText) {
         const rooms = {};
         if (!fullText) return rooms;
@@ -1263,7 +1263,7 @@
 
 
     // ══════════════════════════════════════════════════════════════════════
-    // 📖 跑團同步：酒館正文裡的 <chat chatroom id> 區塊 → 聊天列表 + 通訊錄（取代舊「發現」唯讀檢視）
+    // 📖 跑團同步：酒館正文裡的 <chat chatroom id> 區塊 → 聊天列表 + 通訊錄
     //   ・劇情訊息帶 _story=樓號，每次整份從正文重建 → swipe / 編輯 / 刪樓 / 回朔自然跟上。
     //   ・你在同一間房用微信自己打的話沒有 _story，保留；位置靠 _afterFloor（送出當時正文到第幾樓）釘住。
     //   ・私聊房：對方名字對到通訊錄同一位聯絡人，chat id 就是聯絡人 id → 跟手動加 / AI 搜尋加的是同一個人。
@@ -1274,7 +1274,6 @@
     let _storySyncTimer = null;
     let _storySyncing = false;
     let _storySyncAgain = false;
-    let _storyStat = { rooms: 0, contacts: 0, floor: -1, at: 0 };
 
     function _storyHash(s) { let h = 5381; s = String(s || ''); for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
     function _storyCid() { try { const c = win.OS_DB && win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null; return c == null ? '' : String(c); } catch (e) { return ''; } }
@@ -1727,7 +1726,6 @@
             } catch (e) { console.warn('[wx 跑團同步] 收斂同名重複失敗:', (e && e.message) || e); }
 
             _storyLastFloor = parsed.lastFloor;
-            _storyStat = { rooms: keys.filter(function (k) { return rooms[k].msgs.length; }).length, contacts: contactCount, floor: parsed.lastFloor, at: Date.now() };
 
             if (APP_CONTAINER) {
                 if (GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) {
@@ -2379,18 +2377,18 @@
             if (A && A.setProvider) A.setProvider(v);
         },
 
-        // ── 發現 tab：跑團同步（正文 <chat> 區塊 → 聊天列表 + 通訊錄）──
+        // ── 跑團同步（正文 <chat> 區塊 → 聊天列表 + 通訊錄）；整理入口在右上「＋」選單 ──
         storySync: function() { _storySyncDebounced(0); },
 
         // 🧹 AI 整理：叫副模型判斷「哪些房間其實是同一間」(先前上下文壓縮→同房被編多個亂 id)，
         //    產出「舊id→統一id」對應表存起來；不動歷史正文，同步時自動套用。
         storyTidyAi: async function() {
             const tr = AUI.toastr;
-            if (!win.OS_API || typeof win.OS_API.chatSecondary !== 'function') { try { tr && tr.warning('副模型未就緒，無法整理', '發現'); } catch (e) {} return; }
+            if (!win.OS_API || typeof win.OS_API.chatSecondary !== 'function') { try { tr && tr.warning('副模型未就緒，無法整理', '聊天室整理'); } catch (e) {} return; }
             const parsed = await _parseStoryRoomsByFloor();
             const rooms = parsed.rooms || {};
             const keys = Object.keys(rooms);
-            if (keys.length < 2) { try { tr && tr.info('房間太少，不需整理', '發現'); } catch (e) {} return; }
+            if (keys.length < 2) { try { tr && tr.info('劇情裡的聊天室不到兩間，不用整理', '聊天室整理'); } catch (e) {} return; }
             // 給副模型的精簡清單：id / 名 / 成員 / 訊息數 / 最後兩句樣本（夠它判斷同不同間）
             const payload = keys.map(function (k) {
                 const r = rooms[k];
@@ -2399,7 +2397,7 @@
             });
             const sys = '你是資料整理工具。下面 JSON 是從一段跑團劇情解析出的「手機聊天室」清單；因為先前模型在不同段落為同一間聊天室編了不同的 id（上下文壓縮導致遺忘），同一間房可能裂成多筆。請判斷哪些筆其實是同一間聊天室、歸為一組。\n判斷依據（綜合多項、別只看單一條）：房名相同或明顯同義、成員相同或高度重疊、對話內容是同一串的延續。只要不確定是不是同一間就「不要合併」、各自獨立。\n每組的「統一 id」固定取該組裡 count 最大的那筆的 id。\n只輸出 JSON、不要任何解說或標記，格式：\n{"groups":[{"canonicalId":"統一id","name":"顯示名","ids":["這組所有原id"]}]}\n只列「需要合併」（ids 長度>1）的組；單獨一間不需合併的不要列。';
             const messages = [{ role: 'system', content: sys }, { role: 'user', content: JSON.stringify(payload) }];
-            try { tr && tr.info('副模型整理中…', '發現'); } catch (e) {}
+            try { tr && tr.info('整理中…', '聊天室整理'); } catch (e) {}
             const self = this;
             try {
                 win.OS_API.chatSecondary(messages, null, async function (resp) {
@@ -2414,34 +2412,24 @@
                             const cid = String((g && g.canonicalId) || '').trim(); if (!cid) return;
                             ((g && g.ids) || []).forEach(function (oid) { oid = String(oid || '').trim(); if (oid && oid !== cid) { remap[oid] = cid; merged++; } });
                         });
-                        if (!merged) { try { tr && tr.info('沒有偵測到需要合併的重複房間', '發現'); } catch (e) {} return; }
+                        if (!merged) { try { tr && tr.info('沒有重複的聊天室', '聊天室整理'); } catch (e) {} return; }
                         _saveRoomRemap(remap);
                         await _storySyncNow();
-                        self._fillStorySyncStatus();
-                        try { tr && tr.success('整理完成：把 ' + merged + ' 個重複 id 收斂進 ' + groups.length + ' 間', '發現'); } catch (e) {}
-                    } catch (e) { try { tr && tr.error('整理失敗：AI 回傳格式不對', '發現'); } catch (e2) {} console.warn('[發現整理] 解析失敗:', e, resp); }
-                }, function (err) { try { tr && tr.error('整理失敗：' + ((err && err.message) || err), '發現'); } catch (e) {} }, { task: 'extract', label: '聊天室 id 整理' });
-            } catch (e) { try { tr && tr.error('整理失敗：' + ((e && e.message) || e), '發現'); } catch (e2) {} }
+                        try { tr && tr.success('合併了 ' + merged + ' 間重複的聊天室', '聊天室整理'); } catch (e) {}
+                    } catch (e) { try { tr && tr.error('整理失敗：回傳的格式不對', '聊天室整理'); } catch (e2) {} console.warn('[聊天室整理] 解析失敗:', e, resp); }
+                }, function (err) { try { tr && tr.error('整理失敗：' + ((err && err.message) || err), '聊天室整理'); } catch (e) {} }, { task: 'wx_tidy', label: '聊天室整理' });
+            } catch (e) { try { tr && tr.error('整理失敗：' + ((e && e.message) || e), '聊天室整理'); } catch (e2) {} }
         },
 
         // 清掉本聊天的 AI 整理對應表（還原成原始分群）再重新同步
         storyTidyReset: async function() {
             try { _saveRoomRemap({}); } catch (e) {}
             await _storySyncNow();
-            this._fillStorySyncStatus();
-            try { AUI.toastr && AUI.toastr.info('已清除整理結果、還原原始分群', '發現'); } catch (e) {}
+            try { AUI.toastr && AUI.toastr.info('已還原成整理前的聊天室', '聊天室整理'); } catch (e) {}
         },
-        storyResync: async function() {
-            await _storySyncNow();
-            this._fillStorySyncStatus();
-        },
-        _fillStorySyncStatus: function() {
-            const mount = APP_CONTAINER && APP_CONTAINER.querySelector('#wx-story-status');
-            if (!mount) return;
-            const st = _storyStat || {};
-            if (!st.at) { mount.innerHTML = '<div class="wx-vnlog-empty">還沒同步過。<br>劇情裡出現 &lt;chat chatroom=&quot;…&quot;&gt; 的對話會自動進聊天列表與通訊錄。</div>'; return; }
-            const when = new Date(st.at); const hh = ('0' + when.getHours()).slice(-2), mi = ('0' + when.getMinutes()).slice(-2);
-            mount.innerHTML = '<div class="wx-vnlog-empty">已同步 ' + st.rooms + ' 間聊天室、' + st.contacts + ' 位聯絡人<br>讀到第 ' + (st.floor + 1) + ' 樓・' + hh + ':' + mi + '</div>';
+        // 「＋」選單用：這個故事整理過才擺「還原整理」
+        storyTidyHasRemap: function() {
+            return Object.keys(_loadRoomRemap()).length > 0;
         },
 
         // 「我」頁：暱稱與簽名。這是整支手機的暱稱（st.user() 的 nickname），論壇、微博以外的面板都跟它走；留空＝退回人設真名
@@ -2486,9 +2474,6 @@
 
             const html = window.WX_VIEW.renderShell(GLOBAL_ACTIVE_ID, GLOBAL_CHATS, GLOBAL_TAB, DARK_MODE);
             APP_CONTAINER.innerHTML = html;
-
-            // 「發現」tab：跑團同步狀態
-            if (GLOBAL_TAB === 'discover') { try { this._fillStorySyncStatus(); } catch (e) {} }
 
             const room = APP_CONTAINER.querySelector('.wx-room-scroll');
             if (room && GLOBAL_ACTIVE_ID) {
@@ -3550,7 +3535,7 @@
                 const ev = win.tavern_events;
                 const resync = function () { _storySyncDebounced(1200); };
                 ['MESSAGE_RECEIVED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED'].forEach(function (k) { if (ev[k]) win.eventOn(ev[k], resync); });
-                if (ev.CHAT_CHANGED) win.eventOn(ev.CHAT_CHANGED, function () { _storyLastFloor = -1; _storyStat = { rooms: 0, contacts: 0, floor: -1, at: 0 }; _storySyncDebounced(800); });
+                if (ev.CHAT_CHANGED) win.eventOn(ev.CHAT_CHANGED, function () { _storyLastFloor = -1; _storySyncDebounced(800); });
                 if (ev.GENERATION_STARTED) win.eventOn(ev.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; _storyStampNatives(); });
                 _storySyncDebounced(2000);
                 return;

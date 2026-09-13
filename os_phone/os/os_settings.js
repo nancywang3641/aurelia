@@ -97,7 +97,8 @@
         { id: 'extract',   name: '狀態抽取 / 人物檔案', def: 'sec'  },
         { id: 'illust',    name: '插圖描述',           def: 'sec'  },
         { id: 'map',       name: '地圖探索',           def: 'sec'  },
-        { id: 'heartbeat', name: '主動找我',           def: 'sec'  }
+        { id: 'heartbeat', name: '主動找我',           def: 'sec'  },
+        { id: 'wx_tidy',   name: '聊天室整理',         def: 'sec'  }
     ];
 
     function loadChannels() {
