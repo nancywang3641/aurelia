@@ -1,55 +1,57 @@
 // ----------------------------------------------------------------
-// [檔案] wx_summary.js (V1)
+// [檔案] wx_summary.js (V2 — 一節一節)
 // 路徑：os_phone/wx/wx_summary.js
-// 職責：聊天室自己的長期記憶。把一個聊天室裡「早前的訊息」壓成一段摘要，
-//       送給模型時只帶「摘要 ＋ 最近 N 則原文」，不再整串歷史全帶。
+// 職責：聊天室自己的長期記憶。早前的訊息每累積一段就整理成「一節」，接在後面、舊的不動；
+//       送給模型時只帶「這幾節 ＋ 最近 N 則原文」，不再整串歷史全帶。
 //
-// 為什麼要有這支：
-//   buildContext 以前是 apiChat.messages.forEach(...)——**一則都沒切**。私聊聊久了
-//   整串幾百則全進 prompt：又貴又慢，而且重要的事被埋在一堆寒暄裡。
-//   （可調的那個「每群聊消息數」是**關聯群聊**的上限，跟私聊自己的歷史無關。）
+// 為什麼從「一段」改成「一節一節」（2026-09-14 她提的）：
+//   V1 每次整理都把舊記錄跟新對話揉成一段、蓋掉原本那段——看不出哪天聊了什麼，整理壞了也救不回來。
+//   現在：每 30 則左右寫一節（最多一次寫 3 節）→ 節數太長時最舊的幾節自動併成一節 → 也能手動勾幾節合併、改字、刪掉。
 //
-// 🚨 為什麼不用「索引指標」切歷史：
-//   微信的訊息物件**沒有穩定 id**（只有 type/isMe/content/raw/sender…）。若用
-//   「已摘要到第 N 則」當指標去跳過開頭，使用者從中間刪掉幾則之後指標就歪了，
-//   會把**還沒摘要過的**訊息一起跳掉——那是靜默失憶，最難查。
-//   所以這裡分成兩件事：
-//     · 注入時：永遠只取 messages.slice(-keep)，不看指標 → 刪訊息也不可能漏。
-//     · 生成時：才用 coveredCount 決定「這次要把哪一段折進摘要」，而且發現
-//       總數比上次少（＝有刪過）就整份重建，寧可多花一次也不留錯的帳。
+// 🚨 為什麼不用「索引指標」切歷史（沿用 V1）：
+//   微信的訊息物件**沒有穩定 id**。注入時永遠只取 messages.slice(-keep)，不看指標 → 刪訊息也不可能漏。
+//   生成時才用 coveredCount 決定從哪裡接著寫；發現總數比上次少（刪過訊息）就把指標往回退「少掉的那麼多則」，
+//   寧可有幾則被重寫一次，也不跳過沒整理過的（V1 是整份重建；分節之後重建會把每節都重寫一遍，改成退指標）。
 //
-// 存哪：就存在 api_chat 那筆記錄裡（apiChat.wxSummary），不另開資料庫。
-//   saveApiChat(id, d) 的 d 就是整包記錄，加欄位**不用升 OS_DB 版本**（避開升版 deadlock），
-//   而且一室一份天然分艙、刪聊天室摘要跟著消失、備份也已經涵蓋 api_chats。
+// 🧩 跟故事主線的關係（大總結）：
+//   每節記 merged（寫進第幾次大總結）。大總結生成時 collectForStory() 收「還沒寫進故事」的節一起給主模型，
+//   存檔後 markMerged() 蓋章，不會重複寫。以下不收：
+//     · 關掉「吃這本的劇情」的聊天室（noHistory，隔離開關）——跟這個故事無關的人，例如測試用的系統助手
+//     · storyOnly 的節——整段都是從正文同步進來的劇情聊天室（<chat>），正文本來就有
+//   自動併節只併「已經寫進故事」（或不算進故事）的節，免得還沒寫進故事的內容被揉掉。
 //
-// 誰來觸發：大總結存檔完會順便跑一次（os_story_tools 的 _doSave，fire-and-forget）；
-//   聊天設定頁「早前記錄」也能手動整理。
-// 用哪顆模型：副模型（chatSecondary）。跟地圖番外記事重壓縮同款——工具型短輸出。
+// 存哪：就存在 api_chat 那筆記錄裡（apiChat.wxSummary = { nodes:[…], coveredCount, totalAtSummary, count }），
+//   加欄位**不用升 OS_DB 版本**。V1 的 { text } 讀到時自動變成第一節（id 'legacy'）。
+// 誰來觸發：大總結存檔完順便跑一次（os_story_tools _doSave／PWA vn_summary）；聊天設置「早前記錄」手動整理。
+// 用哪顆模型：副模型（chatSecondary）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
-    console.log('[WX] 載入聊天室記憶模塊 (wx_summary V1)...');
+    console.log('[WX] 載入聊天室記憶模塊 (wx_summary V2)...');
     const win = window.parent || window;
 
     const KEEP_KEY = 'wx_sum_keep_recent';   // 全域預設：注入時保留最近幾則原文
-    const MIN_KEY  = 'wx_sum_min_fold';      // 至少累積這麼多沒整理過的才值得跑一次
+    const MIN_KEY  = 'wx_sum_min_fold';      // 累積這麼多沒整理過的才寫一節
     const ON_KEY   = 'wx_sum_enabled';       // '0' = 關掉整個功能
+    const STREAM_KEY = 'wx_sum_stream';      // '0' = 關掉串流（端點不支援串流時用）
 
     const DEF_KEEP = 40;
-    const DEF_MIN  = 20;
-    const KEEP_MIN = 5;      // 保留再少也要有這麼多，否則模型接不上話
+    const DEF_MIN  = 30;
+    const KEEP_MIN = 5;
     const KEEP_MAX = 500;
-    const STREAM_KEY = 'wx_sum_stream';      // '0' = 關掉串流（端點不支援串流時用）
-    // 單次餵給副模型的上限。原本 12000，實測她按下去撞閘道逾時 524——輸入太長、
-    // 模型還沒吐第一個字連線就被切掉。砍半＋開串流兩手一起。超過就只折最舊那一段，下次再折。
+    const NODE_MSGS = 30;          // 一節最多吃幾則訊息
+    const MAX_NODES_PER_RUN = 3;   // 一次最多寫幾節，剩下的下次再寫（背景工作，別一次打太多通）
+    const NODE_BUDGET = 2400;      // 所有節加起來超過這麼多字 → 最舊的自動併
+    const KEEP_RAW_NODES = 3;      // 最新的幾節不自動併
+    // 單次餵給副模型的上限。實測 12000 會撞閘道逾時 524，砍半＋開串流。
     const FEED_MAX_CHARS = 6000;
 
     function _int(v, d) { const n = parseInt(v); return (isNaN(n) || n < 0) ? d : n; }
     function _clampKeep(n) { return Math.max(KEEP_MIN, Math.min(KEEP_MAX, n)); }
+    function _newId() { return 'sn' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
     function isEnabled() { try { return localStorage.getItem(ON_KEY) !== '0'; } catch (e) { return true; } }
 
-    // 每室可以自己覆寫「保留最近幾條」；沒設就吃全域預設
     function keepOf(apiChat) {
         const per = apiChat && apiChat.summaryKeepRecent;
         if (per != null && per !== '') return _clampKeep(_int(per, DEF_KEEP));
@@ -67,46 +69,67 @@
         return (apiChat && Array.isArray(apiChat.messages)) ? apiChat.messages : [];
     }
 
-    // 現在這個聊天室該怎麼折。純計算，不碰 DB、不打 API —— 可以單獨拿去測。
+    // 讀節：V1 只有一段 text 的，當成第一節（id 固定 'legacy'，兩邊讀到的才是同一節）
+    function nodesOf(apiChat) {
+        const s = apiChat && apiChat.wxSummary;
+        if (!s) return [];
+        if (Array.isArray(s.nodes)) return s.nodes;
+        const t = s.text ? String(s.text).trim() : '';
+        if (!t) return [];
+        return [{ id: 'legacy', text: t, storyDate: '', merged: null, storyOnly: false, createdAt: s.updatedAt || 0 }];
+    }
+    // 要寫之前把舊形狀轉成新形狀
+    function _ensureNodes(chat) {
+        const nodes = nodesOf(chat).slice();
+        const s = Object.assign({}, chat.wxSummary || {});
+        delete s.text;
+        s.nodes = nodes;
+        chat.wxSummary = s;
+        return nodes;
+    }
+    // 這一節算不算「已經處理完、不必再寫進故事」
+    function _settled(chat, n) {
+        return !!(chat && chat.noHistory === true) || !!(n && (n.merged || n.storyOnly));
+    }
+
+    // 現在這個聊天室該怎麼折。純計算，不碰 DB、不打 API。
     function plan(apiChat) {
         const msgs = _msgs(apiChat);
         const total = msgs.length;
         const keep = keepOf(apiChat);
         const s = (apiChat && apiChat.wxSummary) ? apiChat.wxSummary : null;
 
-        // 有刪過訊息（總數比上次整理當下還少）→ 舊的 coveredCount 已經不可信，整份重建
-        const rebuild = !!(s && s.totalAtSummary != null && total < s.totalAtSummary);
-        let covered = (s && !rebuild) ? _int(s.coveredCount, 0) : 0;
-        if (covered > total) covered = 0;          // 保險：怎麼樣都不准指到界外
+        // 刪過訊息（總數比上次整理當下還少）→ 指標往回退少掉的那麼多則：寧可重寫幾則，不准跳過
+        const shrunk = !!(s && s.totalAtSummary != null && total < s.totalAtSummary);
+        let covered = s ? _int(s.coveredCount, 0) : 0;
+        if (shrunk) covered = Math.max(0, covered - (s.totalAtSummary - total));
+        if (covered > total) covered = 0;
 
-        const foldTo = Math.max(0, total - keep);  // 折到這一則為止，後面留原文
+        const foldTo = Math.max(0, total - keep);
         const pending = Math.max(0, foldTo - covered);
         return {
             total: total, keep: keep, covered: covered, foldTo: foldTo,
-            pending: pending, rebuild: rebuild,
+            pending: pending, shrunk: shrunk,
             can: isEnabled() && pending >= minFold()
         };
     }
 
-    // 注入時要帶的那段原文。**永遠只看最後 keep 則**，不理 coveredCount。
     function recentWindow(apiChat) {
         const msgs = _msgs(apiChat);
         const keep = keepOf(apiChat);
         return (msgs.length > keep) ? msgs.slice(-keep) : msgs;
     }
 
-    // 有摘要就回一段 system 文字，沒有就回 null
     function injectionText(apiChat) {
         if (!isEnabled()) return null;
-        const s = (apiChat && apiChat.wxSummary) ? apiChat.wxSummary : null;
-        const t = s && s.text ? String(s.text).trim() : '';
-        if (!t) return null;
-        return '[這個聊天室更早以前的來往｜長期記憶]\n' + t
+        const nodes = nodesOf(apiChat).filter(function (n) { return n && String(n.text || '').trim(); });
+        if (!nodes.length) return null;
+        return '[這個聊天室更早以前的來往｜長期記憶，由舊到新一節一節]\n'
+            + nodes.map(function (n) { return '・' + (n.storyDate ? n.storyDate + '｜' : '') + String(n.text).trim(); }).join('\n')
             + '\n\n上面是你們更早以前聊過的事，已經整理過、不是逐字紀錄。'
             + '接下來那些才是最近的原文。講到以前的事要跟上面對得起來，不要當作沒發生過。';
     }
 
-    // 把一則訊息壓成一行給副模型看
     function _lineOf(msg, meName, taName) {
         if (!msg) return '';
         if (msg.type === 'system') {
@@ -115,10 +138,7 @@
         }
         let text = String(msg.content || '');
         if (!text && msg.raw) {
-            // raw 帶協議標頭（[Chat:…][With:…][Time:…]…）——那是給程式看的，不要餵進摘要
-            text = String(msg.raw)
-                .replace(/^\[[^\]\n]{1,40}\][ \t]*\n?/gm, '')
-                .trim();
+            text = String(msg.raw).replace(/^\[[^\]\n]{1,40}\][ \t]*\n?/gm, '').trim();
         }
         text = text.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
         if (!text) return '';
@@ -127,13 +147,24 @@
     }
 
     function _userName() {
+        try { const me = win.WX_ME; if (me && me.name) { const n = me.name(); if (n) return n; } } catch (e) {}
         try {
             if (win.OS_API && typeof win.OS_API.getGlobalUserName === 'function') return win.OS_API.getGlobalUserName();
         } catch (e) {}
         return '我';
     }
+    // 節上標的是故事裡的日期，不是她電腦的日期
+    async function _storyDate() {
+        try {
+            const S = win.OS_MC_STATUS;
+            if (S && S.load && S.fmtDate) {
+                const st = await S.load();
+                if (st && st.date) return S.fmtDate(st.date) + (st.time ? ' ' + st.time : '');
+            }
+        } catch (e) {}
+        return '';
+    }
 
-    // 讀「最新的那份」聊天室記錄：記憶體裡那份才是剛剛還在聊的，OS_DB 可能落後一拍
     async function _load(chatId) {
         try {
             const live = win.wxApp && win.wxApp.GLOBAL_CHATS && win.wxApp.GLOBAL_CHATS[chatId];
@@ -148,7 +179,7 @@
         return { chat: null, live: false };
     }
 
-    // 寫回：記憶體那份跟 OS_DB 都要寫，不然下一次存檔會把摘要蓋掉
+    // 寫回：記憶體那份跟 OS_DB 都要寫，不然下一次存檔會把記錄蓋掉
     async function _save(chatId, chat) {
         try {
             const live = win.wxApp && win.wxApp.GLOBAL_CHATS && win.wxApp.GLOBAL_CHATS[chatId];
@@ -165,9 +196,6 @@
                     reject(new Error('副模型還沒就緒'));
                     return;
                 }
-                // 🚨 開串流。副模型預設不開（有些便宜端點不支援串流會回 404），但這條路的輸入很長，
-                //    非串流要等整篇生完才回第一個位元組，中間的閘道會在 100 秒左右直接切線 → 524。
-                //    端點真的不吃串流就把 wx_sum_stream 設成 '0' 關回去。
                 let _stream = true;
                 try { _stream = localStorage.getItem(STREAM_KEY) !== '0'; } catch (e) {}
                 win.OS_API.chatSecondary(
@@ -180,124 +208,217 @@
             } catch (e) { reject(e); }
         });
     }
+    function _cleanOut(out) {
+        return String(out || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s{3,}/g, '\n').trim();
+    }
+    function _whyFailed(e) {
+        const raw = (e && e.message) ? String(e.message) : '';
+        const timeout = /(?:502|504|524|408)|timeout|timed out|逾時|超時/i.test(raw);
+        return timeout ? '副模型太久沒回應，這次沒整理完。再按一次會接著整理。' : (raw || '副模型沒回應');
+    }
 
     function _buildPrompt(prevText, lines, taName) {
-        const head = prevText
-            ? ('下面第一段是這個聊天室先前已經整理好的記錄，第二段是後來又聊的內容（由舊到新）。'
-                + '請把兩段併成**一段**新的記錄，取代舊的那段。')
-            : ('下面是一個聊天室裡由舊到新的對話。請整理成**一段**記錄。');
-        return head + '\n\n'
+        return '下面是一個聊天室裡由舊到新的一段對話。請把這一段整理成**一節**記錄。\n\n'
             + '整理的要求：\n'
             + '- 用第三人稱客觀敘述，不要分行條列，不要標題。\n'
             + '- 只留下之後還可能被提起、或會影響兩人關係與後續發展的事：講定的事、答應的事、'
             + '沒解決的事、身分與處境的變化、情緒上的轉折。\n'
-            + '- 時間先後要看得出來；已經被後來的事推翻的舊狀況，寫成已經過去的。\n'
-            + '- 寒暄、重複的話、單純的貼圖與表情不用留。\n'
-            + '- 控制在 500 字以內。只輸出這段記錄本身，不要任何說明。\n\n'
-            + (prevText ? ('【先前已整理的記錄】\n' + prevText + '\n\n') : '')
-            + '【' + (prevText ? '後來又聊的內容' : '對話內容') + '】\n'
+            + '- 時間先後要看得出來。寒暄、重複的話、單純的貼圖與表情不用留。\n'
+            + (prevText ? '- 下面附的「上一節」只是讓你接得上，上一節已經寫過的事不要再寫一次。\n' : '')
+            + '- 控制在 250 字以內。只輸出這一節本身，不要任何說明。\n\n'
+            + (prevText ? ('【上一節】\n' + prevText + '\n\n') : '')
+            + '【這一段對話】\n'
             + lines.join('\n');
     }
+    function _buildCompressPrompt(texts) {
+        return '下面是同一個聊天室由舊到新的幾節記錄。請把它們併成**一節**，取代這幾節。\n\n'
+            + '要求：\n'
+            + '- 用第三人稱客觀敘述，不要分行條列，不要標題。\n'
+            + '- 講定的事、答應的事、沒解決的事、身分處境與關係的變化都要留下；已經被後來的事推翻的舊狀況寫成已經過去的。\n'
+            + '- 時間先後要看得出來。控制在 400 字以內。只輸出併好的這一節，不要任何說明。\n\n'
+            + texts.map(function (t, i) { return '【第 ' + (i + 1) + ' 節】\n' + t; }).join('\n\n');
+    }
 
-    // 整理一個聊天室。回 { ok, reason, folded, total }
+    // 整理一個聊天室：從上次整理到的地方接著寫，一節最多 NODE_MSGS 則，一次最多 MAX_NODES_PER_RUN 節。
+    // 回 { ok, reason, made, total }
     async function summarizeChat(chatId, opts) {
         opts = opts || {};
         if (!isEnabled() && !opts.force) return { ok: false, reason: '功能關著' };
         const got = await _load(chatId);
         const chat = got.chat;
         if (!chat) return { ok: false, reason: '找不到這個聊天室' };
+        _ensureNodes(chat);
 
-        const p = plan(chat);
-        if (!p.can && !opts.force) return { ok: false, reason: '還不用整理', plan: p };
-        if (p.pending <= 0) return { ok: false, reason: '沒有可以整理的舊訊息', plan: p };
-
-        const msgs = _msgs(chat);
         const meName = _userName();
         const taName = chat.name || '對方';
+        let made = 0, reason = '';
+        for (let run = 0; run < MAX_NODES_PER_RUN; run++) {
+            const p = plan(chat);
+            if (p.pending <= 0) { reason = '沒有可以整理的舊訊息'; break; }
+            if (!p.can && !(opts.force && run === 0)) { reason = '還不用整理'; break; }
 
-        // 這次要折的範圍；太長就只折最舊的一段，剩下的下次再折（免得一次餵爆）
-        let end = p.foldTo;
-        const lines = [];
-        let chars = 0;
-        let i = p.covered;
-        for (; i < end; i++) {
-            const ln = _lineOf(msgs[i], meName, taName);
-            if (!ln) continue;
-            if (chars + ln.length > FEED_MAX_CHARS && lines.length) break;
-            lines.push(ln);
-            chars += ln.length;
-        }
-        const newCovered = i;                       // 真正折到哪裡（可能提早收手）
-        if (!lines.length) {
-            // 這一段全是空的（純貼圖之類）——直接把指標推過去，不用花一次呼叫
-            chat.wxSummary = Object.assign({}, chat.wxSummary || {}, {
-                coveredCount: end, totalAtSummary: p.total, updatedAt: Date.now()
+            const msgs = _msgs(chat);
+            const end = Math.min(p.foldTo, p.covered + NODE_MSGS);
+            const lines = [];
+            let chars = 0, i = p.covered, hasMsg = false, allStory = true;
+            for (; i < end; i++) {
+                const m = msgs[i];
+                const ln = _lineOf(m, meName, taName);
+                if (!ln) continue;
+                if (chars + ln.length > FEED_MAX_CHARS && lines.length) break;
+                lines.push(ln);
+                chars += ln.length;
+                if (m && m.type !== 'system') { hasMsg = true; if (m._story == null) allStory = false; }
+            }
+            const s = chat.wxSummary;
+            if (!lines.length) {
+                // 這一段全是空的（純貼圖之類）——指標推過去就好，不用花一次呼叫
+                s.coveredCount = i; s.totalAtSummary = p.total; s.updatedAt = Date.now();
+                await _save(chatId, chat);
+                continue;
+            }
+            const last = s.nodes[s.nodes.length - 1];
+            let out = '';
+            try {
+                out = await _askSecondary(_buildPrompt(last ? String(last.text || '') : '', lines, taName), '聊天室記憶整理｜' + taName);
+            } catch (e) {
+                console.warn('[WX_SUMMARY] 整理失敗（' + taName + '）:', e);
+                if (made) break;
+                return { ok: false, reason: _whyFailed(e) };
+            }
+            const text = _cleanOut(out);
+            if (!text) { if (made) break; return { ok: false, reason: '副模型回了空的' }; }
+            s.nodes.push({
+                id: _newId(), text: text, storyDate: await _storyDate(),
+                storyOnly: hasMsg && allStory, merged: null, createdAt: Date.now()
             });
+            s.coveredCount = i;
+            s.totalAtSummary = p.total;
+            s.count = _int(s.count, 0) + 1;
+            s.updatedAt = Date.now();
             await _save(chatId, chat);
-            return { ok: true, folded: end - p.covered, empty: true, total: p.total };
+            made++;
+            console.log('[WX_SUMMARY] ' + taName + ' 寫了一節（整理到 ' + i + '/' + p.total + ' 則，共 ' + s.nodes.length + ' 節）');
         }
-
-        const prevText = (p.rebuild || !chat.wxSummary) ? '' : String(chat.wxSummary.text || '');
-        const prompt = _buildPrompt(prevText, lines, taName);
-
-        let out = '';
-        try {
-            out = await _askSecondary(prompt, '聊天室記憶整理｜' + taName);
-        } catch (e) {
-            const raw = (e && e.message) ? String(e.message) : '';
-            console.warn('[WX_SUMMARY] 整理失敗（' + taName + '）:', raw || e);
-            // 閘道逾時不要把代碼丟到她臉上，而且這種情況再按一次是有用的：
-            // 失敗時什麼都沒寫回去，成功那次才會把進度往前推，所以按第二次是接著整理不是重來。
-            const timeout = /(?:502|504|524|408)|timeout|timed out|逾時|超時/i.test(raw);
-            return { ok: false, reason: timeout ? '副模型太久沒回應，這次沒整理完。再按一次會接著整理。' : (raw || '副模型沒回應') };
-        }
-        const text = String(out || '').replace(/<[^>]+>/g, ' ').replace(/\s{3,}/g, '\n').trim();
-        if (!text) return { ok: false, reason: '副模型回了空的' };
-
-        const prevCount = (chat.wxSummary && !p.rebuild) ? _int(chat.wxSummary.count, 0) : 0;
-        chat.wxSummary = {
-            text: text,
-            coveredCount: newCovered,
-            totalAtSummary: p.total,
-            count: prevCount + 1,
-            updatedAt: Date.now()
-        };
-        await _save(chatId, chat);
-        console.log('[WX_SUMMARY] ' + taName + ' 已整理 ' + newCovered + '/' + p.total
-            + ' 則（第 ' + chat.wxSummary.count + ' 次' + (p.rebuild ? '、重建' : '') + '）');
-        return { ok: true, folded: newCovered - p.covered, covered: newCovered, total: p.total, rebuild: p.rebuild };
+        if (made) { try { await _autoCompress(chatId, chat); } catch (e) { console.warn('[WX_SUMMARY] 自動併節失敗', e); } }
+        return made ? { ok: true, made: made, total: _msgs(chat).length } : { ok: false, reason: reason || '這次沒有整理' };
     }
 
-    // 把當前這張卡底下所有該整理的聊天室都整理一遍。
-    // 🚨 一個一個來，不要併發：這是背景工作，沒必要跟她正在聊的那則搶 API。
+    // 把 idxs 那幾節（照順序）併成一節，放在第一節的位置
+    async function _combine(chatId, chat, idxs, label) {
+        const nodes = chat.wxSummary.nodes;
+        const picked = idxs.map(function (i) { return nodes[i]; });
+        const out = _cleanOut(await _askSecondary(_buildCompressPrompt(picked.map(function (n) { return String(n.text || ''); })), label));
+        if (!out) throw new Error('副模型回了空的');
+        const first = picked[0], lastN = picked[picked.length - 1];
+        const mergedCounts = picked.map(function (n) { return n.merged; }).filter(Boolean);
+        const node = {
+            id: _newId(),
+            text: out,
+            storyDate: (first.storyDate && lastN.storyDate && first.storyDate !== lastN.storyDate)
+                ? first.storyDate + '～' + lastN.storyDate : (first.storyDate || lastN.storyDate || ''),
+            storyOnly: picked.every(function (n) { return n.storyOnly; }),
+            merged: mergedCounts.length === picked.length ? mergedCounts.reduce(function (a, b) { return (typeof a === 'number' && typeof b === 'number') ? Math.max(a, b) : (a || b); }) : null,
+            combined: picked.reduce(function (a, n) { return a + (_int(n.combined, 0) || 1); }, 0),   // 一共揉了幾節原本的
+            createdAt: Date.now()
+        };
+        const drop = {}; idxs.forEach(function (i) { drop[i] = 1; });
+        const nextNodes = [];
+        nodes.forEach(function (n, i) { if (i === idxs[0]) nextNodes.push(node); else if (!drop[i]) nextNodes.push(n); });
+        chat.wxSummary.nodes = nextNodes;
+        chat.wxSummary.updatedAt = Date.now();
+        await _save(chatId, chat);
+        return node;
+    }
+
+    // 太長了就把最舊、已經處理完的那一串併起來（最新 KEEP_RAW_NODES 節不動）
+    async function _autoCompress(chatId, chat) {
+        const nodes = nodesOf(chat);
+        const chars = nodes.reduce(function (a, n) { return a + String(n.text || '').length; }, 0);
+        if (chars <= NODE_BUDGET || nodes.length <= KEEP_RAW_NODES + 1) return false;
+        let run = [];
+        for (let i = 0; i < nodes.length - KEEP_RAW_NODES; i++) {
+            if (_settled(chat, nodes[i])) run.push(i);
+            else if (run.length >= 2) break;
+            else run = [];
+        }
+        if (run.length < 2) return false;
+        _ensureNodes(chat);
+        await _combine(chatId, chat, run, '聊天室記憶併節｜' + (chat.name || ''));
+        console.log('[WX_SUMMARY] ' + (chat.name || chatId) + ' 最舊的 ' + run.length + ' 節自動併成一節');
+        return true;
+    }
+
     async function summarizeAll(opts) {
         opts = opts || {};
         if (!isEnabled()) return { done: 0, skipped: 0, off: true };
-        let all = {};
-        try {
-            if (win.OS_DB && typeof win.OS_DB.getApiChatsForCurrentCard === 'function') {
-                all = await win.OS_DB.getApiChatsForCurrentCard();
-            } else if (win.OS_DB && typeof win.OS_DB.getAllApiChats === 'function') {
-                all = await win.OS_DB.getAllApiChats();
-            }
-        } catch (e) { console.warn('[WX_SUMMARY] 讀聊天室清單失敗', e); return { done: 0, skipped: 0 }; }
-
+        const all = await _allChats();
         let done = 0, skipped = 0;
         for (const id in all) {
-            // 記憶體那份比較新，用它來判斷要不要跑
-            let chat = all[id];
-            try {
-                const live = win.wxApp && win.wxApp.GLOBAL_CHATS && win.wxApp.GLOBAL_CHATS[id];
-                if (live) chat = live;
-            } catch (e) {}
+            const chat = all[id];
             if (!plan(chat).can) { skipped++; continue; }
             const r = await summarizeChat(id);
             if (r && r.ok) done++; else skipped++;
         }
-        if (done) console.log('[WX_SUMMARY] 大總結順便整理了 ' + done + ' 個聊天室（跳過 ' + skipped + ' 個）');
+        if (done) console.log('[WX_SUMMARY] 順便整理了 ' + done + ' 個聊天室（跳過 ' + skipped + ' 個）');
         return { done: done, skipped: skipped };
     }
+    // 這張卡底下的聊天室；記憶體那份比較新，用它
+    async function _allChats() {
+        let all = {};
+        try {
+            if (win.OS_DB && typeof win.OS_DB.getApiChatsForCurrentCard === 'function') all = await win.OS_DB.getApiChatsForCurrentCard();
+            else if (win.OS_DB && typeof win.OS_DB.getAllApiChats === 'function') all = await win.OS_DB.getAllApiChats();
+        } catch (e) { console.warn('[WX_SUMMARY] 讀聊天室清單失敗', e); return {}; }
+        const out = {};
+        for (const id in (all || {})) {
+            let chat = all[id];
+            try { const live = win.wxApp && win.wxApp.GLOBAL_CHATS && win.wxApp.GLOBAL_CHATS[id]; if (live) chat = live; } catch (e) {}
+            if (chat) out[id] = chat;
+        }
+        return out;
+    }
 
+    // ── 手動：合併、改字、刪節 ────────────────────────────
+    async function mergeNodes(chatId, ids) {
+        const got = await _load(chatId);
+        const chat = got.chat;
+        if (!chat) return { ok: false, reason: '找不到這個聊天室' };
+        const nodes = _ensureNodes(chat);
+        const want = {}; (ids || []).forEach(function (x) { want[x] = 1; });
+        const idxs = []; nodes.forEach(function (n, i) { if (want[n.id]) idxs.push(i); });
+        if (idxs.length < 2) return { ok: false, reason: '至少勾兩節才能合併' };
+        const settled = idxs.map(function (i) { return _settled(chat, nodes[i]); });
+        if (settled.some(Boolean) && !settled.every(Boolean)) {
+            return { ok: false, reason: '已經寫進故事的跟還沒寫進故事的要分開合併，不然還沒寫進去的會被當成寫過了' };
+        }
+        try {
+            const node = await _combine(chatId, chat, idxs, '聊天室記憶合併｜' + (chat.name || ''));
+            return { ok: true, node: node };
+        } catch (e) { return { ok: false, reason: _whyFailed(e) }; }
+    }
+    async function updateNode(chatId, id, text) {
+        const got = await _load(chatId);
+        if (!got.chat) return false;
+        const nodes = _ensureNodes(got.chat);
+        const n = nodes.find(function (x) { return x.id === id; });
+        const t = String(text || '').trim();
+        if (!n || !t || n.text === t) return false;
+        n.text = t;
+        n.editedAt = Date.now();
+        await _save(chatId, got.chat);
+        return true;
+    }
+    async function deleteNode(chatId, id) {
+        const got = await _load(chatId);
+        if (!got.chat) return false;
+        const nodes = _ensureNodes(got.chat);
+        const next = nodes.filter(function (x) { return x.id !== id; });
+        if (next.length === nodes.length) return false;
+        got.chat.wxSummary.nodes = next;
+        await _save(chatId, got.chat);
+        return true;
+    }
     async function clearSummary(chatId) {
         const got = await _load(chatId);
         if (!got.chat) return false;
@@ -311,14 +432,47 @@
         return true;
     }
 
-    async function setSummaryText(chatId, text) {
-        const got = await _load(chatId);
-        if (!got.chat) return false;
-        const t = String(text || '').trim();
-        if (!t) return clearSummary(chatId);
-        got.chat.wxSummary = Object.assign({}, got.chat.wxSummary || {}, { text: t, updatedAt: Date.now() });
-        await _save(chatId, got.chat);
-        return true;
+    // ── 寫進故事主線（大總結）────────────────────────────
+    // 收「還沒寫進故事」的節。回 { text, prompt, refs:[{chatId,nodeId}], chats, nodes }
+    async function collectForStory() {
+        const all = await _allChats();
+        const blocks = [], refs = [];
+        for (const id in all) {
+            const chat = all[id];
+            if (!chat || chat.noHistory === true) continue;   // 隔離：跟這個故事無關
+            const nodes = nodesOf(chat).filter(function (n) { return n && !n.merged && !n.storyOnly && String(n.text || '').trim(); });
+            if (!nodes.length) continue;
+            const name = chat.name || id;
+            const who = chat.isGroup ? '群聊「' + name + '」' : '跟 ' + name + ' 的私聊（含電話）';
+            blocks.push(who + '：\n' + nodes.map(function (n) { return '- ' + (n.storyDate ? n.storyDate + '｜' : '') + String(n.text).trim(); }).join('\n'));
+            nodes.forEach(function (n) { refs.push({ chatId: id, nodeId: n.id }); });
+        }
+        const text = blocks.join('\n\n');
+        const prompt = text
+            ? ('以下是這段時間手機上（微信聊天、電話）發生的事，已經按聊天室整理好，每一條前面是故事裡的日期。'
+                + '其中會影響劇情、人物關係、約定、處境的事，照模板一併寫進這次總結對應的區塊（事件表照故事時間排進時間線）；'
+                + '只是閒聊、不影響後續的不用寫。\n\n' + text)
+            : '';
+        return { text: text, prompt: prompt, refs: refs, chats: blocks.length, nodes: refs.length };
+    }
+    // 存檔成功之後蓋章：這幾節已經寫進第 summaryCount 次大總結
+    async function markMerged(refs, summaryCount) {
+        const by = {};
+        (refs || []).forEach(function (r) { if (r && r.chatId) (by[r.chatId] = by[r.chatId] || []).push(r.nodeId); });
+        let n = 0;
+        for (const chatId in by) {
+            const got = await _load(chatId);
+            if (!got.chat) continue;
+            const nodes = _ensureNodes(got.chat);
+            const want = {}; by[chatId].forEach(function (x) { want[x] = 1; });
+            nodes.forEach(function (node) { if (want[node.id] && !node.merged) { node.merged = summaryCount || true; n++; } });
+            await _save(chatId, got.chat);
+            // 蓋完章，太長的聊天室可以順手併節了（背景跑，不擋大總結）
+            const chat = got.chat;
+            _autoCompress(chatId, chat).catch(function (e) { console.warn('[WX_SUMMARY] 蓋章後併節失敗', e); });
+        }
+        if (n) console.log('[WX_SUMMARY] ' + n + ' 節已寫進第 ' + summaryCount + ' 次大總結');
+        return n;
     }
 
     win.WX_SUMMARY = {
@@ -326,14 +480,19 @@
         keepOf: keepOf,
         minFold: minFold,
         plan: plan,
+        nodesOf: nodesOf,
         recentWindow: recentWindow,
         injectionText: injectionText,
         summarizeChat: summarizeChat,
         summarizeAll: summarizeAll,
+        mergeNodes: mergeNodes,
+        updateNode: updateNode,
+        deleteNode: deleteNode,
         clearSummary: clearSummary,
-        setSummaryText: setSummaryText,
+        collectForStory: collectForStory,
+        markMerged: markMerged,
         KEEP_KEY: KEEP_KEY, MIN_KEY: MIN_KEY, ON_KEY: ON_KEY,
         DEF_KEEP: DEF_KEEP, DEF_MIN: DEF_MIN,
-        _lineOf: _lineOf, _buildPrompt: _buildPrompt   // 給測試用
+        _lineOf: _lineOf, _buildPrompt: _buildPrompt, _autoCompress: _autoCompress   // 給測試用
     };
 })();

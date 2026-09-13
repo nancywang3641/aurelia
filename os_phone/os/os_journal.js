@@ -352,7 +352,7 @@
                     <div class="jrnl-mg-row">
                         <div class="jrnl-mg-txt">
                             <div class="jrnl-mg-k"><i class="fa-solid fa-screwdriver-wrench"></i>總結與隱藏工具</div>
-                            <div class="jrnl-mg-d">生成／重壓大總結、隱藏樓層，作用於目前開啟的對話</div>
+                            <div class="jrnl-mg-d">生成／重壓大總結、把手機聊天室寫進來、隱藏樓層，作用於目前開啟的對話</div>
                         </div>
                         <div class="jrnl-mg-acts">
                             <button class="jrnl-ornate jrnl-open-tools" type="button">開啟</button>

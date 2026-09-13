@@ -125,7 +125,9 @@
             return `<div style="white-space:pre-wrap;">${html}</div>`;
         },
 
-        generate: async function() {
+        // opts.phoneOnly：沒有新章節、只把手機聊天室還沒寫進故事的節寫進去（故事管理那顆鈕）
+        generate: async function(opts) {
+            const phoneOnly = !!(opts && opts.phoneOnly);
             const btn = document.getElementById('ctx-summary-btn');
             if (btn && btn.disabled) return;
 
@@ -158,8 +160,14 @@
 
             // ── 滾動合併：只拿「上一版總結」+「上次之後的新章節」，合併成一份新的；舊版被取代、不再整包累加 ──
             const prevCovered = (latest && Array.isArray(latest.coveredChapterIds)) ? latest.coveredChapterIds : [];
-            const newChapters = prevCovered.length ? chapters.filter(ch => prevCovered.indexOf(ch.id) === -1) : chapters;
-            const coveredChapterIds = chapters.map(ch => ch.id).filter(Boolean);   // 累積：到目前為止已涵蓋的全部章節(供下次判斷新章節)
+            const newChapters = phoneOnly ? [] : (prevCovered.length ? chapters.filter(ch => prevCovered.indexOf(ch.id) === -1) : chapters);
+            // 累積：到目前為止已涵蓋的全部章節(供下次判斷新章節)。只補手機的事時章節沒有總結到，照舊
+            const coveredChapterIds = phoneOnly ? prevCovered.slice() : chapters.map(ch => ch.id).filter(Boolean);
+
+            // 📱 手機聊天室裡還沒寫進故事的節（wx_summary.js）：一起寫進去，存檔後蓋章
+            let _phone = { prompt: '', refs: [] };
+            try { if (win.WX_SUMMARY?.collectForStory) _phone = await win.WX_SUMMARY.collectForStory(); } catch (e) { console.warn('[VN_Summary] 收手機聊天室記錄失敗（不影響總結）:', e); }
+            if (phoneOnly && !_phone.prompt) { AUI.alert('手機聊天室裡沒有還沒寫進故事的記錄。'); return; }
 
             const contentToSummarize = newChapters.map(ch => {
                 const _noCot = String(ch.content || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
@@ -167,7 +175,7 @@
                 return m ? m[1].trim() : '';
             }).filter(Boolean).join('\n\n---\n\n');
 
-            if (!contentToSummarize.trim()) {
+            if (!contentToSummarize.trim() && !phoneOnly) {
                 AUI.alert(latest ? '沒有新章節需要總結（上次大總結之後沒有新增章節）' : '章節中找不到 <content> 內容');
                 if (btn) { btn.textContent = '大總結'; btn.disabled = false; }
                 return;
@@ -182,7 +190,8 @@
             //   拿不到 OS_STORY_TOOLS 才退回本檔自帶的舊模板。
             let tplBody = (win.OS_STORY_TOOLS?.getSummaryTemplate?.() || this.TEMPLATE).replace(/\{\{count\}\}/g, count);
             if (count > 1) tplBody = tplBody.replace(/\n*【故事標題】[\s\S]*?(?=\n【|$)/g, '').trim();   // 故事標題只第一次填，第二次起移除(同酒館)
-            const prompt  = `${tplBody}\n\n${prevSection}\n=== 新劇情內容 ===\n${contentToSummarize}`;
+            const prompt  = `${tplBody}\n\n${prevSection}\n=== 新劇情內容 ===\n${contentToSummarize || '（這次沒有新章節，只把手機上發生的事寫進去）'}`
+                + (_phone.prompt ? `\n\n=== 手機上發生的事 ===\n${_phone.prompt}` : '');
 
             const osApi = win.OS_API;
             const osSet = win.OS_SETTINGS;
@@ -213,6 +222,9 @@
                 }
                 await this._saveToDB(storyId, { count, content: generated, coveredChapterIds });
                 try { win.OS_SUMMARY_INJECT?.invalidate?.(storyId); } catch (e) {}   // 有注入快取的話讓它重抓
+                // 📱 帶進去的手機聊天室節蓋章；再順便把各聊天室新的對話整理成節（背景，不擋）
+                try { if (_phone.refs.length && win.WX_SUMMARY?.markMerged) await win.WX_SUMMARY.markMerged(_phone.refs, count); } catch (e) {}
+                try { if (win.WX_SUMMARY?.summarizeAll) win.WX_SUMMARY.summarizeAll({ reason: 'grand_summary' }); } catch (e) {}
                 try { document.getElementById('vn-ctx-popup')?.classList.remove('show'); } catch (e) {}   // 生完才收 CTX：生成中要留著給那顆鈕顯示進度
                 this.showResult(generated, count);
             } catch(e) {

@@ -708,6 +708,31 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         } catch (e) { console.error('[大總結] 初始化失敗:', e); }
     };
 
+    // 📱 不等下次大總結，現在就把手機聊天室還沒寫進故事的節寫進去。
+    //    先讓各聊天室把新的對話整理成節，再收；生成完照樣先跳預覽、按儲存才算數。
+    API.mergePhoneChats = async function () {
+        const _ws = window.parent.WX_SUMMARY || window.WX_SUMMARY;
+        if (!_ws?.collectForStory) { AUI.alert('微信模組還沒載入，等一下再試。'); return; }
+        const btn = document.getElementById('btn-merge-phone');
+        const t0 = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.textContent = '整理聊天室中…'; }
+        let c = null;
+        try {
+            try { await _ws.summarizeAll({ reason: 'merge_phone' }); } catch (e) {}
+            c = await _ws.collectForStory();
+        } finally { if (btn) { btn.disabled = false; btn.innerHTML = t0; } }
+        if (!c || !c.nodes) { AUI.alert('手機聊天室裡沒有還沒寫進故事的記錄。'); return; }
+        if (!await AUI.confirm(`把 ${c.chats} 個聊天室、${c.nodes} 節記錄寫進大總結？\n會用主模型生成一次，生成完一樣先給你看，按儲存才算數。`)) return;
+        if (_isStandalone()) {
+            const S = win.VN_Summary || window.VN_Summary;
+            if (!S?.generate) { AUI.alert('大總結模組尚未載入'); return; }
+            API.closePanel();
+            S.generate({ phoneOnly: true });
+            return;
+        }
+        API._generateSummary(null, null, 'content', true, false, { phoneOnly: true });
+    };
+
     API.confirmRangeAndGenerate = function () {
         const start = parseInt(document.getElementById('range-start-id').value) || 1;
         const endVal = document.getElementById('range-end-id').value;
@@ -725,7 +750,10 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         API._generateSummary(start, end, sourceType, mergePrev);
     };
 
-    API._generateSummary = async function (startId, endId, sourceType, mergePrev, auto) {
+    // opts.phoneOnly：沒有新樓層、只把手機聊天室還沒寫進故事的節寫進大總結（故事管理「把手機聊天室寫進大總結」）
+    API._generateSummary = async function (startId, endId, sourceType, mergePrev, auto, opts) {
+        const _phoneOnly = !!(opts && opts.phoneOnly);
+        if (_phoneOnly) mergePrev = true;   // 只補手機的事，一定要疊在上一版上
         const btn = document.getElementById('btn-grand-summary');   // 從 CTX 快捷入口開時不存在 → null-safe
         if (btn) { btn.innerText = "生成中 (請勿關閉)..."; btn.classList.add('spinning'); }
         try {
@@ -774,6 +802,15 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             let tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
             if (summaryCount > 1) tplBody = tplBody.replace(/\n*【故事標題】[\s\S]*?(?=\n【|$)/g, '').trim();   // 故事標題只第一次生成、第二次起移除(日誌只要一個總篇名)
 
+            // 📱 手機聊天室裡「還沒寫進故事」的節（wx_summary.js collectForStory）：一起給主模型，存檔後蓋章不再重複。
+            //    關了「吃這本劇情」的聊天室（隔離）與正文同步來的劇情聊天室不收。
+            const _WS = window.parent.WX_SUMMARY || window.WX_SUMMARY;
+            let _phone = { text: '', prompt: '', refs: [], chats: 0, nodes: 0 };
+            try { if (_WS?.collectForStory) _phone = await _WS.collectForStory(); } catch (e) { console.warn('[大總結] 收手機聊天室記錄失敗（不影響總結）:', e); }
+            const _phoneBlock = _phone.prompt ? `\n\n----\n${_phone.prompt}\n` : '';
+            if (_phoneOnly && !_phone.prompt) { if (!auto) AUI.alert('手機聊天室裡沒有還沒寫進故事的記錄。'); return; }
+            if (_phone.nodes) console.log(`[大總結] 帶上手機聊天室 ${_phone.chats} 間、${_phone.nodes} 節`);
+
             let finalContent = '';
             let _summarizedEnd = null;   // 這次總結到的最後樓號（給存檔 Last: + 自動隱藏範圍）
             async function _genOnce() {
@@ -799,8 +836,18 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 } catch (e) {}
                 try {
                     // 背景讀整個聊天檔(原生 /api/chats/get；不靠記憶體陣列、不展開、不卡)
-                    const fileMsgs = await _apiFullChat();
-                    if (fileMsgs && fileMsgs.length) {
+                    const fileMsgs = _phoneOnly ? null : await _apiFullChat();
+                    if (_phoneOnly) {
+                        // 只補手機上的事：不讀樓層、樓號維持上一版
+                        _summarizedEnd = (prevRec && prevRec.lastId != null) ? prevRec.lastId : null;
+                        const userMsg = `這次沒有新的劇情樓層，只把手機上發生的事寫進大總結。${_phoneBlock}\n----\n${prevSection}${charHint}\n${tplBody}`;
+                        generated = await TH.generateRaw({
+                            user_input: userMsg,
+                            ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'user_input'],
+                            max_chat_history: 0,
+                            should_stream: _stream,
+                        });
+                    } else if (fileMsgs && fileMsgs.length) {
                         // 只取「上次總結之後的新樓」(startId 由彈窗帶入=舊總結 Last+1) → 不重讀舊樓、省 token
                         const _lastIdx = fileMsgs.length - 1;
                         const sId = (startId != null && !isNaN(startId)) ? Math.max(0, startId) : 0;
@@ -810,7 +857,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                             const who = m.is_user ? '用户' : (m.name || '角色');
                             return `[#${sId + i}] ${who}：${String(m.mes || '').trim()}`;
                         }).join('\n\n');
-                        const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}\n\n----\n${prevSection}${charHint}\n${tplBody}`;
+                        const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}${_phoneBlock}\n\n----\n${prevSection}${charHint}\n${tplBody}`;
                         generated = await TH.generateRaw({
                             user_input: userMsg,
                             ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'user_input'],   // 破甲(若有)→總結系統提示→正文；不讀 chat_history → 純送我給的全文
@@ -820,7 +867,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                     } else {
                         // 後備：讀不到檔 → generateRaw 讀記憶體 chat_history(all)
                         _summarizedEnd = await _trueLastId();
-                        const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。\n\n${prevSection}${charHint}\n${tplBody}`;
+                        const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。${_phoneBlock}\n\n${prevSection}${charHint}\n${tplBody}`;
                         generated = await TH.generateRaw({
                             user_input: instruction,
                             ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'chat_history', 'user_input'],
@@ -870,15 +917,17 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 // 🏦 PT 結算（fire-and-forget，不擋存檔）：副模型估值→加 PT→浮結算卡。去重同一份只算一次。
                 try { const _pt = window.parent.OS_PT || window.OS_PT; if (_pt?.settleSummary) _pt.settleSummary(finalContent, { chatId, summaryCount }); } catch (e) {}
 
-                // 📒 大總結順便整理各聊天室的早前記錄（她要的「大總結順便總結聊天室」就是這個）。
+                // 📱 這次帶進去的手機聊天室節蓋章：已寫進第幾次大總結，下次不再帶
+                try { if (_phone.refs.length && _WS?.markMerged) await _WS.markMerged(_phone.refs, summaryCount); } catch (e) { console.warn('[大總結] 手機聊天室蓋章失敗:', e); }
+                // 📒 大總結順便把各聊天室新的對話整理成節（下一次大總結再帶進來）。
                 //    fire-and-forget：整理是背景工作，副模型慢或失敗都不該擋住大總結存檔。
-                try { const _ws = window.parent.WX_SUMMARY || window.WX_SUMMARY; if (_ws?.summarizeAll) _ws.summarizeAll({ reason: 'grand_summary' }); } catch (e) {}
+                try { if (_WS?.summarizeAll) _WS.summarizeAll({ reason: 'grand_summary' }); } catch (e) {}
             } catch (e) { console.error('[大總結] 存 OS_DB 失敗:', e); throw e; }
 
             // 🔒 自動隱藏已總結樓層，但預留最新 N 樓可見(近期上下文 + 末樓帶觸發 KEY)。
             //    開關與 N 由彈窗設定(sp_summary_autohide / sp_summary_keep_recent)。
             try {
-                const _autohide = localStorage.getItem('sp_summary_autohide') !== '0';
+                const _autohide = localStorage.getItem('sp_summary_autohide') !== '0' && !_phoneOnly;   // 只補手機的事時沒有新樓層，不動隱藏
                 let _keep = parseInt(localStorage.getItem('sp_summary_keep_recent'));
                 if (isNaN(_keep) || _keep < 0) _keep = 5;
                 let _end = _arrayLastId();   // 陣列索引(/hide 對記憶體陣列操作、不能用真樓號會超出截短陣列)；懶載入時偶爾回 null/只到窗口末
@@ -1278,6 +1327,8 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                             : '還沒有大總結。玩幾章之後按下面那顆，系統會把劇情壓成一份長期記憶。'}</div>
                         <button class="ost-btn ost-btn-primary" id="ost-sa-gen"><i class="fa-solid fa-pen-to-square"></i> 生成 / 更新大總結</button>
                         <div class="ost-hint">拿上一版當底稿，只把「上次之後的新章節」合併進去</div>
+                        <button class="ost-btn" id="btn-merge-phone"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>
+                        <div class="ost-hint">微信、電話裡還沒寫進故事的記錄，不等下次大總結、現在就合進來</div>
                     </div>
                     ${latest ? `
                     <div class="ost-section">
@@ -1298,6 +1349,8 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             API.closePanel();
             S.generate();
         };
+        const mp = ov.querySelector('#btn-merge-phone');
+        if (mp) mp.onclick = () => API.mergePhoneChats();
         const sv = ov.querySelector('#ost-sa-save');
         if (sv) sv.onclick = async () => {
             const ta = ov.querySelector('#ost-sa-text');
@@ -1332,6 +1385,8 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                         <div class="ost-hint">將最近的劇情壓縮成永久記憶</div>
                         <button class="ost-btn" id="btn-recompress-summary" onclick="window.OS_STORY_TOOLS.recompressSummary()"><i class="fa-solid fa-shuffle"></i> 重壓目前大總結</button>
                         <div class="ost-hint">把目前累積的總結再濃縮一次（不新增劇情）</div>
+                        <button class="ost-btn" id="btn-merge-phone" onclick="window.OS_STORY_TOOLS.mergePhoneChats()"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>
+                        <div class="ost-hint">微信、電話裡還沒寫進故事的記錄，不等下次大總結、現在就合進來</div>
                         <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()"><i class="fa-solid fa-pen"></i> 編輯大總結生成模板</button>
                         <div class="ost-hint">查看 / 編輯 / 清空各段劇情 → 大廳「瀅瀅的故事日誌」</div>
                     </div>

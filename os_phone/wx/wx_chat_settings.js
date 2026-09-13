@@ -100,7 +100,7 @@
                         </div>
                         <div class="ws-memory-body" id="ws-sum-body"></div>
                         <div class="ws-memory-footer">
-                            <button class="ws-memory-btn ws-memory-btn-cancel" id="ws-sum-clear">清除</button>
+                            <button class="ws-memory-btn ws-memory-btn-cancel" id="ws-sum-merge" disabled>合併</button>
                             <button class="ws-memory-btn ws-memory-btn-cancel" id="ws-sum-run">現在整理</button>
                             <button class="ws-memory-btn ws-memory-btn-save" id="ws-sum-save">保存</button>
                         </div>
@@ -704,9 +704,9 @@
                     if (!stateEl) return;
                     if (!S) { stateEl.textContent = '尚未載入'; return; }
                     const p = S.plan(chat);
-                    const has = chat.wxSummary && chat.wxSummary.text;
-                    if (has) {
-                        stateEl.textContent = '已整理 ' + (chat.wxSummary.coveredCount || 0) + '／' + p.total + ' 則';
+                    const nodeCount = S.nodesOf ? S.nodesOf(chat).length : 0;
+                    if (nodeCount) {
+                        stateEl.textContent = '已整理 ' + p.covered + '／' + p.total + ' 則 · ' + nodeCount + ' 節';
                         stateEl.style.color = '#07c160';
                     } else if (p.total > p.keep) {
                         stateEl.textContent = '還沒整理';
@@ -720,19 +720,58 @@
 
                 const sumBtn = doc.getElementById('btn-chat-summary');
                 if (!sumBtn) return;
+                // 一節一節列出來：每節可以改字、刪掉，勾兩節以上可以合併（wx_summary.js V2）
                 sumBtn.onclick = () => {
                     const ov = doc.getElementById('ws-sum-overlay');
                     const body = doc.getElementById('ws-sum-body');
                     if (!ov || !body) return;
-                    if (!S) { if (AUI.toastr) AUI.toastr.info('記憶模塊還沒載入完，等一下再試'); return; }
-                    const p = S.plan(chat);
-                    const cur = (chat.wxSummary && chat.wxSummary.text) ? chat.wxSummary.text : '';
-                    body.innerHTML = `
-                        <div style="font-size:12px; color:#999; line-height:1.6; margin-bottom:10px;">
-                            這個聊天室一共 ${p.total} 則訊息。送給 AI 的時候會帶最近 ${p.keep} 則原文，更早以前的就靠下面這段。大總結的時候會自動整理一次。
-                        </div>
-                        <textarea id="ws-sum-text" style="width:100%; min-height:220px; box-sizing:border-box; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px; line-height:1.7; resize:vertical; background:#fff; color:#000;" placeholder="還沒有整理過。按下面的「現在整理」，讓它讀完早前的訊息寫成一段。">${cur.replace(/</g, '&lt;')}</textarea>
-                    `;
+                    if (!S || !S.nodesOf) { if (AUI.toastr) AUI.toastr.info('記憶模塊還沒載入完，等一下再試'); return; }
+                    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    const say = (kind, t) => { try { if (AUI.toastr && AUI.toastr[kind]) AUI.toastr[kind](t, '早前記錄'); } catch (e) {} };
+                    const mergeBtn = doc.getElementById('ws-sum-merge');
+                    const badgeOf = (n) => {
+                        if (chat.noHistory === true) return ['is-off', '不算進故事'];
+                        if (n.storyOnly) return ['is-off', '正文裡已經有'];
+                        if (n.merged) return ['is-done', '已寫進故事'];
+                        return ['is-wait', '還沒寫進故事'];
+                    };
+                    const syncMerge = () => {
+                        const n = body.querySelectorAll('.ws-sum-pick:checked').length;
+                        if (mergeBtn) { mergeBtn.disabled = n < 2; mergeBtn.textContent = n >= 2 ? `合併 (${n})` : '合併'; }
+                    };
+                    // 改過的字先存回去（合併、整理、刪節之前都要，不然畫面重畫就丟了）
+                    const saveEdits = async () => {
+                        const tas = body.querySelectorAll('.ws-sum-node-text');
+                        for (const ta of tas) { await S.updateNode(chatId, ta.dataset.id, ta.value); }
+                    };
+                    const render = () => {
+                        const p = S.plan(chat);
+                        const nodes = S.nodesOf(chat);
+                        body.innerHTML = `<div class="ws-sum-intro">一共 ${p.total} 則訊息。送給 AI 時帶最近 ${p.keep} 則原文，更早的靠下面這幾節。每累積 ${S.minFold()} 則會自動整理一節；太長時最舊、已經寫進故事的幾節會自動併起來。</div>`
+                            + (nodes.length ? nodes.map((n, i) => {
+                                const b = badgeOf(n);
+                                return `<div class="ws-sum-node" data-id="${esc(n.id)}">
+                                    <div class="ws-sum-node-head">
+                                        <input type="checkbox" class="ws-sum-pick" data-id="${esc(n.id)}">
+                                        <span class="ws-sum-node-when">第 ${i + 1} 節${n.storyDate ? ' · ' + esc(n.storyDate) : ''}</span>
+                                        <span class="ws-sum-badge ${b[0]}">${b[1]}</span>
+                                        <button type="button" class="ws-sum-del" data-id="${esc(n.id)}" title="刪掉這一節"><i class="fa-regular fa-trash-can"></i></button>
+                                    </div>
+                                    <textarea class="ws-sum-node-text" data-id="${esc(n.id)}">${esc(n.text)}</textarea>
+                                </div>`;
+                            }).join('') : `<div class="ws-sum-empty">還沒有整理過。按下面的「現在整理」，讓它把早前的訊息寫成一節。</div>`);
+                        body.querySelectorAll('.ws-sum-pick').forEach(c => { c.onchange = syncMerge; });
+                        body.querySelectorAll('.ws-sum-del').forEach(btn => {
+                            btn.onclick = async () => {
+                                if (!await AUI.confirm('刪掉這一節？刪了就找不回來，這段對話也不會再重新整理。')) return;
+                                await saveEdits();
+                                await S.deleteNode(chatId, btn.dataset.id);
+                                render(); refreshState();
+                            };
+                        });
+                        syncMerge();
+                    };
+                    render();
                     ov.classList.add('show');
 
                     doc.getElementById('ws-sum-run').onclick = async () => {
@@ -740,30 +779,33 @@
                         const t0 = b.textContent;
                         b.disabled = true; b.textContent = '整理中…';
                         try {
+                            await saveEdits();
                             const r = await S.summarizeChat(chatId, { force: true });
-                            const ta = doc.getElementById('ws-sum-text');
-                            if (ta) ta.value = (chat.wxSummary && chat.wxSummary.text) || ta.value;
-                            refreshState();
-                            if (AUI.toastr) {
-                                if (r && r.ok) AUI.toastr.success('整理好了', '早前記錄');
-                                else AUI.toastr.info((r && r.reason) || '這次沒有整理', '早前記錄');
-                            }
+                            render(); refreshState();
+                            if (r && r.ok) say('success', '寫了 ' + r.made + ' 節');
+                            else say('info', (r && r.reason) || '這次沒有整理');
                         } catch (e) {
-                            if (AUI.toastr) AUI.toastr.error((e && e.message) || '整理失敗', '早前記錄');
+                            say('error', (e && e.message) || '整理失敗');
                         } finally { b.disabled = false; b.textContent = t0; }
                     };
 
-                    doc.getElementById('ws-sum-clear').onclick = async () => {
-                        await S.clearSummary(chatId);
-                        const ta = doc.getElementById('ws-sum-text');
-                        if (ta) ta.value = '';
-                        refreshState();
-                        if (AUI.toastr) AUI.toastr.success('清掉了', '早前記錄');
+                    if (mergeBtn) mergeBtn.onclick = async () => {
+                        const ids = Array.from(body.querySelectorAll('.ws-sum-pick:checked')).map(c => c.dataset.id);
+                        if (ids.length < 2) return;
+                        const t0 = mergeBtn.textContent;
+                        mergeBtn.disabled = true; mergeBtn.textContent = '合併中…';
+                        try {
+                            await saveEdits();
+                            const r = await S.mergeNodes(chatId, ids);
+                            if (r && r.ok) { render(); refreshState(); say('success', ids.length + ' 節併成一節了'); }
+                            else { say('info', (r && r.reason) || '這次沒有合併'); mergeBtn.textContent = t0; syncMerge(); }
+                        } catch (e) {
+                            say('error', (e && e.message) || '合併失敗'); mergeBtn.textContent = t0; syncMerge();
+                        }
                     };
 
                     doc.getElementById('ws-sum-save').onclick = async () => {
-                        const ta = doc.getElementById('ws-sum-text');
-                        await S.setSummaryText(chatId, ta ? ta.value : '');
+                        await saveEdits();
                         refreshState();
                         ov.classList.remove('show');
                     };
