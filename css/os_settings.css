@@ -83,6 +83,12 @@
         .set-input:focus, .set-textarea:focus, .set-select:focus { border-color: #1A1C28; background: #EEF0F6 !important; box-shadow: 0 0 0 2px rgba(26,28,40,0.10); }
         .set-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
         .set-textarea { resize: vertical; min-height: 80px; font-family: monospace; line-height: 1.5; }
+        /* 素材目錄：BGM／音效清單（vn_settings.js）——下拉挑清單＋還原，底下一格改檔名 */
+        .vncfg-list-head { display: flex; align-items: center; gap: 8px; }
+        .vncfg-list-head .set-select { flex: 1; min-width: 0; }
+        .vncfg-list-head .set-btn { flex-shrink: 0; white-space: nowrap; }
+        .set-textarea.vncfg-list { min-height: 240px; }
+        .set-textarea.vncfg-list.vncfg-list-off { display: none; }
 
         /* 滑桿 */
         .set-slider-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }

@@ -386,11 +386,11 @@
         try { return (win.VN_Config && win.VN_Config.data && win.VN_Config.data.sfx) || ''; } catch (e) {}
         return '';
     }
-    // 音效清單：直接讀「全域世界書」的「SFX音效清單」條目當唯一來源（VN 世界書掛全域、不掛當前聊天）。
-    // 清單依時代拆成多條（通用常駐／現代增補／奇幻中世紀增補）→ 必須把命中的條目「全部」收進來合併，
-    // 只取第一條會讓其餘條目的音效整組從下拉消失。停用的條目照收：停用只是不讓 AI 選用，
-    // 組件登場音效是本地播放、與 AI 無關，選單該給全部。單一來源＝朋友只維護世界書一處。
-    let _sfxListCache = null;
+    // 音效清單：VN 指令（os_vn_rules）裡的音效清單當唯一來源，含使用者在 設置→素材目錄 改過的內容。
+    // 清單依時代拆成多條（通用／現代／奇幻中世紀）→ 必須「全部」收進來合併，
+    // 只取第一條會讓其餘條目的音效整組從下拉消失。停用的照收：停用只是不讓 AI 選用，
+    // 組件登場音效是本地播放、與 AI 無關，選單該給全部。
+    // 以前讀酒館全域世界書（PWA 讀不到），VN 指令搬進程式後改讀這份；不快取，改完清單下次打開就跟上。
     function _parseSfxListContent(text, into) {
         const groups = into || []; let cur = null;
         String(text || '').split(/\r?\n/).forEach(raw => {
@@ -408,24 +408,11 @@
         return groups;
     }
     async function _loadSfxList() {
-        if (_sfxListCache) return _sfxListCache;
-        const TH = (window.parent || window).TavernHelper || window.TavernHelper;
-        if (!TH || !TH.getLorebookEntries) return null;
-        let books = [];
-        try { if (TH.getGlobalWorldbookNames) books = TH.getGlobalWorldbookNames() || []; } catch (e) {}
-        if (!books.length) { try { const s = TH.getLorebookSettings && TH.getLorebookSettings(); books = (s && s.selected_global_lorebooks) || []; } catch (e) {} }
-        if (!books.length) { try { books = (TH.getLorebooks && TH.getLorebooks()) || []; } catch (e) {} }   // 保底：掃全部（仍靠條目名比對，找得到全域那本）
+        const VR = win.OS_VN_RULES || window.OS_VN_RULES;
+        const lists = (VR && VR.getLists) ? VR.getLists('sfx') : [];
         const groups = [];
-        for (const b of books) {
-            let entries = [];
-            try { entries = (await TH.getLorebookEntries(b)) || []; } catch (e) { continue; }
-            entries.filter(e => /SFX音效清單|SFX清单|音效_ID/.test(String(e.comment || ''))
-                             || String(e.content || '').indexOf('<音效_ID') >= 0)   // NSFW 條目是 <SFX_ID_SEXVER>，不會被掃進來
-                   .forEach(e => _parseSfxListContent(e.content, groups));
-        }
-        if (!groups.length) return null;
-        _sfxListCache = { groups };
-        return _sfxListCache;
+        lists.forEach(l => _parseSfxListContent(l.content, groups));
+        return groups.length ? { groups } : null;
     }
     async function _populateAppearSfxSelect(sel, current) {
         const m = await _loadSfxList();

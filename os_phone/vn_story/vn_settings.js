@@ -69,6 +69,12 @@
 
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
+            // BGM／音效清單 → VN 指令（跟出廠一樣的不另存）
+            try {
+                const VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
+                if (VR && VR.setList) container.querySelectorAll('textarea.vncfg-list').forEach(t => VR.setList(t.dataset.vrId, t.value));
+            } catch (e) { console.warn('[VN設置] BGM／音效清單存檔失敗:', e); }
+
             // 摘要標記存回 VN_READER 讀的那兩個 key（全系統抓摘要都走它）——留空＝恢復預設 <summary>
             try {
                 const so = (container.querySelector('#vncfg-sum-open')?.value || '').trim();
@@ -116,16 +122,34 @@
             <div id="vncfg-sum-preview" class="set-desc" style="min-height:34px; padding:8px 10px; border:1px dashed rgba(26,28,40,0.22); border-radius:6px; white-space:pre-wrap; word-break:break-word;">按上面的欄位就會試抓</div>
         </div>`;
 
+            // BGM／音效清單：素材是自己的，資料夾裡有哪些檔名就寫哪些（AI 只從清單挑）。內容存在 VN 指令（os_vn_rules）。
+            //   全部清單都放進畫面、只藏起來：下拉切來切去，改到一半的不會丟；按「保存所有設定」才寫進去。
+            const _VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
+            const listBlock = (group, title) => {
+                const lists = (_VR && _VR.getLists) ? _VR.getLists(group) : [];
+                if (!lists.length) return '';
+                return `
+        <div class="set-label">${title}</div>
+        <div class="vncfg-list-head">
+            <select class="set-select vncfg-list-pick" onchange="window.VN_SETTINGS_PANEL.pickList(this)">${lists.map(l => `<option value="${l.id}">${_sumEsc(l.label)}</option>`).join('')}</select>
+            <button type="button" class="set-btn" onclick="window.VN_SETTINGS_PANEL.resetList(this)">還原預設</button>
+        </div>
+        ${lists.map((l, i) => `<textarea class="set-textarea vncfg-list${i ? ' vncfg-list-off' : ''}" data-vr-id="${l.id}" spellcheck="false">${_sumEsc(l.content)}</textarea>`).join('')}
+        <div class="set-desc">一行一個檔名，不用加 .mp3，要跟上面資料夾裡的檔案對得上。</div>`;
+            };
+
             const assetHTML = /* html */`
 <div style="padding-bottom:4px;">
     <div class="set-group">
         <div class="set-label"><i class="fa-solid fa-music"></i> 遊戲 BGM 目錄</div>
         <input class="set-input" id="vncfg-bgm" placeholder="./bgm/" value="${d.bgm}">
+        ${listBlock('bgm', 'BGM 清單')}
     </div>
 
     <div class="set-group">
         <div class="set-label"><i class="fa-solid fa-volume-high"></i> 音效目錄</div>
         <input class="set-input" id="vncfg-sfx" placeholder="./sfx/" value="${d.sfx}">
+        ${listBlock('sfx', '音效清單')}
     </div>
 
     <div class="set-group">
@@ -164,6 +188,25 @@
             else if (r.state === 'empty')    box.textContent = '撈到了，但裡面是空的';
             else if (r.state === 'nosample') box.textContent = '目前沒有章節可以試抓';
             else                             box.textContent = '最新一章撈不到 —— 標記填的跟正文對不上';
+        },
+
+        // BGM／音效清單：下拉切換看哪一份（清單都在畫面上，只是藏起來）
+        pickList(sel) {
+            try {
+                const box = sel.closest('.set-group');
+                box.querySelectorAll('textarea.vncfg-list').forEach(t => t.classList.toggle('vncfg-list-off', t.dataset.vrId !== sel.value));
+            } catch (e) { console.warn('[VN設置] 切換清單失敗:', e); }
+        },
+        // 還原成程式內建的那份（按「保存所有設定」才算數）
+        resetList(btn) {
+            try {
+                const box = btn.closest('.set-group');
+                const sel = box.querySelector('.vncfg-list-pick');
+                const VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
+                const l = (VR && VR.getLists) ? VR.getLists().find(x => x.id === sel.value) : null;
+                const ta = box.querySelector('textarea.vncfg-list[data-vr-id="' + sel.value + '"]');
+                if (l && ta) ta.value = l.defaultContent;
+            } catch (e) { console.warn('[VN設置] 還原清單失敗:', e); }
         }
     };
 

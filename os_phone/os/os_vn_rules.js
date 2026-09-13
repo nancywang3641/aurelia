@@ -6,7 +6,8 @@
 //   以前住三個地方各改各的：酒館全域世界書「-VN小說家-」、os_prompts 寫死給 PWA 的總綱、PWA 常駐書包。
 //   ・酒館：GENERATION_STARTED → injectPrompts（倒數第 N 則前）／setExtensionPrompt（最前面），生成完就撤
 //   ・PWA：os_api_engine 組 VN context 時把 getDepthParts() 併進世界書 @D 那批；「最前面」的走面板提示詞那格
-//   ・自由模式／世界題材／頭像產圖只撥開關，狀態記在這台裝置（os_vn_rules_on）；內容永遠是程式裡那份
+//   ・自由模式／世界題材／頭像產圖只撥開關，狀態記在這台裝置（os_vn_rules_on）
+//   ・BGM／音效那 8 條清單例外：素材是使用者自己的，可以在 設置→素材目錄 改（os_vn_rules_custom）；其餘內容永遠是程式裡那份
 //   ・角色、CP 關係、內容偏好不放這裡：那些是世界設定或個人偏好，留在世界書
 //   ・第一次載入：把世界書裡跟內建條目「同名」的關掉（只做一次、只撥開關），不然會送兩份
 // ----------------------------------------------------------------
@@ -15,6 +16,21 @@
     const win = window.parent || window;
 
     const STATE_KEY = 'os_vn_rules_on';             // { id: true/false }：被撥過的才記，沒記的用出廠值
+    const CUSTOM_KEY = 'os_vn_rules_custom';        // { id: 內容 }：只收 EDITABLE 那幾條，跟出廠一樣就不存
+
+    // 使用者可以自己改的清單：音樂與音效是他們自己的素材（資料夾在 設置→素材目錄 填），
+    //   清單要跟資料夾裡的檔名對得上，所以給他們改。其餘條目（總綱、規範、模組）一律鎖在程式裡。
+    const EDITABLE = [
+        { id: 'bgm_modern',  group: 'bgm', label: '現代一般' },
+        { id: 'bgm_mystery', group: 'bgm', label: '偵探' },
+        { id: 'bgm_fantasy', group: 'bgm', label: '奇幻' },
+        { id: 'bgm_wuxia',   group: 'bgm', label: '武俠仙俠' },
+        { id: 'bgm_horror',  group: 'bgm', label: '恐怖' },
+        { id: 'sfx_common',  group: 'sfx', label: '通用' },
+        { id: 'sfx_modern',  group: 'sfx', label: '現代' },
+        { id: 'sfx_fantasy', group: 'sfx', label: '奇幻中世紀' }
+    ];
+    const _isEditable = id => EDITABLE.some(x => x.id === id);
     const MIGRATE_KEY = 'os_vn_rules_book_off_v1';  // 世界書同名條目已經關過
     const INJECT_ID = 'aurelia_vn_rules';
     const ROLE_NAME = { 0: 'system', 1: 'user', 2: 'assistant' };
@@ -52,16 +68,56 @@
 
     function list() {
         const st = _loadState();
+        const cu = _loadCustom();
         return _data().map(d => ({
             id: d.id,
             name: d.name,
-            content: String(d.content || ''),
+            content: String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || ''),
             depth: _normDepth(d.depth),
             role: _normRole(d.role),
             enabled: Object.prototype.hasOwnProperty.call(st, d.id) ? st[d.id] !== false : d.on !== false
         }));
     }
     function hasAny() { return _data().length > 0; }
+
+    // ── 使用者改過的清單（BGM／音效）──
+    function _loadCustom() {
+        try {
+            const c = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '{}');
+            const out = {};
+            if (c && typeof c === 'object') Object.keys(c).forEach(k => { if (_isEditable(k) && typeof c[k] === 'string') out[k] = c[k]; });
+            return out;
+        } catch (e) { return {}; }
+    }
+    function _saveCustom(c) {
+        try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(c || {})); return true; }
+        catch (e) {
+            console.warn('[VN指令] 清單存不進去:', e);
+            _toast('error', '清單存不進去：瀏覽器的儲存空間滿了');
+            return false;
+        }
+    }
+    const _norm = s => String(s == null ? '' : s).replace(/\r\n/g, '\n').trim();
+    // group 省略＝全部：[{ id, group, label, content, defaultContent, custom }]
+    function getLists(group) {
+        const cu = _loadCustom();
+        return EDITABLE.filter(x => !group || x.group === group).map(x => {
+            const d = _data().find(y => y.id === x.id);
+            if (!d) return null;
+            const has = Object.prototype.hasOwnProperty.call(cu, x.id);
+            return { id: x.id, group: x.group, label: x.label, content: has ? cu[x.id] : String(d.content || ''), defaultContent: String(d.content || ''), custom: has };
+        }).filter(Boolean);
+    }
+    // 跟出廠一樣就刪掉那筆（之後出廠清單更新才跟得上）；清空也算一種改法（＝這組不給 AI 挑）
+    function setList(id, content) {
+        if (!_isEditable(id)) return false;
+        const d = _data().find(y => y.id === id);
+        if (!d) return false;
+        const cu = _loadCustom();
+        if (_norm(content) === _norm(d.content)) delete cu[id];
+        else cu[id] = String(content == null ? '' : content).replace(/\r\n/g, '\n');
+        return _saveCustom(cu);
+    }
     const _live = e => !!(e && e.enabled && e.content.trim());
 
     // 設了位置的：[{ depth, role, text }]，深度大的排前面（呼叫端由大到小插），形狀跟 OS_WORLDBOOK.getContextParts 的 depths 一樣
@@ -241,6 +297,7 @@
         list: list, hasAny: hasAny,
         getDepthParts: getDepthParts, getPreText: getPreText, getText: getText,
         apply: apply, setEnabledByName: setEnabledByName,
+        getLists: getLists, setList: setList,
         inject: inject,
         get lastInjected() { return _lastInjected; }
     };
