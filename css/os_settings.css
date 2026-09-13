@@ -83,12 +83,26 @@
         .set-input:focus, .set-textarea:focus, .set-select:focus { border-color: #1A1C28; background: #EEF0F6 !important; box-shadow: 0 0 0 2px rgba(26,28,40,0.10); }
         .set-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
         .set-textarea { resize: vertical; min-height: 80px; font-family: monospace; line-height: 1.5; }
-        /* 素材目錄：BGM／音效清單（vn_settings.js）——下拉挑清單＋還原，底下一格改檔名 */
-        .vncfg-list-head { display: flex; align-items: center; gap: 8px; }
-        .vncfg-list-head .set-select { flex: 1; min-width: 0; }
-        .vncfg-list-head .set-btn { flex-shrink: 0; white-space: nowrap; }
-        .set-textarea.vncfg-list { min-height: 240px; }
-        .set-textarea.vncfg-list.vncfg-list-off { display: none; }
+        /* 素材目錄：BGM／音效清單（vn_settings.js）——素材頁只放一條入口，點進去是蓋在設置上面的整頁編輯 */
+        .vncfg-lp-open { font: inherit; display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 6px; border: 1px solid rgba(26,28,40,0.20); background: #EEF0F6; color: #1A1C28; cursor: pointer; text-align: left; }
+        .vncfg-lp-open:hover { border-color: #1A1C28; }
+        .vncfg-lp-open-t { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; }
+        .vncfg-lp-open-n { font-size: 11px; color: #3A3F5C; white-space: nowrap; }
+        .vncfg-lp-open > i:last-child { font-size: 12px; color: rgba(26,28,40,0.5); }
+        .vncfg-lp-host { position: relative; }
+        .vncfg-lp { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; background: #EEF0F6; color: #1A1C28; font-family: 'Noto Sans TC', sans-serif; color-scheme: light; }
+        .vncfg-lp-save { font: inherit; font-size: 13px; font-weight: 800; padding: 6px 12px; border-radius: 4px; border: none; background: #1A1C28; color: #EEF0F6; cursor: pointer; white-space: nowrap; }
+        .vncfg-lp-tabs { display: flex; gap: 6px; padding: 10px 14px; overflow-x: auto; flex-shrink: 0; scrollbar-width: none; border-bottom: 1px solid rgba(26,28,40,0.10); }
+        .vncfg-lp-tabs::-webkit-scrollbar { display: none; }
+        .vncfg-lp-tab { font: inherit; position: relative; flex-shrink: 0; padding: 7px 14px; border-radius: 16px; border: 1px solid rgba(26,28,40,0.20); background: transparent; color: #3A3F5C; font-size: 13px; cursor: pointer; white-space: nowrap; }
+        .vncfg-lp-tab.is-on { background: #1A1C28; border-color: #1A1C28; color: #EEF0F6; font-weight: 700; }
+        .vncfg-lp-tab.is-changed::after { content: ''; position: absolute; top: 3px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: #c0623a; }
+        .vncfg-lp-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; flex-shrink: 0; }
+        .vncfg-lp-count { flex: 1; font-size: 12px; color: #3A3F5C; }
+        .vncfg-lp-bar .set-btn { padding: 6px 12px; font-size: 12px; }
+        .vncfg-lp-ta { flex: 1; min-height: 0; width: auto; margin: 0 14px; padding: 12px; box-sizing: border-box; resize: none; background: #fff !important; color: #1A1C28 !important; border: 1px solid rgba(26,28,40,0.20); border-radius: 6px; font-family: monospace; font-size: 14px; line-height: 1.7; outline: none; }
+        .vncfg-lp-ta:focus { border-color: #1A1C28; box-shadow: 0 0 0 2px rgba(26,28,40,0.10); }
+        .vncfg-lp-hint { flex-shrink: 0; padding: 8px 14px calc(12px + env(safe-area-inset-bottom, 0px)); font-size: 11px; color: #3A3F5C; }
 
         /* 滑桿 */
         .set-slider-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }

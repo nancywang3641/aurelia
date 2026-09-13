@@ -69,12 +69,6 @@
 
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
-            // BGM／音效清單 → VN 指令（跟出廠一樣的不另存）
-            try {
-                const VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
-                if (VR && VR.setList) container.querySelectorAll('textarea.vncfg-list').forEach(t => VR.setList(t.dataset.vrId, t.value));
-            } catch (e) { console.warn('[VN設置] BGM／音效清單存檔失敗:', e); }
-
             // 摘要標記存回 VN_READER 讀的那兩個 key（全系統抓摘要都走它）——留空＝恢復預設 <summary>
             try {
                 const so = (container.querySelector('#vncfg-sum-open')?.value || '').trim();
@@ -123,19 +117,14 @@
         </div>`;
 
             // BGM／音效清單：素材是自己的，資料夾裡有哪些檔名就寫哪些（AI 只從清單挑）。內容存在 VN 指令（os_vn_rules）。
-            //   全部清單都放進畫面、只藏起來：下拉切來切去，改到一半的不會丟；按「保存所有設定」才寫進去。
-            const _VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
-            const listBlock = (group, title) => {
-                const lists = (_VR && _VR.getLists) ? _VR.getLists(group) : [];
-                if (!lists.length) return '';
+            //   這裡只放一條入口；清單很長，塞在這一頁裡格子太小改不動 → 點進去是整頁編輯（openLists）。
+            const listRow = (group, title) => {
+                const VR = this._VR();
+                if (!VR || !VR.getLists || !VR.getLists(group).length) return '';
                 return `
-        <div class="set-label">${title}</div>
-        <div class="vncfg-list-head">
-            <select class="set-select vncfg-list-pick" onchange="window.VN_SETTINGS_PANEL.pickList(this)">${lists.map(l => `<option value="${l.id}">${_sumEsc(l.label)}</option>`).join('')}</select>
-            <button type="button" class="set-btn" onclick="window.VN_SETTINGS_PANEL.resetList(this)">還原預設</button>
-        </div>
-        ${lists.map((l, i) => `<textarea class="set-textarea vncfg-list${i ? ' vncfg-list-off' : ''}" data-vr-id="${l.id}" spellcheck="false">${_sumEsc(l.content)}</textarea>`).join('')}
-        <div class="set-desc">一行一個檔名，不用加 .mp3，要跟上面資料夾裡的檔案對得上。</div>`;
+        <button type="button" class="vncfg-lp-open" data-vr-group="${group}" onclick="window.VN_SETTINGS_PANEL.openLists(this, '${group}')">
+            <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">${title}</span><span class="vncfg-lp-open-n">${this._listNote(group)}</span><i class="fa-solid fa-chevron-right"></i>
+        </button>`;
             };
 
             const assetHTML = /* html */`
@@ -143,13 +132,13 @@
     <div class="set-group">
         <div class="set-label"><i class="fa-solid fa-music"></i> 遊戲 BGM 目錄</div>
         <input class="set-input" id="vncfg-bgm" placeholder="./bgm/" value="${d.bgm}">
-        ${listBlock('bgm', 'BGM 清單')}
+        ${listRow('bgm', 'BGM 清單')}
     </div>
 
     <div class="set-group">
         <div class="set-label"><i class="fa-solid fa-volume-high"></i> 音效目錄</div>
         <input class="set-input" id="vncfg-sfx" placeholder="./sfx/" value="${d.sfx}">
-        ${listBlock('sfx', '音效清單')}
+        ${listRow('sfx', '音效清單')}
     </div>
 
     <div class="set-group">
@@ -190,23 +179,107 @@
             else                             box.textContent = '最新一章撈不到 —— 標記填的跟正文對不上';
         },
 
-        // BGM／音效清單：下拉切換看哪一份（清單都在畫面上，只是藏起來）
-        pickList(sel) {
-            try {
-                const box = sel.closest('.set-group');
-                box.querySelectorAll('textarea.vncfg-list').forEach(t => t.classList.toggle('vncfg-list-off', t.dataset.vrId !== sel.value));
-            } catch (e) { console.warn('[VN設置] 切換清單失敗:', e); }
+        // ── BGM／音效清單 ─────────────────────────────────────────
+        _VR() { return window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES) || null; },
+        _listNote(group) {
+            const VR = this._VR();
+            if (!VR || !VR.getLists) return '';
+            const n = VR.getLists(group).filter(l => l.custom).length;
+            return n ? '改過 ' + n + ' 份' : '';
         },
-        // 還原成程式內建的那份（按「保存所有設定」才算數）
-        resetList(btn) {
+        // 一行算一個檔名：空行、# 分組名、<標籤>、### 標題不算
+        _countIds(text) {
+            return String(text || '').split(/\r?\n/).map(s => s.trim())
+                .filter(s => s && s[0] !== '#' && !/^<\/?[^>]*>$/.test(s)).length;
+        },
+        // 清單編輯頁：蓋在系統設置上面的一整頁（清單很長，要大格子），自己有保存鈕，不跟「保存所有設定」綁。
+        //   切換清單時改到一半的留著；有沒存的就按返回，先問一聲。
+        openLists(btn, group) {
             try {
-                const box = btn.closest('.set-group');
-                const sel = box.querySelector('.vncfg-list-pick');
-                const VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
-                const l = (VR && VR.getLists) ? VR.getLists().find(x => x.id === sel.value) : null;
-                const ta = box.querySelector('textarea.vncfg-list[data-vr-id="' + sel.value + '"]');
-                if (l && ta) ta.value = l.defaultContent;
-            } catch (e) { console.warn('[VN設置] 還原清單失敗:', e); }
+                const VR = this._VR();
+                if (!VR || !VR.getLists) return;
+                const lists = VR.getLists(group);
+                if (!lists.length) return;
+                const setc = btn.closest('.set-container');
+                const host = (setc && setc.parentElement) || btn.ownerDocument.body;
+                const doc = host.ownerDocument || document;
+                if (getComputedStyle(host).position === 'static') host.classList.add('vncfg-lp-host');
+                host.querySelectorAll(':scope > .vncfg-lp').forEach(p => p.remove());
+
+                const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                const norm = s => String(s == null ? '' : s).replace(/\r\n/g, '\n').trim();
+                const drafts = {};
+                lists.forEach(l => { drafts[l.id] = l.content; });
+                let cur = lists[0].id;
+
+                const page = doc.createElement('div');
+                page.className = 'vncfg-lp';
+                page.innerHTML = `
+                    <div class="set-header sysh">
+                        <div class="set-back-btn sysh-back vncfg-lp-back">‹</div>
+                        <div class="set-title sysh-title">${group === 'bgm' ? 'BGM 清單' : '音效清單'}</div>
+                        <div class="sysh-acts"><button type="button" class="vncfg-lp-save">保存</button></div>
+                    </div>
+                    <div class="vncfg-lp-tabs">${lists.map(l => `<button type="button" class="vncfg-lp-tab" data-id="${l.id}">${esc(l.label)}</button>`).join('')}</div>
+                    <div class="vncfg-lp-bar"><span class="vncfg-lp-count"></span><button type="button" class="set-btn vncfg-lp-reset">還原預設</button></div>
+                    <textarea class="vncfg-lp-ta" spellcheck="false"></textarea>
+                    <div class="vncfg-lp-hint">一行一個檔名，不用加 .mp3，要跟資料夾裡的檔案對得上。</div>`;
+                host.appendChild(page);
+
+                const ta = page.querySelector('.vncfg-lp-ta');
+                const byId = id => lists.find(l => l.id === id);
+                const paint = () => {
+                    page.querySelectorAll('.vncfg-lp-tab').forEach(t => {
+                        const l = byId(t.dataset.id);
+                        t.classList.toggle('is-on', t.dataset.id === cur);
+                        t.classList.toggle('is-changed', norm(drafts[l.id]) !== norm(l.defaultContent));
+                    });
+                    page.querySelector('.vncfg-lp-count').textContent = this._countIds(drafts[cur]) + ' 個檔名';
+                };
+                const refreshRow = () => {
+                    try { doc.querySelectorAll('.vncfg-lp-open[data-vr-group="' + group + '"] .vncfg-lp-open-n').forEach(n => { n.textContent = this._listNote(group); }); } catch (e) {}
+                };
+                ta.value = drafts[cur];
+                paint();
+
+                ta.addEventListener('input', () => { drafts[cur] = ta.value; paint(); });
+                page.querySelector('.vncfg-lp-tabs').addEventListener('click', ev => {
+                    const t = ev.target.closest('.vncfg-lp-tab');
+                    if (!t || t.dataset.id === cur) return;
+                    drafts[cur] = ta.value;
+                    cur = t.dataset.id;
+                    ta.value = drafts[cur];
+                    ta.scrollTop = 0;
+                    paint();
+                });
+                page.querySelector('.vncfg-lp-reset').onclick = () => {
+                    ta.value = byId(cur).defaultContent;
+                    drafts[cur] = ta.value;
+                    paint();
+                };
+                page.querySelector('.vncfg-lp-save').onclick = () => {
+                    drafts[cur] = ta.value;
+                    let ok = true;
+                    lists.forEach(l => {
+                        if (!VR.setList(l.id, drafts[l.id])) ok = false;
+                        else l.content = drafts[l.id];
+                    });
+                    const b = page.querySelector('.vncfg-lp-save');
+                    if (ok) { b.textContent = '已保存 ✓'; setTimeout(() => { b.textContent = '保存'; }, 1200); }
+                    refreshRow();
+                };
+                page.querySelector('.vncfg-lp-back').onclick = async () => {
+                    try {
+                        drafts[cur] = ta.value;
+                        if (lists.some(l => drafts[l.id] !== l.content)) {
+                            const A = window.AUI || (window.parent && window.parent.AUI);
+                            if (A && A.confirm && !(await A.confirm('還沒保存，確定要離開嗎？'))) return;
+                        }
+                        page.remove();
+                        refreshRow();
+                    } catch (e) { console.warn('[VN設置] 關閉清單頁失敗:', e); page.remove(); }
+                };
+            } catch (e) { console.warn('[VN設置] 打開清單頁失敗:', e); }
         }
     };
 
