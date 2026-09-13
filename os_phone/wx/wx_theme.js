@@ -264,6 +264,7 @@
             .wx-vmsg-dur { font-size: 13px; font-variant-numeric: tabular-nums; opacity: 0.8; }
             .wx-vmsg-trans { display: none; font-size: 13px; line-height: 1.5; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.1); word-break: break-word; }
             .wx-vmsg-trans.open { display: block; }
+            .wx-vmsg-tone { font-size: 11px; opacity: 0.6; margin-top: 3px; }
             .wx-file-card { background: #fff; padding: 12px 15px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; width: 210px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: pointer; }
             .wx-file-info { flex: 1; overflow: hidden; margin-right: 10px; display: flex; flex-direction: column; justify-content: center; }
             .wx-file-name { font-size: 14px; color: #333; line-height: 1.4; max-height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }

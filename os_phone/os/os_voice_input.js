@@ -40,7 +40,8 @@
 
     // SenseVoice 回來的標籤長這樣：<|HAPPY|>、<|Laughter|>
     const EMOTION_LABEL = { HAPPY: '開心', SAD: '難過', ANGRY: '生氣', FEARFUL: '害怕', DISGUSTED: '嫌棄', SURPRISED: '驚訝', NEUTRAL: '', EMO_UNKNOWN: '' };
-    const EVENT_LABEL = { Speech: '', BGM: '背景音樂', Applause: '掌聲', Laughter: '笑聲', Cry: '哭聲', Sneeze: '打噴嚏', Breath: '呼吸聲', Cough: '咳嗽' };
+    // 事件名寫成「聲音裡有○○」接得起來的名詞
+    const EVENT_LABEL = { Speech: '', BGM: '背景音樂', Applause: '掌聲', Laughter: '笑聲', Cry: '哭聲', Sneeze: '噴嚏聲', Breath: '呼吸聲', Cough: '咳嗽聲' };
     const bareTag = (s) => String(s || '').replace(/<\||\|>/g, '').trim();
 
     // ── 錄音 ─────────────────────────────────────────

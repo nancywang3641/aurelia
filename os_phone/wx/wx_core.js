@@ -358,9 +358,13 @@
         });
     }
 
-    // 文字歷史用（聊天歷史、回傳酒館）：圖庫編號換成它看過的那句；還沒看過就只說是一張照片
+    // 文字歷史用（聊天歷史、回傳酒館）：圖庫編號換成它看過的那句；還沒看過就只說是一張照片。
+    // 🎙 她錄的語音有聽出語氣（msg.voiceTone）的話，接在 [Voice: …] 後面——字一樣，笑著說跟嘆著氣說意思不同
     function photoContextText(msg, text) {
-        const s = String(text == null ? '' : text);
+        let s = String(text == null ? '' : text);
+        if (msg && msg.voiceTone && s.indexOf('（語音') < 0) {
+            s = s.replace(/\[Voice: [^\]]*\]/, (m) => m + '（語音' + msg.voiceTone + '）');
+        }
         if (!PHOTO_ID_RE.test(s)) return s;
         return s.replace(new RegExp(PHOTO_ID_RE.source, 'g'), (msg && msg.photoDesc) ? ('照片｜' + msg.photoDesc) : '照片');
     }
@@ -2357,7 +2361,16 @@
                 const same = !!(_voicePlaying && _voicePlaying.el === el);
                 this._stopVoicePlay();
                 if (same) return;
-                if (box && t) { box.textContent = t; box.classList.add('open'); }
+                if (box && t) {
+                    box.textContent = t;
+                    if (msg.voiceTone) {   // 讓她看得到對方收到的語氣是什麼，判錯了一眼就知道
+                        const tone = doc.createElement('div');
+                        tone.className = 'wx-vmsg-tone';
+                        tone.textContent = msg.voiceTone;
+                        box.appendChild(tone);
+                    }
+                    box.classList.add('open');
+                }
                 try {
                     const url = await win.OS_DB.getImage(msg.voiceAudio);
                     if (!url) { AUI.toast('這段錄音找不到了'); return; }
@@ -2561,9 +2574,13 @@
                 const id = 'aud_wx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
                 await win.OS_DB.saveImage(id, rec.blob);
                 const sec = Math.round((out.durationSec || rec.durationSec) * 10) / 10;
+                // 聽出來的語氣：平靜、只有說話聲的時候不寫，免得每句都多一段
+                const tone = [out.emotionLabel ? '聽起來' + out.emotionLabel : '', out.eventLabel ? '聲音裡有' + out.eventLabel : ''].filter(Boolean).join('，');
+                const extra = { voiceAudio: id, voiceSec: sec, voiceEmotion: out.emotion || '', voiceEvent: out.event || '' };
+                if (tone) extra.voiceTone = tone;
                 this._vsState('idle');
                 this.closeVoiceSheet();
-                await this.sendMsg(null, '[Voice: ' + text + ']', { voiceAudio: id, voiceSec: sec });
+                await this.sendMsg(null, '[Voice: ' + text + ']', extra);
             } catch (e) {
                 console.warn('[WX] 語音送出失敗:', e);
                 AUI.toast('沒送出去，' + this._vsWhy(e));
