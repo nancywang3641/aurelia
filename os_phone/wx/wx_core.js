@@ -129,12 +129,35 @@
         try { localStorage.setItem('wx_transfer_' + txnId, JSON.stringify(data)); } catch (e) {}
     }
 
+    // 🧧 紅包領完了沒：錢領光、或份數領光，其中一個就算完（資料還沒建好的不算完）
+    function _rpDone(d) {
+        if (!d || d.totalAmount == null) return false;
+        const list = Array.isArray(d.list) ? d.list : [];
+        const got = list.reduce(function (n, x) { return n + (Number(x && x.amount) || 0); }, 0);
+        const left = Number(d.totalAmount) - got;
+        const slots = Number(d.totalCount || 1) - list.length;
+        return !(left > 0.001 && slots > 0);
+    }
+    // 寫回紅包資料的地方都叫這支：領完就把那張卡標 finished，待處理清單才不會一直列著它
+    function _rpMarkIfDone(C, cid, card, data) {
+        if (!C || !cid || !card || card.status !== 'pending' || !_rpDone(data)) return;
+        try { C.update(cid, card.key, { status: 'finished' }); } catch (e) {}
+    }
+
     // 🧾 送給模型的「現在還沒處理完的」清單。序號是程式發的（wx_cards.js），保證不重複，
     //    而且同時通常只有一兩張，模型很難指錯——它因此不用自己編單號，也不用把單號印在畫面上
     //    跟自己對帳。沒有待處理的就回空字串，一個字都不加。
     function _pendingBrief(chatId) {
         const C = _cards();
-        const pend = (C && chatId) ? C.pending(chatId) : [];
+        let pend = (C && chatId) ? C.pending(chatId) : [];
+        // 🚨 紅包以前從來沒有人把狀態改掉（禮物、轉帳收下退回都會改，紅包只改領取名單），
+        //    領完了還是 pending → 每一輪都列一行「還剩 ¥0.00」，模型說系統一直重複提醒它紅包歸零。
+        //    現在領完那一刻就標 finished（見 _rpMarkIfDone）；已經卡在 pending 的舊資料在這裡順手改掉。
+        pend = pend.filter(c => {
+            if (c.kind !== 'redpacket' || !_rpDone(c.data)) return true;
+            try { C.update(chatId, c.key, { status: 'finished' }); } catch (e) {}
+            return false;
+        });
         if (!pend.length) return '';
         const NAME = { redpacket: '紅包', gift: '禮物', transfer: '轉帳' };
         const money = (v) => '¥' + (Number(v) || 0).toFixed(2);
@@ -337,13 +360,7 @@
             const card = C.findByAlias(cid, kind, alias);
             if (!card) return;
             if (kind === 'redpacket') {
-                const d = card.data || {};
-                if (d.totalAmount == null) { open = true; return; }   // 資料還沒建好，先留著
-                const list = d.list || [];
-                const got = list.reduce(function (n, x) { return n + (Number(x && x.amount) || 0); }, 0);
-                const left = Number(d.totalAmount) - got;
-                const slots = Number(d.totalCount || 1) - list.length;
-                if (left > 0.001 && slots > 0) open = true;
+                if (!_rpDone(card.data)) open = true;   // 資料還沒建好也算還開著，先留著
             } else if (!card.status || card.status === 'pending') {
                 open = true;
             }
@@ -395,6 +412,7 @@
         if (C && cid) {
             const card = _rpCard(packetId, chatId) || C.adopt(cid, 'redpacket', packetId, data, null);
             C.update(cid, card.key, { data: data });
+            _rpMarkIfDone(C, cid, card, data);
             return;
         }
         try { localStorage.setItem(`wx_redpacket_${packetId}`, JSON.stringify(data)); } catch(e) { console.error('[RedPacket] 保存失敗:', e); }
@@ -412,6 +430,7 @@
                     const old = JSON.parse(raw);
                     const c = C.adopt(cid, 'redpacket', packetId, old, null);
                     C.update(cid, c.key, { data: old });
+                    _rpMarkIfDone(C, cid, c, old);
                     return old;
                 }
             } catch(e) {}
@@ -529,7 +548,7 @@
             time: new Date().toLocaleString('zh-TW')
         });
         // 寫回「那張卡」而不是 packetId——模型用序號指的時候，packetId 根本不是這張卡的單號
-        if (_C && _cid && _card) _C.update(_cid, _card.key, { data: data });
+        if (_C && _cid && _card) { _C.update(_cid, _card.key, { data: data }); _rpMarkIfDone(_C, _cid, _card, data); }
 
         // 🔥 連動經濟系統（只有當前用戶領取時才增加餘額）
         // 領取者寫暱稱或寫人設名都算是我
