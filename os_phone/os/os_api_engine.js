@@ -74,11 +74,12 @@
     }
     // 🧳 隔離開關（微信 → 那間 → 聊天設置）：從別的故事借過來的人，不該讀到「你這本」的
     //    世界書與劇情。她的話：「要不要吃當前世界書和當前歷史上下文」。
-    //    🚨 只認手機聊天那條路：大廳與工具型呼叫的 GLOBAL_ACTIVE_ID 可能還停在上一間聊天室，
-    //       照著它隔離會誤傷。他們自己那間的對話記錄不受影響，永遠照給。
+    //    🚨 只認手機聊天與通話那兩條路：大廳與工具型呼叫的 GLOBAL_ACTIVE_ID 可能還停在上一間聊天室，
+    //       照著它隔離會誤傷。通話會把 GLOBAL_ACTIVE_ID 指到正在講電話的那個人，所以可以一起認。
+    //       他們自己那間的對話記錄不受影響，永遠照給。
     function _wxIsolate(promptKey) {
         const off = { lore: false, story: false };
-        if (promptKey !== 'wx_chat_system') return off;
+        if (promptKey !== 'wx_chat_system' && promptKey !== 'call_voice_system') return off;
         try {
             const app = win.wxApp;
             const id = app && app.GLOBAL_ACTIVE_ID;
@@ -1655,18 +1656,30 @@
                 if (!NO_COT_ROUTES.includes(promptKey)) cotPrompt = win.OS_PROMPTS.get('universal_cot') || '';
             }
 
+            // 📞 通話跟那間微信是同一個人：人設設置、聊天記錄都要一起給。
+            //   以前這裡只認 wx_chat_system，PWA 上打電話過去，接起來的是一個不知道自己是誰、
+            //   也不記得剛剛聊過什麼的人（她在人設寫「你是幫我確認微信的系統助手」，電話裡它說她在胡言亂語）。
+            //   酒館那條路本來就兩個都認。
+            const _isWxRoute = (promptKey === 'wx_chat_system' || promptKey === 'call_voice_system');
+            const _isCall = (promptKey === 'call_voice_system');
             let charPersona = '';
-            if (promptKey === 'wx_chat_system' && win.wxApp?.GLOBAL_ACTIVE_ID) {
+            if (_isWxRoute && win.wxApp?.GLOBAL_ACTIVE_ID) {
                 try {
                     const chatObj = win.wxApp.GLOBAL_CHATS?.[win.wxApp.GLOBAL_ACTIVE_ID];
                     if (chatObj?.personaCustom) charPersona = chatObj.personaCustom;
                     if (!charPersona && chatObj?.persona) charPersona = chatObj.persona;
+                    // 從電話 app 直接打、微信還沒開過：記憶體裡沒有這間，改讀存檔
+                    if (!charPersona && win.WX_DB?.getApiChat) {
+                        const saved = await win.WX_DB.getApiChat(win.wxApp.GLOBAL_ACTIVE_ID);
+                        if (saved?.personaCustom) charPersona = saved.personaCustom;
+                        if (!charPersona && saved?.persona) charPersona = saved.persona;
+                    }
                 } catch(e) {}
             }
 
             let scanText = userMessage || '';
 
-            if (promptKey === 'wx_chat_system' && win.wxApp?.GLOBAL_ACTIVE_ID && win.WX_DB?.getApiChat) {
+            if (_isWxRoute && win.wxApp?.GLOBAL_ACTIVE_ID && win.WX_DB?.getApiChat) {
                 try {
                     const chat = await win.WX_DB.getApiChat(win.wxApp.GLOBAL_ACTIVE_ID);
                     if (chat?.messages?.length) {
@@ -2018,7 +2031,7 @@
 
             if (avsPrompt && !_NO_CARD_STD) apiMessages.push({ role: 'system', content: avsPrompt });
 
-            if (promptKey === 'wx_chat_system' && win.WX_DB?.getApiChat && win.wxApp?.GLOBAL_ACTIVE_ID) {
+            if (_isWxRoute && win.WX_DB?.getApiChat && win.wxApp?.GLOBAL_ACTIVE_ID) {
                 try {
                     // 保留最近幾則全文、更舊的縮成摘要（判讀跟酒館那條路共用 OS_APP_CTX_MSGS）。
                     //   以前這裡是全開/全關的「僅讀取摘要」，關著就整包全吃、完全沒有上限。
@@ -2038,10 +2051,19 @@
                         const _histMsgs = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
                             ? win.WX_SUMMARY.recentWindow(apiChat) : apiChat.messages;
                         const _cut = _keepN === null ? -1 : _histMsgs.length - _keepN;
+                        let _pushedHist = 0;
                         _histMsgs.forEach((msg, _i) => {
                             const useSummary = _i < _cut;
-                            if (msg && (msg.sentWhileBlocked || msg._blockedNotice)) return;   // 對方沒收到的那幾則（同酒館版）
-                            let content = msg.raw || msg.content || '';
+                            if (!msg) return;
+                            if (msg.sentWhileBlocked || msg._blockedNotice) return;   // 對方沒收到的那幾則（同酒館版）
+                            // 📞 通話：開始／結束／未接聽這些分隔不是誰講的話，當成旁註給（同酒館版），不然模型會讀到自己說「通話開始」
+                            if (_isCall && msg.type === 'system') {
+                                const _t = String(msg.content || '').trim();
+                                if (_t) { apiMessages.push({ role: 'system', content: '（' + _t + '）' }); _pushedHist++; }
+                                return;
+                            }
+                            // 📞 通話餵乾淨口語（content），不帶 [Chat:|With:][名] 標頭的 raw，免得它在電話裡學聊天格式（同酒館版）
+                            let content = _isCall ? (msg.content || '') : (msg.raw || msg.content || '');
                             if (!content) return;
                             // 📷 相簿照片的圖庫編號 → 它看過寫下的那句（跟酒館版 buildContext 同一支）
                             try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) content = _pt(msg, content); } catch (e) {}
@@ -2057,11 +2079,15 @@
                                 content = (win.VN_READER?.sumStrip ? win.VN_READER.sumStrip(content) : content.replace(/<summary>[\s\S]*?<\/summary>/gi, '')).trim();
                             }
 
-                            if (content) apiMessages.push({
-                                role: msg.isMe ? 'user' : 'assistant',
-                                content
-                            });
+                            if (content) {
+                                apiMessages.push({ role: msg.isMe ? 'user' : 'assistant', content });
+                                _pushedHist++;
+                            }
                         });
+                        // 📞 收尾：講清楚上面全是過去的事，這一通是新接起來的（同酒館版那句）
+                        if (_isCall && _pushedHist) {
+                            apiMessages.push({ role: 'system', content: '（以上都是以前發生過的對話與通話，不是現在。現在是新接起來的一通電話：先想清楚距離上次過了多久、這段時間裡發生過什麼，不要假設上次沒講完的話還在繼續，也不要假設上次借走、約好、拿走的東西還維持當時的狀態。）' });
+                        }
                     }
                 } catch(e) { console.warn('[OS_API standalone] 聊天歷史載入失敗:', e); }
             }
