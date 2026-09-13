@@ -385,7 +385,7 @@
     //   跟挑任務那層殼無關。AI 叫用改走 OS_API_ENGINE，店長台詞走 VoidTerminal.playSequence。
     async function _askAI(msg) {
         try {
-            if (window.OS_API_ENGINE && typeof window.OS_API_ENGINE.generateText === 'function') return await window.OS_API_ENGINE.generateText('general_assistant', msg);
+            if (window.OS_API_ENGINE && typeof window.OS_API_ENGINE.generateText === 'function') return await window.OS_API_ENGINE.generateText('general_assistant', msg, { task: 'world_gen' });
             console.warn('[書架] 尚未掛載獨立 API 引擎 (OS_API_ENGINE)。'); return null;
         } catch (e) { console.error('[書架] API 崩潰:', e); return null; }
     }

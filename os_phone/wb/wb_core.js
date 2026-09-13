@@ -720,9 +720,9 @@
                 }, (err) => {
                     console.error(err);
                     AUI.alert("生成失敗: " + err.message);
-                    this.isLoading = false; 
+                    this.isLoading = false;
                     this.render();
-                });
+                }, { task: 'weibo' });
             } catch (e) { console.error(e); this.isLoading = false; this.render(); }
         },
 
@@ -749,9 +749,9 @@
                 }, (err) => {
                     console.error(err);
                     AUI.alert("生成失敗: " + err.message);
-                    this.isLoading = false; 
+                    this.isLoading = false;
                     this.render();
-                });
+                }, { task: 'weibo' });
             } catch (e) { console.error(e); this.isLoading = false; this.render(); }
         },
 

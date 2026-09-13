@@ -37,7 +37,8 @@
                 return new Promise((resolve, reject) => {
                     window.OS_API.chat(messages, config, null,
                         (reply) => resolve(reply.replace(/^"|"$/g, '').trim()),
-                        reject
+                        reject,
+                        { task: 'lobby_chat' }
                     );
                 });
             },
@@ -92,7 +93,8 @@ LINE:[用角色風格說一句話，10-20字]`;
                 const raw = await new Promise((resolve, reject) => {
                     window.OS_API.chat(messages, config, null,
                         (reply) => resolve(reply.replace(/^"|"$/g, '').trim()),
-                        reject
+                        reject,
+                        { task: 'lobby_chat' }
                     );
                 });
 

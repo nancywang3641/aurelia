@@ -293,7 +293,7 @@ ${facilityText}
                 console.error('[Schedule] AI 呼叫失敗:', err);
                 if (progressCb) progressCb('error', 'AI 呼叫失敗');
                 resolve(false);
-            });
+            }, { task: 'world_gen' });
         });
     }
 

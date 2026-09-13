@@ -208,7 +208,7 @@
                         (chunk) => { generated = chunk; },
                         (final) => { generated = final; res(); },
                         (err)   => rej(err),
-                        { disableTyping: true }
+                        { task: 'summary', disableTyping: true }
                     );
                 });
 

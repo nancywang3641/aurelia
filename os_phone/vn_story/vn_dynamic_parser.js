@@ -211,7 +211,7 @@
                         return await new Promise(function(res, rej) {
                             OS.chat([{ role: 'system', content: String(systemPrompt || '') }], cfg, null,
                                 function(t) { res(typeof t === 'string' ? t : (t && t.message) || ''); }, rej,
-                                { disableTyping: true });
+                                { task: 'apps', disableTyping: true });
                         });
                     } catch (e) { console.error('[vn st.callAI]', e); return ''; }
                 },

@@ -143,7 +143,7 @@
                 '品質:' + (tier === 'S' ? '靈感之作(命名可以更大膽)' : '優良') + '\n' +
                 '語言:繁體中文。';
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '書咖上架命名', keepCodeFences: true });
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'cafe', label:'書咖上架命名', keepCodeFences: true });
             });
             const json = _extractJSON(raw);
             if (json && json.name) return { name: String(json.name).slice(0, 12), blurb: String(json.blurb || '').slice(0, 40) };
@@ -173,7 +173,7 @@
                 (words ? '玩家補充的關鍵詞:' + words + '\n' : '') +
                 '語言:繁體中文。';
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '書咖自由創想', keepCodeFences: true });
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'cafe', label:'書咖自由創想', keepCodeFences: true });
             });
             const json = _extractJSON(raw);
             if (!json || !/^[SABC]$/.test(String(json.tier))) return null;
@@ -216,7 +216,7 @@
                 '人設:' + String(r.persona).slice(0, 800) + '\n' +
                 '語言:繁體中文。';
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '書咖首訪定調', keepCodeFences: true });
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'cafe', label:'書咖首訪定調', keepCodeFences: true });
             });
             const json = _extractJSON(raw);
             if (!json) return fallback;
@@ -268,7 +268,7 @@
                 '今天他在店裡:' + l.line + (l.item ? '(品項:' + l.item + ')' : '') + '\n' +
                 '語言:繁體中文。';
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '書咖訪客留言', keepCodeFences: true });
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'cafe', label:'書咖訪客留言', keepCodeFences: true });
             });
             const json = _extractJSON(raw);
             return (json && json.line) ? String(json.line).slice(0, 60) : null;
@@ -296,7 +296,7 @@
                 '人設:' + String(r.persona).slice(0, 800) + '\n' +
                 '事件:' + situ + '\n語言:繁體中文。';
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '書咖事件:' + (EV_LABEL[ev.type] || ev.type), keepCodeFences: true });
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'cafe', label:'書咖事件:' + (EV_LABEL[ev.type] || ev.type), keepCodeFences: true });
             });
             const json = _extractJSON(raw);
             if (!json || !json.line) return null;

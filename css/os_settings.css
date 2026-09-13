@@ -317,12 +317,16 @@
 /* 🔌 分流表與通道清單（設置 → API 最下面） */
 .set-row-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(26,28,40,0.08); }
 .set-row-line:last-child { border-bottom: none; }
+/* 分流表分組（劇情／手機／大廳與世界）的小標 */
+.set-row-group { margin-top: 14px; padding-bottom: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #8a8fa3; }
+.set-row-group:first-child { margin-top: 2px; }
 /* 自訂接口的底詞包：下拉＋存成包＋刪，一排；下拉吃剩下的寬 */
 .capi-pack-row { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; }
 .capi-pack-row .set-select { flex: 1; min-width: 0; padding: 8px 10px; }
 .capi-pack-row .set-btn { flex-shrink: 0; white-space: nowrap; }
-.set-row-name { font-size: 13px; color: #1A1C28; white-space: nowrap; }
-.set-row-sel { max-width: 55%; }
+.set-row-name { flex: 1; min-width: 0; font-size: 13px; line-height: 1.4; color: #1A1C28; }
+/* 下拉一律同寬：名字長短不一，下拉跟著縮放的話整張表對不齊 */
+.set-row-sel { flex: 0 0 45%; max-width: 45%; }
 .set-channel { border: 1px solid rgba(26,28,40,0.12); border-radius: 6px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
 .set-channel-row { display: flex; gap: 6px; align-items: center; }
 .set-channel-row .set-input { flex: 1; }

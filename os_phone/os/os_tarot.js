@@ -207,7 +207,7 @@
                     win.OS_API.chat(messages, config, (chunk) => {
                         if (typeof chunk === 'string' && chunk.length >= out.length && out.length > 0 && chunk.startsWith(out)) out = chunk;
                         else out += String(chunk);
-                    }, (final) => { out = final || out; resolve(); }, reject);
+                    }, (final) => { out = final || out; resolve(); }, reject, { task: 'tarot' });
                 }),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 20000))
             ]);
@@ -663,7 +663,7 @@ ${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須
                     textEl.innerHTML = fullResponse.replace(/\n/g, '<br>');
                     log.scrollTop = log.scrollHeight;
                     resolve();
-                }, reject);
+                }, reject, { task: 'tarot' });
             });
             
             const hasCardDrawTrigger = fullResponse.includes('[drew a card]');

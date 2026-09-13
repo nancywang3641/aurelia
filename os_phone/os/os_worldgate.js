@@ -171,7 +171,7 @@
                 if (isNaN(_mt) || _mt < 8192) config.maxTokens = 8192;
             }
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, (typeof onChunk === 'function' ? onChunk : null), resolve, reject, { label, keepCodeFences: true, stream: stream === true });
+                api.chat([{ role: 'system', content: prompt }], config, (typeof onChunk === 'function' ? onChunk : null), resolve, reject, { task: 'worldgate', label, keepCodeFences: true, stream: stream === true });
             });
             return asText ? _stripFences(raw) : _extractJSON(raw);
         } catch (e) { console.warn('[Worldgate③] ' + label + ' 失敗', e); return null; }

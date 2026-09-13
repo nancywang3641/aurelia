@@ -343,7 +343,7 @@
                 if (done) return; done = true;
                 clearTimeout(timer);
                 reject(err);
-            });
+            }, { task: 'extract' });
         });
     }
 
@@ -1748,7 +1748,8 @@ _directorSpec(castNames);
                 win.OS_API.chatMain(messages,
                     null,
                     (full) => { if (done) return; done = true; clearTimeout(timer); resolve(String(full || '')); },
-                    (err) => { if (done) return; done = true; clearTimeout(timer); reject(err || new Error('導演稿失敗')); });
+                    (err) => { if (done) return; done = true; clearTimeout(timer); reject(err || new Error('導演稿失敗')); },
+                    { task: 'director' });
             });
             let clean = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').trim();
             // 驗收容繁簡：卡片是簡體時模型會跟著寫「剧情/记忆」——別把好稿當廢稿丟（Rae 踩過：兩份稿全被逐字比對錯殺）
@@ -2479,7 +2480,7 @@ _directorSpec(castNames);
         let text = '';
         try {
             text = await new Promise((resolve, reject) => {
-                try { win.OS_API.chatMain([{ role: 'system', content: sys }, { role: 'user', content: prompt }], null, resolve, reject); }
+                try { win.OS_API.chatMain([{ role: 'system', content: sys }, { role: 'user', content: prompt }], null, resolve, reject, { task: 'avs_design' }); }
                 catch (e) { reject(e); }
             });
         } catch (e) {

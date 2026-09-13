@@ -786,7 +786,7 @@
         const orig = btn ? btn.textContent : '';
         if (btn) { btn.textContent = '主模型生成中…'; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.6'; }
         try {
-            const callApi = (t, p) => win.OS_API_ENGINE.generateText(t, p);   // 主模型路由
+            const callApi = (t, p) => win.OS_API_ENGINE.generateText(t, p, { task: 'avs_design' });   // 主模型路由
             const n = await win.OS_AVS_RULES.generateRulesForWorld({
                 packId: pack.id,
                 worldId: '',

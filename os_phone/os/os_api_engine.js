@@ -656,12 +656,7 @@
                 mainConfig = Object.assign({}, win.OS_SETTINGS.getConfig());
             }
             mainConfig._isSecondary = false;   // 明確走主模型連線（防 getConfig 回傳被副模型標過的共用物件）
-            try {
-                if (options && options.task && win.OS_SETTINGS && win.OS_SETTINGS.getConfigFor) {
-                    const _routed = win.OS_SETTINGS.getConfigFor(options.task);   // 🔌 分流（見 chatSecondary）
-                    if (_routed) mainConfig = _routed;
-                }
-            } catch (e) {}
+            // 🔌 分流不在這裡做：統一在 chat 開頭照 options.task 換連線（chatSecondary、直接呼叫 chat 的也一樣吃得到）
             // 長輸出任務保底：深度整理/重壓要「整份重印」，連線設定的最大輸出若偏低(如2048)，
             // JSON 會印到一半被掐＝解析失敗整趟白跑。這裡強制下限 8192，不動使用者原設定值本身。
             const _mt = parseInt(mainConfig.maxTokens);
@@ -671,6 +666,27 @@
 
         chat: async function(messages, config, onChunk, onFinish, onError, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpText(); } catch (e) {}   // 文字 API 計數（副模型/PWA主模型/總結都走這）
+            // 🔌 分流（唯一的一處）：呼叫端用 options.task 說這是哪件事；她在「哪件事走哪個模型」改過這件事，
+            //    就把連線那幾欄換成她指定的那條。沒改過就原封不動——呼叫端自己組的設定（副模型沒填退回主模型、
+            //    夾 maxTokens、關預設條目…）全部照舊，所以名冊加新的一列不會改到任何既有行為。
+            if (options && options.task) {
+                try {
+                    const _ov = (win.OS_SETTINGS && win.OS_SETTINGS.getRouteOverride) ? win.OS_SETTINGS.getRouteOverride(options.task) : null;
+                    if (_ov) {
+                        config = Object.assign({}, config, {
+                            url: _ov.url, key: _ov.key, model: _ov.model,
+                            useSystemApi: _ov.useSystemApi, useGenerateRaw: _ov.useGenerateRaw, stProfileId: _ov.stProfileId,
+                            directMode: _ov.directMode, _isSecondary: _ov._isSecondary,
+                            // 破甲前置指令跟著連線走：換到主模型帶主模型那份；副模型那份由 chatSecondary 入口自己插，自訂通道不帶
+                            customCot: _ov._isSecondary === false && !_ov._channel ? (_ov.customCot || '') : '',
+                            _channel: _ov._channel || undefined, _channelName: _ov._channelName || undefined
+                        }, _ov._channel ? { maxTokens: _ov.maxTokens, temperature: _ov.temperature } : {});
+                    }
+                } catch (e) {}
+            } else {
+                // 沒帶 task：控制台只能記成「沒有標記的」，也吃不到分流設定。新功能要在 os_settings 的 LLM_TASKS 加一列再帶上 task。
+                console.warn('[OS_API] 這一通沒有說是哪件事（options.task），控制台會記成沒有標記：', (config && config.route) || (options && options.label) || '');
+            }
             // 呼叫方要「保留三反引號」（創作室生成 JSON 程式碼）→ 跳過 cleanRawOutput 吃圍欄那步，避免 /```/g 被削成 //g。
             const _keepFences = !!options.keepCodeFences;
             const globalUserName = this.getGlobalUserName();
@@ -2172,7 +2188,7 @@
 
     // --- 4. OS_API_ENGINE 獨立應用暴露介面 ---
     win.OS_API_ENGINE = {
-        generateText: async function(promptKey, userMessage) {
+        generateText: async function(promptKey, userMessage, callOptions) {
             return new Promise(async (resolve, reject) => {
                 try {
                     let config = {};
@@ -2193,7 +2209,7 @@
                         (chunk) => { /* 忽略串流輸出，直接等待結果 */ },
                         (finalText) => { resolve(finalText); },
                         (err) => { reject(err); },
-                        { disableTyping: true } // 告知不使用打字機效果，加速回傳
+                        Object.assign({ disableTyping: true }, callOptions || {}) // 告知不使用打字機效果，加速回傳；callOptions 帶 task（是哪件事）
                     );
                 } catch (e) {
                     console.error("[OS_API_ENGINE] generateText 執行失敗:", e);

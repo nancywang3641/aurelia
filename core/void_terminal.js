@@ -1752,7 +1752,7 @@ const IRIS_IDLE = [
             config.route = 'iris_duo';
             window.__AURELIA_SUMMARIZING = true;   // 生成期間擋 AVS/VecEngine/dossier 抽取（它們都查此旗標）
             let script = await new Promise((resolve, reject) => {
-                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, {});
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater' });
             });
             script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
             // 攔截 <content>…</content>：完整一對→直接用；只有開標籤(收尾被 maxtoken 截掉)→補上 </content>；完全沒 <content>→丟棄(不 wrap 垃圾→黑屏)
@@ -1900,7 +1900,7 @@ ${sections}`;
             config.route = 'iris_duo';
 
             const seg = await new Promise((resolve, reject) => {
-                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '小劇場記事:' + npcA.name + '&' + npcB.name });
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater_note', label: '小劇場記事:' + npcA.name + '&' + npcB.name });
             });
             let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim();
             if (!clean || clean === '無' || clean.length < 4 || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) return;
@@ -1930,7 +1930,7 @@ ${sections}`;
             config.route = 'iris_duo';
 
             const seg = await new Promise((resolve, reject) => {
-                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '小劇場重壓縮' });
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater_note', label: '小劇場重壓縮' });
             });
             let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim();
             if (!clean || clean === '無' || clean.length < 8 || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) {
@@ -1992,7 +1992,7 @@ ${sections}`;
             config.route = 'iris_chat';
 
             const seg = await new Promise((resolve, reject) => {
-                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: 'NPC記憶壓縮:' + npcName });
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater_note', label: 'NPC記憶壓縮:' + npcName });
             });
             let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
             if (!clean || clean === '無' || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) {
@@ -2026,7 +2026,7 @@ ${sections}`;
                 config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
             }
             config.route = 'iris_chat';
-            const seg = await new Promise((res, rej) => window.OS_API.chat([{ role: 'system', content: prompt }], config, null, res, rej, { label: 'NPC記憶整理:' + npcName }));
+            const seg = await new Promise((res, rej) => window.OS_API.chat([{ role: 'system', content: prompt }], config, null, res, rej, { task: 'theater_note', label: 'NPC記憶整理:' + npcName }));
             const clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
             if (!clean || clean === '無') { AUI.toastr?.warning?.('整理失敗，記憶保持原樣'); return; }
             await window.OS_DB.saveNpcMemory(npcKey, { name: npcName, summary: clean, lastCompactAt: mem.lastCompactAt || 0 });
@@ -2243,8 +2243,8 @@ ${sections}`;
                     null,       // onChunk 不顯示 raw text，避免程式碼/標籤噴出來後又重播
                     resolve, reject,
                     canStream
-                        ? { useRealStream: true, signal: _irisAbortCtrl?.signal }
-                        : { signal: _irisAbortCtrl?.signal }
+                        ? { task: 'lobby_chat', useRealStream: true, signal: _irisAbortCtrl?.signal }
+                        : { task: 'lobby_chat', signal: _irisAbortCtrl?.signal }
                 );
             });
             let reply = response.replace(/^"|"$/g, '').trim();

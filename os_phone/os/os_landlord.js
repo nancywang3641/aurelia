@@ -518,7 +518,7 @@
                             } catch (e) { finish(null); }
                         },
                         function () { finish(null); },
-                        { label: '租客定調' });
+                        { task: 'estate', label: '租客定調' });
                 } catch (e) { finish(null); }
             });
         }
@@ -719,7 +719,7 @@
         config.route = 'landlord_line';
         const raw = await new Promise(function (resolve, reject) {
             api.chat([{ role: 'system', content: sys }, { role: 'user', content: body }],
-                config, null, resolve, reject, { label: label, keepCodeFences: true });
+                config, null, resolve, reject, { task: 'estate', label: label, keepCodeFences: true });
         });
         let line = '';
         try {

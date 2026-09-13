@@ -386,7 +386,7 @@
                         resolve();
                     },
                     (err) => reject(err),
-                    { disableTyping: true }
+                    { task: 'story', disableTyping: true }
                 );
             });
 

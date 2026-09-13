@@ -90,15 +90,37 @@
     const LLM_ROUTES_KEY = 'os_llm_routes';       // { 任務: 'main' | 'sec' | 通道id }
 
     // 對應表列的是「事情」不是「通道三」——她看得懂自己在調什麼，兩週後也還認得
+    // 🚨 這份是唯一的名冊：每一個呼叫模型的地方都帶 options.task（＝這裡的 id），設置頁、控制台都照這份畫。
+    //    加新功能＝這裡加一列＋呼叫時帶上 task，其他地方不用再對。
+    //    def 填那個功能原本用主模型還是副模型：她沒改過的列，呼叫端自己組的設定一律原封不動（見 getRouteOverride）。
     const LLM_TASKS = [
-        { id: 'story',     name: '正文（故事）',       def: 'main' },
-        { id: 'phone_chat',name: '手機聊天',           def: 'main' },
-        { id: 'summary',   name: '大總結',             def: 'main' },
-        { id: 'extract',   name: '狀態抽取 / 人物檔案', def: 'sec'  },
-        { id: 'illust',    name: '插圖描述',           def: 'sec'  },
-        { id: 'map',       name: '地圖探索',           def: 'sec'  },
-        { id: 'heartbeat', name: '主動找我',           def: 'sec'  },
-        { id: 'wx_tidy',   name: '聊天室整理',         def: 'sec'  }
+        { group: '劇情',       id: 'story',        name: '正文（故事）',               def: 'main' },
+        { group: '劇情',       id: 'summary',      name: '大總結',                     def: 'main' },
+        { group: '劇情',       id: 'extract',      name: '狀態抽取 / 記憶 / 人物檔案', def: 'sec'  },
+        { group: '劇情',       id: 'illust',       name: '插圖描述',                   def: 'sec'  },
+        { group: '劇情',       id: 'director',     name: '導演模式',                   def: 'main' },
+        { group: '劇情',       id: 'avs_design',   name: '狀態欄位設計 / 整理',        def: 'main' },
+        { group: '手機',       id: 'phone_chat',   name: '手機聊天',                   def: 'main' },
+        { group: '手機',       id: 'call',         name: '電話',                       def: 'main' },
+        { group: '手機',       id: 'wx_summary',   name: '聊天室記錄整理',             def: 'sec'  },
+        { group: '手機',       id: 'wx_tidy',      name: '聊天室整理',                 def: 'sec'  },
+        { group: '手機',       id: 'heartbeat',    name: '主動找我',                   def: 'sec'  },
+        { group: '手機',       id: 'weibo',        name: '微博',                       def: 'main' },
+        { group: '手機',       id: 'tarot',        name: '占卜',                       def: 'main' },
+        { group: '手機',       id: 'apps',         name: '應用與組件裡的生成',         def: 'main' },
+        { group: '手機',       id: 'studio',       name: '創作室',                     def: 'main' },
+        { group: '大廳與世界', id: 'map',          name: '地圖探索',                   def: 'sec'  },
+        { group: '大廳與世界', id: 'world_gen',    name: '世界 / 地圖事件 / 行程生成', def: 'main' },
+        { group: '大廳與世界', id: 'theater',      name: '小劇場',                     def: 'main' },
+        { group: '大廳與世界', id: 'theater_note', name: '小劇場記事 / 角色記憶整理',  def: 'sec'  },
+        { group: '大廳與世界', id: 'lobby_chat',   name: '大廳角色對話與小遊戲',       def: 'sec'  },
+        { group: '大廳與世界', id: 'cafe',         name: '書咖',                       def: 'sec'  },
+        { group: '大廳與世界', id: 'estate',       name: '房產（租客 / 房間）',        def: 'sec'  },
+        { group: '大廳與世界', id: 'blueprint',    name: '造物工坊',                   def: 'sec'  },
+        { group: '大廳與世界', id: 'worldgate',    name: '世界門',                     def: 'sec'  },
+        { group: '大廳與世界', id: 'pt',           name: 'PT 結算',                    def: 'sec'  },
+        { group: '大廳與世界', id: 'achievement',  name: '成就估值',                   def: 'main' },
+        { group: '大廳與世界', id: 'store404',     name: '404 商店',                   def: 'main' }
     ];
 
     function loadChannels() {
@@ -140,6 +162,19 @@
             _channel: ch.id, _channelName: ch.name || ''
         });
         if (!cfg.url || !cfg.key) return base;   // 這條還沒填完 → 照舊走預設，不要讓她的對話整個斷掉
+        return cfg;
+    }
+    // 中央 chat 用：這件事她有沒有改過走哪條。沒改過（或指到沒填完的通道）回 null＝呼叫端自己組的設定照舊；
+    // 改過才回那條的設定，由 chat 換掉連線那幾欄。這樣名冊加一列、預設填對主／副，就不會改到任何既有行為。
+    function getRouteOverride(task) {
+        const t = LLM_TASKS.find(x => x.id === task);
+        if (!t) return null;
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(LLM_ROUTES_KEY) || '{}') || {}; } catch (e) { saved = {}; }
+        const pick = saved[task];
+        if (!pick || pick === t.def) return null;
+        const cfg = getConfigForTask(task);
+        if (pick !== 'main' && pick !== 'sec' && !cfg._channel) return null;
         return cfg;
     }
     // 給畫面用：這件事現在實際走誰（顯示名字）
@@ -503,6 +538,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         getSecondaryConfig: loadSecLlmConfig,
         // 🔌 哪件事走哪條（通道清單在設置 → API → 分流）
         getConfigFor: getConfigForTask,
+        getRouteOverride: getRouteOverride,
         getChannels: loadChannels,
         saveChannels: saveChannels,
         getRoutes: loadRoutes,
@@ -2552,14 +2588,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             function paintRoutes() {
                 const routes = loadRoutes();
                 const chans = loadChannels();
+                let _grp = '';
                 routeBox.innerHTML = LLM_TASKS.map(function (t) {
+                    const head = (t.group && t.group !== _grp) ? '<div class="set-row-group">' + t.group + '</div>' : '';
+                    if (t.group) _grp = t.group;
                     const opts = ['<option value="main"' + (routes[t.id] === 'main' ? ' selected' : '') + '>主模型</option>',
                                   '<option value="sec"' + (routes[t.id] === 'sec' ? ' selected' : '') + '>副模型</option>']
                         .concat(chans.map(function (c) {
                             return '<option value="' + esc(c.id) + '"' + (routes[t.id] === c.id ? ' selected' : '') + '>'
                                 + esc(c.name || '未命名通道') + '</option>';
                         })).join('');
-                    return '<div class="set-row-line">'
+                    return head + '<div class="set-row-line">'
                         + '<span class="set-row-name">' + t.name + '</span>'
                         + '<select class="set-select set-row-sel" data-task="' + t.id + '">' + opts + '</select>'
                         + '</div>';

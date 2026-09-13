@@ -466,7 +466,7 @@
             const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.3 };
 
             const responseText = await new Promise((resolve, reject) => {
-                apiEngine.chat([{ role: 'user', content: prompt }], pureConfig, null, resolve, reject, { disableTyping: true });
+                apiEngine.chat([{ role: 'user', content: prompt }], pureConfig, null, resolve, reject, { task: 'studio', disableTyping: true });
             });
 
             if (!responseText) throw new Error('AI 回傳空白');
@@ -648,7 +648,7 @@ ${desc}
             const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.2 };
 
             const responseText = await new Promise((resolve, reject) => {
-                apiEngine.chat(messages, pureConfig, null, resolve, reject, { disableTyping: true });
+                apiEngine.chat(messages, pureConfig, null, resolve, reject, { task: 'studio', disableTyping: true });
             });
 
             if (!responseText) throw new Error('AI 回傳空白');

@@ -280,7 +280,7 @@
                 console.error('[SceneMap] AI 失敗:', err);
                 if (progressCb) progressCb('error', 'AI 呼叫失敗');
                 resolve(null);
-            });
+            }, { task: 'map' });
         });
     }
 

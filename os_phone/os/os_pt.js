@@ -178,7 +178,7 @@
             config.route = 'pt_valuation';
             const prompt = _buildValuationPrompt(text);
             const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: 'PT結算估值', keepCodeFences: true });
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'pt', label: 'PT結算估值', keepCodeFences: true });
             });
             const json = _extractJSON(raw);
             if (!json || typeof json !== 'object') { console.warn('[PT] 估值回傳無法解析，退機械底'); return _mechanicalFallback(text); }
@@ -345,7 +345,7 @@
             ];
             const OS = win.OS_SETTINGS || window.OS_SETTINGS;
             const config = OS ? { ...OS.getConfig(), route: 'rabbit_eval' } : { route: 'rabbit_eval' };
-            const raw = await new Promise((res, rej) => api.chat(messages, config, null, res, rej));
+            const raw = await new Promise((res, rej) => api.chat(messages, config, null, res, rej, { task: 'achievement' }));
 
             let results = null;
             try {

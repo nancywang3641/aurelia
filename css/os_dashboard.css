@@ -170,6 +170,9 @@
 /* 走哪一條：只給看的值（改在設置 → API → 通道） */
 .dsh-route-v { text-align: right; color: #2a4a80; font-weight: 700; letter-spacing: .06em; overflow-wrap: anywhere; }
 .dsh-route-v.off { color: #8b97ae; font-weight: 400; font-size: 12.5px; }
+/* 名冊分組（劇情／手機／大廳與世界）：佔滿整排的小標 */
+.dsh-route-group { grid-column: 1 / -1; margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; color: #7d8aa6; }
+.dsh-route-group:first-child { margin-top: 0; }
 
 .dsh-chans { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .dsh-chan {

@@ -388,7 +388,7 @@ ${list}
                         } catch (e) { resolve(null); }
                     },
                     () => resolve(null),
-                    { disableTyping: true }
+                    { task: 'extract', disableTyping: true }
                 );
             } catch (e) { resolve(null); }
         });

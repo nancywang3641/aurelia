@@ -232,7 +232,7 @@
                     } catch(e) { resolve([]); }
                 },
                 () => resolve([]),
-                { disableTyping: true }
+                { task: 'extract', disableTyping: true }
             );
         });
     }

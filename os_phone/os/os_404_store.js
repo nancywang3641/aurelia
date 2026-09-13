@@ -281,7 +281,7 @@ ${JSON.stringify({ shards, items: itemsState })}`;
             const config = win.OS_SETTINGS ? { ...win.OS_SETTINGS.getConfig(), route: 'cheshire_eval' } : { route: 'cheshire_eval' };
 
             const raw = await new Promise((res, rej) =>
-                win.OS_API.chat(messages, config, null, res, rej)
+                win.OS_API.chat(messages, config, null, res, rej, { task: 'store404' })
             );
 
             // 解析 JSON

@@ -2416,7 +2416,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         if (currentMode === 'vn_ui') _studioAfterGenerate(finalText, parsedOk);
                     },
                     reject,
-                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }, aiBubble   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
+                    { task: 'studio', useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }, aiBubble   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
                 );
             });
 
@@ -2873,7 +2873,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     return await new Promise((res, rej) => {
                         OS.chat([{ role: 'system', content: String(systemPrompt || '') }], cfg, null,
                             t => res(typeof t === 'string' ? t : (t && t.message) || ''), rej,
-                            { disableTyping: true });
+                            { task: 'apps', disableTyping: true });
                     });
                 } catch (e) { console.error('[st.callAI]', e); return ''; }
             },
@@ -3546,7 +3546,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         if (Array.isArray(results) && !summary.failed) _studioAfterGenerate(null, true);
                     },
                     reject,
-                    { useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }, aiBubble   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
+                    { task: 'studio', useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }, aiBubble   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
                 );
             });
         } catch (err) {

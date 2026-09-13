@@ -623,7 +623,7 @@
             let generated = await new Promise((res, rej) => {
                 let text = "";
                 osApi.chat([{role:'system', content:'世界觀生成助手'}, {role:'user', content:prompt}], window.parent.OS_SETTINGS.getConfig(),
-                    (c) => { text = c; status.textContent = `生成中... (${text.length} 字)`; }, (f) => res(f), (e) => rej(e), {disableTyping:true});
+                    (c) => { text = c; status.textContent = `生成中... (${text.length} 字)`; }, (f) => res(f), (e) => rej(e), {task: 'world_gen', disableTyping:true});
             });
 
             const smMatch = generated.match(/<small_world>([\s\S]*?)<\/small_world>/i);
@@ -801,7 +801,7 @@ ${getCharCardTemplate()}`;
                      {role:'user', content: prompt}],
                     window.parent.OS_SETTINGS.getConfig(),
                     (c) => { text = c; status.textContent = `生成中... (${text.length} 字)`; },
-                    (f) => res(f), (e) => rej(e), {disableTyping: true}
+                    (f) => res(f), (e) => rej(e), {task: 'world_gen', disableTyping: true}
                 );
             });
 

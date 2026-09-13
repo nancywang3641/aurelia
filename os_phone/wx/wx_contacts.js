@@ -328,7 +328,7 @@
                                 statusEl.innerText = "解析失敗: " + e.message; 
                             }
                             btn.disabled = false;
-                        }, (err) => { statusEl.innerText = "連線失敗: " + err.message; btn.disabled = false; }, { disableTyping: true });
+                        }, (err) => { statusEl.innerText = "連線失敗: " + err.message; btn.disabled = false; }, { task: 'phone_chat', disableTyping: true });
                     } else { statusEl.innerText = "錯誤: API 模塊未加載"; }
                 };
             } catch (e) { targetDoc.getElementById('wx-search-status').innerText = "初始化失敗: " + e.message; }

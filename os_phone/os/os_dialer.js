@@ -869,7 +869,7 @@
                     if (opts.firstRing) { restore(); _dialFailed(contact); return; }
                     _appendCallBubble(false, '（接不通：' + ((err && err.message) || '錯誤') + '）', contact.name); restore(); _vmAfterTurn();
                 },
-                { disableTyping: cfg.disableTyping !== false }
+                { task: 'call', disableTyping: cfg.disableTyping !== false }
             );
         } catch (e) {
             done();

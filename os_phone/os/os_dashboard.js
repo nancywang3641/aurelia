@@ -150,14 +150,11 @@
         for (let i = 0; i < WINS.length; i++) { try { if (WINS[i] && WINS[i].AURELIA_API_LOG) return WINS[i].AURELIA_API_LOG; } catch (e) {} }
         return win.AURELIA_API_LOG || [];
     }
-    const TASK_FALLBACK = {
-        story: '正文（故事）', phone_chat: '手機聊天', summary: '大總結',
-        extract: '狀態抽取 / 人物檔案', illust: '插圖描述', map: '地圖探索', heartbeat: '主動找我', wx_tidy: '聊天室整理'
-    };
+    // 任務名冊只有一份：os_settings 的 LLM_TASKS（設置頁那張「哪件事走哪個模型」也照它畫）。這裡不再抄一份，
+    // 以前抄的那份每加一件事就要手動對一次，沒對到的在控制台就只剩代號。
     function _tasks() {
         const S = _S();
-        if (S && Array.isArray(S.LLM_TASKS) && S.LLM_TASKS.length) return S.LLM_TASKS;
-        return Object.keys(TASK_FALLBACK).map(function (k) { return { id: k, name: TASK_FALLBACK[k], def: 'main' }; });
+        return (S && Array.isArray(S.LLM_TASKS)) ? S.LLM_TASKS : [];
     }
     function _taskName(id) {
         if (!id || id === '(未標)') return '沒有標記的';
@@ -392,10 +389,13 @@
             return c ? (c.name || '未命名通道') : '主模型';
         };
 
+        let _grp = '';
         let html = _sec('哪件事走哪個模型') + '<div class="dsh-routes">' +
             _tasks().map(function (t) {
                 const off = (t.id === 'story' && !standalone);
-                return '<div class="dsh-route-row"><span>' + _esc(t.name) + '</span>' +
+                const head = (t.group && t.group !== _grp) ? ('<div class="dsh-route-group">' + _esc(t.group) + '</div>') : '';
+                if (t.group) _grp = t.group;
+                return head + '<div class="dsh-route-row"><span>' + _esc(t.name) + '</span>' +
                     '<span class="dsh-route-v' + (off ? ' off' : '') + '">' +
                     (off ? '酒館自己生成，不走這裡' : _esc(chanName(routes[t.id] || t.def))) + '</span></div>';
             }).join('') + '</div>' +

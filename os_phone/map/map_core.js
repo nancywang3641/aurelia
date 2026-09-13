@@ -449,7 +449,7 @@ ${facilityText}
                     if (STATE.view === 'home') renderHome();
                     else if (STATE.view === 'zone') enterZone(STATE.currentZoneId);
                 }
-            });
+            }, null, { task: 'world_gen' });
         } catch (e) {
             console.error('[Map] ❌ 事件生成錯誤:', e);
             if (force && AUI.toastr) AUI.toastr.error('事件生成失敗', 'System');
@@ -1910,7 +1910,7 @@ ${facilityText}
             }
             config.route = 'map_theater';
             const seg = await new Promise((resolve, reject) => {
-                win.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { label: '地圖番外重壓縮' });
+                win.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater_note', label: '地圖番外重壓縮' });
             });
             const clean = String(seg || '').replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
             if (!clean || clean.length < 10 || clean.startsWith('{"error') || clean.includes('請求失敗') || clean.includes('请求失败')) return { ok: false, msg: '整理失敗，記事未動' };
@@ -1954,7 +1954,7 @@ ${facilityText}
             config.route = 'map_theater';
             win.__AURELIA_SUMMARIZING = true;   // 生成期間擋 AVS/VecEngine/dossier 抽取
             let script = await new Promise((resolve, reject) => {
-                win.OS_API.chat(messages, config, null, resolve, reject, {});
+                win.OS_API.chat(messages, config, null, resolve, reject, { task: 'theater' });
             });
             script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
             // 攔 <content>：完整→用；只有開標籤(被 maxtoken 截)→補收尾；全無→丟棄（不 wrap 垃圾→黑屏）

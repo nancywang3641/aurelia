@@ -286,7 +286,7 @@
                 }, function (err) {
                     console.warn('[Blueprints] 訂製失敗', err);
                     reject(new Error('設計師一時聯絡不上，錢已經退回，等一下再試。'));
-                }, { label: '訂製藍圖' });
+                }, { task: 'blueprint', label: '訂製藍圖' });
             });
         } catch (e) { await refund(); throw e; }
         try {

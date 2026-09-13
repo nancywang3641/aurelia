@@ -371,7 +371,7 @@ ${materials.headMessages || '（無）'}
                 if (done) return; done = true;
                 clearTimeout(timer);
                 reject(err);
-            });
+            }, { task: 'avs_design' });
         });
     }
 

@@ -180,7 +180,7 @@
                         catch (e) { finish(reject, e); }
                     },
                     function (err) { finish(reject, err instanceof Error ? err : new Error(String(err || '訂單整理失敗'))); },
-                    { label: '房間包裹訂單' });
+                    { task: 'estate', label: '房間包裹訂單' });
             } catch (e) { finish(reject, e); }
         });
     }

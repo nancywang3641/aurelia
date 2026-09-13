@@ -1497,7 +1497,7 @@
                         }, 500);
                         
                         resolve();
-                    }, (err) => reject(err), { disableTyping: true });
+                    }, (err) => reject(err), { task: 'story', disableTyping: true });
                 });
             } catch(err) {
                 console.error('[VN_Choice] 生成失敗:', err);
