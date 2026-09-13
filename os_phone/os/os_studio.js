@@ -622,7 +622,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         { label: '固定標題' },
         { label: '卡片列表' },
         { label: '深色主題' },
-        { label: '生圖', feature: true, key: 'img', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct，用戶有指定才填、否則不傳）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
+        { label: '生圖', feature: true, key: 'img', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 pollinations／novelai／tavern_sd／comfyui_direct／custom_api，用戶有指定才填、否則不傳，不傳就照使用者在設置裡選的來源。使用者口中的名字對照設置頁：Pollinations＝pollinations、NovelAI＝novelai、酒館原生＝tavern_sd、ComfyUI 直連＝comfyui_direct、自訂接口＝custom_api）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
         { label: '回傳對話框', feature: true, key: 'tochat', text: '【回傳對話框功能】兩種回傳法，依需求選一個：\n① st.toChat(文字, opts)＝貼回「輸入框（送出框）」：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「要讓使用者挑一條、可再編輯後送進劇情當輸入／指令」（例：隨機事件生 5 條、選 1 條 toChat）。\n② st.toSystem(文字)＝不經輸入框，直接把文字當「system 訊息」插進聊天室成最新一則（旁白/系統公告式，不用再按送出）。用在「app 的結果要直接顯示在劇情流裡」（例：擲骰結果、系統宣告、事件觸發）。' }
     ];
     // 功能 chip（feature:true）＝toggle 啟用：用法在送出時併進請求(apiPayload 的 system)、不貼輸入框；話術 chip 照舊貼輸入框
