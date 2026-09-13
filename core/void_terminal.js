@@ -1720,6 +1720,9 @@ const IRIS_IDLE = [
     // 小劇場：抓「-VN小說家-」世界書的「格式類」條目當完整 VN 指令(含 SFX/表情包/Scene)。排除角色/CP 條目(帶當前卡的應子騫等會污染)。抓不到回 '' → 退回手寫格式。
     let _vnProtocolCache = null;
     async function _fetchVnProtocol() {
+        // 🪶 VN 指令搬進應用之後讀那一份：每次都讀（她隨時會改、而且只是讀 localStorage），兩版都有
+        const VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
+        if (VR && VR.hasAny && VR.hasAny()) return VR.getText();
         if (_vnProtocolCache !== null) return _vnProtocolCache;
         _vnProtocolCache = '';
         try {

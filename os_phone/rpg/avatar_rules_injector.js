@@ -27,6 +27,8 @@
         comfyui_direct: '[VN-COMFYUI]',
     };
     const ALL_ENTRY_TAGS = ['[VN-POLLAI]', '[VN-NAI]', '[VN-COMFYUI]'];
+    // 登記給 VN 指令畫面看：這三條會跟著頭像產圖器自動切換
+    (win.__VN_RULES_AUTO = win.__VN_RULES_AUTO || []).push({ label: '頭像產圖', test: n => ALL_ENTRY_TAGS.some(t => n.includes(t)) });
 
     function _currentService() {
         try { return (JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {}).service || 'pollinations'; }
@@ -46,6 +48,15 @@
         try {
             const service = _currentService();
             const wantTag = SERVICE_TO_ENTRY[service] || null;
+
+            // 🪶 VN 指令已經搬進應用（os_vn_rules）→ 撥那一份，酒館與獨立版同一條；還沒搬才走下面的世界書
+            const VR = win.OS_VN_RULES || window.OS_VN_RULES;
+            if (VR && VR.hasAny && VR.hasAny()) {
+                const r = VR.setEnabledByName(ALL_ENTRY_TAGS, wantTag ? [wantTag] : []);
+                if (!r.seen.length) { console.log('🪪 [Avatar Rules] VN 指令裡沒有 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] → 不動'); return; }
+                if (r.opened.length || r.closed.length) console.log(`🪪 [Avatar Rules] ✅ service=${service} → 啟用 ${wantTag}、停用其餘（VN 指令）`);
+                return;
+            }
 
             // 🟢 獨立版：世界書條目住 OS_DB、沒有 TavernHelper。規則與邊界完全一樣（只改 enabled、只認名字）
             if (_isStandalone()) {

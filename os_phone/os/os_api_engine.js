@@ -1804,6 +1804,15 @@
                 }
             } catch(e) { console.warn('[OS_API standalone] AVS 條件規則載入失敗:', e); }
 
+            // 🪶 VN 指令（os_vn_rules）：跟世界書 @D 那批同一套插法，只給 VN 正文。
+            //   接在世界書後面：同一個深度裡排序是穩定的，VN 指令會比世界書條目更貼近生成點。
+            if (promptKey === 'vn_story') {
+                try {
+                    const _vr = win.OS_VN_RULES?.getDepthParts?.() || [];
+                    if (_vr.length) _loreDepths = (_loreDepths || []).concat(_vr);
+                } catch (e) { console.warn('[OS_API vn_story] VN 指令載入失敗:', e); }
+            }
+
             if (cotPrompt) apiMessages.push({ role: 'system', content: `### \n${cotPrompt}` });
             apiMessages.push({ role: 'system', content: `### Roleplay Instruction\n${sysPrompt}` });
 

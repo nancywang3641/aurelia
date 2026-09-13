@@ -24,6 +24,8 @@
     //   兩條裡任一條亮著才算在用，腳本只負責挑「亮哪一版」；兩條都暗就整組不碰。
     //   只有一條（自由版還沒匯入）也不碰，維持舊行為。
     const _isCallName = (nm) => String(nm || '').includes('通話與手機聊天');
+    // 登記給 VN 指令畫面看：總綱與通話那組會跟著自由模式切換（這支比 os_vn_rules 早載入，登記簿掛在 win 上）
+    (win.__VN_RULES_AUTO = win.__VN_RULES_AUTO || []).push({ label: '自由模式', test: nm => _isCoreName(nm) || _isCallName(nm) });
     const CORE_ENTRY_HINT = 'VN…總綱';                 // 只用於 console 提示文字
     const RX_NAME = '[VN自由模式] 歷史表情格剝除';     // promptOnly 正則名
 
@@ -157,6 +159,28 @@
         if (changed) console.log(`[VN自由模式] 獨立版世界書開關已切換 → ${free ? '自由版' : '固定版'}（改了 ${changed} 條）`);
     }
 
+    // VN 指令分支（os_vn_rules）：酒館與獨立版同一份資料、同一套名字判準，只撥開關。
+    //   回 false＝做不了（缺自由版總綱等），呼叫端就不動歷史表情格正則，跟世界書那條的出口一致。
+    function _applyVnRules(VR, free) {
+        const all = VR.list();
+        const cores = all.filter(e => _isCoreName(e && e.name));
+        if (!cores.length) { console.log('[VN自由模式] VN 指令裡沒有總綱條目 → 不動'); return false; }
+        if (free && !cores.some(e => String(e.name || '').includes('自由'))) {
+            console.warn(`[VN自由模式] VN 指令裡找不到自由版總綱（名字需含「${CORE_ENTRY_HINT}」+「自由」）→ 維持固定版、不切換`);
+            return false;
+        }
+        const calls = all.filter(e => _isCallName(e && e.name));
+        const callOn = calls.length >= 2 && calls.some(e => e.enabled !== false);
+        const r = VR.apply(e => {
+            const nm = String(e.name || '');
+            if (_isCoreName(nm)) return nm.includes('自由') ? free : !free;
+            if (calls.length >= 2 && _isCallName(nm)) return callOn && (nm.includes('自由') === free);
+            return undefined;
+        });
+        if (r.opened.length || r.closed.length) console.log(`[VN自由模式] VN 指令開關已切換 → ${free ? '自由版' : '固定版'}（改了 ${r.opened.length + r.closed.length} 條）`);
+        return true;
+    }
+
     let _applying = false;
     let _lastEff = null;   // 上次真的套用完的實際模式；沒變就連世界書都不用讀（世界門每則訊息會戳這支一次）
     async function applyForCurrent(force) {
@@ -167,6 +191,14 @@
         try {
             // 獨立版沒有 TavernHelper：世界書走 OS_DB，歷史表情格的剝除由組 prompt 時做
             //   （PWA 不吃酒館正則，歷史是 os_api_engine 從章節組出來的）
+            // 🪶 VN 指令已經搬進應用 → 撥那一份；酒館照樣要對齊歷史表情格正則
+            const VR = win.OS_VN_RULES || window.OS_VN_RULES;
+            if (VR && VR.hasAny && VR.hasAny()) {
+                const ok = _applyVnRules(VR, free);
+                if (ok && !_isStandalone()) await _setHistoryRegex(free);
+                _lastEff = free;
+                return;
+            }
             if (_isStandalone()) { await _applyStandalone(free); _lastEff = free; return; }
 
             const th = _th();

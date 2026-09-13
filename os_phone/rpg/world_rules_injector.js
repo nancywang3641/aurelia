@@ -42,6 +42,11 @@
     }
     const BGM    = { modern: 'BGM｜現代一般', mystery: 'BGM｜偵探', fantasy: 'BGM｜奇幻',
                      wuxia: 'BGM｜武俠仙俠', horror: 'BGM｜恐怖' };
+    // 登記給 VN 指令畫面看：這幾條會跟著世界題材自動切換
+    (win.__VN_RULES_AUTO = win.__VN_RULES_AUTO || []).push({
+        label: '世界題材',
+        test: n => [BATTLE].concat(PHONE).concat(Object.values(BGM)).some(m => n.includes(m))
+    });
 
     // 世界 → 該開哪些條目。回 { on:Set, managed:[…] }
     function planFor(world) {
@@ -122,6 +127,10 @@
         try {
             // 🟢 獨立版：沒有角色卡也沒有 TavernHelper，世界書條目住在 OS_DB。
             //    跨卡守衛不需要——PWA 整個就是奧瑞亞，不會有「玩別人的卡」這回事。
+            // 🪶 VN 指令已經搬進應用（os_vn_rules）→ 撥那一份；還沒搬才走下面的世界書
+            const VR = win.OS_VN_RULES || window.OS_VN_RULES;
+            if (VR && VR.hasAny && VR.hasAny()) { await _syncVnRules(VR, reason); return; }
+
             if (_isStandalone()) { await _syncStandalone(reason); return; }
 
             const TH = win.TavernHelper || window.TavernHelper;
@@ -200,6 +209,39 @@
         const where = world ? ('「' + world.name + '」(' + (world.genre || '未標題材') + ')') : '奧瑞亞主世界';
         console.log('🌍 [World Rules] ' + where + ' → 開:' + (r.opened.join('、') || '無')
                   + ' / 關:' + (r.closed.join('、') || '無') + '（獨立版・' + reason + '）');
+        try {
+            const t = AUI.toastr;
+            if (t && t.info) t.info((r.opened.length ? '開啟 ' + r.opened.join('、') : '')
+                                  + (r.opened.length && r.closed.length ? '；' : '')
+                                  + (r.closed.length ? '關閉 ' + r.closed.join('、') : ''),
+                                  '世界模組：' + where, { timeOut: 4000 });
+        } catch (e) {}
+    }
+
+    // VN 指令分支：兩版共用同一份資料，守衛照各自原本那條（酒館：非奧瑞亞卡不碰；PWA：角色卡故事沒題材不碰）
+    async function _syncVnRules(VR, reason) {
+        const standalone = _isStandalone();
+        if (!standalone && !_isAurelia()) { console.log('🌍 [World Rules] 非奧瑞亞角色卡 → 一條都不碰（VN 指令・' + reason + '）'); return; }
+        const world = await _currentWorld();
+        if (standalone && !world && _onCardStory()) {
+            console.log('🌍 [World Rules] 角色卡故事、沒有世界門世界 → 一條都不碰（VN 指令・' + reason + '）');
+            return;
+        }
+        const plan = planFor(world);
+        const freeNow = _vnFree();
+        const callVariants = VR.list().filter(e => String((e && e.name) || '').includes(CALL)).length;
+        const r = VR.setEnabledByName(plan.managed, plan.on, (name, hit, should) => {
+            if (hit === CALL && callVariants >= 2) return should && (name.includes('自由') === freeNow);
+            return should;
+        });
+        if (!r.seen.length) {
+            console.log('🌍 [World Rules] VN 指令裡找不到任何受管條目（戰鬥觸發／手機那組／BGM）→ 不動（' + reason + '）');
+            return;
+        }
+        if (!r.opened.length && !r.closed.length) return;
+        const where = world ? ('「' + world.name + '」(' + (world.genre || '未標題材') + ')') : '奧瑞亞主世界';
+        console.log('🌍 [World Rules] ' + where + ' → 開:' + (r.opened.join('、') || '無')
+                  + ' / 關:' + (r.closed.join('、') || '無') + '（VN 指令・' + reason + '）');
         try {
             const t = AUI.toastr;
             if (t && t.info) t.info((r.opened.length ? '開啟 ' + r.opened.join('、') : '')

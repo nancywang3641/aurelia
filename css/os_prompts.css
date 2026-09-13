@@ -125,3 +125,29 @@
         .pm-emodal .pm-bmodal-body.pm-entry-edit { display:flex; flex-direction:column; gap:8px; padding:12px 12px 16px; }
         .pm-entry-edit .pm-entry-name-input { margin-bottom:0; flex-shrink:0; }
         .pm-entry-edit .pm-entry-ta { flex:1; min-height:0; margin:0; font-size:13px; line-height:1.7; }
+
+        /* ── VN 指令（os_vn_rules.js）：殼沿用提示詞，列表每條多一行「位置・字數・跟著什麼自動切換」── */
+        .pm-vr-summary { display:flex; align-items:center; gap:18px; padding:4px 4px 10px; margin-bottom:10px; border-bottom:1px solid rgba(26,28,40,0.15); }
+        .pm-vr-stat { display:flex; flex-direction:column; line-height:1.25; }
+        .pm-vr-stat b { font-size:17px; color:#1A1C28; }
+        .pm-vr-stat span { font-size:11px; color:rgba(26,28,40,0.72); }
+        .pm-vr-summary .pm-vr-add { margin-left:auto; }
+        .pm-vr-item { cursor:pointer; }
+        .pm-vr-item.is-off .pm-vr-main, .pm-vr-irow.is-off .pm-vr-main { opacity:.5; }
+        .pm-vr-main { flex:1; min-width:0; }
+        .pm-vr-name { font-size:14px; font-weight:600; color:#1A1C28; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .pm-vr-meta { display:flex; flex-wrap:wrap; gap:2px 10px; margin-top:3px; font-size:11px; color:rgba(26,28,40,0.72); }
+        .pm-vr-auto { display:inline-flex; align-items:center; gap:4px; color:#4a5a8c; }
+        .pm-vr-same { display:inline-flex; align-items:center; gap:4px; color:#a0621a; }
+        .pm-vr-ghost { position:fixed; pointer-events:none; opacity:.7; z-index:9999; }
+        .pm-vr-empty { display:flex; flex-direction:column; align-items:center; gap:12px; }
+        .pm-vr-empty-icon { font-size:30px; opacity:.45; }
+        .pm-vr-primary { background:#1A1C28; color:#EEF0F6; border:none; border-radius:6px; padding:9px 20px; font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap; }
+        .pm-vr-primary:disabled { opacity:.4; cursor:default; }
+        .pm-vr-pos-row { display:flex; align-items:center; gap:8px; font-size:13px; color:#1A1C28; flex-shrink:0; }
+        .pm-vr-pos, .pm-vr-book { flex:1; min-width:0; background:#EEF0F6; border:1px solid rgba(26,28,40,0.20); color:#1A1C28; padding:6px 8px; border-radius:4px; font-size:13px; }
+        .pm-vr-src { display:flex; align-items:center; gap:8px; margin:2px 0 12px; }
+        .pm-vr-src .pm-vr-file-btn { margin-left:auto; white-space:nowrap; }
+        .pm-vr-irow { display:flex; align-items:center; gap:10px; padding:9px 10px; background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.10); border-radius:6px; margin-bottom:6px; cursor:pointer; }
+        .pm-vr-ifoot { flex-shrink:0; display:flex; align-items:center; gap:10px; padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border-top:1px solid rgba(26,28,40,0.15); background:rgba(228,232,245,0.96); }
+        .pm-vr-inote { flex:1; min-width:0; font-size:11px; color:rgba(26,28,40,0.72); }
