@@ -390,10 +390,9 @@
         box.innerHTML =
             '<div class="lb-pv-bg"></div>' +
             '<div class="lb-pv-hd">' +
-              '<span class="lb-pv-title"></span>' +
+              // 手機：地名是一顆膠囊，點了換場景。桌機的地點在右欄，這顆在桌機只是標題、不吃點擊
+              '<button class="lb-pv-place" type="button" aria-label="換場景"><span class="lb-pv-dot"></span><span class="lb-pv-title"></span><i class="fa-solid fa-chevron-down lb-pv-caret"></i></button>' +
               '<span class="lb-pv-sub"></span>' +
-              // 手機的「開啟」：桌機的開啟鈕在右欄「當前地點」那張卡上，手機沒有右欄，一直打不開面板
-              '<button class="lb-pv-open" type="button"><i class="fa-solid fa-arrow-right-to-bracket"></i><span></span></button>' +
             '</div>' +
             '<img class="lb-pv-portrait" alt="">' +
             '<div class="lb-rail"></div>' +
@@ -402,7 +401,20 @@
         const bg      = box.querySelector('.lb-pv-bg');
         const titleEl = box.querySelector('.lb-pv-title');
         const subEl   = box.querySelector('.lb-pv-sub');
-        const openBtn = box.querySelector('.lb-pv-open');
+        const placeBtn = box.querySelector('.lb-pv-place');
+        // 📱 手機的「開啟」＝對話框底下一顆大按鈕（世界門／書咖櫃檯／交易所…）。
+        //    以前是標題列地名後面一顆小膠囊：跟「現在在哪」擠在一起，也不在拇指搆得到的地方。
+        //    它住在共用的對話區（.void-dialogue-wrap）裡、輸入列正上方；桌機不顯示（桌機的開啟在右欄當前地點卡上）。
+        const cta = document.createElement('button');
+        cta.type = 'button';
+        cta.className = 'lb-pv-cta';
+        cta.innerHTML = '<span class="lb-pv-cta-portal"><i class="fa-solid"></i></span><span class="lb-pv-cta-name"></span><i class="fa-solid fa-arrow-right lb-pv-cta-go"></i>';
+        // 對話區是 void_terminal 建的，這裡只把鈕塞到輸入列上面；每次換地點再確認一次（對話區被重建過就重掛）
+        const mountCta = () => {
+            const wrap = host.querySelector('.void-dialogue-wrap');
+            const row = wrap && wrap.querySelector(':scope > .void-chat-input-row');
+            if (row && cta.nextElementSibling !== row) wrap.insertBefore(cta, row);
+        };
         const pimg    = box.querySelector('.lb-pv-portrait');
         const rail    = box.querySelector('.lb-rail');
         const body    = box.querySelector('.lb-pv-body');
@@ -510,9 +522,12 @@
             //    現在它是常駐主畫面，切過去整片黑會讀成「壞掉了」。留著上一張，素材補上就自動換。
             if (p.bg) bg.style.backgroundImage = 'url(' + CDN + p.bg + ')';
             titleEl.textContent = p.name;
-            // 鈕上寫要開的是什麼（書咖櫃檯／世界門／交易所…），比「開啟」兩個字好懂；沒有這個名字才寫開啟
-            openBtn.querySelector('span').textContent = p.flatName || '開啟';
-            openBtn.hidden = !(p.openIn || p.open);
+            // 鈕上寫要開的是什麼（書咖櫃檯／世界門／交易所…），比「開啟」兩個字好懂；沒有這個名字就寫地名
+            cta.querySelector('.lb-pv-cta-name').textContent = p.flatName || p.name;
+            cta.querySelector('.lb-pv-cta-portal i').className = 'fa-solid ' + (p.icon || 'fa-door-open');
+            cta.hidden = !(p.openIn || p.open);
+            mountCta();
+            closeMoreSheet();
             // 🚨 顯示/隱藏走 class 不走 inline style（專案鐵律）；背景圖是動態 URL，只能直接設 backgroundImage
             const applyNpc = (npc) => {
                 curNpc = npc || null;
@@ -556,7 +571,8 @@
 
         // ✕ 只收起右邊的窗格（回到單純看立繪講話），不是關掉整個主頁——主頁沒有「關掉」這件事
         box.querySelector('.lb-pv-x').addEventListener('click', () => go('talk'));
-        openBtn.addEventListener('click', () => go('app'));
+        cta.addEventListener('click', () => go('app'));
+        placeBtn.addEventListener('click', () => { if (!desktopRail.matches) openScenePicker(); });
 
         // 窗格裡的面板按了它自己的 ✕（見 _mountFloating）：跟按窗格這顆 ✕ 是同一件事，回到對話。
         // 這裡沒人可以講話的話不能叫 go('talk')——它會退回應用、把剛關掉的面板又開一次。
@@ -568,7 +584,8 @@
         });
 
         const close = () => {
-            restorePanel(); talkOff(); closeScenePicker();
+            restorePanel(); talkOff(); closeScenePicker(); closeMoreSheet();
+            cta.remove();
             try { win.LobbyDress?.closeHistory?.(); } catch (e) {}
             // 離開對話模式時站在 404 的話把皮脫掉；接著掛舞台的話，舞台的 lstage-scene 會照它的場景再套一次
             if (_curId === 'room404') { try { win.VoidTerminal?.sync404?.(false); } catch (e) {} }
@@ -586,7 +603,7 @@
 
     // ── 🏞 換場景（窄畫面）───────────────────────────────────────
     //   窄畫面放不下地點欄（以前收成一排沒有名字的深色方塊，看不出哪顆是哪裡），
-    //   改成右側欄一顆「換場景」→ 這張卡片面板：每個地點一張縮圖＋名字，現在在的打勾，沒解鎖的灰掉加鎖。
+    //   改成點左上角的地名膠囊 → 這張卡片面板：每個地點一張縮圖＋名字，現在在的打勾，沒解鎖的灰掉加鎖。
     //   清單跟桌機的地點欄同一份（_cards），點一張就走過去（_paint），跟點地點欄是同一件事。
     //
     // 🚨 縮圖不能直接塞背景原圖：一張 1440×810，七張同時解碼在 iPhone 上就是三十幾 MB
@@ -628,6 +645,7 @@
         const host = document.querySelector('.lobby-left');
         if (!host) return;
         closeScenePicker();
+        closeMoreSheet();
 
         const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const el = document.createElement('div');
@@ -678,9 +696,76 @@
         })();
     }
 
-    // 右側欄那顆鈕沒有 data-proxy（void_terminal 的 dock 代理會略過它），在這裡接
+    // ── ⋯ 更多（窄畫面）───────────────────────────────────────
+    //   手機的右側欄只留藏書／章節／應用／更多／出門：九顆排成一柱會把角色整個蓋住。
+    //   其餘標 data-more 的（日誌／成就／房產／宿舍／控制台）收進這張從底部升起的清單。
+    //   清單上的每一格＝按原本那顆 dock 鈕（它藏著但還在），動作、404 的換字、宿舍沒裝不出現全部照舊走原路。
+    //   清單讓出右側欄那一條：右側欄浮在遮罩上面，再按一次「更多」就收起來。
+    let _more = null;
+    function closeMoreSheet() {
+        if (!_more) return;
+        _more.remove();
+        _more = null;
+        document.querySelector('.lobby-left')?.classList.remove('lb-more-open');
+        document.getElementById('lb-dock-more')?.setAttribute('aria-expanded', 'false');
+    }
+    function openMoreSheet() {
+        if (!_paint) return;                       // 只在對話模式的主畫面有意義
+        const host = document.querySelector('.lobby-left');
+        const dock = document.getElementById('lb-dock');
+        if (!host || !dock) return;
+        closeScenePicker();
+        closeMoreSheet();
+
+        const is404 = !!host.closest('.void-tab.mode-404');
+        const src = [...dock.querySelectorAll('.lb-dock-btn[data-more]')].filter(b => !b.classList.contains('lb-entry-off'));
+        const el = document.createElement('div');
+        el.className = 'lb-more';
+        el.innerHTML =
+            '<div class="lb-more-veil"></div>' +
+            '<div class="lb-more-sheet" role="dialog" aria-label="更多">' +
+              '<div class="lb-more-hd"><span class="lb-more-title">更多</span>' +
+                '<button class="lb-more-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
+              '<div class="lb-more-grid"></div>' +
+            '</div>';
+        const grid = el.querySelector('.lb-more-grid');
+        src.forEach((b, i) => {
+            const lab = b.querySelector('.lb-dock-label');
+            const name = (is404 && lab && lab.getAttribute('data-cn-404')) || (lab ? lab.textContent.trim() : b.title);
+            const dot = b.classList.contains('has-pending') || b.classList.contains('lb-ai-news') || b.classList.contains('lb-ai-news-prop');
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'lb-more-item' + (dot ? ' has-dot' : '');
+            item.dataset.i = String(i);
+            item.innerHTML = '<span class="lb-more-ic"></span><span class="lb-more-name"></span>';
+            const ic = b.querySelector('.lb-dock-ic');
+            if (ic) item.querySelector('.lb-more-ic').appendChild(ic.cloneNode(true));
+            item.querySelector('.lb-more-name').textContent = name;
+            grid.appendChild(item);
+        });
+
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('.lb-more-x') || e.target.classList.contains('lb-more-veil')) { closeMoreSheet(); return; }
+            const it = e.target.closest('.lb-more-item');
+            if (!it) return;
+            const b = src[Number(it.dataset.i)];
+            closeMoreSheet();
+            if (b) b.click();                      // 冒泡到 #lb-dock 的代理，照原本那顆的路走
+        });
+
+        host.appendChild(el);
+        host.classList.add('lb-more-open');
+        _more = el;
+        document.getElementById('lb-dock-more')?.setAttribute('aria-expanded', 'true');
+    }
+
+    // 「更多」那顆沒有 data-proxy（void_terminal 的 dock 代理會略過它），在這裡接；
+    // 清單開著時按右側欄其他顆＝要去別的地方了，清單順手收掉
     document.addEventListener('click', (e) => {
-        if (e.target && e.target.closest && e.target.closest('#lb-dock-scene')) openScenePicker();
+        const t = e.target;
+        if (!t || !t.closest) return;
+        if (t.closest('#lb-dock-more')) { if (_more) closeMoreSheet(); else openMoreSheet(); return; }
+        if (_more && t.closest('#lb-dock .lb-dock-btn')) closeMoreSheet();
     });
 
     // ── 統一入口：同一顆鈕，兩種畫法 ────────────────────────────
@@ -697,6 +782,6 @@
     // reprime()：把對話框換回眼前這位的（大廳開場流程比地點視圖晚一步時，會把書咖的開場旁白蓋上來）。
     const speaker = () => (_speakerOf ? _speakerOf() : undefined);
     const reprime = () => (_reprime ? _reprime() : false);
-    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, openScenePicker, closeScenePicker, speaker, reprime, HOME_ID, PLACES };
+    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, openScenePicker, closeScenePicker, openMoreSheet, closeMoreSheet, speaker, reprime, HOME_ID, PLACES };
     console.log('✅ LobbyPlaces（地點清單）模組就緒');
 })();

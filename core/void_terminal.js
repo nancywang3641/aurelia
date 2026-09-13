@@ -608,11 +608,11 @@ const IRIS_IDLE = [
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-chapters-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="異常記錄">章節</span>
                         </button>
-                        <button class="lb-dock-btn" data-proxy="void-journal-btn" title="故事日誌">
+                        <button class="lb-dock-btn" data-proxy="void-journal-btn" data-more="1" title="故事日誌">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-journal-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="案件日誌">日誌</span>
                         </button>
-                        <button class="lb-dock-btn" id="lb-dock-ach" data-proxy="void-achievement-btn" title="成就">
+                        <button class="lb-dock-btn" id="lb-dock-ach" data-proxy="void-achievement-btn" data-more="1" title="成就">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-achievements-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="異常蒐集">成就</span>
                         </button>
@@ -624,15 +624,15 @@ const IRIS_IDLE = [
                              移動既有 tag 會讓 jsdelivr 繼續吐舊快取，而把全站 52 處 @v1 一起升版
                              要連帶預熱一百多支檔（沒預熱＝她會看到滿屏載入失敗），為了兩顆圖不划算。
                              下次真的要升 v2 時，這兩支跟著一起換掉就好。 -->
-                        <button class="lb-dock-btn" data-proxy="void-estate-btn" title="房產手帳">
+                        <button class="lb-dock-btn" data-proxy="void-estate-btn" data-more="1" title="房產手帳">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@f409f7e/aseets/menu_dock/icon-estate-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="違章建築">房產</span>
                         </button>
-                        <button class="lb-dock-btn lb-entry-off" id="lb-dock-ai" data-proxy="void-ai-btn" title="宿舍">
+                        <button class="lb-dock-btn lb-entry-off" id="lb-dock-ai" data-proxy="void-ai-btn" data-more="1" title="宿舍">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@f409f7e/aseets/menu_dock/icon-dorm-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="收容所">宿舍</span>
                         </button>
-                        <button class="lb-dock-btn" data-proxy="void-dash-btn" title="控制台">
+                        <button class="lb-dock-btn" data-proxy="void-dash-btn" data-more="1" title="控制台">
                             <svg class="lb-dock-ic" viewBox="0 0 512 512" aria-hidden="true">
                                 <g stroke="#12305e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
                                     <rect x="56" y="86" width="400" height="340" rx="34" fill="#f5f9fd"/>
@@ -644,22 +644,21 @@ const IRIS_IDLE = [
                             </svg>
                             <span class="lb-dock-label" data-cn-404="監控站">控制台</span>
                         </button>
-                        <div class="lb-dock-sep"></div>
-                        <!-- 換場景：只在手機的對話模式出現（那時地點欄收掉了，改從這裡叫場景卡片）。
-                             沒有 data-proxy，點擊由 lobby_places.js 接。
+                        <!-- 更多：只在手機的對話模式出現。上面標 data-more 的那幾顆在手機收進這張清單，
+                             右側欄只留藏書／章節／應用／更多／出門。沒有 data-proxy，點擊由 lobby_places.js 接。
                              素材庫沒有這顆圖，照同一套配色（深藍描邊／天藍／金點）直接畫 -->
-                        <button class="lb-dock-btn" id="lb-dock-scene" type="button" title="換場景">
+                        <button class="lb-dock-btn" id="lb-dock-more" type="button" title="更多" aria-expanded="false">
                             <svg class="lb-dock-ic" viewBox="0 0 512 512" aria-hidden="true">
                                 <g stroke="#12305e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
-                                    <rect x="170" y="62" width="290" height="226" rx="30" fill="#bfe3f7" transform="rotate(9 315 175)"/>
-                                    <rect x="52" y="150" width="340" height="286" rx="32" fill="#f5f9fd"/>
-                                    <rect x="94" y="192" width="256" height="202" rx="14" fill="#e3f3fc" stroke-width="16"/>
-                                    <path d="M104 384 L186 280 L236 338 L276 298 L340 384 Z" fill="#1ea7e8" stroke-width="16"/>
-                                    <circle cx="288" cy="244" r="22" fill="#f2b632" stroke-width="12"/>
+                                    <rect x="56" y="112" width="400" height="288" rx="64" fill="#f5f9fd"/>
+                                    <circle cx="160" cy="256" r="34" fill="#1ea7e8" stroke-width="16"/>
+                                    <circle cx="256" cy="256" r="34" fill="#bfe3f7" stroke-width="16"/>
+                                    <circle cx="352" cy="256" r="34" fill="#f2b632" stroke-width="16"/>
                                 </g>
                             </svg>
-                            <span class="lb-dock-label" data-cn-404="跳轉">換場景</span>
+                            <span class="lb-dock-label" data-cn-404="其他">更多</span>
                         </button>
+                        <div class="lb-dock-sep"></div>
                         <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-depart-flat.png" alt="">
                             <span class="lb-dock-label" data-cn-404="墜入404">出門</span>
