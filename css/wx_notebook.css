@@ -1,0 +1,273 @@
+/* ================================================================
+   wx_notebook.css —— 微信記事本（一間聊天室一本，你和角色都能丟東西進來）
+   一整頁：上面搜尋，下面兩欄交錯的卡片牆，右下角「＋」；點卡片開編輯頁。
+   氣質是一本安靜的小倉庫：米白底、白卡、細陰影，沒有社群按鈕。
+   ================================================================ */
+
+.wxnb-root {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    background: #f6f3ec;
+    color: #2f2a22;
+    animation: wxnb-in .2s ease;
+}
+@keyframes wxnb-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+
+.wxnb-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 10px 6px;
+    flex-shrink: 0;
+}
+.wxnb-back, .wxnb-head-pad {
+    width: 36px; height: 36px;
+    flex-shrink: 0;
+}
+.wxnb-back {
+    border: none;
+    background: none;
+    color: #2f2a22;
+    font-size: 17px;
+    cursor: pointer;
+    border-radius: 50%;
+}
+.wxnb-back:active { background: rgba(47, 42, 34, .08); }
+.wxnb-head-t { flex: 1; min-width: 0; text-align: center; }
+.wxnb-title { font-size: 16px; font-weight: 700; letter-spacing: .04em; }
+.wxnb-sub { font-size: 11px; color: rgba(47, 42, 34, .5); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.wxnb-search {
+    margin: 4px 14px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 18px;
+    background: rgba(47, 42, 34, .07);
+    color: rgba(47, 42, 34, .45);
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.wxnb-q {
+    flex: 1;
+    min-width: 0;
+    border: none !important;
+    background: transparent !important;
+    color: #2f2a22 !important;
+    font-size: 14px;
+    outline: none;
+    padding: 0;
+}
+
+.wxnb-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 12px calc(90px + env(safe-area-inset-bottom, 0px));
+    -webkit-overflow-scrolling: touch;
+}
+/* 兩欄交錯：高低不一的卡片自己往下疊，像一面貼滿東西的軟木板 */
+.wxnb-grid { column-count: 2; column-gap: 10px; }
+.wxnb-card {
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    margin-bottom: 10px;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(47, 42, 34, .1);
+    cursor: pointer;
+}
+.wxnb-card:active { transform: scale(.985); }
+.wxnb-card-ph { position: relative; }
+.wxnb-thumb { display: block; width: 100%; max-height: 220px; object-fit: cover; background: #ece6da; }
+.wxnb-thumb:not([src]) { height: 110px; }
+.wxnb-thumb-desc {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 12px;
+    background: linear-gradient(160deg, #e9e1d2, #d8ccb6);
+    color: #5a4e3c;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.wxnb-thumb-desc i { font-size: 16px; opacity: .6; }
+.wxnb-thumb-desc span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wxnb-more {
+    position: absolute;
+    right: 7px; bottom: 7px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, .5);
+    color: #fff;
+    font-size: 11px;
+}
+.wxnb-card-t { padding: 10px 11px 0; font-size: 14px; font-weight: 700; line-height: 1.4; word-break: break-word; }
+.wxnb-card-b {
+    padding: 6px 11px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(47, 42, 34, .78);
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.wxnb-card-f {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px 11px 9px;
+    font-size: 11px;
+    color: rgba(47, 42, 34, .45);
+}
+.wxnb-who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 角色記的：名字那行帶一點綠，一眼分得出是誰丟進來的 */
+.wxnb-card.by-char .wxnb-who { color: #1f9a57; font-weight: 600; }
+
+.wxnb-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 70px 30px 0;
+    text-align: center;
+    color: rgba(47, 42, 34, .45);
+}
+.wxnb-empty[hidden] { display: none !important; }
+.wxnb-empty i { font-size: 34px; opacity: .5; margin-bottom: 4px; }
+.wxnb-empty-t { font-size: 15px; font-weight: 600; color: rgba(47, 42, 34, .6); }
+.wxnb-empty-s { font-size: 12px; line-height: 1.7; }
+
+.wxnb-fab {
+    position: absolute;
+    right: 18px;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    border: none;
+    background: #07c160;
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(7, 193, 96, .35);
+    z-index: 2;
+}
+.wxnb-fab:active { transform: scale(.94); }
+
+/* ── 編輯一則：整頁蓋上去 ── */
+.wxnb-edit {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    background: #fffdf8;
+    animation: wxnb-up .2s ease;
+}
+@keyframes wxnb-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.wxnb-edit-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(47, 42, 34, .08);
+    flex-shrink: 0;
+}
+.wxnb-edit-who { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: rgba(47, 42, 34, .55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wxnb-edit-x, .wxnb-edit-ok {
+    border: none;
+    background: none;
+    font-size: 15px;
+    padding: 6px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.wxnb-edit-x { color: rgba(47, 42, 34, .6); }
+.wxnb-edit-ok { color: #07c160; font-weight: 700; }
+.wxnb-edit-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.wxnb-in-t, .wxnb-in-b {
+    width: 100%;
+    box-sizing: border-box;
+    border: none !important;
+    background: transparent !important;
+    color: #2f2a22 !important;
+    outline: none;
+    font-family: inherit;
+    padding: 0;
+}
+.wxnb-in-t { font-size: 19px; font-weight: 700; }
+.wxnb-in-b { min-height: 160px; font-size: 15px; line-height: 1.75; resize: none; }
+.wxnb-in-t::placeholder, .wxnb-in-b::placeholder { color: rgba(47, 42, 34, .3); }
+
+.wxnb-photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.wxnb-tile {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #ece6da;
+}
+.wxnb-tile .os-img-photo, .wxnb-tile .os-img-card { width: 100%; height: 100%; }
+.wxnb-tile-x {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, .55);
+    color: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    z-index: 4;
+}
+.wxnb-tile-add {
+    border: 1.5px dashed rgba(47, 42, 34, .25);
+    background: transparent;
+    color: rgba(47, 42, 34, .5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.wxnb-tile-add i { font-size: 18px; }
+.wxnb-tile-add:disabled { opacity: .5; cursor: progress; }
+.wxnb-del {
+    margin-top: 14px;
+    align-self: flex-start;
+    border: none;
+    background: none;
+    color: #d64545;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 6px 0;
+}
+
+/* 聊天室右上角那顆本子 */
+.wxnb-head-btn { font-size: 17px; cursor: pointer; padding: 4px 6px; color: #000; }
+.wxnb-head-btn.is-dark { color: #f0f0f0; }
+/* 聊天室裡「○○記了一筆」那行：點了打開那一則 */
+.wx-system-notice.wxnb-notice { cursor: pointer; }
+.wx-system-notice.wxnb-notice i { margin-right: 4px; opacity: .7; }

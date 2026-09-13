@@ -128,58 +128,6 @@
 }
 .wxpf-act:active i { background: rgba(255, 255, 255, .3); }
 
-/* ── 備忘錄：一張小紙條 ── */
-.wxpf-note {
-    position: absolute;
-    inset: 0;
-    z-index: 4;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 18px;
-    box-sizing: border-box;
-    background: rgba(8, 11, 18, .55);
-}
-.wxpf-note-card {
-    width: 100%;
-    max-width: 340px;
-    background: #fffdf6;
-    border-radius: 12px;
-    padding: 15px 15px 13px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, .45);
-}
-.wxpf-note-h { font-size: 14px; font-weight: 700; color: #3a3226; }
-.wxpf-note-ta {
-    width: 100%;
-    box-sizing: border-box;
-    height: 34vh;
-    min-height: 150px;
-    resize: none;
-    border: 1px solid rgba(58, 50, 38, .18);
-    border-radius: 8px;
-    padding: 10px 11px;
-    background: #fffdf6 !important;
-    color: #3a3226 !important;
-    font: 13px/1.8 inherit;
-    outline: none;
-}
-.wxpf-note-ta:focus { border-color: rgba(58, 50, 38, .38); }
-.wxpf-note-btns { display: flex; gap: 9px; justify-content: flex-end; }
-.wxpf-note-b {
-    padding: 7px 17px;
-    border-radius: 17px;
-    border: 1px solid rgba(58, 50, 38, .25);
-    background: #fffdf6;
-    color: #3a3226 !important;
-    font-size: 13px;
-    font-family: inherit;
-    cursor: pointer;
-}
-.wxpf-note-b.solid { background: #3a3226; color: #fdf8ec !important; border-color: #3a3226; }
-
 /* 矮螢幕：頭像縮一點，按鈕不要被擠掉 */
 @media (max-height: 620px) {
     .wxpf-ring { width: 84px; height: 84px; }

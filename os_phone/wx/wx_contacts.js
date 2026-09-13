@@ -453,10 +453,12 @@
             }
             
             // 2. 刪除資料庫中的聊天歷史紀錄
-            if (win.WX_DB && typeof win.WX_DB.deleteApiChat === 'function') { 
-                await win.WX_DB.deleteApiChat(id); 
+            if (win.WX_DB && typeof win.WX_DB.deleteApiChat === 'function') {
+                await win.WX_DB.deleteApiChat(id);
             }
-            
+            // 2.5 📒 你們的記事本一起丟（清空聊天記錄不會清它，只有刪掉這個人才會）
+            try { if (win.WX_NOTEBOOK && win.WX_NOTEBOOK.removeChat) await win.WX_NOTEBOOK.removeChat(id); } catch (e) {}
+
             // 3. 刪除當前畫面上渲染的聊天對象
             if (win.wxApp && win.wxApp.GLOBAL_CHATS) { 
                 if (win.wxApp.GLOBAL_ACTIVE_ID === id) win.wxApp.goBack(); 

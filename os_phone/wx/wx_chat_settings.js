@@ -1201,6 +1201,7 @@
                 if (await AUI.confirm('確定要刪除聊天室嗎？')) {
                     if (win.wxApp && win.wxApp.deleteChat) win.wxApp.deleteChat(chatId);
                     if (win.OS_DB && win.OS_DB.deleteApiChat) win.OS_DB.deleteApiChat(chatId);
+                    try { if (win.WX_NOTEBOOK && win.WX_NOTEBOOK.removeChat) win.WX_NOTEBOOK.removeChat(chatId); } catch (e) {}   // 📒 記事本跟著聊天室一起刪
                     panel.classList.remove('show');
                 }
             };

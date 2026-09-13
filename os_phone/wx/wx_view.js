@@ -227,6 +227,11 @@
                         displayContent = isAccept ? `對方已接收轉帳 ${amount}元` : `對方已拒絕轉帳 ${amount}元`;
                     }
                 }
+                // 📒 「○○記了一筆」：點了打開記事本的那一則
+                if (msg._noteRef) {
+                    const _nbCall = `event.stopPropagation(); const NB=(window.parent.WX_NOTEBOOK||window.WX_NOTEBOOK); if(NB) NB.open('${String(chatId).replace(/'/g, "\\'")}','${String(msg._noteRef).replace(/'/g, "\\'")}')`;
+                    return `<div class="wx-system-notice wxnb-notice ${animClass}" style="${opacityStyle}" ${dataAttr} onclick="${_nbCall}"><i class="fa-solid fa-book-bookmark"></i>${sysText(displayContent)}</div>`;
+                }
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(displayContent)}</div>`;
             }
             if (msg.type === 'time') return `<div class="wx-time-stamp ${animClass}" style="${opacityStyle}" ${dataAttr}>${msg.content}</div>`;
@@ -1157,6 +1162,7 @@
 
                 headerRightBtn = `
                     <div style="display:flex; align-items:center; gap:8px;">
+                        ${(chats[activeId] && chats[activeId].isGroup) ? '' : `<div id="wx-msg-note-btn" class="wxnb-head-btn${isDark ? ' is-dark' : ''}" onclick="event.stopPropagation(); const nb = (window.parent.WX_NOTEBOOK || window.WX_NOTEBOOK); if(nb) nb.open('${activeId}');"><i class="fa-solid fa-book-bookmark"></i></div>`}
                         <div id="wx-msg-delete-btn" style="display:block; font-size:16px; cursor:pointer; color:#ff453a; padding:4px 8px;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.enterMultiSelectMode();"><i class="fa-solid fa-trash"></i></div>
                         <div id="wx-msg-menu-btn" style="display:block; font-size:22px; cursor:pointer; font-weight:bold; margin-top:-8px; color:${isDark ? '#f0f0f0' : '#000'};"

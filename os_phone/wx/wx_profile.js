@@ -7,15 +7,13 @@
 //   背景用那個人的聊天背景（微信那間設的那張）；沒設就用他的頭像放大模糊當底。
 // 🚨 背景與頭像一律走 <img>.src / 既有的 hydrate，不塞進 CSS 變數——
 //    圖庫拿回來的可能是很長的 dataURL，塞 CSS 變數會被瀏覽器整條丟掉。
+//   底下兩顆：發訊息、記事本（wx_notebook.js；群組沒有記事本那顆）。
 // 對外：WX_PROFILE.open(idOrName) / close()
 // ----------------------------------------------------------------
 (function () {
     'use strict';
     const win = window.parent || window;
     const d = win.document;
-
-    const NOTE_KEY = (id) => 'wx_note_' + id;
-    const NOTE_MAX = 4000;
 
     function _esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -98,7 +96,7 @@
             '</div>' +
             '<div class="wxpf-acts">' +
             '  <button class="wxpf-act" type="button" data-act="chat"><i class="fa-solid fa-comment"></i><span>發訊息</span></button>' +
-            '  <button class="wxpf-act" type="button" data-act="note"><i class="fa-solid fa-note-sticky"></i><span>備忘錄</span></button>' +
+            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="note"><i class="fa-solid fa-book-bookmark"></i><span>記事本</span></button>') +
             '</div>';
         host.appendChild(_root);
 
@@ -124,48 +122,13 @@
                     close();
                     try { win.wxApp.openChat(p.id); } catch (e) {}
                 } else {
-                    _openNote(p);
+                    // 記事本（wx_notebook.js）：以前這裡是一張小紙條，第一次打開記事本時會搬成第一則
+                    close();
+                    try { const NB = win.WX_NOTEBOOK || window.WX_NOTEBOOK; if (NB) NB.open(p.id); } catch (e) {}
                 }
             };
         });
         return true;
-    }
-
-    // 備忘錄：先給最小的一張紙條——她說筆記比較像這間聊天室的備忘錄，所以按聊天室存。
-    // 🚨 目前不進 AI 的上下文（她只說要先有一顆按鈕）；要給 AI 看是另一件事。
-    function _openNote(p) {
-        if (!_root) return;
-        let cur = '';
-        try { cur = localStorage.getItem(NOTE_KEY(p.id)) || ''; } catch (e) {}
-        const sheet = d.createElement('div');
-        sheet.className = 'wxpf-note';
-        sheet.innerHTML =
-            '<div class="wxpf-note-card">' +
-            '  <div class="wxpf-note-h">關於 ' + _esc(p.name) + '</div>' +
-            '  <textarea class="wxpf-note-ta" maxlength="' + NOTE_MAX + '" placeholder="記點什麼：他怕什麼、欠我多少、答應過我的事…"></textarea>' +
-            '  <div class="wxpf-note-btns">' +
-            '    <button class="wxpf-note-b" type="button" data-x>關閉</button>' +
-            '    <button class="wxpf-note-b solid" type="button" data-ok>存起來</button>' +
-            '  </div>' +
-            '</div>';
-        _root.appendChild(sheet);
-        const ta = sheet.querySelector('textarea');
-        ta.value = cur;
-        setTimeout(function () { try { ta.focus(); } catch (e) {} }, 30);
-        const bye = function () { try { sheet.remove(); } catch (e) {} };
-        sheet.onclick = function (e) { if (e.target === sheet) bye(); };
-        sheet.querySelector('[data-x]').onclick = bye;
-        sheet.querySelector('[data-ok]').onclick = function () {
-            try {
-                const v = ta.value.slice(0, NOTE_MAX);
-                if (v.trim()) localStorage.setItem(NOTE_KEY(p.id), v);
-                else localStorage.removeItem(NOTE_KEY(p.id));
-                bye();
-            } catch (e) {
-                // 🚨 localStorage 滿了是靜默失敗，要講出來
-                try { (win.AUI || window.AUI).toastr.error('存不進去，瀏覽器的空間滿了'); } catch (e2) {}
-            }
-        };
     }
 
     // 🚨 WX_PROFILE 這個名字有兩個主人：wx_user_profile.js 放的是「我」自己的暱稱／簽名（get/update），
@@ -173,8 +136,7 @@
     //    「我」頁的暱稱就變回 User、編輯暱稱按鈕點了沒反應。兩邊都用合併寫，誰先誰後都不會互相吃掉。
     win.WX_PROFILE = Object.assign(win.WX_PROFILE || {}, {
         open: open,
-        close: close,
-        noteOf: function (id) { try { return localStorage.getItem(NOTE_KEY(id)) || ''; } catch (e) { return ''; } }
+        close: close
     });
     if (win !== window) { try { window.WX_PROFILE = win.WX_PROFILE; } catch (e) {} }
 })();

@@ -665,6 +665,32 @@
             return { type: 'system', content: '', isMe: false };
         }
 
+        // 📒 記事本（wx_notebook.js）三條：看完她放的照片寫回來的描述、改它記過的那則、它自己記一筆。
+        //    照片那條要排在「記一筆」前面——「記事本照片 1 …」開頭也是「記事本」。
+        const nbPhotoMatch = content.match(/^\s*(?:記事本|记事本)\s*(?:照片|相片)\s*(\d+)?\s*[:：]?\s*(.+)$/);
+        if (nbPhotoMatch) {
+            try { const NB = win.WX_NOTEBOOK; if (NB) NB.rememberPhoto(parseInt(nbPhotoMatch[1], 10), nbPhotoMatch[2]); } catch (e) {}
+            return { type: 'system', content: '', isMe: false };
+        }
+        const nbEditMatch = content.match(/^\s*(?:改|修改)\s*(?:記事本|记事本)\s*(\d+)\s*(?:號|号)?\s*[|｜:：]?\s*(.+)$/);
+        if (nbEditMatch) {
+            try {
+                const NB = win.WX_NOTEBOOK;
+                const hit = NB ? NB.editFromAi(ctx.chatId, parseInt(nbEditMatch[1], 10), nbEditMatch[2]) : null;
+                if (hit) return { type: 'system', content: `${ctx.chatName} 改了記事本裡的一則`, isMe: false, _noteRef: hit.id };
+            } catch (e) {}
+            return { type: 'system', content: '', isMe: false };
+        }
+        const nbAddMatch = content.match(/^\s*(?:記一筆|记一笔|記事本|记事本)\s*[|｜:：]?\s*(.+)$/);
+        if (nbAddMatch) {
+            try {
+                const NB = win.WX_NOTEBOOK;
+                const r = NB ? NB.addFromAi(ctx.chatId, nbAddMatch[1], ctx.chatName) : null;
+                if (r) return { type: 'system', content: r.notice, isMe: false, _noteRef: r.item.id };
+            } catch (e) {}
+            return { type: 'system', content: '', isMe: false };
+        }
+
         // 處理 [System: 改名 XXX]。以前完全沒有這條，AI 想改名只能寫成一句話、變成一顆泡泡。
         // 做的事跟她在資料頁手動改名一模一樣：改顯示名、重畫、存檔。不碰通訊錄，跟手動那條一致。
         const renameMatch = content.match(/^\s*(?:改名|更名|改暱稱|改昵称|換名字|换名字|改個名字|改个名字|rename)\s*(?:為|为|成|to)?\s*[:：]?\s*(.+)$/i);
@@ -3063,6 +3089,14 @@
                         if (_seeMsg) { messages.push(_seeMsg); console.log('[WX] 這輪夾了頭像給它看'); }
                     }
                 } catch (e) { console.warn('[WX] 頭像夾帶失敗（不影響送出）:', e); }
+                // 📒 她放進記事本、它還沒看過的照片 → 這一輪夾進去（看完寫描述回來，之後目錄裡只送那句）
+                try {
+                    const _nb = win.WX_NOTEBOOK;
+                    if (_nb && _nb.photoOnceMessage && !currentChat.isGroup) {
+                        const _nbPh = await _nb.photoOnceMessage(GLOBAL_ACTIVE_ID);
+                        if (_nbPh) { messages.push(_nbPh); console.log('[WX] 這輪夾了記事本的照片給它看'); }
+                    }
+                } catch (e) { console.warn('[WX] 記事本照片夾帶失敗（不影響送出）:', e); }
 
                 console.log('[WX] 呼叫 OS_API.chat…');
                 try {

@@ -1394,6 +1394,14 @@
                             if (apiChat.personaCustom && apiChat.personaFromLorebook) personaText = `${apiChat.personaCustom}\n\n---\n\n${personaText}`;
                             
                             if (personaText) apiMessages.push({ role: "system", content: `[Character Persona (Private Chat)]:\n${personaText}\n\n` });
+                            // 📒 你們的記事本：每輪只給目錄（見 wx_notebook.js brief）；通話只給目錄、不教怎麼寫
+                            try {
+                                const _nb = win.WX_NOTEBOOK;
+                                if (_nb && _nb.brief) {
+                                    const _nbt = await _nb.brief(currentChatId, { call: promptKey === 'call_voice_system' });
+                                    if (_nbt) apiMessages.push({ role: "system", content: _nbt });
+                                }
+                            } catch (e) { console.warn('[OS_API] 記事本目錄組裝失敗（不影響送出）', e); }
                         } else if (apiChat && apiChat.isGroup) {
                             let groupNoteText = '';
                             if (apiChat.groupNoteFromLorebook && win.TavernHelper) {
@@ -2032,6 +2040,18 @@
                 if (lore && !_iso.lore) contextBlock += `[World Info]:\n${lore}\n\n`;
             }
             if (contextBlock) apiMessages.push({ role: 'system', content: contextBlock });
+
+            // 📒 記事本目錄：一對一的微信與通話（同酒館版，見 wx_notebook.js brief）
+            if (_isWxRoute && win.wxApp?.GLOBAL_ACTIVE_ID) {
+                try {
+                    const _nbChat = win.wxApp.GLOBAL_CHATS?.[win.wxApp.GLOBAL_ACTIVE_ID];
+                    const _nb = win.WX_NOTEBOOK;
+                    if ((!_nbChat || !_nbChat.isGroup) && _nb && _nb.brief) {
+                        const _nbt = await _nb.brief(win.wxApp.GLOBAL_ACTIVE_ID, { call: _isCall });
+                        if (_nbt) apiMessages.push({ role: 'system', content: _nbt });
+                    }
+                } catch (e) { console.warn('[OS_API standalone] 記事本目錄組裝失敗（不影響送出）', e); }
+            }
 
             // ── 劇情長期記憶 + 劇情正文：手機 app 也要知道劇情發生了什麼 ──────────────────
             //   酒館那條路早就有（大總結壓縮版 ＋ ### Reality Context (Story History)），
