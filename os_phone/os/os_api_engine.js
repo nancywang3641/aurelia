@@ -89,6 +89,27 @@
         } catch (e) { return off; }
     }
 
+    // 📞 正在講的這一通從哪一則開始：最後一個「通話開始」，而且它後面沒有「通話結束」。
+    //    回傳它在 windowMsgs（聊天歷史的尾巴那一段）裡的位置；還在響鈴、這一通還沒接通就回 -1。
+    //    講很久、窗口切在這一通中間的話，整段都算這一通，回 0。
+    //    🚨 以前歷史最後一律補「現在是新接起來的一通電話」，連這一通剛講過的話也被算成「以前」，
+    //       模型每一輪都當成剛接起來：句句開頭「喂」、剛說好要測試轉頭就忘（2026-09-13 她抓到的）。
+    function _openCallAt(windowMsgs, allMsgs) {
+        const all = allMsgs || windowMsgs || [];
+        let start = -1;
+        for (let i = all.length - 1; i >= 0; i--) {
+            const m = all[i];
+            if (!m) continue;
+            if (m._callEnd || m._missed) break;
+            if (m._callStart) { start = i; break; }
+        }
+        if (start < 0) return -1;
+        const offset = all.length - (windowMsgs || []).length;
+        return Math.max(0, start - offset);
+    }
+    const _CALL_PAST_NOTE = '（以上都是以前發生過的對話與通話，不是現在。現在是新接起來的一通電話：先想清楚距離上次過了多久、這段時間裡發生過什麼，不要假設上次沒講完的話還在繼續，也不要假設上次借走、約好、拿走的東西還維持當時的狀態。）';
+    const _CALL_NOW_NOTE = '（以上都是以前發生過的對話與通話，不是現在。下面是現在正在講的這一通電話——早就接通了，下面每一句都是這一通裡剛剛才講過的話，順著講下去。）';
+
     // 把 messages 拼成純文字（多模態只取 text 片段）供估 token
     function _msgsText(messages) {
         try {
@@ -1492,7 +1513,13 @@
                             const _histMsgs = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
                                 ? win.WX_SUMMARY.recentWindow(apiChat) : apiChat.messages;
                             const rawPhoneMsgs = [];
-                            _histMsgs.forEach(msg => {
+                            // 📞 這一通已經接通：「以上是以前」那句放在這一通開始的地方，不是放在最後
+                            const _curCallAt = (promptKey === 'call_voice_system') ? _openCallAt(_histMsgs, apiChat.messages) : -1;
+                            _histMsgs.forEach((msg, _i) => {
+                                if (_i === _curCallAt) {
+                                    rawPhoneMsgs.push({ role: 'system', content: _CALL_NOW_NOTE, _source: 'phone' });
+                                    if (msg && msg._callStart) return;   // 這一通的「通話開始」就是上面那句，不再寫成「之前的一通電話」
+                                }
                                 if (!msg) return;
                                 // 🚫 對方把她刪了之後她還在打的那幾則：他根本沒收到，不能給他看（連「被對方拒收」那句也是）
                                 if (msg.sentWhileBlocked || msg._blockedNotice) return;
@@ -1519,9 +1546,10 @@
                                 if (content) apiMessages.push({ role: msg.role, content: content });
                             });
                             // 收尾：講清楚上面全是過去的事，這一通／這一則是新的
-                            if (rawPhoneMsgs.length) {
+                            //    這一通已經接通的話，那句已經放在這一通開始的地方了，這裡不再補
+                            if (rawPhoneMsgs.length && _curCallAt < 0) {
                                 apiMessages.push({ role: 'system', content: (promptKey === 'call_voice_system')
-                                    ? '（以上都是以前發生過的對話與通話，不是現在。現在是新接起來的一通電話：先想清楚距離上次過了多久、這段時間裡發生過什麼，不要假設上次沒講完的話還在繼續，也不要假設上次借走、約好、拿走的東西還維持當時的狀態。）'
+                                    ? _CALL_PAST_NOTE
                                     : '（以上都是以前的訊息，不是現在。回覆時先想清楚距離上一則過了多久，不要假設當時的情況還沒變。）' });
                             }
                         }
@@ -2052,8 +2080,15 @@
                             ? win.WX_SUMMARY.recentWindow(apiChat) : apiChat.messages;
                         const _cut = _keepN === null ? -1 : _histMsgs.length - _keepN;
                         let _pushedHist = 0;
+                        // 📞 這一通已經接通：「以上是以前」那句放在這一通開始的地方（同酒館版）
+                        const _curCallAt = _isCall ? _openCallAt(_histMsgs, apiChat.messages) : -1;
                         _histMsgs.forEach((msg, _i) => {
                             const useSummary = _i < _cut;
+                            if (_i === _curCallAt) {
+                                apiMessages.push({ role: 'system', content: _CALL_NOW_NOTE });
+                                _pushedHist++;
+                                if (msg && msg._callStart) return;
+                            }
                             if (!msg) return;
                             if (msg.sentWhileBlocked || msg._blockedNotice) return;   // 對方沒收到的那幾則（同酒館版）
                             // 📞 通話：開始／結束／未接聽這些分隔不是誰講的話，當成旁註給（同酒館版），不然模型會讀到自己說「通話開始」
@@ -2084,9 +2119,9 @@
                                 _pushedHist++;
                             }
                         });
-                        // 📞 收尾：講清楚上面全是過去的事，這一通是新接起來的（同酒館版那句）
-                        if (_isCall && _pushedHist) {
-                            apiMessages.push({ role: 'system', content: '（以上都是以前發生過的對話與通話，不是現在。現在是新接起來的一通電話：先想清楚距離上次過了多久、這段時間裡發生過什麼，不要假設上次沒講完的話還在繼續，也不要假設上次借走、約好、拿走的東西還維持當時的狀態。）' });
+                        // 📞 收尾：還在響鈴（這一通還沒接通）才補「現在是新接起來的一通」；接通了那句已經放在這一通開頭
+                        if (_isCall && _pushedHist && _curCallAt < 0) {
+                            apiMessages.push({ role: 'system', content: _CALL_PAST_NOTE });
                         }
                     }
                 } catch(e) { console.warn('[OS_API standalone] 聊天歷史載入失敗:', e); }
