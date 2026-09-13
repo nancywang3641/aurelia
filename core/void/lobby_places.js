@@ -700,13 +700,12 @@
     //   手機的右側欄只留藏書／章節／應用／更多／出門：九顆排成一柱會把角色整個蓋住。
     //   其餘標 data-more 的（日誌／成就／房產／宿舍／控制台）收進這張從底部升起的清單。
     //   清單上的每一格＝按原本那顆 dock 鈕（它藏著但還在），動作、404 的換字、宿舍沒裝不出現全部照舊走原路。
-    //   清單讓出右側欄那一條：右側欄浮在遮罩上面，再按一次「更多」就收起來。
+    //   清單滿寬、蓋住右側欄：開了就是要在這裡挑，不必縮窄去讓它。點遮罩、✕ 或清單裡任一格就收。
     let _more = null;
     function closeMoreSheet() {
         if (!_more) return;
         _more.remove();
         _more = null;
-        document.querySelector('.lobby-left')?.classList.remove('lb-more-open');
         document.getElementById('lb-dock-more')?.setAttribute('aria-expanded', 'false');
     }
     function openMoreSheet() {
@@ -754,7 +753,6 @@
         });
 
         host.appendChild(el);
-        host.classList.add('lb-more-open');
         _more = el;
         document.getElementById('lb-dock-more')?.setAttribute('aria-expanded', 'true');
     }

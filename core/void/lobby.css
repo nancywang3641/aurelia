@@ -1453,11 +1453,11 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
 .lb-pv-cta { display:none; }
 .lb-pv-cta[hidden] { display:none !important; }
 
-/* 更多清單：從底部升起、讓出右側欄那一條；右側欄抬到遮罩上面，再按一次更多就收 */
+/* 更多清單：從底部升起、滿寬。清單都開了就是要在這裡挑，不必縮窄去讓右側欄——右側欄一起蓋在遮罩底下，點遮罩或 ✕ 收起 */
 .lb-more { position:absolute; inset:0; z-index:3360; }
 .lb-more-veil { position:absolute; left:0; right:0; bottom:0; top:var(--lb-m-top, 0px);
   background:rgba(36,56,83,.38); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); }
-.lb-more-sheet { position:absolute; left:0; bottom:0; width:calc(100% - 80px); box-sizing:border-box;
+.lb-more-sheet { position:absolute; left:0; right:0; bottom:0; box-sizing:border-box;
   max-height:calc(100% - var(--lb-m-top, 0px) - 12px); display:flex; flex-direction:column;
   padding:10px 16px calc(18px + env(safe-area-inset-bottom, 0px)); border-radius:22px 22px 0 0;
   background:rgba(245,246,251,.96); border:1px solid #fff; border-bottom:0; color:#30364e;
@@ -1478,7 +1478,6 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
 .lb-more-ic .lb-dock-ic { width:32px; height:32px; }
 .lb-more-item.has-dot::after { content:''; position:absolute; top:10px; right:12px; width:8px; height:8px; border-radius:50%;
   background:#e0a52e; box-shadow:0 0 6px rgba(224,165,46,.8); }
-.lobby-left.lb-more-open #lb-dock { z-index:3362; }
 .void-tab.mode-404 .lb-more-sheet { background:rgba(4,10,4,.96); border-color:rgba(0,255,65,.35); color:#9ef3b0; }
 .void-tab.mode-404 .lb-more-hd { border-bottom-color:rgba(0,255,65,.25); }
 .void-tab.mode-404 .lb-more-x { color:#4ade80; }
@@ -1556,10 +1555,6 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
         border:1px solid rgba(255,255,255,.8); box-shadow:0 3px 12px rgba(52,70,100,.1);
     }
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv) #lb-dock .lb-dock-label { font-size:10px; letter-spacing:1px; color:#4f5d82; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv) #lb-dock-more[aria-expanded="true"] {
-        background:linear-gradient(135deg, #7184af, #52678f); border-color:#d9e5ff;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv) #lb-dock-more[aria-expanded="true"] .lb-dock-label { color:#fff; }
     /* 收進更多的那幾顆有新東西（成就待兌換、宿舍有紙條）→ 更多這顆亮點，不然藏起來就看不到了 */
     #lb-dock:has(.lb-dock-btn[data-more].has-pending, #lb-dock-ai.lb-ai-news:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-prop:not(.lb-entry-off)) #lb-dock-more::after {
         content:''; position:absolute; top:6px; right:7px; width:7px; height:7px; border-radius:50%;
