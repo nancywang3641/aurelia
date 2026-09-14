@@ -503,10 +503,11 @@
                 '<div class="vn-cc-row"><span class="vn-cc-k">好感度</span><span class="vn-cc-v">' + esc(aff) + '</span></div>';
             card.querySelector('.vn-cc-name').textContent = name;
             card.querySelector('#vn-cc-gen').onclick = (e) => this.autoGenSprite(name, e.currentTarget);
-            card.querySelector('#vn-cc-gallery').onclick = () => {
+            card.querySelector('#vn-cc-gallery').onclick = (e) => {
+                const from = e.currentTarget;   // 劇情可能跑在浮動手機裡，也可能在主窗口：按鈕在哪就開在哪
                 this.closeCharCard();
                 const CG = win.OS_CHAR_GALLERY;
-                if (CG) CG.open(name);
+                if (CG) CG.open(name, { from });
             };
             const cvSaveBtn = card.querySelector('#vn-cc-cv-save');
             if (cvSaveBtn) cvSaveBtn.onclick = (e) => this.saveCharCV(name, e.currentTarget);

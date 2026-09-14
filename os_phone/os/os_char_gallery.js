@@ -345,14 +345,22 @@
     // ================================================================
     let S = null;
 
-    // 開在哪裡：手機殼的螢幕開著就開在螢幕裡（跟著手機殼的大小，不蓋滿整個酒館視窗）；沒有才蓋滿畫面。
-    //   opts.from＝按下去的那顆鈕，它在哪個螢幕裡就開在那裡。
+    // 開在哪裡：有兩個「螢幕」——
+    //   大廳浮動手機的 app 區 #aps-app（fixed、z 99990，浮在奧瑞亞主窗口上面）
+    //   奧瑞亞主窗口的螢幕 #aurelia-phone-screen
+    //   🚨 浮動手機開著時一定要開在它裡面：開進主窗口的螢幕會被浮動手機整個蓋住。
+    //   opts.from＝按下去的那顆鈕，它在哪個螢幕裡就開在那裡；兩個都沒有才蓋滿畫面。
+    function shown(el) { return !!(el && el.getClientRects().length && el.clientWidth > 0 && el.clientHeight > 0); }
     function pickHost(opts) {
         const from = opts && opts.from;
-        const inFrom = from && from.closest && from.closest('#aurelia-phone-screen');
-        if (inFrom) return inFrom;
+        if (from && from.closest) {
+            const inFrom = from.closest('#aps-app') || from.closest('#aurelia-phone-screen');
+            if (inFrom) return inFrom;
+        }
+        const shellApp = doc.querySelector('#aurelia-phone-shell #aps-app');
+        if (shown(shellApp)) return shellApp;
         const scr = doc.getElementById('aurelia-phone-screen');
-        if (scr && scr.getClientRects().length && scr.clientWidth > 0 && scr.clientHeight > 0) return scr;
+        if (shown(scr)) return scr;
         return null;
     }
 

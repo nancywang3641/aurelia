@@ -68,7 +68,12 @@
         if (_savedGoHome !== null && win.PhoneSystem) { win.PhoneSystem.goHome = _savedGoHome; }
         _savedGoHome = null;
     }
-    function _runLeave() { if (_leaveApp) { try { _leaveApp(); } catch (e) {} _leaveApp = null; } }
+    function _runLeave() {
+        if (_leaveApp) { try { _leaveApp(); } catch (e) {} _leaveApp = null; }
+        // 角色圖鑑開在手機的 app 區裡（不在 app 內容那層，清空 app 清不到它）→ 換 app／回主畫面／關手機時一起關
+        const G = win.OS_CHAR_GALLERY;
+        if (G && _el && _el.querySelector('.acg-root')) { try { G.close(); } catch (e) {} }
+    }
 
     // ── 手機主題（CSS 變數驅動，掛在 .aps-frame；app 不需知道主題的存在、自動相容）──
     const THEME_KEY = 'aurelia_phone_theme';
