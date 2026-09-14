@@ -74,10 +74,11 @@
         const idle = lastTalkAt(chat) ? Math.round((Date.now() - lastTalkAt(chat)) / 3600000) : 0;
         messages.push({
             role: 'system',
-            content: '【現在是你主動傳訊息給她，不是回覆】\n'
+            content: '【現在是你自己的時間，不是在回覆她】\n'
                 + (idle ? '你們上一次講話大約是 ' + idle + ' 小時前。\n' : '')
-                + (((nth || 0) > 0) ? '你剛剛已經傳過訊息，她還沒有回。又過了一陣子，你這次想說的是別的事，別重複剛才那幾句。' : '')
-                + '照你的個性、你現在在做的事開口，寫一到三則短訊息。'
+                + (((nth || 0) > 0) ? '你剛剛已經找過她，她還沒有回。又過了一陣子，別重複剛才做過的事。\n' : '')
+                + '這段時間你可以傳訊息給她、發朋友圈、去朋友圈按讚或留言，做哪幾件、做不做，照你的個性和你現在在做的事決定。'
+                + '傳訊息就寫一到三則短訊息；朋友圈照上面朋友圈那段的寫法。什麼都不想做，就只回一行 [系統: 略過]。'
                 + '不要提到這是安排好的，也不要問她是不是在等你。'
         });
         return messages;
@@ -102,7 +103,7 @@
                     task: 'heartbeat',
                     disableTyping: true,
                     relayJob: { app: 'wx', kind: KIND, chatId: chat.id, title: chat.name || '',
-                        notify: { title: chat.name || '微信', useResult: true, url: './', tag: 'hb-' + chat.id } },
+                        notify: { title: chat.name || '微信', body: (chat.name || '對方') + ' 在朋友圈有新動態', useResult: true, url: './', tag: 'hb-' + chat.id } },
                     onQueued: function () { resolve(true); }
                 });
         });
@@ -169,7 +170,7 @@
                         app: 'wx', kind: KIND, chatId: cd.chat.id, title: cd.chat.name || '',
                         runAt: Math.round(at / 1000),
                         upstream: { url: url, key: apiConfig.key, body: body },
-                        notify: { title: cd.chat.name || '微信', useResult: true, url: './', tag: 'hb-' + cd.chat.id }
+                        notify: { title: cd.chat.name || '微信', body: (cd.chat.name || '對方') + ' 在朋友圈有新動態', useResult: true, url: './', tag: 'hb-' + cd.chat.id }
                     });
                     cd.chat.hbLast = at;   // 排了就當它會發生，免得回來又排一次
                     n++;

@@ -7,7 +7,7 @@
 //   背景用那個人的聊天背景（微信那間設的那張）；沒設就用他的頭像放大模糊當底。
 // 🚨 背景與頭像一律走 <img>.src / 既有的 hydrate，不塞進 CSS 變數——
 //    圖庫拿回來的可能是很長的 dataURL，塞 CSS 變數會被瀏覽器整條丟掉。
-//   底下兩顆：發訊息、記事本（wx_notebook.js；群組沒有記事本那顆）。
+//   底下四顆：發訊息、記事本（wx_notebook.js）、朋友圈與認識的人（wx_moments.js）；群組只有發訊息。
 // 對外：WX_PROFILE.open(idOrName) / close()
 // ----------------------------------------------------------------
 (function () {
@@ -97,6 +97,8 @@
             '<div class="wxpf-acts">' +
             '  <button class="wxpf-act" type="button" data-act="chat"><i class="fa-solid fa-comment"></i><span>發訊息</span></button>' +
             (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="note"><i class="fa-solid fa-book-bookmark"></i><span>記事本</span></button>') +
+            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="moments"><i class="fa-regular fa-images"></i><span>朋友圈</span></button>') +
+            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="links"><i class="fa-solid fa-user-group"></i><span>認識的人</span></button>') +
             '</div>';
         host.appendChild(_root);
 
@@ -121,6 +123,14 @@
                 if (b.dataset.act === 'chat') {
                     close();
                     try { win.wxApp.openChat(p.id); } catch (e) {}
+                } else if (b.dataset.act === 'moments') {
+                    // 朋友圈（wx_moments.js）：只看他一個人發的
+                    close();
+                    try { const MO = win.WX_MOMENTS || window.WX_MOMENTS; if (MO) MO.open({ author: p.id }); } catch (e) {}
+                } else if (b.dataset.act === 'links') {
+                    // 認識的人：勾了的兩個人在朋友圈看得到彼此的讚和留言
+                    close();
+                    try { const MO = win.WX_MOMENTS || window.WX_MOMENTS; if (MO) MO.openLinks(p.id); } catch (e) {}
                 } else {
                     // 記事本（wx_notebook.js）：以前這裡是一張小紙條，第一次打開記事本時會搬成第一則
                     close();

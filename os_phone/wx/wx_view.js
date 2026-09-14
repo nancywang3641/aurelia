@@ -989,7 +989,8 @@
                 </div>
                 <div class="wx-cell-group">
                     <div class="wx-cell"><div class="wx-cell-icon">${iconFav}</div><div class="wx-cell-text">收藏</div><div class="wx-cell-arrow">›</div></div>
-                    <div class="wx-cell"><div class="wx-cell-icon">${iconMoment}</div><div class="wx-cell-text">朋友圈</div><div class="wx-cell-arrow">›</div></div>
+                    <!-- 🫂 朋友圈（wx_moments.js）：右邊是最新那個人的小頭像＋紅點，由 WX_MOMENTS.paintBadges 在重畫後補上 -->
+                    <div class="wx-cell" onclick="(window.parent.WX_MOMENTS || window.WX_MOMENTS) && (window.parent.WX_MOMENTS || window.WX_MOMENTS).open()"><div class="wx-cell-icon">${iconMoment}</div><div class="wx-cell-text">朋友圈</div><span class="wxmo-cell-badge" data-wxmo-badge="cell" hidden></span><div class="wx-cell-arrow">›</div></div>
                     <div class="wx-cell"><div class="wx-cell-icon">${iconCard}</div><div class="wx-cell-text">卡包</div><div class="wx-cell-arrow">›</div></div>
                     <div class="wx-cell"><div class="wx-cell-icon">${iconFace}</div><div class="wx-cell-text">表情</div><div class="wx-cell-arrow">›</div></div>
                 </div>
@@ -1283,6 +1284,7 @@
                         </div>
                         <div class="wx-tab ${(activeTab === 'me' || activeTab === 'me_set') ? 'active' : ''}" onclick="${app}.switchTab('me')">
                             <div class="wx-tab-icon-box">
+                                <div class="wx-tab-dot" data-wxmo-badge="tab" hidden></div>
                                 <div class="wx-tab-icon">${iconMe}</div>
                             </div>
                             <div class="wx-tab-txt">我</div>

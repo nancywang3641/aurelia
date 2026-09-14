@@ -1418,6 +1418,16 @@
                                     if (_nbt) apiMessages.push({ role: "system", content: _nbt });
                                 }
                             } catch (e) { console.warn('[OS_API] 記事本目錄組裝失敗（不影響送出）', e); }
+                            // 🫂 朋友圈：它看得到的最近幾則＋怎麼發文按讚留言（見 wx_moments.js brief）；通話不給
+                            if (promptKey !== 'call_voice_system') {
+                                try {
+                                    const _mo = win.WX_MOMENTS;
+                                    if (_mo && _mo.brief) {
+                                        const _mot = await _mo.brief(currentChatId);
+                                        if (_mot) apiMessages.push({ role: "system", content: _mot });
+                                    }
+                                } catch (e) { console.warn('[OS_API] 朋友圈組裝失敗（不影響送出）', e); }
+                            }
                         } else if (apiChat && apiChat.isGroup) {
                             let groupNoteText = '';
                             if (apiChat.groupNoteFromLorebook && win.TavernHelper) {
@@ -2076,6 +2086,16 @@
                         if (_nbt) apiMessages.push({ role: 'system', content: _nbt });
                     }
                 } catch (e) { console.warn('[OS_API standalone] 記事本目錄組裝失敗（不影響送出）', e); }
+                // 🫂 朋友圈（同酒館版）；通話不給
+                if (!_isCall) {
+                    try {
+                        const _mo = win.WX_MOMENTS;
+                        if (_mo && _mo.brief) {
+                            const _mot = await _mo.brief(win.wxApp.GLOBAL_ACTIVE_ID);
+                            if (_mot) apiMessages.push({ role: 'system', content: _mot });
+                        }
+                    } catch (e) { console.warn('[OS_API standalone] 朋友圈組裝失敗（不影響送出）', e); }
+                }
             }
 
             // ── 劇情長期記憶 + 劇情正文：手機 app 也要知道劇情發生了什麼 ──────────────────

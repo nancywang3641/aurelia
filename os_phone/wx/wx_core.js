@@ -691,6 +691,15 @@
             return { type: 'system', content: '', isMe: false };
         }
 
+        // 🫂 朋友圈（wx_moments.js）四種動作＋醒來什麼都不做的「略過」。
+        //    🚨 一定要排在改簽名那條前面：那條沒錨定開頭，留言內容裡出現「改簽名」會被它整條吃掉。
+        //    全部不在聊天室冒泡泡，寫進朋友圈、亮紅點就好。
+        try {
+            const _mo = win.WX_MOMENTS;
+            const _mr = _mo && _mo.fromAi ? _mo.fromAi(ctx.chatId, ctx.chatName, content) : null;
+            if (_mr) return { type: 'system', content: '', isMe: false };
+        } catch (e) { console.warn('[WX] 朋友圈那一行處理失敗', e); }
+
         // 處理 [System: 改名 XXX]。以前完全沒有這條，AI 想改名只能寫成一句話、變成一顆泡泡。
         // 做的事跟她在資料頁手動改名一模一樣：改顯示名、重畫、存檔。不碰通訊錄，跟手動那條一致。
         const renameMatch = content.match(/^\s*(?:改名|更名|改暱稱|改昵称|換名字|换名字|改個名字|改个名字|rename)\s*(?:為|为|成|to)?\s*[:：]?\s*(.+)$/i);
@@ -2046,16 +2055,32 @@
 
         const prev = GLOBAL_ACTIVE_ID;
         let newMsgs = [];
+        const _t0 = Date.now();
         try { GLOBAL_ACTIVE_ID = chat.id; newMsgs = parseAndProcess(finalText) || []; }
         finally { GLOBAL_ACTIVE_ID = prev; }
 
-        if (!newMsgs.length && finalText) {
+        // 🚨 解析不出訊息時，以前一律把原文整段當一則訊息塞進去（保底）。可是只在朋友圈動手、
+        //    或醒來選擇什麼都不做的回覆，本來就只有系統行——塞進去就是一顆印著協議原文的泡泡。
+        const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(String(finalText || ''));
+        if (!newMsgs.length && finalText && !_sysOnly) {
             const memberNames = convertMemberIdsToNames(chat.members || []);
             const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chat.name;
             newMsgs.push({
                 type: 'msg', isMe: false, content: finalText, sender: chat.name, senderName: chat.name,
                 raw: `\n[Chat: ${chat.name}|${chat.id}]\n[With: ${memberStr}]\n[${chat.name}] ${finalText}`
             });
+        }
+
+        if (!newMsgs.length) {
+            // 只動了朋友圈（或什麼都沒做）：聊天室不冒泡泡、不標未讀
+            if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+            try {
+                const _mo = win.WX_MOMENTS;
+                if (_mo && _mo.actedSince(chat.id, _t0) && win.document.visibilityState === 'hidden' && win.OS_KEEPALIVE) {
+                    win.OS_KEEPALIVE.notify(chat.name || '微信', (chat.name || '對方') + ' 在朋友圈有新動態', 'wxmo-' + chat.id);
+                }
+            } catch (e) {}
+            return;
         }
 
         if (prev === chat.id && APP_CONTAINER) {
@@ -2485,6 +2510,8 @@
                 //    剛打開聊天室、還沒有新訊息進來之前，長按任何一則都沒反應。
                 _getRoomContent();
             }
+            // 🫂 朋友圈的紅點（「我」分頁＋朋友圈那格）：整頁重畫之後補上
+            try { const _mo = win.WX_MOMENTS; if (_mo && _mo.paintBadges) _mo.paintBadges(APP_CONTAINER); } catch (e) {}
             if (win.WX_MESSAGE_MANAGER && typeof win.WX_MESSAGE_MANAGER._updateUI === 'function') { setTimeout(() => win.WX_MESSAGE_MANAGER._updateUI(), 100); }
         },
         
@@ -3110,7 +3137,9 @@
                 const newMsgs = parseAndProcess(finalText);
                 
                 // 如果解析失敗（空訊息），做保底處理
-                if (newMsgs.length === 0 && finalText) {
+                // 只有系統行（例如只在朋友圈按了讚）就不要把原文塞成一顆泡泡（同 _applyRelayReply）
+                const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(String(finalText || ''));
+                if (!newMsgs.length && finalText && !_sysOnly) {
                     const chatName = currentChat.name; const chatId = currentChat.id;
                     const memberNames = convertMemberIdsToNames(currentChat.members || []);
                     const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chatName;
