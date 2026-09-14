@@ -29,8 +29,10 @@
         .ps-add-btn { width:100%; padding:14px; background:#1A1C28; border:none; border-radius:8px; color:#EEF0F6; font-size:13px; font-weight:900; cursor:pointer; transition:.2s; display:flex; align-items:center; justify-content:center; gap:8px; margin-top:8px; letter-spacing:1px; box-shadow:0 4px 15px rgba(26,28,40,0.10); }
         .ps-add-btn:hover { filter:brightness(1.1); transform:translateY(-2px); box-shadow:0 6px 20px rgba(26,28,40,0.20); }
 
-        /* 編輯頁：蓋滿整個人設 app，不再是置中小窗（手機上長設定改不動） */
-        .ps-edit { position:absolute; inset:0; z-index:100; display:none; flex-direction:column; background:#EEF0F6; }
+        /* 編輯頁：打開時搬到手機螢幕上蓋滿（人設 app 可能裝在大廳右上角的小下拉窗裡）。
+           層級要高過螢幕裡的大廳、相簿、劇情；找不到手機螢幕才 fixed 蓋滿整個視窗。 */
+        .ps-edit { position:absolute; inset:0; z-index:1200; display:none; flex-direction:column; background:#EEF0F6; color:#1A1C28; font-family:'Noto Sans TC',sans-serif; }
+        .ps-edit.ps-edit-fixed { position:fixed; z-index:2147481000; }
         .ps-edit.show { display:flex; }
         .ps-edit-hd { display:grid; grid-template-columns:44px 1fr auto; align-items:center; gap:6px; height:56px; padding:0 10px 0 4px; background:rgba(228,232,245,0.96); border-bottom:1px solid rgba(26,28,40,0.15); flex-shrink:0; }
         .ps-edit-back { width:44px; height:44px; border:0; background:none; color:#1A1C28; font-size:18px; cursor:pointer; }

@@ -101,9 +101,23 @@
     }
 
     let _rootContainer = null;
-    
+    // 編輯頁本體。🚨 人設 app 不一定裝在大空間裡：大廳右上角人設頭像的下拉窗也是裝這個 app，
+    //   編輯頁只蓋滿 app 的話在下拉窗裡還是那麼小 → 打開時整塊搬到手機螢幕上，關掉搬回來。
+    let _editEl = null;
+    const _q = (s) => (_editEl ? _editEl.querySelector(s) : null);
+    // 開在哪：app 所在的浮動手機 app 區 → 奧瑞亞主窗口的螢幕 → 都沒有才蓋滿整個視窗
+    function _editHost() {
+        const from = _rootContainer;
+        const near = from && from.closest && (from.closest('#aps-app') || from.closest('#aurelia-phone-screen'));
+        if (near) return near;
+        const scr = doc.getElementById('aurelia-phone-screen');
+        if (scr && scr.getClientRects().length && scr.clientWidth > 0 && scr.clientHeight > 0) return scr;
+        return null;
+    }
+
     function renderApp(container) {
         _rootContainer = container;
+        if (_editEl && _editEl.isConnected && !container.contains(_editEl)) _editEl.remove();   // 上一次搬出去還沒搬回來的
         container.innerHTML = `
             <div class="ps-app" id="ps-app-root">
                 <div class="ps-header">
@@ -113,7 +127,7 @@
                     <div style="text-align:center; padding:40px; color:rgba(26,28,40,0.72);">載入中...</div>
                 </div>
                 
-                <!-- 編輯頁：蓋滿整個人設 app（手機上小窗改不動長設定），自帶返回鍵 -->
+                <!-- 編輯頁：打開時搬到整個手機螢幕上（手機上小窗改不動長設定），自帶返回鍵 -->
                 <div class="ps-edit" id="ps-modal">
                     <div class="ps-edit-hd">
                         <button class="ps-edit-back" id="ps-btn-cancel" type="button" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>
@@ -147,6 +161,7 @@
                 </div>
             </div>
         `;
+        _editEl = container.querySelector('#ps-modal');
 
         if (!isStandalone()) {
             win.postMessage({ type: 'REQUEST_USER_PERSONA_LIST', source: 'PHONE_OS' }, '*');
@@ -303,14 +318,13 @@
     let _editSnap = '';     // 打開時的樣子：返回時比對，有改過沒存就先問
 
     function _editNow() {
-        const q = (s) => _rootContainer.querySelector(s);
-        return JSON.stringify({ n: q('#ps-f-name').value.trim(), a: _editAvatar, d: q('#ps-f-desc').value.trim() });
+        return JSON.stringify({ n: _q('#ps-f-name').value.trim(), a: _editAvatar, d: _q('#ps-f-desc').value.trim() });
     }
 
     function _paintAvatar() {
-        const img = _rootContainer.querySelector('#ps-av-preview');
-        const input = _rootContainer.querySelector('#ps-f-avatar');
-        const note = _rootContainer.querySelector('#ps-av-note');
+        const img = _q('#ps-av-preview');
+        const input = _q('#ps-f-avatar');
+        const note = _q('#ps-av-note');
         const isLocal = /^data:/.test(_editAvatar);
         if (input && doc.activeElement !== input) input.value = isLocal ? '' : _editAvatar;
         if (note) note.hidden = !isLocal;
@@ -321,12 +335,13 @@
     }
 
     function openEditModal(id) {
-        const modal = _rootContainer.querySelector('#ps-modal');
-        const titleEl = _rootContainer.querySelector('#ps-modal-title');
-        const fName = _rootContainer.querySelector('#ps-f-name');
-        const fAvatar = _rootContainer.querySelector('#ps-f-avatar');
-        const fDesc = _rootContainer.querySelector('#ps-f-desc');
-        const img = _rootContainer.querySelector('#ps-av-preview');
+        if (!_editEl) return;
+        const modal = _editEl;
+        const titleEl = _q('#ps-modal-title');
+        const fName = _q('#ps-f-name');
+        const fAvatar = _q('#ps-f-avatar');
+        const fDesc = _q('#ps-f-desc');
+        const img = _q('#ps-av-preview');
 
         _editingId = id;
 
@@ -349,7 +364,7 @@
 
         fAvatar.oninput = () => { _editAvatar = fAvatar.value.trim(); _paintAvatar(); };
         if (img) img.onerror = () => { img.hidden = true; };
-        _rootContainer.querySelector('#ps-av-upload').onclick = async () => {
+        _q('#ps-av-upload').onclick = async () => {
             const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
             if (!PI || !PI.pickPhoto) { AUI.alert('這裡還不能上傳圖片'); return; }
             try {
@@ -358,26 +373,31 @@
                 if (url) { _editAvatar = url; _paintAvatar(); }
             } catch (e) { AUI.alert('圖片讀不進來：' + (e.message || e)); }
         };
-        _rootContainer.querySelector('#ps-av-clear').onclick = () => { _editAvatar = ''; fAvatar.value = ''; _paintAvatar(); };
-        _rootContainer.querySelector('#ps-btn-save').onclick = saveModalData;
-        _rootContainer.querySelector('#ps-btn-cancel').onclick = async () => {
+        _q('#ps-av-clear').onclick = () => { _editAvatar = ''; fAvatar.value = ''; _paintAvatar(); };
+        _q('#ps-btn-save').onclick = saveModalData;
+        _q('#ps-btn-cancel').onclick = async () => {
             if (_editNow() !== _editSnap && !(await AUI.confirm('還沒儲存，確定要離開嗎？'))) return;
             closeEditModal();
         };
 
+        const host = _editHost();
+        modal.classList.toggle('ps-edit-fixed', !host);
+        (host || doc.body).appendChild(modal);
         modal.classList.add('show');
     }
 
     function closeEditModal() {
-        const modal = _rootContainer.querySelector('#ps-modal');
-        modal.classList.remove('show');
+        if (!_editEl) return;
+        _editEl.classList.remove('show');
+        const home = _rootContainer && _rootContainer.querySelector('.ps-app');
+        if (home && _editEl.parentNode !== home) home.appendChild(_editEl);   // 搬回人設 app 裡
         _editingId = null;
     }
 
     function saveModalData() {
-        const fName = _rootContainer.querySelector('#ps-f-name').value.trim();
+        const fName = _q('#ps-f-name').value.trim();
         const fAvatar = _editAvatar;
-        const fDesc = _rootContainer.querySelector('#ps-f-desc').value.trim();
+        const fDesc = _q('#ps-f-desc').value.trim();
 
         if (!fName) { AUI.alert('請至少輸入名稱！'); return; }
 
@@ -410,6 +430,8 @@
         saveLocalPersonas(list);
         closeEditModal();
         refreshList();
+        // 大廳右上角的人設頭像跟著換（它只在下拉窗關掉時才自己重讀）
+        try { const VT = win.VoidTerminal || window.VoidTerminal; if (VT && VT._refreshPersonaAvatar) VT._refreshPersonaAvatar(); } catch (e) {}
         win.eventEmit && win.eventEmit('CHAT_CHANGED');
     }
 
