@@ -109,6 +109,7 @@
         { group: '手機',       id: 'tarot',        name: '占卜',                       def: 'main' },
         { group: '手機',       id: 'apps',         name: '應用與組件裡的生成',         def: 'main' },
         { group: '手機',       id: 'studio',       name: '創作室',                     def: 'main' },
+        { group: '手機',       id: 'vision',       name: '看圖小模型',                 def: 'sec'  },
         { group: '大廳與世界', id: 'map',          name: '地圖探索',                   def: 'sec'  },
         { group: '大廳與世界', id: 'world_gen',    name: '世界 / 地圖事件 / 行程生成', def: 'main' },
         { group: '大廳與世界', id: 'theater',      name: '小劇場',                     def: 'main' },
@@ -177,6 +178,22 @@
         if (pick !== 'main' && pick !== 'sec' && !cfg._channel) return null;
         return cfg;
     }
+    // 👁 看圖：她傳的照片、頭像、記事本照片、微博照片要怎麼讓模型「看」。
+    //    off    ＝不送圖，模型只知道有一張照片（預設；接什麼模型都不會因為圖報錯）
+    //    main   ＝聊天的模型自己看（模型本來就看得到圖，額度也不心疼）
+    //    helper ＝先交給看圖小模型（名冊的 vision 那列）寫成一句話，聊天的模型只讀那句
+    //    🚨 不能假設大家接的都是看得到圖的熱門模型：看不到圖的模型收到圖，有的整輪報錯、有的亂編。
+    const VISION_MODE_KEY = 'os_vision_mode';
+    const VISION_MODES = ['off', 'main', 'helper'];
+    function getVisionMode() {
+        let v = '';
+        try { v = localStorage.getItem(VISION_MODE_KEY) || ''; } catch (e) {}
+        return VISION_MODES.indexOf(v) >= 0 ? v : 'off';
+    }
+    function setVisionMode(v) {
+        try { localStorage.setItem(VISION_MODE_KEY, VISION_MODES.indexOf(v) >= 0 ? v : 'off'); } catch (e) {}
+    }
+
     // 給畫面用：這件事現在實際走誰（顯示名字）
     function routeLabel(task) {
         const routes = loadRoutes();
@@ -545,6 +562,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         saveRoutes: saveRoutes,
         routeLabel: routeLabel,
         LLM_TASKS: LLM_TASKS,
+        getVisionMode: getVisionMode,
+        setVisionMode: setVisionMode,
         getImageConfig: loadImageConfig,
         getMinimaxConfig: loadMinimaxConfig,
         saveConfig: saveConfig
@@ -1330,6 +1349,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     </div>
 
                     <div id="view-chan" class="api-subview" style="display:none;">
+                        <div class="set-group" id="vision-group">
+                            <div class="set-label"><i class="fa-solid fa-eye"></i> 看圖</div>
+                            <div class="set-desc">手機裡傳的照片、頭像、記事本和微博的照片，要不要讓模型看。聊天的模型看不到圖，就選交給看圖小模型，再到下面把「看圖小模型」指到一條看得到圖的連線。</div>
+                            <div id="vision-mode-box"></div>
+                        </div>
+
                         <div class="set-group" id="route-group">
                             <div class="set-label"><i class="fa-solid fa-shuffle"></i> 哪件事走哪個模型</div>
                             <div class="set-desc">沒動過就跟以前一樣：正文、手機聊天、大總結走主模型，其餘走副模型。要分開再加通道。</div>
@@ -2584,6 +2609,25 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const addBtn = container.querySelector('#channel-add-btn');
             if (!routeBox || !listBox) return;
             const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+            // 👁 看圖三選一。跟分流表一樣畫進格子裡（selected 寫在 HTML 上），改動委派在 container 上，面板重建也不會掉
+            function paintVision() {
+                const box = container.querySelector('#vision-mode-box');
+                if (!box) return;
+                const cur = getVisionMode();
+                const LABEL = { off: '不給模型看圖', main: '聊天的模型自己看', helper: '交給看圖小模型' };
+                box.innerHTML = '<select class="set-select" id="vision-mode">'
+                    + VISION_MODES.map(function (v) { return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + LABEL[v] + '</option>'; }).join('')
+                    + '</select>';
+            }
+            if (!container.dataset.visionBound) {
+                container.dataset.visionBound = '1';
+                container.addEventListener('change', function (ev) {
+                    const sel = ev.target && ev.target.closest ? ev.target.closest('#vision-mode') : null;
+                    if (sel) setVisionMode(sel.value);
+                });
+            }
+            paintVision();
 
             function paintRoutes() {
                 const routes = loadRoutes();

@@ -316,19 +316,36 @@
     async function _photoOnceMessage(chat) {
         _photoBatch = { chatId: (chat && chat.id) || '', msgs: [] };
         if (!chat || !win.OS_DB || !win.OS_DB.getImage) return null;
+        // 👁 設置裡的「看圖」：關著就不送圖（歷史裡只寫「照片」）；交給小模型就讓它寫描述，這一輪只送文字
+        const PI = win.OS_PHONE_IMAGE;
+        const mode = (PI && PI.visionMode) ? PI.visionMode() : 'off';
+        if (mode === 'off') return null;
         const pend = (chat.messages || []).filter(function (m) { return _photoIdOf(m) && !m.photoDesc && (m.photoTries || 0) < PHOTO_TRIES; }).slice(-PHOTO_ONCE_MAX);
-        const used = [], parts = [];
+        const used = [], urls = [];
         for (const m of pend) {
             let url = '';
             try { url = await _photoDataUrl(_photoIdOf(m)); } catch (e) {}
             if (!url) continue;
             m.photoTries = (m.photoTries || 0) + 1;
             used.push(m);
-            parts.push({ type: 'image_url', image_url: { url: url } });
+            urls.push(url);
         }
         if (!used.length) return null;
-        _photoBatch.msgs = used;
         const n = used.length;
+        if (mode === 'helper') {
+            let descs = [];
+            try { descs = await PI.describeImages(urls, '這是聊天時傳給對方的照片。'); } catch (e) { PI.visionFailed(e); }
+            const lines = [];
+            used.forEach(function (m, i) {
+                if (!descs[i]) return;
+                m.photoDesc = descs[i];
+                lines.push((n > 1 ? '第 ' + (i + 1) + ' 張｜' : '') + descs[i]);
+            });
+            if (!lines.length) return null;
+            return { role: 'user', content: '（這是我剛傳給你的' + (n > 1 ? ' ' + n + ' 張照片' : '照片') + '：' + lines.join('；') + '。照平常聊天那樣反應就好。）' };
+        }
+        const parts = urls.map(function (url) { return { type: 'image_url', image_url: { url: url } }; });
+        _photoBatch.msgs = used;
         const text = '（' + (n > 1 ? '這是我剛傳給你的 ' + n + ' 張照片，照順序是第 1 到第 ' + n + ' 張' : '這是我剛傳給你的照片') + '。'
             + '看完在回覆的最後，' + (n > 1 ? '每張各' : '') + '單獨一行寫：[系統: 照片 ' + (n > 1 ? '編號' : '1') + ' 一句話描述]，'
             + '把你看到的寫下來，之後就不用再看圖了。那一行不會變成聊天訊息。照片本身就照平常聊天那樣反應。）';
@@ -2362,7 +2379,14 @@
             const next = !A.seeEnabled();
             A.setSeeEnabled(next);
             this.render();
-            try { AUI.toastr && (next ? AUI.toastr.success('下次換頭像時它會看一眼', '微信') : AUI.toastr.info('已關閉', '微信')); } catch (e) {}
+            const PI = win.OS_PHONE_IMAGE;
+            const visionOff = !(PI && PI.visionMode) || PI.visionMode() === 'off';
+            try {
+                if (!AUI.toastr) {}
+                else if (!next) AUI.toastr.info('已關閉', '微信');
+                else if (visionOff) AUI.toastr.warning('設置 → API → 通道裡的「看圖」還是不給模型看圖，要先選一種看法，它才看得到', '微信');
+                else AUI.toastr.success('下次換頭像時它會看一眼', '微信');
+            } catch (e) {}
         },
         // 忘掉「這一間」記住的樣子，下次進來會重看一次。頭像是一間一個，記憶當然也是。
         forgetMyAvatar: function (chatId) {

@@ -234,6 +234,9 @@
         _photoBatch = { chatId: chatId || '', refs: [] };
         if (!chatId) return null;
         const pi = _pi();
+        // 👁 設置裡的「看圖」：關著就不送圖（目錄裡只寫照片）；交給小模型就讓它寫描述，這一輪只送文字
+        const mode = (pi && pi.visionMode) ? pi.visionMode() : 'off';
+        if (mode === 'off') return null;
         const book = await load(chatId);
         const pend = [];
         _sorted(book).forEach(function (it, idx) {
@@ -242,16 +245,30 @@
             });
         });
         const pick = pend.slice(-PHOTO_ONCE_MAX);
-        const parts = [], used = [];
+        const urls = [], used = [];
         for (const x of pick) {
             let url = '';
             try { url = await _dataUrlOf(x.p.src); } catch (e) {}
             if (!url) continue;
             x.p.tries = (x.p.tries || 0) + 1;
             used.push(x);
-            parts.push({ type: 'image_url', image_url: { url: url } });
+            urls.push(url);
         }
         if (!used.length) return null;
+        if (mode === 'helper') {
+            let descs = [];
+            try { descs = await pi.describeImages(urls, '這是放進兩人共用記事本的照片。'); } catch (e) { pi.visionFailed(e); }
+            const lines = [];
+            used.forEach(function (x, i) {
+                if (!descs[i]) return;
+                x.p.desc = descs[i].slice(0, 300);
+                lines.push('記事本 ' + x.num + ' 號那張：' + x.p.desc);
+            });
+            _write(chatId).catch(function () {});
+            if (!lines.length) return null;
+            return { role: 'user', content: '（這是' + (_userName() || '對方') + '放進你們記事本的照片。' + lines.join('；') + '。）' };
+        }
+        const parts = urls.map(function (url) { return { type: 'image_url', image_url: { url: url } }; });
         _write(chatId).catch(function () {});
         _photoBatch.refs = used;
         const n = used.length;

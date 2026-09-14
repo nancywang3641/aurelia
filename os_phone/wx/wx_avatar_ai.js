@@ -212,10 +212,24 @@
     }
 
     // 只在「換了還沒看過」那一輪用：一則帶圖的訊息，順便要它寫一句回來。
+    const _seeHelperTries = {};   // 看圖小模型沒看成的次數（聊天室＋那張圖），免得每一輪都重叫
     async function seeOnceMessage(chatId) {
         if (!seePending(chatId)) return null;
+        // 👁 設置裡的「看圖」：關著就不看；交給小模型就讓它寫那一句，這一輪只送文字
+        const PI = win.OS_PHONE_IMAGE;
+        const mode = (PI && PI.visionMode) ? PI.visionMode() : 'off';
+        if (mode === 'off') return null;
         const data = await myAvatarDataUrl(chatId);
         if (!data) return null;
+        if (mode === 'helper') {
+            const k = String(chatId) + '::' + myAvatarSrc(chatId);
+            if ((_seeHelperTries[k] || 0) >= 2) return null;
+            let d = '';
+            try { d = (await PI.describeImages([data], '這是聊天時用的大頭貼。'))[0] || ''; } catch (e) { PI.visionFailed(e); }
+            if (!d) { _seeHelperTries[k] = (_seeHelperTries[k] || 0) + 1; return null; }
+            rememberSeen(chatId, d);
+            return { role: 'user', content: '（我現在的大頭貼是：' + d + '。你看過了，不要在對話裡特地提這件事。）' };
+        }
         return {
             role: 'user',
             content: [

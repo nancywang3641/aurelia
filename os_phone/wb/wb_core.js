@@ -637,9 +637,30 @@
 
         // 真照片（data URL）最多夾最近這幾張給 AI 看；更早的退成文字，免得每輪拖一疊圖
         _PHOTO_LIMIT: 3,
+        // 👁 設置裡的「看圖」：off 不送圖、main 夾真照片（下面這支）、helper 先讓看圖小模型寫描述存在貼文上（_ensurePhotoDescs）
+        _visionMode: function() {
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            return (PI && PI.visionMode) ? PI.visionMode() : 'off';
+        },
+        _ensurePhotoDescs: async function(posts) {
+            if (this._visionMode() !== 'helper') return;
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            const pend = (posts || []).filter(p => p && p.isMe && p.media && p.media.type === 'image'
+                && String(p.media.desc || '').startsWith('data:') && !p.media.aiDesc && (p.media.aiTries || 0) < 2)
+                .slice(0, this._PHOTO_LIMIT);
+            if (!pend.length) return;
+            pend.forEach(p => { p.media.aiTries = (p.media.aiTries || 0) + 1; });
+            let descs = [];
+            try { descs = await PI.describeImages(pend.map(p => p.media.desc), '這是社群動態裡貼出來的照片。'); } catch (e) { PI.visionFailed(e); }
+            for (let i = 0; i < pend.length; i++) {
+                if (descs[i]) pend[i].media.aiDesc = descs[i];
+                try { await win.OS_DB.saveWbPost(pend[i]); } catch (e) { console.warn('[Weibo] 照片描述存不進去:', e); }
+            }
+        },
         _collectPhotos: function(posts) {
             const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
             const out = [];
+            if (this._visionMode() !== 'main') return out;
             for (const p of posts) {
                 const d = p && p.media && p.media.type === 'image' ? String(p.media.desc || '') : '';
                 if (p && p.isMe && d.startsWith('data:') && PI && PI.isUrl(d)) out.push({ postId: p.id, url: d });
@@ -654,6 +675,7 @@
                 const d = String(m.desc || '');
                 const idx = photos.findIndex(x => x.postId === p.id);
                 if (idx >= 0) return ` [Image: see attached photo #${idx + 1}]`;
+                if (m.aiDesc) return ` [Image: a photo | ${m.aiDesc}]`;
                 if (d.startsWith('data:') || d.startsWith('http')) return ' [Image: a photo]';
                 return ` [Image: ${d}]`;
             }
@@ -700,6 +722,7 @@
                 if (isInitial) {
                     messages = await win.OS_API.buildContext("System Request: Generate World Social Media Feed.", 'wb_world_gen');
                 } else {
+                    await this._ensurePhotoDescs(GLOBAL_POSTS.slice(0, 6));
                     const feedContext = this.serializeFeedForAI();
                     let prompt = win.OS_PROMPTS.get('wb_world_continue');
                     messages = await win.OS_API.buildContext("System Request: Continue World Feed.", 'wb_world_continue');
@@ -731,6 +754,7 @@
             this.isLoading = true;
             this.render();
             try {
+                await this._ensurePhotoDescs(GLOBAL_POSTS.filter(p => p.id === postId));
                 const singleContext = this.serializeSinglePostForAI(postId);
                 let messages = await win.OS_API.buildContext("System Request: Generate comments for specific post.", 'wb_world_continue');
                 messages.forEach(m => {

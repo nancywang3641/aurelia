@@ -156,6 +156,69 @@
             return prompt;
         },
 
+        // ── 👁 看圖（設置 → API → 通道 最上面那格）─────────────────────
+        //    off＝不送圖（預設）、main＝聊天的模型自己看、helper＝先交給看圖小模型寫成一句話。
+        //    四個會讓模型看照片的地方（微信照片、頭像、記事本照片、微博照片）都先問這裡。
+        visionMode: function () {
+            try {
+                const S = win.OS_SETTINGS || window.OS_SETTINGS;
+                return (S && typeof S.getVisionMode === 'function') ? S.getVisionMode() : 'off';
+            } catch (e) { return 'off'; }
+        },
+
+        // 交給看圖小模型（名冊 vision 那列）：一批圖各寫一句描述，回陣列、跟送進來的順序一樣，沒寫到的是空字串。
+        // about：一句話說這是哪裡的照片，讓它知道看的是什麼場合。
+        describeImages: async function (urls, about) {
+            const list = (urls || []).filter(Boolean);
+            if (!list.length) return [];
+            const S = win.OS_SETTINGS || window.OS_SETTINGS;
+            const O = win.OS_API || window.OS_API;
+            if (!S || typeof S.getConfigFor !== 'function' || !O || typeof O.chat !== 'function') throw new Error('設定或模型連線還沒載入');
+            // 名冊沒改過也要照 vision 那列走（預設副模型），不能吃呼叫端的主模型設定
+            const cfg = Object.assign({}, S.getConfigFor('vision'));
+            cfg.maxTokens = Math.min(Number(cfg.maxTokens) || 800, 800);
+            const sys = '你負責替看不到圖片的另一個模型看照片。每張照片寫一到兩句繁體中文，只寫畫面裡看得到的東西：'
+                + '有沒有人、人的樣子、穿著和動作，地點與場景，重要的物品，畫面上的文字，光線與氣氛。'
+                + '不猜照片裡的人是誰，不評論，不寫其他的話。\n'
+                + '格式固定，一張一行，號碼照照片送來的順序，標籤名照抄英文：\n'
+                + '<photo n="號碼">描述</photo>';
+            const parts = [{ type: 'text', text: (about ? about + '\n' : '') + '一共 ' + list.length + ' 張。' }]
+                .concat(list.map(function (u) { return { type: 'image_url', image_url: { url: u } }; }));
+            const text = await new Promise(function (resolve, reject) {
+                let done = false;
+                // 🚨 不能在 chat 回傳後就判「沒回話」：有些連線（托管那條）chat 先回、結果晚一點才從 onFinish 來。
+                //    兩分鐘都沒消息才算，別讓聊天一直卡在等它。
+                const timer = setTimeout(function () { bad(new Error('看圖小模型兩分鐘沒有回話')); }, 120000);
+                const ok = function (t) { if (!done) { done = true; clearTimeout(timer); resolve(String(t || '')); } };
+                const bad = function (e) { if (!done) { done = true; clearTimeout(timer); reject(e instanceof Error ? e : new Error(String((e && e.message) || e))); } };
+                Promise.resolve(O.chat([{ role: 'system', content: sys }, { role: 'user', content: parts }], cfg, null, ok, bad, { task: 'vision', label: '看圖' }))
+                    .catch(bad);
+            });
+            const out = list.map(function () { return ''; });
+            const re = /[<＜]\s*photo\s+n\s*=\s*["“”＂']?(\d+)[^>＞]*[>＞]([\s\S]*?)[<＜]\s*\/\s*photo\s*[>＞]/gi;
+            let m, hit = false;
+            while ((m = re.exec(text))) {
+                const i = parseInt(m[1], 10) - 1;
+                const d = String(m[2] || '').replace(/\s+/g, ' ').trim();
+                if (i >= 0 && i < out.length && d) { out[i] = d.slice(0, 300); hit = true; }
+            }
+            // 只有一張、它沒套標籤直接寫了描述：那段話就是描述
+            if (!hit && list.length === 1 && !/[<＜]/.test(text)) out[0] = text.replace(/\s+/g, ' ').trim().slice(0, 300);
+            return out;
+        },
+
+        // 看圖小模型沒看成：跟她說一聲（一分鐘內只說一次），不擋聊天
+        _visionWarnAt: 0,
+        visionFailed: function (e) {
+            console.warn('[看圖] 看圖小模型沒看成:', e);
+            if (Date.now() - this._visionWarnAt < 60000) return;
+            this._visionWarnAt = Date.now();
+            try {
+                const A = win.AUI || window.AUI;
+                if (A && A.toastr) A.toastr.warning('看圖小模型沒看成：' + ((e && e.message) || e) + '。照片這次先當成沒看過。', '看圖');
+            } catch (x) {}
+        },
+
         // 描述 → 生圖網址（卡片上的「展開圖片」和看圖器裡那顆都走這條）
         makeUrl: async function (raw) {
             const mgr = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
