@@ -1224,12 +1224,70 @@
     function _saveRoomRemap(map) {
         try { var all = JSON.parse(localStorage.getItem('wx_room_id_remap') || '{}'); all[_wxRemapChatId()] = map || {}; localStorage.setItem('wx_room_id_remap', JSON.stringify(all)); } catch (e) {}
     }
+    // ── AI 整理的另外兩種修正（跟上面的 id 對應表分開一把鑰匙，舊的讀者照舊能讀那張）──
+    //    names：聊天室 id → 正確的顯示名（正文 AI 把代號寫進聊天室名，像 msg_chen）
+    //    people：人名的其他寫法 → 正確寫法（簡繁、錯字、全名簡稱；簡繁重複會讓私聊被當成群）
+    //    寫正文的 AI 同時要寫故事、VN 格式和組件，偶爾寫錯很正常；收拾是整理 AI 的事，不是去逼它寫對。
+    //    跨 IIFE 共用：os_app_memory_inject 的 injectWxChatrooms 也讀這把鑰匙，拿正確名字給正文 AI 看。
+    function _loadRoomFix() {
+        try { var all = JSON.parse(localStorage.getItem('wx_room_fix') || '{}'); var f = all[_wxRemapChatId()] || {}; return { names: f.names || {}, people: f.people || {} }; } catch (e) { return { names: {}, people: {} }; }
+    }
+    function _saveRoomFix(fix) {
+        try { var all = JSON.parse(localStorage.getItem('wx_room_fix') || '{}'); all[_wxRemapChatId()] = fix || {}; localStorage.setItem('wx_room_fix', JSON.stringify(all)); } catch (e) {}
+    }
+    // 人名換成正確寫法；整理過好幾次可能串成 a→b→c，照著走到底（最多幾步防繞圈）
+    function _fixPerson(n, fix) {
+        let s = String(n || '').trim();
+        const p = fix && fix.people;
+        if (!p || !s) return s;
+        for (let i = 0; i < 5 && p[s] && p[s] !== s; i++) s = p[s];
+        return s;
+    }
+    // 把整理 AI 的回覆寫進兩張表。回 {merge, rename, people} 各改了幾個。
+    //   ctx.rooms＝整理當下解析出的房間（key 是 id）。「我」的任何寫法一律統一成人設名，不會被併到別人身上。
+    function _storyTidyApply(obj, ctx) {
+        const rooms = (ctx && ctx.rooms) || {};
+        const remap = _loadRoomRemap();
+        const fix = _loadRoomFix();
+        const myMain = _storyMyName();
+        const out = { merge: 0, rename: 0, people: 0 };
+        ((obj && (obj.merge || obj.groups)) || []).forEach(function (g) {
+            const cid = String((g && g.canonicalId) || '').trim(); if (!cid) return;
+            ((g && g.ids) || []).forEach(function (oid) {
+                oid = String(oid || '').trim();
+                if (oid && oid !== cid && remap[oid] !== cid) { remap[oid] = cid; out.merge++; }
+            });
+        });
+        ((obj && obj.people) || []).forEach(function (p) {
+            let nm = String((p && p.name) || '').trim();
+            const vs = ((p && p.variants) || []).map(function (v) { return String(v || '').trim(); }).filter(Boolean);
+            if (!nm || !vs.length) return;
+            const all = [nm].concat(vs);
+            if (myMain && myMain !== 'User' && all.some(function (x) { return _isMeName(x); })) nm = myMain;
+            all.forEach(function (v) { if (v !== nm && fix.people[v] !== nm) { fix.people[v] = nm; out.people++; } });
+            if (fix.people[nm]) delete fix.people[nm];   // 正確寫法本身不能再指去別的地方
+        });
+        ((obj && obj.rename) || []).forEach(function (r) {
+            let id = String((r && r.id) || '').trim();
+            const nm = String((r && r.name) || '').trim();
+            if (!id || !nm) return;
+            id = remap[id] || id;
+            if (!rooms[id] && !Object.keys(remap).some(function (k) { return remap[k] === id && rooms[k]; })) return;   // 沒有這間房
+            const name = _fixPerson(nm, fix);
+            if (name !== id && fix.names[id] !== name) { fix.names[id] = name; out.rename++; }
+        });
+        if (out.merge) _saveRoomRemap(remap);
+        if (out.rename || out.people) _saveRoomFix(fix);
+        return out;
+    }
 
     // 解析酒館正文裡的 <chat chatroom="名">…</chat> 區塊 → {房名:{name,members,msgs}}
     function _parseVnChatBlocks(fullText) {
         const rooms = {};
         if (!fullText) return rooms;
         const _remap = _loadRoomRemap();   // AI 整理產出的「舊id→統一id」對應表（沒整理過就空）
+        const _fix = _loadRoomFix();       // AI 整理產出的聊天室名字修正＋人名統一（沒整理過就空）
+        const _pn = function (n) { return _fixPerson(n, _fix); };
         // 容器開頭可帶任意順序屬性：chatroom="名" 與（可選）id="穩定id"
         const blockRe = /<chat\s+([^>]*?)>([\s\S]*?)<\/chat>/gi;
         let bm;
@@ -1247,9 +1305,9 @@
             }
             let key = roomId || roomName;
             key = _remap[key] || key;   // AI 整理過：舊亂 id（或名）→ 統一 id，同一間合回一張卡
-            const dispName = nameFromHdr || roomName;
+            const dispName = _fix.names[key] || nameFromHdr || roomName;   // 整理過的正確名字優先（正文把代號寫進名字時）
             // 📱 誰的手機：owner="名" 屬性明寫才換視角，沒寫＝主角（使用者人設名）。[With] 只當名單，順序不算數
-            const attrOwner = (attrs.match(/(?:^|\s)owner\s*=\s*["']?([^"'>]*)["']?/i)?.[1] || '').trim();
+            const attrOwner = _pn((attrs.match(/(?:^|\s)owner\s*=\s*["']?([^"'>]*)["']?/i)?.[1] || '').trim());
             if (!rooms[key]) rooms[key] = { id: key, name: dispName, members: [], msgs: [], owner: '' };
             else if (dispName) rooms[key].name = dispName;   // 名字以最新一次為準
             if (attrOwner) rooms[key].owner = attrOwner;
@@ -1259,7 +1317,8 @@
                 line = line.trim();
                 if (!line) return;
                 const withM = line.match(/^\[\s*With\s*[:：]\s*(.*?)\s*\]/i);
-                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean); if (ppl.length) rooms[key].members = ppl; return; }
+                // 名單裡同一個人的不同寫法（整理過）先統一再去重，不然簡繁各算一人、私聊變三人群
+                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return _pn(s.trim()); }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }); if (ppl.length) rooms[key].members = ppl; return; }
                 const nameM = line.match(/^\[([^\]]+?)\]\s*([\s\S]*)$/);   // [名] 內容
                 if (!nameM) return;
                 let rawName = nameM[1].trim();
@@ -1269,6 +1328,7 @@
                 if (/[:：]/.test(rawName)) return;                         // [图片:…]/[Chat:…]/[Time…] 等不是發話人 → 略過
                 if (/^(Time|時間|时间|Chat|With)$/i.test(rawName)) return;   // [Time] 22:10 這種沒冒號的標頭行也不是發話人
                 if (rawName.indexOf('|') >= 0) rawName = rawName.split('|').pop().trim() || rawName;   // [Char|红石]→红石
+                rawName = _pn(rawName);   // 發話人的其他寫法 → 整理過的正確寫法（要在判斷是不是「我」之前）
                 const content = (nameM[2] || '').trim();
                 if (!content) return;
                 if (/^(系統|系统|System|Notice|附加信息|附加訊息|验证信息|驗證信息|验证消息|驗證消息)$/i.test(rawName)) { rooms[key].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
@@ -2432,56 +2492,72 @@
         // ── 跑團同步（正文 <chat> 區塊 → 聊天列表 + 通訊錄）；整理入口在右上「＋」選單 ──
         storySync: function() { _storySyncDebounced(0); },
 
-        // 🧹 AI 整理：叫副模型判斷「哪些房間其實是同一間」(先前上下文壓縮→同房被編多個亂 id)，
-        //    產出「舊id→統一id」對應表存起來；不動歷史正文，同步時自動套用。
+        // 🧹 AI 整理：寫正文的 AI 同時要寫故事、VN 格式與組件，聊天室資料偶爾寫錯很正常，收拾交給這裡。
+        //    修三種：①同一間裂成多張卡 ②聊天室名字寫成代號 ③同一個人好幾種寫法（簡繁／錯字／全名簡稱）。
+        //    結果記成兩張表（id 對應表＋名字／人名修正），不動正文，同步時自動套用；「還原整理」全部清掉。
         storyTidyAi: async function() {
             const tr = AUI.toastr;
             if (!win.OS_API || typeof win.OS_API.chatSecondary !== 'function') { try { tr && tr.warning('副模型未就緒，無法整理', '聊天室整理'); } catch (e) {} return; }
+            await _storyRefreshMeAliases();
             const parsed = await _parseStoryRoomsByFloor();
             const rooms = parsed.rooms || {};
             const keys = Object.keys(rooms);
-            if (keys.length < 2) { try { tr && tr.info('劇情裡的聊天室不到兩間，不用整理', '聊天室整理'); } catch (e) {} return; }
-            // 給副模型的精簡清單：id / 名 / 成員 / 訊息數 / 最後兩句樣本（夠它判斷同不同間）
-            const payload = keys.map(function (k) {
-                const r = rooms[k];
-                const last = (r.msgs || []).slice(-2).map(function (m) { return (m.sender ? '[' + m.sender + '] ' : '') + String(m.content || '').slice(0, 40); }).join(' / ');
-                return { id: r.id, name: r.name, members: (r.members || []).join('、'), count: (r.msgs || []).length, sample: last };
-            });
-            const sys = '你是資料整理工具。下面 JSON 是從一段跑團劇情解析出的「手機聊天室」清單；因為先前模型在不同段落為同一間聊天室編了不同的 id（上下文壓縮導致遺忘），同一間房可能裂成多筆。請判斷哪些筆其實是同一間聊天室、歸為一組。\n判斷依據（綜合多項、別只看單一條）：房名相同或明顯同義、成員相同或高度重疊、對話內容是同一串的延續。只要不確定是不是同一間就「不要合併」、各自獨立。\n每組的「統一 id」固定取該組裡 count 最大的那筆的 id。\n只輸出 JSON、不要任何解說或標記，格式：\n{"groups":[{"canonicalId":"統一id","name":"顯示名","ids":["這組所有原id"]}]}\n只列「需要合併」（ids 長度>1）的組；單獨一間不需合併的不要列。';
+            if (!keys.length) { try { tr && tr.info('劇情裡還沒有聊天室', '聊天室整理'); } catch (e) {} return; }
+            const me = _storyMeAliases ? Array.from(_storyMeAliases) : [_storyMyName()];
+            let contacts = [];
+            try { contacts = (win.WX_CONTACTS.getAllCustomContacts() || []).filter(function (c) { return c && !c.isGroup && c.name; }).map(function (c) { return c.name; }).slice(0, 200); } catch (e) {}
+            // 給副模型的清單：id / 名 / 名單 / 實際發話的人 / 訊息數 / 最後兩句樣本
+            const payload = {
+                me: me,
+                contacts: contacts,
+                rooms: keys.map(function (k) {
+                    const r = rooms[k];
+                    const speakers = [];
+                    (r.msgs || []).forEach(function (m) { if (m.type === 'msg' && m.sender && speakers.indexOf(m.sender) < 0) speakers.push(m.sender); });
+                    const last = (r.msgs || []).slice(-2).map(function (m) { return (m.sender ? '[' + m.sender + '] ' : '') + String(m.content || '').slice(0, 40); }).join(' / ');
+                    return { id: r.id, name: r.name, members: r.members || [], speakers: speakers, count: (r.msgs || []).length, sample: last };
+                })
+            };
+            const sys = '你是資料整理工具。下面 JSON 是從跑團劇情解析出的手機聊天室。寫劇情的模型同時要寫正文和很多格式，聊天室資料常寫錯，你負責找出錯誤。\n'
+                + 'me＝主角（這支手機的主人）的各種叫法；contacts＝通訊錄裡已有的人名寫法；rooms＝每間聊天室的 id（程式內部用的代號）、name（畫面上顯示的聊天室名）、members（名單）、speakers（實際發話的人）、count（訊息數）、sample（最後兩句）。\n'
+                + '要找三種錯：\n'
+                + '一、同一間聊天室裂成多筆（id 不同）。依據：房名相同或明顯同義、成員相同或高度重疊、對話是同一串的延續，綜合判斷。統一 id 取該組 count 最大那筆的 id。\n'
+                + '二、聊天室名字寫錯。name 應該是給人看的名字；name 看起來像程式代號（英文字母、數字、底線、連字號組成的編號），或跟 id 一模一樣時，給出正確名字：扣掉主角只剩一個人的是私聊，用那個人的名字（用第三項統一後的寫法）；群聊用對話內容看得出來的群名，看不出來就不要列。名字本來就正常的不要列。\n'
+                + '三、同一個人被寫成不同寫法：簡體與繁體、錯字、全名與簡稱、多了空白或符號。每組給一個正確寫法：其中一種在 me 裡就用 me 裡那個；在 contacts 裡就用那個；否則用繁體中文寫法。只有很確定是同一個人才列，名字相近但可能是不同人的不要列。\n'
+                + '只要不確定就不要列，三個清單都可以是空的。\n'
+                + '只輸出 JSON，不要任何解說或標記，格式：\n'
+                + '{"merge":[{"canonicalId":"統一id","ids":["這組所有原id"]}],"rename":[{"id":"聊天室id","name":"正確顯示名"}],"people":[{"name":"正確寫法","variants":["其他寫法"]}]}';
             const messages = [{ role: 'system', content: sys }, { role: 'user', content: JSON.stringify(payload) }];
             try { tr && tr.info('整理中…', '聊天室整理'); } catch (e) {}
-            const self = this;
             try {
                 win.OS_API.chatSecondary(messages, null, async function (resp) {
                     try {
                         let s = String(resp || '').trim();
                         const mm = s.match(/\{[\s\S]*\}/); if (mm) s = mm[0];
                         const obj = JSON.parse(s);
-                        const groups = (obj && obj.groups) || [];
-                        const remap = _loadRoomRemap();   // 併入既有對應表（可多次整理累加）
-                        let merged = 0;
-                        groups.forEach(function (g) {
-                            const cid = String((g && g.canonicalId) || '').trim(); if (!cid) return;
-                            ((g && g.ids) || []).forEach(function (oid) { oid = String(oid || '').trim(); if (oid && oid !== cid) { remap[oid] = cid; merged++; } });
-                        });
-                        if (!merged) { try { tr && tr.info('沒有重複的聊天室', '聊天室整理'); } catch (e) {} return; }
-                        _saveRoomRemap(remap);
+                        const n = _storyTidyApply(obj, { rooms: rooms });
+                        if (!n.merge && !n.rename && !n.people) { try { tr && tr.info('沒有要修的地方', '聊天室整理'); } catch (e) {} return; }
                         await _storySyncNow();
-                        try { tr && tr.success('合併了 ' + merged + ' 間重複的聊天室', '聊天室整理'); } catch (e) {}
+                        const parts = [];
+                        if (n.merge) parts.push('合併了 ' + n.merge + ' 間重複的聊天室');
+                        if (n.rename) parts.push('改好 ' + n.rename + ' 個聊天室名字');
+                        if (n.people) parts.push('統一了 ' + n.people + ' 個人名寫法');
+                        try { tr && tr.success(parts.join('，'), '聊天室整理'); } catch (e) {}
                     } catch (e) { try { tr && tr.error('整理失敗：回傳的格式不對', '聊天室整理'); } catch (e2) {} console.warn('[聊天室整理] 解析失敗:', e, resp); }
                 }, function (err) { try { tr && tr.error('整理失敗：' + ((err && err.message) || err), '聊天室整理'); } catch (e) {} }, { task: 'wx_tidy', label: '聊天室整理' });
             } catch (e) { try { tr && tr.error('整理失敗：' + ((e && e.message) || e), '聊天室整理'); } catch (e2) {} }
         },
 
-        // 清掉本聊天的 AI 整理對應表（還原成原始分群）再重新同步
+        // 清掉本聊天的 AI 整理結果（id 對應表＋名字／人名修正，還原成原始分群）再重新同步
         storyTidyReset: async function() {
-            try { _saveRoomRemap({}); } catch (e) {}
+            try { _saveRoomRemap({}); _saveRoomFix({}); } catch (e) {}
             await _storySyncNow();
             try { AUI.toastr && AUI.toastr.info('已還原成整理前的聊天室', '聊天室整理'); } catch (e) {}
         },
         // 「＋」選單用：這個故事整理過才擺「還原整理」
         storyTidyHasRemap: function() {
-            return Object.keys(_loadRoomRemap()).length > 0;
+            const f = _loadRoomFix();
+            return Object.keys(_loadRoomRemap()).length > 0 || Object.keys(f.names).length > 0 || Object.keys(f.people).length > 0;
         },
 
         // 「我」頁：暱稱與簽名。這是整支手機的暱稱（st.user() 的 nickname），論壇、微博以外的面板都跟它走；留空＝退回人設真名

@@ -436,6 +436,9 @@
             // AI 整理產出的「舊亂id→統一id」對應表（微信右上「＋」→「整理聊天室」存的，按 tavern chatId 隔離）；套上去同房只剩一筆
             var remap = {};
             try { var _allRemap = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_id_remap')) || '{}'); remap = _allRemap[_appChatId()] || {}; } catch (e) {}
+            // 整理過的正確聊天室名字（正文 AI 把代號寫進名字時）：給它看修好的，不然它看到「代號｜代號」會一直照抄
+            var fixNames = {};
+            try { var _allFix = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_fix')) || '{}'); fixNames = (_allFix[_appChatId()] || {}).names || {}; } catch (e) {}
             var map = {}, order = [];
             // ① WX 內文行格式 [Chat: 名|ID]
             var re = /\[Chat[:：]\s*([^|\]]+)\|([^\]]+)\]/g, m2;
@@ -452,7 +455,7 @@
                 if (nm3 || !(id3 in map)) map[id3] = nm3 || map[id3] || '';
             }
             if (!order.length) return;
-            var table = order.map(function (id) { return map[id] + '｜' + id; }).join('、');
+            var table = order.map(function (id) { return (fixNames[id] || map[id]) + '｜' + id; }).join('、');
             var result = th.injectPrompts([{
                 id: WX_CHATROOM_INJECT_ID,
                 content: '\n\n【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器時用對 ID：可放 chatroom 旁的 id="…" 屬性，或容器內的 [Chat: 名|ID] 那行）；就算你改了群名也「絕不可」改 ID，只有全新房間才給新 ID。手機預設是主角的；只有換視角（這段是別人在用手機）才在 <chat> 加 owner="那個人的名字"，[With] 只是名單、順序無所謂：\n' + table + '\n\n',
