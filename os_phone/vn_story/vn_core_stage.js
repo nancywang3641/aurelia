@@ -158,8 +158,10 @@
             this._applyStageLighting(idx, { grantSolo: isNew ? idx : -1 });   // 說話者亮、另一格變暗；置中只授予「進場當下就是獨角」的
         },
 
-        // 單格圖片解析鏈（sprite_cache → 表情立繪條目 → spriteBase → 預設立繪條目 → charDefaultBase → fallbackToAI），
+        // 單格圖片解析鏈（表情立繪條目 → spriteBase → 預設立繪條目 → charDefaultBase → sprite_cache → fallbackToAI），
         // 條目層＝世界書【素材-角色表情立繪】/【素材-角色預設立繪素材】（重構前的老邏輯，2026-08-26 接回）；守衛改用「這格還是不是同角色」
+        // 🔴 2026-09-14 她定：自備圖（世界書條目／網址庫）一律最先。「會放上去都是因為我做好才放上去的，不可能反過來」。
+        //    手動生的立繪（sprite_cache）以前排第一，會把她放的圖整個蓋掉；現在排在自備圖之後、AI 生成之前（在 handleImgError 裡）。
         _renderSlot: async function(idx, name, exp) {
             const img = this._slotEl(idx);
             if (!img) return;
@@ -172,11 +174,6 @@
                 if (target.dataset.slideIn === '1') { target.classList.add('sprite-slide-in-right'); delete target.dataset.slideIn; }
                 else { if (exp === 'Surprised') target.classList.add('sprite-shake'); if (exp === 'JumpScare') target.classList.add('sprite-jumpscare'); }
             };
-            // 最優先：sprite_cache（透明真立繪）
-            for (const v of this._nameVariants(name)) {
-                const cached = await VN_Cache.get('sprite_cache', v);
-                if (cached?.url) { if (_stale()) return; this._swapImage(img, cached.url, false, _stale, () => triggerAnim(img)); return; }
-            }
             // 世界書【素材-角色表情立繪】(名字_表情→URL) → spriteBase 拼檔名；全走探測制，掛一個自動下一個
             if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
             const urls = [];
@@ -218,14 +215,27 @@
                 else { if (lockedExp === 'Surprised') t.classList.add('sprite-shake'); if (lockedExp === 'JumpScare') t.classList.add('sprite-jumpscare'); }
             };
 
-            // 世界書【素材-角色預設立繪素材】(名字→URL) → charDefaultBase 拼檔名；掛了才掉進 AI 生成
+            // 自備圖全沒有 → 手動做的立繪（sprite_cache：一鍵生立繪／裝扮室／相簿設為立繪／立繪工作室）→ 還是沒有才 AI 生成。
+            //   通話頭像照舊不看立繪庫（以前就沒看，全身去背立繪塞不進通話那顆圓頭像）。
+            const toSpriteOrAI = async () => {
+                if (_stale()) return;
+                if (!isCall) {
+                    for (const v of this._nameVariants(lockedName)) {
+                        const cached = await VN_Cache.get('sprite_cache', v);
+                        if (_stale()) return;
+                        if (cached?.url) { this._swapImage(img, cached.url, false, _stale, () => triggerAnim(img)); return; }
+                    }
+                }
+                this.fallbackToAI(target, lockedName, lockedExp);
+            };
+            // 世界書【素材-角色預設立繪素材】(名字→URL) → charDefaultBase 拼檔名；掛了才往下找立繪庫／AI 生成
             const proceed = () => {
                 if (_stale()) return;
                 const urls = [];
                 this._nameVariants(lockedName).forEach(v => { const u = this._lorebookSpriteCache[v]; if (u && !urls.includes(u)) urls.push(u); });
                 if (base) this._nameVariants(lockedName).forEach(v => urls.push(`${base}${v}_presets.png`));
-                if (urls.length) this._tryLoad(img, urls, () => { if (_stale()) return; this.fallbackToAI(target, lockedName, lockedExp); }, isCall ? null : triggerAnim, _stale);
-                else this.fallbackToAI(target, lockedName, lockedExp);
+                if (urls.length) this._tryLoad(img, urls, () => { if (_stale()) return; toSpriteOrAI(); }, isCall ? null : triggerAnim, _stale);
+                else toSpriteOrAI();
             };
             if (!this._lorebookLoaded) {
                 this._loadLorebookAvatars().then(() => { this._lorebookLoaded = true; proceed(); });
