@@ -1197,6 +1197,14 @@
             throw new Error('不支援的壓縮方式: ' + compression);
         },
 
+        // 🔌 NovelAI 格的網址：官方以外，NovelAI 同一種送法的站（公益站、轉發站）都走這格，換節點就是換網址＋Token。
+        //    站方常只給到 .../api/novelai（酒館插件那格的填法），也可能整條 .../ai/generate-image 貼進來 → 兩種都認。
+        _naiEndpoint: function(raw) {
+            const u = String(raw || '').trim().replace(/\/+$/, '');
+            if (!u) return 'https://image.novelai.net/ai/generate-image';
+            return /\/ai\/generate-image$/.test(u) ? u : u + '/ai/generate-image';
+        },
+
         // --- NovelAI 生成邏輯（char / item / pet / scene）---
         _genNovelAI: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
@@ -1380,7 +1388,7 @@
             console.log(`[ImageManager] NAI 實際 prompt: ${finalPrompt.slice(0, 80)}...`);
 
             try {
-                const response = await fetch(cfg.url, {
+                const response = await fetch(this._naiEndpoint(cfg.url), {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${cfg.token}`,

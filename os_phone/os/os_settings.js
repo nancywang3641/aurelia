@@ -38,6 +38,31 @@
         return '<option value="">' + (packs.length ? '底詞包…' : '還沒有底詞包') + '</option>' +
             packs.map(p => '<option value="' + _capiEsc(p.id) + '"' + (p.id === on ? ' selected' : '') + '>' + _capiEsc(p.name) + '</option>').join('');
     }
+    // 🔌 節點：同一種送法、不同的站（NovelAI 官方／公益站；GPT Image 官方／第三方）。[{ id, name, ...連線欄位 }]
+    //    🚨 理由同底詞包，不放進 os_image_config：底部「儲存」會照畫面整份重組 novelai / customApi。
+    //    正在用的那組照舊存在 os_image_config（生圖只讀那裡），節點只是「一鍵填回去」的清單。
+    const IMG_NODE_KINDS = {
+        nai:  { key: 'os_img_nai_nodes',  cfgKey: 'novelai',   idPrefix: 'nain_',  select: '#img-nai-node',  status: '#img-nai-node-status',
+                fields: { url: '#img-nai-url', token: '#img-nai-token' } },
+        capi: { key: 'os_img_capi_nodes', cfgKey: 'customApi', idPrefix: 'capin_', select: '#img-capi-node', status: '#img-capi-node-status',
+                fields: { url: '#img-capi-url', apiKey: '#img-capi-key', model: '#img-capi-model' } },
+    };
+    function _imgNodes(kind) {
+        try { const v = JSON.parse(localStorage.getItem(IMG_NODE_KINDS[kind].key) || '[]'); return Array.isArray(v) ? v.filter(n => n && n.id) : []; }
+        catch (e) { return []; }
+    }
+    function _imgNodesSave(kind, list) { try { localStorage.setItem(IMG_NODE_KINDS[kind].key, JSON.stringify(list || [])); } catch (e) {} }
+    function _imgNodeMatches(kind, node, cur) {
+        return Object.keys(IMG_NODE_KINDS[kind].fields).every(f => String(node[f] || '').trim() === String(cur[f] || '').trim());
+    }
+    // 下拉的選項：格子裡現在那組剛好等於哪個節點，就停在那個節點
+    function _imgNodeOptionsHTML(kind, cur, pickId) {
+        const nodes = _imgNodes(kind);
+        const hit = nodes.find(n => _imgNodeMatches(kind, n, cur || {}));
+        const on = pickId || (hit ? hit.id : '');
+        return '<option value="">' + (nodes.length ? (on ? '節點…' : '目前這組還沒存') : '還沒有節點') + '</option>' +
+            nodes.map(n => '<option value="' + _capiEsc(n.id) + '"' + (n.id === on ? ' selected' : '') + '>' + _capiEsc(n.name) + '</option>').join('');
+    }
     const MINIMAX_STORAGE_KEY = 'os_minimax_config';
     
     // --- 讀取 LLM 設置 ---
@@ -1730,6 +1755,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
                                 <div class="set-group">
                                     <div class="field-row">
+                                        <div class="set-label" title="位址、Key、模型三格存成一個節點，換站時下拉選一下就整組換過去。">節點</div>
+                                        <div class="capi-pack-row">
+                                            <select class="set-select" id="img-capi-node">${_imgNodeOptionsHTML('capi', { url: imgConfig.customApi?.url || '', apiKey: imgConfig.customApi?.apiKey || '', model: imgConfig.customApi?.model || '' })}</select>
+                                            <button class="set-btn" id="img-capi-node-save" type="button" title="把下面位址、Key、模型三格存成一個節點"><i class="fa-solid fa-floppy-disk"></i> 存成節點</button>
+                                            <button class="set-btn" id="img-capi-node-del" type="button" title="刪掉選中的節點（下面的格子不會動）"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                        <div class="set-desc" id="img-capi-node-status"></div>
+                                    </div>
+                                    <div class="field-row">
                                         <div class="set-label" title="站方給的那條位址，通常以 /v1 結尾。整條貼進來也可以。">接口位址 <span class="lbl-req">(必填)</span></div>
                                         <input class="set-input" id="img-capi-url" type="text" placeholder="https://……/v1" value="${(imgConfig.customApi?.url || '').replace(/"/g,'&quot;')}">
                                     </div>
@@ -1770,7 +1804,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
                                 <div class="set-group">
                                     <div class="field-row">
-                                        <div class="set-label">NovelAI Token <span class="lbl-req">(必填)</span></div>
+                                        <div class="set-label" title="網址和 Token 存成一個節點，換站時下拉選一下就整組換過去。">節點</div>
+                                        <div class="capi-pack-row">
+                                            <select class="set-select" id="img-nai-node">${_imgNodeOptionsHTML('nai', { url: imgConfig.novelai.url || '', token: imgConfig.novelai.token || '' })}</select>
+                                            <button class="set-btn" id="img-nai-node-save" type="button" title="把下面網址和 Token 存成一個節點"><i class="fa-solid fa-floppy-disk"></i> 存成節點</button>
+                                            <button class="set-btn" id="img-nai-node-del" type="button" title="刪掉選中的節點（下面的格子不會動）"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                        <div class="set-desc" id="img-nai-node-status"></div>
+                                    </div>
+                                    <div class="field-row">
+                                        <div class="set-label" title="用 NovelAI 官方就不用改。換成 NovelAI 同款的站，貼站方給的位址，只給到 /api/novelai 也可以。">網址</div>
+                                        <input class="set-input" id="img-nai-url" type="text" placeholder="https://image.novelai.net" value="${_capiEsc(imgConfig.novelai.url || '')}">
+                                    </div>
+                                    <div class="field-row">
+                                        <div class="set-label">Token <span class="lbl-req">(必填)</span></div>
                                         <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
                                     </div>
                                     <div class="field-row">
@@ -2965,6 +3012,97 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             _capiSay('「' + p.name + '」刪掉了');
         });
 
+        // 🔌 節點：換節點＝把那組填回格子，而且當下寫進設定（不必再按儲存）。事件一律委派在 container，理由同底下「測試」鈕。
+        const _nodeCur = (kind) => {
+            const K = IMG_NODE_KINDS[kind], o = {};
+            Object.keys(K.fields).forEach(f => { o[f] = (container.querySelector(K.fields[f])?.value || '').trim(); });
+            return o;
+        };
+        const _nodeSay = (kind, msg) => { const el = container.querySelector(IMG_NODE_KINDS[kind].status); if (el) el.textContent = msg; };
+        const _nodeRefill = (kind, pickId) => {
+            const sel = container.querySelector(IMG_NODE_KINDS[kind].select);
+            if (sel) sel.innerHTML = _imgNodeOptionsHTML(kind, _nodeCur(kind), pickId);
+        };
+        const _nodeApply = (kind, vals) => {
+            const K = IMG_NODE_KINDS[kind], patch = {};
+            Object.keys(K.fields).forEach(f => {
+                patch[f] = String(vals[f] || '').trim();
+                const el = container.querySelector(K.fields[f]);
+                if (el) el.value = patch[f];
+            });
+            try {
+                const saved = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
+                saved[K.cfgKey] = Object.assign({}, saved[K.cfgKey] || {}, patch);
+                localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(saved));
+            } catch (e) {}
+            try {
+                const IM = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
+                if (IM && IM.config) IM.config[K.cfgKey] = Object.assign({}, IM.config[K.cfgKey] || {}, patch);
+            } catch (e) {}
+        };
+        container.addEventListener('change', function (ev) {
+            const t = ev.target;
+            if (!t || !t.closest) return;
+            for (const kind in IMG_NODE_KINDS) {
+                const sel = t.closest(IMG_NODE_KINDS[kind].select);
+                if (!sel) continue;
+                const n = _imgNodes(kind).find(x => x.id === sel.value);
+                if (!n) { _nodeRefill(kind); return; }
+                _nodeApply(kind, n);
+                _nodeSay(kind, '換到「' + n.name + '」了');
+                return;
+            }
+        });
+        // 手動改了格子 → 下拉跟著認：改到跟某個節點一樣就停在它，不一樣就顯示「目前這組還沒存」
+        container.addEventListener('input', function (ev) {
+            const t = ev.target;
+            if (!t || !t.closest) return;
+            for (const kind in IMG_NODE_KINDS) {
+                if (Object.values(IMG_NODE_KINDS[kind].fields).some(s => t.closest(s))) { _nodeRefill(kind); return; }
+            }
+        });
+        container.addEventListener('click', async function (ev) {
+            const t = ev.target;
+            if (!t || !t.closest) return;
+            for (const kind in IMG_NODE_KINDS) {
+                const K = IMG_NODE_KINDS[kind];
+                const saveBtn = t.closest(K.select + '-save');
+                const delBtn = t.closest(K.select + '-del');
+                if (!saveBtn && !delBtn) continue;
+                const A = _capiAUI();
+                const nodes = _imgNodes(kind);
+                const sel = container.querySelector(K.select);
+                const picked = nodes.find(x => x.id === (sel && sel.value));
+                if (saveBtn) {
+                    const cur = _nodeCur(kind);
+                    if (!cur.url) { _nodeSay(kind, '網址是空的，沒東西可以存'); return; }
+                    const name = A && A.prompt ? await A.prompt('這個節點叫什麼', picked ? picked.name : '') : '';
+                    if (name == null) return;
+                    const nm = String(name).trim();
+                    if (!nm) return;
+                    let target = nodes.find(x => x.name === nm);
+                    if (target) {
+                        if (A && A.confirm && !(await A.confirm('已經有一個節點叫「' + nm + '」，要用現在這組蓋掉它嗎？'))) return;
+                        Object.assign(target, cur);
+                    } else {
+                        target = Object.assign({ id: K.idPrefix + Date.now().toString(36), name: nm }, cur);
+                        nodes.push(target);
+                    }
+                    _imgNodesSave(kind, nodes);
+                    _nodeApply(kind, cur);
+                    _nodeRefill(kind, target.id);
+                    _nodeSay(kind, '存成「' + nm + '」了，現在用的就是它');
+                    return;
+                }
+                if (!picked) { _nodeSay(kind, '先在左邊選要刪哪個節點'); return; }
+                if (A && A.confirm && !(await A.confirm('刪掉節點「' + picked.name + '」？下面格子裡現在填的不會動。'))) return;
+                _imgNodesSave(kind, nodes.filter(x => x.id !== picked.id));
+                _nodeRefill(kind);
+                _nodeSay(kind, '「' + picked.name + '」刪掉了');
+                return;
+            }
+        });
+
         // 自訂接口「測試」：用畫面上當下的三格去打一張小圖，不必先按儲存。
         // 錯誤原文直接寫在鈕下面 —— 接口填錯八成是網址少一段或型號名不對，要看得到才改得動。
         // 🚨 用委派綁在 container 上，不要直接綁那顆鈕：設定面板在這批 querySelector 之後
@@ -3378,7 +3516,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     },
                     novelai: {
                         token: elNaiToken.value.trim(),
-                        url: 'https://image.novelai.net/ai/generate-image',
+                        url: (container.querySelector('#img-nai-url')?.value || '').trim(),
                         model: elNaiModel ? elNaiModel.value : 'nai-diffusion-3',
                         capFreeSize:   container.querySelector('#img-nai-cap-free')?.checked ?? true,
                         sampler:       (container.querySelector('#img-nai-sampler')?.value        || 'k_euler_ancestral'),
@@ -4234,6 +4372,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const getInt = (selector, def) => parseInt(container.querySelector(selector)?.value ?? def);
                 
                 imageManager.config.novelai.token = elNaiToken.value.trim();
+                imageManager.config.novelai.url = (container.querySelector('#img-nai-url')?.value || '').trim();
                 if (elNaiModel) imageManager.config.novelai.model = elNaiModel.value;
                 imageManager.config.novelai.capFreeSize = container.querySelector('#img-nai-cap-free')?.checked ?? true;
                 imageManager.config.novelai.sampler = container.querySelector('#img-nai-sampler')?.value || 'k_euler_ancestral';
