@@ -1768,6 +1768,31 @@
                         try { if (win.OS_CONTACTS && win.OS_CONTACTS.deleteContact) win.OS_CONTACTS.deleteContact(did); } catch (e) {}
                         if (GLOBAL_ACTIVE_ID === did) GLOBAL_ACTIVE_ID = null;
                     }
+                    // 群成員名單裡還掛著剛刪掉的聯絡人 id → 換回名字。這一輪的群是在清理「之前」組名單的，
+                    //   當時那個路人還查得到 id；不換的話群設定頁找不到這個人，會把 char_105 這種編號當名字顯示，
+                    //   要等正文再進一樓、那間群重建才會自己變回來。聊天室記錄和通訊錄裡的群登記兩份都要換。
+                    const fixMembers = function (arr) {
+                        if (!Array.isArray(arr)) return null;
+                        let hit = false;
+                        const out = arr.map(function (m) { if (drop[m]) { hit = true; return drop[m]; } return m; });
+                        return hit ? out : null;
+                    };
+                    const poolIds = Object.keys(Object.assign({}, all, GLOBAL_CHATS));
+                    for (let gi = 0; gi < poolIds.length; gi++) {
+                        const gid = poolIds[gi];
+                        const gc = GLOBAL_CHATS[gid] || all[gid];
+                        if (!gc || !gc.isGroup) continue;
+                        const fixed = fixMembers(gc.members);
+                        if (!fixed) continue;
+                        gc.members = fixed;
+                        try { await win.WX_DB.saveApiChat(gid, gc); } catch (e) {}
+                    }
+                    try {
+                        const cl = win.WX_CONTACTS.getAllCustomContacts();
+                        let clChanged = false;
+                        cl.forEach(function (c) { if (c && c.isGroup) { const fixed = fixMembers(c.members); if (fixed) { c.members = fixed; clChanged = true; } } });
+                        if (clChanged) localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(cl));
+                    } catch (e) {}
                     console.log('[wx 跑團同步] 清掉只因同群被隱形註冊的聯絡人 ' + dropIds.length + ' 位：' + dropIds.map(function (i) { return drop[i]; }).join('、'));
                 }
             } catch (e) { console.warn('[wx 跑團同步] 清理群成員殘留失敗:', (e && e.message) || e); }
