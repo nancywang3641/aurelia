@@ -290,6 +290,7 @@
             CDN 這條在兩邊都一樣，是唯一同時成立的寫法。
          🚨 房間改版要同時把下面兩處的 commit 換掉（__CCR_BASE__ 與 script src 必須同一個），
             換完先用瀏覽器打一次新網址預熱，不然手機第一次會等 jsDelivr 回源。
+            board.html（手機通知點進來那頁）會讀這份檔案裡的 __CCR_BASE__ 去載房間的留言板，別改那行的寫法。
          ⚠️ 它自己會載自己的 core/css（帶 ?v=VER、順序自己管），這裡只拉 index.js 一支，
             也不要把它的檔案抄進本 repo 的載入清單 —— 那邊改版跟這邊是兩條 git 線。
          ⚠️ 位置必須在 os_settings.js / os_db.js 之後：房間會先看這兩個在不在，
@@ -297,9 +298,9 @@
     <script>
         /* 浮球不用在這裡關 —— void_terminal.js 一載入就會設 __CCR_NO_LAUNCHER__，
            因為入口已經收攏成大廳 dock 的「宿舍」那一顆。 */
-        window.__CCR_BASE__ = "https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@fb90b3c/";
+        window.__CCR_BASE__ = "https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@688b41b/";
     </script>
-    <script src="https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@fb90b3c/index.js"></script>
+    <script src="https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@688b41b/index.js"></script>
 
 
     <script>
