@@ -990,22 +990,53 @@
             return c && c.id && c.name && c.id !== excludeId && !c.wxRemoved && !c.wxBlocked && (c.isGroup || inBook[c.id]);
         });
     }
+    // 名字比對用：不算空白、不分大小寫；再加上「整理聊天室」記下的同一個人的正確寫法
+    //   🚨 程式不會自己轉簡繁：只查整理 AI 記過的那張表（wx_room_fix.people），沒記過的寫法照樣對不上
+    function _roomNameKeys(name) {
+        const norm = function (s) { return String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase(); };
+        const keys = [norm(name)];
+        try { const fixed = _fixPerson(name, _loadRoomFix()); if (fixed && keys.indexOf(norm(fixed)) < 0) keys.push(norm(fixed)); } catch (e) {}
+        return { keys: keys, norm: norm };
+    }
     // chatroom 寫的名字 → 哪一間。沒寫、或寫的是現在這間＝這間；對不到回 null（不新開、不加好友）
+    //   對法依序：名字（含整理記下的寫法）完全一樣 → 只寫了名字的一部分（至少兩個字）而且只對得到一間。對到兩間以上不猜。
     function _resolveRoom(target, cur) {
         const t = String(target == null ? '' : target).trim();
         if (!t) return cur || null;
-        const norm = function (s) { return String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase(); };
-        if (cur && (t === cur.id || norm(t) === norm(cur.name))) return cur;
+        const K = _roomNameKeys(t);
+        const same = function (name) { return K.keys.indexOf(K.norm(name)) >= 0; };
+        if (cur && (t === cur.id || same(cur.name))) return cur;
         const list = _roomTargets(cur ? cur.id : null);
-        return list.find(function (c) { return c.id === t; })
-            || list.find(function (c) { return !c.isGroup && norm(c.name) === norm(t); })
-            || list.find(function (c) { return c.isGroup && norm(c.name) === norm(t); })
-            || null;
+        const exact = list.find(function (c) { return c.id === t; })
+            || list.find(function (c) { return !c.isGroup && same(c.name); })
+            || list.find(function (c) { return c.isGroup && same(c.name); });
+        if (exact) return exact;
+        // 只寫一部分（「彥庭」→「陳彥庭」）：這一間也算進來，免得在私聊裡寫簡稱反而被丟掉
+        const pool = cur ? list.concat([cur]) : list;
+        const partOf = function (isGroup) {
+            const found = pool.filter(function (c) {
+                if (!!c.isGroup !== isGroup) return false;
+                const n = K.norm(c.name);
+                return n.length >= 2 && K.keys.some(function (k) { return k.length >= 2 && (n.indexOf(k) >= 0 || k.indexOf(n) >= 0); });
+            });
+            if (found.length > 1) return false;   // 對到好幾個人：不猜
+            return found[0] || null;
+        };
+        const p = partOf(false);
+        if (p) return p;
+        if (p === false) return null;
+        return partOf(true) || null;
+    }
+    // 有沒有任何一間叫這個名字（含被刪、被拉黑、不是好友的）：對不到時分辨「沒這間」還是「故意不送」
+    function _anyRoomNamed(name) {
+        const K = _roomNameKeys(name);
+        return Object.keys(GLOBAL_CHATS).some(function (k) { const c = GLOBAL_CHATS[k]; return c && c.name && K.keys.indexOf(K.norm(c.name)) >= 0; });
     }
     // 一則回覆拆成一間一段。容器外的字（思考、旁白）丟掉；整則都沒有容器才整段算這一間。
     function _wxSplitRooms(text, cur) {
         const src = String(text == null ? '' : text);
         const out = [];
+        out.unknown = [];   // 對不到任何聊天室的名字（給呼叫端跟她說一聲）
         const re = /<chat\b([^>]*)>([\s\S]*?)<\/chat>/gi;
         let m, any = false;
         while ((m = re.exec(src))) {
@@ -1017,7 +1048,13 @@
             let chat = target ? _resolveRoom(target, cur) : null;
             if (!chat && im && im[1].trim()) chat = _resolveRoom(im[1].trim(), cur);
             if (!target && !(im && im[1].trim())) chat = cur || null;
-            if (!chat) { console.warn('[WX] 回覆要傳到「' + (target || (im ? im[1] : '')) + '」，對不到能收的聊天室，這段不送'); continue; }
+            if (!chat) {
+                const want = target || (im ? im[1].trim() : '');
+                console.warn('[WX] 回覆要傳到「' + want + '」，對不到能收的聊天室，這段不送');
+                // 根本沒有這一間才記下來跟她說；有這間但被刪／拉黑／不是好友是故意不送，不吵她
+                if (want && !_anyRoomNamed(want) && out.unknown.indexOf(want) < 0) out.unknown.push(want);
+                continue;
+            }
             out.push({ chat: chat, text: m[2] });
         }
         if (!any) out.push({ chat: cur || null, text: src.replace(/<\/?chat\b[^>]*>/gi, '') });
@@ -1061,7 +1098,12 @@
         const cur = GLOBAL_ACTIVE_ID ? (GLOBAL_CHATS[GLOBAL_ACTIVE_ID] || null) : null;
         let mine = [];
         const others = [];
-        _wxSplitRooms(String(fullText == null ? '' : fullText).trim(), cur).forEach(function (part) {
+        const parts = _wxSplitRooms(String(fullText == null ? '' : fullText).trim(), cur);
+        // 模型寫的名字對不到任何聊天室：那段沒送出，跟她講一聲（不然訊息悄悄不見）
+        if (parts.unknown && parts.unknown.length) {
+            try { if (typeof AUI !== 'undefined' && AUI.toast) AUI.toast('有訊息要傳給「' + parts.unknown.join('、') + '」，對不到聊天室，沒有送出。按一次整理聊天室，之後就認得這個寫法'); } catch (e) {}
+        }
+        parts.forEach(function (part) {
             const msgs = _parseRoomLines(part.text, part.chat) || [];
             if (!part.chat || !cur || part.chat.id === cur.id) { mine = mine.concat(msgs); return; }
             if (!msgs.length) return;
