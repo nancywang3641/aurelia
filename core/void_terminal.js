@@ -551,6 +551,7 @@ const IRIS_IDLE = [
         }).join('');
 
         // 🔥 判斷是否為獨立模式，用來決定要不要印出多餘的 App 按鈕
+        //    全屏鈕也看這個：它是桌面酒館把手機殼放大蓋滿視窗用的，手機 PWA 本來就滿版，不放
         const isStandalone = !(window.parent || window).SillyTavern;
         const extraAppsHtml = isStandalone ? `
                     <button class="void-hist-btn" data-app-launch="pet" title="寵物店"><span class="vhb-em"><i class="fa-solid fa-paw"></i></span><span>寵物</span></button>
@@ -572,7 +573,7 @@ const IRIS_IDLE = [
                     </div>
                 </div>
                 <div class="lb-top-ctrls">
-                    <button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏"><i class="fa-solid fa-expand"></i></button>
+                    ${isStandalone ? '' : '<button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏"><i class="fa-solid fa-expand"></i></button>'}
                     <button class="lb-icon-btn lstage-toggle-btn" id="lstage-toggle" title="書咖舞台"><i class="fa-solid fa-gamepad"></i></button>
                     <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關"><i class="fa-solid fa-volume-high"></i></button>
                     <button class="lb-icon-btn" id="aurelia-global-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">⏻</button>

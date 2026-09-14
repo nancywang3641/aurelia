@@ -157,6 +157,12 @@
                 getContacts: function() {   // 微信通訊錄（當前故事）[{id,name,desc,avatar,isGroup}]，做選聯絡人清單用
                     try { const F = FEED(); return (F && F.contacts) ? F.contacts() : Promise.resolve([]); } catch (e) { return Promise.resolve([]); }
                 },
+                wbSave: function(title, content, keys) {   // 寫進當前世界書（同標題就改那條）
+                    try { const F = FEED(); return (F && F.wbSave) ? F.wbSave(title, content, keys) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); }
+                },
+                wbLoad: function(title) {
+                    try { const F = FEED(); return (F && F.wbLoad) ? F.wbLoad(title) : Promise.resolve(''); } catch (e) { return Promise.resolve(''); }
+                },
                 esc: function(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
                 // 提示條／確認窗走全站同一套（core/aurelia_dialog.js）
                 toast: function(msg, opts) { try { return AUI.toast(msg, opts); } catch (e) {} },

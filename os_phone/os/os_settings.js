@@ -232,8 +232,9 @@
     }
 
     // --- 讀取 Image 設置 ---
-    function loadImageConfig() {
-        let saved = localStorage.getItem(IMG_STORAGE_KEY);
+    // opts.defaults＝只要內建預設值、不讀存檔（插圖指令頁的「還原預設」用）
+    function loadImageConfig(opts) {
+        let saved = (opts && opts.defaults === true) ? null : localStorage.getItem(IMG_STORAGE_KEY);
         let config = {
             service: 'pollinations',
             serviceInanimate: 'pollinations', // 死物桶：背景/物品/寵物
@@ -2042,26 +2043,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-desc" style="margin-top:6px;">副模型只寫 ##角色名##＋動作場景，外觀由系統用頭像自動填。</div>
                             <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()"><i class="fa-solid fa-pen"></i> 編輯角色外觀登記表</button>
                             <div class="set-desc" style="margin-top:4px;">列出每個角色的外觀（頭像生成詞），可直接改／刪／新增——修你之前的資料。</div>
-                            <div class="set-label" style="font-size:12px; margin-top:10px;" title="跟著上面選的「插圖來源」自動切換：選哪個接口就顯示哪個接口的指令，各自獨立、互不影響。">副模型插圖指令（跟著插圖來源）</div>
-                            ${(() => {
-                                const _ss = imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service;
-                                const _esc = t => (t || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                                const _rows = [
-                                    { svc: 'novelai',        sfx: 'novelai',      hint: 'NovelAI（Danbooru 標籤・五層系統）',  val: imgConfig.sceneGen?.extractPromptNovelai },
-                                    { svc: 'pollinations',   sfx: 'pollinations', hint: 'Pollinations（自然語言英文句子）',     val: imgConfig.sceneGen?.extractPromptPollinations },
-                                    { svc: 'tavern_sd',      sfx: 'tavern',       hint: '酒館原生（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptTavern },
-                                    { svc: 'comfyui_direct', sfx: 'comfy',        hint: 'ComfyUI 直連（自然語言英文句子）',    val: imgConfig.sceneGen?.extractPromptComfy },
-                                    // 🚨 這排是「哪個來源就顯示哪一格」，來源不在這份清單裡＝那格永遠不顯示。
-                                    //    加新的插圖來源時只要加在這裡就好 —— 切換時是掃 data-svc，不再有第二份對照表。
-                                    { svc: 'custom_api',     sfx: 'custom',       hint: '自訂接口（自然語言英文句子）',        val: imgConfig.sceneGen?.extractPromptCustom },
-                                ];
-                                return _rows.map(r => `
-                            <div id="img-scene-extract-row-${r.sfx}" data-svc="${r.svc}" class="scene-extract-row${_ss === r.svc ? '' : ' hidden'}">
-                                <div class="scene-extract-hint">${r.hint}</div>
-                                <textarea class="set-textarea scene-extract-ta" id="img-scene-extract-${r.sfx}">${_esc(r.val)}</textarea>
-                            </div>`).join('');
-                            })()}
-                            <div style="font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px;">↑ 附加到「記憶副模型」指令叫它額外吐 scenes。每個接口一份、互不污染；切到哪個插圖來源就顯示那份。改這裡就能調該接口插圖的數量／風格／規則。</div>
+                            <!-- 插圖指令：每個插圖來源一份，點進去整頁改（_openScenePromptPage） -->
+                            <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="extract">
+                                <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">插圖指令</span><span class="vncfg-lp-open-n">每個插圖來源一份</span><i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                            <div class="set-desc">附加在記憶副模型指令後面，叫它順便寫插圖；切到哪個插圖來源就用那份。</div>
 
                             <!-- 🎯 獨立插圖副模型：另開一通 chatSecondary、只吃規範、不背 AVS/記憶 -->
                             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px; border-top:1px dashed rgba(26,28,40,0.10); padding-top:12px;" title="開啟：插圖改走「獨立一通副模型」(用 API 設定區的副模型接口)、只吃下方規範、不背 AVS/記憶，插圖更準。關閉＝走上面搭便車路(跟記憶/AVS 同一通)。">
@@ -2069,8 +2055,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-standalone-enabled" ${imgConfig.sceneGen?.standaloneEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc" style="margin-top:6px;">插圖另開一通副模型（用副模型接口）、只吃下方規範、不背 AVS/記憶；開了上面的搭便車插圖就停。</div>
-                            <textarea class="set-textarea" id="img-scene-standalone-spec" style="min-height:170px; font-size:11px; margin-top:8px;">${(imgConfig.sceneGen?.standaloneSpec || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
-                            <div style="font-size:10px; color:rgba(26,28,40,0.72); margin-top:4px;">↑ 獨立插圖副模型的規範（只在開上面開關時生效）。改這裡調插圖風格／規則／數量。</div>
+                            <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="standalone">
+                                <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">獨立插圖規範</span><span class="vncfg-lp-open-n"></span><i class="fa-solid fa-chevron-right"></i>
+                            </button>
                         </div>
 
                         <div class="set-group">
@@ -2947,6 +2934,113 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elImgSceneExtract = container.querySelector('#img-scene-extract-block'); // 副模型版（插圖→角色）
         const elImgPixabay      = container.querySelector('#img-pixabay-block');        // 退路圖庫（背景）
         const elImgPolPrompts = container.querySelector('#img-pol-prompts-group');
+
+        // ── 插圖指令／獨立插圖規範：點進去整頁編輯（跟素材頁 BGM 清單同一種頁 .vncfg-lp），自己有保存鈕、當場寫進設定 ──
+        //   🚨 底部「保存所有設定」會整份重組 sceneGen，它照 imgConfig.sceneGen 帶回這幾格 → 這頁存的時候存檔跟 imgConfig 兩邊都要寫。
+        //   委派綁在 container 上：設定面板之後還會重建 DOM，直接綁在鈕上會掉（reference_settings_panel_bind_traps）。
+        const _SCENE_PROMPT_TABS = [
+            { svc: 'novelai',        key: 'extractPromptNovelai',      label: 'NovelAI',      hint: 'NovelAI 用 Danbooru 標籤（五層系統）。' },
+            { svc: 'pollinations',   key: 'extractPromptPollinations', label: 'Pollinations', hint: '寫自然語言英文句子。' },
+            { svc: 'tavern_sd',      key: 'extractPromptTavern',       label: '酒館原生',     hint: '寫自然語言英文句子。' },
+            { svc: 'comfyui_direct', key: 'extractPromptComfy',        label: 'ComfyUI',      hint: '寫自然語言英文句子。' },
+            // 🚨 加新的插圖來源時加在這裡，不然那個來源沒有自己的一份可改
+            { svc: 'custom_api',     key: 'extractPromptCustom',       label: '自訂接口',     hint: '寫自然語言英文句子。' },
+        ];
+        const _openScenePromptPage = (btn, which) => {
+            try {
+                const setc = btn.closest('.set-container');
+                const host = (setc && setc.parentElement) || btn.ownerDocument.body;
+                const pdoc = host.ownerDocument || document;
+                if (getComputedStyle(host).position === 'static') host.classList.add('vncfg-lp-host');
+                host.querySelectorAll(':scope > .vncfg-lp').forEach(p => p.remove());
+                const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                const norm = s => String(s == null ? '' : s).replace(/\r\n/g, '\n').trim();
+                const defs = loadImageConfig({ defaults: true }).sceneGen || {};
+                if (!imgConfig.sceneGen) imgConfig.sceneGen = {};
+                const sg = imgConfig.sceneGen;
+                const solo = which === 'standalone';
+                const tabs = solo
+                    ? [{ key: 'standaloneSpec', label: '獨立插圖規範', hint: '開了「獨立插圖副模型」才用：插圖另開一通副模型，只吃這份規範。' }]
+                    : _SCENE_PROMPT_TABS;
+                const drafts = {}, saved = {};
+                tabs.forEach(t => { saved[t.key] = drafts[t.key] = String(sg[t.key] == null ? (defs[t.key] || '') : sg[t.key]); });
+                const svcNow = elImgServiceScene ? elImgServiceScene.value : (imgConfig.serviceScene || '');
+                let cur = (tabs.find(t => t.svc && t.svc === svcNow) || tabs[0]).key;
+
+                const page = pdoc.createElement('div');
+                page.className = 'vncfg-lp';
+                page.innerHTML = `
+                    <div class="set-header sysh">
+                        <div class="set-back-btn sysh-back vncfg-lp-back">‹</div>
+                        <div class="set-title sysh-title">${solo ? '獨立插圖規範' : '插圖指令'}</div>
+                        <div class="sysh-acts"><button type="button" class="vncfg-lp-save">保存</button></div>
+                    </div>
+                    ${solo ? '' : `<div class="vncfg-lp-tabs">${tabs.map(t => `<button type="button" class="vncfg-lp-tab" data-id="${t.key}">${esc(t.label)}</button>`).join('')}</div>`}
+                    <div class="vncfg-lp-bar"><span class="vncfg-lp-count"></span><button type="button" class="set-btn vncfg-lp-reset">還原預設</button></div>
+                    <textarea class="vncfg-lp-ta" spellcheck="false"></textarea>
+                    <div class="vncfg-lp-hint"></div>`;
+                host.appendChild(page);
+
+                const ta = page.querySelector('.vncfg-lp-ta');
+                const tabOf = key => tabs.find(t => t.key === key);
+                const paint = () => {
+                    page.querySelectorAll('.vncfg-lp-tab').forEach(b => {
+                        b.classList.toggle('is-on', b.dataset.id === cur);
+                        b.classList.toggle('is-changed', norm(drafts[b.dataset.id]) !== norm(defs[b.dataset.id] || ''));
+                    });
+                    page.querySelector('.vncfg-lp-count').textContent = String(drafts[cur] || '').length + ' 字';
+                    const t = tabOf(cur);
+                    page.querySelector('.vncfg-lp-hint').textContent = (t.svc && t.svc === svcNow ? '插圖來源現在用的就是這份。' : '') + t.hint;
+                };
+                ta.value = drafts[cur];
+                paint();
+
+                ta.addEventListener('input', () => { drafts[cur] = ta.value; paint(); });
+                const tabsEl = page.querySelector('.vncfg-lp-tabs');
+                if (tabsEl) tabsEl.addEventListener('click', ev => {
+                    const b = ev.target.closest('.vncfg-lp-tab');
+                    if (!b || b.dataset.id === cur) return;
+                    drafts[cur] = ta.value;
+                    cur = b.dataset.id;
+                    ta.value = drafts[cur];
+                    ta.scrollTop = 0;
+                    paint();
+                });
+                page.querySelector('.vncfg-lp-reset').onclick = () => { ta.value = defs[cur] || ''; drafts[cur] = ta.value; paint(); };
+                page.querySelector('.vncfg-lp-save').onclick = () => {
+                    drafts[cur] = ta.value;
+                    const patch = {};
+                    tabs.forEach(t => { patch[t.key] = t.key === 'standaloneSpec' ? drafts[t.key] : String(drafts[t.key] || '').trim(); });
+                    const b = page.querySelector('.vncfg-lp-save');
+                    try {
+                        const all = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
+                        all.sceneGen = Object.assign({}, all.sceneGen || {}, patch);
+                        localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(all));
+                        Object.assign(sg, patch);
+                        tabs.forEach(t => { saved[t.key] = drafts[t.key]; });
+                        b.textContent = '已保存 ✓';
+                    } catch (e) { b.textContent = '存不進去'; console.warn('[設置] 插圖指令保存失敗:', e); }
+                    setTimeout(() => { b.textContent = '保存'; }, 1400);
+                };
+                page.querySelector('.vncfg-lp-back').onclick = async () => {
+                    try {
+                        drafts[cur] = ta.value;
+                        if (tabs.some(t => drafts[t.key] !== saved[t.key])) {
+                            const A = window.AUI || (window.parent && window.parent.AUI);
+                            if (A && A.confirm && !(await A.confirm('還沒保存，確定要離開嗎？'))) return;
+                        }
+                        page.remove();
+                    } catch (e) { console.warn('[設置] 關閉插圖指令頁失敗:', e); page.remove(); }
+                };
+            } catch (e) { console.warn('[設置] 打開插圖指令頁失敗:', e); }
+        };
+        if (!container.dataset.scenePromptBound) {
+            container.dataset.scenePromptBound = '1';
+            container.addEventListener('click', (ev) => {
+                const b = ev.target && ev.target.closest ? ev.target.closest('.img-scene-prompt-open') : null;
+                if (b) _openScenePromptPage(b, b.dataset.scenePage);
+            });
+        }
         const elTavGroup      = container.querySelector('#img-group-tavernsd');
         const elCfdGroup      = container.querySelector('#img-group-comfyui');
         const elCapiGroup     = container.querySelector('#img-group-customapi');
@@ -3255,13 +3349,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (elImgSceneBlock)   elImgSceneBlock.style.display = '';
                 if (elImgSceneExtract) elImgSceneExtract.style.display = '';
                 if (elImgPixabay)      elImgPixabay.style.display = 'none';
-                // 副模型插圖指令：每接口一份，只顯示對應「插圖來源」那欄。
-                // 🚨 直接掃 DOM 的 data-svc，這裡不再維護第二份來源清單 —— 上面 _rows 是唯一那份。
-                //    以前這裡有一份對照表，加自訂接口時漏了同步：切到自訂接口它那格永遠不出現，
-                //    切回別的來源時它又不會被藏起來，畫面上兩格並存 → 看起來就像「指令框全接口共用」。
-                container.querySelectorAll('.scene-extract-row').forEach(_row => {
-                    _row.classList.toggle('hidden', _row.dataset.svc !== sceneSvc);
-                });
             } else if (imgSrcTab === 'map') {
                 // 小地圖分頁：小地圖桶接口設定（畫風跟背景分開，ComfyUI 桶在下面選「小地圖」）
                 const mapSvc = elImgServiceMap ? elImgServiceMap.value : 'pollinations';
@@ -3606,13 +3693,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         extractEnabled:   container.querySelector('#img-scene-extract-enabled')?.checked ?? false,
                         useNamePlaceholder: container.querySelector('#img-scene-name-placeholder')?.checked ?? true,   // 🏷️ 角色名佔位（預設開）
                         standaloneEnabled: container.querySelector('#img-scene-standalone-enabled')?.checked ?? false,   // 🎯 獨立插圖副模型
-                        standaloneSpec:   (container.querySelector('#img-scene-standalone-spec')?.value || ''),
-                        // 每接口獨立的副模型插圖指令（不再共用標籤/自然語言兩格）
-                        extractPromptNovelai:      (container.querySelector('#img-scene-extract-novelai')?.value || '').trim(),
-                        extractPromptPollinations: (container.querySelector('#img-scene-extract-pollinations')?.value || '').trim(),
-                        extractPromptTavern:       (container.querySelector('#img-scene-extract-tavern')?.value || '').trim(),
-                        extractPromptComfy:        (container.querySelector('#img-scene-extract-comfy')?.value || '').trim(),
-                        extractPromptCustom:       (container.querySelector('#img-scene-extract-custom')?.value || '').trim(),
+                        // 插圖指令／獨立插圖規範在自己的整頁（_openScenePromptPage）改、當場存，畫面上已經沒有那幾格：
+                        //   這裡照記憶體裡那份帶回去。🚨 別改回讀畫面——讀不到就會整份存成空的。
+                        standaloneSpec:            String(imgConfig.sceneGen?.standaloneSpec || ''),
+                        extractPromptNovelai:      String(imgConfig.sceneGen?.extractPromptNovelai || '').trim(),
+                        extractPromptPollinations: String(imgConfig.sceneGen?.extractPromptPollinations || '').trim(),
+                        extractPromptTavern:       String(imgConfig.sceneGen?.extractPromptTavern || '').trim(),
+                        extractPromptComfy:        String(imgConfig.sceneGen?.extractPromptComfy || '').trim(),
+                        extractPromptCustom:       String(imgConfig.sceneGen?.extractPromptCustom || '').trim(),
                     },
                     pixabayKey:    (container.querySelector('#img-pixabay-key')?.value || '').trim(),
                     fallbackForce:  container.querySelector('#img-fallback-force')?.checked ?? false,

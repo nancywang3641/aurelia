@@ -1134,7 +1134,7 @@
         },
 
         // ── lobby_summary_index：酒館大廳跨卡總結索引（V24）─────────
-        //   給 status_panel.js 生成大總結後寫 brief + 角色名單，供瀅瀅/柴郡 sysPrompt 注入
+        //   給故事管理（os_story_tools.js）生成大總結後寫 brief + 角色名單，供瀅瀅/柴郡 sysPrompt 注入
         //   entry: { id, cardName, chatId, summaryCount, brief, characters: [], lorebookBook, lorebookKey, timestamp }
         saveLobbySummaryIndex: async function(entry) {
             const db = await this.init();

@@ -246,7 +246,7 @@
 - 返回：標題列固定一顆返回鈕綁 onComplete。
 
 ## 3. 所有類型都要守的鐵律
-- 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.getContacts、st.user、st.getStory。
+- 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.getContacts、st.wbLoad、st.user、st.getStory。
 - 每個面板都必須自帶一顆綁 onComplete 的出口鈕，三種類型都一樣。造型跟主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角，一眼看得到，flex-shrink:0 不被內容擠走。別幾秒自動消失、別靠手機殼的橫槓代替。少了這顆使用者回不去主畫面。
 - 捲動與溢出：只有「會變長的那一個內容區」給 flex:1; min-height:0; overflow-y:auto；標題、圖示、裝飾、按鈕一律 flex-shrink:0；父容器 display:flex; flex-direction:column，卡本體 overflow:hidden。否則內容一多，固定元素被擠出去。同一個盒子不能又要內部捲動裁切又要讓某元素溢出邊緣；真要溢出裝飾就拆兩層：外層 overflow:visible 放 position:absolute 的裝飾，內層 overflow:hidden 負責捲動。
 - CSS 只能寫在 .vn-dynamic-panel-<tagId> 前綴底下。禁 position:fixed、禁 position:absolute 配 top/left 自定位、禁 100vw、100vh、禁在 body／html 設樣式、禁寫死固定像素寬。
@@ -270,6 +270,8 @@ st 只有下面這些，一個不多。沒列的一律不存在，不准自己�
 - st.parseText(文字) → [{ tag, fields }]。把一段文字（通常是 st.callAI 回來的）照同一套規則拆。
 - st.feed() → Promise<[{ id, src:'story'|'app', tag, fields, floor }]>。共用面板的全部資料，已排好序。傳 { tag: '標籤名' } 只拿某一種。
 - st.feedAdd(tag, fields) → Promise<row>；st.feedUpdate(id, fields) → Promise；st.feedRemove(id) → Promise。共用面板在 App 裡新增／改／刪，只動 src 'app' 的。
+- st.wbSave(標題, 內容[, 關鍵字陣列]) → Promise<布林>。把一段設定寫進當前世界書（酒館是角色卡的世界書，手機是手機世界書正在用的那本），寫正文的模型之後就讀得到：同標題就改那一條、沒有就新建。不給關鍵字＝每輪都送；給了＝對話提到其中一個才送。回 false 表示沒存成（多半是角色卡沒綁世界書），用 st.toast 告訴使用者。只在使用者按了保存／寫入類的按鈕時呼叫。
+- st.wbLoad(標題) → Promise<文字>。讀回當前世界書裡這個標題的內容，沒有就是空字串。
 - st.saveData(key, value[, 'chat']) / st.loadData(key[, 'chat'])：純應用的小量持久化。scope 'chat' 綁當前聊天、不填全域。
 - st.dbSave(key, value[, 'chat']) → Promise / st.dbLoad(key[, 'chat']) → Promise：純應用的大量持久化，存資料庫不怕爆。
 - st.getStory(n) → 最近 n 條劇情 [{ name, text }]，預設 30。純應用要讀劇情時用；純展示、共用不用。
@@ -2909,6 +2911,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 const F = window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED);
                 return (F && F.contacts) ? F.contacts() : Promise.resolve([]);
             },
+            wbSave() {   // 預覽不寫真的世界書
+                try { AUI.toast('預覽不會寫進世界書'); } catch (e) {}
+                return Promise.resolve(true);
+            },
+            wbLoad(title) {
+                const F = window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED);
+                return (F && F.wbLoad) ? F.wbLoad(title) : Promise.resolve('');
+            },
             getStory(n) { try { const R = window.VN_READER || (window.parent && window.parent.VN_READER); return (R && R.getStory) ? R.getStory(n) : []; } catch (e) { return []; } },
             esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
             // 提示條／確認窗走全站同一套（core/aurelia_dialog.js），跟系統其他地方長一樣
@@ -2962,6 +2972,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
             +   'getCurrentChars:async function(){try{return window.getCurrentChars?await window.getCurrentChars():[];}catch(e){return [];}},'
             +   'getContacts:async function(){try{return window.getContacts?await window.getContacts():[];}catch(e){return [];}},'
+            +   'wbSave:async function(t,c,k){try{return window.wbSave?await window.wbSave(t,c,k):false;}catch(e){return false;}},'
+            +   'wbLoad:async function(t){try{return window.wbLoad?await window.wbLoad(t):"";}catch(e){return "";}},'
             +   'getStory:function(n){try{return window.getStory?window.getStory(n):[];}catch(e){return [];}},'
             +   'esc:function(s){try{return window.stEsc?window.stEsc(s):String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}catch(e){return "";}},'
             +   'toast:function(m,o){try{if(window.stToast)window.stToast(m,o);}catch(e){}},'
@@ -3119,6 +3131,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
       },
       getContacts: function(){ try { var F = ctx.VN_PANEL_FEED; return (F && F.contacts) ? F.contacts() : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
+      wbSave: function(t, c, k){ if (window.__IS_PREVIEW) return Promise.resolve(true); try { var F = ctx.VN_PANEL_FEED; return (F && F.wbSave) ? F.wbSave(t, c, k) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      wbLoad: function(t){ try { var F = ctx.VN_PANEL_FEED; return (F && F.wbLoad) ? F.wbLoad(t) : Promise.resolve(''); } catch(e){ return Promise.resolve(''); } },
       feed: function(o){ try { var F = ctx.VN_PANEL_FEED; return F ? F.feed(${JSON.stringify(String(data.tagId || ''))}, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
       parseText: function(x){ try { var F = ctx.VN_PANEL_FEED; return F ? F.parseRecords(String(x == null ? '' : x).split('\\n')) : []; } catch(e){ return []; } },
       user: (function(){ var f = function(){ try { var F = ctx.VN_PANEL_FEED; return F ? F.user() : Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } catch(e){ return Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } }; try { var F = ctx.VN_PANEL_FEED; if (F && F.userSync) { var u = F.userSync(); for (var k in u) f[k] = u[k]; } } catch(e){} return f; })(),

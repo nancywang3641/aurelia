@@ -149,3 +149,13 @@
     outline: none; white-space: pre-wrap; word-break: break-word;
 }
 .ost-sa-text:focus { border-color: #e0a0b0; }
+
+/* 黑名單（原 RPG 面板「操作」頁，2026-09-15 搬進故事管理） */
+.ost-bl-add { display: flex; gap: 8px; margin-bottom: 10px; }
+.ost-bl-add .ost-input { flex: 1; min-width: 0; margin: 0; }
+.ost-bl-add .ost-btn { flex-shrink: 0; margin: 0; white-space: nowrap; }
+.ost-bl-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ost-bl-item { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 10px; border-radius: 14px; border: 1px solid #f0c8d2; background: #fff5f7; color: #8a5a66; font-size: 12px; }
+.ost-bl-del { width: 22px; height: 22px; border: 0; border-radius: 50%; background: none; color: #c97a8e; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.ost-bl-del:hover { background: #fbd6da; }
+.ost-bl-empty { font-size: 11px; color: #b0a08e; }

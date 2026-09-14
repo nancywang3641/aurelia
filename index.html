@@ -44,7 +44,6 @@
     <link rel="stylesheet" href="css/os_avs.css" />
     <link rel="stylesheet" href="css/os_avs_rules.css" />
     <link rel="stylesheet" href="css/os_think.css" />
-    <link rel="stylesheet" href="css/os_debug_panel.css" />
     <link rel="stylesheet" href="css/os_tarot.css" />
     <link rel="stylesheet" href="css/os_journal.css" />
     <link rel="stylesheet" href="css/os_story_tools.css" />
@@ -69,7 +68,6 @@
     <link rel="stylesheet" href="css/qb_os_404_chaos.css" />
     <link rel="stylesheet" href="css/wx_chat_settings.css" />
     <link rel="stylesheet" href="css/map_core.css" />
-    <link rel="stylesheet" href="css/rpg_status_panel.css" />
     <link rel="stylesheet" href="css/void_achievement.css" />
 
     <!-- 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後 -->
@@ -151,7 +149,6 @@
     <!-- 📊 用量記錄層：每次呼叫記一筆進自己的 IndexedDB（必須在 api_engine / image_manager 之前）-->
     <script src="os_phone/os/os_usage.js"></script>
     <script src="os_phone/os/os_api_engine.js"></script>
-    <script src="os_phone/os/os_debug_panel.js"></script>
     <script src="os_phone/os/phone_system.js"></script>
     <script src="os_phone/os/os_monitor.js"></script>
 
@@ -237,7 +234,6 @@
     <script src="os_phone/rpg/state_runtime.js"></script>
     <script src="os_phone/rpg/blacklist_injector.js"></script>
     <!-- ⛔ 已刪(2026-06-19)：summary_core 舊「<summary>→[RPG_LOG]世界書」自動寫入，寫了沒人讀，已被 AVS+向量+大總結取代 -->
-    <script src="os_phone/rpg/status_panel.js"></script>
     <!-- ⛔ 已停用：avatar_manager 與 VN 頭像系統並行重複生成、浪費資源（index.js 早已停用，這裡對齊）。檔案保留。 -->
     <!-- 🔀 世界書條目開關同步器：兩支都補上獨立版分支（改翻 OS_DB 世界書條目的 enabled，
          規則與邊界跟酒館同一份），所以 PWA 也要載。必須排在 os_worldbook / os_worldgate 之後。 -->
@@ -366,7 +362,6 @@
         function registerApps() {
             const PS = window.PhoneSystem;
             if (!PS) return;
-            if (window.RPG_PANEL)    PS.install('RPG 狀態',  '🛡️', '#5d4037', window.RPG_PANEL.launch);
             if (window.OS_TAROT)     PS.install('賽博塔羅',  '🔮', '#9b59b6', window.OS_TAROT.launch);
             if (window.VN_STORY)     PS.install('故事模式',  '📖', '#ff69b4', window.VN_STORY.launch);
             if (window.OS_WORLDBOOK) PS.install('世界書',    '📗', '#1a3a5c', c => window.OS_WORLDBOOK.launch(c));

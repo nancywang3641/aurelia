@@ -89,6 +89,7 @@
         .vncfg-lp-open-t { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; }
         .vncfg-lp-open-n { font-size: 11px; color: #3A3F5C; white-space: nowrap; }
         .vncfg-lp-open > i:last-child { font-size: 12px; color: rgba(26,28,40,0.5); }
+        .img-scene-prompt-open { margin-top: 10px; }
         .vncfg-lp-host { position: relative; }
         .vncfg-lp { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; background: #EEF0F6; color: #1A1C28; font-family: 'Noto Sans TC', sans-serif; color-scheme: light; }
         .vncfg-lp-save { font: inherit; font-size: 13px; font-weight: 800; padding: 6px 12px; border-radius: 4px; border: none; background: #1A1C28; color: #EEF0F6; cursor: pointer; white-space: nowrap; }
@@ -282,9 +283,6 @@
         .cfd-scene-scale { width: auto; }
 
         /* 場景插圖：每接口獨立的副模型插圖指令 */
-        .scene-extract-row { margin-top: 4px; }
-        .scene-extract-hint { font-size: 10px; color: rgba(26,28,40,0.6); margin-bottom: 3px; }
-        .scene-extract-ta { min-height: 150px; font-size: 11px; font-family: monospace; }
 
         /* 🎨 立繪 studio：vng-studio-* 是從 vn_gallery 深色主題借來的(淺色字配深底)，
            放進這個淺色(拿鐵)設定面板會變成「淺字配白底看瞎」。這裡 scope 在 #avatar-sub-sprite

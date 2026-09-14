@@ -926,8 +926,7 @@
                 cleanMessages = JSON.parse(stringifiedPayload);
             } catch(e) { console.warn("核彈替換失效", e); }
 
-            let _dbgId    = Date.now() + Math.random();
-            let _dbgStart = Date.now();
+            let _dbgId    = Date.now() + Math.random();   // 酒館 generateRaw 那條拿它當 generation_id
 
             try {
                 let fullText = "";
@@ -943,11 +942,6 @@
                     ...extraParams
                 };
 
-                _dbgStart = Date.now();
-                try {
-                    const _dbgUrl = !useSystemApi ? (config.url || '') : '/api/st-backend';
-                    window._OS_DBG_REQUEST?.(_dbgId, commonBody, _dbgUrl, config.model);
-                } catch(e) { }
 
                 if (config.enableThinking) {
                     commonBody.include_reasoning = true;
@@ -1241,7 +1235,6 @@
                     throw new Error('API 返回內容為空' + (_why ? '：' + _why : '（可能被過濾或生成失敗）'));
                 }
 
-                try { window._OS_DBG_RESPONSE?.(_dbgId, 200, rawApiResponse || fullText, Date.now() - _dbgStart); } catch(e) {}
 
                 const recvChars = fullText.length;
                 const recvTokens = Math.ceil(recvChars * 0.5);
@@ -1264,7 +1257,6 @@
                 //   不然畫面上永遠只有那句沒有資訊量的話。
                 const _flat = _causeText(err);
                 if (_flat && err && _flat !== err.message) { try { err.message = _flat; } catch (e) {} }
-                try { window._OS_DBG_RESPONSE?.(_dbgId, 'error', _flat || err.message, Date.now() - _dbgStart); } catch(e) {}
                 if (onError) onError(err);
             }
         },

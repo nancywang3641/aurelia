@@ -113,26 +113,35 @@
                     <div style="text-align:center; padding:40px; color:rgba(26,28,40,0.72);">載入中...</div>
                 </div>
                 
-                <div class="ps-modal-overlay" id="ps-modal">
-                    <div class="ps-modal">
-                        <div class="ps-modal-header" id="ps-modal-title">編輯設定</div>
-                        <div class="ps-modal-body">
-                            <div class="ps-field">
-                                <label>名稱 (Name)</label>
-                                <input type="text" id="ps-f-name" placeholder="輸入名稱..." />
-                            </div>
-                            <div class="ps-field">
-                                <label>頭像圖片網址 (URL)</label>
-                                <input type="text" id="ps-f-avatar" placeholder="https://..." />
-                            </div>
-                            <div class="ps-field">
-                                <label>背景與特徵 (Description)</label>
-                                <textarea id="ps-f-desc" placeholder="詳細描述你的外觀、性格與背景..."></textarea>
+                <!-- 編輯頁：蓋滿整個人設 app（手機上小窗改不動長設定），自帶返回鍵 -->
+                <div class="ps-edit" id="ps-modal">
+                    <div class="ps-edit-hd">
+                        <button class="ps-edit-back" id="ps-btn-cancel" type="button" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>
+                        <div class="ps-edit-title" id="ps-modal-title">編輯設定</div>
+                        <button class="ps-edit-save" id="ps-btn-save" type="button">儲存</button>
+                    </div>
+                    <div class="ps-edit-body">
+                        <div class="ps-field">
+                            <label for="ps-f-name">名稱</label>
+                            <input type="text" id="ps-f-name" placeholder="輸入名稱..." />
+                        </div>
+                        <div class="ps-field">
+                            <label>頭像</label>
+                            <div class="ps-av-row">
+                                <div class="ps-av-box"><i class="fa-solid fa-user"></i><img id="ps-av-preview" alt="" hidden /></div>
+                                <div class="ps-av-side">
+                                    <input type="text" id="ps-f-avatar" placeholder="貼圖片網址" />
+                                    <div class="ps-av-btns">
+                                        <button class="ps-av-btn" id="ps-av-upload" type="button"><i class="fa-solid fa-upload"></i> 本地上傳</button>
+                                        <button class="ps-av-btn" id="ps-av-clear" type="button"><i class="fa-solid fa-xmark"></i> 清除</button>
+                                    </div>
+                                    <div class="ps-av-note" id="ps-av-note" hidden>用的是本地上傳的圖</div>
+                                </div>
                             </div>
                         </div>
-                        <div class="ps-modal-footer">
-                            <button class="ps-modal-btn ps-modal-cancel" id="ps-btn-cancel">取消</button>
-                            <button class="ps-modal-btn ps-modal-save" id="ps-btn-save">儲存</button>
+                        <div class="ps-field ps-field-grow">
+                            <label for="ps-f-desc">背景與特徵</label>
+                            <textarea id="ps-f-desc" placeholder="詳細描述你的外觀、性格與背景..."></textarea>
                         </div>
                     </div>
                 </div>
@@ -290,6 +299,26 @@
     }
 
     let _editingId = null;
+    let _editAvatar = '';   // 頭像：網址，或本地上傳壓過的 data URL（不塞進網址那格，免得一大串編碼露在畫面上）
+    let _editSnap = '';     // 打開時的樣子：返回時比對，有改過沒存就先問
+
+    function _editNow() {
+        const q = (s) => _rootContainer.querySelector(s);
+        return JSON.stringify({ n: q('#ps-f-name').value.trim(), a: _editAvatar, d: q('#ps-f-desc').value.trim() });
+    }
+
+    function _paintAvatar() {
+        const img = _rootContainer.querySelector('#ps-av-preview');
+        const input = _rootContainer.querySelector('#ps-f-avatar');
+        const note = _rootContainer.querySelector('#ps-av-note');
+        const isLocal = /^data:/.test(_editAvatar);
+        if (input && doc.activeElement !== input) input.value = isLocal ? '' : _editAvatar;
+        if (note) note.hidden = !isLocal;
+        if (img) {
+            if (_editAvatar) { img.hidden = false; img.src = _editAvatar; }
+            else { img.hidden = true; img.removeAttribute('src'); }
+        }
+    }
 
     function openEditModal(id) {
         const modal = _rootContainer.querySelector('#ps-modal');
@@ -297,6 +326,7 @@
         const fName = _rootContainer.querySelector('#ps-f-name');
         const fAvatar = _rootContainer.querySelector('#ps-f-avatar');
         const fDesc = _rootContainer.querySelector('#ps-f-desc');
+        const img = _rootContainer.querySelector('#ps-av-preview');
 
         _editingId = id;
 
@@ -305,20 +335,35 @@
             const p = list.find(x => x.id === id);
             titleEl.textContent = '編輯設定';
             fName.value = p?.name || '';
-            fAvatar.value = p?.avatar || '';
+            _editAvatar = p?.avatar || '';
             fDesc.value = p?.desc || '';
         } else {
             titleEl.textContent = '新增設定';
             fName.value = '';
-            fAvatar.value = '';
+            _editAvatar = '';
             fDesc.value = '';
         }
+        fAvatar.value = '';
+        _paintAvatar();
+        _editSnap = _editNow();
 
-        const btnSave = _rootContainer.querySelector('#ps-btn-save');
-        const btnCancel = _rootContainer.querySelector('#ps-btn-cancel');
-        
-        btnSave.onclick = saveModalData;
-        btnCancel.onclick = closeEditModal;
+        fAvatar.oninput = () => { _editAvatar = fAvatar.value.trim(); _paintAvatar(); };
+        if (img) img.onerror = () => { img.hidden = true; };
+        _rootContainer.querySelector('#ps-av-upload').onclick = async () => {
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            if (!PI || !PI.pickPhoto) { AUI.alert('這裡還不能上傳圖片'); return; }
+            try {
+                // 壓到長邊 400：人設清單存在瀏覽器本機，原圖塞進去很快就滿
+                const url = await PI.pickPhoto({ maxSide: 400, quality: 0.85 });
+                if (url) { _editAvatar = url; _paintAvatar(); }
+            } catch (e) { AUI.alert('圖片讀不進來：' + (e.message || e)); }
+        };
+        _rootContainer.querySelector('#ps-av-clear').onclick = () => { _editAvatar = ''; fAvatar.value = ''; _paintAvatar(); };
+        _rootContainer.querySelector('#ps-btn-save').onclick = saveModalData;
+        _rootContainer.querySelector('#ps-btn-cancel').onclick = async () => {
+            if (_editNow() !== _editSnap && !(await AUI.confirm('還沒儲存，確定要離開嗎？'))) return;
+            closeEditModal();
+        };
 
         modal.classList.add('show');
     }
@@ -331,7 +376,7 @@
 
     function saveModalData() {
         const fName = _rootContainer.querySelector('#ps-f-name').value.trim();
-        const fAvatar = _rootContainer.querySelector('#ps-f-avatar').value.trim();
+        const fAvatar = _editAvatar;
         const fDesc = _rootContainer.querySelector('#ps-f-desc').value.trim();
 
         if (!fName) { AUI.alert('請至少輸入名稱！'); return; }

@@ -1300,6 +1300,108 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         while (wrap.firstElementChild) document.body.appendChild(wrap.firstElementChild);
     }
 
+    // ====================================================================
+    // 黑名單（原 RPG 面板「操作」頁，2026-09-15 RPG 面板刪掉時搬來）：這段故事裡不准出現的角色名
+    //   酒館：角色卡主世界書一條 comment＝`[當前永不出現名單-黑名單角色] - <聊天 id>`，
+    //         rpg/blacklist_injector.js 每輪讀它直送（世界書靠關鍵字觸發，黑名單的名字本來就不會出現在對話裡）。
+    //         所以條目本身不給關鍵字、不走觸發，免得跟注入器各送一次。
+    //   PWA ：手機世界書一條同標題的常駐條目（keys 空＝每輪直送），不需要注入器。
+    //   以前酒館那條還會把 [BLACKLIST_聊天id] 偷偷接在最後一樓正文後面好讓條目觸發——注入器接手後早就不需要，已拿掉。
+    // ====================================================================
+    const BL_TAG = '[當前永不出現名單-黑名單角色]';
+    function _blTitle() { return BL_TAG + ' - ' + getChatIdentifier(); }
+    function _blContent(names) { return BL_TAG + '\n黑名單規則：劇情封禁\n\n' + names.join('\n'); }
+    function _blNamesOf(content) {
+        return String(content || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('[') && !l.includes('規則'));
+    }
+    function _blBook() {
+        const TH = win.TavernHelper;
+        try { return (TH && ((TH.getCurrentCharPrimaryLorebook && TH.getCurrentCharPrimaryLorebook()) || (TH.getCharWorldbookNames && (TH.getCharWorldbookNames('current') || {}).primary))) || ''; } catch (e) { return ''; }
+    }
+    async function _blRead() {
+        const title = _blTitle();
+        if (_isStandalone()) {
+            const all = (await win.OS_DB.getAllWorldbookEntries()) || [];
+            const entry = all.find(x => x && x.title === title) || null;
+            return { names: entry ? _blNamesOf(entry.content) : [], entry };
+        }
+        const TH = win.TavernHelper, book = _blBook();
+        if (!TH || !book) throw new Error('這張角色卡沒有綁角色世界書，黑名單存不進去');
+        const entries = (await TH.getLorebookEntries(book)) || [];
+        const entry = entries.find(x => x && x.comment === title) || null;
+        return { names: entry ? _blNamesOf(entry.content) : [], entry, book };
+    }
+    async function _blWrite(names) {
+        const cur = await _blRead();
+        if (_isStandalone()) {
+            if (!names.length) { if (cur.entry) await win.OS_DB.deleteWorldbookEntry(cur.entry.id); return; }
+            await win.OS_DB.saveWorldbookEntry(Object.assign({}, cur.entry || {
+                id: 'wb_blacklist_' + getChatIdentifier(),
+                book: (win.OS_WORLDBOOK && win.OS_WORLDBOOK.getTargetBook) ? win.OS_WORLDBOOK.getTargetBook() : '預設書包',
+                category: '規則設定', title: _blTitle(), keys: '', order: 9999, createdAt: Date.now()
+            }, { content: _blContent(names), enabled: true, updatedAt: Date.now() }));
+            return;
+        }
+        const TH = win.TavernHelper;
+        if (!names.length) { if (cur.entry) await TH.deleteLorebookEntries(cur.book, [cur.entry.uid]); return; }
+        if (cur.entry) await TH.setLorebookEntries(cur.book, [{ uid: cur.entry.uid, content: _blContent(names), keys: [], type: 'selective', enabled: true }]);
+        else await TH.createLorebookEntries(cur.book, [{ comment: _blTitle(), content: _blContent(names), keys: [], type: 'selective', enabled: true, position: 'at_depth_as_system', depth: 0, order: 9999 }]);
+    }
+    function _blSectionHtml() {
+        return `
+                    <div class="ost-section" id="ost-bl">
+                        <div class="ost-section-title"><i class="fa-solid fa-ban"></i> 黑名單</div>
+                        <div class="ost-bl-add">
+                            <input type="text" class="ost-input ost-bl-input" placeholder="不准出現的角色名">
+                            <button class="ost-btn ost-bl-add-btn" type="button"><i class="fa-solid fa-plus"></i> 加入</button>
+                        </div>
+                        <div class="ost-bl-list"><div class="ost-bl-empty">讀取中…</div></div>
+                        <div class="ost-hint">名單上的角色在這段故事裡不會出現、不會被提到</div>
+                    </div>`;
+    }
+    function _blMount(ov) {
+        const sec = ov.querySelector('#ost-bl');
+        if (!sec) return;
+        const listEl = sec.querySelector('.ost-bl-list');
+        const input = sec.querySelector('.ost-bl-input');
+        const note = (text) => { listEl.innerHTML = ''; const d = document.createElement('div'); d.className = 'ost-bl-empty'; d.textContent = text; listEl.appendChild(d); };
+        const paint = async () => {
+            try {
+                const { names } = await _blRead();
+                if (!sec.isConnected) return;
+                if (!names.length) { note('名單是空的'); return; }
+                listEl.innerHTML = '';
+                names.forEach(n => {
+                    const row = document.createElement('div');
+                    row.className = 'ost-bl-item';
+                    row.innerHTML = '<span class="ost-bl-name"></span><button class="ost-bl-del" type="button" title="移出黑名單"><i class="fa-solid fa-xmark"></i></button>';
+                    row.querySelector('.ost-bl-name').textContent = n;
+                    row.querySelector('.ost-bl-del').onclick = async () => {
+                        if (!(await AUI.confirm('把「' + n + '」移出黑名單？'))) return;
+                        try { const cur = await _blRead(); await _blWrite(cur.names.filter(x => x !== n)); }
+                        catch (e) { AUI.alert('移出失敗：' + (e.message || e)); }
+                        paint();
+                    };
+                    listEl.appendChild(row);
+                });
+            } catch (e) { note('讀不到：' + (e.message || e)); }
+        };
+        const add = async () => {
+            const name = input.value.trim();
+            if (!name) return;
+            try {
+                const cur = await _blRead();
+                if (cur.names.indexOf(name) >= 0) { AUI.toast('「' + name + '」已經在黑名單裡'); return; }
+                await _blWrite(cur.names.concat([name]));
+                input.value = '';
+            } catch (e) { AUI.alert('加入失敗：' + (e.message || e)); }
+            paint();
+        };
+        sec.querySelector('.ost-bl-add-btn').onclick = add;
+        input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); add(); } });
+        paint();
+    }
+
     // ── PWA 版故事管理：跟酒館同一個入口(故事日誌的書籤 / CTX 快捷)，內容換成獨立版自己的 ──
     //   酒館那套的生成靠 TavernHelper 讀樓層、隱藏對話靠斜線指令，PWA 兩樣都沒有 → 開起來是空轉。
     //   PWA 的大總結在 vn_grand_summaries(by storyId)，生成走 VN_Summary.generate 的滾動合併。
@@ -1337,11 +1439,13 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                         <button class="ost-btn" id="ost-sa-save"><i class="fa-solid fa-floppy-disk"></i> 儲存修改</button>
                         <div class="ost-hint">改完存回去，下一輪劇情就照新的走</div>
                     </div>` : ''}
+                    ${_blSectionHtml()}
                 </div>
             </div>`;
         container.appendChild(ov);
         ov.querySelector('.ost-close').onclick = () => API.closePanel();
         ov.addEventListener('click', (e) => { if (e.target === ov) API.closePanel(); });
+        _blMount(ov);
         const gen = ov.querySelector('#ost-sa-gen');
         if (gen) gen.onclick = () => {
             const S = win.VN_Summary || window.VN_Summary;
@@ -1410,12 +1514,14 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                             </div>
                         </div>
                     </div>
+                    ${_blSectionHtml()}
                 </div>
             </div>`;
         container.appendChild(ov);
         ov.querySelector('.ost-close').onclick = () => API.closePanel();
         ov.addEventListener('click', (e) => { if (e.target === ov) API.closePanel(); });
         try { API._updateHideStatus(); } catch (_) { }
+        _blMount(ov);
     };
 
     API.closePanel = function () {

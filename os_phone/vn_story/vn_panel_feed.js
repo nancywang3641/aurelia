@@ -247,6 +247,63 @@
         return out;
     }
 
+    // 寫進當前世界書（原小世界「生成完存成一條世界書」那段，改給面板用）：同標題就改那條、沒有就新建。
+    //   酒館：角色卡主世界書；手機：手機世界書正在用的那本（OS_WORLDBOOK.getTargetBook）。
+    //   沒給關鍵字＝常駐（每輪都送）；有給＝對話提到才送。回 true/false，false 多半是角色卡沒綁世界書。
+    function _standalone() { try { const A = win.OS_API; return !!(A && A.isStandalone && A.isStandalone()); } catch (e) { return false; } }
+    function _keyList(keys) {
+        return (Array.isArray(keys) ? keys : String(keys == null ? '' : keys).split(/[,，、\n]/)).map(k => String(k == null ? '' : k).trim()).filter(Boolean);
+    }
+    function _tavernBook() {
+        const TH = win.TavernHelper;
+        try { return (TH && ((TH.getCurrentCharPrimaryLorebook && TH.getCurrentCharPrimaryLorebook()) || (TH.getCharWorldbookNames && (TH.getCharWorldbookNames('current') || {}).primary))) || ''; } catch (e) { return ''; }
+    }
+    function _pwaBook() { const W = win.OS_WORLDBOOK; try { return (W && W.getTargetBook) ? W.getTargetBook() : '預設書包'; } catch (e) { return '預設書包'; } }
+    async function wbSave(title, content, keys) {
+        title = String(title == null ? '' : title).trim();
+        if (!title) return false;
+        content = String(content == null ? '' : content);
+        const kl = _keyList(keys);
+        try {
+            if (_standalone()) {
+                const d = _db();
+                if (!d || !d.getAllWorldbookEntries || !d.saveWorldbookEntry) return false;
+                const book = _pwaBook();
+                const old = ((await d.getAllWorldbookEntries()) || []).find(e => e && e.book === book && e.title === title);
+                const now = Date.now();
+                await d.saveWorldbookEntry(Object.assign({}, old || {
+                    id: 'wb_' + now + '_' + Math.random().toString(36).slice(2, 6),
+                    book: book, title: title, category: '預設', order: 100, depth: null, role: 0, createdAt: now
+                }, { content: content, keys: kl.join(','), enabled: true, updatedAt: now }));
+                return true;
+            }
+            const TH = win.TavernHelper, book = _tavernBook();
+            if (!TH || !book || !TH.getLorebookEntries) return false;
+            const old = ((await TH.getLorebookEntries(book)) || []).find(e => e && e.comment === title);
+            const type = kl.length ? 'selective' : 'constant';
+            if (old) await TH.setLorebookEntries(book, [{ uid: old.uid, content: content, keys: kl, type: type, enabled: true }]);
+            else await TH.createLorebookEntries(book, [{ comment: title, content: content, keys: kl, type: type, enabled: true }]);
+            return true;
+        } catch (e) { console.warn('[VN_PANEL_FEED] 寫世界書失敗:', e); return false; }
+    }
+    async function wbLoad(title) {
+        title = String(title == null ? '' : title).trim();
+        if (!title) return '';
+        try {
+            if (_standalone()) {
+                const d = _db();
+                if (!d || !d.getAllWorldbookEntries) return '';
+                const book = _pwaBook();
+                const e = ((await d.getAllWorldbookEntries()) || []).find(x => x && x.book === book && x.title === title);
+                return e ? String(e.content || '') : '';
+            }
+            const TH = win.TavernHelper, book = _tavernBook();
+            if (!TH || !book || !TH.getLorebookEntries) return '';
+            const e = ((await TH.getLorebookEntries(book)) || []).find(x => x && x.comment === title);
+            return e ? String(e.content || '') : '';
+        } catch (e) { return ''; }
+    }
+
     // 刪組件：這個面板在所有聊天裡的應用紀錄整批清
     async function purgeTag(tagId) {
         const d = _db();
@@ -282,7 +339,7 @@
     setTimeout(_purgeLegacyOnce, 3000);
 
     win.VN_PANEL_FEED = {
-        feed: feed, add: add, update: update, remove: remove, clear: clear, user: user, userSync: userSync, contacts: contacts,
+        feed: feed, add: add, update: update, remove: remove, clear: clear, user: user, userSync: userSync, contacts: contacts, wbSave: wbSave, wbLoad: wbLoad,
         storyRecords: storyRecords, parseRecords: parseRecords, parseMap: parseMap,
         purgeTag: purgeTag, invalidate: invalidate, chatId: _chatId, appId: _appId
     };

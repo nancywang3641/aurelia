@@ -265,7 +265,6 @@ const PHONE_FILES = [
     'rpg/avatar_rules_injector.js', // 依選的頭像產圖器，自動翻「-VN小說家-」世界書三條目(依名字)的開關
     'rpg/world_rules_injector.js',  // 🌍 依這個聊天室所在世界的題材，自動翻戰鬥/手機/BGM 那幾條的開關（同上，只動 enabled）
     // 'rpg/summary_core.js',  // ⛔ 已刪(2026-06-19)：舊「<summary>→[RPG_LOG]世界書」自動寫入，key 從不觸發=寫了沒人讀，已被 AVS+向量+大總結取代
-    'rpg/status_panel.js',
 
     // === 🗺️ MAP 地圖系統 ===
     'map/map_icons.js',     // 地圖區域／設施／地標圖示統一走 FA（舊世界的 emoji 也在這換），map_data 前載
@@ -493,7 +492,6 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs_rules.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_think.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/os_debug_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_tarot.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_exchange.css');
@@ -512,7 +510,6 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/qb_os_404_chaos.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/wx_chat_settings.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/map_core.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/rpg_status_panel.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/void_achievement.css');
 
         // 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後才蓋得掉各自的舊頭
@@ -537,11 +534,6 @@ async function initializeExtension() {
         // 延遲執行：確保 PhoneSystem 和各個 App 模組都載入完畢後再註冊圖標
         setTimeout(() => {
             if (window.PhoneSystem) {
-                // 註冊 RPG 狀態
-                if (window.RPG_PANEL) {
-                    window.PhoneSystem.install('RPG 狀態', '🛡️', '#5d4037', window.RPG_PANEL.launch);
-                }
-
                 // 註冊賽博塔羅系統
                 if (window.OS_TAROT) {
                     window.PhoneSystem.install('賽博塔羅', '🔮', '#9b59b6', window.OS_TAROT.launch);

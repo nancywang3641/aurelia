@@ -66,6 +66,9 @@
             +   'window.getCurrentChars = async function(){ try { var R = P && P.VN_READER; return (R && R.getCurrentChars) ? await R.getCurrentChars() : []; } catch(e){ console.error("[app getCurrentChars]",e); return []; } };'
             // ── 微信通訊錄（當前故事那本）：[{id,name,desc,avatar,isGroup}]，做選聯絡人清單用 ──
             +   'window.getContacts = async function(){ try { var F = P && P.VN_PANEL_FEED; return (F && F.contacts) ? await F.contacts() : []; } catch(e){ console.error("[app getContacts]",e); return []; } };'
+            // ── 寫進／讀回當前世界書（同標題就改那條）；預覽不寫 ──
+            +   'window.wbSave = async function(t,c,k){ try { if (window.__IS_PREVIEW) return true; var F = P && P.VN_PANEL_FEED; return (F && F.wbSave) ? await F.wbSave(t,c,k) : false; } catch(e){ console.error("[app wbSave]",e); return false; } };'
+            +   'window.wbLoad = async function(t){ try { var F = P && P.VN_PANEL_FEED; return (F && F.wbLoad) ? await F.wbLoad(t) : ""; } catch(e){ console.error("[app wbLoad]",e); return ""; } };'
             // ── 讀當前劇情：回最近 n 條 [{name,text}]（共用面板「讀劇情顯示」用，不經 AI）──
             +   'window.getStory = function(n){ try { var ST=P.SillyTavern, c=ST&&ST.getContext&&ST.getContext(); if(!c||!Array.isArray(c.chat)) return []; var CL=(P.VN_READER&&P.VN_READER.clean)?P.VN_READER.clean:function(x){return x||"";}; return c.chat.filter(function(m){return m&&!m.is_system;}).slice(-(n||30)).map(function(m){return {name:String(m.name||(m.is_user?"我":"")), text:CL(m.mes||"")};}).filter(function(o){return o.text&&o.text.trim();}); } catch(e){ console.error("[app getStory]",e); return []; } };'
             // ── UI 小工具：toast/confirm/loading/esc（每個 app 共用、免重造；走掛載層→現有 app 也有、免重存）──
