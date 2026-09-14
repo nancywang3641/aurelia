@@ -5,13 +5,13 @@
 //     托管延遲、中間有人刪動態都不會指錯。名字存快照，改名或刪人舊動態照樣畫得出來。
 //     author／who 是 'me' 或那個角色的聊天室 id；之後的路人 AI 預留 'npc:名字'，現在不產生。
 //   ・誰看得到：她看得到全部；角色只看得到她、自己、跟自己「認識的人」的動態與讚留言。
-//   ・給 AI：每輪附它看得到的最近幾則（見 brief），它在回覆裡寫
-//     [系統: 發朋友圈｜…] / [系統: 讚 動態N] / [系統: 留言 動態N｜…] / [系統: 回覆 動態N 名字｜…]，
-//     wx_core 的系統行解析交給 fromAi。醒來什麼都不想做寫 [系統: 略過]。
+//   ・給 AI：每輪附它看得到的最近幾則（見 brief），它在回覆裡寫英文標籤
+//     <moment_post> / <moment_like id/> / <moment_comment id> / <moment_reply id to>，醒來什麼都不做寫 <moment_skip/>。
+//     wx_core.parseAndProcess 一開頭就交給 extract：抽掉標籤、執行、剩下的字才拆成聊天泡泡。
 //   ・不寫進大總結、不寫進正文記憶：朋友圈只活在手機裡。
 // 存哪：OS_DB app_data（appId 'wx_moments'，key 'feed' 與 'links'，分艙鍵＝OS_DB.currentChatId()，跟通訊錄同一把）。
 //   🚨 app_data 是共用倉：appId 不准用 app_ 開頭。
-// 對外：WX_MOMENTS.open(opts) / close() / openLinks(chatId) / brief(chatId) / fromAi(...) / actedSince(...) /
+// 對外：WX_MOMENTS.open(opts) / close() / openLinks(chatId) / brief(chatId) / extract(text, chatId, name) / strip(text) / actedSince(...) /
 //       unseen() / markSeen() / paintBadges(root) / 其餘資料操作見檔尾
 // ----------------------------------------------------------------
 (function () {
@@ -260,43 +260,58 @@
             : '【朋友圈｜你看得到的動態現在是空的】';
         return [head].concat(lines).concat([
             '',
-            '想發朋友圈、按讚或留言時，在回覆的最後單獨一行寫，一行做一件事：',
-            '[系統: 發朋友圈｜內容]，想附照片就在後面接「｜照片：畫面描述」，一張接一次',
-            '[系統: 讚 動態號碼]',
-            '[系統: 留言 動態號碼｜內容]',
-            '[系統: 回覆 動態號碼 對方名字｜內容]',
-            '這幾行不會變成聊天訊息，不必每輪都做。' + user + '和其他人的動態，你只看得到上面這些。'
+            '想發朋友圈、按讚或留言時，在回覆裡另外寫下面的標籤，一個標籤做一件事。標籤名與屬性名照抄英文，不要翻譯、不要改寫：',
+            '<moment_post>內容</moment_post>，想附照片就在內容後面加 <photo>畫面描述</photo>，一張一個',
+            '<moment_like id="動態號碼"/>',
+            '<moment_comment id="動態號碼">內容</moment_comment>',
+            '<moment_reply id="動態號碼" to="對方名字">內容</moment_reply>',
+            '動態號碼就是上面「動態」後面那個數字。標籤不會變成聊天訊息，不必每輪都做。' + user + '和其他人的動態，你只看得到上面這些。'
         ]).join('\n');
     }
 
-    // ── AI 的四種寫法 ─────────────────────────────────────
-    const RE = {
-        skip: /^\s*(?:略過|略过|跳過|跳过)\s*$/,
-        post: /^\s*(?:發朋友圈|发朋友圈|發動態|发动态)\s*[|｜:：]?\s*([\s\S]*)$/,
-        like: /^\s*(?:讚|赞|點讚|点赞|按讚|按赞)\s*(?:動態|动态)?\s*(\d+)\s*(?:號|号)?\s*$/,
-        reply: /^\s*(?:回覆|回复)\s*(?:動態|动态)?\s*(\d+)\s*(?:號|号)?\s+([^|｜:：]+?)\s*[|｜:：]\s*([\s\S]+)$/,
-        comment: /^\s*(?:留言|評論|评论)\s*(?:動態|动态)?\s*(\d+)\s*(?:號|号)?\s*[|｜:：]\s*([\s\S]+)$/
-    };
-    function parseAi(content) {
-        const s = String(content || '').replace(/\]+\s*$/, '').trim();
-        if (!s) return null;
-        if (RE.skip.test(s)) return { verb: 'skip' };
-        let m = s.match(RE.post);
-        if (m) {
-            const photos = [], words = [];
-            String(m[1] || '').split(/[|｜]/).map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (part) {
-                const pm = part.match(/^(?:照片|相片|圖片|图片)\s*[:：]\s*(.+)$/);
-                if (pm) photos.push({ src: '', desc: pm[1].trim() });
-                else words.push(part);
-            });
-            if (!words.length && !photos.length) return null;
-            return { verb: 'post', text: words.join('\n'), photos: photos };
-        }
-        if ((m = s.match(RE.like))) return { verb: 'like', no: parseInt(m[1], 10) };
-        if ((m = s.match(RE.reply))) return { verb: 'reply', no: parseInt(m[1], 10), toName: m[2].trim(), text: m[3].trim() };
-        if ((m = s.match(RE.comment))) return { verb: 'comment', no: parseInt(m[1], 10), text: m[2].trim() };
-        return null;
+    // ── AI 在朋友圈動手的寫法：英文標籤 ─────────────────────
+    // 🚨 以前是中文系統行（[系統: 發朋友圈｜…]）。她實測 AI 常寫成簡體、換個說法，或寫在 <chat> 容器外面被丟掉，
+    //    程式認不出來就整條不見。改成英文標籤、格式固定，像呼叫工具那樣：
+    //    <moment_post>內容<photo>畫面描述</photo></moment_post>
+    //    <moment_like id="17"/>
+    //    <moment_comment id="17">內容</moment_comment>
+    //    <moment_reply id="17" to="名字">內容</moment_reply>
+    //    <moment_skip/>（醒來什麼都不做）
+    // 容錯：全形角括號與引號、屬性不加引號、讚與略過沒寫斜線都認。聊天字本身一個字都不改。
+    const PAIR_RE = /[<＜]\s*moment_(post|comment|reply|like|skip)\b([^>＞]*?)(?:\/\s*[>＞]|[>＞]([\s\S]*?)[<＜]\s*\/\s*moment_\1\s*[>＞])/gi;
+    const SINGLE_RE = /[<＜]\s*moment_(like|skip)\b([^>＞]*?)\/?\s*[>＞]/gi;
+    const PHOTO_RE = /[<＜]\s*photo\s*[>＞]([\s\S]*?)[<＜]\s*\/\s*photo\s*[>＞]/gi;
+    function _attr(attrs, name) {
+        const m = String(attrs || '').match(new RegExp(name + '\\s*=\\s*["“”＂\']?([^"“”＂\'\\s/>＞]+)', 'i'));
+        return m ? m[1].trim() : '';
     }
+    function _toAction(verb, attrs, inner) {
+        if (verb === 'skip') return { verb: 'skip' };
+        if (verb === 'post') {
+            const photos = [];
+            const body = String(inner || '').replace(PHOTO_RE, function (_, dsc) { const t = String(dsc || '').trim(); if (t) photos.push({ src: '', desc: t }); return ''; }).trim();
+            return (body || photos.length) ? { verb: 'post', text: body, photos: photos } : null;
+        }
+        const no = parseInt(_attr(attrs, 'id'), 10);
+        if (!(no >= 1)) return null;
+        if (verb === 'like') return { verb: 'like', no: no };
+        const text = String(inner || '').trim();
+        if (!text) return null;
+        if (verb === 'comment') return { verb: 'comment', no: no, text: text };
+        return { verb: 'reply', no: no, toName: _attr(attrs, 'to'), text: text };
+    }
+    // 掃一段文字：每個標籤交給 onTag，回傳抽掉標籤之後剩下的字
+    function _scan(text, onTag) {
+        let rest = String(text == null ? '' : text).replace(PAIR_RE, function (_, verb, attrs, inner) { onTag(verb.toLowerCase(), attrs || '', inner || ''); return ''; });
+        rest = rest.replace(SINGLE_RE, function (_, verb, attrs) { onTag(verb.toLowerCase(), attrs || '', ''); return ''; });
+        return rest.replace(/\n{3,}/g, '\n\n').trim();
+    }
+    function parseTags(text) {
+        const out = [];
+        _scan(text, function (verb, attrs, inner) { const a = _toAction(verb, attrs, inner); if (a) out.push(a); });
+        return out;
+    }
+    function strip(text) { return _scan(text, function () {}); }
     // 它回覆「某某」：她的名字（或「我」）→ 她；那則底下留過言的人 → 那個人；其他角色 → 聊天室
     function _whoByName(name, post, viewer) {
         const n = String(name || '').trim();
@@ -308,12 +323,10 @@
         const cid = Object.keys(chats).find(function (k) { return chats[k] && !chats[k].isGroup && chats[k].name === n; });
         return cid ? { id: cid, name: n } : { id: '', name: n };
     }
-    // wx_core 的系統行解析交過來：不是朋友圈的回 null；是的話馬上回，寫入在背後排隊
-    function fromAi(chatId, chatName, content) {
-        const a = parseAi(content);
-        if (!a) return null;
+    // 執行一個動作：群聊、略過、沒有聊天室都不動手；其餘馬上回，寫入在背後排隊
+    function _applyAction(chatId, chatName, a) {
         const chat = _chats()[chatId];
-        if (!chatId || (chat && chat.isGroup) || a.verb === 'skip') return { handled: true, acted: false };
+        if (!a || !chatId || (chat && chat.isGroup) || a.verb === 'skip') return { acted: false };
         const who = chatId;
         const whoName = chatName || (chat && chat.name) || '對方';
         _acted[chatId] = Date.now();
@@ -333,9 +346,17 @@
             p.comments.push(_mkComment(who, whoName, t.id, t.name, a.text));
             return true;
         });
-        return { handled: true, acted: true };
+        return { acted: true };
     }
     function actedSince(chatId, ts) { return !!(_acted[chatId] && _acted[chatId] >= ts); }
+    // wx_core.parseAndProcess 一開頭交過來：抽掉所有朋友圈標籤並執行，回剩下的字（這些才拆成聊天泡泡）
+    function extract(text, chatId, chatName) {
+        const acts = [];
+        const rest = _scan(text, function (verb, attrs, inner) { const a = _toAction(verb, attrs, inner); if (a) acts.push(a); });
+        let acted = false;
+        acts.forEach(function (a) { if (_applyAction(chatId, chatName, a).acted) acted = true; });
+        return { text: rest, found: acts.length, acted: acted };
+    }
 
     // ── 紅點 ─────────────────────────────────────────────
     function _seenAt() { try { return parseInt(localStorage.getItem(SEEN_KEY(scope())), 10) || 0; } catch (e) { return 0; } }
@@ -742,7 +763,7 @@
         addPost: addPost, toggleLike: toggleLike, addComment: addComment,
         removePost: removePost, removeComment: removeComment,
         setLink: setLink, linksOf: linksOf, visibleTo: visibleTo,
-        brief: brief, parseAi: parseAi, fromAi: fromAi, actedSince: actedSince,
+        brief: brief, parseTags: parseTags, strip: strip, extract: extract, actedSince: actedSince,
         unseen: unseen, markSeen: markSeen, paintBadges: paintBadges
     };
     if (win !== window) { try { window.WX_MOMENTS = win.WX_MOMENTS; } catch (e) {} }

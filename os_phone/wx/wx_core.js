@@ -691,15 +691,6 @@
             return { type: 'system', content: '', isMe: false };
         }
 
-        // 🫂 朋友圈（wx_moments.js）四種動作＋醒來什麼都不做的「略過」。
-        //    🚨 一定要排在改簽名那條前面：那條沒錨定開頭，留言內容裡出現「改簽名」會被它整條吃掉。
-        //    全部不在聊天室冒泡泡，寫進朋友圈、亮紅點就好。
-        try {
-            const _mo = win.WX_MOMENTS;
-            const _mr = _mo && _mo.fromAi ? _mo.fromAi(ctx.chatId, ctx.chatName, content) : null;
-            if (_mr) return { type: 'system', content: '', isMe: false };
-        } catch (e) { console.warn('[WX] 朋友圈那一行處理失敗', e); }
-
         // 處理 [System: 改名 XXX]。以前完全沒有這條，AI 想改名只能寫成一句話、變成一顆泡泡。
         // 做的事跟她在資料頁手動改名一模一樣：改顯示名、重畫、存檔。不碰通訊錄，跟手動那條一致。
         const renameMatch = content.match(/^\s*(?:改名|更名|改暱稱|改昵称|換名字|换名字|改個名字|改个名字|rename)\s*(?:為|为|成|to)?\s*[:：]?\s*(.+)$/i);
@@ -970,6 +961,15 @@
 
     // --- 解析邏輯 (將長文本切成陣列) ---
     function parseAndProcess(fullText) {
+        // 🫂 朋友圈標籤（wx_moments.js，<moment_post> 那一組）先整段抽掉並執行，剩下的字才往下拆。
+        //    🚨 一定要在「只留 <chat> 容器內容」那步之前：AI 常把標籤寫在容器外面，晚一步就被整段丟掉。
+        try {
+            const _mo = win.WX_MOMENTS;
+            if (_mo && _mo.extract) {
+                const _mc = GLOBAL_ACTIVE_ID ? GLOBAL_CHATS[GLOBAL_ACTIVE_ID] : null;
+                fullText = _mo.extract(fullText, GLOBAL_ACTIVE_ID, _mc ? _mc.name : '').text;
+            }
+        } catch (e) { console.warn('[WX] 朋友圈標籤處理失敗', e); }
         let cleanText = fullText.trim();
         // 對齊 VN PHONE：只提取 <chat chatroom="...">…</chat> 容器「內部」的內容（容器外的思考/旁白一律丟掉）
         const _chatM = cleanText.match(/<chat\b[^>]*>([\s\S]*?)<\/chat>/i);
@@ -2060,9 +2060,12 @@
         finally { GLOBAL_ACTIVE_ID = prev; }
 
         // 🚨 解析不出訊息時，以前一律把原文整段當一則訊息塞進去（保底）。可是只在朋友圈動手、
-        //    或醒來選擇什麼都不做的回覆，本來就只有系統行——塞進去就是一顆印著協議原文的泡泡。
-        const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(String(finalText || ''));
-        if (!newMsgs.length && finalText && !_sysOnly) {
+        //    或醒來選擇什麼都不做的回覆，本來就只有標籤或系統行——塞進去就是一顆印著協議原文的泡泡。
+        //    朋友圈標籤已在 parseAndProcess 抽掉執行過：這裡拿抽掉之後剩下的字判斷，保底也只塞剩下的字。
+        const _rest = (win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || '');
+        const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
+        if (!newMsgs.length && _rest.trim() && !_sysOnly) {
+            finalText = _rest;
             const memberNames = convertMemberIdsToNames(chat.members || []);
             const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chat.name;
             newMsgs.push({
@@ -3137,9 +3140,11 @@
                 const newMsgs = parseAndProcess(finalText);
                 
                 // 如果解析失敗（空訊息），做保底處理
-                // 只有系統行（例如只在朋友圈按了讚）就不要把原文塞成一顆泡泡（同 _applyRelayReply）
-                const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(String(finalText || ''));
-                if (!newMsgs.length && finalText && !_sysOnly) {
+                // 只有朋友圈標籤或系統行（例如只在朋友圈按了讚）就不要把原文塞成一顆泡泡（同 _applyRelayReply）
+                const _rest = (win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || '');
+                const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
+                if (!newMsgs.length && _rest.trim() && !_sysOnly) {
+                    finalText = _rest;
                     const chatName = currentChat.name; const chatId = currentChat.id;
                     const memberNames = convertMemberIdsToNames(currentChat.members || []);
                     const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chatName;
