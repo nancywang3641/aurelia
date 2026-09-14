@@ -249,6 +249,56 @@
             } catch (e) {}
         },
 
+        // 🎭 插圖畫到誰（帶參考圖用）：插圖提示詞展開成外觀之後就看不出是誰了，
+        //    所以派發插圖時先記下「這條提示詞畫的是誰」。鍵是送進 generate 的原始提示詞（翻譯前）。
+        //    存進插圖相簿時也一起寫進去（scene_cache.cast），重整後按重生還找得到。
+        _sceneCast: new Map(),
+        setSceneCast: function(prompt, names) {
+            const k = String(prompt || '').trim();
+            if (!k) return;
+            const list = (Array.isArray(names) ? names : []).map(n => String(n || '').trim()).filter(Boolean);
+            if (list.length) this._sceneCast.set(k, list); else this._sceneCast.delete(k);
+            if (this._sceneCast.size > 200) this._sceneCast.delete(this._sceneCast.keys().next().value);
+        },
+        sceneCastOf: function(prompt) { return this._sceneCast.get(String(prompt || '').trim()) || []; },
+
+        // 帶參考圖：照出場順序最多四個角色，只拿她自己放的圖（角色圖鑑的 userRefUrl），抓不到的跳過。
+        _collectRefImages: async function(names) {
+            const CG = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
+            if (!CG || typeof CG.userRefUrl !== 'function' || !Array.isArray(names)) return [];
+            const out = [], seen = [], missed = [];
+            for (const n of names) {
+                if (out.length >= 4) break;
+                const name = String(n || '').trim();
+                if (!name || seen.indexOf(name) >= 0) continue;
+                seen.push(name);
+                let url = '';
+                try { url = await CG.userRefUrl(name); } catch (e) {}
+                if (!url) continue;
+                try {
+                    const r = await fetch(url);
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    let blob = await r.blob();
+                    if (!/^image\/(png|jpe?g|webp)$/i.test(blob.type)) blob = await this._toPngBlob(blob);
+                    out.push({ name, blob });
+                } catch (e) {
+                    // 最常見是圖床不讓網頁直接抓（瀏覽器擋跨網站）。放得進舞台不代表抓得回來當附件。
+                    console.warn('[ImageManager] 參考圖抓不到，這張不帶「' + name + '」：', (e && e.message) || e);
+                    missed.push(name);
+                }
+            }
+            if (missed.length) {
+                try { AUI.toastr && AUI.toastr.warning('抓不到這幾個角色的立繪，這張沒帶他們：' + missed.join('、') + '。放到角色圖鑑的本地上傳就一定抓得到。', '參考圖', { timeOut: 8000 }); } catch (e) {}
+            }
+            return out;
+        },
+        _toPngBlob: async function(blob) {
+            const bmp = await createImageBitmap(blob);
+            const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
+            cv.getContext('2d').drawImage(bmp, 0, 0);
+            return await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('轉檔失敗')), 'image/png'));
+        },
+
         // --- 三桶路由：依 type 取該桶選的接口 ---
         // 頭像桶 char = serviceChar；插圖桶 scene = serviceScene；其餘(bg/item/pet…) = serviceInanimate。
         // char/scene 多重 fallback：新桶 → 舊「活物桶」serviceLiving → legacy 全域 service → 'pollinations'，保證永不回 undefined。
@@ -304,6 +354,8 @@
             }
 
             console.log(`[ImageManager] Raw Input [${type}]: ${prompt}`);
+            // 插圖的出場角色要在翻譯之前查（登記時用的是原始提示詞）
+            const _refCast = (type === 'scene') ? (options.refCast || this.sceneCastOf(prompt)) : [];
 
             // 🔥 步驟 1: 自動翻譯
             let englishPrompt = prompt;
@@ -332,7 +384,7 @@
             let result;
             if (service === 'custom_api') {
                 console.log('[ImageManager] Final Prompt [' + type + '→自訂接口]: ' + englishPrompt);
-                result = await this._genCustomApi(englishPrompt, type, options);
+                result = await this._genCustomApi(englishPrompt, type, _refCast.length ? { ...options, refCast: _refCast } : options);
             } else if (service === 'tavern_sd') {
                 // 酒館原生 /sd：raw prompt（不塞奧瑞亞底詞，尊重朋友的 SD 設定）；失敗回 null，不偷偷換來源
                 console.log(`[ImageManager] Final Prompt [${type}→TavernSD]: ${englishPrompt}`);
@@ -481,13 +533,47 @@
             const headers = { 'Content-Type': 'application/json' };
             if (key) headers['Authorization'] = 'Bearer ' + key;
 
+            // 🎭 帶參考圖（節點上的開關）：插圖附上出場角色的立繪，改走「帶圖編輯」那條（/images/edits，圖當附件送）。
+            //    一張都拿不到就照原本純文字生圖。SD WebUI 那種站沒有這條，不帶。
+            //    官方文件：GPT 圖片模型一次最多 16 張、每張 png/webp/jpg；這條不收 moderation，所以不送。
+            const _refOn = cfg.refImages === true || cfg.refImages === '1' || cfg.refImages === 'true';
+            let refs = [];
+            if (!isSd && _refOn) {
+                refs = Array.isArray(options.refBlobs) ? options.refBlobs
+                    : (type === 'scene' ? await this._collectRefImages(options.refCast) : []);
+            }
+            const _editsEndpoint = endpoint.replace(/\/images\/generations$/, '/images/edits');
+            const _buildEditForm = () => {
+                const fd = new FormData();
+                if (model) fd.append('model', model);
+                const who = refs.map((r, i) => 'image ' + (i + 1) + ' is ' + r.name).join('; ');
+                fd.append('prompt', 'Reference images for how the characters look: ' + who + '. Keep each of them looking like their reference image.\n\n' + body.prompt);
+                fd.append('n', '1');
+                if (body.size) fd.append('size', body.size);
+                if (body.quality) fd.append('quality', body.quality);
+                if (body.negative_prompt) fd.append('negative_prompt', body.negative_prompt);
+                refs.forEach((r, i) => {
+                    const ext = /webp/i.test(r.blob.type) ? 'webp' : (/jpe?g/i.test(r.blob.type) ? 'jpg' : 'png');
+                    fd.append('image[]', r.blob, 'ref' + (i + 1) + '.' + ext);
+                });
+                return fd;
+            };
+
             // 一次送出（不重試）。回傳圖片網址／data URL；失敗就 throw，由外層決定要不要再來一次。
             const _once = async () => {
-                const resp = await fetch(endpoint, {
-                    method: 'POST', headers: headers, body: JSON.stringify(body),
+                const _withRefs = refs.length > 0;
+                const _h = Object.assign({}, headers);
+                if (_withRefs) delete _h['Content-Type'];   // 附件要讓瀏覽器自己帶分隔線，手寫 Content-Type 會壞
+                const resp = await fetch(_withRefs ? _editsEndpoint : endpoint, {
+                    method: 'POST', headers: _h, body: _withRefs ? _buildEditForm() : JSON.stringify(body),
                     signal: options.signal || undefined,
                 });
                 const text = await resp.text();
+                if (!resp.ok && _withRefs && (resp.status === 404 || resp.status === 405)) {
+                    const e = new Error('這個站不收參考圖（到圖片設置把這個節點的「帶參考圖」關掉）：' + resp.status);
+                    e.status = resp.status;
+                    throw e;
+                }
                 if (!resp.ok) {
                     // 內容被擋是最常撞到的一種，而站方回的是一整包英文 JSON，彈出來看不出是被擋還是設定錯。
                     // 認出來就講人話：那張圖不會有了，但不是她設定壞了，也不用重試。
@@ -512,6 +598,19 @@
                     const b64 = data && Array.isArray(data.images) ? data.images[0] : null;
                     if (!b64) throw new Error('回應裡沒有圖：' + text.slice(0, 200));
                     return /^data:/.test(b64) ? b64 : ('data:image/png;base64,' + b64);
+                }
+                // 參考圖實際吃掉多少：官方回應會分開寫圖片輸入用了幾個單位。第一次讓她在畫面上看到大概多少錢，之後只記在 console。
+                if (refs.length) {
+                    const _imgTok = data && data.usage && data.usage.input_tokens_details && data.usage.input_tokens_details.image_tokens;
+                    if (typeof _imgTok === 'number') {
+                        this._lastRefUsage = { imageTokens: _imgTok, refs: refs.length, at: Date.now() };
+                        const _usd = _official ? (_imgTok * 8 / 1e6) : null;   // 官方 GPT Image 2 圖片輸入 US$8／百萬
+                        console.log('[ImageManager] 🎭 參考圖 ' + refs.length + ' 張，圖片輸入 ' + _imgTok + (_usd != null ? '（約 US$' + _usd.toFixed(4) + '）' : ''));
+                        if (_usd != null && !this._refUsageToasted) {
+                            this._refUsageToasted = true;
+                            try { AUI.toastr && AUI.toastr.info('這張帶了 ' + refs.length + ' 張參考圖，參考圖這部分約 US$' + _usd.toFixed(3) + '（不含畫圖本身）', '參考圖', { timeOut: 9000 }); } catch (e) {}
+                        }
+                    }
                 }
                 const first = data && Array.isArray(data.data) ? data.data[0] : null;
                 if (!first) throw new Error('回應裡沒有圖：' + text.slice(0, 200));

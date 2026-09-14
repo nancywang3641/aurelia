@@ -735,6 +735,26 @@
         }
     }
 
-    win.OS_CHAR_GALLERY = { open, close, localUrl, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar } };
+    // 插圖參考圖用：只看她自己放的圖（本地上傳 → 世界書 → 網址庫），不拿立繪庫與 AI 頭像。
+    //   預設格優先（最完整的一張），沒有再看 Neutral 表情。回傳第一張打得開的網址，沒有就回空字串。
+    async function userRefUrl(name) {
+        const V = VN(); const cfg = Cfg();
+        if (V && !V._lorebookLoaded && V._loadLorebookAvatars) { try { await V._loadLorebookAvatars(); V._lorebookLoaded = true; } catch (e) {} }
+        const vs = variants(name);
+        const first = async (urls) => { for (const u of urls) { if (u && await probe(u)) return u; } return ''; };
+        const def = [];
+        const ld = await localUrl(name, DEFAULT_EXP); if (ld) def.push(ld);
+        vs.forEach(v => { const u = V && V._lorebookSpriteCache && V._lorebookSpriteCache[v]; if (u) def.push(u); });
+        if (cfg.charDefaultBase) vs.forEach(v => def.push(cfg.charDefaultBase + v + '_presets.png'));
+        const hit = await first(def);
+        if (hit) return hit;
+        const neu = [];
+        const ln = await localUrl(name, 'Neutral'); if (ln) neu.push(ln);
+        vs.forEach(v => { const u = V && V._lorebookExpCache && V._lorebookExpCache[v + '_Neutral']; if (u) neu.push(u); });
+        if (cfg.spriteBase) vs.forEach(v => neu.push(cfg.spriteBase + v + '_Neutral.png'));
+        return await first(neu);
+    }
+
+    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();

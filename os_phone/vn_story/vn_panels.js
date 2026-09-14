@@ -415,7 +415,9 @@
                 const _p = String(_sz).split('x').map(Number);
                 if (_p[0] && _p[1]) { _sw = _p[0]; _sh = _p[1]; }
             } catch (e) {}
-            raw = _W.OS_IMAGE_MANAGER ? await _W.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: true }) : '';
+            // 相簿存著「畫到誰」就一起帶（帶參考圖用）
+            const _cast = (val && Array.isArray(val.cast)) ? val.cast : undefined;
+            raw = _W.OS_IMAGE_MANAGER ? await _W.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: true, refCast: _cast }) : '';
         }
         else {
             // 🚨 走 _makeCharImage 而不是寫死 getAvatar：立繪模式開著的時候，

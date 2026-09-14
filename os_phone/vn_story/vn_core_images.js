@@ -611,6 +611,12 @@
                 delete this._sceneInflight[cacheId];
                 delete this._sceneFailed[cacheId];   // 清失敗標記，允許這次手動重生
                 this._sceneGenBackoff = 0;           // 手動重生：解除本輪退避，這張一定要重打
+                // 刪舊圖前先把「畫到誰」讀回來登記，重生才帶得到參考圖
+                try {
+                    const _old = await VN_Cache.get('scene_cache', cacheId);
+                    const _IM = (window.parent || window).OS_IMAGE_MANAGER;
+                    if (_old && Array.isArray(_old.cast) && _old.cast.length && _IM && _IM.setSceneCast) _IM.setSceneCast(prompt, _old.cast);
+                } catch (e) {}
                 try { await VN_Cache.delete('scene_cache', cacheId); } catch (e) {}
                 const url = await this._safeFetchScene(cacheId, prompt);
                 if (url && cgImg) { cgImg.src = url; this._setSceneCgFailed(false); }
@@ -655,7 +661,10 @@
                 this._sceneMemCache[cacheId] = objUrl;
                 this._preloadImg('scene_' + cacheId, objUrl);
                 if (dataUrl) {
-                    await VN_Cache.set('scene_cache', cacheId, { prompt, rawUrl: raw, url: dataUrl });
+                    // 畫到誰一起存（帶參考圖用）：重整後按重生，記憶體裡的登記已經不在了，要從這裡讀回
+                    let _cast = [];
+                    try { const _IM = (window.parent || window).OS_IMAGE_MANAGER; if (_IM && _IM.sceneCastOf) _cast = _IM.sceneCastOf(prompt); } catch (e) {}
+                    await VN_Cache.set('scene_cache', cacheId, { prompt, rawUrl: raw, url: dataUrl, cast: _cast.length ? _cast : undefined });
                     this._saveSceneToDisk(cacheId, dataUrl); // fire-and-forget → user/images/[char]/scene_[id].png
                 }
                 return objUrl;

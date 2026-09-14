@@ -164,7 +164,10 @@
                     const prompt = String(s.prompt).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
                     if (!prompt) return;
                     const cacheId = 'ext_' + this._hash(chatId + '_' + msgId + '_' + idx + '_' + prompt);
-                    entries.push({ cacheId: cacheId, prompt: prompt, after: s.after ? String(s.after).trim() : '', idx: idx });
+                    const cast = Array.isArray(s.cast) ? s.cast.filter(Boolean) : [];
+                    entries.push({ cacheId: cacheId, prompt: prompt, after: s.after ? String(s.after).trim() : '', idx: idx, cast: cast });
+                    // 畫到誰先登記給生圖（帶參考圖用）；要在預熱之前，預熱就是真的去生
+                    try { if (cast.length && win.OS_IMAGE_MANAGER && win.OS_IMAGE_MANAGER.setSceneCast) win.OS_IMAGE_MANAGER.setSceneCast(prompt, cast); } catch (e) {}
                     // 立刻預熱生圖（in-flight dedup，等播到時秒出）；掛進 VN 圖片總進度，loading/語音延後才看得到它
                     try { this._fetchSceneCounted(cacheId, prompt); } catch (e) {}
                 });
@@ -280,7 +283,7 @@
                 }
                 const have = {}; saved.forEach(s => { if (s && s.cacheId) have[s.cacheId] = 1; });
                 let added = 0;
-                entries.forEach(e => { if (e && e.cacheId && !have[e.cacheId]) { saved.push({ cacheId: e.cacheId, prompt: e.prompt, after: e.after || '', idx: e.idx, msgId: (msgId != null ? String(msgId) : undefined) }); added++; } });
+                entries.forEach(e => { if (e && e.cacheId && !have[e.cacheId]) { saved.push({ cacheId: e.cacheId, prompt: e.prompt, after: e.after || '', idx: e.idx, msgId: (msgId != null ? String(msgId) : undefined), cast: (e.cast && e.cast.length) ? e.cast : undefined }); added++; } });
                 if (!added && !dropped) return;
                 latest.scenes = saved;
                 // 🚨 silent 一定要帶：這裡只補「插哪一段」的欄位，正文一個字都沒動。
@@ -297,8 +300,9 @@
             try {
                 if (!Array.isArray(scenes) || !scenes.length) return;
                 const entries = scenes.filter(s => s && s.cacheId && s.prompt)
-                    .map((s, i) => ({ cacheId: s.cacheId, prompt: s.prompt, after: s.after || '', idx: (typeof s.idx === 'number' ? s.idx : i) }));
+                    .map((s, i) => ({ cacheId: s.cacheId, prompt: s.prompt, after: s.after || '', idx: (typeof s.idx === 'number' ? s.idx : i), cast: Array.isArray(s.cast) ? s.cast : [] }));
                 if (!entries.length) return;
+                try { entries.forEach(e => { if (e.cast.length && win.OS_IMAGE_MANAGER && win.OS_IMAGE_MANAGER.setSceneCast) win.OS_IMAGE_MANAGER.setSceneCast(e.prompt, e.cast); }); } catch (e) {}
                 const n = this._spliceInto(entries, { requireAnchor: true });
                 if (n) console.log('[VN_SceneInsert] 回放章節：splice ' + n + ' 張存檔插圖');
             } catch (e) { console.warn('[VN_SceneInsert] applyChapterScenes 失敗:', (e && e.message) || e); }

@@ -45,15 +45,17 @@
         nai:  { key: 'os_img_nai_nodes',  cfgKey: 'novelai',   idPrefix: 'nain_',  select: '#img-nai-node',  status: '#img-nai-node-status',
                 fields: { url: '#img-nai-url', token: '#img-nai-token' } },
         capi: { key: 'os_img_capi_nodes', cfgKey: 'customApi', idPrefix: 'capin_', select: '#img-capi-node', status: '#img-capi-node-status',
-                fields: { url: '#img-capi-url', apiKey: '#img-capi-key', model: '#img-capi-model' } },
+                fields: { url: '#img-capi-url', apiKey: '#img-capi-key', model: '#img-capi-model', refImages: '#img-capi-ref' } },
     };
+    // 開關類的欄位（帶參考圖）在節點裡存 '1'／''，跟文字格一樣比對；設定檔裡可能是 true/false，一律先換成字串
+    const _nodeVal = (v) => (v === true ? '1' : (v === false || v == null ? '' : String(v).trim()));
     function _imgNodes(kind) {
         try { const v = JSON.parse(localStorage.getItem(IMG_NODE_KINDS[kind].key) || '[]'); return Array.isArray(v) ? v.filter(n => n && n.id) : []; }
         catch (e) { return []; }
     }
     function _imgNodesSave(kind, list) { try { localStorage.setItem(IMG_NODE_KINDS[kind].key, JSON.stringify(list || [])); } catch (e) {} }
     function _imgNodeMatches(kind, node, cur) {
-        return Object.keys(IMG_NODE_KINDS[kind].fields).every(f => String(node[f] || '').trim() === String(cur[f] || '').trim());
+        return Object.keys(IMG_NODE_KINDS[kind].fields).every(f => _nodeVal(node[f]) === _nodeVal(cur[f]));
     }
     // 下拉的選項：格子裡現在那組剛好等於哪個節點，就停在那個節點
     function _imgNodeOptionsHTML(kind, cur, pickId) {
@@ -1757,7 +1759,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="field-row">
                                         <div class="set-label" title="位址、Key、模型三格存成一個節點，換站時下拉選一下就整組換過去。">節點</div>
                                         <div class="capi-pack-row img-node-row">
-                                            <select class="set-select" id="img-capi-node">${_imgNodeOptionsHTML('capi', { url: imgConfig.customApi?.url || '', apiKey: imgConfig.customApi?.apiKey || '', model: imgConfig.customApi?.model || '' })}</select>
+                                            <select class="set-select" id="img-capi-node">${_imgNodeOptionsHTML('capi', { url: imgConfig.customApi?.url || '', apiKey: imgConfig.customApi?.apiKey || '', model: imgConfig.customApi?.model || '', refImages: _nodeVal(imgConfig.customApi?.refImages) })}</select>
                                             <button class="set-btn" id="img-capi-node-save" type="button" title="把下面位址、Key、模型三格存成一個節點" aria-label="存成節點"><i class="fa-solid fa-floppy-disk"></i><span class="img-node-btn-text"> 存成節點</span></button>
                                             <button class="set-btn" id="img-capi-node-del" type="button" title="刪掉選中的節點（下面的格子不會動）"><i class="fa-solid fa-trash"></i></button>
                                         </div>
@@ -1782,6 +1784,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             <option value="medium" ${(imgConfig.customApi?.quality || 'medium') === 'medium' ? 'selected' : ''}>中</option>
                                             <option value="high" ${(imgConfig.customApi?.quality || 'medium') === 'high' ? 'selected' : ''}>高</option>
                                         </select>
+                                    </div>
+                                    <div class="field-row">
+                                        <div class="set-label"><span><i class="fa-solid fa-images"></i> 帶參考圖</span><label class="toggle-switch"><input type="checkbox" id="img-capi-ref" ${_nodeVal(imgConfig.customApi?.refImages) ? 'checked' : ''}><span class="slider"></span></label></div>
+                                        <div class="set-desc">插圖附上出場角色的立繪，最多四個。只用角色圖鑑裡你放的圖。</div>
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label" title="選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。">底詞</div>
@@ -3016,7 +3022,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // 🔌 節點：換節點＝把那組填回格子，而且當下寫進設定（不必再按儲存）。事件一律委派在 container，理由同底下「測試」鈕。
         const _nodeCur = (kind) => {
             const K = IMG_NODE_KINDS[kind], o = {};
-            Object.keys(K.fields).forEach(f => { o[f] = (container.querySelector(K.fields[f])?.value || '').trim(); });
+            Object.keys(K.fields).forEach(f => {
+                const el = container.querySelector(K.fields[f]);
+                o[f] = (el && el.type === 'checkbox') ? (el.checked ? '1' : '') : ((el && el.value) || '').trim();
+            });
             return o;
         };
         const _nodeSay = (kind, msg) => { const el = container.querySelector(IMG_NODE_KINDS[kind].status); if (el) el.textContent = msg; };
@@ -3027,9 +3036,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const _nodeApply = (kind, vals) => {
             const K = IMG_NODE_KINDS[kind], patch = {};
             Object.keys(K.fields).forEach(f => {
-                patch[f] = String(vals[f] || '').trim();
+                patch[f] = _nodeVal(vals[f]);
                 const el = container.querySelector(K.fields[f]);
-                if (el) el.value = patch[f];
+                if (el && el.type === 'checkbox') el.checked = patch[f] === '1';
+                else if (el) el.value = patch[f];
             });
             try {
                 const saved = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
@@ -3045,6 +3055,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const t = ev.target;
             if (!t || !t.closest) return;
             for (const kind in IMG_NODE_KINDS) {
+                // 開關類欄位只會發 change（有些瀏覽器不發 input）→ 一樣讓下拉重新認
+                if (t.type === 'checkbox' && Object.values(IMG_NODE_KINDS[kind].fields).some(s => t.closest(s))) { _nodeRefill(kind); return; }
                 const sel = t.closest(IMG_NODE_KINDS[kind].select);
                 if (!sel) continue;
                 const n = _imgNodes(kind).find(x => x.id === sel.value);
@@ -3136,11 +3148,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             btn.disabled = true; say('測試中…（用 ' + tw + '×' + th + ' 生一張，可能要等十幾秒）');
             const prev = IM._lastCustomApiError; IM._lastCustomApiError = null;
             try {
-                const out = await IM._genCustomApi('a cat sitting on a wooden table', 'bg',
-                    { width: tw, height: th, customApi: { url: url, apiKey: key, model: model,
+                // 帶參考圖開著：一起測站方收不收附件。畫一張簡單的圖當參考，不必先有角色。
+                const _refOn = !!q('#img-capi-ref')?.checked;
+                let _refBlobs;
+                if (_refOn) {
+                    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 512;
+                    const g = cv.getContext('2d');
+                    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 512, 512);
+                    g.fillStyle = '#d33'; g.beginPath(); g.arc(256, 256, 180, 0, Math.PI * 2); g.fill();
+                    _refBlobs = [{ name: 'the red ball', blob: await new Promise(r => cv.toBlob(r, 'image/png')) }];
+                }
+                const out = await IM._genCustomApi(_refOn ? 'a cat playing with the red ball on a wooden table' : 'a cat sitting on a wooden table', 'bg',
+                    { width: tw, height: th, refBlobs: _refBlobs, customApi: { url: url, apiKey: key, model: model,
                         quality: (q('#img-capi-quality')?.value || 'medium'),
-                        basePrompt: (q('#img-capi-base')?.value || '').trim() } });
-                if (out) say('通了，' + tw + '×' + th + ' 這個尺寸生得出圖');
+                        basePrompt: (q('#img-capi-base')?.value || '').trim(),
+                        refImages: _refOn } });
+                if (out) say('通了，' + tw + '×' + th + ' 這個尺寸生得出圖' + (_refOn ? '，帶參考圖也收' : ''));
                 else say(((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'));
             } catch (e) {
                 say(((e && e.message) || e));
@@ -3514,6 +3537,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         model:  (container.querySelector('#img-capi-model')?.value || '').trim(),
                         quality: (container.querySelector('#img-capi-quality')?.value || 'medium'),
                         basePrompt: (container.querySelector('#img-capi-base')?.value || '').trim(),
+                        refImages: !!container.querySelector('#img-capi-ref')?.checked,
                     },
                     novelai: {
                         token: elNaiToken.value.trim(),

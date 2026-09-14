@@ -1037,6 +1037,32 @@ ${_memoryRulesText()}
         });
     }
 
+    // 插圖畫到誰（帶參考圖用）：從還沒展開的提示詞裡的 ##代號## / ##角色名## 找出登記表上的角色名，照出場順序、不重複。
+    //   代號 Cn 對回名字：登記表裡名字鍵跟代號鍵指到同一份外觀，找那個不是代號的鍵。登記表外的名字不算（沒有她放的圖可帶）。
+    function _sceneCastOf(str, map) {
+        const out = [];
+        if (!str || !map || String(str).indexOf('##') < 0) return out;
+        const keys = Object.keys(map);
+        const isCode = (k) => /^C\d+$/i.test(k);
+        const nameOf = (tok) => {
+            const t = String(tok || '').trim();
+            if (!t) return '';
+            if (isCode(t)) {
+                const look = map[t.toUpperCase()] || map[t];
+                return look ? (keys.find(k => !isCode(k) && map[k] === look) || '') : '';
+            }
+            if (Object.prototype.hasOwnProperty.call(map, t)) return t;
+            return keys.find(k => !isCode(k) && k.toLowerCase() === t.toLowerCase()) || '';
+        };
+        String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
+            let n = nameOf(raw);
+            if (!n) { const mm = String(raw).trim().match(/^(C\d+)[\s.．:：、,，_-]+(.+)$/i); if (mm) n = nameOf(mm[1]) || nameOf(mm[2]); }
+            if (n && out.indexOf(n) < 0) out.push(n);
+            return m;
+        });
+        return out;
+    }
+
     // 場景插圖最終清洗：剝掉「角色 [...] 區塊內」的人數/獨照框架詞(1boy/1girl/solo/portrait...)。
     //   登記表展開那條已由 _stripAvatarFraming 剝過；但「沒頭像的角色」是副模型自己 inline 寫外觀、會自帶 1boy →
     //   多角色場景每個 block 各帶 1boy 會跟場景級 2boys 數量打架 → NAI 吐多人/亂框。這裡兜底剝乾淨。
@@ -1430,7 +1456,7 @@ ${numberedText}`;
                         _warnExtraPersons(_p, _used);
                 _warnTrailingInteraction(_p);
                         _warnTrailingInteraction(_p);
-                        return { after: after, prompt: _p };
+                        return { after: after, prompt: _p, cast: _looksMap ? _sceneCastOf(s.prompt, _looksMap) : [] };
                     }).filter(s => s && s.prompt);
                     win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId });
                     console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
@@ -1605,7 +1631,7 @@ ${numberedText}`;
                 const _p = _scrubSceneCounts(_expandHashNames(s.prompt, looksMap, _used));
                 _warnExtraPersons(_p, _used);
                 _warnTrailingInteraction(_p);
-                return { after, prompt: _p };
+                return { after, prompt: _p, cast: _sceneCastOf(s.prompt, looksMap) };
             }).filter(s => s && s.prompt);
             if (mapped.length) {
                 // 派發對位 msgId 用 getChatMessages(-1) 的「窗口號」lastId——跟 VN(_currentMessageId/loadScript)同一個 id 空間。
