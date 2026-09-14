@@ -69,7 +69,7 @@
     }
 
     // 這條是不是「在手機上真的發生、正文裡沒有」的訊息（跳過紅包/貼圖/系統，也跳過跑團同步進來的劇情訊息）
-    function _isAppMsg(m) { return !!(m && (!m.type || m.type === 'msg') && m._story == null && _clean(m.content)); }
+    function _isAppMsg(m) { return !!(m && (!m.type || m.type === 'msg') && m._story == null && !m.recalled && _clean(m.content)); }   // 撤回的不回傳酒館
     // 格式說明裡的佔位字（AI 常照字面寫 [Char] 當發話人，存下來就變成一個叫 Char 的人）
     function _isPlaceholderName(n) { return /^\s*(?:\{\{\s*(?:char|user)\s*\}\}|char|user)\s*$/i.test(String(n == null ? '' : n)); }
     // 一條 微信/電話 訊息 → 一行

@@ -136,6 +136,8 @@
             const t = String(msg.content || '').trim();
             return t ? '（' + t + '）' : '';
         }
+        // ↩ 撤回的內容不寫進長期記憶，只留「撤回了一則」
+        if (msg.recalled) return '（' + (msg.isMe ? meName : (msg.senderName || msg.sender || taName)) + '撤回了一則訊息）';
         let text = String(msg.content || '');
         if (!text && msg.raw) {
             text = String(msg.raw).replace(/^\[[^\]\n]{1,40}\][ \t]*\n?/gm, '').trim();

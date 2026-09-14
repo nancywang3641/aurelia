@@ -252,6 +252,20 @@
         return note;
     }
 
+    // ↩ 撤回的訊息怎麼給模型看：
+    //   主角撤回自己的——後面有對方的訊息＝對方回過話、看過了，給內容；還沒回就撤回＝只知道撤回了一則，不給內容。
+    //   角色撤回的——他自己知道說過什麼，給內容。一律寫成旁註，不是誰講的話（模型才不會學成輸出格式）。
+    function _recallNote(msg, list, i, userName) {
+        const text = String((msg && msg.content) || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+        const me = String(userName || '主角');
+        if (msg && msg.isMe) {
+            const seen = (list || []).slice(i + 1).some(x => x && !x.isMe && x.type !== 'system' && x.type !== 'time' && !x.isLoading);
+            return (seen && text) ? '（' + me + ' 傳了「' + text + '」，已經被看到，後來撤回了）' : '（' + me + ' 撤回了一則訊息，內容沒被看到）';
+        }
+        const who = String((msg && (msg.senderName || msg.sender)) || '').trim() || '對方';
+        return text ? '（' + who + ' 傳了「' + text + '」又馬上撤回了）' : '';
+    }
+
     // --- 2. 輔助函數 ---
     function sanitizeContent(content) {
         if (!content || typeof content !== 'string') return content;
@@ -1598,6 +1612,12 @@
                                     if (_note) rawPhoneMsgs.push({ role: 'system', content: _note, _source: 'phone' });
                                     return;
                                 }
+                                // ↩ 撤回的：寫成旁註（看過沒看過見 _recallNote），不當成誰講的話
+                                if (msg.recalled) {
+                                    const _rn = _recallNote(msg, _histMsgs, _i, userName);
+                                    if (_rn) rawPhoneMsgs.push({ role: 'system', content: _rn, _source: 'phone' });
+                                    return;
+                                }
                                 // 📞 通話餵乾淨口語(content)，不帶 [Chat:|With:][名] 標頭的 raw → 免 AI 學歷史去用聊天格式
                                 let _hc = (promptKey === 'call_voice_system') ? (msg.content || "") : _wxStripHeads(msg.raw || msg.content || "");
                                 // 📷 她從相簿傳的照片在訊息裡只是圖庫編號 → 換成它看過寫下的那句（沒看過就只說是照片）
@@ -2192,6 +2212,12 @@
                             if (_isCall && msg.type === 'system') {
                                 const _t = String(msg.content || '').trim();
                                 if (_t) { apiMessages.push({ role: 'system', content: '（' + _t + '）' }); _pushedHist++; }
+                                return;
+                            }
+                            // ↩ 撤回的：寫成旁註（同酒館版）
+                            if (msg.recalled) {
+                                const _rn = _recallNote(msg, _histMsgs, _i, userName);
+                                if (_rn) { apiMessages.push({ role: 'system', content: _rn }); _pushedHist++; }
                                 return;
                             }
                             // 📞 通話餵乾淨口語（content），不帶 [Chat:|With:][名] 標頭的 raw，免得它在電話裡學聊天格式（同酒館版）

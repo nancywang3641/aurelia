@@ -1067,12 +1067,12 @@
         if (!list.length) return;
         for (const o of list) {
             const chat = o.chat;
-            o.msgs.forEach(function (m) { chat.messages.push(m); });
+            o.msgs.forEach(function (m) { chat.messages.push(_settleRecall(m)); });   // 傳到別間她沒在看：傳了又收回的直接記成撤回
             chat.unread = true;
             chat.pushedCount = chat.messages.length;
             chat.renderedCount = chat.messages.length;
             if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
-            const first = o.msgs.find(function (m) { return m && !m.isMe && typeof m.content === 'string' && m.content.trim(); });
+            const first = o.msgs.find(function (m) { return m && !m.isMe && !m.recalled && typeof m.content === 'string' && m.content.trim(); });
             const body = (first ? first.content.replace(/\[[^\]]*\]/g, '').trim() : '') || '傳了訊息給妳';
             try {
                 if (win.document && win.document.visibilityState === 'hidden' && win.OS_KEEPALIVE) win.OS_KEEPALIVE.notify(chat.name || '微信', body, 'wx-' + chat.id);
@@ -1227,6 +1227,11 @@
 
             if (!content) return;
 
+            // ↩ 角色傳了又收回：那句最前面寫 [recall]（英文固定標籤；引用標記可以接在它後面）
+            let _recall = false;
+            const _rcm = content.match(/^\[\s*recall\s*\]\s*/i);
+            if (_rcm) { _recall = true; content = content.slice(_rcm[0].length).trim(); if (!content) return; }
+
             // 🔥 處理帶發送者標籤的系統消息：[丹] [系統: 丹領取了紅包|rp_leon_001]
             const embeddedSysMatch = content.match(/^\[\s*(Notice|System|系統|系统)\s*[:：]\s*(.*)/i);
             if (embeddedSysMatch) {
@@ -1266,6 +1271,7 @@
                     quoteText: _hasQ ? _qp.text : '',
                     raw: singleRaw
                 };
+                if (_recall) msgObj._recallPending = true;
                 extractedMessages.push(msgObj);
             }
         });
@@ -2142,16 +2148,49 @@
         } catch (e) {}
         fallback();
     }
+    // ── 撤回（2026-09-15）──────────────────────────────
+    //   她撤回自己的：那則留著、標 recalled，畫面換成「你撤回了一則訊息」；送模型時看對方回過話沒，決定給不給內容（os_api_engine _recallNote）。
+    //   角色撤回的：回覆裡那句最前面寫 [recall] → 解析成 _recallPending，simulateTypingStream 先冒出來一下再換成撤回提示；
+    //   她沒在看的那幾條路（背景收回、傳到別間）直接記成撤回。
+    function _settleRecall(m) {
+        if (m && m._recallPending) { m.recalled = true; m.recalledAt = Date.now(); delete m._recallPending; }
+        return m;
+    }
+    // 換掉畫面上那一則（一則被媒體標籤切成好幾顆泡泡時，同一個 data-msg-idx 會有好幾個，全換）
+    function _swapBubble(chat, idx) {
+        try {
+            if (!chat || GLOBAL_ACTIVE_ID !== chat.id || !win.WX_VIEW) return false;
+            const rc = _getRoomContent();
+            if (!rc) return false;
+            const els = rc.querySelectorAll('[data-msg-idx="' + idx + '"]');
+            if (!els.length) return false;
+            els[0].insertAdjacentHTML('beforebegin', win.WX_VIEW.renderBubble(chat.messages[idx], chat, false, idx));
+            els.forEach(function (el) { el.remove(); });
+            return true;
+        } catch (e) { return false; }
+    }
+    async function _recallMine(idx) {
+        const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
+        const m = (chat && Array.isArray(chat.messages)) ? chat.messages[idx] : null;
+        if (!m || !m.isMe || m.recalled || m._story != null) return;
+        m.recalled = true;
+        m.recalledAt = Date.now();
+        if (!_swapBubble(chat, idx)) _rebuildRoomContent(chat);
+        if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+    }
+
     function _openMsgMenu(row, idx) {
         const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
         const m = (chat && Array.isArray(chat.messages)) ? chat.messages[idx] : null;
         if (!m || m.isLoading || !APP_CONTAINER) return;
         _closeMsgMenu();
         _lpAt = Date.now();
-        const isSys = m.type === 'system' || m.type === 'time';
+        const isSys = m.type === 'system' || m.type === 'time' || !!m.recalled;   // 撤回的那則只剩一行提示：只能刪
         const items = [];
         if (!isSys && _msgPlainText(m)) items.push(['copy', 'fa-regular fa-copy', '複製']);
         if (!isSys) items.push(['quote', 'fa-solid fa-reply', '引用']);
+        // 撤回：只有她自己在微信裡打的（跑團正文同步進來的是劇情，不能撤）
+        if (!isSys && m.isMe && m._story == null) items.push(['recall', 'fa-solid fa-rotate-left', '撤回']);
         items.push(['delete', 'fa-regular fa-trash-can', '刪除']);
         const shell = APP_CONTAINER.querySelector('.wx-shell') || APP_CONTAINER;
         const menu = doc.createElement('div');
@@ -2183,6 +2222,7 @@
             if (b.dataset.act === 'copy') _copyText(_msgPlainText(m));
             else if (b.dataset.act === 'quote') { if (win.wxApp && win.wxApp.quoteMsg) win.wxApp.quoteMsg(idx); }
             else if (b.dataset.act === 'delete') { const M = _mm(); if (M) M.enterMultiSelectMode(idx); }
+            else if (b.dataset.act === 'recall') _recallMine(idx);
         });
         // 點別的地方、捲動就收起來
         setTimeout(function () {
@@ -2285,7 +2325,7 @@
         if (prev === chat.id && APP_CONTAINER) {
             await win.wxApp.simulateTypingStream(newMsgs, chat);
         } else {
-            newMsgs.forEach(function (m) { chat.messages.push(m); });
+            newMsgs.forEach(function (m) { chat.messages.push(_settleRecall(m)); });   // 她沒在看：傳了又收回的直接記成撤回
             chat.unread = true;
             chat.pushedCount = chat.messages.length;
             chat.renderedCount = chat.messages.length;
@@ -2299,7 +2339,7 @@
         //    前提是 app 還活著（設置 → 一般 → 後台的守候）。
         try {
             if (win.document.visibilityState === 'hidden' && win.OS_KEEPALIVE) {
-                const _first = (newMsgs || []).find(function (m) { return m && !m.isMe && typeof m.content === 'string' && m.content.trim(); });
+                const _first = (newMsgs || []).find(function (m) { return m && !m.isMe && !m.recalled && !m._recallPending && typeof m.content === 'string' && m.content.trim(); });   // 撤回的內容不上通知
                 const _body = _first ? _first.content : '傳了訊息給妳';
                 win.OS_KEEPALIVE.notify(chat.name || '微信', _body, 'wx-' + chat.id);
             }
@@ -3541,6 +3581,14 @@
                 // 2. 推入真實訊息並直接 append
                 chatObj.messages.push(msg);
                 _appendBubble(msg, chatObj);
+
+                // ↩ 角色傳了又收回：先讓她看到一下，再換成撤回提示
+                if (msg._recallPending) {
+                    const _ri = chatObj.messages.length - 1;
+                    await new Promise(r => setTimeout(r, 1800));
+                    _settleRecall(msg);
+                    if (!_swapBubble(chatObj, _ri)) _rebuildRoomContent(chatObj);
+                }
 
                 // 3. 轉帳卡片需要延遲全量刷新（更新轉帳狀態）
                 if (msg.type === 'system' && msg.content && msg.content.includes('轉帳')) {

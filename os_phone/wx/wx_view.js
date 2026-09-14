@@ -159,6 +159,13 @@
         },
 
         renderBubble: function(msg, chatObj, withAnim, msgIndex) {
+            // ↩ 撤回的那則：只剩一行提示（內容還留在資料裡，送模型時才用）。要在切媒體泡泡之前，不然一則會變好幾行提示
+            if (msg && msg.recalled) {
+                const _rc = chatObj || {};
+                const _who = msg.isMe ? '你' : (_rc.isGroup ? (msg.senderName || msg.sender || '有人') : '對方');
+                const _ra = (typeof msgIndex === 'number') ? `data-msg-idx="${msgIndex}"` : '';
+                return `<div class="wx-system-notice wx-recalled ${withAnim ? 'animate' : ''}" style="${withAnim ? 'opacity:0;' : 'opacity:1;'}" ${_ra}>${sysText(_who + '撤回了一則訊息')}</div>`;
+            }
             // 貼圖寫法跟 VN 手機對齊：[貼紙:]/[贴纸:]/[表情:]/[Emote:] 都算表情包；[xxx.gif] 這種只有檔名的也算（跑團正文常這樣寫）
             if (msg && typeof msg.content === 'string' && /\[/.test(msg.content)) {
                 const norm = msg.content
