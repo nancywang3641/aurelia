@@ -477,6 +477,43 @@
                 } catch(e) { j(e); }
             });
         },
+        // 🎭 角色圖鑑的本地上傳：{ id:'char_img::名字::表情', name, exp, data(dataURL 或網址), kind:'file'|'url', createdAt }
+        //    跟 NAI 縮圖同一個 images store，只是鍵的前綴不同 → 不動 schema、不升版（升版會 deadlock，見記憶）。
+        //    不分故事：她放上去的圖是「這個角色長這樣」，跟立繪庫那種一個故事一份的生成圖不同。
+        saveCharImage: async function(record) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).put(record);
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteCharImage: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        listCharImages: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const out = [];
+                    const range = IDBKeyRange.bound('char_img::', 'char_img::￿');
+                    const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).openCursor(range);
+                    req.onsuccess = (e) => { const c = e.target.result; if (c) { out.push(c.value); c.continue(); } else r(out); };
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
         // NAI 氛圍轉印（Vibe Transfer）：.naiv4vibe 檔的 encoding（每顆每模型 ~65KB base64）＋縮圖，
         // 設定檔(localStorage)只存 {id,name,strength,on} 輕引用 → 大字串一律放這。
         saveNaiVibe: async function(id, record) {

@@ -2091,6 +2091,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         </div><!-- /view-img-api -->
                         <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
+                            <button class="set-btn acg-open-btn" type="button" onclick="(window.OS_CHAR_GALLERY || (window.parent && window.parent.OS_CHAR_GALLERY)) && (window.OS_CHAR_GALLERY || window.parent.OS_CHAR_GALLERY).open()"><i class="fa-solid fa-address-book"></i> 角色圖鑑</button>
                             <!-- 內層子 tab：頭像快取 vs 角色立繪 -->
                             <div style="display:flex;gap:6px;padding:0 0 10px;border-bottom:1px solid rgba(26,28,40,0.06);margin-bottom:10px;">
                                 <div class="av-sub active" data-avsub="cache"  style="cursor:pointer;padding:4px 10px;font-size:12px;color:#1A1C28;border:1px solid rgba(26,28,40,0.25);border-radius:4px;background:rgba(26,28,40,0.06);" onclick="_switchAvatarSub(this,'cache')"><i class="fa-solid fa-box"></i> 頭像快取</div>

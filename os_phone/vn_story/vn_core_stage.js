@@ -158,7 +158,8 @@
             this._applyStageLighting(idx, { grantSolo: isNew ? idx : -1 });   // 說話者亮、另一格變暗；置中只授予「進場當下就是獨角」的
         },
 
-        // 單格圖片解析鏈（表情立繪條目 → spriteBase → 預設立繪條目 → charDefaultBase → sprite_cache → fallbackToAI），
+        // 單格圖片解析鏈（圖鑑本地上傳(表情) → 表情立繪條目 → spriteBase → 圖鑑本地上傳(預設) → 預設立繪條目 → charDefaultBase → sprite_cache → fallbackToAI），
+        // 順序只有一份，圖鑑 os_char_gallery.js 照抄；改這裡要一起改那邊。
         // 條目層＝世界書【素材-角色表情立繪】/【素材-角色預設立繪素材】（重構前的老邏輯，2026-08-26 接回）；守衛改用「這格還是不是同角色」
         // 🔴 2026-09-14 她定：自備圖（世界書條目／網址庫）一律最先。「會放上去都是因為我做好才放上去的，不可能反過來」。
         //    手動生的立繪（sprite_cache）以前排第一，會把她放的圖整個蓋掉；現在排在自備圖之後、AI 生成之前（在 handleImgError 裡）。
@@ -177,6 +178,9 @@
             // 世界書【素材-角色表情立繪】(名字_表情→URL) → spriteBase 拼檔名；全走探測制，掛一個自動下一個
             if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
             const urls = [];
+            // 角色圖鑑的本地上傳最先（她在圖鑑裡親手放的）
+            const _cg = win.OS_CHAR_GALLERY;
+            if (_cg && _cg.localUrl) { const lu = await _cg.localUrl(name, exp); if (_stale()) return; if (lu) urls.push(lu); }
             this._nameVariants(name).forEach(v => { const u = this._lorebookExpCache[`${v}_${exp}`]; if (u && !urls.includes(u)) urls.push(u); });
             if (VN_Config.data.spriteBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.spriteBase}${v}_${exp}.png`));
             if (urls.length) this._tryLoad(img, urls, () => this.handleImgError(img), triggerAnim, _stale);
@@ -229,9 +233,12 @@
                 this.fallbackToAI(target, lockedName, lockedExp);
             };
             // 世界書【素材-角色預設立繪素材】(名字→URL) → charDefaultBase 拼檔名；掛了才往下找立繪庫／AI 生成
-            const proceed = () => {
+            const proceed = async () => {
                 if (_stale()) return;
                 const urls = [];
+                // 角色圖鑑「預設」格的本地上傳最先
+                const _cg = win.OS_CHAR_GALLERY;
+                if (_cg && _cg.localUrl) { const lu = await _cg.localUrl(lockedName, 'default'); if (_stale()) return; if (lu) urls.push(lu); }
                 this._nameVariants(lockedName).forEach(v => { const u = this._lorebookSpriteCache[v]; if (u && !urls.includes(u)) urls.push(u); });
                 if (base) this._nameVariants(lockedName).forEach(v => urls.push(`${base}${v}_presets.png`));
                 if (urls.length) this._tryLoad(img, urls, () => { if (_stale()) return; toSpriteOrAI(); }, isCall ? null : triggerAnim, _stale);
@@ -489,12 +496,18 @@
             card.innerHTML =
                 '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' +
                 '<button class="vn-cc-btn" id="vn-cc-gen"><i class="fa-solid fa-palette"></i> 一鍵生立繪（去背）</button>' +
+                '<button class="vn-cc-btn" id="vn-cc-gallery"><i class="fa-solid fa-address-book"></i> 角色圖鑑</button>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + _cvBtn + '</div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">形象</span><span class="vn-cc-v">' + esc(st['形象'] || '—') + '</span></div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">身分</span><span class="vn-cc-v">' + esc(st['身分'] || st['身份'] || '—') + '</span></div>' +
                 '<div class="vn-cc-row"><span class="vn-cc-k">好感度</span><span class="vn-cc-v">' + esc(aff) + '</span></div>';
             card.querySelector('.vn-cc-name').textContent = name;
             card.querySelector('#vn-cc-gen').onclick = (e) => this.autoGenSprite(name, e.currentTarget);
+            card.querySelector('#vn-cc-gallery').onclick = () => {
+                this.closeCharCard();
+                const CG = win.OS_CHAR_GALLERY;
+                if (CG) CG.open(name);
+            };
             const cvSaveBtn = card.querySelector('#vn-cc-cv-save');
             if (cvSaveBtn) cvSaveBtn.onclick = (e) => this.saveCharCV(name, e.currentTarget);
             const cvUnlockBtn = card.querySelector('#vn-cc-cv-unlock');
