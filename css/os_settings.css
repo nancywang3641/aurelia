@@ -324,6 +324,10 @@
 .capi-pack-row { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; }
 .capi-pack-row .set-select { flex: 1; min-width: 0; padding: 8px 10px; }
 .capi-pack-row .set-btn { flex-shrink: 0; white-space: nowrap; }
+/* 節點那排：看的是這一排自己的寬度，不是視窗寬度——酒館桌機上的手機殼視窗很寬、殼裡很窄。
+   窄到名字會被擠掉時，「存成節點」只留磁片圖示，讓節點名字顯示完整 */
+.img-node-row { container-type: inline-size; }
+@container (max-width: 420px) { .img-node-row .img-node-btn-text { display: none; } }
 .set-row-name { flex: 1; min-width: 0; font-size: 13px; line-height: 1.4; color: #1A1C28; }
 /* 下拉一律同寬：名字長短不一，下拉跟著縮放的話整張表對不齊 */
 .set-row-sel { flex: 0 0 45%; max-width: 45%; }

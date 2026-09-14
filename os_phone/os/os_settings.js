@@ -1756,9 +1756,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-group">
                                     <div class="field-row">
                                         <div class="set-label" title="位址、Key、模型三格存成一個節點，換站時下拉選一下就整組換過去。">節點</div>
-                                        <div class="capi-pack-row">
+                                        <div class="capi-pack-row img-node-row">
                                             <select class="set-select" id="img-capi-node">${_imgNodeOptionsHTML('capi', { url: imgConfig.customApi?.url || '', apiKey: imgConfig.customApi?.apiKey || '', model: imgConfig.customApi?.model || '' })}</select>
-                                            <button class="set-btn" id="img-capi-node-save" type="button" title="把下面位址、Key、模型三格存成一個節點"><i class="fa-solid fa-floppy-disk"></i> 存成節點</button>
+                                            <button class="set-btn" id="img-capi-node-save" type="button" title="把下面位址、Key、模型三格存成一個節點" aria-label="存成節點"><i class="fa-solid fa-floppy-disk"></i><span class="img-node-btn-text"> 存成節點</span></button>
                                             <button class="set-btn" id="img-capi-node-del" type="button" title="刪掉選中的節點（下面的格子不會動）"><i class="fa-solid fa-trash"></i></button>
                                         </div>
                                         <div class="set-desc" id="img-capi-node-status"></div>
@@ -1805,9 +1805,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-group">
                                     <div class="field-row">
                                         <div class="set-label" title="網址和 Token 存成一個節點，換站時下拉選一下就整組換過去。">節點</div>
-                                        <div class="capi-pack-row">
+                                        <div class="capi-pack-row img-node-row">
                                             <select class="set-select" id="img-nai-node">${_imgNodeOptionsHTML('nai', { url: imgConfig.novelai.url || '', token: imgConfig.novelai.token || '' })}</select>
-                                            <button class="set-btn" id="img-nai-node-save" type="button" title="把下面網址和 Token 存成一個節點"><i class="fa-solid fa-floppy-disk"></i> 存成節點</button>
+                                            <button class="set-btn" id="img-nai-node-save" type="button" title="把下面網址和 Token 存成一個節點" aria-label="存成節點"><i class="fa-solid fa-floppy-disk"></i><span class="img-node-btn-text"> 存成節點</span></button>
                                             <button class="set-btn" id="img-nai-node-del" type="button" title="刪掉選中的節點（下面的格子不會動）"><i class="fa-solid fa-trash"></i></button>
                                         </div>
                                         <div class="set-desc" id="img-nai-node-status"></div>
