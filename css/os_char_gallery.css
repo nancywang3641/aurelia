@@ -16,9 +16,9 @@
     container-type: inline-size;
     background: var(--acg-bg); color: var(--acg-ink);
     font-family: 'Noto Sans TC', sans-serif; color-scheme: light;
-    opacity: 0; transition: opacity .18s ease;
+    /* 🚨 不做淡入：以前 opacity:0 → 加 class 轉成 1，畫面沒在合成時（視窗在背景、預覽窗）轉場不會往前走，
+       圖鑑就停在全透明——點得到、看不到，跟底下的相簿疊成一片。看不看得見不能綁在動畫跑完。 */
 }
-.acg-root.acg-on { opacity: 1; }
 .acg-root button { font-family: inherit; }
 
 .acg-head {
@@ -163,6 +163,18 @@
 .acg-empty-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 .acg-file { display: none; }
+
+/* 開在手機殼的螢幕裡：跟著螢幕的大小與圓角，不再蓋滿整個酒館視窗。
+   層級要高過螢幕裡的相簿(50)、劇情(51)、劇情抽取窗(1001)。 */
+.acg-root.acg-in-screen { position: absolute; z-index: 1100; }
+
+/* 相簿頭像頁的入口：跟「頭像快取／角色立繪」同一排、同樣大小，排在最右邊 */
+.acg-open-chip {
+    display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+    padding: 4px 10px; font-size: 12px; line-height: 1.4; font-family: inherit;
+    color: #1A1C28; background: #FFFFFF; border: 1px solid rgba(26,28,40,0.25); border-radius: 4px; cursor: pointer;
+}
+.acg-open-chip:hover { border-color: rgba(26,28,40,0.5); }
 
 /* ── 窄的時候（手機、酒館裡的手機殼）：名單變成上面一排橫的 ── */
 @container (max-width: 720px) {

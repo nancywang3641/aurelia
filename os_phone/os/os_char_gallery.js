@@ -345,10 +345,22 @@
     // ================================================================
     let S = null;
 
-    async function open(name) {
+    // 開在哪裡：手機殼的螢幕開著就開在螢幕裡（跟著手機殼的大小，不蓋滿整個酒館視窗）；沒有才蓋滿畫面。
+    //   opts.from＝按下去的那顆鈕，它在哪個螢幕裡就開在那裡。
+    function pickHost(opts) {
+        const from = opts && opts.from;
+        const inFrom = from && from.closest && from.closest('#aurelia-phone-screen');
+        if (inFrom) return inFrom;
+        const scr = doc.getElementById('aurelia-phone-screen');
+        if (scr && scr.getClientRects().length && scr.clientWidth > 0 && scr.clientHeight > 0) return scr;
+        return null;
+    }
+
+    async function open(name, opts) {
         if (S) close();
+        const host = pickHost(opts);
         const root = doc.createElement('div');
-        root.className = 'acg-root';
+        root.className = 'acg-root' + (host ? ' acg-in-screen' : '');
         root.setAttribute('role', 'dialog');
         root.setAttribute('aria-modal', 'true');
         root.innerHTML =
@@ -369,7 +381,7 @@
           +   '<main class="acg-main"></main>'
           + '</div>'
           + '<input class="acg-file" type="file" accept="image/*">';
-        doc.body.appendChild(root);
+        (host || doc.body).appendChild(root);
         S = { root, sel: null, want: name || '', names: [], cast: [], wb: { exp: [], preset: [] }, wbOk: wbAvailable(),
               info: {}, marks: {}, draft: null, extra: [], changed: false, token: 0, filter: '' };
         root.classList.toggle('acg-has-wb', S.wbOk);
@@ -377,8 +389,6 @@
         root.addEventListener('input', onInput);
         root.querySelector('.acg-file').addEventListener('change', onFile);
         doc.addEventListener('keydown', onKey, true);
-        void root.offsetWidth;
-        root.classList.add('acg-on');
         await reload();
     }
 
