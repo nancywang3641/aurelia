@@ -219,6 +219,34 @@
         return out;
     }
 
+    // 微信通訊錄（當前故事那本）：給面板做「選一個聯絡人」的清單。群聊也在裡面，isGroup 分得出來；使用者本人不列。
+    //   通訊錄本來就按故事分本（WX_CONTACTS 的鍵帶當前聊天 id），別張角色卡的人不會混進來。
+    const EMPTY_BIO = ['這個人很懶，什麼都沒寫', '这个人很懒，什么都没写', '...'];
+    async function contacts() {
+        let list = [];
+        try {
+            const C = win.WX_CONTACTS || (win.parent && win.parent.WX_CONTACTS);
+            list = (C && C.getAllCustomContacts) ? (C.getAllCustomContacts() || []) : [];
+        } catch (e) { list = []; }
+        const me = userSync();
+        const d = _db();
+        const out = [], seen = {};
+        for (const c of list) {
+            if (!c || !c.id || seen[c.id]) continue;
+            const name = String(c.name || '').trim();
+            if (!name) continue;
+            if (!c.isGroup && (name === me.name || name === me.nickname || name === '我' || name === 'User')) continue;
+            seen[c.id] = true;
+            let avatar = '';
+            const aid = c.avatarId ? String(c.avatarId) : '';
+            if (/^(https?:|data:|blob:)/.test(aid)) avatar = aid;
+            else if (aid) { try { avatar = (d && d.getImage) ? ((await d.getImage(aid)) || '') : ''; } catch (e) { avatar = ''; } }
+            const bio = String(c.desc || c.bio || '').trim();
+            out.push({ id: String(c.id), name: name, desc: EMPTY_BIO.indexOf(bio) >= 0 ? '' : bio, avatar: avatar, isGroup: !!c.isGroup });
+        }
+        return out;
+    }
+
     // 刪組件：這個面板在所有聊天裡的應用紀錄整批清
     async function purgeTag(tagId) {
         const d = _db();
@@ -254,7 +282,7 @@
     setTimeout(_purgeLegacyOnce, 3000);
 
     win.VN_PANEL_FEED = {
-        feed: feed, add: add, update: update, remove: remove, clear: clear, user: user, userSync: userSync,
+        feed: feed, add: add, update: update, remove: remove, clear: clear, user: user, userSync: userSync, contacts: contacts,
         storyRecords: storyRecords, parseRecords: parseRecords, parseMap: parseMap,
         purgeTag: purgeTag, invalidate: invalidate, chatId: _chatId, appId: _appId
     };

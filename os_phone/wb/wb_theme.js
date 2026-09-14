@@ -174,6 +174,25 @@
             .wb-ask-cancel { background: #f2f2f2; color: #333; }
             .wb-ask-ok { background: #ff4444; color: #fff; font-weight: bold; }
             .wb-ask-btn:active { opacity: 0.75; }
+            /* 關注列表：開在 .wb-shell 裡（手機殼裡就在手機螢幕裡），層級在確認卡片(300)之下 */
+            .wb-follow-mask { position: absolute; inset: 0; z-index: 290; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 16px; animation: wbFadeIn 0.15s; }
+            .wb-follow-card { width: 100%; max-height: 100%; background: #fff; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,0.25); }
+            .wb-follow-hd { display: flex; align-items: center; justify-content: space-between; padding: 10px 8px 10px 15px; background: linear-gradient(to bottom, #ffae00, #ff8200); color: #fff; flex-shrink: 0; }
+            .wb-follow-title { font-weight: bold; font-size: 16px; }
+            .wb-follow-x { background: none; border: 0; color: #fff; font-size: 18px; width: 36px; height: 36px; cursor: pointer; }
+            .wb-follow-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; background: #f8f8f8; border-bottom: 1px solid #eee; flex-shrink: 0; }
+            .wb-follow-all { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #666; cursor: pointer; }
+            .wb-follow-all input, .wb-follow-chk { width: 17px; height: 17px; margin: 0; accent-color: #ff8200; flex-shrink: 0; cursor: pointer; }
+            .wb-follow-off { background: #ff4444; color: #fff; border: 0; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; }
+            .wb-follow-list { overflow-y: auto; flex: 1; min-height: 0; }
+            .wb-follow-row { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+            .wb-follow-av { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; font-weight: bold; font-size: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+            .wb-follow-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+            .wb-follow-info { flex: 1; min-width: 0; }
+            .wb-follow-name { font-weight: bold; font-size: 14px; color: #333; }
+            .wb-follow-bio { font-size: 11px; color: #666; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .wb-follow-fans { font-size: 10px; color: #999; margin-top: 1px; }
+            .wb-follow-empty { padding: 40px 20px; text-align: center; color: #999; font-size: 13px; line-height: 1.6; }
 
             /* === 黑夜模式 === */
             .wb-dark { background: #111 !important; }
@@ -189,6 +208,12 @@
             .wb-dark .wb-loc-name { color: #f0f0f0; }
             .wb-dark .wb-sheet-cancel { color: #aaa; }
             .wb-dark .wb-ask-text { color: #f0f0f0; }
+            .wb-dark .wb-follow-card { background: #1c1c1e; box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08); }
+            .wb-dark .wb-follow-bar { background: #252525; border-bottom-color: #333; }
+            .wb-dark .wb-follow-row { border-bottom-color: #2a2a2a; }
+            .wb-dark .wb-follow-name { color: #f0f0f0; }
+            .wb-dark .wb-follow-bio, .wb-dark .wb-follow-all { color: #888; }
+            .wb-dark .wb-follow-fans, .wb-dark .wb-follow-empty { color: #666; }
             .wb-dark .wb-ask-cancel { background: #2a2a2a; color: #ddd; }
             .wb-dark .wb-header { background: #1c1c1e !important; border-bottom-color: #2a2a2a !important; }
             .wb-dark .wb-header-title { color: #f0f0f0; }

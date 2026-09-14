@@ -314,7 +314,7 @@
                         <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">真名：${account.realName}</div>
                         <div style="font-size: 12px; opacity: 0.8; margin-bottom: 15px; max-width:80%; text-align:center;">${account.bio}</div>
                         <div style="display:flex; gap: 30px; font-size: 13px; text-align:center;">
-                            <div><div style="font-weight:bold; font-size:16px;">${account.following}</div><div>關注</div></div>
+                            <div><div style="font-weight:bold; font-size:16px;">${(win.wbApp && win.wbApp.followList) ? win.wbApp.followList().length : account.following}</div><div>關注</div></div>
                             <div><div style="font-weight:bold; font-size:16px;">${account.followers}</div><div>粉絲</div></div>
                             <div><div style="font-weight:bold; font-size:16px;">${account.posts}</div><div>微博</div></div>
                         </div>

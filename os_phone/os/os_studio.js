@@ -81,6 +81,11 @@
                                 <select class="studio-iface" id="studio-iface"></select>
                                 <div class="studio-set-note">主接口是設置裡的主模型；宿舍住戶是你電腦上的小機，做得慢但有工具</div>
                             </div>
+                            <div class="studio-set-sec">自動修正</div>
+                            <div class="studio-feat-list">
+                                <button class="studio-feat" id="studio-autofix" type="button"><i class="fa-solid fa-wand-magic-sparkles"></i><span>檢查到問題自動叫它修</span><span class="studio-feat-sw" aria-hidden="true"></span></button>
+                            </div>
+                            <div class="studio-set-note">開著：做完檢查到問題會自己再送一次修正，多花一次額度。關著：只送一次，問題列在聊天裡，要修再自己說</div>
                             <div class="studio-set-sec">要求 <small>點了會跟著下一句一起送</small></div>
                             <div class="studio-chips-row" id="studio-chips-row"></div>
                             <div class="studio-set-sec">功能 <small>開著的每一輪都會帶上</small></div>
@@ -241,7 +246,7 @@
 - 返回：標題列固定一顆返回鈕綁 onComplete。
 
 ## 3. 所有類型都要守的鐵律
-- 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.user、st.getStory。
+- 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.getContacts、st.user、st.getStory。
 - 每個面板都必須自帶一顆綁 onComplete 的出口鈕，三種類型都一樣。造型跟主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角，一眼看得到，flex-shrink:0 不被內容擠走。別幾秒自動消失、別靠手機殼的橫槓代替。少了這顆使用者回不去主畫面。
 - 捲動與溢出：只有「會變長的那一個內容區」給 flex:1; min-height:0; overflow-y:auto；標題、圖示、裝飾、按鈕一律 flex-shrink:0；父容器 display:flex; flex-direction:column，卡本體 overflow:hidden。否則內容一多，固定元素被擠出去。同一個盒子不能又要內部捲動裁切又要讓某元素溢出邊緣；真要溢出裝飾就拆兩層：外層 overflow:visible 放 position:absolute 的裝飾，內層 overflow:hidden 負責捲動。
 - CSS 只能寫在 .vn-dynamic-panel-<tagId> 前綴底下。禁 position:fixed、禁 position:absolute 配 top/left 自定位、禁 100vw、100vh、禁在 body／html 設樣式、禁寫死固定像素寬。
@@ -269,6 +274,7 @@ st 只有下面這些，一個不多。沒列的一律不存在，不准自己�
 - st.dbSave(key, value[, 'chat']) → Promise / st.dbLoad(key[, 'chat']) → Promise：純應用的大量持久化，存資料庫不怕爆。
 - st.getStory(n) → 最近 n 條劇情 [{ name, text }]，預設 30。純應用要讀劇情時用；純展示、共用不用。
 - st.getCurrentChars() → Promise<[{ name, count }]>。當前聊天出現過的角色，做角色選單用。
+- st.getContacts() → Promise<[{ id, name, desc, avatar, isGroup }]>。手機微信通訊錄裡的人和群（當前故事那本），做「選一個聯絡人」的清單用。isGroup 為 true 是群聊；使用者本人不在裡面；desc、avatar 可能是空字串，avatar 空的就畫首字圓框。劇情還沒演到、但微信裡已經加過的人也在這裡。
 - st.getChatId() → 當前聊天 id 字串。
 - st.user() → Promise<{ name, nickname, avatar, signature, desc }>。使用者本人。寫法固定：const me = await st.user(); 之後用 me.nickname、me.avatar。面板裡凡是「我」發的東西（留言、貼文、發言、簽到）作者一律用它：顯示名用 nickname、沒有再用 name；頭像用 avatar、空的就畫首字圓框。禁寫死 User、我、匿名；禁做登入或選身分頁面。
 
@@ -453,6 +459,8 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
     let _pvLastJsError = null;     // 預覽層跑面板 js 時抓到的同步錯誤（自檢引擎 os_studio_selfcheck.js 過橋讀）
     let _lastParseError = null;    // 最近一次 <json> 解析失敗的原因（自檢用來叫模型重出）
     let _autoFixRound = 0;         // 自檢自動修正輪數：她每送一次歸零，程式最多自動追加一輪，不無限循環
+    // 自動修正開關（設定頁）：關著就不自動追加那一輪，檢查結果只列在聊天裡。預設開，跟以前一樣
+    let _studioAutoFix = (function () { try { return localStorage.getItem('studio_autofix') !== '0'; } catch (e) { return true; } })();
     let _vnInterface = (function () { try { return localStorage.getItem('studio_vn_interface') || 'main'; } catch (e) { return 'main'; } })();   // 誰來做：'main'＝主接口；其他＝宿舍住戶 id
     let currentParsedData = null;
     let _studioAbortCtrl = null;
@@ -808,6 +816,16 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         renderStudioIface();
         const ifaceSel = document.getElementById('studio-iface');
         if (ifaceSel) ifaceSel.onchange = () => { _vnInterface = ifaceSel.value || 'main'; try { localStorage.setItem('studio_vn_interface', _vnInterface); } catch (e) {} _studioSyncSetBar(); };
+        // 自動修正開關
+        const afBtn = document.getElementById('studio-autofix');
+        if (afBtn) {
+            afBtn.classList.toggle('on', _studioAutoFix);
+            afBtn.onclick = () => {
+                _studioAutoFix = !_studioAutoFix;
+                try { localStorage.setItem('studio_autofix', _studioAutoFix ? '1' : '0'); } catch (e) {}
+                afBtn.classList.toggle('on', _studioAutoFix);
+            };
+        }
         _studioSyncSetBar();
         // 設定頁：設定列的「設定 ›」進去、左上 ‹ 回來（換頁，不是原地展開）
         { const so = document.getElementById('studio-set-open'); if (so) so.onclick = () => _studioSetPage(true); }
@@ -2530,6 +2548,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             if (!/<json>/i.test(String(finalText || ''))) return;
             const why = _lastParseError || '格式不合法';
             if (isAutoRound) { _autoFixRound = 0; _studioNoteBubble('自動檢查：重出了一次還是解析不了（' + why + '）。你可以叫它「重新輸出完整 JSON」。'); return; }
+            if (!_studioAutoFix) { _studioNoteBubble('自動檢查：回覆裡的面板資料解析不了（' + why + '）。自動修正關著，你可以叫它「重新輸出完整 JSON」。'); return; }
             _autoFixRound = 1;
             _studioNoteBubble('自動檢查：回覆裡的面板資料解析不了（' + why + '），正在叫它重出一份。');
             setTimeout(() => { if (stillHere()) handleSend('上一則回覆裡的 <json> 無法解析（JSON.parse 錯誤：' + why + '）。請重新輸出一份完整、合法的 <json>，內容照原本的設計，不要改設計。'); }, 80);
@@ -2549,6 +2568,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 if (isAutoRound) {
                     _autoFixRound = 0;
                     _studioNoteBubble('自動檢查：修過一輪還剩下這些，你可以直接叫它改：\n' + issues.map((it, i) => (i + 1) + '. ' + it.msg).join('\n'));
+                    return;
+                }
+                if (!_studioAutoFix) {
+                    _studioNoteBubble('自動檢查發現這些問題（自動修正關著，要修就直接叫它改）：\n' + issues.map((it, i) => (i + 1) + '. ' + it.msg).join('\n'));
                     return;
                 }
                 _autoFixRound = 1;
@@ -2882,6 +2905,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 const R = window.VN_READER || (window.parent && window.parent.VN_READER);
                 return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
             },
+            getContacts() {   // 微信通訊錄（當前故事）[{id,name,desc,avatar,isGroup}]，做選聯絡人清單用
+                const F = window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED);
+                return (F && F.contacts) ? F.contacts() : Promise.resolve([]);
+            },
             getStory(n) { try { const R = window.VN_READER || (window.parent && window.parent.VN_READER); return (R && R.getStory) ? R.getStory(n) : []; } catch (e) { return []; } },
             esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
             // 提示條／確認窗走全站同一套（core/aurelia_dialog.js），跟系統其他地方長一樣
@@ -2934,6 +2961,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
             +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
             +   'getCurrentChars:async function(){try{return window.getCurrentChars?await window.getCurrentChars():[];}catch(e){return [];}},'
+            +   'getContacts:async function(){try{return window.getContacts?await window.getContacts():[];}catch(e){return [];}},'
             +   'getStory:function(n){try{return window.getStory?window.getStory(n):[];}catch(e){return [];}},'
             +   'esc:function(s){try{return window.stEsc?window.stEsc(s):String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}catch(e){return "";}},'
             +   'toast:function(m,o){try{if(window.stToast)window.stToast(m,o);}catch(e){}},'
@@ -3090,6 +3118,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         var R = window.VN_READER || (window.parent && window.parent.VN_READER);
         return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
       },
+      getContacts: function(){ try { var F = ctx.VN_PANEL_FEED; return (F && F.contacts) ? F.contacts() : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
       feed: function(o){ try { var F = ctx.VN_PANEL_FEED; return F ? F.feed(${JSON.stringify(String(data.tagId || ''))}, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
       parseText: function(x){ try { var F = ctx.VN_PANEL_FEED; return F ? F.parseRecords(String(x == null ? '' : x).split('\\n')) : []; } catch(e){ return []; } },
       user: (function(){ var f = function(){ try { var F = ctx.VN_PANEL_FEED; return F ? F.user() : Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } catch(e){ return Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } }; try { var F = ctx.VN_PANEL_FEED; if (F && F.userSync) { var u = F.userSync(); for (var k in u) f[k] = u[k]; } } catch(e){} return f; })(),

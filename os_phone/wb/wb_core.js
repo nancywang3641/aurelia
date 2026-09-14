@@ -297,101 +297,92 @@
             this.render();
         },
 
+        // 關注列表＝微信通訊錄（當前故事那本）裡的人，扣掉在微博按過「取消關注」的。
+        //   🚨 以前讀全手機共用的舊通訊錄（不分故事），別張角色卡的人全堆在這；刪除也是刪那本共用的。
+        //   取消關注只記在微博這邊（也按故事分），不會刪到微信好友。
+        _unfollowKey: function() {
+            let sid = '';
+            try { sid = (win.OS_DB && win.OS_DB.currentChatId) ? String(win.OS_DB.currentChatId() || '') : ''; } catch (e) {}
+            return 'wb_unfollowed' + (sid ? '__' + sid : '');
+        },
+        _unfollowed: function() {
+            try { const a = JSON.parse(localStorage.getItem(this._unfollowKey()) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+        },
+        followList: function() {
+            const C = win.WX_CONTACTS;
+            let all = [];
+            try { all = (C && C.getAllCustomContacts) ? (C.getAllCustomContacts() || []) : []; } catch (e) { all = []; }
+            const off = this._unfollowed();
+            const me = ['我', 'User'];
+            try { const u = win.VN_PANEL_FEED && win.VN_PANEL_FEED.userSync ? win.VN_PANEL_FEED.userSync() : null; if (u) me.push(u.name, u.nickname); } catch (e) {}
+            try { if (win.WX_ME && win.WX_ME.name) me.push(win.WX_ME.name()); } catch (e) {}
+            return all.filter(c => c && c.id && !c.isGroup && c.name && off.indexOf(c.id) < 0 && me.indexOf(c.name) < 0);
+        },
+        // 粉絲數沒有真的資料：用名字算一個固定的數，每次打開都一樣，不再亂跳
+        _fansOf: function(name) {
+            let h = 0;
+            const s = String(name || '');
+            for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+            return 500 + (h % 50000);
+        },
+
+        // 開在微博自己的畫面裡（.wb-shell），不是蓋在整個頁面上：手機殼裡開就在手機螢幕裡
         showContacts: function() {
-            const osContacts = win.OS_CONTACTS;
-            if (!osContacts) { AUI.alert("錯誤：無法讀取 OS_CONTACTS 模塊"); return; }
-
-            // 移除已存在的 modal
-            const existing = doc.getElementById('wb-contacts-modal');
-            if (existing) existing.remove();
-
-            const allContacts = osContacts.getAll();
-            const currentUserId = (win.OS_USER && win.OS_USER.getInfo) ? win.OS_USER.getInfo().id : 'wxid_User';
-            const contactList = [];
-            for (let id in allContacts) {
-                const contact = allContacts[id];
-                if (contact.id !== currentUserId && !contact.isNPC) {
-                    contactList.push(contact);
-                }
+            const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER;
+            if (!host) return;
+            const old = host.querySelector('.wb-follow-mask');
+            if (old) old.remove();
+            const list = this.followList();
+            const mask = doc.createElement('div');
+            mask.className = 'wb-follow-mask';
+            mask.innerHTML = '<div class="wb-follow-card">'
+                + '<div class="wb-follow-hd"><span class="wb-follow-title"></span><button class="wb-follow-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>'
+                + (list.length ? '<div class="wb-follow-bar"><label class="wb-follow-all"><input type="checkbox" class="wb-follow-all-chk"><span>全選</span></label><button class="wb-follow-off" type="button">取消關注</button></div>' : '')
+                + '<div class="wb-follow-list"></div></div>';
+            mask.querySelector('.wb-follow-title').textContent = '關注列表（' + list.length + '）';
+            const box = mask.querySelector('.wb-follow-list');
+            if (!list.length) {
+                const empty = doc.createElement('div');
+                empty.className = 'wb-follow-empty';
+                empty.textContent = '還沒有關注的人。微信通訊錄裡的人會出現在這裡。';
+                box.appendChild(empty);
             }
-            if (contactList.length === 0) {
-                AUI.alert('暂无关注的好友\n\n提示：在微信中使用 AI 搜索添加好友后，这里会自动同步显示！');
-                return;
-            }
-
-            const appRef = "(window.parent.wbApp || window.wbApp)";
-            const isDark = DARK_MODE;
-            const modalBg    = isDark ? '#1c1c1e' : '#fff';
-            const borderC    = isDark ? '#2a2a2a' : '#f0f0f0';
-            const textC      = isDark ? '#f0f0f0' : '#333';
-            const subTextC   = isDark ? '#888'    : '#666';
-            const subSubC    = isDark ? '#555'    : '#999';
-            const toolbarBg  = isDark ? '#252525' : '#f8f8f8';
-            const toolbarBdr = isDark ? '#333'    : '#eee';
-
-            const listHtml = contactList.map(contact => {
-                const displayName = contact.wb?.nickname || contact.realName;
-                const bio = contact.wb?.bio || contact.wx?.bio || '这个人很懒，什么都没写';
-                const followers = contact.wb?.followers || Math.floor(Math.random() * 5000) + 500;
-                const nameExtra = contact.realName !== displayName
-                    ? `<span style="color:${subSubC}; font-size:11px;">(${contact.realName})</span>` : '';
-                return `
-                    <div style="padding:12px; border-bottom:1px solid ${borderC}; display:flex; align-items:center; gap:10px;">
-                        <input type="checkbox" class="wb-contact-chk" data-id="${contact.id}"
-                            style="width:18px; height:18px; cursor:pointer; flex-shrink:0; accent-color:#ff8200;"
-                            onclick="event.stopPropagation()">
-                        <div style="width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:16px; flex-shrink:0;">${displayName.charAt(0)}</div>
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-weight:bold; font-size:14px; color:${textC}; display:flex; align-items:center; gap:4px;">${displayName} ${nameExtra}</div>
-                            <div style="font-size:11px; color:${subTextC}; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${bio.length > 30 ? bio.substring(0, 30) + '...' : bio}</div>
-                            <div style="font-size:10px; color:${subSubC}; margin-top:1px;">粉絲 ${followers}</div>
-                        </div>
-                    </div>`;
-            }).join('');
-
-            const tempDiv = doc.createElement('div');
-            tempDiv.id = 'wb-contacts-modal';
-            tempDiv.innerHTML = `
-                <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:10001; display:flex; align-items:center; justify-content:center;" onclick="this.parentElement.remove()">
-                    <div style="background:${modalBg}; width:90%; max-width:400px; max-height:80vh; border-radius:12px; overflow:hidden; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
-                        <div style="padding:12px 15px; background:linear-gradient(to bottom,#ffae00,#ff8200); color:#fff; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
-                            <span style="font-weight:bold; font-size:16px;">關注列表 (${contactList.length})</span>
-                            <span style="cursor:pointer; font-size:22px; line-height:1;" onclick="document.getElementById('wb-contacts-modal').remove()"><i class="fa-solid fa-xmark"></i></span>
-                        </div>
-                        <div style="padding:10px 15px; background:${toolbarBg}; border-bottom:1px solid ${toolbarBdr}; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
-                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:${subTextC};">
-                                <input type="checkbox" id="wb-contact-select-all" style="width:16px; height:16px; accent-color:#ff8200;" onchange="${appRef}.toggleSelectAllContacts(this.checked)">
-                                全選
-                            </label>
-                            <button onclick="${appRef}.deleteSelectedContacts()" style="background:#ff4444; color:#fff; border:none; padding:6px 14px; border-radius:6px; font-size:13px; cursor:pointer; font-weight:bold;">刪除選中</button>
-                        </div>
-                        <div style="overflow-y:auto; flex:1;">${listHtml}</div>
-                    </div>
-                </div>`;
-            doc.body.appendChild(tempDiv);
-        },
-
-        toggleSelectAllContacts: function(checked) {
-            const checkboxes = doc.querySelectorAll('.wb-contact-chk');
-            checkboxes.forEach(chk => { chk.checked = checked; });
-        },
-
-        deleteSelectedContacts: async function() {
-            const checkboxes = doc.querySelectorAll('.wb-contact-chk:checked');
-            if (checkboxes.length === 0) { AUI.alert('請先勾選要刪除的聯繫人'); return; }
-            if (!(await this._ask(`刪除選中的 ${checkboxes.length} 個聯繫人？刪了就回不來。`, '刪除'))) return;
-
-            const osContacts = win.OS_CONTACTS;
-            if (!osContacts) return;
-
-            const ids = Array.from(checkboxes).map(chk => chk.getAttribute('data-id'));
-            ids.forEach(id => osContacts.deleteContact(id));
-
-            const modal = doc.getElementById('wb-contacts-modal');
-            if (modal) modal.remove();
-
-            AUI.alert(`已刪除 ${ids.length} 個聯繫人`);
-            this.showContacts(); // 重新開啟以刷新列表
+            list.forEach(c => {
+                const row = doc.createElement('label');
+                row.className = 'wb-follow-row';
+                row.innerHTML = '<input type="checkbox" class="wb-follow-chk"><div class="wb-follow-av"></div><div class="wb-follow-info"><div class="wb-follow-name"></div><div class="wb-follow-bio"></div><div class="wb-follow-fans"></div></div>';
+                row.querySelector('.wb-follow-chk').dataset.id = c.id;
+                const av = row.querySelector('.wb-follow-av');
+                av.textContent = String(c.name).charAt(0);
+                row.querySelector('.wb-follow-name').textContent = c.name;
+                const bio = String(c.desc || c.bio || '').trim();
+                row.querySelector('.wb-follow-bio').textContent = (bio && bio !== '...') ? bio : '這個人很懶，什麼都沒寫';
+                row.querySelector('.wb-follow-fans').textContent = '粉絲 ' + this._fansOf(c.name);
+                box.appendChild(row);
+                // 頭像：微信那邊存的圖（編號就去手機資料庫換網址），沒有就留首字
+                const aid = c.avatarId ? String(c.avatarId) : '';
+                const put = (url) => { if (!url || !av.isConnected) return; const img = doc.createElement('img'); img.alt = ''; img.src = url; img.onerror = () => img.remove(); av.textContent = ''; av.appendChild(img); };
+                if (/^(https?:|data:|blob:)/.test(aid)) put(aid);
+                else if (aid && win.OS_DB && win.OS_DB.getImage) win.OS_DB.getImage(aid).then(put).catch(() => {});
+            });
+            const close = () => mask.remove();
+            mask.querySelector('.wb-follow-x').onclick = (e) => { e.stopPropagation(); close(); };
+            mask.onclick = (e) => { if (e.target === mask) close(); };
+            const allChk = mask.querySelector('.wb-follow-all-chk');
+            if (allChk) allChk.onchange = () => { mask.querySelectorAll('.wb-follow-chk').forEach(chk => { chk.checked = allChk.checked; }); };
+            const offBtn = mask.querySelector('.wb-follow-off');
+            if (offBtn) offBtn.onclick = async (e) => {
+                e.stopPropagation();
+                const ids = Array.from(mask.querySelectorAll('.wb-follow-chk:checked')).map(chk => chk.dataset.id);
+                if (!ids.length) { AUI.toast('先勾選要取消關注的人'); return; }
+                if (!(await this._ask('取消關注這 ' + ids.length + ' 個人？微信好友不會被刪。', '取消關注'))) return;
+                const next = this._unfollowed();
+                ids.forEach(id => { if (next.indexOf(id) < 0) next.push(id); });
+                try { localStorage.setItem(this._unfollowKey(), JSON.stringify(next)); } catch (err) {}
+                this.render();          // 「我」頁的關注數跟著變
+                this.showContacts();
+            };
+            host.appendChild(mask);
         },
 
         // --- 轉發到微信 ---
