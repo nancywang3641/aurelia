@@ -195,7 +195,9 @@
                     .catch(bad);
             });
             const out = list.map(function () { return ''; });
-            const re = /[<＜]\s*photo\s+n\s*=\s*["“”＂']?(\d+)[^>＞]*[>＞]([\s\S]*?)[<＜]\s*\/\s*photo\s*[>＞]/gi;
+            // 🚨 號碼前面的 n= 模型常常漏寫：DeepSeek 實測三次有兩次寫成 <photo 1> 或 <photo 1">，
+            //    只認 n= 的話描述明明回來了卻當成沒看到。n、= 都可有可無，認的是「photo 後面第一個號碼」。
+            const re = /[<＜]\s*photo\s*(?:n\s*)?[=:：]?\s*["“”＂']?(\d+)[^>＞]*[>＞]([\s\S]*?)[<＜]\s*\/\s*photo\s*[>＞]/gi;
             let m, hit = false;
             while ((m = re.exec(text))) {
                 const i = parseInt(m[1], 10) - 1;
