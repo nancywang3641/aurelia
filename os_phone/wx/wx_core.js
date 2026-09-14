@@ -976,10 +976,81 @@
         return new RegExp('^(?:' + tags + ')$', 'i').test(String(tag == null ? '' : tag).trim());
     }
 
+    // ── 一則回覆傳到好幾間（2026-09-15）──────────────────────────────
+    //   以前靠模型每則寫 [Chat: 名|代號]＋[With: 名單] 換間：它每句都照抄、抄錯代號就長出一間空聊天室，
+    //   而且解析完所有訊息還是全塞進現在開著的那一間（A 私下說「這事別傳出去」卻出現在群裡）。
+    //   現在：<chat chatroom="名字"> 一個容器一間，用名字對；[Chat:]／[With:] 一律不認、不拿來開新聊天室。
+    // 回覆能傳到的聊天室：群聊，或通訊錄裡的人的私聊；被刪、被拉黑的不算（同群≠加好友，不自動加人）
+    function _roomTargets(excludeId) {
+        let contacts = [];
+        try { contacts = (win.WX_CONTACTS && win.WX_CONTACTS.getAllCustomContacts) ? (win.WX_CONTACTS.getAllCustomContacts() || []) : []; } catch (e) {}
+        const inBook = {};
+        contacts.forEach(function (c) { if (c && c.id) inBook[c.id] = true; });
+        return Object.keys(GLOBAL_CHATS).map(function (k) { return GLOBAL_CHATS[k]; }).filter(function (c) {
+            return c && c.id && c.name && c.id !== excludeId && !c.wxRemoved && !c.wxBlocked && (c.isGroup || inBook[c.id]);
+        });
+    }
+    // chatroom 寫的名字 → 哪一間。沒寫、或寫的是現在這間＝這間；對不到回 null（不新開、不加好友）
+    function _resolveRoom(target, cur) {
+        const t = String(target == null ? '' : target).trim();
+        if (!t) return cur || null;
+        const norm = function (s) { return String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase(); };
+        if (cur && (t === cur.id || norm(t) === norm(cur.name))) return cur;
+        const list = _roomTargets(cur ? cur.id : null);
+        return list.find(function (c) { return c.id === t; })
+            || list.find(function (c) { return !c.isGroup && norm(c.name) === norm(t); })
+            || list.find(function (c) { return c.isGroup && norm(c.name) === norm(t); })
+            || null;
+    }
+    // 一則回覆拆成一間一段。容器外的字（思考、旁白）丟掉；整則都沒有容器才整段算這一間。
+    function _wxSplitRooms(text, cur) {
+        const src = String(text == null ? '' : text);
+        const out = [];
+        const re = /<chat\b([^>]*)>([\s\S]*?)<\/chat>/gi;
+        let m, any = false;
+        while ((m = re.exec(src))) {
+            any = true;
+            const attrs = m[1] || '';
+            const am = attrs.match(/\b(?:chatroom|name)\s*=\s*["'“”「]([^"'“”」]*)["'“”」]/i);
+            const im = attrs.match(/\bid\s*=\s*["'“”]([^"'“”]*)["'“”]/i);
+            const target = am ? am[1].trim() : '';
+            let chat = target ? _resolveRoom(target, cur) : null;
+            if (!chat && im && im[1].trim()) chat = _resolveRoom(im[1].trim(), cur);
+            if (!target && !(im && im[1].trim())) chat = cur || null;
+            if (!chat) { console.warn('[WX] 回覆要傳到「' + (target || (im ? im[1] : '')) + '」，對不到能收的聊天室，這段不送'); continue; }
+            out.push({ chat: chat, text: m[2] });
+        }
+        if (!any) out.push({ chat: cur || null, text: src.replace(/<\/?chat\b[^>]*>/gi, '') });
+        return out;
+    }
+    // 傳到別間的訊息：放進那一間、標未讀；她不在前景就通知，在前景就跳一行提示。
+    //   她人在某一間裡時不整頁重畫（別打斷她正在看的那間）；在聊天列表才重畫一次讓未讀看得到。
+    async function _deliverOtherRooms(others) {
+        const list = (others || []).filter(function (o) { return o && o.chat && o.msgs && o.msgs.length; });
+        if (!list.length) return;
+        for (const o of list) {
+            const chat = o.chat;
+            o.msgs.forEach(function (m) { chat.messages.push(m); });
+            chat.unread = true;
+            chat.pushedCount = chat.messages.length;
+            chat.renderedCount = chat.messages.length;
+            if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+            const first = o.msgs.find(function (m) { return m && !m.isMe && typeof m.content === 'string' && m.content.trim(); });
+            const body = (first ? first.content.replace(/\[[^\]]*\]/g, '').trim() : '') || '傳了訊息給妳';
+            try {
+                if (win.document && win.document.visibilityState === 'hidden' && win.OS_KEEPALIVE) win.OS_KEEPALIVE.notify(chat.name || '微信', body, 'wx-' + chat.id);
+                else if (typeof AUI !== 'undefined' && AUI.toast) AUI.toast((chat.name || '微信') + '：' + body.slice(0, 40));
+            } catch (e) {}
+        }
+        try { if (APP_CONTAINER && !GLOBAL_ACTIVE_ID) win.wxApp.render(); } catch (e) {}
+        try { _refreshLobbyUnread(); } catch (e) {}
+    }
+
     // --- 解析邏輯 (將長文本切成陣列) ---
+    //   回傳這一間的訊息陣列；傳到別間的掛在 .others = [{ chat, msgs }]，呼叫端交給 _deliverOtherRooms
     function parseAndProcess(fullText) {
         // 🫂 朋友圈標籤（wx_moments.js，<moment_post> 那一組）先整段抽掉並執行，剩下的字才往下拆。
-        //    🚨 一定要在「只留 <chat> 容器內容」那步之前：AI 常把標籤寫在容器外面，晚一步就被整段丟掉。
+        //    🚨 一定要在「拆 <chat> 容器」那步之前：AI 常把標籤寫在容器外面，晚一步就被整段丟掉。
         try {
             const _mo = win.WX_MOMENTS;
             if (_mo && _mo.extract) {
@@ -987,11 +1058,26 @@
                 fullText = _mo.extract(fullText, GLOBAL_ACTIVE_ID, _mc ? _mc.name : '').text;
             }
         } catch (e) { console.warn('[WX] 朋友圈標籤處理失敗', e); }
-        let cleanText = fullText.trim();
-        // 對齊 VN PHONE：只提取 <chat chatroom="...">…</chat> 容器「內部」的內容（容器外的思考/旁白一律丟掉）
-        const _chatM = cleanText.match(/<chat\b[^>]*>([\s\S]*?)<\/chat>/i);
-        if (_chatM) cleanText = _chatM[1].trim();
-        // 殘留 <chat> 標籤 + 相容舊 [wx_os] 包裹一併清掉
+        const cur = GLOBAL_ACTIVE_ID ? (GLOBAL_CHATS[GLOBAL_ACTIVE_ID] || null) : null;
+        let mine = [];
+        const others = [];
+        _wxSplitRooms(String(fullText == null ? '' : fullText).trim(), cur).forEach(function (part) {
+            const msgs = _parseRoomLines(part.text, part.chat) || [];
+            if (!part.chat || !cur || part.chat.id === cur.id) { mine = mine.concat(msgs); return; }
+            if (!msgs.length) return;
+            const ex = others.find(function (o) { return o.chat.id === part.chat.id; });
+            if (ex) ex.msgs = ex.msgs.concat(msgs); else others.push({ chat: part.chat, msgs: msgs });
+        });
+        mine.others = others;
+        return mine;
+    }
+
+    // 一間聊天室的那一段文字 → 訊息陣列（_room＝這段要進的那一間）
+    function _parseRoomLines(fullText, _room) {
+        let cleanText = String(fullText == null ? '' : fullText).trim();
+        // 容器已經在 parseAndProcess 拆好（一間一段）。[Chat: …]／[With: …] 標頭不再認（換間只認容器），
+        //   黏在訊息前面的也拿掉，免得變成泡泡裡的字；再清殘留 <chat> 標籤與舊 [wx_os] 包裹。
+        cleanText = cleanText.replace(/\[\s*(?:Chat|With)\s*[:：][^\]\n]*\]/gi, '');
         cleanText = cleanText.replace(/<\/?chat\b[^>]*>/gi, '').replace(/\[\s*wx_os\s*\]/gi, '').replace(/\[\s*\/wx_os\s*\]/gi, '').trim();
         cleanText = cleanText.replace(/\[\s*(?:紅包|RedPacket)\s*[:：]\s*(\d+(?:\.\d+)?)\s*[\(（]\s*(?:備註|备注|Note)?\s*[:：]?\s*(.*?)\s*[\)）]/gi, '[RedPacket: $1 | $2]');
 
@@ -1000,10 +1086,8 @@
         const extractedMessages = [];
         
         let ctx = { chatName: "Unknown", chatId: "temp", members: [], lastTime: "" };
-        if (GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) {
-            const c = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
-            ctx.chatName = c.name; ctx.chatId = c.id; ctx.members = c.members || [];
-        }
+        const _rc = _room || (GLOBAL_ACTIVE_ID ? GLOBAL_CHATS[GLOBAL_ACTIVE_ID] : null);
+        if (_rc) { ctx.chatName = _rc.name; ctx.chatId = _rc.id; ctx.members = _rc.members || []; }
         
         // 🔥 第一遍掃描：預先處理上下文信息（Chat, With, Time）並保存所有紅包數據
         let tempCtx = { chatName: ctx.chatName, chatId: ctx.chatId, members: ctx.members };
@@ -1011,22 +1095,7 @@
             line = line.trim();
             if (!line) return;
             
-            // 處理 [Chat: ID] 標頭
-            const chatMatch = line.match(/^\[\s*Chat\s*[:：]\s*([^|\]\n]+)(?:\|\s*([^\]\n]+))?\s*\]/i);
-            if (chatMatch) {
-                let name = chatMatch[1].trim();
-                let id = chatMatch[2] ? chatMatch[2].trim() : name;
-                tempCtx.chatName = name;
-                tempCtx.chatId = id;
-                return;
-            }
             
-            // 處理 [With: ...]
-            const withMatch = line.match(/^\[\s*With\s*[:：]\s*(.*?)\s*\]/i);
-            if (withMatch) {
-                tempCtx.members = withMatch[1].split(/[,，、]/).map(s => s.trim()).filter(s => s);
-                return;
-            }
             
             // 處理普通消息中的紅包：預先保存紅包數據
             const nameMatch = line.match(/^\[(.*?)(?:[:：])?\]\s*(.*)/);
@@ -1058,25 +1127,6 @@
                     if (M && M.addEvent) M.addEvent(evMatch[1].trim(), evMatch[2].trim(), '', 'wx');
                 } catch (e) { console.warn('[WX] 約定寫進日曆失敗（不影響訊息）:', e); }
                 return;   // 這是給日曆的，不是一顆泡泡
-            }
-
-            // 處理 [Chat: ID] 標頭
-            const chatMatch = line.match(/^\[\s*Chat\s*[:：]\s*([^|\]\n]+)(?:\|\s*([^\]\n]+))?\s*\]/i);
-            if (chatMatch) {
-                let name = chatMatch[1].trim(); 
-                let id = chatMatch[2] ? chatMatch[2].trim() : name;
-                ctx.chatName = name; ctx.chatId = id;
-                if (!GLOBAL_CHATS[id]) { GLOBAL_CHATS[id] = { name: name, id: id, messages: [], lastTime: '', members: [], isGroup: false, unread: true, pushedCount: 0, renderedCount: 0 }; } 
-                else { GLOBAL_CHATS[id].name = name; }
-                return;
-            }
-
-            // 處理 [With: ...]
-            const withMatch = line.match(/^\[\s*With\s*[:：]\s*(.*?)\s*\]/i);
-            if (withMatch) {
-                ctx.members = withMatch[1].split(/[,，、]/).map(s => s.trim()).filter(s => s);
-                if (GLOBAL_CHATS[ctx.chatId]) { GLOBAL_CHATS[ctx.chatId].members = ctx.members; GLOBAL_CHATS[ctx.chatId].isGroup = GLOBAL_CHATS[ctx.chatId].isGroup || ctx.members.length > 2; }
-                return;
             }
 
             // 處理 [Time]
@@ -2166,7 +2216,8 @@
         //    朋友圈標籤已在 parseAndProcess 抽掉執行過：這裡拿抽掉之後剩下的字判斷，保底也只塞剩下的字。
         const _rest = (win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || '');
         const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
-        if (!newMsgs.length && _rest.trim() && !_sysOnly) {
+        const _othersRelay = newMsgs.others || [];
+        if (!newMsgs.length && !_othersRelay.length && _rest.trim() && !_sysOnly) {
             finalText = _rest;
             const memberNames = convertMemberIdsToNames(chat.members || []);
             const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chat.name;
@@ -2177,6 +2228,7 @@
         }
 
         if (!newMsgs.length) {
+            await _deliverOtherRooms(_othersRelay);   // 只傳到別間的也要送到
             // 只動了朋友圈（或什麼都沒做）：聊天室不冒泡泡、不標未讀
             if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
             try {
@@ -2210,6 +2262,7 @@
                 win.OS_KEEPALIVE.notify(chat.name || '微信', _body, 'wx-' + chat.id);
             }
         } catch (e) {}
+        await _deliverOtherRooms(_othersRelay);   // 同一則回覆裡順便傳到別間的
     }
 
     // 登記給托管：跑完的結果由這裡收（os_relay.js 回到前台時會叫）
@@ -2246,6 +2299,8 @@
         photoContextText: photoContextText,
         stripCardIds: stripCardIds,   // 送進模型的歷史不給看舊單號（不然它會照抄）   // 聊天歷史（os_api_engine）與回傳酒館（os_app_memory_inject）把照片編號換成文字
         applyIncoming: _applyRelayReply,      // 💓 心跳：角色主動開口那一則也走同一條（她人在那間就冒出來，不在就標未讀）
+        // 回覆能另外傳到的聊天室（給送模型的上下文列名字用；只給名字與是不是群，不給代號）
+        roomTargets: function (excludeId) { return _roomTargets(excludeId).map(function (c) { return { id: c.id, name: c.name, isGroup: !!c.isGroup }; }); },
         // 🗑 刪好友記號：通訊錄刪人時記下（markRemoved），她重新加人時撤掉（clearRemoved）
         markRemoved: function (idOrChat, name) {
             const c = (idOrChat && typeof idOrChat === 'object') ? idOrChat : (GLOBAL_CHATS[idOrChat] || (name ? { name: name, realName: name } : null));
@@ -3268,7 +3323,8 @@
                 // 只有朋友圈標籤或系統行（例如只在朋友圈按了讚）就不要把原文塞成一顆泡泡（同 _applyRelayReply）
                 const _rest = (win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || '');
                 const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
-                if (!newMsgs.length && _rest.trim() && !_sysOnly) {
+                // 只傳到別間（這一間沒話）也算有回覆，不要把原文塞成一顆泡泡
+                if (!newMsgs.length && !(newMsgs.others && newMsgs.others.length) && _rest.trim() && !_sysOnly) {
                     finalText = _rest;
                     const chatName = currentChat.name; const chatId = currentChat.id;
                     const memberNames = convertMemberIdsToNames(currentChat.members || []);
@@ -3286,6 +3342,7 @@
 
                 // 🔥 啟動氣泡流 (逐條顯示)
                 await this.simulateTypingStream(newMsgs, currentChat);
+                await _deliverOtherRooms(newMsgs.others);   // 同一則回覆裡順便傳到別間的（例如群裡聊著、有人另外私訊她）
 
                 IS_STREAMING_REPLY = false; // 解鎖
                 if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { await win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat); }

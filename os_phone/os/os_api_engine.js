@@ -213,6 +213,45 @@
         return s;
     }
 
+    // --- 1.6. 微信 app：聊天室標頭與「這一間是誰」 ---
+    //   每則存的 raw 前面都有 [Chat: 名|代號]＋[With: 名單]（重建聊天室要用），送給模型時拿掉：
+    //   它每輪都看到就會每句照抄，抄錯代號還會長出一間空聊天室。發話人 [名字] 留著。
+    function _wxStripHeads(text) {
+        return String(text == null ? '' : text)
+            .replace(/^[ \t]*\[\s*(?:Chat|With)\s*[:：][^\]\n]*\][ \t]*(?:\r?\n|$)/gim, '')
+            .replace(/^\s*\n/, '');
+    }
+    // 這一間是誰、群裡有誰、還能傳到哪幾間。只給名字不給代號；回覆裡另開 <chat chatroom="名字"> 才會傳過去（wx_core _wxSplitRooms）
+    function _wxRoomsNote(apiChat) {
+        if (!apiChat) return '';
+        let contacts = [];
+        try { contacts = (win.WX_CONTACTS && win.WX_CONTACTS.getAllCustomContacts) ? (win.WX_CONTACTS.getAllCustomContacts() || []) : []; } catch (e) {}
+        const nameOf = (id) => {
+            const c = contacts.find(x => x && x.id === id);
+            if (c && c.name) return c.name;
+            return /^(?:char|grp|avt|wx)_/i.test(String(id || '')) ? '' : String(id || '');   // 對不到名字的代號不露出來
+        };
+        const isMeId = (id) => id === 'User' || id === 'user' || id === '我';
+        const name = String(apiChat.name || '').trim();
+        let note;
+        if (apiChat.isGroup) {
+            const mem = (apiChat.members || []).filter(id => !isMeId(id)).map(nameOf).filter(Boolean);
+            note = '【這一間】群聊「' + name + '」' + (mem.length ? '，成員：' + mem.join('、') : '') + '。群裡每一行都寫是誰說的。';
+        } else {
+            note = '【這一間】跟「' + name + '」的私聊。';
+        }
+        let targets = [];
+        try { targets = (win.wxApp && win.wxApp.roomTargets) ? (win.wxApp.roomTargets(apiChat.id) || []) : []; } catch (e) {}
+        const dm = targets.filter(t => t && !t.isGroup).map(t => t.name).slice(0, 40);
+        const gp = targets.filter(t => t && t.isGroup).map(t => t.name).slice(0, 20);
+        note += '\n這一則回覆寫在 <chat chatroom="' + name + '"> 裡。';
+        if (dm.length || gp.length) {
+            note += '\n【可以傳到的聊天室】' + (dm.length ? '私聊：' + dm.join('、') : '') + (dm.length && gp.length ? '；' : '') + (gp.length ? '群聊：' + gp.join('、') : '')
+                + '\n劇情上真的有人會另外傳訊息時，才再開一個 <chat chatroom="清單裡的名字">；清單以外的名字不會送出。';
+        }
+        return note;
+    }
+
     // --- 2. 輔助函數 ---
     function sanitizeContent(content) {
         if (!content || typeof content !== 'string') return content;
@@ -332,9 +371,10 @@
         let lastMsg = null;
         msgList.forEach(curr => {
             const currContent = curr.content || "";
-            const isProto = currContent.includes('[Chat:');
+            // 微信歷史已經拿掉標頭 → 呼叫端用 _chatKey 說是哪一間；還帶 [Chat:] 的舊寫法照舊認
             const chatMatch = currContent.match(/\[Chat:\s*(.*?)(?:\||\])/i);
-            const currChatId = chatMatch ? chatMatch[1] : null;
+            const currChatId = curr._chatKey || (chatMatch ? chatMatch[1] : null);
+            const isProto = !!curr._chatKey || currContent.includes('[Chat:');
 
             if (lastMsg && lastMsg._isProto && isProto &&
                 lastMsg.role === curr.role &&
@@ -1495,6 +1535,10 @@
                     const currentChatId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
                     if (currentChatId) {
                         const apiChat = await win.WX_DB.getApiChat(currentChatId);
+                        // 🧭 這一間是誰、還能傳到哪幾間（歷史不再每則帶 [Chat:]/[With:]，改在這裡講一次）
+                        if (promptKey === 'wx_chat_system' && apiChat) {
+                            try { const _rn = _wxRoomsNote(apiChat); if (_rn) apiMessages.push({ role: 'system', content: _rn }); } catch (e) {}
+                        }
                         if (apiChat && apiChat.messages) {
                             // 🚨 分隔（通話開始／結束／未接聽）不是誰講的話。以前它們被當成 assistant，
                             //    模型會讀到自己說「通話開始 · 9/10」；更糟的是整串歷史完全沒有時間標記，
@@ -1555,7 +1599,7 @@
                                     return;
                                 }
                                 // 📞 通話餵乾淨口語(content)，不帶 [Chat:|With:][名] 標頭的 raw → 免 AI 學歷史去用聊天格式
-                                let _hc = (promptKey === 'call_voice_system') ? (msg.content || "") : (msg.raw || msg.content || "");
+                                let _hc = (promptKey === 'call_voice_system') ? (msg.content || "") : _wxStripHeads(msg.raw || msg.content || "");
                                 // 📷 她從相簿傳的照片在訊息裡只是圖庫編號 → 換成它看過寫下的那句（沒看過就只說是照片）
                                 try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) _hc = _pt(msg, _hc); } catch (e) {}
                                 // 🧾 紅包／轉帳／禮物的單號不給它看：看得到就會照抄，抄到同一個號碼兩張卡會黏在一起
@@ -1563,7 +1607,8 @@
                                 rawPhoneMsgs.push({
                                     role: msg.isMe ? 'user' : 'assistant',
                                     content: _hc,
-                                    _source: 'phone'
+                                    _source: 'phone',
+                                    _chatKey: currentChatId   // 同一間連續幾則合成一段（標頭拿掉了，不能再靠 [Chat:] 認）
                                 });
                             });
                             const mergedPhoneMsgs = smartMergeMessages(rawPhoneMsgs);
@@ -1636,18 +1681,9 @@
                 if (promptKey.includes('wb_')) {
                     finalUserMsg += `\n\n[SYSTEM FORCE COMMAND]\nOutput the defined TAGS ONLY. No conversational filler. No "Here is the post". No markdown code blocks.\nStart immediately with [wb_post] or [wb_reply].`;
                 } else if (promptKey === 'wx_chat_system') {
-                     let chatHeader = "";
-                    const wxApp = win.wxApp;
-                    if (wxApp && wxApp.GLOBAL_ACTIVE_ID) {
-                        const activeId = wxApp.GLOBAL_ACTIVE_ID;
-                        const currentChat = wxApp.GLOBAL_CHATS?.[activeId];
-                        if (currentChat) {
-                            const cName = currentChat.name || "Unknown";
-                            const members = currentChat.members?.join(', ') || userName;
-                            chatHeader = `[Chat: ${cName}|${activeId}]\n[With: ${members}]\n`;
-                        }
-                    }
-                    finalUserMsg = chatHeader ? `${chatHeader}[${userName}] ${userMessage}` : userMessage;
+                    // 是哪一間已經在前面講過（_wxRoomsNote），這裡不再每則接 [Chat:]/[With:] 標頭——模型看到就會每句照抄
+                    const _inRoom = !!(win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID);
+                    finalUserMsg = _inRoom ? `[${userName}] ${userMessage}` : userMessage;
                 }
                 apiMessages.push({ role: "user", content: finalUserMsg });
             }
@@ -2123,6 +2159,10 @@
                     const _keepN = win.OS_APP_CTX_MSGS ? win.OS_APP_CTX_MSGS() : 10;
 
                     const apiChat = await win.WX_DB.getApiChat(win.wxApp.GLOBAL_ACTIVE_ID);
+                    // 🧭 這一間是誰、還能傳到哪幾間（同酒館版）
+                    if (promptKey === 'wx_chat_system' && apiChat) {
+                        try { const _rn = _wxRoomsNote(apiChat); if (_rn) apiMessages.push({ role: 'system', content: _rn }); } catch (e) {}
+                    }
                     if (apiChat?.messages?.length) {
                         // 📒 聊天室長期記憶：跟酒館那條路共用同一份（存在 apiChat.wxSummary）。
                         //    這邊本來就有「保留最近幾則」的上限（OS_APP_CTX_MSGS），窗口機制不動，只把摘要補上。
@@ -2155,7 +2195,7 @@
                                 return;
                             }
                             // 📞 通話餵乾淨口語（content），不帶 [Chat:|With:][名] 標頭的 raw，免得它在電話裡學聊天格式（同酒館版）
-                            let content = _isCall ? (msg.content || '') : (msg.raw || msg.content || '');
+                            let content = _isCall ? (msg.content || '') : _wxStripHeads(msg.raw || msg.content || '');
                             if (!content) return;
                             // 📷 相簿照片的圖庫編號 → 它看過寫下的那句（跟酒館版 buildContext 同一支）
                             try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) content = _pt(msg, content); } catch (e) {}
