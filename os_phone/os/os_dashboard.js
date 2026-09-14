@@ -27,7 +27,10 @@
 
     function _fmtArg(a) {
         if (typeof a === 'string') return a;
-        if (a instanceof Error) return a.message + (a.stack ? ('\n' + a.stack) : '');
+        // 🚨 不能只認 instanceof Error：錯誤是別的視窗（iframe／酒館主頁）造出來的就不算，JSON 化只剩 {}，原因整個看不到
+        //    請求被中斷的那種（DOMException）身上沒有 stack，只有 name + message，也要認
+        if (a instanceof Error || (a && typeof a === 'object' && typeof a.message === 'string' && (typeof a.stack === 'string' || typeof a.name === 'string')))
+            return (a.name && a.name !== 'Error' ? a.name + ': ' : '') + a.message + (a.stack ? ('\n' + a.stack) : '');
         try { return JSON.stringify(a); } catch (e) { return String(a); }
     }
     function _clock(ms) {

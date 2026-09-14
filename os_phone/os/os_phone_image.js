@@ -166,6 +166,9 @@
             } catch (e) { return 'off'; }
         },
 
+        // 等看圖小模型最多多久（毫秒）
+        VISION_WAIT_MS: 120000,
+
         // 交給看圖小模型（名冊 vision 那列）：一批圖各寫一句描述，回陣列、跟送進來的順序一樣，沒寫到的是空字串。
         // about：一句話說這是哪裡的照片，讓它知道看的是什麼場合。
         describeImages: async function (urls, about) {
@@ -175,8 +178,9 @@
             const O = win.OS_API || window.OS_API;
             if (!S || typeof S.getConfigFor !== 'function' || !O || typeof O.chat !== 'function') throw new Error('設定或模型連線還沒載入');
             // 名冊沒改過也要照 vision 那列走（預設副模型），不能吃呼叫端的主模型設定
+            // 最大輸出照她在名冊／通道填的走，不另外壓：看圖的模型多半會先思考，思考跟回答共用這個上限，
+            // 壓小了（DeepSeek 實測給 400）整格被思考吃光、回來是空的。描述本身短，後面也會截在 300 字。
             const cfg = Object.assign({}, S.getConfigFor('vision'));
-            cfg.maxTokens = Math.min(Number(cfg.maxTokens) || 800, 800);
             const sys = '你負責替看不到圖片的另一個模型看照片。每張照片寫一到兩句繁體中文，只寫畫面裡看得到的東西：'
                 + '有沒有人、人的樣子、穿著和動作，地點與場景，重要的物品，畫面上的文字，光線與氣氛。'
                 + '不猜照片裡的人是誰，不評論，不寫其他的話。\n'
@@ -184,14 +188,21 @@
                 + '<photo n="號碼">描述</photo>';
             const parts = [{ type: 'text', text: (about ? about + '\n' : '') + '一共 ' + list.length + ' 張。' }]
                 .concat(list.map(function (u) { return { type: 'image_url', image_url: { url: u } }; }));
+            const self = this;
             const text = await new Promise(function (resolve, reject) {
                 let done = false;
+                // 🚨 放棄時要真的把請求斷掉：DeepSeek 不出字時會一直送空行吊著連線（實測掛到 11 分鐘），
+                //    只是不等它的話那條連線還開著、可能照樣扣錢。
+                const ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
                 // 🚨 不能在 chat 回傳後就判「沒回話」：有些連線（托管那條）chat 先回、結果晚一點才從 onFinish 來。
                 //    兩分鐘都沒消息才算，別讓聊天一直卡在等它。
-                const timer = setTimeout(function () { bad(new Error('看圖小模型兩分鐘沒有回話')); }, 120000);
+                const timer = setTimeout(function () {
+                    bad(new Error('看圖小模型兩分鐘沒有回話'));
+                    if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+                }, self.VISION_WAIT_MS || 120000);
                 const ok = function (t) { if (!done) { done = true; clearTimeout(timer); resolve(String(t || '')); } };
                 const bad = function (e) { if (!done) { done = true; clearTimeout(timer); reject(e instanceof Error ? e : new Error(String((e && e.message) || e))); } };
-                Promise.resolve(O.chat([{ role: 'system', content: sys }, { role: 'user', content: parts }], cfg, null, ok, bad, { task: 'vision', label: '看圖' }))
+                Promise.resolve(O.chat([{ role: 'system', content: sys }, { role: 'user', content: parts }], cfg, null, ok, bad, { task: 'vision', label: '看圖', signal: ctrl ? ctrl.signal : undefined }))
                     .catch(bad);
             });
             const out = list.map(function () { return ''; });
