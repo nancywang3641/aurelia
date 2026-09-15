@@ -284,9 +284,13 @@
                 return '【你們現在不是微信好友】' + me + ' 把你加入了黑名單，你傳的訊息對方收不到。'
                     + '想請對方把你放出來，就寫 <friend_request>想對' + me + '說的附言</friend_request>，對方會在「新的朋友」裡看到；還不想就不要寫。' + TAIL;
             }
+            if (chat.wxBlocked && chat.wxBlockKind === 'blocked') {
+                return '【你把 ' + me + ' 拉黑了】這段時間對方傳的訊息你沒收到。要不要原諒是你說了算：'
+                    + '想原諒就寫 <friend_unblock/> 把對方移出黑名單，要的話接著在 <chat> 裡傳訊息；還不想就不要寫。' + TAIL;
+            }
             if (chat.wxBlocked) {
-                return '【你們現在不是微信好友】你之前把 ' + me + (chat.wxBlockKind === 'blocked' ? ' 拉黑' : ' 從微信刪掉') + '了，這段時間對方傳的訊息你沒收到。'
-                    + '想重新加回來就寫 <friend_request>想對' + me + '說的附言</friend_request>；還不想就不要寫。' + TAIL;
+                return '【你們現在不是微信好友】你之前把 ' + me + ' 從微信刪掉了，這段時間對方傳的訊息你沒收到。'
+                    + '想重新加回來就寫 <friend_request>想對' + me + '說的附言</friend_request>，對方會在「新的朋友」裡看到；還不想就不要寫。' + TAIL;
             }
             return '【刪好友與拉黑】劇情上你真的決定跟 ' + me + ' 斷開時，可以在回覆裡寫 <friend_delete/> 把對方從微信刪掉，或寫 <friend_block/> 把對方拉黑。'
                 + '之後對方傳的訊息你都收不到，直到你們重新加回好友。' + TAIL;

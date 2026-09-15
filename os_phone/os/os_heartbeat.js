@@ -77,12 +77,15 @@
         if (!Array.isArray(messages) || !messages.length) return null;
         const idle = lastTalkAt(chat) ? Math.round((Date.now() - lastTalkAt(chat)) / 3600000) : 0;
         if (_notFriends(chat)) {
+            // 他拉黑她（她沒拉黑他）：拉黑的人說了算，想通就自己移出黑名單，不用申請
+            const _heBlocks = chat.wxBlocked && chat.wxBlockKind === 'blocked' && !chat.wxBlockedByMe;
             messages.push({
                 role: 'system',
                 content: '【現在是你自己的時間，不是在回覆】\n'
                     + (idle ? '你們上一次講話大約是 ' + idle + ' 小時前。\n' : '')
-                    + '你們現在不是微信好友（上面有寫是怎麼回事），你傳不了訊息。'
-                    + '想重新當朋友就寫 <friend_request>想說的附言</friend_request>；還不想就只回 <moment_skip/>。'
+                    + (_heBlocks
+                        ? '你把對方拉黑了（上面有寫是怎麼回事）。想原諒就寫 <friend_unblock/>，要的話接著在 <chat> 裡傳訊息；還不想就只回 <moment_skip/>。'
+                        : '你們現在不是微信好友（上面有寫是怎麼回事），你傳不了訊息。想重新當朋友就寫 <friend_request>想說的附言</friend_request>；還不想就只回 <moment_skip/>。')
                     + '照你的個性和你們現在的關係決定。不要提到這是安排好的。'
             });
             return messages;
@@ -101,6 +104,7 @@
 
     // 通知上那句（有生出聊天行時伺服器會用聊天行蓋掉；只有標籤時就推這句）
     function notifyBody(chat) {
+        if (chat.wxBlocked && chat.wxBlockKind === 'blocked' && !chat.wxBlockedByMe) return (chat.name || '對方') + ' 找你了';
         return (chat.name || '對方') + (_notFriends(chat) ? ' 請求添加你為朋友' : ' 在朋友圈有新動態');
     }
 

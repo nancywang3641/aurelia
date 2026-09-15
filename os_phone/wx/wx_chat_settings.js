@@ -547,7 +547,7 @@
 
                 ${!isGroup ? `
                 <div class="ws-group">
-                    ${(chat.wxBlocked && chat.wxBlockKind === 'deleted' && !chat.wxBlockedByMe) ? `
+                    ${(chat.wxBlocked && !chat.wxBlockedByMe) ? `
                     <div class="ws-cell" id="btn-friend-verify" style="cursor:pointer;">
                         <div class="ws-label">發送朋友驗證</div>
                         <div class="ws-right"><div class="ws-arrow">›</div></div>

@@ -1084,12 +1084,12 @@
     }
 
     // ── 🚫 刪好友／拉黑／好友申請：角色在回覆裡動手的英文標籤（只認私聊裡的那個人）──────────
-    //   <friend_delete/> 他把主角刪了；<friend_block/> 他把主角拉黑
-    //   <friend_request>附言</friend_request> 他想重新當朋友（被她拉黑、或他刪過／拉黑過她的時候才算）
+    //   <friend_delete/> 他把主角刪了；<friend_block/> 他把主角拉黑；<friend_unblock/> 他自己把主角移出黑名單（拉黑的人說了算，不用申請）
+    //   <friend_request>附言</friend_request> 他想重新當朋友（被她拉黑、或他刪過她的時候才算；他拉黑她時寫這個當成移出黑名單）
     //   <friend_accept/> 他通過她送的朋友驗證；<friend_decline>回她的一句</friend_decline> 他不通過
     //   🚨 跟朋友圈標籤一樣要在拆 <chat> 容器之前抽：寫在容器外面的一樣要做。
     const _FR_PAIR_RE = /[<＜]\s*friend_(request|decline)\b[^>＞]*[>＞]([\s\S]*?)[<＜]\s*\/\s*friend_\1\s*[>＞]/gi;
-    const _FR_ONE_RE = /[<＜]\s*\/?\s*friend_(delete|block|accept|request|decline)\b[^>＞]*[>＞]/gi;
+    const _FR_ONE_RE = /[<＜]\s*\/?\s*friend_(delete|block|unblock|accept|request|decline)\b[^>＞]*[>＞]/gi;
     function _stripFriendTags(text) {
         return String(text == null ? '' : text).replace(_FR_PAIR_RE, '').replace(_FR_ONE_RE, '');
     }
@@ -1134,6 +1134,11 @@
                     delete chat.wxFriendReqOut;
                     chat.hbLast = Date.now();   // 剛斷開，不要下一分鐘就來求和
                     _markManual('b:' + n, 'blocked', chat.wxBlockKind);
+                } else if (a.verb === 'unblock' || (a.verb === 'request' && chat.wxBlocked && chat.wxBlockKind === 'blocked' && !chat.wxBlockedByMe)) {
+                    // 他拉黑了她、現在自己想通：直接移出黑名單，照真的微信不通知，她下一則就傳得到
+                    if (!chat.wxBlocked || chat.wxBlockKind !== 'blocked') return;
+                    delete chat.wxBlocked; delete chat.wxBlockKind; delete chat.wxFriendReqOut;
+                    _markManual('b:' + n, 'back');
                 } else if (a.verb === 'request') {
                     if (!chat.wxBlocked && !chat.wxBlockedByMe) return;   // 本來就是朋友，不算
                     chat.wxFriendReqIn = { note: a.text, at: Date.now() };
@@ -2522,8 +2527,8 @@
 
         // ── 🔒 黑名單與朋友驗證 ───────────────────────────────────────
         //   她拉黑他：聊天室留著、通訊錄不列、他傳不進來；她照樣打得出字，放出來之後他看得到。
-        //   他刪了她：她可以送朋友驗證，他當場決定（回覆裡寫 <friend_accept/> 或 <friend_decline>）。
-        //   他拉黑了她：申請直接失敗，要等他自己來加（心跳時寫 <friend_request>）。
+        //   他刪了她或拉黑了她：她可以送朋友驗證，他當場決定（回覆裡寫 <friend_accept/> 或 <friend_decline>）。
+        //   他自己想通：刪過她的來加她（<friend_request>，她在新的朋友接受）；拉黑她的直接移出黑名單（<friend_unblock/>）。
         blockContact: async function (chatId) {
             const chat = GLOBAL_CHATS[chatId];
             if (!chat || chat.isGroup || chat.wxBlockedByMe) return false;
@@ -2574,7 +2579,6 @@
             if (!chat || chat.isGroup) return;
             const name = chat.name || '對方';
             if (!chat.wxBlocked) { AUI.toast('你們已經是朋友了'); return; }
-            if (chat.wxBlockKind !== 'deleted') { AUI.toast('添加失敗，' + name + '把你加入了黑名單'); return; }
             if (chat.wxFriendReqOut) { AUI.toast('已經送出了，等' + name + '回覆'); return; }
             if (!win.WX_API || !win.WX_API.chat || !win.WX_API.buildContext) { AUI.toast('手機聊天的模型還沒接好'); return; }
             const note = await AUI.prompt('發送朋友驗證', '我是' + _meName());
@@ -2590,7 +2594,7 @@
             catch (e) { console.warn('[WX] 朋友驗證組上下文失敗:', e); }
             finally { GLOBAL_ACTIVE_ID = prev; }
             if (!Array.isArray(messages)) messages = [];
-            messages.push({ role: 'system', content: '【' + _meName() + ' 送了朋友驗證給你】你之前把 ' + _meName() + ' 從微信刪掉了，現在對方申請重新加你'
+            messages.push({ role: 'system', content: '【' + _meName() + ' 送了朋友驗證給你】你之前把 ' + _meName() + (chat.wxBlockKind === 'blocked' ? ' 拉黑' : ' 從微信刪掉') + '了，現在對方申請重新加你'
                 + (text ? '，附言：「' + text + '」' : '') + '。\n'
                 + '照你的個性和你們現在的關係決定。通過就寫 <friend_accept/>，要的話接著在 <chat> 裡傳訊息；'
                 + '不通過就寫 <friend_decline>想回對方的一句話，不想回就留空</friend_decline>，不通過時不要傳訊息。'
@@ -3602,16 +3606,12 @@
             if(!GLOBAL_ACTIVE_ID || !GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) return;
             if(IS_STREAMING_REPLY) return; // 鎖定
             // 🔒 她把他拉黑了 → 他收不到，也不會回
-            // 🚫 他把主角刪了 → 按下去是送朋友驗證；拉黑了 → 傳不過去、也加不了
+            // 🚫 他把主角刪了或拉黑了 → 按下去是送朋友驗證（他決定收不收）
             {
                 const _bc = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
                 const _n = _bc.name || '對方';
                 if (_bc.wxBlockedByMe) { AUI.toast('你把' + _n + '加入了黑名單，' + _n + '收不到你的訊息'); return; }
-                if (_bc.wxBlocked) {
-                    if (_bc.wxBlockKind === 'deleted') { this.sendFriendRequest(_bc.id); return; }
-                    AUI.toast('消息被拒收了，' + _n + '把你加入了黑名單');
-                    return;
-                }
+                if (_bc.wxBlocked) { this.sendFriendRequest(_bc.id); return; }
             }
             IS_STREAMING_REPLY = true;
 
