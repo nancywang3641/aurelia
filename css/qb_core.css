@@ -9,18 +9,18 @@
 .qbfp-wrap { margin-bottom:16px; }
 .qbfp-wrap:empty, .qbfp-wrap.qbfp-none { display:none; }
 .qbfp-hd { display:flex; align-items:center; gap:6px; margin-bottom:8px;
-  font-size:10px; letter-spacing:2px; text-transform:uppercase; color:rgba(150,200,255,0.3); }
-.qbfp-count { color:rgba(150,200,255,0.22); letter-spacing:1px; }
+  font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--qbs-cool-dim); }
+.qbfp-count { color:var(--qbk-ink-faint); letter-spacing:1px; }
 .qbfp-list { display:flex; flex-wrap:wrap; gap:6px; }
 .qbfp-chip { display:inline-flex; align-items:center; gap:6px; max-width:100%;
   padding:5px 10px; border-radius:999px; cursor:pointer;
-  background:rgba(100,180,255,0.08); border:1px solid rgba(100,180,255,0.22);
-  color:rgba(200,225,255,0.85); font-size:12px; line-height:1.4;
+  background:var(--qbs-field); border:1px solid var(--qbs-cool-line);
+  color:var(--qbk-ink); font-size:12px; line-height:1.4;
   transition:background .15s ease, border-color .15s ease; }
-.qbfp-chip:hover { background:rgba(100,180,255,0.16); border-color:rgba(100,180,255,0.45); }
+.qbfp-chip:hover { background:#fff; border-color:var(--qbs-cool); }
 .qbfp-chip-nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px; }
 .qbfp-chip-del { flex:none; opacity:.4; font-size:11px; font-style:normal; }
-.qbfp-chip-del:hover { opacity:1; color:rgba(255,150,150,0.95); }
+.qbfp-chip-del:hover { opacity:1; color:var(--qbs-bad); }
 
 /* =========================================================
    書架自己的墨色（深底）— 不吃全域那組白底墨色
@@ -31,12 +31,32 @@
    → 這裡把書架用到的文字色獨立成自己的變數，全域再怎麼調白底都影響不到這裡。
    ========================================================= */
 #qb-bookshelf-overlay, #qb-book-cover-panel, #qb-del-world-dialog {
-    --qbk-ink:       #efe3d0;               /* 主要文字：暖白，壓在木色上仍清楚 */
-    --qbk-ink-dim:   rgba(239,227,208,0.62);/* 次要說明 */
-    --qbk-ink-faint: rgba(239,227,208,0.38);/* 標籤、佔位 */
-    --qbk-accent:    #d9b45a;               /* 主動作：單一實色，不做漸層 */
-    --qbk-accent-ink:#2a1c0a;
-    --qbk-line:      rgba(239,227,208,0.16);
+    /* 2026-09-16 跟著書架換成銀藍版（原本是深木色底＋暖白字＋金色主鈕）。
+       書封、篇章目錄、開場白、啟程、自由劇情、撰寫新書、匯入角色卡、刪除彈窗全吃這組；
+       那些頁面的顏色原本寫死在 qb_bookshelf.js / os_card_import.js 的標籤上，已經全部換成下面的變數。 */
+    --qbk-ink:       #44577e;               /* 主要文字：深藍灰，壓在珍珠白上 */
+    /* 淡字與藍字用實色、不用半透明：半透明疊在珍珠白上對比只剩 2 左右，手機上看不清（量過） */
+    --qbk-ink-dim:   #56678c;               /* 次要說明 */
+    --qbk-ink-faint: #687797;               /* 標籤、佔位 */
+    --qbk-accent:    #50679a;               /* 主動作：單一實色，不做漸層 */
+    --qbk-accent-ink:#ffffff;
+    --qbk-line:      rgba(68,87,126,0.18);
+    --qbs-line-strong: rgba(68,87,126,0.42);
+    --qbs-page:      rgba(240,243,250,0.97);/* 整頁底（目錄、開場白、啟程…） */
+    --qbs-sheet:     #f6f8fc;               /* 浮起來的小窗（取代、刪除） */
+    --qbs-bar:       rgba(255,255,255,0.6); /* 頁首列 */
+    --qbs-field:     rgba(255,255,255,0.72);/* 輸入框、卡片、小鈕 */
+    --qbs-soft:      rgba(95,120,166,0.08);
+    --qbs-soft-2:    rgba(95,120,166,0.16);
+    --qbs-scrim:     rgba(38,50,74,0.38);   /* 小窗後面那層遮罩 */
+    --qbs-shadow:    rgba(38,50,74,0.18);
+    --qbs-cool:      #4a70ad;               /* 自由劇情那區的藍 */
+    --qbs-cool-dim:  #5876ab;
+    --qbs-cool-line: rgba(95,134,196,0.28);
+    --qbs-bad:       #c0504f;
+    --qbs-bad-line:  rgba(192,80,79,0.5);
+    --qbs-good:      #4f8a3c;
+    --qbs-warn:      #b8702c;
 }
 
 /* 主動作鈕：實色、不漸層、不打陰影光暈 */
@@ -47,13 +67,13 @@
     padding: 13px 40px; border-radius: 4px; cursor: pointer;
     letter-spacing: 3px; transition: background .15s, border-color .15s;
 }
-.qb-btn-primary:hover { background: #e6c470; border-color: #e6c470; }
-.qb-btn-primary:active { background: #c9a24a; }
+.qb-btn-primary:hover { background: #6078a8; border-color: #6078a8; }
+.qb-btn-primary:active { background: #455a88; }
 
 /* 主動作鈕（自由劇情那一區是藍調，換一組同形狀的色） */
-.qb-btn-primary.cool { background:#5a8fd6; border-color:#5a8fd6; color:#08131f; }
-.qb-btn-primary.cool:hover { background:#6ea2e6; border-color:#6ea2e6; }
-.qb-btn-primary.cool:active { background:#4a7cc0; }
+.qb-btn-primary.cool { background:#4a70ad; border-color:#4a70ad; color:#fff; }
+.qb-btn-primary.cool:hover { background:#5a80bc; border-color:#5a80bc; }
+.qb-btn-primary.cool:active { background:#3f6199; }
 .qb-btn-primary.block { width:100%; padding:14px; letter-spacing:3px; }
 
 /* 次要動作鈕：描邊 */
@@ -64,17 +84,17 @@
     padding: 9px 20px; border-radius: 4px; cursor: pointer;
     letter-spacing: 1px; transition: background .15s, border-color .15s;
 }
-.qb-btn-ghost:hover { background: rgba(239,227,208,0.08); border-color: rgba(239,227,208,0.34); }
+.qb-btn-ghost:hover { background: var(--qbs-soft); border-color: var(--qbs-line-strong); }
 
 /* 破壞性動作鈕：紅描邊，不填滿 */
 .qb-btn-danger {
-    background: transparent; color: #e08a8a;
-    border: 1px solid rgba(224,138,138,0.42);
+    background: transparent; color: var(--qbs-bad);
+    border: 1px solid var(--qbs-bad-line);
     font-family: inherit; font-weight: 600; font-size: 13px;
     padding: 9px 20px; border-radius: 4px; cursor: pointer;
     letter-spacing: 1px; transition: background .15s, border-color .15s;
 }
-.qb-btn-danger:hover { background: rgba(224,138,138,0.12); border-color: rgba(224,138,138,0.7); }
+.qb-btn-danger:hover { background: rgba(192,80,79,0.08); border-color: var(--qbs-bad); }
 
 /* 小尺寸：開場白那排逐條操作的鈕，跟正文同一個量級 */
 .qb-greet-edit-btn.qb-btn-ghost, .qb-greet-cancel-btn.qb-btn-ghost,
@@ -94,16 +114,16 @@
    角色卡把美化面板放在自己的正則裡，內容是一整份 HTML 文件 → 只能塞 iframe 才跑得動它的字體與腳本。
    高度由 JS 照內容撐（iframe 沒有自然高度），這裡只負責寬度吃滿、去掉框線與白底。 */
 #qb-greet-beautify-btn.qb-btn-ghost { font-size: 12px; padding: 5px 12px; letter-spacing: 0.5px; border-radius: 4px; }
-#qb-greet-beautify-btn.qb-btn-on { color: #f0d9a8; border-color: rgba(240,217,168,0.55); background: rgba(240,217,168,0.10); }
+#qb-greet-beautify-btn.qb-btn-on { color: var(--qbk-accent); border-color: var(--qbk-accent); background: var(--qbs-soft-2); }
 .qb-hidden { display: none !important; }
 .qb-greet-text iframe.vn-regex-card { width: 100%; border: 0; display: block; background: transparent; margin: 8px 0; }
 
 /* 🎭 這本書的立繪模式（圖庫／自由）— 藏書設定列，跟擴充館藏、變數包同一區 */
 .qb-spmode-row { width:78%; display:flex; align-items:center; gap:8px; margin-bottom:16px; }
 .qb-spmode-label { font-size:10px; color:var(--qbk-ink-faint); letter-spacing:2px; white-space:nowrap; flex-shrink:0; }
-.qb-spmode-btn { flex:1; min-width:0; background:rgba(0,0,0,0.35); border:1px solid var(--qbk-line); border-radius:4px; color:var(--qbk-ink-dim); font-size:11px; padding:5px 10px; outline:none; font-family:inherit; cursor:pointer; transition:border-color .15s, background .15s, color .15s; }
-.qb-spmode-btn:hover { border-color:rgba(239,227,208,0.34); color:var(--qbk-ink); }
-.qb-spmode-btn.on { background:rgba(217,180,90,0.18); border-color:var(--qbk-accent); color:var(--qbk-accent); font-weight:700; }
+.qb-spmode-btn { flex:1; min-width:0; background:var(--qbs-field); border:1px solid var(--qbk-line); border-radius:4px; color:var(--qbk-ink-dim); font-size:11px; padding:5px 10px; outline:none; font-family:inherit; cursor:pointer; transition:border-color .15s, background .15s, color .15s; }
+.qb-spmode-btn:hover { border-color:var(--qbs-line-strong); color:var(--qbk-ink); }
+.qb-spmode-btn.on { background:var(--qbs-soft-2); border-color:var(--qbk-accent); color:var(--qbk-accent); font-weight:700; }
 
 /* 📇 篇章目錄（一本書開過的故事線＝酒館一張卡底下的聊天室清單） */
 .qb-toc-body { flex:1; overflow-y:auto; padding:16px 18px 24px; display:flex; flex-direction:column; gap:10px; scrollbar-width:thin; }
@@ -111,18 +131,18 @@
 .qb-toc-label { font-size:10px; color:var(--qbk-ink-faint); letter-spacing:3px; padding-top:6px; border-top:1px solid var(--qbk-line); }
 .qb-toc-empty { font-size:12px; color:var(--qbk-ink-faint); text-align:center; padding:26px 10px; line-height:1.8; }
 .qb-toc-item { width:100%; box-sizing:border-box; display:flex; align-items:center; gap:8px;
-    background:rgba(0,0,0,0.35); border:1px solid var(--qbk-line); border-radius:5px;
+    background:var(--qbs-field); border:1px solid var(--qbk-line); border-radius:5px;
     padding:11px 13px; font-family:inherit; text-align:left;
     transition:background .15s, border-color .15s; }
 .qb-toc-item-main { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:3px; cursor:pointer; }
 .qb-toc-del { flex-shrink:0; width:30px; height:30px; display:flex; align-items:center; justify-content:center;
-    background:none; border:1px solid transparent; border-radius:6px; color:rgba(239,227,208,0.38);
+    background:none; border:1px solid transparent; border-radius:6px; color:var(--qbk-ink-faint);
     font-size:12px; cursor:pointer; transition:color .15s, background .15s, border-color .15s; }
-.qb-toc-del:hover { color:#e06c6c; background:rgba(224,108,108,0.12); border-color:rgba(224,108,108,0.35); }
-.qb-toc-item:hover { background:rgba(239,227,208,0.07); border-color:rgba(239,227,208,0.34); }
+.qb-toc-del:hover { color:var(--qbs-bad); background:rgba(192,80,79,0.08); border-color:var(--qbs-bad-line); }
+.qb-toc-item:hover { background:#fff; border-color:var(--qbs-line-strong); }
 .qb-toc-item-t { font-size:13.5px; font-weight:700; color:var(--qbk-ink); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .qb-toc-item-m { font-size:11px; color:var(--qbk-ink-dim); }
-.qb-toc-item.now { border-color:var(--qbk-accent); background:rgba(217,180,90,0.12); }
+.qb-toc-item.now { border-color:var(--qbk-accent); background:var(--qbs-soft-2); }
 .qb-toc-now { font-size:10px; color:var(--qbk-accent); letter-spacing:2px; }
 
 /* =========================================================

@@ -306,22 +306,22 @@
     // ═══════════════════════════════════════════════════════════
     function _showSuccess(panelEl, { name, worldDesc, importedEntryCount, regexCount, railEl }) {
         panelEl.innerHTML = `
-            <div style="position:absolute;inset:0;background:linear-gradient(160deg,#0e2a1a 0%,#061a0e 100%);"></div>
+            <div style="position:absolute;inset:0;background:var(--qbs-page);"></div>
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
                         justify-content:center;padding:28px;z-index:2;gap:14px;text-align:center;">
-                <div style="font-size:48px;filter:drop-shadow(0 2px 12px rgba(0,200,100,0.5));"><i class="fa-solid fa-circle-check"></i></div>
-                <div style="font-size:18px;font-weight:900;color:#a8ffcc;letter-spacing:2px;">匯入成功</div>
-                <div style="font-size:15px;font-weight:700;color:#1A1C28;">${_esc(name)}</div>
-                <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.7;max-width:260px;">
+                <div style="font-size:48px;filter:drop-shadow(0 2px 6px var(--qbs-shadow));"><i class="fa-solid fa-circle-check"></i></div>
+                <div style="font-size:18px;font-weight:900;color:var(--qbs-good);letter-spacing:2px;">匯入成功</div>
+                <div style="font-size:15px;font-weight:700;color:var(--qbk-ink);">${_esc(name)}</div>
+                <div style="font-size:11px;color:var(--qbk-ink-dim);line-height:1.7;max-width:260px;">
                     ${_esc(worldDesc)}
                 </div>
-                <div style="font-size:11px;color:rgba(168,255,204,0.8);line-height:2.4;
-                            background:rgba(0,0,0,0.3);padding:10px 18px;border-radius:6px;">
+                <div style="font-size:11px;color:var(--qbs-good);line-height:2.4;
+                            background:var(--qbs-field);padding:10px 18px;border-radius:6px;">
                     <i class="fa-solid fa-book"></i> 世界書條目　${importedEntryCount} 條${regexCount ? `<br><i class="fa-solid fa-wand-magic-sparkles"></i> 自帶美化面板　${regexCount} 條` : ''}
                 </div>
                 <button id="ci-go-back" style="
-                    margin-top:8px;background:linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030);
-                    color:#1a0a04;font-weight:900;font-size:14px;padding:12px 36px;
+                    margin-top:8px;background:var(--qbk-accent);
+                    color:#fff;font-weight:900;font-size:14px;padding:12px 36px;
                     border:none;border-radius:3px;cursor:pointer;letter-spacing:2px;
                     box-shadow:0 4px 20px rgba(26,28,40,0.15);
                 "><i class="fa-solid fa-book-open"></i> 回到書架</button>
@@ -350,7 +350,7 @@
 
         panel.innerHTML = `
             <div style="position:absolute;inset:0;
-                background:linear-gradient(160deg,#0e1a2a 0%,#060e1a 100%);"></div>
+                background:var(--qbs-page);"></div>
             <div style="position:absolute;inset:0;pointer-events:none;
                 background-image:repeating-linear-gradient(
                     180deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,
@@ -358,8 +358,8 @@
 
             <button id="ci-back" style="
                 position:absolute;top:12px;left:12px;
-                background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);
-                border:1px solid rgba(26,28,40,0.12);color:#1A1C28;
+                background:var(--qbs-field);backdrop-filter:blur(6px);
+                border:1px solid var(--qbk-line);color:var(--qbk-ink);
                 padding:6px 14px;border-radius:20px;cursor:pointer;
                 font-size:12px;letter-spacing:1px;z-index:30;">← 書架</button>
 
@@ -368,45 +368,45 @@
                         padding:20px 28px;z-index:2;gap:0;">
 
                 <div style="font-size:30px;margin-bottom:14px;
-                            filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));"><i class="fa-solid fa-download"></i></div>
-                <div style="font-size:16px;font-weight:800;color:#1A1C28;
+                            filter:drop-shadow(0 2px 6px var(--qbs-shadow));"><i class="fa-solid fa-download"></i></div>
+                <div style="font-size:16px;font-weight:800;color:var(--qbk-ink);
                             letter-spacing:2px;margin-bottom:6px;">匯入角色卡</div>
-                <div style="font-size:11px;color:rgba(26,28,40,0.30);
+                <div style="font-size:11px;color:var(--qbk-ink-faint);
                             letter-spacing:1px;margin-bottom:22px;">
                     支援 SillyTavern PNG 角色卡（V1 / V2 / V3）
                 </div>
 
                 <div id="ci-drop-zone" style="
                     width:100%;padding:28px 20px;
-                    border:2px dashed rgba(100,160,255,0.4);border-radius:8px;
+                    border:2px dashed var(--qbs-cool-line);border-radius:8px;
                     text-align:center;cursor:pointer;
-                    background:rgba(30,60,120,0.2);
+                    background:var(--qbs-soft);
                     transition:background 0.2s,border-color 0.2s;
                     display:flex;flex-direction:column;align-items:center;gap:10px;">
                     <div style="font-size:32px;"><i class="fa-solid fa-image"></i></div>
-                    <div style="font-size:13px;color:rgba(255,255,255,0.7);">拖放角色卡 PNG 到此處</div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.35);">或點擊選擇文件</div>
+                    <div style="font-size:13px;color:var(--qbk-ink);">拖放角色卡 PNG 到此處</div>
+                    <div style="font-size:11px;color:var(--qbk-ink-faint);">或點擊選擇文件</div>
                     <input id="ci-file-input" type="file" accept=".png,image/png" style="display:none;">
                 </div>
 
                 <div id="ci-preview" style="
                     display:none;width:100%;margin-top:16px;padding:14px;
-                    background:rgba(0,0,0,0.4);border-radius:6px;
-                    border:1px solid rgba(100,160,255,0.3);">
-                    <div style="font-size:11px;color:rgba(100,200,255,0.8);
+                    background:var(--qbs-field);border-radius:6px;
+                    border:1px solid var(--qbs-cool-line);">
+                    <div style="font-size:11px;color:var(--qbs-cool);
                                 letter-spacing:1px;margin-bottom:8px;">✓ 讀取成功</div>
                     <div id="ci-preview-name" style="font-size:15px;font-weight:700;
-                                                     color:#1A1C28;margin-bottom:4px;"></div>
-                    <div id="ci-preview-desc" style="font-size:11px;color:rgba(255,255,255,0.5);
+                                                     color:var(--qbk-ink);margin-bottom:4px;"></div>
+                    <div id="ci-preview-desc" style="font-size:11px;color:var(--qbk-ink-dim);
                                                      line-height:1.6;max-height:60px;overflow:hidden;"></div>
                     <div id="ci-preview-stats" style="font-size:10px;
-                                                      color:rgba(100,200,255,0.6);margin-top:6px;"></div>
+                                                      color:var(--qbs-cool);margin-top:6px;"></div>
                 </div>
 
                 <div id="ci-progress-wrap" style="display:none;width:100%;margin-top:16px;">
                     <div id="ci-progress-label" style="font-size:11px;
-                        color:rgba(255,255,255,0.4);margin-bottom:6px;">準備中…</div>
-                    <div style="height:4px;background:rgba(255,255,255,0.1);
+                        color:var(--qbk-ink-faint);margin-bottom:6px;">準備中…</div>
+                    <div style="height:4px;background:var(--qbk-line);
                                 border-radius:2px;overflow:hidden;">
                         <div id="ci-progress-bar" style="
                             height:100%;width:0%;border-radius:2px;transition:width 0.4s;
@@ -446,17 +446,17 @@
 
         dropZone.ondragover = (e) => {
             e.preventDefault();
-            dropZone.style.borderColor = 'rgba(100,160,255,0.8)';
-            dropZone.style.background  = 'rgba(30,60,120,0.45)';
+            dropZone.style.borderColor = 'var(--qbs-cool)';
+            dropZone.style.background  = 'var(--qbs-soft-2)';
         };
         dropZone.ondragleave = () => {
-            dropZone.style.borderColor = 'rgba(100,160,255,0.4)';
-            dropZone.style.background  = 'rgba(30,60,120,0.2)';
+            dropZone.style.borderColor = 'var(--qbs-cool-line)';
+            dropZone.style.background  = 'var(--qbs-soft)';
         };
         dropZone.ondrop = (e) => {
             e.preventDefault();
-            dropZone.style.borderColor = 'rgba(100,160,255,0.4)';
-            dropZone.style.background  = 'rgba(30,60,120,0.2)';
+            dropZone.style.borderColor = 'var(--qbs-cool-line)';
+            dropZone.style.background  = 'var(--qbs-soft)';
             const file = e.dataTransfer?.files?.[0];
             if (file) _handleFile(file);
         };

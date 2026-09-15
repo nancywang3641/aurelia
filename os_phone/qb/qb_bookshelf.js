@@ -95,15 +95,15 @@
         dlg.id = 'qb-del-world-dialog';
         dlg.style.cssText = `
             position:fixed;inset:0;z-index:99999;
-            background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);
+            background:var(--qbs-scrim);backdrop-filter:blur(4px);
             display:flex;align-items:center;justify-content:center;
         `;
         dlg.innerHTML = `
             <div style="
-                background:linear-gradient(160deg,#1a1008,#0d0804);
-                border:1px solid rgba(210,215,235,0.45);
+                background:var(--qbs-sheet);
+                border:1px solid var(--qbs-line-strong);
                 border-radius:10px;padding:24px 28px;max-width:340px;width:90%;
-                box-shadow:0 8px 40px rgba(0,0,0,0.8);color:var(--qbk-ink);font-family:'Noto Sans TC',sans-serif;
+                box-shadow:0 12px 40px var(--qbs-shadow);color:var(--qbk-ink);font-family:'Noto Sans TC',sans-serif;
             ">
                 <div style="font-size:15px;font-weight:700;margin-bottom:8px;"><i class="fa-solid fa-book"></i> 刪除《${cardName}》</div>
                 <div style="font-size:12px;color:var(--qbk-ink);margin-bottom:18px;line-height:1.6;">
@@ -112,7 +112,7 @@
 
                 <div id="qb-del-scope" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
                     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:8px 10px;border-radius:6px;border:1px solid var(--qbk-line);transition:border-color 0.2s;" id="qb-del-opt-book">
-                        <input type="radio" name="qb-del-scope" value="book" checked style="margin-top:2px;accent-color:#e67e22;">
+                        <input type="radio" name="qb-del-scope" value="book" checked style="margin-top:2px;accent-color:var(--qbk-accent);">
                         <span>
                             <strong style="font-size:13px;">只刪書籍</strong>
                             <div style="font-size:11px;color:var(--qbk-ink-dim);margin-top:2px;">書脊移除，其他資料保留</div>
@@ -121,7 +121,7 @@
                     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:8px 10px;border-radius:6px;border:1px solid var(--qbk-line);transition:border-color 0.2s;" id="qb-del-opt-all">
                         <input type="radio" name="qb-del-scope" value="all" style="margin-top:2px;accent-color:#e53e3e;">
                         <span>
-                            <strong style="font-size:13px;color:#fc8181;">完整清除</strong>
+                            <strong style="font-size:13px;color:var(--qbs-bad);">完整清除</strong>
                             <div style="font-size:11px;color:var(--qbk-ink-dim);margin-top:2px;">
                                 書籍${hasVarPack ? '、追蹤欄位' : ''}、世界書條目（分類「${cardName}」）
                             </div>
@@ -141,10 +141,10 @@
         const labels = [dlg.querySelector('#qb-del-opt-book'), dlg.querySelector('#qb-del-opt-all')];
         radios.forEach((r, i) => {
             r.onchange = () => labels.forEach((l, j) => {
-                l.style.borderColor = j === i ? 'rgba(239,227,208,0.40)' : 'rgba(239,227,208,0.14)';
+                l.style.borderColor = j === i ? 'var(--qbs-line-strong)' : 'var(--qbk-line)';
             });
         });
-        labels[0].style.borderColor = 'rgba(239,227,208,0.40)';
+        labels[0].style.borderColor = 'var(--qbs-line-strong)';
 
         dlg.querySelector('#qb-del-cancel').onclick  = () => dlg.remove();
         dlg.querySelector('#qb-del-confirm').onclick = async () => {
@@ -520,23 +520,23 @@ status = "正常"`;
         if (!panel) return;
 
         panel.innerHTML = `
-            <div style="position:absolute;inset:0;background:linear-gradient(160deg,#2a1a0e 0%,#1a0e06 100%);"></div>
+            <div style="position:absolute;inset:0;background:var(--qbs-page);"></div>
             <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(180deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,transparent 1px,transparent 20px);pointer-events:none;"></div>
 
-            <button id="qb-create-back" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);border:1px solid var(--qbk-line);color:var(--qbk-ink);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;letter-spacing:1px;z-index:30;">返回書架</button>
+            <button id="qb-create-back" style="position:absolute;top:12px;left:12px;background:var(--qbs-field);backdrop-filter:blur(6px);border:1px solid var(--qbk-line);color:var(--qbk-ink);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;letter-spacing:1px;z-index:30;">返回書架</button>
 
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 28px 28px;z-index:2;gap:0;overflow-y:auto;">
-                <div style="font-size:30px;margin-bottom:14px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));"><i class="fa-solid fa-pen-nib"></i></div>
+                <div style="font-size:30px;margin-bottom:14px;filter:drop-shadow(0 2px 6px var(--qbs-shadow));"><i class="fa-solid fa-pen-nib"></i></div>
                 <div style="font-size:16px;font-weight:800;color:var(--qbk-ink);letter-spacing:2px;margin-bottom:6px;">撰寫新書</div>
                 <div style="font-size:11px;color:var(--qbk-ink-dim);letter-spacing:1px;margin-bottom:18px;">描述你想前往的世界</div>
 
                 <input id="qb-create-input" type="text" placeholder="例：蒸汽朋克工業帝國、末日後的海底城市…"
-                    style="width:100%;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);border-radius:4px;color:var(--qbk-ink);font-size:13px;padding:12px 14px;outline:none;text-align:center;letter-spacing:0.5px;font-family:'Noto Sans TC',sans-serif;">
+                    style="width:100%;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:4px;color:var(--qbk-ink);font-size:13px;padding:12px 14px;outline:none;text-align:center;letter-spacing:0.5px;font-family:'Noto Sans TC',sans-serif;">
                 <div style="margin-top:6px;font-size:10px;color:var(--qbk-ink-faint);letter-spacing:0.5px;">按 Enter 或點下方按鈕送出</div>
 
                 <div style="width:100%;margin-top:14px;">
                     <button id="qb-wb-toggle" style="
-                        width:100%;background:rgba(0,0,0,0.3);
+                        width:100%;background:var(--qbs-bar);
                         border:1px solid var(--qbk-line);
                         color:var(--qbk-ink);padding:8px 14px;
                         border-radius:4px;cursor:pointer;font-size:11px;
@@ -545,9 +545,9 @@ status = "正常"`;
                     </button>
                     <div id="qb-wb-list" style="
                         display:none;max-height:150px;overflow-y:auto;margin-top:4px;
-                        background:rgba(0,0,0,0.35);border:1px solid var(--qbk-line);
+                        background:var(--qbs-field);border:1px solid var(--qbk-line);
                         border-radius:4px;padding:6px 10px;">
-                        <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:10px;">
+                        <div style="font-size:10px;color:var(--qbk-ink-faint);text-align:center;padding:10px;">
                             載入中…
                         </div>
                     </div>
@@ -576,28 +576,28 @@ status = "正常"`;
             wbHint.style.display = isOpen ? 'none' : 'block';
             wbToggle.textContent = `從世界書條目生成 ${isOpen ? '▼' : '▲'}`;
             wbToggle.style.borderColor = isOpen
-                ? 'rgba(239,227,208,0.14)' : 'rgba(239,227,208,0.40)';
+                ? 'var(--qbk-line)' : 'var(--qbs-line-strong)';
 
             if (!isOpen && !wbLoaded) {
                 wbLoaded = true;
                 try {
                     const entries = await window.OS_DB?.getAllWorldbookEntries?.() || [];
                     if (entries.length === 0) {
-                        wbList.innerHTML = `<div style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;padding:12px;">世界書目前沒有條目</div>`;
+                        wbList.innerHTML = `<div style="font-size:11px;color:var(--qbk-ink-faint);text-align:center;padding:12px;">世界書目前沒有條目</div>`;
                     } else {
                         wbList.innerHTML = entries.map(e => `
-                            <label style="display:flex;align-items:flex-start;gap:8px;padding:5px 2px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <label style="display:flex;align-items:flex-start;gap:8px;padding:5px 2px;cursor:pointer;border-bottom:1px solid var(--qbk-line);">
                                 <input type="checkbox" data-id="${e.id}" data-content="${encodeURIComponent(e.content || '')}"
-                                    style="margin-top:2px;accent-color:#d4af37;flex-shrink:0;">
-                                <span style="font-size:11px;color:rgba(255,248,231,0.8);line-height:1.5;">
-                                    <span style="color:#d4af37;">${e.title || '未命名'}</span>
-                                    ${e.keys ? `<span style="color:rgba(255,255,255,0.3);font-size:10px;"> · ${e.keys.slice(0,30)}</span>` : ''}
+                                    style="margin-top:2px;accent-color:var(--qbk-accent);flex-shrink:0;">
+                                <span style="font-size:11px;color:var(--qbk-ink);line-height:1.5;">
+                                    <span style="color:var(--qbk-accent);">${e.title || '未命名'}</span>
+                                    ${e.keys ? `<span style="color:var(--qbk-ink-faint);font-size:10px;"> · ${e.keys.slice(0,30)}</span>` : ''}
                                 </span>
                             </label>
                         `).join('');
                     }
                 } catch(err) {
-                    wbList.innerHTML = `<div style="font-size:11px;color:rgba(255,100,100,0.6);text-align:center;padding:12px;">載入失敗</div>`;
+                    wbList.innerHTML = `<div style="font-size:11px;color:var(--qbs-bad-line);text-align:center;padding:12px;">載入失敗</div>`;
                 }
             }
         };
@@ -618,8 +618,8 @@ status = "正常"`;
             const lore    = getCheckedLore();
             if (!keyword && !lore) {
                 input.focus();
-                input.style.borderColor = 'rgba(255,100,100,0.6)';
-                setTimeout(() => { input.style.borderColor = 'rgba(239,227,208,0.16)'; }, 1500);
+                input.style.borderColor = 'var(--qbs-bad-line)';
+                setTimeout(() => { input.style.borderColor = 'var(--qbk-line)'; }, 1500);
                 return;
             }
             submit.textContent = '撰寫中…';
@@ -648,13 +648,13 @@ status = "正常"`;
         if (!panel) return;
 
         panel.innerHTML = `
-            <div style="position:absolute;inset:0;background:linear-gradient(160deg,#0d0d1a,#111827,#0f1f40);"></div>
+            <div style="position:absolute;inset:0;background:var(--qbs-page);"></div>
             <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 40%,rgba(60,120,255,0.12),transparent 65%);"></div>
 
             <button id="qb-cover-back" style="
                 position:absolute;top:12px;left:12px;
-                background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);
-                border:1px solid rgba(100,180,255,0.3);color:rgba(150,200,255,0.9);
+                background:var(--qbs-field);backdrop-filter:blur(6px);
+                border:1px solid var(--qbs-cool-line);color:var(--qbs-cool);
                 padding:6px 14px;border-radius:20px;cursor:pointer;
                 font-size:12px;letter-spacing:1px;z-index:30;">返回書架</button>
 
@@ -663,11 +663,11 @@ status = "正常"`;
                 padding:20px 20px 32px;text-align:center;z-index:2;
                 display:flex;flex-direction:column;align-items:center;">
 
-                <div style="font-size:48px;margin-bottom:8px;filter:drop-shadow(0 2px 12px rgba(100,180,255,0.5));"><i class="fa-solid fa-pen-nib"></i></div>
-                <div style="font-size:24px;font-weight:900;color:rgba(150,210,255,0.95);
-                            letter-spacing:3px;text-shadow:0 2px 16px rgba(0,0,0,0.9);
+                <div style="font-size:48px;margin-bottom:8px;filter:drop-shadow(0 2px 6px var(--qbs-shadow));"><i class="fa-solid fa-pen-nib"></i></div>
+                <div style="font-size:24px;font-weight:900;color:var(--qbs-cool);
+                            letter-spacing:3px;text-shadow:none;
                             margin-bottom:6px;font-family:'Noto Sans TC',sans-serif;">自由劇情</div>
-                <div style="font-size:12px;color:rgba(150,200,255,0.5);margin-bottom:24px;letter-spacing:1px;">
+                <div style="font-size:12px;color:var(--qbs-cool-dim);margin-bottom:24px;letter-spacing:1px;">
                     不限角色，自由輸入劇情指令
                 </div>
 
@@ -676,53 +676,53 @@ status = "正常"`;
 
             <div id="qb-free-inner-view" style="
                 display:none;position:absolute;inset:0;z-index:10;
-                background:rgba(10,12,22,0.98);
+                background:var(--qbs-page);
                 flex-direction:column;">
 
-                <div style="padding:14px 18px;border-bottom:1px solid rgba(100,180,255,0.15);
+                <div style="padding:14px 18px;border-bottom:1px solid var(--qbs-cool-line);
                             display:flex;align-items:center;justify-content:space-between;
-                            background:rgba(0,0,0,0.3);flex-shrink:0;">
-                    <div style="font-size:13px;font-weight:bold;color:rgba(150,210,255,0.9);letter-spacing:1px;">
+                            background:var(--qbs-bar);flex-shrink:0;">
+                    <div style="font-size:13px;font-weight:bold;color:var(--qbs-cool);letter-spacing:1px;">
                         <i class="fa-solid fa-pen-nib"></i> 自由劇情 · 指令輸入
                     </div>
                     <button id="qb-free-inner-close" style="
-                        background:none;border:none;color:rgba(150,200,255,0.5);
+                        background:none;border:none;color:var(--qbs-cool-dim);
                         font-size:24px;cursor:pointer;line-height:1;padding:0 5px;"
-                        onmouseover="this.style.color='rgba(150,200,255,0.9)'" onmouseout="this.style.color='rgba(150,200,255,0.5)'">×</button>
+                        onmouseover="this.style.color='var(--qbs-cool)'" onmouseout="this.style.color='var(--qbs-cool-dim)'">×</button>
                 </div>
 
-                <div style="padding:14px 18px;border-bottom:1px solid rgba(100,180,255,0.1);flex-shrink:0;">
-                    <div style="font-size:11px;color:rgba(150,200,255,0.4);letter-spacing:1px;margin-bottom:5px;">故事標題（可留空）</div>
+                <div style="padding:14px 18px;border-bottom:1px solid var(--qbs-cool-line);flex-shrink:0;">
+                    <div style="font-size:11px;color:var(--qbs-cool-dim);letter-spacing:1px;margin-bottom:5px;">故事標題（可留空）</div>
                     <input id="qb-free-title-input" placeholder="例：廢土女傭兵" style="
                         width:100%;box-sizing:border-box;
-                        background:rgba(0,0,0,0.45);border:1px solid rgba(100,180,255,0.2);
-                        border-radius:6px;color:#e0f0ff;font-size:13px;
+                        background:var(--qbs-field);border:1px solid var(--qbs-cool-line);
+                        border-radius:6px;color:var(--qbk-ink);font-size:13px;
                         padding:8px 10px;outline:none;font-family:inherit;
                         transition:border-color 0.2s;"
-                        onfocus="this.style.borderColor='rgba(100,180,255,0.5)'"
-                        onblur="this.style.borderColor='rgba(100,180,255,0.2)'">
-                    <div style="font-size:11px;color:rgba(150,200,255,0.4);letter-spacing:1px;margin:10px 0 5px;">劇情指令</div>
+                        onfocus="this.style.borderColor='var(--qbs-cool)'"
+                        onblur="this.style.borderColor='var(--qbs-cool-line)'">
+                    <div style="font-size:11px;color:var(--qbs-cool-dim);letter-spacing:1px;margin:10px 0 5px;">劇情指令</div>
                     <textarea id="qb-free-request-input" rows="4" placeholder="直接描述你想要的開場情境、角色設定、世界觀…" style="
                         width:100%;box-sizing:border-box;
-                        background:rgba(0,0,0,0.45);border:1px solid rgba(100,180,255,0.2);
-                        border-radius:6px;color:#e0f0ff;font-size:13px;line-height:1.6;
+                        background:var(--qbs-field);border:1px solid var(--qbs-cool-line);
+                        border-radius:6px;color:var(--qbk-ink);font-size:13px;line-height:1.6;
                         padding:10px 12px;resize:none;font-family:inherit;outline:none;
                         transition:border-color 0.2s;scrollbar-width:none;"
-                        onfocus="this.style.borderColor='rgba(100,180,255,0.5)'"
-                        onblur="this.style.borderColor='rgba(100,180,255,0.2)'"></textarea>
+                        onfocus="this.style.borderColor='var(--qbs-cool)'"
+                        onblur="this.style.borderColor='var(--qbs-cool-line)'"></textarea>
                 </div>
 
-                <div style="flex:1;overflow-y:auto;padding:10px 18px;scrollbar-width:thin;scrollbar-color:#334 transparent;">
+                <div style="flex:1;overflow-y:auto;padding:10px 18px;scrollbar-width:thin;scrollbar-color:var(--qbk-line) transparent;">
                     <!-- 📂 收藏：主動命名存下的開場白（跟舊「AI 生成劇情」面板同一份資料） -->
                     <div id="qb-free-presets-wrap" class="qbfp-wrap">
                         <div class="qbfp-hd">收藏的開場白<span id="qb-free-presets-count" class="qbfp-count"></span></div>
                         <div id="qb-free-presets-list" class="qbfp-list"></div>
                     </div>
-                    <div style="font-size:10px;color:rgba(150,200,255,0.3);letter-spacing:2px;margin-bottom:8px;text-transform:uppercase;">過往開場</div>
+                    <div style="font-size:10px;color:var(--qbs-cool-dim);letter-spacing:2px;margin-bottom:8px;text-transform:uppercase;">過往開場</div>
                     <div id="qb-free-history-list" style="display:flex;flex-direction:column;gap:6px;"></div>
                 </div>
 
-                <div style="padding:12px 18px;border-top:1px solid rgba(100,180,255,0.15);flex-shrink:0;">
+                <div style="padding:12px 18px;border-top:1px solid var(--qbs-cool-line);flex-shrink:0;">
                     <button id="qb-free-dive-btn" class="qb-btn-primary cool block">踏入故事</button>
                 </div>
             </div>
@@ -792,22 +792,22 @@ status = "正常"`;
             if (!listEl) return;
             const hist = _getFreeHistory();
             if (!hist.length) {
-                listEl.innerHTML = `<div style="font-size:12px;color:rgba(255,255,255,0.2);text-align:center;padding:12px;">尚無歷史紀錄</div>`;
+                listEl.innerHTML = `<div style="font-size:12px;color:var(--qbk-ink-faint);text-align:center;padding:12px;">尚無歷史紀錄</div>`;
                 return;
             }
             listEl.innerHTML = hist.map(h => `
                 <div class="qb-free-hist-item" data-id="${h.id}" style="
-                    background:rgba(100,180,255,0.05);border:1px solid rgba(100,180,255,0.15);
+                    background:var(--qbs-soft);border:1px solid var(--qbs-cool-line);
                     border-radius:6px;padding:10px 12px;cursor:pointer;
                     transition:background 0.15s,border-color 0.15s;position:relative;"
-                    onmouseover="this.style.background='rgba(100,180,255,0.1)';this.style.borderColor='rgba(100,180,255,0.3)'"
-                    onmouseout="this.style.background='rgba(100,180,255,0.05)';this.style.borderColor='rgba(100,180,255,0.15)'">
-                    ${h.title ? `<div style="font-size:11px;color:rgba(150,210,255,0.7);font-weight:bold;margin-bottom:4px;letter-spacing:1px;">${_escHtml(h.title)}</div>` : ''}
-                    <div style="font-size:12px;color:rgba(220,235,255,0.75);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${_escHtml(h.request || '')}</div>
-                    <div style="font-size:10px;color:rgba(150,200,255,0.25);margin-top:4px;">${new Date(h.ts).toLocaleDateString('zh-TW')}</div>
+                    onmouseover="this.style.background='var(--qbs-cool-line)';this.style.borderColor='var(--qbs-cool-line)'"
+                    onmouseout="this.style.background='var(--qbs-soft)';this.style.borderColor='var(--qbs-cool-line)'">
+                    ${h.title ? `<div style="font-size:11px;color:var(--qbs-cool);font-weight:bold;margin-bottom:4px;letter-spacing:1px;">${_escHtml(h.title)}</div>` : ''}
+                    <div style="font-size:12px;color:var(--qbk-ink);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${_escHtml(h.request || '')}</div>
+                    <div style="font-size:10px;color:var(--qbs-cool-dim);margin-top:4px;">${new Date(h.ts).toLocaleDateString('zh-TW')}</div>
                     <button class="qb-free-hist-del" data-id="${h.id}" style="
                         position:absolute;top:6px;right:6px;
-                        background:rgba(180,30,30,0.5);border:none;color:rgba(255,180,180,0.7);
+                        background:var(--qbs-bad-line);border:none;color:#fff;
                         font-size:10px;width:18px;height:18px;border-radius:50%;
                         cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;"
                         onclick="event.stopPropagation();">✕</button>
@@ -837,8 +837,8 @@ status = "正常"`;
             const title   = (titleInput?.value || '').trim();
             const request = (reqInput?.value || '').trim();
             if (!request) {
-                reqInput.style.borderColor = 'rgba(255,100,100,0.6)';
-                setTimeout(() => { reqInput.style.borderColor = 'rgba(100,180,255,0.2)'; }, 1500);
+                reqInput.style.borderColor = 'var(--qbs-bad-line)';
+                setTimeout(() => { reqInput.style.borderColor = 'var(--qbs-cool-line)'; }, 1500);
                 reqInput?.focus();
                 return;
             }
@@ -984,12 +984,12 @@ status = "正常"`;
         panel.innerHTML = `
             <div style="position:absolute;inset:0;background:url('${w.cover}') center/cover;"></div>
             <div style="position:absolute;inset:0;background:linear-gradient(180deg,
-                rgba(0,0,0,0.28) 0%,rgba(0,0,0,0.05) 25%,
-                rgba(0,0,0,0.65) 55%,rgba(0,0,0,0.97) 100%);"></div>
+                rgba(240,243,250,0) 0%,rgba(240,243,250,0) 25%,
+                rgba(240,243,250,0.82) 55%,rgba(240,243,250,0.98) 100%);"></div>
 
             <button id="qb-cover-back" style="
                 position:absolute;top:12px;left:12px;
-                background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);
+                background:var(--qbs-field);backdrop-filter:blur(6px);
                 border:1px solid var(--qbk-line);color:var(--qbk-ink);
                 padding:6px 14px;border-radius:20px;cursor:pointer;
                 font-size:12px;letter-spacing:1px;z-index:30;">返回書架</button>
@@ -999,16 +999,16 @@ status = "正常"`;
                 padding:20px 20px 32px;text-align:center;z-index:2;
                 display:flex;flex-direction:column;align-items:center;">
                 
-                <div style="font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));">${_wIcon(w)}</div>
+                <div style="font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 6px var(--qbs-shadow));">${_wIcon(w)}</div>
                 <div style="font-size:24px;font-weight:900;color:var(--qbk-ink);
-                            letter-spacing:3px;text-shadow:0 2px 16px rgba(0,0,0,0.9);
+                            letter-spacing:3px;text-shadow:none;
                             margin-bottom:14px;font-family:'Noto Sans TC',sans-serif;line-height:1.3;">${w.title}</div>
                 
                 ${!isCard ? `
-                <div style="font-size:13px;color:rgba(255,242,210,0.88);line-height:2;font-style:italic;
-                            text-shadow:0 1px 6px rgba(0,0,0,1);margin-bottom:18px;">${_escHtml(w.desc || '')}</div>
-                <div style="color:rgba(229,62,62,0.85);font-size:11px;letter-spacing:2px;margin-bottom:16px;
-                            text-shadow:0 0 6px rgba(0,0,0,0.8);">
+                <div style="font-size:13px;color:var(--qbk-ink);line-height:2;font-style:italic;
+                            text-shadow:none;margin-bottom:18px;">${_escHtml(w.desc || '')}</div>
+                <div style="color:var(--qbs-bad);font-size:11px;letter-spacing:2px;margin-bottom:16px;
+                            text-shadow:none;">
                     危&ensp;險&ensp;度 &nbsp;${dangerFill}<span style="opacity:0.3;">${dangerEmpty}</span>
                 </div>
                 ` : `
@@ -1021,14 +1021,14 @@ status = "正常"`;
                     width: 100%; margin-bottom: 24px;
                     display: flex; flex-direction: column; align-items: center; gap: 8px;">
                     <div style="display:flex; align-items:center; gap:8px; width:75%;">
-                        <div style="flex:1; height:1px; background:linear-gradient(90deg, transparent, rgba(239,227,208,0.16));"></div>
-                        <span style="font-size:10px; color:var(--qbk-ink-dim); letter-spacing:3px; text-shadow:0 1px 2px #000; font-weight:bold;">擴充館藏</span>
-                        <div style="flex:1; height:1px; background:linear-gradient(270deg, transparent, rgba(239,227,208,0.16));"></div>
+                        <div style="flex:1; height:1px; background:linear-gradient(90deg, transparent, var(--qbk-line));"></div>
+                        <span style="font-size:10px; color:var(--qbk-ink-dim); letter-spacing:3px; text-shadow:none; font-weight:bold;">擴充館藏</span>
+                        <div style="flex:1; height:1px; background:linear-gradient(270deg, transparent, var(--qbk-line));"></div>
                     </div>
                     <div style="display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:6px; width:100%;">
                         <div id="qb-wb-pack-tags" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;"></div>
                         <select id="qb-wb-pack-add" style="
-                            background:rgba(0,0,0,0.4); border:1px dashed var(--qbk-line);
+                            background:var(--qbs-field); border:1px dashed var(--qbk-line);
                             border-radius:12px; color:var(--qbk-ink-dim); font-size:10px;
                             padding:3px 8px; outline:none; font-family:inherit; cursor:pointer; text-align:center;
                             transition:all 0.2s;">
@@ -1055,11 +1055,11 @@ status = "正常"`;
                  所以既有的開場白內頁與 dive 綁定完全不用改。 -->
             <div id="qb-toc-view" style="
                 display:none;position:absolute;inset:0;z-index:9;
-                background:rgba(20,12,8,0.98);
+                background:var(--qbs-page);
                 flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
                 <div style="padding:16px 20px;border-bottom:1px solid var(--qbk-line);
                             display:flex;align-items:center;justify-content:space-between;
-                            background:rgba(0,0,0,0.3);flex-shrink:0;">
+                            background:var(--qbs-bar);flex-shrink:0;">
                     <div style="font-size:14px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">${_escHtml(w.title)}</div>
                     <button id="qb-toc-close" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
                 </div>
@@ -1077,14 +1077,14 @@ status = "正常"`;
             ${isCard ? `
             <div id="qb-inner-view" style="
                 display:none;position:absolute;inset:0;z-index:10;
-                background:rgba(20,12,8,0.98);
+                background:var(--qbs-page);
                 flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
                 
                 <!-- 標題列不寫「選擇開場白：《書名》」：都點進這本書了，不必再報一次是誰的開場白。
                      返回擺左邊，跟啟程幕同一個位置。 -->
                 <div style="padding:10px 16px;border-bottom:1px solid var(--qbk-line);
                             display:flex;align-items:center;justify-content:space-between;
-                            background:rgba(0,0,0,0.3);flex-shrink:0;">
+                            background:var(--qbs-bar);flex-shrink:0;">
                     <button id="qb-inner-close" style="
                         background:none;border:none;color:var(--qbk-ink-dim);
                         font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
@@ -1096,17 +1096,17 @@ status = "正常"`;
 
                 <!-- 批量取代：獨立 modal（原本是內嵌展開，一開就把正文擠掉，
                      那一列三個欄位並排在手機寬度直接爆出畫面外）-->
-                <div id="qb-greet-replace-panel" style="display:none;position:absolute;inset:0;z-index:30;background:rgba(0,0,0,0.72);align-items:center;justify-content:center;padding:18px;box-sizing:border-box;">
-                    <div id="qb-greet-replace-box" style="width:100%;max-width:340px;max-height:92%;overflow-y:auto;box-sizing:border-box;background:#1e1208;border:1px solid var(--qbk-line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 18px 44px rgba(0,0,0,0.7);">
+                <div id="qb-greet-replace-panel" style="display:none;position:absolute;inset:0;z-index:30;background:var(--qbs-scrim);align-items:center;justify-content:center;padding:18px;box-sizing:border-box;">
+                    <div id="qb-greet-replace-box" style="width:100%;max-width:340px;max-height:92%;overflow-y:auto;box-sizing:border-box;background:var(--qbs-sheet);border:1px solid var(--qbk-line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 40px var(--qbs-shadow);">
                         <div style="display:flex;align-items:center;justify-content:space-between;">
                             <div style="font-size:13px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">全部開場白批量取代</div>
                             <button id="qb-greet-replace-close" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:20px;line-height:1;cursor:pointer;padding:0 2px;">×</button>
                         </div>
-                        <input id="qb-greet-find" placeholder="搜尋文字…" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:9px 10px;font-size:13px;outline:none;font-family:inherit;">
+                        <input id="qb-greet-find" placeholder="搜尋文字…" style="width:100%;box-sizing:border-box;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:9px 10px;font-size:13px;outline:none;font-family:inherit;">
                         <div style="text-align:center;color:var(--qbk-ink-faint);font-size:13px;line-height:1;">↓</div>
-                        <input id="qb-greet-repl" placeholder="替換為…（留空＝刪掉這段字）" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:9px 10px;font-size:13px;outline:none;font-family:inherit;">
+                        <input id="qb-greet-repl" placeholder="替換為…（留空＝刪掉這段字）" style="width:100%;box-sizing:border-box;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:9px 10px;font-size:13px;outline:none;font-family:inherit;">
                         <button id="qb-greet-replace-do" class="qb-btn-primary" style="width:100%;">取代全部</button>
-                        <div id="qb-greet-replace-msg" style="font-size:12px;color:rgba(150,220,130,0.8);min-height:16px;text-align:center;"></div>
+                        <div id="qb-greet-replace-msg" style="font-size:12px;color:var(--qbs-good);min-height:16px;text-align:center;"></div>
                         <div id="qb-greet-saved-rules" style="display:none;border-top:1px solid var(--qbk-line);padding-top:12px;flex-direction:column;gap:8px;">
                             <div style="font-size:11px;color:var(--qbk-ink-faint);letter-spacing:1px;">已儲存規則（點擊套用）</div>
                             <div id="qb-greet-rules-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
@@ -1119,7 +1119,7 @@ status = "正常"`;
                         
                         ${greetings.map((g, i) => `
                             <div class="qb-greet-slide" data-greet-idx="${i}" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 10px 12px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
-                                <div style="border:1px solid var(--qbk-line); background:rgba(0,0,0,0.5); border-radius:10px; padding:14px 16px; flex:1; display:flex; flex-direction:column;">
+                                <div style="border:1px solid var(--qbk-line); background:var(--qbs-field); border-radius:10px; padding:14px 16px; flex:1; display:flex; flex-direction:column;">
                                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;border-bottom:1px solid var(--qbk-line);padding-bottom:8px;">
                                         <span style="font-size:14px;color:var(--qbk-ink);letter-spacing:2px;font-weight:bold;">
                                             開場白 ${i + 1}
@@ -1129,10 +1129,10 @@ status = "正常"`;
                                             <input type="radio" name="qb-greeting" value="${i}" ${i === 0 ? 'checked' : ''} style="display:none;">
                                         </div>
                                     </div>
-                                    <div class="qb-greet-text" data-idx="${i}" style="font-size:14px;color:rgba(255,248,231,0.88);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">
+                                    <div class="qb-greet-text" data-idx="${i}" style="font-size:14px;color:var(--qbk-ink);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">
                                         ${_escHtml(g).replace(/\{\{\s*user\s*\}\}/gi, currentUserName).replace(/\{\{\s*char\s*\}\}/gi, w.title)}
                                     </div>
-                                    <textarea class="qb-greet-editor" data-idx="${i}" style="display:none;flex:1;min-height:200px;background:rgba(0,0,0,0.6);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);font-size:13px;line-height:1.8;padding:12px;resize:vertical;font-family:inherit;outline:none;"></textarea>
+                                    <textarea class="qb-greet-editor" data-idx="${i}" style="display:none;flex:1;min-height:200px;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);font-size:13px;line-height:1.8;padding:12px;resize:vertical;font-family:inherit;outline:none;"></textarea>
                                     <div class="qb-greet-save-row" data-idx="${i}" style="display:none;justify-content:flex-end;gap:8px;margin-top:10px;">
                                         <button class="qb-greet-cancel-btn qb-btn-ghost" data-idx="${i}">取消</button>
                                         <button class="qb-greet-save-btn qb-btn-ghost" data-idx="${i}">儲存</button>
@@ -1145,11 +1145,11 @@ status = "正常"`;
                         `).join('')}
                         
                         <div class="qb-greet-slide" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 10px 12px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
-                            <div style="border:1px solid rgba(100,160,255,0.3); background:rgba(20,45,100,0.4); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                            <div style="border:1px solid var(--qbs-cool-line); background:var(--qbs-soft); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
                                 <input type="radio" name="qb-greeting" value="-1" style="display:none;">
-                                <div style="font-size:48px; margin-bottom:20px; filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));"><i class="fa-solid fa-dice"></i></div>
-                                <span style="font-size:18px;color:rgba(150,200,255,0.9);font-weight:bold;letter-spacing:3px;">讓 AI 自由發揮</span>
-                                <div style="font-size:13px;color:rgba(150,200,255,0.6);margin-top:12px;text-align:center;line-height:1.6;">無預設開場故事<br>直接踏入這個世界的未知領域</div>
+                                <div style="font-size:48px; margin-bottom:20px; filter:drop-shadow(0 2px 6px var(--qbs-shadow));"><i class="fa-solid fa-dice"></i></div>
+                                <span style="font-size:18px;color:var(--qbs-cool);font-weight:bold;letter-spacing:3px;">讓 AI 自由發揮</span>
+                                <div style="font-size:13px;color:var(--qbs-cool-dim);margin-top:12px;text-align:center;line-height:1.6;">無預設開場故事<br>直接踏入這個世界的未知領域</div>
                                 <div class="qb-greet-go-row">
                                     <button class="qb-goto-embark-btn qb-btn-primary block" data-idx="-1" data-wid="${w.id}">與TA相遇</button>
                                 </div>
@@ -1161,21 +1161,21 @@ status = "正常"`;
                 </div>
 
                 <div style="padding:10px 16px 14px;border-top:1px solid var(--qbk-line);
-                            background:rgba(0,0,0,0.4);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:10px;">
+                            background:var(--qbs-field);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:10px;">
                     
                     <div style="display:flex;align-items:center;justify-content:center;gap:14px;width:100%;">
-                    <button id="qb-greet-prev-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;"><i class="fa-solid fa-caret-left"></i></button>
+                    <button id="qb-greet-prev-btn" style="flex-shrink:0;background:var(--qbs-field);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;"><i class="fa-solid fa-caret-left"></i></button>
                     <div id="qb-greet-dots" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:70%;">
-                        ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:#1A1C28;opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
-                        <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:#4a9eff;opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
+                        ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:var(--qbk-ink);opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
+                        <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:var(--qbs-cool);opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
                     </div>
-                    <button id="qb-greet-next-btn" style="flex-shrink:0;background:rgba(0,0,0,0.5);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;"><i class="fa-solid fa-caret-right"></i></button>
+                    <button id="qb-greet-next-btn" style="flex-shrink:0;background:var(--qbs-field);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;"><i class="fa-solid fa-caret-right"></i></button>
                     </div>
                 </div>
 
                 <!-- ✍️ 啟程：第一句回應自己一幕（跟酒館版同一個心智模型），不再跟開場白擠在同一頁 -->
-                <div id="qb-embark-view" style="display:none;position:absolute;inset:0;z-index:25;background:rgba(20,12,8,0.98);flex-direction:column;">
-                    <div style="padding:10px 16px;border-bottom:1px solid var(--qbk-line);display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.3);flex-shrink:0;">
+                <div id="qb-embark-view" style="display:none;position:absolute;inset:0;z-index:25;background:var(--qbs-page);flex-direction:column;">
+                    <div style="padding:10px 16px;border-bottom:1px solid var(--qbk-line);display:flex;align-items:center;justify-content:space-between;background:var(--qbs-bar);flex-shrink:0;">
                         <button id="qb-embark-back" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
                         <div style="font-size:13px;font-weight:bold;color:var(--qbk-ink);letter-spacing:3px;">啟程</div>
                         <span style="width:44px;"></span>
@@ -1184,7 +1184,7 @@ status = "正常"`;
                         <div style="font-size:12px;color:var(--qbk-ink-dim);letter-spacing:1px;text-align:center;">寫下你踏入故事的第一步——行動、對白或心聲都可以，也可以留空</div>
                         <textarea id="qb-user-reply" placeholder="在這裡寫下你的第一句…" style="
                             flex:1;min-height:0;width:100%;box-sizing:border-box;
-                            background:rgba(0,0,0,0.45);border:1px solid var(--qbk-line);
+                            background:var(--qbs-field);border:1px solid var(--qbk-line);
                             border-radius:8px;color:var(--qbk-ink);font-size:14px;line-height:1.8;
                             padding:12px 14px;resize:none;font-family:inherit;outline:none;
                             scrollbar-width:none;"></textarea>
@@ -1221,7 +1221,7 @@ status = "正常"`;
                 const chip = document.createElement('div');
                 // 美化：輕量化的半透明小標籤
                 chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;
-                    background:rgba(239,227,208,0.07);border:1px solid var(--qbk-line);
+                    background:var(--qbs-soft);border:1px solid var(--qbk-line);
                     border-radius:12px;padding:3px 10px;font-size:10px;
                     color:var(--qbk-ink);backdrop-filter:blur(2px);`;
                 chip.innerHTML = `<span>${_escHtml(pack)}</span>
@@ -1236,7 +1236,7 @@ status = "正常"`;
                 tagsEl.appendChild(chip);
             });
             if (!w.wbPacks.length) {
-                tagsEl.innerHTML = `<span style="font-size:10px;color:rgba(255,255,255,0.2);font-style:italic;">
+                tagsEl.innerHTML = `<span style="font-size:10px;color:var(--qbk-ink-faint);font-style:italic;">
                     （尚無掛載館藏）</span>`;
             }
         }
@@ -1638,16 +1638,16 @@ status = "正常"`;
                 rulesList.innerHTML = '';
                 rules.forEach(r => {
                     const chip = document.createElement('div');
-                    chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:rgba(239,227,208,0.08);border:1px solid var(--qbk-line);border-radius:20px;padding:4px 10px 4px 12px;cursor:pointer;transition:background 0.15s;max-width:100%;';
+                    chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:var(--qbs-soft);border:1px solid var(--qbk-line);border-radius:20px;padding:4px 10px 4px 12px;cursor:pointer;transition:background 0.15s;max-width:100%;';
                     chip.title = `點擊填入：「${r.find}」→「${r.repl}」`;
 
                     const label = document.createElement('span');
-                    label.style.cssText = 'font-size:12px;color:rgba(255,248,231,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;';
+                    label.style.cssText = 'font-size:12px;color:var(--qbk-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;';
                     label.textContent = `${r.find} → ${r.repl || '（刪除）'}`;
 
                     const del = document.createElement('button');
                     del.textContent = '×';
-                    del.style.cssText = 'background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;font-size:14px;line-height:1;padding:0;flex-shrink:0;';
+                    del.style.cssText = 'background:none;border:none;color:var(--qbk-ink-faint);cursor:pointer;font-size:14px;line-height:1;padding:0;flex-shrink:0;';
                     del.title = '刪除此規則';
                     del.onclick = e => {
                         e.stopPropagation();
@@ -1657,8 +1657,8 @@ status = "正常"`;
 
                     chip.appendChild(label);
                     chip.appendChild(del);
-                    chip.addEventListener('mouseenter', () => chip.style.background = 'rgba(239,227,208,0.14)');
-                    chip.addEventListener('mouseleave', () => chip.style.background = 'rgba(239,227,208,0.14)');
+                    chip.addEventListener('mouseenter', () => chip.style.background = 'var(--qbk-line)');
+                    chip.addEventListener('mouseleave', () => chip.style.background = 'var(--qbk-line)');
                     // 點擊 chip → 填入輸入框並立即執行
                     chip.onclick = () => {
                         if (findInput) findInput.value = r.find;
@@ -1672,7 +1672,7 @@ status = "正常"`;
             // 執行取代的核心函式
             function _doReplace(find, repl) {
                 if (!find) {
-                    if (replMsg) { replMsg.textContent = '請輸入搜尋文字'; replMsg.style.color = 'rgba(255,160,100,0.8)'; }
+                    if (replMsg) { replMsg.textContent = '請輸入搜尋文字'; replMsg.style.color = 'var(--qbs-warn)'; }
                     return;
                 }
                 let count = 0;
@@ -1698,9 +1698,9 @@ status = "正常"`;
                     // 儲存這條規則
                     _addRule(find, repl);
                     _renderRules();
-                    if (replMsg) { replMsg.textContent = `已取代 ${count} 個開場白，規則已儲存`; replMsg.style.color = 'rgba(150,220,130,0.9)'; }
+                    if (replMsg) { replMsg.textContent = `已取代 ${count} 個開場白，規則已儲存`; replMsg.style.color = 'var(--qbs-good)'; }
                 } else {
-                    if (replMsg) { replMsg.textContent = '未找到匹配文字'; replMsg.style.color = 'rgba(255,160,100,0.8)'; }
+                    if (replMsg) { replMsg.textContent = '未找到匹配文字'; replMsg.style.color = 'var(--qbs-warn)'; }
                 }
                 setTimeout(() => { if (replMsg) replMsg.textContent = ''; }, 3000);
             }
