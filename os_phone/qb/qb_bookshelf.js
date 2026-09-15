@@ -1,13 +1,13 @@
 ﻿// ---------------------------------------------------------------
 // [檔案] qb_bookshelf.js (v1.6 - 動態人設防汙染預覽版)
-// 職責：書架視窗模組 — 書脊渲染、書封面展開、撰寫新書、刪除確認彈窗
+// 職責：書架視窗模組 — 銀藍書架（一格一本封面、左右滑頁）、書封面展開、撰寫新書、刪除確認彈窗
 // 從 void_terminal.js 抽出，完全無狀態，依賴全域物件：
 //   window.AURELIA_WORLDS / AURELIA_CUSTOM_WORLDS
 //   window.OS_API_ENGINE  (generateText — 撰寫新書用)
 //   window.OS_DB          (deleteVarPack / worldbook CRUD)
 //   window.OS_WORLDBOOK   (getAvailablePacks)
 //   window.OS_API         (isStandalone)
-//   window.OS_CARD_IMPORT (injectImportSpine)
+//   window.OS_CARD_IMPORT (openImportPanel)
 //   window.VoidTerminal   (playSequence — 錯誤回饋台詞)
 //   window.AureliaControlCenter (switchPage)
 //   window.VN_Core        (openGeneratePanel)
@@ -187,196 +187,220 @@
         document.body.appendChild(dlg);
     }
 
-    // ── 書架分頁狀態 ────────────────────────────────────────────
+    // ── 書架（銀藍版）───────────────────────────────────────────
+    //   2026-09-16 換成阿洛的 B 稿（參考資料/aurelia_bookshelf_b_lab）：一格一本、封面是圖、
+    //   書名是字，一頁 2×3（書區太矮就 2×2、再矮 2×1），左右滑換頁（原生 scroll-snap）。
+    //   自由劇情是上面那張長卡，匯入角色卡／撰寫新書在底部那條。
+    //   書架層＝#qb-shelf-stage，開書封、撰寫新書、匯入面板時整層藏起來，退回來再亮。
     let _currentPage = 0;
+    let _pageSize = 6;
+    let _pageCount = 1;
+    let _dragMoved = false;
 
-    function _getShelves() {
-        return [
-            document.getElementById('qb-shelf-1'),
-            document.getElementById('qb-shelf-2'),
-            document.getElementById('qb-shelf-3'),
-        ].filter(Boolean);
+    function _stage() { return document.getElementById('qb-shelf-stage'); }
+    function _track() { return document.getElementById('qb-shelf-carousel'); }
+    // 開書封／撰寫新書／踏入故事那幾條拿這個藏、還原書架層
+    function _getShelves() { const s = _stage(); return s ? [s] : []; }
+
+    // 從書封、匯入面板退回書架：收掉那一層、書架層亮回來、重畫
+    function showShelf() {
+        const panel = document.getElementById('qb-book-cover-panel');
+        if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
+        _getShelves().forEach(s => s.style.display = '');
+        render();
     }
 
-    function _clearShelf(shelfEl) {
-        // 保留底板（position:absolute），移除書脊
-        Array.from(shelfEl.children)
-            .filter(el => el.style.position !== 'absolute')
-            .forEach(el => el.remove());
+    // 書區夠高放三排，不夠放兩排，再矮一排；一律兩欄
+    function _capacity(track) {
+        const h = track.clientHeight;
+        if (!h) return 6;
+        return (h > 440 ? 3 : (h > 230 ? 2 : 1)) * 2;
     }
 
-    function _makeSpine(w, bookH) {
-        const spine = document.createElement('div');
-        spine.className = 'qb-spine';
-        spine.dataset.wid = w.id;
-        const bgStyle = w.isFreeScript
-            ? 'background:linear-gradient(160deg,#1a1a2e,#16213e,#0f3460);'
-            : `background:url('${w.cover}') center/cover;`;
-        spine.style.cssText = `
-            flex-shrink:0; width:48px; height:${bookH}px; position:relative; z-index:1;
-            ${bgStyle}
-            border-radius:2px 1px 1px 2px;
-            border-left:5px solid ${w.isFreeScript ? 'rgba(100,180,255,0.35)' : 'rgba(255,255,255,0.25)'};
-            border-right:2px solid rgba(0,0,0,0.6);
-            box-shadow:inset 4px 0 10px rgba(0,0,0,0.5), 4px 4px 12px rgba(0,0,0,0.7);
-            cursor:pointer;
-            transition:transform 0.25s cubic-bezier(0.2,0.8,0.2,1), box-shadow 0.25s;
-            transform-origin:bottom center;
-        `;
-        spine.innerHTML = `
-            <!-- 書名壓在封面圖上，封面亮起來(水墨、白底立繪)時字會糊掉 → 罩深一點。
-                 0.62 是實算出來的門檻：就算封面整片全白，書名對比也還有 4.9。 -->
-            <div style="position:absolute;inset:0;background:rgba(0,0,0,${w.isFreeScript ? '0.3' : '0.62'});border-radius:inherit;"></div>
-            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:8px 0;">
-                <span style="writing-mode:vertical-rl;text-orientation:mixed;color:${w.isFreeScript ? 'rgba(150,200,255,0.95)' : 'var(--qbk-ink)'};font-size:11px;font-weight:700;letter-spacing:3px;text-shadow:0 1px 4px #000;max-height:78%;overflow:hidden;line-height:1.3;">${w.title}</span>
-            </div>
-            <div style="position:absolute;top:6px;left:0;right:0;text-align:center;font-size:14px;line-height:1;">${_wIcon(w)}</div>
-            ${!w.isFreeScript ? `<div style="position:absolute;bottom:4px;left:0;right:0;text-align:center;color:rgba(229,62,62,0.9);font-size:8px;font-weight:bold;text-shadow:0 0 4px #000;">▲${w.danger}</div>` : ''}
-            ${w.custom ? `<button class="qb-spine-del" title="下架" style="position:absolute;top:4px;right:3px;background:rgba(180,30,30,0.75);border:none;color:#fff;font-size:9px;width:16px;height:16px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;z-index:5;">✕</button>` : ''}
-        `;
-        spine.onmouseenter = () => {
-            spine.style.transform = 'translateY(-12px) scale(1.04)';
-            spine.style.boxShadow = 'inset 4px 0 10px rgba(0,0,0,0.5), 6px 18px 20px rgba(0,0,0,0.8)';
-            spine.style.zIndex = '5';
+    function _makeBook(w) {
+        const card = document.createElement('div');
+        card.className = 'qbs-book';
+        card.dataset.wid = w.id;
+
+        const obj = document.createElement('div');
+        obj.className = 'qbs-book-obj';
+        const spine = document.createElement('span');
+        spine.className = 'qbs-spine';
+
+        const face = document.createElement('button');
+        face.type = 'button';
+        face.className = 'qbs-face';
+        face.title = w.title || '';
+        const slot = document.createElement('span');
+        slot.className = 'qbs-cover';
+        const empty = () => {
+            const e = document.createElement('span');
+            e.className = 'qbs-cover-empty';
+            e.innerHTML = _wIcon(w) || '<i class="fa-solid fa-book"></i>';
+            return e;
         };
-        spine.onmouseleave = () => {
-            spine.style.transform = '';
-            spine.style.boxShadow = 'inset 4px 0 10px rgba(0,0,0,0.5), 4px 4px 12px rgba(0,0,0,0.7)';
-            spine.style.zIndex = '1';
-        };
+        if (w.cover) {
+            const img = document.createElement('img');
+            img.alt = '';
+            img.draggable = false;
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.addEventListener('error', () => slot.replaceChildren(empty()), { once: true });   // 封面壞掉就留書的圖示，書框照舊
+            img.src = w.cover;
+            slot.appendChild(img);
+        } else {
+            slot.appendChild(empty());
+        }
+        face.appendChild(slot);
+        face.onclick = () => { if (!_dragMoved) openCover(w); };
+
+        const plinth = document.createElement('span');
+        plinth.className = 'qbs-plinth';
+        obj.append(spine, face, plinth);
+
         if (w.custom) {
-            const delBtn = spine.querySelector('.qb-spine-del');
-            if (delBtn) {
-                delBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    _confirmDeleteWorld(w, () => render());
-                };
-            }
-        }
-        spine.onclick = () => openCover(w);
-        return spine;
-    }
-
-    function _makeAddSpine(bookH) {
-        const addSpine = document.createElement('div');
-        addSpine.style.cssText = `
-            flex-shrink:0; width:48px; height:${bookH}px; position:relative; z-index:1;
-            background:rgba(44,28,16,0.7);
-            border:1.5px dashed rgba(239,227,208,0.20);
-            border-radius:2px; cursor:pointer;
-            display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-            transition:background 0.2s, border-color 0.2s;
-        `;
-        addSpine.innerHTML = `
-            <span style="color:var(--qbk-ink-dim);font-size:20px;line-height:1;">＋</span>
-            <span style="writing-mode:vertical-rl;color:var(--qbk-ink-faint);font-size:10px;letter-spacing:3px;">撰寫新書</span>
-        `;
-        addSpine.onmouseenter = () => {
-            addSpine.style.background = 'rgba(62,39,22,0.9)';
-            addSpine.style.borderColor = 'rgba(239,227,208,0.40)';
-        };
-        addSpine.onmouseleave = () => {
-            addSpine.style.background = 'rgba(44,28,16,0.7)';
-            addSpine.style.borderColor = 'rgba(239,227,208,0.16)';
-        };
-        addSpine.onclick = () => openCreate();
-        return addSpine;
-    }
-
-    // ── 渲染書架（移動端動態寬高適配＋手勢滑動）────────────────────────
-    function render() {
-        const shelves = _getShelves();
-        if (!shelves.length) return;
-        // 回到書架這一層就不是在讀開場白了 → 收掉滿版態，木框書架窗照舊
-        try { document.getElementById('qb-bookshelf-overlay')?.classList.remove('qb-reading'); } catch (e) { }
-
-        const allWorlds = [_FREE_WORLD]
-            .concat(Object.values(window.AURELIA_WORLDS || {}))
-            .concat(window.AURELIA_CUSTOM_WORLDS || []);
-
-        // 動態獲取第一層書架的真實寬度。
-        let shelfW = shelves[0].clientWidth;
-        if (shelfW <= 0) {
-            shelfW = window.innerWidth > 0 ? (window.innerWidth - 40) : 300;
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'qbs-del';
+            del.title = '下架';
+            del.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            del.onclick = (e) => { e.stopPropagation(); _confirmDeleteWorld(w, () => render()); };
+            obj.appendChild(del);
         }
 
-        // 計算每層可放幾本（保底最少1本，完美適配移動端）
-        const bookW    = 48, gap = 3, padH = 28;
-        const perShelf = Math.max(1, Math.floor((shelfW - padH + gap) / (bookW + gap)));
-        const perPage  = perShelf * shelves.length;
+        const title = document.createElement('div');
+        title.className = 'qbs-title';
+        title.textContent = w.title || '';   // 書名是匯入的角色卡名，不進 innerHTML
+        card.append(obj, title);
+        return card;
+    }
 
-        // 計算書本高度（依層高，避免在移動端變形）
-        const shelfH = shelves[0].clientHeight || 185;
-        const bookH  = Math.min(145, Math.max(60, shelfH - 40));
+    function _go(p) {
+        const track = _track();
+        if (!track) return;
+        const t = Math.max(0, Math.min(p, _pageCount - 1));
+        const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        track.scrollTo({ left: t * track.clientWidth, behavior: reduce ? 'instant' : 'smooth' });
+    }
 
-        // 換頁邊界計算
-        const totalPages = Math.max(1, Math.ceil((allWorlds.length + 1) / perPage));
-        _currentPage = Math.max(0, Math.min(_currentPage, totalPages - 1));
-        const startIdx = _currentPage * perPage;
-        const pageWorlds = allWorlds.slice(startIdx, startIdx + perPage);
-
-        // 清空三層書架
-        shelves.forEach(s => _clearShelf(s));
-
-        // 將書本依序塞入各層
-        shelves.forEach((shelfEl, i) => {
-            const slice = pageWorlds.slice(i * perShelf, (i + 1) * perShelf);
-            slice.forEach(w => shelfEl.appendChild(_makeSpine(w, bookH)));
-
-            // 綁定移動端 Swipe 滑動手勢翻頁
-            if (!shelfEl._swipeWired) {
-                let touchStartX = 0;
-                shelfEl.addEventListener('touchstart', (e) => {
-                    touchStartX = e.changedTouches[0].screenX;
-                }, { passive: true });
-                
-                shelfEl.addEventListener('touchend', (e) => {
-                    let touchEndX = e.changedTouches[0].screenX;
-                    if (touchStartX - touchEndX > 50) {
-                        const nextBtn = document.getElementById('qb-page-next');
-                        if (nextBtn && !nextBtn.disabled) { _currentPage++; render(); }
-                    } else if (touchEndX - touchStartX > 50) {
-                        const prevBtn = document.getElementById('qb-page-prev');
-                        if (prevBtn && !prevBtn.disabled) { _currentPage--; render(); }
-                    }
-                }, { passive: true });
-                
-                shelfEl._swipeWired = true;
+    function _updatePager() {
+        const nav   = document.getElementById('qb-shelf-nav');
+        const prev  = document.getElementById('qb-page-prev');
+        const next  = document.getElementById('qb-page-next');
+        const label = document.getElementById('qb-page-label');
+        const dots  = document.getElementById('qb-page-dots');
+        if (nav) nav.classList.toggle('single', _pageCount <= 1);   // 只有一頁：位置留著、東西藏起來，書區高度才不會跟著跳
+        if (prev) prev.disabled = _currentPage === 0;
+        if (next) next.disabled = _currentPage >= _pageCount - 1;
+        if (label) label.textContent = (_currentPage + 1) + ' / ' + _pageCount;
+        if (dots) {
+            dots.replaceChildren();
+            const start = Math.max(0, Math.min(_currentPage - 2, _pageCount - 5));   // 頁點最多五顆，跟著目前頁移動
+            for (let i = start; i < Math.min(start + 5, _pageCount); i++) {
+                const d = document.createElement('button');
+                d.type = 'button';
+                d.className = 'qbs-dot' + (i === _currentPage ? ' on' : '');
+                d.title = '第 ' + (i + 1) + ' 頁';
+                d.onclick = () => _go(i);
+                dots.appendChild(d);
             }
+        }
+    }
+
+    function _wireOnce() {
+        const stage = _stage();
+        const track = _track();
+        if (!stage || !track || stage._qbsWired) return;
+        stage._qbsWired = true;
+
+        document.getElementById('qb-page-prev').onclick = () => _go(_currentPage - 1);
+        document.getElementById('qb-page-next').onclick = () => _go(_currentPage + 1);
+        document.getElementById('qb-free-story-btn').onclick = () => openCover(_FREE_WORLD);
+        document.getElementById('qb-write-book-btn').onclick = () => openCreate();
+        document.getElementById('qb-import-card-btn').onclick = () => window.OS_CARD_IMPORT?.openImportPanel?.(stage);
+
+        // 滑到哪一頁：手指滑是原生捲動，這裡只跟著更新頁點與箭頭
+        track.addEventListener('scroll', () => {
+            const w = track.clientWidth;
+            if (!w) return;
+            const n = Math.max(0, Math.min(_pageCount - 1, Math.round(track.scrollLeft / w)));
+            if (n !== _currentPage) { _currentPage = n; _updatePager(); }
+        }, { passive: true });
+
+        track.addEventListener('keydown', (e) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            _go(_currentPage + (e.key === 'ArrowRight' ? 1 : -1));
         });
 
-        // ＋ 新增按鈕
-        if (_currentPage === totalPages - 1) {
-            const addShelfIdx = Math.min(
-                Math.floor(pageWorlds.length / perShelf),
-                shelves.length - 1
-            );
-            shelves[addShelfIdx].appendChild(_makeAddSpine(bookH));
-            window.OS_CARD_IMPORT?.injectImportSpine?.(shelves[addShelfIdx]);
-        }
-
-        // 翻頁導航箭頭狀態更新
-        const nav      = document.getElementById('qb-shelf-nav');
-        const label    = document.getElementById('qb-page-label');
-        const prevBtn  = document.getElementById('qb-page-prev');
-        const nextBtn  = document.getElementById('qb-page-next');
-        
-        if (nav) {
-            if (totalPages > 1) {
-                nav.style.display = 'flex';
-                if (label)   label.textContent      = `${_currentPage + 1} / ${totalPages}`;
-                if (prevBtn) prevBtn.disabled       = _currentPage === 0;
-                if (nextBtn) nextBtn.disabled       = _currentPage === totalPages - 1;
-                
-                if (!nav._clickWired) {
-                    nav._clickWired = true;
-                    if (prevBtn) prevBtn.onclick = () => { if (_currentPage > 0) { _currentPage--; render(); } };
-                    if (nextBtn) nextBtn.onclick = () => { if (_currentPage < totalPages - 1) { _currentPage++; render(); } };
-                }
-            } else {
-                nav.style.display = 'none';
+        // 桌機滑鼠拖一下也能換頁；拖過的那次放開不算點書
+        let mouseStart = null;
+        track.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse') mouseStart = { x: e.clientX, page: _currentPage };
+        });
+        window.addEventListener('pointerup', (e) => {
+            if (!mouseStart) return;
+            const dx = e.clientX - mouseStart.x;
+            if (Math.abs(dx) > 45) {
+                _go(mouseStart.page + (dx < 0 ? 1 : -1));
+                _dragMoved = true;
+                setTimeout(() => { _dragMoved = false; }, 0);
             }
+            mouseStart = null;
+        });
+        window.addEventListener('pointercancel', () => { mouseStart = null; });
+
+        // 視窗大小變了（轉橫、桌機拉窗）：一頁放幾本變了就重排並停在原本那幾本，沒變只對齊頁
+        if (window.ResizeObserver) {
+            new ResizeObserver(() => {
+                if (!track.clientWidth || !track.clientHeight) return;
+                const cap = _capacity(track);
+                if (cap !== _pageSize) {
+                    _currentPage = Math.floor((_currentPage * _pageSize) / cap);
+                    render();
+                } else {
+                    track.scrollTo({ left: _currentPage * track.clientWidth, behavior: 'instant' });
+                }
+            }).observe(track);
         }
+    }
+
+    function render() {
+        const stage = _stage();
+        const track = _track();
+        if (!stage || !track) return;
+        // 回到書架這一層就不是在讀開場白了 → 收掉滿版態
+        try { document.getElementById('qb-bookshelf-overlay')?.classList.remove('qb-reading'); } catch (e) { }
+        _wireOnce();
+
+        const books = Object.values(window.AURELIA_WORLDS || {})
+            .concat(window.AURELIA_CUSTOM_WORLDS || []);
+
+        _pageSize  = _capacity(track);
+        _pageCount = Math.max(1, Math.ceil(books.length / _pageSize));
+        _currentPage = Math.max(0, Math.min(_currentPage, _pageCount - 1));
+
+        const frag = document.createDocumentFragment();
+        for (let p = 0; p < _pageCount; p++) {
+            const page = document.createElement('section');
+            page.className = 'qbs-page rows-' + (_pageSize / 2);
+            const rows = books.slice(p * _pageSize, (p + 1) * _pageSize);
+            if (!rows.length) {
+                const e = document.createElement('div');
+                e.className = 'qbs-empty';
+                e.textContent = '書架還空著';
+                page.appendChild(e);
+            }
+            rows.forEach(w => page.appendChild(_makeBook(w)));
+            frag.appendChild(page);
+        }
+        track.replaceChildren(frag);
+        track.scrollTo({ left: _currentPage * track.clientWidth, behavior: 'instant' });
+        _updatePager();
+
+        // 匯入角色卡的模組沒載到就不給按（按了也沒反應）
+        const imp = document.getElementById('qb-import-card-btn');
+        if (imp) imp.classList.toggle('qb-hidden', !window.OS_CARD_IMPORT?.openImportPanel);
     }
 
     // ── 撰寫新書面板 ─────────────────────────────────────────────
@@ -493,7 +517,6 @@ status = "正常"`;
     function openCreate() {
         const panel   = document.getElementById('qb-book-cover-panel');
         const shelves = _getShelves();
-        const nav     = document.getElementById('qb-shelf-nav');
         if (!panel) return;
 
         panel.innerHTML = `
@@ -539,7 +562,6 @@ status = "正常"`;
 
         panel.style.display = 'block';
         shelves.forEach(s => s.style.display = 'none');
-        if (nav) nav.style.display = 'none';
 
         const input    = panel.querySelector('#qb-create-input');
         const submit   = panel.querySelector('#qb-create-submit');
@@ -623,7 +645,6 @@ status = "正常"`;
     function _openFreeScriptCover() {
         const panel   = document.getElementById('qb-book-cover-panel');
         const shelves = _getShelves();
-        const nav     = document.getElementById('qb-shelf-nav');
         if (!panel) return;
 
         panel.innerHTML = `
@@ -709,7 +730,6 @@ status = "正常"`;
 
         panel.style.display = 'block';
         shelves.forEach(s => s.style.display = 'none');
-        if (nav) nav.style.display = 'none';
 
         const coverView  = panel.querySelector('#qb-cover-view');
         const innerView  = panel.querySelector('#qb-free-inner-view');
@@ -733,7 +753,6 @@ status = "正常"`;
         panel.querySelector('#qb-cover-back').onclick = () => {
             panel.style.display = 'none';
             shelves.forEach(s => s.style.display = 'flex');
-            if (nav) nav.style.display = '';
         };
 
         // ── 收藏的開場白（主動命名存的，同名覆蓋）────────────────
@@ -841,7 +860,6 @@ status = "正常"`;
             if (overlay) overlay.style.display = 'none';
             panel.style.display = 'none';
             shelves.forEach(s => s.style.display = 'flex');
-            if (nav) nav.style.display = '';
 
             // 切換到 VN 頁
             if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
@@ -947,7 +965,6 @@ status = "正常"`;
     function openCover(w) {
         const panel = document.getElementById('qb-book-cover-panel');
         const shelves = _getShelves();
-        const nav = document.getElementById('qb-shelf-nav');
         if (!panel) return;
 
         // 自由書籍走獨立路徑
@@ -1182,7 +1199,6 @@ status = "正常"`;
 
         panel.style.display = 'block';
         shelves.forEach(s => s.style.display = 'none');
-        if (nav) nav.style.display = 'none';
 
         // ── 📚 擴充館藏插槽 初始化 ───────────────────────────────
         if (!Array.isArray(w.wbPacks)) {
@@ -1824,18 +1840,6 @@ status = "正常"`;
         });
     }
 
-    // ── 監聽視窗大小改變 (移動端橫直屏旋轉或縮放適配) ─────────────────────
-    let _resizeTimer = null;
-    window.addEventListener('resize', () => {
-        clearTimeout(_resizeTimer);
-        _resizeTimer = setTimeout(() => {
-            const shelves = _getShelves();
-            if (shelves.length > 0 && shelves[0].clientWidth > 0) {
-                render();
-            }
-        }, 150);
-    });
-
     // ── 公開 API ─────────────────────────────────────────────────
     // 🚪 從 dock 的「故事」直接進自由劇情：開書架 → 跳過封面那層，直接落在指令輸入。
     //    合併前那顆開的是另一個「AI 生成劇情」面板，跟這裡做的是同一件事 ——
@@ -1854,7 +1858,7 @@ status = "正常"`;
         } catch (e) { console.warn('[書架] 自由劇情開啟失敗', e); return false; }
     }
 
-    window.QbBookshelf = { render, openCover, openCreate, openFreeScript };
+    window.QbBookshelf = { render, showShelf, openCover, openCreate, openFreeScript };
 
     console.log('✅ QbBookshelf 模組就緒 (v1.6 - 動態人設防汙染預覽版)');
 })();

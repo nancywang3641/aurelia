@@ -8,7 +8,7 @@
  * → 書架自動出現新書
  *
  * 依賴：os_db.js · os_avs_rules.js · OS_API (chat)
- * 暴露：window.OS_CARD_IMPORT.openImportPanel / injectImportSpine / parsePngCard
+ * 暴露：window.OS_CARD_IMPORT.openImportPanel / parsePngCard
  */
 (function () {
     'use strict';
@@ -344,12 +344,9 @@
     function openImportPanel(railEl) {
         const panel = document.getElementById('qb-book-cover-panel');
         if (!panel) return;
-        // 隱藏所有書架層 + 翻頁 nav（與 openCover/openCreate 行為一致）
-        const _allShelves = ['qb-shelf-1','qb-shelf-2','qb-shelf-3']
-            .map(id => document.getElementById(id)).filter(Boolean);
-        const _nav = document.getElementById('qb-shelf-nav');
-        _allShelves.forEach(s => s.style.display = 'none');
-        if (_nav) _nav.style.display = 'none';
+        // 藏起書架層（書、翻頁、底部那條都在裡面；與 openCover/openCreate 行為一致）
+        const _stage = document.getElementById('qb-shelf-stage');
+        if (_stage) _stage.style.display = 'none';
 
         panel.innerHTML = `
             <div style="position:absolute;inset:0;
@@ -438,10 +435,7 @@
 
         // 返回按鈕
         panel.querySelector('#ci-back').onclick = () => {
-            panel.style.display = 'none';
-            panel.innerHTML = '';
-            _allShelves.forEach(s => s.style.display = 'flex');
-            window.QbBookshelf?.render?.();
+            window.QbBookshelf?.showShelf?.();
         };
 
         // 拖放 + 點擊選擇
@@ -542,47 +536,6 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  向書架軌道注入「📥 匯入角色卡」書脊
-    // ═══════════════════════════════════════════════════════════
-    function injectImportSpine(railEl) {
-        if (!railEl) return;
-        // 防重複注入
-        if (railEl.querySelector('.ci-import-spine')) return;
-
-        const spine = document.createElement('div');
-        spine.className = 'ci-import-spine';
-        spine.style.cssText = `
-            flex-shrink:0;width:48px;height:145px;position:relative;z-index:1;
-            background:rgba(16,28,44,0.7);
-            border:1.5px dashed rgba(100,160,255,0.25);
-            border-radius:2px;cursor:pointer;
-            display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
-            transition:background 0.2s,border-color 0.2s;
-            scroll-snap-align:start;
-        `;
-        spine.innerHTML = `
-            <span style="color:rgba(100,160,255,0.6);font-size:18px;line-height:1;"><i class="fa-solid fa-download"></i></span>
-            <span style="writing-mode:vertical-rl;color:rgba(100,160,255,0.4);
-                         font-size:10px;letter-spacing:3px;">匯入角色卡</span>
-        `;
-        spine.onmouseenter = () => {
-            spine.style.background   = 'rgba(22,44,88,0.9)';
-            spine.style.borderColor  = 'rgba(100,160,255,0.6)';
-        };
-        spine.onmouseleave = () => {
-            spine.style.background   = 'rgba(16,28,44,0.7)';
-            spine.style.borderColor  = 'rgba(100,160,255,0.25)';
-        };
-        spine.onclick = () => openImportPanel(railEl);
-
-        // 插在「撰寫新書」書脊之前
-        const addSpine = [...railEl.children].find(el =>
-            el.innerHTML?.includes('撰寫新書')
-        );
-        railEl.insertBefore(spine, addSpine || null);
-    }
-
-    // ═══════════════════════════════════════════════════════════
     //  簡易字串 hash（用來產生確定性 ID，避免世界書重複匯入）
     // ═══════════════════════════════════════════════════════════
     function _simpleHash(str) {
@@ -624,10 +577,8 @@
     //  公開 API
     // ═══════════════════════════════════════════════════════════
     win.OS_CARD_IMPORT = {
-        /** 開啟匯入面板（需傳書架 railEl） */
+        /** 開啟匯入面板（書架底部「匯入角色卡」那顆叫） */
         openImportPanel,
-        /** 向書架 railEl 注入匯入書脊按鈕 */
-        injectImportSpine,
         /** 直接解析 PNG ArrayBuffer → 角色 JSON（供外部使用） */
         parsePngCard,
         /** 舊書補上世界書書包（書名同名者）*/

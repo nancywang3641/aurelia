@@ -31,13 +31,16 @@
 
     // ===== 全域世界館藏 (書架 QbBookshelf 讀) =====
     const BASE_IMG_URL = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/home-page/';
+    // 五本固定館藏的封面是阿洛照故事背景畫的（2026-09-15，docs/五本固定館藏封面_20260915.md），
+    //   640x960 WebP 放介面圖庫、鎖 commit。艾斯蘭登大陸那次沒畫，照舊用原本那張。
+    const SHELF_COVER_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@e02fd742da38fb62d15ad44a99f12276cd1f791c/aseets/bookshelf_ui/';
     window.AURELIA_WORLDS = {
-        xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: 'fa-yin-yang', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: BASE_IMG_URL + '蒼泱神州.png' },
+        xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: 'fa-yin-yang', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: SHELF_COVER_URL + 'cover-xianxia.webp' },
         fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: 'fa-dragon', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: BASE_IMG_URL + '艾斯蘭登大陸.png' },
-        scifi:      { id: 'scifi',      title: '裂縫紀元·新伊甸都市', icon: 'fa-robot', desc: '科技高度發達的未來。賽博朋克的霓虹燈。', danger: 4, cover: BASE_IMG_URL + '裂縫紀元·新伊甸都市.png' },
-        superpower: { id: 'superpower', title: '臨界都市·異時頻界', icon: 'fa-bolt', desc: '現代社會的背面，潛藏著覺醒者。', danger: 3, cover: BASE_IMG_URL + '臨界都市·異時頻界.png' },
-        apocalypse: { id: 'apocalypse', title: '塵土紀元·零號廢土', icon: 'fa-radiation', desc: '文明崩塌後的荒原。喪屍橫行、輻射遍地。', danger: 5, cover: BASE_IMG_URL + '塵土紀元·零號廢土.png' },
-        horror:     { id: 'horror',     title: '午夜詭談·歸路電台', icon: 'fa-radio', desc: '午夜電台亮起紅燈。每段故事的主角都已埋骨——你的任務是把他從結局裡帶回。', danger: 5, cover: BASE_IMG_URL + '午夜詭談·歸路電台.png' }
+        scifi:      { id: 'scifi',      title: '裂縫紀元·新伊甸都市', icon: 'fa-robot', desc: '科技高度發達的未來。賽博朋克的霓虹燈。', danger: 4, cover: SHELF_COVER_URL + 'cover-scifi.webp' },
+        superpower: { id: 'superpower', title: '臨界都市·異時頻界', icon: 'fa-bolt', desc: '現代社會的背面，潛藏著覺醒者。', danger: 3, cover: SHELF_COVER_URL + 'cover-superpower.webp' },
+        apocalypse: { id: 'apocalypse', title: '塵土紀元·零號廢土', icon: 'fa-radiation', desc: '文明崩塌後的荒原。喪屍橫行、輻射遍地。', danger: 5, cover: SHELF_COVER_URL + 'cover-apocalypse.webp' },
+        horror:     { id: 'horror',     title: '午夜詭談·歸路電台', icon: 'fa-radio', desc: '午夜電台亮起紅燈。每段故事的主角都已埋骨——你的任務是把他從結局裡帶回。', danger: 5, cover: SHELF_COVER_URL + 'cover-horror.webp' }
     };
     // 從 localStorage 恢復用戶自建世界
     try {
@@ -805,40 +808,43 @@ const IRIS_IDLE = [
                 </div>
             </div>
             
-            <div class="qb-bookshelf-overlay" id="qb-bookshelf-overlay" style="display:none; position:absolute; top:8%; left:4%; right:4%; bottom:15%; background:#1e1208; border:3px solid #6b4c3a; border-radius:8px; z-index:100; flex-direction:column; box-shadow:inset 0 0 50px rgba(0,0,0,0.8), 0 15px 40px rgba(0,0,0,0.9); overflow:hidden;">
-                <div style="position:absolute; inset:0; background-image:repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 18px); pointer-events:none;"></div>
-                <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, rgba(90,55,25,0.35) 0%, transparent 70%); pointer-events:none;"></div>
-
-                <div class="qb-shelf-titlebar" style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, #3e271a, #2c1e16); border-bottom:2px solid #1a110b; padding:12px 15px; box-shadow:0 4px 15px rgba(0,0,0,0.4);">
-                    <div style="color:var(--qbk-ink); font-weight:bold; font-size:16px; font-family:'Cinzel', serif; letter-spacing:1px; text-shadow:2px 2px 4px rgba(0,0,0,0.5);">瀅瀅的館藏書架</div>
-                    <button id="close-bookshelf-btn" style="background:none; border:none; color:var(--qbk-ink-dim); font-size:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='var(--qbk-ink)'" onmouseout="this.style.color='var(--qbk-ink-dim)'">✕</button>
+            <!-- 藏書書架（銀藍版，阿洛的 B 稿 2026-09-15）：書框、書背、玻璃層板是 CSS，封面是圖片，
+                 書名是文字；書按頁左右滑。樣式全在 css/qb_core.css 的 .qbs-*。
+                 display:none 留在標籤上是開關狀態（開書架那顆鈕看它判斷要開還是關）。 -->
+            <div class="qb-bookshelf-overlay" id="qb-bookshelf-overlay" style="display:none;">
+                <div class="qb-shelf-titlebar">
+                    <span class="qbs-head-star">✧</span>
+                    <div class="qbs-head-txt">
+                        <div class="qbs-head-cn">館藏書架</div>
+                        <div class="qbs-head-en">STORY LIBRARY</div>
+                    </div>
+                    <button id="close-bookshelf-btn" class="qbs-close" title="關閉書架"><i class="fa-solid fa-xmark"></i></button>
                 </div>
 
-                <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">
-
-                    <div id="qb-shelf-1" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
-                        <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
-                        <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
+                <div class="qbs-body">
+                    <div id="qb-shelf-stage" class="qbs-stage">
+                        <button id="qb-free-story-btn" class="qbs-free" type="button">
+                            <i class="qbs-free-ic fa-solid fa-feather-pointed"></i>
+                            <span class="qbs-free-txt"><strong>自由劇情</strong><small>書寫屬於你的故事</small></span>
+                            <i class="qbs-free-go fa-solid fa-chevron-right"></i>
+                        </button>
+                        <div id="qb-shelf-carousel" class="qbs-carousel" tabindex="0" aria-label="藏書，可左右滑動換頁"></div>
+                        <div id="qb-shelf-nav" class="qbs-pager">
+                            <button id="qb-page-prev" class="qbs-pg-btn" type="button" title="上一頁"><i class="fa-solid fa-chevron-left"></i></button>
+                            <div class="qbs-pg-mid">
+                                <div id="qb-page-dots" class="qbs-dots"></div>
+                                <span id="qb-page-label" class="qbs-pg-label"></span>
+                            </div>
+                            <button id="qb-page-next" class="qbs-pg-btn" type="button" title="下一頁"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                        <div class="qbs-foot">
+                            <button id="qb-import-card-btn" class="qbs-foot-btn" type="button"><i class="fa-solid fa-file-import"></i><span>匯入角色卡</span></button>
+                            <i class="qbs-foot-sep"></i>
+                            <button id="qb-write-book-btn" class="qbs-foot-btn write" type="button"><i class="fa-solid fa-book-open"></i><span>撰寫新書</span></button>
+                        </div>
                     </div>
 
-                    <div id="qb-shelf-2" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
-                        <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
-                        <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
-                    </div>
-
-                    <div id="qb-shelf-3" style="flex:1; position:relative; display:flex; align-items:flex-end; padding:0 14px 34px; gap:3px; overflow:hidden; min-height:0;">
-                        <div style="position:absolute; bottom:16px; left:0; right:0; height:18px; background:linear-gradient(180deg,#8a6040 0%,#5a3a1a 60%,#3a2010 100%); border-top:3px solid #a87850; box-shadow:0 4px 14px rgba(0,0,0,0.7); pointer-events:none; z-index:2;"></div>
-                        <div style="position:absolute; bottom:0; left:0; right:0; height:16px; background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,transparent 100%); pointer-events:none; z-index:2;"></div>
-                    </div>
-
-                    <div id="qb-book-cover-panel" style="display:none; position:absolute; inset:0; overflow:hidden; z-index:20;"></div>
-
-                </div>
-
-                <div id="qb-shelf-nav" style="display:none; flex-shrink:0; align-items:center; justify-content:center; gap:16px; padding:6px 0; background:rgba(26,12,6,0.95); border-top:1px solid rgba(107,76,58,0.4);">
-                    <button id="qb-page-prev" style="background:none; border:1px solid rgba(26,28,40,0.18); color:#1A1C28; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">‹</button>
-                    <span id="qb-page-label" style="color:rgba(26,28,40,0.72); font-size:13px; font-family:monospace; letter-spacing:1px;"></span>
-                    <button id="qb-page-next" style="background:none; border:1px solid rgba(26,28,40,0.18); color:#1A1C28; font-size:20px; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; font-family:inherit;">›</button>
+                    <div id="qb-book-cover-panel" class="qbs-cover-panel"></div>
                 </div>
             </div>
 
@@ -991,31 +997,17 @@ const IRIS_IDLE = [
                     bookshelfOverlay.classList.remove('qb-reading');   // 讀開場白的滿版態不能留到下次開書架
                     const coverPanel = bookshelfOverlay.querySelector('#qb-book-cover-panel');
                     if (coverPanel) { coverPanel.style.display = 'none'; coverPanel.innerHTML = ''; }
-                    ['qb-shelf-1','qb-shelf-2','qb-shelf-3'].forEach(id => {
-                        const s = bookshelfOverlay.querySelector(`#${id}`);
-                        if (s) s.style.display = 'flex';
-                    });
-                    const nav = bookshelfOverlay.querySelector('#qb-shelf-nav');
-                    if (nav) nav.style.display = 'none'; // render() 下次開啟時會判斷
+                    const stage = bookshelfOverlay.querySelector('#qb-shelf-stage');   // 開著書封時書架層是藏的，下次開要是書架
+                    if (stage) stage.style.display = '';
                     bookshelfOverlay.style.display = 'none';
                 };
             }
 
-            // 「撰寫新書」已改由書脊軌道末尾的「＋」書脊觸發 (見 QbBookshelf.render)
+            // 「撰寫新書」「匯入角色卡」在書架底部那條 (見 QbBookshelf.render)
 
-            // 📥 角色卡匯入完成後自動刷新書架
+            // 📥 角色卡匯入完成後：收掉匯入面板、書架層亮回來、重繪
             window.addEventListener('CARD_IMPORT_COMPLETE', function _onCardImport() {
-                // 還原書架層（匯入面板會隱藏它們），再重繪
-                const bsOverlay = document.getElementById('qb-bookshelf-overlay');
-                if (bsOverlay) {
-                    const coverPanel = bsOverlay.querySelector('#qb-book-cover-panel');
-                    if (coverPanel) { coverPanel.style.display = 'none'; coverPanel.innerHTML = ''; }
-                    ['qb-shelf-1','qb-shelf-2','qb-shelf-3'].forEach(id => {
-                        const s = bsOverlay.querySelector(`#${id}`);
-                        if (s) s.style.display = 'flex';
-                    });
-                }
-                window.QbBookshelf?.render();
+                window.QbBookshelf?.showShelf?.();
             });
 
             const bgmBtn = tab.querySelector('#lobby-bgm-toggle');

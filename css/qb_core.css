@@ -126,15 +126,203 @@
 .qb-toc-now { font-size:10px; color:var(--qbk-accent); letter-spacing:2px; }
 
 /* =========================================================
-   讀開場白（內頁）＝內容本身：整個書架窗滿版、木框標題列退場。
-   原本 overlay 只佔畫面 77% 高（top 8% / bottom 15%），
-   上面再疊「館藏書架」＋「選擇開場白」兩層標題、下面壓一整塊
-   圓點＋回應框＋按鈕，正文被夾到只剩幾行。
+   📚 藏書書架・銀藍版（2026-09-16）
+   ---------------------------------------------------------
+   照阿洛的 B 稿（參考資料/aurelia_bookshelf_b_lab）搬過來：
+   背景圖只有建築與光，書框、書背、金邊、玻璃層板全是 CSS，
+   封面挖空放圖片，書名是 HTML 文字——換封面不用重畫背景。
+   書架只在 PWA 開（酒館那顆鈕開的是故事提取）。
+   手機滿版；桌機是置中一欄，不然兩欄書在寬窗裡會散掉。
    ========================================================= */
-/* 位置與標題列都寫死在 inline style 上，只能用 !important 蓋 */
-.qb-bookshelf-overlay.qb-reading {
-    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
-    border-width: 0 !important;
-    border-radius: 0 !important;
+.qb-bookshelf-overlay {
+    --qbs-serif: 'Songti TC', 'PMingLiU', 'Noto Serif TC', serif;
+    position: absolute; top: 3%; bottom: 3%; left: 0; right: 0; margin: 0 auto;
+    width: min(440px, 94%); z-index: 100;
+    flex-direction: column; overflow: hidden; isolation: isolate;
+    border: 1px solid rgba(255,255,255,0.82); border-radius: 25px;
+    box-shadow: 0 18px 60px rgba(40,56,84,0.35);
+    background: #e7eaf1 url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@e02fd742da38fb62d15ad44a99f12276cd1f791c/aseets/bookshelf_ui/library-background.webp') center / cover no-repeat;
+    color: #475b80;
+    font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
 }
-.qb-bookshelf-overlay.qb-reading .qb-shelf-titlebar { display: none !important; }
+.qb-bookshelf-overlay::before {
+    content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(rgba(243,246,252,0.15), rgba(244,247,255,0.03) 45%, rgba(237,241,252,0.38));
+}
+.qb-bookshelf-overlay button { font-family: inherit; -webkit-tap-highlight-color: transparent; }
+
+/* ── 標題列 ── */
+.qb-shelf-titlebar {
+    position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 24px 56px 16px;
+}
+.qbs-head-star { position: absolute; left: 26px; top: 50%; transform: translateY(-50%); font-size: 22px; color: #9eacc5; }
+.qbs-head-cn { font: 400 26px/1.2 var(--qbs-serif); letter-spacing: 5px; color: #44577e; margin-bottom: 6px; }
+.qbs-head-en { font: 9px/1 Georgia, serif; letter-spacing: 4px; color: #8c9ab6; }
+.qbs-close {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; display: grid; place-items: center;
+    background: none; border: 0; color: #63789b; font-size: 20px; cursor: pointer;
+}
+.qbs-close:hover { color: #44577e; }
+
+/* ── 書架層與書封層 ── */
+.qbs-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.qbs-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.qbs-cover-panel { display: none; position: absolute; inset: 0; overflow: hidden; z-index: 20; }
+
+/* ── 自由劇情長卡 ── */
+.qbs-free {
+    position: relative; flex-shrink: 0; margin: 0 32px 14px; min-height: 62px;
+    display: flex; align-items: center; gap: 16px; padding: 9px 17px; text-align: left; cursor: pointer;
+    color: #475b80; border: 1px solid rgba(195,182,156,0.66); border-radius: 3px;
+    outline: 1px solid rgba(252,253,255,0.58); outline-offset: 3px;
+    background: linear-gradient(110deg, rgba(255,255,255,0.88), rgba(236,241,250,0.52));
+    box-shadow: 0 4px 15px rgba(129,149,177,0.09);
+    transition: background .2s;
+}
+.qbs-free:hover { background: linear-gradient(110deg, #fff, rgba(236,241,250,0.8)); }
+.qbs-free::before, .qbs-free::after { content: '✧'; position: absolute; color: #beae90; font-size: 11px; line-height: 1; }
+.qbs-free::before { top: 2px; left: 3px; }
+.qbs-free::after { bottom: 2px; right: 3px; }
+.qbs-free-ic { width: 32px; text-align: center; font-size: 26px; color: #8092b2; }
+.qbs-free-txt { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.qbs-free-txt strong { font: 400 17px/1.2 var(--qbs-serif); letter-spacing: 2px; }
+.qbs-free-txt small { font-size: 10px; letter-spacing: 1px; color: #92a0b5; }
+.qbs-free-go { margin-left: auto; font-size: 14px; color: #8092b2; }
+
+/* ── 書頁（左右滑） ── */
+.qbs-carousel {
+    flex: 1; min-height: 0; display: flex; overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain;
+    touch-action: pan-x pinch-zoom; scroll-behavior: smooth; outline: none;
+}
+.qbs-carousel::-webkit-scrollbar { display: none; }
+.qbs-page {
+    flex: 0 0 100%; min-width: 0; min-height: 0; box-sizing: border-box; padding: 6px 32px 5px;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 14px 30px; scroll-snap-align: start; scroll-snap-stop: always;
+}
+.qbs-page.rows-2 { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.qbs-page.rows-1 { grid-template-rows: minmax(0, 1fr); }
+.qbs-empty { grid-column: 1 / -1; grid-row: 1 / -1; display: grid; place-content: center; color: #8294b1; letter-spacing: 2px; font-size: 13px; }
+
+/* ── 一本書：書背＋封面框＋玻璃層板＋書名 ── */
+.qbs-book { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; }
+.qbs-book-obj {
+    position: relative; flex-shrink: 0; height: calc(100% - 42px); aspect-ratio: 0.73; max-width: 100%;
+    filter: drop-shadow(5px 7px 5px rgba(63,80,103,0.17)); transition: transform .2s ease;
+}
+.qbs-book:hover .qbs-book-obj { transform: translateY(-3px); }
+.qbs-spine {
+    position: absolute; left: 0; top: 1px; bottom: 0; width: 12%; border-radius: 5px 0 0 4px;
+    border-top: 1px solid #ccd5e7; border-bottom: 1px solid #b0b6c5;
+    background: linear-gradient(90deg, #17283e, #526785 35%, #263950 70%, #768699 87%, #2c4059);
+    box-shadow: inset 1px 0 1px rgba(199,213,229,0.53);
+}
+.qbs-spine::before {
+    content: ''; position: absolute; inset: 7px 2px;
+    border-top: 3px double #bfb496; border-bottom: 3px double #bfb496;
+    background: repeating-linear-gradient(0deg, transparent 0 18%, rgba(208,196,164,0.46) 19%, transparent 20% 37%);
+}
+.qbs-spine::after { content: '✧'; position: absolute; top: 40%; left: 0; width: 100%; text-align: center; color: #e1d3b3; font-size: 11px; }
+.qbs-face {
+    position: absolute; left: 12%; right: 0; top: 0; bottom: 0; padding: 0; margin: 0; cursor: pointer;
+    border: 1.5px solid #e1decd; border-radius: 1px 4px 4px 1px; background: rgba(236,241,248,0.55);
+    box-shadow: inset 0 0 0 2px rgba(113,131,156,0.28), 2px 1px 0 #e3e8ef, 3px 3px 0 #a8b5c6;
+    overflow: hidden; display: grid; place-items: center;
+}
+.qbs-face::before { content: ''; position: absolute; inset: 5px; border: 1px solid rgba(190,175,139,0.61); pointer-events: none; z-index: 2; }
+.qbs-face::after { content: '✧'; position: absolute; top: 3px; right: 3px; font-size: 12px; line-height: 1; color: #ac9d7e; pointer-events: none; z-index: 3; }
+.qbs-cover { position: absolute; inset: 2px; overflow: hidden; }
+.qbs-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.qbs-cover-empty { position: absolute; inset: 0; display: grid; place-items: center; font-size: 26px; color: rgba(144,160,186,0.8); }
+.qbs-plinth {
+    position: absolute; left: -12%; right: -11%; height: 9px; bottom: -6px; pointer-events: none;
+    transform: perspective(35px) rotateX(27deg);
+    border: 1px solid rgba(255,255,255,0.7); border-bottom: 2px solid #dce8f6;
+    background: linear-gradient(135deg, rgba(255,255,255,0.3), rgba(248,251,255,0.68));
+    box-shadow: 0 7px 7px rgba(104,126,153,0.15);
+}
+.qbs-del {
+    position: absolute; top: -7px; right: -7px; z-index: 5; width: 22px; height: 22px; padding: 0;
+    display: grid; place-items: center; border-radius: 50%; cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.9); background: rgba(120,134,160,0.88); color: #fff; font-size: 11px;
+}
+.qbs-del:hover { background: #c0605f; }
+.qbs-title {
+    max-width: 100%; min-height: 34px; max-height: 43px; padding-top: 11px; box-sizing: border-box;
+    font: 12px/1.25 var(--qbs-serif); letter-spacing: .3px; text-align: center; color: #4a5e80;
+    overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+
+/* ── 翻頁 ── */
+.qbs-pager { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 24px; min-height: 53px; margin-top: 5px; }
+.qbs-pager.single { visibility: hidden; }
+.qbs-pg-btn {
+    width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer; font-size: 15px;
+    background: rgba(247,250,255,0.49); border: 1px solid rgba(249,251,255,0.7); border-radius: 50%; color: #6f83a6;
+}
+.qbs-pg-btn:disabled { opacity: .3; cursor: default; }
+.qbs-pg-mid { min-width: 80px; text-align: center; }
+.qbs-dots { display: flex; justify-content: center; gap: 3px; height: 22px; }
+.qbs-dot { position: relative; width: 22px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; }
+.qbs-dot::before { content: ''; position: absolute; top: 9px; left: 9px; width: 5px; height: 5px; border-radius: 50%; background: #b7c3d7; }
+.qbs-dot.on::before { left: 5px; width: 13px; border-radius: 5px; background: #667c9f; }
+.qbs-pg-label { font: 10px Georgia, serif; letter-spacing: 2px; color: #8494ae; }
+
+/* ── 底部：匯入角色卡｜撰寫新書 ── */
+.qbs-foot {
+    flex-shrink: 0; margin: 9px 21px 22px; padding: 8px 9px; min-height: 60px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    border: 1px solid rgba(255,255,255,0.84); border-radius: 21px;
+    background: linear-gradient(110deg, rgba(237,242,255,0.87), rgba(255,250,241,0.83));
+    box-shadow: 0 5px 15px rgba(122,143,173,0.08); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.qbs-foot-btn {
+    flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 11px;
+    background: none; border: 0; cursor: pointer; color: #475b80;
+}
+.qbs-foot-btn i { font-size: 19px; color: #7c8fb0; }
+.qbs-foot-btn span { font: 15px var(--qbs-serif); letter-spacing: 1px; }
+.qbs-foot-btn.write { color: #7c7390; }
+.qbs-foot-sep { height: 32px; border-left: 1px solid #c6d0e1; }
+.qbs-foot-btn.qb-hidden + .qbs-foot-sep { display: none; }
+
+@media (max-width: 760px) {
+    .qb-bookshelf-overlay { top: 0; bottom: 0; width: auto; border: 0; border-radius: 0; box-shadow: none; }
+    .qb-shelf-titlebar { padding-top: calc(24px + env(safe-area-inset-top)); }
+    .qbs-foot { margin-bottom: calc(16px + env(safe-area-inset-bottom)); }
+}
+@media (max-height: 730px) {
+    .qb-shelf-titlebar { padding-top: 15px; padding-bottom: 12px; }
+    .qbs-head-cn { font-size: 23px; margin-bottom: 4px; }
+    .qbs-free { min-height: 52px; margin-bottom: 10px; padding: 6px 14px; }
+    .qbs-pager { min-height: 45px; margin-top: 0; }
+    .qbs-page { gap: 12px 26px; }
+    .qbs-foot { min-height: 54px; padding-top: 4px; padding-bottom: 4px; margin-top: 5px; margin-bottom: 12px; }
+    .qbs-foot-btn { gap: 7px; }
+    .qbs-foot-btn span { font-size: 14px; }
+}
+@media (max-width: 760px) and (max-height: 730px) {
+    .qb-shelf-titlebar { padding-top: calc(15px + env(safe-area-inset-top)); }
+    .qbs-foot { margin-bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 360px) {
+    .qbs-page { padding-left: 25px; padding-right: 25px; column-gap: 24px; }
+    .qbs-free { margin-left: 29px; margin-right: 29px; }
+    .qbs-foot { margin-left: 13px; margin-right: 13px; }
+    .qbs-head-cn { font-size: 24px; }
+}
+@media (prefers-reduced-motion: reduce) { .qbs-carousel { scroll-behavior: auto; } }
+
+/* =========================================================
+   讀開場白（內頁）＝內容本身：整個書架窗滿版、標題列退場。
+   上面再疊「館藏書架」＋「選擇開場白」兩層標題、下面壓一整塊
+   圓點＋回應框＋按鈕，正文會被夾到只剩幾行。
+   ========================================================= */
+.qb-bookshelf-overlay.qb-reading {
+    top: 0; bottom: 0; width: auto;
+    border-width: 0; border-radius: 0;
+}
+.qb-bookshelf-overlay.qb-reading .qb-shelf-titlebar { display: none; }
