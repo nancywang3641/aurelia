@@ -374,9 +374,15 @@
                             <div class="gs-row"><span class="gs-label">BGM 音量</span><input type="range" class="gs-slider" id="gs-bgm-vol" min="0" max="100" value="10" oninput="window.VN_Settings.applyBgmVol(this.value)"><span class="gs-val" id="gs-bgm-vol-val">10%</span></div>
                             <div class="gs-row"><span class="gs-label">音效音量</span><input type="range" class="gs-slider" id="gs-sfx-vol" min="0" max="100" value="50" oninput="window.VN_Settings.applySfxVol(this.value)"><span class="gs-val" id="gs-sfx-vol-val">50%</span></div>
                             <div class="gs-row"><span class="gs-label">語音音量</span><input type="range" class="gs-slider" id="gs-tts-vol" min="0" max="100" value="80" oninput="window.VN_Settings.applyTtsVol(this.value)"><span class="gs-val" id="gs-tts-vol-val">80%</span></div>
-                            <div class="gs-row" style="margin-top:4px;">
-                                <button class="gs-reset-btn" style="width:100%; text-align:center;" onclick="window.VN_PLAYER.closeGameSettings(); (window.VoidPhoneShell && window.VoidPhoneShell.open());"><i class="fa-solid fa-gear"></i> 開啟應用（語音設置 / 相簿）</button>
-                            </div>
+                            <hr class="gs-divider">
+                            <!-- 🌍 世界題材快捷（取代原本「開啟應用」那顆鈕）：內容由 VN_Settings.renderWorldQuick 畫 -->
+                            <div class="gs-section-title"><i class="fa-solid fa-earth-asia"></i> 世界題材</div>
+                            <div class="gs-chips" id="gs-world-themes"></div>
+                            <div class="gs-sub">BGM</div>
+                            <div class="gs-chips" id="gs-world-bgm"></div>
+                            <div class="gs-sub">音效增補</div>
+                            <div class="gs-chips" id="gs-world-sfx"></div>
+                            <div class="gs-world-note" id="gs-world-note"></div>
                             <hr class="gs-divider">
                             <div class="gs-section-title"><i class="fa-solid fa-palette"></i> 字體顏色設置</div>
                             <div class="gs-color-row"><span class="gs-color-label">文章字體顏色</span><input type="color" class="gs-color-input" id="gs-text-color" value="#dcd8d0" oninput="window.VN_Settings.applyTextColor(this.value)"></div>

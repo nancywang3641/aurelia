@@ -1586,6 +1586,13 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .gs-divider { border: none; margin: 25px 0; }
         .gs-reset-btn { width: 100%; background: transparent; border: 1px solid var(--gold-dark); color: var(--gold-dark); padding: 12px; font-size: 0.9rem; cursor: pointer; transition: all 0.3s; letter-spacing: 2px; font-family: var(--font-classic); text-transform: uppercase; }
         .gs-reset-btn:hover { border-color: var(--gold); color: var(--gold); }
+        /* 🌍 世界題材／BGM／音效增補快捷：一排可點的小框，開著的填金色底 */
+        .gs-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+        .gs-chip { background: transparent; border: 1px solid rgba(212,175,55,0.35); color: #aaa; padding: 7px 12px; font-size: 0.85rem; cursor: pointer; letter-spacing: 1px; font-family: var(--font-classic); transition: all 0.2s; }
+        .gs-chip:hover { border-color: var(--gold); color: var(--gold-light); }
+        .gs-chip.on { background: rgba(212,175,55,0.16); border-color: var(--gold); color: var(--gold-light); }
+        .gs-sub { color: #888; font-size: 0.8rem; letter-spacing: 2px; margin: 4px 0 8px; }
+        .gs-world-note { color: #8a8a8a; font-size: 0.8rem; line-height: 1.6; }
 
         /* =========================================
            📱 手機 UI (回歸現代寫實風, 不套用古典)

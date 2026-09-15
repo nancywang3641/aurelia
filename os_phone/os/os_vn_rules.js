@@ -293,11 +293,86 @@
         if (ev.CHAT_CHANGED) win.eventOn(ev.CHAT_CHANGED, _clearInjected);
     }
 
+    // ================================================================
+    // 世界題材快捷（VN 設定面板）＋ 手機格式跟著 BGM 走
+    // ================================================================
+    // Rae 2026-09-16：「開啟應用刪除，直接改成 world快捷，BGM/SFX快捷。還有如果BGM開啟的不是現代或未來就自動關閉VN手機應用格式，不然玩古風會跟著送」
+    //   世界門的世界會自動撥（world_rules_injector），但角色卡故事那邊一條都不碰 → 玩古風卡手機格式照送、BGM 也沒地方換。
+    //   題材一鍵：BGM 只留那一組、音效增補跟著換。戰鬥不跟題材（現代也可能打架），這裡不碰。
+    //   手機格式跟 BGM：沒開「現代一般」→ 手機那組全關，關之前記下原本哪幾條開著；
+    //     現代一般開回來 → 照記下的還原（沒記錄、或手機條目已經有開著的就不碰），不會擅自多開彈幕／表情包。
+    const THEMES = [
+        { key: 'modern',  label: '現代',     bgm: 'bgm_modern',  sfx: ['sfx_modern'] },
+        { key: 'mystery', label: '偵探',     bgm: 'bgm_mystery', sfx: ['sfx_modern'] },
+        { key: 'fantasy', label: '奇幻',     bgm: 'bgm_fantasy', sfx: ['sfx_fantasy'] },
+        { key: 'wuxia',   label: '武俠仙俠', bgm: 'bgm_wuxia',   sfx: [] },
+        { key: 'horror',  label: '恐怖',     bgm: 'bgm_horror',  sfx: ['sfx_modern'] }
+    ];
+    const BGM_IDS = THEMES.map(t => t.bgm);
+    const SFX_ADDON_IDS = ['sfx_modern', 'sfx_fantasy'];          // 通用那組常駐，不給關
+    const PHONE_IDS = ['call_phone', 'call_phone_free', 'danmu', 'stickers'];
+    const PHONE_SAVED_KEY = 'os_vn_rules_phone_auto_off';          // 自動關手機時記下的原狀 { id: bool }
+    const QUICK_IDS = BGM_IDS.concat(SFX_ADDON_IDS);
+    const _empty = () => ({ opened: [], closed: [], seen: [] });
+    const _merge = (a, b) => ({ opened: a.opened.concat(b.opened), closed: a.closed.concat(b.closed), seen: a.seen.concat(b.seen) });
+
+    function syncPhoneWithBgm() {
+        const L = list();
+        const modernOn = L.some(e => e.id === 'bgm_modern' && e.enabled);
+        const phones = L.filter(e => PHONE_IDS.indexOf(e.id) >= 0);
+        if (!modernOn) {
+            if (!phones.some(e => e.enabled)) return _empty();
+            const snap = {};
+            phones.forEach(e => { snap[e.id] = !!e.enabled; });
+            try { localStorage.setItem(PHONE_SAVED_KEY, JSON.stringify(snap)); } catch (e) {}
+            return apply(e => PHONE_IDS.indexOf(e.id) >= 0 ? false : undefined);
+        }
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(PHONE_SAVED_KEY) || 'null'); } catch (e) {}
+        if (!saved || typeof saved !== 'object') return _empty();
+        try { localStorage.removeItem(PHONE_SAVED_KEY); } catch (e) {}
+        if (phones.some(e => e.enabled)) return _empty();          // 別處（例如世界門）已經開過了 → 不蓋回舊狀態
+        return apply(e => Object.prototype.hasOwnProperty.call(saved, e.id) ? !!saved[e.id] : undefined);
+    }
+    function setTheme(key) {
+        const t = THEMES.find(x => x.key === key);
+        if (!t) return null;
+        const r = apply(e => {
+            if (BGM_IDS.indexOf(e.id) >= 0) return e.id === t.bgm;
+            if (SFX_ADDON_IDS.indexOf(e.id) >= 0) return t.sfx.indexOf(e.id) >= 0;
+            return undefined;
+        });
+        return _merge(r, syncPhoneWithBgm());
+    }
+    function setQuick(id, on) {
+        if (QUICK_IDS.indexOf(id) < 0) return null;
+        const r = apply(e => e.id === id ? !!on : undefined);
+        return BGM_IDS.indexOf(id) >= 0 ? _merge(r, syncPhoneWithBgm()) : r;
+    }
+    function quickState() {
+        const L = list();
+        const on = id => L.some(e => e.id === id && e.enabled);
+        const bgmOn = BGM_IDS.filter(on), sfxOn = SFX_ADDON_IDS.filter(on);
+        const theme = THEMES.find(t => bgmOn.length === 1 && bgmOn[0] === t.bgm
+            && t.sfx.length === sfxOn.length && t.sfx.every(s => sfxOn.indexOf(s) >= 0));
+        let autoOff = false;
+        try { autoOff = !!localStorage.getItem(PHONE_SAVED_KEY); } catch (e) {}
+        return {
+            themes: THEMES.map(t => ({ key: t.key, label: t.label })),
+            theme: theme ? theme.key : '',
+            bgm: EDITABLE.filter(x => x.group === 'bgm').map(x => ({ id: x.id, label: x.label, on: on(x.id) })),
+            sfx: EDITABLE.filter(x => SFX_ADDON_IDS.indexOf(x.id) >= 0).map(x => ({ id: x.id, label: x.label, on: on(x.id) })),
+            phoneOn: PHONE_IDS.some(on),
+            phoneAutoOff: autoOff
+        };
+    }
+
     win.OS_VN_RULES = {
         list: list, hasAny: hasAny,
         getDepthParts: getDepthParts, getPreText: getPreText, getText: getText,
         apply: apply, setEnabledByName: setEnabledByName,
         getLists: getLists, setList: setList,
+        setTheme: setTheme, setQuick: setQuick, quickState: quickState, syncPhoneWithBgm: syncPhoneWithBgm,
         inject: inject,
         get lastInjected() { return _lastInjected; }
     };

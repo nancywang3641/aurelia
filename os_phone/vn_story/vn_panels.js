@@ -152,10 +152,35 @@
         applyTextColor: function(v) { this.data.textColor = v; this._applyColors(); this.save(); },
         applyInnerColor: function(v) { this.data.innerColor = v; this._applyColors(); this.save(); },
         applyNameColor: function(v) { this.data.nameColor = v; this._applyColors(); this.save(); },
-        resetColors: function() { this.data.textColor = this.defaults.textColor; this.data.innerColor = this.defaults.innerColor; this.data.nameColor = this.defaults.nameColor; document.getElementById('gs-text-color').value = this.data.textColor; document.getElementById('gs-inner-color').value = this.data.innerColor; document.getElementById('gs-name-color').value = this.data.nameColor; this._applyColors(); this.save(); }
+        resetColors: function() { this.data.textColor = this.defaults.textColor; this.data.innerColor = this.defaults.innerColor; this.data.nameColor = this.defaults.nameColor; document.getElementById('gs-text-color').value = this.data.textColor; document.getElementById('gs-inner-color').value = this.data.innerColor; document.getElementById('gs-name-color').value = this.data.nameColor; this._applyColors(); this.save(); },
+
+        // 🌍 世界題材／BGM／音效增補快捷（取代原本「開啟應用」那顆鈕，Rae 2026-09-16）
+        //   開關狀態全在 OS_VN_RULES（手機格式跟著 BGM 走也在那邊），這裡只負責畫與轉發點擊
+        renderWorldQuick: function() {
+            const boxT = document.getElementById('gs-world-themes');
+            const boxB = document.getElementById('gs-world-bgm');
+            const boxS = document.getElementById('gs-world-sfx');
+            const note = document.getElementById('gs-world-note');
+            if (!boxT || !boxB || !boxS) return;
+            const VR = win.OS_VN_RULES || window.OS_VN_RULES;
+            if (!VR || !VR.quickState) { boxT.textContent = '還沒準備好，稍後再打開一次設定'; boxB.textContent = ''; boxS.textContent = ''; return; }
+            const st = VR.quickState();
+            const chip = (label, on, fn) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'gs-chip' + (on ? ' on' : '');
+                b.textContent = label;
+                b.onclick = () => { try { fn(); } catch (e) { console.warn('[VN設定] 世界題材切換失敗', e); } this.renderWorldQuick(); };
+                return b;
+            };
+            boxT.replaceChildren(...st.themes.map(t => chip(t.label, st.theme === t.key, () => VR.setTheme(t.key))));
+            boxB.replaceChildren(...st.bgm.map(x => chip(x.label, x.on, () => VR.setQuick(x.id, !x.on))));
+            boxS.replaceChildren(...st.sfx.map(x => chip(x.label, x.on, () => VR.setQuick(x.id, !x.on))));
+            if (note) note.textContent = st.phoneAutoOff ? '手機格式已自動關閉（BGM 沒開現代一般）' : (st.phoneOn ? '手機格式開著' : '手機格式關著');
+        }
     };
 
-    function openGameSettings() { VN_Settings._syncUI(); document.getElementById('game-settings-overlay').classList.add('active'); }
+    function openGameSettings() { VN_Settings._syncUI(); VN_Settings.renderWorldQuick(); document.getElementById('game-settings-overlay').classList.add('active'); }
     function closeGameSettings() { document.getElementById('game-settings-overlay').classList.remove('active'); }
 
     /* =========================================
