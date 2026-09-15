@@ -195,6 +195,13 @@
             .wx-recall-out { transition: opacity .35s ease; opacity: 0 !important; }
             .wx-recall-in { animation: wxRecallIn .35s ease-out; }
             @keyframes wxRecallIn { from { opacity: 0; } to { opacity: 1; } }
+            /* 💭 這一輪的思考：對方那一輪第一顆泡泡上面一條，點開看（wx_view renderBubble） */
+            .wx-think-fold { clear: both; align-self: flex-start; max-width: 72%; margin: 6px 12px 0 58px; padding: 5px 10px; border-radius: 8px; background: rgba(0,0,0,0.045); color: #8a8a8a; font-size: 12px; cursor: pointer; user-select: none; }
+            .wx-think-head { display: flex; align-items: center; gap: 6px; }
+            .wx-think-arrow { font-size: 9px; transition: transform .2s; }
+            .wx-think-fold.open .wx-think-arrow { transform: rotate(90deg); }
+            .wx-think-body { display: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.08); white-space: pre-wrap; line-height: 1.5; max-height: 320px; overflow-y: auto; cursor: text; user-select: text; }
+            .wx-think-fold.open .wx-think-body { display: block; }
             /* 它現在是一顆真泡泡（.wx-bubble-content），只要調泡泡內的排版就好 */
             .wx-typing-indicator { display:flex; align-items:center; gap:7px; padding:12px 14px; }
             .wx-typing-dots-wrap { display:flex; gap:4px; align-items:center; }

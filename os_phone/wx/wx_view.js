@@ -166,6 +166,15 @@
                 const _ra = (typeof msgIndex === 'number') ? `data-msg-idx="${msgIndex}"` : '';
                 return `<div class="wx-system-notice wx-recalled ${withAnim ? 'animate' : ''}" style="${withAnim ? 'opacity:0;' : 'opacity:1;'}" ${_ra}>${sysText(_who + '撤回了一則訊息')}</div>`;
             }
+            // 💭 這一輪的思考（wx_core _attachThinking 掛在第一則對方訊息上）：泡泡上面一條「思考」，點開看。
+            //   不帶 data-msg-idx、不帶進場動畫：長按選單、改圖寫回、逐條冒出都靠泡泡那一列找位置，別被這條搶走。
+            if (msg && msg.thinking && !msg.isMe) {
+                const _th = String(msg.thinking).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const _fold = `<div class="wx-think-fold" onclick="this.classList.toggle('open')">`
+                    + `<div class="wx-think-head"><i class="fa-solid fa-chevron-right wx-think-arrow"></i><i class="fa-solid fa-brain"></i><span>思考</span></div>`
+                    + `<div class="wx-think-body">${_th}</div></div>`;
+                return _fold + this.renderBubble(Object.assign({}, msg, { thinking: '' }), chatObj, withAnim, msgIndex);
+            }
             // 貼圖寫法跟 VN 手機對齊：[貼紙:]/[贴纸:]/[表情:]/[Emote:] 都算表情包；[xxx.gif] 這種只有檔名的也算（跑團正文常這樣寫）
             if (msg && typeof msg.content === 'string' && /\[/.test(msg.content)) {
                 const norm = msg.content

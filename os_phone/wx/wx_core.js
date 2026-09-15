@@ -2286,10 +2286,30 @@
         _scrollToBottom();
     }
 
+    // 💭 這一輪的思考：送出前記下時間，回來後拿思考記錄裡這個時間之後的最新一筆。
+    //   模型寫的 <thinking>（cleanRawOutput 剝下來）和原生推理欄位都會推進 OS_THINK，微信拿到的回覆裡已經沒有思考。
+    //   掛在這一輪第一則對方訊息的 thinking 上，畫面在那顆泡泡上面畫一條可以點開的「思考」（wx_view renderBubble）。
+    //   只存在訊息上給她看，送模型的歷史用的是 raw/content，不會把思考送回去。
+    function _thinkingSince(t0) {
+        try {
+            const e = win.OS_THINK && typeof win.OS_THINK.getLatest === 'function' ? win.OS_THINK.getLatest() : null;
+            if (!e || !t0 || Number(e.timestamp || 0) < t0) return '';
+            return String(e.content || '')
+                .replace(/^\[(?:THINK|THINKING|THOUGHTS?|REASONING|THINKING_PROCESS|VARS_ANALYZE)\]\n/gim, '')
+                .replace(/\n*──────\n*/g, '\n\n')
+                .trim();
+        } catch (e) { return ''; }
+    }
+    function _attachThinking(msgs, text) {
+        if (!text || !Array.isArray(msgs)) return;
+        const first = msgs.find(m => m && !m.isMe && (!m.type || m.type === 'msg'));
+        if (first) first.thinking = text;
+    }
+
     // 📡 托管跑完的結果回來了 → 變成訊息。她人在那間就照常一條條冒出來，不在就安靜收進去、標未讀。
     //    🚨 parseAndProcess 的上下文（房名／房 id／成員）是看 GLOBAL_ACTIVE_ID 的，
     //       收的可能是別間的結果 → 解析那一下先把它借過去，解析完立刻還回去。
-    async function _applyRelayReply(chat, finalText) {
+    async function _applyRelayReply(chat, finalText, thinking) {
         if (!chat) return;
         const li = chat.messages.findIndex(m => !m.isMe && m.isLoading);
         if (li !== -1) chat.messages.splice(li, 1);
@@ -2320,6 +2340,8 @@
                 raw: `\n[Chat: ${chat.name}|${chat.id}]\n[With: ${memberStr}]\n[${chat.name}] ${finalText}`
             });
         }
+
+        _attachThinking(newMsgs, thinking);   // 💭 這一輪的思考掛在第一則上
 
         if (!newMsgs.length) {
             await _deliverOtherRooms(_othersRelay);   // 只傳到別間的也要送到
@@ -2374,9 +2396,10 @@
                 if (APP_CONTAINER) { if (GLOBAL_ACTIVE_ID === chat.id) _rebuildRoomContent(chat); else win.wxApp.render(); }
                 return;
             }
+            const _thinkT0 = Date.now();   // 💭 normalizeRaw 剝思考時會推進 OS_THINK
             const text = (win.OS_API && win.OS_API.normalizeRaw) ? win.OS_API.normalizeRaw(job.result) : String(job.result || '');
             if (!text) { console.warn('[WX] 托管結果是空的'); return; }
-            await _applyRelayReply(chat, text);
+            await _applyRelayReply(chat, text, _thinkingSince(_thinkT0));
         });
     }
 
@@ -3402,6 +3425,8 @@
             let isApiMode = false; let apiConfig = {};
             if (configStr) { apiConfig = JSON.parse(configStr); isApiMode = apiConfig.directMode; }
 
+            let _thinkT0 = 0;   // 💭 送出那一刻；回來後拿這之後的思考記錄（_thinkingSince）
+
             // 定義完成回調
             const onFinishReply = async (finalText) => {
                 // 移除 Loading 佔位符（data）
@@ -3433,6 +3458,8 @@
                         raw: rawPayload 
                     });
                 }
+
+                _attachThinking(newMsgs, _thinkingSince(_thinkT0));   // 💭 這一輪的思考掛在第一則上
 
                 // 🔥 啟動氣泡流 (逐條顯示)
                 await this.simulateTypingStream(newMsgs, currentChat);
@@ -3520,6 +3547,8 @@
                 } catch (e) { console.warn('[WX] 記事本照片夾帶失敗（不影響送出）:', e); }
 
                 console.log('[WX] 呼叫 OS_API.chat…');
+                _thinkT0 = Date.now();
+                try { if (win.OS_THINK && win.OS_THINK.setContext) win.OS_THINK.setContext({ panel: '微信：' + (currentChat.name || ''), userInput: '' }); } catch (e) {}
                 try {
                     await win.WX_API.chat(messages, apiConfig,
                         (chunk) => { /* 不做實時顯示，避免頻閃 */ },
