@@ -2179,6 +2179,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                     <div id="view-voice" class="tab-view hidden">
 
+                        <!-- 🎙 她講話 → 變成字（OS_VOICE_INPUT）。跟下面「角色說話的聲音」是兩件事，選單在 wireChannels 的 paintVoice 畫 -->
+                        <div class="set-group" id="voice-engine-group">
+                            <div class="set-label"><i class="fa-solid fa-microphone"></i> 語音轉文字</div>
+                            <div class="set-desc">微信輸入框的麥克風、語音訊息、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。</div>
+                            <div id="voice-engine-box"></div>
+                        </div>
+
+                        <div class="set-label"><i class="fa-solid fa-volume-high"></i> 角色說話的聲音</div>
                         <!-- 三選一 mode 切換 -->
                         <div style="display:flex;gap:6px;margin-bottom:16px;padding:4px;background:rgba(26,28,40,0.06);border-radius:6px;">
                             <div data-ttsmode="minimax" onclick="_switchTtsMode(this,'minimax')" style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='minimax' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:rgba(26,28,40,0.55);'}">MINIMAX</div>
@@ -2669,6 +2677,30 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 });
             }
             paintVision();
+
+            // 🎙 語音轉文字二選一（OS_VOICE_INPUT 的轉字方式）。這支手機用不了的那種灰掉；沒選過時選單停在實際在用的那種
+            function paintVoice() {
+                const box = container.querySelector('#voice-engine-box');
+                const VI = (window.parent || window).OS_VOICE_INPUT;
+                if (!box) return;
+                if (!VI || !VI.engines) { box.innerHTML = '<div class="set-desc">語音模組還沒載入，等一下重開這頁</div>'; return; }
+                const cur = VI.engineId();
+                box.innerHTML = '<select class="set-select" id="voice-engine">'
+                    + VI.engines().map(function (e) {
+                        return '<option value="' + e.id + '"' + (cur === e.id ? ' selected' : '') + (e.supported ? '' : ' disabled') + '>'
+                            + e.label + (e.supported ? '' : '（這支手機用不了）') + '</option>';
+                    }).join('')
+                    + '</select>';
+            }
+            if (!container.dataset.voiceBound) {
+                container.dataset.voiceBound = '1';
+                container.addEventListener('change', function (ev) {
+                    const sel = ev.target && ev.target.closest ? ev.target.closest('#voice-engine') : null;
+                    const VI = (window.parent || window).OS_VOICE_INPUT;
+                    if (sel && VI) VI.setConfig({ engine: sel.value });
+                });
+            }
+            paintVoice();
 
             function paintRoutes() {
                 const routes = loadRoutes();

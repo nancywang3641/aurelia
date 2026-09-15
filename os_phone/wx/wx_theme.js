@@ -214,6 +214,16 @@
             .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: #f7f7f7; border-top: 1px solid #dcdcdc; z-index: 5; transition: bottom 0.2s; }
             .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; }
             .wx-input-real { flex: 1; min-width: 0; height: 36px; background: #fff !important; border-radius: 6px; border: 1px solid #ddd; margin: 0 10px; padding: 0 10px; font-size: 14px; outline: none; color: #000 !important; opacity: 1 !important; -webkit-text-fill-color: #000 !important; }
+            /* 🎙 輸入框右邊的小麥克風（講話變成字填進框）：平常灰色、聽的時候紅底一圈一圈、準備／轉字時轉圈 */
+            .wx-input-box { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; margin: 0 10px; }
+            .wx-input-box .wx-input-real { margin: 0; width: 100%; box-sizing: border-box; padding-right: 38px; }
+            .wx-dictate-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9a9a9a; font-size: 16px; cursor: pointer; }
+            .wx-dictate-btn .fa-spinner { display: none; }
+            .wx-input-box[data-dict="preparing"] .wx-dictate-btn .fa-microphone, .wx-input-box[data-dict="converting"] .wx-dictate-btn .fa-microphone { display: none; }
+            .wx-input-box[data-dict="preparing"] .wx-dictate-btn .fa-spinner, .wx-input-box[data-dict="converting"] .wx-dictate-btn .fa-spinner { display: inline-block; }
+            .wx-input-box[data-dict="listening"] .wx-dictate-btn { background: #fa5151; color: #fff; animation: wxDictPulse 1.2s ease-in-out infinite; }
+            @keyframes wxDictPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(250,81,81,0.45); } 50% { box-shadow: 0 0 0 6px rgba(250,81,81,0); } }
+            .wx-dark .wx-dictate-btn { color: #8e8e93; }
             .wx-icon-btn { font-size: 26px; color: #000; cursor: pointer; line-height: 1; margin: 0 2px;}
             .wx-send-btn { background: #07c160; color: #fff; padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; margin-left: 5px; display: none; }
             .wx-send-btn.show { display: block; }

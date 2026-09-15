@@ -1273,9 +1273,9 @@
                         <div class="wx-replying hidden" id="wxReplying"><div class="wx-replying-body"><span class="chat-quote-name" id="wxReplyingName"></span><span class="chat-quote-text" id="wxReplyingText"></span></div><span class="wx-replying-x" onclick="${app}.cancelQuote()"><i class="fa-solid fa-xmark"></i></span></div>
                         <div class="wx-input-bar">
                             ${triggerBtn}
-                            <input class="wx-input-real" placeholder="" oninput="${app}.onInputCheck(this)" onkeydown="${app}.onInputKey(event, this)">
+                            <div class="wx-input-box" data-dict=""><input class="wx-input-real" placeholder="" oninput="${app}.onInputCheck(this)" onkeydown="${app}.onInputKey(event, this)"><span class="wx-dictate-btn" onclick="${app}.dictateTap()"><i class="fa-solid fa-microphone"></i><i class="fa-solid fa-spinner fa-spin"></i></span></div>
                             <span class="wx-icon-btn" onclick="${app}.toggleStickerPanel()"><i class="fa-solid fa-face-smile"></i></span>
-                            <span class="wx-icon-btn" onclick="${app}.togglePanel()"><i class="fa-solid fa-circle-plus"></i></span>
+                            <span class="wx-icon-btn wx-plus-btn" onclick="${app}.togglePanel()"><i class="fa-solid fa-circle-plus"></i></span>
                             <div class="wx-send-btn" onclick="${app}.sendMsg(this)">发送</div>
                         </div>
                         <div class="wx-sticker-panel">

@@ -2149,6 +2149,7 @@
     let _replyTo = null;   // { name, text }：正在回覆誰的哪句話；送出或取消就清掉
     let _voicePlaying = null;   // { el, audio, url }：正在播的那段錄音，同一時間只播一段
     let _vsTick = null;         // 錄音面板的計時器
+    let _dict = null;           // 輸入框小麥克風正在聽：{ phase: 'preparing'|'listening'|'converting', base, timer, chatId }
     const VOICE_MAX_SEC = 60;   // 跟微信一樣一段最長 60 秒，到了自動送出
     function _bindQuoteGestures(rc) {
         if (!rc || rc.dataset.quoteBound === '1') return;
@@ -3009,6 +3010,17 @@
             }
             // 🫂 朋友圈的紅點（「我」分頁＋朋友圈那格）：整頁重畫之後補上
             try { const _mo = win.WX_MOMENTS; if (_mo && _mo.paintBadges) _mo.paintBadges(APP_CONTAINER); } catch (e) {}
+            // 🎙 輸入框小麥克風：整頁重畫後把狀態掛回去；換了聊天室或離開聊天室就停掉、不填字
+            if (_dict) {
+                if (_dict.chatId !== GLOBAL_ACTIVE_ID) {
+                    if (_dict.timer) clearTimeout(_dict.timer);
+                    const _wasListening = _dict.phase === 'listening';
+                    _dict = null;
+                    try { const _VI = win.OS_VOICE_INPUT; if (_wasListening && _VI && _VI.isRecording()) _VI.cancel(); } catch (e) {}
+                } else {
+                    win.wxApp._dictSet(_dict.phase);
+                }
+            }
             if (win.WX_MESSAGE_MANAGER && typeof win.WX_MESSAGE_MANAGER._updateUI === 'function') { setTimeout(() => win.WX_MESSAGE_MANAGER._updateUI(), 100); }
         },
         
@@ -3084,7 +3096,8 @@
             if (p.el) p.el.classList.remove('is-playing');
         },
         
-        onInputCheck: function(el) { const btn = el.parentElement.querySelector('.wx-send-btn'); const plus = el.parentElement.querySelector('.wx-icon-btn:nth-child(4)'); if (el.value.trim()) { btn.classList.add('show'); plus.style.display = 'none'; } else { btn.classList.remove('show'); plus.style.display = 'block'; } },
+        // 有字就把「＋」換成「发送」。🚨 輸入框外面多包了一層（小麥克風那層），按鈕要從整條輸入列找，不能找它的上一層
+        onInputCheck: function(el) { const bar = el && el.closest ? el.closest('.wx-input-bar') : null; if (!bar) return; const btn = bar.querySelector('.wx-send-btn'); const plus = bar.querySelector('.wx-plus-btn'); if (!btn || !plus) return; if (el.value.trim()) { btn.classList.add('show'); plus.style.display = 'none'; } else { btn.classList.remove('show'); plus.style.display = 'block'; } },
         onInputKey: function(e, el) { if(e.key==='Enter') this.sendMsg(el); },
 
         // 長按（或右鍵）某一則 → 引用它。只記「誰＋前幾個字」，送出時組成標記接在訊息最前面。
@@ -3278,6 +3291,68 @@
             const VI = win.OS_VOICE_INPUT;
             if (VI && VI.isRecording()) VI.cancel();
             el.hidden = true;
+        },
+
+        // 🎙 輸入框右邊的小麥克風：講話變成字填進輸入框，改完再自己按送出。
+        //    跟「＋ → 語音」是兩回事：那個送出去的是真的聲音，這個只是少打字。轉字方式跟著設置 → 通道 → 語音轉文字。
+        //    點一下開始、再點一下停；手機自己的聽寫邊講邊出字，本機模型停下來才出字。60 秒自動停。
+        _dictBox: function () { return APP_CONTAINER ? APP_CONTAINER.querySelector('.wx-input-box') : null; },
+        _dictSet: function (phase) { const b = this._dictBox(); if (b) b.dataset.dict = phase || ''; },
+        dictateTap: async function () {
+            const VI = win.OS_VOICE_INPUT;
+            if (!VI || !this._dictBox()) return;
+            if (_dict) { if (_dict.phase === 'listening') this._dictStop(); return; }
+            if (!VI.isSupported()) { AUI.toast('這裡不能錄音'); return; }
+            if (VI.isRecording()) { AUI.toast('正在錄別的，等一下再試'); return; }
+            const d = _dict = { phase: 'preparing', base: '', timer: null, chatId: GLOBAL_ACTIVE_ID };
+            this._dictSet('preparing');
+            try {
+                if (!VI.isReady()) {
+                    if (!(await VI.isDownloaded()) && !(await AUI.confirm('本機模型第一次要下載約 250MB，建議連 Wi-Fi。現在下載？'))) {
+                        if (_dict === d) { _dict = null; this._dictSet(''); }
+                        return;
+                    }
+                    await VI.prepare();
+                }
+                if (_dict !== d) return;   // 準備的時候離開了聊天室
+                const input = this._dictBox() && this._dictBox().querySelector('.wx-input-real');
+                d.base = (input && input.value.trim()) ? input.value.replace(/\s+$/, '') : '';
+                await VI.start({ onPartial: (t) => this._dictFill(d, t) });
+            } catch (e) {
+                console.warn('[WX] 輸入框聽寫開不起來:', e);
+                if (_dict === d) { _dict = null; this._dictSet(''); }
+                AUI.toast(e && e.name === 'NotAllowedError' ? '沒有麥克風權限，要到瀏覽器設定裡允許' : ('麥克風開不起來，' + this._vsWhy(e)));
+                return;
+            }
+            if (_dict !== d) { VI.cancel(); return; }   // 等權限框的時候離開了聊天室
+            d.phase = 'listening';
+            this._dictSet('listening');
+            d.timer = setTimeout(() => this._dictStop(), VOICE_MAX_SEC * 1000);
+        },
+        _dictFill: function (d, text) {
+            if (_dict !== d) return;
+            const input = this._dictBox() && this._dictBox().querySelector('.wx-input-real');
+            if (!input) return;
+            input.value = d.base + String(text || '').trim();
+            this.onInputCheck(input);
+        },
+        _dictStop: async function () {
+            const VI = win.OS_VOICE_INPUT;
+            const d = _dict;
+            if (!VI || !d || d.phase !== 'listening') return;
+            if (d.timer) clearTimeout(d.timer);
+            d.phase = 'converting';
+            this._dictSet('converting');
+            try {
+                const rec = await VI.stop();
+                const out = await VI.transcribe(rec.blob);
+                const text = String(out.text || '').trim();
+                if (text) this._dictFill(d, text); else if (_dict === d) AUI.toast('沒聽清楚，再說一次');
+            } catch (e) {
+                console.warn('[WX] 輸入框聽寫失敗:', e);
+                if (_dict === d) AUI.toast('沒轉成字，' + this._vsWhy(e));
+            }
+            if (_dict === d) { _dict = null; this._dictSet(''); }
         },
         closeModal: function() { const modal = doc.querySelector('#wxActionModal'); if(modal) modal.classList.remove('show'); PENDING_ACTION_TYPE = null; },
         confirmModal: function() { 

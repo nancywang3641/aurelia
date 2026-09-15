@@ -2,27 +2,31 @@
 // [手機] os_voice_input.js — 麥克風錄音 → 轉成字
 // 職責：錄一段話、交給選定的「轉字方式」、回傳文字＋情緒＋聲音事件。不畫任何畫面，誰要用誰接。
 //   ① 錄音走 MediaRecorder，錄完回原始音檔 blob（之後要做「泡泡裡是真的聲音」就存它）。
-//   ② 轉字方式是一張表 ENGINES，跟圖片設置的來源一樣可以換；每一種只要實作 transcribe(blob)。
-//      現在只有 sensevoice：SenseVoice 模型放進網頁裡跑（sherpa-onnx 的 WebAssembly 版），聲音不離開裝置。
+//   ② 轉字方式是一張表 ENGINES，跟圖片設置的來源一樣可以換（設置 → 通道 → 語音轉文字）；每一種實作 transcribe(blob)。
+//      browser：手機／瀏覽器自己的聽寫（沒選過時手機有就用它）。不用下載，但聲音交給 Apple 或 Google 轉字。
+//        🚨 它只能邊錄邊聽：start() 時一起開、stop() 時把這一段聽到的字綁在那個音檔上，transcribe(blob) 再拿出來。
+//      sensevoice：SenseVoice 模型放進網頁裡跑（sherpa-onnx 的 WebAssembly 版），聲音不離開裝置。
 //   ③ sensevoice 第一次要下載約 250MB（引擎 12MB＋模型 239MB），存進瀏覽器的 Cache Storage，之後不再下載。
 //      下載與推論都在 Worker 裡，不卡畫面。模型是簡體輸出，Worker 裡用 opencc-js 轉台灣繁體。
 //   ④ 引擎檔鎖在 HuggingFace 的固定 commit：官方網頁版把模型打包在 .data 裡，我們把那段打包載入剝掉，
 //      自己把 SenseVoice 模型寫進它的虛擬檔案系統。換 commit 前要重新確認剝除的標記還在。
 // 入口：window.OS_VOICE_INPUT
-//   isSupported() / getConfig() / setConfig({engine})
-//   start() → stop() 回 { blob, mime, durationSec }；cancel()；level() 目前音量
+//   isSupported() / getConfig() / setConfig({engine}) / engines() 給設置頁列選項 / engineId() 現在實際用哪一種
+//   start({ onPartial }) → stop() 回 { blob, mime, durationSec }；cancel()；level() 目前音量
+//     onPartial(目前聽到的字)：邊講邊給，只有 browser 會叫（輸入框的小麥克風拿來即時填字）
 //   openMic() / closeMic()：一直開著麥克風（講電話），期間 start/stop 都借這一條
 //   prepare(onProgress) 先把目前的轉字方式準備好（sensevoice＝下載＋載入模型）
 //   transcribe(blob, { onProgress, autoPrepare }) 回 { text, lang, emotion, emotionLabel, event, eventLabel, durationSec, engine }
 //   isReady() / isDownloaded() / unload()（放掉記憶體）/ clearCache()（刪掉下載的模型）
-//   用的地方：微信「＋ → 語音」的錄音面板（wx_core.js openVoiceSheet）、電話 app 的「直接說話」（os_dialer.js _vm*）
+//   用的地方：微信「＋ → 語音」的錄音面板（wx_core.js openVoiceSheet）、微信輸入框的小麥克風（wx_core.js dictateTap）、
+//             電話 app 的「直接說話」（os_dialer.js _vm*）——三個都跟著設置頁選的轉字方式
 // ----------------------------------------------------------------
 (function () {
     const win = window.parent || window;
     if (win.OS_VOICE_INPUT) return;
 
     const CFG_KEY = 'os_voice_input_config';
-    const DEFAULTS = { engine: 'sensevoice', language: '' };
+    const DEFAULTS = { engine: '', language: '' };   // engine 空＝沒選過：手機有自己的聽寫就用它，沒有就用 sensevoice（見 engineId）
 
     function getConfig() {
         try { return Object.assign({}, DEFAULTS, JSON.parse(win.localStorage.getItem(CFG_KEY) || '{}')); }
@@ -32,6 +36,8 @@
         const prev = getConfig();
         const next = Object.assign({}, prev, patch || {});
         try { win.localStorage.setItem(CFG_KEY, JSON.stringify(next)); } catch (e) { console.warn('[VoiceInput] 設定存不進去', e); }
+        // 換掉本機模型：把它佔的記憶體放掉（下載的檔案留著，換回來不用重下載）
+        if (next.engine !== prev.engine) { const old = ENGINES[prev.engine]; if (old && old.unload) old.unload(); }
         if (next.language !== prev.language && next.engine === prev.engine) {
             const e = ENGINES[next.engine];
             if (e && e.setLanguage) e.setLanguage(next.language).catch((err) => console.warn('[VoiceInput] 換語言失敗', err));
@@ -108,7 +114,7 @@
         if (h) _stopStream(h.stream, h.meter);
     }
 
-    async function start() {
+    async function start(opts) {
         if (_rec) throw new Error('已經在錄了');
         if (!isSupported()) throw new Error('這個瀏覽器不能錄音');
         let stream, meter, held = false;
@@ -121,6 +127,8 @@
         mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
         mr.start();
         _rec = { stream, mr, chunks, t0: Date.now(), mime: mr.mimeType || mime, meter, held };
+        // 邊錄邊聽的轉字方式：跟錄音同一刻開始聽
+        if (_engine().live) _rec.live = _liveStart(opts && opts.onPartial);
     }
 
     // 目前的音量（0～1 的 RMS，說話大約落在 0.02～0.2）；錄音中、或 openMic 開著時都讀得到
@@ -140,9 +148,11 @@
             const r = _rec;
             if (!r) { reject(new Error('沒有在錄音')); return; }
             _rec = null;
+            const liveDone = r.live ? _liveFinish(r.live) : null;   // 請聽寫把最後一句收尾，transcribe 時再等它
             r.mr.onstop = () => {
                 _release(r);
                 const blob = new win.Blob(r.chunks, { type: r.mime || 'audio/webm' });
+                if (liveDone) _liveOf.set(blob, liveDone);
                 resolve({ blob, mime: blob.type, durationSec: (Date.now() - r.t0) / 1000 });
             };
             r.mr.onerror = (e) => { _release(r); reject((e && e.error) || new Error('錄音失敗')); };
@@ -154,6 +164,7 @@
         const r = _rec;
         _rec = null;
         if (!r) return;
+        if (r.live) _liveAbort(r.live);
         try { r.mr.onstop = null; r.mr.stop(); } catch (e) {}
         _release(r);
     }
@@ -344,8 +355,9 @@
 
     const sensevoice = {
         id: 'sensevoice',
-        label: '在手機裡轉（SenseVoice）',
+        label: '奧瑞亞的本機模型',
         downloadMB: 250,
+        supported() { return !!(win.WebAssembly && win.Worker); },
         _worker: null,
         _ready: false,
         _preparing: null,
@@ -442,13 +454,110 @@
         },
     };
 
-    const ENGINES = { sensevoice };
+    // ── 手機／瀏覽器自己的聽寫（邊錄邊聽）────────────────────
+    //   iPhone 交給 Apple、Chrome 與安卓交給 Google 轉字；iPhone 第一次會另外問「語音辨識」權限（跟麥克風分開問）。
+    //   語言跟 language 設定走，沒設就台灣中文，出來直接是繁體（不用像 330 那樣聽成簡體再轉）。
+    //   安卓 Chrome 的連續模式不穩（330 也這樣判斷），一句一句聽；不管哪種，還在錄的時候它自己停了就再開一段接著聽。
+    const _liveOf = new WeakMap();   // 音檔 → 那一段聽寫收尾的 Promise
+    const LIVE_LANG = { '': 'zh-TW', zh: 'zh-TW', yue: 'zh-HK', en: 'en-US', ja: 'ja-JP', ko: 'ko-KR' };
+    const LIVE_RESTART_MAX = 60;     // 一段錄音裡最多重開幾次（它一開就停的話不要原地打轉）
+    function _SR() { return win.SpeechRecognition || win.webkitSpeechRecognition || null; }
+    function _androidChrome() { try { return /Android.*Chrome/i.test(String((win.navigator && win.navigator.userAgent) || '')); } catch (e) { return false; } }
 
-    function _engine() {
-        const e = ENGINES[getConfig().engine];
-        if (!e) throw new Error('沒有這種轉字方式：' + getConfig().engine);
-        return e;
+    function _liveEnd(s) {
+        if (s.ended) return;
+        s.ended = true;
+        s.waiters.splice(0).forEach((f) => f());
     }
+    function _liveStart(onPartial) {
+        const s = { finals: '', interim: '', error: '', stopped: false, ended: false, waiters: [], sr: null, restarts: 0 };
+        const android = _androidChrome();
+        const open = () => {
+            const SR = _SR();
+            if (!SR) { s.error = 'unsupported'; _liveEnd(s); return; }
+            let sr;
+            try { sr = new SR(); } catch (e) { s.error = 'start'; _liveEnd(s); return; }
+            sr.lang = LIVE_LANG[getConfig().language] || 'zh-TW';
+            sr.continuous = !android;
+            sr.interimResults = !android;
+            sr.onresult = (ev) => {
+                let interim = '';
+                for (let i = ev.resultIndex; i < ev.results.length; i++) {
+                    const res = ev.results[i];
+                    const t = (res && res[0] && res[0].transcript) || '';
+                    if (res.isFinal) s.finals += t; else interim += t;
+                }
+                s.interim = interim;
+                if (onPartial) { try { onPartial(s.finals + s.interim); } catch (e) {} }
+            };
+            sr.onerror = (ev) => { const c = ev && ev.error; if (c && c !== 'no-speech' && c !== 'aborted') s.error = c; };
+            sr.onend = () => {
+                if (sr !== s.sr) return;
+                if (!s.stopped && !s.error && ++s.restarts <= LIVE_RESTART_MAX) {
+                    s.finals += s.interim;   // 這一段沒來得及定稿的字留著
+                    s.interim = '';
+                    open();
+                    return;
+                }
+                _liveEnd(s);
+            };
+            s.sr = sr;
+            try { sr.start(); } catch (e) { s.error = 'start'; _liveEnd(s); }
+        };
+        open();
+        return s;
+    }
+    // 停下來：請它把最後一句收尾，等它真的結束（最多幾秒，安卓比較慢），回這一段聽到的全部
+    function _liveFinish(s) {
+        return new Promise((resolve) => {
+            s.stopped = true;
+            if (s.ended) { resolve(s); return; }
+            s.waiters.push(() => resolve(s));
+            try { if (s.sr) s.sr.stop(); } catch (e) {}
+            setTimeout(() => {
+                if (s.ended) return;
+                try { if (s.sr) s.sr.abort(); } catch (e) {}
+                _liveEnd(s);
+            }, _androidChrome() ? 5000 : 3000);
+        });
+    }
+    function _liveAbort(s) {
+        s.stopped = true;
+        try { if (s.sr) s.sr.abort(); } catch (e) {}
+        _liveEnd(s);
+    }
+
+    const browser = {
+        id: 'browser',
+        label: '手機自己的聽寫',
+        live: true,
+        supported() { return !!_SR(); },
+        isReady() { return true; },
+        async isDownloaded() { return true; },
+        prepare() { return Promise.resolve(); },
+        setLanguage() { return Promise.resolve(); },   // 每一段開始時才讀語言，不用重載
+        async transcribe(blob) {
+            const p = _liveOf.get(blob);
+            if (!p) return { text: '' };
+            const s = await p;
+            const text = String(s.finals + s.interim).trim();
+            if (!text && (s.error === 'not-allowed' || s.error === 'service-not-allowed')) throw new Error('沒有語音辨識權限，要到手機設定裡允許');
+            if (!text && s.error === 'network') throw new Error('聽寫要連網路，現在連不上');
+            return { text: text, lang: '', emotion: '', event: '' };
+        },
+        unload() {},
+    };
+
+    const ENGINES = { browser, sensevoice };
+
+    // 現在實際用哪一種：選過而且這支手機用得了就照選的；沒選過、或選的這裡用不了，手機有聽寫就用它，沒有就本機模型
+    function engineId() {
+        const want = getConfig().engine;
+        const e = ENGINES[want];
+        if (e && e.supported()) return want;
+        return browser.supported() ? 'browser' : 'sensevoice';
+    }
+    function _engine() { return ENGINES[engineId()]; }
 
     async function transcribe(blob, opts) {
         const o = opts || {};
@@ -485,6 +594,8 @@
         isSupported,
         getConfig,
         setConfig,
+        engineId,
+        engines: () => Object.keys(ENGINES).map((k) => ({ id: k, label: ENGINES[k].label, supported: ENGINES[k].supported() })),
         start,
         stop,
         cancel,
