@@ -636,7 +636,9 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             const row = document.createElement('div');
             row.className = 'pm-bitem ' + (isSys ? 'pm-bitem-sys' : 'pm-bitem-entry');
             row.dataset.idx = idx;
-            row.draggable   = true;
+            // 只有左邊把手能拖：整張卡都能拖的話，手機上手指放哪都在搬順序，沒地方滑列表
+            row.draggable   = false;
+            row.addEventListener('pointerdown', e => { row.draggable = !!e.target.closest('.pm-bi-handle'); });
 
             if (isSys) {
                 row.innerHTML = `<span class="pm-bi-handle">⠿</span>
@@ -665,7 +667,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
             row.addEventListener('drop',      e => { e.preventDefault(); row.classList.remove('drag-over'); doReorder(parseInt(e.dataTransfer.getData('text/plain')), idx); });
             // Touch drag
-            row.addEventListener('touchstart', () => {
+            row.addEventListener('touchstart', e => {
+                if (!e.target.closest('.pm-bi-handle')) return;   // 按在把手以外＝正常滑動
                 touchIdx = idx; row.classList.add('dragging');
                 touchGhost = row.cloneNode(true);
                 touchGhost.style.cssText = `position:fixed;pointer-events:none;opacity:.7;z-index:9999;width:${row.offsetWidth}px;left:-9999px;top:-9999px;`;
@@ -820,12 +823,15 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         };
 
         const attachDrag = (item, id) => {
+            // 只有左邊把手能拖（同預設包內部那份）：手機上按在卡片其他地方要能滑列表
+            item.addEventListener('pointerdown', e => { item.draggable = !!e.target.closest('.pm-uni-handle'); });
             item.addEventListener('dragstart', e => { item.classList.add('dragging'); e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; });
             item.addEventListener('dragend',   () => { item.classList.remove('dragging'); getItems().forEach(i => i.classList.remove('drag-over')); });
             item.addEventListener('dragover',  e => { e.preventDefault(); getItems().forEach(i => i.classList.remove('drag-over')); item.classList.add('drag-over'); });
             item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
             item.addEventListener('drop',      e => { e.preventDefault(); item.classList.remove('drag-over'); doReorder(e.dataTransfer.getData('text/plain'), id); });
-            item.addEventListener('touchstart', () => {
+            item.addEventListener('touchstart', e => {
+                if (!e.target.closest('.pm-uni-handle')) return;   // 按在把手以外＝正常滑動
                 touchId = id; item.classList.add('dragging');
                 touchGhost = item.cloneNode(true);
                 touchGhost.style.cssText = `position:fixed;pointer-events:none;opacity:.7;z-index:9999;width:${item.offsetWidth}px;left:-9999px;top:-9999px;`;
@@ -864,7 +870,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             item.className = 'pm-uni-item';
             item.dataset.id   = id;
             item.dataset.type = 'bundle';
-            item.draggable    = true;
+            item.draggable    = false;   // 按到把手才打開，見 attachDrag
 
             {
                 // 預設包（Layer 1 — 純列表行，無折疊）
