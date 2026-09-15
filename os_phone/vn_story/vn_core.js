@@ -119,8 +119,9 @@
                 try { await DB?.deleteVnMemoriesByStoryId?.(id); } catch (e) { console.warn('[VN] 清向量記憶失敗:', e); }
                 try { await DB?.deleteStateData?.(id); } catch (e) { console.warn('[VN] 清人物檔案失敗:', e); }
             }
-            // AVS 的即時狀態與回朔快照住在 localStorage，DB 那邊清不到
-            try { localStorage.removeItem('avs_state_' + id); localStorage.removeItem('avs_snap_' + id); } catch (e) {}
+            // AVS 的即時狀態與回朔快照住在 localStorage（deleteAllByChatId 也會清，這裡是它不在時的保底）。
+            //   🚨 快照 key 是 avs_snap_ + _avsKey()＝avs_snap_avs_state_<id>，以前只刪 avs_snap_<id> 從來沒清到
+            try { localStorage.removeItem('avs_state_' + id); localStorage.removeItem('avs_snap_avs_state_' + id); localStorage.removeItem('avs_snap_' + id); } catch (e) {}
             // 書架「歷史篇章」的清單來源
             try {
                 const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');

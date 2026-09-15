@@ -1398,6 +1398,27 @@
                 return ids.some(x => id.indexOf('::chat:' + x + '::') !== -1);
             }));
 
+            // 六之二、住在 localStorage 的（DB 那邊清不到）：
+            //   · AVS 當前狀態 avs_state_<id> 與回朔快照。🚨 快照的 key 是 `avs_snap_` + _avsKey()，
+            //     而 _avsKey() 本身就是 `avs_state_<id>` → 實際是 avs_snap_avs_state_<id>。
+            //     以前刪故事寫成 avs_snap_<id>，一次都沒清到（每條故事最多 10 份快照一直佔著 5MB 的格子）。舊寫法那個 key 也順手刪。
+            //   · 裝的小程式 saveData(k, v, 'chat') → aurelia_appdata_<appId>_chat_<chatId>_<k>，綁這個聊天的整批刪。
+            //     （PWA 的小程式拿不到 chatId、一律寫成 _nochat，不分故事 → 那一份不是這條故事的，不碰）
+            await _safe('瀏覽器暫存', () => {
+                const LS = win.localStorage || localStorage;
+                const lsIds = ids.concat(o.storyId ? [String(o.storyId)] : []).filter((x, i, a) => x && a.indexOf(x) === i);
+                let n = 0;
+                const drop = (k) => { if (LS.getItem(k) != null) { LS.removeItem(k); n++; } };
+                lsIds.forEach(x => { drop('avs_state_' + x); drop('avs_snap_avs_state_' + x); drop('avs_snap_' + x); });
+                const all = [];
+                for (let i = 0; i < LS.length; i++) { const k = LS.key(i); if (k) all.push(k); }
+                all.forEach(k => {
+                    if (k.indexOf('aurelia_appdata_') !== 0) return;
+                    if (lsIds.some(x => k.indexOf('_chat_' + x + '_') !== -1)) { LS.removeItem(k); n++; }
+                });
+                return n;
+            });
+
             // 七、VN 圖片快取（背景/頭像/立繪/場景/物品）走 VN_Cache（獨立 DB、world=raw chatId）
             await _safe('圖片快取', async () => {
                 const VC = (typeof window !== 'undefined' && window.VN_Cache) || win.VN_Cache;
