@@ -268,6 +268,105 @@
         return out;
     }
 
+    // 🔁 酒館版與獨立版（PWA）兩條 buildContext 共用的微信／通話片段。以前各寫一份，PWA 那份一路漏：
+    //   {{char}}/{{user}} 沒換、暱稱說明、世界書挑的人設與群聊備註、單間表情包庫、世界狀態的「別寫出來」、
+    //   聊天記錄裡的系統行被當成對方講的話、通話分隔沒標日期、微信記錄沒有「以上都是以前」。
+    //   🚨 微信／通話要送給模型的新東西，寫成這裡的一支，兩條都叫，不要只加在其中一條。
+
+    function _wxResolveMacros(s, charName, userName) {
+        return String(s == null ? '' : s).split('{{char}}').join(charName).split('{{user}}').join(userName);
+    }
+
+    // 微信暱稱：微信裡別人看到的是暱稱，不是人設真名。兩個不一樣時講清楚是同一個人，不然 [暱稱] 會被當成另一個角色
+    function _wxNickNote(userName) {
+        try {
+            const nick = win.WX_ME ? String(win.WX_ME.name() || '').trim() : '';
+            if (nick && nick !== userName) return `[微信暱稱] ${userName} 在微信裡把自己的名字設成「${nick}」，訊息前面的 [${nick}] 就是本人，在微信裡就叫這個名字，不要當成另一個角色。`;
+        } catch (e) {}
+        return '';
+    }
+
+    // 人設／群聊備註：自己打的那段＋世界書挑的那條（兩個都有時自己打的在前）
+    function _wxJoinNote(custom, loreText) {
+        const c = String(custom || '').trim();
+        const l = String(loreText || '').trim();
+        if (c && l) return `${c}\n\n---\n\n${l}`;
+        return l || c;
+    }
+
+    // 世界書條目內容：有酒館就讀 TavernHelper（指定那本，沒指定用這張卡的主世界書）；
+    //   PWA 讀 OS_WORLDBOOK 啟用中的條目——設置頁在 PWA 挑條目時存的 uid 就是條目 id。
+    async function _wxLoreEntryText(uid, bookName) {
+        if (uid == null || uid === '') return '';
+        try {
+            const H = win.TavernHelper;
+            if (H && typeof H.getLorebookEntries === 'function') {
+                const book = bookName || (typeof H.getCurrentCharPrimaryLorebook === 'function' ? H.getCurrentCharPrimaryLorebook() : '');
+                if (!book) return '';
+                const entries = await H.getLorebookEntries(book);
+                const hit = (entries || []).find(e => e && e.uid === uid);
+                return (hit && hit.content) || '';
+            }
+            if (win.OS_WORLDBOOK && typeof win.OS_WORLDBOOK.getEnabledEntries === 'function') {
+                const entries = await win.OS_WORLDBOOK.getEnabledEntries();
+                const hit = (entries || []).find(e => e && String(e.id) === String(uid));
+                return (hit && hit.content) || '';
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    // 這一間指定的表情包庫（聊天設置 → 表情包庫）：只給名字清單
+    function _wxStickerLibBlock(apiChat) {
+        if (!apiChat || !apiChat.stickerLibId) return '';
+        try {
+            const libs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]');
+            const lib = (libs || []).find(l => l && l.id === apiChat.stickerLibId);
+            if (!lib || !lib.stickers || !lib.stickers.length) return '';
+            const names = lib.stickers.map(s => String((s && s.name) || '').replace(/\.(gif|png|jpg|jpeg|webp)$/i, '')).join('\n');
+            return `[Available 表情包]\nYou can ONLY use sticker names from this list. Use format: [表情包:名字]\n嚴禁自創，only choose from below:\n\n${names}`;
+        } catch (e) { return ''; }
+    }
+
+    // 🧭 AVS 當背景給手機聊天與通話用（唯讀）。
+    //   為什麼要：正文有寫「剛吃完牛肉麵、手上拿著誰的衣服」，但「這個角色現在對主角是什麼態度」
+    //   是數值、不會寫在正文裡——沒有它，模型只能靠上下文猜語氣，同一個人一下熱情一下冷淡。
+    //   🚨唯讀：這裡只給它看，不要求回報，也明令不准把數字或欄位名寫進訊息——一寫出來就是原始格式跑到畫面上。
+    function _wxAvsBackground() {
+        try {
+            const bg = (win._AVS_ENGINE && win._AVS_ENGINE.read) ? win._AVS_ENGINE.read() : null;
+            if (!bg || !Object.keys(bg).length) return '';
+            return '[現在的世界狀態｜背景參考]\n' + JSON.stringify(bg)
+                + '\n\n上面是主角此刻的處境，以及各個角色現在的狀態。用它決定你這幾則訊息該是什麼態度、'
+                + '講到剛發生的事情時對得上。這是背景，不是要你回報的東西：'
+                + '訊息裡不要提到上面的欄位名或數字，也不要輸出任何狀態、變數之類的格式。';
+        } catch (e) { return ''; }
+    }
+
+    // 📞 聊天記錄裡的系統行（通話開始／結束／未接聽、改名、紅包領取、換頭像…）不是誰講的話 → 寫成旁註。
+    //   通話分隔用故事時鐘標出是哪一天、距今幾天；拿不到故事日期就只寫「之前」。stNow＝故事時鐘的當前日期。
+    function _wxWhenText(d, stNow) {
+        try {
+            const S = win.OS_MC_STATUS;
+            if (!d || !S || !S.fmtDate) return '';
+            if (!stNow || !S.dayDiff) return S.fmtDate(d);
+            const n = S.dayDiff(d, stNow);
+            if (n <= 0) return '今天稍早';
+            if (n === 1) return '昨天';
+            if (n === 2) return '前天';
+            return n + ' 天前（' + S.fmtDate(d) + '）';
+        } catch (e) { return ''; }
+    }
+    function _wxSysNote(msg, stNow) {
+        if (!msg) return '';
+        const w = _wxWhenText(msg._storyDate, stNow);
+        if (msg._callStart) return '（以下是' + (w || '之前') + '的一通電話）';
+        if (msg._callEnd)   return '（那通電話到這裡結束）';
+        if (msg._missed)    return '（' + (w || '之前') + '有一通沒接到的來電）';
+        const t = String(msg.content || '').trim();
+        return t ? '（' + t + '）' : '';
+    }
+
     // ↩ 撤回的訊息怎麼給模型看：
     //   主角撤回自己的——後面有對方的訊息＝對方回過話、看過了，給內容；還沒回就撤回＝只知道撤回了一則，不給內容。
     //   角色撤回的——他自己知道說過什麼，給內容。一律寫成旁註，不是誰講的話（模型才不會學成輸出格式）。
@@ -1456,10 +1555,8 @@
                 // 微信暱稱：微信裡別人看到的是暱稱，不是人設真名。
                 //   兩個不一樣的時候要講清楚是同一個人，不然 AI 會把 [暱稱] 當成劇情裡另一個角色。
                 if (promptKey === 'wx_chat_system') {
-                    try {
-                        const _nick = win.WX_ME ? String(win.WX_ME.name() || '').trim() : '';
-                        if (_nick && _nick !== userName) contextBlock += `[微信暱稱] ${userName} 在微信裡把自己的名字設成「${_nick}」，訊息前面的 [${_nick}] 就是本人，在微信裡就叫這個名字，不要當成另一個角色。\n\n`;
-                    } catch (e) {}
+                    const _nk = _wxNickNote(userName);   // 共用（獨立版同一支）
+                    if (_nk) contextBlock += _nk + '\n\n';
                 }
                 if (ctx.char.description) contextBlock += `[Character Description]:\n${ctx.char.description}\n\n`;
                 if (ctx.char.personality) contextBlock += `[Personality]:\n${ctx.char.personality}\n\n`;
@@ -1548,17 +1645,9 @@
                             
                             if (groupNoteText) apiMessages.push({ role: "system", content: `[Group Note]:\n${groupNoteText}\n\n` });
                         }
-                        if (promptKey === 'wx_chat_system' && apiChat && apiChat.stickerLibId) {
-                            try {
-                                const _stkLibs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]');
-                                const _stkLib = _stkLibs.find(l => l.id === apiChat.stickerLibId);
-                                if (_stkLib && _stkLib.stickers && _stkLib.stickers.length > 0) {
-                                    const names = _stkLib.stickers
-                                        .map(s => s.name.replace(/\.(gif|png|jpg|jpeg|webp)$/i, ''))
-                                        .join('\n');
-                                    apiMessages.push({ role: "system", content: `[Available 表情包]\nYou can ONLY use sticker names from this list. Use format: [表情包:名字]\n嚴禁自創，only choose from below:\n\n${names}` });
-                                }
-                            } catch(_e) { console.warn('[buildContext] sticker lib error:', _e); }
+                        if (promptKey === 'wx_chat_system') {
+                            const _stk = _wxStickerLibBlock(apiChat);   // 共用（獨立版同一支）
+                            if (_stk) apiMessages.push({ role: "system", content: _stk });
                         }
                     }
                 } catch (e) { console.warn('讀取聊天設置失敗:', e); }
@@ -1586,19 +1675,11 @@
             //   🚨唯讀：這裡只給它看，不要求回報，也明令不准把數字或欄位名寫進訊息——
             //   一寫出來就是原始格式跑到畫面上。
             if (promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') {
-                try {
-                    const _avsBg = (win._AVS_ENGINE && win._AVS_ENGINE.read) ? win._AVS_ENGINE.read() : null;
-                    if (_avsBg && Object.keys(_avsBg).length) {
-                        apiMessages.push({
-                            role: 'system',
-                            content: '[現在的世界狀態｜背景參考]\n' + JSON.stringify(_avsBg)
-                                + '\n\n上面是主角此刻的處境，以及各個角色現在的狀態。用它決定你這幾則訊息該是什麼態度、'
-                                + '講到剛發生的事情時對得上。這是背景，不是要你回報的東西：'
-                                + '訊息裡不要提到上面的欄位名或數字，也不要輸出任何狀態、變數之類的格式。'
-                        });
-                        console.log('[OS_API.buildContext] 附上 AVS 背景 ' + JSON.stringify(_avsBg).length + ' 字');
-                    }
-                } catch (e) { console.warn('[OS_API.buildContext] AVS 背景注入失敗（不影響送出）:', e); }
+                const _avsBg = _wxAvsBackground();   // 共用（獨立版同一支），說明見那支
+                if (_avsBg) {
+                    apiMessages.push({ role: 'system', content: _avsBg });
+                    console.log('[OS_API.buildContext] 附上 AVS 背景 ' + _avsBg.length + ' 字');
+                }
             }
 
             if ((promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
@@ -1619,26 +1700,7 @@
                             //    並且用故事時鐘標出那通是哪一天、距今幾天。拿不到故事日期就只寫「之前」。
                             let _stNow = null;
                             try { const S = win.OS_MC_STATUS; if (S && S.load) { const _st = await S.load(); _stNow = (_st && _st.date) || null; } } catch (e) {}
-                            const _whenText = (d) => {
-                                try {
-                                    const S = win.OS_MC_STATUS;
-                                    if (!d || !S || !S.fmtDate) return '';
-                                    if (!_stNow || !S.dayDiff) return S.fmtDate(d);
-                                    const n = S.dayDiff(d, _stNow);
-                                    if (n <= 0) return '今天稍早';
-                                    if (n === 1) return '昨天';
-                                    if (n === 2) return '前天';
-                                    return n + ' 天前（' + S.fmtDate(d) + '）';
-                                } catch (e) { return ''; }
-                            };
-                            const _noteOf = (msg) => {
-                                const w = _whenText(msg._storyDate);
-                                if (msg._callStart) return '（以下是' + (w || '之前') + '的一通電話）';
-                                if (msg._callEnd)   return '（那通電話到這裡結束）';
-                                if (msg._missed)    return '（' + (w || '之前') + '有一通沒接到的來電）';
-                                const t = String(msg.content || '').trim();
-                                return t ? '（' + t + '）' : '';
-                            };
+                            const _noteOf = (msg) => _wxSysNote(msg, _stNow);   // 共用（獨立版同一支），寫法見那支
                             // 📒 聊天室長期記憶：早前的訊息壓成一段摘要先注入，原文只帶最近幾則。
                             //    以前這裡是整串 apiChat.messages 全帶——一則都沒切，聊久了又貴又慢，
                             //    真正要緊的事會被埋在幾百則寒暄裡。（可調的「每群聊消息數」管的是關聯群聊，不是這裡。）
@@ -1796,18 +1858,36 @@
             const _isWxRoute = (promptKey === 'wx_chat_system' || promptKey === 'call_voice_system');
             const _isCall = (promptKey === 'call_voice_system');
             let charPersona = '';
+            let _groupNote = '';
+            let _wxChat = null;   // 這一間：記憶體那份優先；從電話 app 直接打、微信還沒開過就讀存檔
             if (_isWxRoute && win.wxApp?.GLOBAL_ACTIVE_ID) {
                 try {
-                    const chatObj = win.wxApp.GLOBAL_CHATS?.[win.wxApp.GLOBAL_ACTIVE_ID];
-                    if (chatObj?.personaCustom) charPersona = chatObj.personaCustom;
-                    if (!charPersona && chatObj?.persona) charPersona = chatObj.persona;
-                    // 從電話 app 直接打、微信還沒開過：記憶體裡沒有這間，改讀存檔
-                    if (!charPersona && win.WX_DB?.getApiChat) {
-                        const saved = await win.WX_DB.getApiChat(win.wxApp.GLOBAL_ACTIVE_ID);
-                        if (saved?.personaCustom) charPersona = saved.personaCustom;
-                        if (!charPersona && saved?.persona) charPersona = saved.persona;
-                    }
+                    const _cid = win.wxApp.GLOBAL_ACTIVE_ID;
+                    const _mem = win.wxApp.GLOBAL_CHATS?.[_cid] || null;
+                    const _saved = win.WX_DB?.getApiChat ? await win.WX_DB.getApiChat(_cid) : null;
+                    _wxChat = _mem || _saved;
+                    // 人設／群聊備註：自己打的那段＋從世界書挑的那條（同酒館版；以前 PWA 只讀自己打的，挑的條目從來沒送）
+                    const _notesOf = async (c) => {
+                        if (!c) return { persona: '', group: '' };
+                        if (c.isGroup) {
+                            const lore = c.groupNoteFromLorebook ? await _wxLoreEntryText(c.groupNoteFromLorebook) : '';
+                            return { persona: '', group: _wxJoinNote(c.groupNoteCustom, lore) };
+                        }
+                        const custom = c.personaCustom || (!c.personaFromLorebook ? (c.persona || '') : '');
+                        const lore = c.personaFromLorebook ? await _wxLoreEntryText(c.personaFromLorebook, c.personaLoreBook) : '';
+                        return { persona: _wxJoinNote(custom, lore), group: '' };
+                    };
+                    let _n = await _notesOf(_mem);
+                    if (!_n.persona && !_n.group && _saved && _saved !== _mem) _n = await _notesOf(_saved);
+                    charPersona = _n.persona;
+                    _groupNote = _n.group;
                 } catch(e) {}
+            }
+            // 🔑 {{char}}/{{user}} 換成真名（同酒館版）：直連 API 沒有人替它換，以前 PWA 送出去的就是字面上的 {{char}}
+            if (_isWxRoute) {
+                const _charName = (_wxChat && !_wxChat.isGroup && _wxChat.name) ? _wxChat.name : (_wxChat && _wxChat.isGroup ? '群裡的角色' : 'AI');
+                sysPrompt = _wxResolveMacros(sysPrompt, _charName, userName);
+                cotPrompt = _wxResolveMacros(cotPrompt, _charName, userName);
             }
 
             let scanText = userMessage || '';
@@ -2141,8 +2221,18 @@
             const _NO_CARD_STD = (promptKey === 'iris_chat' || promptKey === 'cheshire_chat');
             let contextBlock = '';
             if (!_NO_CARD_STD) {
-                if (userDesc || userName !== 'User') contextBlock += `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}\n\n`;
+                if (userDesc || userName !== 'User') {
+                    contextBlock += `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}\n`;
+                    // 同酒館版：講明她就是正在聊天的本人，不然劇情歷史裡滿是主角名字，模型會把她當成另一個角色
+                    if (_isWxRoute) contextBlock += `⚠️ ${userName} 就是正在跟你聊天的真實使用者本人；你回覆與稱呼的對象永遠是 ${userName}，絕對不要把他當成劇情裡的其他角色或 NPC。\n`;
+                    contextBlock += '\n';
+                }
+                if (promptKey === 'wx_chat_system') {
+                    const _nk = _wxNickNote(userName);   // 微信暱稱（共用）
+                    if (_nk) contextBlock += _nk + '\n\n';
+                }
                 if (charPersona)  contextBlock += `[Character Persona (Private Chat)]:\n${charPersona}\n\n`;
+                if (_groupNote)   contextBlock += `[Group Note]:\n${_groupNote}\n\n`;
                 if (lore && !_iso.lore) contextBlock += `[World Info]:\n${lore}\n\n`;
             }
             if (contextBlock) apiMessages.push({ role: 'system', content: contextBlock });
@@ -2193,6 +2283,11 @@
                 } catch (e) { console.warn('[OS_API standalone] 劇情正文注入失敗:', e); }
             }
 
+            // 🧭 世界狀態當背景，附上「別把欄位名跟數字寫進訊息」（同酒館版，共用那支）
+            if (_isWxRoute) {
+                const _avsBg = _wxAvsBackground();
+                if (_avsBg) apiMessages.push({ role: 'system', content: _avsBg });
+            }
             if (avsPrompt && !_NO_CARD_STD) apiMessages.push({ role: 'system', content: avsPrompt });
 
             if (_isWxRoute && win.WX_DB?.getApiChat && win.wxApp?.GLOBAL_ACTIVE_ID) {
@@ -2209,7 +2304,13 @@
                     // 🖼 換頭像／約定／改名改簽名／它記得我頭像的樣子（同酒館版；以前 PWA 這條完全沒有，角色不知道能換頭像）
                     if (promptKey === 'wx_chat_system') {
                         _wxAbilityBlocks(win.wxApp.GLOBAL_ACTIVE_ID).forEach(m => apiMessages.push(m));
+                        // 😺 這一間指定的表情包庫（同酒館版，共用那支）
+                        const _stk = _wxStickerLibBlock(apiChat);
+                        if (_stk) apiMessages.push({ role: 'system', content: _stk });
                     }
+                    // 📞 故事時鐘的當前日期：通話分隔要標是哪一天（同酒館版）
+                    let _stNow = null;
+                    try { const S = win.OS_MC_STATUS; if (S && S.load) { const _st = await S.load(); _stNow = (_st && _st.date) || null; } } catch (e) {}
                     if (apiChat?.messages?.length) {
                         // 📒 聊天室長期記憶：跟酒館那條路共用同一份（存在 apiChat.wxSummary）。
                         //    這邊本來就有「保留最近幾則」的上限（OS_APP_CTX_MSGS），窗口機制不動，只把摘要補上。
@@ -2235,10 +2336,11 @@
                             }
                             if (!msg) return;
                             if (msg.sentWhileBlocked || msg._blockedNotice) return;   // 對方沒收到的那幾則（同酒館版）
-                            // 📞 通話：開始／結束／未接聽這些分隔不是誰講的話，當成旁註給（同酒館版），不然模型會讀到自己說「通話開始」
-                            if (_isCall && msg.type === 'system') {
-                                const _t = String(msg.content || '').trim();
-                                if (_t) { apiMessages.push({ role: 'system', content: '（' + _t + '）' }); _pushedHist++; }
+                            // 📞 系統行不是誰講的話 → 旁註（同酒館版，共用 _wxSysNote）。
+                            //   以前 PWA 只有通話這樣處理：微信裡的改名、紅包領取、換頭像這些被當成對方講的話；通話分隔也沒標是哪一天。
+                            if (msg.type === 'system') {
+                                const _note = _wxSysNote(msg, _stNow);
+                                if (_note) { apiMessages.push({ role: 'system', content: _note }); _pushedHist++; }
                                 return;
                             }
                             // ↩ 撤回的：寫成旁註（同酒館版）
@@ -2269,9 +2371,12 @@
                                 _pushedHist++;
                             }
                         });
-                        // 📞 收尾：還在響鈴（這一通還沒接通）才補「現在是新接起來的一通」；接通了那句已經放在這一通開頭
-                        if (_isCall && _pushedHist && _curCallAt < 0) {
-                            apiMessages.push({ role: 'system', content: _CALL_PAST_NOTE });
+                        // 📞 收尾：講清楚上面全是過去的事（同酒館版）。通話還在響鈴才補「新接起來的一通」，接通了那句已經放在這一通開頭；
+                        //   微信以前 PWA 沒有這句，模型會把幾天前的話當成剛剛才講的
+                        if (_pushedHist && _curCallAt < 0) {
+                            apiMessages.push({ role: 'system', content: _isCall
+                                ? _CALL_PAST_NOTE
+                                : '（以上都是以前的訊息，不是現在。回覆時先想清楚距離上一則過了多久，不要假設當時的情況還沒變。）' });
                         }
                     }
                     // 🔗 記憶關聯（同酒館版）
