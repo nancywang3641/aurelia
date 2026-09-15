@@ -545,6 +545,20 @@
                     </div>
                 </div>
 
+                ${!isGroup ? `
+                <div class="ws-group">
+                    ${(chat.wxBlocked && chat.wxBlockKind === 'deleted' && !chat.wxBlockedByMe) ? `
+                    <div class="ws-cell" id="btn-friend-verify" style="cursor:pointer;">
+                        <div class="ws-label">發送朋友驗證</div>
+                        <div class="ws-right"><div class="ws-arrow">›</div></div>
+                    </div>` : ''}
+                    <label class="ws-cell ws-cell-switch">
+                        <div class="ws-label">加入黑名單</div>
+                        <input type="checkbox" class="ws-switch" id="chk-blacklist" ${chat.wxBlockedByMe ? 'checked' : ''}>
+                    </label>
+                </div>
+                ` : ''}
+
                 <div class="ws-group">
                     <div class="ws-cell" id="btn-clear-chat" style="cursor:pointer;">
                         <div class="ws-label" style="color: #fa5151;">清空聊天記錄</div>
@@ -1187,6 +1201,16 @@
                     panel.classList.remove('show');
                 }
             };
+            // 🔒 黑名單／朋友驗證（wx_core 的 blockContact／unblockContact／sendFriendRequest）
+            {
+                const _bl = doc.getElementById('chk-blacklist');
+                if (_bl) _bl.onchange = async () => {
+                    const done = _bl.checked ? await app.blockContact(chatId) : await app.unblockContact(chatId);
+                    if (!done) _bl.checked = !!chat.wxBlockedByMe;   // 取消了就撥回去
+                };
+                const _fv = doc.getElementById('btn-friend-verify');
+                if (_fv) _fv.onclick = () => { panel.classList.remove('show'); app.sendFriendRequest(chatId); };
+            }
             // 🧳 隔離：這間要不要吃「這本」的世界書與劇情。切了就存，發訊息時 os_api_engine 會看。
             {
                 const _l = doc.getElementById('chk-iso-lore'), _s = doc.getElementById('chk-iso-story');

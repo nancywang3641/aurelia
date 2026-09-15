@@ -987,7 +987,7 @@
         const inBook = {};
         contacts.forEach(function (c) { if (c && c.id) inBook[c.id] = true; });
         return Object.keys(GLOBAL_CHATS).map(function (k) { return GLOBAL_CHATS[k]; }).filter(function (c) {
-            return c && c.id && c.name && c.id !== excludeId && !c.wxRemoved && !c.wxBlocked && (c.isGroup || inBook[c.id]);
+            return c && c.id && c.name && c.id !== excludeId && !c.wxRemoved && !c.wxBlocked && !c.wxBlockedByMe && (c.isGroup || inBook[c.id]);
         });
     }
     // 名字比對用：不算空白、不分大小寫；再加上「整理聊天室」記下的同一個人的正確寫法
@@ -1083,6 +1083,76 @@
         try { _refreshLobbyUnread(); } catch (e) {}
     }
 
+    // ── 🚫 刪好友／拉黑／好友申請：角色在回覆裡動手的英文標籤（只認私聊裡的那個人）──────────
+    //   <friend_delete/> 他把主角刪了；<friend_block/> 他把主角拉黑
+    //   <friend_request>附言</friend_request> 他想重新當朋友（被她拉黑、或他刪過／拉黑過她的時候才算）
+    //   <friend_accept/> 他通過她送的朋友驗證；<friend_decline>回她的一句</friend_decline> 他不通過
+    //   🚨 跟朋友圈標籤一樣要在拆 <chat> 容器之前抽：寫在容器外面的一樣要做。
+    const _FR_PAIR_RE = /[<＜]\s*friend_(request|decline)\b[^>＞]*[>＞]([\s\S]*?)[<＜]\s*\/\s*friend_\1\s*[>＞]/gi;
+    const _FR_ONE_RE = /[<＜]\s*\/?\s*friend_(delete|block|accept|request|decline)\b[^>＞]*[>＞]/gi;
+    function _stripFriendTags(text) {
+        return String(text == null ? '' : text).replace(_FR_PAIR_RE, '').replace(_FR_ONE_RE, '');
+    }
+    function _friendTagsOf(text) {
+        const acts = [];
+        String(text == null ? '' : text)
+            .replace(_FR_PAIR_RE, function (_, verb, body) { acts.push({ verb: verb.toLowerCase(), text: String(body || '').replace(/<[^>]+>/g, '').trim().slice(0, 80) }); return ''; })
+            .replace(_FR_ONE_RE, function (tag, verb) { if (!/^[<＜]\s*\//.test(tag)) acts.push({ verb: verb.toLowerCase(), text: '' }); return ''; });
+        return acts;
+    }
+    function _blockName(chat) { return String((chat && (chat.realName || chat.name)) || '').trim(); }
+    // 系統行放進這一間；她人在這間就直接畫出來
+    function _sysPush(chat, content) {
+        const m = { type: 'system', isMe: false, content: content, timestamp: Date.now() };
+        chat.messages.push(m);
+        if (APP_CONTAINER && GLOBAL_ACTIVE_ID === chat.id) { try { _appendBubble(m, chat); } catch (e) {} }
+        return m;
+    }
+    // 被刪＝朋友驗證那句；被拉黑＝拒收那句（沒標是哪種的舊資料照舊寫拒收）
+    function _blockedNoticeText(chat) {
+        return (chat && chat.wxBlockKind === 'deleted')
+            ? (chat.name || '對方') + '開啟了朋友驗證，你還不是他（她）朋友。請先發送朋友驗證請求，對方驗證通過後，才能聊天。'
+            : '消息已發出，但被對方拒收了。';
+    }
+    function _notifyFriendReq(chat, note) {
+        const body = (chat.name || '對方') + ' 請求添加你為朋友';
+        try {
+            if (win.document && win.document.visibilityState === 'hidden' && win.OS_KEEPALIVE) win.OS_KEEPALIVE.notify('微信', body + (note ? '：' + note : ''), 'wxfr-' + chat.id);
+            else if (typeof AUI !== 'undefined' && AUI.toast) AUI.toast(body);
+        } catch (e) {}
+        try { if (APP_CONTAINER && !GLOBAL_ACTIVE_ID) win.wxApp.render(); } catch (e) {}
+    }
+    function _applyFriendTags(text, chat) {
+        const acts = _friendTagsOf(text);
+        if (!acts.length) return String(text == null ? '' : text);
+        if (chat && !chat.isGroup) {
+            const n = _blockName(chat);
+            acts.forEach(function (a) {
+                if (a.verb === 'delete' || a.verb === 'block') {
+                    chat.wxBlocked = true;
+                    chat.wxBlockKind = a.verb === 'block' ? 'blocked' : 'deleted';
+                    delete chat.wxFriendReqOut;
+                    chat.hbLast = Date.now();   // 剛斷開，不要下一分鐘就來求和
+                    _markManual('b:' + n, 'blocked', chat.wxBlockKind);
+                } else if (a.verb === 'request') {
+                    if (!chat.wxBlocked && !chat.wxBlockedByMe) return;   // 本來就是朋友，不算
+                    chat.wxFriendReqIn = { note: a.text, at: Date.now() };
+                    _notifyFriendReq(chat, a.text);
+                } else if (a.verb === 'accept') {
+                    if (!chat.wxBlocked) return;
+                    delete chat.wxBlocked; delete chat.wxBlockKind; delete chat.wxFriendReqOut;
+                    _markManual('b:' + n, 'back');
+                    _sysPush(chat, '你已添加了' + (chat.name || n) + '，現在可以開始聊天了。');
+                } else if (a.verb === 'decline') {
+                    if (!chat.wxFriendReqOut) return;
+                    delete chat.wxFriendReqOut;
+                    _sysPush(chat, '「' + (chat.name || n) + '」沒有通過你的朋友驗證' + (a.text ? '，回覆：' + a.text : ''));
+                }
+            });
+        }
+        return _stripFriendTags(text);
+    }
+
     // --- 解析邏輯 (將長文本切成陣列) ---
     //   回傳這一間的訊息陣列；傳到別間的掛在 .others = [{ chat, msgs }]，呼叫端交給 _deliverOtherRooms
     function parseAndProcess(fullText) {
@@ -1096,6 +1166,7 @@
             }
         } catch (e) { console.warn('[WX] 朋友圈標籤處理失敗', e); }
         const cur = GLOBAL_ACTIVE_ID ? (GLOBAL_CHATS[GLOBAL_ACTIVE_ID] || null) : null;
+        try { fullText = _applyFriendTags(fullText, cur); } catch (e) { console.warn('[WX] 好友標籤處理失敗', e); }
         let mine = [];
         const others = [];
         const parts = _wxSplitRooms(String(fullText == null ? '' : fullText).trim(), cur);
@@ -1110,6 +1181,8 @@
             const ex = others.find(function (o) { return o.chat.id === part.chat.id; });
             if (ex) ex.msgs = ex.msgs.concat(msgs); else others.push({ chat: part.chat, msgs: msgs });
         });
+        // 她把他拉黑了：他寫什麼都傳不進來（好友申請在上面已經收了）
+        if (cur && cur.wxBlockedByMe) mine = [];
         mine.others = others;
         return mine;
     }
@@ -1534,15 +1607,19 @@
         try { const all = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null; if (Array.isArray(all)) return all.length - 1; } catch (e) {}
         return -1;
     }
-    // 她在微信刪掉聊天室／聯絡人時呼叫
-    async function _markRemoved(chat) {
-        const k = _rmKeyOf(chat);
+    // 手動記一筆（她在微信做的、或角色在微信回覆裡用標籤做的）：排在當時正文最後一樓所有劇情事件之後
+    //   k：'p:名'／'g:房key'（主角對他）或 'b:名'（他對主角）；kind：'remove'|'blocked'|'back'；how 見 _friendEventOf
+    async function _markManual(k, kind, how) {
         if (!k) return;
         const f = await _storyCurrentFloor();
         const o = _rmLoad();
-        o.manual[k] = { kind: 'remove', floor: f, at: Date.now() };
+        o.manual[k] = how ? { kind: kind, how: how, floor: f, at: Date.now() } : { kind: kind, floor: f, at: Date.now() };
         _rmSave(o);
-        _rmRemovedNow[k] = 1;
+        if (kind === 'back') delete _rmRemovedNow[k]; else _rmRemovedNow[k] = how || 1;
+    }
+    // 她在微信刪掉聊天室／聯絡人時呼叫（how='block' 是拉黑）
+    async function _markRemoved(chat, how) {
+        return _markManual(_rmKeyOf(chat), 'remove', how);
     }
     // 她在微信新加了這個人：只有「現在是刪掉的」才需要記一筆加回（每個新聯絡人都會叫到這裡）
     function _clearRemoved(name) {
@@ -1572,16 +1649,21 @@
         /(?:你已被|已被)(?:對方|对方)?\s*(?:刪除|删除|拉黑|封鎖|封锁|移出(?:好友|通訊錄|通讯录))/,
         new RegExp('(?:對方|对方)\\s*(?:已)?\\s*(?:將|将|把)?\\s*你\\s*(?:刪除|删除|拉黑|加入(?:黑名單|黑名单))')
     ];
+    // 🚫 真的微信兩種不一樣：被刪＝「開啟了朋友驗證」、可以送好友申請；被拉黑＝「被對方拒收」、申請直接失敗。
+    //   how：'deleted' | 'blocked'（對方做的）；主角做的那邊 how='block' 是拉黑（聊天室留著、從通訊錄拿掉），沒寫是刪好友（整間收起來）
     function _friendEventOf(text) {
         const s = String(text || '').trim();
         if (!s) return null;
         for (let i = 0; i < _FRIEND_BLOCKED_RES.length; i++) {
             const m = s.match(_FRIEND_BLOCKED_RES[i]);
-            if (m) return { kind: 'blocked', name: (m[1] || '').trim() };
+            if (m) {
+                const how = (i === 0 || (i >= 2 && !/拉黑|封鎖|封锁|黑名單|黑名单/.test(s))) ? 'deleted' : 'blocked';
+                return { kind: 'blocked', how: how, name: (m[1] || '').trim() };
+            }
         }
         if (_FRIEND_BACK_RE.test(s)) {
             // 後面沒有固定字可以擋的那條用貪婪版（不然只抓到一個字）；名字字元本來就排除標點，會停在逗號前
-            const m = s.match(new RegExp(_Q + _NM + _QE + '\\s*(?:通過|通过|已經是|已经是|已成為|已成为)')) || s.match(new RegExp('(?:添加了?|加回)\\s*' + _Q + _NM.replace('}?)', '})') + _QE));
+            const m = s.match(new RegExp(_Q + _NM + _QE + '\\s*(?:通過|通过|已經是|已经是|已成為|已成为)')) || s.match(new RegExp('(?:將|将|把)\\s*' + _Q + _NM + _QE + '\\s*(?:移出|解除)')) || s.match(new RegExp('(?:添加了?|加回)\\s*' + _Q + _NM.replace('}?)', '})') + _QE));
             return { kind: 'back', name: m ? m[1].trim() : '' };
         }
         for (let i = 0; i < _FRIEND_RM_RES.length; i++) {
@@ -1589,7 +1671,7 @@
             if (m) {
                 let n = (m[1] || '').trim();
                 if (/^(?:該|该|此|這個|这个|對方|对方|他|她|它|你|我|好友|聯絡人|联系人)$/.test(n)) n = '';
-                return { kind: 'remove', name: n };
+                return i >= 2 ? { kind: 'remove', how: 'block', name: n } : { kind: 'remove', name: n };
             }
         }
         return null;
@@ -1675,10 +1757,10 @@
 
             // 🗑 刪好友：每個人（群）現在是不是刪掉的 —— 事件依（樓號, 樓內順序）排，最後一件說了算（見 _rmLoad 上面的說明）
             const rmLast = {};
-            const rmPush = function (k, f, o, kind) {
+            const rmPush = function (k, f, o, kind, how) {
                 if (!k || f == null) return;
                 const cur = rmLast[k];
-                if (!cur || f > cur.f || (f === cur.f && o >= cur.o)) rmLast[k] = { f: f, o: o, kind: kind };
+                if (!cur || f > cur.f || (f === cur.f && o >= cur.o)) rmLast[k] = { f: f, o: o, kind: kind, how: how || '' };
             };
             const rmMan = _rmLoad().manual;
             const backNames = [];   // 「已添加了X」的 X 可能連著後面的字，等所有刪除都收齊了再對名字
@@ -1693,13 +1775,15 @@
                         if (!ev) return;
                         const name = ev.name || (others.length === 1 ? others[0] : '');   // 沒寫名字＝這間私聊的對方
                         if (!name) return;
-                        if (ev.kind === 'remove') rmPush('p:' + name, x.floor, i, 'remove');          // 主角刪了對方
-                        else if (ev.kind === 'blocked') rmPush('b:' + name, x.floor, i, 'blocked');   // 對方刪了主角
+                        if (ev.kind === 'remove') rmPush('p:' + name, x.floor, i, 'remove', ev.how);          // 主角刪了／拉黑了對方
+                        else if (ev.kind === 'blocked') rmPush('b:' + name, x.floor, i, 'blocked', ev.how);   // 對方刪了／拉黑了主角
                         else backNames.push({ name: name, f: x.floor, o: i });
                         return;
                     }
                     if (x.type !== 'msg') return;
-                    rmPush(selfKey, x.floor, i, 'back');   // 這間又有人講話＝主角沒把人刪掉
+                    // 這間又有人講話＝主角沒把人刪掉。拉黑不一樣：聊天室本來就留著，主角自己照樣打得出字，只有對方講話才算放出來
+                    const _cur = rmLast[selfKey];
+                    if (!(x.isMe && _cur && _cur.kind === 'remove' && _cur.how === 'block')) rmPush(selfKey, x.floor, i, 'back');
                     // 對方又講得出話＝主角沒被刪（主角自己說的不算，被刪的人照樣打得出字）
                     if (!x.isMe && others.length === 1) rmPush('b:' + others[0], x.floor, i, 'back');
                 });
@@ -1713,10 +1797,12 @@
                 rmPush('b:' + nm, b.f, b.o, 'back');
             });
             // 她手動做的排在那一樓所有劇情事件之後
-            Object.keys(rmMan).forEach(function (k) { rmPush(k, rmMan[k].floor, Infinity, rmMan[k].kind); });
+            Object.keys(rmMan).forEach(function (k) { rmPush(k, rmMan[k].floor, Infinity, rmMan[k].kind, rmMan[k].how); });
             _rmRemovedNow = {};
-            Object.keys(rmLast).forEach(function (k) { if (rmLast[k].kind === 'remove' || rmLast[k].kind === 'blocked') _rmRemovedNow[k] = 1; });
-            const rmStillOn = function (k) { return !!_rmRemovedNow[k]; };   // 'p:名' ＝主角刪了他；'b:名' ＝他刪了主角
+            Object.keys(rmLast).forEach(function (k) { if (rmLast[k].kind === 'remove' || rmLast[k].kind === 'blocked') _rmRemovedNow[k] = rmLast[k].how || 1; });
+            // 'p:名' ＝主角刪了他（值 1）或拉黑了他（值 'block'）；'b:名' ＝他刪了主角（'deleted'）或拉黑了主角（'blocked'）
+            const rmStillOn = function (k) { return !!_rmRemovedNow[k]; };
+            const rmHidden = function (k) { return !!_rmRemovedNow[k] && _rmRemovedNow[k] !== 'block'; };   // 刪好友才收起來，拉黑的聊天室留著
             // 刪掉的房：本來就有記錄的藏起來（資料留著，加回來時原樣回來）；本來沒有的就不建
             const hideRoom = async function (chatId, key) {
                 let ex = GLOBAL_CHATS[chatId];
@@ -1740,7 +1826,7 @@
                 if (room.owner && room.owner !== _storyMyName() && !_isMeName(room.owner)) continue;
                 // 好友申請（AI 常寫成「新的朋友」系統房）：申請人進通訊錄、簡介用附加信息；這種房本身不建聊天室
                 _storyFriendRequests(room).forEach(function (fr) {
-                    if (rmStillOn('p:' + fr.name)) return;   // 申請比刪除舊（或之後又被刪）→ 不加回來
+                    if (rmHidden('p:' + fr.name)) return;   // 申請比刪除舊（或之後又被刪）→ 不加回來
                     const fid = win.WX_CONTACTS.getOrCreateContactID(fr.name, 'user', true);
                     if (!fid || fid === 'User') return;
                     if (fr.bio) win.WX_CONTACTS.addContactToStorage({ id: fid, name: fr.name, desc: fr.bio });
@@ -1766,7 +1852,7 @@
                 } else {
                     realName = others[0] || room.name || key;
                     // 🗑 刪掉的好友：不重新註冊進通訊錄（查 id 用不存檔的那種），原本的記錄藏起來
-                    if (rmStillOn('p:' + realName)) { await hideRoom(win.WX_CONTACTS.getOrCreateContactID(realName, 'user', false), key); continue; }
+                    if (rmHidden('p:' + realName)) { await hideRoom(win.WX_CONTACTS.getOrCreateContactID(realName, 'user', false), key); continue; }
                     chatId = win.WX_CONTACTS.getOrCreateContactID(realName, 'user', true);
                     if (chatId === 'User') continue;
                     members = [realName];
@@ -1781,7 +1867,10 @@
                 if (existing && existing.wxRemoved) { delete existing.wxRemoved; existing._storySig = ''; }   // 加回來了：重建、重新出現在列表
                 // 對方把主角刪了：聊天室照舊在（真的微信也是這樣，送出去才知道），但送不出去、對方不會回
                 const wantBlocked = !isGroup && rmStillOn('b:' + realName);
-                if (existing && !!existing.wxBlocked !== wantBlocked) existing._storySig = '';
+                const blockHow = wantBlocked ? (_rmRemovedNow['b:' + realName] === 'blocked' ? 'blocked' : 'deleted') : '';
+                // 主角把他拉黑：聊天室留著、通訊錄不列、他傳不進來（見 wx_view 的黑名單頁）
+                const wantMeBlock = !isGroup && _rmRemovedNow['p:' + realName] === 'block';
+                if (existing && (!!existing.wxBlocked !== wantBlocked || (existing.wxBlockKind || '') !== blockHow || !!existing.wxBlockedByMe !== wantMeBlock)) existing._storySig = '';
                 const sig = key + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
                 if (existing && existing._storySig === sig) { GLOBAL_CHATS[chatId] = existing; continue; }
 
@@ -1801,7 +1890,8 @@
                     renderedCount: messages.length
                 });
                 if (isGroup) delete rec.realName; else rec.realName = realName;
-                if (wantBlocked) rec.wxBlocked = true; else delete rec.wxBlocked;
+                if (wantBlocked) { rec.wxBlocked = true; rec.wxBlockKind = blockHow; } else { delete rec.wxBlocked; delete rec.wxBlockKind; }
+                if (wantMeBlock) rec.wxBlockedByMe = true; else delete rec.wxBlockedByMe;
                 GLOBAL_CHATS[chatId] = rec;
                 try { await win.WX_DB.saveApiChat(chatId, rec); } catch (e) { console.warn('[wx 跑團同步] 存檔失敗:', chatId, e); }
                 if (chatId === GLOBAL_ACTIVE_ID) rebuildActive = true;
@@ -2328,10 +2418,15 @@
         // 🚨 解析不出訊息時，以前一律把原文整段當一則訊息塞進去（保底）。可是只在朋友圈動手、
         //    或醒來選擇什麼都不做的回覆，本來就只有標籤或系統行——塞進去就是一顆印著協議原文的泡泡。
         //    朋友圈標籤已在 parseAndProcess 抽掉執行過：這裡拿抽掉之後剩下的字判斷，保底也只塞剩下的字。
-        const _rest = (win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || '');
+        const _rest = _stripFriendTags((win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || ''));
         const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
         const _othersRelay = newMsgs.others || [];
-        if (!newMsgs.length && !_othersRelay.length && _rest.trim() && !_sysOnly) {
+        // 她送的朋友驗證，他回了但沒寫通過也沒寫不通過：收回來，讓她可以再送一次
+        if (chat.wxFriendReqOut && chat.wxBlocked && chat.wxFriendReqOut.at < _t0) {
+            delete chat.wxFriendReqOut;
+            _sysPush(chat, '「' + (chat.name || '對方') + '」還沒有回應你的朋友驗證');
+        }
+        if (!newMsgs.length && !_othersRelay.length && _rest.trim() && !_sysOnly && !chat.wxBlockedByMe) {
             finalText = _rest;
             const memberNames = convertMemberIdsToNames(chat.members || []);
             const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chat.name;
@@ -2424,6 +2519,104 @@
             return _markRemoved(c);
         },
         clearRemoved: _clearRemoved,
+
+        // ── 🔒 黑名單與朋友驗證 ───────────────────────────────────────
+        //   她拉黑他：聊天室留著、通訊錄不列、他傳不進來；她照樣打得出字，放出來之後他看得到。
+        //   他刪了她：她可以送朋友驗證，他當場決定（回覆裡寫 <friend_accept/> 或 <friend_decline>）。
+        //   他拉黑了她：申請直接失敗，要等他自己來加（心跳時寫 <friend_request>）。
+        blockContact: async function (chatId) {
+            const chat = GLOBAL_CHATS[chatId];
+            if (!chat || chat.isGroup || chat.wxBlockedByMe) return false;
+            const name = chat.name || '對方';
+            if (!(await AUI.confirm('把「' + name + '」加入黑名單？\n你將不再收到對方的訊息。'))) return false;
+            chat.wxBlockedByMe = true;
+            delete chat.wxFriendReqIn;
+            chat.hbLast = Date.now();
+            _sysPush(chat, '你已將「' + name + '」加入黑名單');
+            await _markRemoved(chat, 'block');
+            if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+            if (GLOBAL_ACTIVE_ID !== chat.id) this.render();
+            return true;
+        },
+        unblockContact: async function (chatId) {
+            const chat = GLOBAL_CHATS[chatId];
+            if (!chat || !chat.wxBlockedByMe) return false;
+            delete chat.wxBlockedByMe;
+            delete chat.wxFriendReqIn;
+            _sysPush(chat, '你已將「' + (chat.name || '對方') + '」移出黑名單');
+            await _markManual(_rmKeyOf(chat), 'back');
+            if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+            if (GLOBAL_ACTIVE_ID !== chat.id) this.render();
+            return true;
+        },
+        // 他想加回來（新的朋友裡按接受）：她拉黑的就放出來，他刪過她的就重新是朋友
+        acceptFriendRequest: async function (chatId) {
+            const chat = GLOBAL_CHATS[chatId];
+            if (!chat || !chat.wxFriendReqIn) return;
+            delete chat.wxFriendReqIn;
+            if (chat.wxBlockedByMe) { delete chat.wxBlockedByMe; await _markManual(_rmKeyOf(chat), 'back'); }
+            if (chat.wxBlocked) { delete chat.wxBlocked; delete chat.wxBlockKind; await _markManual('b:' + _blockName(chat), 'back'); }
+            _sysPush(chat, '你已添加了' + (chat.name || '對方') + '，現在可以開始聊天了。');
+            if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+            this.render();
+        },
+        ignoreFriendRequest: async function (chatId) {
+            const chat = GLOBAL_CHATS[chatId];
+            if (!chat || !chat.wxFriendReqIn) return;
+            delete chat.wxFriendReqIn;
+            chat.hbLast = Date.now();
+            if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+            this.render();
+        },
+        // 她送朋友驗證給把她刪掉的人：當場叫一次模型，他在回覆裡決定通不通過
+        sendFriendRequest: async function (chatId) {
+            const chat = GLOBAL_CHATS[chatId || GLOBAL_ACTIVE_ID];
+            if (!chat || chat.isGroup) return;
+            const name = chat.name || '對方';
+            if (!chat.wxBlocked) { AUI.toast('你們已經是朋友了'); return; }
+            if (chat.wxBlockKind !== 'deleted') { AUI.toast('添加失敗，' + name + '把你加入了黑名單'); return; }
+            if (chat.wxFriendReqOut) { AUI.toast('已經送出了，等' + name + '回覆'); return; }
+            if (!win.WX_API || !win.WX_API.chat || !win.WX_API.buildContext) { AUI.toast('手機聊天的模型還沒接好'); return; }
+            const note = await AUI.prompt('發送朋友驗證', '我是' + _meName());
+            if (note == null) return;
+            const text = String(note).trim().slice(0, 60);
+            chat.wxFriendReqOut = { note: text, at: Date.now() };
+            _sysPush(chat, '你向「' + name + '」發送了朋友驗證' + (text ? '：' + text : ''));
+            if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+
+            let messages = null;
+            const prev = GLOBAL_ACTIVE_ID;
+            try { GLOBAL_ACTIVE_ID = chat.id; messages = await win.WX_API.buildContext(null); }
+            catch (e) { console.warn('[WX] 朋友驗證組上下文失敗:', e); }
+            finally { GLOBAL_ACTIVE_ID = prev; }
+            if (!Array.isArray(messages)) messages = [];
+            messages.push({ role: 'system', content: '【' + _meName() + ' 送了朋友驗證給你】你之前把 ' + _meName() + ' 從微信刪掉了，現在對方申請重新加你'
+                + (text ? '，附言：「' + text + '」' : '') + '。\n'
+                + '照你的個性和你們現在的關係決定。通過就寫 <friend_accept/>，要的話接著在 <chat> 裡傳訊息；'
+                + '不通過就寫 <friend_decline>想回對方的一句話，不想回就留空</friend_decline>，不通過時不要傳訊息。'
+                + '標籤名照抄英文，不要翻譯、不要改寫。' });
+            let apiConfig = {};
+            try { apiConfig = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}'); } catch (e) {}
+            try { const _S = win.OS_SETTINGS; if (_S) { const _b = _S.getConfigFor ? _S.getConfigFor('phone_chat') : (_S.getConfig && _S.getConfig()); if (_b) apiConfig = Object.assign({}, _b, apiConfig); } } catch (e) {}
+            const fail = async function (err) {
+                delete chat.wxFriendReqOut;
+                _sysPush(chat, '朋友驗證沒有送出去：' + String((err && err.message) || err || '').slice(0, 80));
+                if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+            };
+            try {
+                await win.WX_API.chat(messages, apiConfig, null,
+                    function (out) { _applyRelayReply(chat, out); },
+                    fail,
+                    {
+                        task: 'phone_chat',
+                        disableTyping: true,
+                        relayJob: { app: 'wx', chatId: chat.id, title: name,
+                            notify: { title: name, body: '回覆了你的朋友驗證', url: './', tag: 'wx-' + chat.id } },
+                        onQueued: function () { try { AUI.toast('送出了，' + name + '回覆了會通知你'); } catch (e) {} }
+                    });
+            } catch (e) { fail(e); }
+        },
+
         get GLOBAL_ACTIVE_ID() { return GLOBAL_ACTIVE_ID; },
         set GLOBAL_ACTIVE_ID(v) { GLOBAL_ACTIVE_ID = v; },   // 📞 電話 app 撥通時暫借 active id（buildContext 靠它抓該聯絡人 DB 歷史）；無 setter 會在 strict mode 拋 TypeError → 通話卡死不調 API
         get APP_CONTAINER() { return APP_CONTAINER; },
@@ -3367,14 +3560,16 @@
                 quoteName: _q ? _q.name : '',
                 quoteText: _q ? _q.text : ''
             };
-            // 🚫 對方把主角刪了：字打得出去、傳不到。照真的微信在後面補一句「被對方拒收」，
+            // 🚫 對方把主角刪了／拉黑了：字打得出去、傳不到。照真的微信在後面補一句（被刪是朋友驗證那句、被拉黑是拒收那句），
             //    這幾則標起來（sentWhileBlocked），組上下文時不給對方看——他本來就沒收到。
+            // 🔒 她把他拉黑了：照樣打得出字、他收不到；放出黑名單之後他看得到（sentWhileMeBlocking，組上下文時寫旁註）
             if (currentChat.wxBlocked) sentMsg.sentWhileBlocked = true;
+            else if (currentChat.wxBlockedByMe) sentMsg.sentWhileMeBlocking = true;
             if (extra) Object.assign(sentMsg, extra);
             currentChat.messages.push(sentMsg);
             _appendBubble(sentMsg, currentChat);
             if (currentChat.wxBlocked) {
-                const _rej = { type: 'system', isMe: false, content: '消息已發出，但被對方拒收了。', timestamp: Date.now(), _blockedNotice: true };
+                const _rej = { type: 'system', isMe: false, content: _blockedNoticeText(currentChat), timestamp: Date.now(), _blockedNotice: true };
                 currentChat.messages.push(_rej);
                 _appendBubble(_rej, currentChat);
             }
@@ -3406,11 +3601,17 @@
         triggerReply: async function() {
             if(!GLOBAL_ACTIVE_ID || !GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) return;
             if(IS_STREAMING_REPLY) return; // 鎖定
-            // 🚫 對方把主角刪了 → 他收不到、也不會回。等劇情裡重新加回好友才恢復
-            if (GLOBAL_CHATS[GLOBAL_ACTIVE_ID].wxBlocked) {
-                const _n = GLOBAL_CHATS[GLOBAL_ACTIVE_ID].name || '對方';
-                AUI.toast(_n + '把你刪了，訊息傳不過去');
-                return;
+            // 🔒 她把他拉黑了 → 他收不到，也不會回
+            // 🚫 他把主角刪了 → 按下去是送朋友驗證；拉黑了 → 傳不過去、也加不了
+            {
+                const _bc = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
+                const _n = _bc.name || '對方';
+                if (_bc.wxBlockedByMe) { AUI.toast('你把' + _n + '加入了黑名單，' + _n + '收不到你的訊息'); return; }
+                if (_bc.wxBlocked) {
+                    if (_bc.wxBlockKind === 'deleted') { this.sendFriendRequest(_bc.id); return; }
+                    AUI.toast('消息被拒收了，' + _n + '把你加入了黑名單');
+                    return;
+                }
             }
             IS_STREAMING_REPLY = true;
 
@@ -3440,7 +3641,7 @@
                 
                 // 如果解析失敗（空訊息），做保底處理
                 // 只有朋友圈標籤或系統行（例如只在朋友圈按了讚）就不要把原文塞成一顆泡泡（同 _applyRelayReply）
-                const _rest = (win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || '');
+                const _rest = _stripFriendTags((win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || ''));
                 const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
                 // 只傳到別間（這一間沒話）也算有回覆，不要把原文塞成一顆泡泡
                 if (!newMsgs.length && !(newMsgs.others && newMsgs.others.length) && _rest.trim() && !_sysOnly) {

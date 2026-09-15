@@ -718,7 +718,7 @@
         getContactListHTML: function(chats) {
             // 上面這幾顆都是真的會做事的：新的朋友＝還沒開口的人、僅聊天的朋友＝只在群裡遇到還沒加的人、
             // 群組＝所有群聊、標籤＝自己分的類。原本還有一顆「官方帳號」，奧瑞亞沒有那種東西，拿掉了。
-            const _newN = this._newFriendIds(chats).length;
+            const _newN = this._newFriendIds(chats).length + this._friendReqIds(chats).length;
             const _onlyN = this._chatOnlyNames(chats).length;
             const _grpN = Object.keys(chats).filter(function (k) { return chats[k] && chats[k].isGroup && !chats[k].wxRemoved; }).length;
             let _tagN = 0;
@@ -730,7 +730,8 @@
                 <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_group')"><div class="wx-contact-icon icon-group-chat"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5c0-2.3-4.7-3.5-7-3.5zm8 0c-.3 0-.6 0-1 .1.5.5.9 1.1.9 1.9 0 2.3-4.7 3.5-7 3.5h7.1c2.3 0 6.9-1.2 6.9-3.5V13c0-2.3-4.6-3.5-6.9-3.5z"/></svg></div><div class="wx-contact-name">群組</div>${_cnt(_grpN)}</div>
                 <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_tags')"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div>${_cnt(_tagN)}</div>
             `;
-            let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat' && !(chats[k] && chats[k].wxRemoved)).map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].isGroup ? '' : (chats[id].realName || '') }));
+            // 拉黑的人不在通訊錄，在「我 → 設置 → 通訊錄黑名單」
+            let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat' && !(chats[k] && (chats[k].wxRemoved || chats[k].wxBlockedByMe))).map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].isGroup ? '' : (chats[id].realName || '') }));
             contacts.sort((a, b) => a.name.localeCompare(b.name));
             if (contacts.length > 0) {
                 html += `<div class="wx-contact-section">A</div>`;
@@ -822,11 +823,39 @@
                 `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${name}</div>${right || ''}</div>`;
         },
 
+        // 🔒 好友申請：不是好友的人（被她拉黑、或刪過她）自己來申請加回來，新的在前
+        _friendReqIds: function (chats) {
+            return Object.keys(chats).filter(function (k) { return chats[k] && !chats[k].isGroup && !chats[k].wxRemoved && chats[k].wxFriendReqIn; })
+                .sort(function (a, b) { return (chats[b].wxFriendReqIn.at || 0) - (chats[a].wxFriendReqIn.at || 0); });
+        },
         getNewFriendsHTML: function (chats) {
-            const ids = this._newFriendIds(chats);
-            if (!ids.length) return this._emptyBox('fa-user-check', '沒有還沒開口的人。', '劇情裡有人加你好友、或你自己加了誰，還沒講過話之前都會先待在這裡。');
             const self = this;
-            return ids.map(function (id) { return self._personRow(id, chats[id].name || id, chats, '<div class="wx-contact-side">還沒聊過</div>'); }).join('');
+            const app = '(window.parent.wxApp || window.wxApp)';
+            const esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+            const reqs = this._friendReqIds(chats);
+            const ids = this._newFriendIds(chats);
+            if (!ids.length && !reqs.length) return this._emptyBox('fa-user-check', '沒有還沒開口的人。', '劇情裡有人加你好友、或你自己加了誰，還沒講過話之前都會先待在這裡。');
+            const reqHTML = reqs.map(function (id) {
+                const c = chats[id];
+                const av = self._avatarBits(c.name || id, c.customAvatar, c.realName || '');
+                const note = String((c.wxFriendReqIn && c.wxFriendReqIn.note) || '').trim();
+                return `<div class="wx-contact-item wx-req-item"><div style="${av.style}" ${av.attr}></div>` +
+                    `<div class="wx-req-text"><div class="wx-contact-name">${esc(c.name || id)}</div>${note ? `<div class="wx-req-note">${esc(note)}</div>` : ''}</div>` +
+                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); ${app}.ignoreFriendRequest('${id}')">忽略</button>` +
+                    `<button class="wx-sub-btn solid" onclick="event.stopPropagation(); ${app}.acceptFriendRequest('${id}')">接受</button></div></div>`;
+            }).join('');
+            return reqHTML + ids.map(function (id) { return self._personRow(id, chats[id].name || id, chats, '<div class="wx-contact-side">還沒聊過</div>'); }).join('');
+        },
+        // 🔒 通訊錄黑名單（我 → 設置）：她拉黑的人，點進去看記錄，右邊移出
+        getBlacklistHTML: function (chats) {
+            const self = this;
+            const app = '(window.parent.wxApp || window.wxApp)';
+            const ids = Object.keys(chats).filter(function (k) { return chats[k] && !chats[k].isGroup && !chats[k].wxRemoved && chats[k].wxBlockedByMe; });
+            if (!ids.length) return this._emptyBox('fa-user-lock', '黑名單裡沒有人。', '在聊天詳情打開「加入黑名單」，那個人就會列在這裡。');
+            return ids.map(function (id) {
+                return self._personRow(id, chats[id].name || id, chats,
+                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); ${app}.unblockContact('${id}')">移出</button></div>`);
+            }).join('');
         },
         getChatOnlyHTML: function (chats) {
             const names = this._chatOnlyNames(chats);
@@ -1040,6 +1069,11 @@
                     </div>
                 </div>
 
+                <div class="wx-set-label">隱私</div>
+                <div class="wx-cell-group">
+                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).switchTab('me_black')"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-user-lock"></i></span></div><div class="wx-cell-text">通訊錄黑名單</div><div class="wx-cell-arrow">›</div></div>
+                </div>
+
                 <div class="wx-set-label">通用</div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-moon"></i></span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
@@ -1109,6 +1143,7 @@
             if (activeTab === 'contacts') headerTitle = '通訊錄';
             if (activeTab === 'me') headerTitle = '我';
             if (activeTab === 'me_set') headerTitle = '設置';   // 「我」底下的第二頁
+            if (activeTab === 'me_black') headerTitle = '通訊錄黑名單';   // 設置底下那一頁
             // 通訊錄底下的幾張子頁（跟 me_set 同一套：一個 tab 名字＝一頁）
             const SUB_TITLE = { c_new: '新的朋友', c_only: '僅聊天的朋友', c_group: '群組', c_tags: '標籤' };
             if (SUB_TITLE[activeTab]) headerTitle = SUB_TITLE[activeTab];
@@ -1124,6 +1159,7 @@
             else if (activeTab === 'c_tag') listContent = this.getTagDetailHTML(chats, (win.wxApp && win.wxApp.currentTag) || '', !!(win.wxApp && win.wxApp.tagEditing));
             else if (activeTab === 'me') listContent = this.getMePageHTML(isDark);
             else if (activeTab === 'me_set') listContent = this.getMePageHTML(isDark, 'settings');
+            else if (activeTab === 'me_black') listContent = this.getBlacklistHTML(chats);
             else listContent = this.getListHTML(chats, activeId);
             
             let roomContent = '';
@@ -1167,7 +1203,7 @@
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.deleteSelectedMessages();">刪除</div>
                     </div>
                 `;
-            } else if (activeTab === 'me_set') {
+            } else if (activeTab === 'me_set' || activeTab === 'me_black') {
                 headerRightBtn = '<div style="width:30px;"></div>';   // 設置頁右上不放「＋」，留同寬空位讓標題置中
             } else {
                 headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer; color:${isDark ? '#f0f0f0' : '#000'};" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)"><i class="fa-solid fa-circle-plus"></i></div>`;
@@ -1175,7 +1211,7 @@
             
             const isInChat = !!activeId;
             // 子頁的返回＝回它上一層，不是回手機主頁
-            const SUB_BACK = { me_set: ['我', 'me'], c_new: ['通訊錄', 'contacts'], c_only: ['通訊錄', 'contacts'],
+            const SUB_BACK = { me_set: ['我', 'me'], me_black: ['設置', 'me_set'], c_new: ['通訊錄', 'contacts'], c_only: ['通訊錄', 'contacts'],
                                c_group: ['通訊錄', 'contacts'], c_tags: ['通訊錄', 'contacts'], c_tag: ['標籤', 'c_tags'] };
             const _sub = (!isInChat && SUB_BACK[activeTab]) ? SUB_BACK[activeTab] : null;
             const backBtnText = isInChat ? '微信' : (_sub ? _sub[0] : '主頁');
@@ -1298,7 +1334,7 @@
                             </div>
                             <div class="wx-tab-txt">通訊錄</div>
                         </div>
-                        <div class="wx-tab ${(activeTab === 'me' || activeTab === 'me_set') ? 'active' : ''}" onclick="${app}.switchTab('me')">
+                        <div class="wx-tab ${(activeTab === 'me' || activeTab === 'me_set' || activeTab === 'me_black') ? 'active' : ''}" onclick="${app}.switchTab('me')">
                             <div class="wx-tab-icon-box">
                                 <div class="wx-tab-dot" data-wxmo-badge="tab" hidden></div>
                                 <div class="wx-tab-icon">${iconMe}</div>

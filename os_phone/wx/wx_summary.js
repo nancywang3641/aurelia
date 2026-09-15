@@ -130,8 +130,11 @@
             + '接下來那些才是最近的原文。講到以前的事要跟上面對得起來，不要當作沒發生過。';
     }
 
-    function _lineOf(msg, meName, taName) {
+    function _lineOf(msg, meName, taName, chat) {
         if (!msg) return '';
+        // 🔒 對方沒收到的不寫進長期記憶：他刪了／拉黑了主角時主角打的；主角拉黑他、還沒放出來時主角打的
+        if (msg.sentWhileBlocked || msg._blockedNotice) return '';
+        if (msg.sentWhileMeBlocking && chat && chat.wxBlockedByMe) return '';
         if (msg.type === 'system') {
             const t = String(msg.content || '').trim();
             return t ? '（' + t + '）' : '';
@@ -265,7 +268,7 @@
             let chars = 0, i = p.covered, hasMsg = false, allStory = true;
             for (; i < end; i++) {
                 const m = msgs[i];
-                const ln = _lineOf(m, meName, taName);
+                const ln = _lineOf(m, meName, taName, chat);
                 if (!ln) continue;
                 if (chars + ln.length > FEED_MAX_CHARS && lines.length) break;
                 lines.push(ln);

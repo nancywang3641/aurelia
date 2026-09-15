@@ -256,16 +256,54 @@
     //   酒館版與獨立版兩條 buildContext 都叫這支——以前只寫在酒館那條，PWA 上的角色從來不知道能換頭像。
     function _wxAbilityBlocks(chatId) {
         const out = [];
+        const push = (t) => { if (t) out.push({ role: 'system', content: t }); };
         try {
             const _av = win.WX_AVATAR_AI || (typeof window !== 'undefined' ? window.WX_AVATAR_AI : null);
-            if (!_av) return out;
-            const push = (t) => { if (t) out.push({ role: 'system', content: t }); };
-            push(_av.instruction ? _av.instruction() : '');                  // 換頭像：權限關著回空字串＝一個字都不提
-            push(_av.eventInstruction ? _av.eventInstruction() : '');        // 約定：不花錢，一律教
-            push(_av.profileInstruction ? _av.profileInstruction() : '');    // 改名、改簽名：不花錢，一律教
-            push(_av.seeMemoryText ? _av.seeMemoryText(chatId || '') : '');  // 它看過我頭像後自己寫的那句
+            if (_av) {
+                push(_av.instruction ? _av.instruction() : '');                  // 換頭像：權限關著回空字串＝一個字都不提
+                push(_av.eventInstruction ? _av.eventInstruction() : '');        // 約定：不花錢，一律教
+                push(_av.profileInstruction ? _av.profileInstruction() : '');    // 改名、改簽名：不花錢，一律教
+                push(_av.seeMemoryText ? _av.seeMemoryText(chatId || '') : '');  // 它看過我頭像後自己寫的那句
+            }
         } catch (e) {}
+        push(_wxFriendBlock(chatId));                                             // 刪好友／拉黑／好友申請：不花錢，一律教
         return out;
+    }
+
+    // 🔒 刪好友與拉黑（wx_core 的 _applyFriendTags 收這幾個標籤）。私聊才教，照現在是不是好友給不一樣的一段。
+    //   她正在送朋友驗證的那一輪不給這段（那一輪的指示由 sendFriendRequest 自己帶）。
+    function _wxFriendBlock(chatId) {
+        try {
+            const chat = (win.wxApp && win.wxApp.GLOBAL_CHATS) ? win.wxApp.GLOBAL_CHATS[chatId] : null;
+            if (!chat || chat.isGroup || chat.wxFriendReqOut) return '';
+            let me = '';
+            try { me = win.WX_ME ? String(win.WX_ME.name() || '').trim() : ''; } catch (e) {}
+            me = me || '對方';
+            const TAIL = '標籤名照抄英文，不要翻譯、不要改寫。';
+            if (chat.wxBlockedByMe) {
+                return '【你們現在不是微信好友】' + me + ' 把你加入了黑名單，你傳的訊息對方收不到。'
+                    + '想請對方把你放出來，就寫 <friend_request>想對' + me + '說的附言</friend_request>，對方會在「新的朋友」裡看到；還不想就不要寫。' + TAIL;
+            }
+            if (chat.wxBlocked) {
+                return '【你們現在不是微信好友】你之前把 ' + me + (chat.wxBlockKind === 'blocked' ? ' 拉黑' : ' 從微信刪掉') + '了，這段時間對方傳的訊息你沒收到。'
+                    + '想重新加回來就寫 <friend_request>想對' + me + '說的附言</friend_request>；還不想就不要寫。' + TAIL;
+            }
+            return '【刪好友與拉黑】劇情上你真的決定跟 ' + me + ' 斷開時，可以在回覆裡寫 <friend_delete/> 把對方從微信刪掉，或寫 <friend_block/> 把對方拉黑。'
+                + '之後對方傳的訊息你都收不到，直到你們重新加回好友。' + TAIL;
+        } catch (e) { return ''; }
+    }
+
+    // 🔒 拉黑期間的訊息怎麼給模型看：
+    //   他刪了／拉黑了她時她打的（sentWhileBlocked）與那句系統提示：他從來沒收到 → 永遠不帶。
+    //   她把他拉黑時她打的（sentWhileMeBlocking）：還在黑名單裡就不帶；放出來之後帶，前面寫一句旁註。
+    function _wxBlockSkip(msg, apiChat) {
+        if (!msg) return false;
+        if (msg.sentWhileBlocked || msg._blockedNotice) return true;
+        return !!(msg.sentWhileMeBlocking && apiChat && apiChat.wxBlockedByMe);
+    }
+    function _wxMeBlockNote(msg, prev, userName) {
+        if (!msg || !msg.sentWhileMeBlocking || (prev && prev.sentWhileMeBlocking)) return '';
+        return '（下面這幾則是 ' + String(userName || '主角') + ' 把你拉黑那段時間傳的，你當時沒收到，被放出黑名單之後才看到）';
     }
 
     // 🔁 酒館版與獨立版（PWA）兩條 buildContext 共用的微信／通話片段。以前各寫一份，PWA 那份一路漏：
@@ -407,7 +445,7 @@
             const lines = [];
             for (let i = 0; i < list.length; i++) {
                 const msg = list[i];
-                if (!msg || msg.isLoading || msg.sentWhileBlocked || msg._blockedNotice) continue;
+                if (!msg || msg.isLoading || _wxBlockSkip(msg, other)) continue;
                 if (msg.type === 'system' || msg.type === 'time') continue;
                 let line = '';
                 if (msg.recalled) {
@@ -1725,7 +1763,9 @@
                                 }
                                 if (!msg) return;
                                 // 🚫 對方把她刪了之後她還在打的那幾則：他根本沒收到，不能給他看（連「被對方拒收」那句也是）
-                                if (msg.sentWhileBlocked || msg._blockedNotice) return;
+                                //    她拉黑他時打的：還在黑名單就不帶，放出來之後帶上並寫旁註（共用 _wxBlockSkip／_wxMeBlockNote）
+                                if (_wxBlockSkip(msg, apiChat)) return;
+                                { const _bn = _wxMeBlockNote(msg, _histMsgs[_i - 1], userName); if (_bn) rawPhoneMsgs.push({ role: 'system', content: _bn, _source: 'phone' }); }
                                 if (msg.type === 'system') {
                                     const _note = _noteOf(msg);
                                     if (_note) rawPhoneMsgs.push({ role: 'system', content: _note, _source: 'phone' });
@@ -2335,7 +2375,8 @@
                                 if (msg && msg._callStart) return;
                             }
                             if (!msg) return;
-                            if (msg.sentWhileBlocked || msg._blockedNotice) return;   // 對方沒收到的那幾則（同酒館版）
+                            if (_wxBlockSkip(msg, apiChat)) return;   // 對方沒收到的那幾則（同酒館版）
+                            { const _bn = _wxMeBlockNote(msg, _histMsgs[_i - 1], userName); if (_bn) { apiMessages.push({ role: 'system', content: _bn }); _pushedHist++; } }
                             // 📞 系統行不是誰講的話 → 旁註（同酒館版，共用 _wxSysNote）。
                             //   以前 PWA 只有通話這樣處理：微信裡的改名、紅包領取、換頭像這些被當成對方講的話；通話分隔也沒標是哪一天。
                             if (msg.type === 'system') {

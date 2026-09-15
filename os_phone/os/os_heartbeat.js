@@ -46,9 +46,13 @@
         return chat && chat.hbLast ? chat.hbLast : 0;
     }
     // 到點了沒（兩道門檻）。回 {due, chat, gapMs}
+    // 🔒 不是好友的（她拉黑他、或他刪過／拉黑過她）照樣會醒來，只是醒來只能送好友申請；申請還掛著就不再來
+    function _notFriends(chat) { return !!(chat && (chat.wxBlocked || chat.wxBlockedByMe)); }
+    function _reqPending(chat) { return !!(chat && (chat.wxFriendReqIn || chat.wxFriendReqOut)); }
     function dueOf(chat, now) {
         const c = cfgOf(chat);
-        if (!c.on || !chat || chat.isGroup || chat.wxRemoved || chat.wxBlocked) return null;
+        if (!c.on || !chat || chat.isGroup || chat.wxRemoved) return null;
+        if (_notFriends(chat) && _reqPending(chat)) return null;
         const gap = c.mins * 60 * 1000;
         const last = chat.hbLast || 0;
         const talk = lastTalkAt(chat);
@@ -72,6 +76,17 @@
         } finally { app.GLOBAL_ACTIVE_ID = prev; }
         if (!Array.isArray(messages) || !messages.length) return null;
         const idle = lastTalkAt(chat) ? Math.round((Date.now() - lastTalkAt(chat)) / 3600000) : 0;
+        if (_notFriends(chat)) {
+            messages.push({
+                role: 'system',
+                content: '【現在是你自己的時間，不是在回覆】\n'
+                    + (idle ? '你們上一次講話大約是 ' + idle + ' 小時前。\n' : '')
+                    + '你們現在不是微信好友（上面有寫是怎麼回事），你傳不了訊息。'
+                    + '想重新當朋友就寫 <friend_request>想說的附言</friend_request>；還不想就只回 <moment_skip/>。'
+                    + '照你的個性和你們現在的關係決定。不要提到這是安排好的。'
+            });
+            return messages;
+        }
         messages.push({
             role: 'system',
             content: '【現在是你自己的時間，不是在回覆她】\n'
@@ -82,6 +97,11 @@
                 + '不要提到這是安排好的，也不要問她是不是在等你。'
         });
         return messages;
+    }
+
+    // 通知上那句（有生出聊天行時伺服器會用聊天行蓋掉；只有標籤時就推這句）
+    function notifyBody(chat) {
+        return (chat.name || '對方') + (_notFriends(chat) ? ' 請求添加你為朋友' : ' 在朋友圈有新動態');
     }
 
     // 手機開著時：真的生一則出來（走托管或手機自己跑都行，交給 WX_API.chat 決定）
@@ -103,7 +123,7 @@
                     task: 'heartbeat',
                     disableTyping: true,
                     relayJob: { app: 'wx', kind: KIND, chatId: chat.id, title: chat.name || '',
-                        notify: { title: chat.name || '微信', body: (chat.name || '對方') + ' 在朋友圈有新動態', useResult: true, url: './', tag: 'hb-' + chat.id } },
+                        notify: { title: chat.name || '微信', body: notifyBody(chat), useResult: true, url: './', tag: 'hb-' + chat.id } },
                     onQueued: function () { resolve(true); }
                 });
         });
@@ -133,7 +153,8 @@
         for (const id in chats) {
             const chat = chats[id];
             const c = cfgOf(chat);
-            if (!c.on || chat.isGroup || chat.wxRemoved || chat.wxBlocked) continue;
+            if (!c.on || chat.isGroup || chat.wxRemoved) continue;
+            if (_notFriends(chat) && _reqPending(chat)) continue;
             const gap = c.mins * 60 * 1000;
             const at = Math.max(chat.hbLast || 0, lastTalkAt(chat)) + gap;
             if (at > now + AHEAD_HOURS * 3600 * 1000) continue;          // 太遠的不排
@@ -156,7 +177,9 @@
             const gapMs = cfgOf(cd.chat).mins * 60 * 1000;
             const limit = now + AHEAD_HOURS * 3600 * 1000;
             let at = cd.at, k = 0;
-            while (at <= limit && k < PER_CHAT_MAX) {
+            // 不是好友的一次只排一則（排好幾則就是連送好幾次好友申請）
+            const perMax = _notFriends(cd.chat) ? 1 : PER_CHAT_MAX;
+            while (at <= limit && k < perMax) {
                 if (k > 0 && !roll(cfgOf(cd.chat).chance)) { at += gapMs; k++; continue; }
                 const messages = await buildPayload(cd.chat, k);
                 if (!messages) break;
@@ -170,7 +193,7 @@
                         app: 'wx', kind: KIND, chatId: cd.chat.id, title: cd.chat.name || '',
                         runAt: Math.round(at / 1000),
                         upstream: { url: url, key: apiConfig.key, body: body },
-                        notify: { title: cd.chat.name || '微信', body: (cd.chat.name || '對方') + ' 在朋友圈有新動態', useResult: true, url: './', tag: 'hb-' + cd.chat.id }
+                        notify: { title: cd.chat.name || '微信', body: notifyBody(cd.chat), useResult: true, url: './', tag: 'hb-' + cd.chat.id }
                     });
                     cd.chat.hbLast = at;   // 排了就當它會發生，免得回來又排一次
                     n++;
@@ -210,7 +233,7 @@
     } catch (e) {}
     setTimeout(start, 8000);
 
-    win.OS_HEARTBEAT = { tickNow: tickNow, scheduleAhead: scheduleAhead, clearAhead: clearAhead, cfgOf: cfgOf, dueOf: dueOf, defaults: function () { return Object.assign({}, DEF); } };
+    win.OS_HEARTBEAT = { tickNow: tickNow, scheduleAhead: scheduleAhead, clearAhead: clearAhead, cfgOf: cfgOf, dueOf: dueOf, buildPayload: buildPayload, defaults: function () { return Object.assign({}, DEF); } };
     if (win !== window) window.OS_HEARTBEAT = win.OS_HEARTBEAT;
     console.log('💓 [心跳] 已載入（角色主動找她）');
 })();

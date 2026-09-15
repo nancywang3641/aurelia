@@ -316,6 +316,9 @@
             .wx-dark .wx-contact-section { background: #111; color: #888; }
             /* 通訊錄子頁（新的朋友／僅聊天的朋友／群組／標籤）：沿用 .wx-contact-item 那一列，右邊多一格 */
             .wx-contact-side { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #999; }
+            .wx-req-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+            .wx-req-note { font-size: 13px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .wx-req-item .wx-contact-side { margin-left: 8px; flex-shrink: 0; }
             .wx-contact-count { margin-left: auto; font-size: 13px; color: #999; }
             .wx-sub-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #ededed; border-bottom: 1px solid #e3e3e3; }
             .wx-sub-bar .sp { flex: 1; }
