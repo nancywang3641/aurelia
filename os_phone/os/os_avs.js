@@ -394,6 +394,41 @@
         } catch (e) { return ''; }
     }
 
+    // 🔥 煉丹前把 object 型變數分類，並算出要告訴 AI 的欄位名（看「實際資料形狀」）：
+    //   值是物件 → 多實體（角色/NPC，用 {{#each}} 迴圈）
+    //   值是純量 → 單一群組（一組固定欄位，用 {{群組.欄位}} 點記法；用迴圈會整段空白）
+    //   🚨 2026-09-16 Rae：「AVS煉丹的UI面板生成總是…漏掉 劇情目標…因為當前沒目標?」——就是這個。
+    //      範本寫成自包裝（劇情目標:\n  長期目標:\n  短期待辦:）時，initFromPack 讓容器從 {} 起跳；
+    //      開場到副模型第一次抽到目標之前，劇情目標一直是 {}。以前這裡看到物件就直接拿它的 key → 欄位清單是空的，
+    //      提示只寫「欄位：（動態）」，AI 不知道有哪幾格可放就整段省略，出爐校驗再報「整個沒被用到」。
+    //      另一條：範本沒自包裝（長期目標: …\n短期待辦: …）又沒 runtime 時，舊寫法拿「第一個值」當內層，那是字串 → 也是空。
+    //   現在：runtime 是空的或沒有 → 一律看範本；單一群組就算有 runtime，也把範本上宣告的欄位補進來（這輪剛好沒值的也照樣放進面板）。
+    //   多實體還是單一群組，沒 runtime 時照舊看名字傾向（兩種範本長得一樣，分不出來）。
+    function _classifyObjVar(v, curState) {
+        let tree = {};
+        try { tree = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch (e) {}
+        const tplKeys = Object.keys(tree);
+        // 自包裝範本（最外層只有變數名自己）→ 剝掉那層；空欄位在範本裡會被解析成 {}，所以不能拿「值是不是物件」判斷要不要剝
+        const tpl = (tplKeys.length === 1 && tplKeys[0] === v.name && tree[v.name] && typeof tree[v.name] === 'object') ? tree[v.name] : tree;
+        const cur = curState ? curState[v.name] : undefined;
+        if (cur && typeof cur === 'object' && !Array.isArray(cur) && Object.keys(cur).length) {
+            // ⚠️ 陣列不算實體證據：混合群組(如 MC財富與交易={金錢餘額:數字,交易日誌:[]})曾因陣列被誤判成多實體
+            //    → 模板套 {{#each}}、純量成員(金錢)被 each 丟掉＝「錢包欄位消失」真兇
+            const firstObj = Object.values(cur).find(x => x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).length);
+            if (firstObj) return { kind: 'multi', fields: Object.keys(firstObj) };
+            const fields = Object.keys(cur);
+            Object.keys(tpl).forEach(k => { if (fields.indexOf(k) < 0) fields.push(k); });
+            return { kind: 'single', fields };
+        }
+        // 沒 runtime 資料、或容器還是空的 {} → 看範本結構 + 名字傾向
+        const kind = /狀態|角色|npc|成員|隊友|敵人|怪|實體/i.test(v.name) ? 'multi' : 'single';
+        if (kind === 'multi') {
+            const firstTpl = tpl === tree && tplKeys.length ? Object.values(tree).find(x => x && typeof x === 'object' && Object.keys(x).length) : null;
+            return { kind, fields: Object.keys(firstTpl || tpl) };
+        }
+        return { kind, fields: Object.keys(tpl) };
+    }
+
     // 🧪 出爐即校驗：把煉好的模板跟變數包對一次，回傳白話問題清單（空陣列＝沒問題）。
     //   為什麼要有這個：渲染引擎對「接不到資料」全都是靜默的——欄位名對不上只顯示「—」、
     //   迴圈容器名對不上整段消失、變數根本沒被引用就永遠不出現。面板於是「畫得漂亮但資料一片空白」，
@@ -2369,24 +2404,7 @@
                 //   值是純量 → 單一群組（一組固定欄位，用 {{群組.欄位}} 點記法；用迴圈會整段空白）
                 let _curState = {};
                 try { _curState = win._AVS_ENGINE?.read?.() || {}; } catch(e) {}
-                const _classifyObj = (v) => {
-                    const cur = _curState[v.name];
-                    if (cur && typeof cur === 'object') {
-                        // ⚠️ 陣列不算實體證據：混合群組(如 MC財富與交易={金錢餘額:數字,交易日誌:[]})曾因陣列被誤判成多實體
-                        //    → 模板套 {{#each}}、純量成員(金錢)被 each 丟掉＝「錢包欄位消失」真兇
-                        const firstObj = Object.values(cur).find(x => x && typeof x === 'object' && !Array.isArray(x));
-                        if (firstObj) return { kind: 'multi',  fields: Object.keys(firstObj) };
-                        return { kind: 'single', fields: Object.keys(cur) };
-                    }
-                    // 沒 runtime 資料 → 看範本結構 + 名字傾向
-                    let tree = {};
-                    try { tree = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch(e) {}
-                    const inner = (Object.keys(tree).length === 1 && tree[v.name]) ? tree[v.name] : (Object.values(tree)[0] || tree);
-                    const fields = (inner && typeof inner === 'object') ? Object.keys(inner) : [];
-                    const kind = /狀態|角色|npc|成員|隊友|敵人|怪|實體/i.test(v.name) ? 'multi' : 'single';
-                    return { kind, fields };
-                };
-                const objInfo   = objVars.map(v => ({ v, ..._classifyObj(v) }));
+                const objInfo   = objVars.map(v => ({ v, ..._classifyObjVar(v, _curState) }));
                 const multiObj  = objInfo.filter(o => o.kind === 'multi');
                 const singleObj = objInfo.filter(o => o.kind === 'single');
 
@@ -2789,7 +2807,8 @@
     win.OS_AVS = {
         launch: launchApp,
         renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
-        auditTemplate: _auditTemplate,        // 出爐即校驗：模板接不接得到資料（煉丹後自動跑，也可單獨驗一張舊面板）
+        auditTemplate: _auditTemplate,
+        classifyObjVar: _classifyObjVar,      // 煉丹前 object 型變數分類＋欄位清單（劇情目標還是 {} 時也要列得出欄位）        // 出爐即校驗：模板接不接得到資料（煉丹後自動跑，也可單獨驗一張舊面板）
         buildAvatarMap: _avsBuildAvatarMap,   // 預撈角色頭像(async) 給 {{@avatar}} 用
         syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發（現為「清理舊世界書條目」）
         buildVarDefsContent,     // 變數定義說明書內容→給 state_runtime.injectCurrent 即時注入主提示詞（取代寫世界書）
