@@ -2157,15 +2157,27 @@
         return m;
     }
     // 換掉畫面上那一則（一則被媒體標籤切成好幾顆泡泡時，同一個 data-msg-idx 會有好幾個，全換）
-    function _swapBubble(chat, idx) {
+    //   fade＝撤回的轉場（她 09-15 從三個小樣挑的「淡掉換成提示」）：舊的淡掉 → 換成提示行淡進來。
+    //   🚨 換掉這一下用計時器，不等轉場跑完：視窗在背景時轉場不會往前走，綁在 transitionend 上會卡成全透明（reference_raf_not_firing_when_hidden）；
+    //      淡進來的 class 過一下也拿掉，確定最後一定看得見。
+    function _swapBubble(chat, idx, fade) {
         try {
             if (!chat || GLOBAL_ACTIVE_ID !== chat.id || !win.WX_VIEW) return false;
             const rc = _getRoomContent();
             if (!rc) return false;
-            const els = rc.querySelectorAll('[data-msg-idx="' + idx + '"]');
+            const els = Array.prototype.slice.call(rc.querySelectorAll('[data-msg-idx="' + idx + '"]'));
             if (!els.length) return false;
-            els[0].insertAdjacentHTML('beforebegin', win.WX_VIEW.renderBubble(chat.messages[idx], chat, false, idx));
-            els.forEach(function (el) { el.remove(); });
+            const html = win.WX_VIEW.renderBubble(chat.messages[idx], chat, false, idx);
+            const swap = function () {
+                if (!els[0].isConnected) return;   // 這期間整個訊息區重建過：新的畫面本來就照資料畫成撤回
+                els[0].insertAdjacentHTML('beforebegin', html);
+                const neu = els[0].previousElementSibling;
+                els.forEach(function (el) { el.remove(); });
+                if (fade && neu) { neu.classList.add('wx-recall-in'); setTimeout(function () { neu.classList.remove('wx-recall-in'); }, 700); }
+            };
+            if (!fade) { swap(); return true; }
+            els.forEach(function (el) { el.classList.add('wx-recall-out'); });
+            setTimeout(function () { try { swap(); } catch (e) {} }, 360);
             return true;
         } catch (e) { return false; }
     }
@@ -2175,7 +2187,7 @@
         if (!m || !m.isMe || m.recalled || m._story != null) return;
         m.recalled = true;
         m.recalledAt = Date.now();
-        if (!_swapBubble(chat, idx)) _rebuildRoomContent(chat);
+        if (!_swapBubble(chat, idx, true)) _rebuildRoomContent(chat);
         if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
     }
 
@@ -3587,7 +3599,8 @@
                     const _ri = chatObj.messages.length - 1;
                     await new Promise(r => setTimeout(r, 1800));
                     _settleRecall(msg);
-                    if (!_swapBubble(chatObj, _ri)) _rebuildRoomContent(chatObj);
+                    if (_swapBubble(chatObj, _ri, true)) await new Promise(r => setTimeout(r, 420));   // 等淡掉換好再冒下一句
+                    else _rebuildRoomContent(chatObj);
                 }
 
                 // 3. 轉帳卡片需要延遲全量刷新（更新轉帳狀態）

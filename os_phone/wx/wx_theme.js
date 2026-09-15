@@ -191,6 +191,10 @@
             .wx-msg-row.me .wx-bubble-content { background: #95ec69; margin-right: 10px; border: 1px solid #86d45a; }
             .wx-msg-row.me .wx-bubble-content::before { content: ''; position: absolute; right: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 6px solid #95ec69; }
             .wx-system-notice { text-align: center; font-size: 12px; color: #b2b2b2; margin: 15px 20px; padding: 4px 10px; clear: both; width: auto; align-self: center; border-radius: 4px; }
+            /* 撤回：那則淡掉 → 換成「撤回了一則訊息」淡進來（她從三個小樣挑的 1）。換掉與拿掉 class 都是 wx_core 計時器做，不靠轉場跑完 */
+            .wx-recall-out { transition: opacity .35s ease; opacity: 0 !important; }
+            .wx-recall-in { animation: wxRecallIn .35s ease-out; }
+            @keyframes wxRecallIn { from { opacity: 0; } to { opacity: 1; } }
             /* 它現在是一顆真泡泡（.wx-bubble-content），只要調泡泡內的排版就好 */
             .wx-typing-indicator { display:flex; align-items:center; gap:7px; padding:12px 14px; }
             .wx-typing-dots-wrap { display:flex; gap:4px; align-items:center; }
