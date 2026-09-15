@@ -266,6 +266,63 @@
         return text ? '（' + who + ' 傳了「' + text + '」又馬上撤回了）' : '';
     }
 
+    // 🔗 記憶關聯：私聊這間勾了幾個群 → 帶那些群最近的訊息；群聊這間勾了幾間私聊 → 帶主角跟那些人私聊最近的訊息。
+    //   設定在聊天設置「記憶關聯」（wx_chat_settings.js）。酒館版與獨立版兩條 buildContext 都呼叫這支。
+    //   撤回的照 _recallNote 寫旁註（沒被看到的不給內容）、對方沒收到的不帶、單號拿掉。getChat(id) 回那一間的資料。
+    const _WX_LINK_MAX_CHARS = 10000;
+    async function _wxLinkedMemory(apiChat, userName, getChat) {
+        if (!apiChat || typeof getChat !== 'function') return '';
+        const toGroup = !apiChat.isGroup;
+        const ids = toGroup ? apiChat.linkedGroupChats : apiChat.linkedPrivateChats;
+        if (!Array.isArray(ids) || !ids.length) return '';
+        const lim = Number(toGroup ? apiChat.groupMemoryMessageLimit : apiChat.privateMemoryMessageLimit);
+        const per = lim >= 1 ? Math.min(Math.floor(lim), 500) : 50;
+        const me = String(userName || '主角');
+        let total = 0;
+        const blocks = [];
+        for (const id of ids) {
+            if (total >= _WX_LINK_MAX_CHARS) break;
+            if (!id || id === apiChat.id) continue;
+            let other = null;
+            try { other = await getChat(id); } catch (e) {}
+            if (!other || !!other.isGroup !== toGroup || !Array.isArray(other.messages) || !other.messages.length) continue;
+            const rawName = String(other.name || '').trim();
+            const name = /^(?:char|grp|avt|wx)_/i.test(rawName) ? '' : rawName;   // 對不到名字的代號不露出來
+            const list = other.messages.slice(-per);
+            const lines = [];
+            for (let i = 0; i < list.length; i++) {
+                const msg = list[i];
+                if (!msg || msg.isLoading || msg.sentWhileBlocked || msg._blockedNotice) continue;
+                if (msg.type === 'system' || msg.type === 'time') continue;
+                let line = '';
+                if (msg.recalled) {
+                    line = _recallNote(msg, list, i, me);
+                } else {
+                    let text = String(msg.content || '') || _wxStripHeads(msg.raw || '').replace(/^\[[^\]\n]*\]\s*/, '');
+                    try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) text = _pt(msg, text); } catch (e) {}
+                    try { const _sc = win.wxApp && win.wxApp.stripCardIds; if (_sc) text = _sc(text); } catch (e) {}
+                    text = String(text || '').replace(/<[^>]+>/g, '').trim();
+                    if (!text) continue;
+                    const who = (msg.isMe || msg.is_user) ? me
+                        : (toGroup ? (String(msg.senderName || msg.sender || '').trim() || '某人') : (name || '對方'));
+                    line = '[' + who + '] ' + text;
+                }
+                if (!line) continue;
+                if (total + line.length + 1 > _WX_LINK_MAX_CHARS) { total = _WX_LINK_MAX_CHARS; break; }
+                lines.push(line);
+                total += line.length + 1;
+            }
+            if (lines.length) {
+                blocks.push((toGroup ? '〔群聊「' + (name || '沒有名字的群') + '」〕' : '〔' + me + ' 跟 ' + (name || '某人') + ' 的私聊〕') + '\n' + lines.join('\n'));
+            }
+        }
+        if (!blocks.length) return '';
+        const head = toGroup
+            ? '【關聯的群聊】以下是另外幾個群最近的訊息，只當背景，不是這一間的對話，不要在這一間接著回那些訊息。'
+            : '【群裡有人跟 ' + me + ' 的私聊】以下是 ' + me + ' 分別跟某些人私聊最近的訊息。每一段私聊只有那兩個人知道，群裡其他人沒看過；誰在群裡開口，只能用他自己知道的事。';
+        return head + '\n\n' + blocks.join('\n\n');
+    }
+
     // --- 2. 輔助函數 ---
     function sanitizeContent(content) {
         if (!content || typeof content !== 'string') return content;
@@ -1645,45 +1702,11 @@
                             }
                         }
                         
-                        if (apiChat && !apiChat.isGroup && apiChat.linkedGroupChats && Array.isArray(apiChat.linkedGroupChats) && apiChat.linkedGroupChats.length > 0) {
-                            let groupMemoryText = "### Group Chat Memory (Associated Context)\nThe following are messages from associated group chats. Use this for context only.\n\n";
-                            let hasGroupMessages = false;
-                            const maxMessagesPerGroup = (apiChat.groupMemoryMessageLimit && apiChat.groupMemoryMessageLimit >= 1) ? Math.min(apiChat.groupMemoryMessageLimit, 500) : 50;
-                            const maxTotalLength = 10000;
-                            let totalLength = 0;
-                            
-                            for (const groupChatId of apiChat.linkedGroupChats) {
-                                if (totalLength >= maxTotalLength) break;
-                                try {
-                                    const groupChat = await win.WX_DB.getApiChat(groupChatId);
-                                    if (groupChat && groupChat.messages && groupChat.messages.length > 0) {
-                                        const groupName = groupChat.name || groupChatId;
-                                        groupMemoryText += `[Group: ${groupName}]\n`;
-                                        const recentMessages = groupChat.messages.slice(-maxMessagesPerGroup);
-                                        for (const msg of recentMessages) {
-                                            if (totalLength >= maxTotalLength) break;
-                                            const isUser = msg.isMe || msg.is_user;
-                                            const speaker = isUser ? userName : (msg.senderName || msg.sender || "Unknown");
-                                            let text = msg.content || "";
-                                            if (!text && msg.raw) {
-                                                text = msg.raw.replace(/^\[Chat:[^\]]+\]\n?/im, '').replace(/^\[With:[^\]]+\]\n?/im, '').replace(/^\[Time:[^\]]+\]\n?/im, '').replace(/^\[System:[^\]]+\]\n?/im, '').replace(/^\[Notice:[^\]]+\]\n?/im, '').replace(/^\[(.*?)\]\s*/m, '').trim();
-                                            }
-                                            text = text.replace(/<[^>]+>/g, "").trim();
-                                            if (text && text.length > 0) {
-                                                const messageLine = `[${speaker}]: ${text}\n`;
-                                                if (totalLength + messageLine.length <= maxTotalLength) {
-                                                    groupMemoryText += messageLine;
-                                                    totalLength += messageLine.length;
-                                                    hasGroupMessages = true;
-                                                } else break;
-                                            }
-                                        }
-                                        groupMemoryText += "\n";
-                                    }
-                                } catch (e) { console.warn(`Failed to load group chat ${groupChatId}:`, e); }
-                            }
-                            if (hasGroupMessages) apiMessages.push({ role: "system", content: groupMemoryText });
-                        }
+                        // 🔗 記憶關聯：私聊勾了群聊、群聊勾了私聊，帶那幾間最近的訊息（同獨立版，共用 _wxLinkedMemory）
+                        try {
+                            const _lmTxt = await _wxLinkedMemory(apiChat, userName, (id) => win.WX_DB.getApiChat(id));
+                            if (_lmTxt) apiMessages.push({ role: 'system', content: _lmTxt });
+                        } catch (e) { console.warn('[OS_API.buildContext] 記憶關聯注入失敗（不影響送出）:', e); }
                     }
                 } catch (e) { console.error("Chat history load error", e); }
             }
@@ -2246,6 +2269,13 @@
                         if (_isCall && _pushedHist && _curCallAt < 0) {
                             apiMessages.push({ role: 'system', content: _CALL_PAST_NOTE });
                         }
+                    }
+                    // 🔗 記憶關聯（同酒館版）
+                    if (apiChat) {
+                        try {
+                            const _lmTxt = await _wxLinkedMemory(apiChat, userName, (id) => win.WX_DB.getApiChat(id));
+                            if (_lmTxt) apiMessages.push({ role: 'system', content: _lmTxt });
+                        } catch (e) { console.warn('[OS_API standalone] 記憶關聯注入失敗:', e); }
                     }
                 } catch(e) { console.warn('[OS_API standalone] 聊天歷史載入失敗:', e); }
             }

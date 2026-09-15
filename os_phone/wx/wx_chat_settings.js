@@ -231,14 +231,16 @@
             let myAlias = '';
             try { myAlias = win.WX_ME.name(); } catch (e) {}
             
-            // 讀取關聯的群聊（僅私聊）
-            let linkedGroupChats = chat.linkedGroupChats || [];
-            if (!Array.isArray(linkedGroupChats)) linkedGroupChats = [];
+            // 記憶關聯：私聊勾群聊、群聊勾私聊，送給模型時帶那幾間最近的訊息（os_api_engine 的 _wxLinkedMemory）
+            const _lm = isGroup
+                ? { field: 'linkedPrivateChats', limitField: 'privateMemoryMessageLimit', label: '私聊記憶', limitLabel: '每私聊消息數', unit: '個私聊', title: '選擇關聯私聊', empty: '暫無私聊' }
+                : { field: 'linkedGroupChats', limitField: 'groupMemoryMessageLimit', label: '群聊記憶', limitLabel: '每群聊消息數', unit: '個群聊', title: '選擇關聯群聊', empty: '暫無群聊' };
+            let linkedChats = Array.isArray(chat[_lm.field]) ? chat[_lm.field] : [];
             
-            // 讀取群聊記憶消息數量限制（默認50條）
-            let groupMemoryMessageLimit = chat.groupMemoryMessageLimit || 50;
-            if (typeof groupMemoryMessageLimit !== 'number' || groupMemoryMessageLimit < 1) {
-                groupMemoryMessageLimit = 50;
+            // 每間帶幾條（默認50條）
+            let memoryMessageLimit = chat[_lm.limitField] || 50;
+            if (typeof memoryMessageLimit !== 'number' || memoryMessageLimit < 1) {
+                memoryMessageLimit = 50;
             }
 
             // 讀取「保留最近幾條」（聊天室長期記憶）。空白＝跟隨全域預設。
@@ -441,25 +443,23 @@
                     </div>
                 </div>
                 
-                ${!isGroup ? `
                 <div class="ws-section-header">記憶關聯</div>
                 <div class="ws-group">
-                    <div class="ws-cell" id="btn-group-memory" style="cursor:pointer;">
-                        <div class="ws-label">群聊記憶</div>
+                    <div class="ws-cell" id="btn-linked-memory" style="cursor:pointer;">
+                        <div class="ws-label">${_lm.label}</div>
                         <div class="ws-right">
-                            <div id="group-memory-count" style="font-size:14px; margin-right:5px; color: #999;">未選擇</div>
+                            <div id="linked-memory-count" style="font-size:14px; margin-right:5px; color: #999;">未選擇</div>
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
                     <div class="ws-cell">
-                        <div class="ws-label">每群聊消息數</div>
+                        <div class="ws-label">${_lm.limitLabel}</div>
                         <div class="ws-right">
-                            <input class="ws-input" id="inp-memory-limit" type="number" min="1" max="500" value="${groupMemoryMessageLimit}" placeholder="50" style="text-align: right; width: 80px;">
+                            <input class="ws-input" id="inp-memory-limit" type="number" min="1" max="500" value="${memoryMessageLimit}" placeholder="50" style="text-align: right; width: 80px;">
                             <div style="font-size:14px; margin-left: 5px; color: #999;">條</div>
                         </div>
                     </div>
                 </div>
-                ` : ''}
                 
                 ${seeOn ? `
                 <div class="ws-group">
@@ -595,12 +595,12 @@
                 }
             }
             
-            // 更新群聊記憶計數顯示（僅私聊）
-            if (!isGroup) {
-                const countEl = doc.getElementById('group-memory-count');
+            // 更新記憶關聯計數顯示
+            {
+                const countEl = doc.getElementById('linked-memory-count');
                 if (countEl) {
-                    if (linkedGroupChats.length > 0) {
-                        countEl.textContent = `已選擇 ${linkedGroupChats.length} 個群聊`;
+                    if (linkedChats.length > 0) {
+                        countEl.textContent = `已選擇 ${linkedChats.length} ${_lm.unit}`;
                         countEl.style.color = '#07c160';
                     } else {
                         countEl.textContent = '未選擇';
@@ -812,9 +812,9 @@
                 };
             })();
             
-            // 群聊記憶按鈕（僅私聊）
-            if (!isGroup) {
-                const memoryBtn = doc.getElementById('btn-group-memory');
+            // 記憶關聯按鈕：私聊列群聊、群聊列私聊
+            {
+                const memoryBtn = doc.getElementById('btn-linked-memory');
                 if (memoryBtn) {
                     memoryBtn.onclick = () => {
                         const memoryOverlay = doc.getElementById('ws-memory-overlay');
@@ -823,15 +823,22 @@
                         
                         // 獲取所有群聊
                         const allChats = app.GLOBAL_CHATS || {};
-                        const groupChats = Object.values(allChats).filter(c => c.isGroup === true);
+                        // 變數名沿用舊的：私聊這間列群聊，群聊這間列私聊（群裡的人排前面）
+                        const groupChats = Object.values(allChats).filter(c => c && c.id !== chatId && !!c.isGroup === !isGroup);
+                        if (isGroup) {
+                            const _mem = Array.isArray(chat.members) ? chat.members : [];
+                            groupChats.sort((a, b) => (_mem.includes(b.id) ? 1 : 0) - (_mem.includes(a.id) ? 1 : 0));
+                        }
+                        const _mTitle = memoryOverlay.querySelector('.ws-memory-title');
+                        if (_mTitle) _mTitle.textContent = _lm.title;
                         
                         // 構建群聊列表HTML
                         let html = '';
                         if (groupChats.length === 0) {
-                            html = '<div style="text-align: center; padding: 40px; color: #999;">暫無群聊</div>';
+                            html = '<div style="text-align: center; padding: 40px; color: #999;">' + _lm.empty + '</div>';
                         } else {
                             groupChats.forEach(groupChat => {
-                                const isChecked = linkedGroupChats.includes(groupChat.id);
+                                const isChecked = linkedChats.includes(groupChat.id);
                                 const desc = groupChat.desc || groupChat.bio || '';
                                 html += `
                                     <div class="ws-memory-item">
@@ -860,16 +867,17 @@
                                 });
                                 
                                 // 保存到聊天數據
-                                chat.linkedGroupChats = selectedIds;
+                                chat[_lm.field] = selectedIds;
+                                linkedChats = selectedIds;   // 再打開彈窗時勾的是剛存的
                                 
                                 // 保存消息數量限制
                                 const limitInput = doc.getElementById('inp-memory-limit');
                                 if (limitInput) {
                                     const limitValue = parseInt(limitInput.value);
                                     if (!isNaN(limitValue) && limitValue >= 1 && limitValue <= 500) {
-                                        chat.groupMemoryMessageLimit = limitValue;
+                                        chat[_lm.limitField] = limitValue;
                                     } else {
-                                        chat.groupMemoryMessageLimit = 50; // 無效值時使用默認值
+                                        chat[_lm.limitField] = 50; // 無效值時使用默認值
                                     }
                                 }
                                 
@@ -877,10 +885,10 @@
                                 if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
                                 
                                 // 更新顯示
-                                const countEl = doc.getElementById('group-memory-count');
+                                const countEl = doc.getElementById('linked-memory-count');
                                 if (countEl) {
                                     if (selectedIds.length > 0) {
-                                        countEl.textContent = `已選擇 ${selectedIds.length} 個群聊`;
+                                        countEl.textContent = `已選擇 ${selectedIds.length} ${_lm.unit}`;
                                         countEl.style.color = '#07c160';
                                     } else {
                                         countEl.textContent = '未選擇';
@@ -894,6 +902,8 @@
                     };
                 }
                 
+            }
+            if (!isGroup) {
                 // 人設設置按鈕（僅私聊）
                 const personaBtn = doc.getElementById('btn-persona-settings');
                 if (personaBtn) {
@@ -1299,14 +1309,14 @@
                     if (myAvatarUrl !== (chat.userAvatar || "")) { chat.userAvatar = myAvatarUrl; hasChanges = true; }
                     if (avatarUrl !== (chat.customAvatar || "")) { chat.customAvatar = avatarUrl; hasChanges = true; }
                     
-                    // 保存群聊記憶消息數量限制（僅私聊）
-                    if (!isGroup) {
+                    // 保存記憶關聯每間帶幾條（私聊、群聊各存各的欄位）
+                    {
                         const limitInput = doc.getElementById('inp-memory-limit');
                         if (limitInput) {
                             const limitValue = parseInt(limitInput.value);
                             if (!isNaN(limitValue) && limitValue >= 1 && limitValue <= 500) {
-                                if (chat.groupMemoryMessageLimit !== limitValue) {
-                                    chat.groupMemoryMessageLimit = limitValue;
+                                if (chat[_lm.limitField] !== limitValue) {
+                                    chat[_lm.limitField] = limitValue;
                                     hasChanges = true;
                                 }
                             }
