@@ -79,12 +79,80 @@
     }
     function _isFullDoc(html) { return /<!DOCTYPE|<html[\s>]|<body[\s>]/i.test(html); }
 
+    // ── 🧩 酒館助手替身：卡片面板裡的「切換開場白」────────────────────
+    //   卡片作者的面板腳本是寫給酒館助手的：在酒館裡，面板的 iframe 會被塞進 getChatMessages / setChatMessage /
+    //   setChatMessages / triggerSlash / SillyTavern 這些東西。PWA 沒有酒館助手 → 一呼叫就 ReferenceError，
+    //   按鈕整個死掉（Rae 2026-09-16：「開場白跳轉功能死掉了」）。
+    //   掃過她酒館 63 張會呼叫它的卡，切換開場白只有三種寫法，在酒館裡都是「第 0 樓換成第 N 個版本」：
+    //     ① getChatMessages("0",{include_swipe:true}) 拿 swipes → setChatMessage(內容, 0, {swipe_id:N})
+    //     ② setChatMessages([{message_id:0, swipe_id:N}])（有的先找自己、再找 parent、再找 top）
+    //     ③ 直接改 SillyTavern.chat[0].swipe_id 再 saveChat / reloadCurrentChat
+    //   開場白順序＝匯入時的「first_mes 在第 0 個、alternate_greetings 接在後面」，跟酒館的 swipe 編號一致。
+    //   替身把「第 0 樓換成第 N 版」交給目前登記的主人（開場白頁：翻到第 N 則）；沒有主人（劇情播放中）就什麼都不做。
+    //   母頁有真的酒館助手（酒館版）就不裝，照舊。其他指令（多半是 /send 劇情行動）目前不接。
+    let _host = null;
+    function setHost(h) { _host = h || null; }
+    function getHost() { return _host; }
+    function _tavernStandIn() {
+        var P;
+        try { P = window.parent; if (!P || P === window || P.TavernHelper) return; } catch (e) { return; }
+        function host() { try { return (P.OS_CARD_REGEX && P.OS_CARD_REGEX.getHost()) || null; } catch (e) { return null; } }
+        function done(v) { return Promise.resolve(v); }
+        function select(n) { var h = host(); n = Number(n); if (h && n >= 0) { try { h.select(n); } catch (e) { } } }
+        var chat0 = null;
+        function getChat0() {
+            var h = host(); if (!h) return null;
+            var g = h.greetings(), c = h.current();
+            if (!chat0 || chat0.__base !== c) chat0 = { mes: g[c] || '', swipes: g.slice(), swipe_id: c, name: h.charName(), is_user: false, __base: c };
+            return chat0;
+        }
+        function applyChat0() { if (chat0 && chat0.swipe_id !== chat0.__base) select(chat0.swipe_id); return done(); }
+        function hasMsg0(range) {
+            if (range == null || range === '') return true;
+            var s = String(range).trim();
+            if (s === '0' || s === '-1') return true;
+            var m = s.match(/^(-?\d+)\s*-\s*(-?\d+)$/);
+            return !!(m && Number(m[1]) <= 0 && Number(m[2]) >= 0);
+        }
+        var api = {
+            getChatMessages: function (range, opt) {
+                var c = getChat0(); if (!c || !hasMsg0(range)) return [];
+                var msg = { message_id: 0, name: c.name, role: 'assistant', is_hidden: false, message: c.mes, data: {}, extra: {} };
+                if (opt && opt.include_swipe) { msg.swipe_id = c.swipe_id; msg.swipes = c.swipes.slice(); msg.swipes_data = c.swipes.map(function () { return {}; }); msg.swipes_info = c.swipes.map(function () { return {}; }); }
+                return [msg];
+            },
+            setChatMessage: function (val, id, opt) { if (Number(id) === 0 && opt && opt.swipe_id != null) select(opt.swipe_id); return done(); },
+            setChatMessages: function (arr) { (Array.isArray(arr) ? arr : [arr]).forEach(function (m) { if (m && Number(m.message_id) === 0 && m.swipe_id != null) select(m.swipe_id); }); return done(); },
+            triggerSlash: function () { return done(''); },
+            eventOn: function () { return { stop: function () { } }; },
+            eventEmit: function () { return done(); },
+            getVariables: function () { return {}; }
+        };
+        Object.keys(api).forEach(function (k) { if (typeof window[k] === 'undefined') window[k] = api[k]; });
+        if (typeof window.TavernHelper === 'undefined') window.TavernHelper = api;
+        if (typeof window.SillyTavern === 'undefined') {
+            window.SillyTavern = {
+                get chat() { var c = getChat0(); return c ? [c] : []; },
+                saveChat: applyChat0, reloadCurrentChat: applyChat0,
+                triggerSlash: api.triggerSlash,
+                get name2() { var h = host(); return h ? h.charName() : ''; }
+            };
+        }
+    }
+    const _STANDIN_TAG = '<script>(' + _tavernStandIn.toString() + ')();<\/script>';
+    function _withStandIn(doc) {
+        if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, function (m) { return m + _STANDIN_TAG; });
+        if (/<html[^>]*>/i.test(doc)) return doc.replace(/<html[^>]*>/i, function (m) { return m + '<head>' + _STANDIN_TAG + '</head>'; });
+        return doc.replace(/^(\s*<!DOCTYPE[^>]*>)?/i, function (m) { return (m || '') + _STANDIN_TAG; });
+    }
+
     // 整份 HTML 文件 → iframe（內嵌 <script>／外部字體要在自己的文件裡才跑得動，同酒館做法）
+    //   開頭先放酒館助手替身（見上），卡片自己的腳本才找得到那些函式。
     function _wrapCard(html) {
         const c = _cleanCard(html);
         if (!_isFullDoc(c)) return c;
         return '<iframe class="vn-regex-card" scrolling="no" srcdoc="' +
-            c.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"></iframe>';
+            _withStandIn(c).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"></iframe>';
     }
 
     // ── 讀寫 ────────────────────────────────────────────────────
@@ -372,7 +440,8 @@
 
     win.OS_CARD_REGEX = window.OS_CARD_REGEX = {
         saveFromCard, listPacks, getPack, setEnabled, removePack, hasPack, refresh,
-        currentWorldId, scriptsFor, cardHtmlFor, cardsIn, applyText, renderRichHtml, stopMedia, fitCardFrames
+        currentWorldId, scriptsFor, cardHtmlFor, cardsIn, applyText, renderRichHtml, stopMedia, fitCardFrames,
+        setHost, getHost
     };
 
     // 開機先把庫讀進記憶體：VN 播放中間是同步取用，臨時才讀就來不及。

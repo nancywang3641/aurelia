@@ -1455,9 +1455,23 @@ status = "正常"`;
                     td.innerHTML = _escHtml(_greetRaw(i));
                 });
             }
+            // 卡片面板裡的「切換開場白」按鈕：在酒館是把第 0 樓換成第 N 個版本，這裡＝翻到第 N 則開場白。
+            //   面板腳本透過 OS_CARD_REGEX 的酒館助手替身找到這個主人（見 os_card_regex.js 的 _tavernStandIn）。
+            const _cardHost = {
+                charName: () => w.title,
+                greetings: () => w.greetings.map((g, i) => _greetRaw(i)),
+                current: () => Math.min(currentSlide, w.greetings.length - 1),   // 最後那張「讓 AI 自由發揮」不是開場白
+                select: (i) => {
+                    i = Number(i);
+                    if (!(i >= 0 && i < w.greetings.length) || i === currentSlide) return;
+                    currentSlide = i;
+                    updateSlider();
+                }
+            };
             // 離開開場白這一頁（返回／進啟程幕／踏進故事）→ 全部拆光，不留任何還在響的面板
             function _leaveGreetings() {
                 try { _teardownSlides(-1); } catch (e) {}
+                try { if (_CR && _CR.getHost && _CR.getHost() === _cardHost) _CR.setHost(null); } catch (e) {}
             }
             panel._qbLeaveGreetings = _leaveGreetings;   // 給同檔其它路徑（踏入故事那顆按鈕）叫，同 panel._qbHideToc 的做法
 
@@ -1469,6 +1483,7 @@ status = "正常"`;
                 if (_CR && _CR.stopMedia) _CR.stopMedia(textDiv, false);   // 這一張自己的舊面板先閉嘴
                 const raw = _greetRaw(i);
                 if (_beautifyOn && _CR) {
+                    try { if (_CR.setHost) _CR.setHost(_cardHost); } catch (e) {}   // 面板要能叫「翻到第 N 則」
                     try {
                         const html = _CR.renderRichHtml(raw, _escHtml, w.id);
                         if (html) { textDiv.innerHTML = html; _fitCardFrames(textDiv); return; }
