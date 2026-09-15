@@ -252,6 +252,22 @@
         return note;
     }
 
+    // 🖼 角色在微信裡自己動手的教學：換頭像（權限開了才教）、約定、改名改簽名、它記得我頭像的樣子。
+    //   酒館版與獨立版兩條 buildContext 都叫這支——以前只寫在酒館那條，PWA 上的角色從來不知道能換頭像。
+    function _wxAbilityBlocks(chatId) {
+        const out = [];
+        try {
+            const _av = win.WX_AVATAR_AI || (typeof window !== 'undefined' ? window.WX_AVATAR_AI : null);
+            if (!_av) return out;
+            const push = (t) => { if (t) out.push({ role: 'system', content: t }); };
+            push(_av.instruction ? _av.instruction() : '');                  // 換頭像：權限關著回空字串＝一個字都不提
+            push(_av.eventInstruction ? _av.eventInstruction() : '');        // 約定：不花錢，一律教
+            push(_av.profileInstruction ? _av.profileInstruction() : '');    // 改名、改簽名：不花錢，一律教
+            push(_av.seeMemoryText ? _av.seeMemoryText(chatId || '') : '');  // 它看過我頭像後自己寫的那句
+        } catch (e) {}
+        return out;
+    }
+
     // ↩ 撤回的訊息怎麼給模型看：
     //   主角撤回自己的——後面有對方的訊息＝對方回過話、看過了，給內容；還沒回就撤回＝只知道撤回了一則，不給內容。
     //   角色撤回的——他自己知道說過什麼，給內容。一律寫成旁註，不是誰講的話（模型才不會學成輸出格式）。
@@ -1470,25 +1486,9 @@
                 }
             } catch (e) { console.warn('[OS_API.buildContext] 大總結注入失敗:', e); }
 
-            // 🖼 換頭像是權限，預設關著。開了才把用法教給它——關著就一個字都不提，
-            //    免得它學了卻用不出來（程式那端也會忽略）。
+            // 🖼 換頭像（權限關著就一個字都不提）、約定、改名改簽名、它記得我頭像的樣子（共用 _wxAbilityBlocks，獨立版同一支）
             if (promptKey === 'wx_chat_system') {
-                try {
-                    const _av = win.WX_AVATAR_AI || window.WX_AVATAR_AI;
-                    const _t = (_av && _av.instruction) ? _av.instruction() : '';
-                    if (_t) apiMessages.push({ role: 'system', content: _t });
-                    // 📅 約定不設開關：不花錢也不生東西，而且兩邊寫進同一本日曆才對得上。
-                    const _ev = (_av && _av.eventInstruction) ? _av.eventInstruction() : '';
-                    if (_ev) apiMessages.push({ role: 'system', content: _ev });
-                    // 🪪 改名與改簽名同理：不花錢，一律教。
-                    const _pf = (_av && _av.profileInstruction) ? _av.profileInstruction() : '';
-                    if (_pf) apiMessages.push({ role: 'system', content: _pf });
-                    // 👁 讓角色看我的頭像：平時只注入它自己寫過的那句描述（便宜）；
-                    //    只有「換了還沒看過」那一輪才把圖夾進去，看完它會寫一句回來取代掉。
-                    const _seeCid = (win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID) || '';
-                    const _seeTxt = (_av && _av.seeMemoryText) ? _av.seeMemoryText(_seeCid) : '';
-                    if (_seeTxt) apiMessages.push({ role: 'system', content: _seeTxt });
-                } catch (e) {}
+                _wxAbilityBlocks((win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID) || '').forEach(m => apiMessages.push(m));
             }
 
             if ((promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
@@ -2205,6 +2205,10 @@
                     // 🧭 這一間是誰、還能傳到哪幾間（同酒館版）
                     if (promptKey === 'wx_chat_system' && apiChat) {
                         try { const _rn = _wxRoomsNote(apiChat); if (_rn) apiMessages.push({ role: 'system', content: _rn }); } catch (e) {}
+                    }
+                    // 🖼 換頭像／約定／改名改簽名／它記得我頭像的樣子（同酒館版；以前 PWA 這條完全沒有，角色不知道能換頭像）
+                    if (promptKey === 'wx_chat_system') {
+                        _wxAbilityBlocks(win.wxApp.GLOBAL_ACTIVE_ID).forEach(m => apiMessages.push(m));
                     }
                     if (apiChat?.messages?.length) {
                         // 📒 聊天室長期記憶：跟酒館那條路共用同一份（存在 apiChat.wxSummary）。
