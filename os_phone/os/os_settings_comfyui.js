@@ -123,7 +123,19 @@
                     const lists = await IM.fetchComfyLists(url);
                     models = lists.models; samplers = lists.samplers; schedulers = lists.schedulers; vaes = lists.vaes; loras = lists.loras;
                 } catch (e) {
-                    if (statusEl) statusEl.textContent = '連不上：' + (e.message || e) + '（瀏覽器直連需 ComfyUI 開 --enable-cors-header）';
+                    // 照實講是哪一種連不上。以前一律叫人開 --enable-cors-header，但手機 PWA 最常見的是
+                    //   https 網頁去連 http 網址被瀏覽器擋（錯誤只有一句 Load failed），開那個參數沒用。
+                    const _u = String(url || '');
+                    const _onPhone = /iPhone|iPad|Android/i.test(navigator.userAgent || '');
+                    let _why;
+                    if (location.protocol === 'https:' && /^http:\/\//i.test(_u)) {
+                        _why = '這個網頁是 https 開的，瀏覽器不准它連 http 開頭的網址。要給 ComfyUI 一個 https 開頭的網址';
+                    } else if (_onPhone && /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(_u)) {
+                        _why = '在手機上 127.0.0.1 指的是手機自己，要填電腦的網址';
+                    } else {
+                        _why = (e.message || e) + '。檢查網址對不對、ComfyUI 開著沒；網頁跟 ComfyUI 不在同一個網址時，ComfyUI 要開 --enable-cors-header';
+                    }
+                    if (statusEl) statusEl.textContent = '連不上：' + _why;
                     return;
                 }
                 if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '連不上（檢查網址、ComfyUI 開著沒）'; return; }
