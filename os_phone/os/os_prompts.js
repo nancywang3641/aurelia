@@ -956,7 +956,9 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             setTimeout(() => { close(); btn.textContent = '保存'; onSaved?.(); }, 500);
         };
         requestAnimationFrame(() => modal.classList.add('open'));
-        setTimeout(() => { try { modal.querySelector('.pm-entry-name-input')?.focus(); } catch (e) { } }, 60);
+        // 🚨 focus 的時候這頁還在從右邊滑進來的半路上：瀏覽器會把整個 .pm-wrap 往左捲一整頁去「讓輸入框看得到」，
+        //    滑完就卡在兩頁中間（她手機上看到左邊一條編輯頁、右邊空白）。preventScroll 叫它別捲。
+        setTimeout(() => { try { modal.querySelector('.pm-entry-name-input')?.focus({ preventScroll: true }); } catch (e) { } }, 60);
     }
 
     function renderStaging(stagingList, refresh) {
