@@ -1422,6 +1422,46 @@
             VN_StandaloneArchive.show();
         },
 
+        // 「AI 生成中」進度畫面：選項框送出、卡片面板送出一句話都用這支（原本寫在 vn_inspect 的 doSend 裡）
+        _showSendingLoader: function() {
+            const gamePage = document.getElementById('page-game');
+            // 若 loader DOM 不存在，呼叫一次建立它（_showStartLoader(0) 會排 setTimeout(0) 隱藏，下面用 rAF 在它之後再亮）
+            if (!document.getElementById('vn-start-loader') && gamePage) this._showStartLoader(0);
+            requestAnimationFrame(() => {
+                const loaderEl  = document.getElementById('vn-start-loader');
+                const loaderBar = document.getElementById('vn-start-loader-bar');
+                const loaderLbl = document.getElementById('vn-start-loader-label');
+                if (!loaderEl) return;
+                loaderEl.style.display = 'flex';
+                if (loaderBar) {
+                    loaderBar.style.transition = 'none';
+                    loaderBar.style.width = '0%';
+                    void loaderBar.offsetWidth;           // 強制 reflow
+                    loaderBar.style.transition = 'width 30s cubic-bezier(0.1,0.5,0.5,1)';
+                    loaderBar.style.width = '90%';
+                }
+                if (loaderLbl) loaderLbl.textContent = 'AI 生成中...';
+            });
+        },
+
+        // 🧩 卡片美化面板上「送出一句話」的按鈕（酒館是 /send 那句|/trigger）＝那句當成玩家說的話送出、AI 接著寫。
+        //   跟選項框打字送出同一件事（Rae 2026-09-16 選直接送出）。正在寫這一段時再按不重送。
+        sendPlayerLine: function(text) {
+            const val = String(text || '').trim();
+            if (!val) return false;
+            const ld = document.getElementById('vn-start-loader');
+            if (ld && ld.style.display === 'flex') return false;
+            const arc = window.VN_StandaloneArchive;
+            if (arc) {
+                arc._pendingChoices = null;
+                const ov = document.getElementById('aurelia-extractor-phone-overlay');
+                if (ov && ov.classList.contains('show')) arc.hide();   // 選項框開著就收掉，跟它自己送出一樣
+            }
+            this._showSendingLoader();
+            this._sendChoiceAndContinue(val);
+            return true;
+        },
+
         // opts._continueFrom：這一通是「接續截斷正文」，回來要先跟半截接合再驗貨
         // opts._origChoice ：續寫時 choice 已被換成系統指令，存檔的 request 要留原本那個選項
         _sendChoiceAndContinue: async function(choice, opts) {

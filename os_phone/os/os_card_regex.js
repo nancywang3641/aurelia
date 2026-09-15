@@ -88,20 +88,37 @@
     //     ② setChatMessages([{message_id:0, swipe_id:N}])（有的先找自己、再找 parent、再找 top）
     //     ③ 直接改 SillyTavern.chat[0].swipe_id 再 saveChat / reloadCurrentChat
     //   開場白順序＝匯入時的「first_mes 在第 0 個、alternate_greetings 接在後面」，跟酒館的 swipe 編號一致。
-    //   替身把「第 0 樓換成第 N 版」交給目前登記的主人（開場白頁：翻到第 N 則）；沒有主人（劇情播放中）就什麼都不做。
-    //   母頁有真的酒館助手（酒館版）就不裝，照舊。其他指令（多半是 /send 劇情行動）目前不接。
+    //   替身把「第 0 樓換成第 N 版」交給目前登記的主人（開場白頁：翻到第 N 則）。
+    //   「送出一句話」：卡片按鈕 365 個裡幾乎都是 triggerSlash('/send 那句|/trigger')＝那句當成玩家說的話送出、馬上叫 AI 接著寫。
+    //     Rae 2026-09-16 選「直接送出」：劇情播放中＝跟選項框打字送出同一件事（VN_Core.sendPlayerLine）；
+    //     開場白頁（故事還沒開始）＝把那句填進啟程頁的第一句。其他指令（/echo 之類）不接。
+    //   母頁有真的酒館助手（酒館版）就不裝，照舊。
     let _host = null;
     function setHost(h) { _host = h || null; }
-    function getHost() { return _host; }
+    // 開場白頁有登記就是它；沒有就交給劇情播放器（用到時才找，不管誰先載入）
+    const _vnHost = { send: (t) => { const V = win.VN_Core || window.VN_Core; return !!(V && V.sendPlayerLine && V.sendPlayerLine(t)); } };
+    function getHost() { return _host || _vnHost; }
     function _tavernStandIn() {
         var P;
         try { P = window.parent; if (!P || P === window || P.TavernHelper) return; } catch (e) { return; }
         function host() { try { return (P.OS_CARD_REGEX && P.OS_CARD_REGEX.getHost()) || null; } catch (e) { return null; } }
         function done(v) { return Promise.resolve(v); }
-        function select(n) { var h = host(); n = Number(n); if (h && n >= 0) { try { h.select(n); } catch (e) { } } }
+        function select(n) { var h = host(); n = Number(n); if (h && h.select && n >= 0) { try { h.select(n); } catch (e) { } } }
+        // 酒館斜線指令用「|」串好幾個：/send 那句|/trigger。只有指令開頭的 | 才算分隔，那句話裡的 | 不切。
+        function runSlash(cmd) {
+            var lines = [];
+            String(cmd || '').split(/\|(?=\s*\/[A-Za-z])/).forEach(function (seg) {
+                var m = seg.match(/^\s*\/([\w-]+)\s*([\s\S]*)$/);
+                if (m && m[1].toLowerCase() === 'send' && m[2].trim()) lines.push(m[2].trim());
+            });
+            if (!lines.length) return done('');
+            var h = host();
+            if (h && h.send) { try { h.send(lines.join('\n')); } catch (e) { } }
+            return done('');
+        }
         var chat0 = null;
         function getChat0() {
-            var h = host(); if (!h) return null;
+            var h = host(); if (!h || !h.greetings) return null;
             var g = h.greetings(), c = h.current();
             if (!chat0 || chat0.__base !== c) chat0 = { mes: g[c] || '', swipes: g.slice(), swipe_id: c, name: h.charName(), is_user: false, __base: c };
             return chat0;
@@ -123,7 +140,7 @@
             },
             setChatMessage: function (val, id, opt) { if (Number(id) === 0 && opt && opt.swipe_id != null) select(opt.swipe_id); return done(); },
             setChatMessages: function (arr) { (Array.isArray(arr) ? arr : [arr]).forEach(function (m) { if (m && Number(m.message_id) === 0 && m.swipe_id != null) select(m.swipe_id); }); return done(); },
-            triggerSlash: function () { return done(''); },
+            triggerSlash: runSlash,
             eventOn: function () { return { stop: function () { } }; },
             eventEmit: function () { return done(); },
             getVariables: function () { return {}; }

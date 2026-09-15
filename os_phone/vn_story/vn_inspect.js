@@ -227,33 +227,9 @@
                     if (!val) return;
                     this._pendingChoices = null;
 
+                    // 生成中的進度畫面：卡片面板「送出一句話」也要一模一樣 → 收成 VN_Core 一支
                     const vc = window.VN_Core;
-                    if (vc) {
-                        const gamePage = document.getElementById('page-game');
-                        // 若 loader DOM 不存在，呼叫一次建立它
-                        // （_showStartLoader(0) 會排 setTimeout(0) 隱藏，
-                        //   但我們後面用 rAF 在它之後再 re-show）
-                        if (!document.getElementById('vn-start-loader') && gamePage) {
-                            vc._showStartLoader(0);
-                        }
-                        // requestAnimationFrame 在瀏覽器的事件迴圈中
-                        // 排在 setTimeout(0) 之後才執行 → 可安全覆蓋那個 hide
-                        requestAnimationFrame(() => {
-                            const loaderEl  = document.getElementById('vn-start-loader');
-                            const loaderBar = document.getElementById('vn-start-loader-bar');
-                            const loaderLbl = document.getElementById('vn-start-loader-label');
-                            if (!loaderEl) return;
-                            loaderEl.style.display = 'flex';
-                            if (loaderBar) {
-                                loaderBar.style.transition = 'none';
-                                loaderBar.style.width = '0%';
-                                void loaderBar.offsetWidth;           // 強制 reflow
-                                loaderBar.style.transition = 'width 30s cubic-bezier(0.1,0.5,0.5,1)';
-                                loaderBar.style.width = '90%';
-                            }
-                            if (loaderLbl) loaderLbl.textContent = 'AI 生成中...';
-                        });
-                    }
+                    if (vc && vc._showSendingLoader) vc._showSendingLoader();
 
                     this.hide();    // Archive 滑走（0.4s 動畫）
                     cb && cb(val);  // 觸發 AI 生成

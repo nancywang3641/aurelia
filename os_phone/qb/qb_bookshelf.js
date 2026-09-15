@@ -1466,6 +1466,18 @@ status = "正常"`;
                     if (!(i >= 0 && i < w.greetings.length) || i === currentSlide) return;
                     currentSlide = i;
                     updateSlider();
+                },
+                // 面板上「送出一句話」的按鈕：故事還沒開始，沒有東西可以送 → 選定現在這則、進啟程頁、那句填進第一句
+                send: (text) => {
+                    const t = String(text || '').trim();
+                    if (!t || !embarkView) return;
+                    const v = currentSlide >= w.greetings.length ? '-1' : String(currentSlide);
+                    const radio = panel.querySelector('input[name="qb-greeting"][value="' + v + '"]');
+                    if (radio) radio.checked = true;
+                    _leaveGreetings();
+                    embarkView.style.display = 'flex';
+                    const ta = panel.querySelector('#qb-user-reply');
+                    if (ta) ta.value = t;
                 }
             };
             // 離開開場白這一頁（返回／進啟程幕／踏進故事）→ 全部拆光，不留任何還在響的面板
