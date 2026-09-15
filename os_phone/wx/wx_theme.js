@@ -160,6 +160,7 @@
                這層無形的 70% 夾住 → 她說「預覽正常，套用後偏移，而且泡泡張不開」。
                .pbub-bubble 的 max-width 是相對這一層算的，兩邊都寫百分比會疊兩次。 */
             .wx-bubble-wrap { max-width: 70%; min-width: 0; }
+            .wx-send-fail { align-self: center; flex-shrink: 0; margin-right: 8px; color: #fa5151; font-size: 18px; line-height: 1; }
             /* 📞 通話記錄：電話圖示加一句話，跟一般訊息一樣裝在泡泡裡 */
             .wx-call-rec { display: inline-flex; align-items: center; gap: 7px; }
             .wx-call-rec i { font-size: 15px; opacity: 0.75; }

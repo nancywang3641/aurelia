@@ -192,6 +192,7 @@
                             let subMsg = { ...msg, content: part.trim() };
                             // 一則訊息被媒體標籤切成好幾個泡泡時，引用塊只掛在第一個，不然會重複出現
                             if (pi > 0) { subMsg.quoteName = ''; subMsg.quoteText = ''; }
+                            if (pi < parts.length - 1) subMsg.sentWhileBlocked = false;   // 被拒收的紅色驚嘆號只掛在最後一顆
                             return this.renderBubble(subMsg, chatObj, withAnim, msgIndex);
                         }).join('');
                     }
@@ -343,7 +344,9 @@
             // 貼圖／圖片／轉帳這些卡片，泡泡本來就被 bubbleStyle 設成透明無邊（卡片自己就是造型），
             // 掛上去只會讓主題把卡片外面又糊一層底 → 只有純文字泡泡才吃主題
             const plainBubble = !(isSpecial || isImageTag || isSticker);
-            return `<div class="wx-msg-row ${side} pbub-row ${sideCls} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${avatarAttr}></div><div class="pbub-wrap wx-bubble-wrap">${nameHTML}<div class="wx-bubble-content${plainBubble ? ' pbub-bubble' : ' wx-bubble-bare'}" style="${bubbleStyle}">${html}${quoteHTML}</div></div></div>`;
+            // 🚫 被對方刪了／拉黑時傳的那則：照真的微信，泡泡旁邊一個紅色驚嘆號（我這邊是 row-reverse，放最後＝畫在泡泡左邊）
+            const failMark = (msg.isMe && msg.sentWhileBlocked) ? '<div class="wx-send-fail"><i class="fa-solid fa-circle-exclamation"></i></div>' : '';
+            return `<div class="wx-msg-row ${side} pbub-row ${sideCls} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${avatarAttr}></div><div class="pbub-wrap wx-bubble-wrap">${nameHTML}<div class="wx-bubble-content${plainBubble ? ' pbub-bubble' : ' wx-bubble-bare'}" style="${bubbleStyle}">${html}${quoteHTML}</div></div>${failMark}</div>`;
         },
 
         generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },
