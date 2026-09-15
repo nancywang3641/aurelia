@@ -31,12 +31,12 @@
 
     // ===== 全域世界館藏 (書架 QbBookshelf 讀) =====
     const BASE_IMG_URL = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/home-page/';
-    // 五本固定館藏的封面是阿洛照故事背景畫的（2026-09-15，docs/五本固定館藏封面_20260915.md），
-    //   640x960 WebP 放介面圖庫、鎖 commit。艾斯蘭登大陸那次沒畫，照舊用原本那張。
-    const SHELF_COVER_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@e02fd742da38fb62d15ad44a99f12276cd1f791c/aseets/bookshelf_ui/';
+    // 六本固定館藏的封面是阿洛照故事背景畫的（docs/五本固定館藏封面_20260915.md、
+    //   docs/艾斯蘭登大陸封面補件_20260916.md），640x960 WebP 放介面圖庫、鎖 commit。
+    const SHELF_COVER_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@8c2ae2588d30c725a921a2bbf8410774b23c6a17/aseets/bookshelf_ui/';
     window.AURELIA_WORLDS = {
         xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: 'fa-yin-yang', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: SHELF_COVER_URL + 'cover-xianxia.webp' },
-        fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: 'fa-dragon', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: BASE_IMG_URL + '艾斯蘭登大陸.png' },
+        fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: 'fa-dragon', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: SHELF_COVER_URL + 'cover-fantasy.webp' },
         scifi:      { id: 'scifi',      title: '裂縫紀元·新伊甸都市', icon: 'fa-robot', desc: '科技高度發達的未來。賽博朋克的霓虹燈。', danger: 4, cover: SHELF_COVER_URL + 'cover-scifi.webp' },
         superpower: { id: 'superpower', title: '臨界都市·異時頻界', icon: 'fa-bolt', desc: '現代社會的背面，潛藏著覺醒者。', danger: 3, cover: SHELF_COVER_URL + 'cover-superpower.webp' },
         apocalypse: { id: 'apocalypse', title: '塵土紀元·零號廢土', icon: 'fa-radiation', desc: '文明崩塌後的荒原。喪屍橫行、輻射遍地。', danger: 5, cover: SHELF_COVER_URL + 'cover-apocalypse.webp' },
