@@ -30,12 +30,15 @@
             // ── 返回主畫面 ──
             +   'window.goBack = function(){ try { var V = (P && P.VoidPhoneShell) || window.VoidPhoneShell; if (V && V.home) V.home(); } catch(e){} };'
             // ── 持久化(存主頁 localStorage，用 app 專屬命名空間，跨關閉/重開保留) ──
-            +   'window.getChatId = function(){ try { var ST=P.SillyTavern; if(ST&&typeof ST.getCurrentChatId==="function"){ var id=ST.getCurrentChatId(); if(id!=null&&id!=="") return String(id); } var c=ST&&ST.getContext&&ST.getContext(); if(c&&c.chatId!=null&&c.chatId!=="") return String(c.chatId); if(ST&&ST.chatId!=null) return String(ST.chatId); }catch(e){} return "_nochat"; };'
+            // getChatId：酒館問聊天室；PWA 沒有酒館 → 問當前故事（OS_AVS_ADAPTER.getStoryId，全站唯一取法）。
+            //   🚨 2026-09-16 以前 PWA 一律回 _nochat：scope:"chat" 的資料所有故事共用一份（Rae 選「可以綁」）。
+            //   改綁故事之後，舊的 _nochat 那份不刪：這條故事還沒存過時，loadData/dbLoad 先讀它當起點，存一次就換成這條故事自己的。
+            +   'window.getChatId = function(){ try { var ST=P.SillyTavern; if(ST&&typeof ST.getCurrentChatId==="function"){ var id=ST.getCurrentChatId(); if(id!=null&&id!=="") return String(id); } var c=ST&&ST.getContext&&ST.getContext(); if(c&&c.chatId!=null&&c.chatId!=="") return String(c.chatId); if(ST&&ST.chatId!=null) return String(ST.chatId); }catch(e){} try { var AD=P.OS_AVS_ADAPTER; var sid=AD&&AD.getStoryId&&AD.getStoryId(); if(sid) return String(sid); }catch(e){} return "_nochat"; };'
             +   'window.saveData = function(k, v, scope){ try { var pre="aurelia_appdata_"+window.__APP_ID__+"_"+(scope==="chat"?("chat_"+window.getChatId()+"_"):""); P.localStorage.setItem(pre+k, JSON.stringify(v)); } catch(e){} };'
-            +   'window.loadData = function(k, scope){ try { var pre="aurelia_appdata_"+window.__APP_ID__+"_"+(scope==="chat"?("chat_"+window.getChatId()+"_"):""); var s=P.localStorage.getItem(pre+k); return s==null?null:JSON.parse(s); } catch(e){ return null; } };'
-            // ── DB 持久化（存進 OS_DB、不怕爆；async）。大量/長期累積資料用這個，scope:"chat" 綁聊天室 ──
+            +   'window.loadData = function(k, scope){ try { var base="aurelia_appdata_"+window.__APP_ID__+"_"; var cid=window.getChatId(); var s=P.localStorage.getItem(base+(scope==="chat"?("chat_"+cid+"_"):"")+k); if(s==null&&scope==="chat"&&cid!=="_nochat") s=P.localStorage.getItem(base+"chat__nochat_"+k); return s==null?null:JSON.parse(s); } catch(e){ return null; } };'
+            // ── DB 持久化（存進 OS_DB、不怕爆；async）。大量/長期累積資料用這個，scope:"chat" 綁聊天室（PWA 綁故事） ──
             +   'window.dbSave = async function(k, v, scope){ try { var DB=window.OS_DB||(P&&P.OS_DB); if(!DB||!DB.saveAppData) return false; return await DB.saveAppData(window.__APP_ID__, k, v, scope==="chat"?window.getChatId():null); } catch(e){ return false; } };'
-            +   'window.dbLoad = async function(k, scope){ try { var DB=window.OS_DB||(P&&P.OS_DB); if(!DB||!DB.getAppData) return null; return await DB.getAppData(window.__APP_ID__, k, scope==="chat"?window.getChatId():null); } catch(e){ return null; } };'
+            +   'window.dbLoad = async function(k, scope){ try { var DB=window.OS_DB||(P&&P.OS_DB); if(!DB||!DB.getAppData) return null; if(scope!=="chat") return await DB.getAppData(window.__APP_ID__, k, null); var cid=window.getChatId(); var v=await DB.getAppData(window.__APP_ID__, k, cid); if((v==null)&&cid!=="_nochat") v=await DB.getAppData(window.__APP_ID__, k, "_nochat"); return v; } catch(e){ return null; } };'
             // ── 通用記憶：角色對話型 app 記一筆到統一桶(app_memory)，跟預設應用一起被注入酒館(該 app 開關開時) ──
             +   'window.remember = async function(charName, speaker, text){ try { if(window.__IS_PREVIEW) return; if(!charName||!text) return; var DB = window.OS_DB || (P && P.OS_DB); if(!DB||!DB.saveAppMemory) return; await DB.saveAppMemory(window.__APP_ID__, String(charName), { speaker:String(speaker||""), text:String(text), time: Date.now() }); } catch(e){} };'
             // ── 把一段文字「貼回酒館對話框」（送出框 #send_textarea）。預設只貼、使用者自己按送出；{send:true} 直接幫送。 ──

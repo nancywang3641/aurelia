@@ -1403,7 +1403,7 @@
             //     而 _avsKey() 本身就是 `avs_state_<id>` → 實際是 avs_snap_avs_state_<id>。
             //     以前刪故事寫成 avs_snap_<id>，一次都沒清到（每條故事最多 10 份快照一直佔著 5MB 的格子）。舊寫法那個 key 也順手刪。
             //   · 裝的小程式 saveData(k, v, 'chat') → aurelia_appdata_<appId>_chat_<chatId>_<k>，綁這個聊天的整批刪。
-            //     （PWA 的小程式拿不到 chatId、一律寫成 _nochat，不分故事 → 那一份不是這條故事的，不碰）
+            //     （PWA 的小程式 09-16 起綁故事＝chat_<storyId>_；以前那份 _nochat 是所有故事共用的舊資料，不是這條故事的，不碰）
             await _safe('瀏覽器暫存', () => {
                 const LS = win.localStorage || localStorage;
                 const lsIds = ids.concat(o.storyId ? [String(o.storyId)] : []).filter((x, i, a) => x && a.indexOf(x) === i);
