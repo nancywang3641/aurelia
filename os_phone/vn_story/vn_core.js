@@ -1444,6 +1444,72 @@
             });
         },
 
+        // 🔁 末尾「重新生成」：這一章不滿意 → 丟掉重寫。
+        //   Rae 2026-09-16：「我需要一個我不滿意，所以可以重來的按鈕」——以前酒館版她都是關奧瑞亞、刪樓或 swipe。
+        //   酒館：跟截斷橫幅的「重新生成」同一條（/regenerate），數值回朔照酒館原本刪樓／重生的規矩走。
+        //   PWA：最新這章走 VN_READER.deleteChapter（數值退回這章開始前、記憶與人物檔案對帳；刪章一律走它），
+        //        再用這章記下的那句話重送；第一章沒有上一章可接 → 用當初開故事那段請求重跑生成器；
+        //        角色卡原文開場白（沒叫過 AI）沒有可以重來的。
+        regenerateLatest: async function() {
+            if (this._regenBusy) return;
+            const standalone = win.OS_API?.isStandalone?.() ?? false;
+            if (!standalone) {
+                if (typeof this._tavernRegenerate !== 'function') {
+                    try { AUI.toastr.warning('找不到酒館助手，請回酒館手動重新生成'); } catch (e) {}
+                    return;
+                }
+                if (!await AUI.confirm('重新生成這一章？\n\n最新這則 AI 回覆會換成重新寫的一版。')) return;
+                this._leaveEndScreen();
+                this._tavernRegenerate();
+                return;
+            }
+            const sid = this._currentStoryId || localStorage.getItem('vn_current_story_id') || '';
+            let chs = [];
+            try {
+                chs = ((await win.OS_DB?.getAllVnChapters?.()) || [])
+                    .filter(c => sid ? c.storyId === sid : !c.storyId)
+                    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            } catch (e) {}
+            const last = chs[chs.length - 1];
+            if (!last) { AUI.alert('找不到這一章的紀錄，沒辦法重新生成。'); return; }
+            const isFirst = chs.length === 1;
+            const req = String(last.request || '').trim();
+            if (isFirst && (!req || req === '角色卡開場白')) {
+                AUI.alert('這一章是角色卡原本寫好的開場白，沒有請 AI 寫過，沒有可以重來的。');
+                return;
+            }
+            if (!req) { AUI.alert('這一章沒有記下當初送出的那句話，沒辦法用同樣的內容重來。'); return; }
+            const config = (win.OS_SETTINGS?.getConfig?.()) || {};
+            if (!win.OS_API || (!config.url && !config.useSystemApi)) { AUI.alert('還沒設定 API，沒辦法重新生成。'); return; }
+            if (!await AUI.confirm('重新生成這一章？\n\n這一章會刪掉（數值退回這章開始前、這章的記憶一起清掉），再用同樣的內容請 AI 重寫一次。')) return;
+            this._regenBusy = true;
+            try {
+                const r = await win.VN_READER?.deleteChapter?.(last.id);
+                if (!r || !r.ok) { AUI.alert('刪不掉這一章：' + ((r && r.why) || '閱讀器沒有載入')); return; }
+                this._leaveEndScreen();
+                if (isFirst) {
+                    this._showWriterCurtain();
+                    const self = this;
+                    win.VN_Generator?.generateStory?.({
+                        title: last.storyTitle || this._currentStoryTitle || '',
+                        request: req,
+                        onStatus: function (text, cls) { if (cls === 'err') { self._hideWriterCurtain(); try { AUI.alert(text); } catch (e) {} } },
+                    });
+                } else {
+                    this._showSendingLoader();
+                    this._sendChoiceAndContinue(req);
+                }
+            } finally {
+                this._regenBusy = false;
+            }
+        },
+        // 離開末尾畫面（重新生成時用）：世界活動面板與基本鍵一起收
+        _leaveEndScreen: function() {
+            try { window.VN_EndPanel?.clear?.(); } catch (e) {}
+            const ov = document.getElementById('vn-end-overlay');
+            if (ov) ov.classList.remove('active');
+        },
+
         // 🧩 卡片美化面板上「送出一句話」的按鈕（酒館是 /send 那句|/trigger）＝那句當成玩家說的話送出、AI 接著寫。
         //   跟選項框打字送出同一件事（Rae 2026-09-16 選直接送出）。正在寫這一段時再按不重送。
         sendPlayerLine: function(text) {
@@ -2179,8 +2245,10 @@
                         phone: () => { try { win.VoidPhoneShell && win.VoidPhoneShell.open(); } catch (e) {} },
                         settings: () => { try { window.VN_PLAYER.openGameSettings(); } catch (e) {} },
                         home: () => { try { window.VN_PLAYER.stopGame(); } catch (e) {} },
+                        // 🔁 這章不滿意 → 丟掉重寫（世界面板沒做這顆的話，基本鍵那顆會補上來）
+                        regen: () => { try { window.VN_Core.regenerateLatest(); } catch (e) { console.warn('[VN_Core] 重新生成失敗', e); } },
                     };
-                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', map: 'vn-end-btn-map' };
+                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
                     Object.keys(BASIC_OF).forEach(k => {
                         const b = document.getElementById(BASIC_OF[k]);
                         if (b) { b.onclick = acts[k]; b.classList.remove('hidden'); }
@@ -3812,6 +3880,8 @@
             }
             function _rerollTrunc() { _retryTrunc('/regenerate'); }
             function _continueTrunc() { _retryTrunc('/continue'); }
+            // 末尾「重新生成」鈕（VN_Core.regenerateLatest）酒館那條就是這支：清套用記號、上撰寫幕布、/regenerate
+            try { window.VN_Core._tavernRegenerate = _rerollTrunc; } catch (e) {}
             function _showTruncBanner(messageId) {
                 _truncMsgId = messageId;
                 _vnTruncBannerShow({

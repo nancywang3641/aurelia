@@ -159,6 +159,7 @@
                         <button id="vn-end-btn-ctx">CTX</button>
                         <button id="vn-end-btn-journal">日誌</button>
                         <button id="vn-end-btn-map">地圖</button>
+                        <button id="vn-end-btn-regen"><i class="fa-solid fa-rotate"></i> 重新生成</button>
                     </div>
                 </div>
 

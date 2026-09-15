@@ -1167,7 +1167,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-end-panel .vnep-dead { opacity: 0.35; pointer-events: none; filter: grayscale(1); }
 
         /* 末尾選單鈕直排 + 同寬 */
-        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map { box-sizing: border-box; width: 200px; text-align: center; }
+        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map, #vn-end-btn-regen { box-sizing: border-box; width: 200px; text-align: center; }
         #vn-end-btn-data {
             pointer-events: auto;
             padding: 14px 44px; background: rgba(5,5,8,0.92);
@@ -1178,7 +1178,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             text-shadow: 0 0 8px rgba(212,175,55,0.5);
         }
         #vn-end-btn-data:hover { background: rgba(20,15,5,0.95); box-shadow: 0 0 35px rgba(212,175,55,0.5), 0 8px 32px rgba(0,0,0,0.9); }
-        #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map {
+        #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map, #vn-end-btn-regen {
             pointer-events: auto;
             padding: 10px 28px; background: rgba(5,5,8,0.88);
             border: 1px solid var(--gold); color: var(--gold);
@@ -1187,7 +1187,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             box-shadow: 0 0 14px rgba(212,175,55,0.2), 0 6px 24px rgba(0,0,0,0.8);
             text-shadow: 0 0 8px rgba(212,175,55,0.45);
         }
-        #vn-end-btn-ctx:hover, #vn-end-btn-journal:hover, #vn-end-btn-map:hover { background: rgba(20,15,5,0.95); box-shadow: 0 0 26px rgba(212,175,55,0.45), 0 6px 24px rgba(0,0,0,0.9); }
+        #vn-end-btn-ctx:hover, #vn-end-btn-journal:hover, #vn-end-btn-map:hover, #vn-end-btn-regen:hover { background: rgba(20,15,5,0.95); box-shadow: 0 0 26px rgba(212,175,55,0.45), 0 6px 24px rgba(0,0,0,0.9); }
 
         #text-panel {
             backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
