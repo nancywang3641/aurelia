@@ -86,15 +86,15 @@
             .wx-modal-pick { width: 100%; padding: 11px; margin-bottom: 8px; border: none; border-radius: 6px; background: #07c160; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
             .wx-modal-pick:disabled { opacity: 0.6; cursor: wait; }
             .wx-modal-pick.hidden { display: none; }
-            /* 🎙 語音錄音面板：從底部升起，一顆大圓鈕；狀態寫在 data-state，各區塊照狀態顯示 */
+            /* 🎙 聽寫檔下載面板（本機模型第一次用）：從底部升起；狀態寫在 data-state（download／downloading／preparing） */
             .wx-vsheet-mask { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 1000005; display: flex; align-items: flex-end; animation: fadeIn 0.2s; }
             .wx-vsheet-mask[hidden] { display: none !important; }
             .wx-vsheet { width: 100%; background: #f7f7f7; border-radius: 16px 16px 0 0; padding: 10px 20px calc(18px + env(safe-area-inset-bottom)); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; animation: wxVsheetUp 0.25s ease-out; }
             @keyframes wxVsheetUp { from { transform: translateY(100%); } to { transform: none; } }
             .wx-vsheet-grab { width: 36px; height: 4px; border-radius: 2px; background: #d0d0d0; margin-bottom: 14px; }
-            .wx-vsheet-dl, .wx-vsheet-rec { width: 100%; display: none; flex-direction: column; align-items: center; gap: 10px; }
-            .wx-vsheet-mask[data-state="download"] .wx-vsheet-dl, .wx-vsheet-mask[data-state="downloading"] .wx-vsheet-dl { display: flex; }
-            .wx-vsheet-mask[data-state="idle"] .wx-vsheet-rec, .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-rec, .wx-vsheet-mask[data-state="recording"] .wx-vsheet-rec, .wx-vsheet-mask[data-state="sending"] .wx-vsheet-rec { display: flex; }
+            .wx-vsheet-dl { width: 100%; display: none; flex-direction: column; align-items: center; gap: 10px; }
+            .wx-vsheet-mask[data-state="download"] .wx-vsheet-dl, .wx-vsheet-mask[data-state="downloading"] .wx-vsheet-dl, .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-dl { display: flex; }
+            .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-title, .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-bar, .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-dlbtn { display: none; }
             .wx-vsheet-title { font-size: 16px; font-weight: 600; color: #222; }
             .wx-vsheet-note { font-size: 13px; color: #888; text-align: center; font-variant-numeric: tabular-nums; }
             .wx-vsheet-bar { width: 100%; height: 6px; -webkit-appearance: none; appearance: none; border: none; border-radius: 3px; overflow: hidden; background: #e5e5e5; }
@@ -104,23 +104,7 @@
             .wx-vsheet-mask[data-state="download"] .wx-vsheet-bar { visibility: hidden; }
             .wx-vsheet-dlbtn { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #07c160; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; }
             .wx-vsheet-mask[data-state="downloading"] .wx-vsheet-dlbtn { display: none; }
-            .wx-vsheet-timer { font-size: 15px; color: #333; font-variant-numeric: tabular-nums; height: 20px; visibility: hidden; }
-            .wx-vsheet-level { display: flex; align-items: center; gap: 4px; height: 28px; visibility: hidden; }
-            .wx-vsheet-level i { display: block; width: 4px; height: 4px; border-radius: 2px; background: #07c160; transition: height 0.12s; }
-            .wx-vsheet-level i:nth-child(even) { opacity: 0.6; }
-            .wx-vsheet-level[data-lv="1"] i { height: 8px; }
-            .wx-vsheet-level[data-lv="2"] i { height: 14px; }
-            .wx-vsheet-level[data-lv="3"] i { height: 20px; }
-            .wx-vsheet-level[data-lv="4"] i { height: 26px; }
-            .wx-vsheet-level[data-lv] i:nth-child(3n+1) { transform: scaleY(0.6); }
-            .wx-vsheet-mask[data-state="recording"] .wx-vsheet-timer, .wx-vsheet-mask[data-state="recording"] .wx-vsheet-level { visibility: visible; }
-            .wx-vsheet-mic { width: 76px; height: 76px; border-radius: 50%; border: none; background: #07c160; color: #fff; font-size: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 14px rgba(7,193,96,0.35); }
-            .wx-vsheet-mic:disabled { background: #b8b8b8; box-shadow: none; cursor: progress; }
-            .wx-vsheet-mask[data-state="recording"] .wx-vsheet-mic { background: #fa5151; animation: wxVsheetPulse 1.2s ease-in-out infinite; }
-            @keyframes wxVsheetPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(250,81,81,0.45); } 50% { box-shadow: 0 0 0 12px rgba(250,81,81,0); } }
-            .wx-vsheet-hint { font-size: 13px; color: #888; }
             .wx-vsheet-cancel { background: none; border: none; color: #576b95; font-size: 14px; padding: 6px 14px; cursor: pointer; }
-            .wx-vsheet-mask[data-state="sending"] .wx-vsheet-cancel { visibility: hidden; }
             .wx-modal-footer { display: flex; gap: 10px; margin-top: 10px; }
             .wx-btn { flex: 1; padding: 10px 0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; text-align: center; }
             .wx-btn-cancel { background: #f2f2f2; color: #333; }
@@ -214,16 +198,30 @@
             .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: #f7f7f7; border-top: 1px solid #dcdcdc; z-index: 5; transition: bottom 0.2s; }
             .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; }
             .wx-input-real { flex: 1; min-width: 0; height: 36px; background: #fff !important; border-radius: 6px; border: 1px solid #ddd; margin: 0 10px; padding: 0 10px; font-size: 14px; outline: none; color: #000 !important; opacity: 1 !important; -webkit-text-fill-color: #000 !important; }
-            /* 🎙 輸入框右邊的小麥克風（講話變成字填進框）：平常灰色、聽的時候紅底一圈一圈、準備／轉字時轉圈 */
+            /* 🎙 輸入框右邊的麥克風：按住說話、放開送出語音訊息。按著時麥克風綠底（往上滑到取消時紅底），
+               輸入列上方浮一張卡：音量、邊講邊出的字、秒數、提示。麥克風要擋掉捲動與長按選單，不然手機上按不住 */
             .wx-input-box { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; margin: 0 10px; }
             .wx-input-box .wx-input-real { margin: 0; width: 100%; box-sizing: border-box; padding-right: 38px; }
-            .wx-dictate-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9a9a9a; font-size: 16px; cursor: pointer; }
-            .wx-dictate-btn .fa-spinner { display: none; }
-            .wx-input-box[data-dict="preparing"] .wx-dictate-btn .fa-microphone, .wx-input-box[data-dict="converting"] .wx-dictate-btn .fa-microphone { display: none; }
-            .wx-input-box[data-dict="preparing"] .wx-dictate-btn .fa-spinner, .wx-input-box[data-dict="converting"] .wx-dictate-btn .fa-spinner { display: inline-block; }
-            .wx-input-box[data-dict="listening"] .wx-dictate-btn { background: #fa5151; color: #fff; animation: wxDictPulse 1.2s ease-in-out infinite; }
-            @keyframes wxDictPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(250,81,81,0.45); } 50% { box-shadow: 0 0 0 6px rgba(250,81,81,0); } }
-            .wx-dark .wx-dictate-btn { color: #8e8e93; }
+            .wx-hold-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9a9a9a; font-size: 16px; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+            .wx-input-box[data-hold="starting"] .wx-hold-btn, .wx-input-box[data-hold="recording"] .wx-hold-btn, .wx-input-box[data-hold="sending"] .wx-hold-btn { background: #07c160; color: #fff; }
+            .wx-input-box[data-hold="cancel"] .wx-hold-btn { background: #fa5151; color: #fff; }
+            .wx-dark .wx-hold-btn { color: #8e8e93; }
+            .wx-hold { position: absolute; left: 0; right: 0; bottom: 90px; display: flex; justify-content: center; z-index: 6; pointer-events: none; }
+            .wx-hold[hidden] { display: none !important; }
+            .wx-hold-card { min-width: 190px; max-width: 78%; box-sizing: border-box; padding: 14px 18px 12px; border-radius: 14px; background: rgba(30,30,30,0.84); color: #fff; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+            .wx-hold[data-state="cancel"] .wx-hold-card { background: rgba(250,81,81,0.92); }
+            .wx-hold-level { display: flex; align-items: center; gap: 4px; height: 28px; }
+            .wx-hold-level i { display: block; width: 4px; height: 4px; border-radius: 2px; background: #95ec69; transition: height 0.12s; }
+            .wx-hold[data-state="cancel"] .wx-hold-level i { background: #fff; }
+            .wx-hold-level i:nth-child(even) { opacity: 0.6; }
+            .wx-hold-level[data-lv="1"] i { height: 8px; }
+            .wx-hold-level[data-lv="2"] i { height: 14px; }
+            .wx-hold-level[data-lv="3"] i { height: 20px; }
+            .wx-hold-level[data-lv="4"] i { height: 26px; }
+            .wx-hold-level[data-lv] i:nth-child(3n+1) { transform: scaleY(0.6); }
+            .wx-hold-text { font-size: 14px; line-height: 1.5; text-align: center; word-break: break-all; }
+            .wx-hold-text:empty { display: none; }
+            .wx-hold-foot { display: flex; gap: 10px; font-size: 12px; color: rgba(255,255,255,0.78); font-variant-numeric: tabular-nums; }
             .wx-icon-btn { font-size: 26px; color: #000; cursor: pointer; line-height: 1; margin: 0 2px;}
             .wx-send-btn { background: #07c160; color: #fff; padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; margin-left: 5px; display: none; }
             .wx-send-btn.show { display: block; }
@@ -489,7 +487,7 @@
             .wx-dark .wx-modal-title { color: #f0f0f0; }
             .wx-dark .wx-modal-input { background: #2a2a2c; border-color: #3a3a3c; color: #f0f0f0; }
             .wx-dark .wx-vsheet { background: #1c1c1e; }
-            .wx-dark .wx-vsheet-title, .wx-dark .wx-vsheet-timer { color: #f0f0f0; }
+            .wx-dark .wx-vsheet-title { color: #f0f0f0; }
             .wx-dark .wx-vsheet-grab, .wx-dark .wx-vsheet-bar { background: #3a3a3c; }
             .wx-dark .wx-context-item { color: #f0f0f0; border-bottom-color: #2a2a2a; }
             .wx-dark .wx-btn-cancel { background: #2a2a2c; color: #ccc; }

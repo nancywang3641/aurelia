@@ -18,8 +18,9 @@
 //   prepare(onProgress) 先把目前的轉字方式準備好（sensevoice＝下載＋載入模型）
 //   transcribe(blob, { onProgress, autoPrepare }) 回 { text, lang, emotion, emotionLabel, event, eventLabel, durationSec, engine }
 //   isReady() / isDownloaded() / unload()（放掉記憶體）/ clearCache()（刪掉下載的模型）
-//   用的地方：微信「＋ → 語音」的錄音面板（wx_core.js openVoiceSheet）、微信輸入框的小麥克風（wx_core.js dictateTap）、
-//             電話 app 的「直接說話」（os_dialer.js _vm*）——三個都跟著設置頁選的轉字方式
+//   用的地方：微信輸入框麥克風的按住說話（wx_core.js holdStart；本機模型沒下載時先開 openVoiceSheet 下載頁）、
+//             電話 app 的「直接說話」（os_dialer.js _vm*）——兩個都跟著設置 → 語音 → 語音轉文字選的方式。
+//             微信「＋ → 語音」是打字寫入的小窗，不經過這裡。
 // ----------------------------------------------------------------
 (function () {
     const win = window.parent || window;

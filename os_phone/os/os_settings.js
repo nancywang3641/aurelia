@@ -2182,7 +2182,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- 🎙 她講話 → 變成字（OS_VOICE_INPUT）。跟下面「角色說話的聲音」是兩件事，選單在 wireChannels 的 paintVoice 畫 -->
                         <div class="set-group" id="voice-engine-group">
                             <div class="set-label"><i class="fa-solid fa-microphone"></i> 語音轉文字</div>
-                            <div class="set-desc">微信輸入框的麥克風、語音訊息、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。</div>
+                            <div class="set-desc">微信輸入框按住說話、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。</div>
                             <div id="voice-engine-box"></div>
                         </div>
 

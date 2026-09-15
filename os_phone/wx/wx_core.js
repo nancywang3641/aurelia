@@ -2148,8 +2148,8 @@
     let _lpAt = 0;         // 長按跳出小窗的時間：手指放開那一下的 click 不要再去點到泡泡（用時間窗，不用旗標）
     let _replyTo = null;   // { name, text }：正在回覆誰的哪句話；送出或取消就清掉
     let _voicePlaying = null;   // { el, audio, url }：正在播的那段錄音，同一時間只播一段
-    let _vsTick = null;         // 錄音面板的計時器
-    let _dict = null;           // 輸入框小麥克風正在聽：{ phase: 'preparing'|'listening'|'converting', base, timer, chatId }
+    let _hold = null;           // 輸入框按住說話：{ phase: 'starting'|'recording'|'sending', t0, y0, cancel, released, tick, text, chatId }
+    let _holdH = null;          // 按住期間掛在文件上的手指監聽（放開就拔掉）
     const VOICE_MAX_SEC = 60;   // 跟微信一樣一段最長 60 秒，到了自動送出
     function _bindQuoteGestures(rc) {
         if (!rc || rc.dataset.quoteBound === '1') return;
@@ -3010,16 +3010,10 @@
             }
             // 🫂 朋友圈的紅點（「我」分頁＋朋友圈那格）：整頁重畫之後補上
             try { const _mo = win.WX_MOMENTS; if (_mo && _mo.paintBadges) _mo.paintBadges(APP_CONTAINER); } catch (e) {}
-            // 🎙 輸入框小麥克風：整頁重畫後把狀態掛回去；換了聊天室或離開聊天室就停掉、不填字
-            if (_dict) {
-                if (_dict.chatId !== GLOBAL_ACTIVE_ID) {
-                    if (_dict.timer) clearTimeout(_dict.timer);
-                    const _wasListening = _dict.phase === 'listening';
-                    _dict = null;
-                    try { const _VI = win.OS_VOICE_INPUT; if (_wasListening && _VI && _VI.isRecording()) _VI.cancel(); } catch (e) {}
-                } else {
-                    win.wxApp._dictSet(_dict.phase);
-                }
+            // 🎙 按住說話中整頁重畫：卡片與麥克風的樣子掛回去；換了聊天室就當取消（轉字中的那段會自己判斷不送）
+            if (_hold) {
+                if (_hold.chatId !== GLOBAL_ACTIVE_ID && _hold.phase === 'recording') win.wxApp._holdEnd(true);
+                else win.wxApp._holdPaint();
             }
             if (win.WX_MESSAGE_MANAGER && typeof win.WX_MESSAGE_MANAGER._updateUI === 'function') { setTimeout(() => win.WX_MESSAGE_MANAGER._updateUI(), 100); }
         },
@@ -3145,7 +3139,8 @@
         },
         onScrollDot: function(el) { const dots = APP_CONTAINER.querySelectorAll('.wx-dot'); const pageIndex = Math.round(el.scrollLeft / el.clientWidth); dots.forEach((d, i) => { if(i === pageIndex) d.classList.add('active'); else d.classList.remove('active'); }); },
         
-        action: function(type) { if (type === 'voice_msg' && win.OS_VOICE_INPUT && win.OS_VOICE_INPUT.isSupported()) { this.togglePanel(); this.openVoiceSheet(); return; } PENDING_ACTION_TYPE = type; const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus(); this.togglePanel(); },
+        // ＋ 面板的每一格。🚨「語音」是打字寫入的小窗（[Voice: 打的字]），真的錄音在輸入框的麥克風按住說話——兩種都要，別再把這格換成錄音
+        action: function(type) { PENDING_ACTION_TYPE = type; const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus(); this.togglePanel(); },
 
         // 📷 從相簿選一張照片傳出去：壓成 JPEG 存進圖庫，訊息裡只放圖庫編號。
         //    對方要「看」這張照片的話，在 triggerReply 那邊照頭像的做法只送一次（_photoOnceMessage）。
@@ -3168,9 +3163,8 @@
                 AUI.toast('照片存不進去');
             } finally { if (btn) btn.disabled = false; }
         },
-        // 🎙 語音訊息：底部升起錄音面板，按一下開始、再按一下送出。
-        //    轉出來的字放進 [Voice: …] 給對方讀；錄音本身存進圖庫（aud_wx_…），泡泡點下去播的是她真的聲音。
-        //    第一次要下載聽寫檔（約 250MB），面板自己先顯示下載那一頁。沒有麥克風的瀏覽器才走舊的打字框。
+        // 🎙 聽寫檔下載面板：轉字方式選「奧瑞亞的本機模型」而且還沒下載／還沒載入時，按住麥克風會先開這一頁。
+        //    準備好就自己收起來，跟她說可以按住說話了。（錄音本身在輸入框按住說話，見下面 holdStart）
         _vsEl: function () { return doc.querySelector('#wxVoiceSheet'); },
         // 模組丟出來的錯誤是中文就照講，瀏覽器的英文錯誤不上畫面
         _vsWhy: function (e) { const m = String((e && e.message) || ''); return /[一-鿿]/.test(m) ? m : '再試一次'; },
@@ -3178,25 +3172,21 @@
             const el = this._vsEl();
             if (!el) return;
             el.dataset.state = state;
-            const mic = el.querySelector('#wxVoiceMic');
-            const icon = { idle: 'fa-microphone', recording: 'fa-paper-plane', preparing: 'fa-spinner fa-spin', sending: 'fa-spinner fa-spin' }[state];
-            if (mic && icon) { mic.innerHTML = '<i class="fa-solid ' + icon + '"></i>'; mic.disabled = (state === 'preparing' || state === 'sending'); }
-            const hint = { idle: '點一下開始說話', recording: '說完點一下送出', preparing: '準備中…', sending: '正在轉成字…' }[state];
-            const h = el.querySelector('#wxVoiceHint');
-            if (h && hint) h.textContent = hint;
+            const n = el.querySelector('#wxVoiceNote');
             if (state === 'download') {
-                const n = el.querySelector('#wxVoiceNote'); if (n) n.textContent = '大約 250MB，只要下載一次，建議連 Wi-Fi';
+                if (n) n.textContent = '大約 250MB，只要下載一次，建議連 Wi-Fi';
                 const b = el.querySelector('#wxVoiceBar'); if (b) b.value = 0;
+            } else if (state === 'preparing' && n) {
+                n.textContent = '準備中…';
             }
         },
-        _vsStopTick: function () { if (_vsTick) { clearInterval(_vsTick); _vsTick = null; } },
         openVoiceSheet: async function () {
             const VI = win.OS_VOICE_INPUT;
             const el = this._vsEl();
             if (!el || !VI) return;
             this._vsState('preparing');
             el.hidden = false;
-            if (VI.isReady()) { this._vsState('idle'); return; }
+            if (VI.isReady()) { el.hidden = true; return; }
             if (!(await VI.isDownloaded())) { this._vsState('download'); return; }
             this._vsPrepare(false);
         },
@@ -3224,136 +3214,126 @@
                 if (!el.hidden) { AUI.toast('聽寫沒準備好，' + this._vsWhy(e)); this._vsState('download'); }
                 return;
             }
-            if (!el.hidden) this._vsState('idle');
-        },
-        voiceMicTap: async function () {
-            const VI = win.OS_VOICE_INPUT;
-            const el = this._vsEl();
-            if (!VI || !el) return;
-            if (el.dataset.state === 'recording') { this._vsSend(); return; }
-            if (el.dataset.state !== 'idle') return;
-            try {
-                await VI.start();
-            } catch (e) {
-                console.warn('[WX] 開麥克風失敗:', e);
-                AUI.toast(e && e.name === 'NotAllowedError' ? '沒有麥克風權限，要到瀏覽器設定裡允許' : ('麥克風開不起來，' + this._vsWhy(e)));
-                return;
-            }
-            if (el.hidden) { VI.cancel(); return; }   // 等權限框的時候她把面板關了
-            this._vsState('recording');
-            const t0 = Date.now();
-            const timer = el.querySelector('#wxVoiceTimer');
-            const meter = el.querySelector('#wxVoiceLevel');
-            const tick = () => {
-                const s = Math.floor((Date.now() - t0) / 1000);
-                if (timer) timer.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-                if (meter) { const v = VI.level ? VI.level() : 0; meter.dataset.lv = v < 0.01 ? 0 : (v < 0.03 ? 1 : (v < 0.07 ? 2 : (v < 0.14 ? 3 : 4))); }
-                if (s >= VOICE_MAX_SEC) this._vsSend();
-            };
-            this._vsStopTick();
-            tick();
-            _vsTick = setInterval(tick, 120);
-        },
-        _vsSend: async function () {
-            const VI = win.OS_VOICE_INPUT;
-            const el = this._vsEl();
-            if (!el || el.dataset.state !== 'recording') return;
-            this._vsStopTick();
-            this._vsState('sending');
-            try {
-                const rec = await VI.stop();
-                if (rec.durationSec < 0.8) { AUI.toast('說話時間太短'); this._vsState('idle'); return; }
-                const out = await VI.transcribe(rec.blob);
-                const text = String(out.text || '').replace(/\[/g, '［').replace(/\]/g, '］').trim();
-                if (!text) { AUI.toast('沒聽清楚，再說一次'); this._vsState('idle'); return; }
-                const id = 'aud_wx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-                await win.OS_DB.saveImage(id, rec.blob);
-                const sec = Math.round((out.durationSec || rec.durationSec) * 10) / 10;
-                // 聽出來的語氣：平靜、只有說話聲的時候是空的，免得每句都多一段
-                const tone = out.tone || '';
-                const extra = { voiceAudio: id, voiceSec: sec, voiceEmotion: out.emotion || '', voiceEvent: out.event || '' };
-                if (tone) extra.voiceTone = tone;
-                this._vsState('idle');
-                this.closeVoiceSheet();
-                await this.sendMsg(null, '[Voice: ' + text + ']', extra);
-            } catch (e) {
-                console.warn('[WX] 語音送出失敗:', e);
-                AUI.toast('沒送出去，' + this._vsWhy(e));
-                if (!el.hidden) this._vsState('idle');
-            }
+            if (!el.hidden) { el.hidden = true; AUI.toast('準備好了，按住麥克風說話'); }
         },
         closeVoiceSheet: function (ev) {
             const el = this._vsEl();
             if (!el) return;
             if (ev && ev.target !== el) return;          // 點到面板本身不算，點外面那層才關
-            if (el.dataset.state === 'sending') return;  // 正在轉字、要送出了，別半路關掉
-            this._vsStopTick();
-            const VI = win.OS_VOICE_INPUT;
-            if (VI && VI.isRecording()) VI.cancel();
             el.hidden = true;
         },
 
-        // 🎙 輸入框右邊的小麥克風：講話變成字填進輸入框，改完再自己按送出。
-        //    跟「＋ → 語音」是兩回事：那個送出去的是真的聲音，這個只是少打字。轉字方式跟著設置 → 通道 → 語音轉文字。
-        //    點一下開始、再點一下停；手機自己的聽寫邊講邊出字，本機模型停下來才出字。60 秒自動停。
-        _dictBox: function () { return APP_CONTAINER ? APP_CONTAINER.querySelector('.wx-input-box') : null; },
-        _dictSet: function (phase) { const b = this._dictBox(); if (b) b.dataset.dict = phase || ''; },
-        dictateTap: async function () {
+        // 🎙 輸入框右邊的麥克風：按住說話、放開送出語音訊息；手指往上滑再放開＝取消。
+        //    送出去的是她真的聲音（存圖庫 aud_wx_…，泡泡點下去播），轉出來的字放進 [Voice: …] 給對方讀。
+        //    轉字方式跟著設置 → 語音 → 語音轉文字；手機自己的聽寫會邊講邊把字顯示在浮起來那張卡上。
+        //    第一次按會跳麥克風權限框，手指早就放開了：那次不算，跟她說再按住一次。最長 60 秒，到了自動送。
+        holdStart: async function (ev) {
+            if (ev && ev.preventDefault) ev.preventDefault();   // 不要順手點到輸入框叫出鍵盤、不要長按選字
             const VI = win.OS_VOICE_INPUT;
-            if (!VI || !this._dictBox()) return;
-            if (_dict) { if (_dict.phase === 'listening') this._dictStop(); return; }
-            if (!VI.isSupported()) { AUI.toast('這裡不能錄音'); return; }
-            if (VI.isRecording()) { AUI.toast('正在錄別的，等一下再試'); return; }
-            const d = _dict = { phase: 'preparing', base: '', timer: null, chatId: GLOBAL_ACTIVE_ID };
-            this._dictSet('preparing');
+            if (!VI || !GLOBAL_ACTIVE_ID || _hold) return;
+            if (!VI.isSupported()) { AUI.toast('這裡不能錄音，可以用 ＋ → 語音 打字'); return; }
+            if (VI.isRecording()) return;
+            if (!VI.isReady()) { this.openVoiceSheet(); return; }   // 本機模型還沒下載或還沒載入
+            const h = _hold = { phase: 'starting', t0: 0, y0: (ev && ev.clientY) || 0, cancel: false, released: false, tick: null, text: '', chatId: GLOBAL_ACTIVE_ID };
+            this._holdListen(true);
+            this._holdPaint();
             try {
-                if (!VI.isReady()) {
-                    if (!(await VI.isDownloaded()) && !(await AUI.confirm('本機模型第一次要下載約 250MB，建議連 Wi-Fi。現在下載？'))) {
-                        if (_dict === d) { _dict = null; this._dictSet(''); }
-                        return;
-                    }
-                    await VI.prepare();
-                }
-                if (_dict !== d) return;   // 準備的時候離開了聊天室
-                const input = this._dictBox() && this._dictBox().querySelector('.wx-input-real');
-                d.base = (input && input.value.trim()) ? input.value.replace(/\s+$/, '') : '';
-                await VI.start({ onPartial: (t) => this._dictFill(d, t) });
+                await VI.start({ onPartial: (t) => { if (_hold === h) { h.text = String(t || ''); this._holdPaint(); } } });
             } catch (e) {
-                console.warn('[WX] 輸入框聽寫開不起來:', e);
-                if (_dict === d) { _dict = null; this._dictSet(''); }
+                console.warn('[WX] 開麥克風失敗:', e);
+                if (_hold === h) { _hold = null; this._holdListen(false); this._holdPaint(); }
                 AUI.toast(e && e.name === 'NotAllowedError' ? '沒有麥克風權限，要到瀏覽器設定裡允許' : ('麥克風開不起來，' + this._vsWhy(e)));
                 return;
             }
-            if (_dict !== d) { VI.cancel(); return; }   // 等權限框的時候離開了聊天室
-            d.phase = 'listening';
-            this._dictSet('listening');
-            d.timer = setTimeout(() => this._dictStop(), VOICE_MAX_SEC * 1000);
+            if (_hold !== h || h.released) {
+                VI.cancel();
+                if (_hold === h) { _hold = null; this._holdListen(false); this._holdPaint(); AUI.toast('按住麥克風說話，說完放開'); }
+                return;
+            }
+            h.phase = 'recording';
+            h.t0 = Date.now();
+            h.tick = setInterval(() => {
+                if (_hold !== h) return;
+                if ((Date.now() - h.t0) / 1000 >= VOICE_MAX_SEC) this._holdEnd(false); else this._holdPaint();
+            }, 150);
+            this._holdPaint();
         },
-        _dictFill: function (d, text) {
-            if (_dict !== d) return;
-            const input = this._dictBox() && this._dictBox().querySelector('.wx-input-real');
-            if (!input) return;
-            input.value = d.base + String(text || '').trim();
-            this.onInputCheck(input);
+        // 按住的時候手指移到哪、在哪放開：掛在整份文件上，手指滑出麥克風也收得到
+        _holdListen: function (on) {
+            if (on) {
+                if (_holdH) return;
+                const move = (e) => { const h = _hold; if (!h || h.phase === 'sending') return; const c = (h.y0 - e.clientY) > 60; if (c !== h.cancel) { h.cancel = c; this._holdPaint(); } };
+                const up = () => { const h = _hold; if (!h) return; if (h.phase === 'starting') { h.released = true; return; } if (h.phase === 'recording') this._holdEnd(h.cancel); };
+                const lost = () => { const h = _hold; if (!h) return; if (h.phase === 'starting') { h.released = true; return; } if (h.phase === 'recording') this._holdEnd(true); };
+                _holdH = { move, up, lost };
+                doc.addEventListener('pointermove', move);
+                doc.addEventListener('pointerup', up);
+                doc.addEventListener('pointercancel', lost);
+            } else if (_holdH) {
+                doc.removeEventListener('pointermove', _holdH.move);
+                doc.removeEventListener('pointerup', _holdH.up);
+                doc.removeEventListener('pointercancel', _holdH.lost);
+                _holdH = null;
+            }
         },
-        _dictStop: async function () {
+        _holdEnd: async function (cancel) {
             const VI = win.OS_VOICE_INPUT;
-            const d = _dict;
-            if (!VI || !d || d.phase !== 'listening') return;
-            if (d.timer) clearTimeout(d.timer);
-            d.phase = 'converting';
-            this._dictSet('converting');
+            const h = _hold;
+            if (!VI || !h || h.phase !== 'recording') return;
+            if (h.tick) clearInterval(h.tick);
+            this._holdListen(false);
+            if (cancel) { VI.cancel(); _hold = null; this._holdPaint(); return; }
+            h.phase = 'sending';
+            this._holdPaint();
             try {
                 const rec = await VI.stop();
+                if (rec.durationSec < 0.8) { AUI.toast('說話時間太短'); return; }
                 const out = await VI.transcribe(rec.blob);
-                const text = String(out.text || '').trim();
-                if (text) this._dictFill(d, text); else if (_dict === d) AUI.toast('沒聽清楚，再說一次');
+                if (GLOBAL_ACTIVE_ID !== h.chatId) { AUI.toast('換了聊天室，這段沒送出'); return; }
+                await this._sendVoice(rec, out);
             } catch (e) {
-                console.warn('[WX] 輸入框聽寫失敗:', e);
-                if (_dict === d) AUI.toast('沒轉成字，' + this._vsWhy(e));
+                console.warn('[WX] 語音送出失敗:', e);
+                AUI.toast('沒送出去，' + this._vsWhy(e));
+            } finally {
+                if (_hold === h) { _hold = null; this._holdPaint(); }
             }
-            if (_dict === d) { _dict = null; this._dictSet(''); }
         },
+        // 錄好的一段 → 語音訊息：聲音存圖庫、字給對方讀、語氣有才帶
+        _sendVoice: async function (rec, out) {
+            const text = String((out && out.text) || '').replace(/\[/g, '［').replace(/\]/g, '］').trim();
+            if (!text) { AUI.toast('沒聽清楚，再說一次'); return; }
+            const id = 'aud_wx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+            await win.OS_DB.saveImage(id, rec.blob);
+            const sec = Math.round(((out && out.durationSec) || rec.durationSec) * 10) / 10;
+            const tone = (out && out.tone) || '';   // 平靜、只有說話聲的時候是空的，免得每句都多一段
+            const extra = { voiceAudio: id, voiceSec: sec, voiceEmotion: (out && out.emotion) || '', voiceEvent: (out && out.event) || '' };
+            if (tone) extra.voiceTone = tone;
+            await this.sendMsg(null, '[Voice: ' + text + ']', extra);
+        },
+        // 浮起來那張卡與麥克風的樣子：starting／recording／cancel（手指往上滑了）／sending
+        _holdPaint: function () {
+            if (!APP_CONTAINER) return;
+            const h = _hold;
+            const state = !h ? '' : (h.phase === 'recording' && h.cancel ? 'cancel' : h.phase);
+            const box = APP_CONTAINER.querySelector('.wx-input-box');
+            if (box) box.dataset.hold = state;
+            const el = APP_CONTAINER.querySelector('#wxHold');
+            if (!el) return;
+            el.hidden = !h;
+            if (!h) return;
+            el.dataset.state = state;
+            const VI = win.OS_VOICE_INPUT;
+            const s = h.t0 ? Math.floor((Date.now() - h.t0) / 1000) : 0;
+            const timer = el.querySelector('#wxHoldTimer');
+            if (timer) timer.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+            const lv = el.querySelector('#wxHoldLevel');
+            if (lv) { const v = (h.phase === 'recording' && VI && VI.level) ? VI.level() : 0; lv.dataset.lv = v < 0.01 ? 0 : (v < 0.03 ? 1 : (v < 0.07 ? 2 : (v < 0.14 ? 3 : 4))); }
+            const txt = el.querySelector('#wxHoldText');
+            if (txt) txt.textContent = h.text.length > 60 ? '…' + h.text.slice(-60) : h.text;   // 講很長時只留最後一段，卡片不會長到蓋住聊天
+            const hint = el.querySelector('#wxHoldHint');
+            if (hint) hint.textContent = { starting: '開麥克風…', recording: '鬆開送出，往上滑取消', cancel: '鬆開取消', sending: '正在轉成字…' }[state] || '';
+        },
+
         closeModal: function() { const modal = doc.querySelector('#wxActionModal'); if(modal) modal.classList.remove('show'); PENDING_ACTION_TYPE = null; },
         confirmModal: function() { 
             const input1 = doc.querySelector('#wxModalInput'); 
