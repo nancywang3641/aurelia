@@ -650,6 +650,9 @@
     .aps-notch { display: none; }            /* 全螢幕不需要動態島 —— 她真的手機自己有一個 */
     .aps-frame::before, .aps-frame::after { display: none; }   /* 側邊實體鍵同理，沒有框就沒有邊可以掛 */
     .aps-close { top: 10px; right: 10px; }   /* 關閉鈕收進畫面內，免在框外被切掉 */
+    /* 主畫面底下那排：浮窗版有螢幕邊框隔開，撐滿版沒有 → 橫槓（回主畫面那顆）會壓在底排的字上，
+       底部多讓出橫槓那格。app 裡面的內容區早就讓了（os_sys_chrome），主畫面自己這裡才是漏掉的那個。 */
+    .aps-home { padding-bottom: calc(var(--aps-safe-bottom, 26px) + 8px); }
 }
 
 /* ── 白瓷玻璃 ──
