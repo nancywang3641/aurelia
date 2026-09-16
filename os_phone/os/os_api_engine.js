@@ -277,7 +277,9 @@
         const tag = (t) => t.name + '＝' + t.id;
         const dm = targets.filter(t => t && !t.isGroup).map(tag).slice(0, 40);
         const gp = targets.filter(t => t && t.isGroup).map(tag).slice(0, 20);
-        note += '\n這一則回覆寫在 <chat id="' + apiChat.id + '"> 裡（chatroom="' + name + '" 可加可不加，只是給人看的）。';
+        // 🚨 回這一間不要它寫代號：私聊代號長得像 char_105 這種三位數字，世界書一多、上下文裡同一類編號一堆，它常抄到別的，
+        //    抄錯那一段就整個送不出去。沒寫代號本來就等於這一間，所以這裡只叫它寫 <chat>。
+        note += '\n這一則回覆寫在 <chat> 裡，不用寫 id（要加 chatroom="' + name + '" 可以，只是給人看的）。';
         if (dm.length || gp.length) {
             note += '\n【可以傳到的聊天室】格式是「名字＝代號」：' + (dm.length ? '私聊：' + dm.join('，') : '') + (dm.length && gp.length ? '；' : '') + (gp.length ? '群聊：' + gp.join('，') : '')
                 + '\n劇情上真的有人會另外傳訊息時，才再開一個 <chat id="那一間的代號">。'

@@ -1080,6 +1080,9 @@
             let chat = null;
             if (rid) {
                 chat = _resolveRoomById(rid, cur);
+                // 代號對不到、但它寫的名字就是這一間 → 算這一間。名字在這裡還是只拿來確認「是不是這一間」，
+                //   不拿去找別間。它回這一間常常順手抄一個錯的代號（世界書裡一堆同類編號），以前整段就這樣不見。
+                if (!chat && target && cur && _sameRoomName(target, cur.name)) chat = cur;
             } else if (!target) {
                 chat = cur || null;
             } else if (cur && _sameRoomName(target, cur.name)) {
@@ -1089,7 +1092,7 @@
                 const want = rid || target;
                 console.warn('[WX] 這一段' + (rid ? '的代號「' + rid + '」對不到聊天室' : '沒寫代號（只寫了名字「' + target + '」）') + '，不送');
                 // 根本沒有這一間才記下來跟她說；有這間但被刪／拉黑／不是好友是故意不送，不吵她
-                if (want && !_anyRoomNamed(want) && out.unknown.indexOf(want) < 0) out.unknown.push(want);
+                if (want && !_anyRoomNamed(want) && out.unknown.indexOf(want) < 0) out.unknown.push(rid ? ('代號 ' + rid + (target ? '（' + target + '）' : '')) : want);
                 continue;
             }
             out.push({ chat: chat, text: m[2] });
@@ -1214,7 +1217,7 @@
         const parts = _wxSplitRooms(String(fullText == null ? '' : fullText).trim(), cur);
         // 模型寫的名字對不到任何聊天室：那段沒送出，跟她講一聲（不然訊息悄悄不見）
         if (parts.unknown && parts.unknown.length) {
-            try { if (typeof AUI !== 'undefined' && AUI.toast) AUI.toast('有訊息要傳給「' + parts.unknown.join('、') + '」，對不到聊天室，沒有送出。按一次整理聊天室，之後就認得這個寫法'); } catch (e) {}
+            try { if (typeof AUI !== 'undefined' && AUI.toast) AUI.toast('有一段訊息寫給「' + parts.unknown.join('、') + '」，對不到任何聊天室，沒有送出'); } catch (e) {}
         }
         parts.forEach(function (part) {
             const msgs = _parseRoomLines(part.text, part.chat) || [];
