@@ -645,7 +645,8 @@
     }
     .aps-screen { border-radius: 0; }
     .aps-screen::after { display: none; }    /* 面板邊那圈也不要：全螢幕時它會變成畫面裡一圈方框 */
-    .aps-frame { --aps-safe-top: 0px; --aps-safe-bottom: 0px; }   /* 島與橫槓都是假的、已經藏掉，app 不必讓 */
+    /* 🚨 讓開島與橫槓那兩格在這裡「不能」歸零：島是藏了，但狀態列（時間、訊號、關閉鈕都在那條）跟
+       底部橫槓（回主畫面那顆）在這個版本照樣畫著。之前歸零過一次，結果每個 app 的標頭跟狀態列疊在一起。 */
     .aps-notch { display: none; }            /* 全螢幕不需要動態島 —— 她真的手機自己有一個 */
     .aps-frame::before, .aps-frame::after { display: none; }   /* 側邊實體鍵同理，沒有框就沒有邊可以掛 */
     .aps-close { top: 10px; right: 10px; }   /* 關閉鈕收進畫面內，免在框外被切掉 */
