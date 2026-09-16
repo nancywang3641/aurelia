@@ -121,6 +121,10 @@
     --aps-dock-border: 0 solid transparent;
     --aps-dock-top: 1px solid #d8dfd0;
     --aps-dock-bg: transparent;
+    /* 🧩 主畫面組件的底（見 phone_shell.css 的 .aps-w）*/
+    --aps-w-bg: rgba(255, 255, 255, 0.62);
+    --aps-w-line: rgba(60, 70, 55, 0.10);
+    --aps-w-radius: 18px;
     --aps-dock-shadow: none;
     --aps-dock-icon-bg: transparent;
     --aps-dock-icon-color: #61755b;
@@ -209,6 +213,9 @@
     --aps-dock-border: 3px solid #fff8f3;
     --aps-dock-top: 3px solid #fff8f3;
     --aps-dock-bg: #ebc4c9;
+    --aps-w-bg: rgba(255, 251, 245, 0.78);
+    --aps-w-line: rgba(150, 110, 80, 0.14);
+    --aps-w-radius: 22px;
     --aps-dock-shadow: 0 3px 0 #d5afb5;
     --aps-dock-icon-bg: #fff3ea;
     --aps-dock-icon-color: #98636d;
@@ -304,6 +311,9 @@
     --aps-dock-border: 1px solid rgba(255, 255, 255, 0.80);
     --aps-dock-top: 1px solid rgba(255, 255, 255, 0.80);
     --aps-dock-bg: rgba(255, 255, 255, 0.42);
+    --aps-w-bg: rgba(255, 255, 255, 0.55);
+    --aps-w-line: rgba(255, 255, 255, 0.72);
+    --aps-w-radius: 20px;
     --aps-dock-shadow: 0 8px 24px rgba(22, 24, 26, 0.10);
     --aps-dock-icon-bg: transparent;
     --aps-dock-icon-color: #16181a;
@@ -326,21 +336,21 @@
     --os-on-accent: #ffffff;
 }
 
-.theme-glass .aps-home { grid-template-rows: var(--aps-widget-height) var(--aps-lock-height) minmax(0, 1fr) var(--aps-dock-height); }
-.theme-glass .aps-widgets { grid-row: 1; }
-.theme-glass .aps-lock { grid-row: 2; }
+/* 🧩 這裡本來把「拍立得那一列」排到時鐘上面，是這套皮的特色。
+   拍立得現在是格子裡的一個組件、位置由她自己拖，沒有那一列了 ——
+   這三行留著會讓主畫面多出一列空的，把格子擠到看不見組件（實測就是這樣壞的）。 */
 .theme-glass .aps-icon-em,
 .theme-glass .aps-dock,
 .theme-glass .aps-mood,
-.theme-glass .aps-polaroid { -webkit-backdrop-filter: blur(14px) saturate(1.25); backdrop-filter: blur(14px) saturate(1.25); }
+.theme-glass .aps-w { -webkit-backdrop-filter: blur(14px) saturate(1.25); backdrop-filter: blur(14px) saturate(1.25); }
 .theme-glass .aps-mood { align-self: center; flex-direction: column-reverse; gap: 7px; padding: 12px 10px; margin-top: 0; font-size: 9px; letter-spacing: 1px; }
 .theme-glass .aps-mood-em { font-size: 17px; }
 .theme-glass .aps-mood-em > i { font-size: 17px; }
 .theme-glass .aps-home::before { width: 330px; height: 330px; border-radius: 50%; top: -70px; left: -55px; background: radial-gradient(circle, rgba(128, 154, 208, 0.38) 0, rgba(128, 154, 208, 0) 68%); }
 .theme-glass .aps-home::after { width: 300px; height: 300px; border-radius: 50%; bottom: -60px; right: -70px; background: radial-gradient(circle, rgba(214, 170, 140, 0.34) 0, rgba(214, 170, 140, 0) 68%); }
 .theme-glass .aps-dock .aps-icon:last-child .aps-icon-em { background: #16181a; color: #ffffff; box-shadow: 0 4px 12px rgba(22, 24, 26, 0.28); }
-.theme-glass .aps-polaroid figcaption { color: #16181a; }
-.theme-glass .aps-polaroid time { color: #5f6469; }
+.theme-glass .aps-w-pol-cap { color: #16181a; }
+.theme-glass .aps-w-pol-cap > time { color: #5f6469; }
 
 
 /* ── 霧夜薄荷 ──────────────────────────────────────────────────────
@@ -404,6 +414,9 @@
     --aps-dock-border: 1px solid rgba(113, 133, 116, 0.33);
     --aps-dock-top: 1px solid rgba(113, 133, 116, 0.33);
     --aps-dock-bg: rgba(61, 80, 69, 0.61);
+    --aps-w-bg: rgba(255, 255, 255, 0.08);
+    --aps-w-line: rgba(255, 255, 255, 0.12);
+    --aps-w-radius: 18px;
     --aps-dock-shadow: 0 9px 20px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(217, 255, 214, 0.04);
     --aps-dock-icon-bg: transparent;
     --aps-dock-icon-color: #d2e3ce;

@@ -95,7 +95,9 @@
 .aps-home {
     position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
     display: grid;
-    grid-template-rows: var(--aps-lock-height) var(--aps-widget-height) minmax(0, 1fr) var(--aps-dock-height);
+    /* 🧩 以前有第四列給拍立得，它現在是格子裡的組件 → 那一列拿掉，空間讓給格子。
+       主題裡的 --aps-widget-height 留著沒人用，不影響。 */
+    grid-template-rows: var(--aps-lock-height) minmax(0, 1fr) var(--aps-dock-height);
     gap: 10px;
     padding: 12px 18px 24px;
     background: var(--aps-wallpaper);
@@ -162,50 +164,9 @@
 .aps-mood-em[data-mood="8"] > i { color: #ff8a4c; }
 .aps-mood-em[data-mood="9"] > i { color: #6fc0e8; }
 
-/* ── widget 區：時鐘跟圖標格中間那塊。現在只有拍立得，之後還會有別的擺進來 ── */
-.aps-widgets {
-    display: flex; align-items: center; justify-content: var(--aps-widget-align);
-    gap: 12px; padding: 7px 5px; min-width: 0;
-}
-/* 拍立得：照片＋今天的心情＋日期。點一下換下一個心情（跟時鐘那顆是同一份資料） */
-.aps-polaroid {
-    position: relative; margin: 0;
-    flex: 0 1 var(--aps-photo-width); min-width: 0; max-width: 100%;
-    padding: var(--aps-photo-padding);
-    background: var(--aps-paper);
-    border: 1px solid var(--aps-paper-line);
-    box-shadow: var(--aps-paper-shadow);
-    transform: rotate(var(--aps-photo-rotate));
-    cursor: pointer;
-    transition: transform 0.15s;
-}
-.aps-polaroid:active { transform: rotate(var(--aps-photo-rotate)) scale(0.97); }
-/* 紙膠帶：寬度 0 的主題等於沒有，不必另外藏 */
-.aps-polaroid::before {
-    content: ""; position: absolute; z-index: 3;
-    width: var(--aps-tape-width); height: 20px; left: 50%; top: -9px;
-    transform: translateX(-50%) rotate(-5deg);
-    background: var(--aps-tape-bg); opacity: 0.88;
-    clip-path: polygon(3% 0, 98% 0, 95% 25%, 100% 49%, 96% 76%, 99% 100%, 1% 100%, 4% 72%, 0 46%, 5% 22%);
-}
-.aps-photo {
-    position: relative; height: var(--aps-photo-height);
-    overflow: hidden; background: var(--aps-photo-sky); isolation: isolate;
-}
-/* 她自己填的照片蓋在示意風景上面；沒填時 --aps-photo-1-url 是 none，這一層完全不畫 */
-.aps-photo::after {
-    content: ""; position: absolute; inset: 0; z-index: 4;
-    background-image: var(--aps-photo-1-url);
-    background-size: cover; background-position: var(--aps-photo-position);
-}
-.aps-photo-sun { position: absolute; width: 38px; height: 38px; top: 16%; left: 61%; border-radius: 50%; background: var(--aps-photo-sun); box-shadow: 0 0 30px var(--aps-photo-glow); }
-.aps-photo-hill { position: absolute; width: 145%; height: 100%; border-radius: 48% 58% 0 0; }
-.aps-photo-hill-back { background: var(--aps-photo-back); left: -55%; top: 49%; transform: rotate(18deg); }
-.aps-photo-hill-front { background: var(--aps-photo-front); left: 25%; top: 58%; transform: rotate(-22deg); }
-.aps-photo-water { position: absolute; inset: 76% 0 0; background: var(--aps-photo-water); opacity: 0.72; }
-.aps-polaroid figcaption { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 1px; color: #635954; white-space: nowrap; }
-.aps-polaroid figcaption > span { font: 13px/1.3 var(--aps-caption-font); }
-.aps-polaroid time { font: 9px/1.5 "Segoe UI", sans-serif; letter-spacing: 1.3px; color: #6b6259; }
+/* 🧩 這裡本來是「拍立得那一列」與拍立得自己的樣式。拍立得現在是格子裡的一個組件
+   （見檔案最後面的 .aps-w 那一區、以及 os_widgets.js），那一列與這批樣式都沒有東西用了。
+   主題裡的 --aps-photo-* 變數留著 —— 新的拍立得組件照樣吃它們畫那張示意風景。 */
 
 /* ── 圖標格 ── */
 .aps-grid {
@@ -671,3 +632,95 @@
    放在角落沒有用 —— 玻璃透出來的是它正下方那一塊，角落的暈它照不到，畫面就只是一片白。 */
 /* 整支手機唯一一塊實心黑：底排最後那顆 */
 /* 相片下面那行手寫字在玻璃上要站得住，改成近黑 */
+
+/* ══ 🧩 主畫面組件（widget）══════════════════════════════════════════════
+   組件跟圖標住同一個格子、用同一個 .aps-icon 殼，所以長按編輯、拖著換位置、
+   左上角減號移除那一整套完全沿用 —— 這裡只負責「它比較寬、裡面是一塊畫面」。
+   大小只有三種，高度用比例算，不去對圖標的行高（圖標高度會隨主題變）。 */
+.aps-w {
+    /* 兩欄寬、比一排圖標高一點的橫卡片；主題想改就在自己那組蓋掉這兩個 */
+    --aps-w-h: 128px;
+    --aps-w-h-l: 200px;
+    position: relative;
+    align-self: start;
+    padding: 0;
+    /* 🚨 底不能吃圖標那組（--aps-icon-bg）：預設主題的圖標方塊是「故意全透明」的，
+       組件吃了就變成一塊浮在桌布上的字，看不出是一張卡片。底排那組也一樣（預設主題是 transparent）。
+       所以組件有自己的一組，四套主題各給一次（aurelia_theme.css 的 --aps-w-bg／line／radius）。 */
+    border-radius: var(--aps-w-radius, 18px);
+    background: var(--aps-w-bg, rgba(255,255,255,0.6));
+    border: 1px solid var(--aps-w-line, rgba(0,0,0,0.07));
+    overflow: hidden;
+}
+/* 🚨 高度要給明確值，不能用 aspect-ratio：aspect-ratio 算出來的高度「不參與 grid 的列高計算」，
+   grid 會按內容（0）排完列，組件再照比例畫出來 → 三個組件會疊在一起。實測就是這樣壞的。 */
+.aps-w[data-w-size="s"] { grid-column: span 2; height: var(--aps-w-h); }
+.aps-w[data-w-size="w"] { grid-column: span 3; height: var(--aps-w-h); }
+.aps-w[data-w-size="l"] { grid-column: span 3; height: var(--aps-w-h-l); }
+.aps-w:hover { transform: translateY(-2px); }
+.aps-w:active { transform: scale(0.98); }
+.aps-w-body { display: block; width: 100%; height: 100%; min-width: 0; }
+.aps-w-body > * { width: 100%; height: 100%; }
+/* 編輯模式那顆齒輪：這個組件自己的設定（拍立得的照片就在這裡換）。
+   平常不在畫面上 —— 組件是拿來看的，不該一直掛著一顆按鈕。 */
+.aps-w-cog {
+    position: absolute; z-index: 4; right: -6px; top: -6px;
+    width: 22px; height: 22px; display: none;
+    align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: var(--aps-label-color); color: var(--aps-icon-bg);
+    font-size: 11px; box-shadow: 0 1px 4px rgba(0,0,0,.28);
+}
+.aps-editing .aps-w-cog { display: flex; }
+
+/* ── 內建：拍立得 ───────────────────────────────────────────────────── */
+.aps-w-pol {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 8px 7px;
+    background: var(--aps-paper);
+    box-sizing: border-box;
+}
+.aps-w-pol-ph {
+    position: relative; flex: 1; min-height: 0;
+    overflow: hidden; background: var(--aps-photo-sky); isolation: isolate;
+}
+.aps-w-pol-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.aps-w-pol-sun {
+    position: absolute; left: 50%; top: 22%; width: 26%; aspect-ratio: 1;
+    transform: translateX(-50%); border-radius: 50%; background: var(--aps-photo-sun);
+}
+.aps-w-pol-hill {
+    position: absolute; left: -12%; right: -12%; bottom: 26%; height: 44%;
+    border-radius: 50% 50% 0 0; background: var(--aps-photo-back);
+}
+.aps-w-pol-hill2 { bottom: 20%; height: 36%; left: 6%; right: -22%; background: var(--aps-photo-front); }
+.aps-w-pol-sea { position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: var(--aps-photo-water); }
+.aps-w-pol-cap {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+    font-size: 11px; line-height: 1.3; color: var(--aps-label-color);
+}
+.aps-w-pol-cap > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aps-w-pol-cap > time { flex: none; opacity: 0.6; font-size: 10px; }
+
+/* ── 內建：時鐘 ─────────────────────────────────────────────────────── */
+.aps-w-clock {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    color: var(--aps-label-color);
+}
+.aps-w-clock-t { font-size: 30px; font-weight: 300; letter-spacing: 1px; line-height: 1; }
+.aps-w-clock-d { font-size: 11px; opacity: 0.66; }
+
+/* ── 內建：便條 ─────────────────────────────────────────────────────── */
+.aps-w-note {
+    display: flex; align-items: flex-start;
+    padding: 12px 14px; box-sizing: border-box;
+    color: var(--aps-label-color);
+}
+.aps-w-note-tx {
+    margin: 0; font-size: 13px; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.aps-w-note-empty { opacity: 0.42; }
+
+/* ── 她自己做的組件：那段畫面就塞在這裡面，超出的裁掉 ──────────────── */
+.aps-w-user { overflow: hidden; }

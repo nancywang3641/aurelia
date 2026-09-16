@@ -52,6 +52,8 @@
         // 🏪 黑市已搬到 404 號房的柴郡身上（快轉地圖→404→點柴郡→黑市；立繪模式走前往→黑市）；手機不再重複開一個門。
         { id: 'settings', name: '樣式', icon: 'fa-paintbrush', mode: 'inside', go: function (c) { _renderSettings(c); } },
         { id: 'appstore', name: '應用商城', icon: 'fa-bag-shopping', mode: 'inside', go: function (c) { return _need(win.APP_STORE && win.APP_STORE.launch ? win.APP_STORE : null, '應用商城').launch(c); } },
+        // 🧩 組件：應用商城的對照物 —— 商城是「拿到一個應用、裝到桌面」，這裡是「做一個組件、放到主畫面」
+        { id: 'widgets', name: '組件', icon: 'fa-shapes', mode: 'inside', go: function (c) { return _need(win.OS_WIDGETS && win.OS_WIDGETS.launch ? win.OS_WIDGETS : null, '組件').launch(c); } },
         { id: 'ctrlroom', name: '控制室', icon: 'fa-sliders', mode: 'inside', go: function (c) { return _need(win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp ? win.OS_CONTROL_ROOM : null, '控制室').launchApp(c); } },
         // 🤖 AI 助手已移出手機：入口收攏成大廳 dock 的「宿舍」一顆（房間是獨立擴展，
         //    分兩個入口＝朋友沒裝時要顧兩處，而且以後住戶要站到舞台上也只該有一個門）。
@@ -223,6 +225,7 @@
         const hhmm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
         const sb = _el.querySelector('#aps-sb-time');
         if (sb) sb.textContent = hhmm;
+        _paintWidgets();   // 🧩 時鐘組件跟著走
         const big = _el.querySelector('#aps-lock-time');
         if (big) big.textContent = hhmm;
         const date = _el.querySelector('#aps-lock-date');
@@ -288,13 +291,7 @@
             el.dataset.mood = String(i);
             el.innerHTML = '<i class="fa-solid ' + MOOD_ICONS[i] + '"></i>';
         }
-        const word = _el.querySelector('#aps-pol-mood');
-        if (word) word.textContent = _loadMoodText() || MOOD_WORDS[i];
-        const day = _el.querySelector('#aps-pol-date');
-        if (day) {
-            const d = new Date();
-            day.textContent = d.getFullYear() + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + '.' + ('0' + d.getDate()).slice(-2);
-        }
+        _paintWidgets();   // 🧩 拍立得那句話現在畫在組件裡（心情膠囊跟它是同一份資料）
     }
     function _cycleMood() {
         const i = MOODS.indexOf(_loadMood());
@@ -517,7 +514,8 @@
         return {
             grid: Array.isArray(l.grid) ? l.grid : [],
             dock: Array.isArray(l.dock) ? l.dock : DOCK_IDS.slice(),
-            hidden: Array.isArray(l.hidden) ? l.hidden.filter(function (id) { return PINNED.indexOf(id) < 0; }) : []
+            hidden: Array.isArray(l.hidden) ? l.hidden.filter(function (id) { return PINNED.indexOf(id) < 0; }) : [],
+            seen: Array.isArray(l.seen) ? l.seen : []   // 🧩 這幾個組件已經決定過要不要上桌面（見 _seedWidgets）
         };
     }
     function _saveLayout(l) { try { win.localStorage.setItem(LAYOUT_KEY, JSON.stringify(l)); } catch (e) {} }
@@ -534,6 +532,58 @@
         return APPS.filter(function (a) { return inDock.indexOf(a.id) < 0 && L.hidden.indexOf(a.id) < 0; })
             .sort(function (a, b) { return pos(a) - pos(b); });
     }
+    // ── 🧩 組件（widget）：跟圖標住同一個格子、記在同一份排列裡 ──────────────
+    //   所以長按編輯、拖著換位置、左上角減號移除那一整套完全不用重寫 —— 組件的殼用的是
+    //   同一個 .aps-icon 與 data-app，差別只在它比較寬、裡面畫的是一塊畫面而不是一顆圖標。
+    //   組件本身（有哪些、長什麼樣、點下去做什麼）在 os_widgets.js。
+    const WIDGET_OFF_BY_DEFAULT = ['wdg_clock', 'wdg_note'];   // 內建但預設不放上桌面，要她自己去「組件」加
+    function _W() { return win.OS_WIDGETS || null; }
+    // 第一次看到一個組件就決定它要不要上桌面，之後不再自己動 —— 她拿掉的東西不可以自己跑回來
+    function _seedWidgets() {
+        const W = _W(); if (!W) return;
+        const L = _loadLayout();
+        let changed = false;
+        W.all().forEach(function (w) {
+            if (L.seen.indexOf(w.id) >= 0) return;
+            L.seen.push(w.id); changed = true;
+            if (WIDGET_OFF_BY_DEFAULT.indexOf(w.id) >= 0 && L.hidden.indexOf(w.id) < 0) L.hidden.push(w.id);
+        });
+        if (changed) _saveLayout(L);
+    }
+    function _homeWidgets(L) {
+        const W = _W(); if (!W) return [];
+        L = L || _loadLayout();
+        return W.all().filter(function (w) { return L.hidden.indexOf(w.id) < 0; });
+    }
+    // 桌面上要畫的東西：圖標 ＋ 組件，混成一串照同一份排列排
+    function _gridItems(L) {
+        L = L || _loadLayout();
+        const apps = _gridApps(L).map(function (a) { return { id: a.id, app: a }; });
+        const wds  = _homeWidgets(L).map(function (w) { return { id: w.id, widget: w }; });
+        const all = apps.concat(wds);
+        const pos = function (o, i) { const k = L.grid.indexOf(o.id); return k < 0 ? 1e6 + i : k; };
+        return all.map(function (o, i) { return { o: o, k: pos(o, i) }; })
+                  .sort(function (a, b) { return a.k - b.k; })
+                  .map(function (x) { return x.o; });
+    }
+    function _cellHTML(o) { return o.widget ? _widgetCell(o.widget) : _iconBtn(o.app); }
+    function _widgetCell(w) {
+        const W = _W();
+        return '<button class="aps-icon aps-w" data-app="' + w.id + '" data-w-size="' + W.sizeKeyOf(w) + '" type="button">'
+             + '<span class="aps-icon-del" data-del="' + w.id + '" title="從桌面移除"><i class="fa-solid fa-minus"></i></span>'
+             + (W.hasSettings(w) ? '<span class="aps-w-cog" data-w-cog="' + w.id + '" title="這個組件的設定"><i class="fa-solid fa-gear"></i></span>' : '')
+             + '<span class="aps-w-body" data-w-body="' + w.id + '">' + W.innerHTML(w) + '</span>'
+             + '</button>';
+    }
+    // 會動的部分（時鐘走分針、拍立得跟著今天那句話變）交給組件自己畫
+    function _paintWidgets() {
+        const W = _W(); if (!W || !_el) return;
+        _el.querySelectorAll('[data-w-body]').forEach(function (body) {
+            const w = W.get(body.dataset.wBody);
+            if (w) W.paint(body, w);
+        });
+    }
+
     function _iconBtn(a) {
         return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
              + (PINNED.indexOf(a.id) < 0 ? '<span class="aps-icon-del" data-del="' + a.id + '" title="從桌面移除"><i class="fa-solid fa-minus"></i></span>' : '')
@@ -550,9 +600,11 @@
         if (!_el) return;
         const gridEl = _el.querySelector('.aps-grid');
         if (!gridEl) return;
-        gridEl.innerHTML = _gridApps().map(_iconBtn).join('');
+        _seedWidgets();
+        gridEl.innerHTML = _gridItems().map(_cellHTML).join('');
         _renderDock();
         _applyIcons();
+        _paintWidgets();
     }
     // 對外：app 商店安裝/卸載時呼叫（只動 runtime 與圖標；持久化是商店的事）
     function addApp(meta) {
@@ -584,9 +636,12 @@
         _renderGrid();
     }
     async function _hideApp(id) {
-        const a = APPS.find(function (x) { return x.id === id; });
-        if (!a || PINNED.indexOf(id) >= 0) return;
-        const ok = await AUI.confirm('把「' + a.name + '」從桌面移除？\n不會刪掉，想要時到應用商城「我的應用」放回桌面。', { okText: '移除', danger: false });
+        const W = _W();
+        const isW = !!(W && W.isWidgetId(id));   // 🧩 組件也能從桌面拿掉（放回去的地方不一樣）
+        const a = isW ? W.get(id) : APPS.find(function (x) { return x.id === id; });
+        if (!a || (!isW && PINNED.indexOf(id) >= 0)) return;
+        const back = isW ? '「組件」' : '應用商城「我的應用」';
+        const ok = await AUI.confirm('把「' + a.name + '」從桌面移除？\n不會刪掉，想要時到' + back + '放回桌面。', { okText: '移除', danger: false });
         if (!ok) return;
         const L = _loadLayout();
         if (L.hidden.indexOf(id) < 0) L.hidden.push(id);
@@ -729,6 +784,14 @@
         home.addEventListener('click', function (e) {
             const del = e.target.closest('.aps-icon-del');
             if (del && _editing) { e.stopPropagation(); _hideApp(del.dataset.del); return; }
+            // 🧩 組件自己的設定（她的原話：照片在組件上就可以換，不必跑樣式面板）
+            const cog = e.target.closest('[data-w-cog]');
+            if (cog && _editing) {
+                e.stopPropagation();
+                const W = _W(); const w = W && W.get(cog.dataset.wCog);
+                if (w) W.openSettings(w);
+                return;
+            }
             if (e.target.closest('.aps-edit-done')) { _setEditing(false); return; }
             const btn = e.target.closest('.aps-icon');
             if (Date.now() < _eatUntil) { _eatUntil = 0; return; }
@@ -755,19 +818,9 @@
           +         '<div class="aps-lock-date" id="aps-lock-date"></div>'
           +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情<span class="aps-mood-em" id="aps-mood-em" data-mood="0"><i class="fa-solid fa-sun"></i></span></button>'
           +       '</div>'
-          // widget 區：時鐘跟圖標格中間那塊。目前只有拍立得，之後別的 widget 也加在這個容器裡。
-          // 相片那四塊是程式畫的示意風景，她在設置填了照片網址就被蓋住（CSS 的 .aps-photo::after）。
-          +       '<div class="aps-widgets" id="aps-widgets">'
-          +         '<figure class="aps-polaroid" id="aps-polaroid" role="button" tabindex="0" title="點一下寫今天這句">'
-          +           '<div class="aps-photo">'
-          +             '<span class="aps-photo-sun"></span>'
-          +             '<span class="aps-photo-hill aps-photo-hill-back"></span>'
-          +             '<span class="aps-photo-hill aps-photo-hill-front"></span>'
-          +             '<span class="aps-photo-water"></span>'
-          +           '</div>'
-          +           '<figcaption><span id="aps-pol-mood">今天是晴天</span><time id="aps-pol-date"></time></figcaption>'
-          +         '</figure>'
-          +       '</div>'
+          // 🧩 拍立得以前焊在這裡（時鐘跟圖標格中間那一條，位置動不了）。
+          //    現在它是格子裡的一個組件，跟圖標住同一格、可以拖可以拿掉，設定也在它自己身上
+          //    ——照片點組件就能換，不必再跑一趟樣式面板。見 os_widgets.js。
           +       '<div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div>'
           +       '<button class="aps-edit-done" type="button">完成</button>'
           +     '</div>'
@@ -788,13 +841,6 @@
         _renderGrid();             // 統一畫圖標格 + 綁定 + 套圖庫圖標
         const moodBtn = ov.querySelector('#aps-mood');
         if (moodBtn) moodBtn.addEventListener('click', _cycleMood);
-        const pol = ov.querySelector('#aps-polaroid');
-        if (pol) {
-            // 點拍立得＝寫今天這句（換心情圖示是點上面那顆膠囊，兩件事分開）
-            pol.addEventListener('click', _editMoodText);
-            // 它不是 <button>（拍立得要用 figure/figcaption 才有相片那個結構），鍵盤那條要自己接
-            pol.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _editMoodText(); } });
-        }
         _paintMood();
         _tickClock();                                              // 先畫一次，別讓主畫面停在 --:--
         try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列＋主畫面時鐘
@@ -818,6 +864,13 @@
     }
 
     function _openApp(id) {
+        // 🧩 組件不是應用：點它是它自己的事（寫今天那句、翻下一張），不開全螢幕
+        const W = _W();
+        if (W && W.isWidgetId(id)) {
+            const w = W.get(id);
+            if (w && _el) W.tap(_el.querySelector('[data-w-body="' + id + '"]'), w);
+            return;
+        }
         const app = APPS.find(function (a) { return a.id === id; });
         if (!app || !_el) return;
         if (app.mode === 'out') {
@@ -904,6 +957,24 @@
     // 所以色票在載入時就先套一次，不能等 _applyTheme —— 那支沒有手機殼就直接跳出去了。
     try { _applyThemeClass(_loadTheme().themeId || DEFAULT_THEME); } catch (e) {}
 
-    win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide };
+    win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide,
+        renderHome: _renderGrid, repaintMood: _paintMood,
+        // 📷 拍立得那張照片：樣式面板與組件是「同一份資料」的兩個入口。
+        //    她嫌樣式面板換照片很煩，所以組件上也能換 —— 但不可以各存一份，不然兩邊會是兩張照片。
+        polaroidPhoto: function () { return _urlOf(_loadTheme().photoUrl).replace(/^["']|["']$/g, ''); },
+        setPolaroidPhoto: function (u) {
+            u = String(u || '').trim();
+            _saveTheme({ photoUrl: u ? ('url("' + u.replace(/"/g, '%22') + '")') : '' });
+            _renderGrid();
+        },
+        // 🧩 給「組件」那一頁用：桌面上有哪幾個、放回桌面、從桌面收起來
+        homeWidgetIds: function () { return _homeWidgets().map(function (w) { return w.id; }); },
+        unhideWidget: unhide,
+        hideWidget: function (id) {
+            const L = _loadLayout();
+            if (L.hidden.indexOf(id) < 0) L.hidden.push(id);
+            L.grid = L.grid.filter(function (x) { return x !== id; });
+            _saveLayout(L); _renderGrid();
+        } };
     console.log('✅ VoidPhoneShell（大廳手機殼浮窗）模組就緒');
 })();

@@ -159,6 +159,7 @@ const PHONE_FILES = [
     'os/os_settings_voice.js', // 🎵 語音清單：Minimax 音色檔案卡＋官方音色庫＋測試播放（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_db.js',
     'os/app_store.js',
+    'os/os_widgets.js',
     'os/os_sync.js',
     'os/os_persona.js',
     'os/os_prompts.js', // 提示詞底層需要保留，但 UI 按鈕已透過 isStandalone 隱藏

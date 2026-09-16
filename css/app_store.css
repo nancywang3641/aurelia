@@ -144,3 +144,38 @@
 @keyframes wsFade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── toast ── */
+
+/* ══ 🧩 組件那一頁（沿用工坊同一套長相；做的事是「做一個組件、放到主畫面」）══ */
+.wg-card-ic {
+    flex: none; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
+    border-radius: 12px; background: rgba(122,36,50,0.08); color: #7a2432; font-size: 18px;
+}
+.wg-sec { margin: 14px 0 2px; font-size: 13px; font-weight: 800; color: #8c7a66; letter-spacing: 1px; }
+.wg-list { display: flex; flex-direction: column; gap: 10px; }
+.wg-empty { padding: 22px 0; text-align: center; color: #8c7a66; font-size: 13px; }
+.wg-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 13px 14px; border: 1px solid rgba(110,80,40,0.18); border-radius: 18px; background: #fffdf7;
+}
+.wg-row-tx { flex: 1; min-width: 0; }
+.wg-row-t { font-size: 15px; font-weight: 700; color: #3a2a1a; display: flex; align-items: center; gap: 6px; }
+.wg-tag { flex: none; padding: 1px 7px; border-radius: 999px; background: rgba(122,36,50,0.09); color: #7a2432; font-size: 11px; font-weight: 700; }
+.wg-row-d { margin-top: 3px; font-size: 12px; color: #8c7a66; line-height: 1.45; }
+.wg-szs { display: flex; gap: 6px; margin-top: 9px; }
+.wg-sz {
+    padding: 4px 12px; border: 1px solid rgba(110,80,40,0.22); border-radius: 999px;
+    background: transparent; color: #8c7a66; font-size: 12px; font-family: inherit; cursor: pointer;
+}
+.wg-sz-on { background: #7a2432; border-color: #7a2432; color: #fffdfc; font-weight: 700; }
+.wg-row-go { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.wg-put {
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 8px 12px; border: 1px solid #7a2432; border-radius: 12px;
+    background: #7a2432; color: #fffdfc; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer;
+}
+.wg-put-on { background: transparent; color: #7a2432; }
+.wg-del {
+    padding: 7px 12px; border: 1px solid rgba(110,80,40,0.22); border-radius: 12px;
+    background: transparent; color: #8c7a66; font-size: 12px; font-family: inherit; cursor: pointer;
+}
+.wg-del:active { background: rgba(122,36,50,0.08); }
