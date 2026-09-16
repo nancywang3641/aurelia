@@ -511,6 +511,9 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
         // 優先用 DOM 祖先判斷（在手機殼內＝必手機版），再用實際容器寬度當後備，掛 .studio-mobile。
         try {
             const _cont = appDiv.querySelector('.studio-container');
+            // 🎩 開門那一下先標成組件類：創作室預設落在「製作互動面板」，
+            //    等她切到世界書或我的角色，switchTopMode 會把這顆拿掉、換回米黃。
+            if (_cont && landMode !== 'worldbook' && landMode !== 'persona') _cont.classList.add('craft-skin');
             // 🚨 只認「手機殼的 app 內容區」(#aps-app-body/.aps-app)。
             //    不能認 #aurelia-phone-screen——那是整個擴展的螢幕，大廳也在它底下，
             //    認了就變成「在大廳開的創作室一律當手機版」，再寬也是單欄＋👁 抽屜（2026-08-26 抓到）。
@@ -1192,6 +1195,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         } else {
             loadMode(mode);
         }
+        // 🎩 米黃只留給文書那兩間（世界書、我的角色）；其他一律帽匠皮。
+        //    皮本身在 os_studio.css 最後面那一整段，靠這顆 craft-skin 認。
+        if (cont) cont.classList.toggle('craft-skin', mode !== 'worldbook' && mode !== 'persona');
         _updateStudioHeader();
     }
     // 主題頁掛上來的「清空這一輪」：header 那顆清空鈕按當前分頁分流，不必各自長一顆

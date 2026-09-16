@@ -1701,3 +1701,241 @@ html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { co
 
 /* 還原舊版那顆沒作品時藏著：.studio-icon-btn 自帶 display:flex，會蓋過 hidden */
 .studio-container .studio-icon-btn[hidden] { display:none; }
+
+/* ══ 🎩 組件類創作室＝帽匠皮 ═══════════════════════════
+   照阿洛的稿。本來這整段只在「從帽匠工坊進去」時才生效，
+   所以她從手機的創作室進去看到的還是舊的米黃 —— 就是她說的「創作室好像還有舊的米黃色」。
+   現在條件換成「這一間創作室是組件類」（容器帶 craft-skin），不管從哪個入口進去都一樣。
+
+   🚨 米黃只留給文書那兩間：世界書、我的角色。它們不帶 craft-skin，吃的是上面那套羊皮紙。
+   🚨 這一整段一定要放在檔案最後面：它跟創作室本身的規則權重一樣，靠「後出現」才蓋得過去。
+   🚨 面的底色在這裡是實色：手機殼裡底下是白的，半透明的深紫蓋上去會變成一片淡紫。
+      工坊裡要的是半透明（讓工坊的暗紫透上來），那幾條覆寫留在 lobby_stage.css。 */
+.craft-skin { --lwt-ink:#efe7f6; --lwt-dim:rgba(239,231,246,.62); --lwt-line:rgba(214,150,190,.26);
+  --lwt-pane:#261f38; --lwt-card:rgba(58,47,84,.55); --lwt-hot:#c9407a; }
+.studio-container.craft-skin { background:var(--lwt-pane); color:var(--lwt-ink); }
+.craft-skin .studio-body { background:transparent; }
+/* 標題列：跟面板的框同一種暗紫，底線走酒紅 */
+.craft-skin .studio-header { background:linear-gradient(180deg, rgba(58,47,84,.75), rgba(38,31,56,.6));
+  border-bottom:1px solid var(--lwt-line); }
+.craft-skin .studio-title { color:var(--lwt-ink); letter-spacing:2px; }
+.craft-skin .studio-title i { color:#e79ec4; }
+.craft-skin .studio-back-btn { color:var(--lwt-ink); background:rgba(255,255,255,.08); border:1px solid var(--lwt-line); }
+.craft-skin .studio-back-btn:hover { background:rgba(255,255,255,.16); }
+.craft-skin .studio-icon-btn { background:rgba(255,255,255,.07); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-icon-btn:hover { background:rgba(255,255,255,.15); }
+.craft-skin .studio-icon-btn.danger { color:#f0a8bd; border-color:rgba(226,110,150,.45); }
+/* 左右兩欄 */
+.craft-skin .studio-left { background:rgba(30,24,44,.55); border-right:1px solid var(--lwt-line); }
+.craft-skin .studio-right { background:var(--lwt-pane); }
+.craft-skin .studio-right-header { background:rgba(46,37,68,.9); border-bottom:1px solid var(--lwt-line); }
+.craft-skin .studio-tab { color:var(--lwt-dim); }
+.craft-skin .studio-tab.active { color:#ffd9ea; }
+.craft-skin .studio-tab.active::after { background:linear-gradient(90deg,#8f7ce0,var(--lwt-hot)); }
+/* 對話泡泡 */
+.craft-skin .studio-chat-history { background:transparent; }
+.craft-skin .studio-bubble.user { background:rgba(120,52,96,.42); border-color:rgba(226,140,180,.32); color:var(--lwt-ink); }
+.craft-skin .studio-bubble.ai { background:var(--lwt-card); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-bubble code, .craft-skin .studio-bubble pre {
+  background:rgba(16,12,24,.7); color:#ffd9ea; border-color:var(--lwt-line); }
+.craft-skin .studio-typing-dot { background:#e79ec4; }
+/* 輸入區與 chip */
+.craft-skin .studio-input-wrap { background:rgba(46,37,68,.92); border-top:1px solid var(--lwt-line); }
+.craft-skin .studio-type-label { color:var(--lwt-dim); }
+.craft-skin .studio-type, .craft-skin .studio-chip, .craft-skin .studio-iface {
+  border-color:var(--lwt-line); color:var(--lwt-ink); background:rgba(255,255,255,.05); }
+.craft-skin .studio-type:hover, .craft-skin .studio-chip:hover, .craft-skin .studio-iface:hover { background:rgba(255,255,255,.12); }
+/* 誰來做：底色靠上一條，但下拉箭頭是 background-image、選單本體是原生控制項，兩個都要單獨換成淺色 */
+.craft-skin .studio-iface {
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='6'><path d='M0 0h8L4 6z' fill='%23efe7f6' fill-opacity='.75'/></svg>");
+  background-repeat:no-repeat; background-position:right 9px center; }
+.craft-skin .studio-iface option { background:#2a2240; color:var(--lwt-ink); }
+.craft-skin .studio-resident-status { color:var(--lwt-dim); }
+.craft-skin .studio-type.active, .craft-skin .studio-chip-feature.active {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+.craft-skin .studio-chip-manage { color:var(--lwt-dim); }
+/* 🚨 元素 chip 的「選了」以前在工坊裡看不出來：上面那條 .craft-skin .studio-chip 權重比 .studio-chip.active 高，
+   選取的底色被蓋回透明，選了跟沒選長一樣 */
+.craft-skin .studio-chip.active { background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+/* 設定頁與還原舊版彈窗要實心底：--jrpg-paper 在這裡是 .92 透明，蓋在聊天上會把底下的輸入列透出來 */
+.craft-skin .studio-set-page, .craft-skin .studio-hist-card { background:#262038; }
+.craft-skin .studio-textarea, .craft-skin .studio-attach-btn {
+  background:rgba(22,17,34,.75); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-textarea::placeholder { color:rgba(239,231,246,.42); }
+.craft-skin .studio-send-btn { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff;
+  box-shadow:0 4px 14px rgba(180,50,110,.4); }
+.craft-skin .studio-history-btn { background:rgba(255,255,255,.07); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+/* 預覽區與雜項 */
+.craft-skin .studio-preview-main, .craft-skin .studio-preview-content { background:transparent; }
+.craft-skin .studio-empty { color:rgba(239,231,246,.4); }
+.craft-skin .studio-card { background:var(--lwt-card); border-color:var(--lwt-line); }
+.craft-skin .studio-card-title { color:var(--lwt-ink); border-bottom-color:var(--lwt-line); }
+.craft-skin .studio-pv { background:rgba(255,255,255,.06); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-pv.active { background:var(--lwt-hot); border-color:var(--lwt-hot); color:#fff; }
+.craft-skin .studio-pv-wrap { border-color:var(--lwt-line); }
+.craft-skin .studio-action-area { background:rgba(46,37,68,.92); border-top:1px solid var(--lwt-line); }
+.craft-skin .studio-export-btn { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff; border:none; }
+.craft-skin .studio-preview-fab { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff; }
+/* 捲軸配合暗底 */
+.studio-container.craft-skin, .studio-container.craft-skin * { scrollbar-color:rgba(226,150,190,.45) transparent; }
+.studio-container.craft-skin ::-webkit-scrollbar-thumb { background:rgba(226,150,190,.4); }
+
+/* ── 工坊裡的工具：把創作室那套「羊皮紙」皮整組換掉 ──
+   創作室的暖色皮有兩種寫法，兩種都要處理：
+   ① 變數驅動（--jrpg-*）：這裡整組重新定義就一次翻完。
+      🚨 要 !important——VN 組件庫那層把變數寫在元素的 style 上（os_studio_vn_gallery.js），
+         不加的話 class 規則永遠輸給 inline。順手把羊皮紙紋 --jrpg-paper-texture 設成 none，
+         不然每塊底都還鋪著米色紙紋。
+   ② 硬寫死的米白底（rgba(255,249,235,.88) 那種）：只能點名蓋，下面那幾組就是全部名單。 */
+.studio-container.craft-skin, .vncomp-app.craft-skin {
+  --jrpg-paper:rgba(38,31,56,.92) !important;
+  --jrpg-paper-light:rgba(58,47,84,.62) !important;
+  --jrpg-paper-deep:rgba(30,24,44,.9) !important;
+  --jrpg-ink:#efe7f6 !important;
+  --jrpg-muted:rgba(239,231,246,.62) !important;
+  --jrpg-wine:#a12f66 !important;
+  --jrpg-wine-dark:#6d1f46 !important;
+  --jrpg-gold:#e0a86a !important;
+  --jrpg-gold-light:#f0cfa0 !important;
+  --jrpg-line:rgba(214,150,190,.3) !important;
+  --jrpg-paper-texture:none !important;
+}
+/* 面：所有本來鋪紙底的區塊 */
+.craft-skin .studio-header,
+.craft-skin .studio-input-wrap,
+.craft-skin .studio-right-header,
+.craft-skin .studio-action-area,
+.craft-skin .studio-mode-tabs,
+.craft-skin .studio-card,
+.craft-skin .studio-gallery-card,
+.craft-skin .studio-chip-box,
+.craft-skin .studio-chip-litem,
+.craft-skin .studio-pending-img,
+.craft-skin #vn-studio-history-area,
+.craft-skin .vn-history-item,
+.craft-skin .fx-lib-row,
+.craft-skin .fx-grp-row,
+.craft-skin .sgc-format-box,
+.craft-skin .sgc-grouprow,
+.craft-skin .sgc-preview,
+.craft-skin .vc-font-preview,
+.craft-skin .studio-bubble.render-bubble,
+.craft-skin .studio-bubble.choices-bubble,
+.craft-skin .studio-choice-btn,
+.craft-skin .swb-card,
+.craft-skin .swb-op-body {
+  background-color:rgba(58,47,84,.5); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); box-shadow:none; }
+/* 輸入類：底再深一階，才看得出是可以打字的地方 */
+.craft-skin .studio-chip-input, .craft-skin .studio-chip-ta,
+.craft-skin .sgc-format-input, .craft-skin .swb-field, .craft-skin .mc-block-text,
+.craft-skin .mc-block-label {
+  background-color:rgba(22,17,34,.75); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); }
+/* 下拉選單本身寫了 background:#EEF0F6 !important（原生 select 在某些瀏覽器會吃系統色，所以它加了 important）
+   → 這裡也只能用 important 對衝 */
+.craft-skin .studio-mode-select {
+  background-color:rgba(22,17,34,.9) !important; background-image:none !important;
+  border-color:var(--lwt-line); color:var(--lwt-ink) !important; }
+/* 酒紅底上的字：這幾處原本吃 --jrpg-paper-light 當字色，而那顆變數在這裡被我改成深色的面
+   （它在原皮裡一顆兩用：淺色的面＋酒紅底上的字）→ 這幾條要單獨指定亮字，不然酒紅底配深字看不見 */
+.craft-skin .swb-user, .craft-skin .mc-msg.me, .craft-skin .mc-active-tag { color:#fff; }
+/* 主色鈕（酒紅）：送出／確定創建／收藏／啟用中的分頁與 chip */
+.craft-skin .studio-chip-savebtn,
+.craft-skin .studio-mode-tab.active,
+.craft-skin .studio-pv.active,
+.craft-skin .swb-primary,
+.craft-skin .swb-seg-btn.on,
+.craft-skin .fx-lib-btn:not(.danger),
+.craft-skin .studio-choice-selected,
+.craft-skin .mc-optbtn.primary, .craft-skin .mc-usebtn.on {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); background-image:linear-gradient(135deg,#8f3a76,var(--lwt-hot));
+  border-color:var(--lwt-hot); color:#fff; }
+/* 次要鈕與標籤 */
+.craft-skin .studio-mode-tab, .craft-skin .swb-iconbtn, .craft-skin .studio-back-btn,
+.craft-skin .fx-lib-act, .craft-skin .vn-history-item .h-btn, .craft-skin .studio-history-btn,
+.craft-skin .fx-lib-kind, .craft-skin .fx-lib-grp, .craft-skin .swb-tag {
+  background-color:rgba(255,255,255,.07); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-attach-btn:hover, .craft-skin .studio-back-btn:hover,
+.craft-skin .studio-mode-tab:hover, .craft-skin .fx-lib-act:hover,
+.craft-skin .studio-choice-btn:hover, .craft-skin .swb-card:hover {
+  background-color:rgba(255,255,255,.16); background-image:none; color:var(--lwt-ink); }
+/* 危險色統一 */
+.craft-skin .fx-lib-btn.danger, .craft-skin .fx-lib-act.danger, .craft-skin .studio-chip-del {
+  background-color:rgba(226,110,150,.14); border-color:rgba(226,110,150,.45); color:#f0a8bd; }
+/* 字：泡泡裡的標題／粗體／行內碼原本是深墨色，暗底上等於看不見 */
+.craft-skin .studio-bubble h1, .craft-skin .studio-bubble h2,
+.craft-skin .studio-bubble h3, .craft-skin .studio-bubble strong {
+  color:#ffd9ea; border-bottom-color:var(--lwt-line); }
+.craft-skin .studio-bubble code {
+  background:rgba(16,12,24,.72); color:#9ff0c8; }
+.craft-skin .studio-bubble a { color:#e79ec4; }
+.craft-skin .fx-lib-desc, .craft-skin .fx-pv-desc, .craft-skin .studio-chip-litem-text,
+.craft-skin .studio-chip-empty, .craft-skin .swb-muted, .craft-skin .studio-card-title {
+  color:var(--lwt-dim); }
+.craft-skin .fx-lib-name, .craft-skin .studio-chip-litem-label { color:var(--lwt-ink); }
+
+/* 🚨 酒紅那顆變數在原皮裡是「紙上的墨」：43 處拿它當文字色、只有 18 處當底色。
+   暗紫底上照抄就變成粉字配紫底、整片糊掉（Rae 2026-08-26 回報）→ 這裡把它翻成「暗底上的亮墨」，
+   再把那 18 處當底色的單獨補回酒紅（下面幾組 + 前面那批主色鈕）。 */
+.studio-container.craft-skin, .vncomp-app.craft-skin {
+  --jrpg-wine:#f4a8cd !important; --jrpg-wine-dark:#e888b3 !important; }
+.craft-skin .vc-chip.on, .craft-skin .swb-primary:hover,
+.craft-skin .vn-history-item .h-btn:hover,
+.craft-skin .studio-icon-btn.danger:hover {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+.craft-skin .studio-tab.active::after, .craft-skin .studio-drawer-handle::after,
+.craft-skin .studio-typing-dot { background:var(--lwt-hot); }
+/* 分頁字：原本吃暗色墨，在暗底上跟底融在一起 */
+.craft-skin .studio-tab { color:rgba(239,231,246,.78); }
+.craft-skin .studio-tab.active { color:#fff0f8; }
+.craft-skin .studio-tab:hover { color:#ffd9ea; }
+/* 🚨 這四顆（複製創建說明書／匯入面板／匯入包／組件卡上的小鈕）在原皮裡連底帶字都是 !important，
+   class 規則蓋不過去 → 這裡也只能用 !important 對衝；字色本來吃 --jrpg-wine-dark，
+   我把那顆翻亮之後就變成亮字配米底＝整顆看不到字（Rae 2026-08-26 回報） */
+.craft-skin .sgc-btn, .craft-skin .studio-pack-btn,
+.craft-skin #studio-spec-copy-btn, .craft-skin #studio-import-btn {
+  background:rgba(255,255,255,.07) !important; background-image:none !important;
+  border-color:var(--lwt-line) !important; color:var(--lwt-ink) !important; box-shadow:none; }
+.craft-skin .sgc-btn:hover, .craft-skin .studio-pack-btn:hover,
+.craft-skin #studio-spec-copy-btn:hover, .craft-skin #studio-import-btn:hover {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)) !important;
+  border-color:var(--lwt-hot) !important; color:#fff !important; }
+
+/* 掃出來的兩塊漏網米色底：待處理提示條與「介面已隱藏」提示 */
+.craft-skin .mc-pend, .craft-skin .studio-hidden-ui {
+  background:rgba(58,47,84,.55); background-image:none; border-color:var(--lwt-line); color:var(--lwt-ink); }
+
+/* 匯入頁（借手機那份的 .ws-*）也換暗紫皮：整頁米色紙貼在工坊裡完全是另一個世界 */
+/* 劇情主題那一頁（.vth-*）也換工坊的皮：它原本吃創作室的米色紙底，
+   在工坊裡會跟暗紫框打架。權重跟創作室那份一樣，靠這整段放在檔案最後面、後出現才蓋得過去。 */
+.craft-skin .studio-theme-pane { background:transparent; background-image:none; color:var(--lwt-ink); }
+.craft-skin .vth-css-world, .craft-skin .vth-prev-label, .craft-skin .vth-gal-label { color:#e79ec4; }
+.craft-skin .vth-mini, .craft-skin .vth-vp, .craft-skin .vth-mode, .craft-skin .vth-ptab {
+  background:rgba(255,255,255,.06); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .vth-mini:hover, .craft-skin .vth-vp:hover, .craft-skin .vth-mode:hover, .craft-skin .vth-ptab:hover {
+  background:rgba(255,255,255,.14); color:var(--lwt-ink); border-color:rgba(226,150,190,.5); }
+.craft-skin .vth-mini.primary, .craft-skin .vth-vp.active, .craft-skin .vth-mode.active, .craft-skin .vth-ptab.active {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+.craft-skin .vth-mini.danger { color:#f0a8bd; border-color:rgba(226,110,150,.45); background:rgba(255,255,255,.05); }
+.craft-skin .vth-ai-desc, .craft-skin .vth-css-area, .craft-skin .vth-gal-name, .craft-skin .vth-vp-w {
+  background-color:rgba(22,17,34,.75); background-image:none; border-color:var(--lwt-line);
+  color:var(--lwt-ink); box-shadow:none; }
+.craft-skin .vth-css-area { color:#f3d9e8; }
+.craft-skin .vth-ai-desc::placeholder, .craft-skin .vth-css-area::placeholder,
+.craft-skin .vth-gal-name::placeholder { color:rgba(239,231,246,.4); }
+.craft-skin .vth-css-hint, .craft-skin .vth-gal-empty, .craft-skin .vth-chat-empty { color:var(--lwt-dim); }
+.craft-skin .vth-gal { border-color:var(--lwt-line); }
+.craft-skin .vth-gal-card { background-color:var(--lwt-card); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); box-shadow:none; }
+.craft-skin .vth-gal-cname { color:var(--lwt-ink); }
+.craft-skin .vth-preview-box, .craft-skin .vth-gal-thumb-wrap {
+  border-color:rgba(226,150,190,.34); background:#0d0a14; box-shadow:none; }
+
+/* VN 組件庫（獨立浮層；它的底色寫在 style 上→這幾條必須 !important） */
+.vncomp-app.craft-skin { background:var(--lwt-pane) !important; color:var(--lwt-ink) !important;
+  --jrpg-paper:rgba(46,37,68,.9); --jrpg-paper-light:rgba(58,47,84,.85); --jrpg-paper-deep:rgba(30,24,44,.9);
+  --jrpg-ink:#efe7f6; --jrpg-muted:rgba(239,231,246,.6); --jrpg-wine:#a12f66; --jrpg-wine-dark:#6d1f46;
+  --jrpg-gold:#e0a86a; --jrpg-gold-light:#f0cfa0; --jrpg-line:rgba(214,150,190,.3); }
+

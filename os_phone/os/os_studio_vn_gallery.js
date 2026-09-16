@@ -84,7 +84,7 @@
         const root = rootContainer || document.getElementById('aps-app-body') || document.body;
         const oldOv = root.querySelector(':scope > .vncomp-app'); if (oldOv) oldOv.remove();
         const ov = document.createElement('div');
-        ov.className = 'vncomp-app';
+        ov.className = 'vncomp-app craft-skin';   // 🎩 組件庫是組件類 → 帽匠皮（見 os_studio.css 最後面）
         // 定位＋暖色變數寫進元素本身(跟 #os_studio_app 同作法)：保證蓋滿覆蓋層、不靠 os_studio.css 是否載到新版
         // (曾踩坑：jsdelivr 對 js/css 分開快取→js 新但 css 舊時 .vncomp-app 規則缺失→變流式區塊接在 VN組件 tab 下面)
         ov.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:9000;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;background:#f5ead3;color:#3c2922;'
