@@ -98,7 +98,7 @@
     /* 🧩 以前上面有兩條固定的列：大時鐘與拍立得。兩個現在都是格子裡的組件、位置她自己決定，
        所以主畫面只剩「格子」跟「底部那排」兩列。主題裡的 --aps-widget-height 留著沒人用，不影響；
        --aps-lock-height 還有用，大時鐘組件拿它當高度。 */
-    grid-template-rows: minmax(0, 1fr) var(--aps-dock-height);
+    grid-template-rows: minmax(0, 1fr) auto var(--aps-dock-height);
     gap: 10px;
     padding: 12px 18px 24px;
     background: var(--aps-wallpaper);
@@ -170,6 +170,26 @@
    主題裡的 --aps-photo-* 變數留著 —— 新的拍立得組件照樣吃它們畫那張示意風景。 */
 
 /* ── 圖標格 ── */
+/* 📄 好幾頁：一頁一屏、左右滑、放手貼齊。她說東西太擠了，想要第二頁第三頁。
+   🚨 只有這一層會左右捲；每一頁裡面的格子照舊上下捲。 */
+.aps-pages {
+    display: flex; min-width: 0; min-height: 0;
+    overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+}
+.aps-pages::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+.aps-page { flex: 0 0 100%; min-width: 0; display: flex; scroll-snap-align: start; }
+.aps-page > .aps-grid { flex: 1; min-width: 0; }
+/* 現在在第幾頁。只有一頁時整排不畫（一顆孤零零的點看起來像壞掉），那一列自然沒高度 */
+.aps-dots { display: flex; justify-content: center; align-items: center; gap: 7px; padding: 5px 0 1px; }
+.aps-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--aps-label-color); opacity: 0.26; cursor: pointer;
+    transition: opacity 0.18s;
+}
+.aps-dot.on { opacity: 0.75; }
+
 .aps-grid {
     display: grid;
     grid-template-columns: repeat(var(--aps-grid-columns), minmax(0, 1fr));

@@ -567,6 +567,52 @@
                   .sort(function (a, b) { return a.k - b.k; })
                   .map(function (x) { return x.o; });
     }
+    // ── 📄 分頁：一頁一屏，左右滑 ────────────────────────────────────
+    //   她說東西太擠了、想要第二頁第三頁。分法照「排列順序裝箱」：裝滿一頁就開下一頁，
+    //   所以她拖曳換位置就等於決定了誰在第幾頁，不必另外記「這個在第幾頁」——
+    //   多記一份就會跟排列漂掉（她刪了 app、換了組件大小之後對不上）。
+    //   一頁的容量用格數算：主畫面三欄，一頁五行＝十五格。圖標一格，組件照它佔的欄乘列。
+    const PAGE_UNITS = 15;
+    function _unitsOf(o) {
+        if (!o.widget) return 1;
+        const W = _W(); if (!W) return 1;
+        const sz = W.sizeOf(o.widget);
+        return Math.max(1, (sz.cols || 1) * (sz.rows || 1));
+    }
+    function _paginate(items) {
+        const pages = [[]];
+        let used = 0;
+        items.forEach(function (o) {
+            const u = _unitsOf(o);
+            if (used + u > PAGE_UNITS && pages[pages.length - 1].length) { pages.push([]); used = 0; }
+            pages[pages.length - 1].push(o);
+            used += u;
+        });
+        return pages;
+    }
+    function _pagesEl() { return _el && _el.querySelector('#aps-pages'); }
+    function _pageCount() { const p = _pagesEl(); return p ? p.children.length : 1; }
+    function _curPage() {
+        const p = _pagesEl(); if (!p) return 0;
+        const w = p.clientWidth || 1;
+        return Math.max(0, Math.min(_pageCount() - 1, Math.round(p.scrollLeft / w)));
+    }
+    function _goPage(i, smooth) {
+        const p = _pagesEl(); if (!p) return;
+        const n = Math.max(0, Math.min(_pageCount() - 1, i));
+        try { p.scrollTo({ left: n * p.clientWidth, behavior: smooth === false ? 'auto' : 'smooth' }); }
+        catch (e) { p.scrollLeft = n * p.clientWidth; }
+    }
+    function _paintDots() {
+        const dots = _el && _el.querySelector('#aps-dots');
+        if (!dots) return;
+        const n = _pageCount(), cur = _curPage();
+        // 只有一頁就不要畫那排點：一顆孤零零的點看起來像壞掉
+        dots.innerHTML = n <= 1 ? '' : Array.from({ length: n }, function (_, i) {
+            return '<span class="aps-dot' + (i === cur ? ' on' : '') + '" data-page="' + i + '"></span>';
+        }).join('');
+    }
+
     function _cellHTML(o) { return o.widget ? _widgetCell(o.widget) : _iconBtn(o.app); }
     function _widgetCell(w) {
         const W = _W();
@@ -602,10 +648,16 @@
     // 重畫主畫面圖標格（APPS 或排列變動後呼叫）；點擊／長按走 _bindHome 的事件委派，這裡不綁
     function _renderGrid() {
         if (!_el) return;
-        const gridEl = _el.querySelector('.aps-grid');
-        if (!gridEl) return;
+        const pagesEl = _pagesEl();
+        if (!pagesEl) return;
         _seedWidgets();
-        gridEl.innerHTML = _gridItems().map(_cellHTML).join('');
+        // 📄 重畫會把捲動位置歸零 → 她拖完東西就被彈回第一頁。先記住在第幾頁，畫完放回去。
+        const keep = _curPage();
+        pagesEl.innerHTML = _paginate(_gridItems()).map(function (items) {
+            return '<div class="aps-page"><div class="aps-grid">' + items.map(_cellHTML).join('') + '</div></div>';
+        }).join('');
+        _goPage(keep, false);
+        _paintDots();
         _renderDock();
         _applyIcons();
         _paintMood();   // 🧩 內含重畫組件：心情那顆圖示長在大時鐘組件裡，格子一重畫就要補回去
@@ -672,7 +724,9 @@
         const isW = function (id) { return !!(W && W.isWidgetId(id)); };
         // 🧩 保險：組件永遠不進底部那排（拖曳那邊已經擋住了，這裡再擋一次存檔）。
         //    一塊跨兩欄又比較高的組件擠進那排會把它整個撐爆，連帶把主畫面擠壞。
-        const grid = ids('.aps-grid'), dock = ids('.aps-dock').filter(function (id) { return !isW(id); });
+        // 📄 好幾頁：照頁的先後串成同一串（排列本身就是分頁的依據，不另外記頁碼）
+        const grid = [..._el.querySelectorAll('.aps-page > .aps-grid > .aps-icon')].map(function (b) { return b.dataset.app; });
+        const dock = ids('.aps-dock').filter(function (id) { return !isW(id); });
         // 格子裡的排在前面，其他（沒擺出來的）照舊保留在後面
         L.grid = grid.concat(L.grid.filter(function (x) { return grid.indexOf(x) < 0 && dock.indexOf(x) < 0; }));
         L.dock = dock;
@@ -734,9 +788,28 @@
         if (best && src && src.parentElement === box && dist2(src) <= bestD) return null;
         return best;
     }
+    // 📄 手指現在落在哪一頁的格子上（好幾頁之後不能再永遠抓第一頁）。
+    //   跟著手指的那一份不吃事件、被拿起來那格是隱形的，所以這裡不會抓到它們自己。
+    function _gridAt(ev) {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const g = el && el.closest ? el.closest('.aps-grid') : null;
+        return g || (_el.querySelectorAll('.aps-page > .aps-grid')[_curPage()] || _el.querySelector('.aps-grid'));
+    }
+    let _pageFlipAt = 0;
     function _dragOver(ev) {
         const src = _drag.btn;
-        const grid = _el.querySelector('.aps-grid'), dock = _el.querySelector('.aps-dock');
+        const dock = _el.querySelector('.aps-dock');
+        const pagesEl = _pagesEl();
+        // 📄 拖到左右邊緣就翻頁（這樣才搬得到別頁去）。要節流，不然一路翻到底。
+        if (pagesEl && _pageCount() > 1) {
+            const pr = pagesEl.getBoundingClientRect();
+            const now = Date.now();
+            if (now - _pageFlipAt > 620) {
+                if (ev.clientX < pr.left + 26) { _pageFlipAt = now; _goPage(_curPage() - 1); }
+                else if (ev.clientX > pr.right - 26) { _pageFlipAt = now; _goPage(_curPage() + 1); }
+            }
+        }
+        const grid = _gridAt(ev);
         // 拖到格子上下緣就捲一下
         const gr = grid.getBoundingClientRect();
         if (ev.clientY < gr.top + 24) grid.scrollTop -= 8; else if (ev.clientY > gr.bottom - 24 && ev.clientY < gr.bottom + 4) grid.scrollTop += 8;
@@ -852,7 +925,9 @@
           // 🧩 拍立得以前焊在這裡（時鐘跟圖標格中間那一條，位置動不了）。
           //    現在它是格子裡的一個組件，跟圖標住同一格、可以拖可以拿掉，設定也在它自己身上
           //    ——照片點組件就能換，不必再跑一趟樣式面板。見 os_widgets.js。
-          +       '<div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div>'
+          +       '<div class="aps-pages" id="aps-pages"></div>'
+          +       '<div class="aps-dots" id="aps-dots"></div>'
+          +       '<div class="aps-dock" id="aps-dock"></div>'
           +       '<button class="aps-edit-done" type="button">完成</button>'
           +     '</div>'
           +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'
@@ -866,6 +941,20 @@
         ov.querySelector('#aps-close').addEventListener('click', close);
         ov.querySelector('#aps-home-btn').addEventListener('click', _home);
         _bindHome(ov.querySelector('#aps-home'));
+        // 📄 滑到哪一頁就把那顆點亮起來。捲動事件很密，用一次 rAF 收斂。
+        {
+            const pg = ov.querySelector('#aps-pages');
+            let tick = 0;
+            if (pg) pg.addEventListener('scroll', function () {
+                if (tick) return;
+                tick = requestAnimationFrame(function () { tick = 0; _paintDots(); });
+            }, { passive: true });
+            const dots = ov.querySelector('#aps-dots');
+            if (dots) dots.addEventListener('click', function (e) {
+                const d = e.target.closest('.aps-dot');
+                if (d) _goPage(parseInt(d.dataset.page, 10) || 0);
+            });
+        }
         _el = ov;
         _addWritingTools();        // 寫作工具（系統設置/變數工坊/創作室＋standalone:世界書/提示詞）
         _restoreInstalledApps();   // 從 localStorage 補回已安裝 app
