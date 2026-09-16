@@ -478,6 +478,26 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
     let _landedDirect = false; // (保留兼容) launch 仍會設；返回鈕已統一直接退出，不再讀它
     let chatMessages = [];
     let _vnPanelType = '純展示';   // 面板類型：純展示 / 純應用 / 共用（開頭就選，注入生成訊息）
+    let _pendingLaunchType = '';   // 從外面帶著類型進來（主畫面「組件」那張卡）：等對話載好再套，不跟存檔搶
+    // 🚨 類型要跟對話一起記：以前只在記憶體，視窗重開／PWA 重載就回到純展示，下一則開頭自動標成【類型：純展示】，
+    //    AI 看到跟上一輪不一樣就「順便幫她改回純展示」。她：「我黑人問號」。
+    const _panelTypeKey = (chatId) => 'studio_panel_type_' + chatId;
+    // 重開時該用哪個類型：外面帶進來的 → 這個對話存過的 → 舊對話沒存過就從最後一則她送的訊息開頭的【類型：X】推回來 → 都沒有就維持現在的
+    function _studioPickPanelType(chatId, history) {
+        if (_pendingLaunchType) { const t = _pendingLaunchType; _pendingLaunchType = ''; return t; }
+        let saved = '';
+        try { saved = localStorage.getItem(_panelTypeKey(chatId)) || ''; } catch (e) {}
+        if (saved) return saved;
+        const list = Array.isArray(history) ? history : [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            const m = list[i];
+            if (!m || m.role !== 'user') continue;
+            const c = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content.find(p => p && p.type === 'text') || {}).text || '' : '');
+            const mm = /^【類型：([^】]+)】/.exec(String(c || ''));
+            if (mm) return mm[1].trim();
+        }
+        return _vnPanelType;
+    }
     let _pvLastJsError = null;     // 預覽層跑面板 js 時抓到的同步錯誤（自檢引擎 os_studio_selfcheck.js 過橋讀）
     let _lastParseError = null;    // 最近一次 <json> 解析失敗的原因（自檢用來叫模型重出）
     let _autoFixRound = 0;         // 自檢自動修正輪數：她每送一次歸零，程式最多自動追加一輪，不無限循環
@@ -536,7 +556,7 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
             if (_cont && landMode !== 'worldbook' && landMode !== 'persona') _cont.classList.add('craft-skin');
             // 🧩 從手機「組件」那張卡進來的，開頭就把型別定成主畫面組件 ——
             //    不然她會落在 VN 組件那一種，做出來的是嵌進劇情正文的東西。她原話：「這裡創建會不會搞混啊?」
-            if (panelType) setTimeout(function () { _setPanelType(panelType); }, 0);
+            _pendingLaunchType = panelType || '';   // 對話載好之後由 _studioPickPanelType 套（見 switchChatSession）
             // 🚨 只認「手機殼的 app 內容區」(#aps-app-body/.aps-app)。
             //    不能認 #aurelia-phone-screen——那是整個擴展的螢幕，大廳也在它底下，
             //    認了就變成「在大廳開的創作室一律當手機版」，再寬也是單欄＋👁 抽屜（2026-08-26 抓到）。
@@ -1182,6 +1202,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             ? [sysMsg, ...history.filter(m => m.role !== 'system')]
             : [sysMsg];
 
+        // 類型跟對話一起回來（畫面上那三顆與設定列的標籤也跟著切，HTML 裡寫死的 active 只是初始）
+        try { _setPanelType(_studioPickPanelType(chatId, history)); } catch (e) {}
         renderChatHistory();
 
         // 優先讀 diff refine 後存的「最新修改快照」；沒有才回退到聊天歷史抽 JSON
@@ -3416,6 +3438,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     function _setPanelType(t) {
         if (!t) return;
         _vnPanelType = t;
+        try { localStorage.setItem(_panelTypeKey(getChatSessionId()), t); } catch (e) {}   // 跟這個對話一起記，重開讀回來
         document.querySelectorAll('#studio-type-row .studio-type').forEach(function (x) {
             x.classList.toggle('active', x.dataset.type === t);
         });
