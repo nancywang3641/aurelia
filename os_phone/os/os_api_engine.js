@@ -1497,6 +1497,11 @@
                 //    擺在 🍎 與直連兩條路之前：伺服器是原生 HTTP 出去的，本來就沒有 iOS 那個 CORS 問題，
                 //    所以只要有 url/key 就走這條。跟著酒館那條沒有 key 可以交給伺服器，不走。
                 const _isGeminiFmt = !useSystemApi && String(config.apiFormat || 'openai') === 'gemini';   // Gemini 原生格式（設置→請求格式）
+                if (_apiRec) {   // 記錄補上這一通的參數：她比「正文」跟「應用」兩筆記錄時，看不到字數上限與思考開沒開，差就差在這
+                    _apiRec.params = { model: String(config.model || ''), max_tokens: maxTokens, temperature: temperature, top_p: (top_p === undefined ? null : top_p),
+                        thinking: !!config.enableThinking, format: useSystemApi ? 'tavern' : (_isGeminiFmt ? 'gemini' : 'openai') };
+                    _apiLogFire('tok', _apiRec);
+                }
                 if (options.relayJob && !useSystemApi && !_isGeminiFmt && config.url && config.key && win.OS_RELAY && win.OS_RELAY.enabled()) {
                     let _rUrl = String(config.url).replace(/\/$/, '');
                     if (!_rUrl.includes('/chat/completions')) _rUrl += (_rUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';

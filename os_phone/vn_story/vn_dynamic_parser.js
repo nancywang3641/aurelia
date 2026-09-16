@@ -216,7 +216,7 @@
                         if (!OS || !OS.chat) throw new Error('OS_API 不可用');
                         const S = window.OS_SETTINGS || (window.parent && window.parent.OS_SETTINGS);
                         let cfg = (S && S.getConfig && S.getConfig()) || {};
-                        cfg = Object.assign({}, cfg, { usePresetPrompts: false });   // 思考照主模型設定走（以前寫死關）
+                        cfg = Object.assign({}, cfg, { usePresetPrompts: false, maxTokens: Math.max(parseInt(cfg.maxTokens) || 0, 8192) });   // 思考照主模型設定走；字數上限保底 8192 同正文那條
                         // PWA：任務指令前面接背景（人設、世界書、大總結、最近劇情），跟酒館版 app 一樣；酒館裡引擎回空、照舊
                         let _ctx = '';
                         try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}

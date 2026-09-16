@@ -461,8 +461,15 @@
         return '<span class="dsh-log-tok" title="送出 / 回來 Tokens">↑' + (r.inTok == null ? '—' : _n(r.inTok)) +
                ' ↓' + (r.outTok == null ? '—' : _n(r.outTok)) + '</span>';
     }
+    function _paramsText(p) {
+        if (!p) return '';
+        const fmt = { tavern: '酒館連線', gemini: 'Gemini 原生', openai: 'OpenAI 相容' }[p.format] || String(p.format || '');
+        return '模型：' + (p.model || '—') + '\n字數上限：' + (p.max_tokens == null ? '—' : p.max_tokens) + '\n溫度：' + (p.temperature == null ? '—' : p.temperature)
+             + (p.top_p == null ? '' : '\ntop_p：' + p.top_p) + '\n思考：' + (p.thinking ? '開' : '關') + '\n格式：' + fmt;
+    }
     function _logBodyHtml(r) {
         return (r.ok === false ? '<div class="dsh-pre-k">錯誤</div><pre class="dsh-pre">' + _esc(r.err || '') + '</pre>' : '') +
+            (r.params ? '<div class="dsh-pre-k">參數</div><pre class="dsh-pre">' + _esc(_paramsText(r.params)) + '</pre>' : '') +
             '<div class="dsh-pre-k">送出的 prompt</div><pre class="dsh-pre">' + _esc(r.prompt || '（空）') + '</pre>' +
             '<div class="dsh-pre-k">回來的原文</div><pre class="dsh-pre">' + _esc(r.raw || '（空）') + '</pre>' +
             '<div class="dsh-actions"><span class="sp"></span><button class="dsh-btn" data-one="' + r.id + '">複製這筆</button></div>';

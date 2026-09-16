@@ -2943,7 +2943,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     const S = window.OS_SETTINGS || (window.parent && window.parent.OS_SETTINGS);
                     let cfg = (S && S.getConfig && S.getConfig()) || {};
                     // 同創作室主對話：夾住 maxTokens，避免 gemini/vertex「maxOutputTokens 超過上限」
-                    cfg = Object.assign({}, cfg, { usePresetPrompts: false, maxTokens: Math.min(parseInt(cfg.maxTokens) || 8192, 32768) });   // 思考照主模型設定走（以前寫死關）
+                    cfg = Object.assign({}, cfg, { usePresetPrompts: false, maxTokens: Math.min(Math.max(parseInt(cfg.maxTokens) || 0, 8192), 32768) });   // 思考照主模型設定走；字數上限保底 8192 同正文那條
                     let _ctx = '';   // PWA：任務前面接背景（同 vn_dynamic_parser／app_runtime）；酒館裡引擎回空
                     try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}
                     const _msgs = [];   // 任務放 user、背景放 system（同 app_runtime／vn_dynamic_parser）

@@ -64,7 +64,7 @@
             +     'var msgs = []; if (ctx) msgs.push({role:"system", content: ctx + "----\\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。"}); msgs.push({role:"user", content: sys});'
             +     'var OS = window.OS_API; if (!OS || !OS.chat) throw new Error("OS_API 不可用");'
             +     'var cfg = (P.OS_SETTINGS && P.OS_SETTINGS.getConfig && P.OS_SETTINGS.getConfig()) || {};'
-            +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false });'   // 思考照主模型設定走（以前寫死關；酒館那條照預設包，兩邊對不齊）
+            +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false, maxTokens: Math.max(parseInt(cfg.maxTokens)||0, 8192) });'   // 思考照主模型設定走；字數上限保底 8192 同正文那條（思考模型先吃上限，太小就回空）
             +     'return await new Promise(function(res, rej){ OS.chat(msgs, cfg, null, function(t){ res(typeof t==="string"?t:(t&&t.message)||""); }, rej, {task:"apps", disableTyping:true}); });'
             +   '} catch(e){ console.error("[app callAI]",e); return ""; } };'
             // ── 當前聊天室角色清單：[{name,count}]，做角色選單/搜尋用(繞懶載、不等大總結) ──
