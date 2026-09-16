@@ -1435,6 +1435,16 @@
                     // include_reasoning:false 已足以關閉推理輸出，GPT/Claude 也不受影響。
                 }
 
+                // 🛡 Gemini 的安全過濾全關：酒館送去 Google 那條後端每一通都附 safetySettings=BLOCK_NONE（src/endpoints/backends/chat-completions.js 的 GEMINI_SAFETY），
+                //   直連走 OpenAI 相容格式從來沒帶 → 站用預設過濾，R18 整段被吃掉，回來是 finish_reason=content_filter、內容空。
+                //   她遇到的就是這個：同一個站同一份提示，酒館出、PWA 空。寫法照 Google 相容端點的規格：頂層 extra_body.google.safety_settings。
+                //   只在模型名有 gemini 時帶，別的模型不認這個欄位。
+                if (/gemini/i.test(String(config.model || ''))) {
+                    const _SAFE = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT', 'HARM_CATEGORY_CIVIC_INTEGRITY']
+                        .map(category => ({ category, threshold: 'OFF' }));   // 門檻用 OFF：跟酒館 src/constants.js 的 GEMINI_SAFETY 同一個值（比 BLOCK_NONE 更新更徹底）
+                    commonBody.extra_body = Object.assign({}, commonBody.extra_body, { google: Object.assign({}, commonBody.extra_body && commonBody.extra_body.google, { safety_settings: _SAFE }) });
+                }
+
                 // 📡 回覆交給伺服器跑：呼叫端給了 relayJob、而且她開了托管 → 把這一包丟過去，手機就可以睡了。
                 //    擺在 🍎 與直連兩條路之前：伺服器是原生 HTTP 出去的，本來就沒有 iOS 那個 CORS 問題，
                 //    所以只要有 url/key 就走這條。跟著酒館那條沒有 key 可以交給伺服器，不走。
