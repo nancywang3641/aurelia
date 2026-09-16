@@ -547,6 +547,7 @@
             if (L.seen.indexOf(w.id) >= 0) return;
             L.seen.push(w.id); changed = true;
             if (WIDGET_OFF_BY_DEFAULT.indexOf(w.id) >= 0 && L.hidden.indexOf(w.id) < 0) L.hidden.push(w.id);
+            else if (w.id === 'wdg_lock') L.grid.unshift(w.id);   // 大時鐘本來就在最上面，第一次出現時排第一
         });
         if (changed) _saveLayout(L);
     }
@@ -569,12 +570,14 @@
     function _cellHTML(o) { return o.widget ? _widgetCell(o.widget) : _iconBtn(o.app); }
     function _widgetCell(w) {
         const W = _W();
-        return '<button class="aps-icon aps-w" data-app="' + w.id + '" data-w-size="' + W.sizeKeyOf(w) + '"'
-             + (w.bare ? ' data-w-bare="1"' : '') + ' type="button">'
+        // 🚨 殼用 div 不用 button：大時鐘組件裡面有一顆真的按鈕（心情膠囊），
+        //    按鈕包按鈕是無效的 HTML，瀏覽器會把內層那顆拆出去。拖曳與點擊都認 .aps-icon，不認標籤。
+        return '<div class="aps-icon aps-w" role="button" tabindex="0" data-app="' + w.id + '" data-w-size="' + W.sizeKeyOf(w) + '"'
+             + (w.bare ? ' data-w-bare="1"' : '') + '>'
              + '<span class="aps-icon-del" data-del="' + w.id + '" title="從桌面移除"><i class="fa-solid fa-minus"></i></span>'
              + (W.hasSettings(w) ? '<span class="aps-w-cog" data-w-cog="' + w.id + '" title="這個組件的設定"><i class="fa-solid fa-gear"></i></span>' : '')
              + '<span class="aps-w-body" data-w-body="' + w.id + '">' + W.innerHTML(w) + '</span>'
-             + '</button>';
+             + '</div>';
     }
     // 會動的部分（時鐘走分針、拍立得跟著今天那句話變）交給組件自己畫
     function _paintWidgets() {
@@ -605,7 +608,7 @@
         gridEl.innerHTML = _gridItems().map(_cellHTML).join('');
         _renderDock();
         _applyIcons();
-        _paintWidgets();
+        _paintMood();   // 🧩 內含重畫組件：心情那顆圖示長在大時鐘組件裡，格子一重畫就要補回去
     }
     // 對外：app 商店安裝/卸載時呼叫（只動 runtime 與圖標；持久化是商店的事）
     function addApp(meta) {
@@ -802,6 +805,10 @@
         home.addEventListener('pointerup', up);
         home.addEventListener('pointercancel', up);
         home.addEventListener('click', function (e) {
+            // 🧩 心情膠囊長在大時鐘組件裡：它自己有事要做（換下一個心情），
+            //    不能讓它冒泡上去被當成「點了這個組件」。組件會重畫，所以綁在這裡不綁在節點上。
+            const mood = e.target.closest('.aps-mood');
+            if (mood && !_editing) { e.stopPropagation(); _cycleMood(); return; }
             const del = e.target.closest('.aps-icon-del');
             if (del && _editing) { e.stopPropagation(); _hideApp(del.dataset.del); return; }
             // 🧩 組件自己的設定（她的原話：照片在組件上就可以換，不必跑樣式面板）
@@ -833,11 +840,8 @@
           +   '<div class="aps-screen">'
           +     '<div class="aps-statusbar"><span class="aps-sb-time" id="aps-sb-time">--:--</span><span class="aps-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>'
           +     '<div class="aps-home" id="aps-home">'
-          +       '<div class="aps-lock">'
-          +         '<div class="aps-lock-time" id="aps-lock-time">--:--</div>'
-          +         '<div class="aps-lock-date" id="aps-lock-date"></div>'
-          +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情<span class="aps-mood-em" id="aps-mood-em" data-mood="0"><i class="fa-solid fa-sun"></i></span></button>'
-          +       '</div>'
+          // 🧩 大時鐘以前焊在這裡，是主畫面最上面那條固定的列。她說 Apple 的時間也是一個組件、
+          //    可以自己調，所以它現在也是格子裡的一個組件（預設排在最前面），能拖能拿掉。見 os_widgets.js。
           // 🧩 拍立得以前焊在這裡（時鐘跟圖標格中間那一條，位置動不了）。
           //    現在它是格子裡的一個組件，跟圖標住同一格、可以拖可以拿掉，設定也在它自己身上
           //    ——照片點組件就能換，不必再跑一趟樣式面板。見 os_widgets.js。
@@ -859,8 +863,6 @@
         _addWritingTools();        // 寫作工具（系統設置/變數工坊/創作室＋standalone:世界書/提示詞）
         _restoreInstalledApps();   // 從 localStorage 補回已安裝 app
         _renderGrid();             // 統一畫圖標格 + 綁定 + 套圖庫圖標
-        const moodBtn = ov.querySelector('#aps-mood');
-        if (moodBtn) moodBtn.addEventListener('click', _cycleMood);
         _paintMood();
         _tickClock();                                              // 先畫一次，別讓主畫面停在 --:--
         try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列＋主畫面時鐘

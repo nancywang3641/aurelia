@@ -51,6 +51,30 @@
     //   tap() 是點下去做什麼（不是編輯模式的時候才會走到）。
     const BUILTIN = [
         {
+            // 🧩 主畫面最上面那個大時鐘。以前是焊死的一條列，她說 Apple 的時間也是一個組件、
+            //    可以自己調。搬進來時「原封不動沿用 .aps-lock 那套樣式」——四套皮對它的排法
+            //    （時間／日期／心情膠囊怎麼擺）都寫在那個名字上，改名字等於四套皮一起掉樣式。
+            id: 'wdg_lock', name: '大時鐘', size: 'w', builtin: true, bare: true,
+            hint: '主畫面最上面那個大的；點心情那顆換今天的心情',
+            html: function () {
+                return '<div class="aps-lock aps-w-lock">'
+                     +   '<div class="aps-lock-time" id="aps-lock-time">--:--</div>'
+                     +   '<div class="aps-lock-date" id="aps-lock-date"></div>'
+                     +   '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情'
+                     +     '<span class="aps-mood-em" id="aps-mood-em" data-mood="0"><i class="fa-solid fa-sun"></i></span>'
+                     +   '</button>'
+                     + '</div>';
+            },
+            paint: function (el) {
+                const d = new Date();
+                const t = el.querySelector('#aps-lock-time');
+                const dd = el.querySelector('#aps-lock-date');
+                if (t) t.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+                if (dd) dd.textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日 週' + '日一二三四五六'.charAt(d.getDay());
+                // 心情那顆圖示由主畫面那邊補（圖示清單在它那裡，不另外抄一份）
+            }
+        },
+        {
             // 🚨 bare＝不要外面那層圓角卡片。拍立得本來就是一張相紙：直角、有紙膠帶、
             //    微微歪一點、底下一行手寫字。套上通用卡片殼就變成一塊圓角方卡片，那不是拍立得。
             id: 'wdg_polaroid', name: '拍立得', size: 's', builtin: true, bare: true,

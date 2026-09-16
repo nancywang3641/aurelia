@@ -95,9 +95,10 @@
 .aps-home {
     position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
     display: grid;
-    /* 🧩 以前有第四列給拍立得，它現在是格子裡的組件 → 那一列拿掉，空間讓給格子。
-       主題裡的 --aps-widget-height 留著沒人用，不影響。 */
-    grid-template-rows: var(--aps-lock-height) minmax(0, 1fr) var(--aps-dock-height);
+    /* 🧩 以前上面有兩條固定的列：大時鐘與拍立得。兩個現在都是格子裡的組件、位置她自己決定，
+       所以主畫面只剩「格子」跟「底部那排」兩列。主題裡的 --aps-widget-height 留著沒人用，不影響；
+       --aps-lock-height 還有用，大時鐘組件拿它當高度。 */
+    grid-template-rows: minmax(0, 1fr) var(--aps-dock-height);
     gap: 10px;
     padding: 12px 18px 24px;
     background: var(--aps-wallpaper);
@@ -758,3 +759,8 @@
 .aps-drag-ghost.aps-w { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35); }
 .aps-drag-ghost .aps-w-body { animation: none !important; }
 .aps-drag-ghost .aps-w-cog { display: none !important; }
+
+/* 大時鐘組件：高度沿用主題原本給那一條列的值，長相完全靠 .aps-lock 那套（四套皮都寫在那個名字上） */
+/* 🚨 要壓過上面那條「不要那層卡片殼的組件高度交給內容」——大時鐘的高度是主題給的，
+   不能由內容決定，不然四套皮對它的排法（時間／日期／心情膠囊怎麼擺）會全部擠成一團。 */
+.aps-w[data-w-bare] .aps-w-body > .aps-w-lock { height: var(--aps-lock-height); }
