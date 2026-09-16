@@ -5,85 +5,8 @@
     background: rgba(0, 0, 0, 0.45);
 }
 .aps-frame {
-    /* ══ 手機主題的格子 ══════════════════════════════════════════════
-       一套主題＝把下面這一整組換掉。這裡的預設值就是預設主題「留白相片」，
-       .aps-frame.theme-cute / .theme-dark 各自覆蓋一整組（在這支檔最後面）。
-       🚨 底下所有畫面規則一律只讀 var()，不准再寫死顏色或尺寸 ——
-          寫死一條，那一條就換不動，主題看起來就會「換了但有個東西沒跟上」。
-       🚨 「樣式」那顆單獨改桌布/字體時是寫成 .aps-frame 的行內樣式，
-          行內永遠贏過這裡的 class 規則 → 她的個別設定蓋過主題，這是故意的。 */
-    /* 底色與文字 */
-    --aps-wallpaper: #f8f8f3;
-    --aps-frame-bg: #dedfd6;
-    --aps-frame-line: #b9bdb1;
-    --aps-label-color: #3e4b41;
-    --aps-muted: #727d71;
-    --aps-sb-color: #465246;
-    --aps-sb-bg: transparent;
-    --aps-accent: #728764;
-    --aps-homebar-color: #a3ad9d;
-    --aps-font: "Segoe UI", "Microsoft JhengHei", sans-serif;
     /* 動態島佔掉的那塊。app 自己把標頭往上延伸這麼多，島底下那條就是 app 自己的顏色 ——
        真手機就是這樣，不是系統畫一條黑的蓋住。全螢幕那版是 0（那邊有裝置真正的安全區）。 */
-    --aps-safe-top: 40px;
-    --aps-caption-font: "Segoe Print", "KaiTi", "DFKai-SB", cursive;
-    /* 時鐘區：版位用 grid-areas 換，所以時間／日期／心情的相對位置整個是可換的 */
-    --aps-lock-height: 106px;
-    --aps-clock-areas: "clock date" "mood mood";
-    --aps-clock-columns: 1fr auto;
-    --aps-clock-align: start;
-    --aps-clock-font: "Segoe UI", sans-serif;
-    --aps-clock-size: 46px;
-    --aps-clock-weight: 300;
-    --aps-clock-spacing: -2px;
-    --aps-date-width: 48px;
-    --aps-mood-align: start;
-    --aps-mood-bg: #ffffff;
-    --aps-mood-line: #dfe3d8;
-    --aps-mood-radius: 999px;
-    /* widget 區（拍立得） */
-    --aps-widget-height: 168px;
-    --aps-widget-align: center;
-    --aps-photo-width: 238px;
-    --aps-photo-height: 100px;
-    --aps-photo-padding: 10px 10px 11px;
-    --aps-photo-rotate: 1.5deg;
-    --aps-photo-1-url: none;          /* 她在設置填的網址；沒填就是 none，露出底下程式畫的示意風景 */
-    --aps-photo-position: center;
-    --aps-paper: #fff;
-    --aps-paper-line: #e6e7de;
-    --aps-paper-shadow: 0 5px 12px #505b4612;
-    --aps-tape-width: 0px;
-    --aps-tape-bg: transparent;
-    --aps-photo-sky: linear-gradient(#e1e6db, #f3efe2);
-    --aps-photo-sun: #faf8e9;
-    --aps-photo-glow: transparent;
-    --aps-photo-back: #a8b69c;
-    --aps-photo-front: #748b79;
-    --aps-photo-water: linear-gradient(#c3cbb9, #d7dbca);
-    /* 圖標格 */
-    --aps-grid-columns: 3;
-    --aps-grid-gap: 17px 12px;
-    --aps-icon-size: 46px;
-    --aps-icon-height: 37px;
-    --aps-icon-radius: 0;
-    --aps-icon-bg: transparent;
-    --aps-icon-color: #657b63;
-    --aps-icon-line: transparent;
-    --aps-icon-shadow: none;
-    --aps-icon-gap: 5px;
-    --aps-glyph-size: 21px;
-    /* 底排 dock */
-    --aps-dock-height: 64px;
-    --aps-dock-padding: 10px 0 0;
-    --aps-dock-radius: 0;
-    --aps-dock-border: 0 solid transparent;
-    --aps-dock-top: 1px solid #d8dfd0;
-    --aps-dock-bg: transparent;
-    --aps-dock-shadow: none;
-    --aps-dock-icon-bg: transparent;
-    --aps-dock-icon-color: #61755b;
-    --aps-dock-icon-radius: 0;
 
     position: relative;
     width: 360px; height: 720px; max-height: 92vh;
@@ -424,62 +347,12 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 /* ── 奶油貼紙 ── */
-.aps-frame.theme-cute {
-    --aps-wallpaper: radial-gradient(ellipse at 50% 25%, #fff9ed 0, #fff4e8 40%, #f5dfdf 100%);
-    --aps-frame-bg: #f1d8d9; --aps-frame-line: #c4a3a5; --aps-label-color: #745151; --aps-muted: #8a6666;
-    --aps-sb-color: #805959; --aps-sb-bg: transparent; --aps-accent: #bb727b; --aps-homebar-color: #bb9198;
-    --aps-font: "Microsoft JhengHei", "Segoe UI", sans-serif;
-    --aps-lock-height: 106px; --aps-clock-areas: "clock" "date" "mood"; --aps-clock-columns: 1fr; --aps-clock-align: center;
-    --aps-clock-font: "Arial Rounded MT Bold", "Trebuchet MS", sans-serif; --aps-clock-size: 49px; --aps-clock-weight: 650; --aps-clock-spacing: -2px;
-    --aps-date-width: none; --aps-mood-align: center; --aps-mood-bg: #fffaf3; --aps-mood-line: #e5c6c4; --aps-mood-radius: 20px;
-    --aps-widget-height: 150px; --aps-widget-align: center; --aps-photo-width: 157px; --aps-photo-height: 78px; --aps-photo-padding: 9px 9px 10px; --aps-photo-rotate: -5deg;
-    --aps-paper: #fffdfa; --aps-paper-line: #f1e1d5; --aps-paper-shadow: 2px 5px 7px rgba(152, 111, 93, 0.13);
-    --aps-tape-width: 53px; --aps-tape-bg: repeating-linear-gradient(90deg, #eec1c5 0 5px, #f6d8d9 5px 10px);
-    --aps-photo-sky: linear-gradient(#f0d6c8, #fae9cf); --aps-photo-sun: #fff6d9; --aps-photo-glow: #ffefd9;
-    --aps-photo-back: #acbeb0; --aps-photo-front: #79958c; --aps-photo-water: repeating-linear-gradient(0deg, #d5ddc8 0 5px, #c2d3c3 6px 7px);
-    --aps-grid-columns: 3; --aps-grid-gap: 9px 16px; --aps-icon-size: 53px; --aps-icon-height: 45px; --aps-icon-radius: 19px 19px 17px 17px;
-    --aps-icon-bg: #fffbf6; --aps-icon-color: #ac6978; --aps-icon-line: #eacdc9; --aps-icon-shadow: 0 3px 0 #e5c6c5, inset 0 2px 0 #fff; --aps-icon-gap: 6px; --aps-glyph-size: 21px;
-    --aps-dock-height: 73px; --aps-dock-padding: 10px 8px 5px; --aps-dock-radius: 18px; --aps-dock-border: 3px solid #fff8f3; --aps-dock-top: 3px solid #fff8f3;
-    --aps-dock-bg: #ebc4c9; --aps-dock-shadow: 0 3px 0 #d5afb5; --aps-dock-icon-bg: #fff3ea; --aps-dock-icon-color: #98636d; --aps-dock-icon-radius: 13px;
-}
-.theme-cute .aps-home::before { inset: 9px 7px 11px; border: 2px dotted rgba(222, 176, 180, 0.47); border-radius: 24px; }
-.theme-cute .aps-home::after { width: 49px; height: 17px; border-radius: 20px; top: 65px; left: 15px; background: #fffdf7; box-shadow: 4px 3px 0 rgba(230, 200, 199, 0.30); transform: rotate(-12deg); }
-.theme-cute .aps-lock::before { content: ""; position: absolute; width: 26px; height: 25px; left: 8px; top: 44px; border-radius: 50%; background: #fffdf7; box-shadow: 17px 3px 0 -3px #fffdf7; z-index: -1; }
-.theme-cute .aps-lock::after { content: ""; position: absolute; width: 19px; height: 25px; right: 5px; top: 27px; background: #d7af68; clip-path: polygon(50% 0, 62% 36%, 100% 50%, 62% 64%, 50% 100%, 38% 64%, 0 50%, 38% 36%); transform: rotate(14deg); }
-.theme-cute .aps-dock::before { content: ""; position: absolute; width: 43px; height: 20px; top: -12px; left: calc(50% - 21px); background: #c47f8d; clip-path: polygon(0 4%, 42% 30%, 50% 16%, 58% 30%, 100% 4%, 93% 96%, 57% 67%, 50% 84%, 43% 67%, 7% 96%); filter: drop-shadow(0 1px 0 white); }
-.theme-cute .aps-dock .aps-icon-name { color: #63403f; }
-.theme-cute .aps-grid .aps-icon:nth-child(3n + 2) .aps-icon-em { --aps-icon-color: #8b9471; --aps-icon-bg: #f8f8ec; }
-.theme-cute .aps-grid .aps-icon:nth-child(3n) .aps-icon-em { --aps-icon-color: #a58051; --aps-icon-bg: #fff3df; }
+
 
 /* ── 留白相片（預設）：格子的值在最上面的 .aps-frame，這裡只補它的裝飾 ── */
-.theme-clean .aps-lock { border-bottom: 1px solid #e1e4d9; padding-bottom: 12px; }
-.theme-clean .aps-home::before { width: 1px; height: 29px; background: #c6cfbd; top: 157px; left: 1px; }
-.theme-clean .aps-home::after { width: 1px; height: 29px; background: #c6cfbd; top: 269px; right: 1px; }
 
 /* ── 霧夜薄荷 ── */
-.aps-frame.theme-dark {
-    --aps-wallpaper: radial-gradient(ellipse at 10% 31%, #334840 0, #202b29 43%, #19201f 80%);
-    --aps-frame-bg: #242b29; --aps-frame-line: #616e65; --aps-label-color: #e1e7df; --aps-muted: #b4c0b7;
-    --aps-sb-color: #cbd7ce; --aps-sb-bg: rgba(27, 36, 34, 0.50); --aps-accent: #b8d9bc; --aps-homebar-color: #6f8275;
-    --aps-font: "Segoe UI", "Microsoft JhengHei", sans-serif;
-    --aps-lock-height: 100px; --aps-clock-areas: "mood clock" "mood date"; --aps-clock-columns: auto 1fr; --aps-clock-align: end;
-    --aps-clock-font: "Segoe UI", sans-serif; --aps-clock-size: 57px; --aps-clock-weight: 250; --aps-clock-spacing: -3px;
-    --aps-date-width: none; --aps-mood-align: start; --aps-mood-bg: rgba(255, 255, 255, 0.04); --aps-mood-line: rgba(117, 151, 129, 0.27); --aps-mood-radius: 30px;
-    --aps-widget-height: 154px; --aps-widget-align: flex-start; --aps-photo-width: 162px; --aps-photo-height: 86px; --aps-photo-padding: 8px 8px 10px; --aps-photo-rotate: -3deg;
-    --aps-paper: #e6e9df; --aps-paper-line: #bac7ba; --aps-paper-shadow: 6px 8px 0 rgba(18, 25, 23, 0.44), 0 14px 22px rgba(0, 0, 0, 0.20);
-    --aps-tape-width: 43px; --aps-tape-bg: rgba(187, 202, 187, 0.50); --aps-photo-sky: linear-gradient(#1c302d, #476259); --aps-photo-sun: #cbdcc4; --aps-photo-glow: rgba(179, 210, 177, 0.31);
-    --aps-photo-back: #3e5b51; --aps-photo-front: #243e35; --aps-photo-water: repeating-linear-gradient(0deg, #71957f 0 1px, #405f51 1px 5px);
-    --aps-grid-columns: 3; --aps-grid-gap: 10px 12px; --aps-icon-size: 46px; --aps-icon-height: 46px; --aps-icon-radius: 50%;
-    --aps-icon-bg: rgba(255, 255, 255, 0.04); --aps-icon-color: #bfd5c1; --aps-icon-line: rgba(118, 144, 129, 0.31); --aps-icon-shadow: inset 0 1px 0 rgba(231, 255, 226, 0.04); --aps-icon-gap: 5px; --aps-glyph-size: 21px;
-    --aps-dock-height: 70px; --aps-dock-padding: 8px 7px; --aps-dock-radius: 36px; --aps-dock-border: 1px solid rgba(113, 133, 116, 0.33); --aps-dock-top: 1px solid rgba(113, 133, 116, 0.33);
-    --aps-dock-bg: rgba(61, 80, 69, 0.61); --aps-dock-shadow: 0 9px 20px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(217, 255, 214, 0.04); --aps-dock-icon-bg: transparent; --aps-dock-icon-color: #d2e3ce; --aps-dock-icon-radius: 50%;
-}
-.theme-dark .aps-mood { align-self: center; flex-direction: column-reverse; gap: 7px; padding: 10px 9px; font-size: 9px; }
-.theme-dark .aps-mood-em { font-size: 18px; }
-.theme-dark .aps-mood-em > i { font-size: 18px; }
-.theme-dark .aps-home::before { width: 225px; height: 225px; border: 1px solid rgba(165, 213, 179, 0.09); border-radius: 50%; top: 134px; right: -130px; box-shadow: 0 0 0 22px rgba(165, 213, 179, 0.03), 0 0 0 44px rgba(165, 213, 179, 0.02); }
-.theme-dark .aps-home::after { top: 210px; right: 29px; width: 4px; height: 4px; border-radius: 50%; background: #bad5b3; box-shadow: -14px 43px 0 -1px #bad5b3, 11px -32px 0 -1px #bad5b3; }
-.theme-dark .aps-dock .aps-icon:last-child .aps-icon-em { background: #bdd8b9; color: #2e4c37; }
+
 @media (prefers-reduced-motion: reduce) { .aps-icon-em { transition: none; } }
 /* 字體「硬套用」：蓋掉所有 app(連寫死字體的)，只放過 fa 圖標/svg 不破壞 */
 .aps-frame.aps-font-on .aps-app-body *:not(i):not(svg):not([class*="fa-"]) { font-family: var(--aps-font) !important; }
@@ -741,6 +614,11 @@
 .aps-set-th:active { transform: scale(0.97); }
 .aps-set-th.on { border-color: var(--os-accent); box-shadow: inset 0 0 0 1px var(--os-accent); }
 .aps-set-th-sw { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--os-line); }
+/* 四顆預覽小圓的顏色定義在 css/aurelia_theme.css 的 :root。加新主題時這裡也要多一條。 */
+.aps-th-sw-clean { background: var(--aps-swatch-clean); }
+.aps-th-sw-cute  { background: var(--aps-swatch-cute); }
+.aps-th-sw-glass { background: var(--aps-swatch-glass); }
+.aps-th-sw-dark  { background: var(--aps-swatch-dark); }
 .aps-set-th-name { letter-spacing: 0.5px; }
 
 /* 📱 手機直立：別在手機裡再畫一個置中的小手機框 —— 手機瀏覽器上它會吃 vh/網址列那塊、
@@ -780,46 +658,12 @@
       模糊與亮邊完全看不出來，只會變成一層灰。所以底加了兩團很淡的冷暖光暈。
    🚨 模糊只加在葉子節點（圖標、底排、心情、拍立得），不准往上加到整個螢幕或主畫面那層 ——
       那會把裡面所有貼著螢幕的浮層（選單、彈窗、長按小窗）困在那一層裡面。 */
-.aps-frame.theme-glass {
-    --aps-wallpaper: linear-gradient(168deg, #fdfdfe 0%, #f1f3f7 48%, #e7eaf0 100%);
-    --aps-frame-bg: #e8eaee; --aps-frame-line: #c8ccd4; --aps-label-color: #16181a; --aps-muted: #5a5f66;
-    --aps-sb-color: #16181a; --aps-sb-bg: transparent; --aps-accent: #16181a; --aps-homebar-color: #b7bcc4;
-    --aps-font: "Segoe UI", "Microsoft JhengHei", sans-serif;
-    --aps-lock-height: 92px; --aps-clock-areas: "clock mood" "date mood"; --aps-clock-columns: 1fr auto; --aps-clock-align: start;
-    --aps-clock-font: "Segoe UI", sans-serif; --aps-clock-size: 44px; --aps-clock-weight: 200; --aps-clock-spacing: -1px;
-    --aps-date-width: none; --aps-mood-align: end; --aps-mood-bg: rgba(255, 255, 255, 0.55); --aps-mood-line: rgba(255, 255, 255, 0.85); --aps-mood-radius: 999px;
-    --aps-widget-height: 144px; --aps-widget-align: center; --aps-photo-width: 246px; --aps-photo-height: 84px; --aps-photo-padding: 8px 8px 9px; --aps-photo-rotate: 0deg;
-    --aps-paper: rgba(255, 255, 255, 0.46); --aps-paper-line: rgba(255, 255, 255, 0.80); --aps-paper-shadow: 0 10px 28px rgba(22, 24, 26, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.90);
-    --aps-tape-width: 0px; --aps-tape-bg: transparent;
-    --aps-photo-sky: linear-gradient(#e9edf2, #f8f9fb); --aps-photo-sun: #ffffff; --aps-photo-glow: rgba(255, 255, 255, 0.85);
-    --aps-photo-back: #cfd5dd; --aps-photo-front: #aab2bd; --aps-photo-water: linear-gradient(#dfe3e9, #eef0f3);
-    --aps-grid-columns: 3; --aps-grid-gap: 14px 10px; --aps-icon-size: 52px; --aps-icon-height: 52px; --aps-icon-radius: 16px;
-    --aps-icon-bg: rgba(255, 255, 255, 0.44); --aps-icon-color: #16181a; --aps-icon-line: rgba(255, 255, 255, 0.88);
-    --aps-icon-shadow: 0 4px 14px rgba(22, 24, 26, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.90); --aps-icon-gap: 6px; --aps-glyph-size: 20px;
-    --aps-dock-height: 66px; --aps-dock-padding: 9px 8px; --aps-dock-radius: 26px;
-    --aps-dock-border: 1px solid rgba(255, 255, 255, 0.80); --aps-dock-top: 1px solid rgba(255, 255, 255, 0.80);
-    --aps-dock-bg: rgba(255, 255, 255, 0.42); --aps-dock-shadow: 0 8px 24px rgba(22, 24, 26, 0.10); --aps-dock-icon-bg: transparent; --aps-dock-icon-color: #16181a; --aps-dock-icon-radius: 14px;
-}
+
 /* 換順序：第一列放拍立得、第二列放時鐘。兩列的高度也跟著對調，不然拍立得會被塞進時鐘那一列的高度裡 */
-.theme-glass .aps-home { grid-template-rows: var(--aps-widget-height) var(--aps-lock-height) minmax(0, 1fr) var(--aps-dock-height); }
-.theme-glass .aps-widgets { grid-row: 1; }
-.theme-glass .aps-lock { grid-row: 2; }
 /* 玻璃本體：只有這四個葉子節點模糊 */
-.theme-glass .aps-icon-em,
-.theme-glass .aps-dock,
-.theme-glass .aps-mood,
-.theme-glass .aps-polaroid { -webkit-backdrop-filter: blur(14px) saturate(1.25); backdrop-filter: blur(14px) saturate(1.25); }
 /* 心情做成直的長丸，跟時間日期並排在右邊 */
-.theme-glass .aps-mood { align-self: center; flex-direction: column-reverse; gap: 7px; padding: 12px 10px; margin-top: 0; font-size: 9px; letter-spacing: 1px; }
-.theme-glass .aps-mood-em { font-size: 17px; }
-.theme-glass .aps-mood-em > i { font-size: 17px; }
 /* 玻璃要有東西可以透，才看得出是玻璃：兩團很淡的冷暖光暈墊在底下 */
 /* 光暈要墊在「玻璃真的蓋住的地方」：一團在拍立得與上半排圖標後面、一團在底排後面。
    放在角落沒有用 —— 玻璃透出來的是它正下方那一塊，角落的暈它照不到，畫面就只是一片白。 */
-.theme-glass .aps-home::before { width: 330px; height: 330px; border-radius: 50%; top: -70px; left: -55px; background: radial-gradient(circle, rgba(128, 154, 208, 0.38) 0, rgba(128, 154, 208, 0) 68%); }
-.theme-glass .aps-home::after { width: 300px; height: 300px; border-radius: 50%; bottom: -60px; right: -70px; background: radial-gradient(circle, rgba(214, 170, 140, 0.34) 0, rgba(214, 170, 140, 0) 68%); }
 /* 整支手機唯一一塊實心黑：底排最後那顆 */
-.theme-glass .aps-dock .aps-icon:last-child .aps-icon-em { background: #16181a; color: #ffffff; box-shadow: 0 4px 12px rgba(22, 24, 26, 0.28); }
 /* 相片下面那行手寫字在玻璃上要站得住，改成近黑 */
-.theme-glass .aps-polaroid figcaption { color: #16181a; }
-.theme-glass .aps-polaroid time { color: #5f6469; }

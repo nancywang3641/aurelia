@@ -88,38 +88,15 @@
     };
 
     // ── 內建主題 ────────────────────────────────────────────────────
-    // 一套主題分兩半：主畫面那半是 phone_shell.css 的 .aps-frame.theme-<id>（圖標排幾個、
-    // 時鐘位置、底排形狀都在那），系統面板那半是底下 os 這組 --os-* 色票（os_sys_chrome.css
-    // 用它畫手機設置、相簿、控制室、狀態檔案、提示詞、世界書、電話、日曆、劇情設定的頂欄）。
-    // 🚨 色票寫在 :root 不是寫在手機殼上 —— 那幾個面板有時候是全屏開的，根本不在手機裡面。
-    // 🚨 加一套：這裡加一列 + phone_shell.css 補一組 .aps-frame.theme-<id>，其他都不用動。
-    //    swatch 是設置裡那顆預覽小圓的三段顏色，照著該主題的桌布／圖標／重點色挑。
     const DEFAULT_THEME = 'clean';
+    // 🚨 主題的值一個都不在這裡 —— 全部在 css/aurelia_theme.css，那支檔就是一套主題的全部。
+    //    這邊只留代號與顯示名字；設置頁那顆預覽小圓的顏色也定義在那支的 :root。
+    //    加一套：那支複製一個區塊填滿格子，這裡加一列，就會出現在設置裡。
     const THEMES = [
-        { id: 'clean', name: '留白相片', swatch: ['#f8f8f3', '#dfe3d8', '#728764'],
-          os: { '--os-ink': '#3e4b41', '--os-ink-rgb': '62, 75, 65', '--os-tint-rgb': '240, 241, 235', '--os-ink-dim': 'rgba(62,75,65,0.72)', '--os-line': 'rgba(62,75,65,0.15)',
-                '--os-hover': 'rgba(62,75,65,0.08)', '--os-chrome-bg': 'rgba(240,241,235,0.90)',
-                '--os-chrome-tabs-bg': 'rgba(244,245,239,0.94)', '--os-accent': '#728764', '--os-accent-glow': 'rgba(114,135,100,0.30)',
-                '--os-page-bg': '#fbfbf7', '--os-surface': '#ffffff',
-                '--os-ink-soft': '#5c6a5e', '--os-accent-strong': '#55684a', '--os-on-accent': '#ffffff' } },
-        { id: 'cute', name: '奶油貼紙', swatch: ['#fff4e8', '#ebc4c9', '#bb727b'],
-          os: { '--os-ink': '#745151', '--os-ink-rgb': '116, 81, 81', '--os-tint-rgb': '255, 244, 238', '--os-ink-dim': 'rgba(116,81,81,0.72)', '--os-line': 'rgba(196,163,165,0.35)',
-                '--os-hover': 'rgba(116,81,81,0.08)', '--os-chrome-bg': 'rgba(255,244,238,0.92)',
-                '--os-chrome-tabs-bg': 'rgba(255,249,245,0.95)', '--os-accent': '#bb727b', '--os-accent-glow': 'rgba(187,114,123,0.35)',
-                '--os-page-bg': '#fffaf5', '--os-surface': '#ffffff',
-                '--os-ink-soft': '#8a6666', '--os-accent-strong': '#a05a64', '--os-on-accent': '#ffffff' } },
-        { id: 'glass', name: '白瓷玻璃', swatch: ['#f7f8fa', '#e3e6ea', '#16181a'],
-          os: { '--os-ink': '#16181a', '--os-ink-rgb': '22, 24, 26', '--os-tint-rgb': '244, 246, 249', '--os-ink-dim': 'rgba(22,24,26,0.72)', '--os-line': 'rgba(22,24,26,0.12)',
-                '--os-hover': 'rgba(22,24,26,0.06)', '--os-chrome-bg': 'rgba(250,251,252,0.88)',
-                '--os-chrome-tabs-bg': 'rgba(246,247,249,0.94)', '--os-accent': '#16181a', '--os-accent-glow': 'rgba(22,24,26,0.25)',
-                '--os-page-bg': '#fafbfc', '--os-surface': '#ffffff',
-                '--os-ink-soft': '#5a5f66', '--os-accent-strong': '#16181a', '--os-on-accent': '#ffffff' } },
-        { id: 'dark', name: '霧夜薄荷', swatch: ['#202b29', '#3d5045', '#b8d9bc'],
-          os: { '--os-ink': '#e1e7df', '--os-ink-rgb': '225, 231, 223', '--os-tint-rgb': '44, 53, 50', '--os-ink-dim': 'rgba(225,231,223,0.72)', '--os-line': 'rgba(184,217,188,0.18)',
-                '--os-hover': 'rgba(225,231,223,0.10)', '--os-chrome-bg': 'rgba(36,43,41,0.92)',
-                '--os-chrome-tabs-bg': 'rgba(30,37,35,0.95)', '--os-accent': '#b8d9bc', '--os-accent-glow': 'rgba(184,217,188,0.30)',
-                '--os-page-bg': '#1e2523', '--os-surface': '#28302d',
-                '--os-ink-soft': '#a8b4aa', '--os-accent-strong': '#b8d9bc', '--os-on-accent': '#1e2523' } },
+        { id: 'clean', name: '留白相片' },
+        { id: 'cute',  name: '奶油貼紙' },
+        { id: 'glass', name: '白瓷玻璃' },
+        { id: 'dark',  name: '霧夜薄荷' },
     ];
     function _themeById(id) { return THEMES.find(function (t) { return t.id === id; }) || THEMES[0]; }
     // 換主題＝換一整套，所以把「她之前單獨改過、而這套主題管得到」的那幾項一起清掉。
@@ -145,11 +122,8 @@
         const frame = _el.querySelector('.aps-frame');
         if (!frame) return;
         const t = _loadTheme();
-        // 主題：換掉手機殼上的 theme-<id>。整組格子是 CSS 那邊換的，這裡只負責掛名字。
-        const th = _themeById(t.themeId || DEFAULT_THEME);
-        THEMES.forEach(function (x) { frame.classList.toggle('theme-' + x.id, x.id === th.id); });
-        // 系統面板那半：色票掛在根上（那幾個面板有時候是全屏開的，不在手機殼裡面）
-        _applyOsTokens(th);
+        // 主題：整組格子是 CSS 那邊換的，這裡只負責把名字掛上去。
+        _applyThemeClass(t.themeId || DEFAULT_THEME);
         // 她在設置裡單獨改過的那幾項寫成行內 —— 行內贏過主題那組 class，個別設定優先，這是故意的
         Object.keys(THEME_VARS).forEach(function (k) {
             if (t[k]) frame.style.setProperty(THEME_VARS[k], t[k]);
@@ -163,15 +137,17 @@
         frame.classList.toggle('aps-icon-colorful', !!t.iconColorful);
         _applyIcons();
     }
-    // 色票掛在文件根上。手機殼可能還沒建出來，所以這支不依賴 _el，開機時就先套一次。
-    function _applyOsTokens(th) {
+    // 🚨 主題的 class 掛在 <html> 上，不是掛在手機殼上：
+    //    手機設置、控制室那些面板有時候是全屏開的，根本不在手機殼裡面，掛在殼上它們吃不到。
+    //    掛在根上，兩組格子（手機的 --aps-* 與面板的 --os-*）從根一路流下去，兩邊都吃得到。
+    // 🚨 也因為這樣，格子不准寫回 .aps-frame 上面 —— 直接命中的規則會贏過從根繼承下來的值，
+    //    主題就換不動了。她在設置裡單獨改的那幾項是行內樣式，行內照樣贏，那是故意的。
+    function _applyThemeClass(id) {
         try {
             const root = (win.document || document).documentElement;
             if (!root) return;
-            THEMES[0].os && Object.keys(THEMES[0].os).forEach(function (v) {
-                const val = th.os && th.os[v];
-                if (val) root.style.setProperty(v, val); else root.style.removeProperty(v);
-            });
+            const use = _themeById(id).id;
+            THEMES.forEach(function (x) { root.classList.toggle('theme-' + x.id, x.id === use); });
         } catch (e) {}
     }
 
@@ -375,12 +351,7 @@
                  + '<span class="aps-set-ichint">' + a.id + '.png</span>'
                  + '</div>';
         }).join('');
-        // 主題預覽小圓的三段色。不寫成標籤上的行內樣式：這頁的顏色是資料算出來的，
-        // 一律收進一段自己的樣式規則，標籤上只留 class。
         const curTheme = _themeById(t.themeId || DEFAULT_THEME).id;
-        const thCss = THEMES.map(function (x) {
-            return '.aps-th-sw-' + x.id + ' { background: linear-gradient(135deg,' + x.swatch[0] + ' 0 38%,' + x.swatch[1] + ' 38% 72%,' + x.swatch[2] + ' 72% 100%); }';
-        }).join('\n');
         const thBtns = THEMES.map(function (x) {
             return '<button class="aps-set-th' + (x.id === curTheme ? ' on' : '') + '" data-theme="' + x.id + '" type="button">'
                  + '<span class="aps-set-th-sw aps-th-sw-' + x.id + '"></span>'
@@ -388,7 +359,6 @@
         }).join('');
         c.innerHTML =
             '<div class="aps-set">'
-          +   '<style>' + thCss + '</style>'
           +   '<div class="aps-set-top sysh"><button class="aps-set-back sysh-back" id="aps-set-back" type="button" title="返回">‹</button><span class="aps-set-h sysh-title">手機設置</span></div>'
           +   '<div class="aps-set-sec">主題</div><div class="aps-set-ths">' + thBtns + '</div>'
           +   '<div class="aps-set-subnote">一套主題會換掉桌布、圖標排法、時鐘位置、底排，還有各個系統頁面的配色。下面幾項可以再單獨蓋過它。</div>'
@@ -932,7 +902,7 @@
 
     // 系統面板（控制室、狀態檔案那些）可以完全不開手機就被叫出來，而手機殼是第一次開才建。
     // 所以色票在載入時就先套一次，不能等 _applyTheme —— 那支沒有手機殼就直接跳出去了。
-    try { _applyOsTokens(_themeById(_loadTheme().themeId || DEFAULT_THEME)); } catch (e) {}
+    try { _applyThemeClass(_loadTheme().themeId || DEFAULT_THEME); } catch (e) {}
 
     win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide };
     console.log('✅ VoidPhoneShell（大廳手機殼浮窗）模組就緒');

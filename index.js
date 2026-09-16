@@ -513,6 +513,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/void_achievement.css');
 
         // 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後才蓋得掉各自的舊頭
+        await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_theme.css');   // 主題一包（要在各面板樣式之前）
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_sys_chrome.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_dialog.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_char_gallery.css');   // 角色圖鑑
