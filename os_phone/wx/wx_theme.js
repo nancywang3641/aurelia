@@ -33,7 +33,7 @@
             /* 💬 長按一則訊息跳出來的小窗：複製｜引用｜刪除 */
             .wx-msgmenu { position: absolute; z-index: 1000003; display: flex; background: rgba(20,20,22,0.94); border-radius: 12px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); animation: popIn 0.12s; }
             .wx-msgmenu-btn { position: relative; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 12px 8px; border: none; background: none; color: var(--wx-on-accent); font-size: 12px; font-family: inherit; cursor: pointer; border-radius: 8px; }
-            .wx-msgmenu-btn + .wx-msgmenu-btn: :before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 1px; background: rgba(255,255,255,0.14); }
+            .wx-msgmenu-btn + .wx-msgmenu-btn::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 1px; background: rgba(255,255,255,0.14); }
             .wx-msgmenu-btn i { font-size: 18px; }
             .wx-msgmenu-btn: active { background: rgba(255,255,255,0.12); }
             .wx-msgmenu-tail { position: absolute; bottom: -6px; width: 12px; height: 12px; margin-left: -6px; background: rgba(20,20,22,0.94); transform: rotate(45deg); border-radius: 2px; }
@@ -106,9 +106,9 @@
             .wx-vsheet-title { font-size: 16px; font-weight: 600; color: #222; }
             .wx-vsheet-note { font-size: 13px; color: var(--wx-ink-soft); text-align: center; font-variant-numeric: tabular-nums; }
             .wx-vsheet-bar { width: 100%; height: 6px; -webkit-appearance: none; appearance: none; border: none; border-radius: 3px; overflow: hidden; background: #e5e5e5; }
-            .wx-vsheet-bar: :-webkit-progress-bar { background: #e5e5e5; }
-            .wx-vsheet-bar: :-webkit-progress-value { background: var(--wx-accent); }
-            .wx-vsheet-bar: :-moz-progress-bar { background: var(--wx-accent); }
+            .wx-vsheet-bar::-webkit-progress-bar { background: #e5e5e5; }
+            .wx-vsheet-bar::-webkit-progress-value { background: var(--wx-accent); }
+            .wx-vsheet-bar::-moz-progress-bar { background: var(--wx-accent); }
             .wx-vsheet-mask[data-state="download"] .wx-vsheet-bar { visibility: hidden; }
             .wx-vsheet-dlbtn { width: 100%; padding: 12px; border: none; border-radius: 8px; background: var(--wx-accent); color: var(--wx-on-accent); font-size: 15px; font-weight: 500; cursor: pointer; }
             .wx-vsheet-mask[data-state="downloading"] .wx-vsheet-dlbtn { display: none; }
@@ -132,7 +132,7 @@
             .wx-chat-item { display: flex; padding: 12px 16px; border-bottom: 1px solid #f2f2f2; cursor: pointer; background: var(--wx-surface); min-height: 70px; box-sizing: border-box; }
             .wx-chat-item: active { background: var(--wx-surface-2); }
             .wx-avatar { width: 48px; height: 48px; border-radius: 6px; margin-right: 12px; background-size: cover; background-position: center; flex-shrink: 0; background-color: var(--wx-fill); position: relative; }
-            .wx-badge { position: absolute; top: -6px; right: -6px; background: var(--wx-danger); color: white; font-size: 10px; height: 16px; min-width: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 1px solid #fff; font-weight: bold; z-index: 5; }
+            .wx-badge { position: absolute; top: -6px; right: -6px; background: var(--wx-danger); color: #fff; font-size: 10px; height: 16px; min-width: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 1px solid var(--wx-surface); font-weight: bold; z-index: 5; }
             .wx-info { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
             .wx-name { font-size: 16px; color: var(--wx-ink); font-weight: 500; margin-bottom: 4px;}
             .wx-last-msg { font-size: 13px; color: var(--wx-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -156,17 +156,17 @@
             /* 📞 通話記錄：電話圖示加一句話，跟一般訊息一樣裝在泡泡裡 */
             .wx-call-rec { display: inline-flex; align-items: center; gap: 7px; }
             .wx-call-rec i { font-size: 15px; opacity: 0.75; }
-            .wx-bubble-content { max-width: 100%; padding: 10px 14px; border-radius: 6px; position: relative; font-size: 15px; line-height: 1.5; word-wrap: break-word; color: var(--wx-ink); display: flex; flex-direction: column; gap: 5px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+            .wx-bubble-content { max-width: 100%; padding: 10px 14px; border-radius: 6px; position: relative; font-size: 15px; line-height: 1.5; word-wrap: break-word; color: var(--wx-bubble-ink); display: flex; flex-direction: column; gap: 5px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
             /* 🚨 圖片／影片／定位卡片是寫死寬度（230～240px），外層被上面 70% 夾窄時卡片會往右溢出；
                自己這側頭像在右邊 → 卡片整張壓在頭像上。卡片一律不准比泡泡寬，縮窄照比例。 */
             .wx-bubble-content > * { max-width: 100%; box-sizing: border-box; }
             /* 卡片自己就是造型（泡泡透明無邊），不要泡泡的小尖角 */
-            .wx-msg-row .wx-bubble-content.wx-bubble-bare: :before { display: none; }
+            .wx-msg-row .wx-bubble-content.wx-bubble-bare::before { display: none; }
             .wx-group-name { font-size: 10px; color: var(--wx-ink-dim); margin-bottom: 2px; margin-left: 10px; }
             /* 引用回覆：照微信擺在泡泡內、正文下面的一條灰塊。結構由 OS_API.chatQuote 產，兩個 app 共用 */
             .wx-quote { display: flex; gap: 4px; align-items: baseline; margin-top: 2px; padding: 5px 8px; border-radius: 4px; background: rgba(0,0,0,0.06); font-size: 11px; line-height: 1.4; color: #8a8a8a; cursor: pointer; }
             .wx-quote .chat-quote-name { flex-shrink: 0; color: var(--wx-link); max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-            .wx-quote .chat-quote-name: :after { content: '：'; }
+            .wx-quote .chat-quote-name::after { content: '：'; }
             .wx-quote .chat-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .wx-dark .wx-quote { background: rgba(255,255,255,0.10); color: var(--wx-ink-dim); }
             .wx-dark .wx-quote .chat-quote-name { color: var(--wx-link); }
@@ -174,15 +174,15 @@
             .wx-replying { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(0,0,0,0.05); border-top: 1px solid rgba(0,0,0,0.06); font-size: 11px; color: #8a8a8a; }
             .wx-replying .wx-replying-body { flex: 1; min-width: 0; display: flex; gap: 4px; }
             .wx-replying .chat-quote-name { flex-shrink: 0; color: var(--wx-link); }
-            .wx-replying .chat-quote-name: :after { content: '：'; }
+            .wx-replying .chat-quote-name::after { content: '：'; }
             .wx-replying .chat-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .wx-replying .wx-replying-x { flex-shrink: 0; padding: 2px 6px; cursor: pointer; color: var(--wx-ink-dim); }
             .wx-dark .wx-replying { background: rgba(255,255,255,0.08); border-top-color: rgba(255,255,255,0.10); color: var(--wx-ink-dim); }
             .wx-dark .wx-replying .chat-quote-name { color: var(--wx-link); }
             .wx-msg-row.you .wx-bubble-content { background: var(--wx-surface); margin-left: 10px; border: 1px solid var(--wx-line); }
-            .wx-msg-row.you .wx-bubble-content: :before { content: ''; position: absolute; left: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 6px solid #fff; }
+            .wx-msg-row.you .wx-bubble-content::before { content: ''; position: absolute; left: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 6px solid #fff; }
             .wx-msg-row.me .wx-bubble-content { background: #95ec69; margin-right: 10px; border: 1px solid #86d45a; }
-            .wx-msg-row.me .wx-bubble-content: :before { content: ''; position: absolute; right: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 6px solid #95ec69; }
+            .wx-msg-row.me .wx-bubble-content::before { content: ''; position: absolute; right: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 6px solid #95ec69; }
             .wx-system-notice { text-align: center; font-size: 12px; color: #b2b2b2; margin: 15px 20px; padding: 4px 10px; clear: both; width: auto; align-self: center; border-radius: 4px; }
             /* 撤回：那則淡掉 → 換成「撤回了一則訊息」淡進來（她從三個小樣挑的 1）。換掉與拿掉 class 都是 wx_core 計時器做，不靠轉場跑完 */
             .wx-recall-out { transition: opacity .35s ease; opacity: 0 !important; }
@@ -274,8 +274,8 @@
             .wx-tab.active .wx-tab-txt { color: var(--wx-accent); }
             .wx-tab: not(.active) .wx-tab-icon { fill: #b2b2b2; }
             .wx-tab: not(.active) .wx-tab-txt { color: #b2b2b2; }
-            .wx-tab-badge { position: absolute; top: -2px; right: -4px; background: var(--wx-danger); color: white; font-size: 10px; height: 16px; min-width: 16px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 3px; border: 1px solid #fff; font-weight: bold; z-index: 5; transform: scale(0.9); }
-            .wx-tab-dot { position: absolute; top: 0px; right: -2px; width: 10px; height: 10px; background: var(--wx-danger); border-radius: 50%; border: 1px solid #fff; z-index: 5; }
+            .wx-tab-badge { position: absolute; top: -2px; right: -4px; background: var(--wx-danger); color: #fff; font-size: 10px; height: 16px; min-width: 16px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 3px; border: 1px solid var(--wx-bar); font-weight: bold; z-index: 5; transform: scale(0.9); }
+            .wx-tab-dot { position: absolute; top: 0px; right: -2px; width: 10px; height: 10px; background: var(--wx-danger); border-radius: 50%; border: 1px solid var(--wx-bar); z-index: 5; }
             .wx-scroll-view { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; height: 100%; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
             .wx-grid-page { min-width: 100%; scroll-snap-align: start; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 15px 10px; padding: 25px 20px; box-sizing: border-box; height: 210px; }
             .wx-grid-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
@@ -317,7 +317,7 @@
             .wx-file-size { font-size: 11px; color: var(--wx-ink-dim); margin-top: 4px; }
             .wx-file-icon { width: 45px; height: 45px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--wx-on-accent); font-weight: bold; font-size: 18px; flex-shrink: 0; }
             .wx-gift-card-blue { width: 220px; background: linear-gradient(135deg, #0e2a5e 0%, #173673 100%); border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; padding: 15px 15px 10px 15px; color: #e3c795; box-shadow: 0 2px 5px rgba(0,0,0,0.15); position: relative; overflow: hidden; cursor: pointer; }
-            .wx-gift-card-blue: :before { content: ''; position: absolute; top: -10px; right: -10px; width: 40px; height: 40px; background: rgba(255,255,255,0.05); border-radius: 50%; box-shadow: -20px 40px 0 rgba(255,255,255,0.05), 40px 20px 0 rgba(255,255,255,0.05); }
+            .wx-gift-card-blue::before { content: ''; position: absolute; top: -10px; right: -10px; width: 40px; height: 40px; background: rgba(255,255,255,0.05); border-radius: 50%; box-shadow: -20px 40px 0 rgba(255,255,255,0.05), 40px 20px 0 rgba(255,255,255,0.05); }
             .wx-gift-top { display: flex; align-items: center; gap: 10px; z-index: 1; }
             .wx-gift-icon-gold { font-size: 26px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); }
             .wx-gift-title-text { font-size: 14px; font-weight: 500; letter-spacing: 0.5px; }
@@ -385,8 +385,8 @@
             .wx-receipt-btn-group { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 10px; }
             .wx-receipt-btn-accept { background: var(--wx-accent); color: var(--wx-on-accent); padding: 10px; border-radius: 4px; font-size: 14px; cursor: pointer; font-weight: 500; }
             .wx-receipt-btn-refuse { background: var(--wx-page); color: var(--wx-danger); padding: 10px; border-radius: 4px; font-size: 14px; cursor: pointer; font-weight: 500; }
-            .wx-receipt-box: :before { content: ""; position: absolute; top: -10px; left: 0; width: 100%; height: 10px; background: linear-gradient(135deg, transparent 33%, var(--wx-surface) 34%, var(--wx-surface) 66%, transparent 67%), linear-gradient(45deg, transparent 33%, var(--wx-surface) 34%, var(--wx-surface) 66%, transparent 67%); background-size: 20px 20px; background-position: top center; background-repeat: repeat-x; }
-            .wx-receipt-box: :after { content: ""; position: absolute; bottom: -10px; left: 0; width: 100%; height: 10px; background: linear-gradient(135deg, transparent 33%, var(--wx-surface) 34%, var(--wx-surface) 66%, transparent 67%), linear-gradient(45deg, transparent 33%, var(--wx-surface) 34%, var(--wx-surface) 66%, transparent 67%); background-size: 20px 20px; background-position: bottom center; background-repeat: repeat-x; transform: rotate(180deg); }
+            .wx-receipt-box::before { content: ""; position: absolute; top: -10px; left: 0; width: 100%; height: 10px; background: linear-gradient(135deg, transparent 33%, var(--wx-surface) 34%, var(--wx-surface) 66%, transparent 67%), linear-gradient(45deg, transparent 33%, var(--wx-surface) 34%, var(--wx-surface) 66%, transparent 67%); background-size: 20px 20px; background-position: top center; background-repeat: repeat-x; }
+            .wx-receipt-box::after { content: ""; position: absolute; bottom: -10px; left: 0; width: 100%; height: 10px; background: linear-gradient(135deg, transparent 33%, var(--wx-surface) 34%, var(--wx-surface) 66%, transparent 67%), linear-gradient(45deg, transparent 33%, var(--wx-surface) 34%, var(--wx-surface) 66%, transparent 67%); background-size: 20px 20px; background-position: bottom center; background-repeat: repeat-x; transform: rotate(180deg); }
 
             /* ========== 紅包彈窗 ========== */
             .wx-rp-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 110; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); animation: fadeIn 0.2s; }
@@ -404,7 +404,7 @@
                不是「A: 1 | B: 2 | C: 3」那種一行串到底的印法——那是 log 不是 UI。 */
             .wx-rp-info { display: flex; justify-content: center; padding: 0 12px 14px; font-size: 13px; color: #6b6b6b; }
             .wx-rp-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; min-width: 0; }
-            .wx-rp-stat + .wx-rp-stat: :before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 1px; background: #ececec; }
+            .wx-rp-stat + .wx-rp-stat::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 1px; background: #ececec; }
             .wx-rp-stat b { font-size: 15px; font-weight: 600; color: #2b2b2b; font-variant-numeric: tabular-nums; letter-spacing: -0.2px; }
             .wx-rp-stat span { font-size: 11px; color: #6b6b6b; }
             .wx-rp-list { flex: 1; overflow-y: auto; padding: 10px 15px; max-height: 300px; }
@@ -449,7 +449,7 @@
                 background: var(--wx-accent);
                 border-color: var(--wx-accent);
             }
-            .wx-msg-checkbox.checked: :after {
+            .wx-msg-checkbox.checked::after {
                 content: '✓';
                 color: var(--wx-on-accent);
                 font-size: 14px;
@@ -475,7 +475,7 @@
             .wx-dark .wx-name { color: var(--wx-ink); }
             .wx-dark .wx-system-notice { color: var(--wx-ink-dim); }
             .wx-dark .wx-msg-row.you .wx-bubble-content { background: var(--wx-surface-2); border-color: #333; color: var(--wx-ink); }
-            .wx-dark .wx-msg-row.you .wx-bubble-content: :before { border-right-color: var(--wx-line); }
+            .wx-dark .wx-msg-row.you .wx-bubble-content::before { border-right-color: var(--wx-line); }
             .wx-dark .wx-footer-wrapper { background: var(--wx-surface); border-top-color: var(--wx-line); }
             .wx-dark .wx-input-real { background: var(--wx-surface-2) !important; border-color: var(--wx-line-strong); color: var(--wx-ink) !important; -webkit-text-fill-color: #f0f0f0 !important; }
             .wx-dark .wx-icon-btn { color: var(--wx-ink); }

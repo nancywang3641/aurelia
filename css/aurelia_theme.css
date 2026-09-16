@@ -464,6 +464,10 @@
     --wx-on-accent: #ffffff;     /* 疊在綠色上的字 */
     --wx-danger: #fa5151;        /* 未讀紅點、刪除 */
     --wx-link: #576b95;          /* 連結、可點的藍字 */
+    /* 🚨 泡泡上的字不吃主字色：自己那顆泡泡的底（淺綠）白天夜晚是同一個顏色，
+       跟著主字色走的話夜晚會變成白字配淺綠，整句看不見。
+       對方那顆在夜晚會翻成深底，它自己有一條規則把字改亮，不必動這一格。 */
+    --wx-bubble-ink: #000000;
 }
 .wx-shell.wx-dark {
     --wx-page: #111111;
@@ -486,6 +490,7 @@
     --wx-on-accent: #ffffff;
     --wx-danger: #fa5151;
     --wx-link: #7d90b8;
+    --wx-bubble-ink: #000000;
 }
 
 /* ── 微信的其他皮 ──────────────────────────────────────────────────
@@ -504,6 +509,7 @@
     --wx-ink: #3c2e28;  --wx-ink-2: #57443c;  --wx-ink-3: #7d6558;  --wx-ink-soft: #9a8375;  --wx-ink-dim: #ab968a;
     --wx-accent: #d08a72;  --wx-on-accent: #ffffff;  --wx-danger: #fa5151;  --wx-link: #b07a5f;
     --wx-accent-ink: #9d5740;
+    --wx-bubble-ink: #000000;
 }
 .wx-shell.wx-dark.wxtheme-cream {
     --wx-page: #17120f;  --wx-bar: #221b17;  --wx-surface: #221b17;  --wx-surface-2: #2e2521;
@@ -512,6 +518,7 @@
     --wx-ink: #f2e8e0;  --wx-ink-2: #f2e8e0;  --wx-ink-3: #cbb9ad;  --wx-ink-soft: #a89184;  --wx-ink-dim: #8a776c;
     --wx-accent: #d08a72;  --wx-on-accent: #1a1310;  --wx-danger: #fa5151;  --wx-link: #c9a48f;
     --wx-accent-ink: #e7a992;
+    --wx-bubble-ink: #000000;
 }
 
 /* 靛藍：冷調墨色，重點色換成靛藍 */
@@ -522,6 +529,7 @@
     --wx-ink: #131a26;  --wx-ink-2: #2c3949;  --wx-ink-3: #56647a;  --wx-ink-soft: #7b8799;  --wx-ink-dim: #8d99ab;
     --wx-accent: #3a6ea5;  --wx-on-accent: #ffffff;  --wx-danger: #fa5151;  --wx-link: #3a6ea5;
     --wx-accent-ink: #2b5482;
+    --wx-bubble-ink: #000000;
 }
 .wx-shell.wx-dark.wxtheme-indigo {
     --wx-page: #0d1117;  --wx-bar: #151b24;  --wx-surface: #151b24;  --wx-surface-2: #1e2733;
@@ -530,6 +538,7 @@
     --wx-ink: #e6ecf5;  --wx-ink-2: #e6ecf5;  --wx-ink-3: #b3bfd0;  --wx-ink-soft: #8d9aad;  --wx-ink-dim: #78859a;
     --wx-accent: #5b91cf;  --wx-on-accent: #0d1117;  --wx-danger: #fa5151;  --wx-link: #7fb0e0;
     --wx-accent-ink: #8ab6e6;
+    --wx-bubble-ink: #000000;
 }
 
 /* 設置頁那三顆主題小圓（三段色：底／卡片／重點）。加新主題就在這裡多一條。 */
