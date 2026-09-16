@@ -242,12 +242,15 @@
         }
         let targets = [];
         try { targets = (win.wxApp && win.wxApp.roomTargets) ? (win.wxApp.roomTargets(apiChat.id) || []) : []; } catch (e) {}
-        const dm = targets.filter(t => t && !t.isGroup).map(t => t.name).slice(0, 40);
-        const gp = targets.filter(t => t && t.isGroup).map(t => t.name).slice(0, 20);
-        note += '\n這一則回覆寫在 <chat chatroom="' + name + '"> 裡。';
+        const tag = (t) => t.name + '＝' + t.id;
+        const dm = targets.filter(t => t && !t.isGroup).map(tag).slice(0, 40);
+        const gp = targets.filter(t => t && t.isGroup).map(tag).slice(0, 20);
+        note += '\n這一則回覆寫在 <chat id="' + apiChat.id + '"> 裡（chatroom="' + name + '" 可加可不加，只是給人看的）。';
         if (dm.length || gp.length) {
-            note += '\n【可以傳到的聊天室】' + (dm.length ? '私聊：' + dm.join('、') : '') + (dm.length && gp.length ? '；' : '') + (gp.length ? '群聊：' + gp.join('、') : '')
-                + '\n劇情上真的有人會另外傳訊息時，才再開一個 <chat chatroom="清單裡的名字">；清單以外的名字不會送出。';
+            note += '\n【可以傳到的聊天室】格式是「名字＝代號」：' + (dm.length ? '私聊：' + dm.join('，') : '') + (dm.length && gp.length ? '；' : '') + (gp.length ? '群聊：' + gp.join('，') : '')
+                + '\n劇情上真的有人會另外傳訊息時，才再開一個 <chat id="那一間的代號">。'
+                + '\n認人只認 id，一定要照抄；名字會被改、也分繁簡，寫了不算數。沒寫 id 的容器一律當成這一間。'
+                + '\n清單以外的代號不會送出。';
         }
         return note;
     }

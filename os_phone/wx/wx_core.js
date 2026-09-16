@@ -1006,40 +1006,29 @@
     }
     // 名字比對用：不算空白、不分大小寫；再加上「整理聊天室」記下的同一個人的正確寫法
     //   🚨 程式不會自己轉簡繁：只查整理 AI 記過的那張表（wx_room_fix.people），沒記過的寫法照樣對不上
+    // 🚨 正規化要把繁簡折掉：AI 同一個角色這次寫「陳彥庭」下次寫「陈彦庭」，
+    //    以前兩者算不同名字 → 整段訊息對不到聊天室、直接不見。
+    //    折只用在比對，顯示永遠是原字（見 os_phone/wx/wx_zh.js）。
     function _roomNameKeys(name) {
-        const norm = function (s) { return String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase(); };
+        const zh = function (s) { try { const Z = win.WX_ZH || window.WX_ZH; return Z ? Z.fold(s) : s; } catch (e) { return s; } };
+        const norm = function (s) { return zh(String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase()); };
         const keys = [norm(name)];
         try { const fixed = _fixPerson(name, _loadRoomFix()); if (fixed && keys.indexOf(norm(fixed)) < 0) keys.push(norm(fixed)); } catch (e) {}
         return { keys: keys, norm: norm };
     }
-    // chatroom 寫的名字 → 哪一間。沒寫、或寫的是現在這間＝這間；對不到回 null（不新開、不加好友）
-    //   對法依序：名字（含整理記下的寫法）完全一樣 → 只寫了名字的一部分（至少兩個字）而且只對得到一間。對到兩間以上不猜。
-    function _resolveRoom(target, cur) {
-        const t = String(target == null ? '' : target).trim();
-        if (!t) return cur || null;
-        const K = _roomNameKeys(t);
-        const same = function (name) { return K.keys.indexOf(K.norm(name)) >= 0; };
-        if (cur && (t === cur.id || same(cur.name))) return cur;
+    // 只認代號：找得到就是它，找不到就是 null。不做任何名字上的猜測。
+    //   名字隨時會被改（她改備註、AI 改群名），而且繁簡兩種寫法都出得來，所以名字不能當鑰匙。
+    function _resolveRoomById(id, cur) {
+        const t = String(id == null ? '' : id).trim();
+        if (!t) return null;
+        if (cur && cur.id === t) return cur;
         const list = _roomTargets(cur ? cur.id : null);
-        const exact = list.find(function (c) { return c.id === t; })
-            || list.find(function (c) { return !c.isGroup && same(c.name); })
-            || list.find(function (c) { return c.isGroup && same(c.name); });
-        if (exact) return exact;
-        // 只寫一部分（「彥庭」→「陳彥庭」）：這一間也算進來，免得在私聊裡寫簡稱反而被丟掉
-        const pool = cur ? list.concat([cur]) : list;
-        const partOf = function (isGroup) {
-            const found = pool.filter(function (c) {
-                if (!!c.isGroup !== isGroup) return false;
-                const n = K.norm(c.name);
-                return n.length >= 2 && K.keys.some(function (k) { return k.length >= 2 && (n.indexOf(k) >= 0 || k.indexOf(n) >= 0); });
-            });
-            if (found.length > 1) return false;   // 對到好幾個人：不猜
-            return found[0] || null;
-        };
-        const p = partOf(false);
-        if (p) return p;
-        if (p === false) return null;
-        return partOf(true) || null;
+        return list.find(function (c) { return c.id === t; }) || null;
+    }
+    // 只用來確認「這個名字講的是不是現在這一間」：折過繁簡與空白再比，不拿去找別間
+    function _sameRoomName(a, b) {
+        const K = _roomNameKeys(a);
+        return K.keys.indexOf(K.norm(b)) >= 0;
     }
     // 有沒有任何一間叫這個名字（含被刪、被拉黑、不是好友的）：對不到時分辨「沒這間」還是「故意不送」
     function _anyRoomNamed(name) {
@@ -1059,12 +1048,26 @@
             const am = attrs.match(/\b(?:chatroom|name)\s*=\s*["'“”「]([^"'“”」]*)["'“”」]/i);
             const im = attrs.match(/\bid\s*=\s*["'“”]([^"'“”]*)["'“”]/i);
             const target = am ? am[1].trim() : '';
-            let chat = target ? _resolveRoom(target, cur) : null;
-            if (!chat && im && im[1].trim()) chat = _resolveRoom(im[1].trim(), cur);
-            if (!target && !(im && im[1].trim())) chat = cur || null;
+            const rid = im ? im[1].trim() : '';
+            // 🚨🚨 認人只認代號，名字一律不當鑰匙。
+            //    名字隨時會變：她自己會改備註、AI 也會改群名，而且同一個名字繁簡兩種寫法都出得來。
+            //    以前是名字優先，所以 AI 寫「陈彦庭」而聊天室叫「陳彥庭」時，整段訊息直接不見。
+            //    現在只有三種情況：
+            //      有 id → 照 id 找，找不到就不送、並且跟她說一聲。
+            //      沒 id 也沒名字 → 就是現在這一間（最常見：它就是在回這一間）。
+            //      沒 id 但寫了名字 → 只用來確認「是不是就是這一間」，不拿去找別間；
+            //                        不是這一間就不送，跟她說那一段沒寫代號。
+            let chat = null;
+            if (rid) {
+                chat = _resolveRoomById(rid, cur);
+            } else if (!target) {
+                chat = cur || null;
+            } else if (cur && _sameRoomName(target, cur.name)) {
+                chat = cur;
+            }
             if (!chat) {
-                const want = target || (im ? im[1].trim() : '');
-                console.warn('[WX] 回覆要傳到「' + want + '」，對不到能收的聊天室，這段不送');
+                const want = rid || target;
+                console.warn('[WX] 這一段' + (rid ? '的代號「' + rid + '」對不到聊天室' : '沒寫代號（只寫了名字「' + target + '」）') + '，不送');
                 // 根本沒有這一間才記下來跟她說；有這間但被刪／拉黑／不是好友是故意不送，不吵她
                 if (want && !_anyRoomNamed(want) && out.unknown.indexOf(want) < 0) out.unknown.push(want);
                 continue;
