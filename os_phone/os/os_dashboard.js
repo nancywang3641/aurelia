@@ -188,7 +188,7 @@
         _root.innerHTML =
             '<div class="dsh-book">' +
             '  <button class="dsh-close" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
-            '  <div class="dsh-title-row"><div class="dsh-wing"></div><h1 class="dsh-h1">控制台</h1><div class="dsh-wing r"></div></div>' +
+            '  <div class="dsh-title-row"><div class="dsh-wing"></div><h1 class="dsh-h1">控制台<span class="dsh-ver" id="dsh-ver" title="這台裝置現在跑的版本"></span></h1><div class="dsh-wing r"></div></div>' +
             '  <div class="dsh-head">' +
             '    <div class="dsh-tabs">' +
             Object.keys(TAB_NAME).map(function (k) {
@@ -243,8 +243,21 @@
         page.__dshHtml = h;
     }
 
+    // 這台裝置現在跑的版本：讀 sw.js 裡的 CACHE_VERSION（唯一一份，不另外抄）。手機 PWA 常卡在舊版，
+    //   她手機跟電腦結果不一樣時，先看兩邊版本號一不一樣，別再猜。
+    async function _showVersion() {
+        const el = _root && _root.querySelector('#dsh-ver');
+        if (!el) return;
+        try {
+            const base = (win._AURELIA_EXT_BASE || (typeof _AURELIA_EXT_BASE !== 'undefined' ? _AURELIA_EXT_BASE : '')) || '.';
+            const r = await fetch(base.replace(/\/$/, '') + '/sw.js?ver=' + Date.now(), { cache: 'no-store' });
+            const m = /CACHE_VERSION\s*=\s*(\d+)/.exec(await r.text());
+            el.textContent = m ? ('v' + m[1]) : '';
+        } catch (e) { el.textContent = ''; }
+    }
     async function _render() {
         if (!_root) return;
+        _showVersion();
         const page = _root.querySelector('#dsh-page');
         if (!page) return;
         page.onclick = null;          // 上一頁掛的委派事件不要留到下一頁
