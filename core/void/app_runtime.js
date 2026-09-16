@@ -64,7 +64,7 @@
             +     'var full = (ctx ? (ctx + "----\\n以下是你這次的任務指令，請嚴格遵守(上面只是背景參考)：\\n") : "") + sys;'
             +     'var OS = window.OS_API; if (!OS || !OS.chat) throw new Error("OS_API 不可用");'
             +     'var cfg = (P.OS_SETTINGS && P.OS_SETTINGS.getConfig && P.OS_SETTINGS.getConfig()) || {};'
-            +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false, enableThinking:false });'
+            +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false });'   // 思考照主模型設定走（以前寫死關；酒館那條照預設包，兩邊對不齊）
             +     'return await new Promise(function(res, rej){ OS.chat([{role:"system",content:full}], cfg, null, function(t){ res(typeof t==="string"?t:(t&&t.message)||""); }, rej, {task:"apps", disableTyping:true}); });'
             +   '} catch(e){ console.error("[app callAI]",e); return ""; } };'
             // ── 當前聊天室角色清單：[{name,count}]，做角色選單/搜尋用(繞懶載、不等大總結) ──
