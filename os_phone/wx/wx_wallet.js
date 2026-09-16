@@ -162,8 +162,11 @@
         (doc.head || doc.body).appendChild(s);
     }
 
+    // 🚨 深色模式那格存的是 'true'/'false'（wx_core 的 toggleDarkMode 直接把布林丟進去），
+    //    這裡以前只認 '1' → 這支永遠當成不是深色，深色模式下它畫出來的東西還是淺色的。
+    //    兩種都認，以後誰再換寫法也不會又斷掉。
     function _isDark() {
-        try { return localStorage.getItem('wx_dark_mode') === '1'; } catch (e) { return false; }
+        try { const v = localStorage.getItem('wx_dark_mode'); return v === 'true' || v === '1'; } catch (e) { return false; }
     }
 
     function _when(ts) {

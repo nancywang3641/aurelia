@@ -2974,7 +2974,7 @@
         },
         toggleDarkMode: function() {
             DARK_MODE = !DARK_MODE;
-            localStorage.setItem('wx_dark_mode', DARK_MODE);
+            localStorage.setItem('wx_dark_mode', DARK_MODE ? 'true' : 'false');   // 明確寫字串，不要丟布林讓它自己轉
             this.render();
         },
         
