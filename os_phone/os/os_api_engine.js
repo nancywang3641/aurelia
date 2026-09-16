@@ -36,6 +36,54 @@
     _safeJson._dirty = 0;
     win.OS_SAFE_JSON = _safeJson;   // 托管那條（os_relay）也用同一支
 
+    // OpenAI 形狀的 messages → Gemini 原生 body。system 全部收進 systemInstruction；user→user、assistant→model；
+    //   同角色連著的併成一則（Gemini 要交替）；沒有任何 user 就補一則（跟酒館後端補的同一句）；
+    //   圖片 data URL → inline_data，網址圖片只留一行字。safetySettings 五類全 OFF（同酒館 src/constants.js GEMINI_SAFETY）。
+    const GEMINI_SAFETY_OFF = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT', 'HARM_CATEGORY_CIVIC_INTEGRITY']
+        .map(category => ({ category, threshold: 'OFF' }));
+    function _toGeminiBody(messages, o) {
+        o = o || {};
+        const sys = [];
+        const contents = [];
+        const partsOf = (content) => {
+            if (typeof content === 'string') return content ? [{ text: content }] : [];
+            if (!Array.isArray(content)) return content == null ? [] : [{ text: String(content) }];
+            const out = [];
+            for (const p of content) {
+                if (!p) continue;
+                if (p.type === 'text' && p.text) out.push({ text: String(p.text) });
+                else if (p.type === 'image_url') {
+                    const u = String((p.image_url && p.image_url.url) || p.url || '');
+                    const m = u.match(/^data:([^;]+);base64,(.*)$/);
+                    if (m) out.push({ inline_data: { mime_type: m[1], data: m[2] } });
+                    else if (u) out.push({ text: '[圖片: ' + u + ']' });
+                }
+            }
+            return out;
+        };
+        for (const m of (messages || [])) {
+            if (!m) continue;
+            const role = m.role === 'assistant' ? 'model' : (m.role === 'system' ? 'system' : 'user');
+            const parts = partsOf(m.content);
+            if (!parts.length) continue;
+            if (role === 'system') { sys.push(...parts.filter(p => p.text).map(p => p.text)); continue; }
+            const last = contents[contents.length - 1];
+            if (last && last.role === role) last.parts.push(...parts);
+            else contents.push({ role, parts });
+        }
+        if (!contents.some(c => c.role === 'user')) contents.push({ role: 'user', parts: [{ text: "Let's get started." }] });
+        const body = { contents, safetySettings: GEMINI_SAFETY_OFF };
+        if (sys.length) body.systemInstruction = { parts: [{ text: sys.join('\n\n') }] };
+        const gc = {};
+        if (isFinite(o.temperature)) gc.temperature = o.temperature;
+        if (o.maxTokens > 0) gc.maxOutputTokens = o.maxTokens;
+        if (o.top_p !== undefined && isFinite(o.top_p)) gc.topP = o.top_p;
+        if (o.thinking && o.budget > 0) gc.thinkingConfig = { thinkingBudget: o.budget };
+        if (Object.keys(gc).length) body.generationConfig = gc;
+        return body;
+    }
+    win.OS_TO_GEMINI_BODY = _toGeminiBody;
+
     // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
     const _avsRead  = () => win._AVS_ENGINE?.read?.()       ?? {};
     const _avsApply = (t) => win._AVS_ENGINE?.apply?.(t);
@@ -1448,7 +1496,8 @@
                 // 📡 回覆交給伺服器跑：呼叫端給了 relayJob、而且她開了托管 → 把這一包丟過去，手機就可以睡了。
                 //    擺在 🍎 與直連兩條路之前：伺服器是原生 HTTP 出去的，本來就沒有 iOS 那個 CORS 問題，
                 //    所以只要有 url/key 就走這條。跟著酒館那條沒有 key 可以交給伺服器，不走。
-                if (options.relayJob && !useSystemApi && config.url && config.key && win.OS_RELAY && win.OS_RELAY.enabled()) {
+                const _isGeminiFmt = !useSystemApi && String(config.apiFormat || 'openai') === 'gemini';   // Gemini 原生格式（設置→請求格式）
+                if (options.relayJob && !useSystemApi && !_isGeminiFmt && config.url && config.key && win.OS_RELAY && win.OS_RELAY.enabled()) {
                     let _rUrl = String(config.url).replace(/\/$/, '');
                     if (!_rUrl.includes('/chat/completions')) _rUrl += (_rUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
                     try {
@@ -1648,6 +1697,22 @@
                         rawApiResponse = data; 
                         fullText = normalizeResponse(data, _keepFences);
                     }
+                } else if (_isGeminiFmt) {
+                    // ── Gemini 原生格式：POST /v1beta/models/{model}:generateContent ──
+                    //   接 Gemini CLI 的公益站（例如 gcli 那類）走 OpenAI 相容格式時不吃 Google 的安全欄位，R18 整段被過濾回空；
+                    //   原生格式的 safetySettings 它會照轉，跟酒館用 Google 來源送過去的一樣。串流先不做，整篇回來再給。
+                    const _base = String(config.url || '').replace(/\/chat\/completions$/, '').replace(/\/v1beta.*$/, '').replace(/\/v1$/, '').replace(/\/+$/, '');
+                    const _gUrl = _base + '/v1beta/models/' + encodeURIComponent(String(config.model || '')) + ':generateContent?key=' + encodeURIComponent(String(config.key || ''));
+                    const _gBody = _toGeminiBody(cleanMessages, { temperature, maxTokens, top_p, thinking: !!config.enableThinking, budget: parseInt(config.thinkingBudget) || 0 });
+                    const _gResp = await fetch(_gUrl, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(config.key || '') },
+                        body: _safeJson(_gBody),
+                        signal: options.signal || undefined
+                    });
+                    const _gData = await _gResp.json();
+                    rawApiResponse = _gData;
+                    if (!_gResp.ok && _gData && _gData.error) throw new Error('HTTP ' + _gResp.status + '：' + (_gData.error.message || JSON.stringify(_gData.error)));
+                    fullText = normalizeResponse(_gData, _keepFences);
                 } else {
                     let targetUrl = config.url.replace(/\/$/, '');
                     if (!targetUrl.includes('/chat/completions')) targetUrl += (targetUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';

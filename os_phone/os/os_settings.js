@@ -76,7 +76,8 @@
             directMode: false, enableStreaming: false, disableTyping: false,
             useGenerateRaw: false,
             maxTokens: 2000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
-            usePresetPrompts: false, presetName: '', customCot: '', customCotMap: {}
+            usePresetPrompts: false, presetName: '', customCot: '', customCotMap: {},
+            apiFormat: 'openai'   // 'openai'＝/v1/chat/completions；'gemini'＝/v1beta/models/…:generateContent（原生，附安全過濾全關）
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
         _mergeTavernFlags(config);
@@ -101,7 +102,8 @@
             directMode: false, enableStreaming: false, disableTyping: false,
             useGenerateRaw: false,
             maxTokens: 1000, temperature: 1.0, top_p: 1.0, frequency_penalty: 0, presence_penalty: 0,
-            usePresetPrompts: false, presetName: '', customCot: ''
+            usePresetPrompts: false, presetName: '', customCot: '',
+            apiFormat: 'openai'
         };
         if (saved) { try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {} }
         _mergeTavernFlags(config);
@@ -1213,6 +1215,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div style="margin-top:10px;"><div class="set-label">API Key</div><input class="set-input" id="os-api-key" type="password" value="${llmConfig.key}"></div>
                         </div>
 
+                        <!-- 請求格式：OpenAI 相容（多數站）／Gemini 原生（打 /v1beta/models/…:generateContent，附安全過濾全關；接 Gemini CLI 的公益站要用這個） -->
+                        <div class="set-group" id="api-format-group">
+                            <div class="set-label">請求格式</div>
+                            <select class="set-select" id="os-api-format">
+                                <option value="openai" ${(llmConfig.apiFormat || 'openai') === 'openai' ? 'selected' : ''}>OpenAI 相容（多數站）</option>
+                                <option value="gemini" ${llmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生</option>
+                            </select>
+                            <div class="set-desc">回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。</div>
+                        </div>
+
                         <!-- 主模型的自訂前置指令：以前藏在「用酒館的連線」那格底下，PWA 沒有酒館整格不顯示、直連也沒吃到；
                              現在跟副模型一樣自己一格，酒館連線時每個連接預設各記各的，自己填網址時只有一份。 -->
                         <div class="set-group">
@@ -1314,6 +1326,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group" id="sec-manual-api-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : 'display:flex;'}">
                             <div><div class="set-label">手動 API 地址</div><input class="set-input" id="sec-api-url" placeholder="http://..." value="${secLlmConfig.url}"></div>
                             <div style="margin-top:10px;"><div class="set-label">API Key</div><input class="set-input" id="sec-api-key" type="password" value="${secLlmConfig.key}"></div>
+                        </div>
+
+                        <div class="set-group" id="sec-api-format-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : ''}">
+                            <div class="set-label">請求格式</div>
+                            <select class="set-select" id="sec-api-format">
+                                <option value="openai" ${(secLlmConfig.apiFormat || 'openai') === 'openai' ? 'selected' : ''}>OpenAI 相容（多數站）</option>
+                                <option value="gemini" ${secLlmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生</option>
+                            </select>
+                            <div class="set-desc">同步主模型時跟主模型走。</div>
                         </div>
 
                         <div class="set-group">
@@ -3479,6 +3500,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const url = elUrl.value.trim();
                     const key = elKey.value.trim();
                     if (!url) throw new Error("請輸入 API 地址");
+                    const _fmt = (container.querySelector('#os-api-format') || {}).value || 'openai';
+                    // Gemini 原生格式：清單在 /v1beta/models?key=，名字是 models/xxx
+                    if (_fmt === 'gemini') {
+                        const base = url.replace(/\/chat\/completions$/, '').replace(/\/v1beta.*$/, '').replace(/\/v1$/, '').replace(/\/$/, '');
+                        const res = await fetch(base + '/v1beta/models?key=' + encodeURIComponent(key), { method: 'GET', headers: { 'x-goog-api-key': key } });
+                        if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
+                        const data = await res.json();
+                        const models = (data.models || []).map(m => String((m && m.name) || m).replace(/^models\//, '')).filter(Boolean);
+                        if (!models.length) throw new Error("API 返回了空列表");
+                        elModel.innerHTML = '';
+                        models.forEach(id => { elModel.innerHTML += `<option value="${id}">${id}</option>`; });
+                        status.innerText = `成功獲取 (${models.length})`;
+                        return;
+                    }
 
                     let fetchUrl = url.replace(/\/chat\/completions$/, '').replace(/\/$/, '') + '/v1/models';
                     const res = await fetch(fetchUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
@@ -3534,6 +3569,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const key = isSync ? elKey.value.trim() : secKey.value.trim();  
                     
                     if (!url) throw new Error("請輸入副模型 API 地址");
+                    const _fmt = isSync ? ((container.querySelector('#os-api-format') || {}).value || 'openai') : ((container.querySelector('#sec-api-format') || {}).value || 'openai');
+                    // Gemini 原生格式：清單在 /v1beta/models?key=，名字是 models/xxx
+                    if (_fmt === 'gemini') {
+                        const base = url.replace(/\/chat\/completions$/, '').replace(/\/v1beta.*$/, '').replace(/\/v1$/, '').replace(/\/$/, '');
+                        const res = await fetch(base + '/v1beta/models?key=' + encodeURIComponent(key), { method: 'GET', headers: { 'x-goog-api-key': key } });
+                        if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
+                        const data = await res.json();
+                        const models = (data.models || []).map(m => String((m && m.name) || m).replace(/^models\//, '')).filter(Boolean);
+                        if (!models.length) throw new Error("API 返回了空列表");
+                        secModel.innerHTML = '';
+                        models.forEach(id => { secModel.innerHTML += `<option value="${id}">${id}</option>`; });
+                        status.innerText = `副模型列表更新成功 (${models.length})`;
+                        return;
+                    }
 
                     let fetchUrl = url.replace(/\/chat\/completions$/, '').replace(/\/$/, '') + '/v1/models';
                     const res = await fetch(fetchUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
@@ -3606,6 +3655,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     useGenerateRaw: elSystemApi.checked,   // 兩個旗標併成一個開關：用酒館連線＝走 🍎 那條乾淨 body
                     customCot: (elCustomCot ? elCustomCot.value : ''),
                     customCotMap: (function () { if (elCustomCot) _cotMap[_curCotKey] = elCustomCot.value; return _cotMap; })(),
+                    apiFormat: (container.querySelector('#os-api-format') || {}).value || 'openai',
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
@@ -3627,6 +3677,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     presence_penalty: parseFloat(secPresPenalty.value),
                     useGenerateRaw: secSystemApi.checked,   // 同主模型：用酒館連線＝走 🍎 那條
                     customCot: container.querySelector('#sec-custom-cot')?.value || '',
+                    apiFormat: isSecSync ? ((container.querySelector('#os-api-format') || {}).value || 'openai') : ((container.querySelector('#sec-api-format') || {}).value || 'openai'),
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
