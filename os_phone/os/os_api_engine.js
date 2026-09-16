@@ -59,12 +59,9 @@
     }
     const SEC_LOG_MAX = 120;
     let _secSeq = 0;
-    function _apiLogStart(arr, messages) {
-        // 記整包送出的 messages（標 role），DEBUG 面板「📤 送出 prompt」才看得到完整 sysPrompt＋上下文＋歷史；
-        // 原本只撈最後一則 user → 跟 inTok（用整包估）對不起來，也看不到組好的人設/世界觀。
-        let prompt = '';
+    function _apiLogPromptText(messages) {
         try {
-            prompt = (messages || []).map(m => {
+            return (messages || []).map(m => {
                 const role = (m && m.role) || '?';
                 let c;
                 if (typeof m.content === 'string') c = m.content;
@@ -72,7 +69,20 @@
                 else c = JSON.stringify(m && m.content);
                 return '【' + role + '】\n' + c;
             }).join('\n\n');
-        } catch (e) {}
+        } catch (e) { return ''; }
+    }
+    // 送出前那包還會再長（前置指令插在最前面）：記錄那筆要換成真正送出去的那包。
+    //   以前在入口就記死，控制台看到的永遠是插之前的 —— 她看記錄只有一段、以為前置指令沒帶。
+    function _apiLogRefresh(rec, messages) {
+        if (!rec) return;
+        rec.prompt = _apiLogPromptText(messages);
+        _apiLogFire('tok', rec);
+        _estTok(_msgsText(messages)).then(n => { rec.inTok = n; _apiLogFire('tok', rec); }).catch(() => {});
+    }
+    function _apiLogStart(arr, messages) {
+        // 記整包送出的 messages（標 role），DEBUG 面板「📤 送出 prompt」才看得到完整 sysPrompt＋上下文＋歷史；
+        // 原本只撈最後一則 user → 跟 inTok（用整包估）對不起來，也看不到組好的人設/世界觀。
+        const prompt = _apiLogPromptText(messages);
         const rec = { id: (++_secSeq), t: Date.now(), ok: null, ms: 0, prompt: prompt, raw: '', err: '' };
         try {
             arr.push(rec);
@@ -1156,6 +1166,7 @@
             // ── 🔥 全局 API 記錄：中央 chat 攔「所有」文字呼叫（不論哪個入口、有沒有貼標都記），
             //    按連線分類（main=主模型 / sec=副模型 / aux=未標記的手搭 config）+ 標註用途 route ──
             let _useRec = null, _useInP = null;   // 用量記錄層的那一筆（托管路徑會提早 return，要在外層拿得到）
+            let _apiRec = null;                    // 控制台 API 記錄那一筆：前置指令插進去之後要把記錄換成真正送出的那包
             {
                 const _cat = (config && config._isSecondary === false) ? 'main'
                            : (config && config._isSecondary === true)  ? 'sec'
@@ -1164,6 +1175,7 @@
                 _rec.cat = _cat;
                 _rec.route = (config && config.route) || (options && options.label) || '';
                 _rec.task = (options && options.task) || '';   // 控制台的記錄頁拿它顯示中文的任務名
+                _apiRec = _rec;
                 _rec.inTok = null; _rec.outTok = null;   // token 估算(非阻塞，算完面板下次刷新即顯示)
                 const _inP = _estTok(_msgsText(messages)).then(n => { _rec.inTok = n; _apiLogFire('tok', _rec); return n; }).catch(() => 0);
                 _useInP = _inP;
@@ -1397,6 +1409,7 @@
                     const _cc = (_ck in _cm) ? (_cm[_ck] || '') : (config.customCot || '');
                     if (_cc && String(_cc).trim()) cleanMessages = [{ role: 'system', content: String(_cc) }, ...cleanMessages];
                 }
+                _apiLogRefresh(_apiRec, cleanMessages);   // 控制台記錄換成真正送出的那包（含前置指令）
 
                 const commonBody = {
                     model: config.model, messages: cleanMessages,
@@ -1458,6 +1471,7 @@
                     const _cot = (_cotKey in _cotMap) ? (_cotMap[_cotKey] || '') : (config.customCot || '');
                     if (_cot && String(_cot).trim()) {
                         cleanMessages = [{ role: 'system', content: String(_cot) }, ...cleanMessages];
+                        _apiLogRefresh(_apiRec, cleanMessages);   // 同上：記錄換成含前置指令的那包
                     }
                     let _ngOk = false;
                     try {
