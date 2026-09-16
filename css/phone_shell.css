@@ -84,21 +84,47 @@
 
     position: relative;
     width: 360px; height: 720px; max-height: 92vh;
-    background: var(--aps-frame-bg);
-    border-radius: 44px;
-    padding: 14px;
+    /* 金屬邊框：一層固定的光澤疊在主題自己的框色上 —— 這樣四套各有各的金屬（鈦灰、玫瑰銀、
+       暖銀、冷鋼），不必每套各寫一份漸層。斜角 118 度是讓高光落在左上與右下兩個對角。 */
+    background:
+        linear-gradient(118deg,
+            rgba(255, 255, 255, 0.50) 0%,
+            rgba(0, 0, 0, 0.22) 24%,
+            rgba(255, 255, 255, 0.10) 58%,
+            rgba(0, 0, 0, 0.14) 78%,
+            rgba(255, 255, 255, 0.58) 100%),
+        var(--aps-frame-bg);
+    border-radius: 48px;
+    padding: 10px;
     display: flex; flex-direction: column;
     font-family: var(--aps-font);
-    box-shadow: 0 22px 35px -19px rgba(48, 51, 41, 0.44), inset 0 0 0 1px var(--aps-frame-line), inset 0 0 0 5px rgba(255, 255, 255, 0.07);
+    box-shadow:
+        0 30px 55px -22px rgba(20, 26, 32, 0.45),
+        0 4px 10px rgba(20, 26, 32, 0.18),
+        inset 0 0 0 1.5px rgba(255, 255, 255, 0.42),
+        inset 0 0 0 3px var(--aps-frame-line);
     isolation: isolate;
 }
+/* 側邊實體鍵：左邊那條用漸層一次畫出靜音、音量＋、音量−三段，右邊是電源。
+   顏色用框線色 —— 它本來就是這套主題的金屬邊緣色，按鍵跟著邊框同一種金屬。 */
+.aps-frame::before, .aps-frame::after {
+    content: ""; position: absolute; width: 3px; border-radius: 3px; pointer-events: none;
+}
+.aps-frame::before {
+    left: -3px; top: 116px; height: 112px;
+    background: linear-gradient(to bottom,
+        var(--aps-frame-line) 0 26px, transparent 26px 40px,
+        var(--aps-frame-line) 40px 74px, transparent 74px 88px,
+        var(--aps-frame-line) 88px 112px);
+}
+.aps-frame::after { right: -3px; top: 178px; height: 64px; background: var(--aps-frame-line); }
 .aps-frame, .aps-frame * { box-sizing: border-box; }
 /* 狀態列（時間 + 訊號/wifi/電池）—— 永遠在最上層；底色與字色跟著主題走，
    透明時上半截露出外框色、下半截露出桌布，跟瀏海連成一條 */
 .aps-statusbar {
-    position: absolute; top: 0; left: 0; right: 0; height: 30px; z-index: 4;
+    position: absolute; top: 0; left: 0; right: 0; height: 40px; z-index: 4;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 22px 0; font-size: 12px; font-weight: 600;
+    padding: 14px 26px 0; font-size: 12px; font-weight: 600;
     background: var(--aps-sb-bg); color: var(--aps-sb-color); font-family: var(--aps-font);
     pointer-events: none; letter-spacing: 0.5px;
 }
@@ -109,20 +135,34 @@
 @media (max-height: 600px) { .aps-frame { transform: scale(0.7); } }
 
 .aps-notch {
-    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-    width: 120px; height: 22px; background: var(--aps-frame-bg);
-    border-radius: 0 0 14px 14px; z-index: 3;
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    width: 98px; height: 22px; background: #0c0f13;
+    border-radius: 999px; z-index: 9;
+}
+/* 島上那顆鏡頭。淺色主題也是黑的 —— 它是螢幕上挖掉的一塊，本來就不跟著配色走 */
+.aps-notch::after {
+    content: ""; position: absolute; right: 8px; top: 6px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #18263a;
+    box-shadow: inset 0 0 0 1.5px #24384c, inset 0 2px 3px rgba(255, 255, 255, 0.12);
 }
 .aps-screen {
     position: relative; flex: 1;
-    border-radius: 32px; overflow: hidden; background: var(--aps-wallpaper);
+    border-radius: 38px; overflow: hidden; background: var(--aps-wallpaper);
+}
+/* 面板邊：畫成蓋在最上層的一圈內陰影。寫成 .aps-screen 自己的 inset 陰影會被子元素蓋掉，
+   因為 inset 陰影畫在背景層、子元素畫在它上面。 */
+.aps-screen::after {
+    content: ""; position: absolute; inset: 0; z-index: 6;
+    border-radius: inherit; pointer-events: none;
+    box-shadow: inset 0 0 0 2px rgba(12, 16, 20, 0.45);
 }
 
-/* 主畫面（時鐘 / widget / 圖標格 / dock）—— top:30 留瀏海
+/* 主畫面（時鐘 / widget / 圖標格 / dock）—— top:40 讓給狀態列與動態島
    四段用 grid 的列高排，每一列的高度都是主題可換的格子；圖標格吃剩下的空間並自己捲。
    螢幕被 max-height 壓矮時，被壓到的是圖標格那一列（minmax(0,1fr)），其他三段不變形。 */
 .aps-home {
-    position: absolute; top: 30px; left: 0; right: 0; bottom: 0;
+    position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
     display: grid;
     grid-template-rows: var(--aps-lock-height) var(--aps-widget-height) minmax(0, 1fr) var(--aps-dock-height);
     gap: 10px;
@@ -438,8 +478,8 @@
 
 /* app 內頁（用 app 自己的 header/返回；手機殼不加自己的 chrome）—— top:30 留瀏海，內容撐滿 */
 .aps-app {
-    position: absolute; top: 30px; left: 0; right: 0; bottom: 0;
-    display: none; background: #fff;
+    position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+    display: none; background: var(--os-page-bg, #fff);
 }
 .aps-app-body { position: absolute; inset: 0; overflow: auto; font-family: var(--aps-font); scrollbar-width: none; }
 /* 手機內所有 app 的滾動條隱形(像手機、不像桌面那條粗的) */
@@ -476,11 +516,19 @@
 }
 
 /* 底部 home bar */
-.aps-homebar { height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+/* 底部橫條：iPhone 那條是壓在畫面最上層的，不是待在框底下的一條下巴。
+   改成絕對定位之後它離開了 flex 流，螢幕自己往下吃掉那 32px。
+   整條不吃點擊，只有中間那根短棒吃 —— 不然它會擋住底排 app 的上緣。 */
+.aps-homebar {
+    position: absolute; left: 0; right: 0; bottom: 20px; z-index: 9;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+}
 .aps-home-btn {
-    width: 110px; height: 5px; border-radius: 3px;
+    pointer-events: auto;
+    width: 116px; height: 5px; border-radius: 8px;
     background: var(--aps-homebar-color); border: none; cursor: pointer; padding: 0;
-    transition: background 0.15s;
+    transition: filter 0.15s;
 }
 .aps-home-btn:hover { filter: brightness(1.25); }
 
@@ -704,7 +752,9 @@
         overflow: hidden;
     }
     .aps-screen { border-radius: 0; }
-    .aps-notch { display: none; }            /* 全螢幕不需要假瀏海 */
+    .aps-screen::after { display: none; }    /* 面板邊那圈也不要：全螢幕時它會變成畫面裡一圈方框 */
+    .aps-notch { display: none; }            /* 全螢幕不需要動態島 —— 她真的手機自己有一個 */
+    .aps-frame::before, .aps-frame::after { display: none; }   /* 側邊實體鍵同理，沒有框就沒有邊可以掛 */
     .aps-close { top: 10px; right: 10px; }   /* 關閉鈕收進畫面內，免在框外被切掉 */
 }
 
