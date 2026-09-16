@@ -46,7 +46,7 @@
                 method: o.method || 'GET',
                 headers: Object.assign({ 'Authorization': 'Bearer ' + String(cfg().token || '').trim() },
                     o.body ? { 'Content-Type': 'application/json' } : {}),
-                body: o.body ? JSON.stringify(o.body) : undefined,
+                body: o.body ? (win.OS_SAFE_JSON || JSON.stringify)(o.body) : undefined,   // 半個表情符號會被上游以 invalid_json 退回，跟直連同一支清
                 signal: ctl ? ctl.signal : undefined
             });
             const text = await res.text();

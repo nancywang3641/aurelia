@@ -8,6 +8,34 @@
     console.log('[PhoneOS] 載入 API 引擎 (V3.24)...');
     const win = window.parent || window; // 🔥 絕對保留：雙通向架構的核心
 
+    // ── 送出前把「半個表情符號」清掉 ──
+    //   字串截尾（引用只取前幾個字、歷史砍尾、摘要）會把一個 emoji 切成兩半；JSON.stringify 遇到半個會寫成 \ud83d 這種逃逸，
+    //   對方伺服器一讀就是 failed to read request body / invalid_json。她遇過：整包才兩萬多，不是太大，是壞字。
+    //   走 JSON.stringify 的替換器，巢狀多深的字串都清；先用 regex 探一下，沒有代理字元的字串原樣放行。
+    function _wellFormed(s) {
+        if (!/[\uD800-\uDFFF]/.test(s)) return s;
+        let out = '', dirty = false;
+        for (let i = 0; i < s.length; i++) {
+            const c = s.charCodeAt(i);
+            if (c >= 0xD800 && c <= 0xDBFF) {
+                const d = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
+                if (d >= 0xDC00 && d <= 0xDFFF) { out += s[i] + s[i + 1]; i++; }
+                else dirty = true;
+            } else if (c >= 0xDC00 && c <= 0xDFFF) { dirty = true; }
+            else out += s[i];
+        }
+        if (dirty) _safeJson._dirty++;
+        return dirty ? out : s;
+    }
+    function _safeJson(obj) {
+        _safeJson._dirty = 0;
+        const txt = JSON.stringify(obj, (k, v) => (typeof v === 'string' ? _wellFormed(v) : v));
+        if (_safeJson._dirty) console.warn('[OS_API] 送出前清掉了 ' + _safeJson._dirty + ' 段含半個表情符號的字串（不清會被伺服器以 invalid_json 退回）');
+        return txt;
+    }
+    _safeJson._dirty = 0;
+    win.OS_SAFE_JSON = _safeJson;   // 托管那條（os_relay）也用同一支
+
     // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
     const _avsRead  = () => win._AVS_ENGINE?.read?.()       ?? {};
     const _avsApply = (t) => win._AVS_ENGINE?.apply?.(t);
@@ -1461,7 +1489,7 @@
                             const _resp = await fetch('/api/backends/chat-completions/generate', {
                                 method: 'POST',
                                 headers: { ..._ctx.getRequestHeaders(), 'Content-Type': 'application/json' },
-                                body: JSON.stringify(_body),
+                                body: _safeJson(_body),
                                 signal: options.signal || undefined
                             });
                             const _data = await _resp.json();
@@ -1539,7 +1567,7 @@
                         if (activeModel) requestBody.model = activeModel;
                         const response = await fetch('/api/backends/chat-completions/generate', {
                             method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
-                            body: JSON.stringify(requestBody),
+                            body: _safeJson(requestBody),
                             signal: options.signal || undefined
                         });
                         const data = await response.json();
@@ -1559,7 +1587,7 @@
                         const streamResp = await fetch(targetUrl, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
-                            body: JSON.stringify(streamBody),
+                            body: _safeJson(streamBody),
                             signal: options.signal || undefined
                         });
                         if (!streamResp.ok) throw new Error(`SSE 請求失敗 HTTP ${streamResp.status}`);
@@ -1600,7 +1628,7 @@
 
                     const response = await fetch(targetUrl, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
-                        body: JSON.stringify(commonBody),
+                        body: _safeJson(commonBody),
                         signal: options.signal || undefined
                     });
                     const data = await response.json();
