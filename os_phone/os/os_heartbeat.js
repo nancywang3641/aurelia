@@ -75,6 +75,17 @@
             console.warn('[心跳] 組上下文失敗:', (e && e.message) || e);
         } finally { app.GLOBAL_ACTIVE_ID = prev; }
         if (!Array.isArray(messages) || !messages.length) return null;
+        // 🎯 她傳了、他一直沒回的那幾則：buildContext 現在把它們留給呼叫端排在最後面
+        //    （見 OS_API.wxPendingTurn），心跳這條要自己接回來 —— 不然他主動找她的時候，
+        //    完全不知道她上次說了什麼。導言換成心跳自己的講法，免得跟下面那句「現在是你自己的時間」打架。
+        let hasPending = false;
+        try {
+            const _me = (win.WX_ME && win.WX_ME.name && win.WX_ME.name()) || (win.OS_API.getGlobalUserName && win.OS_API.getGlobalUserName()) || '';
+            const _pend = win.OS_API.wxPendingTurn
+                ? await win.OS_API.wxPendingTurn(chat.id, _me, { lead: '【' + (_me || '她') + ' 傳了這幾則，你一直沒回】\n下面是還沒回過的，上面那些你都回過了。' })
+                : [];
+            if (_pend && _pend.length) { hasPending = true; _pend.forEach(function (m) { messages.push(m); }); }
+        } catch (e) { console.warn('[心跳] 沒回的訊息接不回來（不影響送出）:', (e && e.message) || e); }
         const idle = lastTalkAt(chat) ? Math.round((Date.now() - lastTalkAt(chat)) / 3600000) : 0;
         if (_notFriends(chat)) {
             // 他拉黑她（她沒拉黑他）：拉黑的人說了算，想通就自己移出黑名單，不用申請
@@ -92,7 +103,9 @@
         }
         messages.push({
             role: 'system',
-            content: '【現在是你自己的時間，不是在回覆她】\n'
+            content: (hasPending
+                    ? '【現在是你自己的時間】\n她上面那幾則你還沒回：想回就回，不想回也可以做別的。\n'
+                    : '【現在是你自己的時間，不是在回覆她】\n')
                 + (idle ? '你們上一次講話大約是 ' + idle + ' 小時前。\n' : '')
                 + (((nth || 0) > 0) ? '你剛剛已經找過她，她還沒有回。又過了一陣子，別重複剛才做過的事。\n' : '')
                 + '這段時間你可以傳訊息給她、發朋友圈、去朋友圈按讚或留言，做哪幾件、做不做，照你的個性和你現在在做的事決定。'

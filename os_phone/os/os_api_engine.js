@@ -426,6 +426,63 @@
         return text ? '（' + who + ' 傳了「' + text + '」又馬上撤回了）' : '';
     }
 
+    // 🎯 這一輪她要他回的是「哪幾則」——整包 messages 最後面那一段。
+    //   為什麼需要：以前這一間的訊息是一整串平鋪進去的，她剛打的那則跟三天前那則長得一模一樣，
+    //   後面還接著四五段 system（記憶關聯、待處理紅包、連結內容、表情包清單），
+    //   模型讀到的最後一段是表情包清單 —— 它根本不知道她剛剛說了什麼，只好在整串裡面挑一則看起來能回的，
+    //   所以會回到半小時前那句、也會把回過的再回一次。
+    //   切法：從「他上一則自己說的話」之後算起，全部都是還沒回的。
+    //   為什麼不另外記一個「已回覆」旗標：她會刪訊息、會編輯、托管會晚一步寫回、還有兩台裝置，
+    //   旗標一定會跟記錄對不上；而「他上一則之後」是從記錄本身讀出來的，永遠對得上。
+    function _wxPendingSplit(msgs) {
+        const list = Array.isArray(msgs) ? msgs : [];
+        let at = -1;
+        for (let i = list.length - 1; i >= 0; i--) {
+            const m = list[i];
+            if (!m || m.isLoading) continue;
+            if (m.type === 'system' || m.type === 'time') continue;   // 系統行與日期分隔不是誰講的話
+            if (!m.isMe) { at = i; break; }
+        }
+        return { pastEnd: at, pending: list.slice(at + 1) };
+    }
+
+    // 🎯 把「還沒回的那幾則」組成排在最後面的那一段。
+    //   回傳陣列：夾在中間的系統行、撤回寫成旁註排前面，最後一則保證是 role:'user'，就是她講的話。
+    //   清洗跟歷史那段一致（對方沒收到的不帶、單號不給看、照片換成它寫過的那句、剝 CoT）。
+    function _wxPendingMessages(pending, apiChat, userName, stNow, lead) {
+        const out = [];
+        const lines = [];
+        (pending || []).forEach((msg, _i) => {
+            if (!msg || msg.isLoading) return;
+            if (_wxBlockSkip(msg, apiChat)) return;
+            { const _bn = _wxMeBlockNote(msg, pending[_i - 1], userName); if (_bn) out.push({ role: 'system', content: _bn }); }
+            if (msg.type === 'time') return;
+            if (msg.type === 'system') {
+                const _note = _wxSysNote(msg, stNow);
+                if (_note) out.push({ role: 'system', content: _note });
+                return;
+            }
+            if (msg.recalled) {
+                const _rn = _recallNote(msg, pending, _i, userName);
+                if (_rn) out.push({ role: 'system', content: _rn });
+                return;
+            }
+            let content = _wxStripHeads(msg.raw || msg.content || '');
+            try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) content = _pt(msg, content); } catch (e) {}
+            try { const _sc = win.wxApp && win.wxApp.stripCardIds; if (_sc) content = _sc(content); } catch (e) {}
+            content = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').trim();
+            if (content) lines.push(content);
+        });
+        if (lines.length) {
+            const who = String(userName || '主角');
+            out.push({ role: 'system', content: lead || ('【這一輪要回的就是下面這'
+                + (lines.length > 1 ? ' ' + lines.length + ' 則' : '一則') + '】\n'
+                + who + ' 剛傳來、你還沒回的就這些。上面那些你都已經回過了，不要再回一次，也不要回到更早之前的話題。') });
+            out.push({ role: 'user', content: lines.join('\n') });
+        }
+        return out;
+    }
+
     // 🔗 記憶關聯：私聊這間勾了幾個群 → 帶那些群最近的訊息；群聊這間勾了幾間私聊 → 帶主角跟那些人私聊最近的訊息。
     //   設定在聊天設置「記憶關聯」（wx_chat_settings.js）。酒館版與獨立版兩條 buildContext 都呼叫這支。
     //   撤回的照 _recallNote 寫旁註（沒被看到的不給內容）、對方沒收到的不帶、單號拿掉。getChat(id) 回那一間的資料。
@@ -1532,6 +1589,27 @@
             }
         },
 
+        // 🎯 排在整包 messages 最後面的那一段：她剛傳、他還沒回的那幾則。
+        //   為什麼要另外開一支、不寫在 buildContext 裡：buildContext 回來之後，呼叫端還會再接上
+        //   待處理紅包、連結內容、表情包清單、這輪要給它看的照片 —— 以前她的話就被埋在那堆後面，
+        //   模型讀到的最後一段是表情包清單。這支由呼叫端在「全部都接完、要送出之前」最後叫一次，
+        //   她剛說的話就永遠是模型看到的最後一段。
+        //   來源跟 buildContext 同一份（WX_DB 存檔 ＋ 同一個 recentWindow 窗口），所以兩邊切點一定一致。
+        wxPendingTurn: async function (chatId, userName, opts) {
+            try {
+                const id = chatId || (win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID);
+                if (!id || !win.WX_DB || typeof win.WX_DB.getApiChat !== 'function') return [];
+                const apiChat = await win.WX_DB.getApiChat(id);
+                if (!apiChat || !apiChat.messages || !apiChat.messages.length) return [];
+                const hist = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
+                    ? win.WX_SUMMARY.recentWindow(apiChat) : apiChat.messages;
+                let stNow = null;
+                try { const S = win.OS_MC_STATUS; if (S && S.load) { const st = await S.load(); stNow = (st && st.date) || null; } } catch (e) {}
+                const name = userName || this.getGlobalUserName();
+                return _wxPendingMessages(_wxPendingSplit(hist).pending, apiChat, name, stNow, opts && opts.lead);
+            } catch (e) { console.warn('[OS_API] 這一輪要回哪幾則：組裝失敗（不影響送出）', e); return []; }
+        },
+
         buildContext: async function(userMessage, promptKey = 'wx_chat_system') {
             console.log(`[OS_API.buildContext] 目標路由: ${promptKey} | 模式: ${this.isStandalone() ? '獨立' : 'ST'}`);
 
@@ -1758,8 +1836,15 @@
                                     console.log('[OS_API.buildContext] 附上聊天室長期記憶 ' + _sumTxt.length + ' 字');
                                 }
                             } catch (e) { console.warn('[OS_API.buildContext] 聊天室記憶注入失敗（不影響送出）:', e); }
-                            const _histMsgs = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
+                            let _histMsgs = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
                                 ? win.WX_SUMMARY.recentWindow(apiChat) : apiChat.messages;
+                            // 🎯 她剛傳、他還沒回的那幾則從歷史裡拿出來，由呼叫端排在整包最後面
+                            //    （見 _wxPendingSplit／OS_API.wxPendingTurn）。歷史到此為止＝全都是他回過的。
+                            //    通話不切：電話是即時的，有自己的「這一通從這裡開始」分隔。
+                            if (promptKey === 'wx_chat_system') {
+                                const _sp = _wxPendingSplit(_histMsgs);
+                                if (_sp.pending.length) _histMsgs = _histMsgs.slice(0, _sp.pastEnd + 1);
+                            }
                             const rawPhoneMsgs = [];
                             // 📞 這一通已經接通：「以上是以前」那句放在這一通開始的地方，不是放在最後
                             const _curCallAt = (promptKey === 'call_voice_system') ? _openCallAt(_histMsgs, apiChat.messages) : -1;
@@ -1807,7 +1892,7 @@
                             if (rawPhoneMsgs.length && _curCallAt < 0) {
                                 apiMessages.push({ role: 'system', content: (promptKey === 'call_voice_system')
                                     ? _CALL_PAST_NOTE
-                                    : '（以上都是以前的訊息，不是現在。回覆時先想清楚距離上一則過了多久，不要假設當時的情況還沒變。）' });
+                                    : '（以上到這裡為止都是之前的對話，最後一則是你自己說的，你已經回過了。先想清楚距離現在過了多久，不要假設當時的情況還沒變。）' });
                             }
                         }
                         
@@ -2368,8 +2453,13 @@
                         // 🚨 先用聊天室記憶切窗口再說。上面那個 _keepN 只是把舊訊息換成它自己的
                         //    <summary> 標籤，而微信訊息根本沒有那種標籤 → sumExtract 抓不到就退回全文，
                         //    等於完全沒有上限（實測 120 則全帶）。窗口一定要在這之前先切。
-                        const _histMsgs = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
+                        let _histMsgs = (win.WX_SUMMARY && win.WX_SUMMARY.recentWindow)
                             ? win.WX_SUMMARY.recentWindow(apiChat) : apiChat.messages;
+                        // 🎯 同酒館版：還沒回的那幾則交給 OS_API.wxPendingTurn 排在整包最後面
+                        if (promptKey === 'wx_chat_system') {
+                            const _sp = _wxPendingSplit(_histMsgs);
+                            if (_sp.pending.length) _histMsgs = _histMsgs.slice(0, _sp.pastEnd + 1);
+                        }
                         const _cut = _keepN === null ? -1 : _histMsgs.length - _keepN;
                         let _pushedHist = 0;
                         // 📞 這一通已經接通：「以上是以前」那句放在這一通開始的地方（同酒館版）
@@ -2424,7 +2514,7 @@
                         if (_pushedHist && _curCallAt < 0) {
                             apiMessages.push({ role: 'system', content: _isCall
                                 ? _CALL_PAST_NOTE
-                                : '（以上都是以前的訊息，不是現在。回覆時先想清楚距離上一則過了多久，不要假設當時的情況還沒變。）' });
+                                : '（以上到這裡為止都是之前的對話，最後一則是你自己說的，你已經回過了。先想清楚距離現在過了多久，不要假設當時的情況還沒變。）' });
                         }
                     }
                     // 🔗 記憶關聯（同酒館版）

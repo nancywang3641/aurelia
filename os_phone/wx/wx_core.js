@@ -3844,6 +3844,22 @@
                     }
                 } catch (e) { console.warn('[WX] 記事本照片夾帶失敗（不影響送出）:', e); }
 
+                // 🎯 整包的最後一段永遠是「她剛傳、他還沒回的那幾則」。
+                //    上面那堆附件（待處理紅包、連結內容、表情包清單、這輪給它看的照片）本來排在她的話後面，
+                //    模型讀到的最後一段是表情包清單 —— 它根本不知道她剛剛說了什麼，只好在整串歷史裡挑一則能回的，
+                //    所以會回到半小時前那句、也會把回過的再回一次。組裝在 OS_API.wxPendingTurn。
+                try {
+                    const _pend = (win.OS_API && win.OS_API.wxPendingTurn)
+                        ? await win.OS_API.wxPendingTurn(GLOBAL_ACTIVE_ID, _meName()) : [];
+                    if (_pend && _pend.length) {
+                        _pend.forEach(function (m) { messages.push(m); });
+                        console.log('[WX] 這一輪要回的訊息排在最後（' + _pend.length + ' 段）');
+                    } else {
+                        // 她沒有再傳新的就按了回覆（想讓對方先開口、或讓他再說一句）
+                        messages.push({ role: 'system', content: '【這一輪是你自己主動開口】\n'
+                            + _meName() + ' 沒有再傳新的訊息，上面那些你都已經回過了。想說什麼就說，不要把回過的再回一次。' });
+                    }
+                } catch (e) { console.warn('[WX] 這一輪要回哪幾則：組裝失敗（不影響送出）', e); }
                 console.log('[WX] 呼叫 OS_API.chat…');
                 _thinkT0 = Date.now();
                 try { if (win.OS_THINK && win.OS_THINK.setContext) win.OS_THINK.setContext({ panel: '微信：' + (currentChat.name || ''), userInput: '' }); } catch (e) {}
