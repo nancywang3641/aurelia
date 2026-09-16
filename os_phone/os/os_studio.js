@@ -3435,6 +3435,25 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     }
 
     // 這次要做哪一種：點那排按鈕會走這裡，從別的地方帶著型別開創作室也走這裡（同一支，免得兩邊漂）
+    // 修改（diff）那條路要帶的說明書片段：第 3 節鐵律、第 4 節 st API 封閉清單、加上目前類型那一小節（2a～2d）。
+    //   以前 diff 提示只有「保守原則＋目前程式碼＋她的要求」，AI 改東西時根本沒看過 API 清單，找不到函式就自己發明。
+    //   從 MODES.vn_ui.prompt 切，同一份來源，說明書改了這裡自動跟上。
+    function _studioSpecForRefine() {
+        const P = String((MODES.vn_ui && MODES.vn_ui.prompt) || '');
+        const between = (from, to) => {
+            const i = P.indexOf(from); if (i < 0) return '';
+            const j = to ? P.indexOf(to, i + from.length) : -1;
+            return (j < 0 ? P.slice(i) : P.slice(i, j)).trim();
+        };
+        const typeHead = { '純展示': '### 2a.', '純應用': '### 2b.', '共用': '### 2c.', '主畫面組件': '### 2d.' }[_vnPanelType] || '';
+        let typeSec = '';
+        if (typeHead) {
+            const i = P.indexOf(typeHead);
+            if (i >= 0) { const rest = P.slice(i); const m = /\n(?=### 2|## 3\.)/.exec(rest.slice(typeHead.length)); typeSec = (m ? rest.slice(0, typeHead.length + m.index) : rest).trim(); }
+        }
+        return [typeSec, between('## 3.', '## 4.'), between('## 4.', '## 5.')].filter(Boolean).join('\n\n');
+    }
+
     function _setPanelType(t) {
         if (!t) return;
         _vnPanelType = t;
@@ -4121,6 +4140,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             // ↓ 煉丹 Diff-refine 引擎（os_studio_diff_engine.js）用
             renderPreviewPanel,
             get currentParsedData() { return currentParsedData; },   // 可變 let → getter 即時取
+            specForRefine: _studioSpecForRefine,   // 說明書第 3、4 節＋目前類型那節（diff 提示要帶）
             set activePreviewData(v) { activePreviewData = v; },     // 可變 let → setter 回寫（restoreFromVNSnapshot 用）
             // ↓ 自檢引擎（os_studio_selfcheck.js）用：預覽層跑面板 js 抓到的同步錯誤
             get lastPreviewJsError() { return _pvLastJsError; },
