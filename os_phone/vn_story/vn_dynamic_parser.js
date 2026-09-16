@@ -220,9 +220,12 @@
                         // PWA：任務指令前面接背景（人設、世界書、大總結、最近劇情），跟酒館版 app 一樣；酒館裡引擎回空、照舊
                         let _ctx = '';
                         try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}
-                        const _full = (_ctx ? (_ctx + '----\n以下是你這次的任務指令，請嚴格遵守(上面只是背景參考)：\n') : '') + String(systemPrompt || '');
+                        // 任務放 user、背景放 system（同 app_runtime）：全塞 system 到 Gemini 會整包進 systemInstruction，過濾嚴得多
+                        const _msgs = [];
+                        if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
+                        _msgs.push({ role: 'user', content: String(systemPrompt || '') });
                         return await new Promise(function(res, rej) {
-                            OS.chat([{ role: 'system', content: _full }], cfg, null,
+                            OS.chat(_msgs, cfg, null,
                                 function(t) { res(typeof t === 'string' ? t : (t && t.message) || ''); }, rej,
                                 { task: 'apps', disableTyping: true });
                         });

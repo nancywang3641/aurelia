@@ -2946,9 +2946,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     cfg = Object.assign({}, cfg, { usePresetPrompts: false, maxTokens: Math.min(parseInt(cfg.maxTokens) || 8192, 32768) });   // 思考照主模型設定走（以前寫死關）
                     let _ctx = '';   // PWA：任務前面接背景（同 vn_dynamic_parser／app_runtime）；酒館裡引擎回空
                     try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}
-                    const _full = (_ctx ? (_ctx + '----\n以下是你這次的任務指令，請嚴格遵守(上面只是背景參考)：\n') : '') + String(systemPrompt || '');
+                    const _msgs = [];   // 任務放 user、背景放 system（同 app_runtime／vn_dynamic_parser）
+                    if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
+                    _msgs.push({ role: 'user', content: String(systemPrompt || '') });
                     return await new Promise((res, rej) => {
-                        OS.chat([{ role: 'system', content: _full }], cfg, null,
+                        OS.chat(_msgs, cfg, null,
                             t => res(typeof t === 'string' ? t : (t && t.message) || ''), rej,
                             { task: 'apps', disableTyping: true });
                     });

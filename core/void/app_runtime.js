@@ -61,11 +61,11 @@
             +     'try { if (P.localStorage.getItem("sp_app_inject_summary") !== "0") { var GS = P.OS_STORY_TOOLS; if (GS && GS.getCurrentInjectionPayload) { var sm = await GS.getCurrentInjectionPayload(); if (sm && sm.trim()) ctx += "【劇情總結(至今為止的長期記憶，延續勿矛盾)】\\n" + sm + "\\n\\n"; } } } catch(e){}'
             // PWA 沒有酒館，上面那三段全空 → 問引擎拿 PWA 自己的背景（人設、世界書、大總結、最近劇情），不然模型只看到一段任務
             +     'try { if (!ctx && P.OS_API && P.OS_API.appContextBlock) ctx = await P.OS_API.appContextBlock(); } catch(e){}'
-            +     'var full = (ctx ? (ctx + "----\\n以下是你這次的任務指令，請嚴格遵守(上面只是背景參考)：\\n") : "") + sys;'
+            +     'var msgs = []; if (ctx) msgs.push({role:"system", content: ctx + "----\\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。"}); msgs.push({role:"user", content: sys});'
             +     'var OS = window.OS_API; if (!OS || !OS.chat) throw new Error("OS_API 不可用");'
             +     'var cfg = (P.OS_SETTINGS && P.OS_SETTINGS.getConfig && P.OS_SETTINGS.getConfig()) || {};'
             +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false });'   // 思考照主模型設定走（以前寫死關；酒館那條照預設包，兩邊對不齊）
-            +     'return await new Promise(function(res, rej){ OS.chat([{role:"system",content:full}], cfg, null, function(t){ res(typeof t==="string"?t:(t&&t.message)||""); }, rej, {task:"apps", disableTyping:true}); });'
+            +     'return await new Promise(function(res, rej){ OS.chat(msgs, cfg, null, function(t){ res(typeof t==="string"?t:(t&&t.message)||""); }, rej, {task:"apps", disableTyping:true}); });'
             +   '} catch(e){ console.error("[app callAI]",e); return ""; } };'
             // ── 當前聊天室角色清單：[{name,count}]，做角色選單/搜尋用(繞懶載、不等大總結) ──
             +   'window.getCurrentChars = async function(){ try { var R = P && P.VN_READER; return (R && R.getCurrentChars) ? await R.getCurrentChars() : []; } catch(e){ console.error("[app getCurrentChars]",e); return []; } };'
