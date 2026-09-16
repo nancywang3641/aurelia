@@ -747,7 +747,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 state.selectedName = name;
                 state.selectedPrompt = finalPrompt;  // 存用戶最終確認的版本（供 spriteSave）
                 document.getElementById('sprite-selected-info').innerHTML =
-                    '<i class="fa-solid fa-bullseye"></i> 當前：<b style="color:#1A1C28;">' + name + '</b>';
+                    '<i class="fa-solid fa-bullseye"></i> 當前：<b style="color:var(--os-ink);">' + name + '</b>';
 
                 // 🚨 三段之間一定要逗號（同 VN_Image.getSprite / autoGenSprite）：直接相接會把角色描述的最後一個 tag
                 //    跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"），一次毀掉兩個 tag
@@ -755,7 +755,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!_JT) { setStatus('生圖模組（vn_config.js）尚未載入，請先進一次 VN 再回來', true); return; }
                 let fullPrompt = _JT(document.getElementById('sprite-tpl-prefix').value, finalPrompt, document.getElementById('sprite-tpl-suffix').value);
                 setStatus('為「' + name + '」生立繪中（5–30 秒）...');
-                document.getElementById('sprite-preview').innerHTML = '<span style="color:#666;font-size:11px;">生成中...</span>';
+                document.getElementById('sprite-preview').innerHTML = '<span style="color:var(--os-ink-soft);font-size:11px;">生成中...</span>';
                 enableBtn('sprite-removebg-btn', false);
                 enableBtn('sprite-removebg-canvas-btn', false);
                 enableBtn('sprite-save-btn', false);
@@ -839,7 +839,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         + '</select>';
                     const pentries = groups[state.pickerWorld] || [];
                     if (!pentries.length) {
-                        html += '<div style="color:#666;font-size:11px;padding:10px 0;">這個世界沒有頭像</div>';
+                        html += '<div style="color:var(--os-ink-soft);font-size:11px;padding:10px 0;">這個世界沒有頭像</div>';
                     } else {
                         html += '<div class="vng-grid">' + pentries.map(e => {
                             const bare = VC.bareKeyOf ? VC.bareKeyOf(e) : e.key;
@@ -1022,7 +1022,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (win2.VN_PLAYER && win2.VN_PLAYER.loadSpriteManager) { win2.VN_PLAYER.loadSpriteManager('sprite-list'); return; }
                 try {
                     const all = await win2.VN_Cache.getAll('sprite_cache');
-                    listEl.innerHTML = all.length ? all.map(e => '<div style="color:#888;font-size:11px;padding:2px 0;">' + e.key + '</div>').join('') : '<span style="color:#666;">尚無已存立繪</span>';
+                    listEl.innerHTML = all.length ? all.map(e => '<div style="color:var(--os-ink-soft);font-size:11px;padding:2px 0;">' + e.key + '</div>').join('') : '<span style="color:var(--os-ink-soft);">尚無已存立繪</span>';
                 } catch (e) { listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗</span>'; }
             }
 
@@ -1201,12 +1201,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="toggle-switch"><input type="checkbox" id="os-system-api" ${llmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc">關掉就用下面自己填的網址與金鑰。</div>
-                            <div id="st-profile-group" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
+                            <div id="st-profile-group" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(var(--os-ink-rgb), 0.10); padding-top:10px;">
                                 <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="os-st-profile">${primaryProfileOpts}</select>
-                                <div id="st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72); word-break:break-all; line-height:1.6;"></div>
-                                <details style="margin-top:12px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
-                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在所有訊息最前面；只在用酒館連線時生效，自己填網址那條與副模型不受影響。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
+                                <div id="st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); word-break:break-all; line-height:1.6;"></div>
+                                <details style="margin-top:12px; border-top:1px solid rgba(var(--os-ink-rgb), 0.10); padding-top:10px;">
+                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在所有訊息最前面；只在用酒館連線時生效，自己填網址那條與副模型不受影響。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
                                     <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                                     <div class="set-desc">留空＝不注入。</div>
                                 </details>
@@ -1220,7 +1220,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group">
                             <div class="set-label">選擇模型</div>
-                            <div id="model-system-notice" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; font-size:12px; color:#1A1C28; border:1px solid rgba(26,28,40,0.15);">
+                            <div id="model-system-notice" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(var(--os-ink-rgb), 0.06); padding:10px; border-radius:4px; font-size:12px; color:var(--os-ink); border:1px solid rgba(var(--os-ink-rgb), 0.15);">
                                 <i class="fa-solid fa-link"></i> 模型由酒館決定，在酒館切換即可。
                             </div>
                             <div class="model-row ${llmConfig.useSystemApi ? 'hidden' : ''}" id="model-row">
@@ -1280,7 +1280,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label"><i class="fa-solid fa-plug"></i> 測試 API 連線</div>
                             <div class="btn-test" id="os-test-btn">發送測試訊息</div>
-                            <div id="os-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#3A3F5C; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
+                            <div id="os-test-result" style="display:none; margin-top:10px; background:rgba(var(--os-tint-rgb), 0.90); border-radius:4px; padding:12px; font-size:12px; color:var(--os-ink-soft); font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
                     </div>
 
@@ -1291,10 +1291,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="toggle-switch"><input type="checkbox" id="sec-system-api" ${secLlmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
                             <div class="set-desc">關掉就用下面自己填的網址與金鑰。</div>
-                            <div id="sec-st-profile-group" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(26,28,40,0.10); padding-top:10px;">
+                            <div id="sec-st-profile-group" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(var(--os-ink-rgb), 0.10); padding-top:10px;">
                                 <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="sec-st-profile">${secondaryProfileOpts}</select>
-                                <div id="sec-st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(26,28,40,0.72); word-break:break-all; line-height:1.6;"></div>
+                                <div id="sec-st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); word-break:break-all; line-height:1.6;"></div>
                             </div>
                         </div>
 
@@ -1313,7 +1313,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group">
                             <div class="set-label">選擇模型</div>
-                            <div id="sec-model-system-notice" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; font-size:12px; color:#1A1C28; border:1px solid rgba(26,28,40,0.15);">
+                            <div id="sec-model-system-notice" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(var(--os-ink-rgb), 0.06); padding:10px; border-radius:4px; font-size:12px; color:var(--os-ink); border:1px solid rgba(var(--os-ink-rgb), 0.15);">
                                 <i class="fa-solid fa-link"></i> 模型由酒館決定，在酒館切換即可。
                             </div>
                             <div class="model-row ${secLlmConfig.useSystemApi ? 'hidden' : ''}" id="sec-model-row">
@@ -1327,7 +1327,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group">
                             <details>
-                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:#1A1C28;" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／）都生效。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
+                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／）都生效。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
                                 <textarea class="set-input" id="sec-custom-cot" rows="7" placeholder="貼上要放在副模型訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(secLlmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                                 <div class="set-desc">留空＝不注入。</div>
                             </details>
@@ -1372,7 +1372,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label"><i class="fa-solid fa-plug"></i> 測試 API 連線</div>
                             <div class="btn-test" id="sec-test-btn">發送測試訊息</div>
-                            <div id="sec-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#3A3F5C; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
+                            <div id="sec-test-result" style="display:none; margin-top:10px; background:rgba(var(--os-tint-rgb), 0.90); border-radius:4px; padding:12px; font-size:12px; color:var(--os-ink-soft); font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
                         </div>
                     </div>
 
@@ -1591,13 +1591,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div id="img-cfd-preset-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
                                     <div style="background:#f5f3ee; width:min(560px,92vw); max-height:86vh; border-radius:12px; padding:16px; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
                                         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                                            <div style="font-size:15px; font-weight:700; color:#1A1C28;"><i class="fa-solid fa-box"></i> 預設包</div>
-                                            <span style="cursor:pointer; font-size:18px; color:#1A1C28; padding:0 6px;" onclick="window._cfdPreset.close()">✕</span>
+                                            <div style="font-size:15px; font-weight:700; color:var(--os-ink);"><i class="fa-solid fa-box"></i> 預設包</div>
+                                            <span style="cursor:pointer; font-size:18px; color:var(--os-ink); padding:0 6px;" onclick="window._cfdPreset.close()">✕</span>
                                         </div>
-                                        <div style="font-size:11px; color:rgba(26,28,40,0.7); margin-bottom:4px;"><i class="fa-solid fa-palette"></i> 預覽測試詞（每個包都用這句生縮圖，只比風格差異）</div>
+                                        <div style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.7); margin-bottom:4px;"><i class="fa-solid fa-palette"></i> 預覽測試詞（每個包都用這句生縮圖，只比風格差異）</div>
                                         <input id="img-cfd-preview-prompt" class="set-input" style="width:100%; margin-bottom:12px;" value="${(imgConfig.comfyuiDirect?.previewPrompt || '1 person, upper body portrait, looking at viewer, simple background').replace(/"/g,'&quot;')}">
                                         <div id="img-cfd-preset-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px;"></div>
-                                        <div style="display:flex; gap:6px; align-items:center; margin-top:14px; border-top:1px solid rgba(26,28,40,0.12); padding-top:12px;">
+                                        <div style="display:flex; gap:6px; align-items:center; margin-top:14px; border-top:1px solid rgba(var(--os-ink-rgb), 0.12); padding-top:12px;">
                                             <input id="img-cfd-preset-newname" class="set-input" placeholder="新預設包名稱（如：日常動漫）" style="flex:1;">
                                             <button class="set-btn" type="button" onclick="window._cfdPreset.saveNew()" style="white-space:nowrap;"><i class="fa-solid fa-plus"></i> 從目前設定另存</button>
                                         </div>
@@ -2003,7 +2003,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <!-- ── 🎬 場景插圖（共用設定）｜屬「插圖」分頁 ── -->
-                        <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(26,28,40,0.12); padding-top:15px; margin-top:5px;">
+                        <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(var(--os-ink-rgb), 0.12); padding-top:15px; margin-top:5px;">
                             <div class="set-label" style="font-size:13px;" title="尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。"><i class="fa-solid fa-clapperboard"></i> 場景插圖</div>
                             <div class="set-desc" style="margin-top:6px;">設定套用於所有場景插圖。</div>
 
@@ -2023,14 +2023,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <option value="custom"    ${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? 'selected':''}>自訂…</option>
                                     </select>
                                     <input class="set-input" id="img-scene-size-custom" type="text" placeholder="寬x高，例如 1020x1020" value="${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? (imgConfig.sceneGen?.size||'') : ''}" style="font-size:12px; margin-top:6px; display:${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? '' : 'none'};">
-                                    <div style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:3px;">← 越大越清晰但越耗點數。自訂填「寬x高」(數字)；多數模型建議用 64 的倍數(如 1024)。</div>
+                                    <div style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); margin-top:3px;">← 越大越清晰但越耗點數。自訂填「寬x高」(數字)；多數模型建議用 64 的倍數(如 1024)。</div>
                                 </div>
 
                                 <div class="set-desc" style="margin-bottom:12px; font-size:11px;" title="插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。"><i class="fa-solid fa-palette"></i> 插圖底詞／負詞在接口設定區調整。</div>
                             </div>
                         </div>
 
-                        <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
+                        <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
                             <div style="display:flex; align-items:center; justify-content:space-between;" title="開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會順便依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。其它觸發：主模型直接吐 [Scene|]（世界書開規則，最省）。">
                                 <span><i class="fa-solid fa-image"></i> 自動插圖</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
@@ -2050,7 +2050,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-desc">附加在記憶副模型指令後面，叫它順便寫插圖；切到哪個插圖來源就用那份。</div>
 
                             <!-- 🎯 獨立插圖副模型：另開一通 chatSecondary、只吃規範、不背 AVS/記憶 -->
-                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px; border-top:1px dashed rgba(26,28,40,0.10); padding-top:12px;" title="開啟：插圖改走「獨立一通副模型」(用 API 設定區的副模型接口)、只吃下方規範、不背 AVS/記憶，插圖更準。關閉＝走上面搭便車路(跟記憶/AVS 同一通)。">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px; border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:12px;" title="開啟：插圖改走「獨立一通副模型」(用 API 設定區的副模型接口)、只吃下方規範、不背 AVS/記憶，插圖更準。關閉＝走上面搭便車路(跟記憶/AVS 同一通)。">
                                 <span><i class="fa-solid fa-bullseye"></i> 獨立插圖副模型</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-standalone-enabled" ${imgConfig.sceneGen?.standaloneEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
@@ -2065,18 +2065,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <input class="set-input" id="img-test-prompt" type="text" placeholder="輸入描述..." value="a handsome man holding a rose">
                             <div class="btn-test" id="img-test-btn" style="margin-top:10px;"><i class="fa-solid fa-palette"></i> 生成預覽</div>
                             <div id="img-test-preview" style="margin-top:15px; display:none; text-align:center;">
-                                <img id="img-test-image" style="max-width:100%; border-radius:4px; border:1px solid rgba(26,28,40,0.15);" />
-                                <div id="img-test-url" style="font-size:11px; color:rgba(26,28,40,0.72); margin-top:8px; word-break:break-all;"></div>
+                                <img id="img-test-image" style="max-width:100%; border-radius:4px; border:1px solid rgba(var(--os-ink-rgb), 0.15);" />
+                                <div id="img-test-url" style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); margin-top:8px; word-break:break-all;"></div>
                             </div>
                         </div>
 
-                        <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(26,28,40,0.10); padding-top:14px; margin-top:14px;">
+                        <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
                             <div class="set-label" title="主來源卡住或逾時時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。"><i class="fa-solid fa-life-ring"></i> 退路圖庫</div>
-                            <div class="set-desc" style="margin-bottom:8px;">免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:#1A1C28;">pixabay.com/api/docs</a></div>
+                            <div class="set-desc" style="margin-bottom:8px;">免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--os-ink);">pixabay.com/api/docs</a></div>
                             <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${imgConfig.pixabayKey || ''}">
                             <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
                                 <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
-                                <span style="font-size:12px; color:#1A1C28;"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去 Pollinations）</span>
+                                <span style="font-size:12px; color:var(--os-ink);"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去 Pollinations）</span>
                             </div>
                         </div>
 
@@ -2085,9 +2085,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div><!-- /view-img-api -->
                         <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
                             <!-- 內層子 tab：頭像快取 vs 角色立繪；最後一顆「角色圖鑑」是開窗口，不是切分頁 -->
-                            <div style="display:flex;gap:6px;padding:0 0 10px;border-bottom:1px solid rgba(26,28,40,0.06);margin-bottom:10px;">
-                                <div class="av-sub active" data-avsub="cache"  style="cursor:pointer;padding:4px 10px;font-size:12px;color:#1A1C28;border:1px solid rgba(26,28,40,0.25);border-radius:4px;background:rgba(26,28,40,0.06);" onclick="_switchAvatarSub(this,'cache')"><i class="fa-solid fa-box"></i> 頭像快取</div>
-                                <div class="av-sub"        data-avsub="sprite" style="cursor:pointer;padding:4px 10px;font-size:12px;color:rgba(26,28,40,0.72);border:1px solid #444;border-radius:4px;"                              onclick="_switchAvatarSub(this,'sprite')"><i class="fa-solid fa-palette"></i> 角色立繪</div>
+                            <div style="display:flex;gap:6px;padding:0 0 10px;border-bottom:1px solid rgba(var(--os-ink-rgb), 0.06);margin-bottom:10px;">
+                                <div class="av-sub active" data-avsub="cache"  style="cursor:pointer;padding:4px 10px;font-size:12px;color:var(--os-ink);border:1px solid rgba(var(--os-ink-rgb), 0.25);border-radius:4px;background:rgba(var(--os-ink-rgb), 0.06);" onclick="_switchAvatarSub(this,'cache')"><i class="fa-solid fa-box"></i> 頭像快取</div>
+                                <div class="av-sub"        data-avsub="sprite" style="cursor:pointer;padding:4px 10px;font-size:12px;color:rgba(var(--os-ink-rgb), 0.72);border:1px solid rgba(var(--os-ink-rgb), 0.25);border-radius:4px;"                              onclick="_switchAvatarSub(this,'sprite')"><i class="fa-solid fa-palette"></i> 角色立繪</div>
                                 <button class="acg-open-chip" type="button" onclick="var G=window.OS_CHAR_GALLERY||(window.parent&&window.parent.OS_CHAR_GALLERY);if(G)G.open(null,{from:this});"><i class="fa-solid fa-address-book"></i><span>角色圖鑑</span></button>
                             </div>
 
@@ -2123,7 +2123,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                                 <option value="1.5" selected>精緻 1.5x（768×1344）</option>
                                                 <option value="2">高清 2x（1024×1792）</option>
                                             </select>
-                                            <label id="sprite-hires-row" style="display:none;align-items:center;gap:4px;font-size:11px;color:#1A1C28;white-space:nowrap;cursor:pointer;" title="ComfyUI 直連專屬：base 生完→潛空間放大→二次低重繪採樣，真的補出細節（比單純放大清晰）。較慢。">
+                                            <label id="sprite-hires-row" style="display:none;align-items:center;gap:4px;font-size:11px;color:var(--os-ink);white-space:nowrap;cursor:pointer;" title="ComfyUI 直連專屬：base 生完→潛空間放大→二次低重繪採樣，真的補出細節（比單純放大清晰）。較慢。">
                                                 <input type="checkbox" id="sprite-hires" style="margin:0;"><i class="fa-solid fa-microscope"></i> 高清修復
                                             </label>
                                             <button class="vng-studio-gen" id="sprite-gen-btn"><i class="fa-solid fa-wand-magic-sparkles"></i> 生立繪</button>
@@ -2140,7 +2140,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         </div>
                                     </div>
 
-                                    <div id="sprite-preview" class="vng-studio-preview"><span style="color:#888;font-size:11px;">生立繪後在這裡預覽、去背</span></div>
+                                    <div id="sprite-preview" class="vng-studio-preview"><span style="color:var(--os-ink-soft);font-size:11px;">生立繪後在這裡預覽、去背</span></div>
 
                                     <div class="vng-studio-bar">
                                         <button class="vng-studio-act" id="sprite-removebg-canvas-btn" style="opacity:0.5;pointer-events:none;"><i class="fa-solid fa-scissors"></i> 純色去背</button>
@@ -2188,10 +2188,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-label"><i class="fa-solid fa-volume-high"></i> 角色說話的聲音</div>
                         <!-- 三選一 mode 切換 -->
-                        <div style="display:flex;gap:6px;margin-bottom:16px;padding:4px;background:rgba(26,28,40,0.06);border-radius:6px;">
-                            <div data-ttsmode="minimax" onclick="_switchTtsMode(this,'minimax')" style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='minimax' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:rgba(26,28,40,0.55);'}">MINIMAX</div>
-                            <div data-ttsmode="sovits"  onclick="_switchTtsMode(this,'sovits')"  style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='sovits' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:rgba(26,28,40,0.55);'}">本機語音</div>
-                            <div data-ttsmode="off"     onclick="_switchTtsMode(this,'off')"     style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='off' ? 'background:rgba(26,28,40,0.09);color:#1A1C28;font-weight:700;box-shadow:0 0 0 1px rgba(26,28,40,0.25) inset;' : 'color:rgba(26,28,40,0.55);'}">全關閉</div>
+                        <div style="display:flex;gap:6px;margin-bottom:16px;padding:4px;background:rgba(var(--os-ink-rgb), 0.06);border-radius:6px;">
+                            <div data-ttsmode="minimax" onclick="_switchTtsMode(this,'minimax')" style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='minimax' ? 'background:rgba(var(--os-ink-rgb), 0.09);color:var(--os-ink);font-weight:700;box-shadow:0 0 0 1px rgba(var(--os-ink-rgb), 0.25) inset;' : 'color:rgba(var(--os-ink-rgb), 0.55);'}">MINIMAX</div>
+                            <div data-ttsmode="sovits"  onclick="_switchTtsMode(this,'sovits')"  style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='sovits' ? 'background:rgba(var(--os-ink-rgb), 0.09);color:var(--os-ink);font-weight:700;box-shadow:0 0 0 1px rgba(var(--os-ink-rgb), 0.25) inset;' : 'color:rgba(var(--os-ink-rgb), 0.55);'}">本機語音</div>
+                            <div data-ttsmode="off"     onclick="_switchTtsMode(this,'off')"     style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='off' ? 'background:rgba(var(--os-ink-rgb), 0.09);color:var(--os-ink);font-weight:700;box-shadow:0 0 0 1px rgba(var(--os-ink-rgb), 0.25) inset;' : 'color:rgba(var(--os-ink-rgb), 0.55);'}">全關閉</div>
                         </div>
 
                         <!-- 旁白·系統（跨模式、永遠顯示；旁白與系統音默認都關閉） -->
@@ -2200,7 +2200,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- MINIMAX 設定區 -->
                         <div id="voice-area-minimax" class="voice-area" style="display:${currentTtsMode==='minimax' ? 'block' : 'none'};">
 
-                        <div style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.10); font-size:12px; color:#1A1C28;">
+                        <div style="background:rgba(var(--os-ink-rgb), 0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(var(--os-ink-rgb), 0.10); font-size:12px; color:var(--os-ink);">
                             <i class="fa-solid fa-music"></i> <b>Minimax TTS</b>：配置後，VN 面板 [Char|...] 對話自動合成語音。請至 Minimax 平台取得 API Key。
                         </div>
 
@@ -2263,15 +2263,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="mm-profile-list" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
                             <div style="display:flex; gap:8px; margin-top:12px;">
                                 <div class="btn-test" id="mm-add-profile-btn" style="flex:1;">＋ 新增音色設定檔</div>
-                                <div class="btn-test" id="mm-browse-voices-btn" style="flex:1; background:rgba(228,232,245,0.96);"><i class="fa-solid fa-magnifying-glass"></i> 瀏覽官方音色庫</div>
+                                <div class="btn-test" id="mm-browse-voices-btn" style="flex:1; background:rgba(var(--os-tint-rgb), 0.96);"><i class="fa-solid fa-magnifying-glass"></i> 瀏覽官方音色庫</div>
                             </div>
                         </div>
 
                         <div id="mm-voice-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(26,13,10,0.85); align-items:center; justify-content:center;">
-                            <div style="background:rgba(228,232,245,0.97); border:1px solid rgba(26,28,40,0.20); border-radius:8px; padding:16px; width:92%; max-width:480px; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+                            <div style="background:rgba(var(--os-tint-rgb), 0.97); border:1px solid rgba(var(--os-ink-rgb), 0.20); border-radius:8px; padding:16px; width:92%; max-width:480px; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                                    <div style="font-weight:bold; color:#1A1C28; font-size:14px;"><i class="fa-solid fa-music"></i> 官方音色庫 <span id="mm-voice-count" style="font-size:11px; color:rgba(26,28,40,0.72); font-weight:normal;"></span></div>
-                                    <span id="mm-voice-modal-close" style="cursor:pointer; color:#1A1C28; font-size:20px; line-height:1; padding:0 4px;">✕</span>
+                                    <div style="font-weight:bold; color:var(--os-ink); font-size:14px;"><i class="fa-solid fa-music"></i> 官方音色庫 <span id="mm-voice-count" style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); font-weight:normal;"></span></div>
+                                    <span id="mm-voice-modal-close" style="cursor:pointer; color:var(--os-ink); font-size:20px; line-height:1; padding:0 4px;">✕</span>
                                 </div>
                                 <input id="mm-voice-search" class="set-input" placeholder="搜尋 voice_id 或描述..." style="margin-bottom:8px;">
                                 <div id="mm-voice-list" style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:6px; padding-right:4px;"></div>
@@ -2286,7 +2286,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <input class="set-input" id="mm-test-text" type="text" placeholder="測試文字" value="你好，我是AI語音助手，測試一下。" style="margin-bottom:10px;">
                             <div class="btn-test" id="mm-test-btn"><i class="fa-solid fa-music"></i> 播放測試語音</div>
                             <div class="btn-test" id="mm-stop-btn" style="margin-top:8px; display:none;"><i class="fa-solid fa-stop"></i> 停止播放</div>
-                            <div id="mm-test-result" style="display:none; margin-top:10px; background:rgba(228,232,245,0.90); border-radius:4px; padding:12px; font-size:12px; color:#1A1C28; font-family:monospace; word-break:break-all;"></div>
+                            <div id="mm-test-result" style="display:none; margin-top:10px; background:rgba(var(--os-tint-rgb), 0.90); border-radius:4px; padding:12px; font-size:12px; color:var(--os-ink); font-family:monospace; word-break:break-all;"></div>
                         </div>
 
                         </div><!-- /voice-area-minimax -->
@@ -2298,9 +2298,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <!-- 全關閉 -->
                         <div id="voice-area-off" class="voice-area" style="display:${currentTtsMode==='off' ? 'block' : 'none'};">
-                            <div style="background:rgba(26,28,40,0.04);padding:24px;border-radius:6px;text-align:center;color:rgba(26,28,40,0.72);font-size:13px;line-height:1.9;border:1px solid rgba(26,28,40,0.06);">
+                            <div style="background:rgba(var(--os-ink-rgb), 0.04);padding:24px;border-radius:6px;text-align:center;color:rgba(var(--os-ink-rgb), 0.72);font-size:13px;line-height:1.9;border:1px solid rgba(var(--os-ink-rgb), 0.06);">
                                 <i class="fa-solid fa-volume-xmark"></i> 已關閉所有語音合成<br>
-                                <span style="font-size:11px;color:#888;">VN 面板對話將不會自動朗讀<br>點上方按鈕切換語音引擎</span>
+                                <span style="font-size:11px;color:var(--os-ink-soft);">VN 面板對話將不會自動朗讀<br>點上方按鈕切換語音引擎</span>
                             </div>
                         </div>
                     </div>
@@ -2360,7 +2360,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="btn-save" id="relay-save-btn" style="flex:1; padding:12px; font-size:13px;">開啟並測試</div>
                                 <div class="btn-test" id="relay-off-btn" style="flex:1; padding:12px; font-size:13px;">關掉</div>
                             </div>
-                            <div id="relay-state" style="font-size:12px; color:#1A1C28; margin-top:8px;">還沒開。</div>
+                            <div id="relay-state" style="font-size:12px; color:var(--os-ink); margin-top:8px;">還沒開。</div>
                         </div>
 
                             <div class="set-group" id="ka-group">
@@ -2432,7 +2432,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </select>
                         </div>
 
-                        <div style="background:rgba(26,28,40,0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(26,28,40,0.10); font-size:12px; color:#1A1C28;">
+                        <div style="background:rgba(var(--os-ink-rgb), 0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(var(--os-ink-rgb), 0.10); font-size:12px; color:var(--os-ink);">
                             <i class="fa-solid fa-cloud"></i> 備份會將世界書、寵物、成就、App 設定等<b>輕量資料</b>同步至 GitHub Gist。
                             大型資料（寵物日誌、未來 VN 存檔等）請使用「本地全量匯出」。
                         </div>
@@ -2442,7 +2442,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-desc">填 gist 權限的 Token，首次備份後自動存 ID。</div>
                             <input class="set-input" id="bk-token" type="password" placeholder="ghp_xxxxxxxxxxxx（不會備份 Token 本身）" />
                             <input class="set-input" id="bk-gist-id" placeholder="Gist ID（首次留空，備份後自動填入）" style="margin-top:8px;" />
-                            <div id="bk-gist-hint" style="font-size:11px; color:#1A1C28; margin-top:6px; word-break:break-all;"></div>
+                            <div id="bk-gist-hint" style="font-size:11px; color:var(--os-ink); margin-top:6px; word-break:break-all;"></div>
                             <div style="display:flex; gap:8px; margin-top:10px;">
                                 <div class="btn-save" id="bk-gist-save-btn" style="flex:1; padding:12px; font-size:13px;"><i class="fa-solid fa-cloud"></i> 備份到 Gist</div>
                                 <div class="btn-test" id="bk-gist-restore-btn" style="flex:1;"><i class="fa-solid fa-download"></i> 從 Gist 還原</div>
@@ -2454,7 +2454,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <i class="fa-solid fa-chart-simple"></i> 本地儲存空間
                                 <span class="btn-test" id="bk-scan-btn" style="padding:4px 12px; font-size:11px; cursor:pointer; margin:0;">掃描</span>
                             </div>
-                            <div id="bk-storage-info" style="font-size:12px; color:rgba(26,28,40,0.72); margin-top:8px;">點擊「掃描」查看各資料佔用量</div>
+                            <div id="bk-storage-info" style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.72); margin-top:8px;">點擊「掃描」查看各資料佔用量</div>
                         </div>
 
                         <div class="set-group">
@@ -2471,7 +2471,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="btn-danger" id="bk-format-btn"><i class="fa-solid fa-burst"></i> 格式化並清空所有數據</div>
                         </div>
 
-                        <div id="bk-status" style="font-size:12px; color:rgba(26,28,40,0.72); text-align:center; padding:10px 0; min-height:20px;"></div>
+                        <div id="bk-status" style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.72); text-align:center; padding:10px 0; min-height:20px;"></div>
                     </div>
 
                 </div>
@@ -5003,9 +5003,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try {
                 const info = await BACKUP.estimateSize();
                 const lines = Object.entries(info).map(([k, v]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(26,28,40,0.10);">
-                        <span style="color:#3A3F5C">${k}</span>
-                        <span style="color:#1A1C28; font-weight:bold;">${v.count} 筆 / ${v.kb} KB</span>
+                    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(var(--os-ink-rgb), 0.10);">
+                        <span style="color:var(--os-ink-soft)">${k}</span>
+                        <span style="color:var(--os-ink); font-weight:bold;">${v.count} 筆 / ${v.kb} KB</span>
                     </div>`
                 ).join('');
                 if (elStorageInfo) elStorageInfo.innerHTML = lines || '（無資料）';

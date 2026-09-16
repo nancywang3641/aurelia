@@ -17,10 +17,13 @@
    ═══════════════════════════════════════════════════════════════════ */
 :root {
     --os-ink: #1A1C28;                         /* 主字色 */
+    --os-ink-rgb: 26, 28, 40;                  /* 同一個主字色的三個數字 —— 面板裡那堆
+                                                  rgba(主字色, 濃度) 的半透明線與底都吃這格 */
     --os-ink-dim: rgba(26, 28, 40, 0.72);      /* 次要字：返回鍵、動作鈕、沒選中的分頁 */
     --os-line: rgba(26, 28, 40, 0.15);         /* 分隔線 */
     --os-hover: rgba(26, 28, 40, 0.08);        /* 滑過時的底 */
     --os-chrome-bg: rgba(228, 232, 245, 0.88); /* 標頭列的底 */
+    --os-tint-rgb: 228, 232, 245;              /* 面板裡那些淡底（區塊底、輸入框底、選中底）的三個數字 */
     --os-chrome-tabs-bg: rgba(228, 232, 245, 0.92); /* 分頁列的底 */
     --os-accent: var(--os-ink);                /* 重點色：分頁指示條與選中的分頁字 */
     --os-accent-glow: rgba(26, 28, 40, 0.30);  /* 指示條下方那圈暈 */
@@ -183,7 +186,9 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.5px;
-    color: var(--os-ink-dim);
+    /* 沒選中的分頁是「還可以點的字」，不是裝飾 —— 用實色，不用主字色調半透明。
+       半透明疊在淺底上對比只有 3 出頭，看起來只是灰灰的，實際上讀起來很吃力。 */
+    color: var(--os-ink-soft);
     cursor: pointer;
     position: relative;
     transition: .3s;
