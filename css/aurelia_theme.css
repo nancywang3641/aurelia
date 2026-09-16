@@ -429,3 +429,59 @@
 .theme-dark .aps-home::before { width: 225px; height: 225px; border: 1px solid rgba(165, 213, 179, 0.09); border-radius: 50%; top: 134px; right: -130px; box-shadow: 0 0 0 22px rgba(165, 213, 179, 0.03), 0 0 0 44px rgba(165, 213, 179, 0.02); }
 .theme-dark .aps-home::after { top: 210px; right: 29px; width: 4px; height: 4px; border-radius: 50%; background: #bad5b3; box-shadow: -14px 43px 0 -1px #bad5b3, 11px -32px 0 -1px #bad5b3; }
 .theme-dark .aps-dock .aps-icon:last-child .aps-icon-em { background: #bdd8b9; color: #2e4c37; }
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   微信那身皮 —— 跟手機主題分開的一組格子
+   ═══════════════════════════════════════════════════════════════════
+   微信是世界裡的一支 app，有自己的身分（綠色、白卡片、灰底），不該跟著桌布變色 ——
+   真手機的微信也不會因為你換桌布就變成粉紅色。所以它自己一組 --wx-*。
+
+   🚨 深色模式不是另一套主題，是同一套皮的另一半：.wx-dark 掛在 .wx-shell 上，
+      只換下面這組格子的值。程式那邊的開關（wx_dark_mode）完全不用動。
+   🚨 微信的訊息卡片（紅包、轉帳、語音、檔案、連結、位置、禮物、貼圖、影片）
+      在 css/vn_styles.css 也有一份 —— VN 手機聊天跟微信共用同一組 class。
+      所以那幾個 class 的深色規則不能刪：它們的存在是為了壓過那支的寫死白底。
+   ═══════════════════════════════════════════════════════════════════ */
+.wx-shell {
+    --wx-page: #f2f2f2;          /* 整頁的底（聊天列表、設置頁） */
+    --wx-bar: #f7f7f7;           /* 底部分頁列、輸入列 */
+    --wx-surface: #ffffff;       /* 卡片、列、聊天室背景 */
+    --wx-surface-2: #f5f5f5;     /* 輸入框、按下去的底 */
+    --wx-header: #ededed;        /* 頂欄 */
+    --wx-line: #eeeeee;          /* 分隔線 */
+    --wx-line-strong: #dddddd;   /* 比較明顯的框 */
+    --wx-arrow: #cccccc;         /* 右邊那個箭頭、佔位字 */
+    --wx-ink: #000000;           /* 標題 */
+    --wx-ink-2: #333333;         /* 內文 */
+    --wx-ink-3: #666666;         /* 次要字 */
+    --wx-ink-soft: #888888;      /* 再次一層 */
+    --wx-fill: #eeeeee;          /* 沒有圖時的頭像底、預覽底 */
+    --wx-fill-2: #f0f0f0;        /* 比它再淺一點的填充 */
+    --wx-ink-dim: #999999;       /* 時間、說明 */
+    --wx-accent: #07c160;        /* 微信綠：主要按鈕、已讀、確認 */
+    --wx-on-accent: #ffffff;     /* 疊在綠色上的字 */
+    --wx-danger: #fa5151;        /* 未讀紅點、刪除 */
+    --wx-link: #576b95;          /* 連結、可點的藍字 */
+}
+.wx-shell.wx-dark {
+    --wx-page: #111111;
+    --wx-bar: #1c1c1e;
+    --wx-surface: #1c1c1e;
+    --wx-surface-2: #2a2a2a;
+    --wx-header: #1c1c1e;
+    --wx-line: #2a2a2a;
+    --wx-line-strong: #3a3a3c;
+    --wx-arrow: #555555;
+    --wx-ink: #f0f0f0;
+    --wx-ink-2: #f0f0f0;
+    --wx-ink-3: #cccccc;
+    --wx-ink-soft: #9a9a9e;
+    --wx-fill: #2a2a2a;
+    --wx-fill-2: #2a2a2a;
+    --wx-ink-dim: #888888;
+    --wx-accent: #07c160;
+    --wx-on-accent: #ffffff;
+    --wx-danger: #fa5151;
+    --wx-link: #7d90b8;
+}
