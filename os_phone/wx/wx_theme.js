@@ -203,7 +203,7 @@
             .wx-typing-dots-wrap span:nth-child(3) { animation-delay: 0.36s; }
             @keyframes wx-dot-bounce { 0%,80%,100%{transform: translateY(0); opacity: 0.35} 40%{transform: translateY(-4px); opacity: 0.85} }
             /* .wx-typing-label 已停用：群聊要顯示誰在打字改用 .wx-group-name，跟一般訊息同一條 */
-            .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); z-index: 5; transition: bottom 0.2s; }
+            .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); z-index: 5; transition: bottom 0.2s; padding-bottom: var(--aps-safe-bottom, 0px); }
             .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; }
             .wx-input-real { flex: 1; min-width: 0; height: 36px; background: var(--wx-surface) !important; border-radius: 6px; border: 1px solid var(--wx-line-strong); margin: 0 10px; padding: 0 10px; font-size: 14px; outline: none; color: var(--wx-ink) !important; opacity: 1 !important; -webkit-text-fill-color: #000 !important; }
             /* 🎙 輸入框右邊的麥克風：按住說話、放開送出語音訊息。按著時麥克風綠底（往上滑到取消時紅底），
@@ -265,7 +265,7 @@
             .wx-stk-import-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
             .wx-stk-url-input { flex: 1; font-size: 12px; padding: 4px 8px; border: 1px solid var(--wx-line-strong); border-radius: 4px; background: #fafafa; min-width: 0; }
             .wx-stk-file-btn { background: var(--wx-accent); color: var(--wx-on-accent); font-size: 12px; padding: 5px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
-            .wx-bottom-nav { height: 55px; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; z-index: 10; padding-bottom: 5px; }
+            .wx-bottom-nav { padding-bottom: var(--aps-safe-bottom, 0px); height: 55px; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; z-index: 10; padding-bottom: 5px; }
             .wx-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; flex: 1; cursor: pointer; position: relative; }
             .wx-tab-icon-box { position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
             .wx-tab-icon { width: 24px; height: 24px; fill: var(--wx-ink); transition: fill 0.2s; }
@@ -279,7 +279,7 @@
             .wx-scroll-view { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; height: 100%; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
             .wx-grid-page { min-width: 100%; scroll-snap-align: start; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 15px 10px; padding: 25px 20px; box-sizing: border-box; height: 210px; }
             .wx-grid-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
-            .wx-grid-icon { width: 55px; height: 55px; background: var(--wx-surface); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1px solid #e0e0e0; color: #444; }
+            .wx-grid-icon { width: 55px; height: 55px; background: var(--wx-surface); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1px solid var(--wx-line-strong); color: var(--wx-ink-2); }
             .wx-grid-label { font-size: 11px; color: var(--wx-ink-3); }
             .wx-img-block { max-width: 100%; border-radius: 4px; cursor: pointer; display: block; }
             .wx-time-stamp { text-align: center; font-size: 12px; color: #cecece; margin: 10px 0; width: 100%; clear: both; }
@@ -485,7 +485,7 @@
             .wx-dark .wx-stk-url-input { background: var(--wx-surface-2); border-color: var(--wx-line-strong); color: var(--wx-ink); }
             .wx-dark .wx-bottom-nav { background: var(--wx-surface); border-top-color: var(--wx-line); }
             .wx-dark .wx-tab-txt { color: var(--wx-ink-dim); }
-            .wx-dark .wx-grid-icon { background: var(--wx-surface); border-color: var(--wx-line); color: var(--wx-ink-3); }
+            /* 深色那條刪了：基底已經吃格子，深淺自己會跟著換 */
             .wx-dark .wx-file-card, .wx-dark .wx-wb-share-card { background: var(--wx-surface); border-color: var(--wx-line); }
             .wx-dark .wx-file-name, .wx-dark .wx-wb-share-text { color: var(--wx-ink-3); }
             .wx-dark .wx-settings-panel { background: #000; }

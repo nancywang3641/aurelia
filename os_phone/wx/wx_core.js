@@ -41,6 +41,21 @@
     let WX_THEME = localStorage.getItem('wx_theme') || '';
     if (!WX_THEMES.some(function (t) { return t.id === WX_THEME; })) WX_THEME = '';
 
+    // 🚨 皮的格子定義掛在 <html> 上，不是掛在微信外殼上。
+    //    聊天設置那種面板是外殼的**兄弟**（貼在同一個容器裡、不是長在外殼裡面），
+    //    掛在外殼上它們一個格子都拿不到，底色會變成無效值 → 整頁透明。她遇過。
+    //    外殼自己那幾個 class 照舊留著，那是給既有那批深色規則用的。
+    function _applyWxSkinClass() {
+        try {
+            const root = (win.document || document).documentElement;
+            if (!root) return;
+            root.classList.toggle('wxskin-dark', !!DARK_MODE);
+            WX_THEMES.forEach(function (t) {
+                if (t.id) root.classList.toggle('wxskin-' + t.id, WX_THEME === t.id);
+            });
+        } catch (e) {}
+    }
+
     // --- HTML 轉純文字核心 ---
     function cleanHtmlToText(htmlContent) {
         let temp = htmlContent;
@@ -3021,6 +3036,7 @@
             const atBottom = !prevScroll || (prevScroll.scrollHeight - prevScroll.scrollTop - prevScroll.clientHeight < 80);
             const savedTop = prevScroll ? prevScroll.scrollTop : 0;
 
+            _applyWxSkinClass();
             const html = window.WX_VIEW.renderShell(GLOBAL_ACTIVE_ID, GLOBAL_CHATS, GLOBAL_TAB, DARK_MODE, WX_THEME);
             APP_CONTAINER.innerHTML = html;
 

@@ -68,6 +68,9 @@
     --aps-homebar-color: #a3ad9d;
     --aps-font: "Segoe UI", "Microsoft JhengHei", sans-serif;
     --aps-safe-top: 40px;
+    /* 底部那條橫槓是壓在畫面最上層的（iPhone 就是這樣），所以 app 底部要讓出這麼多，
+       不然橫槓會蓋住輸入列、分頁列那些東西 —— 她遇過，整條輸入框被擋掉。 */
+    --aps-safe-bottom: 26px;
     --aps-caption-font: "Segoe Print", "KaiTi", "DFKai-SB", cursive;
     --aps-lock-height: 106px;
     --aps-clock-areas: "clock date" "mood mood";
@@ -439,13 +442,18 @@
    🚨 它不是真的微信：裡面有些做法來自 LINE（例如多選刪除那條底列），
       所以皮的名字只講長相（經典綠／奶油／靛藍），不要掛真實 App 的名字。
 
-   🚨 深色模式不是另一套主題，是同一套皮的另一半：.wx-dark 掛在 .wx-shell 上，
-      只換下面這組格子的值。程式那邊的開關（wx_dark_mode）完全不用動。
+   🚨🚨 格子定義掛在最外層（:root）不是掛在微信外殼上。
+      聊天設置那種面板是外殼的**兄弟**（貼在同一個容器裡、不是長在外殼裡面），
+      掛在外殼上它們一個格子都拿不到，底色會變成無效值 → 整頁透明。她遇過。
+      深淺與哪一套皮靠掛在 <html> 上的 wxskin-* 決定（程式在畫微信時掛上去）；
+      外殼自己那幾個 wx-dark／wxtheme-* 的 class 留著，是給既有那批深色規則用的。
+   🚨 深色模式不是另一套主題，是同一套皮的另一半：只換下面這組格子的值，
+      程式那邊的開關（wx_dark_mode）完全不用動。
    🚨 微信的訊息卡片（紅包、轉帳、語音、檔案、連結、位置、禮物、貼圖、影片）
       在 css/vn_styles.css 也有一份 —— VN 手機聊天跟微信共用同一組 class。
       所以那幾個 class 的深色規則不能刪：它們的存在是為了壓過那支的寫死白底。
    ═══════════════════════════════════════════════════════════════════ */
-.wx-shell {
+:root {
     --wx-page: #f2f2f2;          /* 整頁的底（聊天列表、設置頁） */
     --wx-bar: #f7f7f7;           /* 底部分頁列、輸入列 */
     --wx-surface: #ffffff;       /* 卡片、列、聊天室背景 */
@@ -471,7 +479,7 @@
        對方那顆在夜晚會翻成深底，它自己有一條規則把字改亮，不必動這一格。 */
     --wx-bubble-ink: #000000;
 }
-.wx-shell.wx-dark {
+:root.wxskin-dark {
     --wx-page: #111111;
     --wx-bar: #1c1c1e;
     --wx-surface: #1c1c1e;
@@ -504,7 +512,7 @@
       再到 os_phone/wx/wx_core.js 的 WX_THEMES 加一列。 */
 
 /* 奶油：暖白紙感，重點色換成陶紅 */
-.wx-shell.wxtheme-cream {
+:root.wxskin-cream {
     --wx-page: #f7f1ea;  --wx-bar: #fdf7f1;  --wx-surface: #fffaf5;  --wx-surface-2: #f4ece4;
     --wx-header: #f3e9de;  --wx-line: #efe3d8;  --wx-line-strong: #e2d2c3;  --wx-arrow: #cdbcac;
     --wx-fill: #efe4d9;  --wx-fill-2: #f3e9e0;
@@ -513,7 +521,7 @@
     --wx-accent-ink: #9d5740;
     --wx-bubble-ink: #000000;
 }
-.wx-shell.wx-dark.wxtheme-cream {
+:root.wxskin-dark.wxskin-cream {
     --wx-page: #17120f;  --wx-bar: #221b17;  --wx-surface: #221b17;  --wx-surface-2: #2e2521;
     --wx-header: #221b17;  --wx-line: #2e2521;  --wx-line-strong: #3d312b;  --wx-arrow: #6b5a50;
     --wx-fill: #2e2521;  --wx-fill-2: #2e2521;
@@ -524,7 +532,7 @@
 }
 
 /* 靛藍：冷調墨色，重點色換成靛藍 */
-.wx-shell.wxtheme-indigo {
+:root.wxskin-indigo {
     --wx-page: #eef1f6;  --wx-bar: #f6f8fb;  --wx-surface: #ffffff;  --wx-surface-2: #eaeef5;
     --wx-header: #e7ecf4;  --wx-line: #e2e8f1;  --wx-line-strong: #cfd7e4;  --wx-arrow: #b3bccd;
     --wx-fill: #e4e9f2;  --wx-fill-2: #eceff6;
@@ -533,7 +541,7 @@
     --wx-accent-ink: #2b5482;
     --wx-bubble-ink: #000000;
 }
-.wx-shell.wx-dark.wxtheme-indigo {
+:root.wxskin-dark.wxskin-indigo {
     --wx-page: #0d1117;  --wx-bar: #151b24;  --wx-surface: #151b24;  --wx-surface-2: #1e2733;
     --wx-header: #151b24;  --wx-line: #1e2733;  --wx-line-strong: #2b3747;  --wx-arrow: #5b6779;
     --wx-fill: #1e2733;  --wx-fill-2: #1e2733;
