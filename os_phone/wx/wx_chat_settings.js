@@ -490,6 +490,14 @@
                 </div>
                 <div class="ws-note">開了之後你傳網址，對方會先讀過那個網頁再回你。要登入才看得到的網站讀不到。</div>
 
+                <div class="ws-group">
+                    <label class="ws-cell ws-cell-switch">
+                        <div class="ws-label">他知道現在幾點、隔了多久</div>
+                        <input type="checkbox" class="ws-switch" id="chk-time-aware" ${chat.timeAware ? 'checked' : ''}>
+                    </label>
+                </div>
+                <div class="ws-note">開了他會看到現在幾點、你隔多久才回，可能會說「怎麼一個多小時才理我」。關著他一個字都不會提時間——你中途跑去吃飯、或是在跑團（故事裡的時間跟你坐在電腦前的時間本來就是兩回事），關著比較好。</div>
+
                 <div class="ws-section-header">隔離</div>
                 <div class="ws-group">
                     <label class="ws-cell ws-cell-switch">
@@ -1263,6 +1271,15 @@
                     if (el) el.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } };
                 });
                 _paint();
+            }
+            // ⏰ 時間感知：一間一個開關，切了就存。組上下文時 os_api_engine 會看（時間分隔、間隔旁註、現在幾點）
+            {
+                const _ta = doc.getElementById('chk-time-aware');
+                if (_ta) _ta.onchange = () => {
+                    if (_ta.checked) chat.timeAware = true; else delete chat.timeAware;
+                    if (app.saveChats) app.saveChats();
+                    if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
+                };
             }
             // 🔗 打開我傳的連結：一間一個開關，切了就存（不用再按保存）。實際讀網頁在 wx_core 的 _prepareLinks
             {

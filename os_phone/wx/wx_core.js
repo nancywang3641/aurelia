@@ -1051,6 +1051,11 @@
         return Object.keys(GLOBAL_CHATS).some(function (k) { const c = GLOBAL_CHATS[k]; return c && c.name && K.keys.indexOf(K.norm(c.name)) >= 0; });
     }
     // 一則回覆拆成一間一段。容器外的字（思考、旁白）丟掉；整則都沒有容器才整段算這一間。
+    // ⏰ 他的訊息蓋上時間戳。她傳的一直都有，他的從來沒有 —— 所以「隔了多久」以前根本算不出來，
+    //   模型只能自己從歷史裡的蛛絲馬跡編一個數字（她實測被角色說「等一個多小時」）。
+    //   舊記錄補不回來，算不出來的就不標；新的從現在起都有。
+    function _stamp(m) { if (m && !m.timestamp) m.timestamp = Date.now(); return m; }
+
     function _wxSplitRooms(text, cur) {
         const src = String(text == null ? '' : text);
         const out = [];
@@ -1099,7 +1104,7 @@
         if (!list.length) return;
         for (const o of list) {
             const chat = o.chat;
-            o.msgs.forEach(function (m) { chat.messages.push(_settleRecall(m)); });   // 傳到別間她沒在看：傳了又收回的直接記成撤回
+            o.msgs.forEach(function (m) { chat.messages.push(_stamp(_settleRecall(m))); });   // 傳到別間她沒在看：傳了又收回的直接記成撤回
             chat.unread = true;
             chat.pushedCount = chat.messages.length;
             chat.renderedCount = chat.messages.length;
@@ -2492,7 +2497,7 @@
         if (prev === chat.id && APP_CONTAINER) {
             await win.wxApp.simulateTypingStream(newMsgs, chat);
         } else {
-            newMsgs.forEach(function (m) { chat.messages.push(_settleRecall(m)); });   // 她沒在看：傳了又收回的直接記成撤回
+            newMsgs.forEach(function (m) { chat.messages.push(_stamp(_settleRecall(m))); });   // 她沒在看：傳了又收回的直接記成撤回
             chat.unread = true;
             chat.pushedCount = chat.messages.length;
             chat.renderedCount = chat.messages.length;
@@ -3934,7 +3939,7 @@
                 }
 
                 // 2. 推入真實訊息並直接 append
-                chatObj.messages.push(msg);
+                chatObj.messages.push(_stamp(msg));
                 _appendBubble(msg, chatObj);
 
                 // ↩ 角色傳了又收回：先讓她看到一下，再換成撤回提示

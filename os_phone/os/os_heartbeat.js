@@ -86,7 +86,9 @@
                 : [];
             if (_pend && _pend.length) { hasPending = true; _pend.forEach(function (m) { messages.push(m); }); }
         } catch (e) { console.warn('[心跳] 沒回的訊息接不回來（不影響送出）:', (e && e.message) || e); }
-        const idle = lastTalkAt(chat) ? Math.round((Date.now() - lastTalkAt(chat)) / 3600000) : 0;
+        // ⏰ 「上一次講話多久前」是現實時間 —— 跟著這一間的時間感知開關走（聊天設置）。
+        //   關著就一個字都不提：她跑去吃飯、或是在跑團，不該回來被數落隔了幾小時。
+        const idle = (chat && chat.timeAware && lastTalkAt(chat)) ? Math.round((Date.now() - lastTalkAt(chat)) / 3600000) : 0;
         if (_notFriends(chat)) {
             // 他拉黑她（她沒拉黑他）：拉黑的人說了算，想通就自己移出黑名單，不用申請
             const _heBlocks = chat.wxBlocked && chat.wxBlockKind === 'blocked' && !chat.wxBlockedByMe;

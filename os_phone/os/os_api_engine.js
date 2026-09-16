@@ -108,6 +108,10 @@
         return Math.max(0, start - offset);
     }
     const _CALL_PAST_NOTE = '（以上都是以前發生過的對話與通話，不是現在。現在是新接起來的一通電話：先想清楚距離上次過了多久、這段時間裡發生過什麼，不要假設上次沒講完的話還在繼續，也不要假設上次借走、約好、拿走的東西還維持當時的狀態。）';
+    // ⏰ 沒開時間感知的那一間，電話也一樣不提時間 —— 通話跟微信是同一個人、吃同一個開關。
+    //   劇情上的連續性（上次借走、約好的東西）照樣要提醒，那跟她坐在電腦前多久沒關係。
+    const _CALL_PAST_NOTE_NOTIME = '（以上都是以前發生過的對話與通話，不是現在。現在是新接起來的一通電話：不要去算距離上次過了多久，也不要提對方隔了多久才打來。'
+        + '但不要假設上次沒講完的話還在繼續，也不要假設上次借走、約好、拿走的東西還維持當時的狀態。）';
     const _CALL_NOW_NOTE = '（以上都是以前發生過的對話與通話，不是現在。下面是現在正在講的這一通電話——早就接通了，下面每一句都是這一通裡剛剛才講過的話，順著講下去。）';
 
     // 把 messages 拼成純文字（多模態只取 text 片段）供估 token
@@ -388,6 +392,56 @@
         } catch (e) { return ''; }
     }
 
+    // ⏰ 時間感知：這一間要不要讓他知道現在幾點、上一則隔了多久（聊天設置一間一個，預設關）。
+    //   為什麼預設關：她玩到一半去吃飯，回來不該被角色數落「怎麼一個多小時才回」；
+    //   跑團更是如此 —— 故事裡的時間跟她坐在電腦前的時間本來就是兩回事。
+    function _wxTimeAware(apiChat) {
+        // 記憶體那份優先（她剛在設置切完就是最新的），沒有才看存檔 —— 跟 _wxIsolate 同一個讀法
+        try {
+            const app = win.wxApp, id = app && app.GLOBAL_ACTIVE_ID;
+            const mem = (id && app.GLOBAL_CHATS) ? app.GLOBAL_CHATS[id] : null;
+            if (mem && (!apiChat || !apiChat.id || mem.id === apiChat.id)) return mem.timeAware === true;
+        } catch (e) {}
+        return !!(apiChat && apiChat.timeAware);
+    }
+
+    // ⏰ 歷史結尾那句。開了時間感知才叫它想「過了多久」；沒開就明講不要算
+    //   （原本不分開關一律叫它想，它手上又沒有真的時間 → 只能自己編一個數字出來）。
+    function _wxPastNote(tAware) {
+        const base = '（以上到這裡為止都是之前的對話，最後一則是你自己說的，你已經回過了。';
+        return tAware
+            ? base + '先想清楚距離現在過了多久，不要假設當時的情況還沒變。）'
+            : base + _WX_NO_TIME_NOTE + '）';
+    }
+
+    // ⏰ 兩則之間隔了多久，講成人話。門檻以下不標 —— 正常一來一往的節奏不需要每則都寫。
+    const _WX_GAP_MIN_MS = 30 * 60 * 1000;
+    function _wxGapText(ms) {
+        const n = Number(ms);
+        if (!isFinite(n) || n < _WX_GAP_MIN_MS) return '';
+        const mins = Math.round(n / 60000);
+        if (mins < 60) return mins + ' 分鐘';
+        const hrs = Math.floor(mins / 60), rem = mins % 60;
+        if (hrs < 24) return hrs + ' 小時' + (rem >= 10 ? ' ' + rem + ' 分鐘' : '');
+        const days = Math.round(hrs / 24);
+        return days + ' 天';
+    }
+    // ⏰ 歷史裡兩則之間的空白：隔得夠久才插一句旁註。沒有時間戳的（舊記錄、AI 早期的回覆）算不出來就不標。
+    function _wxGapNote(prev, cur) {
+        const a = Number(prev && prev.timestamp), b = Number(cur && cur.timestamp);
+        if (!a || !b || b <= a) return '';
+        const t = _wxGapText(b - a);
+        return t ? '（這裡隔了 ' + t + '）' : '';
+    }
+    // ⏰ 現在幾點：只給時分，不給日期 —— 日期是故事時鐘的事，兩個一起給會打架。
+    function _wxNowClock() {
+        try { return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+        catch (e) { return ''; }
+    }
+    // ⏰ 關掉時明講不要去算 —— 不寫這句，模型會自己從歷史裡的蛛絲馬跡編一個數字出來（她實測被說「等一個多小時」）。
+    const _WX_NO_TIME_NOTE = '不要去算距離上一則過了多久，也不要提對方隔了多久才回、更不要因為這件事抱怨或質問。'
+        + '就當成話還接得上，順著講下去。';
+
     // 📞 聊天記錄裡的系統行（通話開始／結束／未接聽、改名、紅包領取、換頭像…）不是誰講的話 → 寫成旁註。
     //   通話分隔用故事時鐘標出是哪一天、距今幾天；拿不到故事日期就只寫「之前」。stNow＝故事時鐘的當前日期。
     function _wxWhenText(d, stNow) {
@@ -449,7 +503,7 @@
     // 🎯 把「還沒回的那幾則」組成排在最後面的那一段。
     //   回傳陣列：夾在中間的系統行、撤回寫成旁註排前面，最後一則保證是 role:'user'，就是她講的話。
     //   清洗跟歷史那段一致（對方沒收到的不帶、單號不給看、照片換成它寫過的那句、剝 CoT）。
-    function _wxPendingMessages(pending, apiChat, userName, stNow, lead) {
+    function _wxPendingMessages(pending, apiChat, userName, stNow, lead, prevMsg) {
         const out = [];
         const lines = [];
         (pending || []).forEach((msg, _i) => {
@@ -475,9 +529,17 @@
         });
         if (lines.length) {
             const who = String(userName || '主角');
-            out.push({ role: 'system', content: lead || ('【這一輪要回的就是下面這'
+            // ⏰ 開了時間感知才給真正的時間：現在幾點、她距離上一則隔了多久。
+            //   沒開就一個字都不提（不提也不叫它算，見 _WX_NO_TIME_NOTE）。
+            let _when = '';
+            if (_wxTimeAware(apiChat)) {
+                const _g = _wxGapNote(prevMsg, (pending || []).find(function (m) { return m && m.timestamp; }));
+                const _c = _wxNowClock();
+                _when = (_c ? '\n現在是 ' + _c + '。' : '') + (_g ? (_c ? '' : '\n') + _g.replace('這裡隔了', '距離上一則隔了') : '');
+            }
+            out.push({ role: 'system', content: (lead || ('【這一輪要回的就是下面這'
                 + (lines.length > 1 ? ' ' + lines.length + ' 則' : '一則') + '】\n'
-                + who + ' 剛傳來、你還沒回的就這些。上面那些你都已經回過了，不要再回一次，也不要回到更早之前的話題。') });
+                + who + ' 剛傳來、你還沒回的就這些。上面那些你都已經回過了，不要再回一次，也不要回到更早之前的話題。')) + _when });
             out.push({ role: 'user', content: lines.join('\n') });
         }
         return out;
@@ -1606,7 +1668,8 @@
                 let stNow = null;
                 try { const S = win.OS_MC_STATUS; if (S && S.load) { const st = await S.load(); stNow = (st && st.date) || null; } } catch (e) {}
                 const name = userName || this.getGlobalUserName();
-                return _wxPendingMessages(_wxPendingSplit(hist).pending, apiChat, name, stNow, opts && opts.lead);
+                const _sp = _wxPendingSplit(hist);
+                return _wxPendingMessages(_sp.pending, apiChat, name, stNow, opts && opts.lead, hist[_sp.pastEnd]);
             } catch (e) { console.warn('[OS_API] 這一輪要回哪幾則：組裝失敗（不影響送出）', e); return []; }
         },
 
@@ -1845,6 +1908,7 @@
                                 const _sp = _wxPendingSplit(_histMsgs);
                                 if (_sp.pending.length) _histMsgs = _histMsgs.slice(0, _sp.pastEnd + 1);
                             }
+                            const _tAware = _wxTimeAware(apiChat);   // ⏰ 這一間有沒有開時間感知（聊天設置）
                             const rawPhoneMsgs = [];
                             // 📞 這一通已經接通：「以上是以前」那句放在這一通開始的地方，不是放在最後
                             const _curCallAt = (promptKey === 'call_voice_system') ? _openCallAt(_histMsgs, apiChat.messages) : -1;
@@ -1858,6 +1922,14 @@
                                 //    她拉黑他時打的：還在黑名單就不帶，放出來之後帶上並寫旁註（共用 _wxBlockSkip／_wxMeBlockNote）
                                 if (_wxBlockSkip(msg, apiChat)) return;
                                 { const _bn = _wxMeBlockNote(msg, _histMsgs[_i - 1], userName); if (_bn) rawPhoneMsgs.push({ role: 'system', content: _bn, _source: 'phone' }); }
+                                // ⏰ 畫面上的時間分隔是 AI 自己寫的 [Time]，不是誰講的話。以前它掉進下面那格，
+                                //    變成「對方說了『下午3:20』」，模型就靠這些自己算出隔了多久（她實測被角色說「等一個多小時」）。
+                                if (msg.type === 'time') {
+                                    if (_tAware) { const _t = String(msg.content || '').trim(); if (_t) rawPhoneMsgs.push({ role: 'system', _source: 'phone', content: '（' + _t + '）' }); }
+                                    return;
+                                }
+                                // ⏰ 隔得夠久標一句（只在這一間開了時間感知時）
+                                if (_tAware) { const _g = _wxGapNote(_histMsgs[_i - 1], msg); if (_g) rawPhoneMsgs.push({ role: 'system', _source: 'phone', content: _g }); }
                                 if (msg.type === 'system') {
                                     const _note = _noteOf(msg);
                                     if (_note) rawPhoneMsgs.push({ role: 'system', content: _note, _source: 'phone' });
@@ -1891,8 +1963,8 @@
                             //    這一通已經接通的話，那句已經放在這一通開始的地方了，這裡不再補
                             if (rawPhoneMsgs.length && _curCallAt < 0) {
                                 apiMessages.push({ role: 'system', content: (promptKey === 'call_voice_system')
-                                    ? _CALL_PAST_NOTE
-                                    : '（以上到這裡為止都是之前的對話，最後一則是你自己說的，你已經回過了。先想清楚距離現在過了多久，不要假設當時的情況還沒變。）' });
+                                    ? (_tAware ? _CALL_PAST_NOTE : _CALL_PAST_NOTE_NOTIME)
+                                    : _wxPastNote(_tAware) });
                             }
                         }
                         
@@ -2460,6 +2532,7 @@
                             const _sp = _wxPendingSplit(_histMsgs);
                             if (_sp.pending.length) _histMsgs = _histMsgs.slice(0, _sp.pastEnd + 1);
                         }
+                        const _tAware = _wxTimeAware(apiChat);   // ⏰ 這一間有沒有開時間感知（同酒館版）
                         const _cut = _keepN === null ? -1 : _histMsgs.length - _keepN;
                         let _pushedHist = 0;
                         // 📞 這一通已經接通：「以上是以前」那句放在這一通開始的地方（同酒館版）
@@ -2474,6 +2547,13 @@
                             if (!msg) return;
                             if (_wxBlockSkip(msg, apiChat)) return;   // 對方沒收到的那幾則（同酒館版）
                             { const _bn = _wxMeBlockNote(msg, _histMsgs[_i - 1], userName); if (_bn) { apiMessages.push({ role: 'system', content: _bn }); _pushedHist++; } }
+                            // ⏰ 畫面上的時間分隔是 AI 自己寫的 [Time]，不是誰講的話（同酒館版）
+                            if (msg.type === 'time') {
+                                if (_tAware) { const _t = String(msg.content || '').trim(); if (_t) { apiMessages.push({ role: 'system', content: '（' + _t + '）' }); _pushedHist++; } }
+                                return;
+                            }
+                            // ⏰ 隔得夠久標一句（只在這一間開了時間感知時）
+                            if (_tAware) { const _g = _wxGapNote(_histMsgs[_i - 1], msg); if (_g) { apiMessages.push({ role: 'system', content: _g }); _pushedHist++; } }
                             // 📞 系統行不是誰講的話 → 旁註（同酒館版，共用 _wxSysNote）。
                             //   以前 PWA 只有通話這樣處理：微信裡的改名、紅包領取、換頭像這些被當成對方講的話；通話分隔也沒標是哪一天。
                             if (msg.type === 'system') {
@@ -2513,8 +2593,8 @@
                         //   微信以前 PWA 沒有這句，模型會把幾天前的話當成剛剛才講的
                         if (_pushedHist && _curCallAt < 0) {
                             apiMessages.push({ role: 'system', content: _isCall
-                                ? _CALL_PAST_NOTE
-                                : '（以上到這裡為止都是之前的對話，最後一則是你自己說的，你已經回過了。先想清楚距離現在過了多久，不要假設當時的情況還沒變。）' });
+                                ? (_tAware ? _CALL_PAST_NOTE : _CALL_PAST_NOTE_NOTIME)
+                                : _wxPastNote(_tAware) });
                         }
                     }
                     // 🔗 記憶關聯（同酒館版）
