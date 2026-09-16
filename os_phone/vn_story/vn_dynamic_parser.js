@@ -224,7 +224,7 @@
                         // 背景一則 system、任務一則 user（同 app_runtime）。借正文整包那一版退掉了：太貴，而且正文的條目會叫它寫視覺小說。
                         const _msgs = [];
                         if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
-                        _msgs.push({ role: 'user', content: String(systemPrompt || '') });
+                        _msgs.push({ role: 'user', content: '（這一則是手機應用發出的生成要求，不是主角在說話。）\n' + String(systemPrompt || '') });   // 標清楚不是主角開口（同 app_runtime）
                         return await new Promise(function(res, rej) {
                             OS.chat(_msgs, cfg, null,
                                 function(t) { res(typeof t === 'string' ? t : (t && t.message) || ''); }, rej,
