@@ -223,6 +223,21 @@
     }
 
     // --- 1.5. 歷史記錄 VN 格式清洗 ---
+
+    // [Char|…] 有兩種欄數：一般模式 [Char|名|表情|「台詞」|Stay/Leave]、自由模式 [Char|名|「台詞」|Stay/Leave]，
+    //   通話還有 [Char|名|表情|內容]／[Char|名|內容]。以前用一條只認五欄的規則抓「第三欄」當台詞，
+    //   四欄的第三欄是 Stay，歷史裡就變成「角色名: Stay」。改成照欄位找：先剝掉尾巴的 Stay/Leave，
+    //   台詞是帶「」或 *…* 的那一欄，都沒有就取剩下的最後一欄。
+    function _charLine(inner, sep) {
+        const f = String(inner || '').split('|');
+        const name = String(f[1] || '').trim();
+        let rest = f.slice(2).map(x => String(x || '').trim());
+        while (rest.length > 1 && /^(stay|leave)$/i.test(rest[rest.length - 1])) rest.pop();
+        let d = rest.find(x => /[「」*]/.test(x));
+        if (d == null) d = rest.length ? rest[rest.length - 1] : '';
+        if (!name) return '';
+        return name + sep + d;
+    }
     function stripVnTags(text) {
         if (!text || typeof text !== 'string') return '';
         let s = text;
@@ -231,8 +246,7 @@
         s = s.replace(/<\/?(content|summary)>/gi, '');
         s = s.replace(/<(think(?:ing)?|thoughts?|reasoning|thinking_process)>([\s\S]*?)<\/\1>/gi, '');
         s = s.replace(/<details\b[^>]*reasoning[^>]*>[\s\S]*?<\/details>/gi, '');
-        s = s.replace(/\[Char\|([^|]+)\|[^|]*\|([^|\]]+)(?:\|[^\]]+)?\]/g,
-            (_, name, dialogue) => `${name.trim()}: ${dialogue.trim()}`);
+        s = s.replace(/\[(Char\|[^\]\n]*)\]/g, (_, inner) => _charLine(inner, ': '));
         s = s.replace(/\[Nar\|([^|\]]+)(?:\|[^\]]+)?\]/g,
             (_, t) => `(${t.trim()})`);
         s = s.replace(/\[Inner\|[^|]+\|([^|\]]+)(?:\|[^\]]+)?\]/g,
@@ -287,6 +301,18 @@
                 + '\n清單以外的代號不會送出。';
         }
         return note;
+    }
+
+    // 兩條 buildContext 都在結尾叫這支：讀這一間、把代號清單推到整包最後（呼叫端接著才推她剛說的話）。
+    async function _wxRoomsNoteLate(apiMessages, promptKey) {
+        if (promptKey !== 'wx_chat_system') return;
+        try {
+            const _id = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
+            if (!_id || !win.WX_DB || typeof win.WX_DB.getApiChat !== 'function') return;
+            const _ac = await win.WX_DB.getApiChat(_id);
+            const _rn = _ac ? _wxRoomsNote(_ac) : '';
+            if (_rn) apiMessages.push({ role: 'system', content: _rn });
+        } catch (e) {}
     }
 
     // 🖼 角色在微信裡自己動手的教學：換頭像（權限開了才教）、約定、改名改簽名、它記得我頭像的樣子。
@@ -1905,10 +1931,7 @@
                     const currentChatId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
                     if (currentChatId) {
                         const apiChat = await win.WX_DB.getApiChat(currentChatId);
-                        // 🧭 這一間是誰、還能傳到哪幾間（歷史不再每則帶 [Chat:]/[With:]，改在這裡講一次）
-                        if (promptKey === 'wx_chat_system' && apiChat) {
-                            try { const _rn = _wxRoomsNote(apiChat); if (_rn) apiMessages.push({ role: 'system', content: _rn }); } catch (e) {}
-                        }
+                        // 🧭 這一間是誰、還能傳到哪幾間：以前在這裡（歷史最前面）講，現在搬到整包最後面，見 _wxRoomsNoteLate
                         if (apiChat && apiChat.messages) {
                             // 🚨 分隔（通話開始／結束／未接聽）不是誰講的話。以前它們被當成 assistant，
                             //    模型會讀到自己說「通話開始 · 9/10」；更糟的是整串歷史完全沒有時間標記，
@@ -2017,6 +2040,10 @@
                 }
             } catch(e) {}
 
+            // 🧭 這一間是誰、還能傳到哪幾間 → 貼在整包最後面（她剛說的那幾則之前）。
+            //    以前放在歷史最前面：中間隔著世界書、記憶、幾十則歷史，代號早被各種背景裡的同類編號沖掉，
+            //    模型抄別的。她要它黏在最底部、離要寫的地方最近，世界背景才擾亂不到。
+            await _wxRoomsNoteLate(apiMessages, promptKey);
             if (userMessage) {
                 let finalUserMsg = userMessage;
                 if (promptKey.includes('wb_')) {
@@ -2535,10 +2562,7 @@
                     const _keepN = win.OS_APP_CTX_MSGS ? win.OS_APP_CTX_MSGS() : 10;
 
                     const apiChat = await win.WX_DB.getApiChat(win.wxApp.GLOBAL_ACTIVE_ID);
-                    // 🧭 這一間是誰、還能傳到哪幾間（同酒館版）
-                    if (promptKey === 'wx_chat_system' && apiChat) {
-                        try { const _rn = _wxRoomsNote(apiChat); if (_rn) apiMessages.push({ role: 'system', content: _rn }); } catch (e) {}
-                    }
+                    // 🧭 這一間是誰、還能傳到哪幾間：搬到整包最後面，見 _wxRoomsNoteLate（同酒館版）
                     // 🖼 換頭像／約定／改名改簽名／它記得我頭像的樣子（同酒館版；以前 PWA 這條完全沒有，角色不知道能換頭像）
                     if (promptKey === 'wx_chat_system') {
                         _wxAbilityBlocks(win.wxApp.GLOBAL_ACTIVE_ID).forEach(m => apiMessages.push(m));
@@ -2641,6 +2665,7 @@
                 } catch(e) { console.warn('[OS_API standalone] 聊天歷史載入失敗:', e); }
             }
 
+            await _wxRoomsNoteLate(apiMessages, promptKey);   // 🧭 代號清單貼在最後面（同酒館版）
             if (userMessage) {
                 let finalUserMsg = userMessage;
                 const cotReminder = `\n\n[SYS]\n上面是新收到的訊息。回覆前先在 <thinking> 裡想清楚，想完再寫正文。`;

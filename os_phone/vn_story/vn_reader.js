@@ -157,7 +157,13 @@
         const cm = s.match(/<content>([\s\S]*?)<\/content>/i);
         if (cm) s = cm[1];
         else s = s.replace(/<\/?(content)[^>]*>/gi, '');
-        s = s.replace(/\[Char\|([^|]+)\|[^|]*\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, n, d) => `${n.trim()}：${d.trim()}`);
+        // [Char] 有四欄（自由模式）和五欄兩種，第三欄不一定是台詞：剝掉尾巴 Stay/Leave，取帶「」或 * 的那欄（同 os_api_engine 的 _charLine）
+        s = s.replace(/\[(Char\|[^\]\n]*)\]/g, (_, inner) => {
+            const f = inner.split('|'); const n = (f[1] || '').trim(); let r = f.slice(2).map(x => x.trim());
+            while (r.length > 1 && /^(stay|leave)$/i.test(r[r.length - 1])) r.pop();
+            let d = r.find(x => /[「」*]/.test(x)); if (d == null) d = r.length ? r[r.length - 1] : '';
+            return n ? n + '：' + d : '';
+        });
         s = s.replace(/\[Nar\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, t) => `　　${t.trim()}`);
         s = s.replace(/\[Inner\|[^|]+\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, t) => `（${t.trim()}）`);
         s = s.replace(/<os_status>[\s\S]*?<\/os_status>\s*/gi, '');
