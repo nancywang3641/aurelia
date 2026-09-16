@@ -664,7 +664,11 @@
     function _saveFromDom() {
         const L = _loadLayout();
         const ids = function (sel) { return [..._el.querySelectorAll(sel + ' > .aps-icon')].map(function (b) { return b.dataset.app; }); };
-        const grid = ids('.aps-grid'), dock = ids('.aps-dock');
+        const W = _W();
+        const isW = function (id) { return !!(W && W.isWidgetId(id)); };
+        // 🧩 保險：組件永遠不進底部那排（拖曳那邊已經擋住了，這裡再擋一次存檔）。
+        //    一塊跨兩欄又比較高的組件擠進那排會把它整個撐爆，連帶把主畫面擠壞。
+        const grid = ids('.aps-grid'), dock = ids('.aps-dock').filter(function (id) { return !isW(id); });
         // 格子裡的排在前面，其他（沒擺出來的）照舊保留在後面
         L.grid = grid.concat(L.grid.filter(function (x) { return grid.indexOf(x) < 0 && dock.indexOf(x) < 0; }));
         L.dock = dock;
@@ -705,18 +709,33 @@
         _drag.ghost.style.left = ((ev.clientX - hs.r.left) / hs.k - _drag.dx) + 'px';
         _drag.ghost.style.top = ((ev.clientY - hs.r.top) / hs.k - _drag.dy) + 'px';
     }
+    // 🧩 離手指最近的那一格（拖著的那一格自己不算）。
+    //   本來是用「手指正壓在誰身上」判斷，圖標小的時候沒問題；組件跨兩欄又比較高，
+    //   手指得先整個離開組件本身才會有反應 —— 體感就是拖不動、卡卡的。
+    function _nearestCell(ev, box, src) {
+        let best = null, bestD = Infinity;
+        [...box.children].forEach(function (el) {
+            if (el === src || !el.classList || !el.classList.contains('aps-icon')) return;
+            const r = el.getBoundingClientRect();
+            const dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
+            const d = dx * dx + dy * dy;
+            if (d < bestD) { bestD = d; best = el; }
+        });
+        return best;
+    }
     function _dragOver(ev) {
         const src = _drag.btn;
         const grid = _el.querySelector('.aps-grid'), dock = _el.querySelector('.aps-dock');
         // 拖到格子上下緣就捲一下
         const gr = grid.getBoundingClientRect();
         if (ev.clientY < gr.top + 24) grid.scrollTop -= 8; else if (ev.clientY > gr.bottom - 24 && ev.clientY < gr.bottom + 4) grid.scrollTop += 8;
-        const hit = document.elementFromPoint(ev.clientX, ev.clientY);
-        if (!hit) return;
-        const t = hit.closest('.aps-icon');
-        const inDock = !!hit.closest('.aps-dock'), inGrid = !!hit.closest('.aps-grid');
-        const key = t ? t.dataset.app : (inDock ? '#dock' : (inGrid ? '#grid' : ''));
-        if (!key || key === _drag.last || t === src) return;
+        const inDock = ev.clientY >= dock.getBoundingClientRect().top;
+        // 🚨 組件不准進底部那排：那排是橫向排的固定幾顆，塞一塊跨兩欄又比較高的組件進去會把它整個撐爆，
+        //    連帶把主畫面擠壞。手指移到那排上面時，組件就停在原位不動。
+        if (inDock && src.classList.contains('aps-w')) return;
+        const t = _nearestCell(ev, inDock ? dock : grid, src);
+        const key = t ? t.dataset.app : (inDock ? '#dock' : '#grid');
+        if (!key || key === _drag.last) return;
         _drag.last = key;
         const dockCount = dock.querySelectorAll(':scope > .aps-icon:not(.aps-drag-src)').length;
         const srcInDock = src.parentElement === dock;
@@ -736,7 +755,7 @@
                 t.parentElement.insertBefore(src, after ? t.nextSibling : t);
             } else if (inDock && !srcInDock && dockCount < DOCK_MAX) {
                 dock.appendChild(src);
-            } else if (inGrid && srcInDock) {
+            } else if (!inDock && srcInDock) {
                 grid.appendChild(src);
             }
         });

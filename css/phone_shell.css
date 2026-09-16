@@ -724,3 +724,17 @@
 
 /* ── 她自己做的組件：那段畫面就塞在這裡面，超出的裁掉 ──────────────── */
 .aps-w-user { overflow: hidden; }
+
+/* ── 組件在編輯模式也要會搖，不然看不出它跟圖標一樣能拖 ──────────────
+   🚨 搖的是裡面那層，不是組件本身：換位置的滑動動畫是給組件本身設 transform 的，
+   搖晃如果掛在同一層會把它蓋掉，位置就變成瞬移。圖標也是同一個道理（它搖的是那顆方塊）。 */
+.aps-home.aps-editing .aps-w-body { animation: apsJiggle 0.28s ease-in-out infinite alternate; transform-origin: 50% 50%; }
+.aps-home.aps-editing .aps-w:nth-child(2n) .aps-w-body { animation-duration: 0.31s; animation-delay: -0.12s; }
+.aps-home.aps-editing .aps-w:nth-child(3n) .aps-w-body { animation-duration: 0.25s; animation-delay: -0.06s; }
+/* 編輯中不要再疊上滑與縮小：那兩個會跟換位置的滑動打架 */
+.aps-home.aps-editing .aps-w:hover,
+.aps-home.aps-editing .aps-w:active { transform: none; }
+/* 跟著手指走的那一份：不要搖、加深陰影看得出被拿起來 */
+.aps-drag-ghost.aps-w { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35); }
+.aps-drag-ghost .aps-w-body { animation: none !important; }
+.aps-drag-ghost .aps-w-cog { display: none !important; }
