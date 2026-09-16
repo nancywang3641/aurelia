@@ -366,7 +366,7 @@
                     <div class="ws-cell" id="btn-persona-settings" style="cursor:pointer;">
                         <div class="ws-label">人設設置</div>
                         <div class="ws-right">
-                            <div id="persona-status" style="font-size:14px; margin-right:5px; color: #999;">未設置</div>
+                            <div id="persona-status" style="font-size:14px; margin-right:5px; color: var(--wx-ink-dim);">未設置</div>
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -379,7 +379,7 @@
                     <div class="ws-cell" id="btn-group-note-settings" style="cursor:pointer;">
                         <div class="ws-label">備註設置</div>
                         <div class="ws-right">
-                            <div id="group-note-status" style="font-size:14px; margin-right:5px; color: #999;">未設置</div>
+                            <div id="group-note-status" style="font-size:14px; margin-right:5px; color: var(--wx-ink-dim);">未設置</div>
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -438,7 +438,7 @@
                     <div class="ws-cell">
                         <div class="ws-label">表情包庫</div>
                         <div class="ws-right">
-                            <select class="ws-input" id="sel-sticker-lib" style="text-align:right; max-width:150px; border:none; background:transparent; font-size:14px; color:#333;">${_stkLibOpts}</select>
+                            <select class="ws-input" id="sel-sticker-lib" style="text-align:right; max-width:150px; border:none; background:transparent; font-size:14px; color:var(--wx-ink-2);">${_stkLibOpts}</select>
                         </div>
                     </div>
                 </div>
@@ -448,7 +448,7 @@
                     <div class="ws-cell" id="btn-linked-memory" style="cursor:pointer;">
                         <div class="ws-label">${_lm.label}</div>
                         <div class="ws-right">
-                            <div id="linked-memory-count" style="font-size:14px; margin-right:5px; color: #999;">未選擇</div>
+                            <div id="linked-memory-count" style="font-size:14px; margin-right:5px; color: var(--wx-ink-dim);">未選擇</div>
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -456,7 +456,7 @@
                         <div class="ws-label">${_lm.limitLabel}</div>
                         <div class="ws-right">
                             <input class="ws-input" id="inp-memory-limit" type="number" min="1" max="500" value="${memoryMessageLimit}" placeholder="50" style="text-align: right; width: 80px;">
-                            <div style="font-size:14px; margin-left: 5px; color: #999;">條</div>
+                            <div style="font-size:14px; margin-left: 5px; color: var(--wx-ink-dim);">條</div>
                         </div>
                     </div>
                 </div>
@@ -466,7 +466,7 @@
                     <div class="ws-cell" id="btn-forget-avatar" style="cursor:pointer;">
                         <div class="ws-label">它記得我的樣子</div>
                         <div class="ws-right">
-                            <div id="see-mem-text" style="font-size:14px; margin-right:5px; color:#999; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${seeText}</div>
+                            <div id="see-mem-text" style="font-size:14px; margin-right:5px; color:var(--wx-ink-dim); max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${seeText}</div>
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -476,7 +476,7 @@
                     <div class="ws-cell" id="btn-chat-media" style="cursor:pointer;">
                         <div class="ws-label">聊天媒體</div>
                         <div class="ws-right">
-                            <div id="chat-media-count" style="font-size:14px; margin-right:5px; color:#999;"></div>
+                            <div id="chat-media-count" style="font-size:14px; margin-right:5px; color:var(--wx-ink-dim);"></div>
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -532,7 +532,7 @@
                     <div class="ws-cell" id="btn-chat-summary" style="cursor:pointer;">
                         <div class="ws-label">早前記錄</div>
                         <div class="ws-right">
-                            <div id="chat-summary-state" style="font-size:14px; margin-right:5px; color:#999;">—</div>
+                            <div id="chat-summary-state" style="font-size:14px; margin-right:5px; color:var(--wx-ink-dim);">—</div>
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -540,7 +540,7 @@
                         <div class="ws-label">保留最近</div>
                         <div class="ws-right">
                             <input class="ws-input" id="inp-summary-keep" type="number" min="5" max="500" value="${summaryKeepRecent}" placeholder="${defKeep}" style="text-align: right; width: 80px;">
-                            <div style="font-size:14px; margin-left: 5px; color: #999;">條</div>
+                            <div style="font-size:14px; margin-left: 5px; color: var(--wx-ink-dim);">條</div>
                         </div>
                     </div>
                 </div>
@@ -561,7 +561,7 @@
 
                 <div class="ws-group">
                     <div class="ws-cell" id="btn-clear-chat" style="cursor:pointer;">
-                        <div class="ws-label" style="color: #fa5151;">清空聊天記錄</div>
+                        <div class="ws-label" style="color: var(--wx-danger);">清空聊天記錄</div>
                         <div class="ws-right"><div class="ws-arrow">›</div></div>
                     </div>
                 </div>
@@ -849,7 +849,7 @@
                         // 構建群聊列表HTML
                         let html = '';
                         if (groupChats.length === 0) {
-                            html = '<div style="text-align: center; padding: 40px; color: #999;">' + _lm.empty + '</div>';
+                            html = '<div style="text-align: center; padding: 40px; color: var(--wx-ink-dim);">' + _lm.empty + '</div>';
                         } else {
                             groupChats.forEach(groupChat => {
                                 const isChecked = linkedChats.includes(groupChat.id);
@@ -951,7 +951,7 @@
 
                         // 第二欄：額外補充（世界書有的不用再填，只補這個聊天室特有的內容）
                         html += '<div class="ws-persona-section">';
-                        html += '<div class="ws-persona-section-title">額外補充 <span style="font-weight:400;color:#aaa;font-size:11px;">（選填，疊加在世界書條目之上）</span></div>';
+                        html += '<div class="ws-persona-section-title">額外補充 <span style="font-weight:400;color:var(--wx-ink-dim);font-size:11px;">（選填，疊加在世界書條目之上）</span></div>';
                         html += '<div class="ws-persona-input-wrapper">';
                         html += `<textarea class="ws-persona-textarea" id="inp-persona-custom" placeholder="例：這個聊天室裡他是臥底身份，對方不知道他的真實職業..." style="min-height:80px;">${personaCustom || ''}</textarea>`;
                         html += '</div>';
@@ -964,17 +964,17 @@
                         const paintEntries = async (bookName) => {
                             const box = doc.getElementById('ws-persona-entries');
                             if (!box) return;
-                            box.innerHTML = '<div style="padding:16px;text-align:center;color:#999;">讀取中…</div>';
+                            box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--wx-ink-dim);">讀取中…</div>';
                             let entries = [];
                             try { entries = await _bookEntries(bookName); }
-                            catch (e) { box.innerHTML = '<div style="padding:20px;text-align:center;color:#fa5151;">這本讀不到</div>'; return; }
+                            catch (e) { box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--wx-danger);">這本讀不到</div>'; return; }
                             // 沒設過就拿舊的 chat.persona 回頭比對，把當初那一條勾回來
                             if (!personaFromLorebook && chat.persona) {
                                 const matched = entries.find(e => (e.content || '').trim() === chat.persona.trim());
                                 if (matched) personaFromLorebook = matched.uid;
                             }
                             if (!entries.length) {
-                                box.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">這本沒有條目</div>';
+                                box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--wx-ink-dim);">這本沒有條目</div>';
                                 return;
                             }
                             box.innerHTML = entries.map(entry => {
@@ -1081,7 +1081,7 @@
                                 entries = await win.TavernHelper.getLorebookEntries(currentLorebook);
                             }
                             if (!entries || entries.length === 0) {
-                                html += '<div style="padding:20px;text-align:center;color:#999;">世界書中沒有條目</div>';
+                                html += '<div style="padding:20px;text-align:center;color:var(--wx-ink-dim);">世界書中沒有條目</div>';
                             } else {
                                 const escapeHtml = (t) => { const d = doc.createElement('div'); d.textContent = t; return d.innerHTML; };
                                 entries.forEach(entry => {
@@ -1100,7 +1100,7 @@
                                 });
                             }
                         } catch (e) {
-                            html += '<div style="padding:20px;text-align:center;color:#fa5151;">獲取世界書條目失敗</div>';
+                            html += '<div style="padding:20px;text-align:center;color:var(--wx-danger);">獲取世界書條目失敗</div>';
                         }
                         html += '</div>';
                         
