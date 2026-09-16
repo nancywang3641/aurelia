@@ -108,6 +108,12 @@
                 '--os-chrome-tabs-bg': 'rgba(255,249,245,0.95)', '--os-accent': '#bb727b', '--os-accent-glow': 'rgba(187,114,123,0.35)',
                 '--os-page-bg': '#fffaf5', '--os-surface': '#ffffff',
                 '--os-ink-soft': '#8a6666', '--os-accent-strong': '#a05a64', '--os-on-accent': '#ffffff' } },
+        { id: 'glass', name: '白瓷玻璃', swatch: ['#f7f8fa', '#e3e6ea', '#16181a'],
+          os: { '--os-ink': '#16181a', '--os-ink-dim': 'rgba(22,24,26,0.72)', '--os-line': 'rgba(22,24,26,0.12)',
+                '--os-hover': 'rgba(22,24,26,0.06)', '--os-chrome-bg': 'rgba(250,251,252,0.88)',
+                '--os-chrome-tabs-bg': 'rgba(246,247,249,0.94)', '--os-accent': '#16181a', '--os-accent-glow': 'rgba(22,24,26,0.25)',
+                '--os-page-bg': '#fafbfc', '--os-surface': '#ffffff',
+                '--os-ink-soft': '#5a5f66', '--os-accent-strong': '#16181a', '--os-on-accent': '#ffffff' } },
         { id: 'dark', name: '霧夜薄荷', swatch: ['#202b29', '#3d5045', '#b8d9bc'],
           os: { '--os-ink': '#e1e7df', '--os-ink-dim': 'rgba(225,231,223,0.72)', '--os-line': 'rgba(184,217,188,0.18)',
                 '--os-hover': 'rgba(225,231,223,0.10)', '--os-chrome-bg': 'rgba(36,43,41,0.92)',
@@ -714,7 +720,7 @@
           +       '<div class="aps-lock">'
           +         '<div class="aps-lock-time" id="aps-lock-time">--:--</div>'
           +         '<div class="aps-lock-date" id="aps-lock-date"></div>'
-          +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情：<span class="aps-mood-em" id="aps-mood-em" data-mood="0"><i class="fa-solid fa-sun"></i></span></button>'
+          +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情<span class="aps-mood-em" id="aps-mood-em" data-mood="0"><i class="fa-solid fa-sun"></i></span></button>'
           +       '</div>'
           // widget 區：時鐘跟圖標格中間那塊。目前只有拍立得，之後別的 widget 也加在這個容器裡。
           // 相片那四塊是程式畫的示意風景，她在設置填了照片網址就被蓋住（CSS 的 .aps-photo::after）。

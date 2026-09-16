@@ -234,7 +234,7 @@
 .aps-photo-water { position: absolute; inset: 76% 0 0; background: var(--aps-photo-water); opacity: 0.72; }
 .aps-polaroid figcaption { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 1px; color: #635954; white-space: nowrap; }
 .aps-polaroid figcaption > span { font: 13px/1.3 var(--aps-caption-font); }
-.aps-polaroid time { font: 8px/1.5 "Segoe UI", sans-serif; letter-spacing: 1.3px; color: #85796f; }
+.aps-polaroid time { font: 9px/1.5 "Segoe UI", sans-serif; letter-spacing: 1.3px; color: #6b6259; }
 
 /* ── 圖標格 ── */
 .aps-grid {
@@ -356,6 +356,11 @@
     color: #fff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 12px rgba(0, 0, 0, 0.38), 0 0 26px rgba(0, 0, 0, 0.30);
 }
+/* 狀態列有一半疊在桌布上：淺色主題的深色時間字碰到深色照片會整個不見 */
+.aps-wp-photo .aps-statusbar {
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    內建主題 —— 一套主題就是一整組格子。
@@ -394,6 +399,7 @@
 .theme-cute .aps-lock::before { content: ""; position: absolute; width: 26px; height: 25px; left: 8px; top: 44px; border-radius: 50%; background: #fffdf7; box-shadow: 17px 3px 0 -3px #fffdf7; z-index: -1; }
 .theme-cute .aps-lock::after { content: ""; position: absolute; width: 19px; height: 25px; right: 5px; top: 27px; background: #d7af68; clip-path: polygon(50% 0, 62% 36%, 100% 50%, 62% 64%, 50% 100%, 38% 64%, 0 50%, 38% 36%); transform: rotate(14deg); }
 .theme-cute .aps-dock::before { content: ""; position: absolute; width: 43px; height: 20px; top: -12px; left: calc(50% - 21px); background: #c47f8d; clip-path: polygon(0 4%, 42% 30%, 50% 16%, 58% 30%, 100% 4%, 93% 96%, 57% 67%, 50% 84%, 43% 67%, 7% 96%); filter: drop-shadow(0 1px 0 white); }
+.theme-cute .aps-dock .aps-icon-name { color: #63403f; }
 .theme-cute .aps-grid .aps-icon:nth-child(3n + 2) .aps-icon-em { --aps-icon-color: #8b9471; --aps-icon-bg: #f8f8ec; }
 .theme-cute .aps-grid .aps-icon:nth-child(3n) .aps-icon-em { --aps-icon-color: #a58051; --aps-icon-bg: #fff3df; }
 
@@ -701,3 +707,54 @@
     .aps-notch { display: none; }            /* 全螢幕不需要假瀏海 */
     .aps-close { top: 10px; right: 10px; }   /* 關閉鈕收進畫面內，免在框外被切掉 */
 }
+
+/* ── 白瓷玻璃 ──
+   跟留白相片同樣是淺色，所以版面刻意拉開：拍立得排在最上面、時鐘在它下面
+   （上面那條 grid-template-rows 的順序在這裡被換過來），心情是右側一顆直的長丸。
+   🚨 桌布不能是一片純白：玻璃靠的是「透出底下的東西」，底下什麼都沒有的話
+      模糊與亮邊完全看不出來，只會變成一層灰。所以底加了兩團很淡的冷暖光暈。
+   🚨 模糊只加在葉子節點（圖標、底排、心情、拍立得），不准往上加到整個螢幕或主畫面那層 ——
+      那會把裡面所有貼著螢幕的浮層（選單、彈窗、長按小窗）困在那一層裡面。 */
+.aps-frame.theme-glass {
+    --aps-wallpaper: linear-gradient(168deg, #fdfdfe 0%, #f1f3f7 48%, #e7eaf0 100%);
+    --aps-frame-bg: #e8eaee; --aps-frame-line: #c8ccd4; --aps-label-color: #16181a; --aps-muted: #5a5f66;
+    --aps-sb-color: #16181a; --aps-sb-bg: transparent; --aps-accent: #16181a; --aps-homebar-color: #b7bcc4;
+    --aps-font: "Segoe UI", "Microsoft JhengHei", sans-serif;
+    --aps-lock-height: 92px; --aps-clock-areas: "clock mood" "date mood"; --aps-clock-columns: 1fr auto; --aps-clock-align: start;
+    --aps-clock-font: "Segoe UI", sans-serif; --aps-clock-size: 44px; --aps-clock-weight: 200; --aps-clock-spacing: -1px;
+    --aps-date-width: none; --aps-mood-align: end; --aps-mood-bg: rgba(255, 255, 255, 0.55); --aps-mood-line: rgba(255, 255, 255, 0.85); --aps-mood-radius: 999px;
+    --aps-widget-height: 144px; --aps-widget-align: center; --aps-photo-width: 246px; --aps-photo-height: 84px; --aps-photo-padding: 8px 8px 9px; --aps-photo-rotate: 0deg;
+    --aps-paper: rgba(255, 255, 255, 0.46); --aps-paper-line: rgba(255, 255, 255, 0.80); --aps-paper-shadow: 0 10px 28px rgba(22, 24, 26, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+    --aps-tape-width: 0px; --aps-tape-bg: transparent;
+    --aps-photo-sky: linear-gradient(#e9edf2, #f8f9fb); --aps-photo-sun: #ffffff; --aps-photo-glow: rgba(255, 255, 255, 0.85);
+    --aps-photo-back: #cfd5dd; --aps-photo-front: #aab2bd; --aps-photo-water: linear-gradient(#dfe3e9, #eef0f3);
+    --aps-grid-columns: 3; --aps-grid-gap: 14px 10px; --aps-icon-size: 52px; --aps-icon-height: 52px; --aps-icon-radius: 16px;
+    --aps-icon-bg: rgba(255, 255, 255, 0.44); --aps-icon-color: #16181a; --aps-icon-line: rgba(255, 255, 255, 0.88);
+    --aps-icon-shadow: 0 4px 14px rgba(22, 24, 26, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.90); --aps-icon-gap: 6px; --aps-glyph-size: 20px;
+    --aps-dock-height: 66px; --aps-dock-padding: 9px 8px; --aps-dock-radius: 26px;
+    --aps-dock-border: 1px solid rgba(255, 255, 255, 0.80); --aps-dock-top: 1px solid rgba(255, 255, 255, 0.80);
+    --aps-dock-bg: rgba(255, 255, 255, 0.42); --aps-dock-shadow: 0 8px 24px rgba(22, 24, 26, 0.10); --aps-dock-icon-bg: transparent; --aps-dock-icon-color: #16181a; --aps-dock-icon-radius: 14px;
+}
+/* 換順序：第一列放拍立得、第二列放時鐘。兩列的高度也跟著對調，不然拍立得會被塞進時鐘那一列的高度裡 */
+.theme-glass .aps-home { grid-template-rows: var(--aps-widget-height) var(--aps-lock-height) minmax(0, 1fr) var(--aps-dock-height); }
+.theme-glass .aps-widgets { grid-row: 1; }
+.theme-glass .aps-lock { grid-row: 2; }
+/* 玻璃本體：只有這四個葉子節點模糊 */
+.theme-glass .aps-icon-em,
+.theme-glass .aps-dock,
+.theme-glass .aps-mood,
+.theme-glass .aps-polaroid { -webkit-backdrop-filter: blur(14px) saturate(1.25); backdrop-filter: blur(14px) saturate(1.25); }
+/* 心情做成直的長丸，跟時間日期並排在右邊 */
+.theme-glass .aps-mood { align-self: center; flex-direction: column-reverse; gap: 7px; padding: 12px 10px; margin-top: 0; font-size: 9px; letter-spacing: 1px; }
+.theme-glass .aps-mood-em { font-size: 17px; }
+.theme-glass .aps-mood-em > i { font-size: 17px; }
+/* 玻璃要有東西可以透，才看得出是玻璃：兩團很淡的冷暖光暈墊在底下 */
+/* 光暈要墊在「玻璃真的蓋住的地方」：一團在拍立得與上半排圖標後面、一團在底排後面。
+   放在角落沒有用 —— 玻璃透出來的是它正下方那一塊，角落的暈它照不到，畫面就只是一片白。 */
+.theme-glass .aps-home::before { width: 330px; height: 330px; border-radius: 50%; top: -70px; left: -55px; background: radial-gradient(circle, rgba(128, 154, 208, 0.38) 0, rgba(128, 154, 208, 0) 68%); }
+.theme-glass .aps-home::after { width: 300px; height: 300px; border-radius: 50%; bottom: -60px; right: -70px; background: radial-gradient(circle, rgba(214, 170, 140, 0.34) 0, rgba(214, 170, 140, 0) 68%); }
+/* 整支手機唯一一塊實心黑：底排最後那顆 */
+.theme-glass .aps-dock .aps-icon:last-child .aps-icon-em { background: #16181a; color: #ffffff; box-shadow: 0 4px 12px rgba(22, 24, 26, 0.28); }
+/* 相片下面那行手寫字在玻璃上要站得住，改成近黑 */
+.theme-glass .aps-polaroid figcaption { color: #16181a; }
+.theme-glass .aps-polaroid time { color: #5f6469; }
