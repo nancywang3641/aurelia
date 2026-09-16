@@ -1090,6 +1090,7 @@
                     messages = [{ role: 'system', content: String(_secCot) }, ...(messages || [])];
                 }
                 delete secConfig.customCot;
+                delete secConfig.customCotMap;   // 分流到主模型時帶著那張表進來：入口已插過，表留著 chat() 裡會照表再插一次
             } catch (e) {}
             this.chat(messages, secConfig, onChunk, onFinish, onError, options || {});
         },
@@ -1123,8 +1124,11 @@
                             url: _ov.url, key: _ov.key, model: _ov.model,
                             useSystemApi: _ov.useSystemApi, useGenerateRaw: _ov.useGenerateRaw, stProfileId: _ov.stProfileId,
                             directMode: _ov.directMode, _isSecondary: _ov._isSecondary,
-                            // 破甲前置指令跟著連線走：換到主模型帶主模型那份；副模型那份由 chatSecondary 入口自己插，自訂通道不帶
-                            customCot: _ov._isSecondary === false && !_ov._channel ? (_ov.customCot || '') : '',
+                            // 前置指令跟著連線走：主模型帶主模型那份（含每個連接預設各自那張表）、副模型帶副模型那份；自訂通道不帶。
+                            //   以前副模型這裡給空字串，理由是「副模型那份由 chatSecondary 入口自己插」——但經分流走 chat() 進來的
+                            //   （應用與組件裡的生成、插圖…）根本沒經過那個入口，一份都沒有。她說：應用組件都沒給自訂前置指令，破不了。
+                            customCot: _ov._channel ? '' : (_ov.customCot || ''),
+                            customCotMap: _ov._channel ? {} : (_ov.customCotMap || {}),
                             _channel: _ov._channel || undefined, _channelName: _ov._channelName || undefined
                         }, _ov._channel ? { maxTokens: _ov.maxTokens, temperature: _ov.temperature } : {});
                     }
@@ -1385,7 +1389,9 @@
                 // 主模型的自訂前置指令：直連（自己填網址）與托管這兩條以前從來沒吃到，只有走酒館連線的 🍎 那條才插。
                 //   她在 PWA 上填了主模型那格沒作用；副模型是在入口就插，所以一直有。這裡補直連那份，🍎 那條照舊、兩邊互斥不會插兩次。
                 //   自訂通道不帶（跟分流那邊一致）；副模型那份 chatSecondary 已經插過。
-                if (!useSystemApi && !config._isSecondary && !config._channel) {
+                //   副模型也插：chatSecondary 入口插過的已把 customCot／customCotMap 拿掉，到這裡是空的不會重複；
+                //   經分流直接進 chat() 的副模型設定還帶著那份，就在這裡插。
+                if (!useSystemApi && !config._channel) {
                     const _cm = config.customCotMap || {};
                     const _ck = (config.stProfileId && String(config.stProfileId).trim()) ? String(config.stProfileId) : '__none__';
                     const _cc = (_ck in _cm) ? (_cm[_ck] || '') : (config.customCot || '');
