@@ -140,7 +140,7 @@
 
           <div class="wb-tool-bar">
             <div class="wb-book-row">
-              <span style="font-size:18px; color:#1A1C28;" title="當前書包"><i class="fa-solid fa-book"></i></span>
+              <span style="font-size:18px; color:var(--os-ink);" title="當前書包"><i class="fa-solid fa-book"></i></span>
               <select id="wb-book-select" class="wb-book-select"></select>
               <button id="wb-global-btn" class="wb-book-btn"><i class="fa-regular fa-bookmark"></i> 每本都用</button>
               <button id="wb-new-book-btn" class="wb-book-btn" title="創建新世界書包">＋ 創建</button>
@@ -421,7 +421,7 @@
         if (cnt) cnt.textContent = suggestions.length ? `（${suggestions.length}）` : '（0）';
 
         if (suggestions.length === 0) {
-            sugArea.innerHTML = '<span style="color:rgba(26,28,40,0.72); font-size:10px;">(當前書包無其他可用標籤)</span>';
+            sugArea.innerHTML = '<span style="color:rgba(var(--os-ink-rgb), 0.72); font-size:10px;">(當前書包無其他可用標籤)</span>';
         } else {
             sugArea.innerHTML = suggestions.map(t =>
                 `<button class="wb-tag-sug" data-tag="${escHtml(t)}">+ ${escHtml(t)}</button>`

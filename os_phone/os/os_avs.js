@@ -29,52 +29,52 @@
                     <div class="avs-back-btn sysh-act" id="avs-btn-help" style="font-size:16px;font-weight:bold;">?</div>
                 </div>
                 <!-- 使用說明遮罩 -->
-                <div id="avs-help-overlay" style="display:none;position:absolute;inset:0;background:rgba(238,240,246,0.98);z-index:200;overflow-y:auto;padding:20px 18px 80px;box-sizing:border-box;">
+                <div id="avs-help-overlay" style="display:none;position:absolute;inset:0;background:rgba(var(--os-tint-rgb), 0.98);z-index:200;overflow-y:auto;padding:20px 18px 80px;box-sizing:border-box;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-                        <div style="font-size:16px;font-weight:bold;color:#1A1C28;"><i class="fa-solid fa-book-open"></i> 使用說明</div>
-                        <div id="avs-help-close" style="font-size:22px;color:rgba(26,28,40,0.25);cursor:pointer;padding:4px 8px;">✕</div>
+                        <div style="font-size:16px;font-weight:bold;color:var(--os-ink);"><i class="fa-solid fa-book-open"></i> 使用說明</div>
+                        <div id="avs-help-close" style="font-size:22px;color:rgba(var(--os-ink-rgb), 0.25);cursor:pointer;padding:4px 8px;">✕</div>
                     </div>
-                    <div style="font-size:13px;color:#3A3F5C;line-height:1.9;">
+                    <div style="font-size:13px;color:var(--os-ink-soft);line-height:1.9;">
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;">狀態檔案是什麼？</div>
-                        <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;">
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;">狀態檔案是什麼？</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 16px;">
                             狀態檔案讓你在跑團時，自動幫你記錄角色的各種數值，像是血量、金幣、好感度等等。<br>
                             AI 每次回覆時，會一起更新這些數字，你不用自己手動記。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-box"></i> 第一步：建立「檔案」</div>
-                        <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">先決定你的故事要追蹤哪些東西，給它們取個名字和初始值。</p>
-                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;margin-bottom:16px;font-family:monospace;font-size:12px;color:#1A1C28;">
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-box"></i> 第一步：建立「檔案」</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 6px;">先決定你的故事要追蹤哪些東西，給它們取個名字和初始值。</p>
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(var(--os-ink-rgb), 0.30);padding:10px 12px;border-radius:4px;margin-bottom:16px;font-family:monospace;font-size:12px;color:var(--os-ink);">
                             hp = 100　　← 血量，從100開始<br>
                             gold = 0　　← 金幣，從0開始<br>
                             好感度 = 0　← 名字可以用中文
                         </div>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-fire"></i> 第二步：用「煉丹爐」做美化面板（可選）</div>
-                        <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;">
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-fire"></i> 第二步：用「煉丹爐」做美化面板（可選）</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 16px;">
                             選好檔案後，描述你想要的風格（例如「暗黑奇幻、血紅色」），讓 AI 自動幫你做一個好看的狀態面板。做好後到「展廳」開啟它，跑團時就會顯示漂亮的面板而不是純數字。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-bolt"></i> 第三步：設定「條件規則」（可選）</div>
-                        <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-bolt"></i> 第三步：設定「條件規則」（可選）</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 6px;">
                             你可以設定「當某個數值達到某個條件時，自動告訴 AI 要怎麼做」。
                         </p>
-                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;margin-bottom:6px;font-size:12px;color:#1A1C28;">
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(var(--os-ink-rgb), 0.30);padding:10px 12px;border-radius:4px;margin-bottom:6px;font-size:12px;color:var(--os-ink);">
                             好感度 ≥ 80 → 告訴 AI：「這個角色現在對你非常親密，說話語氣要溫柔」
                         </div>
-                        <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;font-size:12px;">
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 16px;font-size:12px;">
                             這樣你就不用在每次對話裡重複解釋角色行為，系統會自動根據數值切換說明，省下很多字數。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-chart-simple"></i> 跑團中：看目前狀態</div>
-                        <p style="color:rgba(26,28,40,0.6);margin:0 0 16px;">
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-chart-simple"></i> 跑團中：看目前狀態</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 16px;">
                             跑團時打開右側「資料中心」→「<i class="fa-solid fa-chart-simple"></i> 狀態」，就可以看到目前所有數值，以及每一章改了什麼。<br>
                             如果 AI 這章亂改了數值，也可以點「<i class="fa-solid fa-rotate-left"></i> 回朔上一章節」撤銷。
                         </p>
 
-                        <div style="color:#1A1C28;font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-lightbulb"></i> 提示：告訴 AI 怎麼更新數值</div>
-                        <p style="color:rgba(26,28,40,0.6);margin:0 0 6px;">在你的 Prompt 裡加上這段說明，AI 就知道要輸出數值變化了：</p>
-                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(26,28,40,0.30);padding:10px 12px;border-radius:4px;font-family:monospace;font-size:12px;color:#1A1C28;">
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-lightbulb"></i> 提示：告訴 AI 怎麼更新數值</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 6px;">在你的 Prompt 裡加上這段說明，AI 就知道要輸出數值變化了：</p>
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(var(--os-ink-rgb), 0.30);padding:10px 12px;border-radius:4px;font-family:monospace;font-size:12px;color:var(--os-ink);">
                             每次回覆結束後，如果有數值改變，請在最後加上：<br>
                             &lt;vars&gt;<br>
                             hp -= 20<br>
@@ -112,15 +112,15 @@
 
                 <!-- 🔥 煉丹爐 modal（從變數包 tab 頂部按鈕 / 卡片按鈕觸發）-->
                 <div id="avs-furnace-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
-                    <div style="max-width:600px; width:100%; background:#EEF0F6; border:1px solid rgba(26,28,40,0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(26,28,40,0.10); margin:auto;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(26,28,40,0.15);">
-                            <strong id="furnace-modal-title" style="font-size:16px; color:#1A1C28;"><i class="fa-solid fa-fire"></i> 煉丹爐 · 為檔案煉個 UI 面板</strong>
-                            <div style="color:#1A1C28; cursor:pointer; font-size:20px;" id="avs-furnace-close">✕</div>
+                    <div style="max-width:600px; width:100%; background:var(--os-page-bg); border:1px solid rgba(var(--os-ink-rgb), 0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(var(--os-ink-rgb), 0.10); margin:auto;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(var(--os-ink-rgb), 0.15);">
+                            <strong id="furnace-modal-title" style="font-size:16px; color:var(--os-ink);"><i class="fa-solid fa-fire"></i> 煉丹爐 · 為檔案煉個 UI 面板</strong>
+                            <div style="color:var(--os-ink); cursor:pointer; font-size:20px;" id="avs-furnace-close">✕</div>
                         </div>
                         <div class="avs-card" id="furnace-card" style="background:transparent; border:none; padding:0;">
                             <!-- 預選 pack 顯示（煉丹爐永遠從變數包卡片進入，所以一定知道是哪個 pack）-->
-                            <div id="furnace-pack-display" style="margin-bottom:15px; padding:10px 12px; background:rgba(26,28,40,0.08); border:1px solid rgba(26,28,40,0.15); border-radius:6px; font-size:13px; color:#1A1C28;">
-                                正在為 <strong id="furnace-pack-display-name" style="color:#1A1C28;">?</strong> 煉丹
+                            <div id="furnace-pack-display" style="margin-bottom:15px; padding:10px 12px; background:rgba(var(--os-ink-rgb), 0.08); border:1px solid rgba(var(--os-ink-rgb), 0.15); border-radius:6px; font-size:13px; color:var(--os-ink);">
+                                正在為 <strong id="furnace-pack-display-name" style="color:var(--os-ink);">?</strong> 煉丹
                             </div>
                             <!-- 內部用的 hidden select，存當前 packId 供煉丹流程讀取 -->
                             <select id="furnace-pack-select" style="display:none;"></select>
@@ -161,12 +161,12 @@
 
                 <!-- V3：條件規則 modal（從變數包卡片「⚡ 規則」按鈕觸發）-->
                 <div id="avs-rules-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; overflow-y:auto;">
-                    <div style="max-width:600px; margin:20px auto; background:#EEF0F6; border:1px solid rgba(26,28,40,0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(26,28,40,0.10);">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(26,28,40,0.15);">
-                            <strong style="font-size:16px; color:#1A1C28;"><i class="fa-solid fa-bolt"></i> <span id="avs-rules-modal-title">檔案</span> · 條件規則</strong>
-                            <div style="color:#1A1C28; cursor:pointer; font-size:20px;" id="avs-rules-modal-close">✕</div>
+                    <div style="max-width:600px; margin:20px auto; background:var(--os-page-bg); border:1px solid rgba(var(--os-ink-rgb), 0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(var(--os-ink-rgb), 0.10);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(var(--os-ink-rgb), 0.15);">
+                            <strong style="font-size:16px; color:var(--os-ink);"><i class="fa-solid fa-bolt"></i> <span id="avs-rules-modal-title">檔案</span> · 條件規則</strong>
+                            <div style="color:var(--os-ink); cursor:pointer; font-size:20px;" id="avs-rules-modal-close">✕</div>
                         </div>
-                        <div style="font-size:11px; color:rgba(26,28,40,0.30); margin-bottom:12px; line-height:1.6;">
+                        <div style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.30); margin-bottom:12px; line-height:1.6;">
                             條件滿足時注入主模型 system prompt，引導劇情走向。<br>例：「好感度 ≥ 80 時對主角親暱稱呼」
                         </div>
                         <div id="avs-rules-modal-list" style="display:flex; flex-direction:column; gap:10px; max-height:60vh; overflow-y:auto; padding:4px;"></div>
@@ -619,7 +619,7 @@
         //    一個故事一套追蹤欄位就夠——擺兩組入口只會誘導做出重複包；要重做就先刪舊的。
 
         if (currentPacks.length === 0) {
-            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">尚無檔案<br><br>回上方建檔畫面選一種建立方式</div>';
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(var(--os-ink-rgb), 0.20); font-size:13px;">尚無檔案<br><br>回上方建檔畫面選一種建立方式</div>';
             return;
         }
 
@@ -629,7 +629,7 @@
         // 有檔案、但沒有一個是這個故事的（例如舊版在 PWA 生的包 chatId 是空的）→ 這裡以前是整片空白，
         //   看起來像「生成失敗」。明講一句，並指去看得到它們的地方。
         if (!_mine.length) {
-            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(26,28,40,0.20); font-size:13px;">這個故事還沒有自己的檔案<br><br>已有的 ' + currentPacks.length + ' 份屬於別的故事<br>回上方建檔畫面用「<i class="fa-solid fa-clipboard"></i> 沿用其他故事的設定」搬過來</div>';
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(var(--os-ink-rgb), 0.20); font-size:13px;">這個故事還沒有自己的檔案<br><br>已有的 ' + currentPacks.length + ' 份屬於別的故事<br>回上方建檔畫面用「<i class="fa-solid fa-clipboard"></i> 沿用其他故事的設定」搬過來</div>';
             return;
         }
         _mine.forEach(pack => {
@@ -641,22 +641,22 @@
             const card = document.createElement('div');
             card.className = 'avs-card';
             card.innerHTML = `
-                <strong style="color:#1A1C28;">${pack.name}</strong>
-                <p style="font-size:12px; color:rgba(26,28,40,0.25);">${pack.variables.length} 個項目${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
-                <div style="font-size:11px; margin:1px 0 2px;">${pack.chatId ? `<i class="fa-solid fa-lock"></i> <span style="color:#2e9e6b;">綁定此卡</span> <span style="color:rgba(26,28,40,0.45);">${String(pack.chatId).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : `<i class="fa-solid fa-globe"></i> <span style="color:#c9920f;">全域 · 所有卡共用 <i class="fa-solid fa-triangle-exclamation"></i></span>`}</div>
+                <strong style="color:var(--os-ink);">${pack.name}</strong>
+                <p style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.25);">${pack.variables.length} 個項目${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
+                <div style="font-size:11px; margin:1px 0 2px;">${pack.chatId ? `<i class="fa-solid fa-lock"></i> <span style="color:#2e9e6b;">綁定此卡</span> <span style="color:rgba(var(--os-ink-rgb), 0.45);">${String(pack.chatId).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : `<i class="fa-solid fa-globe"></i> <span style="color:#c9920f;">全域 · 所有卡共用 <i class="fa-solid fa-triangle-exclamation"></i></span>`}</div>
                 <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
                     <div class="avs-btn avs-btn-outline btn-edit" style="flex:1; min-width:60px; padding:6px;">編輯</div>
                     <div class="avs-btn avs-btn-outline btn-rules" style="flex:1; min-width:90px; padding:6px;"><i class="fa-solid fa-bolt"></i> 規則${rulesCount ? ` (${rulesCount})` : ''}</div>
                     <div class="avs-btn avs-btn-danger btn-del" style="padding:6px 12px;">刪除</div>
                 </div>
-                <div class="pack-ui-area" style="margin-top:14px; padding-top:12px; border-top:1px dashed rgba(26,28,40,0.10);"></div>
+                <div class="pack-ui-area" style="margin-top:14px; padding-top:12px; border-top:1px dashed rgba(var(--os-ink-rgb), 0.10);"></div>
             `;
 
             // === 嵌入 UI 面板區（取代原本獨立「展廳」tab）===
             const uiArea = card.querySelector('.pack-ui-area');
             if (!activeTpl) {
                 uiArea.innerHTML = `
-                    <div style="font-size:12px; color:rgba(26,28,40,0.25); margin-bottom:8px;"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:#888;">無</span></div>
+                    <div style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.25); margin-bottom:8px;"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:var(--os-ink-soft);">無</span></div>
                     <div class="avs-btn avs-btn-outline btn-go-furnace" style="width:100%; padding:8px; font-size:12px;"><i class="fa-solid fa-wand-magic-sparkles"></i> 為這個檔案煉個 UI 面板</div>
                 `;
                 uiArea.querySelector('.btn-go-furnace').onclick = () => openFurnaceModal(container, pack.id);
@@ -678,7 +678,7 @@
 
                 uiArea.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <span style="font-size:12px; color:rgba(26,28,40,0.68);"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:#1A1C28;">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
+                        <span style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.68);"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:var(--os-ink);">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
                     </div>
                     ${scopedCssText ? `<style>${scopedCssText}</style>` : ''}
                     <div class="avs-pv-tabs">
@@ -688,7 +688,7 @@
                     </div>
                     <div class="avs-pv-wrap">
                         <div class="avs-pv-box" id="${scopeId}">
-                            ${previewHtml || '<span style="color:rgba(26,28,40,0.20);font-size:12px;">（無預覽內容）</span>'}
+                            ${previewHtml || '<span style="color:rgba(var(--os-ink-rgb), 0.20);font-size:12px;">（無預覽內容）</span>'}
                         </div>
                     </div>
                     <div style="display:flex; gap:8px; margin-bottom:6px;">
@@ -857,28 +857,28 @@
         const curName = rule?.name || '';
         const curContent = rule?.content || '';
 
-        return `<div class="avs-card" data-rule-edit="${id}" style="background:rgba(228,232,245,0.97); border-color:#1A1C28;">
-            <div style="margin-bottom:8px;"><span style="font-size:11px; color:rgba(26,28,40,0.35);">名稱</span>
+        return `<div class="avs-card" data-rule-edit="${id}" style="background:rgba(var(--os-tint-rgb), 0.97); border-color:var(--os-ink);">
+            <div style="margin-bottom:8px;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">名稱</span>
                 <input class="avs-input" data-rule-key="name" value="${escapeAttr(curName)}" placeholder="例：高好感親密化 / 末日緊張感">
             </div>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
-                <div style="flex:2;"><span style="font-size:11px; color:rgba(26,28,40,0.35);">項目</span>
+                <div style="flex:2;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">項目</span>
                     <select class="avs-select" data-rule-key="path">
                         ${fieldNames.length === 0
                           ? '<option value="">（檔案無項目）</option>'
                           : fieldNames.map(n => `<option value="${escapeAttr(n)}" ${n === curPath ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
                     </select>
                 </div>
-                <div style="flex:0 0 70px;"><span style="font-size:11px; color:rgba(26,28,40,0.35);">運算</span>
+                <div style="flex:0 0 70px;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">運算</span>
                     <select class="avs-select" data-rule-key="op">
                         ${RULE_OPS.map(o => `<option value="${o}" ${o === curOp ? 'selected' : ''}>${o}</option>`).join('')}
                     </select>
                 </div>
-                <div style="flex:1;"><span style="font-size:11px; color:rgba(26,28,40,0.35);">值</span>
+                <div style="flex:1;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">值</span>
                     <input class="avs-input" data-rule-key="value" value="${escapeAttr(curVal)}" placeholder="例 80">
                 </div>
             </div>
-            <div style="margin-bottom:8px;"><span style="font-size:11px; color:rgba(26,28,40,0.35);">注入內容（給主模型看的指示）</span>
+            <div style="margin-bottom:8px;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">注入內容（給主模型看的指示）</span>
                 <textarea class="avs-textarea" data-rule-key="content" style="min-height:60px;" placeholder="條件滿足時主模型該怎麼寫劇情。例：對主角的稱呼從「你」改為親暱稱呼，對話帶撒嬌語氣">${escapeHtml(curContent)}</textarea>
             </div>
             <div style="display:flex; gap:8px; justify-content:flex-end;">
@@ -905,24 +905,24 @@
             const enabled = r.enabled !== false;
             html += `<div class="avs-card" style="${!enabled ? 'opacity:0.5;' : ''}">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                    <strong style="color:#1A1C28; font-size:13px;">${escapeHtml(r.name || '未命名規則')}</strong>
+                    <strong style="color:var(--os-ink); font-size:13px;">${escapeHtml(r.name || '未命名規則')}</strong>
                     <div style="display:flex; gap:6px; flex-shrink:0;">
                         <div class="avs-btn avs-btn-outline" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._toggleRule?.('${escapeAttr(r.id)}')">${enabled ? '啟用' : '停用'}</div>
                         <div class="avs-btn avs-btn-outline" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._editRule?.('${escapeAttr(r.id)}')">編輯</div>
                         <div class="avs-btn avs-btn-danger" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._delRule?.('${escapeAttr(r.id)}')"><i class="fa-solid fa-xmark"></i></div>
                     </div>
                 </div>
-                <div style="font-size:12px; margin-top:6px; color:rgba(26,28,40,0.68); font-family:monospace;">
-                    ${escapeHtml(r.path || '?')} <span style="color:#1A1C28; margin:0 4px;">${r.op}</span> <span style="color:#1A1C28;">${escapeHtml(String(r.value ?? ''))}</span>
+                <div style="font-size:12px; margin-top:6px; color:rgba(var(--os-ink-rgb), 0.68); font-family:monospace;">
+                    ${escapeHtml(r.path || '?')} <span style="color:var(--os-ink); margin:0 4px;">${r.op}</span> <span style="color:var(--os-ink);">${escapeHtml(String(r.value ?? ''))}</span>
                 </div>
-                <div style="font-size:12px; margin-top:6px; color:rgba(26,28,40,0.78); line-height:1.6;">${escapeHtml(r.content || '（無注入內容）')}</div>
+                <div style="font-size:12px; margin-top:6px; color:rgba(var(--os-ink-rgb), 0.78); line-height:1.6;">${escapeHtml(r.content || '（無注入內容）')}</div>
             </div>`;
         }
         if (_editingRuleIdInModal === '__new__') {
             html += renderRuleEditForm(pack, null, true);
         }
         if (!packRules.length && _editingRuleIdInModal !== '__new__') {
-            html = `<div style="text-align:center; padding:40px 20px; color:rgba(26,28,40,0.20); font-size:12px;">
+            html = `<div style="text-align:center; padding:40px 20px; color:rgba(var(--os-ink-rgb), 0.20); font-size:12px;">
                 這個檔案還沒設規則。點下方「＋ 添加規則」開始。
             </div>` + html;
         }
@@ -1386,7 +1386,7 @@
         el.innerHTML = `
             <span style="flex-shrink:0;"><i class="fa-solid fa-tag"></i></span>
             <input class="avs-input avs-obj-key" placeholder="名稱" style="flex:1; font-size:12px;">
-            <span style="flex-shrink:0; color:#888;">=</span>
+            <span style="flex-shrink:0; color:var(--os-ink-soft);">=</span>
             <input class="avs-input avs-obj-val" placeholder="值（數字/文字/{}）" style="flex:1; font-size:12px;">
             <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;"><i class="fa-solid fa-xmark"></i></span>
         `;
@@ -1408,7 +1408,7 @@
                 <input class="avs-input avs-obj-key" placeholder="項目名" style="flex:1; font-size:12px; font-weight:600;">
                 <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;"><i class="fa-solid fa-xmark"></i></span>
             </div>
-            <div class="avs-obj-children" style="margin-left:14px; border-left:1px solid rgba(26,28,40,0.08); padding-left:8px; margin-top:2px;"></div>
+            <div class="avs-obj-children" style="margin-left:14px; border-left:1px solid rgba(var(--os-ink-rgb), 0.08); padding-left:8px; margin-top:2px;"></div>
         `;
         const headKey = el.querySelector('.avs-obj-folder-head .avs-obj-key');
         headKey.value = key != null ? String(key) : '';
@@ -1423,8 +1423,8 @@
         bar.className = 'avs-obj-addbar';
         bar.style.cssText = 'display:flex; gap:6px; margin:4px 0;';
         bar.innerHTML = `
-            <button type="button" class="avs-obj-add-folder" style="font-size:11px; padding:2px 8px; background:rgba(26,28,40,0.12); border:1px solid rgba(26,28,40,0.15); color:#1A1C28; border-radius:3px; cursor:pointer;">+ <i class="fa-solid fa-folder"></i> 資料夾</button>
-            <button type="button" class="avs-obj-add-leaf" style="font-size:11px; padding:2px 8px; background:rgba(26,28,40,0.12); border:1px solid rgba(26,28,40,0.15); color:#1A1C28; border-radius:3px; cursor:pointer;">+ <i class="fa-solid fa-tag"></i> 數值</button>
+            <button type="button" class="avs-obj-add-folder" style="font-size:11px; padding:2px 8px; background:rgba(var(--os-ink-rgb), 0.12); border:1px solid rgba(var(--os-ink-rgb), 0.15); color:var(--os-ink); border-radius:3px; cursor:pointer;">+ <i class="fa-solid fa-folder"></i> 資料夾</button>
+            <button type="button" class="avs-obj-add-leaf" style="font-size:11px; padding:2px 8px; background:rgba(var(--os-ink-rgb), 0.12); border:1px solid rgba(var(--os-ink-rgb), 0.15); color:var(--os-ink); border-radius:3px; cursor:pointer;">+ <i class="fa-solid fa-tag"></i> 數值</button>
         `;
         bar.querySelector('.avs-obj-add-folder').addEventListener('click', () => {
             childrenEl.insertBefore(_avsMakeFolder('', {}), bar);
@@ -1471,7 +1471,7 @@
                 <div class="avs-obj-children"></div>
             </div>
             <details class="var-obj-adv" style="display:none; margin-top:4px;">
-                <summary style="cursor:pointer; color:rgba(26,28,40,0.72); font-size:11px;">▸ 進階：直接編 JSON（老手用，平常不用碰）</summary>
+                <summary style="cursor:pointer; color:rgba(var(--os-ink-rgb), 0.72); font-size:11px;">▸ 進階：直接編 JSON（老手用，平常不用碰）</summary>
                 <textarea class="avs-textarea var-default-obj" placeholder="{}" style="font-size:11px; min-height:80px; font-family:monospace; white-space:pre; line-height:1.4; margin-top:4px;"></textarea>
             </details>
             <textarea class="avs-textarea var-desc" placeholder="說明（AI 跑團看這個約束這個項目，例：好感度 0-100，互動正面 +1~5）" style="font-size:12px; min-height:40px; opacity:0.7;" onfocus="this.style.opacity=1; this.style.minHeight='60px';" onblur="this.style.opacity=0.7;"></textarea>
@@ -2296,7 +2296,7 @@
                 background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.18);
                 border-radius:6px;padding:9px 10px;cursor:pointer;
                 transition:background 0.15s;" class="furnace-preset-card">
-                <div style="flex:1;font-size:12px;color:rgba(26,28,40,0.78);line-height:1.5;">
+                <div style="flex:1;font-size:12px;color:rgba(var(--os-ink-rgb), 0.78);line-height:1.5;">
                     ${p.suggestion}
                 </div>
                 <button data-del-preset="${p.id}" style="
@@ -2670,11 +2670,11 @@
             card.innerHTML = `
                 ${scopedCss}
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <strong style="font-size:13px;color:#1A1C28;">${pack ? pack.name : (tpl.packName || '已刪除的檔案')} - 面板</strong>
-                    ${tpl.isActive ? '<span style="font-size:10px;color:#1A1C28;border:1px solid rgba(26,28,40,0.20);padding:2px 7px;border-radius:3px;">啟用中</span>' : ''}
+                    <strong style="font-size:13px;color:var(--os-ink);">${pack ? pack.name : (tpl.packName || '已刪除的檔案')} - 面板</strong>
+                    ${tpl.isActive ? '<span style="font-size:10px;color:var(--os-ink);border:1px solid rgba(var(--os-ink-rgb), 0.20);padding:2px 7px;border-radius:3px;">啟用中</span>' : ''}
                 </div>
                 <div id="${scopeId}" style="margin-bottom:12px;padding:10px;background:rgba(0,0,0,0.3);border-radius:6px;min-height:60px;overflow:hidden;">
-                    ${previewHtml || '<span style="color:rgba(26,28,40,0.20);font-size:12px;">（無預覽內容）</span>'}
+                    ${previewHtml || '<span style="color:rgba(var(--os-ink-rgb), 0.20);font-size:12px;">（無預覽內容）</span>'}
                 </div>
                 <div style="display:flex; gap:10px;">
                     <div class="avs-btn avs-btn-primary btn-toggle" style="flex:1;">${tpl.isActive ? '取消啟用' : '設為啟用'}</div>

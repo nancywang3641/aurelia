@@ -1,60 +1,60 @@
-        .avs-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; position: relative; }
-        .avs-header { padding: 15px 20px; background: rgba(228,232,245,0.92); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+        .avs-container { width: 100%; height: 100%; background: var(--os-page-bg); color: var(--os-ink); display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; position: relative; }
+        .avs-header { padding: 15px 20px; background: rgba(var(--os-tint-rgb), 0.92); border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.15); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         .avs-header { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
         body.layout-pad-ios .avs-header { padding-top: 55px !important; }
-        .avs-title { font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #1A1C28; display: flex; align-items: center; gap: 8px; }
-        .avs-back-btn { font-size: 24px; color: rgba(26,28,40,0.72); cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; }
-        .avs-back-btn:hover { background: rgba(26,28,40,0.06); }
-        .avs-tabs { display: flex; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
+        .avs-title { font-size: 18px; font-weight: 800; letter-spacing: 2px; color: var(--os-ink); display: flex; align-items: center; gap: 8px; }
+        .avs-back-btn { font-size: 24px; color: rgba(var(--os-ink-rgb), 0.72); cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; }
+        .avs-back-btn:hover { background: rgba(var(--os-ink-rgb), 0.06); }
+        .avs-tabs { display: flex; background: rgba(var(--os-tint-rgb), 0.96); border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.15); flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
         .avs-tabs::-webkit-scrollbar { display: none; }
-        .avs-tab { flex: 1; text-align: center; padding: 12px 0; font-size: 13px; color: rgba(26,28,40,0.72); cursor: pointer; position: relative; transition: 0.3s; font-weight: 600; white-space: nowrap; }
-        .avs-tab.active { color: #1A1C28; font-weight: 800; }
-        .avs-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; border-radius: 3px 3px 0 0; box-shadow: 0 -2px 8px rgba(26,28,40,0.30); }
+        .avs-tab { flex: 1; text-align: center; padding: 12px 0; font-size: 13px; color: rgba(var(--os-ink-rgb), 0.72); cursor: pointer; position: relative; transition: 0.3s; font-weight: 600; white-space: nowrap; }
+        .avs-tab.active { color: var(--os-ink); font-weight: 800; }
+        .avs-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: var(--os-ink); border-radius: 3px 3px 0 0; box-shadow: 0 -2px 8px rgba(var(--os-ink-rgb), 0.30); }
         .avs-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px; position: relative; }
         .avs-view { display: none; animation: avsFadeIn 0.3s; flex-direction: column; gap: 20px; }
         .avs-view.active { display: flex; }
-        .avs-card { background: rgba(228,232,245,0.85); border-radius: 8px; padding: 16px; border: 1px solid rgba(26,28,40,0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
-        .avs-label { font-size: 13px; color: rgba(26,28,40,0.35); margin-bottom: 8px; display: block; font-weight: 600; }
-        .avs-input, .avs-textarea, .avs-select { background: rgba(228,232,245,0.90); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; padding: 10px 12px; border-radius: 4px; font-size: 14px; outline: none; width: 100%; box-sizing: border-box; transition: all 0.2s; }
-        .avs-input:focus, .avs-textarea:focus, .avs-select:focus { border-color: #1A1C28; background: #EEF0F6; box-shadow: 0 0 0 2px rgba(26,28,40,0.10); }
+        .avs-card { background: rgba(var(--os-tint-rgb), 0.85); border-radius: 8px; padding: 16px; border: 1px solid rgba(var(--os-ink-rgb), 0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
+        .avs-label { font-size: 13px; color: var(--os-ink-soft); margin-bottom: 8px; display: block; font-weight: 600; }
+        .avs-input, .avs-textarea, .avs-select { background: rgba(var(--os-tint-rgb), 0.90); border: 1px solid rgba(var(--os-ink-rgb), 0.20); color: var(--os-ink); padding: 10px 12px; border-radius: 4px; font-size: 14px; outline: none; width: 100%; box-sizing: border-box; transition: all 0.2s; }
+        .avs-input:focus, .avs-textarea:focus, .avs-select:focus { border-color: var(--os-ink); background: var(--os-page-bg); box-shadow: 0 0 0 2px rgba(var(--os-ink-rgb), 0.10); }
         .avs-btn { padding: 12px; border-radius: 4px; text-align: center; font-weight: bold; cursor: pointer; transition: 0.2s; display: inline-flex; justify-content: center; align-items: center; gap: 8px; user-select: none; }
-        .avs-btn-primary { background: linear-gradient(135deg,rgba(26,28,40,0.25),#c8a030); color: #1a0a04; border: none; }
-        .avs-btn-outline { background: transparent; color: rgba(26,28,40,0.65); border: 1px solid rgba(26,28,40,0.20); }
+        .avs-btn-primary { background: linear-gradient(135deg,rgba(var(--os-ink-rgb), 0.25),#c8a030); color: #1a0a04; border: none; }
+        .avs-btn-outline { background: transparent; color: rgba(var(--os-ink-rgb), 0.65); border: 1px solid rgba(var(--os-ink-rgb), 0.20); }
         .avs-btn-danger { background: rgba(231,76,60,0.1); color: #e74c3c; border: 1px solid rgba(231,76,60,0.3); }
-        .avs-var-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; background: rgba(228,232,245,0.60); padding: 10px; border-radius: 4px; }
+        .avs-var-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; background: rgba(var(--os-tint-rgb), 0.60); padding: 10px; border-radius: 4px; }
         /* 🐚 貼紙微調視窗：在真的面板上拖貼紙 */
         .wsk-tuner { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
-        .wsk-tuner-win { width: 100%; max-width: 720px; max-height: 92vh; display: flex; flex-direction: column; background: #EEF0F6; border: 1px solid rgba(26,28,40,0.25); border-radius: 8px; overflow: hidden; }
-        .wsk-tuner-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(26,28,40,0.15); color: #1A1C28; }
-        .wsk-tuner-hint { flex: 1; font-size: 11px; color: rgba(26,28,40,0.45); }
-        .wsk-tuner-x { background: none; border: none; font-size: 18px; cursor: pointer; color: #1A1C28; }
+        .wsk-tuner-win { width: 100%; max-width: 720px; max-height: 92vh; display: flex; flex-direction: column; background: var(--os-page-bg); border: 1px solid rgba(var(--os-ink-rgb), 0.25); border-radius: 8px; overflow: hidden; }
+        .wsk-tuner-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.15); color: var(--os-ink); }
+        .wsk-tuner-hint { flex: 1; font-size: 11px; color: var(--os-ink-soft); }
+        .wsk-tuner-x { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--os-ink); }
         .wsk-stage-wrap { flex: 1; min-height: 0; overflow: auto; padding: 12px; background: rgba(0,0,0,0.28); }
         .wsk-stage { position: relative; }
         /* 選中的那張：外圈虛線好認，但不影響它自己的樣式 */
-        .wsk-stage .wsk { outline: 1px dashed rgba(26,28,40,0.35); outline-offset: 2px; }
+        .wsk-stage .wsk { outline: 1px dashed rgba(var(--os-ink-rgb), 0.35); outline-offset: 2px; }
         .wsk-stage .wsk.wsk-sel { outline: 2px solid #c8a030; outline-offset: 3px; }
-        .wsk-tuner-ctl { padding: 10px 12px; border-top: 1px solid rgba(26,28,40,0.15); }
-        .wsk-ctl-none { font-size: 12px; color: rgba(26,28,40,0.45); }
+        .wsk-tuner-ctl { padding: 10px 12px; border-top: 1px solid rgba(var(--os-ink-rgb), 0.15); }
+        .wsk-ctl-none { font-size: 12px; color: var(--os-ink-soft); }
         .wsk-ctl-on { display: none; gap: 14px; align-items: center; flex-wrap: wrap; }
-        .wsk-ctl-on label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #1A1C28; }
+        .wsk-ctl-on label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--os-ink); }
         .wsk-ctl-on input[type=range] { width: 150px; }
-        .wsk-ctl-on b { font-size: 11px; color: rgba(26,28,40,0.55); min-width: 42px; }
-        .wsk-tuner-foot { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid rgba(26,28,40,0.15); }
+        .wsk-ctl-on b { font-size: 11px; color: var(--os-ink-soft); min-width: 42px; }
+        .wsk-tuner-foot { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid rgba(var(--os-ink-rgb), 0.15); }
         .wsk-tuner-foot .avs-btn { flex: 1; padding: 8px; font-size: 13px; }
         /* 🎨 煉丹爐的美術方向列：下拉吃剩下的寬、換一個鈕不被壓扁 */
         .avs-art-row { display: flex; gap: 8px; align-items: stretch; }
         .avs-art-row .avs-input { flex: 1; min-width: 0; }
         .avs-art-row .avs-btn { flex: 0 0 auto; padding: 10px 14px; font-size: 13px; white-space: nowrap; }
-        .avs-art-note { font-size: 11px; color: rgba(26,28,40,0.45); line-height: 1.6; margin: 6px 0 15px; }
-        .furnace-log { background: rgba(0,0,0,0.4); border: 1px solid rgba(26,28,40,0.08); border-radius: 4px; padding: 12px; font-family: monospace; font-size: 12px; color: rgba(26,28,40,0.30); max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+        .avs-art-note { font-size: 11px; color: var(--os-ink-soft); line-height: 1.6; margin: 6px 0 15px; }
+        .furnace-log { background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--os-ink-rgb), 0.08); border-radius: 4px; padding: 12px; font-family: monospace; font-size: 12px; color: var(--os-ink-soft); max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
         @keyframes avsFadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .furnace-active { animation: avsGlow 2s infinite; border-color: rgba(26,28,40,0.60) !important; }
-        @keyframes avsGlow { 0% { box-shadow: 0 0 10px rgba(26,28,40,0.10); } 50% { box-shadow: 0 0 20px rgba(26,28,40,0.30); } 100% { box-shadow: 0 0 10px rgba(26,28,40,0.10); } }
+        .furnace-active { animation: avsGlow 2s infinite; border-color: rgba(var(--os-ink-rgb), 0.60) !important; }
+        @keyframes avsGlow { 0% { box-shadow: 0 0 10px rgba(var(--os-ink-rgb), 0.10); } 50% { box-shadow: 0 0 20px rgba(var(--os-ink-rgb), 0.30); } 100% { box-shadow: 0 0 10px rgba(var(--os-ink-rgb), 0.10); } }
 
         /* ===== 煉丹爐面板預覽三尺寸切換（手機/中間/全屏）— 行為共用 os_studio.attachVpScaler ===== */
         .avs-pv-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
-        .avs-pv { padding: 4px 11px; font-size: 11px; border-radius: 6px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; }
-        .avs-pv.active { background: rgba(26,28,40,0.85); color: #EEF0F6; border-color: rgba(26,28,40,0.85); }
+        .avs-pv { padding: 4px 11px; font-size: 11px; border-radius: 6px; border: 1px solid rgba(var(--os-ink-rgb), 0.25); background: transparent; color: rgba(var(--os-ink-rgb), 0.72); cursor: pointer; }
+        .avs-pv.active { background: rgba(var(--os-ink-rgb), 0.85); color: var(--os-page-bg); border-color: rgba(var(--os-ink-rgb), 0.85); }
         .avs-pv-wrap { margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; overflow: hidden; }
         .avs-pv-box { min-height: 60px; }
 
@@ -62,64 +62,64 @@
         .avs-st { display: flex; flex-direction: column; gap: 12px; }
         /* 版面順序一律照 HTML 寫的先後，這裡不要再出現任何 order —— 開第二套就會像 2026-07-31
            那次：舊清單漏掉新入口 → 新入口 order 預設 0 → 被頂到最前面，改 HTML 完全沒用。 */
-        .avs-st-loading { padding: 30px; text-align: center; color: rgba(26,28,40,0.35); font-size: 13px; }
-        .avs-st-dim { color: rgba(26,28,40,0.30); }
+        .avs-st-loading { padding: 30px; text-align: center; color: var(--os-ink-soft); font-size: 13px; }
+        .avs-st-dim { color: var(--os-ink-soft); }
         .avs-st-err { padding: 20px; text-align: center; color: #c0392b; font-size: 13px; }
 
         .avs-st-story { padding: 14px 16px; }
-        .avs-st-story-label { font-size: 12px; color: rgba(26,28,40,0.4); margin-bottom: 4px; }
-        .avs-st-story-name { font-size: 15px; font-weight: 800; color: #1A1C28; }
+        .avs-st-story-label { font-size: 12px; color: var(--os-ink-soft); margin-bottom: 4px; }
+        .avs-st-story-name { font-size: 15px; font-weight: 800; color: var(--os-ink); }
 
         .avs-st-init { text-align: center; padding: 28px 20px; }
         .avs-st-init-icon { font-size: 34px; margin-bottom: 10px; }
-        .avs-st-init-title { font-size: 15px; font-weight: 700; color: #1A1C28; margin-bottom: 8px; }
-        .avs-st-init-desc { font-size: 12.5px; color: rgba(26,28,40,0.5); line-height: 1.8; margin-bottom: 16px; }
+        .avs-st-init-title { font-size: 15px; font-weight: 700; color: var(--os-ink); margin-bottom: 8px; }
+        .avs-st-init-desc { font-size: 12.5px; color: var(--os-ink-soft); line-height: 1.8; margin-bottom: 16px; }
         /* 主鈕吃滿寬；替代方案兩顆並排各半 → 三顆不會各長各的寬度 */
         .avs-st-init-btn { padding: 11px 20px; font-size: 14px; width: 100%; box-sizing: border-box; }
         .avs-st-init-alt { display: flex; gap: 8px; margin-top: 8px; }
         .avs-st-init-alt .avs-st-init-btn { flex: 1; min-width: 0; padding: 10px 8px; font-size: 13px; }
-        .avs-st-init-foot { font-size: 11px; color: rgba(26,28,40,0.3); margin-top: 10px; }
+        .avs-st-init-foot { font-size: 11px; color: var(--os-ink-soft); margin-top: 10px; }
 
         .avs-st-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; }
         .avs-st-toggle-text { min-width: 0; }
-        .avs-st-toggle-name { font-size: 14px; font-weight: 700; color: #1A1C28; }
-        .avs-st-toggle-desc { font-size: 11.5px; color: rgba(26,28,40,0.45); margin-top: 3px; line-height: 1.5; }
-        .avs-st-toggle { width: 46px; height: 26px; border-radius: 13px; background: rgba(26,28,40,0.18); cursor: pointer; position: relative; transition: all .25s; flex-shrink: 0; }
+        .avs-st-toggle-name { font-size: 14px; font-weight: 700; color: var(--os-ink); }
+        .avs-st-toggle-desc { font-size: 11.5px; color: var(--os-ink-soft); margin-top: 3px; line-height: 1.5; }
+        .avs-st-toggle { width: 46px; height: 26px; border-radius: 13px; background: rgba(var(--os-ink-rgb), 0.18); cursor: pointer; position: relative; transition: all .25s; flex-shrink: 0; }
         .avs-st-toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: all .25s; }
         .avs-st-toggle.on { background: #c8a030; }
         .avs-st-toggle.on::after { left: 23px; }
 
-        .avs-st-current-hd { font-size: 14px; font-weight: 800; color: #1A1C28; margin: 4px 2px 2px; }
+        .avs-st-current-hd { font-size: 14px; font-weight: 800; color: var(--os-ink); margin: 4px 2px 2px; }
         .avs-st-current-body { display: flex; flex-direction: column; gap: 10px; }
         /* 「✏️ 改數值」編輯模式：每個值一個小格子（非 JSON） */
         .avs-st-cur-editbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-        .avs-st-editbar-hint { font-size: 12px; color: rgba(26,28,40,0.5); }
-        .avs-st-edit-group { margin: 4px 0 8px; padding-left: 10px; border-left: 2px solid rgba(26,28,40,0.12); }
-        .avs-st-edit-grouphd { font-size: 13px; font-weight: bold; color: #1A1C28; margin: 6px 0 4px; }
+        .avs-st-editbar-hint { font-size: 12px; color: var(--os-ink-soft); }
+        .avs-st-edit-group { margin: 4px 0 8px; padding-left: 10px; border-left: 2px solid rgba(var(--os-ink-rgb), 0.12); }
+        .avs-st-edit-grouphd { font-size: 13px; font-weight: bold; color: var(--os-ink); margin: 6px 0 4px; }
         .avs-st-edit-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
-        .avs-st-edit-k { font-size: 12.5px; color: rgba(26,28,40,0.6); flex: 0 0 33%; min-width: 0; word-break: break-word; }
-        .avs-st-edit-input { flex: 1; min-width: 0; background: rgba(228,232,245,0.9); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
-        .avs-st-edit-input:focus { border-color: #1A1C28; background: #EEF0F6; }
+        .avs-st-edit-k { font-size: 12.5px; color: rgba(var(--os-ink-rgb), 0.6); flex: 0 0 33%; min-width: 0; word-break: break-word; }
+        .avs-st-edit-input { flex: 1; min-width: 0; background: rgba(var(--os-tint-rgb), 0.9); border: 1px solid rgba(var(--os-ink-rgb), 0.20); color: var(--os-ink); padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
+        .avs-st-edit-input:focus { border-color: var(--os-ink); background: var(--os-page-bg); }
         /* 實體（NPC）：名稱可改 + 標記刪除 */
-        .avs-st-edit-entity { margin: 6px 0; padding: 6px 0 6px 10px; border-left: 2px solid rgba(26,28,40,0.18); }
+        .avs-st-edit-entity { margin: 6px 0; padding: 6px 0 6px 10px; border-left: 2px solid rgba(var(--os-ink-rgb), 0.18); }
         .avs-st-edit-entityhd { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .avs-st-edit-name { flex: 1; min-width: 0; background: rgba(228,232,245,0.9); border: 1px solid rgba(26,28,40,0.25); color: #1A1C28; font-weight: bold; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
-        .avs-st-edit-name:focus { border-color: #1A1C28; background: #EEF0F6; }
+        .avs-st-edit-name { flex: 1; min-width: 0; background: rgba(var(--os-tint-rgb), 0.9); border: 1px solid rgba(var(--os-ink-rgb), 0.25); color: var(--os-ink); font-weight: bold; padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
+        .avs-st-edit-name:focus { border-color: var(--os-ink); background: var(--os-page-bg); }
         .avs-st-edit-del { flex-shrink: 0; width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(231,76,60,0.4); background: rgba(231,76,60,0.08); color: #e74c3c; font-size: 16px; line-height: 1; cursor: pointer; }
         .avs-st-edit-del:hover { background: rgba(231,76,60,0.18); }
         .avs-st-edit-entity.deleting { opacity: 0.55; }
         .avs-st-edit-entity.deleting .avs-st-edit-name { text-decoration: line-through; }
         .avs-st-edit-entity.deleting .avs-st-edit-del { background: #e74c3c; color: #fff; border-color: #e74c3c; }
-        .avs-st-empty { padding: 24px 16px; text-align: center; color: rgba(26,28,40,0.4); font-size: 12.5px; line-height: 1.9; background: rgba(228,232,245,0.6); border: 1px dashed rgba(26,28,40,0.15); border-radius: 10px; }
-        .avs-st-section { background: rgba(228,232,245,0.85); border: 1px solid rgba(26,28,40,0.12); border-radius: 10px; overflow: hidden; }
-        .avs-st-section-hd { font-size: 13px; font-weight: 800; color: #1A1C28; padding: 10px 14px; background: rgba(26,28,40,0.05); border-bottom: 1px solid rgba(26,28,40,0.08); }
+        .avs-st-empty { padding: 24px 16px; text-align: center; color: var(--os-ink-soft); font-size: 12.5px; line-height: 1.9; background: rgba(var(--os-tint-rgb), 0.6); border: 1px dashed rgba(var(--os-ink-rgb), 0.15); border-radius: 10px; }
+        .avs-st-section { background: rgba(var(--os-tint-rgb), 0.85); border: 1px solid rgba(var(--os-ink-rgb), 0.12); border-radius: 10px; overflow: hidden; }
+        .avs-st-section-hd { font-size: 13px; font-weight: 800; color: var(--os-ink); padding: 10px 14px; background: rgba(var(--os-ink-rgb), 0.05); border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.08); }
         .avs-st-section-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
-        .avs-st-entity { background: rgba(255,255,255,0.55); border: 1px solid rgba(26,28,40,0.10); border-radius: 8px; padding: 8px 10px; }
-        .avs-st-entity-hd { font-size: 12.5px; font-weight: 700; color: #3a3a50; margin-bottom: 6px; }
-        .avs-st-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px dashed rgba(26,28,40,0.07); }
+        .avs-st-entity { background: rgba(255,255,255,0.55); border: 1px solid rgba(var(--os-ink-rgb), 0.10); border-radius: 8px; padding: 8px 10px; }
+        .avs-st-entity-hd { font-size: 12.5px; font-weight: 700; color: var(--os-ink-soft); margin-bottom: 6px; }
+        .avs-st-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px dashed rgba(var(--os-ink-rgb), 0.07); }
         .avs-st-row:last-child { border-bottom: none; }
-        .avs-st-row-k { font-size: 12.5px; color: rgba(26,28,40,0.55); flex-shrink: 0; }
-        .avs-st-row-v { font-size: 13px; color: #1A1C28; font-weight: 600; text-align: right; word-break: break-word; }
+        .avs-st-row-k { font-size: 12.5px; color: var(--os-ink-soft); flex-shrink: 0; }
+        .avs-st-row-v { font-size: 13px; color: var(--os-ink); font-weight: 600; text-align: right; word-break: break-word; }
         .avs-st-row-v.solo { text-align: left; font-weight: 500; }
         .avs-st-chips { display: flex; flex-wrap: wrap; gap: 6px; }
         .avs-st-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(200,160,48,0.14); border: 1px solid rgba(200,160,48,0.3); color: #7a5e10; }
@@ -132,12 +132,12 @@
            吸頂：往下捲看設定清單時，分頁列留在原位好切換。 */
         .avs-adopt-tabs { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; max-height: 128px; overflow-y: auto; overflow-x: hidden;
             position: sticky; top: -6px; z-index: 2; padding: 6px 0 8px; margin-bottom: 10px;
-            border-bottom: 1px solid rgba(26,28,40,0.10); background: #eef1f8; scrollbar-width: thin; }
+            border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.10); background: var(--os-page-bg); scrollbar-width: thin; }
         .avs-adopt-tabs::-webkit-scrollbar { width: 4px; }
-        .avs-adopt-tabs::-webkit-scrollbar-thumb { background: rgba(26,28,40,0.2); border-radius: 2px; }
-        .avs-adopt-tab { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; padding: 4px 11px 4px 4px; border-radius: 999px; border: 1px solid rgba(26,28,40,0.15); background: transparent; color: rgba(26,28,40,0.6); font-size: 12px; cursor: pointer; max-width: 190px; }
-        .avs-adopt-tab.on { background: rgba(26,28,40,0.85); color: #EEF0F6; border-color: rgba(26,28,40,0.85); }
-        .avs-adopt-ava { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: rgba(26,28,40,0.10); }
+        .avs-adopt-tabs::-webkit-scrollbar-thumb { background: rgba(var(--os-ink-rgb), 0.2); border-radius: 2px; }
+        .avs-adopt-tab { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; padding: 4px 11px 4px 4px; border-radius: 999px; border: 1px solid rgba(var(--os-ink-rgb), 0.15); background: transparent; color: rgba(var(--os-ink-rgb), 0.6); font-size: 12px; cursor: pointer; max-width: 190px; }
+        .avs-adopt-tab.on { background: rgba(var(--os-ink-rgb), 0.85); color: var(--os-page-bg); border-color: rgba(var(--os-ink-rgb), 0.85); }
+        .avs-adopt-ava { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: rgba(var(--os-ink-rgb), 0.10); }
         .avs-adopt-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .avs-adopt-tab-n { flex-shrink: 0; opacity: 0.65; font-size: 11px; }
         .avs-adopt-panel { display: none; }
@@ -152,74 +152,74 @@
         .avs-st-init-prompt { width: 100%; box-sizing: border-box; min-height: 54px; margin-bottom: 14px; }
 
         /* 兩層換頁：第一層瀏覽入口 */
-        .avs-st-nav { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 16px 18px; font-size: 15px; font-weight: 700; color: #1A1C28; background: rgba(228,232,245,0.92); border: 1px solid rgba(26,28,40,0.12); border-radius: 12px; cursor: pointer; transition: .2s; }
-        .avs-st-nav:hover { background: #EEF0F6; box-shadow: 0 2px 8px rgba(26,28,40,0.06); }
+        .avs-st-nav { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 16px 18px; font-size: 15px; font-weight: 700; color: var(--os-ink); background: rgba(var(--os-tint-rgb), 0.92); border: 1px solid rgba(var(--os-ink-rgb), 0.12); border-radius: 12px; cursor: pointer; transition: .2s; }
+        .avs-st-nav:hover { background: var(--os-page-bg); box-shadow: 0 2px 8px rgba(var(--os-ink-rgb), 0.06); }
         .avs-st-nav-txt { min-width: 0; }
-        .avs-st-nav-sub { display: block; margin-top: 4px; font-size: 11.5px; font-weight: 400; color: rgba(26,28,40,0.5); line-height: 1.5; }
-        .avs-st-nav-chev { flex-shrink: 0; font-size: 22px; color: rgba(26,28,40,0.35); }
+        .avs-st-nav-sub { display: block; margin-top: 4px; font-size: 11.5px; font-weight: 400; color: var(--os-ink-soft); line-height: 1.5; }
+        .avs-st-nav-chev { flex-shrink: 0; font-size: 22px; color: var(--os-ink-soft); }
         /* 第二層：操作頁頭 + 返回 */
         .avs-st-l2hd { display: flex; align-items: center; gap: 12px; }
-        .avs-st-back { flex-shrink: 0; display: inline-flex; align-items: center; padding: 8px 14px; font-size: 13px; font-weight: 700; color: #1A1C28; background: rgba(228,232,245,0.9); border: 1px solid rgba(26,28,40,0.12); border-radius: 10px; cursor: pointer; transition: .2s; }
-        .avs-st-back:hover { background: #EEF0F6; }
-        .avs-st-l2title { font-size: 16px; font-weight: 800; color: #1A1C28; }
+        .avs-st-back { flex-shrink: 0; display: inline-flex; align-items: center; padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--os-ink); background: rgba(var(--os-tint-rgb), 0.9); border: 1px solid rgba(var(--os-ink-rgb), 0.12); border-radius: 10px; cursor: pointer; transition: .2s; }
+        .avs-st-back:hover { background: var(--os-page-bg); }
+        .avs-st-l2title { font-size: 16px; font-weight: 800; color: var(--os-ink); }
         /* 目前狀態操作頁的「複製狀態數據」小按鈕 */
         .avs-st-sm { padding: 7px 12px; font-size: 12px; flex-shrink: 0; }
         .avs-st-editbar-r { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         /* 摺疊版（記憶分頁 os_avs_memory.js 仍沿用） */
-        .avs-st-adv-btn { width: 100%; text-align: left; padding: 11px 14px; font-size: 13px; font-weight: 600; color: rgba(26,28,40,0.6); background: rgba(228,232,245,0.7); border: 1px solid rgba(26,28,40,0.12); border-radius: 10px; cursor: pointer; transition: .2s; }
+        .avs-st-adv-btn { width: 100%; text-align: left; padding: 11px 14px; font-size: 13px; font-weight: 600; color: rgba(var(--os-ink-rgb), 0.6); background: rgba(var(--os-tint-rgb), 0.7); border: 1px solid rgba(var(--os-ink-rgb), 0.12); border-radius: 10px; cursor: pointer; transition: .2s; }
         .avs-st-adv-btn::after { content: ' ▾'; float: right; }
         .avs-st-adv-btn.open::after { content: ' ▴'; }
-        .avs-st-adv-btn:hover { background: rgba(228,232,245,0.95); }
+        .avs-st-adv-btn:hover { background: rgba(var(--os-tint-rgb), 0.95); }
         .avs-st-adv { display: none; flex-direction: column; gap: 14px; padding: 4px 2px 2px; }
         .avs-st-adv.open, .avs-st-adv.is-page { display: flex; }
         .avs-st-adv-sec { display: flex; flex-direction: column; gap: 8px; }
-        .avs-st-adv-hd { font-size: 12px; font-weight: 700; color: rgba(26,28,40,0.78); }
-        .avs-st-adv-hint { font-weight: 400; color: rgba(26,28,40,0.55); margin-left: 6px; }
+        .avs-st-adv-hd { font-size: 12px; font-weight: 700; color: rgba(var(--os-ink-rgb), 0.78); }
+        .avs-st-adv-hint { font-weight: 400; color: var(--os-ink-soft); margin-left: 6px; }
         .avs-st-btn-grid { display: flex; gap: 8px; flex-wrap: wrap; }
         .avs-st-btn-grid .avs-btn { flex: 1; min-width: 110px; padding: 9px; font-size: 12px; }
         .avs-st-initpack { display: flex; gap: 8px; align-items: center; }
         .avs-st-initpack .avs-select { flex: 1; }
         .avs-st-wide { width: 100%; padding: 10px; font-size: 12.5px; }
-        .avs-st-gc { color: rgba(26,28,40,0.5); }
+        .avs-st-gc { color: var(--os-ink-soft); }
         .avs-btn.disabled { opacity: 0.4; pointer-events: none; }
 
         .avs-st-field-list { display: flex; flex-direction: column; gap: 6px; }
-        .avs-st-field { display: flex; align-items: flex-start; gap: 8px; background: rgba(228,232,245,0.7); border: 1px solid rgba(26,28,40,0.10); border-radius: 8px; padding: 8px 10px; }
+        .avs-st-field { display: flex; align-items: flex-start; gap: 8px; background: rgba(var(--os-tint-rgb), 0.7); border: 1px solid rgba(var(--os-ink-rgb), 0.10); border-radius: 8px; padding: 8px 10px; }
         .avs-st-field-main { flex: 1; min-width: 0; }
         .avs-st-field-row { display: flex; align-items: center; gap: 8px; }
-        .avs-st-field-name { font-size: 13px; font-weight: 700; color: #1A1C28; }
+        .avs-st-field-name { font-size: 13px; font-weight: 700; color: var(--os-ink); }
         .avs-st-field-type { font-size: 10px; color: #7a5e10; background: rgba(200,160,48,0.14); border: 1px solid rgba(200,160,48,0.3); border-radius: 4px; padding: 1px 6px; }
-        .avs-st-field-desc { font-size: 11.5px; color: rgba(26,28,40,0.7); margin-top: 3px; line-height: 1.5; }
+        .avs-st-field-desc { font-size: 11.5px; color: rgba(var(--os-ink-rgb), 0.7); margin-top: 3px; line-height: 1.5; }
         .avs-st-field-acts { display: flex; gap: 4px; flex-shrink: 0; }
-        .avs-st-field-act { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(26,28,40,0.15); background: transparent; color: rgba(26,28,40,0.5); cursor: pointer; font-size: 13px; }
-        .avs-st-field-act:hover { background: rgba(26,28,40,0.06); }
+        .avs-st-field-act { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(var(--os-ink-rgb), 0.15); background: transparent; color: var(--os-ink-soft); cursor: pointer; font-size: 13px; }
+        .avs-st-field-act:hover { background: rgba(var(--os-ink-rgb), 0.06); }
         .avs-st-field-act.danger { color: #e74c3c; border-color: rgba(231,76,60,0.3); }
-        .avs-st-field-add { text-align: center; padding: 9px; font-size: 12.5px; color: rgba(26,28,40,0.62); border: 1px dashed rgba(26,28,40,0.2); border-radius: 8px; cursor: pointer; }
-        .avs-st-field-add:hover { color: #1A1C28; background: rgba(228,232,245,0.7); }
+        .avs-st-field-add { text-align: center; padding: 9px; font-size: 12.5px; color: rgba(var(--os-ink-rgb), 0.62); border: 1px dashed rgba(var(--os-ink-rgb), 0.2); border-radius: 8px; cursor: pointer; }
+        .avs-st-field-add:hover { color: var(--os-ink); background: rgba(var(--os-tint-rgb), 0.7); }
 
-        .avs-st-field-edit { background: rgba(228,232,245,0.95); border: 1px solid rgba(200,160,48,0.4); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .avs-st-field-edit { background: rgba(var(--os-tint-rgb), 0.95); border: 1px solid rgba(200,160,48,0.4); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
         .avs-st-fe-row { display: flex; align-items: flex-start; gap: 8px; }
-        .avs-st-fe-label { font-size: 12px; color: rgba(26,28,40,0.5); width: 40px; flex-shrink: 0; padding-top: 8px; }
+        .avs-st-fe-label { font-size: 12px; color: var(--os-ink-soft); width: 40px; flex-shrink: 0; padding-top: 8px; }
         .avs-st-fe-actions { display: flex; gap: 8px; justify-content: flex-end; }
         .avs-st-fe-btn { padding: 7px 16px; font-size: 12px; }
 
         /* 跨世界管理 modal（亮色） */
         .avs-sm-modal { display: none; position: fixed; inset: 0; z-index: 100002; background: rgba(20,22,34,0.55); align-items: center; justify-content: center; padding: 20px; }
         .avs-sm-modal.active { display: flex; }
-        .avs-sm-card { width: min(680px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: #EEF0F6; border: 1px solid rgba(26,28,40,0.15); border-radius: 14px; padding: 18px; box-shadow: 0 16px 50px rgba(0,0,0,0.35); }
-        .avs-sm-title { font-size: 16px; font-weight: 800; color: #1A1C28; margin-bottom: 6px; }
-        .avs-sm-desc { font-size: 11.5px; color: rgba(26,28,40,0.45); line-height: 1.6; margin-bottom: 12px; }
+        .avs-sm-card { width: min(680px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: var(--os-page-bg); border: 1px solid rgba(var(--os-ink-rgb), 0.15); border-radius: 14px; padding: 18px; box-shadow: 0 16px 50px rgba(0,0,0,0.35); }
+        .avs-sm-title { font-size: 16px; font-weight: 800; color: var(--os-ink); margin-bottom: 6px; }
+        .avs-sm-desc { font-size: 11.5px; color: var(--os-ink-soft); line-height: 1.6; margin-bottom: 12px; }
         /* 🚨 overflow-x 一定要明寫 hidden：只寫 overflow-y:auto 時 x 會被算成 auto，
            裡面的角色卡分頁列就把整個清單往右撐開（分頁列自己反而不產生捲軸＝桌機拖不動、選不到後面的卡）。 */
-        .avs-sm-list { flex: 1; overflow-y: auto; overflow-x: hidden; border: 1px solid rgba(26,28,40,0.12); border-radius: 8px; padding: 6px; background: rgba(228,232,245,0.5); }
-        .avs-sm-tip { text-align: center; padding: 28px 10px; color: rgba(26,28,40,0.4); font-size: 12.5px; }
+        .avs-sm-list { flex: 1; overflow-y: auto; overflow-x: hidden; border: 1px solid rgba(var(--os-ink-rgb), 0.12); border-radius: 8px; padding: 6px; background: rgba(var(--os-tint-rgb), 0.5); }
+        .avs-sm-tip { text-align: center; padding: 28px 10px; color: var(--os-ink-soft); font-size: 12.5px; }
         .avs-sm-tip.err { color: #c0392b; }
-        .avs-sm-row { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px dashed rgba(26,28,40,0.1); }
+        .avs-sm-row { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px dashed rgba(var(--os-ink-rgb), 0.1); }
         .avs-sm-row.cur { background: rgba(200,160,48,0.1); border-radius: 6px; }
         .avs-sm-row-main { flex: 1; min-width: 0; overflow: hidden; }
-        .avs-sm-row-id { color: #3a3a50; font-size: 12px; font-family: monospace; word-break: break-word; overflow-wrap: break-word; }
+        .avs-sm-row-id { color: var(--os-ink-soft); font-size: 12px; font-family: monospace; word-break: break-word; overflow-wrap: break-word; }
         .avs-sm-row.cur .avs-sm-row-id { color: #7a5e10; font-weight: 700; }
-        .avs-sm-row-meta { font-size: 10px; color: rgba(26,28,40,0.4); margin-top: 3px; line-height: 1.5; }
+        .avs-sm-row-meta { font-size: 10px; color: var(--os-ink-soft); margin-top: 3px; line-height: 1.5; }
         .avs-sm-del { flex-shrink: 0; font-size: 14px; padding: 6px 12px; background: rgba(231,76,60,0.08); border: 1px solid rgba(231,76,60,0.3); color: #e74c3c; cursor: pointer; border-radius: 6px; }
         .avs-sm-del:hover { background: rgba(231,76,60,0.16); }
         .avs-sm-actions { display: flex; gap: 8px; margin-top: 12px; }
@@ -227,39 +227,39 @@
 
         /* ===== 📝 記憶分頁（os_avs_memory.js）—— 亮色，沿用 .avs-st-toggle / .avs-st-adv ===== */
         .avs-mem { display: flex; flex-direction: column; gap: 12px; }
-        .avs-mem-loading { padding: 30px; text-align: center; color: rgba(26,28,40,0.35); font-size: 13px; }
+        .avs-mem-loading { padding: 30px; text-align: center; color: var(--os-ink-soft); font-size: 13px; }
         .avs-mem-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; }
         .avs-mem-top-text { min-width: 0; }
-        .avs-mem-top-name { font-size: 14px; font-weight: 700; color: #1A1C28; }
-        .avs-mem-top-desc { font-size: 11.5px; color: rgba(26,28,40,0.45); margin-top: 3px; line-height: 1.5; }
-        .avs-mem-status { font-size: 12px; color: rgba(26,28,40,0.5); padding: 0 4px; }
-        .avs-mem-list-hd { font-size: 14px; font-weight: 800; color: #1A1C28; margin: 4px 2px 2px; flex-shrink: 0; }
+        .avs-mem-top-name { font-size: 14px; font-weight: 700; color: var(--os-ink); }
+        .avs-mem-top-desc { font-size: 11.5px; color: var(--os-ink-soft); margin-top: 3px; line-height: 1.5; }
+        .avs-mem-status { font-size: 12px; color: var(--os-ink-soft); padding: 0 4px; }
+        .avs-mem-list-hd { font-size: 14px; font-weight: 800; color: var(--os-ink); margin: 4px 2px 2px; flex-shrink: 0; }
         .avs-mem-list-hd-row { display: flex; align-items: center; gap: 8px; margin: 4px 2px 6px; flex-wrap: wrap; }
         .avs-mem-filter { display: flex; gap: 8px; flex: 1; min-width: 0; justify-content: flex-end; }
         .avs-mem-filter-sel { width: auto; min-width: 96px; flex: 0 1 auto; }
         .avs-mem-filter-search { flex: 1 1 90px; min-width: 0; max-width: 200px; }
         .avs-mem-list { display: flex; flex-direction: column; gap: 8px; }
-        .avs-mem-empty { padding: 24px 16px; text-align: center; color: rgba(26,28,40,0.4); font-size: 12.5px; line-height: 1.9; background: rgba(228,232,245,0.6); border: 1px dashed rgba(26,28,40,0.15); border-radius: 10px; }
-        .avs-mem-card { background: rgba(228,232,245,0.85); border: 1px solid rgba(26,28,40,0.12); border-radius: 10px; padding: 10px 12px; }
+        .avs-mem-empty { padding: 24px 16px; text-align: center; color: var(--os-ink-soft); font-size: 12.5px; line-height: 1.9; background: rgba(var(--os-tint-rgb), 0.6); border: 1px dashed rgba(var(--os-ink-rgb), 0.15); border-radius: 10px; }
+        .avs-mem-card { background: rgba(var(--os-tint-rgb), 0.85); border: 1px solid rgba(var(--os-ink-rgb), 0.12); border-radius: 10px; padding: 10px 12px; }
         .avs-mem-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
         .avs-mem-type { font-size: 11px; font-weight: 700; color: #7a5e10; background: rgba(200,160,48,0.14); border: 1px solid rgba(200,160,48,0.3); border-radius: 999px; padding: 2px 10px; }
         .avs-mem-del { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(231,76,60,0.3); background: transparent; color: #e74c3c; cursor: pointer; font-size: 15px; line-height: 1; flex-shrink: 0; }
         .avs-mem-del:hover { background: rgba(231,76,60,0.12); }
-        .avs-mem-text { font-size: 13px; color: #1A1C28; line-height: 1.6; word-break: break-word; }
+        .avs-mem-text { font-size: 13px; color: var(--os-ink); line-height: 1.6; word-break: break-word; }
         .avs-mem-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-        .avs-mem-tag { font-size: 10.5px; color: rgba(26,28,40,0.55); background: rgba(26,28,40,0.06); border-radius: 4px; padding: 1px 7px; }
+        .avs-mem-tag { font-size: 10.5px; color: var(--os-ink-soft); background: rgba(var(--os-ink-rgb), 0.06); border-radius: 4px; padding: 1px 7px; }
         .avs-mem-cfg { display: flex; flex-direction: column; gap: 8px; }
-        .avs-mem-fld { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(26,28,40,0.55); }
+        .avs-mem-fld { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--os-ink-soft); }
         .avs-mem-fld > span { flex-shrink: 0; width: 56px; }
         .avs-mem-fld .avs-input { flex: 1; }
         .avs-mem-fld.avs-mem-chk { align-items: flex-start; }
         .avs-mem-fld.avs-mem-chk > span { width: auto; flex: 1; min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
         .avs-mem-chk input { margin-top: 2px; flex-shrink: 0; }
         .avs-mem-num { max-width: 90px; }
-        .avs-mem-test-result { font-size: 12px; min-height: 16px; margin-top: 4px; color: rgba(26,28,40,0.5); }
+        .avs-mem-test-result { font-size: 12px; min-height: 16px; margin-top: 4px; color: var(--os-ink-soft); }
         .avs-mem-test-result.ok { color: #2e7d32; }
         .avs-mem-test-result.err { color: #c0392b; }
-        .avs-mem-srchint { font-size: 11px; color: rgba(26,28,40,0.4); line-height: 1.5; }
+        .avs-mem-srchint { font-size: 11px; color: var(--os-ink-soft); line-height: 1.5; }
         .avs-mem-move { display: flex; gap: 8px; align-items: center; }
         .avs-mem-move .avs-input { flex: 1; min-width: 0; }
         .avs-mem-move .avs-btn { flex: 0 0 auto; padding: 8px 14px; font-size: 12px; white-space: nowrap; }
@@ -277,14 +277,14 @@
         .avs-st-toggle-row { min-height: 58px; padding: 16px 18px; border-radius: 12px; }
         .avs-st-toggle-name { font-size: 15px; }
         .avs-st-toggle-desc { max-width: 38em; font-size: 12px; line-height: 1.65; }
-        .avs-st-toggle { box-shadow: inset 0 0 0 1px rgba(26,28,40,.08); }
+        .avs-st-toggle { box-shadow: inset 0 0 0 1px rgba(var(--os-ink-rgb), .08); }
 
         /* 目前狀態預設可見；標題與手動修正操作保持在同一個清楚的工具列。 */
-        .avs-st-cur-editbar { justify-content: space-between; padding: 12px 14px; margin: 0; background: rgba(26,28,40,.045); border: 1px solid rgba(26,28,40,.12); border-radius: 10px 10px 0 0; }
+        .avs-st-cur-editbar { justify-content: space-between; padding: 12px 14px; margin: 0; background: rgba(var(--os-ink-rgb), .045); border: 1px solid rgba(var(--os-ink-rgb), .12); border-radius: 10px 10px 0 0; }
         .avs-st-editbar-hint { flex: 1; min-width: 120px; }
-        .avs-st-current-body { gap: 12px; padding: 12px; background: rgba(228,232,245,.48); border: 1px solid rgba(26,28,40,.12); border-top: 0; border-radius: 0 0 10px 10px; }
+        .avs-st-current-body { gap: 12px; padding: 12px; background: rgba(var(--os-tint-rgb), .48); border: 1px solid rgba(var(--os-ink-rgb), .12); border-top: 0; border-radius: 0 0 10px 10px; }
         .avs-st-current-body .avs-st-empty { margin: 0; }
-        .avs-st-section { border-radius: 10px; box-shadow: 0 1px 2px rgba(26,28,40,.04); }
+        .avs-st-section { border-radius: 10px; box-shadow: 0 1px 2px rgba(var(--os-ink-rgb), .04); }
         .avs-st-section-hd { padding: 12px 14px; font-size: 13.5px; }
         .avs-st-section-body { padding: 12px 14px; }
         .avs-st-row { gap: 16px; padding: 6px 0; }
@@ -292,17 +292,17 @@
         .avs-st-row-v { line-height: 1.45; }
 
         /* 進階功能改成有明確邊界的工作區，不再像一整片按鈕牆。 */
-        .avs-st-adv-btn { padding: 14px 16px; font-size: 14px; color: #1A1C28; background: rgba(228,232,245,.92); }
+        .avs-st-adv-btn { padding: 14px 16px; font-size: 14px; color: var(--os-ink); background: rgba(var(--os-tint-rgb), .92); }
         .avs-st-adv { gap: 12px; padding: 2px 0; }
-        .avs-st-adv-sec { gap: 10px; padding: 14px; background: rgba(228,232,245,.62); border: 1px solid rgba(26,28,40,.11); border-radius: 10px; }
-        .avs-st-adv-hd { font-size: 13px; color: #1A1C28; }
+        .avs-st-adv-sec { gap: 10px; padding: 14px; background: rgba(var(--os-tint-rgb), .62); border: 1px solid rgba(var(--os-ink-rgb), .11); border-radius: 10px; }
+        .avs-st-adv-hd { font-size: 13px; color: var(--os-ink); }
         .avs-st-adv-hint { display: block; margin: 4px 0 0; line-height: 1.55; }
         .avs-st-btn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         .avs-st-btn-grid.col1 { grid-template-columns: 1fr; }   /* 一欄堆疊：兩顆按鈕並排易誤會時用 */
         .avs-st-btn-grid.col3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }   /* 三顆一排：狀態頁的抽取/整理/還原 */
         .avs-st-btn-grid .avs-btn { width: 100%; min-width: 0; min-height: 42px; padding: 9px 10px; line-height: 1.35; }
         /* 📦 我的檔案（#avs-view-packs，第一層瀏覽頁）：標題要看得清、建檔按鈕一欄堆疊 */
-        .avs-packs-title { font-size: 13px; font-weight: 700; color: #1A1C28; margin-top: 6px; padding-top: 14px; border-top: 1px solid rgba(26,28,40,0.10); }
+        .avs-packs-title { font-size: 13px; font-weight: 700; color: var(--os-ink); margin-top: 6px; padding-top: 14px; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
         .avs-st-initpack { align-items: stretch; padding-top: 2px; }
         .avs-st-initpack .avs-btn { min-width: 68px; }
         .avs-st-wide { min-height: 42px; text-align: left; justify-content: flex-start; }
@@ -312,7 +312,7 @@
         /* 導演模式：開關 + 工具鈕併成同一張卡（avs-st-director-card），關閉時只剩開關列。 */
         .avs-st-director-card .avs-st-toggle-row { padding: 0; min-height: 0; }
         .avs-st-director-tools { display: none; }
-        .avs-st-director-tools.is-visible { display: block; margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(26,28,40,0.10); }
+        .avs-st-director-tools.is-visible { display: block; margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
         .avs-st-director-editor { display: none; margin-top: 12px; }
         .avs-st-director-editor.open { display: block; }
         .avs-st-director-text { min-height: 220px; }

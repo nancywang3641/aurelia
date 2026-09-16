@@ -51,7 +51,7 @@
     width: 36px; flex-shrink: 0; border: 1px solid var(--acg-line); border-radius: 8px;
     background: var(--acg-card); color: var(--acg-ink); cursor: pointer;
 }
-.acg-tool:hover { border-color: rgba(var(--os-ink-rgb), 0.35); }
+.acg-tool:hover { border-color: var(--os-ink-soft); }
 .acg-root:not(.acg-has-wb) .acg-wb-only { display: none; }
 
 .acg-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
@@ -90,7 +90,7 @@
 .acg-slot.is-bad { border-color: rgba(194,65,58,0.55); }
 .acg-slot-img {
     aspect-ratio: 3 / 4; border-radius: 8px; overflow: hidden;
-    display: flex; align-items: center; justify-content: center; color: rgba(var(--os-ink-rgb), 0.25); font-size: 28px;
+    display: flex; align-items: center; justify-content: center; color: var(--os-ink-soft); font-size: 28px;
     background-color: rgb(var(--os-tint-rgb));
     background-image: linear-gradient(45deg, rgba(var(--os-ink-rgb), 0.12) 25%, transparent 25%), linear-gradient(-45deg, rgba(var(--os-ink-rgb), 0.12) 25%, transparent 25%),
                       linear-gradient(45deg, transparent 75%, rgba(var(--os-ink-rgb), 0.12) 75%), linear-gradient(-45deg, transparent 75%, rgba(var(--os-ink-rgb), 0.12) 75%);
@@ -118,14 +118,14 @@
     border-style: dashed; background: transparent; color: var(--acg-sub); font-size: 13px;
 }
 .acg-slot-add i { font-size: 20px; }
-.acg-slot-add:hover { color: var(--acg-ink); border-color: rgba(var(--os-ink-rgb), 0.35); }
+.acg-slot-add:hover { color: var(--acg-ink); border-color: var(--os-ink-soft); }
 
 .acg-mini {
     display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px;
     border: 1px solid var(--acg-line); border-radius: 7px; background: var(--os-page-bg);
     color: var(--acg-ink); font-size: 12px; cursor: pointer; white-space: nowrap;
 }
-.acg-mini:hover { border-color: rgba(var(--os-ink-rgb), 0.35); }
+.acg-mini:hover { border-color: var(--os-ink-soft); }
 .acg-mini-icon { padding: 5px 8px; }
 .acg-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px;
@@ -174,7 +174,7 @@
     padding: 4px 10px; font-size: 12px; line-height: 1.4; font-family: inherit;
     color: var(--os-ink); background: var(--os-surface); border: 1px solid rgba(var(--os-ink-rgb), 0.25); border-radius: 4px; cursor: pointer;
 }
-.acg-open-chip:hover { border-color: rgba(var(--os-ink-rgb), 0.5); }
+.acg-open-chip:hover { border-color: var(--os-ink-soft); }
 
 /* ── 窄的時候（手機、酒館裡的手機殼）：名單變成上面一排橫的 ── */
 @container (max-width: 720px) {

@@ -1063,21 +1063,21 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 <button class="pm-bundle-save" id="st-modal-import">匯入選中</button>
             </div>
             <div class="pm-bmodal-body">
-                <div style="font-size:12px; color:rgba(26,28,40,0.72); margin-bottom:12px; line-height:1.4;">
+                <div style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.72); margin-bottom:12px; line-height:1.4;">
                     系統掃描到這是一個 ST Preset。<br>請勾選你想提取並轉換為「本地條目」的提示詞區塊：
                 </div>
         `;
 
         stBlocks.forEach((b, idx) => {
             html += `
-                <div class="pm-staging-entry" style="margin-bottom:8px; border-color:rgba(26,28,40,0.15);">
+                <div class="pm-staging-entry" style="margin-bottom:8px; border-color:rgba(var(--os-ink-rgb), 0.15);">
                     <div class="pm-staging-head">
-                        <input type="checkbox" class="st-block-cb" data-idx="${idx}" checked style="width:16px; height:16px; accent-color:#1A1C28;">
-                        <span class="pm-staging-name" style="color:#1A1C28;">${b.title}</span>
+                        <input type="checkbox" class="st-block-cb" data-idx="${idx}" checked style="width:16px; height:16px; accent-color:var(--os-ink);">
+                        <span class="pm-staging-name" style="color:var(--os-ink);">${b.title}</span>
                         <button class="pm-icon-btn" onclick="this.parentElement.nextElementSibling.classList.toggle('open')"><i class="fa-solid fa-eye"></i> 預覽</button>
                     </div>
                     <div class="pm-staging-body" style="padding:0 10px 10px; display:none;">
-                        <textarea class="pm-entry-ta" readonly style="height:100px; color:#3A3F5C; border-color:rgba(26,28,40,0.15);">${b.content.replace(/</g, '&lt;')}</textarea>
+                        <textarea class="pm-entry-ta" readonly style="height:100px; color:var(--os-ink-soft); border-color:rgba(var(--os-ink-rgb), 0.15);">${b.content.replace(/</g, '&lt;')}</textarea>
                     </div>
                 </div>
             `;
