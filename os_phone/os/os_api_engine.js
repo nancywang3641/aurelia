@@ -1382,6 +1382,16 @@
                 if (frequency_penalty !== undefined) extraParams.frequency_penalty = frequency_penalty;
                 if (presence_penalty !== undefined) extraParams.presence_penalty = presence_penalty;
 
+                // 主模型的自訂前置指令：直連（自己填網址）與托管這兩條以前從來沒吃到，只有走酒館連線的 🍎 那條才插。
+                //   她在 PWA 上填了主模型那格沒作用；副模型是在入口就插，所以一直有。這裡補直連那份，🍎 那條照舊、兩邊互斥不會插兩次。
+                //   自訂通道不帶（跟分流那邊一致）；副模型那份 chatSecondary 已經插過。
+                if (!useSystemApi && !config._isSecondary && !config._channel) {
+                    const _cm = config.customCotMap || {};
+                    const _ck = (config.stProfileId && String(config.stProfileId).trim()) ? String(config.stProfileId) : '__none__';
+                    const _cc = (_ck in _cm) ? (_cm[_ck] || '') : (config.customCot || '');
+                    if (_cc && String(_cc).trim()) cleanMessages = [{ role: 'system', content: String(_cc) }, ...cleanMessages];
+                }
+
                 const commonBody = {
                     model: config.model, messages: cleanMessages,
                     stream: false, max_tokens: maxTokens, temperature: temperature,

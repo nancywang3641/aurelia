@@ -1205,17 +1205,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="os-st-profile">${primaryProfileOpts}</select>
                                 <div id="st-profile-info" style="margin-top:6px; font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); word-break:break-all; line-height:1.6;"></div>
-                                <details style="margin-top:12px; border-top:1px solid rgba(var(--os-ink-rgb), 0.10); padding-top:10px;">
-                                    <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在所有訊息最前面；只在用酒館連線時生效，自己填網址那條與副模型不受影響。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
-                                    <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                                    <div class="set-desc">留空＝不注入。</div>
-                                </details>
                             </div>
                         </div>
 
                         <div class="set-group" id="manual-api-group">
                             <div><div class="set-label">手動 API 地址</div><input class="set-input" id="os-api-url" placeholder="http://..." value="${llmConfig.url}"></div>
                             <div style="margin-top:10px;"><div class="set-label">API Key</div><input class="set-input" id="os-api-key" type="password" value="${llmConfig.key}"></div>
+                        </div>
+
+                        <!-- 主模型的自訂前置指令：以前藏在「用酒館的連線」那格底下，PWA 沒有酒館整格不顯示、直連也沒吃到；
+                             現在跟副模型一樣自己一格，酒館連線時每個連接預設各記各的，自己填網址時只有一份。 -->
+                        <div class="set-group">
+                            <details>
+                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在主模型所有訊息最前面；直連、托管、酒館連線都生效。用酒館連線時每個連接預設各記各的。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
+                                <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在主模型訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                                <div class="set-desc">留空＝不注入。</div>
+                            </details>
                         </div>
 
                         <div class="set-group">
