@@ -2098,6 +2098,37 @@
         // --- 4.5 獨立模式：劇情正文當背景（酒館那條路的 ### Reality Context 對應物）---
         //   資料源是 OS_DB 章節（by storyId），不是聊天樓；保留幾章全文走全系統唯一那格 ctxChapters
         //   （N＝最近 N 章全文、0＝全部只讀摘要、null＝全送），更舊的縮成摘要，跟劇情面板同一套。
+        // 應用與組件叫模型時，任務指令前面接的背景。酒館版 app_runtime 自己從酒館拿（角色卡、最近二十則、角色世界書、大總結）；
+        //   PWA 沒有酒館，以前一個字都沒接 → 模型只看到「前置指令＋一段任務」，同一份提示、同一個模型在酒館能出、在 PWA 直接道歉。
+        //   這裡照酒館那份的四塊，從 PWA 自己的來源拿：人設、世界書（同樣截 4000）、大總結、最近劇情（跟劇情面板同一套截法）。
+        //   酒館裡回空字串，app_runtime 那邊自己拿的不動。
+        appContextBlock: async function () {
+            if (!this.isStandalone()) return '';
+            let ctx = '';
+            try {
+                const p = (win.OS_PERSONA && win.OS_PERSONA.getCurrent) ? (win.OS_PERSONA.getCurrent() || {}) : {};
+                const n = String(p.name || '').trim(), d = String(p.description || p.desc || '').trim();
+                if (n || d) ctx += '【主角】' + n + '\n' + d + '\n\n';
+            } catch (e) {}
+            try {
+                if (win.OS_WORLDBOOK && win.OS_WORLDBOOK.getEnabledContext) {
+                    let lore = String((await win.OS_WORLDBOOK.getEnabledContext('')) || '');
+                    if (lore.length > 4000) lore = lore.slice(0, 4000);
+                    if (lore.trim()) ctx += '【世界設定】\n' + lore + '\n\n';
+                }
+            } catch (e) {}
+            try {
+                if (win.OS_STORY_TOOLS && win.OS_STORY_TOOLS.getCurrentInjectionPayload && localStorage.getItem('sp_app_inject_summary') !== '0') {
+                    const sm = await win.OS_STORY_TOOLS.getCurrentInjectionPayload();
+                    if (sm && String(sm).trim()) ctx += '【劇情總結(至今為止的長期記憶，延續勿矛盾)】\n' + String(sm).trim() + '\n\n';
+                }
+            } catch (e) {}
+            try {
+                const st = await this._buildStoryReality(this.getGlobalUserName());
+                if (st && String(st).trim()) ctx += '【最近劇情】\n' + String(st).trim() + '\n\n';
+            } catch (e) {}
+            return ctx;
+        },
         _buildStoryReality: async function(userName) {
             if (!win.OS_DB?.getAllVnChapters) return '';
             const _sid = (win.OS_AVS_ADAPTER?.getStoryId?.()) || localStorage.getItem('vn_current_story_id') || '';

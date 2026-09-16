@@ -59,6 +59,8 @@
             +     'try { if (TH && TH.getCharWorldbookNames && TH.getWorldbook) { var nm = TH.getCharWorldbookNames("current"); var bks = []; if (nm) { if (nm.primary) bks.push(nm.primary); if (Array.isArray(nm.additional)) bks = bks.concat(nm.additional); } var lore=""; for (var i=0;i<bks.length;i++){ var es = await TH.getWorldbook(bks[i]); (es||[]).forEach(function(e){ if (e && e.enabled !== false && e.content) lore += e.content + "\\n"; }); } if (lore) { if (lore.length>4000) lore=lore.slice(0,4000); ctx += "【角色設定書】\\n" + lore + "\\n\\n"; } } } catch(e){}'
             // ── 劇情長期記憶：補酒館大總結壓縮版(工坊 APP 只吃最近20則+無總結→對被總結的舊劇情失憶)；關閉 localStorage sp_app_inject_summary=0 ──
             +     'try { if (P.localStorage.getItem("sp_app_inject_summary") !== "0") { var GS = P.OS_STORY_TOOLS; if (GS && GS.getCurrentInjectionPayload) { var sm = await GS.getCurrentInjectionPayload(); if (sm && sm.trim()) ctx += "【劇情總結(至今為止的長期記憶，延續勿矛盾)】\\n" + sm + "\\n\\n"; } } } catch(e){}'
+            // PWA 沒有酒館，上面那三段全空 → 問引擎拿 PWA 自己的背景（人設、世界書、大總結、最近劇情），不然模型只看到一段任務
+            +     'try { if (!ctx && P.OS_API && P.OS_API.appContextBlock) ctx = await P.OS_API.appContextBlock(); } catch(e){}'
             +     'var full = (ctx ? (ctx + "----\\n以下是你這次的任務指令，請嚴格遵守(上面只是背景參考)：\\n") : "") + sys;'
             +     'var OS = window.OS_API; if (!OS || !OS.chat) throw new Error("OS_API 不可用");'
             +     'var cfg = (P.OS_SETTINGS && P.OS_SETTINGS.getConfig && P.OS_SETTINGS.getConfig()) || {};'

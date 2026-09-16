@@ -2944,8 +2944,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     let cfg = (S && S.getConfig && S.getConfig()) || {};
                     // 同創作室主對話：夾住 maxTokens，避免 gemini/vertex「maxOutputTokens 超過上限」
                     cfg = Object.assign({}, cfg, { usePresetPrompts: false, enableThinking: false, maxTokens: Math.min(parseInt(cfg.maxTokens) || 8192, 32768) });
+                    let _ctx = '';   // PWA：任務前面接背景（同 vn_dynamic_parser／app_runtime）；酒館裡引擎回空
+                    try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}
+                    const _full = (_ctx ? (_ctx + '----\n以下是你這次的任務指令，請嚴格遵守(上面只是背景參考)：\n') : '') + String(systemPrompt || '');
                     return await new Promise((res, rej) => {
-                        OS.chat([{ role: 'system', content: String(systemPrompt || '') }], cfg, null,
+                        OS.chat([{ role: 'system', content: _full }], cfg, null,
                             t => res(typeof t === 'string' ? t : (t && t.message) || ''), rej,
                             { task: 'apps', disableTyping: true });
                     });
