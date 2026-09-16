@@ -756,7 +756,16 @@
 .aps-home.aps-editing .aps-w:hover,
 .aps-home.aps-editing .aps-w:active { transform: none; }
 /* 跟著手指走的那一份：不要搖、加深陰影看得出被拿起來 */
-.aps-drag-ghost.aps-w { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35); }
+/* 🚨🚨 跟著手指走的那一份「一定要脫離版面」。
+   上面那條 .aps-drag-ghost 是絕對定位，但組件那條 .aps-w 的相對定位寫在它後面、權重又一樣
+   → 組件的贏。於是被拿起來的組件變成主畫面上一個真的格子，還帶著「跨兩欄」，
+   主畫面那層就被它開出新的欄：圖標全擠到左半邊、底部那排被推到畫面中間。
+   她每拖一次拍立得就爆一次，就是這個。這裡把定位與跨欄一起收回來。 */
+.aps-drag-ghost.aps-w {
+    position: absolute;
+    grid-column: auto; grid-row: auto;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+}
 .aps-drag-ghost .aps-w-body { animation: none !important; }
 .aps-drag-ghost .aps-w-cog { display: none !important; }
 

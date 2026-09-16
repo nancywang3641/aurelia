@@ -717,14 +717,21 @@
     //   本來是用「手指正壓在誰身上」判斷，圖標小的時候沒問題；組件跨兩欄又比較高，
     //   手指得先整個離開組件本身才會有反應 —— 體感就是拖不動、卡卡的。
     function _nearestCell(ev, box, src) {
+        const dist2 = function (el) {
+            const r = el.getBoundingClientRect();
+            const dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
+            return dx * dx + dy * dy;
+        };
         let best = null, bestD = Infinity;
         [...box.children].forEach(function (el) {
             if (el === src || !el.classList || !el.classList.contains('aps-icon')) return;
-            const r = el.getBoundingClientRect();
-            const dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
-            const d = dx * dx + dy * dy;
+            const d = dist2(el);
             if (d < bestD) { bestD = d; best = el; }
         });
+        // 🚨 手指還比較靠近「自己原本那一格」就不要換：不加這道，手指在組件上稍微動一下
+        //    就會整排重排，變成另一種難用（大組件很寬，中心附近的小移動不該算是要換位）。
+        //    src 不在這個容器裡（從底部那排拖上來）就沒有這個問題，照舊。
+        if (best && src && src.parentElement === box && dist2(src) <= bestD) return null;
         return best;
     }
     function _dragOver(ev) {
