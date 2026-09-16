@@ -62,7 +62,7 @@
             // PWA 沒有酒館，上面那三段全空 → 問引擎拿 PWA 自己的背景（人設、世界書、大總結、最近劇情），不然模型只看到一段任務
             +     'try { if (!ctx && P.OS_API && P.OS_API.appContextBlock) ctx = await P.OS_API.appContextBlock(); } catch(e){}'
             // 排法：背景一則 system、任務一則 user。曾試過借正文整包（一萬多字＋叫它寫視覺小說那批條目），那是為了追一顆壞掉的舊 app 才硬接的，退掉。
-            +     'var msgs = []; if (ctx) msgs.push({role:"system", content: ctx + "----\\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。"}); msgs.push({role:"user", content: "（這一則是手機應用發出的生成要求，不是主角在說話。）\\n" + sys});'   // 標清楚不是主角開口：她的人設就叫 User，會撞
+            +     'var msgs = []; if (ctx) msgs.push({role:"system", content: ctx + "----\\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。"}); msgs.push({role:"user", content: sys});'   // 那一則是指令還是使用者在 app 裡打的話，由 app 自己的指令寫清楚，引擎不標
             +     'var OS = window.OS_API; if (!OS || !OS.chat) throw new Error("OS_API 不可用");'
             +     'var cfg = (P.OS_SETTINGS && P.OS_SETTINGS.getConfig && P.OS_SETTINGS.getConfig()) || {};'
             +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false, maxTokens: Math.max(parseInt(cfg.maxTokens)||0, 8192) });'   // 思考照主模型設定走；字數上限保底 8192 同正文那條（思考模型先吃上限，太小就回空）
