@@ -74,6 +74,7 @@
                                 <button class="studio-type active" data-type="純展示" type="button"><b>純展示</b><span>把劇情資料漂亮顯示出來</span></button>
                                 <button class="studio-type" data-type="純應用" type="button"><b>純應用</b><span>按一下就生成內容或圖</span></button>
                                 <button class="studio-type" data-type="共用" type="button"><b>共用</b><span>既顯示資料，又能生成</span></button>
+                                <button class="studio-type" data-type="主畫面組件" type="button"><b>主畫面組件</b><span>擺在手機主畫面上的一小塊</span></button>
                             </div>
                             <!-- 誰來做：主接口／宿舍住戶。只有宿舍接上橋時才出現（沒小機的人看不到這格）-->
                             <div class="studio-iface-wrap" id="studio-iface-wrap" hidden>
@@ -166,7 +167,7 @@
                     <div style="color:#9b59b6; cursor:pointer; font-size:20px;" id="studio-import-close"><i class="fa-solid fa-xmark"></i></div>
                 </div>
                 <div style="font-size:11px; color:rgba(125,60,174,0.85); line-height:1.6;">
-                    把你的 AI 照「創建說明書」產出的 <strong>&lt;json&gt;…&lt;/json&gt;</strong> 整段貼進來，按「載入預覽」檢查；OK 後到上方按「確定創建」存起來（純展示→VN組件、應用/共用→我的應用），就能用了。
+                    把你的 AI 照「創建說明書」產出的 <strong>&lt;json&gt;…&lt;/json&gt;</strong> 整段貼進來，按「載入預覽」檢查；OK 後到上方按「確定創建」存起來（純展示→VN組件、應用/共用→我的應用、主畫面組件→手機主畫面的「組件」），就能用了。
                 </div>
                 <textarea id="studio-import-textarea" placeholder="&lt;json&gt;{ ... }&lt;/json&gt;" style="flex:1; min-height:46vh; max-height:62vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
                 <div id="studio-import-status" style="font-size:11px; color:rgba(26,28,40,0.6); min-height:14px;"></div>
@@ -196,7 +197,7 @@
             name: 'VN UI 煉丹',
             prompt: `你是 UI 工程師，替一個視覺小說引擎做「面板」。你看不到引擎的程式碼，你能用的東西全部寫在這份說明裡；沒寫的就是沒有。
 
-使用者每則訊息開頭會標【類型：X】，X 是 純展示／純應用／共用 之一。三種類型的規則各自完整寫在第 2 節，照那一段做，別問；沒標＝純展示。
+使用者每則訊息開頭會標【類型：X】，X 是 純展示／純應用／共用／主畫面組件 之一。四種類型的規則各自完整寫在第 2 節，照那一段做，別問；沒標＝純展示。
 
 ## 1. 做事方式
 - 使用者要什麼就做什麼。主題、風格、結構、元素以使用者描述為準；要 A 給 A，別換成你覺得更好的 B。真有更好的點子，做完之後一兩句附帶提。
@@ -245,9 +246,18 @@
   生成出來的東西只進 st.feed，不送進劇情、不進記憶。只有使用者按了才生。
 - 返回：標題列固定一顆返回鈕綁 onComplete。
 
+### 2d. 主畫面組件：擺在手機主畫面上的一小塊
+- 落點：手機主畫面，跟應用圖標並排的一格。它不嵌進劇情正文，也不是點開來用的 App。
+- 大小由使用者自己選（兩欄寬的方塊、整排、整排加高，三種），所以版面要能縮放：用相對單位排，不要寫死寬度。內容超出那一格會被裁掉，重要的東西不要放在邊緣。
+- 只做「看一眼就知道」的東西。不要按鈕、輸入框、分頁、捲軸、彈窗——要動手的東西請做成 App。
+- 拿不到劇情資料，也不要呼叫任何 st.*：這一類只取畫面與樣式，那段程式不會被執行。js 給空字串。
+- 不要出口鈕：它不是開起來的東西，沒有要關。
+- 那一格很小，字級與間距都要比平常大一階；寧可少放一點，不要擠成一團。
+- isBlock 給 false，不需要 demoFormat。
+
 ## 3. 所有類型都要守的鐵律
 - 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.getContacts、st.wbLoad、st.user、st.getStory。
-- 每個面板都必須自帶一顆綁 onComplete 的出口鈕，三種類型都一樣。造型跟主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角，一眼看得到，flex-shrink:0 不被內容擠走。別幾秒自動消失、別靠手機殼的橫槓代替。少了這顆使用者回不去主畫面。
+- 每個面板都必須自帶一顆綁 onComplete 的出口鈕，純展示／純應用／共用都一樣（主畫面組件沒有出口鈕，見 2d）。造型跟主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角，一眼看得到，flex-shrink:0 不被內容擠走。別幾秒自動消失、別靠手機殼的橫槓代替。少了這顆使用者回不去主畫面。
 - 捲動與溢出：只有「會變長的那一個內容區」給 flex:1; min-height:0; overflow-y:auto；標題、圖示、裝飾、按鈕一律 flex-shrink:0；父容器 display:flex; flex-direction:column，卡本體 overflow:hidden。否則內容一多，固定元素被擠出去。同一個盒子不能又要內部捲動裁切又要讓某元素溢出邊緣；真要溢出裝飾就拆兩層：外層 overflow:visible 放 position:absolute 的裝飾，內層 overflow:hidden 負責捲動。
 - CSS 只能寫在 .vn-dynamic-panel-<tagId> 前綴底下。禁 position:fixed、禁 position:absolute 配 top/left 自定位、禁 100vw、100vh、禁在 body／html 設樣式、禁寫死固定像素寬。
 - 主題化：外形跟面板用途綁定（寶箱、卷軸、通訊終端、檔案夾、契約書、地圖板、懸賞令，依用途挑、別每次同一個）；資訊融進主體結構（鎖孔、封蠟、寶石槽、紙頁、銘牌），不是另開方塊貼上去；至少一個 SVG 或 CSS 造型當視覺主體；按鈕像拉桿、封印、鑰匙孔這種跟主體一體的互動件。
@@ -347,6 +357,16 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
                     await syncActiveTagsToLocal();
                     // 🔀 按開頭選的型別分流：純展示→只進 VN組件；純應用→只裝手機 app；共用→兩邊都要（劇情渲染＋裝成 app，讀同一份資料）
                     let _aid = null;
+                    // 🧩 主畫面組件走自己那條：它不嵌進劇情正文、也不是點開來用的應用，
+                    //    是擺在手機主畫面上的一小塊。她原話：「轉到 vn 組件這，這裡創建會不會搞混啊?」——
+                    //    會，所以現在開頭就分清楚，做出來直接進「組件」、不會跑到 VN 組件那邊。
+                    if (_vnPanelType === '主畫面組件') {
+                        const _w = _installTemplateAsHomeWidget(data);
+                        AUI.alert(_w
+                            ? ('「' + _w.name + '」做好了，已經放上手機主畫面。想換大小或拿下來，到手機的「組件」。')
+                            : '做好了，但放上主畫面失敗——到手機的「組件」看看。');
+                        return;
+                    }
                     if (_vnPanelType !== '純展示') {
                         _aid = await _installTemplateAsPhoneApp(data);   // 先裝 app，下面 init 才抓得到它的 id 建「模板→app」對照
                     }
@@ -493,7 +513,7 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
 
     function getChatSessionId() { return currentMode; }
 
-    function launch(container, landMode) {
+    function launch(container, landMode, panelType) {
         _landedDirect = !!landMode;   // 帶 landMode＝工坊直接入場，返回要一步退回工坊（別再落到孤兒首頁）
         const root = container || document.getElementById('aurelia-tab-container') || document.getElementById('aurelia-phone-screen') || document.body;
         try { syncActiveTagsToLocal(); } catch (e) {}   // 開創作室即用最新格式重組啟用組件說明（給注入器讀）
@@ -514,6 +534,9 @@ JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜
             // 🎩 開門那一下先標成組件類：創作室預設落在「製作互動面板」，
             //    等她切到世界書或我的角色，switchTopMode 會把這顆拿掉、換回米黃。
             if (_cont && landMode !== 'worldbook' && landMode !== 'persona') _cont.classList.add('craft-skin');
+            // 🧩 從手機「組件」那張卡進來的，開頭就把型別定成主畫面組件 ——
+            //    不然她會落在 VN 組件那一種，做出來的是嵌進劇情正文的東西。她原話：「這裡創建會不會搞混啊?」
+            if (panelType) setTimeout(function () { _setPanelType(panelType); }, 0);
             // 🚨 只認「手機殼的 app 內容區」(#aps-app-body/.aps-app)。
             //    不能認 #aurelia-phone-screen——那是整個擴展的螢幕，大廳也在它底下，
             //    認了就變成「在大廳開的創作室一律當手機版」，再寬也是單欄＋👁 抽屜（2026-08-26 抓到）。
@@ -813,9 +836,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 
         // 面板類型選擇器（純展示 / 純應用 / 共用）——在設定頁裡；設定列那顆標籤跟著換
         document.querySelectorAll('#studio-type-row .studio-type').forEach(b => b.onclick = () => {
-            _vnPanelType = b.dataset.type;
-            document.querySelectorAll('#studio-type-row .studio-type').forEach(x => x.classList.toggle('active', x === b));
-            _studioSyncSetBar();
+            _setPanelType(b.dataset.type);
         });
         // 誰來做（主接口／宿舍住戶）
         renderStudioIface();
@@ -2292,7 +2313,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
         // VN UI 生成：在訊息開頭標【類型：X】，AI 第一輪就知道要做純展示/純應用/共用（不用每次費口舌）
         const genText = (currentMode === 'vn_ui')
-            ? ('【類型：' + _vnPanelType + '】' + (_vnPanelType === '共用' ? '（共用＝正文 <tagId> 餵資料 ＋ app 內「生成」鈕叫 st.callAI 產外圍內容，兩條都走 st.feed；生成鈕必須有）' : '') + '（面板必須自帶一顆綁 onComplete 的出口鈕；鈕上的字與造型照這個面板的內容取，別沿用這句話裡的字）' + (text || '（依此類型先做一版）'))
+            ? ('【類型：' + _vnPanelType + '】' + (_vnPanelType === '共用' ? '（共用＝正文 <tagId> 餵資料 ＋ app 內「生成」鈕叫 st.callAI 產外圍內容，兩條都走 st.feed；生成鈕必須有）' : '') + (_vnPanelType === '主畫面組件' ? '' : '（面板必須自帶一顆綁 onComplete 的出口鈕；鈕上的字與造型照這個面板的內容取，別沿用這句話裡的字）') + (text || '（依此類型先做一版）'))
             : text;
         // 帶圖時 content 變陣列；不帶圖時還是字串（向後兼容既有清洗 / parse 邏輯）
         const userContent = buildUserMessageContent(genText, pendingImages);
@@ -3372,6 +3393,35 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
     // 把一個「應用/共用」模板裝成手機 app（進「應用工坊·我的應用」+ 桌面圖標）。
     // 以 srcTplId 去重：已裝過就更新內容(編輯後重存會更新)，沒裝過才新增。回傳 app id。
+    // 🧩 把做好的東西放上手機主畫面（見 os_widgets.js）。
+    //   只取畫面與樣式，不帶那段程式：組件是擺著看的，要跑程式的東西該做成應用。
+    //   🚨 樣式的選擇器全都帶 .vn-dynamic-panel-<標籤> 前綴，所以那層外殼一定要包上去，
+    //      否則選擇器一條都不命中、整塊掉樣式（跟裝成應用那邊同一個道理）。
+    function _installTemplateAsHomeWidget(tpl) {
+        const W = win.OS_WIDGETS;
+        if (!W || !tpl) return null;
+        try {
+            const safeTagId = String(tpl.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+            const css = String(tpl.css || '').trim();
+            const body = '<div class="vn-dynamic-panel-' + safeTagId + '">'
+                       + (css ? '<style>' + css + '</style>' : '')
+                       + String(tpl.html || '') + '</div>';
+            const rec = W.save({ name: _appNameOf(tpl), size: 's', html: body, hint: tpl.title || '' });
+            if (rec) { try { win.VoidPhoneShell.unhideWidget(rec.id); } catch (e) {} }   // 做好就直接上主畫面
+            return rec;
+        } catch (e) { console.warn('[studio] 放上主畫面失敗', e); return null; }
+    }
+
+    // 這次要做哪一種：點那排按鈕會走這裡，從別的地方帶著型別開創作室也走這裡（同一支，免得兩邊漂）
+    function _setPanelType(t) {
+        if (!t) return;
+        _vnPanelType = t;
+        document.querySelectorAll('#studio-type-row .studio-type').forEach(function (x) {
+            x.classList.toggle('active', x.dataset.type === t);
+        });
+        try { _studioSyncSetBar(); } catch (e) {}
+    }
+
     async function _installTemplateAsPhoneApp(tpl) {
         if (!tpl || !(win.OS_DB && win.OS_DB.savePhoneApp)) return null;
         try {

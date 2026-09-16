@@ -333,7 +333,7 @@
              +   '<button class="ws-card" data-wg-new="studio" type="button">'
              +     '<span class="wg-card-ic"><i class="fa-solid fa-wand-magic-sparkles"></i></span>'
              +     '<span class="ws-card-tx"><span class="ws-card-t">開創作室做一個</span>'
-             +       '<span class="ws-card-d">講一句話讓它畫出來，做好回這裡貼上</span></span>'
+             +       '<span class="ws-card-d">講一句話讓它畫出來，做好直接放上主畫面</span></span>'
              +     '<span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span>'
              +   '</button>'
              +   '<div class="wg-sec">全部組件</div>'
@@ -370,7 +370,9 @@
             const nw = e.target.closest('[data-wg-new]');
             if (nw) {
                 if (nw.dataset.wgNew === 'paste') _newByPaste(c);
-                else if (win.OS_STUDIO && win.OS_STUDIO.launch) win.OS_STUDIO.launch(c, 'vn_ui');
+                // 🧩 帶著「這次做的是主畫面組件」進去。不帶的話她會落在 VN 組件那一種，
+                //    做出來的是嵌進劇情正文的東西，不是主畫面上這一格 —— 她原話：「這裡創建會不會搞混啊?」
+                else if (win.OS_STUDIO && win.OS_STUDIO.launch) win.OS_STUDIO.launch(c, 'vn_ui', '主畫面組件');
                 else try { AUI.toast('創作室還沒載入'); } catch (er) {}
                 return;
             }
