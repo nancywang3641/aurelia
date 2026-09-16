@@ -569,7 +569,8 @@
     function _cellHTML(o) { return o.widget ? _widgetCell(o.widget) : _iconBtn(o.app); }
     function _widgetCell(w) {
         const W = _W();
-        return '<button class="aps-icon aps-w" data-app="' + w.id + '" data-w-size="' + W.sizeKeyOf(w) + '" type="button">'
+        return '<button class="aps-icon aps-w" data-app="' + w.id + '" data-w-size="' + W.sizeKeyOf(w) + '"'
+             + (w.bare ? ' data-w-bare="1"' : '') + ' type="button">'
              + '<span class="aps-icon-del" data-del="' + w.id + '" title="從桌面移除"><i class="fa-solid fa-minus"></i></span>'
              + (W.hasSettings(w) ? '<span class="aps-w-cog" data-w-cog="' + w.id + '" title="這個組件的設定"><i class="fa-solid fa-gear"></i></span>' : '')
              + '<span class="aps-w-body" data-w-body="' + w.id + '">' + W.innerHTML(w) + '</span>'

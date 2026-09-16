@@ -51,7 +51,9 @@
     //   tap() 是點下去做什麼（不是編輯模式的時候才會走到）。
     const BUILTIN = [
         {
-            id: 'wdg_polaroid', name: '拍立得', size: 's', builtin: true,
+            // 🚨 bare＝不要外面那層圓角卡片。拍立得本來就是一張相紙：直角、有紙膠帶、
+            //    微微歪一點、底下一行手寫字。套上通用卡片殼就變成一塊圓角方卡片，那不是拍立得。
+            id: 'wdg_polaroid', name: '拍立得', size: 's', builtin: true, bare: true,
             hint: '點一下寫今天那句話，長按可以換照片',
             html: function (w) {
                 const url = _photoUrl();

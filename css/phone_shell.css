@@ -673,34 +673,54 @@
 }
 .aps-editing .aps-w-cog { display: flex; }
 
-/* ── 內建：拍立得 ───────────────────────────────────────────────────── */
+/* ── 不要那層卡片殼的組件（拍立得）：它自己就是一張相紙 ──────────────
+   🚨 相紙是直角的，別給它圓角；紙膠帶要露到框外，所以不能裁切。
+   高度也交給內容決定（照片＋底下那行字），不吃組件那個固定高。 */
+.aps-w[data-w-bare] {
+    background: none; border: 0; box-shadow: none;
+    border-radius: 0; overflow: visible;
+    height: auto; align-self: start;
+}
+.aps-w[data-w-bare]:hover, .aps-w[data-w-bare]:active { transform: none; }
+/* 裡面那層本來被撐成滿版高（給一般組件用的），相紙要讓內容自己決定高度 */
+.aps-w[data-w-bare] .aps-w-body,
+.aps-w[data-w-bare] .aps-w-body > * { height: auto; }
+
+/* ── 內建：拍立得。長相照原本那張相紙，一模一樣 ─────────────────────
+   直角、紙膠帶、微微歪一點、底下一行手寫字置中，顏色全部跟著主題走。
+   🚨 歪的那一下掛在相紙自己身上，不掛在外面那格 —— 外面那格的位移是換位置的
+   滑動動畫在用的，掛同一層會互相蓋掉。 */
 .aps-w-pol {
-    display: flex; flex-direction: column; gap: 6px;
-    padding: 8px 8px 7px;
+    position: relative;
+    padding: var(--aps-photo-padding);
     background: var(--aps-paper);
+    border: 1px solid var(--aps-paper-line);
+    box-shadow: var(--aps-paper-shadow);
+    transform: rotate(var(--aps-photo-rotate));
     box-sizing: border-box;
+    transition: transform 0.15s;
+}
+.aps-w:active .aps-w-pol { transform: rotate(var(--aps-photo-rotate)) scale(0.97); }
+/* 紙膠帶：寬度 0 的主題等於沒有，不必另外藏 */
+.aps-w-pol::before {
+    content: ""; position: absolute; z-index: 3;
+    width: var(--aps-tape-width); height: 20px; left: 50%; top: -9px;
+    transform: translateX(-50%) rotate(-5deg);
+    background: var(--aps-tape-bg); opacity: 0.88;
+    clip-path: polygon(3% 0, 98% 0, 95% 25%, 100% 49%, 96% 76%, 99% 100%, 1% 100%, 4% 72%, 0 46%, 5% 22%);
 }
 .aps-w-pol-ph {
-    position: relative; flex: 1; min-height: 0;
+    position: relative; height: var(--aps-photo-height);
     overflow: hidden; background: var(--aps-photo-sky); isolation: isolate;
 }
-.aps-w-pol-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.aps-w-pol-sun {
-    position: absolute; left: 50%; top: 22%; width: 26%; aspect-ratio: 1;
-    transform: translateX(-50%); border-radius: 50%; background: var(--aps-photo-sun);
-}
-.aps-w-pol-hill {
-    position: absolute; left: -12%; right: -12%; bottom: 26%; height: 44%;
-    border-radius: 50% 50% 0 0; background: var(--aps-photo-back);
-}
-.aps-w-pol-hill2 { bottom: 20%; height: 36%; left: 6%; right: -22%; background: var(--aps-photo-front); }
-.aps-w-pol-sea { position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: var(--aps-photo-water); }
-.aps-w-pol-cap {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
-    font-size: 11px; line-height: 1.3; color: var(--aps-label-color);
-}
-.aps-w-pol-cap > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aps-w-pol-cap > time { flex: none; opacity: 0.6; font-size: 10px; }
+.aps-w-pol-img { position: absolute; inset: 0; z-index: 4; width: 100%; height: 100%; object-fit: cover; display: block; }
+.aps-w-pol-sun { position: absolute; width: 38px; height: 38px; top: 16%; left: 61%; border-radius: 50%; background: var(--aps-photo-sun); box-shadow: 0 0 30px var(--aps-photo-glow); }
+.aps-w-pol-hill { position: absolute; width: 145%; height: 100%; border-radius: 48% 58% 0 0; background: var(--aps-photo-back); left: -55%; top: 49%; transform: rotate(18deg); }
+.aps-w-pol-hill2 { background: var(--aps-photo-front); left: 25%; top: 58%; transform: rotate(-22deg); }
+.aps-w-pol-sea { position: absolute; inset: 76% 0 0; background: var(--aps-photo-water); opacity: 0.72; }
+.aps-w-pol-cap { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 1px; color: #635954; white-space: nowrap; }
+.aps-w-pol-cap > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font: 13px/1.3 var(--aps-caption-font); }
+.aps-w-pol-cap > time { font: 9px/1.5 "Segoe UI", sans-serif; letter-spacing: 1.3px; color: #6b6259; }
 
 /* ── 內建：時鐘 ─────────────────────────────────────────────────────── */
 .aps-w-clock {
