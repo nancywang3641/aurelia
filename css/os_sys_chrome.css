@@ -1,4 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════════
+   手機主題色票（--os-*）—— 整支手機共用的一組格子
+
+   為什麼要有這個：主題要換得動，畫面上的顏色就得有名字。以前這些值一條一條
+   寫死在下面的規則裡，想換一套皮只能整份 CSS 重寫。收成變數之後，主題只要
+   覆寫這幾格，掛了 .sysh 的面板（手機設置、相簿、控制室、狀態檔案、提示詞、
+   世界書、電話、日曆、劇情設定）就一起跟著變。
+
+   🚨 預設值就是收攏之前那幾個寫死的顏色，一個色都沒動 —— 這一步只搬家、不改樣子。
+      --os-accent 預設等於 --os-ink（分頁指示條本來就是那個深藍黑），所以今天看不出差別；
+      主題想把它換成別的重點色時，分頁條與選中的分頁字會一起跟上。
+
+   🚨 寫在 :root 不是寫在 .sysh 上：同一套皮還要給手機主畫面與各 app 用，
+      而全屏面板（控制室那種）根本不在手機殼裡面。掛在根上，兩邊都吃得到。
+      os_sys_chrome.css 酒館與 PWA 兩份載入清單都有（index.js / index.html），
+      所以放這裡等於全站都拿得到，不必多開一支檔、也不會漏掉其中一邊。
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+    --os-ink: #1A1C28;                         /* 主字色 */
+    --os-ink-dim: rgba(26, 28, 40, 0.72);      /* 次要字：返回鍵、動作鈕、沒選中的分頁 */
+    --os-line: rgba(26, 28, 40, 0.15);         /* 分隔線 */
+    --os-hover: rgba(26, 28, 40, 0.08);        /* 滑過時的底 */
+    --os-chrome-bg: rgba(228, 232, 245, 0.88); /* 標頭列的底 */
+    --os-chrome-tabs-bg: rgba(228, 232, 245, 0.92); /* 分頁列的底 */
+    --os-accent: var(--os-ink);                /* 重點色：分頁指示條與選中的分頁字 */
+    --os-accent-glow: rgba(26, 28, 40, 0.30);  /* 指示條下方那圈暈 */
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    系統性面板的統一外殼（2026-09-11 改成三格骨架）
 
    微信、微博、QB 那種「應用」可以有自己的皮；
@@ -31,10 +59,10 @@
     min-height: calc(56px + env(safe-area-inset-top, 0px));
     padding: 6px 10px;   /* 44px 觸控區＋上下 6＋底線 1 ≈ 57，接近 56 那個基準 */
     padding-top: calc(6px + env(safe-area-inset-top, 0px));
-    background: rgba(228, 232, 245, 0.88);
-    border-bottom: 1px solid rgba(26, 28, 40, 0.15);
+    background: var(--os-chrome-bg);
+    border-bottom: 1px solid var(--os-line);
     flex-shrink: 0;
-    color: #1A1C28;
+    color: var(--os-ink);
     /* 電話那條把字級字重寫在容器上，會滲進子元素 → 在這裡歸零 */
     font-size: 14px;
     font-weight: 400;
@@ -63,7 +91,7 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
     font-weight: 700;
     letter-spacing: 1px;
     line-height: 1.25;
-    color: #1A1C28;
+    color: var(--os-ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -83,7 +111,7 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
     padding: 0;
     font-size: 0;
     line-height: 1;
-    color: rgba(26, 28, 40, 0.72);
+    color: var(--os-ink-dim);
     background: none;
     border: none;
     border-radius: 50%;
@@ -98,7 +126,7 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
     font-size: 18px;
     line-height: 1;
 }
-.sysh.sysh > .sysh-back:hover { background: rgba(26, 28, 40, 0.08); color: #1A1C28; }
+.sysh.sysh > .sysh-back:hover { background: var(--os-hover); color: var(--os-ink); }
 
 /* ── 右側動作鈕 ── */
 .sysh.sysh .sysh-act {
@@ -110,14 +138,14 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
     padding: 0;
     margin: 0;
     font-size: 15px;
-    color: rgba(26, 28, 40, 0.72);
+    color: var(--os-ink-dim);
     background: none;
     border: none;
     border-radius: 50%;
     cursor: pointer;
     transition: background .2s, color .2s;
 }
-.sysh.sysh .sysh-act:hover { background: rgba(26, 28, 40, 0.08); color: #1A1C28; }
+.sysh.sysh .sysh-act:hover { background: var(--os-hover); color: var(--os-ink); }
 /* 右槽放兩顆以上（提示詞的匯出／匯入）：包在一個容器裡並排 */
 .sysh.sysh .sysh-acts { display: flex; align-items: center; gap: 4px; }
 
@@ -125,8 +153,8 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
 .sysh-tabs,
 .set-tabs, .avs-tabs, .pm-tabs {
     display: flex;
-    background: rgba(228, 232, 245, 0.92);
-    border-bottom: 1px solid rgba(26, 28, 40, 0.15);
+    background: var(--os-chrome-tabs-bg);
+    border-bottom: 1px solid var(--os-line);
     flex-shrink: 0;
     overflow-x: auto;
     white-space: nowrap;
@@ -144,7 +172,7 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.5px;
-    color: rgba(26, 28, 40, 0.72);
+    color: var(--os-ink-dim);
     cursor: pointer;
     position: relative;
     transition: .3s;
@@ -153,7 +181,7 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
 }
 .sysh-tab.active,
 .set-tab.active, .avs-tab.active, .pm-tab.active {
-    color: #1A1C28;
+    color: var(--os-accent);
     font-weight: 800;
     border-bottom: none;
 }
@@ -165,7 +193,7 @@ body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
     left: 0;
     width: 100%;
     height: 3px;
-    background: #1A1C28;
+    background: var(--os-accent);
     border-radius: 3px 3px 0 0;
-    box-shadow: 0 -2px 8px rgba(26, 28, 40, 0.30);
+    box-shadow: 0 -2px 8px var(--os-accent-glow);
 }
