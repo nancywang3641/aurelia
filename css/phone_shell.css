@@ -5,28 +5,101 @@
     background: rgba(0, 0, 0, 0.45);
 }
 .aps-frame {
-    /* 手機主題變數（設置 app 改這些值；app 完全不需知道、自動相容、不衝突） */
-    --aps-wallpaper: linear-gradient(160deg, #2b2d42, #4a4e69);
-    --aps-icon-bg: rgba(255, 255, 255, 0.94);
-    --aps-icon-radius: 16px;
-    --aps-label-color: #fff;
-    --aps-sb-color: #fff;
-    --aps-font: inherit;
+    /* ══ 手機主題的格子 ══════════════════════════════════════════════
+       一套主題＝把下面這一整組換掉。這裡的預設值就是預設主題「留白相片」，
+       .aps-frame.theme-cute / .theme-dark 各自覆蓋一整組（在這支檔最後面）。
+       🚨 底下所有畫面規則一律只讀 var()，不准再寫死顏色或尺寸 ——
+          寫死一條，那一條就換不動，主題看起來就會「換了但有個東西沒跟上」。
+       🚨 「樣式」那顆單獨改桌布/字體時是寫成 .aps-frame 的行內樣式，
+          行內永遠贏過這裡的 class 規則 → 她的個別設定蓋過主題，這是故意的。 */
+    /* 底色與文字 */
+    --aps-wallpaper: #f8f8f3;
+    --aps-frame-bg: #dedfd6;
+    --aps-frame-line: #b9bdb1;
+    --aps-label-color: #3e4b41;
+    --aps-muted: #727d71;
+    --aps-sb-color: #465246;
+    --aps-sb-bg: transparent;
+    --aps-accent: #728764;
+    --aps-homebar-color: #a3ad9d;
+    --aps-font: "Segoe UI", "Microsoft JhengHei", sans-serif;
+    --aps-caption-font: "Segoe Print", "KaiTi", "DFKai-SB", cursive;
+    /* 時鐘區：版位用 grid-areas 換，所以時間／日期／心情的相對位置整個是可換的 */
+    --aps-lock-height: 106px;
+    --aps-clock-areas: "clock date" "mood mood";
+    --aps-clock-columns: 1fr auto;
+    --aps-clock-align: start;
+    --aps-clock-font: "Segoe UI", sans-serif;
+    --aps-clock-size: 46px;
+    --aps-clock-weight: 300;
+    --aps-clock-spacing: -2px;
+    --aps-date-width: 48px;
+    --aps-mood-align: start;
+    --aps-mood-bg: #ffffff;
+    --aps-mood-line: #dfe3d8;
+    --aps-mood-radius: 999px;
+    /* widget 區（拍立得） */
+    --aps-widget-height: 168px;
+    --aps-widget-align: center;
+    --aps-photo-width: 238px;
+    --aps-photo-height: 100px;
+    --aps-photo-padding: 10px 10px 11px;
+    --aps-photo-rotate: 1.5deg;
+    --aps-photo-1-url: none;          /* 她在設置填的網址；沒填就是 none，露出底下程式畫的示意風景 */
+    --aps-photo-position: center;
+    --aps-paper: #fff;
+    --aps-paper-line: #e6e7de;
+    --aps-paper-shadow: 0 5px 12px #505b4612;
+    --aps-tape-width: 0px;
+    --aps-tape-bg: transparent;
+    --aps-photo-sky: linear-gradient(#e1e6db, #f3efe2);
+    --aps-photo-sun: #faf8e9;
+    --aps-photo-glow: transparent;
+    --aps-photo-back: #a8b69c;
+    --aps-photo-front: #748b79;
+    --aps-photo-water: linear-gradient(#c3cbb9, #d7dbca);
+    /* 圖標格 */
+    --aps-grid-columns: 3;
+    --aps-grid-gap: 17px 12px;
+    --aps-icon-size: 46px;
+    --aps-icon-height: 37px;
+    --aps-icon-radius: 0;
+    --aps-icon-bg: transparent;
+    --aps-icon-color: #657b63;
+    --aps-icon-line: transparent;
+    --aps-icon-shadow: none;
+    --aps-icon-gap: 5px;
+    --aps-glyph-size: 21px;
+    /* 底排 dock */
+    --aps-dock-height: 64px;
+    --aps-dock-padding: 10px 0 0;
+    --aps-dock-radius: 0;
+    --aps-dock-border: 0 solid transparent;
+    --aps-dock-top: 1px solid #d8dfd0;
+    --aps-dock-bg: transparent;
+    --aps-dock-shadow: none;
+    --aps-dock-icon-bg: transparent;
+    --aps-dock-icon-color: #61755b;
+    --aps-dock-icon-radius: 0;
 
     position: relative;
     width: 360px; height: 720px; max-height: 92vh;
-    background: #0e0e12;
+    background: var(--aps-frame-bg);
     border-radius: 44px;
     padding: 14px;
     display: flex; flex-direction: column;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+    font-family: var(--aps-font);
+    box-shadow: 0 22px 35px -19px rgba(48, 51, 41, 0.44), inset 0 0 0 1px var(--aps-frame-line), inset 0 0 0 5px rgba(255, 255, 255, 0.07);
+    isolation: isolate;
 }
-/* 狀態列（時間 + 訊號/wifi/電池）—— 黑底頂條、永遠在最上層、跟瀏海融成一條 */
+.aps-frame, .aps-frame * { box-sizing: border-box; }
+/* 狀態列（時間 + 訊號/wifi/電池）—— 永遠在最上層；底色與字色跟著主題走，
+   透明時上半截露出外框色、下半截露出桌布，跟瀏海連成一條 */
 .aps-statusbar {
     position: absolute; top: 0; left: 0; right: 0; height: 30px; z-index: 4;
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 22px 0; font-size: 12px; font-weight: 600;
-    background: #0e0e12; color: #fff; font-family: var(--aps-font);
+    background: var(--aps-sb-bg); color: var(--aps-sb-color); font-family: var(--aps-font);
     pointer-events: none; letter-spacing: 0.5px;
 }
 .aps-sb-icons { display: flex; align-items: center; gap: 6px; font-size: 11px; }
@@ -37,109 +110,198 @@
 
 .aps-notch {
     position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-    width: 120px; height: 22px; background: #0e0e12;
+    width: 120px; height: 22px; background: var(--aps-frame-bg);
     border-radius: 0 0 14px 14px; z-index: 3;
 }
 .aps-screen {
     position: relative; flex: 1;
-    border-radius: 32px; overflow: hidden; background: #f4f5f8;
+    border-radius: 32px; overflow: hidden; background: var(--aps-wallpaper);
 }
 
-/* 主畫面（app 圖標格）—— top:30 留瀏海 */
+/* 主畫面（時鐘 / widget / 圖標格 / dock）—— top:30 留瀏海
+   四段用 grid 的列高排，每一列的高度都是主題可換的格子；圖標格吃剩下的空間並自己捲。
+   螢幕被 max-height 壓矮時，被壓到的是圖標格那一列（minmax(0,1fr)），其他三段不變形。 */
 .aps-home {
     position: absolute; top: 30px; left: 0; right: 0; bottom: 0;
-    display: flex; flex-direction: column;
-    padding: 16px 18px 18px;
+    display: grid;
+    grid-template-rows: var(--aps-lock-height) var(--aps-widget-height) minmax(0, 1fr) var(--aps-dock-height);
+    gap: 10px;
+    padding: 12px 18px 24px;
     background: var(--aps-wallpaper);
     font-family: var(--aps-font);
     overflow: hidden;
+    isolation: isolate;
 }
-/* 主畫面頂端：時間 / 日期 / 今日心情。桌布深淺不定，所以白字一律配陰影，
-   心情膠囊沿用圖標名字那顆的毛玻璃（同一個桌布上只該有一種玻璃）。 */
-.aps-lock { flex-shrink: 0; padding: 6px 2px 18px; color: var(--aps-label-color); }
-/* 桌布可以是任何一張圖，也可以是「純白」——裸白字在淺桌布上會整個消失。
-   疊三層由近到遠的暗影當底暈，再加一道極細描邊：深桌布上看起來就是普通陰影，
-   淺桌布上這圈暗影撐出輪廓，字才讀得出來。膠囊那招不用在這裡：參考圖的時間就是裸字，
-   加了玻璃底就變成另一個東西。 */
+/* 主題的裝飾層（雲、星、弧線、縫線…）一律畫在這兩個偽元素上，不另外加節點。
+   🚨 這裡只給定位與「不擋點擊」，不給尺寸也不給底色 —— 沒有主題時什麼都不會出現。
+      基底若先畫了一個形狀，主題只覆蓋一部分屬性時，沒被覆蓋的那幾條會留在裝飾上（泡泡主題踩過同一個坑）。 */
+.aps-home::before, .aps-home::after { content: ""; position: absolute; pointer-events: none; z-index: -1; }
+
+/* ── 時鐘區：時間 / 日期 / 心情，三者的相對位置由 --aps-clock-areas 決定 ── */
+.aps-lock {
+    position: relative;
+    display: grid;
+    grid-template-areas: var(--aps-clock-areas);
+    grid-template-columns: var(--aps-clock-columns);
+    align-content: center;
+    justify-items: var(--aps-clock-align);
+    color: var(--aps-label-color);
+}
 .aps-lock-time {
-    font-size: 46px; font-weight: 300; line-height: 1.05; letter-spacing: 1px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.45), 0 2px 12px rgba(0,0,0,0.38), 0 0 26px rgba(0,0,0,0.30);
-    -webkit-text-stroke: 0.4px rgba(0,0,0,0.18);
+    grid-area: clock;
+    font-family: var(--aps-clock-font);
+    font-size: var(--aps-clock-size);
+    font-weight: var(--aps-clock-weight);
+    letter-spacing: var(--aps-clock-spacing);
+    line-height: 1; font-variant-numeric: tabular-nums;
 }
 .aps-lock-date {
-    font-size: 14px; font-weight: 500; letter-spacing: 1px; margin-top: 2px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.50), 0 1px 8px rgba(0,0,0,0.38), 0 0 18px rgba(0,0,0,0.28);
+    grid-area: date; align-self: center;
+    max-width: var(--aps-date-width);
+    margin-top: 6px;
+    font-size: 11px; letter-spacing: 1px; line-height: 1.8;
+    word-break: keep-all;
 }
+/* 今日心情：點一下換下一個。
+   🚨 它是按鈕不是標籤 —— 高度至少 32 才點得到，不管主題想多低調都不准比這矮。 */
 .aps-mood {
-    margin-top: 12px; display: inline-flex; align-items: center; gap: 4px;
-    font: inherit; font-size: 12px; letter-spacing: 0.5px; color: var(--aps-label-color); cursor: pointer;
-    padding: 5px 14px; border-radius: 14px;
-    background: rgba(30,32,44,0.24);
-    -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3);
-    border: 0.5px solid rgba(255,255,255,0.16);
-    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
-    transition: background 0.15s, transform 0.12s;
+    grid-area: mood; justify-self: var(--aps-mood-align);
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 9px; padding: 7px 12px; min-height: 32px;
+    border: 1px solid var(--aps-mood-line);
+    border-radius: var(--aps-mood-radius);
+    background: var(--aps-mood-bg);
+    color: var(--aps-muted);
+    font: inherit; font-size: 11px; letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: filter 0.15s, transform 0.12s;
 }
-.aps-mood:hover { background: rgba(30,32,44,0.34); }
+.aps-mood:hover { filter: brightness(0.97); }
 .aps-mood:active { transform: scale(0.96); }
-.aps-mood-em { font-size: 14px; line-height: 1; }
+.aps-mood-em { font-size: 13px; line-height: 1; color: var(--aps-accent); }
 .aps-mood-em > i { font-size: 13px; }
 .aps-mood-em[data-mood="0"] > i { color: #ffc53d; }
-.aps-mood-em[data-mood="1"] > i { color: #dfe6ef; }
+.aps-mood-em[data-mood="1"] > i { color: #9fb4c9; }
 .aps-mood-em[data-mood="2"] > i { color: #8cc4f5; }
-.aps-mood-em[data-mood="3"] > i { color: #ffe08a; }
-.aps-mood-em[data-mood="4"] > i { color: #ffd95a; }
+.aps-mood-em[data-mood="3"] > i { color: #c9a94e; }
+.aps-mood-em[data-mood="4"] > i { color: #e0b93f; }
 .aps-mood-em[data-mood="5"] > i { color: #ff9cc6; }
-.aps-mood-em[data-mood="6"] > i { color: #e2b48c; }
-.aps-mood-em[data-mood="7"] > i { color: #c4bff0; }
+.aps-mood-em[data-mood="6"] > i { color: #c08d62; }
+.aps-mood-em[data-mood="7"] > i { color: #9d95d8; }
 .aps-mood-em[data-mood="8"] > i { color: #ff8a4c; }
-.aps-mood-em[data-mood="9"] > i { color: #9fdcff; }
+.aps-mood-em[data-mood="9"] > i { color: #6fc0e8; }
+
+/* ── widget 區：時鐘跟圖標格中間那塊。現在只有拍立得，之後還會有別的擺進來 ── */
+.aps-widgets {
+    display: flex; align-items: center; justify-content: var(--aps-widget-align);
+    gap: 12px; padding: 7px 5px; min-width: 0;
+}
+/* 拍立得：照片＋今天的心情＋日期。點一下換下一個心情（跟時鐘那顆是同一份資料） */
+.aps-polaroid {
+    position: relative; margin: 0;
+    flex: 0 1 var(--aps-photo-width); min-width: 0; max-width: 100%;
+    padding: var(--aps-photo-padding);
+    background: var(--aps-paper);
+    border: 1px solid var(--aps-paper-line);
+    box-shadow: var(--aps-paper-shadow);
+    transform: rotate(var(--aps-photo-rotate));
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+.aps-polaroid:active { transform: rotate(var(--aps-photo-rotate)) scale(0.97); }
+/* 紙膠帶：寬度 0 的主題等於沒有，不必另外藏 */
+.aps-polaroid::before {
+    content: ""; position: absolute; z-index: 3;
+    width: var(--aps-tape-width); height: 20px; left: 50%; top: -9px;
+    transform: translateX(-50%) rotate(-5deg);
+    background: var(--aps-tape-bg); opacity: 0.88;
+    clip-path: polygon(3% 0, 98% 0, 95% 25%, 100% 49%, 96% 76%, 99% 100%, 1% 100%, 4% 72%, 0 46%, 5% 22%);
+}
+.aps-photo {
+    position: relative; height: var(--aps-photo-height);
+    overflow: hidden; background: var(--aps-photo-sky); isolation: isolate;
+}
+/* 她自己填的照片蓋在示意風景上面；沒填時 --aps-photo-1-url 是 none，這一層完全不畫 */
+.aps-photo::after {
+    content: ""; position: absolute; inset: 0; z-index: 4;
+    background-image: var(--aps-photo-1-url);
+    background-size: cover; background-position: var(--aps-photo-position);
+}
+.aps-photo-sun { position: absolute; width: 38px; height: 38px; top: 16%; left: 61%; border-radius: 50%; background: var(--aps-photo-sun); box-shadow: 0 0 30px var(--aps-photo-glow); }
+.aps-photo-hill { position: absolute; width: 145%; height: 100%; border-radius: 48% 58% 0 0; }
+.aps-photo-hill-back { background: var(--aps-photo-back); left: -55%; top: 49%; transform: rotate(18deg); }
+.aps-photo-hill-front { background: var(--aps-photo-front); left: 25%; top: 58%; transform: rotate(-22deg); }
+.aps-photo-water { position: absolute; inset: 76% 0 0; background: var(--aps-photo-water); opacity: 0.72; }
+.aps-polaroid figcaption { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 1px; color: #635954; white-space: nowrap; }
+.aps-polaroid figcaption > span { font: 13px/1.3 var(--aps-caption-font); }
+.aps-polaroid time { font: 8px/1.5 "Segoe UI", sans-serif; letter-spacing: 1.3px; color: #85796f; }
+
+/* ── 圖標格 ── */
 .aps-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 18px 8px; align-content: start;
-    flex: 1 1 auto; overflow-y: auto; min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--aps-grid-columns), minmax(0, 1fr));
+    gap: var(--aps-grid-gap);
+    align-content: start;
+    min-height: 0; overflow-y: auto; padding: 4px 1px;
+    scrollbar-width: none;
 }
-/* 底部 dock：設置/樣式/相簿/電話，固定在主畫面底部、不隨 grid 捲動 */
+.aps-grid::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+/* ── 底排 dock：設置/樣式/相簿/電話，固定在主畫面底部、不隨圖標格捲動 ── */
 .aps-dock {
-    flex-shrink: 0; display: flex; justify-content: space-around; align-items: flex-start;
-    gap: 4px; margin-top: 12px; padding: 12px 8px 6px;
-    border-radius: 26px;
-    background: rgba(30,32,44,0.22);
-    -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3);
-    border: 0.5px solid rgba(255,255,255,0.16);
+    position: relative;
+    display: flex; justify-content: space-around; align-items: center; gap: 4px;
+    padding: var(--aps-dock-padding);
+    border: var(--aps-dock-border);
+    border-top: var(--aps-dock-top);
+    border-radius: var(--aps-dock-radius);
+    background: var(--aps-dock-bg);
+    box-shadow: var(--aps-dock-shadow);
 }
-.aps-dock .aps-icon { flex: 1; padding: 0; }
 .aps-icon {
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    background: transparent; border: none; cursor: pointer; padding: 4px 0;
+    display: flex; flex-direction: column; align-items: center; gap: var(--aps-icon-gap);
+    min-width: 0; align-self: start; padding: 0;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--aps-label-color); font-family: inherit;
 }
 .aps-icon-em {
-    width: 54px; height: 54px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 28px; border-radius: var(--aps-icon-radius);
+    width: var(--aps-icon-size); height: var(--aps-icon-height);
+    border-radius: var(--aps-icon-radius);
     background: var(--aps-icon-bg);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-    transition: transform 0.12s;
+    border: 1px solid var(--aps-icon-line);
+    box-shadow: var(--aps-icon-shadow);
+    color: var(--aps-icon-color);
+    transition: transform 0.15s ease;
 }
-.aps-icon:active .aps-icon-em { transform: scale(0.9); }
+.aps-icon-em > i { font-size: var(--aps-glyph-size); line-height: 1; }
+.aps-icon:hover .aps-icon-em { transform: translateY(-2px); }
+.aps-icon:active .aps-icon-em { transform: scale(0.94); }
+.aps-dock .aps-icon { flex: 1; align-self: center; gap: 3px; }
+.aps-dock .aps-icon-em { width: 40px; height: 36px; border: 0; box-shadow: none; border-radius: var(--aps-dock-icon-radius); background: var(--aps-dock-icon-bg); color: var(--aps-dock-icon-color); }
+.aps-dock .aps-icon-em > i { font-size: 18px; }
+.aps-dock .aps-icon-name { font-size: 10px; line-height: 14px; }
 .aps-icon-em.aps-icon-img { font-size: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
 /* 內建 app 的圖標是 Font Awesome（使用者自己裝的 app 還是它挑的 emoji）；換了圖庫圖片就把圖示藏掉 */
 .aps-icon-em > i { font-size: 25px; line-height: 1; }
 .aps-icon-em.aps-icon-img > i { display: none; }
 .aps-set-icprev > i { font-size: 17px; }
-[data-ic="wx"] > i, [data-ic="phone"] > i { color: #22b35e; }
-[data-ic="wb"] > i { color: #e8582f; }
-[data-ic="cal"] > i { color: #e5484d; }
-[data-ic="appstore"] > i { color: #2f7cf6; }
-[data-ic="reader"] > i { color: #d9822b; }
-[data-ic="ctrlroom"] > i, [data-ic="avsvar"] > i { color: #6d5bd6; }
-[data-ic="lorebook"] > i { color: #1f9d74; }
-[data-ic="prompts"] > i { color: #b7791f; }
-[data-ic="sysset"] > i { color: #6b7280; }
-[data-ic="settings"] > i { color: #e0508f; }
-[data-ic="album"] > i { color: #f29d0b; }
-.aps-icon-em > i.fa-cube { color: #7b8194; }
-.aps-icon-em > i.fa-puzzle-piece { color: #8a6fd8; }
+/* 每個 app 原本各有各的品牌色（微信綠、日曆紅…）。那組顏色會蓋過主題挑的圖標色，
+   三套主題套上去全部變成同一盤彩色，主題之間只剩桌布在變。
+   所以收成一個開關：預設關（圖標跟著主題走，就是她挑的那版稿子的樣子），
+   想要原本的彩色就在「樣式」裡打開，class 掛在手機殼上。 */
+.aps-icon-colorful [data-ic="wx"] > i, .aps-icon-colorful [data-ic="phone"] > i { color: #22b35e; }
+.aps-icon-colorful [data-ic="wb"] > i { color: #e8582f; }
+.aps-icon-colorful [data-ic="cal"] > i { color: #e5484d; }
+.aps-icon-colorful [data-ic="appstore"] > i { color: #2f7cf6; }
+.aps-icon-colorful [data-ic="reader"] > i { color: #d9822b; }
+.aps-icon-colorful [data-ic="ctrlroom"] > i, .aps-icon-colorful [data-ic="avsvar"] > i { color: #6d5bd6; }
+.aps-icon-colorful [data-ic="lorebook"] > i { color: #1f9d74; }
+.aps-icon-colorful [data-ic="prompts"] > i { color: #b7791f; }
+.aps-icon-colorful [data-ic="sysset"] > i { color: #6b7280; }
+.aps-icon-colorful [data-ic="settings"] > i { color: #e0508f; }
+.aps-icon-colorful [data-ic="album"] > i { color: #f29d0b; }
+.aps-icon-colorful .aps-icon-em > i.fa-cube { color: #7b8194; }
+.aps-icon-colorful .aps-icon-em > i.fa-puzzle-piece { color: #8a6fd8; }
 
 /* ── 長按編輯主畫面：圖標搖晃、左上角「−」、右上角「完成」、拖著換位置 ── */
 .aps-icon { position: relative; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
@@ -170,14 +332,101 @@
 .aps-drag-ghost { position: absolute; z-index: 20; pointer-events: none; margin: 0; }
 .aps-drag-ghost .aps-icon-em { animation: none !important; transform: scale(1.12); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
 .aps-drag-ghost .aps-icon-del { display: none !important; }
-/* iOS 毛玻璃小膠囊：半透明微暗玻璃 + backdrop blur 把桌布糊掉，白字清楚又有玻璃質感 */
 /* 🚨 名字一律單行、放不下就尾端省略 —— 跟 iOS 一樣。
-   格子是 grid，而 grid 的列高由那一列最高的格子決定：只要有一個 app 的名字折成兩行，
-   整列就變高，下面每一列都被推下去，看起來就是「字被擠下去、位置跑掉」。
-   padding 從 10px 收到 8px，四到五個中文字在一般手機寬度下仍然完整顯示。 */
-.aps-icon-name { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--aps-label-color); letter-spacing: 0.3px; display: inline-block; box-sizing: border-box; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 2px 8px; border-radius: 11px; background: rgba(30,32,44,0.24); -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3); border: 0.5px solid rgba(255,255,255,0.16); text-shadow: 0 1px 2px rgba(0,0,0,0.35); }
-/* 名字長度不同也不影響對齊：格子貼著自己那一列的頂端排，不被拉伸 */
-.aps-grid .aps-icon { align-self: start; }
+   格子是 grid，列高由那一列最高的格子決定：只要有一個 app 的名字折成兩行，
+   整列就變高，下面每一列都被推下去，看起來就是「字被擠下去、位置跑掉」。 */
+.aps-icon-name {
+    display: block; max-width: 100%;
+    font-size: 11px; line-height: 18px; letter-spacing: 0.3px;
+    color: var(--aps-label-color);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* 桌布換成她自己貼的照片時，主題為淺色底挑的字色在照片上常常整個讀不出來
+   → 名字戴回毛玻璃小膠囊、時間與日期加暗影。這個 class 由程式判斷「桌布是不是一張圖」時掛上；
+     漸層與純色不掛（那些是主題自己配好的，戴膠囊反而破壞版面）。 */
+.aps-wp-photo .aps-icon-name {
+    padding: 2px 8px; border-radius: 11px; color: #fff;
+    background: rgba(30, 32, 44, 0.24);
+    -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3);
+    border: 0.5px solid rgba(255, 255, 255, 0.16);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.aps-wp-photo .aps-lock-time,
+.aps-wp-photo .aps-lock-date {
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 12px rgba(0, 0, 0, 0.38), 0 0 26px rgba(0, 0, 0, 0.30);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   內建主題 —— 一套主題就是一整組格子。
+   預設「留白相片」的值寫在這支檔最上面的 .aps-frame，所以這裡只列另外兩套。
+   稿子出自阿洛（參考資料/aurelia_phone_theme_lab），接進來時改了兩處：
+     ・心情那顆在原稿裡小到看不見也點不到 → 尺寸與觸控區改由 .aps-mood 統一保底。
+     ・霧夜薄荷原稿一排四個，九個 app 剛好讓最後一個孤零零掉在第三排 → 改成一排三個。
+   🚨 加一套：複製一組 .aps-frame.theme-<id> 把格子填滿，裝飾畫在
+      .theme-<id> .aps-home::before/::after 上；程式那邊 THEMES 加一列就會出現在設置裡。
+   🚨 backdrop-filter 只准加在葉子節點（dock、心情膠囊、拍立得框這種）。
+      加在 .aps-screen / .aps-home / .aps-app 這幾層，會把裡面所有 position:fixed 的浮層
+      困在那一層裡面，選單與彈窗整個跑位。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 奶油貼紙 ── */
+.aps-frame.theme-cute {
+    --aps-wallpaper: radial-gradient(ellipse at 50% 25%, #fff9ed 0, #fff4e8 40%, #f5dfdf 100%);
+    --aps-frame-bg: #f1d8d9; --aps-frame-line: #c4a3a5; --aps-label-color: #745151; --aps-muted: #8a6666;
+    --aps-sb-color: #805959; --aps-sb-bg: transparent; --aps-accent: #bb727b; --aps-homebar-color: #bb9198;
+    --aps-font: "Microsoft JhengHei", "Segoe UI", sans-serif;
+    --aps-lock-height: 106px; --aps-clock-areas: "clock" "date" "mood"; --aps-clock-columns: 1fr; --aps-clock-align: center;
+    --aps-clock-font: "Arial Rounded MT Bold", "Trebuchet MS", sans-serif; --aps-clock-size: 49px; --aps-clock-weight: 650; --aps-clock-spacing: -2px;
+    --aps-date-width: none; --aps-mood-align: center; --aps-mood-bg: #fffaf3; --aps-mood-line: #e5c6c4; --aps-mood-radius: 20px;
+    --aps-widget-height: 150px; --aps-widget-align: center; --aps-photo-width: 157px; --aps-photo-height: 78px; --aps-photo-padding: 9px 9px 10px; --aps-photo-rotate: -5deg;
+    --aps-paper: #fffdfa; --aps-paper-line: #f1e1d5; --aps-paper-shadow: 2px 5px 7px rgba(152, 111, 93, 0.13);
+    --aps-tape-width: 53px; --aps-tape-bg: repeating-linear-gradient(90deg, #eec1c5 0 5px, #f6d8d9 5px 10px);
+    --aps-photo-sky: linear-gradient(#f0d6c8, #fae9cf); --aps-photo-sun: #fff6d9; --aps-photo-glow: #ffefd9;
+    --aps-photo-back: #acbeb0; --aps-photo-front: #79958c; --aps-photo-water: repeating-linear-gradient(0deg, #d5ddc8 0 5px, #c2d3c3 6px 7px);
+    --aps-grid-columns: 3; --aps-grid-gap: 9px 16px; --aps-icon-size: 53px; --aps-icon-height: 45px; --aps-icon-radius: 19px 19px 17px 17px;
+    --aps-icon-bg: #fffbf6; --aps-icon-color: #ac6978; --aps-icon-line: #eacdc9; --aps-icon-shadow: 0 3px 0 #e5c6c5, inset 0 2px 0 #fff; --aps-icon-gap: 6px; --aps-glyph-size: 21px;
+    --aps-dock-height: 73px; --aps-dock-padding: 10px 8px 5px; --aps-dock-radius: 18px; --aps-dock-border: 3px solid #fff8f3; --aps-dock-top: 3px solid #fff8f3;
+    --aps-dock-bg: #ebc4c9; --aps-dock-shadow: 0 3px 0 #d5afb5; --aps-dock-icon-bg: #fff3ea; --aps-dock-icon-color: #98636d; --aps-dock-icon-radius: 13px;
+}
+.theme-cute .aps-home::before { inset: 9px 7px 11px; border: 2px dotted rgba(222, 176, 180, 0.47); border-radius: 24px; }
+.theme-cute .aps-home::after { width: 49px; height: 17px; border-radius: 20px; top: 65px; left: 15px; background: #fffdf7; box-shadow: 4px 3px 0 rgba(230, 200, 199, 0.30); transform: rotate(-12deg); }
+.theme-cute .aps-lock::before { content: ""; position: absolute; width: 26px; height: 25px; left: 8px; top: 44px; border-radius: 50%; background: #fffdf7; box-shadow: 17px 3px 0 -3px #fffdf7; z-index: -1; }
+.theme-cute .aps-lock::after { content: ""; position: absolute; width: 19px; height: 25px; right: 5px; top: 27px; background: #d7af68; clip-path: polygon(50% 0, 62% 36%, 100% 50%, 62% 64%, 50% 100%, 38% 64%, 0 50%, 38% 36%); transform: rotate(14deg); }
+.theme-cute .aps-dock::before { content: ""; position: absolute; width: 43px; height: 20px; top: -12px; left: calc(50% - 21px); background: #c47f8d; clip-path: polygon(0 4%, 42% 30%, 50% 16%, 58% 30%, 100% 4%, 93% 96%, 57% 67%, 50% 84%, 43% 67%, 7% 96%); filter: drop-shadow(0 1px 0 white); }
+.theme-cute .aps-grid .aps-icon:nth-child(3n + 2) .aps-icon-em { --aps-icon-color: #8b9471; --aps-icon-bg: #f8f8ec; }
+.theme-cute .aps-grid .aps-icon:nth-child(3n) .aps-icon-em { --aps-icon-color: #a58051; --aps-icon-bg: #fff3df; }
+
+/* ── 留白相片（預設）：格子的值在最上面的 .aps-frame，這裡只補它的裝飾 ── */
+.theme-clean .aps-lock { border-bottom: 1px solid #e1e4d9; padding-bottom: 12px; }
+.theme-clean .aps-home::before { width: 1px; height: 29px; background: #c6cfbd; top: 157px; left: 1px; }
+.theme-clean .aps-home::after { width: 1px; height: 29px; background: #c6cfbd; top: 269px; right: 1px; }
+
+/* ── 霧夜薄荷 ── */
+.aps-frame.theme-dark {
+    --aps-wallpaper: radial-gradient(ellipse at 10% 31%, #334840 0, #202b29 43%, #19201f 80%);
+    --aps-frame-bg: #242b29; --aps-frame-line: #616e65; --aps-label-color: #e1e7df; --aps-muted: #b4c0b7;
+    --aps-sb-color: #cbd7ce; --aps-sb-bg: rgba(27, 36, 34, 0.50); --aps-accent: #b8d9bc; --aps-homebar-color: #6f8275;
+    --aps-font: "Segoe UI", "Microsoft JhengHei", sans-serif;
+    --aps-lock-height: 100px; --aps-clock-areas: "mood clock" "mood date"; --aps-clock-columns: auto 1fr; --aps-clock-align: end;
+    --aps-clock-font: "Segoe UI", sans-serif; --aps-clock-size: 57px; --aps-clock-weight: 250; --aps-clock-spacing: -3px;
+    --aps-date-width: none; --aps-mood-align: start; --aps-mood-bg: rgba(255, 255, 255, 0.04); --aps-mood-line: rgba(117, 151, 129, 0.27); --aps-mood-radius: 30px;
+    --aps-widget-height: 154px; --aps-widget-align: flex-start; --aps-photo-width: 162px; --aps-photo-height: 86px; --aps-photo-padding: 8px 8px 10px; --aps-photo-rotate: -3deg;
+    --aps-paper: #e6e9df; --aps-paper-line: #bac7ba; --aps-paper-shadow: 6px 8px 0 rgba(18, 25, 23, 0.44), 0 14px 22px rgba(0, 0, 0, 0.20);
+    --aps-tape-width: 43px; --aps-tape-bg: rgba(187, 202, 187, 0.50); --aps-photo-sky: linear-gradient(#1c302d, #476259); --aps-photo-sun: #cbdcc4; --aps-photo-glow: rgba(179, 210, 177, 0.31);
+    --aps-photo-back: #3e5b51; --aps-photo-front: #243e35; --aps-photo-water: repeating-linear-gradient(0deg, #71957f 0 1px, #405f51 1px 5px);
+    --aps-grid-columns: 3; --aps-grid-gap: 10px 12px; --aps-icon-size: 46px; --aps-icon-height: 46px; --aps-icon-radius: 50%;
+    --aps-icon-bg: rgba(255, 255, 255, 0.04); --aps-icon-color: #bfd5c1; --aps-icon-line: rgba(118, 144, 129, 0.31); --aps-icon-shadow: inset 0 1px 0 rgba(231, 255, 226, 0.04); --aps-icon-gap: 5px; --aps-glyph-size: 21px;
+    --aps-dock-height: 70px; --aps-dock-padding: 8px 7px; --aps-dock-radius: 36px; --aps-dock-border: 1px solid rgba(113, 133, 116, 0.33); --aps-dock-top: 1px solid rgba(113, 133, 116, 0.33);
+    --aps-dock-bg: rgba(61, 80, 69, 0.61); --aps-dock-shadow: 0 9px 20px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(217, 255, 214, 0.04); --aps-dock-icon-bg: transparent; --aps-dock-icon-color: #d2e3ce; --aps-dock-icon-radius: 50%;
+}
+.theme-dark .aps-mood { align-self: center; flex-direction: column-reverse; gap: 7px; padding: 10px 9px; font-size: 9px; }
+.theme-dark .aps-mood-em { font-size: 18px; }
+.theme-dark .aps-mood-em > i { font-size: 18px; }
+.theme-dark .aps-home::before { width: 225px; height: 225px; border: 1px solid rgba(165, 213, 179, 0.09); border-radius: 50%; top: 134px; right: -130px; box-shadow: 0 0 0 22px rgba(165, 213, 179, 0.03), 0 0 0 44px rgba(165, 213, 179, 0.02); }
+.theme-dark .aps-home::after { top: 210px; right: 29px; width: 4px; height: 4px; border-radius: 50%; background: #bad5b3; box-shadow: -14px 43px 0 -1px #bad5b3, 11px -32px 0 -1px #bad5b3; }
+.theme-dark .aps-dock .aps-icon:last-child .aps-icon-em { background: #bdd8b9; color: #2e4c37; }
+@media (prefers-reduced-motion: reduce) { .aps-icon-em { transition: none; } }
 /* 字體「硬套用」：蓋掉所有 app(連寫死字體的)，只放過 fa 圖標/svg 不破壞 */
 .aps-frame.aps-font-on .aps-app-body *:not(i):not(svg):not([class*="fa-"]) { font-family: var(--aps-font) !important; }
 
@@ -224,10 +473,10 @@
 .aps-homebar { height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .aps-home-btn {
     width: 110px; height: 5px; border-radius: 3px;
-    background: rgba(255, 255, 255, 0.5); border: none; cursor: pointer; padding: 0;
+    background: var(--aps-homebar-color); border: none; cursor: pointer; padding: 0;
     transition: background 0.15s;
 }
-.aps-home-btn:hover { background: rgba(255, 255, 255, 0.85); }
+.aps-home-btn:hover { filter: brightness(1.25); }
 
 /* ── 📞 電話 dialer ── */
 .dlr-wrap { position: relative; display: flex; flex-direction: column; height: 100%; background: #f4f5f8; color: #1a1c28; }
@@ -386,21 +635,24 @@
 }
 .aps-close:hover { color: #fff; }
 
-/* 設置 app 面板（手機主題：背景…） */
-.aps-set { padding: 18px 16px; color: #2b2d42; font-family: var(--aps-font); }
+/* 設置 app 面板（主題、拍立得照片、背景、圖標、字體）
+   🚨 這一頁的顏色一律吃 --os-* 色票：她就是在這頁換主題的，頁面自己不跟著變的話，
+      按下去只有頂欄變色、底下整片還是白的，看起來就像沒換成功。 */
+.aps-set { padding: 18px 16px; color: var(--os-ink); background: var(--os-page-bg); min-height: 100%; font-family: var(--aps-font); }
 .aps-set-top { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
-.aps-set-back { background: transparent; border: none; font-size: 26px; line-height: 1; color: #2b2d42; cursor: pointer; padding: 0 4px; }
+.aps-set-back { background: transparent; border: none; font-size: 26px; line-height: 1; color: var(--os-ink-dim); cursor: pointer; padding: 0 4px; }
 .aps-set-h { font-size: 16px; font-weight: 700; }
 .aps-set-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.aps-set-chip { padding: 7px 13px; border: 1px solid #ccc; border-radius: 16px; background: #fff; font-size: 12px; cursor: pointer; color: #2b2d42; }
-.aps-set-chip:hover { border-color: #2b2d42; }
+.aps-set-chip { padding: 7px 13px; border: 1px solid var(--os-line); border-radius: 16px; background: var(--os-surface); font-size: 12px; cursor: pointer; color: var(--os-ink); }
+.aps-set-chip:hover { border-color: var(--os-accent); }
+.aps-set-chip.on { border-color: var(--os-accent-strong); color: var(--os-accent-strong); box-shadow: inset 0 0 0 1px var(--os-accent-strong); font-weight: 700; }
 .aps-set-iclist { display: flex; flex-direction: column; gap: 8px; }
 .aps-set-icrow { display: flex; align-items: center; gap: 8px; }
 .aps-set-icprev { width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; background: rgba(0,0,0,0.06) center/cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-.aps-set-icname { width: 44px; flex-shrink: 0; font-size: 12px; color: #555; }
-.aps-set-ichint { margin-left: auto; font-family: 'Courier New', monospace; font-size: 11px; color: #999; }
-.aps-set-subnote { font-size: 11px; color: #999; margin: 6px 0 8px; line-height: 1.4; }
-.aps-set-sec { font-size: 12px; color: #888; letter-spacing: 1px; margin: 10px 0 8px; }
+.aps-set-icname { width: 44px; flex-shrink: 0; font-size: 12px; color: var(--os-ink-soft); }
+.aps-set-ichint { margin-left: auto; font-family: 'Courier New', monospace; font-size: 11px; color: var(--os-ink-soft); }
+.aps-set-subnote { font-size: 11px; color: var(--os-ink-soft); margin: 6px 0 8px; line-height: 1.5; }
+.aps-set-sec { font-size: 12px; color: var(--os-ink-soft); letter-spacing: 1px; margin: 16px 0 8px; }
 .aps-set-swgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .aps-set-sw {
     height: 64px; border-radius: 12px; border: 2px solid rgba(0, 0, 0, 0.08);
@@ -409,10 +661,19 @@
 }
 .aps-set-sw span { font-size: 11px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); font-weight: 600; }
 .aps-set-row { display: flex; gap: 8px; margin-top: 12px; }
-.aps-set-input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 12px; outline: none; }
-.aps-set-btn { padding: 8px 14px; border: none; border-radius: 6px; background: #2b2d42; color: #fff; font-size: 12px; cursor: pointer; flex-shrink: 0; }
-.aps-set-btn.ghost { background: transparent; color: #888; border: 1px solid #ccc; }
-.aps-set-note { font-size: 11px; color: #aaa; margin-top: 16px; line-height: 1.5; }
+.aps-set-input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--os-line); border-radius: 6px; background: var(--os-surface); color: var(--os-ink); font-size: 12px; outline: none; }
+.aps-set-btn { padding: 8px 14px; border: none; border-radius: 6px; background: var(--os-accent-strong); color: var(--os-on-accent); font-size: 12px; cursor: pointer; flex-shrink: 0; }
+.aps-set-btn.ghost { background: transparent; color: var(--os-ink-soft); border: 1px solid var(--os-line); }
+.aps-set-note { font-size: 11px; color: var(--os-ink-soft); margin-top: 16px; line-height: 1.6; }
+
+/* 主題那一排：一顆＝一套。小圓是三段色的預覽（桌布／底排／重點色），選中的那顆描邊 */
+.aps-set-ths { display: flex; gap: 10px; flex-wrap: wrap; }
+.aps-set-th { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px 7px; min-width: 76px; border: 1px solid var(--os-line); border-radius: 12px; background: var(--os-surface); color: var(--os-ink); font: inherit; font-size: 11px; cursor: pointer; transition: border-color 0.15s, transform 0.12s; }
+.aps-set-th:hover { border-color: var(--os-accent); }
+.aps-set-th:active { transform: scale(0.97); }
+.aps-set-th.on { border-color: var(--os-accent); box-shadow: inset 0 0 0 1px var(--os-accent); }
+.aps-set-th-sw { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--os-line); }
+.aps-set-th-name { letter-spacing: 0.5px; }
 
 /* 📱 手機直立：別在手機裡再畫一個置中的小手機框 —— 手機瀏覽器上它會吃 vh/網址列那塊、
    被頂歪夾在頂部(看起來像「出窗」)。改讓 app 視窗用 100dvh 直接填滿可見螢幕，像原生全螢幕 app。

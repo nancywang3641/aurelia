@@ -84,7 +84,49 @@
         labelColor: '--aps-label-color',  // 圖標文字色
         sbColor:    '--aps-sb-color',     // 狀態列文字色
         font:       '--aps-font',         // 字體
+        photoUrl:   '--aps-photo-1-url',  // 拍立得裡那張照片（沒填＝露出程式畫的示意風景）
     };
+
+    // ── 內建主題 ────────────────────────────────────────────────────
+    // 一套主題分兩半：主畫面那半是 phone_shell.css 的 .aps-frame.theme-<id>（圖標排幾個、
+    // 時鐘位置、底排形狀都在那），系統面板那半是底下 os 這組 --os-* 色票（os_sys_chrome.css
+    // 用它畫手機設置、相簿、控制室、狀態檔案、提示詞、世界書、電話、日曆、劇情設定的頂欄）。
+    // 🚨 色票寫在 :root 不是寫在手機殼上 —— 那幾個面板有時候是全屏開的，根本不在手機裡面。
+    // 🚨 加一套：這裡加一列 + phone_shell.css 補一組 .aps-frame.theme-<id>，其他都不用動。
+    //    swatch 是設置裡那顆預覽小圓的三段顏色，照著該主題的桌布／圖標／重點色挑。
+    const DEFAULT_THEME = 'clean';
+    const THEMES = [
+        { id: 'clean', name: '留白相片', swatch: ['#f8f8f3', '#dfe3d8', '#728764'],
+          os: { '--os-ink': '#3e4b41', '--os-ink-dim': 'rgba(62,75,65,0.72)', '--os-line': 'rgba(62,75,65,0.15)',
+                '--os-hover': 'rgba(62,75,65,0.08)', '--os-chrome-bg': 'rgba(240,241,235,0.90)',
+                '--os-chrome-tabs-bg': 'rgba(244,245,239,0.94)', '--os-accent': '#728764', '--os-accent-glow': 'rgba(114,135,100,0.30)',
+                '--os-page-bg': '#fbfbf7', '--os-surface': '#ffffff',
+                '--os-ink-soft': '#5c6a5e', '--os-accent-strong': '#55684a', '--os-on-accent': '#ffffff' } },
+        { id: 'cute', name: '奶油貼紙', swatch: ['#fff4e8', '#ebc4c9', '#bb727b'],
+          os: { '--os-ink': '#745151', '--os-ink-dim': 'rgba(116,81,81,0.72)', '--os-line': 'rgba(196,163,165,0.35)',
+                '--os-hover': 'rgba(116,81,81,0.08)', '--os-chrome-bg': 'rgba(255,244,238,0.92)',
+                '--os-chrome-tabs-bg': 'rgba(255,249,245,0.95)', '--os-accent': '#bb727b', '--os-accent-glow': 'rgba(187,114,123,0.35)',
+                '--os-page-bg': '#fffaf5', '--os-surface': '#ffffff',
+                '--os-ink-soft': '#8a6666', '--os-accent-strong': '#a05a64', '--os-on-accent': '#ffffff' } },
+        { id: 'dark', name: '霧夜薄荷', swatch: ['#202b29', '#3d5045', '#b8d9bc'],
+          os: { '--os-ink': '#e1e7df', '--os-ink-dim': 'rgba(225,231,223,0.72)', '--os-line': 'rgba(184,217,188,0.18)',
+                '--os-hover': 'rgba(225,231,223,0.10)', '--os-chrome-bg': 'rgba(36,43,41,0.92)',
+                '--os-chrome-tabs-bg': 'rgba(30,37,35,0.95)', '--os-accent': '#b8d9bc', '--os-accent-glow': 'rgba(184,217,188,0.30)',
+                '--os-page-bg': '#1e2523', '--os-surface': '#28302d',
+                '--os-ink-soft': '#a8b4aa', '--os-accent-strong': '#b8d9bc', '--os-on-accent': '#1e2523' } },
+    ];
+    function _themeById(id) { return THEMES.find(function (t) { return t.id === id; }) || THEMES[0]; }
+    // 換主題＝換一整套，所以把「她之前單獨改過、而這套主題管得到」的那幾項一起清掉。
+    // 不清的話換主題會有東西沒跟上（桌布還是上一套的），看起來就像主題壞了。
+    // 圖庫資料夾不清 —— 那是她放的圖，跟配色無關，清掉等於把她的圖弄不見。
+    const THEME_OWNED = ['wallpaper', 'iconBg', 'iconRadius', 'labelColor', 'sbColor', 'font'];
+    function _setThemeId(id) {
+        const t = _loadTheme();
+        t.themeId = _themeById(id).id;
+        THEME_OWNED.forEach(function (k) { delete t[k]; });
+        try { win.localStorage.setItem(THEME_KEY, JSON.stringify(t)); } catch (e) {}
+        _applyTheme();
+    }
     function _loadTheme() { try { return JSON.parse(win.localStorage.getItem(THEME_KEY)) || {}; } catch (e) { return {}; } }
     function _saveTheme(patch) {
         const t = Object.assign(_loadTheme(), patch);
@@ -97,13 +139,34 @@
         const frame = _el.querySelector('.aps-frame');
         if (!frame) return;
         const t = _loadTheme();
+        // 主題：換掉手機殼上的 theme-<id>。整組格子是 CSS 那邊換的，這裡只負責掛名字。
+        const th = _themeById(t.themeId || DEFAULT_THEME);
+        THEMES.forEach(function (x) { frame.classList.toggle('theme-' + x.id, x.id === th.id); });
+        // 系統面板那半：色票掛在根上（那幾個面板有時候是全屏開的，不在手機殼裡面）
+        _applyOsTokens(th);
+        // 她在設置裡單獨改過的那幾項寫成行內 —— 行內贏過主題那組 class，個別設定優先，這是故意的
         Object.keys(THEME_VARS).forEach(function (k) {
             if (t[k]) frame.style.setProperty(THEME_VARS[k], t[k]);
-            else frame.style.removeProperty(THEME_VARS[k]);   // 沒設 = 用 CSS 預設
+            else frame.style.removeProperty(THEME_VARS[k]);   // 沒設 = 用主題的值
         });
         // 字體「硬套用」：有設且非預設 → 加 class，CSS 用 !important 蓋掉所有 app(連寫死的)、只放過 fa 圖標
         frame.classList.toggle('aps-font-on', !!(t.font && t.font !== 'inherit'));
+        // 桌布換成一張照片時，圖標名字要戴回毛玻璃膠囊才讀得出來（漸層與純色不掛，那是主題配好的）
+        frame.classList.toggle('aps-wp-photo', /^url\(/i.test(String(t.wallpaper || '')));
+        // 圖標要跟著主題的顏色，還是各 app 原本的品牌色（微信綠、日曆紅…）
+        frame.classList.toggle('aps-icon-colorful', !!t.iconColorful);
         _applyIcons();
+    }
+    // 色票掛在文件根上。手機殼可能還沒建出來，所以這支不依賴 _el，開機時就先套一次。
+    function _applyOsTokens(th) {
+        try {
+            const root = (win.document || document).documentElement;
+            if (!root) return;
+            THEMES[0].os && Object.keys(THEMES[0].os).forEach(function (v) {
+                const val = th.os && th.os[v];
+                if (val) root.style.setProperty(v, val); else root.style.removeProperty(v);
+            });
+        } catch (e) {}
     }
 
     // icon pack（VN 素材式）：給一個圖庫資料夾網址，每個 app 自動抓 <資料夾>/<代號>.png
@@ -156,6 +219,8 @@
     const MOODS = ['☀️', '⛅', '🌧️', '🌙', '✨', '🌸', '☕', '😴', '🔥', '🫧'];
     // 畫面用的圖示（MOODS 本身是存檔的鍵，舊資料照讀，所以不改）；顏色在 phone_shell.css 照 data-mood 上
     const MOOD_ICONS = ['fa-sun', 'fa-cloud-sun', 'fa-cloud-rain', 'fa-moon', 'fa-star', 'fa-spa', 'fa-mug-hot', 'fa-bed', 'fa-fire', 'fa-soap'];
+    // 拍立得下面那行手寫字用的名字，跟上面兩排一一對齊（圖標講不出來的東西，一個詞講得出來）
+    const MOOD_WORDS = ['今天是晴天', '有點多雲', '下雨的一天', '安靜的夜', '亮晶晶的一天', '喘口氣', '配一杯咖啡', '想睡', '整個燒起來', '泡泡一樣輕'];
     const MOOD_KEY = 'aurelia_phone_mood';
     function _todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
     function _loadMood() {
@@ -168,13 +233,23 @@
     function _saveMood(em) {
         try { win.localStorage.setItem(MOOD_KEY, JSON.stringify({ day: _todayKey(), em: em })); } catch (e) {}
     }
+    // 時鐘那顆心情膠囊與拍立得是同一份資料的兩個臉：膠囊給圖示，拍立得給那句話。
+    // 兩邊都能點，點了都是換下一個 —— 所以一律走這支重畫，不要各畫各的。
     function _paintMood() {
         if (!_el) return;
-        const el = _el.querySelector('#aps-mood-em');
-        if (!el) return;
         const i = Math.max(0, MOODS.indexOf(_loadMood()));
-        el.dataset.mood = String(i);
-        el.innerHTML = '<i class="fa-solid ' + MOOD_ICONS[i] + '"></i>';
+        const el = _el.querySelector('#aps-mood-em');
+        if (el) {
+            el.dataset.mood = String(i);
+            el.innerHTML = '<i class="fa-solid ' + MOOD_ICONS[i] + '"></i>';
+        }
+        const word = _el.querySelector('#aps-pol-mood');
+        if (word) word.textContent = MOOD_WORDS[i];
+        const day = _el.querySelector('#aps-pol-date');
+        if (day) {
+            const d = new Date();
+            day.textContent = d.getFullYear() + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + '.' + ('0' + d.getDate()).slice(-2);
+        }
     }
     function _cycleMood() {
         const i = MOODS.indexOf(_loadMood());
@@ -194,7 +269,7 @@
     ];
     // 這排是系統字體：本機有就有、沒有就退回預設。要別的字體用下面那格自己填。
     const FONTS = [
-        { name: '預設',  css: 'inherit' },
+        { name: '預設',  css: '' },   // 空＝把這一項刪掉，字體交還給主題（以前寫 inherit 會蓋掉主題挑的字）
         { name: '思源宋', css: "'Noto Serif TC',serif" },
         { name: '優雅',  css: "'Playfair Display','Noto Serif TC',serif" },
         { name: '黑體',  css: "system-ui,'PingFang TC','Microsoft JhengHei',sans-serif" },
@@ -231,9 +306,30 @@
                  + '<span class="aps-set-ichint">' + a.id + '.png</span>'
                  + '</div>';
         }).join('');
+        // 主題預覽小圓的三段色。不寫成標籤上的行內樣式：這頁的顏色是資料算出來的，
+        // 一律收進一段自己的樣式規則，標籤上只留 class。
+        const curTheme = _themeById(t.themeId || DEFAULT_THEME).id;
+        const thCss = THEMES.map(function (x) {
+            return '.aps-th-sw-' + x.id + ' { background: linear-gradient(135deg,' + x.swatch[0] + ' 0 38%,' + x.swatch[1] + ' 38% 72%,' + x.swatch[2] + ' 72% 100%); }';
+        }).join('\n');
+        const thBtns = THEMES.map(function (x) {
+            return '<button class="aps-set-th' + (x.id === curTheme ? ' on' : '') + '" data-theme="' + x.id + '" type="button">'
+                 + '<span class="aps-set-th-sw aps-th-sw-' + x.id + '"></span>'
+                 + '<span class="aps-set-th-name">' + _esc(x.name) + '</span></button>';
+        }).join('');
         c.innerHTML =
             '<div class="aps-set">'
+          +   '<style>' + thCss + '</style>'
           +   '<div class="aps-set-top sysh"><button class="aps-set-back sysh-back" id="aps-set-back" type="button" title="返回">‹</button><span class="aps-set-h sysh-title">手機設置</span></div>'
+          +   '<div class="aps-set-sec">主題</div><div class="aps-set-ths">' + thBtns + '</div>'
+          +   '<div class="aps-set-subnote">一套主題會換掉桌布、圖標排法、時鐘位置、底排，還有各個系統頁面的配色。下面幾項可以再單獨蓋過它。</div>'
+          +   '<div class="aps-set-sec">App 圖標的顏色</div><div class="aps-set-chips">'
+          +     '<button class="aps-set-chip' + (t.iconColorful ? '' : ' on') + '" data-iconcolor="0" type="button">跟著主題</button>'
+          +     '<button class="aps-set-chip' + (t.iconColorful ? ' on' : '') + '" data-iconcolor="1" type="button">各自的原色</button>'
+          +   '</div>'
+          +   '<div class="aps-set-sec">拍立得的照片</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-polurl" class="aps-set-input" type="text" placeholder="貼一張照片網址 https://..." value="' + _esc(_urlOf(t.photoUrl)) + '"><button id="aps-set-polurl-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-subnote">留空＝用主題自己畫的那張風景。主畫面上點拍立得可以換今天的心情。</div>'
           +   '<div class="aps-set-sec">背景</div><div class="aps-set-swgrid">' + sw(WALLPAPERS, 'wallpaper') + '</div>'
           +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(_urlOf(t.wallpaper)) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
           +   '<div class="aps-set-sec">APP 圖標（一個圖庫資料夾、自動對名）</div>'
@@ -247,6 +343,23 @@
           +   '<div class="aps-set-note">字體會「硬套用」蓋掉所有 app(連寫死字體的也蓋)，只放過 fa 圖標不破壞。</div>'
           + '</div>';
         const back = c.querySelector('#aps-set-back'); if (back) back.addEventListener('click', _home);
+        // 換主題後整頁重畫：底下那幾項的「目前是什麼」跟著主題變了，不重畫會顯示上一套的值
+        c.querySelectorAll('[data-theme]').forEach(function (b) {
+            b.addEventListener('click', function () { _setThemeId(b.dataset.theme); _renderSettings(c); });
+        });
+        c.querySelectorAll('[data-iconcolor]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                const t2 = _loadTheme();
+                if (b.dataset.iconcolor === '1') t2.iconColorful = true; else delete t2.iconColorful;
+                try { win.localStorage.setItem(THEME_KEY, JSON.stringify(t2)); } catch (e) {}
+                _applyTheme(); _renderSettings(c);
+            });
+        });
+        const polBtn = c.querySelector('#aps-set-polurl-btn');
+        if (polBtn) polBtn.addEventListener('click', function () {
+            const u = (c.querySelector('#aps-set-polurl').value || '').trim();
+            _saveTheme({ photoUrl: u ? ('url("' + u.replace(/"/g, '%22') + '")') : '' });
+        });
         c.querySelectorAll('[data-k]').forEach(function (b) {
             b.addEventListener('click', function () { const p = {}; p[b.dataset.k] = b.dataset.css; _saveTheme(p); });
         });
@@ -255,7 +368,7 @@
         const fnBtn = c.querySelector('#aps-set-fontname-btn');
         if (fnBtn) fnBtn.addEventListener('click', function () {
             const css = _fontCssFromName(c.querySelector('#aps-set-fontname').value);
-            _saveTheme({ font: css || 'inherit' });   // 清空＝退回預設，不然會卡在上一個自訂字體
+            _saveTheme({ font: css || '' });   // 清空＝把這一項刪掉、退回主題的字體，不然會卡在上一個自訂字體
         });
         const icfBtn = c.querySelector('#aps-set-icf-btn');
         if (icfBtn) icfBtn.addEventListener('click', function () { _saveIconFolder((c.querySelector('#aps-set-icfolder').value || '').trim()); });
@@ -603,6 +716,19 @@
           +         '<div class="aps-lock-date" id="aps-lock-date"></div>'
           +         '<button class="aps-mood" id="aps-mood" type="button" title="點一下換心情">今日心情：<span class="aps-mood-em" id="aps-mood-em" data-mood="0"><i class="fa-solid fa-sun"></i></span></button>'
           +       '</div>'
+          // widget 區：時鐘跟圖標格中間那塊。目前只有拍立得，之後別的 widget 也加在這個容器裡。
+          // 相片那四塊是程式畫的示意風景，她在設置填了照片網址就被蓋住（CSS 的 .aps-photo::after）。
+          +       '<div class="aps-widgets" id="aps-widgets">'
+          +         '<figure class="aps-polaroid" id="aps-polaroid" role="button" tabindex="0" title="點一下換心情">'
+          +           '<div class="aps-photo">'
+          +             '<span class="aps-photo-sun"></span>'
+          +             '<span class="aps-photo-hill aps-photo-hill-back"></span>'
+          +             '<span class="aps-photo-hill aps-photo-hill-front"></span>'
+          +             '<span class="aps-photo-water"></span>'
+          +           '</div>'
+          +           '<figcaption><span id="aps-pol-mood">今天是晴天</span><time id="aps-pol-date"></time></figcaption>'
+          +         '</figure>'
+          +       '</div>'
           +       '<div class="aps-grid"></div><div class="aps-dock" id="aps-dock"></div>'
           +       '<button class="aps-edit-done" type="button">完成</button>'
           +     '</div>'
@@ -623,6 +749,12 @@
         _renderGrid();             // 統一畫圖標格 + 綁定 + 套圖庫圖標
         const moodBtn = ov.querySelector('#aps-mood');
         if (moodBtn) moodBtn.addEventListener('click', _cycleMood);
+        const pol = ov.querySelector('#aps-polaroid');
+        if (pol) {
+            pol.addEventListener('click', _cycleMood);
+            // 它不是 <button>（拍立得要用 figure/figcaption 才有相片那個結構），鍵盤那條要自己接
+            pol.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _cycleMood(); } });
+        }
         _paintMood();
         _tickClock();                                              // 先畫一次，別讓主畫面停在 --:--
         try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列＋主畫面時鐘
@@ -638,7 +770,10 @@
         const body = _el.querySelector('#aps-app-body');
         if (body) body.innerHTML = '';
         _el.querySelector('#aps-app').style.display = 'none';
-        _el.querySelector('#aps-home').style.display = 'flex';
+        // 🚨 不准寫死 'flex'：主畫面現在是 grid（時鐘／widget／圖標格／底排四列）。
+        //    寫死 flex 會把那四列攤成一橫排 —— 畫面會變成圖標格不見、底排變一整塊直條。
+        //    清成空字串就好，讓 CSS 自己決定用什麼排。
+        _el.querySelector('#aps-home').style.display = '';
     }
 
     function _openApp(id) {
@@ -722,6 +857,10 @@
         _el.style.display = 'none';
     }
     function toggle() { if (_el && _el.style.display !== 'none') close(); else open(); }
+
+    // 系統面板（控制室、狀態檔案那些）可以完全不開手機就被叫出來，而手機殼是第一次開才建。
+    // 所以色票在載入時就先套一次，不能等 _applyTheme —— 那支沒有手機殼就直接跳出去了。
+    try { _applyOsTokens(_themeById(_loadTheme().themeId || DEFAULT_THEME)); } catch (e) {}
 
     win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide };
     console.log('✅ VoidPhoneShell（大廳手機殼浮窗）模組就緒');
