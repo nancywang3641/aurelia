@@ -961,28 +961,42 @@
             const avOn = !!(_AV && _AV.isEnabled && _AV.isEnabled());
             const avSrc = (_AV && _AV.getProvider) ? _AV.getProvider() : '';
             const avBadge = avOn
-                ? '<span style="background:#07c160; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
+                ? '<span style="background: var(--wx-accent); color: var(--wx-on-accent); font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
                 : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
             const seeOn = !!(_AV && _AV.seeEnabled && _AV.seeEnabled());
             const seeBadge = seeOn
-                ? '<span style="background:#07c160; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
+                ? '<span style="background: var(--wx-accent); color: var(--wx-on-accent); font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
                 : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
             const AV_SRC_LABEL = { '': '跟著圖片設置', pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館原生', custom_api: '自訂接口', comfyui_direct: 'ComfyUI 直連' };
             const avOptions = Object.keys(AV_SRC_LABEL).map(function (v) {
                 return '<option value="' + v + '"' + (avSrc === v ? ' selected' : '') + '>' + AV_SRC_LABEL[v] + '</option>';
             }).join('');
 
-            const pageBg      = isDark ? '#111'    : '#f2f2f2';
-            const headerBg    = isDark ? '#1c1c1e' : '#fff';
-            const cellGroupBg = isDark ? '#1c1c1e' : '#fff';
-            const borderColor = isDark ? '#2a2a2a' : '#f2f2f2';
-            const nameColor   = isDark ? '#f0f0f0' : '#000';
-            const idColor     = isDark ? '#888'    : '#666';
-            const sigColor    = isDark ? '#666'    : '#999';
-            const cellText    = isDark ? '#f0f0f0' : '#000';
-            const arrowColor  = isDark ? '#555'    : '#ccc';
+            // 🚨 這幾個本來是在程式裡按深色與否選顏色，再寫成標籤上的行內樣式。
+            //    行內樣式贏過主題那組格子 —— 只要還有一行這樣寫，主題就換不動那一塊。
+            //    改成直接指到格子，深淺由 .wx-dark 那半決定，主題也才吃得到。
+            const pageBg      = 'var(--wx-page)';
+            const headerBg    = 'var(--wx-surface)';
+            const cellGroupBg = 'var(--wx-surface)';
+            const borderColor = 'var(--wx-line)';
+            const nameColor   = 'var(--wx-ink)';
+            const idColor     = 'var(--wx-ink-3)';
+            const sigColor    = 'var(--wx-ink-dim)';
+            const cellText    = 'var(--wx-ink)';
+            const arrowColor  = 'var(--wx-arrow)';
+            // 主題那一排：顏色定義在主題檔，這裡只掛代號，畫面上那顆小圓吃 CSS 自己的規則
+            const _app = (window.parent && window.parent.wxApp) || window.wxApp || null;
+            const _themes = (_app && _app.getWxThemes) ? _app.getWxThemes() : [];
+            const _cur = (_app && _app.getWxTheme) ? _app.getWxTheme() : '';
+            const themeChips = _themes.map(function (t) {
+                return '<button type="button" class="wx-theme-chip' + (t.id === _cur ? ' on' : '') + '"'
+                     + ' data-wxtheme="' + t.id + '"'
+                     + ' onclick="(window.parent.wxApp || window.wxApp).setWxTheme(\'' + t.id + '\')">'
+                     + '<span class="wx-theme-dot wx-theme-dot-' + (t.id || 'origin') + '"></span>'
+                     + '<span>' + t.name + '</span></button>';
+            }).join('');
             const darkBadge   = isDark
-                ? '<span style="background:#07c160; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
+                ? '<span style="background: var(--wx-accent); color: var(--wx-on-accent); font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
                 : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
 
             const style = `
@@ -996,7 +1010,7 @@
                 .wx-me-arrow { font-size: 20px; color: ${arrowColor}; margin-left: 10px; }
                 .wx-cell-group { background: ${cellGroupBg}; margin-bottom: 10px; }
                 .wx-cell { display: flex; align-items: center; padding: 15px 20px; border-bottom: 1px solid ${borderColor}; cursor: pointer; }
-                .wx-cell:active { background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; }
+                .wx-cell:active { background: var(--wx-surface-2); }
                 .wx-cell-icon { width: 24px; height: 24px; margin-right: 15px; display: flex; align-items: center; justify-content: center; }
                 .wx-cell-icon svg { width: 22px; height: 22px; }
                 .wx-cell-text { flex: 1; font-size: 16px; color: ${cellText}; }
@@ -1009,7 +1023,7 @@
                 .wx-cell-sub { flex: 1; min-width: 0; margin-right: 6px; text-align: right;
                     font-size: 13px; color: ${idColor}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             `;
-            const iconPay = `<svg viewBox="0 0 24 24" fill="#07c160"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V19h-2.67v-1.07H9.27v-1.6h1.47v-1.73H9.41c-1.39 0-2.28-.96-2.28-2.31 0-1.44.97-2.33 2.6-2.33V9h2.67v1.07h1.47v1.6h-1.47v1.73h1.33c1.39 0 2.28.96 2.28 2.31 0 1.44-.97 2.38-2.6 2.38zM12 12.27c-.63 0-.93-.28-.93-.76 0-.49.33-.76.93-.76v1.52zm-1.33 2.53v1.52c.63 0 .93.28.93.76 0 .49-.33.76-.93.76z"/></svg>`;
+            const iconPay = `<svg viewBox="0 0 24 24" fill="var(--wx-accent)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V19h-2.67v-1.07H9.27v-1.6h1.47v-1.73H9.41c-1.39 0-2.28-.96-2.28-2.31 0-1.44.97-2.33 2.6-2.33V9h2.67v1.07h1.47v1.6h-1.47v1.73h1.33c1.39 0 2.28.96 2.28 2.31 0 1.44-.97 2.38-2.6 2.38zM12 12.27c-.63 0-.93-.28-.93-.76 0-.49.33-.76.93-.76v1.52zm-1.33 2.53v1.52c.63 0 .93.28.93.76 0 .49-.33.76-.93.76z"/></svg>`;
             const iconFav = `<svg viewBox="0 0 24 24" fill="#fa9d3b"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/><path d="M7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/></svg>`;
             const iconMoment = `<svg viewBox="0 0 24 24" fill="none"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="#576b95"/></svg>`;
             const iconCard = `<svg viewBox="0 0 24 24" fill="#2782d7"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>`;
@@ -1077,10 +1091,16 @@
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).switchTab('me_black')"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-user-lock"></i></span></div><div class="wx-cell-text">通訊錄黑名單</div><div class="wx-cell-arrow">›</div></div>
                 </div>
 
-                <div class="wx-set-label">通用</div>
+                <div class="wx-set-label">外觀</div>
                 <div class="wx-cell-group">
+                    <div class="wx-cell wx-theme-cell">
+                        <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-palette"></i></span></div>
+                        <div class="wx-cell-text">主題</div>
+                    </div>
+                    <div class="wx-theme-row">${themeChips}</div>
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-moon"></i></span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
                 </div>
+                <div class="wx-set-desc">主題換的是顏色，黑夜模式換的是明暗——每套主題都有自己的白天與夜晚。</div>
                 <div class="wx-set-label">數據管理</div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(async function(){
@@ -1134,7 +1154,7 @@
         },
 
         // --- 6. Shell 渲染 (核心 + 異步背景加載) ---
-        renderShell: function(activeId, chats, activeTab = 'chat', isDark = false) {
+        renderShell: function(activeId, chats, activeTab = 'chat', isDark = false, wxTheme = '') {
             const win = window.parent || window;
             const doc = win.document;
             const transform = activeId ? 'translateX(-30%)' : 'translateX(0)';
@@ -1200,7 +1220,7 @@
                 headerRightBtn = `
                     <div style="display:flex; align-items:center; gap:8px;">
                         ${(chats[activeId] && chats[activeId].isGroup) ? '' : `<div id="wx-msg-note-btn" class="wxnb-head-btn${isDark ? ' is-dark' : ''}" onclick="event.stopPropagation(); const nb = (window.parent.WX_NOTEBOOK || window.WX_NOTEBOOK); if(nb) nb.open('${activeId}');"><i class="fa-solid fa-book-bookmark"></i></div>`}
-                        <div id="wx-msg-menu-btn" style="display:block; font-size:22px; cursor:pointer; font-weight:bold; margin-top:-8px; color:${isDark ? '#f0f0f0' : '#000'};"
+                        <div id="wx-msg-menu-btn" style="display:block; font-size:22px; cursor:pointer; font-weight:bold; margin-top:-8px; color: var(--wx-ink);"
                              onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${activeId}');"><i class="fa-solid fa-ellipsis"></i></div>
                         <div id="wx-msg-confirm-btn" style="display:none; font-size:14px; cursor:pointer; color:#999; padding:4px 8px; font-weight:bold;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.deleteSelectedMessages();">刪除</div>
@@ -1209,7 +1229,7 @@
             } else if (activeTab === 'me_set' || activeTab === 'me_black') {
                 headerRightBtn = '<div style="width:30px;"></div>';   // 設置頁右上不放「＋」，留同寬空位讓標題置中
             } else {
-                headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer; color:${isDark ? '#f0f0f0' : '#000'};" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)"><i class="fa-solid fa-circle-plus"></i></div>`;
+                headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer; color: var(--wx-ink);" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)"><i class="fa-solid fa-circle-plus"></i></div>`;
             }
             
             const isInChat = !!activeId;
@@ -1228,23 +1248,26 @@
             const chatBadgeHTML = totalUnread > 0 ? `<div class="wx-tab-badge">${totalUnread}</div>` : '';
 
             // 觸發按鈕
-            const triggerBtn = `<span class="wx-icon-btn" id="wx-trigger-btn" onclick="${app}.triggerReply()" style="font-size:24px; color:#07c160; margin-right:5px;" title="點擊召喚 AI 回覆"><i class="fa-solid fa-wand-magic-sparkles"></i></span>`;
+            const triggerBtn = `<span class="wx-icon-btn" id="wx-trigger-btn" onclick="${app}.triggerReply()" style="font-size:24px; color: var(--wx-accent); margin-right:5px;" title="點擊召喚 AI 回覆"><i class="fa-solid fa-wand-magic-sparkles"></i></span>`;
 
             const iconChat = `<svg viewBox="0 0 24 24"><path d="M18 13.5c0-2.2-2.3-4-5-4-2.8 0-5 1.8-5 4s2.2 4 5 4c.6 0 1.1-.1 1.6-.2l.1-.1 1.7.5-.4-1.6.1-.1c1.2-1 1.9-1.9 1.9-2.5zm-5 4.5c-3.1 0-5.5-2.1-5.5-4.5S9.9 9 13 9s5.5 2.1 5.5 4.5-2.4 4.5-5.5 4.5zM7.5 7.5h.1c3.1 0 5.8 1.8 6.4 4.3.4-.2.8-.2 1.2-.2 3.6 0 6.5 2.5 6.5 5.5 0 .8-.2 1.6-.6 2.3l.5 2.1-2.2-.6c-1.1.7-2.5 1.2-3.8 1.2-3.6 0-6.5-2.5-6.5-5.5 0-.4 0-.8.1-1.2C5.9 14.8 4 12.9 4 10.5c0-2.8 2.8-5 6.2-5h-2.7z"/></svg>`;
             const iconContact = `<svg viewBox="0 0 24 24"><path d="M4 19h16v-1c0-2.2-1.8-4-4-4h-8c-2.2 0-4 1.8-4 4v1z" opacity=".3"/><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>`;
             const iconMe = `<svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>`;
 
             // 構建主介面
-            const darkShellStyle = isDark ? 'background:#111;' : '';
-            const darkHeaderStyle = isDark ? 'background:#1c1c1e; border-bottom:1px solid #2a2a2a;' : '';
-            const darkTabStyle = isDark ? 'background:#1c1c1e; border-top:1px solid #2a2a2a;' : '';
-            const darkListBg = isDark ? '#111' : ((activeTab === 'me' || activeTab === 'me_set') ? '#f2f2f2' : '#fff');
+            // 同上：外殼、頂欄、底部分頁的深色以前寫成行內，會蓋掉主題 → 一律指到格子。
+            // 名字保留 dark 開頭是為了不用改下面一堆用到它的地方，實際上兩種模式都吃這些值。
+            const darkShellStyle = 'background: var(--wx-page);';
+            const darkHeaderStyle = 'background: var(--wx-header); border-bottom: 1px solid var(--wx-line);';
+            const darkTabStyle = 'background: var(--wx-bar); border-top: 1px solid var(--wx-line);';
+            // 聊天列表是白底、「我」那兩頁是灰底 —— 這個差別跟深淺無關，是版面本來的分別
+            const darkListBg = (activeTab === 'me' || activeTab === 'me_set') ? 'var(--wx-page)' : 'var(--wx-surface)';
 
             const html = `
-                <div class="wx-shell${isDark ? ' wx-dark' : ''}" style="${darkShellStyle}">
+                <div class="wx-shell${isDark ? ' wx-dark' : ''}${wxTheme ? ' wxtheme-' + wxTheme : ''}" style="${darkShellStyle}">
                     <div class="wx-header" style="${darkHeaderStyle}">
-                        <div class="${backBtnClass}" onclick="${backAction}" style="color:${isDark ? '#f0f0f0' : '#000'}">${backBtnText}</div>
-                        <div ${headerTitleAction} style="color:${isDark ? '#f0f0f0' : '#000'}">${headerTitle}</div>
+                        <div class="${backBtnClass}" onclick="${backAction}" style="color: var(--wx-ink)">${backBtnText}</div>
+                        <div ${headerTitleAction} style="color: var(--wx-ink)">${headerTitle}</div>
                         ${headerRightBtn}
                     </div>
                     <div class="wx-page-container">

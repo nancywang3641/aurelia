@@ -27,6 +27,18 @@
     let IS_STREAMING_REPLY = false; // 🔥 防止重複觸發
     let DARK_MODE = localStorage.getItem('wx_dark_mode') === 'true';
 
+    // ── 微信的皮 ────────────────────────────────────────────────────
+    // 顏色一個都不在這裡，全部在 css/aurelia_theme.css 的 .wx-shell.wxtheme-<代號>。
+    // 這裡只留代號與顯示名字。一套皮自己帶淺色與深色兩半，所以跟「黑夜模式」那顆不衝突：
+    // 皮決定顏色，那顆決定明暗，兩個各管各的。
+    const WX_THEMES = [
+        { id: '',       name: '微信原色' },   // 空字串＝不掛任何皮的 class，用預設那組
+        { id: 'cream',  name: '奶油' },
+        { id: 'indigo', name: '靛藍' },
+    ];
+    let WX_THEME = localStorage.getItem('wx_theme') || '';
+    if (!WX_THEMES.some(function (t) { return t.id === WX_THEME; })) WX_THEME = '';
+
     // --- HTML 轉純文字核心 ---
     function cleanHtmlToText(htmlContent) {
         let temp = htmlContent;
@@ -2977,6 +2989,15 @@
             localStorage.setItem('wx_dark_mode', DARK_MODE ? 'true' : 'false');   // 明確寫字串，不要丟布林讓它自己轉
             this.render();
         },
+        // 換皮：只記一個代號，畫面那邊把它接到外殼的 class 上
+        setWxTheme: function (id) {
+            const ok = WX_THEMES.some(function (t) { return t.id === id; });
+            WX_THEME = ok ? id : '';
+            try { localStorage.setItem('wx_theme', WX_THEME); } catch (e) {}
+            this.render();
+        },
+        getWxTheme: function () { return WX_THEME; },
+        getWxThemes: function () { return WX_THEMES.slice(); },
         
         deleteChat: function(chatId) { if (GLOBAL_CHATS[chatId]) {
             // 紅包／轉帳／禮物的已領狀態跟著聊天一起走（刪訊息、清空也是同一套，見 wx_message_manager.purgeProtocolState）
@@ -2995,7 +3016,7 @@
             const atBottom = !prevScroll || (prevScroll.scrollHeight - prevScroll.scrollTop - prevScroll.clientHeight < 80);
             const savedTop = prevScroll ? prevScroll.scrollTop : 0;
 
-            const html = window.WX_VIEW.renderShell(GLOBAL_ACTIVE_ID, GLOBAL_CHATS, GLOBAL_TAB, DARK_MODE);
+            const html = window.WX_VIEW.renderShell(GLOBAL_ACTIVE_ID, GLOBAL_CHATS, GLOBAL_TAB, DARK_MODE, WX_THEME);
             APP_CONTAINER.innerHTML = html;
 
             const room = APP_CONTAINER.querySelector('.wx-room-scroll');

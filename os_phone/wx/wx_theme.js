@@ -59,6 +59,14 @@
 
             /* Settings Panel */
             .wx-settings-panel { background: var(--wx-bar); display: flex; flex-direction: column; gap: 10px; padding-bottom: 20px; }
+            /* 設置頁「外觀」那一排主題晶片：小圓的顏色各自定義在 css/aurelia_theme.css，
+               加新主題時那邊多一條 .wx-theme-dot-<代號> 就會跟著出現。 */
+            .wx-theme-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 15px 14px; background: var(--wx-surface); border-top: 1px solid var(--wx-line); }
+            .wx-theme-chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--wx-line-strong); border-radius: 999px; background: var(--wx-surface-2); color: var(--wx-ink-2); font: inherit; font-size: 13px; cursor: pointer; }
+            .wx-theme-chip.on { border-color: var(--wx-accent-ink); color: var(--wx-accent-ink); box-shadow: inset 0 0 0 1px var(--wx-accent-ink); font-weight: 600; }
+            .wx-theme-dot { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; border: 1px solid var(--wx-line-strong); }
+            .wx-theme-cell { border-bottom: none; }
+            .wx-set-desc { padding: 6px 15px 14px; font-size: 12px; line-height: 1.5; color: var(--wx-ink-3); }
             .wx-set-group { background: var(--wx-surface); border-top: 1px solid var(--wx-line); border-bottom: 1px solid var(--wx-line); padding: 0 15px; margin-top: 10px; }
             .wx-set-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--wx-line); }
             .wx-set-item: last-child { border-bottom: none; }

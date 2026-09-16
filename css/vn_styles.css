@@ -1843,7 +1843,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .wx-cell { display: flex; align-items: center; gap: 12px; padding: 13px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
         .wx-cell:last-child { border-bottom: none; }
         .wx-cell:active { background: #f5f5f5; }
-        .wx-cell-icon { width: 26px; text-align: center; color: #07c160; font-size: 17px; flex-shrink: 0; }
+                /* 微信那排列的圖標吃微信的重點色 —— 換皮時它們要跟著換，不能永遠是綠的。
+           這支是 VN 手機聊天與微信共用的，退路值寫成微信綠，微信外殼外面用到時照舊。 */
+.wx-cell-icon { width: 26px; text-align: center; color: var(--wx-accent, #07c160); font-size: 17px; flex-shrink: 0; }
         .wx-cell-text { flex: 1; min-width: 0; font-size: 15px; color: #1a1a1a; }
         .wx-cell-arrow { color: #c8c8c8; font-size: 13px; flex-shrink: 0; }
 

@@ -460,6 +460,7 @@
     --wx-fill-2: #f0f0f0;        /* 比它再淺一點的填充 */
     --wx-ink-dim: #999999;       /* 時間、說明 */
     --wx-accent: #07c160;        /* 微信綠：主要按鈕、已讀、確認 */
+    --wx-accent-ink: #046e2f;    /* 同一個重點色深一階：當字、當框線用。色塊上那個綠拿來當字，配淺底只有 2.2，讀不出來 */
     --wx-on-accent: #ffffff;     /* 疊在綠色上的字 */
     --wx-danger: #fa5151;        /* 未讀紅點、刪除 */
     --wx-link: #576b95;          /* 連結、可點的藍字 */
@@ -481,7 +482,57 @@
     --wx-fill-2: #2a2a2a;
     --wx-ink-dim: #888888;
     --wx-accent: #07c160;
+    --wx-accent-ink: #4fd98a;
     --wx-on-accent: #ffffff;
     --wx-danger: #fa5151;
     --wx-link: #7d90b8;
 }
+
+/* ── 微信的其他皮 ──────────────────────────────────────────────────
+   一套皮＝兩個區塊：淺色一個、深色一個。深色那個要同時帶 .wx-dark 與皮的名字
+   （三個 class 才壓得過上面那組原色的深色區塊，兩個 class 會同分、只靠先後順序，很脆）。
+   🚨 微信綠在這裡是可以換的：它是這支 app 的重點色，不是「有意思」的顏色。
+      真正不准換的是未讀紅點與刪除紅，所以每套都照樣寫同一個紅。
+   🚨 加一套：複製底下兩個區塊、改名字、把每一格填滿（缺的會掉回原色，變成半套皮），
+      再到 os_phone/wx/wx_core.js 的 WX_THEMES 加一列。 */
+
+/* 奶油：暖白紙感，重點色換成陶紅 */
+.wx-shell.wxtheme-cream {
+    --wx-page: #f7f1ea;  --wx-bar: #fdf7f1;  --wx-surface: #fffaf5;  --wx-surface-2: #f4ece4;
+    --wx-header: #f3e9de;  --wx-line: #efe3d8;  --wx-line-strong: #e2d2c3;  --wx-arrow: #cdbcac;
+    --wx-fill: #efe4d9;  --wx-fill-2: #f3e9e0;
+    --wx-ink: #3c2e28;  --wx-ink-2: #57443c;  --wx-ink-3: #7d6558;  --wx-ink-soft: #9a8375;  --wx-ink-dim: #ab968a;
+    --wx-accent: #d08a72;  --wx-on-accent: #ffffff;  --wx-danger: #fa5151;  --wx-link: #b07a5f;
+    --wx-accent-ink: #9d5740;
+}
+.wx-shell.wx-dark.wxtheme-cream {
+    --wx-page: #17120f;  --wx-bar: #221b17;  --wx-surface: #221b17;  --wx-surface-2: #2e2521;
+    --wx-header: #221b17;  --wx-line: #2e2521;  --wx-line-strong: #3d312b;  --wx-arrow: #6b5a50;
+    --wx-fill: #2e2521;  --wx-fill-2: #2e2521;
+    --wx-ink: #f2e8e0;  --wx-ink-2: #f2e8e0;  --wx-ink-3: #cbb9ad;  --wx-ink-soft: #a89184;  --wx-ink-dim: #8a776c;
+    --wx-accent: #d08a72;  --wx-on-accent: #1a1310;  --wx-danger: #fa5151;  --wx-link: #c9a48f;
+    --wx-accent-ink: #e7a992;
+}
+
+/* 靛藍：冷調墨色，重點色換成靛藍 */
+.wx-shell.wxtheme-indigo {
+    --wx-page: #eef1f6;  --wx-bar: #f6f8fb;  --wx-surface: #ffffff;  --wx-surface-2: #eaeef5;
+    --wx-header: #e7ecf4;  --wx-line: #e2e8f1;  --wx-line-strong: #cfd7e4;  --wx-arrow: #b3bccd;
+    --wx-fill: #e4e9f2;  --wx-fill-2: #eceff6;
+    --wx-ink: #131a26;  --wx-ink-2: #2c3949;  --wx-ink-3: #56647a;  --wx-ink-soft: #7b8799;  --wx-ink-dim: #8d99ab;
+    --wx-accent: #3a6ea5;  --wx-on-accent: #ffffff;  --wx-danger: #fa5151;  --wx-link: #3a6ea5;
+    --wx-accent-ink: #2b5482;
+}
+.wx-shell.wx-dark.wxtheme-indigo {
+    --wx-page: #0d1117;  --wx-bar: #151b24;  --wx-surface: #151b24;  --wx-surface-2: #1e2733;
+    --wx-header: #151b24;  --wx-line: #1e2733;  --wx-line-strong: #2b3747;  --wx-arrow: #5b6779;
+    --wx-fill: #1e2733;  --wx-fill-2: #1e2733;
+    --wx-ink: #e6ecf5;  --wx-ink-2: #e6ecf5;  --wx-ink-3: #b3bfd0;  --wx-ink-soft: #8d9aad;  --wx-ink-dim: #78859a;
+    --wx-accent: #5b91cf;  --wx-on-accent: #0d1117;  --wx-danger: #fa5151;  --wx-link: #7fb0e0;
+    --wx-accent-ink: #8ab6e6;
+}
+
+/* 設置頁那三顆主題小圓（三段色：底／卡片／重點）。加新主題就在這裡多一條。 */
+.wx-theme-dot-origin { background: linear-gradient(135deg, #f2f2f2 0 38%, #ffffff 38% 72%, #07c160 72% 100%); }
+.wx-theme-dot-cream  { background: linear-gradient(135deg, #f7f1ea 0 38%, #fffaf5 38% 72%, #d08a72 72% 100%); }
+.wx-theme-dot-indigo { background: linear-gradient(135deg, #eef1f6 0 38%, #ffffff 38% 72%, #3a6ea5 72% 100%); }
