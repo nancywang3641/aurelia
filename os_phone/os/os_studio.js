@@ -2946,13 +2946,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     cfg = Object.assign({}, cfg, { usePresetPrompts: false, maxTokens: Math.min(Math.max(parseInt(cfg.maxTokens) || 0, 8192), 32768) });   // 思考照主模型設定走；字數上限保底 8192 同正文那條
                     let _ctx = '';   // PWA：任務前面接背景（同 vn_dynamic_parser／app_runtime）；酒館裡引擎回空
                     try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}
-                    let _msgs = null;   // PWA：借正文那一包（同 app_runtime／vn_dynamic_parser）；拿不到才退回背景＋任務
-                    try { if (OS.isStandalone && OS.isStandalone() && OS.buildContext) _msgs = await OS.buildContext(String(systemPrompt || ''), 'vn_story', { plain: true }); } catch (e) { _msgs = null; }
-                    if (!_msgs || !_msgs.length) {
-                        _msgs = [];
-                        if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
-                        _msgs.push({ role: 'user', content: String(systemPrompt || '') });
-                    }
+                    const _msgs = [];   // 背景一則 system、任務一則 user（同 app_runtime／vn_dynamic_parser）；借正文整包那版退掉
+                    if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
+                    _msgs.push({ role: 'user', content: String(systemPrompt || '') });
                     return await new Promise((res, rej) => {
                         OS.chat(_msgs, cfg, null,
                             t => res(typeof t === 'string' ? t : (t && t.message) || ''), rej,
