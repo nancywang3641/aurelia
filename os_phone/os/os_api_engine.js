@@ -1215,6 +1215,7 @@
             //    按連線分類（main=主模型 / sec=副模型 / aux=未標記的手搭 config）+ 標註用途 route ──
             let _useRec = null, _useInP = null;   // 用量記錄層的那一筆（托管路徑會提早 return，要在外層拿得到）
             let _apiRec = null;                    // 控制台 API 記錄那一筆：前置指令插進去之後要把記錄換成真正送出的那包
+            const _keepReq = (s) => { if (_apiRec) _apiRec.reqBody = s; return s; };   // 交給 fetch 的那個字串原封不動留一份，控制台給她看、她不用信我
             {
                 const _cat = (config && config._isSecondary === false) ? 'main'
                            : (config && config._isSecondary === true)  ? 'sec'
@@ -1711,7 +1712,7 @@
                     const _gBody = _toGeminiBody(cleanMessages, { temperature, maxTokens, top_p, thinking: !!config.enableThinking, budget: parseInt(config.thinkingBudget) || 0 });
                     const _gResp = await fetch(_gUrl, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(config.key || '') },
-                        body: _safeJson(_gBody),
+                        body: _keepReq(_safeJson(_gBody)),
                         signal: options.signal || undefined
                     });
                     const _gData = await _gResp.json();
@@ -1731,7 +1732,7 @@
                         const streamResp = await fetch(targetUrl, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
-                            body: _safeJson(streamBody),
+                            body: _keepReq(_safeJson(streamBody)),
                             signal: options.signal || undefined
                         });
                         if (!streamResp.ok) throw new Error(`SSE 請求失敗 HTTP ${streamResp.status}`);
@@ -1772,7 +1773,7 @@
 
                     const response = await fetch(targetUrl, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
-                        body: _safeJson(commonBody),
+                        body: _keepReq(_safeJson(commonBody)),
                         signal: options.signal || undefined
                     });
                     const data = await response.json();
@@ -1845,11 +1846,11 @@
             } catch (e) { console.warn('[OS_API] 這一輪要回哪幾則：組裝失敗（不影響送出）', e); return []; }
         },
 
-        buildContext: async function(userMessage, promptKey = 'wx_chat_system') {
+        buildContext: async function(userMessage, promptKey = 'wx_chat_system', opts) {
             console.log(`[OS_API.buildContext] 目標路由: ${promptKey} | 模式: ${this.isStandalone() ? '獨立' : 'ST'}`);
 
             if (this.isStandalone()) {
-                return this._buildStandaloneContext(userMessage, promptKey);
+                return this._buildStandaloneContext(userMessage, promptKey, opts);
             }
 
             let ctx = { char: {}, user: {}, lore: "", history: [] };
@@ -2243,7 +2244,10 @@
         },
 
         // --- 5. 獨立模式 Context Builder (精準掃描引擎) ---
-        _buildStandaloneContext: async function(userMessage, promptKey) {
+        _buildStandaloneContext: async function(userMessage, promptKey, opts) {
+            // plain：應用與組件借用「正文那一包」（前置指令、預設包條目、人設、世界書、大總結、歷史全部一樣），
+            //   只拿掉 VN 格式協議與 VN 指令那幾段，任務就是最後那則 user。她要的就是應用吃到跟正文一模一樣的東西。
+            const _plain = !!(opts && opts.plain);
             const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];   // 📞 通話「保留」CoT：AI 靠它讀世界書情感/規範條目想怎麼回；思考關進 <thinking> 由字幕端剝掉
 
             const apiMessages = [];
@@ -2395,7 +2399,7 @@
 
             // 🪶 VN 指令（os_vn_rules）：跟世界書 @D 那批同一套插法，只給 VN 正文。
             //   接在世界書後面：同一個深度裡排序是穩定的，VN 指令會比世界書條目更貼近生成點。
-            if (promptKey === 'vn_story') {
+            if (promptKey === 'vn_story' && !_plain) {
                 try {
                     const _vr = win.OS_VN_RULES?.getDepthParts?.() || [];
                     if (_vr.length) _loreDepths = (_loreDepths || []).concat(_vr);
@@ -2577,7 +2581,7 @@
                             if      (_item.id === 'cot'          && cotPrompt) _vn.push({ role: 'system', content: `### \n${cotPrompt}` });
                             // 只要格式協議本身。用 getSystemPrompt 會把整包(條目＋格式)重組一遍，
                             //   而條目在下面 _item.type==='entry' 那條會各自 push → 每條被送兩次。
-                            else if (_item.id === 'panel_prompt')              { const fmt = win.OS_PROMPTS?.getPanelFormat?.('vn_story') || win.OS_PROMPTS?.getFormat?.('vn_story') || ''; if (fmt) _vn.push({ role: 'system', content: fmt }); }
+                            else if (_item.id === 'panel_prompt')              { if (_plain) continue; const fmt = win.OS_PROMPTS?.getPanelFormat?.('vn_story') || win.OS_PROMPTS?.getFormat?.('vn_story') || ''; if (fmt) _vn.push({ role: 'system', content: fmt }); }
                             else if (_item.id === 'worldbook'   && _lorePre)   _vn.push({ role: 'system', content: `[World Info]:\n${_lorePre}` });
                             else if (_item.id === 'persona'     && (userDesc || userName !== 'User'))  _vn.push({ role: 'system', content: `[User Info (${userName})]:\n${userDesc || '(玩家本人)'}` });
                             else if (_item.id === 'vn_history') _injectHistoryWithDepths(_vn, _vnMsgs, _loreDepths);
@@ -2622,7 +2626,7 @@
 
                 if (userMessage) {
                     const _cotReminder = `\n\n[SYS]\n上面是新收到的訊息。回覆前先在 <thinking> 裡想清楚，想完再寫正文。`;
-                    _vn.push({ role: 'user', content: userMessage + _cotReminder });
+                    _vn.push({ role: 'user', content: _plain ? userMessage : (userMessage + _cotReminder) });
                 }
 
                 console.log(`[OS_API vn_story] Context 組裝完成：${_vn.length} 段 | 包：${_vnBundles.map(b=>b.name).join(' → ')}`);

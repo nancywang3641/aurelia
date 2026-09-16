@@ -471,6 +471,7 @@
         return (r.ok === false ? '<div class="dsh-pre-k">錯誤</div><pre class="dsh-pre">' + _esc(r.err || '') + '</pre>' : '') +
             (r.params ? '<div class="dsh-pre-k">參數</div><pre class="dsh-pre">' + _esc(_paramsText(r.params)) + '</pre>' : '') +
             '<div class="dsh-pre-k">送出的 prompt</div><pre class="dsh-pre">' + _esc(r.prompt || '（空）') + '</pre>' +
+            (r.reqBody ? '<div class="dsh-pre-k">實際送出的 JSON（交給網路那一字串，原封不動）</div><pre class="dsh-pre">' + _esc(r.reqBody) + '</pre>' : '') +
             '<div class="dsh-pre-k">回來的原文</div><pre class="dsh-pre">' + _esc(r.raw || '（空）') + '</pre>' +
             '<div class="dsh-actions"><span class="sp"></span><button class="dsh-btn" data-one="' + r.id + '">複製這筆</button></div>';
     }

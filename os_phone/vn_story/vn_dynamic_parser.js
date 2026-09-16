@@ -221,9 +221,13 @@
                         let _ctx = '';
                         try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}
                         // 任務放 user、背景放 system（同 app_runtime）：全塞 system 到 Gemini 會整包進 systemInstruction，過濾嚴得多
-                        const _msgs = [];
-                        if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
-                        _msgs.push({ role: 'user', content: String(systemPrompt || '') });
+                        let _msgs = null;   // PWA：借正文那一包（同 app_runtime）；拿不到才退回背景＋任務
+                        try { if (OS.isStandalone && OS.isStandalone() && OS.buildContext) _msgs = await OS.buildContext(String(systemPrompt || ''), 'vn_story', { plain: true }); } catch (e) { _msgs = null; }
+                        if (!_msgs || !_msgs.length) {
+                            _msgs = [];
+                            if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
+                            _msgs.push({ role: 'user', content: String(systemPrompt || '') });
+                        }
                         return await new Promise(function(res, rej) {
                             OS.chat(_msgs, cfg, null,
                                 function(t) { res(typeof t === 'string' ? t : (t && t.message) || ''); }, rej,
