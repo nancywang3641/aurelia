@@ -1698,11 +1698,13 @@
                 if (uInfo.desc) userDesc = uInfo.desc;
             }
             let charName = ctx.char.name || "AI";
+            let _wxIsGroup = null;   // 這一間是不是群：分私聊／群聊的提示詞包靠它挑；不知道就 null＝都給
             // {{char}} 用「實際在聊的那個聯絡人」名字（群像卡尤其重要：一張卡很多角色，聯絡人靠世界書條目設人設）
             try {
                 const _activeId = win.wxApp && win.wxApp.GLOBAL_ACTIVE_ID;
                 if (_activeId && win.WX_DB && typeof win.WX_DB.getApiChat === 'function') {
                     const _ac = await win.WX_DB.getApiChat(_activeId);
+                    if (_ac) _wxIsGroup = !!_ac.isGroup;
                     if (_ac && !_ac.isGroup && _ac.name) charName = _ac.name;
                 }
             } catch (e) {}
@@ -1713,7 +1715,7 @@
             const NO_COT_ROUTES = ['iris_chat', 'cheshire_chat'];   // 📞 通話「保留」CoT：AI 靠它讀世界書情感/規範條目想怎麼回；思考關進 <thinking> 由字幕端剝掉
 
             if (win.OS_PROMPTS) {
-                if (promptKey) sysPrompt = win.OS_PROMPTS.get(promptKey);
+                if (promptKey) sysPrompt = win.OS_PROMPTS.get(promptKey, { wxGroup: _wxIsGroup });
                 if (!NO_COT_ROUTES.includes(promptKey)) cotPrompt = win.OS_PROMPTS.get('universal_cot');
             }
 
@@ -2090,6 +2092,8 @@
             // 🔑 {{char}}/{{user}} 換成真名（同酒館版）：直連 API 沒有人替它換，以前 PWA 送出去的就是字面上的 {{char}}
             if (_isWxRoute) {
                 const _charName = (_wxChat && !_wxChat.isGroup && _wxChat.name) ? _wxChat.name : (_wxChat && _wxChat.isGroup ? '群裡的角色' : 'AI');
+                // 這一間是不是群現在才知道 → 重拿一次系統提示，分私聊／群聊的包才挑得對
+                if (_wxChat && win.OS_PROMPTS) sysPrompt = win.OS_PROMPTS.get(promptKey, { wxGroup: !!_wxChat.isGroup }) || '';
                 sysPrompt = _wxResolveMacros(sysPrompt, _charName, userName);
                 cotPrompt = _wxResolveMacros(cotPrompt, _charName, userName);
             }
@@ -2413,7 +2417,7 @@
                 }
 
                 if (userMessage) {
-                    const _cotReminder = `\n\n[SYS]\n叮! 委託者發來新的消息，請查收後，提交<thinking> tag，草稿及正文本`;
+                    const _cotReminder = `\n\n[SYS]\n上面是新收到的訊息。回覆前先在 <thinking> 裡想清楚，想完再寫正文。`;
                     _vn.push({ role: 'user', content: userMessage + _cotReminder });
                 }
 
@@ -2609,7 +2613,7 @@
 
             if (userMessage) {
                 let finalUserMsg = userMessage;
-                const cotReminder = `\n\n[SYS]\n叮! 委託者發來新的消息，請查收後，提交<thinking> tag，草稿及正文本`;
+                const cotReminder = `\n\n[SYS]\n上面是新收到的訊息。回覆前先在 <thinking> 裡想清楚，想完再寫正文。`;
                 finalUserMsg += cotReminder;
                 apiMessages.push({ role: 'user', content: finalUserMsg });
             }

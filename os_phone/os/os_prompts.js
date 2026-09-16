@@ -388,6 +388,12 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         { key: 'tarot',      label: '塔羅',    icon: 'fa-wand-sparkles',  color: '#a855f7' },
     ];
     const PANEL_KEYS = PANELS.map(p => p.key);
+    // 微信那格再分：這一包只給私聊、只給群聊、或都給（bundle.wxScope，沒寫＝都要）
+    const WX_SCOPES = [
+        { key: 'all',     label: '都要' },
+        { key: 'private', label: '只有私聊' },
+        { key: 'group',   label: '只有群聊' },
+    ];
     const PANEL_MIGRATE = {};                                    // 舊 key → 新 key（目前沒有）
     const PANEL_DEAD = ['inv', 'child', 'livestream', 'pet', 'host', 'qb', 'quest'];   // 模組已不存在，勾了也沒有路由
 
@@ -476,9 +482,16 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     function saveBundles(list) { localStorage.setItem(BUNDLE_KEY, JSON.stringify(list)); }
 
     // promptKey 匹配：bundle.panels 包含對應前綴
-    function bundleMatchesKey(bundle, promptKey) {
+    function bundleMatchesKey(bundle, promptKey, opts) {
         const ps = bundle.panels;
         if (!ps || !ps.length) return false;
+        // 聊天室分私聊／群聊：包上寫了只給哪一種，而這次呼叫講明了這一間是不是群，對不上就不算這一包。
+        //   沒講（其他路線、或舊的呼叫）就照舊全給。
+        if (promptKey === 'wx_chat_system' && opts && typeof opts.wxGroup === 'boolean') {
+            const sc = bundle.wxScope || 'all';
+            if (sc === 'private' && opts.wxGroup) return false;
+            if (sc === 'group' && !opts.wxGroup) return false;
+        }
         if (ps.includes('*')) return true;
         return ps.some(p => promptKey === p || promptKey.startsWith(p + '_') || promptKey.startsWith(p));
     }
@@ -491,12 +504,12 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         return (R && R.getPreText) ? (R.getPreText() || '') : '';
     }
 
-    function getSystemPrompt(promptKey) {
+    function getSystemPrompt(promptKey, opts) {
         const allEnabled = loadBundles().filter(b => b.enabled !== false);
         const entryMap   = Object.fromEntries(loadEntries().map(e => [e.id, e]));
         const order      = loadUnifiedOrder();
 
-        let bundles = allEnabled.filter(b => bundleMatchesKey(b, promptKey));
+        let bundles = allEnabled.filter(b => bundleMatchesKey(b, promptKey, opts));
 
         // ✨ 動態提取展廳中已啟用的 VN 擴充標籤
         let extraVNTags = '';
@@ -534,7 +547,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     function saveUniversalCot(v) { localStorage.setItem(UCOT_KEY, v); }
 
     win.OS_PROMPTS = {
-        get: function(key) {
+        get: function(key, opts) {   // opts.wxGroup：聊天路線這一間是不是群（分私聊／群聊的包靠它）
             if (key === 'universal_cot')   return loadUniversalCot();
             if (key === 'iris_system')     return loadIris();
             if (key === 'cheshire_system') return loadCheshire();
@@ -547,7 +560,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 return HARDCODED[key];
             }
 
-            return getSystemPrompt(key);   // panel_prompt sys slot 負責在正確位置注入格式提示詞
+            return getSystemPrompt(key, opts);   // panel_prompt sys slot 負責在正確位置注入格式提示詞
         },
         getSystemPrompt,
         getFormat: (key) => HARDCODED[key] || '',   // 只取硬編碼格式提示詞（不含 VN 擴充標籤）
@@ -751,6 +764,11 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             const chk = bPanels.includes(p.key) ? 'checked' : '';
             return `<label class="pm-panel-cb"><input type="checkbox" class="pm-panel-check" data-panel="${p.key}" ${chk}><i class="fa-solid ${p.icon} pm-panel-ico" style="color:${p.color}" aria-hidden="true"></i> ${p.label}</label>`;
         }).join('');
+        // 聊天室分私聊／群聊：只在勾了微信時出現；舊包沒寫過＝都要
+        const curScope  = WX_SCOPES.some(s => s.key === bundle.wxScope) ? bundle.wxScope : 'all';
+        const scopeRows = WX_SCOPES.map(s =>
+            `<label class="pm-panel-cb"><input type="radio" class="pm-wx-scope-check" name="pm-wx-scope-${bundleId}" value="${s.key}" ${s.key === curScope ? 'checked' : ''}> ${s.label}</label>`
+        ).join('');
 
         modal.innerHTML = `
             <div class="pm-bmodal-hd">
@@ -763,12 +781,18 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                     <input class="pm-bundle-name-input" type="text" placeholder="預設包名稱" value="${(bundle.name||'').replace(/"/g,'&quot;')}">
                 </div>
                 <div class="pm-panel-row"><span class="pm-panel-row-label">適用面板：</span>${cbRows}</div>
+                <div class="pm-panel-row pm-wx-scope-row" ${bPanels.includes('wx') ? '' : 'hidden'}><span class="pm-panel-row-label">聊天室：</span>${scopeRows}</div>
                 <div class="pm-bundle-inner-list"></div>
                 <div class="pm-bundle-staging-label">── 加入條目（點擊加入）──</div>
                 <div class="pm-bundle-staging"></div>
             </div>`;
 
         modal.querySelector('.pm-bmodal-back').onclick = () => modal.classList.remove('open');
+        {
+            const _wxCb = modal.querySelector('.pm-panel-check[data-panel="wx"]');
+            const _scopeRow = modal.querySelector('.pm-wx-scope-row');
+            if (_wxCb && _scopeRow) _wxCb.onchange = () => { _scopeRow.hidden = !_wxCb.checked; };
+        }
 
         modal.querySelector('.pm-bmodal-sv').onclick = () => {
             const bl = loadBundles(); const bi = bl.findIndex(b => b.id === bundleId);
@@ -776,6 +800,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             const newName = modal.querySelector('.pm-bundle-name-input').value.trim() || '(未命名包)';
             bl[bi].name   = newName;
             bl[bi].panels = [...modal.querySelectorAll('.pm-panel-check:checked')].map(cb => cb.dataset.panel);
+            bl[bi].wxScope = modal.querySelector('.pm-wx-scope-check:checked')?.value || 'all';
             saveBundles(bl);
             modal.querySelector('.pm-bmodal-title').innerHTML = '<i class="fa-solid fa-box"></i> ' + newName.replace(/&/g, '&amp;').replace(/</g, '&lt;');
             renderUnified(bodyEl);
@@ -885,7 +910,9 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 const bPanels = bundle.panels || [];
                 const chips   = bPanels.map(pk => {
                     const pd = PANELS.find(p => p.key === pk) || { icon: 'fa-puzzle-piece', color: '#888', label: pk };
-                    return `<span class="pm-panel-chip" style="background:${pd.color}20;border-color:${pd.color};color:${pd.color}" title="${pd.label}"><i class="fa-solid ${pd.icon}"></i> ${pd.label}</span>`;
+                    const sc = (pk === 'wx') ? WX_SCOPES.find(s => s.key === bundle.wxScope && s.key !== 'all') : null;
+                    const lab = sc ? `${pd.label}·${sc.label.replace(/^只有/, '')}` : pd.label;
+                    return `<span class="pm-panel-chip" style="background:${pd.color}20;border-color:${pd.color};color:${pd.color}" title="${lab}"><i class="fa-solid ${pd.icon}"></i> ${lab}</span>`;
                 }).join('');
                 item.innerHTML = `<div class="pm-uni-head">
                     <span class="pm-uni-handle">⠿</span>

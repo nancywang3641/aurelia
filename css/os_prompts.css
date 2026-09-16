@@ -52,6 +52,7 @@
         .pm-bundle-name-input { flex:1; background:var(--os-page-bg); border:1px solid rgba(var(--os-ink-rgb), 0.20); color:var(--os-ink); padding:6px 8px; border-radius:4px; font-size:13px; box-sizing:border-box; }
         .pm-bundle-save { background:var(--os-ink); color:var(--os-page-bg); border:none; border-radius:4px; padding:5px 14px; font-size:12px; cursor:pointer; white-space:nowrap; font-weight:bold; }
         .pm-panel-row  { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:10px; }
+        .pm-panel-row[hidden] { display:none; }
         .pm-panel-row-label { font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); flex-shrink:0; }
         .pm-panel-cb   { display:flex; align-items:center; gap:3px; font-size:12px; color:var(--os-ink-soft); cursor:pointer; user-select:none; }
         .pm-panel-cb input { width:14px; height:14px; accent-color:var(--os-ink); cursor:pointer; }
