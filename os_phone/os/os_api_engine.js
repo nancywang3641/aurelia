@@ -1409,6 +1409,12 @@
                     const _cc = (_ck in _cm) ? (_cm[_ck] || '') : (config.customCot || '');
                     if (_cc && String(_cc).trim()) cleanMessages = [{ role: 'system', content: String(_cc) }, ...cleanMessages];
                 }
+                // 整包一則使用者訊息都沒有（應用與組件的生成只給一段 system）：酒館後端送去 Claude／Gemini 之前會自己補一則
+                //   使用者訊息「Let's get started.」（src/prompt-converters.js 的 placeholders），直連沒有人補。
+                //   只有 system 的請求，有些上游會拒答或回錯，同一份前置指令在酒館能出、在 PWA 直接道歉，這是差別之一。照酒館補同一句。
+                if (!useSystemApi && cleanMessages.length && !cleanMessages.some(m => m && m.role === 'user')) {
+                    cleanMessages = [...cleanMessages, { role: 'user', content: "Let's get started." }];
+                }
                 _apiLogRefresh(_apiRec, cleanMessages);   // 控制台記錄換成真正送出的那包（含前置指令）
 
                 const commonBody = {
