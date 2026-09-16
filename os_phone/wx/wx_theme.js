@@ -25,7 +25,7 @@
             .wx-shell.wx-multi-on #wx-msg-note-btn, .wx-shell.wx-multi-on #wx-msg-menu-btn { visibility: hidden; }
             .wx-multi-bar-btn { flex: 1; height: 42px; border-radius: 10px; border: 1px solid #d8d8d8; background: var(--wx-surface); color: var(--wx-ink-2); font-size: 15px; font-family: inherit; cursor: pointer; }
             .wx-multi-bar-btn.danger { flex: 1.4; border: none; background: var(--wx-danger); color: var(--wx-on-accent); font-weight: 600; }
-            .wx-multi-bar-btn.danger: disabled { opacity: 0.45; cursor: default; }
+            .wx-multi-bar-btn.danger:disabled { opacity: 0.45; cursor: default; }
             .wx-dark .wx-multi-bar { background: var(--wx-surface); border-top-color: var(--wx-line); }
             .wx-dark .wx-multi-bar-btn { background: var(--wx-surface-2); border-color: var(--wx-line-strong); color: var(--wx-ink); }
             .wx-dark .wx-multi-bar-btn.danger { background: #fa5151; color: var(--wx-on-accent); }
@@ -35,7 +35,7 @@
             .wx-msgmenu-btn { position: relative; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 12px 8px; border: none; background: none; color: var(--wx-on-accent); font-size: 12px; font-family: inherit; cursor: pointer; border-radius: 8px; }
             .wx-msgmenu-btn + .wx-msgmenu-btn::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 1px; background: rgba(255,255,255,0.14); }
             .wx-msgmenu-btn i { font-size: 18px; }
-            .wx-msgmenu-btn: active { background: rgba(255,255,255,0.12); }
+            .wx-msgmenu-btn:active { background: rgba(255,255,255,0.12); }
             .wx-msgmenu-tail { position: absolute; bottom: -6px; width: 12px; height: 12px; margin-left: -6px; background: rgba(20,20,22,0.94); transform: rotate(45deg); border-radius: 2px; }
             .wx-msgmenu.below .wx-msgmenu-tail { bottom: auto; top: -6px; }
             .wx-copy-ta { position: fixed; left: -9999px; top: 0; opacity: 0; }
@@ -48,13 +48,13 @@
             
             .wx-plus-menu-pop { position: fixed; background: #4c4c4c; border-radius: 6px; padding: 5px 0; box-shadow: 0 5px 15px rgba(0,0,0,0.5); z-index: 1000001; animation: popIn 0.2s; min-width: 160px; }
             .wx-menu-item { padding: 12px 20px; color: var(--wx-on-accent); font-size: 15px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.1); }
-            .wx-menu-item: last-child { border-bottom: none; }
-            .wx-menu-item: active { background: rgba(0,0,0,0.2); }
+            .wx-menu-item:last-child { border-bottom: none; }
+            .wx-menu-item:active { background: rgba(0,0,0,0.2); }
             .wx-menu-item .icon { font-size: 18px; width: 24px; text-align: center; }
             
             .wx-context-menu { position: fixed; background: var(--wx-surface); border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000002; animation: popIn 0.1s; min-width: 120px; overflow: hidden; }
             .wx-context-item { padding: 12px 15px; font-size: 14px; color: var(--wx-ink-2); cursor: pointer; border-bottom: 1px solid var(--wx-line); }
-            .wx-context-item: active { background: var(--wx-surface-2); }
+            .wx-context-item:active { background: var(--wx-surface-2); }
             .wx-context-item.danger { color: var(--wx-danger); }
 
             /* Settings Panel */
@@ -69,7 +69,7 @@
             .wx-set-desc { padding: 6px 15px 14px; font-size: 12px; line-height: 1.5; color: var(--wx-ink-3); }
             .wx-set-group { background: var(--wx-surface); border-top: 1px solid var(--wx-line); border-bottom: 1px solid var(--wx-line); padding: 0 15px; margin-top: 10px; }
             .wx-set-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--wx-line); }
-            .wx-set-item: last-child { border-bottom: none; }
+            .wx-set-item:last-child { border-bottom: none; }
             .wx-set-label { font-size: 15px; color: var(--wx-ink); }
             .wx-set-val { font-size: 14px; color: var(--wx-ink-soft); display: flex; align-items: center; gap: 5px; cursor: pointer; }
             .wx-set-val: after { content: '›'; font-size: 20px; color: var(--wx-arrow); margin-left: 5px; margin-top: -2px;}
@@ -88,11 +88,11 @@
             .wx-modal-box { background: var(--wx-surface); width: 85%; border-radius: 12px; padding: 20px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); animation: popIn 0.25s; display: flex; flex-direction: column; gap: 10px; max-height: 85%; overflow-y: auto; }
             .wx-modal-title { font-size: 16px; font-weight: 600; text-align: center; margin-bottom: 5px; color: var(--wx-ink-2); }
             .wx-modal-input { width: 100%; padding: 10px; border: 1px solid var(--wx-line-strong); background: #f9f9f9; border-radius: 6px; box-sizing: border-box; font-size: 14px; outline: none; transition: border 0.2s; color: var(--wx-ink); }
-            .wx-modal-input: focus { border-color: var(--wx-accent); background: var(--wx-surface); }
+            .wx-modal-input:focus { border-color: var(--wx-accent); background: var(--wx-surface); }
             .wx-modal-input.hidden { display: none; }
             /* 照片：從相簿選（手機會跳相簿／相機），底下的輸入框留給貼網址 */
             .wx-modal-pick { width: 100%; padding: 11px; margin-bottom: 8px; border: none; border-radius: 6px; background: var(--wx-accent); color: var(--wx-on-accent); font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
-            .wx-modal-pick: disabled { opacity: 0.6; cursor: wait; }
+            .wx-modal-pick:disabled { opacity: 0.6; cursor: wait; }
             .wx-modal-pick.hidden { display: none; }
             /* 🎙 聽寫檔下載面板（本機模型第一次用）：從底部升起；狀態寫在 data-state（download／downloading／preparing） */
             .wx-vsheet-mask { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 1000005; display: flex; align-items: flex-end; animation: fadeIn 0.2s; }
@@ -130,7 +130,7 @@
             .wx-page-room.has-bg .wx-group-name { color: var(--wx-on-accent); text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.7); }
             .wx-page-room.has-bg .wx-system-notice { background: rgba(0,0,0,0.38); color: var(--wx-on-accent); backdrop-filter: blur(4px); }
             .wx-chat-item { display: flex; padding: 12px 16px; border-bottom: 1px solid #f2f2f2; cursor: pointer; background: var(--wx-surface); min-height: 70px; box-sizing: border-box; }
-            .wx-chat-item: active { background: var(--wx-surface-2); }
+            .wx-chat-item:active { background: var(--wx-surface-2); }
             .wx-avatar { width: 48px; height: 48px; border-radius: 6px; margin-right: 12px; background-size: cover; background-position: center; flex-shrink: 0; background-color: var(--wx-fill); position: relative; }
             .wx-badge { position: absolute; top: -6px; right: -6px; background: var(--wx-danger); color: #fff; font-size: 10px; height: 16px; min-width: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 1px solid var(--wx-surface); font-weight: bold; z-index: 5; }
             .wx-info { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
@@ -199,8 +199,8 @@
             .wx-typing-indicator { display: flex; align-items: center; gap: 7px; padding: 12px 14px; }
             .wx-typing-dots-wrap { display: flex; gap: 4px; align-items: center; }
             .wx-typing-dots-wrap span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.5; display: inline-block; animation: wx-dot-bounce 1.1s infinite ease-in-out; }
-            .wx-typing-dots-wrap span: nth-child(2) { animation-delay: 0.18s; }
-            .wx-typing-dots-wrap span: nth-child(3) { animation-delay: 0.36s; }
+            .wx-typing-dots-wrap span:nth-child(2) { animation-delay: 0.18s; }
+            .wx-typing-dots-wrap span:nth-child(3) { animation-delay: 0.36s; }
             @keyframes wx-dot-bounce { 0%,80%,100%{transform: translateY(0); opacity: 0.35} 40%{transform: translateY(-4px); opacity: 0.85} }
             /* .wx-typing-label 已停用：群聊要顯示誰在打字改用 .wx-group-name，跟一般訊息同一條 */
             .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); z-index: 5; transition: bottom 0.2s; }
@@ -221,14 +221,14 @@
             .wx-hold-level { display: flex; align-items: center; gap: 4px; height: 28px; }
             .wx-hold-level i { display: block; width: 4px; height: 4px; border-radius: 2px; background: #95ec69; transition: height 0.12s; }
             .wx-hold[data-state="cancel"] .wx-hold-level i { background: var(--wx-surface); }
-            .wx-hold-level i: nth-child(even) { opacity: 0.6; }
+            .wx-hold-level i:nth-child(even) { opacity: 0.6; }
             .wx-hold-level[data-lv="1"] i { height: 8px; }
             .wx-hold-level[data-lv="2"] i { height: 14px; }
             .wx-hold-level[data-lv="3"] i { height: 20px; }
             .wx-hold-level[data-lv="4"] i { height: 26px; }
-            .wx-hold-level[data-lv] i: nth-child(3n+1) { transform: scaleY(0.6); }
+            .wx-hold-level[data-lv] i:nth-child(3n+1) { transform: scaleY(0.6); }
             .wx-hold-text { font-size: 14px; line-height: 1.5; text-align: center; word-break: break-all; }
-            .wx-hold-text: empty { display: none; }
+            .wx-hold-text:empty { display: none; }
             .wx-hold-foot { display: flex; gap: 10px; font-size: 12px; color: rgba(255,255,255,0.78); font-variant-numeric: tabular-nums; }
             .wx-icon-btn { font-size: 26px; color: var(--wx-ink); cursor: pointer; line-height: 1; margin: 0 2px;}
             .wx-send-btn { background: var(--wx-accent); color: var(--wx-on-accent); padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; margin-left: 5px; display: none; }
@@ -239,7 +239,7 @@
             .wx-sticker-panel { height: 0; overflow: hidden; transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); background: var(--wx-surface-2); border-top: 1px solid var(--wx-line); display: flex; flex-direction: column; }
             .wx-sticker-panel.open { height: 260px; }
             /* 管理區打開時面板加高，格子縮、管理區自己捲，上傳列與 TXT 說明才不會被手機底切掉 */
-            .wx-sticker-panel.open: has(.wx-stk-manage-area.open) { height: 360px; }
+            .wx-sticker-panel.open:has(.wx-stk-manage-area.open) { height: 360px; }
             .wx-stk-panel-header { display: flex; align-items: center; padding: 6px 10px; background: var(--wx-surface); border-bottom: 1px solid var(--wx-line); flex-shrink: 0; }
             .wx-stk-tabs-wrap { display: flex; flex: 1; gap: 6px; overflow-x: auto; scrollbar-width: none; }
             .wx-stk-tab { border: none; background: none; font-size: 12px; color: var(--wx-ink-3); padding: 3px 10px; border-radius: 20px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
@@ -248,7 +248,7 @@
             .wx-sticker-grid { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 62px; gap: 4px; padding: 8px; overflow-y: auto; min-height: 78px; }
             .wx-stk-item { height: 62px; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--wx-surface); cursor: pointer; border: 1px solid var(--wx-line); }
             .wx-stk-item img { width: 100%; height: 100%; object-fit: contain; }
-            .wx-stk-item: active { opacity: 0.6; }
+            .wx-stk-item:active { opacity: 0.6; }
             .wx-stk-fallback { font-size: 10px; color: var(--wx-ink-soft); text-align: center; padding: 2px; word-break: break-all; }
             .wx-stk-fallback-box { background: var(--wx-surface); border: 1px solid var(--wx-line); border-radius: 6px; padding: 8px 12px; font-size: 13px; color: var(--wx-ink-2); display: inline-block; max-width: 150px; }
             .wx-stk-empty { grid-column: 1/-1; text-align: center; color: #bbb; font-size: 12px; padding: 20px; }
@@ -268,14 +268,14 @@
             .wx-bottom-nav { height: 55px; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; z-index: 10; padding-bottom: 5px; }
             .wx-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; flex: 1; cursor: pointer; position: relative; }
             .wx-tab-icon-box { position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
-            .wx-tab-icon { width: 24px; height: 24px; fill: #111; transition: fill 0.2s; }
-            .wx-tab-txt { font-size: 10px; margin-top: 1px; color: #111; font-weight: 500; transition: color 0.2s; }
+            .wx-tab-icon { width: 24px; height: 24px; fill: var(--wx-ink); transition: fill 0.2s; }
+            .wx-tab-txt { font-size: 10px; margin-top: 1px; color: var(--wx-ink); font-weight: 500; transition: color 0.2s; }
             .wx-tab.active .wx-tab-icon { fill: var(--wx-accent); }
             .wx-tab.active .wx-tab-txt { color: var(--wx-accent); }
-            .wx-tab: not(.active) .wx-tab-icon { fill: #b2b2b2; }
-            .wx-tab: not(.active) .wx-tab-txt { color: #b2b2b2; }
-            .wx-tab-badge { position: absolute; top: -2px; right: -4px; background: var(--wx-danger); color: #fff; font-size: 10px; height: 16px; min-width: 16px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 3px; border: 1px solid var(--wx-bar); font-weight: bold; z-index: 5; transform: scale(0.9); }
-            .wx-tab-dot { position: absolute; top: 0px; right: -2px; width: 10px; height: 10px; background: var(--wx-danger); border-radius: 50%; border: 1px solid var(--wx-bar); z-index: 5; }
+            .wx-tab:not(.active) .wx-tab-icon { fill: #b2b2b2; }
+            .wx-tab:not(.active) .wx-tab-txt { color: #b2b2b2; }
+            .wx-tab-badge { position: absolute; top: -6px; right: -10px; background: var(--wx-danger); color: #fff; font-size: 10px; height: 16px; min-width: 16px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 3px; border: 1px solid var(--wx-bar); font-weight: bold; z-index: 5; transform: scale(0.9); }
+            .wx-tab-dot { position: absolute; top: -2px; right: -4px; width: 10px; height: 10px; background: var(--wx-danger); border-radius: 50%; border: 1px solid var(--wx-bar); z-index: 5; }
             .wx-scroll-view { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; height: 100%; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
             .wx-grid-page { min-width: 100%; scroll-snap-align: start; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 15px 10px; padding: 25px 20px; box-sizing: border-box; height: 210px; }
             .wx-grid-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
@@ -296,15 +296,15 @@
             .wx-vmsg-bars { display: flex; align-items: center; gap: 3px; height: 16px; flex: 1; }
             .wx-vmsg--me .wx-vmsg-bars { justify-content: flex-end; }
             .wx-vmsg-bars i { display: block; width: 2.5px; height: 6px; border-radius: 2px; background: currentColor; opacity: 0.45; }
-            .wx-vmsg-bars i: nth-child(2) { height: 11px; }
-            .wx-vmsg-bars i: nth-child(3) { height: 8px; }
-            .wx-vmsg-bars i: nth-child(4) { height: 14px; }
-            .wx-vmsg-bars i: nth-child(5) { height: 7px; }
+            .wx-vmsg-bars i:nth-child(2) { height: 11px; }
+            .wx-vmsg-bars i:nth-child(3) { height: 8px; }
+            .wx-vmsg-bars i:nth-child(4) { height: 14px; }
+            .wx-vmsg-bars i:nth-child(5) { height: 7px; }
             .wx-vmsg.is-playing .wx-vmsg-bars i { animation: wxVmsgBar 0.9s ease-in-out infinite; }
-            .wx-vmsg.is-playing .wx-vmsg-bars i: nth-child(2) { animation-delay: 0.15s; }
-            .wx-vmsg.is-playing .wx-vmsg-bars i: nth-child(3) { animation-delay: 0.3s; }
-            .wx-vmsg.is-playing .wx-vmsg-bars i: nth-child(4) { animation-delay: 0.45s; }
-            .wx-vmsg.is-playing .wx-vmsg-bars i: nth-child(5) { animation-delay: 0.6s; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i:nth-child(2) { animation-delay: 0.15s; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i:nth-child(3) { animation-delay: 0.3s; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i:nth-child(4) { animation-delay: 0.45s; }
+            .wx-vmsg.is-playing .wx-vmsg-bars i:nth-child(5) { animation-delay: 0.6s; }
             @keyframes wxVmsgBar { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1.3); } }
             .wx-vmsg.is-playing .wx-vmsg-icon { opacity: 1; }
             .wx-vmsg-dur { font-size: 13px; font-variant-numeric: tabular-nums; opacity: 0.8; }
@@ -323,12 +323,12 @@
             .wx-gift-title-text { font-size: 14px; font-weight: 500; letter-spacing: 0.5px; }
             .wx-gift-footer { font-size: 10px; opacity: 0.6; margin-top: 15px; }
             .wx-contact-item { display: flex; align-items: center; padding: 10px 16px; background: var(--wx-surface); border-bottom: 1px solid #f2f2f2; cursor: pointer; height: 56px; box-sizing: border-box; }
-            .wx-contact-item: active { background: var(--wx-surface-2); }
+            .wx-contact-item:active { background: var(--wx-surface-2); }
             .wx-contact-icon { width: 38px; height: 38px; border-radius: 4px; margin-right: 12px; display: flex; align-items: center; justify-content: center; color: var(--wx-on-accent); font-size: 20px; flex-shrink: 0; background-size: cover; position: relative; }
             .wx-contact-name { font-size: 16px; color: var(--wx-ink); font-weight: 500; }
             .wx-contact-section { background: var(--wx-header); color: var(--wx-ink-soft); font-size: 11px; padding: 4px 16px; font-weight: bold; }
             .wx-dark .wx-contact-item { background: var(--wx-surface); border-bottom-color: var(--wx-line); }
-            .wx-dark .wx-contact-item: active { background: var(--wx-surface-2); }
+            .wx-dark .wx-contact-item:active { background: var(--wx-surface-2); }
             .wx-dark .wx-contact-name { color: var(--wx-ink); }
             .wx-dark .wx-contact-section { background: var(--wx-page); color: var(--wx-ink-dim); }
             /* 通訊錄子頁（新的朋友／僅聊天的朋友／群組／標籤）：沿用 .wx-contact-item 那一列，右邊多一格 */
@@ -341,7 +341,7 @@
             .wx-sub-bar .sp { flex: 1; }
             .wx-sub-note { font-size: 12px; color: var(--wx-ink-soft); }
             .wx-sub-btn { font-family: inherit; font-size: 13px; padding: 6px 14px; border-radius: 16px; border: 1px solid #d0d0d0; background: var(--wx-surface); color: var(--wx-ink-2); cursor: pointer; }
-            .wx-sub-btn: active { background: var(--wx-fill-2); }
+            .wx-sub-btn:active { background: var(--wx-fill-2); }
             .wx-sub-btn.solid { background: var(--wx-accent); border-color: var(--wx-accent); color: var(--wx-on-accent); }
             .wx-sub-btn.warn { color: #e64340; border-color: #f0c3c2; }
             .wx-sub-empty { padding: 48px 32px; text-align: center; color: var(--wx-ink-dim); font-size: 14px; line-height: 1.7; }
@@ -351,7 +351,7 @@
             .wx-tag-mark.wx-tag-on { color: var(--wx-accent); }
             .wx-dark .wx-sub-bar { background: var(--wx-page); border-bottom-color: var(--wx-line); }
             .wx-dark .wx-sub-btn { background: var(--wx-surface-2); border-color: var(--wx-line-strong); color: var(--wx-ink); }
-            .wx-dark .wx-sub-btn: active { background: #333; }
+            .wx-dark .wx-sub-btn:active { background: #333; }
             .wx-dark .wx-sub-btn.solid { background: #07c160; border-color: #07c160; color: var(--wx-on-accent); }
             .wx-dark .wx-sub-btn.warn { color: #ff6b68; border-color: #5a2f2e; }
             .wx-dark .wx-sub-empty i { color: #3a3a3a; }
@@ -409,7 +409,7 @@
             .wx-rp-stat span { font-size: 11px; color: #6b6b6b; }
             .wx-rp-list { flex: 1; overflow-y: auto; padding: 10px 15px; max-height: 300px; }
             .wx-rp-item { display: flex; align-items: center; padding: 12px 10px; border-bottom: 1px solid #f5f5f5; }
-            .wx-rp-item: last-child { border-bottom: none; }
+            .wx-rp-item:last-child { border-bottom: none; }
             .wx-rp-item-avatar { width: 40px; height: 40px; border-radius: 50%; background-size: cover; background-position: center; margin-right: 12px; flex-shrink: 0; }
             .wx-rp-item-info { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
             .wx-rp-item-name { font-size: 14px; font-weight: 500; color: var(--wx-ink-2); }
@@ -441,7 +441,7 @@
                 justify-content: center;
                 position: relative;
             }
-            .wx-msg-checkbox: hover {
+            .wx-msg-checkbox:hover {
                 border-color: var(--wx-accent);
                 transform: scale(1.1);
             }
@@ -462,7 +462,7 @@
                 cursor: pointer;
                 transition: background 0.2s;
             }
-            .wx-page-room.multi-select-mode .wx-msg-row: active {
+            .wx-page-room.multi-select-mode .wx-msg-row:active {
                 background: rgba(0, 0, 0, 0.05);
             }
 
@@ -506,7 +506,7 @@
             /* ── .wx-cell* 在 vn_styles.css 是寫死白底 → 黑夜模式漏成白卡。這裡補齊暗色一套（.wx-dark 特異度蓋過全域白底）。 ── */
             .wx-dark .wx-cell-group { background: var(--wx-surface); }
             .wx-dark .wx-cell { background: var(--wx-surface); border-bottom-color: var(--wx-line); }
-            .wx-dark .wx-cell: active { background: var(--wx-surface-2); }
+            .wx-dark .wx-cell:active { background: var(--wx-surface-2); }
             .wx-dark .wx-cell-text { color: var(--wx-ink); }
             .wx-dark .wx-cell-arrow { color: #555; }
         `,
