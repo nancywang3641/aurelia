@@ -23,6 +23,9 @@
     --aps-accent: #728764;
     --aps-homebar-color: #a3ad9d;
     --aps-font: "Segoe UI", "Microsoft JhengHei", sans-serif;
+    /* 動態島佔掉的那塊。app 自己把標頭往上延伸這麼多，島底下那條就是 app 自己的顏色 ——
+       真手機就是這樣，不是系統畫一條黑的蓋住。全螢幕那版是 0（那邊有裝置真正的安全區）。 */
+    --aps-safe-top: 40px;
     --aps-caption-font: "Segoe Print", "KaiTi", "DFKai-SB", cursive;
     /* 時鐘區：版位用 grid-areas 換，所以時間／日期／心情的相對位置整個是可換的 */
     --aps-lock-height: 106px;
@@ -129,6 +132,11 @@
     pointer-events: none; letter-spacing: 0.5px;
 }
 .aps-sb-icons { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+/* 狀態列的字是疊在 app 自己的標頭上的，而每個 app 的標頭深淺不一（微信還有自己的深色模式），
+   所以字色不能寫死、也不能只跟著主題走。開 app 時程式會量一次島底下那塊真正的底色，
+   把 data-sb 設成 light 或 dark；主畫面沒有 data-sb，維持主題自己那個顏色。 */
+.aps-frame[data-sb="light"] .aps-statusbar { color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+.aps-frame[data-sb="dark"] .aps-statusbar { color: #16181a; text-shadow: none; }
 /* 小螢幕等比縮 */
 @media (max-height: 760px) { .aps-frame { transform: scale(0.9); } }
 @media (max-height: 680px) { .aps-frame { transform: scale(0.8); } }
@@ -478,7 +486,7 @@
 
 /* app 內頁（用 app 自己的 header/返回；手機殼不加自己的 chrome）—— top:30 留瀏海，內容撐滿 */
 .aps-app {
-    position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+    position: absolute; inset: 0;
     display: none; background: var(--os-page-bg, #fff);
 }
 .aps-app-body { position: absolute; inset: 0; overflow: auto; font-family: var(--aps-font); scrollbar-width: none; }
@@ -487,8 +495,14 @@
 .aps-app-body::-webkit-scrollbar, .aps-app-body *::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }
 /* 手機殼內：app 自己的 header 已在手機殼狀態列下方，不該再加 device 安全區(env safe-area-inset-top)，
    否則 header 上方會留一大塊白。歸零(高優先級蓋過 wx/wb theme 與 aurelia_core 的 env padding)。 */
-.aps-app-body .wx-header, .aps-app-body .wb-shell .wb-header { padding-top: 0 !important; height: 45px !important; }   /* 只限微博：世界書也叫 .wb-header，它的頭歸 .sysh 管 */
-.aps-app-body .ps-header { padding-top: 0 !important; height: 56px !important; }
+.aps-app-body .wx-header, .aps-app-body .wb-shell .wb-header {
+    padding-top: var(--aps-safe-top) !important;
+    height: calc(45px + var(--aps-safe-top)) !important;
+}   /* 只限微博：世界書也叫 .wb-header，它的頭歸 .sysh 管 */
+.aps-app-body .ps-header {
+    padding-top: var(--aps-safe-top) !important;
+    height: calc(56px + var(--aps-safe-top)) !important;
+}
 .aps-mount { position: relative; width: 100%; height: 100%; }
 .aps-fail { padding: 24px 18px; text-align: center; color: #999; font-size: 13px; }
 .aps-fail b { display: block; color: #c0392b; font-size: 14px; margin-bottom: 10px; }
@@ -753,6 +767,7 @@
     }
     .aps-screen { border-radius: 0; }
     .aps-screen::after { display: none; }    /* 面板邊那圈也不要：全螢幕時它會變成畫面裡一圈方框 */
+    .aps-frame { --aps-safe-top: 0px; }      /* 島是假的、已經藏掉，app 不必再讓那塊 */
     .aps-notch { display: none; }            /* 全螢幕不需要動態島 —— 她真的手機自己有一個 */
     .aps-frame::before, .aps-frame::after { display: none; }   /* 側邊實體鍵同理，沒有框就沒有邊可以掛 */
     .aps-close { top: 10px; right: 10px; }   /* 關閉鈕收進畫面內，免在框外被切掉 */

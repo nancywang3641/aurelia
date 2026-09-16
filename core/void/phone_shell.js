@@ -206,6 +206,39 @@
         _applyTheme();
     }
 
+    // ── 狀態列的字色：跟著 app 自己的標頭走 ──
+    // 真手機是 app 把自己的標頭延伸到動態島底下，島那條就是 app 的顏色；系統不會畫一條黑的蓋住。
+    // 所以字色不能寫死也不能只跟主題 —— 微信還有自己的深色模式，同一套主題下深淺是會變的。
+    // 做法：量一次島底下那塊真正的底色。狀態列自己是 pointer-events:none，
+    //       elementFromPoint 會直接穿過它拿到底下的 app 標頭，不必每個 app 都來登記一遍。
+    // 回主畫面時清掉，讓主題自己那個顏色回來。
+    function _syncStatusBar() {
+        if (!_el) return;
+        const frame = _el.querySelector('.aps-frame');
+        if (!frame) return;
+        const app = _el.querySelector('#aps-app');
+        if (!app || app.style.display === 'none') { delete frame.dataset.sb; return; }
+        // 等 app 把自己畫出來再量；沒畫完就量會抓到還沒上色的容器
+        win.requestAnimationFrame(function () {
+            try {
+                const sb = _el.querySelector('.aps-statusbar');
+                const r = sb.getBoundingClientRect();
+                const hit = document.elementFromPoint(Math.round(r.left + 40), Math.round(r.top + r.height / 2));
+                let n = hit, bg = null;
+                while (n && n !== document.documentElement) {
+                    const c = win.getComputedStyle(n).backgroundColor;
+                    const m = String(c).match(/[\d.]+/g);
+                    if (m && (m[3] === undefined || parseFloat(m[3]) > 0.85)) { bg = m.map(Number); break; }
+                    n = n.parentElement;
+                }
+                if (!bg) { delete frame.dataset.sb; return; }
+                const lin = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+                const lum = 0.2126 * lin(bg[0]) + 0.7152 * lin(bg[1]) + 0.0722 * lin(bg[2]);
+                frame.dataset.sb = lum < 0.45 ? 'light' : 'dark';
+            } catch (e) { delete frame.dataset.sb; }
+        });
+    }
+
     // ── 狀態列時鐘 ──
     const _WEEK = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
     function _tickClock() {
@@ -237,7 +270,37 @@
         return MOODS[0];
     }
     function _saveMood(em) {
-        try { win.localStorage.setItem(MOOD_KEY, JSON.stringify({ day: _todayKey(), em: em })); } catch (e) {}
+        try { win.localStorage.setItem(MOOD_KEY, JSON.stringify({ day: _todayKey(), em: em, text: _loadMoodText() })); } catch (e) {}
+    }
+    // 拍立得下面那行字：她自己寫的優先，沒寫過才用心情的預設句。
+    // 跟心情一樣綁日期 —— 這是「今天的拍立得」，不是一句掛在那裡不會變的簽名。
+    function _loadMoodText() {
+        try {
+            const m = JSON.parse(win.localStorage.getItem(MOOD_KEY));
+            if (m && m.day === _todayKey() && typeof m.text === 'string') return m.text;
+        } catch (e) {}
+        return '';
+    }
+    function _saveMoodText(t) {
+        try {
+            const m = JSON.parse(win.localStorage.getItem(MOOD_KEY)) || {};
+            const same = m.day === _todayKey();
+            win.localStorage.setItem(MOOD_KEY, JSON.stringify({
+                day: _todayKey(), em: (same && m.em) || MOODS[0], text: String(t || '')
+            }));
+        } catch (e) {}
+        _paintMood();
+    }
+    async function _editMoodText() {
+        const A = win.AUI || window.AUI;
+        const now = _loadMoodText();
+        const i = Math.max(0, MOODS.indexOf(_loadMood()));
+        if (!A || !A.prompt) return;   // 對話窗還沒載到就先不擋著她，什麼都不做
+        const v = await A.prompt('今天想寫什麼？', now, {
+            title: '拍立得', placeholder: MOOD_WORDS[i], hint: '留空就回到今天的心情那句。', okText: '寫上去'
+        });
+        if (v === null) return;        // 取消
+        _saveMoodText(v.trim());
     }
     // 時鐘那顆心情膠囊與拍立得是同一份資料的兩個臉：膠囊給圖示，拍立得給那句話。
     // 兩邊都能點，點了都是換下一個 —— 所以一律走這支重畫，不要各畫各的。
@@ -250,7 +313,7 @@
             el.innerHTML = '<i class="fa-solid ' + MOOD_ICONS[i] + '"></i>';
         }
         const word = _el.querySelector('#aps-pol-mood');
-        if (word) word.textContent = MOOD_WORDS[i];
+        if (word) word.textContent = _loadMoodText() || MOOD_WORDS[i];
         const day = _el.querySelector('#aps-pol-date');
         if (day) {
             const d = new Date();
@@ -335,7 +398,7 @@
           +   '</div>'
           +   '<div class="aps-set-sec">拍立得的照片</div>'
           +   '<div class="aps-set-row"><input id="aps-set-polurl" class="aps-set-input" type="text" placeholder="貼一張照片網址 https://..." value="' + _esc(_urlOf(t.photoUrl)) + '"><button id="aps-set-polurl-btn" class="aps-set-btn" type="button">套用</button></div>'
-          +   '<div class="aps-set-subnote">留空＝用主題自己畫的那張風景。主畫面上點拍立得可以換今天的心情。</div>'
+          +   '<div class="aps-set-subnote">留空＝用主題自己畫的那張風景。主畫面上點拍立得可以寫今天那句話，點時鐘旁邊那顆換心情。</div>'
           +   '<div class="aps-set-sec">背景</div><div class="aps-set-swgrid">' + sw(WALLPAPERS, 'wallpaper') + '</div>'
           +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(_urlOf(t.wallpaper)) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
           +   '<div class="aps-set-sec">APP 圖標（一個圖庫資料夾、自動對名）</div>'
@@ -725,7 +788,7 @@
           // widget 區：時鐘跟圖標格中間那塊。目前只有拍立得，之後別的 widget 也加在這個容器裡。
           // 相片那四塊是程式畫的示意風景，她在設置填了照片網址就被蓋住（CSS 的 .aps-photo::after）。
           +       '<div class="aps-widgets" id="aps-widgets">'
-          +         '<figure class="aps-polaroid" id="aps-polaroid" role="button" tabindex="0" title="點一下換心情">'
+          +         '<figure class="aps-polaroid" id="aps-polaroid" role="button" tabindex="0" title="點一下寫今天這句">'
           +           '<div class="aps-photo">'
           +             '<span class="aps-photo-sun"></span>'
           +             '<span class="aps-photo-hill aps-photo-hill-back"></span>'
@@ -757,9 +820,10 @@
         if (moodBtn) moodBtn.addEventListener('click', _cycleMood);
         const pol = ov.querySelector('#aps-polaroid');
         if (pol) {
-            pol.addEventListener('click', _cycleMood);
+            // 點拍立得＝寫今天這句（換心情圖示是點上面那顆膠囊，兩件事分開）
+            pol.addEventListener('click', _editMoodText);
             // 它不是 <button>（拍立得要用 figure/figcaption 才有相片那個結構），鍵盤那條要自己接
-            pol.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _cycleMood(); } });
+            pol.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _editMoodText(); } });
         }
         _paintMood();
         _tickClock();                                              // 先畫一次，別讓主畫面停在 --:--
@@ -776,6 +840,7 @@
         const body = _el.querySelector('#aps-app-body');
         if (body) body.innerHTML = '';
         _el.querySelector('#aps-app').style.display = 'none';
+        _syncStatusBar();
         // 🚨 不准寫死 'flex'：主畫面現在是 grid（時鐘／widget／圖標格／底排四列）。
         //    寫死 flex 會把那四列攤成一橫排 —— 畫面會變成圖標格不見、底排變一整塊直條。
         //    清成空字串就好，讓 CSS 自己決定用什麼排。
@@ -802,6 +867,7 @@
         if (win.PhoneSystem) { _savedGoHome = win.PhoneSystem.goHome; win.PhoneSystem.goHome = _home; }
         _el.querySelector('#aps-home').style.display = 'none';
         _el.querySelector('#aps-app').style.display = 'flex';
+        _syncStatusBar();
         // 🚨 app 的 go() 可能是 async（微信就是）。以前只 try/catch 同步錯誤 → 非同步炸掉時
         //    整個 promise 靜靜地 reject，螢幕上只剩那個空的 .aps-mount＝她看到的「白屏」，
         //    而她沒有 console 可以看是什麼錯。現在兩種都接，並且把錯誤直接印在螢幕上讓她複製。

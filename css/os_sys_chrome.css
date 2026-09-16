@@ -77,8 +77,12 @@
 }
 /* 手動「iOS 動態島」版位：讓出固定高度 */
 body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
-/* 手機殼裡：狀態列由殼讓（.aps-app 已經 top:30px），不再加裝置安全區，否則上方多一塊白 */
-.aps-app-body .sysh.sysh { padding-top: 6px; min-height: 56px; }
+/* 手機殼裡：裝置自己的安全區不算數（那是給真手機用的），改讓手機殼的動態島那一格。
+   標頭往上長進島底下 → 島那條就是這個面板自己的顏色，跟真手機一樣。 */
+.aps-app-body .sysh.sysh {
+    padding-top: calc(6px + var(--aps-safe-top, 0px));
+    min-height: calc(56px + var(--aps-safe-top, 0px));
+}
 
 /* 三格定位：第一個子元素進左槽、第二個進中間、其餘進右槽。
    各面板舊樣式把按鈕寫成 position:absolute（日曆）或帶 margin（提示詞），在骨架裡一律歸零。 */
