@@ -129,11 +129,23 @@
 .ws-set-note { font-size: 12px; color: #8c7a66; margin-top: 4px; line-height: 1.5; }
 
 /* ── 底部 nav ── */
-.ws-nav { flex-shrink: 0; display: flex; background: #fffdf7; border-top: 1px solid rgba(110,80,40,0.12); padding: 4px 0; }
-.ws-nav-b { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; border: none; background: transparent; padding: 6px 0; cursor: pointer; color: #a08a72; }
-.ws-nav-ic { font-size: 19px; filter: grayscale(0.5); opacity: 0.65; }
-.ws-nav-t { font-size: 10px; }
-.ws-nav-b.active { color: #7a2432; }
+/* 底部導覽跟著手機主題走（--os-nav-*，定義在 css/aurelia_theme.css）。
+   以前這條是寫死的米色，換什麼主題都不動。 */
+.ws-nav {
+    flex-shrink: 0; display: flex; box-sizing: border-box;
+    height: var(--os-nav-height, 52px);
+    margin: 0 var(--os-nav-inset, 0) calc(var(--os-nav-gap-bottom, 0px) + var(--aps-safe-bottom, 0px));
+    background: var(--os-nav-bg, #fffdf7);
+    border: var(--os-nav-border, 0 solid transparent);
+    border-top: var(--os-nav-top, 1px solid rgba(110,80,40,0.12));
+    border-radius: var(--os-nav-radius, 0);
+    box-shadow: var(--os-nav-shadow, none);
+    padding: 4px 0;
+}
+.ws-nav-b { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; padding: 4px 0; cursor: pointer; color: var(--os-nav-ink, #a08a72); border-radius: var(--os-nav-on-radius, 0); margin: 0 6px; }
+.ws-nav-ic { font-size: var(--os-nav-icon-size, 19px); filter: grayscale(0.5); opacity: 0.65; }
+.ws-nav-t { font-size: var(--os-nav-label-size, 10px); }
+.ws-nav-b.active { color: var(--os-nav-ink-on, #7a2432); background: var(--os-nav-on-bg, transparent); }
 .ws-nav-b.active .ws-nav-ic { filter: none; opacity: 1; }
 
 /* ── 安裝成功覆蓋 ── */

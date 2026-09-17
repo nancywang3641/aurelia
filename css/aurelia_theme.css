@@ -6,7 +6,8 @@
 
      --aps-*   手機主畫面：桌布、外框、時鐘區、widget（拍立得）、圖標格、底排。
                只有 css/phone_shell.css 在讀。
-     --os-*    所有面板：頂欄、分頁列、頁底、卡片、輸入框、按鈕、文字、線。
+     --os-*    所有面板：頂欄、分頁列、頁底、卡片、輸入框、按鈕、文字、線，
+               以及 app 底下那條底部導覽（--os-nav-*，見下面那組）。
                手機設置、相簿、控制室、狀態檔案、提示詞、世界書、電話、日曆、
                劇情設定、角色圖鑑都在讀。
 
@@ -145,6 +146,26 @@
     --os-ink-soft: #5c6a5e;
     --os-accent-strong: #55684a;
     --os-on-accent: #ffffff;
+
+    /* ── 底部導覽（app 底下那條分頁列：微博、應用工坊、電話）──────────
+       貼底一條 → radius 0、inset 0、gap-bottom 0，只給 top 那條線。
+       浮起來的一塊 → radius 給大值、inset 留左右、gap-bottom 離底，border 給完整框線。
+       （底部橫槓那塊程式會自己加進 gap-bottom，主題不用算。）
+       選中那一顆：on-bg 透明＝只變色；給底色＋on-radius＝藥丸。 */
+    --os-nav-bg: rgba(244, 245, 239, 0.96);
+    --os-nav-border: 0 solid transparent;
+    --os-nav-top: 1px solid rgba(62, 75, 65, 0.13);
+    --os-nav-height: 52px;
+    --os-nav-radius: 0;
+    --os-nav-inset: 0;
+    --os-nav-gap-bottom: 0px;
+    --os-nav-shadow: none;
+    --os-nav-ink: #5c6a5e;
+    --os-nav-ink-on: #728764;
+    --os-nav-on-bg: transparent;
+    --os-nav-on-radius: 0;
+    --os-nav-icon-size: 19px;
+    --os-nav-label-size: 10px;
 }
 
 .theme-clean .aps-lock { border-bottom: 1px solid #e1e4d9; padding-bottom: 12px; }
@@ -236,6 +257,21 @@
     --os-ink-soft: #8a6666;
     --os-accent-strong: #a05a64;
     --os-on-accent: #ffffff;
+
+    --os-nav-bg: #ebc4c9;
+    --os-nav-border: 3px solid #fff8f3;
+    --os-nav-top: 3px solid #fff8f3;
+    --os-nav-height: 58px;
+    --os-nav-radius: 18px;
+    --os-nav-inset: 8px;
+    --os-nav-gap-bottom: 8px;
+    --os-nav-shadow: 0 3px 0 #d5afb5;
+    --os-nav-ink: #98636d;
+    --os-nav-ink-on: #7a3f4a;
+    --os-nav-on-bg: #fff3ea;
+    --os-nav-on-radius: 13px;
+    --os-nav-icon-size: 19px;
+    --os-nav-label-size: 10px;
 }
 
 .theme-cute .aps-home::before { inset: 9px 7px 11px; border: 2px dotted rgba(222, 176, 180, 0.47); border-radius: 24px; }
@@ -334,6 +370,21 @@
     --os-ink-soft: #5a5f66;
     --os-accent-strong: #16181a;
     --os-on-accent: #ffffff;
+
+    --os-nav-bg: rgba(255, 255, 255, 0.86);
+    --os-nav-border: 1px solid rgba(255, 255, 255, 0.80);
+    --os-nav-top: 1px solid rgba(22, 24, 26, 0.08);
+    --os-nav-height: 56px;
+    --os-nav-radius: 26px;
+    --os-nav-inset: 10px;
+    --os-nav-gap-bottom: 10px;
+    --os-nav-shadow: 0 8px 24px rgba(22, 24, 26, 0.12);
+    --os-nav-ink: #5b6166;
+    --os-nav-ink-on: #16181a;
+    --os-nav-on-bg: rgba(22, 24, 26, 0.07);
+    --os-nav-on-radius: 14px;
+    --os-nav-icon-size: 19px;
+    --os-nav-label-size: 10px;
 }
 
 /* 🧩 這裡本來把「拍立得那一列」排到時鐘上面，是這套皮的特色。
@@ -437,6 +488,21 @@
     --os-ink-soft: #a8b4aa;
     --os-accent-strong: #b8d9bc;
     --os-on-accent: #1e2523;
+
+    --os-nav-bg: rgba(40, 48, 45, 0.94);
+    --os-nav-border: 1px solid rgba(113, 133, 116, 0.33);
+    --os-nav-top: 1px solid rgba(113, 133, 116, 0.33);
+    --os-nav-height: 58px;
+    --os-nav-radius: 26px;
+    --os-nav-inset: 10px;
+    --os-nav-gap-bottom: 10px;
+    --os-nav-shadow: 0 9px 20px rgba(0, 0, 0, 0.28);
+    --os-nav-ink: #9fb3a3;
+    --os-nav-ink-on: #b8d9bc;
+    --os-nav-on-bg: rgba(184, 217, 188, 0.14);
+    --os-nav-on-radius: 14px;
+    --os-nav-icon-size: 19px;
+    --os-nav-label-size: 10px;
 }
 
 .theme-dark .aps-mood { align-self: center; flex-direction: column-reverse; gap: 7px; padding: 10px 9px; font-size: 9px; }
