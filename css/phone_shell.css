@@ -350,7 +350,14 @@
     position: absolute; inset: 0; z-index: 1;
     display: none; background: var(--os-page-bg, #fff);
 }
-.aps-app-body { position: absolute; inset: 0; overflow: auto; font-family: var(--aps-font); scrollbar-width: none; }
+.aps-app-body {
+    position: absolute; inset: 0; overflow: auto; font-family: var(--aps-font); scrollbar-width: none;
+    /* 全專案共用的「頂端要讓出多少」那個變數，在手機殼裡換成手機殼自己的狀態列高度。
+       外面那份算的是真手機的瀏海（在 PWA 幾乎都是 0），在手機殼裡不算數——這裡的頂端是狀態列。
+       創作室、UI 工坊那種自己的標頭本來就寫著「原本的內距 ＋ 這個變數」，換掉就自動讓位，
+       不必再一個一個列進下面那張清單。 */
+    --safe-top: var(--aps-safe-top);
+}
 /* 手機內所有 app 的滾動條隱形(像手機、不像桌面那條粗的) */
 .aps-app-body, .aps-app-body * { scrollbar-width: none; -ms-overflow-style: none; }
 .aps-app-body::-webkit-scrollbar, .aps-app-body *::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }

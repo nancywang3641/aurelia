@@ -216,6 +216,18 @@
             } catch (e) { delete frame.dataset.sb; }
         });
     }
+    // app 開起來之後畫面還會再變：創作室、聊天設置那種整頁蓋上來的，底下那塊顏色跟著換
+    //   （創作室是深紫、聊天設置是淺灰），只在開 app 那一刻量一次，時間就會變成深字壓在深底上看不見。
+    //   所以 app 區塊只要有變動就重量一次，收斂成一次、免得聊天一直冒字就一直量。
+    let _sbT = 0;
+    function _watchStatusBar(body) {
+        if (!body || !win.MutationObserver) return;
+        const mo = new win.MutationObserver(function () {
+            if (_sbT) return;
+            _sbT = win.setTimeout(function () { _sbT = 0; _syncStatusBar(); }, 250);
+        });
+        mo.observe(body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+    }
 
     // ── 狀態列時鐘 ──
     const _WEEK = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -956,6 +968,7 @@
             });
         }
         _el = ov;
+        _watchStatusBar(ov.querySelector('#aps-app-body'));   // 畫面一變就重量一次狀態列字色
         _addWritingTools();        // 寫作工具（系統設置/變數工坊/創作室＋standalone:世界書/提示詞）
         _restoreInstalledApps();   // 從 localStorage 補回已安裝 app
         _renderGrid();             // 統一畫圖標格 + 綁定 + 套圖庫圖標
