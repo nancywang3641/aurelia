@@ -1769,14 +1769,8 @@
                 if (VN_Config.data.spriteDirect !== true) return 1;
                 const n = parseInt(VN_Config.data.spriteBatch, 10);
                 if (!(n > 1)) return 1;
-                // 來源不是官方那顆就不批次：其他接口會把幾個角色糊成一團。設置那格本來就只在官方時出現，
-                // 這裡再擋一次是因為她可能先開了批次、之後才把來源換掉。
-                const M = win.OS_IMAGE_MANAGER;
-                const cfg = (M && M.config) || {};
-                if (((cfg.serviceChar || cfg.serviceLiving || cfg.service) || '') !== 'custom_api') return 1;
-                const u = String((cfg.customApi && cfg.customApi.url) || '').toLowerCase();
-                const md = String((cfg.customApi && cfg.customApi.model) || '').toLowerCase();
-                if (!(/api\.openai\.com/.test(u) || /gpt-image/.test(md))) return 1;
+                // 🚨🚨 這裡不准再加「來源是不是官方」的判斷：設置那格拿掉了，執行期也不准偷偷擋。
+                //    她選了幾個就是幾個——猜錯接口而把功能靜靜停掉，比畫壞一張圖難查得多。
                 return Math.min(3, n);
             } catch (e) { return 1; }
         },

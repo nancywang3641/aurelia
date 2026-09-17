@@ -643,17 +643,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const imgConfig = loadImageConfig();
         const minimaxConfig = loadMinimaxConfig();
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
-        // 🎯 「一次生幾個角色」只給官方那顆：它照指令擺格子擺得準，切開才是三個完整的人。
-        //    其他接口（Pollinations／NAI／ComfyUI／酒館原生）會把幾個角色糊成一團，開了只是浪費錢。
-        //    判定跟尺寸吸附那邊同一套：頭像那桶選「自訂接口」，而且網址或型號看得出是官方。
-        const _spriteBatchOk = function (cfg) {
-            try {
-                if (((cfg.serviceChar || cfg.serviceLiving || cfg.service) || '') !== 'custom_api') return false;
-                const u = String((cfg.customApi && cfg.customApi.url) || '').toLowerCase();
-                const m = String((cfg.customApi && cfg.customApi.model) || '').toLowerCase();
-                return /api\.openai\.com/.test(u) || /gpt-image/.test(m);
-            } catch (e) { return false; }
-        };
         const tavernExt = loadTavernExtSettings();
 
         // 畫廊子 tab 切換 helper（含 avatar/bg 列表 lazy load）
@@ -1486,16 +1475,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${vnD.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
                                 <div class="set-desc">開＝直接生全身立繪、不生頭像。</div>
                                 <!-- 🎯 一次幾個：把幾個角色擠進同一張寬圖生出來再切開。
-                                     只有官方那顆（自訂接口填 api.openai.com／gpt-image）畫得出乾淨的分格，
-                                     其他接口會把三個角色糊在一起 → 那幾條來源不顯示這一格。 -->
-                                <div id="vncfg-sprite-batch-row" style="margin-top:10px; display:${_spriteBatchOk(imgConfig) ? '' : 'none'};">
+                                     🚨🚨 這一格不准加「猜她在用哪個接口」的條件。我第一版只在認出官方網址時才顯示、
+                                        第二版改成變灰，兩版都踩同一個坑：判斷猜錯就等於把她的選項鎖起來，
+                                        而她是付錢的人、她知道自己接的是什麼（她的原話：「什麼鬼? 我就是拿官方的」）。
+                                        照她選的做，底下寫清楚它適合誰就夠了。 -->
+                                <div id="vncfg-sprite-batch-row" style="margin-top:10px;">
                                     <div class="set-label" title="幾個角色擠進同一張寬圖一次生完再切開。畫風一致、也省呼叫次數。">一次生幾個角色</div>
                                     <select class="set-select" id="vncfg-sprite-batch" style="font-size:12px;">
                                         <option value="1" ${!(vnD.spriteBatch > 1) ? 'selected' : ''}>一個一個生</option>
                                         <option value="2" ${vnD.spriteBatch === 2 ? 'selected' : ''}>兩個一起（每個 768×1024）</option>
                                         <option value="3" ${vnD.spriteBatch === 3 ? 'selected' : ''}>三個一起（每個 512×1024）</option>
                                     </select>
-                                    <div class="set-desc">湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。</div>
+                                    <div class="set-desc">湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>會照指令把畫面分成等寬直欄的只有 GPT 那顆；畫風鬆散的接口可能把幾個角色糊在一起。</div>
                                 </div>
                             </div>
                         </div>
