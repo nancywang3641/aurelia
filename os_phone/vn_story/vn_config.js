@@ -158,6 +158,13 @@
                 return await win.OS_IMAGE_MANAGER.generate(full, 'char', _avOpts);
             } return "";
         },
+        // 🎨 立繪要不要「原樣送」（raw）——同一個旗標在不同接口代表不同的事，不能一律開著：
+        //   ・NAI：raw 會連品質負詞與畫風底詞一起不送 → 要 false（本來就是）
+        //   ・自訂接口：raw 唯一的作用就是「不要附上她自己填的底詞」，而那格底詞就是她的畫風，
+        //     生圖那支的註解自己寫著「畫風放這裡由程式保證每張都帶」 → 要 false，否則立繪完全沒有風格。
+        //     （她的說法：「風格沒送，連自動立繪的底圖都沒送」。）
+        //   ・Pollinations／酒館原生／ComfyUI：它們的底詞是內建那套動漫底詞，會跟立繪模板打架 → 維持 true。
+        _spriteRaw: function (svc) { return !(svc === 'novelai' || svc === 'custom_api'); },
         // 立繪模式專用：直接從角色描述生「全身站姿立繪」(跟 studio 頭像轉立繪同套邏輯)。
         // 清掉跟立繪衝突的構圖/背景/視角 tag → 套全身模板 → 512×896 直立 → 非 NAI 走 raw(純模板)，NAI 套頭像同畫風底詞避免太裸。
         getSprite: async function(prompt, force) {
@@ -195,7 +202,7 @@
             // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面(extraNegative)。空＝不送。
             let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
-            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: !_useNAI, force: !!force, extraNegative: _neg });
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg });
         },
         // 🎯 幾個角色擠一張寬圖一次生完（只在官方那顆開；見設置 → 圖片 → 頭像 → 一次生幾個角色）。
         //    回傳整張寬圖，切開的事交給呼叫端（vn_core 的 _sliceSheet）。
@@ -228,7 +235,8 @@
             let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
             // 官方只收那三種尺寸，寬的那個就是 1536×1024：切兩格＝每個 768×1024、切三格＝每個 512×1024
-            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: 1536, height: 1024, raw: true, force: !!force, extraNegative: _neg });
+            const _svc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : ((win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '');
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: 1536, height: 1024, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg });
         },
         // 剝掉跟立繪衝突的構圖/背景/視角 tag（與 os_settings studio 的 stripPromptForSprite 同規則）
         _stripForSprite: function(p) {

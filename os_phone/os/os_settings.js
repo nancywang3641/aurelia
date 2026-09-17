@@ -805,6 +805,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
                     const _isComfy = !!(_imCfg && _imCfg.service === 'comfyui_direct');
+                    // 🎨 raw 是「原樣送、不附底詞」。自訂接口那格底詞就是她填的畫風，立繪不附＝整張沒有風格
+                    //    → 判斷收在 VN_Image._spriteRaw 一份，三條立繪路徑共用（拿不到就退回原本的寫法）。
+                    const _svc = (typeof win2.OS_IMAGE_MANAGER.serviceFor === 'function') ? win2.OS_IMAGE_MANAGER.serviceFor('char') : (_imCfg && _imCfg.service);
+                    const _spriteRawFor = function (sv) {
+                        const VI = win2.VN_Image || win.VN_Image;
+                        return (VI && typeof VI._spriteRaw === 'function') ? VI._spriteRaw(sv) : !_useNAI;
+                    };
                     // 立繪 base 比例（可調，「立繪比例」下拉，預設 512×896；鎧甲/壯角色選寬一點）
                     let _bw = 512, _bh = 896;
                     try { const _bp = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_bp[0] && _bp[1]) { _bw = _bp[0]; _bh = _bp[1]; } } catch(e) {}
@@ -823,12 +830,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const _spriteNeg = (document.getElementById('sprite-tpl-neg')?.value || '').trim() || undefined;
                     let _opts;
                     if (_hiresOn) {
-                        _opts = { force: true, width: _bw, height: _bh, raw: !_useNAI, extraNegative: _spriteNeg, comfyHires: { scale: _ratio, denoise: 0.45 } };
+                        _opts = { force: true, width: _bw, height: _bh, raw: _spriteRawFor(_svc), extraNegative: _spriteNeg, comfyHires: { scale: _ratio, denoise: 0.45 } };
                         setStatus('為「' + name + '」生立繪中（高清修復，較久 15–60 秒）...');
                     } else {
                         const _sw = Math.round(_bw * _ratio / 8) * 8;
                         const _sh = Math.round(_bh * _ratio / 8) * 8;
-                        _opts = { force: true, width: _sw, height: _sh, raw: !_useNAI, extraNegative: _spriteNeg };
+                        _opts = { force: true, width: _sw, height: _sh, raw: _spriteRawFor(_svc), extraNegative: _spriteNeg };
                     }
                     const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', _opts);
                     if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
