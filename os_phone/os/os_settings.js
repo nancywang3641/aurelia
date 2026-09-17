@@ -643,6 +643,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const imgConfig = loadImageConfig();
         const minimaxConfig = loadMinimaxConfig();
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
+        // 🎯 頭像那桶現在接的型號名（自訂接口那條才有）。節點只是預設組，選了之後值就在這幾格裡。
+        const _charModelName = function (cfg) { try { return String((cfg.customApi && cfg.customApi.model) || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); } catch (e) { return ''; } };
+        // 判「是不是 GPT 那種」＝自訂接口 ＋ 型號名帶 GPT（她定的規則）。只拿來寫說明那一行，不鎖任何東西。
+        const _isGptChar = function (cfg) {
+            try {
+                if (((cfg.serviceChar || cfg.serviceLiving || cfg.service) || '') !== 'custom_api') return false;
+                return /gpt/i.test(_charModelName(cfg));
+            } catch (e) { return false; }
+        };
         const tavernExt = loadTavernExtSettings();
 
         // 畫廊子 tab 切換 helper（含 avatar/bg 列表 lazy load）
@@ -1475,10 +1484,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${vnD.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
                                 <div class="set-desc">開＝直接生全身立繪、不生頭像。</div>
                                 <!-- 🎯 一次幾個：把幾個角色擠進同一張寬圖生出來再切開。
-                                     🚨🚨 這一格不准加「猜她在用哪個接口」的條件。我第一版只在認出官方網址時才顯示、
-                                        第二版改成變灰，兩版都踩同一個坑：判斷猜錯就等於把她的選項鎖起來，
-                                        而她是付錢的人、她知道自己接的是什麼（她的原話：「什麼鬼? 我就是拿官方的」）。
-                                        照她選的做，底下寫清楚它適合誰就夠了。 -->
+                                     🚨🚨 這一格永遠能選，判斷只拿來寫底下那行字、不准拿來鎖。
+                                        我第一版是「認不出官方就整格不顯示」（她找不到，問「在哪開?」），
+                                        第二版改成變灰（她回「什麼鬼? 我就是拿官方的」——判斷猜錯了）。
+                                        判斷條件是她定的：自訂接口 ＋ 型號名帶 GPT。我原本寫死成網址 api.openai.com
+                                        或型號含 gpt-image，兩條都比她的寫法窄，所以她的設定一直判不中。 -->
                                 <div id="vncfg-sprite-batch-row" style="margin-top:10px;">
                                     <div class="set-label" title="幾個角色擠進同一張寬圖一次生完再切開。畫風一致、也省呼叫次數。">一次生幾個角色</div>
                                     <select class="set-select" id="vncfg-sprite-batch" style="font-size:12px;">
@@ -1486,7 +1496,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <option value="2" ${vnD.spriteBatch === 2 ? 'selected' : ''}>兩個一起（每個 768×1024）</option>
                                         <option value="3" ${vnD.spriteBatch === 3 ? 'selected' : ''}>三個一起（每個 512×1024）</option>
                                     </select>
-                                    <div class="set-desc">湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>會照指令把畫面分成等寬直欄的只有 GPT 那顆；畫風鬆散的接口可能把幾個角色糊在一起。</div>
+                                    <div class="set-desc">湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>${_isGptChar(imgConfig)
+                                        ? '你現在頭像接的是 <b>' + _charModelName(imgConfig) + '</b>，就是它擅長的事。'
+                                        : '會照指令把畫面分成等寬直欄的是 GPT 那種（頭像來源選「自訂接口」、型號名帶 GPT）；畫風鬆散的接口可能把幾個角色糊在一起。'}</div>
                                 </div>
                             </div>
                         </div>
