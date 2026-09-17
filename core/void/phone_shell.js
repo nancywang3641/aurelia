@@ -966,6 +966,62 @@
                 const d = e.target.closest('.aps-dot');
                 if (d) _goPage(parseInt(d.dataset.page, 10) || 0);
             });
+            // 🖱 桌機用滑鼠：翻頁本來整個靠手指左右滑（瀏覽器自己的橫向捲動），滑鼠沒有「滑」這個動作，
+            //    於是在電腦上只剩底下那排小點能點——她說主畫面滑不動，就是這件事。補兩種滑鼠做得到的：
+            //    滾輪翻一頁、按著左右拖。手指照舊走瀏覽器原本那條，一個字都不動。
+            if (pg) {
+                let wheelAt = 0;
+                pg.addEventListener('wheel', function (e) {
+                    if (_pageCount() <= 1) return;
+                    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+                    if (!d) return;
+                    // 這一頁的格子自己還能上下捲就先讓它捲（圖標多到一頁裝不下時），捲到頭了才翻頁
+                    const grid = e.target && e.target.closest ? e.target.closest('.aps-grid') : null;
+                    if (grid && Math.abs(e.deltaY) > Math.abs(e.deltaX) && grid.scrollHeight > grid.clientHeight + 1) {
+                        const atTop = grid.scrollTop <= 0;
+                        const atEnd = grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 1;
+                        if (!((d < 0 && atTop) || (d > 0 && atEnd))) return;
+                    }
+                    e.preventDefault();
+                    const now = Date.now();
+                    if (now - wheelAt < 380) return;   // 滾輪一格會連發好幾次，一次只翻一頁
+                    wheelAt = now;
+                    _goPage(_curPage() + (d > 0 ? 1 : -1));
+                }, { passive: false });
+
+                let sw = null;
+                pg.addEventListener('pointerdown', function (e) {
+                    if (e.pointerType !== 'mouse' || (e.button != null && e.button > 0)) return;
+                    if (_editing || _pageCount() <= 1) return;   // 編輯中按著是要搬圖標，不要搶
+                    const w = pg.clientWidth || 1;
+                    sw = { x: e.clientX, y: e.clientY, left: pg.scrollLeft, from: Math.round(pg.scrollLeft / w), id: e.pointerId, on: false };
+                });
+                pg.addEventListener('pointermove', function (e) {
+                    if (!sw || e.pointerId !== sw.id) return;
+                    const dx = e.clientX - sw.x;
+                    if (!sw.on) {
+                        // 橫向動得夠多才算在翻頁，不然直著拖會變成翻頁
+                        if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(e.clientY - sw.y)) return;
+                        sw.on = true;
+                        pg.style.scrollSnapType = 'none';   // 拖的時候關掉貼齊，不然跟著手走會一直被吸回去
+                        try { pg.setPointerCapture(e.pointerId); } catch (err) {}
+                    }
+                    e.preventDefault();
+                    pg.scrollLeft = sw.left - dx;
+                });
+                const swEnd = function (e) {
+                    if (!sw || (e.pointerId != null && e.pointerId !== sw.id)) return;
+                    const on = sw.on, dx = e.clientX - sw.x, from = sw.from;
+                    sw = null;
+                    pg.style.scrollSnapType = '';
+                    if (!on) return;
+                    _eatNextClick();   // 拖完放開那一下不要順手開了 app
+                    const w = pg.clientWidth || 1;
+                    _goPage(Math.abs(dx) > w / 3 ? from + (dx < 0 ? 1 : -1) : from);   // 拖過三分之一才換頁，不然彈回去
+                };
+                pg.addEventListener('pointerup', swEnd);
+                pg.addEventListener('pointercancel', swEnd);
+            }
         }
         _el = ov;
         _watchStatusBar(ov.querySelector('#aps-app-body'));   // 畫面一變就重量一次狀態列字色
