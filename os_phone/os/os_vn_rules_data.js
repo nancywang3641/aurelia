@@ -1187,6 +1187,48 @@ Magic_Beginning
 - 非人類沒有人類老化外觀也要選一檔，錨點改寫在體表（甲殼磨損、鱗片褪色、羽毛斑白）。`
         },
         {
+            id: "avatar_capi",
+            name: "🖼️生圖｜[VN-CAPI] 頭像規則(腳本自動開關)",
+            on: false, depth: 0, role: 0,
+            content: `## 🪪 [AVATAR] 新角色首次登場輸出一行，已出場過的不再輸出
+[Avatar|名|聲線|A {adult/teen/elderly+主詞} with {髮色髮型}, {瞳色} eyes, {種族標籤}, {標誌特徵}, {種族特徵}, wearing {上衣}, {下褲}, {裝飾物}, {表情}, {背景}]
+- 開場 <ChapterCard> 內、[Bg] 行後，每角色一行；名字與 [Char] 同步；內文禁用「|」。
+- 自然語言英文句，逗號分段。不堆 Danbooru 標籤、不寫權重括號（這條線路背後可能是任何一種模型，括號不一定有用）——要加壓就把詞放到句首、句尾再點一次。
+- 單人胸像，臉要清晰。禁真人描寫、環境／一次性／群體角色、完整場景、群眾、戰鬥、腰部以下（腿鞋蹄尾）。負面詞腳本會加。
+- 髮色、瞳色、上衣款式必寫（無髮寫頭部表面色）。表情具象，禁 neutral expression。背景一個詞，限本世界真有的環境。
+- 種族必填，不填特徵會直接全部人類型態，非常不合格。
+
+### 主詞與種族
+- 主詞只能一個詞：人類 male/female；非人類用該種族英文專有詞，不得並列。種族專有詞任何取景都要寫。
+- 非純人類＝種族特徵必填。只寫 tail／fins／scales 會變成「人多長一個零件」。
+- 種族欄只收畫得出來的身體部位，且要寫長在身上哪裡。禁身分職業愛好性格；形容詞位置禁任何生物名（當顏色用也一樣），生物名只准出現在主詞的種族專有詞。
+- 挑一種（畫法分類，不是可用種族清單）：
+ ① 人臉＋局部異質（獸耳尾、角、翅膀、鱗片、非人膚色、發光紋路）：主詞照人類寫，部位進種族段。翅膀角耳在肩背頭上，胸像看得到，露一截也要寫。只差耳形膚色的寫一項。
+ ② 頭部非人臉（獸頭、爬蟲、蟲、機械、無面）：種族專有詞當主詞，緊接頭部形態，禁 human face／head。
+ ③ 下半身非人腿（魚尾、蛇身、馬身、蹄）：種族專有詞當主詞，要最精確的那個。魚族：整條魚尾無腿＝mermaid／merman；有手有腳只多鰃鰭尾＝shark girl／shark boy，不可互換。
+
+### 種族標籤
+即使有種族也必須優先標:male/female，否則男女不分
+亞人: XXX- ears, XXX- tail
+人魚: mermaid／merman
+鮫人: shark girl／shark boy with fish tail
+羽人(鳥人): color/pattern feathered wings (不可使用鳥類形容詞， 要鳥爪時：描述部位，不寫鳥種，會導致變成鳥頭/鳥身)
+獸人: XXX(動物)- head like, XXX- tail (與亞人有區分，這個是連頭部都是動物)
+矮人: short dwarf, full thick {color} beard, broad bulbous nose (必須寫矮，否則會默認人類，並強調鬍子)
+精靈: elf, Elf ears
+妖精: fairy
+惡魔: demon wings, horns
+
+### 年齡（必選一檔，年齡短語＋錨點都要寫進句子）
+- ~25：a youthful young {主詞}, smooth face
+- 26~39：an adult {主詞}，禁 youthful
+- 40~55：a middle-aged {主詞} ＋兩個錨點：男 weathered face／fine wrinkles／greying hair／stubble；女 fine wrinkles／crow's feet／grey-streaked hair
+- 60+：an old {主詞} ＋ wrinkled face, grey or white hair
+- 15 歲以下才用 teen，15 歲以上一律用 adult；年齡檔漏寫或寫錯，模型會把成年人畫成小孩。
+- handsome/beautiful 要用就得同時有錨點。mature／elderly 不能當年齡主詞。
+- 非人類沒有人類老化外觀也要選一檔，錨點改寫在體表（甲殼磨損、鱗片褪色、羽毛斑白）。`
+        },
+        {
             id: "core_format",
             name: "🟦核心｜VN正文格式與TAG總綱",
             on: true, depth: 0, role: 0,

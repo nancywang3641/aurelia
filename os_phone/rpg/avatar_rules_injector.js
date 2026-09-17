@@ -5,6 +5,7 @@
 //         [VN-POLLAI]  → Pollinations
 //         [VN-NAI]     → NovelAI
 //         [VN-COMFYUI] → 酒館原生(tavern_sd) 與 ComfyUI 直連(comfyui_direct)
+//         [VN-CAPI]    → 自訂接口(custom_api)
 //       依當前頭像產圖器，把對應那條打開、其餘兩條關掉。酒館與 PWA 同一條路。
 // ⚠️ 邊界：只撥開關，不寫內容。
 // 2026-09-14 以前撥的是酒館全域世界書「-VN小說家-」（PWA 撥自己的世界書），VN 指令搬進程式後改撥這份。
@@ -21,11 +22,18 @@
         novelai:        '[VN-NAI]',
         tavern_sd:      '[VN-COMFYUI]',
         comfyui_direct: '[VN-COMFYUI]',
+        custom_api:     '[VN-CAPI]',
     };
-    const ALL_ENTRY_TAGS = ['[VN-POLLAI]', '[VN-NAI]', '[VN-COMFYUI]'];
+    const ALL_ENTRY_TAGS = ['[VN-POLLAI]', '[VN-NAI]', '[VN-COMFYUI]', '[VN-CAPI]'];
 
+    // 頭像規則要跟「頭像桶」走：設置→圖片→頭像那格是 serviceChar，
+    // 舊「活物桶」serviceLiving、再舊的全域 service 依序當退路（同 OS_IMAGE_MANAGER.serviceFor('char')）。
+    // ⚠️ 原本只讀全域 service → 頭像那格換了接口這裡看不到，規則會停在舊的那一條。
     function _currentService() {
-        try { return (JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {}).service || 'pollinations'; }
+        try {
+            const c = JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {};
+            return c.serviceChar || c.serviceLiving || c.service || 'pollinations';
+        }
         catch (e) { return 'pollinations'; }
     }
 
@@ -38,9 +46,11 @@
             const wantTag = SERVICE_TO_ENTRY[service] || null;
             const r = VR.setEnabledByName(ALL_ENTRY_TAGS, wantTag ? [wantTag] : []);
             if (!r.seen.length) {
-                console.warn('🪪 [Avatar Rules] ⛔ VN 指令裡找不到 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI] → 頭像規則沒有東西可切');
+                console.warn('🪪 [Avatar Rules] ⛔ VN 指令裡找不到 [VN-POLLAI]/[VN-NAI]/[VN-COMFYUI]/[VN-CAPI] → 頭像規則沒有東西可切');
                 return;
             }
+            // 新接口沒在 SERVICE_TO_ENTRY 登記 → 四條全關，AI 只剩總綱那行可照，頭像只寫得出髮型服裝。加新來源必須同步這張表。
+            if (!wantTag) console.warn(`🪪 [Avatar Rules] ⚠️ service=${service} 沒有對應的頭像規則條目 → 四條全關`);
             if (r.opened.length || r.closed.length) {
                 console.log(`🪪 [Avatar Rules] ✅ service=${service} → 啟用 ${wantTag}、停用其餘（改了 ${r.opened.length + r.closed.length} 條）`);
             }

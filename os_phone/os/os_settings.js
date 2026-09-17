@@ -3036,7 +3036,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             pollinations: 'Pollinations',
             novelai: 'NovelAI',
             tavern_sd: '酒館原生',
-            comfyui_direct: 'ComfyUI 直連'
+            comfyui_direct: 'ComfyUI 直連',
+            custom_api: '自訂接口'
         };
         const elImgSyncBg     = container.querySelector('#img-sync-bg-to-char');
         const elImgBgSrcGroup = container.querySelector('#img-bg-source-group');
