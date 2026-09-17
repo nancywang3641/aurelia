@@ -652,6 +652,16 @@
 .aps-th-sw-glass { background: var(--aps-swatch-glass); }
 .aps-th-sw-dark  { background: var(--aps-swatch-dark); }
 .aps-set-th-name { letter-spacing: 0.5px; }
+/* 她自己做的那幾套右上角有個叉，點它是刪掉那一套（內建四套沒有）*/
+.aps-set-th { position: relative; }
+.aps-set-th-del {
+    position: absolute; top: 2px; right: 4px;
+    width: 18px; height: 18px; line-height: 17px; text-align: center;
+    border-radius: 50%; font-size: 13px;
+    color: var(--os-ink-soft); background: var(--os-hover);
+    opacity: 0; transition: opacity 0.15s;
+}
+.aps-set-th:hover .aps-set-th-del, .aps-set-th.on .aps-set-th-del { opacity: 1; }
 
 /* 📱 手機直立：別在手機裡再畫一個置中的小手機框 —— 手機瀏覽器上它會吃 vh/網址列那塊、
    被頂歪夾在頂部(看起來像「出窗」)。改讓 app 視窗用 100dvh 直接填滿可見螢幕，像原生全螢幕 app。

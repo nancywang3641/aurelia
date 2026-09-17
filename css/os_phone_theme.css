@@ -1,0 +1,107 @@
+/* 🎨 手機主題工坊（os_phone/os/os_phone_theme.js）
+   這一頁自己不帶顏色，全部吃主題那組格子（--os-*），所以它自己也會跟著換皮。
+   🚨 預覽那兩塊例外：它們的格子是從外面行內寫進來的（她剛做出來那套），
+      所以裡面的規則一律讀格子、不要寫死顏色，不然預覽會騙人。 */
+.pth-app { display: flex; flex-direction: column; height: 100%; background: var(--os-page-bg); color: var(--os-ink); }
+.pth-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px calc(24px + var(--aps-safe-bottom, 0px)); }
+
+.pth-say { font-size: 12.5px; line-height: 1.7; color: var(--os-ink-soft); margin-bottom: 10px; }
+.pth-input {
+    width: 100%; box-sizing: border-box; padding: 11px 12px; resize: vertical;
+    border: 1px solid var(--os-line); border-radius: 11px;
+    background: var(--os-surface); color: var(--os-ink);
+    font: inherit; font-size: 13.5px; line-height: 1.6; outline: none;
+}
+.pth-input:focus { border-color: var(--os-accent); }
+.pth-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.pth-btn {
+    padding: 9px 18px; border: none; border-radius: 10px; cursor: pointer;
+    background: var(--os-accent); color: var(--os-on-accent);
+    font: inherit; font-size: 13px; font-weight: 700;
+}
+.pth-btn:disabled { opacity: 0.5; cursor: default; }
+.pth-status { font-size: 12px; color: var(--os-ink-soft); }
+.pth-status.bad { color: #c0392b; }
+
+/* ── 預覽 ── */
+.pth-preview { display: flex; gap: 12px; margin-top: 16px; align-items: flex-start; }
+.pth-preview.pth-empty { opacity: 0.45; }
+.pth-phone, .pth-panel {
+    flex: 1; min-width: 0; border-radius: 16px; overflow: hidden;
+    border: 1px solid var(--os-line);
+}
+.pth-phone {
+    background: var(--aps-wallpaper);
+    display: flex; flex-direction: column; min-height: 240px;
+}
+.pth-sb {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 10px 2px; font-size: 9px; font-weight: 600;
+    color: var(--aps-sb-color);
+}
+.pth-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 6px; padding: 10px 8px 6px; }
+.pth-w {
+    margin: 0 8px 8px; padding: 10px; text-align: center; font-size: 10px;
+    color: var(--aps-label-color);
+    background: var(--aps-w-bg); border: 1px solid var(--aps-w-line); border-radius: var(--aps-w-radius);
+}
+.pth-dock {
+    margin: auto 0 0; display: flex; justify-content: space-around; align-items: center;
+    height: var(--aps-dock-height); box-sizing: border-box; padding: 6px 6px 0;
+    background: var(--aps-dock-bg);
+    border: var(--aps-dock-border); border-top: var(--aps-dock-top);
+    border-radius: var(--aps-dock-radius); box-shadow: var(--aps-dock-shadow);
+}
+.pth-grid .pth-ic, .pth-dock .pth-ic {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 26px; margin: 0 auto; font-size: 13px;
+}
+.pth-grid .pth-ic {
+    background: var(--aps-icon-bg); color: var(--aps-icon-color);
+    border: 1px solid var(--aps-icon-line); border-radius: var(--aps-icon-radius);
+    box-shadow: var(--aps-icon-shadow);
+}
+.pth-dock .pth-ic {
+    background: var(--aps-dock-icon-bg); color: var(--aps-dock-icon-color);
+    border-radius: var(--aps-dock-icon-radius); border: none;
+}
+
+.pth-panel { background: var(--os-page-bg); display: flex; flex-direction: column; min-height: 240px; }
+.pth-panel-hd {
+    padding: 10px 12px; font-size: 12px; font-weight: 700;
+    background: var(--os-chrome-bg); color: var(--os-ink); border-bottom: 1px solid var(--os-line);
+}
+.pth-panel-tabs { display: flex; background: var(--os-chrome-tabs-bg); border-bottom: 1px solid var(--os-line); }
+.pth-panel-tabs span { flex: 1; text-align: center; padding: 7px 0; font-size: 10.5px; color: var(--os-ink-soft); }
+.pth-panel-tabs span.on { color: var(--os-accent); font-weight: 800; box-shadow: inset 0 -2px 0 var(--os-accent); }
+.pth-panel-body { flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 7px; }
+.pth-card {
+    padding: 10px; border-radius: 10px; font-size: 11px;
+    background: var(--os-surface); color: var(--os-ink); border: 1px solid var(--os-line);
+}
+.pth-dim { font-size: 10px; color: var(--os-ink-soft); }
+.pth-nav {
+    display: flex; box-sizing: border-box;
+    height: var(--os-nav-height);
+    margin: 0 var(--os-nav-inset) var(--os-nav-gap-bottom);
+    background: var(--os-nav-bg);
+    border: var(--os-nav-border); border-top: var(--os-nav-top);
+    border-radius: var(--os-nav-radius); box-shadow: var(--os-nav-shadow);
+}
+.pth-nav span {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    margin: 0 5px; border-radius: var(--os-nav-on-radius);
+    color: var(--os-nav-ink); font-size: var(--os-nav-icon-size);
+}
+.pth-nav span.on { color: var(--os-nav-ink-on); background: var(--os-nav-on-bg); }
+.pth-nav em { font-style: normal; font-size: var(--os-nav-label-size); }
+
+/* ── 存起來 ── */
+.pth-save { display: flex; gap: 8px; margin-top: 16px; }
+.pth-name {
+    flex: 1; min-width: 0; box-sizing: border-box; padding: 9px 12px;
+    border: 1px solid var(--os-line); border-radius: 10px;
+    background: var(--os-surface); color: var(--os-ink); font: inherit; font-size: 13px; outline: none;
+}
+.pth-name:focus { border-color: var(--os-accent); }
+.pth-note { margin-top: 10px; font-size: 11.5px; line-height: 1.7; color: var(--os-ink-soft); }

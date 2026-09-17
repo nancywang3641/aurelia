@@ -100,7 +100,38 @@
         { id: 'glass', name: '白瓷玻璃' },
         { id: 'dark',  name: '霧夜薄荷' },
     ];
-    function _themeById(id) { return THEMES.find(function (t) { return t.id === id; }) || THEMES[0]; }
+    // ── 她自己做的主題（創作室生成的）─────────────────────────────────
+    //   內建那四套的值寫在 css/aurelia_theme.css；她做的那些存在這裡，開機時拼成一段
+    //   <style> 貼進 <head>，格式跟內建那四套一模一樣（.theme-<代號> { 一堆格子 }）。
+    //   那段是後來才貼上去的，所以同名格子贏得過樣式檔裡的——她做的主題可以只填幾格，
+    //   沒填的自然沿用留白相片的值。
+    const USER_THEMES_KEY = 'aurelia_phone_user_themes';   // [{ id, name, swatch, vars:{ '--os-nav-bg': '…' } }]
+    function _loadUserThemes() {
+        try { const l = JSON.parse(win.localStorage.getItem(USER_THEMES_KEY)); return Array.isArray(l) ? l : []; } catch (e) { return []; }
+    }
+    function _saveUserThemes(list) {
+        try { win.localStorage.setItem(USER_THEMES_KEY, JSON.stringify(list || [])); } catch (e) {}
+        _injectUserThemeCss();
+    }
+    function _userThemeCss(t) {
+        const vars = (t && t.vars) || {};
+        const body = Object.keys(vars).map(function (k) { return '  ' + k + ': ' + String(vars[k]) + ';'; }).join(String.fromCharCode(10));
+        const NL = String.fromCharCode(10);
+        return '.theme-' + t.id + ' {' + NL + body + NL + '}';
+    }
+    function _injectUserThemeCss() {
+        try {
+            const doc = win.document || document;
+            let el = doc.getElementById('aps-user-themes');
+            if (!el) { el = doc.createElement('style'); el.id = 'aps-user-themes'; doc.head.appendChild(el); }
+            el.textContent = _loadUserThemes().map(_userThemeCss).join(String.fromCharCode(10, 10));
+        } catch (e) {}
+    }
+    // 內建 ＋ 她做的，合成一張清單。挑主題那排、套主題、還原預設全部照這張走。
+    function _allThemes() {
+        return THEMES.concat(_loadUserThemes().map(function (t) { return { id: t.id, name: t.name, user: true, swatch: t.swatch || '' }; }));
+    }
+    function _themeById(id) { return _allThemes().find(function (t) { return t.id === id; }) || THEMES[0]; }
     // 換主題＝換一整套，所以把「她之前單獨改過、而這套主題管得到」的那幾項一起清掉。
     // 不清的話換主題會有東西沒跟上（桌布還是上一套的），看起來就像主題壞了。
     // 圖庫資料夾不清 —— 那是她放的圖，跟配色無關，清掉等於把她的圖弄不見。
@@ -110,6 +141,9 @@
         t.themeId = _themeById(id).id;
         THEME_OWNED.forEach(function (k) { delete t[k]; });
         try { win.localStorage.setItem(THEME_KEY, JSON.stringify(t)); } catch (e) {}
+        // 🚨 class 要自己掛一次：_applyTheme 沒有手機殼就直接跳出去了，而系統面板可以在
+        //    完全沒開過手機的情況下全屏開著（跟這支最後面那段「載入時先套一次」同一個道理）。
+        _applyThemeClass(t.themeId);
         _applyTheme();
     }
     function _loadTheme() { try { return JSON.parse(win.localStorage.getItem(THEME_KEY)) || {}; } catch (e) { return {}; } }
@@ -149,7 +183,13 @@
             const root = (win.document || document).documentElement;
             if (!root) return;
             const use = _themeById(id).id;
-            THEMES.forEach(function (x) { root.classList.toggle('theme-' + x.id, x.id === use); });
+            // 🚨 一律照「現在根上掛著哪些 theme-」清，不是照清單清 —— 她把自己做的那套刪掉之後，
+            //    那個代號已經不在清單裡了，照清單清會把它的 class 留在根上，等於刪了還套著。
+            const keep = 'theme-' + use;
+            Array.prototype.slice.call(root.classList).forEach(function (c) {
+                if (c.indexOf('theme-') === 0 && c !== keep) root.classList.remove(c);
+            });
+            root.classList.add(keep);
         } catch (e) {}
     }
 
@@ -361,15 +401,22 @@
                  + '</div>';
         }).join('');
         const curTheme = _themeById(t.themeId || DEFAULT_THEME).id;
-        const thBtns = THEMES.map(function (x) {
+        const thBtns = _allThemes().map(function (x) {
+            // 內建四套那顆小圓的三段色寫在樣式檔（.aps-th-sw-<代號>）；她自己做的那些是資料，寫行內
+            const sw = x.user
+                ? '<span class="aps-set-th-sw" style="background:' + _esc(x.swatch || 'linear-gradient(135deg,#ddd,#bbb)') + '"></span>'
+                : '<span class="aps-set-th-sw aps-th-sw-' + x.id + '"></span>';
             return '<button class="aps-set-th' + (x.id === curTheme ? ' on' : '') + '" data-theme="' + x.id + '" type="button">'
-                 + '<span class="aps-set-th-sw aps-th-sw-' + x.id + '"></span>'
-                 + '<span class="aps-set-th-name">' + _esc(x.name) + '</span></button>';
+                 + sw
+                 + '<span class="aps-set-th-name">' + _esc(x.name) + '</span>'
+                 + (x.user ? '<span class="aps-set-th-del" data-delth="' + x.id + '" title="刪掉這套">×</span>' : '')
+                 + '</button>';
         }).join('');
         c.innerHTML =
             '<div class="aps-set">'
           +   '<div class="aps-set-top sysh"><button class="aps-set-back sysh-back" id="aps-set-back" type="button" title="返回">‹</button><span class="aps-set-h sysh-title">手機設置</span></div>'
           +   '<div class="aps-set-sec">主題</div><div class="aps-set-ths">' + thBtns + '</div>'
+          +   '<div class="aps-set-row"><button id="aps-set-newth" class="aps-set-btn ghost" type="button">做一套新的</button></div>'
           +   '<div class="aps-set-subnote">一套主題會換掉桌布、圖標排法、時鐘位置、底排，還有各個系統頁面的配色。下面幾項可以再單獨蓋過它。</div>'
           +   '<div class="aps-set-sec">App 圖標的顏色</div><div class="aps-set-chips">'
           +     '<button class="aps-set-chip' + (t.iconColorful ? '' : ' on') + '" data-iconcolor="0" type="button">跟著主題</button>'
@@ -391,9 +438,27 @@
           +   '<div class="aps-set-note">字體會「硬套用」蓋掉所有 app(連寫死字體的也蓋)，只放過 fa 圖標不破壞。</div>'
           + '</div>';
         const back = c.querySelector('#aps-set-back'); if (back) back.addEventListener('click', _home);
+        // 🎨 做一套新的：直接在同一格開手機主題工坊（它自己帶返回鍵，按了回主畫面）
+        const newTh = c.querySelector('#aps-set-newth');
+        if (newTh) newTh.addEventListener('click', function () {
+            if (win.OS_PHONE_THEME && win.OS_PHONE_THEME.launch) win.OS_PHONE_THEME.launch(c);
+            else c.innerHTML = '<div class="aps-fail">手機主題工坊還沒載入</div>';
+        });
         // 換主題後整頁重畫：底下那幾項的「目前是什麼」跟著主題變了，不重畫會顯示上一套的值
         c.querySelectorAll('[data-theme]').forEach(function (b) {
-            b.addEventListener('click', function () { _setThemeId(b.dataset.theme); _renderSettings(c); });
+            b.addEventListener('click', function (e) {
+                // 她自己做的那幾套右上角有個 ×：點它是刪掉，不是選它
+                const del = e.target.closest && e.target.closest('[data-delth]');
+                if (del) {
+                    e.stopPropagation();
+                    const id = del.dataset.delth;
+                    _saveUserThemes(_loadUserThemes().filter(function (x) { return x.id !== id; }));
+                    if ((_loadTheme().themeId || DEFAULT_THEME) === id) _setThemeId(DEFAULT_THEME);
+                    _renderSettings(c);
+                    return;
+                }
+                _setThemeId(b.dataset.theme); _renderSettings(c);
+            });
         });
         c.querySelectorAll('[data-iconcolor]').forEach(function (b) {
             b.addEventListener('click', function () {
@@ -1142,6 +1207,8 @@
 
     // 系統面板（控制室、狀態檔案那些）可以完全不開手機就被叫出來，而手機殼是第一次開才建。
     // 所以色票在載入時就先套一次，不能等 _applyTheme —— 那支沒有手機殼就直接跳出去了。
+    // 她自己做的主題那段 CSS 也要在這時候貼好 —— 不然她選的是自己那套時，畫面會先閃一下預設的
+    try { _injectUserThemeCss(); } catch (e) {}
     try { _applyThemeClass(_loadTheme().themeId || DEFAULT_THEME); } catch (e) {}
 
     win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide,
@@ -1157,6 +1224,21 @@
         // 🧩 給「組件」那一頁用：桌面上有哪幾個、放回桌面、從桌面收起來
         homeWidgetIds: function () { return _homeWidgets().map(function (w) { return w.id; }); },
         unhideWidget: unhide,
+        // 🎨 她自己做的主題（創作室那邊生成之後存進來，樣式面板就會多一顆）
+        getUserThemes: _loadUserThemes,
+        saveUserTheme: function (t) {
+            if (!t || !t.id) return false;
+            const list = _loadUserThemes().filter(function (x) { return x.id !== t.id; });
+            list.push({ id: String(t.id), name: String(t.name || '我的主題'), swatch: String(t.swatch || ''), vars: t.vars || {} });
+            _saveUserThemes(list);
+            return true;
+        },
+        removeUserTheme: function (id) {
+            _saveUserThemes(_loadUserThemes().filter(function (x) { return x.id !== id; }));
+            if ((_loadTheme().themeId || DEFAULT_THEME) === id) _setThemeId(DEFAULT_THEME);
+        },
+        useTheme: function (id) { _setThemeId(id); },
+        currentThemeId: function () { return _loadTheme().themeId || DEFAULT_THEME; },
         hideWidget: function (id) {
             const L = _loadLayout();
             if (L.hidden.indexOf(id) < 0) L.hidden.push(id);

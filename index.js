@@ -155,6 +155,7 @@ const PHONE_BASE_PATH = _AURELIA_EXT_BASE + '/os_phone/';
 const PHONE_FILES = [
     // === 🟢 OS 層 (系統基礎) ===
     'os/os_settings.js',
+    'os/os_phone_theme.js', // 🎨 手機主題工坊：說一句話，AI 填一套主題的格子（配色／應用圖標／底部導覽）
     'os/os_settings_comfyui.js', // 🧩 ComfyUI 直連設定（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_settings_voice.js', // 🎵 語音清單：Minimax 音色檔案卡＋官方音色庫＋測試播放（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_db.js',
@@ -480,6 +481,7 @@ async function initializeExtension() {
 
         // os_phone/os 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_phone_theme.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_control_room.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_dashboard.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_keepalive.css');
