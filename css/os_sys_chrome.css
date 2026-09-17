@@ -47,10 +47,8 @@
 body.layout-pad-ios .sysh.sysh { padding-top: 55px; min-height: 103px; }
 /* 手機殼裡：裝置自己的安全區不算數（那是給真手機用的），改讓手機殼的動態島那一格。
    標頭往上長進島底下 → 島那條就是這個面板自己的顏色，跟真手機一樣。 */
-/* 手機殼裡的面板，內容捲到底時會被那條橫槓壓住 → 底部讓出橫槓那塊 */
-.aps-app-body .set-container,
-.aps-app-body .aps-set,
-.aps-app-body .wx-page-container { padding-bottom: var(--aps-safe-bottom, 0px); }
+/* 底部橫槓那塊的讓位已經收成一條總規矩（css/phone_shell.css 的 .aps-app-body > .aps-mount > *），
+   每個 app 的最外層都會讓，這裡不用再逐個列。 */
 .aps-app-body .sysh.sysh {
     padding-top: calc(6px + var(--aps-safe-top, 0px));
     min-height: calc(56px + var(--aps-safe-top, 0px));

@@ -390,6 +390,17 @@
     padding-top: var(--aps-safe-top) !important;
 }
 .aps-mount { position: relative; width: 100%; height: 100%; }
+/* ⬇ 底部那條橫槓是壓在最上層的，每個 app 都要讓出它那塊，不然橫槓會壓在分頁列、輸入列上面
+   （她看到的是聊天那條的「通訊錄」被橫槓劃掉）。
+   讓位寫在「app 自己的最外層」而不是外面的容器上：內距是長在 app 自己身上的，
+   它自己的底色會鋪滿那一塊，不會在底下露出一條跟 app 無關的顏色。
+   🚨 只有這一個地方在讓底部那塊。各 app 的分頁列、內容區都不要再自己加一次，會變兩倍高。 */
+.aps-app-body > .aps-mount > * {
+    padding-bottom: var(--aps-safe-bottom, 0px);
+    box-sizing: border-box;
+}
+/* 商城裝的 app 跑在自己的窗口裡，窗口本身吃不了內距 → 改成整個往上縮 */
+.aps-app-body > .aps-mount > .app-iframe { padding-bottom: 0; }
 .aps-fail { padding: 24px 18px; text-align: center; color: #999; font-size: 13px; }
 .aps-fail b { display: block; color: #c0392b; font-size: 14px; margin-bottom: 10px; }
 .aps-fail-why {
@@ -414,7 +425,8 @@
       不該被推下去。 */
 .aps-app-body > .aps-mount > .app-iframe {
     margin-top: var(--aps-safe-top);
-    height: calc(100% - var(--aps-safe-top));
+    margin-bottom: var(--aps-safe-bottom);
+    height: calc(100% - var(--aps-safe-top) - var(--aps-safe-bottom));
 }
 /* 借大廳/自建單例的 app(閱讀 #vn-reader-sa)塞進手機時，強制填滿、不偏移 */
 .aps-app-body #vn-reader-sa {
@@ -461,7 +473,7 @@
 .dlr-tabbar {
     flex-shrink: 0; display: flex; box-sizing: border-box;
     height: var(--os-nav-height, 52px);
-    margin: 0 var(--os-nav-inset, 0) calc(var(--os-nav-gap-bottom, 0px) + var(--aps-safe-bottom, 0px));
+    margin: 0 var(--os-nav-inset, 0) var(--os-nav-gap-bottom, 0px);
     background: var(--os-nav-bg, rgba(244,245,248,0.97));
     border: var(--os-nav-border, 0 solid transparent);
     border-top: var(--os-nav-top, 0.5px solid rgba(var(--os-ink-rgb), 0.12));

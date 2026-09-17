@@ -134,7 +134,7 @@
 .ws-nav {
     flex-shrink: 0; display: flex; box-sizing: border-box;
     height: var(--os-nav-height, 52px);
-    margin: 0 var(--os-nav-inset, 0) calc(var(--os-nav-gap-bottom, 0px) + var(--aps-safe-bottom, 0px));
+    margin: 0 var(--os-nav-inset, 0) var(--os-nav-gap-bottom, 0px);
     background: var(--os-nav-bg, #fffdf7);
     border: var(--os-nav-border, 0 solid transparent);
     border-top: var(--os-nav-top, 1px solid rgba(110,80,40,0.12));

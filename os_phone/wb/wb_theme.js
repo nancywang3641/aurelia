@@ -93,7 +93,7 @@
                以前這條是寫死的白底灰線橘字，換什麼主題都不動。 */
             .wb-tab-bar {
                 height: var(--os-nav-height, 50px);
-                margin: 0 var(--os-nav-inset, 0) calc(var(--os-nav-gap-bottom, 0px) + var(--aps-safe-bottom, 0px));
+                margin: 0 var(--os-nav-inset, 0) var(--os-nav-gap-bottom, 0px);
                 background: var(--os-nav-bg, #fff);
                 border: var(--os-nav-border, 0 solid transparent);
                 border-top: var(--os-nav-top, 1px solid #dcdcdc);

@@ -265,7 +265,7 @@
             .wx-stk-import-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
             .wx-stk-url-input { flex: 1; font-size: 12px; padding: 4px 8px; border: 1px solid var(--wx-line-strong); border-radius: 4px; background: #fafafa; min-width: 0; }
             .wx-stk-file-btn { background: var(--wx-accent); color: var(--wx-on-accent); font-size: 12px; padding: 5px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
-            .wx-bottom-nav { padding-bottom: var(--aps-safe-bottom, 0px); height: 55px; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; z-index: 10; padding-bottom: 5px; }
+            .wx-bottom-nav { height: 55px; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; z-index: 10; padding-bottom: 5px; }
             .wx-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; flex: 1; cursor: pointer; position: relative; }
             .wx-tab-icon-box { position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
             .wx-tab-icon { width: 24px; height: 24px; fill: var(--wx-ink); transition: fill 0.2s; }
