@@ -1730,6 +1730,12 @@
         //   立繪模式＝唯二差別：① getSprite 模板取代 getAvatar ② AI 去背。整條 gate/解析/快取/去重由呼叫端
         //   (頭像管線：_genAvatarToCache / fallbackToAI) 共用，這裡只負責「生成那一步」。回 { objUrl, dataUrl }，失敗回 null。
         _makeCharImage: async function(prompt, exp, force) {
+            // 🎯 立繪模式 ＋ 她設了一次生幾個 ＋ 來源是官方那顆 → 進排隊，湊幾個角色一張寬圖一起生。
+            //    force（相簿的「重生」）要的是立刻重畫這一張，不排隊。
+            if (!force && this._spriteBatchSize() > 1) return await this._sheetEnqueue(prompt);
+            return await this._makeCharImageOne(prompt, exp, force);
+        },
+        _makeCharImageOne: async function(prompt, exp, force) {
             const sprite = (VN_Config.data.spriteDirect === true);
             // force：相簿的「重生」要繞過 generate() 的記憶體快取，否則同 prompt 會吐回同一張舊圖
             const raw = await (sprite ? VN_Image.getSprite(prompt, force) : VN_Image.getAvatar(prompt, exp, force));
@@ -1749,6 +1755,130 @@
             let dataUrl = '';
             try { dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.onerror = () => r(''); rd.readAsDataURL(blob); }); } catch (e) {}
             return { objUrl, dataUrl };
+        },
+
+        // ── 🎯 幾個角色擠一張寬圖一起生（設置 → 圖片 → 頭像 → 一次生幾個角色）──────────
+        //   為什麼插在 _makeCharImage 這一層：早路徑（掃描時）跟晚路徑（角色開口時）兩條都經過它，
+        //   插在這裡兩條自動都吃得到，快取、去重、上台那些邏輯一行都不用改。
+        //   排隊的理由：劇情一次冒出幾個角色時把它們湊成一張寬圖送一次；只冒一個就不等、照舊單獨生。
+        _sheetQueue: [],
+        _sheetTimer: 0,
+        _sheetWaitMs: 1200,        // 湊人的等待窗口：這段時間內再來的角色算同一批
+        _spriteBatchSize: function () {
+            try {
+                if (VN_Config.data.spriteDirect !== true) return 1;
+                const n = parseInt(VN_Config.data.spriteBatch, 10);
+                if (!(n > 1)) return 1;
+                // 來源不是官方那顆就不批次：其他接口會把幾個角色糊成一團。設置那格本來就只在官方時出現，
+                // 這裡再擋一次是因為她可能先開了批次、之後才把來源換掉。
+                const M = win.OS_IMAGE_MANAGER;
+                const cfg = (M && M.config) || {};
+                if (((cfg.serviceChar || cfg.serviceLiving || cfg.service) || '') !== 'custom_api') return 1;
+                const u = String((cfg.customApi && cfg.customApi.url) || '').toLowerCase();
+                const md = String((cfg.customApi && cfg.customApi.model) || '').toLowerCase();
+                if (!(/api\.openai\.com/.test(u) || /gpt-image/.test(md))) return 1;
+                return Math.min(3, n);
+            } catch (e) { return 1; }
+        },
+        _sheetEnqueue: function (prompt) {
+            const self = this;
+            return new Promise(function (resolve) {
+                self._sheetQueue.push({ prompt: prompt, resolve: resolve });
+                if (self._sheetQueue.length >= self._spriteBatchSize()) { self._sheetFlush(); return; }
+                if (self._sheetTimer) clearTimeout(self._sheetTimer);
+                self._sheetTimer = setTimeout(function () { self._sheetFlush(); }, self._sheetWaitMs);
+            });
+        },
+        _sheetFlush: async function () {
+            if (this._sheetTimer) { clearTimeout(this._sheetTimer); this._sheetTimer = 0; }
+            const batch = this._sheetQueue.splice(0, this._spriteBatchSize());
+            if (!batch.length) return;
+            // 只湊到一個人＝沒省到任何東西，照原本那條單張路走（也避免一個人被硬塞進寬圖裡縮成一小條）
+            if (batch.length === 1) {
+                let one = null;
+                try { one = await this._makeCharImageOne(batch[0].prompt, 'Neutral'); } catch (e) {}
+                batch[0].resolve(one);
+                return;
+            }
+            let parts = null;
+            try {
+                const raw = await VN_Image.getSpriteSheet(batch.map(function (b) { return b.prompt; }), true);
+                if (raw) parts = await this._sliceSheet(raw, batch.length);
+            } catch (e) { console.warn('[VN] 立繪合圖失敗，退回一個一個生', e); }
+            for (let i = 0; i < batch.length; i++) {
+                const blob = parts && parts[i];
+                if (!blob) {
+                    // 切不出這一格＝那個角色照舊單獨生，不是丟著不管（不然她會看到少一個人的剪影）
+                    let one = null;
+                    try { one = await this._makeCharImageOne(batch[i].prompt, 'Neutral'); } catch (e) {}
+                    batch[i].resolve(one);
+                    continue;
+                }
+                let out = blob;
+                try { const cut = await this._stripSpriteBgAI(blob); if (cut) out = cut; } catch (e) {}
+                let dataUrl = '';
+                try { dataUrl = await new Promise(function (r) { const rd = new FileReader(); rd.onload = function () { r(rd.result); }; rd.onerror = function () { r(''); }; rd.readAsDataURL(out); }); } catch (e) {}
+                batch[i].resolve({ objUrl: URL.createObjectURL(out), dataUrl: dataUrl });
+            }
+            if (this._sheetQueue.length) this._sheetFlush();   // 一次來超過一批：剩下的接著跑
+        },
+        // 把寬圖切成幾塊。🚨 不照「除以格數」下刀：模型不保證切線在那裡，差幾像素每格邊緣就黏到隔壁一條。
+        //   改成去找它畫的那條分隔帶（整條由上到下都同一個顏色的直欄），照帶子的位置切。
+        //   找不到帶子（它沒照畫）才退回平均分，並且各往內縮一點避開接縫。
+        _sliceSheet: async function (url, n) {
+            const doc = win.document;
+            const img = await new Promise(function (res, rej) {
+                const im = new Image(); im.crossOrigin = 'anonymous';
+                im.onload = function () { res(im); }; im.onerror = rej; im.src = url;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            const cv = doc.createElement('canvas'); cv.width = W; cv.height = H;
+            const cx = cv.getContext('2d', { willReadFrequently: true });
+            cx.drawImage(img, 0, 0);
+            let data = null;
+            try { data = cx.getImageData(0, 0, W, H).data; } catch (e) { data = null; }   // 跨網域拿不到像素＝退平均分
+            const bars = [];
+            if (data) {
+                const isSep = function (x) {
+                    const step = Math.max(1, Math.floor(H / 60));
+                    let hit = 0, tot = 0;
+                    for (let y = 0; y < H; y += step) {
+                        const i = (y * W + x) * 4;
+                        tot++;
+                        if (data[i + 1] > 150 && data[i] < 120 && data[i + 2] < 120) hit++;
+                    }
+                    return tot && (hit / tot) > 0.85;
+                };
+                // 🚨 分隔帶一定是「窄的」：不設上限的話，一個穿綠衣服的角色、或整格綠色的背景
+                //    會被整欄判成分隔帶（我用綠色測試圖時就把第三格整個當成帶子吃掉了）。
+                //    真正的帶子只有二十幾像素，這裡放寬到「一格寬的一半」都還算窄。
+                const maxBar = Math.max(8, Math.floor(W / (n * 2)));
+                const take = function (r) { if (r && r.b - r.a >= 3 && r.b - r.a <= maxBar) bars.push(r); };
+                let run = null;
+                for (let x = 0; x < W; x++) {
+                    if (isSep(x)) { if (!run) run = { a: x, b: x }; else run.b = x; }
+                    else if (run) { take(run); run = null; }
+                }
+                take(run);
+            }
+            const cuts = [];
+            if (bars.length === n - 1) {
+                let left = 0;
+                bars.forEach(function (bar) { cuts.push([left, bar.a - 1]); left = bar.b + 1; });
+                cuts.push([left, W - 1]);
+            } else {
+                const w = W / n, pad = Math.round(w * 0.02);   // 沒找到帶子：平均分，兩邊各縮一點避開接縫
+                for (let i = 0; i < n; i++) cuts.push([Math.round(i * w) + (i ? pad : 0), Math.round((i + 1) * w) - 1 - (i < n - 1 ? pad : 0)]);
+            }
+            const out = [];
+            for (let i = 0; i < cuts.length; i++) {
+                const a = Math.max(0, cuts[i][0]), b = Math.min(W - 1, cuts[i][1]);
+                const w = Math.max(1, b - a + 1);
+                const c2 = doc.createElement('canvas'); c2.width = w; c2.height = H;
+                c2.getContext('2d').drawImage(cv, a, 0, w, H, 0, 0, w, H);
+                out.push(await new Promise(function (r) { c2.toBlob(function (bl) { r(bl); }, 'image/png'); }));
+            }
+            return out;
         },
 
         // 🤖 AI 去背（@imgly isnet，靠 AI 認人形、吃任何背景）：立繪模式唯一去背路徑（同典籍「一鍵生立繪」）。

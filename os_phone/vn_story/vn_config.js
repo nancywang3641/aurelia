@@ -197,6 +197,39 @@
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
             return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: !_useNAI, force: !!force, extraNegative: _neg });
         },
+        // 🎯 幾個角色擠一張寬圖一次生完（只在官方那顆開；見設置 → 圖片 → 頭像 → 一次生幾個角色）。
+        //    回傳整張寬圖，切開的事交給呼叫端（vn_core 的 _sliceSheet）。
+        //    🚨 分隔帶是關鍵：不能叫它「平均分成三等分」然後照三分之一下刀——它不保證切線在那裡，
+        //       差幾像素每一格邊緣就黏到隔壁一條。改成叫它畫明顯的分隔帶，切的時候去找那條帶子。
+        SHEET_SEP: '#00ff00',
+        getSpriteSheet: async function (descs, force) {
+            if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return '';
+            const list = (descs || []).filter(Boolean);
+            if (!list.length) return '';
+            let pfx = null, sfx = null;
+            try { pfx = localStorage.getItem('os_sprite_tpl_prefix'); } catch (e) {}
+            try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
+            if (pfx == null) pfx = 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ';
+            if (sfx == null) sfx = 'simple bright background, straight view, no shading';
+            const n = list.length;
+            const people = list.map(function (d, i) {
+                return 'Panel ' + (i + 1) + ': ' + _joinTags(pfx, this._stripForSprite(d));
+            }, this).join('\n');
+            // 寫給它的排版要求：等寬直欄、每欄一個人、欄與欄之間一條純色帶、人不可以跨欄。
+            const full = [
+                'A single wide image divided into exactly ' + n + ' equal-width vertical panels, side by side.',
+                'Between every two panels draw a solid ' + this.SHEET_SEP + ' vertical bar, 24 pixels wide, running the full height.',
+                'Each panel contains exactly one full-body character, centered, facing the viewer, feet and head inside that panel.',
+                'No character may cross a panel border. Do not draw any frame, caption, number or text.',
+                'All panels share the same art style, lighting and camera height.',
+                people,
+                sfx,
+            ].join('\n');
+            let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
+            _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
+            // 官方只收那三種尺寸，寬的那個就是 1536×1024：切兩格＝每個 768×1024、切三格＝每個 512×1024
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: 1536, height: 1024, raw: true, force: !!force, extraNegative: _neg });
+        },
         // 剝掉跟立繪衝突的構圖/背景/視角 tag（與 os_settings studio 的 stripPromptForSprite 同規則）
         _stripForSprite: function(p) {
             if (!p) return '';

@@ -48,6 +48,7 @@
                 sfx:                 g('sfx'),
                 spriteBase:          g('sprite'),
                 spriteDirect:        container.querySelector('#vncfg-sprite-direct')?.checked === true,
+                spriteBatch:         gi('sprite-batch', 1),   // 幾個角色擠一張寬圖一起生（只有官方那顆撐得住，見設置那格）
                 stickerBase:         g('sticker'),
                 charDefaultBase:     g('char-default-base'),
                 finalFallbackSprite: g('final-fallback') || DEFAULTS.finalFallbackSprite,
