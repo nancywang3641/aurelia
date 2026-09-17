@@ -226,7 +226,7 @@
             const full = [
                 'A single wide image divided into exactly ' + n + ' equal-width vertical panels, side by side.',
                 'Between every two panels draw a solid ' + this.SHEET_SEP + ' vertical bar, 24 pixels wide, running the full height.',
-                'Each panel contains exactly one full-body character, centered, facing the viewer, feet and head inside that panel.',
+                'Each panel contains exactly one character, centered, facing the viewer, entirely inside that panel.',   // 取景範圍別寫死：那是她在立繪前綴裡定的（寫死 full-body＋腳要在格子裡，會整個蓋掉她填的 cowboy shot）
                 'No character may cross a panel border. Do not draw any frame, caption, number or text.',
                 'All panels share the same art style, lighting and camera height.',
                 people,

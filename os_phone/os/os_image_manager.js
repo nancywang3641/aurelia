@@ -434,12 +434,13 @@
         _genPollinations: function(basePrompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'pollinations', type: type }); } catch (e) {}   // 📊 長期用量帳
-            let optimizedPrompt = basePrompt;
-
             const seed = options.seed || Math.floor(Math.random() * 100000);
             const width = options.width || 512;
             const height = options.height || 512;
             const model = options.model || this.config.pollinations.model;
+            // 🎥 這裡也選得到 GPT Image 那幾顆；它們跟官方一樣不吃權重括號跟 Danbooru 取景詞。flux 那些照舊。
+            let optimizedPrompt = this._isNaturalModel(model) ? this._naturalizePrompt(basePrompt) : basePrompt;
+            this._noteImgSent({ patch: true, sent: optimizedPrompt });   // 記錄要看得到真正出門的字
             const encoded = encodeURIComponent(optimizedPrompt);
 
             // 🔥 構建 URL
@@ -477,7 +478,12 @@
             try {
                 if (e && e.patch) {   // 接完底詞之後回填同一筆（真正出門的是那個字串）
                     const last = this._imgSentLog[this._imgSentLog.length - 1];
-                    if (last) { last.sent = e.sent; last.base = e.base; last.raw = e.raw; }
+                    if (last) {
+                        last.sent = e.sent;
+                        // 沒帶的欄位別覆寫成空：Pollinations 那條只回填送出去的字，它本來就沒有底詞/raw 這兩格
+                        if (e.base !== undefined) last.base = e.base;
+                        if (e.raw !== undefined) last.raw = e.raw;
+                    }
                     return;
                 }
                 this._imgSentLog.push({ t: Date.now(), type: e.type, service: e.service, sent: e.prompt });
@@ -485,6 +491,36 @@
             } catch (err) {}
         },
         lastImgSent: function (n) { return this._imgSentLog.slice(-(n || 5)); },
+
+        // 🎥 標籤體系的取景詞 → 自然語言模型讀得懂的一句話（GPT Image／DALL·E 那種）
+        //   「cowboy shot」在 Danbooru 是「頭頂到大腿中段」，但自然語言模型看到的只有 cowboy＝牛仔：
+        //   取景一點都沒生效，還可能真的給角色加頂牛仔帽。（她：立繪預設寫了 cowboy shot，gpt 還是給我全身照）
+        //   權重括號 (xxx:1.2) 同理，那是 SD 的語法，這種模型只會把「1.2」當字讀進去。
+        //   ⚠️ 只對這類模型做；SD／NAI／ComfyUI 那幾條照舊吃標籤，一個字都不動。
+        //   ⚠️ 同時出現幾個取景詞只認第一個：兩句互相矛盾的取景要求比沒寫還糟。
+        _FRAMING_SAY: [
+            [/\bcowboy\s*-?\s*shots?\b/gi, 'Show the character from the top of the head down to the middle of the thighs; do not show the knees, lower legs, feet or shoes.'],
+            [/\bfull\s*-?\s*body\b/gi,     'Show the whole character from head to feet, with the shoes inside the frame.'],
+            [/\b(?:upper\s*-?\s*body|waist\s*-?\s*up)\b/gi, 'Show the character from the top of the head down to the waist.'],
+            [/\bchest\s*-?\s*up\b/gi,      'Show the character from the top of the head down to the chest.'],
+            [/\b(?:bust\s*-?\s*shots?|head\s+and\s+shoulders)\b/gi, 'Show the head, shoulders and upper chest only.'],
+            [/\b(?:head\s*-?\s*shots?|close\s*-?\s*ups?)\b/gi, 'Show the face filling most of the frame.'],
+        ],
+        _naturalizePrompt: function (prompt) {
+            let s = String(prompt || '');
+            if (!s) return s;
+            s = s.replace(/\(([^()]*?):\s*[\d.]+\s*\)/g, '$1');            // (詞:1.2) → 詞
+            let say = '';
+            this._FRAMING_SAY.forEach(function (pair) {
+                const before = s;
+                s = s.replace(pair[0], '');
+                if (s !== before && !say) say = pair[1];
+            });
+            s = s.replace(/\s*,\s*(?:,\s*)+/g, ', ').replace(/^[\s,]+|[\s,]+$/g, '').replace(/[ \t]{2,}/g, ' ');
+            return say ? (s + '\n\n' + say) : s;
+        },
+        // 這條線路背後是不是「讀句子」的模型（官方 GPT Image／DALL·E，Pollinations 那幾顆同名的也是）
+        _isNaturalModel: function (model) { return /^(gpt-?image|dall-?e)/i.test(String(model || '')); },
 
         _genCustomApi: async function(prompt, type, options = {}) {
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: type }); } catch (e) {}   // 📊 長期用量帳
@@ -527,8 +563,11 @@
                 return r > 1.2 ? '1536x1024' : (r < 0.83 ? '1024x1536' : '1024x1024');  // gpt-image-1 與其後續
             };
             // 底詞接在後面：SD 那種吃逗號串接，OpenAI 那種吃自然語言、隔一個空行讀起來才是「另一句要求」。
-            const _p = (!_basePrompt || options.raw) ? prompt
-                : (isSd ? (prompt + ', ' + _basePrompt) : (prompt + '\n\n' + _basePrompt));
+            // 🎥 OpenAI 格式那邊是「讀句子」的模型：權重括號跟 Danbooru 取景詞對它無效，先翻成話（見 _naturalizePrompt）。
+            //    在接底詞之前做：底詞是她自己寫的句子，不該被動。SD WebUI 格式照舊吃標籤，一個字不碰。
+            const _base = isSd ? prompt : this._naturalizePrompt(prompt);
+            const _p = (!_basePrompt || options.raw) ? _base
+                : (isSd ? (_base + ', ' + _basePrompt) : (_base + '\n\n' + _basePrompt));
             // 回填那筆記錄：上面記的是「接底詞之前」的字，真正出門的是這個
             this._noteImgSent({ patch: true, sent: _p, base: _basePrompt, raw: !!options.raw });
             const body = isSd
