@@ -662,15 +662,18 @@
         _describeMedia: function(p, photos) {
             const m = p && p.media;
             if (!m) return '';
+            const _PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            // 照片描述只給前段：後段是畫圖用的英文，餵回去只是多花字數，它還會當成貼文內容照抄
+            const _only = function (v) { const t = String(v || ''); return (_PI && _PI.textOnly) ? _PI.textOnly(t) : t; };
             if (m.type === 'image') {
-                const d = String(m.desc || '');
+                const d = _only(m.desc);
                 const idx = photos.findIndex(x => x.postId === p.id);
                 if (idx >= 0) return ` [Image: see attached photo #${idx + 1}]`;
                 if (m.aiDesc) return ` [Image: a photo | ${m.aiDesc}]`;
                 if (d.startsWith('data:') || d.startsWith('http')) return ' [Image: a photo]';
                 return ` [Image: ${d}]`;
             }
-            if (m.type === 'images') return ` [Images: ${(m.list || []).map(x => (String(x).startsWith('http') || String(x).startsWith('data:')) ? 'a photo' : x).join(' | ')}]`;
+            if (m.type === 'images') return ` [Images: ${(m.list || []).map(x => (String(x).startsWith('http') || String(x).startsWith('data:')) ? 'a photo' : _only(x)).join(' | ')}]`;
             if (m.type === 'video') return ` [Video: ${m.title || ''}${m.desc ? ' | ' + m.desc : ''}]`;
             if (m.type === 'vote') return ` [Vote: ${m.title || ''} | ${(m.options || []).join(', ')}]`;
             if (m.type === 'location') return ` [Location: ${m.name || ''}${m.desc ? ' | ' + m.desc : ''}]`;

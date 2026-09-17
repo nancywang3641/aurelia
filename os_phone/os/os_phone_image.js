@@ -94,9 +94,9 @@
             });
         },
 
-        // 顯示用描述：剝掉 (外貌補充) 與 ## 井號，只留給人看的那句
+        // 顯示用描述：先拆掉後段（畫圖用的英文），再剝掉 (外貌補充) 與 ## 井號，只留給人看的那句
         displayText: function (desc) {
-            return String(desc || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/##\s*([^#]+?)\s*##/g, '$1').replace(/\s+/g, ' ').trim() || '圖片';
+            return String(this.textOnly(desc) || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/##\s*([^#]+?)\s*##/g, '$1').replace(/\s+/g, ' ').trim() || '圖片';
         },
 
         // 佔位卡：desc 是 AI 寫的完整描述；app 是登記過的寫回處理器名；ref 是該 app 認得的資料位置

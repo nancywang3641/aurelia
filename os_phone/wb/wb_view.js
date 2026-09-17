@@ -272,7 +272,8 @@
                 attach = `<div class="wb-compose-preview"><img src="${esc(m.desc)}"><div class="wb-compose-preview-x" onclick="${appRef}.composeClearImage()"><i class="fa-solid fa-xmark"></i></div></div>`;
             } else if (m) {
                 const icon = { image: 'fa-regular fa-image', video: 'fa-solid fa-video', vote: 'fa-solid fa-square-poll-horizontal', location: 'fa-solid fa-location-dot' }[m.type] || 'fa-solid fa-paperclip';
-                const label = m.type === 'image' ? m.desc : (m.type === 'location' ? m.name : m.title);
+                const _PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+                const label = m.type === 'image' ? ((_PI && _PI.textOnly) ? _PI.textOnly(m.desc) : m.desc) : (m.type === 'location' ? m.name : m.title);
                 attach = `<div class="wb-compose-chip" onclick="${appRef}.composeEditMedia()"><i class="${icon}"></i><span class="wb-compose-chip-text">${esc(label)}</span><i class="fa-solid fa-xmark wb-compose-chip-x" onclick="event.stopPropagation(); ${appRef}.composeClearImage()"></i></div>`;
             }
             return `<div class="wb-compose-mask" onclick="if (event.target === this) ${appRef}.closeCompose()">
