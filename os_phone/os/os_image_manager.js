@@ -381,6 +381,7 @@
             // 🔥 步驟 2: 路由判斷（依 type 桶取接口：活物桶 char/scene、死物桶 bg/item/pet）
             // options.provider 可「單次」覆蓋桶選擇（給 VN 面板各自選 NAI / POLL AI 用）；沒給就走該 type 的桶
             const service = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider : this.serviceFor(type);
+            this._noteImgSent({ type: type, service: service, prompt: englishPrompt });   // 見 _noteImgSent：給她自己看送了什麼
             let result;
             if (service === 'custom_api') {
                 console.log('[ImageManager] Final Prompt [' + type + '→自訂接口]: ' + englishPrompt);
@@ -468,6 +469,23 @@
         // 送 JSON、回 JSON，跟 Pollinations「提示詞塞網址、GET 回圖」完全是兩回事，
         // 所以不能共用那格、只換網址。
         // 模型名一律使用者自己填 —— 每個站支援的型號都不一樣，內建清單只會過期。
+        // 📝 留一份「這張圖到底送了什麼字出去」。她沒有 console，那幾行 Final Prompt 她一輩子看不到，
+        //    於是「畫風有沒有帶到」只能聽我說。這份給 DEBUG 那顆按鈕讀，她自己看得到。
+        //    只留在記憶體、最多 20 筆：小倉庫已經很擠，不落地是刻意的。
+        _imgSentLog: [],
+        _noteImgSent: function (e) {
+            try {
+                if (e && e.patch) {   // 接完底詞之後回填同一筆（真正出門的是那個字串）
+                    const last = this._imgSentLog[this._imgSentLog.length - 1];
+                    if (last) { last.sent = e.sent; last.base = e.base; last.raw = e.raw; }
+                    return;
+                }
+                this._imgSentLog.push({ t: Date.now(), type: e.type, service: e.service, sent: e.prompt });
+                while (this._imgSentLog.length > 20) this._imgSentLog.shift();
+            } catch (err) {}
+        },
+        lastImgSent: function (n) { return this._imgSentLog.slice(-(n || 5)); },
+
         _genCustomApi: async function(prompt, type, options = {}) {
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: type }); } catch (e) {}   // 📊 長期用量帳
             // options.customApi：設置頁的「測試」鈕用的——讓她還沒按儲存就能試，不必先存壞設定
@@ -511,6 +529,8 @@
             // 底詞接在後面：SD 那種吃逗號串接，OpenAI 那種吃自然語言、隔一個空行讀起來才是「另一句要求」。
             const _p = (!_basePrompt || options.raw) ? prompt
                 : (isSd ? (prompt + ', ' + _basePrompt) : (prompt + '\n\n' + _basePrompt));
+            // 回填那筆記錄：上面記的是「接底詞之前」的字，真正出門的是這個
+            this._noteImgSent({ patch: true, sent: _p, base: _basePrompt, raw: !!options.raw });
             const body = isSd
                 ? { prompt: _p, negative_prompt: options.negativePrompt || '', width: width, height: height }
                 : { model: model, prompt: _p, n: 1, size: _official ? _snapSize() : (width + 'x' + height) };
