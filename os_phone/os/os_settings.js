@@ -550,6 +550,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             listEl.innerHTML = rows.map((r, i) => `<div class="avl-row">
                 <div class="avl-name" title="${_e(r.name)}">${_e(r.name)}</div>
                 <textarea class="avl-prompt" data-i="${i}" rows="2" placeholder="這個角色的外觀描述（頭像生成詞）…">${_e(r.prompt)}</textarea>
+                <button class="avl-redo" data-i="${i}" type="button" title="照上面那段外觀詞重畫一張，蓋掉現在那張">重畫</button>
                 <button class="avl-del" data-i="${i}" type="button">刪除</button>
             </div>`).join('');
             listEl.querySelectorAll('.avl-prompt').forEach(ta => ta.onblur = async () => {
@@ -557,6 +558,30 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (v === r.prompt) return;
                 try { const cur = (await C.get('avatar_cache', r.name)) || {}; await C.set('avatar_cache', r.name, { ...cur, prompt: v }); r.prompt = v; tip('已存「' + r.name + '」'); }
                 catch (e) { AUI.alert('存失敗：' + (e && e.message || e)); }
+            });
+            // 🔁 重畫：改完外觀詞之後要能把圖換掉。
+            //    原本只有「改詞」跟「刪除整筆」——改了詞圖還是舊的，刪了又連詞一起沒了，
+            //    所以卡在裸體／比基尼的角色沒有路可以救（她：「我總不能讓角色一張裸體一直跑」）。
+            //    這顆照當下那段詞重生一張、蓋掉舊的，詞留著。
+            listEl.querySelectorAll('.avl-redo').forEach(b => b.onclick = async () => {
+                const i = +b.getAttribute('data-i'); const r = rows[i];
+                const ta = listEl.querySelector('.avl-prompt[data-i="' + i + '"]');
+                const desc = ((ta && ta.value) || r.prompt || '').trim();
+                if (!desc) { AUI.alert('先把外觀詞填上再重畫'); return; }
+                const VN = (window.parent || window).VN_Core || (window.parent || window).VN_PLAYER;
+                if (!VN || typeof VN._makeCharImage !== 'function') { AUI.alert('VN 還沒載入，先進故事一次再回來'); return; }
+                const old = b.textContent; b.disabled = true; b.textContent = '畫…';
+                try {
+                    // force=true：繞過記憶體快取，也不進「幾個角色湊一張寬圖」那個排隊（她要的是現在這一張）
+                    const img = await VN._makeCharImage(desc, 'Neutral', true);
+                    if (!img || !img.dataUrl) throw new Error('沒有生出圖（檢查圖片來源與額度）');
+                    const cur = (await C.get('avatar_cache', r.name)) || {};
+                    await C.set('avatar_cache', r.name, { ...cur, prompt: desc, url: img.dataUrl });
+                    try { delete VN._avatarMemCache[r.name]; } catch (e) {}   // 本輪的記憶體快取也要清，不然畫面上還是舊那張
+                    r.prompt = desc;
+                    tip('已重畫「' + r.name + '」');
+                } catch (e) { AUI.alert('重畫失敗：' + (e && e.message || e)); }
+                b.disabled = false; b.textContent = old;
             });
             listEl.querySelectorAll('.avl-del').forEach(b => b.onclick = async () => {
                 const i = +b.getAttribute('data-i'); const r = rows[i];

@@ -655,7 +655,7 @@
                 let _voice = '', _ad = '';
                 if (_rest.length >= 2) { _voice = _rest[0]; _ad = _rest.slice(1).join(' '); }  // 名|聲線|外觀
                 else { _ad = _rest[0]; }                                                          // 名|外觀（舊式，無聲線）
-                if (_an && _ad) this.avatars[_an] = _ad;
+                if (_an && _ad) this.avatars[_an] = this._safeOutfit(_ad);
                 if (_an && _voice) this.charVoices[_an] = _voice;
             }
             this._saveCharVoices();   // 本則新宣告的聲線寫回持久化（合併制，只增不洗）
@@ -1757,6 +1757,31 @@
             return { objUrl, dataUrl };
         },
 
+        // ── 👕 Avatar 那一格的穿著保險：裸露的詞不准進去 ──────────────────────────
+        //   那一行是「這個角色的長期立繪」，只寫一次、之後每一幕都用同一張（引擎看到快取就不重生）。
+        //   所以只要它第一次登場剛好在床上、在浴室、在沙灘，那個樣子就被存成永久的
+        //   —— 她的說法：「我總不能讓角色一張裸體一直跑」「以後都變比基尼了」。
+        //   指令那邊已經講明「寫平常的樣子、禁裸體泳裝」，但那是請求；這裡是保險：
+        //   詞進到快取之前先換成中性穿著，模型不聽話也還是穿著衣服。
+        //   🚨 只管這一格。插圖、場景、劇情那些一個字都不碰 —— 那邊該怎麼演就怎麼演。
+        _OUTFIT_BAD: [
+            /\b(fully\s+)?nudes?\b/gi, /\bnaked\b/gi, /\bnudity\b/gi, /\btopless\b/gi, /\bbottomless\b/gi,
+            /\bbikini\b/gi, /\bswim(suit|wear)\b/gi, /\blingerie\b/gi, /\bunderwear\b/gi,
+            /\bpanties\b/gi, /\bthong\b/gi, /\bbra\b/gi, /\btowel\b/gi, /\bnsfw\b/gi,
+            /全裸|半裸|裸體|裸体|赤裸|比基尼|泳裝|泳衣|內衣|内衣|內褲|内裤|胸罩|浴巾/g,
+        ],
+        _safeOutfit: function (desc) {
+            let d = String(desc || '');
+            let hit = false;
+            this._OUTFIT_BAD.forEach(function (rx) { if (rx.test(d)) { hit = true; d = d.replace(rx, ''); } });
+            if (!hit) return d;
+            // 洗掉之後常留下「, ,」或開頭結尾的逗號 → 收乾淨，免得接成怪字串（同 getSprite 那邊接縫補逗號的教訓）
+            d = d.replace(/\s*,\s*(,\s*)+/g, ', ').replace(/^[\s,]+|[\s,]+$/g, '');
+            d = d ? (d + ', fully clothed, everyday casual outfit') : 'fully clothed, everyday casual outfit';
+            console.warn('[VN] Avatar 那一格出現裸露/泳裝的詞，已換成中性穿著（那一行是長期立繪，會跟著角色一輩子）');
+            return d;
+        },
+
         // ── 🎯 幾個角色擠一張寬圖一起生（設置 → 圖片 → 頭像 → 一次生幾個角色）──────────
         //   為什麼插在 _makeCharImage 這一層：早路徑（掃描時）跟晚路徑（角色開口時）兩條都經過它，
         //   插在這裡兩條自動都吃得到，快取、去重、上台那些邏輯一行都不用改。
@@ -1913,7 +1938,9 @@
                     let d = '';
                     if (rest.length >= 2) { if (rest[0]) this.charVoices[n] = rest[0]; d = rest.slice(1).join(' '); }
                     else { d = rest[0]; }
-                    if (n && d && !pairs.some(p => p.name === n)) pairs.push({ name: n, desc: d });
+                    // 🚨 穿著保險要在這裡也套一次：早鳥比 loadScript 早，它生完就進快取，
+                    //    只修 loadScript 那條等於沒修（下次讀到的是早鳥存的那張裸圖）。
+                    if (n && d && !pairs.some(p => p.name === n)) pairs.push({ name: n, desc: this._safeOutfit(d) });
                 }
                 if (pairs.length) {
                     console.log(`[VN] 頭像早鳥：收到 ${pairs.length} 位（${pairs.map(p => p.name).join('、')}）`);
