@@ -189,9 +189,12 @@ body.mode-404 { background: #000000; }
 .void-mode-toggle-btn:hover { background:rgba(210,215,235,0.95); border-color:rgba(26,28,40,0.35); }
 
 /* ── 寫作設置 TAB 與 各應用主面板 (復古格柵背景) ── */
+/* 🚨 這條以前把底色寫死成淺灰＋!important，於是主題換了什麼顏色都被它蓋回去——
+   設置、相簿、提示詞、世界書、狀態檔案、我的角色全部一直是白底，只有電話（不在這張清單裡）
+   會跟著主題變。格柵那層留著，但顏色改成跟主題的字色走，深色主題上才看得見紋路而不是一片白。 */
 .write-tab, .set-container, .pm-wrap, .wb-app, .avs-container, .ps-app {
-    background-color: #EEF0F6 !important;
-    background-image: linear-gradient(rgba(26,28,40,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(26,28,40,0.03) 1px, transparent 1px) !important;
+    background-color: var(--os-page-bg, #EEF0F6) !important;
+    background-image: linear-gradient(rgba(var(--os-ink-rgb, 26, 28, 40), 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--os-ink-rgb, 26, 28, 40), 0.03) 1px, transparent 1px) !important;
     background-size: 30px 30px !important;
 }
 
