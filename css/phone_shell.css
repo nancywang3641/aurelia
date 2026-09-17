@@ -340,8 +340,14 @@
 .aps-frame.aps-font-on .aps-app-body *:not(i):not(svg):not([class*="fa-"]) { font-family: var(--aps-font) !important; }
 
 /* app 內頁（用 app 自己的 header/返回；手機殼不加自己的 chrome）—— top:30 留瀏海，內容撐滿 */
+/* 🚨 z-index:1 是關鍵：手機殼自己那三件東西（狀態列、瀏海、底部橫條）永遠要在 app 上面，
+   像真手機一樣。沒有這一行的時候，app 裡任何一個比 4 大的層級——微信標頭 20、微博標頭 10、
+   朋友圈/記事本/個人檔案那幾張整頁 60、聊天設置 500、閱讀器 200——都會把狀態列整條蓋掉，
+   畫面上就變成「上面空一條、但時間訊號電池都不見了」。
+   給 .aps-app 一個層級之後，它自己變成一個獨立的疊放範圍，裡面寫多大都只在它自己裡面比，
+   蓋不到外面的狀態列。新 app 想疊什麼上去都不必再登記一次。 */
 .aps-app {
-    position: absolute; inset: 0;
+    position: absolute; inset: 0; z-index: 1;
     display: none; background: var(--os-page-bg, #fff);
 }
 .aps-app-body { position: absolute; inset: 0; overflow: auto; font-family: var(--aps-font); scrollbar-width: none; }
@@ -357,6 +363,24 @@
 .aps-app-body .ps-header {
     padding-top: var(--aps-safe-top) !important;
     height: calc(56px + var(--aps-safe-top)) !important;
+}
+/* 同一條規矩，補上以前漏掉的那幾個：每個 app 最上面那一列都要往上長到狀態列底下，
+   讓時間訊號電池坐在那一列自己的顏色上。沒補的話那一列會從螢幕最頂端開始畫，
+   標題跟時間就疊在一起（她看到的「有 status bar 但跟 header 重疊」）。
+   🚨 新 app 的標頭要加進這張清單；底下那幾支各自原本的上內距寫在 calc 的第一項，改它們的時候要一起改。
+   ・應用工坊／組件：首頁那列與其他頁那列 ・閱讀 ・朋友圈 ・記事本 ・個人檔案的返回鈕 ・聊天設置 */
+.aps-app-body .ws-app .ws-home-hd { padding-top: calc(18px + var(--aps-safe-top)) !important; }
+.aps-app-body .ws-app .ws-vhd     { padding-top: calc(12px + var(--aps-safe-top)) !important; }
+.aps-app-body #vn-reader-sa-hd    { padding-top: calc(14px + var(--aps-safe-top)) !important; }
+.aps-app-body .wxmo-bar {
+    height: calc(48px + var(--aps-safe-top)) !important;
+    padding-top: var(--aps-safe-top) !important;
+}
+.aps-app-body .wxnb-head { padding-top: calc(10px + var(--aps-safe-top)) !important; }
+.aps-app-body .wxpf-x    { top: calc(14px + var(--aps-safe-top)) !important; }
+.aps-app-body .ws-overlay > .ws-header {
+    height: calc(50px + var(--aps-safe-top)) !important;
+    padding-top: var(--aps-safe-top) !important;
 }
 .aps-mount { position: relative; width: 100%; height: 100%; }
 .aps-fail { padding: 24px 18px; text-align: center; color: #999; font-size: 13px; }
@@ -376,6 +400,15 @@
 .aps-loading { padding: 30px; text-align: center; color: #999; font-size: 13px; }
 /* app 商店裝的功能型 app（iframe 執行）—— 填滿容器、無邊框 */
 .app-iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+/* 她自己做的那些 app 是一整頁跑在自己的窗口裡，我們沒辦法伸手進去叫它的標頭往上長，
+   所以改成整頁從狀態列底下開始。上面讓出來那條由 .aps-mount 塗色，顏色是進去之後
+   照 app 自己的底色抄一份（見 app_runtime.js），這樣不會憑空多一條白的。
+   🚨 只挑手機桌面直接開的那個 iframe：應用工坊裡的預覽框也叫 .app-iframe，它在工坊頁面裡面，
+      不該被推下去。 */
+.aps-app-body > .aps-mount > .app-iframe {
+    margin-top: var(--aps-safe-top);
+    height: calc(100% - var(--aps-safe-top));
+}
 /* 借大廳/自建單例的 app(閱讀 #vn-reader-sa)塞進手機時，強制填滿、不偏移 */
 .aps-app-body #vn-reader-sa {
     position: absolute !important;
