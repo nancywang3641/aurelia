@@ -89,26 +89,14 @@
             .wb-send-btn.active { opacity: 1; pointer-events: auto; }
 
             /* 底部導航 & FAB */
-            /* 底部導覽跟著手機主題走（--os-nav-*，定義在 css/aurelia_theme.css）。
-               以前這條是寫死的白底灰線橘字，換什麼主題都不動。 */
-            .wb-tab-bar {
-                height: var(--os-nav-height, 50px);
-                margin: 0 var(--os-nav-inset, 0) var(--os-nav-gap-bottom, 0px);
-                background: var(--os-nav-bg, #fff);
-                border: var(--os-nav-border, 0 solid transparent);
-                border-top: var(--os-nav-top, 1px solid #dcdcdc);
-                border-radius: var(--os-nav-radius, 0);
-                box-shadow: var(--os-nav-shadow, none);
-                display: flex; align-items: center; justify-content: space-around; flex-shrink: 0;
-                box-sizing: border-box;
-            }
-            .wb-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: var(--os-nav-ink, #999); transition: color 0.15s; padding: 0 10px; }
-            .wb-tab.active { color: var(--os-nav-ink-on, #ff8200); }
-            /* 選中那顆墊的底只墊在圖標後面，不是把整顆分頁塗成一塊 —— 塗整顆會變成一個大色塊，
-               而且下面那行字就得壓在那塊底上，顏色很難兩邊都讀得到。 */
-            .wb-tab-icon { font-size: var(--os-nav-icon-size, 19px); line-height: 1; padding: 3px 13px; border-radius: var(--os-nav-on-radius, 0); }
-            .wb-tab.active .wb-tab-icon { background: var(--os-nav-on-bg, transparent); color: var(--os-nav-on-ink, var(--os-nav-ink-on, #ff8200)); }
-            .wb-tab-label { font-size: var(--os-nav-label-size, 10px); letter-spacing: 0.5px; }
+            /* 🚨 微博不跟手機主題走：它跟聊天那支一樣，是世界裡的一支 app，有自己的身分。
+               我一度把這條分頁列接上主題那組格子，換主題連它的選中色都被換掉——她說「微薄不可以被影響」。
+               底部橫槓那塊由手機殼那條總規矩讓，這裡不用自己算。 */
+            .wb-tab-bar { height: 50px; background: #fff; border-top: 1px solid #dcdcdc; display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; }
+            .wb-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: #999; transition: color 0.15s; }
+            .wb-tab.active { color: #ff8200; }
+            .wb-tab-icon { font-size: 19px; line-height: 1; }
+            .wb-tab-label { font-size: 10px; letter-spacing: 0.5px; }
             .wb-fab { position: absolute; bottom: 70px; right: 20px; width: 50px; height: 50px; background: linear-gradient(135deg, #ffae00, #ff8200); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 28px; box-shadow: 0 4px 10px rgba(255, 130, 0, 0.4); cursor: pointer; z-index: 10; transition: transform 0.2s; }
             .wb-fab:active { transform: scale(0.9); }
             
