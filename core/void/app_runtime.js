@@ -85,8 +85,13 @@
             // ── generateRaw 仍橋接(進階 app 指名要它才用；預設請用 callAI) ──
             +   'if (!window.generateRaw) window.generateRaw = function(cfg){ var Q=window.parent; if (Q && Q.TavernHelper && Q.TavernHelper.generateRaw) return Q.TavernHelper.generateRaw(cfg); if (Q && Q.generateRaw) return Q.generateRaw(cfg); return Promise.reject(new Error("no generateRaw")); };'
             // ── 版面：強制 app 撐滿手機螢幕。修「面板用 min-height:100% 但 #app-root 無確定高度→百分比解析不到→底下露白」。
+            //    🚨 撐滿那條只給「整個 app 包在同一個根容器裡」的那種（:only-child）。
+            //    以前寫成「最外層每個區塊都平均長高」，結果 app 把標題列／內容／底部三段平鋪時，
+            //    三段被拉成一樣高——標題列變成一大塊、內容擠在中間，就是她說的「創作室做的應用打開就是塌的」。
+            //    而且那條是 id 選擇器，權重壓過面板自己寫的「標題列不要被拉長」，面板寫對了也沒用。
+            //    創作室預覽那邊沒有這條，所以預覽好好的、裝成 app 才壞，兩邊對不起來。
             //    DOMContentLoaded 後補(排在 app 自己 style 之後→同 specificity 後者贏)，所有現有 app 自動套、免重存。
-            +   'document.addEventListener("DOMContentLoaded", function(){ try { var _s=document.createElement("style"); _s.textContent="html,body{height:100%;}#app-root{display:flex;flex-direction:column;height:100%;box-sizing:border-box;}#app-root>*{flex:1 1 auto;min-height:0;}*{scrollbar-width:thin;scrollbar-color:rgba(140,140,140,0.5) transparent;}::-webkit-scrollbar{width:8px;height:8px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.45);border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:rgba(140,140,140,0.7);}"; document.head.appendChild(_s); } catch(e){} });'
+            +   'document.addEventListener("DOMContentLoaded", function(){ try { var _s=document.createElement("style"); _s.textContent="html,body{height:100%;}#app-root{display:flex;flex-direction:column;height:100%;box-sizing:border-box;}#app-root>:only-child{flex:1 1 auto;min-height:0;}*{scrollbar-width:thin;scrollbar-color:rgba(140,140,140,0.5) transparent;}::-webkit-scrollbar{width:8px;height:8px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.45);border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:rgba(140,140,140,0.7);}"; document.head.appendChild(_s); } catch(e){} });'
             + '} catch(e) { console.warn("[app bridge]", e); }'
             + '})();</scr' + 'ipt>';
     }

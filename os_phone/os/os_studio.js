@@ -264,7 +264,7 @@
 - 禁無聊網頁感：卡中卡、header+content+footer 堆疊、普通圓角矩形列表、只靠漸層加陰影。
 - 禁在按鈕或標籤文字加 ASCII 裝飾（[ ]、<< >>、» «）。禁左側色條（border-left 當 accent）、禁 Markdown 引用（行首大於號會被 st.md 畫成左邊一條槓）。
 - js 裡禁止出現字串字面 $1（引擎的正則層會當成 capture group 切掉、整段 js 炸）。自寫 regex 替換用 callback：.replace(rx, function(_, p1){ return '<b>' + p1 + '</b>'; })。
-- 解析資料只用 st.parse() 或 st.parseText()，禁自己對 lines 用 regex 切、禁 JSON.parse。渲染含標籤的字串用 innerHTML；塞使用者或 AI 產的文字前先 st.esc()。
+- 解析資料只用 st.parse() 或 st.parseText()，禁自己對 lines 用 regex 切、禁 JSON.parse。渲染含標籤的字串用 innerHTML。文字塞進畫面前先過一手：短的（名字、標籤、單欄欄位）用 st.esc()；整段文章（st.callAI 回來的、或資料裡那種會換行分段的長內容）用 st.md()，它會把換行、段落、粗體排好。長內容直接 textContent 或只 st.esc()，整段會擠成沒有段落的一坨。
 - 送進劇情或對話只准用 st.toChat／st.toSystem（要用得先點功能 chip 把用法帶進來）。絕對禁止 createChatMessages、TavernHelper、generateRaw、直接操作 #send_textarea。沒帶那個 chip 就不做送進對話這件事。
 
 ## 4. st：你唯一能用的 API（封閉清單）
