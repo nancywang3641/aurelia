@@ -170,6 +170,9 @@
     --os-nav-ink-on: #728764;
     --os-nav-on-bg: transparent;
     --os-nav-on-radius: 0;
+    /* 🚨 --os-nav-on-ink（墊底上面那顆圖標的顏色）故意不在這裡定義：
+       定義了它就永遠有值，沒填這格的主題會吃到這裡的顏色，而不是退回它自己的「選中色」。
+       留白相片本來就沒墊底，退回選中色剛好對。另外三套各自有寫。 */
     --os-nav-icon-size: 19px;
     --os-nav-label-size: 10px;
 }
@@ -276,6 +279,7 @@
     --os-nav-ink-on: #7a3f4a;
     --os-nav-on-bg: #fff3ea;
     --os-nav-on-radius: 13px;
+    --os-nav-on-ink: #7a3f4a;
     --os-nav-icon-size: 19px;
     --os-nav-label-size: 10px;
 }
@@ -389,6 +393,7 @@
     --os-nav-ink-on: #16181a;
     --os-nav-on-bg: rgba(22, 24, 26, 0.07);
     --os-nav-on-radius: 14px;
+    --os-nav-on-ink: #16181a;
     --os-nav-icon-size: 19px;
     --os-nav-label-size: 10px;
 }
@@ -507,6 +512,7 @@
     --os-nav-ink-on: #b8d9bc;
     --os-nav-on-bg: rgba(184, 217, 188, 0.14);
     --os-nav-on-radius: 14px;
+    --os-nav-on-ink: #b8d9bc;
     --os-nav-icon-size: 19px;
     --os-nav-label-size: 10px;
 }

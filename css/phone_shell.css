@@ -480,9 +480,11 @@
     border-radius: var(--os-nav-radius, 0);
     box-shadow: var(--os-nav-shadow, none);
 }
-.dlr-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 0; margin: 0 6px; background: transparent; border: none; cursor: pointer; color: var(--os-nav-ink, rgba(var(--os-ink-rgb), 0.45)); border-radius: var(--os-nav-on-radius, 0); }
-.dlr-tab.on { color: var(--os-nav-ink-on, #2a6ad0); background: var(--os-nav-on-bg, transparent); }
-.dlr-tab-ic { font-size: var(--os-nav-icon-size, 19px); line-height: 1; }
+.dlr-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 0; background: transparent; border: none; cursor: pointer; color: var(--os-nav-ink, rgba(var(--os-ink-rgb), 0.45)); }
+.dlr-tab.on { color: var(--os-nav-ink-on, #2a6ad0); }
+/* 墊的那塊只在圖標後面（同 wb-tab-icon 那條的理由）*/
+.dlr-tab-ic { font-size: var(--os-nav-icon-size, 19px); line-height: 1; padding: 3px 13px; border-radius: var(--os-nav-on-radius, 0); }
+.dlr-tab.on .dlr-tab-ic { background: var(--os-nav-on-bg, transparent); color: var(--os-nav-on-ink, var(--os-nav-ink-on, #2a6ad0)); }
 .dlr-tab-tx { font-size: var(--os-nav-label-size, 10px); }
 .dlr-num-disp { font-size: 30px; font-weight: 300; letter-spacing: 2px; min-height: 44px; margin: 18px 0 6px; word-break: break-all; text-align: center; padding: 0 16px; }
 .dlr-keys { display: grid; grid-template-columns: repeat(3, 72px); gap: 16px; justify-content: center; margin-top: 8px; }

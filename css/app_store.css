@@ -142,11 +142,12 @@
     box-shadow: var(--os-nav-shadow, none);
     padding: 4px 0;
 }
-.ws-nav-b { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; padding: 4px 0; cursor: pointer; color: var(--os-nav-ink, #a08a72); border-radius: var(--os-nav-on-radius, 0); margin: 0 6px; }
-.ws-nav-ic { font-size: var(--os-nav-icon-size, 19px); filter: grayscale(0.5); opacity: 0.65; }
+.ws-nav-b { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; padding: 4px 0; cursor: pointer; color: var(--os-nav-ink, #a08a72); }
+/* 墊的那塊只在圖標後面（同 wb-tab-icon 那條的理由）*/
+.ws-nav-ic { font-size: var(--os-nav-icon-size, 19px); filter: grayscale(0.5); opacity: 0.65; padding: 3px 13px; border-radius: var(--os-nav-on-radius, 0); }
 .ws-nav-t { font-size: var(--os-nav-label-size, 10px); }
-.ws-nav-b.active { color: var(--os-nav-ink-on, #7a2432); background: var(--os-nav-on-bg, transparent); }
-.ws-nav-b.active .ws-nav-ic { filter: none; opacity: 1; }
+.ws-nav-b.active { color: var(--os-nav-ink-on, #7a2432); }
+.ws-nav-b.active .ws-nav-ic { filter: none; opacity: 1; background: var(--os-nav-on-bg, transparent); color: var(--os-nav-on-ink, var(--os-nav-ink-on, #7a2432)); }
 
 /* ── 安裝成功覆蓋 ── */
 .ws-success { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(244,236,222,0.97); animation: wsFade 0.25s ease; }

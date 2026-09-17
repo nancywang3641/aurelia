@@ -20,8 +20,6 @@
     const FIELDS = [
         // ── 配色：手機主畫面 ──
         { k: '--aps-wallpaper',       t: 'bg',    h: '桌布。純色、漸層都行' },
-        { k: '--aps-frame-bg',        t: 'color', h: '手機外框的顏色' },
-        { k: '--aps-frame-line',      t: 'color', h: '外框上的側鍵那幾條' },
         { k: '--aps-label-color',     t: 'color', h: '圖標底下那行字' },
         { k: '--aps-muted',           t: 'color', h: '主畫面上比較淡的字（日期那種）' },
         { k: '--aps-sb-color',        t: 'color', h: '最上面時間訊號電池那排的字' },
@@ -81,8 +79,8 @@
         { k: '--os-nav-shadow',       t: 'shadow',h: '底部導覽的陰影' },
         { k: '--os-nav-ink',          t: 'color', h: '沒選中那幾顆的顏色' },
         { k: '--os-nav-ink-on',       t: 'color', h: '選中那一顆的顏色' },
-        { k: '--os-nav-on-bg',        t: 'bg',    h: '選中那一顆背後的底。transparent＝只變色不加底' },
-        { k: '--os-nav-on-radius',    t: 'len',   h: '選中那一顆那塊底的圓角' },
+        { k: '--os-nav-on-bg',        t: 'bg',    h: '選中那一顆的圖標後面墊的那塊底。transparent＝只變色不墊底' },
+        { k: '--os-nav-on-radius',    t: 'len',   h: '墊的那塊底的圓角。999px＝藥丸' },
     ];
     const FIELD_KEYS = FIELDS.map(function (f) { return f.k; });
 
@@ -95,6 +93,7 @@
         const list = FIELDS.map(function (f) { return '- ' + f.k + '：' + f.h; }).join('\n');
         return [
             '你是手機介面的視覺設計師。使用者給你一句話（一個氛圍、一個顏色、一個東西），你要把它變成一套手機主題。',
+            '手機本身那個外殼（金屬邊框、側邊按鍵）不歸你管，那是這支手機，不是介面。',
             '',
             '一套主題＝下面這張表填滿。**你只能填這些格子，版面、排列、位置、字級一律不歸你管**，也不要寫任何 CSS 規則或選擇器。',
             '',
@@ -104,7 +103,7 @@
             '## 三件要一起想的事',
             '1. 配色：整套要像同一個東西做出來的。面板整頁的底跟卡片那層要分得出來，深色主題的字要夠亮、淺色主題的字要夠深。',
             '2. 應用圖標的樣子：裸符號沒有底、圓角方塊、圓形、有框線、有陰影——選一種，然後底排那幾顆跟著同一個做法。',
-            '3. 底部導覽的樣子：要嘛貼底一條（圓角 0、左右留白 0、離底 0px、只有上緣一條線），要嘛浮起來一塊（圓角給大值、左右留白與離底各留幾 px、給完整框線與陰影）。兩種不要混。選中那一顆可以只變色，也可以給它一塊圓角的底。',
+            '3. 底部導覽的樣子：要嘛貼底一條（圓角 0、左右留白 0、離底 0px、只有上緣一條線），要嘛浮起來一塊（圓角給大值、左右留白與離底各留幾 px、給完整框線與陰影）。兩種不要混。選中那一顆可以只變色（墊底那格給 transparent），也可以在它的圖標後面墊一塊底——墊的那塊只在圖標後面、不會蓋住下面的字，字的顏色用「選中那一顆的顏色」那格。',
             '',
             '## 規矩',
             '- 顏色用 #rrggbb 或 rgba()；長度帶單位（px、%）；不要用 var()、不要用 calc()、不要引用其他格子。',
@@ -135,6 +134,11 @@
             const rgb = _toRgb(out[pair[0]]);
             if (rgb) out[pair[1]] = rgb.join(', ');
         });
+        // 選中那一顆的圖標後面若真的墊了一塊底，圖標的顏色要跟「那塊底」比，不是跟導覽列的底比。
+        // 這一格不叫 AI 填：它常常挑一個跟墊底同色系的，結果圖標整個埋進去看不見。
+        // 底是深的就給白字、淺的就給黑字，永遠讀得到。沒墊底（transparent）就沿用選中的顏色。
+        const ink = _onInk(out['--os-nav-on-bg']);
+        if (ink) out['--os-nav-on-ink'] = ink;
         return out;
     }
     function _toRgb(v) {
@@ -146,6 +150,17 @@
         m = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i.exec(v);
         if (m) return [Math.round(+m[1]), Math.round(+m[2]), Math.round(+m[3])];
         return null;
+    }
+    // 墊底那塊上面該用什麼字色：深底給白、淺底給黑。沒墊底（透明或半透明）回 null＝沿用選中色。
+    function _onInk(v) {
+        const rgb = _toRgb(v);
+        if (!rgb) return null;
+        if (/transparent/i.test(String(v)) || /rgba\([^)]*,\s*0?\.[0-3]\d*\s*\)/i.test(String(v))) return null;
+        return _lum(rgb) < 0.45 ? '#ffffff' : '#16181a';
+    }
+    function _lum(rgb) {
+        const lin = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
     }
     function _missing(vars) { return FIELD_KEYS.filter(function (k) { return !vars[k]; }); }
 
@@ -292,6 +307,6 @@
         });
     }
 
-    win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS };
+    win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS, onInk: _onInk };
     console.log('✅ OS_PHONE_THEME（手機主題工坊）模組就緒');
 })();

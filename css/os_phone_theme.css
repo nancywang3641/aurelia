@@ -90,10 +90,12 @@
 }
 .pth-nav span {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    margin: 0 5px; border-radius: var(--os-nav-on-radius);
     color: var(--os-nav-ink); font-size: var(--os-nav-icon-size);
 }
-.pth-nav span.on { color: var(--os-nav-ink-on); background: var(--os-nav-on-bg); }
+.pth-nav span.on { color: var(--os-nav-ink-on); }
+/* 墊的那塊只在圖標後面，跟真的那幾條分頁列同一個做法 */
+.pth-nav i { padding: 3px 13px; border-radius: var(--os-nav-on-radius); }
+.pth-nav span.on i { background: var(--os-nav-on-bg); color: var(--os-nav-on-ink, var(--os-nav-ink-on)); }
 .pth-nav em { font-style: normal; font-size: var(--os-nav-label-size); }
 
 /* ── 存起來 ── */

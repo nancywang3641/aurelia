@@ -113,9 +113,21 @@
         try { win.localStorage.setItem(USER_THEMES_KEY, JSON.stringify(list || [])); } catch (e) {}
         _injectUserThemeCss();
     }
+    // 🚨 手機那個外殼（金屬邊框、側邊按鍵）不給她做的主題碰：那是「這支手機」本身，不是介面。
+    //    她第一次生了一套紅色的，整支手機的邊框跟著變紅，她的說法是「不知道為啥會紅紅的」。
+    //    內建那四套是手工配的、可以動框色；生成的那些一律跳過這兩格。
+    const NOT_FOR_USER_THEMES = ['--aps-frame-bg', '--aps-frame-line'];
     function _userThemeCss(t) {
         const vars = (t && t.vars) || {};
-        const body = Object.keys(vars).map(function (k) { return '  ' + k + ': ' + String(vars[k]) + ';'; }).join(String.fromCharCode(10));
+        // 墊在選中那顆圖標後面那塊底，上面的字色由「那塊底的深淺」決定（算色的那一份在工坊那支）。
+        // 這裡補算是為了她之前已經存的那些主題——沒有這一格的話圖標會埋進墊底裡。
+        try {
+            if (!vars['--os-nav-on-ink'] && win.OS_PHONE_THEME && win.OS_PHONE_THEME.onInk) {
+                const ink = win.OS_PHONE_THEME.onInk(vars['--os-nav-on-bg']);
+                if (ink) vars['--os-nav-on-ink'] = ink;
+            }
+        } catch (e) {}
+        const body = Object.keys(vars).filter(function (k) { return NOT_FOR_USER_THEMES.indexOf(k) < 0; }).map(function (k) { return '  ' + k + ': ' + String(vars[k]) + ';'; }).join(String.fromCharCode(10));
         const NL = String.fromCharCode(10);
         return '.theme-' + t.id + ' {' + NL + body + NL + '}';
     }
