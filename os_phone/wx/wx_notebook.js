@@ -158,7 +158,8 @@
         const start = Math.max(0, all.length - BRIEF_MAX);
         for (let i = start; i < all.length; i++) {
             const it = all[i];
-            const descs = (it.photos || []).map(function (p) { return p.desc; }).filter(Boolean);
+            const _PI2 = _pi();   // 照片描述只給前段：後段是畫圖用的英文，不必餵回去
+            const descs = (it.photos || []).map(function (p) { return (_PI2 && _PI2.textOnly) ? _PI2.textOnly(p.desc) : p.desc; }).filter(Boolean);
             const n = (it.photos || []).length;
             const ph = n ? '（照片 ' + n + ' 張' + (descs.length ? '：' + descs.join('；') : '') + '）' : '';
             lines.push((i + 1) + ' 號｜' + (it.by === 'char' ? '你記的' : who + '記的') + '｜' + _headline(it) + ph);
@@ -172,7 +173,7 @@
             : ['【你們的記事本｜只有你們兩個看得到，現在還是空的】'];
         return head.concat([
             '',
-            '這段對話裡有值得留下來的東西（約定、地址、去過的地方、心得、跟' + who + '有關的事），就記一筆：回覆的最後單獨一行寫 [系統: 記一筆｜標題｜內容]；想附照片就在後面接「｜照片：畫面描述」，一張接一次。',
+            '這段對話裡有值得留下來的東西（約定、地址、去過的地方、心得、跟' + who + '有關的事），就記一筆：回覆的最後單獨一行寫 [系統: 記一筆｜標題｜內容]；想附照片就在後面接「｜照片：給人看的一句中文 >> 畫圖用的英文句子」，一張接一次（那兩段中間一定要有 >>：前段是記事本上顯示的那句，中文寫短；後段拿去畫圖，寫成完整的英文句子，把畫面裡有誰、長相穿著、在做什麼、在哪裡講完）。',
             '要改你自己記過的某一則，單獨一行寫 [系統: 改記事本 號碼｜新的內容]。',
             '那一行不會變成聊天訊息。不必每輪都記，沒有值得留的就不寫；已經記過的事別重複記。'
         ]).join('\n');

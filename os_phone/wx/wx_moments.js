@@ -246,7 +246,8 @@
         });
         seen.slice(-BRIEF_POSTS).reverse().forEach(function (p) {
             const txt = p.text.length > BRIEF_LEN ? p.text.slice(0, BRIEF_LEN) + '…' : p.text;
-            const descs = p.photos.map(function (x) { return x.desc; }).filter(Boolean);
+            const _PI2 = _pi();   // 照片描述只給前段：後段是畫圖用的英文，不必餵回去
+            const descs = p.photos.map(function (x) { return (_PI2 && _PI2.textOnly) ? _PI2.textOnly(x.desc) : x.desc; }).filter(Boolean);
             const ph = p.photos.length ? '（照片 ' + p.photos.length + ' 張' + (descs.length ? '：' + descs.join('；') : '') + '）' : '';
             const likes = p.likes.length ? '｜讚：' + p.likes.map(function (l) { return nm(l.who, l.whoName); }).join('、') : '';
             const cms = p.comments.slice(-BRIEF_COMMENTS).map(function (c) {
@@ -261,7 +262,8 @@
         return [head].concat(lines).concat([
             '',
             '想發朋友圈、按讚或留言時，在回覆裡另外寫下面的標籤，一個標籤做一件事。標籤名與屬性名照抄英文，不要翻譯、不要改寫：',
-            '<moment_post>內容</moment_post>，想附照片就在內容後面加 <photo>畫面描述</photo>，一張一個',
+            '<moment_post>內容</moment_post>，想附照片就在內容後面加 <photo>給人看的一句中文 >> 畫圖用的英文句子</photo>，一張一個'
+                + '（照片那兩段中間一定要有 >>：前段是動態上顯示的那句，中文寫短；後段拿去畫圖，寫成完整的英文句子，把畫面裡有誰、長相穿著、在做什麼、在哪裡講完）',
             '<moment_like id="動態號碼"/>',
             '<moment_comment id="動態號碼">內容</moment_comment>',
             '<moment_reply id="動態號碼" to="對方名字">內容</moment_reply>',
@@ -272,7 +274,7 @@
     // ── AI 在朋友圈動手的寫法：英文標籤 ─────────────────────
     // 🚨 以前是中文系統行（[系統: 發朋友圈｜…]）。她實測 AI 常寫成簡體、換個說法，或寫在 <chat> 容器外面被丟掉，
     //    程式認不出來就整條不見。改成英文標籤、格式固定，像呼叫工具那樣：
-    //    <moment_post>內容<photo>畫面描述</photo></moment_post>
+    //    <moment_post>內容<photo>給人看的一句 >> 畫圖的英文句子</photo></moment_post>
     //    <moment_like id="17"/>
     //    <moment_comment id="17">內容</moment_comment>
     //    <moment_reply id="17" to="名字">內容</moment_reply>

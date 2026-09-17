@@ -7,6 +7,8 @@
 //   ③ 描述裡的 ##角色名## / ##C1## 跟劇情插圖同一套展開（OS_STATE_RUNTIME.expandLooks），外觀跟頭像一致。
 //   ④ 生完的網址交還給各 app 寫回自己的資料（wx 訊息／wb 貼文），下次開不再重生；VN 手機沒有資料層、只換畫面。
 //   ⑤ 描述裡的 (…) 括號是給生圖看的外貌補充，顯示時剝掉。
+//   ⑥ 一則寫成「給人看的描述 >> 畫圖的英文句子」兩段（見 split）：卡片上顯示前段，按下去生圖用後段。
+//      沒有分隔線的（舊的、她自己打的）就一段兩用，行為跟以前一樣。
 // ----------------------------------------------------------------
 (function () {
     const win = window.parent || window;
@@ -54,6 +56,44 @@
 
         isUrl: function (s) { return /^(https?:\/\/|data:|blob:)/i.test(String(s || '').trim()); },
 
+        // 「給人看的描述 >> 畫圖的英文句子」：一則兩段，中間兩個大於號。
+        //   分開的理由：同一段字要同時當「聊天室裡看到的那句中文」跟「送去畫圖的提示詞」，
+        //   兩邊要的東西是打架的——人要短句，畫圖的要把誰、長什麼樣、在哪裡、在做什麼全講完，
+        //   而且畫圖那邊吃英文句子。（她：照片還是得分開，描述和 PROMPT 分開，PROMPT 自然語言）
+        //   🚨 分隔線不能用直線：直線在聊天協議裡已經是欄位分隔（轉帳、紅包、禮物、記一筆那幾條
+        //      都是照直線切欄），照片描述裡再出現一根就會被當成下一欄，那一則直接散掉。
+        //   ⚠️ 只寫一段的（舊訊息、她自己打的、貼網址的）照舊一段兩用，存檔不用動。
+        //   ⚠️ 全形＞與》都收：它寫中文時常常打成全形。
+        //   ⚠️ 只寫了一邊（前面空的或後面空的）當它沒分段，有字的那邊兩用——別讓卡片變空白。
+        SPLIT_RE:   /\s*(?:[>＞》]\s*){2,}/,
+        SPLIT_RE_G: /\s*(?:[>＞》]\s*){2,}/g,
+        split: function (raw) {
+            const t = String(raw == null ? '' : raw).trim();
+            if (!t) return { desc: '', gen: '' };
+            const m = t.match(this.SPLIT_RE);
+            if (!m) return { desc: t, gen: t };
+            const d = t.slice(0, m.index).trim();
+            const g = t.slice(m.index + m[0].length).replace(this.SPLIT_RE_G, ' ').trim();   // 後段再有分隔線＝它多打的，當空白
+            if (!d || !g) return { desc: d || g, gen: g || d };
+            return { desc: d, gen: g };
+        },
+
+        // 只要前段（給人看的那句）。送給模型的歷史、朋友圈與記事本的目錄都用這個——
+        //   後段是畫圖用的英文，餵回模型只會多花字數，還會被它當成聊天內容照抄。
+        //   （同「畫面用的東西別原樣餵回模型」那條教訓）
+        textOnly: function (raw) { return this.split(raw).desc; },
+
+        // 一句話裡夾著的 [圖片: 前段 >> 後段] 收成 [圖片: 前段]：訊息是一整句、不是單獨一格描述時用。
+        //   標籤名連簡體與英文別名一起認（同各 app 的圖片別名）。
+        HIST_IMG_RE: /([\[［]\s*(?:图片|圖片|照片|相片|Img|Image|Photo)\s*[:：]\s*)([^\]］]*)([\]］])/gi,
+        stripGenFromText: function (text) {
+            const self = this;
+            return String(text == null ? '' : text).replace(this.HIST_IMG_RE, function (m, head, body, tail) {
+                const d = self.split(body).desc;
+                return d ? (head + d + tail) : m;
+            });
+        },
+
         // 顯示用描述：剝掉 (外貌補充) 與 ## 井號，只留給人看的那句
         displayText: function (desc) {
             return String(desc || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/##\s*([^#]+?)\s*##/g, '$1').replace(/\s+/g, ' ').trim() || '圖片';
@@ -63,9 +103,12 @@
         card: function (desc, opts) {
             const o = opts || {};
             const cls = 'os-img-card' + (o.fill ? ' os-img-card--fill' : '') + (o.cls ? ' ' + o.cls : '');
-            return `<div class="${cls}" data-prompt="${esc(desc)}" data-app="${esc(o.app || '')}" data-ref="${esc(o.ref || '')}">`
+            // data-prompt 照舊放「整串」：各 app 生完寫回時拿它比對是哪一則，動了就對不上。
+            // 真正送去畫圖的是 data-gen（後段）；卡片上顯示的是前段。
+            const two = this.split(desc);
+            return `<div class="${cls}" data-prompt="${esc(desc)}" data-gen="${esc(two.gen)}" data-app="${esc(o.app || '')}" data-ref="${esc(o.ref || '')}">`
                 + `<span class="os-img-icon"></span>`
-                + `<span class="os-img-desc">${esc(this.displayText(desc))}</span>`
+                + `<span class="os-img-desc">${esc(this.displayText(two.desc))}</span>`
                 + `<button class="os-img-gen" onclick="event.stopPropagation(); ${REF}.generate(this);">展開圖片</button>`
                 + `</div>`;
         },
@@ -248,6 +291,7 @@
             if (!card || card.dataset.gening === '1') return;
             const raw = card.dataset.prompt || '';
             if (!raw.trim()) return;
+            const gen = (card.dataset.gen || '').trim() || this.split(raw).gen;   // 送去畫圖的是後段
 
             card.dataset.gening = '1';
             const origText = btnEl.textContent;
@@ -256,7 +300,7 @@
             card.classList.add('os-img-loading');
 
             try {
-                const url = await this.makeUrl(raw);
+                const url = await this.makeUrl(gen);
 
                 const fill = card.classList.contains('os-img-card--fill');
                 const app = card.dataset.app || '';

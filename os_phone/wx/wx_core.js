@@ -426,6 +426,9 @@
     //    微信語音接在 [Voice: …] 後面；電話裡講的是一行口語、沒有標籤，就接在句尾
     function photoContextText(msg, text) {
         let s = String(text == null ? '' : text);
+        // 📷 [圖片: 給人看的那句 >> 畫圖的英文句子] → 只留前段。後段餵回去只是多花字數，
+        //    而且它會把自己上一則的英文提示詞當成聊天內容照抄。
+        try { const _PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; if (_PI && _PI.stripGenFromText) s = _PI.stripGenFromText(s); } catch (e) {}
         if (msg && msg.voiceTone && s.indexOf('（語音') < 0) {
             const mark = '（語音' + msg.voiceTone + '）';
             s = /\[Voice: [^\]]*\]/.test(s) ? s.replace(/\[Voice: [^\]]*\]/, (m) => m + mark) : s + mark;
