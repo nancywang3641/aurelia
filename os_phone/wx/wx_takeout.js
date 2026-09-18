@@ -470,7 +470,7 @@
         _obs = new MO(function () {
             if (!_root) return;
             if (!host.isConnected) { close(); return; }
-            if (!_root.isConnected) host.appendChild(_root);
+            if (!_root.isConnected) { _root.classList.add('is-back'); host.appendChild(_root); }   // 貼回去不要再滑進來一次（會閃）
         });
         _obs.observe(host, { childList: true });
     }

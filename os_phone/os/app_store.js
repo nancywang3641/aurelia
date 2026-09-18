@@ -60,7 +60,7 @@
     // 掃出「孤兒」：三個資料桶裡出現過、但已不在已安裝清單的 appId（排除 preview 預覽暫存）
     // 🚨🚨 只認應用的 id 格式（app_<時間>_<亂碼>，os_db.js 安裝時唯一的產生方式）。
     //    app_data 這個桶不只應用在用：PT 餘額(pt_wallet)、房產與藍圖(landlord)、書咖櫃檯(book_cafe)、
-    //    主角狀態(mc_status)、世界門(worldgate)、微信錢包(wx_wallet)、外送店家(wx_takeout)、家具(furniture)、角色卡正則(aurelia_card_regex)、
+    //    主角狀態(mc_status)、世界門(worldgate)、微信錢包(wx_wallet)、外送店家(wx_takeout)、聊天 app 主題(wx_theme_pack)、家具(furniture)、角色卡正則(aurelia_card_regex)、
     //    VN 組件的資料(vnpanel:<tag>)、創作室預覽(studio_preview) 全都住在這裡。
     //    以前任何「不在已安裝清單」的 id 都算孤兒 → 這些系統資料全被列進「清理殘留資料」，一按就刪光，
     //    而且因為它們永遠不會是已安裝的應用，那一條永遠清不掉、一直冒出來。

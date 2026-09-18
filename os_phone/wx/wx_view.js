@@ -1105,14 +1105,15 @@
 
                 <div class="wx-set-label">外觀</div>
                 <div class="wx-cell-group">
+                    <div class="wx-cell" onclick="var T=(window.parent.WX_THEME_PACK||window.WX_THEME_PACK); if(T) T.open();"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-swatchbook"></i></span></div><div class="wx-cell-text">主題</div><div class="wx-cell-arrow">›</div></div>
                     <div class="wx-cell wx-theme-cell">
                         <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-palette"></i></span></div>
-                        <div class="wx-cell-text">主題</div>
+                        <div class="wx-cell-text">配色</div>
                     </div>
                     <div class="wx-theme-row">${themeChips}</div>
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-moon"></i></span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
                 </div>
-                <div class="wx-set-desc">主題換的是顏色，黑夜模式換的是明暗——每套主題都有自己的白天與夜晚。</div>
+                <div class="wx-set-desc">主題換的是整支聊天 app 的長相（泡泡除外）；配色是底下那層顏色，黑夜模式換明暗。套了主題之後，長相以主題為準。</div>
                 <div class="wx-set-label">數據管理</div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(async function(){

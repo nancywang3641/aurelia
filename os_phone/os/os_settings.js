@@ -141,6 +141,7 @@
         { group: '手機',       id: 'phone_theme',  name: '手機主題',                   def: 'main' },
         { group: '手機',       id: 'vision',       name: '看圖小模型',                 def: 'sec'  },
         { group: '手機',       id: 'takeout',      name: '外送找店',                   def: 'sec'  },
+        { group: '手機',       id: 'wx_theme',     name: '聊天 app 主題',              def: 'main' },
         { group: '大廳與世界', id: 'map',          name: '地圖探索',                   def: 'sec'  },
         { group: '大廳與世界', id: 'world_gen',    name: '世界 / 地圖事件 / 行程生成', def: 'main' },
         { group: '大廳與世界', id: 'theater',      name: '小劇場',                     def: 'main' },

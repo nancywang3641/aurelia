@@ -385,6 +385,7 @@
 }
 .aps-app-body .wxnb-head { padding-top: calc(10px + var(--aps-safe-top)) !important; }
 .aps-app-body .wxto-head { padding-top: calc(10px + var(--aps-safe-top)) !important; }
+.aps-app-body .wxtp-head, .aps-app-body .wxtp-sheet-bar { padding-top: calc(10px + var(--aps-safe-top)) !important; }
 .aps-app-body .wxpf-x    { top: calc(14px + var(--aps-safe-top)) !important; }
 .aps-app-body .ws-overlay > .ws-header {
     height: calc(50px + var(--aps-safe-top)) !important;
