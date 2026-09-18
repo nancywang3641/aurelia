@@ -553,15 +553,8 @@ const IRIS_IDLE = [
             </div>`;
         }).join('');
 
-        // 🔥 判斷是否為獨立模式，用來決定要不要印出多餘的 App 按鈕
-        //    全屏鈕也看這個：它是桌面酒館把手機殼放大蓋滿視窗用的，手機 PWA 本來就滿版，不放
+        // 全屏鈕看這個：它是桌面酒館把手機殼放大蓋滿視窗用的，手機 PWA 本來就滿版，不放
         const isStandalone = !(window.parent || window).SillyTavern;
-        const extraAppsHtml = isStandalone ? `
-                    <button class="void-hist-btn" data-app-launch="pet" title="寵物店"><span class="vhb-em"><i class="fa-solid fa-paw"></i></span><span>寵物</span></button>
-                    <button class="void-hist-btn" data-app-launch="pet_home" title="我的寵物"><span class="vhb-em"><i class="fa-solid fa-house"></i></span><span>我的寵物</span></button>
-                    <button class="void-hist-btn" data-os-launch="微博" title="微博"><span class="vhb-em"><i class="fa-solid fa-eye"></i></span><span>微博</span></button>
-                    <button class="void-hist-btn" data-os-launch="電子錢包" title="電子錢包"><span class="vhb-em"><i class="fa-solid fa-credit-card"></i></span><span>錢包</span></button>
-        ` : '';
 
         tab.innerHTML = `
             <div class="void-bg" style="background-color: #EEF0F6;"></div>

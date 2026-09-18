@@ -722,8 +722,6 @@
 
     AureliaControlCenter.launchGameApp = function(key) {
         const GAME_APP_MAP = {
-            pet:        () => window.PET_SHOP?.launch,
-            pet_home:   () => window.PET_HOME?.launch,
             tarot:      () => window.OS_TAROT?.launch,
             map:        () => window.OS_MAP?.launchApp,
             worldbook:  () => window.OS_WORLDBOOK?.launch,
