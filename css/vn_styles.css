@@ -1300,7 +1300,31 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .ctx-usage-text.danger { color: #ff6b6b; font-weight: bold; }
         /* --- 細項拆解（上下文組成）--- */
         .ctx-breakdown { display: none; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; }
-        .ctx-bd-head { color: var(--gold); font-size: 0.62rem; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.75; margin-bottom: 6px; font-family: var(--font-sans); }
+        .ctx-bd-head { display: flex; align-items: center; justify-content: space-between; color: var(--gold); font-size: 0.62rem; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; font-family: var(--font-sans); }
+        .ctx-bd-head > span { opacity: 0.75; }
+        .ctx-bd-all { background: rgba(246,173,85,0.1); border: 1px solid rgba(246,173,85,0.4); border-radius: 4px; color: #f6ad55; font-size: 0.66rem; letter-spacing: 1px; padding: 3px 8px; cursor: pointer; font-family: inherit; }
+        .ctx-bd-all:hover { background: rgba(246,173,85,0.22); }
+        .ctx-bd-all i { font-size: 0.55rem; margin-left: 2px; }
+        /* 逐段看：送出去的每一段，照順序一格一格 */
+        .ctx-seg-list { overflow: auto; padding: 6px 8px 10px; }
+        .ctx-seg-note { font-size: 11px; color: #999; padding: 6px 8px 8px; line-height: 1.5; }
+        .ctx-seg-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 8px; background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.06); color: #ddd; text-align: left; cursor: pointer; font-family: inherit; }
+        .ctx-seg-row:hover { background: rgba(246,173,85,0.1); }
+        .ctx-seg-tag { flex-shrink: 0; width: 52px; text-align: center; font-size: 10px; letter-spacing: 0.5px; padding: 2px 0; border-radius: 3px; border: 1px solid currentColor; }
+        .ctx-seg-tag.k-aurelia { color: #f6ad55; }
+        .ctx-seg-tag.k-wi      { color: #69db7c; }
+        .ctx-seg-tag.k-preset  { color: #74c0fc; }
+        .ctx-seg-tag.k-card    { color: #e599f7; }
+        .ctx-seg-tag.k-persona { color: #e599f7; }
+        .ctx-seg-tag.k-tavern  { color: #a5b4c8; }
+        .ctx-seg-tag.k-ext     { color: #a5b4c8; }
+        .ctx-seg-tag.k-chat    { color: #cfcfcf; }
+        .ctx-seg-tag.k-now     { color: #ffd43b; }
+        .ctx-seg-tag.k-unknown { color: #ff8787; }
+        .ctx-seg-name { flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; }
+        .ctx-seg-name small { display: block; font-size: 11px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ctx-seg-tok { flex-shrink: 0; font-size: 12px; color: #f6ad55; font-variant-numeric: tabular-nums; }
+        .ctx-seg-back { background: transparent; border: none; color: #f6ad55; font-size: 14px; cursor: pointer; padding: 2px 6px 2px 0; }
         .ctx-bd-item { display: flex; align-items: center; gap: 8px; padding: 2px 4px; cursor: pointer; border-radius: 3px; transition: background 0.15s; }
         .ctx-bd-item:hover { background: rgba(246,173,85,0.14); }
         /* CTX 逐項內容檢視彈窗 */

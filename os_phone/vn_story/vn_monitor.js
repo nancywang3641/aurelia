@@ -364,6 +364,214 @@
             const cb = ov.querySelector('.ctx-cv-close');
             if (cb) cb.addEventListener('click', close);
         },
+        // ── 逐段看：把「真送出去的那包」切回一段一段，認出每段是誰放的 ──
+        //   做法：送出那一刻把手上知道原文的東西都記下來（奧瑞亞與其他擴充注入的、這輪觸發的世界書條目、
+        //   預設條目、角色卡、使用者角色），再到送出的每則訊息裡找它們的原文。找到的標名字，
+        //   剩下的：你／角色說的話＝聊天記錄，系統那邊沒人認領的＝沒認出來。
+        _AURELIA_NAMES: {
+            aurelia_vn_rules: 'VN 指令', aurelia_vn_rules_pre: 'VN 指令（開頭那段）',
+            aurelia_grand_summary: '大總結', aurelia_vn_memory: '記憶召回',
+            aurelia_app_memory: '手機裡跟角色的近期互動', aurelia_app_data: '創作室應用的資料',
+            aurelia_sticker_list: '表情包清單', aurelia_vn_tags: 'VN 組件說明', aurelia_fx_list: '畫面特效清單',
+            aurelia_wx_chatroom_ids: '聊天室代號對照', aurelia_map_theater: '地圖小劇場記事',
+            aurelia_state_brief: '狀態面板', aurelia_avs_rules: '狀態面板的規則',
+            aurelia_avatar_reminder: '頭像提醒', aurelia_achv_reminder: '成就提醒',
+            aurelia_director_brief: '導演提示', aurelia_npc_dossier: '角色檔案',
+            aurelia_mc_status: '主角狀態', aurelia_blacklist: '黑名單'
+        },
+        _TAVERN_NAMES: {
+            '1_memory': ['tavern', '摘要'], '2_floating_prompt': ['tavern', '作者備註'],
+            '3_vectors': ['tavern', '向量記憶'], '4_vectors_data_bank': ['tavern', '資料庫'],
+            'DEPTH_PROMPT': ['card', '角色備註'], 'PERSONA_DESCRIPTION': ['persona', '使用者角色']
+        },
+        _KIND_TAGS: { aurelia: '奧瑞亞', wi: '世界書', preset: '預設', card: '角色卡', persona: '使用者', tavern: '酒館', ext: '其他擴充', chat: '聊天記錄', now: '你這輪', unknown: '沒認出' },
+
+        _ctx: function() {
+            try { return (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext()) || (window.SillyTavern && window.SillyTavern.getContext && window.SillyTavern.getContext()) || null; }
+            catch (e) { return null; }
+        },
+
+        // 送出那一刻呼叫：手上知道原文的東西先抄一份（用完即清的注入，生成完就不見了）
+        _snapKnown: function() {
+            const ctx = this._ctx();
+            const exts = [];
+            try {
+                const ep = (ctx && ctx.extensionPrompts) || win.extension_prompts || {};
+                Object.keys(ep).forEach(function(k){
+                    const v = ep[k] && ep[k].value;
+                    if (typeof v === 'string' && v.trim()) exts.push({ key: k, value: v });
+                });
+            } catch (e) {}
+            this._liveKnown = { exts: exts, wi: (this._wiActive || []).slice(), at: Date.now() };
+        },
+
+        _knownPieces: function() {
+            const ctx = this._ctx() || {};
+            const sub = function(t){ try { return ctx.substituteParams ? ctx.substituteParams(t) : t; } catch (e) { return t; } };
+            const out = [];
+            const add = function(kind, name, text, sub2) {
+                const t = String(text == null ? '' : text).trim();
+                if (t.length < 12) return;
+                out.push({ kind: kind, name: name, sub: sub2 || '', text: t });
+                const s = String(sub(t) || '').trim();
+                if (s && s !== t && s.length >= 12) out.push({ kind: kind, name: name, sub: sub2 || '', text: s });
+            };
+            const self = this;
+            const known = this._liveKnown || { exts: [], wi: [] };
+            known.exts.forEach(function(e){
+                const k = e.key;
+                if (/^customDepthWI|^customWIOutlet/i.test(k)) return;          // 世界書的整包，底下一條一條認
+                if (self._AURELIA_NAMES[k]) return add('aurelia', self._AURELIA_NAMES[k], e.value);
+                if (/^aurelia_/i.test(k)) return add('aurelia', k.replace(/^aurelia_/i, ''), e.value);
+                if (self._TAVERN_NAMES[k]) return add(self._TAVERN_NAMES[k][0], self._TAVERN_NAMES[k][1], e.value);
+                add('ext', k, e.value);
+            });
+            known.wi.forEach(function(w){
+                if (!w) return;
+                const name = String(w.comment || (Array.isArray(w.key) ? w.key.join('、') : w.key) || ('條目 ' + (w.uid != null ? w.uid : ''))).trim();
+                add('wi', name, w.content, w.world || '');
+            });
+            try {
+                const ps = (ctx.chatCompletionSettings && ctx.chatCompletionSettings.prompts) || [];
+                ps.forEach(function(p){ if (p && !p.marker && p.content) add('preset', p.name || p.identifier || '預設條目', p.content); });
+            } catch (e) {}
+            try {
+                const ch = ctx.characters && ctx.characters[ctx.characterId];
+                if (ch) {
+                    add('card', '描述', ch.description);
+                    add('card', '個性', ch.personality);
+                    add('card', '情境', ch.scenario);
+                    add('card', '對話範例', ch.mes_example);
+                    const d = ch.data || {};
+                    add('card', '角色卡的主提示', d.system_prompt);
+                    add('card', '角色卡的後置指令', d.post_history_instructions);
+                }
+            } catch (e) {}
+            try { const pu = ctx.powerUserSettings; if (pu) add('persona', '使用者角色', pu.persona_description); } catch (e) {}
+            out.sort(function(a, b){ return b.text.length - a.text.length; });   // 長的先認，免得短的咬掉長的中間
+            return out;
+        },
+
+        _msgText: function(m) {
+            if (!m) return '';
+            const c = m.content;
+            if (typeof c === 'string') return c;
+            if (Array.isArray(c)) return c.map(function(p){ return (p && (p.text || (typeof p === 'string' ? p : ''))) || ''; }).join('\n');
+            return c == null ? '' : String(c);
+        },
+
+        _buildSegments: function() {
+            const lc = this._liveChat;
+            if (!Array.isArray(lc) || !lc.length) return null;
+            const pieces = this._knownPieces();
+            const segs = [];
+            const self = this;
+            lc.forEach(function(m, mi){
+                const text = self._msgText(m);
+                const role = (m && m.role) || 'system';
+                const claimed = [];
+                pieces.forEach(function(p){
+                    let from = 0, i;
+                    while ((i = text.indexOf(p.text, from)) >= 0) {
+                        const end = i + p.text.length;
+                        const hit = claimed.some(function(c){ return i < c.end && end > c.start; });
+                        if (!hit) claimed.push({ start: i, end: end, p: p });
+                        from = end;
+                    }
+                });
+                claimed.sort(function(a, b){ return a.start - b.start; });
+                let pos = 0;
+                const gap = function(s) {
+                    const t = s.trim();
+                    if (t.replace(/[\s\-=*#_.,，。:：|>]/g, '').length < 2) return;   // 只剩分隔線、空行的不算一段
+                    if (role === 'user' || role === 'assistant') segs.push({ kind: 'chat', role: role, text: t, mi: mi });
+                    else segs.push({ kind: 'unknown', name: '系統那邊，沒認出是誰放的', text: t, mi: mi });
+                };
+                claimed.forEach(function(c){
+                    gap(text.slice(pos, c.start));
+                    segs.push({ kind: c.p.kind, name: c.p.name, sub: c.p.sub, text: text.slice(c.start, c.end), mi: mi });
+                    pos = c.end;
+                });
+                gap(text.slice(pos));
+            });
+            // 最後一則你說的話單獨拿出來（模型最看重最後那段）
+            for (let i = segs.length - 1; i >= 0; i--) {
+                if (segs[i].kind === 'chat') { if (segs[i].role === 'user') segs[i].kind = 'now'; break; }
+            }
+            // 連在一起的聊天記錄併成一格
+            const merged = [];
+            segs.forEach(function(s){
+                const last = merged[merged.length - 1];
+                if (s.kind === 'chat' && last && last.kind === 'chat') {
+                    last.parts.push(s); return;
+                }
+                if (s.kind === 'chat') merged.push({ kind: 'chat', parts: [s] });
+                else merged.push(s);
+            });
+            merged.forEach(function(s){
+                if (s.kind === 'chat') {
+                    s.name = '聊天記錄 · ' + s.parts.length + ' 則';
+                    s.text = s.parts.map(function(p){ return '【' + (p.role === 'user' ? '你' : '角色') + '】\n' + p.text; }).join('\n\n');
+                } else if (s.kind === 'now') {
+                    s.name = '你這一輪說的話';
+                }
+            });
+            return merged;
+        },
+
+        showSegments: async function() {
+            const esc = function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+            const old = document.getElementById('ctx-cv-overlay');
+            if (old) old.remove();
+            const ov = document.createElement('div');
+            ov.id = 'ctx-cv-overlay';
+            ov.className = 'ctx-cv-overlay';
+            ov.innerHTML = '<div class="ctx-cv-box"><div class="ctx-cv-head"><span class="ctx-cv-title">送出去的每一段</span><span class="ctx-cv-meta">整理中…</span><button class="ctx-cv-close" type="button">✕</button></div><div class="ctx-seg-list"></div></div>';
+            document.body.appendChild(ov);
+            const close = function(){ ov.remove(); };
+            ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+            ov.querySelector('.ctx-cv-close').addEventListener('click', close);
+            const box = ov.querySelector('.ctx-cv-box');
+
+            let segs = this._buildSegments();
+            let note = '';
+            if (!segs) {
+                // 重新整理後手上沒有「真送出去那包」，只剩存檔裡的大類
+                const bc = this.breakdownContent || {};
+                const self = this;
+                segs = Object.keys(this._KEY_LABELS).filter(function(k){ return bc[k] && String(bc[k]).trim(); })
+                    .map(function(k){ return { kind: k === 'chat' ? 'chat' : 'unknown', name: self._KEY_LABELS[k], text: String(bc[k]) }; });
+                note = '這裡只分得出大類。再生成一輪，就能一段一段看是誰放的。';
+            }
+            for (let i = 0; i < segs.length; i++) segs[i].tok = await this._tokAsync(segs[i].text);
+            const total = segs.reduce(function(a, s){ return a + (s.tok || 0); }, 0);
+
+            const self = this;
+            const renderList = function() {
+                box.innerHTML = '<div class="ctx-cv-head"><span class="ctx-cv-title">送出去的每一段</span><span class="ctx-cv-meta">照送出去的順序 · ' + segs.length + ' 段 · 約 ' + total.toLocaleString() + ' tokens</span><button class="ctx-cv-close" type="button">✕</button></div>'
+                    + (note ? '<div class="ctx-seg-note">' + esc(note) + '</div>' : '')
+                    + '<div class="ctx-seg-list">' + (segs.length ? segs.map(function(s, i){
+                        return '<button class="ctx-seg-row" type="button" data-i="' + i + '">'
+                            + '<span class="ctx-seg-tag k-' + s.kind + '">' + esc(self._KIND_TAGS[s.kind] || '') + '</span>'
+                            + '<span class="ctx-seg-name">' + esc(s.name) + (s.sub ? '<small>' + esc(s.sub) + '</small>' : '') + '</span>'
+                            + '<span class="ctx-seg-tok">' + (s.tok || 0).toLocaleString() + '</span></button>';
+                    }).join('') : '<div class="ctx-seg-note">還沒有送出過。</div>') + '</div>';
+                box.querySelector('.ctx-cv-close').addEventListener('click', close);
+                box.querySelectorAll('.ctx-seg-row').forEach(function(b){
+                    b.addEventListener('click', function(){ renderOne(segs[+b.dataset.i]); });
+                });
+            };
+            const renderOne = function(s) {
+                box.innerHTML = '<div class="ctx-cv-head"><button class="ctx-seg-back" type="button"><i class="fa-solid fa-chevron-left"></i></button>'
+                    + '<span class="ctx-cv-title">' + esc(s.name) + '</span><span class="ctx-cv-meta">' + esc(self._KIND_TAGS[s.kind] || '') + (s.sub ? ' · ' + esc(s.sub) : '') + ' · 約 ' + (s.tok || 0).toLocaleString() + ' tokens</span>'
+                    + '<button class="ctx-cv-close" type="button">✕</button></div>'
+                    + '<pre class="ctx-cv-body">' + esc(s.text) + '</pre>';
+                box.querySelector('.ctx-cv-close').addEventListener('click', close);
+                box.querySelector('.ctx-seg-back').addEventListener('click', renderList);
+            };
+            renderList();
+        },
+
         _readFromTauriStorage: async function() {
             try {
                 const ctx = (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext())
@@ -648,8 +856,15 @@
                     try {
                         if (!data || data.dryRun) return;   // dryRun = 純算 token、不是真送，跳過
                         const msgs = data.chat || data.messages || data.prompt;
-                        if (Array.isArray(msgs)) VN_CtxMonitor._liveChat = msgs;
+                        if (Array.isArray(msgs)) { VN_CtxMonitor._liveChat = msgs; VN_CtxMonitor._snapKnown(); }
                     } catch (e) {}
+                });
+                // 這一輪觸發了哪些世界書條目（逐段看要拿它們的原文去認）
+                if (te.WORLD_INFO_ACTIVATED) win.eventOn(te.WORLD_INFO_ACTIVATED, function(entries) {
+                    try { if (Array.isArray(entries)) VN_CtxMonitor._wiActive = entries.slice(); } catch (e) {}
+                });
+                if (te.GENERATION_STARTED) win.eventOn(te.GENERATION_STARTED, function(type, opts, dryRun) {
+                    if (!dryRun) VN_CtxMonitor._wiActive = [];
                 });
                 return;
             }
