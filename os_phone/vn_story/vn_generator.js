@@ -295,7 +295,7 @@
                 window.VN_Core.newStoryId(presetTitle || '未命名故事', '');
             }
 
-            const messages = await win.OS_API.buildContext(userMsg, 'vn_story');
+            const messages = await win.OS_API.buildContext(userMsg, 'vn_story', { phone: options._continueFrom ? 'skip' : (options._phoneRedo ? 'redo' : '') });
 
             await new Promise((resolve, reject) => {
                 win.OS_API.chat(
@@ -356,6 +356,7 @@
                         } catch(e) {
                             console.warn('[VN_Gen] 存檔失敗（不影響播放）:', e);
                         }
+                        try { await win.OS_PHONE_EVENTS?.commit?.(); } catch (e) {}   // 章節回來了：手機上剛發生的那批記成送過
 
                         if (win.OS_ECONOMY && typeof win.OS_ECONOMY.processAiTransaction === 'function') {
                             const statusMatch = fullText.match(/<status>([\s\S]*?)<\/status>/i);

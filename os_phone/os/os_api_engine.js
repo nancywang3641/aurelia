@@ -2536,7 +2536,11 @@
                 let _npcBlock = '', _appMemBlock = '';
                 try { _npcBlock = (await win.OS_NPC_DOSSIER?.buildBlock?.(scanText)) || ''; }
                 catch (_e) { console.warn('[OS_API vn_story] NPC 人物檔案組裝失敗:', _e); }
-                try { _appMemBlock = (await win.OS_APP_MEMORY_INJECT?.buildAppMemoryBlock?.(scanText)) || ''; }
+                // 📨 手機上剛發生的事（手機事件簿，跟酒館同一本）：先拿，回顧那塊才知道要排除哪之後的
+                let _phoneNow = { text: '', from: null };
+                try { if (win.OS_PHONE_EVENTS) _phoneNow = await win.OS_PHONE_EVENTS.build(opts && opts.phone); }
+                catch (_e) { console.warn('[OS_API vn_story] 手機事件簿組裝失敗:', _e); }
+                try { _appMemBlock = (await win.OS_APP_MEMORY_INJECT?.buildAppMemoryBlock?.(scanText, -1, _phoneNow.from)) || ''; }
                 catch (_e) { console.warn('[OS_API vn_story] 手機近況組裝失敗:', _e); }
                 let _mcBlock = '';
                 try { _mcBlock = (await win.OS_MC_STATUS?.buildBlock?.()) || ''; }
@@ -2624,6 +2628,11 @@
                     }
                 }
 
+                // 手機上剛發生的事排在她那句話正前面（先發生的在前，她的話永遠是最後一段）
+                if (_phoneNow.text) {
+                    const _B = win.AURELIA_BLOCK;
+                    _vn.push({ role: 'system', content: _B ? _B.wrap('aurelia_phone_now', _phoneNow.text) : _phoneNow.text });
+                }
                 if (userMessage) {
                     const _cotReminder = `\n\n[SYS]\n上面是新收到的訊息。回覆前先在 <thinking> 裡想清楚，想完再寫正文。`;
                     _vn.push({ role: 'user', content: _plain ? userMessage : (userMessage + _cotReminder) });

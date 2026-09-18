@@ -189,6 +189,7 @@ const PHONE_FILES = [
     'os/os_vector_engine.js', // 向量記憶引擎（embed/ingest/search；酒館原本沒載入，補上）
     'os/os_inject_blocks.js', // 奧瑞亞每種注入包成一塊 <名字>…</名字>（要在所有注入器之前）
     'os/os_vector_inject.js', // 酒館版記憶召回注入器（GENERATION_STARTED → injectPrompts）
+    'os/os_phone_events.js',  // 手機事件簿：上一段劇情之後手機上發生的事，只交給劇情一次（酒館與 PWA 共用）
     'os/os_app_memory_inject.js', // app→酒館 記憶反向注入器（在場角色的手機近況，唯讀注入不貼回 chat）
     'os/os_summary_inject.js', // 酒館版大總結程式注入器（OS_DB tavern_summary → 壓縮 → injectPrompts；搬出世界書）
     'os/phone_system.js',

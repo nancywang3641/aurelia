@@ -1494,11 +1494,12 @@
                     win.VN_Generator?.generateStory?.({
                         title: last.storyTitle || this._currentStoryTitle || '',
                         request: req,
+                        _phoneRedo: true,
                         onStatus: function (text, cls) { if (cls === 'err') { self._hideWriterCurtain(); try { AUI.alert(text); } catch (e) {} } },
                     });
                 } else {
                     this._showSendingLoader();
-                    this._sendChoiceAndContinue(req);
+                    this._sendChoiceAndContinue(req, { _phoneRedo: true });   // 重寫這一章：手機上的事送上一次那一批
                 }
             } finally {
                 this._regenBusy = false;
@@ -1542,7 +1543,7 @@
             try {
                 if (win.OS_THINK) win.OS_THINK.setContext({ panel: 'VN 選項選擇', userInput: choice });
                 const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
-                const messages = await win.OS_API.buildContext(choice, 'vn_story');
+                const messages = await win.OS_API.buildContext(choice, 'vn_story', { phone: opts?._continueFrom ? 'skip' : (opts?._phoneRedo ? 'redo' : '') });
                 await new Promise((resolve, reject) => {
                     win.OS_API.chat(messages, config, null, async (fullText) => {
                         // 續寫回來的片段先接回半截正文，再一起驗貨（驗的是接完的完整章節，不是那個片段）
@@ -1588,6 +1589,7 @@
                             const _reqChoice = opts?._origChoice || choice;
                             await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${_reqChoice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: _reqChoice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
                         } catch(e) {}
+                        try { await win.OS_PHONE_EVENTS?.commit?.(); } catch (e) {}   // 章節存好了：手機上剛發生的那批記成送過
                         
                         window.VN_Core._lastRawText = fullText;
 

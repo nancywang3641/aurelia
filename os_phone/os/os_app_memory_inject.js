@@ -272,15 +272,12 @@
     }
 
     // ── 手機上剛發生的事：上一段劇情之後、她這句話之前，在手機上聊的、發生的 ──
-    //    黏在她那句話「前面」只送這一次（手機的事先發生，她回到劇情說的話才是最新的，要排最後）。
+    //    組法、送過沒、重新生成送哪一批，都在手機事件簿（os_phone_events.js），酒館與 PWA 共用。
+    //    這裡只做兩件事：把微信登記成事件簿的一個來源；酒館那條把它插在她那句話前面（深度 1）。
     //    送過的就退進上面那塊回顧當背景，不會每輪都像剛發生一樣再送一次（她：AI 總是重複我在微信聊的內容）。
-    //    時間點記在這個故事自己身上：lastEnd＝上一次送到哪；重新生成／換一個回覆時送同一批。
     const NOW_INJECT_ID = 'aurelia_phone_now';
-    const NOW_APP = 'wx_to_story';
-    const NOW_FIRST_HOURS = 3;     // 這個故事第一次用：只往回看這麼久，免得把很久以前的全倒進去
-    const NOW_MAX_CHARS = 2400;    // 一輪最多帶這麼多字（每間從最新往回，太多就截掉最舊的）
+    const NOW_MAX_CHARS = 2400;    // 一間一輪最多帶這麼多字（從最新往回，太多就截掉最舊的）
     let _nowUninject = null;
-    let _nowPending = null;        // 這一輪要送的那批，等劇情真的回來了才算送出
 
     // 聊天設置 → 隔離 →「帶回劇情」：沒動過的照「吃這本的劇情」走（關了劇情的那些人本來就跟這本故事無關）
     function _backToStory(c) {
@@ -288,12 +285,6 @@
         if (c.noBack === true) return false;
         if (c.noBack === false) return true;
         return c.noHistory !== true;
-    }
-    async function _nowState(cid) {
-        try { return (await win.OS_DB.getAppData(NOW_APP, 'state', cid)) || {}; } catch (e) { return {}; }
-    }
-    async function _saveNowState(cid, st) {
-        try { await win.OS_DB.saveAppData(NOW_APP, 'state', st, cid); } catch (e) {}
     }
     // 一則 → 一行（系統那種也要：外送付了、紅包收了…都是手機上發生的事）
     function _nowLine(m, userName, charName, isGroup) {
@@ -303,8 +294,10 @@
         if (m.type === 'system') { const t = _clean(m.content); return t ? '（' + t + '）' : ''; }
         return _chatLine(m, userName, charName, isGroup);
     }
-    async function _phoneSince(cid, from) {
-        const chats = (win.OS_DB.getAllApiChats ? (await win.OS_DB.getAllApiChats()) : {}) || {};
+    // 事件簿的微信來源：from 之後每一間聊了什麼
+    async function _wxSince(cid, from) {
+        if (!win.OS_DB || !win.OS_DB.getAllApiChats) return [];
+        const chats = (await win.OS_DB.getAllApiChats()) || {};
         const userName = _userName();
         const rooms = [];
         Object.keys(chats).forEach(function (id) {
@@ -327,45 +320,27 @@
             }
             if (lines.length) rooms.push({ name: c.isGroup ? ('群聊：' + name) : name, last: ms[ms.length - 1].timestamp, lines: lines });
         });
-        rooms.sort(function (a, b) { return a.last - b.last; });   // 先聊完的排前面
-        if (!rooms.length) return '';
-        return '上一段劇情之後、' + userName + '接下來這句話之前，' + userName + '在手機上：\n'
-            + rooms.map(function (r) { return '〔' + r.name + '〕\n' + r.lines.join('\n'); }).join('\n')
-            + '\n這些都已經發生過了。劇情從' + userName + '接下來這句話接著寫，可以自然帶到手機上的事，但不要把這些對話再演一遍。';
+        return rooms;
     }
-    // 回傳這一輪「剛發生的事」從哪個時間點算起（回顧那塊要排除這之後的，免得同一句出現兩次）
+    (function registerWx(n) {
+        const B = win.OS_PHONE_EVENTS;
+        if (B && B.addSource) { B.addSource('wx', _wxSince); return; }
+        if (n > 0) setTimeout(function () { registerWx(n - 1); }, 500);
+    })(20);
+
+    // 酒館那條：插在她那句話前面。回傳 from（回顧那塊要排除這之後的，免得同一句出現兩次）
     async function injectPhoneNow(type) {
         try { _nowUninject && _nowUninject(); } catch (e) {}
         _nowUninject = null;
-        _nowPending = null;
-        if (!win.OS_DB || !win.OS_DB.getAllApiChats || !win.OS_DB.getAppData) return null;
-        const cid = (win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
-        if (cid == null) return null;
-        const st = await _nowState(cid);
-        const redo = (type === 'regenerate' || type === 'swipe');
-        let text = '', from;
-        if (redo) {
-            text = st.lastText || '';
-            from = st.lastFrom || st.lastEnd || 0;
-        } else {
-            const now = Date.now();
-            from = st.lastEnd || (now - NOW_FIRST_HOURS * 3600 * 1000);
-            text = await _phoneSince(cid, from);
-            _nowPending = { cid: cid, from: from, until: now, text: text };
-        }
-        if (text && win.TavernHelper && win.TavernHelper.injectPrompts) {
+        const B = win.OS_PHONE_EVENTS;
+        if (!B) return null;
+        const r = await B.build((type === 'regenerate' || type === 'swipe') ? 'redo' : '');
+        if (r.text && win.TavernHelper && win.TavernHelper.injectPrompts) {
             // 深度 1＝排在最後一則（她這句話）的前面
-            const r = win.TavernHelper.injectPrompts([{ id: NOW_INJECT_ID, content: text, position: 'in_chat', depth: 1, role: 'system' }], { once: true });
-            _nowUninject = (r && r.uninject) || null;
+            const x = win.TavernHelper.injectPrompts([{ id: NOW_INJECT_ID, content: r.text, position: 'in_chat', depth: 1, role: 'system' }], { once: true });
+            _nowUninject = (x && x.uninject) || null;
         }
-        return from;
-    }
-    // 劇情真的回來了才把這一批記成送過（生成失敗或按停，下一輪會再送一次）
-    async function _commitPhoneNow() {
-        const p = _nowPending;
-        _nowPending = null;
-        if (!p) return;
-        await _saveNowState(p.cid, { lastEnd: p.until, lastFrom: p.from, lastText: p.text });
+        return r.from;
     }
 
     async function injectAppMemory(type) {
@@ -708,8 +683,9 @@
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectAppData); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });
         }
-        if (win.tavern_events.MESSAGE_RECEIVED) win.eventOn(win.tavern_events.MESSAGE_RECEIVED, function () { _commitPhoneNow(); });
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { _nowPending = null; try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; });
+        // 劇情真的回來了才把這一批記成送過（生成失敗或按停，下一輪會再送一次）
+        if (win.tavern_events.MESSAGE_RECEIVED) win.eventOn(win.tavern_events.MESSAGE_RECEIVED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.commit(); });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.cancel(); try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; });
         console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件 + app資料回傳 + 地圖番外記事）');
     }
 
