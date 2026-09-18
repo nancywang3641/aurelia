@@ -3205,6 +3205,25 @@
                 scroll.style.paddingBottom = '70px';
             }
         },
+        // 🖱 「＋」面板翻頁。那排是左右滑的，手機用手指滑得過去，電腦的滑鼠滾輪只會上下、
+        //    底下兩個點以前又沒有樣式（看不到也按不到）——第二頁的禮物、外送在電腦上根本到不了。
+        //    現在：點點可以按、滾輪上下滾一格就翻一頁。
+        panelPage: function(i) {
+            const el = APP_CONTAINER && APP_CONTAINER.querySelector('.wx-scroll-view');
+            if (!el) return;
+            const n = el.querySelectorAll('.wx-grid-page').length || 1;
+            const p = Math.max(0, Math.min(n - 1, i));
+            el.scrollTo({ left: p * el.clientWidth, behavior: 'smooth' });
+        },
+        onPanelWheel: function(e, el) {
+            if (!e || !el || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // 本來就是左右滑（觸控板）就照它自己的
+            e.preventDefault();
+            const now = Date.now();
+            if (now - (this._panelWheelAt || 0) < 350) return;                   // 一次滾動會來好幾下，一下只翻一頁
+            this._panelWheelAt = now;
+            const cur = Math.round(el.scrollLeft / (el.clientWidth || 1));
+            this.panelPage(cur + (e.deltaY > 0 ? 1 : -1));
+        },
         onScrollDot: function(el) { const dots = APP_CONTAINER.querySelectorAll('.wx-dot'); const pageIndex = Math.round(el.scrollLeft / el.clientWidth); dots.forEach((d, i) => { if(i === pageIndex) d.classList.add('active'); else d.classList.remove('active'); }); },
         
         // ＋ 面板的每一格。🚨「語音」是打字寫入的小窗（[Voice: 打的字]），真的錄音在輸入框的麥克風按住說話——兩種都要，別再把這格換成錄音

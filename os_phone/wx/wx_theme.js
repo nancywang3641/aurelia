@@ -233,7 +233,7 @@
             .wx-icon-btn { font-size: 26px; color: var(--wx-ink); cursor: pointer; line-height: 1; margin: 0 2px;}
             .wx-send-btn { background: var(--wx-accent); color: var(--wx-on-accent); padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; margin-left: 5px; display: none; }
             .wx-send-btn.show { display: block; }
-            .wx-action-panel { height: 0; overflow: hidden; transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); background: var(--wx-surface-2); border-top: 1px solid var(--wx-line); position: relative; }
+            .wx-action-panel { height: 0; overflow: hidden; transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); background: var(--wx-surface-2); border-top: 1px solid var(--wx-line); position: relative; display: flex; flex-direction: column; }
             .wx-action-panel.open { height: 230px; }
             /* === 表情包面板 === */
             .wx-sticker-panel { height: 0; overflow: hidden; transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); background: var(--wx-surface-2); border-top: 1px solid var(--wx-line); display: flex; flex-direction: column; }
@@ -276,11 +276,16 @@
             .wx-tab:not(.active) .wx-tab-txt { color: #b2b2b2; }
             .wx-tab-badge { position: absolute; top: -6px; right: -10px; background: var(--wx-danger); color: #fff; font-size: 10px; height: 16px; min-width: 16px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 3px; border: 1px solid var(--wx-bar); font-weight: bold; z-index: 5; transform: scale(0.9); }
             .wx-tab-dot { position: absolute; top: -2px; right: -4px; width: 10px; height: 10px; background: var(--wx-danger); border-radius: 50%; border: 1px solid var(--wx-bar); z-index: 5; }
-            .wx-scroll-view { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; height: 100%; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
-            .wx-grid-page { min-width: 100%; scroll-snap-align: start; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 15px 10px; padding: 25px 20px; box-sizing: border-box; height: 210px; }
+            /* 🚨 以前是 height:100%＝整個面板那麼高，底下的翻頁點被擠到面板外面、被裁掉——所以一直看不到點 */
+            .wx-scroll-view { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+            .wx-grid-page { min-width: 100%; scroll-snap-align: start; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 15px 10px; padding: 22px 20px 12px; box-sizing: border-box; height: 100%; }
             .wx-grid-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
             .wx-grid-icon { width: 55px; height: 55px; background: var(--wx-surface); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1px solid var(--wx-line-strong); color: var(--wx-ink-2); }
             .wx-grid-label { font-size: 11px; color: var(--wx-ink-3); }
+            /* ＋面板底下的翻頁點：以前沒有樣式＝看不到也按不到，電腦上翻不到第二頁 */
+            .wx-dots { display: flex; justify-content: center; gap: 2px; padding: 0 0 6px; flex-shrink: 0; }
+            .wx-dot { width: 7px; height: 7px; padding: 6px; border-radius: 50%; background: var(--wx-line-strong); background-clip: content-box; cursor: pointer; }
+            .wx-dot.active { background-color: var(--wx-ink-3); }
             .wx-img-block { max-width: 100%; border-radius: 4px; cursor: pointer; display: block; }
             .wx-time-stamp { text-align: center; font-size: 12px; color: #cecece; margin: 10px 0; width: 100%; clear: both; }
             /* 🎙 語音泡泡：喇叭＋音波＋秒數，長度四檔；字幕點開才出現。顏色跟著泡泡走（currentColor），換皮不用另外寫 */

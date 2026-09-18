@@ -1343,7 +1343,7 @@
                         </div>
 
                         <div class="wx-action-panel">
-                            <div class="wx-scroll-view" onscroll="${app}.onScrollDot(this)">
+                            <div class="wx-scroll-view" onscroll="${app}.onScrollDot(this)" onwheel="${app}.onPanelWheel(event, this)">
                                 <div class="wx-grid-page">
                                     <div class="wx-grid-item" onclick="${app}.action('photo')"><div class="wx-grid-icon"><i class="fa-solid fa-image"></i></div><div class="wx-grid-label">照片</div></div>
                                     <div class="wx-grid-item" onclick="${app}.action('video_file')"><div class="wx-grid-icon"><i class="fa-solid fa-video"></i></div><div class="wx-grid-label">視頻</div></div>
@@ -1359,7 +1359,7 @@
                                     <div class="wx-grid-item" onclick="${app}.action('takeout')"><div class="wx-grid-icon"><i class="fa-solid fa-motorcycle"></i></div><div class="wx-grid-label">外送</div></div>
                                 </div>
                             </div>
-                            <div class="wx-dots" id="wxPanelDots"><div class="wx-dot active"></div><div class="wx-dot"></div></div>
+                            <div class="wx-dots" id="wxPanelDots"><div class="wx-dot active" onclick="${app}.panelPage(0)"></div><div class="wx-dot" onclick="${app}.panelPage(1)"></div></div>
                         </div>
                     </div>
 
