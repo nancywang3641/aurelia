@@ -358,6 +358,10 @@
        不必再一個一個列進下面那張清單。 */
     --safe-top: var(--aps-safe-top);
 }
+/* 📱 聊天 app 整頁自己排好（標頭、列表或訊息區、輸入列），捲動只在它裡面那塊。
+   外面這層以前照樣能捲：套了主題或 iPhone 叫出鍵盤，聊天 app 比這層高一點點，
+   在標頭或輸入列上一滑就把整支 app 推歪，標頭跑到狀態列底下（她 09-19 回報）。 */
+.aps-app-body:has(> .aps-mount > .wx-shell) { overflow: hidden; overscroll-behavior: none; }
 /* 手機內所有 app 的滾動條隱形(像手機、不像桌面那條粗的) */
 .aps-app-body, .aps-app-body * { scrollbar-width: none; -ms-overflow-style: none; }
 .aps-app-body::-webkit-scrollbar, .aps-app-body *::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }

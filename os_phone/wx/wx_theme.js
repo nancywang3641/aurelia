@@ -189,11 +189,20 @@
             .wx-recall-in { animation: wxRecallIn .35s ease-out; }
             @keyframes wxRecallIn { from { opacity: 0; } to { opacity: 1; } }
             /* 💭 這一輪的思考：對方那一輪第一顆泡泡上面一條，點開看（wx_view renderBubble） */
-            .wx-think-fold { clear: both; align-self: flex-start; max-width: 72%; margin: 6px 12px 0 58px; padding: 5px 10px; border-radius: 8px; background: rgba(0,0,0,0.045); color: #8a8a8a; font-size: 12px; cursor: pointer; user-select: none; }
+            /* 💭 思考摺疊用卡片那組顏色（底 --wx-surface、字 --wx-ink-3／--wx-ink-2、框 --wx-line）：
+               以前寫死淺灰底灰字，主題把聊天室換色時常常看不到。底和字同一組格子，換了也一起換，不會對不上。 */
+            .wx-think-fold { clear: both; align-self: flex-start; max-width: 72%; margin: 6px 12px 0 58px; padding: 5px 10px; border-radius: 8px; background: var(--wx-surface); border: 1px solid var(--wx-line); color: var(--wx-ink-3); font-size: 12px; cursor: pointer; user-select: none; }
             .wx-think-head { display: flex; align-items: center; gap: 6px; }
             .wx-think-arrow { font-size: 9px; transition: transform .2s; }
             .wx-think-fold.open .wx-think-arrow { transform: rotate(90deg); }
-            .wx-think-body { display: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.08); white-space: pre-wrap; line-height: 1.5; max-height: 320px; overflow-y: auto; cursor: text; user-select: text; }
+            .wx-think-body { display: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--wx-line); color: var(--wx-ink-2); line-height: 1.55; max-height: 320px; overflow-y: auto; cursor: text; user-select: text; overscroll-behavior: contain; }
+            .wx-think-body p { margin: 0 0 6px; }
+            .wx-think-body p:last-child, .wx-think-body ul:last-child, .wx-think-body ol:last-child { margin-bottom: 0; }
+            .wx-think-body .wx-think-h { font-weight: 700; color: var(--wx-ink); margin: 8px 0 4px; }
+            .wx-think-body .wx-think-h:first-child { margin-top: 0; }
+            .wx-think-body ul, .wx-think-body ol { margin: 0 0 6px; padding-left: 18px; }
+            .wx-think-body code { font-family: ui-monospace, monospace; font-size: 11px; padding: 0 3px; border-radius: 3px; background: var(--wx-surface-2); }
+            .wx-think-body hr { border: 0; border-top: 1px solid var(--wx-line); margin: 6px 0; }
             .wx-think-fold.open .wx-think-body { display: block; }
             /* 它現在是一顆真泡泡（.wx-bubble-content），只要調泡泡內的排版就好 */
             .wx-typing-indicator { display: flex; align-items: center; gap: 7px; padding: 12px 14px; }
@@ -268,12 +277,14 @@
             .wx-bottom-nav { height: 55px; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); display: flex; align-items: center; justify-content: space-around; flex-shrink: 0; z-index: 10; padding-bottom: 5px; }
             .wx-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; flex: 1; cursor: pointer; position: relative; }
             .wx-tab-icon-box { position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
-            .wx-tab-icon { width: 24px; height: 24px; fill: var(--wx-ink); transition: fill 0.2s; }
-            .wx-tab-txt { font-size: 10px; margin-top: 1px; color: var(--wx-ink); font-weight: 500; transition: color 0.2s; }
-            .wx-tab.active .wx-tab-icon { fill: var(--wx-accent); }
-            .wx-tab.active .wx-tab-txt { color: var(--wx-accent); }
-            .wx-tab:not(.active) .wx-tab-icon { fill: #b2b2b2; }
-            .wx-tab:not(.active) .wx-tab-txt { color: #b2b2b2; }
+            /* 🎨 分頁的圖示和字都跟著 .wx-tab 的 color 走（圖示 fill: currentColor）。
+               預設顏色包在 :where() 裡、權重是零：以前寫成 .wx-tab:not(.active) .wx-tab-icon 那麼重，
+               主題寫 .wx-tab-icon 蓋不過，只有它自己的 hover 那條夠重才看得到變色（她：只有 hover 改變）。 */
+            .wx-tab-icon { width: 24px; height: 24px; fill: currentColor; transition: color 0.2s, fill 0.2s; }
+            .wx-tab-txt { font-size: 10px; margin-top: 1px; font-weight: 500; transition: color 0.2s; }
+            :where(.wx-tab-txt) { color: inherit; }
+            :where(.wx-tab) { color: #b2b2b2; }
+            :where(.wx-tab.active) { color: var(--wx-accent); }
             .wx-tab-badge { position: absolute; top: -6px; right: -10px; background: var(--wx-danger); color: #fff; font-size: 10px; height: 16px; min-width: 16px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 3px; border: 1px solid var(--wx-bar); font-weight: bold; z-index: 5; transform: scale(0.9); }
             .wx-tab-dot { position: absolute; top: -2px; right: -4px; width: 10px; height: 10px; background: var(--wx-danger); border-radius: 50%; border: 1px solid var(--wx-bar); z-index: 5; }
             /* 🚨 以前是 height:100%＝整個面板那麼高，底下的翻頁點被擠到面板外面、被裁掉——所以一直看不到點 */
@@ -497,7 +508,7 @@
             .wx-dark .wx-stk-lib-name, .wx-dark .wx-stk-fallback-box { color: var(--wx-ink-3); }
             .wx-dark .wx-stk-url-input { background: var(--wx-surface-2); border-color: var(--wx-line-strong); color: var(--wx-ink); }
             .wx-dark .wx-bottom-nav { background: var(--wx-surface); border-top-color: var(--wx-line); }
-            .wx-dark .wx-tab-txt { color: var(--wx-ink-dim); }
+            :where(.wx-dark .wx-tab:not(.active) .wx-tab-txt) { color: var(--wx-ink-dim); }
             /* 深色那條刪了：基底已經吃格子，深淺自己會跟著換 */
             .wx-dark .wx-file-card, .wx-dark .wx-wb-share-card, .wx-dark .wx-app-share-card { background: var(--wx-surface); border-color: var(--wx-line); }
             .wx-dark .wx-file-name, .wx-dark .wx-wb-share-text { color: var(--wx-ink-3); }

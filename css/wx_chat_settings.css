@@ -27,7 +27,7 @@
         
         /* 頭像樣式 */
         .ws-avatar-circle { width: 44px; height: 44px; border-radius: 50%; background-color: var(--wx-fill); background-size: cover; background-position: center; border: 1px solid var(--wx-line-strong); position: relative; overflow: hidden; cursor: pointer; }
-        .ws-avatar-icon { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.05); color: var(--wx-ink-3); font-size: 20px; pointer-events: none; }
+        .ws-avatar-icon { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.32); color: #fff; font-size: 17px; pointer-events: none; }   /* 疊在頭像上的相機：半透明黑底白圖，主題把底換成什麼顏色都看得到（以前是次要字色，換深色主題就消失） */
         .ws-file-input-hidden { display: none !important; }
         .ws-bg-preview { width: 30px; height: 30px; border-radius: 4px; background-size: cover; border: 1px solid var(--wx-line-strong); margin-right: 5px; }
 

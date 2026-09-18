@@ -175,7 +175,7 @@
             // 💭 這一輪的思考（wx_core _attachThinking 掛在第一則對方訊息上）：泡泡上面一條「思考」，點開看。
             //   不帶 data-msg-idx、不帶進場動畫：長按選單、改圖寫回、逐條冒出都靠泡泡那一列找位置，別被這條搶走。
             if (msg && msg.thinking && !msg.isMe) {
-                const _th = String(msg.thinking).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const _th = this._thinkMd(msg.thinking);
                 const _fold = `<div class="wx-think-fold" onclick="this.classList.toggle('open')">`
                     + `<div class="wx-think-head"><i class="fa-solid fa-chevron-right wx-think-arrow"></i><i class="fa-solid fa-brain"></i><span>思考</span></div>`
                     + `<div class="wx-think-body">${_th}</div></div>`;
@@ -704,6 +704,34 @@
             });
             html = html.replace(/\n/g, '<br>');
             return html;
+        },
+
+        // 💭 思考內容的 markdown：模型想的時候很愛用標題、粗體、清單，原樣印出來一堆 # 和 **。
+        //    先整段跳脫再排，所以它寫的 HTML 不會變成真的標籤。只認常見那幾種：標題、粗體、斜體、行內程式碼、清單、分隔線。
+        _thinkMd: function(raw) {
+            const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const inline = (t) => t
+                .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+                .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+                .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+            const lines = esc(String(raw || '').trim()).split(/\r?\n/);
+            const out = [];
+            let para = [], list = null;
+            const flushPara = () => { if (para.length) { out.push('<p>' + para.map(inline).join('<br>') + '</p>'); para = []; } };
+            const flushList = () => { if (list) { out.push('<' + list.tag + '>' + list.items.map(x => '<li>' + inline(x) + '</li>').join('') + '</' + list.tag + '>'); list = null; } };
+            lines.forEach((ln) => {
+                const t = ln.trim();
+                let m;
+                if (!t) { flushPara(); flushList(); return; }
+                if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { flushPara(); flushList(); out.push('<hr>'); return; }
+                if ((m = t.match(/^#{1,6}\s+(.+)$/))) { flushPara(); flushList(); out.push('<div class="wx-think-h">' + inline(m[1]) + '</div>'); return; }
+                if ((m = t.match(/^[-*•]\s+(.+)$/))) { flushPara(); if (!list || list.tag !== 'ul') { flushList(); list = { tag: 'ul', items: [] }; } list.items.push(m[1]); return; }
+                if ((m = t.match(/^\d+[.)、]\s*(.+)$/))) { flushPara(); if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', items: [] }; } list.items.push(m[1]); return; }
+                flushList(); para.push(t);
+            });
+            flushPara(); flushList();
+            return out.join('');
         },
 
         // --- 3. 聊天列表渲染 (保持 V108.5 邏輯) ---

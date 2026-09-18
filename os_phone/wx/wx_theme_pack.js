@@ -307,15 +307,15 @@
         '整支 app 的最外層：.wx-shell（底、字型都從這裡開始）',
         '每頁最上面那條：.wx-header；標題 .wx-header-title；返回鈕 .wx-back-btn；右上角的圖示鈕 .wx-icon-btn',
         '聊天列表頁：.wx-page-list；每一列 .wx-chat-item；頭像 .wx-avatar；右邊文字區 .wx-info；名字 .wx-name；最後一句 .wx-last-msg；時間 .wx-meta；未讀數 .wx-badge',
-        '底部分頁列：.wx-bottom-nav；每一格 .wx-tab（選中的那格多一個 .active）；圖示 .wx-tab-icon；字 .wx-tab-txt；紅點數字 .wx-tab-badge',
-        '聊天室：整頁 .wx-page-room；背景 .wx-room-bg；訊息捲動區 .wx-room-scroll；系統提示那一行 .wx-system-notice；時間分隔 .wx-time-stamp；聊天室裡的頭像 .wx-bubble-avatar',
+        '底部分頁列：.wx-bottom-nav；每一格 .wx-tab（選中的那格多一個 .active）；圖示 .wx-tab-icon；字 .wx-tab-txt；紅點數字 .wx-tab-badge。圖示和字的顏色都跟著 .wx-tab 的 color 走，選中與沒選中的顏色都要寫',
+        '聊天室：整頁 .wx-page-room；背景 .wx-room-bg；訊息捲動區 .wx-room-scroll；系統提示那一行 .wx-system-notice；時間分隔 .wx-time-stamp；聊天室裡的頭像 .wx-bubble-avatar；對方訊息上面那條可以點開的「思考」.wx-think-fold（標題列 .wx-think-head，點開的內容 .wx-think-body，底色與字色要跟聊天室背景分得開）',
         '輸入列：整條 .wx-footer-wrapper；.wx-input-bar；打字框外框 .wx-input-box；打字框 .wx-input-real；送出 .wx-send-btn；加號 .wx-plus-btn',
         '加號打開的功能面板：.wx-action-panel；每個功能 .wx-grid-item；圖示 .wx-grid-icon；字 .wx-grid-label；翻頁點 .wx-dot（目前那頁多 .active）',
         '通訊錄：分區 .wx-contact-section；每個人 .wx-contact-item；名字 .wx-contact-name；圖示 .wx-contact-icon',
         '「我」那頁上方：.wx-me-header；頭像 .wx-me-avatar；名字 .wx-me-name；帳號 .wx-me-id；簽名 .wx-me-signature',
         '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；小標 .wx-set-label；說明字 .wx-set-desc',
         '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box；標題 .wx-modal-title；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
-        '聊天設置（從聊天室右上角進去那一層）：.ws-overlay；標頭 .ws-header；標題 .ws-title；關閉 .ws-close；內容 .ws-body；一組 .ws-group；每格 .ws-cell；字 .ws-label；輸入框 .ws-input；開關 .ws-switch；底部 .ws-footer；保存 .ws-btn-save'
+        '聊天設置（從聊天室右上角進去那一層）：.ws-overlay；標頭 .ws-header；標題 .ws-title；關閉 .ws-close；內容 .ws-body；一組 .ws-group；每格 .ws-cell；字 .ws-label；輸入框 .ws-input；開關 .ws-switch；頭像圓框 .ws-avatar-circle；疊在頭像上的相機 .ws-avatar-icon；底部 .ws-footer；保存 .ws-btn-save'
     ];
     const VARS = '--wx-page 整頁的底、--wx-bar 分頁列與輸入列、--wx-surface 卡片與列、--wx-surface-2 輸入框與按下去的底、--wx-header 標頭、--wx-line 分隔線、--wx-line-strong 明顯的框、--wx-arrow 箭頭與佔位字、--wx-ink 標題字、--wx-ink-2 內文、--wx-ink-3 次要字、--wx-ink-soft 再淡一層、--wx-ink-dim 時間與說明、--wx-fill 沒圖時的頭像底、--wx-accent 重點色（主要按鈕、選中）、--wx-accent-ink 重點色當字用的深一階、--wx-on-accent 疊在重點色上的字、--wx-danger 未讀紅點與刪除（保持紅色系）、--wx-link 可點的字';
 

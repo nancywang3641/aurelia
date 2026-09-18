@@ -79,6 +79,29 @@
     //   第一次讀到舊世界那筆時會接手過來，既有對話不會突然變空。
     function _cards() { return win.WX_CARDS || window.WX_CARDS; }
 
+    // 📱 手機殼裝聊天 app 的那層不准被捲開：CSS 已經把它設成不能捲，但 iPhone 叫出鍵盤、focus 輸入框時
+    //    瀏覽器還是會自己把它捲一段去「露出輸入框」，捲完不會回來，整支 app 就歪著、標頭壓在狀態列底下。
+    //    聊天 app 還掛在裡面時，一被捲開就放回原位。
+    function _pinHostScroll(container) {
+        try {
+            const host = container && container.closest && container.closest('.aps-app-body');
+            if (!host) return;
+            // 外面幾層（螢幕、手機框）是 overflow:hidden，手指捲不動，但 focus 一樣捲得動它們，一起釘住
+            const stop = host.closest('.aps-frame') || host;
+            for (let el = host; el; el = el.parentElement) {
+                if (!el.__wxPinned) {
+                    el.__wxPinned = true;
+                    const layer = el;
+                    layer.addEventListener('scroll', function () {
+                        if (!host.querySelector(':scope > .aps-mount > .wx-shell')) return;
+                        if (layer.scrollTop || layer.scrollLeft) { layer.scrollTop = 0; layer.scrollLeft = 0; }
+                    }, { passive: true });
+                }
+                if (el === stop) break;
+            }
+        } catch (e) {}
+    }
+
     // 💬 有沒有人在等她回：大廳「應用」那顆的小圓點。她沒開手機就不知道有人講話了，
     //    心跳（角色主動找她）在酒館尤其明顯——訊息進去了，畫面上卻一點聲音都沒有。
     //    只算出 true/false 交給大廳自己標，不要伸手進別人的 DOM。
@@ -4081,6 +4104,7 @@
             if (win.PhoneSystem) {
                 win.PhoneSystem.install('微信', '💬', '#07c160', async (container) => {
                     APP_CONTAINER = container;
+                    _pinHostScroll(container);
                     _bindPanelDismiss(container);
                     console.log('[Core] 微信面板已打開');
                     try {
