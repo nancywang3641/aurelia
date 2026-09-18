@@ -324,16 +324,19 @@
 /* ================================================================
    聊天室裡的訂單卡
    ================================================================ */
-.wxto-card { width: 244px; max-width: 100%; }
-.wxto-card-in {
+/* 卡片的底、圓角、陰影畫在外層 .wxto-card：聊天 app 主題給 AI 的零件名是外層，
+   以前畫在裡面那層，主題把外層改成直角框，裡面還留一塊白色圓角底（她：Persona5 直角框裡有圓角填充）。
+   裡面那層只排版、不畫底。 */
+.wxto-card {
+    width: 244px; max-width: 100%;
     border-radius: 12px;
     overflow: hidden;
     background: #fff;
     color: #2b2419;
     box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
-    font-family: inherit;
 }
-.wxto-card-in.is-dim { opacity: .62; filter: grayscale(.6); }
+.wxto-card-in { border-radius: inherit; background: transparent; color: inherit; font-family: inherit; }
+.wxto-card:has(> .wxto-card-in.is-dim) { opacity: .62; filter: grayscale(.6); }
 .wxto-card-hd {
     display: flex;
     align-items: center;
