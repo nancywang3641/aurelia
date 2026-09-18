@@ -595,6 +595,7 @@ const IRIS_IDLE = [
                 <div class="lobby-left">
                     <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" alt="瀅瀅" style="display:none;">
                     <div class="lb-scene-badge" id="lb-scene-badge">視差書咖</div>
+                    <div class="lb-feed" id="lb-feed"><button class="lb-feed-now" type="button" title="世界頻道"><i class="fa-solid fa-tower-broadcast lb-feed-ic"></i><span class="lb-feed-text"></span></button><div class="lb-feed-list"></div></div>
                     <div class="lb-signature"></div>
                     <div class="lb-dock" id="lb-dock">
                         <button class="lb-dock-btn" data-proxy="void-quest-btn" title="藏書">
@@ -1249,6 +1250,7 @@ const IRIS_IDLE = [
             }
 
             tab.querySelectorAll('.void-bubble').forEach(b => scheduleBubbleFade(b));
+            _paintFeed(false);
         }, 100);
 
         return tab;
@@ -1446,9 +1448,52 @@ const IRIS_IDLE = [
     // ===== 世界頻道 =====
     const FEED_PALETTE_MAP = { SYS: { c:'rgba(26,28,40,0.25)', r:'251,223,162' }, ECHO: { c:'#9f7aea', r:'159,122,234' } };
 
+    // 📡 世界頻道：地點牌下面那一條。有新訊息亮起來、過一會兒淡成半透明留著；點開看最近幾條。
+    //    瀅瀅每次回話會附 1～2 條（[FEED|SYS/ECHO|…]），柴郡偶爾。彩蛋，不搶戲。
+    const FEED_LOG_KEY = 'lobby_feed_log';
+    const FEED_LOG_MAX = 7;
+    function _feedLog() {
+        try { const a = JSON.parse(localStorage.getItem(FEED_LOG_KEY) || '[]'); if (Array.isArray(a) && a.length) return a; } catch (e) {}
+        return [{ tag: 'SYS', text: 'LUNA-VII 敘事協議就緒 ▸ 等待靈感導入' }, { tag: 'SYS', text: '視差書咖待機中' }];
+    }
+    let _feedDimTimer = null;
+    function _paintFeed(fresh) {
+        const box = document.getElementById('lb-feed');
+        if (!box) return;
+        const log = _feedLog();
+        const last = log[log.length - 1];
+        const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const icon = (tag) => (String(tag).toUpperCase() === 'ECHO' ? 'fa-wave-square' : 'fa-tower-broadcast');
+        const now = box.querySelector('.lb-feed-now');
+        now.querySelector('.lb-feed-ic').className = 'fa-solid ' + icon(last.tag) + ' lb-feed-ic';
+        now.querySelector('.lb-feed-text').textContent = last.text;
+        box.classList.toggle('is-echo', String(last.tag).toUpperCase() === 'ECHO');
+        box.querySelector('.lb-feed-list').innerHTML = log.slice().reverse().map(function (e) {
+            return '<div class="lb-feed-row' + (String(e.tag).toUpperCase() === 'ECHO' ? ' is-echo' : '') + '"><i class="fa-solid ' + icon(e.tag) + '"></i><span>' + esc(e.text) + '</span></div>';
+        }).join('');
+        if (!box._bound) {
+            box._bound = true;
+            now.addEventListener('click', function (ev) { ev.stopPropagation(); box.classList.toggle('is-open'); });
+            document.addEventListener('click', function (ev) { if (!box.contains(ev.target)) box.classList.remove('is-open'); });
+        }
+        if (fresh) {
+            box.classList.remove('is-dim');
+            box.classList.remove('is-new'); void box.offsetWidth; box.classList.add('is-new');
+            clearTimeout(_feedDimTimer);
+            _feedDimTimer = setTimeout(function () { box.classList.add('is-dim'); box.classList.remove('is-new'); }, 9000);
+        } else box.classList.add('is-dim');
+    }
+
     function addFeedEntry(tag, text) {
+        try {
+            const log = _feedLog();
+            log.push({ tag: String(tag || 'SYS').toUpperCase(), text: String(text || '').trim() });
+            while (log.length > FEED_LOG_MAX) log.shift();
+            localStorage.setItem(FEED_LOG_KEY, JSON.stringify(log));
+        } catch (e) {}
+        _paintFeed(true);
         const layer = document.getElementById('void-bubble-layer');
-        if (!layer) return;
+        if (!layer) { window.VoidUiSfx?.play('ping'); return; }
         const pal = FEED_PALETTE_MAP[tag.toUpperCase()] || FEED_PALETTE_MAP.SYS;
         const item = document.createElement('div');
         item.className = 'void-bubble';
@@ -1461,6 +1506,8 @@ const IRIS_IDLE = [
         if (all.length > 7) all[0].remove();
         scheduleBubbleFade(item);
     }
+
+    VoidTerminal.addFeedEntry = addFeedEntry;
 
     function scheduleBubbleFade(el) {
         // 泡泡不自動消失，由 addFeedEntry 超限時移除最舊一條

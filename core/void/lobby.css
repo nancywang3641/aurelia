@@ -512,6 +512,38 @@
     margin-left:10px; margin-bottom:2px;
 }
 .void-tab.mode-404 .lb-scene-badge { color:#9ef3b0; }
+
+/* 📡 世界頻道（地點牌下面那一條）：跟地點牌同一種黑色漸隱底，字小一號。
+   新訊息亮起來，過一會兒 .is-dim 淡成半透明留著；點開 .is-open 往下列最近幾條。 */
+.lb-feed {
+    position:absolute; top:56px; left:10px; z-index:3;
+    max-width:min(340px, calc(100% - 90px));
+    transition:opacity .8s ease;
+}
+.lb-feed.is-dim:not(.is-open):not(:hover) { opacity:.5; }
+.lb-feed-now {
+    display:flex; align-items:center; gap:8px; max-width:100%;
+    padding:4px 26px 4px 22px; border:0; cursor:pointer;
+    background:linear-gradient(to right, transparent 0%, rgba(0,0,0,0.5) 10%, rgba(0,0,0,0.5) 90%, transparent 100%);
+    color:#e8dcc0; font:inherit; font-size:12px; letter-spacing:1px; line-height:1.5; text-align:left;
+    text-shadow:0 0 4px rgba(0,0,0,1);
+}
+.lb-feed-now .lb-feed-text { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.lb-feed-ic { font-size:10px; color:#c8a96e; flex-shrink:0; }
+.lb-feed.is-echo .lb-feed-ic { color:#b79cf0; }
+.lb-feed.is-new .lb-feed-ic { animation:lbFeedPing 1.2s ease-out 2; }
+@keyframes lbFeedPing { 0% { opacity:1; } 40% { opacity:.25; } 100% { opacity:1; } }
+.lb-feed-list {
+    display:none; margin-top:4px; padding:8px 12px; border-radius:6px;
+    background:rgba(10,10,14,0.82); border:1px solid rgba(200,169,110,0.25);
+    max-height:220px; overflow-y:auto;
+}
+.lb-feed.is-open .lb-feed-list { display:block; }
+.lb-feed-row { display:flex; gap:8px; align-items:baseline; padding:4px 0; font-size:12px; line-height:1.5; color:#e8dcc0; }
+.lb-feed-row + .lb-feed-row { border-top:1px solid rgba(255,255,255,0.06); }
+.lb-feed-row i { font-size:10px; color:#c8a96e; flex-shrink:0; }
+.lb-feed-row.is-echo i { color:#b79cf0; }
+.void-tab.mode-404 .lb-feed-now, .void-tab.mode-404 .lb-feed-row { color:#9ef3b0; }
 /* 簽名圖 */
 .lb-signature {
     position:absolute; top:60px; left:18px; z-index:2;
