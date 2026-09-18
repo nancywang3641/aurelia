@@ -243,7 +243,7 @@
   ③ const text = await st.callAI(提示)。提示還要講清楚面板主題、要幾筆、輸出格式嚴格照 demoFormat 那幾行 [標籤|欄…]、一行一筆、除此之外不輸出任何字。
   ④ const recs = st.parseText(text)；for (const r of recs) await st.feedAdd(r.tag, r.fields)
   ⑤ st.loading(…, false)；重新 await st.feed() 重畫
-  生成出來的東西只進 st.feed，不送進劇情、不進記憶。只有使用者按了才生。
+  生成出來的東西只進 st.feed，不送進劇情、不進記憶。除了 st.onWake 登記的那段，只有使用者按了才生。
 - 返回：標題列固定一顆返回鈕綁 onComplete。
 
 ### 2d. 主畫面組件：擺在手機主畫面上的一小塊
@@ -256,7 +256,7 @@
 - isBlock 給 false，不需要 demoFormat。
 
 ## 3. 所有類型都要守的鐵律
-- 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.getContacts、st.wbLoad、st.user、st.getStory。
+- 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑；唯一例外是 st.onWake 登記的那段（見第 4 節「自己動」，是使用者自己在設定裡打開的）。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.getContacts、st.wbLoad、st.user、st.getStory、st.clock、st.balance。
 - 每個面板都必須自帶一顆綁 onComplete 的出口鈕，純展示／純應用／共用都一樣（主畫面組件沒有出口鈕，見 2d）。造型跟主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角，一眼看得到，flex-shrink:0 不被內容擠走。別幾秒自動消失、別靠手機殼的橫槓代替。少了這顆使用者回不去主畫面。
 - 捲動與溢出：只有「會變長的那一個內容區」給 flex:1; min-height:0; overflow-y:auto；標題、圖示、裝飾、按鈕一律 flex-shrink:0；父容器 display:flex; flex-direction:column，卡本體 overflow:hidden。否則內容一多，固定元素被擠出去。同一個盒子不能又要內部捲動裁切又要讓某元素溢出邊緣；真要溢出裝飾就拆兩層：外層 overflow:visible 放 position:absolute 的裝飾，內層 overflow:hidden 負責捲動。
 - CSS 只能寫在 .vn-dynamic-panel-<tagId> 前綴底下。禁 position:fixed、禁 position:absolute 配 top/left 自定位、禁 100vw、100vh、禁在 body／html 設樣式、禁寫死固定像素寬。
@@ -286,7 +286,8 @@ st 只有下面這些，一個不多。沒列的一律不存在，不准自己�
 - st.dbSave(key, value[, 'chat']) → Promise / st.dbLoad(key[, 'chat']) → Promise：純應用的大量持久化，存資料庫不怕爆。
 - st.getStory(n) → 最近 n 條劇情 [{ name, text }]，預設 30。純應用要讀劇情時用；純展示、共用不用。
 - st.getCurrentChars() → Promise<[{ name, count }]>。當前聊天出現過的角色，做角色選單用。
-- st.getContacts() → Promise<[{ id, name, desc, avatar, isGroup }]>。手機微信通訊錄裡的人和群（當前故事那本），做「選一個聯絡人」的清單用。isGroup 為 true 是群聊；使用者本人不在裡面；desc、avatar 可能是空字串，avatar 空的就畫首字圓框。劇情還沒演到、但微信裡已經加過的人也在這裡。
+- st.getContacts() → Promise<[{ id, name, desc, avatar, isGroup, persona }]>。手機微信通訊錄裡的人和群（當前故事那本），做「選一個聯絡人」的清單用。isGroup 為 true 是群聊；使用者本人不在裡面；desc、avatar、persona 可能是空字串，avatar 空的就畫首字圓框。劇情還沒演到、但微信裡已經加過的人也在這裡。persona 是使用者替這個人設的人設（群聊是群的備註）：App 要讓 AI 寫到某個人（替他發文、留言、回話）時，把他的 persona 一起放進 st.callAI 的提示，不要只給名字。
+- st.clock() → Promise<{ date, time, upcoming:[{ date, title }] }>。故事裡現在的日期（例如 6/20）與時間（例如 18:30），upcoming 是接下來幾天跟使用者約好的事。故事還沒有時間時 date、time 是空字串；要顯示今天幾號、排行程、算倒數用它，不要自己猜或拿現實時間。
 - st.getChatId() → 當前聊天 id 字串。
 - st.user() → Promise<{ name, nickname, avatar, signature, desc }>。使用者本人。寫法固定：const me = await st.user(); 之後用 me.nickname、me.avatar。面板裡凡是「我」發的東西（留言、貼文、發言、簽到）作者一律用它：顯示名用 nickname、沒有再用 name；頭像用 avatar、空的就畫首字圓框。禁寫死 User、我、匿名；禁做登入或選身分頁面。
 
@@ -300,6 +301,16 @@ st 只有下面這些，一個不多。沒列的一律不存在，不准自己�
 - st.toast(訊息[, { type:'error' 或 color:'#xxx' }])：短暫提示。別自己做 toast。
 - st.confirm(訊息[, { danger:true, okText, cancelText }]) → Promise<布林>。危險動作先問；別用 window.confirm。
 - st.loading(元素或選擇器, true/false[, '生成中…'])：轉圈遮罩。
+
+錢包與分享
+- st.balance() → Promise<數字>。使用者手機錢包現在有多少錢（跟微信紅包、轉帳同一個錢包）。
+- st.pay(金額, 用途) → Promise<布林>。從手機錢包扣錢；錢不夠回 false、一毛都不扣，這時用 st.toast 告訴使用者。扣成功劇情會知道這筆錢花在哪，不用再另外 st.toStory。只在使用者按了付款／購買類按鈕、畫面上看得到金額之後呼叫。
+- st.share(聯絡人id, 標題, 內容) → Promise<布林>。以使用者的身分把一張分享卡片送進某個微信聊天室（id 從 st.getContacts 拿，先讓使用者選人）。只在使用者按了分享鈕、選好人之後呼叫；成功後 st.toast 提示一下。
+
+自己動（App 自己產生新東西、通知使用者）
+- st.onWake(async () => { … })：登記「被叫醒時要做的事」。使用者在這個 App 的設定裡打開「自己動」後，時間到了程式會在背景把 App 開起來跑這一段，跑完就關掉；平常使用者自己打開 App 時這段不會跑。裡面通常是：讀現有資料、st.callAI 生幾筆新內容、存起來（st.feedAdd 或 st.dbSave）、st.badge 亮紅點、st.notify 發一句通知。被叫醒時沒有人在看畫面：不要等使用者點按鈕、不要跳 st.confirm、不要依賴畫面上的元素。這段整個寫成一個 async 函式，做完才 return。只有內容會隨時間自己增加的 App 才寫，工具類 App 不要寫。
+- st.badge(數字)：桌面圖標右上角的紅點，0 清掉。使用者打開 App 時會自動清掉，App 不用自己清。
+- st.notify(一句話) → Promise：發一則手機通知，一句話講清楚誰做了什麼。使用者沒開通知就不會出現，不影響其他事。
 
 交給劇情
 - st.toStory(一句話) → Promise<布林>。使用者在 App 裡做完一件劇情該知道的事，就記一筆；下次劇情接著寫時會帶到，只帶一次，不會出現在對話裡。只在使用者按了會完成某件事的按鈕之後呼叫；載入、瀏覽、切頁不記，生成鈕產出的內容也不記。一句話寫清楚是使用者做的、做了什麼，不要寫成給劇本 AI 的指示。
@@ -2961,6 +2972,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             },
             remember() { /* 預覽不寫真實記憶 */ },
             toStory() { return Promise.resolve(false); },   // 預覽不記進事件簿
+            // 手機本身的東西：讀的照真的讀；會動到東西的（分享、扣錢、紅點、通知）預覽只提示不做
+            clock() { const T = window.OS_APP_TOOLS || (window.parent && window.parent.OS_APP_TOOLS); return T ? T.clock() : Promise.resolve({ date: '', time: '', upcoming: [] }); },
+            balance() { const T = window.OS_APP_TOOLS || (window.parent && window.parent.OS_APP_TOOLS); return T ? T.balance() : Promise.resolve(0); },
+            share() { try { AUI.toast('預覽不會真的分享'); } catch (e) {} return Promise.resolve(true); },
+            pay() { try { AUI.toast('預覽不會真的扣錢'); } catch (e) {} return Promise.resolve(true); },
+            badge() {},
+            notify() { return Promise.resolve(false); },
+            onWake() {},   // 預覽不會被叫醒
             getCurrentChars() {   // 當前聊天室出現過的角色 [{name,count}]，做角色選單用
                 const R = window.VN_READER || (window.parent && window.parent.VN_READER);
                 return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
@@ -3052,6 +3071,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'toChat:function(t,o){try{return window.toChat?window.toChat(t,o):false;}catch(e){return false;}},'
             +   'toSystem:function(t){try{return window.toSystem?window.toSystem(t):false;}catch(e){return false;}},'
             +   'toStory:function(t){try{return window.toStory?window.toStory(t):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'clock:function(){try{return window.stClock?window.stClock():Promise.resolve({date:"",time:"",upcoming:[]});}catch(e){return Promise.resolve({date:"",time:"",upcoming:[]});}},'
+            +   'share:function(id,t,x){try{return window.stShare?window.stShare(id,t,x):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'balance:function(){try{return window.stBalance?window.stBalance():Promise.resolve(0);}catch(e){return Promise.resolve(0);}},'
+            +   'pay:function(a,w){try{return window.stPay?window.stPay(a,w):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'badge:function(n){try{if(window.stBadge)window.stBadge(n);}catch(e){}},'
+            +   'notify:function(t){try{return window.stNotify?window.stNotify(t):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'onWake:function(f){try{if(window.stOnWake)window.stOnWake(f);}catch(e){}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
             + '(async function(){try{' + js + '}catch(e){console.error("[phone tpl]",e);}})();'
@@ -3200,7 +3226,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
       feedRemove: function(id){ try { var F = ctx.VN_PANEL_FEED; return F ? F.remove(${JSON.stringify(String(data.tagId || ''))}, id) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
       saveData: function(k, v){ try { if (window.saveData) window.saveData(k, v); } catch(e){} },
       loadData: function(k){ try { return window.loadData ? window.loadData(k) : null; } catch(e){ return null; } },
-      toStory: function(t){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var B = ctx.OS_PHONE_EVENTS; t = String(t == null ? '' : t).trim(); return (B && B.record && t) ? B.record({ room: ${JSON.stringify(String(data.tagId || ''))} || '手機', line: t }) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } }
+      toStory: function(t){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var B = ctx.OS_PHONE_EVENTS; t = String(t == null ? '' : t).trim(); return (B && B.record && t) ? B.record({ room: ${JSON.stringify(String(data.tagId || ''))} || '手機', line: t }) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      // 手機本身的東西（OS_APP_TOOLS）；劇情裡的面板沒有桌面圖標、不會被叫醒，紅點／通知／自己動不做事
+      clock: function(){ try { var T = ctx.OS_APP_TOOLS; return T ? T.clock() : Promise.resolve({ date: '', time: '', upcoming: [] }); } catch(e){ return Promise.resolve({ date: '', time: '', upcoming: [] }); } },
+      balance: function(){ try { var T = ctx.OS_APP_TOOLS; return T ? T.balance() : Promise.resolve(0); } catch(e){ return Promise.resolve(0); } },
+      share: function(id, t, x){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var T = ctx.OS_APP_TOOLS; return T ? T.share(${JSON.stringify(String(data.tagId || ''))}, id, t, x) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      pay: function(a, w){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var T = ctx.OS_APP_TOOLS; return T ? T.pay(${JSON.stringify(String(data.tagId || ''))}, a, w) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      badge: function(){},
+      notify: function(){ return Promise.resolve(false); },
+      onWake: function(){}
     };
     // ============================================================
     const __onComplete = function(){};

@@ -862,6 +862,19 @@
     // --- 3. OS API 主對象 ---
     win.OS_API = {
 
+        // 👤 聊天設置裡替這間設的人設（私聊）／群聊備註（群聊）：自己打的那段＋從世界書挑的那條。
+        //    微信回話用的就是這份；創作室 app 的通訊錄（st.getContacts）也拿這份，同一個人不會兩邊兩種設定。
+        chatNoteOf: async function (c) {
+            if (!c) return '';
+            if (c.isGroup) {
+                const lore = c.groupNoteFromLorebook ? await _wxLoreEntryText(c.groupNoteFromLorebook) : '';
+                return _wxJoinNote(c.groupNoteCustom, lore);
+            }
+            const custom = c.personaCustom || (!c.personaFromLorebook ? (c.persona || '') : '');
+            const lore = c.personaFromLorebook ? await _wxLoreEntryText(c.personaFromLorebook, c.personaLoreBook) : '';
+            return _wxJoinNote(custom, lore);
+        },
+
         // 📡 托管回來的是上游原樣的 JSON 字串 → 交回同一套清洗，結果才跟手機自己跑的一樣
         normalizeRaw: function (raw, keepFences) {
             let data = raw;

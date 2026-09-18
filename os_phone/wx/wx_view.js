@@ -34,6 +34,7 @@
         //    真的能講話的通話在電話 app，微信這顆本來就只是留個記錄，那就讓它長得像記錄。
         CALL: '通话|通話|Call',
         WBSHARE: 'WbShare',
+        APPSHARE: 'AppShare',   // 創作室 app 分享過來的卡片（OS_APP_TOOLS.share）：[AppShare: 來源|標題|內容]
         // 🛵 外送（wx_takeout.js）。代付那組一定要先換：「Takeout」是「TakeoutAsk」的開頭，
         //    順序反過來會把代付單當成一般外送、欄位全部錯位。
         TAKEOUT_ASK: 'TakeoutAsk|外送代付|外賣代付|外卖代付|代付',
@@ -41,7 +42,7 @@
     };
     // 自帶造型、泡泡要讓位的那些（語音刻意不在內：微信原生語音本來就裝在泡泡裡）
     MSG_TAG.CARD = [MSG_TAG.TRANSFER, MSG_TAG.GIFT, MSG_TAG.REDPACKET, MSG_TAG.LOCATION,
-        MSG_TAG.VIDEO, MSG_TAG.FILE, MSG_TAG.LINK, MSG_TAG.PAYCODE, MSG_TAG.WBSHARE,
+        MSG_TAG.VIDEO, MSG_TAG.FILE, MSG_TAG.LINK, MSG_TAG.PAYCODE, MSG_TAG.WBSHARE, MSG_TAG.APPSHARE,
         MSG_TAG.TAKEOUT_ASK, MSG_TAG.TAKEOUT].join('|');
     MSG_TAG.ALL = [MSG_TAG.STICKER, MSG_TAG.IMAGE, MSG_TAG.CARD, MSG_TAG.VOICE, MSG_TAG.CALL].join('|');
 
@@ -678,6 +679,15 @@
                 const text   = (parts[1] || '').trim();
                 const short  = text.length > 60 ? text.substring(0, 60) + '…' : text;
                 return `<div class="wx-wb-share-card"><div class="wx-wb-share-top"><span class="wx-wb-share-logo">微博</span><span style="font-size:11px; opacity:0.8; margin-left:4px;">分享</span></div><div class="wx-wb-share-body"><div class="wx-wb-share-author">@${author}</div><div class="wx-wb-share-text">${short || '（查看原貼）'}</div></div></div>`;
+            });
+            html = html.replace(tagRe(MSG_TAG.APPSHARE), (match, _tag, content) => {
+                const esc = (t) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                const parts = String(content || '').split('|');
+                const src = esc((parts[0] || '').trim() || 'App');
+                const title = (parts[1] || '').trim();
+                const text = (parts.slice(2).join('|') || '').trim();
+                const short = text.length > 80 ? text.substring(0, 80) + '…' : text;
+                return `<div class="wx-app-share-card"><div class="wx-app-share-top"><i class="fa-solid fa-share-nodes"></i><span>${src}</span></div><div class="wx-app-share-body">${title ? `<div class="wx-app-share-title">${esc(title)}</div>` : ''}${short ? `<div class="wx-app-share-text">${esc(short)}</div>` : ''}</div></div>`;
             });
             // 鏈接/網頁分享卡（跑團用、不帶網址；重用 vn_styles.css 的 .wx-link-msg）
             html = html.replace(tagRe(MSG_TAG.LINK), (m, _tag, title) => {

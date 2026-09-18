@@ -727,7 +727,18 @@
         return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
              + (PINNED.indexOf(a.id) < 0 ? '<span class="aps-icon-del" data-del="' + a.id + '" title="從桌面移除"><i class="fa-solid fa-minus"></i></span>' : '')
              + '<span class="aps-icon-em" data-app-em="' + a.id + '" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
+             + '<span class="aps-badge" data-badge="' + a.id + '" hidden></span>'
              + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
+    }
+    // 🔴 紅點：app 自己說有幾件新的（OS_APP_TOOLS.badge，一個故事一份），她打開就清掉
+    function _paintBadges() {
+        if (!_el) return;
+        const T = win.OS_APP_TOOLS;
+        _el.querySelectorAll('[data-badge]').forEach(function (b) {
+            const n = (T && T.getBadge) ? T.getBadge(b.dataset.badge) : 0;
+            b.textContent = n > 9 ? '9+' : (n ? String(n) : '');
+            b.hidden = !n;
+        });
     }
     function _renderDock() {
         if (!_el) return;
@@ -749,6 +760,7 @@
         _paintDots();
         _renderDock();
         _applyIcons();
+        _paintBadges();
         _paintMood();   // 🧩 內含重畫組件：心情那顆圖示長在大時鐘組件裡，格子一重畫就要補回去
     }
     // 對外：app 商店安裝/卸載時呼叫（只動 runtime 與圖標；持久化是商店的事）
@@ -1143,6 +1155,8 @@
             try { app.go(); } catch (e) { console.warn('[PhoneShell] 開啟失敗', id, e); }
             return;
         }
+        // 🔴 打開了＝看過了，紅點清掉
+        try { const T = win.OS_APP_TOOLS; if (T && T.getBadge && T.getBadge(id)) { T.badge(id, 0); } } catch (e) {}
         // inside：渲染進手機螢幕
         _runLeave();   // 防禦：清空前先還原上一個借單例的 app
         const body = _el.querySelector('#aps-app-body');
@@ -1203,6 +1217,7 @@
         _applyTheme();
         _tickClock();
         _paintMood();   // 心情是綁日期的，每次開都要重讀——只在 _build 畫一次的話跨日還掛著昨天那個
+        _paintBadges(); // 紅點一個故事一份：換了故事再打開要重讀
         ov.style.display = 'flex';
     }
     function close() {
@@ -1224,7 +1239,7 @@
     try { _applyThemeClass(_loadTheme().themeId || DEFAULT_THEME); } catch (e) {}
 
     win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide,
-        renderHome: _renderGrid, repaintMood: _paintMood,
+        renderHome: _renderGrid, repaintMood: _paintMood, paintBadges: _paintBadges,
         // 📷 拍立得那張照片：樣式面板與組件是「同一份資料」的兩個入口。
         //    她嫌樣式面板換照片很煩，所以組件上也能換 —— 但不可以各存一份，不然兩邊會是兩張照片。
         polaroidPhoto: function () { return _urlOf(_loadTheme().photoUrl).replace(/^["']|["']$/g, ''); },

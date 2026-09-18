@@ -199,6 +199,7 @@ const PHONE_FILES = [
     'os/os_image_manager.js',
     'os/os_relay.js',            // 📡 回覆交給伺服器跑（請求托管）：手機睡著也跑得完
     'os/os_heartbeat.js',        // 💓 角色主動找她：一間一組開關/節奏/機率
+    'os/os_app_tools.js',        // 🧰 創作室 app 用的手機工具：故事時鐘、分享到聊天室、錢包、紅點、通知、自己動
     'os/os_keepalive.js',        // ☕ 沒有伺服器的守候：靜音音訊／螢幕不關／畫中畫小窗＋本機通知
     'os/os_phone_image.js',       // 手機類 app 共用的圖片描述→卡片→生圖管道
     'os/os_voice_input.js',       // 🎙 麥克風錄音→轉成字（轉字方式可換；SenseVoice 在網頁裡跑，聲音不離開裝置）

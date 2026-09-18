@@ -869,3 +869,18 @@
 /* 🚨 要壓過上面那條「不要那層卡片殼的組件高度交給內容」——大時鐘的高度是主題給的，
    不能由內容決定，不然四套皮對它的排法（時間／日期／心情膠囊怎麼擺）會全部擠成一團。 */
 .aps-w[data-w-bare] .aps-w-body > .aps-w-lock { height: var(--aps-lock-height); }
+
+/* 🔴 桌面圖標紅點（app 自己說有幾件新的；OS_APP_TOOLS.badge） */
+.aps-badge {
+    position: absolute; top: -3px; left: calc(50% + 17px); z-index: 2;
+    min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+    border-radius: 9px; background: var(--aps-badge-bg, #f23f3f); color: var(--aps-badge-color, #fff);
+    font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+    box-shadow: 0 0 0 1.5px var(--aps-badge-ring, rgba(0, 0, 0, 0.12));
+    pointer-events: none;
+}
+.aps-badge[hidden] { display: none; }
+.aps-dock .aps-badge { top: -4px; left: calc(50% + 12px); }
+.aps-home.aps-editing .aps-badge { display: none; }
+/* ⏰ 「自己動」在背景叫醒 app 的那格：看不見、不佔版面、不擋點擊 */
+.aps-wake-host { position: fixed; left: -10000px; top: 0; width: 390px; height: 700px; visibility: hidden; pointer-events: none; }

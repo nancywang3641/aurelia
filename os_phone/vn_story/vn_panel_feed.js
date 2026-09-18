@@ -221,6 +221,8 @@
 
     // 微信通訊錄（當前故事那本）：給面板做「選一個聯絡人」的清單。群聊也在裡面，isGroup 分得出來；使用者本人不列。
     //   通訊錄本來就按故事分本（WX_CONTACTS 的鍵帶當前聊天 id），別張角色卡的人不會混進來。
+    //   persona＝聊天設置裡替他設的人設（群聊是群聊備註）：關掉「吃這本的劇情」的人，設定只剩這裡有，
+    //   論壇、直播那種 app 要寫到他，從這裡拿才不會把他寫成別人。聯絡人 id 就是聊天室 id。
     const EMPTY_BIO = ['這個人很懶，什麼都沒寫', '这个人很懒，什么都没写', '...'];
     async function contacts() {
         let list = [];
@@ -242,7 +244,16 @@
             if (/^(https?:|data:|blob:)/.test(aid)) avatar = aid;
             else if (aid) { try { avatar = (d && d.getImage) ? ((await d.getImage(aid)) || '') : ''; } catch (e) { avatar = ''; } }
             const bio = String(c.desc || c.bio || '').trim();
-            out.push({ id: String(c.id), name: name, desc: EMPTY_BIO.indexOf(bio) >= 0 ? '' : bio, avatar: avatar, isGroup: !!c.isGroup });
+            let persona = '';
+            try {
+                const A = win.OS_API;
+                if (A && A.chatNoteOf) {
+                    const W = win.wxApp;
+                    const chat = (W && W.GLOBAL_CHATS && W.GLOBAL_CHATS[c.id]) || ((d && d.getApiChat) ? await d.getApiChat(c.id) : null);
+                    persona = String((await A.chatNoteOf(chat)) || '').trim();
+                }
+            } catch (e) { persona = ''; }
+            out.push({ id: String(c.id), name: name, desc: EMPTY_BIO.indexOf(bio) >= 0 ? '' : bio, avatar: avatar, isGroup: !!c.isGroup, persona: persona });
         }
         return out;
     }

@@ -85,6 +85,10 @@
         let text = m.content;
         // 📷 相簿照片在訊息裡只是圖庫編號 → 換成對方看過寫下的那句
         try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) text = _pt(m, text); } catch (e) {}
+        // 分享卡片：聊天室裡畫成卡片，交給劇情的要講人話
+        text = String(text == null ? '' : text)
+            .replace(/\[\s*AppShare\s*[:：]\s*([^|\]]*)\|([^|\]]*)\|?([^\]]*)\]/gi, function (_, src, t, x) { return '（分享了「' + src.trim() + '」上的一則：' + t.trim() + (x.trim() ? '——' + x.trim() : '') + '）'; })
+            .replace(/\[\s*WbShare\s*[:：]\s*([^|\]]*)\|([^\]]*)\]/gi, function (_, au, x) { return '（分享了 @' + au.trim() + ' 的微博：' + x.trim() + '）'; });
         return `・${who}：${_cut(text)}`;
     }
     // 🚨 先挑出「手機上發生的」再取最後幾條。以前反過來（先取最後 6 條再濾）：

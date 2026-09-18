@@ -111,6 +111,7 @@
             const shareAppId = (tpl && tpl.id && this._tplAppMap && this._tplAppMap[tpl.id]) || ('vnpanel:' + ((tpl && tpl.tagId) || ''));
             const feedTag = (tpl && tpl.tagId) || '';
             const FEED = () => window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED) || null;
+            const TOOLS = () => window.OS_APP_TOOLS || (window.parent && window.parent.OS_APP_TOOLS) || null;
             return {
                 md: function(text) {
                     if (!text) return '';
@@ -198,6 +199,14 @@
                 feedRemove: function(id) { try { const F = FEED(); return F ? F.remove(feedTag, id) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },
                 // 記進手機事件簿：下次劇情接著寫時排在她那句話前面帶到一次
                 toStory: function(text) { try { if (window.__IS_PREVIEW) return Promise.resolve(false); const B = window.OS_PHONE_EVENTS || (window.parent && window.parent.OS_PHONE_EVENTS); const t = String(text == null ? '' : text).trim(); return (B && B.record && t) ? B.record({ room: feedTag || '手機', line: t }) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },
+                // 手機本身的東西（OS_APP_TOOLS）；劇情裡的面板沒有桌面圖標、不會被叫醒，紅點／通知／自己動不做事
+                clock: function() { try { const T = TOOLS(); return T ? T.clock() : Promise.resolve({ date: '', time: '', upcoming: [] }); } catch (e) { return Promise.resolve({ date: '', time: '', upcoming: [] }); } },
+                balance: function() { try { const T = TOOLS(); return T ? T.balance() : Promise.resolve(0); } catch (e) { return Promise.resolve(0); } },
+                share: function(id, title, text) { try { if (window.__IS_PREVIEW) return Promise.resolve(false); const T = TOOLS(); return T ? T.share(feedTag || '手機', id, title, text) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },
+                pay: function(amount, why) { try { if (window.__IS_PREVIEW) return Promise.resolve(false); const T = TOOLS(); return T ? T.pay(feedTag || '手機', amount, why) : Promise.resolve(false); } catch (e) { return Promise.resolve(false); } },
+                badge: function() {},
+                notify: function() { return Promise.resolve(false); },
+                onWake: function() {},
                 dbSave: async function(k, v, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.saveAppData(shareAppId, k, v, cid); } catch (e) { return false; } },
                 dbLoad: async function(k, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.getAppData(shareAppId, k, cid); } catch (e) { return null; } },
                 setImage: async function(el, prompt, type, provider) {

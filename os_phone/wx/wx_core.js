@@ -4008,9 +4008,30 @@
             }
         },
 
+        // --- 別的 app 分享一張卡片進聊天室（以她的身分）：微博轉發、創作室 app 的 st.share 都走這裡 ---
+        //   🚨 聊天 app 還沒打開過時 GLOBAL_CHATS 是空的：先讀存檔，不然會拿一間空房把整間的記錄蓋掉
+        shareCard: async function(chatId, content, preview) {
+            if (!chatId || !content) return false;
+            if (!GLOBAL_CHATS[chatId] && win.WX_DB && win.WX_DB.getApiChat) {
+                try { const saved = await win.WX_DB.getApiChat(chatId); if (saved) GLOBAL_CHATS[chatId] = saved; } catch (e) {}
+            }
+            if (!GLOBAL_CHATS[chatId]) return false;   // 通訊錄沒有這間
+            const chat = GLOBAL_CHATS[chatId];
+            if (!Array.isArray(chat.messages)) chat.messages = [];
+            const myName = _meName();
+            chat.messages.push({ type: 'msg', isMe: true, content: content, sender: myName, senderName: myName, timestamp: Date.now() });
+            chat.lastTime = '剛剛';
+            if (preview) chat.lastPreview = preview;
+            if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') await win.WX_DB.saveApiChat(chatId, chat);
+            return true;
+        },
+
         // --- 微博轉發接口 ---
         shareFromWeibo: async function(chatId, post) {
             if (!chatId || !post) return false;
+            if (!GLOBAL_CHATS[chatId] && win.WX_DB && win.WX_DB.getApiChat) {
+                try { const saved = await win.WX_DB.getApiChat(chatId); if (saved) GLOBAL_CHATS[chatId] = saved; } catch (e) {}
+            }
 
             // 確保 chat 存在
             if (!GLOBAL_CHATS[chatId]) {

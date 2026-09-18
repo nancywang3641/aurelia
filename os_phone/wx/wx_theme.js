@@ -430,6 +430,14 @@
             .wx-wb-share-author { font-size: 12px; color: var(--wx-link); font-weight: 500; margin-bottom: 4px; }
             .wx-wb-share-text { font-size: 13px; color: var(--wx-ink-2); line-height: 1.4; word-break: break-word; }
 
+            /* ========== 創作室 app 分享卡片 ========== */
+            .wx-app-share-card { width: 210px; background: var(--wx-surface); border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--wx-line); }
+            .wx-app-share-top { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 11px; font-weight: 600; color: var(--wx-ink-3); border-bottom: 1px solid var(--wx-line); }
+            .wx-app-share-top > i { color: var(--wx-accent); font-size: 11px; }
+            .wx-app-share-body { padding: 8px 10px 10px; }
+            .wx-app-share-title { font-size: 14px; font-weight: 600; color: var(--wx-ink-2); line-height: 1.35; margin-bottom: 4px; word-break: break-word; }
+            .wx-app-share-text { font-size: 12.5px; color: var(--wx-ink-3); line-height: 1.45; word-break: break-word; }
+
             /* ========== 消息刪除多選模式 ========== */
             .wx-msg-checkbox {
                 width: 20px;
@@ -491,7 +499,7 @@
             .wx-dark .wx-bottom-nav { background: var(--wx-surface); border-top-color: var(--wx-line); }
             .wx-dark .wx-tab-txt { color: var(--wx-ink-dim); }
             /* 深色那條刪了：基底已經吃格子，深淺自己會跟著換 */
-            .wx-dark .wx-file-card, .wx-dark .wx-wb-share-card { background: var(--wx-surface); border-color: var(--wx-line); }
+            .wx-dark .wx-file-card, .wx-dark .wx-wb-share-card, .wx-dark .wx-app-share-card { background: var(--wx-surface); border-color: var(--wx-line); }
             .wx-dark .wx-file-name, .wx-dark .wx-wb-share-text { color: var(--wx-ink-3); }
             .wx-dark .wx-settings-panel { background: #000; }
             .wx-dark .wx-set-group { background: var(--wx-surface); border-top-color: var(--wx-line); border-bottom-color: var(--wx-line); }

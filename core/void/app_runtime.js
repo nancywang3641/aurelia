@@ -12,6 +12,7 @@
     function _bridgeScript(opts) {
         opts = opts || {};
         var preview = opts.preview ? 'true' : 'false';
+        var wake = opts.wake ? 'true' : 'false';
         var appId = String(opts.appId || 'preview').replace(/[^a-zA-Z0-9_-]/g, '') || 'preview';
         // 生圖來源：app 記錄有指定才帶；沒指定就留空，讓 OS_IMAGE_MANAGER 照使用者的圖片設定按類型分桶（以前寫死退回 pollinations，等於無視她的設定）
         var provider = String(opts.provider || '').replace(/[^a-z0-9_-]/gi, '');
@@ -46,7 +47,19 @@
             // ── 不經輸入框：直接把文字當「system 訊息」插進聊天成最新一則（旁白/系統公告式；使用者不用再按送出）。 ──
             +   'window.toSystem = function(text){ try { if(window.__IS_PREVIEW) return false; text=String(text==null?"":text); if(!text) return false; var ST=window.SillyTavern||(P&&P.SillyTavern); var ctx=ST&&ST.getContext&&ST.getContext(); if(!ctx||!ctx.chat||!ctx.addOneMessage) return false; var ts=(typeof ctx.getMessageTimeStamp==="function")?ctx.getMessageTimeStamp():new Date().toISOString(); var msg={ name:"System", is_user:false, is_system:true, mes:text, send_date:ts, extra:{} }; ctx.chat.push(msg); ctx.addOneMessage(msg,{scroll:true}); try{ if(typeof ctx.saveChat==="function") ctx.saveChat(); }catch(e){} return true; } catch(e){ console.error("[app toSystem]",e); return false; } };'
             // ── 記進手機事件簿：她在 app 裡做了劇情該知道的事，下次劇情接著寫時排在她那句話前面帶到一次（格子名＝app 名） ──
-            +   'window.toStory = async function(text){ try { if(window.__IS_PREVIEW) return false; text=String(text==null?"":text).trim(); if(!text) return false; var B=P.OS_PHONE_EVENTS; if(!B||!B.record) return false; var nm=""; try { var DB=window.OS_DB||(P&&P.OS_DB); var apps=(DB&&DB.getAllPhoneApps)?await DB.getAllPhoneApps():[]; var a=(apps||[]).filter(function(x){ return x&&String(x.id)===window.__APP_ID__; })[0]; nm=(a&&a.name)||""; } catch(e){} return await B.record({ room: nm||"手機", line: text }); } catch(e){ return false; } };'
+            +   'window.__appName = function(){ if(window.__APP_NAME_P) return window.__APP_NAME_P; window.__APP_NAME_P = (async function(){ try { var DB=window.OS_DB||(P&&P.OS_DB); var apps=(DB&&DB.getAllPhoneApps)?await DB.getAllPhoneApps():[]; var a=(apps||[]).filter(function(x){ return x&&String(x.id)===window.__APP_ID__; })[0]; return (a&&a.name)||""; } catch(e){ return ""; } })(); return window.__APP_NAME_P; };'
+            +   'window.toStory = async function(text){ try { if(window.__IS_PREVIEW) return false; text=String(text==null?"":text).trim(); if(!text) return false; var B=P.OS_PHONE_EVENTS; if(!B||!B.record) return false; return await B.record({ room: (await window.__appName())||"手機", line: text }); } catch(e){ return false; } };'
+            // ── 手機本身的東西（實作在 OS_APP_TOOLS）：故事時鐘、分享到聊天室、錢包、紅點、通知 ──
+            +   'window.stClock = function(){ try { var T=P&&P.OS_APP_TOOLS; return T?T.clock():Promise.resolve({date:"",time:"",upcoming:[]}); } catch(e){ return Promise.resolve({date:"",time:"",upcoming:[]}); } };'
+            +   'window.stShare = async function(id, title, text){ try { if(window.__IS_PREVIEW) return false; var T=P&&P.OS_APP_TOOLS; return T? await T.share((await window.__appName())||"App", id, title, text) : false; } catch(e){ return false; } };'
+            +   'window.stBalance = function(){ try { var T=P&&P.OS_APP_TOOLS; return T?T.balance():Promise.resolve(0); } catch(e){ return Promise.resolve(0); } };'
+            +   'window.stPay = async function(amount, why){ try { if(window.__IS_PREVIEW) return false; var T=P&&P.OS_APP_TOOLS; return T? await T.pay((await window.__appName())||"App", amount, why) : false; } catch(e){ return false; } };'
+            +   'window.stBadge = function(n){ try { if(window.__IS_PREVIEW) return; var T=P&&P.OS_APP_TOOLS; if(T) T.badge(window.__APP_ID__, n); } catch(e){} };'
+            +   'window.stNotify = async function(text){ try { if(window.__IS_PREVIEW) return false; var T=P&&P.OS_APP_TOOLS; return T? await T.notify((await window.__appName())||"奧瑞亞", text) : false; } catch(e){ return false; } };'
+            // ── 自己動：app 用 onWake 登記「被叫醒時要做的事」。平常打開不會跑；只有 OS_APP_TOOLS 在背景叫醒（__WAKE）才跑，跑完回報收掉 ──
+            +   'window.__WAKE = ' + wake + ';'
+            +   'window.stOnWake = function(fn){ if(!window.__WAKE || typeof fn!=="function" || window.__WAKE_REG) return; window.__WAKE_REG = true; var done=function(ok){ try { var T=P&&P.OS_APP_TOOLS; if(T&&T.wakeDone) T.wakeDone(window.__APP_ID__, ok); } catch(e){} }; setTimeout(function(){ Promise.resolve().then(fn).then(function(){ done(true); }, function(e){ console.error("[app onWake]", e); done(false); }); }, 0); };'
+            +   'if (window.__WAKE) window.addEventListener("load", function(){ setTimeout(function(){ if(!window.__WAKE_REG){ try { var T=P&&P.OS_APP_TOOLS; if(T&&T.wakeDone) T.wakeDone(window.__APP_ID__, false); } catch(e){} } }, 5000); });'
             // ── 生圖(預覽走佔位省額度) ──
             +   'window.genImg = async function(p, type, provider){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", (provider || window.__APP_PROVIDER__) ? {provider: provider || window.__APP_PROVIDER__} : {}); } catch(e){ console.error("[app genImg]",e); return ""; } };'
             // ── 文字生成：走 OS_API.chat(直接打 API、不發酒館 GENERATION 事件→不觸發記憶/狀態抽取)。
@@ -106,6 +119,7 @@
         container.innerHTML = '';
         const iframe = document.createElement('iframe');
         iframe.className = 'app-iframe';
+        if (opts.appId) iframe.dataset.appId = String(opts.appId);   // 「自己動」要知道她是不是正開著這個 app
         iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals');
         // 橋接 bootstrap 要在 app 自身 script 前跑，且不能擠在 <!DOCTYPE> 之前(會觸發 quirks mode 壞版面)；
         // 有 <head> 就插進 head 開頭、否則退回最前面。

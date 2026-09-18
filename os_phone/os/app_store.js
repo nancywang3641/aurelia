@@ -4,6 +4,13 @@
 (function () {
     'use strict';
     const win = window;
+
+    // ❔ 設定旁邊問號點開的說明（AUI.helpBtn），面板上不掛說明文字
+    try {
+        if (win.AUI && win.AUI.registerHelp) win.AUI.registerHelp({
+            as_wake: { title: '自己動', body: '開了，這個 app 會照「多久一次」和「機率」自己長出新東西，有新的會在桌面圖標冒紅點、發通知。\n時間從打開這格起算。手機要開著才會動，關著的時候不會。' }
+        });
+    } catch (e) {}
     const INSTALLED_KEY = 'aurelia_phone_apps';      // 與 phone_shell.js 同 key：[{id,name,emoji,iconUrl}]
     const OPENED_KEY = 'aurelia_app_opened';         // {id: timestamp} —— 最近使用，phone_shell 開 app 時寫
     function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -281,6 +288,50 @@
                 mkRow('fa-file-import', '載入酒館', function () { if (S.injectAppToTavern) { S.injectAppToTavern(a.srcTplId); _toast(c, '已寫入酒館正則，純文字也能跑'); } }),
                 mkRow('fa-house', '放進大廳', async function () { if (S.toggleAppLobby) { const on = await S.toggleAppLobby(a.srcTplId); _toast(c, '大廳：' + (on ? '已啟用' : '已關閉')); } }),
                 mkRow('fa-box-archive', '匯出 .json', function () { if (S.exportApp) S.exportApp(a.srcTplId); })
+            ]);
+        }
+
+        // ⏰ 自己動：app 有寫「被叫醒時要做的事」才給這組（沒寫的開了也不會動）。
+        //    跟聊天室「他會主動找我」同一套：開關＋多久一次（自己打分鐘）＋機率，打字中不夾不存，離開格子或按 Enter 才收。
+        const T = win.OS_APP_TOOLS;
+        if (T && T.canWake && T.canWake(a)) {
+            const cfg = T.wakeCfg(a.id);
+            const help = (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('as_wake') : '';
+            const tog = mkRow('fa-clock-rotate-left', '自己動', null, { toggle: true, on: cfg.on });
+            const lab = tog.querySelector('.ws-act-label'); if (lab && help) lab.insertAdjacentHTML('beforeend', help);
+            tog.addEventListener('click', function (e) {
+                if (e.target && e.target.closest && e.target.closest('.aui-help')) return;
+                const on = !T.wakeCfg(a.id).on;
+                T.setWakeCfg(a.id, { on: on });
+                const t = tog.querySelector('.ws-act-tog'); if (t) t.classList.toggle('on', on);
+            });
+            const numRow = function (icon, label, val, lo, hi, def, unit, key) {
+                const r = document.createElement('div');
+                r.className = 'ws-act-row ws-act-numrow';
+                r.innerHTML = '<i class="fa-solid ' + icon + ' ws-act-ico"></i><span class="ws-act-label">' + _esc(label) + '<span class="ws-act-sub"></span></span>'
+                    + '<input type="number" class="ws-act-num" inputmode="numeric" min="' + lo + '" max="' + hi + '" step="1" value="' + val + '"><span class="ws-act-unit">' + _esc(unit) + '</span>';
+                const inp = r.querySelector('input'), sub = r.querySelector('.ws-act-sub');
+                const paint = function () {
+                    if (key !== 'mins' || !sub) return;
+                    const m = parseInt(inp.value, 10);
+                    sub.textContent = (isFinite(m) && m >= 60) ? (m % 60 ? Math.floor(m / 60) + ' 小時 ' + (m % 60) + ' 分' : (m / 60) + ' 小時') : '';
+                };
+                inp.addEventListener('input', paint);
+                inp.addEventListener('change', function () {
+                    let n = parseInt(inp.value, 10);
+                    n = isFinite(n) ? Math.min(hi, Math.max(lo, n)) : def;
+                    inp.value = n; paint();
+                    const p = {}; p[key] = n; T.setWakeCfg(a.id, p);
+                });
+                inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+                paint();
+                return r;
+            };
+            const D = T.wakeDefaults();
+            mkGroup([
+                tog,
+                numRow('fa-hourglass-half', '多久一次', cfg.mins, 1, 1440, D.mins, '分鐘', 'mins'),
+                numRow('fa-dice', '機率', cfg.chance, 0, 100, D.chance, '%', 'chance')
             ]);
         }
 

@@ -192,3 +192,11 @@
     background: transparent; color: #8c7a66; font-size: 12px; font-family: inherit; cursor: pointer;
 }
 .wg-del:active { background: rgba(122,36,50,0.08); }
+
+/* ⏰ 自己動：自己打分鐘與機率（跟聊天室「他會主動找我」同一種格子） */
+.ws-act-numrow { cursor: default; }
+.ws-act-numrow:active { background: transparent; }
+.ws-act-sub { margin-left: 6px; font-size: 12px; color: #8c7a66; }
+.ws-act-num { width: 64px; flex: none; padding: 5px 8px; border: 1px solid rgba(110,80,40,0.22); border-radius: 8px; background: #fff; color: #7a2432; font: inherit; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.ws-act-num::-webkit-outer-spin-button, .ws-act-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ws-act-unit { flex: none; font-size: 13px; color: #8c7a66; min-width: 26px; }

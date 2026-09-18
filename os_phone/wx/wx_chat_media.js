@@ -28,7 +28,7 @@
     const CATS = [
         { key: 'image', label: '圖片', icon: 'fa-image',    tags: ['IMAGE', 'VIDEO'] },
         { key: 'file',  label: '檔案', icon: 'fa-file',     tags: ['FILE'] },
-        { key: 'link',  label: '連結', icon: 'fa-link',     tags: ['LINK', 'WBSHARE'] },
+        { key: 'link',  label: '連結', icon: 'fa-link',     tags: ['LINK', 'WBSHARE', 'APPSHARE'] },
         { key: 'place', label: '位置', icon: 'fa-location-dot', tags: ['LOCATION'] },
     ];
 
