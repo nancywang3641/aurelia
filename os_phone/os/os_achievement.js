@@ -132,8 +132,7 @@
             desc:      desc || '',
             timestamp: Date.now(),
             redeemed:  false,
-            shards:    0,                // 兌換後由柴郡 API 填入
-            exp:       0                 // shards / 8，結算後供 child 面板讀取
+            shards:    0                 // 兌換後由柴郡 API 填入
         };
 
         _achievements.push(entry);
@@ -162,7 +161,6 @@
         ach.redeemed = true;
         ach.shards   = shards || 0;
         ach.currency = currency || 'shards';   // 'shards'=柴郡碎片(預設,舊資料同) / 'pt'=白兔交易所 PT
-        ach.exp      = Math.round((shards || 0) / 8);  // EXP = shards / 8
         // 估值當下那句點評：以前只在 toast 閃一下就沒了，存進票券才留得住
         if (comment) ach.comment = String(comment).trim();
 
@@ -172,12 +170,7 @@
             catch(e) { console.error('[OS_ACHIEVEMENT] 更新 DB 失敗:', e); }
         }
 
-        console.log(`[OS_ACHIEVEMENT] 💎 兌換: "${ach.name}" shards=${ach.shards} exp=${ach.exp}`);
-
-        // 通知 child 面板加 EXP
-        if (ach.exp > 0 && win.CHILD_CORE && typeof win.CHILD_CORE.addExpFromAchievement === 'function') {
-            win.CHILD_CORE.addExpFromAchievement(ach.exp);
-        }
+        console.log(`[OS_ACHIEVEMENT] 💎 兌換: "${ach.name}" shards=${ach.shards}`);
 
         // 刷新成就面板
         if (win.VoidTerminal && win.VoidTerminal.refreshAchievementPanel) {

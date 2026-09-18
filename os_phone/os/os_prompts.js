@@ -564,7 +564,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             if (key === 'cheshire_system') return loadCheshire();
             
             // 🔥 V4.6 終極修復：攔截獨立 API 請求
-            // 如果是子面板的 API 請求（如 inv_case_gen, pet_random_event 等），直接返回乾淨的硬編碼
+            // 如果是子面板的 API 請求，直接返回乾淨的硬編碼
             // 只有持續對話的主面板（VN, WX 等）才需要經過 Bundle 打包與世界書注入
             const MAIN_PANELS = ['vn_story', 'wx_chat_system'];
             if (HARDCODED[key] && !MAIN_PANELS.includes(key)) {

@@ -113,7 +113,7 @@ LINE:[用角色風格說一句話，10-20字]`;
             },
 
             // 生圖：回傳圖片 URL（預覽環境返回佔位圖）
-            // type: 'item' | 'scene' | 'char' | 'pet'
+            // type: 'item' | 'scene' | 'char'
             image: async function(prompt, type = 'item') {
                 if (window.__IS_PREVIEW || !window.OS_IMAGE_MANAGER) {
                     return `https://via.placeholder.com/400x300/1a0a02/FBDFA2?text=Preview`;

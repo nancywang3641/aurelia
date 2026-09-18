@@ -3078,22 +3078,6 @@
                 return;
             }
 
-            // 📖 章節結束標記
-            if (line.startsWith('[SessionEnd|')) {
-                if (win.OS_API?.isStandalone?.() ?? false) {
-                    try {
-                        const tagSummary = line.slice(12, -1);
-                        const fullText = this._lastRawText || '';
-                        win.dispatchEvent(new CustomEvent('os_vn_session_end', {
-                            detail: { summary: tagSummary, fullText }
-                        }));
-                        console.log('[VN_Core] 已派發 os_vn_session_end 事件');
-                    } catch(e) {}
-                }
-                this.next();
-                return;
-            }
-
             // Fallback
             const _trimmed = line.trim();
             if (/^\*{1,2}[^*].+\*{1,2}$/.test(_trimmed)) {

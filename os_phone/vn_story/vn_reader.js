@@ -167,7 +167,7 @@
         s = s.replace(/\[Nar\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, t) => `　　${t.trim()}`);
         s = s.replace(/\[Inner\|[^|]+\|([^|\]]+)(?:\|[^\]]+)?\]/g, (_, t) => `（${t.trim()}）`);
         s = s.replace(/<os_status>[\s\S]*?<\/os_status>\s*/gi, '');
-        s = s.replace(/\[(Story|Chapter|Protagonist|Area|BGM|Bg|Trans|Item|SessionEnd|Achievement|Choice|Quest|Date|HP|Buff|Debuff|Event)[^\]]*\]/gi, '');
+        s = s.replace(/\[(Story|Chapter|Protagonist|Area|BGM|Bg|Trans|Item|Achievement|Choice|Quest|Date|HP|Buff|Debuff|Event)[^\]]*\]/gi, '');
         s = s.replace(/\[[^\[\]\n]{1,80}\]/g, '');
         s = s.replace(/<[^>]+>/g, '');
         s = s.replace(/\n{3,}/g, '\n\n').trim();

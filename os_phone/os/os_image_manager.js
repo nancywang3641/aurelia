@@ -4,7 +4,7 @@
 // 職責：統一管理圖片生成，並整合 TranslationManager 自動翻譯
 // V3.0：
 //   ① 實作 NovelAI 圖片生成（ZIP 解壓 → Blob URL）
-//   ② 路由策略：背景永遠走 Pollinations，角色/物品/寵物有 NAI token 則走 NAI
+//   ② 路由策略：背景永遠走 Pollinations，角色/物品有 NAI token 則走 NAI
 //   ③ 新增 V4 / V4 Full 模型選項
 // ----------------------------------------------------------------
 (function() {
@@ -113,8 +113,8 @@
     const ImageManager = {
         config: {
             service: 'pollinations', // 預設（legacy：單一全域服務，保留供舊讀者；新路由走三桶）
-            // 三桶各自選接口：死物桶(bg/item/pet) vs 頭像桶(char) vs 插圖桶(scene)
-            serviceInanimate: 'pollinations', // 死物桶：bg / item / pet
+            // 三桶各自選接口：死物桶(bg/item) vs 頭像桶(char) vs 插圖桶(scene)
+            serviceInanimate: 'pollinations', // 死物桶：bg / item
             serviceLiving: 'pollinations',    // legacy：舊「活物桶」(char+scene 共用)，保留供遷移/舊讀者；新路由走 serviceChar/serviceScene
             serviceChar: 'pollinations',      // 頭像桶：char（角色頭像／立繪）
             serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖／CG）
@@ -335,7 +335,7 @@
             if (type === 'char') return 'char';
             if (type === 'scene') return 'scene';
             if (type === 'map') return 'map';
-            return 'bg';   // bg / item / pet → 背景桶
+            return 'bg';   // bg / item → 背景桶
         },
         _comfyCfgFor: function(type) {
             const cd = this.config.comfyuiDirect || {};
@@ -1363,7 +1363,7 @@
             return /\/ai\/generate-image$/.test(u) ? u : u + '/ai/generate-image';
         },
 
-        // --- NovelAI 生成邏輯（char / item / pet / scene）---
+        // --- NovelAI 生成邏輯（char / item / scene）---
         _genNovelAI: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'novelai', type: type }); } catch (e) {}   // 📊 長期用量帳
@@ -1381,7 +1381,7 @@
             console.log('[ImageManager] NAI 輪到我了，開始生成...');
 
             // 尺寸：預設 1024x1024，但接受 options 傳入
-            // scene / char 都是人物插圖類型；item / pet 是物品類型
+            // scene / char 都是人物插圖類型；item 是物品類型
             const isChar = (type === 'char' || type === 'scene');
             let width  = options.width  || 1024;
             let height = options.height || 1024;
@@ -1599,7 +1599,7 @@
                     console.warn('[ImageManager] ' + type + ' NAI 失敗 → 不回退 Pollinations（提示詞不相容），略過此張');
                     return null;
                 }
-                // 死物（背景／物品／寵物）仍回退：那類圖 Pollinations 出得堪用，
+                // 死物（背景／物品）仍回退：那類圖 Pollinations 出得堪用，
                 // 而且背景缺圖會整片黑，比畫風不一致嚴重。
                 return this._genPollinations(prompt, type);
             }

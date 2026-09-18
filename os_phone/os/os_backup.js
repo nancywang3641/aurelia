@@ -3,7 +3,7 @@
 // 路徑：os_phone/os/os_backup.js
 // 職責：統一資料備份引擎
 //   - 備份目標：IndexedDB 所有重要倉庫 + localStorage 設定
-//   - 雲端：GitHub Gist（僅限世界書/寵物等輕量必要資料）
+//   - 雲端：GitHub Gist（僅限世界書/成就等輕量必要資料）
 //   - 本地：JSON 檔案匯出入（100% 包含 AVS、VN章節、聊天紀錄等大型資料）
 // ----------------------------------------------------------------
 (function () {
@@ -67,13 +67,10 @@
         try {
             // 🌟 1. 輕量資料 (Gist 與本地都會備份)
             if (opts.worldbook !== false) out.worldbook = await _getStore('world_book_entries');
-            if (opts.pets !== false) out.pets = await _getStore('pets');
             if (opts.achievements !== false) out.achievements = await _getStore('achievements');
 
             // 🌟 2. 全量資料 (僅限本地 JSON 打包)
             if (opts.fullExport) {
-                out.petLogs = await _getStore('pet_logs');
-                
                 // 🔥 新增：AVS 變數工坊資料
                 out.varPacks = await _getStore('var_packs');
                 out.uiTemplates = await _getStore('ui_templates');
@@ -83,7 +80,6 @@
                 
                 // 🔥 新增：各類聊天與歷史紀錄
                 out.apiChats = await _getStore('api_chats');
-                out.childChatHistory = await _getStore('child_chat_history');
                 out.wbPosts = await _getStore('wb_posts');
                 out.lobbyHistory = await _getStore('lobby_history');
             }
@@ -115,7 +111,7 @@
 
     // ── Gist 備份資料打包（只含輕量必要資料） ─────────────────────────
     async function collectEssential() {
-        const dbData = await collectDB({ worldbook: true, pets: true, achievements: true, fullExport: false });
+        const dbData = await collectDB({ worldbook: true, achievements: true, fullExport: false });
         return {
             version: 3,
             exportedAt: new Date().toISOString(),
@@ -127,7 +123,7 @@
 
     // ── 還原資料 ──────────────────────────────────────────────────────
     async function applyData(data, opts = {}) {
-        let restored = { worldbook: 0, pets: 0, achievements: 0, localStorage: 0, avs: 0, vn: 0, chats: 0 };
+        let restored = { worldbook: 0, achievements: 0, localStorage: 0, avs: 0, vn: 0, chats: 0 };
 
         // IndexedDB 恢復
         if (data.db) {
@@ -137,10 +133,6 @@
             if (d.worldbook?.length) {
                 for (const e of d.worldbook) await _putStore('world_book_entries', e).catch(()=>{});
                 restored.worldbook = d.worldbook.length;
-            }
-            if (d.pets?.length) {
-                for (const e of d.pets) await _putStore('pets', e).catch(()=>{});
-                restored.pets = d.pets.length;
             }
             if (d.achievements?.length) {
                 for (const e of d.achievements) await _putStore('achievements', e).catch(()=>{});
@@ -164,12 +156,10 @@
             }
 
             // 恢復其他歷史紀錄
-            if (d.petLogs?.length) for (const e of d.petLogs) await _putStore('pet_logs', e).catch(()=>{});
             if (d.apiChats?.length) {
                 for (const e of d.apiChats) await _putStore('api_chats', e).catch(()=>{});
                 restored.chats += d.apiChats.length;
             }
-            if (d.childChatHistory?.length) for (const e of d.childChatHistory) await _putStore('child_chat_history', e).catch(()=>{});
             if (d.wbPosts?.length) for (const e of d.wbPosts) await _putStore('wb_posts', e).catch(()=>{});
             if (d.lobbyHistory?.length) for (const e of d.lobbyHistory) await _putStore('lobby_history', e).catch(()=>{});
         }
@@ -256,8 +246,8 @@
         const results = {};
         // 將 AVS 和 VN 加入掃描清單
         const stores = [
-            'world_book_entries', 'pets', 'pet_logs', 'achievements', 
-            'child_chat_history', 'var_packs', 'ui_templates', 'vn_chapters', 'api_chats'
+            'world_book_entries', 'achievements',
+            'var_packs', 'ui_templates', 'vn_chapters', 'api_chats'
         ];
         for (const s of stores) {
             try {

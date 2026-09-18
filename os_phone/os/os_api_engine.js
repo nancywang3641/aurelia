@@ -310,7 +310,7 @@
         s = s.replace(/\[Inner\|[^|]+\|([^|\]]+)(?:\|[^\]]+)?\]/g,
             (_, t) => `(${t.trim()})`);
         s = s.replace(/\[Sys\|[^|]+\|([^\]]+)\]/g, (_, t) => t.trim());
-        s = s.replace(/\[(Story|Chapter|Protagonist|Area|BGM|Bg|Trans|Item|SessionEnd|物證|人證|scene)[^\]]*\]/gi, '');
+        s = s.replace(/\[(Story|Chapter|Protagonist|Area|BGM|Bg|Trans|Item|scene)[^\]]*\]/gi, '');
         s = s.replace(/\[[^\[\]\n]{1,60}\]/g, '');
         s = s.replace(/<[^>]+>/g, '');
         s = s.replace(/\n{3,}/g, '\n\n').trim();

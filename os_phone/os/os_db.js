@@ -14,13 +14,9 @@
     const STORE_NAME_IMAGES = 'images';
     const STORE_NAME_CHATS = 'api_chats';
     const STORE_NAME_WB = 'wb_posts';
-    const STORE_NAME_INV = 'investigation_data';
     const STORE_NAME_MAP = 'map_data';
-    const STORE_NAME_PETS = 'pets';
-    const STORE_NAME_PET_LOGS = 'pet_logs';
     const STORE_NAME_LOBBY      = 'lobby_history';
     const STORE_NAME_ACH        = 'achievements';
-    const STORE_NAME_CHILD_CHAT = 'child_chat_history';
     const STORE_NAME_WORLDBOOK  = 'world_book_entries';
     const STORE_NAME_VN_CHAPTERS = 'vn_chapters';
     
@@ -39,6 +35,21 @@
     const STORE_NAME_NPC_MEMORY = 'lobby_npc_memory'; // 🔥 V29：大廳 NPC 一對一長期記憶（id = NPC 對話 key）
 
     let dbInstance = null;
+
+    // 🗑 已經拆掉的三種面板（查案、寵物、帶小孩出遊）留下的倉庫：新裝的不再建；舊的清空一次，只剩空殼。
+    //    不刪倉庫本身＝不升資料庫版本（升版會卡死整個大廳，見 onblocked 那段）。
+    function _purgeLegacyPanelStores(db) {
+        const FLAG = 'osdb_legacy_panels_purged_v1';
+        try { if (localStorage.getItem(FLAG) === '1') return; } catch (e) {}
+        try {
+            const names = ['investigation_data', 'pets', 'pet_logs', 'child_chat_history'].filter(function (n) { return db.objectStoreNames.contains(n); });
+            const done = function () { try { localStorage.setItem(FLAG, '1'); } catch (e) {} };
+            if (!names.length) { done(); return; }
+            const tx = db.transaction(names, 'readwrite');
+            names.forEach(function (n) { tx.objectStore(n).clear(); });
+            tx.oncomplete = function () { done(); console.log('[OS_DB] 清空已拆面板的舊資料：' + names.join('、')); };
+        } catch (e) { console.warn('[OS_DB] 清舊面板資料失敗（不影響其他功能）', e); }
+    }
 
     // 取得當前 tavern 劇情存檔 id（與 state_runtime 同款正規化）→ 給 app 紀錄蓋章做 chatId 隔離
     // 當前劇情線的分艙鑰匙：酒館＝chatId、PWA＝storyId（PWA 沒有 SillyTavern，以前一律回 null
@@ -78,9 +89,8 @@
                         const db = event.target.result;
                         const stores = [
                             STORE_NAME_IMAGES, STORE_NAME_CHATS, STORE_NAME_WB,
-                            STORE_NAME_INV, STORE_NAME_MAP, STORE_NAME_PETS,
-                            STORE_NAME_PET_LOGS, STORE_NAME_LOBBY, STORE_NAME_ACH,
-                            STORE_NAME_CHILD_CHAT, STORE_NAME_WORLDBOOK,
+                            STORE_NAME_MAP, STORE_NAME_LOBBY, STORE_NAME_ACH,
+                            STORE_NAME_WORLDBOOK,
                             STORE_NAME_VN_CHAPTERS, STORE_NAME_VAR_PACKS,
                             STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO,
                             STORE_NAME_STUDIO_DRAFTS,
@@ -108,6 +118,7 @@
                     request.onsuccess = (event) => {
                         dbInstance = event.target.result;
                         dbInstance.onversionchange = () => { try { dbInstance.close(); } catch (e) {} dbInstance = null; };
+                        _purgeLegacyPanelStores(dbInstance);
                         resolve(dbInstance);
                     };
                     request.onerror = (event) => {
@@ -308,89 +319,7 @@
             });
         },
 
-        // --- 寵物、圖片、聊天歷史 (維持原樣) ---
-        savePet: async function(petData) {
-            const db = await this.init();
-            return new Promise((resolve, reject) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_PETS, 'readwrite');
-                    if (!petData.id) petData.id = 'pet_' + Date.now();
-                    tx.objectStore(STORE_NAME_PETS).put(petData);
-                    tx.oncomplete = () => resolve(petData.id);
-                    tx.onerror = (e) => reject(e.target.error);
-                } catch (e) { reject(e); }
-            });
-        },
-        getAllPets: async function() {
-            const db = await this.init();
-            return new Promise((resolve, reject) => {
-                try {
-                    const req = db.transaction(STORE_NAME_PETS, 'readonly').objectStore(STORE_NAME_PETS).getAll();
-                    req.onsuccess = () => resolve(req.result || []);
-                    req.onerror = (e) => reject(e.target.error);
-                } catch (e) { reject(e); }
-            });
-        },
-        getPet: async function(id) {
-            const db = await this.init();
-            return new Promise((resolve, reject) => {
-                try {
-                    const req = db.transaction(STORE_NAME_PETS, 'readonly').objectStore(STORE_NAME_PETS).get(id);
-                    req.onsuccess = () => resolve(req.result || null);
-                    req.onerror = (e) => reject(e.target.error);
-                } catch(e) { reject(e); }
-            });
-        },
-        deletePet: async function(id) {
-            const db = await this.init();
-            return new Promise((resolve, reject) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_PETS, 'readwrite');
-                    tx.objectStore(STORE_NAME_PETS).delete(id);
-                    tx.oncomplete = () => resolve(true);
-                    tx.onerror = (e) => reject(e.target.error);
-                } catch(e) { reject(e); }
-            });
-        },
-        savePetLog: async function(logData) {
-            const db = await this.init();
-            return new Promise((resolve, reject) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_PET_LOGS, 'readwrite');
-                    if (!logData.id) logData.id = 'log_' + Date.now();
-                    if (!logData.timestamp) logData.timestamp = Date.now();
-                    tx.objectStore(STORE_NAME_PET_LOGS).put(logData);
-                    tx.oncomplete = () => resolve(logData.id);
-                    tx.onerror = (e) => reject(e.target.error);
-                } catch (e) { reject(e); }
-            });
-        },
-        getRelatedPetLogs: async function(petId) {
-            const db = await this.init();
-            return new Promise((resolve, reject) => {
-                try {
-                    const req = db.transaction(STORE_NAME_PET_LOGS, 'readonly').objectStore(STORE_NAME_PET_LOGS).getAll();
-                    req.onsuccess = () => {
-                        let logs = req.result || [];
-                        if (petId) logs = logs.filter(log => log.participants && log.participants.includes(petId));
-                        resolve(logs.sort((a, b) => b.timestamp - a.timestamp));
-                    };
-                    req.onerror = (e) => reject(e.target.error);
-                } catch (e) { reject(e); }
-            });
-        },
-        getAllPetLogs: async function() { return this.getRelatedPetLogs(null); },
-        clearPetLogs: async function() {
-            const db = await this.init();
-            return new Promise((resolve, reject) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_PET_LOGS, 'readwrite');
-                    tx.objectStore(STORE_NAME_PET_LOGS).clear();
-                    tx.oncomplete = () => resolve(true);
-                    tx.onerror = (e) => reject(e.target.error);
-                } catch(e) { reject(e); }
-            });
-        },
+        // --- 圖片、聊天歷史 ---
         saveImage: async function(id, f) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
@@ -695,35 +624,6 @@
                 } catch(e) { j(e); }
             });
         },
-        saveInvestigationState: async function(chatId, d) { 
-            const db = await this.init(); 
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_INV, 'readwrite');
-                    tx.objectStore(STORE_NAME_INV).put({id: chatId, ...d, timestamp: Date.now()});
-                    tx.oncomplete = () => r(true);
-                } catch(e) { j(e); }
-            });
-        },
-        getInvestigationState: async function(chatId) { 
-            const db = await this.init(); 
-            return new Promise((r, j) => {
-                try {
-                    const req = db.transaction(STORE_NAME_INV, 'readonly').objectStore(STORE_NAME_INV).get(chatId);
-                    req.onsuccess = () => r(req.result || null);
-                } catch(e) { j(e); }
-            });
-        },
-        clearInvestigationState: async function(chatId) { 
-            const db = await this.init(); 
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_INV, 'readwrite');
-                    tx.objectStore(STORE_NAME_INV).delete(chatId);
-                    tx.oncomplete = () => r(true);
-                } catch(e) { j(e); }
-            });
-        },
         saveMapFacilityData: async function(z, f, d) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
@@ -897,38 +797,6 @@
                         (req.result || []).filter(a => a.chatId === chatId).forEach(a => store.delete(a.id));
                         tx.oncomplete = () => r(true);
                     };
-                } catch(e) { j(e); }
-            });
-        }
-    });
-
-    Object.assign(win.OS_DB, {
-        saveChildChatHistory: async function(childId, messages) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_CHILD_CHAT, 'readwrite');
-                    tx.objectStore(STORE_NAME_CHILD_CHAT).put({ id: childId, messages, timestamp: Date.now() });
-                    tx.oncomplete = () => r(true);
-                } catch(e) { j(e); }
-            });
-        },
-        getChildChatHistory: async function(childId) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const req = db.transaction(STORE_NAME_CHILD_CHAT, 'readonly').objectStore(STORE_NAME_CHILD_CHAT).get(childId);
-                    req.onsuccess = () => r(req.result ? req.result.messages : []);
-                } catch(e) { j(e); }
-            });
-        },
-        deleteChildChatHistory: async function(childId) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_CHILD_CHAT, 'readwrite');
-                    tx.objectStore(STORE_NAME_CHILD_CHAT).delete(childId);
-                    tx.oncomplete = () => r(true);
                 } catch(e) { j(e); }
             });
         }

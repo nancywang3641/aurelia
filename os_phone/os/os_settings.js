@@ -242,7 +242,7 @@
         let saved = (opts && opts.defaults === true) ? null : localStorage.getItem(IMG_STORAGE_KEY);
         let config = {
             service: 'pollinations',
-            serviceInanimate: 'pollinations', // 死物桶：背景/物品/寵物
+            serviceInanimate: 'pollinations', // 死物桶：背景/物品
             serviceLiving: 'pollinations',    // legacy：舊「活物桶」(角色+插圖共用)，保留供遷移
             serviceChar: 'pollinations',      // 頭像桶：char（角色頭像/立繪）
             serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖/CG）
@@ -2520,8 +2520,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div style="background:rgba(var(--os-ink-rgb), 0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(var(--os-ink-rgb), 0.10); font-size:12px; color:var(--os-ink);">
-                            <i class="fa-solid fa-cloud"></i> 備份會將世界書、寵物、成就、App 設定等<b>輕量資料</b>同步至 GitHub Gist。
-                            大型資料（寵物日誌、未來 VN 存檔等）請使用「本地全量匯出」。
+                            <i class="fa-solid fa-cloud"></i> 備份會將世界書、成就、App 設定等<b>輕量資料</b>同步至 GitHub Gist。
+                            大型資料（VN 章節、聊天紀錄等）請使用「本地全量匯出」。
                         </div>
 
                         <div class="set-group">
@@ -2554,7 +2554,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="danger-zone">
                             <h3><i class="fa-solid fa-triangle-exclamation"></i> 危險區域：一鍵格式化</h3>
-                            <p>此操作將徹底刪除所有本地資料庫（包含角色、對話、長線劇情、變數工坊、寵物與系統設定）。操作後將自動重整網頁。請務必先進行備份！</p>
+                            <p>此操作將徹底刪除所有本地資料庫（包含角色、對話、長線劇情、變數工坊與系統設定）。操作後將自動重整網頁。請務必先進行備份！</p>
                             <div class="btn-danger" id="bk-format-btn"><i class="fa-solid fa-burst"></i> 格式化並清空所有數據</div>
                         </div>
 
@@ -2711,7 +2711,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const secValPres = container.querySelector('#sec-val-pres');
 
         // 綁定元素 (圖片)
-        const elImgServiceInanimate = container.querySelector('#img-service-inanimate'); // 死物桶：背景/物品/寵物
+        const elImgServiceInanimate = container.querySelector('#img-service-inanimate'); // 死物桶：背景/物品
         const elImgServiceLiving    = container.querySelector('#img-service-living');    // 頭像桶：char（角色頭像/立繪）
         const elImgServiceScene     = container.querySelector('#img-service-scene');     // 插圖桶：scene（場景插圖/CG）
         const elImgServiceMap       = container.querySelector('#img-service-map');       // 小地圖桶：map（場景俯視底板）
@@ -5108,7 +5108,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try {
                 const data = await BACKUP.gistRestore();
                 const result = await BACKUP.applyData(data);
-                setStatus(`還原完成：世界書 ${result.worldbook} 條、寵物 ${result.pets} 隻、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
+                setStatus(`還原完成：世界書 ${result.worldbook} 條、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
             } catch(e) { setStatus('還原失敗：' + e.message, '#fc8181'); }
             setBtnDone(btnGistRestore, '從 Gist 還原');
         });
@@ -5153,7 +5153,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             setStatus('正在匯入...', 'rgba(26,28,40,0.25)');
             try {
                 const result = await BACKUP.importLocal(file);
-                setStatus(`匯入完成：世界書 ${result.worldbook} 條、寵物 ${result.pets} 隻、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
+                setStatus(`匯入完成：世界書 ${result.worldbook} 條、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
             } catch(e) { setStatus('匯入失敗：' + e.message, '#fc8181'); }
             e.target.value = '';
         });
