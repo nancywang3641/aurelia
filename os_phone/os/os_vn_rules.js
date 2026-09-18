@@ -300,7 +300,7 @@
     //   世界門的世界會自動撥（world_rules_injector），但角色卡故事那邊一條都不碰 → 玩古風卡手機格式照送、BGM 也沒地方換。
     //   題材一鍵：BGM 只留那一組、音效增補跟著換。戰鬥不跟題材（現代也可能打架），這裡不碰。
     //   手機格式跟 BGM：沒開「現代一般」→ 手機那組全關，關之前記下原本哪幾條開著；
-    //     現代一般開回來 → 照記下的還原（沒記錄、或手機條目已經有開著的就不碰），不會擅自多開彈幕／表情包。
+    //     現代一般開回來 → 照記下的還原（沒記錄、或手機條目已經有開著的就不碰），不會擅自多開彈幕。
     const THEMES = [
         { key: 'modern',  label: '現代',     bgm: 'bgm_modern',  sfx: ['sfx_modern'] },
         { key: 'mystery', label: '偵探',     bgm: 'bgm_mystery', sfx: ['sfx_modern'] },
@@ -310,7 +310,7 @@
     ];
     const BGM_IDS = THEMES.map(t => t.bgm);
     const SFX_ADDON_IDS = ['sfx_modern', 'sfx_fantasy'];          // 通用那組常駐，不給關
-    const PHONE_IDS = ['call_phone', 'call_phone_free', 'danmu', 'stickers'];
+    const PHONE_IDS = ['call_phone', 'call_phone_free', 'danmu'];   // 表情包清單那條拿掉了：表情包改由手機共用的表情包庫送（os_app_memory_inject 的 aurelia_sticker_list）
     const PHONE_SAVED_KEY = 'os_vn_rules_phone_auto_off';          // 自動關手機時記下的原狀 { id: bool }
     const QUICK_IDS = BGM_IDS.concat(SFX_ADDON_IDS);
     const _empty = () => ({ opened: [], closed: [], seen: [] });
