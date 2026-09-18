@@ -208,7 +208,7 @@
             try { ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null; } catch (e) {}
             if (ctx && ctx.setExtensionPrompt) {
                 // IN_PROMPT＝preset 主提示正後方（跟大總結同一個位置，os_summary_inject 對過酒館原始碼）
-                ctx.setExtensionPrompt(INJECT_ID + '_pre', pre, 0, 0, false, 0);
+                ctx.setExtensionPrompt(INJECT_ID + '_pre', (win.AURELIA_BLOCK ? win.AURELIA_BLOCK.wrap(INJECT_ID + '_pre', pre) : pre), 0, 0, false, 0);
                 _undo.push(() => ctx.setExtensionPrompt(INJECT_ID + '_pre', '', 0, 0, false, 0));
             }
         }

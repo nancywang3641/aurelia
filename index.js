@@ -187,6 +187,7 @@ const PHONE_FILES = [
     'os/os_usage.js',        // 📊 用量記錄層：每次呼叫記一筆進自己的 IndexedDB（必須在 api_engine/image_manager 之前）
     'os/os_api_engine.js',
     'os/os_vector_engine.js', // 向量記憶引擎（embed/ingest/search；酒館原本沒載入，補上）
+    'os/os_inject_blocks.js', // 奧瑞亞每種注入包成一塊 <名字>…</名字>（要在所有注入器之前）
     'os/os_vector_inject.js', // 酒館版記憶召回注入器（GENERATION_STARTED → injectPrompts）
     'os/os_app_memory_inject.js', // app→酒館 記憶反向注入器（在場角色的手機近況，唯讀注入不貼回 chat）
     'os/os_summary_inject.js', // 酒館版大總結程式注入器（OS_DB tavern_summary → 壓縮 → injectPrompts；搬出世界書）

@@ -302,6 +302,7 @@
             // 取 user/assistant 訊息 = 對話歷史；system 訊息 = 系統段；rpAll = 全部(備援)。
             const rp = rec.rawPrompt;
             const rpArr = Array.isArray(rp) ? rp : null;
+            if (rpArr && rpArr.length > 1) this._recRaw = rpArr;   // 逐段看：重新整理後沒有即時那包，就切存檔裡這包
             const rpByRole = function(roles){ return rpArr ? rpArr.filter(function(m){ return m && roles.indexOf(m.role) >= 0; }).map(function(m){ return '['+(m.role||'?')+']\n'+s(m.content); }).join('\n\n') : ''; };
             const rpAll = rpArr ? rpArr.map(function(m){ return '['+(m.role||'?')+']\n'+s(m.content); }).join('\n\n') : s(rp);
             return {
@@ -368,17 +369,6 @@
         //   做法：送出那一刻把手上知道原文的東西都記下來（奧瑞亞與其他擴充注入的、這輪觸發的世界書條目、
         //   預設條目、角色卡、使用者角色），再到送出的每則訊息裡找它們的原文。找到的標名字，
         //   剩下的：你／角色說的話＝聊天記錄，系統那邊沒人認領的＝沒認出來。
-        _AURELIA_NAMES: {
-            aurelia_vn_rules: 'VN 指令', aurelia_vn_rules_pre: 'VN 指令（開頭那段）',
-            aurelia_grand_summary: '大總結', aurelia_vn_memory: '記憶召回',
-            aurelia_app_memory: '手機裡跟角色的近期互動', aurelia_app_data: '創作室應用的資料',
-            aurelia_sticker_list: '表情包清單', aurelia_vn_tags: 'VN 組件說明', aurelia_fx_list: '畫面特效清單',
-            aurelia_wx_chatroom_ids: '聊天室代號對照', aurelia_map_theater: '地圖小劇場記事',
-            aurelia_state_brief: '狀態面板', aurelia_avs_rules: '狀態面板的規則',
-            aurelia_avatar_reminder: '頭像提醒', aurelia_achv_reminder: '成就提醒',
-            aurelia_director_brief: '導演提示', aurelia_npc_dossier: '角色檔案',
-            aurelia_mc_status: '主角狀態', aurelia_blacklist: '黑名單'
-        },
         _TAVERN_NAMES: {
             '1_memory': ['tavern', '摘要'], '2_floating_prompt': ['tavern', '作者備註'],
             '3_vectors': ['tavern', '向量記憶'], '4_vectors_data_bank': ['tavern', '資料庫'],
@@ -421,8 +411,10 @@
             known.exts.forEach(function(e){
                 const k = e.key;
                 if (/^customDepthWI|^customWIOutlet/i.test(k)) return;          // 世界書的整包，底下一條一條認
-                if (self._AURELIA_NAMES[k]) return add('aurelia', self._AURELIA_NAMES[k], e.value);
-                if (/^aurelia_/i.test(k)) return add('aurelia', k.replace(/^aurelia_/i, ''), e.value);
+                if (/^aurelia_/i.test(k)) {
+                    const B = win.AURELIA_BLOCK || window.AURELIA_BLOCK;
+                    return add('aurelia', (B && B.nameOf(k)) || k.replace(/^aurelia_/i, ''), e.value);
+                }
                 if (self._TAVERN_NAMES[k]) return add(self._TAVERN_NAMES[k][0], self._TAVERN_NAMES[k][1], e.value);
                 add('ext', k, e.value);
             });
@@ -460,16 +452,29 @@
             return c == null ? '' : String(c);
         },
 
-        _buildSegments: function() {
-            const lc = this._liveChat;
+        // 奧瑞亞的注入每一塊都包成 <名字>…</名字>（os_inject_blocks.js），直接照名字切
+        _blockRe: function() {
+            const B = win.AURELIA_BLOCK || window.AURELIA_BLOCK;
+            const names = (B && B.tagNames) ? B.tagNames() : ['劇情總結', '劇情記憶', '手機記憶', '人物名冊', '人物檔案'];
+            const alt = names.map(function(n){ return n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|');
+            return new RegExp('<(' + alt + ')(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1>', 'g');
+        },
+
+        _buildSegments: function(lc) {
             if (!Array.isArray(lc) || !lc.length) return null;
             const pieces = this._knownPieces();
+            const blockRe = this._blockRe();
             const segs = [];
             const self = this;
             lc.forEach(function(m, mi){
                 const text = self._msgText(m);
                 const role = (m && m.role) || 'system';
                 const claimed = [];
+                let bm;
+                blockRe.lastIndex = 0;
+                while ((bm = blockRe.exec(text)) !== null) {
+                    claimed.push({ start: bm.index, end: bm.index + bm[0].length, p: { kind: 'aurelia', name: bm[1], sub: '' } });
+                }
                 pieces.forEach(function(p){
                     let from = 0, i;
                     while ((i = text.indexOf(p.text, from)) >= 0) {
@@ -519,6 +524,22 @@
             return merged;
         },
 
+        _latestStoredRaw: async function() {
+            try {
+                const ctx = this._ctx();
+                const chatId = ctx && ctx.chatId;
+                if (!chatId) return null;
+                const index = await this._promptStoreGet('tt_prompts_index:' + chatId);
+                if (!Array.isArray(index) || !index.length) return null;
+                const sorted = index.slice().sort(function(a, b){ return Number(b.mesId) - Number(a.mesId); });
+                for (let i = 0; i < sorted.length && i < 6; i++) {
+                    const rec = await this._promptStoreGet('tt_prompts_record:' + chatId + ':' + sorted[i].recordId);
+                    if (rec && Array.isArray(rec.rawPrompt) && rec.rawPrompt.length > 1) return rec.rawPrompt;
+                }
+            } catch (e) {}
+            return null;
+        },
+
         showSegments: async function() {
             const esc = function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
             const old = document.getElementById('ctx-cv-overlay');
@@ -533,7 +554,9 @@
             ov.querySelector('.ctx-cv-close').addEventListener('click', close);
             const box = ov.querySelector('.ctx-cv-box');
 
-            let segs = this._buildSegments();
+            let chat = Array.isArray(this._liveChat) && this._liveChat.length ? this._liveChat : this._recRaw;
+            if (!chat) chat = await this._latestStoredRaw();
+            let segs = this._buildSegments(chat);
             let note = '';
             if (!segs) {
                 // 重新整理後手上沒有「真送出去那包」，只剩存檔裡的大類
@@ -541,7 +564,7 @@
                 const self = this;
                 segs = Object.keys(this._KEY_LABELS).filter(function(k){ return bc[k] && String(bc[k]).trim(); })
                     .map(function(k){ return { kind: k === 'chat' ? 'chat' : 'unknown', name: self._KEY_LABELS[k], text: String(bc[k]) }; });
-                note = '這裡只分得出大類。再生成一輪，就能一段一段看是誰放的。';
+                note = '找不到這個聊天送出去的記錄，只分得出大類。';
             }
             for (let i = 0; i < segs.length; i++) segs[i].tok = await this._tokAsync(segs[i].text);
             const total = segs.reduce(function(a, s){ return a + (s.tok || 0); }, 0);

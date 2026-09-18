@@ -1331,7 +1331,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .ctx-cv-overlay { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 4vh 4vw; }
         .ctx-cv-box { width: min(720px, 94vw); max-height: 88vh; display: flex; flex-direction: column; background: #1b1b1f; border: 1px solid rgba(246,173,85,0.4); border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); overflow: hidden; }
         .ctx-cv-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid rgba(246,173,85,0.2); background: rgba(246,173,85,0.06); }
-        .ctx-cv-title { font-size: 13px; font-weight: 700; color: #f6ad55; letter-spacing: 1px; }
+        .ctx-cv-title { font-size: 13px; font-weight: 700; color: #f6ad55; letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; }
         .ctx-cv-meta { font-size: 11px; color: #888; margin-right: auto; }
         .ctx-cv-close { background: transparent; border: none; color: #aaa; font-size: 16px; cursor: pointer; padding: 2px 6px; line-height: 1; }
         .ctx-cv-close:hover { color: #fff; }
