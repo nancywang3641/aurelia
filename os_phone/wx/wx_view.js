@@ -421,9 +421,7 @@
                 const _card = _CARDS ? _CARDS.adopt(safeId, 'transfer', txnId,
                     { amount: amount, targetName: targetName, memo: memo }, uniqueId, msgIndex) : null;
                 const status = _card ? _card.status : localStorage.getItem(uniqueId);
-                let bgColor = "#fa9d3b";
-                let textColor = "white";
-                let borderColor = "white";
+                let state = '';   // ''＝待收、is-ok＝已收款、is-back＝已退還／已過期（顏色在 wx_theme.js 的 .wx-tf-card）
                 let icon = "¥";
                 let title = targetName ? `轉帳給${targetName}` : "轉帳給朋友";
                 let sub = memo || "微信轉帳";
@@ -431,17 +429,13 @@
                 
                 if (isMe) {
                     if (status === 'accepted') {
-                        bgColor = "#f6e3c8";
-                        textColor = "#b8702b";
-                        borderColor = "#d99a5e";
+                        state = 'is-ok';
                         icon = '<i class="fa-solid fa-check"></i>';
                         title = "已收款";
                         sub = `對方已收款`;
                         clickAction = "";
                     } else if (status === 'returned' || status === 'expired') {
-                        bgColor = "#e6e6e6";
-                        textColor = "#666";
-                        borderColor = "#999";
+                        state = 'is-back';
                         icon = '<i class="fa-solid fa-reply"></i>';
                         title = status === 'expired' ? "已過期" : "已退還";
                         sub = status === 'expired' ? "轉帳已過期" : "對方已退回";
@@ -449,24 +443,20 @@
                     }
                 } else {
                     if (status === 'accepted') {
-                        bgColor = "#f6e3c8";
-                        textColor = "#b8702b";
-                        borderColor = "#d99a5e";
+                        state = 'is-ok';
                         icon = '<i class="fa-solid fa-check"></i>';
                         title = "已收款";
                         sub = `已存入餘額`;
                         clickAction = "";
                     } else if (status === 'returned') {
-                        bgColor = "#e6e6e6";
-                        textColor = "#666";
-                        borderColor = "#999";
+                        state = 'is-back';
                         icon = '<i class="fa-solid fa-reply"></i>';
                         title = "已退還";
                         sub = "轉帳已退回";
                         clickAction = "";
                     }
                 }
-                return `<div style="background:${bgColor}; padding:15px; border-radius:4px; color:${textColor}; min-width:210px; display:flex; flex-direction:column; gap:5px; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" ${clickAction}><div style="display:flex; align-items:center; gap:10px;"><div style="border:2px solid ${borderColor}; border-radius:50%; width:35px; height:35px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; flex-shrink:0;">${icon}</div><div style="overflow:hidden;"><div style="font-size:15px; font-weight:500; white-space:nowrap;">${title}</div><div style="font-size:12px; opacity:0.8; white-space:nowrap;">${sub}${(!isMe && !status) ? ' ¥' + amount : ''}</div></div></div></div>`; });
+                return `<div class="wx-tf-card ${state}" ${clickAction}><div class="wx-tf-row"><div class="wx-tf-icon">${icon}</div><div class="wx-tf-text"><div class="wx-tf-title">${title}</div><div class="wx-tf-sub">${sub}${(!isMe && !status) ? ' ¥' + amount : ''}</div></div></div></div>`; });
             html = html.replace(tagRe(MSG_TAG.GIFT), (m, t, content) => {
                 // 解析新格式：[Gift: emoji+物品名|備註|Gft_ID] 或舊格式 [Gift: 物品名-价格]
                 let giftName = '', memo = '', giftId = '', price = "心意無價";
@@ -634,7 +624,7 @@
                 // 🚨 領完了就別再擺出「領取紅包」的樣子。這張卡以前是完全靜態的——不管被領走多少、
                 //    甚至整包領完，都還是寫「領取紅包」，所以她說「AI 收了之後紅包按鈕還在」。
                 //    轉帳跟禮物都有狀態，只有紅包沒有。
-                let rpSub = '領取紅包', rpDim = '';
+                let rpSub = '領取紅包', rpDim = '';   // rpDim：領完了整張淡掉（.is-empty）
                 try {
                     const _rd = (win.wxApp && win.wxApp._getRedPacketData) ? win.wxApp._getRedPacketData(rpRef) : null;
                     if (_rd && _rd.totalAmount != null) {
@@ -642,14 +632,14 @@
                         const _got = _list.reduce(function (n, x) { return n + (Number(x && x.amount) || 0); }, 0);
                         const _left = Number(_rd.totalAmount) - _got;
                         const _slots = Number(_rd.totalCount || 1) - _list.length;
-                        if (_left <= 0.001 || _slots <= 0) { rpSub = '已領完'; rpDim = 'opacity:0.55;'; }
+                        if (_left <= 0.001 || _slots <= 0) { rpSub = '已領完'; rpDim = 'is-empty'; }
                         else if (_list.some(function (x) { try { return x && win.WX_ME.isMine(x.name); } catch (e) { return false; } })) { rpSub = '已領取'; }
                     }
                 } catch (e) {}
-                return `<div style="width: 220px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; font-family: sans-serif; ${rpDim}" onclick="${app}.openRedPacketById('${rpRef}')"><div style="background: #fa9d3b; padding: 15px; display: flex; align-items: center;"><div style="width: 32px; height: 42px; background: #e64340; border-radius: 4px; position: relative; margin-right: 12px; flex-shrink: 0; display:flex; justify-content:center; align-items:center; border:1px solid #f8b97a;"><div style="width:18px; height:18px; background:#f6d147; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#e64340; font-weight:bold; font-size:11px;">¥</div></div><div style="color: white; flex: 1; overflow:hidden;"><div style="font-size: 15px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${memo}</div><div style="font-size: 12px; opacity: 0.8;">${rpSub}</div></div></div><div style="background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display:flex; justify-content:space-between; align-items:center;"><span>微信紅包</span></div></div>`;
+                return `<div class="wx-rpc-card ${rpDim}" onclick="${app}.openRedPacketById('${rpRef}')"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${memo}</div><div class="wx-rpc-sub">${rpSub}</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
             });
-            html = html.replace(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; return `<div style="width:230px; border-radius:6px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.1); background:#fff; cursor:default; font-family: sans-serif;"><div style="height:120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; position:relative; background-color:#e6e6e6;"><div style="width:100%; height:100%; background:rgba(0,0,0,0.05);"></div><div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -80%); font-size:32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color:#e64340;"><i class="fa-solid fa-location-dot"></i></div></div><div style="background:#55d967; padding:10px 12px; color:white; display:flex; flex-direction:column; justify-content:center;"><div style="font-size:15px; font-weight:bold; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div><div style="font-size:11px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${address}</div></div></div>`; });
-            html = html.replace(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${content}')"` : ''; return `<div ${vidClick} style="margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: ${isUrl ? 'pointer' : 'default'}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><div style="position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8;"></div><div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2;"><div style="width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px;"></div></div><div style="position: absolute; bottom: 10px; left: 12px; color: #fff; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div style="position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2;">00:15</div></div>`; });
+            html = html.replace(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; return `<div class="wx-loc-card"><div class="wx-loc-map"><div class="wx-loc-shade"></div><div class="wx-loc-pin"><i class="fa-solid fa-location-dot"></i></div></div><div class="wx-loc-info"><div class="wx-loc-name">${name}</div><div class="wx-loc-addr">${address}</div></div></div>`; });
+            html = html.replace(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${content}')"` : ''; return `<div ${vidClick} class="wx-vcard${isUrl ? ' is-link' : ''}"><div class="wx-vcard-bg"></div><div class="wx-vcard-play"></div><div class="wx-vcard-title"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div class="wx-vcard-dur">00:15</div></div>`; });
             html = html.replace(tagRe(MSG_TAG.FILE), (m, t, filename) => { filename = filename.trim(); let ext = filename.split('.').pop().toLowerCase(); let iconColor = '#999'; let iconText = '?'; if (ext.match(/ppt|pptx/)) { iconColor = '#f4511e'; iconText = 'P'; } else if (ext.match(/doc|docx/)) { iconColor = '#4b89dc'; iconText = 'W'; } else if (ext.match(/xls|xlsx/)) { iconColor = '#2e7d32'; iconText = 'X'; } else if (ext.match(/pdf/)) { iconColor = '#e53935'; iconText = '<span style="font-size:10px">PDF</span>'; } else if (ext.match(/txt/)) { iconColor = '#999'; iconText = 'T'; } let size = (Math.random() * 5 + 1).toFixed(1) + " MB"; return `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${filename}</div><div class="wx-file-size">${size}</div></div><div class="wx-file-icon" style="background:${iconColor}">${iconText}</div></div>`; });
             html = html.replace(tagRe(MSG_TAG.STICKER), (match, tag, content) => {
                 content = content.trim();

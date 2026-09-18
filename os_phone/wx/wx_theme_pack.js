@@ -52,6 +52,9 @@
     const BUBBLE_VAR_RE = /^--(?:pbub-|wx-bubble-)/i;
     // 弄不見就回不去的那些
     const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|btn-(?:confirm|cancel))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-/i;
+    // 聊天室裡的卡片（轉帳、紅包、禮物、位置、影片、檔案、連結、收款碼、分享、語音、通話、外送）：跟著主題換長相，
+    //   但金額、狀態字（已收款、已領完、已過期）不准被藏掉——她點下去要知道收了沒
+    const CARD_RE = /wx-(?:tf-|rpc-|gift-|loc-|vcard|file-|link-|receive-|wb-share-|app-share-|vmsg|call-rec)|wxto-card/i;
     const ROOT_RE = /^\s*(?::root|html|body)\s*$/i;
     // 🚨 頭像是一張照片，放在元素自己的背景圖上。主題寫 background 就會把照片整個蓋掉
     //    （她套的第一套：頭像全變成黃色六角形）。頭像只准改形狀、框、陰影、大小，背景那兩句拿掉。
@@ -100,7 +103,8 @@
     }
 
     function _cleanDecls(cssText, sel) {
-        const prot = PROTECT_RE.test(sel);
+        const card = CARD_RE.test(sel);
+        const prot = PROTECT_RE.test(sel) || card;
         const avatar = AVATAR_RE.test(sel);
         const title = TITLE_RE.test(sel);
         const topbar = _isTopbar(sel);
@@ -135,6 +139,10 @@
                 if (prop === 'visibility' && v === 'hidden') return;
                 if (prop === 'pointer-events' && v === 'none') return;
                 if (prop === 'opacity' && parseFloat(v) < 0.3) return;
+            }
+            if (card) {
+                if (prop === 'color' && v === 'transparent') return;                        // 字弄成透明＝藏起來
+                if (prop === 'font-size' && parseFloat(v) === 0) return;
             }
             keep.push(prop + ': ' + val);
         });
@@ -310,6 +318,7 @@
         '底部分頁列：.wx-bottom-nav；每一格 .wx-tab（選中的那格多一個 .active）；圖示 .wx-tab-icon；字 .wx-tab-txt；紅點數字 .wx-tab-badge。圖示和字的顏色都跟著 .wx-tab 的 color 走，選中與沒選中的顏色都要寫',
         '聊天室：整頁 .wx-page-room；背景 .wx-room-bg；訊息捲動區 .wx-room-scroll；系統提示那一行 .wx-system-notice；時間分隔 .wx-time-stamp；聊天室裡的頭像 .wx-bubble-avatar；對方訊息上面那條可以點開的「思考」.wx-think-fold（標題列 .wx-think-head，點開的內容 .wx-think-body，底色與字色要跟聊天室背景分得開）',
         '輸入列：整條 .wx-footer-wrapper；.wx-input-bar；打字框外框 .wx-input-box；打字框 .wx-input-real；送出 .wx-send-btn；加號 .wx-plus-btn',
+        '聊天室裡的卡片（跟著主題換長相）：轉帳 .wx-tf-card（已收款多 .is-ok，退回或過期多 .is-back），圖示圈 .wx-tf-icon，標題 .wx-tf-title，小字 .wx-tf-sub；紅包 .wx-rpc-card（領完多 .is-empty），上半 .wx-rpc-top，紅包袋 .wx-rpc-env，袋上的圓 .wx-rpc-coin，祝福語 .wx-rpc-memo，狀態 .wx-rpc-sub，下緣 .wx-rpc-foot；禮物 .wx-gift-card-blue，上半 .wx-gift-top，圖示 .wx-gift-icon-gold，字 .wx-gift-title-text，下緣 .wx-gift-footer；位置 .wx-loc-card，地圖 .wx-loc-map，圖釘 .wx-loc-pin，下半 .wx-loc-info，地名 .wx-loc-name，地址 .wx-loc-addr；影片 .wx-vcard，播放鈕 .wx-vcard-play，標題 .wx-vcard-title，時長 .wx-vcard-dur；檔案 .wx-file-card，檔名 .wx-file-name，大小 .wx-file-size；連結 .wx-link-msg，標題 .wx-link-title，下緣 .wx-link-foot，右邊縮圖 .wx-link-thumb；收款碼 .wx-receive-msg，上緣 .wx-receive-head，碼 .wx-receive-qr，金額 .wx-receive-amt，下緣 .wx-receive-foot；微博分享 .wx-wb-share-card；其他 app 分享 .wx-app-share-card；外送單 .wxto-card，上緣 .wxto-card-hd，店名 .wxto-card-shop，品項 .wxto-card-items，金額 .wxto-card-amt，下緣 .wxto-card-ft',
         '加號打開的功能面板：.wx-action-panel；每個功能 .wx-grid-item；圖示 .wx-grid-icon；字 .wx-grid-label；翻頁點 .wx-dot（目前那頁多 .active）',
         '通訊錄：分區 .wx-contact-section；每個人 .wx-contact-item；名字 .wx-contact-name；圖示 .wx-contact-icon',
         '「我」那頁上方：.wx-me-header；頭像 .wx-me-avatar；名字 .wx-me-name；帳號 .wx-me-id；簽名 .wx-me-signature',
@@ -341,6 +350,7 @@
             '',
             '規則：',
             '・訊息泡泡不歸主題管，不要寫任何跟泡泡有關的樣式。',
+            '・聊天室裡的卡片要跟整套風格一致，但每一種都要一眼認得出是什麼（紅包還是紅包、轉帳還是轉帳）；金額、店名、狀態字要清楚；已收款、退回、領完這幾種要跟還沒處理的看得出不同。檔案圖示 .wx-file-icon 的底色代表檔案種類，不要改。',
             '・不要把任何東西藏起來、弄透明、弄得點不到；不要用 position: fixed；寬高不要用螢幕單位（vw、vh）。',
             '・這支 app 自己的樣式有不少寫在元素身上，要蓋過它們就加 !important。',
             '・字型只能從 Google Fonts 用 @import 引入，其他外部檔案不要用。',

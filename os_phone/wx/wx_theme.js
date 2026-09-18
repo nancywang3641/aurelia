@@ -433,6 +433,44 @@
             .wx-rp-item-amount { font-size: 15px; font-weight: bold; color: #c2410c; flex-shrink: 0; }   /* 橘金在白底只有 2.11:1，這是最該看清的數字 */
             .wx-rp-close { text-align: center; padding: 15px; font-size: 14px; color: var(--wx-link); cursor: pointer; border-top: 1px solid var(--wx-line); font-weight: 500; }
 
+            /* ========== 轉帳／紅包／位置／影片卡片（以前整張寫在元素身上，主題抓不到；搬成零件，長相照舊） ========== */
+            .wx-tf-card { background: #fa9d3b; color: #fff; padding: 15px; border-radius: 4px; min-width: 210px; display: flex; flex-direction: column; gap: 5px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+            .wx-tf-card.is-ok { background: #f6e3c8; color: #b8702b; }
+            .wx-tf-card.is-back { background: #e6e6e6; color: #666; }
+            .wx-tf-row { display: flex; align-items: center; gap: 10px; }
+            .wx-tf-icon { border: 2px solid currentColor; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; flex-shrink: 0; }
+            .wx-tf-card.is-ok .wx-tf-icon { border-color: #d99a5e; }
+            .wx-tf-card.is-back .wx-tf-icon { border-color: #999; }
+            .wx-tf-text { overflow: hidden; }
+            .wx-tf-title { font-size: 15px; font-weight: 500; white-space: nowrap; }
+            .wx-tf-sub { font-size: 12px; opacity: 0.8; white-space: nowrap; }
+
+            .wx-rpc-card { width: 220px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; font-family: sans-serif; }
+            .wx-rpc-card.is-empty { opacity: 0.55; }
+            .wx-rpc-top { background: #fa9d3b; padding: 15px; display: flex; align-items: center; }
+            .wx-rpc-env { width: 32px; height: 42px; background: #e64340; border-radius: 4px; position: relative; margin-right: 12px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; border: 1px solid #f8b97a; }
+            .wx-rpc-coin { width: 18px; height: 18px; background: #f6d147; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #e64340; font-weight: bold; font-size: 11px; }
+            .wx-rpc-text { color: #fff; flex: 1; overflow: hidden; }
+            .wx-rpc-memo { font-size: 15px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .wx-rpc-sub { font-size: 12px; opacity: 0.8; }
+            .wx-rpc-foot { background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display: flex; justify-content: space-between; align-items: center; }
+
+            .wx-loc-card { width: 230px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); background: #fff; cursor: default; font-family: sans-serif; }
+            .wx-loc-map { height: 120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; background-color: #e6e6e6; position: relative; }
+            .wx-loc-shade { width: 100%; height: 100%; background: rgba(0,0,0,0.05); }
+            .wx-loc-pin { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -80%); font-size: 32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color: #e64340; }
+            .wx-loc-info { background: #55d967; padding: 10px 12px; color: #fff; display: flex; flex-direction: column; justify-content: center; }
+            .wx-loc-name { font-size: 15px; font-weight: bold; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .wx-loc-addr { font-size: 11px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+            .wx-vcard { margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: default; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+            .wx-vcard.is-link { cursor: pointer; }
+            .wx-vcard-bg { position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8; }
+            .wx-vcard-play { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2; }
+            .wx-vcard-play::after { content: ''; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px; }
+            .wx-vcard-title { position: absolute; bottom: 10px; left: 12px; color: #fff; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%; }
+            .wx-vcard-dur { position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2; }
+
             /* ========== 微博分享卡片 ========== */
             .wx-wb-share-card { width: 210px; background: var(--wx-surface); border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--wx-line); }
             .wx-wb-share-top { background: #ff8200; padding: 6px 10px; display: flex; align-items: center; }
