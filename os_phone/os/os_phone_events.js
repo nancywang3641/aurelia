@@ -8,8 +8,10 @@
 //
 //   兩種來源：
 //     ・讀取型 addSource(id, fn)：資料本來就存在別處的（微信的聊天記錄），送的時候去讀「那個時間點之後」的。
-//       fn(故事id, from) → Promise<[{ name, last, lines:[…] }]>
-//     ・記一筆型 record({ room, line })：沒有自己的記錄可讀的（之後的創作室 app、分享…），往這本裡記。
+//       fn(故事id, from, snaps) → Promise<[{ name, last, lines:[…], snap? }]>
+//       資料是「一份現況」沒有時間可比的（創作室 app 存的行程、清單），來源自己拿 snaps[鍵] 跟現在比，
+//       變了才回那一格，並帶 snap:{ key, val }；正文回來 commit 時才記下，下一輪就不再送。
+//     ・記一筆型 record({ room, line })：沒有自己的記錄可讀的（創作室 app 的 st.toStory、之後的分享…），往這本裡記。
 //
 //   送出流程：build(mode) 組這一輪要送的 → 正文真的回來了 commit() 才記成送過（失敗或按停，下一輪再送）。
 //     mode 'redo'＝重新生成／換一個回覆：送上一次那一批；'skip'＝續寫之類不是她說了一句話的：不送。
@@ -79,31 +81,44 @@
         const cid = _cid();
         if (cid == null || !win.OS_DB || !win.OS_DB.getAppData) return { text: '', from: 0 };
         const st = (await _get('state', cid)) || {};
-        if (mode === 'redo') return { text: st.lastText || '', from: st.lastFrom || st.lastEnd || 0 };
-        if (mode === 'skip') return { text: '', from: st.lastEnd || 0 };
+        if (mode === 'redo') return { text: st.lastText || '', from: st.lastFrom || st.lastEnd || 0, keys: st.lastKeys || [] };
+        if (mode === 'skip') return { text: '', from: st.lastEnd || 0, keys: [] };
         const now = Date.now();
         const from = st.lastEnd || (now - FIRST_HOURS * H);
+        const snaps = st.snaps || {};
         let rooms = [];
         for (let i = 0; i < _sources.length; i++) {
-            try { const r = await _sources[i].fn(cid, from); if (Array.isArray(r)) rooms = rooms.concat(r); }
+            try { const r = await _sources[i].fn(cid, from, snaps); if (Array.isArray(r)) rooms = rooms.concat(r); }
             catch (e) { console.warn('[手機事件簿] 「' + _sources[i].id + '」讀不到：', (e && e.message) || e); }
         }
         rooms = rooms.concat(await _recorded(cid, from)).filter(function (r) { return r && r.lines && r.lines.length; });
         rooms.sort(function (a, b) { return (a.last || 0) - (b.last || 0); });   // 先聊完的排前面
         const text = _format(rooms);
-        _pending = { cid: cid, from: from, until: now, text: text };
-        return { text: text, from: from };
+        const newSnaps = {};
+        rooms.forEach(function (r) { if (r.snap && r.snap.key) newSnaps[r.snap.key] = r.snap.val; });
+        const keys = Object.keys(newSnaps);
+        _pending = { cid: cid, from: from, until: now, text: text, snaps: newSnaps };
+        return { text: text, from: from, keys: keys };
+    }
+    // 只看不動：這一輪不送事件簿的那種生成（背景那些）要知道「送到哪了」時用，不會蓋掉正在等的那一批
+    async function peek() {
+        const cid = _cid();
+        if (cid == null || !win.OS_DB || !win.OS_DB.getAppData) return { from: 0, keys: [], snaps: {} };
+        const st = (await _get('state', cid)) || {};
+        return { from: st.lastEnd || 0, keys: [], snaps: st.snaps || {} };
     }
     // 正文真的回來了：把這一批記成送過
     async function commit() {
         const p = _pending;
         _pending = null;
         if (!p) return;
-        await _put('state', { lastEnd: p.until, lastFrom: p.from, lastText: p.text }, p.cid);
+        const old = (await _get('state', p.cid)) || {};
+        const sn = Object.assign({}, old.snaps || {}, p.snaps || {});
+        await _put('state', { lastEnd: p.until, lastFrom: p.from, lastText: p.text, lastKeys: Object.keys(p.snaps || {}), snaps: sn }, p.cid);
     }
     function cancel() { _pending = null; }
 
-    const API = { addSource: addSource, record: record, build: build, commit: commit, cancel: cancel };
+    const API = { addSource: addSource, record: record, build: build, peek: peek, commit: commit, cancel: cancel };
     win.OS_PHONE_EVENTS = API;
     window.OS_PHONE_EVENTS = API;
 })();

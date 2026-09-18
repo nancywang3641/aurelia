@@ -265,7 +265,7 @@
 - 禁在按鈕或標籤文字加 ASCII 裝飾（[ ]、<< >>、» «）。禁左側色條（border-left 當 accent）、禁 Markdown 引用（行首大於號會被 st.md 畫成左邊一條槓）。
 - js 裡禁止出現字串字面 $1（引擎的正則層會當成 capture group 切掉、整段 js 炸）。自寫 regex 替換用 callback：.replace(rx, function(_, p1){ return '<b>' + p1 + '</b>'; })。
 - 解析資料只用 st.parse() 或 st.parseText()，禁自己對 lines 用 regex 切、禁 JSON.parse。渲染含標籤的字串用 innerHTML。文字塞進畫面前先過一手：短的（名字、標籤、單欄欄位）用 st.esc()；整段文章（st.callAI 回來的、或資料裡那種會換行分段的長內容）用 st.md()，它會把換行、段落、粗體排好。長內容直接 textContent 或只 st.esc()，整段會擠成沒有段落的一坨。
-- 送進劇情或對話只准用 st.toChat／st.toSystem（要用得先點功能 chip 把用法帶進來）。絕對禁止 createChatMessages、TavernHelper、generateRaw、直接操作 #send_textarea。沒帶那個 chip 就不做送進對話這件事。
+- 貼進輸入框或插一則訊息進對話只准用 st.toChat／st.toSystem（要用得先點功能 chip 把用法帶進來）；沒帶那個 chip 就不做這件事。讓劇情知道使用者在 App 裡做了什麼用 st.toStory，不需要 chip。絕對禁止 createChatMessages、TavernHelper、generateRaw、直接操作 #send_textarea。
 
 ## 4. st：你唯一能用的 API（封閉清單）
 st 只有下面這些，一個不多。沒列的一律不存在，不准自己發明或猜（沒有 st.char、st.player、st.getUser、st.user.name、st.data、st.save）。寫成 xxx() 的是函式，要加括號；標「Promise」的要 await。
@@ -300,6 +300,9 @@ st 只有下面這些，一個不多。沒列的一律不存在，不准自己�
 - st.toast(訊息[, { type:'error' 或 color:'#xxx' }])：短暫提示。別自己做 toast。
 - st.confirm(訊息[, { danger:true, okText, cancelText }]) → Promise<布林>。危險動作先問；別用 window.confirm。
 - st.loading(元素或選擇器, true/false[, '生成中…'])：轉圈遮罩。
+
+交給劇情
+- st.toStory(一句話) → Promise<布林>。使用者在 App 裡做完一件劇情該知道的事，就記一筆；下次劇情接著寫時會帶到，只帶一次，不會出現在對話裡。只在使用者按了會完成某件事的按鈕之後呼叫；載入、瀏覽、切頁不記，生成鈕產出的內容也不記。一句話寫清楚是使用者做的、做了什麼，不要寫成給劇本 AI 的指示。
 
 送進對話（要先點功能 chip 帶用法）
 - st.toChat(文字[, opts])：貼回輸入框，使用者自己送。
@@ -2957,6 +2960,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 } catch (e) { console.error('[st.callAI]', e); return ''; }
             },
             remember() { /* 預覽不寫真實記憶 */ },
+            toStory() { return Promise.resolve(false); },   // 預覽不記進事件簿
             getCurrentChars() {   // 當前聊天室出現過的角色 [{name,count}]，做角色選單用
                 const R = window.VN_READER || (window.parent && window.parent.VN_READER);
                 return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
@@ -3047,6 +3051,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'feedRemove:function(id){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.remove(' + JSON.stringify(String(tpl.tagId || '')) + ',id):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
             +   'toChat:function(t,o){try{return window.toChat?window.toChat(t,o):false;}catch(e){return false;}},'
             +   'toSystem:function(t){try{return window.toSystem?window.toSystem(t):false;}catch(e){return false;}},'
+            +   'toStory:function(t){try{return window.toStory?window.toStory(t):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
             + '};'
             + 'var onComplete=function(){if(window.goBack)window.goBack();};'
             + '(async function(){try{' + js + '}catch(e){console.error("[phone tpl]",e);}})();'
@@ -3194,7 +3199,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
       feedUpdate: function(id, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.update(${JSON.stringify(String(data.tagId || ''))}, id, fl) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
       feedRemove: function(id){ try { var F = ctx.VN_PANEL_FEED; return F ? F.remove(${JSON.stringify(String(data.tagId || ''))}, id) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
       saveData: function(k, v){ try { if (window.saveData) window.saveData(k, v); } catch(e){} },
-      loadData: function(k){ try { return window.loadData ? window.loadData(k) : null; } catch(e){ return null; } }
+      loadData: function(k){ try { return window.loadData ? window.loadData(k) : null; } catch(e){ return null; } },
+      toStory: function(t){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var B = ctx.OS_PHONE_EVENTS; t = String(t == null ? '' : t).trim(); return (B && B.record && t) ? B.record({ room: ${JSON.stringify(String(data.tagId || ''))} || '手機', line: t }) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } }
     };
     // ============================================================
     const __onComplete = function(){};
