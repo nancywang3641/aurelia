@@ -7,6 +7,66 @@
 // 3. 🔥 新增：核彈級「一鍵格式化」雙重確認清空數據功能。
 // ----------------------------------------------------------------
 (function() {
+    // ❔ 設定旁邊問號點開的說明（AUI.helpBtn），面板上不掛說明文字；鍵名 ss_＋當初那段說明在的行號，只是名字
+    function _regHelp() {
+        const A = window.AUI || (window.parent && window.parent.AUI);
+        if (!A || !A.registerHelp) return false;
+        A.registerHelp({
+            ss_1249: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
+            ss_1269: { title: '請求格式', body: '回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。' },
+            ss_1278: { title: '自訂前置指令', body: '這段會放在主模型每次收到的訊息最前面。直連、托管、酒館連線都有效；用酒館連線時每個連接預設各記一份。\n留空就不放。' },
+            ss_1298: { title: '注入 Preset 自訂條目', body: '把你挑的那個 Preset 裡自己寫的條目，放進主模型的指令裡。要裝酒館助手才有。' },
+            ss_1354: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
+            ss_1367: { title: '同步主模型 URL 與 Key', body: '共用主模型的網址與密鑰。' },
+            ss_1381: { title: '請求格式', body: '同步主模型時跟主模型走。' },
+            ss_1402: { title: '自訂前置指令', body: '這段會放在副模型每次收到的訊息最前面。\n留空就不放。' },
+            ss_1452: { title: '看圖', body: '手機裡傳的照片、頭像、記事本和微博的照片，要不要讓模型看。聊天的模型看不到圖，就選交給看圖小模型，再到下面把「看圖小模型」指到一條看得到圖的連線。' },
+            ss_1458: { title: '哪件事走哪個模型', body: '沒動過就跟以前一樣：正文、手機聊天、大總結走主模型，其餘走副模型。要分開再加通道。' },
+            ss_1464: { title: '我的通道', body: '主模型、副模型以外的連線，加幾條都行；加完回上面指定哪件事用它。' },
+            ss_1503: { title: '頭像 來源', body: '角色頭像／立繪用這個來源。' },
+            ss_1519: { title: '立繪模式', body: '開＝直接生全身立繪、不生頭像。' },
+            ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
+            ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
+            ss_1589: { title: '房間畫風', body: '房客的房間整間畫出來時用這個畫風。選好就生效。' },
+            ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
+            ss_1627: { title: '同步角色來源', body: '開啟後，背景和角色用同一個來源，不用再貼一次帳號。' },
+            ss_1652: { title: '背景尺寸', body: '全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。' },
+            ss_1733: { title: 'Flux 專用搭配檔', body: 'CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。' },
+            ss_1741: { title: 'Anima 專用搭配檔', body: '自然語言提示詞、CFG 自動≈4、採樣 er_sde/simple；上面「模型」要選 diffusion_models 裡的 anima-base（按測試會自動列出）。' },
+            ss_1777: { title: '場景插圖品質', body: '需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。' },
+            ss_1809: { title: '工作流模式', body: '用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。前提：先在酒館「圖像生成」擴展設好一個後端來源；沒設好會跳提示，不會偷偷換成別的來源。' },
+            ss_1840: { title: '模型', body: '角色頭像在「頭像」、背景在「背景」、場景在「插圖」分頁各自調。' },
+            ss_1878: { title: '帶參考圖', body: '插圖附上出場角色的立繪，最多四個。只用角色圖鑑裡你放的圖。' },
+            ss_1893: { title: '底詞', body: '貼站方給的位址就好，兩種送法會自己認：網址帶 /sdapi 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟上面的 Pollinations 都不是同一種送法，所以各佔一格、不能只換網址。' },
+            ss_1919: { title: '防超免費尺寸', body: '超過免費上限自動縮回。' },
+            ss_2095: { title: '場景插圖', body: '設定套用於所有場景插圖。' },
+            ss_2116: { title: '場景插圖尺寸', body: '插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。' },
+            ss_2125: { title: '自動插圖', body: '每輪記憶抽取時順便吐插圖、自動生圖。' },
+            ss_2130: { title: '角色名佔位', body: '副模型只寫 ##角色名##＋動作場景，外觀由系統用頭像自動填。' },
+            ss_2144: { title: '獨立插圖副模型', body: '插圖另開一通副模型（用副模型接口）、只吃下方規範、不背 AVS/記憶；開了上面的搭便車插圖就停。' },
+            ss_2188: { title: '角色頭像快取', body: '備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。' },
+            ss_2250: { title: '已存立繪', body: '純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。' },
+            ss_2272: { title: '語音轉文字', body: '微信輸入框按住說話、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。' },
+            ss_2308: { title: 'Group ID (必填)', body: '登入 Minimax 平台後，在帳號設定頁面可找到 Group ID。' },
+            ss_2349: { title: '音色設定檔', body: '每個角色設定顯示名、音色ID 與別名。' },
+            ss_2413: { title: '顯示位置', body: '換了要重整酒館才會挪過去。' },
+            ss_2420: { title: '高度', body: '100 就是跟對話框一樣高。調矮的話窗留在正中間，上下兩截露出聊天，改完當場就變。' },
+            ss_2428: { title: '訊息可收合', body: '為每則訊息加上收合按鈕，太長的訊息可以收起來。' },
+            ss_2443: { title: '回覆交給伺服器跑', body: '開了之後按送出就可以切出去或鎖屏，回覆由伺服器跑完再通知妳。只對「直連 API」有效，跟著酒館的那種不行。' },
+            ss_2455: { title: '沒有伺服器的守候', body: '沒填上面那個網址的時候用這個：想辦法讓手機別把奧瑞亞凍起來，角色才會在妳沒看的時候開口。三招各自獨立，開一個就有效果。這台做不到的那一招會自己淡掉。' },
+            ss_2462: { title: '當成在放音樂', body: '播一段完全沒有聲音的音軌，手機就會把奧瑞亞當成音樂 app 留著，鎖屏還會出現一張播放卡。妳自己正在放的音樂會被停掉。' },
+            ss_2470: { title: '螢幕不要自己關', body: '畫面亮著的時候不讓它自動暗掉，同時讓背景的計時器繼續走。比較耗電。' },
+            ss_2476: { title: '開一個小窗守著', body: '推出一個浮在最上面的小窗，上面寫著已經守了多久。小窗還在，這一頁就不會被凍起來。' },
+            ss_2486: { title: '有人找妳就通知', body: '妳沒在看的時候有人開口，就在手機上叮一下。第一次打開會問妳要不要允許通知。' },
+            ss_2499: { title: '手機通知', body: '丹自己醒來寫紙條的時候叮妳一下，點通知直接回到板子。' },
+            ss_2515: { title: '介面佈局', body: '頂部被遮擋時選「強制下移」。' },
+            ss_2529: { title: 'GitHub Gist 設定', body: '填 gist 權限的 Token，首次備份後自動存 ID。' },
+            ss_2549: { title: '本地全量備份', body: '匯出所有資料成 JSON 檔。' },
+        });
+        return true;
+    }
+    if (!_regHelp()) setTimeout(_regHelp, 1500);
+
     console.log('[PhoneOS] 載入系統設置模塊 (V6.0.0 Aurelia Style & Sync & Reset)...');
 
     // 定義系統級樣式 (全面替換為 Aurelia 咖啡流金風格)
@@ -1243,10 +1303,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-llm" class="api-subview">
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span><i class="fa-solid fa-link"></i> 用酒館的連線</span>
+                                <span><i class="fa-solid fa-link"></i> 用酒館的連線${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1249') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-system-api" ${llmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc">關掉就用下面自己填的網址與金鑰。</div>
                             <div id="st-profile-group" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(var(--os-ink-rgb), 0.10); padding-top:10px;">
                                 <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="os-st-profile">${primaryProfileOpts}</select>
@@ -1261,21 +1320,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <!-- 請求格式：OpenAI 相容（多數站）／Gemini 原生（打 /v1beta/models/…:generateContent，附安全過濾全關；接 Gemini CLI 的公益站要用這個） -->
                         <div class="set-group" id="api-format-group">
-                            <div class="set-label">請求格式</div>
+                            <div class="set-label">請求格式${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1269') : ''}</div>
                             <select class="set-select" id="os-api-format">
                                 <option value="openai" ${(llmConfig.apiFormat || 'openai') === 'openai' ? 'selected' : ''}>OpenAI 相容（多數站）</option>
                                 <option value="gemini" ${llmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生</option>
                             </select>
-                            <div class="set-desc">回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。</div>
                         </div>
 
                         <!-- 主模型的自訂前置指令：以前藏在「用酒館的連線」那格底下，PWA 沒有酒館整格不顯示、直連也沒吃到；
                              現在跟副模型一樣自己一格，酒館連線時每個連接預設各記各的，自己填網址時只有一份。 -->
                         <div class="set-group">
                             <details>
-                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在主模型所有訊息最前面；直連、托管、酒館連線都生效。用酒館連線時每個連接預設各記各的。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
+                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在主模型所有訊息最前面；直連、托管、酒館連線都生效。用酒館連線時每個連接預設各記各的。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1278') : ''}</summary>
                                 <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在主模型訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                                <div class="set-desc">留空＝不注入。</div>
                             </details>
                         </div>
 
@@ -1292,10 +1349,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group"${stHide}>
                             <div class="set-label" title="把指定 Preset 的自訂條目當系統提示詞注入（排除佔位符）。需安裝 TavernHelper 插件。">
-                                <span><i class="fa-solid fa-clipboard"></i> 注入 Preset 自訂條目</span>
+                                <span><i class="fa-solid fa-clipboard"></i> 注入 Preset 自訂條目${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1298') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="os-use-preset-prompts" ${llmConfig.usePresetPrompts ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc">注入指定 Preset 的自訂條目。</div>
                             <div id="os-preset-name-group" style="margin-top:10px; display:${llmConfig.usePresetPrompts ? 'flex' : 'none'}; gap:8px; align-items:center;">
                                 <select class="set-select" id="os-preset-name" style="flex:1;">
                                     <option value="">（使用當前 in_use Preset）</option>
@@ -1348,10 +1404,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-sec-llm" class="api-subview" style="display:none;">
                         <div class="set-group"${stHide}>
                             <div class="set-label">
-                                <span><i class="fa-solid fa-link"></i> 用酒館的連線</span>
+                                <span><i class="fa-solid fa-link"></i> 用酒館的連線${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1354') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-system-api" ${secLlmConfig.useSystemApi ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc">關掉就用下面自己填的網址與金鑰。</div>
                             <div id="sec-st-profile-group" class="${secLlmConfig.useSystemApi ? '' : 'hidden'}" style="margin-top:10px; border-top:1px solid rgba(var(--os-ink-rgb), 0.10); padding-top:10px;">
                                 <div class="set-label">選擇連接預設</div>
                                 <select class="set-select" id="sec-st-profile">${secondaryProfileOpts}</select>
@@ -1361,10 +1416,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group" id="sec-sync-primary-group" style="${secLlmConfig.useSystemApi ? 'display:none;' : ''}">
                              <div class="set-label" title="自動共用主模型的 API 地址與密鑰，模型仍可獨立選擇。">
-                                <span><i class="fa-solid fa-link"></i> 同步主模型 URL 與 Key</span>
+                                <span><i class="fa-solid fa-link"></i> 同步主模型 URL 與 Key${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1367') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="sec-sync-primary" ${secLlmConfig.syncWithPrimary ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc">共用主模型的網址與密鑰。</div>
                         </div>
 
                         <div class="set-group" id="sec-manual-api-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : 'display:flex;'}">
@@ -1373,12 +1427,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group" id="sec-api-format-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : ''}">
-                            <div class="set-label">請求格式</div>
+                            <div class="set-label">請求格式${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1381') : ''}</div>
                             <select class="set-select" id="sec-api-format">
                                 <option value="openai" ${(secLlmConfig.apiFormat || 'openai') === 'openai' ? 'selected' : ''}>OpenAI 相容（多數站）</option>
                                 <option value="gemini" ${secLlmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生</option>
                             </select>
-                            <div class="set-desc">同步主模型時跟主模型走。</div>
                         </div>
 
                         <div class="set-group">
@@ -1397,9 +1450,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group">
                             <details>
-                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／）都生效。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令</summary>
+                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／）都生效。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1402') : ''}</summary>
                                 <textarea class="set-input" id="sec-custom-cot" rows="7" placeholder="貼上要放在副模型訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(secLlmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                                <div class="set-desc">留空＝不注入。</div>
                             </details>
                         </div>
 
@@ -1448,20 +1500,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                     <div id="view-chan" class="api-subview" style="display:none;">
                         <div class="set-group" id="vision-group">
-                            <div class="set-label"><i class="fa-solid fa-eye"></i> 看圖</div>
-                            <div class="set-desc">手機裡傳的照片、頭像、記事本和微博的照片，要不要讓模型看。聊天的模型看不到圖，就選交給看圖小模型，再到下面把「看圖小模型」指到一條看得到圖的連線。</div>
+                            <div class="set-label"><i class="fa-solid fa-eye"></i> 看圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1452') : ''}</div>
                             <div id="vision-mode-box"></div>
                         </div>
 
                         <div class="set-group" id="route-group">
-                            <div class="set-label"><i class="fa-solid fa-shuffle"></i> 哪件事走哪個模型</div>
-                            <div class="set-desc">沒動過就跟以前一樣：正文、手機聊天、大總結走主模型，其餘走副模型。要分開再加通道。</div>
+                            <div class="set-label"><i class="fa-solid fa-shuffle"></i> 哪件事走哪個模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1458') : ''}</div>
                             <div id="route-table"></div>
                         </div>
 
                         <div class="set-group" id="channel-group">
-                            <div class="set-label"><i class="fa-solid fa-plug-circle-plus"></i> 我的通道</div>
-                            <div class="set-desc">主模型、副模型以外的連線，加幾條都行；加完回上面指定哪件事用它。</div>
+                            <div class="set-label"><i class="fa-solid fa-plug-circle-plus"></i> 我的通道${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1464') : ''}</div>
                             <div id="channel-list"></div>
                             <div class="btn-test" id="channel-add-btn" style="margin-top:10px;"><i class="fa-solid fa-plus"></i> 加一條通道</div>
                         </div>
@@ -1492,7 +1541,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🎭 頭像 分頁 body（char：角色頭像／立繪）── -->
                         <div id="img-tab-char" class="img-srctab-body">
                             <div class="set-group">
-                                <div class="set-label" title="角色頭像／立繪用這個來源。插圖在「插圖」分頁另選，可走不同渠道。"><i class="fa-solid fa-masks-theater"></i> 頭像 來源</div>
+                                <div class="set-label" title="角色頭像／立繪用這個來源。插圖在「插圖」分頁另選，可走不同渠道。"><i class="fa-solid fa-masks-theater"></i> 頭像 來源${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1503') : ''}</div>
                                 <select class="set-select" id="img-service-living">
                                     <option value="pollinations" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
@@ -1500,7 +1549,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="custom_api" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">角色頭像／立繪用這個來源。</div>
                             </div>
                             <div class="set-group">
                                 <div class="set-label" title="設了＝所有接口都用這格（蓋過預設包）。留空＝交給接口：ComfyUI 用基本參數/預設包調的寬高、Pollinations 512、NovelAI 1024。"><i class="fa-solid fa-ruler-combined"></i> 角色頭像尺寸</div>
@@ -1514,9 +1562,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </select>
                             </div>
                             <div class="set-group">
-                                <div class="set-label" title="關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像；適合繪圖模型生全身穩定的情況。">立繪模式</div>
+                                <div class="set-label" title="關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像；適合繪圖模型生全身穩定的情況。">立繪模式${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1519') : ''}</div>
                                 <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${vnD.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
-                                <div class="set-desc">開＝直接生全身立繪、不生頭像。</div>
                                 <!-- 🎯 一次幾個：把幾個角色擠進同一張寬圖生出來再切開。
                                      🚨🚨 這一格永遠能選，判斷只拿來寫底下那行字、不准拿來鎖。
                                         我第一版是「認不出官方就整格不顯示」（她找不到，問「在哪開?」），
@@ -1540,7 +1587,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <!-- ── 🎬 插圖 分頁 body（scene：場景插圖／CG 來源，可與頭像不同渠道）── -->
                         <div id="img-tab-scene" class="img-srctab-body" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label" title="場景插圖／CG 用這個來源，可跟頭像不同渠道（例如頭像走 Anima、插圖走 Pollinations）。"><i class="fa-solid fa-clapperboard"></i> 插圖 來源</div>
+                                <div class="set-label" title="場景插圖／CG 用這個來源，可跟頭像不同渠道（例如頭像走 Anima、插圖走 Pollinations）。"><i class="fa-solid fa-clapperboard"></i> 插圖 來源${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1551') : ''}</div>
                                 <select class="set-select" id="img-service-scene">
                                     <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
@@ -1548,14 +1595,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="custom_api" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">場景插圖／CG 用這個來源。</div>
                             </div>
                         </div>
 
                         <!-- ── 🗺️ 小地圖 分頁 body（map：場景俯視小地圖底板，畫風跟背景分開）── -->
                         <div id="img-tab-map" class="img-srctab-body" style="display:none;">
                             <div class="set-group">
-                                <div class="set-label" title="場景俯視小地圖底板用這個來源，畫風跟背景分開（例：俯視平面圖模型）。"><i class="fa-solid fa-map"></i> 小地圖 來源</div>
+                                <div class="set-label" title="場景俯視小地圖底板用這個來源，畫風跟背景分開（例：俯視平面圖模型）。"><i class="fa-solid fa-map"></i> 小地圖 來源${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1566') : ''}</div>
                                 <select class="set-select" id="img-service-map">
                                     <option value="pollinations" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
                                     <option value="novelai" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
@@ -1563,7 +1609,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="custom_api" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
                                     <option value="comfyui_direct" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。</div>
                             </div>
                         </div>
 
@@ -1571,7 +1616,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="img-tab-misc" class="img-srctab-body" style="display:none;">
                             <!-- 🏠 房間畫風：房客的房間整間生出來時用哪個畫風包。選了就存(localStorage)、不用按底部保存。 -->
                             <div class="set-group" id="img-room-style-block">
-                                <div class="set-label" title="包租婆的房客房間是「整間一次畫出來」，用這裡選的畫風。"><i class="fa-solid fa-house"></i> 房間畫風</div>
+                                <div class="set-label" title="包租婆的房客房間是「整間一次畫出來」，用這裡選的畫風。"><i class="fa-solid fa-house"></i> 房間畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1589') : ''}</div>
                                 <select class="set-select" id="img-room-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">
                                     ${(() => {
                                         const _w = window.parent || window;
@@ -1586,12 +1631,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         }).join('');
                                     })()}
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">房客的房間整間畫出來時用這個畫風。選好就生效。</div>
                             </div>
 
                             <!-- 🚪 世界門旅人畫風：展開世界後，大廳那四個旅人的小人自動用這個畫風生出來（不選＝維持剪影） -->
                             <div class="set-group" id="img-wg-sprite-block">
-                                <div class="set-label" title="展開世界後，大廳的旅人小人會自動用這個畫風生成，不用一個一個進裝扮室。"><i class="fa-solid fa-door-open"></i> 世界門旅人畫風</div>
+                                <div class="set-label" title="展開世界後，大廳的旅人小人會自動用這個畫風生成，不用一個一個進裝扮室。"><i class="fa-solid fa-door-open"></i> 世界門旅人畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1616') : ''}</div>
                                 <select class="set-select" id="img-wg-sprite" onchange="window._saveWgSpritePack && window._saveWgSpritePack(this.value)">
                                     ${(() => {
                                         const _w = window.parent || window;
@@ -1613,7 +1657,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         return html;
                                     })()}
                                 </select>
-                                <div class="set-desc" style="margin-top:6px;">生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。</div>
                             </div>
                         </div>
 
@@ -1621,10 +1664,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="img-tab-bg" class="img-srctab-body" style="display:none;">
                             <div class="set-group">
                                 <div class="set-label">
-                                    <span><i class="fa-solid fa-link"></i> 同步角色來源</span>
+                                    <span><i class="fa-solid fa-link"></i> 同步角色來源${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1627') : ''}</span>
                                     <label class="toggle-switch"><input type="checkbox" id="img-sync-bg-to-char"><span class="slider"></span></label>
                                 </div>
-                                <div class="set-desc">開啟後，背景和角色用同一個來源，不用再貼一次帳號。</div>
                             </div>
                             <div class="set-group" id="img-bg-source-group">
                                 <div class="set-label"><i class="fa-solid fa-mountain-sun"></i> 背景・<i class="fa-solid fa-box"></i> 物品 來源</div>
@@ -1640,7 +1682,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-desc" id="img-bg-synced-note-text">（與角色相同）</div>
                             </div>
                             <div class="set-group">
-                                <div class="set-label" title="所有接口共用。"><i class="fa-solid fa-ruler-combined"></i> 背景尺寸</div>
+                                <div class="set-label" title="所有接口共用。"><i class="fa-solid fa-ruler-combined"></i> 背景尺寸${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1652') : ''}</div>
                                 <select class="set-select" id="img-bg-size" style="font-size:12px;">
                                     <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅 4:3，預設）</option>
                                     <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅 3:2）</option>
@@ -1649,7 +1691,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="832x1216"  ${(imgConfig.bgSize||'1024x768')==='832x1216'  ? 'selected':''}>832×1216（豎版 2:3）</option>
                                     <option value="768x1344"  ${(imgConfig.bgSize||'1024x768')==='768x1344'  ? 'selected':''}>768×1344（直立，手機全螢幕）</option>
                                 </select>
-                                <div class="set-desc">全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。</div>
                                 <div class="set-label" style="margin-top:12px;">背景生圖底詞</div>
                                 <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:55px;">${vnD.bgBasePrompt || ''}</textarea>
                                 <div class="set-label" style="margin-top:8px;"><i class="fa-solid fa-ban"></i> 背景 Negative</div>
@@ -1723,22 +1764,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </select>
                                 </div>
                                 <div class="set-group ${imgConfig.comfyuiDirect?.modelType==='flux'?'':'hidden'}" id="img-cfd-flux-fields">
-                                    <div class="set-desc" title="檔名一般跟你下載的一致，不用改。">Flux 專用搭配檔</div>
+                                    <div class="set-desc" title="檔名一般跟你下載的一致，不用改。">Flux 專用搭配檔${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1733') : ''}</div>
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
                                         <div><div class="set-label" style="font-size:11px;">clip_l</div><input class="set-input" id="img-cfd-clipl" value="${imgConfig.comfyuiDirect?.fluxClipL || 'clip_l.safetensors'}"></div>
                                         <div><div class="set-label" style="font-size:11px;">t5xxl</div><input class="set-input" id="img-cfd-t5xxl" value="${imgConfig.comfyuiDirect?.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors'}"></div>
                                         <div><div class="set-label" style="font-size:11px;">ae VAE</div><input class="set-input" id="img-cfd-ae" value="${imgConfig.comfyuiDirect?.fluxAe || 'ae.safetensors'}"></div>
                                         <div><div class="set-label" style="font-size:11px;" title="建議 3.5。">Guidance</div><input class="set-input" id="img-cfd-guidance" type="number" step="0.1" min="0" max="10" value="${imgConfig.comfyuiDirect?.guidance ?? 3.5}"></div>
                                     </div>
-                                    <div class="set-desc" style="margin-top:4px;" title="CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。">Flux 模式：CFG 自動、引導靠 Guidance。</div>
                                 </div>
                                 <div class="set-group ${imgConfig.comfyuiDirect?.modelType==='anima'?'':'hidden'}" id="img-cfd-anima-fields">
-                                    <div class="set-desc" title="檔名跟你下載的一致，通常不用改。">Anima 專用搭配檔</div>
+                                    <div class="set-desc" title="檔名跟你下載的一致，通常不用改。">Anima 專用搭配檔${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1741') : ''}</div>
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
                                         <div><div class="set-label" style="font-size:11px;" title="qwen 編碼器。">文字編碼器</div><input class="set-input" id="img-cfd-anima-clip" value="${imgConfig.comfyuiDirect?.animaClip || 'qwen_3_06b_base.safetensors'}"></div>
                                         <div><div class="set-label" style="font-size:11px;" title="qwen VAE。">VAE</div><input class="set-input" id="img-cfd-anima-vae" value="${imgConfig.comfyuiDirect?.animaVae || 'qwen_image_vae.safetensors'}"></div>
                                     </div>
-                                    <div class="set-desc" style="margin-top:4px;" title="自然語言提示詞、CFG 自動≈4、採樣 er_sde/simple；上面「模型」要選 diffusion_models 裡的 anima-base（按測試會自動列出）。">Anima 模式：自然語言提示詞、CFG 自動。</div>
                                 </div>
                                 <div class="set-group">
                                     <div class="set-label">基本參數</div>
@@ -1761,7 +1800,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <button class="set-btn" id="img-cfd-add-lora" type="button" style="margin-top:6px;"><i class="fa-solid fa-plus"></i> 加 LoRA</button>
                                 </div>
                                 <div class="set-group">
-                                    <div class="set-label" title="只在「場景插圖」自動套用，頭像不套；會變慢。"><i class="fa-solid fa-image"></i> 場景插圖品質</div>
+                                    <div class="set-label" title="只在「場景插圖」自動套用，頭像不套；會變慢。"><i class="fa-solid fa-image"></i> 場景插圖品質${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1777') : ''}</div>
                                     <div class="cfd-scene-row">
                                         <label class="cfd-scene-chk">
                                             <input type="checkbox" id="img-cfd-scene-hires" ${imgConfig.comfyuiDirect?.sceneHires !== false ? 'checked' : ''}><i class="fa-solid fa-microscope"></i> 高清修復
@@ -1774,7 +1813,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             <input type="checkbox" id="img-cfd-scene-facedetailer" ${imgConfig.comfyuiDirect?.sceneFaceDetailer !== false ? 'checked' : ''}><i class="fa-solid fa-bullseye"></i> FaceDetailer 修臉
                                         </label>
                                     </div>
-                                    <div class="set-desc" title="需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。">場景小臉/遠景眼睛會清楚很多，但較慢。</div>
                                 </div>
                                 <div class="iface-section-title"><i class="fa-solid fa-pen-to-square"></i> 提示詞（底詞）</div>
                                 <div class="set-group">
@@ -1789,7 +1827,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </div>
                                 <div class="iface-section-title"><i class="fa-solid fa-gear"></i> 進階：自訂工作流</div>
                                 <div class="set-group">
-                                    <div class="set-label" title="想用自己的工作流再開，否則不用碰。">工作流模式</div>
+                                    <div class="set-label" title="想用自己的工作流再開，否則不用碰。">工作流模式${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1809') : ''}</div>
                                     <select class="set-select" id="img-cfd-wfmode">
                                         <option value="auto" ${(imgConfig.comfyuiDirect?.workflowMode||'auto')!=='custom'?'selected':''}>自動（推薦，用上面的設定就好）</option>
                                         <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼自己的工作流）</option>
@@ -1806,7 +1844,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="img-group-tavernsd" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd') ? '' : 'hidden'}">
                                 <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
                                 <div class="set-group">
-                                    <div class="set-desc" title="用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。前提：先在酒館「圖像生成」擴展設好一個後端來源；沒設好會跳提示，不會偷偷換成別的來源。">用酒館原生「圖像生成」擴展的後端生圖。</div>
                                 </div>
                             </div>
 
@@ -1818,7 +1855,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${imgConfig.pollinations.apiKey || ''}">
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label" title="按價格排序。">模型</div>
+                                        <div class="set-label" title="按價格排序。">模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1840') : ''}</div>
                                         <select class="set-select" id="img-pol-model">
                                             <option value="zimage" ${imgConfig.pollinations.model === 'zimage' ? 'selected' : ''}>Z-Image Turbo (0.002p)</option>
                                             <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>Flux Schnell (0.00175p)</option>
@@ -1837,7 +1874,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                             <option value="kontext" ${imgConfig.pollinations.model === 'kontext' ? 'selected' : ''}>FLUX.1 Kontext (0.04p)</option>
                                         </select>
                                     </div>
-                                    <div class="set-desc" title="角色頭像在「頭像」、背景在「背景」、場景在「插圖」分頁各自調。">尺寸已改到各部位分頁各自調。</div>
                                 </div>
                             </div>
 
@@ -1874,11 +1910,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         </select>
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label"><span><i class="fa-solid fa-images"></i> 帶參考圖</span><label class="toggle-switch"><input type="checkbox" id="img-capi-ref" ${_nodeVal(imgConfig.customApi?.refImages) ? 'checked' : ''}><span class="slider"></span></label></div>
-                                        <div class="set-desc">插圖附上出場角色的立繪，最多四個。只用角色圖鑑裡你放的圖。</div>
+                                        <div class="set-label"><span><i class="fa-solid fa-images"></i> 帶參考圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1878') : ''}</span><label class="toggle-switch"><input type="checkbox" id="img-capi-ref" ${_nodeVal(imgConfig.customApi?.refImages) ? 'checked' : ''}><span class="slider"></span></label></div>
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label" title="選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。">底詞</div>
+                                        <div class="set-label" title="選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。">底詞${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1893') : ''}</div>
                                         <div class="capi-pack-row">
                                             <select class="set-select" id="img-capi-pack" title="換一包就把那一包的底詞填進下面這格，當下就生效">${_capiPackOptionsHTML(imgConfig.customApi?.basePrompt || '')}</select>
                                             <button class="set-btn" id="img-capi-pack-save" type="button" title="把下面這格現在的字存成一包"><i class="fa-solid fa-floppy-disk"></i> 存成包</button>
@@ -1890,7 +1925,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <button class="set-btn" id="img-capi-test" type="button"><i class="fa-solid fa-plug"></i> 測試</button>
                                         <div class="set-desc" id="img-capi-status"></div>
                                     </div>
-                                    <div class="set-desc">貼站方給的位址就好，兩種送法會自己認：網址帶 <b>/sdapi</b> 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟上面的 Pollinations 都不是同一種送法，所以各佔一格、不能只換網址。</div>
                                 </div>
                             </div>
 
@@ -1915,8 +1949,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label" title="開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。"><span><i class="fa-solid fa-shield-halved"></i> 防超免費尺寸</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
-                                        <div class="set-desc">超過免費上限自動縮回。</div>
+                                        <div class="set-label" title="開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。"><span><i class="fa-solid fa-shield-halved"></i> 防超免費尺寸${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1919') : ''}</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label">模型版本</div>
@@ -2091,14 +2124,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <!-- ── 🎬 場景插圖（共用設定）｜屬「插圖」分頁 ── -->
                         <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(var(--os-ink-rgb), 0.12); padding-top:15px; margin-top:5px;">
-                            <div class="set-label" style="font-size:13px;" title="尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。"><i class="fa-solid fa-clapperboard"></i> 場景插圖</div>
-                            <div class="set-desc" style="margin-top:6px;">設定套用於所有場景插圖。</div>
+                            <div class="set-label" style="font-size:13px;" title="尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。"><i class="fa-solid fa-clapperboard"></i> 場景插圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2095') : ''}</div>
 
                             <div id="img-scene-body" style="margin-top:14px;">
 
                                 <!-- ── 場景插圖尺寸（獨立於主圖片尺寸）── -->
                                 <div style="margin-bottom:12px;">
-                                    <div class="set-label" style="font-size:11px;"><i class="fa-solid fa-ruler-combined"></i> 場景插圖尺寸</div>
+                                    <div class="set-label" style="font-size:11px;"><i class="fa-solid fa-ruler-combined"></i> 場景插圖尺寸${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2116') : ''}</div>
                                     <select class="set-select" id="img-scene-size" style="font-size:12px;" onchange="document.getElementById('img-scene-size-custom').style.display=(this.value==='custom')?'':'none';">
                                         <option value="512x512"   ${(imgConfig.sceneGen?.size||'1024x1024')==='512x512'   ? 'selected':''}>512×512（最快最省，較糊）</option>
                                         <option value="768x768"   ${(imgConfig.sceneGen?.size||'1024x1024')==='768x768'   ? 'selected':''}>768×768（平衡）</option>
@@ -2113,21 +2145,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); margin-top:3px;">← 越大越清晰但越耗點數。自訂填「寬x高」(數字)；多數模型建議用 64 的倍數(如 1024)。</div>
                                 </div>
 
-                                <div class="set-desc" style="margin-bottom:12px; font-size:11px;" title="插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。"><i class="fa-solid fa-palette"></i> 插圖底詞／負詞在接口設定區調整。</div>
                             </div>
                         </div>
 
                         <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
                             <div style="display:flex; align-items:center; justify-content:space-between;" title="開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會順便依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。其它觸發：主模型直接吐 [Scene|]（世界書開規則，最省）。">
-                                <span><i class="fa-solid fa-image"></i> 自動插圖</span>
+                                <span><i class="fa-solid fa-image"></i> 自動插圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2125') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc" style="margin-top:6px;">每輪記憶抽取時順便吐插圖、自動生圖。</div>
                             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;" title="開啟：副模型寫插圖 prompt 時只用 ##角色名##（或 ##代號##）代表角色，外觀由系統用該角色頭像生成詞自動填入（沒頭像退 AVS 簡易形象、再沒有留原名）。副模型 prompt 不用塞整塊外觀、不會越積越肥，外觀又跟頭像一致。關閉＝改回把近期角色外觀整塊塞給副模型。">
-                                <span><i class="fa-solid fa-tag"></i> 角色名佔位</span>
+                                <span><i class="fa-solid fa-tag"></i> 角色名佔位${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2130') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc" style="margin-top:6px;">副模型只寫 ##角色名##＋動作場景，外觀由系統用頭像自動填。</div>
                             <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()"><i class="fa-solid fa-pen"></i> 編輯角色外觀登記表</button>
                             <div class="set-desc" style="margin-top:4px;">列出每個角色的外觀（頭像生成詞），可直接改／刪／新增——修你之前的資料。</div>
                             <!-- 插圖指令：每個插圖來源一份，點進去整頁改（_openScenePromptPage） -->
@@ -2138,10 +2167,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                             <!-- 🎯 獨立插圖副模型：另開一通 chatSecondary、只吃規範、不背 AVS/記憶 -->
                             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px; border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:12px;" title="開啟：插圖改走「獨立一通副模型」(用 API 設定區的副模型接口)、只吃下方規範、不背 AVS/記憶，插圖更準。關閉＝走上面搭便車路(跟記憶/AVS 同一通)。">
-                                <span><i class="fa-solid fa-bullseye"></i> 獨立插圖副模型</span>
+                                <span><i class="fa-solid fa-bullseye"></i> 獨立插圖副模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2144') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-standalone-enabled" ${imgConfig.sceneGen?.standaloneEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc" style="margin-top:6px;">插圖另開一通副模型（用副模型接口）、只吃下方規範、不背 AVS/記憶；開了上面的搭便車插圖就停。</div>
                             <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="standalone">
                                 <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">獨立插圖規範</span><span class="vncfg-lp-open-n"></span><i class="fa-solid fa-chevron-right"></i>
                             </button>
@@ -2181,11 +2209,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <!-- 子: 頭像快取 -->
                             <div id="avatar-sub-cache" class="avatar-sub-view">
                                 <div class="set-group">
-                                    <div class="set-label" title="防重複生圖。"><i class="fa-solid fa-masks-theater"></i> 角色頭像快取</div>
+                                    <div class="set-label" title="防重複生圖。"><i class="fa-solid fa-masks-theater"></i> 角色頭像快取${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2188') : ''}</div>
                                     <div id="vncfg-avatar-mgr-list" style="margin-top:8px;"></div>
                                     <button class="set-btn" type="button" onclick="window.VN_PLAYER && window.VN_PLAYER.backupAvatarsToWorldbook && window.VN_PLAYER.backupAvatarsToWorldbook(this)"><i class="fa-solid fa-floppy-disk"></i> 備份頭像到角色世界書</button>
                                 </div>
-                                <div class="set-desc" style="margin-top:4px;" title="備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。">備份後本地快取清空也能讀回。</div>
                             </div>
 
                             <!-- 子: 角色立繪（去背工作室）-->
@@ -2243,11 +2270,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </div>
 
                                 <div class="set-group" style="margin-top:14px;">
-                                    <div class="set-label"><i class="fa-solid fa-book"></i> 已存立繪</div>
+                                    <div class="set-label"><i class="fa-solid fa-book"></i> 已存立繪${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2250') : ''}</div>
                                     <div id="sprite-list" style="margin-top:8px;">載入中...</div>
                                 </div>
 
-                                <div class="set-desc" style="margin-top:6px;" title="純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。"><i class="fa-solid fa-scissors"></i> 純色去背快、適合純色背景；<i class="fa-solid fa-wand-magic-sparkles"></i> AI 去背適合雜背景。</div>
                             </div>
                         </div>
                         <div id="view-img-bg" class="img-subtab-view" style="display:none;">
@@ -2268,8 +2294,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <!-- 🎙 她講話 → 變成字（OS_VOICE_INPUT）。跟下面「角色說話的聲音」是兩件事，選單在 wireChannels 的 paintVoice 畫 -->
                         <div class="set-group" id="voice-engine-group">
-                            <div class="set-label"><i class="fa-solid fa-microphone"></i> 語音轉文字</div>
-                            <div class="set-desc">微信輸入框按住說話、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。</div>
+                            <div class="set-label"><i class="fa-solid fa-microphone"></i> 語音轉文字${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2272') : ''}</div>
                             <div id="voice-engine-box"></div>
                         </div>
 
@@ -2303,9 +2328,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label">Group ID <span style="font-size:11px; color:#fc8181;">(必填)</span></div>
+                            <div class="set-label">Group ID <span style="font-size:11px; color:#fc8181;">(必填)</span>${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2308') : ''}</div>
                             <input class="set-input" id="mm-group-id" type="text" placeholder="請輸入 Minimax Group ID..." value="${minimaxConfig.groupId || ''}">
-                            <div class="set-desc">登入 Minimax 平台後，在帳號設定頁面可找到 Group ID。</div>
                         </div>
 
                         <div class="set-group">
@@ -2345,8 +2369,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="VN / wx 面板通用。每個角色可設定顯示名稱、Minimax 音色ID 與多個別名；VN 輸出的角色名會自動比對別名（大小寫不敏感）後播放對應音色。"><i class="fa-solid fa-masks-theater"></i> 音色設定檔</div>
-                            <div class="set-desc">每個角色設定顯示名、音色ID 與別名。</div>
+                            <div class="set-label" title="VN / wx 面板通用。每個角色可設定顯示名稱、Minimax 音色ID 與多個別名；VN 輸出的角色名會自動比對別名（大小寫不敏感）後播放對應音色。"><i class="fa-solid fa-masks-theater"></i> 音色設定檔${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2349') : ''}</div>
                             <div id="mm-profile-list" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
                             <div style="display:flex; gap:8px; margin-top:12px;">
                                 <div class="btn-test" id="mm-add-profile-btn" style="flex:1;">＋ 新增音色設定檔</div>
@@ -2405,27 +2428,24 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div id="gview-panel" class="gen-subview"${stHide}>
                         <div class="set-group">
-                            <div class="set-label"><i class="fa-solid fa-chess-rook"></i> 顯示位置</div>
+                            <div class="set-label"><i class="fa-solid fa-chess-rook"></i> 顯示位置${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2413') : ''}</div>
                             <select class="set-select" id="mp-mount-selector">
                                 <option value="#sheld" ${(tavernExt.mount?.selector || '#sheld') === '#sheld' ? 'selected' : ''}>整個對話框（推薦）</option>
                                 <option value="#chat" ${(tavernExt.mount?.selector || '#sheld') === '#chat' ? 'selected' : ''}>只在訊息區</option>
                             </select>
-                            <div class="set-desc">換了要重整酒館才會挪過去。</div>
 
-                            <div class="set-label" style="margin-top:14px;">高度</div>
+                            <div class="set-label" style="margin-top:14px;">高度${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2420') : ''}</div>
                             <div class="mp-height-row">
                                 <input class="set-input" type="number" id="mp-panel-height" min="30" max="100" step="5" placeholder="100" value="${tavernExt.panelHeight ?? ''}">
                                 <span class="mp-height-unit">%</span>
                             </div>
-                            <div class="set-desc">100 就是跟對話框一樣高。調矮的話窗留在正中間，上下兩截露出聊天，改完當場就變。</div>
                         </div>
 
                         <div class="set-group">
                             <div class="set-label">
-                                <span><i class="fa-solid fa-file-lines"></i> 訊息可收合</span>
+                                <span><i class="fa-solid fa-file-lines"></i> 訊息可收合${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2428') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="mp-message-collapse" ${tavernExt.messageCollapse !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc">為每則訊息加上收合按鈕，太長的訊息可以收起來。</div>
                         </div>
                         </div><!-- /gview-panel -->
 
@@ -2439,8 +2459,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div id="gview-back" class="gen-subview" style="display:none;">
                         <div class="set-group" id="relay-group">
-                            <div class="set-label"><i class="fa-solid fa-satellite-dish"></i> 回覆交給伺服器跑</div>
-                            <div class="set-desc">開了之後按送出就可以切出去或鎖屏，回覆由伺服器跑完再通知妳。只對「直連 API」有效，跟著酒館的那種不行。</div>
+                            <div class="set-label"><i class="fa-solid fa-satellite-dish"></i> 回覆交給伺服器跑${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2443') : ''}</div>
                             <input class="set-input" id="relay-url" placeholder="托管網址，例如 relay.你的網域" />
                             <input class="set-input" id="relay-token" type="password" placeholder="通行碼" style="margin-top:8px;" />
                             <div style="display:flex; gap:8px; margin-top:10px;">
@@ -2451,39 +2470,34 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                             <div class="set-group" id="ka-group">
-                                <div class="set-label"><i class="fa-solid fa-mug-saucer"></i> 沒有伺服器的守候</div>
-                                <div class="set-desc">沒填上面那個網址的時候用這個：想辦法讓手機別把奧瑞亞凍起來，角色才會在妳沒看的時候開口。三招各自獨立，開一個就有效果。這台做不到的那一招會自己淡掉。</div>
+                                <div class="set-label"><i class="fa-solid fa-mug-saucer"></i> 沒有伺服器的守候${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2455') : ''}</div>
 
                                 <div class="ka-item" id="ka-item-audio">
                                     <div class="set-label" style="margin-top:12px;">
-                                        <span><i class="fa-solid fa-music"></i> 當成在放音樂</span>
+                                        <span><i class="fa-solid fa-music"></i> 當成在放音樂${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2462') : ''}</span>
                                         <label class="toggle-switch"><input type="checkbox" id="ka-audio"><span class="slider"></span></label>
                                     </div>
-                                    <div class="set-desc">播一段完全沒有聲音的音軌，手機就會把奧瑞亞當成音樂 app 留著，鎖屏還會出現一張播放卡。<b>妳自己正在放的音樂會被停掉。</b></div>
                                 </div>
 
                                 <div class="ka-item" id="ka-item-wake">
                                     <div class="set-label" style="margin-top:12px;">
-                                        <span><i class="fa-solid fa-lightbulb"></i> 螢幕不要自己關</span>
+                                        <span><i class="fa-solid fa-lightbulb"></i> 螢幕不要自己關${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2470') : ''}</span>
                                         <label class="toggle-switch"><input type="checkbox" id="ka-wake"><span class="slider"></span></label>
                                     </div>
-                                    <div class="set-desc">畫面亮著的時候不讓它自動暗掉，同時讓背景的計時器繼續走。比較耗電。</div>
                                     <div class="ka-why hidden" id="ka-why-wake">這台做不到這一招</div>
                                 </div>
 
                                 <div class="ka-item" id="ka-item-pip">
-                                    <div class="set-label" style="margin-top:12px;"><span><i class="fa-solid fa-clone"></i> 開一個小窗守著</span></div>
-                                    <div class="set-desc">推出一個浮在最上面的小窗，上面寫著已經守了多久。小窗還在，這一頁就不會被凍起來。</div>
+                                    <div class="set-label" style="margin-top:12px;"><span><i class="fa-solid fa-clone"></i> 開一個小窗守著${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2476') : ''}</span></div>
                                     <div class="ka-btns"><div class="btn-test" id="ka-pip-btn">開小窗</div></div>
                                     <div class="ka-why hidden" id="ka-why-pip">這台做不到這一招</div>
                                 </div>
 
                                 <div class="ka-item" id="ka-item-notify">
                                     <div class="set-label" style="margin-top:12px;">
-                                        <span><i class="fa-solid fa-bell"></i> 有人找妳就通知</span>
+                                        <span><i class="fa-solid fa-bell"></i> 有人找妳就通知${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2486') : ''}</span>
                                         <label class="toggle-switch"><input type="checkbox" id="ka-notify"><span class="slider"></span></label>
                                     </div>
-                                    <div class="set-desc">妳沒在看的時候有人開口，就在手機上叮一下。第一次打開會問妳要不要允許通知。</div>
                                     <div class="ka-why hidden" id="ka-why-notify">這台做不到這一招</div>
                                 </div>
 
@@ -2495,8 +2509,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <div id="view-sys" class="tab-view hidden">
 
                         <div class="set-group" id="push-group">
-                            <div class="set-label"><i class="fa-solid fa-bell"></i> 手機通知</div>
-                            <div class="set-desc">丹自己醒來寫紙條的時候叮妳一下，點通知直接回到板子。</div>
+                            <div class="set-label"><i class="fa-solid fa-bell"></i> 手機通知${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2499') : ''}</div>
                             <div class="push-gate hidden" id="push-gate">
                                 要從主畫面開啟才收得到——分享鈕 → 加入主畫面，再從那顆圖示進來。
                             </div>
@@ -2511,8 +2524,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。"><i class="fa-solid fa-desktop"></i> 介面佈局</div>
-                            <div class="set-desc">頂部被遮擋時選「強制下移」。</div>
+                            <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。"><i class="fa-solid fa-desktop"></i> 介面佈局${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2515') : ''}</div>
                             <select class="set-select" id="os-layout-mode">
                                 <option value="auto" ${localStorage.getItem('aurelia_layout_mode') !== 'pad-ios' ? 'selected' : ''}>自動適配 (Auto/預設)</option>
                                 <option value="pad-ios" ${localStorage.getItem('aurelia_layout_mode') === 'pad-ios' ? 'selected' : ''}>強制下移 (iOS 動態島/瀏海)</option>
@@ -2525,8 +2537,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="申請 gist 權限的 Personal Access Token（Settings → Developer settings → Fine-grained tokens）。首次備份後 Gist ID 自動保存。"><i class="fa-solid fa-key"></i> GitHub Gist 設定</div>
-                            <div class="set-desc">填 gist 權限的 Token，首次備份後自動存 ID。</div>
+                            <div class="set-label" title="申請 gist 權限的 Personal Access Token（Settings → Developer settings → Fine-grained tokens）。首次備份後 Gist ID 自動保存。"><i class="fa-solid fa-key"></i> GitHub Gist 設定${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2529') : ''}</div>
                             <input class="set-input" id="bk-token" type="password" placeholder="ghp_xxxxxxxxxxxx（不會備份 Token 本身）" />
                             <input class="set-input" id="bk-gist-id" placeholder="Gist ID（首次留空，備份後自動填入）" style="margin-top:8px;" />
                             <div id="bk-gist-hint" style="font-size:11px; color:var(--os-ink); margin-top:6px; word-break:break-all;"></div>
@@ -2545,8 +2556,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。"><i class="fa-solid fa-floppy-disk"></i> 本地全量備份</div>
-                            <div class="set-desc">匯出所有資料成 JSON 檔。</div>
+                            <div class="set-label" title="匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。"><i class="fa-solid fa-floppy-disk"></i> 本地全量備份${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2549') : ''}</div>
                             <div class="btn-save" id="bk-export-btn" style="padding:12px; font-size:13px;"><i class="fa-solid fa-upload"></i> 匯出完整備份 JSON</div>
                             <div class="btn-test" id="bk-import-btn" style="margin-top:8px;"><i class="fa-solid fa-download"></i> 從本地 JSON 還原</div>
                             <input type="file" id="bk-file-input" accept=".json" style="display:none;" />

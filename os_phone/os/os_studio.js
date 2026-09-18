@@ -78,18 +78,16 @@
                             </div>
                             <!-- 誰來做：主接口／宿舍住戶。只有宿舍接上橋時才出現（沒小機的人看不到這格）-->
                             <div class="studio-iface-wrap" id="studio-iface-wrap" hidden>
-                                <div class="studio-set-sec">誰來做</div>
+                                <div class="studio-set-sec">誰來做<button type="button" class="aui-help" data-help="st_iface" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
                                 <select class="studio-iface" id="studio-iface"></select>
-                                <div class="studio-set-note">主接口是設置裡的主模型；宿舍住戶是你電腦上的小機，做得慢但有工具</div>
                             </div>
-                            <div class="studio-set-sec">自動修正</div>
+                            <div class="studio-set-sec">自動修正<button type="button" class="aui-help" data-help="st_autofix" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
                             <div class="studio-feat-list">
                                 <button class="studio-feat" id="studio-autofix" type="button"><i class="fa-solid fa-wand-magic-sparkles"></i><span>檢查到問題自動叫它修</span><span class="studio-feat-sw" aria-hidden="true"></span></button>
                             </div>
-                            <div class="studio-set-note">開著：做完檢查到問題會自己再送一次修正，多花一次額度。關著：只送一次，問題列在聊天裡，要修再自己說</div>
-                            <div class="studio-set-sec">要求 <small>點了會跟著下一句一起送</small></div>
+                            <div class="studio-set-sec">要求<button type="button" class="aui-help" data-help="st_chips" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
                             <div class="studio-chips-row" id="studio-chips-row"></div>
-                            <div class="studio-set-sec">功能 <small>開著的每一輪都會帶上</small></div>
+                            <div class="studio-set-sec">功能<button type="button" class="aui-help" data-help="st_feats" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
                             <div class="studio-feat-list" id="studio-feat-list"></div>
                         </div>
                     </div>
@@ -684,6 +682,25 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         const ld = document.getElementById('studio-import-load'); if (ld) ld.onclick = _doImportLoad;
     }
 
+    // ❔ 設定頁問號點開的說明（AUI.helpBtn 同一種按鈕），面板上不掛說明文字
+    (function _regStudioHelp(n) {
+        const A = window.AUI || (window.parent && window.parent.AUI);
+        if (A && A.registerHelp) {
+            A.registerHelp({
+                st_iface:   { title: '誰來做', body: '主接口是設置裡的主模型。\n宿舍住戶是你電腦上的小機，做得慢但有工具。' },
+                st_autofix: { title: '自動修正', body: '開著：做完檢查到問題會自己再送一次修正，多花一次額度。\n關著：只送一次，問題列在聊天裡，要修再自己說。' },
+                st_chips:   { title: '要求', body: '點了會跟著你下一句一起送出去，送完就取消。' },
+                st_feats:   { title: '功能', body: '開著的每一輪都會帶上，關掉才不帶。' }
+            });
+            return;
+        }
+        if (n > 0) setTimeout(function () { _regStudioHelp(n - 1); }, 500);
+    })(20);
+    function _enterSends(e) {
+        const A = window.AUI || (window.parent && window.parent.AUI);
+        if (A && A.enterSends) return A.enterSends(e);
+        return !!(e && e.key === 'Enter' && !e.shiftKey && !e.isComposing);
+    }
     // ⚡ 組件快捷：常用 UI 元素 chip。點一下＝選取（不碰輸入框），送出時接在使用者文字後面一行「[用戶指定元素] A、B」，送完自動清掉。
     //    內建的只有名字（AI 看得懂 TAB 分頁是什麼，不用解釋）；使用者自存的 chip 有填話術就送話術、沒填就送名字。
     const STUDIO_CHIP_BUILTIN = [
@@ -866,7 +883,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         const sendBtn = document.getElementById('studio-send-btn');
         sendBtn.onclick = handleSend;
         // Enter 發送、Shift+Enter 換行（恢復原邏輯）
-        inputEl.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+        // 電腦 Enter 送出、Shift+Enter 換行；手機螢幕鍵盤的 Enter 是換行，送出按送出鍵（她在 iPhone 按換行就被送出去）
+        inputEl.onkeydown = (e) => { if (_enterSends(e)) { e.preventDefault(); handleSend(); } };
 
         // 面板類型選擇器（純展示 / 純應用 / 共用）——在設定頁裡；設定列那顆標籤跟著換
         document.querySelectorAll('#studio-type-row .studio-type').forEach(b => b.onclick = () => {
@@ -1983,7 +2001,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 });
         };
         sendBtn.onclick = send;
-        sayEl.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+        sayEl.onkeydown = (e) => { if (_enterSends(e)) { e.preventDefault(); send(); } };
         // 🚨「清空」＝這一輪整個重來：對話紀錄與還原版本一起清（Rae 定案）。
         //   還原堆疊是「這一輪 AI 每次改動前的備份」，跟對話同生同滅；留著它等於清了一半。
         //   它不動已經套用的 CSS——那是這個世界的成品，要拿掉走右下角的「移除主題」。

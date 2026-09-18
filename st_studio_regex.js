@@ -115,7 +115,7 @@ JS 腳本會被自動包裝執行，你擁有以下變數可用：
     };
 
     document.getElementById('st-rs-send').onclick = handleGenerate;
-    document.getElementById('st-rs-input').onkeydown = e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(); } };
+    document.getElementById('st-rs-input').onkeydown = e => { if (window.AUI && window.AUI.enterSends ? window.AUI.enterSends(e) : (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); handleGenerate(); } };
 
     document.getElementById('st-rs-inject').onclick = async () => {
         if(!currentData) return;

@@ -5,7 +5,7 @@
 //   ・clock()            故事裡現在幾月幾號幾點＋接下來的約定（主角狀態那個故事時鐘，OS_MC_STATUS）
 //   ・share()            以她的身分把一張分享卡送進某個聊天室（跟微博分享同一條路）
 //   ・pay() / balance()  手機錢包（WX_WALLET）扣錢；扣成功就記進手機事件簿，劇情會知道錢花在哪
-//   ・badge()            桌面圖標右上角的紅點，一個故事一份，她打開那個 app 就清掉
+//   ・badge()            桌面圖標右上角的紅點，一個故事一份；app 自己說的她打開就清，照資料算的（聊天 app 未讀間數）看完才少
 //   ・notify()           手機通知（她在設置開了通知才會出現，OS_KEEPALIVE.notify）
 //   ・自己動（wake）      app 詳情頁「自己動」：開關＋多久一次＋機率，跟聊天室「他會主動找我」同一套節奏。
 //                        時間到就在背景把那個 app 開起來（看不見），跑它用 st.onWake 登記的那段，跑完關掉。
@@ -72,21 +72,33 @@
     // ── 紅點（一個故事一份）──
     const BADGE_KEY = 'aurelia_app_badges';
     function _badgeScope() { return _cid() || '_nochat'; }
+    //   值是數字（app 自己說的，打開 app 就清）或 { n, live:true }（照資料算出來的，例如聊天 app 的未讀間數：
+    //   打開 app 不代表看完了，要等資料變了由它自己重算）
+    function _badgeVal(v) { return Math.max(0, parseInt((v && typeof v === 'object') ? v.n : v, 10) || 0); }
     function getBadge(appId) {
         const all = _ls(BADGE_KEY, {});
         const m = all[_badgeScope()] || {};
-        return Math.max(0, parseInt(m[String(appId)], 10) || 0);
+        return _badgeVal(m[String(appId)]);
     }
-    function badge(appId, n) {
+    function badge(appId, n, opts) {
         if (appId == null || appId === '') return;
         const all = _ls(BADGE_KEY, {});
         const sc = _badgeScope();
         const m = all[sc] = all[sc] || {};
         const v = Math.max(0, Math.min(99, parseInt(n, 10) || 0));
-        if (v) m[String(appId)] = v; else delete m[String(appId)];
+        const next = v ? ((opts && opts.live) ? { n: v, live: true } : v) : undefined;
+        if (JSON.stringify(m[String(appId)]) === JSON.stringify(next)) { if (!Object.keys(m).length) delete all[sc]; return; }   // 沒變就不寫、不重畫
+        if (next !== undefined) m[String(appId)] = next; else delete m[String(appId)];
         if (!Object.keys(m).length) delete all[sc];
         _lsSet(BADGE_KEY, all);
         try { if (win.VoidPhoneShell && win.VoidPhoneShell.paintBadges) win.VoidPhoneShell.paintBadges(); } catch (e) {}
+    }
+
+    // 她打開了那個 app：app 自己說的紅點清掉；照資料算的留著
+    function openedApp(appId) {
+        const m = _ls(BADGE_KEY, {})[_badgeScope()] || {};
+        const v = m[String(appId)];
+        if (v != null && !(v && v.live)) badge(appId, 0);
     }
 
     // ── 通知 ──
@@ -179,7 +191,7 @@
 
     const API = {
         clock: clock, share: share, pay: pay, balance: balance,
-        badge: badge, getBadge: getBadge, notify: notify,
+        badge: badge, getBadge: getBadge, openedApp: openedApp, notify: notify,
         wakeCfg: wakeCfg, setWakeCfg: setWakeCfg, canWake: canWake, wakeDone: wakeDone, runWake: runWake, tickWake: tickWake,
         wakeDefaults: function () { return Object.assign({}, WAKE_DEF); }
     };

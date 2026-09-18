@@ -1155,8 +1155,8 @@
             try { app.go(); } catch (e) { console.warn('[PhoneShell] 開啟失敗', id, e); }
             return;
         }
-        // 🔴 打開了＝看過了，紅點清掉
-        try { const T = win.OS_APP_TOOLS; if (T && T.getBadge && T.getBadge(id)) { T.badge(id, 0); } } catch (e) {}
+        // 🔴 打開了＝看過了，app 自己說的紅點清掉（聊天 app 那種照未讀算的不清，看完那間才會少）
+        try { const T = win.OS_APP_TOOLS; if (T && T.openedApp) T.openedApp(id); } catch (e) {}
         // inside：渲染進手機螢幕
         _runLeave();   // 防禦：清空前先還原上一個借單例的 app
         const body = _el.querySelector('#aps-app-body');

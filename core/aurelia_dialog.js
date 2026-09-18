@@ -249,5 +249,18 @@
         .filter((d, i, a) => d && a.indexOf(d) === i)
         .forEach(d => d.addEventListener('click', _onHelp, true));
 
-    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn };
+    // ⏎ 這一下 Enter 要不要當「送出」：有實體鍵盤的才算（Shift+Enter 換行、選字中不算）。
+    //   手機螢幕鍵盤上那顆是「換行」，她在 iPhone 上按它是要換行，一按就送出去是錯的；手機上送出一律按送出鍵。
+    function isTouchKeyboard() {
+        try {
+            const w = window.parent || window;
+            return !!(w.matchMedia && w.matchMedia('(hover: none) and (pointer: coarse)').matches);
+        } catch (e) { return false; }
+    }
+    function enterSends(e) {
+        if (!e || e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return false;
+        return !isTouchKeyboard();
+    }
+
+    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard };
 })();

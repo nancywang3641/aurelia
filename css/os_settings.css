@@ -51,6 +51,8 @@
         /* 組件 */
         .set-group { background: rgba(var(--os-tint-rgb), 0.85); border-radius: 8px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px; border: 1px solid rgba(var(--os-ink-rgb), 0.15); box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
         .set-label { font-size: 13px; color: var(--os-ink); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-weight: 800; letter-spacing: 1px; }
+        /* ❔ 名字旁的問號貼著名字，不要被 space-between 推到最右邊（開關那種在 span 裡，本來就貼著） */
+        .set-label > .aui-help { margin-left: 4px; margin-right: auto; }
         /* 開頭帶圖示的標籤：圖示跟文字要黏在一起（space-between 會把文字推到最右邊），後面若還有按鈕才靠右 */
         .set-label:has(> i.fa-solid:first-child) { justify-content: flex-start; gap: 6px; }
         .set-label:has(> i.fa-solid:first-child) > :last-child:not(i) { margin-left: auto; }

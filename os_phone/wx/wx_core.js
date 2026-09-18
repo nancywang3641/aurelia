@@ -82,17 +82,22 @@
     // 💬 有沒有人在等她回：大廳「應用」那顆的小圓點。她沒開手機就不知道有人講話了，
     //    心跳（角色主動找她）在酒館尤其明顯——訊息進去了，畫面上卻一點聲音都沒有。
     //    只算出 true/false 交給大廳自己標，不要伸手進別人的 DOM。
+    //    手機桌面那顆聊天圖標也亮紅點：數字＝有幾間沒看（聊天室只記看了沒，沒記幾則）。
     function _refreshLobbyUnread() {
+        let n = 0;
         try {
-            const V = win.VoidTerminal || window.VoidTerminal;
-            if (!V || !V.markPhoneUnread) return;
-            let any = false;
+            const cid = (win.OS_DB && win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
+            const lobby = win.OS_DB && win.OS_DB.LOBBY_ID;
             for (const k in GLOBAL_CHATS) {
                 const c = GLOBAL_CHATS[k];
-                if (c && c.unread) { any = true; break; }
+                if (!c || !c.unread || c.wxRemoved) continue;
+                // 還沒清掉的別本聊天室不算（紅點一個故事一份）
+                if (cid != null && c.tavernChatId != null && c.tavernChatId !== cid && c.tavernChatId !== lobby) continue;
+                n++;
             }
-            V.markPhoneUnread(any);
         } catch (e) {}
+        try { const V = win.VoidTerminal || window.VoidTerminal; if (V && V.markPhoneUnread) V.markPhoneUnread(n > 0); } catch (e) {}
+        try { const T = win.OS_APP_TOOLS; if (T && T.badge) T.badge('wx', n, { live: true }); } catch (e) {}
     }
     // 轉帳時效。🚨 以前寫死十分鐘，但那時「轉帳單上根本沒有時間」所以從來沒真的過期過；
     //    時間補回來之後十分鐘會變成真的——她晚一點才看到那則就收不了。真的微信是一天，照那個。

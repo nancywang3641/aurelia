@@ -924,9 +924,9 @@ const IRIS_IDLE = [
             if (dialogueBox) dialogueBox.onclick = advanceIrisVn;
             if (sendBtn) sendBtn.onclick = sendIrisMessage;
             if (inputField) {
-                // Enter 送出、Shift+Enter 換行
+                // Enter 送出、Shift+Enter 換行；手機螢幕鍵盤的 Enter 是換行（AUI.enterSends）
                 inputField.onkeydown = (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                    if (window.AUI && window.AUI.enterSends ? window.AUI.enterSends(e) : (e.key === 'Enter' && !e.shiftKey && !e.isComposing)) {
                         e.preventDefault();
                         sendIrisMessage();
                     }
