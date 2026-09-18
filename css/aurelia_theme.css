@@ -569,6 +569,11 @@
        跟著主字色走的話夜晚會變成白字配淺綠，整句看不見。
        對方那顆在夜晚會翻成深底，它自己有一條規則把字改亮，不必動這一格。 */
     --wx-bubble-ink: #000000;
+    /* 對方那顆泡泡自己的底、框、字：以前借卡片那兩格（--wx-surface／--wx-line），主題一改卡片色，泡泡跟著變深、字卻還是深色。
+       泡泡不歸主題管，這三格主題碰不到（--wx-bubble-* 在主題裡一律丟掉）。 */
+    --wx-bubble-you-bg: #ffffff;
+    --wx-bubble-you-line: #eeeeee;
+    --wx-bubble-you-ink: #000000;
 }
 :root.wxskin-dark {
     --wx-page: #111111;
@@ -592,6 +597,9 @@
     --wx-danger: #fa5151;
     --wx-link: #7d90b8;
     --wx-bubble-ink: #000000;
+    --wx-bubble-you-bg: #2a2a2a;
+    --wx-bubble-you-line: #333333;
+    --wx-bubble-you-ink: #f0f0f0;
 }
 
 /* ── 微信的其他皮 ──────────────────────────────────────────────────
@@ -611,6 +619,9 @@
     --wx-accent: #d08a72;  --wx-on-accent: #ffffff;  --wx-danger: #fa5151;  --wx-link: #b07a5f;
     --wx-accent-ink: #9d5740;
     --wx-bubble-ink: #000000;
+    --wx-bubble-you-bg: #fffaf5;
+    --wx-bubble-you-line: #efe3d8;
+    --wx-bubble-you-ink: #000000;
 }
 :root.wxskin-dark.wxskin-cream {
     --wx-page: #17120f;  --wx-bar: #221b17;  --wx-surface: #221b17;  --wx-surface-2: #2e2521;
@@ -620,6 +631,9 @@
     --wx-accent: #d08a72;  --wx-on-accent: #1a1310;  --wx-danger: #fa5151;  --wx-link: #c9a48f;
     --wx-accent-ink: #e7a992;
     --wx-bubble-ink: #000000;
+    --wx-bubble-you-bg: #2e2521;
+    --wx-bubble-you-line: #333333;
+    --wx-bubble-you-ink: #f2e8e0;
 }
 
 /* 靛藍：冷調墨色，重點色換成靛藍 */
@@ -631,6 +645,9 @@
     --wx-accent: #3a6ea5;  --wx-on-accent: #ffffff;  --wx-danger: #fa5151;  --wx-link: #3a6ea5;
     --wx-accent-ink: #2b5482;
     --wx-bubble-ink: #000000;
+    --wx-bubble-you-bg: #ffffff;
+    --wx-bubble-you-line: #e2e8f1;
+    --wx-bubble-you-ink: #000000;
 }
 :root.wxskin-dark.wxskin-indigo {
     --wx-page: #0d1117;  --wx-bar: #151b24;  --wx-surface: #151b24;  --wx-surface-2: #1e2733;
@@ -640,6 +657,9 @@
     --wx-accent: #5b91cf;  --wx-on-accent: #0d1117;  --wx-danger: #fa5151;  --wx-link: #7fb0e0;
     --wx-accent-ink: #8ab6e6;
     --wx-bubble-ink: #000000;
+    --wx-bubble-you-bg: #1e2733;
+    --wx-bubble-you-line: #333333;
+    --wx-bubble-you-ink: #e6ecf5;
 }
 
 /* 設置頁那三顆主題小圓（三段色：底／卡片／重點）。加新主題就在這裡多一條。 */

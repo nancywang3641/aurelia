@@ -179,8 +179,8 @@
             .wx-replying .wx-replying-x { flex-shrink: 0; padding: 2px 6px; cursor: pointer; color: var(--wx-ink-dim); }
             .wx-dark .wx-replying { background: rgba(255,255,255,0.08); border-top-color: rgba(255,255,255,0.10); color: var(--wx-ink-dim); }
             .wx-dark .wx-replying .chat-quote-name { color: var(--wx-link); }
-            .wx-msg-row.you .wx-bubble-content { background: var(--wx-surface); margin-left: 10px; border: 1px solid var(--wx-line); }
-            .wx-msg-row.you .wx-bubble-content::before { content: ''; position: absolute; left: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 6px solid #fff; }
+            .wx-msg-row.you .wx-bubble-content { background: var(--wx-bubble-you-bg); color: var(--wx-bubble-you-ink); margin-left: 10px; border: 1px solid var(--wx-bubble-you-line); }   /* 泡泡自己的格子，主題碰不到 */
+            .wx-msg-row.you .wx-bubble-content::before { content: ''; position: absolute; left: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 6px solid var(--wx-bubble-you-bg); }
             .wx-msg-row.me .wx-bubble-content { background: #95ec69; margin-right: 10px; border: 1px solid #86d45a; }
             .wx-msg-row.me .wx-bubble-content::before { content: ''; position: absolute; right: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 6px solid #95ec69; }
             .wx-system-notice { text-align: center; font-size: 12px; color: #b2b2b2; margin: 15px 20px; padding: 4px 10px; clear: both; width: auto; align-self: center; border-radius: 4px; }
@@ -498,8 +498,7 @@
             .wx-dark .wx-chat-item { background: var(--wx-surface); border-bottom-color: var(--wx-line); }
             .wx-dark .wx-name { color: var(--wx-ink); }
             .wx-dark .wx-system-notice { color: var(--wx-ink-dim); }
-            .wx-dark .wx-msg-row.you .wx-bubble-content { background: var(--wx-surface-2); border-color: #333; color: var(--wx-ink); }
-            .wx-dark .wx-msg-row.you .wx-bubble-content::before { border-right-color: var(--wx-line); }
+            /* 夜晚那組格子在 aurelia_theme.css 的 wxskin-dark 裡（對方泡泡翻成深底亮字），這裡不用另外寫 */
             .wx-dark .wx-footer-wrapper { background: var(--wx-surface); border-top-color: var(--wx-line); }
             .wx-dark .wx-input-real { background: var(--wx-surface-2) !important; border-color: var(--wx-line-strong); color: var(--wx-ink) !important; -webkit-text-fill-color: #f0f0f0 !important; }
             .wx-dark .wx-icon-btn { color: var(--wx-ink); }
