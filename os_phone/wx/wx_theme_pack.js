@@ -53,6 +53,18 @@
     // 弄不見就回不去的那些
     const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|btn-(?:confirm|cancel))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-/i;
     const ROOT_RE = /^\s*(?::root|html|body)\s*$/i;
+    // 🚨 頭像是一張照片，放在元素自己的背景圖上。主題寫 background 就會把照片整個蓋掉
+    //    （她套的第一套：頭像全變成黃色六角形）。頭像只准改形狀、框、陰影、大小，背景那兩句拿掉。
+    const AVATAR_RE = /wx-(?:avatar|bubble-avatar|me-avatar|rp-avatar|rp-item-avatar)\b|pbub-avatar\b|ws-avatar-circle\b/i;
+    // 🚨 標題字太大會擠成兩行、壓到返回鈕（她截圖：群名兩行疊在「微信」上）：超過就壓回上限
+    const TITLE_RE = /wx-header-title\b|ws-title\b|wx-modal-title\b|wx-name\b|wx-contact-name\b|wx-me-name\b/i;
+    const TITLE_MAX_PX = 20;
+    function _clampFont(val) {
+        const m = String(val).match(/^\s*([\d.]+)\s*(px|rem|em)\s*(!important)?\s*$/i);
+        if (!m) return val;
+        const px = m[2].toLowerCase() === 'px' ? parseFloat(m[1]) : parseFloat(m[1]) * 16;
+        return px > TITLE_MAX_PX ? (TITLE_MAX_PX + 'px' + (m[3] ? ' !important' : '')) : val;
+    }
 
     // 逗號切選擇器，括號裡的逗號不算
     function _splitTop(s, sep) {
@@ -73,6 +85,8 @@
 
     function _cleanDecls(cssText, sel) {
         const prot = PROTECT_RE.test(sel);
+        const avatar = AVATAR_RE.test(sel);
+        const title = TITLE_RE.test(sel);
         const keep = [];
         _splitTop(String(cssText || ''), ';').forEach(function (decl) {
             const i = decl.indexOf(':');
@@ -85,6 +99,8 @@
             if (/javascript:|expression\s*\(|behavior\s*:/i.test(val)) return;
             if (prop === 'position' && v === 'fixed') return;                              // 會跑出手機外面
             if (/^(?:min-|max-)?(?:width|height)$/.test(prop) && /\b100v[wh]\b|\b\d+v(?:w|h|min|max)\b/.test(v)) return;
+            if (avatar && (prop === 'background' || prop === 'background-image')) return;   // 會把照片蓋掉
+            if (title && prop === 'font-size') { keep.push(prop + ': ' + _clampFont(val)); return; }
             if (prot) {
                 if (prop === 'display' && v === 'none') return;
                 if (prop === 'visibility' && v === 'hidden') return;
@@ -180,9 +196,19 @@
     }
     function activeId() { try { return localStorage.getItem(ACTIVE_KEY) || ''; } catch (e) { return ''; } }
 
+    // 主題後面墊的一層（主題寫了 !important 也壓得過：選擇器更長、排在最後）
+    const SAFETY = [
+        '.wx-shell .wx-header .wx-header-title, .wx-shell ~ * .ws-header .ws-title {',
+        '  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;',
+        '  min-width: 0 !important; max-width: 62% !important; line-height: 1.3 !important; }',
+        '.wx-shell .wx-chat-item .wx-name, .wx-shell .wx-contact-item .wx-contact-name {',
+        '  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }'
+    ].join('\n');
+
     function _inject(css) {
         let st = d.getElementById(STYLE_ID);
         if (!css) { if (st) st.remove(); return; }
+        css = css + '\n' + SAFETY;
         if (!st) { st = d.createElement('style'); st.id = STYLE_ID; }
         // 永遠排在 head 最後：主題要壓過 app 自己的樣式
         (d.head || d.documentElement).appendChild(st);
@@ -265,6 +291,14 @@
             PARTS.map(function (p) { return '・' + p; }).join('\n'),
             '',
             '顏色格子（寫在 :root 裡會整支 app 一起換）：' + VARS,
+            '',
+            '尺寸（這是手機畫面，照這個比例設計）：',
+            '・整支 app 寬約 360px（手機直立），高約 800px。',
+            '・標頭高約 45px（上面另有手機的狀態列）；標題一行、字 15～18px，左邊是返回、右邊是圖示鈕，標題太大會擠成兩行壓到它們。',
+            '・聊天列表每一列高約 72px，頭像約 48px；聊天室裡的頭像約 40px；名字字級 15～17px。',
+            '・底部分頁列高約 55px，三格平分；輸入列高約 56px，打字框高約 36px。',
+            '・頭像是一張照片，只能改形狀（圓角、裁切）、邊框、陰影、大小；不要寫 background，會把照片蓋掉。',
+            '・字級整體別超過 20px，標籤、說明這種小字 11～13px。',
             '',
             '規則：',
             '・訊息泡泡不歸主題管，不要寫任何跟泡泡有關的樣式。',
