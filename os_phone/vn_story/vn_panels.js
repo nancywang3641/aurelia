@@ -183,6 +183,12 @@
         }
     };
 
+    // ❔ 「內建格式」旁問號的說明
+    try {
+        const _A = win.AUI || window.AUI;
+        if (_A && _A.registerHelp) _A.registerHelp({ vn_builtin: { title: '內建格式', body: '寫死在 VN 指令裡的幾種格式，只能開關。\n手機格式：劇情裡的通話和手機聊天。\n直播彈幕：畫面上飄過的彈幕。\n戰鬥：打起來時交給系統擲骰。\n主角狀態：左上的日期、HP、狀態效果；關掉就不記也不顯示，之前的資料留著。' } });
+    } catch (e) {}
+
     function openGameSettings() { VN_Settings._syncUI(); VN_Settings.renderWorldQuick(); document.getElementById('game-settings-overlay').classList.add('active'); }
     function closeGameSettings() { document.getElementById('game-settings-overlay').classList.remove('active'); }
 

@@ -186,3 +186,12 @@
 .aud-mask .aud-btn-main { background: #1c1e2a; color: #fff; }
 .aud-mask .aud-btn-danger { background: #d64545; color: #fff; }
 .aud-mask .aud-btn-main:hover, .aud-mask .aud-btn-danger:hover { filter: brightness(1.12); }
+
+/* ❔ 設定項旁邊的小問號（AUI.helpBtn）：字的顏色跟著所在面板走，淡一點 */
+.aui-help {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: 0; padding: 0 4px; margin-left: 2px;
+    color: inherit; opacity: .45; font-size: .85em; line-height: 1; cursor: pointer;
+    vertical-align: middle;
+}
+.aui-help:hover, .aui-help:focus-visible { opacity: .9; }

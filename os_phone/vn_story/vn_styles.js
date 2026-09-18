@@ -384,7 +384,7 @@
                             <div class="gs-chips" id="gs-world-sfx"></div>
                             <div class="gs-world-note" id="gs-world-note"></div>
                             <hr class="gs-divider">
-                            <div class="gs-section-title"><i class="fa-solid fa-puzzle-piece"></i> 內建格式</div>
+                            <div class="gs-section-title"><i class="fa-solid fa-puzzle-piece"></i> 內建格式<button type="button" class="aui-help" data-help="vn_builtin" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
                             <div class="gs-chips" id="gs-builtin"></div>
                             <hr class="gs-divider">
                             <div class="gs-section-title"><i class="fa-solid fa-palette"></i> 字體顏色設置</div>

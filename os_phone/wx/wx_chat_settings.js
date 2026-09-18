@@ -180,6 +180,21 @@
     }
 
     // --- 主邏輯 ---
+    // ❔ 每個開關旁邊問號點開的說明（AUI.helpBtn），面板上不掛說明文字
+    try {
+        const _A = win.AUI || window.AUI;
+        if (_A && _A.registerHelp) _A.registerHelp({
+            ws_links: { title: '打開我傳的連結', body: '開了之後，你傳網址給他，他會先讀過那個網頁再回你。\n要登入才看得到的網站讀不到。' },
+            ws_time:  { title: '他知道現在幾點、隔了多久', body: '開了，他會看到現在幾點、你隔多久才回，可能會說「怎麼這麼久才理我」。\n關著，他完全不提時間。跑團時故事裡的時間跟現實不一樣，建議關著。' },
+            ws_lore:  { title: '吃這本的世界書', body: '他回你的時候，看不看得到這本故事的世界設定和其他角色的資料。\n關掉後，「人設設置」可以去別本世界書挑條目。' },
+            ws_story: { title: '吃這本的劇情', body: '他回你的時候，知不知道這本故事裡發生過什麼。\n世界書和劇情都關掉，他只記得你們聊過的話，從別的故事借來的角色適合這樣設。你的人設照樣會給他。' },
+            ws_back:  { title: '帶回劇情', body: '開著：你們在這裡聊的，回到故事時會排在你下一句話前面交給劇情，只交一次。\n關著：劇情不會知道你們聊了什麼。' },
+            ws_lobby: { title: '常駐角色', body: '開了，每個故事的手機裡都找得到他，在哪本故事裡聊都不會被算成那本的人。\n你們聊的預設不帶回劇情，要帶就打開「帶回劇情」。' },
+            wx_look:  { title: '外觀', body: '主題：整支聊天 app 的長相，泡泡不在內。\n配色：底下那層顏色。\n黑夜模式：換明暗。\n套了主題之後，長相以主題為準。' },
+            ws_hb:    { title: '他會主動找我', body: '開了，他會照「多久來一次」和「來的機率」自己傳訊息給你：時間到、而且你們有一陣子沒講話，才擲一次機率決定要不要開口。\n手機關著時，要先在設置打開「回覆交給伺服器跑」才會找你。' }
+        });
+    } catch (e) {}
+
     win.WX_CHAT_SETTINGS = {
         // 📱 給 VN 劇情手機用：那邊的聊天室對到同名聯絡人時，要吃他在微信這邊設好的聊天背景
         //    （同一個人兩邊長一樣，跟泡泡主題同一套規矩）。
@@ -484,53 +499,48 @@
 
                 <div class="ws-group">
                     <label class="ws-cell ws-cell-switch">
-                        <div class="ws-label">打開我傳的連結</div>
+                        <div class="ws-label">打開我傳的連結${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_links') : ''}</div>
                         <input type="checkbox" class="ws-switch" id="chk-read-links" ${chat.readLinks ? 'checked' : ''}>
                     </label>
                 </div>
-                <div class="ws-note">開了之後你傳網址，對方會先讀過那個網頁再回你。要登入才看得到的網站讀不到。</div>
 
                 <div class="ws-group">
                     <label class="ws-cell ws-cell-switch">
-                        <div class="ws-label">他知道現在幾點、隔了多久</div>
+                        <div class="ws-label">他知道現在幾點、隔了多久${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_time') : ''}</div>
                         <input type="checkbox" class="ws-switch" id="chk-time-aware" ${chat.timeAware ? 'checked' : ''}>
                     </label>
                 </div>
-                <div class="ws-note">開了他會看到現在幾點、你隔多久才回，可能會說「怎麼一個多小時才理我」。關著他一個字都不會提時間——你中途跑去吃飯、或是在跑團（故事裡的時間跟你坐在電腦前的時間本來就是兩回事），關著比較好。</div>
 
                 <div class="ws-section-header">隔離</div>
                 <div class="ws-group">
                     <label class="ws-cell ws-cell-switch">
-                        <div class="ws-label">吃這本的世界書</div>
+                        <div class="ws-label">吃這本的世界書${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_lore') : ''}</div>
                         <input type="checkbox" class="ws-switch" id="chk-iso-lore" ${chat.noLore ? '' : 'checked'}>
                     </label>
                     <label class="ws-cell ws-cell-switch">
-                        <div class="ws-label">吃這本的劇情</div>
+                        <div class="ws-label">吃這本的劇情${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_story') : ''}</div>
                         <input type="checkbox" class="ws-switch" id="chk-iso-story" ${chat.noHistory ? '' : 'checked'}>
                     </label>
                     <label class="ws-cell ws-cell-switch">
-                        <div class="ws-label">帶回劇情</div>
+                        <div class="ws-label">帶回劇情${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_back') : ''}</div>
                         <input type="checkbox" class="ws-switch" id="chk-iso-back" ${(chat.noBack === true || (chat.noBack !== false && (chat.noHistory || chat.tavernChatId === (win.OS_DB && win.OS_DB.LOBBY_ID)))) ? '' : 'checked'}>
                     </label>
                 </div>
-                <div class="ws-note">前兩個都關掉，他就不知道你這本故事在發生什麼，只認得你們倆講過的話——從別的故事借過來的人這樣設。你的人設照舊會帶給他。關掉世界書之後，人設設置可以去別本世界書挑條目。</div>
-                <div class="ws-note">帶回劇情開著：你在這裡聊的，回到劇情時會跟你下一句話一起交給劇情，只交一次。無關緊要的人關掉，劇情就不會知道。</div>
                 <div class="ws-group">
                     <label class="ws-cell ws-cell-switch">
-                        <div class="ws-label">常駐角色</div>
+                        <div class="ws-label">常駐角色${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_lobby') : ''}</div>
                         <input type="checkbox" class="ws-switch" id="chk-iso-lobby" ${chat.tavernChatId === (win.OS_DB && win.OS_DB.LOBBY_ID) ? 'checked' : ''} ${(win.OS_DB && win.OS_DB.currentChatId && win.OS_DB.currentChatId() != null) ? '' : 'disabled'}>
                     </label>
                 </div>
-                <div class="ws-note">開了每個故事都找得到他。你們聊的預設不帶回劇情，要帶就打開上面的「帶回劇情」。</div>
 
                 ${!isGroup ? `
                 <div class="ws-group">
                     <label class="ws-cell ws-cell-switch">
-                        <div class="ws-label">他會主動找我</div>
+                        <div class="ws-label">他會主動找我${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_hb') : ''}</div>
                         <input type="checkbox" class="ws-switch" id="chk-hb-on" ${chat.hbOn ? 'checked' : ''}>
                     </label>
                     <div class="ws-cell">
-                        <div class="ws-label">多久來一次</div>
+                        <div class="ws-label">多久來一次<span class="ws-label-sub" id="hb-mins-val"></span></div>
                         <div class="ws-right">
                             <input type="number" class="ws-input ws-num" id="hb-mins" inputmode="numeric" min="${HB_MIN}" max="${HB_MAX}" step="1" value="${parseInt(chat.hbMins, 10) || 180}">
                             <span class="ws-unit">分鐘</span>
@@ -544,7 +554,6 @@
                         </div>
                     </div>
                 </div>
-                <div class="ws-note"><span id="hb-mins-val"></span>時間到而且你們也有一陣子沒講話，才會擲一次機率決定他要不要開口。手機關著時由伺服器代跑（要先開「回覆交給伺服器跑」）。</div>
                 ` : ''}
 
                 <div class="ws-section-header">聊天記憶</div>
@@ -1297,7 +1306,7 @@
                     if (!_minsV) return;
                     const m = parseInt(_mins && _mins.value, 10);
                     // 超過一小時才換算給她看——「90 分鐘」自己看得懂，「480 分鐘」看不出是八小時
-                    _minsV.textContent = (isFinite(m) && m >= 60) ? ('每 ' + _hbMinsText(m) + '一次。') : '';
+                    _minsV.textContent = (isFinite(m) && m >= 60) ? _hbMinsText(m) : '';
                 };
                 if (_on) _on.onchange = () => { if (_on.checked) chat.hbOn = true; else delete chat.hbOn; _saveHb(); };
                 if (_mins) {

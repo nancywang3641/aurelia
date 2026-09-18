@@ -138,7 +138,7 @@
             if (parts.title) card.appendChild(_el('div', 'aud-title', parts.title));
             if (parts.body) {
                 // 短的置中；長文、條列、超過三行才靠左比較好讀
-                const long = parts.body.length > 90 || /[•・●]/.test(parts.body) || parts.body.split('\n').length > 3;
+                const long = !!opts.left || parts.body.length > 90 || /[•・●]/.test(parts.body) || parts.body.split('\n').length > 3;
                 card.appendChild(_el('div', 'aud-body' + (long ? ' aud-body-long' : ''), parts.body));
             }
 
@@ -231,5 +231,23 @@
     const _tr = (type) => (msg, _title, o) => toast(msg, { type, duration: o && o.timeOut });
     const toastr = { success: _tr('success'), info: _tr('info'), warning: _tr('warn'), error: _tr('error') };
 
-    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr };
+    // ❔ 設定項旁邊的小問號：面板上不掛說明文字，點問號才開「標題＋說明＋關閉」小窗（跟酒館助手一樣）。
+    //   用法：先 AUI.registerHelp({ 鍵: { title, body } })，畫面上放 AUI.helpBtn('鍵')。
+    //   問號常放在 <label> 開關裡：點它要擋掉預設動作，不然開關會跟著被切。
+    const _help = {};
+    function registerHelp(map) { Object.assign(_help, map || {}); }
+    function helpBtn(key) { return '<button type="button" class="aui-help" data-help="' + String(key).replace(/"/g, '') + '" title="說明"><i class="fa-regular fa-circle-question"></i></button>'; }
+    function _onHelp(e) {
+        const b = e.target && e.target.closest && e.target.closest('.aui-help');
+        if (!b) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const h = _help[b.getAttribute('data-help')];
+        if (h) alert(h.body, { title: h.title, modal: true, left: true, type: 'info' });
+    }
+    [document, (function () { try { return window.parent && window.parent.document; } catch (e) { return null; } })()]
+        .filter((d, i, a) => d && a.indexOf(d) === i)
+        .forEach(d => d.addEventListener('click', _onHelp, true));
+
+    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn };
 })();
