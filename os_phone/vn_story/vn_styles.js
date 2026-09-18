@@ -384,6 +384,9 @@
                             <div class="gs-chips" id="gs-world-sfx"></div>
                             <div class="gs-world-note" id="gs-world-note"></div>
                             <hr class="gs-divider">
+                            <div class="gs-section-title"><i class="fa-solid fa-puzzle-piece"></i> 內建格式</div>
+                            <div class="gs-chips" id="gs-builtin"></div>
+                            <hr class="gs-divider">
                             <div class="gs-section-title"><i class="fa-solid fa-palette"></i> 字體顏色設置</div>
                             <div class="gs-color-row"><span class="gs-color-label">文章字體顏色</span><input type="color" class="gs-color-input" id="gs-text-color" value="#dcd8d0" oninput="window.VN_Settings.applyTextColor(this.value)"></div>
                             <div class="gs-color-row"><span class="gs-color-label">內心獨白顏色</span><input type="color" class="gs-color-input" id="gs-inner-color" value="#d4af37" oninput="window.VN_Settings.applyInnerColor(this.value)"></div>

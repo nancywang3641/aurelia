@@ -367,7 +367,41 @@
         };
     }
 
+    // 🧩 內建格式：寫死在 VN 指令裡、只能開關不能改的幾樣（故事畫面「設定」→「內建格式」）
+    //   手機格式有兩版（一般／自由版），跟著「VN 總綱」現在用哪一版開對應那條；關就兩條一起關。
+    //   主角狀態＝教模型寫狀態欄的那條；關掉時主角狀態模組也跟著不注入、不顯示（mc_status 讀這條）。
+    //   她手動撥手機格式之後，「BGM 沒開現代一般就自動關」記下的原狀作廢，免得下次換 BGM 又被蓋回去。
+    const BUILTIN = [
+        { key: 'phone',  label: '手機格式', ids: ['call_phone', 'call_phone_free'] },
+        { key: 'danmu',  label: '直播彈幕', ids: ['danmu'] },
+        { key: 'battle', label: '戰鬥',     ids: ['battle'] },
+        { key: 'status', label: '主角狀態', ids: ['status_bar'] }
+    ];
+    function builtinState() {
+        const L = list();
+        const on = id => L.some(e => e.id === id && e.enabled);
+        return BUILTIN.map(b => ({ key: b.key, label: b.label, on: b.ids.some(on) }));
+    }
+    function setBuiltin(key, want) {
+        const b = BUILTIN.find(x => x.key === key);
+        if (!b) return null;
+        let target = b.ids;
+        if (key === 'phone') {
+            try { localStorage.removeItem(PHONE_SAVED_KEY); } catch (e) {}
+            if (want) {
+                const free = list().some(e => e.id === 'core_format_free' && e.enabled);
+                target = [free ? 'call_phone_free' : 'call_phone'];
+            }
+        }
+        const r = apply(e => (want ? (target.indexOf(e.id) >= 0 ? true : (b.ids.indexOf(e.id) >= 0 ? false : undefined))
+                                   : (b.ids.indexOf(e.id) >= 0 ? false : undefined)));
+        if (key === 'status') { try { (win.OS_MC_STATUS || window.OS_MC_STATUS)?.renderHud?.(); } catch (e) {} }
+        return r;
+    }
+    function isOn(id) { return list().some(e => e.id === id && e.enabled); }
+
     win.OS_VN_RULES = {
+        builtinState: builtinState, setBuiltin: setBuiltin, isOn: isOn,
         list: list, hasAny: hasAny,
         getDepthParts: getDepthParts, getPreText: getPreText, getText: getText,
         apply: apply, setEnabledByName: setEnabledByName,

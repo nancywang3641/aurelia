@@ -316,8 +316,15 @@
         return parts;
     }
 
+    // 故事畫面「設定」→「內建格式」→「主角狀態」關掉＝VN 指令裡教模型寫狀態欄那條關了：不注入、不顯示（資料留著）
+    function _on() {
+        try { const VR = win.OS_VN_RULES || window.OS_VN_RULES; return !(VR && VR.isOn && VR.list && VR.list().some(e => e.id === 'status_bar')) || VR.isOn('status_bar'); }
+        catch (e) { return true; }
+    }
+
     // ── 注入文字（酒館與 PWA 共用的唯一真相）──
     async function buildBlock() {
+        if (!_on()) return '';
         const st = await load();
         if (!st.date && !st.hp && !st.buffs.length && !st.events.length) return '';
         const L = ['【主角狀態｜系統記錄，以此為準】'];
@@ -354,7 +361,7 @@
         let el = null;
         for (const d of docs) { el = d.getElementById('mc-status-hud'); if (el) break; }
         if (!el) return;
-        const st = _cache;
+        const st = _on() ? _cache : null;
         const parts = st ? summary(st) : [];
         if (!parts.length) { el.hidden = true; el.innerHTML = ''; return; }
         const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

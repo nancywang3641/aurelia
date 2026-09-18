@@ -176,7 +176,10 @@
             boxT.replaceChildren(...st.themes.map(t => chip(t.label, st.theme === t.key, () => VR.setTheme(t.key))));
             boxB.replaceChildren(...st.bgm.map(x => chip(x.label, x.on, () => VR.setQuick(x.id, !x.on))));
             boxS.replaceChildren(...st.sfx.map(x => chip(x.label, x.on, () => VR.setQuick(x.id, !x.on))));
-            if (note) note.textContent = st.phoneAutoOff ? '手機格式已自動關閉（BGM 沒開現代一般）' : (st.phoneOn ? '手機格式開著' : '手機格式關著');
+            if (note) note.textContent = st.phoneAutoOff ? '手機格式已自動關閉（BGM 沒開現代一般）' : '';
+            // 🧩 內建格式：手機格式、直播彈幕、戰鬥、主角狀態，一個一個開關
+            const boxI = document.getElementById('gs-builtin');
+            if (boxI && VR.builtinState) boxI.replaceChildren(...VR.builtinState().map(x => chip(x.label, x.on, () => VR.setBuiltin(x.key, !x.on))));
         }
     };
 
