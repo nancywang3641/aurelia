@@ -125,6 +125,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_panels', path: _AURELIA_EXT_BASE + '/core/void/panels.js', key: 'voidPanels' },
     { name: 'void_worldview', path: _AURELIA_EXT_BASE + '/core/void/worldview.js', key: 'voidWorldview' },
     { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },
+    { name: 'void_guide', path: _AURELIA_EXT_BASE + '/core/void/guide_map.js', key: 'voidGuide' },   // 🧭 大廳管理員的奧瑞亞導覽（被問在哪/怎麼用時才帶）
     { name: 'void_worldgate', path: _AURELIA_EXT_BASE + '/core/void/worldgate.js', key: 'voidWorldgate' },   // 🌌 視差切書（②）：enterParallax/exitParallax/殘局對帳
     { name: 'void_ambient', path: _AURELIA_EXT_BASE + '/core/void/ambient.js', key: 'voidAmbient' },
     { name: 'void_ui_sfx', path: _AURELIA_EXT_BASE + '/core/void/ui_sfx.js', key: 'voidUiSfx' },   // 🔊 大廳介面音效（點擊/滑過/開關/面板開合）

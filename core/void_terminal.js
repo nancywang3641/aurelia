@@ -2220,7 +2220,11 @@ ${sections}`;
             } catch (e) {}
             const _userNameWithPersona = (userPersona?.name || currentUserName) + (userPersona?.desc ? '（' + userPersona.desc + '）' : '');
 
-            const sysPrompt = npcTarget
+            // 🧭 大廳管理員（瀅瀅、柴郡、愛麗絲、白兔先生、紫薇老師、帽匠）知道奧瑞亞每個功能在哪：
+            //    這句話像在問「在哪／怎麼用」才帶導覽表（core/void/guide_map.js），書卡來的客人不帶
+            const _isManager = !npcTarget || ['alice', 'rabbit', 'zhiwei', 'hatter'].indexOf(npcTarget.key) >= 0;
+            const _guideSec = (_isManager && window.VoidGuide && window.VoidGuide.block) ? window.VoidGuide.block(text) : '';
+            const sysPrompt = (npcTarget
                 ? VoidPrompts.buildNpcPrompt(npcTarget, {
                     userName: currentUserName,
                     userPersona,
@@ -2241,7 +2245,7 @@ ${sections}`;
                 justReturnedFrom404: _justReturnedFrom404,
                 journalCtx,
                 worldCtx,
-            });
+            })) + (_guideSec ? '\n\n' + _guideSec : '');
 
             let messages = [];
             if (typeof window.OS_API.buildContext === 'function') {
