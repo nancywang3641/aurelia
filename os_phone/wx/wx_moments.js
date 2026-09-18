@@ -70,6 +70,45 @@
         return '';
     }
 
+    // 🏠 不屬於任何故事的人（聊天室蓋大廳章）發的動態，存在大廳那一本，每個故事都併進來看。
+    //    編號從 1001 起，跟各本自己的 1、2、3 不會撞（AI 用「動態幾號」指是哪一則）。
+    //    別本故事的人在那則底下的讚、留言，在這本裡看不到（只留我、跟這本聊天列表裡有的人）。
+    const LOBBY_NO_BASE = 1001;
+    function _lobbyScope() { const db = _db(); return (db && db.LOBBY_ID) || ''; }
+    function _isLobbyWho(who) { const L = _lobbyScope(); const c = _chats()[who]; return !!(L && c && c.tavernChatId === L); }
+    function _here(p) {
+        const ok = function (w) { return w === 'me' || !!_chats()[w]; };
+        return Object.assign({}, p, {
+            likes: (p.likes || []).filter(function (l) { return ok(l.who); }),
+            comments: (p.comments || []).filter(function (c) { return ok(c.who); }).map(function (c) {
+                return (c.toWho && !ok(c.toWho)) ? Object.assign({}, c, { toWho: '', toName: '' }) : c;
+            })
+        });
+    }
+    function _viewOf(st, lb) {
+        if (!lb || lb === st) return st;
+        return { feed: { posts: st.feed.posts.concat(lb.feed.posts.map(_here)).sort(function (a, b) { return a.at - b.at; }) }, links: st.links };
+    }
+    // 這本＋大廳那本併起來看
+    async function _view() {
+        const st = await load();
+        const L = _lobbyScope();
+        return _viewOf(st, (L && scope() !== L) ? await load(L) : null);
+    }
+    function _viewSync() {
+        const st = _cache[scope()];
+        if (!st) return null;
+        const L = _lobbyScope();
+        if (!L || scope() === L) return st;
+        return _cache[L] ? _viewOf(st, _cache[L]) : null;
+    }
+    // 這則動態存在哪一本
+    function _scopeOfPost(id) {
+        const L = _lobbyScope();
+        const lb = L && _cache[L];
+        return (lb && lb.feed.posts.some(function (x) { return x.id === id; })) ? L : scope();
+    }
+
     // ── 資料 ─────────────────────────────────────────
     function load(sc) {
         const s = sc == null ? scope() : sc;
@@ -84,8 +123,9 @@
                     links = await db.getAppData(APP_ID, LINKS_KEY, s || null);
                 }
             } catch (e) { console.warn('[朋友圈] 讀不出來', e); }
-            if (!feed || !Array.isArray(feed.posts)) feed = { nextNo: 1, posts: [] };
-            if (!(feed.nextNo >= 1)) feed.nextNo = feed.posts.reduce(function (m, p) { return Math.max(m, p.no || 0); }, 0) + 1;
+            const _base = (s && s === _lobbyScope()) ? LOBBY_NO_BASE : 1;
+            if (!feed || !Array.isArray(feed.posts)) feed = { nextNo: _base, posts: [] };
+            if (!(feed.nextNo >= _base)) feed.nextNo = feed.posts.reduce(function (m, p) { return Math.max(m, p.no || 0); }, _base - 1) + 1;
             feed.posts.forEach(function (p) { p.likes = p.likes || []; p.comments = p.comments || []; p.photos = p.photos || []; });
             if (!links || typeof links !== 'object') links = {};
             if (!_cache[s]) _cache[s] = { feed: feed, links: links };
@@ -112,7 +152,7 @@
         _queue[sc] = next.catch(function (e) { console.warn('[朋友圈] 存不進去', e); });
         return next;
     }
-    function _flush() { return _queue[scope()] || Promise.resolve(); }
+    function _flush() { const L = _lobbyScope(); return Promise.all([_queue[scope()] || Promise.resolve(), (L && _queue[L]) || Promise.resolve()]); }
     function onChange(fn) { if (typeof fn === 'function') _listeners.push(fn); }
     function _emit() {
         _listeners.forEach(function (fn) { try { fn(); } catch (e) {} });
@@ -146,11 +186,12 @@
 
     function addPost(p) {
         let out = null;
-        return _run(scope(), function (st) { out = _pushPost(st, p); return true; }).then(function () { return out; });
+        const sc = _isLobbyWho(p && p.author) ? _lobbyScope() : scope();
+        return _run(sc, function (st) { out = _pushPost(st, p); return true; }).then(function () { return out; });
     }
     function toggleLike(postId, who, whoName) {
         let liked = false;
-        return _run(scope(), function (st) {
+        return _run(_scopeOfPost(postId), function (st) {
             const p = _post(st, postId);
             if (!p) return false;
             const i = p.likes.findIndex(function (l) { return l.who === who; });
@@ -161,7 +202,7 @@
     }
     function addComment(postId, c) {
         let out = null;
-        return _run(scope(), function (st) {
+        return _run(_scopeOfPost(postId), function (st) {
             const p = _post(st, postId);
             const text = String((c && c.text) || '').trim();
             if (!p || !text) return false;
@@ -171,14 +212,14 @@
         }).then(function () { return out; });
     }
     function removePost(postId) {
-        return _run(scope(), function (st) {
+        return _run(_scopeOfPost(postId), function (st) {
             const before = st.feed.posts.length;
             st.feed.posts = st.feed.posts.filter(function (x) { return x.id !== postId; });
             return st.feed.posts.length !== before;
         });
     }
     function removeComment(postId, commentId) {
-        return _run(scope(), function (st) {
+        return _run(_scopeOfPost(postId), function (st) {
             const p = _post(st, postId);
             if (!p) return false;
             const before = p.comments.length;
@@ -231,7 +272,7 @@
         if (!chatId) return '';
         const chat = _chats()[chatId];
         if (chat && chat.isGroup) return '';
-        const st = await load();
+        const st = await _view();
         const seen = visibleTo(chatId, st.feed, st.links);
         const user = _userName();
         const nm = function (who, snap) { return who === chatId ? '你' : _nameOf(who, snap); };
@@ -332,11 +373,15 @@
         const who = chatId;
         const whoName = chatName || (chat && chat.name) || '對方';
         _acted[chatId] = Date.now();
-        _run(scope(), function (st) {
+        // 發文：大廳的人發到大廳那本；讚／留言：1001 號以後的是大廳那本的
+        const sc = (a.verb === 'post') ? (_isLobbyWho(who) ? _lobbyScope() : scope())
+                 : ((a.no >= LOBBY_NO_BASE && _lobbyScope()) ? _lobbyScope() : scope());
+        _run(sc, function (st) {
             if (a.verb === 'post') { _pushPost(st, { author: who, authorName: whoName, text: a.text, photos: a.photos }); return true; }
             const p = st.feed.posts.find(function (x) { return x.no === a.no; });
             if (!p) return false;
-            if (!visibleTo(who, st.feed, st.links).some(function (x) { return x.id === p.id; })) return false;
+            const v = _viewSync() || st;   // 看不看得到照這本的「認識的人」算
+            if (!visibleTo(who, v.feed, v.links).some(function (x) { return x.id === p.id; })) return false;
             if (a.verb === 'like') {
                 if (p.likes.some(function (l) { return l.who === who; })) return false;
                 p.likes.push({ who: who, whoName: whoName, at: _now() });
@@ -364,9 +409,8 @@
     function _seenAt() { try { return parseInt(localStorage.getItem(SEEN_KEY(scope())), 10) || 0; } catch (e) { return 0; } }
     // count：角色的動態、讚、留言（她看過之後的）；actor：最新那個人；replies：她動態上的讚留言＋回覆她的
     function unseen() {
-        const sc = scope();
-        const st = _cache[sc];
-        if (!st) { load(sc).then(function () { try { paintBadges(); } catch (e) {} }); return { count: 0, actor: '', replies: 0 }; }
+        const st = _viewSync();
+        if (!st) { _view().then(function () { try { paintBadges(); } catch (e) {} }); return { count: 0, actor: '', replies: 0 }; }
         const seen = _seenAt();
         let count = 0, replies = 0, last = null;
         const hit = function (who, at, toMe) {
@@ -453,7 +497,7 @@
             '<div class="wxmo-input" hidden><input class="wxmo-in" type="text" maxlength="' + COMMENT_MAX + '" autocomplete="off"><button class="wxmo-send" type="button" data-act="send">發送</button></div>';
         host.appendChild(_root);
         _bindRoot();
-        await load();
+        await _view();
         if (!_root) return false;
         _renderCover();
         _renderFeed();
@@ -520,7 +564,7 @@
     }
     function _renderFeed() {
         if (!_root) return;
-        const st = _cache[scope()];
+        const st = _viewSync();
         if (!st) return;
         const list = st.feed.posts.filter(function (p) { return !_author || p.author === _author; }).slice().reverse();
         const box = _root.querySelector('.wxmo-list');
