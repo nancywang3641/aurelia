@@ -123,6 +123,9 @@
             .wx-page-list { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow-y: auto; background: var(--wx-surface); transition: transform 0.3s; z-index: 1; }
             .wx-page-room { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; background: var(--wx-page); transform: translateX(100%); transition: transform 0.3s; display: flex; flex-direction: column; z-index: 2; }
             .wx-page-room.active { transform: translateX(0); }
+            /* 聊天室開著時把後面的列表藏起來。以前靠聊天室自己的底色擋住，主題常把頁面底色弄透明好讓外殼的漸層透出來，
+               聊天室一透明，後面的聊天列表就露出來（她：每個主題套用後聊天室背景都出現聊天列表）。 */
+            .wx-page-container:has(> .wx-page-room.active) > .wx-page-list { visibility: hidden !important; }
             .wx-room-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; background-repeat: no-repeat; z-index: 0; pointer-events: none; }
             .wx-room-bg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0); z-index: 1; pointer-events: none; transition: background 0.3s; }
             .wx-page-room.has-bg .wx-room-bg-overlay { background: rgba(0,0,0,0.22); }
