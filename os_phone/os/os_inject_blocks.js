@@ -18,6 +18,7 @@
         aurelia_grand_summary: '劇情總結',
         aurelia_vn_memory: '劇情記憶',
         aurelia_app_memory: '手機記憶',
+        aurelia_phone_now: '手機上剛發生的事',
         aurelia_app_data: '應用資料',
         aurelia_sticker_list: '表情包清單',
         aurelia_vn_tags: 'VN組件說明',

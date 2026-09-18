@@ -508,8 +508,13 @@
                         <div class="ws-label">吃這本的劇情</div>
                         <input type="checkbox" class="ws-switch" id="chk-iso-story" ${chat.noHistory ? '' : 'checked'}>
                     </label>
+                    <label class="ws-cell ws-cell-switch">
+                        <div class="ws-label">帶回劇情</div>
+                        <input type="checkbox" class="ws-switch" id="chk-iso-back" ${(chat.noBack === true || (chat.noBack !== false && chat.noHistory)) ? '' : 'checked'}>
+                    </label>
                 </div>
-                <div class="ws-note">兩個都關掉，他就不知道你這本故事在發生什麼，只認得你們倆講過的話——從別的故事借過來的人這樣設。你的人設照舊會帶給他。關掉世界書之後，人設設置可以去別本世界書挑條目。</div>
+                <div class="ws-note">前兩個都關掉，他就不知道你這本故事在發生什麼，只認得你們倆講過的話——從別的故事借過來的人這樣設。你的人設照舊會帶給他。關掉世界書之後，人設設置可以去別本世界書挑條目。</div>
+                <div class="ws-note">帶回劇情開著：你在這裡聊的，回到劇情時會跟你下一句話一起交給劇情，只交一次。無關緊要的人關掉，劇情就不會知道。</div>
 
                 ${!isGroup ? `
                 <div class="ws-group">
@@ -1231,14 +1236,25 @@
             }
             // 🧳 隔離：這間要不要吃「這本」的世界書與劇情。切了就存，發訊息時 os_api_engine 會看。
             {
-                const _l = doc.getElementById('chk-iso-lore'), _s = doc.getElementById('chk-iso-story');
+                const _l = doc.getElementById('chk-iso-lore'), _s = doc.getElementById('chk-iso-story'), _b = doc.getElementById('chk-iso-back');
                 const _saveIso = () => {
                     if (app.saveChats) app.saveChats();
                     if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
                 };
                 // 存的是「不吃」：沒動過的舊聊天室一律照舊吃，不會因為新欄位而改行為
                 if (_l) _l.onchange = () => { if (_l.checked) delete chat.noLore; else chat.noLore = true; _saveIso(); };
-                if (_s) _s.onchange = () => { if (_s.checked) delete chat.noHistory; else chat.noHistory = true; _saveIso(); };
+                if (_s) _s.onchange = () => {
+                    if (_s.checked) delete chat.noHistory; else chat.noHistory = true;
+                    // 關掉劇情的人跟這本故事無關 → 帶回劇情一起關（看得到，要的話可以再打開）
+                    if (!_s.checked && _b && _b.checked) { _b.checked = false; chat.noBack = true; }
+                    _saveIso();
+                };
+                // 帶回劇情：存「關」為 true、在關了劇情的聊天室裡硬要打開存 false
+                if (_b) _b.onchange = () => {
+                    if (_b.checked) { if (chat.noHistory === true) chat.noBack = false; else delete chat.noBack; }
+                    else chat.noBack = true;
+                    _saveIso();
+                };
             }
 
             // 💓 他會主動找我：一間一組（開關＋多久一次＋機率），動一下就存。引擎在 os_heartbeat.js

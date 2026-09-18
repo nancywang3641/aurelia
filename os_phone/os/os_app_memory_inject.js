@@ -91,8 +91,11 @@
     //    跑團同步把正文裡的聊天室也塞進同一串，最後 6 條常常全是劇情訊息 → 濾完變空，你在微信打的話永遠回不去酒館。
     //    從最新往回帶到 PER_CHAT_CHARS 字：以前固定 6 句，一問一答加兩個表情包就用完了，
     //    「約吃飯」只剩後半段「下課來接」，主模型看不懂接什麼。
-    function _appLines(chat, userName, name) {
-        const ms = (chat && Array.isArray(chat.messages)) ? chat.messages.filter(_isAppMsg) : [];
+    //    before：只取這個時間點以前的（之後的那些這一輪另外黏在她那句話前面，這裡不重複）
+    function _appLines(chat, userName, name, before) {
+        const ms = (chat && Array.isArray(chat.messages)) ? chat.messages.filter(function (m) {
+            return _isAppMsg(m) && !(before && m.timestamp && m.timestamp > before);
+        }) : [];
         const isGroup = !!(chat && chat.isGroup);
         const out = [];
         let used = 0;
@@ -191,7 +194,7 @@
     // 組「手機近況」文字（兩版共用的唯一真相）：recentText＝最近正文＋這次輸入，用來篩「在場角色」。
     //   酒館端由 injectAppMemory 包成 injectPrompts；PWA 端由 _buildStandaloneContext 的
     //   app_memory 那一格取這份塞進 messages（PWA 沒有 injectPrompts）。
-    async function buildAppMemoryBlock(recentText, lastFloor) {
+    async function buildAppMemoryBlock(recentText, lastFloor, before) {
         try {
             if (!_enabled()) return '';
             if (!win.OS_DB) return '';
@@ -211,6 +214,7 @@
                 // 🔒 只收當前劇情建立的對話。沒蓋章的一律保留 —— 跟 OS_DB.getApiChatsForCurrentCard 同一把尺：
                 //    PWA 以前根本取不到分艙鑰匙、資料全是沒蓋章的，濾掉就等於這個注入源在 PWA 永遠是空的。
                 if (c.tavernChatId != null && c.tavernChatId !== curCid) return;
+                if (!_backToStory(c)) return;   // 聊天設置 → 隔離 →「帶回劇情」關掉的
                 const name = c.name || c.realName || '';
                 if (!name || name.length < 2) return;
                 const key = c.isGroup ? ('群聊：' + name) : name;
@@ -243,13 +247,13 @@
             if (!present.length) return '';
 
             const userName = _userName();
-            let block = `<手機記憶 規則="下列角色最近在手機 app（微信/微薄/電話等）上跟${userName}的真實互動，都已經發生過。寫作時必須記得並延續，別當沒發生；這是記憶供你參考，不是要你照抄這個格式。">`;
+            let block = `<手機記憶 規則="下列是更早以前角色在手機 app（微信/微薄/電話等）上跟${userName}的互動，都已經發生過、劇情也已經接過了。寫作時記得並延續，別當沒發生；但不是現在正在發生的事，不要再回應一次，也不要照抄這個格式。">`;
             let any = false;
             for (let i = 0; i < present.length; i++) {
                 const name = present[i];
                 const info = cand[name];
                 const lines = [];
-                if (info.chat) _appLines(info.chat, userName, info.match || name).forEach(function (l) { lines.push(l); });
+                if (info.chat) _appLines(info.chat, userName, info.match || name, before).forEach(function (l) { lines.push(l); });
                 if (info.posts) _wbLines(info.posts).forEach(function (l) { lines.push(l); });
                 if (info.plugins) _pluginLines(info.plugins, curCid).forEach(function (l) { lines.push(l); });
                 if (!lines.length) continue;
@@ -267,7 +271,104 @@
         }
     }
 
-    async function injectAppMemory() {
+    // ── 手機上剛發生的事：上一段劇情之後、她這句話之前，在手機上聊的、發生的 ──
+    //    黏在她那句話「前面」只送這一次（手機的事先發生，她回到劇情說的話才是最新的，要排最後）。
+    //    送過的就退進上面那塊回顧當背景，不會每輪都像剛發生一樣再送一次（她：AI 總是重複我在微信聊的內容）。
+    //    時間點記在這個故事自己身上：lastEnd＝上一次送到哪；重新生成／換一個回覆時送同一批。
+    const NOW_INJECT_ID = 'aurelia_phone_now';
+    const NOW_APP = 'wx_to_story';
+    const NOW_FIRST_HOURS = 3;     // 這個故事第一次用：只往回看這麼久，免得把很久以前的全倒進去
+    const NOW_MAX_CHARS = 2400;    // 一輪最多帶這麼多字（每間從最新往回，太多就截掉最舊的）
+    let _nowUninject = null;
+    let _nowPending = null;        // 這一輪要送的那批，等劇情真的回來了才算送出
+
+    // 聊天設置 → 隔離 →「帶回劇情」：沒動過的照「吃這本的劇情」走（關了劇情的那些人本來就跟這本故事無關）
+    function _backToStory(c) {
+        if (!c) return false;
+        if (c.noBack === true) return false;
+        if (c.noBack === false) return true;
+        return c.noHistory !== true;
+    }
+    async function _nowState(cid) {
+        try { return (await win.OS_DB.getAppData(NOW_APP, 'state', cid)) || {}; } catch (e) { return {}; }
+    }
+    async function _saveNowState(cid, st) {
+        try { await win.OS_DB.saveAppData(NOW_APP, 'state', st, cid); } catch (e) {}
+    }
+    // 一則 → 一行（系統那種也要：外送付了、紅包收了…都是手機上發生的事）
+    function _nowLine(m, userName, charName, isGroup) {
+        if (!m || m._story != null) return '';                  // 劇情同步進來的，本來就在正文裡
+        if (m.sentWhileBlocked || m._blockedNotice) return '';  // 對方沒收到的
+        if (m.recalled) return '（' + (m.isMe ? userName : charName) + '撤回了一則訊息）';
+        if (m.type === 'system') { const t = _clean(m.content); return t ? '（' + t + '）' : ''; }
+        return _chatLine(m, userName, charName, isGroup);
+    }
+    async function _phoneSince(cid, from) {
+        const chats = (win.OS_DB.getAllApiChats ? (await win.OS_DB.getAllApiChats()) : {}) || {};
+        const userName = _userName();
+        const rooms = [];
+        Object.keys(chats).forEach(function (id) {
+            const c = chats[id];
+            if (!c || !Array.isArray(c.messages)) return;
+            if (c.tavernChatId != null && c.tavernChatId !== cid) return;
+            if (!_backToStory(c)) return;
+            const name = c.name || c.realName || '';
+            if (!name) return;
+            const ms = c.messages.filter(function (m) { return m && m.timestamp && m.timestamp > from; });
+            if (!ms.length) return;
+            const lines = [];
+            let used = 0;
+            for (let i = ms.length - 1; i >= 0; i--) {
+                const l = _nowLine(ms[i], userName, name, !!c.isGroup);
+                if (!l) continue;
+                if (lines.length && used + l.length > NOW_MAX_CHARS) break;
+                lines.unshift(l);
+                used += l.length;
+            }
+            if (lines.length) rooms.push({ name: c.isGroup ? ('群聊：' + name) : name, last: ms[ms.length - 1].timestamp, lines: lines });
+        });
+        rooms.sort(function (a, b) { return a.last - b.last; });   // 先聊完的排前面
+        if (!rooms.length) return '';
+        return '上一段劇情之後、' + userName + '接下來這句話之前，' + userName + '在手機上：\n'
+            + rooms.map(function (r) { return '〔' + r.name + '〕\n' + r.lines.join('\n'); }).join('\n')
+            + '\n這些都已經發生過了。劇情從' + userName + '接下來這句話接著寫，可以自然帶到手機上的事，但不要把這些對話再演一遍。';
+    }
+    // 回傳這一輪「剛發生的事」從哪個時間點算起（回顧那塊要排除這之後的，免得同一句出現兩次）
+    async function injectPhoneNow(type) {
+        try { _nowUninject && _nowUninject(); } catch (e) {}
+        _nowUninject = null;
+        _nowPending = null;
+        if (!win.OS_DB || !win.OS_DB.getAllApiChats || !win.OS_DB.getAppData) return null;
+        const cid = (win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
+        if (cid == null) return null;
+        const st = await _nowState(cid);
+        const redo = (type === 'regenerate' || type === 'swipe');
+        let text = '', from;
+        if (redo) {
+            text = st.lastText || '';
+            from = st.lastFrom || st.lastEnd || 0;
+        } else {
+            const now = Date.now();
+            from = st.lastEnd || (now - NOW_FIRST_HOURS * 3600 * 1000);
+            text = await _phoneSince(cid, from);
+            _nowPending = { cid: cid, from: from, until: now, text: text };
+        }
+        if (text && win.TavernHelper && win.TavernHelper.injectPrompts) {
+            // 深度 1＝排在最後一則（她這句話）的前面
+            const r = win.TavernHelper.injectPrompts([{ id: NOW_INJECT_ID, content: text, position: 'in_chat', depth: 1, role: 'system' }], { once: true });
+            _nowUninject = (r && r.uninject) || null;
+        }
+        return from;
+    }
+    // 劇情真的回來了才把這一批記成送過（生成失敗或按停，下一輪會再送一次）
+    async function _commitPhoneNow() {
+        const p = _nowPending;
+        _nowPending = null;
+        if (!p) return;
+        await _saveNowState(p.cid, { lastEnd: p.until, lastFrom: p.from, lastText: p.text });
+    }
+
+    async function injectAppMemory(type) {
         try {
             try { _lastUninject && _lastUninject(); } catch (e) {}
             _lastUninject = null;
@@ -275,10 +376,13 @@
             if (win.__AURELIA_SUMMARIZING) return;            // 大總結生成不摻
             if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 這條路酒館 only（PWA 走 app_memory 那一格）
             if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            if (type === 'quiet' || type === 'impersonate' || type === 'continue') return;   // 不是她說了一句話的那種
+
+            const before = await injectPhoneNow(type);
 
             let lastFloor = -1;
             try { lastFloor = await win.TavernHelper.getLastMessageId(); } catch (e) {}
-            const content = await buildAppMemoryBlock(await _recentChatText(), lastFloor);
+            const content = await buildAppMemoryBlock(await _recentChatText(), lastFloor, before);
             if (!content) return;
 
             const result = win.TavernHelper.injectPrompts([{
@@ -596,7 +700,7 @@
     function init() {
         if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
         if (win.tavern_events.GENERATION_STARTED) {
-            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectAppMemory); });   // dryRun 空跑不注入
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(function () { return injectAppMemory(type); }); });   // dryRun 空跑不注入
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectVnTags); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectFxList); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectStickers); });
@@ -604,7 +708,8 @@
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectAppData); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });
         }
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; });
+        if (win.tavern_events.MESSAGE_RECEIVED) win.eventOn(win.tavern_events.MESSAGE_RECEIVED, function () { _commitPhoneNow(); });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { _nowPending = null; try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; });
         console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件 + app資料回傳 + 地圖番外記事）');
     }
 
