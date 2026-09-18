@@ -247,17 +247,96 @@
         '.aps-app-body .wx-shell > .wx-bottom-nav { position: relative; }',
         '.aps-app-body .wx-shell > .wx-bottom-nav::after, .aps-app-body .wx-shell > .wx-footer-wrapper::after {',
         '  content: "" !important; position: absolute !important; left: 0 !important; right: 0 !important; top: 100% !important;',
-        '  height: var(--aps-safe-bottom, 0px) !important; background: inherit !important; pointer-events: none !important; }'
+        '  height: var(--aps-safe-bottom, 0px) !important; background: inherit !important; pointer-events: none !important; }',
+        // 🚨 圖示是字型畫的（Font Awesome）。主題替整片換字型（.wx-shell * { font-family }）就把圖示也換掉，
+        //    找不到那個字只剩框框（她：三次 Persona5 按鈕全變框框）。:not(#_) 讓這條比主題任何寫法都重。
+        '.wx-shell :is(.fa-solid,.fas,.fa-regular,.far):not(#_), .wx-shell ~ * :is(.fa-solid,.fas,.fa-regular,.far):not(#_) {',
+        '  font-family: "Font Awesome 6 Free" !important; font-style: normal !important; }',
+        '.wx-shell :is(.fa-solid,.fas):not(#_), .wx-shell ~ * :is(.fa-solid,.fas):not(#_) { font-weight: 900 !important; }',
+        '.wx-shell :is(.fa-regular,.far):not(#_), .wx-shell ~ * :is(.fa-regular,.far):not(#_) { font-weight: 400 !important; }',
+        '.wx-shell :is(.fa-brands,.fab):not(#_), .wx-shell ~ * :is(.fa-brands,.fab):not(#_) { font-family: "Font Awesome 6 Brands" !important; font-weight: 400 !important; font-style: normal !important; }',
+        // 卡片上的字跟底色分不開時（主題換了底色沒換字色），_fixCardInk 掛這兩個 class
+        '.wx-shell .wxtp-ink-dark:not(#_) { color: #141414 !important; }',
+        '.wx-shell .wxtp-ink-light:not(#_) { color: #ffffff !important; }'
     ].join('\n');
+
+    // ── 卡片上的字看不看得清楚：主題常只換卡片底色、沒換字色（紅包祝福語本來是白字，底換成淺色就看不見）。
+    //    套著主題時，每行卡片字跟它底下那層的顏色比一次，對比太低就換成黑字或白字。卡片是聊天室一則一則畫出來的，
+    //    所以盯著聊天 app 有沒有新東西長出來，有就再比一次。沒套主題時全部收掉。
+    const CARD_TEXT = '.wx-tf-title,.wx-tf-sub,.wx-rpc-memo,.wx-rpc-sub,.wx-rpc-foot,.wx-gift-title-text,.wx-gift-footer,'
+        + '.wx-loc-name,.wx-loc-addr,.wx-vcard-title,.wx-vcard-dur,.wx-file-name,.wx-file-size,.wx-link-title,.wx-link-foot,'
+        + '.wx-receive-head,.wx-receive-amt,.wx-receive-foot,.wx-wb-share-author,.wx-wb-share-text,.wx-app-share-top,.wx-app-share-title,.wx-app-share-text,'
+        + '.wxto-card-hd,.wxto-card-shop,.wxto-card-items,.wxto-card-amt,.wxto-card-ft,.wxto-card-note,.wxto-card-kind';
+    function _rgb(str) {
+        const m = String(str || '').match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?/i);
+        if (!m) return null;
+        let a = m[4] == null ? 1 : parseFloat(m[4]);
+        if (m[4] && /%$/.test(m[4])) a = a / 100;
+        return { r: +m[1], g: +m[2], b: +m[3], a: a };
+    }
+    function _lum(c) {
+        const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    }
+    function _contrast(a, b) { const x = _lum(a), y = _lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    // 字底下實際的顏色：往外一層一層找第一個不透明的底色；漸層取第一個顏色；遇到圖片（地圖、照片）不判斷
+    function _bgOf(el) {
+        const w = el.ownerDocument.defaultView;
+        for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+            const cs = w.getComputedStyle(n);
+            const img = cs.backgroundImage || '';
+            if (img && img !== 'none') {
+                if (/url\(/i.test(img)) return null;
+                const g = _rgb(img);
+                if (g && g.a > 0.5) return g;
+            }
+            const c = _rgb(cs.backgroundColor);
+            if (c && c.a > 0.5) return c;
+            if (n.classList && n.classList.contains('wx-shell')) break;
+        }
+        return null;
+    }
+    function _fixCardInk(root) {
+        const box = root || d;
+        box.querySelectorAll(CARD_TEXT).forEach(function (el) {
+            el.classList.remove('wxtp-ink-dark', 'wxtp-ink-light');
+            if (!el.textContent.trim()) return;
+            const w = el.ownerDocument.defaultView;
+            const fg = _rgb(w.getComputedStyle(el).color);
+            const bg = _bgOf(el);
+            if (!fg || !bg) return;
+            if (_contrast(fg, bg) >= 3) return;
+            const black = { r: 20, g: 20, b: 20 }, white = { r: 255, g: 255, b: 255 };
+            el.classList.add(_contrast(black, bg) >= _contrast(white, bg) ? 'wxtp-ink-dark' : 'wxtp-ink-light');
+        });
+    }
+    let _inkObs = null, _inkT = 0;
+    function _watchCardInk(on) {
+        if (_inkObs) { _inkObs.disconnect(); _inkObs = null; }
+        clearTimeout(_inkT);
+        if (!on) { d.querySelectorAll('.wxtp-ink-dark,.wxtp-ink-light').forEach(function (el) { el.classList.remove('wxtp-ink-dark', 'wxtp-ink-light'); }); return; }
+        const run = function () { clearTimeout(_inkT); _inkT = setTimeout(function () { try { _fixCardInk(d); } catch (e) {} }, 120); };
+        try {
+            _inkObs = new (d.defaultView.MutationObserver)(function (muts) {
+                for (let i = 0; i < muts.length; i++) {
+                    const t = muts[i].target;
+                    if (t && t.closest && t.closest('.wx-shell, .aps-mount')) { run(); return; }
+                }
+            });
+            _inkObs.observe(d.body, { childList: true, subtree: true });
+        } catch (e) {}
+        run();
+    }
 
     function _inject(css) {
         let st = d.getElementById(STYLE_ID);
-        if (!css) { if (st) st.remove(); return; }
+        if (!css) { if (st) st.remove(); _watchCardInk(false); return; }
         css = css + '\n' + SAFETY;
         if (!st) { st = d.createElement('style'); st.id = STYLE_ID; }
         // 永遠排在 head 最後：主題要壓過 app 自己的樣式
         (d.head || d.documentElement).appendChild(st);
         st.textContent = css;
+        _watchCardInk(true);
     }
     async function apply(id) {
         await load();
@@ -350,10 +429,10 @@
             '',
             '規則：',
             '・訊息泡泡不歸主題管，不要寫任何跟泡泡有關的樣式。',
-            '・聊天室裡的卡片要跟整套風格一致，但每一種都要一眼認得出是什麼（紅包還是紅包、轉帳還是轉帳）；金額、店名、狀態字要清楚；已收款、退回、領完這幾種要跟還沒處理的看得出不同。檔案圖示 .wx-file-icon 的底色代表檔案種類，不要改。',
+            '・聊天室裡的卡片要跟整套風格一致，但每一種都要一眼認得出是什麼（紅包還是紅包、轉帳還是轉帳）；換了卡片哪一塊的底色，同一條就要把那塊的字色一起寫，卡片裡的標題、小字、金額才看得清楚（有些卡片的字原本是白色）；金額、店名、狀態字要清楚；已收款、退回、領完這幾種要跟還沒處理的看得出不同。檔案圖示 .wx-file-icon 的底色代表檔案種類，不要改。',
             '・不要把任何東西藏起來、弄透明、弄得點不到；不要用 position: fixed；寬高不要用螢幕單位（vw、vh）。',
             '・這支 app 自己的樣式有不少寫在元素身上，要蓋過它們就加 !important。',
-            '・字型只能從 Google Fonts 用 @import 引入，其他外部檔案不要用。',
+            '・字型只能從 Google Fonts 用 @import 引入，其他外部檔案不要用。按鈕上的小圖示是另一套圖示字型畫的，字型只換文字就好，不要寫成全部元素（*）一起換。',
             '・深色與淺色：做成一套固定的樣子就好，不用另外寫夜晚版。',
             '',
             '輸出格式固定，標籤名照抄英文，除此之外不要寫任何字：',
