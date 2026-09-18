@@ -1397,12 +1397,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         
         /* 🧭 支線提示小卡 (Quest toast)：上方置中滑入、停幾秒自己走，pointer-events 全關不擋也不吃點擊 */
         #quest-toast-stack { position: absolute; top: 56px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 26; }
-        /* 🕰 主角狀態列：日期時間、HP、狀態效果剩餘回合。上方置中一條窄 pill，不吃點擊。 */
-        #mc-status-hud { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; max-width: 86%; padding: 4px 10px; background: rgba(10,8,2,0.72); border: 1px solid rgba(212,175,55,0.35); border-radius: 999px; backdrop-filter: blur(6px); font-family: var(--font-sans); font-size: 0.72rem; color: rgba(255,248,230,0.92); pointer-events: none; z-index: 25; white-space: nowrap; overflow: hidden; }
+        /* 🕰 主角狀態列：日期時間、HP、狀態效果剩餘回合。放在左上場景牌正下方，一項一條往下排，
+           跟場景牌同一種水平漸隱黑底（不再是上方置中那顆 pill）。不吃點擊。 */
+        #mc-status-hud { position: absolute; top: calc(60px + env(safe-area-inset-top, 0px)); left: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; max-width: 46%; font-family: var(--font-sans); font-size: 0.74rem; color: rgba(255,248,230,0.94); pointer-events: none; z-index: 10; }
         #mc-status-hud[hidden] { display: none; }
-        .mc-hud-item { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-left: 1px solid rgba(212,175,55,0.25); }
-        .mc-hud-item:first-child { border-left: none; padding-left: 0; }
-        .mc-hud-item i { font-size: 0.68rem; color: var(--gold); }
+        .mc-hud-item { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 26px 3px 14px; background: linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.55) 70%, transparent 100%); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 1px; text-shadow: 0 0 4px rgba(0,0,0,1); }
+        .mc-hud-item i { font-size: 0.68rem; color: var(--gold); width: 12px; text-align: center; }
         .mc-hud-hp i { color: #e06a6a; }
         .mc-hud-buff { color: rgba(255,220,160,0.95); }
         .mc-hud-buff b { font-weight: 600; color: var(--gold); margin-left: 2px; }
@@ -1999,6 +1999,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             
             /* 背景標籤 */
             #top-badge { font-size: 0.82rem; letter-spacing: 1.5px; }
+            #mc-status-hud { top: calc(52px + env(safe-area-inset-top, 0px)); max-width: 60%; }
 
             /* 對話框全面縮小 + 整體上移，避開最底部拇指難按的死角 */
             #text-panel-wrapper { width: 95%; bottom: 64px; }

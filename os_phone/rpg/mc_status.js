@@ -361,7 +361,7 @@
         let html = '';
         if (st.date) html += '<span class="mc-hud-item mc-hud-date"><i class="fa-regular fa-calendar"></i>' + esc(fmtDate(st.date) + (st.time ? ' ' + st.time : '')) + '</span>';
         if (st.hp) html += '<span class="mc-hud-item mc-hud-hp"><i class="fa-solid fa-heart"></i>' + esc(st.hp) + '</span>';
-        st.buffs.forEach(b => { html += '<span class="mc-hud-item mc-hud-buff">' + esc(b.name) + '<b>' + b.left + '</b></span>'; });
+        st.buffs.forEach(b => { html += '<span class="mc-hud-item mc-hud-buff"><i class="fa-solid fa-hourglass-half"></i>' + esc(b.name) + '<b>' + b.left + '</b></span>'; });
         el.innerHTML = html;
         el.hidden = false;
     }
