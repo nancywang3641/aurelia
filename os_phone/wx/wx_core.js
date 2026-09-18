@@ -1287,6 +1287,13 @@
                     }
                     ensureRedPacketData(content, senderName);
                 }
+                // 🛵 外送單也先開：同一則裡「A 請 B 付、B 付了」，付款那行才找得到單（wx_takeout.js prescan）
+                if (content && /[\[［]\s*(?:TakeoutAsk|Takeout|外送|外賣|外卖|代付)/i.test(content)) {
+                    try {
+                        const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT;
+                        if (_TO && _TO.prescan) _TO.prescan(tempCtx.chatId, _isMediaTag(tag) ? (tempCtx.chatName || '') : tag, content);
+                    } catch (e) { console.warn('[WX] 外送單預先開單失敗（不影響訊息）:', e); }
+                }
             }
         });
 
@@ -1373,7 +1380,10 @@
                 let sysContent = embeddedSysMatch[2].trim();
                 // 移除末尾的 ] 字符（如果存在）
                 sysContent = sysContent.replace(/\]+\s*$/, '').trim();
+                // 群聊裡是誰說的這行（例如誰幫忙付了外送代付）：處理器靠 ctx.sender 分辨，用完就清掉
+                ctx.sender = sender;
                 const sysMsgObj = processSystemIntent(sysContent, ctx);
+                ctx.sender = '';
                 if (sysMsgObj && sysMsgObj.content === '') return;   // 同上
                 if (sysMsgObj) {
                     extractedMessages.push(sysMsgObj);

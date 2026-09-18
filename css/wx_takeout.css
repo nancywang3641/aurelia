@@ -342,7 +342,8 @@
     color: #fff;
 }
 .wxto-card-hd i { font-size: 15px; }
-.wxto-card-kind { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 群聊會有「誰 幫 誰 付的」這種長標題：寧可折兩行，別把「付的／點的」切掉 */
+.wxto-card-kind { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; line-height: 1.3; word-break: break-word; }
 .wxto-card-amt { flex-shrink: 0; font-size: 14px; font-weight: 800; }
 .wxto-card-bd { padding: 10px 12px 4px; }
 .wxto-card-shop { font-size: 11.5px; color: rgba(43, 36, 25, .55); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

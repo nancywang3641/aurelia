@@ -109,17 +109,22 @@
     function _delivering(c) { return !!(c && c.data && c.data.startAt); }
     function _askOpen(c) { return !!(c && c.data && c.data.mode === 'ask' && !c.data.startAt && c.status === 'pending'); }
 
+    // 角色發的單是不是衝著她：看「送給誰／找誰付」那格。
+    //   🚨 以前角色發的一律當成給她——群聊裡 A 點給 B，卡片也寫「A 幫你點的」、代付還跳出要她付的按鈕。
+    //   那格空著、寫她的名字、或寫「你／User」這種代稱，才算她。
+    const ME_WORDS = /^(?:你|您|妳|我|user|\{\{\s*user\s*\}\}|主角)$/i;
+    function _forMe(x) {
+        const w = String((x && x.who) || '').trim();
+        return !w || ME_WORDS.test(w) || _isMe(w);
+    }
     // 這張單誰出錢、送給誰（名字）。from＝發這則訊息的人（她就是自己的名字）。
     function _parties(c) {
         const x = (c && c.data) || {};
         const me = _me();
         const from = x.fromMe ? me : (x.from || '對方');
-        if (x.mode === 'ask') {
-            const payer = x.paidBy || (x.fromMe ? (x.who || '對方') : me);
-            return { payer: payer, eater: from, from: from };
-        }
-        const eater = x.fromMe ? (x.who || '對方') : me;
-        return { payer: from, eater: eater, from: from };
+        const target = x.fromMe ? (x.who || '對方') : (_forMe(x) ? me : x.who);
+        if (x.mode === 'ask') return { payer: x.paidBy || target, eater: from, from: from, target: target };
+        return { payer: from, eater: target, from: from, target: target };
     }
 
     // 找一個店名配上的「幾分鐘送到」：店是這個故事生出來的就用它說的，不然用單號擲一個 20～40 分
@@ -142,6 +147,22 @@
         return C.findOrAttach(chatId, KIND, alias, seed, slot);
     }
 
+    // ── 解析 AI 回覆的第一遍就先開單（同紅包的 ensureRedPacketData）──
+    //   🚨 同一則回覆裡「A 請 B 付、B 接著付了」很常見：付款那行比卡片先被處理，
+    //      等畫卡片時才開單的話，付款那行找不到單、整行被吞掉（實測就是這樣）。
+    //      只開有寫單號的：沒單號的要等畫面用「第幾則訊息」當身分，先開會對不上、變兩張。
+    const PRE_RE = /[\[［]\s*(TakeoutAsk|外送代付|外賣代付|外卖代付|代付|Takeout|外送|外賣|外卖)\s*[:：]\s*([^\]］]*)[\]］]/gi;
+    function prescan(chatId, sender, content) {
+        if (!chatId || !content) return;
+        let m;
+        PRE_RE.lastIndex = 0;
+        while ((m = PRE_RE.exec(String(content)))) {
+            const mode = /^(?:TakeoutAsk|外送代付|外賣代付|外卖代付|代付)$/i.test(m[1]) ? 'ask' : 'order';
+            const info = parse(mode, m[2]);
+            if (info.id) ensure(chatId, info.id, info, null, false, sender);
+        }
+    }
+
     // ── 把時間走完的單結案（送到了、代付過期了）─────────────────
     //   回傳這一次剛結案的那幾張，給模型的清單會說「剛剛送到」。
     function sweep(chatId) {
@@ -151,7 +172,7 @@
         const done = [];
         C.pending(chatId, KIND).forEach(function (c) {
             const x = c.data || {};
-            if (_askOpen(c) && !x.fromMe && x.askAt && now - x.askAt > ASK_TTL) {
+            if (_askOpen(c) && !x.fromMe && _forMe(x) && x.askAt && now - x.askAt > ASK_TTL) {
                 C.update(chatId, c.key, { status: 'expired' });
                 _line(chatId, (x.from || '對方') + ' 請你付的外送過期了，你沒有付（' + (x.shop || x.items) + '）');
                 done.push({ card: c, what: 'expired' });
@@ -164,7 +185,9 @@
                 const ask = x.mode === 'ask';
                 _line(chatId, _isMe(p.eater)
                     ? p.payer + (ask ? ' 幫你付的外送送到了' : ' 幫你點的外送送到了') + what
-                    : (ask ? '你幫 ' + p.eater + ' 付的外送送到 ' + p.eater + ' 那裡了' : '你點給 ' + p.eater + ' 的外送送到了') + what);
+                    : _isMe(p.payer)
+                        ? (ask ? '你幫 ' + p.eater + ' 付的外送送到 ' + p.eater + ' 那裡了' : '你點給 ' + p.eater + ' 的外送送到了') + what
+                        : (ask ? p.payer + ' 幫 ' + p.eater + ' 付的外送送到了' : p.payer + ' 點給 ' + p.eater + ' 的外送送到了') + what);
                 done.push({ card: c, what: 'delivered' });
             }
         });
@@ -189,8 +212,10 @@
         const p = _parties(c);
         const meEat = _isMe(p.eater);
         let kind;
-        if (x.mode === 'ask') kind = x.fromMe ? ('請 ' + (x.who || '對方') + ' 付') : (p.from + ' 想請你付');
-        else kind = x.fromMe ? ('點給 ' + (x.who || '對方')) : (p.from + ' 幫你點的');
+        const forMe = !x.fromMe && _forMe(x);
+        // 標題不夾空格：中文本來就不用，群聊「誰幫誰付的」夾了空格就擠不下、會把「的」折到下一行
+        if (x.mode === 'ask') kind = x.fromMe ? ('請' + (x.who || '對方') + '付') : forMe ? (p.from + '想請你付') : (p.from + '請' + p.target + '付');
+        else kind = x.fromMe ? ('點給' + (x.who || '對方')) : forMe ? (p.from + '幫你點的') : (p.from + '點給' + p.target);
         let dim = false, foot = '', steps = '', act = '';
         if (_delivering(c) || c.status === 'finished') {
             const st = c.status === 'finished' ? STAGE.length - 1 : _stage(x, now);
@@ -202,14 +227,14 @@
             } else {
                 foot = STAGE[Math.max(0, st)].label + ' · 預計 ' + _hhmm(x.startAt + x.eta * 60000) + ' 送達';
             }
-            if (x.mode === 'ask' && x.paidBy) kind = (_isMe(x.paidBy) ? '你幫 ' + p.eater + ' 付的' : x.paidBy + ' 幫你付的');
+            if (x.mode === 'ask' && x.paidBy) kind = _isMe(x.paidBy) ? ('你幫' + p.eater + '付的') : _isMe(p.eater) ? (x.paidBy + '幫你付的') : (x.paidBy + '幫' + p.eater + '付的');
         } else if (c.status === 'expired') {
             dim = true; foot = '代付已過期';
         } else if (c.status === 'declined') {
-            dim = true; foot = x.fromMe ? ((x.who || '對方') + ' 沒有付') : '你沒有付';
+            dim = true; foot = forMe ? '你沒有付' : ((p.target || '對方') + ' 沒有付');
         } else if (_askOpen(c)) {
-            if (x.fromMe) {
-                foot = '等 ' + (x.who || '對方') + ' 付款';
+            if (!forMe) {
+                foot = '等 ' + (p.target || '對方') + ' 付款';
             } else {
                 const left = Math.max(0, (x.askAt || now) + ASK_TTL - now);
                 foot = Math.ceil(left / 60000) + ' 分鐘內有效';
@@ -275,7 +300,7 @@
         const cid = el.dataset.wxtoChat, key = el.dataset.wxtoKey;
         sweep(cid);
         const c = C.byKey(cid, key);
-        if (!c || !_askOpen(c) || c.data.fromMe) { refresh(el.parentNode); return; }
+        if (!c || !_askOpen(c) || c.data.fromMe || !_forMe(c.data)) { refresh(el.parentNode); return; }
         const x = c.data;
         if (what === 'pay') {
             const W = _wallet();
@@ -302,22 +327,25 @@
         const cid = ctx && ctx.chatId;
         if (!C || !cid) return { type: 'system', content: '', isMe: false };
         const ref = String(m[2] || '').replace(/\]+\s*$/, '').trim();
-        // 只找「她請人付、還沒結果」的那幾張：find 對不上會退回最近一張，先把範圍縮在這裡
-        const mine = C.pending(cid, KIND).filter(function (c) { return _askOpen(c) && c.data.fromMe; });
+        // 只找「還沒結果、而且不是等她付」的那幾張（她自己按卡片）：find 對不上會退回最近一張，先把範圍縮在這裡
+        const mine = C.pending(cid, KIND).filter(function (c) { return _askOpen(c) && (c.data.fromMe || !_forMe(c.data)); });
         let c = null;
         if (ref) { const f = C.find(cid, KIND, ref); if (f && mine.some(function (x) { return x.key === f.key; })) c = f; }
         if (!c) c = mine[mine.length - 1] || null;
         if (!c) return { type: 'system', content: '', isMe: false };
-        const payer = (ctx.chatName && !(_chat(cid) || {}).isGroup) ? ctx.chatName : (c.data.who || '對方');
+        // 誰付的：群聊裡看這一行是誰說的（ctx.sender），私聊就是聊天室那位，都沒有才用單子上寫的那個人
+        const grp = !!(_chat(cid) || {}).isGroup;
+        const payer = (grp ? ctx.sender : ctx.chatName) || c.data.who || '對方';
         const x = c.data;
+        const forWhom = x.fromMe ? '你' : (x.from || '對方');
         if (/^pay$/i.test(m[1])) {
             C.update(cid, c.key, { data: { paidBy: payer, startAt: Date.now(), eta: x.eta || _etaFor(x.shop, c.alias) } });
             setTimeout(refresh, 0);
-            return { type: 'system', content: payer + ' 幫你付了外送 ' + money(x.amount) + '（' + (x.shop ? x.shop + '・' : '') + x.items + '），店家開始準備了', isMe: false };
+            return { type: 'system', content: payer + ' 幫' + forWhom + '付了外送 ' + money(x.amount) + '（' + (x.shop ? x.shop + '・' : '') + x.items + '），店家開始準備了', isMe: false };
         }
         C.update(cid, c.key, { status: 'declined' });
         setTimeout(refresh, 0);
-        return { type: 'system', content: payer + ' 沒有幫你付外送（' + (x.shop || x.items) + '）', isMe: false };
+        return { type: 'system', content: payer + ' 沒有幫' + forWhom + '付外送（' + (x.shop || x.items) + '）', isMe: false };
     }
 
     // 「誰幫誰」：點外送是「A 點給 B」，代付是「A 幫 B 付」——錢是誰出的要講對，模型才知道該謝誰
@@ -337,7 +365,7 @@
             const p = _parties(c);
             let t;
             if (_askOpen(c)) {
-                if (x.fromMe) { asks = true; t = '代付：' + p.from + ' 請 ' + (x.who || '你') + ' 付 ' + desc(c) + '，等你決定'; }
+                if (x.fromMe || !_forMe(x)) { asks = true; t = '代付：' + p.from + ' 請 ' + (p.target || '對方') + ' 付 ' + desc(c) + '，等 ' + (p.target || '對方') + ' 決定'; }
                 else t = '代付：' + p.from + ' 請 ' + _me() + ' 付 ' + desc(c) + '，' + _me() + ' 還沒回應，' + Math.max(1, Math.ceil(((x.askAt || now) + ASK_TTL - now) / 60000)) + ' 分鐘後失效';
             } else if (_delivering(c)) {
                 t = '外送：' + _who(c, p) + ' ' + desc(c) + '，' + STAGE[Math.max(0, _stage(x, now))].label + '，大約 ' + _minsLeft(x, now) + ' 分鐘後送到';
@@ -680,7 +708,7 @@
     }
 
     const API = {
-        KIND, parse, cardHTML, staticCard, refresh, sweep, act, intent, briefLines,
+        KIND, parse, prescan, cardHTML, staticCard, refresh, sweep, act, intent, briefLines,
         open, close, parseShops, money
     };
     win.WX_TAKEOUT = API;
