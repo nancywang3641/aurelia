@@ -39,6 +39,25 @@
     const TAGS_BASE_KEY = 'wx_contact_tags';
     function _tagsKey() { const sid = _storyId(); return sid ? (TAGS_BASE_KEY + '__' + sid) : TAGS_BASE_KEY; }
 
+    // 🏠 不屬於任何故事的人（大廳加的、或聊天設置打開「不屬於任何故事」）另外存一份，每一本都併進來。
+    //    每筆帶 lobby:true；寫回時照這個記號分兩份存，不會混進哪一本故事。
+    const LOBBY_CONTACTS_KEY = CONTACTS_BASE_KEY + '__lobby';
+    function _parse(k) { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+    function _readAll() {
+        const own = _parse(_contactsKey());
+        const ids = {};
+        own.forEach(function (c) { if (c && c.id) ids[c.id] = 1; });
+        const lob = _parse(LOBBY_CONTACTS_KEY).filter(function (c) { return c && c.id && !ids[c.id]; })
+            .map(function (c) { return Object.assign({}, c, { lobby: true }); });
+        return own.filter(function (c) { return c && !c.lobby; }).concat(lob);
+    }
+    function _writeAll(list) {
+        const own = [], lob = [];
+        (list || []).forEach(function (c) { if (c) (c.lobby ? lob : own).push(c); });
+        localStorage.setItem(_contactsKey(), JSON.stringify(own));
+        localStorage.setItem(LOBBY_CONTACTS_KEY, JSON.stringify(lob));
+    }
+
     function _contactsKey() {
         const sid = _storyId();
         if (!sid) return CONTACTS_BASE_KEY;   // 拿不到 storyId → 退回全域(安全:不隔離也不壞)
@@ -141,8 +160,9 @@
                 id: newId, name: input, desc: '這個人很懶，什麼都沒寫', 
                 avatarId: null, aiKeyword: avatarKeyword || 'user', isGroup: false
             };
+            if (!_storyId()) newContact.lobby = true;   // 沒開故事時加的＝大廳的人
             list.push(newContact);
-            localStorage.setItem(_contactsKey(), JSON.stringify(list));
+            _writeAll(list);
             // 重新加回來的人：撤掉刪好友記號（跑團同步只會對「沒被刪、或已經恢復」的人走到這裡，不會誤撤）
             try { if (win.wxApp && win.wxApp.clearRemoved) win.wxApp.clearRemoved(input); } catch (e) {}
             console.log(`[WX_CONTACTS] 自動註冊新成員: ${input} (ID: ${newId})`);
@@ -335,20 +355,30 @@
         },
 
         addContactToStorage: function(contactObj) {
-            let saved = localStorage.getItem(_contactsKey()); let list = saved ? JSON.parse(saved) : [];
+            let list = _readAll();
             const idx = list.findIndex(c => c.id === contactObj.id);
             if (idx >= 0) { list[idx] = { ...list[idx], ...contactObj }; } else {
+                if (!_storyId() && contactObj.lobby == null) contactObj = { ...contactObj, lobby: true };   // 沒開故事時加的＝大廳的人
                 list.push(contactObj);
                 // 新加的朋友：撤掉這個名字的刪好友記號（她刪了又手動加回來）
                 if (!contactObj.isGroup && contactObj.name) { try { if (win.wxApp && win.wxApp.clearRemoved) win.wxApp.clearRemoved(contactObj.name); } catch (e) {} }
             }
-            localStorage.setItem(_contactsKey(), JSON.stringify(list));
+            _writeAll(list);
         },
-        getAllCustomContacts: function() { const saved = localStorage.getItem(_contactsKey()); return saved ? JSON.parse(saved) : []; },
+        getAllCustomContacts: function() { return _readAll(); },
         updateContactInfo: function(id, data) {
             let list = this.getAllCustomContacts(); const idx = list.findIndex(c => c.id === id);
-            if (idx >= 0) { Object.assign(list[idx], data); localStorage.setItem(_contactsKey(), JSON.stringify(list)); }
+            if (idx >= 0) { Object.assign(list[idx], data); _writeAll(list); }
         },
+        // 🏠 設成／取消「不屬於任何故事」：搬到大廳那份，或搬回當前這本
+        setLobby: function(id, on) {
+            const list = _readAll(); const idx = list.findIndex(c => c.id === id);
+            if (idx < 0) return false;
+            if (on) list[idx].lobby = true; else delete list[idx].lobby;
+            _writeAll(list);
+            return true;
+        },
+        isLobby: function(id) { const c = _readAll().find(x => x.id === id); return !!(c && c.lobby); },
         openInviteWindow: function(chatId, currentMemberIds, callback) {
             const allContacts = this.getAllCustomContacts().filter(c => !c.isGroup);
             const candidates = allContacts.filter(c => !currentMemberIds.includes(c.id));
@@ -445,12 +475,7 @@
                 if (win.wxApp && win.wxApp.markRemoved) await win.wxApp.markRemoved(id, _c && _c.name);
             } catch (e) {}
             // 1. 刪除微信本地儲存的聯絡人
-            let saved = localStorage.getItem(_contactsKey());
-            if (saved) { 
-                let list = JSON.parse(saved); 
-                const newList = list.filter(c => c.id !== id); 
-                localStorage.setItem(_contactsKey(), JSON.stringify(newList)); 
-            }
+            _writeAll(_readAll().filter(c => c.id !== id));
             
             // 2. 刪除資料庫中的聊天歷史紀錄
             if (win.WX_DB && typeof win.WX_DB.deleteApiChat === 'function') {

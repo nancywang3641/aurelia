@@ -43,6 +43,7 @@
     // 取得當前 tavern 劇情存檔 id（與 state_runtime 同款正規化）→ 給 app 紀錄蓋章做 chatId 隔離
     // 當前劇情線的分艙鑰匙：酒館＝chatId、PWA＝storyId（PWA 沒有 SillyTavern，以前一律回 null
     //   ＝手機資料完全不分艙，換一本書照樣看到上一本的聯絡人/微薄）。舊資料沒蓋章、讀取端一律保留。
+    const LOBBY_ID = '__lobby__';   // 🏠 不屬於任何故事的聊天室蓋這個章（手機版大廳加的、或聊天設置打開「不屬於任何故事」）
     function _curTavernChatId() {
         try {
             const ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
@@ -62,6 +63,7 @@
 
     win.OS_DB = {
         currentChatId: function() { return _curTavernChatId(); },
+        LOBBY_ID: LOBBY_ID,   // 聊天室的「大廳」章：不屬於任何故事的人
         init: function() {
             return new Promise((resolve, reject) => {
                 if (dbInstance) { resolve(dbInstance); return; }
@@ -551,7 +553,8 @@
         saveApiChat: async function(id, d) {
             const db = await this.init();
             // 🔒 chatId 隔離：第一次存檔時蓋上「當前劇情 id」（已有就不覆蓋）→ 注入器只注入當前劇情的對話，避免古代卡冒出現代手機數據
-            try { if (d && typeof d === 'object' && d.tavernChatId == null) { const _c = _curTavernChatId(); if (_c != null) d.tavernChatId = _c; } } catch (e) {}
+            //   🏠 沒開故事時（手機版的大廳）蓋「大廳」章＝不屬於任何故事的人：每個故事都看得到，之後在故事裡聊也不會被改蓋成那個故事的
+            try { if (d && typeof d === 'object' && d.tavernChatId == null) { const _c = _curTavernChatId(); d.tavernChatId = (_c != null) ? _c : LOBBY_ID; } } catch (e) {}
             return new Promise((r, j) => {
                 try {
                     const tx = db.transaction(STORE_NAME_CHATS, 'readwrite');
@@ -595,7 +598,7 @@
             for (const k in all) {
                 const d = all[k];
                 const tag = (d && typeof d === 'object') ? d.tavernChatId : null;
-                if (tag == null || tag === cid) out[k] = d;   // 沒章=舊資料保留；同卡=保留；別卡=濾掉
+                if (tag == null || tag === cid || tag === LOBBY_ID) out[k] = d;   // 沒章=舊資料保留；同卡=保留；大廳的人=每本都有；別卡=濾掉
             }
             return out;
         },

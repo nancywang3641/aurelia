@@ -213,8 +213,8 @@
                 if (!c) return;
                 // 🔒 只收當前劇情建立的對話。沒蓋章的一律保留 —— 跟 OS_DB.getApiChatsForCurrentCard 同一把尺：
                 //    PWA 以前根本取不到分艙鑰匙、資料全是沒蓋章的，濾掉就等於這個注入源在 PWA 永遠是空的。
-                if (c.tavernChatId != null && c.tavernChatId !== curCid) return;
-                if (!_backToStory(c)) return;   // 聊天設置 → 隔離 →「帶回劇情」關掉的
+                if (c.tavernChatId != null && c.tavernChatId !== curCid && !_isLobby(c)) return;
+                if (!_backToStory(c)) return;   // 聊天設置 → 隔離 →「帶回劇情」關掉的（大廳的人預設也不帶）
                 const name = c.name || c.realName || '';
                 if (!name || name.length < 2) return;
                 const key = c.isGroup ? ('群聊：' + name) : name;
@@ -280,10 +280,12 @@
     let _nowUninject = null;
 
     // 聊天設置 → 隔離 →「帶回劇情」：沒動過的照「吃這本的劇情」走（關了劇情的那些人本來就跟這本故事無關）
+    function _isLobby(c) { return !!(c && win.OS_DB && c.tavernChatId === win.OS_DB.LOBBY_ID); }
     function _backToStory(c) {
         if (!c) return false;
         if (c.noBack === true) return false;
         if (c.noBack === false) return true;
+        if (_isLobby(c)) return false;          // 不屬於任何故事的人：預設不帶，要的話在聊天設置打開
         return c.noHistory !== true;
     }
     // 一則 → 一行（系統那種也要：外送付了、紅包收了…都是手機上發生的事）
@@ -303,9 +305,9 @@
         Object.keys(chats).forEach(function (id) {
             const c = chats[id];
             if (!c || !Array.isArray(c.messages)) return;
-            // 只送屬於這個故事的：沒開故事時（大廳）聊的不屬於任何一本，不能被下一個進去的故事拿走。
+            // 只送屬於這個故事的；不屬於任何故事的人（大廳章）要她在聊天設置打開「帶回劇情」才送，送進當下這本。
             //   在故事裡傳過訊息的聊天室，存檔時就會被記成這個故事的，所以這裡不會漏掉正在玩的那本。
-            if (c.tavernChatId !== cid) return;
+            if (c.tavernChatId !== cid && !_isLobby(c)) return;
             if (!_backToStory(c)) return;
             const name = c.name || c.realName || '';
             if (!name) return;

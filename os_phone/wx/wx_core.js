@@ -4070,7 +4070,7 @@
                             if (cid != null) {
                                 for (const k in GLOBAL_CHATS) {
                                     const tag = GLOBAL_CHATS[k] ? GLOBAL_CHATS[k].tavernChatId : null;
-                                    if (tag != null && tag !== cid) delete GLOBAL_CHATS[k];
+                                    if (tag != null && tag !== cid && tag !== (win.OS_DB && win.OS_DB.LOBBY_ID)) delete GLOBAL_CHATS[k];   // 大廳的人每本都有
                                 }
                                 if (GLOBAL_ACTIVE_ID && !GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) GLOBAL_ACTIVE_ID = null; // 修正懸空 active id
                             }
