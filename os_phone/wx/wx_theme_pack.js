@@ -59,6 +59,22 @@
     // 🚨 標題字太大會擠成兩行、壓到返回鈕（她截圖：群名兩行疊在「微信」上）：超過就壓回上限
     const TITLE_RE = /wx-header-title\b|ws-title\b|wx-modal-title\b|wx-name\b|wx-contact-name\b|wx-me-name\b/i;
     const TITLE_MAX_PX = 20;
+    // 🚨 每頁最上面那條要往上長到手機狀態列底下（時間、電池坐在它自己的顏色上）。
+    //    主題寫了自己的高度／上內距就把讓出來那塊吃掉 → 返回鈕、圖示鈕被壓到狀態列底下（她截圖）。
+    //    主題照「不含狀態列」那塊寫，這裡替它把狀態列加回去。只認那條本身，不認它裡面的東西。
+    const TOPBAR_RE = /\.(?:wx-header|ws-header|wxmo-bar|wxnb-head|wxto-head)(?![\w-])/i;
+    function _isTopbar(sel) {
+        return _splitTop(String(sel || ''), ',').some(function (s) {
+            const last = s.trim().split(/\s*[\s>+~]\s*/).pop();
+            return TOPBAR_RE.test(last);
+        });
+    }
+    function _plusSafeTop(val) {
+        const imp = /!important/i.test(val);
+        const v = val.replace(/!important/i, '').trim();
+        if (!/^(?:[\d.]+[a-z%]*|calc\(.*\)|var\(.*\))$/i.test(v) || /%$/.test(v)) return null;   // auto、fit-content、百分比不動
+        return 'calc(' + v + ' + var(--safe-top, 0px))' + (imp ? ' !important' : '');
+    }
     function _clampFont(val) {
         const m = String(val).match(/^\s*([\d.]+)\s*(px|rem|em)\s*(!important)?\s*$/i);
         if (!m) return val;
@@ -87,6 +103,7 @@
         const prot = PROTECT_RE.test(sel);
         const avatar = AVATAR_RE.test(sel);
         const title = TITLE_RE.test(sel);
+        const topbar = _isTopbar(sel);
         const keep = [];
         _splitTop(String(cssText || ''), ';').forEach(function (decl) {
             const i = decl.indexOf(':');
@@ -101,6 +118,18 @@
             if (/^(?:min-|max-)?(?:width|height)$/.test(prop) && /\b100v[wh]\b|\b\d+v(?:w|h|min|max)\b/.test(v)) return;
             if (avatar && (prop === 'background' || prop === 'background-image')) return;   // 會把照片蓋掉
             if (title && prop === 'font-size') { keep.push(prop + ': ' + _clampFont(val)); return; }
+            if (topbar && /^(?:min-|max-)?height$|^padding-top$/.test(prop)) {
+                const nv = _plusSafeTop(val);
+                keep.push(prop + ': ' + (nv || val));
+                return;
+            }
+            if (topbar && (prop === 'padding' || prop === 'padding-block')) {
+                keep.push(prop + ': ' + val);
+                const first = _splitTop(val.replace(/!important/i, '').trim(), ' ').filter(Boolean)[0];
+                const nv = first && _plusSafeTop(first + (/!important/i.test(val) ? ' !important' : ''));
+                if (nv) keep.push('padding-top: ' + nv);
+                return;
+            }
             if (prot) {
                 if (prop === 'display' && v === 'none') return;
                 if (prop === 'visibility' && v === 'hidden') return;
@@ -202,7 +231,15 @@
         '  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;',
         '  min-width: 0 !important; max-width: 62% !important; line-height: 1.3 !important; }',
         '.wx-shell .wx-chat-item .wx-name, .wx-shell .wx-contact-item .wx-contact-name {',
-        '  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }'
+        '  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }',
+        // 最底下那條放手機的橫槓，是外殼自己的下內距讓出來的；主題寫 padding 會把它吃掉，分頁列就壓到橫槓上
+        '.aps-app-body > .aps-mount > .wx-shell { padding-bottom: var(--aps-safe-bottom, 0px) !important; box-sizing: border-box !important; }',
+        // 那條露出來的是外殼的底色，主題常把外殼跟分頁列做成兩個顏色 → 底下多一條不相干的色帶。
+        // 讓分頁列／輸入列往下多長一塊自己的底，跟真手機一樣一路鋪到最底
+        '.aps-app-body .wx-shell > .wx-bottom-nav { position: relative; }',
+        '.aps-app-body .wx-shell > .wx-bottom-nav::after, .aps-app-body .wx-shell > .wx-footer-wrapper::after {',
+        '  content: "" !important; position: absolute !important; left: 0 !important; right: 0 !important; top: 100% !important;',
+        '  height: var(--aps-safe-bottom, 0px) !important; background: inherit !important; pointer-events: none !important; }'
     ].join('\n');
 
     function _inject(css) {
@@ -294,7 +331,9 @@
             '',
             '尺寸（這是手機畫面，照這個比例設計）：',
             '・整支 app 寬約 360px（手機直立），高約 800px。',
-            '・標頭高約 45px（上面另有手機的狀態列）；標題一行、字 15～18px，左邊是返回、右邊是圖示鈕，標題太大會擠成兩行壓到它們。',
+            '・最上面約 40px 是手機的狀態列（時間、訊號、電池），標頭會自動往上長去墊在它底下；標頭的高度與內距照「狀態列以下那塊」寫就好，不用自己加。',
+            '・標頭高約 45px；標題一行、字 15～18px，左邊是返回、右邊是圖示鈕，三樣在這 45px 裡上下置中。標題太大會擠成兩行壓到它們。',
+            '・最底下約 26px 放手機的橫槓，露出來的是 .wx-shell 的底色：外殼底色跟分頁列、輸入列同一個顏色才接得成一整塊；分頁列與輸入列不要自己加底部內距或外距，也不要用 position 釘到最底。',
             '・聊天列表每一列高約 72px，頭像約 48px；聊天室裡的頭像約 40px；名字字級 15～17px。',
             '・底部分頁列高約 55px，三格平分；輸入列高約 56px，打字框高約 36px。',
             '・頭像是一張照片，只能改形狀（圓角、裁切）、邊框、陰影、大小；不要寫 background，會把照片蓋掉。',
