@@ -178,7 +178,10 @@
     //    跟自己對帳。沒有待處理的就回空字串，一個字都不加。
     function _pendingBrief(chatId) {
         const C = _cards();
-        let pend = (C && chatId) ? C.pending(chatId) : [];
+        let pend = (C && chatId) ? C.pending(chatId).filter(c => c.kind !== 'takeout') : [];
+        // 🛵 外送單另外列（wx_takeout.js）：它不是收下退回那種，是走到哪一格、還剩幾分鐘、代付等誰決定
+        let _to = { lines: [], asks: false };
+        try { const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT; if (_TO && _TO.briefLines && chatId) _to = _TO.briefLines(chatId); } catch (e) { console.warn('[WX] 外送清單組裝失敗', e); }
         // 🚨 紅包以前從來沒有人把狀態改掉（禮物、轉帳收下退回都會改，紅包只改領取名單），
         //    領完了還是 pending → 每一輪都列一行「還剩 ¥0.00」，模型說系統一直重複提醒它紅包歸零。
         //    現在領完那一刻就標 finished（見 _rpMarkIfDone）；已經卡在 pending 的舊資料在這裡順手改掉。
@@ -187,7 +190,10 @@
             try { C.update(chatId, c.key, { status: 'finished' }); } catch (e) {}
             return false;
         });
-        if (!pend.length) return '';
+        const _toBlock = !_to.lines.length ? [] : ['【外送】'].concat(_to.lines).concat(_to.asks
+            ? ['別人請你付的代付，要付就在回覆裡單獨一行寫 [系統: TakeoutPay|號碼]，不付就寫 [系統: TakeoutDecline|號碼]。外送送到之前，東西還沒到手上。']
+            : ['外送送到之前，東西還沒到手上。']);
+        if (!pend.length) return _toBlock.join('\n');
         const NAME = { redpacket: '紅包', gift: '禮物', transfer: '轉帳' };
         const money = (v) => '¥' + (Number(v) || 0).toFixed(2);
         const lines = pend.map(c => {
@@ -215,7 +221,7 @@
             '上面這些是之前留下、還沒處理完的。要讓誰領它們、或收下退回它們時，最後一段直接寫號碼就好（例如「小明領取了紅包 4.44元|1」）。',
             '這一輪你新發的紅包／禮物／轉帳，照原本的規矩自己帶一個單號——它還沒有號碼；同一輪就要讓人領它的話，用你剛剛帶的那個單號指。',
             '沒列在上面、也不是這一輪新發的，就是已經處理完了，別再動它。'
-        ]).join('\n');
+        ]).concat(_toBlock.length ? [''].concat(_toBlock) : []).join('\n');
     }
 
     // 🔗 打開她傳的連結（聊天設置「打開我傳的連結」，一間一個開關，存在 chat.readLinks）。
@@ -661,6 +667,14 @@
 
     function processSystemIntent(content, ctx) {
         if (!content || !ctx.chatId) return null;
+
+        // 🛵 角色回她的外送代付：[系統: TakeoutPay|號碼] / [系統: TakeoutDecline|號碼]（wx_takeout.js）。
+        //    排最前面：後面轉帳那幾條認「Accept／Return」加直線，換個寫法就可能先被它們吃掉。
+        try {
+            const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT;
+            const _tr = _TO && _TO.intent ? _TO.intent(content, ctx) : null;
+            if (_tr) return _tr;
+        } catch (e) { console.warn('[WX] 外送代付回覆解析失敗:', e); }
 
         // 處理 [System: 換頭像 描述]。跟更改簽名同一家族：AI 動的是自己的門面。
         // 🚨 這是權限，預設關著。關著的時候連教學都不會進 prompt，所以正常不會收到這行；
@@ -2665,6 +2679,7 @@
             } catch (e) { fail(e); }
         },
 
+        pushSystemLine: _pushSystemLine,   // 事後才知道結果的那種（外送送到、代付過期）補一行進那間
         get GLOBAL_ACTIVE_ID() { return GLOBAL_ACTIVE_ID; },
         set GLOBAL_ACTIVE_ID(v) { GLOBAL_ACTIVE_ID = v; },   // 📞 電話 app 撥通時暫借 active id（buildContext 靠它抓該聯絡人 DB 歷史）；無 setter 會在 strict mode 拋 TypeError → 通話卡死不調 API
         get APP_CONTAINER() { return APP_CONTAINER; },
@@ -3193,7 +3208,7 @@
         onScrollDot: function(el) { const dots = APP_CONTAINER.querySelectorAll('.wx-dot'); const pageIndex = Math.round(el.scrollLeft / el.clientWidth); dots.forEach((d, i) => { if(i === pageIndex) d.classList.add('active'); else d.classList.remove('active'); }); },
         
         // ＋ 面板的每一格。🚨「語音」是打字寫入的小窗（[Voice: 打的字]），真的錄音在輸入框的麥克風按住說話——兩種都要，別再把這格換成錄音
-        action: function(type) { PENDING_ACTION_TYPE = type; const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus(); this.togglePanel(); },
+        action: function(type) { if (type === 'takeout') { const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT; this.togglePanel(); if (_TO) _TO.open(GLOBAL_ACTIVE_ID); return; } PENDING_ACTION_TYPE = type; const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus(); this.togglePanel(); },
 
         // 📷 從相簿選一張照片傳出去：壓成 JPEG 存進圖庫，訊息裡只放圖庫編號。
         //    對方要「看」這張照片的話，在 triggerReply 那邊照頭像的做法只送一次（_photoOnceMessage）。

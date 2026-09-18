@@ -33,11 +33,16 @@
         //    （喇叭、音波條、秒數）——看起來像「一則語音」，不是「一通通話」。她說感覺做一半就是這個。
         //    真的能講話的通話在電話 app，微信這顆本來就只是留個記錄，那就讓它長得像記錄。
         CALL: '通话|通話|Call',
-        WBSHARE: 'WbShare'
+        WBSHARE: 'WbShare',
+        // 🛵 外送（wx_takeout.js）。代付那組一定要先換：「Takeout」是「TakeoutAsk」的開頭，
+        //    順序反過來會把代付單當成一般外送、欄位全部錯位。
+        TAKEOUT_ASK: 'TakeoutAsk|外送代付|外賣代付|外卖代付|代付',
+        TAKEOUT: 'Takeout|外送|外賣|外卖'
     };
     // 自帶造型、泡泡要讓位的那些（語音刻意不在內：微信原生語音本來就裝在泡泡裡）
     MSG_TAG.CARD = [MSG_TAG.TRANSFER, MSG_TAG.GIFT, MSG_TAG.REDPACKET, MSG_TAG.LOCATION,
-        MSG_TAG.VIDEO, MSG_TAG.FILE, MSG_TAG.LINK, MSG_TAG.PAYCODE, MSG_TAG.WBSHARE].join('|');
+        MSG_TAG.VIDEO, MSG_TAG.FILE, MSG_TAG.LINK, MSG_TAG.PAYCODE, MSG_TAG.WBSHARE,
+        MSG_TAG.TAKEOUT_ASK, MSG_TAG.TAKEOUT].join('|');
     MSG_TAG.ALL = [MSG_TAG.STICKER, MSG_TAG.IMAGE, MSG_TAG.CARD, MSG_TAG.VOICE, MSG_TAG.CALL].join('|');
 
     // 🚨系統訊息的最後一道：畫面上不准出現原始協議格式。
@@ -540,6 +545,13 @@
                 }
                 return `<div class="wx-gift-card-blue ${extraClass}" style="opacity:${opacity}" ${clickAction}><div class="wx-gift-top"><div class="wx-gift-icon-gold">${icon}</div><div class="wx-gift-title-text">${memo || '送你一份心意'}</div></div><div class="wx-gift-footer">${statusLabel}</div></div>`;
             });
+            // 🛵 外送單（wx_takeout.js）：狀態記在這間的卡片帳本，卡片自己會照時間往前走
+            const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT;
+            if (_TO) {
+                const _toSender = (msg && (msg.sender || msg.senderName)) || '';
+                html = html.replace(tagRe(MSG_TAG.TAKEOUT_ASK), (m, t, content) => _TO.cardHTML({ chatId: safeId, msgIndex: msgIndex, isMe: !!isMe, sender: _toSender, mode: 'ask', content: content, alias: autoRef('toa') }));
+                html = html.replace(tagRe(MSG_TAG.TAKEOUT), (m, t, content) => _TO.cardHTML({ chatId: safeId, msgIndex: msgIndex, isMe: !!isMe, sender: _toSender, mode: 'order', content: content, alias: autoRef('to') }));
+            }
             // 圖片走三個手機 app 共用的管道；ref 帶 chatId，訊息位置由 .wx-msg-row 的 data-msg-idx 補上
             html = html.replace(tagRe(MSG_TAG.IMAGE), (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), { app: 'wx', ref: safeId }) : content; });
             // 📞 通話記錄：一個電話圖示加一句話，裝在泡泡裡（微信原生就是這樣）。
@@ -1344,6 +1356,7 @@
                                 </div>
                                 <div class="wx-grid-page">
                                     <div class="wx-grid-item" onclick="${app}.action('gift')"><div class="wx-grid-icon"><i class="fa-solid fa-gift"></i></div><div class="wx-grid-label">禮物</div></div>
+                                    <div class="wx-grid-item" onclick="${app}.action('takeout')"><div class="wx-grid-icon"><i class="fa-solid fa-motorcycle"></i></div><div class="wx-grid-label">外送</div></div>
                                 </div>
                             </div>
                             <div class="wx-dots" id="wxPanelDots"><div class="wx-dot active"></div><div class="wx-dot"></div></div>

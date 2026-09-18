@@ -198,7 +198,7 @@
         // 把混在文字裡的「圖片/語音/表情包」tag 拆成單獨一條（描述式 [X: 描述] 或檔案式 [x.gif] 都拆）
         // 例: "加油！[表情包: 小猫打滚]" → ["加油！","[表情包: 小猫打滚]"]；"我到了[图片: 街道照]" → ["我到了","[图片: 街道照]"]
         // 通用：抓任何 [別名: 描述]，用 _isAliasTag 判類型，只拆三類媒體；[文件:]/[22:35] 等非媒體不動。
-        _SPECIAL_CARD_RE: /^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|收款码|收款碼|收款|付款码|付款碼)[：:]/i,
+        _SPECIAL_CARD_RE: /^\[(轉賬|转账|Transfer|Gift|禮物|礼物|紅包|红包|RedPacket|視頻|视频|Video|位置|Location|定位|收款码|收款碼|收款|付款码|付款碼|TakeoutAsk|Takeout|外送代付|外賣代付|外卖代付|代付|外送|外賣|外卖)[：:]/i,
         _splitStickerContent: function(content) {
             // 轉賬/紅包/視頻/位置/收款碼這些判定卡也拆：AI 常把「[收款碼: 任意] 沒留。要不贊助點？」寫成一條，
             // 卡跟話黏在一起 buildBubble 的 ^\[…\]$ 就對不上，整條變成原始文字。卡自己一條、話自己一條。
@@ -316,9 +316,15 @@
             const fileM = content.match(/^\[(文件|檔案|档案|附件|File|Document|Attachment)[：:]\s*(.*?)\]$/i);
             const linkM = content.match(/^\[(鏈接|链接|連結|连结|鏈結|网址|網址|網頁|网页|Link|URL|Url)[：:]\s*([\s\S]*?)\]$/i);
             const recvM = content.match(/^\[(收款码|收款碼|收款|付款码|付款碼)[：:]\s*([\s\S]*?)\]$/i);
+            // 🛵 外送單：劇情裡的手機只畫單子本身（沒有錢包、沒有帳本，不走狀態）。代付那組先認，Takeout 是 TakeoutAsk 的開頭
+            const toAskM = content.match(/^\[(TakeoutAsk|外送代付|外賣代付|外卖代付|代付)[：:]\s*([\s\S]*?)\]$/i);
+            const toM = toAskM ? null : content.match(/^\[(Takeout|外送|外賣|外卖)[：:]\s*([\s\S]*?)\]$/i);
 
             let inner = '';
-            if (imgM) {
+            const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT;
+            if ((toAskM || toM) && _TO) {
+                inner = _TO.staticCard(toAskM ? 'ask' : 'order', (toAskM || toM)[2], false, sender);
+            } else if (imgM) {
                 const desc = imgM[2] || '圖片';
                 // 圖片走三個手機 app 共用的管道（佔位卡＋展開鈕＋頭像桶生圖＋##角色名##展開）；VN 手機沒有資料層，生完只換畫面
                 const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;

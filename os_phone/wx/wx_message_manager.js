@@ -139,6 +139,8 @@
                 const _pv = String((lastMsg.type === 'msg' && lastMsg.content) || '');
                 // 圖片訊息顯示 [圖片]，別把圖庫編號或網址露在聊天列表上
                 currentChat.lastPreview = /^\[\s*(?:图片|圖片|照片|Img)\s*[:：]/i.test(_pv) ? '[圖片]'
+                    : /^\[\s*(?:TakeoutAsk|外送代付|外賣代付|外卖代付|代付)\s*[:：]/i.test(_pv) ? '[外送代付]'
+                    : /^\[\s*(?:Takeout|外送|外賣|外卖)\s*[:：]/i.test(_pv) ? '[外送]'
                     : (_pv.substring(0, 30) + (_pv.length > 30 ? '...' : ''));
             } else {
                 currentChat.lastPreview = '';
