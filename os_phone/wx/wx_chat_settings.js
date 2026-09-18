@@ -934,6 +934,12 @@
                         const personaBody = doc.getElementById('ws-persona-body');
                         if (!personaOverlay || !personaBody) return;
                         
+                        // 🚨 每次打開都重讀這間現在存著的。以前用的是設定頁剛打開時抄下來的那份：
+                        //    存完不回頭更新，同一頁再打開這格就是「存之前的舊字」（她：保存再打開字變少了），
+                        //    這時再按一次保存，剛寫的就被舊的蓋掉。
+                        personaFromLorebook = chat.personaFromLorebook || null;
+                        personaCustom = chat.personaCustom || (!chat.personaFromLorebook && chat.persona ? chat.persona : '');
+
                         // 📚 從哪一本世界書挑：預設是這張卡的主世界書；她可以翻到別本
                         //    （視差那些從別的故事借過來的人，人設條目本來就不在這本裡）。
                         let curBook = chat.personaLoreBook || '';
@@ -961,7 +967,7 @@
                         html += '<div class="ws-persona-section">';
                         html += '<div class="ws-persona-section-title">額外補充 <span style="font-weight:400;color:var(--wx-ink-dim);font-size:11px;">（選填，疊加在世界書條目之上）</span></div>';
                         html += '<div class="ws-persona-input-wrapper">';
-                        html += `<textarea class="ws-persona-textarea" id="inp-persona-custom" placeholder="例：這個聊天室裡他是臥底身份，對方不知道他的真實職業..." style="min-height:80px;">${personaCustom || ''}</textarea>`;
+                        html += `<textarea class="ws-persona-textarea" id="inp-persona-custom" placeholder="例：這個聊天室裡他是臥底身份，對方不知道他的真實職業...">${escapeHtml(personaCustom || '')}</textarea>`;
                         html += '</div>';
                         html += '</div>';
 
@@ -1065,6 +1071,10 @@
                         const personaBody = doc.getElementById('ws-persona-body');
                         if (!personaOverlay || !personaBody) return;
                         
+                        // 🚨 同人設那格：每次打開重讀這間存著的，別用設定頁剛打開時抄的舊字
+                        groupNoteFromLorebook = chat.groupNoteFromLorebook || null;
+                        groupNoteCustom = chat.groupNoteCustom || '';
+
                         // 獲取當前世界書
                         let currentLorebook = null;
                         if (win.TavernHelper && typeof win.TavernHelper.getCurrentCharPrimaryLorebook === 'function') {
@@ -1116,7 +1126,7 @@
                         html += '<div class="ws-persona-section">';
                         html += '<div class="ws-persona-section-title">或直接輸入備註</div>';
                         html += '<div class="ws-persona-input-wrapper">';
-                        html += `<textarea class="ws-persona-textarea" id="inp-group-note-custom" placeholder="在此輸入群組關係網等備註內容...">${groupNoteCustom || ''}</textarea>`;
+                        html += `<textarea class="ws-persona-textarea" id="inp-group-note-custom" placeholder="在此輸入群組關係網等備註內容...">${String(groupNoteCustom || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>`;
                         html += '</div>';
                         html += '</div>';
                         
