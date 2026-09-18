@@ -303,7 +303,9 @@
         Object.keys(chats).forEach(function (id) {
             const c = chats[id];
             if (!c || !Array.isArray(c.messages)) return;
-            if (c.tavernChatId != null && c.tavernChatId !== cid) return;
+            // 只送屬於這個故事的：沒開故事時（大廳）聊的不屬於任何一本，不能被下一個進去的故事拿走。
+            //   在故事裡傳過訊息的聊天室，存檔時就會被記成這個故事的，所以這裡不會漏掉正在玩的那本。
+            if (c.tavernChatId !== cid) return;
             if (!_backToStory(c)) return;
             const name = c.name || c.realName || '';
             if (!name) return;
