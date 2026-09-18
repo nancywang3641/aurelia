@@ -13,7 +13,14 @@
     if (!win.WB_VIEW) { console.error('錯誤：未檢測到 wb_view.js'); return; }
     if (!win.OS_DB) { console.error('錯誤：未檢測到 os_db.js'); return; }
 
-    let GLOBAL_POSTS = [];
+    let GLOBAL_POSTS = [];   // 全部故事的都在這（找某一則用它）；畫面與給 AI 看的一律用 _posts()
+    // 只留這個故事的：蓋這本章的、不屬於任何故事的人發的（大廳章）、沒蓋章的舊資料
+    function _posts() {
+        let cid = null, L = '';
+        try { cid = win.OS_DB && win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null; L = (win.OS_DB && win.OS_DB.LOBBY_ID) || ''; } catch (e) {}
+        if (cid == null) return GLOBAL_POSTS;
+        return GLOBAL_POSTS.filter(function (p) { return p && (p.tavernChatId == null || p.tavernChatId === cid || (L && p.tavernChatId === L)); });
+    }
     let CURRENT_TAB = 'home';
     let APP_CONTAINER = null;
     let LAST_USER_HASH = "";
@@ -89,7 +96,7 @@
                 }
 
                 // 正常渲染主頁面
-                APP_CONTAINER.innerHTML = win.WB_VIEW.renderApp(GLOBAL_POSTS, CURRENT_TAB, this.isLoading, DARK_MODE);
+                APP_CONTAINER.innerHTML = win.WB_VIEW.renderApp(_posts(), CURRENT_TAB, this.isLoading, DARK_MODE);
             }
         },
 
@@ -256,10 +263,13 @@
         },
 
         clearAllData: async function() {
-            const n = GLOBAL_POSTS.length;
-            if (!(await this._ask(`清空全部 ${n} 條微博？刪了就回不來。`, '清空'))) return;
-            await win.OS_DB.clearWbPosts();
-            GLOBAL_POSTS = [];
+            // 只清這個故事的（別本故事的、不屬於任何故事的人發的都不動）
+            const mine = _posts().filter(p => !(win.OS_DB && p.tavernChatId === win.OS_DB.LOBBY_ID));
+            const n = mine.length;
+            if (!(await this._ask(`清空這個故事的 ${n} 條微博？刪了就回不來。`, '清空'))) return;
+            for (const p of mine) { try { await win.OS_DB.deleteWbPost(p.id); } catch (e) {} }
+            const gone = new Set(mine.map(p => p.id));
+            GLOBAL_POSTS = GLOBAL_POSTS.filter(p => !gone.has(p.id));
             this.render();
             this._showToast('已清空');
         },
@@ -680,7 +690,7 @@
             return '';
         },
         serializeFeedForAI: function() {
-            const recent = GLOBAL_POSTS.slice(0, 6);
+            const recent = _posts().slice(0, 6);
             const photos = this._collectPhotos(recent);
             return recent.map(p => {
                 let comms = (p.comments && p.comments.length > 0) ? this._filterComments(p.comments) : "None";
@@ -711,12 +721,12 @@
             this.isLoading = true;
             this.render();
             try {
-                const isInitial = GLOBAL_POSTS.length <= 1; 
+                const isInitial = _posts().length <= 1; 
                 let messages = [];
                 if (isInitial) {
                     messages = await win.OS_API.buildContext("System Request: Generate World Social Media Feed.", 'wb_world_gen');
                 } else {
-                    await this._ensurePhotoDescs(GLOBAL_POSTS.slice(0, 6));
+                    await this._ensurePhotoDescs(_posts().slice(0, 6));
                     const feedContext = this.serializeFeedForAI();
                     let prompt = win.OS_PROMPTS.get('wb_world_continue');
                     messages = await win.OS_API.buildContext("System Request: Continue World Feed.", 'wb_world_continue');
@@ -725,7 +735,7 @@
                             m.content = m.content.replace('{{context}}', feedContext);
                         }
                     });
-                    this._attachPhotos(messages, this._collectPhotos(GLOBAL_POSTS.slice(0, 6)));
+                    this._attachPhotos(messages, this._collectPhotos(_posts().slice(0, 6)));
                 }
                 // 設定：直接用主模型完整設定（含 useSystemApi/useGenerateRaw/stProfileId/url/key）跟創作室同源。
                 // 🚨別再用 wx_phone_api_config 覆蓋——舊 wx 設定會把「跟隨酒館/generateRaw」旗標蓋成直連→報「無 URL/Key」。

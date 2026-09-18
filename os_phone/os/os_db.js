@@ -648,7 +648,15 @@
         },
         saveWbPost: async function(p) {
             const db = await this.init();
-            try { if (p && typeof p === 'object' && p.tavernChatId == null) { const _c = _curTavernChatId(); if (_c != null) p.tavernChatId = _c; } } catch (e) {}
+            // 🏠 發文的是不屬於任何故事的人（通訊錄裡帶大廳記號）、或當下沒開故事 → 蓋大廳章，每個故事都看得到
+            try {
+                if (p && typeof p === 'object' && p.tavernChatId == null) {
+                    const _c = _curTavernChatId();
+                    let _lobbyAuthor = false;
+                    try { const C = win.WX_CONTACTS; _lobbyAuthor = !p.isMe && !!(C && C.getAllCustomContacts && C.getAllCustomContacts().some(function (x) { return x && x.lobby && x.name === p.user; })); } catch (e) {}
+                    p.tavernChatId = (_c == null || _lobbyAuthor) ? LOBBY_ID : _c;
+                }
+            } catch (e) {}
             return new Promise((r, j) => {
                 try {
                     const tx = db.transaction(STORE_NAME_WB, 'readwrite');
