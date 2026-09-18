@@ -285,7 +285,7 @@
         if (!c) return false;
         if (c.noBack === true) return false;
         if (c.noBack === false) return true;
-        if (_isLobby(c)) return false;          // 不屬於任何故事的人：預設不帶，要的話在聊天設置打開
+        if (_isLobby(c)) return false;          // 常駐角色：預設不帶，要的話在聊天設置打開
         return c.noHistory !== true;
     }
     // 一則 → 一行（系統那種也要：外送付了、紅包收了…都是手機上發生的事）
@@ -305,7 +305,7 @@
         Object.keys(chats).forEach(function (id) {
             const c = chats[id];
             if (!c || !Array.isArray(c.messages)) return;
-            // 只送屬於這個故事的；不屬於任何故事的人（大廳章）要她在聊天設置打開「帶回劇情」才送，送進當下這本。
+            // 只送屬於這個故事的；常駐角色（大廳章）要她在聊天設置打開「帶回劇情」才送，送進當下這本。
             //   在故事裡傳過訊息的聊天室，存檔時就會被記成這個故事的，所以這裡不會漏掉正在玩的那本。
             if (c.tavernChatId !== cid && !_isLobby(c)) return;
             if (!_backToStory(c)) return;

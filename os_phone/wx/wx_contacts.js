@@ -39,7 +39,7 @@
     const TAGS_BASE_KEY = 'wx_contact_tags';
     function _tagsKey() { const sid = _storyId(); return sid ? (TAGS_BASE_KEY + '__' + sid) : TAGS_BASE_KEY; }
 
-    // 🏠 不屬於任何故事的人（大廳加的、或聊天設置打開「不屬於任何故事」）另外存一份，每一本都併進來。
+    // 🏠 常駐角色（大廳加的、或聊天設置打開「常駐角色」）另外存一份，每一本都併進來。
     //    每筆帶 lobby:true；寫回時照這個記號分兩份存，不會混進哪一本故事。
     const LOBBY_CONTACTS_KEY = CONTACTS_BASE_KEY + '__lobby';
     function _parse(k) { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
@@ -370,7 +370,7 @@
             let list = this.getAllCustomContacts(); const idx = list.findIndex(c => c.id === id);
             if (idx >= 0) { Object.assign(list[idx], data); _writeAll(list); }
         },
-        // 🏠 設成／取消「不屬於任何故事」：搬到大廳那份，或搬回當前這本
+        // 🏠 設成／取消「常駐角色」：搬到大廳那份，或搬回當前這本
         setLobby: function(id, on) {
             const list = _readAll(); const idx = list.findIndex(c => c.id === id);
             if (idx < 0) return false;

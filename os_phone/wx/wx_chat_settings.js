@@ -517,11 +517,11 @@
                 <div class="ws-note">帶回劇情開著：你在這裡聊的，回到劇情時會跟你下一句話一起交給劇情，只交一次。無關緊要的人關掉，劇情就不會知道。</div>
                 <div class="ws-group">
                     <label class="ws-cell ws-cell-switch">
-                        <div class="ws-label">不屬於任何故事</div>
+                        <div class="ws-label">常駐角色</div>
                         <input type="checkbox" class="ws-switch" id="chk-iso-lobby" ${chat.tavernChatId === (win.OS_DB && win.OS_DB.LOBBY_ID) ? 'checked' : ''} ${(win.OS_DB && win.OS_DB.currentChatId && win.OS_DB.currentChatId() != null) ? '' : 'disabled'}>
                     </label>
                 </div>
-                <div class="ws-note">打開後他像你手機裡的朋友：每個故事都看得到他，不會被算成哪一本故事的人。你們聊的預設不帶回劇情，要帶就打開上面的「帶回劇情」，會帶回你當下在玩的那個故事。</div>
+                <div class="ws-note">開了每個故事都找得到他。你們聊的預設不帶回劇情，要帶就打開上面的「帶回劇情」。</div>
 
                 ${!isGroup ? `
                 <div class="ws-group">
@@ -1256,7 +1256,7 @@
                     if (!_s.checked && _b && _b.checked) { _b.checked = false; chat.noBack = true; }
                     _saveIso();
                 };
-                // 🏠 不屬於任何故事：聊天室蓋大廳章、通訊錄搬到大廳那份；關掉＝歸回當下這本故事
+                // 🏠 常駐角色：聊天室蓋大廳章、通訊錄搬到大廳那份；關掉＝歸回當下這本故事
                 const _lb = doc.getElementById('chk-iso-lobby');
                 if (_lb) _lb.onchange = () => {
                     const L = win.OS_DB && win.OS_DB.LOBBY_ID;

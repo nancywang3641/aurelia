@@ -14,7 +14,7 @@
     if (!win.OS_DB) { console.error('錯誤：未檢測到 os_db.js'); return; }
 
     let GLOBAL_POSTS = [];   // 全部故事的都在這（找某一則用它）；畫面與給 AI 看的一律用 _posts()
-    // 只留這個故事的：蓋這本章的、不屬於任何故事的人發的（大廳章）、沒蓋章的舊資料
+    // 只留這個故事的：蓋這本章的、常駐角色發的（大廳章）、沒蓋章的舊資料
     function _posts() {
         let cid = null, L = '';
         try { cid = win.OS_DB && win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null; L = (win.OS_DB && win.OS_DB.LOBBY_ID) || ''; } catch (e) {}
@@ -263,7 +263,7 @@
         },
 
         clearAllData: async function() {
-            // 只清這個故事的（別本故事的、不屬於任何故事的人發的都不動）
+            // 只清這個故事的（別本故事的、常駐角色發的都不動）
             const mine = _posts().filter(p => !(win.OS_DB && p.tavernChatId === win.OS_DB.LOBBY_ID));
             const n = mine.length;
             if (!(await this._ask(`清空這個故事的 ${n} 條微博？刪了就回不來。`, '清空'))) return;
