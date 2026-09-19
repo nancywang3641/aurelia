@@ -266,6 +266,98 @@
             return out;
         },
 
+        // 圖（data 網址／網址／圖庫編號）→ 可以送給模型的 data 網址；拿不到回空字串
+        toDataUrl: async function (src) {
+            const s = String(src || '');
+            if (!s) return '';
+            if (/^data:image/i.test(s)) return s;
+            let url = s, revoke = false;
+            if (this.isDbId(s)) {
+                const db = win.OS_DB || window.OS_DB;
+                url = (db && db.getImage) ? (await db.getImage(s)) || '' : '';
+                revoke = /^blob:/.test(url);
+                if (!url) return '';
+            }
+            try {
+                const blob = await (await fetch(url)).blob();
+                return await new Promise(function (res, rej) { const rd = new FileReader(); rd.onload = function () { res(String(rd.result || '')); }; rd.onerror = rej; rd.readAsDataURL(blob); });
+            } catch (e) {
+                return /^https?:/i.test(s) ? s : '';   // 抓不回來的網址就原樣給（模型那邊自己去拿）
+            } finally { if (revoke) { try { URL.revokeObjectURL(url); } catch (e) {} } }
+        },
+
+        // ── 👁 看一次圖（共用）─────────────────────────────────────
+        //    她上傳的真照片要給角色看時一律走這支：照設置「看圖」那格決定送不送、怎麼送，看過的描述存回那筆資料，之後只送文字。
+        //    以前微信照片、記事本照片、頭像、微博各寫一份，流程一樣；新的地方要看圖就叫這個，不要再抄一份。
+        //    recs：可能要看的那幾筆資料（呼叫端的訊息／照片物件）。o：
+        //      src(rec) → 那張圖（data 網址／網址／圖庫編號）      descKey：描述存在 rec 的哪一格（有值＝看過了）
+        //      triesKey：試過幾次存哪一格（沒寫回描述也算一次）      maxTries：最多試幾次（預設 2）
+        //      max：一輪最多幾張（取最新的）                         about：一句話說這是哪裡的照片（給看圖小模型）
+        //      helperOnly：只在「交給看圖小模型」時做（聊天模型自己看那條由呼叫端自己處理）
+        //    回傳 null（關著／沒有要看的）或
+        //      { mode: 'helper', used: [rec], descs: [描述] }   ← 描述已寫進 rec[descKey]，沒看成的那張是空字串
+        //      { mode: 'main',   used: [rec], parts: [image_url…] } ← 這一輪夾進去給聊天模型看，它看完要自己寫描述回來
+        lookOnce: async function (recs, o) {
+            o = o || {};
+            const mode = this.visionMode();
+            if (mode === 'off' || (o.helperOnly && mode !== 'helper')) return null;
+            const dk = o.descKey || 'desc', tk = o.triesKey || 'tries', maxT = o.maxTries || 2;
+            const pend = (recs || []).filter(function (r) { return r && !r[dk] && (r[tk] || 0) < maxT; }).slice(-(o.max || 3));
+            const used = [], urls = [];
+            for (const r of pend) {
+                let u = '';
+                try { u = await this.toDataUrl(typeof o.src === 'function' ? o.src(r) : r.src); } catch (e) {}
+                if (!u) continue;
+                r[tk] = (r[tk] || 0) + 1;
+                used.push(r); urls.push(u);
+            }
+            if (!used.length) return null;
+            if (mode === 'helper') {
+                let descs = [];
+                try { descs = await this.describeImages(urls, o.about || ''); } catch (e) { this.visionFailed(e); }
+                descs = used.map(function (r, i) { const d = String(descs[i] || '').slice(0, 300); if (d) r[dk] = d; return d; });
+                return { mode: 'helper', used: used, descs: descs };
+            }
+            return { mode: 'main', used: used, parts: urls.map(function (u) { return { type: 'image_url', image_url: { url: u } }; }) };
+        },
+
+        // ── 👁 附圖叫 AI（共用）：創作室聊天框的參考圖、創作室做的 app 的 st.callAI(提示, { images })
+        //    一段文字＋幾張圖 → 照「看圖」那格變成要送的內容：
+        //      main   → [文字, 圖…]（聊天模型自己看）
+        //      helper → 純文字，後面接看圖小模型寫的描述
+        //      off    → 純文字，圖不送（跳一次提示）
+        withImages: async function (text, images, about) {
+            const t = String(text == null ? '' : text);
+            const list = [];
+            for (const x of (images || []).slice(0, 6)) {
+                const u = await this.toDataUrl(typeof x === 'string' ? x : (x && (x.dataUrl || x.url || x.src)));
+                if (u) list.push(u);
+            }
+            if (!list.length) return t;
+            const mode = this.visionMode();
+            if (mode === 'main') {
+                return (t ? [{ type: 'text', text: t }] : []).concat(list.map(function (u) { return { type: 'image_url', image_url: { url: u } }; }));
+            }
+            if (mode === 'helper') {
+                let descs = [];
+                try { descs = await this.describeImages(list, about || '這是使用者附上的圖片。'); } catch (e) { this.visionFailed(e); }
+                const lines = descs.map(function (d, i) { return '圖 ' + (i + 1) + '：' + (d || '（沒看成）'); });
+                return t + '\n\n（附了 ' + list.length + ' 張圖，下面是替你看過後寫的描述）\n' + lines.join('\n');
+            }
+            this._visionOffNotice();
+            return t + '\n\n（使用者附了 ' + list.length + ' 張圖，但這次看不到內容。）';
+        },
+        _offWarnAt: 0,
+        _visionOffNotice: function () {
+            if (Date.now() - this._offWarnAt < 60000) return;
+            this._offWarnAt = Date.now();
+            try {
+                const A = win.AUI || window.AUI;
+                const msg = '設置裡的「看圖」是關著的，這次圖沒有給 AI 看，只送了文字。';
+                if (A && A.toastr) A.toastr.warning(msg, '看圖'); else if (A && A.toast) A.toast(msg);
+            } catch (x) {}
+        },
+
         // 看圖小模型沒看成：跟她說一聲（一分鐘內只說一次），不擋聊天
         _visionWarnAt: 0,
         visionFailed: function (e) {

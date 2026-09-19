@@ -268,6 +268,62 @@
         if (h < 24) return h + ' 小時前';
         return Math.round(h / 24) + ' 天前';
     }
+    // ── 她發的動態裡的照片：只給它看一次（共用 OS_PHONE_IMAGE.lookOnce，照設置「看圖」那格）──
+    //   看過的描述存回那張照片的 desc，之後 brief 裡的「照片 N 張：…」就帶著描述，圖不再送。
+    //   以前沒接：她發的照片角色只知道「照片 N 張」。
+    let _phBatch = { refs: [] };
+    async function photoOnceMessage(chatId) {
+        _phBatch = { refs: [] };
+        if (!chatId) return null;
+        const chat = _chats()[chatId];
+        if (chat && chat.isGroup) return null;
+        const pi = _pi();
+        if (!pi || !pi.lookOnce) return null;
+        const st = await _view();
+        const seen = visibleTo(chatId, st.feed, st.links).slice(-BRIEF_POSTS);
+        const cand = [], info = new Map();
+        seen.forEach(function (p) {
+            if (p.author !== 'me') return;
+            (p.photos || []).forEach(function (ph, i) {
+                if (ph && ph.src && pi.isDbId(ph.src)) { cand.push(ph); info.set(ph, { post: p, i: i }); }
+            });
+        });
+        const got = await pi.lookOnce(cand, { src: function (ph) { return ph.src; }, descKey: 'desc', triesKey: 'tries', max: 3,
+            about: '這是發在朋友圈動態裡的照片。' });
+        if (!got) return null;
+        _savePhotosOf(got.used, info);
+        const where = function (ph) { const x = info.get(ph); return '動態' + x.post.no + (x.post.photos.length > 1 ? ' 的第 ' + (x.i + 1) + ' 張' : ' 的照片'); };
+        const who = _userName() || '對方';
+        if (got.mode === 'helper') {
+            const lines = [];
+            got.used.forEach(function (ph, i) { if (got.descs[i]) lines.push(where(ph) + '：' + got.descs[i]); });
+            if (!lines.length) return null;
+            return { role: 'user', content: '（這是' + who + '發在朋友圈的照片。' + lines.join('；') + '。）' };
+        }
+        _phBatch.refs = got.used.map(function (ph) { return { ph: ph, info: info.get(ph) }; });
+        const n = got.used.length;
+        const text = '（這是' + who + '發在朋友圈的' + (n > 1 ? ' ' + n + ' 張照片，照順序是' : '照片，在') + got.used.map(where).join('、') + '。'
+            + '看完在回覆的最後，' + (n > 1 ? '每張各' : '') + '單獨一行寫：[系統: 朋友圈照片 ' + (n > 1 ? '編號' : '1') + ' 一句話描述]，'
+            + '之後就不用再看圖了。那一行不會變成聊天訊息。）';
+        return { role: 'user', content: [{ type: 'text', text: text }].concat(got.parts) };
+    }
+    function _savePhotosOf(phs, info) {
+        const scopes = {};
+        (phs || []).forEach(function (ph) { const x = info.get(ph); if (x) scopes[_scopeOfPost(x.post.id) || ''] = true; });
+        Object.keys(scopes).forEach(function (sc) { _run(sc || scope(), function () { return true; }).catch(function () {}); });
+    }
+    function rememberPhoto(num, desc) {
+        const s = String(desc || '').replace(/\]+\s*$/, '').trim();
+        const refs = _phBatch.refs;
+        if (!s || !refs.length) return false;
+        const x = (num >= 1 && num <= refs.length) ? refs[num - 1] : refs.find(function (r) { return !r.ph.desc; });
+        if (!x) return false;
+        x.ph.desc = s.slice(0, 300);
+        const m = new Map(); m.set(x.ph, x.info);
+        _savePhotosOf([x.ph], m);
+        return true;
+    }
+
     async function brief(chatId) {
         if (!chatId) return '';
         const chat = _chats()[chatId];
@@ -809,7 +865,7 @@
         addPost: addPost, toggleLike: toggleLike, addComment: addComment,
         removePost: removePost, removeComment: removeComment,
         setLink: setLink, linksOf: linksOf, visibleTo: visibleTo,
-        brief: brief, parseTags: parseTags, strip: strip, extract: extract, actedSince: actedSince,
+        brief: brief, photoOnceMessage: photoOnceMessage, rememberPhoto: rememberPhoto, parseTags: parseTags, strip: strip, extract: extract, actedSince: actedSince,
         unseen: unseen, markSeen: markSeen, paintBadges: paintBadges
     };
     if (win !== window) { try { window.WX_MOMENTS = win.WX_MOMENTS; } catch (e) {} }

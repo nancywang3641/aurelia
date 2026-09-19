@@ -220,7 +220,12 @@
                         if (url) el.src = url;
                     } catch(e) { console.error('[VN Parser] setImage 失敗(保留佔位):', e); }
                 },
-                callAI: async function(systemPrompt) {
+                // 選一張照片（手機跳相機／相簿）→ 縮好的 data 網址；取消回空字串
+                pickPhoto: async function(o) {
+                    const PI = window.OS_PHONE_IMAGE || (window.parent && window.parent.OS_PHONE_IMAGE);
+                    try { return (PI && PI.pickPhoto) ? await PI.pickPhoto(o) : ''; } catch (e) { return ''; }
+                },
+                callAI: async function(systemPrompt, opts) {
                     if (window.__IS_PREVIEW) return '（預覽模式示範回覆）';
                     try {
                         const OS = window.OS_API || (window.parent && window.parent.OS_API);
@@ -235,7 +240,10 @@
                         // 背景一則 system、任務一則 user（同 app_runtime）。借正文整包那一版退掉了：太貴，而且正文的條目會叫它寫視覺小說。
                         const _msgs = [];
                         if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
-                        _msgs.push({ role: 'user', content: String(systemPrompt || '') });   // 是指令還是使用者在 app 裡打的話，由 app 的指令自己寫清楚，引擎不標
+                        // 附圖（opts.images）照設置「看圖」那格送（OS_PHONE_IMAGE.withImages）
+                        const _PI = window.OS_PHONE_IMAGE || (window.parent && window.parent.OS_PHONE_IMAGE);
+                        const _imgs = (opts && Array.isArray(opts.images)) ? opts.images : [];
+                        _msgs.push({ role: 'user', content: (_imgs.length && _PI && _PI.withImages) ? await _PI.withImages(String(systemPrompt || ''), _imgs, '這是使用者在 app 裡附上的圖片。') : String(systemPrompt || '') });   // 是指令還是使用者在 app 裡打的話，由 app 的指令自己寫清楚，引擎不標
                         return await new Promise(function(res, rej) {
                             OS.chat(_msgs, cfg, null,
                                 function(t) { res(typeof t === 'string' ? t : (t && t.message) || ''); }, rej,

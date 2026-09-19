@@ -290,6 +290,8 @@ st 只有下面這些，一個不多。沒列的一律不存在，不准自己�
 - st.user() → Promise<{ name, nickname, avatar, signature, desc }>。使用者本人。寫法固定：const me = await st.user(); 之後用 me.nickname、me.avatar。面板裡凡是「我」發的東西（留言、貼文、發言、簽到）作者一律用它：顯示名用 nickname、沒有再用 name；頭像用 avatar、空的就畫首字圓框。禁寫死 User、我、匿名；禁做登入或選身分頁面。
 
 生成
+- st.pickPhoto() → Promise<圖片 data 網址，取消是空字串>。讓使用者選一張自己的照片（手機會跳相機／相簿），已經縮好，可以直接放進 <img src>、也可以存起來。只在使用者按了「上傳／選照片」類按鈕時叫。
+- st.callAI(提示, { images: [圖, …] }) → 要 AI 看圖時把圖（st.pickPhoto 拿到的那種）放進 images，最多 6 張；AI 看不看得到、怎麼看，照使用者的設定走，面板不用管。沒有圖就只寫 st.callAI(提示)。
 - st.callAI(系統提示) → Promise<文字>。自動帶角色卡、最近劇情、世界書，不必重述背景；不會帶面板內容。await 包 try/catch，生成中顯示 st.loading。
 - st.setImage(img元素, 英文提示, 類型, 來源)：生圖。用法不常駐，使用者點了「生圖」功能 chip 才會把完整用法帶進來；沒帶就別用。
 
@@ -1191,6 +1193,40 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             return content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n');
         }
         return '';
+    }
+
+    // 👁 附圖照設置「看圖」那格送（OS_PHONE_IMAGE）：
+    //   聊天模型自己看＝原樣帶圖；交給看圖小模型＝送出前先讓它看、描述存在那則訊息的 _imgDesc，之後每輪送描述；關閉＝只送文字（提示一次）
+    //   以前創作室不管那格，一律把圖丟給聊天模型：看不了圖的模型（DeepSeek）圖白送或直接報錯。
+    function _studioPI() { return win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE || null; }
+    function _studioVisionMode() { const PI = _studioPI(); return (PI && PI.visionMode) ? PI.visionMode() : 'main'; }
+    async function _studioDescribeFor(msg) {
+        const PI = _studioPI();
+        if (!msg || !Array.isArray(msg.content) || _studioVisionMode() !== 'helper' || !PI || !PI.describeImages) return;
+        if (Array.isArray(msg._imgDesc)) return;
+        const urls = msg.content.filter(p => p && p.type === 'image_url').map(p => p.image_url && p.image_url.url).filter(Boolean);
+        if (!urls.length) return;
+        let descs = [];
+        try { descs = await PI.describeImages(urls, '這是使用者在做介面時附上的參考圖，描述時多寫版面、配色、字型、元件長相。'); } catch (e) { PI.visionFailed(e); }
+        msg._imgDesc = urls.map((_, i) => descs[i] || '');
+    }
+    function _studioApplyVision(payload) {
+        const mode = _studioVisionMode();
+        if (mode === 'main') return payload;
+        let hidden = 0;
+        payload.forEach(m => {
+            if (!Array.isArray(m.content) || !m.content.some(p => p && p.type === 'image_url')) return;
+            const text = messageContentToString(m.content);
+            const n = m.content.filter(p => p && p.type === 'image_url').length;
+            if (mode === 'helper' && Array.isArray(m._imgDesc) && m._imgDesc.some(Boolean)) {
+                m.content = text + '\n\n（附了 ' + n + ' 張參考圖，下面是替你看過後寫的描述）\n' + m._imgDesc.map((d, i) => '圖 ' + (i + 1) + '：' + (d || '（沒看成）')).join('\n');
+            } else {
+                m.content = text + '\n\n（附了 ' + n + ' 張參考圖，但這次看不到內容。）';
+                hidden++;
+            }
+        });
+        if (hidden && mode === 'off') { const PI = _studioPI(); if (PI && PI._visionOffNotice) PI._visionOffNotice(); }
+        return payload;
     }
 
     function messageHasImage(content) {
@@ -2407,6 +2443,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const _capTok = Math.min(parseInt(baseConfig.maxTokens) || 8192, 32768);
             const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.7, maxTokens: _capTok };
 
+            // 👁 交給看圖小模型時，這一輪附的圖先讓它看（描述存在那則訊息上，之後每輪只送描述；打字三點已經在轉）
+            if (Array.isArray(userMsg.content) && !Array.isArray(userMsg._imgDesc) && _studioVisionMode() === 'helper') {
+                await _studioDescribeFor(userMsg);
+                _studioSave(getChatSessionId());
+            }
             // 過濾：content 是字串時要 trim、陣列時要有內容；跳過已壓縮的原始對話（_isCompressed）
             let apiPayload = JSON.parse(JSON.stringify(chatMessages.filter(m => {
                 if (m._isCompressed) return false; // 已壓縮 → 不再送
@@ -2439,6 +2480,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
             // 圖片修剪：只保留最近 N 張圖在 context 中，其他帶圖訊息圖被剝掉只留文字 + 占位
             pruneImagesFromHistory(apiPayload);
+            _studioApplyVision(apiPayload);   // 👁 照設置「看圖」那格送
 
             // 找出「最新一條含面板 JSON 的訊息索引」—— 這條不清洗，其他舊版照清
             let latestPanelMsgIdx = -1;
@@ -2964,7 +3006,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     console.error('[preview] setImage 失敗:', e);
                 }
             },
-            async callAI(systemPrompt) {
+            // 選一張照片（手機跳相機／相簿）→ 縮好的 data 網址；取消回空字串
+            async pickPhoto(o) {
+                const PI = window.OS_PHONE_IMAGE || (window.parent && window.parent.OS_PHONE_IMAGE);
+                try { return (PI && PI.pickPhoto) ? await PI.pickPhoto(o) : ''; } catch (e) { return ''; }
+            },
+            async callAI(systemPrompt, opts) {
                 // 預覽不燒額度：給固定示範字串
                 if (window.__IS_PREVIEW) {
                     return '（預覽模式示範回覆）這是 AI 生成的內容會出現的位置。';
@@ -2980,7 +3027,10 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}
                     const _msgs = [];   // 背景一則 system、任務一則 user（同 app_runtime／vn_dynamic_parser）；借正文整包那版退掉
                     if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
-                    _msgs.push({ role: 'user', content: String(systemPrompt || '') });   // 同 app_runtime：引擎不標，由 app 的指令自己寫清楚
+                    // 附圖（opts.images）照設置「看圖」那格送（OS_PHONE_IMAGE.withImages）
+                    const _PI = window.OS_PHONE_IMAGE || (window.parent && window.parent.OS_PHONE_IMAGE);
+                    const _imgs = (opts && Array.isArray(opts.images)) ? opts.images : [];
+                    _msgs.push({ role: 'user', content: (_imgs.length && _PI && _PI.withImages) ? await _PI.withImages(String(systemPrompt || ''), _imgs, '這是使用者在 app 裡附上的圖片。') : String(systemPrompt || '') });   // 同 app_runtime：引擎不標，由 app 的指令自己寫清楚
                     return await new Promise((res, rej) => {
                         OS.chat(_msgs, cfg, null,
                             t => res(typeof t === 'string' ? t : (t && t.message) || ''), rej,
@@ -3063,7 +3113,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             +   'md:function(t){if(!t)return "";t=String(t).replace(/\\\\n/g,"\\n");try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return D?D.sanitize(h):h;}}catch(e){}return String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";});},'
             +   'parse:function(){return {};},'
             +   'setImage:async function(el,p,type,provider){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene",provider);if(u)el.src=u;}}catch(e){}},'
-            +   'callAI:async function(s){try{return window.callAI?await window.callAI(s):"";}catch(e){return "";}},'
+            +   'callAI:async function(s,o){try{return window.callAI?await window.callAI(s,o):"";}catch(e){return "";}},'
+            +   'pickPhoto:async function(o){try{return window.stPickPhoto?await window.stPickPhoto(o):"";}catch(e){return "";}},'
             +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
             +   'getCurrentChars:async function(){try{return window.getCurrentChars?await window.getCurrentChars():[];}catch(e){return [];}},'
             +   'getContacts:async function(){try{return window.getContacts?await window.getContacts():[];}catch(e){return [];}},'
@@ -3658,8 +3709,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
             const diffPrompt = win.OS_STUDIO_DIFF?.buildDiffRefinePrompt(refineMsg);   // 拆檔：os_studio_diff_engine.js
             // 如有附圖：把圖跟 prompt 一起送（diff 路徑 apiPayload 只有單條 user message）
+            const _PI = _studioPI();
             const promptContent = imagesForAI.length > 0
-                ? buildUserMessageContent(diffPrompt, imagesForAI)
+                ? ((_PI && _PI.withImages) ? await _PI.withImages(diffPrompt, imagesForAI, '這是使用者在改介面時附上的參考圖，描述時多寫版面、配色、字型、元件長相。') : buildUserMessageContent(diffPrompt, imagesForAI))
                 : diffPrompt;
             const apiPayload = [{ role: 'user', content: promptContent }];
             // 啟用的「功能 chip」用法 → 併進請求(system)，不貼輸入框（diff 修改路徑同樣帶上）

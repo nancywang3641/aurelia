@@ -644,18 +644,17 @@
             return (PI && PI.visionMode) ? PI.visionMode() : 'off';
         },
         _ensurePhotoDescs: async function(posts) {
-            if (this._visionMode() !== 'helper') return;
+            // 看一次圖走共用那支（OS_PHONE_IMAGE.lookOnce），只做「交給看圖小模型」這條；聊天模型自己看那條在 _collectPhotos
             const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
-            const pend = (posts || []).filter(p => p && p.isMe && p.media && p.media.type === 'image'
-                && String(p.media.desc || '').startsWith('data:') && !p.media.aiDesc && (p.media.aiTries || 0) < 2)
-                .slice(0, this._PHOTO_LIMIT);
-            if (!pend.length) return;
-            pend.forEach(p => { p.media.aiTries = (p.media.aiTries || 0) + 1; });
-            let descs = [];
-            try { descs = await PI.describeImages(pend.map(p => p.media.desc), '這是社群動態裡貼出來的照片。'); } catch (e) { PI.visionFailed(e); }
-            for (let i = 0; i < pend.length; i++) {
-                if (descs[i]) pend[i].media.aiDesc = descs[i];
-                try { await win.OS_DB.saveWbPost(pend[i]); } catch (e) { console.warn('[Weibo] 照片描述存不進去:', e); }
+            if (!PI || !PI.lookOnce) return;
+            const mine = (posts || []).filter(p => p && p.isMe && p.media && p.media.type === 'image' && String(p.media.desc || '').startsWith('data:'))
+                .reverse();   // 貼文是新的在前；lookOnce 挑「還沒看過的最後幾筆」，翻過來讓它挑到最新的
+            const got = await PI.lookOnce(mine.map(p => p.media), { src: m => m.desc, descKey: 'aiDesc', triesKey: 'aiTries', max: this._PHOTO_LIMIT,
+                helperOnly: true, about: '這是社群動態裡貼出來的照片。' });
+            if (!got) return;
+            for (const p of mine) {
+                if (got.used.indexOf(p.media) === -1) continue;
+                try { await win.OS_DB.saveWbPost(p); } catch (e) { console.warn('[Weibo] 照片描述存不進去:', e); }
             }
         },
         _collectPhotos: function(posts) {

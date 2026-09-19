@@ -64,7 +64,9 @@
             +   'window.genImg = async function(p, type, provider){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", (provider || window.__APP_PROVIDER__) ? {provider: provider || window.__APP_PROVIDER__} : {}); } catch(e){ console.error("[app genImg]",e); return ""; } };'
             // ── 文字生成：走 OS_API.chat(直接打 API、不發酒館 GENERATION 事件→不觸發記憶/狀態抽取)。
             //    上下文手動組：角色卡 + 當前角色綁定世界書 + 最近劇情；不吃 preset、不吃全域世界書。
-            +   'window.callAI = async function(sys){ try {'
+            // ── 選照片（st.pickPhoto）：跳相機／相簿，回縮好的 data 網址，取消回空字串 ──
+            +   'window.stPickPhoto = function(o){ try { var PI = P.OS_PHONE_IMAGE; return (PI && PI.pickPhoto) ? PI.pickPhoto(o).catch(function(){ return ""; }) : Promise.resolve(""); } catch(e){ return Promise.resolve(""); } };'
+            +   'window.callAI = async function(sys, opt){ try {'
             +     'var TH = P.TavernHelper, ST = P.SillyTavern, ctx = "";'
             +     'try { var c = ST && ST.getContext && ST.getContext(); if (c) {'
             +       'var ch = (c.characters && c.characters[c.characterId]) || null;'
@@ -77,6 +79,8 @@
             // PWA 沒有酒館，上面那三段全空 → 問引擎拿 PWA 自己的背景（人設、世界書、大總結、最近劇情），不然模型只看到一段任務
             +     'try { if (!ctx && P.OS_API && P.OS_API.appContextBlock) ctx = await P.OS_API.appContextBlock(); } catch(e){}'
             // 排法：背景一則 system、任務一則 user。曾試過借正文整包（一萬多字＋叫它寫視覺小說那批條目），那是為了追一顆壞掉的舊 app 才硬接的，退掉。
+            // 附圖（st.callAI(提示, { images })）照設置「看圖」那格送：OS_PHONE_IMAGE.withImages
+            +     'var __imgs = (opt && Array.isArray(opt.images)) ? opt.images : []; var __PI = P.OS_PHONE_IMAGE; if (__imgs.length && __PI && __PI.withImages) sys = await __PI.withImages(String(sys == null ? "" : sys), __imgs, "這是使用者在 app 裡附上的圖片。");'
             +     'var msgs = []; if (ctx) msgs.push({role:"system", content: ctx + "----\\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。"}); msgs.push({role:"user", content: sys});'   // 那一則是指令還是使用者在 app 裡打的話，由 app 自己的指令寫清楚，引擎不標
             +     'var OS = window.OS_API; if (!OS || !OS.chat) throw new Error("OS_API 不可用");'
             +     'var cfg = (P.OS_SETTINGS && P.OS_SETTINGS.getConfig && P.OS_SETTINGS.getConfig()) || {};'

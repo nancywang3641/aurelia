@@ -222,55 +222,32 @@
     }
 
     // ── 她放的照片只給它看一次 ───────────────────────────────
-    async function _dataUrlOf(id) {
-        const db = _db();
-        const blobUrl = db && db.getImage ? await db.getImage(id) : '';
-        if (!blobUrl) return '';
-        try {
-            const blob = await (await fetch(blobUrl)).blob();
-            return await new Promise(function (res, rej) { const rd = new FileReader(); rd.onload = function () { res(String(rd.result || '')); }; rd.onerror = rej; rd.readAsDataURL(blob); });
-        } finally { try { URL.revokeObjectURL(blobUrl); } catch (e) {} }
-    }
     async function photoOnceMessage(chatId) {
         _photoBatch = { chatId: chatId || '', refs: [] };
         if (!chatId) return null;
         const pi = _pi();
-        // 👁 設置裡的「看圖」：關著就不送圖（目錄裡只寫照片）；交給小模型就讓它寫描述，這一輪只送文字
-        const mode = (pi && pi.visionMode) ? pi.visionMode() : 'off';
-        if (mode === 'off') return null;
+        // 👁 看一次圖走共用那支（OS_PHONE_IMAGE.lookOnce）：照設置、挑還沒看過的、描述存回 p.desc
+        if (!pi || !pi.lookOnce) return null;
         const book = await load(chatId);
-        const pend = [];
+        const cand = [];
+        const numOf = new Map();   // 照片 → 記事本第幾號
         _sorted(book).forEach(function (it, idx) {
-            (it.photos || []).forEach(function (p, pIdx) {
-                if (it.by === 'me' && p.src && pi && pi.isDbId(p.src) && !p.desc && (p.tries || 0) < PHOTO_TRIES) pend.push({ it: it, p: p, num: idx + 1 });
+            (it.photos || []).forEach(function (p) {
+                if (it.by === 'me' && p.src && pi.isDbId(p.src)) { cand.push(p); numOf.set(p, idx + 1); }
             });
         });
-        const pick = pend.slice(-PHOTO_ONCE_MAX);
-        const urls = [], used = [];
-        for (const x of pick) {
-            let url = '';
-            try { url = await _dataUrlOf(x.p.src); } catch (e) {}
-            if (!url) continue;
-            x.p.tries = (x.p.tries || 0) + 1;
-            used.push(x);
-            urls.push(url);
-        }
-        if (!used.length) return null;
-        if (mode === 'helper') {
-            let descs = [];
-            try { descs = await pi.describeImages(urls, '這是放進兩人共用記事本的照片。'); } catch (e) { pi.visionFailed(e); }
+        const got = await pi.lookOnce(cand, { src: function (p) { return p.src; }, descKey: 'desc', triesKey: 'tries', maxTries: PHOTO_TRIES, max: PHOTO_ONCE_MAX,
+            about: '這是放進兩人共用記事本的照片。' });
+        if (!got) return null;
+        const used = got.used.map(function (p) { return { p: p, num: numOf.get(p) }; });
+        _write(chatId).catch(function () {});
+        if (got.mode === 'helper') {
             const lines = [];
-            used.forEach(function (x, i) {
-                if (!descs[i]) return;
-                x.p.desc = descs[i].slice(0, 300);
-                lines.push('記事本 ' + x.num + ' 號那張：' + x.p.desc);
-            });
-            _write(chatId).catch(function () {});
+            used.forEach(function (x, i) { if (got.descs[i]) lines.push('記事本 ' + x.num + ' 號那張：' + got.descs[i]); });
             if (!lines.length) return null;
             return { role: 'user', content: '（這是' + (_userName() || '對方') + '放進你們記事本的照片。' + lines.join('；') + '。）' };
         }
-        const parts = urls.map(function (url) { return { type: 'image_url', image_url: { url: url } }; });
-        _write(chatId).catch(function () {});
+        const parts = got.parts;
         _photoBatch.refs = used;
         const n = used.length;
         const where = used.map(function (x, i) { return (n > 1 ? '第 ' + (i + 1) + ' 張' : '這張') + '在記事本 ' + x.num + ' 號'; }).join('，');

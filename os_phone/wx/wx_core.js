@@ -368,46 +368,27 @@
         const x = String(m.content || '').match(PHOTO_ID_RE);
         return x ? x[0] : '';
     }
-    async function _photoDataUrl(id) {
-        const blobUrl = await win.OS_DB.getImage(id);
-        if (!blobUrl) return '';
-        try {
-            const blob = await (await fetch(blobUrl)).blob();
-            return await new Promise(function (res, rej) { const rd = new FileReader(); rd.onload = function () { res(String(rd.result || '')); }; rd.onerror = rej; rd.readAsDataURL(blob); });
-        } finally { try { URL.revokeObjectURL(blobUrl); } catch (e) {} }
-    }
     async function _photoOnceMessage(chat) {
         _photoBatch = { chatId: (chat && chat.id) || '', msgs: [] };
         if (!chat || !win.OS_DB || !win.OS_DB.getImage) return null;
         // 👁 設置裡的「看圖」：關著就不送圖（歷史裡只寫「照片」）；交給小模型就讓它寫描述，這一輪只送文字
+        // 看一次圖走共用那支（OS_PHONE_IMAGE.lookOnce）：照設置、挑還沒看過的、描述存回 m.photoDesc
         const PI = win.OS_PHONE_IMAGE;
-        const mode = (PI && PI.visionMode) ? PI.visionMode() : 'off';
-        if (mode === 'off') return null;
-        const pend = (chat.messages || []).filter(function (m) { return _photoIdOf(m) && !m.photoDesc && (m.photoTries || 0) < PHOTO_TRIES; }).slice(-PHOTO_ONCE_MAX);
-        const used = [], urls = [];
-        for (const m of pend) {
-            let url = '';
-            try { url = await _photoDataUrl(_photoIdOf(m)); } catch (e) {}
-            if (!url) continue;
-            m.photoTries = (m.photoTries || 0) + 1;
-            used.push(m);
-            urls.push(url);
-        }
-        if (!used.length) return null;
+        if (!PI || !PI.lookOnce) return null;
+        const got = await PI.lookOnce((chat.messages || []).filter(function (m) { return _photoIdOf(m); }), {
+            src: _photoIdOf, descKey: 'photoDesc', triesKey: 'photoTries', maxTries: PHOTO_TRIES, max: PHOTO_ONCE_MAX,
+            about: '這是聊天時傳給對方的照片。'
+        });
+        if (!got) return null;
+        const used = got.used;
         const n = used.length;
-        if (mode === 'helper') {
-            let descs = [];
-            try { descs = await PI.describeImages(urls, '這是聊天時傳給對方的照片。'); } catch (e) { PI.visionFailed(e); }
+        if (got.mode === 'helper') {
             const lines = [];
-            used.forEach(function (m, i) {
-                if (!descs[i]) return;
-                m.photoDesc = descs[i];
-                lines.push((n > 1 ? '第 ' + (i + 1) + ' 張｜' : '') + descs[i]);
-            });
+            got.descs.forEach(function (d, i) { if (d) lines.push((n > 1 ? '第 ' + (i + 1) + ' 張｜' : '') + d); });
             if (!lines.length) return null;
             return { role: 'user', content: '（這是我剛傳給你的' + (n > 1 ? ' ' + n + ' 張照片' : '照片') + '：' + lines.join('；') + '。照平常聊天那樣反應就好。）' };
         }
-        const parts = urls.map(function (url) { return { type: 'image_url', image_url: { url: url } }; });
+        const parts = got.parts;
         _photoBatch.msgs = used;
         const text = '（' + (n > 1 ? '這是我剛傳給你的 ' + n + ' 張照片，照順序是第 1 到第 ' + n + ' 張' : '這是我剛傳給你的照片') + '。'
             + '看完在回覆的最後，' + (n > 1 ? '每張各' : '') + '單獨一行寫：[系統: 照片 ' + (n > 1 ? '編號' : '1') + ' 一句話描述]，'
@@ -753,6 +734,13 @@
         const linkSeenMatch = content.match(/^\s*(?:網頁|网页)\s*(\d+)?\s*[:：]?\s*(.+)$/);
         if (linkSeenMatch) {
             try { _rememberLink(parseInt(linkSeenMatch[1], 10), String(linkSeenMatch[2] || '').replace(/\]+\s*$/, '').trim()); } catch (e) {}
+            return { type: 'system', content: '', isMe: false };
+        }
+
+        // 🫂 看完她發在朋友圈的照片寫回來的描述（WX_MOMENTS.photoOnceMessage 那輪要它寫的）
+        const moPhotoMatch = content.match(/^\s*(?:朋友圈)\s*(?:照片|相片)\s*(\d+)?\s*[:：]?\s*(.+)$/);
+        if (moPhotoMatch) {
+            try { const MO = win.WX_MOMENTS; if (MO && MO.rememberPhoto) MO.rememberPhoto(parseInt(moPhotoMatch[1], 10), moPhotoMatch[2]); } catch (e) {}
             return { type: 'system', content: '', isMe: false };
         }
 
@@ -3985,6 +3973,14 @@
                         if (_nbPh) { messages.push(_nbPh); console.log('[WX] 這輪夾了記事本的照片給它看'); }
                     }
                 } catch (e) { console.warn('[WX] 記事本照片夾帶失敗（不影響送出）:', e); }
+                // 🫂 她發在朋友圈、它還沒看過的照片 → 這一輪夾進去（看完寫描述回來，之後朋友圈那段只送那句）
+                try {
+                    const _mo = win.WX_MOMENTS;
+                    if (_mo && _mo.photoOnceMessage && !currentChat.isGroup) {
+                        const _moPh = await _mo.photoOnceMessage(GLOBAL_ACTIVE_ID);
+                        if (_moPh) { messages.push(_moPh); console.log('[WX] 這輪夾了朋友圈的照片給它看'); }
+                    }
+                } catch (e) { console.warn('[WX] 朋友圈照片夾帶失敗（不影響送出）:', e); }
 
                 // 🎯 整包的最後一段永遠是「她剛傳、他還沒回的那幾則」。
                 //    上面那堆附件（待處理紅包、連結內容、表情包清單、這輪給它看的照片）本來排在她的話後面，
