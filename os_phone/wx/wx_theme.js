@@ -384,7 +384,7 @@
             .wx-dark .wx-sub-bar { background: var(--wx-page); border-bottom-color: var(--wx-line); }
             .wx-dark .wx-sub-btn { background: var(--wx-surface-2); border-color: var(--wx-line-strong); color: var(--wx-ink); }
             .wx-dark .wx-sub-btn:active { background: #333; }
-            .wx-dark .wx-sub-btn.solid { background: #07c160; border-color: #07c160; color: var(--wx-on-accent); }
+            .wx-dark .wx-sub-btn.solid { background: var(--wx-accent); border-color: var(--wx-accent); color: var(--wx-on-accent); }
             .wx-dark .wx-sub-btn.warn { color: #ff6b68; border-color: #5a2f2e; }
             .wx-dark .wx-sub-empty i { color: #3a3a3a; }
             .wx-dark .wx-tag-mark { color: #3a3a3a; }
@@ -403,7 +403,8 @@
             .wx-modal-label.is-gap { margin: 10px 0 0; color: var(--wx-ink-soft); }
             .wx-modal-hint { font-size: 10px; color: var(--wx-ink-soft); }
             .wx-modal-hint.is-right { margin-top: 5px; font-size: 11px; text-align: right; }
-            .wx-modal-ok { color: #07c160; }
+            .wx-modal-ok { color: var(--wx-accent); }
+            .wx-wb-load-btn { width: 100%; padding: 8px; background: color-mix(in srgb, var(--wx-accent) 8%, var(--wx-surface)); border: 1px solid var(--wx-accent); border-radius: 6px; color: var(--wx-accent-ink); font-size: 13px; cursor: pointer; font-weight: 600; }
             .icon-group-chat { background: var(--wx-accent); }
             .icon-tags { background: #2782d7; }
             .icon-official { background: #2782d7; }
@@ -490,7 +491,7 @@
             .wx-loc-map { height: 120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; background-color: #e6e6e6; position: relative; }
             .wx-loc-shade { width: 100%; height: 100%; background: rgba(0,0,0,0.05); }
             .wx-loc-pin { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -80%); font-size: 32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color: #e64340; }
-            .wx-loc-info { background: #55d967; padding: 10px 12px; color: #fff; display: flex; flex-direction: column; justify-content: center; }
+            .wx-loc-info { background: var(--wx-accent); padding: 10px 12px; color: var(--wx-on-accent); display: flex; flex-direction: column; justify-content: center; }
             .wx-loc-name { font-size: 15px; font-weight: bold; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .wx-loc-addr { font-size: 11px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

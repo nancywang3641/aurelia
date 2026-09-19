@@ -95,10 +95,10 @@
             '  <div class="wxpf-bio">' + (p.bio ? _esc(p.bio) : '還沒寫什麼') + '</div>' +
             '</div>' +
             '<div class="wxpf-acts">' +
-            '  <button class="wxpf-act" type="button" data-act="chat"><i class="fa-solid fa-comment"></i><span>發訊息</span></button>' +
-            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="note"><i class="fa-solid fa-book-bookmark"></i><span>記事本</span></button>') +
-            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="moments"><i class="fa-regular fa-images"></i><span>朋友圈</span></button>') +
-            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="links"><i class="fa-solid fa-user-group"></i><span>認識的人</span></button>') +
+            '  <button class="wxpf-act" type="button" data-act="chat"><i class="fa-solid fa-comment wxpf-act-ic"></i><span>發訊息</span></button>' +
+            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="note"><i class="fa-solid fa-book-bookmark wxpf-act-ic"></i><span>記事本</span></button>') +
+            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="moments"><i class="fa-regular fa-images wxpf-act-ic"></i><span>朋友圈</span></button>') +
+            (p.isGroup ? '' : '  <button class="wxpf-act" type="button" data-act="links"><i class="fa-solid fa-user-group wxpf-act-ic"></i><span>認識的人</span></button>') +
             '</div>';
         host.appendChild(_root);
 

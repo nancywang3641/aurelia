@@ -62,7 +62,7 @@
         /* 以前寫在元素身上的幾樣，搬成零件（主題才改得到），長相照舊 */
         .ws-value { font-size: 14px; margin-right: 5px; color: var(--wx-ink-dim); }
         .ws-value.is-clip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ws-value.is-set { color: #07c160; }
+        .ws-value.is-set { color: var(--wx-accent); }
         .ws-value.is-warn { color: #fa9d3b; }
         .ws-select-plain { text-align: right; max-width: 150px; border: none; background: transparent; font-size: 14px; color: var(--wx-ink-2); }
         .ws-label.is-danger { color: var(--wx-danger); }

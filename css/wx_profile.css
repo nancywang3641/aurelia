@@ -116,10 +116,11 @@
     cursor: pointer;
     text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
     padding: 0;
+    border-radius: 50%;   /* 沒有底色看不出來；裡面的圓圈跟著它，主題把整顆改方的，圓圈也一起方（她：內部圓外部方） */
 }
 .wxpf-act i {
     width: 46px; height: 46px;
-    border-radius: 50%;
+    border-radius: inherit;
     background: rgba(255, 255, 255, .18);
     border: 1px solid rgba(255, 255, 255, .34);
     display: flex; align-items: center; justify-content: center;

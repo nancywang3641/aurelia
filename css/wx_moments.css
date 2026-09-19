@@ -7,7 +7,7 @@
 .wxmo-root {
     position: absolute; inset: 0; z-index: 60;
     display: flex; flex-direction: column;
-    background: var(--wx-surface); color: #111;
+    background: var(--wx-surface); color: var(--wx-ink);
     animation: wxmo-in .2s ease;
 }
 @keyframes wxmo-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
@@ -22,14 +22,15 @@
 .wxmo-bar-btn, .wxmo-bar-pad { width: 38px; height: 38px; flex-shrink: 0; }
 .wxmo-bar-btn { border: none; background: none; color: inherit; font-size: 18px; cursor: pointer; border-radius: 50%; text-shadow: 0 1px 3px rgba(0,0,0,.45); }
 .wxmo-bar-t { flex: 1; min-width: 0; text-align: center; font-size: 16px; font-weight: 600; opacity: 0; transition: opacity .2s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wxmo-root.is-scrolled .wxmo-bar { background: var(--wx-header); color: #111; }
+.wxmo-root.is-scrolled .wxmo-bar { background: var(--wx-header); color: var(--wx-ink); }
 .wxmo-root.is-scrolled .wxmo-bar-btn { text-shadow: none; }
 .wxmo-root.is-scrolled .wxmo-bar-t { opacity: 1; }
 
 .wxmo-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding-bottom: 24px; }
 
 /* 封面 */
-.wxmo-cover { position: relative; height: 280px; margin-bottom: 44px; background: linear-gradient(160deg, #3d4a5c, #6b7a8f); }
+.wxmo-cover { position: relative; z-index: 2; height: 280px;   /* 名字與頭像一半凸出封面、壓在內容上：封面要排在內容上面 */
+     margin-bottom: 44px; background: linear-gradient(160deg, #3d4a5c, #6b7a8f); }
 .wxmo-cover.can-change { cursor: pointer; }
 .wxmo-cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
 .wxmo-root.has-cover .wxmo-cover-img { display: block; }
@@ -51,7 +52,7 @@
 .wxmo-av-xs { width: 26px; height: 26px; border-radius: 4px; font-size: 12px; }
 
 /* 一則動態 */
-.wxmo-post { display: flex; gap: 11px; padding: 14px 14px 12px; border-bottom: 1px solid #efefef; }
+.wxmo-post { display: flex; gap: 11px; padding: 14px 14px 12px; border-bottom: 1px solid var(--wx-line); }
 .wxmo-main { flex: 1; min-width: 0; }
 .wxmo-name { color: var(--wx-link); font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .wxmo-text { margin-top: 4px; font-size: 15px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -65,7 +66,7 @@
 .wxmo-ph .os-img-gen { padding: 3px 8px; font-size: 0.66rem; }
 
 .wxmo-meta { position: relative; display: flex; align-items: center; gap: 12px; margin-top: 8px; }
-.wxmo-time { font-size: 12px; color: #b2b2b2; }
+.wxmo-time { font-size: 12px; color: color-mix(in srgb, currentColor 45%, transparent); }
 .wxmo-del { border: none; background: none; padding: 0; font-size: 12px; color: var(--wx-link); cursor: pointer; }
 .wxmo-sp { flex: 1; }
 .wxmo-more { flex-shrink: 0; width: 32px; height: 20px; border: none; border-radius: 4px; background: var(--wx-bar); color: var(--wx-link); font-size: 13px; cursor: pointer; }
@@ -82,42 +83,42 @@
 
 /* 讚與留言那塊灰底 */
 .wxmo-social { position: relative; margin-top: 8px; border-radius: 4px; background: var(--wx-bar); font-size: 14px; line-height: 1.5; }
-.wxmo-social::before { content: ''; position: absolute; top: -6px; left: 12px; border: 6px solid transparent; border-top: 0; border-bottom-color: #f7f7f7; }
+.wxmo-social::before { content: ''; position: absolute; top: -6px; left: 12px; border: 6px solid transparent; border-top: 0; border-bottom-color: var(--wx-bar); }
 .wxmo-likes { display: flex; gap: 6px; padding: 5px 9px; color: var(--wx-link); overflow-wrap: anywhere; }
 .wxmo-likes i { margin-top: 4px; font-size: 12px; }
-.wxmo-likes + .wxmo-cms { border-top: 1px solid #ececec; }
+.wxmo-likes + .wxmo-cms { border-top: 1px solid var(--wx-line); }
 .wxmo-cms { padding: 4px 9px; }
 .wxmo-cm { padding: 1px 0; overflow-wrap: anywhere; cursor: pointer; }
-.wxmo-cm:active { background: #e8e8e8; }
+.wxmo-cm:active { background: color-mix(in srgb, currentColor 8%, transparent); }
 .wxmo-cm b { color: var(--wx-link); font-weight: 600; }
-.wxmo-cm i { font-style: normal; margin: 0 3px; color: #111; }
+.wxmo-cm i { font-style: normal; margin: 0 3px; color: inherit; }
 
-.wxmo-empty { padding: 60px 20px; text-align: center; color: #b2b2b2; font-size: 14px; }
+.wxmo-empty { padding: 60px 20px; text-align: center; color: color-mix(in srgb, currentColor 45%, transparent); font-size: 14px; }
 .wxmo-empty[hidden] { display: none; }
 .wxmo-empty i { display: block; font-size: 30px; margin-bottom: 10px; }
 
 /* 底部留言列 */
 .wxmo-input { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: var(--wx-bar); border-top: 1px solid var(--wx-line); flex-shrink: 0; }
 .wxmo-input[hidden] { display: none; }
-.wxmo-in { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid #e0e0e0 !important; border-radius: 6px; background: var(--wx-surface) !important; color: #111 !important; font-size: 15px; outline: none; box-sizing: border-box; }
+.wxmo-in { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--wx-line) !important; border-radius: 6px; background: var(--wx-surface) !important; color: var(--wx-ink) !important; font-size: 15px; outline: none; box-sizing: border-box; }
 .wxmo-send { flex-shrink: 0; height: 32px; padding: 0 14px; border: none; border-radius: 5px; background: var(--wx-accent); color: var(--wx-on-accent); font-size: 14px; cursor: pointer; }
 
 /* 發動態 */
 .wxmo-compose { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--wx-surface); }
 .wxmo-compose-bar { display: flex; align-items: center; padding: 10px 14px; flex-shrink: 0; }
-.wxmo-compose-x { border: none; background: none; font-size: 15px; color: #111; cursor: pointer; }
+.wxmo-compose-x { border: none; background: none; font-size: 15px; color: inherit; cursor: pointer; }
 .wxmo-compose-ok { height: 32px; padding: 0 14px; border: none; border-radius: 5px; background: var(--wx-accent); color: var(--wx-on-accent); font-size: 14px; cursor: pointer; }
 .wxmo-compose-ok:disabled { opacity: .5; }
-.wxmo-compose-in { margin: 6px 18px 0; min-height: 110px; border: none !important; outline: none; resize: none; background: transparent !important; color: #111 !important; font-size: 16px; line-height: 1.6; font-family: inherit; }
+.wxmo-compose-in { margin: 6px 18px 0; min-height: 110px; border: none !important; outline: none; resize: none; background: transparent !important; color: inherit !important; font-size: 16px; line-height: 1.6; font-family: inherit; }
 .wxmo-compose-photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px 18px; }
 .wxmo-tile { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--wx-page); border: none; padding: 0; }
-.wxmo-tile-add { display: flex; align-items: center; justify-content: center; color: #b2b2b2; font-size: 26px; cursor: pointer; }
+.wxmo-tile-add { display: flex; align-items: center; justify-content: center; color: color-mix(in srgb, currentColor 45%, transparent); font-size: 26px; cursor: pointer; }
 .wxmo-tile-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: none; border-radius: 50%; background: rgba(0,0,0,.5); color: var(--wx-on-accent); font-size: 11px; cursor: pointer; }
 
 /* 認識的人 */
-.wxmo-links { position: absolute; inset: 0; z-index: 61; display: flex; flex-direction: column; background: var(--wx-header); color: #111; animation: wxmo-in .2s ease; }
+.wxmo-links { position: absolute; inset: 0; z-index: 61; display: flex; flex-direction: column; background: var(--wx-header); color: var(--wx-ink); animation: wxmo-in .2s ease; }
 .wxmo-links-bar { display: flex; align-items: center; gap: 6px; height: 48px; padding: 0 8px; flex-shrink: 0; }
-.wxmo-links-bar .wxmo-bar-btn { color: #111; text-shadow: none; }
+.wxmo-links-bar .wxmo-bar-btn { color: inherit; text-shadow: none; }
 .wxmo-links-t { flex: 1; min-width: 0; text-align: center; font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wxmo-links-note { padding: 6px 16px 10px; font-size: 12px; color: var(--wx-ink-soft); }
 .wxmo-links-list { flex: 1; min-height: 0; overflow-y: auto; background: var(--wx-surface); }

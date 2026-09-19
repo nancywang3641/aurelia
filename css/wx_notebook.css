@@ -10,8 +10,15 @@
     z-index: 60;
     display: flex;
     flex-direction: column;
-    background: #f6f3ec;
-    color: #2f2a22;
+    /* 記事本自己的一組顏色：預設是米白底、深咖啡字。套了聊天 app 主題時，這組改接主題的顏色表（wx_theme_pack.js）。
+       裡面的字一律跟著這一頁的字色走，淡字用字色本身調淡，不再各自寫死深咖啡——
+       以前主題只改了底或只改了字，另一半還是寫死的，就變成白底白字、黑底黑字（她 09-19）。 */
+    --wxnb-bg: #f6f3ec;
+    --wxnb-ink: #2f2a22;
+    --wxnb-edit: #fffdf8;
+    --wxnb-well: #ece6da;
+    background: var(--wxnb-bg);
+    color: var(--wxnb-ink);
     animation: wxnb-in .2s ease;
 }
 @keyframes wxnb-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
@@ -30,15 +37,15 @@
 .wxnb-back {
     border: none;
     background: none;
-    color: #2f2a22;
+    color: inherit;
     font-size: 17px;
     cursor: pointer;
     border-radius: 50%;
 }
-.wxnb-back:active { background: rgba(47, 42, 34, .08); }
+.wxnb-back:active { background: color-mix(in srgb, currentColor 8%, transparent); }
 .wxnb-head-t { flex: 1; min-width: 0; text-align: center; }
 .wxnb-title { font-size: 16px; font-weight: 700; letter-spacing: .04em; }
-.wxnb-sub { font-size: 11px; color: rgba(47, 42, 34, .5); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wxnb-sub { font-size: 11px; color: color-mix(in srgb, currentColor 50%, transparent); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .wxnb-search {
     margin: 4px 14px 10px;
@@ -48,17 +55,19 @@
     height: 36px;
     padding: 0 12px;
     border-radius: 18px;
-    background: rgba(47, 42, 34, .07);
-    color: rgba(47, 42, 34, .45);
+    background: color-mix(in srgb, currentColor 7%, transparent);
+    color: inherit;
     font-size: 13px;
     flex-shrink: 0;
 }
+.wxnb-search > i { opacity: .45; }
+.wxnb-q::placeholder { color: color-mix(in srgb, currentColor 45%, transparent); }
 .wxnb-q {
     flex: 1;
     min-width: 0;
     border: none !important;
     background: transparent !important;
-    color: #2f2a22 !important;
+    color: inherit !important;
     font-size: 14px;
     outline: none;
     padding: 0;
@@ -85,7 +94,7 @@
 }
 .wxnb-card:active { transform: scale(.985); }
 .wxnb-card-ph { position: relative; }
-.wxnb-thumb { display: block; width: 100%; max-height: 220px; object-fit: cover; background: #ece6da; }
+.wxnb-thumb { display: block; width: 100%; max-height: 220px; object-fit: cover; background: var(--wxnb-well); }
 .wxnb-thumb:not([src]) { height: 110px; }
 .wxnb-thumb-desc {
     display: flex;
@@ -113,7 +122,7 @@
     padding: 6px 11px 0;
     font-size: 13px;
     line-height: 1.6;
-    color: rgba(47, 42, 34, .78);
+    color: color-mix(in srgb, currentColor 78%, transparent);
     white-space: pre-wrap;
     word-break: break-word;
     display: -webkit-box;
@@ -127,11 +136,11 @@
     gap: 6px;
     padding: 8px 11px 9px;
     font-size: 11px;
-    color: rgba(47, 42, 34, .45);
+    color: color-mix(in srgb, currentColor 45%, transparent);
 }
 .wxnb-who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 角色記的：名字那行帶一點綠，一眼分得出是誰丟進來的 */
-.wxnb-card.by-char .wxnb-who { color: #1f9a57; font-weight: 600; }
+.wxnb-card.by-char .wxnb-who { color: var(--wx-accent); font-weight: 600; }
 
 .wxnb-empty {
     display: flex;
@@ -140,11 +149,11 @@
     gap: 8px;
     padding: 70px 30px 0;
     text-align: center;
-    color: rgba(47, 42, 34, .45);
+    color: color-mix(in srgb, currentColor 45%, transparent);
 }
 .wxnb-empty[hidden] { display: none !important; }
 .wxnb-empty i { font-size: 34px; opacity: .5; margin-bottom: 4px; }
-.wxnb-empty-t { font-size: 15px; font-weight: 600; color: rgba(47, 42, 34, .6); }
+.wxnb-empty-t { font-size: 15px; font-weight: 600; }
 .wxnb-empty-s { font-size: 12px; line-height: 1.7; }
 
 .wxnb-fab {
@@ -158,7 +167,7 @@
     color: var(--wx-on-accent);
     font-size: 22px;
     cursor: pointer;
-    box-shadow: 0 6px 16px rgba(7, 193, 96, .35);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--wx-accent) 35%, transparent);
     z-index: 2;
 }
 .wxnb-fab:active { transform: scale(.94); }
@@ -170,7 +179,7 @@
     z-index: 5;
     display: flex;
     flex-direction: column;
-    background: #fffdf8;
+    background: var(--wxnb-edit);
     animation: wxnb-up .2s ease;
 }
 @keyframes wxnb-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
@@ -179,10 +188,10 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    border-bottom: 1px solid rgba(47, 42, 34, .08);
+    border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent);
     flex-shrink: 0;
 }
-.wxnb-edit-who { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: rgba(47, 42, 34, .55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wxnb-edit-who { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: color-mix(in srgb, currentColor 55%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wxnb-edit-x, .wxnb-edit-ok {
     border: none;
     background: none;
@@ -191,7 +200,7 @@
     cursor: pointer;
     flex-shrink: 0;
 }
-.wxnb-edit-x { color: rgba(47, 42, 34, .6); }
+.wxnb-edit-x { color: color-mix(in srgb, currentColor 60%, transparent); }
 .wxnb-edit-ok { color: var(--wx-accent); font-weight: 700; }
 .wxnb-edit-body {
     flex: 1;
@@ -207,14 +216,14 @@
     box-sizing: border-box;
     border: none !important;
     background: transparent !important;
-    color: #2f2a22 !important;
+    color: inherit !important;
     outline: none;
     font-family: inherit;
     padding: 0;
 }
 .wxnb-in-t { font-size: 19px; font-weight: 700; }
 .wxnb-in-b { min-height: 160px; font-size: 15px; line-height: 1.75; resize: none; }
-.wxnb-in-t::placeholder, .wxnb-in-b::placeholder { color: rgba(47, 42, 34, .3); }
+.wxnb-in-t::placeholder, .wxnb-in-b::placeholder { color: color-mix(in srgb, currentColor 30%, transparent); }
 
 .wxnb-photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .wxnb-tile {
@@ -222,7 +231,7 @@
     aspect-ratio: 1 / 1;
     border-radius: 10px;
     overflow: hidden;
-    background: #ece6da;
+    background: var(--wxnb-well);
 }
 .wxnb-tile .os-img-photo, .wxnb-tile .os-img-card { width: 100%; height: 100%; }
 .wxnb-tile-x {
@@ -238,9 +247,9 @@
     z-index: 4;
 }
 .wxnb-tile-add {
-    border: 1.5px dashed rgba(47, 42, 34, .25);
+    border: 1.5px dashed color-mix(in srgb, currentColor 25%, transparent);
     background: transparent;
-    color: rgba(47, 42, 34, .5);
+    color: color-mix(in srgb, currentColor 50%, transparent);
     display: flex;
     flex-direction: column;
     align-items: center;

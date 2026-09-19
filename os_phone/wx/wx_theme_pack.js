@@ -289,10 +289,16 @@
         return out.join('\n');
     }
 
+    // 疊在外殼旁邊的整頁（記事本）有自己的一組顏色；套主題時改接顏色表，主題單獨寫它的時候照主題
+    //   （div.xxx 比記事本自己的 .xxx 重、比主題的 .wx-shell ~ .xxx 輕）
+    const PANEL_PALETTE = 'div.wxnb-root { --wxnb-bg: var(--wx-page); --wxnb-ink: var(--wx-ink); --wxnb-edit: var(--wx-surface); --wxnb-well: var(--wx-surface-2); }\n'
+        // 朋友圈封面的名字與頭像一半凸出去、壓在內容上：主題給內容加了底或定位也不能把它蓋掉（她 09-19）
+        + '.wxmo-root .wxmo-cover:not(#_) { position: relative !important; z-index: 2 !important; }';
+
     function _inject(css) {
         let st = d.getElementById(STYLE_ID);
         if (!css) { if (st) st.remove(); return; }
-        css = css + '\n' + SAFETY + '\n' + _pageFill(css);
+        css = css + '\n' + SAFETY + '\n' + _pageFill(css) + '\n' + PANEL_PALETTE;
         if (!st) { st = d.createElement('style'); st.id = STYLE_ID; }
         // 永遠排在 head 最後：主題要壓過 app 自己的樣式
         (d.head || d.documentElement).appendChild(st);
@@ -364,21 +370,71 @@
         '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；小標 .wx-set-label；說明字 .wx-set-desc',
         '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box；標題 .wx-modal-title；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
         '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit，上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',
-        '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；中間資訊 .wxpf-main；頭像 .wxpf-avatar 與外圈 .wxpf-ring；名字 .wxpf-name；簽名 .wxpf-bio；底下動作鈕一排 .wxpf-acts、每顆 .wxpf-act；關閉 .wxpf-x',
+        '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；中間資訊 .wxpf-main；頭像 .wxpf-avatar 與外圈 .wxpf-ring；名字 .wxpf-name；簽名 .wxpf-bio；底下動作鈕一排 .wxpf-acts、每顆 .wxpf-act（含下面那行字），按鈕的樣子（底、框、形狀）寫在圖示那一格 .wxpf-act-ic；關閉 .wxpf-x',
         '朋友圈（整頁）：整頁 .wxmo-root；頂列 .wxmo-bar（蓋在封面上時是透明的，往下捲之後 .wxmo-root 多一個 .is-scrolled，要寫實心的樣子就寫 .wxmo-root.is-scrolled .wxmo-bar），頂列按鈕 .wxmo-bar-btn，標題 .wxmo-bar-t；封面 .wxmo-cover（封面照片 .wxmo-cover-img 不要蓋掉），封面上的名字 .wxmo-cover-name；每一則 .wxmo-post，頭像 .wxmo-av，名字 .wxmo-name，內文 .wxmo-text，照片 .wxmo-photos，時間 .wxmo-time，右邊的更多鈕 .wxmo-more；讚與留言那一塊 .wxmo-social，讚 .wxmo-likes，每則留言 .wxmo-cm；留言輸入 .wxmo-input，送出 .wxmo-send；發一則的頁 .wxmo-compose，上方列 .wxmo-compose-bar，輸入 .wxmo-compose-in，發表 .wxmo-compose-ok，關閉 .wxmo-compose-x',
         '聊天設置（從聊天室右上角進去那一層）：.ws-overlay；標頭 .ws-header；標題 .ws-title；關閉 .ws-close；內容 .ws-body；一組 .ws-group；每格 .ws-cell；字 .ws-label；輸入框 .ws-input；開關 .ws-switch；頭像圓框 .ws-avatar-circle；疊在頭像上的相機 .ws-avatar-icon；底部 .ws-footer；保存 .ws-btn-save'
     ];
-    const VARS = '--wx-page 整頁的底、--wx-bar 分頁列與輸入列、--wx-surface 卡片與列、--wx-surface-2 輸入框與按下去的底、--wx-header 標頭、--wx-line 分隔線、--wx-line-strong 明顯的框、--wx-arrow 箭頭與佔位字、--wx-ink 標題字、--wx-ink-2 內文、--wx-ink-3 次要字、--wx-ink-soft 再淡一層、--wx-ink-dim 時間與說明、--wx-fill 沒圖時的頭像底、--wx-accent 重點色（主要按鈕、選中）、--wx-accent-ink 重點色當字用的深一階、--wx-on-accent 疊在重點色上的字、--wx-danger 未讀紅點與刪除（保持紅色系）、--wx-link 可點的字';
+    // 🎨 顏色表：整支 app 沒被主題單獨寫到的地方都吃這幾格（按鈕、選中的分頁、開關、送出、卡片、各頁的底與字）。
+    //   以前只在說明裡提一句「寫在 :root 會一起換」，AI 忙著設計零件常常沒寫 → 沒碰到的全留在預設的微信綠
+    //   （她：Persona5 紅黑白變綠黑白、晨報風按鈕符號綠色）。現在要它先交一張固定格式的顏色表，缺了就叫它補。
+    const PALETTE = [
+        ['--wx-page', '整頁的底（聊天列表、設置頁、聊天室）', 1],
+        ['--wx-surface', '卡片與每一列的底', 1],
+        ['--wx-header', '每頁最上面那條的底', 1],
+        ['--wx-bar', '底部分頁列與輸入列的底', 1],
+        ['--wx-ink', '主要的字（標題、名字）', 1],
+        ['--wx-ink-3', '次要的字（最後一句、說明）', 1],
+        ['--wx-accent', '重點色：按鈕、選中的分頁、開關、送出、未讀以外的強調', 1],
+        ['--wx-on-accent', '疊在重點色上面的字', 1],
+        ['--wx-surface-2', '輸入框、按下去的底', 0],
+        ['--wx-line', '分隔線', 0],
+        ['--wx-ink-2', '內文', 0],
+        ['--wx-ink-dim', '時間、最淡的說明', 0],
+        ['--wx-accent-ink', '重點色當字用時（要在卡片底上看得清楚）', 0],
+        ['--wx-link', '可以點的字', 0],
+        ['--wx-fill', '沒有圖時頭像的底', 0]
+    ];
+    const VARS = PALETTE.map(function (x) { return x[0] + ' ' + x[1]; }).join('、');
+    // AI 回的顏色表 → :root 一塊；沒寫的從寫了的推（淺一階、深一階那種），核心那幾格缺了回傳 missing 讓它補
+    function _paletteCss(text) {
+        const got = {};
+        String(text || '').split(/[\n;；]+/).forEach(function (ln) {
+            const m = ln.match(/(--wx-[a-z0-9-]+)\s*[:：]\s*([^\n;；]+)/i);
+            if (!m) return;
+            const v = m[2].replace(/!important/i, '').trim();
+            if (v && !/[{}<>]|url\(|expression/i.test(v)) got[m[1].toLowerCase()] = v;
+        });
+        const missing = PALETTE.filter(function (x) { return x[2] && !got[x[0]]; }).map(function (x) { return x[0]; });
+        const pick = function (k, alt) { return got[k] || alt; };
+        const v = Object.assign({}, got);
+        v['--wx-surface-2'] = pick('--wx-surface-2', got['--wx-surface']);
+        v['--wx-line'] = pick('--wx-line', got['--wx-ink-3'] ? 'color-mix(in srgb, ' + got['--wx-ink-3'] + ' 25%, transparent)' : undefined);
+        v['--wx-line-strong'] = pick('--wx-line-strong', v['--wx-line']);
+        v['--wx-ink-2'] = pick('--wx-ink-2', got['--wx-ink']);
+        v['--wx-ink-soft'] = pick('--wx-ink-soft', got['--wx-ink-3']);
+        v['--wx-ink-dim'] = pick('--wx-ink-dim', got['--wx-ink-3']);
+        v['--wx-arrow'] = pick('--wx-arrow', v['--wx-ink-dim']);
+        v['--wx-accent-ink'] = pick('--wx-accent-ink', got['--wx-accent']);
+        v['--wx-link'] = pick('--wx-link', v['--wx-accent-ink']);
+        v['--wx-fill'] = pick('--wx-fill', v['--wx-surface-2']);
+        v['--wx-fill-2'] = pick('--wx-fill-2', v['--wx-fill']);
+        const body = Object.keys(v).filter(function (k) { return v[k]; }).map(function (k) { return '  ' + k + ': ' + v[k] + ';'; }).join('\n');
+        return { css: body ? ':root {\n' + body + '\n}' : '', missing: missing };
+    }
+
 
     function _aiMessages(want, ref) {
         const sys = [
             '你替一支手機聊天 app 設計「主題」：一整包 CSS，換掉整支 app 的長相。',
             '主題不只是換顏色：要動到形狀（圓角、邊框、陰影）、間距與密度、字型與字級字重、背景（漸層、紋理）、標頭與分頁列與輸入列的造型、清單的排法、圖示的樣子。整體要看得出是一種風格，而不是同一個版面換了顏色。',
             '',
-            '這支 app 的零件（只能用這些名字）：',
-            PARTS.map(function (p) { return '・' + p; }).join('\n'),
+            '分兩步做：',
+            '第一步：整套顏色（一定要全填，這是最重要的一步）。整支 app 裡你沒有單獨寫到的零件，全部吃這張表：按鈕、選中的分頁、開關、送出鍵、卡片、各頁的底與字。沒填的格子會留在原本的微信綠與白，整套主題就會看起來沒換。格子：',
+            PALETTE.map(function (x) { return '・' + x[0] + '：' + x[1] + (x[2] ? '（必填）' : ''); }).join('\n'),
+            '重點色要照這套風格挑，字和它底下的底色要看得清楚。',
             '',
-            '顏色格子（寫在 :root 裡會整支 app 一起換）：' + VARS,
+            '第二步：造型。挑最能表現風格的幾樣做（標頭、分頁列、輸入列、列表、卡片的形狀與裝飾），不用每個零件都寫；沒寫到的會用第一步的顏色。零件（只能用這些名字）：',
+            PARTS.map(function (p) { return '・' + p; }).join('\n'),
             '',
             '尺寸（這是手機畫面，照這個比例設計）：',
             '・整支 app 寬約 360px（手機直立），高約 800px。',
@@ -403,8 +459,11 @@
             '・深色與淺色：做成一套固定的樣子就好，不用另外寫夜晚版。',
             '',
             '輸出格式固定，標籤名照抄英文，除此之外不要寫任何字：',
+            '<palette>',
+            '一行一格，寫成 格子名: 顏色',
+            '</palette>',
             '<theme name="主題名稱（中文，十個字以內）">',
-            '這裡放完整的 CSS',
+            '第二步的 CSS（顏色表不用再寫一次）',
             '</theme>'
         ].join('\n');
         let user = '想要的感覺：' + (String(want || '').trim() || '照你的判斷做一套有個性的');
@@ -424,7 +483,10 @@
             css = fence ? fence[1] : '';
         }
         css = String(css || '').replace(/^\s*```(?:css)?/i, '').replace(/```\s*$/, '').trim();
-        return { name: name, css: css };
+        const pm = t.match(/[<＜]\s*palette\s*[>＞]([\s\S]*?)[<＜]\s*\/\s*palette\s*[>＞]/i);
+        // 沒寫顏色表但 CSS 裡有 :root 那塊的，也收（舊寫法）
+        const pal = _paletteCss(pm ? pm[1] : ((css.match(/:root\s*\{([^}]*)\}/i) || [])[1] || ''));
+        return { name: name, css: css, palette: pal.css, missing: pal.missing };
     }
     function generate(want, ref) {
         return new Promise(function (resolve, reject) {
@@ -433,10 +495,24 @@
             O.chatMain(_aiMessages(want, ref), null,
                 function (text) {
                     const r = _parseAi(text);
-                    if (!r.css) { reject(new Error('它沒有照格式回')); return; }
-                    const c = compile(r.css);
-                    if (!c.ok || !c.kept) { reject(new Error(c.error || '寫出來的樣式一條都用不上')); return; }
-                    resolve(r);
+                    if (!r.css && !r.palette) { reject(new Error('它沒有照格式回')); return; }
+                    const finish = function (paletteCss) {
+                        const full = (paletteCss ? paletteCss + '\n' : '') + r.css;
+                        const c = compile(full);
+                        if (!c.ok || !c.kept) { reject(new Error(c.error || '寫出來的樣式一條都用不上')); return; }
+                        resolve({ name: r.name, css: full });
+                    };
+                    if (!r.missing.length) { finish(r.palette); return; }
+                    // 顏色表缺了核心那幾格：只問顏色，把整張表補齊（不重做造型）
+                    const ask = [
+                        { role: 'system', content: '你剛才替一支手機聊天 app 設計了一套主題，但顏色表漏了幾格。照你那套主題的風格把整張顏色表補齊。只輸出 <palette> 那一塊，一行一格寫成 格子名: 顏色，不要寫別的字。格子：\n' + PALETTE.map(function (x) { return '・' + x[0] + '：' + x[1]; }).join('\n') },
+                        { role: 'user', content: '你那套主題：\n' + String(text).slice(0, 12000) + '\n\n漏掉的格子：' + r.missing.join('、') }
+                    ];
+                    O.chatMain(ask, null, function (t2) {
+                        const pm = String(t2 || '').match(/[<＜]\s*palette\s*[>＞]([\s\S]*?)[<＜]\s*\/\s*palette\s*[>＞]/i);
+                        const merged = _paletteCss((r.palette.replace(/^:root\s*\{|\}\s*$/g, '')) + '\n' + (pm ? pm[1] : t2));
+                        finish(merged.css);
+                    }, function () { finish(r.palette); }, { task: 'wx_theme', label: '聊天 app 主題（補顏色）' });
                 },
                 function (e) { reject(e instanceof Error ? e : new Error(String((e && e.message) || e))); },
                 { task: 'wx_theme', label: '聊天 app 主題' });

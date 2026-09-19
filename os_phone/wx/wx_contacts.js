@@ -540,7 +540,7 @@
   <input type="text" id="wx-add-name" class="wx-modal-input" placeholder="輸入名稱 (例: 林黛玉)">
   <input type="text" id="wx-add-desc" class="wx-modal-input" placeholder="個性簽名 (選填)">
   <textarea id="wx-add-persona" class="wx-modal-input" placeholder="角色設定 (選填，AI 會帶入 System Prompt)" style="resize:vertical;min-height:80px;width:100%;font-family:inherit;font-size:13px;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;box-sizing:border-box;"></textarea>
-  <button id="wx-load-worldbook-btn" style="width:100%;padding:8px;background:#f0f9f0;border:1px solid #07c160;border-radius:6px;color:#07c160;font-size:13px;cursor:pointer;font-weight:600;"><i class="fa-solid fa-book"></i> 從世界書載入角色設定</button>
+  <button id="wx-load-worldbook-btn" class="wx-wb-load-btn"><i class="fa-solid fa-book"></i> 從世界書載入角色設定</button>
   <div id="wx-worldbook-list" style="display:none;width:100%;max-height:180px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:6px;background:#fff;"></div>
 </div>
 <div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-cancel">取消</button><button class="wx-btn wx-btn-confirm" id="wx-btn-add-confirm">添加</button></div>`;
