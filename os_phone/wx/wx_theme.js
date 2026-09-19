@@ -37,7 +37,7 @@
 
             /* 💬 長按一則訊息跳出來的小窗：複製｜引用｜刪除 */
             .wx-msgmenu { position: absolute; z-index: 1000003; display: flex; background: rgba(20,20,22,0.94); border-radius: 12px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); animation: popIn 0.12s; }
-            .wx-msgmenu-btn { position: relative; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 12px 8px; border: none; background: none; color: var(--wx-on-accent); font-size: 12px; font-family: inherit; cursor: pointer; border-radius: 8px; }
+            .wx-msgmenu-btn { position: relative; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 12px 8px; border: none; background: none; color: #fff; font-size: 12px; font-family: inherit; cursor: pointer; border-radius: 8px; }
             .wx-msgmenu-btn + .wx-msgmenu-btn::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 1px; background: rgba(255,255,255,0.14); }
             .wx-msgmenu-btn i { font-size: 18px; }
             .wx-msgmenu-btn:active { background: rgba(255,255,255,0.12); }
@@ -52,13 +52,13 @@
             .wx-back-btn: before { content: '‹'; margin-right: 2px; font-size: 28px; line-height: 20px; position: relative; top: -2px;}
             
             .wx-plus-menu-pop { position: fixed; background: #4c4c4c; border-radius: 6px; padding: 5px 0; box-shadow: 0 5px 15px rgba(0,0,0,0.5); z-index: 1000001; animation: popIn 0.2s; min-width: 160px; }
-            .wx-menu-item { padding: 12px 20px; color: var(--wx-on-accent); font-size: 15px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.1); }
+            .wx-menu-item { padding: 12px 20px; color: #fff; font-size: 15px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.1); }
             .wx-menu-item:last-child { border-bottom: none; }
             .wx-menu-item:active { background: rgba(0,0,0,0.2); }
             .wx-menu-item .icon { font-size: 18px; width: 24px; text-align: center; }
             
-            .wx-context-menu { position: fixed; background: var(--wx-surface); border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000002; animation: popIn 0.1s; min-width: 120px; overflow: hidden; }
-            .wx-context-item { padding: 12px 15px; font-size: 14px; color: var(--wx-ink-2); cursor: pointer; border-bottom: 1px solid var(--wx-line); }
+            .wx-context-menu { position: fixed; background: var(--wx-surface); color: var(--wx-ink); border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000002; animation: popIn 0.1s; min-width: 120px; overflow: hidden; }
+            .wx-context-item { padding: 12px 15px; font-size: 14px; color: inherit; cursor: pointer; border-bottom: 1px solid var(--wx-line); }
             .wx-context-item:active { background: var(--wx-surface-2); }
             .wx-context-item.danger { color: var(--wx-danger); }
 
@@ -90,9 +90,9 @@
 
             .wx-modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000005; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); animation: fadeIn 0.2s; }
             .wx-modal-overlay.show { display: flex; }
-            .wx-modal-box { background: var(--wx-surface); width: 85%; border-radius: 12px; padding: 20px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); animation: popIn 0.25s; display: flex; flex-direction: column; gap: 10px; max-height: 85%; overflow-y: auto; }
-            .wx-modal-title { font-size: 16px; font-weight: 600; text-align: center; margin-bottom: 5px; color: var(--wx-ink-2); }
-            .wx-modal-input { width: 100%; padding: 10px; border: 1px solid var(--wx-line-strong); background: #f9f9f9; border-radius: 6px; box-sizing: border-box; font-size: 14px; outline: none; transition: border 0.2s; color: var(--wx-ink); }
+            .wx-modal-box { background: var(--wx-surface); color: var(--wx-ink); width: 85%; border-radius: 12px; padding: 20px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); animation: popIn 0.25s; display: flex; flex-direction: column; gap: 10px; max-height: 85%; overflow-y: auto; }
+            .wx-modal-title { font-size: 16px; font-weight: 600; text-align: center; margin-bottom: 5px; color: inherit; }
+            .wx-modal-input { width: 100%; padding: 10px; border: 1px solid var(--wx-line-strong); background: var(--wx-surface-2); border-radius: 6px; box-sizing: border-box; font-size: 14px; outline: none; transition: border 0.2s; color: var(--wx-ink); }
             .wx-modal-input:focus { border-color: var(--wx-accent); background: var(--wx-surface); }
             .wx-modal-input.hidden { display: none; }
             /* 照片：從相簿選（手機會跳相簿／相機），底下的輸入框留給貼網址 */
@@ -102,16 +102,16 @@
             /* 🎙 聽寫檔下載面板（本機模型第一次用）：從底部升起；狀態寫在 data-state（download／downloading／preparing） */
             .wx-vsheet-mask { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 1000005; display: flex; align-items: flex-end; animation: fadeIn 0.2s; }
             .wx-vsheet-mask[hidden] { display: none !important; }
-            .wx-vsheet { width: 100%; background: var(--wx-bar); border-radius: 16px 16px 0 0; padding: 10px 20px calc(18px + env(safe-area-inset-bottom)); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; animation: wxVsheetUp 0.25s ease-out; }
+            .wx-vsheet { width: 100%; background: var(--wx-bar); color: var(--wx-bar-ink, var(--wx-ink)); border-radius: 16px 16px 0 0; padding: 10px 20px calc(18px + env(safe-area-inset-bottom)); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; animation: wxVsheetUp 0.25s ease-out; }
             @keyframes wxVsheetUp { from { transform: translateY(100%); } to { transform: none; } }
-            .wx-vsheet-grab { width: 36px; height: 4px; border-radius: 2px; background: #d0d0d0; margin-bottom: 14px; }
+            .wx-vsheet-grab { width: 36px; height: 4px; border-radius: 2px; background: color-mix(in srgb, currentColor 24%, transparent); margin-bottom: 14px; }
             .wx-vsheet-dl { width: 100%; display: none; flex-direction: column; align-items: center; gap: 10px; }
             .wx-vsheet-mask[data-state="download"] .wx-vsheet-dl, .wx-vsheet-mask[data-state="downloading"] .wx-vsheet-dl, .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-dl { display: flex; }
             .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-title, .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-bar, .wx-vsheet-mask[data-state="preparing"] .wx-vsheet-dlbtn { display: none; }
-            .wx-vsheet-title { font-size: 16px; font-weight: 600; color: #222; }
-            .wx-vsheet-note { font-size: 13px; color: var(--wx-ink-soft); text-align: center; font-variant-numeric: tabular-nums; }
-            .wx-vsheet-bar { width: 100%; height: 6px; -webkit-appearance: none; appearance: none; border: none; border-radius: 3px; overflow: hidden; background: #e5e5e5; }
-            .wx-vsheet-bar::-webkit-progress-bar { background: #e5e5e5; }
+            .wx-vsheet-title { font-size: 16px; font-weight: 600; color: inherit; }
+            .wx-vsheet-note { font-size: 13px; color: color-mix(in srgb, currentColor 62%, transparent); text-align: center; font-variant-numeric: tabular-nums; }
+            .wx-vsheet-bar { width: 100%; height: 6px; -webkit-appearance: none; appearance: none; border: none; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, currentColor 14%, transparent); }
+            .wx-vsheet-bar::-webkit-progress-bar { background: transparent; }
             .wx-vsheet-bar::-webkit-progress-value { background: var(--wx-accent); }
             .wx-vsheet-bar::-moz-progress-bar { background: var(--wx-accent); }
             .wx-vsheet-mask[data-state="download"] .wx-vsheet-bar { visibility: hidden; }
@@ -183,7 +183,7 @@
             .wx-dark .wx-quote { background: rgba(255,255,255,0.10); color: var(--wx-ink-dim); }
             .wx-dark .wx-quote .chat-quote-name { color: var(--wx-link); }
             /* 正在回覆：輸入列上方那條，帶一顆取消 */
-            .wx-replying { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(0,0,0,0.05); border-top: 1px solid rgba(0,0,0,0.06); font-size: 11px; color: #8a8a8a; }
+            .wx-replying { display: flex; align-items: center; gap: 6px; padding: 6px 12px; color: color-mix(in srgb, var(--wx-bar-ink, var(--wx-ink)) 60%, transparent); background: color-mix(in srgb, var(--wx-bar-ink, var(--wx-ink)) 6%, transparent); border-top: 1px solid color-mix(in srgb, var(--wx-bar-ink, var(--wx-ink)) 8%, transparent); font-size: 11px; }
             .wx-replying .wx-replying-body { flex: 1; min-width: 0; display: flex; gap: 4px; }
             .wx-replying .chat-quote-name { flex-shrink: 0; color: var(--wx-link); }
             .wx-replying .chat-quote-name::after { content: '：'; }
@@ -269,18 +269,18 @@
             .wx-stk-tabs-wrap { display: flex; flex: 1; gap: 6px; overflow-x: auto; scrollbar-width: none; }
             .wx-stk-tab { border: none; background: none; font-size: 12px; color: var(--wx-ink-3); padding: 3px 10px; border-radius: 20px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
             .wx-stk-tab.active { background: var(--wx-accent); color: var(--wx-on-accent); }
-            .wx-stk-manage-toggle { font-size: 18px; color: #bbb; cursor: pointer; padding: 4px; margin-left: 6px; line-height: 1; }
+            .wx-stk-manage-toggle { font-size: 18px; color: var(--wx-ink-dim); cursor: pointer; padding: 4px; margin-left: 6px; line-height: 1; }
             .wx-sticker-grid { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 62px; gap: 4px; padding: 8px; overflow-y: auto; min-height: 78px; }
             .wx-stk-item { height: 62px; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--wx-surface); cursor: pointer; border: 1px solid var(--wx-line); }
             .wx-stk-item img { width: 100%; height: 100%; object-fit: contain; }
             .wx-stk-item:active { opacity: 0.6; }
             .wx-stk-fallback { font-size: 10px; color: var(--wx-ink-soft); text-align: center; padding: 2px; word-break: break-all; }
             .wx-stk-fallback-box { background: var(--wx-surface); border: 1px solid var(--wx-line); border-radius: 6px; padding: 8px 12px; font-size: 13px; color: var(--wx-ink-2); display: inline-block; max-width: 150px; }
-            .wx-stk-empty { grid-column: 1/-1; text-align: center; color: #bbb; font-size: 12px; padding: 20px; }
+            .wx-stk-empty { grid-column: 1/-1; text-align: center; color: var(--wx-ink-dim); font-size: 12px; padding: 20px; }
             .wx-stk-manage-area { max-height: 0; overflow: hidden; transition: max-height 0.2s ease; background: var(--wx-surface); border-top: 1px solid var(--wx-line); }
             .wx-stk-manage-area.open { max-height: 210px; overflow-y: auto; flex-shrink: 0; }
             .wx-stk-manage-inner { padding: 8px 10px; }
-            .wx-stk-lib-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid #f5f5f5; }
+            .wx-stk-lib-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--wx-line); }
             .wx-stk-lib-name { flex: 1; font-size: 13px; color: var(--wx-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .wx-stk-lib-count { font-size: 11px; color: var(--wx-ink-dim); flex-shrink: 0; }
             .wx-stk-lib-del { border: none; background: none; color: #e74c3c; cursor: pointer; font-size: 14px; padding: 0 4px; }
@@ -340,14 +340,14 @@
             @keyframes wxVmsgBar { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1.3); } }
             .wx-vmsg.is-playing .wx-vmsg-icon { opacity: 1; }
             .wx-vmsg-dur { font-size: 13px; font-variant-numeric: tabular-nums; opacity: 0.8; }
-            .wx-vmsg-trans { display: none; font-size: 13px; line-height: 1.5; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.1); word-break: break-word; }
+            .wx-vmsg-trans { display: none; font-size: 13px; line-height: 1.5; padding-top: 6px; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); word-break: break-word; }
             .wx-vmsg-trans.open { display: block; }
             .wx-vmsg-tone { font-size: 11px; opacity: 0.6; margin-top: 3px; }
             .wx-file-card { background: var(--wx-surface); color: var(--wx-ink-2); padding: 12px 15px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; width: 210px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: pointer; }
             .wx-file-info { flex: 1; overflow: hidden; margin-right: 10px; display: flex; flex-direction: column; justify-content: center; }
             .wx-file-name { font-size: 14px; line-height: 1.4; max-height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
             .wx-file-size { font-size: 11px; opacity: .55; margin-top: 4px; }
-            .wx-file-icon { width: 45px; height: 45px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--wx-on-accent); font-weight: bold; font-size: 18px; flex-shrink: 0; }
+            .wx-file-icon { width: 45px; height: 45px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 18px; flex-shrink: 0; }
             .wx-gift-card-blue { width: 220px; background: linear-gradient(135deg, #0e2a5e 0%, #173673 100%); border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; padding: 15px 15px 10px 15px; color: #e3c795; box-shadow: 0 2px 5px rgba(0,0,0,0.15); position: relative; overflow: hidden; cursor: pointer; }
             .wx-gift-card-blue::before { content: ''; position: absolute; top: -10px; right: -10px; width: 40px; height: 40px; background: rgba(255,255,255,0.05); border-radius: 50%; box-shadow: -20px 40px 0 rgba(255,255,255,0.05), 40px 20px 0 rgba(255,255,255,0.05); }
             .wx-gift-top { display: flex; align-items: center; gap: 10px; z-index: 1; }
@@ -396,12 +396,12 @@
             .wx-cell-value { font-size: 15px; color: var(--wx-ink-3); margin-right: 6px; }
             .wx-cell-select { border: none; background: transparent; font-size: 15px; color: var(--wx-ink-3); text-align: right; max-width: 150px; }
             .wx-cell-text.is-danger { color: #e74c3c; }
-            .wx-fmt-sum { font-size: 11px; color: #aaa; cursor: pointer; user-select: none; }
-            .wx-fmt-body { font-size: 11px; color: #999; line-height: 1.7; margin-top: 4px; padding: 6px 8px; background: #f9f9f9; border-radius: 4px; border: 1px solid #eee; }
-            .wx-transfer-note { font-size: 12px; color: #6b6b6b; margin-top: 5px; }
-            .wx-modal-label { font-size: 12px; color: var(--wx-ink-3); margin-bottom: 5px; }
-            .wx-modal-label.is-gap { margin: 10px 0 0; color: var(--wx-ink-soft); }
-            .wx-modal-hint { font-size: 10px; color: var(--wx-ink-soft); }
+            .wx-fmt-sum { font-size: 11px; color: color-mix(in srgb, currentColor 50%, transparent); cursor: pointer; user-select: none; }
+            .wx-fmt-body { font-size: 11px; color: color-mix(in srgb, currentColor 60%, transparent); line-height: 1.7; margin-top: 4px; padding: 6px 8px; background: color-mix(in srgb, currentColor 5%, transparent); border-radius: 4px; border: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+            .wx-transfer-note { font-size: 12px; color: color-mix(in srgb, currentColor 62%, transparent); margin-top: 5px; }
+            .wx-modal-label { font-size: 12px; color: color-mix(in srgb, currentColor 62%, transparent); margin-bottom: 5px; }
+            .wx-modal-label.is-gap { margin: 10px 0 0; }
+            .wx-modal-hint { font-size: 10px; color: color-mix(in srgb, currentColor 55%, transparent); }
             .wx-modal-hint.is-right { margin-top: 5px; font-size: 11px; text-align: right; }
             .wx-modal-ok { color: var(--wx-accent); }
             .wx-wb-load-btn { width: 100%; padding: 8px; background: color-mix(in srgb, var(--wx-accent) 8%, var(--wx-surface)); border: 1px solid var(--wx-accent); border-radius: 6px; color: var(--wx-accent-ink); font-size: 13px; cursor: pointer; font-weight: 600; }
@@ -411,23 +411,23 @@
             .wx-avatar-upload { width: 80px; height: 80px; background: var(--wx-fill); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px dashed #999; margin: 10px auto; font-size: 30px; color: var(--wx-ink-dim); position: relative; overflow: hidden; }
             .wx-transfer-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 110; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); animation: fadeIn 0.2s; }
             .wx-transfer-overlay.show { display: flex; }
-            .wx-transfer-box { background: var(--wx-surface); width: 260px; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 25px rgba(0,0,0,0.2); animation: popIn 0.3s; display: flex; flex-direction: column; text-align: center; }
+            .wx-transfer-box { background: var(--wx-surface); color: var(--wx-ink); width: 260px; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 25px rgba(0,0,0,0.2); animation: popIn 0.3s; display: flex; flex-direction: column; text-align: center; }
             /* 🚨同紅包：亮橘配白字只有 2.11:1。加深到 5.02:1，橘色的身分還在 */
             .wx-transfer-header { background: #b45309; padding: 30px 20px; color: white; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-            .wx-transfer-icon { width: 50px; height: 50px; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; }
+            .wx-transfer-icon { width: 50px; height: 50px; border: 2px solid currentColor; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; }
             .wx-transfer-amount { font-size: 32px; font-weight: bold; font-family: 'Arial', sans-serif; }
             .wx-transfer-actions { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-            .wx-btn-receive { background: var(--wx-accent); color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; cursor: pointer; font-weight: bold; }
-            .wx-btn-return { background: white; color: var(--wx-danger); border: 1px solid var(--wx-danger); padding: 12px; border-radius: 6px; font-size: 15px; cursor: pointer; font-weight: bold; }
+            .wx-btn-receive { background: var(--wx-accent); color: var(--wx-on-accent); border: none; padding: 12px; border-radius: 6px; font-size: 15px; cursor: pointer; font-weight: bold; }
+            .wx-btn-return { background: transparent; color: var(--wx-danger); border: 1px solid var(--wx-danger); padding: 12px; border-radius: 6px; font-size: 15px; cursor: pointer; font-weight: bold; }
             .wx-gift-overlay { z-index: 110; backdrop-filter: blur(3px); position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; animation: fadeIn 0.2s; }
             .wx-gift-overlay.show { display: flex; }
-            .wx-receipt-box { background: var(--wx-surface); width: 230px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); animation: popIn 0.3s; display: flex; flex-direction: column; text-align: center; position: relative; margin: 20px 0; }
+            .wx-receipt-box { background: var(--wx-surface); color: var(--wx-ink); width: 230px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); animation: popIn 0.3s; display: flex; flex-direction: column; text-align: center; position: relative; margin: 20px 0; }
             .wx-receipt-header { display: none; }
             .wx-receipt-content { padding: 30px 20px 25px 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
             .wx-receipt-icon { font-size: 45px; margin-bottom: 5px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.1)); }
-            .wx-receipt-name { font-size: 17px; font-weight: bold; color: var(--wx-ink-2); }
-            .wx-receipt-divider { width: 100%; border-bottom: 2px dashed #e0e0e0; margin: 8px 0; }
-            .wx-receipt-price-label { font-size: 12px; color: var(--wx-ink-dim); margin-bottom: -5px; letter-spacing: 1px;}
+            .wx-receipt-name { font-size: 17px; font-weight: bold; color: inherit; }
+            .wx-receipt-divider { width: 100%; border-bottom: 2px dashed color-mix(in srgb, currentColor 18%, transparent); margin: 8px 0; }
+            .wx-receipt-price-label { font-size: 12px; color: color-mix(in srgb, currentColor 55%, transparent); margin-bottom: -5px; letter-spacing: 1px;}
             .wx-receipt-price { font-size: 22px; font-weight: bold; color: #d95f55; font-family: 'Arial', sans-serif; }
             .wx-receipt-close { margin-top: 12px; font-size: 13px; color: var(--wx-link); cursor: pointer; padding: 8px; font-weight: 500;}
             .wx-receipt-btn-group { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 10px; }
@@ -439,7 +439,7 @@
             /* ========== 紅包彈窗 ========== */
             .wx-rp-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 110; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); animation: fadeIn 0.2s; }
             .wx-rp-overlay.show { display: flex; }
-            .wx-rp-box { background: var(--wx-surface); width: 280px; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 25px rgba(0,0,0,0.3); animation: popIn 0.3s; display: flex; flex-direction: column; max-height: 80vh; }
+            .wx-rp-box { background: var(--wx-surface); color: var(--wx-ink); width: 280px; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 25px rgba(0,0,0,0.3); animation: popIn 0.3s; display: flex; flex-direction: column; max-height: 80vh; }
             /* 🚨可讀性：原本是亮黃漸層配白字，實測對比只有 1.49:1（4.5 才及格）——她說「非常難看清」。
                改成紅包本來的深紅，白字拿到 5.4~7.7:1；金色留給頭像框與金額，紅配金還是紅包的樣子。 */
             .wx-rp-header { background: linear-gradient(135deg, #c0392b 0%, #96301c 100%); padding: 25px 20px; color: white; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; }
@@ -447,21 +447,21 @@
             .wx-rp-sender { font-size: 16px; font-weight: bold; }
             /* 層次靠字級與顏色做，不靠 opacity——透明度一壓，對比就掉到不及格 */
             .wx-rp-memo { font-size: 13px; color: #ffeede; line-height: 1.4; }
-            .wx-rp-divider { width: 90%; border-bottom: 1px solid #e6e6e6; margin: 15px auto; }
+            .wx-rp-divider { width: 90%; border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent); margin: 15px auto; }
             /* 總金額／已領／剩餘：三欄，數字在上、名目在下，中間一道細分隔。
                不是「A: 1 | B: 2 | C: 3」那種一行串到底的印法——那是 log 不是 UI。 */
-            .wx-rp-info { display: flex; justify-content: center; padding: 0 12px 14px; font-size: 13px; color: #6b6b6b; }
+            .wx-rp-info { display: flex; justify-content: center; padding: 0 12px 14px; font-size: 13px; }
             .wx-rp-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; min-width: 0; }
-            .wx-rp-stat + .wx-rp-stat::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 1px; background: #ececec; }
-            .wx-rp-stat b { font-size: 15px; font-weight: 600; color: #2b2b2b; font-variant-numeric: tabular-nums; letter-spacing: -0.2px; }
-            .wx-rp-stat span { font-size: 11px; color: #6b6b6b; }
+            .wx-rp-stat + .wx-rp-stat::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 1px; background: color-mix(in srgb, currentColor 12%, transparent); }
+            .wx-rp-stat b { font-size: 15px; font-weight: 600; color: inherit; font-variant-numeric: tabular-nums; letter-spacing: -0.2px; }
+            .wx-rp-stat span { font-size: 11px; color: color-mix(in srgb, currentColor 62%, transparent); }
             .wx-rp-list { flex: 1; overflow-y: auto; padding: 10px 15px; max-height: 300px; }
-            .wx-rp-item { display: flex; align-items: center; padding: 12px 10px; border-bottom: 1px solid #f5f5f5; }
+            .wx-rp-item { display: flex; align-items: center; padding: 12px 10px; border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent); }
             .wx-rp-item:last-child { border-bottom: none; }
             .wx-rp-item-avatar { width: 40px; height: 40px; border-radius: 50%; background-size: cover; background-position: center; margin-right: 12px; flex-shrink: 0; }
             .wx-rp-item-info { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-            .wx-rp-item-name { font-size: 14px; font-weight: 500; color: var(--wx-ink-2); }
-            .wx-rp-item-time { font-size: 11px; color: #6b6b6b; }
+            .wx-rp-item-name { font-size: 14px; font-weight: 500; color: inherit; }
+            .wx-rp-item-time { font-size: 11px; color: color-mix(in srgb, currentColor 62%, transparent); }
             .wx-rp-item-amount { font-size: 15px; font-weight: bold; color: #c2410c; flex-shrink: 0; }   /* 橘金在白底只有 2.11:1，這是最該看清的數字 */
             .wx-rp-close { text-align: center; padding: 15px; font-size: 14px; color: var(--wx-link); cursor: pointer; border-top: 1px solid var(--wx-line); font-weight: 500; }
 
@@ -585,12 +585,9 @@
             .wx-dark .wx-set-group { background: var(--wx-surface); border-top-color: var(--wx-line); border-bottom-color: var(--wx-line); }
             .wx-dark .wx-set-label { color: var(--wx-ink); }
             .wx-dark .wx-modal-box, .wx-dark .wx-context-menu { background: var(--wx-surface); }
-            .wx-dark .wx-modal-title { color: var(--wx-ink); }
             .wx-dark .wx-modal-input { background: var(--wx-surface-2); border-color: var(--wx-line-strong); color: var(--wx-ink); }
             .wx-dark .wx-vsheet { background: var(--wx-surface); }
-            .wx-dark .wx-vsheet-title { color: var(--wx-ink); }
-            .wx-dark .wx-vsheet-grab, .wx-dark .wx-vsheet-bar { background: var(--wx-line-strong); }
-            .wx-dark .wx-context-item { color: var(--wx-ink); border-bottom-color: var(--wx-line); }
+            .wx-dark .wx-context-item { border-bottom-color: var(--wx-line); }
             .wx-dark .wx-btn-cancel { background: var(--wx-surface-2); color: var(--wx-ink-3); }
             .wx-dark .wx-btn-reset { background: var(--wx-surface-2); color: #ff6b6b; }
             .wx-dark .wx-source-details { background: var(--wx-surface); border-color: var(--wx-line-strong); color: #aaa; }

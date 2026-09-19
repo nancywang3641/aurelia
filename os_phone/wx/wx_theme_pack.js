@@ -60,7 +60,7 @@
         return NOSTYLE_RE.test(last);
     }
     // 弄不見就回不去的那些
-    const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|btn-(?:confirm|cancel))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-|wxpf-|wxwal-/i;
+    const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|rp-box|rp-close|transfer-box|receipt-box|receipt-close|context-menu|vsheet|btn-(?:confirm|cancel|receive|return))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-|wxpf-|wxwal-/i;
     // 聊天室裡的卡片（轉帳、紅包、禮物、位置、影片、檔案、連結、收款碼、分享、語音、通話、外送）：跟著主題換長相，
     //   但金額、狀態字（已收款、已領完、已過期）不准被藏掉——她點下去要知道收了沒
     const CARD_RE = /wx-(?:tf-|rpc-|gift-|loc-|vcard|file-|link-|receive-|wb-share-|app-share-|call-rec)|wxto-card/i;
@@ -386,7 +386,8 @@
         '通訊錄：分區 .wx-contact-section；每個人 .wx-contact-item；名字 .wx-contact-name；圖示 .wx-contact-icon',
         '「我」那頁上方：.wx-me-header；頭像 .wx-me-avatar；名字 .wx-me-name；帳號 .wx-me-id；簽名 .wx-me-signature',
         '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；分組小標（在整頁底上，吃 --wx-page-ink）.wx-set-head；說明字 .wx-set-desc',
-        '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box；標題 .wx-modal-title；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
+        '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box（裡面的標題、說明字都跟著它的 color）；標題 .wx-modal-title；欄位名 .wx-modal-label；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
+        '聊天室裡點卡片開出來的小窗（都浮在一層半透明黑上，每個小窗裡的字預設跟著那個小窗自己的 color，換小窗的底就同一條寫 color）：紅包明細 .wx-rp-box（上半那塊 .wx-rp-header，發的人 .wx-rp-sender，祝福語 .wx-rp-memo；下半：總金額／已領／剩餘三個數字 .wx-rp-stat，領的人每一筆 .wx-rp-item，名字 .wx-rp-item-name，時間 .wx-rp-item-time，金額 .wx-rp-item-amount，關閉 .wx-rp-close）；轉帳 .wx-transfer-box（上半 .wx-transfer-header，裡面的圈 .wx-transfer-icon 與金額 .wx-transfer-amount；下半按鈕區 .wx-transfer-actions，確認收款 .wx-btn-receive，退回 .wx-btn-return，小字 .wx-transfer-note）；禮物收據 .wx-receipt-box（品名 .wx-receipt-name，價錢 .wx-receipt-price，收下 .wx-receipt-btn-accept，婉拒 .wx-receipt-btn-refuse，關閉 .wx-receipt-close）；選單 .wx-context-menu，每一項 .wx-context-item；從底部升起的面板 .wx-vsheet（標題 .wx-vsheet-title）。長按訊息跳出的那條黑色小選單與右上加號選單是固定的深色，不用做',
         '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit（整頁吃 --wx-page-ink，卡片與編輯頁吃 --wx-ink），上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',
         '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；頭像 .wxpf-avatar（只有這一層：形狀、框、陰影都寫在它身上，外面沒有另一圈）；名字 .wxpf-name；簽名 .wxpf-bio（頭像、名字、簽名是直接疊在照片上的，外面不會有框或底）；底下一排動作鈕 .wxpf-acts（發訊息、記事本等三四顆），每顆 .wxpf-act（含下面那行字），按鈕的樣子（底、框、形狀）寫在圖示那一格 .wxpf-act-ic——這排按鈕一定要做成這套風格；關閉 .wxpf-x',
         '朋友圈（整頁）：整頁 .wxmo-root；頂列 .wxmo-bar（蓋在封面上時是透明的，往下捲之後 .wxmo-root 多一個 .is-scrolled，要寫實心的樣子就寫 .wxmo-root.is-scrolled .wxmo-bar），頂列按鈕 .wxmo-bar-btn，標題 .wxmo-bar-t；封面 .wxmo-cover（封面照片 .wxmo-cover-img 不要蓋掉），封面上的名字 .wxmo-cover-name；每一則 .wxmo-post，頭像 .wxmo-av，名字 .wxmo-name，內文 .wxmo-text，照片 .wxmo-photos，時間 .wxmo-time，右邊的更多鈕 .wxmo-more；讚與留言那一塊 .wxmo-social，讚 .wxmo-likes，每則留言 .wxmo-cm；留言輸入 .wxmo-input，送出 .wxmo-send；發一則的頁 .wxmo-compose，上方列 .wxmo-compose-bar，輸入 .wxmo-compose-in，發表 .wxmo-compose-ok，關閉 .wxmo-compose-x',
@@ -469,6 +470,19 @@
         ['.wx-link-msg', '連結卡，標題與下緣'],
         ['.wx-receive-head', '收款碼卡上緣的字'],
         ['.wx-receive-foot', '收款碼卡下緣的字'],
+        ['.wx-modal-box', '彈出小窗，裡面的標題與說明字'],
+        ['.wx-rp-box', '紅包明細小窗下半，三個數字與領的人每一筆'],
+        ['.wx-rp-header', '紅包明細小窗上半，發的人與祝福語'],
+        ['.wx-transfer-box', '轉帳小窗下半的小字'],
+        ['.wx-transfer-header', '轉帳小窗上半，圈、狀態字與金額'],
+        ['.wx-btn-receive', '轉帳小窗的確認收款鈕上的字'],
+        ['.wx-btn-return', '轉帳小窗的退回鈕上的字'],
+        ['.wx-receipt-box', '禮物收據小窗，品名與說明字'],
+        ['.wx-receipt-btn-accept', '禮物收據的收下鈕上的字'],
+        ['.wx-receipt-btn-refuse', '禮物收據的婉拒鈕上的字'],
+        ['.wx-context-menu', '選單，每一項的字'],
+        ['.wx-context-item', '選單每一項的字'],
+        ['.wx-vsheet', '從底部升起的面板，標題與說明字'],
         ['.wx-icon-btn', '標頭與輸入列的圖示鈕，裡面是符號'],
         ['.wx-back-btn', '返回鈕的符號'],
         ['.wx-plus-btn', '輸入列的加號'],
