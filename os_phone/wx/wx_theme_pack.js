@@ -48,7 +48,8 @@
     // 把一份樣式變成「只在聊天 app 裡、不碰泡泡、不把東西弄壞」的版本
     // ================================================================
     // 泡泡：她選了主題不管泡泡。頭像不算泡泡（圓頭像、方頭像是主題可以動的）。
-    const BUBBLE_RE = /pbub-(?:bubble|row|me|other|wrap)\b|wx-bubble-(?:content|wrap|bare)\b|wx-msg-row\b|wx-typing|chat-bubble\b|chat-row\b/i;
+    // 語音訊息（.wx-vmsg，含點開的轉文字）畫在泡泡裡面、底色是泡泡的 → 算泡泡
+    const BUBBLE_RE = /pbub-(?:bubble|row|me|other|wrap)\b|wx-bubble-(?:content|wrap|bare)\b|wx-msg-row\b|wx-typing|chat-bubble\b|chat-row\b|wx-vmsg/i;
     const BUBBLE_VAR_RE = /^--(?:pbub-|wx-bubble-)/i;
     // 不准加樣式的那層：個人檔案卡中間放頭像＋名字＋簽名的那塊，本來就是直接疊在背景照片上，
     //   主題每次都給它加框加底，看起來像一張卡片擋住照片（她 09-19）。只擋「那一層本身」，它裡面的頭像、名字照樣能改。
@@ -62,7 +63,7 @@
     const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|btn-(?:confirm|cancel))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-|wxpf-|wxwal-/i;
     // 聊天室裡的卡片（轉帳、紅包、禮物、位置、影片、檔案、連結、收款碼、分享、語音、通話、外送）：跟著主題換長相，
     //   但金額、狀態字（已收款、已領完、已過期）不准被藏掉——她點下去要知道收了沒
-    const CARD_RE = /wx-(?:tf-|rpc-|gift-|loc-|vcard|file-|link-|receive-|wb-share-|app-share-|vmsg|call-rec)|wxto-card/i;
+    const CARD_RE = /wx-(?:tf-|rpc-|gift-|loc-|vcard|file-|link-|receive-|wb-share-|app-share-|call-rec)|wxto-card/i;
     const ROOT_RE = /^\s*(?::root|html|body)\s*$/i;
     // 🚨 頭像是一張照片，放在元素自己的背景圖上。主題寫 background 就會把照片整個蓋掉
     //    （她套的第一套：頭像全變成黃色六角形）。頭像只准改形狀、框、陰影、大小，背景那兩句拿掉。
@@ -305,6 +306,8 @@
         + 'div.wx-set-head { color: color-mix(in srgb, var(--wx-page-ink, var(--wx-ink-3)) 70%, transparent); }\n'
         // 外送整頁同一個道理：整頁的字、卡片上的字、重點色（原本的琥珀色）都接顏色表
         + 'div.wxto-root { --wxto-bg: var(--wx-page); --wxto-ink: var(--wx-page-ink, var(--wx-ink)); --wxto-card: var(--wx-surface); --wxto-card-ink: var(--wx-ink); --wxto-amber: var(--wx-accent); --wxto-amber-deep: var(--wx-accent-ink, var(--wx-accent)); --wxto-on-amber: var(--wx-on-accent); }\n'
+        // 聊天室裡的訂單卡：同一組名字，卡片底、字、重點色接顏色表（主題單獨寫 .wxto-card 的底時，字記得一起寫）
+        + 'div.wxto-card { --wxto-card: var(--wx-surface); --wxto-card-ink: var(--wx-ink); --wxto-amber: var(--wx-accent); --wxto-amber-lite: var(--wx-accent); --wxto-amber-deep: var(--wx-accent); --wxto-amber-ink: var(--wx-accent-ink, var(--wx-accent)); --wxto-on-amber: var(--wx-on-accent); }\n'
         // 餘額那顆坐在整頁底上，不是卡片上：用重點色本身，別用給卡片的深一階
         + 'div.wxto-root .wxto-bal { color: var(--wx-accent); }\n'
         // 朋友圈封面的名字與頭像一半凸出去、壓在內容上：主題給內容加了底或定位也不能把它蓋掉（她 09-19）

@@ -332,12 +332,21 @@
 /* 卡片的底、圓角、陰影畫在外層 .wxto-card：聊天 app 主題給 AI 的零件名是外層，
    以前畫在裡面那層，主題把外層改成直角框，裡面還留一塊白色圓角底（她：Persona5 直角框裡有圓角填充）。
    裡面那層只排版、不畫底。 */
+/* 訂單卡自己一組顏色（預設白卡、深咖啡字、琥珀色）；套聊天 app 主題時整組改接顏色表（wx_theme_pack.js 的 PANEL_PALETTE）。
+   以前字色寫死深咖啡，主題把卡片換成深底，字還是深咖啡（她 09-19 截圖）。裡面的字一律跟著卡片的字色、淡字用透明度。 */
 .wxto-card {
+    --wxto-card: #ffffff;
+    --wxto-card-ink: #2b2419;
+    --wxto-amber: #ee9a2e;
+    --wxto-amber-lite: #f7b24c;
+    --wxto-amber-deep: #d9821a;
+    --wxto-amber-ink: #b8741c;
+    --wxto-on-amber: #ffffff;
     width: 244px; max-width: 100%;
     border-radius: 12px;
     overflow: hidden;
-    background: #fff;
-    color: #2b2419;
+    background: var(--wxto-card);
+    color: var(--wxto-card-ink);
     box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
 }
 .wxto-card-in { border-radius: inherit; background: transparent; color: inherit; font-family: inherit; }
@@ -347,8 +356,8 @@
     align-items: center;
     gap: 8px;
     padding: 9px 12px;
-    background: linear-gradient(135deg, #f7b24c, #ee9a2e);
-    color: #fff;
+    background: linear-gradient(135deg, var(--wxto-amber-lite), var(--wxto-amber));
+    color: var(--wxto-on-amber);
 }
 .wxto-card-hd i { font-size: 15px; }
 /* 群聊會有「誰 幫 誰 付的」這種長標題：寧可折兩行，別把「付的／點的」切掉 */
@@ -361,10 +370,10 @@
     margin-top: 6px;
     padding: 6px 9px;
     border-radius: 8px;
-    background: #fff6e8;
+    background: color-mix(in srgb, var(--wxto-amber) 12%, var(--wxto-card));
     font-size: 12.5px;
     line-height: 1.45;
-    color: #7a5520;
+    color: inherit;
     word-break: break-word;
 }
 .wxto-steps {
@@ -375,8 +384,8 @@
 .wxto-step { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .wxto-step i { display: block; height: 4px; border-radius: 2px; background: currentColor; opacity: .1; }
 .wxto-step em { font-style: normal; font-size: 10.5px; opacity: .4; text-align: center; }
-.wxto-step.is-on i { background: #ee9a2e; opacity: 1; }
-.wxto-step.is-on em { color: #b8741c; font-weight: 700; opacity: 1; }
+.wxto-step.is-on i { background: var(--wxto-amber); opacity: 1; }
+.wxto-step.is-on em { color: var(--wxto-amber-ink); font-weight: 700; opacity: 1; }
 .wxto-step.is-now i { animation: wxto-pulse 1.6s ease-in-out infinite; }
 @keyframes wxto-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .wxto-card-ft {
@@ -395,9 +404,9 @@
     min-width: 0;
     height: 34px;
     border-radius: 17px;
-    border: 1.5px solid rgba(43, 36, 25, .16);
-    background: #fff;
-    color: #2b2419;
+    border: 1.5px solid color-mix(in srgb, currentColor 16%, transparent);
+    background: var(--wxto-card);
+    color: inherit;
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
@@ -406,5 +415,5 @@
     text-overflow: ellipsis;
     padding: 0 10px;
 }
-.wxto-btn.is-main { flex: 2; border-color: #ee9a2e; background: #ee9a2e; color: #fff; }
-.wxto-btn.is-main:active { background: #d9821a; }
+.wxto-btn.is-main { flex: 2; border-color: var(--wxto-amber); background: var(--wxto-amber); color: var(--wxto-on-amber); }
+.wxto-btn.is-main:active { background: var(--wxto-amber-deep); }
