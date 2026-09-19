@@ -60,7 +60,7 @@
         return NOSTYLE_RE.test(last);
     }
     // 弄不見就回不去的那些
-    const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|rp-box|rp-close|transfer-box|receipt-box|receipt-close|context-menu|vsheet|btn-(?:confirm|cancel|receive|return))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-|wxpf-|wxwal-/i;
+    const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|rp-box|rp-close|transfer-box|receipt-box|receipt-close|context-menu|context-item|plus-menu-pop|menu-item|vsheet|btn-(?:confirm|cancel|receive|return))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-|wxpf-|wxwal-/i;
     // 聊天室裡的卡片（轉帳、紅包、禮物、位置、影片、檔案、連結、收款碼、分享、語音、通話、外送）：跟著主題換長相，
     //   但金額、狀態字（已收款、已領完、已過期）不准被藏掉——她點下去要知道收了沒
     const CARD_RE = /wx-(?:tf-|rpc-|gift-|loc-|vcard|file-|link-|receive-|wb-share-|app-share-|call-rec)|wxto-card/i;
@@ -333,6 +333,8 @@
         + 'div.wxto-root { --wxto-bg: var(--wx-page); --wxto-ink: var(--wx-page-ink, var(--wx-ink)); --wxto-card: var(--wx-surface); --wxto-card-ink: var(--wx-ink); --wxto-amber: var(--wx-accent); --wxto-amber-deep: var(--wx-accent-ink, var(--wx-accent)); --wxto-on-amber: var(--wx-on-accent); }\n'
         // 聊天室裡的訂單卡：同一組名字，卡片底、字、重點色接顏色表（主題單獨寫 .wxto-card 的底時，字記得一起寫）
         + 'div.wxto-card { --wxto-card: var(--wx-surface); --wxto-card-ink: var(--wx-ink); --wxto-amber: var(--wx-accent); --wxto-amber-lite: var(--wx-accent); --wxto-amber-deep: var(--wx-accent); --wxto-amber-ink: var(--wx-accent-ink, var(--wx-accent)); --wxto-on-amber: var(--wx-on-accent); }\n'
+        // 右上角「＋」的選單：接顏色表（卡片底＋卡片上的字）
+        + 'div.wx-plus-menu-pop { --wx-menu-bg: var(--wx-surface); --wx-menu-ink: var(--wx-ink); }\n'
         // 餘額那顆坐在整頁底上，不是卡片上：用重點色本身，別用給卡片的深一階
         + 'div.wxto-root .wxto-bal { color: var(--wx-accent); }\n'
         // 朋友圈封面的名字與頭像一半凸出去、壓在內容上：主題給內容加了底或定位也不能把它蓋掉（她 09-19）
@@ -411,6 +413,7 @@
         '通訊錄：分區 .wx-contact-section；每個人 .wx-contact-item；名字 .wx-contact-name；圖示 .wx-contact-icon',
         '「我」那頁上方：.wx-me-header；頭像 .wx-me-avatar；名字 .wx-me-name；帳號 .wx-me-id；簽名 .wx-me-signature',
         '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；分組小標（在整頁底上，吃 --wx-page-ink）.wx-set-head；說明字 .wx-set-desc',
+        '右上角「＋」打開的小選單：整塊 .wx-plus-menu-pop；每一項 .wx-menu-item（左邊圖示 .wx-menu-item .icon）。通訊錄長按出來的小選單：.wx-context-menu，每一項 .wx-context-item',
         '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box（裡面的標題、說明字都跟著它的 color）；標題 .wx-modal-title；欄位名 .wx-modal-label；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
         '聊天室裡點卡片開出來的小窗（都浮在一層半透明黑上，每個小窗裡的字預設跟著那個小窗自己的 color，換小窗的底就同一條寫 color）：紅包明細 .wx-rp-box（上半那塊 .wx-rp-header，發的人 .wx-rp-sender，祝福語 .wx-rp-memo；下半：總金額／已領／剩餘三個數字 .wx-rp-stat，領的人每一筆 .wx-rp-item，名字 .wx-rp-item-name，時間 .wx-rp-item-time，金額 .wx-rp-item-amount，關閉 .wx-rp-close）；轉帳 .wx-transfer-box（上半 .wx-transfer-header，裡面的圈 .wx-transfer-icon 與金額 .wx-transfer-amount；下半按鈕區 .wx-transfer-actions，確認收款 .wx-btn-receive，退回 .wx-btn-return，小字 .wx-transfer-note）；禮物收據 .wx-receipt-box（品名 .wx-receipt-name，價錢 .wx-receipt-price，收下 .wx-receipt-btn-accept，婉拒 .wx-receipt-btn-refuse，關閉 .wx-receipt-close）；選單 .wx-context-menu，每一項 .wx-context-item；從底部升起的面板 .wx-vsheet（標題 .wx-vsheet-title）。長按訊息跳出的那條黑色小選單與右上加號選單是固定的深色，不用做',
         '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit（整頁吃 --wx-page-ink，卡片與編輯頁吃 --wx-ink），上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',

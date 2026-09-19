@@ -456,13 +456,28 @@
                 AUI.alert(`成功邀請 ${newIds.length} 位成員！`); targetDoc.getElementById('wxActionModal').classList.remove('show'); if (callback) callback(finalMembers);
             };
         },
+        // 小選單放進聊天 app 那一層（外殼旁邊），位置換成相對那一層。
+        //   以前掛在整頁最外面：聊天 app 主題（顏色表跟零件樣式都只罩到外殼與外殼旁邊）碰不到，套了主題它還是原本的灰底白字（她 09-20）。
+        _popIn: function(menu, x, y, alignRight) {
+            const host = (win.wxApp && win.wxApp.APP_CONTAINER) || targetDoc.body;
+            if (host === targetDoc.body) {
+                menu.style.position = 'fixed';
+                if (alignRight) { menu.style.right = (win.innerWidth - x) + 'px'; } else { menu.style.left = x + 'px'; }
+                menu.style.top = y + 'px';
+            } else {
+                const r = host.getBoundingClientRect();
+                if (alignRight) { menu.style.right = (r.right - x) + 'px'; } else { menu.style.left = (x - r.left) + 'px'; }
+                menu.style.top = (y - r.top) + 'px';
+            }
+            host.appendChild(menu);
+        },
         showContextMenu: function(e, contactId, contactName) {
             e.preventDefault(); e.stopPropagation();
             const existing = targetDoc.getElementById('wx-context-menu'); if (existing) existing.remove();
             const menu = targetDoc.createElement('div'); menu.id = 'wx-context-menu'; menu.className = 'wx-context-menu';
             menu.innerHTML = `<div class="wx-context-item danger" id="wx-ctx-delete">刪除 (永久)</div>`;
             let x = e.clientX; let y = e.clientY; if (x + 120 > win.innerWidth) x = win.innerWidth - 130; if (y + 100 > win.innerHeight) y = win.innerHeight - 110;
-            menu.style.left = x + 'px'; menu.style.top = y + 'px'; targetDoc.body.appendChild(menu);
+            this._popIn(menu, x, y, false);
             menu.querySelector('#wx-ctx-delete').onclick = async () => { if(await AUI.confirm(`確定要永久刪除「${contactName}」嗎？\nID: ${contactId}`)) { this.deleteContact(contactId); } menu.remove(); };
             setTimeout(() => { targetDoc.addEventListener('click', function closeCtx() { menu.remove(); targetDoc.removeEventListener('click', closeCtx); }); }, 0);
         },
@@ -505,7 +520,7 @@
             // 整理過才有東西可以還原；沒整理過不擺這顆
             const app = win.wxApp;
             if (app && app.storyTidyHasRemap && app.storyTidyHasRemap()) menu.innerHTML += `<div class="wx-menu-item" id="wx-menu-tidy-reset"><span class="icon"><i class="fa-solid fa-arrow-rotate-left"></i></span> 還原整理</div>`;
-            const rect = btn.getBoundingClientRect(); menu.style.top = (rect.bottom + 5) + 'px'; menu.style.right = (win.innerWidth - rect.right) + 'px'; targetDoc.body.appendChild(menu);
+            const rect = btn.getBoundingClientRect(); this._popIn(menu, rect.right, rect.bottom + 5, true);
             menu.querySelector('#wx-menu-create-group').onclick = () => this.openCreateGroupWindow();
             menu.querySelector('#wx-menu-add').onclick = () => this.openAddWindow();
             menu.querySelector('#wx-menu-search').onclick = () => this.openSearchWindow();

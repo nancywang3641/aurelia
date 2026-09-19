@@ -51,13 +51,15 @@
             .wx-back-btn.show { opacity: 1; pointer-events: auto; }
             .wx-back-btn: before { content: '‹'; margin-right: 2px; font-size: 28px; line-height: 20px; position: relative; top: -2px;}
             
-            .wx-plus-menu-pop { position: fixed; background: #4c4c4c; border-radius: 6px; padding: 5px 0; box-shadow: 0 5px 15px rgba(0,0,0,0.5); z-index: 1000001; animation: popIn 0.2s; min-width: 160px; }
-            .wx-menu-item { padding: 12px 20px; color: #fff; font-size: 15px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.1); }
+            /* 右上角「＋」的選單：自己一組顏色（預設深灰底白字）；套了聊天 app 主題時接顏色表（wx_theme_pack.js 的 PANEL_PALETTE）。
+               放在聊天 app 那一層裡、位置相對那一層（wx_contacts._popIn），主題才罩得到 */
+            .wx-plus-menu-pop { --wx-menu-bg: #4c4c4c; --wx-menu-ink: #fff; position: absolute; background: var(--wx-menu-bg); color: var(--wx-menu-ink); border-radius: 6px; padding: 5px 0; box-shadow: 0 5px 15px rgba(0,0,0,0.5); z-index: 1000001; animation: popIn 0.2s; min-width: 160px; }
+            .wx-menu-item { padding: 12px 20px; color: inherit; font-size: 15px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
             .wx-menu-item:last-child { border-bottom: none; }
-            .wx-menu-item:active { background: rgba(0,0,0,0.2); }
+            .wx-menu-item:active { background: color-mix(in srgb, currentColor 12%, transparent); }
             .wx-menu-item .icon { font-size: 18px; width: 24px; text-align: center; }
             
-            .wx-context-menu { position: fixed; background: var(--wx-surface); color: var(--wx-ink); border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000002; animation: popIn 0.1s; min-width: 120px; overflow: hidden; }
+            .wx-context-menu { position: absolute; background: var(--wx-surface); color: var(--wx-ink); border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000002; animation: popIn 0.1s; min-width: 120px; overflow: hidden; }
             .wx-context-item { padding: 12px 15px; font-size: 14px; color: inherit; cursor: pointer; border-bottom: 1px solid var(--wx-line); }
             .wx-context-item:active { background: var(--wx-surface-2); }
             .wx-context-item.danger { color: var(--wx-danger); }

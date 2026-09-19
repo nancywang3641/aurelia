@@ -408,6 +408,9 @@
 }
 /* 商城裝的 app 跑在自己的窗口裡，窗口本身吃不了內距 → 改成整個往上縮 */
 .aps-app-body > .aps-mount > .app-iframe { padding-bottom: 0; }
+/* 聊天 app 右上「＋」、通訊錄長按那種小選單也掛在這層（主題才罩得到），它們不是整頁、不用讓底部 */
+.aps-app-body > .aps-mount > .wx-plus-menu-pop { padding-bottom: 5px; }
+.aps-app-body > .aps-mount > .wx-context-menu { padding-bottom: 0; }
 .aps-fail { padding: 24px 18px; text-align: center; color: #999; font-size: 13px; }
 .aps-fail b { display: block; color: #c0392b; font-size: 14px; margin-bottom: 10px; }
 .aps-fail-why {
