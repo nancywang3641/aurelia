@@ -150,21 +150,41 @@
     }
 
     // 一條規則 → 加上範圍。回傳 '' ＝整條丟掉（全是泡泡、或清完沒有東西）
-    function _scopeRule(selText, cssText) {
-        const sels = _splitTop(String(selText || ''), ',').map(function (s) { return s.trim(); }).filter(Boolean);
+    // 裝飾層（::before／::after）：AI 用它畫塗鴉、網格、條紋。它預設疊在零件的內容上面，
+    //   蓋住標題和按鈕、還把點擊吃掉（她：header 的 svg 塗鴉在標題和按鈕前面；網格條紋放在字和按鈕前面點不了）。
+    //   一律壓到那個零件的內容底下（z-index -1，零件自己設 isolation 當一層，所以圖案還在它的底色上面）、不接點擊。
+    const PSEUDO_RE = /::?(?:before|after)\s*$/i;
+    function _scopeList(sels) {
         const out = [];
-        let decls = null;
         sels.forEach(function (sel) {
-            if (BUBBLE_RE.test(sel)) return;
             if (ROOT_RE.test(sel)) { out.push('.wx-shell', '.wx-shell ~ *'); return; }   // 變數寫在最外層＝外殼與它旁邊那幾層都吃得到
             if (/^\.wx-shell\b/.test(sel)) { out.push(sel); return; }                       // 本來就從外殼開始寫
             // 在外殼裡／外殼旁邊那一層本身／外殼旁邊那一層裡面
             out.push('.wx-shell ' + sel, '.wx-shell ~ ' + sel, '.wx-shell ~ * ' + sel);
         });
-        if (!out.length) return '';
-        decls = _cleanDecls(cssText, sels.join(','));
-        if (!decls) return '';
-        return out.join(',\n') + ' { ' + decls + '; }';
+        return out;
+    }
+    function _scopeRule(selText, cssText) {
+        const sels = _splitTop(String(selText || ''), ',').map(function (s) { return s.trim(); }).filter(Boolean)
+            .filter(function (sel) { return !BUBBLE_RE.test(sel); });
+        if (!sels.length) return '';
+        const plain = sels.filter(function (sel) { return !PSEUDO_RE.test(sel); });
+        const deco = sels.filter(function (sel) { return PSEUDO_RE.test(sel); });
+        const parts = [];
+        if (plain.length) {
+            const d1 = _cleanDecls(cssText, plain.join(','));
+            if (d1) parts.push(_scopeList(plain).join(',\n') + ' { ' + d1 + '; }');
+        }
+        if (deco.length) {
+            let d2 = _cleanDecls(cssText, deco.join(','));
+            if (d2) {
+                d2 = _splitTop(d2, ';').filter(function (x) { return !/^\s*(?:z-index|pointer-events)\s*:/i.test(x); }).join('; ');
+                parts.push(_scopeList(deco).join(',\n') + ' { ' + (d2 ? d2 + '; ' : '') + 'z-index: -1 !important; pointer-events: none !important; }');
+                const hosts = deco.map(function (sel) { return sel.replace(PSEUDO_RE, '').trim(); }).filter(function (h) { return h && !ROOT_RE.test(h); });
+                if (hosts.length) parts.push(_scopeList(hosts).join(',\n') + ' { isolation: isolate; }');
+            }
+        }
+        return parts.join('\n');
     }
 
     function _ruleBody(rule) {
@@ -254,87 +274,8 @@
         '  font-family: "Font Awesome 6 Free" !important; font-style: normal !important; }',
         '.wx-shell :is(.fa-solid,.fas):not(#_), .wx-shell ~ * :is(.fa-solid,.fas):not(#_) { font-weight: 900 !important; }',
         '.wx-shell :is(.fa-regular,.far):not(#_), .wx-shell ~ * :is(.fa-regular,.far):not(#_) { font-weight: 400 !important; }',
-        '.wx-shell :is(.fa-brands,.fab):not(#_), .wx-shell ~ * :is(.fa-brands,.fab):not(#_) { font-family: "Font Awesome 6 Brands" !important; font-weight: 400 !important; font-style: normal !important; }',
-        // 卡片上的字跟底色分不開時（主題換了底色沒換字色），_fixCardInk 掛這兩個 class
-        // 記事本、個人檔案卡是疊在外殼旁邊的另一層，不在 .wx-shell 裡：這兩個 class 只有 _fixCardInk 會掛，不用限範圍
-        '.wxtp-ink-dark:not(#_):not(#_) { color: #141414 !important; }',
-        '.wxtp-ink-light:not(#_):not(#_) { color: #ffffff !important; }',
-        '.wxtp-ink-dark:not(#_):not(#_)::placeholder { color: rgba(20, 20, 20, .5) !important; }',
-        '.wxtp-ink-light:not(#_):not(#_)::placeholder { color: rgba(255, 255, 255, .6) !important; }'
+        '.wx-shell :is(.fa-brands,.fab):not(#_), .wx-shell ~ * :is(.fa-brands,.fab):not(#_) { font-family: "Font Awesome 6 Brands" !important; font-weight: 400 !important; font-style: normal !important; }'
     ].join('\n');
-
-    // ── 卡片上的字看不看得清楚：主題常只換卡片底色、沒換字色（紅包祝福語本來是白字，底換成淺色就看不見）。
-    //    套著主題時，每行卡片字跟它底下那層的顏色比一次，對比太低就換成黑字或白字。卡片是聊天室一則一則畫出來的，
-    //    所以盯著聊天 app 有沒有新東西長出來，有就再比一次。沒套主題時全部收掉。
-    const CARD_TEXT = '.wx-tf-title,.wx-tf-sub,.wx-rpc-memo,.wx-rpc-sub,.wx-rpc-foot,.wx-gift-title-text,.wx-gift-footer,'
-        + '.wx-loc-name,.wx-loc-addr,.wx-vcard-title,.wx-vcard-dur,.wx-file-name,.wx-file-size,.wx-link-title,.wx-link-foot,'
-        + '.wx-receive-head,.wx-receive-amt,.wx-receive-foot,.wx-wb-share-author,.wx-wb-share-text,.wx-app-share-top,.wx-app-share-title,.wx-app-share-text,'
-        + '.wxto-card-hd,.wxto-card-shop,.wxto-card-items,.wxto-card-amt,.wxto-card-ft,.wxto-card-note,.wxto-card-kind,'
-        // 記事本與個人檔案卡的字：顏色也是自己寫死的（記事本是深咖啡字），主題換了底色一樣會看不見
-        + '.wxnb-back,.wxnb-title,.wxnb-sub,.wxnb-search,.wxnb-q,.wxnb-card-t,.wxnb-card-b,.wxnb-card-f,.wxnb-who,.wxnb-empty-t,.wxnb-empty-s,'
-        + '.wxnb-edit-who,.wxnb-edit-body,.wxnb-edit-x,.wxnb-in-t,.wxnb-in-b,.wxnb-thumb-desc,.wxnb-more,'
-        + '.wxpf-name,.wxpf-bio,.wxpf-act,.wxpf-x,'
-        + '.wxmo-bar-t,.wxmo-name,.wxmo-text,.wxmo-time,.wxmo-likes,.wxmo-cm,.wxmo-empty,.wxmo-input,.wxmo-compose-in,.wxmo-link-name,.wxmo-links-t,.wxmo-links-note';
-    function _rgb(str) {
-        const m = String(str || '').match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?/i);
-        if (!m) return null;
-        let a = m[4] == null ? 1 : parseFloat(m[4]);
-        if (m[4] && /%$/.test(m[4])) a = a / 100;
-        return { r: +m[1], g: +m[2], b: +m[3], a: a };
-    }
-    function _lum(c) {
-        const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
-    }
-    function _contrast(a, b) { const x = _lum(a), y = _lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
-    // 字底下實際的顏色：往外一層一層找第一個不透明的底色；漸層取第一個顏色；遇到圖片（地圖、照片）不判斷
-    function _bgOf(el) {
-        const w = el.ownerDocument.defaultView;
-        for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
-            const cs = w.getComputedStyle(n);
-            const img = cs.backgroundImage || '';
-            if (img && img !== 'none') {
-                if (/url\(/i.test(img)) return null;
-                const g = _rgb(img);
-                if (g && g.a > 0.5) return g;
-            }
-            const c = _rgb(cs.backgroundColor);
-            if (c && c.a > 0.5) return c;
-            if (n.classList && n.classList.contains('wx-shell')) break;
-        }
-        return null;
-    }
-    function _fixCardInk(root) {
-        const box = root || d;
-        box.querySelectorAll(CARD_TEXT).forEach(function (el) {
-            el.classList.remove('wxtp-ink-dark', 'wxtp-ink-light');
-            if (!String(el.textContent || el.value || el.placeholder || '').trim()) return;   // 搜尋框那種沒字只有提示字的也要看
-            const w = el.ownerDocument.defaultView;
-            const fg = _rgb(w.getComputedStyle(el).color);
-            const bg = _bgOf(el);
-            if (!fg || !bg) return;
-            if (_contrast(fg, bg) >= 3) return;
-            const black = { r: 20, g: 20, b: 20 }, white = { r: 255, g: 255, b: 255 };
-            el.classList.add(_contrast(black, bg) >= _contrast(white, bg) ? 'wxtp-ink-dark' : 'wxtp-ink-light');
-        });
-    }
-    let _inkObs = null, _inkT = 0;
-    function _watchCardInk(on) {
-        if (_inkObs) { _inkObs.disconnect(); _inkObs = null; }
-        clearTimeout(_inkT);
-        if (!on) { d.querySelectorAll('.wxtp-ink-dark,.wxtp-ink-light').forEach(function (el) { el.classList.remove('wxtp-ink-dark', 'wxtp-ink-light'); }); return; }
-        const run = function () { clearTimeout(_inkT); _inkT = setTimeout(function () { try { _fixCardInk(d); } catch (e) {} }, 120); };
-        try {
-            _inkObs = new (d.defaultView.MutationObserver)(function (muts) {
-                for (let i = 0; i < muts.length; i++) {
-                    const t = muts[i].target;
-                    if (t && t.closest && t.closest('.wx-shell, .aps-mount')) { run(); return; }
-                }
-            });
-            _inkObs.observe(d.body, { childList: true, subtree: true });
-        } catch (e) {}
-        run();
-    }
 
     // 列表頁、聊天室頁自己鋪了一層底色（白、淺灰）。AI 的主題常只換外殼和每一列，沒寫這兩頁 →
     //   聊天少的時候下面空出來那一大塊還是白的（她：每次生成主頁底部都是白色，感覺都沒套用）。
@@ -350,13 +291,12 @@
 
     function _inject(css) {
         let st = d.getElementById(STYLE_ID);
-        if (!css) { if (st) st.remove(); _watchCardInk(false); return; }
+        if (!css) { if (st) st.remove(); return; }
         css = css + '\n' + SAFETY + '\n' + _pageFill(css);
         if (!st) { st = d.createElement('style'); st.id = STYLE_ID; }
         // 永遠排在 head 最後：主題要壓過 app 自己的樣式
         (d.head || d.documentElement).appendChild(st);
         st.textContent = css;
-        _watchCardInk(true);
     }
     async function apply(id) {
         await load();
@@ -452,6 +392,8 @@
             '',
             '規則：',
             '・訊息泡泡不歸主題管，不要寫任何跟泡泡有關的樣式。',
+            '・每一塊的底色和字色寫在同一條：這支 app 裡每塊的字都跟著那一塊的 color 走，小字只是半透明，不會另外指定灰色。',
+            '・用 ::before／::after 畫的裝飾（塗鴉、網格、條紋、光暈）一律會被放在那個零件的內容底下、點不到，當背景圖案設計就好，不要拿它放要讓人看的字。',
             '・聊天室裡的卡片要跟整套風格一致，但每一種都要一眼認得出是什麼（紅包還是紅包、轉帳還是轉帳）；換了卡片哪一塊的底色，同一條就要把那塊的字色一起寫，卡片裡的標題、小字、金額才看得清楚（有些卡片的字原本是白色）；金額、店名、狀態字要清楚；已收款、退回、領完這幾種要跟還沒處理的看得出不同。檔案圖示 .wx-file-icon 的底色代表檔案種類，不要改。',
             '・不要把任何東西藏起來、弄透明、弄得點不到；不要用 position: fixed；寬高不要用螢幕單位（vw、vh）。',
             '・這支 app 自己的樣式有不少寫在元素身上，要蓋過它們就加 !important。',

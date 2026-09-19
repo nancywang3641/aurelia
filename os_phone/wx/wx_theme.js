@@ -15,10 +15,12 @@
             .wx-source-details summary { cursor: pointer; outline: none; font-weight: bold; user-select: none; color: var(--wx-ink-soft); }
             .wx-code-content { display: block; white-space: pre-wrap; font-family: monospace; font-size: 11px; color: #2c662d; margin-top: 5px; padding: 5px; background: var(--wx-surface); border: 1px solid var(--wx-line); overflow-x: auto; }
 
-            .wx-header { color: var(--wx-ink); background: var(--wx-header); height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid var(--wx-line-strong); z-index: 20; }
+            .wx-header { color: var(--wx-ink); background: var(--wx-header); height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid var(--wx-line); z-index: 20; }
             .wx-header-title { font-weight: 600; font-size: 16px; }
             /* 標頭裡的字和圖示都跟著 .wx-header 的字色：主題只寫標頭的 color，標題、返回、右上的記事本與選單鈕就一起換 */
-            :where(.wx-header-title, .wx-header .wx-back-btn, .wx-header .wxnb-head-btn, .wx-header .wx-head-menu-btn) { color: inherit; }
+            :where(.wx-header-title, .wx-header .wx-back-btn, .wx-header .wxnb-head-btn, .wx-header .wx-head-menu-btn, .wx-header .wx-head-add-btn) { color: inherit; }
+            .wx-head-add-btn { width: 30px; text-align: right; font-size: 20px; cursor: pointer; }
+            .wx-head-confirm-btn { font-size: 14px; cursor: pointer; color: #999; padding: 4px 8px; font-weight: bold; }
             .wx-head-menu-btn { display: block; font-size: 22px; cursor: pointer; font-weight: bold; margin-top: -8px; }
             /* 多選刪除時標題列右邊那組：取消／全選／刪除 */
             /* 🗑 多選刪除：底下換成一條「取消｜全選｜刪除(n)」，輸入列藏起來（LINE 那樣，標題列不再塞按鈕） */
@@ -341,10 +343,10 @@
             .wx-vmsg-trans { display: none; font-size: 13px; line-height: 1.5; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.1); word-break: break-word; }
             .wx-vmsg-trans.open { display: block; }
             .wx-vmsg-tone { font-size: 11px; opacity: 0.6; margin-top: 3px; }
-            .wx-file-card { background: var(--wx-surface); padding: 12px 15px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; width: 210px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: pointer; }
+            .wx-file-card { background: var(--wx-surface); color: var(--wx-ink-2); padding: 12px 15px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; width: 210px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: pointer; }
             .wx-file-info { flex: 1; overflow: hidden; margin-right: 10px; display: flex; flex-direction: column; justify-content: center; }
-            .wx-file-name { font-size: 14px; color: var(--wx-ink-2); line-height: 1.4; max-height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
-            .wx-file-size { font-size: 11px; color: var(--wx-ink-dim); margin-top: 4px; }
+            .wx-file-name { font-size: 14px; line-height: 1.4; max-height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
+            .wx-file-size { font-size: 11px; opacity: .55; margin-top: 4px; }
             .wx-file-icon { width: 45px; height: 45px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--wx-on-accent); font-weight: bold; font-size: 18px; flex-shrink: 0; }
             .wx-gift-card-blue { width: 220px; background: linear-gradient(135deg, #0e2a5e 0%, #173673 100%); border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; padding: 15px 15px 10px 15px; color: #e3c795; box-shadow: 0 2px 5px rgba(0,0,0,0.15); position: relative; overflow: hidden; cursor: pointer; }
             .wx-gift-card-blue::before { content: ''; position: absolute; top: -10px; right: -10px; width: 40px; height: 40px; background: rgba(255,255,255,0.05); border-radius: 50%; box-shadow: -20px 40px 0 rgba(255,255,255,0.05), 40px 20px 0 rgba(255,255,255,0.05); }
@@ -386,7 +388,22 @@
             .wx-dark .wx-sub-btn.warn { color: #ff6b68; border-color: #5a2f2e; }
             .wx-dark .wx-sub-empty i { color: #3a3a3a; }
             .wx-dark .wx-tag-mark { color: #3a3a3a; }
-            .icon-new-friend { background: #fa9d3b; }
+            .icon-new-friend, .icon-only { background: #fa9d3b; }
+            /* 以前寫在元素身上的幾樣，搬成零件（主題才改得到），長相照舊 */
+            .wx-list-empty { text-align: center; padding: 30px; color: var(--wx-arrow); }
+            .wx-pill { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #ddd; color: #999; }
+            .wx-pill.is-on { background: var(--wx-accent); color: var(--wx-on-accent); }
+            .wx-cell-value { font-size: 15px; color: var(--wx-ink-3); margin-right: 6px; }
+            .wx-cell-select { border: none; background: transparent; font-size: 15px; color: var(--wx-ink-3); text-align: right; max-width: 150px; }
+            .wx-cell-text.is-danger { color: #e74c3c; }
+            .wx-fmt-sum { font-size: 11px; color: #aaa; cursor: pointer; user-select: none; }
+            .wx-fmt-body { font-size: 11px; color: #999; line-height: 1.7; margin-top: 4px; padding: 6px 8px; background: #f9f9f9; border-radius: 4px; border: 1px solid #eee; }
+            .wx-transfer-note { font-size: 12px; color: #6b6b6b; margin-top: 5px; }
+            .wx-modal-label { font-size: 12px; color: var(--wx-ink-3); margin-bottom: 5px; }
+            .wx-modal-label.is-gap { margin: 10px 0 0; color: var(--wx-ink-soft); }
+            .wx-modal-hint { font-size: 10px; color: var(--wx-ink-soft); }
+            .wx-modal-hint.is-right { margin-top: 5px; font-size: 11px; text-align: right; }
+            .wx-modal-ok { color: #07c160; }
             .icon-group-chat { background: var(--wx-accent); }
             .icon-tags { background: #2782d7; }
             .icon-official { background: #2782d7; }
@@ -461,10 +478,10 @@
 
             .wx-rpc-card { width: 220px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; font-family: sans-serif; }
             .wx-rpc-card.is-empty { opacity: 0.55; }
-            .wx-rpc-top { background: #fa9d3b; padding: 15px; display: flex; align-items: center; }
+            .wx-rpc-top { background: #fa9d3b; color: #fff; padding: 15px; display: flex; align-items: center; }
             .wx-rpc-env { width: 32px; height: 42px; background: #e64340; border-radius: 4px; position: relative; margin-right: 12px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; border: 1px solid #f8b97a; }
             .wx-rpc-coin { width: 18px; height: 18px; background: #f6d147; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #e64340; font-weight: bold; font-size: 11px; }
-            .wx-rpc-text { color: #fff; flex: 1; overflow: hidden; }
+            .wx-rpc-text { flex: 1; overflow: hidden; }
             .wx-rpc-memo { font-size: 15px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .wx-rpc-sub { font-size: 12px; opacity: 0.8; }
             .wx-rpc-foot { background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display: flex; justify-content: space-between; align-items: center; }
@@ -477,29 +494,29 @@
             .wx-loc-name { font-size: 15px; font-weight: bold; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .wx-loc-addr { font-size: 11px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-            .wx-vcard { margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: default; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+            .wx-vcard { margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; color: #fff; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: default; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
             .wx-vcard.is-link { cursor: pointer; }
             .wx-vcard-bg { position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8; }
             .wx-vcard-play { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2; }
             .wx-vcard-play::after { content: ''; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px; }
-            .wx-vcard-title { position: absolute; bottom: 10px; left: 12px; color: #fff; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%; }
+            .wx-vcard-title { position: absolute; bottom: 10px; left: 12px; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%; }
             .wx-vcard-dur { position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2; }
 
             /* ========== 微博分享卡片 ========== */
-            .wx-wb-share-card { width: 210px; background: var(--wx-surface); border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--wx-line); }
+            .wx-wb-share-card { width: 210px; background: var(--wx-surface); color: var(--wx-ink-2); border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--wx-line); }
             .wx-wb-share-top { background: #ff8200; padding: 6px 10px; display: flex; align-items: center; }
             .wx-wb-share-logo { color: var(--wx-on-accent); font-size: 11px; font-weight: bold; background: rgba(0,0,0,0.15); padding: 1px 6px; border-radius: 3px; letter-spacing: 1px; }
             .wx-wb-share-body { padding: 8px 10px 10px; }
             .wx-wb-share-author { font-size: 12px; color: var(--wx-link); font-weight: 500; margin-bottom: 4px; }
-            .wx-wb-share-text { font-size: 13px; color: var(--wx-ink-2); line-height: 1.4; word-break: break-word; }
+            .wx-wb-share-text { font-size: 13px; line-height: 1.4; word-break: break-word; }
 
             /* ========== 創作室 app 分享卡片 ========== */
-            .wx-app-share-card { width: 210px; background: var(--wx-surface); border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--wx-line); }
-            .wx-app-share-top { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 11px; font-weight: 600; color: var(--wx-ink-3); border-bottom: 1px solid var(--wx-line); }
+            .wx-app-share-card { width: 210px; background: var(--wx-surface); color: var(--wx-ink-2); border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--wx-line); }
+            .wx-app-share-top { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 11px; font-weight: 600; opacity: .75; border-bottom: 1px solid var(--wx-line); }
             .wx-app-share-top > i { color: var(--wx-accent); font-size: 11px; }
             .wx-app-share-body { padding: 8px 10px 10px; }
-            .wx-app-share-title { font-size: 14px; font-weight: 600; color: var(--wx-ink-2); line-height: 1.35; margin-bottom: 4px; word-break: break-word; }
-            .wx-app-share-text { font-size: 12.5px; color: var(--wx-ink-3); line-height: 1.45; word-break: break-word; }
+            .wx-app-share-title { font-size: 14px; font-weight: 600; line-height: 1.35; margin-bottom: 4px; word-break: break-word; }
+            .wx-app-share-text { font-size: 12.5px; opacity: .75; line-height: 1.45; word-break: break-word; }
 
             /* ========== 消息刪除多選模式 ========== */
             .wx-msg-checkbox {
@@ -562,7 +579,7 @@
             :where(.wx-dark .wx-tab:not(.active) .wx-tab-txt) { color: var(--wx-ink-dim); }
             /* 深色那條刪了：基底已經吃格子，深淺自己會跟著換 */
             .wx-dark .wx-file-card, .wx-dark .wx-wb-share-card, .wx-dark .wx-app-share-card { background: var(--wx-surface); border-color: var(--wx-line); }
-            .wx-dark .wx-file-name, .wx-dark .wx-wb-share-text { color: var(--wx-ink-3); }
+            .wx-dark .wx-file-card, .wx-dark .wx-wb-share-card { color: var(--wx-ink-3); }
             .wx-dark .wx-settings-panel { background: #000; }
             .wx-dark .wx-set-group { background: var(--wx-surface); border-top-color: var(--wx-line); border-bottom-color: var(--wx-line); }
             .wx-dark .wx-set-label { color: var(--wx-ink); }

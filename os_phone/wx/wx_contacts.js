@@ -174,7 +174,7 @@
             if (!win.OS_API) { AUI.alert('錯誤：OS_API 未載入'); return; }
             let metaInfo = { charName: "系統", bookName: "無", userName: "User" };
 
-            const html = `<div class="wx-modal-title">AI 搜尋好友</div><div style="background:#f0f9eb; border:1px solid #e1f3d8; border-radius:4px; padding:8px; margin-bottom:10px; font-size:11px; color:#2e7d32;"><div style="display:flex; justify-content:space-between;"><span><i class="fa-solid fa-user"></i> 鎖定角色: <b id="wx-meta-char">...</b></span></div><div style="display:flex; justify-content:space-between; margin-top:2px;"><span><i class="fa-solid fa-user-secret"></i> 當前扮演: <b id="wx-meta-user">...</b></span></div><div style="margin-top:2px;"><span><i class="fa-solid fa-book-open"></i> 世界觀: <b id="wx-meta-book">...</b></span></div></div><div style="font-size:12px; color:#666; margin-bottom:5px;">AI 將根據世界觀與您的人設，推薦潛在好友。</div><div id="wx-search-status" style="padding:10px; background:#f2f2f2; border-radius:4px; min-height:50px; font-size:12px; color:#333;">準備中...</div><div id="wx-token-status" style="margin-top:5px; font-size:11px; color:#888; text-align:right;"><i class="fa-solid fa-chart-simple"></i> 計算中...</div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-close">關閉</button><button class="wx-btn wx-btn-confirm" id="wx-btn-search-start" disabled>加載中...</button></div>`;
+            const html = `<div class="wx-modal-title">AI 搜尋好友</div><div style="background:#f0f9eb; border:1px solid #e1f3d8; border-radius:4px; padding:8px; margin-bottom:10px; font-size:11px; color:#2e7d32;"><div style="display:flex; justify-content:space-between;"><span><i class="fa-solid fa-user"></i> 鎖定角色: <b id="wx-meta-char">...</b></span></div><div style="display:flex; justify-content:space-between; margin-top:2px;"><span><i class="fa-solid fa-user-secret"></i> 當前扮演: <b id="wx-meta-user">...</b></span></div><div style="margin-top:2px;"><span><i class="fa-solid fa-book-open"></i> 世界觀: <b id="wx-meta-book">...</b></span></div></div><div class="wx-modal-label">AI 將根據世界觀與您的人設，推薦潛在好友。</div><div id="wx-search-status" style="padding:10px; background:#f2f2f2; border-radius:4px; min-height:50px; font-size:12px; color:#333;">準備中...</div><div id="wx-token-status" class="wx-modal-hint is-right"><i class="fa-solid fa-chart-simple"></i> 計算中...</div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-close">關閉</button><button class="wx-btn wx-btn-confirm" id="wx-btn-search-start" disabled>加載中...</button></div>`;
             this.showModal(html);
             targetDoc.getElementById('wx-btn-close').onclick = () => targetDoc.getElementById('wxActionModal').classList.remove('show');
             const statusEl = targetDoc.getElementById('wx-search-status');
@@ -212,7 +212,7 @@
                 let count = win.SillyTavern?.getTokenCountAsync
                     ? await win.SillyTavern.getTokenCountAsync(fullText)
                     : Math.ceil(fullText.length * 0.7);
-                tokenEl.innerHTML = `<span style="color:#07c160"><i class="fa-solid fa-chart-simple"></i> 預估 Token: ${count} (完整上下文)</span>`;
+                tokenEl.innerHTML = `<span class="wx-modal-ok"><i class="fa-solid fa-chart-simple"></i> 預估 Token: ${count} (完整上下文)</span>`;
                 statusEl.innerText = `準備就緒 (為 ${metaInfo.userName} 搜尋)`;
                 btn.innerText = '開始搜尋';
                 btn.disabled = false;
@@ -254,7 +254,7 @@
                                             members   // 群組成員 id 列表（私聊為空）
                                         };
                                     });
-                                    statusEl.innerHTML += `<br><span style="color:#888;font-size:10px">(標籤格式)</span>`;
+                                    statusEl.innerHTML += `<br><span class="wx-modal-hint">(標籤格式)</span>`;
                                 }
 
                                 // --- 方案 B：JSON 格式（備用）---
@@ -278,7 +278,7 @@
                                         }
                                     });
 
-                                    statusEl.innerHTML = `<div style="color:#07c160"><i class="fa-solid fa-circle-check"></i> 成功找到 ${filtered.length} 位好友！</div>`;
+                                    statusEl.innerHTML = `<div class="wx-modal-ok"><i class="fa-solid fa-circle-check"></i> 成功找到 ${filtered.length} 位好友！</div>`;
 
                                     const createdChats = [];
                                     filtered.forEach(c => {
@@ -519,7 +519,7 @@
             const allContacts = this.getAllCustomContacts().filter(c => !c.isGroup);
             if (allContacts.length === 0) { AUI.alert('通訊錄目前沒有好友，無法建群！'); return; }
             let listHtml = allContacts.map(c => `<label style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; cursor:pointer;"><input type="checkbox" class="wx-group-check" value="${c.id}" style="margin-right:10px;"><div style="font-weight:bold;">${c.name}</div></label>`).join('');
-            const html = `<div class="wx-modal-title">發起群聊</div><div style="padding:10px;"><input type="text" id="wx-group-create-name" class="wx-modal-input" placeholder="請輸入群聊名稱"><div style="margin-top:10px; font-size:12px; color:#888;">選擇群成員:</div><div style="max-height:200px; overflow-y:auto; border:1px solid #eee; border-radius:4px; margin-top:5px;">${listHtml}</div></div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-cancel">取消</button><button class="wx-btn wx-btn-confirm" id="wx-btn-create-group">創建</button></div>`;
+            const html = `<div class="wx-modal-title">發起群聊</div><div style="padding:10px;"><input type="text" id="wx-group-create-name" class="wx-modal-input" placeholder="請輸入群聊名稱"><div class="wx-modal-label is-gap">選擇群成員:</div><div style="max-height:200px; overflow-y:auto; border:1px solid #eee; border-radius:4px; margin-top:5px;">${listHtml}</div></div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-cancel">取消</button><button class="wx-btn wx-btn-confirm" id="wx-btn-create-group">創建</button></div>`;
             this.showModal(html);
             targetDoc.getElementById('wx-btn-cancel').onclick = () => targetDoc.getElementById('wxActionModal').classList.remove('show');
             targetDoc.getElementById('wx-btn-create-group').onclick = () => {

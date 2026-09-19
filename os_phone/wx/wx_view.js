@@ -769,7 +769,7 @@
             const _cnt = function (n) { return n ? '<div class="wx-contact-count">' + n + '</div>' : ''; };
             let html = `
                 <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_new')"><div class="wx-contact-icon icon-new-friend">${_newN ? '<div class="wx-badge" style="top:-6px; right:-6px;">' + _newN + '</div>' : ''}<svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M15 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg></div><div class="wx-contact-name">新的朋友</div></div>
-                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_only')"><div class="wx-contact-icon" style="background:#fa9d3b;"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h2v2H6zm4-4h8v2h-8zm0 4h5v2h-5z"/></svg></div><div class="wx-contact-name">僅聊天的朋友</div>${_cnt(_onlyN)}</div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_only')"><div class="wx-contact-icon icon-only"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h2v2H6zm4-4h8v2h-8zm0 4h5v2h-5z"/></svg></div><div class="wx-contact-name">僅聊天的朋友</div>${_cnt(_onlyN)}</div>
                 <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_group')"><div class="wx-contact-icon icon-group-chat"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5c0-2.3-4.7-3.5-7-3.5zm8 0c-.3 0-.6 0-1 .1.5.5.9 1.1.9 1.9 0 2.3-4.7 3.5-7 3.5h7.1c2.3 0 6.9-1.2 6.9-3.5V13c0-2.3-4.6-3.5-6.9-3.5z"/></svg></div><div class="wx-contact-name">群組</div>${_cnt(_grpN)}</div>
                 <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_tags')"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div>${_cnt(_tagN)}</div>
             `;
@@ -806,7 +806,7 @@
                     const avatarTap = ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${c.id}')"`;
                     html += `<div class="wx-contact-item" id="contact-item-${c.id}" ${contextAction} onclick="(window.parent.wxApp || window.wxApp).openChat('${c.id}')"><div style="${avatarStyle}" ${dataAttr}${avatarTap}></div><div class="wx-contact-name">${c.name}</div></div>`;
                 });
-            } else { html += `<div style="text-align:center; padding:30px; color:#ccc;">暫無聯絡人</div>`; }
+            } else { html += `<div class="wx-list-empty">暫無聯絡人</div>`; }
             return html;
         },
 
@@ -1001,12 +1001,12 @@
             const avOn = !!(_AV && _AV.isEnabled && _AV.isEnabled());
             const avSrc = (_AV && _AV.getProvider) ? _AV.getProvider() : '';
             const avBadge = avOn
-                ? '<span style="background: var(--wx-accent); color: var(--wx-on-accent); font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
-                : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
+                ? '<span class="wx-pill is-on">已開啟</span>'
+                : '<span class="wx-pill">已關閉</span>';
             const seeOn = !!(_AV && _AV.seeEnabled && _AV.seeEnabled());
             const seeBadge = seeOn
-                ? '<span style="background: var(--wx-accent); color: var(--wx-on-accent); font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
-                : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
+                ? '<span class="wx-pill is-on">已開啟</span>'
+                : '<span class="wx-pill">已關閉</span>';
             const AV_SRC_LABEL = { '': '跟著圖片設置', pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館原生', custom_api: '自訂接口', comfyui_direct: 'ComfyUI 直連' };
             const avOptions = Object.keys(AV_SRC_LABEL).map(function (v) {
                 return '<option value="' + v + '"' + (avSrc === v ? ' selected' : '') + '>' + AV_SRC_LABEL[v] + '</option>';
@@ -1035,8 +1035,8 @@
                      + '<span>' + t.name + '</span></button>';
             }).join('');
             const darkBadge   = isDark
-                ? '<span style="background: var(--wx-accent); color: var(--wx-on-accent); font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
-                : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
+                ? '<span class="wx-pill is-on">已開啟</span>'
+                : '<span class="wx-pill">已關閉</span>';
 
             const style = `
                 .wx-me-header { background: ${headerBg}; padding: 30px 25px 30px 20px; padding-top: calc(30px + env(safe-area-inset-top, 0px)); display: flex; align-items: center; margin-bottom: 10px; }
@@ -1084,7 +1084,7 @@
                     <div class="wx-cell" onclick="(window.parent.WX_WALLET || window.WX_WALLET) && (window.parent.WX_WALLET || window.WX_WALLET).open()">
                         <div class="wx-cell-icon">${iconPay}</div>
                         <div class="wx-cell-text">錢包</div>
-                        <div id="wx-wallet-cell-amount" style="font-size:15px; color:${idColor}; margin-right:6px;">${walletAmount}</div>
+                        <div id="wx-wallet-cell-amount" class="wx-cell-value">${walletAmount}</div>
                         <div class="wx-cell-arrow">›</div>
                     </div>
                 </div>
@@ -1115,7 +1115,7 @@
                     <div class="wx-cell" style="${avOn ? '' : 'display:none;'}">
                         <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-wand-magic-sparkles"></i></span></div>
                         <div class="wx-cell-text">頭像來源</div>
-                        <select id="wx-av-src" style="border:none; background:transparent; font-size:15px; color:${idColor}; text-align:right; max-width:150px;"
+                        <select id="wx-av-src" class="wx-cell-select"
                                 onchange="(window.parent.wxApp || window.wxApp).setAvatarAiSource(this.value)">${avOptions}</select>
                     </div>
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleSeeMe()">
@@ -1157,7 +1157,7 @@
                         AUI.alert('通訊錄已清空');
                     })()">
                         <div class="wx-cell-icon"><svg viewBox="0 0 24 24" fill="#e74c3c"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></div>
-                        <div class="wx-cell-text" style="color:#e74c3c;">清空通訊錄</div>
+                        <div class="wx-cell-text is-danger">清空通訊錄</div>
                         <div class="wx-cell-arrow">›</div>
                     </div>
                     <div class="wx-cell" onclick="(async function(){
@@ -1179,7 +1179,7 @@
                         AUI.alert('微信數據已全部清空');
                     })()">
                         <div class="wx-cell-icon"><svg viewBox="0 0 24 24" fill="#c0392b"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg></div>
-                        <div class="wx-cell-text" style="color:#c0392b;">清空全部微信數據</div>
+                        <div class="wx-cell-text is-danger">清空全部微信數據</div>
                         <div class="wx-cell-arrow">›</div>
                     </div>
                 </div>
@@ -1261,14 +1261,14 @@
                         ${(chats[activeId] && chats[activeId].isGroup) ? '' : `<div id="wx-msg-note-btn" class="wxnb-head-btn${isDark ? ' is-dark' : ''}" onclick="event.stopPropagation(); const nb = (window.parent.WX_NOTEBOOK || window.WX_NOTEBOOK); if(nb) nb.open('${activeId}');"><i class="fa-solid fa-book-bookmark"></i></div>`}
                         <div id="wx-msg-menu-btn" class="wx-head-menu-btn"
                              onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${activeId}');"><i class="fa-solid fa-ellipsis"></i></div>
-                        <div id="wx-msg-confirm-btn" style="display:none; font-size:14px; cursor:pointer; color:#999; padding:4px 8px; font-weight:bold;"
+                        <div id="wx-msg-confirm-btn" class="wx-head-confirm-btn" style="display:none;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.deleteSelectedMessages();">刪除</div>
                     </div>
                 `;
             } else if (activeTab === 'me_set' || activeTab === 'me_black') {
                 headerRightBtn = '<div style="width:30px;"></div>';   // 設置頁右上不放「＋」，留同寬空位讓標題置中
             } else {
-                headerRightBtn = `<div style="width:30px; text-align:right; font-size:20px; cursor:pointer; color: var(--wx-ink);" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)"><i class="fa-solid fa-circle-plus"></i></div>`;
+                headerRightBtn = `<div class="wx-head-add-btn" onclick="event.stopPropagation(); const wc = (window.parent.WX_CONTACTS || window.WX_CONTACTS); if(wc) wc.showMenu(this)"><i class="fa-solid fa-circle-plus"></i></div>`;
             }
             
             const isInChat = !!activeId;
@@ -1299,15 +1299,13 @@
             // 構建主介面
             // 同上：外殼、頂欄、底部分頁的深色以前寫成行內，會蓋掉主題 → 一律指到格子。
             // 名字保留 dark 開頭是為了不用改下面一堆用到它的地方，實際上兩種模式都吃這些值。
-            const darkShellStyle = 'background: var(--wx-page);';
-            const darkHeaderStyle = 'background: var(--wx-header); border-bottom: 1px solid var(--wx-line);';
             const darkTabStyle = 'background: var(--wx-bar); border-top: 1px solid var(--wx-line);';
             // 聊天列表是白底、「我」那兩頁是灰底 —— 這個差別跟深淺無關，是版面本來的分別
             const darkListIsPage = (activeTab === 'me' || activeTab === 'me_set');   // 「我」那頁底是淺灰（--wx-page），其他是白（--wx-surface）
 
             const html = `
-                <div class="wx-shell${isDark ? ' wx-dark' : ''}${wxTheme ? ' wxtheme-' + wxTheme : ''}" style="${darkShellStyle}">
-                    <div class="wx-header" style="${darkHeaderStyle}">
+                <div class="wx-shell${isDark ? ' wx-dark' : ''}${wxTheme ? ' wxtheme-' + wxTheme : ''}">
+                    <div class="wx-header">
                         <div class="${backBtnClass}" onclick="${backAction}">${backBtnText}</div>
                         <div ${headerTitleAction}>${headerTitle}</div>
                         ${headerRightBtn}
@@ -1331,7 +1329,7 @@
                     <div class="wx-vsheet-mask" id="wxVoiceSheet" data-state="idle" hidden onclick="${app}.closeVoiceSheet(event)"><div class="wx-vsheet"><div class="wx-vsheet-grab"></div><div class="wx-vsheet-dl"><div class="wx-vsheet-title">先下載聽寫檔案</div><div class="wx-vsheet-note" id="wxVoiceNote">大約 250MB，只要下載一次，建議連 Wi-Fi</div><progress class="wx-vsheet-bar" id="wxVoiceBar" max="100" value="0"></progress><button class="wx-vsheet-dlbtn" onclick="${app}.voiceDownload()">下載</button><button class="wx-vsheet-cancel" onclick="${app}.closeVoiceSheet()">取消</button></div></div></div>
                     <div class="wx-hold" id="wxHold" data-state="" hidden><div class="wx-hold-card"><div class="wx-hold-level" id="wxHoldLevel" data-lv="0"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="wx-hold-text" id="wxHoldText"></div><div class="wx-hold-foot"><span class="wx-hold-timer" id="wxHoldTimer">0:00</span><span class="wx-hold-hint" id="wxHoldHint"></span></div></div></div>
                     <div class="wx-gift-overlay" id="wxGiftOverlay" onclick="this.classList.remove('show')"><div class="wx-receipt-box" onclick="event.stopPropagation()"><div class="wx-receipt-header"></div><div class="wx-receipt-content"><div class="wx-receipt-icon" id="wxGiftIcon"><i class="fa-solid fa-gift"></i></div><div class="wx-receipt-name" id="wxGiftName">禮物名稱</div><div class="wx-receipt-divider"></div><div class="wx-receipt-price-label">價值</div><div class="wx-receipt-price" id="wxGiftPrice">¥0</div><div class="wx-receipt-btn-group" id="wxGiftBtnGroup" style="display:none;"><div class="wx-receipt-btn-accept" id="wxGiftAccept">收下禮物</div><div class="wx-receipt-btn-refuse" id="wxGiftRefuse">殘忍拒絕</div></div><div class="wx-receipt-close" id="wxGiftClose" onclick="document.getElementById('wxGiftOverlay').classList.remove('show')">關閉</div></div></div></div>
-                    <div class="wx-transfer-overlay" id="wxTransferOverlay" onclick="${app}.closeTransfer()"><div class="wx-transfer-box" onclick="event.stopPropagation()"><div class="wx-transfer-header"><div class="wx-transfer-icon"><i class="fa-solid fa-check"></i></div><div style="font-size:14px;" id="wxTransferState">待收款金額</div><div class="wx-transfer-amount" id="wxTransferAmount">¥0.00</div></div><div class="wx-transfer-actions"><button class="wx-btn-receive" id="wxBtnReceive" onclick="">確認收款</button><button class="wx-btn-return" id="wxBtnReturn" onclick="">退回轉帳</button><div style="font-size:12px; color:#6b6b6b; margin-top:5px;">收款後將存入餘額</div></div></div></div>
+                    <div class="wx-transfer-overlay" id="wxTransferOverlay" onclick="${app}.closeTransfer()"><div class="wx-transfer-box" onclick="event.stopPropagation()"><div class="wx-transfer-header"><div class="wx-transfer-icon"><i class="fa-solid fa-check"></i></div><div style="font-size:14px;" id="wxTransferState">待收款金額</div><div class="wx-transfer-amount" id="wxTransferAmount">¥0.00</div></div><div class="wx-transfer-actions"><button class="wx-btn-receive" id="wxBtnReceive" onclick="">確認收款</button><button class="wx-btn-return" id="wxBtnReturn" onclick="">退回轉帳</button><div class="wx-transfer-note">收款後將存入餘額</div></div></div></div>
                     <div class="wx-rp-overlay" id="wxRedPacketOverlay" onclick="this.classList.remove('show')"><div class="wx-rp-box" onclick="event.stopPropagation()"><div class="wx-rp-header"><div class="wx-rp-avatar" id="wxRpAvatar"></div><div class="wx-rp-sender" id="wxRpSender">的紅包</div><div class="wx-rp-memo" id="wxRpMemo">恭喜發財，大吉大利</div></div><div class="wx-rp-divider"></div><div class="wx-rp-info" id="wxRpInfoBar">暫無人領取</div><div class="wx-rp-list" id="wxRpList"></div><div class="wx-rp-close" onclick="document.getElementById('wxRedPacketOverlay').classList.remove('show')">關閉</div></div></div>
 
                     <div class="wx-multi-bar" id="wxMultiBar"><button type="button" class="wx-multi-bar-btn" data-mm="cancel">取消</button><button type="button" class="wx-multi-bar-btn" data-mm="all">全選</button><button type="button" class="wx-multi-bar-btn danger" data-mm="delete" disabled>刪除</button></div>
@@ -1358,8 +1356,8 @@
                                         <label class="wx-stk-file-btn"><i class="fa-solid fa-upload"></i> 上傳 TXT<input type="file" accept=".txt" style="display:none" onchange="var w=window.parent||window;if(w.WX_STICKER)w.WX_STICKER.importFromFile(this)"></label>
                                     </div>
                                     <details style="margin-top:4px;">
-                                        <summary style="font-size:11px; color:#aaa; cursor:pointer; user-select:none;"><i class="fa-solid fa-file-lines"></i> TXT 格式說明</summary>
-                                        <div style="font-size:11px; color:#999; line-height:1.7; margin-top:4px; padding:6px 8px; background:#f9f9f9; border-radius:4px; border:1px solid #eee;">
+                                        <summary class="wx-fmt-sum"><i class="fa-solid fa-file-lines"></i> TXT 格式說明</summary>
+                                        <div class="wx-fmt-body">
                                             第一行：<code>library:庫名稱</code><br>
                                             之後每行：<code>顯示名稱:檔名.gif</code>（有資料夾 URL 時只填檔名）<br>
                                             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;或：<code>顯示名稱:https://完整URL</code>
