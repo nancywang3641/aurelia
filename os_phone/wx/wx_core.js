@@ -1246,6 +1246,15 @@
     // --- 解析邏輯 (將長文本切成陣列) ---
     //   回傳這一間的訊息陣列；傳到別間的掛在 .others = [{ chat, msgs }]，呼叫端交給 _deliverOtherRooms
     function parseAndProcess(fullText) {
+        // 🧰 叫工具的標籤（wx_tools.js）：先抽掉記下來，這一輪的泡泡畫完再去跑（_afterTools）
+        try {
+            const _T = win.WX_TOOLS;
+            if (_T && _T.extract) {
+                const _tx = _T.extract(fullText);
+                fullText = _tx.text;
+                if (_tx.calls.length && GLOBAL_ACTIVE_ID) _toolCalls[GLOBAL_ACTIVE_ID] = _tx.calls;
+            }
+        } catch (e) { console.warn('[WX] 工具標籤處理失敗', e); }
         // 🫂 朋友圈標籤（wx_moments.js，<moment_post> 那一組）先整段抽掉並執行，剩下的字才往下拆。
         //    🚨 一定要在「拆 <chat> 容器」那步之前：AI 常把標籤寫在容器外面，晚一步就被整段丟掉。
         try {
@@ -1640,6 +1649,37 @@
     //   暱稱在微信「我」頁 -> 編輯暱稱，一支手機一個，不分聊天室。
     function _personaName() { try { return win.WX_ME.personaName(); } catch (e) { return 'User'; } }
     function _meName() { try { return win.WX_ME.name(); } catch (e) { return 'User'; } }
+
+    // ── 🧰 工具（wx_tools.js）──────────────────────────────────
+    //   角色回覆裡寫了 <tool_call>：parseAndProcess 抽掉記在 _toolCalls，這一輪的泡泡畫完後 _afterTools 去跑，
+    //   結果存進 chat.toolLog，再自動回一次（triggerReply({ fromTool: true })），那一輪把結果交給它。
+    //   連續用工具最多 TOOL_CHAIN 輪，免得它一直查不停。
+    const _toolCalls = {};
+    const TOOL_CHAIN = 3;
+    function _stripToolTags(text) {
+        try { if (win.WX_TOOLS && win.WX_TOOLS.strip) return win.WX_TOOLS.strip(text); } catch (e) {}
+        return String(text == null ? '' : text);
+    }
+    async function _afterTools(chat) {
+        if (!chat) return;
+        const calls = _toolCalls[chat.id];
+        delete _toolCalls[chat.id];
+        const T = win.WX_TOOLS;
+        if (!calls || !calls.length || !T || !T.run) return;
+        if (!T.enabledFor(chat).length) return;   // 這間沒開工具：標籤照樣拿掉，不跑
+        chat._toolChain = (chat._toolChain || 0) + 1;
+        if (chat._toolChain > TOOL_CHAIN) return;
+        const who = chat.name || '對方';
+        const ran = await T.run(chat, calls, function (label, what) {
+            _sysPush(chat, who + ' 用「' + label + '」查了' + (what ? '：' + what : ''));
+        });
+        if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+        if (!ran) return;
+        // 她人還在這間就接著回；不在的話結果留著，下次回覆時會交給它
+        if (APP_CONTAINER && GLOBAL_ACTIVE_ID === chat.id && win.wxApp && win.wxApp.triggerReply) {
+            await win.wxApp.triggerReply({ fromTool: true });
+        }
+    }
     function _isMyName(n) { try { return win.WX_ME.isMine(n); } catch (e) { return false; } }
 
     // 「我」的所有叫法：人設名、微信暱稱、AI 在主角狀態裡自己寫的主角名（它常寫簡體或不帶星號，跟人設名對不上）、去掉頭尾星號的版本
@@ -2519,7 +2559,7 @@
         // 🚨 解析不出訊息時，以前一律把原文整段當一則訊息塞進去（保底）。可是只在朋友圈動手、
         //    或醒來選擇什麼都不做的回覆，本來就只有標籤或系統行——塞進去就是一顆印著協議原文的泡泡。
         //    朋友圈標籤已在 parseAndProcess 抽掉執行過：這裡拿抽掉之後剩下的字判斷，保底也只塞剩下的字。
-        const _rest = _stripFriendTags((win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || ''));
+        const _rest = _stripFriendTags((win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(_stripToolTags(finalText)) : _stripToolTags(finalText));
         const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
         const _othersRelay = newMsgs.others || [];
         // 她送的朋友驗證，他回了但沒寫通過也沒寫不通過：收回來，讓她可以再送一次
@@ -2549,6 +2589,7 @@
                     win.OS_KEEPALIVE.notify(chat.name || '微信', (chat.name || '對方') + ' 在朋友圈有新動態', 'wxmo-' + chat.id);
                 }
             } catch (e) {}
+            await _afterTools(chat);
             return;
         }
 
@@ -2575,6 +2616,7 @@
             }
         } catch (e) {}
         await _deliverOtherRooms(_othersRelay);   // 同一則回覆裡順便傳到別間的
+        await _afterTools(chat);
     }
 
     // 登記給托管：跑完的結果由這裡收（os_relay.js 回到前台時會叫）
@@ -3782,8 +3824,9 @@
         },
 
         // --- 觸發 AI 回覆 (含氣泡流) ---
-        triggerReply: async function() {
+        triggerReply: async function(opts) {
             if(!GLOBAL_ACTIVE_ID || !GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) return;
+            const _fromTool = !!(opts && opts.fromTool);   // 🧰 工具跑完自動接著回的那一輪
             if(IS_STREAMING_REPLY) return; // 鎖定
             // 🔒 她把他拉黑了 → 他收不到，也不會回
             // 🚫 他把主角刪了或拉黑了 → 按下去是送朋友驗證（他決定收不收）
@@ -3796,6 +3839,7 @@
             IS_STREAMING_REPLY = true;
 
             const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
+            if (!_fromTool) { currentChat._toolChain = 0; delete _toolCalls[currentChat.id]; }
             
             // 1. 顯示「對方正在輸入...」的臨時佔位符
             const loadingMsg = {type:'msg', isMe:false, content:'...', sender: currentChat.name, isLoading: true};
@@ -3821,7 +3865,7 @@
                 
                 // 如果解析失敗（空訊息），做保底處理
                 // 只有朋友圈標籤或系統行（例如只在朋友圈按了讚）就不要把原文塞成一顆泡泡（同 _applyRelayReply）
-                const _rest = _stripFriendTags((win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(finalText) : String(finalText || ''));
+                const _rest = _stripFriendTags((win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(_stripToolTags(finalText)) : _stripToolTags(finalText));
                 const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
                 // 只傳到別間（這一間沒話）也算有回覆，不要把原文塞成一顆泡泡
                 if (!newMsgs.length && !(newMsgs.others && newMsgs.others.length) && _rest.trim() && !_sysOnly) {
@@ -3848,6 +3892,7 @@
 
                 IS_STREAMING_REPLY = false; // 解鎖
                 if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { await win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat); }
+                await _afterTools(currentChat);   // 🧰 這一輪叫了工具 → 去跑，跑完接著回
             };
 
             console.log('[WX] triggerReply: isApiMode=' + isApiMode + ', WX_API=' + (!!win.WX_API));
@@ -3869,6 +3914,10 @@
                 try {
                     await Promise.race([_prepareLinks(currentChat), new Promise(r => setTimeout(r, LINK_TIMEOUT + 1000))]);
                 } catch (e) { console.warn('[WX] 讀連結失敗（不影響送出）:', e); }
+                // 🧰 這間開了工具、而那個工具還沒問過有哪些功能 → 先問（問不到也不擋送出）
+                try {
+                    if (win.WX_TOOLS && win.WX_TOOLS.prepare) await Promise.race([win.WX_TOOLS.prepare(currentChat), new Promise(r => setTimeout(r, 12000))]);
+                } catch (e) { console.warn('[WX] 工具準備失敗（不影響送出）:', e); }
                 // buildContext 加逾時 + 失敗用精簡上下文續跑（不讓它卡住/丟錯就整個不回又鎖死）
                 let messages;
                 try {
@@ -3899,6 +3948,16 @@
                     const _links = _linkBrief(currentChat, _me);
                     if (_links) { messages.push({ role: 'system', content: _links }); console.log('[WX] 附上連結內容'); }
                 } catch (e) { console.warn('[WX] 連結內容組裝失敗（不影響送出）', e); }
+                // 🧰 能用哪些工具、怎麼叫；上一輪查到的結果（整段只給一次）
+                try {
+                    const _T = win.WX_TOOLS;
+                    if (_T) {
+                        const _tp = _T.promptBlock(currentChat, currentChat.name);
+                        if (_tp) messages.push({ role: 'system', content: _tp });
+                        const _tr = _T.resultsBlock(currentChat);
+                        if (_tr) { messages.push({ role: 'system', content: _tr }); console.log('[WX] 附上工具結果'); }
+                    }
+                } catch (e) { console.warn('[WX] 工具說明組裝失敗（不影響送出）', e); }
                 // 😺 這支手機裡有哪些表情包（只有被指定給角色用的那一包，見 WX_STICKER.aiPromptBlock）
                 try {
                     const _stk = WX_STICKER.aiPromptBlock();
@@ -3934,7 +3993,12 @@
                 try {
                     const _pend = (win.OS_API && win.OS_API.wxPendingTurn)
                         ? await win.OS_API.wxPendingTurn(GLOBAL_ACTIVE_ID, _meName()) : [];
-                    if (_pend && _pend.length) {
+                    if (_fromTool) {
+                        // 🧰 上一輪說了要去查、這一輪結果回來了（「查了」那行系統提示也會被當成還沒回的，照樣排進來，這句一定墊在最後）
+                        (_pend || []).forEach(function (m) { messages.push(m); });
+                        messages.push({ role: 'system', content: '【你剛才用工具查的結果回來了，在上面】\n'
+                            + '接著你們剛才的話題，把查到的用在回覆裡。剛才已經說過的話不要再說一次。' });
+                    } else if (_pend && _pend.length) {
                         _pend.forEach(function (m) { messages.push(m); });
                         console.log('[WX] 這一輪要回的訊息排在最後（' + _pend.length + ' 段）');
                     } else {

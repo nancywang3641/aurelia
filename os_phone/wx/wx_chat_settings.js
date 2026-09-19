@@ -185,6 +185,7 @@
         const _A = win.AUI || window.AUI;
         if (_A && _A.registerHelp) _A.registerHelp({
             ws_links: { title: '打開我傳的連結', body: '開了之後，你傳網址給他，他會先讀過那個網頁再回你。\n要登入才看得到的網站讀不到。' },
+            ws_tools: { title: '可以用工具', body: '打開就會跳出工具清單，勾這個角色能用哪幾個，例如上網搜尋。\n他覺得需要時會先去用，看完結果再回你，那一句會慢幾秒。\n清單所有聊天室共用，裝一次就好；點開關旁邊的字可以再改勾選。' },
             ws_time:  { title: '他知道現在幾點、隔了多久', body: '開了，他會看到現在幾點、你隔多久才回，可能會說「怎麼這麼久才理我」。\n關著，他完全不提時間。跑團時故事裡的時間跟現實不一樣，建議關著。' },
             ws_lore:  { title: '吃這本的世界書', body: '他回你的時候，看不看得到這本故事的世界設定和其他角色的資料。\n關掉後，「人設設置」可以去別本世界書挑條目。' },
             ws_story: { title: '吃這本的劇情', body: '他回你的時候，知不知道這本故事裡發生過什麼。\n世界書和劇情都關掉，他只記得你們聊過的話，從別的故事借來的角色適合這樣設。你的人設照樣會給他。' },
@@ -502,6 +503,16 @@
                         <div class="ws-label">打開我傳的連結${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_links') : ''}</div>
                         <input type="checkbox" class="ws-switch" id="chk-read-links" ${chat.readLinks ? 'checked' : ''}>
                     </label>
+                </div>
+
+                <div class="ws-group">
+                    <div class="ws-cell">
+                        <div class="ws-label">可以用工具${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_tools') : ''}</div>
+                        <div class="ws-right ws-tools-right">
+                            <div id="ws-tools-val" class="ws-value is-clip is-set ws-tools-val" role="button"></div>
+                            <input type="checkbox" class="ws-switch" id="chk-tools" ${(Array.isArray(chat.tools) && chat.tools.length) ? 'checked' : ''}>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="ws-group">
@@ -1336,6 +1347,36 @@
                     if (app.saveChats) app.saveChats();
                     if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
                 };
+            }
+            // 🧰 可以用工具（wx_tools.js）：打開就跳小窗勾這間用哪幾個；一個都沒勾就關回去。點旁邊的字再叫出小窗
+            {
+                const _tk = doc.getElementById('chk-tools');
+                const _tv = doc.getElementById('ws-tools-val');
+                const T = win.WX_TOOLS;
+                const _paint = () => {
+                    const on = !!(Array.isArray(chat.tools) && chat.tools.length);
+                    if (_tk) _tk.checked = on;
+                    if (_tv) _tv.textContent = on && T ? (T.summary(chat) || '') : '';
+                };
+                const _pick = async () => {
+                    if (!T) return;
+                    const ok = await T.open(chat, panel.parentNode || panel, () => {
+                        if (Array.isArray(chat.tools) && !chat.tools.length) delete chat.tools;
+                        if (app.saveChats) app.saveChats();
+                        if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
+                        _paint();
+                    });
+                    if (!ok) _paint();
+                };
+                if (T && T.load) T.load().then(_paint).catch(() => {});
+                if (_tk) _tk.onchange = () => {
+                    if (_tk.checked) { _pick(); return; }
+                    delete chat.tools;
+                    if (app.saveChats) app.saveChats();
+                    if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
+                    _paint();
+                };
+                if (_tv) _tv.onclick = _pick;
             }
             // 🔗 打開我傳的連結：一間一個開關，切了就存（不用再按保存）。實際讀網頁在 wx_core 的 _prepareLinks
             {
