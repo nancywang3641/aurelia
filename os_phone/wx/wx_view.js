@@ -1015,7 +1015,6 @@
             // 🚨 這幾個本來是在程式裡按深色與否選顏色，再寫成標籤上的行內樣式。
             //    行內樣式贏過主題那組格子 —— 只要還有一行這樣寫，主題就換不動那一塊。
             //    改成直接指到格子，深淺由 .wx-dark 那半決定，主題也才吃得到。
-            const pageBg      = 'var(--wx-page)';
             const headerBg    = 'var(--wx-surface)';
             const cellGroupBg = 'var(--wx-surface)';
             const borderColor = 'var(--wx-line)';
@@ -1187,7 +1186,7 @@
             `;
             return `
                 <style>${style}</style>
-                <div style="background:${pageBg}; min-height:100%;">
+                <div class="wx-me-page">
                 ${sub === 'settings' ? settingsHTML : mainHTML}
                 </div>
             `;
@@ -1304,7 +1303,7 @@
             const darkHeaderStyle = 'background: var(--wx-header); border-bottom: 1px solid var(--wx-line);';
             const darkTabStyle = 'background: var(--wx-bar); border-top: 1px solid var(--wx-line);';
             // 聊天列表是白底、「我」那兩頁是灰底 —— 這個差別跟深淺無關，是版面本來的分別
-            const darkListBg = (activeTab === 'me' || activeTab === 'me_set') ? 'var(--wx-page)' : 'var(--wx-surface)';
+            const darkListIsPage = (activeTab === 'me' || activeTab === 'me_set');   // 「我」那頁底是淺灰（--wx-page），其他是白（--wx-surface）
 
             const html = `
                 <div class="wx-shell${isDark ? ' wx-dark' : ''}${wxTheme ? ' wxtheme-' + wxTheme : ''}" style="${darkShellStyle}">
@@ -1315,7 +1314,7 @@
                     </div>
                     <div class="wx-page-container">
                         <div class="wx-page-list" style="transform: ${transform}">
-                            <div style="padding:0; background:${darkListBg}; height:100%;">${listContent}</div>
+                            <div class="wx-page-fill${darkListIsPage ? ' is-page' : ''}">${listContent}</div>
                         </div>
                         
                         <div class="wx-page-room ${activeId ? 'active' : ''} ${hasBg ? 'has-bg' : ''}" id="wx-current-room-bg">

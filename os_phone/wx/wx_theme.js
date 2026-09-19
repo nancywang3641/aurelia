@@ -126,6 +126,10 @@
             .wx-page-list { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow-y: auto; background: var(--wx-surface); transition: transform 0.3s; z-index: 1; }
             .wx-page-room { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; background: var(--wx-page); transform: translateX(100%); transition: transform 0.3s; display: flex; flex-direction: column; z-index: 2; }
             .wx-page-room.active { transform: translateX(0); }
+            /* 列表頁、「我」那頁裡面那層鋪底（以前是寫在元素身上的底色，主題抓不到） */
+            .wx-page-fill { padding: 0; height: 100%; background: var(--wx-surface); }
+            .wx-page-fill.is-page { background: var(--wx-page); }
+            .wx-me-page { background: var(--wx-page); min-height: 100%; }
             /* 聊天室開著時把後面的列表藏起來。以前靠聊天室自己的底色擋住，主題常把頁面底色弄透明好讓外殼的漸層透出來，
                聊天室一透明，後面的聊天列表就露出來（她：每個主題套用後聊天室背景都出現聊天列表）。 */
             .wx-page-container:has(> .wx-page-room.active) > .wx-page-list { visibility: hidden !important; }

@@ -58,7 +58,7 @@
     const ROOT_RE = /^\s*(?::root|html|body)\s*$/i;
     // 🚨 頭像是一張照片，放在元素自己的背景圖上。主題寫 background 就會把照片整個蓋掉
     //    （她套的第一套：頭像全變成黃色六角形）。頭像只准改形狀、框、陰影、大小，背景那兩句拿掉。
-    const AVATAR_RE = /wx-(?:avatar|bubble-avatar|me-avatar|rp-avatar|rp-item-avatar)\b|pbub-avatar\b|ws-avatar-circle\b|wxpf-(?:bg|avatar)\b/i;
+    const AVATAR_RE = /wx-(?:avatar|bubble-avatar|me-avatar|rp-avatar|rp-item-avatar)\b|pbub-avatar\b|ws-avatar-circle\b|wxpf-(?:bg|avatar)\b|wxmo-(?:av|av-lg|av-xs|cover-img)\b/i;
     // 🚨 標題字太大會擠成兩行、壓到返回鈕（她截圖：群名兩行疊在「微信」上）：超過就壓回上限
     const TITLE_RE = /wx-header-title\b|ws-title\b|wx-modal-title\b|wx-name\b|wx-contact-name\b|wx-me-name\b/i;
     const TITLE_MAX_PX = 20;
@@ -273,7 +273,8 @@
         // 記事本與個人檔案卡的字：顏色也是自己寫死的（記事本是深咖啡字），主題換了底色一樣會看不見
         + '.wxnb-back,.wxnb-title,.wxnb-sub,.wxnb-search,.wxnb-q,.wxnb-card-t,.wxnb-card-b,.wxnb-card-f,.wxnb-who,.wxnb-empty-t,.wxnb-empty-s,'
         + '.wxnb-edit-who,.wxnb-edit-body,.wxnb-edit-x,.wxnb-in-t,.wxnb-in-b,.wxnb-thumb-desc,.wxnb-more,'
-        + '.wxpf-name,.wxpf-bio,.wxpf-act,.wxpf-x';
+        + '.wxpf-name,.wxpf-bio,.wxpf-act,.wxpf-x,'
+        + '.wxmo-bar-t,.wxmo-name,.wxmo-text,.wxmo-time,.wxmo-likes,.wxmo-cm,.wxmo-empty,.wxmo-input,.wxmo-compose-in,.wxmo-link-name,.wxmo-links-t,.wxmo-links-note';
     function _rgb(str) {
         const m = String(str || '').match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?/i);
         if (!m) return null;
@@ -335,10 +336,22 @@
         run();
     }
 
+    // 列表頁、聊天室頁自己鋪了一層底色（白、淺灰）。AI 的主題常只換外殼和每一列，沒寫這兩頁 →
+    //   聊天少的時候下面空出來那一大塊還是白的（她：每次生成主頁底部都是白色，感覺都沒套用）。
+    //   主題沒寫這兩頁、也沒改那兩個顏色格子時，這兩頁不畫底，透出外殼的底色。主題有寫就照主題。
+    function _pageFill(css) {
+        const out = [];
+        // 列表頁本身＋裡面那層鋪底（.wx-page-fill），「我」那頁（.wx-me-page、.wx-page-fill.is-page）與聊天室各看各的
+        if (!/wx-page-list|wx-page-fill|--wx-surface\s*:/.test(css)) out.push('.wx-shell :is(.wx-page-list, .wx-page-fill:not(.is-page)):not(#_) { background: transparent !important; }');
+        if (!/wx-me-page|wx-page-fill|--wx-page\s*:/.test(css)) out.push('.wx-shell :is(.wx-me-page, .wx-page-fill.is-page):not(#_) { background: transparent !important; }');
+        if (!/wx-page-room|--wx-page\s*:/.test(css)) out.push('.wx-shell .wx-page-room:not(#_) { background: transparent !important; }');
+        return out.join('\n');
+    }
+
     function _inject(css) {
         let st = d.getElementById(STYLE_ID);
         if (!css) { if (st) st.remove(); _watchCardInk(false); return; }
-        css = css + '\n' + SAFETY;
+        css = css + '\n' + SAFETY + '\n' + _pageFill(css);
         if (!st) { st = d.createElement('style'); st.id = STYLE_ID; }
         // 永遠排在 head 最後：主題要壓過 app 自己的樣式
         (d.head || d.documentElement).appendChild(st);
@@ -412,6 +425,7 @@
         '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box；標題 .wx-modal-title；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
         '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit，上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',
         '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；中間資訊 .wxpf-main；頭像 .wxpf-avatar 與外圈 .wxpf-ring；名字 .wxpf-name；簽名 .wxpf-bio；底下動作鈕一排 .wxpf-acts、每顆 .wxpf-act；關閉 .wxpf-x',
+        '朋友圈（整頁）：整頁 .wxmo-root；頂列 .wxmo-bar（蓋在封面上時是透明的，往下捲之後 .wxmo-root 多一個 .is-scrolled，要寫實心的樣子就寫 .wxmo-root.is-scrolled .wxmo-bar），頂列按鈕 .wxmo-bar-btn，標題 .wxmo-bar-t；封面 .wxmo-cover（封面照片 .wxmo-cover-img 不要蓋掉），封面上的名字 .wxmo-cover-name；每一則 .wxmo-post，頭像 .wxmo-av，名字 .wxmo-name，內文 .wxmo-text，照片 .wxmo-photos，時間 .wxmo-time，右邊的更多鈕 .wxmo-more；讚與留言那一塊 .wxmo-social，讚 .wxmo-likes，每則留言 .wxmo-cm；留言輸入 .wxmo-input，送出 .wxmo-send；發一則的頁 .wxmo-compose，上方列 .wxmo-compose-bar，輸入 .wxmo-compose-in，發表 .wxmo-compose-ok，關閉 .wxmo-compose-x',
         '聊天設置（從聊天室右上角進去那一層）：.ws-overlay；標頭 .ws-header；標題 .ws-title；關閉 .ws-close；內容 .ws-body；一組 .ws-group；每格 .ws-cell；字 .ws-label；輸入框 .ws-input；開關 .ws-switch；頭像圓框 .ws-avatar-circle；疊在頭像上的相機 .ws-avatar-icon；底部 .ws-footer；保存 .ws-btn-save'
     ];
     const VARS = '--wx-page 整頁的底、--wx-bar 分頁列與輸入列、--wx-surface 卡片與列、--wx-surface-2 輸入框與按下去的底、--wx-header 標頭、--wx-line 分隔線、--wx-line-strong 明顯的框、--wx-arrow 箭頭與佔位字、--wx-ink 標題字、--wx-ink-2 內文、--wx-ink-3 次要字、--wx-ink-soft 再淡一層、--wx-ink-dim 時間與說明、--wx-fill 沒圖時的頭像底、--wx-accent 重點色（主要按鈕、選中）、--wx-accent-ink 重點色當字用的深一階、--wx-on-accent 疊在重點色上的字、--wx-danger 未讀紅點與刪除（保持紅色系）、--wx-link 可點的字';
@@ -441,6 +455,8 @@
             '・聊天室裡的卡片要跟整套風格一致，但每一種都要一眼認得出是什麼（紅包還是紅包、轉帳還是轉帳）；換了卡片哪一塊的底色，同一條就要把那塊的字色一起寫，卡片裡的標題、小字、金額才看得清楚（有些卡片的字原本是白色）；金額、店名、狀態字要清楚；已收款、退回、領完這幾種要跟還沒處理的看得出不同。檔案圖示 .wx-file-icon 的底色代表檔案種類，不要改。',
             '・不要把任何東西藏起來、弄透明、弄得點不到；不要用 position: fixed；寬高不要用螢幕單位（vw、vh）。',
             '・這支 app 自己的樣式有不少寫在元素身上，要蓋過它們就加 !important。',
+            '・整支 app 的底色或紋理寫在 .wx-shell；聊天列表頁 .wx-page-list、「我」那頁 .wx-me-page 與聊天室 .wx-page-room 沒另外寫底色時會透出它。只換每一列的底、沒寫整頁，列表下面空的那塊就會是別的顏色。',
+            '・每一頁都要設計到，不能只做聊天列表：通訊錄的每個人、「我」那頁與設置的每一格（.wx-cell-group、.wx-cell）、聊天室、輸入列、記事本、朋友圈、個人檔案卡、聊天設置，漏掉的那頁會維持原本的白底，看起來像沒套用。',
             '・字型只能從 Google Fonts 用 @import 引入，其他外部檔案不要用。按鈕上的小圖示是另一套圖示字型畫的，字型只換文字就好，不要寫成全部元素（*）一起換。',
             '・深色與淺色：做成一套固定的樣子就好，不用另外寫夜晚版。',
             '',
