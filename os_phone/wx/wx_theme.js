@@ -15,8 +15,11 @@
             .wx-source-details summary { cursor: pointer; outline: none; font-weight: bold; user-select: none; color: var(--wx-ink-soft); }
             .wx-code-content { display: block; white-space: pre-wrap; font-family: monospace; font-size: 11px; color: #2c662d; margin-top: 5px; padding: 5px; background: var(--wx-surface); border: 1px solid var(--wx-line); overflow-x: auto; }
 
-            .wx-header { background: var(--wx-header); height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid var(--wx-line-strong); z-index: 20; }
-            .wx-header-title { font-weight: 600; font-size: 16px; color: var(--wx-ink); }
+            .wx-header { color: var(--wx-ink); background: var(--wx-header); height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid var(--wx-line-strong); z-index: 20; }
+            .wx-header-title { font-weight: 600; font-size: 16px; }
+            /* 標頭裡的字和圖示都跟著 .wx-header 的字色：主題只寫標頭的 color，標題、返回、右上的記事本與選單鈕就一起換 */
+            :where(.wx-header-title, .wx-header .wx-back-btn, .wx-header .wxnb-head-btn, .wx-header .wx-head-menu-btn) { color: inherit; }
+            .wx-head-menu-btn { display: block; font-size: 22px; cursor: pointer; font-weight: bold; margin-top: -8px; }
             /* 多選刪除時標題列右邊那組：取消／全選／刪除 */
             /* 🗑 多選刪除：底下換成一條「取消｜全選｜刪除(n)」，輸入列藏起來（LINE 那樣，標題列不再塞按鈕） */
             .wx-multi-bar { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; gap: 10px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); box-sizing: border-box; }
@@ -42,7 +45,7 @@
             .wx-copy-box-ta { resize: none; line-height: 1.6; }
             /* 長按要跳自己的小窗，不要跳 iOS 的放大鏡／系統選單 */
             #wxRoomContent { -webkit-touch-callout: none; }
-            .wx-back-btn { cursor: pointer; display: flex; align-items: center; font-size: 15px; color: var(--wx-ink); font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 0.2s;}
+            .wx-back-btn { cursor: pointer; display: flex; align-items: center; font-size: 15px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 0.2s;}
             .wx-back-btn.show { opacity: 1; pointer-events: auto; }
             .wx-back-btn: before { content: '‹'; margin-right: 2px; font-size: 28px; line-height: 20px; position: relative; top: -2px;}
             

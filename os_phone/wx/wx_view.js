@@ -1260,7 +1260,7 @@
                 headerRightBtn = `
                     <div style="display:flex; align-items:center; gap:8px;">
                         ${(chats[activeId] && chats[activeId].isGroup) ? '' : `<div id="wx-msg-note-btn" class="wxnb-head-btn${isDark ? ' is-dark' : ''}" onclick="event.stopPropagation(); const nb = (window.parent.WX_NOTEBOOK || window.WX_NOTEBOOK); if(nb) nb.open('${activeId}');"><i class="fa-solid fa-book-bookmark"></i></div>`}
-                        <div id="wx-msg-menu-btn" style="display:block; font-size:22px; cursor:pointer; font-weight:bold; margin-top:-8px; color: var(--wx-ink);"
+                        <div id="wx-msg-menu-btn" class="wx-head-menu-btn"
                              onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${activeId}');"><i class="fa-solid fa-ellipsis"></i></div>
                         <div id="wx-msg-confirm-btn" style="display:none; font-size:14px; cursor:pointer; color:#999; padding:4px 8px; font-weight:bold;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.deleteSelectedMessages();">刪除</div>
@@ -1309,8 +1309,8 @@
             const html = `
                 <div class="wx-shell${isDark ? ' wx-dark' : ''}${wxTheme ? ' wxtheme-' + wxTheme : ''}" style="${darkShellStyle}">
                     <div class="wx-header" style="${darkHeaderStyle}">
-                        <div class="${backBtnClass}" onclick="${backAction}" style="color: var(--wx-ink)">${backBtnText}</div>
-                        <div ${headerTitleAction} style="color: var(--wx-ink)">${headerTitle}</div>
+                        <div class="${backBtnClass}" onclick="${backAction}">${backBtnText}</div>
+                        <div ${headerTitleAction}>${headerTitle}</div>
                         ${headerRightBtn}
                     </div>
                     <div class="wx-page-container">

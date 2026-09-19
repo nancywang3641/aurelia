@@ -266,8 +266,7 @@
 }
 
 /* 聊天室右上角那顆本子 */
-.wxnb-head-btn { font-size: 17px; cursor: pointer; padding: 4px 6px; color: var(--wx-ink); }
-.wxnb-head-btn.is-dark { color: #f0f0f0; }
+.wxnb-head-btn { font-size: 17px; cursor: pointer; padding: 4px 6px; }   /* 字色跟著聊天室標頭（wx_theme.js），主題改標頭字色就一起換 */
 /* 聊天室裡「○○記了一筆」那行：點了打開那一則 */
 .wx-system-notice.wxnb-notice { cursor: pointer; }
 .wx-system-notice.wxnb-notice i { margin-right: 4px; opacity: .7; }

@@ -51,14 +51,14 @@
     const BUBBLE_RE = /pbub-(?:bubble|row|me|other|wrap)\b|wx-bubble-(?:content|wrap|bare)\b|wx-msg-row\b|wx-typing|chat-bubble\b|chat-row\b/i;
     const BUBBLE_VAR_RE = /^--(?:pbub-|wx-bubble-)/i;
     // 弄不見就回不去的那些
-    const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|btn-(?:confirm|cancel))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-/i;
+    const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|btn-(?:confirm|cancel))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-|wxpf-/i;
     // 聊天室裡的卡片（轉帳、紅包、禮物、位置、影片、檔案、連結、收款碼、分享、語音、通話、外送）：跟著主題換長相，
     //   但金額、狀態字（已收款、已領完、已過期）不准被藏掉——她點下去要知道收了沒
     const CARD_RE = /wx-(?:tf-|rpc-|gift-|loc-|vcard|file-|link-|receive-|wb-share-|app-share-|vmsg|call-rec)|wxto-card/i;
     const ROOT_RE = /^\s*(?::root|html|body)\s*$/i;
     // 🚨 頭像是一張照片，放在元素自己的背景圖上。主題寫 background 就會把照片整個蓋掉
     //    （她套的第一套：頭像全變成黃色六角形）。頭像只准改形狀、框、陰影、大小，背景那兩句拿掉。
-    const AVATAR_RE = /wx-(?:avatar|bubble-avatar|me-avatar|rp-avatar|rp-item-avatar)\b|pbub-avatar\b|ws-avatar-circle\b/i;
+    const AVATAR_RE = /wx-(?:avatar|bubble-avatar|me-avatar|rp-avatar|rp-item-avatar)\b|pbub-avatar\b|ws-avatar-circle\b|wxpf-(?:bg|avatar)\b/i;
     // 🚨 標題字太大會擠成兩行、壓到返回鈕（她截圖：群名兩行疊在「微信」上）：超過就壓回上限
     const TITLE_RE = /wx-header-title\b|ws-title\b|wx-modal-title\b|wx-name\b|wx-contact-name\b|wx-me-name\b/i;
     const TITLE_MAX_PX = 20;
@@ -256,8 +256,11 @@
         '.wx-shell :is(.fa-regular,.far):not(#_), .wx-shell ~ * :is(.fa-regular,.far):not(#_) { font-weight: 400 !important; }',
         '.wx-shell :is(.fa-brands,.fab):not(#_), .wx-shell ~ * :is(.fa-brands,.fab):not(#_) { font-family: "Font Awesome 6 Brands" !important; font-weight: 400 !important; font-style: normal !important; }',
         // 卡片上的字跟底色分不開時（主題換了底色沒換字色），_fixCardInk 掛這兩個 class
-        '.wx-shell .wxtp-ink-dark:not(#_) { color: #141414 !important; }',
-        '.wx-shell .wxtp-ink-light:not(#_) { color: #ffffff !important; }'
+        // 記事本、個人檔案卡是疊在外殼旁邊的另一層，不在 .wx-shell 裡：這兩個 class 只有 _fixCardInk 會掛，不用限範圍
+        '.wxtp-ink-dark:not(#_):not(#_) { color: #141414 !important; }',
+        '.wxtp-ink-light:not(#_):not(#_) { color: #ffffff !important; }',
+        '.wxtp-ink-dark:not(#_):not(#_)::placeholder { color: rgba(20, 20, 20, .5) !important; }',
+        '.wxtp-ink-light:not(#_):not(#_)::placeholder { color: rgba(255, 255, 255, .6) !important; }'
     ].join('\n');
 
     // ── 卡片上的字看不看得清楚：主題常只換卡片底色、沒換字色（紅包祝福語本來是白字，底換成淺色就看不見）。
@@ -266,7 +269,11 @@
     const CARD_TEXT = '.wx-tf-title,.wx-tf-sub,.wx-rpc-memo,.wx-rpc-sub,.wx-rpc-foot,.wx-gift-title-text,.wx-gift-footer,'
         + '.wx-loc-name,.wx-loc-addr,.wx-vcard-title,.wx-vcard-dur,.wx-file-name,.wx-file-size,.wx-link-title,.wx-link-foot,'
         + '.wx-receive-head,.wx-receive-amt,.wx-receive-foot,.wx-wb-share-author,.wx-wb-share-text,.wx-app-share-top,.wx-app-share-title,.wx-app-share-text,'
-        + '.wxto-card-hd,.wxto-card-shop,.wxto-card-items,.wxto-card-amt,.wxto-card-ft,.wxto-card-note,.wxto-card-kind';
+        + '.wxto-card-hd,.wxto-card-shop,.wxto-card-items,.wxto-card-amt,.wxto-card-ft,.wxto-card-note,.wxto-card-kind,'
+        // 記事本與個人檔案卡的字：顏色也是自己寫死的（記事本是深咖啡字），主題換了底色一樣會看不見
+        + '.wxnb-back,.wxnb-title,.wxnb-sub,.wxnb-search,.wxnb-q,.wxnb-card-t,.wxnb-card-b,.wxnb-card-f,.wxnb-who,.wxnb-empty-t,.wxnb-empty-s,'
+        + '.wxnb-edit-who,.wxnb-edit-body,.wxnb-edit-x,.wxnb-in-t,.wxnb-in-b,.wxnb-thumb-desc,.wxnb-more,'
+        + '.wxpf-name,.wxpf-bio,.wxpf-act,.wxpf-x';
     function _rgb(str) {
         const m = String(str || '').match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?/i);
         if (!m) return null;
@@ -300,7 +307,7 @@
         const box = root || d;
         box.querySelectorAll(CARD_TEXT).forEach(function (el) {
             el.classList.remove('wxtp-ink-dark', 'wxtp-ink-light');
-            if (!el.textContent.trim()) return;
+            if (!String(el.textContent || el.value || el.placeholder || '').trim()) return;   // 搜尋框那種沒字只有提示字的也要看
             const w = el.ownerDocument.defaultView;
             const fg = _rgb(w.getComputedStyle(el).color);
             const bg = _bgOf(el);
@@ -392,7 +399,7 @@
     // 🚨 寫給一個從沒看過這支 app 的人：零件叫什麼、各是哪一塊，說清楚；不給範例（它會照抄）。
     const PARTS = [
         '整支 app 的最外層：.wx-shell（底、字型都從這裡開始）',
-        '每頁最上面那條：.wx-header；標題 .wx-header-title；返回鈕 .wx-back-btn；右上角的圖示鈕 .wx-icon-btn',
+        '每頁最上面那條：.wx-header；標題 .wx-header-title；返回鈕 .wx-back-btn；右上角的圖示鈕 .wx-icon-btn；聊天室右上的記事本鈕 .wxnb-head-btn 與選單鈕 .wx-head-menu-btn。標頭裡的字和圖示預設都跟著 .wx-header 的 color 走',
         '聊天列表頁：.wx-page-list；每一列 .wx-chat-item；頭像 .wx-avatar；右邊文字區 .wx-info；名字 .wx-name；最後一句 .wx-last-msg；時間 .wx-meta；未讀數 .wx-badge',
         '底部分頁列：.wx-bottom-nav；每一格 .wx-tab（選中的那格多一個 .active）；圖示 .wx-tab-icon；字 .wx-tab-txt；紅點數字 .wx-tab-badge。圖示和字的顏色都跟著 .wx-tab 的 color 走，選中與沒選中的顏色都要寫',
         '聊天室：整頁 .wx-page-room；背景 .wx-room-bg；訊息捲動區 .wx-room-scroll；系統提示那一行 .wx-system-notice；時間分隔 .wx-time-stamp；聊天室裡的頭像 .wx-bubble-avatar；對方訊息上面那條可以點開的「思考」.wx-think-fold（標題列 .wx-think-head，點開的內容 .wx-think-body，底色與字色要跟聊天室背景分得開）',
@@ -403,6 +410,8 @@
         '「我」那頁上方：.wx-me-header；頭像 .wx-me-avatar；名字 .wx-me-name；帳號 .wx-me-id；簽名 .wx-me-signature',
         '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；小標 .wx-set-label；說明字 .wx-set-desc',
         '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box；標題 .wx-modal-title；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
+        '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit，上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',
+        '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；中間資訊 .wxpf-main；頭像 .wxpf-avatar 與外圈 .wxpf-ring；名字 .wxpf-name；簽名 .wxpf-bio；底下動作鈕一排 .wxpf-acts、每顆 .wxpf-act；關閉 .wxpf-x',
         '聊天設置（從聊天室右上角進去那一層）：.ws-overlay；標頭 .ws-header；標題 .ws-title；關閉 .ws-close；內容 .ws-body；一組 .ws-group；每格 .ws-cell；字 .ws-label；輸入框 .ws-input；開關 .ws-switch；頭像圓框 .ws-avatar-circle；疊在頭像上的相機 .ws-avatar-icon；底部 .ws-footer；保存 .ws-btn-save'
     ];
     const VARS = '--wx-page 整頁的底、--wx-bar 分頁列與輸入列、--wx-surface 卡片與列、--wx-surface-2 輸入框與按下去的底、--wx-header 標頭、--wx-line 分隔線、--wx-line-strong 明顯的框、--wx-arrow 箭頭與佔位字、--wx-ink 標題字、--wx-ink-2 內文、--wx-ink-3 次要字、--wx-ink-soft 再淡一層、--wx-ink-dim 時間與說明、--wx-fill 沒圖時的頭像底、--wx-accent 重點色（主要按鈕、選中）、--wx-accent-ink 重點色當字用的深一階、--wx-on-accent 疊在重點色上的字、--wx-danger 未讀紅點與刪除（保持紅色系）、--wx-link 可點的字';
