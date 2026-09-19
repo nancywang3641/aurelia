@@ -870,6 +870,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             // chatMessages 重置時也順便砍掉 latest panel marker（雖然 chatMessages 整個被重設了）
             chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
             currentParsedData = null;
+            // 預覽畫的是「剛生成的」或「正在看的那份」：兩份都要清，不然預覽還掛著上一件，要退出再進來才空（她 09-20）
+            activePreviewData = null;
             // 清空 IDB
             if (win.OS_DB && win.OS_DB.clearStudioChat) {
                 win.OS_DB.clearStudioChat(chatId).catch(e=>e);
