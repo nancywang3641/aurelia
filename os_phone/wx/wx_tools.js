@@ -38,6 +38,96 @@
     }
 
     // ================================================================
+    // 內建工具：不是 MCP，程式自己做（網頁做得到、又真的有用的才放）
+    //   ・天氣：手機的位置（或她在小窗填的城市）→ 天氣。座標不給模型，只給地名。
+    //     地名→座標用 OpenStreetMap（中文地名認得準；Open-Meteo 自己的查地名認不得「台北」）；
+    //     座標→地名用 BigDataCloud；天氣用 Open-Meteo。三個都免金鑰、網頁直接叫得到。
+    // ================================================================
+    const WMO = { 0: '晴', 1: '大致晴朗', 2: '局部多雲', 3: '陰', 45: '霧', 48: '霧', 51: '毛毛雨', 53: '毛毛雨', 55: '較大的毛毛雨',
+        56: '凍毛毛雨', 57: '凍毛毛雨', 61: '小雨', 63: '中雨', 65: '大雨', 66: '凍雨', 67: '凍雨', 71: '小雪', 73: '中雪', 75: '大雪',
+        77: '雪粒', 80: '陣雨', 81: '較強的陣雨', 82: '猛烈陣雨', 85: '陣雪', 86: '較大的陣雪', 95: '雷雨', 96: '雷雨夾冰雹', 99: '雷雨夾冰雹' };
+    async function _getJson(url) {
+        const ac = new AbortController();
+        const timer = setTimeout(function () { ac.abort(); }, 12000);
+        try { const r = await fetch(url, { signal: ac.signal }); if (!r.ok) throw new Error(String(r.status)); return await r.json(); }
+        finally { clearTimeout(timer); }
+    }
+    async function _geocode(q) {
+        try {
+            const j = await _getJson('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=zh-TW&q=' + encodeURIComponent(q));
+            if (j && j[0]) return { lat: +j[0].lat, lon: +j[0].lon, place: q };
+        } catch (e) {}
+        try {
+            const j = await _getJson('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&name=' + encodeURIComponent(q));
+            const r = j && j.results && j.results[0];
+            if (r) return { lat: r.latitude, lon: r.longitude, place: [r.name, r.admin1, r.country].filter(Boolean).join('，') };
+        } catch (e) {}
+        return null;
+    }
+    let _pos = null;   // { lat, lon, at }：手機位置留 30 分鐘，不用每次都問
+    function _myPos() {
+        if (_pos && Date.now() - _pos.at < 30 * 60 * 1000) return Promise.resolve(_pos);
+        const geo = (win.navigator && win.navigator.geolocation) || (navigator && navigator.geolocation);
+        if (!geo) return Promise.reject(new Error('這台裝置拿不到位置'));
+        return new Promise(function (ok, no) {
+            geo.getCurrentPosition(function (p) {
+                _pos = { lat: p.coords.latitude, lon: p.coords.longitude, at: Date.now() };
+                ok(_pos);
+            }, function (e) {
+                no(new Error(e && e.code === 1 ? '沒有給位置' : '這次拿不到位置'));
+            }, { timeout: 10000, maximumAge: 30 * 60 * 1000 });
+        });
+    }
+    async function _placeName(lat, lon) {
+        try {
+            const j = await _getJson('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=zh&latitude=' + lat + '&longitude=' + lon);
+            return [j.city || j.locality, j.principalSubdivision !== (j.city || j.locality) ? j.principalSubdivision : '', j.countryName].filter(Boolean).join('，');
+        } catch (e) { return ''; }
+    }
+    async function _weather(args, srv) {
+        const asked = String((args && args.city) || '').trim();
+        const q = asked || String((srv && srv.city) || '').trim();
+        let lat, lon, place;
+        if (q) {
+            const g = await _geocode(q);
+            if (!g) throw new Error('找不到「' + q + '」這個地方');
+            lat = g.lat; lon = g.lon; place = g.place + (asked ? '' : '（對方住的地方）');
+        } else {
+            let pos;
+            try { pos = await _myPos(); }
+            catch (e) {
+                _toast('天氣要用手機的位置：' + e.message + '。也可以在聊天設置「可以用工具」裡替天氣填一個城市');
+                throw new Error('對方' + e.message + '，不知道對方在哪裡');
+            }
+            lat = pos.lat; lon = pos.lon;
+            place = ((await _placeName(lat, lon)) || '對方所在的地方') + '（對方現在的位置）';
+        }
+        const la = (+lat).toFixed(2), lo = (+lon).toFixed(2);
+        const f = await _getJson('https://api.open-meteo.com/v1/forecast?latitude=' + la + '&longitude=' + lo
+            + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m'
+            + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=3');
+        const c = f.current || {}, dly = f.daily || {};
+        const rd = function (v) { return Math.round(+v); };
+        const lines = ['地點：' + place];
+        lines.push('現在（當地 ' + String(c.time || '').slice(11, 16) + '）：' + (WMO[c.weather_code] || '—') + '，' + rd(c.temperature_2m) + '°C（體感 ' + rd(c.apparent_temperature) + '°C），濕度 '
+            + rd(c.relative_humidity_2m) + '%，風 ' + rd(c.wind_speed_10m) + ' km/h' + (+c.precipitation > 0 ? '，正在下（' + c.precipitation + ' mm）' : ''));
+        ['今天', '明天', '後天'].forEach(function (lab, i) {
+            if (!dly.time || dly.time[i] == null) return;
+            lines.push(lab + '：' + (WMO[dly.weather_code[i]] || '—') + '，' + rd(dly.temperature_2m_min[i]) + '～' + rd(dly.temperature_2m_max[i]) + '°C'
+                + (dly.precipitation_probability_max && dly.precipitation_probability_max[i] != null ? '，降雨機率 ' + dly.precipitation_probability_max[i] + '%' : ''));
+        });
+        return lines.join('\n');
+    }
+    const BUILTIN = {
+        weather: {
+            id: 'tl_weather', name: '天氣',
+            tools: [{ name: 'get_weather', description: '查現在的天氣和接下來三天的預報。不填地點就是對方現在所在的地方。',
+                inputSchema: { type: 'object', properties: { city: { type: 'string', description: '要查的地方（城市名）；問對方那邊的天氣就不要填' } } } }],
+            run: _weather
+        }
+    };
+
+    // ================================================================
     // 清單（共用）
     // ================================================================
     let _list = null;   // [{ id, name, url, key, paused, tools:[{name, description, inputSchema}], err, at }]
@@ -56,6 +146,13 @@
         } else if (!seeded) {
             try { localStorage.setItem(SEED_KEY, '1'); } catch (e) {}
         }
+        let added = false;
+        Object.keys(BUILTIN).forEach(function (k) {
+            if (_list.some(function (x) { return x.builtin === k; })) return;
+            _list.push({ id: BUILTIN[k].id, name: BUILTIN[k].name, builtin: k, city: '', paused: false });
+            added = true;
+        });
+        if (added) await _save();
         return _list;
     }
     async function _save() {
@@ -166,7 +263,7 @@
     function _toolMap(chat) {
         const map = {};
         enabledFor(chat).forEach(function (srv) {
-            (srv.tools || []).forEach(function (t) {
+            ((srv.builtin && BUILTIN[srv.builtin]) ? BUILTIN[srv.builtin].tools : (srv.tools || [])).forEach(function (t) {
                 let key = t.name, n = 2;
                 while (map[key]) key = t.name + '_' + (n++);
                 map[key] = { srv: srv, tool: t };
@@ -188,7 +285,7 @@
     // 工具那幾個還沒問過有哪些功能（剛裝、或上次連不上）→ 送出前先問一次
     async function prepare(chat) {
         await load();
-        const need = enabledFor(chat).filter(function (s) { return !(s.tools && s.tools.length); });
+        const need = enabledFor(chat).filter(function (s) { return !s.builtin && !(s.tools && s.tools.length); });
         for (const s of need) { try { await refresh(s); } catch (e) {} }
     }
     function promptBlock(chat, charName) {
@@ -283,7 +380,12 @@
             } else {
                 entry.args = _parseArgs(c.body, hit.tool.inputSchema);
                 try { if (onNotice) onNotice(hit.srv.name, _argsText(entry.args)); } catch (e) {}
-                try { entry.text = await _callTool(hit.srv, hit.tool.name, entry.args); entry.ok = true; }
+                try {
+                    entry.text = (hit.srv.builtin && BUILTIN[hit.srv.builtin])
+                        ? await BUILTIN[hit.srv.builtin].run(entry.args, hit.srv)
+                        : await _callTool(hit.srv, hit.tool.name, entry.args);
+                    entry.ok = true;
+                }
                 catch (e) { entry.text = (e && e.message) || '失敗'; }
             }
             chat.toolLog.push(entry);
@@ -332,6 +434,7 @@
             color:rgba(38,36,31,.5); font-size:14px; cursor:pointer; }
         .wxtl-ic:active { background:rgba(38,36,31,.08); }
         .wxtl-ic:disabled { opacity:.4; cursor:default; }
+        .wxtl-ic-pad { flex-shrink:0; width:34px; height:34px; }
         .wxtl-empty { padding:22px 16px; text-align:center; font-size:13px; line-height:1.6; color:rgba(38,36,31,.5); }
         .wxtl-add { margin-top:10px; width:100%; height:42px; border-radius:21px; border:1.5px dashed rgba(38,36,31,.25);
             background:transparent; color:#26241f; font-size:14px; font-weight:700; cursor:pointer;
@@ -353,6 +456,7 @@
     function _subText(s) {
         if (_busy === s.id) return { t: '連線中…', bad: false };
         if (s.paused) return { t: '已暫停', bad: false };
+        if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
@@ -367,9 +471,11 @@
                 + '<button class="wxtl-pick' + (picked ? ' is-on' : '') + '" type="button" data-act="pick" data-id="' + esc(s.id) + '" aria-label="這間用這個"' + (s.paused ? ' disabled' : '') + '>'
                 + (picked ? '<i class="fa-solid fa-check"></i>' : '') + '</button>'
                 + '<div class="wxtl-row-t" data-act="pick" data-id="' + esc(s.id) + '"><b>' + esc(s.name) + '</b><span class="' + (sub.bad ? 'is-bad' : '') + '">' + esc(sub.t) + '</span></div>'
-                + '<button class="wxtl-ic" type="button" data-act="test" data-id="' + esc(s.id) + '" title="重新連一次"' + (_busy ? ' disabled' : '') + '><i class="fa-solid fa-rotate"></i></button>'
+                + (s.builtin
+                    ? '<button class="wxtl-ic" type="button" data-act="city" data-id="' + esc(s.id) + '" title="查哪裡"><i class="fa-solid fa-location-dot"></i></button>'
+                    : '<button class="wxtl-ic" type="button" data-act="test" data-id="' + esc(s.id) + '" title="重新連一次"' + (_busy ? ' disabled' : '') + '><i class="fa-solid fa-rotate"></i></button>')
                 + '<button class="wxtl-ic" type="button" data-act="pause" data-id="' + esc(s.id) + '" title="' + (s.paused ? '繼續使用' : '暫停') + '"><i class="fa-solid ' + (s.paused ? 'fa-play' : 'fa-pause') + '"></i></button>'
-                + '<button class="wxtl-ic" type="button" data-act="del" data-id="' + esc(s.id) + '" title="刪掉"><i class="fa-solid fa-trash-can"></i></button>'
+                + (s.builtin ? '<span class="wxtl-ic-pad"></span>' : '<button class="wxtl-ic" type="button" data-act="del" data-id="' + esc(s.id) + '" title="刪掉"><i class="fa-solid fa-trash-can"></i></button>')
                 + '</div>';
         }).join('');
         const list = rows ? '<div class="wxtl-list">' + rows + '</div>' : '<div class="wxtl-empty">還沒有裝任何工具。</div>';
@@ -414,6 +520,14 @@
             return;
         }
         if (act === 'pause' && s) { s.paused = !s.paused; await _save(); _render(); return; }
+        if (act === 'city' && s) {
+            const A = win.AUI || window.AUI;
+            const v = (A && A.prompt) ? await A.prompt('天氣查哪裡（空白＝用你手機的位置）', s.city || '') : win.prompt('天氣查哪裡（空白＝用你手機的位置）', s.city || '');
+            if (v == null) return;
+            s.city = String(v).trim().slice(0, 40);
+            await _save(); _render();
+            return;
+        }
         if (act === 'del' && s) {
             if (!(await _confirm('刪掉「' + s.name + '」？所有聊天室都會一起拿掉這個工具。'))) return;
             _list = _list.filter(function (x) { return x.id !== s.id; });
