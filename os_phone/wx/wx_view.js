@@ -1287,7 +1287,7 @@
             const chatBadgeHTML = totalUnread > 0 ? `<div class="wx-tab-badge">${totalUnread}</div>` : '';
 
             // 觸發按鈕
-            const triggerBtn = `<span class="wx-icon-btn" id="wx-trigger-btn" onclick="${app}.triggerReply()" style="font-size:24px; color: var(--wx-accent); margin-right:5px;" title="點擊召喚 AI 回覆"><i class="fa-solid fa-wand-magic-sparkles"></i></span>`;
+            const triggerBtn = `<span class="wx-icon-btn wx-trigger-btn" id="wx-trigger-btn" onclick="${app}.triggerReply()" title="點擊召喚 AI 回覆"><i class="fa-solid fa-wand-magic-sparkles"></i></span>`;
 
             // 🚨 舊的那條路徑是壞的：幾個子路徑互相疊、最後還往左折回去一段，
             //    填色規則一算就出現缺角與破洞 —— 她看到的「符號破圖」就是這個，不是紅點遮到。
@@ -1340,7 +1340,7 @@
                         <div class="wx-input-bar">
                             ${triggerBtn}
                             <div class="wx-input-box" data-hold=""><input class="wx-input-real" placeholder="" oninput="${app}.onInputCheck(this)" onkeydown="${app}.onInputKey(event, this)"><span class="wx-hold-btn" onpointerdown="${app}.holdStart(event)" oncontextmenu="return false"><i class="fa-solid fa-microphone"></i></span></div>
-                            <span class="wx-icon-btn" onclick="${app}.toggleStickerPanel()"><i class="fa-solid fa-face-smile"></i></span>
+                            <span class="wx-icon-btn wx-sticker-btn" onclick="${app}.toggleStickerPanel()"><i class="fa-solid fa-face-smile"></i></span>
                             <span class="wx-icon-btn wx-plus-btn" onclick="${app}.togglePanel()"><i class="fa-solid fa-circle-plus"></i></span>
                             <div class="wx-send-btn" onclick="${app}.sendMsg(this)">发送</div>
                         </div>

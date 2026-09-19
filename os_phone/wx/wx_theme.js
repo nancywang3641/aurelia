@@ -223,7 +223,11 @@
             @keyframes wx-dot-bounce { 0%,80%,100%{transform: translateY(0); opacity: 0.35} 40%{transform: translateY(-4px); opacity: 0.85} }
             /* .wx-typing-label 已停用：群聊要顯示誰在打字改用 .wx-group-name，跟一般訊息同一條 */
             .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); z-index: 5; transition: bottom 0.2s; padding-bottom: var(--aps-safe-bottom, 0px); }
-            .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; }
+            .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; color: var(--wx-ink); }
+            /* 輸入列上的圖示（表情包、加號）跟著 .wx-input-bar 的字色：主題只寫輸入列的 color 就一起換。
+               叫他回覆那顆（魔杖）預設是重點色；以前寫在元素身上，主題抓不到 */
+            .wx-input-bar .wx-icon-btn { color: inherit; }   /* 比 .wx-icon-btn 重、跟主題寫的 .wx-shell .xxx 一樣重（主題排後面，主題贏） */
+            .wx-input-bar .wx-trigger-btn { color: var(--wx-accent); font-size: 24px; margin-right: 5px; }
             .wx-input-real { flex: 1; min-width: 0; height: 36px; background: var(--wx-surface) !important; border-radius: 6px; border: 1px solid var(--wx-line-strong); margin: 0 10px; padding: 0 10px; font-size: 14px; outline: none; color: var(--wx-ink) !important; opacity: 1 !important; -webkit-text-fill-color: #000 !important; }
             /* 🎙 輸入框右邊的麥克風：按住說話、放開送出語音訊息。按著時麥克風綠底（往上滑到取消時紅底），
                輸入列上方浮一張卡：音量、邊講邊出的字、秒數、提示。麥克風要擋掉捲動與長按選單，不然手機上按不住 */
@@ -549,7 +553,7 @@
             /* 夜晚那組格子在 aurelia_theme.css 的 wxskin-dark 裡（對方泡泡翻成深底亮字），這裡不用另外寫 */
             .wx-dark .wx-footer-wrapper { background: var(--wx-surface); border-top-color: var(--wx-line); }
             .wx-dark .wx-input-real { background: var(--wx-surface-2) !important; border-color: var(--wx-line-strong); color: var(--wx-ink) !important; -webkit-text-fill-color: #f0f0f0 !important; }
-            .wx-dark .wx-icon-btn { color: var(--wx-ink); }
+            :where(.wx-dark .wx-icon-btn) { color: var(--wx-ink); }
             .wx-dark .wx-action-panel, .wx-dark .wx-sticker-panel { background: var(--wx-surface); border-top-color: var(--wx-line); }
             .wx-dark .wx-stk-panel-header, .wx-dark .wx-stk-item, .wx-dark .wx-stk-fallback-box, .wx-dark .wx-stk-manage-area { background: var(--wx-surface); border-color: var(--wx-line); }
             .wx-dark .wx-stk-lib-name, .wx-dark .wx-stk-fallback-box { color: var(--wx-ink-3); }
