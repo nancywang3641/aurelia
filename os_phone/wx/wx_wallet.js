@@ -116,42 +116,38 @@
     }
 
     // ── 畫面 ─────────────────────────────────────────────
+    // 顏色全吃聊天 app 的顏色格子（--wx-*）：夜晚模式、配色、主題換格子就一起換。
+    //   以前整頁寫死白底綠卡藍字，套了主題只有這頁還是微信的樣子（她 09-19）。
     const CSS = `
         .wxwal-page { position:absolute; inset:0; z-index:520; display:flex; flex-direction:column;
-            background:#f2f2f2; color:#000; font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif; }
-        .wxwal-page.wxwal-dark { background:#111; color:#f0f0f0; }
-        .wxwal-head { flex:0 0 auto; height:50px; display:flex; align-items:center; padding:0 8px;
-            padding-top:env(safe-area-inset-top,0px); height:calc(50px + env(safe-area-inset-top,0px));
-            background:#fff; border-bottom:1px solid #e5e5e5; }
-        .wxwal-dark .wxwal-head { background:#1c1c1e; border-bottom-color:#2a2a2a; }
+            background:var(--wx-page); color:var(--wx-page-ink, var(--wx-ink)); font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif; }
+        .wxwal-head { flex:0 0 auto; display:flex; align-items:center; padding:0 8px;
+            padding-top:var(--safe-top, env(safe-area-inset-top,0px)); height:calc(50px + var(--safe-top, env(safe-area-inset-top,0px)));
+            background:var(--wx-header); color:var(--wx-ink); border-bottom:1px solid var(--wx-line); }
         .wxwal-back { width:44px; height:44px; display:flex; align-items:center; justify-content:center;
-            font-size:18px; color:#576b95; cursor:pointer; }
+            font-size:18px; color:inherit; cursor:pointer; }
         .wxwal-title { flex:1; text-align:center; font-size:17px; font-weight:600; }
         .wxwal-edit { width:44px; height:44px; display:flex; align-items:center; justify-content:center;
-            font-size:16px; color:#576b95; cursor:pointer; }
-        .wxwal-card { margin:12px; padding:22px 20px; border-radius:12px; background:#07c160; color:#fff; }
+            font-size:16px; color:inherit; cursor:pointer; }
+        .wxwal-card { margin:12px; padding:22px 20px; border-radius:12px; background:var(--wx-accent); color:var(--wx-on-accent); }
         .wxwal-card-label { font-size:13px; opacity:.85; }
         .wxwal-card-num { font-size:34px; font-weight:600; margin-top:6px; letter-spacing:.5px; word-break:break-all; }
-        .wxwal-sec { margin:0 12px 6px; font-size:12px; color:#888; }
-        .wxwal-list { flex:1; overflow-y:auto; margin:0 12px 12px; background:#fff; border-radius:12px; }
-        .wxwal-dark .wxwal-list { background:#1c1c1e; }
-        .wxwal-row { display:flex; align-items:center; gap:12px; padding:14px 16px; border-bottom:1px solid #f2f2f2; }
-        .wxwal-dark .wxwal-row { border-bottom-color:#2a2a2a; }
+        .wxwal-sec { margin:0 12px 6px; font-size:12px; color:color-mix(in srgb, currentColor 55%, transparent); }
+        .wxwal-list { flex:1; overflow-y:auto; margin:0 12px 12px; background:var(--wx-surface); color:var(--wx-ink); border-radius:12px; }
+        .wxwal-row { display:flex; align-items:center; gap:12px; padding:14px 16px; border-bottom:1px solid var(--wx-line); }
         .wxwal-row:last-child { border-bottom:none; }
         .wxwal-ico { width:34px; height:34px; flex:0 0 auto; border-radius:50%; display:flex; align-items:center;
-            justify-content:center; font-size:14px; background:#f2f2f2; color:#888; }
-        .wxwal-dark .wxwal-ico { background:#2a2a2a; }
-        .wxwal-ico.wxwal-in { background:#e8f8ee; color:#07c160; }
-        .wxwal-dark .wxwal-ico.wxwal-in { background:#123; color:#3ddc84; }
+            justify-content:center; font-size:14px; background:var(--wx-surface-2); color:color-mix(in srgb, currentColor 55%, transparent); }
+        .wxwal-ico.wxwal-in { background:color-mix(in srgb, var(--wx-accent) 14%, var(--wx-surface)); color:var(--wx-accent-ink, var(--wx-accent)); }
         .wxwal-body { flex:1; min-width:0; }
         .wxwal-why { font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .wxwal-when { font-size:12px; color:#999; margin-top:3px; }
+        .wxwal-when { font-size:12px; color:color-mix(in srgb, currentColor 50%, transparent); margin-top:3px; }
         .wxwal-amt { flex:0 0 auto; font-size:16px; font-weight:600; }
-        .wxwal-amt.wxwal-in { color:#07c160; }
-        .wxwal-empty { padding:48px 28px; text-align:center; color:#999; font-size:14px; line-height:1.9; }
-        .wxwal-empty i { font-size:30px; display:block; margin-bottom:14px; color:#d8d8d8; }
+        .wxwal-amt.wxwal-in { color:var(--wx-accent-ink, var(--wx-accent)); }
+        .wxwal-empty { padding:48px 28px; text-align:center; color:color-mix(in srgb, currentColor 55%, transparent); font-size:14px; line-height:1.9; }
+        .wxwal-empty i { font-size:30px; display:block; margin-bottom:14px; opacity:.4; }
         .wxwal-empty-btn { display:inline-block; margin-top:18px; padding:10px 22px; border-radius:20px;
-            background:#07c160; color:#fff; font-size:14px; cursor:pointer; }
+            background:var(--wx-accent); color:var(--wx-on-accent); font-size:14px; cursor:pointer; }
     `;
 
     function _injectCss() {

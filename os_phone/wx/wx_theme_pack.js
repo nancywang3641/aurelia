@@ -50,8 +50,15 @@
     // 泡泡：她選了主題不管泡泡。頭像不算泡泡（圓頭像、方頭像是主題可以動的）。
     const BUBBLE_RE = /pbub-(?:bubble|row|me|other|wrap)\b|wx-bubble-(?:content|wrap|bare)\b|wx-msg-row\b|wx-typing|chat-bubble\b|chat-row\b/i;
     const BUBBLE_VAR_RE = /^--(?:pbub-|wx-bubble-)/i;
+    // 不准加樣式的那層：個人檔案卡中間放頭像＋名字＋簽名的那塊，本來就是直接疊在背景照片上，
+    //   主題每次都給它加框加底，看起來像一張卡片擋住照片（她 09-19）。只擋「那一層本身」，它裡面的頭像、名字照樣能改。
+    const NOSTYLE_RE = /\.wxpf-main(?![\w-])/i;
+    function _isNoStyle(sel) {
+        const last = String(sel).trim().split(/\s*[\s>+~]\s*/).pop();
+        return NOSTYLE_RE.test(last);
+    }
     // 弄不見就回不去的那些
-    const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|btn-(?:confirm|cancel))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-|wxpf-/i;
+    const PROTECT_RE = /wx-(?:shell|header|back-btn|icon-btn|footer-wrapper|input-(?:bar|box|real)|send-btn|plus-btn|bottom-nav|tab|page-container|page-room|page-list|room-scroll|modal-box|btn-(?:confirm|cancel))\b|ws-(?:overlay|header|close|body|footer|btn-save)\b|wxto-|wxnb-|wxmo-|wxpf-|wxwal-/i;
     // 聊天室裡的卡片（轉帳、紅包、禮物、位置、影片、檔案、連結、收款碼、分享、語音、通話、外送）：跟著主題換長相，
     //   但金額、狀態字（已收款、已領完、已過期）不准被藏掉——她點下去要知道收了沒
     const CARD_RE = /wx-(?:tf-|rpc-|gift-|loc-|vcard|file-|link-|receive-|wb-share-|app-share-|vmsg|call-rec)|wxto-card/i;
@@ -65,7 +72,7 @@
     // 🚨 每頁最上面那條要往上長到手機狀態列底下（時間、電池坐在它自己的顏色上）。
     //    主題寫了自己的高度／上內距就把讓出來那塊吃掉 → 返回鈕、圖示鈕被壓到狀態列底下（她截圖）。
     //    主題照「不含狀態列」那塊寫，這裡替它把狀態列加回去。只認那條本身，不認它裡面的東西。
-    const TOPBAR_RE = /\.(?:wx-header|ws-header|wxmo-bar|wxnb-head|wxnb-edit-bar|wxto-head)(?![\w-])/i;
+    const TOPBAR_RE = /\.(?:wx-header|ws-header|wxmo-bar|wxnb-head|wxnb-edit-bar|wxto-head|wxwal-head)(?![\w-])/i;
     function _isTopbar(sel) {
         return _splitTop(String(sel || ''), ',').some(function (s) {
             const last = s.trim().split(/\s*[\s>+~]\s*/).pop();
@@ -166,7 +173,7 @@
     }
     function _scopeRule(selText, cssText) {
         const sels = _splitTop(String(selText || ''), ',').map(function (s) { return s.trim(); }).filter(Boolean)
-            .filter(function (sel) { return !BUBBLE_RE.test(sel); });
+            .filter(function (sel) { return !BUBBLE_RE.test(sel) && !_isNoStyle(sel); });
         if (!sels.length) return '';
         const plain = sels.filter(function (sel) { return !PSEUDO_RE.test(sel); });
         const deco = sels.filter(function (sel) { return PSEUDO_RE.test(sel); });
@@ -295,6 +302,10 @@
     const PANEL_PALETTE = 'div.wxnb-root { --wxnb-bg: var(--wx-page); --wxnb-ink: var(--wx-page-ink, var(--wx-ink)); --wxnb-card-ink: var(--wx-ink); --wxnb-edit: var(--wx-surface); --wxnb-well: var(--wx-surface-2); }\n'
         // 設置頁的分組小標（頭像／隱私／外觀／數據管理）不在卡片裡，直接坐在整頁底上
         + 'div.wx-set-head { color: color-mix(in srgb, var(--wx-page-ink, var(--wx-ink-3)) 70%, transparent); }\n'
+        // 外送整頁同一個道理：整頁的字、卡片上的字、重點色（原本的琥珀色）都接顏色表
+        + 'div.wxto-root { --wxto-bg: var(--wx-page); --wxto-ink: var(--wx-page-ink, var(--wx-ink)); --wxto-card: var(--wx-surface); --wxto-card-ink: var(--wx-ink); --wxto-amber: var(--wx-accent); --wxto-amber-deep: var(--wx-accent-ink, var(--wx-accent)); --wxto-on-amber: var(--wx-on-accent); }\n'
+        // 餘額那顆坐在整頁底上，不是卡片上：用重點色本身，別用給卡片的深一階
+        + 'div.wxto-root .wxto-bal { color: var(--wx-accent); }\n'
         // 朋友圈封面的名字與頭像一半凸出去、壓在內容上：主題給內容加了底或定位也不能把它蓋掉（她 09-19）
         + '.wxmo-root .wxmo-cover:not(#_) { position: relative !important; z-index: 2 !important; }';
 
@@ -373,8 +384,10 @@
         '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；分組小標（在整頁底上，吃 --wx-page-ink）.wx-set-head；說明字 .wx-set-desc',
         '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box；標題 .wx-modal-title；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
         '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit（整頁吃 --wx-page-ink，卡片與編輯頁吃 --wx-ink），上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',
-        '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；中間資訊 .wxpf-main；頭像 .wxpf-avatar 與外圈 .wxpf-ring；名字 .wxpf-name；簽名 .wxpf-bio；底下動作鈕一排 .wxpf-acts、每顆 .wxpf-act（含下面那行字），按鈕的樣子（底、框、形狀）寫在圖示那一格 .wxpf-act-ic；關閉 .wxpf-x',
+        '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；頭像 .wxpf-avatar 與外圈 .wxpf-ring；名字 .wxpf-name；簽名 .wxpf-bio（頭像、名字、簽名是直接疊在照片上的，外面不會有框或底）；底下一排動作鈕 .wxpf-acts（發訊息、記事本等三四顆），每顆 .wxpf-act（含下面那行字），按鈕的樣子（底、框、形狀）寫在圖示那一格 .wxpf-act-ic——這排按鈕一定要做成這套風格；關閉 .wxpf-x',
         '朋友圈（整頁）：整頁 .wxmo-root；頂列 .wxmo-bar（蓋在封面上時是透明的，往下捲之後 .wxmo-root 多一個 .is-scrolled，要寫實心的樣子就寫 .wxmo-root.is-scrolled .wxmo-bar），頂列按鈕 .wxmo-bar-btn，標題 .wxmo-bar-t；封面 .wxmo-cover（封面照片 .wxmo-cover-img 不要蓋掉），封面上的名字 .wxmo-cover-name；每一則 .wxmo-post，頭像 .wxmo-av，名字 .wxmo-name，內文 .wxmo-text，照片 .wxmo-photos，時間 .wxmo-time，右邊的更多鈕 .wxmo-more；讚與留言那一塊 .wxmo-social，讚 .wxmo-likes，每則留言 .wxmo-cm；留言輸入 .wxmo-input，送出 .wxmo-send；發一則的頁 .wxmo-compose，上方列 .wxmo-compose-bar，輸入 .wxmo-compose-in，發表 .wxmo-compose-ok，關閉 .wxmo-compose-x',
+        '錢包（「我」→ 錢包，整頁）：整頁 .wxwal-page；上方列 .wxwal-head，返回 .wxwal-back，標題 .wxwal-title；餘額那張卡 .wxwal-card（金額 .wxwal-card-num）；分區小標 .wxwal-sec；明細清單 .wxwal-list，每筆 .wxwal-row（圖示 .wxwal-ico，說明 .wxwal-why，時間 .wxwal-when，金額 .wxwal-amt，進帳的多 .wxwal-in）',
+        '外送（聊天室加號 → 外送，整頁）：整頁 .wxto-root；上方 .wxto-head，返回 .wxto-back，標題 .wxto-title，餘額 .wxto-bal；點給他／請他付的切換 .wxto-seg，每顆 .wxto-seg-b（選中多 .is-on）；一排店 .wxto-shops，每家 .wxto-shop（選中多 .is-on）；菜單 .wxto-dishes，每道 .wxto-dish，價錢 .wxto-dish-p，加減鈕 .wxto-step-q；找店與加菜的按鈕 .wxto-find、.wxto-add；最底下結帳列 .wxto-bar，結帳鈕 .wxto-go',
         '聊天設置（從聊天室右上角進去那一層）：.ws-overlay；標頭 .ws-header；標題 .ws-title；關閉 .ws-close；內容 .ws-body；一組 .ws-group；每格 .ws-cell；字 .ws-label；輸入框 .ws-input；開關 .ws-switch；頭像圓框 .ws-avatar-circle；疊在頭像上的相機 .ws-avatar-icon；底部 .ws-footer；保存 .ws-btn-save'
     ];
     // 🎨 顏色表：整支 app 沒被主題單獨寫到的地方都吃這幾格（按鈕、選中的分頁、開關、送出、卡片、各頁的底與字）。

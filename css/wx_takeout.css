@@ -7,11 +7,14 @@
 .wxto-root {
     --wxto-bg: #fbf6ee;
     --wxto-ink: #2b2419;
-    --wxto-mute: rgba(43, 36, 25, .52);
-    --wxto-line: rgba(43, 36, 25, .09);
+    /* 淡字、線都從字色調出來：套主題換了字色，這兩格跟著走，不會留一條咖啡色 */
+    --wxto-line: color-mix(in srgb, var(--wxto-ink) 9%, transparent);
     --wxto-amber: #f2a33a;
     --wxto-amber-deep: #d9821a;
     --wxto-card: #ffffff;
+    /* 白卡上的字、琥珀色上的字：套主題時整頁底跟卡片底常常一深一淺，兩種字要分開（wx_theme_pack.js 的 PANEL_PALETTE 接顏色表） */
+    --wxto-card-ink: #2b2419;
+    --wxto-on-amber: #ffffff;
     position: absolute;
     inset: 0;
     z-index: 60;
@@ -45,7 +48,7 @@
 .wxto-back:active { background: var(--wxto-line); }
 .wxto-head-t { flex: 1; min-width: 0; }
 .wxto-title { font-size: 17px; font-weight: 800; letter-spacing: .04em; }
-.wxto-sub { font-size: 11.5px; color: var(--wxto-mute); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wxto-sub { font-size: 11.5px; color: color-mix(in srgb, currentColor 52%, transparent); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wxto-head-pad { width: 36px; height: 36px; flex-shrink: 0; }
 .wxto-bal {
     flex-shrink: 0;
@@ -55,7 +58,7 @@
     font-size: 12.5px;
     font-weight: 700;
     color: var(--wxto-amber-deep);
-    background: rgba(242, 163, 58, .13);
+    background: color-mix(in srgb, var(--wxto-amber) 13%, transparent);
     padding: 5px 10px;
     border-radius: 999px;
 }
@@ -90,7 +93,7 @@
     border: none;
     border-radius: 11px;
     background: transparent;
-    color: var(--wxto-mute);
+    color: color-mix(in srgb, currentColor 52%, transparent);
     font-size: 13.5px;
     font-weight: 700;
     cursor: pointer;
@@ -98,7 +101,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.wxto-seg-b.is-on { background: var(--wxto-card); color: var(--wxto-ink); box-shadow: 0 1px 4px rgba(43, 36, 25, .12); }
+.wxto-seg-b.is-on { background: var(--wxto-card); color: var(--wxto-card-ink); box-shadow: 0 1px 4px rgba(43, 36, 25, .12); }
 .wxto-seg-b.is-on i { color: var(--wxto-amber-deep); }
 
 .wxto-to {
@@ -107,7 +110,7 @@
     gap: 10px;
     margin-bottom: 10px;
     font-size: 13px;
-    color: var(--wxto-mute);
+    color: color-mix(in srgb, currentColor 52%, transparent);
 }
 .wxto-to-sel {
     flex: 1;
@@ -117,7 +120,7 @@
     border-radius: 10px;
     border: 1px solid var(--wxto-line) !important;
     background: var(--wxto-card) !important;
-    color: var(--wxto-ink) !important;
+    color: var(--wxto-card-ink) !important;
     font-size: 14px;
 }
 
@@ -143,15 +146,15 @@
     border-radius: 13px;
     border: 1.5px solid transparent;
     background: var(--wxto-card);
-    color: var(--wxto-ink);
+    color: var(--wxto-card-ink);
     cursor: pointer;
     text-align: left;
     box-shadow: 0 1px 3px rgba(43, 36, 25, .07);
 }
 .wxto-shop b { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 124px; }
 .wxto-shop b i { margin-right: 5px; font-size: 12px; }
-.wxto-shop span { font-size: 11px; color: var(--wxto-mute); }
-.wxto-shop.is-on { border-color: var(--wxto-amber); background: #fff8ec; }
+.wxto-shop span { font-size: 11px; color: color-mix(in srgb, currentColor 52%, transparent); }
+.wxto-shop.is-on { border-color: var(--wxto-amber); background: color-mix(in srgb, var(--wxto-amber) 10%, var(--wxto-card)); }
 .wxto-shop em {
     position: absolute;
     top: -5px; right: -5px;
@@ -159,35 +162,36 @@
     padding: 0 5px;
     border-radius: 9px;
     background: var(--wxto-amber-deep);
-    color: #fff;
+    color: var(--wxto-on-amber);
     font-size: 11px;
     font-style: normal;
     font-weight: 700;
     line-height: 18px;
     text-align: center;
 }
-.wxto-shop.is-custom { background: transparent; border: 1.5px dashed rgba(43, 36, 25, .22); box-shadow: none; }
-.wxto-shop.is-custom.is-on { border-style: solid; border-color: var(--wxto-amber); background: #fff8ec; }
+.wxto-shop.is-custom { background: transparent; border: 1.5px dashed color-mix(in srgb, currentColor 22%, transparent); box-shadow: none; }
+.wxto-shop.is-custom.is-on { border-style: solid; border-color: var(--wxto-amber); background: color-mix(in srgb, var(--wxto-amber) 10%, var(--wxto-card)); }
 .wxto-reshop {
     flex-shrink: 0;
     width: 44px;
     border: none;
     border-radius: 13px;
     background: var(--wxto-line);
-    color: var(--wxto-mute);
+    color: color-mix(in srgb, currentColor 52%, transparent);
     font-size: 15px;
     cursor: pointer;
 }
-.wxto-reshop:active { background: rgba(43, 36, 25, .16); }
+.wxto-reshop:active { background: color-mix(in srgb, currentColor 16%, transparent); }
 
 /* 菜單 */
 .wxto-menu { min-height: 120px; }
-.wxto-shop-note { font-size: 12.5px; color: var(--wxto-mute); margin: 0 2px 8px; line-height: 1.5; }
+.wxto-shop-note { font-size: 12.5px; color: color-mix(in srgb, currentColor 52%, transparent); margin: 0 2px 8px; line-height: 1.5; }
 .wxto-dishes {
     display: flex;
     flex-direction: column;
     border-radius: 14px;
     background: var(--wxto-card);
+    color: var(--wxto-card-ink);
     box-shadow: 0 1px 3px rgba(43, 36, 25, .07);
     overflow: hidden;
 }
@@ -200,19 +204,19 @@
     border-top: 1px solid var(--wxto-line);
 }
 .wxto-dish:first-child { border-top: none; }
-.wxto-dish.is-in { background: #fffaf2; }
+.wxto-dish.is-in { background: color-mix(in srgb, var(--wxto-amber) 6%, var(--wxto-card)); }
 .wxto-dish-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .wxto-dish-t b { font-size: 14px; font-weight: 600; line-height: 1.35; word-break: break-word; }
-.wxto-dish-t span { font-size: 11px; color: var(--wxto-mute); }
+.wxto-dish-t span { font-size: 11px; color: color-mix(in srgb, currentColor 52%, transparent); }
 .wxto-dish-p { flex-shrink: 0; font-size: 14px; font-weight: 700; color: var(--wxto-amber-deep); }
 .wxto-step-q { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
 .wxto-step-q span { min-width: 16px; text-align: center; font-size: 14px; font-weight: 700; }
 .wxto-step-q button, .wxto-x {
     width: 28px; height: 28px;
     border-radius: 50%;
-    border: 1.5px solid rgba(43, 36, 25, .2);
+    border: 1.5px solid color-mix(in srgb, currentColor 20%, transparent);
     background: var(--wxto-card);
-    color: var(--wxto-ink);
+    color: var(--wxto-card-ink);
     font-size: 12px;
     cursor: pointer;
     display: flex;
@@ -220,7 +224,7 @@
     justify-content: center;
     padding: 0;
 }
-.wxto-step-q button.is-plus { border-color: var(--wxto-amber); background: var(--wxto-amber); color: #fff; }
+.wxto-step-q button.is-plus { border-color: var(--wxto-amber); background: var(--wxto-amber); color: var(--wxto-on-amber); }
 
 /* 空的時候／正在找 */
 .wxto-empty {
@@ -230,9 +234,9 @@
     text-align: center;
     gap: 8px;
     padding: 34px 20px 24px;
-    color: var(--wxto-mute);
+    color: color-mix(in srgb, currentColor 52%, transparent);
 }
-.wxto-empty > i { font-size: 34px; color: rgba(242, 163, 58, .7); margin-bottom: 4px; }
+.wxto-empty > i { font-size: 34px; color: color-mix(in srgb, var(--wxto-amber) 70%, transparent); margin-bottom: 4px; }
 .wxto-empty-t { font-size: 15px; font-weight: 700; color: var(--wxto-ink); }
 .wxto-empty-s { font-size: 12.5px; line-height: 1.55; max-width: 230px; }
 .wxto-find, .wxto-add {
@@ -246,7 +250,7 @@
     border: none;
     border-radius: 21px;
     background: var(--wxto-amber);
-    color: #fff;
+    color: var(--wxto-on-amber);
     font-size: 14px;
     font-weight: 700;
     cursor: pointer;
@@ -272,7 +276,7 @@
     border-radius: 12px;
     border: 1px solid var(--wxto-line) !important;
     background: var(--wxto-card) !important;
-    color: var(--wxto-ink) !important;
+    color: var(--wxto-card-ink) !important;
     font-size: 14px;
     outline: none;
     box-sizing: border-box;
@@ -292,16 +296,17 @@
     gap: 10px;
     padding: 10px 14px 12px;
     background: var(--wxto-card);
+    color: var(--wxto-card-ink);
     box-shadow: 0 -1px 0 var(--wxto-line), 0 -6px 16px rgba(43, 36, 25, .05);
 }
-.wxto-bar-sum { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--wxto-mute); }
+.wxto-bar-sum { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: color-mix(in srgb, currentColor 52%, transparent); }
 .wxto-bar-sum i { color: var(--wxto-amber-deep); font-size: 16px; }
 .wxto-bar-t { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .wxto-bar-t > div { display: flex; align-items: baseline; gap: 8px; }
-.wxto-bar-t small { font-size: 11px; color: var(--wxto-mute); }
+.wxto-bar-t small { font-size: 11px; color: color-mix(in srgb, currentColor 52%, transparent); }
 .wxto-bar-t small.is-short { color: #d4513a; font-weight: 700; }
-.wxto-bar-sum b { color: var(--wxto-ink); font-size: 13px; }
-.wxto-bar-sum span { font-size: 15px; font-weight: 800; color: var(--wxto-ink); }
+.wxto-bar-sum b { color: inherit; font-size: 13px; }
+.wxto-bar-sum span { font-size: 15px; font-weight: 800; color: inherit; }
 .wxto-go {
     flex-shrink: 0;
     height: 44px;
@@ -310,7 +315,7 @@
     border: none;
     border-radius: 22px;
     background: var(--wxto-amber);
-    color: #fff;
+    color: var(--wxto-on-amber);
     font-size: 14.5px;
     font-weight: 800;
     cursor: pointer;
@@ -319,7 +324,7 @@
     text-overflow: ellipsis;
 }
 .wxto-go:active { background: var(--wxto-amber-deep); }
-.wxto-go:disabled { background: rgba(43, 36, 25, .14); color: var(--wxto-mute); cursor: default; }
+.wxto-go:disabled { background: color-mix(in srgb, currentColor 14%, transparent); color: color-mix(in srgb, currentColor 52%, transparent); cursor: default; }
 
 /* ================================================================
    聊天室裡的訂單卡
