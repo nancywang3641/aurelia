@@ -298,6 +298,31 @@
         return out.join('\n');
     }
 
+    // 一顆按鈕兩層（外層＝格子＋底下那行字，裡層＝放符號的格子），app 自己的框畫在裡層。
+    //   AI 有時把框畫在外層、裡層沒碰 → 外面是它的方框、裡面還留著原本的圓角框（她 09-19：「這有固定按鈕形狀?」）。
+    //   主題替外層畫了框、卻沒替裡層寫任何長相時，裡層不畫東西，符號跟外層的字色走。兩層都寫了就照主題。
+    const FRAME_PAIRS = [['.wx-grid-item', '.wx-grid-icon'], ['.wxpf-act', '.wxpf-act-ic']];
+    function _frameOwner(css) {
+        const ends = function (sel, name) { return new RegExp(name.replace(/\./g, '\\.') + '(?![\\w-])[^\\s>+~,]*$', 'i').test(sel.trim()); };
+        const LOOK = /(?:^|;)\s*(?:background(?:-color)?|border(?:-radius|-color|-width|-style)?|box-shadow|outline)\s*:/i;
+        const FRAME = /(?:^|;)\s*(?:background(?:-color)?|border|box-shadow)\s*:\s*(?!(?:none|transparent|0)\b)/i;
+        const hit = {};
+        String(css || '').replace(/([^{}]+)\{([^{}]*)\}/g, function (m, sels, body) {
+            sels.split(',').forEach(function (sel) {
+                if (/:(?:hover|active|focus)|::?(?:before|after)/i.test(sel)) return;
+                FRAME_PAIRS.forEach(function (pr) {
+                    if (ends(sel, pr[0]) && FRAME.test(body)) hit[pr[0]] = 1;
+                    if (ends(sel, pr[1]) && LOOK.test(body)) hit[pr[1]] = 1;
+                    if (ends(sel, pr[1]) && /(?:^|;)\s*color\s*:/i.test(body)) hit[pr[1] + ':ink'] = 1;
+                });
+            });
+            return m;
+        });
+        return FRAME_PAIRS.filter(function (pr) { return hit[pr[0]] && !hit[pr[1]]; }).map(function (pr) {
+            return ':is(.wx-shell, .wx-shell ~ *) ' + pr[1] + ':not(#_) { background: transparent !important; border-color: transparent !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;' + (hit[pr[1] + ':ink'] ? '' : ' color: inherit !important;') + ' }';
+        }).join('\n');
+    }
+
     // 疊在外殼旁邊的整頁（記事本）有自己的一組顏色；套主題時改接顏色表，主題單獨寫它的時候照主題
     //   （div.xxx 比記事本自己的 .xxx 重、比主題的 .wx-shell ~ .xxx 輕）
     //   整頁上的字接 --wx-page-ink，卡片與編輯頁（卡片那塊底）接 --wx-ink：黑整頁＋白卡片的主題，兩種字本來就要不同色（她 09-19 記事本黑底黑字）
@@ -316,7 +341,7 @@
     function _inject(css) {
         let st = d.getElementById(STYLE_ID);
         if (!css) { if (st) st.remove(); return; }
-        css = css + '\n' + SAFETY + '\n' + _pageFill(css) + '\n' + PANEL_PALETTE;
+        css = css + '\n' + SAFETY + '\n' + _pageFill(css) + '\n' + _frameOwner(css) + '\n' + PANEL_PALETTE;
         if (!st) { st = d.createElement('style'); st.id = STYLE_ID; }
         // 永遠排在 head 最後：主題要壓過 app 自己的樣式
         (d.head || d.documentElement).appendChild(st);
@@ -382,7 +407,7 @@
         '聊天室：整頁 .wx-page-room；背景 .wx-room-bg；訊息捲動區 .wx-room-scroll；系統提示那一行 .wx-system-notice；時間分隔 .wx-time-stamp；聊天室裡的頭像 .wx-bubble-avatar；對方訊息上面那條可以點開的「思考」.wx-think-fold（標題列 .wx-think-head，點開的內容 .wx-think-body，底色與字色要跟聊天室背景分得開）',
         '輸入列：整條 .wx-footer-wrapper；.wx-input-bar；打字框外框 .wx-input-box；打字框 .wx-input-real；送出 .wx-send-btn；加號 .wx-plus-btn；表情包鈕 .wx-sticker-btn；左邊叫他回覆的魔杖鈕 .wx-trigger-btn。表情包鈕和加號預設跟著 .wx-input-bar 的 color 走',
         '聊天室裡的卡片（跟著主題換長相）：轉帳 .wx-tf-card（已收款多 .is-ok，退回或過期多 .is-back），圖示圈 .wx-tf-icon，標題 .wx-tf-title，小字 .wx-tf-sub；紅包 .wx-rpc-card（領完多 .is-empty），上半 .wx-rpc-top，紅包袋 .wx-rpc-env，袋上的圓 .wx-rpc-coin，祝福語 .wx-rpc-memo，狀態 .wx-rpc-sub，下緣 .wx-rpc-foot；禮物 .wx-gift-card-blue，上半 .wx-gift-top，圖示 .wx-gift-icon-gold，字 .wx-gift-title-text，下緣 .wx-gift-footer；位置 .wx-loc-card，地圖 .wx-loc-map，圖釘 .wx-loc-pin，下半 .wx-loc-info，地名 .wx-loc-name，地址 .wx-loc-addr；影片 .wx-vcard，播放鈕 .wx-vcard-play，標題 .wx-vcard-title，時長 .wx-vcard-dur；檔案 .wx-file-card，檔名 .wx-file-name，大小 .wx-file-size；連結 .wx-link-msg，標題 .wx-link-title，下緣 .wx-link-foot，右邊縮圖 .wx-link-thumb；收款碼 .wx-receive-msg，上緣 .wx-receive-head，碼 .wx-receive-qr，金額 .wx-receive-amt，下緣 .wx-receive-foot；微博分享 .wx-wb-share-card；其他 app 分享 .wx-app-share-card；外送單 .wxto-card，上緣 .wxto-card-hd，店名 .wxto-card-shop，品項 .wxto-card-items，金額 .wxto-card-amt，下緣 .wxto-card-ft',
-        '加號打開的功能面板：.wx-action-panel；每個功能 .wx-grid-item；圖示 .wx-grid-icon；字 .wx-grid-label；翻頁點 .wx-dot（目前那頁多 .active）',
+        '加號打開的功能面板：.wx-action-panel；每個功能 .wx-grid-item（只是外層：包著上面放符號的格子和底下那行字）；放符號的格子 .wx-grid-icon（按鈕的底、框、形狀寫在這一格，它原本是圓角方塊；想讓框連底下那行字一起包住才寫在 .wx-grid-item，兩層只挑一層畫框）；字 .wx-grid-label；翻頁點 .wx-dot（目前那頁多 .active）',
         '通訊錄：分區 .wx-contact-section；每個人 .wx-contact-item；名字 .wx-contact-name；圖示 .wx-contact-icon',
         '「我」那頁上方：.wx-me-header；頭像 .wx-me-avatar；名字 .wx-me-name；帳號 .wx-me-id；簽名 .wx-me-signature',
         '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；分組小標（在整頁底上，吃 --wx-page-ink）.wx-set-head；說明字 .wx-set-desc',
@@ -510,7 +535,7 @@
         const Sheet = win.CSSStyleSheet || window.CSSStyleSheet;
         let sheet;
         try { sheet = new Sheet(); sheet.replaceSync(String(css || '').replace(/@import[^;]*;/gi, '')); } catch (e) { return []; }
-        const hasBg = {}, hasInk = {};
+        const hasBg = {}, hasInk = {}, outerInk = {}, selfBg = {};
         // 最後一段就是這一格 → 'self'；這一格後面只跟著它裡面的符號（i、svg、span、path、*）→ 'glyph'
         const GLYPH = '(?:\\s*>?\\s*(?:i|svg|span|path|\\*)[^\\s>+~]*)+';
         const walk = function (rules) {
@@ -529,13 +554,15 @@
                             const self = _partRe(x[0], '').test(sel);
                             if (bg && (self || (x[2] && _partRe(x[2], '').test(sel)))) hasBg[x[0]] = 1;   // x[2]＝包著它的那層：底寫在外層，符號一樣要跟著換
                             if (ink && (self || _partRe(x[0], GLYPH).test(sel))) hasInk[x[0]] = 1;
+                            if (ink && x[2] && _partRe(x[2], '').test(sel)) outerInk[x[0]] = 1;
+                            if (bg && self) selfBg[x[0]] = 1;
                         });
                     });
                 } else if (r.cssRules && r.name == null) walk(r.cssRules);
             }
         };
         walk(sheet.cssRules);
-        return PAIRED.map(function (x) { return x[0]; }).filter(function (p) { return hasBg[p] && !hasInk[p]; });
+        return PAIRED.map(function (x) { return x[0]; }).filter(function (p) { return hasBg[p] && !hasInk[p] && !(outerInk[p] && !selfBg[p]); });
     }
     // 叫它把漏掉的符號色補上：回傳要接在主題後面的幾條樣式（補不成就回空字串，主題照存）
     function _askInk(themeText, parts) {
