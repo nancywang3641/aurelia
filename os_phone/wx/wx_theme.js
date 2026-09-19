@@ -15,7 +15,7 @@
             .wx-source-details summary { cursor: pointer; outline: none; font-weight: bold; user-select: none; color: var(--wx-ink-soft); }
             .wx-code-content { display: block; white-space: pre-wrap; font-family: monospace; font-size: 11px; color: #2c662d; margin-top: 5px; padding: 5px; background: var(--wx-surface); border: 1px solid var(--wx-line); overflow-x: auto; }
 
-            .wx-header { color: var(--wx-ink); background: var(--wx-header); height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid var(--wx-line); z-index: 20; }
+            .wx-header { color: var(--wx-header-ink, var(--wx-ink)); background: var(--wx-header); height: calc(45px + env(safe-area-inset-top, 0px)); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; padding-top: env(safe-area-inset-top, 0px); border-bottom: 1px solid var(--wx-line); z-index: 20; }
             .wx-header-title { font-weight: 600; font-size: 16px; }
             /* 標頭裡的字和圖示都跟著 .wx-header 的字色：主題只寫標頭的 color，標題、返回、右上的記事本與選單鈕就一起換 */
             :where(.wx-header-title, .wx-header .wx-back-btn, .wx-header .wxnb-head-btn, .wx-header .wx-head-menu-btn, .wx-header .wx-head-add-btn) { color: inherit; }
@@ -225,7 +225,7 @@
             @keyframes wx-dot-bounce { 0%,80%,100%{transform: translateY(0); opacity: 0.35} 40%{transform: translateY(-4px); opacity: 0.85} }
             /* .wx-typing-label 已停用：群聊要顯示誰在打字改用 .wx-group-name，跟一般訊息同一條 */
             .wx-footer-wrapper { position: absolute; bottom: 0; width: 100%; display: flex; flex-direction: column; background: var(--wx-bar); border-top: 1px solid var(--wx-line-strong); z-index: 5; transition: bottom 0.2s; padding-bottom: var(--aps-safe-bottom, 0px); }
-            .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; color: var(--wx-ink); }
+            .wx-input-bar { display: flex; align-items: center; padding: 8px 10px; min-height: 50px; box-sizing: border-box; color: var(--wx-bar-ink, var(--wx-ink)); }
             /* 輸入列上的圖示（表情包、加號）跟著 .wx-input-bar 的字色：主題只寫輸入列的 color 就一起換。
                叫他回覆那顆（魔杖）預設是重點色；以前寫在元素身上，主題抓不到 */
             .wx-input-bar .wx-icon-btn { color: inherit; }   /* 比 .wx-icon-btn 重、跟主題寫的 .wx-shell .xxx 一樣重（主題排後面，主題贏） */
@@ -358,7 +358,7 @@
             .wx-contact-item:active { background: var(--wx-surface-2); }
             .wx-contact-icon { width: 38px; height: 38px; border-radius: 4px; margin-right: 12px; display: flex; align-items: center; justify-content: center; color: var(--wx-on-accent); font-size: 20px; flex-shrink: 0; background-size: cover; position: relative; }
             .wx-contact-name { font-size: 16px; color: var(--wx-ink); font-weight: 500; }
-            .wx-contact-section { background: var(--wx-header); color: var(--wx-ink-soft); font-size: 11px; padding: 4px 16px; font-weight: bold; }
+            .wx-contact-section { background: var(--wx-header); color: var(--wx-header-ink, var(--wx-ink-soft)); font-size: 11px; padding: 4px 16px; font-weight: bold; }
             .wx-dark .wx-contact-item { background: var(--wx-surface); border-bottom-color: var(--wx-line); }
             .wx-dark .wx-contact-item:active { background: var(--wx-surface-2); }
             .wx-dark .wx-contact-name { color: var(--wx-ink); }
@@ -498,8 +498,8 @@
             .wx-vcard { margin: 0; width: 230px; aspect-ratio: 16/9; background: #000; color: #fff; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: default; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
             .wx-vcard.is-link { cursor: pointer; }
             .wx-vcard-bg { position: absolute; width: 100%; height: 100%; background: linear-gradient(45deg, #111, #222); opacity: 0.8; }
-            .wx-vcard-play { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; z-index: 2; }
-            .wx-vcard-play::after { content: ''; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid #fff; margin-left: 4px; }
+            .wx-vcard-play { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.5); color: #fff; display: flex; align-items: center; justify-content: center; z-index: 2; }
+            .wx-vcard-play::after { content: ''; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 14px solid currentColor; margin-left: 4px; }
             .wx-vcard-title { position: absolute; bottom: 10px; left: 12px; font-size: 13px; font-weight: 500; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%; }
             .wx-vcard-dur { position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 11px; z-index: 2; }
 

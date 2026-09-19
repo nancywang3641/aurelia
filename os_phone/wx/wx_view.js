@@ -768,10 +768,10 @@
             try { _tagN = Object.keys((win.WX_CONTACTS || window.WX_CONTACTS).getTags()).length; } catch (e) {}
             const _cnt = function (n) { return n ? '<div class="wx-contact-count">' + n + '</div>' : ''; };
             let html = `
-                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_new')"><div class="wx-contact-icon icon-new-friend">${_newN ? '<div class="wx-badge" style="top:-6px; right:-6px;">' + _newN + '</div>' : ''}<svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M15 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg></div><div class="wx-contact-name">新的朋友</div></div>
-                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_only')"><div class="wx-contact-icon icon-only"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h2v2H6zm4-4h8v2h-8zm0 4h5v2h-5z"/></svg></div><div class="wx-contact-name">僅聊天的朋友</div>${_cnt(_onlyN)}</div>
-                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_group')"><div class="wx-contact-icon icon-group-chat"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5c0-2.3-4.7-3.5-7-3.5zm8 0c-.3 0-.6 0-1 .1.5.5.9 1.1.9 1.9 0 2.3-4.7 3.5-7 3.5h7.1c2.3 0 6.9-1.2 6.9-3.5V13c0-2.3-4.6-3.5-6.9-3.5z"/></svg></div><div class="wx-contact-name">群組</div>${_cnt(_grpN)}</div>
-                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_tags')"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div>${_cnt(_tagN)}</div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_new')"><div class="wx-contact-icon icon-new-friend">${_newN ? '<div class="wx-badge" style="top:-6px; right:-6px;">' + _newN + '</div>' : ''}<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg></div><div class="wx-contact-name">新的朋友</div></div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_only')"><div class="wx-contact-icon icon-only"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h2v2H6zm4-4h8v2h-8zm0 4h5v2h-5z"/></svg></div><div class="wx-contact-name">僅聊天的朋友</div>${_cnt(_onlyN)}</div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_group')"><div class="wx-contact-icon icon-group-chat"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5c0-2.3-4.7-3.5-7-3.5zm8 0c-.3 0-.6 0-1 .1.5.5.9 1.1.9 1.9 0 2.3-4.7 3.5-7 3.5h7.1c2.3 0 6.9-1.2 6.9-3.5V13c0-2.3-4.6-3.5-6.9-3.5z"/></svg></div><div class="wx-contact-name">群組</div>${_cnt(_grpN)}</div>
+                <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_tags')"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div>${_cnt(_tagN)}</div>
             `;
             // 拉黑的人不在通訊錄，在「我 → 設置 → 通訊錄黑名單」
             let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat' && !(chats[k] && (chats[k].wxRemoved || chats[k].wxBlockedByMe))).map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].isGroup ? '' : (chats[id].realName || '') }));
@@ -934,7 +934,7 @@
                 const ids = (tags[t] || []).filter(function (i) { return chats[i] && !chats[i].wxRemoved; });
                 const esc = String(t).replace(/'/g, "\\'");
                 html += `<div class="wx-contact-item" onclick="${app}.openContactSub('c_tag', '${esc}')">` +
-                    `<div class="wx-contact-icon icon-tags" style="margin-right:12px;"><svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div>` +
+                    `<div class="wx-contact-icon icon-tags" style="margin-right:12px;"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div>` +
                     `<div class="wx-contact-name">${t}</div><div class="wx-contact-side">${ids.length} 人</div></div>`;
             });
             return html;
@@ -1052,6 +1052,8 @@
                 .wx-cell:active { background: var(--wx-surface-2); }
                 .wx-cell-icon { width: 24px; height: 24px; margin-right: 15px; display: flex; align-items: center; justify-content: center; }
                 .wx-cell-icon svg { width: 22px; height: 22px; }
+                /* 圖示一律 currentColor，顏色放在格子上：主題寫 .wx-cell-icon 的 color 就換得到 */
+                .wx-cell-icon.is-accent { color: var(--wx-accent); } .wx-cell-icon.is-amber { color: #fa9d3b; } .wx-cell-icon.is-blue { color: #2782d7; } .wx-cell-icon.is-slate { color: #576b95; } .wx-cell-icon.is-red { color: #e74c3c; } .wx-cell-icon.is-red-deep { color: #c0392b; }
                 .wx-cell-text { flex: 1; font-size: 16px; color: ${cellText}; }
                 .wx-cell-arrow { font-size: 18px; color: ${arrowColor}; }
                 /* 🚨 右邊帶一段長文字的格子：標籤要保持一行，讓右邊那段自己縮。
@@ -1062,12 +1064,12 @@
                 .wx-cell-sub { flex: 1; min-width: 0; margin-right: 6px; text-align: right;
                     font-size: 13px; color: ${idColor}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             `;
-            const iconPay = `<svg viewBox="0 0 24 24" fill="var(--wx-accent)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V19h-2.67v-1.07H9.27v-1.6h1.47v-1.73H9.41c-1.39 0-2.28-.96-2.28-2.31 0-1.44.97-2.33 2.6-2.33V9h2.67v1.07h1.47v1.6h-1.47v1.73h1.33c1.39 0 2.28.96 2.28 2.31 0 1.44-.97 2.38-2.6 2.38zM12 12.27c-.63 0-.93-.28-.93-.76 0-.49.33-.76.93-.76v1.52zm-1.33 2.53v1.52c.63 0 .93.28.93.76 0 .49-.33.76-.93.76z"/></svg>`;
-            const iconFav = `<svg viewBox="0 0 24 24" fill="#fa9d3b"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/><path d="M7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/></svg>`;
-            const iconMoment = `<svg viewBox="0 0 24 24" fill="none"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="#576b95"/></svg>`;
-            const iconCard = `<svg viewBox="0 0 24 24" fill="#2782d7"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>`;
-            const iconFace = `<svg viewBox="0 0 24 24" fill="#fa9d3b"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>`;
-            const iconSet = `<svg viewBox="0 0 24 24" fill="#576b95"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
+            const iconPay = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V19h-2.67v-1.07H9.27v-1.6h1.47v-1.73H9.41c-1.39 0-2.28-.96-2.28-2.31 0-1.44.97-2.33 2.6-2.33V9h2.67v1.07h1.47v1.6h-1.47v1.73h1.33c1.39 0 2.28.96 2.28 2.31 0 1.44-.97 2.38-2.6 2.38zM12 12.27c-.63 0-.93-.28-.93-.76 0-.49.33-.76.93-.76v1.52zm-1.33 2.53v1.52c.63 0 .93.28.93.76 0 .49-.33.76-.93.76z"/></svg>`;
+            const iconFav = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/><path d="M7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/></svg>`;
+            const iconMoment = `<svg viewBox="0 0 24 24" fill="none"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/></svg>`;
+            const iconCard = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>`;
+            const iconFace = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>`;
+            const iconSet = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
 
             const mainHTML = `
                 <div class="wx-me-header">
@@ -1082,25 +1084,25 @@
                      那就不該還要再點進去一層才看得到。原本這格是不會動的「服務」裝飾。 -->
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.WX_WALLET || window.WX_WALLET) && (window.parent.WX_WALLET || window.WX_WALLET).open()">
-                        <div class="wx-cell-icon">${iconPay}</div>
+                        <div class="wx-cell-icon is-accent">${iconPay}</div>
                         <div class="wx-cell-text">錢包</div>
                         <div id="wx-wallet-cell-amount" class="wx-cell-value">${walletAmount}</div>
                         <div class="wx-cell-arrow">›</div>
                     </div>
                 </div>
                 <div class="wx-cell-group">
-                    <div class="wx-cell"><div class="wx-cell-icon">${iconFav}</div><div class="wx-cell-text">收藏</div><div class="wx-cell-arrow">›</div></div>
+                    <div class="wx-cell"><div class="wx-cell-icon is-amber">${iconFav}</div><div class="wx-cell-text">收藏</div><div class="wx-cell-arrow">›</div></div>
                     <!-- 🫂 朋友圈（wx_moments.js）：右邊是最新那個人的小頭像＋紅點，由 WX_MOMENTS.paintBadges 在重畫後補上 -->
-                    <div class="wx-cell" onclick="(window.parent.WX_MOMENTS || window.WX_MOMENTS) && (window.parent.WX_MOMENTS || window.WX_MOMENTS).open()"><div class="wx-cell-icon">${iconMoment}</div><div class="wx-cell-text">朋友圈</div><span class="wxmo-cell-badge" data-wxmo-badge="cell" hidden></span><div class="wx-cell-arrow">›</div></div>
-                    <div class="wx-cell"><div class="wx-cell-icon">${iconCard}</div><div class="wx-cell-text">卡包</div><div class="wx-cell-arrow">›</div></div>
-                    <div class="wx-cell"><div class="wx-cell-icon">${iconFace}</div><div class="wx-cell-text">表情</div><div class="wx-cell-arrow">›</div></div>
+                    <div class="wx-cell" onclick="(window.parent.WX_MOMENTS || window.WX_MOMENTS) && (window.parent.WX_MOMENTS || window.WX_MOMENTS).open()"><div class="wx-cell-icon is-slate">${iconMoment}</div><div class="wx-cell-text">朋友圈</div><span class="wxmo-cell-badge" data-wxmo-badge="cell" hidden></span><div class="wx-cell-arrow">›</div></div>
+                    <div class="wx-cell"><div class="wx-cell-icon is-blue">${iconCard}</div><div class="wx-cell-text">卡包</div><div class="wx-cell-arrow">›</div></div>
+                    <div class="wx-cell"><div class="wx-cell-icon is-amber">${iconFace}</div><div class="wx-cell-text">表情</div><div class="wx-cell-arrow">›</div></div>
                 </div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).editNickname()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-pen"></i></span></div><div class="wx-cell-text">編輯暱稱</div><div class="wx-cell-arrow">›</div></div>
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).editSignature()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-pen-to-square"></i></span></div><div class="wx-cell-text">編輯個性簽名</div><div class="wx-cell-arrow">›</div></div>
                 </div>
                 <div class="wx-cell-group">
-                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).openMeSettings()"><div class="wx-cell-icon">${iconSet}</div><div class="wx-cell-text">設置</div><div class="wx-cell-arrow">›</div></div>
+                    <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).openMeSettings()"><div class="wx-cell-icon is-slate">${iconSet}</div><div class="wx-cell-text">設置</div><div class="wx-cell-arrow">›</div></div>
                 </div>
             `;
             const settingsHTML = `
@@ -1156,7 +1158,7 @@
                         }
                         AUI.alert('通訊錄已清空');
                     })()">
-                        <div class="wx-cell-icon"><svg viewBox="0 0 24 24" fill="#e74c3c"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></div>
+                        <div class="wx-cell-icon is-red"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></div>
                         <div class="wx-cell-text is-danger">清空通訊錄</div>
                         <div class="wx-cell-arrow">›</div>
                     </div>
@@ -1178,7 +1180,7 @@
                         }
                         AUI.alert('微信數據已全部清空');
                     })()">
-                        <div class="wx-cell-icon"><svg viewBox="0 0 24 24" fill="#c0392b"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg></div>
+                        <div class="wx-cell-icon is-red-deep"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg></div>
                         <div class="wx-cell-text is-danger">清空全部微信數據</div>
                         <div class="wx-cell-arrow">›</div>
                     </div>

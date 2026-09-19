@@ -123,7 +123,7 @@
             background:var(--wx-page); color:var(--wx-page-ink, var(--wx-ink)); font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif; }
         .wxwal-head { flex:0 0 auto; display:flex; align-items:center; padding:0 8px;
             padding-top:var(--safe-top, env(safe-area-inset-top,0px)); height:calc(50px + var(--safe-top, env(safe-area-inset-top,0px)));
-            background:var(--wx-header); color:var(--wx-ink); border-bottom:1px solid var(--wx-line); }
+            background:var(--wx-header); color:var(--wx-header-ink, var(--wx-ink)); border-bottom:1px solid var(--wx-line); }
         .wxwal-back { width:44px; height:44px; display:flex; align-items:center; justify-content:center;
             font-size:18px; color:inherit; cursor:pointer; }
         .wxwal-title { flex:1; text-align:center; font-size:17px; font-weight:600; }

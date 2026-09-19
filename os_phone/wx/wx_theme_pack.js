@@ -405,6 +405,8 @@
         ['--wx-ink', '卡片與每一列上的主要字（標題、名字）', 1],
         ['--wx-ink-3', '卡片與每一列上的次要字（最後一句、說明）', 1],
         ['--wx-page-ink', '直接寫在整頁底上、不在卡片裡的字（設置的分組小標、記事本那一整頁）。整頁底跟卡片底一深一淺時，這格要跟 --wx-ink 相反', 1],
+        ['--wx-header-ink', '最上面那條上的字與符號（標題、返回、右上角的圖示鈕）。要在 --wx-header 上看得清楚', 1],
+        ['--wx-bar-ink', '輸入列上的符號（表情、加號）。要在 --wx-bar 上看得清楚', 1],
         ['--wx-accent', '重點色：按鈕、選中的分頁、開關、送出、未讀以外的強調', 1],
         ['--wx-on-accent', '疊在重點色上面的字', 1],
         ['--wx-surface-2', '輸入框、按下去的底', 0],
@@ -445,6 +447,108 @@
     }
 
 
+    // 🔲 放符號／字的格子：裡面的符號吃的是「這一格自己的 color」。
+    //   從她存的幾套真主題撈出來看，AI 每次都替這種格子寫了底、同一條卻沒寫 color（.wx-grid-icon、.wxpf-act-ic、.wx-tf-icon 全是），
+    //   符號留在原本的顏色 → 白格白符號、黑格深灰符號（她：「那該死的按鈕符號」）。
+    //   說明裡講過「底色字色同一條寫」它照樣漏，所以改成交稿後逐格檢查：寫了底沒寫符號色的，列出來叫它補（顏色由它挑，程式不替它換色）。
+    const PAIRED = [
+        ['.wx-grid-icon', '加號面板每個功能的格子，裡面是功能的符號', '.wx-grid-item'],
+        ['.wxpf-act-ic', '個人檔案卡動作鈕的格子，裡面是符號', '.wxpf-act'],
+        ['.wx-cell-icon', '設置與「我」那頁每格左邊的圖示（它有自己的顏色，不跟著那一格的字色）'],
+        ['.wx-contact-icon', '通訊錄每一列左邊的圖示格，裡面是符號'],
+        ['.wx-tf-card', '轉帳卡，裡面的 ¥ 圈、標題、小字'],
+        ['.wx-tf-icon', '轉帳卡的 ¥ 圈'],
+        ['.wx-rpc-top', '紅包卡上半，裡面的祝福語與狀態'],
+        ['.wx-rpc-foot', '紅包卡下緣的字'],
+        ['.wx-rpc-coin', '紅包袋上的圓，裡面是 ¥'],
+        ['.wx-gift-top', '禮物卡上半，裡面的圖示與字'],
+        ['.wx-gift-footer', '禮物卡下緣的字'],
+        ['.wx-loc-info', '位置卡下半，地名與地址'],
+        ['.wx-vcard-play', '影片卡的播放鈕，裡面是三角形'],
+        ['.wx-file-card', '檔案卡，檔名與大小'],
+        ['.wx-link-msg', '連結卡，標題與下緣'],
+        ['.wx-receive-head', '收款碼卡上緣的字'],
+        ['.wx-receive-foot', '收款碼卡下緣的字'],
+        ['.wx-icon-btn', '標頭與輸入列的圖示鈕，裡面是符號'],
+        ['.wx-back-btn', '返回鈕的符號'],
+        ['.wx-plus-btn', '輸入列的加號'],
+        ['.wx-sticker-btn', '輸入列的表情包鈕'],
+        ['.wx-trigger-btn', '輸入列的魔杖鈕'],
+        ['.wx-send-btn', '送出鍵上的字'],
+        ['.wx-btn-confirm', '小窗的確定鈕上的字'],
+        ['.wx-btn-cancel', '小窗的取消鈕上的字'],
+        ['.ws-btn-save', '聊天設置的保存鈕上的字'],
+        ['.ws-close', '聊天設置的關閉鈕'],
+        ['.wxnb-fab', '記事本右下的新增鈕，裡面是符號'],
+        ['.wxnb-head-btn', '聊天室右上的記事本鈕'],
+        ['.wx-head-menu-btn', '聊天室右上的選單鈕'],
+        ['.wxmo-bar-btn', '朋友圈頂列的按鈕，裡面是符號'],
+        ['.wxpf-x', '個人檔案卡的關閉鈕'],
+        ['.wxwal-ico', '錢包每筆明細左邊的圖示格'],
+        ['.wxwal-card', '錢包餘額那張卡上的字'],
+        ['.wxto-go', '外送結帳鈕上的字'],
+        ['.wxto-find', '外送找店鈕'],
+        ['.wxto-add', '外送加菜鈕']
+    ];
+    function _partRe(name, tail) { return new RegExp(name.replace(/\./g, '\\.') + '(?![\\w-])[^\\s>+~]*' + tail + '$', 'i'); }
+    // 回傳寫了底、卻沒有任何一條替它寫 color 的格子名。hover／按下去那種狀態不算。
+    function _unpaired(css) {
+        const Sheet = win.CSSStyleSheet || window.CSSStyleSheet;
+        let sheet;
+        try { sheet = new Sheet(); sheet.replaceSync(String(css || '').replace(/@import[^;]*;/gi, '')); } catch (e) { return []; }
+        const hasBg = {}, hasInk = {};
+        // 最後一段就是這一格 → 'self'；這一格後面只跟著它裡面的符號（i、svg、span、path、*）→ 'glyph'
+        const GLYPH = '(?:\\s*>?\\s*(?:i|svg|span|path|\\*)[^\\s>+~]*)+';
+        const walk = function (rules) {
+            for (let i = 0; i < rules.length; i++) {
+                const r = rules[i];
+                if (r.selectorText != null) {
+                    const body = _ruleBody(r);
+                    const bg = /(?:^|;)\s*background(?:-color)?\s*:\s*(?!(?:none|transparent|inherit|initial|unset)\b)/i.test(body);
+                    const ink = /(?:^|;)\s*(?:color|fill)\s*:/i.test(body);
+                    if (!bg && !ink) continue;
+                    _splitTop(r.selectorText, ',').forEach(function (sel) {
+                        sel = String(sel || '').trim();
+                        if (/::?(?:before|after)\s*$/i.test(sel)) return;                 // 裝飾層的底不算這一格的底
+                        if (/:(?:hover|active|focus|disabled)/i.test(sel)) return;
+                        PAIRED.forEach(function (x) {
+                            const self = _partRe(x[0], '').test(sel);
+                            if (bg && (self || (x[2] && _partRe(x[2], '').test(sel)))) hasBg[x[0]] = 1;   // x[2]＝包著它的那層：底寫在外層，符號一樣要跟著換
+                            if (ink && (self || _partRe(x[0], GLYPH).test(sel))) hasInk[x[0]] = 1;
+                        });
+                    });
+                } else if (r.cssRules && r.name == null) walk(r.cssRules);
+            }
+        };
+        walk(sheet.cssRules);
+        return PAIRED.map(function (x) { return x[0]; }).filter(function (p) { return hasBg[p] && !hasInk[p]; });
+    }
+    // 叫它把漏掉的符號色補上：回傳要接在主題後面的幾條樣式（補不成就回空字串，主題照存）
+    function _askInk(themeText, parts) {
+        return new Promise(function (resolve) {
+            const O = win.OS_API || window.OS_API;
+            if (!parts.length || !O || !O.chatMain) { resolve(''); return; }
+            const desc = {}; PAIRED.forEach(function (x) { desc[x[0]] = x[1]; });
+            const ask = [
+                { role: 'system', content: '你替一支手機聊天 app 設計了一套主題。下面列的幾個零件，你換了它的底色，卻沒寫它裡面的符號／字的顏色——它們還留在原本的顏色，很可能跟你的新底撞在一起看不到。照那套主題的風格，替每一個挑一個在它的新底上看得清楚的顏色。只輸出 <ink> 那一塊，一行一個寫成 零件名: 顏色，不要寫別的字。' },
+                { role: 'user', content: '那套主題：\n' + String(themeText).slice(0, 14000) + '\n\n要補的零件：\n' + parts.map(function (p) { return '・' + p + '（' + desc[p] + '）'; }).join('\n') }
+            ];
+            O.chatMain(ask, null, function (t2) {
+                const s = String(t2 || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                const m = s.match(/[<＜]\s*ink\s*[>＞]([\s\S]*?)[<＜]\s*\/\s*ink\s*[>＞]/i);
+                const out = [];
+                (m ? m[1] : s).split(/\n+/).forEach(function (ln) {
+                    const k = ln.match(/(\.[a-z][\w-]*)\s*[:：]\s*([^\n;；]+)/i);
+                    if (!k || parts.indexOf(k[1]) < 0) return;
+                    const v = k[2].replace(/!important/i, '').trim();
+                    if (!v || /[{}<>]|url\(|expression/i.test(v)) return;
+                    out.push(k[1] + ' { color: ' + v + ' !important; }');
+                });
+                resolve(out.length ? '\n/* 格子裡的符號 */\n' + out.join('\n') : '');
+            }, function () { resolve(''); }, { task: 'wx_theme', label: '聊天 app 主題（補符號顏色）' });
+        });
+    }
+
     function _aiMessages(want, ref) {
         const sys = [
             '你替一支手機聊天 app 設計「主題」：一整包 CSS，換掉整支 app 的長相。',
@@ -470,6 +574,7 @@
             '',
             '規則：',
             '・訊息泡泡不歸主題管，不要寫任何跟泡泡有關的樣式。',
+            '・放符號的格子（加號面板的 .wx-grid-icon、個人檔案卡的 .wxpf-act-ic、清單左邊的 .wx-cell-icon、通訊錄的 .wx-contact-icon、轉帳卡的 .wx-tf-icon、各種圖示鈕）：格子裡面有一個符號，符號的顏色就是這一格自己的 color。替這種格子寫 background 的那一條，一定同時寫 color；只寫底，符號會留在原本的顏色，白格子裡是白符號、黑格子裡是深灰符號，整顆按鈕看起來是空的。',
             '・每一塊的底色和字色寫在同一條：這支 app 裡每塊的字都跟著那一塊的 color 走，小字只是半透明，不會另外指定灰色。',
             '・用 ::before／::after 畫的裝飾（塗鴉、網格、條紋、光暈）一律會被放在那個零件的內容底下、點不到，當背景圖案設計就好，不要拿它放要讓人看的字。',
             '・聊天室裡的卡片要跟整套風格一致，但每一種都要一眼認得出是什麼（紅包還是紅包、轉帳還是轉帳）；換了卡片哪一塊的底色，同一條就要把那塊的字色一起寫，卡片裡的標題、小字、金額才看得清楚（有些卡片的字原本是白色）；金額、店名、狀態字要清楚；已收款、退回、領完這幾種要跟還沒處理的看得出不同。檔案圖示 .wx-file-icon 的底色代表檔案種類，不要改。',
@@ -522,7 +627,7 @@
                         const full = (paletteCss ? paletteCss + '\n' : '') + r.css;
                         const c = compile(full);
                         if (!c.ok || !c.kept) { reject(new Error(c.error || '寫出來的樣式一條都用不上')); return; }
-                        resolve({ name: r.name, css: full });
+                        _askInk(full, _unpaired(full)).then(function (extra) { resolve({ name: r.name, css: full + extra }); });
                     };
                     if (!r.missing.length) { finish(r.palette); return; }
                     // 顏色表缺了核心那幾格：只問顏色，把整張表補齊（不重做造型）
@@ -729,6 +834,7 @@
             '<button type="button" data-m="rename"><i class="fa-solid fa-pen"></i>改名</button>' +
             '<button type="button" data-m="copy"><i class="fa-regular fa-copy"></i>複製分享</button>' +
             '<button type="button" data-m="file"><i class="fa-solid fa-file-export"></i>存成檔案</button>' +
+            (_unpaired(t.css).length ? '<button type="button" data-m="ink"><i class="fa-solid fa-icons"></i>補上看不見的符號</button>' : '') +
             '<button type="button" data-m="del" class="is-danger"><i class="fa-solid fa-trash-can"></i>刪除</button>' +
             '<button type="button" data-m="x" class="is-cancel">取消</button>' +
             '</div>';
@@ -754,6 +860,17 @@
                     d.body.appendChild(a); a.click(); a.remove();
                     setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
                 } catch (err) { _toast('存不出來'); }
+            } else if (what === 'ink') {
+                if (_busy) return;
+                _busy = true; _renderPage();
+                _toast('請它補符號的顏色…');
+                const extra = await _askInk(t.css, _unpaired(t.css));
+                _busy = false;
+                if (!extra) { _renderPage(); _toast('沒補成，再試一次'); return; }
+                t.css = String(t.css || '') + extra;
+                await _save();
+                if (activeId() === id) await apply(id); else _renderPage();
+                _toast('補好了');
             } else if (what === 'del') {
                 if (await _confirm('刪掉「' + t.name + '」？')) await remove(id);
             }
@@ -784,7 +901,7 @@
         await apply(id);
     }
 
-    const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText };
+    const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText, _unpaired };
     win.WX_THEME_PACK = API;
     window.WX_THEME_PACK = API;
     setTimeout(function () { _boot().catch(function (e) { console.warn('[主題] 開機套用失敗', e); }); }, 800);
