@@ -52,7 +52,8 @@
     const BUBBLE_VAR_RE = /^--(?:pbub-|wx-bubble-)/i;
     // 不准加樣式的那層：個人檔案卡中間放頭像＋名字＋簽名的那塊，本來就是直接疊在背景照片上，
     //   主題每次都給它加框加底，看起來像一張卡片擋住照片（她 09-19）。只擋「那一層本身」，它裡面的頭像、名字照樣能改。
-    const NOSTYLE_RE = /\.wxpf-main(?![\w-])/i;
+    //   頭像外圈 .wxpf-ring 同理：它只佔位子，形狀與框都畫在頭像本身，主題寫外圈就會多套一個形狀（她：圈套圈）
+    const NOSTYLE_RE = /\.wxpf-(?:main|ring)(?![\w-])/i;
     function _isNoStyle(sel) {
         const last = String(sel).trim().split(/\s*[\s>+~]\s*/).pop();
         return NOSTYLE_RE.test(last);
@@ -384,7 +385,7 @@
         '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；分組小標（在整頁底上，吃 --wx-page-ink）.wx-set-head；說明字 .wx-set-desc',
         '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box；標題 .wx-modal-title；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
         '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit（整頁吃 --wx-page-ink，卡片與編輯頁吃 --wx-ink），上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',
-        '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；頭像 .wxpf-avatar 與外圈 .wxpf-ring；名字 .wxpf-name；簽名 .wxpf-bio（頭像、名字、簽名是直接疊在照片上的，外面不會有框或底）；底下一排動作鈕 .wxpf-acts（發訊息、記事本等三四顆），每顆 .wxpf-act（含下面那行字），按鈕的樣子（底、框、形狀）寫在圖示那一格 .wxpf-act-ic——這排按鈕一定要做成這套風格；關閉 .wxpf-x',
+        '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；頭像 .wxpf-avatar（只有這一層：形狀、框、陰影都寫在它身上，外面沒有另一圈）；名字 .wxpf-name；簽名 .wxpf-bio（頭像、名字、簽名是直接疊在照片上的，外面不會有框或底）；底下一排動作鈕 .wxpf-acts（發訊息、記事本等三四顆），每顆 .wxpf-act（含下面那行字），按鈕的樣子（底、框、形狀）寫在圖示那一格 .wxpf-act-ic——這排按鈕一定要做成這套風格；關閉 .wxpf-x',
         '朋友圈（整頁）：整頁 .wxmo-root；頂列 .wxmo-bar（蓋在封面上時是透明的，往下捲之後 .wxmo-root 多一個 .is-scrolled，要寫實心的樣子就寫 .wxmo-root.is-scrolled .wxmo-bar），頂列按鈕 .wxmo-bar-btn，標題 .wxmo-bar-t；封面 .wxmo-cover（封面照片 .wxmo-cover-img 不要蓋掉），封面上的名字 .wxmo-cover-name；每一則 .wxmo-post，頭像 .wxmo-av，名字 .wxmo-name，內文 .wxmo-text，照片 .wxmo-photos，時間 .wxmo-time，右邊的更多鈕 .wxmo-more；讚與留言那一塊 .wxmo-social，讚 .wxmo-likes，每則留言 .wxmo-cm；留言輸入 .wxmo-input，送出 .wxmo-send；發一則的頁 .wxmo-compose，上方列 .wxmo-compose-bar，輸入 .wxmo-compose-in，發表 .wxmo-compose-ok，關閉 .wxmo-compose-x',
         '錢包（「我」→ 錢包，整頁）：整頁 .wxwal-page；上方列 .wxwal-head，返回 .wxwal-back，標題 .wxwal-title；餘額那張卡 .wxwal-card（金額 .wxwal-card-num）；分區小標 .wxwal-sec；明細清單 .wxwal-list，每筆 .wxwal-row（圖示 .wxwal-ico，說明 .wxwal-why，時間 .wxwal-when，金額 .wxwal-amt，進帳的多 .wxwal-in）',
         '外送（聊天室加號 → 外送，整頁）：整頁 .wxto-root；上方 .wxto-head，返回 .wxto-back，標題 .wxto-title，餘額 .wxto-bal；點給他／請他付的切換 .wxto-seg，每顆 .wxto-seg-b（選中多 .is-on）；一排店 .wxto-shops，每家 .wxto-shop（選中多 .is-on）；菜單 .wxto-dishes，每道 .wxto-dish，價錢 .wxto-dish-p，加減鈕 .wxto-step-q；找店與加菜的按鈕 .wxto-find、.wxto-add；最底下結帳列 .wxto-bar，結帳鈕 .wxto-go',

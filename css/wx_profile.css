@@ -59,18 +59,20 @@
     padding: 0 24px 4px;
     text-align: center;
 }
+/* 外圈只佔位子、不畫任何東西；白圈、陰影、形狀全畫在頭像那一層。
+   以前外圈自己一個圓、頭像自己一個圓，主題只改到其中一層 → 方頭像後面露一個圓、圓頭像外面套方框（她 09-19：總是圈套圈）。 */
 .wxpf-ring {
     width: 104px; height: 104px;
-    border-radius: 50%;
-    padding: 3px;
-    background: rgba(255, 255, 255, .55);
-    box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
     margin-bottom: 6px;
 }
 .wxpf-avatar {
     width: 100%; height: 100%;
+    box-sizing: border-box;
     border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, .55);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
     background: #dfe3ec center/cover no-repeat;
+    background-clip: padding-box;
 }
 .wxpf-name {
     font-size: 23px;
