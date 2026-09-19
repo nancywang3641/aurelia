@@ -203,18 +203,18 @@
             /* 💭 這一輪的思考：對方那一輪第一顆泡泡上面一條，點開看（wx_view renderBubble） */
             /* 💭 思考摺疊用卡片那組顏色（底 --wx-surface、字 --wx-ink-3／--wx-ink-2、框 --wx-line）：
                以前寫死淺灰底灰字，主題把聊天室換色時常常看不到。底和字同一組格子，換了也一起換，不會對不上。 */
-            .wx-think-fold { clear: both; align-self: flex-start; max-width: 72%; margin: 6px 12px 0 58px; padding: 5px 10px; border-radius: 8px; background: var(--wx-surface); border: 1px solid var(--wx-line); color: var(--wx-ink-3); font-size: 12px; cursor: pointer; user-select: none; }
-            .wx-think-head { display: flex; align-items: center; gap: 6px; }
+            .wx-think-fold { clear: both; align-self: flex-start; max-width: 72%; margin: 6px 12px 0 58px; padding: 5px 10px; border-radius: 8px; background: var(--wx-surface); border: 1px solid var(--wx-line); color: var(--wx-ink-2); font-size: 12px; cursor: pointer; user-select: none; }
+            .wx-think-head { display: flex; align-items: center; gap: 6px; opacity: .7; }
             .wx-think-arrow { font-size: 9px; transition: transform .2s; }
             .wx-think-fold.open .wx-think-arrow { transform: rotate(90deg); }
-            .wx-think-body { display: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--wx-line); color: var(--wx-ink-2); line-height: 1.55; max-height: 320px; overflow-y: auto; cursor: text; user-select: text; overscroll-behavior: contain; }
+            .wx-think-body { display: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent); color: inherit; line-height: 1.55; max-height: 320px; overflow-y: auto; cursor: text; user-select: text; overscroll-behavior: contain; }
             .wx-think-body p { margin: 0 0 6px; }
             .wx-think-body p:last-child, .wx-think-body ul:last-child, .wx-think-body ol:last-child { margin-bottom: 0; }
-            .wx-think-body .wx-think-h { font-weight: 700; color: var(--wx-ink); margin: 8px 0 4px; }
+            .wx-think-body .wx-think-h { font-weight: 700; color: inherit; margin: 8px 0 4px; }
             .wx-think-body .wx-think-h:first-child { margin-top: 0; }
             .wx-think-body ul, .wx-think-body ol { margin: 0 0 6px; padding-left: 18px; }
-            .wx-think-body code { font-family: ui-monospace, monospace; font-size: 11px; padding: 0 3px; border-radius: 3px; background: var(--wx-surface-2); }
-            .wx-think-body hr { border: 0; border-top: 1px solid var(--wx-line); margin: 6px 0; }
+            .wx-think-body code { font-family: ui-monospace, monospace; font-size: 11px; padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, currentColor 12%, transparent); }
+            .wx-think-body hr { border: 0; border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent); margin: 6px 0; }
             .wx-think-fold.open .wx-think-body { display: block; }
             /* 它現在是一顆真泡泡（.wx-bubble-content），只要調泡泡內的排版就好 */
             .wx-typing-indicator { display: flex; align-items: center; gap: 7px; padding: 12px 14px; }

@@ -17,6 +17,8 @@
     --wxnb-ink: #2f2a22;
     --wxnb-edit: #fffdf8;
     --wxnb-well: #ece6da;
+    /* 卡片與編輯頁是另一塊底（--wxnb-edit），字色跟著那塊，不跟整頁：主題常是黑整頁＋白卡片（她 09-19 記事本黑底黑字） */
+    --wxnb-card-ink: #2f2a22;
     background: var(--wxnb-bg);
     color: var(--wxnb-ink);
     animation: wxnb-in .2s ease;
@@ -87,6 +89,7 @@
     -webkit-column-break-inside: avoid;
     margin-bottom: 10px;
     background: var(--wx-surface);
+    color: var(--wxnb-card-ink);
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(47, 42, 34, .1);
@@ -180,6 +183,7 @@
     display: flex;
     flex-direction: column;
     background: var(--wxnb-edit);
+    color: var(--wxnb-card-ink);
     animation: wxnb-up .2s ease;
 }
 @keyframes wxnb-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }

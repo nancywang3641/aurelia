@@ -1105,7 +1105,7 @@
             `;
             const settingsHTML = `
                 <!-- ⚙️ 設置頁（「我」底下的第二頁）：以前這些開關直接攤在「我」上面，現實微信都收在「設置」裡 -->
-                <div class="wx-set-label">頭像</div>
+                <div class="wx-set-label wx-set-head">頭像</div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleAvatarAi()">
                         <div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-user-pen"></i></span></div>
@@ -1125,12 +1125,12 @@
                     </div>
                 </div>
 
-                <div class="wx-set-label">隱私</div>
+                <div class="wx-set-label wx-set-head">隱私</div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).switchTab('me_black')"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-user-lock"></i></span></div><div class="wx-cell-text">通訊錄黑名單</div><div class="wx-cell-arrow">›</div></div>
                 </div>
 
-                <div class="wx-set-label">外觀${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('wx_look') : ''}</div>
+                <div class="wx-set-label wx-set-head">外觀${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('wx_look') : ''}</div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="var T=(window.parent.WX_THEME_PACK||window.WX_THEME_PACK); if(T) T.open();"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-swatchbook"></i></span></div><div class="wx-cell-text">主題</div><div class="wx-cell-arrow">›</div></div>
                     <div class="wx-cell wx-theme-cell">
@@ -1140,7 +1140,7 @@
                     <div class="wx-theme-row">${themeChips}</div>
                     <div class="wx-cell" onclick="(window.parent.wxApp || window.wxApp).toggleDarkMode()"><div class="wx-cell-icon"><span style="font-size:20px;"><i class="fa-solid fa-moon"></i></span></div><div class="wx-cell-text">黑夜模式</div>${darkBadge}</div>
                 </div>
-                <div class="wx-set-label">數據管理</div>
+                <div class="wx-set-label wx-set-head">數據管理</div>
                 <div class="wx-cell-group">
                     <div class="wx-cell" onclick="(async function(){
                         const w = window.parent || window;

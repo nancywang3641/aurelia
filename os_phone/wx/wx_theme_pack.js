@@ -65,7 +65,7 @@
     // 🚨 每頁最上面那條要往上長到手機狀態列底下（時間、電池坐在它自己的顏色上）。
     //    主題寫了自己的高度／上內距就把讓出來那塊吃掉 → 返回鈕、圖示鈕被壓到狀態列底下（她截圖）。
     //    主題照「不含狀態列」那塊寫，這裡替它把狀態列加回去。只認那條本身，不認它裡面的東西。
-    const TOPBAR_RE = /\.(?:wx-header|ws-header|wxmo-bar|wxnb-head|wxto-head)(?![\w-])/i;
+    const TOPBAR_RE = /\.(?:wx-header|ws-header|wxmo-bar|wxnb-head|wxnb-edit-bar|wxto-head)(?![\w-])/i;
     function _isTopbar(sel) {
         return _splitTop(String(sel || ''), ',').some(function (s) {
             const last = s.trim().split(/\s*[\s>+~]\s*/).pop();
@@ -291,7 +291,10 @@
 
     // 疊在外殼旁邊的整頁（記事本）有自己的一組顏色；套主題時改接顏色表，主題單獨寫它的時候照主題
     //   （div.xxx 比記事本自己的 .xxx 重、比主題的 .wx-shell ~ .xxx 輕）
-    const PANEL_PALETTE = 'div.wxnb-root { --wxnb-bg: var(--wx-page); --wxnb-ink: var(--wx-ink); --wxnb-edit: var(--wx-surface); --wxnb-well: var(--wx-surface-2); }\n'
+    //   整頁上的字接 --wx-page-ink，卡片與編輯頁（卡片那塊底）接 --wx-ink：黑整頁＋白卡片的主題，兩種字本來就要不同色（她 09-19 記事本黑底黑字）
+    const PANEL_PALETTE = 'div.wxnb-root { --wxnb-bg: var(--wx-page); --wxnb-ink: var(--wx-page-ink, var(--wx-ink)); --wxnb-card-ink: var(--wx-ink); --wxnb-edit: var(--wx-surface); --wxnb-well: var(--wx-surface-2); }\n'
+        // 設置頁的分組小標（頭像／隱私／外觀／數據管理）不在卡片裡，直接坐在整頁底上
+        + 'div.wx-set-head { color: color-mix(in srgb, var(--wx-page-ink, var(--wx-ink-3)) 70%, transparent); }\n'
         // 朋友圈封面的名字與頭像一半凸出去、壓在內容上：主題給內容加了底或定位也不能把它蓋掉（她 09-19）
         + '.wxmo-root .wxmo-cover:not(#_) { position: relative !important; z-index: 2 !important; }';
 
@@ -367,9 +370,9 @@
         '加號打開的功能面板：.wx-action-panel；每個功能 .wx-grid-item；圖示 .wx-grid-icon；字 .wx-grid-label；翻頁點 .wx-dot（目前那頁多 .active）',
         '通訊錄：分區 .wx-contact-section；每個人 .wx-contact-item；名字 .wx-contact-name；圖示 .wx-contact-icon',
         '「我」那頁上方：.wx-me-header；頭像 .wx-me-avatar；名字 .wx-me-name；帳號 .wx-me-id；簽名 .wx-me-signature',
-        '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；小標 .wx-set-label；說明字 .wx-set-desc',
+        '一格一格的清單（設置、「我」）：一組 .wx-cell-group；每格 .wx-cell；左邊圖示 .wx-cell-icon；字 .wx-cell-text；右邊箭頭 .wx-cell-arrow；分組小標（在整頁底上，吃 --wx-page-ink）.wx-set-head；說明字 .wx-set-desc',
         '彈出小窗：遮罩 .wx-modal-overlay；窗 .wx-modal-box；標題 .wx-modal-title；輸入框 .wx-modal-input；取消 .wx-btn-cancel；確定 .wx-btn-confirm',
-        '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit，上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',
+        '記事本（聊天室右上角那本書點開的整頁）：整頁 .wxnb-root；上方 .wxnb-head，返回 .wxnb-back，標題 .wxnb-title，副標 .wxnb-sub；搜尋框 .wxnb-search；卡片牆 .wxnb-grid；每張卡 .wxnb-card（標題 .wxnb-card-t、內文 .wxnb-card-b、下緣 .wxnb-card-f、照片 .wxnb-card-ph）；右下新增鈕 .wxnb-fab；沒有東西時 .wxnb-empty；編輯頁 .wxnb-edit（整頁吃 --wx-page-ink，卡片與編輯頁吃 --wx-ink），上方列 .wxnb-edit-bar，內文 .wxnb-edit-body，完成 .wxnb-edit-ok，關閉 .wxnb-edit-x',
         '個人檔案卡（點頭像開出來的整屏）：整張 .wxpf-root（鋪底的是這個人自己的背景照片 .wxpf-bg，不要蓋掉）；照片上的暗層 .wxpf-scrim；中間資訊 .wxpf-main；頭像 .wxpf-avatar 與外圈 .wxpf-ring；名字 .wxpf-name；簽名 .wxpf-bio；底下動作鈕一排 .wxpf-acts、每顆 .wxpf-act（含下面那行字），按鈕的樣子（底、框、形狀）寫在圖示那一格 .wxpf-act-ic；關閉 .wxpf-x',
         '朋友圈（整頁）：整頁 .wxmo-root；頂列 .wxmo-bar（蓋在封面上時是透明的，往下捲之後 .wxmo-root 多一個 .is-scrolled，要寫實心的樣子就寫 .wxmo-root.is-scrolled .wxmo-bar），頂列按鈕 .wxmo-bar-btn，標題 .wxmo-bar-t；封面 .wxmo-cover（封面照片 .wxmo-cover-img 不要蓋掉），封面上的名字 .wxmo-cover-name；每一則 .wxmo-post，頭像 .wxmo-av，名字 .wxmo-name，內文 .wxmo-text，照片 .wxmo-photos，時間 .wxmo-time，右邊的更多鈕 .wxmo-more；讚與留言那一塊 .wxmo-social，讚 .wxmo-likes，每則留言 .wxmo-cm；留言輸入 .wxmo-input，送出 .wxmo-send；發一則的頁 .wxmo-compose，上方列 .wxmo-compose-bar，輸入 .wxmo-compose-in，發表 .wxmo-compose-ok，關閉 .wxmo-compose-x',
         '聊天設置（從聊天室右上角進去那一層）：.ws-overlay；標頭 .ws-header；標題 .ws-title；關閉 .ws-close；內容 .ws-body；一組 .ws-group；每格 .ws-cell；字 .ws-label；輸入框 .ws-input；開關 .ws-switch；頭像圓框 .ws-avatar-circle；疊在頭像上的相機 .ws-avatar-icon；底部 .ws-footer；保存 .ws-btn-save'
@@ -382,8 +385,9 @@
         ['--wx-surface', '卡片與每一列的底', 1],
         ['--wx-header', '每頁最上面那條的底', 1],
         ['--wx-bar', '底部分頁列與輸入列的底', 1],
-        ['--wx-ink', '主要的字（標題、名字）', 1],
-        ['--wx-ink-3', '次要的字（最後一句、說明）', 1],
+        ['--wx-ink', '卡片與每一列上的主要字（標題、名字）', 1],
+        ['--wx-ink-3', '卡片與每一列上的次要字（最後一句、說明）', 1],
+        ['--wx-page-ink', '直接寫在整頁底上、不在卡片裡的字（設置的分組小標、記事本那一整頁）。整頁底跟卡片底一深一淺時，這格要跟 --wx-ink 相反', 1],
         ['--wx-accent', '重點色：按鈕、選中的分頁、開關、送出、未讀以外的強調', 1],
         ['--wx-on-accent', '疊在重點色上面的字', 1],
         ['--wx-surface-2', '輸入框、按下去的底', 0],
@@ -411,6 +415,7 @@
         v['--wx-line'] = pick('--wx-line', got['--wx-ink-3'] ? 'color-mix(in srgb, ' + got['--wx-ink-3'] + ' 25%, transparent)' : undefined);
         v['--wx-line-strong'] = pick('--wx-line-strong', v['--wx-line']);
         v['--wx-ink-2'] = pick('--wx-ink-2', got['--wx-ink']);
+        v['--wx-page-ink'] = pick('--wx-page-ink', got['--wx-ink']);
         v['--wx-ink-soft'] = pick('--wx-ink-soft', got['--wx-ink-3']);
         v['--wx-ink-dim'] = pick('--wx-ink-dim', got['--wx-ink-3']);
         v['--wx-arrow'] = pick('--wx-arrow', v['--wx-ink-dim']);
