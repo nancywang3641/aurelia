@@ -37,6 +37,22 @@
       所以沒寫裝飾的主題不會冒出東西。
    3. 版位可以換：.aps-home 的四列順序、.aps-lock 的 grid-template-areas 都能覆蓋
       （白瓷玻璃就是把拍立得換到時鐘上面）。
+   3b. 骨架現在也有格子可填，不必寫規則 —— 她做的主題就是靠這幾格換骨架的
+      （內建四套目前沒用，照舊寫規則也可以）：
+        主畫面那排四顆站哪裡：--aps-dock-row（1＝最上面那列／4＝最底下，預設 4）
+          搭配 --aps-row-top / --aps-row-bot 兩列的高度、--aps-dock-mb / --aps-dots-mb 的空隙；
+          浮起來蓋在格子上則是 --aps-dock-pos: absolute ＋ --aps-dock-l/-r/-b，
+          而且要給 --aps-grid-pad-bot 讓最後一排圖標不被蓋住。
+        一格裡面怎麼擺：--aps-icon-dir（column/row）、--aps-label-display（none＝不要名字）、
+          --aps-label-align / --aps-label-flex。
+        一排幾顆與大小：--aps-grid-columns、--aps-grid-gap、--aps-icon-size/-height、
+          --aps-glyph-size、--aps-label-size/-weight、--aps-font。
+        換頁那排點：--aps-dot-w/-h/-radius/-bg 與選中那顆的 --aps-dot-on-w/-bg/-opacity。
+        桌布上兩塊裝飾：--aps-deco1-* / --aps-deco2-*（寬高位置顏色圓角框線角度），
+          這是給沒有自己裝飾規則的主題用的；本檔內建四套的 ::before/::after 規則權重較高，照舊贏。
+        app 那條分頁列：--os-nav-order（-1＝跑到最上面）、--os-nav-item-dir、--os-nav-label-display。
+      🚨 這幾格互相牽連（換一格要順手改另外三格），所以工坊那邊不叫 AI 直接填，
+         它只回 @dock-place / @icon-layout 這種一個詞的選擇，由 os_phone_theme.js 的 _layout() 翻成上面這些。
    4. 到 core/void/phone_shell.js 的 THEMES 加一列 { id, name }（那邊沒有顏色）。
    5. 回到這支的 :root 補一條 --aps-swatch-<代號>（設置頁那顆預覽小圓），
       再到 css/phone_shell.css 的 .aps-th-sw-<代號> 加一條讀它。

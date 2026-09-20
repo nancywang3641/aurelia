@@ -131,7 +131,10 @@
 /* ── 底部 nav ── */
 /* 底部導覽跟著手機主題走（--os-nav-*，定義在 css/aurelia_theme.css）。
    以前這條是寫死的米色，換什麼主題都不動。 */
+/* 🪧 order：這條不一定在最底下。9＝最後（預設，貼著畫面底），-1＝跑到最上面當頂欄。
+      主題只說「上面／下面」，os_phone_theme.js 翻成這一格。 */
 .ws-nav {
+    order: var(--os-nav-order, 9);
     flex-shrink: 0; display: flex; box-sizing: border-box;
     height: var(--os-nav-height, 52px);
     margin: 0 var(--os-nav-inset, 0) var(--os-nav-gap-bottom, 0px);
@@ -142,10 +145,10 @@
     box-shadow: var(--os-nav-shadow, none);
     padding: 4px 0;
 }
-.ws-nav-b { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; padding: 4px 0; cursor: pointer; color: var(--os-nav-ink, #a08a72); }
+.ws-nav-b { flex: 1; display: flex; flex-direction: var(--os-nav-item-dir, column); align-items: center; justify-content: center; gap: 2px; border: none; background: transparent; padding: 4px 0; cursor: pointer; color: var(--os-nav-ink, #a08a72); }
 /* 墊的那塊只在圖標後面（同 wb-tab-icon 那條的理由）*/
 .ws-nav-ic { font-size: var(--os-nav-icon-size, 19px); filter: grayscale(0.5); opacity: 0.65; padding: 3px 13px; border-radius: var(--os-nav-on-radius, 0); }
-.ws-nav-t { font-size: var(--os-nav-label-size, 10px); }
+.ws-nav-t { font-size: var(--os-nav-label-size, 10px); display: var(--os-nav-label-display, block); }
 .ws-nav-b.active { color: var(--os-nav-ink-on, #7a2432); }
 .ws-nav-b.active .ws-nav-ic { filter: none; opacity: 1; background: var(--os-nav-on-bg, transparent); color: var(--os-nav-on-ink, var(--os-nav-ink-on, #7a2432)); }
 

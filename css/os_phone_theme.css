@@ -33,20 +33,75 @@
 .pth-phone {
     background: var(--aps-wallpaper);
     display: flex; flex-direction: column; min-height: 240px;
+    position: relative; isolation: isolate; font-family: var(--aps-font, inherit);
 }
+/* 🚨 預覽只有真手機的一半寬，所以桌布上那兩塊裝飾要整個縮一半再擺
+      （位置自己乘 0.5，大小交給 scale）—— 不縮的話她看到的位置跟手機上不一樣，預覽就在騙人。 */
+.pth-phone::before, .pth-phone::after {
+    content: ""; position: absolute; pointer-events: none; z-index: -1;
+    transform-origin: top left;
+}
+.pth-phone::before {
+    inset: calc(var(--aps-deco1-top, 0px) * 0.5) auto auto calc(var(--aps-deco1-left, 0px) * 0.5);
+    width: var(--aps-deco1-w, 0); height: var(--aps-deco1-h, 0);
+    background: var(--aps-deco1-bg, transparent);
+    border: var(--aps-deco1-border, 0 solid transparent);
+    border-radius: var(--aps-deco1-radius, 0);
+    transform: scale(0.5) rotate(var(--aps-deco1-rot, 0deg));
+}
+.pth-phone::after {
+    inset: calc(var(--aps-deco2-top, 0px) * 0.5) auto auto calc(var(--aps-deco2-left, 0px) * 0.5);
+    width: var(--aps-deco2-w, 0); height: var(--aps-deco2-h, 0);
+    background: var(--aps-deco2-bg, transparent);
+    border: var(--aps-deco2-border, 0 solid transparent);
+    border-radius: var(--aps-deco2-radius, 0);
+    transform: scale(0.5) rotate(var(--aps-deco2-rot, 0deg));
+}
+/* 🚨 order：那排四顆站上面時（order 1）要排在圖標格前面，所以其他幾塊也得標號 —— 沒標的是 0，會贏過 1 */
 .pth-sb {
+    order: -10;
     display: flex; justify-content: space-between; align-items: center;
     padding: 7px 10px 2px; font-size: 9px; font-weight: 600;
     color: var(--aps-sb-color);
 }
-.pth-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 6px; padding: 10px 8px 6px; }
+/* 一排幾顆跟著主題走。圖標的實際大小是真手機上的值，預覽只有一半寬，所以一律乘 0.62 */
+/* flex: 1 讓圖標格吃掉剩下的高度，那排四顆就自然落在最底下 ——
+   不用 margin-top: auto，那樣它跑到最上面時會被 auto 推回去。 */
+.pth-grid {
+    order: 2; flex: 1; align-content: start;
+    display: grid; grid-template-columns: repeat(var(--aps-grid-columns, 3), 1fr);
+    gap: 10px 6px; padding: 10px 8px 6px;
+}
+/* 一格＝圖標＋名字，排法跟真主畫面同一組格子 */
+.pth-cell {
+    display: flex; flex-direction: var(--aps-icon-dir, column);
+    align-items: center; justify-content: center; min-width: 0;
+    gap: calc(var(--aps-icon-gap, 5px) * 0.62);
+}
+.pth-nm {
+    display: var(--aps-label-display, block);
+    font-size: calc(var(--aps-label-size, 11px) * 0.75);
+    font-weight: var(--aps-label-weight, 400);
+    color: var(--aps-label-color);
+    text-align: var(--aps-label-align, center);
+    flex: var(--aps-label-flex, 0 1 auto);
+    font-style: normal; line-height: 1.35; min-width: 0; max-width: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .pth-w {
+    order: 3;
     margin: 0 8px 8px; padding: 10px; text-align: center; font-size: 10px;
     color: var(--aps-label-color);
     background: var(--aps-w-bg); border: 1px solid var(--aps-w-line); border-radius: var(--aps-w-radius);
 }
+/* 🪧 那排四顆站哪裡：上面（order 1）／下面（order 4，margin-top auto 推到底）／浮起來（absolute）。
+      吃的是 os_phone_theme.js 算出來的同一組格子，所以預覽跟真手機一定一致。 */
 .pth-dock {
-    margin: auto 0 0; display: flex; justify-content: space-around; align-items: center;
+    order: var(--aps-dock-row, 4);
+    position: var(--aps-dock-pos, static);
+    left: var(--aps-dock-l, auto); right: var(--aps-dock-r, auto); bottom: var(--aps-dock-b, auto);
+    margin: var(--aps-dock-mt, 0px) var(--aps-dock-inset, 0px) var(--aps-dock-mb, 0px);
+    display: flex; justify-content: space-around; align-items: center;
     height: var(--aps-dock-height); box-sizing: border-box; padding: 6px 6px 0;
     background: var(--aps-dock-bg);
     border: var(--aps-dock-border); border-top: var(--aps-dock-top);
@@ -54,9 +109,14 @@
 }
 .pth-grid .pth-ic, .pth-dock .pth-ic {
     display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 26px; margin: 0 auto; font-size: 13px;
+    flex-shrink: 0; width: 30px; height: 26px; font-size: 13px;
 }
+.pth-dock .pth-ic { margin: 0 auto; }
 .pth-grid .pth-ic {
+    /* 真手機上的尺寸乘 0.62 —— 預覽只有一半寬，照搬 70px 的圖標會整個擠爆 */
+    width: calc(var(--aps-icon-size, 46px) * 0.62);
+    height: calc(var(--aps-icon-height, 37px) * 0.62);
+    font-size: calc(var(--aps-glyph-size, 21px) * 0.62);
     background: var(--aps-icon-bg); color: var(--aps-icon-color);
     border: 1px solid var(--aps-icon-line); border-radius: var(--aps-icon-radius);
     box-shadow: var(--aps-icon-shadow);
@@ -81,6 +141,7 @@
 }
 .pth-dim { font-size: 10px; color: var(--os-ink-soft); }
 .pth-nav {
+    order: var(--os-nav-order, 9);
     display: flex; box-sizing: border-box;
     height: var(--os-nav-height);
     margin: 0 var(--os-nav-inset) var(--os-nav-gap-bottom);
@@ -89,14 +150,14 @@
     border-radius: var(--os-nav-radius); box-shadow: var(--os-nav-shadow);
 }
 .pth-nav span {
-    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    flex: 1; display: flex; flex-direction: var(--os-nav-item-dir, column); align-items: center; justify-content: center; gap: 2px;
     color: var(--os-nav-ink); font-size: var(--os-nav-icon-size);
 }
 .pth-nav span.on { color: var(--os-nav-ink-on); }
 /* 墊的那塊只在圖標後面，跟真的那幾條分頁列同一個做法 */
 .pth-nav i { padding: 3px 13px; border-radius: var(--os-nav-on-radius); }
 .pth-nav span.on i { background: var(--os-nav-on-bg); color: var(--os-nav-on-ink, var(--os-nav-ink-on)); }
-.pth-nav em { font-style: normal; font-size: var(--os-nav-label-size); }
+.pth-nav em { font-style: normal; font-size: var(--os-nav-label-size); display: var(--os-nav-label-display, block); }
 
 /* ── 存起來 ── */
 .pth-save { display: flex; gap: 8px; margin-top: 16px; }

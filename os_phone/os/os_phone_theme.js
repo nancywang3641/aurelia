@@ -1,7 +1,12 @@
 // os_phone/os/os_phone_theme.js
 // 🎨 手機主題工坊 —— 說一句話，AI 做一套手機主題出來。
 //
-// 一套主題就是「一張格子表」：配色、應用圖標的樣子、底部導覽的樣子。**版面不歸它管。**
+// 一套主題＝「一張格子表」＋「一份骨架選擇」：配色、圖標的樣子、分頁列的樣子，
+// 還有東西怎麼擺（一排幾顆、名字要不要、那排常用的擺上面還是浮起來、桌布上加不加裝飾）。
+//
+// 🚨 骨架這半是 2026-09-20 才開的。在那之前 AI 只能填顏色跟圓角，所以她做幾套出來
+//    都只有配色在變、形狀一模一樣（她的說法：「千篇一律改底部導覽形狀+按鈕形狀，挺無聊的」）。
+//    真正讓兩套主題像兩支不同的手機的，是東西擺在哪裡、多大、多密 —— 那半以前鎖著。
 // 內建那四套的值寫在 css/aurelia_theme.css；她做的那些是資料，存在手機殼那邊
 // （VoidPhoneShell.saveUserTheme），開機時拼成一段 <style> 貼進 <head>，格式完全一樣。
 //
@@ -10,6 +15,10 @@
 //    程式端得架五道關卡去攔（見 os_studio.js 的 _vthStripLayout 那一串）。
 //    手機這邊不給它寫 CSS 的機會：它只能回一份「格子名: 值」，不在清單上的一律丟掉，
 //    所以它碰不到版面，也就沒有東西需要攔。
+//    🚨 開了骨架之後這條仍然成立 —— 骨架不是讓它寫位置，是給它四道選擇題
+//       （@dock-place / @nav-place / @icon-layout / @nav-item），每一題只認固定那幾個詞，
+//       聯動的那三四格由 _layout() 算。它自己填那幾格一定會漏一格，
+//       漏一格的症狀是底排卡在兩列中間、或者被自己的空隙壓矮 10px。
 (function () {
     'use strict';
     const win = window;
@@ -17,7 +26,34 @@
     // ── 格子表：AI 能填的全部欄位，一格一行說明 ───────────────────────
     //   key 就是 CSS 變數名；hint 是寫給 AI 看的；type 決定怎麼驗。
     //   🚨 加一格＝這裡加一行，其他地方不用動（提示詞與驗證都照這張表生）。
+    // ── 版面骨架：AI 說人話，程式翻成格子 ─────────────────────────────
+    // 🚨 這幾個不是真的格子（不會被寫進樣式），是「這套主題長什麼骨架」的選擇題。
+    //    底排釘在畫面最底下、導覽永遠貼著底，是以前沒開給它的東西 ——
+    //    所以她做幾套出來都只有顏色在變，形狀都一樣。
+    const LAYOUT = [
+        { k: '@dock-place',  v: ['bottom', 'top', 'float'],
+          h: '主畫面那排常用的四顆站哪裡。bottom＝畫面最底下（一般手機那樣）／top＝跑到最上面當一條工具列／float＝浮起來蓋在圖標上方，下面要給圓角跟左右留白' },
+        { k: '@nav-place',   v: ['bottom', 'top'],
+          h: 'app 裡面那條分頁列站哪裡。bottom＝底下（一般那樣）／top＝跑到標題列下面當頂部分頁' },
+        { k: '@icon-layout', v: ['stack', 'row', 'iconOnly'],
+          h: '主畫面一格裡面怎麼擺。stack＝圖標在上名字在下／row＝圖標在左名字在右（一排放少一點才擺得下）／iconOnly＝只有圖標、不要名字' },
+        { k: '@nav-item',    v: ['stack', 'row', 'iconOnly'],
+          h: '分頁列每一顆怎麼擺。stack＝圖標在上字在下／row＝圖標在左字在右／iconOnly＝只有圖標' },
+    ];
+    const LAYOUT_KEYS = LAYOUT.map(function (f) { return f.k; });
+
     const FIELDS = [
+        // ── 版面：大小與疏密（以前只有內建那四套能調，她做的一律吃預設）──
+        { k: '--aps-grid-columns',    t: 'int',   min: 2, max: 5, h: '主畫面一排放幾顆。2＝很大很鬆，3＝一般，4～5＝小而密' },
+        { k: '--aps-grid-gap',        t: 'len2',  h: '格子之間的空隙，上下與左右兩個值，例如 16px 12px' },
+        { k: '--aps-icon-size',       t: 'len',   h: '圖標那塊的寬' },
+        { k: '--aps-icon-height',     t: 'len',   h: '圖標那塊的高。跟寬一樣＝正方，比寬矮＝扁的' },
+        { k: '--aps-glyph-size',      t: 'len',   h: '圖標裡面那個符號的大小' },
+        { k: '--aps-icon-gap',        t: 'len',   h: '圖標跟它名字之間的距離' },
+        { k: '--aps-label-size',      t: 'len',   h: '圖標底下那行字多大' },
+        { k: '--aps-label-weight',    t: 'int',   min: 100, max: 900, h: '那行字多粗。400＝一般，700＝粗' },
+        { k: '--aps-font',            t: 'font',  h: '整支手機的字體，寫字體名就好（可以寫好幾個用逗號隔開）' },
+
         // ── 配色：手機主畫面 ──
         { k: '--aps-wallpaper',       t: 'bg',    h: '桌布。純色、漸層都行' },
         { k: '--aps-label-color',     t: 'color', h: '圖標底下那行字' },
@@ -52,6 +88,36 @@
         { k: '--aps-dock-border',     t: 'bd',    h: '主畫面底排的完整框線，例如 3px solid #fff' },
         { k: '--aps-dock-top',        t: 'bd',    h: '主畫面底排的上緣那條線。貼底那種只有這條有意義' },
         { k: '--aps-dock-shadow',     t: 'shadow',h: '主畫面底排的陰影' },
+        { k: '--aps-dock-inset',      t: 'len',   h: '主畫面底排左右各留多少白。貼底一條給 0px，浮起來那種留 10～16px' },
+        { k: '--aps-dock-padding',    t: 'len2',  h: '主畫面底排裡面的留白，例如 10px 8px' },
+
+        // ── 換頁那排小點 ──
+        { k: '--aps-dot-w',           t: 'len',   h: '每顆點多寬' },
+        { k: '--aps-dot-h',           t: 'len',   h: '每顆點多高。跟寬一樣＝圓點，比寬矮很多＝短橫線' },
+        { k: '--aps-dot-radius',      t: 'len',   h: '點的圓角。50%＝圓的，0＝方的' },
+        { k: '--aps-dot-bg',          t: 'color', h: '點的顏色' },
+        { k: '--aps-dot-on-w',        t: 'len',   h: '現在這一頁那顆多寬。給大一點就變成一條長的' },
+        { k: '--aps-dot-on-bg',       t: 'color', h: '現在這一頁那顆的顏色' },
+
+        // ── 桌布上的兩塊裝飾（選填，不填就沒有）──
+        // 🚨 內建那四套一直都有（雲、虛線框、光暈、小點），她做的以前一塊都放不了。
+        //    這兩塊永遠在最底下、不吃點擊，所以怎麼畫都不會擋到東西。
+        { k: '--aps-deco1-w',      t: 'len',   o: 1, h: '第一塊裝飾多寬。不要這塊就整組別寫' },
+        { k: '--aps-deco1-h',      t: 'len',   o: 1, h: '第一塊裝飾多高' },
+        { k: '--aps-deco1-top',    t: 'len',   o: 1, h: '第一塊離畫面上緣多遠。可以是負的，讓它一半跑到畫面外' },
+        { k: '--aps-deco1-left',   t: 'len',   o: 1, h: '第一塊離畫面左緣多遠。可以是負的。手機螢幕大約 300px 寬' },
+        { k: '--aps-deco1-bg',     t: 'bg',    o: 1, h: '第一塊的顏色。漸層可以做出光暈，transparent＝只有框線' },
+        { k: '--aps-deco1-radius', t: 'len',   o: 1, h: '第一塊的圓角。50%＝圓形' },
+        { k: '--aps-deco1-border', t: 'bd',    o: 1, h: '第一塊的框線，例如 2px dashed #ddd' },
+        { k: '--aps-deco1-rot',    t: 'deg',   o: 1, h: '第一塊轉幾度，例如 -12deg' },
+        { k: '--aps-deco2-w',      t: 'len',   o: 1, h: '第二塊裝飾多寬。只要一塊的話這組別寫' },
+        { k: '--aps-deco2-h',      t: 'len',   o: 1, h: '第二塊裝飾多高' },
+        { k: '--aps-deco2-top',    t: 'len',   o: 1, h: '第二塊離畫面上緣多遠' },
+        { k: '--aps-deco2-left',   t: 'len',   o: 1, h: '第二塊離畫面左緣多遠' },
+        { k: '--aps-deco2-bg',     t: 'bg',    o: 1, h: '第二塊的顏色' },
+        { k: '--aps-deco2-radius', t: 'len',   o: 1, h: '第二塊的圓角' },
+        { k: '--aps-deco2-border', t: 'bd',    o: 1, h: '第二塊的框線' },
+        { k: '--aps-deco2-rot',    t: 'deg',   o: 1, h: '第二塊轉幾度' },
 
         // ── 配色：所有面板 ──
         { k: '--os-ink',              t: 'color', h: '面板裡的主字色' },
@@ -83,6 +149,30 @@
         { k: '--os-nav-on-radius',    t: 'len',   h: '墊的那塊底的圓角。999px＝藥丸' },
     ];
     const FIELD_KEYS = FIELDS.map(function (f) { return f.k; });
+    const FIELD_BY_K = {}; FIELDS.forEach(function (f) { FIELD_BY_K[f.k] = f; });
+    // 必填＝沒標選填的那些。選填那幾格（桌布上的裝飾）不填就是沒有，不算漏。
+    const NEED_KEYS = FIELDS.filter(function (f) { return !f.o; }).map(function (f) { return f.k; });
+
+    // 值長得對不對：型別不合就丟掉那一格（丟掉＝沿用預設，整套仍然能用）
+    function _okType(f, v) {
+        switch (f.t) {
+            case 'int': {
+                if (!/^-?\d+$/.test(v)) return false;
+                const n = +v;
+                return !(f.min != null && n < f.min) && !(f.max != null && n > f.max);
+            }
+            case 'deg':  return /^-?\d+(\.\d+)?deg$/.test(v);
+            case 'len':  return /^-?\d+(\.\d+)?(px|%|em|rem)$/.test(v) || v === '0' || v === 'auto';
+            // 一到四個長度，用空白隔開；裸 0 是合法的（padding: 10px 0 0 這種很常見）
+            case 'len2': {
+                const one = '(-?\\d+(\\.\\d+)?(px|%|em|rem)|0)';
+                return new RegExp('^' + one + '(\\s+' + one + '){0,3}$').test(v);
+            }
+            // 字體只准字體名：中英數、空白、逗號、引號、連字號。擋掉一切函式與符號
+            case 'font': return /^[-\w一-鿿"',\s]+$/.test(v) && v.length <= 80;
+            default:     return true;
+        }
+    }
 
     // 這兩格是「同一個顏色的兩種寫法」，面板裡大量半透明的線與淡底吃的是數字版。
     // 不叫 AI 填，改用它給的顏色自己算 —— 它算錯的話症狀是「字換了、線還是舊顏色」。
@@ -90,30 +180,49 @@
 
     // ── 提示詞：整份照 FIELDS 生，改格子表這裡自動跟上 ──────────────
     function _prompt() {
-        const list = FIELDS.map(function (f) { return '- ' + f.k + '：' + f.h; }).join('\n');
+        const need = FIELDS.filter(function (f) { return !f.o; }).map(function (f) { return '- ' + f.k + '：' + f.h; }).join('\n');
+        const opt  = FIELDS.filter(function (f) { return f.o; }).map(function (f) { return '- ' + f.k + '：' + f.h; }).join('\n');
+        const sk   = LAYOUT.map(function (f) { return '- ' + f.k + '：' + f.v.join(' / ') + '。' + f.h; }).join('\n');
         return [
-            '你是手機介面的視覺設計師。使用者給你一句話（一個氛圍、一個顏色、一個東西），你要把它變成一套手機主題。',
+            '你是手機介面的視覺設計師。使用者給你一句話（一個氛圍、一個顏色、一個東西），你要把它變成一套完整的手機主題。',
             '手機本身那個外殼（金屬邊框、側邊按鍵）不歸你管，那是這支手機，不是介面。',
             '',
-            '一套主題＝下面這張表填滿。**你只能填這些格子，版面、排列、位置、字級一律不歸你管**，也不要寫任何 CSS 規則或選擇器。',
+            '## 先決定骨架，再決定顏色',
+            '同樣一支手機，換了顏色仍然是同一支手機。真正讓兩套主題看起來是兩支不同的手機的，是東西擺在哪裡、多大、多密。',
+            '所以你要先挑下面這幾個，而且要挑得跟這次的氛圍有關係——不要每次都挑一樣的：',
+            sk,
             '',
-            '## 你要填的格子',
-            list,
+            '挑的時候想一下這幾件事互相配不配：',
+            '- 一排只放 2 顆的時候圖標要大（70px 以上）；放 4～5 顆的時候圖標要小（40px 上下），名字也要跟著縮。',
+            '- 圖標在左名字在右（row）那種，一排最多放 2 顆，不然名字沒地方擺。',
+            '- 只有圖標不要名字（iconOnly）那種，圖標自己要夠有辨識度：給它底色或框線，不要裸著。',
+            '- 那排四顆浮起來（float）的時候，左右留白給 10～16px、圓角給大值、陰影要有，它才像浮著。貼底那種就全部給 0。',
             '',
-            '## 三件要一起想的事',
-            '1. 配色：整套要像同一個東西做出來的。面板整頁的底跟卡片那層要分得出來，深色主題的字要夠亮、淺色主題的字要夠深。',
-            '2. 應用圖標的樣子：裸符號沒有底、圓角方塊、圓形、有框線、有陰影——選一種，然後底排那幾顆跟著同一個做法。',
-            '3. 底部導覽的樣子：要嘛貼底一條（圓角 0、左右留白 0、離底 0px、只有上緣一條線），要嘛浮起來一塊（圓角給大值、左右留白與離底各留幾 px、給完整框線與陰影）。兩種不要混。選中那一顆可以只變色（墊底那格給 transparent），也可以在它的圖標後面墊一塊底——墊的那塊只在圖標後面、不會蓋住下面的字，字的顏色用「選中那一顆的顏色」那格。',
+            '## 再填格子',
+            need,
+            '',
+            '## 桌布上的裝飾（選填）',
+            '兩塊可以自由擺的形狀，畫在桌布上、永遠在所有東西的最底下。一塊大圓加半透明漸層＝光暈；',
+            '一塊跟整個畫面差不多大、只有虛線框、顏色 transparent＝一圈框；細長一條加旋轉＝一道斜線或一段膠帶。',
+            '不需要就整組都別寫（兩塊各自獨立，可以只要一塊）。',
+            opt,
+            '',
+            '## 顏色',
+            '1. 整套要像同一個東西做出來的。面板整頁的底跟卡片那層要分得出來，深色主題的字要夠亮、淺色主題的字要夠深。',
+            '2. 應用圖標：裸符號沒有底、圓角方塊、圓形、有框線、有陰影——選一種，然後底排那幾顆跟著同一個做法。',
+            '3. app 裡那條分頁列：要嘛貼底一條（圓角 0、左右留白 0、離底 0px、只有上緣一條線），要嘛浮起來一塊（圓角給大值、左右留白與離底各留幾 px、給完整框線與陰影）。兩種不要混。選中那一顆可以只變色（墊底那格給 transparent），也可以在它的圖標後面墊一塊底——墊的那塊只在圖標後面、不會蓋住下面的字。',
             '',
             '## 規矩',
             '- 顏色用 #rrggbb 或 rgba()；長度帶單位（px、%）；不要用 var()、不要用 calc()、不要引用其他格子。',
+            '- 不要寫任何 CSS 規則或選擇器，只填格子的值。',
             '- 不要用圖片網址當桌布（她自己會換照片）；桌布用純色或漸層。',
             '- 帶意思的顏色不歸主題管（刪除紅、警告紅、接通綠、連結藍），不要想辦法把它們塞進來。',
-            '- 每一格都要有值。少一格，那一格會掉回預設那套，整套就會看起來只換一半。',
+            '- 「再填格子」那一段每一格都要有值。少一格，那一格會掉回預設那套，整套就會看起來只換一半。',
             '',
             '## 輸出',
             '只輸出一段 JSON，前後不要有任何其他字：',
-            '{"name":"四個字以內的中文名字","swatch":["#桌布色","#底排色","#重點色"],"vars":{"--格子名":"值", …}}',
+            '{"name":"四個字以內的中文名字","layout":{"@dock-place":"…","@nav-place":"…","@icon-layout":"…","@nav-item":"…"},'
+              + '"swatch":["#桌布色","#底排色","#重點色"],"vars":{"--格子名":"值", …}}',
         ].join('\n');
     }
 
@@ -127,8 +236,10 @@
             if (!v) return;
             if (/[{}<>;]|@import|url\s*\(|expression\s*\(/i.test(v)) return;   // 值裡不准夾規則、不准連外
             if (/var\s*\(/.test(v)) return;                              // 引用別的格子＝她刪掉那套時會整串垮掉
+            if (!_okType(FIELD_BY_K[k], v)) return;                      // 型別不合＝那一格沿用預設，其餘照樣成立
             out[k] = v;
         });
+        _layout(raw, out);   // 版面骨架：它說的人話在這裡翻成真的格子
         // 數字版的顏色自己算，不信 AI 給的
         RGB_PAIRS.forEach(function (pair) {
             const rgb = _toRgb(out[pair[0]]);
@@ -141,6 +252,61 @@
         if (ink) out['--os-nav-on-ink'] = ink;
         return out;
     }
+    // ── 版面骨架：把「上面／下面／浮著」翻成那幾格 ──────────────────
+    //    AI 只挑一個詞，聯動的三四格由這裡算。它自己填那幾格一定會漏一格，
+    //    漏一格的症狀是底排卡在兩列中間、或格子區高度算錯。
+    function _layout(raw, out) {
+        const L = (raw && (raw.layout || raw.skeleton)) || {};
+        const pick = function (k, def) {
+            const f = LAYOUT[LAYOUT_KEYS.indexOf(k)];
+            const v = String(L[k] == null ? (L[k.slice(1)] == null ? '' : L[k.slice(1)]) : L[k]).trim();
+            return f.v.indexOf(v) >= 0 ? v : def;
+        };
+
+        // 主畫面那排四顆
+        const dock = pick('@dock-place', 'bottom');
+        if (dock === 'top') {
+            // 站到最上面那一列：上面那列給它高度、下面那列收成 0。
+            // 列與列之間那 10px 也要跟著搬：它下面留 10px，換頁那排點下面就不用再留。
+            out['--aps-dock-row'] = '1';
+            out['--aps-row-top']  = 'var(--aps-dock-height)';
+            out['--aps-row-bot']  = '0px';
+            out['--aps-dock-mb']  = '10px';
+            out['--aps-dots-mb']  = '0px';
+        } else if (dock === 'float') {
+            // 浮起來蓋在格子上：離開版面流（下面那列收 0），左右與離底用它自己填的留白，
+            // 格子區最後補一段留白，不然最下面那一排被蓋住點不到
+            const inset = out['--aps-dock-inset'] || '12px';
+            out['--aps-dock-pos'] = 'absolute';
+            out['--aps-dock-l']   = inset;
+            out['--aps-dock-r']   = inset;
+            out['--aps-dock-b']   = '10px';
+            out['--aps-dock-inset'] = '0px';       // 已經用 left/right 擺好了，margin 不能再推一次
+            out['--aps-row-bot']  = '0px';
+            out['--aps-dots-mb']  = '0px';
+            out['--aps-grid-pad-bot'] = 'calc(var(--aps-dock-height) + 18px)';
+        }
+
+        // app 裡那條分頁列
+        if (pick('@nav-place', 'bottom') === 'top') out['--os-nav-order'] = '-1';
+
+        // 主畫面一格裡面怎麼擺
+        const icon = pick('@icon-layout', 'stack');
+        if (icon === 'row') {
+            out['--aps-icon-dir']   = 'row';
+            out['--aps-icon-align'] = 'center';
+            out['--aps-label-align'] = 'left';
+            out['--aps-label-flex'] = '1 1 auto';
+        } else if (icon === 'iconOnly') {
+            out['--aps-label-display'] = 'none';
+        }
+
+        // 分頁列每一顆怎麼擺
+        const navItem = pick('@nav-item', 'stack');
+        if (navItem === 'row') out['--os-nav-item-dir'] = 'row';
+        else if (navItem === 'iconOnly') out['--os-nav-label-display'] = 'none';
+    }
+
     function _toRgb(v) {
         if (!v) return null;
         let m = /^#([0-9a-f]{3})$/i.exec(v);
@@ -162,7 +328,8 @@
         const lin = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
         return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
     }
-    function _missing(vars) { return FIELD_KEYS.filter(function (k) { return !vars[k]; }); }
+    // 桌布上那兩塊裝飾是選填的，沒填不算漏 —— 不然每套都會報「漏了 16 格」
+    function _missing(vars) { return NEED_KEYS.filter(function (k) { return !vars[k]; }); }
 
     // AI 常常在 JSON 前後多寫兩句，或包在圍欄裡 —— 撈出最外層那一對大括號就好
     function _pickJson(text) {
@@ -184,6 +351,18 @@
         box.classList.toggle('pth-empty', !Object.keys(vars).length);
     }
 
+    // 預覽那六格：用真的 app 名字（兩個字跟三個字都有），才看得出名字放不放得下
+    const PV_CELLS = [
+        ['fa-comment', '聊天'], ['fa-calendar-days', '日曆'], ['fa-book-open', '藏書'],
+        ['fa-gear', '設置'], ['fa-images', '相簿'], ['fa-phone', '電話'],
+    ];
+    function _pvCells() {
+        return PV_CELLS.map(function (c) {
+            return '<span class="pth-cell"><span class="pth-ic"><i class="fa-solid ' + c[0] + '"></i></span>'
+                 + '<em class="pth-nm">' + c[1] + '</em></span>';
+        }).join('');
+    }
+
     function launch(container) {
         if (!container) return;
         container.innerHTML =
@@ -193,7 +372,7 @@
           +     '<span class="sysh-title">手機主題</span>'
           +   '</div>'
           +   '<div class="pth-body">'
-          +     '<div class="pth-say">說一句話，做一套手機主題。它會換掉配色、應用圖標的樣子、底部導覽的樣子；排版不動。</div>'
+          +     '<div class="pth-say">說一句話，做一套手機主題。配色、圖標的樣子、分頁列的樣子，還有東西怎麼擺——一排放幾顆、名字要不要、那排常用的擺上面還是浮起來、桌布上加不加一塊裝飾，都會跟著這句話變。</div>'
           +     '<textarea class="pth-input" rows="2" placeholder="例如：深海玻璃、暖橘手帳、黑白塗鴉、舊書房"></textarea>'
           +     '<div class="pth-row">'
           +       '<button class="pth-btn pth-go" type="button">做一套</button>'
@@ -202,14 +381,8 @@
           +     '<div class="pth-preview">'
           +       '<div class="pth-phone">'
           +         '<div class="pth-sb"><span>9:41</span><span><i class="fa-solid fa-signal"></i> <i class="fa-solid fa-wifi"></i> <i class="fa-solid fa-battery-full"></i></span></div>'
-          +         '<div class="pth-grid">'
-          +           '<span class="pth-ic"><i class="fa-solid fa-comment"></i></span>'
-          +           '<span class="pth-ic"><i class="fa-solid fa-calendar-days"></i></span>'
-          +           '<span class="pth-ic"><i class="fa-solid fa-book-open"></i></span>'
-          +           '<span class="pth-ic"><i class="fa-solid fa-gear"></i></span>'
-          +           '<span class="pth-ic"><i class="fa-solid fa-images"></i></span>'
-          +           '<span class="pth-ic"><i class="fa-solid fa-phone"></i></span>'
-          +         '</div>'
+          // 一格連名字一起畫，不然「圖標在左名字在右」「只有圖標」那兩種在預覽上看不出差別
+          +         '<div class="pth-grid">' + _pvCells() + '</div>'
           +         '<div class="pth-w">組件</div>'
           +         '<div class="pth-dock">'
           +           '<span class="pth-ic"><i class="fa-solid fa-comment"></i></span>'
@@ -307,6 +480,7 @@
         });
     }
 
-    win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS, onInk: _onInk };
+    // clean／prompt 外露是為了驗得到：拿一份假回覆丟進 clean，就能看到程式實際算出哪些格子
+    win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS, LAYOUT: LAYOUT, onInk: _onInk, clean: _clean, prompt: _prompt };
     console.log('✅ OS_PHONE_THEME（手機主題工坊）模組就緒');
 })();

@@ -98,8 +98,13 @@
     /* 🧩 以前上面有兩條固定的列：大時鐘與拍立得。兩個現在都是格子裡的組件、位置她自己決定，
        所以主畫面只剩「格子」跟「底部那排」兩列。主題裡的 --aps-widget-height 留著沒人用，不影響；
        --aps-lock-height 還有用，大時鐘組件拿它當高度。 */
-    grid-template-rows: minmax(0, 1fr) auto var(--aps-dock-height);
-    gap: 10px;
+    /* 🪧 底排不一定在最底下。四列：上面那條（平常 0）／格子／頁點／下面那條。
+       底排自己用 --aps-dock-row 選它站哪一列，主題只要說「上面／下面／浮著」，
+       那三格由 os_phone_theme.js 翻出來（同 --os-nav-on-ink 的做法：AI 填人話，程式算值）。 */
+    grid-template-rows: var(--aps-row-top, 0px) minmax(0, 1fr) auto var(--aps-row-bot, var(--aps-dock-height));
+    /* 🚨 列與列之間的空隙不能用 gap：多了一列空的（高 0）就會多一道 gap，底排永遠差 10px。
+       改成下面那兩列自己帶 margin，空列就真的不佔任何空間。 */
+    gap: 0;
     padding: 12px 18px 24px;
     background: var(--aps-wallpaper);
     font-family: var(--aps-font);
@@ -109,7 +114,35 @@
 /* 主題的裝飾層（雲、星、弧線、縫線…）一律畫在這兩個偽元素上，不另外加節點。
    🚨 這裡只給定位與「不擋點擊」，不給尺寸也不給底色 —— 沒有主題時什麼都不會出現。
       基底若先畫了一個形狀，主題只覆蓋一部分屬性時，沒被覆蓋的那幾條會留在裝飾上（泡泡主題踩過同一個坑）。 */
-.aps-home::before, .aps-home::after { content: ""; position: absolute; pointer-events: none; z-index: -1; }
+/* 🪧 四套內建主題一直是直接在這兩層寫整條規則（雲、虛線框、光暈、小點）；
+      她自己做的主題以前一格都拿不到，所以怎麼換都只有顏色在變。現在兩層各開一組格子，
+      AI 填「多大、擺哪、什麼形狀、什麼顏色、轉幾度」就能畫出一塊裝飾，
+      仍然碰不到版面（這兩層永遠在最底下、永遠不吃點擊，下面四條寫死）。
+   🚨 內建四套的規則權重比這裡高、又在後面載入，所以它們照舊贏，一條都不用改。
+   🚨 位置用 inset 簡寫，內建那幾套寫 top/left 或 bottom/right 才不會互相打架。 */
+.aps-home::before, .aps-home::after {
+    content: ""; position: absolute; pointer-events: none; z-index: -1;
+}
+/* 🚨 寬高的預設一定是 auto 不是 0：奶油貼紙那圈虛線框沒寫寬高，靠 inset 四邊撐出大小，
+      這裡給 0 會把它整個壓沒（量出來 282×488 變成 0×0）。沒填就是 auto ＋ 沒有內容＝看不見。 */
+.aps-home::before {
+    inset: var(--aps-deco1-top, auto) auto auto var(--aps-deco1-left, auto);
+    width: var(--aps-deco1-w, auto); height: var(--aps-deco1-h, auto);
+    background: var(--aps-deco1-bg, transparent);
+    border: var(--aps-deco1-border, 0 solid transparent);
+    border-radius: var(--aps-deco1-radius, 0);
+    box-shadow: var(--aps-deco1-shadow, none);
+    transform: rotate(var(--aps-deco1-rot, 0deg));
+}
+.aps-home::after {
+    inset: var(--aps-deco2-top, auto) auto auto var(--aps-deco2-left, auto);
+    width: var(--aps-deco2-w, auto); height: var(--aps-deco2-h, auto);
+    background: var(--aps-deco2-bg, transparent);
+    border: var(--aps-deco2-border, 0 solid transparent);
+    border-radius: var(--aps-deco2-radius, 0);
+    box-shadow: var(--aps-deco2-shadow, none);
+    transform: rotate(var(--aps-deco2-rot, 0deg));
+}
 
 /* ── 時鐘區：時間 / 日期 / 心情，三者的相對位置由 --aps-clock-areas 決定 ── */
 .aps-lock {
@@ -173,6 +206,7 @@
 /* 📄 好幾頁：一頁一屏、左右滑、放手貼齊。她說東西太擠了，想要第二頁第三頁。
    🚨 只有這一層會左右捲；每一頁裡面的格子照舊上下捲。 */
 .aps-pages {
+    grid-row: 2;
     display: flex; min-width: 0; min-height: 0;
     overflow-x: auto; overflow-y: hidden;
     scroll-snap-type: x mandatory;
@@ -182,26 +216,46 @@
 .aps-page { flex: 0 0 100%; min-width: 0; display: flex; scroll-snap-align: start; }
 .aps-page > .aps-grid { flex: 1; min-width: 0; }
 /* 現在在第幾頁。只有一頁時整排不畫（一顆孤零零的點看起來像壞掉），那一列自然沒高度 */
-.aps-dots { display: flex; justify-content: center; align-items: center; gap: 7px; padding: 5px 0 1px; }
-.aps-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--aps-label-color); opacity: 0.26; cursor: pointer;
-    transition: opacity 0.18s;
+/* 🚨 列與列的 10px 空隙掛在這一列的上下，不能掛在底排身上：
+      底排那一列的高度就是 --aps-dock-height，底排自己再帶 margin-top 會把自己壓矮 10px（量出來 64 變 54）。 */
+.aps-dots {
+    grid-row: 3; margin: var(--aps-dots-mt, 10px) 0 var(--aps-dots-mb, 10px);
+    display: flex; justify-content: center; align-items: center;
+    gap: var(--aps-dots-gap, 7px); padding: 5px 0 1px;
 }
-.aps-dot.on { opacity: 0.75; }
+.aps-dot {
+    width: var(--aps-dot-w, 6px); height: var(--aps-dot-h, 6px);
+    border-radius: var(--aps-dot-radius, 50%);
+    background: var(--aps-dot-bg, var(--aps-label-color));
+    opacity: var(--aps-dot-opacity, 0.26); cursor: pointer;
+    transition: opacity 0.18s, width 0.18s;
+}
+/* 現在這一頁那顆可以自己一種長相（變長條、換顏色）—— 沒填就跟其他那幾顆一樣、只是比較清楚 */
+.aps-dot.on {
+    opacity: var(--aps-dot-on-opacity, 0.75);
+    width: var(--aps-dot-on-w, var(--aps-dot-w, 6px));
+    background: var(--aps-dot-on-bg, var(--aps-dot-bg, var(--aps-label-color)));
+}
 
 .aps-grid {
     display: grid;
     grid-template-columns: repeat(var(--aps-grid-columns), minmax(0, 1fr));
     gap: var(--aps-grid-gap);
     align-content: start;
-    min-height: 0; overflow-y: auto; padding: 4px 1px;
+    /* 底排浮起來蓋在格子上的時候，最後一列要留出它的高度，不然最下面那排點不到 */
+    min-height: 0; overflow-y: auto; padding: 4px 1px var(--aps-grid-pad-bot, 4px);
     scrollbar-width: none;
 }
 .aps-grid::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
-/* ── 底排 dock：設置/樣式/相簿/電話，固定在主畫面底部、不隨圖標格捲動 ── */
+/* ── 底排 dock：設置/樣式/相簿/電話，不隨圖標格捲動 ── */
+/* 🪧 它站哪裡是主題說了算：預設最底下那一列（4），也可以站到最上面那一列（1），
+      或者整個浮起來蓋在格子上（position 換成 absolute）。三格都由 os_phone_theme.js 算，
+      AI 只說「上面／下面／浮著」。 */
 .aps-dock {
-    position: relative;
+    grid-row: var(--aps-dock-row, 4);
+    position: var(--aps-dock-pos, relative);
+    left: var(--aps-dock-l, auto); right: var(--aps-dock-r, auto); bottom: var(--aps-dock-b, auto);
+    margin: var(--aps-dock-mt, 0px) var(--aps-dock-inset, 0px) var(--aps-dock-mb, 0px);
     display: flex; justify-content: space-around; align-items: center; gap: 4px;
     padding: var(--aps-dock-padding);
     border: var(--aps-dock-border);
@@ -210,8 +264,11 @@
     background: var(--aps-dock-bg);
     box-shadow: var(--aps-dock-shadow);
 }
+/* 🪧 一格裡面「圖標」跟「名字」怎麼擺也是主題的事：預設圖標在上名字在下（column），
+      也可以圖標在左名字在右（row）。名字整個不要就把 --aps-label-display 給 none。 */
 .aps-icon {
-    display: flex; flex-direction: column; align-items: center; gap: var(--aps-icon-gap);
+    display: flex; flex-direction: var(--aps-icon-dir, column);
+    align-items: var(--aps-icon-align, center); gap: var(--aps-icon-gap);
     min-width: 0; align-self: start; padding: 0;
     background: transparent; border: none; cursor: pointer;
     color: var(--aps-label-color); font-family: inherit;
@@ -289,8 +346,11 @@
    格子是 grid，列高由那一列最高的格子決定：只要有一個 app 的名字折成兩行，
    整列就變高，下面每一列都被推下去，看起來就是「字被擠下去、位置跑掉」。 */
 .aps-icon-name {
-    display: block; max-width: 100%;
-    font-size: 11px; line-height: 18px; letter-spacing: 0.3px;
+    display: var(--aps-label-display, block); max-width: 100%;
+    font-size: var(--aps-label-size, 11px); line-height: var(--aps-label-lh, 18px);
+    font-weight: var(--aps-label-weight, 400); letter-spacing: 0.3px;
+    /* 圖標在左名字在右的時候，名字要靠左、而且吃掉剩下的寬度 */
+    text-align: var(--aps-label-align, center); flex: var(--aps-label-flex, 0 1 auto); min-width: 0;
     color: var(--aps-label-color);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -480,7 +540,9 @@
 .dlr-pad-inner { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-y: auto; padding: 10px 0; }
 /* 底部分頁列（iOS 風：通訊錄 / 鍵盤）*/
 /* 電話的底部導覽：跟其他 app 底下那條同一組格子（--os-nav-*，定義在 css/aurelia_theme.css）*/
+/* 🪧 order：9＝貼著畫面底（預設），-1＝跑到最上面。見 app_store.css 的 .ws-nav 同一條 */
 .dlr-tabbar {
+    order: var(--os-nav-order, 9);
     flex-shrink: 0; display: flex; box-sizing: border-box;
     height: var(--os-nav-height, 52px);
     margin: 0 var(--os-nav-inset, 0) var(--os-nav-gap-bottom, 0px);
@@ -490,12 +552,12 @@
     border-radius: var(--os-nav-radius, 0);
     box-shadow: var(--os-nav-shadow, none);
 }
-.dlr-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 0; background: transparent; border: none; cursor: pointer; color: var(--os-nav-ink, rgba(var(--os-ink-rgb), 0.45)); }
+.dlr-tab { flex: 1; display: flex; flex-direction: var(--os-nav-item-dir, column); align-items: center; justify-content: center; gap: 2px; padding: 4px 0; background: transparent; border: none; cursor: pointer; color: var(--os-nav-ink, rgba(var(--os-ink-rgb), 0.45)); }
 .dlr-tab.on { color: var(--os-nav-ink-on, #2a6ad0); }
 /* 墊的那塊只在圖標後面（同 wb-tab-icon 那條的理由）*/
 .dlr-tab-ic { font-size: var(--os-nav-icon-size, 19px); line-height: 1; padding: 3px 13px; border-radius: var(--os-nav-on-radius, 0); }
 .dlr-tab.on .dlr-tab-ic { background: var(--os-nav-on-bg, transparent); color: var(--os-nav-on-ink, var(--os-nav-ink-on, #2a6ad0)); }
-.dlr-tab-tx { font-size: var(--os-nav-label-size, 10px); }
+.dlr-tab-tx { font-size: var(--os-nav-label-size, 10px); display: var(--os-nav-label-display, block); }
 .dlr-num-disp { font-size: 30px; font-weight: 300; letter-spacing: 2px; min-height: 44px; margin: 18px 0 6px; word-break: break-all; text-align: center; padding: 0 16px; }
 .dlr-keys { display: grid; grid-template-columns: repeat(3, 72px); gap: 16px; justify-content: center; margin-top: 8px; }
 .dlr-key { width: 72px; height: 72px; border-radius: 50%; border: none; background: rgba(var(--os-ink-rgb), 0.06); font-size: 28px; cursor: pointer; transition: background 0.1s; color: var(--os-ink); }
