@@ -1131,7 +1131,10 @@
         _restoreGoHome();
         const body = _el.querySelector('#aps-app-body');
         if (body) body.innerHTML = '';
-        _el.querySelector('#aps-app').style.display = 'none';
+        const _app = _el.querySelector('#aps-app');
+        _app.style.display = 'none';
+        _app.style.opacity = '';           // 下次開才不會卡在透明
+        delete _app.dataset.open;
         _syncStatusBar();
         // 🚨 不准寫死 'flex'：主畫面現在是 grid（時鐘／widget／圖標格／底排四列）。
         //    寫死 flex 會把那四列攤成一橫排 —— 畫面會變成圖標格不見、底排變一整塊直條。
@@ -1166,20 +1169,44 @@
         body.appendChild(div);
         // app 內部「返回/home」按鈕原本呼叫 PhoneSystem.goHome → 暫時改成回手機主畫面
         if (win.PhoneSystem) { _savedGoHome = win.PhoneSystem.goHome; win.PhoneSystem.goHome = _home; }
-        _el.querySelector('#aps-home').style.display = 'none';
-        // 🚨 先標出「正在開哪一個」，CSS 才有辦法在畫出來之前就鋪對的底色。
-        //    沒有這一行的時候：容器露出來那一刻是空的、底色是系統頁面那個（淺色主題＝白），
-        //    聊天 app 自己的底要等它畫完才蓋上去 → 她看到的「閃白一下才出現面板」。
-        //    聊天 app 的 go() 還是非同步的，那一閃更明顯。
+        // 🚨🚨 她 2026-09-20 回報過兩次「閃白一下才出現面板」。
+        //    第一次我以為是容器自己的底色，先鋪對顏色就好 —— 沒有用，白的是別層。
+        //    第二次換做法，不去猜白的是哪一層：**app 畫好之前根本不讓她看到那一層**。
+        //    主畫面先留著不收、app 那層先全透明蓋在上面；等它真的畫出東西（或失敗）再一起切換。
+        //    聊天 app 開起來要先讀完資料庫、再掃整本正文重建聊天室，那段路很長，
+        //    中間她看到的是原本的主畫面，不是任何一塊空白。
+        const homeEl = _el.querySelector('#aps-home');
         const appEl = _el.querySelector('#aps-app');
         appEl.dataset.open = id;
         appEl.style.display = 'flex';
+        appEl.style.opacity = '0';
+        let _shown = false;
+        const _reveal = function () {
+            if (_shown) return;
+            _shown = true;
+            homeEl.style.display = 'none';
+            appEl.style.opacity = '';
+        };
+        // 🚨 保險：只防「那支 app 既不回報完成、也沒把東西畫進來」那種壞掉的情況。
+        //    正常的 app 有三條更早的路會切過去（自己回報完成、畫面長出東西、載入失敗），
+        //    所以這裡要設得夠久 —— 聊天 app 開起來要先讀資料庫、再掃整本正文重建聊天室，
+        //    故事長的時候會超過一秒，設太短會提早切過去、又讓她看到空的那一層。
+        const _revealTimer = setTimeout(_reveal, 3000);
+        // 畫面上真的長出東西就立刻切（多數 app 這一步很快，看起來就是直接開）
+        if (window.MutationObserver) {
+            const _ob = new MutationObserver(function () {
+                if (!div.children.length && !String(div.innerHTML).trim()) return;
+                _ob.disconnect(); clearTimeout(_revealTimer); _reveal();
+            });
+            _ob.observe(div, { childList: true, subtree: true });
+        }
         _syncStatusBar();
         // 🚨 app 的 go() 可能是 async（微信就是）。以前只 try/catch 同步錯誤 → 非同步炸掉時
         //    整個 promise 靜靜地 reject，螢幕上只剩那個空的 .aps-mount＝她看到的「白屏」，
         //    而她沒有 console 可以看是什麼錯。現在兩種都接，並且把錯誤直接印在螢幕上讓她複製。
         const fail = function (e) {
             console.warn('[PhoneShell] 掛載失敗', id, e);
+            _reveal();   // 失敗訊息塞在外層、不在我們盯著的那一塊，這裡要自己切過去，不然她只看到主畫面沒反應
             body.innerHTML = '<div class="aps-fail"><b>這個 app 載入失敗</b>'
                 + '<div class="aps-fail-why"></div>'
                 + '<button class="aps-fail-copy" type="button">複製錯誤</button></div>';
@@ -1208,10 +1235,12 @@
             if (cleanup && typeof cleanup.then === 'function') {
                 cleanup.then(function (cl) {
                     if (typeof cl === 'function') _leaveApp = cl;
+                    _reveal();   // app 自己說畫完了＝最準的時機（上面那個看畫面長東西的只是保險）
                     setTimeout(_emptyGuard, 600);
                 }, fail);
             } else {
                 if (typeof cleanup === 'function') _leaveApp = cleanup;
+                _reveal();   // 同步畫完的 app：這裡就已經畫好了
                 setTimeout(_emptyGuard, 1800);   // 同步的 app 也可能自己再去 await 東西，給它久一點
             }
         } catch (e) { fail(e); }
