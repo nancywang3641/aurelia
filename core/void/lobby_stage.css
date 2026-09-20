@@ -735,15 +735,13 @@
    📚 書咖沙發組的兩顆熱點（沙發＝我的角色、圓几＝世界書）
    書咖整間是奶油白＋原木，占卜那套酒紅金、帽匠那套紫金在這裡都太重
    → 換成暖褐配奶油字，跟房間同一個調。
-   🚨 還沒有描邊圖：一張圖上疊兩顆熱點，描邊要沿「沙發」與「圓几」各自的輪廓分開畫，
-      共用一張會互相蓋住。沒有圖的時候用淡暖光＋內框，仍然看得出來按得下去。
-   🚨 兩顆是靠 hotspots 的 rect 比例框分開的（見 lobby_stage.js 的 _mountHotspots），
-      挪沙發組的時候兩顆自己跟著走。
+   🚨 2026-09-20 沙發組拆成三張圖（沙發／圓几／圓毯各一張）之後，滑過去亮的是家具本身：
+      光沿著那張圖自己的形狀長出來（見下面 .lstage-obj-lit），所以沙發亮沙發、圓几亮圓几，
+      不必另外畫描邊圖。這裡的框就整個拿掉，只留下面那顆標籤。
+   🚨 一張圖只能畫一件東西 —— 三件畫在一起的話，一圈光會把三件一起框起來。
    ========================================================= */
 .lstage-hotspot.hs-cafe { padding-bottom:16px; }
-.lstage-hotspot.hs-cafe:hover {
-  background:var(--hs-hover-img, rgba(214,176,120,.14)) center / 100% 100% no-repeat;
-  box-shadow:0 0 0 2px rgba(176,134,86,.55) inset, 0 0 18px rgba(214,176,120,.22); }
+.lstage-hotspot.hs-cafe:hover { background:none; box-shadow:none; }
 .lstage-hotspot.hs-cafe .lstage-hotspot-chip {
   background:rgba(58,40,26,.86); color:#f6ead6; border:1px solid rgba(196,158,104,.55);
   font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
@@ -751,3 +749,14 @@
   opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
 .lstage-hotspot.hs-cafe:hover .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
 .lstage-hotspot.hs-cafe .lstage-hotspot-chip i { color:#e8c88a; font-size:11px; }
+
+/* ✨ 家具自己鑲一圈光（書咖的沙發與圓几；由 hotspots 的 lit 掛上來）
+   四個方向各一道零模糊的投影＝沿圖片透明邊緣長出的實心細邊，外面再疊一層散開的暖光。
+   🚨 這是照「圖片本身的形狀」算的，所以那張圖只能畫一件東西。
+   🚨 邊要用青銅色：書咖整間跟這幾件家具都是奶油白，淺金的邊壓在奶油白上幾乎看不見
+      （三個顏色試過：奶金糊掉、深褐像影子、青銅才看得出是「被點亮」）。 */
+.lstage-actor.lstage-obj { transition:filter .16s ease; }
+.lstage-obj.lstage-obj-lit {
+  filter:drop-shadow(2px 0 0 #a86a24) drop-shadow(-2px 0 0 #a86a24)
+         drop-shadow(0 2px 0 #a86a24) drop-shadow(0 -2px 0 #a86a24)
+         drop-shadow(0 0 12px rgba(255,196,110,.9)); }

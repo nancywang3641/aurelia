@@ -53,7 +53,7 @@
             // 🚨 沒有 mask：新底圖的地板形狀跟舊的對不上，碰撞改走 boundary 鋼索（同占卜小屋／帽匠工坊）。
             base: 'lobby_cafe_base_v3.png',
             upper: 'lobby_cafe_upper_v3.png',   // 前緣那排花圃＋台階：壓在最上層，小人走到下緣會被它擋住腳
-            cfgKey: 'lobby_stage_layout_cafe_v3',   // v3＝整組換素材，舊存檔（v1）的座標對新家具沒意義
+            cfgKey: 'lobby_stage_layout_cafe_v4',   // v4＝沙發組拆成三件（存檔是整份覆蓋，不升版會蓋掉新佈局）
             layout: [   // 目測擺位；她進擺設模式拖完複製數據回來換掉這份（同帽匠工坊那份的作法）
                 { file: 'lobby_cafe_obj_mat_v3.png',         x: 380,  y: 560, w: 637,  h: 383,  footH: 0,   s: 0.92, layer: 'floor', noCollide: true },  // 中央地毯(平貼地板)
                 { file: 'lobby_cafe_obj_bar_v3.png',         x: 95,   y: 250, w: 1259, h: 903,  footH: 200, s: 0.36 },   // 咖啡吧台(左後牆，含咖啡機與水槽)
@@ -65,7 +65,12 @@
                 { file: 'lobby_cafe_obj_table_v3.png',       x: 520,  y: 590, w: 861,  h: 1133, footH: 180, s: 0.27 },   // 圓桌(中央)
                 { file: 'lobby_cafe_obj_chair_l_v3.png',     x: 400,  y: 610, w: 648,  h: 1240, footH: 170, s: 0.23 },   // 曲木椅(桌左)
                 { file: 'lobby_cafe_obj_chair_r_v3.png',     x: 690,  y: 610, w: 658,  h: 1238, footH: 170, s: 0.23 },   // 曲木椅(桌右)
-                { file: 'lobby_cafe_obj_lounge_v3.png',      x: 830,  y: 530, w: 1074, h: 909,  footH: 240, s: 0.47 },   // 🎯 單人沙發＋圓几＋圓毯(互動點，見 hotspots)
+                // 🎯 沙發組：2026-09-20 從「一張圖畫三件東西」拆成三張（阿洛重畫）。
+                //    拆開是為了滑過去那圈光能沿著沙發／圓几自己的邊走 —— 三件畫在一起時，
+                //    一圈光只能把整組框起來，看不出按的是哪一件。
+                { file: 'lobby_cafe_obj_rug_v4.png',         x: 830,  y: 587, w: 1186, h: 869,  footH: 0,   s: 0.426, layer: 'floor', noCollide: true },  // 圓毯(沙發組底下，平貼地板)
+                { file: 'lobby_cafe_obj_sofa_v4.png',        x: 840,  y: 530, w: 877,  h: 859,  footH: 560, s: 0.345 },   // 🎯 單人沙發(互動點＝我的角色)
+                { file: 'lobby_cafe_obj_teatable_v4.png',    x: 1113, y: 684, w: 835,  h: 785,  footH: 430, s: 0.266 },   // 🎯 圓几＋茶具(互動點＝世界書)
                 { file: 'lobby_cafe_obj_cart_v3.png',        x: 170,  y: 620, w: 698,  h: 1129, footH: 150, s: 0.24 },   // 邊桌推車(左下)
                 { file: 'lobby_cafe_obj_plant_right_v3.png', x: 1300, y: 545, w: 735,  h: 1074, footH: 130, s: 0.23 },   // 龜背芋(右牆邊)
             ],
@@ -88,12 +93,13 @@
             doorsV: 3,
             // 🎯 單人沙發那組＝兩顆互動點（2026-09-20 從手機的應用工坊搬過來的）。
             //    坐的那張沙發＝我的角色，旁邊的圓几＝世界書；兩件事分開，各自直接開，不再多一層選單。
-            //    rect 是「佔這件家具的哪一塊」的比例框，所以她在擺設模式挪沙發組，兩顆熱點自己跟上。
+            //    一顆管一件家具（沙發一張圖、圓几一張圖）→ 不用再切比例框，滑過去亮的就是那一件本身。
+            //    照樣跟著家具走：她在擺設模式挪沙發或圓几，熱點自己跟上。
             hotspots: [
-                { obj: 'obj_lounge', rect: [0.02, 0.00, 0.60, 0.72], label: '我的角色', icon: 'fa-user-pen',
-                  open: 'persona', cls: 'hs-cafe' },
-                { obj: 'obj_lounge', rect: [0.56, 0.36, 0.44, 0.64], label: '世界書', icon: 'fa-book-open',
-                  open: 'worldbook', cls: 'hs-cafe' },
+                { obj: 'obj_sofa_v4', label: '我的角色', icon: 'fa-user-pen',
+                  open: 'persona', cls: 'hs-cafe', lit: true },
+                { obj: 'obj_teatable_v4', label: '世界書', icon: 'fa-book-open',
+                  open: 'worldbook', cls: 'hs-cafe', lit: true },
             ],
         },
         hall: {
@@ -2265,9 +2271,12 @@
     function _mountHotspots() {
         (SCENES[S.scene].hotspots || []).forEach(hs => {
             let box = hs;
+            let litEl = null;   // hs.lit＝滑過時亮的是家具本身（見下面 lstage-obj-lit）
             if (hs.obj) {
-                const o = (CFG.layout || []).find(l => String(l.file || '').indexOf(hs.obj) >= 0);
+                const oi = (CFG.layout || []).findIndex(l => String(l.file || '').indexOf(hs.obj) >= 0);
+                const o = oi < 0 ? null : CFG.layout[oi];
                 if (!o || o._plotOff) return;   // 家具不在（換過素材／地塊沒蓋）→ 這顆熱點就不要
+                if (hs.lit) litEl = S.objEls?.[oi] || null;
                 const s = o.s || 1;
                 // hRatio＝只取家具上半那一段（不給就是整件；熱點要跟 hoverImg 對齊時務必留 1）
                 box = { x: o.x, y: o.y, w: o.w * s, h: o.h * s * (hs.hRatio || 1) };
@@ -2288,6 +2297,13 @@
             //    熱點框＝家具的完整矩形，圖用 100% 100% 鋪滿 → 跟家具本體像素對齊。
             //    圖只留外圈金邊、中間透明，才不會蓋掉椅背與走到桌前的小人（熱點在 z:1500）。
             if (hs.hoverImg) el.style.setProperty('--hs-hover-img', 'url("' + CDN + hs.hoverImg + '")');
+            // ✨ hs.lit＝不用另外畫描邊圖：滑過去的時候讓「那張家具圖自己」鑲一圈光。
+            //    光是照圖片本身的形狀長出來的，所以沙發亮沙發、圓几亮圓几，各是各的輪廓。
+            //    🚨 前提是一張圖只畫一件東西 —— 一張圖畫三件，一圈光會把三件一起框起來。
+            if (litEl) {
+                el.addEventListener('mouseenter', () => litEl.classList.add('lstage-obj-lit'));
+                el.addEventListener('mouseleave', () => litEl.classList.remove('lstage-obj-lit'));
+            }
             if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid ' +
                 (hs.icon || 'fa-door-open') + '"></i> ' + hs.label + '</span>';
             el.addEventListener('click', (e) => {
