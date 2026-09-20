@@ -1874,14 +1874,48 @@
         let msgs = null;
         try { msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null; } catch (e) {}
         if (!Array.isArray(msgs)) return { rooms: rooms, lastFloor: -1, ok: false };
-        // 💰 [Pay|金額|單號|花在哪]：劇情裡主角花掉的錢（掃碼付款那種）。
+        // 💰 主角在劇情裡花掉的錢（掃碼付款、買東西、付車資）。
         //    不屬於任何一間聊天室，所以掃整篇，不限在 <chat> 容器裡面。
         //    真的扣錢在下面結算時做，跟收下轉帳共用同一份「已經算過的單號」擋重複。
+        //
+        //    💳 主要認的是她那張「微信掃碼付款」的畫面卡：卡片上本來就寫了金額、買了什麼、交易單號，
+        //       所以正文裡跳了那張卡就等於付了錢，不用再另外寫一句付款的話。她的原話：
+        //       「反正都要跳卡展示了，沒必要再另外做一個標籤吧? 沒完沒了」。
+        //       🚨 這不等於「展示組件可以碰錢包」——動錢的還是這裡（掃整本正文那一層），
+        //          卡片自己的程式從頭到尾沒碰過錢包，所以劇情重跑也不會重扣。
+        //    🚨 交易單號在卡上是選填的。沒寫就用「商戶＋金額＋買了什麼」當鑰匙，同一組出現第幾次就算第幾筆，
+        //       這樣同一段重播不會重扣、真的買兩次一樣的東西也還是算兩筆。
+        //    📜 舊的 [Pay|金額|單號|花在哪] 照樣認（以前寫過的劇情往回讀還在），但已經不教 AI 寫了。
+        //       同一則裡卡片跟舊寫法金額一樣＝同一筆，只算卡片那一次。
         const payEvents = [];
+        const _paySeen = {};
         for (let f = 0; f < msgs.length; f++) {
             const m = msgs[f];
             const t = (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || '');
-            if (!t || t.indexOf('[Pay') < 0) continue;
+            if (!t) continue;
+            const cardAmts = {};
+            if (t.indexOf('[Payment') >= 0) {
+                let shop = '';
+                t.split(/\r?\n/).forEach(function (ln) {
+                    const sm = ln.match(/\[\s*Merchant\s*\|([^\]]*)\]/i);
+                    if (sm) { shop = String(sm[1] || '').split('|')[0].trim(); return; }
+                    const cm = ln.match(/\[\s*Payment\s*\|([^\]]*)\]/i);
+                    if (!cm) return;
+                    const cs = String(cm[1] || '').split('|').map(function (x) { return x.trim(); });
+                    const amt = parseFloat(cs[0]);
+                    if (!(amt > 0)) return;
+                    const what = cs[1] || '';
+                    let id = cs[3] || '';
+                    if (!id) {
+                        const k = 'wxpay:' + shop + '|' + amt + '|' + what;
+                        _paySeen[k] = (_paySeen[k] || 0) + 1;
+                        id = k + '#' + _paySeen[k];
+                    }
+                    cardAmts[amt] = true;
+                    payEvents.push({ amount: amt, txnId: id, why: [shop, what].filter(Boolean).join(' - ') || '掃碼付款' });
+                });
+            }
+            if (t.indexOf('[Pay') < 0) continue;
             const re = /\[\s*Pay\s*\|([^\]]*)\]/gi;
             let pm;
             while ((pm = re.exec(t))) {
@@ -1889,6 +1923,7 @@
                 const amt = parseFloat(ps[0]);
                 const id = ps[1] || '';
                 if (!(amt > 0) || !id) continue;
+                if (cardAmts[amt]) continue;   // 這一則已經有一張同金額的卡＝同一筆，別扣兩次
                 payEvents.push({ amount: amt, txnId: id, why: ps[2] || '' });
             }
         }
