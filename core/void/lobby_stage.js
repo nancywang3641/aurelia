@@ -70,7 +70,7 @@
                 //    一圈光只能把整組框起來，看不出按的是哪一件。
                 { file: 'lobby_cafe_obj_rug_v4.png',         x: 830,  y: 587, w: 1186, h: 869,  footH: 0,   s: 0.426, layer: 'floor', noCollide: true },  // 圓毯(沙發組底下，平貼地板)
                 { file: 'lobby_cafe_obj_sofa_v4.png',        x: 840,  y: 530, w: 877,  h: 859,  footH: 560, s: 0.345 },   // 🎯 單人沙發(互動點＝我的角色)
-                { file: 'lobby_cafe_obj_teatable_v4.png',    x: 1113, y: 684, w: 835,  h: 785,  footH: 430, s: 0.266 },   // 🎯 圓几＋茶具(互動點＝世界書)
+                { file: 'lobby_cafe_obj_teatable_v4.png',    x: 1078, y: 652, w: 835,  h: 785,  footH: 430, s: 0.266 },   // 🎯 圓几＋茶具(互動點＝世界書)
                 { file: 'lobby_cafe_obj_cart_v3.png',        x: 170,  y: 620, w: 698,  h: 1129, footH: 150, s: 0.24 },   // 邊桌推車(左下)
                 { file: 'lobby_cafe_obj_plant_right_v3.png', x: 1300, y: 545, w: 735,  h: 1074, footH: 130, s: 0.23 },   // 龜背芋(右牆邊)
             ],
