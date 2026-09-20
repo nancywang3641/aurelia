@@ -82,15 +82,18 @@
 .wxmo-pop button + button { border-left: 1px solid rgba(0,0,0,.25); }
 
 /* 讚與留言那塊灰底 */
-.wxmo-social { position: relative; margin-top: 8px; border-radius: 4px; background: var(--wx-bar); font-size: 14px; line-height: 1.5; }
+/* 讚與留言那一塊：底是分頁列那個底（--wx-bar），字就一定要用「那個底上的字」（--wx-bar-ink），
+   不能借卡片的字色或可點的字色——主題只要把那兩格調成跟底一樣，名字或留言內容就整條看不見（她 09-20：試好幾次，
+   一次名字跟底色一樣、一次內容跟底色一樣）。沒套主題時 --wx-bar-ink 是空的，照舊用原本那兩個顏色。 */
+.wxmo-social { position: relative; margin-top: 8px; border-radius: 4px; background: var(--wx-bar); color: var(--wx-bar-ink, var(--wx-ink)); font-size: 14px; line-height: 1.5; }
 .wxmo-social::before { content: ''; position: absolute; top: -6px; left: 12px; border: 6px solid transparent; border-top: 0; border-bottom-color: var(--wx-bar); }
-.wxmo-likes { display: flex; gap: 6px; padding: 5px 9px; color: var(--wx-link); overflow-wrap: anywhere; }
+.wxmo-likes { display: flex; gap: 6px; padding: 5px 9px; color: var(--wx-bar-ink, var(--wx-link)); overflow-wrap: anywhere; }
 .wxmo-likes i { margin-top: 4px; font-size: 12px; }
 .wxmo-likes + .wxmo-cms { border-top: 1px solid var(--wx-line); }
 .wxmo-cms { padding: 4px 9px; }
 .wxmo-cm { padding: 1px 0; overflow-wrap: anywhere; cursor: pointer; }
 .wxmo-cm:active { background: color-mix(in srgb, currentColor 8%, transparent); }
-.wxmo-cm b { color: var(--wx-link); font-weight: 600; }
+.wxmo-cm b { color: var(--wx-bar-ink, var(--wx-link)); font-weight: 600; }
 .wxmo-cm i { font-style: normal; margin: 0 3px; color: inherit; }
 
 .wxmo-empty { padding: 60px 20px; text-align: center; color: color-mix(in srgb, currentColor 45%, transparent); font-size: 14px; }
@@ -98,7 +101,7 @@
 .wxmo-empty i { display: block; font-size: 30px; margin-bottom: 10px; }
 
 /* 底部留言列 */
-.wxmo-input { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: var(--wx-bar); border-top: 1px solid var(--wx-line); flex-shrink: 0; }
+.wxmo-input { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: var(--wx-bar); color: var(--wx-bar-ink, var(--wx-ink)); border-top: 1px solid var(--wx-line); flex-shrink: 0; }
 .wxmo-input[hidden] { display: none; }
 .wxmo-in { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--wx-line) !important; border-radius: 6px; background: var(--wx-surface) !important; color: var(--wx-ink) !important; font-size: 15px; outline: none; box-sizing: border-box; }
 .wxmo-send { flex-shrink: 0; height: 32px; padding: 0 14px; border: none; border-radius: 5px; background: var(--wx-accent); color: var(--wx-on-accent); font-size: 14px; cursor: pointer; }
