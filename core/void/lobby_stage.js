@@ -54,29 +54,35 @@
             base: 'lobby_cafe_base_v3.png',
             upper: 'lobby_cafe_upper_v3.png',   // 前緣那排花圃＋台階：壓在最上層，小人走到下緣會被它擋住腳
             cfgKey: 'lobby_stage_layout_cafe_v4',   // v4＝沙發組拆成三件（存檔是整份覆蓋，不升版會蓋掉新佈局）
-            layout: [   // 目測擺位；她進擺設模式拖完複製數據回來換掉這份（同帽匠工坊那份的作法）
-                { file: 'lobby_cafe_obj_mat_v3.png',         x: 380,  y: 560, w: 637,  h: 383,  footH: 0,   s: 0.92, layer: 'floor', noCollide: true },  // 中央地毯(平貼地板)
-                { file: 'lobby_cafe_obj_bar_v3.png',         x: 95,   y: 250, w: 1259, h: 903,  footH: 200, s: 0.36 },   // 咖啡吧台(左後牆，含咖啡機與水槽)
-                { file: 'lobby_cafe_obj_counter_v3.png',     x: 560,  y: 270, w: 1956, h: 593,  footH: 150, s: 0.38 },   // 點心櫃檯(後牆中央，瀅瀅站這裡)
-                { file: 'lobby_cafe_obj_plant_back_v3.png',  x: 200,  y: 350, w: 876,  h: 1056, footH: 130, s: 0.24 },   // 大盆栽(左後角)
-                { file: 'lobby_cafe_obj_shelf_v3.png',       x: 1120, y: 285, w: 760,  h: 1113, footH: 150, s: 0.30 },   // 書櫃(右後牆)
-                { file: 'lobby_cafe_obj_cabinet_v3.png',     x: 1250, y: 430, w: 680,  h: 1099, footH: 150, s: 0.25 },   // 玻璃展示櫃(右牆)
-                { file: 'lobby_cafe_obj_console_v3.png',     x: 120,  y: 500, w: 643,  h: 904,  footH: 200, s: 0.38 },   // 畫架＋盆栽(左牆)
-                { file: 'lobby_cafe_obj_table_v3.png',       x: 520,  y: 590, w: 861,  h: 1133, footH: 180, s: 0.27 },   // 圓桌(中央)
-                { file: 'lobby_cafe_obj_chair_l_v3.png',     x: 400,  y: 610, w: 648,  h: 1240, footH: 170, s: 0.23 },   // 曲木椅(桌左)
-                { file: 'lobby_cafe_obj_chair_r_v3.png',     x: 690,  y: 610, w: 658,  h: 1238, footH: 170, s: 0.23 },   // 曲木椅(桌右)
-                // 🎯 沙發組：2026-09-20 從「一張圖畫三件東西」拆成三張（阿洛重畫）。
-                //    拆開是為了滑過去那圈光能沿著沙發／圓几自己的邊走 —— 三件畫在一起時，
-                //    一圈光只能把整組框起來，看不出按的是哪一件。
-                { file: 'lobby_cafe_obj_rug_v4.png',         x: 830,  y: 587, w: 1186, h: 869,  footH: 0,   s: 0.426, layer: 'floor', noCollide: true },  // 圓毯(沙發組底下，平貼地板)
-                { file: 'lobby_cafe_obj_sofa_v4.png',        x: 840,  y: 530, w: 877,  h: 859,  footH: 560, s: 0.345 },   // 🎯 單人沙發(互動點＝我的角色)
-                { file: 'lobby_cafe_obj_teatable_v4.png',    x: 1078, y: 652, w: 835,  h: 785,  footH: 430, s: 0.266 },   // 🎯 圓几＋茶具(互動點＝世界書)
-                { file: 'lobby_cafe_obj_cart_v3.png',        x: 170,  y: 620, w: 698,  h: 1129, footH: 150, s: 0.24 },   // 邊桌推車(左下)
-                { file: 'lobby_cafe_obj_plant_right_v3.png', x: 1300, y: 545, w: 735,  h: 1074, footH: 130, s: 0.23 },   // 龜背芋(右牆邊)
+            layout: [   // ⬇ Rae 擺設模式輸出（複製數據）；改版請直接換這份
+                { file: "lobby_cafe_obj_mat_v3.png", x: 780, y: 387, w: 637, h: 383, footH: 0, s: 0.234, layer: "floor", noCollide: true },   // 長毯(中央走道，平貼地板)
+                { file: "lobby_cafe_obj_bar_v3.png", x: 342, y: 91, w: 1259, h: 903, footH: 200, s: 0.309 },   // 咖啡吧台(左後牆，含咖啡機與水槽)
+                { file: "lobby_cafe_obj_counter_v3.png", x: 323, y: 387, w: 1956, h: 593, footH: 180, s: 0.224 },   // 點心櫃檯(瀅瀅站這裡)
+                { file: "lobby_cafe_obj_plant_back_v3.png", x: 154, y: 254, w: 876, h: 1056, footH: 130, s: 0.104 },   // 大盆栽(左後角)
+                { file: "lobby_cafe_obj_shelf_v3.png", x: 1294, y: 135, w: 760, h: 1113, footH: 150, s: 0.217 },   // 書櫃(右後牆)
+                { file: "lobby_cafe_obj_cabinet_v3.png", x: 732, y: 170, w: 680, h: 1099, footH: 150, s: 0.182 },   // 玻璃展示櫃(後牆中央)
+                { file: "lobby_cafe_obj_console_v3.png", x: 70, y: 559, w: 643, h: 904, footH: 200, s: 0.277, zb: -446 },   // 畫架＋盆栽(左牆；zb 把它壓回牆邊)
+                { file: "lobby_cafe_obj_table_v3.png", x: 451, y: 587, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v3.png", x: 400, y: 610, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v3.png", x: 549, y: 608, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_rug_v4.png", x: 1163, y: 365, w: 1186, h: 869, footH: 0, s: 0.184, layer: "floor", noCollide: true },   // 圓毯(沙發組底下，平貼地板)
+                { file: "lobby_cafe_obj_sofa_v4.png", x: 1199, y: 312, w: 877, h: 859, footH: 560, footW: 703, s: 0.134 },   // 🎯 單人沙發(互動點＝我的角色)
+                { file: "lobby_cafe_obj_teatable_v4.png", x: 1243, y: 383, w: 835, h: 785, footH: 230, footW: 385, s: 0.142 },   // 🎯 圓几＋茶具(互動點＝世界書)
+                { file: "lobby_cafe_obj_cart_v3.png", x: 852, y: 223, w: 698, h: 1129, footH: 150, s: 0.127 },   // 邊桌推車
+                { file: "lobby_cafe_obj_plant_right_v3.png", x: 1213, y: 247, w: 735, h: 1074, footH: 130, s: 0.099 },   // 龜背芋
+                { file: "lobby_cafe_obj_chair_r_v3.png", x: 996, y: 781, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v3.png", x: 898, y: 761, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v3.png", x: 847, y: 784, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v3.png", x: 1054, y: 513, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v3.png", x: 956, y: 492, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v3.png", x: 905, y: 515, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v3.png", x: 1364, y: 681, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v3.png", x: 1266, y: 659, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v3.png", x: 1215, y: 683, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
             ],
             points: {
-                yingZone: { x: 620, y: 505, w: 620, h: 30 },      // 瀅瀅在點心櫃檯前那一條
-                npcZone:  { x: 260, y: 600, w: 1000, h: 220 },    // 客人出沒區（輪班NPC隨機刷在框內）
+                yingZone: { x: 342, y: 447, w: 380, h: 30 },      // 瀅瀅在點心櫃檯前那一條
+                npcZone:  { x: 160, y: 527, w: 1346, h: 392 },    // 客人出沒區（輪班NPC隨機刷在框內）
                 player: { x: 720, y: 790 },
                 arrive: { x: 720, y: 870 },   // 走門進來的落點（從街區進書咖：底部大門前）
                 // 外框鋼索：可走範圍多邊形，照新底圖的地板梯形（牆往前是外八）；牆角錨點可在擺設模式拖
