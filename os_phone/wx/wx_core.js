@@ -1822,6 +1822,19 @@
     // 💴 卡片上的金額欄 AI 常寫成「¥128」「128.00 元」「1,280」——只留數字再算，
     //    不然 parseFloat 直接 NaN＝卡片跳出來了、錢卻沒扣（她看得到的東西跟錢包對不上）。
     //    「金額任意」那種整格沒有數字的照樣算不出來，等於不扣，是對的。
+    // 🎯 付款畫面第一行的「收款人」是不是主角本人。
+    //    🚨 不能只比名字：VN 指令要角色名寫簡體、她的人設名是繁體，AI 每次都在繁簡之間搖擺
+    //       （她：「與其這樣還不如 {{user}}　因為AI肯定又在繁簡纏鬥MC名」）。
+    //       所以指令改成叫它寫 {{user}}；酒館有沒有先把這個字換成真名都吃得到：
+    //       沒換＝這裡認得這個記號，換了＝落回名字比對（名字比對已經不分繁簡）。
+    //    主角／MC／我／User 這幾種寫法一起認，跟大廳認主角用的是同一組記號。
+    const _MC_MARKS = ['{{user}}', '主角', 'mc', '我', 'user', 'self', 'you'];
+    function _isMcPayee(name) {
+        const n = String(name || '').trim();
+        if (!n) return false;
+        if (_MC_MARKS.indexOf(n.toLowerCase()) >= 0) return true;
+        return _isMyName(n);
+    }
     function _payAmt(v) { return parseFloat(String(v == null ? '' : v).replace(/[^0-9.]/g, '')); }
     function _moneyDone() {
         try { return JSON.parse(localStorage.getItem('wx_story_money_done') || '{}')[_wxRemapChatId()] || {}; }
@@ -1913,7 +1926,7 @@
                     //    寫主角＝有人掃主角的碼付錢給他（進帳）；寫別人或店名＝主角付出去（出帳）。
                     //    🚨 她回報過一次 25000 的轉帳收款完全沒進錢包 —— 那時候一律當成付款在扣，
                     //       金額又比餘額大，扣不成就整筆靜靜不見。
-                    const mine = _isMyName(shop);
+                    const mine = _isMcPayee(shop);
                     let id = cs[3] || '';
                     if (!id) {
                         const k = 'wxpay:' + shop + '|' + amt + '|' + what;

@@ -328,8 +328,24 @@
             };
         },
 
+        // 👤 資料行裡的 {{user}} 換成主角現在的名字。
+        //    AI 寫主角名字時繁簡老是搖擺，所以指令改成叫它寫 {{user}}（見付款畫面那張卡）。
+        //    酒館在送進模型之前有沒有先把它換掉都不一定，所以這裡再換一次
+        //    —— 沒換到就會有一張卡上大大寫著「{{user}}」，那本身就是壞掉的畫面。
+        _meName: function() {
+            const w = window.parent || window;
+            try { const n = String(w.WX_ME.name() || '').trim(); if (n && n !== 'User') return n; } catch (e) {}
+            try { const i = w.OS_USER.getInfo(); const n = String((i && i.name) || '').trim(); if (n && n !== 'User') return n; } catch (e) {}
+            return '我';
+        },
+        _fillMacros: function(lines) {
+            const me = this._meName();
+            return (lines || []).map(ln => String(ln == null ? '' : ln).split('{{user}}').join(me));
+        },
+
         // --- 執行區塊微型 App (核心魔法) ---
         _renderBlock: function(tagId, lines, vnCore) {
+            lines = this._fillMacros(lines);
             const tpl = this.activeTemplates.find(t => t.tagId.toLowerCase() === tagId.toLowerCase());
             // 🔊 組件登場音效：block 組件走這條(非 _showDomBlock)，彈出即播(來源=素材音效目錄，留空不播)
             if (tpl && tpl.appearSfx && vnCore && vnCore.playSFX) { try { vnCore.playSFX(tpl.appearSfx); } catch (e) {} }
