@@ -287,7 +287,14 @@
 .aps-icon:hover .aps-icon-em { transform: translateY(-2px); }
 .aps-icon:active .aps-icon-em { transform: scale(0.94); }
 .aps-dock .aps-icon { flex: 1; align-self: center; gap: 3px; }
-.aps-dock .aps-icon-em { width: 40px; height: 36px; border: 0; box-shadow: none; border-radius: var(--aps-dock-icon-radius); background: var(--aps-dock-icon-bg); color: var(--aps-dock-icon-color); }
+/* 🚨 框線與陰影以前寫死沒有：做主題的說明卻要求「常用列那四顆跟主畫面圖標同一種做法」，
+      選了有框線的做法時這裡做不到 —— 規則要它做一件沒給工具做的事。改成也吃格子，預設仍是沒有。 */
+.aps-dock .aps-icon-em {
+    width: 40px; height: 36px;
+    border: var(--aps-dock-icon-border, 0 solid transparent);
+    box-shadow: var(--aps-dock-icon-shadow, none);
+    border-radius: var(--aps-dock-icon-radius); background: var(--aps-dock-icon-bg); color: var(--aps-dock-icon-color);
+}
 .aps-dock .aps-icon-em > i { font-size: 18px; }
 .aps-dock .aps-icon-name { font-size: 10px; line-height: 14px; }
 .aps-icon-em.aps-icon-img { font-size: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }

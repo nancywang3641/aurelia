@@ -52,7 +52,10 @@
         { k: '--aps-icon-gap',        t: 'len',   h: '圖標跟它名字之間的距離' },
         { k: '--aps-label-size',      t: 'len',   h: '圖標底下那行字多大' },
         { k: '--aps-label-weight',    t: 'int',   min: 100, max: 900, h: '那行字多粗。400＝一般，700＝粗' },
-        { k: '--aps-font',            t: 'font',  h: '整支手機的字體，寫字體名就好（可以寫好幾個用逗號隔開）' },
+        { k: '--aps-font',            t: 'font',  h: '整支手機的字體。只能從這幾個裡面挑，挑一到三個用逗號隔開，最後補一個 sans-serif：'
+            + 'Segoe UI（一般無襯線）／Microsoft JhengHei（中文黑體）／Segoe Print、Comic Sans MS（手寫感）／'
+            + 'Georgia、Times New Roman（襯線、書本感）／Courier New（打字機）／KaiTi、DFKai-SB（中文楷書）。'
+            + '這幾個以外的字體畫面上不一定有，寫了等於沒寫' },
 
         // ── 配色：手機主畫面 ──
         { k: '--aps-wallpaper',       t: 'bg',    h: '桌布。純色、漸層都行' },
@@ -80,6 +83,8 @@
         { k: '--aps-dock-icon-bg',    t: 'bg',    h: '常用列裡那四顆圖標的底' },
         { k: '--aps-dock-icon-color', t: 'color', h: '常用列裡那四顆圖標的符號顏色' },
         { k: '--aps-dock-icon-radius',t: 'len',   h: '常用列裡那四顆圖標的圓角' },
+        { k: '--aps-dock-icon-border',t: 'bd',   h: '常用列裡那四顆圖標的框線，例如 1px solid #333。不要框線給 0 solid transparent' },
+        { k: '--aps-dock-icon-shadow',t: 'shadow',h: '常用列裡那四顆圖標的陰影。none＝沒有' },
 
         // ── 常用列 ──
         { k: '--aps-dock-height',     t: 'len',   h: '常用列的高' },
@@ -191,6 +196,7 @@
         const line = function (f) { return '- ' + f.h + '　設定名稱：' + f.k; };
         const need = FIELDS.filter(function (f) { return !f.o; }).map(line).join(String.fromCharCode(10));
         const opt  = FIELDS.filter(function (f) { return f.o; }).map(line).join(String.fromCharCode(10));
+        const pairs = PAIRS.map(function (q) { return '- ' + q.t + '　要 ' + q.min + ' 倍以上　（' + q.fg + ' 壓在 ' + q.bg[0] + ' 上）'; }).join(String.fromCharCode(10));
         const sk   = LAYOUT.map(function (f) { return '- ' + f.h + '　設定名稱：' + f.k + '，只能填 ' + f.v.join(' / '); }).join(String.fromCharCode(10));
         return [
             '# 你的工作',
@@ -219,6 +225,12 @@
             '- **分頁列**：這種頁面最底下橫著的一排，用來在這個應用程式的幾個分頁之間切換。',
             '  每一顆分頁上有一個符號跟一行字，現在在哪一頁那顆會用重點色標出來。',
             '',
+            '**名字跟設定名稱怎麼對**：下面每一項設定的名稱都是英文，對應關係固定如下，照這個對，不要自己猜：',
+            '- 開頭是 --aps- 的，管的是主畫面上的東西（桌布、應用圖標、換頁圓點、常用列、小工具方塊）。',
+            '- 開頭是 --os- 的，管的是系統頁面裡的東西（整頁的底、標題列、卡片、按鈕、文字、分隔線）。',
+            '- 名稱裡有 dock 的一律指常用列；有 nav 的一律指分頁列；有 icon 的指應用圖標；有 label 的指圖標底下那行字；',
+            '  有 dot 的指換頁圓點；有 grid 的指主畫面圖標的排列；有 deco 的指桌布上的裝飾。',
+            '',
             '# 第一步：先決定東西怎麼擺',
             '同樣一支手機換了顏色還是同一支手機。真正讓兩套看起來是兩支不同的手機的，是東西擺在哪裡、多大、多密。',
             '所以先挑下面這四個，挑得跟使用者那句話有關係，不要每次都挑一樣的：',
@@ -227,7 +239,7 @@
             '挑完檢查這幾條，不合就回去改：',
             '- 一排只放 2 個應用程式時，符號底下那塊要大（寬 70 像素以上）；放 4 到 5 個時要小（40 像素上下），名字也要跟著縮小。',
             '- 選了「符號在左、名字在右」，一排最多放 2 個，再多名字就沒地方擺。',
-            '- 選了「只有符號、不要名字」，符號底下一定要墊一塊有顏色或有框線的方塊，不然桌布上只剩幾個孤零零的線條。',
+            '- 主畫面選了「只有符號、不要名字」，符號底下一定要墊一塊有顏色或有框線的方塊（--aps-icon-bg 或 --aps-icon-line），不然桌布上只剩幾個孤零零的線條。分頁列選只有符號則不必，那邊本來就有底色。',
             '- 常用列選了浮起來那種，左右留白要 10 到 16 像素、圓角要大、要有陰影，它才像浮著；貼底那種這三樣都給 0。',
             '',
             '# 第二步：把下面每一項都填上一個值',
@@ -241,12 +253,21 @@
             '不需要就整組都不要寫（兩塊各自獨立，可以只要一塊）。',
             opt,
             '',
+            '# 哪些顏色是一對的',
+            '下面每一行是「一個字（或符號）」配「它壓在上面的那塊底」。'
+              + '一對裡的兩個顏色不可以相近，不然畫面上就是黑底黑字、白底白字，字整個看不見。',
+            '判斷方法：把兩個顏色的亮度算出來（亮的加 0.05 除以暗的加 0.05），每一行後面標幾倍就要達到幾倍以上。'
+              + '抓不準就讓兩邊差更多，寧可對比過頭也不要看不清楚。',
+            pairs,
+            '上面寫「它底下那塊」的那幾對，如果你把那塊底填成 transparent，那它壓的其實是再下面那層'
+              + '（圖標底透明就是壓在桌布上，常用列的符號底透明就是壓在常用列的底上、常用列的底也透明就是桌布）。這種情況拿真正看得到的那層來比。',
+            '',
             '# 配色要注意的',
             '1. 整套要像同一個東西做出來的：主畫面、系統頁面、常用列、分頁列的顏色是一家人。',
-            '2. 系統頁面整頁的底跟卡片的底要分得出來，深淺差一階。',
-            '3. 底是深色時字要夠亮，底是淺色時字要夠深，每一組字跟它背後那塊底都要看得清楚。',
-            '4. 應用圖標的做法選一種貫徹到底：沒有底的裸符號、圓角方塊、圓形、有框線、有陰影——',
-            '   選好之後常用列那四顆也用同一種做法，不要一個是圓的一個是方的。',
+            '2. 系統頁面整頁的底跟卡片的底要分得出來：兩個顏色不能一樣，亮度差大約一到兩成。淺色那套卡片比整頁亮，深色那套卡片比整頁亮一點點。',
+            '3. 底是深色時字要夠亮，底是淺色時字要夠深——上面「哪些顏色是一對的」那張表列出了全部要檢查的組合，填完自己對一遍。',
+            '4. 應用圖標的做法選一種貫徹到底：沒有底的裸符號、圓角方塊、圓形、有框線、有陰影。',
+            '   選好之後常用列那四顆用同一種做法——它有自己的底色、符號色、圓角、框線、陰影五項，跟主畫面那組配成一套，不要一個是圓的一個是方的。',
             '5. 分頁列現在在哪一頁那一顆，可以只換符號顏色，也可以在符號後面墊一小塊底色當標記，兩種挑一種。',
             '',
             '# 不可以做的事',
@@ -345,6 +366,60 @@
         else if (navItem === 'iconOnly') out['--os-nav-label-display'] = 'none';
     }
 
+
+    // ── 👓 誰壓在誰上面：一對一對列出來，交稿後真的量一次 ─────────────
+    //   阿洛 2026-09-20 提的：光叫它「底深字要亮」沒用，要明講**哪兩項是一對**，
+    //   一對之間不可以是相近色，不然就是黑底黑字、白底白字。
+    //   兩個失憶檢查的測試員也都指同一件事：「對比度沒有算式、沒有預覽，永遠沒把握」。
+    //   所以這張表兩用：① 生進提示詞，讓它知道自己在配哪幾對 ② 交稿後照它算對比，不夠就點名。
+    // 🚨 under 是「這一格透明時底色退到哪一層」，一層一層退（圖標底透明→退到桌布）。
+    //   退到底還是拿不到純色（例如桌布是漸層）就跳過那一對，不要誤報。
+    // 🚨 min：一般文字 4.5，圖標符號那種大塊的 3（比照無障礙那套的大字標準）。
+    const PAIRS = [
+        { fg: '--aps-label-color',     bg: ['--aps-wallpaper'],                                  min: 4,   t: '圖標底下那行字／桌布' },
+        { fg: '--aps-muted',           bg: ['--aps-wallpaper'],                                  min: 3,   t: '主畫面比較淡的字／桌布（本來就該淡，照大字標準）' },
+        { fg: '--aps-sb-color',        bg: ['--aps-wallpaper'],                                  min: 4,   t: '最上面時間訊號那排／桌布' },
+        { fg: '--aps-icon-color',      bg: ['--aps-icon-bg', '--aps-wallpaper'],                 min: 3,   t: '圖標符號／它底下那塊' },
+        { fg: '--aps-dock-icon-color', bg: ['--aps-dock-icon-bg', '--aps-dock-bg', '--aps-wallpaper'], min: 3, t: '常用列的符號／它底下那塊' },
+        { fg: '--aps-label-color',     bg: ['--aps-dock-bg', '--aps-wallpaper'],                 min: 4,   t: '常用列那四個字／常用列的底' },
+        { fg: '--aps-label-color',     bg: ['--aps-w-bg', '--aps-wallpaper'],                    min: 4,   t: '小工具方塊裡的字／方塊的底' },
+        { fg: '--os-ink',              bg: ['--os-page-bg'],                                     min: 4.5, t: '系統頁面主字／整頁的底' },
+        { fg: '--os-ink',              bg: ['--os-surface'],                                     min: 4.5, t: '系統頁面主字／卡片的底' },
+        { fg: '--os-ink-soft',         bg: ['--os-page-bg'],                                     min: 4,   t: '次要的字／整頁的底' },
+        { fg: '--os-ink-dim',          bg: ['--os-surface'],                                     min: 3,   t: '更淡的字／卡片的底' },
+        { fg: '--os-ink',              bg: ['--os-chrome-bg', '--os-page-bg'],                   min: 4.5, t: '標題列的字／標題列的底' },
+        { fg: '--os-on-accent',        bg: ['--os-accent'],                                      min: 3,   t: '按鈕上的字／按鈕的底（粗體大字，照大字的標準）' },
+        { fg: '--os-nav-ink',          bg: ['--os-nav-bg', '--os-page-bg'],                      min: 3,   t: '分頁列沒選中那幾顆／分頁列的底' },
+        { fg: '--os-nav-ink-on',       bg: ['--os-nav-bg', '--os-page-bg'],                      min: 3,   t: '分頁列選中那一顆／分頁列的底' },
+        { fg: '--os-danger',           bg: ['--os-surface'],                                     min: 4,   t: '刪除那種紅字／卡片的底' },
+    ];
+    // 透明／半透明就往下一層退；退完還是拿不到純色（漸層）回 null＝這一對不算
+    function _solidOf(vars, chain) {
+        for (let i = 0; i < chain.length; i++) {
+            const v = String(vars[chain[i]] || '').trim();
+            if (!v || /^transparent$/i.test(v)) continue;
+            if (/rgba\([^)]*,\s*0?\.[0-4]\d*\s*\)/i.test(v)) continue;   // 太透明，看得到底下那層
+            const rgb = _toRgb(v);
+            if (rgb) return rgb;
+        }
+        return null;
+    }
+    function _ratio(a, b) {
+        const hi = Math.max(_lum(a), _lum(b)), lo = Math.min(_lum(a), _lum(b));
+        return (hi + 0.05) / (lo + 0.05);
+    }
+    // 交稿後用：回傳看不清楚的那幾對（她畫面上要看到的是 t 那句話，不是變數名）
+    function _contrastIssues(vars) {
+        const out = [];
+        PAIRS.forEach(function (p) {
+            const fg = _toRgb(vars[p.fg]), bg = _solidOf(vars, p.bg);
+            if (!fg || !bg) return;
+            const r = _ratio(fg, bg);
+            if (r < p.min) out.push({ t: p.t, r: Math.round(r * 10) / 10, fg: p.fg, bg: p.bg[0] });
+        });
+        return out;
+    }
+
     function _toRgb(v) {
         if (!v) return null;
         let m = /^#([0-9a-f]{3})$/i.exec(v);
@@ -414,6 +489,7 @@
           +     '<textarea class="pth-input" rows="2" placeholder="例如：深海玻璃、暖橘手帳、黑白塗鴉、舊書房"></textarea>'
           +     '<div class="pth-row">'
           +       '<button class="pth-btn pth-go" type="button">做一套</button>'
+          +       '<button class="pth-btn pth-fix" type="button" hidden>修看不清楚的顏色</button>'
           +       '<span class="pth-status"></span>'
           +     '</div>'
           +     '<div class="pth-preview">'
@@ -472,10 +548,44 @@
                 };
                 _paintPreview(box, vars);
                 const n = $('.pth-name'); if (n && !n.value.trim()) n.value = _pending.name;
-                say(miss.length ? ('做好了，有 ' + miss.length + ' 格它沒填，那幾格會沿用預設那套') : '做好了，看看喜不喜歡');
+                // 👓 交稿後自己量一次「字壓在底上看不看得清楚」：模型沒有預覽、算不準，
+                //    所以不要求它保證，改成我們量完點名（同她在聊天 app 主題那邊定的：做好套上再問一次要不要補）。
+                const bad = _contrastIssues(vars);
+                _pending.issues = bad; _pending.want = want;
+                const fixBtn = $('.pth-fix');
+                if (fixBtn) fixBtn.hidden = !bad.length;
+                const parts = [];
+                if (miss.length) parts.push('有 ' + miss.length + ' 項它沒填，那幾項會沿用內建的樣子');
+                if (bad.length) parts.push('有 ' + bad.length + ' 組顏色疊起來看不清楚：' + bad.slice(0, 3).map(function (x) { return x.t; }).join('、') + (bad.length > 3 ? ' 等' : ''));
+                say(parts.length ? ('做好了，' + parts.join('；')) : '做好了，看看喜不喜歡');
             } catch (e) {
                 console.warn('[手機主題] 生成失敗', e);
                 say('沒做出來：' + ((e && e.message) || e), true);
+            }
+            btn.disabled = false;
+        });
+
+        // 🔧 她按了才修：把那幾組丟回去請它改，改完只收它動到的那幾項、再量一次
+        $('.pth-fix').addEventListener('click', async function () {
+            if (!_pending || !(_pending.issues || []).length) return;
+            const btn = this;
+            btn.disabled = true; say('改看不清楚的那幾組…');
+            try {
+                const text = await _askFix(_pending.want, _pending.vars, _pending.issues);
+                const raw = _pickJson(text);
+                const patch = raw && raw.vars ? _clean({ vars: raw.vars }) : null;
+                if (!patch || !Object.keys(patch).length) { say('它沒給出新的顏色，再按一次', true); btn.disabled = false; return; }
+                Object.keys(patch).forEach(function (k) { _pending.vars[k] = patch[k]; });
+                _paintPreview(box, _pending.vars);
+                const left = _contrastIssues(_pending.vars);
+                _pending.issues = left;
+                btn.hidden = !left.length;
+                say(left.length
+                    ? ('還有 ' + left.length + ' 組看不清楚：' + left.slice(0, 3).map(function (x) { return x.t; }).join('、') + '，可以再按一次')
+                    : '改好了，現在每一組字都看得清楚');
+            } catch (e) {
+                console.warn('[手機主題] 修顏色失敗', e);
+                say('沒改成：' + ((e && e.message) || e), true);
             }
             btn.disabled = false;
         });
@@ -503,6 +613,39 @@
     }
 
     // 地基留給主模型：副模型做不了設計，這跟劇情主題那邊是同一個結論。
+    // 🔧 只修顏色看不清楚的那幾對：把原本那套跟問題清單一起丟回去，叫它只動那幾項。
+    //    她的規矩（聊天 app 主題那邊定的）：交稿就結束，不自己反覆叫模型 ——
+    //    做好套上之後問她一次要不要叫它補，不要就先用著。
+    async function _askFix(want, vars, issues) {
+        const API = win.OS_API;
+        if (!API || !API.chatMain) throw new Error('API 還沒載入');
+        const list = issues.map(function (x) {
+            return '- ' + x.t + '：現在只差 ' + x.r + ' 倍，' + x.fg + ' 是 ' + (vars[x.fg] || '(沒填)')
+                 + '，' + x.bg + ' 是 ' + (vars[x.bg] || '(沒填)');
+        }).join(String.fromCharCode(10));
+        const sys = [
+            '你之前做了一套手機外觀設定，但有幾組顏色疊在一起看不清楚（字跟它背後那塊底太接近）。',
+            '把下面列出來的那幾組改到看得清楚：亮的那邊更亮、暗的那邊更暗，或兩邊一起調，',
+            '標 4.5 倍的要到 4.5 倍以上，標 3 倍的要到 3 倍以上（亮度算法：亮的加 0.05 除以暗的加 0.05）。',
+            '',
+            '要修的：',
+            list,
+            '',
+            '規矩：只動這幾組牽涉到的設定，其他的一個都不要改，整套的氛圍要維持原樣。',
+            '只輸出一段 JSON，前後不要有任何其他字：{"vars":{"設定名稱":"新的值", …}}，只放你改動的那幾項。',
+        ].join(String.fromCharCode(10));
+        const messages = [
+            { role: 'system', content: sys },
+            { role: 'user', content: '這套的主題是「' + want + '」。現在整套的值：' + JSON.stringify(vars) },
+        ];
+        return await new Promise(function (resolve, reject) {
+            API.chatMain(messages, null,
+                function (full) { resolve(full); },
+                function (err) { reject(err instanceof Error ? err : new Error(String(err || '沒有回應'))); },
+                { task: 'phone_theme', label: '手機主題·修顏色', stream: false });
+        });
+    }
+
     async function _ask(want) {
         const API = win.OS_API;
         if (!API || !API.chatMain) throw new Error('API 還沒載入');
@@ -519,6 +662,6 @@
     }
 
     // clean／prompt 外露是為了驗得到：拿一份假回覆丟進 clean，就能看到程式實際算出哪些格子
-    win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS, LAYOUT: LAYOUT, onInk: _onInk, clean: _clean, prompt: _prompt };
+    win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS, LAYOUT: LAYOUT, onInk: _onInk, clean: _clean, prompt: _prompt, PAIRS: PAIRS, contrastIssues: _contrastIssues };
     console.log('✅ OS_PHONE_THEME（手機主題工坊）模組就緒');
 })();
