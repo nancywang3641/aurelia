@@ -1878,7 +1878,7 @@
         let msgs = null;
         try { msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null; } catch (e) {}
         if (!Array.isArray(msgs)) return { rooms: rooms, lastFloor: -1, ok: false };
-        // 💰 主角在劇情裡花掉的錢（掃碼付款、買東西、付車資）。
+        // 💰 劇情裡掃碼付的錢（買東西、付車資，或別人掃主角的碼付錢給他）。
         //    不屬於任何一間聊天室，所以掃整篇，不限在 <chat> 容器裡面。
         //    真的扣錢在下面結算時做，跟收下轉帳共用同一份「已經算過的單號」擋重複。
         //
@@ -1909,6 +1909,11 @@
                     const amt = _payAmt(cs[0]);
                     if (!(amt > 0)) return;
                     const what = cs[1] || '';
+                    // 🔁 收款的是誰決定錢往哪走：那張卡上第一行寫的是「收款人／收款商戶」。
+                    //    寫主角＝有人掃主角的碼付錢給他（進帳）；寫別人或店名＝主角付出去（出帳）。
+                    //    🚨 她回報過一次 25000 的轉帳收款完全沒進錢包 —— 那時候一律當成付款在扣，
+                    //       金額又比餘額大，扣不成就整筆靜靜不見。
+                    const mine = _isMyName(shop);
                     let id = cs[3] || '';
                     if (!id) {
                         const k = 'wxpay:' + shop + '|' + amt + '|' + what;
@@ -1916,7 +1921,11 @@
                         id = k + '#' + _paySeen[k];
                     }
                     cardAmts[amt] = true;
-                    payEvents.push({ amount: amt, txnId: id, why: [shop, what].filter(Boolean).join(' - ') || '掃碼付款' });
+                    payEvents.push({
+                        amount: amt, txnId: id, inbound: mine,
+                        why: mine ? ('掃碼收款' + (what ? ' - ' + what : ''))
+                                  : ([shop, what].filter(Boolean).join(' - ') || '掃碼付款'),
+                    });
                 });
             }
             if (t.indexOf('[Pay') < 0) continue;
@@ -2060,16 +2069,17 @@
             //   但動完就不是 pending 了。卡片不在的時候（正文只寫收下、沒寫那張轉帳單）補一張，
             //   不然沒有東西擋，她每同步一次就加一次錢。
             const _done = _moneyDone();
-            // 💰 劇情裡花掉的錢（[Pay|…]）：直接從錢包扣，明細上寫她看得懂的那句。
-            //    跟收下轉帳共用同一份已結算單號 —— 她重新生成或往回讀同一段都不會再扣一次。
+            // 💰 劇情裡掃碼動到的錢：主角付出去就扣、別人付給主角就加，明細上寫她看得懂的那句。
+            //    跟收下轉帳共用同一份已結算單號 —— 她重新生成或往回讀同一段都不會再算一次。
             //    餘額不夠就不扣，也不記，留著讓她自己處理（劇情照演，錢包不會變成負的）。
             (parsed.pays || []).forEach(function (p) {
                 if (_done[p.txnId]) return;
                 const W = win.WX_WALLET;
                 if (!W || !W.transaction) return;
                 let ok = false;
-                try { ok = W.transaction(-p.amount, p.why || '劇情消費'); } catch (e) { console.warn('[wx 跑團同步] 付款沒扣成', e); }
-                if (ok) _moneyDoneSet(p.txnId, 'paid');
+                try { ok = W.transaction(p.inbound ? p.amount : -p.amount, p.why || '劇情消費'); }
+                catch (e) { console.warn('[wx 跑團同步] 錢沒動成', e); }
+                if (ok) _moneyDoneSet(p.txnId, p.inbound ? 'received' : 'paid');
             });
             moneyEvents.forEach(function (m) {
                 const ev = m.ev;

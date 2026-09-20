@@ -27,10 +27,64 @@
                     const apps = win.OS_DB.getAllPhoneApps ? (await win.OS_DB.getAllPhoneApps()) : [];
                     (apps || []).forEach(a => { if (a && a.srcTplId) this._tplAppMap[a.srcTplId] = a.id; });
                 } catch (e) {}
+                this._buildRowOwners();
                 this._injectCSS();
             }
         },
         
+        // 🧵 「資料行名字 → 哪個組件」對照（init 時建一次）。
+        //    AI 常常只寫組件的資料行、忘了外面那層 <Tag>…</Tag>（她看到的就是「卡沒跳出來」）。
+        //    有了這張表，看到一行 [Merchant|…] 就知道它是哪個組件的，可以自己把外殼補回去。
+        //    🚨 一個名字被兩個組件宣告＝認不出是誰的，寧可不認（留給原本的流程）。
+        //    🚨 劇本本來就有的那些標籤一律不收：[Bg|、[BGM| 這些在正文裡本來就會單獨出現，
+        //       收進來會被當成某個組件的資料行、把後面整段吃掉。
+        _rowOwner: {},
+        _vnOwnTags: ['char','inner','trans','exit','sys','bg','bgm','avatar','story','chapter',
+                     'preface','protagonist','world','date','hp','buff','debuff','event','pay',
+                     'with','foe','arrive','rename','time'],
+        _buildRowOwners: function() {
+            const map = {}, dup = {};
+            this.activeTemplates.forEach(t => {
+                if (!t.isBlock || !t.tagId || !t.demoFormat) return;
+                const rows = {};
+                String(t.demoFormat).split(/\r?\n/).forEach(ln => {
+                    const m = String(ln).trim().match(/^\[([A-Za-z0-9_-]+)\|/);
+                    if (m) rows[m[1].toLowerCase()] = 1;
+                });
+                Object.keys(rows).forEach(r => {
+                    if (this._vnOwnTags.indexOf(r) >= 0) return;
+                    if (map[r] && map[r] !== t.tagId) dup[r] = 1;
+                    map[r] = t.tagId;
+                });
+            });
+            Object.keys(dup).forEach(r => { delete map[r]; });
+            this._rowOwner = map;
+        },
+        // 這一行是某個組件的資料行嗎？是的話把後面連著的同組資料行一起收走，補上外殼直接渲染。
+        //    停在最後一行資料行、由 _renderBlock 接手，跟 vn_core 收 <system>／<BattleStart> 同一種走法。
+        _adoptOrphanRows: function(firstLine, vnCore) {
+            const m = firstLine.match(/^\[([A-Za-z0-9_-]+)\|/);
+            if (!m) return false;
+            const tag = this._rowOwner[m[1].toLowerCase()];
+            if (!tag || !vnCore || !Array.isArray(vnCore.script)) return false;
+            const mine = (ln) => {
+                const g = String(ln || '').trim().match(/^\[([A-Za-z0-9_-]+)\|/);
+                return !!(g && this._rowOwner[g[1].toLowerCase()] === tag);
+            };
+            const lines = [firstLine];
+            let i = vnCore.index + 1, last = vnCore.index;
+            while (i < vnCore.script.length) {
+                const raw = String(vnCore.script[i] || '').trim();
+                if (!raw) { i++; continue; }      // 中間的空行跳過，不算結束
+                if (!mine(raw)) break;
+                lines.push(raw); last = i; i++;
+            }
+            vnCore.index = last;
+            console.warn('[VN 動態組件] 正文裡有 <' + tag + '> 的資料行卻沒有外層標籤，已自動補上', lines);
+            this._renderBlock(tag, lines, vnCore);
+            return true;
+        },
+
         _injectCSS: function() {
             let s = document.getElementById('vn-dyn-css');
             if (!s) { s = document.createElement('style'); s.id = 'vn-dyn-css'; document.head.appendChild(s); }
@@ -84,6 +138,9 @@
                 }
             }
             
+            // 狀態 2.5：AI 只寫了資料行、忘了外層標籤 → 自己補外殼（見 _adoptOrphanRows）
+            if (this._adoptOrphanRows(safeLine, vnCore)) return true;
+
             // 狀態 3：傳統單行正則攔截 (保留向下相容)
             for (const tpl of this.activeTemplates) {
                 if (tpl.isBlock) continue; // 區塊模式跳過正則匹配
