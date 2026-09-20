@@ -1278,7 +1278,11 @@
             const SUB_BACK = { me_set: ['我', 'me'], me_black: ['設置', 'me_set'], c_new: ['通訊錄', 'contacts'], c_only: ['通訊錄', 'contacts'],
                                c_group: ['通訊錄', 'contacts'], c_tags: ['通訊錄', 'contacts'], c_tag: ['標籤', 'c_tags'] };
             const _sub = (!isInChat && SUB_BACK[activeTab]) ? SUB_BACK[activeTab] : null;
-            const backBtnText = isInChat ? '微信' : (_sub ? _sub[0] : '主頁');
+            // 返回鍵只放那個箭頭，不寫「主頁」「微信」這種字（她 2026-09-20：「直接給符號，不要用名稱按鈕」）。
+            // 箭頭畫在 .wx-back-btn::before（wx_theme.js）——那條以前被打成 `.wx-back-btn: before`，
+            // 選擇器無效，所以畫面上一直只有字、沒有箭頭。
+            const backBtnText = '';
+            const backTitle = isInChat ? '回聊天列表' : (_sub ? ('回' + _sub[0]) : '回主畫面');
             const backAction = _sub
                 ? "(window.parent.wxApp || window.wxApp).switchTab('" + _sub[1] + "')"
                 : "(window.parent.wxApp || window.wxApp).onBack()"; 
@@ -1308,7 +1312,7 @@
             const html = `
                 <div class="wx-shell${isDark ? ' wx-dark' : ''}${wxTheme ? ' wxtheme-' + wxTheme : ''}">
                     <div class="wx-header">
-                        <div class="${backBtnClass}" onclick="${backAction}">${backBtnText}</div>
+                        <div class="${backBtnClass}" onclick="${backAction}" role="button" aria-label="${backTitle}" title="${backTitle}">${backBtnText}</div>
                         <div ${headerTitleAction}>${headerTitle}</div>
                         ${headerRightBtn}
                     </div>

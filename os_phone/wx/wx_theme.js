@@ -47,9 +47,9 @@
             .wx-copy-box-ta { resize: none; line-height: 1.6; }
             /* 長按要跳自己的小窗，不要跳 iOS 的放大鏡／系統選單 */
             #wxRoomContent { -webkit-touch-callout: none; }
-            .wx-back-btn { cursor: pointer; display: flex; align-items: center; font-size: 15px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 0.2s;}
+            .wx-back-btn { cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-left: -6px; font-size: 15px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
             .wx-back-btn.show { opacity: 1; pointer-events: auto; }
-            .wx-back-btn: before { content: '‹'; margin-right: 2px; font-size: 28px; line-height: 20px; position: relative; top: -2px;}
+            .wx-back-btn::before { content: '‹'; font-size: 28px; line-height: 20px; position: relative; top: -2px; }
             
             /* 右上角「＋」的選單：自己一組顏色（預設深灰底白字）；套了聊天 app 主題時接顏色表（wx_theme_pack.js 的 PANEL_PALETTE）。
                放在聊天 app 那一層裡、位置相對那一層（wx_contacts._popIn），主題才罩得到 */
@@ -79,7 +79,7 @@
             .wx-set-item:last-child { border-bottom: none; }
             .wx-set-label { font-size: 15px; color: var(--wx-ink); }
             .wx-set-val { font-size: 14px; color: var(--wx-ink-soft); display: flex; align-items: center; gap: 5px; cursor: pointer; }
-            .wx-set-val: after { content: '›'; font-size: 20px; color: var(--wx-arrow); margin-left: 5px; margin-top: -2px;}
+            .wx-set-val::after { content: '›'; font-size: 20px; color: var(--wx-arrow); margin-left: 5px; margin-top: -2px; }
             .wx-avatar-preview-circle { width: 50px; height: 50px; border-radius: 50%; background-size: cover; background-color: var(--wx-fill); border: 1px solid var(--wx-line-strong); }
             /* [新增] 背景預覽框 (長方形) */
             .wx-bg-preview { width: 60px; height: 60px; border-radius: 6px; background-size: cover; background-position: center; background-color: var(--wx-fill); border: 1px solid var(--wx-line-strong); cursor: pointer; display: flex; align-items: center; justify-content: center; }

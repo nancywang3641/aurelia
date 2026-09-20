@@ -417,6 +417,13 @@
     position: absolute; inset: 0; z-index: 1;
     display: none; background: var(--os-page-bg, #fff);
 }
+/* 🚨 開啟那一瞬間容器是空的，底色就是上面那個（淺色主題＝白），而 app 自己的底要等它畫完才蓋上
+      → 她看到的「閃白一下才出現面板」。手機殼開之前會先標出正在開哪一個（phone_shell.js 的
+      appEl.dataset.open），這裡照那個先把底鋪對。
+   🚨 只有「自己不吃 --os-page-bg」的 app 需要列在這裡：聊天 app 有自己那組顏色，微博是世界裡的
+      一支 app、一律白底。其他 app 本來就吃 --os-page-bg，上面那行就對了。 */
+.aps-app[data-open="wx"] { background: var(--wx-page, #ededed); }
+.aps-app[data-open="wb"] { background: #ffffff; }
 .aps-app-body {
     position: absolute; inset: 0; overflow: auto; font-family: var(--aps-font); scrollbar-width: none;
     /* 全專案共用的「頂端要讓出多少」那個變數，在手機殼裡換成手機殼自己的狀態列高度。

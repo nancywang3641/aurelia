@@ -1167,7 +1167,13 @@
         // app 內部「返回/home」按鈕原本呼叫 PhoneSystem.goHome → 暫時改成回手機主畫面
         if (win.PhoneSystem) { _savedGoHome = win.PhoneSystem.goHome; win.PhoneSystem.goHome = _home; }
         _el.querySelector('#aps-home').style.display = 'none';
-        _el.querySelector('#aps-app').style.display = 'flex';
+        // 🚨 先標出「正在開哪一個」，CSS 才有辦法在畫出來之前就鋪對的底色。
+        //    沒有這一行的時候：容器露出來那一刻是空的、底色是系統頁面那個（淺色主題＝白），
+        //    聊天 app 自己的底要等它畫完才蓋上去 → 她看到的「閃白一下才出現面板」。
+        //    聊天 app 的 go() 還是非同步的，那一閃更明顯。
+        const appEl = _el.querySelector('#aps-app');
+        appEl.dataset.open = id;
+        appEl.style.display = 'flex';
         _syncStatusBar();
         // 🚨 app 的 go() 可能是 async（微信就是）。以前只 try/catch 同步錯誤 → 非同步炸掉時
         //    整個 promise 靜靜地 reject，螢幕上只剩那個空的 .aps-mount＝她看到的「白屏」，
