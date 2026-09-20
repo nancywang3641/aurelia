@@ -19,6 +19,10 @@
   box-shadow:0 4px 14px rgba(0,0,0,.45); border:1px solid rgba(150,200,255,.4);
   display:inline-flex; align-items:center; gap:9px; }
 .lstage-hotspot-chip i { color:#9ecbff; }
+/* 🏗 擺設模式：可點的家具（書咖沙發、占卜桌、造物儀…）要先把熱點收起來。
+   熱點是蓋在家具正上方、z:1500 的一塊，比家具本身高 —— 不收起來的話她按下去是熱點先吃到，
+   拖不動家具、每次都變成開那個面板。（同 .lstage-upper 那條：擺設時擋路的東西一律讓開。） */
+.lstage-editing .lstage-hotspot { display:none; }
 /* 彈跳/翻面全走 transform（margin 會逐幀觸發重排版=掉幀元兇） */
 .lstage-actor.walking { animation:lstage-bob .35s steps(2) infinite; }
 .lstage-actor.walking.flip { animation:lstage-bob-flip .35s steps(2) infinite; }
