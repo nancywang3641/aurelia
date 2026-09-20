@@ -1819,6 +1819,10 @@
     //   本來想靠那張卡的狀態擋，但卡片不一定建得起來（正文只寫收下、沒寫轉帳單就沒有卡），
     //   拿不到狀態就等於沒擋 —— 她每同步一次就加一次錢。
     // 🚨 收了就是收了：她刪樓或回朔時這裡不會退錢，跟她自己在聊天室點過收下一樣。
+    // 💴 卡片上的金額欄 AI 常寫成「¥128」「128.00 元」「1,280」——只留數字再算，
+    //    不然 parseFloat 直接 NaN＝卡片跳出來了、錢卻沒扣（她看得到的東西跟錢包對不上）。
+    //    「金額任意」那種整格沒有數字的照樣算不出來，等於不扣，是對的。
+    function _payAmt(v) { return parseFloat(String(v == null ? '' : v).replace(/[^0-9.]/g, '')); }
     function _moneyDone() {
         try { return JSON.parse(localStorage.getItem('wx_story_money_done') || '{}')[_wxRemapChatId()] || {}; }
         catch (e) { return {}; }
@@ -1902,7 +1906,7 @@
                     const cm = ln.match(/\[\s*Payment\s*\|([^\]]*)\]/i);
                     if (!cm) return;
                     const cs = String(cm[1] || '').split('|').map(function (x) { return x.trim(); });
-                    const amt = parseFloat(cs[0]);
+                    const amt = _payAmt(cs[0]);
                     if (!(amt > 0)) return;
                     const what = cs[1] || '';
                     let id = cs[3] || '';
@@ -1920,7 +1924,7 @@
             let pm;
             while ((pm = re.exec(t))) {
                 const ps = String(pm[1] || '').split('|').map(function (x) { return x.trim(); });
-                const amt = parseFloat(ps[0]);
+                const amt = _payAmt(ps[0]);
                 const id = ps[1] || '';
                 if (!(amt > 0) || !id) continue;
                 if (cardAmts[amt]) continue;   // 這一則已經有一張同金額的卡＝同一筆，別扣兩次
