@@ -84,8 +84,6 @@
     const ASSET_BASE = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/';
     const ASSET_MAP = {
         'im-icon': 'workshop-import.png',   // 匯入應用（資料箱；卡片搬去帽匠工坊後這張只剩匯入頁的頭圖在用）
-        'wb-icon': 'studio-worldbook.png',      // 整理世界書
-        'persona-icon': 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/我的角色_ying.png'   // 我的角色（在 aseets 根，非 studio-ui）
     };
     function _applyAssets(c) {
         c.querySelectorAll('[data-asset]').forEach(function (img) {
@@ -104,11 +102,11 @@
       +       '<div class="ws-home-hd"><button class="ws-back ws-home-back" type="button" title="返回桌面"><i class="fa-solid fa-chevron-left"></i></button><div class="ws-home-hd-tx"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div></div>'
       // 🎩 做給劇情用的那半（VN 組件／製作互動面板／特效工坊／劇情主題）2026-08-26 搬去廣場的
       //    帽匠工坊（core/void/lobby_workshop.js）＝走得進去的一間店。
-      //    匯入應用留在這裡：匯進來的是「手機上的應用」，安裝完就住手機桌面，入口跟著東西走。
-      //    世界書／我的角色照舊留在這裡（書咖還沒做，現在搬過去會變孤兒）。
+      //    世界書／我的角色 2026-09-20 搬去書咖那張單人沙發組（沙發＝我的角色、圓几＝世界書），
+      //    兌現上一版註解裡那句「書咖還沒做，現在搬過去會變孤兒」—— 書咖做好了。
+      //    🚨 入口跟著東西走，不留第二份：走進書咖、點沙發就是唯一的入口。
+      //    匯入應用留在這裡：匯進來的是「手機上的應用」，安裝完就住手機桌面。
       +       '<button class="ws-card ws-card-sm ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上或載入現成 HTML，安裝到手機桌面</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
-      +       '<button class="ws-card ws-card-sm ws-card-wb" data-studio="worldbook" type="button"><img class="ws-card-ic" data-asset="wb-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">整理世界書</span><span class="ws-card-d">建／改世界書條目，AI 幫你寫規則</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
-      +       '<button class="ws-card ws-card-sm ws-card-persona" data-studio="persona" type="button"><img class="ws-card-ic" data-asset="persona-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">我的角色</span><span class="ws-card-d">寫／改你扮演的主角人設，對標不同世界</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
       +     '</div>'
       // ── 匯入 ──
       +     '<div class="ws-view" data-view="import">'
@@ -160,14 +158,6 @@
         // 導覽：所有 data-go（卡片/返回/查看全部/底部 nav）
         c.querySelectorAll('[data-go]').forEach(function (b) {
             b.addEventListener('click', function () { _go(c, b.dataset.go); });
-        });
-        // 創作室四鈕：直接開創作室並落到對應工作（vn_ui/theme/worldbook/persona），跳過創作室首頁
-        c.querySelectorAll('[data-studio]').forEach(function (el) {
-            el.addEventListener('click', function (e) {
-                if (e) e.stopPropagation();
-                if (win.OS_STUDIO && win.OS_STUDIO.launch) win.OS_STUDIO.launch(c, el.dataset.studio);
-                else _toast(c, '創作室未載入');
-            });
         });
         _bindImport(c);
     }

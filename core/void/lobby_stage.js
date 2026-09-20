@@ -48,40 +48,53 @@
 
     const SCENES = {
         cafe: {
-            base: 'lobby_base_v2.png',
-            mask: 'lobby_mask_cafe_v1.png',   // Rae 手繪碰撞遮罩(白=可走)；載入後取代鋼索+烤死家具矩形
-            cfgKey: 'lobby_stage_layout_v1',   // 沿用 Rae 已調好的存檔
-            layout: [
-                { file: 'lobby_obj_counter.png', x: 292,  y: 376, w: 1266, h: 396, footH: 150, s: 0.4 },
-                { file: 'lobby_obj_02.png',      x: 337,  y: 570, w: 394,  h: 258, footH: 90,  s: 0.6 },
-                { file: 'lobby_obj_01.png',      x: 701,  y: 685, w: 391,  h: 267, footH: 90,  s: 0.6 },
-                { file: 'lobby_obj_04.png',      x: 955,  y: 524, w: 396,  h: 263, footH: 90,  s: 0.6 },
-                { file: 'lobby_obj_03.png',      x: 1054, y: 217, w: 166,  h: 259, footH: 60,  s: 0.55 },
-                { file: 'lobby_obj_05.png',      x: 1413, y: 612, w: 156,  h: 259, footH: 60,  s: 0.59 },
-                { file: 'lobby_obj_07.png',      x: 101,  y: 829, w: 425,  h: 177, footH: 20,  s: 0.7 },
+            // 🆕 2026-09-20 整間換素材（舊的 lobby_base_v2 + lobby_obj_01~07 + 手繪遮罩全部不再用）。
+            //    新底圖是「空房」，所有家具都是獨立物件＝她在擺設模式裡可以整間重排。
+            // 🚨 沒有 mask：新底圖的地板形狀跟舊的對不上，碰撞改走 boundary 鋼索（同占卜小屋／帽匠工坊）。
+            base: 'lobby_cafe_base_v3.png',
+            upper: 'lobby_cafe_upper_v3.png',   // 前緣那排花圃＋台階：壓在最上層，小人走到下緣會被它擋住腳
+            cfgKey: 'lobby_stage_layout_cafe_v3',   // v3＝整組換素材，舊存檔（v1）的座標對新家具沒意義
+            layout: [   // 目測擺位；她進擺設模式拖完複製數據回來換掉這份（同帽匠工坊那份的作法）
+                { file: 'lobby_cafe_obj_mat_v3.png',         x: 380,  y: 560, w: 637,  h: 383,  footH: 0,   s: 0.92, layer: 'floor', noCollide: true },  // 中央地毯(平貼地板)
+                { file: 'lobby_cafe_obj_bar_v3.png',         x: 95,   y: 250, w: 1259, h: 903,  footH: 200, s: 0.36 },   // 咖啡吧台(左後牆，含咖啡機與水槽)
+                { file: 'lobby_cafe_obj_counter_v3.png',     x: 560,  y: 270, w: 1956, h: 593,  footH: 150, s: 0.38 },   // 點心櫃檯(後牆中央，瀅瀅站這裡)
+                { file: 'lobby_cafe_obj_plant_back_v3.png',  x: 200,  y: 350, w: 876,  h: 1056, footH: 130, s: 0.24 },   // 大盆栽(左後角)
+                { file: 'lobby_cafe_obj_shelf_v3.png',       x: 1120, y: 285, w: 760,  h: 1113, footH: 150, s: 0.30 },   // 書櫃(右後牆)
+                { file: 'lobby_cafe_obj_cabinet_v3.png',     x: 1250, y: 430, w: 680,  h: 1099, footH: 150, s: 0.25 },   // 玻璃展示櫃(右牆)
+                { file: 'lobby_cafe_obj_console_v3.png',     x: 120,  y: 500, w: 643,  h: 904,  footH: 200, s: 0.38 },   // 畫架＋盆栽(左牆)
+                { file: 'lobby_cafe_obj_table_v3.png',       x: 520,  y: 590, w: 861,  h: 1133, footH: 180, s: 0.27 },   // 圓桌(中央)
+                { file: 'lobby_cafe_obj_chair_l_v3.png',     x: 400,  y: 610, w: 648,  h: 1240, footH: 170, s: 0.23 },   // 曲木椅(桌左)
+                { file: 'lobby_cafe_obj_chair_r_v3.png',     x: 690,  y: 610, w: 658,  h: 1238, footH: 170, s: 0.23 },   // 曲木椅(桌右)
+                { file: 'lobby_cafe_obj_lounge_v3.png',      x: 830,  y: 530, w: 1074, h: 909,  footH: 240, s: 0.47 },   // 🎯 單人沙發＋圓几＋圓毯(互動點，見 hotspots)
+                { file: 'lobby_cafe_obj_cart_v3.png',        x: 170,  y: 620, w: 698,  h: 1129, footH: 150, s: 0.24 },   // 邊桌推車(左下)
+                { file: 'lobby_cafe_obj_plant_right_v3.png', x: 1300, y: 545, w: 735,  h: 1074, footH: 130, s: 0.23 },   // 龜背芋(右牆邊)
             ],
             points: {
-                yingZone: { x: 315, y: 438, w: 465, h: 30 },
-                npcZone:  { x: 184, y: 542, w: 1109, h: 248 },   // 客人出沒區（輪班NPC隨機刷在框內）
-                player: { x: 697, y: 600 },
-                arrive: { x: 780, y: 868 },   // 走門進來的落點（從街區進書咖：底部大門前）
-                // 外框鋼索：可走範圍多邊形（牆角錨點可在擺設模式拖）
+                yingZone: { x: 620, y: 505, w: 620, h: 30 },      // 瀅瀅在點心櫃檯前那一條
+                npcZone:  { x: 260, y: 600, w: 1000, h: 220 },    // 客人出沒區（輪班NPC隨機刷在框內）
+                player: { x: 720, y: 790 },
+                arrive: { x: 720, y: 870 },   // 走門進來的落點（從街區進書咖：底部大門前）
+                // 外框鋼索：可走範圍多邊形，照新底圖的地板梯形（牆往前是外八）；牆角錨點可在擺設模式拖
                 boundary: [
-                    { x: 195, y: 360 }, { x: 1453, y: 315 }, { x: 1517, y: 642 },
-                    { x: 1529, y: 923 }, { x: 75, y: 925 }, { x: 105, y: 640 },
+                    { x: 170, y: 335 }, { x: 1380, y: 335 },
+                    { x: 1460, y: 950 }, { x: 90, y: 950 },
                 ],
                 actorScale: 0.7,
             },
-            walls: [
-                // 外牆改走 boundary 鋼索；這裡只留底圖烤死的家具
-                { x: 1140, y: 360, w: 260,  h: 155 },   // 右側沙發閱讀角
-                { x: 1140, y: 800, w: 396,  h: 130 },   // 右下露臺花圃
-                { x: 915,  y: 840, w: 180,  h: 90 },    // 底部中央花圃
-                { x: 55,   y: 620, w: 130,  h: 110 },   // 左側小案几
-            ],
+            walls: [],   // 新底圖沒有烤死的家具，全部是獨立物件；外框走 boundary
             // 書咖⇄大廳不再直通（2026-07-17 Rae 定案）：出入口只剩底部大門→城市街區；doorsV 擋舊存檔的門座標
-            doors: [ { x: 700, y: 895, w: 160, h: 40, to: 'city', spawn: { x: 384, y: 400 } } ],  // 底部大門→街區（落在書咖建築門口）
-            doorsV: 2,
+            // 🚨 觸發區要整個落在 boundary 裡面，不然走不到門＝被關在店裡（同占卜小屋那條）
+            doors: [ { x: 640, y: 895, w: 200, h: 44, to: 'city', spawn: { x: 384, y: 400 } } ],  // 底部大門→街區（落在書咖建築門口）
+            doorsV: 3,
+            // 🎯 單人沙發那組＝兩顆互動點（2026-09-20 從手機的應用工坊搬過來的）。
+            //    坐的那張沙發＝我的角色，旁邊的圓几＝世界書；兩件事分開，各自直接開，不再多一層選單。
+            //    rect 是「佔這件家具的哪一塊」的比例框，所以她在擺設模式挪沙發組，兩顆熱點自己跟上。
+            hotspots: [
+                { obj: 'obj_lounge', rect: [0.02, 0.00, 0.60, 0.72], label: '我的角色', icon: 'fa-user-pen',
+                  open: 'persona', cls: 'hs-cafe' },
+                { obj: 'obj_lounge', rect: [0.56, 0.36, 0.44, 0.64], label: '世界書', icon: 'fa-book-open',
+                  open: 'worldbook', cls: 'hs-cafe' },
+            ],
         },
         hall: {
             base: 'lobby_hall_base_v6.png',   // v6=Rae 修正底圖(exchange_left_entry02)
@@ -1959,6 +1972,43 @@
         else box.innerHTML = '<div class="lws-fail">造物工坊面板載入失敗</div>';
     }
 
+    // ── 📚 書咖的沙發組：點沙發＝我的角色，點旁邊的圓几＝世界書 ──
+    //    浮窗跟帽匠工坊同一種（同一個 class、同一套開關與互斥），差別只在裡面直接放創作室那一頁，
+    //    不再先給一張卡片首頁 —— 一顆熱點就是一件事。
+    // 🚨 創作室自己會生一層覆蓋層蓋滿容器、返回鈕把自己移除；所以這裡不必畫返回，只要給它一個盒子。
+    function _openCafeStudio(mode, label) {
+        _closeWins();
+        endTalk();      // 正在跟瀅瀅聊 → 結束（同占卜桌那條：辦事跟講話不同時發生）
+        hideDialog();   // 沒在聊但框還浮著 → 也收掉
+        _showPortraitOnly(S.npcs.find(n => n.key === 'ying'));   // 🧍 人留著，收的是白框與輸入列
+        const box = document.createElement('div');
+        box.className = 'lstage-wswin lstage-cafewin';
+        const host = document.querySelector('.lobby-left') || S.root;
+        const close = () => {
+            box.remove();
+            _wsWin = null;
+            if (!S.talkTarget) host.querySelector('.lstage-talk-portrait')?.remove();
+            try { host.classList.remove('void-dock-open'); } catch (e) {}
+        };
+        _wsWin = close;
+        host.appendChild(box);
+        host.classList.add('void-dock-open');   // 手機版靠這個 class 讓面板改吃滿寬（同世界門/交易所/帽匠）
+        _regWin(close);
+        if (window.OS_STUDIO && window.OS_STUDIO.launch) {
+            window.OS_STUDIO.launch(box, mode);
+            // 創作室的返回鈕是把它自己那層移除 → 盒子空了就等於她按了返回，把浮窗一起收掉
+            if (window.MutationObserver) {
+                const ob = new MutationObserver(() => {
+                    if (box.querySelector('#os_studio_app')) return;
+                    ob.disconnect(); close();
+                });
+                ob.observe(box, { childList: true, subtree: true });
+            }
+        } else {
+            box.innerHTML = '<div class="lws-fail">創作室還沒載入（' + label + '）</div>';
+        }
+    }
+
     // ── 🏪 黑市（404 房點圓桌）：面板本體是蓋滿畫面的 overlay（panels.js 的 store-panel-overlay），
     //    這裡只負責開關與互斥圈。跟占卜／造物工坊的差別是它蓋滿畫面＝留立繪也看不到，所以不留人。
     function _closeStorePanel() { try { window.VoidPanels?.closeStore?.(); } catch (e) {} }
@@ -2207,6 +2257,10 @@
         tarot: () => _openTarotPanel(),
         workshop: () => _openWorkshopPanel(),
         store: () => _openStorePanel(),
+        // 📚 書咖那張單人沙發組：2026-09-20 從手機的應用工坊搬過來的兩樣東西。
+        //    當初那兩張卡的註解就寫著「書咖還沒做，現在搬過去會變孤兒」——書咖做好了，兌現。
+        persona:   () => _openCafeStudio('persona',   '我的角色'),
+        worldbook: () => _openCafeStudio('worldbook', '整理世界書'),
     };
     function _mountHotspots() {
         (SCENES[S.scene].hotspots || []).forEach(hs => {
@@ -2217,6 +2271,13 @@
                 const s = o.s || 1;
                 // hRatio＝只取家具上半那一段（不給就是整件；熱點要跟 hoverImg 對齊時務必留 1）
                 box = { x: o.x, y: o.y, w: o.w * s, h: o.h * s * (hs.hRatio || 1) };
+                // rect＝[左, 上, 寬, 高] 的比例框：一件家具上要放兩顆熱點時用
+                //   （書咖那張圖是「沙發＋圓几」兩件東西畫在一起，一顆管一件）。
+                //   照樣跟著家具走 —— 她在擺設模式挪沙發組，兩顆自己跟上。
+                if (Array.isArray(hs.rect)) {
+                    const W = o.w * s, H = o.h * s;
+                    box = { x: o.x + W * hs.rect[0], y: o.y + H * hs.rect[1], w: W * hs.rect[2], h: H * hs.rect[3] };
+                }
             }
             const el = document.createElement('div');
             el.className = 'lstage-hotspot' + (hs.cls ? ' ' + hs.cls : '');

@@ -730,3 +730,24 @@
   .lws-card-t { font-size:16px; letter-spacing:1px; }
   .lws-card-d { font-size:11.5px; }
 }
+
+/* =========================================================
+   📚 書咖沙發組的兩顆熱點（沙發＝我的角色、圓几＝世界書）
+   書咖整間是奶油白＋原木，占卜那套酒紅金、帽匠那套紫金在這裡都太重
+   → 換成暖褐配奶油字，跟房間同一個調。
+   🚨 還沒有描邊圖：一張圖上疊兩顆熱點，描邊要沿「沙發」與「圓几」各自的輪廓分開畫，
+      共用一張會互相蓋住。沒有圖的時候用淡暖光＋內框，仍然看得出來按得下去。
+   🚨 兩顆是靠 hotspots 的 rect 比例框分開的（見 lobby_stage.js 的 _mountHotspots），
+      挪沙發組的時候兩顆自己跟著走。
+   ========================================================= */
+.lstage-hotspot.hs-cafe { padding-bottom:16px; }
+.lstage-hotspot.hs-cafe:hover {
+  background:var(--hs-hover-img, rgba(214,176,120,.14)) center / 100% 100% no-repeat;
+  box-shadow:0 0 0 2px rgba(176,134,86,.55) inset, 0 0 18px rgba(214,176,120,.22); }
+.lstage-hotspot.hs-cafe .lstage-hotspot-chip {
+  background:rgba(58,40,26,.86); color:#f6ead6; border:1px solid rgba(196,158,104,.55);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(0,0,0,.45);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-cafe:hover .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-cafe .lstage-hotspot-chip i { color:#e8c88a; font-size:11px; }

@@ -41,12 +41,12 @@
 .ws-card-d { font-size: 12px; color: var(--os-ink-soft); line-height: 1.45; }
 .ws-card-go { font-size: 18px; color: var(--os-ink-dim); flex-shrink: 0; }
 
-/* 首頁的橫向小卡（創作那半搬去帽匠工坊後，這裡剩世界書／我的角色兩張）*/
+/* 首頁的橫向小卡（創作那半搬去帽匠工坊、世界書／我的角色搬去書咖沙發後，這裡剩匯入應用一張）*/
 .ws-card-sm { padding: 12px; border-radius: 16px; gap: 10px; }
 .ws-card-sm .ws-card-ic { width: clamp(52px, 18vw, 70px); max-height: 70px; }
 .ws-card-sm .ws-card-t { font-size: 15px; }
 /* 統一米白底 + 線框（不再一張一色）；如需區分靠圖標 */
-.ws-card-im, .ws-card-wb, .ws-card-persona { background: var(--os-surface); }
+.ws-card-im { background: var(--os-surface); }
 
 /* ── 匯入 共用欄位 ── */
 .ws-hero { display: flex; justify-content: center; padding: 6px 0 4px; }
