@@ -80,11 +80,20 @@
             try { const n = String(win.WX_PROFILE.get().nickname || '').trim(); if (n && n !== 'User') return n; } catch (e) {}
             return this.personaName();
         },
-        // 模型寫回來的名字可能是暱稱、也可能是人設名（舊記錄就是人設名），兩個都要認
+        // 模型寫回來的名字可能是暱稱、也可能是人設名（舊記錄就是人設名），兩個都要認。
+        // 🚨 繁簡也要認：VN 指令要角色名一律寫簡體，她的人設名卻常常是繁體
+        //    ——「应子骞」對不上「應子騫」，劇情裡別人掃她的碼付錢給她就被當成她付出去、錢包倒扣。
+        //    折只為了比對，顯示一律用原字（見 wx_zh.js）。表裡沒有的字照樣退回原字比，不會比原本更差。
         isMine: function (n) {
             n = String(n || '').trim();
             if (!n) return false;
-            return n === this.name() || n === this.personaName() || n === 'User' || n === '我';
+            if (n === 'User' || n === '我') return true;
+            if (n === this.name() || n === this.personaName()) return true;
+            try {
+                const fold = (win.WX_ZH || window.WX_ZH).fold;
+                const f = fold(n);
+                return f === fold(this.name()) || f === fold(this.personaName());
+            } catch (e) { return false; }
         }
     };
 })();
