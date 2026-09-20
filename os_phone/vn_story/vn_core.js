@@ -2905,6 +2905,11 @@
 
             // 🕰 主角狀態：[Date|月/日|時:分] [HP|數值] [Buff|名|回合] [Event|月/日|一句話]
             //    模型只回報變化，程式記住、倒數、下一輪再塞回去（os_phone/rpg/mc_status.js）。不顯示、不卡劇情。
+            // 💰 [Pay|金額|單號|花在哪]：劇情裡主角花掉的錢。這裡只負責「不顯示、不卡劇情」，
+            //    真的扣錢交給手機那邊掃整本正文時處理（wx_core 的跑團同步）——
+            //    播到這一行才扣的話，她重新生成或往回讀同一段就會再扣一次。
+            if (/^\[Pay\|/i.test(line)) { this.next(); return; }
+
             if (/^\[(Date|HP|Buff|Debuff|Event)\|/i.test(line)) {
                 const _in = line.slice(1, -1).split('|');
                 const _tag = (_in[0] || '').trim().toLowerCase();

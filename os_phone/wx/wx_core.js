@@ -1874,6 +1874,24 @@
         let msgs = null;
         try { msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null; } catch (e) {}
         if (!Array.isArray(msgs)) return { rooms: rooms, lastFloor: -1, ok: false };
+        // 💰 [Pay|金額|單號|花在哪]：劇情裡主角花掉的錢（掃碼付款那種）。
+        //    不屬於任何一間聊天室，所以掃整篇，不限在 <chat> 容器裡面。
+        //    真的扣錢在下面結算時做，跟收下轉帳共用同一份「已經算過的單號」擋重複。
+        const payEvents = [];
+        for (let f = 0; f < msgs.length; f++) {
+            const m = msgs[f];
+            const t = (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || '');
+            if (!t || t.indexOf('[Pay') < 0) continue;
+            const re = /\[\s*Pay\s*\|([^\]]*)\]/gi;
+            let pm;
+            while ((pm = re.exec(t))) {
+                const ps = String(pm[1] || '').split('|').map(function (x) { return x.trim(); });
+                const amt = parseFloat(ps[0]);
+                const id = ps[1] || '';
+                if (!(amt > 0) || !id) continue;
+                payEvents.push({ amount: amt, txnId: id, why: ps[2] || '' });
+            }
+        }
         for (let f = 0; f < msgs.length; f++) {
             const m = msgs[f];
             const text = (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || '');
@@ -1899,7 +1917,7 @@
             const me = r.owner || '';
             r.msgs.forEach(function (x) { if (!x.isMe && ((me && x.sender === me) || x.sender === myName || _isMeName(x.sender))) x.isMe = true; });
         });
-        return { rooms: rooms, lastFloor: msgs.length - 1, ok: true };
+        return { rooms: rooms, lastFloor: msgs.length - 1, ok: true, pays: payEvents };
     }
 
     // 房間的「對方們」：[With] 名單扣掉「我」（使用者人設名、owner、You/主角 這類）；順序不算數。沒寫 [With] 就拿發話人湊
@@ -2003,6 +2021,17 @@
             //   但動完就不是 pending 了。卡片不在的時候（正文只寫收下、沒寫那張轉帳單）補一張，
             //   不然沒有東西擋，她每同步一次就加一次錢。
             const _done = _moneyDone();
+            // 💰 劇情裡花掉的錢（[Pay|…]）：直接從錢包扣，明細上寫她看得懂的那句。
+            //    跟收下轉帳共用同一份已結算單號 —— 她重新生成或往回讀同一段都不會再扣一次。
+            //    餘額不夠就不扣，也不記，留著讓她自己處理（劇情照演，錢包不會變成負的）。
+            (parsed.pays || []).forEach(function (p) {
+                if (_done[p.txnId]) return;
+                const W = win.WX_WALLET;
+                if (!W || !W.transaction) return;
+                let ok = false;
+                try { ok = W.transaction(-p.amount, p.why || '劇情消費'); } catch (e) { console.warn('[wx 跑團同步] 付款沒扣成', e); }
+                if (ok) _moneyDoneSet(p.txnId, 'paid');
+            });
             moneyEvents.forEach(function (m) {
                 const ev = m.ev;
                 if (!(ev.amount > 0) || !ev.txnId) return;
