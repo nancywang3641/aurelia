@@ -3039,7 +3039,10 @@
                     const r = rooms[k];
                     const speakers = [];
                     (r.msgs || []).forEach(function (m) { if (m.type === 'msg' && m.sender && speakers.indexOf(m.sender) < 0) speakers.push(m.sender); });
-                    const last = (r.msgs || []).slice(-2).map(function (m) { return (m.sender ? '[' + m.sender + '] ' : '') + String(m.content || '').slice(0, 40); }).join(' / ');
+                    // 🚨 要它取群名就得讓它看得到對話。以前只給最後兩句、各 40 字，
+                    //    那點量看不出這群人在幹嘛，它就只好跳過不取名。
+                    const last = (r.msgs || []).filter(function (m) { return m.type === 'msg'; }).slice(-8)
+                        .map(function (m) { return (m.sender ? '[' + m.sender + '] ' : '') + String(m.content || '').slice(0, 60); }).join('\n');
                     return { id: r.id, name: r.name, members: r.members || [], speakers: speakers, count: (r.msgs || []).length, sample: last };
                 })
             };
@@ -3047,7 +3050,12 @@
                 + 'me＝主角（這支手機的主人）的各種叫法；contacts＝通訊錄裡已有的人名寫法；rooms＝每間聊天室的 id（程式內部用的代號）、name（畫面上顯示的聊天室名）、members（名單）、speakers（實際發話的人）、count（訊息數）、sample（最後兩句）。\n'
                 + '要找三種錯：\n'
                 + '一、同一間聊天室裂成多筆（id 不同）。依據：房名相同或明顯同義、成員相同或高度重疊、對話是同一串的延續，綜合判斷。統一 id 取該組 count 最大那筆的 id。\n'
-                + '二、聊天室名字寫錯。name 應該是給人看的名字；name 看起來像程式代號（英文字母、數字、底線、連字號組成的編號），或跟 id 一模一樣時，給出正確名字：扣掉主角只剩一個人的是私聊，用那個人的名字（用第三項統一後的寫法）；群聊先看對話內容有沒有講到這群人在幹嘛，講得出來就用那個當群名，看不出來就把扣掉主角之後的成員名字用頓號串起來（一般手機沒設群名時就是這樣顯示的）。名字本來就正常的不要列。\n'
+                + '二、聊天室名字寫錯。name 應該是給人看的名字；name 看起來像程式代號（英文字母、數字、底線、連字號組成的編號），或跟 id 一模一樣時，給出正確名字。\n'
+                + '　　扣掉主角只剩一個人的是私聊，用那個人的名字（用第三項統一後的寫法）。\n'
+                + '　　群聊一定要給一個名字，不要跳過：讀 sample 看這群人在聊什麼、是為了什麼事聚在一起，取一個中文短名字，不超過八個字。\n'
+                + '　　群名不要用成員名字串起來，不要用英文或編號，不要照抄 id。\n'
+                + '　　name 已經是「成員名字用頓號或逗號串起來的人名清單」時，那不算名字，照上面重取一個。\n'
+                + '　　名字本來就正常的不要列。\n'
                 + '三、同一個人被寫成不同寫法：簡體與繁體、錯字、全名與簡稱、多了空白或符號。每組給一個正確寫法：其中一種在 me 裡就用 me 裡那個；在 contacts 裡就用那個；否則用繁體中文寫法。只有很確定是同一個人才列，名字相近但可能是不同人的不要列。\n'
                 + '只要不確定就不要列，三個清單都可以是空的。\n'
                 + '只輸出 JSON，不要任何解說或標記，格式：\n'
