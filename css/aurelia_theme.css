@@ -66,6 +66,9 @@
    帶意思的顏色一律不進主題：刪除紅、警告紅、接通綠、連結藍、金色，
    還有 404 房那身螢光綠終端機（它是那個模式自己的皮）。
    換主題不該把「刪除」變成綠的。
+   🚨 但「意思不變」不等於「值不能動」：刪除紅 #a32d2d 壓在霧夜薄荷的深底上只有 1.92 的對比，
+      字根本讀不出來。所以有一格 --os-danger，四套都是紅的、深色那套亮一階（同微信 --wx-danger 的做法）。
+      新增意義色照這個辦：給它一格，每套都填同一個意思，只在深底上換亮度。
    ═══════════════════════════════════════════════════════════════════ */
 
 
@@ -168,6 +171,7 @@
     --os-ink-soft: #5c6a5e;
     --os-accent-strong: #55684a;
     --os-on-accent: #ffffff;
+    --os-danger: #a32d2d;
 
     /* ── 底部導覽（app 底下那條分頁列：微博、應用工坊、電話）──────────
        貼底一條 → radius 0、inset 0、gap-bottom 0，只給 top 那條線。
@@ -282,6 +286,7 @@
     --os-ink-soft: #8a6666;
     --os-accent-strong: #a05a64;
     --os-on-accent: #ffffff;
+    --os-danger: #a32d2d;
 
     --os-nav-bg: #ebc4c9;
     --os-nav-border: 3px solid #fff8f3;
@@ -396,6 +401,7 @@
     --os-ink-soft: #5a5f66;
     --os-accent-strong: #16181a;
     --os-on-accent: #ffffff;
+    --os-danger: #a32d2d;
 
     --os-nav-bg: rgba(255, 255, 255, 0.86);
     --os-nav-border: 1px solid rgba(255, 255, 255, 0.80);
@@ -515,6 +521,7 @@
     --os-ink-soft: #a8b4aa;
     --os-accent-strong: #b8d9bc;
     --os-on-accent: #1e2523;
+    --os-danger: #ff7b7b;   /* 刪除／危險：意思不准換（永遠是紅的），但深底上要亮一階才讀得到 */
 
     --os-nav-bg: rgba(40, 48, 45, 0.94);
     --os-nav-border: 1px solid rgba(113, 133, 116, 0.33);
