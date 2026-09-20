@@ -1999,7 +1999,11 @@
                 // 主角把他拉黑：聊天室留著、通訊錄不列、他傳不進來（見 wx_view 的黑名單頁）
                 const wantMeBlock = !isGroup && _rmRemovedNow['p:' + realName] === 'block';
                 if (existing && (!!existing.wxBlocked !== wantBlocked || (existing.wxBlockKind || '') !== blockHow || !!existing.wxBlockedByMe !== wantMeBlock)) existing._storySig = '';
-                const sig = key + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
+                // 🚨 房名一定要進簽名。「整理聊天室」改的只有名字、訊息一個字都沒動 →
+                //    簽名一樣就走下面那條「跟上次一樣就沿用舊的」，名字永遠停在舊的那個。
+                //    她 2026-09-20 回報「整理後根本沒換」就是這個：合併會換 key、統一人名會換發話人，
+                //    所以那兩種看得到效果，只有改名看不到。（tmp/wx_tidy_fix_test.cjs 第 ④ 項守著）
+                const sig = key + '|' + (room.name || '') + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
                 if (existing && existing._storySig === sig) { GLOBAL_CHATS[chatId] = existing; continue; }
 
                 const prevStoryCount = existing ? (existing.messages || []).filter(function (m) { return m && m._story != null; }).length : 0;
@@ -3043,7 +3047,7 @@
                 + 'me＝主角（這支手機的主人）的各種叫法；contacts＝通訊錄裡已有的人名寫法；rooms＝每間聊天室的 id（程式內部用的代號）、name（畫面上顯示的聊天室名）、members（名單）、speakers（實際發話的人）、count（訊息數）、sample（最後兩句）。\n'
                 + '要找三種錯：\n'
                 + '一、同一間聊天室裂成多筆（id 不同）。依據：房名相同或明顯同義、成員相同或高度重疊、對話是同一串的延續，綜合判斷。統一 id 取該組 count 最大那筆的 id。\n'
-                + '二、聊天室名字寫錯。name 應該是給人看的名字；name 看起來像程式代號（英文字母、數字、底線、連字號組成的編號），或跟 id 一模一樣時，給出正確名字：扣掉主角只剩一個人的是私聊，用那個人的名字（用第三項統一後的寫法）；群聊用對話內容看得出來的群名，看不出來就不要列。名字本來就正常的不要列。\n'
+                + '二、聊天室名字寫錯。name 應該是給人看的名字；name 看起來像程式代號（英文字母、數字、底線、連字號組成的編號），或跟 id 一模一樣時，給出正確名字：扣掉主角只剩一個人的是私聊，用那個人的名字（用第三項統一後的寫法）；群聊先看對話內容有沒有講到這群人在幹嘛，講得出來就用那個當群名，看不出來就把扣掉主角之後的成員名字用頓號串起來（一般手機沒設群名時就是這樣顯示的）。名字本來就正常的不要列。\n'
                 + '三、同一個人被寫成不同寫法：簡體與繁體、錯字、全名與簡稱、多了空白或符號。每組給一個正確寫法：其中一種在 me 裡就用 me 裡那個；在 contacts 裡就用那個；否則用繁體中文寫法。只有很確定是同一個人才列，名字相近但可能是不同人的不要列。\n'
                 + '只要不確定就不要列，三個清單都可以是空的。\n'
                 + '只輸出 JSON，不要任何解說或標記，格式：\n'
