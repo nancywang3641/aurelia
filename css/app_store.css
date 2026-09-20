@@ -207,4 +207,8 @@
 .ws-act-sub { margin-left: 6px; font-size: 12px; color: var(--os-ink-soft); }
 .ws-act-num { width: 64px; flex: none; padding: 5px 8px; border: 1px solid rgba(var(--os-ink-rgb), 0.22); border-radius: 8px; background: var(--os-surface); color: var(--os-accent); font: inherit; font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
 .ws-act-num::-webkit-outer-spin-button, .ws-act-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+/* 挑一包的那一列（提示詞包）：整列不當按鈕，只有右邊那顆選單能點 */
+.ws-act-selrow { cursor: default; }
+.ws-act-selrow:active { background: transparent; }
+.ws-act-sel { flex: none; max-width: 52%; padding: 5px 8px; border: 1px solid rgba(var(--os-ink-rgb), 0.22); border-radius: 8px; background: var(--os-surface); color: var(--os-accent); font: inherit; font-size: 15px; text-overflow: ellipsis; }
 .ws-act-unit { flex: none; font-size: 13px; color: var(--os-ink-soft); min-width: 26px; }

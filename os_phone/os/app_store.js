@@ -8,7 +8,8 @@
     // ❔ 設定旁邊問號點開的說明（AUI.helpBtn），面板上不掛說明文字
     try {
         if (win.AUI && win.AUI.registerHelp) win.AUI.registerHelp({
-            as_wake: { title: '自己動', body: '開了，這個 app 會照「多久一次」和「機率」自己長出新東西，有新的會在桌面圖標冒紅點、發通知。\n時間從打開這格起算。手機要開著才會動，關著的時候不會。' }
+            as_wake: { title: '自己動', body: '開了，這個 app 會照「多久一次」和「機率」自己長出新東西，有新的會在桌面圖標冒紅點、發通知。\n時間從打開這格起算。手機要開著才會動，關著的時候不會。' },
+            as_bundle: { title: '提示詞包', body: '挑一包，這個 app 叫 AI 的時候就多帶那一包裡的條目（破限、寫作風格、小劇場的規矩那些）。\n挑「不用」就跟以前一樣，只帶角色卡、世界書跟最近劇情。\n包的內容在「提示詞」那邊改，改完這裡不用重挑。' }
         });
     } catch (e) {}
     const INSTALLED_KEY = 'aurelia_phone_apps';      // 與 phone_shell.js 同 key：[{id,name,emoji,iconUrl}]
@@ -279,6 +280,32 @@
                 mkRow('fa-house', '放進大廳', async function () { if (S.toggleAppLobby) { const on = await S.toggleAppLobby(a.srcTplId); _toast(c, '大廳：' + (on ? '已啟用' : '已關閉')); } }),
                 mkRow('fa-box-archive', '匯出 .json', function () { if (S.exportApp) S.exportApp(a.srcTplId); })
             ]);
+        }
+
+        // 📦 提示詞包：這個 app 叫 AI 的時候要不要多帶一包條目（她在「提示詞」那邊建的那些）。
+        //    只有會叫 AI 的 app 才給這一列 —— 純展示的 app 挑了也沒地方用（判斷方式同「自己動」那條）。
+        const TB = win.OS_APP_TOOLS;
+        if (TB && TB.canCallAI && TB.canCallAI(a)) {
+            const bundles = (function () {
+                try { return (win.OS_PROMPTS && win.OS_PROMPTS.getBundles) ? (win.OS_PROMPTS.getBundles() || []) : []; }
+                catch (e) { return []; }
+            })();
+            const curB = TB.promptBundle ? TB.promptBundle(a.id) : '';
+            const r = document.createElement('div');
+            r.className = 'ws-act-row ws-act-selrow';
+            const bHelp = (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('as_bundle') : '';
+            const opts = ['<option value="">不用</option>'].concat(bundles.map(function (b) {
+                return '<option value="' + _esc(b.id) + '"' + (b.id === curB ? ' selected' : '') + '>' + _esc(b.name || '未命名') + '</option>';
+            })).join('');
+            r.innerHTML = '<i class="fa-solid fa-scroll ws-act-ico"></i>'
+                + '<span class="ws-act-label">提示詞包' + bHelp + '</span>'
+                + '<select class="ws-act-sel">' + opts + '</select>';
+            const sel = r.querySelector('select');
+            sel.addEventListener('change', function () {
+                if (TB.setPromptBundle) TB.setPromptBundle(a.id, sel.value);
+                _toast(c, sel.value ? ('這個 app 會帶「' + sel.options[sel.selectedIndex].text + '」') : '這個 app 不帶提示詞包');
+            });
+            mkGroup([r]);
         }
 
         // ⏰ 自己動：app 有寫「被叫醒時要做的事」才給這組（沒寫的開了也不會動）。

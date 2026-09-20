@@ -81,7 +81,16 @@
             // 排法：背景一則 system、任務一則 user。曾試過借正文整包（一萬多字＋叫它寫視覺小說那批條目），那是為了追一顆壞掉的舊 app 才硬接的，退掉。
             // 附圖（st.callAI(提示, { images })）照設置「看圖」那格送：OS_PHONE_IMAGE.withImages
             +     'var __imgs = (opt && Array.isArray(opt.images)) ? opt.images : []; var __PI = P.OS_PHONE_IMAGE; if (__imgs.length && __PI && __PI.withImages) sys = await __PI.withImages(String(sys == null ? "" : sys), __imgs, "這是使用者在 app 裡附上的圖片。");'
-            +     'var msgs = []; if (ctx) msgs.push({role:"system", content: ctx + "----\\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。"}); msgs.push({role:"user", content: sys});'   // 那一則是指令還是使用者在 app 裡打的話，由 app 自己的指令寫清楚，引擎不標
+            // 📦 她在這個 app 的設定裡挑的提示詞包：整包條目排在最前面一則 system。
+            //    包的內容每次現拿，她在「提示詞」那邊改完不用回來重挑。沒挑就完全不加，行為跟以前一樣。
+            //    🚨 這裡不經過酒館，{{user}}／{{char}} 沒有人會替它換 → 自己換掉，
+            //       不然條目裡那幾個字會原樣送給模型，它只能亂猜那是誰。
+            +     'var __me = ""; try { __me = String((P.WX_ME && P.WX_ME.name && P.WX_ME.name()) || ""); } catch(e){}'
+            +     'if (!__me || __me === "User") { try { __me = String(((P.OS_USER && P.OS_USER.getInfo && P.OS_USER.getInfo()) || {}).name || ""); } catch(e){} }'
+            +     'var __chn = ""; try { __chn = String((ch && ch.name) || ""); } catch(e){}'
+            +     'var __pb = ""; try { var T2 = P.OS_APP_TOOLS; if (T2 && T2.promptBundleText) __pb = String(T2.promptBundleText(window.__APP_ID__) || ""); } catch(e){}'
+            +     'if (__pb) { if (__me) __pb = __pb.split("{{user}}").join(__me); if (__chn) __pb = __pb.split("{{char}}").join(__chn); }'
+            +     'var msgs = []; if (__pb) msgs.push({role:"system", content: __pb}); if (ctx) msgs.push({role:"system", content: ctx + "----\\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。"}); msgs.push({role:"user", content: sys});'   // 那一則是指令還是使用者在 app 裡打的話，由 app 自己的指令寫清楚，引擎不標
             +     'var OS = window.OS_API; if (!OS || !OS.chat) throw new Error("OS_API 不可用");'
             +     'var cfg = (P.OS_SETTINGS && P.OS_SETTINGS.getConfig && P.OS_SETTINGS.getConfig()) || {};'
             +     'cfg = Object.assign({}, cfg, { usePresetPrompts:false, maxTokens: Math.max(parseInt(cfg.maxTokens)||0, 8192) });'   // 思考照主模型設定走；字數上限保底 8192 同正文那條（思考模型先吃上限，太小就回空）

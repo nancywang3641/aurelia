@@ -189,11 +189,40 @@
     }
     setTimeout(function () { setInterval(function () { tickWake().catch(function () {}); }, TICK_MS); }, 15000);
 
+    // 📦 這個應用要不要吃某一個提示詞包（她在應用的設定裡指名的那一包）。
+    //    跟「自己動」一樣是整台手機一份、不分故事：包是這個應用的性格，不是這本故事的東西。
+    //    只存包的編號；內容每次現拿，她在提示詞那邊改了包，應用下一次叫 AI 就吃到新的。
+    const PBUNDLE_KEY = 'aurelia_app_prompt_bundle';
+    function promptBundle(appId) { return String(_ls(PBUNDLE_KEY, {})[String(appId)] || ''); }
+    function setPromptBundle(appId, bundleId) {
+        const all = _ls(PBUNDLE_KEY, {});
+        if (bundleId) all[String(appId)] = String(bundleId); else delete all[String(appId)];
+        _lsSet(PBUNDLE_KEY, all);
+    }
+    //    指名的那一包不在了（她刪掉了）就回空字串，不要拿別包頂替。
+    function promptBundleText(appId) {
+        const id = promptBundle(appId);
+        if (!id) return '';
+        try { return (win.OS_PROMPTS && win.OS_PROMPTS.getBundleTextById) ? (win.OS_PROMPTS.getBundleTextById(id) || '') : ''; }
+        catch (e) { return ''; }
+    }
+    // 這個應用會不會叫 AI（不會叫的，設定頁不給挑包——挑了也沒地方用）。
+    // 🚨 創作室包出來的頁面「每一份」都帶著 st.callAI 的轉接那行，不先拿掉的話每個 app 都會算會叫 AI
+    //    （跟「自己動」那條同一個坑，見上面的 ST_WRAPPER）。
+    const ST_AI_WRAPPER = 'callAI:async function(s,o){try{return window.callAI?await window.callAI(s,o):"";}catch(e){return "";}}';
+    function canCallAI(rec) {
+        if (!rec) return false;
+        const h = String(rec.html || '').split(ST_AI_WRAPPER).join('');
+        return /(callAI|generateRaw)\s*\(/i.test(h);
+    }
+
     const API = {
         clock: clock, share: share, pay: pay, balance: balance,
         badge: badge, getBadge: getBadge, openedApp: openedApp, notify: notify,
         wakeCfg: wakeCfg, setWakeCfg: setWakeCfg, canWake: canWake, wakeDone: wakeDone, runWake: runWake, tickWake: tickWake,
-        wakeDefaults: function () { return Object.assign({}, WAKE_DEF); }
+        wakeDefaults: function () { return Object.assign({}, WAKE_DEF); },
+        promptBundle: promptBundle, setPromptBundle: setPromptBundle,
+        promptBundleText: promptBundleText, canCallAI: canCallAI
     };
     win.OS_APP_TOOLS = API;
     if (win !== window) window.OS_APP_TOOLS = API;

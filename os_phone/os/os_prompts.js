@@ -553,6 +553,24 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         return results.join('\n\n');
     }
 
+    // 📦 指名要某一包的內容（給「應用自己挑一包」用，見 os_app_tools 的 promptBundle）。
+    //    跟 getSystemPrompt 不同：那支是照面板挑包，這支是她在某個應用的設定裡指名了哪一包。
+    //    只收條目的文字：sys 那幾格（面板提示詞、劇情歷史、大總結、記憶召回、狀態變數）是給
+    //    正文那條組裝線排位置用的，應用叫 AI 時背景是自己另外組的，硬塞進來只會重複。
+    function getBundleTextById(bundleId) {
+        if (!bundleId) return '';
+        const b = loadBundles().find(x => x.id === bundleId);
+        if (!b) return '';
+        const entryMap = Object.fromEntries(loadEntries().map(e => [e.id, e]));
+        const out = [];
+        for (const item of (b.items || [])) {
+            if (item.type !== 'entry') continue;
+            const e = entryMap[item.id];
+            if (e && e.enabled !== false && e.content && e.content.trim()) out.push(e.content.trim());
+        }
+        return out.join('\n\n');
+    }
+
     const UCOT_KEY = 'os_universal_cot';
     function loadUniversalCot() { return localStorage.getItem(UCOT_KEY) || ''; }
     function saveUniversalCot(v) { localStorage.setItem(UCOT_KEY, v); }
@@ -588,6 +606,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         },
         getEntries: loadEntries,
         getBundles: loadBundles,
+        getBundleTextById,   // 應用指名某一包時用（只回條目的文字）
         // 大廳人設補充（瀅瀅 / 柴郡 / 世界觀）— 給 os_settings「大廳人設」分頁讀寫用
         loadIris, saveIris, loadCheshire, saveCheshire, loadAlice, saveAlice, loadRabbit, saveRabbit, loadZhiwei, saveZhiwei, loadHatter, saveHatter, loadWorld, saveWorld,
         PANELS,
