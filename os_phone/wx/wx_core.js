@@ -1617,6 +1617,19 @@
                 if (!content) return;
                 if (/^(系統|系统|System|Notice|附加信息|附加訊息|验证信息|驗證信息|验证消息|驗證消息)$/i.test(rawName)) { rooms[key].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
                 const isMe = (me && rawName === me) || (myName && myName !== 'User' && rawName === myName) || _isMeName(rawName);
+                // 💰 [某某] [系統: Accept 5000|單號]：劇情裡有人收下／退回了轉帳。
+                //    以前這一行原樣變成一顆泡泡（畫面上直接看到那串格式），而且錢包不知道。
+                //    收成一筆 money 事件，同步結算時照單號去動錢包（見下面 _storySyncNow 那段）。
+                const _sysIn = content.match(/^\[\s*(?:系統|系统|System)\s*[:：]\s*([\s\S]+?)\s*\]$/i);
+                const _mev = _sysIn ? _moneyEventOf(_sysIn[1]) : null;
+                if (_mev) {
+                    rooms[key].msgs.push({
+                        type: 'money', sender: rawName, isMe: isMe,
+                        take: _mev.take, amount: _mev.amount, txnId: _mev.txnId,
+                        content: (_mev.take ? '收下了轉帳 ' : '退回了轉帳 ') + _mev.amount + ' 元',
+                    });
+                    return;
+                }
                 // 引用回覆：標記在內容最前面，解析規則跟 VN 手機共用同一份（OS_API.chatQuote）。
                 // 引用完後面沒東西就當它沒引用——只有一個引用塊沒正文不是一則訊息。
                 const _qp = (win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.parse(content) : null;
@@ -1795,6 +1808,40 @@
     ];
     // 🚫 真的微信兩種不一樣：被刪＝「開啟了朋友驗證」、可以送好友申請；被拉黑＝「被對方拒收」、申請直接失敗。
     //   how：'deleted' | 'blocked'（對方做的）；主角做的那邊 how='block' 是拉黑（聊天室留著、從通訊錄拿掉），沒寫是刪好友（整間收起來）
+    // 💰 劇情裡真的動到錢的那一行：[系統: Accept 金額|單號] / [系統: Return 金額|單號]
+    //   她 2026-09-20 回報：「劇情有演到有人轉5000給我，然後MC收錢了，但當前面板根本沒更新到微信錢包裡」。
+    //   以前這行同步進來只會變成一顆寫著原始格式的泡泡，錢包完全不知道 —— 因為動錢包的只有兩條路：
+    //   她自己在聊天室點那張卡、或角色在「微信聊天」裡回這一行（那條是即時訊息，走 processSystemIntent）。
+    //   酒館正文那條從來沒接上。
+    // 🚨 誰收誰付看發話人：角色寫的＝角色收下她轉出去的（扣她的錢）；主角寫的＝主角收下別人轉的（加她的錢）。
+    // 💰 劇情裡已經結算過的轉帳單號（一本故事一份）。
+    //   擋重複一定要有自己的依據：同步每次整份重建，那幾行每次都會被掃到。
+    //   本來想靠那張卡的狀態擋，但卡片不一定建得起來（正文只寫收下、沒寫轉帳單就沒有卡），
+    //   拿不到狀態就等於沒擋 —— 她每同步一次就加一次錢。
+    // 🚨 收了就是收了：她刪樓或回朔時這裡不會退錢，跟她自己在聊天室點過收下一樣。
+    function _moneyDone() {
+        try { return JSON.parse(localStorage.getItem('wx_story_money_done') || '{}')[_wxRemapChatId()] || {}; }
+        catch (e) { return {}; }
+    }
+    function _moneyDoneSet(txnId, how) {
+        try {
+            const all = JSON.parse(localStorage.getItem('wx_story_money_done') || '{}');
+            const k = _wxRemapChatId();
+            all[k] = all[k] || {};
+            all[k][txnId] = how;
+            localStorage.setItem('wx_story_money_done', JSON.stringify(all));
+        } catch (e) {}
+    }
+
+    function _moneyEventOf(text) {
+        const m = String(text || '').trim()
+            .match(/^(Accept|Return|接收了?|收下了?|退回了?|拒绝|拒絕)\s+(\d+(?:\.\d+)?)\s*[|｜]\s*(.+)$/i);
+        if (!m) return null;
+        const act = m[1].toLowerCase();
+        const take = /^(accept|接收|接收了|收下|收下了)$/.test(act);
+        return { take: take, amount: parseFloat(m[2]), txnId: String(m[3]).replace(/\]+\s*$/, '').trim() };
+    }
+
     function _friendEventOf(text) {
         const s = String(text || '').trim();
         if (!s) return null;
@@ -1840,7 +1887,9 @@
                 else if (!rooms[key].name && r.name) rooms[key].name = r.name;
                 if (r.owner) rooms[key].owner = r.owner;
                 if (r.members && r.members.length) rooms[key].members = r.members.slice();
-                (r.msgs || []).forEach(function (x) { rooms[key].msgs.push({ type: x.type, sender: x.sender, content: x.content, isMe: x.isMe, floor: f, quoteName: x.quoteName || '', quoteText: x.quoteText || '' }); });
+                // 🚨 整份抄過來，不要一個一個欄位列 —— 以前只抄那六個，
+                //    新的訊息種類（劇情裡收下轉帳那種，身上有金額與單號）欄位會在這裡靜靜掉光。
+                (r.msgs || []).forEach(function (x) { rooms[key].msgs.push(Object.assign({ quoteName: '', quoteText: '' }, x, { floor: f })); });
             });
         }
         // 「我」跨樓補判：某樓沒寫 owner 時用整間房累積的 owner 再判一次（換視角的房，後面幾樓 AI 常省略屬性）
@@ -1910,12 +1959,17 @@
             };
             const rmMan = _rmLoad().manual;
             const backNames = [];   // 「已添加了X」的 X 可能連著後面的字，等所有刪除都收齊了再對名字
+            const moneyEvents = [];   // 💰 劇情裡收下／退回轉帳的那幾行，掃完一起結算
             keys.forEach(function (key) {
                 const room = rooms[key];
                 if (room.owner && room.owner !== _storyMyName() && !_isMeName(room.owner)) return;
                 const others = _storyOthers(room);
                 const selfKey = others.length >= 2 ? 'g:' + key : (others.length === 1 ? 'p:' + others[0] : '');
                 room.msgs.forEach(function (x, i) {
+                    // 💰 劇情裡收下／退回轉帳：照單號找那張卡，只有還在等的才動錢包。
+                    //    同步每次整份重建，所以一定要有東西擋重複 —— 擋的是那張卡的狀態，
+                    //    動完就不是 pending 了，下一次同步掃到同一行也不會再加一次。
+                    if (x.type === 'money') { moneyEvents.push({ key: key, name: room.name || '', ev: x }); return; }
                     if (x.type === 'system') {
                         const ev = _friendEventOf(x.content);
                         if (!ev) return;
@@ -1941,6 +1995,37 @@
                 const nm = hit ? hit.slice(2) : b.name;
                 rmPush('p:' + nm, b.f, b.o, 'back');
                 rmPush('b:' + nm, b.f, b.o, 'back');
+            });
+            // 💰 劇情裡收下／退回的轉帳，在這裡真的動錢包。
+            //   收下：主角收下別人轉的＝加錢；角色收下主角轉出去的＝扣錢（跟在「微信聊天」裡回同一行一樣）。
+            //   退回：誰都不動錢，只把那張卡標成退回。
+            // 🚨 擋重複靠那張卡的狀態：同步每次整份重建，這幾行每次都會被掃到，
+            //   但動完就不是 pending 了。卡片不在的時候（正文只寫收下、沒寫那張轉帳單）補一張，
+            //   不然沒有東西擋，她每同步一次就加一次錢。
+            const _done = _moneyDone();
+            moneyEvents.forEach(function (m) {
+                const ev = m.ev;
+                if (!(ev.amount > 0) || !ev.txnId) return;
+                if (_done[ev.txnId]) return;   // 這一筆早就結算過了
+                let rec = null;
+                try { rec = _txnLoad(null, ev.txnId); } catch (e) {}
+                if (rec && rec.status && rec.status !== 'pending') { _moneyDoneSet(ev.txnId, rec.status); return; }
+                if (!ev.take) {
+                    try { _txnSave(null, ev.txnId, Object.assign({}, rec || { amount: ev.amount, timestamp: Date.now() }, { status: 'returned' })); } catch (e) {}
+                    try { _setCardStatus(null, 'transfer', ev.txnId, 'returned', 'ID_' + ev.txnId); } catch (e) {}
+                    _moneyDoneSet(ev.txnId, 'returned');
+                    return;
+                }
+                const W = win.WX_WALLET;
+                if (W && W.transaction) {
+                    // 發話的是主角＝主角把錢收進來；發話的是角色＝角色收下主角轉出去的那筆
+                    const delta = ev.isMe ? ev.amount : -ev.amount;
+                    const why = ev.isMe ? ('微信收款 - ' + (m.name || '劇情')) : ('微信轉帳給 ' + (ev.sender || '對方'));
+                    try { W.transaction(delta, why); } catch (e) { console.warn('[wx 跑團同步] 錢包沒動成', e); }
+                }
+                try { _txnSave(null, ev.txnId, Object.assign({}, rec || { amount: ev.amount, targetName: ev.sender || '', timestamp: Date.now() }, { status: 'accepted' })); } catch (e) {}
+                try { _setCardStatus(null, 'transfer', ev.txnId, 'accepted', 'ID_' + ev.txnId); } catch (e) {}
+                _moneyDoneSet(ev.txnId, 'accepted');
             });
             // 她手動做的排在那一樓所有劇情事件之後
             Object.keys(rmMan).forEach(function (k) { rmPush(k, rmMan[k].floor, Infinity, rmMan[k].kind, rmMan[k].how); });
