@@ -1573,17 +1573,33 @@
             }
             let key = roomId || roomName;
             key = _remap[key] || key;   // AI 整理過：舊亂 id（或名）→ 統一 id，同一間合回一張卡
-            const dispName = _fix.names[key] || nameFromHdr || roomName;   // 整理過的正確名字優先（正文把代號寫進名字時）
+            // 🚨🚨 名字分兩種來源，差別在「可不可以覆蓋畫面上現在那個名字」：
+            //   說了算的（fixedName）＝整理聊天室改的、劇情用 <chat_rename> 改的 → 一定要換上去
+            //   隨便寫的（dispName）＝正文容器上的 chatroom 或 [Chat:] 那行 → 只有這間房第一次出現時才當名字
+            // 以前 chatroom 每樓都會蓋一次，所以她自己改的群名、整理好的名字，
+            // 只要劇情再多一句話就被正文寫的那個蓋回去（她 2026-09-20：「酒館AI跑正文的時候，把chatroom名改了不同的，導致混亂」）。
+            const fixedName = _fix.names[key] || '';
+            const dispName = nameFromHdr || roomName;
             // 📱 誰的手機：owner="名" 屬性明寫才換視角，沒寫＝主角（使用者人設名）。[With] 只當名單，順序不算數
             const attrOwner = _pn((attrs.match(/(?:^|\s)owner\s*=\s*["']?([^"'>]*)["']?/i)?.[1] || '').trim());
-            if (!rooms[key]) rooms[key] = { id: key, name: dispName, members: [], msgs: [], owner: '' };
-            else if (dispName) rooms[key].name = dispName;   // 名字以最新一次為準
+            if (!rooms[key]) rooms[key] = { id: key, name: fixedName || dispName, fixedName: fixedName, members: [], msgs: [], owner: '' };
+            else if (fixedName) { rooms[key].name = fixedName; rooms[key].fixedName = fixedName; }
             if (attrOwner) rooms[key].owner = attrOwner;
             const me = rooms[key].owner || '';
             const myName = _storyMyName();
             rawLines.forEach(function (line) {
                 line = line.trim();
                 if (!line) return;
+                // 🏷 [Rename: 新名字]：改這間聊天室名字的唯一一條路（見 os_vn_rules_data.js 的格式）。
+                //    她 2026-09-20 定的規矩：「不管是用戶還是角色，都必須使用系統標籤來改名」——
+                //    容器上的 chatroom 只在這間房第一次出現時命名，之後正文再怎麼亂寫都不影響畫面。
+                //    寫在容器裡是因為它本來就屬於這間房（id 跑不掉），而且容器內容不會被正文的標籤過濾吃掉。
+                const renM = line.match(/^\[\s*Rename\s*[:：]\s*(.*?)\s*\]$/i);
+                if (renM) {
+                    const rn = String(renM[1] || '').replace(/^["'「『]+|["'」』]+$/g, '').trim();
+                    if (rn && rn.length <= 24) { rooms[key].name = rn; rooms[key].fixedName = rn; }
+                    return;
+                }
                 const withM = line.match(/^\[\s*With\s*[:：]\s*(.*?)\s*\]/i);
                 // 名單裡同一個人的不同寫法（整理過）先統一再去重，不然簡繁各算一人、私聊變三人群
                 if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return _pn(s.trim()); }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }); if (ppl.length) rooms[key].members = ppl; return; }
@@ -1818,8 +1834,10 @@
             const part = _parseVnChatBlocks(text);
             Object.keys(part).forEach(function (key) {
                 const r = part[key];
-                if (!rooms[key]) rooms[key] = { id: key, name: r.name, members: [], msgs: [], owner: '' };
-                if (r.name) rooms[key].name = r.name;
+                if (!rooms[key]) rooms[key] = { id: key, name: r.name, fixedName: r.fixedName || '', members: [], msgs: [], owner: '' };
+                // 🚨 只有「說了算」的名字可以蓋掉已經有的；正文容器上的 chatroom 只在這間房第一次出現時算數
+                if (r.fixedName) { rooms[key].name = r.fixedName; rooms[key].fixedName = r.fixedName; }
+                else if (!rooms[key].name && r.name) rooms[key].name = r.name;
                 if (r.owner) rooms[key].owner = r.owner;
                 if (r.members && r.members.length) rooms[key].members = r.members.slice();
                 (r.msgs || []).forEach(function (x) { rooms[key].msgs.push({ type: x.type, sender: x.sender, content: x.content, isMe: x.isMe, floor: f, quoteName: x.quoteName || '', quoteText: x.quoteText || '' }); });
@@ -1976,7 +1994,10 @@
                     //    下面回收舊房的迴圈永遠掃不到，只會越積越多。
                     members = others.map(function (n) { return win.WX_CONTACTS.getOrCreateContactID(n, 'user', false); });
                     others.forEach(function (n) { groupOnlyNames[n] = 1; });
-                    win.WX_CONTACTS.addContactToStorage({ id: chatId, name: room.name || key, isGroup: true, members: members });
+                    // 🚨 通訊錄那筆的群名照同一條規矩：說了算的優先，其次是現在卡上那個（她可能改過），
+                    //    最後才是建房那次的 chatroom —— 不然聊天列表改好了、通訊錄還掛著正文亂寫的名字
+                    const _gname = room.fixedName || ((GLOBAL_CHATS[chatId] || {}).name) || room.name || key;
+                    win.WX_CONTACTS.addContactToStorage({ id: chatId, name: _gname, isGroup: true, members: members });
                 } else {
                     realName = others[0] || room.name || key;
                     // 🗑 刪掉的好友：不重新註冊進通訊錄（查 id 用不存檔的那種），原本的記錄藏起來
@@ -2003,14 +2024,16 @@
                 //    簽名一樣就走下面那條「跟上次一樣就沿用舊的」，名字永遠停在舊的那個。
                 //    她 2026-09-20 回報「整理後根本沒換」就是這個：合併會換 key、統一人名會換發話人，
                 //    所以那兩種看得到效果，只有改名看不到。（tmp/wx_tidy_fix_test.cjs 第 ④ 項守著）
-                const sig = key + '|' + (room.name || '') + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
+                const sig = key + '|' + (room.name || '') + '|' + (room.fixedName || '') + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
                 if (existing && existing._storySig === sig) { GLOBAL_CHATS[chatId] = existing; continue; }
 
                 const prevStoryCount = existing ? (existing.messages || []).filter(function (m) { return m && m._story != null; }).length : 0;
                 const messages = _storyMergeMessages(existing, room.msgs, isGroup ? (room.name || key) : realName, isGroup);
                 const rec = Object.assign({}, existing || {}, {
                     id: chatId,
-                    name: isGroup ? (room.name || key) : ((existing && existing.name) || realName),
+                    // 🚨 名字誰說了算：整理聊天室改的／劇情 <chat_rename> 改的 > 她自己改的（現在卡上那個）> 建房那次的 chatroom
+                    //    以前群名一律吃 room.name，所以她在群設定改好的名字，劇情再多一句就被正文寫的蓋回去。
+                    name: room.fixedName || (existing && existing.name) || (isGroup ? (room.name || key) : realName),
                     isGroup: isGroup,
                     members: members,
                     messages: messages,
