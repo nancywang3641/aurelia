@@ -121,6 +121,40 @@
                 chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${t}</div>`);
                 this.scrollChat(); core.checkAutoNext(); return;
             }
+            // 💸 收下轉帳／退回／代付這幾句，寫法是「[誰] [系統: 動作 金額|單號]」。
+            //    那是給程式看的句子，不是講給人聽的話 —— 照原樣印出來，她畫面上就會出現
+            //    一行「Accept 2000.00|ZJZQ20230625」（她：「VN_PHONE這格式好像不會在VN_PHONE面板上顯示」）。
+            //    這裡把它翻成人看得懂的那一句，順便把上面那張轉帳卡翻成已收款／已退回。
+            //    🚨 劇情裡的手機只管畫面：錢包那邊由跑團同步自己算（見 wx_core 的「劇情裡的錢」），
+            //       這裡碰錢包的話同一筆會被算兩次。
+            const _payV = line.match(/^(?:\[[^\]]+\]\s*)?\[(?:系統|系统|System)[：:]\s*(Accept|Return|TakeoutPay|TakeoutDecline)\b[\s|]*([^\]]*)\]/i);
+            if (_payV) {
+                const verb = _payV[1].toLowerCase();
+                const args = String(_payV[2] || '').split('|').map(function (x) { return x.trim(); });
+                const isMoney = (verb === 'accept' || verb === 'return');
+                const amt = isMoney ? (args[0] || '') : '';
+                const id  = args[args.length - 1] || '';
+                if (isMoney) {
+                    const esc = function (v) { return String(v).replace(/"/g, ''); };
+                    let card = id ? chatBody.querySelector('.wx-transfer-msg[data-tf-id="' + esc(id) + '"]') : null;
+                    if (!card && amt) {
+                        const same = chatBody.querySelectorAll('.wx-transfer-msg[data-tf-amt="' + esc(amt) + '"]');
+                        card = same.length ? same[same.length - 1] : null;
+                    }
+                    if (card) {
+                        card.classList.add(verb === 'accept' ? 'is-ok' : 'is-back');
+                        const ft = card.querySelector('.wx-t-footer');
+                        if (ft) ft.textContent = (verb === 'accept' ? '已收款' : '已退回');
+                    }
+                }
+                const say = verb === 'accept' ? ('已收款' + (amt ? ' ¥' + amt : ''))
+                          : verb === 'return' ? ('已退回' + (amt ? ' ¥' + amt : ''))
+                          : verb === 'takeoutpay' ? '已幫忙付款'
+                          : '沒有幫忙付款';
+                chatBody.insertAdjacentHTML('beforeend', '<div class="chat-sys">' + say + '</div>');
+                this.scrollChat(); core.checkAutoNext(); return;
+            }
+
             // 系統/旁白訊息：容忍 AI 常見變體 ——
             //   1) 整行開頭即標籤：[系统] 描述 / [系統：描述]
             //   2) 被多包一層說話人名：[丹尼尔] [系统] 描述（AI 把「媒體前奏帶人名」規則誤用到系統訊息上）
@@ -365,7 +399,8 @@
                 inner = `<div class="sticker-wrap" data-label="${safeLabel}"><img src="${src}" style="max-width:120px; border-radius:4px; display:block;" onerror="${onerror}"></div>`;
             } else if (trM) {
                 const tParts = trM[2].split('|'); const tAmt = tParts[0] || '0'; const tId = tParts[tParts.length - 1] || '';
-                inner = `<div class="wx-transfer-msg"><div class="wx-t-main"><div class="wx-t-icon">¥</div><div class="wx-t-body"><div class="wx-t-title">轉賬給朋友</div><div class="wx-t-amount">¥${tAmt}</div></div></div><div class="wx-t-footer">微信轉帳${tId && tId !== tAmt ? ' · ' + tId : ''}</div></div>`;
+                // 💸 單號與金額掛在卡上：後面那行「收下了／退回」要靠它找回這一張（見 _payVerb）
+                inner = `<div class="wx-transfer-msg" data-tf-id="${tId}" data-tf-amt="${tAmt}"><div class="wx-t-main"><div class="wx-t-icon">¥</div><div class="wx-t-body"><div class="wx-t-title">轉賬給朋友</div><div class="wx-t-amount">¥${tAmt}</div></div></div><div class="wx-t-footer">微信轉帳${tId && tId !== tAmt ? ' · ' + tId : ''}</div></div>`;
             } else if (giftM) {
                 const gParts = giftM[2].split('|'); const gName = gParts[0] || ''; const gMemo = gParts[1] || '送你一份心意'; const gId = gParts[2] || '';
                 const emojiRe = /^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF\u2300-\u23FF\u{1F300}-\u{1F9FF}])/u;

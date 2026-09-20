@@ -1824,6 +1824,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .wx-t-amount, .wx-rp-label { color: rgba(255,255,255,0.85); font-size: 0.78rem; margin-top: 2px; }
         .wx-rp-amount { color: #fff; font-weight: bold; font-size: 0.85rem; }
         .wx-t-footer, .wx-rp-footer { border-top: 1px solid rgba(255,255,255,0.22); padding: 6px 14px; font-size: 0.7rem; color: rgba(255,255,255,0.7); }
+        /* 劇情裡那張轉帳卡：後面有人寫了收下／退回，卡就翻面（照聊天 app 裡收過的那張的顏色） */
+        .wx-transfer-msg.is-ok, .wx-transfer-msg.is-back { background: #f6e3c8; }
+        .wx-transfer-msg.is-ok .wx-t-title, .wx-transfer-msg.is-back .wx-t-title { color: #b8702b; }
+        .wx-transfer-msg.is-ok .wx-t-amount, .wx-transfer-msg.is-back .wx-t-amount { color: rgba(184,112,43,0.8); }
+        .wx-transfer-msg.is-ok .wx-t-icon, .wx-transfer-msg.is-back .wx-t-icon { background: rgba(184,112,43,0.18); color: #b8702b; }
+        .wx-transfer-msg.is-ok .wx-t-footer, .wx-transfer-msg.is-back .wx-t-footer { border-top-color: rgba(184,112,43,0.25); color: rgba(184,112,43,0.75); }
         .wx-gift-msg { background: #1e306e; border-radius: 10px; overflow: hidden; min-width: 175px; max-width: 210px; }
         .wx-g-main { display: flex; align-items: center; gap: 11px; padding: 12px 14px 10px; }
         .wx-g-icon { font-size: 1.5rem; flex-shrink: 0; }
