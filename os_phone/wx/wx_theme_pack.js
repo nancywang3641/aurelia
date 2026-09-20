@@ -659,6 +659,29 @@
         const pal = _paletteCss(pm ? pm[1] : ((css.match(/:root\s*\{([^}]*)\}/i) || [])[1] || ''));
         return { name: name, css: css, palette: pal.css, missing: pal.missing };
     }
+    // 叫它把顏色表漏掉的那幾格補齊（不重做造型）：回傳補好的整張顏色表，補不成就回原本那張
+    function _askPalette(themeText, paletteRaw, missing) {
+        return new Promise(function (resolve) {
+            const O = win.OS_API || window.OS_API;
+            if (!missing.length || !O || !O.chatMain) { resolve(''); return; }
+            const ask = [
+                { role: 'system', content: '你剛才替一支手機聊天 app 設計了一套主題，但顏色表漏了幾格。照你那套主題的風格把整張顏色表補齊。只輸出 <palette> 那一塊，一行一格寫成 格子名: 顏色，不要寫別的字。格子：\n' + PALETTE.map(function (x) { return '・' + x[0] + '：' + x[1]; }).join('\n') },
+                { role: 'user', content: '你那套主題：\n' + String(themeText).slice(0, 12000) + '\n\n漏掉的格子：' + missing.join('、') }
+            ];
+            O.chatMain(ask, null, function (t2) {
+                const pm = String(t2 || '').match(/[<＜]\s*palette\s*[>＞]([\s\S]*?)[<＜]\s*\/\s*palette\s*[>＞]/i);
+                const merged = _paletteCss(String(paletteRaw || '').replace(/^:root\s*\{|\}\s*$/g, '') + '\n' + (pm ? pm[1] : t2));
+                resolve(merged.css || '');
+            }, function () { resolve(''); }, { task: 'wx_theme', label: '聊天 app 主題（補顏色）' });
+        });
+    }
+    // 這套主題的顏色表缺哪幾格（存好的主題也看得出來：讀它開頭那塊 :root）
+    function missingPalette(css) {
+        const m = String(css || '').match(/:root\s*\{([^}]*)\}/i);
+        return _paletteCss(m ? m[1] : '').missing;
+    }
+    // 叫 AI 做一套。🚨 交稿就結束，不自己再打一次 API——缺什麼一起回報，要不要再叫他補由她決定
+    //   （她 09-20：「有些人沒法接受反覆觸發」）。補的兩件事：顏色表漏格（missing）、換了底沒寫符號色（ink）。
     function generate(want, ref) {
         return new Promise(function (resolve, reject) {
             const O = win.OS_API || window.OS_API;
@@ -667,27 +690,32 @@
                 function (text) {
                     const r = _parseAi(text);
                     if (!r.css && !r.palette) { reject(new Error('它沒有照格式回')); return; }
-                    const finish = function (paletteCss) {
-                        const full = (paletteCss ? paletteCss + '\n' : '') + r.css;
-                        const c = compile(full);
-                        if (!c.ok || !c.kept) { reject(new Error(c.error || '寫出來的樣式一條都用不上')); return; }
-                        _askInk(full, _unpaired(full)).then(function (extra) { resolve({ name: r.name, css: full + extra }); });
-                    };
-                    if (!r.missing.length) { finish(r.palette); return; }
-                    // 顏色表缺了核心那幾格：只問顏色，把整張表補齊（不重做造型）
-                    const ask = [
-                        { role: 'system', content: '你剛才替一支手機聊天 app 設計了一套主題，但顏色表漏了幾格。照你那套主題的風格把整張顏色表補齊。只輸出 <palette> 那一塊，一行一格寫成 格子名: 顏色，不要寫別的字。格子：\n' + PALETTE.map(function (x) { return '・' + x[0] + '：' + x[1]; }).join('\n') },
-                        { role: 'user', content: '你那套主題：\n' + String(text).slice(0, 12000) + '\n\n漏掉的格子：' + r.missing.join('、') }
-                    ];
-                    O.chatMain(ask, null, function (t2) {
-                        const pm = String(t2 || '').match(/[<＜]\s*palette\s*[>＞]([\s\S]*?)[<＜]\s*\/\s*palette\s*[>＞]/i);
-                        const merged = _paletteCss((r.palette.replace(/^:root\s*\{|\}\s*$/g, '')) + '\n' + (pm ? pm[1] : t2));
-                        finish(merged.css);
-                    }, function () { finish(r.palette); }, { task: 'wx_theme', label: '聊天 app 主題（補顏色）' });
+                    const full = (r.palette ? r.palette + '\n' : '') + r.css;
+                    const c = compile(full);
+                    if (!c.ok || !c.kept) { reject(new Error(c.error || '寫出來的樣式一條都用不上')); return; }
+                    resolve({ name: r.name, css: full, missing: r.missing, ink: _unpaired(full), raw: text });
                 },
                 function (e) { reject(e instanceof Error ? e : new Error(String((e && e.message) || e))); },
                 { task: 'wx_theme', label: '聊天 app 主題' });
         });
+    }
+    // 補一次：顏色表漏格與符號顏色一起補（要補什麼由呼叫端挑），回傳補好的整份樣式
+    async function fillUp(t, opts) {
+        opts = opts || {};
+        let css = String(t.css || '');
+        if (opts.palette !== false) {
+            const miss = missingPalette(css);
+            if (miss.length) {
+                const cur = (css.match(/:root\s*\{([^}]*)\}/i) || [])[1] || '';
+                const pal = await _askPalette(opts.raw || css, cur, miss);
+                if (pal) css = pal + '\n' + css.replace(/:root\s*\{[^}]*\}\s*/i, '');
+            }
+        }
+        if (opts.ink !== false) {
+            const parts = _unpaired(css);
+            if (parts.length) css += await _askInk(css, parts);
+        }
+        return css;
     }
 
     // ================================================================
@@ -860,6 +888,23 @@
             _busy = false; _sheet = '';
             await apply(t.id);
             _toast('做好了：「' + t.name + '」，已經套上');
+            // 缺東西不自己再打一次：先用著，問她要不要再叫他補（不要的話「⋯」裡隨時能再叫）
+            const lack = [];
+            if (r.missing && r.missing.length) lack.push('有 ' + r.missing.length + ' 格顏色沒寫');
+            if (r.ink && r.ink.length) lack.push('有 ' + r.ink.length + ' 個地方換了底、沒寫上面的符號顏色');
+            if (!lack.length) return;
+            if (!(await _confirm('這套主題' + lack.join('，') + '，沒寫到的先用原本的顏色。要再叫他補一次嗎？（會再問他一次，多花一次）'))) {
+                _toast('先這樣用，之後在「⋯」裡還能叫他補');
+                return;
+            }
+            _busy = true; _renderPage();
+            const css = await fillUp(t, { raw: r.raw });
+            _busy = false;
+            if (css === t.css) { _renderPage(); _toast('沒補成，之後在「⋯」裡可以再試'); return; }
+            t.css = css;
+            await _save();
+            if (activeId() === t.id) await apply(t.id); else _renderPage();
+            _toast('補好了');
         } catch (err) {
             _busy = false; _renderPage();
             _toast('沒做成：' + ((err && err.message) || err));
@@ -878,6 +923,7 @@
             '<button type="button" data-m="rename"><i class="fa-solid fa-pen"></i>改名</button>' +
             '<button type="button" data-m="copy"><i class="fa-regular fa-copy"></i>複製分享</button>' +
             '<button type="button" data-m="file"><i class="fa-solid fa-file-export"></i>存成檔案</button>' +
+            (missingPalette(t.css).length ? '<button type="button" data-m="pal"><i class="fa-solid fa-palette"></i>補齊沒寫的顏色</button>' : '') +
             (_unpaired(t.css).length ? '<button type="button" data-m="ink"><i class="fa-solid fa-icons"></i>補上看不見的符號</button>' : '') +
             '<button type="button" data-m="del" class="is-danger"><i class="fa-solid fa-trash-can"></i>刪除</button>' +
             '<button type="button" data-m="x" class="is-cancel">取消</button>' +
@@ -904,14 +950,14 @@
                     d.body.appendChild(a); a.click(); a.remove();
                     setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
                 } catch (err) { _toast('存不出來'); }
-            } else if (what === 'ink') {
+            } else if (what === 'ink' || what === 'pal') {
                 if (_busy) return;
                 _busy = true; _renderPage();
-                _toast('請它補符號的顏色…');
-                const extra = await _askInk(t.css, _unpaired(t.css));
+                _toast(what === 'pal' ? '請它把顏色補齊…' : '請它補符號的顏色…');
+                const css = await fillUp(t, what === 'pal' ? { ink: false } : { palette: false });
                 _busy = false;
-                if (!extra) { _renderPage(); _toast('沒補成，再試一次'); return; }
-                t.css = String(t.css || '') + extra;
+                if (css === t.css) { _renderPage(); _toast('沒補成，再試一次'); return; }
+                t.css = css;
                 await _save();
                 if (activeId() === id) await apply(id); else _renderPage();
                 _toast('補好了');
@@ -945,7 +991,7 @@
         await apply(id);
     }
 
-    const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText, _unpaired };
+    const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText, fillUp, missingPalette, _unpaired };
     win.WX_THEME_PACK = API;
     window.WX_THEME_PACK = API;
     setTimeout(function () { _boot().catch(function (e) { console.warn('[主題] 開機套用失敗', e); }); }, 800);
