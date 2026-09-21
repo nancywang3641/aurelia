@@ -1,0 +1,138 @@
+/* 聊天記錄整理頁（os_phone/os/os_chat_tidy.js）。class 一律 act- 開頭。
+   跟設置頁、角色圖鑑同一套淺色：底 var(--os-page-bg)、字 var(--os-ink)。 */
+.act-root {
+    --act-ink: var(--os-ink);
+    --act-sub: rgba(var(--os-ink-rgb), 0.62);
+    --act-faint: rgba(var(--os-ink-rgb), 0.42);
+    --act-line: rgba(var(--os-ink-rgb), 0.12);
+    --act-card: #FFFFFF;
+    --act-bg: var(--os-page-bg);
+    --act-head: rgba(var(--os-tint-rgb), 0.95);
+    --act-bad: #C2413A;
+    --act-accent: #2F4A8A;
+    position: fixed; inset: 0; z-index: 2147482000;
+    display: flex; flex-direction: column;
+    container-type: inline-size;
+    background: var(--act-bg); color: var(--act-ink);
+    font-family: 'Noto Sans TC', sans-serif; color-scheme: light;
+}
+.act-root.act-in-screen { position: absolute; z-index: 1100; }
+.act-root, .act-root * { box-sizing: border-box; }
+.act-root button { font-family: inherit; }
+
+.act-head {
+    flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    background: var(--act-head); border-bottom: 1px solid var(--act-line);
+}
+.act-back {
+    width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent;
+    color: var(--act-sub); font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+}
+.act-back:hover { background: rgba(var(--os-ink-rgb), 0.08); color: var(--act-ink); }
+.act-title { font-size: 17px; font-weight: 800; letter-spacing: 2px; }
+
+.act-body {
+    flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 16px; display: flex; flex-direction: column; gap: 14px;
+}
+.act-body > * { width: 100%; max-width: 860px; margin-left: auto; margin-right: auto; flex-shrink: 0; }
+
+.act-wait, .act-empty { color: var(--act-sub); font-size: 14px; text-align: center; padding: 48px 12px; }
+.act-wait i { margin-right: 8px; }
+.act-wait-t { font-variant-numeric: tabular-nums; }
+
+/* ── 最上面：聊天已經不在、圖還留著 ── */
+.act-orphan {
+    background: var(--act-card); border: 1px solid var(--act-line); border-radius: 12px; padding: 14px 16px;
+}
+.act-sec-title { font-size: 13px; font-weight: 700; color: var(--act-sub); letter-spacing: 1px; }
+.act-sec-title i { margin-right: 7px; }
+.act-orphan-say { margin-top: 8px; font-size: 14px; color: var(--act-sub); }
+.act-orphan-row { margin-top: 10px; display: flex; align-items: center; gap: 12px; }
+.act-orphan-num { flex: 1; min-width: 0; font-size: 14px; color: var(--act-ink); }
+.act-orphan-num b { font-size: 30px; font-weight: 800; margin-right: 4px; font-variant-numeric: tabular-nums; }
+.act-orphan-num span { display: block; margin-top: 2px; font-size: 12.5px; color: var(--act-sub); }
+.act-orphan-list { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px dashed var(--act-line); display: flex; flex-direction: column; gap: 5px; }
+.act-orphan-list li { display: flex; gap: 10px; font-size: 12.5px; color: var(--act-sub); }
+.act-o-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-o-n { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.act-o-more { color: var(--act-faint); }
+
+/* ── 按鈕 ── */
+.act-btn {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 16px; border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer;
+    color: var(--act-ink); background: transparent; border: 1px solid rgba(var(--os-ink-rgb), 0.25);
+}
+.act-btn:hover { border-color: var(--act-ink); }
+.act-btn.act-danger { color: #fff; background: var(--act-bad); border-color: var(--act-bad); }
+.act-btn.act-danger:hover { filter: brightness(1.08); }
+.act-link { border: 0; background: transparent; padding: 4px 2px; font-size: 12.5px; color: var(--act-accent); cursor: pointer; flex-shrink: 0; }
+.act-link:hover { text-decoration: underline; }
+
+/* ── 篩選 ── */
+.act-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.act-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 999px; cursor: pointer;
+    font-size: 13px; color: var(--act-sub); background: var(--act-card); border: 1px solid var(--act-line);
+}
+.act-chip span { font-size: 11.5px; color: var(--act-faint); font-variant-numeric: tabular-nums; }
+.act-chip.on { color: #fff; background: var(--act-ink); border-color: var(--act-ink); }
+.act-chip.on span { color: rgba(255, 255, 255, 0.7); }
+
+/* ── 一張卡一區 ── */
+.act-card { background: var(--act-card); border: 1px solid var(--act-line); border-radius: 12px; overflow: hidden; }
+.act-card-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--act-line); }
+.act-card-name { min-width: 0; font-size: 15px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-card-meta { flex: 1; font-size: 12px; color: var(--act-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.act-row { display: flex; gap: 12px; padding: 12px 16px; cursor: pointer; border-top: 1px solid rgba(var(--os-ink-rgb), 0.06); }
+.act-card-head + .act-row { border-top: 0; }
+.act-row:hover { background: rgba(var(--os-ink-rgb), 0.03); }
+.act-row.on { background: rgba(194, 65, 58, 0.07); }
+.act-row.is-cur { cursor: default; }
+.act-check { flex-shrink: 0; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--act-bad); cursor: pointer; }
+.act-row.is-cur .act-check { cursor: not-allowed; opacity: 0.35; }
+.act-row-main { flex: 1; min-width: 0; }
+.act-row-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.act-row-title { font-size: 14px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.act-tag { flex-shrink: 0; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.act-tag.cur { color: #fff; background: var(--act-accent); }
+.act-tag.jr { color: #2E6B45; background: rgba(46, 107, 69, 0.12); }
+.act-tag.short { color: #8A6A1F; background: rgba(183, 121, 31, 0.14); }
+.act-row-text {
+    margin-top: 4px; font-size: 12.5px; line-height: 1.55; color: var(--act-sub);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.act-row-meta { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--act-faint); font-variant-numeric: tabular-nums; }
+.act-has-img { color: var(--act-bad); font-weight: 700; }
+
+/* ── 底下那條：有勾選才出現 ── */
+.act-bar { display: none; }
+.act-has-sel .act-bar {
+    flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--act-card); border-top: 1px solid var(--act-line); box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.06);
+}
+.act-bar-say { flex: 1; min-width: 0; font-size: 14px; color: var(--act-ink); font-variant-numeric: tabular-nums; }
+.act-bar-say b { font-weight: 800; }
+
+/* 相簿那一排分頁最右邊的入口 */
+.act-open-chip {
+    display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+    padding: 4px 10px; font-size: 12px; line-height: 1.4; font-family: inherit;
+    color: var(--os-ink); background: var(--os-surface); border: 1px solid rgba(var(--os-ink-rgb), 0.25); border-radius: 4px; cursor: pointer;
+}
+.act-open-chip:hover { border-color: var(--os-ink-soft); }
+
+@container (max-width: 520px) {
+    .act-body { padding: 12px; gap: 12px; }
+    .act-orphan-row { flex-direction: column; align-items: stretch; }
+    .act-orphan-row .act-btn { justify-content: center; }
+    .act-row { padding: 12px; }
+}
+
+/* 在設置→圖片那一排分頁裡：垂直置中 */
+.gal-subtab-row .act-open-chip { align-self: center; }

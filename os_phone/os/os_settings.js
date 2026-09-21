@@ -1529,6 +1529,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="gal-subtab" data-galtab="avatar" onclick="_switchOsGalTab(this,'avatar')">頭像</div>
                             <div class="gal-subtab" data-galtab="bg"     onclick="_switchOsGalTab(this,'bg')">背景</div>
                             <div class="gal-subtab" data-galtab="scene"  onclick="_switchOsGalTab(this,'scene')">插圖</div>
+                            ${((window.OS_CHAT_TIDY || (window.parent && window.parent.OS_CHAT_TIDY)) || { available: () => false }).available() ? `<button class="act-open-chip" type="button" onclick="var T=window.OS_CHAT_TIDY||(window.parent&&window.parent.OS_CHAT_TIDY);if(T)T.open({from:this});"><i class="fa-solid fa-broom"></i><span>整理聊天與圖</span></button>` : ''}
                         </div>
                         <div id="view-img-api" class="img-subtab-view">
 
