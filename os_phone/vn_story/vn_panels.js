@@ -596,13 +596,19 @@
     async function _renderImgMgr(cfg) {
         const list = document.getElementById(cfg.listId); if (!list) return;
         const store = cfg.store, curWorld = VN_Cache.getCurrentWorld();
-        let all = await VN_Cache.getAllMeta(store);   // 只撈中繼資料，大圖等卡片進視口才逐張載（整庫一次全載會 OOM）
+        // 清單不讀任何一張圖（鑰匙 × 圖庫小帳）；圖等卡片進視口才逐張載。
+        // 改版前就存在、小帳還沒記到的舊圖：先照鑰匙列出來（不等），背景一張張補記，補完重排一次。
+        let all = await VN_Cache.getAllMeta(store, { partial: true });
+        const pending = all.pending || [];
         // spriteDirect(直生立繪)生的圖存同一個 avatar_cache（供遊戲重用、切拉桿不重生＝Rae 拍板），但相簿「頭像」tab 排除它(isSprite)→不再被全身立繪污染
         if (cfg.kind === 'avatar') all = all.filter(e => !e.isSprite);
         // 直生立繪(spriteDirect)存在 avatar_cache 但被頭像 tab 濾掉、立繪 tab 又只讀 sprite_cache
         // → 兩邊都不顯示＝孤兒、刪不掉。使用者看到的就是立繪，所以併進立繪 tab（不搬 store，切拉桿仍不重生）
-        else if (cfg.kind === 'sprite') {
-            const _direct = (await VN_Cache.getAllMeta('avatar_cache')).filter(e => e.isSprite);
+        const fills = pending.length ? [[store, pending]] : [];
+        if (cfg.kind === 'sprite') {
+            const _av = await VN_Cache.getAllMeta('avatar_cache', { partial: true });
+            if ((_av.pending || []).length) fills.push(['avatar_cache', _av.pending]);   // 還沒補記的看不出是不是直生立繪，補完重排時才會出現
+            const _direct = _av.filter(e => e.isSprite);
             _direct.forEach(e => { e._st = 'avatar_cache'; });
             all = all.concat(_direct);
         }
@@ -633,6 +639,22 @@
         });
         bar.appendChild(chips);
         list.appendChild(bar);
+
+        // 舊圖補記：背景跑、這裡只給一行進度；補完（而且這段時間她沒自己換過篩選）就重排一次
+        const token = st.token = (st.token || 0) + 1;
+        if (fills.length) {
+            const note = document.createElement('div'); note.className = 'vng-indexing';
+            const say = (i, n) => { note.textContent = `正在整理舊圖 ${i} / ${n}（只有這一次，可以先照常看）`; };
+            say(0, fills[0][1].length); list.appendChild(note);
+            (async () => {
+                for (const [s, ks] of fills) await VN_Cache.indexMissing(s, ks, say);
+                if (st.token !== token || !list.isConnected) return;
+                let sc = list; while (sc && sc.scrollHeight <= sc.clientHeight + 1) sc = sc.parentElement;
+                const top = sc ? sc.scrollTop : 0;
+                await rerender();
+                if (sc && sc.isConnected) sc.scrollTop = top;
+            })();
+        }
 
         let entries = (groups[st.world] || []).slice();
         if (st.filter === 'fav') entries = entries.filter(e => e.favorite);

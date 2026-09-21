@@ -84,6 +84,8 @@
 .vng-btn-ok { background:#d4af37; color:#1a1a1a; font-weight:700; }
 .vng-btn-cancel { background:rgba(255,255,255,0.1); color:#ddd; }
 .vng-empty { color:#888; font-size:.85rem; padding:28px 0; text-align:center; }
+/* 舊圖補記進度（只有改版後第一次開會出現） */
+.vng-indexing { color:#888; font-size:.78rem; margin:-4px 0 10px; font-variant-numeric:tabular-nums; }
 
 /* ── 立繪去背工作室（從頭像轉立繪）── */
 .vng-pick { cursor:pointer; }

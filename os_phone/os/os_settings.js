@@ -586,11 +586,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const W = window.parent || window;
         const C = W.VN_Cache || window.VN_Cache;
         const doc = W.document || document;
-        if (!C || !C.getAll) { AUI.alert('VN_Cache 未就緒（先進一次 VN）'); return; }
+        if (!C || !C.getAllMeta) { AUI.alert('VN_Cache 未就緒（先進一次 VN）'); return; }
         const _e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
         let all = [];
-        try { all = (await C.getAll('avatar_cache')) || []; } catch (e) {}
+        try { all = (await C.getAllMeta('avatar_cache')) || []; } catch (e) {}   // 只要名字與生成詞，不讀圖
         const rows = all
             .filter(e => !world || (C.worldOf ? C.worldOf(e) === world : true))
             .map(e => ({ name: (C.bareKeyOf ? C.bareKeyOf(e) : e.key), prompt: e.prompt || '' }))
@@ -930,8 +930,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 try {
                     const VC = win2.VN_Cache;
                     const cur = VC.getCurrentWorld ? VC.getCurrentWorld() : '';
-                    const all = await VC.getAll('avatar_cache');
-                    const valid = all.filter(e => e.url && !e.url.startsWith('blob:'));
+                    // 清單不讀圖；圖只撈「選中的這個世界」那幾張、一張一張放上去（整庫頭像一次進記憶體會 OOM）
+                    const all = await VC.getAllMeta('avatar_cache');
+                    const valid = all.filter(e => e.hasUrl);
                     const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                     // 依世界分組（含「未分類」舊頭像）+ 下拉切換 → 舊頭像也挑得到、能繼續轉立繪
                     const groups = {};
@@ -949,7 +950,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     } else {
                         html += '<div class="vng-grid">' + pentries.map(e => {
                             const bare = VC.bareKeyOf ? VC.bareKeyOf(e) : e.key;
-                            return '<div class="vng-card vng-pick" data-key="' + encodeURIComponent(e.key) + '" data-name="' + esc(bare) + '" title="' + esc(bare) + '"><img src="' + esc(e.url) + '"><div class="vng-foot">' + esc(bare) + '</div></div>';
+                            return '<div class="vng-card vng-pick" data-key="' + encodeURIComponent(e.key) + '" data-name="' + esc(bare) + '" title="' + esc(bare) + '"><img alt=""><div class="vng-foot">' + esc(bare) + '</div></div>';
                         }).join('') + '</div>';
                     }
                     listEl.className = '';
@@ -970,6 +971,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             const info = document.getElementById('sprite-selected-info'); if (info) info.textContent = '已選角色：' + name;
                         };
                     });
+                    for (const card of listEl.querySelectorAll('.vng-pick')) {
+                        const v = await VC.getRaw('avatar_cache', decodeURIComponent(card.getAttribute('data-key')));
+                        if (!card.isConnected) break;   // 這段時間她換了世界＝整塊重畫了
+                        if (v && v.url && !String(v.url).startsWith('blob:')) card.querySelector('img').src = v.url; else card.remove();
+                    }
                 } catch (e) {
                     listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗: ' + e.message + '</span>';
                 }
@@ -1127,7 +1133,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 // 🌍 改用畫廊網格（世界感知、圖片為主）；VN_PLAYER 未就緒時退回極簡清單
                 if (win2.VN_PLAYER && win2.VN_PLAYER.loadSpriteManager) { win2.VN_PLAYER.loadSpriteManager('sprite-list'); return; }
                 try {
-                    const all = await win2.VN_Cache.getAll('sprite_cache');
+                    const all = await win2.VN_Cache.getAllMeta('sprite_cache', { partial: true });   // 只列名字，不讀圖
                     listEl.innerHTML = all.length ? all.map(e => '<div style="color:var(--os-ink-soft);font-size:11px;padding:2px 0;">' + e.key + '</div>').join('') : '<span style="color:var(--os-ink-soft);">尚無已存立繪</span>';
                 } catch (e) { listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗</span>'; }
             }

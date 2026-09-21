@@ -226,16 +226,19 @@
             if (!lb) return { ok:false, msg:'當前角色卡沒有綁定「角色世界書」（主世界書），無法備份' };
 
             // 收集當前世界的頭像（只取持久的 dataURL；blob 不可重用→跳過）
-            const all = await VN_Cache.getAll('avatar_cache');
+            // 清單不讀圖；圖只撈當前世界那幾張、一張一張讀（整庫頭像一次進記憶體會 OOM）
+            const all = await VN_Cache.getAllMeta('avatar_cache');
             const curWorld = VN_Cache.getCurrentWorld();
             const cur = {};   // 名字 → dataURL
             for (const e of (all || [])) {
-                if (!e || !e.url || e.url.indexOf('data:') !== 0) continue;
+                if (!e || !e.hasUrl) continue;
                 if (VN_Cache.worldOf(e) !== curWorld) continue;
                 const k = String(e.key || '');
                 const sep = k.indexOf('::');
                 const name = sep >= 0 ? k.slice(sep + 2) : k;
-                if (name) cur[name] = e.url;
+                if (!name) continue;
+                const full = await VN_Cache.getRaw('avatar_cache', e.key);
+                if (full && full.url && full.url.indexOf('data:') === 0) cur[name] = full.url;
             }
             if (!Object.keys(cur).length) return { ok:false, msg:'當前世界沒有可備份的頭像快取' };
 

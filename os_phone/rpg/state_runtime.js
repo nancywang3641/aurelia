@@ -879,9 +879,9 @@ ${_memoryRulesText()}
         const seen = new Set();
         try {
             const C = win.VN_Cache;
-            if (C && C.getAll) {
+            if (C && C.getAllMeta) {
                 const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
-                const all = await C.getAll('avatar_cache');
+                const all = await C.getAllMeta('avatar_cache');   // 只要生成詞，不讀圖（整庫頭像一次進記憶體會 OOM）
                 for (const e of (all || [])) {
                     if (!e || !e.prompt) continue;
                     if (world && C.worldOf && C.worldOf(e) !== world) continue;   // 只看當前世界
@@ -943,9 +943,9 @@ ${_memoryRulesText()}
         const map = {};
         try {
             const C = win.VN_Cache;
-            if (C && C.getAll) {
+            if (C && C.getAllMeta) {
                 const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
-                const all = await C.getAll('avatar_cache');
+                const all = await C.getAllMeta('avatar_cache');   // 只要生成詞，不讀圖（整庫頭像一次進記憶體會 OOM）
                 for (const e of (all || [])) {
                     if (!e || !e.prompt) continue;
                     if (world && C.worldOf && C.worldOf(e) !== world) continue;

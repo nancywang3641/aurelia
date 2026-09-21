@@ -10,7 +10,20 @@
     'use strict';
     console.log('[PhoneOS] 載入 VN 快取模組 (vn_cache.js)...');
 
+    // 連線開一次就留著用：以前每讀寫一筆都重開一條、從不關，整理圖庫一口氣幾千筆會疊出幾千條連線。
+    let _dbP = null;
     function _openIDB() {
+        if (_dbP) return _dbP;
+        const p = _openIDBOnce().then(db => {
+            db.onversionchange = () => { try { db.close(); } catch (e) {} if (_dbP === p) _dbP = null; };
+            db.onclose = () => { if (_dbP === p) _dbP = null; };
+            return db;
+        });
+        p.catch(() => { if (_dbP === p) _dbP = null; });
+        _dbP = p;
+        return p;
+    }
+    function _openIDBOnce() {
         return new Promise((res, rej) => {
             const req = indexedDB.open('vn_player_db', 7);
             req.onupgradeneeded = e => {
@@ -72,14 +85,95 @@
         return _openIDB().then(db => new Promise(res => {
             const tx = db.transaction(store, 'readwrite'); tx.objectStore(store).put(value, key);
             tx.oncomplete = () => res(true); tx.onerror = () => res(false);
-        })).catch(() => false);
+        })).catch(() => false).then(async ok => { if (ok && IMAGE_STORES[store]) await _metaPut(store, key, value); return ok; });
     }
     function _txDel(store, key) {
         return _openIDB().then(db => new Promise(res => {
             const tx = db.transaction(store, 'readwrite'); tx.objectStore(store).delete(key);
             tx.oncomplete = () => res(true); tx.onerror = () => res(false);
+        })).catch(() => false).then(async ok => { if (ok && IMAGE_STORES[store]) await _metaDel([_mk(store, key)]); return ok; });
+    }
+    function _txKeys(store) {
+        return _openIDB().then(db => new Promise((res, rej) => {
+            const req = db.transaction(store, 'readonly').objectStore(store).getAllKeys();   // 只讀鑰匙，不碰值
+            req.onsuccess = () => res(req.result || []);
+            req.onerror = () => rej(req.error);
+        }));
+    }
+
+    // ── 圖庫小帳（vn_player_meta）──────────────────────────────────────────
+    // 圖片 store 的每一筆值裡都躺著整張圖（base64，一張 1～8MB）。要列清單就得讀值，
+    // 而讀值＝把整張圖從硬碟搬進記憶體：她的圖庫 2026-09 已經 9.5GB／六千多張，
+    // 開一次相簿就是讀 9GB，游標一次還會預抓一整批 → TauriTavern 直接 Out of Memory。
+    // 所以清單要用的東西（提示詞、收藏、時間、屬於哪個世界…）另外記在這本小帳，
+    // 列清單＝「圖庫的鑰匙」對「小帳」，全程不讀任何一張圖。
+    // 🚨 小帳開成另一個資料庫、不是在 vn_player_db 加 store：那邊升版要搬動 9GB 的庫，
+    //    而且升版被別條連線擋住時所有讀寫會一起卡死（OS_DB 踩過）。
+    let _metaP = null;
+    function _openMeta() {
+        if (_metaP) return _metaP;
+        const p = new Promise((res, rej) => {
+            const req = indexedDB.open('vn_player_meta', 1);
+            req.onupgradeneeded = e => { const db = e.target.result; if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta'); };
+            req.onsuccess = e => {
+                const db = e.target.result;
+                db.onversionchange = () => { try { db.close(); } catch (er) {} if (_metaP === p) _metaP = null; };
+                db.onclose = () => { if (_metaP === p) _metaP = null; };
+                res(db);
+            };
+            req.onerror = () => rej(req.error);
+        });
+        p.catch(() => { if (_metaP === p) _metaP = null; });
+        _metaP = p;
+        return p;
+    }
+    const _MSEP = '|';
+    function _mk(store, key) { return store + _MSEP + String(key); }
+    // 值 → 小帳那一筆：圖本身（url、以及任何 data:/blob: 或超長的字串欄位，例如 bg 的 rawUrl）一律不抄
+    function _metaOf(value) {
+        const v = (value && typeof value === 'object') ? value : {};
+        const m = {};
+        for (const f of Object.keys(v)) {
+            if (f === 'url') continue;
+            const x = v[f];
+            if (typeof x === 'string' && (x.length > 4000 || x.startsWith('data:') || x.startsWith('blob:'))) continue;
+            m[f] = x;
+        }
+        return { m, hasUrl: !!v.url };
+    }
+    function _metaPut(store, key, value) {
+        return _openMeta().then(db => new Promise(res => {
+            const tx = db.transaction('meta', 'readwrite');
+            tx.objectStore('meta').put({ k: key, ..._metaOf(value) }, _mk(store, key));
+            tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false);
+        })).catch(e => { console.error('[VN_Cache] 圖庫小帳寫入失敗', e); return false; });
+    }
+    function _metaDel(metaKeys) {
+        if (!metaKeys.length) return Promise.resolve(true);
+        return _openMeta().then(db => new Promise(res => {
+            const tx = db.transaction('meta', 'readwrite'); const os = tx.objectStore('meta');
+            metaKeys.forEach(mk => os.delete(mk));
+            tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false);
         })).catch(() => false);
     }
+    function _metaGet(store, key) {
+        return _openMeta().then(db => new Promise(res => {
+            const req = db.transaction('meta', 'readonly').objectStore('meta').get(_mk(store, key));
+            req.onsuccess = () => res(req.result || null); req.onerror = () => res(null);
+        }));
+    }
+    // 某個 store 的整本小帳（每筆只有幾百字，一次全拿沒問題）→ Map(小帳鑰匙 → 那一筆)
+    function _metaAll(store) {
+        return _openMeta().then(db => new Promise((res, rej) => {
+            const os = db.transaction('meta', 'readonly').objectStore('meta');
+            const range = IDBKeyRange.bound(store + _MSEP, store + _MSEP + '￿');
+            const rk = os.getAllKeys(range), rv = os.getAll(range);
+            rv.onsuccess = () => { const map = new Map(); (rk.result || []).forEach((k, i) => map.set(k, rv.result[i])); res(map); };
+            rv.onerror = rk.onerror = () => rej(rv.error || rk.error);
+        }));
+    }
+    const _entryOf = (key, rec) => ({ key, ...rec.m, hasUrl: !!rec.hasUrl });
+    const _filling = {};   // store → 正在整理的那一輪（同一個 store 同時只跑一輪）
 
     const VN_Cache = {
         // 自動隔離版（圖片 store 依當前世界加前綴）→ VN 播放、wx、journal 都走這條，自動只看當前世界
@@ -115,10 +209,70 @@
             } catch(e) { return []; }
         },
 
-        // 同 getAll 但剝掉 url（base64 大圖字串），只回中繼資料 + hasUrl 旗標。
-        // 畫廊列表/整庫掃描用：cursor 逐筆過、大圖字串不留在結果陣列 → 峰值記憶體只有一張，
-        // 不再因為整庫幾百張插圖一次全進記憶體把 TauriTavern 撐到 OOM。
-        async getAllMeta(store) {
+        // 清單用：每筆只回中繼資料 + hasUrl 旗標，不帶圖。
+        // 圖片 store 走「鑰匙 × 小帳」，全程不讀任何一張圖（見上面「圖庫小帳」）。
+        //   小帳還沒記到的（改版前就存在的舊圖）：
+        //     預設 → 在這裡逐張整理完才回（opts.onProgress(i, n) 報進度）；
+        //     opts.partial → 不等，先回只有鑰匙的那幾筆（hasUrl 當作有、世界看鑰匙前綴），
+        //                    並把待整理的鑰匙掛在回傳陣列的 .pending 上，呼叫端自己叫 indexMissing。
+        async getAllMeta(store, opts) {
+            if (!IMAGE_STORES[store]) return this._scanMeta(store);
+            try {
+                const keys = await _txKeys(store);
+                const metas = await _metaAll(store);
+                const out = [], missing = [], live = new Set();
+                for (const k of keys) {
+                    const mk = _mk(store, k); live.add(mk);
+                    const rec = metas.get(mk);
+                    if (rec) out.push(_entryOf(k, rec)); else missing.push(k);
+                }
+                const dead = []; metas.forEach((rec, mk) => { if (!live.has(mk)) dead.push(mk); });
+                if (dead.length) await _metaDel(dead);   // 圖已經不在了的小帳
+                if (missing.length) {
+                    if (opts && opts.partial) { missing.forEach(k => out.push({ key: k, hasUrl: true, _pending: 1 })); out.pending = missing; }
+                    else out.push(...await this.indexMissing(store, missing, opts && opts.onProgress));
+                }
+                return out;
+            } catch (e) { console.error('[VN_Cache] getAllMeta 失敗', store, e); return []; }
+        },
+
+        // 把還沒進小帳的圖補記進去：一次只讀一張、讀完就放，每幾張讓出一次執行緒。
+        // 只有改版後第一次、或被繞過 VN_Cache 寫進來的圖才會走到這裡。回傳補好的那幾筆（不帶圖）。
+        async indexMissing(store, keys, onProgress) {
+            // 同一個 store 已經有一輪在跑 → 等它，等的期間把它的進度轉給這邊（不然畫面上那行會停在 0）
+            while (_filling[store]) {
+                const cur = _filling[store];
+                if (onProgress) cur.listeners.add(onProgress);
+                try { await cur; } catch (e) {}
+            }
+            const listeners = new Set(onProgress ? [onProgress] : []);
+            const tell = (i, n) => listeners.forEach(fn => { try { fn(i, n); } catch (e) {} });
+            const run = (async () => {
+                const out = [], n = keys.length;
+                for (let i = 0; i < n; i++) {
+                    const k = keys[i];
+                    let rec = await _metaGet(store, k);   // 別輪已經補過就不再讀圖
+                    if (!rec) {
+                        const v = await _txGet(store, k);
+                        if (v == null) continue;          // 這段時間被刪了
+                        rec = { k, ..._metaOf(v) };
+                        await _metaPut(store, k, v);
+                    }
+                    out.push(_entryOf(k, rec));
+                    if (i % 8 === 7 || i === n - 1) {
+                        tell(i + 1, n);
+                        await new Promise(r => setTimeout(r, 0));
+                    }
+                }
+                return out;
+            })();
+            run.listeners = listeners;
+            _filling[store] = run;
+            try { return await run; } finally { if (_filling[store] === run) delete _filling[store]; }
+        },
+
+        // 沒有小帳的 store（chat_bg 這種少量的）照舊用游標掃，剝掉 url
+        async _scanMeta(store) {
             try {
                 const db = await _openIDB();
                 return new Promise(res => {
@@ -165,7 +319,9 @@
             let n = 0;
             for (const store of Object.keys(IMAGE_STORES)) {
                 try {
-                    const all = await this.getAllMeta(store);   // 只要 key/world，別把整庫大圖撈進記憶體
+                    // 只要 key/world：不讀圖、也不在這裡等整理（還沒整理的看鑰匙前綴就知道世界；
+                    // 世界標記跟鑰匙前綴是同一支 set() 一起蓋的，沒有「有標記卻沒前綴」的圖）
+                    const all = await this.getAllMeta(store, { partial: true });
                     for (const entry of all) {
                         if (_norm(this.worldOf(entry)) === wn) { if (await this.deleteRaw(store, entry.key)) n++; }
                     }
