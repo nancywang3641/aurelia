@@ -3336,8 +3336,43 @@
         },
         toggleUI: function(target) {
             const po = document.getElementById('phone-overlay');
-            if (target === 'vn') { po.classList.remove('active'); document.getElementById('text-panel-wrapper').style.display = 'block'; }
+            if (target === 'vn') {
+                // 🚨這支在劇情模式下「每一行劇本」都會被叫一次（next() 裡那句 toggleUI('vn')），
+                //    所以一定要分清楚：手機真的開著、這一次是把它關掉 → 才做下面清舊字那一套；
+                //    平常的每一行只要維持對話框開著就好，不能每行都清字、收框。
+                const _wasPhone = po.classList.contains('active');
+                po.classList.remove('active');
+                if (!_wasPhone) {
+                    // 還在等「從手機回來後的第一句」就繼續收著，別被中間的 [BGM|]、[Bg|] 這種行提前放出來
+                    if (!this._panelPending) document.getElementById('text-panel-wrapper').style.display = 'block';
+                    return;
+                }
+                // 🚨從手機（聊天／通話／瀏覽器／導航）回到劇情時，對話框裡還留著「進手機之前」那一句。
+                //    以前這裡直接把對話框叫回來，手機還在滑出去的那一秒，後面就冒出那句舊台詞，
+                //    等下一句真的畫上去才換掉（她實測導航走到目的地按下去那一下）。
+                //    現在先把舊的字清掉、對話框繼續收著，等下一句真的要畫（renderVN）才一起出來；
+                //    下一行如果不是台詞（系統框、道具、過場）它們本來就會自己收對話框，不受影響。
+                //    保底：一秒半內都沒有台詞要畫，就把（已經清空的）對話框放回來，免得卡在沒有地方可以點。
+                try {
+                    const _dt = document.getElementById('dialogue-text'); if (_dt) _dt.innerHTML = '';
+                    const _sn = document.getElementById('speaker-name'); if (_sn) _sn.style.display = 'none';
+                    if (this._twTimer) { clearTimeout(this._twTimer); this._twTimer = null; }
+                } catch (e) {}
+                this._panelPending = true;
+                clearTimeout(this._panelPendingTimer);
+                this._panelPendingTimer = setTimeout(() => {
+                    if (!this._panelPending) return;
+                    this._panelPending = false;
+                    const _po = document.getElementById('phone-overlay');
+                    // 有別的東西正蓋在畫面上（系統框、道具、過場、彈出的卡片）就不放，它們收掉時自己會把對話框叫回來
+                    const _busy = document.querySelector('#sys-overlay.active, #trans-overlay.active, #item-overlay.active, #vn-dom-block-overlay.active');
+                    if (this.mode === 'vn' && !_busy && !(_po && _po.classList.contains('active'))) {
+                        document.getElementById('text-panel-wrapper').style.display = 'block';
+                    }
+                }, 1500);
+            }
             else {
+                this._panelPending = false; clearTimeout(this._panelPendingTimer);
                 po.classList.add('active'); document.getElementById('text-panel-wrapper').style.display = 'none';
                 document.getElementById('phone-chat').classList.toggle('hidden', target !== 'phone-chat');
                 document.getElementById('phone-call').classList.toggle('hidden', target !== 'phone-call');
@@ -3643,6 +3678,11 @@
             const nel = document.getElementById('speaker-name');
             const panel = document.getElementById('text-panel');
             const dtEl = document.getElementById('dialogue-text');
+            // 從手機回來後收著的對話框：這一句要畫了才放出來（見 toggleUI）
+            if (this._panelPending) {
+                this._panelPending = false; clearTimeout(this._panelPendingTimer);
+                const _w = document.getElementById('text-panel-wrapper'); if (_w) _w.style.display = 'block';
+            }
             panel.classList.remove('inner-mode');
             if (mode === 'inner') {
                 if (n) { nel.style.display = 'inline-block'; nel.innerText = n; }
