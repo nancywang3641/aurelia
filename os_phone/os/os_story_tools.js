@@ -12,6 +12,27 @@
     'use strict';
     console.log('[OS] 載入故事管理工具 (os_story_tools.js)...');
     const win = window.parent || window;
+
+    // ❔ 功能說明放在問號裡，不掛在面板上
+    //   說明要在「畫面組出來那一刻」才登記：這支檔案載入時提示視窗那支不一定已經在了
+    let _helpReg = false;
+    function _help(key) {
+        try {
+            if (!_helpReg && win.AUI && win.AUI.registerHelp) { win.AUI.registerHelp(_HELP); _helpReg = true; }
+            return (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn(key) : '';
+        } catch (e) { return ''; }
+    }
+    const _HELP = {
+            ost_merge_phone: { title: '把手機聊天室寫進大總結', body:
+                '你在聊天 app 裡自己跟角色聊的，不在劇情的樓層裡，寫正文的 AI 平常看不到。'
+                + '\n這顆鈕會把每個聊天室「還沒寫進故事」的記錄收起來，合進現在這份大總結。一樣先給你看，按儲存才算數；不會動到劇情的樓層，也不會隱藏舊樓。'
+                + '\n\n平常不按也會寫進去：每次大總結自己會順便帶上。這顆鈕是讓你不用等到下一次。'
+                + '\n\n不會寫進去的：'
+                + '\n・劇情正文裡演過的聊天——正文本來就有，不重複寫。'
+                + '\n・聊天設置裡開了「隔離」的聊天室。'
+                + '\n\n聊天室的舊訊息：每間只把最近 40 則原文帶給角色，更早的每 30 則整理成一節，在聊天設置的「早前記錄」看得到、改得了。'
+                + '這顆鈕收的就是那些節，所以一間還不到 40 則的聊天室，按了也沒東西可收。' }
+    };
     const API = {};
 
     // === 取目前劇情線的識別碼 ===
@@ -1429,8 +1450,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                             : '還沒有大總結。玩幾章之後按下面那顆，系統會把劇情壓成一份長期記憶。'}</div>
                         <button class="ost-btn ost-btn-primary" id="ost-sa-gen"><i class="fa-solid fa-pen-to-square"></i> 生成 / 更新大總結</button>
                         <div class="ost-hint">拿上一版當底稿，只把「上次之後的新章節」合併進去</div>
-                        <button class="ost-btn" id="btn-merge-phone"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>
-                        <div class="ost-hint">微信、電話裡還沒寫進故事的記錄，不等下次大總結、現在就合進來</div>
+                        <div class="ost-btn-row"><button class="ost-btn" id="btn-merge-phone"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>${_help('ost_merge_phone')}</div>
                     </div>
                     ${latest ? `
                     <div class="ost-section">
@@ -1489,8 +1509,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                         <div class="ost-hint">將最近的劇情壓縮成永久記憶</div>
                         <button class="ost-btn" id="btn-recompress-summary" onclick="window.OS_STORY_TOOLS.recompressSummary()"><i class="fa-solid fa-shuffle"></i> 重壓目前大總結</button>
                         <div class="ost-hint">把目前累積的總結再濃縮一次（不新增劇情）</div>
-                        <button class="ost-btn" id="btn-merge-phone" onclick="window.OS_STORY_TOOLS.mergePhoneChats()"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>
-                        <div class="ost-hint">微信、電話裡還沒寫進故事的記錄，不等下次大總結、現在就合進來</div>
+                        <div class="ost-btn-row"><button class="ost-btn" id="btn-merge-phone" onclick="window.OS_STORY_TOOLS.mergePhoneChats()"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>${_help('ost_merge_phone')}</div>
                         <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()"><i class="fa-solid fa-pen"></i> 編輯大總結生成模板</button>
                         <div class="ost-hint">查看 / 編輯 / 清空各段劇情 → 大廳「瀅瀅的故事日誌」</div>
                     </div>

@@ -64,6 +64,10 @@
 .ost-wipe-confirm input { accent-color: #d05a5a; }
 /* 面板裡的大總結三顆鈕：滿寬直排 */
 .ost-section > .ost-btn { display: block; width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+.ost-btn-row { display: flex; align-items: center; gap: 2px; margin-bottom: 8px; }
+.ost-btn-row > .ost-btn { flex: 1; min-width: 0; box-sizing: border-box; }
+.ost-btn-row > .aui-help { color: #b0a08e; font-size: 16px; padding: 0 6px; }
+
 .ost-section > .ost-btn:last-child { margin-bottom: 0; }
 
 /* ───── 隱藏對話工具列 ───── */
