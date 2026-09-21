@@ -338,3 +338,24 @@
 .set-channel-row { display: flex; gap: 6px; align-items: center; }
 .set-channel-row .set-input { flex: 1; }
 .set-channel-row .btn-test { flex: 0 0 auto; padding: 8px 14px; margin: 0; }
+
+/* ── 設置→備份：這台裝置上的空間（用量條／資料有沒有受保護／各佔多少）── */
+.bk-scan-btn { padding: 4px 12px; font-size: 11px; cursor: pointer; margin: 0; flex-shrink: 0; }
+.bk-usage { font-size: 12px; color: rgba(var(--os-ink-rgb), 0.72); }
+.bk-usage-nums { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.bk-usage-nums b { font-size: 22px; font-weight: 800; color: var(--os-ink); }
+.bk-usage-nums em { margin-left: auto; font-style: normal; font-weight: 700; color: var(--os-ink); }
+.bk-usage-bar { margin-top: 8px; height: 8px; border-radius: 999px; background: rgba(var(--os-ink-rgb), 0.10); overflow: hidden; }
+.bk-usage-bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: #4E8F6A; }
+.bk-usage-bar.is-mid i { background: #D08A2E; }
+.bk-usage-bar.is-high i { background: #C2413A; }
+.bk-protect { display: flex; align-items: center; gap: 10px; font-size: 12px; color: rgba(var(--os-ink-rgb), 0.72); }
+.bk-protect:empty, .bk-storage-info:empty { display: none; }
+.bk-protect-say { flex: 1; min-width: 0; }
+.bk-protect-say i { margin-right: 5px; }
+.bk-protect-say.is-on { color: #2E6B45; }
+.bk-storage-info { font-size: 12px; color: rgba(var(--os-ink-rgb), 0.72); }
+.bk-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.10); }
+.bk-row-name { color: var(--os-ink-soft); min-width: 0; }
+.bk-row-num { flex-shrink: 0; text-align: right; color: var(--os-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.bk-row small { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: rgba(var(--os-ink-rgb), 0.5); }

@@ -241,23 +241,66 @@
         return applyData(data, opts);
     }
 
-    // ── 儲存空間估算 (包含所有 V16 倉庫) ────────────────────────────────
+    // ── 儲存空間 ────────────────────────────────────────────────────
+    // 分項（掃描鈕）：文字資料算大小，圖片只算張數——圖的大小要把圖讀出來才量得到，整庫讀一遍會撐爆記憶體。
+    //   張數走 VN_Cache.getAllMeta(partial)＝只看鑰匙，不讀圖。名字一律給人看的，不顯示倉庫代號。
+    const SIZE_STORES = [
+        ['vn_chapters', '劇情章節'], ['api_chats', '聊天 app 的對話'], ['world_book_entries', '世界書'],
+        ['var_packs', '變數包'], ['ui_templates', '劇情面板'], ['achievements', '成就']
+    ];
+    const IMAGE_STORES = [['scene_cache', '插圖'], ['bg_cache', '背景'], ['avatar_cache', '頭像與直生立繪'], ['sprite_cache', '立繪'], ['item_cache', '物品圖']];
     async function estimateSize() {
         const results = {};
-        // 將 AVS 和 VN 加入掃描清單
-        const stores = [
-            'world_book_entries', 'achievements',
-            'var_packs', 'ui_templates', 'vn_chapters', 'api_chats'
-        ];
-        for (const s of stores) {
+        const C = win.VN_Cache || window.VN_Cache;
+        if (C && C.getAllMeta) {
+            let n = 0; const parts = [];
+            for (const [s, label] of IMAGE_STORES) {
+                try { const k = (await C.getAllMeta(s, { partial: true })).length; if (k) { n += k; parts.push(label + ' ' + k); } } catch (e) {}
+            }
+            results['圖片'] = { count: n, unit: '張', note: parts.join('、') };
+        }
+        for (const [s, label] of SIZE_STORES) {
             try {
                 const items = await _getStore(s);
                 const kb = Math.round(new Blob([JSON.stringify(items)]).size / 1024);
-                results[s] = { count: items.length, kb };
-            } catch(e) { results[s] = { count: 0, kb: 0 }; }
+                results[label] = { count: items.length, kb };
+            } catch(e) { results[label] = { count: 0, kb: 0 }; }
         }
         return results;
     }
+
+    // 整個站在這台裝置上用了多少、瀏覽器給多少、資料有沒有受保護。
+    //   瀏覽器空間吃緊時是「整個站的資料一起丟」，不是只丟圖；受保護（persist）之後瀏覽器不會自己動手清，
+    //   只有使用者自己去清。酒館桌面版的資料在電腦資料夾裡、本來就不會被清，叫了也無害，所以不分版本都叫。
+    async function storageStatus() {
+        const st = { supported: false, usage: 0, quota: 0, ratio: 0, persisted: null };
+        const ns = win.navigator && win.navigator.storage;
+        if (!ns) return st;
+        try { if (ns.estimate) { const e = await ns.estimate(); st.supported = true; st.usage = e.usage || 0; st.quota = e.quota || 0; st.ratio = st.quota ? st.usage / st.quota : 0; } } catch (e) {}
+        try { if (ns.persisted) st.persisted = await ns.persisted(); } catch (e) {}
+        return st;
+    }
+    async function requestPersist() {
+        const ns = win.navigator && win.navigator.storage;
+        if (!ns || !ns.persist) return null;
+        try { if (ns.persisted && await ns.persisted()) return true; return await ns.persist(); } catch (e) { return false; }
+    }
+    // 開機後自己申請一次保護；用到八成以上一天提醒一次（不擋畫面）
+    const WARN_KEY = 'os_storage_warn_day';
+    async function _bootCheck() {
+        await requestPersist();
+        const st = await storageStatus();
+        if (!st.supported || st.ratio < 0.8) return;
+        const _d = new Date(), today = _d.getFullYear() + '-' + (_d.getMonth() + 1) + '-' + _d.getDate();
+        try { if (localStorage.getItem(WARN_KEY) === today) return; localStorage.setItem(WARN_KEY, today); } catch (e) {}
+        const A = win.AUI || window.AUI;
+        // 「系統/備份」那一頁只有 PWA 有；酒館版沒有那頁，就只指相簿
+        let pwa = false; try { pwa = !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) {}
+        const msg = '這台裝置留給奧瑞亞的空間已經用了 ' + Math.round(st.ratio * 100) + '%。'
+                  + (pwa ? '到 設置 → 系統/備份 先匯出一份備份，再到相簿壓縮或清掉不要的圖。' : '到相簿壓縮或清掉不要的圖。');
+        try { if (A && A.toast) A.toast(msg, { type: 'warn' }); } catch (e) {}
+    }
+    try { setTimeout(() => { _bootCheck().catch(() => {}); }, 6000); } catch (e) {}
 
     // ── 對外接口 ──────────────────────────────────────────────────────
     win.OS_BACKUP = {
@@ -269,6 +312,8 @@
         exportLocal,
         importLocal,
         estimateSize,
+        storageStatus,
+        requestPersist,
         collectEssential,
         collectAll,
     };

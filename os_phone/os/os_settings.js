@@ -45,6 +45,7 @@
             ss_2130: { title: '角色名佔位', body: '副模型只寫 ##角色名##＋動作場景，外觀由系統用頭像自動填。' },
             ss_2144: { title: '獨立插圖副模型', body: '插圖另開一通副模型（用副模型接口）、只吃下方規範、不背 AVS/記憶；開了上面的搭便車插圖就停。' },
             ss_2188: { title: '角色頭像快取', body: '備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。' },
+            bk_storage: { title: '這台裝置上的空間', body: '奧瑞亞的資料（劇情、聊天、圖片）都存在這台裝置的瀏覽器裡，瀏覽器會給一個上限。佔最多的通常是圖片。用到一半橘色、八成紅色。空間吃緊時，瀏覽器可能把整個站的資料一起清掉，不只是圖；「受保護」之後它就不會自己動手。不管有沒有受保護，定期匯出一份完整備份最保險。' },
             ss_2250: { title: '已存立繪', body: '純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。' },
             ss_2272: { title: '語音轉文字', body: '微信輸入框按住說話、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。' },
             ss_2308: { title: 'Group ID (必填)', body: '登入 Minimax 平台後，在帳號設定頁面可找到 Group ID。' },
@@ -2556,10 +2557,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group">
                             <div class="set-label">
-                                <i class="fa-solid fa-chart-simple"></i> 本地儲存空間
-                                <span class="btn-test" id="bk-scan-btn" style="padding:4px 12px; font-size:11px; cursor:pointer; margin:0;">掃描</span>
+                                <span><i class="fa-solid fa-chart-simple"></i> 這台裝置上的空間${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('bk_storage') : ''}</span>
+                                <span class="btn-test bk-scan-btn" id="bk-scan-btn">看各佔多少</span>
                             </div>
-                            <div id="bk-storage-info" style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.72); margin-top:8px;">點擊「掃描」查看各資料佔用量</div>
+                            <div class="bk-usage" id="bk-usage"></div>
+                            <div class="bk-protect" id="bk-protect"></div>
+                            <div class="bk-storage-info" id="bk-storage-info"></div>
                         </div>
 
                         <div class="set-group">
@@ -5137,16 +5140,45 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             btnScan.textContent = '掃描中...';
             try {
                 const info = await BACKUP.estimateSize();
+                const _size = kb => kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB';
                 const lines = Object.entries(info).map(([k, v]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(var(--os-ink-rgb), 0.10);">
-                        <span style="color:var(--os-ink-soft)">${k}</span>
-                        <span style="color:var(--os-ink); font-weight:bold;">${v.count} 筆 / ${v.kb} KB</span>
-                    </div>`
+                    `<div class="bk-row"><span class="bk-row-name">${k}${v.note ? `<small>${v.note}</small>` : ''}</span>
+                        <span class="bk-row-num">${v.count} ${v.unit || '筆'}${v.kb != null ? `<small>${_size(v.kb)}</small>` : ''}</span></div>`
                 ).join('');
                 if (elStorageInfo) elStorageInfo.innerHTML = lines || '（無資料）';
-            } catch(e) { if (elStorageInfo) elStorageInfo.textContent = '掃描失敗: ' + e.message; }
-            btnScan.textContent = '掃描';
+            } catch(e) { if (elStorageInfo) elStorageInfo.textContent = '讀不到：' + e.message; }
+            btnScan.textContent = '看各佔多少';
+            _paintUsage();
         });
+
+        // 用量條＋資料有沒有受保護（開這頁就畫，不用按）
+        const elUsage = container.querySelector('#bk-usage'), elProtect = container.querySelector('#bk-protect');
+        const _gb = n => n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' : Math.max(1, Math.round(n / 1048576)) + ' MB';
+        async function _paintUsage() {
+            if (!BACKUP || !BACKUP.storageStatus || !elUsage) return;
+            const st = await BACKUP.storageStatus();
+            if (!st.supported) { elUsage.textContent = '這個瀏覽器不告訴網頁用了多少空間。'; }
+            else {
+                const pct = Math.min(100, Math.round(st.ratio * 100));
+                const lv = st.ratio >= 0.8 ? ' is-high' : (st.ratio >= 0.5 ? ' is-mid' : '');
+                elUsage.innerHTML = `<div class="bk-usage-nums"><b>${_gb(st.usage)}</b><span>／瀏覽器最多給 ${_gb(st.quota)}</span><em>${pct}%</em></div>
+                    <div class="bk-usage-bar${lv}"><i></i></div>`;
+                const fill = elUsage.querySelector('.bk-usage-bar i'); if (fill) fill.style.width = Math.max(pct, st.usage ? 1 : 0) + '%';
+            }
+            if (!elProtect) return;
+            if (st.persisted === true) elProtect.innerHTML = '<span class="bk-protect-say is-on"><i class="fa-solid fa-shield-halved"></i> 資料已受保護：瀏覽器不會自己清掉</span>';
+            else if (st.persisted === false) {
+                elProtect.innerHTML = '<span class="bk-protect-say"><i class="fa-solid fa-shield"></i> 資料還沒受保護：空間吃緊時瀏覽器可能整個清掉</span><span class="btn-test bk-scan-btn" id="bk-persist-btn">申請保護</span>';
+                const b = elProtect.querySelector('#bk-persist-btn');
+                if (b) b.onclick = async () => {
+                    b.textContent = '申請中…';
+                    const ok = await BACKUP.requestPersist();
+                    await _paintUsage();
+                    if (!ok && window.AUI) window.AUI.alert('瀏覽器這次沒有答應。\n通常要先把奧瑞亞「加到主畫面」、或允許它的通知之後再申請才會過。\n沒過之前，記得定期按下面的「匯出完整備份」。');
+                };
+            } else elProtect.textContent = '';
+        }
+        _paintUsage();
 
         const btnExport = container.querySelector('#bk-export-btn');
         if (btnExport) btnExport.addEventListener('click', async () => {
