@@ -48,6 +48,8 @@
             //    代號就先掛著，等下一行 [With: …] 進來再換成人名（見下面 _titleFromWith）。
             this._roomSlug = /^[A-Za-z0-9_\-.]+$/.test(newName) ? newName : '';
             document.getElementById('chat-title').innerText = newName;       // 標題永遠顯示房名（給玩家看）
+            // 黑夜模式跟聊天 app 那顆同一個開關（顏色本身掛在整頁上，這裡只補外殼那個 class 給既有的深色規則用）
+            try { document.getElementById('phone-chat').classList.toggle('wx-dark', localStorage.getItem('wx_dark_mode') === 'true'); } catch (e) {}
 
             if (newKey !== this.currentChatroom) {
                 if (this.currentChatroom) {
@@ -112,13 +114,13 @@
             }
             if (line.startsWith('[Time]') || line.match(/^\[Time[：:]/i)) {
                 const t = line.replace(/^\[Time[：:\]]\s*/i,'').replace(/\]$/,'').trim();
-                chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${t}</div>`);
+                this._time(chatBody, t);
                 this.scrollChat(); core.checkAutoNext(); return;
             }
             // TTIME 格式：[22:45] 純時間標記
             if (line.match(/^\[\d{1,2}:\d{2}\]$/)) {
                 const t = line.slice(1, -1);
-                chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${t}</div>`);
+                this._time(chatBody, t);
                 this.scrollChat(); core.checkAutoNext(); return;
             }
             // 💸 收下轉帳／退回／代付這幾句，寫法是「[誰] [系統: 動作 金額|單號]」。
@@ -144,15 +146,15 @@
                     // 卡片跟微信同一張，翻成已收款／已退還也用微信那邊的字（WX_VIEW.markTransfer）
                     const WV = win.WX_VIEW || window.WX_VIEW;
                     if (card && WV && WV.markTransfer) {
-                        const row = card.closest('.chat-row');
-                        WV.markTransfer(card, verb, !!(row && row.classList.contains('you')));
+                        const row = card.closest('.wx-msg-row');
+                        WV.markTransfer(card, verb, !!(row && row.classList.contains('me')));
                     }
                 }
                 const say = verb === 'accept' ? ('已收款' + (amt ? ' ¥' + amt : ''))
                           : verb === 'return' ? ('已退回' + (amt ? ' ¥' + amt : ''))
                           : verb === 'takeoutpay' ? '已幫忙付款'
                           : '沒有幫忙付款';
-                chatBody.insertAdjacentHTML('beforeend', '<div class="chat-sys">' + say + '</div>');
+                this._sys(chatBody, say);
                 this.scrollChat(); core.checkAutoNext(); return;
             }
 
@@ -163,7 +165,7 @@
             const _sysWrap = line.match(/^(?:\[[^\]]+\]\s*)?\[(?:系統|系统|System|旁白|Narrator)([：:\]])([\s\S]*)$/i);
             if (_sysWrap) {
                 const t = (_sysWrap[1] === ']' ? _sysWrap[2] : _sysWrap[2].replace(/\]\s*$/, '')).trim();
-                chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${t}</div>`);
+                this._sys(chatBody, t);
                 this.scrollChat(); core.checkAutoNext(); return;
             }
 
@@ -173,11 +175,11 @@
                 const content = match[2].trim();
                 // 只有 [XXXX] 沒有後續內容 → 視為系統提示
                 if (content === '') {
-                    chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${sender}</div>`);
+                    this._sys(chatBody, sender);
                     this.scrollChat(); core.checkAutoNext(); return;
                 }
                 if (/^(系統|系统|System|旁白|Narrator)$/i.test(sender)) {
-                    chatBody.insertAdjacentHTML('beforeend', `<div class="chat-sys">${content}</div>`);
+                    this._sys(chatBody, content);
                 } else {
                     // 右邊泡泡＝①You/主角/我/使用者人設名 ②<chat owner="名"> 點名的人。[With] 只當名單，順序不算數
                     const mc = (win.OS_PERSONA && win.OS_PERSONA.getName && win.OS_PERSONA.getName()) || (win.OS_API && win.OS_API.getGlobalUserName && win.OS_API.getGlobalUserName()) || '';
@@ -196,6 +198,8 @@
                         const q = (_hasQ && pi === 0) ? { name: _qp.name, text: _qp.text } : null;
                         chatBody.insertAdjacentHTML('beforeend', this._buildChatBubbleHTML(sender, part, isMe, core, q));
                     });
+                    // 頭像跟聊天 app 同一支貼：她在聊天 app 設的照片、劇情生過存起來的都在這裡補上
+                    try { const WV = win.WX_VIEW || window.WX_VIEW; if (WV && WV.hydrateAvatars) WV.hydrateAvatars(chatBody); } catch (e) {}
                     core.addLog(sender, body);
                 }
                 this.scrollChat();
@@ -284,11 +288,6 @@
             return parts.length > 0 ? parts : [content];
         },
 
-        _avatarColor: function(name) {
-            const palette = ['#fa9d3b','#3b97fa','#2ecc71','#9b59b6','#e74c3c','#1abc9c','#e67e22','#34495e'];
-            let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-            return palette[Math.abs(h) % palette.length];
-        },
 
         // chatroom 是代號的時候，標題拿 [With] 裡的人名頂上：私聊＝對方那一個，群＝前兩個＋…
         _titleFromWith: function () {
@@ -309,57 +308,58 @@
                 : (others.slice(0, 2).join('、') + (others.length > 2 ? ' 等 ' + others.length + ' 人' : ''));
         },
 
+        // 🙋 聊天 app 裡對得到這個人嗎：拿他在聊天 app 的那一間（頭像、她那邊的頭像都記在那一間上）
+        _wxChatByName: function (name) {
+            const n = String(name || '').replace(/^[*＊_]+|[*＊_]+$/g, '').trim();
+            if (!n) return null;
+            try {
+                const G = (win.wxApp && win.wxApp.GLOBAL_CHATS) || {};
+                const B = win.WX_BUBBLE_SETTINGS;
+                const id = (B && B._contactIdByName) ? B._contactIdByName(n) : '';
+                if (id && G[id]) return G[id];
+                const k = Object.keys(G).find(function (x) { const c = G[x]; return c && !c.isGroup && (c.name === n || c.realName === n); });
+                return k ? G[k] : null;
+            } catch (e) { return null; }
+        },
+
+        // 系統提示／時間：跟聊天 app 同一種樣子（一行淡灰字，有背景圖時自己帶一塊底）
+        _sys: function (chatBody, text) {
+            chatBody.insertAdjacentHTML('beforeend', `<div class="wx-system-notice">${text}</div>`);
+        },
+        _time: function (chatBody, text) {
+            chatBody.insertAdjacentHTML('beforeend', `<div class="wx-time-stamp">${text}</div>`);
+        },
+
+        // 📱 整則訊息交給聊天 app 那支畫（WX_VIEW.renderBubble）：頭像、泡泡、卡片、語音、群聊人名、引用全部同一份，
+        //    同一個人在劇情裡跟打開聊天 app 看到的長一樣。以前這裡自己畫一套，轉帳、紅包、語音、頭像都不一樣，很出戲。
+        //    帶 _static＝只借長相：不碰帳本、不存紅包、點了不開窗，錢照舊由跑團同步那層算。
+        //    頭像的順序也照聊天 app：她在聊天 app 幫他設的照片 → 世界書 → 劇情這次生的 → 劇情以前生過存起來的 → 預設頭像。
         _buildChatBubbleHTML: function(sender, content, isMe, core, quote) {
-            if (content.startsWith('[撤回]')) { return `<div class="chat-sys">${sender} 撤回了一條消息</div>`; }
-            const nameHTML = (!isMe && this.isGroupChat) ? `<div class="chat-sender-name">${sender}</div>` : '';
-
-            // -- 世界書頭像判定 --
-            let lbUrl = core._lorebookAvatarCache?.[sender] || core._avatarMemCache?.[sender];
-            if (!lbUrl && core._nameVariants) {
-                const variant = core._nameVariants(sender).find(v => core._lorebookAvatarCache?.[v] || core._avatarMemCache?.[v]);
-                if (variant) lbUrl = core._lorebookAvatarCache?.[variant] || core._avatarMemCache?.[variant];
-            }
-
-            let avatarHTML = sender.charAt(0);
-            let color = this._avatarColor(sender);
-            let avatarStyle = `background:${color};`;
-
-            if (lbUrl) {
-                const letter = sender.charAt(0);
-                avatarStyle = `background:${color}; overflow:hidden; padding:0;`;
-                avatarHTML = `<img src="${lbUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="var p=this.parentNode;this.remove();p.style.padding='';p.textContent='${letter}';">`;
-            }
-
-            // 任何圖片／語音／檔案的變體先 normalize 成微信認得的那個字（[圖片:]、[語音:]、[文件:]）
+            // 任何圖片／語音／檔案的變體先 normalize 成聊天 app 認得的那個字（[圖片:]、[語音:]、[文件:]）
             content = this._normalizeAliasTags(this._normalizeImageTag(content));
-
-            // 📱 卡片、語音、通話記錄一律跟微信同一份畫法（WX_VIEW.staticMessage）：同一個人、同一支手機，
-            //    劇情裡看到的就要跟打開微信看到的一樣。以前這裡自己畫一套，轉帳、紅包、語音長得都不一樣，很出戲。
-            //    只借長相：帳本、紅包資料、點開的窗那些都不碰，錢照舊由跑團同步那層算。
-            let inner = '';
             const WV = win.WX_VIEW || window.WX_VIEW;
-            const peer = (document.getElementById('chat-title') || {}).innerText || '';
-            const sm = (WV && WV.staticMessage) ? WV.staticMessage(content, isMe, {
-                peer: peer, sender: sender,
-                voiceClick: 'event.stopPropagation(); window.VN_Phone._voiceTap(this)'
-            }) : null;
-            if (sm) {
-                // 卡片自己就是造型，外面不套泡泡；語音、通話記錄照微信裝在泡泡裡（會吃泡泡主題）
-                inner = sm.bare ? sm.html : `<div class="chat-bubble pbub-bubble">${sm.html}</div>`;
-            } else {
-                // .pbub-bubble＝泡泡主題的共用 class（跟微信同一組，見 wx_bubble_ai.js）
-                inner = `<div class="chat-bubble pbub-bubble">${content}</div>`;
+            if (!WV || !WV.renderBubble) {
+                const esc = String(content).replace(/</g, '&lt;');
+                return `<div class="wx-msg-row ${isMe ? 'me' : 'you'} pbub-row ${isMe ? 'pbub-me' : 'pbub-other'}"><div class="wx-bubble-avatar pbub-avatar"></div><div class="pbub-wrap wx-bubble-wrap"><div class="wx-bubble-content pbub-bubble">${esc}</div></div></div>`;
             }
-            // 引用回覆的灰塊：照微信擺在泡泡內、正文下面。結構跟微信共用 OS_API.chatQuote
-            if (quote && quote.name && quote.text && win.OS_API && win.OS_API.chatQuote) {
-                const qh = win.OS_API.chatQuote.html(quote.name, quote.text, "vnp-quote");
-                const cut = inner.lastIndexOf('</div>');
-                if (qh && cut > -1) inner = inner.slice(0, cut) + qh + inner.slice(cut);
-            }
-            // 🚨這裡的 .you 是「我」、.other 是對方，微信那邊卻是 .me 才是我——名字剛好相反。
-            //    泡泡主題一律只認 .pbub-me / .pbub-other，兩邊在這層對齊。
-            const rowHTML = `<div class="chat-row ${isMe ? 'you' : 'other'} pbub-row ${isMe ? 'pbub-me' : 'pbub-other'}"><div class="chat-avatar pbub-avatar" style="${avatarStyle}">${avatarHTML}</div><div class="chat-content">${inner}</div></div>`;
-            return nameHTML ? `<div class="chat-outer">${nameHTML}${rowHTML}</div>` : rowHTML;
+            const roomName = (document.getElementById('chat-title') || {}).innerText || '';
+            const room = this._wxChatByName(roomName);
+            const person = isMe ? null : this._wxChatByName(sender);
+            // 用別人的手機當視角（owner="名"）時，右邊那顆是那個角色：頭像拿他的，不是她的
+            const owner = this.chatOwner ? this._wxChatByName(this.chatOwner) : null;
+            const chatObj = {
+                id: '', name: sender, realName: sender, isGroup: !!this.isGroupChat,
+                customAvatar: (person && person.customAvatar) || '',
+                userAvatar: this.chatOwner ? ((owner && owner.customAvatar) || '') : ((room && room.userAvatar) || ''),
+                userVnName: this.chatOwner || ''
+            };
+            const msg = {
+                content: content, isMe: !!isMe, sender: sender,
+                recalled: content.startsWith('[撤回]'),
+                quoteName: quote ? quote.name : '', quoteText: quote ? quote.text : '',
+                _static: { peer: roomName, voiceClick: 'event.stopPropagation(); window.VN_Phone._voiceTap(this)' }
+            };
+            return WV.renderBubble(msg, chatObj, false);
         },
 
         // 點語音訊息：字的展開跟微信同一支（WX_VIEW.voiceReveal），另外照劇情的語音設定念出來

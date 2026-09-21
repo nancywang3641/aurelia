@@ -235,23 +235,25 @@
                         <div class="vnp-notch"></div>
                         <div class="vnp-statusbar"><span class="vnp-sb-time">--:--</span><span class="vnp-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
                         <div class="vnp-homebar"></div>
-                        <div id="phone-chat" class="hidden" onclick="window.VN_Core.next()">
+                        <!-- 聊天室整頁跟聊天 app 同一套 class（.wx-shell／.wx-header／.wx-input-bar）：
+                             顏色、黑夜模式、她做的聊天 app 主題包全都吃得到，兩邊長一樣 -->
+                        <div id="phone-chat" class="hidden wx-shell" onclick="window.VN_Core.next()">
                             <img id="chat-bg-img" src="" style="display:none;">
-                            <div id="chat-header">
-                                <span style="font-size: 1.2rem; cursor:pointer;" onclick="window.VN_Core.closeChat(); event.stopPropagation()">&lt;</span>
-                                <span id="chat-title" style="font-weight:bold; font-size: 1.1rem;">Name</span>
-                                <button id="chat-more-btn" onclick="window.VN_PLAYER.openChatBgPanel(); event.stopPropagation()">···</button>
+                            <div id="chat-header" class="wx-header">
+                                <div class="wx-back-btn show" role="button" aria-label="返回" onclick="window.VN_Core.closeChat(); event.stopPropagation()"></div>
+                                <div id="chat-title" class="wx-header-title">Name</div>
+                                <div id="chat-more-btn" class="wx-head-menu-btn" role="button" onclick="window.VN_PLAYER.openChatBgPanel(); event.stopPropagation()">···</div>
                             </div>
                             <div id="chat-body"></div>
 
-
-
-                            <div id="chat-footer" onclick="event.stopPropagation()">
-                                <!-- 劇情手機是展示正文用的，沒有「＋」發東西的面板；輸入框只是樣子 -->
-                                <div id="chat-input-wrap">
-                                    <input type="text" id="chat-input" placeholder="發送消息..." readonly>
+                            <div id="chat-footer" class="wx-footer-wrapper" onclick="event.stopPropagation()">
+                                <!-- 劇情手機是展示正文用的：輸入列只是樣子，按了不會發東西 -->
+                                <div class="wx-input-bar">
+                                    <span class="wx-icon-btn wx-trigger-btn"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                                    <div class="wx-input-box"><input class="wx-input-real" id="chat-input" readonly tabindex="-1"><span class="wx-hold-btn"><i class="fa-solid fa-microphone"></i></span></div>
+                                    <span class="wx-icon-btn wx-sticker-btn"><i class="fa-solid fa-face-smile"></i></span>
+                                    <span class="wx-icon-btn wx-plus-btn"><i class="fa-solid fa-circle-plus"></i></span>
                                 </div>
-                                <button id="chat-mic-btn"><i class="fa-solid fa-microphone"></i></button>
                             </div>
 
                             <div id="chat-bg-panel" onclick="event.stopPropagation()">

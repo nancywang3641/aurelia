@@ -55,6 +55,8 @@
             });
         } catch (e) {}
     }
+    // 一載入就掛一次：劇情裡的手機也吃這組顏色，她這一輪還沒打開聊天 app 的話，以前要等聊天 app 畫過才有
+    _applyWxSkinClass();
 
     // --- HTML 轉純文字核心 ---
     function cleanHtmlToText(htmlContent) {

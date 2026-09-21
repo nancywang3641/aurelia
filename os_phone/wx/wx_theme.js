@@ -141,7 +141,9 @@
             .wx-room-bg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0); z-index: 1; pointer-events: none; transition: background 0.3s; }
             .wx-page-room.has-bg .wx-room-bg-overlay { background: rgba(0,0,0,0.22); }
             .wx-room-scroll { flex: 1; overflow-y: auto; position: relative; z-index: 2; padding-bottom: 70px; }
-            .wx-page-room.has-bg .wx-group-name { color: var(--wx-on-accent); text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.7); }
+            /* 🚨 白字＋陰影只在深色背景上讀得到，米黃的底圖上整個糊掉（她在劇情手機的群聊抓到：「群聊字看不到欸」）。
+               名字自己帶一塊底的小膠囊，深底淺底都讀得到。劇情手機那邊同一組（vn_styles.css 的 #phone-chat.has-bg） */
+            .wx-page-room.has-bg .wx-group-name { color: var(--wx-on-accent); width: fit-content; background: rgba(0,0,0,0.46); padding: 1px 8px; border-radius: 9px; text-shadow: 0 1px 2px rgba(0,0,0,0.55); }
             .wx-page-room.has-bg .wx-system-notice { background: rgba(0,0,0,0.38); color: var(--wx-on-accent); backdrop-filter: blur(4px); }
             .wx-chat-item { display: flex; padding: 12px 16px; border-bottom: 1px solid #f2f2f2; cursor: pointer; background: var(--wx-surface); min-height: 70px; box-sizing: border-box; }
             .wx-chat-item:active { background: var(--wx-surface-2); }
@@ -166,6 +168,9 @@
                這層無形的 70% 夾住 → 她說「預覽正常，套用後偏移，而且泡泡張不開」。
                .pbub-bubble 的 max-width 是相對這一層算的，兩邊都寫百分比會疊兩次。 */
             .wx-bubble-wrap { max-width: 70%; min-width: 0; }
+            /* 卡片（轉帳、紅包、位置…）自己有固定寬度：螢幕窄的時候 70% 裝不下，卡片會蓋到頭像上（劇情手機比較窄，先撞到）。
+               裝卡片的那一欄放寬到「整排扣掉頭像」，文字泡泡照舊 70% */
+            .wx-bubble-wrap:has(> .wx-bubble-bare) { max-width: calc(100% - 50px); }
             .wx-send-fail { align-self: center; flex-shrink: 0; margin-right: 8px; color: var(--wx-danger); font-size: 18px; line-height: 1; }
             /* 📞 通話記錄：電話圖示加一句話，跟一般訊息一樣裝在泡泡裡 */
             .wx-call-rec { display: inline-flex; align-items: center; gap: 7px; }
@@ -197,7 +202,8 @@
             .wx-msg-row.you .wx-bubble-content::before { content: ''; position: absolute; left: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 6px solid var(--wx-bubble-you-bg); }
             .wx-msg-row.me .wx-bubble-content { background: #95ec69; margin-right: 10px; border: 1px solid #86d45a; }
             .wx-msg-row.me .wx-bubble-content::before { content: ''; position: absolute; right: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 6px solid #95ec69; }
-            .wx-system-notice { text-align: center; font-size: 12px; color: #b2b2b2; margin: 15px 20px; padding: 4px 10px; clear: both; width: auto; align-self: center; border-radius: 4px; }
+            /* 寬度跟著字走、置中：有聊天背景圖時它會長出一塊深底，寬度 auto 的話那塊底被撐成整排一條 */
+            .wx-system-notice { text-align: center; font-size: 12px; color: #b2b2b2; margin: 15px auto; padding: 4px 10px; clear: both; width: fit-content; max-width: calc(100% - 40px); box-sizing: border-box; align-self: center; border-radius: 4px; }
             /* 撤回：那則淡掉 → 換成「撤回了一則訊息」淡進來（她從三個小樣挑的 1）。換掉與拿掉 class 都是 wx_core 計時器做，不靠轉場跑完 */
             .wx-recall-out { transition: opacity .35s ease; opacity: 0 !important; }
             .wx-recall-in { animation: wxRecallIn .35s ease-out; }

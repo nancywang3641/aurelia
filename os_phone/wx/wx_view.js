@@ -269,7 +269,8 @@
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(display)}</div>`;
             }
 
-            html = this.processModules(html, String(chatId), msg.isMe, msgIndex, msg);
+            // 🎭 msg._static：劇情裡的手機借這支畫整則（頭像、泡泡、卡片都同一份），只畫樣子，理由見 processModules 開頭
+            html = this.processModules(html, String(chatId), msg.isMe, msgIndex, msg, msg._static ? Object.assign({ static: true }, msg._static) : undefined);
             
             let avatarSeed = chatName; 
             let avatarUrl = "";
@@ -277,7 +278,7 @@
             let dbDataAttr = ""; 
 
             if (msg.isMe) {
-                avatarUrl = safeChat.userAvatar; 
+                avatarUrl = safeChat.userAvatar;
                 if (!avatarUrl) avatarSeed = 'MySelf';
             }
             else {
@@ -300,7 +301,8 @@
                 }
             } else {
                 // 沒有自定義頭像 → 嘗試從 VN 串接獲取
-                const vnName = msg.isMe ? '' : (safeChat.isGroup && msg.sender ? msg.sender : safeChat.realName || '');
+                // userVnName：劇情手機用別人的手機當視角（owner="名"）時，右邊那顆是那個角色，不是她
+                const vnName = msg.isMe ? (safeChat.userVnName || '') : (safeChat.isGroup && msg.sender ? msg.sender : safeChat.realName || '');
                 if (vnName) {
                     dbDataAttr = `data-vn-name="${vnName}" class="wx-bubble-avatar vn-load-target"`;
                 } else {
@@ -343,7 +345,7 @@
             let avatarAttr = /class="/.test(dbDataAttr) ? dbDataAttr.replace('class="', 'class="pbub-avatar ') : `${dbDataAttr} class="pbub-avatar"`;
             // 👤 點頭像＝看那個人的個人檔案（LINE 那種）。群聊點誰就開誰，自己那顆不開。
             //    stopPropagation：聊天區有「點一下收面板」的處理，不擋住會連帶被吃掉。
-            if (!msg.isMe) {
+            if (!msg.isMe && !msg._static) {
                 const _who = String((safeChat.isGroup && msg.sender) ? msg.sender : (safeChat.name || safeChat.id || '')).replace(/'/g, "\\'");
                 if (_who) avatarAttr += ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${_who}')"`;
             }
@@ -718,18 +720,6 @@
             });
             html = html.replace(/\n/g, '<br>');
             return html;
-        },
-
-        // 🎭 劇情裡的手機畫一則訊息，跟微信長一模一樣（同一份卡片、同一份語音）。
-        //   回傳 null＝這不是任何一種媒體標籤，照純文字泡泡畫。bare＝卡片自己就是造型，外面不套泡泡。
-        //   只畫樣子：不碰帳本、不存紅包、點了不開窗，理由見 processModules 開頭。
-        staticMessage: function (content, isMe, opts) {
-            const c = String(content || '').trim();
-            if (!new RegExp('^\\[\\s*(?:' + MSG_TAG.ALL + ')\\s*[:：]', 'i').test(c)) return null;
-            opts = Object.assign({}, opts, { static: true });
-            const html = this.processModules(c, '', !!isMe, null, { sender: opts.sender || '' }, opts);
-            const bare = new RegExp('^\\[\\s*(?:' + [MSG_TAG.CARD, MSG_TAG.IMAGE, MSG_TAG.STICKER].join('|') + ')', 'i').test(c);
-            return { html: html, bare: bare };
         },
 
         // 轉帳卡翻成已收款／已退還。字跟微信那邊的狀態一字不差（上面 processModules 的轉帳那段）。

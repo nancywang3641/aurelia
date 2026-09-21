@@ -3343,10 +3343,21 @@
                 document.getElementById('phone-call').classList.toggle('hidden', target !== 'phone-call');
                 const pb = document.getElementById('phone-browser'); if (pb) pb.classList.toggle('hidden', target !== 'phone-browser');
                 const pn = document.getElementById('phone-nav'); if (pn) pn.classList.toggle('hidden', target !== 'phone-nav');
-                // 狀態列：時間照真的走；通話是深底，時間與橫槓換白的
+                // 狀態列：時間照真的走；底下那塊是深的，時間與橫槓就換白的。
+                //   聊天室的頂欄跟著聊天 app 的主題與黑夜模式變色，不能寫死 → 量頂欄真正的底色（同應用手機的做法）
                 const ps = document.getElementById('phone-screen');
                 if (ps) {
-                    ps.classList.toggle('vnp-dark', target === 'phone-call');
+                    let dark = target === 'phone-call';
+                    if (target === 'phone-chat') {
+                        try {
+                            const m = String(getComputedStyle(document.getElementById('chat-header')).backgroundColor).match(/[\d.]+/g);
+                            if (m && (m[3] === undefined || parseFloat(m[3]) > 0.5)) {
+                                const lin = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+                                dark = (0.2126 * lin(+m[0]) + 0.7152 * lin(+m[1]) + 0.0722 * lin(+m[2])) < 0.45;
+                            }
+                        } catch (e) {}
+                    }
+                    ps.classList.toggle('vnp-dark', dark);
                     const d = new Date(), t = ps.querySelector('.vnp-sb-time');
                     if (t) t.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
                 }
