@@ -1,20 +1,25 @@
 /* 聊天記錄整理頁（os_phone/os/os_chat_tidy.js）。class 一律 act- 開頭。
-   跟設置頁、角色圖鑑同一套淺色：底 var(--os-page-bg)、字 var(--os-ink)。 */
+   🚨 這頁每一個顏色都吃主題那幾格，不准寫死：字是主題的(--os-ink)、底就也要是主題的(--os-surface)。
+      第一版卡片底寫死 #FFFFFF，深色主題下字是淺的 → 白底白字。成對使用：
+      字 --os-ink ／ 底 --os-page-bg、卡片 --os-surface；強調 --os-accent 配 --os-on-accent；
+      刪除 --os-danger，填滿的紅鈕上面的字用頁面底色（淺主題＝深紅配米白、深主題＝亮紅配深底）。 */
 .act-root {
     --act-ink: var(--os-ink);
     --act-sub: rgba(var(--os-ink-rgb), 0.62);
     --act-faint: rgba(var(--os-ink-rgb), 0.42);
     --act-line: rgba(var(--os-ink-rgb), 0.12);
-    --act-card: #FFFFFF;
+    --act-card: var(--os-surface);
     --act-bg: var(--os-page-bg);
     --act-head: rgba(var(--os-tint-rgb), 0.95);
-    --act-bad: #C2413A;
-    --act-accent: #2F4A8A;
+    --act-bad: var(--os-danger);
+    --act-on-bad: var(--os-page-bg);
+    --act-accent: var(--os-accent-strong, var(--os-accent));
+    --act-on-accent: var(--os-on-accent);
     position: fixed; inset: 0; z-index: 2147482000;
     display: flex; flex-direction: column;
     container-type: inline-size;
     background: var(--act-bg); color: var(--act-ink);
-    font-family: 'Noto Sans TC', sans-serif; color-scheme: light;
+    font-family: 'Noto Sans TC', sans-serif;
 }
 .act-root.act-in-screen { position: absolute; z-index: 1100; }
 .act-root, .act-root * { box-sizing: border-box; }
@@ -22,7 +27,7 @@
 
 .act-head {
     flex-shrink: 0; display: flex; align-items: center; gap: 8px;
-    padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    padding: 12px 16px; padding-top: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px)));   /* 手機殼裡要讓出狀態列，不然標題跟時間疊在一起 */
     background: var(--act-head); border-bottom: 1px solid var(--act-line);
 }
 .act-back {
@@ -67,7 +72,7 @@
     color: var(--act-ink); background: transparent; border: 1px solid rgba(var(--os-ink-rgb), 0.25);
 }
 .act-btn:hover { border-color: var(--act-ink); }
-.act-btn.act-danger { color: #fff; background: var(--act-bad); border-color: var(--act-bad); }
+.act-btn.act-danger { color: var(--act-on-bad); background: var(--act-bad); border-color: var(--act-bad); }
 .act-btn.act-danger:hover { filter: brightness(1.08); }
 .act-link { border: 0; background: transparent; padding: 4px 2px; font-size: 12.5px; color: var(--act-accent); cursor: pointer; flex-shrink: 0; }
 .act-link:hover { text-decoration: underline; }
@@ -79,8 +84,8 @@
     font-size: 13px; color: var(--act-sub); background: var(--act-card); border: 1px solid var(--act-line);
 }
 .act-chip span { font-size: 11.5px; color: var(--act-faint); font-variant-numeric: tabular-nums; }
-.act-chip.on { color: #fff; background: var(--act-ink); border-color: var(--act-ink); }
-.act-chip.on span { color: rgba(255, 255, 255, 0.7); }
+.act-chip.on { color: var(--act-bg); background: var(--act-ink); border-color: var(--act-ink); }
+.act-chip.on span { color: inherit; opacity: 0.7; }
 
 /* ── 一張卡一區 ── */
 .act-card { background: var(--act-card); border: 1px solid var(--act-line); border-radius: 12px; overflow: hidden; }
@@ -91,7 +96,7 @@
 .act-row { display: flex; gap: 12px; padding: 12px 16px; cursor: pointer; border-top: 1px solid rgba(var(--os-ink-rgb), 0.06); }
 .act-card-head + .act-row { border-top: 0; }
 .act-row:hover { background: rgba(var(--os-ink-rgb), 0.03); }
-.act-row.on { background: rgba(194, 65, 58, 0.07); }
+.act-row.on { background: color-mix(in srgb, var(--act-bad) 10%, transparent); }
 .act-row.is-cur { cursor: default; }
 .act-check { flex-shrink: 0; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--act-bad); cursor: pointer; }
 .act-row.is-cur .act-check { cursor: not-allowed; opacity: 0.35; }
@@ -99,9 +104,9 @@
 .act-row-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .act-row-title { font-size: 14px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .act-tag { flex-shrink: 0; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-.act-tag.cur { color: #fff; background: var(--act-accent); }
-.act-tag.jr { color: #2E6B45; background: rgba(46, 107, 69, 0.12); }
-.act-tag.short { color: #8A6A1F; background: rgba(183, 121, 31, 0.14); }
+.act-tag { color: var(--act-sub); background: rgba(var(--os-ink-rgb), 0.08); }
+.act-tag.cur { color: var(--act-on-accent); background: var(--act-accent); }
+.act-tag.jr { color: var(--act-ink); border: 1px solid rgba(var(--os-ink-rgb), 0.3); background: transparent; }
 .act-row-text {
     margin-top: 4px; font-size: 12.5px; line-height: 1.55; color: var(--act-sub);
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;

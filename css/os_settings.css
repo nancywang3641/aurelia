@@ -353,7 +353,8 @@
 .bk-protect:empty, .bk-storage-info:empty { display: none; }
 .bk-protect-say { flex: 1; min-width: 0; }
 .bk-protect-say i { margin-right: 5px; }
-.bk-protect-say.is-on { color: #2E6B45; }
+.bk-protect-say.is-on { color: var(--os-ink); }
+.bk-protect-say.is-on i { color: var(--os-accent-strong, var(--os-accent)); }   /* 字吃主題的字色；寫死深綠在深色主題會看不到 */
 .bk-storage-info { font-size: 12px; color: rgba(var(--os-ink-rgb), 0.72); }
 .bk-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.10); }
 .bk-row-name { color: var(--os-ink-soft); min-width: 0; }
