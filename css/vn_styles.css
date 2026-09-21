@@ -1780,7 +1780,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #phone-chat.has-bg .wx-group-name { color: var(--wx-on-accent, #fff); align-self: flex-start; background: rgba(0,0,0,0.46); padding: 1px 8px; border-radius: 9px; text-shadow: 0 1px 2px rgba(0,0,0,0.55); width: fit-content; }
         #phone-chat.has-bg .wx-system-notice { background: rgba(0,0,0,0.38); color: var(--wx-on-accent, #fff); backdrop-filter: blur(4px); }
 
-        .wx-sticker-msg { background: #fff; border: 1px solid #ededed; border-radius: 6px; padding: 10px; display: flex; align-items: center; justify-content: center; min-width: 80px; max-width: 140px; min-height: 80px; text-align: center; font-size: 0.88rem; color: #333; word-break: break-word; line-height: 1.4; }
         .wx-file-card { background: #fff; border-radius: 6px; padding: 12px; display: flex; align-items: center; gap: 10px; min-width: 190px; max-width: 220px; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
         .wx-file-info { flex: 1; min-width: 0; }
         .wx-file-name { font-size: 13px; color: #333; word-break: break-word; line-height: 1.4; }

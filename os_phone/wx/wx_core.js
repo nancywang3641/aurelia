@@ -4596,10 +4596,13 @@
             return { name: libName, stickers };
         },
         lookup(name) {
-            const key = name.replace(/\.(gif|jpg|jpeg|png)$/i, '').toLowerCase();
+            // 繁簡不分：AI 寫簡體、庫裡存繁體（或反過來）也要對得到（比對用 WX_ZH，名字本身不改）
+            const Z = win.WX_ZH || window.WX_ZH;
+            const norm = (x) => { const t = String(x || '').toLowerCase(); return Z ? Z.fold(t) : t; };
+            const key = norm(name.replace(/\.(gif|jpg|jpeg|png)$/i, ''));
             for (const lib of this._libs) {
                 for (const s of lib.stickers)
-                    if (s.name.toLowerCase() === key || s.file.replace(/\.(gif|jpg|jpeg|png)$/i,'').toLowerCase() === key)
+                    if (norm(s.name) === key || norm(s.file.replace(/\.(gif|jpg|jpeg|png)$/i,'')) === key)
                         return this._resolveUrl(lib, s.file);
                 if (lib.baseUrl && name.match(/\.(gif|jpg|jpeg|png)$/i))
                     return this._resolveUrl(lib, name);

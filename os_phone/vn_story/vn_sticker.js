@@ -49,11 +49,14 @@
         // 名字或檔名 → 完整網址；查不到回 null（呼叫端自己決定要不要退回 stickerBase 拼）
         lookup(name) {
             const n = String(name || '');
-            const key = n.replace(/\.(gif|jpg|jpeg|png|webp)$/i, '').toLowerCase();
+            // 繁簡不分：AI 寫簡體、庫裡存繁體（或反過來）也要對得到（比對用 WX_ZH，名字本身不改）
+            const Z = (window.parent && window.parent.WX_ZH) || window.WX_ZH;
+            const norm = (x) => { const t = String(x || '').toLowerCase(); return Z ? Z.fold(t) : t; };
+            const key = norm(n.replace(/\.(gif|jpg|jpeg|png|webp)$/i, ''));
             for (const lib of _load()) {
                 for (const s of (lib.stickers || [])) {
-                    if (String(s.name || '').toLowerCase() === key
-                        || String(s.file || '').replace(/\.(gif|jpg|jpeg|png|webp)$/i, '').toLowerCase() === key)
+                    if (norm(s.name) === key
+                        || norm(String(s.file || '').replace(/\.(gif|jpg|jpeg|png|webp)$/i, '')) === key)
                         return _resolveUrl(lib, s.file);
                 }
                 if (lib.baseUrl && /\.(gif|jpg|jpeg|png|webp)$/i.test(n)) return _resolveUrl(lib, n);

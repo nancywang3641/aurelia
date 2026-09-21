@@ -283,7 +283,9 @@
             .wx-stk-item img { width: 100%; height: 100%; object-fit: contain; }
             .wx-stk-item:active { opacity: 0.6; }
             .wx-stk-fallback { font-size: 10px; color: var(--wx-ink-soft); text-align: center; padding: 2px; word-break: break-all; }
-            .wx-stk-fallback-box { background: var(--wx-surface); border: 1px solid var(--wx-line); border-radius: 6px; padding: 8px 12px; font-size: 13px; color: var(--wx-ink-2); display: inline-block; max-width: 150px; }
+            /* 表情包找不到圖：佔一個跟圖一樣大的正方形、名字放中間，看得出「這裡是一張表情包」，
+               不是一顆普通的字泡泡（她：「這個表情包為什麼沒正方容器啊」） */
+            .wx-stk-fallback-box { background: var(--wx-surface); border: 1px solid var(--wx-line); border-radius: 8px; padding: 10px; box-sizing: border-box; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 13px; line-height: 1.4; color: var(--wx-ink-2); word-break: break-word; overflow: hidden; }
             .wx-stk-empty { grid-column: 1/-1; text-align: center; color: var(--wx-ink-dim); font-size: 12px; padding: 20px; }
             .wx-stk-manage-area { max-height: 0; overflow: hidden; transition: max-height 0.2s ease; background: var(--wx-surface); border-top: 1px solid var(--wx-line); }
             .wx-stk-manage-area.open { max-height: 210px; overflow-y: auto; flex-shrink: 0; }
