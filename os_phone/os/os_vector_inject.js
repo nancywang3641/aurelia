@@ -365,8 +365,9 @@
             const q = String(queryText || '').replace(/<[^>]+>/g, ' ').trim();
             if (q && typeof win.OS_VECTOR_ENGINE?.search === 'function' && win.OS_VECTOR_ENGINE?.vectorReady?.(all)) {
                 try {
-                    const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, PICK_POOL_K);
-                    const picked = (hits || []).filter(m => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged);
+                    const _isFact = (m) => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged;
+                    const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, PICK_POOL_K, _isFact);   // 先篩再取前 K 名，候選池才真的有 K 條事件
+                    const picked = (hits || []).filter(_isFact);
                     if (picked.length) {
                         pool = picked; segmented = false;   // 候選池＝相關片段，不再分三段
                         // ⚖️ 按缺口補重的：粗篩自己撈到幾條 weight 夠高的就少補幾條，
@@ -485,8 +486,9 @@
             if (typeof win.OS_VECTOR_ENGINE?.search !== 'function') return;
             const q = String(queryText || '').replace(/<[^>]+>/g, ' ').trim();
             if (!q) return;
-            const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, 8);
-            const picked = (hits || []).filter(m => m && m.type !== 'dialogue' && !m.merged);
+            const _ok = (m) => m && m.type !== 'dialogue' && !m.merged;
+            const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, 8, _ok);   // 先篩再取前 8 名
+            const picked = (hits || []).filter(_ok);
             if (picked.length) setPendingRecall(picked);
         } catch (e) {}
     }

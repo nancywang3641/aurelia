@@ -354,7 +354,9 @@
     // 六、Search：向量搜尋 → top-K
     // ================================================================
 
-    async function search(queryText, storyId, topK) {
+    // keep(m)：要不要列入候選。一定要在取前 K 名「之前」篩——先取前 K 再篩，語氣樣本/物品/角色那幾類一多，
+    //   前 K 名幾乎被它們佔滿，篩完事件只剩個位數，導演就只有那幾條可挑。
+    async function search(queryText, storyId, topK, keep) {
         if (!_isEnabled() || !win.OS_DB?.getAllVnMemories) return [];
         try {
             const queryVec = await embed(queryText);
@@ -364,6 +366,7 @@
 
             return all
                 .filter(m => Array.isArray(m.vector) && m.vector.length && m.vecModel === cur)   // 只比同模型算的向量(維度一致、餘弦才有意義)
+                .filter(m => (typeof keep === 'function') ? keep(m) : true)
                 .map(m => ({ ...m, _score: cosineSim(queryVec, m.vector) }))
                 .sort((a, b) => b._score - a._score)
                 .slice(0, topK || _getTopK());
