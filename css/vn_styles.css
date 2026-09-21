@@ -1637,6 +1637,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #phone-screen { position: relative; flex: 1; min-height: 0; border-radius: 38px; overflow: hidden; background: #000; display: flex; flex-direction: column; }
         /* 螢幕邊那圈細線畫在最上層（寫成螢幕自己的內陰影會被裡面的畫面蓋掉） */
         #phone-screen::after { content: ''; position: absolute; inset: 0; z-index: 40; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 2px rgba(12,16,20,0.45); }
+        /* 捲軸一律藏起來（照樣能滑）：真手機的畫面邊上不會有一條捲軸，應用手機也是這樣（phone_shell.css 的 .aps-app-body） */
+        #phone-screen, #phone-screen * { scrollbar-width: none; -ms-overflow-style: none; }
+        #phone-screen::-webkit-scrollbar, #phone-screen *::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }
         #phone-screen > #phone-chat, #phone-screen > #phone-browser, #phone-screen > #phone-nav, #phone-screen > #phone-call { flex: 1; min-height: 0; height: auto; }
         /* 膠囊島＋鏡頭：螢幕上挖掉的一塊，不跟配色走 */
         .vnp-notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 98px; height: 22px; background: #0c0f13; border-radius: 999px; z-index: 32; pointer-events: none; }
