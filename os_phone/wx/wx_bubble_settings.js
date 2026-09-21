@@ -279,6 +279,7 @@
                         <input id="gal-name" class="wx-modal-input" style="flex:1; padding:8px; font-size:13px;" placeholder="幫這一套取個名字">
                         <button id="gal-add" class="wx-btn" style="background:#07c160; color:#fff; border:none; padding:8px 12px; white-space:nowrap;"><i class="fa-solid fa-bookmark"></i> 收藏目前</button>
                     </div>
+                    <div id="gal-say" style="display:none; font-size:12px; line-height:1.5; margin:-4px 2px 8px;"></div>
                     <div id="gal-list" style="max-height:240px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
                 </div>
 
@@ -565,7 +566,15 @@
             if (!AI) { listEl.innerHTML = '<div style="font-size:12px;color:#fa5151;">泡泡主題模組沒載入到，重整一次看看</div>'; return; }
 
             const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const hint = (msg, color) => { nameEl.placeholder = msg; nameEl.style.borderColor = color || '#fa5151'; setTimeout(() => { nameEl.placeholder = '幫這一套取個名字'; nameEl.style.borderColor = ''; }, 2600); };
+            // 🚨以前講在輸入框的淡字（placeholder）裡：框裡只要打了字就完全看不到，
+            //   「空間滿了」這種最要緊的一句剛好是打完名字才會遇到的。改成名字那排底下自己一行。
+            const sayEl = doc.getElementById('gal-say');
+            let sayTimer = 0;
+            const hint = (msg, color) => {
+                if (!sayEl) return;
+                sayEl.textContent = msg; sayEl.style.color = color || '#fa5151'; sayEl.style.display = 'block';
+                clearTimeout(sayTimer); sayTimer = setTimeout(() => { sayEl.style.display = 'none'; }, 5000);
+            };
             const flash = (btn, txt) => { const o = btn.innerHTML; btn.innerHTML = txt; setTimeout(() => { btn.innerHTML = o; }, 1100); };
 
             // 現在生效的是哪一段 CSS。微調那頁存的是一堆參數不是 CSS，先轉過來——
@@ -584,7 +593,7 @@
                         + '還沒收藏過。<br>調好一套之後在上面取個名字、按「收藏目前」，<br>以後換到誰的聊天室都能一鍵套上去。</div>';
                     return;
                 }
-                listEl.innerHTML = arr.map(t => `<div class="wx-bubble-gal-card" style="border:1px solid #e5e5e5; border-radius:8px; overflow:hidden; background:#fff;">
+                listEl.innerHTML = arr.map(t => `<div class="wx-bubble-gal-card" style="flex-shrink:0; border:1px solid #e5e5e5; border-radius:8px; overflow:hidden; background:#fff;">
                     <iframe sandbox="allow-same-origin" scrolling="no" style="width:100%; height:88px; border:none; display:block; background:#eaeaea;"></iframe>
                     <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-top:1px solid #f0f0f0;">
                         <span style="flex:1; min-width:0; font-size:13px; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(t.name)}</span>
@@ -621,15 +630,21 @@
             render();
 
             addBtn.onclick = () => {
-                const name = (nameEl.value || '').trim();
-                if (!name) { hint('先取個名字再收藏'); nameEl.focus(); return; }
+                let name = (nameEl.value || '').trim();
                 const css = currentCss();
                 if (!css.trim() || /^\/\*\s*尚未設定\s*\*\/$/.test(css.trim())) { hint('現在這頁還沒有東西可以收'); return; }
                 // 🚨localStorage 撞上限時是靜默失敗的，存不進去一定要講，不然她以為收好了
-                if (!AI.galAdd(name, css)) { hint('存不進去，瀏覽器的空間滿了'); return; }
+                // 沒取名字不擋：她按了「收藏目前」卻什麼都沒發生，只會以為壞了。自己編一個，之後看縮圖認得出來
+                if (!name) {
+                    const d = new Date(), p = n => String(n).padStart(2, '0');
+                    name = '我的泡泡 ' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+                }
+                if (!AI.galAdd(name, css)) { hint('存不進去：瀏覽器給這個網站的空間滿了。刪掉幾套舊的再試'); return; }
                 nameEl.value = '';
                 render();
+                listEl.scrollTop = 0;   // 新收的排最上面，捲回去讓她看到
                 flash(addBtn, '✓ 收好了');
+                hint('收進主題庫了：「' + name + '」', '#07c160');
             };
         },
 
