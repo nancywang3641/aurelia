@@ -89,11 +89,17 @@
 泡泡存在的唯一理由，是讓人把裡面那句話讀完。它疊在一張使用者自選、明暗未知的背景圖上。
 - 字的正下方要夠安靜，兩條路挑一條：
   ① 實底：泡泡的底是實心色，或 alpha ≥ 0.85。
-  ② 玻璃：使用者要的是玻璃、液態、水滴、果凍、透明感這一類，底就可以是半透明的（alpha 0.18～0.55），
+  ② 玻璃：使用者要的是玻璃、液態、水滴、果凍、透明感這一類，底就可以是半透明的（alpha 0.45～0.7），
      但同一條規則裡一定要有 backdrop-filter: blur(12px 以上)（連同 -webkit-backdrop-filter 一起寫），
      把後面那張背景圖糊掉，字才讀得到。只寫半透明、不寫模糊，字會直接壓在背景圖的細節上。
-- 字色要強對比：實底就深底亮字、亮底深字。玻璃底的明暗會跟著背景圖變，所以字用純白或近黑其中一個，
-  再加一圈很淡的 text-shadow 托住它。不要半透明的字，不要相近色。
+- 字色要強對比：實底就深底亮字、亮底深字。不要半透明的字，不要相近色。
+- 玻璃底的字色跟著「玻璃自己的色調」走，不是跟著你想像中的背景走——後面那張圖可能全白也可能全黑，
+  模糊只會把它糊開，不會改變它的明暗，所以對比只能靠玻璃這一層自己撐：
+    淺色調的玻璃（白、奶白、淺粉、淺藍這種偏亮的色）→ 字用近黑（#111 到 #333）。
+    深色調或飽和的玻璃（深藍、墨綠、酒紅、黑）→ 字用純白。
+  淺色玻璃配白字、深色玻璃配黑字，在一半的背景上會完全看不見。兩側的玻璃色調不同，字色就各自照自己那側定，
+  不必兩側同一個字色。alpha 低於 0.45 的玻璃撐不住對比，別用。字可以加一圈很淡的 text-shadow，
+  方向相反：黑字配白的光暈，白字配黑的陰影。
 - 玻璃的質感來自疊層，不是來自顏色：邊緣一圈亮邊（1px 半透明白的 border，或 inset 的 box-shadow）、
   頂部一道高光（::after 畫一條由白到透明的漸層，貼著上緣）、底下一層柔的外陰影，三樣至少做兩樣。
   只有一塊半透明的色塊，看起來是褪色，不是玻璃。
@@ -210,6 +216,51 @@
         return { css: hit ? out : String(css || ''), hit };
     }
 
+    // ── 量顏色用的小工具（只給 risky 用）──────────────────────────
+    function _parseColor(v) {
+        const x = String(v || '').trim();
+        let m = x.match(/#([0-9a-f]{3,8})\b/i);
+        if (m) {
+            let h = m[1];
+            if (h.length === 3 || h.length === 4) h = h.split('').map(function (ch) { return ch + ch; }).join('');
+            if (h.length !== 6 && h.length !== 8) return null;
+            return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1];
+        }
+        m = x.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,\/]+([\d.]+%?))?\s*\)/i);
+        if (m) {
+            let a = m[4] == null ? 1 : (/%$/.test(m[4]) ? parseFloat(m[4]) / 100 : parseFloat(m[4]));
+            return [parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]), isNaN(a) ? 1 : a];
+        }
+        if (/^white$/i.test(x)) return [255, 255, 255, 1];
+        if (/^black$/i.test(x)) return [0, 0, 0, 1];
+        return null;
+    }
+    function _over(c, back) { const a = c[3] == null ? 1 : c[3]; return [0, 1, 2].map(function (i) { return c[i] * a + back[i] * (1 - a); }); }
+    function _lum(c) {
+        const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+    }
+    function _contrast(a, b) { const x = _lum(a), y = _lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    // 某一側的底色與字色：先看 .pbub-me .pbub-bubble{…} 那條，沒寫就退回 --pbub-me-bg / --pbub-me-fg
+    function _sideColors(t, side) {
+        let bgRaw = '', fgRaw = '';
+        const re = new RegExp('\\.pbub-' + side + '\\s+\\.pbub-bubble\\s*(?:,[^{]*)?\\{([^}]*)\\}', 'gi');
+        let m;
+        while ((m = re.exec(t))) {
+            const body = m[1];
+            const b = body.match(/(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/i);
+            const c = body.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
+            if (b) bgRaw = b[1];
+            if (c) fgRaw = c[1];
+        }
+        if (!bgRaw) { const v = t.match(new RegExp('--pbub-' + side + '-bg\\s*:\\s*([^;}]+)', 'i')); if (v) bgRaw = v[1]; }
+        if (!fgRaw) { const v = t.match(new RegExp('--pbub-' + side + '-fg\\s*:\\s*([^;}]+)', 'i')); if (v) fgRaw = v[1]; }
+        if (!bgRaw || !fgRaw || /gradient|url\(|var\(/i.test(bgRaw) || /var\(/i.test(fgRaw)) return null;
+        const bg = _parseColor(bgRaw), fg = _parseColor(fgRaw);
+        if (!bg || !fg) return null;
+        return { bg: bg, fg: fg };
+    }
+
     // ── 掃出「看起來會壞」的寫法，套用時直接講給她聽 ──────────────
     function risky(css) {
         const t = String(css || '');
@@ -235,6 +286,16 @@
             || glass
             || /box-shadow\s*:[^;}]*inset[^;}]*,|box-shadow\s*:[^;}]*,[^;}]*inset/i.test(t);
         if (!shaped) out.push('整份沒有任何塑形：泡泡還是四個一樣的圓角');
+        // 字壓在底上看不看得清楚：半透明的底要在「後面全白」跟「後面全黑」兩個極端都過得去，
+        //   模糊只是把背景糊開、不改明暗，所以對比只能靠泡泡這一層自己撐。
+        //   門檻 3 倍：內建那顆綠底黑字十幾倍、白底黑字二十一倍，離得很遠；
+        //   她實測那顆「白玻璃配白字」在白背景上是 1 倍出頭。解析不出顏色（漸層、變數套變數）就不量，不誤報。
+        [['me', '自己'], ['other', '對方']].forEach(function (pair) {
+            const c = _sideColors(t, pair[0]);
+            if (!c) return;
+            const worst = Math.min(_contrast(_over(c.bg, [255, 255, 255]), c.fg), _contrast(_over(c.bg, [0, 0, 0]), c.fg));
+            if (worst < 3) out.push(pair[1] + '那側的字跟泡泡的底太接近，換到' + (_lum(c.fg) > 0.5 ? '亮' : '暗') + '的聊天背景上會看不見');
+        });
         // 只做了一側
         const hasMe = /\.pbub-me\s+\.pbub-bubble/i.test(t);
         const hasOther = /\.pbub-other\s+\.pbub-bubble/i.test(t);
