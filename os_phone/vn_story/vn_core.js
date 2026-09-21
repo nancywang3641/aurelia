@@ -3269,6 +3269,13 @@
             // 章節卡接管畫面時別把對話框叫回來：卡片出場前後還有早鳥生圖／立繪這些非同步的活，
             // 誰晚一步呼叫到這裡，空對話框就又浮出來了。
             if (this._ccPanelHidden) return;
+            // 🚨手機開著的時候（聊天／通話／瀏覽器／導航）別把對話框叫回來。這支每按一下「下一句」都會先跑一次，
+            //    平常緊接著的那一步會再把對話框收掉所以看不到；但導航到達時要先停 0.9 秒演「已到達」，
+            //    那 0.9 秒對話框就帶著進手機之前的舊台詞亮在手機後面（她實測：按下去舊句先冒出來，手機滑走後才換新句）。
+            //    剛從手機回來、還在等第一句台詞的那段（_panelPending）同理不叫。
+            if (this.mode !== 'vn' || this._panelPending) return;
+            const _po = document.getElementById('phone-overlay');
+            if (_po && _po.classList.contains('active')) return;
             document.getElementById('text-panel-wrapper').style.display = 'block';
         },
         _showBgmToast: function(name, found) {
