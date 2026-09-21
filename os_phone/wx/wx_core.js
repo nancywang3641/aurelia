@@ -2085,14 +2085,29 @@
             // 💰 劇情裡掃碼動到的錢：主角付出去就扣、別人付給主角就加，明細上寫她看得懂的那句。
             //    跟收下轉帳共用同一份已結算單號 —— 她重新生成或往回讀同一段都不會再算一次。
             //    餘額不夠就不扣，也不記，留著讓她自己處理（劇情照演，錢包不會變成負的）。
+            // 🚨 同一個單號＝同一筆錢。角色在聊天室轉帳、主角收下之後，AI 常常順手再跳一張付款卡當收據，
+            //    單號抄的就是那筆轉帳的。那筆錢由下面「收下轉帳」算，這裡再算一次就是重複
+            //    （她看到的是同一分鐘一筆 +3000、一筆 −3000）。
+            const _transferIds = {};
+            moneyEvents.forEach(function (m) { if (m && m.ev && m.ev.txnId) _transferIds[m.ev.txnId] = 1; });
             (parsed.pays || []).forEach(function (p) {
                 if (_done[p.txnId]) return;
+                if (_transferIds[p.txnId]) return;
+                // 聊天室裡有這張轉帳單、而且已經收下或退回過＝也是那一筆。
+                // 還在等人收的（正文沒寫收下那句、直接跳卡）就由這張卡結，結完把那張轉帳單翻成已收款。
+                let _rec = null;
+                try { _rec = _txnLoad(null, p.txnId); } catch (e) {}
+                if (_rec && _rec.status && _rec.status !== 'pending') { _moneyDoneSet(p.txnId, _rec.status); return; }
                 const W = win.WX_WALLET;
                 if (!W || !W.transaction) return;
                 let ok = false;
                 try { ok = W.transaction(p.inbound ? p.amount : -p.amount, p.why || '劇情消費'); }
                 catch (e) { console.warn('[wx 跑團同步] 錢沒動成', e); }
                 if (ok) _moneyDoneSet(p.txnId, p.inbound ? 'received' : 'paid');
+                if (ok && _rec) {
+                    try { _txnSave(null, p.txnId, Object.assign({}, _rec, { status: 'accepted' })); } catch (e) {}
+                    try { _setCardStatus(null, 'transfer', p.txnId, 'accepted', 'ID_' + p.txnId); } catch (e) {}
+                }
             });
             moneyEvents.forEach(function (m) {
                 const ev = m.ev;
