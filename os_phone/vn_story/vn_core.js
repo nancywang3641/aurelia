@@ -1280,7 +1280,7 @@
                     '#vn-dom-block-body{max-height:calc(100% - 60px);overflow-y:auto;overflow-x:hidden;color:#e8dfc8;',
                     /* 卡片自己帶了寬度上限又沒寫置中（AI 現場寫的美化卡幾乎都這樣）→ 會貼在左邊。由外框負責置中，卡片不用管 */
                     'display:flex;flex-direction:column;align-items:center}',
-                    '#vn-dom-block-body>*{flex-shrink:0;max-width:100%}',
+                    '#vn-dom-block-body>*{flex-shrink:0}',
                     '#vn-dom-block-body::-webkit-scrollbar{width:3px}',
                     '#vn-dom-block-body::-webkit-scrollbar-thumb{background:rgba(212,175,55,.3);border-radius:2px}',
                     /* 確保圖片（如 SD 插件的 sd-ui-image）在缺少原插件 CSS 時仍可見 */
@@ -1368,6 +1368,19 @@
             if (_hintEl2) _hintEl2.style.opacity = '0';
             void overlay.offsetWidth; // 強制 reflow 確保 transition 生效
             overlay.classList.add('active');
+        },
+
+        // [QrPay|方向|對方|金額|買了什麼|單號] → { dir, who, amount, what, txnId }；方向認不得或金額不是正數回 null。
+        //   聊天 app 的跑團同步用同一支拆（錢在那邊算），兩邊對同一行的理解才不會漂掉。
+        _parseQrPay: function(line) {
+            const m = String(line || '').trim().match(/^\[\s*QrPay\s*\|([^\]]*)\]/i);
+            if (!m) return null;
+            const p = m[1].split('|').map(x => x.trim());
+            const d = String(p[0] || '').toLowerCase();
+            const dir = d === 'out' ? 'out' : (d === 'in' ? 'in' : (d === 'other' ? 'other' : ''));
+            const amount = parseFloat(String(p[2] || '').replace(/[^0-9.]/g, ''));
+            if (!dir || !(amount > 0)) return null;
+            return { dir: dir, who: p[1] || '', amount: amount, what: p[3] || '', txnId: p[4] || '' };
         },
 
         _hideDomBlock: function() {
@@ -2982,6 +2995,39 @@
                     })();
                 }
                 this.addLog("獲得物品", `${itemName} - ${parts[1]||''}`);
+                return;
+            }
+
+            // 💳 掃碼付款（內建固定樣式）：[QrPay|out／in／other|對方|金額|買了什麼|單號]
+            //    第一格講方向，名字那格只寫「對方」，主角的名字從頭到尾不出現——以前靠比對主角名字判斷錢往哪走，
+            //    AI 繁簡亂寫就判反。這裡只負責畫那張卡；錢由聊天 app 跑團同步掃整本正文那一層算（重播不會重扣）。
+            if (/^\[QrPay\|/i.test(line)) {
+                const q = this._parseQrPay(line);
+                if (!q) { this.next(); return; }
+                const _e = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                let me = '';
+                try { me = (window.VN_DynamicParser && window.VN_DynamicParser._meName) ? window.VN_DynamicParser._meName() : ''; } catch (e) {}
+                const head = q.dir === 'in' ? '收款' : (q.dir === 'out' ? '付款' : '轉帳');
+                const who = q.dir === 'in' ? ('來自 ' + q.who) : (q.dir === 'out' ? ('付給 ' + q.who) : q.who.replace(/\s*>\s*/, ' → '));
+                const sign = q.dir === 'in' ? '+' : (q.dir === 'out' ? '−' : '');
+                const html = '<div class="vn-qrpay vn-qrpay-' + q.dir + '">'
+                    + '<div class="vn-qrpay-top"><i class="fa-solid fa-qrcode"></i><span>掃碼' + head + '</span></div>'
+                    + '<div class="vn-qrpay-who">' + _e(who) + '</div>'
+                    + '<div class="vn-qrpay-amt"><span class="vn-qrpay-sign">' + sign + '</span><span class="vn-qrpay-cur">¥</span>' + _e(q.amount.toFixed(2)) + '</div>'
+                    + '<div class="vn-qrpay-rows">'
+                    + (q.what ? '<div class="vn-qrpay-row"><span>說明</span><b>' + _e(q.what) + '</b></div>' : '')
+                    + (q.dir !== 'other' && me && me !== '我' ? '<div class="vn-qrpay-row"><span>' + (q.dir === 'in' ? '收款人' : '付款人') + '</span><b>' + _e(me) + '</b></div>' : '')
+                    + (q.txnId ? '<div class="vn-qrpay-row"><span>單號</span><b class="vn-qrpay-mono">' + _e(q.txnId) + '</b></div>' : '')
+                    + '</div>'
+                    + '<button type="button" class="vn-qrpay-btn">完成</button>'
+                    + '</div>';
+                this.hideVNPanel();
+                this._showDomBlock(null, null, html);
+                try {
+                    const btn = document.querySelector('#vn-dom-block-body .vn-qrpay-btn');
+                    if (btn) btn.addEventListener('click', () => this._hideDomBlock());
+                } catch (e) {}
+                this.addLog(q.dir === 'in' ? '收款' : (q.dir === 'out' ? '付款' : '轉帳'), who + '　¥' + q.amount.toFixed(2) + (q.what ? '　' + q.what : ''));
                 return;
             }
 

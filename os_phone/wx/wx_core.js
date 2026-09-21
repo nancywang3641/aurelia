@@ -1941,6 +1941,31 @@
                     });
                 });
             }
+            // 💳 內建的掃碼付款那一行：[QrPay|out／in／other|對方|金額|買了什麼|單號]
+            //    方向直接寫在第一格，這裡完全不用比對主角的名字（AI 繁簡亂寫主角名就是以前判反的原因）。
+            //    other＝別人之間的錢，只給畫面看，不碰主角的錢包。拆法跟播放器那支 _parseQrPay 要一致。
+            if (/\[\s*QrPay\s*\|/i.test(t)) {
+                const qre = /\[\s*QrPay\s*\|([^\]]*)\]/gi;
+                let qm;
+                while ((qm = qre.exec(t))) {
+                    const qs = String(qm[1] || '').split('|').map(function (x) { return x.trim(); });
+                    const dir = String(qs[0] || '').toLowerCase();
+                    const amt = _payAmt(qs[2]);
+                    if (!(amt > 0) || (dir !== 'in' && dir !== 'out')) continue;
+                    const who = qs[1] || '', what = qs[3] || '';
+                    let id = qs[4] || '';
+                    if (!id) {
+                        const k = 'qrpay:' + dir + '|' + who + '|' + amt + '|' + what;
+                        _paySeen[k] = (_paySeen[k] || 0) + 1;
+                        id = k + '#' + _paySeen[k];
+                    }
+                    cardAmts[amt] = true;
+                    payEvents.push({
+                        amount: amt, txnId: id, inbound: dir === 'in',
+                        why: [dir === 'in' ? '掃碼收款' : '掃碼付款', who, what].filter(Boolean).join(' - '),
+                    });
+                }
+            }
             if (t.indexOf('[Pay') < 0) continue;
             const re = /\[\s*Pay\s*\|([^\]]*)\]/gi;
             let pm;

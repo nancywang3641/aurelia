@@ -2270,3 +2270,42 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
     #vncc-preface { font-size: 0.9rem; }
     .vncc-cell { min-width: 80px; padding: 8px 12px; }
 }
+
+/* 💳 掃碼付款卡（內建固定樣式 [QrPay|…]）：顯示在共用彈窗裡，置中由彈窗外框負責 */
+/* 彈窗那條 #vn-dom-block-body>div 會把它壓成 block＋撐滿，這裡要用同等的權重蓋回來 */
+#vn-dom-block-body .vn-qrpay {
+    width: 100%; max-width: 360px; box-sizing: border-box;
+    background: #ffffff; color: #1c1c1e; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding-bottom: 18px;
+}
+.vn-qrpay-top {
+    width: 100%; box-sizing: border-box; padding: 12px 16px;
+    display: flex; align-items: center; gap: 8px;
+    background: #f6f6f6; border-bottom: 1px solid #ececec;
+    font-size: 13px; font-weight: 600; color: #2a2a2c;
+}
+.vn-qrpay-top i { color: #1aad5a; }
+.vn-qrpay-who { margin-top: 20px; padding: 0 20px; font-size: 15px; font-weight: 600; text-align: center; word-break: break-all; }
+.vn-qrpay-amt { margin: 8px 0 18px; font-size: 38px; font-weight: 700; letter-spacing: -0.5px; color: #111; }
+.vn-qrpay-cur { font-size: 24px; margin-right: 2px; }
+.vn-qrpay-sign { font-size: 28px; margin-right: 2px; }
+.vn-qrpay-in .vn-qrpay-amt { color: #0f8a45; }
+.vn-qrpay-rows {
+    width: calc(100% - 40px); box-sizing: border-box; padding: 12px 14px;
+    background: #fafafa; border: 1px solid #f0f0f0; border-radius: 10px;
+    display: flex; flex-direction: column; gap: 9px;
+}
+.vn-qrpay-rows:empty { display: none; }
+.vn-qrpay-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; line-height: 1.4; }
+.vn-qrpay-row span { color: #8a8a8e; flex-shrink: 0; }
+.vn-qrpay-row b { color: #222; font-weight: 500; text-align: right; word-break: break-all; }
+.vn-qrpay-mono { font-family: Menlo, Consolas, monospace; font-size: 11.5px; }
+.vn-qrpay-btn {
+    margin-top: 16px; width: calc(100% - 40px); height: 42px;
+    border: 0; border-radius: 8px; background: #1aad5a; color: #fff;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.vn-qrpay-btn:active { background: #14934b; }
+.vn-qrpay-other .vn-qrpay-btn { background: #5b6472; }
