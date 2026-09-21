@@ -39,7 +39,13 @@
    靠特異性就夠了：這條 0,3,0 注入在原生之後 → 收得掉原生；
    AI 那份提權後 0,4,0 → 蓋得回來。 */
 .pbub-row.pbub-row .pbub-bubble::after { content: none; border: 0; top: auto; right: auto; bottom: auto; left: auto; }
-.pbub-row.pbub-row .pbub-bubble { position: relative; }
+.pbub-row.pbub-row .pbub-bubble { position: relative; isolation: isolate; }
+/* 🚨裝飾層一律墊在字的下面。::after 是絕對定位的，照瀏覽器的疊法它會畫在字的「上面」：
+   AI 拿它畫玻璃頂部那道白色高光，第一行字就被一層白霧蓋住、看起來糊糊的（她實測，問是不是遮罩放到字前面了——是）。
+   泡泡自己圍成一層（isolation），裝飾給 z-index:-1＝在泡泡的底色之上、字之下。
+   這一條帶 !important：沒有任何正當的設計需要把裝飾蓋在字上，而 AI 那份提權後比底稿強，不鎖就蓋得回來。
+   （上面收原生 ::after 那條不帶 important 的理由不受影響：那條管的是 content／border，這條只管疊的順序。） */
+.pbub-row.pbub-row .pbub-bubble::after { z-index: -1 !important; }
 .pbub-row.pbub-other .pbub-bubble { background: var(--pbub-other-bg, #ffffff); color: var(--pbub-other-fg, #000000); border-radius: var(--pbub-other-radius, 6px); }
 .pbub-row.pbub-me .pbub-bubble { background: var(--pbub-me-bg, #95ec69); color: var(--pbub-me-fg, #000000); border-radius: var(--pbub-me-radius, 6px); }
 .pbub-row.pbub-row .pbub-bubble::before { content: ''; position: absolute; top: var(--pbub-tail-top, 14px); width: 0; height: 0; border-top: var(--pbub-tail-size, 6px) solid transparent; border-bottom: var(--pbub-tail-size, 6px) solid transparent; pointer-events: none; }
@@ -105,6 +111,8 @@
   只有一塊半透明的色塊，看起來是褪色，不是玻璃。
 - 玻璃泡泡不留尖角（--pbub-tail-size:0）：尖角是一塊純色三角形，接在半透明的泡泡上一定穿幫。
 - 裝飾不准壓在字上：花紋、線條、光暈、圖案一律走泡泡的邊緣、角落，或泡泡外面。中間留給字。
+  泡泡的 ::after 程式會自動墊在字的下面（你不用、也不要自己寫 z-index），所以高光、紋理畫在那裡不會蓋住字；
+  但它還是會讓字後面那一塊變亮或變花，頂部高光的高度別超過泡泡的三分之一，顏色淡一點。
 - 所有裝飾一律 pointer-events:none（泡泡可以長按叫出選單，裝飾蓋住會擋掉）。
 
 【可設計的元素 — 只有這三個】
