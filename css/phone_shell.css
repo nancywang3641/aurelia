@@ -655,23 +655,24 @@
 .dlr-hrow.sel-on .dlr-check::after { content: '✓'; color: #fff; font-size: 12px; line-height: 1; }
 
 /* 歷史對話 transcript（唯讀檢視） */
-.dlr-tx-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px; border-bottom: 0.5px solid rgba(var(--os-ink-rgb), 0.1); flex-shrink: 0; background: var(--os-page-bg); }
-.dlr-tx-back { background: transparent; border: none; color: #2a6ad0; font-size: 15px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
+/* 這頁的標頭是自己的、不是電話其他頁共用的那條 → 上緣自己讓出狀態列，不然標題跟時間疊在一起 */
+.dlr-tx-head { display: flex; align-items: center; gap: 8px; padding: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px))) 12px 10px; border-bottom: 0.5px solid rgba(var(--os-ink-rgb), 0.1); flex-shrink: 0; background: var(--os-page-bg); }
+.dlr-tx-back { background: transparent; border: none; color: var(--os-accent-strong, var(--os-accent)); font-size: 15px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
 .dlr-tx-title { flex: 1; text-align: center; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--os-ink); }
 .dlr-tx-call { background: transparent; border: none; font-size: 17px; color: #22b35e; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
 .dlr-tx-wrap { flex: 1; overflow-y: auto; padding: 14px 14px 24px; display: flex; flex-direction: column; gap: 12px; background: var(--os-page-bg); }
 /* 逐字稿按「一通」分段：每段自己一張淺卡，右上角一顆垃圾桶，整段一起刪 */
-.dlr-tx-group { display: flex; flex-direction: column; gap: 12px; padding: 10px 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.55); border: 0.5px solid rgba(var(--os-ink-rgb), 0.08); }
-.dlr-tx-ghead { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(var(--os-ink-rgb), 0.45); }
+.dlr-tx-group { display: flex; flex-direction: column; gap: 12px; padding: 10px 10px 12px; border-radius: 14px; background: rgba(var(--os-ink-rgb), 0.05); border: 0.5px solid rgba(var(--os-ink-rgb), 0.08); }   /* 以前是半透明白：深色主題下疊出一塊灰，上面的淺字就看不清 */
+.dlr-tx-ghead { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(var(--os-ink-rgb), 0.6); }
 .dlr-tx-ghead span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dlr-tx-gdel { flex-shrink: 0; border: none; background: transparent; color: #d64545; font-size: 13px; line-height: 1; padding: 4px 6px; border-radius: 8px; cursor: pointer; opacity: 0.5; }
+.dlr-tx-gdel { flex-shrink: 0; border: none; background: transparent; color: var(--os-danger); font-size: 13px; line-height: 1; padding: 4px 6px; border-radius: 8px; cursor: pointer; opacity: 0.6; }
 .dlr-tx-gdel:hover { opacity: 1; background: rgba(255,59,48,0.12); }
 /* 段落內的分隔線本來就置中，在卡片裡不用再拉長線 */
 .dlr-tx-group .dlr-tx-time { margin: 2px 0; }
 .dlr-tx-group .dlr-tx-time::before, .dlr-tx-group .dlr-tx-time::after { display: none; }
 .dlr-tx-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 80%; }
 .dlr-tx-msg.me { align-self: flex-end; align-items: flex-end; }
-.dlr-tx-who { font-size: 11px; color: rgba(var(--os-ink-rgb), 0.45); margin: 0 4px 3px; }
+.dlr-tx-who { font-size: 11px; color: rgba(var(--os-ink-rgb), 0.6); margin: 0 4px 3px; }
 .dlr-tx-bubble { padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.5; background: var(--os-surface); color: var(--os-ink); box-shadow: 0 1px 2px rgba(var(--os-ink-rgb), 0.06); white-space: pre-wrap; word-break: break-word; }
 .dlr-tx-msg.me .dlr-tx-bubble { background: linear-gradient(135deg,#34c759,#28a048); color: #fff; }
 /* 通話開始／結束、未接聽這些分隔：置中小字，左右各拉一條細線，一眼看得出「這裡換一通了」 */

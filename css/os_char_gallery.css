@@ -1,21 +1,22 @@
 /* 角色圖鑑（os_phone/os/os_char_gallery.js）。class 一律 acg- 開頭。
-   跟設置頁同一套淺色：底 var(--os-page-bg)、字 var(--os-ink)。圖層在設置／劇情之上、看圖器與提示小窗之下。 */
+   🚨 顏色一律吃主題、成對寫：字 --os-ink 配底 --os-page-bg／卡片 --os-surface。以前卡片底寫死白、字卻跟主題走，
+      套深色主題就是白底白字（聊天記錄整理頁同一天踩到，兩頁一起改）。圖層在設置／劇情之上、看圖器與提示小窗之下。 */
 .acg-root {
     --acg-ink: var(--os-ink);
     --acg-sub: rgba(var(--os-ink-rgb), 0.62);
     --acg-line: rgba(var(--os-ink-rgb), 0.12);
-    --acg-card: #FFFFFF;
+    --acg-card: var(--os-surface);
     --acg-bg: var(--os-page-bg);
     --acg-head: rgba(var(--os-tint-rgb), 0.95);
-    --acg-bad: #C2413A;
+    --acg-bad: var(--os-danger);
     --acg-warn: #B7791F;
-    --acg-accent: #2F4A8A;
+    --acg-accent: var(--os-accent-strong, var(--os-accent));
     position: fixed; inset: 0; z-index: 2147482000;
     display: flex; flex-direction: column;
     /* 🚨 寬度判斷掛在最外層：容器查詢改不到容器自己，掛在 .acg-body 上它就沒辦法把自己改成上下排 */
     container-type: inline-size;
     background: var(--acg-bg); color: var(--acg-ink);
-    font-family: 'Noto Sans TC', sans-serif; color-scheme: light;
+    font-family: 'Noto Sans TC', sans-serif;
     /* 🚨 不做淡入：以前 opacity:0 → 加 class 轉成 1，畫面沒在合成時（視窗在背景、預覽窗）轉場不會往前走，
        圖鑑就停在全透明——點得到、看不到，跟底下的相簿疊成一片。看不看得見不能綁在動畫跑完。 */
 }
@@ -23,7 +24,7 @@
 
 .acg-head {
     flex-shrink: 0; display: flex; align-items: center; gap: 8px;
-    padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    padding: 12px 16px; padding-top: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px)));   /* 手機殼裡讓出狀態列 */
     background: var(--acg-head); border-bottom: 1px solid var(--acg-line);
 }
 .acg-back {
@@ -40,7 +41,7 @@
 /* ── 左：名單 ── */
 .acg-side {
     width: 250px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;
-    border-right: 1px solid var(--acg-line); background: rgba(255,255,255,0.45);
+    border-right: 1px solid var(--acg-line); background: rgba(var(--os-ink-rgb), 0.04);
 }
 .acg-tools { display: flex; gap: 6px; padding: 12px; border-bottom: 1px solid var(--acg-line); }
 .acg-search {
@@ -105,7 +106,7 @@
     flex-shrink: 0; font-size: 11px; padding: 1px 7px; border-radius: 999px;
     background: rgba(var(--os-ink-rgb), 0.07); color: var(--acg-sub);
 }
-.acg-src-local { background: rgba(47,74,138,0.12); color: var(--acg-accent); }
+.acg-src-local { background: color-mix(in srgb, var(--acg-accent) 14%, transparent); color: var(--acg-accent); }
 .acg-slot-state { font-size: 11px; color: var(--acg-sub); }
 .acg-state-bad { color: var(--acg-bad); }
 /* 上傳／網址／垃圾桶排一行：上傳與網址平分，垃圾桶只佔圖示寬 */
@@ -132,7 +133,7 @@
     border: 1px solid var(--acg-line); border-radius: 9px; background: var(--acg-card);
     color: var(--acg-ink); font-size: 14px; font-weight: 700; cursor: pointer;
 }
-.acg-btn-main { background: var(--acg-ink); border-color: var(--acg-ink); color: #FFFFFF; }
+.acg-btn-main { background: var(--acg-ink); border-color: var(--acg-ink); color: var(--acg-bg); }
 .acg-btn:disabled { opacity: .5; cursor: default; }
 
 .acg-sec { margin-top: 26px; }
