@@ -850,7 +850,15 @@
                 }
                 wf = this._buildComfyWorkflow(posText, negText, type, _opts, cfg);
             }
-            const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
+            // 暖機單那張 128 小圖沒有人要看：存圖節點換成預覽節點，檔案落在 ComfyUI 的暫存夾（重開就清），
+            //   不進 output 資料夾。她在 ComfyUI 的「已生成」裡一直看到一格一格的色塊圖、提示詞尾巴寫著 warmup，就是這個。
+            if (options.warmup && wf && typeof wf === 'object') {
+                Object.keys(wf).forEach(function (k) {
+                    const n = wf[k];
+                    if (n && n.class_type === 'SaveImage') { n.class_type = 'PreviewImage'; if (n.inputs) delete n.inputs.filename_prefix; }
+                });
+            }
+            const body ={ url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
 
             // 進本機 GPU 單線佇列（優先序 1）：跟語音絕不同時上顯卡
             return await win.AURELIA_GPU_QUEUE.run(async () => {
