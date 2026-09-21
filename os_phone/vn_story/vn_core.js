@@ -3343,6 +3343,13 @@
                 document.getElementById('phone-call').classList.toggle('hidden', target !== 'phone-call');
                 const pb = document.getElementById('phone-browser'); if (pb) pb.classList.toggle('hidden', target !== 'phone-browser');
                 const pn = document.getElementById('phone-nav'); if (pn) pn.classList.toggle('hidden', target !== 'phone-nav');
+                // 狀態列：時間照真的走；通話是深底，時間與橫槓換白的
+                const ps = document.getElementById('phone-screen');
+                if (ps) {
+                    ps.classList.toggle('vnp-dark', target === 'phone-call');
+                    const d = new Date(), t = ps.querySelector('.vnp-sb-time');
+                    if (t) t.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+                }
             }
         },
 

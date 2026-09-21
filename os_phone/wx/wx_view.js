@@ -358,7 +358,12 @@
         generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },
 
         // --- 2. 模塊解析 ---
-        processModules: function(html, chatId, isMe, msgIndex, msg) {
+        processModules: function(html, chatId, isMe, msgIndex, msg, opts) {
+            // 🎭 opts.static＝劇情裡的手機借這份畫卡片：長相一模一樣，但不碰任何帳本、不存紅包、點了也不開窗。
+            //    劇情手機只是把正文演出來，錢由跑團同步那層算；這裡一碰就是同一筆算兩次、還會在微信裡長出不存在的紅包。
+            //    opts.peer＝這間的對方名字（轉帳卡「轉帳給誰」用），opts.voiceClick＝語音被點時要跑的那句。
+            opts = opts || {};
+            const STATIC = !!opts.static;
             // 🚨模型沒給單號時，以前是現場擲一個隨機數（紅包甚至只有三位數）。
             //   每次重畫都會擲出不一樣的，狀態當場跟丟；三位數還會撞到別人的紅包、
             //   直接繼承對方的金額與領取紀錄。改成用「第幾則訊息＋這則裡的第幾張卡」當身分，
@@ -404,7 +409,9 @@
                 }
                 
                 // 如果沒有指定人物，使用聊天對象名稱
-                if (!targetName && safeId) {
+                if (!targetName && STATIC) {
+                    if (isMe && opts.peer) targetName = opts.peer;
+                } else if (!targetName && safeId) {
                     const win = window.parent || window;
                     if (win.wxApp && win.wxApp.GLOBAL_CHATS && win.wxApp.GLOBAL_CHATS[safeId]) {
                         targetName = win.wxApp.GLOBAL_CHATS[safeId].name || safeId;
@@ -416,11 +423,11 @@
                 const uniqueId = txnId.startsWith('ID_') ? txnId : ('ID_' + txnId);
                 // 狀態走「這個聊天室的帳本」（wx_cards.js），不再拿模型寫的單號當全域鍵。
                 // 第一次畫到這張卡時把舊世界那份接過來，所以既有對話不會突然變回未讀。
-                const _CARDS = win.WX_CARDS || window.WX_CARDS;
+                const _CARDS = STATIC ? null : (win.WX_CARDS || window.WX_CARDS);
                 //   msgIndex 一起帶：同一個單號長在不同則訊息上就是不同張卡（模型很愛重用單號）
                 const _card = _CARDS ? _CARDS.adopt(safeId, 'transfer', txnId,
                     { amount: amount, targetName: targetName, memo: memo }, uniqueId, msgIndex) : null;
-                const status = _card ? _card.status : localStorage.getItem(uniqueId);
+                const status = STATIC ? '' : (_card ? _card.status : localStorage.getItem(uniqueId));
                 let state = '';   // ''＝待收、is-ok＝已收款、is-back＝已退還／已過期（顏色在 wx_theme.js 的 .wx-tf-card）
                 let icon = "¥";
                 let title = targetName ? `轉帳給${targetName}` : "轉帳給朋友";
@@ -456,6 +463,8 @@
                         clickAction = "";
                     }
                 }
+                // 劇情手機：不能點，改掛單號與金額——後面那行「收下了／退回」要靠它找回這一張（markTransfer）
+                if (STATIC) clickAction = `data-tf-id="${String(txnId).replace(/"/g, '')}" data-tf-amt="${String(amount).replace(/"/g, '')}"`;
                 return `<div class="wx-tf-card ${state}" ${clickAction}><div class="wx-tf-row"><div class="wx-tf-icon">${icon}</div><div class="wx-tf-text"><div class="wx-tf-title">${title}</div><div class="wx-tf-sub">${sub}${(!isMe && !status) ? ' ¥' + amount : ''}</div></div></div></div>`; });
             html = html.replace(tagRe(MSG_TAG.GIFT), (m, t, content) => {
                 // 解析新格式：[Gift: emoji+物品名|備註|Gft_ID] 或舊格式 [Gift: 物品名-价格]
@@ -499,10 +508,10 @@
                 if (!giftId) giftId = autoRef('gft');
                 const uniqueId = 'ID_' + giftId;
                 // 同轉帳：狀態走這個聊天室的帳本，第一次畫到時接手舊世界那份
-                const _CARDS = win.WX_CARDS || window.WX_CARDS;
+                const _CARDS = STATIC ? null : (win.WX_CARDS || window.WX_CARDS);
                 const _card = _CARDS ? _CARDS.adopt(safeId, 'gift', giftId,
                     { itemName: giftName, price: price }, uniqueId, msgIndex) : null;
-                const status = _card ? _card.status : localStorage.getItem(uniqueId);
+                const status = STATIC ? '' : (_card ? _card.status : localStorage.getItem(uniqueId));
                 
                 let opacity = "1";
                 let extraClass = "";
@@ -534,17 +543,22 @@
                         statusLabel = "已退回";
                     }
                 }
+                if (STATIC) clickAction = '';
                 return `<div class="wx-gift-card-blue ${extraClass}" style="opacity:${opacity}" ${clickAction}><div class="wx-gift-top"><div class="wx-gift-icon-gold">${icon}</div><div class="wx-gift-title-text">${memo || '送你一份心意'}</div></div><div class="wx-gift-footer">${statusLabel}</div></div>`;
             });
             // 🛵 外送單（wx_takeout.js）：狀態記在這間的卡片帳本，卡片自己會照時間往前走
             const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT;
-            if (_TO) {
+            if (_TO && STATIC) {
+                const _toSender = (msg && (msg.sender || msg.senderName)) || '';
+                html = html.replace(tagRe(MSG_TAG.TAKEOUT_ASK), (m, t, content) => _TO.staticCard('ask', content, !!isMe, _toSender));
+                html = html.replace(tagRe(MSG_TAG.TAKEOUT), (m, t, content) => _TO.staticCard('order', content, !!isMe, _toSender));
+            } else if (_TO) {
                 const _toSender = (msg && (msg.sender || msg.senderName)) || '';
                 html = html.replace(tagRe(MSG_TAG.TAKEOUT_ASK), (m, t, content) => _TO.cardHTML({ chatId: safeId, msgIndex: msgIndex, isMe: !!isMe, sender: _toSender, mode: 'ask', content: content, alias: autoRef('toa') }));
                 html = html.replace(tagRe(MSG_TAG.TAKEOUT), (m, t, content) => _TO.cardHTML({ chatId: safeId, msgIndex: msgIndex, isMe: !!isMe, sender: _toSender, mode: 'order', content: content, alias: autoRef('to') }));
             }
             // 圖片走三個手機 app 共用的管道；ref 帶 chatId，訊息位置由 .wx-msg-row 的 data-msg-idx 補上
-            html = html.replace(tagRe(MSG_TAG.IMAGE), (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), { app: 'wx', ref: safeId }) : content; });
+            html = html.replace(tagRe(MSG_TAG.IMAGE), (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), STATIC ? { app: 'vn_phone' } : { app: 'wx', ref: safeId }) : content; });
             // 📞 通話記錄：一個電話圖示加一句話，裝在泡泡裡（微信原生就是這樣）。
             //    她填的備註原樣顯示，沒填就寫「通話已結束」。
             html = html.replace(tagRe(MSG_TAG.CALL), (m, t, txt) => {
@@ -558,7 +572,11 @@
                 const real = !!(msg && msg.voiceAudio);
                 const sec = real ? Math.max(1, Math.round(msg.voiceSec || 1)) : Math.min(60, Math.max(2, Math.ceil(cleanTxt.length / 2)));
                 const len = sec <= 5 ? 1 : (sec <= 15 ? 2 : (sec <= 30 ? 3 : 4));
-                return `<div class="wx-vmsg${isMe ? ' wx-vmsg--me' : ''}" onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"><div class="wx-vmsg-box wx-vmsg-len${len}"><i class="fa-solid fa-volume-high wx-vmsg-icon"></i><span class="wx-vmsg-bars"><i></i><i></i><i></i><i></i><i></i></span><span class="wx-vmsg-dur">${sec}"</span></div><div class="wx-vmsg-trans"></div></div>`;
+                const _vAttr = (s) => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                const vClick = STATIC
+                    ? `data-vtext="${_vAttr(cleanTxt)}" data-vsender="${_vAttr(msg && msg.sender)}" data-vsec="${sec}" onclick="${opts.voiceClick || ''}"`
+                    : `onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"`;
+                return `<div class="wx-vmsg${isMe ? ' wx-vmsg--me' : ''}" ${vClick}><div class="wx-vmsg-box wx-vmsg-len${len}"><i class="fa-solid fa-volume-high wx-vmsg-icon"></i><span class="wx-vmsg-bars"><i></i><i></i><i></i><i></i><i></i></span><span class="wx-vmsg-dur">${sec}"</span></div><div class="wx-vmsg-trans"></div></div>`;
             });
             html = html.replace(tagRe(MSG_TAG.REDPACKET), (match, tag, content) => {
                 // 解析內容：支持 [金額|備註|紅包ID] 或舊格式
@@ -583,6 +601,7 @@
                 }
                 
                 if (!packetId) packetId = autoRef('rp');
+                if (STATIC) return `<div class="wx-rpc-card"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${memo}</div><div class="wx-rpc-sub">領取紅包</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
 
                 // 🚨 同一個單號長在不同則訊息上＝不同的紅包（模型很愛重用單號，重用時第二包會
                 //    讀到第一包的領取紀錄，一發出來就「已領完」）。跟轉帳一樣綁上 msgIndex，
@@ -680,9 +699,14 @@
                 return `<div class="wx-app-share-card"><div class="wx-app-share-top"><i class="fa-solid fa-share-nodes"></i><span>${src}</span></div><div class="wx-app-share-body">${title ? `<div class="wx-app-share-title">${esc(title)}</div>` : ''}${short ? `<div class="wx-app-share-text">${esc(short)}</div>` : ''}</div></div>`;
             });
             // 鏈接/網頁分享卡（跑團用、不帶網址；重用 vn_styles.css 的 .wx-link-msg）
-            html = html.replace(tagRe(MSG_TAG.LINK), (m, _tag, title) => {
+            // 寫成「標題|網址」時後半段是真網址：不印出來，整張卡點了開那個網址（劇情手機以前就這樣，微信這邊補上）
+            html = html.replace(tagRe(MSG_TAG.LINK), (m, _tag, body) => {
+                const lp = String(body || '').split(/[|｜]/);
+                const title = lp[0], lUrl = (lp[1] || '').trim();
+                const isUrl = /^(https?:\/\/|www\.)/i.test(lUrl);
+                const click = isUrl ? ` onclick="event.stopPropagation(); window.open('${encodeURI(lUrl).replace(/'/g, '%27')}')"` : '';
                 const safe = (String(title || '').trim() || '網頁連結').replace(/&/g,'&amp;').replace(/</g,'&lt;');
-                return `<div class="wx-link-msg"><div class="wx-link-body"><div class="wx-link-title">${safe}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
+                return `<div class="wx-link-msg${isUrl ? ' clickable' : ''}"${click}><div class="wx-link-body"><div class="wx-link-title">${safe}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
             });
             // 收款碼（假容器：程式畫 QR 樣式 SVG，跑團用、不用生圖；重用 vn_styles.css 的 .wx-receive-msg）
             html = html.replace(tagRe(MSG_TAG.PAYCODE), (m, _tag, body) => {
@@ -694,6 +718,56 @@
             });
             html = html.replace(/\n/g, '<br>');
             return html;
+        },
+
+        // 🎭 劇情裡的手機畫一則訊息，跟微信長一模一樣（同一份卡片、同一份語音）。
+        //   回傳 null＝這不是任何一種媒體標籤，照純文字泡泡畫。bare＝卡片自己就是造型，外面不套泡泡。
+        //   只畫樣子：不碰帳本、不存紅包、點了不開窗，理由見 processModules 開頭。
+        staticMessage: function (content, isMe, opts) {
+            const c = String(content || '').trim();
+            if (!new RegExp('^\\[\\s*(?:' + MSG_TAG.ALL + ')\\s*[:：]', 'i').test(c)) return null;
+            opts = Object.assign({}, opts, { static: true });
+            const html = this.processModules(c, '', !!isMe, null, { sender: opts.sender || '' }, opts);
+            const bare = new RegExp('^\\[\\s*(?:' + [MSG_TAG.CARD, MSG_TAG.IMAGE, MSG_TAG.STICKER].join('|') + ')', 'i').test(c);
+            return { html: html, bare: bare };
+        },
+
+        // 轉帳卡翻成已收款／已退還。字跟微信那邊的狀態一字不差（上面 processModules 的轉帳那段）。
+        markTransfer: function (card, verb, isMe) {
+            if (!card) return;
+            const ok = /^accept/i.test(verb);
+            card.classList.remove('is-ok', 'is-back');
+            card.classList.add(ok ? 'is-ok' : 'is-back');
+            const icon = card.querySelector('.wx-tf-icon'), title = card.querySelector('.wx-tf-title'), sub = card.querySelector('.wx-tf-sub');
+            if (icon) icon.innerHTML = ok ? '<i class="fa-solid fa-check"></i>' : '<i class="fa-solid fa-reply"></i>';
+            if (title) title.textContent = ok ? '已收款' : '已退還';
+            if (sub) sub.textContent = isMe ? (ok ? '對方已收款' : '對方已退回') : (ok ? '已存入餘額' : '轉帳已退回');
+        },
+
+        // 🎙 點語音看字：一個字一個字打出來，但整段字從第一刻就排好位置，還沒打到的先隱形。
+        //   🚨 以前是把字一個一個加進去，泡泡跟著字數一格一格變寬、打到換行才停，看起來整顆在抖。
+        //      現在泡泡一打開就是最後的大小，只有字在裡面長出來。再點一次收起來。
+        voiceReveal: function (el, text) {
+            const box = el && el.querySelector('.wx-vmsg-trans');
+            if (!box) return false;
+            if (el._vmsgTimer) { clearInterval(el._vmsgTimer); el._vmsgTimer = 0; }
+            if (box.classList.contains('open')) { box.classList.remove('open'); return false; }
+            const chars = Array.from(String(text || ''));   // Array.from：emoji 是兩格，拆開會變亂碼
+            const doc = box.ownerDocument;
+            box.textContent = '';
+            const on = doc.createElement('span'), off = doc.createElement('span');
+            off.className = 'wx-vmsg-rest';
+            off.textContent = chars.join('');
+            box.appendChild(on); box.appendChild(off);
+            box.classList.add('open');
+            let i = 0;
+            el._vmsgTimer = setInterval(function () {
+                i++;
+                on.textContent = chars.slice(0, i).join('');
+                off.textContent = chars.slice(i).join('');
+                if (i >= chars.length) { clearInterval(el._vmsgTimer); el._vmsgTimer = 0; }
+            }, 30);
+            return true;
         },
 
         // 💭 思考內容的 markdown：模型想的時候很愛用標題、粗體、清單，原樣印出來一堆 # 和 **。

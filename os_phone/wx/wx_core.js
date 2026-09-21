@@ -3539,12 +3539,8 @@
                 }
                 return;
             }
-            if (!box) return;
-            if (box.classList.contains('open')) { box.classList.remove('open'); return; }
-            box.classList.add('open');
-            box.textContent = '';
-            let i = 0;
-            const timer = setInterval(() => { box.textContent += t.charAt(i); i++; if (i >= t.length) clearInterval(timer); }, 30);
+            // 看字那段跟劇情手機共用一支（WX_VIEW.voiceReveal）：泡泡一打開就定大小，字在裡面長出來
+            if (window.WX_VIEW && window.WX_VIEW.voiceReveal) window.WX_VIEW.voiceReveal(el, t);
         },
         _stopVoicePlay: function () {
             const p = _voicePlaying;

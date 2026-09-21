@@ -229,7 +229,12 @@
                 </div>
 
                 <div id="phone-overlay">
+                    <!-- 外框跟應用那支手機同一套（金屬邊、側鍵、膠囊島、狀態列、底部橫槓），顏色吃手機主題 -->
                     <div id="phone-device">
+                      <div id="phone-screen">
+                        <div class="vnp-notch"></div>
+                        <div class="vnp-statusbar"><span class="vnp-sb-time">--:--</span><span class="vnp-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+                        <div class="vnp-homebar"></div>
                         <div id="phone-chat" class="hidden" onclick="window.VN_Core.next()">
                             <img id="chat-bg-img" src="" style="display:none;">
                             <div id="chat-header">
@@ -352,6 +357,7 @@
                                 </div>
                             </div>
                         </div>
+                      </div>
                     </div>
                 </div>
 

@@ -136,15 +136,16 @@
                 const id  = args[args.length - 1] || '';
                 if (isMoney) {
                     const esc = function (v) { return String(v).replace(/"/g, ''); };
-                    let card = id ? chatBody.querySelector('.wx-transfer-msg[data-tf-id="' + esc(id) + '"]') : null;
+                    let card = id ? chatBody.querySelector('.wx-tf-card[data-tf-id="' + esc(id) + '"]') : null;
                     if (!card && amt) {
-                        const same = chatBody.querySelectorAll('.wx-transfer-msg[data-tf-amt="' + esc(amt) + '"]');
+                        const same = chatBody.querySelectorAll('.wx-tf-card[data-tf-amt="' + esc(amt) + '"]');
                         card = same.length ? same[same.length - 1] : null;
                     }
-                    if (card) {
-                        card.classList.add(verb === 'accept' ? 'is-ok' : 'is-back');
-                        const ft = card.querySelector('.wx-t-footer');
-                        if (ft) ft.textContent = (verb === 'accept' ? '已收款' : '已退回');
+                    // 卡片跟微信同一張，翻成已收款／已退還也用微信那邊的字（WX_VIEW.markTransfer）
+                    const WV = win.WX_VIEW || window.WX_VIEW;
+                    if (card && WV && WV.markTransfer) {
+                        const row = card.closest('.chat-row');
+                        WV.markTransfer(card, verb, !!(row && row.classList.contains('you')));
                     }
                 }
                 const say = verb === 'accept' ? ('已收款' + (amt ? ' ¥' + amt : ''))
@@ -228,6 +229,14 @@
             }
             return content;
         },
+        // 語音、檔案 AI 常自創寫法（[錄音: …]、[附件: …]）→ 換成微信認得的 [語音:]、[文件:]，不然整條變成裸文字
+        _normalizeAliasTags: function(content) {
+            const m = content.match(/^\[[^\]\[:：]+[：:]\s*([\s\S]*?)\]$/);
+            if (!m) return content;
+            if (this._isAliasTag(content, this._VOICE_ALIAS)) return `[語音: ${m[1]}]`;
+            if (this._isAliasTag(content, this._FILE_ALIAS)) return `[文件: ${m[1]}]`;
+            return content;
+        },
 
         // 把混在文字裡的「圖片/語音/表情包」tag 拆成單獨一條（描述式 [X: 描述] 或檔案式 [x.gif] 都拆）
         // 例: "加油！[表情包: 小猫打滚]" → ["加油！","[表情包: 小猫打滚]"]；"我到了[图片: 街道照]" → ["我到了","[图片: 街道照]"]
@@ -273,22 +282,6 @@
             const rest = content.slice(last).trim();
             if (rest) parts.push(rest);
             return parts.length > 0 ? parts : [content];
-        },
-
-        // 假收款碼：程式畫一個「QR 樣式」SVG（三角定位框 + 依 seed 的隨機黑塊），跑團用、不可掃也不用生圖
-        _fakeQrSvg: function(seed) {
-            let h = 0; const s = String(seed || 'qr'); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
-            const N = 25; let cells = '';
-            const fp = (r, c, br, bc) => { const rr = r - br, cc = c - bc; return rr === 0 || rr === 6 || cc === 0 || cc === 6 || (rr >= 2 && rr <= 4 && cc >= 2 && cc <= 4); };
-            for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-                let on;
-                if (r < 7 && c < 7) on = fp(r, c, 0, 0);
-                else if (r < 7 && c >= N - 7) on = fp(r, c, 0, N - 7);
-                else if (r >= N - 7 && c < 7) on = fp(r, c, N - 7, 0);
-                else { h = (h * 1103515245 + 12345) & 0x7fffffff; on = (h % 100) > 52; }
-                if (on) cells += '<rect x="' + c + '" y="' + r + '" width="1" height="1"/>';
-            }
-            return '<svg viewBox="0 0 ' + N + ' ' + N + '" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect width="' + N + '" height="' + N + '" fill="#fff"/><g fill="#1a1a1a">' + cells + '</g></svg>';
         },
 
         _avatarColor: function(name) {
@@ -337,109 +330,24 @@
                 avatarHTML = `<img src="${lbUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="var p=this.parentNode;this.remove();p.style.padding='';p.textContent='${letter}';">`;
             }
 
-            // 任何圖片變體先 normalize 成 [圖片: xxx]
-            content = this._normalizeImageTag(content);
-            const imgM  = content.match(/^\[(圖片|图片|Image|Photo|Img)[：:]\s*([\s\S]*?)\]$/i);
-            const vocM  = content.match(/^\[(語音|语音|Voice)[：:]\s*(.*?)\]$/i);
-            const stkM  = content.match(/^\[(表情包|Sticker|貼紙|贴纸)[：:]\s*([\s\S]*?)\]$/i);
-            const trM   = content.match(/^\[(轉賬|转账|Transfer)[：:]\s*(.*?)\]$/i);
-            const giftM = content.match(/^\[(Gift|禮物|礼物|礼品|禮品)[：:]\s*(.*?)\]$/i);
-            const rpM   = content.match(/^\[(紅包|红包|RedPacket)[：:]\s*(.*?)\]$/i);
-            const vidM  = content.match(/^\[(視頻|视频|Video)[：:]\s*(.*?)\]$/i);
-            const locM  = content.match(/^\[(位置|Location|定位)[：:]\s*(.*?)\]$/i);
-            const fileM = content.match(/^\[(文件|檔案|档案|附件|File|Document|Attachment)[：:]\s*(.*?)\]$/i);
-            const linkM = content.match(/^\[(鏈接|链接|連結|连结|鏈結|网址|網址|網頁|网页|Link|URL|Url)[：:]\s*([\s\S]*?)\]$/i);
-            const recvM = content.match(/^\[(收款码|收款碼|收款|付款码|付款碼)[：:]\s*([\s\S]*?)\]$/i);
-            // 🛵 外送單：劇情裡的手機只畫單子本身（沒有錢包、沒有帳本，不走狀態）。代付那組先認，Takeout 是 TakeoutAsk 的開頭
-            const toAskM = content.match(/^\[(TakeoutAsk|外送代付|外賣代付|外卖代付|代付)[：:]\s*([\s\S]*?)\]$/i);
-            const toM = toAskM ? null : content.match(/^\[(Takeout|外送|外賣|外卖)[：:]\s*([\s\S]*?)\]$/i);
+            // 任何圖片／語音／檔案的變體先 normalize 成微信認得的那個字（[圖片:]、[語音:]、[文件:]）
+            content = this._normalizeAliasTags(this._normalizeImageTag(content));
 
+            // 📱 卡片、語音、通話記錄一律跟微信同一份畫法（WX_VIEW.staticMessage）：同一個人、同一支手機，
+            //    劇情裡看到的就要跟打開微信看到的一樣。以前這裡自己畫一套，轉帳、紅包、語音長得都不一樣，很出戲。
+            //    只借長相：帳本、紅包資料、點開的窗那些都不碰，錢照舊由跑團同步那層算。
             let inner = '';
-            const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT;
-            if ((toAskM || toM) && _TO) {
-                inner = _TO.staticCard(toAskM ? 'ask' : 'order', (toAskM || toM)[2], false, sender);
-            } else if (imgM) {
-                const desc = imgM[2] || '圖片';
-                // 圖片走三個手機 app 共用的管道（佔位卡＋展開鈕＋頭像桶生圖＋##角色名##展開）；VN 手機沒有資料層，生完只換畫面
-                const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
-                inner = PI ? PI.render(desc, { app: 'vn_phone' }) : `<div class="chat-sys">${desc}</div>`;
-            } else if (vocM) {
-                const txt = vocM[2] || ''; const sec = Math.min(60, Math.max(2, Math.ceil(txt.length / 2)));
-                const escVS = String(sender).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
-                const escVT = String(txt).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
-                const transHTML = txt ? `<div class="wx-voice-trans">${txt}</div>` : '';
-                // 長度分四檔決定泡泡寬度（不用 inline style）；播放中 .playing 讓音波動起來
-                const lenCls = sec <= 5 ? 'wx-voice-len1' : sec <= 15 ? 'wx-voice-len2' : sec <= 30 ? 'wx-voice-len3' : 'wx-voice-len4';
-                inner = `<div class="wx-voice-wrap">
-                    <div class="wx-voice-msg ${lenCls}" data-vsender="${escVS}" data-vtext="${escVT}" data-vsec="${sec}" onclick="event.stopPropagation(); window.VN_Phone._playVoice(this); var t=this.nextElementSibling; if(t) t.classList.toggle('open');">
-                        <span class="wx-voice-icon"><i class="fa-solid fa-volume-high"></i></span><span class="wx-voice-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="wx-voice-dur">${sec}"</span>
-                    </div>
-                    ${transHTML}
-                </div>`;
-            } else if (stkM) {
-                const desc = stkM[2] || '貼圖';
-                // fallback 只顯示檔名，不顯示完整 URL
-                const labelOnly = desc.replace(/^.*\//, '') || desc;
-                const safeLabel = labelOnly.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
-                const onerror = `var w=this.parentNode;this.remove();w.className='wx-sticker-msg';w.textContent=w.dataset.label;`;
-                let src;
-                if (desc.match(/^(https?:\/\/|data:|blob:)/i)) {
-                    // 完整 URL：encode 路徑中的非 ASCII（解決中文檔名）
-                    src = desc.replace(/[^\x00-\x7F]/g, c => encodeURIComponent(c));
-                } else {
-                    // 先查貼圖庫（名稱→URL，含中文名如「小猫打滚」）；查不到才退 stickerBase 拼、再不行 onerror 顯示標籤
-                    let libUrl = null;
-                    try { libUrl = window.VN_Sticker?.lookup?.(desc) || null; } catch (e) {}
-                    if (libUrl) { src = libUrl; }
-                    else {
-                        const base = (window.VN_Config?.data?.stickerBase || '').replace(/\/?$/, '/');
-                        src = base ? base + encodeURIComponent(desc) : desc;
-                    }
-                }
-                inner = `<div class="sticker-wrap" data-label="${safeLabel}"><img src="${src}" style="max-width:120px; border-radius:4px; display:block;" onerror="${onerror}"></div>`;
-            } else if (trM) {
-                const tParts = trM[2].split('|'); const tAmt = tParts[0] || '0'; const tId = tParts[tParts.length - 1] || '';
-                // 💸 單號與金額掛在卡上：後面那行「收下了／退回」要靠它找回這一張（見 _payVerb）
-                inner = `<div class="wx-transfer-msg" data-tf-id="${tId}" data-tf-amt="${tAmt}"><div class="wx-t-main"><div class="wx-t-icon">¥</div><div class="wx-t-body"><div class="wx-t-title">轉賬給朋友</div><div class="wx-t-amount">¥${tAmt}</div></div></div><div class="wx-t-footer">微信轉帳${tId && tId !== tAmt ? ' · ' + tId : ''}</div></div>`;
-            } else if (giftM) {
-                const gParts = giftM[2].split('|'); const gName = gParts[0] || ''; const gMemo = gParts[1] || '送你一份心意'; const gId = gParts[2] || '';
-                const emojiRe = /^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF\u2300-\u23FF\u{1F300}-\u{1F9FF}])/u;
-                const eMatch = gName.includes('+') ? gName.split('+', 2) : (emojiRe.test(gName) ? [gName.match(emojiRe)[0], gName.replace(emojiRe, '').trim()] : ['', gName]);
-                const gEmoji = eMatch[0] || '<i class="fa-solid fa-gift"></i>'; const gTitle = eMatch[1] || gName;
-                inner = `<div class="wx-gift-msg"><div class="wx-g-main"><span class="wx-g-icon">${gEmoji}</span><div class="wx-g-body"><div class="wx-g-title">${gMemo}</div><div class="wx-g-sub">${gTitle || '微信禮物'}</div></div></div><div class="wx-g-footer">微信禮物${gId ? ' · ' + gId : ''}</div></div>`;
-            } else if (rpM) {
-                const rParts = rpM[2].split('|'); const rAmt = rParts[0] || ''; const rNote = rParts[1] || '恭喜發財，大吉大利';
-                inner = `<div class="wx-redpacket-msg"><div class="wx-rp-main"><div class="wx-rp-icon"><div style="width:18px;height:18px;background:#f6d147;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#e64340;font-weight:bold;font-size:11px;">¥</div></div><div class="wx-rp-body"><div class="wx-rp-amount">${rNote}</div><div class="wx-rp-label">領取紅包${rAmt ? ' ¥' + rAmt : ''}</div></div></div><div class="wx-rp-footer">微信紅包</div></div>`;
-            } else if (vidM) {
-                const vDesc = vidM[2] || 'Video';
-                inner = `<div class="wx-video-msg"><div class="wx-video-play"></div><div class="wx-video-title"><i class="fa-solid fa-video"></i> ${vDesc}</div></div>`;
-            } else if (locM) {
-                const lParts = locM[2].split(/[-－]/); const lName = lParts[0].trim(); const lAddr = lParts[1] ? lParts[1].trim() : lName;
-                inner = `<div class="wx-location-msg"><div class="wx-location-map"><i class="fa-solid fa-location-dot"></i></div><div class="wx-location-info"><div class="wx-location-name">${lName}</div><div class="wx-location-addr">${lAddr}</div></div></div>`;
-            } else if (fileM) {
-                const fName = fileM[2].trim() || 'file.txt'; const fExt = fName.split('.').pop().toLowerCase();
-                const fColors = { ppt:'#f4511e', pptx:'#f4511e', doc:'#4b89dc', docx:'#4b89dc', xls:'#2e7d32', xlsx:'#2e7d32', pdf:'#e53935', zip:'#fa9d3b', rar:'#fa9d3b', '7z':'#fa9d3b' };
-                const fLabels = { ppt:'P', pptx:'P', doc:'W', docx:'W', xls:'X', xlsx:'X', pdf:'PDF', zip:'Z', rar:'Z', '7z':'Z' };
-                const fColor = fColors[fExt] || '#999'; const fLabel = fLabels[fExt] || fExt.slice(0,3).toUpperCase() || '?'; const fSize = (Math.random() * 4 + 0.5).toFixed(1) + ' MB';
-                inner = `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${fName}</div><div class="wx-file-size">${fSize}</div></div><div class="wx-file-icon" style="background:${fColor}">${fLabel}</div></div>`;
-            } else if (linkM) {
-                const lParts = (linkM[2] || '').split('|');
-                const lTitle = (lParts[0] || '網頁連結').trim();
-                const lUrl = lParts[1] ? lParts[1].trim() : '';
-                const safeTitle = lTitle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-                const isUrl = /^(https?:\/\/|www\.)/i.test(lUrl);
-                const click = isUrl ? ` onclick="window.open('${encodeURI(lUrl).replace(/'/g,'%27')}')"` : '';
-                inner = `<div class="wx-link-msg${isUrl ? ' clickable' : ''}"${click}><div class="wx-link-body"><div class="wx-link-title">${safeTitle}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
-            } else if (recvM) {
-                const rParts = (recvM[2] || '').split('|');
-                const amt = (rParts[0] || '').trim(); const memo = (rParts[1] || '').trim();
-                const isNum = /^\d+(\.\d+)?$/.test(amt);
-                const amtDisp = (isNum ? '¥' + amt : (amt || '金額任意')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-                const memoDisp = (memo || '掃碼支付給對方').replace(/&/g,'&amp;').replace(/</g,'&lt;');
-                inner = `<div class="wx-receive-msg"><div class="wx-receive-head"><i class="fa-solid fa-wallet"></i> 微信收款</div><div class="wx-receive-qr">${this._fakeQrSvg(recvM[2] || 'qr')}</div><div class="wx-receive-amt">${amtDisp}</div><div class="wx-receive-foot">${memoDisp}</div></div>`;
+            const WV = win.WX_VIEW || window.WX_VIEW;
+            const peer = (document.getElementById('chat-title') || {}).innerText || '';
+            const sm = (WV && WV.staticMessage) ? WV.staticMessage(content, isMe, {
+                peer: peer, sender: sender,
+                voiceClick: 'event.stopPropagation(); window.VN_Phone._voiceTap(this)'
+            }) : null;
+            if (sm) {
+                // 卡片自己就是造型，外面不套泡泡；語音、通話記錄照微信裝在泡泡裡（會吃泡泡主題）
+                inner = sm.bare ? sm.html : `<div class="chat-bubble pbub-bubble">${sm.html}</div>`;
             } else {
-                // .pbub-bubble＝泡泡主題的共用 class（跟微信同一組，見 wx_bubble_ai.js）。
-                // 只有純文字泡泡掛，上面那些卡片自己就是造型，不吃主題。
+                // .pbub-bubble＝泡泡主題的共用 class（跟微信同一組，見 wx_bubble_ai.js）
                 inner = `<div class="chat-bubble pbub-bubble">${content}</div>`;
             }
             // 引用回覆的灰塊：照微信擺在泡泡內、正文下面。結構跟微信共用 OS_API.chatQuote
@@ -454,18 +362,22 @@
             return nameHTML ? `<div class="chat-outer">${nameHTML}${rowHTML}</div>` : rowHTML;
         },
 
-        // 點語音訊息 → 念出來（跟通話/正文同款：當前開哪個引擎就念哪個；沒指派音色就無聲）
-        _playVoice: function(el) {
+        // 點語音訊息：字的展開跟微信同一支（WX_VIEW.voiceReveal），另外照劇情的語音設定念出來
+        //   （跟通話/正文同款：當前開哪個引擎就念哪個；沒指派音色就無聲）。收起來那一下不念。
+        _voiceTap: function(el) {
             if (!el) return;
             const sender = el.dataset.vsender || '';
             const text = el.dataset.vtext || '';
             if (!text) return;
+            const WV = win.WX_VIEW || window.WX_VIEW;
+            const opened = WV && WV.voiceReveal ? WV.voiceReveal(el, text) : true;
+            if (!opened) { el.classList.remove('is-playing'); return; }
             // 音波跟著「秒數」動，跟語音引擎有沒有真的在放無關（引擎那邊沒有結束回呼可接）
             try {
-                if (this._voiceTimer) { clearTimeout(this._voiceTimer); if (this._voiceEl) this._voiceEl.classList.remove('playing'); }
-                el.classList.add('playing'); this._voiceEl = el;
+                if (this._voiceTimer) { clearTimeout(this._voiceTimer); if (this._voiceEl) this._voiceEl.classList.remove('is-playing'); }
+                el.classList.add('is-playing'); this._voiceEl = el;
                 const sec = Math.min(60, Math.max(2, parseInt(el.dataset.vsec || '3', 10)));
-                this._voiceTimer = setTimeout(() => { el.classList.remove('playing'); this._voiceTimer = null; this._voiceEl = null; }, sec * 1000);
+                this._voiceTimer = setTimeout(() => { el.classList.remove('is-playing'); this._voiceTimer = null; this._voiceEl = null; }, sec * 1000);
             } catch (e) {}
             const core = win.VN_Core || (win.parent && win.parent.VN_Core);
             try { if (core && core._vnSoVITSPlay) core._vnSoVITSPlay(sender, text, '', ''); } catch (e) {}
