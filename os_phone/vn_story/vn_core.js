@@ -1277,7 +1277,10 @@
                     'display:flex;flex-direction:column;justify-content:center;padding:20px 16px 14px;',
                     'transform:translateY(100%);transition:transform .35s cubic-bezier(.22,1,.36,1);overflow:hidden}',
                     '#vn-dom-block-overlay.active{transform:translateY(0)}',
-                    '#vn-dom-block-body{max-height:calc(100% - 60px);overflow-y:auto;overflow-x:hidden;color:#e8dfc8}',
+                    '#vn-dom-block-body{max-height:calc(100% - 60px);overflow-y:auto;overflow-x:hidden;color:#e8dfc8;',
+                    /* 卡片自己帶了寬度上限又沒寫置中（AI 現場寫的美化卡幾乎都這樣）→ 會貼在左邊。由外框負責置中，卡片不用管 */
+                    'display:flex;flex-direction:column;align-items:center}',
+                    '#vn-dom-block-body>*{flex-shrink:0;max-width:100%}',
                     '#vn-dom-block-body::-webkit-scrollbar{width:3px}',
                     '#vn-dom-block-body::-webkit-scrollbar-thumb{background:rgba(212,175,55,.3);border-radius:2px}',
                     /* 確保圖片（如 SD 插件的 sd-ui-image）在缺少原插件 CSS 時仍可見 */
