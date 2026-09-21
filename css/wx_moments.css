@@ -85,15 +85,19 @@
 /* 讚與留言那一塊：底是分頁列那個底（--wx-bar），字就一定要用「那個底上的字」（--wx-bar-ink），
    不能借卡片的字色或可點的字色——主題只要把那兩格調成跟底一樣，名字或留言內容就整條看不見（她 09-20：試好幾次，
    一次名字跟底色一樣、一次內容跟底色一樣）。沒套主題時 --wx-bar-ink 是空的，照舊用原本那兩個顏色。 */
-.wxmo-social { position: relative; margin-top: 8px; border-radius: 4px; background: var(--wx-bar); color: var(--wx-bar-ink, var(--wx-ink)); font-size: 14px; line-height: 1.5; }
-.wxmo-social::before { content: ''; position: absolute; top: -6px; left: 12px; border: 6px solid transparent; border-top: 0; border-bottom-color: var(--wx-bar); }
-.wxmo-likes { display: flex; gap: 6px; padding: 5px 9px; color: var(--wx-bar-ink, var(--wx-link)); overflow-wrap: anywhere; }
+/* 讚與留言那塊＝一塊小卡：底用卡片那組（--wx-surface-2），字用 --wx-ink，名字用可點的字 --wx-link。
+   🚨 以前借的是底部分頁列那組（--wx-bar／--wx-bar-ink），可是主題工坊跟 AI 說那組只是「輸入列上的符號」，
+      AI 照符號去配、分頁列想做多花就做多花，留言的字跟著撞色（她：「評論區總是顏色不對，總會有字跟底色同色」）。
+      卡片那組是全 app 字最多的一組，每一套主題都會把它配到看得清楚。 */
+.wxmo-social { position: relative; margin-top: 8px; border-radius: 4px; background: var(--wx-surface-2); color: var(--wx-ink); font-size: 14px; line-height: 1.5; }
+.wxmo-social::before { content: ''; position: absolute; top: -6px; left: 12px; border: 6px solid transparent; border-top: 0; border-bottom-color: var(--wx-surface-2); }
+.wxmo-likes { display: flex; gap: 6px; padding: 5px 9px; color: var(--wx-link); overflow-wrap: anywhere; }
 .wxmo-likes i { margin-top: 4px; font-size: 12px; }
 .wxmo-likes + .wxmo-cms { border-top: 1px solid var(--wx-line); }
 .wxmo-cms { padding: 4px 9px; }
 .wxmo-cm { padding: 1px 0; overflow-wrap: anywhere; cursor: pointer; }
 .wxmo-cm:active { background: color-mix(in srgb, currentColor 8%, transparent); }
-.wxmo-cm b { color: var(--wx-bar-ink, var(--wx-link)); font-weight: 600; }
+.wxmo-cm b { color: var(--wx-link); font-weight: 600; }
 .wxmo-cm i { font-style: normal; margin: 0 3px; color: inherit; }
 
 .wxmo-empty { padding: 60px 20px; text-align: center; color: color-mix(in srgb, currentColor 45%, transparent); font-size: 14px; }
@@ -144,10 +148,10 @@
 .wxmo-root.is-dark, .wxmo-root.is-dark .wxmo-compose { background: #111; color: #ddd; }
 .wxmo-root.is-dark.is-scrolled .wxmo-bar { background: #1c1c1e; color: #ddd; }
 .wxmo-root.is-dark .wxmo-post { border-bottom-color: #222; }
-.wxmo-root.is-dark .wxmo-name, .wxmo-root.is-dark .wxmo-cm b, .wxmo-root.is-dark .wxmo-likes, .wxmo-root.is-dark .wxmo-del { color: #7d90a9; }
-.wxmo-root.is-dark .wxmo-social, .wxmo-root.is-dark .wxmo-more { background: #1e1e1e; }
-.wxmo-root.is-dark .wxmo-social::before { border-bottom-color: #1e1e1e; }
-.wxmo-root.is-dark .wxmo-cm i { color: #ddd; }
+.wxmo-root.is-dark .wxmo-name, .wxmo-root.is-dark .wxmo-del { color: #7d90a9; }
+/* 🚨 留言那塊的深色不在這裡寫：它吃的那幾格（--wx-surface-2／--wx-ink／--wx-link）夜晚值已經在 wxskin-dark 裡了。
+   以前這裡把底寫死成 #1e1e1e、字卻還跟著主題 → 主題是淺色字深時，就是深底深字。 */
+.wxmo-root.is-dark .wxmo-more { background: #1e1e1e; }
 .wxmo-root.is-dark .wxmo-input { background: #1c1c1e; border-top-color: #2a2a2a; }
 .wxmo-root.is-dark .wxmo-in { background: #2a2a2c !important; border-color: #3a3a3c !important; color: #f0f0f0 !important; }
 .wxmo-root.is-dark .wxmo-compose-in, .wxmo-root.is-dark .wxmo-compose-x { color: #f0f0f0 !important; }
