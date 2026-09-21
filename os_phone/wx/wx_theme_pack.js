@@ -447,6 +447,74 @@
         ['--wx-fill', '沒有圖時頭像的底', 0]
     ];
     const VARS = PALETTE.map(function (x) { return x[0] + ' ' + x[1]; }).join('、');
+
+    // ── 👓 誰壓在誰上面：一對一對列出來，交稿後真的量一次 ─────────────
+    //   同手機主題工坊那套（os_phone_theme.js 的 PAIRS）：光叫它「字和底要看得清楚」沒用，
+    //   要明講哪個字壓在哪塊底上；它沒有預覽、也算不準，所以交稿後我們自己量、點名。
+    //   她 09-21：「朋友圈的評論區總是顏色不對，總會有字跟底色同色」——聊天 app 這邊從來沒量過。
+    // 🚨 門檻拿內建六套（預設／奶油／靛藍 × 淺深）校準過，全部都過而且留了空間：
+    //   真微信那顆綠底白字的按鈕只有 2.4 倍、時間那種最淡的字最低 2.7 倍 → 那兩組訂 2；
+    //   訂得比內建還嚴，好好的主題會被判成壞的，這個檢查就變成狼來了。
+    //   目的是抓「字跟底幾乎同色」（1～1.5 倍那種），不是無障礙評分。
+    // 🚨 fg／bg 都是一串：前面那格沒寫就退到後面那格（跟畫面上實際吃的後備一樣）。
+    const PAIRS = [
+        { fg: ['--wx-ink'],                     bg: ['--wx-surface'],                   min: 4, t: '卡片與每一列上的主要字（名字、標題）' },
+        { fg: ['--wx-ink-2', '--wx-ink'],       bg: ['--wx-surface'],                   min: 4, t: '內文' },
+        { fg: ['--wx-ink-3'],                   bg: ['--wx-surface'],                   min: 3, t: '次要的字（最後一句、說明）' },
+        { fg: ['--wx-ink-dim', '--wx-ink-3'],   bg: ['--wx-surface'],                   min: 2, t: '時間那種最淡的字' },
+        { fg: ['--wx-page-ink', '--wx-ink'],    bg: ['--wx-page'],                      min: 4, t: '直接寫在整頁底上的字（設置的分組小標、記事本）' },
+        { fg: ['--wx-header-ink', '--wx-ink'],  bg: ['--wx-header'],                    min: 4, t: '最上面那條的標題、返回與圖示鈕' },
+        { fg: ['--wx-bar-ink', '--wx-ink'],     bg: ['--wx-bar'],                       min: 3, t: '底部分頁列與輸入列上的符號' },
+        { fg: ['--wx-on-accent'],               bg: ['--wx-accent'],                    min: 2, t: '按鈕、送出鍵上的字' },
+        { fg: ['--wx-accent-ink', '--wx-accent'], bg: ['--wx-surface'],                 min: 3, t: '重點色當字用的地方' },
+        { fg: ['--wx-link', '--wx-accent-ink'], bg: ['--wx-surface'],                   min: 3, t: '可以點的字' },
+        { fg: ['--wx-ink'],                     bg: ['--wx-surface-2', '--wx-surface'], min: 4, t: '朋友圈留言的字、打字框裡的字' },
+        { fg: ['--wx-link', '--wx-accent-ink'], bg: ['--wx-surface-2', '--wx-surface'], min: 3, t: '朋友圈留言者與按讚的名字' }
+    ];
+    function _pairLine(q) { return '・' + q.t + '：' + q.fg[0] + ' 壓在 ' + q.bg[0] + ' 上，要 ' + q.min + ' 倍以上'; }
+    function _toRgb(v) {
+        v = String(v || '').trim();
+        let m = /^#([0-9a-f]{3})$/i.exec(v);
+        if (m) return m[1].split('').map(function (c) { return parseInt(c + c, 16); });
+        m = /^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i.exec(v);
+        if (m) return [0, 2, 4].map(function (i) { return parseInt(m[1].slice(i, i + 2), 16); });
+        m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(v);
+        if (m) { if (m[4] != null && parseFloat(m[4]) < 0.5) return null; return [+m[1], +m[2], +m[3]]; }   // 太透明看得到下面那層，量不準就不量
+        return null;
+    }
+    function _lum(c) {
+        const f = function (x) { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+        return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+    }
+    // 開頭那塊 :root 裡的顏色表 → { 格子名: 值 }；值是另一格（var(--x)）就往下找一層
+    function _paletteVars(css) {
+        const m = String(css || '').match(/:root\s*\{([^}]*)\}/i);
+        const out = {};
+        if (!m) return out;
+        m[1].replace(/(--wx-[a-z0-9-]+)\s*:\s*([^;]+);?/gi, function (_, k, v) { out[k.toLowerCase()] = v.trim(); });
+        Object.keys(out).forEach(function (k) {
+            const r = String(out[k]).match(/^var\(\s*(--wx-[a-z0-9-]+)\s*\)$/i);
+            if (r && out[r[1].toLowerCase()]) out[k] = out[r[1].toLowerCase()];
+        });
+        return out;
+    }
+    function _firstRgb(vars, chain) {
+        for (let i = 0; i < chain.length; i++) { const c = _toRgb(vars[chain[i]]); if (c) return c; }
+        return null;
+    }
+    // 回傳看不清楚的那幾組（她畫面上看到的是 t 那句話）。量不出來的（漸層、color-mix、太透明）不算，不誤報。
+    function contrastIssues(css) {
+        const vars = _paletteVars(css);
+        const out = [];
+        PAIRS.forEach(function (q) {
+            const a = _firstRgb(vars, q.fg), b = _firstRgb(vars, q.bg);
+            if (!a || !b) return;
+            const hi = Math.max(_lum(a), _lum(b)), lo = Math.min(_lum(a), _lum(b));
+            const r = (hi + 0.05) / (lo + 0.05);
+            if (r < q.min) out.push({ t: q.t, r: Math.round(r * 10) / 10, min: q.min, fg: q.fg[0], bg: q.bg[0], fv: vars[q.fg[0]] || '', bv: vars[q.bg[0]] || '' });
+        });
+        return out;
+    }
     // AI 回的顏色表 → :root 一塊；沒寫的從寫了的推（淺一階、深一階那種），核心那幾格缺了回傳 missing 讓它補
     function _paletteCss(text) {
         const got = {};
@@ -601,7 +669,10 @@
             '分兩步做：',
             '第一步：整套顏色（一定要全填，這是最重要的一步）。整支 app 裡你沒有單獨寫到的零件，全部吃這張表：按鈕、選中的分頁、開關、送出鍵、卡片、各頁的底與字。沒填的格子會留在原本的微信綠與白，整套主題就會看起來沒換。格子：',
             PALETTE.map(function (x) { return '・' + x[0] + '：' + x[1] + (x[2] ? '（必填）' : ''); }).join('\n'),
-            '重點色要照這套風格挑，字和它底下的底色要看得清楚。',
+            '重點色要照這套風格挑。',
+            '顏色是一對一對的：下面每一行是「一種字」壓在「它底下那塊底」上。一對裡的兩個顏色不可以相近，不然畫面上就是深底深字、淺底淺字，字整個看不見。',
+            '判斷方法：把兩個顏色的亮度算出來，亮的加 0.05 除以暗的加 0.05，要達到每一行後面標的倍數。這張表填完，自己一行一行對一遍：',
+            PAIRS.map(_pairLine).join('\n'),
             '',
             '第二步：造型。挑最能表現風格的幾樣做（標頭、分頁列、輸入列、列表、卡片的形狀與裝飾），不用每個零件都寫；沒寫到的會用第一步的顏色。零件（只能用這些名字）：',
             PARTS.map(function (p) { return '・' + p; }).join('\n'),
@@ -693,13 +764,37 @@
                     const full = (r.palette ? r.palette + '\n' : '') + r.css;
                     const c = compile(full);
                     if (!c.ok || !c.kept) { reject(new Error(c.error || '寫出來的樣式一條都用不上')); return; }
-                    resolve({ name: r.name, css: full, missing: r.missing, ink: _unpaired(full), raw: text });
+                    resolve({ name: r.name, css: full, missing: r.missing, ink: _unpaired(full), pairs: contrastIssues(full), raw: text });
                 },
                 function (e) { reject(e instanceof Error ? e : new Error(String((e && e.message) || e))); },
                 { task: 'wx_theme', label: '聊天 app 主題' });
         });
     }
-    // 補一次：顏色表漏格與符號顏色一起補（要補什麼由呼叫端挑），回傳補好的整份樣式
+    // 叫它只改看不清楚的那幾組（造型、其他顏色都不動）：回它新寫的那幾格，併進原本那張表
+    function _askPairs(css, issues) {
+        return new Promise(function (resolve) {
+            const O = win.OS_API || window.OS_API;
+            if (!issues.length || !O || !O.chatMain) { resolve(''); return; }
+            const cur = (String(css).match(/:root\s*\{([^}]*)\}/i) || [])[1] || '';
+            const lines = issues.map(function (x) {
+                return '・' + x.t + '：' + x.fg + '（現在 ' + (x.fv || '沒填') + '）壓在 ' + x.bg + '（現在 ' + (x.bv || '沒填') + '）上，只差 ' + x.r + ' 倍，要 ' + x.min + ' 倍以上';
+            }).join('\n');
+            const ask = [
+                { role: 'system', content: '你剛才替一支手機聊天 app 設計了一套主題，其中幾組「字壓在底上」的顏色太相近，字看不清楚。' +
+                    '照這套主題原本的風格，改那幾組裡的其中一格（通常改字，底是整套的招牌就別動它），讓每一組都達到要求的倍數（亮度算法：亮的加 0.05 除以暗的加 0.05）。' +
+                    '只輸出 <palette> 那一塊，一行一格寫成 格子名: 顏色，只寫你改了的那幾格，不要寫別的字。' },
+                { role: 'user', content: '這套主題現在的顏色表：\n' + cur.trim() + '\n\n看不清楚的那幾組：\n' + lines }
+            ];
+            O.chatMain(ask, null, function (t2) {
+                const txt = String(t2 || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                const pm = txt.match(/[<＜]\s*palette\s*[>＞]([\s\S]*?)[<＜]\s*\/\s*palette\s*[>＞]/i);
+                const add = pm ? pm[1] : txt;
+                if (!/--wx-[a-z0-9-]+\s*[:：]/i.test(add)) { resolve(''); return; }
+                resolve(_paletteCss(cur + '\n' + add).css || '');
+            }, function () { resolve(''); }, { task: 'wx_theme', label: '聊天 app 主題（修看不清楚的顏色）' });
+        });
+    }
+    // 補一次：顏色表漏格、符號顏色、看不清楚的顏色（要補什麼由呼叫端挑），回傳補好的整份樣式
     async function fillUp(t, opts) {
         opts = opts || {};
         let css = String(t.css || '');
@@ -714,6 +809,14 @@
         if (opts.ink !== false) {
             const parts = _unpaired(css);
             if (parts.length) css += await _askInk(css, parts);
+        }
+        // 看不清楚的顏色排最後：前面補了漏格，才量得到那幾格
+        if (opts.pairs !== false) {
+            const bad = contrastIssues(css);
+            if (bad.length) {
+                const pal = await _askPairs(css, bad);
+                if (pal) css = pal + '\n' + css.replace(/:root\s*\{[^}]*\}\s*/i, '');
+            }
         }
         return css;
     }
@@ -892,6 +995,7 @@
             const lack = [];
             if (r.missing && r.missing.length) lack.push('有 ' + r.missing.length + ' 格顏色沒寫');
             if (r.ink && r.ink.length) lack.push('有 ' + r.ink.length + ' 個地方換了底、沒寫上面的符號顏色');
+            if (r.pairs && r.pairs.length) lack.push('有 ' + r.pairs.length + ' 組字跟底太接近看不清楚（' + r.pairs.slice(0, 3).map(function (x) { return x.t; }).join('、') + (r.pairs.length > 3 ? ' 等' : '') + '）');
             if (!lack.length) return;
             if (!(await _confirm('這套主題' + lack.join('，') + '，沒寫到的先用原本的顏色。要再叫他補一次嗎？（會再問他一次，多花一次）'))) {
                 _toast('先這樣用，之後在「⋯」裡還能叫他補');
@@ -925,6 +1029,7 @@
             '<button type="button" data-m="file"><i class="fa-solid fa-file-export"></i>存成檔案</button>' +
             (missingPalette(t.css).length ? '<button type="button" data-m="pal"><i class="fa-solid fa-palette"></i>補齊沒寫的顏色</button>' : '') +
             (_unpaired(t.css).length ? '<button type="button" data-m="ink"><i class="fa-solid fa-icons"></i>補上看不見的符號</button>' : '') +
+            (contrastIssues(t.css).length ? '<button type="button" data-m="pair"><i class="fa-solid fa-eye"></i>修看不清楚的顏色</button>' : '') +
             '<button type="button" data-m="del" class="is-danger"><i class="fa-solid fa-trash-can"></i>刪除</button>' +
             '<button type="button" data-m="x" class="is-cancel">取消</button>' +
             '</div>';
@@ -950,11 +1055,12 @@
                     d.body.appendChild(a); a.click(); a.remove();
                     setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
                 } catch (err) { _toast('存不出來'); }
-            } else if (what === 'ink' || what === 'pal') {
+            } else if (what === 'ink' || what === 'pal' || what === 'pair') {
                 if (_busy) return;
                 _busy = true; _renderPage();
-                _toast(what === 'pal' ? '請它把顏色補齊…' : '請它補符號的顏色…');
-                const css = await fillUp(t, what === 'pal' ? { ink: false } : { palette: false });
+                _toast(what === 'pal' ? '請它把顏色補齊…' : what === 'ink' ? '請它補符號的顏色…' : '請它改看不清楚的那幾組…');
+                // 一次只補按的那一樣
+                const css = await fillUp(t, { palette: what === 'pal', ink: what === 'ink', pairs: what === 'pair' });
                 _busy = false;
                 if (css === t.css) { _renderPage(); _toast('沒補成，再試一次'); return; }
                 t.css = css;
@@ -991,7 +1097,7 @@
         await apply(id);
     }
 
-    const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText, fillUp, missingPalette, _unpaired };
+    const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText, fillUp, missingPalette, _unpaired, contrastIssues, PAIRS };
     win.WX_THEME_PACK = API;
     window.WX_THEME_PACK = API;
     setTimeout(function () { _boot().catch(function (e) { console.warn('[主題] 開機套用失敗', e); }); }, 800);
