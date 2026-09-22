@@ -1732,7 +1732,9 @@
         }
         // 小人多高：房間自己算出來的「一個人該多少 px」除以角色基準高；沒給才退回一個保守值。
         const scale = dyn.actorPx ? (dyn.actorPx / PLAYER_H) : (dyn.actorScale || 0.62);
-        const pts = { player: { x: px, y: py }, arrive: { x: px, y: py }, actorScale: scale };
+        // 房間給了落點就用它（家具會擋路的房間：地板正中常常是床，落在那裡一進門就卡住）；門口照舊跟地板置中
+        const sp = (dyn.spawn && isFinite(dyn.spawn.x) && isFinite(dyn.spawn.y)) ? dyn.spawn : { x: px, y: py };
+        const pts = { player: { x: sp.x, y: sp.y }, arrive: { x: sp.x, y: sp.y }, actorScale: scale };
         if (poly) pts.boundary = poly.map(p => ({ x: p[0], y: p[1] }));   // 遮罩沒載成功時的退路輪廓
         SCENES.room.points = pts;
         let ex = dyn.exit || { to: 'city' };

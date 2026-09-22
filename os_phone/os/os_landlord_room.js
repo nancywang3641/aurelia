@@ -178,6 +178,7 @@
             exit: info.exit,
             doors: extraDoors,
             actorPx: layers.figurePx,
+            spawn: layers.spawn || null,
         });
 
         // 面板讓開，讓舞台變成主角
@@ -891,6 +892,8 @@
                 roomTypeKey: spec.typeKey,   // 房型跟著房間走,下次進來要用同一間
                 // 🚨 幾何三件套一定要一起存：地板＝可走區(沒有就整片不能動)、personH＝尺度(沒有就退回拉滿舞台)
                 floor: result.floor, inner4: result.inner4, viewBox: result.viewBox, personH: result.personH,
+                // 🛋 家具擋路那張：只有自訂接口畫的房間有；ComfyUI 畫的一定要寫 null，不然留著上一版的家具位置
+                furnMask: result.furnMask || null,
                 styleName: result.styleName, at: result.at,
             });
             _endDeco();

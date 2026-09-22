@@ -243,8 +243,249 @@
     // onStep：進度回呼(給畫面顯示現在做到哪，純文案)
     // opts.layout：上次翻好的那份英文清單。給了就不再燒副模型重翻——「重新生成」走這條，
     //   同一份提示詞只換種子，調參數時才是單一變因。
+    // ====================================================================
+    // 🖼 另一條路：用自訂接口（GPT 那種）畫整間房，順便描出家具擋在哪（2026-09-22，她在測試頁跑過定案）
+    //   ① 送「高牆空房」當參考圖，第一通照訂單畫整間房。
+    //      矮牆空房是為了 ComfyUI；矮牆的左右牆在畫面上只剩一條往內斜的邊，GPT 會讀成牆頂、把房間畫歪。
+    //   ② 把畫好的房間送回去，第二通只描家具：家具壓在地上的範圍黑、其他全白。
+    //      牆、地板、門口不靠它——程式自己知道空房的地板在哪，而且是準的（她：「程式的 svg 保留地板白色，
+    //      配上家具遮罩，等於一個完美的遮罩」）。
+    //   ③ 官方接口會自己把房間挪一點、拉寬壓扁；照「房間外形」量出它挪了多少，把畫好的房間裁回空房的框。
+    //      之後擺放位置、小人大小、門口都照舊用空房那一套，一個座標都不用換。
+    //   🚨 描家具那張整片白一定碰到圖邊，別拿「白色碰邊就清掉」那套保險去洗它（測試頁踩過：會整張清光）。
+    // ====================================================================
+    const K_ROUTE = 'aurelia_room_route';
+    function getRoute() {
+        let r = {};
+        try { r = JSON.parse(win.localStorage.getItem(K_ROUTE) || '{}') || {}; } catch (e) {}
+        return { mode: r.mode === 'capi' ? 'capi' : 'comfy', roomNode: String(r.roomNode || ''), maskNode: String(r.maskNode || '') };
+    }
+    function setRoute(patch) {
+        const r = Object.assign(getRoute(), patch || {});
+        try { win.localStorage.setItem(K_ROUTE, JSON.stringify(r)); } catch (e) {}
+        return r;
+    }
+    // 自訂接口的選項：'' ＝圖片設置裡現在填的那組；其他是存起來的節點
+    function listCapiNodes() {
+        const out = [];
+        try {
+            const cur = (_mgr() && _mgr().config && _mgr().config.customApi) || {};
+            out.push({ id: '', name: '圖片設置裡現在那組', url: cur.url, apiKey: cur.apiKey, model: cur.model });
+        } catch (e) {}
+        try {
+            const arr = JSON.parse(win.localStorage.getItem('os_img_capi_nodes') || '[]');
+            (Array.isArray(arr) ? arr : []).forEach(function (n) { if (n && n.id && n.url) out.push({ id: n.id, name: n.name || n.model || n.url, url: n.url, apiKey: n.apiKey, model: n.model }); });
+        } catch (e) {}
+        return out;
+    }
+    function _capiNode(id) {
+        const list = listCapiNodes();
+        return list.find(function (n) { return n.id === String(id || ''); }) || list[0] || null;
+    }
+    function _cv(w, h) { const c = win.document.createElement('canvas'); c.width = w; c.height = h; return c; }
+    function _scaleCv(src, w, h) { const c = _cv(w, h); const g = c.getContext('2d'); g.imageSmoothingEnabled = true; g.drawImage(src, 0, 0, w, h); return c; }
+    function _dataUrlToBlob(u) {
+        const m = String(u).match(/^data:([^;]+);base64,(.*)$/);
+        const bin = atob(m[2]); const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return new Blob([arr], { type: m[1] });
+    }
+    async function _capiEdit(node, prompt, refDataUrl, size) {
+        if (!node || !node.url) throw new Error('房間用的自訂接口還沒填網址，先到設置的圖片頁填好。');
+        try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: 'room' }); } catch (e) {}
+        const b = String(node.url).trim().replace(/\/+$/, '');
+        const url = /\/images\/edits$/.test(b) ? b : (/\/images\/generations$/.test(b) ? b.replace(/\/images\/generations$/, '/images/edits') : b + '/images/edits');
+        const fd = new FormData();
+        if (node.model) fd.append('model', node.model);
+        fd.append('prompt', prompt);
+        fd.append('n', '1');
+        fd.append('size', size);
+        if (/^gpt-image/i.test(String(node.model || ''))) {
+            const q = String(((_mgr() && _mgr().config && _mgr().config.customApi) || {}).quality || 'medium').toLowerCase();
+            fd.append('quality', (q === 'low' || q === 'high') ? q : 'medium');
+        }
+        fd.append('image[]', _dataUrlToBlob(refDataUrl), 'ref.png');
+        const headers = {};
+        if (node.apiKey) headers.Authorization = 'Bearer ' + String(node.apiKey).trim();
+        const resp = await fetch(url, { method: 'POST', headers: headers, body: fd });
+        const text = await resp.text();
+        if (!resp.ok) {
+            if (resp.status === 404 || resp.status === 405) throw new Error('這個接口不收帶圖的請求，房間要換一個接口畫。');
+            if (/insufficient_quota|billing_hard_limit|exceeded your current quota/i.test(text)) throw new Error('生圖的額度用完了。');
+            if (/safety system|content[_ ]policy|moderation_blocked/i.test(text)) throw new Error('這次被接口的內容審查擋掉了，改一下包裹再配送。');
+            throw new Error('房間沒畫成（' + resp.status + '），再按一次配送就好。');
+        }
+        let data; try { data = JSON.parse(text); } catch (e) { throw new Error('接口回來的不是圖，網址可能填錯了。'); }
+        const first = data && Array.isArray(data.data) ? data.data[0] : null;
+        if (first && first.b64_json) return 'data:image/png;base64,' + first.b64_json;
+        if (first && first.url) {
+            const r = await fetch(first.url); const blob = await r.blob();
+            return await new Promise(function (res, rej) { const fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(blob); });
+        }
+        throw new Error('接口沒有回圖，再按一次配送就好。');
+    }
+
+    // 黑底上那一整塊房間的外形框（含牆、含門口）：從四邊灌水把黑底挖掉，剩下的就是房間
+    function _roomBox(cv) {
+        const MW = 256, MH = Math.max(8, Math.round(MW * cv.height / cv.width));
+        const px = _scaleCv(cv, MW, MH).getContext('2d').getImageData(0, 0, MW, MH).data;
+        const N = MW * MH, dark = new Uint8Array(N), out = new Uint8Array(N);
+        for (let i = 0; i < N; i++) dark[i] = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) < 40 ? 1 : 0;
+        const q = []; const push = function (p) { if (dark[p] && !out[p]) { out[p] = 1; q.push(p); } };
+        for (let x = 0; x < MW; x++) { push(x); push(N - MW + x); }
+        for (let y = 0; y < MH; y++) { push(y * MW); push(y * MW + MW - 1); }
+        while (q.length) { const p = q.pop(), x = p % MW, y = (p / MW) | 0; if (x > 0) push(p - 1); if (x < MW - 1) push(p + 1); if (y > 0) push(p - MW); if (y < MH - 1) push(p + MW); }
+        let x0 = MW, y0 = MH, x1 = -1, y1 = -1, n = 0;
+        for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (!out[y * MW + x]) { n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (n < N * 0.03 || x1 < 0) return null;
+        const kx = cv.width / MW, ky = cv.height / MH;
+        return { x0: x0 * kx, y0: y0 * ky, x1: (x1 + 1) * kx, y1: (y1 + 1) * ky };
+    }
+    // 家具圖跟房間圖差多少：兩張都只看「是不是邊」（房間圖只留最明顯的一成五，木紋那些細邊不算），
+    //   家具圖的邊有幾成落在房間圖的邊上。🚨 別拿邊的強弱去算，會被木紋拖著跑（測試頁踩過兩次）。
+    function _edgeHit(roomCv, maskCv, S) {
+        const gw = 160, gh = Math.max(8, Math.round(160 * roomCv.height / roomCv.width));
+        const gray = function (cv) {
+            const p = _scaleCv(cv, gw, gh).getContext('2d').getImageData(0, 0, gw, gh).data, o = new Float32Array(gw * gh);
+            for (let i = 0; i < gw * gh; i++) o[i] = (0.299 * p[i * 4] + 0.587 * p[i * 4 + 1] + 0.114 * p[i * 4 + 2]) / 255;
+            return o;
+        };
+        const edge = function (g) {
+            const e = new Float32Array(gw * gh);
+            for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) { const i = y * gw + x; e[i] = Math.abs(g[i + 1] - g[i - 1]) + Math.abs(g[i + gw] - g[i - gw]); }
+            return e;
+        };
+        const er = edge(gray(roomCv)), em = edge(gray(maskCv));
+        const cut = Array.from(er).sort(function (a, b) { return a - b; })[Math.floor(er.length * 0.85)] || 0.1;
+        const rg = new Uint8Array(er.length);
+        for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) {
+            const i = y * gw + x;
+            rg[i] = (er[i] > cut || er[i - 1] > cut || er[i + 1] > cut || er[i - gw] > cut || er[i + gw] > cut) ? 1 : 0;
+        }
+        const score = function (dx, dy) {
+            let hit = 0, n = 0;
+            for (let y = S; y < gh - S; y++) for (let x = S; x < gw - S; x++) {
+                if (em[y * gw + x] < 0.5) continue;
+                n++; if (rg[(y - dy) * gw + (x - dx)]) hit++;
+            }
+            return n ? hit / n : 0;
+        };
+        let best = { dx: 0, dy: 0, s: score(0, 0) };
+        for (let dy = -S; dy <= S; dy++) for (let dx = -S; dx <= S; dx++) { const s = score(dx, dy); if (s > best.s) best = { dx: dx, dy: dy, s: s }; }
+        const k = roomCv.width / gw;
+        return { dx: Math.round(best.dx * k), dy: Math.round(best.dy * k), hit: best.s };
+    }
+    function _moveMask(maskCv, scale, dx, dy) {
+        const c = _cv(maskCv.width, maskCv.height); const g = c.getContext('2d');
+        g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);   // 家具圖的底是白（能走）；挪出去的空邊也當能走，牆由地板那張管
+        const w = maskCv.width * scale, h = maskCv.height * scale;
+        g.drawImage(maskCv, (c.width - w) / 2 - dx, (c.height - h) / 2 - dy, w, h);
+        return c;
+    }
+    function _alignFurniture(roomCv, maskCv) {
+        let best = null;
+        for (let sc = 0.94; sc <= 1.0601; sc += 0.02) {
+            const m = _edgeHit(roomCv, _moveMask(maskCv, sc, 0, 0), 12);
+            if (!best || m.hit > best.m.hit) best = { sc: sc, m: m };
+        }
+        return _moveMask(maskCv, best.sc, best.m.dx, best.m.dy);
+    }
+
+    function _gptRoomPrompt(layout, floorWord, style) {
+        return 'The attached image is an empty room seen from above at a slightly tilted camera: the floor, the back wall, the two side walls, and a low front wall with a doorway in the middle. '
+            + 'Draw that same room furnished. Keep the walls, the floor outline, the doorway, the camera angle and the proportions as in the attached image, and keep the room at the same size and position with the same empty black margin around it. '
+            + 'Furniture and objects: ' + layout + '. Floor: ' + floorWord + '. '
+            + 'Nothing hangs from the ceiling; everything stands on the floor or is mounted on a wall.'
+            + (style ? '\n\n' + style : '');
+    }
+    function _gptFurniturePrompt() {
+        return 'The attached image is a furnished room seen from above. Make a flat black-and-white picture the same size as the attached image. '
+            + 'Paint pure black (#000000) the area each piece of furniture and each object covers on the floor, at exactly the same position and size as in the attached image, so a person could not stand there. '
+            + 'Paint everything else pure white (#ffffff): the empty floor, the walls, the doorway, the background — do not draw the room itself, only the furniture footprints. '
+            + 'Only those two colours: no grey, no shading, no texture, no outlines, no text.';
+    }
+
+    async function _deliverCapi(spec, order, onStep, opts, layout) {
+        const route = getRoute();
+        const roomNode = _capiNode(route.roomNode), maskNode = _capiNode(route.maskNode);
+        const S = _svg();
+        if (!S || typeof S.makeRoom !== 'function') throw new Error('房間產生器還沒載入。');
+        // 高牆空房（幾何跟矮牆版不同，存下來的地板/尺度也是這一份）
+        const tallSpec = Object.assign({}, spec, { tallWalls: true });
+        if (onStep) onStep('正在準備空房…');
+        const base = await buildBase(tallSpec);
+        const bw = base.width, bh = base.height, vb = base.room.viewBox;
+        const r = bw / bh;
+        const size = r > 1.2 ? '1536x1024' : (r < 0.83 ? '1024x1536' : '1024x1024');
+        const OW = parseInt(size, 10), OH = parseInt(size.split('x')[1], 10);
+        // 參考圖塞進跟輸出一樣的比例（補黑邊）：比例不同時它會自己把房間拉長壓扁，地板就對不回去
+        const baseIm = await _loadImg(base.baseData);
+        const pad = _cv(OW, OH);
+        const pg = pad.getContext('2d'); pg.fillStyle = '#000'; pg.fillRect(0, 0, OW, OH);
+        const ps = Math.min(OW / bw, OH / bh);
+        const pr = { x: (OW - bw * ps) / 2, y: (OH - bh * ps) / 2, w: bw * ps, h: bh * ps };
+        pg.drawImage(baseIm, pr.x, pr.y, pr.w, pr.h);
+
+        if (onStep) onStep('正在把東西一件件擺進房間…');
+        const style = String(((_mgr() && _mgr().config && _mgr().config.customApi) || {}).basePrompt || '').trim();
+        const roomData = await _capiEdit(roomNode, _gptRoomPrompt(layout, FLOOR_WORDS[spec && spec.floor] || FLOOR_WORDS.oak, style), pad.toDataURL('image/png'), size);
+        if (onStep) onStep('正在量家具擋在哪裡…');
+        const maskData = await _capiEdit(maskNode, _gptFurniturePrompt(), roomData, size);
+
+        const roomIm = await _loadImg(roomData), maskIm = await _loadImg(maskData);
+        const roomCv = _scaleCv(roomIm, roomIm.width, roomIm.height);
+        const furn = _alignFurniture(roomCv, _scaleCv(maskIm, roomCv.width, roomCv.height));
+        // 它畫的房間跟送出去的空房差多少：外形框對外形框，寬高各自換算
+        const bA = _roomBox(pad), bB0 = _roomBox(roomCv);
+        const kx = roomCv.width / OW, ky = roomCv.height / OH;
+        const bB = bB0 || { x0: bA.x0 * kx, y0: bA.y0 * ky, x1: bA.x1 * kx, y1: bA.y1 * ky };
+        const sx = (bB.x1 - bB.x0) / (bA.x1 - bA.x0), sy = (bB.y1 - bB.y0) / (bA.y1 - bA.y0);
+        // 空房的框（送出去時在 pr 那一塊）落在它畫的圖上哪裡 → 裁下來、縮回空房原本的大小
+        const cx0 = bB.x0 + (pr.x - bA.x0) * sx, cy0 = bB.y0 + (pr.y - bA.y0) * sy;
+        const cw = pr.w * sx, ch = pr.h * sy;
+        const cropTo = function (src) {
+            const c = _cv(bw, bh); const g = c.getContext('2d');
+            g.fillStyle = '#000'; g.fillRect(0, 0, bw, bh);
+            g.imageSmoothingEnabled = true;
+            g.drawImage(src, cx0, cy0, cw, ch, 0, 0, bw, bh);
+            return c;
+        };
+        const roomOut = cropTo(roomCv);
+        const furnOut = (function () { const c = cropTo(furn); return c; })();
+        // 家具圖二值化：黑＝家具、白＝沒擋（裁出去的邊被補成黑也沒關係，那裡本來就在地板外）
+        {
+            const g = furnOut.getContext('2d'); const d = g.getImageData(0, 0, bw, bh);
+            for (let i = 0; i < d.data.length; i += 4) {
+                const v = (0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2]) >= 128 ? 255 : 0;
+                d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255;
+            }
+            g.putImageData(d, 0, 0);
+        }
+        void vb;
+        const nm = function (n) { return (n && n.name) || '自訂接口'; };
+        return {
+            image: roomOut.toDataURL('image/png'),
+            furnMask: furnOut.toDataURL('image/png'),
+            layout: layout,
+            floor: base.room.floor,
+            inner4: base.room.inner4,
+            viewBox: base.room.viewBox,
+            personH: base.room.personH,
+            styleName: nm(roomNode) + (maskNode && maskNode !== roomNode ? '／' + nm(maskNode) : ''),
+            at: Date.now(),
+        };
+    }
+
     async function deliver(spec, order, onStep, opts) {
         if (!Array.isArray(order) || !order.length) throw new Error('房間裡還沒有東西，先丟幾個包裹進去。');
+        // 設置裡房間選了自訂接口 → 走上面那條（訂單翻譯照舊共用）
+        if (getRoute().mode === 'capi') {
+            const reuse0 = String((opts && opts.layout) || '').trim();
+            let layout0;
+            if (reuse0) { if (onStep) onStep('照上次那份清單重畫…'); layout0 = reuse0; }
+            else { if (onStep) onStep('正在核對這批包裹…'); layout0 = await translateOrder(order); }
+            return _deliverCapi(spec, order, onStep, opts, layout0);
+        }
         const manager = _mgr();
         if (!manager || typeof manager.previewComfyPreset !== 'function') throw new Error('找不到生圖介面。');
         const preset = pickStylePreset();
@@ -407,9 +648,33 @@
             floorStage.forEach(function (p, i) { if (i) mx.lineTo(p[0], p[1]); else mx.moveTo(p[0], p[1]); });
             mx.closePath(); mx.fill();
         }
+        // 🛋 自訂接口畫的房間多一張家具圖（黑＝家具）：乘上去，家具壓著的地方就走不過去
+        let spawn = null;
+        if (room.furnMask && floorStage.length >= 3) {
+            try {
+                mx.globalCompositeOperation = 'multiply';
+                mx.drawImage(await _loadImg(room.furnMask), f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
+                mx.globalCompositeOperation = 'source-over';
+                // 落點：地板正中那一格被家具壓住（床常常就在正中）→ 找最近一塊能走的地方，不然一進門就卡在床裡
+                const SW = 192, SH = Math.max(2, Math.round(SW * H / W));
+                const sc = _scaleCv(mv, SW, SH).getContext('2d').getImageData(0, 0, SW, SH).data;
+                let cx = 0, cy = 0; floorStage.forEach(function (p) { cx += p[0]; cy += p[1]; });
+                cx = cx / floorStage.length * SW / W; cy = cy / floorStage.length * SH / H;
+                let best = null;
+                for (let y = 1; y < SH - 1; y++) for (let x = 1; x < SW - 1; x++) {
+                    let ok = true;   // 連周圍一圈都能走才算，免得落在家具邊上
+                    for (let dy = -1; dy <= 1 && ok; dy++) for (let dx = -1; dx <= 1 && ok; dx++) if (sc[((y + dy) * SW + x + dx) * 4] < 200) ok = false;
+                    if (!ok) continue;
+                    const dd = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+                    if (!best || dd < best.d) best = { d: dd, x: x, y: y };
+                }
+                if (best) spawn = { x: Math.round((best.x + 0.5) * W / SW), y: Math.round((best.y + 0.5) * H / SH) };
+            } catch (e) { mx.globalCompositeOperation = 'source-over'; }
+        }
         return {
             base: cv.toDataURL('image/png'), mask: mv.toDataURL('image/png'),
             floorStage: floorStage, innerStage: innerStage, fit: f, viewBox: vb,
+            spawn: spawn,   // 有家具遮罩時才有：不在家具上的落點
             // 🧍 一個真人在這間房裡、站在舞台座標系下該有多高（房間幾何算出來的；等於 PERSON_PX）
             personPx: (room.personH || 0) * f.s,
             // 🧍 小人實際畫多高：固定值，走到哪一間房都一樣大（RPG 規矩）
@@ -464,6 +729,7 @@
     win.OS_ROOM_GEN = {
         deliver, buildBase, stageLayers, cutout, positionWord, orderMessages, parseLayout, sanitizeCeiling, clusterOrder,
         listStylePresets, getStyleName, setStyleName, pickStylePreset,
+        getRoute, setRoute, listCapiNodes,   // 房間用哪個接口畫（設置的圖片頁）
         // console 調小人大小用：改完重進房間就看得到（決定好再寫回上面那個常數）
         _setFigure: function (px) { const v = parseFloat(px); if (isFinite(v) && v > 20) FIGURE_PX = v; return FIGURE_PX; },
         _cfg: { DENOISE, PROTECT, LONG_SIDE },

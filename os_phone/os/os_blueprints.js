@@ -333,6 +333,7 @@
             image: result.image, layout: result.layout, order: order,
             roomTypeKey: spec.typeKey,
             floor: result.floor, inner4: result.inner4, viewBox: result.viewBox, personH: result.personH,
+            furnMask: result.furnMask || null,   // 家具擋路那張（只有自訂接口畫的房間有）
             styleName: result.styleName, at: result.at,
             blueprint: bp.id,   // 記著這間房套的是哪張藍圖（UI 顯示用）
         });

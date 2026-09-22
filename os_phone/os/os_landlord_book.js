@@ -688,6 +688,7 @@
                 image: result.image, layout: result.layout,
                 roomTypeKey: spec.typeKey,
                 floor: result.floor, inner4: result.inner4, viewBox: result.viewBox, personH: result.personH,
+                furnMask: result.furnMask || null,   // 🚨 這裡是把舊的整份抄過來再蓋，沒寫 null 就會留著上一版的家具位置
                 styleName: result.styleName, at: result.at,
             }));
             bz.done();
