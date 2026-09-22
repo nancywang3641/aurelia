@@ -54,6 +54,7 @@
                     body: JSON.stringify(body), signal: ctrl.signal,
                 });
                 const d = await res.json().catch(() => null);
+                try { win.OS_JEV_USAGE && win.OS_JEV_USAGE.add('memory', d, !!(res.ok && d && d.answers)); } catch (e) {}
                 if (res.ok && d && d.answers) return d;
                 last = (d && d.error && d.error.message) || ('HTTP ' + res.status);
                 if (res.status !== 503 && res.status !== 429 && res.status < 500) break;   // 不是「忙線」那種就別重試

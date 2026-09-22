@@ -65,6 +65,7 @@
             });
         } finally { clearTimeout(timer); }
         const data = await res.json().catch(() => null);
+        try { const U = window.OS_JEV_USAGE || (window.parent && window.parent.OS_JEV_USAGE); if (U) U.add('npc', data, !!(res.ok && data && data.answers)); } catch (e) {}
         if (!res.ok || !data || !data.answers) {
             const msg = (data && data.error && data.error.message) || ('HTTP ' + res.status);
             throw new Error(msg);

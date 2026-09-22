@@ -689,6 +689,8 @@
             this._prewarmAvatars();
             this._deferVoicePrewarm();   // 語音延後：等圖片預熱清空才開跑（圖片優先進顯卡）
             this._startImgGate = true;   // 開場閘門上膛：第一行劇情文本渲染前檢查圖片（卡片/指令不受影響）
+            // 🎭 立繪離場的 Jev 影子比對（os_jev_stage_shadow.js）：只記進 DEBUG 對照，不 await、不改舞台怎麼收立繪
+            try { const _JS = win.OS_JEV_STAGE || window.OS_JEV_STAGE; if (_JS) _JS.compare({ script: this.script.slice(), msgId: this._currentMessageId }); } catch (e) {}
         },
 
         // 語音預熱延後啟動：圖片（頭像/背景/場景/道具）全部清空才放語音佇列進場。
