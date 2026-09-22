@@ -880,7 +880,12 @@
             g.clearRect(0, 0, MAPW, MAPH);
             // 地板外面壓暗：那裡本來就走不過去，不用圈
             g.fillStyle = 'rgba(8,10,14,.45)'; g.fillRect(0, 0, MAPW, MAPH);
-            if (floor.length >= 3) {
+            if (st.floorA) {
+                // GPT 自己標的地板（跟空房算的不一定一樣大）
+                g.save(); g.globalCompositeOperation = 'destination-out';
+                g.drawImage(st.floorA, f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
+                g.restore();
+            } else if (floor.length >= 3) {
                 g.save(); g.globalCompositeOperation = 'destination-out';
                 g.beginPath(); floor.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); g.fill();
                 g.restore();
@@ -895,8 +900,9 @@
                     px[i] = 230; px[i + 1] = 60; px[i + 2] = 60; px[i + 3] = blocked ? 120 : 0;
                 }
                 tg.putImageData(id, 0, 0);
+                if (st.floorA) { tg.globalCompositeOperation = 'destination-in'; tg.drawImage(st.floorA, 0, 0, st.iw, st.ih); }
                 g.save();
-                if (floor.length >= 3) { g.beginPath(); floor.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); g.clip(); }
+                if (!st.floorA && floor.length >= 3) { g.beginPath(); floor.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); g.clip(); }
                 g.drawImage(t, f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
                 g.restore();
             }
@@ -998,6 +1004,18 @@
             st.edit = d.createElement('canvas'); st.edit.width = st.iw; st.edit.height = st.ih;
             const g = st.edit.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, st.iw, st.ih);
             if (room.furnMask) { try { g.drawImage(await _loadImgEl(room.furnMask), 0, 0, st.iw, st.ih); } catch (e) {} }
+            // GPT 標的地板：黑白圖轉成「白＝不透明」，拿來挖壓暗那層、裁紅色那層
+            if (room.floorMask) {
+                try {
+                    const fm = await _loadImgEl(room.floorMask);
+                    const a = d.createElement('canvas'); a.width = st.iw; a.height = st.ih;
+                    const ag = a.getContext('2d'); ag.drawImage(fm, 0, 0, st.iw, st.ih);
+                    const ad = ag.getImageData(0, 0, st.iw, st.ih);
+                    for (let i = 0; i < ad.data.length; i += 4) { ad.data[i + 3] = ad.data[i] >= 128 ? 255 : 0; }
+                    ag.putImageData(ad, 0, 0);
+                    st.floorA = a;
+                } catch (e) {}
+            }
             st.orig = snapshot();
             paint();
         }).catch(function () { tip.textContent = '房間的圖讀不進來，按取消再試一次。'; });
@@ -1117,6 +1135,7 @@
                 floor: result.floor, inner4: result.inner4, viewBox: result.viewBox, personH: result.personH,
                 // 🛋 家具擋路那張：只有自訂接口畫的房間有；ComfyUI 畫的一定要寫 null，不然留著上一版的家具位置
                 furnMask: result.furnMask || null,
+                floorMask: result.floorMask || null,   // GPT 標的地板；沒有就用空房算的，舊的一定要清掉
                 // 「幫我補齊」開著沒：重新生成沿用上次清單不帶這個，就照這間房原本記的
                 fill: (opts && opts.fill != null) ? !!opts.fill : !!(_ctx.room && _ctx.room.fill),
                 styleName: result.styleName, at: result.at,

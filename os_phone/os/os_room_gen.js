@@ -268,7 +268,10 @@
         try { r = JSON.parse(win.localStorage.getItem(K_ROUTE) || '{}') || {}; } catch (e) {}
         // mode：comfy＝原本那套；capi1＝自訂接口只畫房間（家具不擋路，省一半）；capi＝自訂接口畫房間＋量家具
         const mode = (r.mode === 'capi' || r.mode === 'capi1') ? r.mode : 'comfy';
-        return { mode: mode, roomNode: String(r.roomNode || ''), maskNode: String(r.maskNode || '') };
+        // styles＝她自己加的房間畫風（名字＋一段畫風描述），style＝現在選哪一個；沒選＝照圖片設置的底詞
+        const styles = (Array.isArray(r.styles) ? r.styles : []).filter(function (x) { return x && String(x.name || '').trim(); })
+            .map(function (x) { return { name: String(x.name).trim(), prompt: String(x.prompt || '') }; });
+        return { mode: mode, roomNode: String(r.roomNode || ''), maskNode: String(r.maskNode || ''), styles: styles, style: String(r.style || '') };
     }
     function setRoute(patch) {
         const r = Object.assign(getRoute(), patch || {});
@@ -393,16 +396,24 @@
         const moved = _moveCv(paintCv, best.sc, best.m.dx, best.m.dy);
         const w = moved.width, h = moved.height;
         const src = moved.getContext('2d').getImageData(0, 0, w, h).data;
+        // cv＝家具圖（白底、洋紅的地方黑）；floor＝地板圖（綠或洋紅的地方白＝房裡的地面，家具底下也算地面）
         const out = _cv(w, h); const og = out.getContext('2d'); const od = og.createImageData(w, h);
+        const fl = _cv(w, h); const fg = fl.getContext('2d'); const fd = fg.createImageData(w, h);
+        let green = 0;
         for (let i = 0; i < w * h; i++) {
             const r = src[i * 4], gg = src[i * 4 + 1], b = src[i * 4 + 2];
             // 洋紅：紅藍都高、綠低（它塗的洋紅會帶一點陰影，別卡死 #FF00FF）
             const mag = r > 140 && b > 120 && gg < 110 && (r - gg) > 90 && (b - gg) > 70;
+            const grn = gg > 140 && r < 130 && b < 130 && (gg - r) > 70 && (gg - b) > 70;
+            if (grn) green++;
             const v = mag ? 0 : 255;
             od.data[i * 4] = od.data[i * 4 + 1] = od.data[i * 4 + 2] = v; od.data[i * 4 + 3] = 255;
+            const u = (mag || grn) ? 255 : 0;
+            fd.data[i * 4] = fd.data[i * 4 + 1] = fd.data[i * 4 + 2] = u; fd.data[i * 4 + 3] = 255;
         }
         og.putImageData(od, 0, 0);
-        return { cv: out, scale: best.sc, dx: best.m.dx, dy: best.m.dy, hit: best.m.hit };
+        fg.putImageData(fd, 0, 0);
+        return { cv: out, floor: green > w * h * 0.03 ? fl : null, scale: best.sc, dx: best.m.dx, dy: best.m.dy, hit: best.m.hit };
     }
 
     function _gptRoomPrompt(layout, floorWord, style, withFigure) {
@@ -421,11 +432,14 @@
     //   跟房間沒有共同的東西可對，對齊只能拿黑塊的邊去碰房間的邊，常撞到地板木紋停在錯的地方；
     //   而且叫它塗「壓在地上的範圍」，它自己猜腳在哪，比看得到的家具偏下或縮一截。
     //   改成：房間原封不動，只把家具整件塗成洋紅。牆、窗、地板都還在→整張拿來對齊；塗的是看得到的整件家具。
+    // 🚨 09-22 第二次：家具對了，但地板邊界是程式照空房算的——GPT 把後牆畫矮、加窗簾，它畫的地板比空房往後長，
+    //   靠後牆那一條走不過去、床上半截也沒判到。所以地板也交給它標：光禿禿能踩的地板（地毯也算）塗綠。
     function _gptFurniturePrompt() {
-        return 'The attached image is a furnished room seen from above. Return this same picture unchanged — same room, same camera, same size, every wall, window and object in exactly the same place — with only one change: '
-            + 'fill every piece of furniture and every object that stands on the floor with solid flat magenta (#FF00FF), covering its whole visible shape from its top down to where it meets the floor, together with anything sitting on it. '
-            + 'Leave rugs, carpets and mats unpainted, and leave the floor, the walls, the windows and anything hanging on the walls as they are. '
-            + 'The magenta is one flat colour: no shading, no outlines, no texture.';
+        return 'The attached image is a furnished room seen from above. Return this same picture unchanged — same room, same camera, same size, every wall, window and object in exactly the same place — with only two changes. '
+            + 'First, fill every piece of furniture and every object that stands on the floor with solid flat magenta (#FF00FF), covering its whole visible shape from its top down to where it meets the floor, together with anything sitting on it. '
+            + 'Second, fill all the bare floor that a person could step on with solid flat green (#00FF00): the open floor between the furniture, the floor in the doorway, and any rugs, carpets and mats lying on the floor. '
+            + 'Leave the walls, the windows, the tops of the walls, anything hanging on the walls and the black background exactly as they are. '
+            + 'Each colour is one flat colour: no shading, no outlines, no texture.';
     }
 
     // 舞台上她現在那隻小人（換過裝就是換過的樣子）：走路圖取「面向前方、站著」那一格
@@ -506,7 +520,9 @@
         pg.drawImage(baseIm, pr.x, pr.y, pr.w, pr.h);
 
         if (onStep) onStep('正在把東西一件件擺進房間…');
-        const style = String(((_mgr() && _mgr().config && _mgr().config.customApi) || {}).basePrompt || '').trim();
+        // 畫風：選了房間畫風就用它，沒選照圖片設置的底詞
+        const picked = route.styles.find(function (x) { return x.name === route.style; });
+        const style = String(picked ? picked.prompt : (((_mgr() && _mgr().config && _mgr().config.customApi) || {}).basePrompt || '')).trim();
         // 🧍 比例尺：同一張空房，站一隻她現在的小人，大小＝進房間後實際畫的大小。
         //   只給空房的話 GPT 只能照牆高猜家具多大，常常畫太大（床比小人長三倍）；看得到小人它才知道家具該多大。
         //   另外一張送，不直接畫在空房上：畫在上面它會把小人一起畫進房間。
@@ -526,7 +542,7 @@
         const painted = maskData ? _furnitureFromPainted(roomCv, _scaleCv(await _loadImg(maskData), roomCv.width, roomCv.height)) : null;
         const furn = painted ? painted.cv : null;
         // 最近一次的原圖留在記憶體裡（不存檔）：下次又偏，DEBUG 執行框拿得到它塗的那張來看
-        try { win.OS_ROOM_GEN._last = { room: roomData, painted: maskData, align: painted ? { scale: painted.scale, dx: painted.dx, dy: painted.dy, hit: painted.hit } : null }; } catch (e) {}
+        try { win.OS_ROOM_GEN._last = { room: roomData, painted: maskData, floorFound: !!(painted && painted.floor), align: painted ? { scale: painted.scale, dx: painted.dx, dy: painted.dy, hit: painted.hit } : null }; } catch (e) {}
         // 它畫的房間跟送出去的空房差多少：外形框對外形框，寬高各自換算
         const bA = _roomBox(pad), bB0 = _roomBox(roomCv);
         const kx = roomCv.width / OW, ky = roomCv.height / OH;
@@ -544,6 +560,32 @@
         };
         const roomOut = cropTo(roomCv);
         const furnOut = furn ? cropTo(furn) : null;
+        // 地板圖：它標的綠＋洋紅，再補上門口外那一截（照空房算，免得它沒塗到就走不出去）
+        let floorOut = (painted && painted.floor) ? cropTo(painted.floor) : null;
+        if (floorOut) {
+            const k = bw / vb[0];
+            const g = floorOut.getContext('2d');
+            const frontY = Math.max(base.room.inner4[0][1], base.room.inner4[1][1]) * k;
+            g.save(); g.beginPath(); g.rect(0, frontY - 2, bw, bh); g.clip();
+            g.fillStyle = '#fff'; g.beginPath();
+            base.room.floor.forEach(function (p, i) { if (i) g.lineTo(p[0] * k, p[1] * k); else g.moveTo(p[0] * k, p[1] * k); });
+            g.closePath(); g.fill(); g.restore();
+            const d = g.getImageData(0, 0, bw, bh);
+            for (let i = 0; i < d.data.length; i += 4) {
+                const v = (0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2]) >= 128 ? 255 : 0;
+                d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255;
+            }
+            g.putImageData(d, 0, 0);
+            // 它沒照做（標出來的地面連空房地板的一半都不到）→ 不採用，照舊用空房的地板
+            const pc = _cv(bw, bh); const pg = pc.getContext('2d');
+            pg.fillStyle = '#000'; pg.fillRect(0, 0, bw, bh); pg.fillStyle = '#fff'; pg.beginPath();
+            base.room.inner4.forEach(function (p, i) { if (i) pg.lineTo(p[0] * k, p[1] * k); else pg.moveTo(p[0] * k, p[1] * k); });
+            pg.closePath(); pg.fill();
+            const pd = pg.getImageData(0, 0, bw, bh).data;
+            let inPoly = 0, both = 0;
+            for (let i = 0; i < pd.length; i += 4) if (pd[i] > 128) { inPoly++; if (d.data[i] > 128) both++; }
+            if (!inPoly || both / inPoly < 0.5) floorOut = null;
+        }
         // 家具圖二值化：黑＝家具、白＝沒擋（裁出去的邊被補成黑也沒關係，那裡本來就在地板外）
         if (furnOut) {
             const g = furnOut.getContext('2d'); const d = g.getImageData(0, 0, bw, bh);
@@ -558,6 +600,7 @@
         return {
             image: roomOut.toDataURL('image/png'),
             furnMask: furnOut ? furnOut.toDataURL('image/png') : null,
+            floorMask: floorOut ? floorOut.toDataURL('image/png') : null,   // 有它就不用空房算的地板
             layout: layout,
             floor: base.room.floor,
             inner4: base.room.inner4,
@@ -746,7 +789,12 @@
         const mv = doc.createElement('canvas'); mv.width = W; mv.height = H;
         const mx = mv.getContext('2d');
         mx.fillStyle = '#000'; mx.fillRect(0, 0, W, H);
-        if (floorStage.length >= 3) {
+        let floorImg = null;
+        if (room.floorMask) { try { floorImg = await _loadImg(room.floorMask); } catch (e) {} }
+        if (floorImg) {
+            // GPT 自己標的地板（它畫的房間跟空房不一定一樣大，用它的才對得上）
+            mx.drawImage(floorImg, f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
+        } else if (floorStage.length >= 3) {
             mx.fillStyle = '#fff'; mx.beginPath();
             floorStage.forEach(function (p, i) { if (i) mx.lineTo(p[0], p[1]); else mx.moveTo(p[0], p[1]); });
             mx.closePath(); mx.fill();

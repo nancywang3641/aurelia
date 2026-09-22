@@ -323,6 +323,8 @@
 /* 分流表分組（劇情／手機／大廳與世界）的小標 */
 .set-row-group { margin-top: 14px; padding-bottom: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #8a8fa3; }
 .set-row-group:first-child { margin-top: 2px; }
+.set-room-style-btns { display: flex; gap: 6px; margin-top: 6px; }
+.set-room-style-btns .set-btn { flex: 1; justify-content: center; }
 /* 自訂接口的底詞包：下拉＋存成包＋刪，一排；下拉吃剩下的寬 */
 .capi-pack-row { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; }
 .capi-pack-row .set-select { flex: 1; min-width: 0; padding: 8px 10px; }

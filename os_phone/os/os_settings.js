@@ -28,7 +28,8 @@
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '房間畫風', body: '房客的房間整間畫出來時用這個畫風。選好就生效。' },
-            ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次量出家具擋在哪裡，之後小人會被家具擋住、繞過去走。牆和地板照舊由程式算，所以位置是準的。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
+            ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。\n\nComfyUI 畫的房間不看這格，看上面那格。' },
+            ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次讓它把家具和能踩的地板各塗一個顏色，之後小人會被家具擋住、繞過去走，地板照它畫的範圍走。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
             ss_1627: { title: '同步角色來源', body: '開啟後，背景和角色用同一個來源，不用再貼一次帳號。' },
             ss_1652: { title: '背景尺寸', body: '全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。' },
@@ -1656,7 +1657,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         + '<div class="set-label">畫房間用</div>'
                                         + '<select class="set-select" id="img-room-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.roomNode) + '</select>'
                                         + '<div class="set-label">量家具用</div>'
-                                        + '<select class="set-select" id="img-room-mask-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.maskNode) + '</select>';
+                                        + '<select class="set-select" id="img-room-mask-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.maskNode) + '</select>'
+                                        + '<div class="set-label">房間畫風' + ((window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_room_style') : '') + '</div>'
+                                        + '<select class="set-select" id="img-room-style" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + ('<option value=""' + (_r.style ? '' : ' selected') + '>照圖片設置的底詞</option>' + (_r.styles || []).map(x => '<option value="' + _e(x.name) + '"' + (x.name === _r.style ? ' selected' : '') + '>' + _e(x.name) + '</option>').join('')) + '</select>'
+                                        + '<div class="set-room-style-btns">'
+                                        + '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.add()"><i class="fa-solid fa-plus"></i> 新增</button>'
+                                        + '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.edit()"><i class="fa-solid fa-pen"></i> 修改</button>'
+                                        + '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.del()"><i class="fa-solid fa-trash"></i> 刪除</button>'
+                                        + '</div>';
                                 })()}
                             </div>
 
@@ -3551,8 +3559,51 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const _d = (_w.document && _w.document.getElementById('img-room-route')) ? _w.document : document;
             const v = (id) => { const el = _d.getElementById(id); return el ? el.value : ''; };
             const _m = v('img-room-route');
-            _G.setRoute({ mode: (_m === 'capi' || _m === 'capi1') ? _m : 'comfy', roomNode: v('img-room-node'), maskNode: v('img-room-mask-node') });
+            _G.setRoute({ mode: (_m === 'capi' || _m === 'capi1') ? _m : 'comfy', roomNode: v('img-room-node'), maskNode: v('img-room-mask-node'), style: v('img-room-style') });
         };
+        // 🎨 房間畫風（自訂接口畫房間用）：她自己加，一個名字配一段畫風描述
+        window._roomStyleOpts = (r) => {
+            const _e = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            return '<option value=""' + (r.style ? '' : ' selected') + '>照圖片設置的底詞</option>'
+                + (r.styles || []).map(x => '<option value="' + _e(x.name) + '"' + (x.name === r.style ? ' selected' : '') + '>' + _e(x.name) + '</option>').join('');
+        };
+        window._roomStyle = (() => {
+            const G = () => { const _w = window.parent || window; return _w.OS_ROOM_GEN || window.OS_ROOM_GEN; };
+            const sel = () => { const _w = window.parent || window; return (_w.document && _w.document.getElementById('img-room-style')) || document.getElementById('img-room-style'); };
+            const redraw = () => { const s = sel(); if (s && G()) s.innerHTML = window._roomStyleOpts(G().getRoute()); };
+            return {
+                async add() {
+                    if (!G()) return;
+                    const name = String(await AUI.prompt('畫風的名字', '', { title: '新增房間畫風' }) || '').trim();
+                    if (!name) return;
+                    const r = G().getRoute();
+                    if (r.styles.some(x => x.name === name)) { AUI.toastr.warning('已經有叫「' + name + '」的畫風了。'); return; }
+                    const prompt = await AUI.prompt('這個畫風長什麼樣子', '', { title: name, multiline: true });
+                    if (prompt == null) return;
+                    G().setRoute({ styles: r.styles.concat([{ name: name, prompt: String(prompt) }]), style: name });
+                    redraw();
+                },
+                async edit() {
+                    if (!G()) return;
+                    const r = G().getRoute();
+                    const cur = r.styles.find(x => x.name === r.style);
+                    if (!cur) { AUI.toastr.info('先在上面選一個自己加的畫風。'); return; }
+                    const prompt = await AUI.prompt('這個畫風長什麼樣子', cur.prompt, { title: cur.name, multiline: true });
+                    if (prompt == null) return;
+                    G().setRoute({ styles: r.styles.map(x => x.name === cur.name ? { name: x.name, prompt: String(prompt) } : x) });
+                    redraw();
+                },
+                async del() {
+                    if (!G()) return;
+                    const r = G().getRoute();
+                    const cur = r.styles.find(x => x.name === r.style);
+                    if (!cur) { AUI.toastr.info('先在上面選一個自己加的畫風。'); return; }
+                    if (!(await AUI.confirm('刪掉畫風「' + cur.name + '」？', { danger: true }))) return;
+                    G().setRoute({ styles: r.styles.filter(x => x.name !== cur.name), style: '' });
+                    redraw();
+                },
+            };
+        })();
 
         // 🚪 世界門旅人畫風：值＝「接口|預設包key」，選了就存，不用按底部保存（同 🏠 房間畫風的作風）
         window._saveWgSpritePack = (v) => {
