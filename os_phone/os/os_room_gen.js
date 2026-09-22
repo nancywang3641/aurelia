@@ -343,33 +343,24 @@
         const kx = cv.width / MW, ky = cv.height / MH;
         return { x0: x0 * kx, y0: y0 * ky, x1: (x1 + 1) * kx, y1: (y1 + 1) * ky };
     }
-    // 家具圖跟房間圖差多少：兩張都只看「是不是邊」（房間圖只留最明顯的一成五，木紋那些細邊不算），
-    //   家具圖的邊有幾成落在房間圖的邊上。🚨 別拿邊的強弱去算，會被木紋拖著跑（測試頁踩過兩次）。
-    function _edgeHit(roomCv, maskCv, S) {
+    // 塗了洋紅的那張房間 → 對回第一通畫的房間 → 挑出洋紅＝家具（白底、家具黑）
+    //   兩張幾乎是同一張圖，兩邊都只留最明顯的一成五的邊來比（家具輪廓、牆腳、窗框），不比強弱。
+    function _paintedEdgeHit(roomCv, paintCv, S) {
         const gw = 160, gh = Math.max(8, Math.round(160 * roomCv.height / roomCv.width));
-        const gray = function (cv) {
-            const p = _scaleCv(cv, gw, gh).getContext('2d').getImageData(0, 0, gw, gh).data, o = new Float32Array(gw * gh);
-            for (let i = 0; i < gw * gh; i++) o[i] = (0.299 * p[i * 4] + 0.587 * p[i * 4 + 1] + 0.114 * p[i * 4 + 2]) / 255;
-            return o;
-        };
-        const edge = function (g) {
-            const e = new Float32Array(gw * gh);
+        const bin = function (cv) {
+            const p = _scaleCv(cv, gw, gh).getContext('2d').getImageData(0, 0, gw, gh).data, g = new Float32Array(gw * gh), e = new Float32Array(gw * gh);
+            for (let i = 0; i < gw * gh; i++) g[i] = (0.299 * p[i * 4] + 0.587 * p[i * 4 + 1] + 0.114 * p[i * 4 + 2]) / 255;
             for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) { const i = y * gw + x; e[i] = Math.abs(g[i + 1] - g[i - 1]) + Math.abs(g[i + gw] - g[i - gw]); }
-            return e;
+            const cut = Array.from(e).sort(function (a, b) { return a - b; })[Math.floor(e.length * 0.85)] || 0.1;
+            const b = new Uint8Array(e.length); for (let i = 0; i < e.length; i++) b[i] = e[i] > cut ? 1 : 0;
+            return b;
         };
-        const er = edge(gray(roomCv)), em = edge(gray(maskCv));
-        const cut = Array.from(er).sort(function (a, b) { return a - b; })[Math.floor(er.length * 0.85)] || 0.1;
-        const rg = new Uint8Array(er.length);
-        for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) {
-            const i = y * gw + x;
-            rg[i] = (er[i] > cut || er[i - 1] > cut || er[i + 1] > cut || er[i - gw] > cut || er[i + gw] > cut) ? 1 : 0;
-        }
+        const rb = bin(roomCv), pb = bin(paintCv);
+        const rg = new Uint8Array(rb.length);
+        for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) { const i = y * gw + x; rg[i] = (rb[i] | rb[i - 1] | rb[i + 1] | rb[i - gw] | rb[i + gw]) ? 1 : 0; }
         const score = function (dx, dy) {
             let hit = 0, n = 0;
-            for (let y = S; y < gh - S; y++) for (let x = S; x < gw - S; x++) {
-                if (em[y * gw + x] < 0.5) continue;
-                n++; if (rg[(y - dy) * gw + (x - dx)]) hit++;
-            }
+            for (let y = S; y < gh - S; y++) for (let x = S; x < gw - S; x++) { if (!pb[y * gw + x]) continue; n++; if (rg[(y - dy) * gw + (x - dx)]) hit++; }
             return n ? hit / n : 0;
         };
         let best = { dx: 0, dy: 0, s: score(0, 0) };
@@ -377,20 +368,33 @@
         const k = roomCv.width / gw;
         return { dx: Math.round(best.dx * k), dy: Math.round(best.dy * k), hit: best.s };
     }
-    function _moveMask(maskCv, scale, dx, dy) {
-        const c = _cv(maskCv.width, maskCv.height); const g = c.getContext('2d');
-        g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);   // 家具圖的底是白（能走）；挪出去的空邊也當能走，牆由地板那張管
-        const w = maskCv.width * scale, h = maskCv.height * scale;
-        g.drawImage(maskCv, (c.width - w) / 2 - dx, (c.height - h) / 2 - dy, w, h);
+    function _moveCv(cv, scale, dx, dy) {
+        const c = _cv(cv.width, cv.height); const g = c.getContext('2d');
+        g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
+        const w = cv.width * scale, h = cv.height * scale;
+        g.imageSmoothingEnabled = true;
+        g.drawImage(cv, (c.width - w) / 2 - dx, (c.height - h) / 2 - dy, w, h);
         return c;
     }
-    function _alignFurniture(roomCv, maskCv) {
+    function _furnitureFromPainted(roomCv, paintCv) {
         let best = null;
         for (let sc = 0.94; sc <= 1.0601; sc += 0.02) {
-            const m = _edgeHit(roomCv, _moveMask(maskCv, sc, 0, 0), 12);
+            const m = _paintedEdgeHit(roomCv, _moveCv(paintCv, sc, 0, 0), 12);
             if (!best || m.hit > best.m.hit) best = { sc: sc, m: m };
         }
-        return _moveMask(maskCv, best.sc, best.m.dx, best.m.dy);
+        const moved = _moveCv(paintCv, best.sc, best.m.dx, best.m.dy);
+        const w = moved.width, h = moved.height;
+        const src = moved.getContext('2d').getImageData(0, 0, w, h).data;
+        const out = _cv(w, h); const og = out.getContext('2d'); const od = og.createImageData(w, h);
+        for (let i = 0; i < w * h; i++) {
+            const r = src[i * 4], gg = src[i * 4 + 1], b = src[i * 4 + 2];
+            // 洋紅：紅藍都高、綠低（它塗的洋紅會帶一點陰影，別卡死 #FF00FF）
+            const mag = r > 140 && b > 120 && gg < 110 && (r - gg) > 90 && (b - gg) > 70;
+            const v = mag ? 0 : 255;
+            od.data[i * 4] = od.data[i * 4 + 1] = od.data[i * 4 + 2] = v; od.data[i * 4 + 3] = 255;
+        }
+        og.putImageData(od, 0, 0);
+        return { cv: out, scale: best.sc, dx: best.m.dx, dy: best.m.dy, hit: best.m.hit };
     }
 
     function _gptRoomPrompt(layout, floorWord, style, withFigure) {
@@ -405,11 +409,15 @@
             + 'Nothing hangs from the ceiling; everything stands on the floor or is mounted on a wall.'
             + (style ? '\n\n' + style : '');
     }
+    // 🚨 09-22 她實跑兩間都偏：以前叫它另畫一張黑白圖（家具黑、其他白），交回來只剩幾塊黑，
+    //   跟房間沒有共同的東西可對，對齊只能拿黑塊的邊去碰房間的邊，常撞到地板木紋停在錯的地方；
+    //   而且叫它塗「壓在地上的範圍」，它自己猜腳在哪，比看得到的家具偏下或縮一截。
+    //   改成：房間原封不動，只把家具整件塗成洋紅。牆、窗、地板都還在→整張拿來對齊；塗的是看得到的整件家具。
     function _gptFurniturePrompt() {
-        return 'The attached image is a furnished room seen from above. Make a flat black-and-white picture the same size as the attached image. '
-            + 'Paint pure black (#000000) the area each piece of furniture and each object covers on the floor, at exactly the same position and size as in the attached image, so a person could not stand there. '
-            + 'Paint everything else pure white (#ffffff): the empty floor, the walls, the doorway, the background — do not draw the room itself, only the furniture footprints. '
-            + 'Only those two colours: no grey, no shading, no texture, no outlines, no text.';
+        return 'The attached image is a furnished room seen from above. Return this same picture unchanged — same room, same camera, same size, every wall, window and object in exactly the same place — with only one change: '
+            + 'fill every piece of furniture and every object that stands on the floor with solid flat magenta (#FF00FF), covering its whole visible shape from its top down to where it meets the floor, together with anything sitting on it. '
+            + 'Leave rugs, carpets and mats unpainted, and leave the floor, the walls, the windows and anything hanging on the walls as they are. '
+            + 'The magenta is one flat colour: no shading, no outlines, no texture.';
     }
 
     // 舞台上她現在那隻小人（換過裝就是換過的樣子）：走路圖取「面向前方、站著」那一格
@@ -497,7 +505,10 @@
 
         const roomIm = await _loadImg(roomData);
         const roomCv = _scaleCv(roomIm, roomIm.width, roomIm.height);
-        const furn = maskData ? _alignFurniture(roomCv, _scaleCv(await _loadImg(maskData), roomCv.width, roomCv.height)) : null;
+        const painted = maskData ? _furnitureFromPainted(roomCv, _scaleCv(await _loadImg(maskData), roomCv.width, roomCv.height)) : null;
+        const furn = painted ? painted.cv : null;
+        // 最近一次的原圖留在記憶體裡（不存檔）：下次又偏，DEBUG 執行框拿得到它塗的那張來看
+        try { win.OS_ROOM_GEN._last = { room: roomData, painted: maskData, align: painted ? { scale: painted.scale, dx: painted.dx, dy: painted.dy, hit: painted.hit } : null }; } catch (e) {}
         // 它畫的房間跟送出去的空房差多少：外形框對外形框，寬高各自換算
         const bA = _roomBox(pad), bB0 = _roomBox(roomCv);
         const kx = roomCv.width / OW, ky = roomCv.height / OH;
