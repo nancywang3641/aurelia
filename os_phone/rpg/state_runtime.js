@@ -1360,6 +1360,8 @@ ${numberedText}`;
                     const _codes = Array.isArray(json.recall_next) ? json.recall_next : [];
                     const _picked = _codes.map(c => _recallCat.map[String(c).trim().toUpperCase()]).filter(Boolean);
                     win.OS_VECTOR_INJECT.setPendingRecall(_picked);
+                    // 🧠 Jev 影子比對（os_jev_shadow.js）：同一批候選也讓 Jev 排一次，只記進 DEBUG 面板對照，實際送出的仍是上面副模型挑的；不 await，Jev 慢或掛了都不影響這一輪
+                    try { win.OS_JEV_SHADOW?.compare({ map: _recallCat.map, query: lastContent || recentText || '', picked: _codes, msgId: lastId }); } catch (e) {}
                 }
             } catch (e) {}
 
