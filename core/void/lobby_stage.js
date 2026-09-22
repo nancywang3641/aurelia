@@ -1239,7 +1239,6 @@
         go_table: '走到一張桌子旁邊待著',
         go_shelf: '走去書櫃前看書',
         wander: '在店裡隨意走走',
-        stay: '待在原地不動',
         leave: '離開書咖',
     };
     const DEC_LEAVE_AFTER_MS = 5 * 60 * 1000;   // 進店滿五分鐘才把「離開」放進選項，免得一進門就走
@@ -1297,8 +1296,12 @@
         if (r.mood) D.mood = r.mood;
         if (r.talk != null) D.talk = r.talk;
         D.facePlayer = false; D.leaving = false; n.dest = null;
-        const slow = r.source !== 'jev';   // 走副模型的話問慢一點（每一次都是一通正常的模型呼叫）
-        D.waitT = slow ? 20000 + Math.random() * 20000 : 5000 + Math.random() * 7000;
+        // 站多久＝Jev 的「待多久」那題：馬上又想動≈4 秒、待一下子≈15 秒、待很久≈半分鐘，再上下晃兩成免得像節拍器。
+        //   走副模型的話問慢一點（每一次都是一通正常的模型呼叫）
+        const slow = r.source !== 'jev';
+        D.waitT = slow ? 20000 + Math.random() * 20000
+            : r.linger != null ? (4000 + r.linger * 26000) * (0.8 + Math.random() * 0.4)
+            : 5000 + Math.random() * 7000;
         let t = null;
         if (r.action === 'approach_player' && S.player) {
             const p = S.player, ang = Math.atan2(n.y - p.y, n.x - p.x);
