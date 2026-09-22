@@ -11,7 +11,7 @@
 // 為什麼（2026-09-23，見丹的記憶 project_jev_optimization_ideas 4a3）：丹寫的四章考卷（9 個真的離場點）
 //   AI 的第五欄只收對 1 個；「5 段沒開口自動收」0 個對、收錯 32 次；Jev 選段號 9/9、收錯 2 次。
 //   她說這不用影子跑：只是分類，在某個區塊把人拿掉。
-// 花費：一章大約每句台詞一題，每通最多 40 題；市價一章約台幣 0.02 元以下，帳記在 OS_JEV_USAGE。
+// 花費：一章大約每句台詞一題，每通最多 12 題、選項加起來 150 個（太大會被回 503）；市價一章約台幣 0.03 元以下，帳記在 OS_JEV_USAGE。
 // 鑰匙：沿用大廳設置「決策模型鑰匙」（localStorage npc_decide_key）。
 // ----------------------------------------------------------------
 (function () {
@@ -24,8 +24,10 @@
     const LOG_LS = 'jev_stage_log';
     const ON_LS = 'jev_stage_on';
     const LOG_MAX = 20;
-    const Q_PER_CALL = 40;
-    const MAX_CALLS = 8;          // 題目多到要叫超過這麼多通 → 這章不問 Jev，走舊的收法
+    // 🚨 一通塞太多題，Jev 會回 503「暫時無法服務」（看起來像當機，其實是太大）：09-23 實測 40 題×8 選項連兩次被拒、10 題從沒被拒
+    const Q_PER_CALL = 12;
+    const OPT_PER_CALL = 150;     // 一通裡所有題目的選項加起來最多這麼多
+    const MAX_CALLS = 20;         // 題目多到要叫超過這麼多通 → 這章不問 Jev，走舊的收法
     const SEG_MAX = 200;          // 送給 Jev 的每段最多這麼長
     const TXT_MAX = 50;           // 記錄裡每段只留這麼長
     const STAY = '一直都在';
@@ -121,7 +123,7 @@
 
     async function _ask(body) {
         let last = '';
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 4; i++) {
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 30000);
             try {
@@ -138,7 +140,7 @@
             } catch (e) {
                 last = (e && e.name === 'AbortError') ? '逾時' : String((e && e.message) || e);
             } finally { clearTimeout(timer); }
-            await new Promise(r => setTimeout(r, 2500));
+            await new Promise(r => setTimeout(r, 2500 * (i + 1)));
         }
         throw new Error(last || '沒有回應');
     }
@@ -189,7 +191,13 @@
                     const qs = _questions(ss);
                     if (!qs.length) return;
                     const state = { '這一場戲（逐段，P 後面是段號）': ss.map(s => 'P' + s.p + ' ' + (s.who ? s.who + '：「' + _cut(s.text, SEG_MAX) + '」' : '旁白：' + _cut(s.text, SEG_MAX))) };
-                    for (let i = 0; i < qs.length; i += Q_PER_CALL) jobs.push({ state, qs: qs.slice(i, i + Q_PER_CALL) });
+                    let cur = [], opts = 0;
+                    qs.forEach(x => {
+                        const n = Object.keys(x.q.criteria).length;
+                        if (cur.length && (cur.length >= Q_PER_CALL || opts + n > OPT_PER_CALL)) { jobs.push({ state, qs: cur }); cur = []; opts = 0; }
+                        cur.push(x); opts += n;
+                    });
+                    if (cur.length) jobs.push({ state, qs: cur });
                 });
                 if (jobs.length > MAX_CALLS) throw new Error('題目太多（要叫 ' + jobs.length + ' 通），這章走舊的收法');
                 const removals = [];
