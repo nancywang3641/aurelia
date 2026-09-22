@@ -108,7 +108,8 @@
         if (!zone) return;
         SN_RESIDENTS.filter(r => Array.isArray(r.scenes) && r.scenes.includes(S.scene)).forEach(r => {
             // 🎲 書咖的丹＝自己決定下一步（npc_decide.js）；試跑期間只有他一個，開著時每次都在，方便看
-            const decider = r.key === 'dan' && S.scene === 'cafe' && !!(window.NPC_DECIDE && window.NPC_DECIDE.isOn());
+            //    🚨 看開關本身，不看 NPC_DECIDE 載好沒：大廳可能比 npc_decide.js 先建出來（酒館走網路拉檔時），那時問模組會是 false
+            const decider = r.key === 'dan' && S.scene === 'cafe' && _b.decOn();
             if (!decider && Math.random() >= r.chance) return;
             const x = zone.x + Math.random() * zone.w;
             const y = zone.y + Math.random() * zone.h;

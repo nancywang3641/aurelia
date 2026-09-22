@@ -1195,7 +1195,7 @@
                 }
                 placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return;
             }
-            if (n.decider && window.NPC_DECIDE && window.NPC_DECIDE.isOn()) { _deciderStep(n, dt); return; }   // 🎲 自己決定下一步的 NPC（npc_decide.js）
+            if (n.decider && _decOn()) { _deciderStep(n, dt); return; }   // 🎲 自己決定下一步的 NPC（npc_decide.js）
             if (n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
             n.wanderT -= dt;
             if (n.wanderT <= 0 && !n.dest) {
@@ -1243,6 +1243,8 @@
         leave: '離開書咖',
     };
     const DEC_LEAVE_AFTER_MS = 5 * 60 * 1000;   // 進店滿五分鐘才把「離開」放進選項，免得一進門就走
+    // 開關直接讀存檔（跟 npc_decide.js 的 isOn 同一格），不等那支檔載好：大廳可能比它先建出來
+    function _decOn() { try { return localStorage.getItem('npc_decide_on') !== '0'; } catch (e) { return true; } }
     function _decObjs(word) {
         return ((CFG && CFG.layout) || []).filter(o => o && o.file && o.file.indexOf(word) >= 0 && !o.plot && !o.plotFrame);
     }
@@ -1313,7 +1315,59 @@
             const dr = CFG.doors[0];
             t = { x: dr.x + dr.w / 2, y: dr.y + dr.h / 2 }; D.leaving = true;
         }
-        if (t) { n.dest = t; D.walkT = 0; }
+        if (t) {
+            D.goal = t; D.replans = 0;
+            D.path = _decPath(n, t);
+            n.dest = D.path.shift() || null; D.walkT = 0;
+        }
+    }
+    // 找路：直直走會被桌椅擋住就放棄，所以先在 16px 的格子上找一條走得通的路，
+    //   再把路上「直線看得到」的點省掉，只留轉彎處。目的地走不到就停在找得到的最近那格。
+    function _decPath(n, t) {
+        const C = 16, W = Math.ceil(MAP_W / C), H = Math.ceil(MAP_H / C);
+        const sx = Math.round(n.x / C), sy = Math.round(n.y / C);
+        const tx = Math.round(t.x / C), ty = Math.round(t.y / C);
+        const inMap = (cx, cy) => cx >= 0 && cy >= 0 && cx < W && cy < H;
+        const free = new Int8Array(W * H);   // 0=還沒量 1=能走 2=擋住
+        const ok = (cx, cy) => {
+            const i = cy * W + cx;
+            if (!free[i]) free[i] = blocked(cx * C, cy * C, n.hw) ? 2 : 1;
+            return free[i] === 1;
+        };
+        const prev = new Int32Array(W * H).fill(-1);
+        const start = sy * W + sx;
+        if (!inMap(sx, sy) || !inMap(tx, ty)) return [t];
+        prev[start] = start;
+        const q = [start];
+        let best = start, bestD = Infinity;
+        const NB = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+        for (let h = 0; h < q.length; h++) {
+            const i = q[h], cx = i % W, cy = (i - cx) / W;
+            const dd = Math.abs(cx - tx) + Math.abs(cy - ty);
+            if (dd < bestD) { bestD = dd; best = i; }
+            if (dd === 0) break;
+            for (const [dx, dy] of NB) {
+                const nx = cx + dx, ny = cy + dy;
+                if (!inMap(nx, ny)) continue;
+                const j = ny * W + nx;
+                if (prev[j] !== -1 || !ok(nx, ny)) continue;
+                if (dx && dy && !(ok(cx + dx, cy) && ok(cx, cy + dy))) continue;   // 斜著走不准擦過桌角
+                prev[j] = i; q.push(j);
+            }
+        }
+        const cells = [];
+        for (let i = best; i !== start; i = prev[i]) cells.push(i);
+        cells.reverse();
+        const pts = cells.map(i => ({ x: (i % W) * C, y: Math.floor(i / W) * C }));
+        if (best === ty * W + tx) pts[pts.length - 1] = { x: t.x, y: t.y };   // 走得到就停在真正的目的地
+        const out = [];
+        let from = { x: n.x, y: n.y }, k = 0;
+        while (k < pts.length) {
+            let far = k;
+            for (let m = pts.length - 1; m > k; m--) { if (!blockedPath(from.x, from.y, pts[m].x, pts[m].y, n.hw)) { far = m; break; } }
+            out.push(pts[far]); from = pts[far]; k = far + 1;
+        }
+        return out;
     }
     function _decAsk(n, D) {
         D.busy = true;
@@ -1329,11 +1383,17 @@
         const f = S.followers.indexOf(n); if (f >= 0) S.followers.splice(f, 1);
     }
     function _deciderStep(n, dt) {
+        if (!n._dec) {
+            // 客人是在出沒框裡隨機刷的，框角會超出店的可走範圍（書咖右下角就是牆外）；站著的客人看不出來，
+            // 要走路的一出生卡在牆外，每一步都被擋 → 先挪回最近的地板
+            if (blocked(n.x, n.y, n.hw)) { const sp = findFreeSpot(n.x, n.y); n.x = sp.x; n.y = sp.y; }
+        }
         const D = n._dec || (n._dec = { waitT: 2500 + Math.random() * 2500, bornAt: Date.now(), busy: false });
         if (n.dest) {
             const vx = n.dest.x - n.x, vy = n.dest.y - n.y, d = Math.hypot(vx, vy);
             D.walkT = (D.walkT || 0) + dt;
-            const moved = d >= 6 && D.walkT < 15000 && _slideMove(n, vx / d, vy / d, Math.min(d, 0.12 * dt));
+            if (D.path && D.path.length && (d < 6 || (d < 14 && !blockedPath(n.x, n.y, D.path[0].x, D.path[0].y, n.hw)))) { n.dest = D.path.shift(); placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }   // 到了轉彎處，換下一段
+            const moved = d >= 6 && D.walkT < 25000 && _slideMove(n, vx / d, vy / d, Math.min(d, 0.12 * dt));
             if (moved) {
                 n.walking = true;
                 if (n.sheet) {
@@ -1341,8 +1401,12 @@
                     n.animT = (n.animT || 0) + dt;
                     n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
                 } else if (vx) n.flip = vx > 0;
-            } else {   // 到了，或卡住走不過去（15 秒還沒到也算），就地停下
-                n.dest = null; n.walking = false;
+            } else if (d >= 6 && D.goal && (D.replans || 0) < 2 && D.walkT < 25000) {   // 半路被桌角卡住：從現在的位置重找一次路
+                D.replans = (D.replans || 0) + 1;
+                D.path = _decPath(n, D.goal);
+                n.dest = D.path.shift() || null;
+            } else {   // 到了，或重找兩次還是卡住（25 秒還沒到也算），就地停下
+                n.dest = null; n.walking = false; D.path = null;
                 if (n.sheet) { n.frame = 1; n.animT = 0; }
                 if (D.leaving && S.talkTarget !== n) { _decRemove(n); return; }
             }
@@ -1354,7 +1418,7 @@
                 else if (vx) n.flip = vx > 0;
             }
             D.waitT -= dt;
-            if (D.waitT <= 0 && !D.busy && !document.hidden) _decAsk(n, D);
+            if (D.waitT <= 0 && !D.busy && !document.hidden && window.NPC_DECIDE) _decAsk(n, D);   // 還沒載好就先站著，載好下一幀就問
         }
         placeActor(n); placeNpcExtras(n); _npcNearCheck(n);
     }
@@ -2782,7 +2846,7 @@
             placeObj, spawnObjEl: _spawnObjEl, footRect,
             rebuildBlocks, loadMask, applyActorScale, fitCamera,
             setPlot, plotOccupied: _plotOccupied,   // 🏘 地塊切換（編輯器「蓋房/空地」鈕）
-            // 給 lobby_npcs.js（NPC 生成/名冊）：素材表/生NPC/碰撞判定/站位開闊度採樣
+            decOn: _decOn,                          // 🎲 給 lobby_npcs.js：書咖的丹要不要自己決定下一步            // 給 lobby_npcs.js（NPC 生成/名冊）：素材表/生NPC/碰撞判定/站位開闊度採樣
             ASSET, addNpc, blocked, whiteRatio: _whiteRatio,
             startTalk,   // 給 os_worldgate.js（旅人偶遇窗「隨便聊聊」退回自由對話軌道）
         },
