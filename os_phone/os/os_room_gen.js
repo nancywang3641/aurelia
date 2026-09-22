@@ -111,11 +111,13 @@
     }
 
     // ── 訂單 → 副模型 messages：只准翻譯，不准自己加減物件、不准改位置 ──
-    function orderMessages(order) {
+    // fill＝她開了「幫我補齊」：訂單上的照翻，另外可以把過日子缺的東西補上（09-22 她：「用戶只填一部分家具，剩下的生活功能…AI可以自行補充豐富度」）
+    function orderMessages(order, fill) {
         const sys = [
             '你是房間布置提示詞翻譯器。玩家已經親手決定了每件東西要放在房間的哪個位置，你的工作只是把這份訂單翻成一條英文生圖提示詞。',
             '硬性規則：',
-            '一、只能翻譯訂單上有的東西，不准自己增加、刪除或合併任何一件，件數必須跟訂單一模一樣。',
+            fill ? '一、訂單上的每一件都要翻，不准刪除或合併任何一件；訂單以外要補哪些東西，照最後那段的交代。'
+                 : '一、只能翻譯訂單上有的東西，不准自己增加、刪除或合併任何一件，件數必須跟訂單一模一樣。',
             '二、每件東西的位置以訂單給的為準，不准更動、不准重新安排。',
             '三、這是固定俯視角的房間布置，鏡頭只能由上往下看。牆面物件、壁掛物件、靠牆物件全部允許。',
             '四、唯獨附著於天花板、位於天花板平面，或從天花板向下垂落的元素一律不准出現；照明只能用立燈、壁燈、桌燈這類不碰天花板的燈具。',
@@ -124,7 +126,13 @@
             '輸出骨架只能理解為：<位置> <該件東西的英文名稱與必要細節>，各件之間用英文逗號分隔。',
             '角括號是結構佔位說明，正式輸出時要換成實際英文內容，不可保留角括號或方括號。',
             '不要解釋、不要 markdown、不要給替代版本。只輸出 <room-layout>...</room-layout>。',
-        ].join('\n');
+        ].concat(fill ? [
+            '',
+            '這次玩家另外交代：訂單只寫了玩家在意的幾件，其餘交給你補齊，讓這間房看起來真的有人住。',
+            '依照訂單已有的東西推想這是什麼樣的房間、住的是什麼樣的人，把日常生活少不了但訂單沒寫到的家具與用品補上。訂單上那幾件的位置照舊不動。',
+            '補的東西放在訂單沒佔用的地方，靠牆或跟用途相關的東西擺在一起；地板中間要留出能走動的空間，不要塞滿。補的每一件也用同一種骨架寫：<位置> <英文名稱與必要細節>。',
+            '補的東西同樣不准附著於天花板，也不准加入人物。',
+        ] : []).join('\n');
         const body = clusterOrder(order).map(function (g) {
             const pos = positionWord(g.x, g.y);   // 整群用重心定位，不會被格線切開
             const line = g.items.map(function (it) {
@@ -136,7 +144,7 @@
         }).join('\n');
         return [
             { role: 'system', content: sys },
-            { role: 'user', content: '訂單（共 ' + order.length + ' 件，位置在前、東西在後）：\n' + body + '\n\n請照這份訂單輸出 <room-layout>。' },
+            { role: 'user', content: '訂單（共 ' + order.length + ' 件，位置在前、東西在後）：\n' + body + '\n\n' + (fill ? '請照這份訂單輸出 <room-layout>，並把生活需要但訂單沒寫的東西補齊。' : '請照這份訂單輸出 <room-layout>。') },
         ];
     }
 
@@ -166,7 +174,7 @@
         return layout;
     }
 
-    function translateOrder(order) {
+    function translateOrder(order, fill) {
         return new Promise(function (resolve, reject) {
             const api = _api();
             if (!api || typeof api.chatSecondary !== 'function') { reject(new Error('副模型還沒接好，沒辦法整理訂單。')); return; }
@@ -174,7 +182,7 @@
             const finish = function (fn, v) { if (!done) { done = true; clearTimeout(timer); fn(v); } };
             const timer = setTimeout(function () { finish(reject, new Error('整理訂單等太久了，再按一次配送就好。')); }, 60000);
             try {
-                api.chatSecondary(orderMessages(order), null,
+                api.chatSecondary(orderMessages(order, fill), null,
                     function (text) {
                         try { finish(resolve, parseLayout(text)); }
                         catch (e) { finish(reject, e); }
@@ -475,6 +483,16 @@
         const tallSpec = Object.assign({}, spec, { tallWalls: true });
         if (onStep) onStep('正在準備空房…');
         const base = await buildBase(tallSpec);
+        // 🧍 小人大小照矮牆那間算，不照高牆鏡頭算（09-22 她：「家具還是很大」）
+        //   高牆的鏡頭幾乎正上往下看，站著的人被壓得很扁：照它算，小人只有 0.52 公尺地板寬，
+        //   她調小人大小時用的 ComfyUI 房間是 1.1 公尺。換算成「小人對地板」跟矮牆那間一樣的比例。
+        try {
+            const low = S.makeRoom(spec);
+            const midW = function (q) { return ((q[1][0] - q[0][0]) + (q[2][0] - q[3][0])) / 2; };
+            if (low && low.inner4 && base.room.inner4 && low.personH > 0) {
+                base.room.personH = low.personH * midW(base.room.inner4) / midW(low.inner4);
+            }
+        } catch (e) {}
         const bw = base.width, bh = base.height, vb = base.room.viewBox;
         const r = bw / bh;
         const size = r > 1.2 ? '1536x1024' : (r < 0.83 ? '1024x1536' : '1024x1024');
@@ -557,7 +575,7 @@
             const reuse0 = String((opts && opts.layout) || '').trim();
             let layout0;
             if (reuse0) { if (onStep) onStep('照上次那份清單重畫…'); layout0 = reuse0; }
-            else { if (onStep) onStep('正在核對這批包裹…'); layout0 = await translateOrder(order); }
+            else { if (onStep) onStep('正在核對這批包裹…'); layout0 = await translateOrder(order, !!(opts && opts.fill)); }
             return _deliverCapi(spec, order, onStep, opts, layout0);
         }
         const manager = _mgr();
@@ -572,7 +590,7 @@
             layout = reuse;
         } else {
             if (onStep) onStep('正在核對這批包裹…');
-            layout = await translateOrder(order);
+            layout = await translateOrder(order, !!(opts && opts.fill));
         }
 
         if (onStep) onStep('正在準備空房…');

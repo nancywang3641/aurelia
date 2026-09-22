@@ -65,6 +65,8 @@
             '.llr-area{min-height:64px;resize:vertical}',
             '.llr-card-bar{display:flex;gap:8px;margin-top:12px}',
             '.llr-card-bar .llr-btn{flex:1;justify-content:center}',
+            '.llr-fill{display:flex;align-items:center;gap:2px}',
+            '.llr-fill .aui-help{background:none;border:0;color:#cdbf9f;padding:4px;font-size:15px;cursor:pointer}',
             '.llr-danger{border-color:#5a3038;color:#e0a0a8}',
             // 樓層清單：一層一顆，會換行
             '.llr-floors{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}',
@@ -722,14 +724,32 @@
         const cancel = _btn('fa-solid fa-xmark', '取消');
         const add = _btn('fa-solid fa-plus', '添加包裹');
         const ship = _btn('fa-solid fa-truck-fast', '配送', 'is-go');
-        bar.appendChild(cancel); bar.appendChild(add);
+        // ✨ 幫我補齊：她只放在意的幾件，其他過日子要的東西交給 AI 補（09-22 她要的）；記在這間房，下次打開還是同一個樣子
+        _ctx.fill = !!(_ctx.room && _ctx.room.fill);
+        const fill = _btn('fa-solid fa-wand-magic-sparkles', '幫我補齊');
+        fill.classList.toggle('is-on', _ctx.fill);
+        fill.setAttribute('aria-pressed', _ctx.fill ? 'true' : 'false');
+        fill.onclick = function () {
+            _ctx.fill = !_ctx.fill;
+            fill.classList.toggle('is-on', _ctx.fill);
+            fill.setAttribute('aria-pressed', _ctx.fill ? 'true' : 'false');
+        };
+        const fillWrap = d.createElement('span'); fillWrap.className = 'llr-fill';
+        fillWrap.appendChild(fill);
+        try {
+            if (win.AUI && win.AUI.registerHelp) {
+                win.AUI.registerHelp({ llr_fill: { title: '幫我補齊', body: '打開以後，房間裡除了你放的包裹，還會多出過日子用得到的東西。\n\n你放的包裹一件都不會少，位置也照你擺的。AI 會看你放了什麼，猜這是什麼樣的房間，把缺的家具和用品補在空著的地方，中間會留路給你走。\n\n關著的時候只畫你放的包裹。\n\n按「配送」才會照這個開關畫；「重新生成」會用上一次的清單，不會重新補。' } });
+                fillWrap.insertAdjacentHTML('beforeend', win.AUI.helpBtn('llr_fill'));
+            }
+        } catch (e) {}
+        bar.appendChild(cancel); bar.appendChild(add); bar.appendChild(fillWrap);
         // 已經布置過才給「清空」：把房間退回空屋(不燒生圖)。沒布置過的房本來就是空的,不用這顆。
         const wipe = (_ctx.room && _ctx.room.order && _ctx.room.order.length) ? _btn('fa-solid fa-broom', '清空', 'llr-danger') : null;
         if (wipe) bar.appendChild(wipe);
         bar.appendChild(ship);
         root.appendChild(bar);
 
-        _ctx.deco = { root: root, world: world, layer: layer, tip: tip, bar: bar, btns: [cancel, add, ship].concat(wipe ? [wipe] : []) };
+        _ctx.deco = { root: root, world: world, layer: layer, tip: tip, bar: bar, btns: [cancel, add, fill, ship].concat(wipe ? [wipe] : []) };
 
         function say(msg) {
             tip.textContent = msg || (_ctx.items.length
@@ -1097,6 +1117,8 @@
                 floor: result.floor, inner4: result.inner4, viewBox: result.viewBox, personH: result.personH,
                 // 🛋 家具擋路那張：只有自訂接口畫的房間有；ComfyUI 畫的一定要寫 null，不然留著上一版的家具位置
                 furnMask: result.furnMask || null,
+                // 「幫我補齊」開著沒：重新生成沿用上次清單不帶這個，就照這間房原本記的
+                fill: (opts && opts.fill != null) ? !!opts.fill : !!(_ctx.room && _ctx.room.fill),
                 styleName: result.styleName, at: result.at,
             });
             _endDeco();
@@ -1121,7 +1143,7 @@
         dc.btns.forEach(function (b) { b.disabled = true; });
         const order = items.map(function (it) { return { name: it.name, content: it.content, x: it.x, y: it.y, tags: (it.tags || []).slice() }; });
         try {
-            await _runDeliver(order, dc.root, null);
+            await _runDeliver(order, dc.root, { fill: !!_ctx.fill });
         } catch (e) {
             dc.btns.forEach(function (b) { b.disabled = false; });
             say((e && e.message) || '這次沒送成，再按一次配送就好。');
