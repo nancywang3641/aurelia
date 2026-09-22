@@ -19,6 +19,7 @@
     const APP_ID = 'mc_status';
     const INJECT_ID = 'aurelia_mc_status';
     const MAX_BUFF_AGE = 20;     // 效果最多活這麼多回合，防模型忘了寫 0 賴著不走
+    const REVIVE_BLOCK = 8;      // 效果到期後這麼多回合內，AI 又寫回同一個（或換說法的同一個）不收——防它從聊天紀錄抄回來復活
     const UPCOMING_DAYS = 7;     // 注入「近期約定」看幾天內
     const SNAP_MAX = 40;         // 快照留最近幾則
 
@@ -42,7 +43,7 @@
         } catch (e) { return ''; }
     }
 
-    function blank() { return { date: null, time: '', hp: '', name: '', buffs: [], events: [], snaps: {}, snapOrder: [] }; }
+    function blank() { return { date: null, time: '', hp: '', name: '', buffs: [], events: [], snaps: {}, snapOrder: [], turn: 0, expired: [] }; }
 
     async function load() {
         const cid = getChatId();
@@ -55,6 +56,8 @@
         if (!Array.isArray(_cache.events)) _cache.events = [];
         if (!_cache.snaps || typeof _cache.snaps !== 'object') _cache.snaps = {};
         if (!Array.isArray(_cache.snapOrder)) _cache.snapOrder = Object.keys(_cache.snaps);
+        if (!Array.isArray(_cache.expired)) _cache.expired = [];
+        if (!(_cache.turn >= 0)) _cache.turn = 0;
         delete _cache.seen;   // 舊版欄位
         _cacheChat = cid;
         return _cache;
@@ -128,13 +131,15 @@
     function snapshotOf(st) {
         return JSON.parse(JSON.stringify({
             date: st.date, time: st.time, hp: st.hp, name: st.name,
-            buffs: st.buffs,
+            buffs: st.buffs, turn: st.turn | 0, expired: st.expired || [],
             events: st.events.filter(e => e.src !== 'me'),   // 她手動記的不進快照、也不被回朔
         }));
     }
     function restoreSnapshot(st, snap) {
         st.date = snap.date || null; st.time = snap.time || ''; st.hp = snap.hp || ''; st.name = snap.name || '';
         st.buffs = JSON.parse(JSON.stringify(snap.buffs || []));
+        st.turn = snap.turn | 0;
+        st.expired = JSON.parse(JSON.stringify(snap.expired || []));
         const mine = st.events.filter(e => e.src === 'me');
         st.events = JSON.parse(JSON.stringify(snap.events || [])).concat(mine);
         st.events.sort((a, b) => dateKey(a.date) - dateKey(b.date));
@@ -160,7 +165,11 @@
             st.snaps[id] = snapshotOf(st);
             st.snapOrder.push(id);
             if (st.snapOrder.length > SNAP_MAX) { const old = st.snapOrder.shift(); delete st.snaps[old]; }
+            st.turn = (st.turn | 0) + 1;
             st.buffs.forEach(b => { b.left = (b.left | 0) - 1; b.age = (b.age | 0) + 1; });
+            // 剛到期的記下來：AI 前幾回合自己寫過它，聊天紀錄裡還看得到，下一回合常又抄回來 → 在「死了又復活」那關擋
+            st.buffs.filter(b => !(b.left > 0 && b.age <= MAX_BUFF_AGE)).forEach(b => st.expired.push({ name: b.name, turn: st.turn }));
+            st.expired = st.expired.filter(e => st.turn - (e.turn | 0) <= REVIVE_BLOCK).slice(-30);
             st.buffs = st.buffs.filter(b => b.left > 0 && b.age <= MAX_BUFF_AGE);
             await save();
             return st;
@@ -212,14 +221,27 @@
     function setHp(v) {
         return run(async () => { const st = await load(); st.hp = String(v || '').trim(); await save(); });
     }
+    // 🍬 效果「像口香糖黏著」（她 09-06、09-23 都講過）：狀態欄每回合是 AI 整份重寫，程式又把「宿醉（剩 2 回合）」
+    //   注入回去給它看 → 它照抄、常把剩餘回合寫回原本的數字 → 倒數一直被充值；到期拿掉後它又從聊天紀錄抄回來 → 復活；
+    //   名字稍微換個說法（宿醉→宿醉頭痛）就被當成新的，從零算。
+    //   規則：AI 只能讓剩餘回合變少或拿掉，不能充值；同一個效果換說法算同一個；剛到期的 REVIVE_BLOCK 回合內 AI 寫回來不收。
+    //   🔴 代價：劇情裡真的又喝醉、傷口裂開，這幾回合內也加不回去（之後要讓 Jev 判「這回合正文真的讓它加重了嗎」才放行）。
+    function _sameBuff(a, b) {
+        a = String(a || '').trim(); b = String(b || '').trim();
+        if (!a || !b) return false;
+        if (a === b) return true;
+        return (a.length >= 2 && b.indexOf(a) >= 0) || (b.length >= 2 && a.indexOf(b) >= 0);
+    }
+    function _findBuff(st, name) { return st.buffs.find(b => _sameBuff(b.name, name)) || null; }
+    function _justExpired(st, name) { return (st.expired || []).some(e => _sameBuff(e.name, name) && (st.turn | 0) - (e.turn | 0) <= REVIVE_BLOCK); }
     function applyBuff(st, name, rounds, total) {
         name = String(name || '').trim();
         if (!name) return;
         const n = (rounds == null || rounds === '') ? 3 : parseInt(String(rounds).replace(/[^\d\-]/g, ''), 10);
-        const i = st.buffs.findIndex(b => b.name === name);
-        if (!(n > 0)) { if (i >= 0) st.buffs.splice(i, 1); }
-        else if (i >= 0) { st.buffs[i].left = n; st.buffs[i].total = Math.max(st.buffs[i].total | 0, total || n); st.buffs[i].age = 0; }
-        else st.buffs.push({ name: name, left: n, total: total || n, age: 0 });
+        const old = _findBuff(st, name);
+        if (!(n > 0)) { if (old) st.buffs.splice(st.buffs.indexOf(old), 1); }
+        else if (old) { old.left = Math.min(n, old.left | 0); old.total = Math.max(old.total | 0, total || n); }   // 只准變少，不重設年齡
+        else if (!_justExpired(st, name)) st.buffs.push({ name: name, left: n, total: total || n, age: 0 });
     }
     function setBuff(name, rounds) {
         return run(async () => { const st = await load(); applyBuff(st, name, rounds); await save(); });
@@ -293,8 +315,13 @@
                     const left = m ? parseInt(m[2], 10) : 3;
                     const total = m && m[3] ? parseInt(m[3], 10) : left;
                     if (!name || !(left > 0)) return;
-                    const old = st.buffs.find(b => b.name === name);
-                    next.push({ name: name, left: left, total: Math.max(total, left), age: old ? (old.age | 0) : 0 });
+                    const old = _findBuff(st, name);
+                    if (old) {   // 已經有的：只准變少（AI 抄回原本的數字＝不理），名字沿用原本那個，免得換說法變兩條
+                        if (next.some(b => b.name === old.name)) return;
+                        next.push({ name: old.name, left: Math.min(left, old.left | 0), total: Math.max(old.total | 0, total), age: old.age | 0 });
+                    } else if (!_justExpired(st, name)) {
+                        next.push({ name: name, left: left, total: Math.max(total, left), age: 0 });
+                    }
                 });
                 st.buffs = next;
                 touched = true;
