@@ -63,7 +63,12 @@
         // spec: { w, d, wallH, floor, window } → { svg, floor:[[x,y]x4], viewBox:[w,h] }
         function makeRoom(spec) {
             var w = spec.w, d = spec.d;
-            var WALLH = spec.noWallCap ? Math.max(0.45, spec.wallH == null ? 0.68 : spec.wallH)
+            // 🧱 spec.tallWalls＝給 GPT 那種接口用的空房（她 2026-09-22 定的）：牆拉到正常樓高、相機拉高拉遠。
+            //   矮牆是為了 ComfyUI（它照牆高決定家具多大），GPT 沒這毛病；反而矮牆在畫面上只剩一條往內斜的邊，
+            //   GPT 會把那條斜邊讀成牆頂、把房間畫歪。只有前面那道牆照舊切矮留門口。ComfyUI 那條絕不可以帶這個。
+            var TALL = !!spec.tallWalls;
+            var WALLH = TALL ? (spec.tallWallH || 2.2)
+                : spec.noWallCap ? Math.max(0.45, spec.wallH == null ? 0.68 : spec.wallH)
                 : Math.min(WALL_MAX, spec.wallH == null ? 0.68 : spec.wallH);
             var FL = FLOORS[spec.floor] || FLOORS.oak;
             var hasWin = spec.window !== false;
@@ -72,6 +77,8 @@
             //   舊版是「左矮牆＋中央柱＋右矮牆」＝兩個門口夾一根柱子,看起來像牆中間卡了一塊,已改回單一門口。
             var FOC = 7.0, SC = 150, FRONTH = 0.20, E = 0.16, DOORW = 1.04;
             var CAMH = 4.2, CAMZ = -3.2, CTRY = 0.2;
+            // 高牆版：相機拉高拉遠（透視變弱＝左右牆接近直的），投影變小就把 SC 同比例放大回來
+            if (TALL) { CAMH = 18; CAMZ = -5.5; CTRY = 0.3; SC = 150 * 2.6; }
             var Cam = [0, CAMH, CAMZ], Ctr = [0, CTRY, d / 2];
             var fwd = _v3nrm(_v3sub(Ctr, Cam));
             var right = _v3nrm(_v3cross([0, 1, 0], fwd));
