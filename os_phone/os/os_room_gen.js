@@ -292,7 +292,7 @@
         for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
         return new Blob([arr], { type: m[1] });
     }
-    async function _capiEdit(node, prompt, refDataUrl, size) {
+    async function _capiEdit(node, prompt, refDataUrls, size) {
         if (!node || !node.url) throw new Error('房間用的自訂接口還沒填網址，先到設置的圖片頁填好。');
         try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: 'room' }); } catch (e) {}
         const b = String(node.url).trim().replace(/\/+$/, '');
@@ -306,7 +306,7 @@
             const q = String(((_mgr() && _mgr().config && _mgr().config.customApi) || {}).quality || 'medium').toLowerCase();
             fd.append('quality', (q === 'low' || q === 'high') ? q : 'medium');
         }
-        fd.append('image[]', _dataUrlToBlob(refDataUrl), 'ref.png');
+        [].concat(refDataUrls).forEach(function (u, i) { fd.append('image[]', _dataUrlToBlob(u), 'ref' + (i + 1) + '.png'); });
         const headers = {};
         if (node.apiKey) headers.Authorization = 'Bearer ' + String(node.apiKey).trim();
         const resp = await fetch(url, { method: 'POST', headers: headers, body: fd });
@@ -393,9 +393,14 @@
         return _moveMask(maskCv, best.sc, best.m.dx, best.m.dy);
     }
 
-    function _gptRoomPrompt(layout, floorWord, style) {
-        return 'The attached image is an empty room seen from above at a slightly tilted camera: the floor, the back wall, the two side walls, and a low front wall with a doorway in the middle. '
-            + 'Draw that same room furnished. Keep the walls, the floor outline, the doorway, the camera angle and the proportions as in the attached image, and keep the room at the same size and position with the same empty black margin around it. '
+    function _gptRoomPrompt(layout, floorWord, style, withFigure) {
+        return 'The ' + (withFigure ? 'first ' : '') + 'attached image is an empty room seen from above at a slightly tilted camera: the floor, the back wall, the two side walls, and a low front wall with a doorway in the middle. '
+            + 'Draw that same room furnished. Keep the walls, the floor outline, the doorway, the camera angle and the proportions as in the ' + (withFigure ? 'first ' : '') + 'attached image, and keep the room at the same size and position with the same empty black margin around it. '
+            + (withFigure
+                ? 'The second attached image is the same empty room with one small character standing on the floor. That character is the person who will walk around this room, shown at exactly the size it will appear in it. '
+                  + 'Use it only as a size reference: make every piece of furniture and every object as big as it would be next to that character in real life, so the character could lie on the bed, sit on the chairs and reach the tables. '
+                  + 'Do not draw the character or any other person in the result. '
+                : '')
             + 'Furniture and objects: ' + layout + '. Floor: ' + floorWord + '. '
             + 'Nothing hangs from the ceiling; everything stands on the floor or is mounted on a wall.'
             + (style ? '\n\n' + style : '');
@@ -405,6 +410,52 @@
             + 'Paint pure black (#000000) the area each piece of furniture and each object covers on the floor, at exactly the same position and size as in the attached image, so a person could not stand there. '
             + 'Paint everything else pure white (#ffffff): the empty floor, the walls, the doorway, the background — do not draw the room itself, only the furniture footprints. '
             + 'Only those two colours: no grey, no shading, no texture, no outlines, no text.';
+    }
+
+    // 舞台上她現在那隻小人（換過裝就是換過的樣子）：走路圖取「面向前方、站著」那一格
+    async function _playerFigure() {
+        const LS = win.LobbyStage;
+        const p = LS && LS._S && LS._S.player;
+        let src = null, sheet = false;
+        if (p && p.el) {
+            if (p.sheet) { const m = String(p.el.style.backgroundImage || '').match(/url\(["']?(.*?)["']?\)$/); if (m) { src = m[1]; sheet = true; } }
+            else if (p.el.src) src = p.el.src;
+        }
+        if (!src) {
+            const A = LS && LS._b && LS._b.ASSET;
+            if (A) src = (win.localStorage.getItem('lobby_stage_mc') === 'm') ? A.mcM : A.mcF;
+        }
+        if (!src) return null;
+        const im = await new Promise(function (res) {
+            const i = new win.Image();
+            if (/^https?:/i.test(src)) i.crossOrigin = 'anonymous';
+            i.onload = function () { res(i); }; i.onerror = function () { res(null); };
+            i.src = src;
+        });
+        if (!im || !im.naturalWidth) return null;
+        const fw = sheet ? im.naturalWidth / 3 : im.naturalWidth, fh = sheet ? im.naturalHeight / 4 : im.naturalHeight;
+        return { im: im, sx: sheet ? fw : 0, sy: 0, sw: fw, sh: fh };
+    }
+    // 空房（送出去那張）上站一隻小人：高度照舞台的規矩換算——一個真人高在這間房是 personH，小人畫 FIGURE_PX/PERSON_PX 那麼高
+    async function _figureRef(pad, base, pr, ps) {
+        try {
+            const fig = await _playerFigure();
+            if (!fig) return null;
+            const room = base.room, vb = room.viewBox;
+            const k = (base.width / vb[0]) * ps;   // viewBox 單位 → 送出去那張的像素
+            const h = room.personH * k * (FIGURE_PX / PERSON_PX);
+            if (!(h > 4)) return null;
+            const w = h * fig.sw / fig.sh;
+            const q = room.inner4 || room.floor || [];
+            if (!q.length) return null;
+            let cx = 0, cy = 0; q.forEach(function (pt) { cx += pt[0]; cy += pt[1]; });
+            cx = pr.x + (cx / q.length) * k; cy = pr.y + (cy / q.length) * k;   // 腳踩在地板正中
+            const c = _cv(pad.width, pad.height); const g = c.getContext('2d');
+            g.drawImage(pad, 0, 0);
+            g.imageSmoothingEnabled = false;   // 像素小人放大別糊掉
+            g.drawImage(fig.im, fig.sx, fig.sy, fig.sw, fig.sh, cx - w / 2, cy - h, w, h);
+            return c.toDataURL('image/png');
+        } catch (e) { return null; }   // 讀不到小人（跨網域被擋等）就照舊只送空房
     }
 
     async function _deliverCapi(spec, order, onStep, opts, layout) {
@@ -430,7 +481,12 @@
 
         if (onStep) onStep('正在把東西一件件擺進房間…');
         const style = String(((_mgr() && _mgr().config && _mgr().config.customApi) || {}).basePrompt || '').trim();
-        const roomData = await _capiEdit(roomNode, _gptRoomPrompt(layout, FLOOR_WORDS[spec && spec.floor] || FLOOR_WORDS.oak, style), pad.toDataURL('image/png'), size);
+        // 🧍 比例尺：同一張空房，站一隻她現在的小人，大小＝進房間後實際畫的大小。
+        //   只給空房的話 GPT 只能照牆高猜家具多大，常常畫太大（床比小人長三倍）；看得到小人它才知道家具該多大。
+        //   另外一張送，不直接畫在空房上：畫在上面它會把小人一起畫進房間。
+        const figRef = await _figureRef(pad, base, pr, ps);
+        const refs = figRef ? [pad.toDataURL('image/png'), figRef] : pad.toDataURL('image/png');
+        const roomData = await _capiEdit(roomNode, _gptRoomPrompt(layout, FLOOR_WORDS[spec && spec.floor] || FLOOR_WORDS.oak, style, !!figRef), refs, size);
         // 只畫一次（capi1）：不量家具，家具不擋路，跟 ComfyUI 畫的房間一樣——想省錢的人用
         const twoPass = route.mode === 'capi';
         let maskData = null;
