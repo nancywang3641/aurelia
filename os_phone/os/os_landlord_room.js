@@ -73,6 +73,11 @@
             '.llr-rent{margin:6px 0 8px;font-size:20px;font-weight:700;color:#f0e2c6}',
             '.llr-msg{margin-top:10px;font-size:12px;line-height:1.7;color:#9aa1b0}',
             '.llr-msg.is-bad{color:#e0a0a8}',
+            // 擋路範圍：畫在舞台世界層的那張（跟著縮放）＋蓋滿舞台接點擊的透明層（不讓舞台把點擊當成走路）
+            '.llr-pencv{position:absolute;left:0;top:0;width:1536px;height:1024px;z-index:4990;pointer-events:none}',
+            '.llr-cap{position:absolute;left:0;top:0;right:0;bottom:0;z-index:61;cursor:crosshair;touch-action:none}',
+            '.llr-bar-wrap{flex-wrap:wrap}',
+            '.llr-btn.is-on{border-color:rgba(217,176,106,.8);color:#f0e2c6;background:#2d2a24}',
             '.llr-busy{position:absolute;left:0;top:0;right:0;bottom:0;z-index:75;background:rgba(8,10,14,.8);',
             '  display:flex;align-items:center;justify-content:center;padding:18px;text-align:center;',
             '  color:#e7eaf1;font-size:14px;line-height:1.8}',
@@ -549,6 +554,11 @@
         deco.innerHTML = '<i class="fa-solid fa-box-open"></i> 布置這間房';
         deco.onclick = function () { _startDeco(root); };
         box.appendChild(deco);
+        const block = d.createElement('button');
+        block.type = 'button'; block.className = 'llr-fab';
+        block.innerHTML = '<i class="fa-solid fa-draw-polygon"></i> 擋路範圍';
+        block.onclick = function () { _startBlock(root); };
+        box.appendChild(block);
         if (_ctx && _ctx.room && Array.isArray(_ctx.room.order) && _ctx.room.order.length) {
             const again = d.createElement('button');
             again.type = 'button'; again.className = 'llr-fab';
@@ -688,7 +698,7 @@
 
     // ── 布置模式：站在房裡擺包裹 ──
     function _startDeco(root) {
-        if (!_ctx || _ctx.deco) return;
+        if (!_ctx || _ctx.deco || _ctx.block) return;
         const stage = _STAGE();
         const world = stage && stage._S && stage._S.world;
         if (!world) return;
@@ -781,6 +791,199 @@
         [dc.layer, dc.tip, dc.bar].forEach(function (el) { try { el.remove(); } catch (e) {} });
         _ctx.deco = null;
         try { _mountFabs(dc.root); } catch (e) {}   // 浮鈕組放回去
+    }
+
+
+    // ── ✏️ 擋路範圍：站在房裡用鋼筆圈出走不過去的地方（2026-09-22 她要的：「像 PS 那種鋼筆直線錨點」）──
+    //   改的是房間那張家具圖（黑＝擋路、白＝能走，跟自訂接口量出來的是同一張），任何房間都能用：
+    //   ComfyUI 畫的、自訂接口一次畫的本來沒有這張 → 從全白開始；兩次畫的 → 從它量的開始修。
+    //   牆和地板外面本來就走不過去（程式的地板管），這裡只圈家具。
+    //   手機上一下一下點比手指拖著畫準，所以只做錨點，不做筆刷。
+    function _startBlock(root) {
+        if (!_ctx || _ctx.deco || _ctx.block) return;
+        const stage = _STAGE();
+        const S = stage && stage._S;
+        const world = S && S.world;
+        const room = _ctx.room;
+        if (!world || !room || !room.image) return;
+        _injectStyle();
+
+        const fabs = root.querySelector('.llr-fabs');
+        if (fabs) fabs.remove();
+
+        const MAPW = 1536, MAPH = 1024;
+        const f = _ctx.fit, vb = _ctx.viewBox;
+        const floor = (_ctx.floor || []).map(function (p) { return [p[0] * f.s + f.ox, p[1] * f.s + f.oy]; });
+
+        const over = d.createElement('canvas');
+        over.className = 'llr-pencv'; over.width = MAPW; over.height = MAPH;
+        world.appendChild(over);
+        const cap = d.createElement('div'); cap.className = 'llr-cap';
+        root.appendChild(cap);
+        const tip = d.createElement('div'); tip.className = 'llr-tip';
+        root.appendChild(tip);
+        const bar = d.createElement('div'); bar.className = 'llr-bar llr-bar-wrap';
+        const bAdd = _btn('fa-solid fa-ban', '加擋路');
+        const bErase = _btn('fa-solid fa-eraser', '擦掉');
+        const bUndo = _btn('fa-solid fa-rotate-left', '退一步');
+        const bClose = _btn('fa-solid fa-draw-polygon', '封起來');
+        const bReset = _btn('fa-solid fa-arrows-rotate', '重來');
+        const bCancel = _btn('fa-solid fa-xmark', '取消');
+        const bSave = _btn('fa-solid fa-check', '存好了', 'is-go');
+        [bAdd, bErase, bUndo, bClose, bReset, bCancel, bSave].forEach(function (b) { bar.appendChild(b); });
+        root.appendChild(bar);
+
+        const st = { mode: 'add', pts: [], undo: [], img: null, iw: 0, ih: 0, edit: null, orig: null, dirty: false, busy: false };
+        _ctx.block = { root: root, over: over, cap: cap, tip: tip, bar: bar };
+
+        // 圖片像素 ↔ 舞台座標：房間圖在舞台上鋪在 (ox, oy, vb寬*s, vb高*s) 那一塊
+        function toImg(p) { return [(p[0] - f.ox) / (vb[0] * f.s) * st.iw, (p[1] - f.oy) / (vb[1] * f.s) * st.ih]; }
+
+        function say() {
+            if (st.pts.length) {
+                tip.textContent = '放了 ' + st.pts.length + ' 個點。點回第一個點、或按「封起來」，這一塊就' + (st.mode === 'add' ? '擋住' : '變回能走') + '。';
+                return;
+            }
+            tip.textContent = st.mode === 'add'
+                ? '在家具四周一下一下點，圈起來的地方走不過去。紅色＝現在走不過去的地方。'
+                : '在要放行的地方一下一下點，圈起來的地方變回能走。';
+        }
+        function paintButtons() {
+            bAdd.classList.toggle('is-on', st.mode === 'add');
+            bErase.classList.toggle('is-on', st.mode === 'erase');
+            bClose.disabled = st.pts.length < 3;
+            bUndo.disabled = !st.pts.length && !st.undo.length;
+            bReset.disabled = !st.dirty;
+        }
+        function paint() {
+            const g = over.getContext('2d');
+            g.clearRect(0, 0, MAPW, MAPH);
+            // 地板外面壓暗：那裡本來就走不過去，不用圈
+            g.fillStyle = 'rgba(8,10,14,.45)'; g.fillRect(0, 0, MAPW, MAPH);
+            if (floor.length >= 3) {
+                g.save(); g.globalCompositeOperation = 'destination-out';
+                g.beginPath(); floor.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); g.fill();
+                g.restore();
+            }
+            // 家具圖黑的地方塗紅（只畫在地板裡）
+            if (st.edit) {
+                const t = d.createElement('canvas'); t.width = st.iw; t.height = st.ih;
+                const tg = t.getContext('2d'); tg.drawImage(st.edit, 0, 0);
+                const id = tg.getImageData(0, 0, st.iw, st.ih); const px = id.data;
+                for (let i = 0; i < px.length; i += 4) {
+                    const blocked = px[i] < 128;
+                    px[i] = 230; px[i + 1] = 60; px[i + 2] = 60; px[i + 3] = blocked ? 120 : 0;
+                }
+                tg.putImageData(id, 0, 0);
+                g.save();
+                if (floor.length >= 3) { g.beginPath(); floor.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); g.clip(); }
+                g.drawImage(t, f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
+                g.restore();
+            }
+            // 正在畫的這一筆：線＋錨點（錨點照螢幕大小畫，不跟著舞台縮小）
+            if (st.pts.length) {
+                const k = 1 / ((S && S.scale) || 1);
+                g.strokeStyle = st.mode === 'add' ? '#ffd27a' : '#8fe3ff'; g.lineWidth = 3 * k;
+                g.beginPath(); st.pts.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.stroke();
+                st.pts.forEach(function (p, i) {
+                    g.beginPath(); g.arc(p[0], p[1], (i === 0 ? 9 : 6) * k, 0, Math.PI * 2);
+                    g.fillStyle = i === 0 ? '#ffffff' : g.strokeStyle; g.fill();
+                    g.lineWidth = 2 * k; g.strokeStyle = '#14161c'; g.stroke();
+                    g.strokeStyle = st.mode === 'add' ? '#ffd27a' : '#8fe3ff';
+                });
+            }
+            paintButtons();
+            say();
+        }
+        function snapshot() {
+            const c = d.createElement('canvas'); c.width = st.iw; c.height = st.ih;
+            c.getContext('2d').drawImage(st.edit, 0, 0); return c;
+        }
+        function closeShape() {
+            if (st.pts.length < 3) return;
+            st.undo.push(snapshot());
+            const g = st.edit.getContext('2d');
+            g.fillStyle = st.mode === 'add' ? '#000' : '#fff';
+            g.beginPath(); st.pts.forEach(function (p, i) { const q = toImg(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath(); g.fill();
+            st.pts = []; st.dirty = true;
+            paint();
+        }
+        function undo() {
+            if (st.pts.length) { st.pts.pop(); paint(); return; }
+            const prev = st.undo.pop(); if (!prev) return;
+            st.edit.getContext('2d').drawImage(prev, 0, 0);
+            st.dirty = true; paint();
+        }
+        function end() {
+            win.removeEventListener('keydown', onKey, true);
+            [over, cap, tip, bar].forEach(function (el) { try { el.remove(); } catch (e) {} });
+            _ctx.block = null;
+            try { _mountFabs(root); } catch (e) {}
+        }
+        function onKey(ev) {
+            const t = ev.target && ev.target.tagName;
+            if (t === 'INPUT' || t === 'TEXTAREA') return;
+            if (ev.key === 'Enter') { ev.preventDefault(); closeShape(); }
+            else if (ev.key === 'Escape') { ev.preventDefault(); if (st.pts.length) { st.pts = []; paint(); } }
+            else if (ev.key === 'Backspace') { ev.preventDefault(); undo(); }
+        }
+        win.addEventListener('keydown', onKey, true);
+
+        cap.addEventListener('pointerdown', function (ev) {
+            ev.preventDefault(); ev.stopPropagation();   // 別讓舞台把這一下當成「走過去」
+            if (!st.edit || !S || !S.scale) return;
+            const r = world.getBoundingClientRect();
+            const p = [(ev.clientX - r.left) / S.scale, (ev.clientY - r.top) / S.scale];
+            // 點回第一個點（螢幕上 22 像素內）＝封起來
+            if (st.pts.length >= 3) {
+                const a = st.pts[0];
+                if (Math.hypot((p[0] - a[0]) * S.scale, (p[1] - a[1]) * S.scale) < 22) { closeShape(); return; }
+            }
+            st.pts.push(p); paint();
+        });
+        bAdd.onclick = function () { st.mode = 'add'; paint(); };
+        bErase.onclick = function () { st.mode = 'erase'; paint(); };
+        bUndo.onclick = undo;
+        bClose.onclick = closeShape;
+        bReset.onclick = function () {
+            st.edit.getContext('2d').drawImage(st.orig, 0, 0);
+            st.pts = []; st.undo = []; st.dirty = false; paint();
+        };
+        bCancel.onclick = end;
+        bSave.onclick = async function () {
+            if (st.busy) return;
+            if (st.pts.length >= 3) closeShape();
+            st.busy = true; bSave.disabled = true; tip.textContent = '正在存…';
+            try {
+                // 整張都是白的＝沒有東西擋路 → 不存那張圖（省空間，也跟沒量過家具的房間一樣）
+                const px = st.edit.getContext('2d').getImageData(0, 0, st.iw, st.ih).data;
+                let any = false; for (let i = 0; i < px.length; i += 4) { if (px[i] < 128) { any = true; break; } }
+                const next = Object.assign({}, room, { furnMask: any ? st.edit.toDataURL('image/png') : null });
+                const id = _ctx.unitId, isHome = (id === HOME_ID);
+                await _LL().saveRoom(id, next);
+                end();
+                // 就地重進這間房＝新的擋路範圍立刻生效
+                if (isHome) await openHome(); else await open(null, id);
+            } catch (e) {
+                console.warn('[LandlordRoom] 擋路範圍沒存成', e);
+                st.busy = false; bSave.disabled = false; tip.textContent = '這次沒存起來，再按一次「存好了」。';
+            }
+        };
+
+        // 讀房間圖的大小，家具圖照同一個大小（沒有就從全白開始）
+        tip.textContent = '正在準備…';
+        paintButtons();
+        _loadImgEl(room.image).then(async function (im) {
+            st.iw = im.naturalWidth || im.width; st.ih = im.naturalHeight || im.height;
+            st.edit = d.createElement('canvas'); st.edit.width = st.iw; st.edit.height = st.ih;
+            const g = st.edit.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, st.iw, st.ih);
+            if (room.furnMask) { try { g.drawImage(await _loadImgEl(room.furnMask), 0, 0, st.iw, st.ih); } catch (e) {} }
+            st.orig = snapshot();
+            paint();
+        }).catch(function () { tip.textContent = '房間的圖讀不進來，按取消再試一次。'; });
+    }
+    function _loadImgEl(src) {
+        return new Promise(function (res, rej) { const im = new win.Image(); im.onload = function () { res(im); }; im.onerror = rej; im.src = src; });
     }
 
     function _makePkg(it, redraw, say) {
