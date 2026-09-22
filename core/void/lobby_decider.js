@@ -178,7 +178,8 @@
         const scene = S.scene;
         window.NPC_DECIDE.decide(_decState(n, D), _decActions(n, D))
             .then(r => { if (S.scene === scene && S.npcs.indexOf(n) >= 0 && !D.chatWith) _decApply(n, D, r); })   // 問到一半被小劇場抓走→這次答案作廢
-            .catch(e => { console.warn('[NPC決策] 這次沒決定成', e); D.waitT = 30000; })
+            // 沒決定成（Jev 沒回應又關了副模型頂替、或副模型也失敗）→ 站著，照她填的時間之後再試
+            .catch(e => { console.warn('[NPC決策] 這次沒決定成', e); D.waitT = _decMins() * 60000; })
             .finally(() => { D.busy = false; });
     }
     // 跟他說話時帶一行「他此刻在店裡的狀況」：不帶的話，他自己走到她旁邊、她一開口，他會當成是她來找他；
@@ -278,14 +279,17 @@
     const _help = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
     if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
         lset_npcdec: { title: '書咖的丹自己決定去哪', body: '打開以後，每次進書咖丹都會在，而且會自己走動：站一會兒就決定下一步，可能走去書櫃、走到桌子旁、走過來找你、在店裡晃，或待在原地；待滿五分鐘後也可能離開書咖。\n\n關掉就跟以前一樣，偶爾出現、站著不動。\n\n切換後會重新進一次這個地方。' },
-        lset_npckey: { title: '決策模型鑰匙', body: '填 Vercel AI Gateway 的鑰匙，丹就用決策模型 Jev 決定下一步，一次不到台幣 0.001 元。多久想一次照下面那格填的分鐘數。\n\n沒填，或那一次 Jev 沒回應，就改問副模型，每次都是一通正常的副模型呼叫。\n\n你 5 分鐘沒碰滑鼠、鍵盤或螢幕，他就停在原地不想；一碰就繼續。視窗縮小或切走時也不想。\n\n鑰匙只存在這台裝置上，電腦和手機要各填一次。' },
+        lset_npckey: { title: '決策模型鑰匙', body: '填 Vercel AI Gateway 的鑰匙，丹就用決策模型 Jev 決定下一步，一次不到台幣 0.001 元。多久想一次照下面那格填的分鐘數。\n\n沒填，或那一次 Jev 沒回應時怎麼辦，看下面「Jev 不能用時改問副模型」那格。\n\n你 5 分鐘沒碰滑鼠、鍵盤或螢幕，他就停在原地不想；一碰就繼續。視窗縮小或切走時也不想。\n\n鑰匙只存在這台裝置上，電腦和手機要各填一次。' },
+        lset_npcfb: { title: 'Jev 不能用時改問副模型', body: '沒填鑰匙、額度用完（例如你在 Vercel 設的每月上限到了，或 Jev 漲價用得比較快）、或那一次 Jev 沒回應時：\n\n打開＝丹改問你的副模型，照樣會走。每一次都是一通正常的副模型呼叫，算在你副模型那邊的帳上。\n\n關掉＝丹就站在原地，照「多久想一次」的時間之後再試 Jev，不會花副模型的錢。\n\n這格只存在這台裝置上。' },
     });
     function settingsHtml() {
         const ND = window.NPC_DECIDE;
         return '<label class="lset-row"><span class="lset-tx">書咖的丹自己決定去哪' + _help('lset_npcdec') + '</span>' +
               '<input type="checkbox" class="lset-chk lset-npcdec" data-k="npcdec"' + (_decOn() ? ' checked' : '') + '></label>' +
             '<div class="lset-row"><span class="lset-tx">決策模型鑰匙' + _help('lset_npckey') + '</span>' +
-              '<input type="password" class="lset-key" autocomplete="off" placeholder="沒填就用副模型" value="' + String(ND ? ND.getKey() : '').replace(/[&"<>]/g, '') + '"></div>' +
+              '<input type="password" class="lset-key" autocomplete="off" placeholder="貼上鑰匙" value="' + String(ND ? ND.getKey() : '').replace(/[&"<>]/g, '') + '"></div>' +
+            '<label class="lset-row"><span class="lset-tx">Jev 不能用時改問副模型' + _help('lset_npcfb') + '</span>' +
+              '<input type="checkbox" class="lset-chk lset-npcfb" data-k="npcfb"' + (!ND || ND.getFallback() ? ' checked' : '') + '></label>' +
             '<div class="lset-row"><span class="lset-tx">多久想一次下一步</span>' +
               '<span class="lset-numwrap"><input type="number" class="lset-num" inputmode="numeric" min="' + DEC_MINS_MIN + '" max="' + DEC_MINS_MAX + '" step="1" value="' + _decMins() + '">' +
               '<span class="lset-unit">分鐘</span></span></div>';
@@ -296,6 +300,7 @@
             if (S.scene === 'cafe') _b.remount();
         });
         box.querySelector('.lset-key')?.addEventListener('input', (e) => { window.NPC_DECIDE?.setKey(e.target.value); });
+        box.querySelector('.lset-npcfb')?.addEventListener('change', (e) => { window.NPC_DECIDE?.setFallback(e.target.checked); });
         box.querySelector('.lset-num')?.addEventListener('change', (e) => {
             const v = Math.max(DEC_MINS_MIN, Math.min(DEC_MINS_MAX, parseInt(e.target.value, 10) || 3));
             e.target.value = v;

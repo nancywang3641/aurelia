@@ -9,6 +9,7 @@
 //      永遠站著（09-23 實測）。多久想一次改由她在大廳設置填（分鐘），兩次之間他本來就站著。
 //      挑哪件事照機率抽，不是永遠拿最高那個，NPC 才不會每次都做一樣的事。
 //    - 沒填鑰匙，或 Jev 這一次失敗 → 改問副模型，只叫它回一個動作代號（task 'npc_decide'）。
+//      這條頂替她可以在大廳設置關掉（npc_decide_fallback），關掉就丟錯，呼叫端照她填的時間之後再試。
 //    送出去的只有狀況本身，不放鑰匙、不放她的私人資料。
 (function () {
     'use strict';
@@ -25,6 +26,11 @@
     function setKey(v) { try { localStorage.setItem(KEY_LS, String(v || '').trim()); } catch (e) {} }
     function isOn() { try { return localStorage.getItem(ON_LS) !== '0'; } catch (e) { return true; } }
     function setOn(on) { try { localStorage.setItem(ON_LS, on ? '1' : '0'); } catch (e) {} }
+    // Jev 用不了（沒填鑰匙、額度用完、沒回應）時要不要改問副模型：她怕 Jev 漲價把額度用光後，
+    //   丹不聲不響改成每幾分鐘叫一次副模型（她自己的帳單）。預設開＝跟以前一樣；關掉＝問不到 Jev 就站著。
+    const FALLBACK_LS = 'npc_decide_fallback';
+    function getFallback() { try { return localStorage.getItem(FALLBACK_LS) !== '0'; } catch (e) { return true; } }
+    function setFallback(on) { try { localStorage.setItem(FALLBACK_LS, on ? '1' : '0'); } catch (e) {} }
 
     // 照機率抽一個；機率全 0 就回 null
     function _draw(probs) {
@@ -113,7 +119,15 @@
             try { r = await _askJev(state, actions, key); }
             catch (e) { jevErr = (e && e.name === 'AbortError') ? '逾時' : String(e && e.message || e); }
         }
-        if (!r) r = await _askLlm(state, actions);
+        if (!r) {
+            if (!getFallback()) {
+                const why = key ? ('Jev 這次沒回應（' + jevErr + '），副模型頂替關著') : '沒填決策模型鑰匙，副模型頂替關著';
+                log.unshift({ at: new Date().toLocaleTimeString(), npc: state.name, state, result: { action: null, source: 'none', jevError: jevErr || '沒填鑰匙' } });
+                if (log.length > LOG_MAX) log.length = LOG_MAX;
+                throw new Error(why);
+            }
+            r = await _askLlm(state, actions);
+        }
         r.ms = Date.now() - t0;
         if (jevErr) r.jevError = jevErr;
         log.unshift({ at: new Date().toLocaleTimeString(), npc: state.name, state, result: r });
@@ -121,5 +135,5 @@
         return r;
     }
 
-    window.NPC_DECIDE = { decide, getKey, setKey, isOn, setOn, log, MOODS };
+    window.NPC_DECIDE = { decide, getKey, setKey, isOn, setOn, getFallback, setFallback, log, MOODS };
 })();
