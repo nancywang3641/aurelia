@@ -28,7 +28,7 @@
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '房間畫風', body: '房客的房間整間畫出來時用這個畫風。選好就生效。' },
-            ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口：每間房叫兩次。第一次畫整間房，第二次量出家具擋在哪裡，之後小人會被家具擋住、繞過去走。牆和地板照舊由程式算，所以位置是準的。\n\n兩次可以用不同的接口：量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
+            ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次量出家具擋在哪裡，之後小人會被家具擋住、繞過去走。牆和地板照舊由程式算，所以位置是準的。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
             ss_1627: { title: '同步角色來源', body: '開啟後，背景和角色用同一個來源，不用再貼一次帳號。' },
             ss_1652: { title: '背景尺寸', body: '全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。' },
@@ -1650,7 +1650,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     const _opts = (cur) => _nodes.map(n => '<option value="' + _e(n.id) + '"' + (n.id === cur ? ' selected' : '') + '>' + _e(n.name) + '</option>').join('');
                                     return '<select class="set-select" id="img-room-route" onchange="window._saveRoomRoute && window._saveRoomRoute()">'
                                         + '<option value="comfy"' + (_r.mode !== 'capi' ? ' selected' : '') + '>ComfyUI（原本那套）</option>'
-                                        + '<option value="capi"' + (_r.mode === 'capi' ? ' selected' : '') + '>自訂接口（畫房間＋量家具，共兩次）</option>'
+                                        + '<option value="capi1"' + (_r.mode === 'capi1' ? ' selected' : '') + '>自訂接口・一次（只畫房間，家具不擋路）</option>'
+                                        + '<option value="capi"' + (_r.mode === 'capi' ? ' selected' : '') + '>自訂接口・兩次（自動量家具，家具會擋路）</option>'
                                         + '</select>'
                                         + '<div class="set-label">畫房間用</div>'
                                         + '<select class="set-select" id="img-room-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.roomNode) + '</select>'
@@ -3549,7 +3550,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (!_G || !_G.setRoute) return;
             const _d = (_w.document && _w.document.getElementById('img-room-route')) ? _w.document : document;
             const v = (id) => { const el = _d.getElementById(id); return el ? el.value : ''; };
-            _G.setRoute({ mode: v('img-room-route') === 'capi' ? 'capi' : 'comfy', roomNode: v('img-room-node'), maskNode: v('img-room-mask-node') });
+            const _m = v('img-room-route');
+            _G.setRoute({ mode: (_m === 'capi' || _m === 'capi1') ? _m : 'comfy', roomNode: v('img-room-node'), maskNode: v('img-room-mask-node') });
         };
 
         // 🚪 世界門旅人畫風：值＝「接口|預設包key」，選了就存，不用按底部保存（同 🏠 房間畫風的作風）

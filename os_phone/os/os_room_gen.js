@@ -258,7 +258,9 @@
     function getRoute() {
         let r = {};
         try { r = JSON.parse(win.localStorage.getItem(K_ROUTE) || '{}') || {}; } catch (e) {}
-        return { mode: r.mode === 'capi' ? 'capi' : 'comfy', roomNode: String(r.roomNode || ''), maskNode: String(r.maskNode || '') };
+        // mode：comfy＝原本那套；capi1＝自訂接口只畫房間（家具不擋路，省一半）；capi＝自訂接口畫房間＋量家具
+        const mode = (r.mode === 'capi' || r.mode === 'capi1') ? r.mode : 'comfy';
+        return { mode: mode, roomNode: String(r.roomNode || ''), maskNode: String(r.maskNode || '') };
     }
     function setRoute(patch) {
         const r = Object.assign(getRoute(), patch || {});
@@ -429,12 +431,17 @@
         if (onStep) onStep('正在把東西一件件擺進房間…');
         const style = String(((_mgr() && _mgr().config && _mgr().config.customApi) || {}).basePrompt || '').trim();
         const roomData = await _capiEdit(roomNode, _gptRoomPrompt(layout, FLOOR_WORDS[spec && spec.floor] || FLOOR_WORDS.oak, style), pad.toDataURL('image/png'), size);
-        if (onStep) onStep('正在量家具擋在哪裡…');
-        const maskData = await _capiEdit(maskNode, _gptFurniturePrompt(), roomData, size);
+        // 只畫一次（capi1）：不量家具，家具不擋路，跟 ComfyUI 畫的房間一樣——想省錢的人用
+        const twoPass = route.mode === 'capi';
+        let maskData = null;
+        if (twoPass) {
+            if (onStep) onStep('正在量家具擋在哪裡…');
+            maskData = await _capiEdit(maskNode, _gptFurniturePrompt(), roomData, size);
+        }
 
-        const roomIm = await _loadImg(roomData), maskIm = await _loadImg(maskData);
+        const roomIm = await _loadImg(roomData);
         const roomCv = _scaleCv(roomIm, roomIm.width, roomIm.height);
-        const furn = _alignFurniture(roomCv, _scaleCv(maskIm, roomCv.width, roomCv.height));
+        const furn = maskData ? _alignFurniture(roomCv, _scaleCv(await _loadImg(maskData), roomCv.width, roomCv.height)) : null;
         // 它畫的房間跟送出去的空房差多少：外形框對外形框，寬高各自換算
         const bA = _roomBox(pad), bB0 = _roomBox(roomCv);
         const kx = roomCv.width / OW, ky = roomCv.height / OH;
@@ -451,9 +458,9 @@
             return c;
         };
         const roomOut = cropTo(roomCv);
-        const furnOut = (function () { const c = cropTo(furn); return c; })();
+        const furnOut = furn ? cropTo(furn) : null;
         // 家具圖二值化：黑＝家具、白＝沒擋（裁出去的邊被補成黑也沒關係，那裡本來就在地板外）
-        {
+        if (furnOut) {
             const g = furnOut.getContext('2d'); const d = g.getImageData(0, 0, bw, bh);
             for (let i = 0; i < d.data.length; i += 4) {
                 const v = (0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2]) >= 128 ? 255 : 0;
@@ -465,13 +472,13 @@
         const nm = function (n) { return (n && n.name) || '自訂接口'; };
         return {
             image: roomOut.toDataURL('image/png'),
-            furnMask: furnOut.toDataURL('image/png'),
+            furnMask: furnOut ? furnOut.toDataURL('image/png') : null,
             layout: layout,
             floor: base.room.floor,
             inner4: base.room.inner4,
             viewBox: base.room.viewBox,
             personH: base.room.personH,
-            styleName: nm(roomNode) + (maskNode && maskNode !== roomNode ? '／' + nm(maskNode) : ''),
+            styleName: nm(roomNode) + (twoPass && maskNode && maskNode !== roomNode ? '／' + nm(maskNode) : ''),
             at: Date.now(),
         };
     }
@@ -479,7 +486,7 @@
     async function deliver(spec, order, onStep, opts) {
         if (!Array.isArray(order) || !order.length) throw new Error('房間裡還沒有東西，先丟幾個包裹進去。');
         // 設置裡房間選了自訂接口 → 走上面那條（訂單翻譯照舊共用）
-        if (getRoute().mode === 'capi') {
+        if (getRoute().mode !== 'comfy') {
             const reuse0 = String((opts && opts.layout) || '').trim();
             let layout0;
             if (reuse0) { if (onStep) onStep('照上次那份清單重畫…'); layout0 = reuse0; }
