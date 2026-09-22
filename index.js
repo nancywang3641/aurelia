@@ -193,7 +193,7 @@ const PHONE_FILES = [
     'os/os_vector_inject.js', // 酒館版記憶召回注入器（GENERATION_STARTED → injectPrompts）
     'os/os_jev_usage.js', // Jev 呼叫的次數＋花費帳本（DEBUG 看）；記憶／立繪影子比對、書咖的丹都記在這
     'os/os_jev_shadow.js', // 記憶召回的 Jev 影子比對：副模型挑完記憶後讓 Jev 也排一次，只記進 DEBUG 對照、不改送出的東西
-    'os/os_jev_stage_shadow.js', // 立繪離場的 Jev 影子比對：每章劇本載入後逐段問誰還在場，跟 AI 寫的 Stay/Leave 對照，只記進 DEBUG
+    'os/os_jev_stage.js', // 立繪什麼時候收交給 Jev：每章劇本載入時排好誰從第幾段起不在；Jev 沒回應就照 AI 寫的 Stay/Leave
     'os/os_phone_events.js',  // 手機事件簿：上一段劇情之後手機上發生的事，只交給劇情一次（酒館與 PWA 共用）
     'os/os_app_memory_inject.js', // app→酒館 記憶反向注入器（在場角色的手機近況，唯讀注入不貼回 chat）
     'os/os_summary_inject.js', // 酒館版大總結程式注入器（OS_DB tavern_summary → 壓縮 → injectPrompts；搬出世界書）

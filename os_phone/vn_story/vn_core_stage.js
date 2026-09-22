@@ -83,10 +83,49 @@
             this._stageInit();
             for (let i = 0; i < 2; i++) if (this._stage[i] && this._stage[i].name === name) this._clearSlot(i);
         },
+        // 🎭 Jev 排的收立繪時間表（os_jev_stage.js 的 plan → this._jevStage.removals：{name, line, occ}）
+        //   line/occ＝「從這段起不在」那一段在劇本裡的原文＋同樣原文前面出現過幾次；比原文不比行號，劇本中途被插進插圖行也對得上
+        _jevStageOcc: function(idx) {
+            const l = this.script[idx]; let n = 0;
+            for (let i = 0; i < idx; i++) if (this.script[i] === l) n++;
+            return n;
+        },
+        // next() 走到第 idx 行、還沒演之前叫：這行是誰的「從這段起不在」就收他
+        _jevStageHit: function(idx) {
+            const pl = this._jevStage; if (!pl || !pl.removals) return;
+            const l = this.script[idx]; if (typeof l !== 'string') return;
+            let occ = -1;
+            pl.removals.forEach(r => {
+                if (r.done || r.line !== l) return;
+                if (occ < 0) occ = this._jevStageOcc(idx);
+                if (r.occ !== occ) return;
+                r.done = 1;
+                this._stageRemove(r.name);
+            });
+        },
+        // 時間表晚到（Jev 回來時已經播過幾段）：已經播過的收立繪點，那個人之後沒再開口的，現在補收
+        _jevStageCatchUp: function() {
+            const pl = this._jevStage; if (!pl || !pl.removals) return;
+            const cur = this.index;
+            pl.removals.forEach(r => {
+                if (r.done) return;
+                let n = -1, at = -1;
+                for (let i = 0; i < this.script.length; i++) if (this.script[i] === r.line && ++n === r.occ) { at = i; break; }
+                if (at < 0 || at > cur) return;
+                r.done = 1;
+                for (let i = at; i <= cur; i++) {
+                    const l = this.script[i];
+                    if (typeof l === 'string' && (l.indexOf('[Char|' + r.name + '|') === 0 || /^\[Bg\|/i.test(l))) return;   // 又開口了、或已經換場（換場本來就清空）
+                }
+                this._stageRemove(r.name);
+            });
+        },
         _stageClear: function() { this._stageInit(); this._clearSlot(0); this._clearSlot(1); this._slotMemory = {}; this._pendingLeave = []; },   // 換景=站位記憶歸零(跨場景的陳舊記憶會害兩人搶同一格)+清待離場
         // 滯留清除：某格角色超過 N tick 沒當說話者 → 自動移除（防殘留），N 預設 5、可由 localStorage 覆寫
         _staleSweep: function() {
             this._stageInit();
+            // 🎭 這章聽 Jev（os_jev_stage.js）就不做：考卷上這條收對 0 次、人還在就收掉 32 次；誰什麼時候走交給 Jev 的時間表
+            if (this._jevStage) return;
             let limit = parseInt(window.localStorage.getItem('vn_sprite_stale_limit'));
             if (isNaN(limit) || limit < 1) limit = 5;
             let removed = false;

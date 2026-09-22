@@ -279,6 +279,8 @@
             this.script = [];
             this.index = -1;
             this._pendingLeave = [];   // 清掉上一份劇本殘留的 |Leave 待離場
+            this._jevStage = null;     // 🎭 上一章 Jev 排的收立繪時間表作廢（晚到的也不收：看 _jevStageSeq）
+            this._jevStageSeq = (this._jevStageSeq || 0) + 1;
             this.avatars = {};
             this.charVoices = {};   // [Avatar|名|聲線|外觀] 宣告的固定聲線（名→聲線）；[Char] 不再每行帶
             // 清除殘留彈幕 DOM 並重置跑道
@@ -689,8 +691,19 @@
             this._prewarmAvatars();
             this._deferVoicePrewarm();   // 語音延後：等圖片預熱清空才開跑（圖片優先進顯卡）
             this._startImgGate = true;   // 開場閘門上膛：第一行劇情文本渲染前檢查圖片（卡片/指令不受影響）
-            // 🎭 立繪離場的 Jev 影子比對（os_jev_stage_shadow.js）：只記進 DEBUG 對照，不 await、不改舞台怎麼收立繪
-            try { const _JS = win.OS_JEV_STAGE || window.OS_JEV_STAGE; if (_JS) _JS.compare({ script: this.script.slice(), msgId: this._currentMessageId }); } catch (e) {}
+            // 🎭 立繪什麼時候收交給 Jev（os_jev_stage.js）：不 await，排好時間表回來才生效（_jevStageHit／_jevStageCatchUp）。
+            //    這章 Jev 有回答 → 整章聽 Jev（AI 的 Leave／[Exit]／幾行沒開口自動收都停）；沒回答 → 照舊聽 AI 的。
+            try {
+                const _JS = win.OS_JEV_STAGE || window.OS_JEV_STAGE;
+                if (_JS) {
+                    const _self = this, _seq = this._jevStageSeq;
+                    _JS.plan(this.script.slice(), this._currentMessageId).then(function (pl) {
+                        if (!pl || _self._jevStageSeq !== _seq) return;
+                        _self._jevStage = pl;
+                        _self._jevStageCatchUp();
+                    }).catch(function () {});
+                }
+            } catch (e) {}
         },
 
         // 語音預熱延後啟動：圖片（頭像/背景/場景/道具）全部清空才放語音佇列進場。
@@ -2482,6 +2495,8 @@
                 const _pl = this._pendingLeave; this._pendingLeave = [];
                 _pl.forEach(n => { try { this._stageRemove(n); } catch (e) {} });
             }
+            // 🎭 Jev 排的收立繪：播到他「從這段起不在」的那一段之前收掉
+            if (this._jevStage) { try { this._jevStageHit(this.index); } catch (e) {} }
 
             // ── 開場圖片閘門（loading 排最前面）──────────────────────────────
             // loadScript 後的第一次 next() 就檢查：圖片（含盤點中）沒清空 → 先彈 loading 等，
@@ -3059,7 +3074,8 @@
                 this.addLog(p[0], _cx.text);
                 this.playSFX(_cx.sfx !== 'NA' ? _cx.sfx : ex.sfx);
                 // 第五欄 |Leave：這句演完(下一次 next)把該角色立繪撤下——強制狀態欄取代 AI 老忘記的 [Exit] 行
-                if (ex.stage === 'leave') (this._pendingLeave = this._pendingLeave || []).push(p[0]);
+                //    這章 Jev 有回答就不聽第五欄（整章聽 Jev，見 os_jev_stage.js）
+                if (ex.stage === 'leave' && !this._jevStage) (this._pendingLeave = this._pendingLeave || []).push(p[0]);
                 this._lastChar = p[0];
                 this._currentChar = { charName: p[0], text: _cx.text, emotion: this._mapExprToEmotion(rawExp), expression: rawExp };
                 this.updateControlUI();
@@ -3110,7 +3126,7 @@
             }
             if (line.startsWith('[Exit|')) {
                 const p = line.slice(6, -1).split('|');
-                if (p[0]) this._stageRemove(p[0].trim());   // 角色離場 → 移除該格立繪
+                if (p[0] && !this._jevStage) this._stageRemove(p[0].trim());   // 角色離場 → 移除該格立繪（這章聽 Jev 時不管 AI 寫的 [Exit]）
                 this.next();
                 return;
             }

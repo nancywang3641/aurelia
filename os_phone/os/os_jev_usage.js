@@ -5,7 +5,7 @@
 //   每一通 Jev 回來都記一筆：哪個功能叫的、成功或失敗、讀了多少字（token）、花多少錢。
 //   錢照 Vercel 回的兩個數字記：cost＝真的從她帳上扣的（免費額度還沒用完時是 0）、marketCost＝照市價算的。
 //   按天分格存（localStorage jev_usage），留最近 62 天。
-// 誰會記：記憶影子比對（os_jev_shadow.js）、立繪離場影子比對（os_jev_stage_shadow.js）、書咖的丹（core/void/npc_decide.js）。
+// 誰會記：記憶影子比對（os_jev_shadow.js）、立繪什麼時候收（os_jev_stage.js）、書咖的丹（core/void/npc_decide.js）。
 //   它們都寫 window.OS_JEV_USAGE?.add(...)：這支沒載到就少記，不影響功能本身。
 // ----------------------------------------------------------------
 (function () {
@@ -16,7 +16,7 @@
     const LS = 'jev_usage';
     const KEEP_DAYS = 62;
     const USD_TWD = 32;   // 只拿來給她一個台幣的感覺，不是精算
-    const TAGS = { memory: '記憶影子比對', stage: '立繪離場影子比對', npc: '書咖的丹' };
+    const TAGS = { memory: '記憶影子比對', stage: '立繪什麼時候收', npc: '書咖的丹' };
 
     function _day(d) { d = d || new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
     function _load() { try { const o = JSON.parse(localStorage.getItem(LS) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
