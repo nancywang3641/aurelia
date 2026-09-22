@@ -1195,6 +1195,7 @@
                 }
                 placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return;
             }
+            if (n.decider && window.NPC_DECIDE && window.NPC_DECIDE.isOn()) { _deciderStep(n, dt); return; }   // 🎲 自己決定下一步的 NPC（npc_decide.js）
             if (n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
             n.wanderT -= dt;
             if (n.wanderT <= 0 && !n.dest) {
@@ -1227,6 +1228,135 @@
     function _npcNearCheck(n) {
         const near = _npcInReach(n);
         n.hint.style.display = (near && !S.talkTarget) ? '' : 'none';
+    }
+
+    // ── 🎲 自己決定下一步的 NPC（書咖的丹）──────────────────
+    //    站著的時候倒數，時間到就問 NPC_DECIDE「接下來做什麼」，照答案挑一個目的地走過去；
+    //    走到了（或撞到走不過去）就再站一會兒，然後再問。分頁在背景時不問（省錢）。
+    //    家具位置照擺設讀（她在擺設模式挪了書櫃，去書櫃的點跟著挪）。
+    const DEC_ACTIONS = {
+        approach_player: '走到玩家身邊',
+        go_table: '走到一張桌子旁邊待著',
+        go_shelf: '走去書櫃前看書',
+        wander: '在店裡隨意走走',
+        stay: '待在原地不動',
+        leave: '離開書咖',
+    };
+    const DEC_LEAVE_AFTER_MS = 5 * 60 * 1000;   // 進店滿五分鐘才把「離開」放進選項，免得一進門就走
+    function _decObjs(word) {
+        return ((CFG && CFG.layout) || []).filter(o => o && o.file && o.file.indexOf(word) >= 0 && !o.plot && !o.plotFrame);
+    }
+    function _decSpotBelow(o) {
+        const fr = footRect(o);
+        return findFreeSpot(fr.x + fr.w / 2 + (Math.random() - 0.5) * fr.w * 0.5, fr.y + fr.h + 26);
+    }
+    function _decActions(n, D) {
+        const A = Object.assign({}, DEC_ACTIONS);
+        if (!_decObjs('obj_table').length) delete A.go_table;
+        if (!_decObjs('obj_shelf').length) delete A.go_shelf;
+        if (!S.player) delete A.approach_player;
+        if (!(CFG && CFG.doors && CFG.doors.length) || Date.now() - D.bornAt < DEC_LEAVE_AFTER_MS) delete A.leave;
+        return A;
+    }
+    function _decDistWord(a, b) {
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        return d < 140 ? '就在旁邊' : d < 420 ? '幾步外' : '在店的另一頭';
+    }
+    function _decPersonaBrief(n) {
+        const t = String(n.personaFull || '');
+        const i = t.indexOf('行為：');
+        const s = i >= 0 ? t.slice(i + 3) : '';
+        const cut = s.split('。').slice(0, 2).join('。');
+        return (cut ? cut + '。' : '') || n.subTitle || '';
+    }
+    function _decState(n, D) {
+        const now = new Date();
+        const hh = now.getHours(), mm = String(now.getMinutes()).padStart(2, '0');
+        const p = S.player;
+        const others = S.npcs.filter(o => o !== n && o.name).map(o => o.name + '（' + _decDistWord(n, o) + '）');
+        return {
+            name: n.name,
+            personality: _decPersonaBrief(n),
+            place: (SCENE_HEADER[S.scene] && SCENE_HEADER[S.scene].badge) || S.scene,
+            place_detail: '有書櫃、幾組桌椅、沙發和點心櫃檯的咖啡書店',
+            time: hh + ':' + mm + '（' + (_isNightNow() ? '晚上' : '白天') + '）',
+            minutes_in_shop: Math.round((Date.now() - D.bornAt) / 60000),
+            mood: D.mood || '還不知道',
+            last_action: D.last ? DEC_ACTIONS[D.last] : '剛走進店裡',
+            player: p ? {
+                distance: _decDistWord(n, p),
+                doing: S.talkTarget ? ('正在跟' + (S.talkTarget.name || '別人') + '說話') : (p.walking ? '在走動' : '站著'),
+            } : null,
+            nearby: others,
+        };
+    }
+    function _decApply(n, D, r) {
+        D.last = r.action;
+        if (r.mood) D.mood = r.mood;
+        if (r.talk != null) D.talk = r.talk;
+        D.facePlayer = false; D.leaving = false; n.dest = null;
+        const slow = r.source !== 'jev';   // 走副模型的話問慢一點（每一次都是一通正常的模型呼叫）
+        D.waitT = slow ? 20000 + Math.random() * 20000 : 5000 + Math.random() * 7000;
+        let t = null;
+        if (r.action === 'approach_player' && S.player) {
+            const p = S.player, ang = Math.atan2(n.y - p.y, n.x - p.x);
+            t = findFreeSpot(p.x + Math.cos(ang) * 80, p.y + Math.sin(ang) * 40);
+            D.facePlayer = true;
+        } else if (r.action === 'go_table') {
+            const ts = _decObjs('obj_table'); t = _decSpotBelow(ts[Math.floor(Math.random() * ts.length)]);
+        } else if (r.action === 'go_shelf') {
+            t = _decSpotBelow(_decObjs('obj_shelf')[0]);
+        } else if (r.action === 'wander') {
+            const R = n.homeRect;
+            if (R) t = findFreeSpot(R.x + Math.random() * R.w, R.y + Math.random() * R.h);
+        } else if (r.action === 'leave') {
+            const dr = CFG.doors[0];
+            t = { x: dr.x + dr.w / 2, y: dr.y + dr.h / 2 }; D.leaving = true;
+        }
+        if (t) { n.dest = t; D.walkT = 0; }
+    }
+    function _decAsk(n, D) {
+        D.busy = true;
+        const scene = S.scene;
+        window.NPC_DECIDE.decide(_decState(n, D), _decActions(n, D))
+            .then(r => { if (S.scene === scene && S.npcs.indexOf(n) >= 0) _decApply(n, D, r); })
+            .catch(e => { console.warn('[NPC決策] 這次沒決定成', e); D.waitT = 30000; })
+            .finally(() => { D.busy = false; });
+    }
+    function _decRemove(n) {
+        [n.el, n.tag, n.hint].forEach(el => { try { el && el.remove(); } catch (e) {} });
+        const i = S.npcs.indexOf(n); if (i >= 0) S.npcs.splice(i, 1);
+        const f = S.followers.indexOf(n); if (f >= 0) S.followers.splice(f, 1);
+    }
+    function _deciderStep(n, dt) {
+        const D = n._dec || (n._dec = { waitT: 2500 + Math.random() * 2500, bornAt: Date.now(), busy: false });
+        if (n.dest) {
+            const vx = n.dest.x - n.x, vy = n.dest.y - n.y, d = Math.hypot(vx, vy);
+            D.walkT = (D.walkT || 0) + dt;
+            const moved = d >= 6 && D.walkT < 15000 && _slideMove(n, vx / d, vy / d, Math.min(d, 0.12 * dt));
+            if (moved) {
+                n.walking = true;
+                if (n.sheet) {
+                    n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
+                    n.animT = (n.animT || 0) + dt;
+                    n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
+                } else if (vx) n.flip = vx > 0;
+            } else {   // 到了，或卡住走不過去（15 秒還沒到也算），就地停下
+                n.dest = null; n.walking = false;
+                if (n.sheet) { n.frame = 1; n.animT = 0; }
+                if (D.leaving && S.talkTarget !== n) { _decRemove(n); return; }
+            }
+        } else {
+            n.walking = false;
+            if (D.facePlayer && S.player) {
+                const vx = S.player.x - n.x, vy = S.player.y - n.y;
+                if (n.sheet) { n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0); n.frame = 1; }
+                else if (vx) n.flip = vx > 0;
+            }
+            D.waitT -= dt;
+            if (D.waitT <= 0 && !D.busy && !document.hidden) _decAsk(n, D);
+        }
+        placeActor(n); placeNpcExtras(n); _npcNearCheck(n);
     }
 
     // ── NPC 各自的輕量對話歷史（localStorage，上限 40 條）──
@@ -2078,6 +2208,12 @@
                     '</button>').join('') +
                 '</div>';
         }
+        const ND = window.NPC_DECIDE;
+        const _help = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
+        if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
+            lset_npcdec: { title: '書咖的丹自己決定去哪', body: '打開以後，每次進書咖丹都會在，而且會自己走動：站一會兒就決定下一步，可能走去書櫃、走到桌子旁、走過來找你、在店裡晃，或待在原地；待滿五分鐘後也可能離開書咖。\n\n關掉就跟以前一樣，偶爾出現、站著不動。\n\n切換後會重新進一次這個地方。' },
+            lset_npckey: { title: '決策模型鑰匙', body: '填 Vercel AI Gateway 的鑰匙，丹就用決策模型 Jev 決定下一步，大約每 5～12 秒想一次，一次不到台幣 0.001 元。\n\n沒填，或那一次 Jev 沒回應，就改問副模型，大約每 20～40 秒想一次，每次都是一通正常的副模型呼叫。\n\n鑰匙只存在這台裝置上，電腦和手機要各填一次。' },
+        });
         function _optsHtml() {
             const sfxOn = window.VoidUiSfx ? window.VoidUiSfx.isOn() : false;
             const sfxVol = String(Math.round((window.VoidUiSfx ? window.VoidUiSfx.getVol() : 0.35) * 100));
@@ -2108,7 +2244,11 @@
                 '<div class="lset-hint">只影響戶外大地圖。自動＝每次進城隨機（晴／雨／雪）。</div>' +
                 '<label class="lset-row"><span class="lset-tx">書咖離線訪客</span>' +
                   '<input type="checkbox" class="lset-chk" data-k="cafe"' + (localStorage.getItem('cafe_offline_visits') !== '0' ? ' checked' : '') + '></label>' +
-                '<div class="lset-hint">開著＝常客會自己來書咖消費、留下紀錄（每位第一次上門會請 AI 記一次他的口味）。關閉＝書咖不營業。</div>';
+                '<div class="lset-hint">開著＝常客會自己來書咖消費、留下紀錄（每位第一次上門會請 AI 記一次他的口味）。關閉＝書咖不營業。</div>' +
+                '<label class="lset-row"><span class="lset-tx">書咖的丹自己決定去哪' + _help('lset_npcdec') + '</span>' +
+                  '<input type="checkbox" class="lset-chk" data-k="npcdec"' + (ND && ND.isOn() ? ' checked' : '') + '></label>' +
+                '<div class="lset-row"><span class="lset-tx">決策模型鑰匙' + _help('lset_npckey') + '</span>' +
+                  '<input type="password" class="lset-key" autocomplete="off" placeholder="沒填就用副模型" value="' + String(ND ? ND.getKey() : '').replace(/[&"<>]/g, '') + '"></div>';
         }
         function _bindChars() {
             box.querySelectorAll('.lset-item').forEach(btn => btn.addEventListener('click', () => {
@@ -2130,12 +2270,16 @@
                     const fr = box.querySelector('.ltheater-freq'); if (fr) fr.classList.toggle('off', !e.target.checked);
                 } else if (k === 'cafe') {
                     try { localStorage.setItem('cafe_offline_visits', e.target.checked ? '1' : '0'); } catch (_) {}
+                } else if (k === 'npcdec') {
+                    ND?.setOn(e.target.checked);
+                    if (S.scene === 'cafe') { _closeLobbySettings(); unmount(); tryMount(); }
                 } else if (k === 'uisfx') {
                     window.VoidUiSfx?.setOn(e.target.checked);
                     const vr = box.querySelector('[data-volrow]'); if (vr) vr.classList.toggle('off', !e.target.checked);
                     if (e.target.checked) window.VoidUiSfx?.play('toggle');
                 }
             }));
+            box.querySelector('.lset-key')?.addEventListener('input', (e) => { ND?.setKey(e.target.value); });
             box.querySelectorAll('.ltheater-freq-btn[data-vol]').forEach(btn => btn.addEventListener('click', () => {
                 window.VoidUiSfx?.setVol(parseInt(btn.dataset.vol, 10));
                 box.querySelectorAll('.ltheater-freq-btn[data-vol]').forEach(b => b.classList.toggle('on', b === btn));

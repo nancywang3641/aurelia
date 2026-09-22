@@ -107,12 +107,14 @@
         const zone = _b.CFG.points.npcZone;
         if (!zone) return;
         SN_RESIDENTS.filter(r => Array.isArray(r.scenes) && r.scenes.includes(S.scene)).forEach(r => {
-            if (Math.random() >= r.chance) return;
+            // 🎲 書咖的丹＝自己決定下一步（npc_decide.js）；試跑期間只有他一個，開著時每次都在，方便看
+            const decider = r.key === 'dan' && S.scene === 'cafe' && !!(window.NPC_DECIDE && window.NPC_DECIDE.isOn());
+            if (!decider && Math.random() >= r.chance) return;
             const x = zone.x + Math.random() * zone.w;
             const y = zone.y + Math.random() * zone.h;
             _b.addNpc({ key:r.key, name:r.name, personaFull:r.personaFull, subTitle:r.subTitle,
                      x, y, h:200, src:{ sheet:r.walk }, portrait:r.portrait,
-                     noWander:true, avoidBlocks:true, homeRect:zone });
+                     noWander:true, decider, avoidBlocks:true, homeRect:zone });
         });
     }
     async function initNpcs() {

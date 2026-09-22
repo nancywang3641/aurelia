@@ -211,6 +211,7 @@
         { group: '大廳與世界', id: 'theater_note', name: '小劇場記事 / 角色記憶整理',  def: 'sec'  },
         { group: '大廳與世界', id: 'lobby_chat',   name: '大廳角色對話與小遊戲',       def: 'sec'  },
         { group: '大廳與世界', id: 'cafe',         name: '書咖',                       def: 'sec'  },
+        { group: '大廳與世界', id: 'npc_decide',   name: 'NPC 決定下一步（沒填決策模型鑰匙時）', def: 'sec'  },
         { group: '大廳與世界', id: 'estate',       name: '房產（租客 / 房間）',        def: 'sec'  },
         { group: '大廳與世界', id: 'blueprint',    name: '造物工坊',                   def: 'sec'  },
         { group: '大廳與世界', id: 'worldgate',    name: '世界門',                     def: 'sec'  },
