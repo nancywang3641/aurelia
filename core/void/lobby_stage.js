@@ -1245,6 +1245,12 @@
     const DEC_LEAVE_AFTER_MS = 5 * 60 * 1000;   // 進店滿五分鐘才把「離開」放進選項，免得一進門就走
     // 開關直接讀存檔（跟 npc_decide.js 的 isOn 同一格），不等那支檔載好：大廳可能比它先建出來
     function _decOn() { try { return localStorage.getItem('npc_decide_on') !== '0'; } catch (e) { return true; } }
+    // 她放置不管（常常幾個小時）時不問：5 分鐘沒碰滑鼠／鍵盤／觸控就停在原地，一碰就接著想。
+    //   視窗縮小或切走本來就不問（document.hidden），這條管的是「視窗開在螢幕上、人不在」。
+    const DEC_IDLE_MS = 5 * 60 * 1000;
+    let _decLastInput = Date.now();
+    ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach(ev =>
+        document.addEventListener(ev, () => { _decLastInput = Date.now(); }, { passive: true, capture: true }));
     // 走路用的身體寬度：取「她的小人」和「他自己」比較窄的那個。寬度是照各自的圖量的，
     //   換過裝的 NPC 常比她寬，她擠得過的桌椅縫他過不去 → 在她擺的書咖裡出生就被圍死（09-23 她實測卡住）。
     //   她走得過的地方他就要走得過。
@@ -1454,7 +1460,8 @@
                 else if (vx) n.flip = vx > 0;
             }
             if (!D.chatWith) D.waitT -= dt;   // 聊天中不想下一步
-            if (D.waitT <= 0 && !D.chatWith && !D.busy && !document.hidden && window.NPC_DECIDE) _decAsk(n, D);   // 還沒載好就先站著，載好下一幀就問
+            if (D.waitT <= 0 && !D.chatWith && !D.busy && !document.hidden && window.NPC_DECIDE
+                && Date.now() - _decLastInput < DEC_IDLE_MS) _decAsk(n, D);   // 還沒載好就先站著，載好下一幀就問
         }
         placeActor(n); placeNpcExtras(n); _npcNearCheck(n);
     }
@@ -2312,7 +2319,7 @@
         const _help = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
         if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
             lset_npcdec: { title: '書咖的丹自己決定去哪', body: '打開以後，每次進書咖丹都會在，而且會自己走動：站一會兒就決定下一步，可能走去書櫃、走到桌子旁、走過來找你、在店裡晃，或待在原地；待滿五分鐘後也可能離開書咖。\n\n關掉就跟以前一樣，偶爾出現、站著不動。\n\n切換後會重新進一次這個地方。' },
-            lset_npckey: { title: '決策模型鑰匙', body: '填 Vercel AI Gateway 的鑰匙，丹就用決策模型 Jev 決定下一步，大約每 5～12 秒想一次，一次不到台幣 0.001 元。\n\n沒填，或那一次 Jev 沒回應，就改問副模型，大約每 20～40 秒想一次，每次都是一通正常的副模型呼叫。\n\n鑰匙只存在這台裝置上，電腦和手機要各填一次。' },
+            lset_npckey: { title: '決策模型鑰匙', body: '填 Vercel AI Gateway 的鑰匙，丹就用決策模型 Jev 決定下一步，大約每 15～25 秒想一次，一次不到台幣 0.001 元，一小時大約台幣 0.2 元。\n\n沒填，或那一次 Jev 沒回應，就改問副模型，大約每 20～40 秒想一次，每次都是一通正常的副模型呼叫。\n\n你 5 分鐘沒碰滑鼠、鍵盤或螢幕，他就停在原地不想；一碰就繼續。視窗縮小或切走時也不想。\n\n鑰匙只存在這台裝置上，電腦和手機要各填一次。' },
         });
         function _optsHtml() {
             const sfxOn = window.VoidUiSfx ? window.VoidUiSfx.isOn() : false;
