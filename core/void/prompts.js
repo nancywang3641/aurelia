@@ -102,9 +102,11 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 
     // buildNpcPrompt(npc, ctx) — 書咖舞台的典籍角色對話
     //   npc: { name, storyTitle, persona, personaFull }
-    //   ctx: { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec, worldCtx, personaSupplement }
+    //   ctx: { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec, worldCtx, personaSupplement, stageCtx }
+    //   stageCtx：會自己在店裡走動的 NPC（書咖的丹）此刻在哪、剛才做了什麼、心情；其他人沒有就空
     function buildNpcPrompt(npc, ctx) {
-        const { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec, worldCtx, personaSupplement } = ctx || {};
+        const { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec, worldCtx, personaSupplement, stageCtx } = ctx || {};
+        const stageSec = stageCtx ? ('\n\n【你此刻在店裡的狀況】\n' + stageCtx) : '';
         // 對話對象：優先當前酒館 persona（含描述），沒有才退登入名/訪客
         const who = (userPersona && userPersona.name)
             ? (userPersona.name + (userPersona.desc ? '（' + userPersona.desc + '）' : ''))
@@ -118,12 +120,12 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
         // personaFull=完整人設卡（如愛麗絲），直接採用＋overlay 補充＋格式段
         if (npc.personaFull) {
             const supp = personaSupplement ? ('\n\n' + personaSupplement) : '';
-            return npc.personaFull + supp + worldSec + memBlock + lobbySec + '\n\n【對話對象】\n' + who + '。\n\n' +
+            return npc.personaFull + supp + worldSec + memBlock + lobbySec + stageSec + '\n\n【對話對象】\n' + who + '。\n\n' +
 '【對話輸出格式】\n旁白/動作：[Nar|動作描述]\n角色對話：[Char|' + npc.name + '|表情|「對話內容」]\n表情只用：normal/smile/think/surprise/warning/error。\n' +
 (timeCtx || '');
         }
         return '你現在扮演' + (npc.persona || ('角色「' + npc.name + '」')) + '，' +
-'此刻你正坐在「視差書咖」裡休息——這間店是故事角色們下班後歇腳的地方，店長是天然呆小說家瀅瀅。' + worldSec + memBlock + '\n\n' +
+'此刻你正坐在「視差書咖」裡休息——這間店是故事角色們下班後歇腳的地方，店長是天然呆小說家瀅瀅。' + worldSec + memBlock + stageSec + '\n\n' +
 '【對話對象】\n書咖的常客、委託人：' + who + '。\n\n' +
 '【扮演規則】\n' +
 '1. 完全以「' + npc.name + '」的身分、性格與記憶說話，語氣貼合原作；你知道自己來自《' + (npc.storyTitle || '一本書') + '》的世界，此刻是在故事之外的休憩時光。\n' +

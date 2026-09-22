@@ -2234,6 +2234,7 @@ ${sections}`;
                     lobbyTemplateSec: (npcTarget.key === 'alice') ? lobbyTemplateSec : '',
                     worldCtx,
                     personaSupplement: aliceSupplement,
+                    stageCtx: window.LobbyStage?.npcNowCtx?.(npcTarget) || '',   // 🎲 會自己走動的 NPC：此刻在哪、剛才做了什麼
                 })
                 : VoidPrompts.buildSysPrompt(is404Room ? 'cheshire' : 'iris', {
                 userName: _userNameWithPersona,

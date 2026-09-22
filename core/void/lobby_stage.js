@@ -1397,6 +1397,25 @@
             .catch(e => { console.warn('[NPC決策] 這次沒決定成', e); D.waitT = 30000; })
             .finally(() => { D.busy = false; });
     }
+    // 跟他說話時帶一行「他此刻在店裡的狀況」：不帶的話，他自己走到她旁邊、她一開口，他會當成是她來找他；
+    //   剛跟瀅瀅聊完、剛在書櫃前翻書也都不知道。只帶現在這一刻，不帶整份走動紀錄（會變流水帳）。
+    //   寫給模型看的：「對方」＝【對話對象】那一段寫的人。
+    const DEC_WHERE = {
+        approach_player: '對方身邊', go_table: '一張桌子旁邊', go_shelf: '書櫃前', wander: '店裡', leave: '門口',
+    };
+    function _decTalkCtx(n) {
+        const D = n && n.decider && n._dec;
+        if (!D) return '';
+        const lines = [];
+        const place = (SCENE_HEADER[S.scene] && SCENE_HEADER[S.scene].badge) || '店裡';
+        if (D.chatWith) lines.push('你正站在' + (D.chatWith.name || '別人') + '旁邊跟對方聊天。');
+        else if (D.last === 'chat') lines.push('你剛跟' + (D.chatName || '別人') + '聊完天。');
+        else if (D.last === 'approach_player') lines.push(n.dest ? '你正自己走向對方。' : '是你自己走到對方身邊的，不是對方來找你。');
+        else if (D.last) lines.push(n.dest ? ('你正走向' + (DEC_WHERE[D.last] || '店裡某處') + '。') : ('你在' + place + '的' + (DEC_WHERE[D.last] || '店裡') + '，剛才' + DEC_ACTIONS[D.last] + '。'));
+        else lines.push('你剛走進' + place + '。');
+        if (D.mood) lines.push('你現在的心情：' + D.mood + '。');
+        return lines.join('');
+    }
     function _decRemove(n) {
         [n.el, n.tag, n.hint].forEach(el => { try { el && el.remove(); } catch (e) {} });
         const i = S.npcs.indexOf(n); if (i >= 0) S.npcs.splice(i, 1);
@@ -2866,6 +2885,7 @@
         isActive: () => S.active,
         isOn,
         getTalkTarget: () => S.talkTarget,
+        npcNowCtx: _decTalkCtx,             // 🎲 跟會自己走動的 NPC 說話時，他此刻在哪、剛才做了什麼（void_terminal 組人設時帶）
         getDefaultTarget,
         setTalkTarget: (t) => { S.talkTarget = t || null; },
         endTalk,
