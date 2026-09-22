@@ -1245,6 +1245,13 @@
     const DEC_LEAVE_AFTER_MS = 5 * 60 * 1000;   // 進店滿五分鐘才把「離開」放進選項，免得一進門就走
     // 開關直接讀存檔（跟 npc_decide.js 的 isOn 同一格），不等那支檔載好：大廳可能比它先建出來
     function _decOn() { try { return localStorage.getItem('npc_decide_on') !== '0'; } catch (e) { return true; } }
+    // 走路用的身體寬度：取「她的小人」和「他自己」比較窄的那個。寬度是照各自的圖量的，
+    //   換過裝的 NPC 常比她寬，她擠得過的桌椅縫他過不去 → 在她擺的書咖裡出生就被圍死（09-23 她實測卡住）。
+    //   她走得過的地方他就要走得過。
+    function _decHw(n) {
+        const ph = S.player && S.player.hw;
+        return ph ? Math.min(n.hw || ph, ph) : n.hw;
+    }
     function _decObjs(word) {
         return ((CFG && CFG.layout) || []).filter(o => o && o.file && o.file.indexOf(word) >= 0 && !o.plot && !o.plotFrame);
     }
@@ -1328,14 +1335,14 @@
     // 找路：直直走會被桌椅擋住就放棄，所以先在 16px 的格子上找一條走得通的路，
     //   再把路上「直線看得到」的點省掉，只留轉彎處。目的地走不到就停在找得到的最近那格。
     function _decPath(n, t) {
-        const C = 16, W = Math.ceil(MAP_W / C), H = Math.ceil(MAP_H / C);
+        const C = 16, W = Math.ceil(MAP_W / C), H = Math.ceil(MAP_H / C), hw = _decHw(n);
         const sx = Math.round(n.x / C), sy = Math.round(n.y / C);
         const tx = Math.round(t.x / C), ty = Math.round(t.y / C);
         const inMap = (cx, cy) => cx >= 0 && cy >= 0 && cx < W && cy < H;
         const free = new Int8Array(W * H);   // 0=還沒量 1=能走 2=擋住
         const ok = (cx, cy) => {
             const i = cy * W + cx;
-            if (!free[i]) free[i] = blocked(cx * C, cy * C, n.hw) ? 2 : 1;
+            if (!free[i]) free[i] = blocked(cx * C, cy * C, hw) ? 2 : 1;
             return free[i] === 1;
         };
         const prev = new Int32Array(W * H).fill(-1);
@@ -1368,7 +1375,7 @@
         let from = { x: n.x, y: n.y }, k = 0;
         while (k < pts.length) {
             let far = k;
-            for (let m = pts.length - 1; m > k; m--) { if (!blockedPath(from.x, from.y, pts[m].x, pts[m].y, n.hw)) { far = m; break; } }
+            for (let m = pts.length - 1; m > k; m--) { if (!blockedPath(from.x, from.y, pts[m].x, pts[m].y, hw)) { far = m; break; } }
             out.push(pts[far]); from = pts[far]; k = far + 1;
         }
         return out;
@@ -1390,7 +1397,15 @@
         if (!n._dec) {
             // 客人是在出沒框裡隨機刷的，框角會超出店的可走範圍（書咖右下角就是牆外）；站著的客人看不出來，
             // 要走路的一出生卡在牆外，每一步都被擋 → 先挪回最近的地板
-            if (blocked(n.x, n.y, n.hw)) { const sp = findFreeSpot(n.x, n.y); n.x = sp.x; n.y = sp.y; }
+            if (blocked(n.x, n.y, _decHw(n))) { const sp = findFreeSpot(n.x, n.y); n.x = sp.x; n.y = sp.y; }
+            // 刷在家具圍起來的小角落（走不到她那裡）→ 改放到她旁邊的空地
+            if (S.player) {
+                const pth = _decPath(n, S.player), end = pth[pth.length - 1] || n;
+                if (Math.hypot(end.x - S.player.x, end.y - S.player.y) > 60) {
+                    const sp = findFreeSpot(S.player.x + (Math.random() < 0.5 ? -1 : 1) * 110, S.player.y);
+                    n.x = sp.x; n.y = sp.y;
+                }
+            }
         }
         const D = n._dec || (n._dec = { waitT: 2500 + Math.random() * 2500, bornAt: Date.now(), busy: false });
         // 🎭 小劇場把他跟別人配成一對：走到對方旁邊、面對面站著，等她點泡泡偷聽完（散場）才回去自己決定
@@ -1410,8 +1425,10 @@
         if (n.dest) {
             const vx = n.dest.x - n.x, vy = n.dest.y - n.y, d = Math.hypot(vx, vy);
             D.walkT = (D.walkT || 0) + dt;
-            if (D.path && D.path.length && (d < 6 || (d < 14 && !blockedPath(n.x, n.y, D.path[0].x, D.path[0].y, n.hw)))) { n.dest = D.path.shift(); placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }   // 到了轉彎處，換下一段
-            const moved = d >= 6 && D.walkT < 25000 && _slideMove(n, vx / d, vy / d, Math.min(d, 0.12 * dt));
+            if (D.path && D.path.length && (d < 6 || (d < 14 && !blockedPath(n.x, n.y, D.path[0].x, D.path[0].y, _decHw(n))))) { n.dest = D.path.shift(); placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }   // 到了轉彎處，換下一段
+            const body = { x: n.x, y: n.y, hw: _decHw(n) };
+            const moved = d >= 6 && D.walkT < 25000 && _slideMove(body, vx / d, vy / d, Math.min(d, 0.12 * dt));
+            if (moved) { n.x = body.x; n.y = body.y; }
             if (moved) {
                 n.walking = true;
                 if (n.sheet) {
