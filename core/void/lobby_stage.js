@@ -1159,7 +1159,8 @@
         S.npcs.forEach(n => {
             // 🎭 小劇場：凍結當事 NPC 的漫步/跟隨/面向，維持面對面。凍的是走動不是搭話——
             //    近距檢查照跑，否則玩家走過去搭話泡泡不會亮，愛麗絲/瀅瀅被抓去配對時就等於點不開。
-            if (n._theaterFrozen) { _npcNearCheck(n); return; }
+            //    自己決定下一步的 NPC 例外：他不凍，交給 _deciderStep 走過去找對方、面對面站著（她 09-23 選的）
+            if (n._theaterFrozen && !(n.decider && _decOn())) { _npcNearCheck(n); return; }
             if (n.facePlayer && S.player) {   // 愛麗絲永遠面向玩家
                 if (n.sheet) n.dir = S.player.x < n.x ? 1 : 2;
                 else n.flip = S.player.x > n.x;   // 原圖朝左：玩家在右側才鏡像成朝右
@@ -1283,7 +1284,7 @@
             time: hh + ':' + mm + '（' + (_isNightNow() ? '晚上' : '白天') + '）',
             minutes_in_shop: Math.round((Date.now() - D.bornAt) / 60000),
             mood: D.mood || '還不知道',
-            last_action: D.last ? DEC_ACTIONS[D.last] : '剛走進店裡',
+            last_action: D.last === 'chat' ? ('剛跟' + (D.chatName || '別人') + '聊完天') : D.last ? DEC_ACTIONS[D.last] : '剛走進店裡',
             player: p ? {
                 distance: _decDistWord(n, p),
                 doing: S.talkTarget ? ('正在跟' + (S.talkTarget.name || '別人') + '說話') : (p.walking ? '在走動' : '站著'),
@@ -1376,7 +1377,7 @@
         D.busy = true;
         const scene = S.scene;
         window.NPC_DECIDE.decide(_decState(n, D), _decActions(n, D))
-            .then(r => { if (S.scene === scene && S.npcs.indexOf(n) >= 0) _decApply(n, D, r); })
+            .then(r => { if (S.scene === scene && S.npcs.indexOf(n) >= 0 && !D.chatWith) _decApply(n, D, r); })   // 問到一半被小劇場抓走→這次答案作廢
             .catch(e => { console.warn('[NPC決策] 這次沒決定成', e); D.waitT = 30000; })
             .finally(() => { D.busy = false; });
     }
@@ -1392,6 +1393,20 @@
             if (blocked(n.x, n.y, n.hw)) { const sp = findFreeSpot(n.x, n.y); n.x = sp.x; n.y = sp.y; }
         }
         const D = n._dec || (n._dec = { waitT: 2500 + Math.random() * 2500, bornAt: Date.now(), busy: false });
+        // 🎭 小劇場把他跟別人配成一對：走到對方旁邊、面對面站著，等她點泡泡偷聽完（散場）才回去自己決定
+        const T = S.theater;
+        const partner = (n._theaterFrozen && T) ? (T.a === n ? T.b : T.a) : null;
+        if (partner && D.chatWith !== partner) {
+            D.chatWith = partner; D.facePlayer = false; D.leaving = false;
+            const side = n.x < partner.x ? -1 : 1;   // 站在對方靠自己這一側
+            const t = findFreeSpot(partner.x + side * 70, partner.y);
+            D.goal = t; D.replans = 0; D.walkT = 0;
+            D.path = _decPath(n, t);
+            n.dest = D.path.shift() || null;
+        } else if (!partner && D.chatWith) {
+            D.last = 'chat'; D.chatName = D.chatWith.name; D.chatWith = null;
+            D.waitT = 3000 + Math.random() * 3000;
+        }
         if (n.dest) {
             const vx = n.dest.x - n.x, vy = n.dest.y - n.y, d = Math.hypot(vx, vy);
             D.walkT = (D.walkT || 0) + dt;
@@ -1415,13 +1430,14 @@
             }
         } else {
             n.walking = false;
-            if (D.facePlayer && S.player) {
-                const vx = S.player.x - n.x, vy = S.player.y - n.y;
+            const face = D.chatWith || (D.facePlayer && S.player);
+            if (face) {
+                const vx = face.x - n.x, vy = face.y - n.y;
                 if (n.sheet) { n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0); n.frame = 1; }
                 else if (vx) n.flip = vx > 0;
             }
-            D.waitT -= dt;
-            if (D.waitT <= 0 && !D.busy && !document.hidden && window.NPC_DECIDE) _decAsk(n, D);   // 還沒載好就先站著，載好下一幀就問
+            if (!D.chatWith) D.waitT -= dt;   // 聊天中不想下一步
+            if (D.waitT <= 0 && !D.chatWith && !D.busy && !document.hidden && window.NPC_DECIDE) _decAsk(n, D);   // 還沒載好就先站著，載好下一幀就問
         }
         placeActor(n); placeNpcExtras(n); _npcNearCheck(n);
     }
