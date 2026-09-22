@@ -136,6 +136,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_lobby_editor', path: _AURELIA_EXT_BASE + '/core/void/lobby_editor.js', key: 'voidLobbyEditor' },   // 🖊 擺設模式編輯器（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_npcs', path: _AURELIA_EXT_BASE + '/core/void/lobby_npcs.js', key: 'voidLobbyNpcs' },   // 🧑‍🤝‍🧑 NPC 生成/名冊（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_places', path: _AURELIA_EXT_BASE + '/core/void/lobby_places.js', key: 'voidLobbyPlaces' },   // 🧭 地點清單(單一真相)+立繪模式地點面板；讀 lobby_stage 的 _b 橋，必須排它後面
+    { name: 'void_lobby_decider', path: _AURELIA_EXT_BASE + '/core/void/lobby_decider.js', key: 'voidLobbyDecider' },   // 🎲 自己決定下一步的 NPC（書咖的丹：找路走路／小劇場／設置三格）；靠 lobby_stage 的 _b 橋，必須排它後面；整支拿掉＝丹回到站著
     { name: 'void_npc_decide', path: _AURELIA_EXT_BASE + '/core/void/npc_decide.js', key: 'voidNpcDecide' },   // 🎲 NPC 決定下一步（Jev／副模型）；lobby_stage 用到時才讀 window.NPC_DECIDE
     { name: 'void_lobby_workshop', path: _AURELIA_EXT_BASE + '/core/void/lobby_workshop.js', key: 'voidLobbyWorkshop' },   // 🎩 造物工坊面板本體（帽匠工坊/立繪模式共用；只用 window 上的 OS_STUDIO 與 APP_STORE，無載入順序要求）
     { name: 'void_login', path: _AURELIA_EXT_BASE + '/core/void/login.js', key: 'voidLogin' },

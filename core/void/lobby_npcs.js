@@ -109,7 +109,8 @@
         SN_RESIDENTS.filter(r => Array.isArray(r.scenes) && r.scenes.includes(S.scene)).forEach(r => {
             // 🎲 書咖的丹＝自己決定下一步（npc_decide.js）；試跑期間只有他一個，開著時每次都在，方便看
             //    🚨 看開關本身，不看 NPC_DECIDE 載好沒：大廳可能比 npc_decide.js 先建出來（酒館走網路拉檔時），那時問模組會是 false
-            const decider = r.key === 'dan' && S.scene === 'cafe' && _b.decOn();
+            //    開關跟 lobby_decider.js、npc_decide.js 讀同一格存檔；拿掉那兩支檔時，丹照舊站著（主迴圈沒人接手就走 noWander）
+            const decider = r.key === 'dan' && S.scene === 'cafe' && (() => { try { return localStorage.getItem('npc_decide_on') !== '0'; } catch (e) { return true; } })();
             if (!decider && Math.random() >= r.chance) return;
             const x = zone.x + Math.random() * zone.w;
             const y = zone.y + Math.random() * zone.h;
