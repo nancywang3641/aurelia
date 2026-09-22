@@ -276,6 +276,11 @@
 .lstage-settings .lset-key { flex:1; min-width:0; max-width:190px; padding:5px 8px; border:1px solid rgba(60,80,130,.25);
   border-radius:8px; background:rgba(240,244,252,.65); color:#23315e; font-size:12px; font-family:inherit; }
 .lstage-settings .lset-key:focus { outline:none; border-color:#4a78d8; }
+.lstage-settings .lset-numwrap { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+.lstage-settings .lset-num { width:64px; padding:5px 8px; border:1px solid rgba(60,80,130,.25); border-radius:8px;
+  background:rgba(240,244,252,.65); color:#23315e; font-size:12px; font-family:inherit; text-align:right; }
+.lstage-settings .lset-num:focus { outline:none; border-color:#4a78d8; }
+.lstage-settings .lset-unit { color:#5a6784; font-size:12px; }
 .lstage-settings .lset-list { display:flex; flex-direction:column; gap:6px; }
 .lstage-settings .lset-item { display:flex; align-items:center; gap:10px; width:100%;
   padding:9px 10px; border:1px solid rgba(60,80,130,.18); border-radius:12px; cursor:pointer; text-align:left;

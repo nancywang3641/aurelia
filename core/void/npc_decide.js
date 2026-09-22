@@ -4,7 +4,9 @@
 //
 //    走哪個模型：
 //    - 她填了決策模型鑰匙 → 問 Jev（TypeSafe 的決策模型，經 Vercel AI Gateway）。
-//      Jev 不生字，一次回四題：挑哪件事（附每件的機率）、心情幾分、會不會主動搭話（機率）、做完想待多久。
+//      Jev 不生字，一次回三題：挑哪件事（附每件的機率）、心情幾分、會不會主動搭話（機率）。
+//      「待在原地」不放進選項：放進去的話，只要選到一次，狀況寫著「上一步待在原地」，Jev 就給它九成以上，
+//      永遠站著（09-23 實測）。多久想一次改由她在大廳設置填（分鐘），兩次之間他本來就站著。
 //      挑哪件事照機率抽，不是永遠拿最高那個，NPC 才不會每次都做一樣的事。
 //    - 沒填鑰匙，或 Jev 這一次失敗 → 改問副模型，只叫它回一個動作代號（task 'npc_decide'）。
 //    送出去的只有狀況本身，不放鑰匙、不放她的私人資料。
@@ -16,7 +18,6 @@
     const JEV_URL = 'https://ai-gateway.vercel.sh/v1/evaluate';
     const JEV_MODEL = 'typesafe-ai/jev';
     const MOODS = ['很差', '普通', '不錯', '很好'];
-    const LINGER = ['馬上又想動', '待一下子', '待很久'];
     const LOG_MAX = 20;
     const log = [];   // 最近幾次決定（DEBUG 執行框看：NPC_DECIDE.log）
 
@@ -44,9 +45,6 @@
                 next_action: { type: 'choice', instructions: name + '接下來要做什麼？', criteria: actions },
                 mood: { type: 'score', instructions: name + '現在心情多好？', criteria: MOODS },
                 will_talk_to_player: { type: 'boolean', instructions: name + '會不會主動跟玩家說話？' },
-                // 「待著」不放進 next_action：放進去的話，只要選到一次，下一次狀況寫著「上一步待在原地」，
-                // Jev 就給它九成以上，永遠站著（09-23 實測）。改成另一題問「待多久」，呼叫端照它決定站多久。
-                linger: { type: 'score', instructions: name + '做完這件事之後，想在那裡待多久才再動？', criteria: LINGER },
             },
         };
         const ctrl = new AbortController();
@@ -71,16 +69,14 @@
         if (!Object.prototype.hasOwnProperty.call(actions, action)) action = na.choice;
         if (!Object.prototype.hasOwnProperty.call(actions, action)) throw new Error('回了清單外的動作：' + action);
         const sc = A.mood && typeof A.mood.score === 'number' ? A.mood.score : null;
-        const lg = A.linger && typeof A.linger.score === 'number' ? A.linger.score : null;
         const pTalk = A.will_talk_to_player && typeof A.will_talk_to_player.probability === 'number' ? A.will_talk_to_player.probability : null;
         const gw = data.providerMetadata && data.providerMetadata.gateway;
         return {
             action,
             mood: sc == null ? null : MOODS[Math.max(0, Math.min(MOODS.length - 1, Math.round(sc)))],
             talk: pTalk == null ? null : Math.random() < pTalk,
-            linger: lg == null ? null : lg / (LINGER.length - 1),   // 0＝馬上又想動 … 1＝待很久
             source: 'jev',
-            detail: { probabilities: na.probabilities || null, moodScore: sc, talkProbability: pTalk, lingerScore: lg },
+            detail: { probabilities: na.probabilities || null, moodScore: sc, talkProbability: pTalk },
             usage: data.usage || null,
             cost: gw ? { charged: gw.cost, market: gw.marketCost } : null,
         };
@@ -102,7 +98,7 @@
                 const txt = String(reply || '');
                 const hit = keys.filter(k => txt.indexOf(k) >= 0).sort((a, b) => txt.indexOf(a) - txt.indexOf(b))[0];
                 if (!hit) { reject(new Error('副模型沒回清單裡的代號：' + txt.slice(0, 60))); return; }
-                resolve({ action: hit, mood: null, talk: null, linger: null, source: 'llm', detail: { reply: txt.slice(0, 120) }, usage: null, cost: null });
+                resolve({ action: hit, mood: null, talk: null, source: 'llm', detail: { reply: txt.slice(0, 120) }, usage: null, cost: null });
             }, reject, { task: 'npc_decide' });
         });
     }

@@ -1248,6 +1248,13 @@
     // 她放置不管（常常幾個小時）時不問：5 分鐘沒碰滑鼠／鍵盤／觸控就停在原地，一碰就接著想。
     //   視窗縮小或切走本來就不問（document.hidden），這條管的是「視窗開在螢幕上、人不在」。
     const DEC_IDLE_MS = 5 * 60 * 1000;
+    // 多久想一次＝她在大廳設置填的分鐘數（跟微信「他會主動找我」多久來一次同一種格子），預設 3 分鐘
+    const DEC_MINS_MIN = 1, DEC_MINS_MAX = 1440;
+    function _decMins() {
+        let m = 3;
+        try { const v = parseInt(localStorage.getItem('npc_decide_mins'), 10); if (isFinite(v)) m = v; } catch (e) {}
+        return Math.max(DEC_MINS_MIN, Math.min(DEC_MINS_MAX, m));
+    }
     let _decLastInput = Date.now();
     ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach(ev =>
         document.addEventListener(ev, () => { _decLastInput = Date.now(); }, { passive: true, capture: true }));
@@ -1310,12 +1317,8 @@
         if (r.mood) D.mood = r.mood;
         if (r.talk != null) D.talk = r.talk;
         D.facePlayer = false; D.leaving = false; n.dest = null;
-        // 站多久＝Jev 的「待多久」那題：馬上又想動≈4 秒、待一下子≈15 秒、待很久≈半分鐘，再上下晃兩成免得像節拍器。
-        //   走副模型的話問慢一點（每一次都是一通正常的模型呼叫）
-        const slow = r.source !== 'jev';
-        D.waitT = slow ? 20000 + Math.random() * 20000
-            : r.linger != null ? (4000 + r.linger * 26000) * (0.8 + Math.random() * 0.4)
-            : 5000 + Math.random() * 7000;
+        // 下一次想＝她填的分鐘數，上下晃兩成免得像鬧鐘（走到那裡的時間不算在裡面）
+        D.waitT = _decMins() * 60000 * (0.8 + Math.random() * 0.4);
         let t = null;
         if (r.action === 'approach_player' && S.player) {
             const p = S.player, ang = Math.atan2(n.y - p.y, n.x - p.x);
@@ -2319,7 +2322,7 @@
         const _help = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
         if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
             lset_npcdec: { title: '書咖的丹自己決定去哪', body: '打開以後，每次進書咖丹都會在，而且會自己走動：站一會兒就決定下一步，可能走去書櫃、走到桌子旁、走過來找你、在店裡晃，或待在原地；待滿五分鐘後也可能離開書咖。\n\n關掉就跟以前一樣，偶爾出現、站著不動。\n\n切換後會重新進一次這個地方。' },
-            lset_npckey: { title: '決策模型鑰匙', body: '填 Vercel AI Gateway 的鑰匙，丹就用決策模型 Jev 決定下一步，大約每 15～25 秒想一次，一次不到台幣 0.001 元，一小時大約台幣 0.2 元。\n\n沒填，或那一次 Jev 沒回應，就改問副模型，大約每 20～40 秒想一次，每次都是一通正常的副模型呼叫。\n\n你 5 分鐘沒碰滑鼠、鍵盤或螢幕，他就停在原地不想；一碰就繼續。視窗縮小或切走時也不想。\n\n鑰匙只存在這台裝置上，電腦和手機要各填一次。' },
+            lset_npckey: { title: '決策模型鑰匙', body: '填 Vercel AI Gateway 的鑰匙，丹就用決策模型 Jev 決定下一步，一次不到台幣 0.001 元。多久想一次照下面那格填的分鐘數。\n\n沒填，或那一次 Jev 沒回應，就改問副模型，每次都是一通正常的副模型呼叫。\n\n你 5 分鐘沒碰滑鼠、鍵盤或螢幕，他就停在原地不想；一碰就繼續。視窗縮小或切走時也不想。\n\n鑰匙只存在這台裝置上，電腦和手機要各填一次。' },
         });
         function _optsHtml() {
             const sfxOn = window.VoidUiSfx ? window.VoidUiSfx.isOn() : false;
@@ -2355,7 +2358,10 @@
                 '<label class="lset-row"><span class="lset-tx">書咖的丹自己決定去哪' + _help('lset_npcdec') + '</span>' +
                   '<input type="checkbox" class="lset-chk" data-k="npcdec"' + (ND && ND.isOn() ? ' checked' : '') + '></label>' +
                 '<div class="lset-row"><span class="lset-tx">決策模型鑰匙' + _help('lset_npckey') + '</span>' +
-                  '<input type="password" class="lset-key" autocomplete="off" placeholder="沒填就用副模型" value="' + String(ND ? ND.getKey() : '').replace(/[&"<>]/g, '') + '"></div>';
+                  '<input type="password" class="lset-key" autocomplete="off" placeholder="沒填就用副模型" value="' + String(ND ? ND.getKey() : '').replace(/[&"<>]/g, '') + '"></div>' +
+                '<div class="lset-row"><span class="lset-tx">多久想一次下一步</span>' +
+                  '<span class="lset-numwrap"><input type="number" class="lset-num" inputmode="numeric" min="' + DEC_MINS_MIN + '" max="' + DEC_MINS_MAX + '" step="1" value="' + _decMins() + '">' +
+                  '<span class="lset-unit">分鐘</span></span></div>';
         }
         function _bindChars() {
             box.querySelectorAll('.lset-item').forEach(btn => btn.addEventListener('click', () => {
@@ -2387,6 +2393,13 @@
                 }
             }));
             box.querySelector('.lset-key')?.addEventListener('input', (e) => { ND?.setKey(e.target.value); });
+            box.querySelector('.lset-num')?.addEventListener('change', (e) => {
+                const v = Math.max(DEC_MINS_MIN, Math.min(DEC_MINS_MAX, parseInt(e.target.value, 10) || 3));
+                e.target.value = v;
+                try { localStorage.setItem('npc_decide_mins', String(v)); } catch (_) {}
+                // 已經在等的那一次也跟著縮短（改長不動它，免得她改完要等很久才看到效果）
+                S.npcs.forEach(n => { if (n._dec && n._dec.waitT > v * 60000) n._dec.waitT = v * 60000 * (0.8 + Math.random() * 0.4); });
+            });
             box.querySelectorAll('.ltheater-freq-btn[data-vol]').forEach(btn => btn.addEventListener('click', () => {
                 window.VoidUiSfx?.setVol(parseInt(btn.dataset.vol, 10));
                 box.querySelectorAll('.ltheater-freq-btn[data-vol]').forEach(b => b.classList.toggle('on', b === btn));
