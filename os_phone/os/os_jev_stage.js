@@ -6,7 +6,8 @@
 //   整場全文交給 Jev；每個人每次開口之後問一題：「他說完這句之後、到他下次開口之前，從第幾段起就不在現場了？」
 //   選項＝中間那幾段的段號＋「一直都在」。Jev 選了段號，播到那一段之前就收他的立繪（vn_core _jevStageHit）。
 //   Jev 有回答的那一章：AI 寫的第五欄 Leave、[Exit]、「幾行沒開口自動收」都不用，整章聽 Jev。
-//   沒填鑰匙、關掉、Jev 沒回應 → 這章照舊聽 AI 寫的 Stay/Leave。一章只聽一邊，不混著用。
+//   沒填鑰匙、關掉、Jev 沒回應 → 這章走舊的收法：幾行沒開口自動收（舊章節裡 AI 寫過的 Leave／[Exit] 也照收）。一章只聽一邊，不混著用。
+//   09-23 她：「AI那個邏輯一直很差」→ VN 指令裡教 AI 寫第五欄 Stay/Leave 和 [Exit] 的部分同一天拿掉了（os_vn_rules_data.js）。
 // 為什麼（2026-09-23，見丹的記憶 project_jev_optimization_ideas 4a3）：丹寫的四章考卷（9 個真的離場點）
 //   AI 的第五欄只收對 1 個；「5 段沒開口自動收」0 個對、收錯 32 次；Jev 選段號 9/9、收錯 2 次。
 //   她說這不用影子跑：只是分類，在某個區塊把人拿掉。
@@ -24,7 +25,7 @@
     const ON_LS = 'jev_stage_on';
     const LOG_MAX = 20;
     const Q_PER_CALL = 40;
-    const MAX_CALLS = 8;          // 題目多到要叫超過這麼多通 → 這章不問 Jev，照 AI 的
+    const MAX_CALLS = 8;          // 題目多到要叫超過這麼多通 → 這章不問 Jev，走舊的收法
     const SEG_MAX = 200;          // 送給 Jev 的每段最多這麼長
     const TXT_MAX = 50;           // 記錄裡每段只留這麼長
     const STAY = '一直都在';
@@ -43,6 +44,13 @@
     function clearLog() { try { localStorage.removeItem(LOG_LS); } catch (e) {} }
     function _clean(s) { return String(s || '').replace(/<[^>]+>/g, ' ').replace(/#[A-Za-z0-9_\-&]+#/g, '').replace(/\s+/g, ' ').trim(); }
     function _cut(s, n) { s = _clean(s); return s.length > n ? s.slice(0, n) + '…' : s; }
+    // [Char|名|表情|「台詞」]、自由模式 [Char|名|「台詞」]、舊的尾巴 |Stay/|Leave 都認：台詞是帶「」或 *…* 的那欄，沒有就取最後一欄（同 os_api_engine 的 _charLine）
+    function _charText(parts) {
+        const rest = parts.slice(1).map(x => String(x || '').trim());
+        while (rest.length > 1 && /^(stay|leave)$/i.test(rest[rest.length - 1])) rest.pop();
+        const d = rest.find(x => /[「」*]/.test(x));
+        return _clean(d != null ? d : (rest.length ? rest[rest.length - 1] : ''));
+    }
 
     // 劇本（vn_core 切好的一行一行）→ 一段一段＋場景切點＋AI 寫的離場點
     //   每段記下它在劇本裡是哪一行（line＝那一行原文、occ＝同樣的原文前面出現過幾次），vn_core 播到那一行就知道到了
@@ -69,7 +77,7 @@
                     const mcc = l.match(/^\[(Char|Nar)\|([\s\S]*)\]$/i);
                     if (mcc) {
                         const ps = mcc[2].split('|');
-                        add('', mcc[1].toLowerCase() === 'char' ? '（電話裡）' + (ps[0] || '').trim() + '：' + _clean(ps.slice(2).join(' ')) : '（通話中）' + _clean(ps[0]), raw, occ);
+                        add('', mcc[1].toLowerCase() === 'char' ? '（電話裡）' + (ps[0] || '').trim() + '：' + _charText(ps) : '（通話中）' + _clean(ps[0]), raw, occ);
                     }
                 } else {
                     const tx = _clean(l.replace(/^\[With:[^\]]*\]/i, '').replace(/^\[Time\].*/i, ''));
@@ -91,9 +99,9 @@
                 const who = (parts[0] || '').trim();
                 const last = (parts[parts.length - 1] || '').trim().toLowerCase();
                 cols++;
-                if (last === 'stay' || last === 'leave') parts.pop(); else colMissing++;
+                if (last !== 'stay' && last !== 'leave') colMissing++;
                 if (!who) return;
-                add(who, _clean(parts.slice(2).join(' ')), raw, occ);   // 第五欄剝掉：Jev 看不到 AI 寫的 Stay/Leave
+                add(who, _charText(parts), raw, occ);   // 舊格式尾巴的 Stay/Leave 剝掉：Jev 看不到
                 if (last === 'leave') aiLeave.push({ name: who, scene, from: segs.length + 1 });
             } else {
                 let text;
@@ -183,7 +191,7 @@
                     const state = { '這一場戲（逐段，P 後面是段號）': ss.map(s => 'P' + s.p + ' ' + (s.who ? s.who + '：「' + _cut(s.text, SEG_MAX) + '」' : '旁白：' + _cut(s.text, SEG_MAX))) };
                     for (let i = 0; i < qs.length; i += Q_PER_CALL) jobs.push({ state, qs: qs.slice(i, i + Q_PER_CALL) });
                 });
-                if (jobs.length > MAX_CALLS) throw new Error('題目太多（要叫 ' + jobs.length + ' 通），這章照 AI 的');
+                if (jobs.length > MAX_CALLS) throw new Error('題目太多（要叫 ' + jobs.length + ' 通），這章走舊的收法');
                 const removals = [];
                 let ms = 0, n = 0;
                 for (const j of jobs) {
@@ -222,20 +230,19 @@
         const log = getLog().slice(0, limit || 5);
         if (!log.length) return '還沒有記錄。在酒館裡播一章 VN，這裡就會有。';
         const L = [];
-        L.push('立繪交給 Jev 收：' + (isOn() ? '開著' : '關著（照 AI 寫的 Stay/Leave）'));
+        L.push('立繪交給 Jev 收：' + (isOn() ? '開著' : '關著（走舊的收法：幾行沒開口自動收）'));
         L.push('段號 P 是這一章裡第幾段（一句台詞或一段旁白算一段）');
         log.forEach((e, i) => {
             L.push('');
             L.push('══ 第 ' + (i + 1) + ' 章（' + e.at + (e.msgId != null ? '，第 ' + e.msgId + ' 樓' : '') + '）共 ' + e.segs + ' 段');
-            if (e.error) { L.push('  Jev 沒成：' + e.error + ' → 這章照 AI 寫的 Stay/Leave'); }
+            if (e.error) { L.push('  Jev 沒成：' + e.error + ' → 這章走舊的收法（幾行沒開口自動收）'); }
             else {
                 L.push('  這章聽 Jev｜叫了 ' + e.calls + ' 通、' + e.qs + ' 題，花 ' + ((e.ms || 0) / 1000).toFixed(1) + ' 秒');
                 if (!e.removals.length) L.push('  Jev 收的立繪：（沒有，大家都待到換場）');
                 else { L.push('  Jev 收的立繪：'); e.removals.forEach(r => L.push('    P' + r.p + ' 收 ' + r.name + (r.pr != null ? '（' + Math.round(r.pr * 100) + '%）' : '') + '｜' + r.text)); }
             }
-            if (e.cols) L.push('  AI 寫的台詞 ' + e.cols + ' 句' + (e.colMissing ? '，其中 ' + e.colMissing + ' 句沒寫 Stay/Leave' : ''));
-            if (!e.ai || !e.ai.length) L.push('  AI 自己寫的離場：（沒有）');
-            else { L.push('  AI 自己寫的離場（Leave／Exit）：'); e.ai.forEach(r => L.push('    P' + r.p + ' ' + r.name + '｜' + r.text)); }
+            if (e.cols && e.cols > e.colMissing) L.push('  AI 還有 ' + (e.cols - e.colMissing) + ' 句台詞照舊格式寫了 Stay/Leave（不影響，會慢慢消失）');
+            if (e.ai && e.ai.length) { L.push('  AI 照舊格式寫的離場（Leave／Exit，這章沒用上）：'); e.ai.forEach(r => L.push('    P' + r.p + ' ' + r.name + '｜' + r.text)); }
         });
         return L.join('\n');
     }

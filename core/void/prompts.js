@@ -210,7 +210,7 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
         // fallback：世界書抓不到 → 手寫精簡格式
         return head +
 '【VN 輸出格式（嚴格遵守）】\n' +
-'- ChapterCard 之後正文：旁白直接寫；角色出聲一律 [Char|角色名|表情|「台詞」|Stay 或 Leave]（第五欄必填；最後離開的人 Leave 並下一行 [Exit|角色名]）。\n' +
+'- ChapterCard 之後正文：旁白直接寫；角色出聲一律 [Char|角色名|表情|「台詞」]。\n' +
 '- 表情只能用：Neutral, Happy, Think, Surprised, Annoyed, Angry, Sighing, Awkward, Embarrassed, Excited, Sad, Confused, Tired, Pout, Laughing, Smirk, Amazed, Teasing。\n' +
 '- [Scene|scene_id|tags]：tags 只用 Danbooru 英文標籤。音效可用 #SFXID# 穿插在旁白後（沒有就略過）。\n' +
 duoRules;
