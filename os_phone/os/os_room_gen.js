@@ -628,7 +628,9 @@
     //    ③ 其餘全算房內——被房間包住的深色家具/門洞不是洞,大白區整片填滿;
     //    ④ 只留最大連通塊(8連通,門前台階隔線暗縫也算同塊),黑底上的雜訊亮點浮不起來。
     //    占比不合理(退化)回 null=照舊整張顯示。閾值 console 可調 aurelia_room_mask_threshold(不進 UI)。
-    function _roomShapeMask(srcCv, W, H) {
+    //    🚨 wall＝地板多邊形(舞台座標)：先把地板整塊當亮格擋住。前牆中間是門口沒有牆，
+    //       深色地板會被從門口一路灌進去，整片地板連深色地毯、盆栽、椅子一起被挖成黑的（09-22 她實跑踩到）。
+    function _roomShapeMask(srcCv, W, H, wall) {
         try {
             const MW = 384, MH = Math.max(2, Math.round(MW * H / W));
             const doc = win.document;
@@ -643,6 +645,15 @@
             const bright = new Uint8Array(N);
             for (let i = 0; i < N; i++) {
                 if (d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114 >= TH) bright[i] = 1;
+            }
+            if (Array.isArray(wall) && wall.length >= 3) {
+                const fc = doc.createElement('canvas'); fc.width = MW; fc.height = MH;
+                const fx = fc.getContext('2d', { willReadFrequently: true });
+                fx.fillStyle = '#fff'; fx.beginPath();
+                wall.forEach(function (p, i) { const x = p[0] * MW / W, y = p[1] * MH / H; if (i) fx.lineTo(x, y); else fx.moveTo(x, y); });
+                fx.closePath(); fx.fill();
+                const fd = fx.getImageData(0, 0, MW, MH).data;
+                for (let i = 0; i < N; i++) if (fd[i * 4 + 3] > 0) bright[i] = 1;
             }
             const outside = new Uint8Array(N);
             const q = [];
@@ -702,7 +713,7 @@
         cx.fillStyle = '#0b0d12'; cx.fillRect(0, 0, W, H);
         cx.drawImage(await _loadImg(room.image), f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
         // 🖼 剪掉成品圖四周的黑底,只留房間形狀貼在舞台上;算不出可信遮罩=照舊整張顯示
-        const shape = _roomShapeMask(cv, W, H);
+        const shape = _roomShapeMask(cv, W, H, (room.floor || []).map(function (p) { return [p[0] * f.s + f.ox, p[1] * f.s + f.oy]; }));
         if (shape) {
             cx.globalCompositeOperation = 'destination-in';
             cx.imageSmoothingEnabled = true;
