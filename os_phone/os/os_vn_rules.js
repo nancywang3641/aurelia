@@ -78,7 +78,8 @@
             .replace(/^\[BGM\|BGM_ID\][^\n]*\n?/m, '')
             .replace(/^- Bg\/BGM 可在[^\n]*$/m, '- Bg 可在 ChapterCard 外的正文區穿插換場。')
             .replace(/^## SFX \/ FX$/m, '## FX')
-            .replace(/^- #SFXID#[^\n]*\n?/m, '');
+            // 🚨 音效那行連著「正文禁止任何音效說明/註解/技術自白」這條禁令；整行拿掉過一次，AI 就在正文裡寫「(此处不用特效，改掉，删)」
+            .replace(/^- #SFXID#[^\n]*$/m, '- 正文禁止任何音效／特效的說明、註解、技術自白（例如「這裡不用特效」），違者該段作廢。');
     }
     function list() {
         const st = _loadState();
