@@ -481,7 +481,17 @@
                     });
                 }
             } catch (e) {}
+            // 🪙 起始金額 [Wallet|金額]：錢包還沒設過的故事，VN 指令會叫正文 AI 在章節卡寫這一行（wx_wallet.seedFromStory 只在錢包是空的時候設）
+            try {
+                const _wm = String(txt || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').match(/^[ \t]*\[Wallet\|\s*([^\]\n]*)\][ \t]*$/im);
+                const _WW = win.WX_WALLET || window.WX_WALLET;
+                if (_wm && _WW && _WW.seedFromStory) {
+                    const _amt = parseFloat(String(_wm[1]).replace(/[^0-9.]/g, ''));
+                    if (_amt > 0) _WW.seedFromStory(_amt);
+                }
+            } catch (e) {}
             txt = String(txt || '')
+                .replace(/^[ \t]*\[Wallet\|[^\]\n]*\][ \t]*\r?\n?/gim, '')
                 .replace(/<os_status>[\s\S]*?<\/os_status>\s*/gi, '')
                 .replace(/^[ \t]*\[(?:Date|HP|Buff|Debuff|Event)\|[^\]\n]*\][ \t]*\r?\n?/gim, '');
             // 這份劇本的原文：區塊內容等一下會被「未知 XML 區塊過濾器」刪掉，

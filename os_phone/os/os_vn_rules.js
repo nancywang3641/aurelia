@@ -81,6 +81,13 @@
             // 🚨 音效那行連著「正文禁止任何音效說明/註解/技術自白」這條禁令；整行拿掉過一次，AI 就在正文裡寫「(此处不用特效，改掉，删)」
             .replace(/^- #SFXID#[^\n]*$/m, '- 正文禁止任何音效／特效的說明、註解、技術自白（例如「這裡不用特效」），違者該段作廢。');
     }
+    // 🪙 起始金額：這本故事的微信錢包還沒設過 → 手機那條（通話與手機聊天，兩版）後面多一句，叫正文 AI 在章節卡寫 [Wallet|金額]。
+    //   手機那條只在現代題材開著，奇幻武俠那種卡本來就沒微信錢包、也就不會看到這句（她 09-23）。
+    const WALLET_SEED_LINE = '\n\n- 主角手機裡的微信錢包還沒有設過金額。這一回合在 <ChapterCard> 裡多寫一行 [Wallet|金額]：照主角的身分、職業、家境，寫他的微信錢包現在大概有多少錢（只寫數字，單位是元）。這行只寫這一次，之後的回合都不要再寫。';
+    function _walletSeedLine(id) {
+        if (id !== 'call_phone' && id !== 'call_phone_free') return '';
+        try { const W = win.WX_WALLET || window.WX_WALLET; return (W && W.needsSeed && W.needsSeed()) ? WALLET_SEED_LINE : ''; } catch (e) { return ''; }
+    }
     function list() {
         const st = _loadState();
         const cu = _loadCustom();
@@ -88,7 +95,7 @@
         return _data().map(d => ({
             id: d.id,
             name: d.name,
-            content: _jevSfxStrip(d.id, String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || '')),
+            content: _jevSfxStrip(d.id, String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || '')) + _walletSeedLine(d.id),
             depth: _normDepth(d.depth),
             role: _normRole(d.role),
             enabled: Object.prototype.hasOwnProperty.call(st, d.id) ? st[d.id] !== false : d.on !== false,

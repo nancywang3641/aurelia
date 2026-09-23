@@ -69,6 +69,22 @@
         } catch (e) { console.warn('[WX_WALLET] 存檔失敗', e); }
     }
 
+    // 🪙 起始金額（她 09-23：隨機劇情卡沒標主角有多少錢，錢包一直從 0 開始）。
+    //   這本故事的錢包「設過沒」記在 localStorage wx_wallet_seeded（{ 故事: 1 }）：她自己填過、有過任何一筆、或正文寫過 [Wallet|]，都算設過。
+    //   沒設過時 os_vn_rules 會叫正文 AI 在章節卡寫一行 [Wallet|金額]，vn_core 讀到交給 seedFromStory。
+    const SEED_LS = 'wx_wallet_seeded';
+    function _seededMap() { try { const m = JSON.parse(localStorage.getItem(SEED_LS) || '{}'); return (m && typeof m === 'object') ? m : {}; } catch (e) { return {}; } }
+    function _markSeeded() { try { const m = _seededMap(); const k = _scope(); if (!m[k]) { m[k] = 1; localStorage.setItem(SEED_LS, JSON.stringify(m)); } } catch (e) {} }
+    function needsSeed() { return !_seededMap()[_scope()]; }
+    // 正文寫的起始金額：錢包真的是空的（沒錢、也沒有任何一筆明細）才設，已經有錢或有紀錄的故事只記「設過了」
+    async function seedFromStory(amount) {
+        const n = _round(amount);
+        _markSeeded();
+        try { await load(); } catch (e) {}
+        if (!(n > 0) || _cache !== 0 || _ledger.length) return false;
+        return setBalance(n, '故事開始時身上的錢');
+    }
+
     // 同步回傳快取。呼叫點是「發之前先看夠不夠」那種即時判斷，等不了 await。
     function getBalance() { return _round(_cache); }
 
@@ -82,6 +98,7 @@
             return false;
         }
         _cache = _round(_cache + d);
+        _markSeeded();
         _ledger.unshift(Object.assign({
             amount: d,
             reason: String(reason || (d > 0 ? '收到' : '支出')),
@@ -98,6 +115,7 @@
         const target = _round(next);
         if (target < 0) return false;
         const diff = _round(target - _cache);
+        _markSeeded();   // 她自己填過（就算填的跟現在一樣）＝這本設過了
         if (!diff) return true;
         _cache = target;
         _ledger.unshift({ amount: diff, reason: note || '自己調整', ts: Date.now(), manual: true });
@@ -276,6 +294,7 @@
         setBalance: setBalance,
         getLedger: getLedger,
         clearAll: clearAll,
+        needsSeed: needsSeed, seedFromStory: seedFromStory,
         money: money,
         open: open, close: close
     };
