@@ -135,7 +135,7 @@
             L.push('  只有 Jev 挑（分數 0～3）：');
             (e.onlyJev.length ? e.onlyJev : [{ code: '', text: '（沒有）' }]).forEach(x => L.push('    ' + (x.code ? x.code + '〔' + x.need + '〕' : '') + x.text));
             if (e.outdated && e.outdated.length) {
-                L.push('  Jev 覺得已經不成立：');
+                L.push('  Jev 覺得已經過去了、現在不是這樣（事情本身仍然發生過，不會刪，只是它的看法）：');
                 e.outdated.forEach(x => L.push('    ' + x.code + '〔' + x.stillTrue + '〕' + x.text));
             }
         });
