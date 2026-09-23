@@ -66,16 +66,32 @@
         catch (e) { console.warn('[VN指令] 開關狀態存不進去:', e); return false; }
     }
 
+    // 🎵 音效和音樂交給 Jev 配（os_jev_sfx.js）：開著＋有決策模型鑰匙才算。
+    //   生效時 BGM／音效清單和 BGM 規範不送給正文 AI，總綱裡教它寫 #音效# 和 [BGM|] 的那幾行也拿掉（清單還是留在設置裡給 Jev 用）。
+    function _jevSfxOn() {
+        try { return localStorage.getItem('jev_sfx_on') === '1' && !!(localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return false; }
+    }
+    const JEV_SFX_HIDE = ['bgm_rules'].concat(EDITABLE.map(x => x.id));
+    function _jevSfxStrip(id, content) {
+        if (id !== 'core_format' && id !== 'core_format_free') return content;
+        return String(content)
+            .replace(/^\[BGM\|BGM_ID\][^\n]*\n?/m, '')
+            .replace(/^- Bg\/BGM 可在[^\n]*$/m, '- Bg 可在 ChapterCard 外的正文區穿插換場。')
+            .replace(/^## SFX \/ FX$/m, '## FX')
+            .replace(/^- #SFXID#[^\n]*\n?/m, '');
+    }
     function list() {
         const st = _loadState();
         const cu = _loadCustom();
+        const jev = _jevSfxOn();
         return _data().map(d => ({
             id: d.id,
             name: d.name,
-            content: String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || ''),
+            content: _jevSfxStrip(d.id, String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || '')),
             depth: _normDepth(d.depth),
             role: _normRole(d.role),
-            enabled: Object.prototype.hasOwnProperty.call(st, d.id) ? st[d.id] !== false : d.on !== false
+            enabled: Object.prototype.hasOwnProperty.call(st, d.id) ? st[d.id] !== false : d.on !== false,
+            jevHidden: jev && JEV_SFX_HIDE.indexOf(d.id) >= 0   // 清單本身還是「開著」（設置頁、Jev 都照這個），只是不送給正文 AI
         }));
     }
     function hasAny() { return _data().length > 0; }
@@ -118,7 +134,7 @@
         else cu[id] = String(content == null ? '' : content).replace(/\r\n/g, '\n');
         return _saveCustom(cu);
     }
-    const _live = e => !!(e && e.enabled && e.content.trim());
+    const _live = e => !!(e && e.enabled && !e.jevHidden && e.content.trim());
 
     // 設了位置的：[{ depth, role, text }]，深度大的排前面（呼叫端由大到小插），形狀跟 OS_WORLDBOOK.getContextParts 的 depths 一樣
     function getDepthParts() {

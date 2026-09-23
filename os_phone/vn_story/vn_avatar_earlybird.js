@@ -127,6 +127,7 @@
             if (!t) return;
             if (!_doneThisGen) _scan(t);
             _voiceScan(t, false);
+            try { const J = (win.parent || win).OS_JEV_SFX; if (J) J.feed(t, false); } catch (e) {}   // 🎵 音效／音樂交給 Jev：寫好的格先問
         }, 1500);
     }
 
@@ -163,6 +164,7 @@
                 if (!t) return;
                 _voiceScan(t, true);
                 if (!_doneThisGen) _scan(t);
+                try { const J = (win.parent || win).OS_JEV_SFX; if (J) J.feed(t, true); } catch (e) {}   // 🎵 整則落地：剩下的格和最後一場的音樂
             } catch (e) {}
         });
 

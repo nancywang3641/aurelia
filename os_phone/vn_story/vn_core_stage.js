@@ -120,6 +120,40 @@
                 this._stageRemove(r.name);
             });
         },
+        // 🎵 Jev 排的音效／音樂時間表（os_jev_sfx.js 的 plan → this._jevSfx：{ sfx:[{line,occ,id}], bgm:[{line,occ,id}] }）
+        //   跟立繪一樣比原文＋第幾次出現。next() 走到第 idx 行、還沒演之前叫：
+        //   這格有音效 → 記在 _jevSfxNow 給旁白播；這格是一場的開頭有音樂 → 回一行 [BGM|曲|jev] 讓 next() 先插進去播
+        _jevSfxHit: function(idx) {
+            const pl = this._jevSfx; if (!pl) return null;
+            const l = this.script[idx]; if (typeof l !== 'string') return null;
+            let occ = -1, bgmLine = null;
+            const occOf = () => { if (occ < 0) occ = this._jevStageOcc(idx); return occ; };
+            (pl.sfx || []).forEach(r => { if (r.done || r.line !== l || r.occ !== occOf()) return; r.done = 1; this._jevSfxNow = r.id; });
+            (pl.bgm || []).forEach(r => { if (r.done || r.line !== l || r.occ !== occOf()) return; r.done = 1; bgmLine = '[BGM|' + r.id + '|jev]'; });
+            return bgmLine;
+        },
+        // 旁白要播哪個音效：這章聽 Jev 就只播 Jev 排的（AI 寫的 #音效# 不理）；沒有就照舊（行內的優先，再來尾格的）
+        _sfxFor: function(inline, tail) {
+            if (this._jevSfx) { const j = this._jevSfxNow; this._jevSfxNow = null; return j || 'NA'; }
+            return (inline && inline !== 'NA') ? inline : (tail || 'NA');
+        },
+        // 時間表晚到（已經播了幾格）：這一場的音樂如果還沒放，現在補放；已經播過的格的音效就算了（音效是一瞬間的事）
+        _jevSfxCatchUp: function() {
+            const pl = this._jevSfx; if (!pl || !pl.bgm) return;
+            const cur = this.index;
+            let best = null, bestAt = -1;
+            pl.bgm.forEach(r => {
+                if (r.done) return;
+                let n = -1, at = -1;
+                for (let i = 0; i < this.script.length; i++) if (this.script[i] === r.line && ++n === r.occ) { at = i; break; }
+                if (at < 0 || at > cur) return;
+                r.done = 1;
+                if (at > bestAt) { bestAt = at; best = r; }
+            });
+            if (!best) return;
+            for (let i = bestAt; i <= cur; i++) if (/^\[Bg\|/i.test(String(this.script[i] || ''))) return;   // 已經換到下一場了，別放上一場的
+            this.script.splice(cur + 1, 0, '[BGM|' + best.id + '|jev]');   // 下一次推進就播
+        },
         _stageClear: function() { this._stageInit(); this._clearSlot(0); this._clearSlot(1); this._slotMemory = {}; this._pendingLeave = []; },   // 換景=站位記憶歸零(跨場景的陳舊記憶會害兩人搶同一格)+清待離場
         // 滯留清除：某格角色超過 N tick 沒當說話者 → 自動移除（防殘留），N 預設 5、可由 localStorage 覆寫
         _staleSweep: function() {

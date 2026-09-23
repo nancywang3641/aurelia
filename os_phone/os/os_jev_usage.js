@@ -16,7 +16,7 @@
     const LS = 'jev_usage';
     const KEEP_DAYS = 62;
     const USD_TWD = 32;   // 只拿來給她一個台幣的感覺，不是精算
-    const TAGS = { memory: '記憶影子比對', stage: '立繪什麼時候收', npc: '書咖的丹' };
+    const TAGS = { memory: '記憶影子比對', stage: '立繪什麼時候收', sfx: '音效和音樂', npc: '書咖的丹' };
 
     function _day(d) { d = d || new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
     function _load() { try { const o = JSON.parse(localStorage.getItem(LS) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }

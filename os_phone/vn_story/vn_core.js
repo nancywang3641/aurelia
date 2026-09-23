@@ -280,6 +280,8 @@
             this.index = -1;
             this._pendingLeave = [];   // 清掉上一份劇本殘留的 |Leave 待離場
             this._jevStage = null;     // 🎭 上一章 Jev 排的收立繪時間表作廢（晚到的也不收：看 _jevStageSeq）
+            this._jevSfx = null;       // 🎵 上一章 Jev 排的音效／音樂時間表作廢（同一個序號）
+            this._jevSfxNow = null;
             this._jevStageSeq = (this._jevStageSeq || 0) + 1;
             this.avatars = {};
             this.charVoices = {};   // [Avatar|名|聲線|外觀] 宣告的固定聲線（名→聲線）；[Char] 不再每行帶
@@ -701,6 +703,19 @@
                         if (!pl || _self._jevStageSeq !== _seq) return;
                         _self._jevStage = pl;
                         _self._jevStageCatchUp();
+                    }).catch(function () {});
+                }
+            } catch (e) {}
+            // 🎵 音效和音樂交給 Jev（os_jev_sfx.js）：大多在正文 AI 寫的時候就問好了，這裡只補問剩下的、排成時間表。
+            //    這章有時間表 → AI 寫的 #音效# 和 [BGM|] 都不理；沒有 → 照舊。
+            try {
+                const _JX = win.OS_JEV_SFX || window.OS_JEV_SFX;
+                if (_JX && _JX.active && _JX.active()) {
+                    const _self = this, _seq = this._jevStageSeq;
+                    _JX.plan(this.script.slice(), this._currentMessageId).then(function (pl) {
+                        if (!pl || _self._jevStageSeq !== _seq) return;
+                        _self._jevSfx = pl;
+                        _self._jevSfxCatchUp();
                     }).catch(function () {});
                 }
             } catch (e) {}
@@ -2497,6 +2512,12 @@
             }
             // 🎭 Jev 排的收立繪：播到他「從這段起不在」的那一段之前收掉
             if (this._jevStage) { try { this._jevStageHit(this.index); } catch (e) {} }
+            // 🎵 Jev 排的音效／音樂：這一格要配的音效先記著（旁白播的時候拿）；這一場的音樂先插一行 [BGM|曲|jev] 進來播
+            if (this._jevSfx) {
+                let _bgmLine = null;
+                try { _bgmLine = this._jevSfxHit(this.index); } catch (e) {}
+                if (_bgmLine) { this.script.splice(this.index, 0, _bgmLine); this.index--; return this.next(); }
+            }
 
             // ── 開場圖片閘門（loading 排最前面）──────────────────────────────
             // loadScript 後的第一次 next() 就檢查：圖片（含盤點中）沒清空 → 先彈 loading 等，
@@ -2716,6 +2737,8 @@
             this.toggleUI('vn');
 
             if (line.startsWith('[BGM|')) {
+                // 🎵 這章音樂交給 Jev 時，AI 自己寫的 [BGM|] 不播（Jev 插的那行帶 |jev）
+                if (this._jevSfx && !/\|jev\]$/.test(line)) { this.next(); return; }
                 const rawName = line.split('|')[1].replace(']', '').trim();
                 const name = rawName.replace(/\.[^.]+$/, '');
                 const audio = document.getElementById('bgm-player');
@@ -3135,13 +3158,13 @@
                 const ex = this._extractTextAndSFX(p);
                 const _nx = this._extractInlineSFX(ex.text);   // 正文內 #SFXID#
                 // 整則只剩音效(剝標記後空) → 只播音效、跳過、不渲染空對話框
-                if (!_nx.text) { this.playSFX(_nx.sfx !== 'NA' ? _nx.sfx : ex.sfx); return this.next(); }
+                if (!_nx.text) { this.playSFX(this._sfxFor(_nx.sfx, ex.sfx)); return this.next(); }
                 this._stageNarr();   // 旁白：算一場次(推進清滯留) + 立繪全留全部變暗
                 this._currentChar = null; this.updateControlUI();
                 this.renderVN('', _nx.text);
                 this.addLog("旁白", _nx.text);
                 this._vnNarrVoicePlay(_nx.text);
-                this.playSFX(_nx.sfx !== 'NA' ? _nx.sfx : ex.sfx);
+                this.playSFX(this._sfxFor(_nx.sfx, ex.sfx));
                 return;
             }
 
@@ -3169,12 +3192,12 @@
             if (_stripped.length > 2 && !_trimmed.startsWith('[') && !_trimmed.startsWith('<') && !_trimmed.startsWith('//') && !_trimmed.startsWith('---')) {
                 const _nx = this._extractInlineSFX(_stripped);   // 正文內 #SFXID# → 抽音效 + 剝標記
                 // 整行只剩音效(剝標記後空，如單獨一行 #fastrunning#) → 只播音效、跳過、不渲染空對話框
-                if (!_nx.text) { this.playSFX(_nx.sfx); return this.next(); }
+                if (!_nx.text) { this.playSFX(this._sfxFor(_nx.sfx)); return this.next(); }
                 this._stageNarr();   // 純文字旁白：算一場次(推進清滯留) + 立繪保留變暗
                 this.renderVN('', _nx.text);
                 this.addLog('旁白', _nx.text);
                 this._vnNarrVoicePlay(_nx.text);
-                this.playSFX(_nx.sfx);
+                this.playSFX(this._sfxFor(_nx.sfx));
                 return;
             }
             this.next();
