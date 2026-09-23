@@ -233,7 +233,9 @@
                 const sx = Array.from(sexByChar.entries()).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0)).slice(0, 8);
                 if (sx.length) {
                     const _mc = _getProtagonist();   // 主角名（性事是角色×角色，標頭綁兩個人名才清楚）
-                    block += `\n\n【性事紀錄｜主角與下列角色發生過性事，互動時務必記得這層關係、別寫成初次見面或冷淡無情】\n`;
+                    // 🚨 09-23 她：前期泡友、後期感情加深 → 舊的性事紀錄寫著「泡友」，又每回合喊「務必記得這層關係」，跟核心角色那段最新的關係打架。
+                    //    這段只提醒「發生過」，關係一律以核心角色那段（relationship 最新一條）為準；舊紀錄裡寫的關係是當時的，不代表現在。
+                    block += `\n\n【性事紀錄｜主角與下列角色發生過性事，別寫成初次見面或冷淡無情。兩人現在是什麼關係，以上面【核心角色】那段的最新狀態為準；下面紀錄裡若提到關係，那是當時的，不代表現在】\n`;
                     block += sx.map(([name, m]) => {
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
