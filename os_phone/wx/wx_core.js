@@ -2066,6 +2066,17 @@
             const rmMan = _rmLoad().manual;
             const backNames = [];   // 「已添加了X」的 X 可能連著後面的字，等所有刪除都收齊了再對名字
             const moneyEvents = [];   // 💰 劇情裡收下／退回轉帳的那幾行，掃完一起結算
+            // 💰 每張轉帳單是誰發的（單號 → 發話人）。她 09-23：群聊裡 A 轉給 B、B 收下，錢卻從她的錢包扣掉——
+            //    以前只看「收錢的是不是主角」，不是主角就一律當成主角轉出去的。
+            const txnFrom = {};
+            const _txnKey = function (id) { return String(id || '').replace(/^ID_/i, '').trim(); };
+            keys.forEach(function (key) {
+                (rooms[key].msgs || []).forEach(function (x) {
+                    if (!x || x.type !== 'msg' || !x.content) return;
+                    const tm = String(x.content).match(/\[\s*(?:轉賬|轉帳|转账|Transfer)\s*[:：][^\]]*?[|｜]\s*([^\]|｜]+?)\s*\]/i);
+                    if (tm) txnFrom[_txnKey(tm[1])] = { isMe: !!x.isMe, sender: x.sender || '' };
+                });
+            });
             keys.forEach(function (key) {
                 const room = rooms[key];
                 if (room.owner && room.owner !== _storyMyName() && !_isMeName(room.owner)) return;
@@ -2149,8 +2160,18 @@
                     _moneyDoneSet(ev.txnId, 'returned');
                     return;
                 }
+                // 收下的不是主角時，要先確定那筆是主角轉出去的才扣：
+                //   正文裡有那張轉帳單 → 看是誰發的；沒有 → 她自己在手機上轉出去還在等的那張也算主角的；
+                //   都查不到 → 私聊照舊（對方收下的只可能是主角轉的），群聊不動她的錢（A 轉給 B 那種）
+                let _mcPaid = true;
+                if (!ev.isMe) {
+                    const _from = txnFrom[_txnKey(ev.txnId)];
+                    if (_from) _mcPaid = !!_from.isMe;
+                    else if (rec && rec.status === 'pending' && rec.targetName) _mcPaid = true;
+                    else { let _others = []; try { _others = _storyOthers(rooms[m.key]); } catch (e) {} _mcPaid = _others.length < 2; }
+                }
                 const W = win.WX_WALLET;
-                if (W && W.transaction) {
+                if (W && W.transaction && (ev.isMe || _mcPaid)) {
                     // 發話的是主角＝主角把錢收進來；發話的是角色＝角色收下主角轉出去的那筆
                     const delta = ev.isMe ? ev.amount : -ev.amount;
                     const why = ev.isMe ? ('微信收款 - ' + (m.name || '劇情')) : ('微信轉帳給 ' + (ev.sender || '對方'));
