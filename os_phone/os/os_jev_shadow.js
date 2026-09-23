@@ -9,7 +9,7 @@
 // 為什麼（2026-09-23 實驗，見丹的記憶 project_jev_optimization_ideas）：她的真跑團 8 回合，
 //   Jev 取排名前 8 必要的全送到、送出量只有副模型的一半；副模型判「過期」大量冤枉還成立的舊事。
 //   但只考過兩個短故事、Jev 服務又不穩 → 先在她真的玩的時候影子跑，對過再決定要不要接手。
-// 花費：每回合一通 Jev（候選數 × 2 題），約台幣 0.005 元以下。沒填鑰匙、關掉、或 Jev 掛了 → 這輪不比，不影響任何東西。
+// 花費：每回合 5 條一通（40 條＝8 通，每通都附同一段劇情），約台幣 0.02 元以下。沒填鑰匙、關掉、或 Jev 掛了 → 這輪不比，不影響任何東西。
 // 鑰匙：沿用大廳設置「決策模型鑰匙」（localStorage npc_decide_key，npc_decide.js 那把）。
 // ----------------------------------------------------------------
 (function () {
@@ -22,6 +22,7 @@
     const LOG_LS = 'jev_shadow_log';
     const ON_LS = 'jev_shadow_on';
     const LOG_MAX = 30;
+    const PER_CALL = 5;           // 一通問 5 條（10 題）
     const TOP_N = 8;              // 實驗：固定分數門檻在兩主角的故事會漏（好東西只拿 1.1～1.3），排名前 8 才全送到
     const OUTDATED_BELOW = 0.5;
     const TXT_MAX = 70;           // 記錄裡每條記憶只留前 70 字，免得撐爆 localStorage
@@ -77,21 +78,23 @@
             if (!codes.length) return;
             if (!_key()) { entry.skip = '沒填決策模型鑰匙'; _push(entry); return; }
             const scene = String(o.query || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(-SCENE_MAX);
-            const qs = {};
-            codes.forEach(c => {
-                const t = _memText(map[c]);
-                qs[c + '_need'] = { type: 'score', instructions: '寫下一回合的劇情時，這條過往記憶「' + t + '」有多需要被提醒？', criteria: ['用不到', '可能有點用', '很有用', '一定要知道'] };
-                qs[c + '_true'] = { type: 'boolean', instructions: '根據剛發生的劇情和其他記憶，這條「' + t + '」現在還成立嗎？' };
-            });
+            // 🚨 一批題目太多 Jev 會回 503（09-23 量的：10 題一批從沒被拒，40 題常被拒）。40 條記憶×2 題＝80 題，以前一次送，改成 5 條一批
+            const state = { '剛發生的這一回合劇情': scene, '候選的過往記憶（依時間先後）': codes.map(c => c + '：' + _memText(map[c])) };
             const t0 = Date.now();
-            const d = await _ask({
-                model: JEV_MODEL,
-                state: { '剛發生的這一回合劇情': scene, '候選的過往記憶（依時間先後）': codes.map(c => c + '：' + _memText(map[c])) },
-                questions: qs,
-            });
+            const A = {}; let tokens = 0;
+            for (let i = 0; i < codes.length; i += PER_CALL) {
+                const qs = {};
+                codes.slice(i, i + PER_CALL).forEach(c => {
+                    const t = _memText(map[c]);
+                    qs[c + '_need'] = { type: 'score', instructions: '寫下一回合的劇情時，這條過往記憶「' + t + '」有多需要被提醒？', criteria: ['用不到', '可能有點用', '很有用', '一定要知道'] };
+                    qs[c + '_true'] = { type: 'boolean', instructions: '根據剛發生的劇情和其他記憶，這條「' + t + '」現在還成立嗎？' };
+                });
+                const d = await _ask({ model: JEV_MODEL, state, questions: qs });
+                Object.assign(A, d.answers);
+                tokens += (d.usage && d.usage.inputTokens) || 0;
+            }
             entry.ms = Date.now() - t0;
-            entry.tokens = d.usage && d.usage.inputTokens;
-            const A = d.answers;
+            entry.tokens = tokens;
             const rows = codes.map(c => ({
                 code: c, text: _short(_memText(map[c])),
                 need: A[c + '_need'] && typeof A[c + '_need'].score === 'number' ? Math.round(A[c + '_need'].score * 100) / 100 : null,
