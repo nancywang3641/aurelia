@@ -193,14 +193,16 @@
                 this._paint(p, false);
                 return true;
             }
-            const w = this._who(it.who);
             if (it.verb === 'like') {
-                if (p.likes.some(x => x.who === w.id)) return false;
-                p.likes.push({ who: w.id, whoName: w.name, at: Date.now() });
+                // 一行寫了好幾個人（解析那邊拆好在 whos）：一起加上去，算一步
+                const added = (it.whos || [it.who]).map(n => this._who(n)).filter(w => w.id && !p.likes.some(x => x.who === w.id));
+                if (!added.length) return false;
+                added.forEach(w => p.likes.push({ who: w.id, whoName: w.name, at: Date.now() }));
                 this._paint(p, false);
-                core.addLog(w.name, '按了讚');
+                core.addLog(added.map(w => w.name).join('、'), '按了讚');
                 return true;
             }
+            const w = this._who(it.who);
             const to = it.verb === 'reply' ? this._who(it.to) : { id: '', name: '' };
             p.comments.push({ id: 'vnc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), who: w.id, whoName: w.name, toWho: to.id, toName: to.name, text: it.text, at: Date.now() });
             this._paint(p, false);

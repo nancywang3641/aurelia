@@ -482,6 +482,13 @@
     //      正文裡已經沒有的（回朔、刪樓）整則拿掉；她自己刪掉的記在 hiddenStory，不再放回來。
     const STORY_BLOCK_RE = /<moments\b([^>]*)>([\s\S]*?)<\/moments\s*>/gi;
     const STORY_LINE_RE = /^\[\s*(Post|Photo|Like|Comment|Reply)\s*[|｜]([\s\S]*)\]\s*$/i;
+    // AI 常在尾巴多補一格「沒有」（她 09-24 截圖：[Post|moment_101|方尽|无聊。|none] → 畫面上印出「无聊。|none」）
+    const NONE_RE = /^(?:none|null|nil|n\/a|無|无|空|沒有|没有|-+|—+)?$/i;
+    function _body(parts) {
+        const a = parts.slice();
+        while (a.length && NONE_RE.test(a[a.length - 1])) a.pop();
+        return a.join('|').trim();
+    }
     function parseStoryLine(line) {
         const m = String(line || '').trim().match(STORY_LINE_RE);
         if (!m) return null;
@@ -489,11 +496,15 @@
         const p = m[2].split('|').map(function (x) { return x.trim(); });
         const sid = p[0] || '';
         if (!sid) return null;
-        if (verb === 'post') return p[1] ? { verb: verb, sid: sid, who: p[1], text: p.slice(2).join('|').trim() } : null;
-        if (verb === 'photo') { const desc = p.slice(1).join('|').trim(); return desc ? { verb: verb, sid: sid, text: desc } : null; }
-        if (verb === 'like') return p[1] ? { verb: verb, sid: sid, who: p[1] } : null;
-        if (verb === 'comment') { const t = p.slice(2).join('|').trim(); return (p[1] && t) ? { verb: verb, sid: sid, who: p[1], text: t } : null; }
-        const t = p.slice(3).join('|').trim();
+        if (verb === 'post') return p[1] ? { verb: verb, sid: sid, who: p[1], text: _body(p.slice(2)) } : null;
+        if (verb === 'photo') { const desc = _body(p.slice(1)); return desc ? { verb: verb, sid: sid, text: desc } : null; }
+        // 一行寫了好幾個人（[Like|編號|沈喜喜, 驰翊]）：拆開，一人一個讚
+        if (verb === 'like') {
+            const whos = p.slice(1).join(',').split(/[,，、;；]/).map(function (x) { return x.trim(); }).filter(function (x, i, a) { return x && !NONE_RE.test(x) && a.indexOf(x) === i; });
+            return whos.length ? { verb: verb, sid: sid, who: whos[0], whos: whos } : null;
+        }
+        if (verb === 'comment') { const t = _body(p.slice(2)); return (p[1] && t) ? { verb: verb, sid: sid, who: p[1], text: t } : null; }
+        const t = _body(p.slice(3));
         return (p[1] && t) ? { verb: 'reply', sid: sid, who: p[1], to: p[2] || '', text: t } : null;
     }
     // 一則正文 → [{ owner, items:[…] }]（一個容器一筆）
@@ -506,7 +517,12 @@
         while ((bm = STORY_BLOCK_RE.exec(s))) {
             const owner = ((bm[1] || '').match(/\bowner\s*=\s*["'“”]?([^"'“”>]*)/i) || [])[1] || '';
             const items = [];
-            (bm[2] || '').split(/\r?\n/).forEach(function (ln) { const it = parseStoryLine(ln); if (it) items.push(it); });
+            (bm[2] || '').split(/\r?\n/).forEach(function (ln) {
+                const it = parseStoryLine(ln);
+                if (!it) return;
+                if (it.whos) it.whos.forEach(function (w) { items.push({ verb: 'like', sid: it.sid, who: w }); });
+                else items.push(it);
+            });
             out.push({ owner: owner.trim(), items: items });
         }
         return out;
