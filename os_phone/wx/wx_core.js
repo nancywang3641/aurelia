@@ -1980,6 +1980,14 @@
                 payEvents.push({ amount: amt, txnId: id, why: ps[2] || '' });
             }
         }
+        // 🫂 劇情裡的朋友圈（<moments> 容器）：解析跟劇情播放共用 WX_MOMENTS.parseStory，一樓一樓帶樓號收起來，結算在 _storySyncNow
+        const moments = [];
+        for (let f = 0; f < msgs.length; f++) {
+            const m = msgs[f];
+            const t = (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || '');
+            if (!t || t.indexOf('<moments') < 0 || !win.WX_MOMENTS || !win.WX_MOMENTS.parseStory) continue;
+            win.WX_MOMENTS.parseStory(t).forEach(function (b) { moments.push({ floor: f, owner: b.owner, items: b.items }); });
+        }
         for (let f = 0; f < msgs.length; f++) {
             const m = msgs[f];
             const text = (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || '');
@@ -2005,7 +2013,7 @@
             const me = r.owner || '';
             r.msgs.forEach(function (x) { if (!x.isMe && ((me && x.sender === me) || x.sender === myName || _isMeName(x.sender))) x.isMe = true; });
         });
-        return { rooms: rooms, lastFloor: msgs.length - 1, ok: true, pays: payEvents };
+        return { rooms: rooms, lastFloor: msgs.length - 1, ok: true, pays: payEvents, moments: moments };
     }
 
     // 房間的「對方們」：[With] 名單扣掉「我」（使用者人設名、owner、You/主角 這類）；順序不算數。沒寫 [With] 就拿發話人湊
@@ -2290,6 +2298,46 @@
                 try { await win.WX_DB.saveApiChat(chatId, rec); } catch (e) { console.warn('[wx 跑團同步] 存檔失敗:', chatId, e); }
                 if (chatId === GLOBAL_ACTIVE_ID) rebuildActive = true;
             }
+
+            // 🫂 劇情裡的朋友圈 → 手機的朋友圈（WX_MOMENTS.syncStory 整份重建劇情那幾則，她自己按的讚留的言不動）
+            //   發文的人＝主角的微信好友：通訊錄沒有就加（跟一對一聊過同一個待遇）；
+            //   按讚留言的人通訊錄有就對上那個人，沒有就是路人（只顯示名字，不加好友）。
+            //   別人的手機（owner 不是主角）只在劇情裡演，不收。
+            try {
+                const MO = win.WX_MOMENTS;
+                if (MO && MO.syncStory && Array.isArray(parsed.moments)) {
+                    const _fx = _loadRoomFix();
+                    const _moWho = function (raw, isAuthor) {
+                        const n = _fixPerson(String(raw || '').trim(), _fx);
+                        if (!n) return { id: '', name: '' };
+                        if (n === _storyMyName() || _isMeName(n)) return { id: 'me', name: _meName() };
+                        if (isAuthor && !rmHidden('p:' + n)) {
+                            const fid = win.WX_CONTACTS.getOrCreateContactID(n, 'user', true);
+                            if (fid && fid !== 'User') {
+                                _storyEnsureContactChat(fid, n);
+                                realContactNames[n] = 1;
+                                if (!contactSeen[n]) { contactSeen[n] = 1; contactCount++; }
+                                return { id: fid, name: n };
+                            }
+                        }
+                        const id = win.WX_CONTACTS.getOrCreateContactID(n, 'user', false);
+                        if (id && id !== n && id !== 'User' && GLOBAL_CHATS[id] && !GLOBAL_CHATS[id].isGroup) return { id: id, name: n };
+                        return { id: 'npc:' + n, name: n };
+                    };
+                    const moList = [];
+                    parsed.moments.forEach(function (b) {
+                        const ow = b.owner ? _fixPerson(b.owner, _fx) : '';
+                        if (ow && ow !== _storyMyName() && !_isMeName(ow)) return;
+                        (b.items || []).forEach(function (it) {
+                            const x = Object.assign({}, it, { floor: b.floor });
+                            if (it.who) { const r = _moWho(it.who, it.verb === 'post'); x.who = r.id; x.whoName = r.name; }
+                            if (it.to) { const r = _moWho(it.to, false); x.toWho = r.id; x.toName = r.name; }
+                            moList.push(x);
+                        });
+                    });
+                    await MO.syncStory(moList);
+                }
+            } catch (e) { console.warn('[wx 跑團同步] 朋友圈沒收進來:', (e && e.message) || e); }
 
             // 正文裡已經不存在的房（回朔 / 刪樓）：拆掉劇情訊息；空了的群整筆移除、私聊保留成一般聯絡人
             let all = {};

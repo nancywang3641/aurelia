@@ -1640,7 +1640,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 捲軸一律藏起來（照樣能滑）：真手機的畫面邊上不會有一條捲軸，應用手機也是這樣（phone_shell.css 的 .aps-app-body） */
         #phone-screen, #phone-screen * { scrollbar-width: none; -ms-overflow-style: none; }
         #phone-screen::-webkit-scrollbar, #phone-screen *::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }
-        #phone-screen > #phone-chat, #phone-screen > #phone-browser, #phone-screen > #phone-nav, #phone-screen > #phone-call { flex: 1; min-height: 0; height: auto; }
+        #phone-screen > #phone-chat, #phone-screen > #phone-browser, #phone-screen > #phone-nav, #phone-screen > #phone-call, #phone-screen > #phone-moments { flex: 1; min-height: 0; height: auto; }
         /* 膠囊島＋鏡頭：螢幕上挖掉的一塊，不跟配色走 */
         .vnp-notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 98px; height: 22px; background: #0c0f13; border-radius: 999px; z-index: 32; pointer-events: none; }
         .vnp-notch::after { content: ''; position: absolute; right: 8px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: #18263a; box-shadow: inset 0 0 0 1.5px #24384c, inset 0 2px 3px rgba(255,255,255,0.12); }
@@ -1663,6 +1663,24 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #chat-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; z-index: 10; position: relative; }
         #chat-footer.wx-footer-wrapper { position: relative; bottom: auto; flex-shrink: 0; padding-bottom: 14px; }
         #chat-footer .wx-input-real { pointer-events: none; }
+
+        /* --- 朋友圈模式（vn_moments.js）--- */
+        /* 長相整份是聊天 app 朋友圈那套（css/wx_moments.css 的 .wxmo-*），主題也照吃。這裡只補放進劇情手機框要的：
+           頂列讓出狀態列（寫成 --safe-top，聊天 app 主題改頂列高度時會自己加上這一段）、封面矮一點、
+           刪除與讚評論小窗拿掉（劇情手機只是看的）、底部讓出橫槓。
+           🚨 z-index:0 開一層自己的疊放：.wxmo-root 自帶 z-index:60，不關在這層裡會蓋過狀態列。 */
+        #phone-moments { position: relative; z-index: 0; overflow: hidden; --safe-top: 34px; }
+        #phone-moments .wxmo-bar { height: auto; min-height: calc(48px + var(--safe-top)); padding-top: var(--safe-top); box-sizing: border-box; }
+        #phone-moments .wxmo-cover { height: 210px; }
+        #phone-moments .wxmo-del, #phone-moments .wxmo-pop { display: none !important; }
+        #phone-moments .wxmo-scroll { padding-bottom: 36px; }
+        #phone-moments .vnmo-in { animation: vnmo-in 0.45s ease both; }
+        #phone-moments .vnmo-pop .wxmo-social { animation: vnmo-pop 0.6s ease; }
+        @keyframes vnmo-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+        @keyframes vnmo-pop { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--wx-link) 40%, transparent); } 100% { box-shadow: 0 0 0 8px transparent; } }
+        .vnmo-nar { position: absolute; left: 12px; right: 12px; bottom: 22px; background: rgba(17,17,17,0.82); color: #fff; font-size: 0.82rem; line-height: 1.5; padding: 10px 12px; border-radius: 10px; backdrop-filter: blur(6px); z-index: 5; }
+        .vnmo-nar b { color: #fbbf24; margin-right: 6px; }
+        .vnmo-nar.hidden { display: none; }
 
         /* --- Browser 模式（手機瀏覽器；開場：搜尋框長成網址列 → 逐字打 → 骨架 → 內容長出來） --- */
         #phone-browser { display: flex; flex-direction: column; height: 100%; background: #f4f5f7; color: #111; position: relative; overflow: hidden; }

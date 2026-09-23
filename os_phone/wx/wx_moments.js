@@ -8,7 +8,8 @@
 //   ・給 AI：每輪附它看得到的最近幾則（見 brief），它在回覆裡寫英文標籤
 //     <moment_post> / <moment_like id/> / <moment_comment id> / <moment_reply id to>，醒來什麼都不做寫 <moment_skip/>。
 //     wx_core.parseAndProcess 一開頭就交給 extract：抽掉標籤、執行、剩下的字才拆成聊天泡泡。
-//   ・不寫進大總結、不寫進正文記憶：朋友圈只活在手機裡。
+//   ・不寫進大總結、不寫進正文記憶；她在朋友圈做的事（跟別人對她動態做的事）走手機事件簿，下一輪交給劇情一次。
+//   ・劇情裡的朋友圈：正文 <moments> 容器（格式見「劇情裡的朋友圈」那段），跑團同步收進來；劇情播放時 vn_moments.js 借這裡的畫法。
 // 存哪：OS_DB app_data（appId 'wx_moments'，key 'feed' 與 'links'，分艙鍵＝OS_DB.currentChatId()，跟通訊錄同一把）。
 //   🚨 app_data 是共用倉：appId 不准用 app_ 開頭。
 // 對外：WX_MOMENTS.open(opts) / close() / openLinks(chatId) / brief(chatId) / extract(text, chatId, name) / strip(text) / actedSince(...) /
@@ -214,6 +215,12 @@
     function removePost(postId) {
         return _run(_scopeOfPost(postId), function (st) {
             const before = st.feed.posts.length;
+            // 劇情同步進來的那則，她刪了就記著：下次同步不再放回來
+            const p = _post(st, postId);
+            if (p && p.storyKey) {
+                const h = st.feed.hiddenStory = st.feed.hiddenStory || [];
+                if (h.indexOf(p.storyKey) < 0) h.push(p.storyKey);
+            }
             st.feed.posts = st.feed.posts.filter(function (x) { return x.id !== postId; });
             return st.feed.posts.length !== before;
         });
@@ -461,6 +468,172 @@
         return { text: rest, found: acts.length, acted: acted };
     }
 
+    // ── 📖 劇情裡的朋友圈（正文的 <moments> 容器）──────────────────
+    //   正文 AI 照 VN 指令「朋友圈格式」寫，一行一件事、英文標籤、第一格是動態的編號（它自己取，之後照抄）：
+    //     <moments>                 ← 別人的手機才加 owner="名"，那種不進她的手機
+    //     [Post|編號|發文的人|內容]
+    //     [Photo|編號|給人看的一句 >> 畫圖的英文句子]
+    //     [Like|編號|按讚的人]
+    //     [Comment|編號|留言的人|內容]
+    //     [Reply|編號|留言的人|回覆誰|內容]
+    //     </moments>
+    //   劇情播放時 vn_moments.js 用下面同一支解析、借這裡的畫法畫；跑團同步（wx_core）整本正文掃過一次交給 syncStory。
+    //   🚨 同步每次整份重建：劇情那幾則帶 storyKey、讚留言帶 story:1；她自己按的讚留的言不帶，永遠留著。
+    //      正文裡已經沒有的（回朔、刪樓）整則拿掉；她自己刪掉的記在 hiddenStory，不再放回來。
+    const STORY_BLOCK_RE = /<moments\b([^>]*)>([\s\S]*?)<\/moments\s*>/gi;
+    const STORY_LINE_RE = /^\[\s*(Post|Photo|Like|Comment|Reply)\s*[|｜]([\s\S]*)\]\s*$/i;
+    function parseStoryLine(line) {
+        const m = String(line || '').trim().match(STORY_LINE_RE);
+        if (!m) return null;
+        const verb = m[1].toLowerCase();
+        const p = m[2].split('|').map(function (x) { return x.trim(); });
+        const sid = p[0] || '';
+        if (!sid) return null;
+        if (verb === 'post') return p[1] ? { verb: verb, sid: sid, who: p[1], text: p.slice(2).join('|').trim() } : null;
+        if (verb === 'photo') { const desc = p.slice(1).join('|').trim(); return desc ? { verb: verb, sid: sid, text: desc } : null; }
+        if (verb === 'like') return p[1] ? { verb: verb, sid: sid, who: p[1] } : null;
+        if (verb === 'comment') { const t = p.slice(2).join('|').trim(); return (p[1] && t) ? { verb: verb, sid: sid, who: p[1], text: t } : null; }
+        const t = p.slice(3).join('|').trim();
+        return (p[1] && t) ? { verb: 'reply', sid: sid, who: p[1], to: p[2] || '', text: t } : null;
+    }
+    // 一則正文 → [{ owner, items:[…] }]（一個容器一筆）
+    function parseStory(text) {
+        const out = [];
+        const s = String(text || '');
+        if (s.indexOf('<moments') < 0) return out;
+        STORY_BLOCK_RE.lastIndex = 0;
+        let bm;
+        while ((bm = STORY_BLOCK_RE.exec(s))) {
+            const owner = ((bm[1] || '').match(/\bowner\s*=\s*["'“”]?([^"'“”>]*)/i) || [])[1] || '';
+            const items = [];
+            (bm[2] || '').split(/\r?\n/).forEach(function (ln) { const it = parseStoryLine(ln); if (it) items.push(it); });
+            out.push({ owner: owner.trim(), items: items });
+        }
+        return out;
+    }
+    // 照順序疊成「劇情裡每一則現在長什麼樣」。list 的每一筆已經把名字換成 who（'me'／聊天室 id／'npc:名字'）。
+    //   同一個編號換了人發＝另一則（AI 在不同章節重用了編號），之後指這個編號的都算新的那則。
+    function _storyPlan(list) {
+        const posts = {}, order = [], cur = {}, used = {};
+        (list || []).forEach(function (it) {
+            const sid = String((it && it.sid) || '').trim();
+            if (!sid) return;
+            if (it.verb === 'post') {
+                let key = cur[sid];
+                if (key && posts[key].who !== it.who) key = '';
+                if (!key) {
+                    used[sid] = (used[sid] || 0) + 1;
+                    key = 's:' + sid + (used[sid] > 1 ? '#' + used[sid] : '');
+                    cur[sid] = key;
+                    posts[key] = { key: key, who: it.who, whoName: it.whoName || '', text: '', photos: [], likes: [], comments: [] };
+                    order.push(key);
+                }
+                if (it.text) posts[key].text = it.text;
+                return;
+            }
+            const p = cur[sid] ? posts[cur[sid]] : null;
+            if (!p) return;   // 指到劇情裡沒發過的動態：不收
+            if (it.verb === 'photo') { if (!p.photos.some(function (x) { return x.desc === it.text; })) p.photos.push({ desc: it.text }); return; }
+            if (it.verb === 'like') { if (!p.likes.some(function (x) { return x.who === it.who; })) p.likes.push({ who: it.who, whoName: it.whoName || '' }); return; }
+            const c = { who: it.who, whoName: it.whoName || '', toWho: it.verb === 'reply' ? (it.toWho || '') : '', toName: it.verb === 'reply' ? (it.toName || '') : '', text: it.text };
+            // 同一句重演一次（AI 重播整個朋友圈）不算兩條
+            if (!p.comments.some(function (x) { return x.who === c.who && x.toWho === c.toWho && x.toName === c.toName && x.text === c.text; })) p.comments.push(c);
+        });
+        return { posts: posts, order: order };
+    }
+    function syncStory(list) {
+        const sc = scope();
+        if (!sc) return Promise.resolve(false);
+        const plan = _storyPlan(list);
+        return _run(sc, function (st) {
+            const before = JSON.stringify(st.feed.posts);
+            const hidden = st.feed.hiddenStory || [];
+            const byKey = {};
+            st.feed.posts.forEach(function (p) { if (p.storyKey) byKey[p.storyKey] = p; });
+            st.feed.posts = st.feed.posts.filter(function (p) { return !p.storyKey || (plan.posts[p.storyKey] && hidden.indexOf(p.storyKey) < 0); });
+            plan.order.forEach(function (key) {
+                if (hidden.indexOf(key) >= 0) return;
+                const d = plan.posts[key];
+                let p = byKey[key];
+                if (!p) { p = _pushPost(st, { author: d.who, authorName: d.whoName, text: '', photos: [] }); p.storyKey = key; }
+                p.author = d.who;
+                p.authorName = String(d.whoName || '');
+                p.text = String(d.text || '').slice(0, TEXT_MAX);
+                const oldPh = p.photos || [];
+                p.photos = d.photos.slice(0, PHOTO_MAX).map(function (ph) {
+                    const o = oldPh.find(function (x) { return x.desc === ph.desc; });
+                    return { src: (o && o.src) || '', desc: String(ph.desc).slice(0, 300) };
+                });
+                const natL = p.likes.filter(function (l) { return !l.story; });
+                const oldL = p.likes.filter(function (l) { return l.story; });
+                p.likes = natL.concat(d.likes.filter(function (l) { return !natL.some(function (n) { return n.who === l.who; }); }).map(function (l) {
+                    const o = oldL.find(function (x) { return x.who === l.who; });
+                    return { who: l.who, whoName: l.whoName, at: o ? o.at : _now(), story: 1 };
+                }));
+                const natC = p.comments.filter(function (c) { return !c.story; });
+                const oldC = p.comments.filter(function (c) { return c.story; });
+                const stC = d.comments.map(function (c) {
+                    const o = oldC.find(function (x) { return x.who === c.who && x.toWho === c.toWho && x.text === c.text; });
+                    const nc = o ? Object.assign({}, o, { whoName: c.whoName, toName: c.toName }) : _mkComment(c.who, c.whoName, c.toWho, c.toName, c.text);
+                    nc.story = 1;
+                    return nc;
+                });
+                p.comments = natC.concat(stC).sort(function (a, b) { return (a.at || 0) - (b.at || 0); });
+            });
+            return JSON.stringify(st.feed.posts) !== before;
+        });
+    }
+    // 劇情播放時，這一段的讚留言指到前面章節發的那則：拿同步進來的那一份（同一編號換過人的，拿最後那一則）
+    function findStory(sid) {
+        const st = _viewSync();
+        if (!st || !sid) return null;
+        const base = 's:' + String(sid).trim();
+        let hit = null, n = 0;
+        st.feed.posts.forEach(function (p) {
+            if (!p.storyKey) return;
+            if (p.storyKey === base) { if (!hit) { hit = p; n = 1; } return; }
+            const m = p.storyKey.indexOf(base + '#') === 0 ? parseInt(p.storyKey.slice(base.length + 1), 10) : 0;
+            if (m > n) { hit = p; n = m; }
+        });
+        return hit ? _clone(hit) : null;
+    }
+
+    // ── 手機事件簿（手機上剛發生的事只交劇情一次）：她在朋友圈做的事、別人對她的動態做的事 ──
+    //   劇情同步進來的那幾則（story）正文本來就有，不算。角色自己發的動態也不算（跟微博那格一樣，只收跟她有關的）。
+    async function _eventsSince(cid, from) {
+        const st = await load(cid == null ? scope() : String(cid));
+        const me = _userName();
+        const cut = function (t) { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > 60 ? t.slice(0, 60) + '…' : t; };
+        const evs = [];
+        st.feed.posts.forEach(function (p) {
+            const mine = p.author === 'me';
+            const about = '「' + (cut(p.text) || (p.photos.length ? '照片' : '')) + '」';
+            const whose = mine ? me + '的' : _nameOf(p.author, p.authorName) + '的';
+            if (mine && !p.storyKey && p.at > from) {
+                evs.push({ at: p.at, line: '・' + me + '發了一則朋友圈：' + cut(p.text) + (p.photos.length ? '（附了 ' + p.photos.length + ' 張照片）' : '') });
+            }
+            p.likes.forEach(function (l) {
+                if (l.story || !(l.at > from)) return;
+                if (l.who === 'me') evs.push({ at: l.at, line: '・' + me + '讚了' + whose + '朋友圈' + about });
+                else if (mine) evs.push({ at: l.at, line: '・' + _nameOf(l.who, l.whoName) + '讚了' + me + '的朋友圈' + about });
+            });
+            p.comments.forEach(function (c) {
+                if (c.story || !(c.at > from)) return;
+                const act = c.toWho ? '回覆 ' + (c.toWho === 'me' ? me : _nameOf(c.toWho, c.toName)) : '留言';
+                if (c.who === 'me') evs.push({ at: c.at, line: '・' + me + '在' + whose + '朋友圈' + about + '底下' + act + '：' + cut(c.text) });
+                else if (mine || c.toWho === 'me') evs.push({ at: c.at, line: '・' + _nameOf(c.who, c.whoName) + '在' + whose + '朋友圈' + about + '底下' + act + '：' + cut(c.text) });
+            });
+        });
+        if (!evs.length) return [];
+        evs.sort(function (a, b) { return a.at - b.at; });
+        return [{ name: '朋友圈', last: evs[evs.length - 1].at, lines: evs.map(function (e) { return e.line; }) }];
+    }
+    (function registerSource(n) {
+        const B = win.OS_PHONE_EVENTS;
+        if (B && B.addSource) { B.addSource('wxmo', _eventsSince); return; }
+        if (n > 0) setTimeout(function () { registerSource(n - 1); }, 500);
+    })(20);
+
     // ── 紅點 ─────────────────────────────────────────────
     function _seenAt() { try { return parseInt(localStorage.getItem(SEEN_KEY(scope())), 10) || 0; } catch (e) { return 0; } }
     // count：角色的動態、讚、留言（她看過之後的）；actor：最新那個人；replies：她動態上的讚留言＋回覆她的
@@ -498,6 +671,8 @@
         if (who === 'me') {
             try { const P = win.WX_PROFILE; const pr = P && P.get ? P.get() : null; return { src: (pr && pr.avatar) || '', vn: '' }; } catch (e) { return { src: '', vn: '' }; }
         }
+        // 劇情裡按讚留言的路人（不在通訊錄）：頭像照劇情立繪那一庫找名字
+        if (String(who || '').indexOf('npc:') === 0) return { src: '', vn: String(who).slice(4) };
         const c = _chats()[who];
         return { src: (c && c.customAvatar) || '', vn: (c && !c.customAvatar && c.realName) || '' };
     }
@@ -860,7 +1035,8 @@
 
     win.WX_MOMENTS = {
         open: open, close: close, openLinks: openLinks,
-        _avatarHTML: _avatarHTML, _hydrate: _hydrate, _nameOf: _nameOf,
+        _avatarHTML: _avatarHTML, _hydrate: _hydrate, _nameOf: _nameOf, _postHTML: _postHTML,
+        parseStory: parseStory, parseStoryLine: parseStoryLine, syncStory: syncStory, findStory: findStory, _storyPlan: _storyPlan, _eventsSince: _eventsSince,
         scope: scope, load: load, onChange: onChange, _flush: _flush,
         addPost: addPost, toggleLike: toggleLike, addComment: addComment,
         removePost: removePost, removeComment: removeComment,

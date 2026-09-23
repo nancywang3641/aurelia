@@ -265,6 +265,7 @@ const PHONE_FILES = [
     'vn_story/vn_phone.js',
     'vn_story/vn_browser.js',
     'vn_story/vn_nav.js',
+    'vn_story/vn_moments.js',          // 🫂 劇情手機的朋友圈（畫法借 wx/wx_moments.js）
     'vn_story/vn_reader.js',
     'vn_story/vn_ui_workshop.js',
 

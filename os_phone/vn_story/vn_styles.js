@@ -291,6 +291,8 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- 🫂 朋友圈（vn_moments.js）：裡面整份借聊天 app 朋友圈的畫法；🚨 要排在 #phone-chat（.wx-shell）後面，聊天 app 的主題才罩得到 -->
+                        <div id="phone-moments" class="hidden" onclick="window.VN_Moments && window.VN_Moments.tap()"></div>
                         <div id="phone-browser" class="hidden" onclick="window.VN_Browser && window.VN_Browser.tap()">
                             <div id="br-home">
                                 <div id="br-clock"></div>

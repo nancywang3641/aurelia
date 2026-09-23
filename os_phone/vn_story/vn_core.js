@@ -346,6 +346,7 @@
             if (win.VN_Phone) win.VN_Phone.resetState();
             if (win.VN_Browser) win.VN_Browser.resetState();
             if (win.VN_Nav) win.VN_Nav.resetState();
+            if (win.VN_Moments) win.VN_Moments.resetState();
 
             this.updateControlUI();
 
@@ -581,7 +582,7 @@
             // 預處理：移除外部作者區塊標籤內的原始文字行
             // 這些行的內容由 DOM 渲染版本呈現（_showDomBlock），原文不需出現在對話框
             {
-                const _skipSys = ['content','call','chat','browser','nav','status','summary','avatar','scene',
+                const _skipSys = ['content','call','chat','browser','nav','moments','status','summary','avatar','scene',
                     // 🚨 章節卡：prompt 規定每輪必出，裡面裝的是 [Story|/[Chapter|/[BGM|/[Bg|/[Avatar|。
                     //    不列白名單的話會被下面的「未知 XML 區塊過濾器」當成作者的 HTML 美化區塊，
                     //    整塊內容刪光 → 背景/BGM/左上角場景 tag 全沒（立繪還在，因為早鳥直接掃原文）。
@@ -2362,8 +2363,8 @@
             VN_TTS.playNarration(rawText);
         },
 
-        // 手機四個面（chat/call/browser/nav）裡不該出現的正文層行：看到就當容器已關（見 next 裡的逃生口）
-        _phoneEscapeRe: /^(?:\[(?:Choice|Bg|BGM|Scene|Area|Exit|Item|Date|HP|Buff|Event|Quest|Achievement|Story|Chapter|Preface|Protagonist|World|Sys|EventText|HtmlCard)\||<\/?(?:content|summary|ChapterCard|status|scene|system|BattleStart|live_popup)\b|<(?:chat|call|browser|nav)\b)/i,
+        // 手機五個面（chat/call/browser/nav/moments）裡不該出現的正文層行：看到就當容器已關（見 next 裡的逃生口）
+        _phoneEscapeRe: /^(?:\[(?:Choice|Bg|BGM|Scene|Area|Exit|Item|Date|HP|Buff|Event|Quest|Achievement|Story|Chapter|Preface|Protagonist|World|Sys|EventText|HtmlCard)\||<\/?(?:content|summary|ChapterCard|status|scene|system|BattleStart|live_popup)\b|<(?:chat|call|browser|nav|moments)\b)/i,
 
         next: function () {
             this.clearTimers();
@@ -2553,13 +2554,15 @@
             if (/^<\/browser\s*>/i.test(line)) { if(win.VN_Browser) win.VN_Browser.exitBrowser(this); else this.next(); return; }
             if (/^<nav\b/i.test(line)) { if(win.VN_Nav) win.VN_Nav.initNav(this, line); else this.next(); return; }
             if (/^<\/nav\s*>/i.test(line)) { if(win.VN_Nav) win.VN_Nav.exitNav(this); else this.next(); return; }
+            if (/^<moments\b/i.test(line)) { if(win.VN_Moments) win.VN_Moments.initMoments(this, line); else this.next(); return; }
+            if (/^<\/moments\s*>/i.test(line)) { if(win.VN_Moments) win.VN_Moments.exitMoments(this); else this.next(); return; }
 
             // ── 手機殼四個面的逃生口＋瀏覽器/導航的提前分派（必須在所有區塊過濾之前）──
             //    逃生口：正文層才會出現的行（選項、背景、場景、章節卡、狀態、摘要、另一個容器…）跑進手機裡，
             //    代表 AI 忘了寫關門那行；當作關門，這一行退回去用 VN 模式重播，後面的劇情才不會整段被手機吃掉。
             //    提前分派：導航/瀏覽器裡的 [Arrive]、[Page] 這種整行單一標籤，會被下面「格式B：[XXX]」
             //    當成自訂區塊找不到閉合而跳過，所以這兩個模式的行在這裡就交出去。
-            if (this.mode === 'chat' || this.mode === 'call' || this.mode === 'browser' || this.mode === 'nav') {
+            if (this.mode === 'chat' || this.mode === 'call' || this.mode === 'browser' || this.mode === 'nav' || this.mode === 'moments') {
                 if (this._phoneEscapeRe.test(line)) {
                     const _pm = this.mode;
                     this.index--;   // exit 會 next() 一次，剛好回到這一行
@@ -2567,11 +2570,13 @@
                     else if (_pm === 'call' && win.VN_Phone) win.VN_Phone.exitCall(this);
                     else if (_pm === 'browser' && win.VN_Browser) win.VN_Browser.exitBrowser(this);
                     else if (_pm === 'nav' && win.VN_Nav) win.VN_Nav.exitNav(this);
+                    else if (_pm === 'moments' && win.VN_Moments) win.VN_Moments.exitMoments(this);
                     else { this.mode = 'vn'; this.toggleUI('vn'); this.next(); }
                     return;
                 }
                 if (this.mode === 'browser') { if(win.VN_Browser) win.VN_Browser.handleBrowserLine(line, this); else this.next(); return; }
                 if (this.mode === 'nav') { if(win.VN_Nav) win.VN_Nav.handleNavLine(line, this); else this.next(); return; }
+                if (this.mode === 'moments') { if(win.VN_Moments) win.VN_Moments.handleLine(line, this); else this.next(); return; }
             }
 
             // ── <scene>...</scene> 場景插圖 block ───────────────────────
@@ -2688,7 +2693,7 @@
 
             // --- 自訂區塊過濾 ---
             {
-                const _sysXml = ['content','call','chat','browser','nav','status','summary','avatar','scene','system',
+                const _sysXml = ['content','call','chat','browser','nav','moments','status','summary','avatar','scene','system',
                     'p','div','span','br','hr','b','i','em','strong','a','img',
                     'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
                     'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
@@ -3439,11 +3444,12 @@
                 document.getElementById('phone-call').classList.toggle('hidden', target !== 'phone-call');
                 const pb = document.getElementById('phone-browser'); if (pb) pb.classList.toggle('hidden', target !== 'phone-browser');
                 const pn = document.getElementById('phone-nav'); if (pn) pn.classList.toggle('hidden', target !== 'phone-nav');
+                const pm = document.getElementById('phone-moments'); if (pm) pm.classList.toggle('hidden', target !== 'phone-moments');
                 // 狀態列：時間照真的走；底下那塊是深的，時間與橫槓就換白的。
                 //   聊天室的頂欄跟著聊天 app 的主題與黑夜模式變色，不能寫死 → 量頂欄真正的底色（同應用手機的做法）
                 const ps = document.getElementById('phone-screen');
                 if (ps) {
-                    let dark = target === 'phone-call';
+                    let dark = target === 'phone-call' || target === 'phone-moments';   // 朋友圈頂上是封面（深色）
                     if (target === 'phone-chat') {
                         try {
                             const m = String(getComputedStyle(document.getElementById('chat-header')).backgroundColor).match(/[\d.]+/g);
