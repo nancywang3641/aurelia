@@ -150,8 +150,20 @@
                 r.done = 1;
                 if (at > bestAt) { bestAt = at; best = r; }
             });
-            if (!best) return;
-            for (let i = bestAt; i <= cur; i++) if (/^\[Bg\|/i.test(String(this.script[i] || ''))) return;   // 已經換到下一場了，別放上一場的
+            // 還停在章節卡片（一句台詞旁白都還沒演）：第一場的音樂現在就放，卡片跟第一場是同一首，關掉卡片不會再換歌
+            if (!best) {
+                const said = this.script.slice(0, cur + 1).some(l => /^\[(?:Char|Nar)\|/.test(String(l || '')));
+                const first = !said && pl.bgm.find(r => !r.done);
+                if (!first) return;
+                first.done = 1;
+                if (this._ccOpen) { this._playBgm(first.id); this._ccSetBgm(first.id); }   // 卡片已經開著在等她按：現在就放，卡上的曲名也換成這首
+                else this.script.splice(cur + 1, 0, '[BGM|' + first.id + '|jev]');
+                return;
+            }
+            // 已經換到下一場了，別放上一場的。🚨 從那一場開頭的「下一行」算：一場常常就是從 [Bg|] 開始的（章節卡片裡那行），
+            //    以前從開頭那行本身算，永遠判成換場了 → 時間表晚到的章，第一場的音樂一首都不放。
+            for (let i = bestAt + 1; i <= cur; i++) if (/^\[Bg\|/i.test(String(this.script[i] || ''))) return;
+            if (this._ccOpen) { this._playBgm(best.id); this._ccSetBgm(best.id); return; }   // 卡片開著在等她按：現在就放
             this.script.splice(cur + 1, 0, '[BGM|' + best.id + '|jev]');   // 下一次推進就播
         },
         _stageClear: function() { this._stageInit(); this._clearSlot(0); this._clearSlot(1); this._slotMemory = {}; this._pendingLeave = []; },   // 換景=站位記憶歸零(跨場景的陳舊記憶會害兩人搶同一格)+清待離場

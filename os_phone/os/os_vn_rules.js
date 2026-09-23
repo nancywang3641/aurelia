@@ -75,7 +75,8 @@
     function _jevSfxStrip(id, content) {
         if (id !== 'core_format' && id !== 'core_format_free') return content;
         return String(content)
-            .replace(/^\[BGM\|BGM_ID\][^\n]*\n?/m, '')
+            // 格式那行和範例那行（[BGM|示范BGM]）都拿掉：只拿格式那行，範例照樣在教它每章卡片寫一首
+            .replace(/^\[BGM\|[^\]\n]*\][^\n]*\n?/gm, '')
             .replace(/^- Bg\/BGM 可在[^\n]*$/m, '- Bg 可在 ChapterCard 外的正文區穿插換場。')
             .replace(/^## SFX \/ FX$/m, '## FX')
             // 🚨 音效那行連著「正文禁止任何音效說明/註解/技術自白」這條禁令；整行拿掉過一次，AI 就在正文裡寫「(此处不用特效，改掉，删)」
@@ -95,7 +96,8 @@
         return _data().map(d => ({
             id: d.id,
             name: d.name,
-            content: _jevSfxStrip(d.id, String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || '')) + _walletSeedLine(d.id),
+            // 🚨 只在交給 Jev 時才拿（a0776a5d 起一直不看開關：沒開 Jev 的時候正文 AI 也沒被教音樂音效的寫法）
+            content: (jev ? _jevSfxStrip : function (i, c) { return c; })(d.id, String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || '')) + _walletSeedLine(d.id),
             depth: _normDepth(d.depth),
             role: _normRole(d.role),
             enabled: Object.prototype.hasOwnProperty.call(st, d.id) ? st[d.id] !== false : d.on !== false,

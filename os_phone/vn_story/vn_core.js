@@ -282,6 +282,8 @@
             this._jevStage = null;     // 🎭 上一章 Jev 排的收立繪時間表作廢（晚到的也不收：看 _jevStageSeq）
             this._jevSfx = null;       // 🎵 上一章 Jev 排的音效／音樂時間表作廢（同一個序號）
             this._jevSfxNow = null;
+            this._jevSfxWait = false;  // 🎵 Jev 的時間表還在路上（這段期間 AI 寫的 [BGM|] 先扣著，見 [BGM| 那段）
+            this._aiBgmHeld = null;
             this._jevStageSeq = (this._jevStageSeq || 0) + 1;
             this.avatars = {};
             this.charVoices = {};   // [Avatar|名|聲線|外觀] 宣告的固定聲線（名→聲線）；[Char] 不再每行帶
@@ -723,11 +725,26 @@
                 const _JX = win.OS_JEV_SFX || window.OS_JEV_SFX;
                 if (_JX && _JX.active && _JX.active()) {
                     const _self = this, _seq = this._jevStageSeq;
+                    // 🚨 時間表是非同步回來的。以前回來之前 AI 寫的 [BGM|] 照播 —— 章節卡片那行一定比時間表早，
+                    //    於是卡片放 AI 選的歌、關掉卡片 Jev 的歌進來又換一首，每章都這樣（她 09-24：「為啥章節卡片有BGM?
+                    //    但關閉後，又換BGM」）。現在等的這段 AI 的先扣著；Jev 沒回答（這章照舊）才把扣著的那首放出來。
+                    this._jevSfxWait = true;
+                    const _giveBack = function () {
+                        if (_self._jevStageSeq !== _seq) return;
+                        _self._jevSfxWait = false;
+                        const held = _self._aiBgmHeld; _self._aiBgmHeld = null;
+                        if (!held) return;
+                        if (_self._ccOpen) { _self._playBgm(held.split('|')[1].replace(']', '').trim().replace(/\.[^.]+$/, '')); return; }   // 卡片開著在等她按：現在就放
+                        if (Array.isArray(_self.script)) _self.script.splice(_self.index + 1, 0, held);   // 下一次推進就播
+                    };
                     _JX.plan(this.script.slice(), this._currentMessageId).then(function (pl) {
-                        if (!pl || _self._jevStageSeq !== _seq) return;
+                        if (_self._jevStageSeq !== _seq) return;
+                        if (!pl) { _giveBack(); return; }
+                        _self._jevSfxWait = false;
+                        _self._aiBgmHeld = null;
                         _self._jevSfx = pl;
                         _self._jevSfxCatchUp();
-                    }).catch(function () {});
+                    }).catch(_giveBack);
                 }
             } catch (e) {}
         },
@@ -2753,57 +2770,14 @@
 
             if (line.startsWith('[BGM|')) {
                 // 🎵 這章音樂交給 Jev 時，AI 自己寫的 [BGM|] 不播（Jev 插的那行帶 |jev）
-                if (this._jevSfx && !/\|jev\]$/.test(line)) { this.next(); return; }
+                //    時間表還在路上也不播，先扣著（Jev 沒回答才放出來，見 loadScript 尾巴）
+                if ((this._jevSfx || this._jevSfxWait) && !/\|jev\]$/.test(line)) {
+                    if (!this._jevSfx) this._aiBgmHeld = line;
+                    this.next(); return;
+                }
                 const rawName = line.split('|')[1].replace(']', '').trim();
                 const name = rawName.replace(/\.[^.]+$/, '');
-                const audio = document.getElementById('bgm-player');
-                if (name === 'stop') {
-                    if (audio) audio.pause();
-                } else if (!audio) {
-                    console.warn(`[VN] BGM「${name}」不播：找不到 #bgm-player（VN 舞台還沒建起來？）`);
-                } else if (!VN_Config.data.bgm) {
-                    console.log(`[VN] BGM「${name}」跳過：設定裡的背景音樂是關的`);
-                } else if (VN_Config.data.bgm && audio) {
-                    const _self = this;
-                    const tryPlay = (filename, fuzzyHint) => {
-                        // iOS 要靠 Web Audio 調 BGM 音量就得開 CORS；crossOrigin 必須在設 src 前設好，
-                        // 否則跨域音訊接進 Web Audio 會被當 tainted 而靜音。
-                        if (win.VN_AudioGain && win.VN_AudioGain.isIOS() && !audio.dataset.noCors) {
-                            audio.crossOrigin = 'anonymous';
-                        }
-                        audio.src = VN_Config.data.bgm + filename + '.mp3';
-                        const onOk  = () => { _self._showBgmToast(fuzzyHint ? `${filename} ←≈ ${name}` : filename, true); cleanup(); };
-                        const onErr = async () => {
-                            cleanup();
-                            // 保命：BGM 主機沒開 CORS 時 crossOrigin 會害載入失敗 → 清掉重試純播放（放棄音量控制但確保有聲音）
-                            if (audio.crossOrigin === 'anonymous' && !audio.dataset.noCors) {
-                                audio.dataset.noCors = '1';
-                                audio.removeAttribute('crossorigin');
-                                tryPlay(filename, fuzzyHint);
-                                return;
-                            }
-                            // exact 失敗 → 嘗試 fuzzy match
-                            if (!fuzzyHint && win.VN_BgmIndex) {
-                                await win.VN_BgmIndex.load();
-                                const match = win.VN_BgmIndex.findMatch(name);
-                                if (match) {
-                                    console.log(`[VN] BGM fuzzy match: "${name}" → "${match.name}" (score ${match.score.toFixed(2)})`);
-                                    tryPlay(match.name, true);
-                                    return;
-                                }
-                            }
-                            // 找不到夠像的 → 靜音（避免配錯氛圍）
-                            _self._showBgmToast(name, false);
-                        };
-                        const cleanup = () => { audio.removeEventListener('canplay', onOk); audio.removeEventListener('error', onErr); };
-                        audio.addEventListener('canplay', onOk, { once: true });
-                        audio.addEventListener('error',   onErr, { once: true });
-                        audio.play().catch(() => {});
-                    };
-                    tryPlay(name, false);
-                } else {
-                    this._showBgmToast(name, false);
-                }
+                this._playBgm(name);
                 this.next(); return;
             }
 
@@ -3242,6 +3216,15 @@
             return d;
         },
         // 回 true＝卡片接管畫面（呼叫端就別再 next()，等「開始閱讀」）
+        // 卡片開著時換掉 BGM 那一格（Jev 的時間表在卡片出場之後才回來時用）
+        _ccSetBgm: function(id) {
+            const meta = document.getElementById('vncc-meta');
+            if (!meta || !id) return;
+            const cells = [...meta.querySelectorAll('.vncc-cell')];
+            const hit = cells.find(c => (c.querySelector('.vncc-cell-k') || {}).textContent === 'BGM');
+            if (hit) { hit.querySelector('.vncc-cell-v').textContent = id; return; }
+            meta.insertAdjacentHTML('beforeend', '<div class="vncc-cell"><span class="vncc-cell-k">BGM</span><span class="vncc-cell-v">' + this._ccEsc(id) + '</span></div>');
+        },
         _showChapterCard: function(d) {
             const el = document.getElementById('vn-chapter-card');
             if (!el || !d) return false;
@@ -3251,6 +3234,11 @@
             set('vncc-num', d.num ? ('Chapter ' + d.num) : '');
             set('vncc-title', d.title || d.story);
             set('vncc-preface', d.preface);
+            // 🎵 音樂交給 Jev 的章：卡上的 BGM 格寫 Jev 選的那首（還沒回來就先空著），不寫 AI 寫的那首 —— 那首根本不會播
+            if (this._jevSfx || this._jevSfxWait) {
+                const jb = this._jevSfx && (this._jevSfx.bgm || [])[0];
+                d = Object.assign({}, d, { bgm: jb ? jb.id : '' });
+            }
             const meta = document.getElementById('vncc-meta');
             if (meta) {
                 meta.innerHTML = [['Protagonist', d.who], ['Location', d.where], ['BGM', d.bgm]]
@@ -3400,6 +3388,58 @@
             const g2 = document.getElementById('game-char-2'); if (g2) g2.style.display = 'none';
             const cp = document.getElementById('char-portrait'); if (cp) cp.style.display = 'none';
         },
+        // 🎵 放一首背景音樂（名字不帶副檔名；'stop' 停）。劇本裡的 [BGM|] 行與 Jev 在章節卡片上補放的那首都走這裡。
+        _playBgm: function(name) {
+            const audio = document.getElementById('bgm-player');
+            if (name === 'stop') {
+                if (audio) audio.pause();
+            } else if (!audio) {
+                console.warn(`[VN] BGM「${name}」不播：找不到 #bgm-player（VN 舞台還沒建起來？）`);
+            } else if (!VN_Config.data.bgm) {
+                console.log(`[VN] BGM「${name}」跳過：設定裡的背景音樂是關的`);
+            } else if (VN_Config.data.bgm && audio) {
+                const _self = this;
+                const tryPlay = (filename, fuzzyHint) => {
+                    // iOS 要靠 Web Audio 調 BGM 音量就得開 CORS；crossOrigin 必須在設 src 前設好，
+                    // 否則跨域音訊接進 Web Audio 會被當 tainted 而靜音。
+                    if (win.VN_AudioGain && win.VN_AudioGain.isIOS() && !audio.dataset.noCors) {
+                        audio.crossOrigin = 'anonymous';
+                    }
+                    audio.src = VN_Config.data.bgm + filename + '.mp3';
+                    const onOk  = () => { _self._showBgmToast(fuzzyHint ? `${filename} ←≈ ${name}` : filename, true); cleanup(); };
+                    const onErr = async () => {
+                        cleanup();
+                        // 保命：BGM 主機沒開 CORS 時 crossOrigin 會害載入失敗 → 清掉重試純播放（放棄音量控制但確保有聲音）
+                        if (audio.crossOrigin === 'anonymous' && !audio.dataset.noCors) {
+                            audio.dataset.noCors = '1';
+                            audio.removeAttribute('crossorigin');
+                            tryPlay(filename, fuzzyHint);
+                            return;
+                        }
+                        // exact 失敗 → 嘗試 fuzzy match
+                        if (!fuzzyHint && win.VN_BgmIndex) {
+                            await win.VN_BgmIndex.load();
+                            const match = win.VN_BgmIndex.findMatch(name);
+                            if (match) {
+                                console.log(`[VN] BGM fuzzy match: "${name}" → "${match.name}" (score ${match.score.toFixed(2)})`);
+                                tryPlay(match.name, true);
+                                return;
+                            }
+                        }
+                        // 找不到夠像的 → 靜音（避免配錯氛圍）
+                        _self._showBgmToast(name, false);
+                    };
+                    const cleanup = () => { audio.removeEventListener('canplay', onOk); audio.removeEventListener('error', onErr); };
+                    audio.addEventListener('canplay', onOk, { once: true });
+                    audio.addEventListener('error',   onErr, { once: true });
+                    audio.play().catch(() => {});
+                };
+                tryPlay(name, false);
+            } else {
+                this._showBgmToast(name, false);
+            }
+        },
+
         toggleUI: function(target) {
             const po = document.getElementById('phone-overlay');
             if (target === 'vn') {
