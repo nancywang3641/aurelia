@@ -124,7 +124,7 @@ function renderBasic(cfg) {
   </div>
   <div class="vtts-field">
     <label class="vtts-label">Sample Steps <span id="vtts-steps-val">${cfg.sampleSteps ?? 32}</span>
-      <span style="color:rgba(26,28,40,0.55);font-weight:normal;margin-left:6px;">（V3 / V4 專屬，V1/V2 忽略）</span>
+      <span class="vtts-note-inline">（V3 / V4 專屬，V1/V2 忽略）</span>
     </label>
     <input class="vtts-input" id="vtts-steps" type="range" min="4" max="100" step="4"
            value="${cfg.sampleSteps ?? 32}" oninput="document.getElementById('vtts-steps-val').textContent=this.value">
@@ -242,7 +242,7 @@ function renderModels(cfg, eng) {
   <button class="vtts-btn vtts-btn-primary" onclick="VN_TTS_Panel.importIndexVoices()" title="從 IndexTTS 服務把所有音色抓進來，情緒自動掛好"><i class="fa-solid fa-microphone"></i> 匯入 IndexTTS 音色</button>
   <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteAllModels()"><i class="fa-solid fa-trash-can"></i> 一鍵清空</button>
 </div>
-<div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:10px;"><i class="fa-solid fa-lightbulb"></i> 有多個模型？先執行擴展目錄裡的 <code style="color:rgba(26,28,40,0.55)">scan_models.bat</code>，再點「載入配置」一次匯入全部。</div>
+<div class="vtts-hint vtts-hint-block"><i class="fa-solid fa-lightbulb"></i> 有多個模型？先執行擴展目錄裡的 <code class="vtts-code">scan_models.bat</code>，再點「載入配置」一次匯入全部。</div>
 ${cards}`;
 }
 
@@ -280,9 +280,9 @@ function renderEmotionBlock(emoKey, emData) {
     emoKey = emoKey || '';
     emData = emData || {};
     return `
-    <div class="vtts-emo-block" style="border-left: 2px solid rgba(26,28,40,0.25); padding-left: 10px; margin-bottom: 12px; background: rgba(26,28,40,0.04); padding: 8px;">
+    <div class="vtts-emo-block">
       <div class="vtts-row" style="margin-bottom: 8px;">
-        <span style="font-size: 12px; color: #1A1C28; white-space: nowrap;"><i class="fa-solid fa-masks-theater"></i> 觸發標籤：</span>
+        <span class="vtts-emo-label"><i class="fa-solid fa-masks-theater"></i> 觸發標籤：</span>
         <input class="vtts-input vtts-emo-key" type="text" value="${esc(emoKey)}" placeholder="例：Surprise, 哭腔, 撒嬌">
         <button class="vtts-btn vtts-btn-danger" onclick="this.closest('.vtts-emo-block').remove()" style="padding: 4px 8px;" title="刪除此情緒">✕</button>
       </div>
@@ -328,8 +328,8 @@ function renderModelForm(id, m) {
     <input class="vtts-input" id="vtts-mf-sovits" type="text" value="${esc(m.sovitsPath||'')}" placeholder="D:\\...\\model.pth">
   </div>
   
-  <div style="margin-top:20px; margin-bottom:8px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 4px;">
-    <span style="font-size: 13px; color: #1A1C28; font-weight: 600;"><i class="fa-solid fa-volume-low"></i> 預設參考音頻（必填）</span>
+  <div class="vtts-sec-head">
+    <span class="vtts-sec-title"><i class="fa-solid fa-volume-low"></i> 預設參考音頻（必填）</span>
   </div>
   <div class="vtts-field">
     <label class="vtts-label">預設參考音頻路徑（.wav）</label>
@@ -348,10 +348,10 @@ function renderModelForm(id, m) {
     </select>
   </div>
 
-  <div style="margin-top:24px; margin-bottom:12px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-end;">
+  <div class="vtts-sec-head vtts-sec-head-split">
     <div>
-        <span style="font-size: 13px; color: #1A1C28; font-weight: 600;"><i class="fa-solid fa-wand-magic-sparkles"></i> 自訂多情緒語音（選填）</span>
-        <div style="font-size: 11px; color: rgba(26,28,40,0.55); margin-top: 4px;">當腳本表情與「觸發標籤」一致時自動替換。<br>留空或無匹配時將使用上方預設音頻。</div>
+        <span class="vtts-sec-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 自訂多情緒語音（選填）</span>
+        <div class="vtts-hint">當腳本表情與「觸發標籤」一致時自動替換。<br>留空或無匹配時將使用上方預設音頻。</div>
     </div>
     <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addEmotionSlot()" style="padding: 5px 12px; font-size: 11px; flex-shrink: 0;">＋ 新增情緒</button>
   </div>
@@ -472,10 +472,8 @@ function renderChars(cfg, eng) {
 
     const rows = Object.entries(cfg.charMappings).filter(([, mid]) => !mid || pick[mid]).map(([char, mid]) => {
         const aliases = (cfg.charAliases && Array.isArray(cfg.charAliases[char])) ? cfg.charAliases[char] : [];
-        const chipStyle = 'display:inline-flex;align-items:center;gap:5px;background:rgba(26,28,40,0.06);border:1px solid rgba(26,28,40,0.20);color:#1A1C28;padding:3px 9px;border-radius:11px;font-size:11px;line-height:1.2;';
-        const chipXStyle = 'cursor:pointer;color:rgba(26,28,40,0.55);font-size:11px;line-height:1;padding:0 1px;';
         const chips = aliases.map(a =>
-            `<span style="${chipStyle}">${esc(a)}<span style="${chipXStyle}" onclick="VN_TTS_Panel.removeAlias('${escJs(char)}','${escJs(a)}')" title="移除別名">✕</span></span>`
+            `<span class="vtts-alias-chip">${esc(a)}<span class="vtts-alias-x" onclick="VN_TTS_Panel.removeAlias('${escJs(char)}','${escJs(a)}')" title="移除別名">✕</span></span>`
         ).join('');
 
         return `
@@ -491,9 +489,9 @@ function renderChars(cfg, eng) {
     <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.deleteCharMapping('${escJs(char)}')">✕</button>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-left:8px;">
-    <span style="font-size:11px;color:rgba(26,28,40,0.55);letter-spacing:1px;">別名</span>
-    ${chips || '<span style="font-size:11px;color:rgba(26,28,40,0.55);">（無，AI 流口水時會對不上）</span>'}
-    <input id="vtts-alias-input-${esc(char)}" type="text" placeholder="+ 新增別名（按 Enter）" style="flex:1;min-width:140px;background:#EEF0F6;border:1px dashed rgba(26,28,40,0.30);color:#1A1C28;padding:4px 8px;border-radius:3px;font-size:11px;outline:none;" onkeypress="if(event.key==='Enter'){event.preventDefault();VN_TTS_Panel.addAlias('${escJs(char)}',this.value);this.value='';}">
+    <span class="vtts-mini vtts-mini-label">別名</span>
+    ${chips || '<span class="vtts-mini">（無，AI 流口水時會對不上）</span>'}
+    <input id="vtts-alias-input-${esc(char)}" type="text" placeholder="+ 新增別名（按 Enter）" class="vtts-alias-input" onkeypress="if(event.key==='Enter'){event.preventDefault();VN_TTS_Panel.addAlias('${escJs(char)}',this.value);this.value='';}">
   </div>
 </div>`;
     }).join('');
@@ -523,14 +521,14 @@ ${(() => {
         const mname = (cfg.models[mid] && cfg.models[mid].name) || mid;
         return `<div style="display:flex;align-items:center;gap:8px;">
       <span class="vtts-char-name" style="flex:1;">${esc(char)}</span>
-      <span style="flex:0 0 auto;font-size:11px;color:rgba(26,28,40,0.6);">${esc(mname)}</span>
+      <span class="vtts-mini vtts-lock-model">${esc(mname)}</span>
       <button class="vtts-btn vtts-btn-danger" onclick="VN_TTS_Panel.unlockNpc('${escJs(char)}')"><i class="fa-solid fa-lock-open"></i> 解除</button>
     </div>`;
     }).join('');
     return `
 <div class="vtts-card">
   <div class="vtts-card-title"><i class="fa-solid fa-lock"></i> 本卡 NPC 聲線鎖${keys.length ? ` <button class="vtts-btn vtts-btn-danger" style="float:right;" onclick="VN_TTS_Panel.clearCardLocks()">清空本卡</button>` : ''}</div>
-  <div style="font-size:11px;color:rgba(26,28,40,0.55);margin-bottom:8px;">立繪雙擊「<i class="fa-solid fa-floppy-disk"></i> 保存 CV」鎖住的 NPC 音；只在這張卡有效、換卡自動回歸抽池、同卡重玩還在。與上面的手動對應分開、互不干擾。</div>
+  <div class="vtts-hint vtts-hint-block">立繪雙擊「<i class="fa-solid fa-floppy-disk"></i> 保存 CV」鎖住的 NPC 音；只在這張卡有效、換卡自動回歸抽池、同卡重玩還在。與上面的手動對應分開、互不干擾。</div>
   ${lockRows || '<div class="vtts-empty">本卡尚無 NPC 聲線鎖</div>'}
 </div>`;
 })()}`;
@@ -603,7 +601,7 @@ function renderNpcCard(cat, models) {
 
   <div style="margin-bottom:10px;">
     <div class="vtts-label">模糊匹配別名（角色名稱含有以下標籤時隨機套用此分類）</div>
-    <div class="vtts-tag-list" id="vtts-tags-${esc(cat.id)}">${tags || '<span style="color:rgba(26,28,40,0.55);font-size:11px">尚無標籤</span>'}</div>
+    <div class="vtts-tag-list" id="vtts-tags-${esc(cat.id)}">${tags || '<span class="vtts-mini">尚無標籤</span>'}</div>
     <div class="vtts-row" style="margin-top:7px;">
       <input class="vtts-input" id="vtts-tag-input-${esc(cat.id)}" type="text" placeholder="新標籤（如：大嬸、長髮女孩）"
              onkeydown="if(event.key==='Enter')VN_TTS_Panel.addNpcTag('${escJs(cat.id)}')">
