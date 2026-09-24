@@ -1638,15 +1638,21 @@
                     });
                     return;
                 }
+                // ↩ [某某] [recall] 那句：傳了又收回（舊寫法 [撤回]）。收成撤回的那則，畫面只剩「撤回了一則訊息」，
+                //   以前原樣變成一顆寫著「[撤回] …」的泡泡。認法跟劇情手機 VN_Phone._recallOf 同一份。
+                const _rc = _storyRecallOf(content);
+                const _body = _rc ? _rc.rest : content;
                 // 引用回覆：標記在內容最前面，解析規則跟 VN 手機共用同一份（OS_API.chatQuote）。
                 // 引用完後面沒東西就當它沒引用——只有一個引用塊沒正文不是一則訊息。
-                const _qp = (win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.parse(content) : null;
+                const _qp = (win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.parse(_body) : null;
                 const _hasQ = !!(_qp && _qp.name && _qp.text && _qp.rest);
-                rooms[key].msgs.push({
+                const _m = {
                     type: 'msg', sender: rawName, isMe: isMe,
-                    content: _hasQ ? _qp.rest : content,
+                    content: _hasQ ? _qp.rest : _body,
                     quoteName: _hasQ ? _qp.name : '', quoteText: _hasQ ? _qp.text : ''
-                });
+                };
+                if (_rc) _m.recalled = true;
+                rooms[key].msgs.push(_m);
             });
         }
         return rooms;
@@ -1914,7 +1920,18 @@
     win.WX_GROUP_EV = {
         parse: function (line) { return _groupEvOf(line); },
         privateOnly: function (text) { return !!_friendEventOf(text); },
+        recallOf: function (content) { return _storyRecallOf(content); },
     };
+
+    // ↩ 劇情裡「傳了又收回」：內容最前面 [recall]（舊寫法 [撤回]）→ { rest: 原本傳的那句 }。
+    //   AI 照抄格式說明寫出「消息內容」這種佔位字＝沒寫原本那句，當成沒內容（畫面只剩撤回提示、不給模型看假內容）。
+    function _storyRecallOf(content) {
+        const m = String(content || '').match(/^\[\s*(?:recall|撤回|撤回消息|撤回訊息)\s*\]\s*([\s\S]*)$/i);
+        if (!m) return null;
+        let rest = m[1].trim();
+        if (/^(?:消息|訊息|讯息|信息)?[內内]容$|^被撤回的那句話$/.test(rest)) rest = '';
+        return { rest: rest };
+    }
 
     function _friendEventOf(text) {
         const s = String(text || '').trim();
@@ -2094,7 +2111,9 @@
         storyMsgs.forEach(function (x) {
             while (ni < stamped.length && stamped[ni].f < x.floor) { out.push(stamped[ni].m); ni++; }
             const sender = x.isMe ? myName : (isGroup ? x.sender : (x.sender || roomName));
-            out.push({ type: x.type === 'system' ? 'system' : 'msg', isMe: !!x.isMe, content: x.content, sender: sender, senderName: sender, _story: x.floor, quoteName: x.quoteName || '', quoteText: x.quoteText || '' });
+            const o = { type: x.type === 'system' ? 'system' : 'msg', isMe: !!x.isMe, content: x.content, sender: sender, senderName: sender, _story: x.floor, quoteName: x.quoteName || '', quoteText: x.quoteText || '' };
+            if (x.recalled) o.recalled = true;   // 劇情裡傳了又收回：畫面一行撤回提示，送模型時寫成旁註（os_api_engine _recallNote）
+            out.push(o);
         });
         while (ni < stamped.length) { out.push(stamped[ni].m); ni++; }
         return out;
@@ -2338,7 +2357,7 @@
                 //    簽名一樣就走下面那條「跟上次一樣就沿用舊的」，名字永遠停在舊的那個。
                 //    她 2026-09-20 回報「整理後根本沒換」就是這個：合併會換 key、統一人名會換發話人，
                 //    所以那兩種看得到效果，只有改名看不到。（tmp/wx_tidy_fix_test.cjs 第 ④ 項守著）
-                const sig = key + '|' + (room.name || '') + '|' + (room.fixedName || '') + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + x.content; }).join('\n'));
+                const sig = key + '|' + (room.name || '') + '|' + (room.fixedName || '') + '|' + room.msgs.length + '|' + parsed.lastFloor + '|' + _storyHash(room.msgs.map(function (x) { return x.sender + ':' + (x.recalled ? '[recall]' : '') + x.content; }).join('\n'));
                 if (existing && existing._storySig === sig) { GLOBAL_CHATS[chatId] = existing; continue; }
 
                 const prevStoryCount = existing ? (existing.messages || []).filter(function (m) { return m && m._story != null; }).length : 0;

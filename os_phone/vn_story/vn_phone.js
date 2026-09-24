@@ -27,6 +27,7 @@
             this.isGroupChat = false;
             this.currentChatroom = '';
             this.chatroomCache = {};
+            this._recallJobs = [];
             this.isCallActive = false;
             this._stopCallTimer(); this._callSec = 0;
         },
@@ -53,6 +54,7 @@
 
             if (newKey !== this.currentChatroom) {
                 if (this.currentChatroom) {
+                    this._recallFlush();
                     this.chatroomCache[this.currentChatroom] = document.getElementById('chat-body').innerHTML;
                 }
                 const chatBody = document.getElementById('chat-body');
@@ -70,6 +72,7 @@
 
         exitChat: function(core) {
             if (this.currentChatroom) {
+                this._recallFlush();
                 this.chatroomCache[this.currentChatroom] = document.getElementById('chat-body').innerHTML;
             }
             core.mode = 'vn';
@@ -80,6 +83,7 @@
         // 用戶手動按返回鍵 → 跳過剩餘 chat 內容，銜接後續對話
         closeChat: function(core) {
             if (this.currentChatroom) {
+                this._recallFlush();
                 this.chatroomCache[this.currentChatroom] = document.getElementById('chat-body').innerHTML;
             }
             let foundEnd = false;
@@ -203,21 +207,65 @@
                         || (!!this.chatOwner && sender === this.chatOwner);
                     // 引用回覆：標記在內容最前面，解析跟微信共用同一份（OS_API.chatQuote）。
                     // 引用完後面沒東西就當它沒引用。灰塊只掛在被貼圖切開後的第一個泡泡上。
-                    const _qp = (win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.parse(content) : null;
+                    // ↩ [某某] [recall] 那句：傳了又收回。認法跟聊天 app 同步那邊同一份（WX_GROUP_EV.recallOf，舊寫法 [撤回] 也認）。
+                    const _rc = (GE && GE.recallOf) ? GE.recallOf(content) : null;
+                    const said = _rc ? _rc.rest : content;
+                    const _qp = (said && win.OS_API && win.OS_API.chatQuote) ? win.OS_API.chatQuote.parse(said) : null;
                     const _hasQ = !!(_qp && _qp.name && _qp.text && _qp.rest);
-                    const body = _hasQ ? _qp.rest : content;
-                    const parts = this._splitStickerContent(body);
-                    parts.forEach((part, pi) => {
-                        const q = (_hasQ && pi === 0) ? { name: _qp.name, text: _qp.text } : null;
-                        chatBody.insertAdjacentHTML('beforeend', this._buildChatBubbleHTML(sender, part, isMe, core, q));
-                    });
+                    const body = _hasQ ? _qp.rest : said;
+                    const before = chatBody.lastElementChild;
+                    if (body) {
+                        const parts = this._splitStickerContent(body);
+                        parts.forEach((part, pi) => {
+                            const q = (_hasQ && pi === 0) ? { name: _qp.name, text: _qp.text } : null;
+                            chatBody.insertAdjacentHTML('beforeend', this._buildChatBubbleHTML(sender, part, isMe, core, q));
+                        });
+                    }
                     // 頭像跟聊天 app 同一支貼：她在聊天 app 設的照片、劇情生過存起來的都在這裡補上
                     try { const WV = win.WX_VIEW || window.WX_VIEW; if (WV && WV.hydrateAvatars) WV.hydrateAvatars(chatBody); } catch (e) {}
-                    core.addLog(sender, body);
+                    if (_rc) {
+                        const shown = [];
+                        for (let el = before ? before.nextElementSibling : chatBody.firstElementChild; el; el = el.nextElementSibling) shown.push(el);
+                        this._recallSwap(chatBody, shown, sender, isMe);
+                        core.addLog(sender, body ? ('傳了「' + body + '」又撤回了') : '撤回了一則訊息');
+                    } else {
+                        core.addLog(sender, body);
+                    }
                 }
                 this.scrollChat();
             }
             core.checkAutoNext();
+        },
+
+        // ↩ 撤回：跟聊天 app 同一個樣子（她 09-15 挑的「淡掉換成提示」）——那句先冒出來約 1.8 秒，淡掉換成一行「撤回了一則訊息」。
+        //   沒寫原本那句（shown 空）就直接一行提示。換掉用計時器不等轉場（視窗在背景時轉場不走會卡全透明）；
+        //   這期間聊天室被清掉重畫過（跳章、回朔）就不動。
+        _recallSwap: function(chatBody, shown, sender, isMe) {
+            const WV = win.WX_VIEW || window.WX_VIEW;
+            const html = (WV && WV.renderBubble)
+                ? WV.renderBubble({ recalled: true, isMe: !!isMe, sender: sender, senderName: sender }, { isGroup: !!this.isGroupChat }, false)
+                : `<div class="wx-system-notice wx-recalled">${isMe ? '你' : (this.isGroupChat ? sender : '對方')}撤回了一則訊息</div>`;
+            if (!shown.length) { chatBody.insertAdjacentHTML('beforeend', html); return; }
+            const job = { shown: shown, html: html };
+            (this._recallJobs = this._recallJobs || []).push(job);
+            setTimeout(() => {
+                if (job.done || !shown[0].isConnected) return;
+                shown.forEach(el => el.classList.add('wx-recall-out'));
+                setTimeout(() => { const neu = this._recallDone(job); if (neu) { neu.classList.add('wx-recall-in'); setTimeout(() => neu.classList.remove('wx-recall-in'), 700); } }, 360);
+            }, 1800);
+        },
+        _recallDone: function(job) {
+            this._recallJobs = (this._recallJobs || []).filter(j => j !== job);
+            if (job.done || !job.shown[0].isConnected) return null;
+            job.done = true;
+            job.shown[0].insertAdjacentHTML('beforebegin', job.html);
+            const neu = job.shown[0].previousElementSibling;
+            job.shown.forEach(el => el.remove());
+            return neu;
+        },
+        // 離開聊天室前（畫面要存進 chatroomCache）：還沒換掉的撤回立刻換掉，不然回來這間時那句還掛著
+        _recallFlush: function() {
+            (this._recallJobs || []).slice().forEach(j => this._recallDone(j));
         },
 
         scrollChat: function() {
@@ -262,7 +310,6 @@
         _splitStickerContent: function(content) {
             // 轉賬/紅包/視頻/位置/收款碼這些判定卡也拆：AI 常把「[收款碼: 任意] 沒留。要不贊助點？」寫成一條，
             // 卡跟話黏在一起 buildBubble 的 ^\[…\]$ 就對不上，整條變成原始文字。卡自己一條、話自己一條。
-            if (content.startsWith('[撤回]')) return [content];
 
             const re = /\[[^\]\[：:]+[：:][^\]]*\]|\[[^\]]+\.(?:gif|jpg|jpeg|png)\]/gi;
             if (!re.test(content)) return [content];
@@ -368,7 +415,6 @@
             };
             const msg = {
                 content: content, isMe: !!isMe, sender: sender,
-                recalled: content.startsWith('[撤回]'),
                 quoteName: quote ? quote.name : '', quoteText: quote ? quote.text : '',
                 _static: { peer: roomName, voiceClick: 'event.stopPropagation(); window.VN_Phone._voiceTap(this)' }
             };
