@@ -343,11 +343,159 @@
             if (!b || typeof b !== 'object') return cd;         // 該桶沒獨立設定 → 用扁平共用設定（現狀）
             return Object.assign({}, cd, b, { url: cd.url });   // 桶設定覆蓋，網址永遠用共用的
         },
+        // 預設包（組合）蓋在扁平設定上，跟 previewComfyPreset 同一種合法；網址永遠用共用的。
+        //   包裡沒帶工作流＝自動組（不能沿用扁平那份的自訂工作流）
+        _comfyCfgFromPreset: function(preset) {
+            const cd = this.config.comfyuiDirect || {};
+            const p = Object.assign({}, preset || {});
+            if (!p.customWorkflow || !String(p.customWorkflow).trim()) { p.workflowMode = 'auto'; p.customWorkflow = ''; }
+            else p.workflowMode = 'custom';
+            delete p.name; delete p.id; delete p.thumb;
+            return Object.assign({}, cd, p, { url: cd.url });
+        },
+
+        // ════════════════════════════════════════════════════════════════
+        // 🗂 圖片用途名冊（跟設置 → API「哪件事走哪個模型」同一套，2026-09-24）
+        //   以前每個生圖的地方跟著「桶」走：頭像跟立繪綁在一起、物品跟背景綁在一起，要分開就得加桶、加分頁，
+        //   設定頁越長越亂。現在一個地方一列，每列自己選用哪組接口、哪個畫風；呼叫端帶 options.use。
+        //   🔴 加新功能要生圖：這裡加一列，呼叫 generate／generateBackgroundAsync／generateItem 時帶 use。設定頁自動多一列。
+        //   沒改過的列（os_img_routes 裡沒有）＝照舊走原本的桶與原本的底詞，換面板當天出圖不變。
+        // ════════════════════════════════════════════════════════════════
+        USES: [
+            { id: 'avatar', name: '頭像',       type: 'char'  },
+            { id: 'sprite', name: '立繪',       type: 'char'  },
+            { id: 'scene',  name: '插圖',       type: 'scene' },
+            { id: 'bg',     name: '背景',       type: 'bg'    },
+            { id: 'item',   name: '物品',       type: 'item'  },
+            { id: 'map',    name: '小地圖',     type: 'map'   },
+            { id: 'phone',  name: '手機照片',   type: 'scene' },
+            { id: 'app',    name: '應用裡的圖', type: 'item'  },
+        ],
+        useOf: function(id) { return this.USES.find(u => u.id === id) || null; },
+        _ROUTES_KEY: 'os_img_routes',
+        _STYLES_KEY: 'os_img_styles',
+        // { [use]: { conn, style } }；只存她改過的欄
+        getRoutes: function() {
+            try { const v = JSON.parse(localStorage.getItem(this._ROUTES_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; }
+        },
+        setRoute: function(use, patch) {
+            const all = this.getRoutes();
+            const r = Object.assign({}, all[use] || {}, patch || {});
+            Object.keys(r).forEach(k => { if (r[k] === '' || r[k] == null) delete r[k]; });
+            if (Object.keys(r).length) all[use] = r; else delete all[use];
+            try { localStorage.setItem(this._ROUTES_KEY, JSON.stringify(all)); } catch (e) {}
+            return r;
+        },
+        // 畫風包 [{ id, name, pos, neg, ref }]；ref＝底圖在 OS_DB 圖庫的編號
+        getStyles: function() {
+            try { const v = JSON.parse(localStorage.getItem(this._STYLES_KEY) || '[]'); return Array.isArray(v) ? v.filter(s => s && s.id) : []; } catch (e) { return []; }
+        },
+        setStyles: function(list) { try { localStorage.setItem(this._STYLES_KEY, JSON.stringify(list || [])); } catch (e) {} },
+        // 這一列選了畫風嗎：沒選回 null（照舊）；選「不加」回空的一包
+        styleFor: function(use) {
+            const r = this.getRoutes()[use];
+            if (!r || !r.style) return null;
+            if (r.style === 'none') return { id: 'none', name: '不加', pos: '', neg: '', ref: '' };
+            return this.getStyles().find(s => s.id === r.style) || null;   // 那包被刪了＝照舊
+        },
+        // 「用哪組」的選項：各接口頁存好的組合
+        connList: function() {
+            const out = [{ id: 'poll', svc: 'pollinations', name: 'Pollinations' }];
+            const nai = this.config.novelai || {};
+            out.push({ id: 'nai', svc: 'novelai', name: 'NAI・目前的設定' });
+            (nai.naiPresets || []).forEach(p => { if (p && p.id) out.push({ id: 'nai:' + p.id, svc: 'novelai', name: 'NAI・' + (p.name || '未命名') }); });
+            ((this.config.comfyuiDirect || {}).presets || []).forEach(p => { if (p && p.name) out.push({ id: 'comfy:' + p.name, svc: 'comfyui_direct', name: 'ComfyUI・' + p.name }); });
+            out.push({ id: 'tavern', svc: 'tavern_sd', name: '酒館的生圖' });
+            out.push({ id: 'capi', svc: 'custom_api', name: '自訂接口・目前那組' });
+            let nodes = [];
+            try { nodes = JSON.parse(localStorage.getItem('os_img_capi_nodes') || '[]'); } catch (e) {}
+            (Array.isArray(nodes) ? nodes : []).forEach(n => { if (n && n.id && n.url) out.push({ id: 'capi:' + n.id, svc: 'custom_api', name: '自訂接口・' + (n.name || n.model || n.url) }); });
+            return out;
+        },
+        // 選項 → 要換成哪個接口、帶哪組參數。對不到（包被刪了、節點沒了）回 null＝照舊
+        _resolveConn: function(conn) {
+            conn = String(conn || '');
+            if (!conn) return null;
+            if (conn === 'poll')   return { provider: 'pollinations' };
+            if (conn === 'tavern') return { provider: 'tavern_sd' };
+            if (conn === 'nai')    return { provider: 'novelai' };
+            if (conn === 'capi')   return { provider: 'custom_api' };
+            const i = conn.indexOf(':'), kind = conn.slice(0, i), key = conn.slice(i + 1);
+            if (kind === 'comfy') {
+                const p = ((this.config.comfyuiDirect || {}).presets || []).find(x => x && x.name === key);
+                return p ? { provider: 'comfyui_direct', _comfyPreset: p } : null;
+            }
+            if (kind === 'nai') {
+                const p = ((this.config.novelai || {}).naiPresets || []).find(x => x && x.id === key);
+                if (!p) return null;
+                const pick = {};
+                ['charBasePrompt', 'charNegPrompt', 'itemBasePrompt', 'itemNegPrompt', 'sampler', 'scale', 'steps', 'ucPreset'].forEach(k => { if (p[k] !== undefined) pick[k] = p[k]; });
+                return { provider: 'novelai', _naiCfg: Object.assign({}, this.config.novelai, pick) };
+            }
+            if (kind === 'capi') {
+                let nodes = [];
+                try { nodes = JSON.parse(localStorage.getItem('os_img_capi_nodes') || '[]'); } catch (e) {}
+                const n = (Array.isArray(nodes) ? nodes : []).find(x => x && x.id === key);
+                if (!n || !n.url) return null;
+                const cur = this.config.customApi || {};
+                return { provider: 'custom_api', customApi: Object.assign({}, cur, { url: n.url, apiKey: n.apiKey, model: n.model, refImages: n.refImages }) };
+            }
+            return null;
+        },
+        // 這一列照舊的話走哪組（設定頁顯示「目前實際在用的」、第一次打開把舊設定轉成列用）
+        legacyServiceOf: function(use) {
+            const u = this.useOf(use);
+            return this.serviceFor(u ? u.type : 'scene');
+        },
+        // 這一列實際走哪個接口（改過就是改過的，沒改就是原本的桶）。
+        //   🚨 會先問接口再決定怎麼寫的地方（立繪要不要原樣送、插圖寫標籤還是句子、要不要一個一個排隊）一律問這支，
+        //      別再問 serviceFor(type)——那是桶，列改過之後就不準了。
+        serviceForUse: function(use) {
+            const r = this.getRoutes()[use];
+            const hit = (r && r.conn) ? this._resolveConn(r.conn) : null;
+            return hit ? hit.provider : this.legacyServiceOf(use);
+        },
+        // 這一列走 ComfyUI 時用的那組參數（看模型類型決定寫標籤還是句子的地方用）
+        comfyCfgForUse: function(use) {
+            const r = this.getRoutes()[use];
+            const hit = (r && r.conn) ? this._resolveConn(r.conn) : null;
+            if (hit && hit._comfyPreset) return this._comfyCfgFromPreset(hit._comfyPreset);
+            const u = this.useOf(use);
+            return this._comfyCfgFor(u ? u.type : 'scene');
+        },
+        // 🚪 唯一入口：呼叫端帶了 options.use → 套這一列改過的接口與畫風。
+        //   直接改 options 物件（generateBackgroundAsync 要把 translatedPrompt 寫回呼叫端那一份）。
+        //   options.provider 是呼叫端自己明指的（應用、大廳換裝），不蓋掉。
+        //   options.styleDone＝呼叫端已經照 styleFor 拼過底詞（頭像、背景、物品那種原本就自己拼的），這裡不再加一次。
+        _applyUse: async function(prompt, options) {
+            const use = options && options.use;
+            if (!use) return prompt;
+            const r = this.getRoutes()[use] || {};
+            if (r.conn && !options.provider) {
+                const hit = this._resolveConn(r.conn);
+                if (hit) Object.assign(options, hit);
+            }
+            const st = this.styleFor(use);
+            if (st && !options.styleDone) {
+                if (st.pos) prompt = st.pos + ', ' + prompt;
+                if (st.neg && !options.negativePrompt) options.negativePrompt = st.neg;
+            }
+            // 畫風的底圖：只有自訂接口收得到參考圖
+            if (st && st.ref && (options.provider || this.legacyServiceOf(use)) === 'custom_api') {
+                try {
+                    const url = win.OS_DB && win.OS_DB.getImage ? await win.OS_DB.getImage(st.ref) : '';
+                    if (url) options._styleRef = { name: 'the art style reference', kind: 'style', blob: await (await fetch(url)).blob() };
+                } catch (e) { console.warn('[ImageManager] 畫風底圖讀不到，這張不帶:', e); }
+            }
+            return prompt;
+        },
 
         // --- 核心生成函數 (整合翻譯 + cache) ---
         generate: async function(prompt, type = 'scene', options = {}) {
-            // 🔥 步驟 0: cache 命中
-            const cacheKey = type + '|' + (prompt || '');
+            // 🗂 這一列（options.use）改過的接口／畫風先套上；拷一份，不動呼叫端傳進來的物件
+            if (options && options.use) { options = Object.assign({}, options); prompt = await this._applyUse(prompt, options); }
+            // 🔥 步驟 0: cache 命中（帶 use 的另外算：同一句話不同列可能走不同接口）
+            const cacheKey = (options.use ? options.use + '|' : '') + type + '|' + (prompt || '');
             if (!options.force && this._urlCache.has(cacheKey)) {
                 console.log(`[ImageManager] cache hit [${type}]: ${prompt}`);
                 return this._urlCache.get(cacheKey);
@@ -601,12 +749,17 @@
                 refs = Array.isArray(options.refBlobs) ? options.refBlobs
                     : (type === 'scene' ? await this._collectRefImages(options.refCast) : []);
             }
+            // 畫風的底圖（_applyUse 讀好的）：不管這個節點有沒有開「帶參考圖」都送——她是在畫風裡特地放的
+            if (!isSd && options._styleRef) refs = refs.concat([options._styleRef]);
             const _editsEndpoint = endpoint.replace(/\/images\/generations$/, '/images/edits');
             const _buildEditForm = () => {
                 const fd = new FormData();
                 if (model) fd.append('model', model);
-                const who = refs.map((r, i) => 'image ' + (i + 1) + ' is ' + r.name).join('; ');
-                fd.append('prompt', 'Reference images for how the characters look: ' + who + '. Keep each of them looking like their reference image.\n\n' + body.prompt);
+                const _chars = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind !== 'style');
+                const _styles = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind === 'style');
+                const _lead = (_chars.length ? 'Reference images for how the characters look: ' + _chars.map(x => 'image ' + x.n + ' is ' + x.r.name).join('; ') + '. Keep each of them looking like their reference image.\n' : '')
+                    + (_styles.length ? 'Image ' + _styles.map(x => x.n).join(' and ') + ' shows the art style to follow; match its rendering, colors and line quality, not its content.\n' : '');
+                fd.append('prompt', _lead + '\n' + body.prompt);
                 fd.append('n', '1');
                 if (body.size) fd.append('size', body.size);
                 if (body.quality) fd.append('quality', body.quality);
@@ -813,7 +966,8 @@
                 try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
                 try { win.OS_USAGE && win.OS_USAGE.note({ source: 'comfyui_direct', type: type }); } catch (e) {}   // 📊 長期用量帳
             }
-            const cfg = this._comfyCfgFor(type);   // 按桶取設定（char/scene/bg/map 各自一份，沒設過退共用）
+            // 這一列選了某個組合（預設包）就用它；沒選照舊按桶取（char/scene/bg/map 各自一份，沒設過退共用）
+            const cfg = options._comfyPreset ? this._comfyCfgFromPreset(options._comfyPreset) : this._comfyCfgFor(type);
             const url = (cfg.url || '').trim();
             if (!url) {
                 if (!options.warmup) { try { AUI.toastr && AUI.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {} }
@@ -1375,7 +1529,8 @@
         _genNovelAI: async function(prompt, type, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'novelai', type: type }); } catch (e) {}   // 📊 長期用量帳
-            const cfg = this.config.novelai;
+            // 這一列選了某個 NAI 預設就用它那幾欄（_resolveConn 拼好的一份），不動全域設定——大廳換裝那種「暫時換掉再換回來」在並行時會互相蓋
+            const cfg = options._naiCfg || this.config.novelai;
             if (!cfg.token) {
                 console.warn('[ImageManager] NAI token 未設定，回退 Pollinations');
                 return this._genPollinations(prompt, type);
@@ -1643,6 +1798,8 @@
         // 🔥 異步版本 (給 Host/OS/VN_Core 使用)
         generateBackgroundAsync: async function(rawPrompt, options = {}) {
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數（背景）
+            // 🗂 這一列（options.use）改過的接口／畫風。直接改呼叫端那份 options：translatedPrompt 要寫回去給它
+            if (options && options.use) rawPrompt = await this._applyUse(rawPrompt, options);
             console.log(`[ImageManager] 🚀 OS 接收原始 prompt: ${rawPrompt.substring(0, 50)}...`);
 
             let translatedPrompt = rawPrompt;
@@ -1671,7 +1828,8 @@
             const _isMap = options.imgType === 'map';
             // 🌄 背景/小地圖接口由對應桶決定：背景→死物桶、小地圖→map 桶（各自的模型/負詞）。
             const _tp = _isMap ? 'map' : 'bg';
-            const _bgSvc = (typeof this.serviceFor === 'function') ? this.serviceFor(_tp) : 'pollinations';
+            const _bgSvc = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider
+                : ((typeof this.serviceFor === 'function') ? this.serviceFor(_tp) : 'pollinations');
             if (_bgSvc !== 'pollinations') {
                 const _bgOpts = { ...options, width: options.width || 1024, height: options.height || 1024 };
                 if (_isMap) {
@@ -1679,7 +1837,7 @@
                 } else {
                     _bgOpts.negativePrompt = negativePrompt;
                 }
-                if (_bgSvc === 'novelai' && this.config.novelai && this.config.novelai.token) {
+                if (_bgSvc === 'novelai' && ((options._naiCfg && options._naiCfg.token) || (this.config.novelai && this.config.novelai.token))) {
                     // raw=true：跳過 NAI 物品底詞(white background/no background…會毀背景)，只用 bgBasePrompt + bgNegPrompt
                     return await this._genNovelAI(optimizedPrompt, _tp, { ..._bgOpts, raw: true });
                 } else if (_bgSvc === 'comfyui_direct') {
@@ -1720,15 +1878,18 @@
             console.log(`[ImageManager] 生成物品: ${prompt.substring(0, 50)}...`);
             // 物品專用底詞/負詞（與角色分離），整條走統一 generate 路由：serviceFor('item')=死物桶，
             //   pollinations / comfyui_direct / novelai / tavern_sd 全由 generate 內部分派 → 換哪條線路物品都跟著走。
-            const itemBase = this.config.pollinations.itemBasePrompt;
+            // 🗂 這一列選了畫風＝用那包取代原本的物品底詞（styleDone：generate 那邊不再加一次）
+            const _st = options.use ? this.styleFor(options.use) : null;
+            const itemBase = _st ? _st.pos : this.config.pollinations.itemBasePrompt;
             const finalPrompt = itemBase ? itemBase + ', ' + prompt : prompt;
-            const negPrompt = options.negativePrompt || this.config.pollinations.itemNegPrompt || undefined;
+            const negPrompt = options.negativePrompt || (_st ? _st.neg : this.config.pollinations.itemNegPrompt) || undefined;
             return this.generate(finalPrompt, 'item', {
                 ...options,
                 width: options.width || 512,
                 height: options.height || 512,
                 negativePrompt: negPrompt,
-                raw: true
+                raw: true,
+                styleDone: true
             });
         },
 

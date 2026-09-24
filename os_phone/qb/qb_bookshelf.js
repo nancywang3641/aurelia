@@ -484,7 +484,7 @@ status = "正常"`;
         let coverUrl = '';
         if (window.OS_IMAGE_MANAGER && typeof window.OS_IMAGE_MANAGER.generateItem === 'function') {
             try {
-                coverUrl = await window.OS_IMAGE_MANAGER.generateItem(`book cover, ${keyword}, cinematic lighting, highly detailed, masterpiece, no text`, { width: 512, height: 768 });
+                coverUrl = await window.OS_IMAGE_MANAGER.generateItem(`book cover, ${keyword}, cinematic lighting, highly detailed, masterpiece, no text`, { width: 512, height: 768, use: 'item' });
             } catch(e) { console.warn('書封生成失敗', e); }
         }
 

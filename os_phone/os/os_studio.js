@@ -2257,7 +2257,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 try {
                     const imgMgr = win.OS_IMAGE_MANAGER;
                     if (!imgMgr?.generate) throw new Error('找不到圖片引擎');
-                    const url = await imgMgr.generate(seg.content, 'scene');
+                    const url = await imgMgr.generate(seg.content, 'scene', { use: 'app' });
                     if (url) {
                         bubble.innerHTML = `<img src="${url}" alt="generated" />
                             <div style="font-size:10px;color:rgba(26,28,40,0.72);margin-top:4px;padding:0 4px;">${seg.content.slice(0,60)}</div>`;
@@ -3002,7 +3002,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 try {
                     const url = window.__IS_PREVIEW
                         ? ('https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt))
-                        : (imgManager ? await imgManager.generate(prompt, type, { provider: provider }) : '');
+                        : (imgManager ? await imgManager.generate(prompt, type, { provider: provider, use: 'app' }) : '');
                     if (url) el.src = url;
                 } catch(e) {
                     console.error('[preview] setImage 失敗:', e);
@@ -3276,7 +3276,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         el.src = ph;   // 先放佔位（不破圖），成功再換真圖
         if (window.__IS_PREVIEW) return;
         try {
-          var url = imgManager ? await imgManager.generate(prompt, type, { provider: provider }) : '';
+          var url = imgManager ? await imgManager.generate(prompt, type, { provider: provider, use: 'app' }) : '';
           if (url) el.src = url;
         } catch(e) {
           console.error('[${safeTagId}] setImage 失敗(保留佔位):', e);

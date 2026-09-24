@@ -31,6 +31,10 @@
     // ⚠️ 原本只讀全域 service → 頭像那格換了接口這裡看不到，規則會停在舊的那一條。
     function _currentService() {
         try {
+            // 圖片設置 → 畫風「頭像」那列改過接口就跟它走（引擎還沒載好才讀存檔）
+            const W = window.parent || window;
+            const IM = W.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+            if (IM && typeof IM.serviceForUse === 'function') return IM.serviceForUse('avatar') || 'pollinations';
             const c = JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {};
             return c.serviceChar || c.serviceLiving || c.service || 'pollinations';
         }

@@ -451,7 +451,7 @@
             } catch (e) {}
             // 相簿存著「畫到誰」就一起帶（帶參考圖用）
             const _cast = (val && Array.isArray(val.cast)) ? val.cast : undefined;
-            raw = _W.OS_IMAGE_MANAGER ? await _W.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: true, refCast: _cast }) : '';
+            raw = _W.OS_IMAGE_MANAGER ? await _W.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: true, refCast: _cast, use: 'scene' }) : '';
         }
         else {
             // 🚨 走 _makeCharImage 而不是寫死 getAvatar：立繪模式開著的時候，

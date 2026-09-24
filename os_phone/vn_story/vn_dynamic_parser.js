@@ -273,7 +273,7 @@
                     el.src = ph;   // 先放佔位（生成慢/失敗都不破圖），成功再換成真圖
                     if (window.__IS_PREVIEW) return;
                     try {
-                        const url = imgManager ? await imgManager.generate(prompt, type, { provider: provider }) : '';
+                        const url = imgManager ? await imgManager.generate(prompt, type, { provider: provider, use: 'app' }) : '';
                         if (url) el.src = url;
                     } catch(e) { console.error('[VN Parser] setImage 失敗(保留佔位):', e); }
                 },

@@ -124,10 +124,10 @@
     function _mapPromptStyle() {
         try {
             const IM = win.OS_IMAGE_MANAGER;
-            const svc = (IM && typeof IM.serviceFor === 'function') ? IM.serviceFor('map') : 'pollinations';
+            const svc = (IM && typeof IM.serviceForUse === 'function') ? IM.serviceForUse('map') : ((IM && typeof IM.serviceFor === 'function') ? IM.serviceFor('map') : 'pollinations');
             if (svc === 'novelai') return 'tags';
             if (svc === 'comfyui_direct') {
-                const cfg = (typeof IM._comfyCfgFor === 'function') ? IM._comfyCfgFor('map') : ((IM.config && IM.config.comfyuiDirect) || {});
+                const cfg = (typeof IM.comfyCfgForUse === 'function') ? IM.comfyCfgForUse('map') : ((typeof IM._comfyCfgFor === 'function') ? IM._comfyCfgFor('map') : ((IM.config && IM.config.comfyuiDirect) || {}));
                 const mt = cfg.modelType;
                 return (mt === 'anima' || mt === 'flux') ? 'natural' : 'tags';   // SDXL(checkpoint)=標籤
             }
@@ -302,7 +302,7 @@
         if (isBackdropAuto() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
             try {
                 const fullPrompt = sceneMap.backdropPrompt;   // 風格詞在「小地圖 TAB」底詞欄，不再暗拼固定詞
-                let _bu = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(fullPrompt, { width: 1024, height: 512, imgType: 'map' }) || '';
+                let _bu = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(fullPrompt, { width: 1024, height: 512, imgType: 'map', use: 'map' }) || '';
                 if (_bu && _bu.indexOf('blob:') === 0) {
                     try { const _b = await (await fetch(_bu)).blob(); _bu = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(_b); }); } catch (e) {}
                 }

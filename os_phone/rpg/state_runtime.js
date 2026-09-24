@@ -1114,7 +1114,7 @@ ${numberedText}`;
     function _pickScenePrompt(cfg) {
         cfg = cfg || {};
         let svc = '';
-        try { svc = (win.OS_IMAGE_MANAGER?.serviceFor?.('scene')) || win.OS_IMAGE_MANAGER?.config?.service || ''; } catch (e) {}
+        try { svc = ((win.OS_IMAGE_MANAGER?.serviceForUse?.('scene') || win.OS_IMAGE_MANAGER?.serviceFor?.('scene'))) || win.OS_IMAGE_MANAGER?.config?.service || ''; } catch (e) {}
         const perIface = ({
             novelai:        cfg.extractPromptNovelai,
             pollinations:   cfg.extractPromptPollinations,
@@ -1221,7 +1221,7 @@ ${numberedText}`;
                 if (opts && opts.skipScenes) _why = '這通是初始填充/獨立插圖模式，插圖不搭這通';
                 else if (_sceneCfg.standaloneEnabled) _why = '開著「獨立插圖副模型」→ 由那條獨立通負責，不搭這通';
                 else if (!_scenePromptText) {
-                    let _svc = ''; try { _svc = (win.OS_IMAGE_MANAGER?.serviceFor?.('scene')) || ''; } catch (e) {}
+                    let _svc = ''; try { _svc = ((win.OS_IMAGE_MANAGER?.serviceForUse?.('scene') || win.OS_IMAGE_MANAGER?.serviceFor?.('scene'))) || ''; } catch (e) {}
                     _why = '這個插圖來源(' + (_svc || '未知') + ')的「插圖規範」是空的 → 去 設置→圖片→插圖 把那一格填好（規範是按來源各存一份的）';
                 }
                 if (_why) console.warn('🖼️ [State Runtime] 插圖這輪沒跑：' + _why);
@@ -1607,7 +1607,7 @@ ${numberedText}`;
             // 漏了的話開著獨立插圖副模型就等於這條規則沒生效。
             let _safe = '';
             try {
-                const _svc = (win.OS_IMAGE_MANAGER?.serviceFor?.('scene')) || win.OS_IMAGE_MANAGER?.config?.service || '';
+                const _svc = ((win.OS_IMAGE_MANAGER?.serviceForUse?.('scene') || win.OS_IMAGE_MANAGER?.serviceFor?.('scene'))) || win.OS_IMAGE_MANAGER?.config?.service || '';
                 _safe = win.OS_API?.sceneSafeRules ? win.OS_API.sceneSafeRules(_svc) : '';
             } catch (e) {}
             const messages = [

@@ -512,7 +512,7 @@
                 let prompt = win.VN_Image._joinTags(pfx, rawP, sfx);
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
                 const imCfg = win.OS_IMAGE_MANAGER.config;
-                const _spriteSvc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (imCfg && imCfg.service);
+                const _spriteSvc = (typeof win.OS_IMAGE_MANAGER.serviceForUse === 'function') ? win.OS_IMAGE_MANAGER.serviceForUse('sprite') : ((typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (imCfg && imCfg.service));
                 const useNAI = !!(_spriteSvc === 'novelai' && imCfg && imCfg.novelai && imCfg.novelai.token);
                 const _svc2 = _spriteSvc || (imCfg && imCfg.service) || '';   // raw 的判斷要看來源（見 VN_Image._spriteRaw）
                 let _bw = 512, _bh = 896;
@@ -525,7 +525,7 @@
                 // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面。空＝不送。
                 let _spriteNeg = null; try { _spriteNeg = localStorage.getItem('os_sprite_tpl_neg'); } catch(e) {}
                 _spriteNeg = (_spriteNeg && _spriteNeg.trim()) ? _spriteNeg.trim() : undefined;
-                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: _bw, height: _bh, raw: (win.VN_Image && win.VN_Image._spriteRaw) ? win.VN_Image._spriteRaw(_svc2) : !useNAI, extraNegative: _spriteNeg });
+                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: _bw, height: _bh, raw: (win.VN_Image && win.VN_Image._spriteRaw) ? win.VN_Image._spriteRaw(_svc2) : !useNAI, extraNegative: _spriteNeg, use: 'sprite' });
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
                 setT('去背中…');

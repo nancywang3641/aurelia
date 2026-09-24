@@ -1749,7 +1749,7 @@
 
                 // 第二輪：生成。雲端(NAI/Poll)維持並行；本機(ComfyUI直連/酒館SD)改串行——
                 // ComfyUI 端本來就一張一張跑，串行零損失，還讓「語音紅綠燈」插得進空檔
-                const _svc = (typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (win.OS_IMAGE_MANAGER?.config?.service || '');
+                const _svc = (typeof win.OS_IMAGE_MANAGER?.serviceForUse === 'function') ? win.OS_IMAGE_MANAGER.serviceForUse((window.VN_Config && window.VN_Config.data && window.VN_Config.data.spriteDirect === true) ? 'sprite' : 'avatar') : (typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (win.OS_IMAGE_MANAGER?.config?.service || '');
                 const _localGpu = (_svc === 'comfyui_direct' || _svc === 'tavern_sd');
                 console.log(`[VN] ${_localGpu ? '串行' : '並行'}生成 ${needGen.length} 個頭像...`);
                 if (_localGpu) {

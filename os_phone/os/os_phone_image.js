@@ -375,7 +375,7 @@
             const mgr = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
             if (!mgr || typeof mgr.generate !== 'function') throw new Error('OS_IMAGE_MANAGER 未載入');
             const prompt = await this.expand(raw);
-            const url = await mgr.generate(prompt, this.TYPE, { width: this.SIZE.width, height: this.SIZE.height });
+            const url = await mgr.generate(prompt, this.TYPE, { width: this.SIZE.width, height: this.SIZE.height, use: 'phone' });
             if (!url) throw new Error('未取得圖片');
             await new Promise((resolve, reject) => { const pre = new Image(); pre.onload = resolve; pre.onerror = reject; pre.src = url; });
             return url;

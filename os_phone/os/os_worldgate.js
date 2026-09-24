@@ -1472,7 +1472,7 @@
         if (!IM || typeof IM.generateBackgroundAsync !== 'function') return '';
         const p = String(prompt || '').trim();
         if (!p) return '';
-        const o = { width: w, height: h };
+        const o = { width: w, height: h, use: 'bg', styleDone: true };   // 接口跟「背景」那列走；畫風刻意不套（見下）
         // 只借負向詞,不借 VN 的背景底詞:那份是給劇情場景用的,套上來會把世界圖拉成同一種畫風
         try { const d = win.VN_Config && win.VN_Config.data; if (d && d.bgNegPrompt) o.negativePrompt = d.bgNegPrompt; } catch (e) {}
         let url = '';
@@ -1811,6 +1811,7 @@
     function _sceneSvc() {
         try {
             const IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+            if (IM && typeof IM.serviceForUse === 'function') return String(IM.serviceForUse('scene') || '').toLowerCase();
             if (IM && typeof IM.serviceFor === 'function') return String(IM.serviceFor('scene') || '').toLowerCase();
             const c = IM && IM.config;
             return String((c && (c.serviceScene || c.serviceLiving || c.service)) || '').toLowerCase();
@@ -1942,7 +1943,7 @@
         // 🚨拉遠視角光靠正向詞不夠,模型的預設構圖偏好就是特寫;負面把特寫那幾種說法一起擋掉才穩。
         const CLOSE_NEG = 'close-up, extreme close-up, portrait, bust shot, head shot, cropped legs, cropped body, out of frame, faces filling the frame';
         // 跟概念圖共用同一組尺寸(理由寫在那個常數上面):同比例、不跌破原生解析度、不踩 NAI 的免費上限
-        try { url = await IM.generate(promptText, 'scene', { width: _ART_W, height: _ART_H, extraNegative: CLOSE_NEG }) || ''; }
+        try { url = await IM.generate(promptText, 'scene', { width: _ART_W, height: _ART_H, extraNegative: CLOSE_NEG, use: 'scene' }) || ''; }
         catch (e) { console.warn('[Worldgate③] 啟航圖生成失敗', e && e.message); return false; }
         if (!url) return false;
         if (url.indexOf('blob:') === 0) {   // blob: 重載就失效 → 轉 dataURL 才存得住

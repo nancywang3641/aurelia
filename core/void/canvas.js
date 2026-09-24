@@ -118,7 +118,7 @@ LINE:[用角色風格說一句話，10-20字]`;
                 if (window.__IS_PREVIEW || !window.OS_IMAGE_MANAGER) {
                     return `https://via.placeholder.com/400x300/1a0a02/FBDFA2?text=Preview`;
                 }
-                return await window.OS_IMAGE_MANAGER.generate(prompt, type);
+                return await window.OS_IMAGE_MANAGER.generate(prompt, type, { use: 'app' });
             },
 
             // 關閉畫布

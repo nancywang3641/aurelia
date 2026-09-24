@@ -210,7 +210,7 @@
             //    備援又接不上 → 回空＝「背景沒拿到圖」，但 ComfyUI 那邊其實生完了。
             //    → 只有「確定是 pollinations」才用短逾時，問不出來一律當本機/直連放寬。
             let _bgSvc = '';
-            try { if (_IM && typeof _IM.serviceFor === 'function') _bgSvc = _IM.serviceFor('bg') || ''; } catch (e) {}
+            try { if (_IM && typeof _IM.serviceForUse === 'function') _bgSvc = _IM.serviceForUse('bg') || ''; else if (_IM && typeof _IM.serviceFor === 'function') _bgSvc = _IM.serviceFor('bg') || ''; } catch (e) {}
             const _bgTimeoutMs = (_bgSvc === 'pollinations') ? 12000 : 150000;
             let raw = '';
             if (!forceFallback) {

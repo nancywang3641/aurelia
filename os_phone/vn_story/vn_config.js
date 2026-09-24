@@ -119,17 +119,31 @@
     }
 
     // === 生圖引擎 ===
+    // 這一列（圖片設置 → 畫風）實際走哪個接口；舊版引擎沒有 serviceForUse 就退回桶
+    function _svcOf(use, type) {
+        const M = win.OS_IMAGE_MANAGER;
+        if (!M) return '';
+        if (typeof M.serviceForUse === 'function') return M.serviceForUse(use);
+        if (typeof M.serviceFor === 'function') return M.serviceFor(type);
+        return (M.config && M.config.service) || '';
+    }
+    // 這一列選了畫風嗎（沒選回 null＝照舊用原本的底詞）
+    function _styleOf(use) {
+        const M = win.OS_IMAGE_MANAGER;
+        return (M && typeof M.styleFor === 'function') ? M.styleFor(use) : null;
+    }
     const VN_Image = {
         _join: function(...parts) { return parts.filter(Boolean).join(', '); },
         // 立繪三段（前綴/角色描述/後綴）接合：三條立繪路徑共用同一份，別再各自 pfx+desc+sfx 硬接（會黏成 dresssimple）
         _joinTags: _joinTags,
         getBg: async function(prompt, outMeta) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
-                const full = this._join(VN_Config.data.bgBasePrompt, prompt);
+                const _st = _styleOf('bg');   // 選了畫風＝用那包取代原本的背景底詞
+                const full = this._join(_st ? _st.pos : VN_Config.data.bgBasePrompt, prompt);
                 // 背景尺寸：讀「🌄 背景 → 背景尺寸」設定（取代原本寫死 1024×768）
                 let _bw = 1024, _bh = 768;
                 try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').bgSize) || '1024x768').split('x').map(Number); if (_p[0]&&_p[1]) { _bw=_p[0]; _bh=_p[1]; } } catch(e) {}
-                const opts = { width: _bw, height: _bh, negativePrompt: VN_Config.data.bgNegPrompt || undefined };
+                const opts = { width: _bw, height: _bh, negativePrompt: (_st ? _st.neg : VN_Config.data.bgNegPrompt) || undefined, use: 'bg', styleDone: true };
                 const url = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(full, opts);
                 if (outMeta) outMeta.translatedPrompt = opts.translatedPrompt;
                 return url;
@@ -139,11 +153,12 @@
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
                 // 來源隔離：走「酒館原生(tavern_sd)」時改用「酒館原生專屬」頭像底詞/負詞（預設空＝乾淨），
                 // 避免給 poll ai 的 avatarBasePrompt/avatarNegPrompt 漏進 ComfyUI → 跟模型底詞打架爆光
-                const _svc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : ((win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '');
+                const _svc = _svcOf('avatar', 'char');
                 // tavern_sd / comfyui_direct：底詞由各自來源控制，VN 層改用「乾淨」專屬底詞，避免 poll ai 底詞漏入
                 const _isTavern = (_svc === 'tavern_sd' || _svc === 'comfyui_direct');
-                const _base = _isTavern ? VN_Config.data.avatarBasePromptTavern : VN_Config.data.avatarBasePrompt;
-                const _neg  = _isTavern ? VN_Config.data.avatarNegPromptTavern  : VN_Config.data.avatarNegPrompt;
+                const _st = _styleOf('avatar');   // 選了畫風＝用那包取代原本的頭像底詞
+                const _base = _st ? _st.pos : (_isTavern ? VN_Config.data.avatarBasePromptTavern : VN_Config.data.avatarBasePrompt);
+                const _neg  = _st ? _st.neg : (_isTavern ? VN_Config.data.avatarNegPromptTavern  : VN_Config.data.avatarNegPrompt);
                 // 順序：(來源對應)追加詞 → 角色描述詞 → 表情
                 const full = this._join(_base, prompt, `${exp} expression`);
                 const negPrompt = _neg || undefined;
@@ -152,7 +167,7 @@
                 //   ComfyUI 落到「基本參數/預設包」調的寬高、Pollinations/NAI 用引擎預設（跟下拉說明對齊）。
                 //   ⚠️ 先前留空寫死 512×768 → ComfyUI 的包/面板寬高在劇情頭像上永遠無效＝「調了跟沒調一樣」（Rae 抓的）。
                 //   想要舊的 512×768 直式小圖＝下拉明選那格，不再是隱形預設。
-                const _avOpts = { negativePrompt: negPrompt, force: !!force };
+                const _avOpts = { negativePrompt: negPrompt, force: !!force, use: 'avatar', styleDone: true };
                 try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').avatarSize) || '').split('x').map(Number); if (_p[0]&&_p[1]) { _avOpts.width=_p[0]; _avOpts.height=_p[1]; } } catch(e) {}
                 // force=true（畫廊「重生」用）→ 繞過 generate() 記憶體快取
                 return await win.OS_IMAGE_MANAGER.generate(full, 'char', _avOpts);
@@ -169,7 +184,7 @@
         // 清掉跟立繪衝突的構圖/背景/視角 tag → 套全身模板 → 512×896 直立 → 非 NAI 走 raw(純模板)，NAI 套頭像同畫風底詞避免太裸。
         getSprite: async function(prompt, force) {
             if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return "";
-            const _svc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : ((win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '');
+            const _svc = _svcOf('sprite', 'char');
             const _useNAI = (_svc === 'novelai');
             // ⭐ 跟「角色立繪 studio / 一鍵生立繪」一字不差：用她在 studio 調好的前綴/後綴(localStorage os_sprite_tpl_prefix/suffix)，
             //   別再自己硬編模板。沒設過才退預設(她的 cowboy shot + brown background 那組，避免 full body 打架被切、純色底好去背)。
@@ -202,7 +217,7 @@
             // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面(extraNegative)。空＝不送。
             let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
-            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg });
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' });
         },
         // 🎯 幾個角色擠一張寬圖一次生完（只在官方那顆開；見設置 → 圖片 → 頭像 → 一次生幾個角色）。
         //    回傳整張寬圖，切開的事交給呼叫端（vn_core 的 _sliceSheet）。
@@ -235,8 +250,8 @@
             let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
             // 官方只收那三種尺寸，寬的那個就是 1536×1024：切兩格＝每個 768×1024、切三格＝每個 512×1024
-            const _svc = (typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : ((win.OS_IMAGE_MANAGER.config && win.OS_IMAGE_MANAGER.config.service) || '');
-            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: 1536, height: 1024, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg });
+            const _svc = _svcOf('sprite', 'char');
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: 1536, height: 1024, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' });
         },
         // 剝掉跟立繪衝突的構圖/背景/視角 tag（與 os_settings studio 的 stripPromptForSprite 同規則）
         _stripForSprite: function(p) {
@@ -255,7 +270,7 @@
         },
         getItem: async function(prompt) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateItem === 'function') {
-                return await win.OS_IMAGE_MANAGER.generateItem(prompt);
+                return await win.OS_IMAGE_MANAGER.generateItem(prompt, { use: 'item' });
             } return "";
         },
         getScene: async function(prompt) {
@@ -268,7 +283,7 @@
                     const _p = String(_sz).split('x').map(Number);
                     if (_p[0] && _p[1]) { _sw = _p[0]; _sh = _p[1]; }
                 } catch(e) {}
-                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh });
+                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, use: 'scene' });
             } return "";
         }
     };

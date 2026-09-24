@@ -63,7 +63,7 @@
 
         let url;
         try {
-            const opts = { width: SIZE.width, height: SIZE.height };
+            const opts = { width: SIZE.width, height: SIZE.height, use: 'avatar' };
             const p = getProvider();
             if (p) opts.provider = p;          // 沒選就不帶，讓派發器走「頭像」那個桶
             url = await mgr.generate(text, 'char', opts);

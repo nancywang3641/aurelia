@@ -137,9 +137,13 @@ ${(win.MAP_ICONS && win.MAP_ICONS.promptList()) || ''}
         const o = Object.assign({ width: 1024, height: 1024 }, opts || {});
         try {
             const d = win.VN_Config && win.VN_Config.data;
-            if (d && d.bgBasePrompt) full = [d.bgBasePrompt, prompt].filter(Boolean).join(', ');
-            if (d && d.bgNegPrompt && !o.negativePrompt) o.negativePrompt = d.bgNegPrompt;
+            // 圖片設置 → 畫風「背景」那列選了畫風＝用那包取代原本的背景底詞（跟 VN getBg 同一份）
+            const _st = (typeof IM.styleFor === 'function') ? IM.styleFor('bg') : null;
+            const _pos = _st ? _st.pos : (d && d.bgBasePrompt), _neg = _st ? _st.neg : (d && d.bgNegPrompt);
+            if (_pos) full = [_pos, prompt].filter(Boolean).join(', ');
+            if (_neg && !o.negativePrompt) o.negativePrompt = _neg;
         } catch (e) {}
+        o.use = 'bg'; o.styleDone = true;
         let url = '';
         try { url = await IM.generateBackgroundAsync(full, o) || ''; }
         catch (e) { console.warn('[WorldGen] 圖生成失敗:', e && e.message); return ''; }

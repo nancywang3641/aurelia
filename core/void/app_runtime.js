@@ -61,7 +61,7 @@
             +   'window.stOnWake = function(fn){ if(!window.__WAKE || typeof fn!=="function" || window.__WAKE_REG) return; window.__WAKE_REG = true; var done=function(ok){ try { var T=P&&P.OS_APP_TOOLS; if(T&&T.wakeDone) T.wakeDone(window.__APP_ID__, ok); } catch(e){} }; setTimeout(function(){ Promise.resolve().then(fn).then(function(){ done(true); }, function(e){ console.error("[app onWake]", e); done(false); }); }, 0); };'
             +   'if (window.__WAKE) window.addEventListener("load", function(){ setTimeout(function(){ if(!window.__WAKE_REG){ try { var T=P&&P.OS_APP_TOOLS; if(T&&T.wakeDone) T.wakeDone(window.__APP_ID__, false); } catch(e){} } }, 5000); });'
             // ── 生圖(預覽走佔位省額度) ──
-            +   'window.genImg = async function(p, type, provider){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", (provider || window.__APP_PROVIDER__) ? {provider: provider || window.__APP_PROVIDER__} : {}); } catch(e){ console.error("[app genImg]",e); return ""; } };'
+            +   'window.genImg = async function(p, type, provider){ try { return window.__IS_PREVIEW ? ("https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p)) : await window.OS_IMAGE_MANAGER.generate(p, type||"item", (provider || window.__APP_PROVIDER__) ? {provider: provider || window.__APP_PROVIDER__, use: "app"} : {use: "app"}); } catch(e){ console.error("[app genImg]",e); return ""; } };'
             // ── 文字生成：走 OS_API.chat(直接打 API、不發酒館 GENERATION 事件→不觸發記憶/狀態抽取)。
             //    上下文手動組：角色卡 + 當前角色綁定世界書 + 最近劇情；不吃 preset、不吃全域世界書。
             // ── 選照片（st.pickPhoto）：跳相機／相簿，回縮好的 data 網址，取消回空字串 ──
