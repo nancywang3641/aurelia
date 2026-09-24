@@ -27,7 +27,7 @@
         _mcAlias: '',
 
         resetState: function () {
-            this.owner = '';
+            this.owner = ''; this._seg = false;
             this.posts = {}; this.cur = {}; this.used = {};
             const r = $('phone-moments'); if (r) r.innerHTML = '';
         },
@@ -62,10 +62,16 @@
         initMoments: function (core, line) {
             core.mode = 'moments';
             this._core = core;
-            this.posts = {}; this.cur = {}; this.used = {};
-            this.owner = ((String(line).match(/\bowner\s*=\s*["'“”]?([^"'“”>]*)/i) || [])[1] || '').trim();
+            // 同一樓裡朋友圈被正文切成好幾段（發完文→去聊天→回來看讚留言）：同一支手機就接著前一段，
+            //   前面發的那則還在、讚留言往上加。以前每段從零開始，後一段的讚留言只能去手機存檔裡找那則，
+            //   存檔還沒讀進來（沒開過朋友圈）就整段找不到、一行都畫不出來。換樓時 resetState 會清。
+            const owner = ((String(line).match(/\bowner\s*=\s*["'“”]?([^"'“”>]*)/i) || [])[1] || '').trim();
+            if (owner !== this.owner || !this._seg) { this.posts = {}; this.cur = {}; this.used = {}; }
+            this.owner = owner;
+            this._seg = true;
             try { const M = win.OS_MC_STATUS; if (M && M.load) M.load().then(st => { this._mcAlias = (st && st.name) ? String(st.name).trim() : ''; }).catch(() => {}); } catch (e) {}
             this._build();
+            Object.keys(this.posts).forEach(k => this._paint(this.posts[k], false, true));
             core.toggleUI('phone-moments');
             core.addLog('手機', this.owner && !this._isMe(this.owner) ? (this.owner + '在看朋友圈') : '打開朋友圈');
             core.next();
@@ -132,7 +138,7 @@
             }
         },
 
-        _paint: function (p, isNew) {
+        _paint: function (p, isNew, quiet) {   // quiet＝回到朋友圈把這一樓前面那段的擺回去，不跳動畫
             const MO = this._mo();
             const root = $('phone-moments');
             const list = root && root.querySelector('.wxmo-list');
@@ -143,7 +149,7 @@
             card.dataset.vnKey = p._vnKey;
             const old = list.querySelector('[data-vn-key="' + CSS.escape(p._vnKey) + '"]');
             if (old) old.replaceWith(card); else list.insertBefore(card, list.firstChild);   // 新的一則排最上面，跟手機裡一樣
-            card.classList.add(isNew ? 'vnmo-in' : 'vnmo-pop');
+            if (!quiet) card.classList.add(isNew ? 'vnmo-in' : 'vnmo-pop');
             MO._hydrate(card);
             try { card.scrollIntoView({ block: 'nearest' }); } catch (e) {}
         },
