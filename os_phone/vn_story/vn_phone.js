@@ -158,6 +158,17 @@
                 this.scrollChat(); core.checkAutoNext(); return;
             }
 
+            // 👥 群聊標籤 [Kick:] [Leave:] [Join:] [Mute:] [Unmute:]：認法與顯示的字跟聊天 app 共用（wx_core WX_GROUP_EV）。
+            //    只在群聊顯示；寫在私聊裡是寫錯地方，跳過。[Rename:] 由聊天 app 那邊改名，這裡不印出原始格式。
+            const GE = win.WX_GROUP_EV || window.WX_GROUP_EV;
+            const _gev = GE && GE.parse ? GE.parse(line) : null;
+            if (_gev) {
+                if (this.isGroupChat) { this._sys(chatBody, _gev.text); this.scrollChat(); core.checkAutoNext(); }
+                else core.next();
+                return;
+            }
+            if (/^\[\s*Rename\s*[:：]/i.test(line)) { core.next(); return; }
+
             // 系統/旁白訊息：容忍 AI 常見變體 ——
             //   1) 整行開頭即標籤：[系统] 描述 / [系統：描述]
             //   2) 被多包一層說話人名：[丹尼尔] [系统] 描述（AI 把「媒體前奏帶人名」規則誤用到系統訊息上）
@@ -165,6 +176,8 @@
             const _sysWrap = line.match(/^(?:\[[^\]]+\]\s*)?\[(?:系統|系统|System|旁白|Narrator)([：:\]])([\s\S]*)$/i);
             if (_sysWrap) {
                 const t = (_sysWrap[1] === ']' ? _sysWrap[2] : _sysWrap[2].replace(/\]\s*$/, '')).trim();
+                // 刪好友、拉黑、朋友驗證、被拒收是私聊的事，群裡出現就跳過（聊天 app 那邊同樣不收）
+                if (this.isGroupChat && GE && GE.privateOnly && GE.privateOnly(t)) { core.next(); return; }
                 this._sys(chatBody, t);
                 this.scrollChat(); core.checkAutoNext(); return;
             }

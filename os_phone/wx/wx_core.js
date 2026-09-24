@@ -1602,9 +1602,11 @@
                     if (rn && rn.length <= 24) { rooms[key].name = rn; rooms[key].fixedName = rn; }
                     return;
                 }
+                const gev = _groupEvOf(line, _pn);
+                if (gev) { rooms[key].msgs.push({ type: 'system', content: gev.text, sender: '系統', isMe: false, gev: gev }); return; }
                 const withM = line.match(/^\[\s*With\s*[:：]\s*(.*?)\s*\]/i);
                 // 名單裡同一個人的不同寫法（整理過）先統一再去重，不然簡繁各算一人、私聊變三人群
-                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return _pn(s.trim()); }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }); if (ppl.length) rooms[key].members = ppl; return; }
+                if (withM) { const ppl = withM[1].split(/[,，、]/).map(function (s) { return _pn(s.trim()); }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }); if (ppl.length) { rooms[key].members = ppl; if (ppl.length > 2) rooms[key].everGroup = true; } return; }
                 const nameM = line.match(/^\[([^\]]+?)\]\s*([\s\S]*)$/);   // [名] 內容
                 if (!nameM) return;
                 let rawName = nameM[1].trim();
@@ -1865,6 +1867,55 @@
         return { take: take, amount: parseFloat(m[2]), txnId: String(m[3]).replace(/\]+\s*$/, '').trim() };
     }
 
+    // 👥 群聊專用的標籤（VN 指令「群聊專用」那行）：[Kick: 被移出的人|動手的人] [Leave: 名] [Join: 名|邀請的人]
+    //   [Mute: 名或all|動手的人] [Unmute: 名或all|動手的人]。刪好友、拉黑、朋友驗證那些是私聊的事，群裡不收（見 _storyIsGroup 用的地方）。
+    //   聊天 app 同步（這裡）跟劇情手機（vn_phone，走 WX_GROUP_EV）共用：一樣的認法、畫面上一樣的字。
+    const _GEV_RE = /^\[\s*(Kick|Leave|Join|Mute|Unmute)\s*[:：]\s*([^\]]*)\]\s*$/i;
+    function _groupEvOf(line, mapName) {
+        const m = String(line || '').trim().match(_GEV_RE);
+        if (!m) return null;
+        const kind = m[1].toLowerCase();
+        const clean = function (v) { return String(v || '').trim().replace(/^["'「『]+|["'」』]+$/g, '').trim(); };
+        const ps = String(m[2] || '').split(/[|｜]/).map(clean);
+        const all = /^(all|全員|全员|全體|全体|所有人)$/i.test(ps[0] || '');
+        const map = mapName || function (n) { return n; };
+        const who = all ? '' : map(ps[0] || ''), by = ps[1] ? map(ps[1]) : '';
+        if (!who && !all) return null;
+        if (all && kind !== 'mute' && kind !== 'unmute') return null;
+        const nm = function (n) { return _isMcPayee(n) ? '你' : '「' + n + '」'; };
+        let text;
+        if (kind === 'kick') text = by ? nm(by) + '將' + nm(who) + '移出了群聊' : nm(who) + '被移出了群聊';
+        else if (kind === 'leave') text = nm(who) + '退出了群聊';
+        else if (kind === 'join') text = by ? nm(by) + '邀請' + nm(who) + '加入了群聊' : nm(who) + '加入了群聊';
+        else if (kind === 'mute') text = all ? (by ? nm(by) + '開啟了全員禁言' : '已開啟全員禁言') : (by ? nm(by) + '將' + nm(who) + '禁言' : nm(who) + '被禁言了');
+        else text = all ? (by ? nm(by) + '關閉了全員禁言' : '已關閉全員禁言') : (by ? nm(by) + '解除了' + nm(who) + '的禁言' : nm(who) + '的禁言已解除');
+        return { kind: kind, who: who, by: by, all: all, text: text };
+    }
+    // 照順序走一遍群裡的標籤 → 現在誰不在群裡、誰被禁言、主角自己是不是被移出／禁言
+    function _groupStateOf(msgs) {
+        const out = {}, joined = [], muted = {};
+        let allMuted = false, allBy = '', meOut = false, meMuted = false;
+        (msgs || []).forEach(function (x) {
+            const g = x && x.gev;
+            if (!g) return;
+            const me = !g.all && _isMcPayee(g.who);
+            if (g.kind === 'kick' || g.kind === 'leave') { if (me) meOut = true; else { out[g.who] = 1; delete muted[g.who]; } }
+            else if (g.kind === 'join') { if (me) meOut = false; else { delete out[g.who]; if (joined.indexOf(g.who) < 0) joined.push(g.who); } }
+            else if (g.kind === 'mute') { if (g.all) { allMuted = true; allBy = g.by; } else if (me) meMuted = true; else muted[g.who] = 1; }
+            else if (g.kind === 'unmute') { if (g.all) { allMuted = false; allBy = ''; } else if (me) meMuted = false; else delete muted[g.who]; }
+        });
+        return { out: out, joined: joined, muted: Object.keys(muted), allMuted: allMuted, allBy: allBy, meOut: meOut, meMuted: meMuted || (allMuted && !_isMcPayee(allBy)) };
+    }
+    // 這間算不算群：對方（名單＋講過話的）有兩個以上，或者名單寫過三個人以上。
+    //   被移出幾個人以後 [With] 只剩一個對方，不能因此變成私聊。群聊標籤本身不算數——寫在私聊裡的是寫錯地方。
+    function _storyIsGroup(room, others) {
+        return others.length >= 2 || !!room.everGroup;
+    }
+    win.WX_GROUP_EV = {
+        parse: function (line) { return _groupEvOf(line); },
+        privateOnly: function (text) { return !!_friendEventOf(text); },
+    };
+
     function _friendEventOf(text) {
         const s = String(text || '').trim();
         if (!s) return null;
@@ -2005,6 +2056,7 @@
                 else if (!rooms[key].name && r.name) rooms[key].name = r.name;
                 if (r.owner) rooms[key].owner = r.owner;
                 if (r.members && r.members.length) rooms[key].members = r.members.slice();
+                if (r.everGroup) rooms[key].everGroup = true;
                 // 🚨 整份抄過來，不要一個一個欄位列 —— 以前只抄那六個，
                 //    新的訊息種類（劇情裡收下轉帳那種，身上有金額與單號）欄位會在這裡靜靜掉光。
                 (r.msgs || []).forEach(function (x) { rooms[key].msgs.push(Object.assign({ quoteName: '', quoteText: '' }, x, { floor: f })); });
@@ -2093,7 +2145,8 @@
                 const room = rooms[key];
                 if (room.owner && room.owner !== _storyMyName() && !_isMeName(room.owner)) return;
                 const others = _storyOthers(room);
-                const selfKey = others.length >= 2 ? 'g:' + key : (others.length === 1 ? 'p:' + others[0] : '');
+                const _grp = _storyIsGroup(room, others);
+                const selfKey = _grp ? 'g:' + key : (others.length === 1 ? 'p:' + others[0] : '');
                 room.msgs.forEach(function (x, i) {
                     // 💰 劇情裡收下／退回轉帳：照單號找那張卡，只有還在等的才動錢包。
                     //    同步每次整份重建，所以一定要有東西擋重複 —— 擋的是那張卡的狀態，
@@ -2102,9 +2155,9 @@
                     if (x.type === 'system') {
                         const ev = _friendEventOf(x.content);
                         if (!ev) return;
-                        // 「開啟了朋友驗證」「被對方拒收」只會出現在跟那個人的私聊裡（真的微信在群裡看不到）。
-                        //   AI 在群聊寫這句多半是在開玩笑或寫錯地方，照收的話那個人的私聊會被當成把主角刪了。
-                        if (ev.kind === 'blocked' && others.length !== 1) return;
+                        // 刪好友、拉黑、朋友驗證、被拒收都是私聊的事（真的微信在群裡看不到）。
+                        //   AI 寫在群裡照收的話，那個人的私聊會被當成刪了主角／被主角刪了。
+                        if (_grp) return;
                         const name = ev.name || (others.length === 1 ? others[0] : '');   // 沒寫名字＝這間私聊的對方
                         if (!name) return;
                         if (ev.kind === 'remove') rmPush('p:' + name, x.floor, i, 'remove', ev.how);          // 主角刪了／拉黑了對方
@@ -2117,7 +2170,7 @@
                     const _cur = rmLast[selfKey];
                     if (!(x.isMe && _cur && _cur.kind === 'remove' && _cur.how === 'block')) rmPush(selfKey, x.floor, i, 'back');
                     // 對方又講得出話＝主角沒被刪（主角自己說的不算，被刪的人照樣打得出字）
-                    if (!x.isMe && others.length === 1) rmPush('b:' + others[0], x.floor, i, 'back');
+                    if (!x.isMe && !_grp && others.length === 1) rmPush('b:' + others[0], x.floor, i, 'back');
                 });
                 // 好友申請（誰申請都算兩邊重新是朋友）
                 _storyFriendRequests(room).forEach(function (fr) { rmPush('p:' + fr.name, fr.floor, 1e9, 'back'); rmPush('b:' + fr.name, fr.floor, 1e9, 'back'); });
@@ -2236,7 +2289,12 @@
                 });
                 const others = _storyOthers(room);
                 if (!others.length) continue;   // 只有我跟系統的房（新的朋友、系統通知）不建聊天室
-                const isGroup = others.length >= 2;
+                const isGroup = _storyIsGroup(room, others);
+                // 私聊的系統行（刪好友、朋友驗證…）不進群；群聊標籤（移出、禁言…）不進私聊
+                room.msgs = isGroup
+                    ? room.msgs.filter(function (x) { return !(x.type === 'system' && !x.gev && _friendEventOf(x.content)); })
+                    : room.msgs.filter(function (x) { return !x.gev; });
+                const gst = isGroup ? _groupStateOf(room.msgs) : null;
                 let chatId, members, realName;
                 if (isGroup) {
                     chatId = 'grp_story_' + _storyHash(cid) + '_' + String(key).replace(/[^\w一-鿿-]/g, '_').slice(0, 40);
@@ -2246,7 +2304,9 @@
                     //    以前這行是 saveToStorage=true，光取個 id 就把人隱形註冊進通訊錄，後面再補一間空的一對一
                     //    聊天室；於是劇情裡出現過的每個路人都成了她的微信聯絡人。而那種空房身上沒有 storyKey，
                     //    下面回收舊房的迴圈永遠掃不到，只會越積越多。
-                    members = others.map(function (n) { return win.WX_CONTACTS.getOrCreateContactID(n, 'user', false); });
+                    // 現在還在群裡的：對方們＋加進來的，扣掉移出／退出的
+                    const inGroup = others.concat(gst.joined.filter(function (n) { return others.indexOf(n) < 0 && !_isMcPayee(n); })).filter(function (n) { return !gst.out[n]; });
+                    members = inGroup.map(function (n) { return win.WX_CONTACTS.getOrCreateContactID(n, 'user', false); });
                     others.forEach(function (n) { groupOnlyNames[n] = 1; });
                     // 🚨 通訊錄那筆的群名照同一條規矩：說了算的優先，其次是現在卡上那個（她可能改過），
                     //    最後才是建房那次的 chatroom —— 不然聊天列表改好了、通訊錄還掛著正文亂寫的名字
@@ -2301,6 +2361,10 @@
                 if (isGroup) delete rec.realName; else rec.realName = realName;
                 if (wantBlocked) { rec.wxBlocked = true; rec.wxBlockKind = blockHow; } else { delete rec.wxBlocked; delete rec.wxBlockKind; }
                 if (wantMeBlock) rec.wxBlockedByMe = true; else delete rec.wxBlockedByMe;
+                // 群：主角被移出／退出、被禁言 → 聊天 app 送不出去；誰被禁言給群聊回覆那邊看（os_api_engine 組這一間的說明）
+                if (gst && gst.meOut) rec.wxGroupOut = true; else delete rec.wxGroupOut;
+                if (gst && gst.meMuted) rec.wxMeMuted = true; else delete rec.wxMeMuted;
+                if (gst && (gst.muted.length || gst.allMuted)) rec.wxMuted = { names: gst.muted, all: gst.allMuted, by: gst.allBy }; else delete rec.wxMuted;
                 GLOBAL_CHATS[chatId] = rec;
                 try { await win.WX_DB.saveApiChat(chatId, rec); } catch (e) { console.warn('[wx 跑團同步] 存檔失敗:', chatId, e); }
                 if (chatId === GLOBAL_ACTIVE_ID) rebuildActive = true;
@@ -4154,6 +4218,9 @@
             if (!GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { GLOBAL_CHATS[GLOBAL_ACTIVE_ID] = { name: GLOBAL_ACTIVE_ID, id: GLOBAL_ACTIVE_ID, members:[], messages: [], lastTime: '', unread: false, pushedCount:0, renderedCount:0 }; }
             const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
             
+            // 👥 劇情裡主角被移出群聊／被禁言：這間送不出去（真的軟體是整個輸入框鎖住）
+            if (currentChat.isGroup && currentChat.wxGroupOut) { AUI.toast('你已經不在這個群聊裡'); return; }
+            if (currentChat.isGroup && currentChat.wxMeMuted) { AUI.toast('你被禁言了'); return; }
             // 「我」在微信裡叫什麼（暱稱優先）——AI 看到的發話人就是這個名字
             const myName = _meName();
 
@@ -4226,6 +4293,7 @@
                 const _n = _bc.name || '對方';
                 if (_bc.wxBlockedByMe) { AUI.toast('你把' + _n + '加入了黑名單，' + _n + '收不到你的訊息'); return; }
                 if (_bc.wxBlocked) { this.sendFriendRequest(_bc.id); return; }
+                if (_bc.isGroup && _bc.wxGroupOut) { AUI.toast('你已經不在這個群聊裡'); return; }
             }
             IS_STREAMING_REPLY = true;
 

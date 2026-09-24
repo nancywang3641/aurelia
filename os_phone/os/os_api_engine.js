@@ -341,6 +341,10 @@
         if (apiChat.isGroup) {
             const mem = (apiChat.members || []).filter(id => !isMeId(id)).map(nameOf).filter(Boolean);
             note = '【這一間】群聊「' + name + '」' + (mem.length ? '，成員：' + mem.join('、') : '') + '。群裡每一行都寫是誰說的。';
+            // 劇情裡被禁言的人（wx_core 跑團同步記的 wxMuted）：這一輪不能在群裡說話
+            const mu = apiChat.wxMuted;
+            if (mu && mu.all) note += '\n現在全員禁言' + (mu.by ? '，只有' + mu.by + '能說話' : '，沒有人能說話') + '。';
+            else if (mu && mu.names && mu.names.length) note += '\n被禁言、不能說話：' + mu.names.join('、') + '。';
         } else {
             note = '【這一間】跟「' + name + '」的私聊。';
         }
