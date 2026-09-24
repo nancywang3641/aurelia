@@ -1617,6 +1617,10 @@
                 rawName = _pn(rawName);   // 發話人的其他寫法 → 整理過的正確寫法（要在判斷是不是「我」之前）
                 const content = (nameM[2] || '').trim();
                 if (!content) return;
+                // [某人] [系統] 描述：AI 把說話人名多包一層在系統行外面。劇情手機那邊本來就當系統行（vn_phone _sysWrap），
+                //   這裡以前當成那個人講的話 → 聊天 app 出現一顆寫著「[系統]」的泡泡。兩邊認法對齊。
+                const _sysBare = content.match(/^\[\s*(?:系統|系统|System|Notice)\s*\]\s*([\s\S]+)$/i);
+                if (_sysBare) { rooms[key].msgs.push({ type: 'system', content: _sysBare[1].trim(), sender: '系統', isMe: false }); return; }
                 if (/^(系統|系统|System|Notice|附加信息|附加訊息|验证信息|驗證信息|验证消息|驗證消息)$/i.test(rawName)) { rooms[key].msgs.push({ type: 'system', content: content, sender: rawName, isMe: false }); return; }
                 const isMe = (me && rawName === me) || (myName && myName !== 'User' && rawName === myName) || _isMeName(rawName);
                 // 💰 [某某] [系統: Accept 5000|單號]：劇情裡有人收下／退回了轉帳。
@@ -2098,6 +2102,9 @@
                     if (x.type === 'system') {
                         const ev = _friendEventOf(x.content);
                         if (!ev) return;
+                        // 「開啟了朋友驗證」「被對方拒收」只會出現在跟那個人的私聊裡（真的微信在群裡看不到）。
+                        //   AI 在群聊寫這句多半是在開玩笑或寫錯地方，照收的話那個人的私聊會被當成把主角刪了。
+                        if (ev.kind === 'blocked' && others.length !== 1) return;
                         const name = ev.name || (others.length === 1 ? others[0] : '');   // 沒寫名字＝這間私聊的對方
                         if (!name) return;
                         if (ev.kind === 'remove') rmPush('p:' + name, x.floor, i, 'remove', ev.how);          // 主角刪了／拉黑了對方
