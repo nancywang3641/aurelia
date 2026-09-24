@@ -123,6 +123,7 @@
                 '  </div>' +
                 '  <div class="vnmo-nar hidden"></div>' +
                 '</div>';
+            host.scrollTop = 0; host.scrollLeft = 0;   // 以前 scrollIntoView 把這格捲歪過，重畫時扶正
             const root = host.firstElementChild;
             const sc = root.querySelector('.wxmo-scroll');
             sc.addEventListener('scroll', function () { root.classList.toggle('is-scrolled', sc.scrollTop > 120); });
@@ -148,10 +149,21 @@
             const card = tmp.firstElementChild;
             card.dataset.vnKey = p._vnKey;
             const old = list.querySelector('[data-vn-key="' + CSS.escape(p._vnKey) + '"]');
+            // 每加一個讚、一則留言整則重畫：舊的那則已經貼好的照片直接搬過來，不然每點一下照片都重新載一次、閃一下
+            if (old) card.querySelectorAll('img[data-db-img]').forEach(function (im) {
+                const was = old.querySelector('img[data-db-img="' + CSS.escape(im.getAttribute('data-db-img')) + '"][data-img-done]');
+                if (was && was.src) { im.src = was.src; im.setAttribute('data-img-done', '1'); }
+            });
             if (old) old.replaceWith(card); else list.insertBefore(card, list.firstChild);   // 新的一則排最上面，跟手機裡一樣
             if (!quiet) card.classList.add(isNew ? 'vnmo-in' : 'vnmo-pop');
             MO._hydrate(card);
-            try { card.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+            // 🚨 不用 scrollIntoView：它連外層一起捲，手機正滑進來的時候整個框被拖著抖一下（#phone-moments 被捲歪 14px）。只捲朋友圈自己那格
+            const sc = root.querySelector('.wxmo-scroll');
+            if (sc) {
+                const cr = card.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+                if (cr.top < sr.top) sc.scrollTop += cr.top - sr.top - 8;
+                else if (cr.bottom > sr.bottom) sc.scrollTop += Math.min(cr.bottom - sr.bottom + 8, cr.top - sr.top - 8);
+            }
         },
 
         // ---------- 每行 ----------

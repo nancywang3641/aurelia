@@ -166,6 +166,9 @@
             /* 頭像拿的是全身立繪（設定裡「跳過頭像，直接生全身立繪」）：只露上半部置中那塊。
                高度放大成兩倍、貼齊上緣＝框裡剛好是圖的上半部，左右自動置中，不管立繪是 2:3 還是 9:16。
                主題會改頭像的 background-size，所以要 !important 蓋過（wx_view hydrateAvatars 掛這個 class）。 */
+            /* 頭像還在查（第一次見到這個人）：先空著，不先露預設頭像再跳成真的那張（WX_VIEW.hydrateAvatars） */
+            .avt-wait { background-image: none !important; }
+            .avt-wait > span { visibility: hidden; }
             .vn-load-target.vn-avt-sprite { background-size: auto 200% !important; background-position: center top !important; }
             /* 🚨 泡泡的寬度上限在這一層，不在泡泡本身。以前它是一個沒有 class 的行內樣式，
                主題碰不到（行內還蓋過所有樣式表），於是 AI 主題在預覽裡好好的、套進微信就被

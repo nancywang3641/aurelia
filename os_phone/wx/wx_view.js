@@ -79,6 +79,9 @@
     async function _isSpriteRec(VN_Cache, v) {
         try { const r = VN_Cache ? await VN_Cache.get('avatar_cache', v) : null; return !!(r && r.isSprite); } catch (e) { return false; }
     }
+    // 貼過的頭像：'db:圖庫編號'／'vn:名字' → { url, sprite }；查不到記 { miss: 時間 }（30 秒內再遇到就直接露預設，不空一下）
+    const _avtSeen = {};
+    const _avtRecentMiss = s => !!(s && s.miss && Date.now() - s.miss < 30000);
     async function _resolveVNAvatar(name) {
         const win = window.parent || window;
         const vn = win.VN_Core;
@@ -147,25 +150,45 @@
             if (!win.OS_DB || !root || !root.querySelectorAll) return;
             // 她從相簿傳的照片（圖庫編號）也在這裡貼上：頭像跟照片走同一個時機，追加、重建都不會漏
             try { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; if (PI && PI.hydrate) PI.hydrate(root); } catch (e) {}
+            // 🚨 閃一下的來源：每顆新泡泡（劇情手機一句一顆、朋友圈每點一下整則重畫）都是新的頭像格，
+            //    以前每次都先露預設頭像、等查完才換成真的那張。查過的記在 _avtSeen，下一顆當場貼上；
+            //    第一次見到的人先空著（.avt-wait），查到貼上、查不到才露預設。
+            const put = function (el, hit) {
+                el.style.backgroundImage = "url('" + hit.url + "')";
+                if (hit.sprite != null) el.classList.toggle('vn-avt-sprite', !!hit.sprite);
+                el.classList.remove('avt-wait');
+            };
             root.querySelectorAll('.db-load-target:not([data-avt-done])').forEach(async function (el) {
                 const id = el.getAttribute('data-db-bg');
                 if (!id) return;
                 el.setAttribute('data-avt-done', '1');
+                const k = 'db:' + id, seen = _avtSeen[k];
+                if (seen && seen.url) { put(el, seen); return; }   // 圖庫編號一張圖一個（換頭像會換新編號），貼過的就是對的
+                if (!_avtRecentMiss(seen)) el.classList.add('avt-wait');
                 try {
                     const url = await win.OS_DB.getImage(id);
-                    if (url) el.style.backgroundImage = "url('" + url + "')";
-                    else el.removeAttribute('data-avt-done');   // 這次沒拿到，下次還能再試
-                } catch (e) { el.removeAttribute('data-avt-done'); }
+                    if (url) { _avtSeen[k] = { url: url }; put(el, _avtSeen[k]); }
+                    else { _avtSeen[k] = { miss: Date.now() }; el.classList.remove('avt-wait'); el.removeAttribute('data-avt-done'); }   // 這次沒拿到，下次還能再試
+                } catch (e) { el.classList.remove('avt-wait'); el.removeAttribute('data-avt-done'); }
             });
             root.querySelectorAll('.vn-load-target:not([data-avt-done])').forEach(async function (el) {
                 const name = el.getAttribute('data-vn-name');
                 if (!name) return;
                 el.setAttribute('data-avt-done', '1');
+                const k = 'vn:' + name, seen = _avtSeen[k];
+                if (seen && seen.url) put(el, seen);   // 先貼記得的那張；下面照樣再查一次，劇情中途生了新頭像才換得過去
+                else if (!_avtRecentMiss(seen)) el.classList.add('avt-wait');
                 try {
                     const hit = await _resolveVNAvatar(name);
-                    if (hit && hit.url) { el.style.backgroundImage = "url('" + hit.url + "')"; el.classList.toggle('vn-avt-sprite', !!hit.sprite); }
-                    else el.removeAttribute('data-avt-done');
-                } catch (e) { el.removeAttribute('data-avt-done'); }
+                    if (hit && hit.url) {
+                        if (!seen || seen.url !== hit.url || seen.sprite !== !!hit.sprite) put(el, hit);
+                        _avtSeen[k] = { url: hit.url, sprite: !!hit.sprite };
+                    } else {
+                        if (!(seen && seen.url)) _avtSeen[k] = { miss: Date.now() };
+                        el.classList.remove('avt-wait');
+                        el.removeAttribute('data-avt-done');
+                    }
+                } catch (e) { el.classList.remove('avt-wait'); el.removeAttribute('data-avt-done'); }
             });
         },
 
