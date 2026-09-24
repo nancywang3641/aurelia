@@ -324,11 +324,37 @@
 .set-row-group { margin-top: 14px; padding-bottom: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #8a8fa3; }
 .set-row-group:first-child { margin-top: 2px; }
 .set-room-style-btns { display: flex; gap: 6px; margin-top: 6px; }
-/* 房間那塊只露選中那條路的格子；ComfyUI 寬高用不到時換成鎖住的兩格。這幾格的 display 會被 .set-input/.set-select 蓋掉，hidden 要硬一點 */
-#img-room-style-block [data-room-for][hidden],
-#img-cfd-width[hidden], #img-cfd-height[hidden], #img-cfd-width-eff[hidden], #img-cfd-height-eff[hidden], #img-cfd-size-note[hidden] { display: none !important; }
-.cfd-size-note { grid-column: 1 / -1; margin: 0; }
-#img-cfd-width-eff, #img-cfd-height-eff { opacity: 0.55; cursor: not-allowed; }
+/* 房間那塊只露選中那條路的格子。這幾格的 display 會被 .set-input/.set-select 蓋掉，hidden 要硬一點 */
+#img-room-style-block [data-room-for][hidden], #img-tab-style[hidden] { display: none !important; }
+/* 圖片設置分頁：六顆排成整齊的 3×2（一排擠不下，自然換行會長短不齊） */
+.img-srctab-row.img-conn-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 4px; }
+.img-srctab-row.img-conn-tabs .img-srctab { text-align: center; white-space: nowrap; padding-left: 2px; padding-right: 2px; }
+/* 圖片設置「畫風」頁：一個地方一段，名字一行，下面「用哪組／畫風／尺寸」各一行（面板只有三百多寬，兩格並排會把名字切掉） */
+.img-use-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 8px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
+.img-use-row:first-child { border-top: 0; padding-top: 2px; }
+.img-use-name { grid-column: 1 / -1; font-size: 13px; font-weight: 800; color: var(--os-ink); }
+.img-use-label { font-size: 11px; color: var(--os-ink-soft); }
+.img-use-row .set-select, .img-use-row .set-input { font-size: 12px; min-width: 0; width: 100%; }
+.img-use-size { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.img-use-label:has(+ .img-use-size:empty), .img-use-size:empty { display: none; }
+.img-use-size .set-input { flex: 1 1 100%; margin-top: 0 !important; }
+.img-use-fixed { font-size: 12px; color: var(--os-ink-soft); }
+/* 我的畫風 */
+.img-style-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.img-style-empty { font-size: 12px; color: var(--os-ink-soft); padding: 6px 0; }
+.img-style-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; border: 1px solid rgba(var(--os-ink-rgb), 0.12); background: rgba(var(--os-ink-rgb), 0.03); }
+.img-style-thumb { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 6px; background: rgba(var(--os-ink-rgb), 0.08) center / cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--os-ink-soft); }
+.img-style-main { flex: 1; min-width: 0; }
+.img-style-name { font-size: 13px; font-weight: 800; color: var(--os-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.img-style-use { font-size: 11px; color: var(--os-ink-soft); margin-top: 2px; }
+.img-style-btn { flex: 0 0 auto; padding: 6px 9px; }
+.img-style-btn.is-del { color: #e74c3c; }
+.img-style-modal .avl-card .set-label { margin-top: 10px; }
+.img-style-modal .avl-prompt { width: 100%; }
+.img-style-modal .avl-name-input { width: 100%; }
+.img-style-ref-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.img-style-ref-row .img-style-thumb { width: 56px; height: 56px; }
+.img-style-f-btns { display: flex; gap: 8px; }
 .set-room-style-btns .set-btn { flex: 1; justify-content: center; }
 /* 自訂接口的底詞包：下拉＋存成包＋刪，一排；下拉吃剩下的寬 */
 .capi-pack-row { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; }

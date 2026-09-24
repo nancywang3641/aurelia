@@ -1,10 +1,10 @@
 ﻿// ----------------------------------------------------------------
 // [檔案] os_settings_comfyui.js — 系統設置 🧩 ComfyUI 直連設定（2026-07-17 自 os_settings.js 拆出）
 // 職責：LoRA 行＋測試連線/抓模型清單；預設包（modal/grid/另存/覆蓋/匯出入/清空/風格預覽/拖圖還原工作流）；
-//       char/scene/bg/map 四桶各自設定＋切換（包庫全域一份）。
+//       面板編輯的是「正在改哪個預設包」（2026-09-24 起；四個桶照存檔原樣留著，給還沒改過的列當照原本的，面板不再讀寫）。
 // 依賴：參數注入 ctx = { imgConfig, container }（都是 os_settings.js launchApp 的閉包變數，開面板時組好傳入）；
-//       入口＝window.OS_SETTINGS_COMFY.wire(ctx)。對外照舊發布 window._cfdPreset/_cfdSwitchBucket/
-//       _cfdSetActivePreset/_cfdCollectBuckets（HTML onclick 與核心存檔/測試呼叫點不變），
+//       入口＝window.OS_SETTINGS_COMFY.wire(ctx)。對外發布 window._cfdPreset（預設包牆）／_cfdEdit（正在改哪個包）
+//       （HTML onclick 用），
 //       另加 window._cfdGetPresets 給核心存檔收包庫（cfdPresets 原是閉包變數）。
 //       載入順序排 os_settings.js 之後（index.js PHONE_FILES）；wire 在 launchApp 執行期才被呼叫。
 // ----------------------------------------------------------------
@@ -410,12 +410,17 @@
                 const stores = [window.localStorage];
                 try { if (_w && _w !== window && _w.localStorage) stores.push(_w.localStorage); } catch(e) {}
 
-                // ① 四個桶記的「目前套用哪個包」（記憶體 + 面板狀態列）
-                _CFD_BUCKETS.forEach(function(b){
-                    if (_comfyBuckets[b] && _comfyBuckets[b].activePreset === oldName) { _comfyBuckets[b].activePreset = newName; res.touched = true; }
-                    if (_cfdActivePreset[b] === oldName) { _cfdActivePreset[b] = newName; res.touched = true; }
+                // ① 正在改的包＋圖片設置「畫風」頁每一列選的包（os_img_routes 記的是 comfy:名字）
+                if (_editing === oldName) { _editing = newName; _fillEditSel(); }
+                stores.forEach(function(st){
+                    try {
+                        const raw = st.getItem('os_img_routes'); if (!raw) return;
+                        const o = JSON.parse(raw); if (!o || typeof o !== 'object') return;
+                        let hit = false;
+                        Object.keys(o).forEach(function(k){ if (o[k] && o[k].conn === 'comfy:' + oldName) { o[k].conn = 'comfy:' + newName; hit = true; } });
+                        if (hit) { st.setItem('os_img_routes', JSON.stringify(o)); res.touched = true; }
+                    } catch(e) {}
                 });
-                _updateBucketHeader();
 
                 // ② 生圖引擎手上那份 config 是 init() 時的快照、不跟著 localStorage 走 → 直接改活物件
                 try {
@@ -478,10 +483,8 @@
                 close: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.style.display = 'none'; },
                 applyIdx: function(i){
                     const p = cfdPresets[i]; if (!p) return;
-                    applyPresetToPanel(p);
-                    try { if (window._cfdSetActivePreset) window._cfdSetActivePreset(p.name || ''); } catch(e){}   // 狀態列顯示目前套用的預設名
+                    _pick(p.name || '');   // 打開這個包來改（面板上方「正在改的預設包」跟著換）
                     this.close();
-                    if (statusEl) statusEl.textContent = '已套用預設包「' + (p.name || '') + '」（要正式生圖記得按底部保存）';
                 },
                 // 就地改名：點名字或 ✏️ → 那格變輸入框。Enter/移開焦點＝改，Esc＝不改。
                 renameIdx: function(i){
@@ -590,9 +593,18 @@
                 },
                 delIdx: async function(i){
                     const old = cfdPresets[i]; if (!old) return;
-                    if (!await AUI.confirm('刪除預設包「' + old.name + '」？')) return;
+                    let used = [];
+                    try {
+                        const M = (window.parent || window).OS_IMAGE_MANAGER;
+                        const rt = (M && M.getRoutes) ? M.getRoutes() : {};
+                        used = ((M && M.USES) || []).filter(function(u){ return rt[u.id] && rt[u.id].conn === 'comfy:' + old.name; }).map(function(u){ return u.name; });
+                    } catch(e) {}
+                    if (!await AUI.confirm('刪除預設包「' + old.name + '」？' + (used.length ? '\n用它的地方（' + used.join('、') + '）會改回照原本的設定。' : ''))) return;
                     cfdPresets.splice(i, 1);
+                    if (_editing === old.name) _editing = '';
                     renderPresetGrid();
+                    _fillEditSel();
+                    try { window._imgPersistPresets && window._imgPersistPresets(); } catch(e) {}
                 },
                 genPreviewIdx: async function(i){
                     const p = cfdPresets[i]; if (!p) return;
@@ -734,78 +746,64 @@
                 drop.addEventListener('drop', function(e){ e.preventDefault(); drop.classList.remove('is-over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) window._cfdPreset._handleImage(f); });
             })();
 
-            // ===== ComfyUI 每桶各自一份設定＋預設包（char/scene/bg/map）=====
-            //   面板同一塊 DOM，靠「編輯桶」下拉切換：切換時存目前桶、載入目標桶。連線網址(url)四桶共用、不進桶。
-            //   沒設過的桶 → 用你現有設定當起點(_flatSeed)，切過去改完保存就各自獨立、絕不弄丟。
-            let _cfdBucket = 'char';
-            const _CFD_BUCKETS = ['char','scene','bg','map'];
-            const _comfyBuckets = { char:null, scene:null, bg:null, map:null };
-            (function(){
-                const sb = cfd.buckets && typeof cfd.buckets === 'object' ? cfd.buckets : null;
-                if (sb) _CFD_BUCKETS.forEach(function(b){ if (sb[b] && typeof sb[b] === 'object') _comfyBuckets[b] = sb[b]; });
-            })();
-            // 你現有扁平設定 → 一份桶起點（沒獨立設過的桶用它，等於「複製進四桶」）
-            function _flatSeed(){
-                const n = function(v,d){ const x=parseFloat(v); return isNaN(x)?d:x; };
-                const i = function(v,d){ const x=parseInt(v); return isNaN(x)?d:x; };
-                const s = function(v){ return (v==null)?'':String(v); };
-                return {
-                    modelType: s(cfd.modelType)||'checkpoint', model: s(cfd.model), vae: s(cfd.vae),
-                    sampler: s(cfd.sampler)||'euler', scheduler: s(cfd.scheduler)||'normal',
-                    steps: i(cfd.steps,28), cfg: n(cfd.cfg,6.5), width: i(cfd.width,1024), height: i(cfd.height,1024),
-                    clipSkip: i(cfd.clipSkip,0), basePrompt: s(cfd.basePrompt), negPrompt: s(cfd.negPrompt),
-                    fluxClipL: s(cfd.fluxClipL)||'clip_l.safetensors', fluxT5: s(cfd.fluxT5)||'t5xxl_fp8_e4m3fn.safetensors',
-                    fluxAe: s(cfd.fluxAe)||'ae.safetensors', guidance: n(cfd.guidance,3.5),
-                    animaClip: s(cfd.animaClip)||'qwen_3_06b_base.safetensors', animaVae: s(cfd.animaVae)||'qwen_image_vae.safetensors',
-                    loras: Array.isArray(cfd.loras)?cfd.loras.slice():[],
-                    workflowMode: (s(cfd.workflowMode)==='custom') ? 'custom' : 'auto',
-                    customWorkflow: (s(cfd.workflowMode)==='custom') ? s(cfd.customWorkflow) : '',
-                    activePreset: ''   // 包庫是全域一份(cfdPresets)，桶只記「套用哪個包」
-                };
+            // ===== 正在改哪個預設包（2026-09-24）=====
+            //   以前面板編輯的是四個桶（頭像／插圖／背景／小地圖各一份），跟著子分頁切；現在每個地方在「畫風」頁自己選用哪個包，
+            //   面板就只編輯包：上面選一個包載進來，改完「存回這個包」或「另存新的包」。
+            //   四個桶照存檔原樣留著（還沒改過的列靠它照原本出圖），面板不再讀寫它們。
+            let _editing = '';
+            const _editSel = container.querySelector('#img-cfd-edit-sel');
+            const _editStatus = container.querySelector('#img-cfd-edit-status');
+            function _fillEditSel(){
+                if (!_editSel) return;
+                _editSel.innerHTML = cfdPresets.length
+                    ? (_editing ? '' : '<option value="" selected>（選一個包來改）</option>') + cfdPresets.map(function(p){ return '<option value="' + escAttr(p.name) + '"' + (p.name === _editing ? ' selected' : '') + '>' + escAttr(p.name) + '</option>'; }).join('')
+                    : '<option value="">還沒有預設包</option>';
             }
-            // 桶正規化：一定要有 workflowMode（舊桶沒存過 → 當 auto 並清掉殘留 customWorkflow，治「全變自訂」）
-            function _normBucket(cfg){ cfg = cfg || {}; if (cfg.workflowMode == null) { cfg.workflowMode = 'auto'; cfg.customWorkflow = ''; } if (cfg.workflowMode !== 'custom') cfg.customWorkflow = ''; return cfg; }
-            // 讀目前面板 → 桶物件（重用 buildCfdPreset 的欄位讀取 + 明確 workflowMode；包庫不進桶——全域一份）
-            function _readPanelBucket(){ const c = buildCfdPreset(''); delete c.name; c.workflowMode = (container.querySelector('#img-cfd-wfmode')?.value || 'auto'); c.activePreset = _cfdActivePreset[_cfdBucket] || ''; return c; }
-            const _BUCKET_LABEL = { char:'角色', scene:'插圖', bg:'背景', map:'小地圖' };
-            const _cfdActivePreset = { char:'', scene:'', bg:'', map:'' };   // 各桶「目前套用哪個預設包」
-            function _updateBucketHeader(){
-                const cur = container.querySelector('#img-cfd-bucket-cur'); if (cur) cur.textContent = _BUCKET_LABEL[_cfdBucket] || _cfdBucket;
-                const pc = container.querySelector('#img-cfd-preset-cur');
-                if (pc) { const nm = _cfdActivePreset[_cfdBucket]; pc.textContent = nm ? ('　·　預設：' + nm) : '　·　（未套用預設）'; }
+            function _pick(name){
+                const p = cfdPresets.find(function(x){ return x.name === name; });
+                if (!p) { _fillEditSel(); return; }
+                applyPresetToPanel(p);
+                _editing = name;
+                _fillEditSel();
+                if (_editStatus) _editStatus.textContent = '';
             }
-            window._cfdSetActivePreset = function(name){ _cfdActivePreset[_cfdBucket] = name || ''; _updateBucketHeader(); };
-            function _switchBucket(nb){
-                if (!_comfyBuckets.hasOwnProperty(nb) || nb === _cfdBucket) return;
-                _comfyBuckets[_cfdBucket] = _readPanelBucket();                 // 存目前桶
-                _cfdBucket = nb;
-                const cfg = _normBucket(_comfyBuckets[nb] || _flatSeed());      // 目標桶（沒設過退你現有設定）
-                applyPresetToPanel(cfg);                                        // 灌回面板（模型/LoRA/參數/自訂工作流…）
-                // 包庫(cfdPresets)不隨桶切換——全域同一份，四桶看到的牆永遠一樣
-                _cfdActivePreset[nb] = cfg.activePreset || '';
-                _updateBucketHeader();
+            function _afterEdit(msg){
+                renderPresetGrid(); _fillEditSel();
+                try { window._imgPersistPresets && window._imgPersistPresets(); } catch(e) {}
+                if (_editStatus) _editStatus.textContent = msg;
             }
-            window._cfdSwitchBucket = _switchBucket;   // 給分頁切換連動
-            // 給存檔用：收齊四桶（先把目前面板存進當前桶），沒獨立設過的桶用你現有設定
-            //   桶物件一律剝掉 presets 殘留（舊存檔的桶內副本已在啟動時併回全域庫，別再寫回去分家）
-            window._cfdCollectBuckets = function(){
-                _comfyBuckets[_cfdBucket] = _readPanelBucket();
-                const out = {};
-                _CFD_BUCKETS.forEach(function(b){
-                    const o = Object.assign({}, _comfyBuckets[b] || _flatSeed());
-                    delete o.presets;
-                    out[b] = o;
-                });
-                return out;
+            window._cfdEdit = {
+                pick: _pick,
+                saveBack: function(){
+                    const i = cfdPresets.findIndex(function(x){ return x.name === _editing; });
+                    if (i < 0) { this.saveAs(); return; }
+                    const old = cfdPresets[i];
+                    cfdPresets[i] = Object.assign(buildCfdPreset(old.name), old.preview ? { preview: old.preview } : {});
+                    _afterEdit('已存回「' + old.name + '」');
+                },
+                saveAs: async function(){
+                    const name = String(await AUI.prompt('新預設包的名字', '', { title: '另存新的包' }) || '').trim();
+                    if (!name) return;
+                    if (cfdPresets.some(function(x){ return x.name === name; })) { AUI.toastr.warning('已經有叫「' + name + '」的包了'); return; }
+                    cfdPresets.push(buildCfdPreset(name));
+                    _editing = name;
+                    _afterEdit('已另存「' + name + '」');
+                },
+                // 第一次打開時舊設定才轉成包（畫風頁那支），轉完叫這裡重新列一次
+                refresh: function(){
+                    if (_editing && cfdPresets.some(function(x){ return x.name === _editing; })) { _fillEditSel(); return; }
+                    let first = '';
+                    try {
+                        const M = (window.parent || window).OS_IMAGE_MANAGER;
+                        const rt = (M && M.getRoutes) ? M.getRoutes() : {};
+                        ['avatar', 'sprite', 'scene', 'bg'].some(function(u){ const c = rt[u] && rt[u].conn; if (c && c.indexOf('comfy:') === 0) { first = c.slice(6); return true; } return false; });
+                    } catch(e) {}
+                    if (!cfdPresets.some(function(x){ return x.name === first; })) first = (cfdPresets[0] || {}).name || '';
+                    if (first) _pick(first); else _fillEditSel();
+                },
             };
-            // 初始對齊：扁平面板可能是上次存檔時「別的桶」→ 強制載入 char 桶，確保 _cfdBucket='char' 跟面板一致
-            //   （包庫不動：cfdPresets 開頁時已載入全域一份＋併回四桶散落的）
-            if (_comfyBuckets.char) {
-                const _c0 = _normBucket(_comfyBuckets.char);
-                applyPresetToPanel(_c0);
-                _cfdActivePreset.char = _c0.activePreset || '';
-            }
-            _updateBucketHeader();   // 狀態列顯示當前桶＋目前套用的預設名
+            if (_editSel) _editSel.addEventListener('change', function(){ _pick(_editSel.value); });
+            window._cfdEdit.refresh();
         })();
 
         // 給核心存檔收包庫：cfdPresets 原是 launchApp 閉包變數，拆檔後核心經這個窗口拿（同一個陣列引用、形狀不變）

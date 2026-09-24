@@ -283,7 +283,7 @@
         const out = [];
         try {
             const cur = (_mgr() && _mgr().config && _mgr().config.customApi) || {};
-            out.push({ id: '', name: '圖片設置裡現在那組', url: cur.url, apiKey: cur.apiKey, model: cur.model });
+            out.push({ id: '', name: '自訂接口・目前那組', url: cur.url, apiKey: cur.apiKey, model: cur.model });
         } catch (e) {}
         try {
             const arr = JSON.parse(win.localStorage.getItem('os_img_capi_nodes') || '[]');
@@ -521,7 +521,10 @@
 
         if (onStep) onStep('正在把東西一件件擺進房間…');
         // 畫風：選了房間畫風就用它，沒選照圖片設置的底詞
-        const picked = route.styles.find(function (x) { return x.name === route.style; });
+        //   2026-09-24 起房間畫風跟其他地方共用「我的畫風」（圖片設置 → 畫風），route.style 存的是那包的 id；
+        //   舊版自己一份（route.styles，用名字認）第一次打開新版時已經併過去，對不到才退回舊的那份
+        const _gs = (_mgr() && typeof _mgr().getStyles === 'function') ? _mgr().getStyles().find(function (x) { return x.id === route.style; }) : null;
+        const picked = _gs ? { prompt: _gs.pos } : route.styles.find(function (x) { return x.name === route.style; });
         const style = String(picked ? picked.prompt : (((_mgr() && _mgr().config && _mgr().config.customApi) || {}).basePrompt || '')).trim();
         // 🧍 比例尺：同一張空房，站一隻她現在的小人，大小＝進房間後實際畫的大小。
         //   只給空房的話 GPT 只能照牆高猜家具多大，常常畫太大（床比小人長三倍）；看得到小人它才知道家具該多大。

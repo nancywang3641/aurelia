@@ -40,7 +40,16 @@
 
         // ── 儲存設定（從 os_settings 的 container 讀取） ─────────
         save(container) {
-            const g  = (id) => (container.querySelector(`#vncfg-${id}`)?.value || '').trim();
+            // 畫面上沒有這一格＝保留原本存的值。圖片設置改版後，頭像／背景的底詞搬進「畫風」包，格子拿掉了；
+            //   照舊讀畫面的話那幾格會被存成空的，沒改過畫風的列就沒有底詞了。
+            const prev = this.load();
+            const KEY_OF = { 'avatar-prompt': 'avatarBasePrompt', 'avatar-neg': 'avatarNegPrompt', 'avatar-prompt-tavern': 'avatarBasePromptTavern',
+                'avatar-neg-tavern': 'avatarNegPromptTavern', 'bg-prompt': 'bgBasePrompt', 'bg-neg': 'bgNegPrompt', 'item-prompt': 'itemBasePrompt', 'item-neg': 'itemNegPrompt' };
+            const g  = (id) => {
+                const el = container.querySelector(`#vncfg-${id}`);
+                if (!el && KEY_OF[id]) return String(prev[KEY_OF[id]] || '');
+                return ((el && el.value) || '').trim();
+            };
             const gi = (id, def) => parseInt(container.querySelector(`#vncfg-${id}`)?.value || def) || def;
 
             const data = {

@@ -28,6 +28,11 @@
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
+            ss_img_uses: { title: '每個地方用什麼', body: '一列是一個會生圖的地方。「用哪組」是前面幾頁存好的連線與預設包，「畫風」是下面「我的畫風」裡的一包。選了就存，不用按底部保存。\n\n照原本的＝還沒換過，照改版前那套走。' },
+            ss_img_styles: { title: '我的畫風', body: '一包是一段底詞加一段負詞，可以再放一張底圖。上面每個地方挑一包，好幾個地方可以用同一包。' },
+            ss_img_style_ref: { title: '底圖', body: '給生圖參考畫風用的一張圖。只有自訂接口收得到參考圖，其他接口會略過。' },
+            ss_img_test: { title: '試畫一張', body: '選一個地方，照那一列現在的設定畫一張。ComfyUI 的預設包要先存好才試得到。' },
+            ss_cfd_edit: { title: '正在改的預設包', body: '選一個包，下面的欄位就換成它的設定。改完按「存回這個包」；想留著原本那個，就按「另存新的包」。\n\n哪個地方用哪個包，在「畫風」頁選。' },
             ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。' },
             ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次讓它把家具和能踩的地板各塗一個顏色，之後小人會被家具擋住、繞過去走，地板照它畫的範圍走。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
@@ -869,11 +874,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     // 真的會走 NAI 時就「不 raw」，讓它套用「圖片設置」裡設好的 NAI 底詞/負詞（跟頭像同一套畫風）；
                     // Pollinations（或 NAI 沒 token 退回）維持 raw（純模板，行為不變）。
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
-                    const _useNAI = !!(_imCfg && _imCfg.service === 'novelai' && _imCfg.novelai && _imCfg.novelai.token);
-                    const _isComfy = !!(_imCfg && _imCfg.service === 'comfyui_direct');
+                    // 立繪走圖片設置「畫風」頁「立繪」那一列（以前看全域 service，那格早就不是立繪用的了）
+                    const _spSvc = (typeof win2.OS_IMAGE_MANAGER.serviceForUse === 'function') ? win2.OS_IMAGE_MANAGER.serviceForUse('sprite') : (_imCfg && _imCfg.service);
+                    const _useNAI = !!(_spSvc === 'novelai' && _imCfg && _imCfg.novelai && _imCfg.novelai.token);
+                    const _isComfy = (_spSvc === 'comfyui_direct');
                     // 🎨 raw 是「原樣送、不附底詞」。自訂接口那格底詞就是她填的畫風，立繪不附＝整張沒有風格
                     //    → 判斷收在 VN_Image._spriteRaw 一份，三條立繪路徑共用（拿不到就退回原本的寫法）。
-                    const _svc = (typeof win2.OS_IMAGE_MANAGER.serviceFor === 'function') ? win2.OS_IMAGE_MANAGER.serviceFor('char') : (_imCfg && _imCfg.service);
+                    const _svc = _spSvc;
                     const _spriteRawFor = function (sv) {
                         const VI = win2.VN_Image || win.VN_Image;
                         return (VI && typeof VI._spriteRaw === 'function') ? VI._spriteRaw(sv) : !_useNAI;
@@ -903,6 +910,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         const _sh = Math.round(_bh * _ratio / 8) * 8;
                         _opts = { force: true, width: _sw, height: _sh, raw: _spriteRawFor(_svc), extraNegative: _spriteNeg };
                     }
+                    _opts.use = 'sprite';
                     const url = await win2.OS_IMAGE_MANAGER.generate(fullPrompt, 'char', _opts);
                     if (!url) throw new Error('OS_IMAGE_MANAGER 回傳空 URL');
                     const res = await fetch(url);
@@ -1171,7 +1179,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const _win2 = window.parent || window;
                 // 立繪是 char 型 → 走活物桶
                 const _svc = (_win2.OS_IMAGE_MANAGER && typeof _win2.OS_IMAGE_MANAGER.serviceFor === 'function')
-                    ? _win2.OS_IMAGE_MANAGER.serviceFor('char')
+                    ? ((typeof _win2.OS_IMAGE_MANAGER.serviceForUse === 'function') ? _win2.OS_IMAGE_MANAGER.serviceForUse('sprite') : _win2.OS_IMAGE_MANAGER.serviceFor('char'))
                     : ((_win2.OS_IMAGE_MANAGER && _win2.OS_IMAGE_MANAGER.config && _win2.OS_IMAGE_MANAGER.config.service) || '');
                 const hiresRow = document.getElementById('sprite-hires-row');
                 const hiresEl = document.getElementById('sprite-hires');
@@ -1537,43 +1545,25 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
                         <div id="view-img-api" class="img-subtab-view">
 
-                        <!-- ── 子分頁鈕：頭像 / 插圖 / 背景（各自獨立來源）── -->
-                        <div class="img-srctab-row">
-                            <div class="img-srctab" id="img-srctab-char" data-imgsrctab="char" onclick="window._switchImgSrcTab && window._switchImgSrcTab('char')">頭像</div>
-                            <div class="img-srctab" id="img-srctab-scene" data-imgsrctab="scene" onclick="window._switchImgSrcTab && window._switchImgSrcTab('scene')">插圖</div>
-                            <div class="img-srctab" id="img-srctab-bg" data-imgsrctab="bg" onclick="window._switchImgSrcTab && window._switchImgSrcTab('bg')">背景</div>
-                            <div class="img-srctab" id="img-srctab-map" data-imgsrctab="map" onclick="window._switchImgSrcTab && window._switchImgSrcTab('map')">小地圖</div>
-                            <div class="img-srctab" id="img-srctab-misc" data-imgsrctab="misc" onclick="window._switchImgSrcTab && window._switchImgSrcTab('misc')">其他</div>
+                        <!-- ── 分頁照接口分（她 09-24 定的）：前五頁只管連線、存成一組一組；「畫風」頁放每個要生圖的地方用哪組、哪個畫風、多大。
+                             跟 API 頁「我的通道＋哪件事走哪個模型」同一套。由 _switchImgTab 切。── -->
+                        <div class="img-srctab-row img-conn-tabs">
+                            <div class="img-srctab" data-imgtab="style" onclick="window._switchImgTab && window._switchImgTab('style')">畫風</div>
+                            <div class="img-srctab" data-imgtab="novelai" onclick="window._switchImgTab && window._switchImgTab('novelai')">NAI</div>
+                            <div class="img-srctab" data-imgtab="comfyui_direct" onclick="window._switchImgTab && window._switchImgTab('comfyui_direct')">ComfyUI</div>
+                            <div class="img-srctab" data-imgtab="tavern_sd" onclick="window._switchImgTab && window._switchImgTab('tavern_sd')">酒館</div>
+                            <div class="img-srctab" data-imgtab="custom_api" onclick="window._switchImgTab && window._switchImgTab('custom_api')">自訂接口</div>
+                            <div class="img-srctab" data-imgtab="pollinations" onclick="window._switchImgTab && window._switchImgTab('pollinations')">Pollinations</div>
                         </div>
 
-                        <!-- 目前桶＋套用的預設（置於分頁下方，最上面常駐顯示） -->
-                        <div class="cfd-bucket-row" id="img-cfd-bucket-status"><div class="set-label"><b id="img-cfd-bucket-cur">角色</b><span class="cfd-preset-cur" id="img-cfd-preset-cur">　·　（未套用預設）</span></div></div>
-
-                        <!-- ── 🎭 頭像 分頁 body（char：角色頭像／立繪）── -->
-                        <div id="img-tab-char" class="img-srctab-body">
-                            <div class="set-group">
-                                <div class="set-label" title="角色頭像／立繪用這個來源。插圖在「插圖」分頁另選，可走不同渠道。"><i class="fa-solid fa-masks-theater"></i> 頭像 來源${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1503') : ''}</div>
-                                <select class="set-select" id="img-service-living">
-                                    <option value="pollinations" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>酒館原生</option>
-                                    <option value="custom_api" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
-                                </select>
+                        <!-- ── 🎨 畫風：每個地方一列（_renderImgUses 照 OS_IMAGE_MANAGER.USES 畫）── -->
+                        <div id="img-tab-style" class="img-srctab-body">
+                            <div class="set-group" id="img-use-block">
+                                <div class="set-label"><i class="fa-solid fa-table-list"></i> 每個地方用什麼${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_img_uses') : ''}</div>
+                                <div id="img-use-table" class="img-use-table"></div>
                             </div>
-                            <div class="set-group">
-                                <div class="set-label" title="設了＝所有接口都用這格（蓋過預設包）。留空＝交給接口：ComfyUI 用基本參數/預設包調的寬高、Pollinations 512、NovelAI 1024。"><i class="fa-solid fa-ruler-combined"></i> 角色頭像尺寸</div>
-                                <select class="set-select" id="img-avatar-size" style="font-size:12px;">
-                                    <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設（ComfyUI＝預設包尺寸）</option>
-                                    <option value="512x768"   ${imgConfig.avatarSize==='512x768'   ? 'selected':''}>512×768（直式小圖，舊預設）</option>
-                                    <option value="512x512"   ${imgConfig.avatarSize==='512x512'   ? 'selected':''}>512×512（方形）</option>
-                                    <option value="768x768"   ${imgConfig.avatarSize==='768x768'   ? 'selected':''}>768×768</option>
-                                    <option value="1024x1024" ${imgConfig.avatarSize==='1024x1024' ? 'selected':''}>1024×1024（清晰）</option>
-                                    <option value="832x1216"  ${imgConfig.avatarSize==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
-                                </select>
-                            </div>
-                            <div class="set-group">
-                                <div class="set-label" title="關＝照舊（先生頭像，可再手動轉立繪）。開＝角色登場直接出全身立繪、不生頭像；適合繪圖模型生全身穩定的情況。">立繪模式${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1519') : ''}</div>
+                            <div class="set-group" id="img-sprite-opts">
+                                <div class="set-label">立繪模式${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1519') : ''}</div>
                                 <label class="set-check"><input type="checkbox" id="vncfg-sprite-direct" ${vnD.spriteDirect ? 'checked' : ''}> 跳過頭像，角色直接生全身立繪</label>
                                 <!-- 🎯 一次幾個：把幾個角色擠進同一張寬圖生出來再切開。
                                      🚨🚨 這一格永遠能選，判斷只拿來寫底下那行字、不准拿來鎖。
@@ -1593,90 +1583,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         : '會照指令把畫面分成等寬直欄的是 GPT 那種（頭像來源選「自訂接口」、型號名帶 GPT）；畫風鬆散的接口可能把幾個角色糊在一起。'}</div>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- ── 🎬 插圖 分頁 body（scene：場景插圖／CG 來源，可與頭像不同渠道）── -->
-                        <div id="img-tab-scene" class="img-srctab-body" style="display:none;">
-                            <div class="set-group">
-                                <div class="set-label" title="場景插圖／CG 用這個來源，可跟頭像不同渠道（例如頭像走 Anima、插圖走 Pollinations）。"><i class="fa-solid fa-clapperboard"></i> 插圖 來源${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1551') : ''}</div>
-                                <select class="set-select" id="img-service-scene">
-                                    <option value="pollinations" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>酒館原生</option>
-                                    <option value="custom_api" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- ── 🗺️ 小地圖 分頁 body（map：場景俯視小地圖底板，畫風跟背景分開）── -->
-                        <div id="img-tab-map" class="img-srctab-body" style="display:none;">
-                            <div class="set-group">
-                                <div class="set-label" title="場景俯視小地圖底板用這個來源，畫風跟背景分開（例：俯視平面圖模型）。"><i class="fa-solid fa-map"></i> 小地圖 來源${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1566') : ''}</div>
-                                <select class="set-select" id="img-service-map">
-                                    <option value="pollinations" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>酒館原生</option>
-                                    <option value="custom_api" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- ── 🧰 其他 分頁 body：不屬於頭像/插圖/背景/小地圖任何一桶的設定都放這 ── -->
-                        <div id="img-tab-misc" class="img-srctab-body" style="display:none;">
-                            <!-- 🏠 房間：先選用哪個接口畫，下面只露那條路用得到的格子（data-room-for 對 img-room-route 的值，_roomRouteShow 切）。
-                                 以前兩條路的選項全部一起列、還有兩個下拉同名 img-room-style：存自訂接口的畫風時讀到的是 ComfyUI 那格。
-                                 選了就存（localStorage），不用按底部保存。 -->
-                            <div class="set-group" id="img-room-style-block">
-                                ${(() => {
-                                    const _w = window.parent || window;
-                                    const _G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
-                                    const _r = (_G && _G.getRoute) ? _G.getRoute() : { mode: 'comfy', roomNode: '', maskNode: '', styles: [], style: '' };
-                                    const _nodes = (_G && _G.listCapiNodes) ? _G.listCapiNodes() : [];
-                                    const _e = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                                    const _help = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
-                                    const _opts = (cur) => _nodes.map(n => '<option value="' + _e(n.id) + '"' + (n.id === cur ? ' selected' : '') + '>' + _e(n.name) + '</option>').join('');
-                                    const _hide = (modes) => (modes.split(' ').indexOf(_r.mode) >= 0 ? '' : ' hidden');
-                                    // ComfyUI 那條的畫風＝ComfyUI 預設包（只認整房 inpaint 那顆）
-                                    const _packs = (_G && _G.listStylePresets) ? _G.listStylePresets() : [];
-                                    const _packCur = (_G && _G.getStyleName) ? _G.getStyleName() : '';
-                                    const _packOpts = _packs.length
-                                        ? _packs.map(p => { const nm = String((p && p.name) || '未命名'); return '<option value="' + _e(nm) + '"' + (nm === _packCur ? ' selected' : '') + '>' + _e(nm) + '</option>'; }).join('')
-                                        : '<option value="">還沒有可用的預設包</option>';
-                                    return '<div class="set-label"><i class="fa-solid fa-house"></i> 房間用哪個接口畫' + _help('ss_room_route') + '</div>'
-                                        + '<select class="set-select" id="img-room-route" onchange="window._saveRoomRoute && window._saveRoomRoute(); window._roomRouteShow && window._roomRouteShow()">'
-                                        + '<option value="comfy"' + (_r.mode === 'comfy' ? ' selected' : '') + '>ComfyUI</option>'
-                                        + '<option value="capi1"' + (_r.mode === 'capi1' ? ' selected' : '') + '>自訂接口・一次（只畫房間，家具不擋路）</option>'
-                                        + '<option value="capi"' + (_r.mode === 'capi' ? ' selected' : '') + '>自訂接口・兩次（自動量家具，家具會擋路）</option>'
-                                        + '</select>'
-                                        + '<div data-room-for="comfy"' + _hide('comfy') + '>'
-                                        +   '<div class="set-label">畫風預設包' + _help('ss_1589') + '</div>'
-                                        +   '<select class="set-select" id="img-room-comfy-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">' + _packOpts + '</select>'
-                                        + '</div>'
-                                        + '<div data-room-for="capi1 capi"' + _hide('capi1 capi') + '>'
-                                        +   '<div class="set-label">畫房間用</div>'
-                                        +   '<select class="set-select" id="img-room-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.roomNode) + '</select>'
-                                        + '</div>'
-                                        + '<div data-room-for="capi"' + _hide('capi') + '>'
-                                        +   '<div class="set-label">量家具用</div>'
-                                        +   '<select class="set-select" id="img-room-mask-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.maskNode) + '</select>'
-                                        + '</div>'
-                                        + '<div data-room-for="capi1 capi"' + _hide('capi1 capi') + '>'
-                                        +   '<div class="set-label">房間畫風' + _help('ss_room_style') + '</div>'
-                                        +   '<select class="set-select" id="img-room-capi-style" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + window._roomStyleOpts(_r) + '</select>'
-                                        +   '<div class="set-room-style-btns">'
-                                        +     '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.add()"><i class="fa-solid fa-plus"></i> 新增</button>'
-                                        +     '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.edit()"><i class="fa-solid fa-pen"></i> 修改</button>'
-                                        +     '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.del()"><i class="fa-solid fa-trash"></i> 刪除</button>'
-                                        +   '</div>'
-                                        + '</div>';
-                                })()}
-                            </div>
-
+                            <div class="set-group" id="img-room-style-block"></div>
                             <!-- 🚪 世界門旅人畫風：展開世界後，大廳那四個旅人的小人自動用這個畫風生出來（不選＝維持剪影） -->
                             <div class="set-group" id="img-wg-sprite-block">
-                                <div class="set-label" title="展開世界後，大廳的旅人小人會自動用這個畫風生成，不用一個一個進裝扮室。"><i class="fa-solid fa-door-open"></i> 世界門旅人畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1616') : ''}</div>
+                                <div class="set-label" title="展開世界後，大廳的旅人小人會自動用這個畫風生成，不用一個一個進裝扮室。"><i class="fa-solid fa-door-open"></i> 世界門旅人${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1616') : ''}</div>
                                 <select class="set-select" id="img-wg-sprite" onchange="window._saveWgSpritePack && window._saveWgSpritePack(this.value)">
                                     ${(() => {
                                         const _w = window.parent || window;
@@ -1699,31 +1609,77 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     })()}
                                 </select>
                             </div>
-                        </div>
+                            <div class="set-group" id="img-style-list-block">
+                                <div class="set-label"><i class="fa-solid fa-palette"></i> 我的畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_img_styles') : ''}</div>
+                                <div id="img-style-list" class="img-style-list"></div>
+                                <button class="set-btn" type="button" id="img-style-add" onclick="window._imgStyle && window._imgStyle.add()"><i class="fa-solid fa-plus"></i> 新增畫風</button>
+                            </div>
+                            <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between;" title="開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會順便依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。其它觸發：主模型直接吐 [Scene|]（世界書開規則，最省）。">
+                                <span><i class="fa-solid fa-image"></i> 自動插圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2125') : ''}</span>
+                                <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
+                            </div>
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;" title="開啟：副模型寫插圖 prompt 時只用 ##角色名##（或 ##代號##）代表角色，外觀由系統用該角色頭像生成詞自動填入（沒頭像退 AVS 簡易形象、再沒有留原名）。副模型 prompt 不用塞整塊外觀、不會越積越肥，外觀又跟頭像一致。關閉＝改回把近期角色外觀整塊塞給副模型。">
+                                <span><i class="fa-solid fa-tag"></i> 角色名佔位${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2130') : ''}</span>
+                                <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
+                            </div>
+                            <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()"><i class="fa-solid fa-pen"></i> 編輯角色外觀登記表</button>
+                            <div class="set-desc" style="margin-top:4px;">列出每個角色的外觀（頭像生成詞），可直接改／刪／新增——修你之前的資料。</div>
+                            <!-- 插圖指令：每個插圖來源一份，點進去整頁改（_openScenePromptPage） -->
+                            <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="extract">
+                                <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">插圖指令</span><span class="vncfg-lp-open-n">每個插圖來源一份</span><i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                            <div class="set-desc">附加在記憶副模型指令後面，叫它順便寫插圖；切到哪個插圖來源就用那份。</div>
 
-                        <!-- ── 🌄 背景 分頁 body（死物：背景・物品）── -->
-                        <div id="img-tab-bg" class="img-srctab-body" style="display:none;">
-                            <div class="set-group">
-                                <div class="set-label">
-                                    <span><i class="fa-solid fa-link"></i> 同步角色來源${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1627') : ''}</span>
-                                    <label class="toggle-switch"><input type="checkbox" id="img-sync-bg-to-char"><span class="slider"></span></label>
-                                </div>
+                            <!-- 🎯 獨立插圖副模型：另開一通 chatSecondary、只吃規範、不背 AVS/記憶 -->
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px; border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:12px;" title="開啟：插圖改走「獨立一通副模型」(用 API 設定區的副模型接口)、只吃下方規範、不背 AVS/記憶，插圖更準。關閉＝走上面搭便車路(跟記憶/AVS 同一通)。">
+                                <span><i class="fa-solid fa-bullseye"></i> 獨立插圖副模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2144') : ''}</span>
+                                <label class="toggle-switch"><input type="checkbox" id="img-scene-standalone-enabled" ${imgConfig.sceneGen?.standaloneEnabled ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-group" id="img-bg-source-group">
-                                <div class="set-label"><i class="fa-solid fa-mountain-sun"></i> 背景・<i class="fa-solid fa-box"></i> 物品 來源</div>
-                                <select class="set-select" id="img-service-inanimate">
-                                    <option value="pollinations" ${(imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' ? 'selected' : ''}>Pollinations</option>
-                                    <option value="novelai" ${(imgConfig.serviceInanimate || imgConfig.service) === 'novelai' ? 'selected' : ''}>NovelAI</option>
-                                    <option value="tavern_sd" ${(imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' ? 'selected' : ''}>酒館原生</option>
-                                    <option value="custom_api" ${(imgConfig.serviceInanimate || imgConfig.service) === 'custom_api' ? 'selected' : ''}>自訂接口</option>
-                                    <option value="comfyui_direct" ${(imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' ? 'selected' : ''}>ComfyUI 直連</option>
+                            <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="standalone">
+                                <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">獨立插圖規範</span><span class="vncfg-lp-open-n"></span><i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                            <div class="set-group">
+                            <div class="set-label"><i class="fa-solid fa-flask"></i> 試畫一張${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_img_test') : ''}</div>
+                            <select class="set-select" id="img-test-use"></select>
+                            <input class="set-input" id="img-test-prompt" type="text" placeholder="輸入描述…" value="a handsome man holding a rose">
+                            <div class="btn-test" id="img-test-btn" style="margin-top:10px;"><i class="fa-solid fa-palette"></i> 生成預覽</div>
+                            <div id="img-test-preview" style="margin-top:15px; display:none; text-align:center;">
+                                <img id="img-test-image" style="max-width:100%; border-radius:4px; border:1px solid rgba(var(--os-ink-rgb), 0.15);" />
+                                <div id="img-test-url" style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); margin-top:8px; word-break:break-all;"></div>
+                            </div>
+                        </div>
+                            <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
+                            <div class="set-label" title="主來源卡住或逾時時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。"><i class="fa-solid fa-life-ring"></i> 退路圖庫</div>
+                            <div class="set-desc" style="margin-bottom:8px;">免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--os-ink);">pixabay.com/api/docs</a></div>
+                            <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${imgConfig.pixabayKey || ''}">
+                            <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+                                <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
+                                <span style="font-size:12px; color:var(--os-ink);"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去 Pollinations）</span>
+                            </div>
+                        </div>
+                            <!-- 三個尺寸下拉照舊在這裡組好（存檔讀它們），_renderImgUses 再把它們搬進對應那一列 -->
+                            <div id="img-size-parking" hidden>
+                                <select class="set-select" id="img-avatar-size" style="font-size:12px;">
+                                    <option value=""          ${!(imgConfig.avatarSize) ? 'selected':''}>跟各接口預設（ComfyUI＝預設包尺寸）</option>
+                                    <option value="512x768"   ${imgConfig.avatarSize==='512x768'   ? 'selected':''}>512×768（直式小圖，舊預設）</option>
+                                    <option value="512x512"   ${imgConfig.avatarSize==='512x512'   ? 'selected':''}>512×512（方形）</option>
+                                    <option value="768x768"   ${imgConfig.avatarSize==='768x768'   ? 'selected':''}>768×768</option>
+                                    <option value="1024x1024" ${imgConfig.avatarSize==='1024x1024' ? 'selected':''}>1024×1024（清晰）</option>
+                                    <option value="832x1216"  ${imgConfig.avatarSize==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
                                 </select>
-                            </div>
-                            <div class="set-group" id="img-bg-synced-note" style="display:none;">
-                                <div class="set-desc" id="img-bg-synced-note-text">（與角色相同）</div>
-                            </div>
-                            <div class="set-group">
-                                <div class="set-label" title="所有接口共用。"><i class="fa-solid fa-ruler-combined"></i> 背景尺寸${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1652') : ''}</div>
+                                <select class="set-select" id="img-scene-size" style="font-size:12px;" onchange="document.getElementById('img-scene-size-custom').style.display=(this.value==='custom')?'':'none';">
+                                        <option value="512x512"   ${(imgConfig.sceneGen?.size||'1024x1024')==='512x512'   ? 'selected':''}>512×512（最快最省，較糊）</option>
+                                        <option value="768x768"   ${(imgConfig.sceneGen?.size||'1024x1024')==='768x768'   ? 'selected':''}>768×768（平衡）</option>
+                                        <option value="1024x1024" ${(imgConfig.sceneGen?.size||'1024x1024')==='1024x1024' ? 'selected':''}>1024×1024（清晰，推薦）</option>
+                                        <option value="1024x768"  ${(imgConfig.sceneGen?.size||'1024x1024')==='1024x768'  ? 'selected':''}>1024×768（橫幅）</option>
+                                        <option value="768x1024"  ${(imgConfig.sceneGen?.size||'1024x1024')==='768x1024'  ? 'selected':''}>768×1024（直幅）</option>
+                                        <option value="1216x832"  ${(imgConfig.sceneGen?.size||'1024x1024')==='1216x832'  ? 'selected':''}>1216×832（NAI 橫幅）</option>
+                                        <option value="832x1216"  ${(imgConfig.sceneGen?.size||'1024x1024')==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
+                                        <option value="custom"    ${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? 'selected':''}>自訂…</option>
+                                    </select>
+                                <input class="set-input" id="img-scene-size-custom" type="text" placeholder="寬x高，例如 1020x1020" value="${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? (imgConfig.sceneGen?.size||'') : ''}" style="font-size:12px; margin-top:6px; display:${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? '' : 'none'};">
                                 <select class="set-select" id="img-bg-size" style="font-size:12px;">
                                     <option value="1024x768"  ${(imgConfig.bgSize||'1024x768')==='1024x768'  ? 'selected':''}>1024×768（橫幅 4:3，預設）</option>
                                     <option value="1216x832"  ${(imgConfig.bgSize||'1024x768')==='1216x832'  ? 'selected':''}>1216×832（寬幅 3:2）</option>
@@ -1732,14 +1688,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <option value="832x1216"  ${(imgConfig.bgSize||'1024x768')==='832x1216'  ? 'selected':''}>832×1216（豎版 2:3）</option>
                                     <option value="768x1344"  ${(imgConfig.bgSize||'1024x768')==='768x1344'  ? 'selected':''}>768×1344（直立，手機全螢幕）</option>
                                 </select>
-                                <div class="set-label" style="margin-top:12px;">背景生圖底詞</div>
-                                <textarea class="set-textarea" id="vncfg-bg-prompt" style="min-height:55px;">${vnD.bgBasePrompt || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;"><i class="fa-solid fa-ban"></i> 背景 Negative</div>
-                                <textarea class="set-textarea" id="vncfg-bg-neg" style="min-height:45px;">${vnD.bgNegPrompt || ''}</textarea>
                             </div>
                         </div>
 
-                        <!-- ── 共用接口設定區（一次只顯示一個，由 refreshImgPanel 控制）── -->
+                        <!-- ── 各接口的連線設定：一頁一個，由 _switchImgTab 切 ── -->
                         <div id="img-iface-groups">
 
                             <div id="img-group-comfyui" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'comfyui_direct') ? '' : 'hidden'}">
@@ -1755,6 +1707,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-group">
                                     <div class="set-label" title="把整組設定存起來，一鍵切換。每個包存一組設定，可存預覽圖、套用、刪除。改完記得到底部按儲存。"><i class="fa-solid fa-box"></i> 預設包</div>
                                     <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;"><i class="fa-solid fa-box"></i> 打開預設包 · ${(imgConfig.comfyuiDirect?.presets || []).length} 個</button>
+                                </div>
+                                <div class="set-group" id="img-cfd-edit-group">
+                                    <div class="set-label"><i class="fa-solid fa-pen-to-square"></i> 正在改的預設包${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cfd_edit') : ''}</div>
+                                    <select class="set-select" id="img-cfd-edit-sel"></select>
+                                    <div class="set-room-style-btns">
+                                        <button class="set-btn" type="button" onclick="window._cfdEdit && window._cfdEdit.saveBack()"><i class="fa-solid fa-floppy-disk"></i> 存回這個包</button>
+                                        <button class="set-btn" type="button" onclick="window._cfdEdit && window._cfdEdit.saveAs()"><i class="fa-solid fa-plus"></i> 另存新的包</button>
+                                    </div>
+                                    <div class="set-desc" id="img-cfd-edit-status"></div>
                                 </div>
                                 <!-- 預設包 modal（可視化卡片牆） -->
                                 <div id="img-cfd-preset-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
@@ -1827,9 +1788,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div><div class="set-label" style="font-size:11px;">排程器</div><select class="set-select" id="img-cfd-scheduler">${['normal','karras','exponential','sgm_uniform','simple','ddim_uniform','beta','linear_quadratic','kl_optimal'].map(s => `<option value="${s}"${(imgConfig.comfyuiDirect?.scheduler||'normal')===s?' selected':''}>${s}</option>`).join('')}</select></div>
                                         <div><div class="set-label" style="font-size:11px;">步數</div><input class="set-input" id="img-cfd-steps" type="number" min="1" max="60" value="${imgConfig.comfyuiDirect?.steps ?? 28}"></div>
                                         <div><div class="set-label" style="font-size:11px;">CFG</div><input class="set-input" id="img-cfd-cfg" type="number" step="0.1" min="1" max="20" value="${imgConfig.comfyuiDirect?.cfg ?? 6.5}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${imgConfig.comfyuiDirect?.width ?? 1024}"><input class="set-input" id="img-cfd-width-eff" type="text" disabled hidden></div>
-                                        <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${imgConfig.comfyuiDirect?.height ?? 1024}"><input class="set-input" id="img-cfd-height-eff" type="text" disabled hidden></div>
-                                        <div class="set-desc cfd-size-note" id="img-cfd-size-note" hidden></div>
+                                        <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${imgConfig.comfyuiDirect?.width ?? 1024}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${imgConfig.comfyuiDirect?.height ?? 1024}"></div>
                                         <div><div class="set-label" style="font-size:11px;" title="-1 為隨機。">種子</div><input class="set-input" id="img-cfd-seed" type="number" value="${imgConfig.comfyuiDirect?.seed ?? -1}"></div>
                                         <div><div class="set-label" style="font-size:11px;" title="0 為關閉。">CLIP skip</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${imgConfig.comfyuiDirect?.clipSkip ?? 0}"></div>
                                         <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;" title="空＝模型內建。">VAE</div><select class="set-select" id="img-cfd-vae"><option value=""${!imgConfig.comfyuiDirect?.vae?' selected':''}>（內建 VAE）</option>${imgConfig.comfyuiDirect?.vae?`<option value="${imgConfig.comfyuiDirect.vae}" selected>${imgConfig.comfyuiDirect.vae}</option>`:''}</select></div>
@@ -2147,97 +2107,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                         </div>
                         </div>
-
-                        <!-- ── 🧑‍🎨 頭像追加詞（按接口，屬「頭像」分頁；放在底詞區下方，不再頂在連線設定上面）── -->
-                        <div id="img-avatar-add-zone">
-                            <div class="set-group" id="img-avatar-add-main">
-                                <div class="set-label" title="插在通用底詞與角色描述之間。"><i class="fa-solid fa-palette"></i> 頭像追加詞</div>
-                                <textarea class="set-textarea" id="vncfg-avatar-prompt" style="min-height:55px;">${vnD.avatarBasePrompt || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;"><i class="fa-solid fa-ban"></i> 頭像 Negative</div>
-                                <textarea class="set-textarea" id="vncfg-avatar-neg" style="min-height:45px;">${vnD.avatarNegPrompt || ''}</textarea>
-                            </div>
-                            <div class="set-group" id="img-avatar-add-tav">
-                                <div class="set-label" title="酒館原生 / ComfyUI 專用。"><i class="fa-solid fa-palette"></i> 頭像追加詞</div>
-                                <textarea class="set-textarea" id="vncfg-avatar-prompt-tavern" style="min-height:55px;">${vnD.avatarBasePromptTavern || ''}</textarea>
-                                <div class="set-label" style="margin-top:8px;" title="酒館原生 / ComfyUI 專用。"><i class="fa-solid fa-ban"></i> 頭像 Negative</div>
-                                <textarea class="set-textarea" id="vncfg-avatar-neg-tavern" style="min-height:45px;">${vnD.avatarNegPromptTavern || ''}</textarea>
-                            </div>
-                        </div>
-
-                        <!-- ── 🎬 場景插圖（共用設定）｜屬「插圖」分頁 ── -->
-                        <div class="set-group" id="img-scene-block" style="border-top:1px solid rgba(var(--os-ink-rgb), 0.12); padding-top:15px; margin-top:5px;">
-                            <div class="set-label" style="font-size:13px;" title="尺寸／風格／底詞／負詞 套用於所有場景插圖（不論主模型 [Scene|] 或下方副模型搭便車）。"><i class="fa-solid fa-clapperboard"></i> 場景插圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2095') : ''}</div>
-
-                            <div id="img-scene-body" style="margin-top:14px;">
-
-                                <!-- ── 場景插圖尺寸（獨立於主圖片尺寸）── -->
-                                <div style="margin-bottom:12px;">
-                                    <div class="set-label" style="font-size:11px;"><i class="fa-solid fa-ruler-combined"></i> 場景插圖尺寸${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2116') : ''}</div>
-                                    <select class="set-select" id="img-scene-size" style="font-size:12px;" onchange="document.getElementById('img-scene-size-custom').style.display=(this.value==='custom')?'':'none';">
-                                        <option value="512x512"   ${(imgConfig.sceneGen?.size||'1024x1024')==='512x512'   ? 'selected':''}>512×512（最快最省，較糊）</option>
-                                        <option value="768x768"   ${(imgConfig.sceneGen?.size||'1024x1024')==='768x768'   ? 'selected':''}>768×768（平衡）</option>
-                                        <option value="1024x1024" ${(imgConfig.sceneGen?.size||'1024x1024')==='1024x1024' ? 'selected':''}>1024×1024（清晰，推薦）</option>
-                                        <option value="1024x768"  ${(imgConfig.sceneGen?.size||'1024x1024')==='1024x768'  ? 'selected':''}>1024×768（橫幅）</option>
-                                        <option value="768x1024"  ${(imgConfig.sceneGen?.size||'1024x1024')==='768x1024'  ? 'selected':''}>768×1024（直幅）</option>
-                                        <option value="1216x832"  ${(imgConfig.sceneGen?.size||'1024x1024')==='1216x832'  ? 'selected':''}>1216×832（NAI 橫幅）</option>
-                                        <option value="832x1216"  ${(imgConfig.sceneGen?.size||'1024x1024')==='832x1216'  ? 'selected':''}>832×1216（NAI 直幅）</option>
-                                        <option value="custom"    ${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? 'selected':''}>自訂…</option>
-                                    </select>
-                                    <input class="set-input" id="img-scene-size-custom" type="text" placeholder="寬x高，例如 1020x1020" value="${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? (imgConfig.sceneGen?.size||'') : ''}" style="font-size:12px; margin-top:6px; display:${!['512x512','768x768','1024x1024','1024x768','768x1024','1216x832','832x1216'].includes(imgConfig.sceneGen?.size||'1024x1024') ? '' : 'none'};">
-                                    <div style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); margin-top:3px;">← 越大越清晰但越耗點數。自訂填「寬x高」(數字)；多數模型建議用 64 的倍數(如 1024)。</div>
-                                </div>
-
-                            </div>
-                        </div>
-
-                        <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
-                            <div style="display:flex; align-items:center; justify-content:space-between;" title="開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會順便依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。其它觸發：主模型直接吐 [Scene|]（世界書開規則，最省）。">
-                                <span><i class="fa-solid fa-image"></i> 自動插圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2125') : ''}</span>
-                                <label class="toggle-switch"><input type="checkbox" id="img-scene-extract-enabled" ${imgConfig.sceneGen?.extractEnabled ? 'checked' : ''}><span class="slider"></span></label>
-                            </div>
-                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;" title="開啟：副模型寫插圖 prompt 時只用 ##角色名##（或 ##代號##）代表角色，外觀由系統用該角色頭像生成詞自動填入（沒頭像退 AVS 簡易形象、再沒有留原名）。副模型 prompt 不用塞整塊外觀、不會越積越肥，外觀又跟頭像一致。關閉＝改回把近期角色外觀整塊塞給副模型。">
-                                <span><i class="fa-solid fa-tag"></i> 角色名佔位${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2130') : ''}</span>
-                                <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
-                            </div>
-                            <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()"><i class="fa-solid fa-pen"></i> 編輯角色外觀登記表</button>
-                            <div class="set-desc" style="margin-top:4px;">列出每個角色的外觀（頭像生成詞），可直接改／刪／新增——修你之前的資料。</div>
-                            <!-- 插圖指令：每個插圖來源一份，點進去整頁改（_openScenePromptPage） -->
-                            <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="extract">
-                                <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">插圖指令</span><span class="vncfg-lp-open-n">每個插圖來源一份</span><i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                            <div class="set-desc">附加在記憶副模型指令後面，叫它順便寫插圖；切到哪個插圖來源就用那份。</div>
-
-                            <!-- 🎯 獨立插圖副模型：另開一通 chatSecondary、只吃規範、不背 AVS/記憶 -->
-                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px; border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:12px;" title="開啟：插圖改走「獨立一通副模型」(用 API 設定區的副模型接口)、只吃下方規範、不背 AVS/記憶，插圖更準。關閉＝走上面搭便車路(跟記憶/AVS 同一通)。">
-                                <span><i class="fa-solid fa-bullseye"></i> 獨立插圖副模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2144') : ''}</span>
-                                <label class="toggle-switch"><input type="checkbox" id="img-scene-standalone-enabled" ${imgConfig.sceneGen?.standaloneEnabled ? 'checked' : ''}><span class="slider"></span></label>
-                            </div>
-                            <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="standalone">
-                                <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">獨立插圖規範</span><span class="vncfg-lp-open-n"></span><i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label">測試生成</div>
-                            <input class="set-input" id="img-test-prompt" type="text" placeholder="輸入描述..." value="a handsome man holding a rose">
-                            <div class="btn-test" id="img-test-btn" style="margin-top:10px;"><i class="fa-solid fa-palette"></i> 生成預覽</div>
-                            <div id="img-test-preview" style="margin-top:15px; display:none; text-align:center;">
-                                <img id="img-test-image" style="max-width:100%; border-radius:4px; border:1px solid rgba(var(--os-ink-rgb), 0.15);" />
-                                <div id="img-test-url" style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); margin-top:8px; word-break:break-all;"></div>
-                            </div>
-                        </div>
-
-                        <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
-                            <div class="set-label" title="主來源卡住或逾時時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。"><i class="fa-solid fa-life-ring"></i> 退路圖庫</div>
-                            <div class="set-desc" style="margin-bottom:8px;">免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--os-ink);">pixabay.com/api/docs</a></div>
-                            <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${imgConfig.pixabayKey || ''}">
-                            <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
-                                <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
-                                <span style="font-size:12px; color:var(--os-ink);"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去 Pollinations）</span>
-                            </div>
-                        </div>
-
-
 
                         </div><!-- /view-img-api -->
                         <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
@@ -2765,10 +2634,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const secValPres = container.querySelector('#sec-val-pres');
 
         // 綁定元素 (圖片)
-        const elImgServiceInanimate = container.querySelector('#img-service-inanimate'); // 死物桶：背景/物品
-        const elImgServiceLiving    = container.querySelector('#img-service-living');    // 頭像桶：char（角色頭像/立繪）
-        const elImgServiceScene     = container.querySelector('#img-service-scene');     // 插圖桶：scene（場景插圖/CG）
-        const elImgServiceMap       = container.querySelector('#img-service-map');       // 小地圖桶：map（場景俯視底板）
         const elPolGroup = container.querySelector('#img-group-pollinations');
         const elPolApiKey = container.querySelector('#img-pol-apikey');
         const elPolModel = container.querySelector('#img-pol-model');
@@ -3087,7 +2952,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
         if (elNaiModel) elNaiModel.onchange = () => updateSmeaVisibility(elNaiModel.value);
 
-        // ── 圖片設置：背景／角色 兩個子分頁，一次只顯示一邊（取代舊「兩桶聯集」） ──
+        // 接口的顯示名（畫風頁「照原本的（…）」那一項用）
         const SVC_DISP = {
             pollinations: 'Pollinations',
             novelai: 'NovelAI',
@@ -3095,18 +2960,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             comfyui_direct: 'ComfyUI 直連',
             custom_api: '自訂接口'
         };
-        const elImgSyncBg     = container.querySelector('#img-sync-bg-to-char');
-        const elImgBgSrcGroup = container.querySelector('#img-bg-source-group');
-        const elImgBgNote     = container.querySelector('#img-bg-synced-note');
-        const elImgBgNoteText = container.querySelector('#img-bg-synced-note-text');
-        const elImgTabChar    = container.querySelector('#img-tab-char');
-        const elImgTabScene   = container.querySelector('#img-tab-scene');
-        const elImgTabBg      = container.querySelector('#img-tab-bg');
-        const elImgTabMap     = container.querySelector('#img-tab-map');
-        const elImgTabMisc    = container.querySelector('#img-tab-misc');   // 🧰 其他：不屬於任何一桶的設定
-        const elImgSceneBlock = container.querySelector('#img-scene-block');
-        const elImgSceneExtract = container.querySelector('#img-scene-extract-block'); // 副模型版（插圖→角色）
-        const elImgPixabay      = container.querySelector('#img-pixabay-block');        // 退路圖庫（背景）
         const elImgPolPrompts = container.querySelector('#img-pol-prompts-group');
 
         // ── 插圖指令／獨立插圖規範：點進去整頁編輯（跟素材頁 BGM 清單同一種頁 .vncfg-lp），自己有保存鈕、當場寫進設定 ──
@@ -3138,7 +2991,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     : _SCENE_PROMPT_TABS;
                 const drafts = {}, saved = {};
                 tabs.forEach(t => { saved[t.key] = drafts[t.key] = String(sg[t.key] == null ? (defs[t.key] || '') : sg[t.key]); });
-                const svcNow = elImgServiceScene ? elImgServiceScene.value : (imgConfig.serviceScene || '');
+                const _imM = (window.parent || window).OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+                const svcNow = (_imM && _imM.serviceForUse) ? _imM.serviceForUse('scene') : (imgConfig.serviceScene || '');
                 let cur = (tabs.find(t => t.svc && t.svc === svcNow) || tabs[0]).key;
 
                 const page = pdoc.createElement('div');
@@ -3440,217 +3294,302 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!IM._lastCustomApiError) IM._lastCustomApiError = prev;
             }
         });
-        const srcTabBtnChar   = container.querySelector('#img-srctab-char');
-        const srcTabBtnScene  = container.querySelector('#img-srctab-scene');
-        const srcTabBtnBg     = container.querySelector('#img-srctab-bg');
-        const srcTabBtnMap    = container.querySelector('#img-srctab-map');
-        const srcTabBtnMisc   = container.querySelector('#img-srctab-misc');
-        const elImgBucketRow  = container.querySelector('#img-cfd-bucket-status');   // 「目前桶／套用的預設」狀態列（其他分頁沒有桶，要藏）
-
-        // 目前子分頁（預設「角色」）
-        let imgSrcTab = 'char';
-
-        // 同步開關初始狀態：有存就用存的，否則用「兩桶是否相等」推斷
-        if (elImgSyncBg) {
-            elImgSyncBg.checked = (typeof imgConfig.imgSourceSynced === 'boolean')
-                ? imgConfig.imgSourceSynced
-                : ((imgConfig.serviceInanimate || imgConfig.service) === (imgConfig.serviceLiving || imgConfig.service));
-        }
-
-        // 顯示「需要的接口設定區」：傳單一 svc 或 svc 陣列（頭像/插圖走不同渠道時要同時出現），其餘藏起
-        function showOnlyIfaceGroup(svc) {
-            const set = new Set(Array.isArray(svc) ? svc : [svc]);
-            if (elNaiGroup) elNaiGroup.classList.toggle('hidden', !set.has('novelai'));
-            if (elPolGroup) elPolGroup.classList.toggle('hidden', !set.has('pollinations'));
-            if (elTavGroup) elTavGroup.classList.toggle('hidden', !set.has('tavern_sd'));
-            if (elCfdGroup) elCfdGroup.classList.toggle('hidden', !set.has('comfyui_direct'));
-            if (elCapiGroup) elCapiGroup.classList.toggle('hidden', !set.has('custom_api'));
-        }
-
-        // 📐 這一頁的圖實際用哪一格的尺寸（跟 vn_config.getScene/getBg/getAvatar、小地圖寫死的那組一致）：
-        //   插圖→「場景插圖尺寸」、背景→「背景尺寸」、小地圖→固定 1024×512、頭像→「角色頭像尺寸」有選就用它，
-        //   選「跟各接口預設」才輪到 ComfyUI 基本參數的寬高。回 null＝用基本參數那兩格。
-        const _effectiveSize = (tab) => {
-            const q = (sel) => (container.querySelector(sel) || {}).value || '';
-            const parse = (raw) => { const m = String(raw || '').toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x').match(/^(\d{2,5})x(\d{2,5})$/); return m ? { w: +m[1], h: +m[2] } : null; };
-            if (tab === 'map') return { w: 1024, h: 512, from: '小地圖固定尺寸' };
-            if (tab === 'bg') { const z = parse(q('#img-bg-size') || '1024x768'); return z ? Object.assign(z, { from: '背景尺寸' }) : null; }
-            if (tab === 'scene') { let raw = q('#img-scene-size') || '1024x1024'; if (raw === 'custom') raw = q('#img-scene-size-custom'); const z = parse(raw); return z ? Object.assign(z, { from: '場景插圖尺寸' }) : null; }
-            const z = parse(q('#img-avatar-size'));
-            return z ? Object.assign(z, { from: '角色頭像尺寸' }) : null;
-        };
-        // 基本參數的寬高：用不到時藏起真的那兩格、換上鎖住的兩格顯示實際尺寸，下面一行說去哪格改（她：「應用後才鎖死基礎參數」）
-        const _cfdSizeLock = () => {
-            const eff = _effectiveSize(imgSrcTab);
-            const w = container.querySelector('#img-cfd-width'), h = container.querySelector('#img-cfd-height');
-            const we = container.querySelector('#img-cfd-width-eff'), he = container.querySelector('#img-cfd-height-eff');
-            const note = container.querySelector('#img-cfd-size-note');
-            if (!w || !h || !we || !he || !note) return;
-            const locked = !!eff;
-            w.hidden = h.hidden = locked;
-            we.hidden = he.hidden = !locked;
-            note.hidden = !locked;
-            if (locked) {
-                we.value = eff.w; he.value = eff.h;
-                note.textContent = eff.from === '小地圖固定尺寸' ? '小地圖固定 1024×512，這兩格用不到。' : '這一頁的圖用「' + eff.from + '」那格的尺寸，要改去那格改。';
-            }
-        };
-        ['#img-avatar-size', '#img-scene-size', '#img-scene-size-custom', '#img-bg-size'].forEach(sel => {
-            const el = container.querySelector(sel);
-            if (el) { el.addEventListener('change', () => _cfdSizeLock()); el.addEventListener('input', () => _cfdSizeLock()); }
-        });
-
-        const refreshImgPanel = () => {
-            try { _cfdSizeLock(); } catch (e) {}
-            const charSvc  = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations'; // 頭像桶
-            const sceneSvc = elImgServiceScene  ? elImgServiceScene.value  : charSvc;         // 插圖桶
-            const synced   = elImgSyncBg ? elImgSyncBg.checked : true;
-
-            const _avZone = container.querySelector('#img-avatar-add-zone');
-            const _avM    = container.querySelector('#img-avatar-add-main');
-            const _avT    = container.querySelector('#img-avatar-add-tav');
-            const _itB    = container.querySelector('#img-nai-item-block');
-
-            // 子分頁鈕 active 樣式
-            if (srcTabBtnChar)  srcTabBtnChar.classList.toggle('active', imgSrcTab === 'char');
-            if (srcTabBtnScene) srcTabBtnScene.classList.toggle('active', imgSrcTab === 'scene');
-            if (srcTabBtnBg)    srcTabBtnBg.classList.toggle('active', imgSrcTab === 'bg');
-            if (srcTabBtnMap)   srcTabBtnMap.classList.toggle('active', imgSrcTab === 'map');
-            if (srcTabBtnMisc)  srcTabBtnMisc.classList.toggle('active', imgSrcTab === 'misc');
-            // body 一次只出一個
-            if (elImgTabChar)  elImgTabChar.style.display  = (imgSrcTab === 'char')  ? '' : 'none';
-            if (elImgTabScene) elImgTabScene.style.display = (imgSrcTab === 'scene') ? '' : 'none';
-            if (elImgTabBg)    elImgTabBg.style.display    = (imgSrcTab === 'bg')    ? '' : 'none';
-            if (elImgTabMap)   elImgTabMap.style.display   = (imgSrcTab === 'map')   ? '' : 'none';
-            if (elImgTabMisc)  elImgTabMisc.style.display  = (imgSrcTab === 'misc')  ? '' : 'none';
-            // 「目前桶／套用的預設」是四個桶專用的狀態列，其他分頁沒有桶 → 藏起來
-            if (elImgBucketRow) elImgBucketRow.style.display = (imgSrcTab === 'misc') ? 'none' : '';
-
-            if (imgSrcTab === 'misc') {
-                // 🧰 其他：不屬於任何一桶 → 接口設定、底詞、插圖、退路圖庫全藏，只留本分頁自己的東西
-                showOnlyIfaceGroup(null);
-                if (elImgPolPrompts) elImgPolPrompts.classList.add('hidden');
-                if (_avZone) _avZone.style.display = 'none';
-                if (_itB) _itB.classList.add('hidden');
-                if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
-                if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
-                if (elImgPixabay)      elImgPixabay.style.display = 'none';
-            } else if (imgSrcTab === 'char') {
-                // 頭像分頁：頭像桶接口設定 + 頭像底詞 + 頭像追加詞（按接口）
-                showOnlyIfaceGroup(charSvc);
-                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', charSvc !== 'pollinations');
-                // 頭像追加詞按接口：Pol/NAI 用主版、酒館原生/ComfyUI 用專用版（選 NAI 不再看到 ComfyUI 專用詞）
-                if (_avZone) _avZone.style.display = '';
-                const _isTavAv = (charSvc === 'tavern_sd' || charSvc === 'comfyui_direct');
-                if (_avM) _avM.classList.toggle('hidden', _isTavAv);
-                if (_avT) _avT.classList.toggle('hidden', !_isTavAv);
-                if (_itB) _itB.classList.add('hidden');   // 物品＝死物，頭像分頁藏
-                if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';   // 場景插圖設定屬插圖分頁
-                if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
-                if (elImgPixabay)      elImgPixabay.style.display = 'none';
-            } else if (imgSrcTab === 'scene') {
-                // 插圖分頁：插圖桶接口設定 + 場景插圖（尺寸/風格/底詞說明）+ 副模型插圖
-                showOnlyIfaceGroup(sceneSvc);
-                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', sceneSvc !== 'pollinations'); // pol 底詞全模組共用，插圖走 pol 時這裡也能調
-                if (_avZone) _avZone.style.display = 'none';   // 頭像追加詞屬頭像分頁
-                if (_itB) _itB.classList.add('hidden');
-                if (elImgSceneBlock)   elImgSceneBlock.style.display = '';
-                if (elImgSceneExtract) elImgSceneExtract.style.display = '';
-                if (elImgPixabay)      elImgPixabay.style.display = 'none';
-            } else if (imgSrcTab === 'map') {
-                // 小地圖分頁：小地圖桶接口設定（畫風跟背景分開，ComfyUI 桶在下面選「小地圖」）
-                const mapSvc = elImgServiceMap ? elImgServiceMap.value : 'pollinations';
-                showOnlyIfaceGroup(mapSvc);
-                if (elImgPolPrompts) elImgPolPrompts.classList.toggle('hidden', mapSvc !== 'pollinations');
-                if (_avZone) _avZone.style.display = 'none';
-                if (_itB) _itB.classList.add('hidden');
-                if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
-                if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
-                if (elImgPixabay)      elImgPixabay.style.display = 'none';
-            } else {
-                // 背景分頁
-                if (synced) {
-                    // 同步：藏下拉、顯示「與頭像相同」、接口設定本體留在頭像分頁（這裡不重複出）
-                    if (elImgBgSrcGroup) elImgBgSrcGroup.style.display = 'none';
-                    if (elImgBgNote)     elImgBgNote.style.display = '';
-                    if (elImgBgNoteText) elImgBgNoteText.textContent = '（與頭像相同：' + (SVC_DISP[charSvc] || charSvc) + '）';
-                    showOnlyIfaceGroup(null); // 接口區全藏（設定在頭像分頁）
-                } else {
-                    // 不同步：顯示背景自己的下拉 + 它選的接口設定
-                    const bgSvc = elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations';
-                    if (elImgBgSrcGroup) elImgBgSrcGroup.style.display = '';
-                    if (elImgBgNote)     elImgBgNote.style.display = 'none';
-                    showOnlyIfaceGroup(bgSvc);
+        // ════════════════════════════════════════════════════════════════
+        // 🎨 圖片設置：分頁照接口分＋「畫風」頁（2026-09-24，她定的：「就像 API 接口那樣」）
+        //   前五頁只管連線、存成一組一組；「畫風」頁一個地方一列，選用哪組、哪個畫風、多大。
+        //   每列的選擇存在 OS_IMAGE_MANAGER（os_img_routes／os_img_styles），選了就存，不用按底部保存。
+        //   🔴 加新的生圖地方：去 os_image_manager.js 的 USES 加一列，這頁自動多一列。
+        // ════════════════════════════════════════════════════════════════
+        const _IM = () => { const w = window.parent || window; return w.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER; };
+        const _ie = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const _ihelp = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
+        // NAI 預設包是底下才宣告的 let（naiPresets）；畫面第一次畫的時候還拿不到 → 退回存檔裡那份
+        const _naiList = () => { try { return naiPresets; } catch (e) { return (imgConfig.novelai && imgConfig.novelai.naiPresets) || []; } };
+        const _cfdList = () => (window._cfdGetPresets ? window._cfdGetPresets() : ((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || []));
+        // 組合（預設包）現在就寫進存檔：列指到的組合要真的存在，不然她沒按底部保存、那一列就退回照舊
+        const _persistImgPresets = () => {
+            try {
+                const raw = localStorage.getItem(IMG_STORAGE_KEY);
+                const cfg = raw ? JSON.parse(raw) : {};
+                cfg.comfyuiDirect = Object.assign({}, cfg.comfyuiDirect || {}, { presets: _cfdList() });
+                cfg.novelai = Object.assign({}, cfg.novelai || {}, { naiPresets: _naiList() });
+                localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(cfg));
+                const M = _IM();
+                if (M && M.config) {
+                    M.config.comfyuiDirect = Object.assign({}, M.config.comfyuiDirect || {}, { presets: _cfdList() });
+                    M.config.novelai = Object.assign({}, M.config.novelai || {}, { naiPresets: _naiList() });
                 }
-                if (_avZone) _avZone.style.display = 'none';
-                if (elImgPolPrompts) elImgPolPrompts.classList.add('hidden');
-                if (_itB) _itB.classList.remove('hidden');   // 物品底詞在背景分頁(死物桶)顯示
-                if (elImgSceneBlock)   elImgSceneBlock.style.display = 'none';
-                if (elImgSceneExtract) elImgSceneExtract.style.display = 'none';
-                if (elImgPixabay)      elImgPixabay.style.display = '';   // 退路圖庫（背景生不出抓照片）屬背景
+            } catch (e) { console.warn('[圖片設置] 組合寫不進存檔:', e); }
+        };
+        window._imgPersistPresets = _persistImgPresets;
+
+        const IMG_TABS = ['style', 'novelai', 'comfyui_direct', 'tavern_sd', 'custom_api', 'pollinations'];
+        let imgTab = 'style';
+        try { const t = localStorage.getItem('os_img_settings_tab'); if (IMG_TABS.indexOf(t) >= 0) imgTab = t; } catch (e) {}
+        const _tabGroups = { novelai: [elNaiGroup], comfyui_direct: [elCfdGroup], tavern_sd: [elTavGroup], custom_api: [elCapiGroup], pollinations: [elPolGroup, elImgPolPrompts] };
+        window._switchImgTab = (tab) => {
+            imgTab = IMG_TABS.indexOf(tab) >= 0 ? tab : 'style';
+            try { localStorage.setItem('os_img_settings_tab', imgTab); } catch (e) {}
+            container.querySelectorAll('.img-conn-tabs .img-srctab').forEach(b => b.classList.toggle('active', b.dataset.imgtab === imgTab));
+            const st = container.querySelector('#img-tab-style');
+            if (st) st.hidden = (imgTab !== 'style');
+            Object.keys(_tabGroups).forEach(k => _tabGroups[k].forEach(el => { if (el) el.classList.toggle('hidden', k !== imgTab); }));
+            const itB = container.querySelector('#img-nai-item-block');
+            if (itB) itB.classList.remove('hidden');
+            if (imgTab === 'style') { _renderImgUses(); _renderImgStyles(); _renderRoomBlock(); }
+        };
+
+        // ── 「用哪組」的選項：各接口頁存好的組合 ──
+        const _connChoices = () => {
+            const out = [{ id: 'poll', name: 'Pollinations' }, { id: 'nai', name: 'NAI・目前的設定' }];
+            _naiList().forEach(p => { if (p && p.id) out.push({ id: 'nai:' + p.id, name: 'NAI・' + (p.name || '未命名') }); });
+            _cfdList().forEach(p => { if (p && p.name) out.push({ id: 'comfy:' + p.name, name: 'ComfyUI・' + p.name }); });
+            out.push({ id: 'tavern', name: '酒館的生圖' }, { id: 'capi', name: '自訂接口・目前那組' });
+            _imgNodes('capi').forEach(n => { if (n && n.id && n.url) out.push({ id: 'capi:' + n.id, name: '自訂接口・' + (n.name || n.model || n.url) }); });
+            return out;
+        };
+        // 有「原本的底詞」的列（劇情頭像、背景、物品本來就自己拼一段底詞）
+        const LEGACY_STYLE = { avatar: '原本的頭像底詞', bg: '原本的背景底詞', item: '原本的物品底詞' };
+        const FIXED_SIZE = { item: '跟著用它的地方', map: '1024×512', phone: '1024×1024', app: '跟著應用' };
+        const SPRITE_SIZES = [['512x896', '512×896（窄·瘦）'], ['640x896', '640×896（標準）'], ['704x896', '704×896（寬·鎧甲）'], ['768x896', '768×896（超寬·厚甲）']];
+        const _parking = () => container.querySelector('#img-size-parking');
+        function _renderImgUses() {
+            const box = container.querySelector('#img-use-table');
+            const M = _IM();
+            if (!box || !M || !M.USES) return;
+            // 搬進列裡的尺寸下拉先搬回停車格，不然重畫會把它們一起刪掉（存檔讀的就是它們）
+            const park = _parking();
+            if (park) box.querySelectorAll('#img-avatar-size, #img-scene-size, #img-scene-size-custom, #img-bg-size').forEach(el => park.appendChild(el));
+            const routes = M.getRoutes(), styles = M.getStyles(), conns = _connChoices();
+            box.innerHTML = M.USES.map(u => {
+                const r = routes[u.id] || {};
+                const legacySvc = M.legacyServiceOf(u.id);
+                const connOpts = '<option value=""' + (r.conn ? '' : ' selected') + '>照原本的（' + _ie(SVC_DISP[legacySvc] || legacySvc) + '）</option>'
+                    + conns.map(c => '<option value="' + _ie(c.id) + '"' + (c.id === r.conn ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('');
+                const leg = LEGACY_STYLE[u.id];
+                const styleOpts = '<option value=""' + ((!r.style || (!leg && r.style === 'none')) ? ' selected' : '') + '>' + (leg || '不加') + '</option>'
+                    + (leg ? '<option value="none"' + (r.style === 'none' ? ' selected' : '') + '>不加</option>' : '')
+                    + styles.map(s => '<option value="' + _ie(s.id) + '"' + (s.id === r.style ? ' selected' : '') + '>' + _ie(s.name) + '</option>').join('');
+                const size = FIXED_SIZE[u.id]
+                    ? '<span class="img-use-fixed">' + FIXED_SIZE[u.id] + '</span>'
+                    : (u.id === 'sprite'
+                        ? '<select class="set-select img-use-sprite-size">' + SPRITE_SIZES.map(z => '<option value="' + z[0] + '"' + ((localStorage.getItem('os_sprite_size') || '512x896') === z[0] ? ' selected' : '') + '>' + z[1] + '</option>').join('') + '</select>'
+                        : '');
+                return '<div class="img-use-row" data-use="' + u.id + '">'
+                    + '<div class="img-use-name">' + _ie(u.name) + '</div>'
+                    + '<span class="img-use-label">用哪組</span><select class="set-select img-use-conn" data-use="' + u.id + '">' + connOpts + '</select>'
+                    + '<span class="img-use-label">畫風</span><select class="set-select img-use-style" data-use="' + u.id + '">' + styleOpts + '</select>'
+                    + '<span class="img-use-label">尺寸</span><div class="img-use-size" data-use="' + u.id + '">' + size + '</div>'
+                    + '</div>';
+            }).join('');
+            const slot = (id) => box.querySelector('.img-use-size[data-use="' + id + '"]');
+            const mv = (sel, id) => { const el = container.querySelector(sel), s = slot(id); if (el && s) s.appendChild(el); };
+            mv('#img-avatar-size', 'avatar'); mv('#img-scene-size', 'scene'); mv('#img-scene-size-custom', 'scene'); mv('#img-bg-size', 'bg');
+        }
+        const _useBox = container.querySelector('#img-use-table');
+        if (_useBox) _useBox.addEventListener('change', (e) => {
+            const t = e.target, M = _IM();
+            if (!M || !t || !t.classList) return;
+            const use = t.getAttribute('data-use');
+            if (t.classList.contains('img-use-conn')) {
+                if (/^(comfy|nai):/.test(t.value)) _persistImgPresets();
+                M.setRoute(use, { conn: t.value });
+                if (use === 'sprite') _refreshSpriteBatchNote();
+            } else if (t.classList.contains('img-use-style')) {
+                M.setRoute(use, { style: t.value });
+                _renderImgStyles();
+            } else if (t.classList.contains('img-use-sprite-size')) {
+                // 立繪比例跟立繪工作室那格是同一個設定
+                try { localStorage.setItem('os_sprite_size', t.value); } catch (err) {}
+                const studio = document.getElementById('sprite-base-size');
+                if (studio) studio.value = t.value;
             }
-            // 測試生成是通用工具 → 各分頁都留
+        });
+        // 「一次生幾個角色」底下那行字：看立繪那列現在接的是不是 GPT
+        function _refreshSpriteBatchNote() {
+            const M = _IM();
+            const el = container.querySelector('#vncfg-sprite-batch-row .set-desc');
+            if (!el || !M) return;
+            let model = '';
+            try {
+                const r = M.getRoutes().sprite || {};
+                const hit = r.conn ? M._resolveConn(r.conn) : null;
+                const svc = hit ? hit.provider : M.legacyServiceOf('sprite');
+                if (svc === 'custom_api') model = String(((hit && hit.customApi) || M.config.customApi || {}).model || '');
+            } catch (e) {}
+            el.innerHTML = '湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>' + (/gpt/i.test(model)
+                ? '立繪現在接的是 <b>' + _ie(model) + '</b>，就是它擅長的事。'
+                : '會照指令把畫面分成等寬直欄的是 GPT 那種（「立繪」那列選自訂接口、型號名帶 GPT）；畫風鬆散的接口可能把幾個角色糊在一起。');
+        }
+
+        // ── 我的畫風：一包＝名字＋底詞＋負詞＋（可選）一張底圖 ──
+        const STYLE_IMG_PREFIX = 'imgstyle_';   // 底圖在 OS_DB 圖庫的編號前綴（相簿只列 char_img::，不會掃到）
+        const _dbw = () => { const w = window.parent || window; return w.OS_DB || window.OS_DB; };
+        function _renderImgStyles() {
+            const box = container.querySelector('#img-style-list');
+            const M = _IM();
+            if (!box || !M) return;
+            const list = M.getStyles();
+            if (!list.length) { box.innerHTML = '<div class="img-style-empty">還沒有畫風</div>'; return; }
+            box.innerHTML = list.map(s => {
+                const used = _styleUsedBy(s.id);
+                return '<div class="img-style-item">'
+                    + '<div class="img-style-thumb" data-ref="' + _ie(s.ref || '') + '">' + (s.ref ? '' : '<i class="fa-solid fa-palette"></i>') + '</div>'
+                    + '<div class="img-style-main"><div class="img-style-name">' + _ie(s.name) + '</div>'
+                    + '<div class="img-style-use">' + (used.length ? '用在：' + _ie(used.join('、')) : '還沒有地方用') + '</div></div>'
+                    + '<button class="set-btn img-style-btn" type="button" onclick="window._imgStyle.edit(\'' + _ie(s.id) + '\')" aria-label="修改"><i class="fa-solid fa-pen"></i></button>'
+                    + '<button class="set-btn img-style-btn is-del" type="button" onclick="window._imgStyle.del(\'' + _ie(s.id) + '\')" aria-label="刪除"><i class="fa-solid fa-trash"></i></button>'
+                    + '</div>';
+            }).join('');
+            const D = _dbw();
+            if (D && D.getImage) box.querySelectorAll('.img-style-thumb[data-ref]').forEach(async el => {
+                const id = el.getAttribute('data-ref');
+                if (!id) return;
+                try { const url = await D.getImage(id); if (url) el.style.backgroundImage = "url('" + url + "')"; } catch (e) {}
+            });
+        }
+        // 哪些地方用這包（每一列＋房間；房間自己存在 aurelia_room_route）
+        function _styleUsedBy(id) {
+            const M = _IM(); if (!M) return [];
+            const routes = M.getRoutes();
+            const out = M.USES.filter(u => (routes[u.id] || {}).style === id).map(u => u.name);
+            try { const G = (window.parent || window).OS_ROOM_GEN || window.OS_ROOM_GEN; if (G && G.getRoute && G.getRoute().mode !== 'comfy' && G.getRoute().style === id) out.push('房間'); } catch (e) {}
+            return out;
+        }
+        // 編輯畫風的小視窗（樣子跟「角色外觀登記表」同一套）
+        function _openStyleEditor(style) {
+            return new Promise(resolve => {
+                const s = Object.assign({ name: '', pos: '', neg: '', ref: '' }, style || {});
+                let refFile = null, refCleared = false;
+                const wrap = document.createElement('div');
+                wrap.className = 'avl-modal img-style-modal';
+                wrap.innerHTML = '<div class="avl-card">'
+                    + '<div class="avl-title"><i class="fa-solid fa-palette"></i> ' + (style ? '修改畫風' : '新增畫風') + '</div>'
+                    + '<div class="set-label">名字</div><input class="avl-name-input img-style-f-name" value="' + _ie(s.name) + '">'
+                    + '<div class="set-label">底詞</div><textarea class="avl-prompt img-style-f-pos" rows="4">' + _ie(s.pos) + '</textarea>'
+                    + '<div class="set-label">負詞</div><textarea class="avl-prompt img-style-f-neg" rows="3">' + _ie(s.neg) + '</textarea>'
+                    + '<div class="set-label">底圖' + _ihelp('ss_img_style_ref') + '</div>'
+                    + '<div class="img-style-ref-row"><div class="img-style-thumb img-style-f-thumb"></div>'
+                    + '<button class="avl-btn img-style-f-pick" type="button"><i class="fa-solid fa-image"></i> 選一張</button>'
+                    + '<button class="avl-btn img-style-f-clear" type="button"><i class="fa-solid fa-xmark"></i> 拿掉</button>'
+                    + '<input type="file" accept="image/*" class="img-style-f-file" hidden></div>'
+                    + '<div class="avl-actions"><span></span><span class="img-style-f-btns">'
+                    + '<button class="avl-btn img-style-f-cancel" type="button">取消</button> '
+                    + '<button class="avl-btn primary img-style-f-save" type="button">存好</button></span></div>'
+                    + '</div>';
+                (document.querySelector('.os-settings-root') || document.body).appendChild(wrap);
+                const q = (c) => wrap.querySelector(c);
+                const thumb = q('.img-style-f-thumb');
+                const D = _dbw();
+                if (s.ref && D && D.getImage) D.getImage(s.ref).then(u => { if (u) thumb.style.backgroundImage = "url('" + u + "')"; }).catch(() => {});
+                q('.img-style-f-pick').onclick = () => q('.img-style-f-file').click();
+                q('.img-style-f-file').onchange = () => {
+                    const f = q('.img-style-f-file').files && q('.img-style-f-file').files[0];
+                    if (!f) return;
+                    refFile = f; refCleared = false;
+                    thumb.style.backgroundImage = "url('" + URL.createObjectURL(f) + "')";
+                };
+                q('.img-style-f-clear').onclick = () => { refFile = null; refCleared = true; thumb.style.backgroundImage = ''; };
+                const close = (v) => { wrap.remove(); resolve(v); };
+                q('.img-style-f-cancel').onclick = () => close(null);
+                q('.img-style-f-save').onclick = () => {
+                    const name = q('.img-style-f-name').value.trim();
+                    if (!name) { q('.img-style-f-name').focus(); return; }
+                    close({ name: name, pos: q('.img-style-f-pos').value.trim(), neg: q('.img-style-f-neg').value.trim(), refFile: refFile, refCleared: refCleared });
+                };
+            });
+        }
+        window._imgStyle = {
+            async add() {
+                const M = _IM(); if (!M) return;
+                const v = await _openStyleEditor(null);
+                if (!v) return;
+                const id = 'st_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+                let ref = '';
+                if (v.refFile && _dbw() && _dbw().saveImage) { try { ref = await _dbw().saveImage(STYLE_IMG_PREFIX + id, v.refFile); } catch (e) { AUI.toastr.warning('底圖存不進去：' + ((e && e.message) || e)); } }
+                M.setStyles(M.getStyles().concat([{ id: id, name: v.name, pos: v.pos, neg: v.neg, ref: ref }]));
+                _renderImgStyles(); _renderImgUses(); _renderRoomBlock();
+            },
+            async edit(id) {
+                const M = _IM(); if (!M) return;
+                const list = M.getStyles();
+                const cur = list.find(x => x.id === id);
+                if (!cur) return;
+                const v = await _openStyleEditor(cur);
+                if (!v) return;
+                let ref = cur.ref || '';
+                if (v.refFile && _dbw() && _dbw().saveImage) { try { ref = await _dbw().saveImage(STYLE_IMG_PREFIX + id, v.refFile); } catch (e) { AUI.toastr.warning('底圖存不進去：' + ((e && e.message) || e)); } }
+                else if (v.refCleared) { if (ref && _dbw() && _dbw().deleteCharImage) { try { await _dbw().deleteCharImage(ref); } catch (e) {} } ref = ''; }
+                M.setStyles(list.map(x => x.id === id ? { id: id, name: v.name, pos: v.pos, neg: v.neg, ref: ref } : x));
+                _renderImgStyles(); _renderImgUses(); _renderRoomBlock();
+            },
+            async del(id) {
+                const M = _IM(); if (!M) return;
+                const list = M.getStyles();
+                const cur = list.find(x => x.id === id);
+                if (!cur) return;
+                const routes = M.getRoutes();
+                const used = _styleUsedBy(id);
+                if (!(await AUI.confirm('刪掉畫風「' + cur.name + '」？' + (used.length ? '\n用它的地方（' + used.join('、') + '）會改成不加畫風。' : ''), { danger: true }))) return;
+                try { const G = (window.parent || window).OS_ROOM_GEN || window.OS_ROOM_GEN; if (G && G.getRoute && G.getRoute().style === id) G.setRoute({ style: '' }); } catch (e) {}
+                if (cur.ref && _dbw() && _dbw().deleteCharImage) { try { await _dbw().deleteCharImage(cur.ref); } catch (e) {} }
+                M.setStyles(list.filter(x => x.id !== id));
+                M.USES.forEach(u => { if ((routes[u.id] || {}).style === id) M.setRoute(u.id, { style: '' }); });
+                _renderImgStyles(); _renderImgUses(); _renderRoomBlock();
+            },
         };
 
-        // 🛋 房間用哪個接口畫：選了就存，不用按底部保存（同 🏠 房間畫風）
+        // ── 房間：照舊自己一塊（接口有三種走法，擠不進一列）；畫風改用「我的畫風」同一份 ──
+        function _renderRoomBlock() {
+            const box = container.querySelector('#img-room-style-block');
+            const _w = window.parent || window;
+            const G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
+            const M = _IM();
+            if (!box || !G || !G.getRoute) return;
+            const r = G.getRoute();
+            const nodes = G.listCapiNodes ? G.listCapiNodes() : [];
+            const opts = (cur) => nodes.map(n => '<option value="' + _ie(n.id) + '"' + (n.id === cur ? ' selected' : '') + '>' + _ie(n.name) + '</option>').join('');
+            const hide = (modes) => (modes.split(' ').indexOf(r.mode) >= 0 ? '' : ' hidden');
+            const packs = G.listStylePresets ? G.listStylePresets() : [];
+            const packCur = G.getStyleName ? G.getStyleName() : '';
+            const packOpts = packs.length
+                ? packs.map(p => { const nm = String((p && p.name) || '未命名'); return '<option value="' + _ie(nm) + '"' + (nm === packCur ? ' selected' : '') + '>' + _ie(nm) + '</option>'; }).join('')
+                : '<option value="">還沒有能畫房間的 ComfyUI 組合</option>';
+            const styles = M ? M.getStyles() : [];
+            box.innerHTML = '<div class="set-label"><i class="fa-solid fa-house"></i> 房間' + _ihelp('ss_room_route') + '</div>'
+                + '<select class="set-select" id="img-room-route" onchange="window._saveRoomRoute && window._saveRoomRoute(); window._roomRouteShow && window._roomRouteShow()">'
+                + '<option value="comfy"' + (r.mode === 'comfy' ? ' selected' : '') + '>ComfyUI</option>'
+                + '<option value="capi1"' + (r.mode === 'capi1' ? ' selected' : '') + '>自訂接口・一次（只畫房間，家具不擋路）</option>'
+                + '<option value="capi"' + (r.mode === 'capi' ? ' selected' : '') + '>自訂接口・兩次（自動量家具，家具會擋路）</option>'
+                + '</select>'
+                + '<div data-room-for="comfy"' + hide('comfy') + '><div class="set-label">用哪組' + _ihelp('ss_1589') + '</div>'
+                + '<select class="set-select" id="img-room-comfy-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">' + packOpts + '</select></div>'
+                + '<div data-room-for="capi1 capi"' + hide('capi1 capi') + '><div class="set-label">畫房間用</div>'
+                + '<select class="set-select" id="img-room-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + opts(r.roomNode) + '</select></div>'
+                + '<div data-room-for="capi"' + hide('capi') + '><div class="set-label">量家具用</div>'
+                + '<select class="set-select" id="img-room-mask-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + opts(r.maskNode) + '</select></div>'
+                + '<div data-room-for="capi1 capi"' + hide('capi1 capi') + '><div class="set-label">畫風</div>'
+                + '<select class="set-select" id="img-room-capi-style" onchange="window._saveRoomRoute && window._saveRoomRoute()">'
+                + '<option value=""' + (r.style ? '' : ' selected') + '>照自訂接口的底詞</option>'
+                + styles.map(x => '<option value="' + _ie(x.id) + '"' + (x.id === r.style ? ' selected' : '') + '>' + _ie(x.name) + '</option>').join('')
+                + '</select></div>';
+        }
         window._saveRoomRoute = () => {
+            setTimeout(() => _renderImgStyles(), 0);   // 「用在」那行要把房間算進去
             const _w = window.parent || window;
-            const _G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
-            if (!_G || !_G.setRoute) return;
-            const _d = (_w.document && _w.document.getElementById('img-room-route')) ? _w.document : document;
-            const v = (id) => { const el = _d.getElementById(id); return el ? el.value : ''; };
-            const _m = v('img-room-route');
-            _G.setRoute({ mode: (_m === 'capi' || _m === 'capi1') ? _m : 'comfy', roomNode: v('img-room-node'), maskNode: v('img-room-mask-node'), style: v('img-room-capi-style') });
+            const G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
+            if (!G || !G.setRoute) return;
+            const v = (id) => { const el = container.querySelector('#' + id); return el ? el.value : ''; };
+            const m = v('img-room-route');
+            G.setRoute({ mode: (m === 'capi' || m === 'capi1') ? m : 'comfy', roomNode: v('img-room-node'), maskNode: v('img-room-mask-node'), style: v('img-room-capi-style') });
         };
-        // 房間那塊：只露選中那條路用得到的格子
         window._roomRouteShow = () => {
-            const _w = window.parent || window;
-            const _d = (_w.document && _w.document.getElementById('img-room-route')) ? _w.document : document;
-            const sel = _d.getElementById('img-room-route');
+            const sel = container.querySelector('#img-room-route');
             if (!sel) return;
-            const mode = sel.value;
-            _d.querySelectorAll('#img-room-style-block [data-room-for]').forEach(el => { el.hidden = String(el.getAttribute('data-room-for')).split(' ').indexOf(mode) < 0; });
+            container.querySelectorAll('#img-room-style-block [data-room-for]').forEach(el => { el.hidden = String(el.getAttribute('data-room-for')).split(' ').indexOf(sel.value) < 0; });
         };
-        // 🎨 房間畫風（自訂接口畫房間用）：她自己加，一個名字配一段畫風描述。選項組法 window._roomStyleOpts 定義在檔頭（組畫面時就要用）
-        window._roomStyle = (() => {
-            const G = () => { const _w = window.parent || window; return _w.OS_ROOM_GEN || window.OS_ROOM_GEN; };
-            const sel = () => { const _w = window.parent || window; return (_w.document && _w.document.getElementById('img-room-capi-style')) || document.getElementById('img-room-capi-style'); };
-            const redraw = () => { const s = sel(); if (s && G()) s.innerHTML = window._roomStyleOpts(G().getRoute()); };
-            return {
-                async add() {
-                    if (!G()) return;
-                    const name = String(await AUI.prompt('畫風的名字', '', { title: '新增房間畫風' }) || '').trim();
-                    if (!name) return;
-                    const r = G().getRoute();
-                    if (r.styles.some(x => x.name === name)) { AUI.toastr.warning('已經有叫「' + name + '」的畫風了。'); return; }
-                    const prompt = await AUI.prompt('這個畫風長什麼樣子', '', { title: name, multiline: true });
-                    if (prompt == null) return;
-                    G().setRoute({ styles: r.styles.concat([{ name: name, prompt: String(prompt) }]), style: name });
-                    redraw();
-                },
-                async edit() {
-                    if (!G()) return;
-                    const r = G().getRoute();
-                    const cur = r.styles.find(x => x.name === r.style);
-                    if (!cur) { AUI.toastr.info('先在上面選一個自己加的畫風。'); return; }
-                    const prompt = await AUI.prompt('這個畫風長什麼樣子', cur.prompt, { title: cur.name, multiline: true });
-                    if (prompt == null) return;
-                    G().setRoute({ styles: r.styles.map(x => x.name === cur.name ? { name: x.name, prompt: String(prompt) } : x) });
-                    redraw();
-                },
-                async del() {
-                    if (!G()) return;
-                    const r = G().getRoute();
-                    const cur = r.styles.find(x => x.name === r.style);
-                    if (!cur) { AUI.toastr.info('先在上面選一個自己加的畫風。'); return; }
-                    if (!(await AUI.confirm('刪掉畫風「' + cur.name + '」？', { danger: true }))) return;
-                    G().setRoute({ styles: r.styles.filter(x => x.name !== cur.name), style: '' });
-                    redraw();
-                },
-            };
-        })();
 
-        // 🚪 世界門旅人畫風：值＝「接口|預設包key」，選了就存，不用按底部保存（同 🏠 房間畫風的作風）
+        // 🚪 世界門旅人：值＝「接口|預設包key」，選了就存（同房間的作風）
         window._saveWgSpritePack = (v) => {
             const _w = window.parent || window;
             try {
@@ -3660,23 +3599,125 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             } catch (e) {}
         };
 
-        // 子分頁切換鈕（切分頁時，ComfyUI 設定/預設包也連動切到對應桶：頭像→char、插圖→scene、背景→bg、小地圖→map）
-        window._switchImgSrcTab = (tab) => {
-            imgSrcTab = (tab === 'bg' || tab === 'scene' || tab === 'map' || tab === 'misc') ? tab : 'char';
-            // 「其他」不是生圖桶 → 不去切 ComfyUI 的桶（切了會把預設包套錯地方）
-            if (imgSrcTab !== 'misc') { try { if (window._cfdSwitchBucket) window._cfdSwitchBucket(imgSrcTab); } catch (e) {} }
-            refreshImgPanel();
+        // ── 🔁 第一次打開新版：把目前每個地方實際在用的設定轉成列的值，出圖不變 ──
+        //   ① ComfyUI 的四個桶各存成一組「○○原本的設定」（跟現有組合一模一樣就指過去，不另存）
+        //   ② 原本的頭像／背景／物品底詞各存成一包畫風
+        //   ③ 房間原本自己那份畫風併進「我的畫風」
+        //   ④ 每一列照原本的接口與底詞填好
+        //   只跑一次（os_img_routes_migrated）；她已經改過的列不動。
+        const _migrateImgRoutes = () => {
+            const M = _IM();
+            if (!M || !M.USES) return;
+            try { if (localStorage.getItem('os_img_routes_migrated') === '1') return; } catch (e) { return; }
+            const cd = imgConfig.comfyuiDirect || {};
+            const presets = _cfdList();
+            const LBL = { char: '頭像', scene: '插圖', bg: '背景', map: '小地圖' };
+            const KEYS = ['modelType', 'model', 'vae', 'sampler', 'scheduler', 'steps', 'cfg', 'clipSkip', 'basePrompt', 'negPrompt', 'guidance', 'fluxClipL', 'fluxT5', 'fluxAe', 'animaClip', 'animaVae'];
+            const sameAs = (a, b) => KEYS.every(k => String(a[k] == null ? '' : a[k]) === String(b[k] == null ? '' : b[k]))
+                && JSON.stringify((a.loras || []).filter(l => l && l.name)) === JSON.stringify((b.loras || []).filter(l => l && l.name))
+                && String((a.workflowMode === 'custom' && a.customWorkflow) || '') === String(b.customWorkflow || '');
+            const bucketPreset = {};   // 桶 → 組合名字
+            // 只替原本真的走 ComfyUI 的列用到的桶建（插圖走 NAI 就不必替插圖桶建一組）
+            const needBuckets = [];
+            M.USES.forEach(u => { if (M.legacyServiceOf(u.id) === 'comfyui_direct') { const bk = M._comfyBucketOf((M.useOf(u.id) || {}).type); if (needBuckets.indexOf(bk) < 0) needBuckets.push(bk); } });
+            if (needBuckets.length) {
+                needBuckets.forEach(b => {
+                    const eff = M._comfyCfgFor(b === 'bg' ? 'bg' : b);
+                    const hit = presets.find(p => p && p.name && sameAs(eff, p));
+                    if (hit) { bucketPreset[b] = hit.name; return; }
+                    let name = LBL[b] + '原本的設定', n = 2;
+                    while (presets.some(p => p && p.name === name)) name = LBL[b] + '原本的設定 ' + (n++);
+                    const np = { name: name };
+                    KEYS.forEach(k => { if (eff[k] !== undefined) np[k] = eff[k]; });
+                    np.loras = (eff.loras || []).slice();
+                    np.width = eff.width; np.height = eff.height;
+                    np.customWorkflow = (eff.workflowMode === 'custom') ? (eff.customWorkflow || '') : '';
+                    presets.push(np);
+                    bucketPreset[b] = name;
+                });
+                _persistImgPresets();
+            }
+            // 畫風包
+            const styles = M.getStyles();
+            const mkStyle = (name, pos, neg) => {
+                pos = String(pos || '').trim(); neg = String(neg || '').trim();
+                if (!pos && !neg) return 'none';
+                const hit = styles.find(s => s.pos === pos && s.neg === neg);
+                if (hit) return hit.id;
+                const id = 'st_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+                styles.push({ id: id, name: name, pos: pos, neg: neg, ref: '' });
+                return id;
+            };
+            const avSvc = M.legacyServiceOf('avatar');
+            const avTav = (avSvc === 'tavern_sd' || avSvc === 'comfyui_direct');
+            const styleOf = {
+                avatar: mkStyle('頭像原本的底詞', avTav ? vnD.avatarBasePromptTavern : vnD.avatarBasePrompt, avTav ? vnD.avatarNegPromptTavern : vnD.avatarNegPrompt),
+                bg: mkStyle('背景原本的底詞', vnD.bgBasePrompt, vnD.bgNegPrompt),
+                item: mkStyle('物品原本的底詞', (imgConfig.pollinations || {}).itemBasePrompt, (imgConfig.pollinations || {}).itemNegPrompt),
+            };
+            // 房間自己的畫風併過來
+            const _w = window.parent || window;
+            const G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
+            if (G && G.getRoute) {
+                const rr = G.getRoute();
+                let pick = '';
+                (rr.styles || []).forEach(x => {
+                    const id = mkStyle(x.name, x.prompt, '');
+                    if (x.name === rr.style && id !== 'none') pick = id;
+                });
+                G.setRoute({ style: pick });
+            }
+            M.setStyles(styles);
+            // 每一列
+            const routes = M.getRoutes();
+            const connOf = (use) => {
+                const svc = M.legacyServiceOf(use);
+                const t = (M.useOf(use) || {}).type;
+                if (svc === 'comfyui_direct') { const nm = bucketPreset[M._comfyBucketOf(t)]; return nm ? 'comfy:' + nm : ''; }
+                return { novelai: 'nai', custom_api: 'capi', tavern_sd: 'tavern', pollinations: 'poll' }[svc] || '';
+            };
+            M.USES.forEach(u => {
+                const r = routes[u.id] || {};
+                const patch = {};
+                if (!r.conn) patch.conn = connOf(u.id);
+                if (!r.style && styleOf[u.id]) patch.style = styleOf[u.id];
+                if (Object.keys(patch).length) M.setRoute(u.id, patch);
+            });
+            try { localStorage.setItem('os_img_routes_migrated', '1'); } catch (e) {}
+            console.log('[圖片設置] 舊設定已轉成每個地方一列');
         };
 
-        if (elImgServiceInanimate) elImgServiceInanimate.onchange = refreshImgPanel;
-        if (elImgServiceLiving)    elImgServiceLiving.onchange = refreshImgPanel;
-        if (elImgServiceScene)     elImgServiceScene.onchange = refreshImgPanel;
-        if (elImgServiceMap)       elImgServiceMap.onchange = refreshImgPanel;
-        if (elImgSyncBg)           elImgSyncBg.addEventListener('change', refreshImgPanel);
-        refreshImgPanel(); // 初始化同步一次
+        // ComfyUI 那支（wire）在下面才接上 → 等它接完再轉舊設定、畫第一次
+        setTimeout(() => {
+            try { _migrateImgRoutes(); } catch (e) { console.warn('[圖片設置] 轉舊設定失敗:', e); }
+            try { window._cfdEdit && window._cfdEdit.refresh && window._cfdEdit.refresh(); } catch (e) {}
+            window._switchImgTab(imgTab);
+            _refreshSpriteBatchNote();
+            _fillTestUses();
+        }, 0);
+
+        // ── 試畫一張：選一個地方，走真的分流 ──
+        function _fillTestUses() {
+            const sel = container.querySelector('#img-test-use');
+            const M = _IM();
+            if (!sel || !M || !M.USES) return;
+            sel.innerHTML = M.USES.map(u => '<option value="' + u.id + '">' + _ie(u.name) + '</option>').join('');
+        }
+        // 這一列實際的尺寸（跟 vn_config 的 getAvatar／getSprite／getScene／getBg、各呼叫點寫死的那組一致）
+        const _useSize = (use) => {
+            const v = (sel) => (container.querySelector(sel) || {}).value || '';
+            const parse = (raw) => { const m = String(raw || '').toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x').match(/^(\d{2,5})x(\d{2,5})$/); return m ? { width: +m[1], height: +m[2] } : {}; };
+            if (use === 'avatar') return parse(v('#img-avatar-size'));
+            if (use === 'sprite') return parse(localStorage.getItem('os_sprite_size') || '512x896');
+            if (use === 'scene') { let raw = v('#img-scene-size') || '1024x1024'; if (raw === 'custom') raw = v('#img-scene-size-custom'); return parse(raw); }
+            if (use === 'bg') return parse(v('#img-bg-size') || '1024x768');
+            if (use === 'map') return { width: 1024, height: 512 };
+            if (use === 'phone') return { width: 1024, height: 1024 };
+            return { width: 512, height: 512 };
+        };
 
         // ===== ComfyUI 直連設定：已拆到 os_settings_comfyui.js（參數注入 ctx＝閉包變數）=====
-        //   模組發布 window._cfdPreset/_cfdSwitchBucket/_cfdSetActivePreset/_cfdCollectBuckets/_cfdGetPresets，
+        //   模組發布 window._cfdPreset／_cfdEdit／_cfdGetPresets，
         //   HTML onclick 與下面存檔/測試呼叫點照舊不變。
         if (window.OS_SETTINGS_COMFY && window.OS_SETTINGS_COMFY.wire) {
             window.OS_SETTINGS_COMFY.wire({ imgConfig: imgConfig, container: container });
@@ -3889,20 +3930,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     directMode: false, enableStreaming: false, disableTyping: false
                 };
 
-                // 同步開關：ON＝背景沿用頭像來源；OFF＝背景用自己選的
-                const _imgSyncBgEl = container.querySelector('#img-sync-bg-to-char');
-                const _imgSynced   = _imgSyncBgEl ? _imgSyncBgEl.checked : true;
-                const _imgCharSvc  = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations'; // 頭像桶
-                const _imgSceneSvc = elImgServiceScene  ? elImgServiceScene.value  : _imgCharSvc;     // 插圖桶
+                // 桶的接口（serviceChar／serviceScene…）面板上已經沒有格子：每個地方改在「畫風」頁一列一列選（os_img_routes）。
+                //   這幾個值照存檔原樣留著，給還沒改過的列當「照原本的」。
+                const _imgCharSvc  = imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service || 'pollinations';
                 const imgData = {
-                    // 三桶各自存；serviceLiving/service 保留＝頭像桶當 legacy mirror（避免漏改的舊讀者爆掉）
-                    serviceInanimate: _imgSynced ? _imgCharSvc : (elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations'),
+                    serviceInanimate: imgConfig.serviceInanimate || imgConfig.service || 'pollinations',
                     serviceChar:      _imgCharSvc,
-                    serviceScene:     _imgSceneSvc,
-                    serviceMap:       (elImgServiceMap ? elImgServiceMap.value : (_imgSynced ? _imgCharSvc : (elImgServiceInanimate ? elImgServiceInanimate.value : 'pollinations'))),
+                    serviceScene:     imgConfig.serviceScene || _imgCharSvc,
+                    serviceMap:       imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service || 'pollinations',
                     serviceLiving:    _imgCharSvc,
                     service:          _imgCharSvc,
-                    imgSourceSynced:  _imgSynced,
+                    imgSourceSynced:  (typeof imgConfig.imgSourceSynced === 'boolean') ? imgConfig.imgSourceSynced : true,
                     pollinations: {
                         url: 'https://gen.pollinations.ai/image',
                         apiKey: elPolApiKey.value.trim(),
@@ -3946,42 +3984,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             bg:    container.querySelector('#img-nai-vibe-sc-bg')?.checked    ?? true,
                         },
                     },
-                    comfyuiDirect: {
+                    // ComfyUI：面板現在編輯的是「組合」（預設包），存回組合走 ComfyUI 頁那兩顆鈕；
+                    //   扁平參數與四個桶照存檔原樣留著（給還沒改過的列當「照原本的」），這裡只收網址、組合庫與全域開關。
+                    comfyuiDirect: Object.assign({}, imgConfig.comfyuiDirect || {}, {
                         url:       (container.querySelector('#img-cfd-url')?.value || '').trim(),
-                        modelType: (container.querySelector('#img-cfd-type')?.value || 'checkpoint'),
-                        model:     (container.querySelector('#img-cfd-model')?.value || '').trim(),
-                        vae:       (container.querySelector('#img-cfd-vae')?.value || '').trim(),
-                        sampler:   (container.querySelector('#img-cfd-sampler')?.value || 'euler').trim(),
-                        scheduler: (container.querySelector('#img-cfd-scheduler')?.value || 'normal').trim(),
-                        steps:     parseInt(container.querySelector('#img-cfd-steps')?.value ?? 28) || 28,
-                        cfg:       parseFloat(container.querySelector('#img-cfd-cfg')?.value ?? 6.5) || 6.5,
-                        width:     parseInt(container.querySelector('#img-cfd-width')?.value ?? 1024) || 1024,
-                        height:    parseInt(container.querySelector('#img-cfd-height')?.value ?? 1024) || 1024,
-                        seed:      (function(){ const v = parseInt(container.querySelector('#img-cfd-seed')?.value ?? -1); return isNaN(v) ? -1 : v; })(),
-                        clipSkip:  parseInt(container.querySelector('#img-cfd-clipskip')?.value ?? 0) || 0,
-                        basePrompt:(container.querySelector('#img-cfd-base')?.value || '').trim(),
-                        negPrompt: (container.querySelector('#img-cfd-neg')?.value || '').trim(),
-                        loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(r => ({
-                            on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
-                            name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
-                            strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
-                            strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
-                        })).filter(l => l.name),
-                        fluxClipL: (container.querySelector('#img-cfd-clipl')?.value || 'clip_l.safetensors').trim(),
-                        fluxT5:    (container.querySelector('#img-cfd-t5xxl')?.value || 't5xxl_fp8_e4m3fn.safetensors').trim(),
-                        fluxAe:    (container.querySelector('#img-cfd-ae')?.value || 'ae.safetensors').trim(),
-                        guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5,
-                        animaClip: (container.querySelector('#img-cfd-anima-clip')?.value || 'qwen_3_06b_base.safetensors').trim(),
-                        animaVae:  (container.querySelector('#img-cfd-anima-vae')?.value || 'qwen_image_vae.safetensors').trim(),
-                        presets:   (window._cfdGetPresets ? window._cfdGetPresets() : ((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || [])),   // 包庫在 os_settings_comfyui.js（cfdPresets 閉包）→ 經窗口拿
+                        presets:   (window._cfdGetPresets ? window._cfdGetPresets() : ((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || [])),
                         previewPrompt: (container.querySelector('#img-cfd-preview-prompt')?.value || '').trim(),
                         sceneHires:        container.querySelector('#img-cfd-scene-hires')?.checked ?? true,
                         sceneHiresScale:   parseFloat(container.querySelector('#img-cfd-scene-hires-scale')?.value || 1.5) || 1.5,
                         sceneFaceDetailer: container.querySelector('#img-cfd-scene-facedetailer')?.checked ?? true,
-                        workflowMode:  (container.querySelector('#img-cfd-wfmode')?.value || 'auto'),
-                        customWorkflow:(container.querySelector('#img-cfd-custom-wf-text')?.value || ''),
-                        buckets: (window._cfdCollectBuckets ? window._cfdCollectBuckets() : undefined)
-                    },
+                    }),
                     sceneGen: {
                         size:             (() => { const _sz = container.querySelector('#img-scene-size'); if (_sz?.value === 'custom') { const _c = (container.querySelector('#img-scene-size-custom')?.value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x'); return /^\d{2,5}x\d{2,5}$/.test(_c) ? _c : '1024x1024'; } return _sz?.value || '1024x1024'; })(),
                         sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
@@ -4765,13 +4777,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const imageManager = win.OS_IMAGE_MANAGER;
                 if (!imageManager) throw new Error('ImageManager 未載入');
 
-                // 同步三桶（測試用 char 型→走頭像桶；legacy mirror = 頭像桶）
-                imageManager.config.serviceInanimate = elImgServiceInanimate ? elImgServiceInanimate.value : imageManager.config.serviceInanimate;
-                imageManager.config.serviceChar  = elImgServiceLiving ? elImgServiceLiving.value : imageManager.config.serviceChar;
-                imageManager.config.serviceScene = elImgServiceScene  ? elImgServiceScene.value  : imageManager.config.serviceScene;
-                imageManager.config.serviceLiving = imageManager.config.serviceChar;
-                imageManager.config.service = imageManager.config.serviceChar;
-
                 imageManager.config.pollinations.apiKey = elPolApiKey.value.trim();
                 imageManager.config.pollinations.model = elPolModel.value;
                 imageManager.config.pollinations.charBasePrompt = elStylePrompt.value.trim();
@@ -4794,72 +4799,25 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 imageManager.config.novelai.charBasePrompt = (container.querySelector('#img-nai-char-base')?.value || '').trim();
                 imageManager.config.novelai.charNegPrompt = (container.querySelector('#img-nai-char-neg')?.value || '').trim();
 
-                // ComfyUI 直連：測試也套當前面板值（免先保存）
-                imageManager.config.comfyuiDirect = {
-                    ...imageManager.config.comfyuiDirect,
-                    workflowMode:  (container.querySelector('#img-cfd-wfmode')?.value || 'auto'),
-                    customWorkflow:(container.querySelector('#img-cfd-custom-wf-text')?.value || ''),
-                    url:       (container.querySelector('#img-cfd-url')?.value || '').trim(),
-                    modelType: (container.querySelector('#img-cfd-type')?.value || 'checkpoint'),
-                    model:     (container.querySelector('#img-cfd-model')?.value || '').trim(),
-                    vae:       (container.querySelector('#img-cfd-vae')?.value || '').trim(),
-                    sampler:   (container.querySelector('#img-cfd-sampler')?.value || 'euler').trim(),
-                    scheduler: (container.querySelector('#img-cfd-scheduler')?.value || 'normal').trim(),
-                    steps:     parseInt(container.querySelector('#img-cfd-steps')?.value ?? 28) || 28,
-                    cfg:       parseFloat(container.querySelector('#img-cfd-cfg')?.value ?? 6.5) || 6.5,
-                    width:     parseInt(container.querySelector('#img-cfd-width')?.value ?? 1024) || 1024,
-                    height:    parseInt(container.querySelector('#img-cfd-height')?.value ?? 1024) || 1024,
-                    seed:      (function(){ const v = parseInt(container.querySelector('#img-cfd-seed')?.value ?? -1); return isNaN(v) ? -1 : v; })(),
-                    clipSkip:  parseInt(container.querySelector('#img-cfd-clipskip')?.value ?? 0) || 0,
-                    basePrompt:(container.querySelector('#img-cfd-base')?.value || '').trim(),
-                    negPrompt: (container.querySelector('#img-cfd-neg')?.value || '').trim(),
-                    fluxClipL: (container.querySelector('#img-cfd-clipl')?.value || 'clip_l.safetensors').trim(),
-                    fluxT5:    (container.querySelector('#img-cfd-t5xxl')?.value || 't5xxl_fp8_e4m3fn.safetensors').trim(),
-                    fluxAe:    (container.querySelector('#img-cfd-ae')?.value || 'ae.safetensors').trim(),
-                    guidance:  parseFloat(container.querySelector('#img-cfd-guidance')?.value ?? 3.5) || 3.5,
-                    animaClip: (container.querySelector('#img-cfd-anima-clip')?.value || 'qwen_3_06b_base.safetensors').trim(),
-                    animaVae:  (container.querySelector('#img-cfd-anima-vae')?.value || 'qwen_image_vae.safetensors').trim(),
-                    loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(function(r){ return {
-                        on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
-                        name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
-                        strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
-                        strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
-                    }; }).filter(function(l){ return l.name; }),
-                    buckets: (window._cfdCollectBuckets ? window._cfdCollectBuckets() : undefined)
-                };
-
-                // 測試跟著「當前子分頁」走：🎭頭像→char桶、🎬插圖→scene桶、🌄背景→bg桶；
-                // 各讀自己的來源(service)+尺寸下拉，不再全部寫死走頭像桶（修共域）。
-                const _activeTab = (typeof imgSrcTab !== 'undefined' && imgSrcTab) ? imgSrcTab : 'char';
-                const _tabMap = {
-                    char:  { type: 'char',  svcEl: elImgServiceLiving,   sizeSel: '#img-avatar-size' },
-                    scene: { type: 'scene', svcEl: elImgServiceScene,     sizeSel: '#img-scene-size'  },
-                    bg:    { type: 'bg',    svcEl: elImgServiceInanimate, sizeSel: '#img-bg-size'     },
-                    map:   { type: 'map',   svcEl: elImgServiceMap,       sizeSel: ''                 },
-                };
-                const _tabCfg = _tabMap[_activeTab] || _tabMap.char;
-
-                // 該桶自己的尺寸：插圖可能選 custom；頭像空值(跟接口預設)就不塞尺寸、讓接口用自己的預設
-                const _eff = _effectiveSize(_activeTab);
-                const _sizeOpts = _eff ? { width: _eff.w, height: _eff.h } : {};
-
-                // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
-                // 尺寸跟實際生圖同一套（_effectiveSize）；頭像選「跟各接口預設」時不塞，ComfyUI 就落到基本參數那兩格
-                const _testIsCfd = (_tabCfg.svcEl ? _tabCfg.svcEl.value : '') === 'comfyui_direct';
-
-                // 畫風底詞/負詞：頭像桶由 generate() 內部自動套(charBasePrompt/charNegPrompt)；
-                // 背景桶的底詞/負詞存在 VN_Config、平常由 getBg 套、測試直連 generate 會繞過 → 這裡自己帶進去才測得到畫風。
-                // ComfyUI 直連有自己的 basePrompt/negPrompt，不重複疊。
+                // 🧪 選一個地方試：走那一列真的分流（用哪組、畫風、尺寸都跟平常生圖一樣）。
+                //   ComfyUI 的組合要先存好才試得到；還沒存的調整用 ComfyUI 頁組合卡上的「風格預覽」看。
+                const _use = (container.querySelector('#img-test-use') || {}).value || 'avatar';
+                const _u = (imageManager.useOf && imageManager.useOf(_use)) || { type: 'char' };
+                const _genOpts = Object.assign({}, _useSize(_use), { force: true, use: _use });
+                // 這一列沒選畫風、而它原本自己拼一段底詞（頭像／背景）→ 試的時候也照原本那段拼，跟平常一樣
                 let _testPrompt = testPrompt;
-                const _genOpts = { ..._sizeOpts, force: true };
-                if (_activeTab === 'bg' && !_testIsCfd) {
-                    const _bgBase = (container.querySelector('#vncfg-bg-prompt')?.value || '').trim();
-                    const _bgNeg  = (container.querySelector('#vncfg-bg-neg')?.value || '').trim();
-                    if (_bgBase) _testPrompt = _bgBase + ', ' + _testPrompt;
-                    if (_bgNeg)  _genOpts.negativePrompt = _bgNeg;
+                if (!(imageManager.styleFor && imageManager.styleFor(_use))) {
+                    const _svc = imageManager.serviceForUse ? imageManager.serviceForUse(_use) : '';
+                    const _tav = (_svc === 'tavern_sd' || _svc === 'comfyui_direct');
+                    const _lp = _use === 'bg' ? vnD.bgBasePrompt : (_use === 'avatar' ? (_tav ? vnD.avatarBasePromptTavern : vnD.avatarBasePrompt) : '');
+                    const _ln = _use === 'bg' ? vnD.bgNegPrompt : (_use === 'avatar' ? (_tav ? vnD.avatarNegPromptTavern : vnD.avatarNegPrompt) : '');
+                    if (_lp) _testPrompt = _lp + ', ' + _testPrompt;
+                    if (_ln) _genOpts.negativePrompt = _ln;
+                    _genOpts.styleDone = true;
                 }
-                // 🗑️ 小地圖測試的寫死去人物負詞已刪（Rae 定案）：負詞在小地圖預設包/桶負詞欄自管，測試對齊實際生成=不暗掛
-                const imageUrl = await imageManager.generate(_testPrompt, _tabCfg.type, _genOpts);
+                const imageUrl = (_use === 'item' || _use === 'app')
+                    ? await imageManager.generateItem(_testPrompt, _genOpts)
+                    : await imageManager.generate(_testPrompt, _u.type, _genOpts);
 
                 imgTestImage.src = imageUrl;
                 imgTestUrl.textContent = /^(data:|blob:)/.test(imageUrl) ? '圖片已生成（內嵌資料，省略顯示）' : `URL: ${imageUrl}`;
