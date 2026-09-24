@@ -74,6 +74,11 @@
     const tagRe = (tags) => new RegExp('\\[\\s*(' + tags + ')\\s*[:：]?\\s*(.*?)\\s*\\]', 'gi');
 
     // VN 頭像串接查詢：lorebook → mem cache → VN IndexedDB（最多到第4步，不生成）
+    //   回 { url, sprite }：sprite＝這張其實是全身立繪（「跳過頭像，直接生全身立繪」生的，avatar_cache 標 isSprite），
+    //   貼上去時只露上半部（見 wx_theme 的 .vn-avt-sprite）。
+    async function _isSpriteRec(VN_Cache, v) {
+        try { const r = VN_Cache ? await VN_Cache.get('avatar_cache', v) : null; return !!(r && r.isSprite); } catch (e) { return false; }
+    }
     async function _resolveVNAvatar(name) {
         const win = window.parent || window;
         const vn = win.VN_Core;
@@ -85,14 +90,14 @@
         // 1. Lorebook 頭像
         if (vn._lorebookAvatarCache) {
             for (const v of variants) {
-                if (vn._lorebookAvatarCache[v]) return vn._lorebookAvatarCache[v];
+                if (vn._lorebookAvatarCache[v]) return { url: vn._lorebookAvatarCache[v], sprite: false };
             }
         }
 
         // 2. VN 記憶體快取（已生成的頭像）
         if (vn._avatarMemCache) {
             for (const v of variants) {
-                if (vn._avatarMemCache[v]) return vn._avatarMemCache[v];
+                if (vn._avatarMemCache[v]) return { url: vn._avatarMemCache[v], sprite: await _isSpriteRec(win.VN_Cache, v) };
             }
         }
 
@@ -102,7 +107,7 @@
             for (const v of variants) {
                 try {
                     const cached = await VN_Cache.get('avatar_cache', v);
-                    if (cached?.url && !cached.url.startsWith('blob:')) return cached.url;
+                    if (cached?.url && !cached.url.startsWith('blob:')) return { url: cached.url, sprite: !!cached.isSprite };
                 } catch(e) {}
             }
         }
@@ -157,8 +162,8 @@
                 if (!name) return;
                 el.setAttribute('data-avt-done', '1');
                 try {
-                    const url = await _resolveVNAvatar(name);
-                    if (url) el.style.backgroundImage = "url('" + url + "')";
+                    const hit = await _resolveVNAvatar(name);
+                    if (hit && hit.url) { el.style.backgroundImage = "url('" + hit.url + "')"; el.classList.toggle('vn-avt-sprite', !!hit.sprite); }
                     else el.removeAttribute('data-avt-done');
                 } catch (e) { el.removeAttribute('data-avt-done'); }
             });

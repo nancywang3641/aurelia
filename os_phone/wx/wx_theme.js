@@ -163,6 +163,10 @@
             .wx-time-stamp.animate { animation: popIn 0.3s ease-out forwards; }
             .wx-msg-row.me { flex-direction: row-reverse; }
             .wx-bubble-avatar { width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; background-size: cover; background-color: #ccc; }
+            /* 頭像拿的是全身立繪（設定裡「跳過頭像，直接生全身立繪」）：只露上半部置中那塊。
+               高度放大成兩倍、貼齊上緣＝框裡剛好是圖的上半部，左右自動置中，不管立繪是 2:3 還是 9:16。
+               主題會改頭像的 background-size，所以要 !important 蓋過（wx_view hydrateAvatars 掛這個 class）。 */
+            .vn-load-target.vn-avt-sprite { background-size: auto 200% !important; background-position: center top !important; }
             /* 🚨 泡泡的寬度上限在這一層，不在泡泡本身。以前它是一個沒有 class 的行內樣式，
                主題碰不到（行內還蓋過所有樣式表），於是 AI 主題在預覽裡好好的、套進微信就被
                這層無形的 70% 夾住 → 她說「預覽正常，套用後偏移，而且泡泡張不開」。
