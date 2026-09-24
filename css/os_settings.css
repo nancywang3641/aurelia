@@ -324,6 +324,11 @@
 .set-row-group { margin-top: 14px; padding-bottom: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #8a8fa3; }
 .set-row-group:first-child { margin-top: 2px; }
 .set-room-style-btns { display: flex; gap: 6px; margin-top: 6px; }
+/* 房間那塊只露選中那條路的格子；ComfyUI 寬高用不到時換成鎖住的兩格。這幾格的 display 會被 .set-input/.set-select 蓋掉，hidden 要硬一點 */
+#img-room-style-block [data-room-for][hidden],
+#img-cfd-width[hidden], #img-cfd-height[hidden], #img-cfd-width-eff[hidden], #img-cfd-height-eff[hidden], #img-cfd-size-note[hidden] { display: none !important; }
+.cfd-size-note { grid-column: 1 / -1; margin: 0; }
+#img-cfd-width-eff, #img-cfd-height-eff { opacity: 0.55; cursor: not-allowed; }
 .set-room-style-btns .set-btn { flex: 1; justify-content: center; }
 /* 自訂接口的底詞包：下拉＋存成包＋刪，一排；下拉吃剩下的寬 */
 .capi-pack-row { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; }

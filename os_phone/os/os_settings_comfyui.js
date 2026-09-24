@@ -470,7 +470,7 @@
                 fixSelect(container.querySelector('#img-wg-sprite'),
                           'comfyui_direct|' + oldName, 'comfyui_direct|' + newName,
                           'ComfyUI｜' + oldName, 'ComfyUI｜' + newName);
-                fixSelect(container.querySelector('#img-room-style'), oldName, newName, oldName, newName);
+                fixSelect(container.querySelector('#img-room-comfy-style'), oldName, newName, oldName, newName);
                 return res;
             }
             window._cfdPreset = {

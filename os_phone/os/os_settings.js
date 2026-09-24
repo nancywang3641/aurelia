@@ -27,8 +27,8 @@
             ss_1519: { title: '立繪模式', body: '開＝直接生全身立繪、不生頭像。' },
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
-            ss_1589: { title: '房間畫風', body: '房客的房間整間畫出來時用這個畫風。選好就生效。' },
-            ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。\n\nComfyUI 畫的房間不看這格，看上面那格。' },
+            ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
+            ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。' },
             ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次讓它把家具和能踩的地板各塗一個顏色，之後小人會被家具擋住、繞過去走，地板照它畫的範圍走。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
             ss_1627: { title: '同步角色來源', body: '開啟後，背景和角色用同一個來源，不用再貼一次帳號。' },
@@ -1625,46 +1625,51 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <!-- ── 🧰 其他 分頁 body：不屬於頭像/插圖/背景/小地圖任何一桶的設定都放這 ── -->
                         <div id="img-tab-misc" class="img-srctab-body" style="display:none;">
-                            <!-- 🏠 房間畫風：房客的房間整間生出來時用哪個畫風包。選了就存(localStorage)、不用按底部保存。 -->
+                            <!-- 🏠 房間：先選用哪個接口畫，下面只露那條路用得到的格子（data-room-for 對 img-room-route 的值，_roomRouteShow 切）。
+                                 以前兩條路的選項全部一起列、還有兩個下拉同名 img-room-style：存自訂接口的畫風時讀到的是 ComfyUI 那格。
+                                 選了就存（localStorage），不用按底部保存。 -->
                             <div class="set-group" id="img-room-style-block">
-                                <div class="set-label" title="包租婆的房客房間是「整間一次畫出來」，用這裡選的畫風。"><i class="fa-solid fa-house"></i> 房間畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1589') : ''}</div>
-                                <select class="set-select" id="img-room-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">
-                                    ${(() => {
-                                        const _w = window.parent || window;
-                                        const _G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
-                                        const _list = (_G && _G.listStylePresets) ? _G.listStylePresets() : [];
-                                        const _cur = (_G && _G.getStyleName) ? _G.getStyleName() : '';
-                                        if (!_list.length) return '<option value="">還沒有可用的畫風</option>';
-                                        return _list.map(p => {
-                                            const nm = String((p && p.name) || '未命名');
-                                            const v = nm.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                                            return '<option value="' + v + '"' + (nm === _cur ? ' selected' : '') + '>' + v + '</option>';
-                                        }).join('');
-                                    })()}
-                                </select>
-                                <div class="set-label"><i class="fa-solid fa-couch"></i> 房間用哪個接口畫${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_room_route') : ''}</div>
                                 ${(() => {
                                     const _w = window.parent || window;
                                     const _G = _w.OS_ROOM_GEN || window.OS_ROOM_GEN;
-                                    const _r = (_G && _G.getRoute) ? _G.getRoute() : { mode: 'comfy', roomNode: '', maskNode: '' };
+                                    const _r = (_G && _G.getRoute) ? _G.getRoute() : { mode: 'comfy', roomNode: '', maskNode: '', styles: [], style: '' };
                                     const _nodes = (_G && _G.listCapiNodes) ? _G.listCapiNodes() : [];
                                     const _e = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                                    const _help = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
                                     const _opts = (cur) => _nodes.map(n => '<option value="' + _e(n.id) + '"' + (n.id === cur ? ' selected' : '') + '>' + _e(n.name) + '</option>').join('');
-                                    return '<select class="set-select" id="img-room-route" onchange="window._saveRoomRoute && window._saveRoomRoute()">'
-                                        + '<option value="comfy"' + (_r.mode !== 'capi' ? ' selected' : '') + '>ComfyUI（原本那套）</option>'
+                                    const _hide = (modes) => (modes.split(' ').indexOf(_r.mode) >= 0 ? '' : ' hidden');
+                                    // ComfyUI 那條的畫風＝ComfyUI 預設包（只認整房 inpaint 那顆）
+                                    const _packs = (_G && _G.listStylePresets) ? _G.listStylePresets() : [];
+                                    const _packCur = (_G && _G.getStyleName) ? _G.getStyleName() : '';
+                                    const _packOpts = _packs.length
+                                        ? _packs.map(p => { const nm = String((p && p.name) || '未命名'); return '<option value="' + _e(nm) + '"' + (nm === _packCur ? ' selected' : '') + '>' + _e(nm) + '</option>'; }).join('')
+                                        : '<option value="">還沒有可用的預設包</option>';
+                                    return '<div class="set-label"><i class="fa-solid fa-house"></i> 房間用哪個接口畫' + _help('ss_room_route') + '</div>'
+                                        + '<select class="set-select" id="img-room-route" onchange="window._saveRoomRoute && window._saveRoomRoute(); window._roomRouteShow && window._roomRouteShow()">'
+                                        + '<option value="comfy"' + (_r.mode === 'comfy' ? ' selected' : '') + '>ComfyUI</option>'
                                         + '<option value="capi1"' + (_r.mode === 'capi1' ? ' selected' : '') + '>自訂接口・一次（只畫房間，家具不擋路）</option>'
                                         + '<option value="capi"' + (_r.mode === 'capi' ? ' selected' : '') + '>自訂接口・兩次（自動量家具，家具會擋路）</option>'
                                         + '</select>'
-                                        + '<div class="set-label">畫房間用</div>'
-                                        + '<select class="set-select" id="img-room-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.roomNode) + '</select>'
-                                        + '<div class="set-label">量家具用</div>'
-                                        + '<select class="set-select" id="img-room-mask-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.maskNode) + '</select>'
-                                        + '<div class="set-label">房間畫風' + ((window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_room_style') : '') + '</div>'
-                                        + '<select class="set-select" id="img-room-style" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + ('<option value=""' + (_r.style ? '' : ' selected') + '>照圖片設置的底詞</option>' + (_r.styles || []).map(x => '<option value="' + _e(x.name) + '"' + (x.name === _r.style ? ' selected' : '') + '>' + _e(x.name) + '</option>').join('')) + '</select>'
-                                        + '<div class="set-room-style-btns">'
-                                        + '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.add()"><i class="fa-solid fa-plus"></i> 新增</button>'
-                                        + '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.edit()"><i class="fa-solid fa-pen"></i> 修改</button>'
-                                        + '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.del()"><i class="fa-solid fa-trash"></i> 刪除</button>'
+                                        + '<div data-room-for="comfy"' + _hide('comfy') + '>'
+                                        +   '<div class="set-label">畫風預設包' + _help('ss_1589') + '</div>'
+                                        +   '<select class="set-select" id="img-room-comfy-style" onchange="((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN||{}).setStyleName && ((window.parent||window).OS_ROOM_GEN||window.OS_ROOM_GEN).setStyleName(this.value)">' + _packOpts + '</select>'
+                                        + '</div>'
+                                        + '<div data-room-for="capi1 capi"' + _hide('capi1 capi') + '>'
+                                        +   '<div class="set-label">畫房間用</div>'
+                                        +   '<select class="set-select" id="img-room-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.roomNode) + '</select>'
+                                        + '</div>'
+                                        + '<div data-room-for="capi"' + _hide('capi') + '>'
+                                        +   '<div class="set-label">量家具用</div>'
+                                        +   '<select class="set-select" id="img-room-mask-node" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + _opts(_r.maskNode) + '</select>'
+                                        + '</div>'
+                                        + '<div data-room-for="capi1 capi"' + _hide('capi1 capi') + '>'
+                                        +   '<div class="set-label">房間畫風' + _help('ss_room_style') + '</div>'
+                                        +   '<select class="set-select" id="img-room-capi-style" onchange="window._saveRoomRoute && window._saveRoomRoute()">' + window._roomStyleOpts(_r) + '</select>'
+                                        +   '<div class="set-room-style-btns">'
+                                        +     '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.add()"><i class="fa-solid fa-plus"></i> 新增</button>'
+                                        +     '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.edit()"><i class="fa-solid fa-pen"></i> 修改</button>'
+                                        +     '<button class="set-btn" type="button" onclick="window._roomStyle && window._roomStyle.del()"><i class="fa-solid fa-trash"></i> 刪除</button>'
+                                        +   '</div>'
                                         + '</div>';
                                 })()}
                             </div>
@@ -1822,8 +1827,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div><div class="set-label" style="font-size:11px;">排程器</div><select class="set-select" id="img-cfd-scheduler">${['normal','karras','exponential','sgm_uniform','simple','ddim_uniform','beta','linear_quadratic','kl_optimal'].map(s => `<option value="${s}"${(imgConfig.comfyuiDirect?.scheduler||'normal')===s?' selected':''}>${s}</option>`).join('')}</select></div>
                                         <div><div class="set-label" style="font-size:11px;">步數</div><input class="set-input" id="img-cfd-steps" type="number" min="1" max="60" value="${imgConfig.comfyuiDirect?.steps ?? 28}"></div>
                                         <div><div class="set-label" style="font-size:11px;">CFG</div><input class="set-input" id="img-cfd-cfg" type="number" step="0.1" min="1" max="20" value="${imgConfig.comfyuiDirect?.cfg ?? 6.5}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${imgConfig.comfyuiDirect?.width ?? 1024}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${imgConfig.comfyuiDirect?.height ?? 1024}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${imgConfig.comfyuiDirect?.width ?? 1024}"><input class="set-input" id="img-cfd-width-eff" type="text" disabled hidden></div>
+                                        <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${imgConfig.comfyuiDirect?.height ?? 1024}"><input class="set-input" id="img-cfd-height-eff" type="text" disabled hidden></div>
+                                        <div class="set-desc cfd-size-note" id="img-cfd-size-note" hidden></div>
                                         <div><div class="set-label" style="font-size:11px;" title="-1 為隨機。">種子</div><input class="set-input" id="img-cfd-seed" type="number" value="${imgConfig.comfyuiDirect?.seed ?? -1}"></div>
                                         <div><div class="set-label" style="font-size:11px;" title="0 為關閉。">CLIP skip</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${imgConfig.comfyuiDirect?.clipSkip ?? 0}"></div>
                                         <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;" title="空＝模型內建。">VAE</div><select class="set-select" id="img-cfd-vae"><option value=""${!imgConfig.comfyuiDirect?.vae?' selected':''}>（內建 VAE）</option>${imgConfig.comfyuiDirect?.vae?`<option value="${imgConfig.comfyuiDirect.vae}" selected>${imgConfig.comfyuiDirect.vae}</option>`:''}</select></div>
@@ -3461,7 +3467,41 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (elCapiGroup) elCapiGroup.classList.toggle('hidden', !set.has('custom_api'));
         }
 
+        // 📐 這一頁的圖實際用哪一格的尺寸（跟 vn_config.getScene/getBg/getAvatar、小地圖寫死的那組一致）：
+        //   插圖→「場景插圖尺寸」、背景→「背景尺寸」、小地圖→固定 1024×512、頭像→「角色頭像尺寸」有選就用它，
+        //   選「跟各接口預設」才輪到 ComfyUI 基本參數的寬高。回 null＝用基本參數那兩格。
+        const _effectiveSize = (tab) => {
+            const q = (sel) => (container.querySelector(sel) || {}).value || '';
+            const parse = (raw) => { const m = String(raw || '').toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x').match(/^(\d{2,5})x(\d{2,5})$/); return m ? { w: +m[1], h: +m[2] } : null; };
+            if (tab === 'map') return { w: 1024, h: 512, from: '小地圖固定尺寸' };
+            if (tab === 'bg') { const z = parse(q('#img-bg-size') || '1024x768'); return z ? Object.assign(z, { from: '背景尺寸' }) : null; }
+            if (tab === 'scene') { let raw = q('#img-scene-size') || '1024x1024'; if (raw === 'custom') raw = q('#img-scene-size-custom'); const z = parse(raw); return z ? Object.assign(z, { from: '場景插圖尺寸' }) : null; }
+            const z = parse(q('#img-avatar-size'));
+            return z ? Object.assign(z, { from: '角色頭像尺寸' }) : null;
+        };
+        // 基本參數的寬高：用不到時藏起真的那兩格、換上鎖住的兩格顯示實際尺寸，下面一行說去哪格改（她：「應用後才鎖死基礎參數」）
+        const _cfdSizeLock = () => {
+            const eff = _effectiveSize(imgSrcTab);
+            const w = container.querySelector('#img-cfd-width'), h = container.querySelector('#img-cfd-height');
+            const we = container.querySelector('#img-cfd-width-eff'), he = container.querySelector('#img-cfd-height-eff');
+            const note = container.querySelector('#img-cfd-size-note');
+            if (!w || !h || !we || !he || !note) return;
+            const locked = !!eff;
+            w.hidden = h.hidden = locked;
+            we.hidden = he.hidden = !locked;
+            note.hidden = !locked;
+            if (locked) {
+                we.value = eff.w; he.value = eff.h;
+                note.textContent = eff.from === '小地圖固定尺寸' ? '小地圖固定 1024×512，這兩格用不到。' : '這一頁的圖用「' + eff.from + '」那格的尺寸，要改去那格改。';
+            }
+        };
+        ['#img-avatar-size', '#img-scene-size', '#img-scene-size-custom', '#img-bg-size'].forEach(sel => {
+            const el = container.querySelector(sel);
+            if (el) { el.addEventListener('change', () => _cfdSizeLock()); el.addEventListener('input', () => _cfdSizeLock()); }
+        });
+
         const refreshImgPanel = () => {
+            try { _cfdSizeLock(); } catch (e) {}
             const charSvc  = elImgServiceLiving ? elImgServiceLiving.value : 'pollinations'; // 頭像桶
             const sceneSvc = elImgServiceScene  ? elImgServiceScene.value  : charSvc;         // 插圖桶
             const synced   = elImgSyncBg ? elImgSyncBg.checked : true;
@@ -3560,17 +3600,21 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const _d = (_w.document && _w.document.getElementById('img-room-route')) ? _w.document : document;
             const v = (id) => { const el = _d.getElementById(id); return el ? el.value : ''; };
             const _m = v('img-room-route');
-            _G.setRoute({ mode: (_m === 'capi' || _m === 'capi1') ? _m : 'comfy', roomNode: v('img-room-node'), maskNode: v('img-room-mask-node'), style: v('img-room-style') });
+            _G.setRoute({ mode: (_m === 'capi' || _m === 'capi1') ? _m : 'comfy', roomNode: v('img-room-node'), maskNode: v('img-room-mask-node'), style: v('img-room-capi-style') });
         };
-        // 🎨 房間畫風（自訂接口畫房間用）：她自己加，一個名字配一段畫風描述
-        window._roomStyleOpts = (r) => {
-            const _e = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-            return '<option value=""' + (r.style ? '' : ' selected') + '>照圖片設置的底詞</option>'
-                + (r.styles || []).map(x => '<option value="' + _e(x.name) + '"' + (x.name === r.style ? ' selected' : '') + '>' + _e(x.name) + '</option>').join('');
+        // 房間那塊：只露選中那條路用得到的格子
+        window._roomRouteShow = () => {
+            const _w = window.parent || window;
+            const _d = (_w.document && _w.document.getElementById('img-room-route')) ? _w.document : document;
+            const sel = _d.getElementById('img-room-route');
+            if (!sel) return;
+            const mode = sel.value;
+            _d.querySelectorAll('#img-room-style-block [data-room-for]').forEach(el => { el.hidden = String(el.getAttribute('data-room-for')).split(' ').indexOf(mode) < 0; });
         };
+        // 🎨 房間畫風（自訂接口畫房間用）：她自己加，一個名字配一段畫風描述。選項組法 window._roomStyleOpts 定義在檔頭（組畫面時就要用）
         window._roomStyle = (() => {
             const G = () => { const _w = window.parent || window; return _w.OS_ROOM_GEN || window.OS_ROOM_GEN; };
-            const sel = () => { const _w = window.parent || window; return (_w.document && _w.document.getElementById('img-room-style')) || document.getElementById('img-room-style'); };
+            const sel = () => { const _w = window.parent || window; return (_w.document && _w.document.getElementById('img-room-capi-style')) || document.getElementById('img-room-capi-style'); };
             const redraw = () => { const s = sel(); if (s && G()) s.innerHTML = window._roomStyleOpts(G().getRoute()); };
             return {
                 async add() {
@@ -4791,26 +4835,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     char:  { type: 'char',  svcEl: elImgServiceLiving,   sizeSel: '#img-avatar-size' },
                     scene: { type: 'scene', svcEl: elImgServiceScene,     sizeSel: '#img-scene-size'  },
                     bg:    { type: 'bg',    svcEl: elImgServiceInanimate, sizeSel: '#img-bg-size'     },
-                    map:   { type: 'map',   svcEl: elImgServiceMap,       sizeSel: '#img-bg-size'     },
+                    map:   { type: 'map',   svcEl: elImgServiceMap,       sizeSel: ''                 },
                 };
                 const _tabCfg = _tabMap[_activeTab] || _tabMap.char;
 
                 // 該桶自己的尺寸：插圖可能選 custom；頭像空值(跟接口預設)就不塞尺寸、讓接口用自己的預設
-                let _szRaw = container.querySelector(_tabCfg.sizeSel)?.value || '';
-                if (_szRaw === 'custom') _szRaw = (container.querySelector('#img-scene-size-custom')?.value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x');
-                const _sizeOpts = /^\d{2,5}x\d{2,5}$/.test(_szRaw)
-                    ? { width: Number(_szRaw.split('x')[0]), height: Number(_szRaw.split('x')[1]) }
-                    : {};
+                const _eff = _effectiveSize(_activeTab);
+                const _sizeOpts = _eff ? { width: _eff.w, height: _eff.h } : {};
 
                 // force:true → 測試按鈕每次都實生，不吃 _urlCache 舊圖（測試搞快取根本沒意義）
-                // ComfyUI 直連用面板自己的尺寸(cfg.width/height)，其他來源用上面的測試尺寸
+                // 尺寸跟實際生圖同一套（_effectiveSize）；頭像選「跟各接口預設」時不塞，ComfyUI 就落到基本參數那兩格
                 const _testIsCfd = (_tabCfg.svcEl ? _tabCfg.svcEl.value : '') === 'comfyui_direct';
 
                 // 畫風底詞/負詞：頭像桶由 generate() 內部自動套(charBasePrompt/charNegPrompt)；
                 // 背景桶的底詞/負詞存在 VN_Config、平常由 getBg 套、測試直連 generate 會繞過 → 這裡自己帶進去才測得到畫風。
                 // ComfyUI 直連有自己的 basePrompt/negPrompt，不重複疊。
                 let _testPrompt = testPrompt;
-                const _genOpts = _testIsCfd ? { force: true } : { ..._sizeOpts, force: true };
+                const _genOpts = { ..._sizeOpts, force: true };
                 if (_activeTab === 'bg' && !_testIsCfd) {
                     const _bgBase = (container.querySelector('#vncfg-bg-prompt')?.value || '').trim();
                     const _bgNeg  = (container.querySelector('#vncfg-bg-neg')?.value || '').trim();
@@ -5326,6 +5367,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
     }
 
+    // 🎨 房間畫風（自訂接口畫房間用）的下拉選項：組設定頁畫面時就要用，所以放在模組層、不放 wire 裡
+    window._roomStyleOpts = (r) => {
+        const _e = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        return '<option value=""' + (r.style ? '' : ' selected') + '>照圖片設置的底詞</option>'
+            + (r.styles || []).map(x => '<option value="' + _e(x.name) + '"' + (x.name === r.style ? ' selected' : '') + '>' + _e(x.name) + '</option>').join('');
+    };
     window.OS_SETTINGS.launchApp = launchApp;
     // 相簿 app（大廳手機殼）：用同一引擎跑「只顯示畫廊」模式
     window.OS_SETTINGS.launchAlbum = function (container) { return launchApp(container, 'album'); };
