@@ -149,11 +149,19 @@
             const card = tmp.firstElementChild;
             card.dataset.vnKey = p._vnKey;
             const old = list.querySelector('[data-vn-key="' + CSS.escape(p._vnKey) + '"]');
-            // 每加一個讚、一則留言整則重畫：舊的那則已經貼好的照片直接搬過來，不然每點一下照片都重新載一次、閃一下
-            if (old) card.querySelectorAll('img[data-db-img]').forEach(function (im) {
-                const was = old.querySelector('img[data-db-img="' + CSS.escape(im.getAttribute('data-db-img')) + '"][data-img-done]');
-                if (was && was.src) { im.src = was.src; im.setAttribute('data-img-done', '1'); }
-            });
+            // 每加一個讚、一則留言整則重畫：舊的那則的照片格整格搬過來（照片只會往後加，照順序對）。
+            //   她按「展開圖片」生出來的圖只換了畫面上那一格，這一段的資料不知道 → 以前重畫就變回沒展開的卡片；
+            //   還在生的那格搬過來，生完照樣換得上去。生好的網址順便記回來，下一段朋友圈擺回這則時也是展開的。
+            if (old) {
+                const was = old.querySelectorAll('.wxmo-ph');
+                card.querySelectorAll('.wxmo-ph').forEach(function (n, i) {
+                    const o = was[i];
+                    if (!o) return;
+                    const im = o.querySelector('img.os-img-photo');
+                    if (im && im.src && p.photos[i] && !p.photos[i].src) p.photos[i].src = im.src;
+                    n.replaceWith(o);
+                });
+            }
             if (old) old.replaceWith(card); else list.insertBefore(card, list.firstChild);   // 新的一則排最上面，跟手機裡一樣
             if (!quiet) card.classList.add(isNew ? 'vnmo-in' : 'vnmo-pop');
             MO._hydrate(card);
