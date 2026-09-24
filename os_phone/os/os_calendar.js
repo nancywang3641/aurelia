@@ -43,6 +43,9 @@
         .cal-ev.cal-ev-me .cal-ev-bar { background: #3d8be0; }
         .cal-ev-text { flex: 1; min-width: 0; cursor: pointer; }
         .cal-ev-title { font-size: 14px; color: var(--os-ink); word-break: break-word; }
+        .cal-ev.cal-ev-done .cal-ev-title { color: var(--os-ink-soft); }
+        .cal-ev.cal-ev-done .cal-ev-bar { opacity: 0.35; }
+        .cal-ev-state { font-size: 12px; margin-left: 4px; }
         .cal-ev-src { font-size: 11px; color: var(--os-ink-soft); margin-top: 2px; }
         .cal-ev-del { color: rgba(var(--os-ink-rgb), 0.25); padding: 6px; cursor: pointer; font-size: 14px; }
         .cal-ev-del:active { color: #ff4444; }
@@ -101,9 +104,9 @@
         const sel = _sel || (today ? { y: today.y || y, m: today.m, d: today.d } : { y: y, m: m, d: 1 });
         const evs = eventsOn(st, sel.y, sel.m, sel.d);
         const evHtml = evs.length ? evs.map(e => `
-            <div class="cal-ev${e.src === 'me' ? ' cal-ev-me' : ''}">
+            <div class="cal-ev${e.src === 'me' ? ' cal-ev-me' : ''}${e.done ? ' cal-ev-done' : ''}">
                 <div class="cal-ev-bar"></div>
-                <div class="cal-ev-text" data-edit="${esc(e.id)}"><div class="cal-ev-title">${esc(e.title)}</div><div class="cal-ev-src">${e.src === 'me' ? '自己記的' : (e.src === 'wx' ? (e.edited ? '在微信說好的，改過' : '在微信說好的') : (e.edited ? '劇情裡說好的，改過' : '劇情裡說好的'))}</div></div>
+                <div class="cal-ev-text" data-edit="${esc(e.id)}"><div class="cal-ev-title">${esc(e.title)}${e.done ? '<span class="cal-ev-state">' + esc(S().doneLabel ? S().doneLabel(e) : '') + '</span>' : ''}</div><div class="cal-ev-src">${e.src === 'me' ? '自己記的' : (e.src === 'wx' ? (e.edited ? '在微信說好的，改過' : '在微信說好的') : (e.edited ? '劇情裡說好的，改過' : '劇情裡說好的'))}</div></div>
                 <div class="cal-ev-del" data-id="${esc(e.id)}"><i class="fa-solid fa-trash"></i></div>
             </div>`).join('') : '<div class="cal-empty-note">這天沒有約定</div>';
 

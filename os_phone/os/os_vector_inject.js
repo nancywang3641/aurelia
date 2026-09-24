@@ -91,6 +91,80 @@
     const HEAVY_SLOTS  = 5;
     const HEAVY_MIN    = 0.7;    // 多重才算「還懸著」。0.5 是副模型拿不準時的預設值，門檻要高於它
 
+    // ── 🗓 每條記憶標「第幾章·故事日期」──
+    //   🚨 09-24 她：約定拍完了，隔天 AI 又提約定，問是不是記憶沒標順序。送出那包的劇情記憶每條都沒有時間：
+    //   「核心角色｜最新狀態」裡有的其實是初遇那條；同一樣東西有兩條說法（一條說丟了、一條說還在），模型分不出哪條新。
+    //   記憶存的 chapterId 就是當時那一樓 → 回聊天檔讀那樓的 [Chapter|N] 跟狀態欄的日期，不用另外存、舊記憶也標得到。
+    //   讀不到完整聊天檔就不標（不猜）。快取按「樓號＋那樓記憶最新的寫入時間」，重生後那樓重抽就會重讀。
+    let _labelCache = { chat: '', map: {} };
+    function _labelOf(text) {
+        const t = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+        const cm = t.match(/\[Chapter\|\s*(\d+)/i);
+        let day = '';
+        const P = win.OS_MC_STATUS;
+        const os = t.match(/<os_status>[\s\S]*?<\/os_status>/i);
+        let dm = os && os[0].match(/(?:日期|date)\s*\|\s*([^\n<|]+)/i);
+        if (!dm) dm = t.match(/\[Date\|([^\]|]+)/i);
+        if (dm && P && P.parseDate) { const d = P.parseDate(dm[1]); if (d) day = P.fmtDate(d); }
+        const parts = [];
+        if (cm) parts.push('第' + cm[1] + '章');
+        if (day) parts.push(day);
+        return parts.length ? '（' + parts.join('·') + '）' : '';
+    }
+    async function _chapterLabels(mems) {
+        const cid = _storyId();
+        if (_labelCache.chat !== cid) _labelCache = { chat: cid, map: {} };
+        const floorTs = {};
+        for (const m of mems) {
+            const f = String(m && m.chapterId != null ? m.chapterId : '');
+            if (!/^\d+$/.test(f)) continue;
+            floorTs[f] = Math.max(floorTs[f] || 0, m.createdAt || 0);
+        }
+        const need = Object.keys(floorTs).filter(f => !(_labelCache.map[f] && _labelCache.map[f].ts === floorTs[f]));
+        if (need.length && win.VN_READER?.fetchFullChat) {
+            const cache = _labelCache;
+            const fill = (full) => {
+                if (!Array.isArray(full) || !full.length) return;
+                const msgs = full.filter(x => x && (x.mes != null || x.message != null));   // 聊天檔第一行是設定、不是訊息
+                const textAt = (i) => { const x = msgs[i]; return x ? String(x.mes != null ? x.mes : x.message) : ''; };
+                for (const f of need) {
+                    const i = Number(f);
+                    // 記憶來源一定是帶 <content> 的 AI 那則；對不上就看隔壁（兩種編號差一）
+                    let text = textAt(i);
+                    if (text.indexOf('<content>') < 0) { const a = textAt(i - 1), b = textAt(i + 1); text = a.indexOf('<content>') >= 0 ? a : (b.indexOf('<content>') >= 0 ? b : ''); }
+                    cache.map[f] = { ts: floorTs[f], label: text ? _labelOf(text) : '' };
+                }
+            };
+            // 注入整段最多等 2.5 秒（見 _waitFor）：讀檔最多等 0.8 秒，慢了這輪先不標，讀完照樣填進快取、下一輪就有
+            const p = Promise.resolve().then(() => win.VN_READER.fetchFullChat()).then(fill).catch(() => {});
+            await Promise.race([p, new Promise(r => setTimeout(r, 800))]);
+        }
+        return (m) => { const f = String(m && m.chapterId != null ? m.chapterId : ''); const c = _labelCache.map[f]; return c ? c.label : ''; };
+    }
+    function _floorOf(m) { const s = String(m && m.chapterId != null ? m.chapterId : ''); return /^\d+$/.test(s) ? Number(s) : -1; }
+    // 「哪條比較新」：先看發生在哪一樓（故事先後），同一樓或認不出樓號才看寫入時間。
+    //   只看寫入時間會錯：舊章重新整理／重抽過的記憶寫入時間是新的，會蓋掉真正最近的那條。
+    function _newer(a, b) {
+        const fa = _floorOf(a), fb = _floorOf(b);
+        if (fa >= 0 && fb >= 0 && fa !== fb) return fa > fb;
+        return (a.createdAt || 0) > (b.createdAt || 0);
+    }
+    function _keepNewest(map, key, name, m) { const prev = map.get(key); if (!prev || !_newer(prev[1], m)) map.set(key, [name, m]); }
+
+    // ── 👥 同一個人只算一個：正文寫简体（张伟），抽記憶的副模型寫繁體（張偉）→ 以前各算一個人、各留一條「最新」，
+    //   其中一條停在很早以前。比對一律過 OS_ZH.key。
+    //   關係／性事那兩類常把主角放第一個標籤，那條其實是在講對方 → 跳過主角，算在對方頭上。
+    function _nameKey(s) { const Z = win.OS_ZH || window.OS_ZH; return Z && Z.key ? Z.key(s) : String(s || '').trim(); }
+    function _whoOf(m, mcKey) {
+        const tags = (Array.isArray(m.tags) ? m.tags : []).map(t => String(t || '').trim()).filter(Boolean);
+        let name = tags[0] || String(m.summary || '').slice(0, 10).trim();
+        if ((m.type === 'relationship' || m.type === 'sex') && mcKey) {
+            const other = tags.find(t => _nameKey(t) !== mcKey);
+            if (other) name = other;
+        }
+        return name;
+    }
+
     async function injectMemories() {
         try {
             // 撤上次（避免疊加 / 切 chat 殘留）
@@ -131,6 +205,10 @@
                 } catch (e) {}
             }
 
+            const _lab = await _chapterLabels(all);            // m → （第N章·6/21），讀不到就空字串
+            const _mcKey = _nameKey(_getProtagonist());
+            const _labNote = all.some(m => _lab(m)) ? '每條前面的（第幾章·日期）是那件事記下時的章節與故事日期；同一個人或同一樣東西有新舊不同說法時，以章數大的那條為準。\n' : '';
+
             // 索引 = 每條的「一句話摘要」(summary，學星河璀璨的目錄)，不是 tags。
             //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
             //   再做「免費時間召回」：facts 已按 createdAt 舊→新排序，切三段標粗略時距(不花 LLM、不多通)，
@@ -160,9 +238,9 @@
             let block = `<劇情記憶 規則="既成事實·寫作前必讀·不得矛盾">\n`;
             if (_vecActive) {
                 // 向量召回就緒：主模型不背全目錄，只給下面的釘選＋導演挑的細節；要更多細節用關鍵詞 <recall> 兜底。
-                block += `下列是本劇過往「已經發生」的重要記憶與當前需要的細節。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾。\n`;
+                block += `下列是本劇過往「已經發生」的重要記憶與當前需要的細節。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾。\n` + _labNote;
             } else {
-                block += `下列是本劇過往「已經發生」的記憶摘要${_mainRecentOnly ? '（近期段）' : '，按時間遠近分三段(早期/中段/近期)'}。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n`;
+                block += `下列是本劇過往「已經發生」的記憶摘要${_mainRecentOnly ? '（近期段）' : '，按時間遠近分三段(早期/中段/近期)'}。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n` + _labNote;
                 if (facts.length) {
                     const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
                     const _segs = _mainRecentOnly
@@ -186,18 +264,17 @@
             const CORE_PIN_MAX = 10, CORE_TEXT_MAX = 120;
             const _coreKeys = new Set();
             {
-                const coreByChar = new Map();   // 角色名 → 最新一條（all 已 createdAt 舊→新排序，後者覆蓋＝留最新）
+                const coreByChar = new Map();   // 角色鑰匙(簡繁折一起) → [顯示名, 最新一條]（all 已 createdAt 舊→新排序，後者覆蓋＝留最新）
                 for (const m of all) {
                     if (m.type !== 'npc' && m.type !== 'relationship') continue;
-                    let name = (Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || String(m.summary || '').slice(0, 10);
-                    name = String(name).trim();
-                    if (name) coreByChar.set(name, m);
+                    const name = _whoOf(m, _mcKey);
+                    if (name) _keepNewest(coreByChar, _nameKey(name), name, m);
                 }
                 // 按角色去重留最新一條(收斂)：前 N 個給完整內文、其餘給「最新一句摘要」索引。
                 //   角色/關係改走這裡收斂、不再進零散目錄(facts 已排除)→ 治「舊態度+新態度並存→主模型忽冷忽熱」；
                 //   被擠出前 N 的角色仍有最新摘要一句(不消失、也只給最新不並存舊態度)。
-                const _coreAll = Array.from(coreByChar.entries())   // [角色名, 最新一條 m]
-                    .sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+                const _coreAll = Array.from(coreByChar.values())   // [角色名, 最新一條 m]
+                    .sort((a, b) => (_newer(a[1], b[1]) ? -1 : 1));
                 const core = _coreAll.slice(0, CORE_PIN_MAX);
                 const coreRest = _coreAll.slice(CORE_PIN_MAX);
                 if (core.length) {
@@ -206,7 +283,7 @@
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
                         _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・【${name}】${t}`;
+                        return `・【${name}】${_lab(m)}${t}`;
                     }).join('\n');
                 }
                 if (coreRest.length) {
@@ -215,7 +292,7 @@
                         let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
                         if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
                         _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・【${name}】${s}`;
+                        return `・【${name}】${_lab(m)}${s}`;
                     }).join('\n');
                 }
             }
@@ -226,11 +303,10 @@
                 const sexByChar = new Map();
                 for (const m of all) {
                     if (m.type !== 'sex') continue;
-                    let name = (Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || String(m.summary || '').slice(0, 10);
-                    name = String(name).trim();
-                    if (name) sexByChar.set(name, m);
+                    const name = _whoOf(m, _mcKey);
+                    if (name) _keepNewest(sexByChar, _nameKey(name), name, m);
                 }
-                const sx = Array.from(sexByChar.entries()).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0)).slice(0, 8);
+                const sx = Array.from(sexByChar.values()).sort((a, b) => (_newer(a[1], b[1]) ? -1 : 1)).slice(0, 8);
                 if (sx.length) {
                     const _mc = _getProtagonist();   // 主角名（性事是角色×角色，標頭綁兩個人名才清楚）
                     // 🚨 09-23 她：前期泡友、後期感情加深 → 舊的性事紀錄寫著「泡友」，又每回合喊「務必記得這層關係」，跟核心角色那段最新的關係打架。
@@ -240,7 +316,7 @@
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
                         _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・【${_mc ? _mc + '×' + name : name}】${t}`;
+                        return `・【${_mc ? _mc + '×' + name : name}】${_lab(m)}${t}`;
                     }).join('\n');
                 }
             }
@@ -254,10 +330,10 @@
                     if (m.type !== 'item') continue;
                     let name = (Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || String(m.summary || '').slice(0, 10);
                     name = String(name).trim();
-                    if (name) itemByName.set(name, m);   // 後者覆蓋＝留最新一條
+                    if (name) _keepNewest(itemByName, _nameKey(name), name, m);   // 留最新一條（簡繁同一樣東西算一個）
                 }
-                const items = Array.from(itemByName.entries())
-                    .sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0))
+                const items = Array.from(itemByName.values())
+                    .sort((a, b) => (_newer(a[1], b[1]) ? -1 : 1))
                     .slice(0, ITEM_PIN_MAX);
                 if (items.length) {
                     block += `\n\n【物品狀態｜下列物品的「目前狀態／持有者」以此為唯一最新依據，不得拿更早的舊狀態、也不得寫成自相矛盾】\n`;
@@ -265,7 +341,7 @@
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
                         _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・【${name}】${t}`;
+                        return `・【${name}】${_lab(m)}${t}`;
                     }).join('\n');
                 }
             }
@@ -310,12 +386,14 @@
                     if (_hit.length >= 8) break;
                 }
                 if (_hit.length) {
+                    // 照發生先後排（導演挑回來的順序是相關度，不是時間）
+                    _hit.sort((a, b) => (_floorOf(a) - _floorOf(b)) || ((a.createdAt || 0) - (b.createdAt || 0)));
                     block += `\n\n【點名記憶細節｜下列是這段劇情需要記得的完整記憶內容，務必據此保持連貫】\n`;
                     block += _hit.map(m => {
                         let t = String(m.text || '').replace(/\s+/g, ' ').trim();
                         if (t.length > 300) t = t.slice(0, 300) + '…';
                         const tag = ((Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || '').trim();   // 角色名/事件名當標頭
-                        return tag ? `・【${tag}】${t}` : `・${t}`;
+                        return tag ? `・【${tag}】${_lab(m)}${t}` : `・${_lab(m)}${t}`;
                     }).join('\n');
                 }
                 _pendingRecallEntries = [];       // 消費掉；副模型每輪會重新挑
@@ -388,7 +466,8 @@
                 } catch (e) {}
             }
             if (!pool) pool = facts.slice();
-            pool.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            pool.sort((a, b) => (_newer(a, b) ? 1 : -1));   // 照故事先後（見 _newer）
+            const _lab = await _chapterLabels(pool.concat(heavy));   // 目錄每行也標（第N章·日期），導演才分得出新舊
 
             const map = {};
             const _seen = new Set();
@@ -402,7 +481,7 @@
                 idx++;
                 const code = 'A' + idx;
                 map[code] = m;
-                lines.push(`${code}・${s}`);
+                lines.push(`${code}・${_lab(m)}${s}`);
             };
             if (segmented) {
                 const n = pool.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);

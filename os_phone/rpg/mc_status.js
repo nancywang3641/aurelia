@@ -6,8 +6,10 @@
 //     ② 區塊：<os_status> … 日期|6/20 / HP|65/100 / BUFF/DEBUFF|名(剩/總)、… / 日曆|6/20|一句話 … </os_status>
 //        （她自己貼給主模型的那份格式；vn_core.loadScript 先整塊撈出來餵這裡、再從劇本剝掉）
 //   回合：每則新訊息讓狀態效果倒數一回合（區塊寫法由模型直接給數字，以它為準）。
-//   回朔：每則訊息處理前存一張快照。同一則再進來（swipe／重生／編輯）先退回快照再套新內容；
-//        每輪生成前對帳，聊天裡已經不在的訊息退回最早那則的快照。她手動記的約定不跟著回朔。
+//   回朔：每則訊息處理前存一張快照（帶內容簽名）。最新那則換了內容（swipe／重生）先退回快照再套新內容；
+//        處理過的內容再進來（重看舊章）什麼都不動。每輪生成前對帳：內容已經不在完整聊天檔裡的，退回最早那則的快照。
+//        她手動記的約定不跟著回朔。
+//   約定：AI 寫「(已完成)」「(取消)」就打勾；日曆那行每輪整份重寫，沒再寫的劇情約定不再當成「還沒到」。
 //   注入：每輪生成前把現在幾點、HP、還在身上的效果、七天內的約定組成一小段：
 //     酒館走 TavernHelper.injectPrompts（once、不貼回 chat）；PWA 走提示詞順序表的 mc_status 那一格。
 //   資料：OS_DB.app_data（appId=mc_status、chat scope）。跟狀態系統／副模型完全無關——她拍板不給副模型加負擔。
@@ -43,7 +45,7 @@
         } catch (e) { return ''; }
     }
 
-    function blank() { return { date: null, time: '', hp: '', name: '', buffs: [], events: [], snaps: {}, snapOrder: [], turn: 0, expired: [] }; }
+    function blank() { return { date: null, time: '', hp: '', name: '', buffs: [], events: [], snaps: {}, snapOrder: [], turn: 0, expired: [], seenSigs: [] }; }
 
     async function load() {
         const cid = getChatId();
@@ -57,6 +59,7 @@
         if (!_cache.snaps || typeof _cache.snaps !== 'object') _cache.snaps = {};
         if (!Array.isArray(_cache.snapOrder)) _cache.snapOrder = Object.keys(_cache.snaps);
         if (!Array.isArray(_cache.expired)) _cache.expired = [];
+        if (!Array.isArray(_cache.seenSigs)) _cache.seenSigs = [];
         if (!(_cache.turn >= 0)) _cache.turn = 0;
         delete _cache.seen;   // 舊版欄位
         _cacheChat = cid;
@@ -150,19 +153,67 @@
         return gone;
     }
 
-    // ── 回合：每則訊息處理前存快照；同一則再進來先退回快照 ──
-    function onMessage(msgId) {
+    // ── 內容簽名：認「這一則是不是處理過」──
+    //   🚨 09-24 她：約定拍完了，隔天 AI 又提約定。送出那包的主角狀態停在第 8 章（6/20、約定 6/25 還沒到），
+    //   資料庫裡的存檔一輪一輪看：每次生成前都被退回第 8 章那份。兩個原因：
+    //   ① 對帳拿 ctx.chat.length 當「聊天有幾樓」，TauriTavern 懶載入只放最近一段進來 → 樓號比它大的全被當成刪掉。
+    //   ② 樓號不可靠：GENERATION_ENDED 給的是「則數」（樓號＋1），章節列表回放給的是樓號，同一則會用兩個號碼各處理一次；
+    //      回放舊章也被當成「重生這一則」，退回那章之前、之後的全丟。
+    //   現在：處理過的內容用簽名認（重看＝什麼都不動），對帳看「這段內容還在不在完整聊天檔裡」，不看樓號。
+    //   簽名前剝掉程式自己會補寫進正文的東西（插圖 [Scene|]、狀態標記註解、<recall>），免得補寫一次就被當成新內容。
+    function sigOf(text) {
+        const s = String(text || '')
+            .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+            .replace(/\[Scene\|[^\]\n]*\]/gi, '')
+            .replace(/<!--[\s\S]*?-->/g, '')
+            .replace(/<recall>[\s\S]*?<\/recall>/gi, '')
+            .replace(/\s+/g, '');
+        if (!s) return '';
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+        return s.length + ':' + (h >>> 0).toString(36);
+    }
+    const SEEN_MAX = 400;
+    function _seen(st, sig) {
+        if (!sig) return false;
+        return st.snapOrder.some(k => st.snaps[k] && st.snaps[k].sig === sig) || (st.seenSigs || []).indexOf(sig) >= 0;
+    }
+    // 比目前處理過最新的那則還舊、又沒處理過 → 是在翻舊章，不是新的一輪
+    function _olderThanLatest(st, id) {
+        if (!/^\d+$/.test(id)) return false;
+        const nums = st.snapOrder.filter(k => /^\d+$/.test(k)).map(Number);
+        return nums.length > 0 && Number(id) < Math.max.apply(null, nums);
+    }
+
+    // ── 回合：每則訊息處理前存快照；同一則換了內容（swipe／重生）先退回快照 ──
+    //   回傳 { replay }：true＝這則處理過或是舊章，呼叫端不要再套它的狀態欄。
+    function onMessage(msgId, text) {
         return run(async () => {
             const st = await load();
-            if (msgId == null || msgId === '') return st;
+            const sig = text != null ? sigOf(text) : '';
+            if (_seen(st, sig)) return { replay: true };
+            if (msgId == null || msgId === '') {
+                // 獨立版沒有樓號：只記簽名，重看同一章就認得出來
+                if (sig) {
+                    if (!Array.isArray(st.seenSigs)) st.seenSigs = [];
+                    st.seenSigs.push(sig);
+                    if (st.seenSigs.length > SEEN_MAX) st.seenSigs = st.seenSigs.slice(-SEEN_MAX);
+                    await save();
+                }
+                return { replay: false };
+            }
             const id = String(msgId);
             const idx = st.snapOrder.indexOf(id);
             if (idx >= 0) {
-                // swipe／重生／編輯：退回這則處理前的樣子，它之後的快照也一併作廢（後面的內容會重新進來）
+                // 只有「最新那則換了內容」才是 swipe／重生；更早的樓號撞到＝回放或兩種編號撞號，退回去會把之後的進度全丟
+                if (idx !== st.snapOrder.length - 1) return { replay: true };
                 restoreSnapshot(st, st.snaps[id]);
                 dropSnapsFrom(st, idx);
+            } else if (_olderThanLatest(st, id)) {
+                return { replay: true };
             }
             st.snaps[id] = snapshotOf(st);
+            st.snaps[id].sig = sig;
             st.snapOrder.push(id);
             if (st.snapOrder.length > SNAP_MAX) { const old = st.snapOrder.shift(); delete st.snaps[old]; }
             st.turn = (st.turn | 0) + 1;
@@ -172,7 +223,7 @@
             st.expired = st.expired.filter(e => st.turn - (e.turn | 0) <= REVIVE_BLOCK).slice(-30);
             st.buffs = st.buffs.filter(b => b.left > 0 && b.age <= MAX_BUFF_AGE);
             await save();
-            return st;
+            return { replay: false };
         });
     }
     // 對帳：這些訊息 id 已經不在了 → 退回其中最早那則處理前的快照。回退了幾則。
@@ -192,14 +243,27 @@
         });
     }
     function listSnapshotIds() { return _cache ? _cache.snapOrder.slice() : []; }
-    // 酒館：訊息 id 就是樓層索引，聊天縮短＝尾巴那幾樓被刪或重生 → 那幾則的快照該退
+    // 酒館：處理過的那段內容已經不在聊天裡（刪樓／重生／swipe）→ 那幾則的快照該退
+    //   🚨 不能拿 ctx.chat.length 比樓號：TauriTavern 懶載入，ctx.chat 只有最近一段，會把每一則新的都當成刪掉（見 sigOf 上面）。
+    //   看的是完整聊天檔（VN_READER.fetchFullChat 讀檔繞開懶載入）＋記憶體裡那段（剛寫完、檔案還沒存的在這裡）。
+    //   讀不到完整聊天檔就不動；舊存檔沒有簽名的快照認不出來，一律當還活著。
     async function reconcileWithTavern() {
         try {
-            const ctx = win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext();
-            const chat = ctx && ctx.chat;
-            if (!Array.isArray(chat)) return 0;
             const st = await load();
-            const dead = st.snapOrder.filter(id => /^\d+$/.test(id) && parseInt(id, 10) >= chat.length);
+            const signed = st.snapOrder.filter(k => st.snaps[k] && st.snaps[k].sig);
+            if (!signed.length) return 0;
+            const R = win.VN_READER || window.VN_READER;
+            if (!R || !R.fetchFullChat) return 0;
+            const full = await R.fetchFullChat();
+            if (!Array.isArray(full) || !full.length) return 0;
+            const alive = new Set();
+            const add = (m) => { const s = m ? sigOf(m.mes || m.message || m.content || '') : ''; if (s) alive.add(s); };
+            full.forEach(add);
+            try {
+                const ctx = win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext();
+                if (ctx && Array.isArray(ctx.chat)) ctx.chat.forEach(add);
+            } catch (e) {}
+            const dead = signed.filter(k => !alive.has(st.snaps[k].sig));
             return dead.length ? await rollbackByIds(dead) : 0;
         } catch (e) { return 0; }
     }
@@ -246,13 +310,49 @@
     function setBuff(name, rounds) {
         return run(async () => { const st = await load(); applyBuff(st, name, rounds); await save(); });
     }
+    // ✅ 約定做完／取消：AI 每輪整份重寫日曆那行，做完了會寫「周末下午去拍照(已完成)」。
+    //   以前整串標題比對，括號一加就當另一個約定，原本那筆永遠掛在「近期約定」、每輪又送回去說還沒到。
+    //   現在把尾巴的括號狀態剝下來：完成／結束／取消 → 把同一個約定打勾；進行中／今天這類只剝掉不算。
+    //   地點那種括號（某某咖啡店）不認得就停，留在標題裡；比對「是不是同一個」時才把括號全拿掉、簡繁折一起。
+    const NONE_RE = /^(无|無|none|暂无|暫無|无约定|無約定|没有|沒有|-|—)$/i;
+    function _splitMark(title) {
+        let t = String(title || '').trim(), status = '';
+        let m;
+        while ((m = t.match(/[（(【\[]\s*([^()（）【】\[\]]{1,10}?)\s*[)）】\]]\s*$/))) {
+            const w = m[1];
+            if (/取消|作废|作廢|爽约|爽約/.test(w)) status = status || 'cancel';
+            else if (/完成|结束|結束|赴约|赴約|履约|履約|已过|已過|搞定/.test(w)) status = status || 'done';
+            else if (!/进行|進行|今天|今日|明天|待定|待发|待發/.test(w)) break;
+            t = t.slice(0, m.index).trim();
+        }
+        return { base: t, status: status };
+    }
+    function _evKey(title) {
+        const s = String(title || '').replace(/[（(【\[][^()（）【】\[\]]*[)）】\]]/g, '');
+        const Z = win.OS_ZH || window.OS_ZH;
+        return Z && Z.key ? Z.key(s) : s.replace(/\s+/g, '');
+    }
     function addEventTo(st, dateStr, title, note, src, msgId) {
         const d = parseDate(dateStr);
-        title = String(title || '').trim();
-        if (!d || !title) return null;
-        const dup = st.events.find(e => e.date && dateKey(e.date) === dateKey(d) && e.title === title);
-        if (dup) return dup;
+        const sm = _splitMark(title);
+        title = sm.base;
+        if (!d || !title || NONE_RE.test(title)) return null;
+        const k = _evKey(title);
+        const same = st.events.filter(e => _evKey(e.title) === k);
+        const sameDay = (e) => e.date && dateKey(e.date) === dateKey(d);
+        // 'gone'＝某一輪日曆沒寫它（見 applyStatusBlock）；之後又寫回來就不算結束
+        const open = (e) => !e.done || e.done === 'gone';
+        if (sm.status) {
+            const target = same.find(e => open(e) && sameDay(e)) || same.find(open);
+            if (target) { target.done = sm.status; target.doneTs = Date.now(); return target; }
+            const already = same.find(e => e.done);
+            if (already) return already;
+        } else {
+            const dup = same.find(sameDay);
+            if (dup) { if (dup.done === 'gone') { delete dup.done; delete dup.doneTs; } return dup; }
+        }
         const ev = { id: 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), date: d, title: title, note: String(note || ''), src: src || 'ai', ts: Date.now() };
+        if (sm.status) { ev.done = sm.status; ev.doneTs = Date.now(); }
         if (msgId != null) ev.msg = String(msgId);
         st.events.push(ev);
         st.events.sort((a, b) => dateKey(a.date) - dateKey(b.date));
@@ -285,13 +385,23 @@
         return run(async () => {
             const st = await load();
             const body = String(text || '').replace(/<\/?[^>]+>/g, '\n');
-            let touched = false, buffLine = null;
+            let touched = false, buffLine = null, inCal = false, hadCal = false;
+            const calIds = new Set();   // 這份日曆寫到的約定
+            // 一行寫好幾個約定（周末上午去修车；周末下午去拍照）拆開記
+            const addCal = (dateStr, title) => {
+                String(title || '').split(/[；;]/).forEach(t => { const ev = addEventTo(st, dateStr, t, '', 'ai', msgId); if (ev) { touched = true; calIds.add(ev.id); } });
+            };
             body.split(/\n/).forEach(raw => {
                 const line = raw.trim();
                 if (!line || line.indexOf('|') < 0) return;
                 const parts = line.split('|').map(x => x.trim());
                 const key = parts[0].replace(/\s+/g, '').toLowerCase();
                 const val = parts.slice(1).join('|').trim();
+                // 日曆那行後面用 <br> 接的「明天(6/22)|下午两点拍摄」：開頭是日期就當同一張日曆的下一筆
+                if (inCal && !/^(日期|日期時間|日期时间|date|時間|时间|主角名|主角|mc|name|hp|體力|体力|生命|buff\/debuff|buff|debuff|狀態|状态|狀態效果|状态效果)$/.test(key)) {
+                    if (parseDate(parts[0])) { addCal(parts[0], val); return; }
+                }
+                inCal = false;
                 if (/^(日期|日期時間|日期时间|date|時間|时间)$/.test(key)) {
                     const d = parseDate(val);
                     if (d) { st.date = d; touched = true; }
@@ -303,11 +413,16 @@
                 } else if (/^(buff\/debuff|buff|debuff|狀態|状态|狀態效果|状态效果)$/.test(key)) {
                     buffLine = val;
                 } else if (/^(日曆|日历|行事曆|行事历|calendar|約定|约定|event)$/.test(key)) {
-                    if (parts.length >= 3 && addEventTo(st, parts[1], parts.slice(2).join('|'), '', 'ai', msgId)) touched = true;
+                    inCal = true; hadCal = true;
+                    if (parts.length >= 3) addCal(parts[1], parts.slice(2).join('|'));
                 }
             });
             if (buffLine != null) {
-                const items = buffLine.split(/[、，,;；]/).map(x => x.trim()).filter(x => x && !/^(無|无|none|-)$/i.test(x));
+                // AI 常在效果後面加一段括號說明「扭伤(1/5) (下楼梯摔了一跤，脚踝肿，已经消了一半)」，
+                //   說明裡的逗號會把它切成「脚踝肿」「已经消了一半)」好幾個假效果 → 先把不是 (剩/總) 數字的括號拿掉再切
+                const items = buffLine
+                    .replace(/[（(](?!\s*\d+\s*(?:\/\s*\d+)?\s*[)）])[^（()）]*[)）]/g, '')
+                    .split(/[、，,;；]/).map(x => x.trim()).filter(x => x && !/^(無|无|none|-)$/i.test(x));
                 const next = [];
                 items.forEach(it => {
                     const m = it.match(/^(.*?)\s*[（(]\s*(\d+)\s*(?:\/\s*(\d+))?\s*[)）]\s*$/);
@@ -326,15 +441,25 @@
                 st.buffs = next;
                 touched = true;
             }
+            // 日曆跟狀態效果一樣是每輪整份重寫：劇情寫的約定這份日曆沒再寫＝AI 認為結束了，不再當成「還沒到」送回去。
+            //   09-24 那本：6/20 把「周末」記成 6/25，隔天改寫成 6/21 另一種說法，舊的 6/25 那筆沒人收，一直掛著。
+            //   只收劇情寫的（src ai）；微信說好的、她自己記的不動。這份沒有日曆那行就什麼都不收。
+            if (hadCal) {
+                st.events.forEach(e => {
+                    if (e.src === 'ai' && !e.done && !calIds.has(e.id)) { e.done = 'gone'; e.doneTs = Date.now(); touched = true; }
+                });
+            }
             if (touched) await save();
             return touched;
         });
     }
 
     function upcoming(st, days) {
-        if (!st.date) return st.events.slice(0, 5);
-        return st.events.filter(e => { const dd = dayDiff(st.date, e.date); return dd >= 0 && dd <= (days || UPCOMING_DAYS); });
+        const open = st.events.filter(e => !e.done);
+        if (!st.date) return open.slice(0, 5);
+        return open.filter(e => { const dd = dayDiff(st.date, e.date); return dd >= 0 && dd <= (days || UPCOMING_DAYS); });
     }
+    function doneLabel(e) { return e.done === 'cancel' ? '（取消了）' : (e.done === 'gone' ? '（劇情沒再提）' : (e.done ? '（已完成）' : '')); }
     function summary(st) {
         const parts = [];
         if (st.date) parts.push(fmtDate(st.date) + (st.time ? ' ' + st.time : ''));
@@ -361,8 +486,12 @@
         L.push('狀態效果：' + (st.buffs.length ? st.buffs.map(b => b.name + '（剩 ' + b.left + ' 回合）').join('、') : '無'));
         const up = upcoming(st, UPCOMING_DAYS);
         if (up.length) L.push('近期約定：' + up.map(e => fmtDate(e.date) + ' ' + e.title).join('；'));
-        const past = st.date ? st.events.filter(e => dayDiff(st.date, e.date) < 0).slice(-3) : [];
-        if (past.length) L.push('已過的約定：' + past.map(e => fmtDate(e.date) + ' ' + e.title).join('；'));
+        // 做完／取消的也放這裡（按做完的先後），AI 才知道那件事已經過去了，不會再提
+        const past = st.events
+            .filter(e => (e.done && e.done !== 'gone') || (!e.done && st.date && dayDiff(st.date, e.date) < 0))
+            .sort((a, b) => ((a.doneTs || 0) - (b.doneTs || 0)) || (dateKey(a.date) - dateKey(b.date)))
+            .slice(-3);
+        if (past.length) L.push('已過的約定：' + past.map(e => fmtDate(e.date) + ' ' + e.title + doneLabel(e)).join('；'));
         L.push('（狀態效果的剩餘回合以這裡為準往下數；時間只能往前走。）');
         return L.join('\n');
     }
@@ -414,7 +543,7 @@
     const API = {
         load: load, save: save, onMessage: onMessage, rollbackByIds: rollbackByIds, listSnapshotIds: listSnapshotIds, reconcileWithTavern: reconcileWithTavern,
         setDate: setDate, setHp: setHp, setBuff: setBuff, addEvent: addEvent, updateEvent: updateEvent, removeEvent: removeEvent, applyStatusBlock: applyStatusBlock,
-        upcoming: upcoming, summary: summary, buildBlock: buildBlock, injectStatus: injectStatus, renderHud: renderHud,
+        upcoming: upcoming, doneLabel: doneLabel, sigOf: sigOf, summary: summary, buildBlock: buildBlock, injectStatus: injectStatus, renderHud: renderHud,
         parseDate: parseDate, parseTime: parseTime, fmtDate: fmtDate, dateKey: dateKey, dayDiff: dayDiff, getChatId: getChatId,
         resetCache: function () { _cache = null; _cacheChat = ''; },
     };

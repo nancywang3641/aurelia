@@ -466,22 +466,28 @@
             try {
                 const _S = win.OS_MC_STATUS || window.OS_MC_STATUS;
                 if (_S) {
-                    _S.onMessage(messageId).then(function () { _S.renderHud(); });
-                    const _blocks = String(txt || '').match(/<os_status>[\s\S]*?<\/os_status>/gi);
-                    if (_blocks) _blocks.forEach(function (b) { _S.applyStatusBlock(b, messageId); });
-                    // 標籤寫法也在這裡撈：AI 常把 [Date|][HP|][Buff|] 放在 </content> 之後（回覆末尾），
-                    //   劇本只取 <content> 裡面的行，放外面的就永遠讀不到 → 不管寫在哪都認，撈完從原文剝掉。
-                    const _noCot = String(txt || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
-                    const _tagLines = _noCot.match(/^[ \t]*\[(?:Date|HP|Buff|Debuff|Event)\|[^\]\n]*\][ \t]*$/gim);
-                    if (_tagLines) _tagLines.forEach(function (ln) {
-                        const _in = ln.trim().slice(1, -1).split('|');
-                        const _tag = (_in[0] || '').trim().toLowerCase();
-                        const _a = (_in[1] || '').trim(), _b = _in.slice(2).join('|').trim();
-                        if (_tag === 'date') _S.setDate(_a, _b);
-                        else if (_tag === 'hp') _S.setHp(_a);
-                        else if (_tag === 'buff' || _tag === 'debuff') _S.setBuff(_a, _b);
-                        else if (_tag === 'event') _S.addEvent(_a, _b, '', 'ai', messageId);
-                    });
+                    // 重看舊章（處理過的內容、或比最新那則還舊的樓）→ onMessage 回 replay，這章的狀態欄一律不套：
+                    //   以前照套，時鐘就被拉回那章的日期、約定又變成還沒到（09-24 她：約定拍完了隔天又提）。
+                    const _raw = String(txt || '');
+                    _S.onMessage(messageId, _raw).then(function (r) {
+                        _S.renderHud();
+                        if (r && r.replay) return;
+                        const _blocks = _raw.match(/<os_status>[\s\S]*?<\/os_status>/gi);
+                        if (_blocks) _blocks.forEach(function (b) { _S.applyStatusBlock(b, messageId); });
+                        // 標籤寫法也在這裡撈：AI 常把 [Date|][HP|][Buff|] 放在 </content> 之後（回覆末尾），
+                        //   劇本只取 <content> 裡面的行，放外面的就永遠讀不到 → 不管寫在哪都認，撈完從原文剝掉。
+                        const _noCot = _raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                        const _tagLines = _noCot.match(/^[ \t]*\[(?:Date|HP|Buff|Debuff|Event)\|[^\]\n]*\][ \t]*$/gim);
+                        if (_tagLines) _tagLines.forEach(function (ln) {
+                            const _in = ln.trim().slice(1, -1).split('|');
+                            const _tag = (_in[0] || '').trim().toLowerCase();
+                            const _a = (_in[1] || '').trim(), _b = _in.slice(2).join('|').trim();
+                            if (_tag === 'date') _S.setDate(_a, _b);
+                            else if (_tag === 'hp') _S.setHp(_a);
+                            else if (_tag === 'buff' || _tag === 'debuff') _S.setBuff(_a, _b);
+                            else if (_tag === 'event') _S.addEvent(_a, _b, '', 'ai', messageId);
+                        });
+                    }).catch(function () {});
                 }
             } catch (e) {}
             // 🪙 起始金額 [Wallet|金額]：錢包還沒設過的故事，VN 指令會叫正文 AI 在章節卡寫這一行（wx_wallet.seedFromStory 只在錢包是空的時候設）
