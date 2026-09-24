@@ -678,9 +678,8 @@
             while ((m = regAvNew.exec(txtString)) !== null) {
                 const _an = m[1].trim();
                 const _rest = m[2].split('|').map(s => s.trim());
-                let _voice = '', _ad = '';
-                if (_rest.length >= 2) { _voice = _rest[0]; _ad = _rest.slice(1).join(' '); }  // 名|聲線|外觀
-                else { _ad = _rest[0]; }                                                          // 名|外觀（舊式，無聲線）
+                const _voice = _rest.length >= 2 ? _rest[0] : '';
+                const _ad = this._avatarDescOf(_rest);
                 if (_an && _ad) this.avatars[_an] = this._safeOutfit(_ad);
                 if (_an && _voice) this.charVoices[_an] = _voice;
             }
@@ -1855,6 +1854,23 @@
             /\bpanties\b/gi, /\bthong\b/gi, /\bbra\b/gi, /\btowel\b/gi, /\bnsfw\b/gi,
             /全裸|半裸|裸體|裸体|赤裸|比基尼|泳裝|泳衣|內衣|内衣|內褲|内裤|胸罩|浴巾/g,
         ],
+        // ── [Avatar|名|…] 名字後面那幾格 → 存進頭像快取的那一串 ──────────────────────
+        //   新格式 名|聲線|長相|這張頭像的穿著表情背景：後一格收進括號接在長相後面。
+        //   括號組是插圖那邊（state_runtime 的 _stripAvatarFraming）認的「只給頭像用」記號，整組剝掉，
+        //   插圖就只拿到長相；立繪那邊保留括號裡的衣服、只剝背景。頭像本身照整串畫。
+        //   以前靠模型自己在長相後面加括號，一半的時候沒加，衣服和「modern city」就黏進每一張插圖。
+        //   後一格裡的括號先拿掉：巢狀括號會讓插圖那邊的剝除對不齊。
+        //   舊格式 名|聲線|外觀、名|外觀 照舊整格當外觀。
+        _avatarDescOf: function (rest) {
+            const f = (rest || []).map(s => String(s || '').trim());
+            if (f.length >= 3) {
+                const look = f[1];
+                const extra = f.slice(2).filter(Boolean).join(', ').replace(/[()（）]/g, '').trim();
+                if (!extra) return look;
+                return look ? look + ', (' + extra + ')' : extra;
+            }
+            return f.length === 2 ? f[1] : (f[0] || '');
+        },
         _safeOutfit: function (desc) {
             let d = String(desc || '');
             let hit = false;
@@ -2020,9 +2036,8 @@
                 while ((m = reAv.exec(text)) !== null) {
                     const n = m[1].trim();
                     const rest = m[2].split('|').map(s => s.trim());
-                    let d = '';
-                    if (rest.length >= 2) { if (rest[0]) this.charVoices[n] = rest[0]; d = rest.slice(1).join(' '); }
-                    else { d = rest[0]; }
+                    if (rest.length >= 2 && rest[0]) this.charVoices[n] = rest[0];
+                    const d = this._avatarDescOf(rest);
                     // 🚨 穿著保險要在這裡也套一次：早鳥比 loadScript 早，它生完就進快取，
                     //    只修 loadScript 那條等於沒修（下次讀到的是早鳥存的那張裸圖）。
                     if (n && d && !pairs.some(p => p.name === n)) pairs.push({ name: n, desc: this._safeOutfit(d) });
