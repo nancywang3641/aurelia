@@ -198,11 +198,19 @@
                 }
                 const p = this.posts[key];
                 if (it.text) p.text = it.text;
+                // 照片塞在發文那一行裡：解析那邊拆好放在 photos
+                (it.photos || []).forEach(d => {
+                    if (p.photos.some(x => x.desc === d)) return;
+                    const old = p._saved && (p._saved.photos || []).find(x => x.desc === d);
+                    p.photos.push({ src: (old && old.src) || '', desc: d });
+                });
                 this._paint(p, isNew);
                 core.addLog(w.name, '發了朋友圈：' + (it.text || '（照片）'));
                 return true;
             }
-            const p = this._postFor(sid);
+            let p = this._postFor(sid);
+            // 照片給自己取了編號（moment_104_p1）：前綴對得到的那則，都對不到就是最後發的那則（跟同步那邊同一條規則）
+            if (!p && it.verb === 'photo' && MO && MO._photoHost) { const h = MO._photoHost(sid, Object.keys(this.cur)); p = h ? this.posts[this.cur[h]] : null; }
             if (!p) return false;
             if (it.verb === 'photo') {
                 if (p.photos.some(x => x.desc === it.text)) return false;
@@ -221,7 +229,9 @@
                 return true;
             }
             const w = this._who(it.who);
-            const to = it.verb === 'reply' ? this._who(it.to) : { id: '', name: '' };
+            let to = it.verb === 'reply' ? this._who(it.to) : { id: '', name: '' };
+            // 回覆沒寫回覆誰：照前面的留言補（跟同步那邊同一條規則）
+            if (it.verb === 'reply' && !to.id && MO && MO._storyReplyTo) { const r = MO._storyReplyTo(p, w.id); if (r) to = { id: r.who, name: r.name }; }
             p.comments.push({ id: 'vnc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), who: w.id, whoName: w.name, toWho: to.id, toName: to.name, text: it.text, at: Date.now() });
             this._paint(p, false);
             core.addLog(w.name, (to.name ? '回覆 ' + to.name + '：' : '留言：') + it.text);

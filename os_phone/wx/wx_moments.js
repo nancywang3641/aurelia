@@ -496,7 +496,20 @@
         const p = m[2].split('|').map(function (x) { return x.trim(); });
         const sid = p[0] || '';
         if (!sid) return null;
-        if (verb === 'post') return p[1] ? { verb: verb, sid: sid, who: p[1], text: _body(p.slice(2)) } : null;
+        if (verb === 'post') {
+            if (!p[1]) return null;
+            // 照片塞在發文那一行裡（她 09-25 截圖：[Post|編號|游星|光線很好。[Photo|編號_p1|… >> …]]）→ 拆出來當這則的照片，內文不留那串格式
+            const photos = [];
+            const text = _body(p.slice(2)).replace(EMBED_PHOTO_RE, function (all, body) {
+                const f = body.split(/[|｜]/).map(function (x) { return x.trim(); });
+                const desc = (f.length > 1 && f[0].indexOf('>>') < 0) ? f.slice(1).join('|').trim() : f.join('|').trim();
+                if (desc) photos.push(desc);
+                return '';
+            }).trim();
+            const it = { verb: verb, sid: sid, who: p[1], text: text };
+            if (photos.length) it.photos = photos;
+            return it;
+        }
         if (verb === 'photo') { const desc = _body(p.slice(1)); return desc ? { verb: verb, sid: sid, text: desc } : null; }
         // 一行寫了好幾個人（[Like|編號|沈喜喜, 驰翊]）：拆開，一人一個讚
         if (verb === 'like') {
@@ -504,8 +517,25 @@
             return whos.length ? { verb: verb, sid: sid, who: whos[0], whos: whos } : null;
         }
         if (verb === 'comment') { const t = _body(p.slice(2)); return (p[1] && t) ? { verb: verb, sid: sid, who: p[1], text: t } : null; }
+        // 少了「回覆誰」那格（[Reply|編號|游星|不辛苦…]）：以前整行丟掉。當成回覆，對象由疊的那邊照前面的留言補（_storyReplyTo）
+        if (p.length === 3) return (p[1] && p[2]) ? { verb: 'reply', sid: sid, who: p[1], to: '', text: p[2] } : null;
         const t = _body(p.slice(3));
         return (p[1] && t) ? { verb: 'reply', sid: sid, who: p[1], to: p[2] || '', text: t } : null;
+    }
+    const EMBED_PHOTO_RE = /\[\s*(?:Photo|圖片|图片|照片)\s*[|｜:：]([^\[\]]*)\]/gi;
+    // 回覆沒寫回覆誰：回給這則底下最後一個不是自己的留言者；沒有就回給發文的人；發文的就是自己＝當普通留言
+    //   comments 的每筆有 who／whoName，post 有 who／whoName（兩邊——劇情播放、同步——長一樣）
+    function _storyReplyTo(post, who) {
+        const cs = (post && post.comments) || [];
+        for (let i = cs.length - 1; i >= 0; i--) if (cs[i].who && cs[i].who !== who) return { who: cs[i].who, name: cs[i].whoName || '' };
+        const a = post && (post.who || post.author);
+        return (a && a !== who) ? { who: a, name: post.whoName || post.authorName || '' } : null;
+    }
+    // 照片指到一個沒發過的編號（AI 給照片自己取了編號：moment_104_p1）：前綴對得到哪則就是那則，都對不到就是最後發的那則
+    function _photoHost(sid, sids) {
+        let best = '';
+        (sids || []).forEach(function (s) { if (s && sid.indexOf(s) === 0 && s.length > best.length) best = s; });
+        return best || (sids && sids.length ? sids[sids.length - 1] : '');
     }
     // 一則正文 → [{ owner, items:[…] }]（一個容器一筆）
     function parseStory(text) {
@@ -521,6 +551,7 @@
                 const it = parseStoryLine(ln);
                 if (!it) return;
                 if (it.whos) it.whos.forEach(function (w) { items.push({ verb: 'like', sid: it.sid, who: w }); });
+                else if (it.photos) { const ps = it.photos; delete it.photos; items.push(it); ps.forEach(function (d) { items.push({ verb: 'photo', sid: it.sid, text: d }); }); }
                 else items.push(it);
             });
             out.push({ owner: owner.trim(), items: items });
@@ -547,11 +578,13 @@
                 if (it.text) posts[key].text = it.text;
                 return;
             }
-            const p = cur[sid] ? posts[cur[sid]] : null;
+            let p = cur[sid] ? posts[cur[sid]] : null;
+            if (!p && it.verb === 'photo') { const h = _photoHost(sid, Object.keys(cur)); p = h ? posts[cur[h]] : null; }
             if (!p) return;   // 指到劇情裡沒發過的動態：不收
             if (it.verb === 'photo') { if (!p.photos.some(function (x) { return x.desc === it.text; })) p.photos.push({ desc: it.text }); return; }
             if (it.verb === 'like') { if (!p.likes.some(function (x) { return x.who === it.who; })) p.likes.push({ who: it.who, whoName: it.whoName || '' }); return; }
             const c = { who: it.who, whoName: it.whoName || '', toWho: it.verb === 'reply' ? (it.toWho || '') : '', toName: it.verb === 'reply' ? (it.toName || '') : '', text: it.text };
+            if (it.verb === 'reply' && !c.toWho && !c.toName) { const r = _storyReplyTo(p, it.who); if (r) { c.toWho = r.who; c.toName = r.name; } }
             // 同一句重演一次（AI 重播整個朋友圈）不算兩條
             if (!p.comments.some(function (x) { return x.who === c.who && x.toWho === c.toWho && x.toName === c.toName && x.text === c.text; })) p.comments.push(c);
         });
@@ -1052,7 +1085,7 @@
     win.WX_MOMENTS = {
         open: open, close: close, openLinks: openLinks,
         _avatarHTML: _avatarHTML, _hydrate: _hydrate, _nameOf: _nameOf, _postHTML: _postHTML,
-        parseStory: parseStory, parseStoryLine: parseStoryLine, syncStory: syncStory, findStory: findStory, _storyPlan: _storyPlan, _eventsSince: _eventsSince,
+        parseStory: parseStory, parseStoryLine: parseStoryLine, syncStory: syncStory, findStory: findStory, _storyPlan: _storyPlan, _storyReplyTo: _storyReplyTo, _photoHost: _photoHost, _eventsSince: _eventsSince,
         scope: scope, load: load, onChange: onChange, _flush: _flush,
         addPost: addPost, toggleLike: toggleLike, addComment: addComment,
         removePost: removePost, removeComment: removeComment,
