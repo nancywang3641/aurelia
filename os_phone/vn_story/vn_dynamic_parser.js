@@ -81,7 +81,7 @@
             }
             vnCore.index = last;
             console.warn('[VN 動態組件] 正文裡有 <' + tag + '> 的資料行卻沒有外層標籤，已自動補上', lines);
-            this._renderBlock(tag, lines, vnCore);
+            this._renderBlock(tag, lines, vnCore, { orphan: true });
             return true;
         },
 
@@ -161,7 +161,7 @@
         // st helper：與創作室預覽 _buildPreviewSt 同一套 API（md / parse / setImage）。
         // 模板 JS 是針對 (container, lines, onComplete, st) 四參數寫的；不給 st 會「st is not defined」。
         // 跟 PWA/酒館共用同一支引擎，創作室建的 tag 兩邊一致。
-        _buildSt: function(lines, tpl) {
+        _buildSt: function(lines, tpl, at) {
             const imgManager = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
             // 共用面板：dbSave/dbLoad 要對到「該模板對應的手機 app id」，跟桌面 app 端存進同一個桶 → 兩邊讀同一份。
             // 沒對應 app（未裝成 app／純展示）就用這個面板自己的桶 vnpanel:<tagId>（刪組件時一起清；舊制 pwa_panel 通用桶已廢）。
@@ -243,7 +243,8 @@
                     } catch (e) {}
                 },
                 // 📖 資料接口（共用面板）：正文全樓層 <tagId> 區塊 + 應用裡新增的，程式合併好給面板畫；面板不自己存清單
-                feed: function(o) { try { const F = FEED(); return F ? F.feed(feedTag, Object.assign({ lines: lines }, o || {})) : Promise.resolve([]); } catch (e) { return Promise.resolve([]); } },
+                // 劇情裡只給演到這個區塊為止的（at），同一則後段才出場的不先亮
+                feed: function(o) { try { const F = FEED(); return F ? F.feed(feedTag, Object.assign({ lines: lines, at: at || null }, o || {})) : Promise.resolve([]); } catch (e) { return Promise.resolve([]); } },
                 parseText: function(text) { try { const F = FEED(); return F ? F.parseRecords(String(text == null ? '' : text).split('\n')) : []; } catch (e) { return []; } },
                 user: (function() {
                     // 正確用法 await st.user()；欄位同時掛在函式上，AI 手滑寫 st.user.name 也讀得到（頭像存 DB 的在這條會是空）
@@ -344,7 +345,22 @@
         },
 
         // --- 執行區塊微型 App (核心魔法) ---
-        _renderBlock: function(tagId, lines, vnCore) {
+        // 這個區塊在劇本裡的位置，給共用面板只拿「演到這裡為止」的資料：
+        //   正在播哪一樓、這是這一則第幾個同名區塊（數劇本裡到目前為止的開頭行；補殼的散行沒有開頭行，前面有幾個就是第幾）
+        _blockAt: function(tagId, rawLines, vnCore, orphan) {
+            let ord = 0;
+            try {
+                const re = new RegExp('^[<\\[]' + String(tagId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[>\\]]$', 'i');
+                const sc = (vnCore && Array.isArray(vnCore.script)) ? vnCore.script : [];
+                const end = Math.min(sc.length - 1, vnCore ? vnCore.index : -1);
+                for (let i = 0; i <= end; i++) { if (re.test(String(sc[i] || '').trim())) ord++; }
+                if (!orphan && ord > 0) ord--;
+            } catch (e) { ord = -1; }
+            return { lines: rawLines.slice(), floor: (vnCore && vnCore._currentMessageId != null) ? vnCore._currentMessageId : null, ord: ord };
+        },
+
+        _renderBlock: function(tagId, lines, vnCore, how) {
+            const _at = this._blockAt(tagId, lines || [], vnCore, !!(how && how.orphan));
             lines = this._fillMacros(lines);
             const tpl = this.activeTemplates.find(t => t.tagId.toLowerCase() === tagId.toLowerCase());
             // 🔊 組件登場音效：block 組件走這條(非 _showDomBlock)，彈出即播(來源=素材音效目錄，留空不播)
@@ -434,7 +450,7 @@
 
                 // 真正播放（非預覽）→ 走真實圖片 API；並注入 st helper（與創作室同一套 API）
                 window.__IS_PREVIEW = false;
-                const st = this._buildSt(lines, tpl);
+                const st = this._buildSt(lines, tpl, _at);
                 const runMicroApp = new Function('container', 'lines', 'onComplete', 'st', safeJs);
                 runMicroApp(panel, lines, onComplete, st);
             } catch(e) {

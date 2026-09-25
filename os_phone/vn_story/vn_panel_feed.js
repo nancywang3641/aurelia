@@ -86,20 +86,60 @@
         return blocks;
     }
 
+    // 比對用：去掉空白、全形分隔符換半形（VN 劇本與存檔原文的空白、全形寫法可能不一樣）
+    function _norm(s) { return String(s == null ? '' : s).replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']').replace(/\s+/g, ''); }
+    function _keyLines(lines) { return (lines || []).map(_norm).filter(Boolean); }
+    function _sameBlock(blockLines, keys) {
+        const b = _keyLines(blockLines);
+        return b.length === keys.length && b.every(function (l, i) { return l === keys[i]; });
+    }
+    // 劇情裡彈出的這一個區塊在哪：哪一樓、那一樓的第幾個 <tagId> 區塊。
+    //   at = { lines: 這個區塊的原始資料行, floor: 正在播的樓號（可空）, ord: 劇本裡這是第幾個同名區塊（可空） }
+    //   樓號給了而且那樓真的有這些行就用它；沒給（新生成那則常是 null）就找最後一個含這些行的樓。
+    //   找不到（這則還沒進存檔）回 null＝存檔裡的全是前面的事。
+    function _locate(texts, tagId, at) {
+        const keys = _keyLines(at && at.lines);
+        if (!keys.length) return null;
+        const holds = function (t) { if (!t) return false; const n = _norm(t); return keys.every(function (k) { return n.indexOf(k) >= 0; }); };
+        const hint = (at.floor == null || at.floor === '') ? NaN : Number(at.floor);
+        let f = -1;
+        if (hint >= 0 && hint < texts.length && holds(texts[hint])) f = hint;
+        else for (let i = texts.length - 1; i >= 0; i--) { if (holds(texts[i])) { f = i; break; } }
+        if (f < 0) return null;
+        const blocks = _blocksIn(texts[f], tagId);
+        const ord = (typeof at.ord === 'number' && at.ord >= 0) ? at.ord : -1;
+        let b = -1;
+        if (ord >= 0 && blocks[ord] && _sameBlock(blocks[ord], keys)) b = ord;
+        if (b < 0) {
+            blocks.forEach(function (bl, i) {
+                if (!_sameBlock(bl, keys)) return;
+                if (b < 0 || (ord >= 0 && Math.abs(i - ord) < Math.abs(b - ord))) b = i;
+            });
+        }
+        // 對不到整塊（AI 沒寫外層標籤、由 VN 補殼的散行）：排在它前面那幾個區塊之後
+        if (b < 0) b = ord >= 0 ? Math.min(ord, blocks.length) : blocks.length;
+        return { floor: f, block: b };
+    }
+
     // 正文那份：每筆 { id:'s:樓:序', src:'story', tag, fields, floor }
-    async function storyRecords(tagId) {
+    //   cut = { floor, block }：只收演到這裡之前的（那樓之前全部、那樓第 block 個區塊之前），後面的不先露出來
+    async function storyRecords(tagId, cut) {
         const texts = await _fullChat();
         const out = [];
+        let nextSeq = 0;
         const probe = String(tagId || '').toLowerCase();
         for (let f = 0; f < texts.length; f++) {
+            if (cut && f > cut.floor) break;
             const text = texts[f];
             if (!text || text.toLowerCase().indexOf(probe) < 0) continue;
             let seq = 0;
-            _blocksIn(text, tagId).forEach(function (lines) {
+            _blocksIn(text, tagId).forEach(function (lines, bi) {
+                if (cut && f === cut.floor && bi >= cut.block) return;
                 parseRecords(lines).forEach(function (r) { out.push({ id: 's:' + f + ':' + (seq++), src: 'story', tag: r.tag, fields: r.fields, floor: f }); });
             });
+            if (cut && f === cut.floor) nextSeq = seq;
         }
-        return { records: out, lastFloor: texts.length - 1 };
+        return { records: out, lastFloor: texts.length - 1, nextSeq: nextSeq };
     }
 
     // 應用那份：存 OS_DB app_data（appId=vnpanel:<tagId>、scope=當前聊天）
@@ -118,12 +158,22 @@
     function _newId() { return 'a:' + Date.now().toString(36) + ':' + Math.random().toString(36).slice(2, 7); }
 
     // 合併：正文紀錄照樓號；應用紀錄釘在「新增當時正文到哪一樓」之後，同樓內照新增時間
+    //   opts.at（劇情裡彈出時才給）：只給演到這個區塊為止的，同一則後段才出場的區塊、之後的樓都不先給，
+    //   不然第一次彈出就把後面的全亮出來、演到後面又再亮一次。手機 app 與創作室預覽不給 at，照舊拿全部。
     async function feed(tagId, opts) {
         opts = opts || {};
-        const story = await storyRecords(tagId);
+        let cut = null;
+        if (opts.at) { try { cut = _locate(await _fullChat(), tagId, opts.at); } catch (e) { cut = null; } }
+        const story = await storyRecords(tagId, cut);
         const records = story.records.slice();
-        // 劇情彈出當下若這一樓還沒進聊天檔（極少見），把彈出時拿到的 lines 補上、內容重複的不重加
-        if (Array.isArray(opts.lines) && opts.lines.length) {
+        if (cut) {
+            // 這個區塊自己：用彈出時拿到的 lines（已套好名字巨集），排在同一樓前面那幾塊之後
+            let seq = story.nextSeq;
+            if (Array.isArray(opts.lines)) parseRecords(opts.lines).forEach(function (r) {
+                records.push({ id: 's:' + cut.floor + ':' + (seq++), src: 'story', tag: r.tag, fields: r.fields, floor: cut.floor });
+            });
+        } else if (Array.isArray(opts.lines) && opts.lines.length) {
+            // 劇情彈出當下若這一樓還沒進聊天檔（極少見），把彈出時拿到的 lines 補上、內容重複的不重加
             const seen = {};
             records.forEach(function (r) { seen[r.tag + '|' + r.fields.join('|')] = 1; });
             let seq = 0;
@@ -136,7 +186,7 @@
         }
         const app = (await _loadEntries(tagId)).map(function (e) {
             return { id: e.id, src: 'app', tag: e.tag, fields: Array.isArray(e.fields) ? e.fields.slice() : [], floor: (e.afterFloor == null ? Infinity : e.afterFloor), ts: e.ts || 0 };
-        });
+        }).filter(function (r) { return !cut || r.floor <= cut.floor; });   // 劇情裡：之後的樓才新增的不先露；這一則當下新增的（在面板裡留言）照樣看得到
         const out = [];
         let ai = 0;
         app.sort(function (a, b) { return (a.floor - b.floor) || (a.ts - b.ts); });
