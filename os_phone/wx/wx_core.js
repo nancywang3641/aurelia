@@ -450,6 +450,8 @@
             const mark = '（語音' + msg.voiceTone + '）';
             s = /\[Voice: [^\]]*\]/.test(s) ? s.replace(/\[Voice: [^\]]*\]/, (m) => m + mark) : s + mark;
         }
+        // 生完存進圖庫的圖（img_gen_）：換回原本那句描述，不給模型看編號
+        s = s.replace(/\bimg_gen_[A-Za-z0-9_]+/g, (msg && msg.imgDesc) ? msg.imgDesc : '圖片');
         if (!PHOTO_ID_RE.test(s)) return s;
         return s.replace(new RegExp(PHOTO_ID_RE.source, 'g'), (msg && msg.photoDesc) ? ('照片｜' + msg.photoDesc) : '照片');
     }
@@ -2884,6 +2886,7 @@
     }
     function _scrollToBottom(){ const r = _getScrollEl(); if (r) r.scrollTop = r.scrollHeight; }
     function _appendBubble(msg, chatObj) {
+        if (chatObj && chatObj.id && GLOBAL_ACTIVE_ID !== chatObj.id) return;   // 冒泡泡途中她切走了：畫面是別間，不畫進去
         const rc = _getRoomContent();
         if (rc && window.WX_VIEW) {
             const idx = chatObj.messages.length - 1;
@@ -2902,6 +2905,7 @@
     }
     // 從 data 重建 roomContent（不碰背景層，不閃爍）
     function _rebuildRoomContent(chatObj) {
+        if (chatObj && chatObj.id && GLOBAL_ACTIVE_ID !== chatObj.id) return;   // 畫面是別間
         const rc = _getRoomContent();
         if (!rc || !window.WX_VIEW) return;
         rc.innerHTML = chatObj.messages.map((m, i) => window.WX_VIEW.renderBubble(m, chatObj, false, i)).join('');
@@ -3657,6 +3661,12 @@
             let idx = Number.isInteger(msgIdx) ? msgIdx : -1;
             if (!(idx >= 0 && hits(chat.messages[idx]))) idx = chat.messages.findIndex(hits);
             if (idx < 0) return false;
+            // 寫回的是圖庫編號：原本那句描述留在訊息上，送模型時換回來（photoContextText）
+            if (/^img_gen_/.test(url)) {
+                const _m = chat.messages[idx].content.match(tagRe);
+                const _PI = win.OS_PHONE_IMAGE;
+                if (_m && _m[2]) chat.messages[idx].imgDesc = (_PI && _PI.textOnly) ? _PI.textOnly(_m[2]) : _m[2];
+            }
             chat.messages[idx].content = chat.messages[idx].content.replace(tagRe, `[图片:${url}]`);
             if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { try { await win.WX_DB.saveApiChat(chatId, chat); } catch (e) { console.warn('[wx] 圖片網址寫回失敗:', e); } }
             return true;
@@ -4316,6 +4326,8 @@
             }
             IS_STREAMING_REPLY = true;
 
+            // 🚨 這一輪是哪間發的：等回覆的時候她可能切到別間，存檔一律存回這間，不看當下開著哪間
+            const _replyId = GLOBAL_ACTIVE_ID;
             const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
             if (!_fromTool) { currentChat._toolChain = 0; delete _toolCalls[currentChat.id]; }
             
@@ -4332,6 +4344,12 @@
 
             // 定義完成回調
             const onFinishReply = async (finalText) => {
+                // 回來時她已經切到別間 → 當成「她沒在看的那間收到回覆」：標未讀、存回這間（跟托管收回來同一條）
+                if (GLOBAL_ACTIVE_ID !== _replyId) {
+                    IS_STREAMING_REPLY = false;
+                    await _applyRelayReply(currentChat, finalText, _thinkingSince(_thinkT0));
+                    return;
+                }
                 // 移除 Loading 佔位符（data）
                 const loadingMsgIndex = currentChat.messages.findIndex(m => !m.isMe && m.isLoading);
                 if (loadingMsgIndex !== -1) { currentChat.messages.splice(loadingMsgIndex, 1); }
@@ -4369,7 +4387,7 @@
                 await _deliverOtherRooms(newMsgs.others);   // 同一則回覆裡順便傳到別間的（例如群裡聊著、有人另外私訊她）
 
                 IS_STREAMING_REPLY = false; // 解鎖
-                if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { await win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat); }
+                if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { await win.WX_DB.saveApiChat(_replyId, currentChat); }
                 await _afterTools(currentChat);   // 🧰 這一輪叫了工具 → 去跑，跑完接著回
             };
 
@@ -4521,7 +4539,7 @@
                             onQueued: (jid) => {
                                 currentChat._relayJob = jid;
                                 IS_STREAMING_REPLY = false;   // 交出去了就解鎖，不然她切回來還是卡著
-                                try { if (win.WX_DB && win.WX_DB.saveApiChat) win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat); } catch (e) {}
+                                try { if (win.WX_DB && win.WX_DB.saveApiChat) win.WX_DB.saveApiChat(_replyId, currentChat); } catch (e) {}
                                 try { AUI.toast('交給伺服器跑了，好了會通知你'); } catch (e) {}
                             }
                         }

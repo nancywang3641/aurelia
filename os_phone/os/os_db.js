@@ -161,6 +161,7 @@
                         updatedAt: Date.now(),
                     });
                     tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch (e) { reject(e); }
             });
@@ -184,6 +185,7 @@
                     const tx = db.transaction(STORE_NAME_STUDIO, 'readwrite');
                     tx.objectStore(STORE_NAME_STUDIO).put({ id: modeId, messages: messages, timestamp: Date.now() });
                     tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch(e) { reject(e); }
             });
@@ -205,6 +207,7 @@
                     const tx = db.transaction(STORE_NAME_STUDIO, 'readwrite');
                     tx.objectStore(STORE_NAME_STUDIO).delete(modeId);
                     tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch(e) { reject(e); }
             });
@@ -219,6 +222,7 @@
                     const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
                     tx.objectStore(STORE_NAME_APP_DATA).put({ id: id, value: value, ts: Date.now() });
                     tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch (e) { reject(e); }
             });
@@ -245,6 +249,7 @@
                     const req = tx.objectStore(STORE_NAME_APP_DATA).openCursor();
                     req.onsuccess = (e) => { const cur = e.target.result; if (cur) { if (String(cur.key).indexOf(pre) === 0) cur.delete(); cur.continue(); } };
                     tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch (e) { reject(e); }
             });
@@ -261,6 +266,7 @@
                     const req = tx.objectStore(STORE_NAME_APP_DATA).openCursor();
                     req.onsuccess = (e) => { const cur = e.target.result; if (cur) { const p = String(cur.key).split('::'); if (p.length >= 3 && p[1] === want) { cur.delete(); n++; } cur.continue(); } };
                     tx.oncomplete = () => resolve(n);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch (e) { reject(e); }
             });
@@ -314,6 +320,7 @@
                     const req = tx.objectStore(STORE_NAME_APP_MEM).openCursor();
                     req.onsuccess = (e) => { const cur = e.target.result; if (cur) { if (String(cur.key).indexOf(pre) === 0) cur.delete(); cur.continue(); } };
                     tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch (e) { reject(e); }
             });
@@ -329,6 +336,7 @@
                         const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                         tx.objectStore(STORE_NAME_IMAGES).put({id: id, data: new Blob([rd.result], {type: f.type})});
                         tx.oncomplete = () => r(id);
+                        tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                         tx.onerror = e => j(e.target.error);
                     };
                     rd.readAsArrayBuffer(f);
@@ -352,6 +360,7 @@
                     const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                     tx.objectStore(STORE_NAME_IMAGES).put({ id: 'child_bg_' + childId, data: base64 });
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -371,6 +380,7 @@
                     const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                     tx.objectStore(STORE_NAME_IMAGES).delete('child_bg_' + childId);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -383,6 +393,7 @@
                     const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                     tx.objectStore(STORE_NAME_IMAGES).put({ id: 'nai_thumb_' + id, data: base64 });
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -404,6 +415,7 @@
                     const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                     tx.objectStore(STORE_NAME_IMAGES).delete('nai_thumb_' + id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -418,6 +430,7 @@
                     const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                     tx.objectStore(STORE_NAME_IMAGES).put(record);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -429,6 +442,7 @@
                     const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                     tx.objectStore(STORE_NAME_IMAGES).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -454,6 +468,7 @@
                     const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                     tx.objectStore(STORE_NAME_IMAGES).put({ id: 'nai_vibe_' + id, data: record });
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -475,6 +490,7 @@
                     const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
                     tx.objectStore(STORE_NAME_IMAGES).delete('nai_vibe_' + id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -489,6 +505,7 @@
                     const tx = db.transaction(STORE_NAME_CHATS, 'readwrite');
                     tx.objectStore(STORE_NAME_CHATS).put({id: id, chatId: id, data: d, timestamp: Date.now()});
                     tx.oncomplete = () => r(id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -551,6 +568,7 @@
                         store.put(rec);
                     };
                     tx.oncomplete = () => r(id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -572,6 +590,7 @@
                     const tx = db.transaction(STORE_NAME_CHATS, 'readwrite');
                     tx.objectStore(STORE_NAME_CHATS).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -592,6 +611,7 @@
                     if(!p.timestamp) p.timestamp = Date.now();
                     tx.objectStore(STORE_NAME_WB).put(p);
                     tx.oncomplete = () => r(p.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -611,6 +631,7 @@
                     const tx = db.transaction(STORE_NAME_WB, 'readwrite');
                     tx.objectStore(STORE_NAME_WB).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -621,6 +642,7 @@
                     const tx = db.transaction(STORE_NAME_WB, 'readwrite');
                     tx.objectStore(STORE_NAME_WB).clear();
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -631,6 +653,7 @@
                     const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
                     tx.objectStore(STORE_NAME_MAP).put({id: `${z}_${f}`, zoneId: z, facilityKey: f, ...d, timestamp: Date.now()});
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -650,6 +673,7 @@
                     const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
                     tx.objectStore(STORE_NAME_MAP).clear();
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -666,6 +690,7 @@
                         (req.result || []).forEach(k => { if (!String(k).startsWith('__world__')) store.delete(k); });
                     };
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -682,6 +707,7 @@
                         timestamp: Date.now()
                     });
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -717,6 +743,7 @@
                     const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
                     tx.objectStore(STORE_NAME_MAP).delete(`__world__${worldId}`);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -727,6 +754,7 @@
                     const tx = db.transaction(STORE_NAME_LOBBY, 'readwrite');
                     tx.objectStore(STORE_NAME_LOBBY).put({ id: chatId, ...data, timestamp: Date.now() });
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -746,6 +774,7 @@
                     const tx = db.transaction(STORE_NAME_LOBBY, 'readwrite');
                     tx.objectStore(STORE_NAME_LOBBY).delete(chatId);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -768,6 +797,7 @@
                     const tx = db.transaction(STORE_NAME_ACH, 'readwrite');
                     tx.objectStore(STORE_NAME_ACH).put(entry);
                     tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -791,11 +821,13 @@
                 try {
                     const tx = db.transaction(STORE_NAME_ACH, 'readwrite');
                     const store = tx.objectStore(STORE_NAME_ACH);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止'));
                     if (!chatId) { store.clear(); tx.oncomplete = () => r(true); return; }
                     const req = store.getAll();
                     req.onsuccess = () => {
                         (req.result || []).filter(a => a.chatId === chatId).forEach(a => store.delete(a.id));
                         tx.oncomplete = () => r(true);
+                        tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     };
                 } catch(e) { j(e); }
             });
@@ -813,6 +845,7 @@
                     const tx = db.transaction(STORE_NAME_WORLDBOOK, 'readwrite');
                     tx.objectStore(STORE_NAME_WORLDBOOK).put(entry);
                     tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -844,6 +877,7 @@
                     const tx = db.transaction(STORE_NAME_WORLDBOOK, 'readwrite');
                     tx.objectStore(STORE_NAME_WORLDBOOK).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -854,6 +888,7 @@
                     const tx = db.transaction(STORE_NAME_WORLDBOOK, 'readwrite');
                     tx.objectStore(STORE_NAME_WORLDBOOK).clear();
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         }
@@ -872,6 +907,7 @@
                     const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
                     tx.objectStore(STORE_NAME_STUDIO_DRAFTS).put(entry);
                     tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -901,6 +937,7 @@
                     const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
                     tx.objectStore(STORE_NAME_STUDIO_DRAFTS).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -911,6 +948,7 @@
                     const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
                     tx.objectStore(STORE_NAME_STUDIO_DRAFTS).clear();
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         }
@@ -938,6 +976,7 @@
                         }
                         r(chapter.id);
                     };
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止'));
                 } catch(e) { j(e); }
             });
         },
@@ -957,6 +996,7 @@
                     const tx = db.transaction(STORE_NAME_VN_CHAPTERS, 'readwrite');
                     tx.objectStore(STORE_NAME_VN_CHAPTERS).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -970,6 +1010,7 @@
                     req.onsuccess = () => {
                         (req.result || []).filter(ch => ch.storyId === storyId).forEach(ch => store.delete(ch.id));
                         tx.oncomplete = () => r(true);
+                        tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     };
                 } catch(e) { j(e); }
             });
@@ -986,6 +1027,7 @@
                     const tx = db.transaction(STORE_NAME_VN_SUMMARIES, 'readwrite');
                     tx.objectStore(STORE_NAME_VN_SUMMARIES).put(entry);
                     tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -1008,6 +1050,7 @@
                     const tx = db.transaction(STORE_NAME_VN_SUMMARIES, 'readwrite');
                     tx.objectStore(STORE_NAME_VN_SUMMARIES).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -1024,6 +1067,7 @@
                     const tx = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readwrite');
                     tx.objectStore(STORE_NAME_LOBBY_SUM_IDX).put(entry);
                     tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -1045,6 +1089,7 @@
                     const tx = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readwrite');
                     tx.objectStore(STORE_NAME_LOBBY_SUM_IDX).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -1113,6 +1158,7 @@
                     const tx = db.transaction(STORE_NAME_TAVERN_SUMMARY, 'readwrite');
                     tx.objectStore(STORE_NAME_TAVERN_SUMMARY).put(entry);
                     tx.oncomplete = () => r(cid);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => j(e.target.error);
                 } catch (e) { j(e); }
             });
@@ -1138,6 +1184,7 @@
                     const tx = db.transaction(STORE_NAME_TAVERN_SUMMARY, 'readwrite');
                     tx.objectStore(STORE_NAME_TAVERN_SUMMARY).delete(cid);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => j(e.target.error);
                 } catch (e) { j(e); }
             });
@@ -1180,6 +1227,7 @@
                         c.continue();
                     };
                     tx.oncomplete = () => res(n);
+                    tx.onabort = () => rej(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => rej(e.target.error);
                 } catch (e) { rej(e); }
             });
@@ -1187,7 +1235,6 @@
             // 一、key 就是 chatId 的 store → 每個 id 變體都刪（清了就回 ok）
             await _safe('大總結', () => _delEach(id => self.deleteTavernSummary(id)));
             await _safe('狀態(AVS)', () => _delEach(id => self.deleteStateData ? self.deleteStateData(id) : null));
-            await _safe('調查進度', () => _delEach(id => self.clearInvestigationState ? self.clearInvestigationState(id) : null));
             await _safe('大廳歷史', () => _delEach(id => self.deleteLobbyHistory ? self.deleteLobbyHistory(id) : null));
             await _safe('成就', () => _delEach(id => self.clearAchievements ? self.clearAchievements(id) : null));
 
@@ -1220,6 +1267,7 @@
                         c.continue();
                     };
                     tx.oncomplete = () => res(n);
+                    tx.onabort = () => rej(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => rej(e.target.error);
                 } catch (e) { rej(e); }
             }));
@@ -1253,6 +1301,7 @@
                         c.continue();
                     };
                     tx.oncomplete = () => res(n);
+                    tx.onabort = () => rej(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = e => rej(e.target.error);
                 } catch (e) { rej(e); }
             }));
@@ -1319,6 +1368,7 @@
                     const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
                     tx.objectStore(STORE_NAME_VN_MEMORIES).put(entry);
                     tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -1344,6 +1394,7 @@
                     req.onsuccess = () => {
                         (req.result || []).filter(m => m.storyId === storyId).forEach(m => store.delete(m.id));
                         tx.oncomplete = () => r(true);
+                        tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     };
                 } catch(e) { j(e); }
             });
@@ -1356,6 +1407,7 @@
                     const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
                     tx.objectStore(STORE_NAME_VN_MEMORIES).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -1373,6 +1425,7 @@
                         ).forEach(m => store.delete(m.id));
                     };
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -1399,6 +1452,7 @@
                     const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readwrite');
                     tx.objectStore(STORE_NAME_VAR_PACKS).put(pack);
                     tx.oncomplete = () => r(pack.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -1418,6 +1472,7 @@
                     const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readwrite');
                     tx.objectStore(STORE_NAME_VAR_PACKS).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -1477,7 +1532,9 @@
             const db = await this.init();
             return new Promise((resolve, reject) => {
                 try {
+                    // 整份照存：base（修剪／深度整理折進去的舊值）、patchFmt 等欄位也要留，否則回溯時基準是空的
                     const entry = {
+                        ...data,
                         id: chatId,
                         schema: data.schema || null,       // Stage 1 生成的欄位定義
                         patches: data.patches || [],       // 身分制時序陣列 [{id, updates}]，id＝正文裡的 <!--avs:id-->
@@ -1490,6 +1547,7 @@
                     const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');
                     tx.objectStore(STORE_NAME_STATE_DATA).put(entry);
                     tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch(e) { reject(e); }
             });
@@ -1511,6 +1569,7 @@
                     const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');
                     tx.objectStore(STORE_NAME_STATE_DATA).delete(chatId);
                     tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => reject(e.target.error);
                 } catch(e) { reject(e); }
             });
@@ -1539,6 +1598,7 @@
                     const tx = db.transaction(STORE_NAME_PHONE_APPS, 'readwrite');
                     tx.objectStore(STORE_NAME_PHONE_APPS).put(rec);
                     tx.oncomplete = () => r(rec.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => j(e.target.error);
                 } catch(e) { j(e); }
             });
@@ -1570,6 +1630,7 @@
                     const tx = db.transaction(STORE_NAME_PHONE_APPS, 'readwrite');
                     tx.objectStore(STORE_NAME_PHONE_APPS).delete(id);
                     tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                     tx.onerror = (e) => j(e.target.error);
                 } catch(e) { j(e); }
             });

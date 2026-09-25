@@ -237,14 +237,16 @@ type:"item" 的 text 一律寫到「現在」：在誰手上／放在哪／已�
                 ],
                 secCfg,
                 null,
+                // 🚨 失敗一律回 null，不回 []：[] 是「這章真的沒東西好記」，會先清掉同章舊記憶；
+                //    null 讓 ingestEntries 什麼都不動，舊記憶留著
                 (text) => {
                     try {
                         const match = (text || '').match(/\[[\s\S]*\]/);
-                        const arr = match ? JSON.parse(match[0]) : [];
-                        resolve(Array.isArray(arr) ? arr : []);
-                    } catch(e) { resolve([]); }
+                        const arr = match ? JSON.parse(match[0]) : null;
+                        resolve(Array.isArray(arr) ? arr : null);
+                    } catch(e) { resolve(null); }
                 },
-                () => resolve([]),
+                () => resolve(null),
                 { task: 'extract', disableTyping: true }
             );
         });
@@ -276,6 +278,7 @@ type:"item" 的 text 一律寫到「現在」：在誰手上／放在哪／已�
         console.log('[VecEngine] 開始 ingest，章節:', chapterId);
         try {
             const entries = await _extractMemories(cleanContent);
+            if (!entries) { console.warn('[VecEngine] 副模型沒抽成，這章舊記憶保留不動:', chapterId); return; }
             await ingestEntries(entries, storyId, chapterId);
         } catch(e) {
             console.error('[VecEngine] ingest 失敗:', e);

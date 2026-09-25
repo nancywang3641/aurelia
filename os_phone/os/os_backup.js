@@ -17,10 +17,11 @@
         'os_secondary_llm_config',    // 副模型設定
         'os_image_config',            // 圖片生成設定
         'os_minimax_config',          // Minimax 語音設定
-        'os_worldbook_cats',          // 世界書分類
+        'os_worldbook_books',         // 世界書書包清單
         'vn_cfg_v4',                  // VN 面板設定
-        'os_persona_data',            // 人設資料
-        'os_economy_data',            // 錢包餘額/交易
+        'os_personas',                // 人設
+        'avs_condition_rules',        // [AVS] 條件規則
+        'aurelia_rules_tavern',       // [AVS] 酒館版規則
         'avs_current_state',          // [AVS] 當前全局動態變數 JSON 狀態
         'avs_active_ui_templates',    // [AVS] 當前啟用的美化面板快取
         'vn_current_story_id',        // [VN] 當前故事 ID
@@ -28,6 +29,27 @@
         'vn_prompt_order',            // [VN] 提示詞順序
         'wx_phone_api_config'         // 微信設定
     ];
+    // 只有本地全量匯出才收的（可能很大：書的封面、每本故事的狀態；Gist 有 8MB 上限）
+    const LS_FULL_ONLY_KEYS = [
+        'aurelia_custom_worlds'       // 書架上的書
+    ];
+    // 開頭符合就收（每本故事一個 key），也只在全量匯出
+    const LS_BACKUP_PREFIXES = [
+        'avs_state_'                  // [AVS] 各故事的狀態數值
+    ];
+
+    // 全量備份收的 IndexedDB 倉庫：OS_DB 除了圖片（images 存的是二進位，JSON 裝不下）以外全部
+    //   🚨 OS_DB 新增倉庫時這裡也要加一列，不然備份不到
+    const FULL_STORES = [
+        'var_packs', 'ui_templates', 'vn_chapters', 'api_chats', 'wb_posts', 'lobby_history',
+        'map_data', 'studio_chats', 'studio_drafts', 'vn_memories', 'vn_grand_summaries', 'state_data',
+        'lobby_summary_index', 'phone_apps', 'app_memory', 'tavern_summary', 'app_data', 'lobby_npc_memory'
+    ];
+    // 舊版備份檔（V3）用的欄位名 → 倉庫名；還原舊檔時用
+    const LEGACY_FIELDS = {
+        varPacks: 'var_packs', uiTemplates: 'ui_templates', vnChapters: 'vn_chapters',
+        apiChats: 'api_chats', wbPosts: 'wb_posts', lobbyHistory: 'lobby_history'
+    };
 
     // ── 設定讀寫 ─────────────────────────────────────────────────────
     function getSettings() {
@@ -71,28 +93,23 @@
 
             // 🌟 2. 全量資料 (僅限本地 JSON 打包)
             if (opts.fullExport) {
-                // 🔥 新增：AVS 變數工坊資料
-                out.varPacks = await _getStore('var_packs');
-                out.uiTemplates = await _getStore('ui_templates');
-                
-                // 🔥 新增：VN 視覺小說長線劇本
-                out.vnChapters = await _getStore('vn_chapters');
-                
-                // 🔥 新增：各類聊天與歷史紀錄
-                out.apiChats = await _getStore('api_chats');
-                out.wbPosts = await _getStore('wb_posts');
-                out.lobbyHistory = await _getStore('lobby_history');
+                out.stores = {};
+                for (const name of FULL_STORES) out.stores[name] = await _getStore(name);
             }
         } catch(e) { console.warn('[OS_BACKUP] DB 收集部分失敗:', e); }
         return out;
     }
 
-    function collectLocalStorage() {
+    function collectLocalStorage(full) {
         const out = {};
-        LS_BACKUP_KEYS.forEach(k => {
+        LS_BACKUP_KEYS.concat(full ? LS_FULL_ONLY_KEYS : []).forEach(k => {
             const v = localStorage.getItem(k);
             if (v !== null) out[k] = v; 
         });
+        if (full) for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && LS_BACKUP_PREFIXES.some(p => k.startsWith(p))) out[k] = localStorage.getItem(k);
+        }
         return out;
     }
 
@@ -101,11 +118,11 @@
         // 強制開啟全量收集模式
         const dbData = await collectDB({ ...opts, fullExport: true });
         return {
-            version: 3, // 升級為 V3 備份格式
+            version: 4, // V4：倉庫收在 db.stores（舊的 V3 檔照樣能還原）
             exportedAt: new Date().toISOString(),
             type: 'full',
             db: dbData,
-            localStorage: collectLocalStorage()
+            localStorage: collectLocalStorage(true)
         };
     }
 
@@ -113,7 +130,7 @@
     async function collectEssential() {
         const dbData = await collectDB({ worldbook: true, achievements: true, fullExport: false });
         return {
-            version: 3,
+            version: 4,
             exportedAt: new Date().toISOString(),
             type: 'essential',
             db: dbData,
@@ -139,36 +156,24 @@
                 restored.achievements = d.achievements.length;
             }
 
-            // 恢復 AVS 資料
-            if (d.varPacks?.length) {
-                for (const e of d.varPacks) await _putStore('var_packs', e).catch(()=>{});
-                restored.avs += d.varPacks.length;
+            // 其他倉庫：新檔在 d.stores，舊檔（V3）是幾個分開的欄位
+            const stores = Object.assign({}, d.stores || {});
+            Object.keys(LEGACY_FIELDS).forEach(f => { if (Array.isArray(d[f]) && !stores[LEGACY_FIELDS[f]]) stores[LEGACY_FIELDS[f]] = d[f]; });
+            for (const name of Object.keys(stores)) {
+                if (!FULL_STORES.includes(name) || !Array.isArray(stores[name])) continue;
+                for (const e of stores[name]) await _putStore(name, e).catch(()=>{});
+                const n = stores[name].length;
+                if (name === 'var_packs' || name === 'ui_templates' || name === 'state_data') restored.avs += n;
+                else if (name === 'vn_chapters' || name === 'vn_memories' || name === 'vn_grand_summaries') restored.vn += n;
+                else if (name === 'api_chats') restored.chats += n;
             }
-            if (d.uiTemplates?.length) {
-                for (const e of d.uiTemplates) await _putStore('ui_templates', e).catch(()=>{});
-                restored.avs += d.uiTemplates.length;
-            }
-
-            // 恢復 VN 資料
-            if (d.vnChapters?.length) {
-                for (const e of d.vnChapters) await _putStore('vn_chapters', e).catch(()=>{});
-                restored.vn += d.vnChapters.length;
-            }
-
-            // 恢復其他歷史紀錄
-            if (d.apiChats?.length) {
-                for (const e of d.apiChats) await _putStore('api_chats', e).catch(()=>{});
-                restored.chats += d.apiChats.length;
-            }
-            if (d.wbPosts?.length) for (const e of d.wbPosts) await _putStore('wb_posts', e).catch(()=>{});
-            if (d.lobbyHistory?.length) for (const e of d.lobbyHistory) await _putStore('lobby_history', e).catch(()=>{});
         }
 
         // LocalStorage 恢復
         if (data.localStorage && opts.restoreSettings !== false) {
             Object.entries(data.localStorage).forEach(([k, v]) => {
-                localStorage.setItem(k, v);
-                restored.localStorage++;
+                try { localStorage.setItem(k, v); restored.localStorage++; }
+                catch (e) { console.warn('[OS_BACKUP] 還原設定失敗（空間不夠？）:', k, e); }
             });
         }
 

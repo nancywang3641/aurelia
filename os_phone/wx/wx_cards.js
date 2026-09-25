@@ -158,14 +158,35 @@
         },
 
         // 刪掉指定單號的那幾張（刪部分訊息時用；整室清空直接 clear）
-        removeByAliases(chatId, aliases) {
+        //   onlyUnclaimed：只刪還沒認領位置的（有位置的交給 dropSlots，不然同單號、畫面上還在的那幾張也會被刪）
+        removeByAliases(chatId, aliases, onlyUnclaimed) {
             const set = new Set((aliases || []).map(norm).filter(Boolean));
             if (!set.size) return 0;
             const book = load(chatId);
             const before = book.list.length;
-            book.list = book.list.filter(c => !set.has(norm(c.alias)));
+            book.list = book.list.filter(c => !(set.has(norm(c.alias)) && (!onlyUnclaimed || c.slot == null)));
             const n = before - book.list.length;
             if (n) save(chatId, book);
+            return n;
+        },
+
+        // 刪掉幾則訊息之後（removed＝被刪的那幾則原本的位置）：
+        //   長在被刪那幾則上的卡跟著丟；長在後面的卡 slot 往前挪——
+        //   🚨 不挪的話後面每張都對不到位置，重畫時開新的待處理卡，已收款的紅包可以再收一次
+        dropSlots(chatId, removed) {
+            const gone = Array.from(new Set((removed || []).filter(Number.isInteger))).sort((a, b) => a - b);
+            if (!gone.length) return 0;
+            const book = load(chatId);
+            const before = book.list.length;
+            book.list = book.list.filter(c => c.slot == null || gone.indexOf(c.slot) < 0);
+            let moved = 0;
+            book.list.forEach(c => {
+                if (c.slot == null) return;
+                const k = gone.filter(i => i < c.slot).length;
+                if (k) { c.slot -= k; moved++; }
+            });
+            const n = before - book.list.length;
+            if (n || moved) save(chatId, book);
             return n;
         },
 

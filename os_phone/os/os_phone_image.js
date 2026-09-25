@@ -396,6 +396,14 @@
 
             try {
                 const url = await this.makeUrl(gen);
+                // 🚨 NovelAI 回的是 blob: 暫時網址，重整就失效：先存進圖庫，寫回的是圖庫編號（跟她從相簿傳的照片同一套）
+                let keep = url;
+                if (/^blob:/i.test(url)) {
+                    const db = win.OS_DB || window.OS_DB;
+                    if (!db || !db.saveImage) throw new Error('圖庫還沒載入，圖存不下來');
+                    const blob = await (await fetch(url)).blob();
+                    keep = await db.saveImage('img_gen_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), blob);
+                }
 
                 const fill = card.classList.contains('os-img-card--fill');
                 const app = card.dataset.app || '';
@@ -407,7 +415,7 @@
 
                 const fn = this._handlers[app];
                 if (typeof fn === 'function') {
-                    try { await fn(ref, url, img, raw); }
+                    try { await fn(ref, keep, img, raw); }
                     catch (e) { console.warn('[PhoneImage] 寫回失敗(' + app + '):', e); }
                 }
             } catch (e) {

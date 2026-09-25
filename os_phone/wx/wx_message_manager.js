@@ -88,7 +88,9 @@
     //   下次模型又寫同一個 ID——測試腳本會，模型自己也常用固定編號——卡片一出現就是「已接收」。
     //   她實測：清空重試之後，禮物與轉帳直接顯示已接收、已收款。
     //   所以刪訊息的時候，把那幾則帶的 ID 一起清掉。
-    function purgeProtocolState(chatId, messages) {
+    //   removedIdx：只刪部分訊息時傳被刪那幾則原本的位置——帳本照位置丟卡、後面的卡往前挪（WX_CARDS.dropSlots），
+    //   不照單號整批刪（同單號、畫面上還在的卡會被一起刪掉）。整室清空不用傳。
+    function purgeProtocolState(chatId, messages, removedIdx) {
         let n = 0;
         const seen = new Set();
         (messages || []).forEach(m => {
@@ -105,7 +107,10 @@
         // 帳本那邊也要跟著走（wx_cards.js：一個聊天室一本帳）
         try {
             const C = (window.parent || window).WX_CARDS || window.WX_CARDS;
-            if (C && chatId && seen.size) n += C.removeByAliases(chatId, [...seen]);
+            if (C && chatId && Array.isArray(removedIdx) && C.dropSlots) {
+                n += C.dropSlots(chatId, removedIdx);
+                if (seen.size) n += C.removeByAliases(chatId, [...seen], true);
+            } else if (C && chatId && seen.size) n += C.removeByAliases(chatId, [...seen]);
         } catch (e) {}
         if (n) console.log('[MessageManager] 順手清掉 ' + n + ' 筆紅包/禮物/轉帳狀態');
         return n;
@@ -131,7 +136,7 @@
             sortedIndices.forEach(index => {
                 currentChat.messages.splice(index, 1);
             });
-            purgeProtocolState(activeId, doomed);
+            purgeProtocolState(activeId, doomed, sortedIndices);
 
             // 更新預覽
             if (currentChat.messages.length > 0) {

@@ -1248,6 +1248,8 @@ const IRIS_IDLE = [
                 _autoEnterFromPersona();
                 _applyLoadedLobbyState();
             }
+            // 🚨 沒有存檔也要記下這是哪一間：onShow 靠它判斷換了聊天室，沒記的話換間後還是舊對話、一開口就存進新那間
+            _currentChatId = currentId;
 
             tab.querySelectorAll('.void-bubble').forEach(b => scheduleBubbleFade(b));
             _paintFeed(false);

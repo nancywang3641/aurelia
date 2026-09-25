@@ -21,6 +21,10 @@
         if (cid == null) return GLOBAL_POSTS;
         return GLOBAL_POSTS.filter(function (p) { return p && (p.tavernChatId == null || p.tavernChatId === cid || (L && p.tavernChatId === L)); });
     }
+    // 圖庫編號的圖（生完存進 OS_DB 的）要另外貼上
+    function _hydrateImgs(root) {
+        try { const PI = win.OS_PHONE_IMAGE; if (PI && PI.hydrate) PI.hydrate(root); } catch (e) {}
+    }
     let CURRENT_TAB = 'home';
     let APP_CONTAINER = null;
     let LAST_USER_HASH = "";
@@ -56,6 +60,7 @@
             const container = doc.getElementById('wb-detail-container');
             if (container) {
                 container.innerHTML = win.WB_VIEW.renderDetailPage(post);
+                _hydrateImgs(container);
             }
         },
 
@@ -97,6 +102,7 @@
 
                 // 正常渲染主頁面
                 APP_CONTAINER.innerHTML = win.WB_VIEW.renderApp(_posts(), CURRENT_TAB, this.isLoading, DARK_MODE);
+                _hydrateImgs(APP_CONTAINER);
             }
         },
 
