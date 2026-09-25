@@ -462,7 +462,7 @@
                 let icon = "¥";
                 let title = targetName ? `轉帳給${targetName}` : "轉帳給朋友";
                 let sub = memo || "微信轉帳";
-                let clickAction = `onclick="${app}.openTransfer('${amount}', '${uniqueId}', this)"`;
+                let clickAction = `onclick="${app}.openTransfer('${amount}', '${uniqueId}', this, ${isMe ? 1 : 0})"`;   // 帶上是不是自己發的：自己轉出去的不能自己收
                 
                 if (isMe) {
                     if (status === 'accepted') {

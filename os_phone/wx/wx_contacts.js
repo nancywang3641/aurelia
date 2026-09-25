@@ -145,7 +145,9 @@
             if (existById) return existById.id;
 
             // 2. 檢查名字
-            let existByName = list.find(c => !c.isGroup && (c.name === input));
+            // 她在聊天設置改過名字（備註）的人：劇情還是叫他原本的名字 → 原名（realName）也認，不然同步就另開一間
+            let existByName = list.find(c => !c.isGroup && (c.name === input))
+                || list.find(c => !c.isGroup && c.realName && c.realName === input);
             if (existByName) return existByName.id; 
 
             if (!saveToStorage) return input; 
@@ -374,7 +376,14 @@
         getAllCustomContacts: function() { return _readAll(); },
         updateContactInfo: function(id, data) {
             let list = this.getAllCustomContacts(); const idx = list.findIndex(c => c.id === id);
-            if (idx >= 0) { Object.assign(list[idx], data); _writeAll(list); }
+            if (idx < 0) return;
+            data = Object.assign({}, data || {});
+            // 名字清空＝沒改，別把空名字寫進通訊錄
+            if ('name' in data && !String(data.name || '').trim()) delete data.name;
+            // 第一次改名：把原本的名字記成 realName（劇情同步靠它認人，見 getOrCreateContactID）
+            const c = list[idx];
+            if (data.name && data.name !== c.name && !c.isGroup && !c.realName && c.name) data.realName = c.name;
+            Object.assign(c, data); _writeAll(list);
         },
         // 🏠 設成／取消「常駐角色」：搬到大廳那份，或搬回當前這本
         setLobby: function(id, on) {
@@ -507,7 +516,7 @@
 
             // 3. 刪除當前畫面上渲染的聊天對象
             if (win.wxApp && win.wxApp.GLOBAL_CHATS) { 
-                if (win.wxApp.GLOBAL_ACTIVE_ID === id) win.wxApp.goBack(); 
+                if (win.wxApp.GLOBAL_ACTIVE_ID === id) win.wxApp.onBack();   // 🚨 wxApp 沒有 goBack（以前丟錯，後面的清理全部沒做） 
                 delete win.wxApp.GLOBAL_CHATS[id]; 
                 win.wxApp.render(); 
             }

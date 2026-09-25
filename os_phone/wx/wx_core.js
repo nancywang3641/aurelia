@@ -625,8 +625,9 @@
             win.WX_WALLET.transaction(grabAmount, `微信紅包 - 來自${senderName}`);
         }
 
-        // 保存數據
-        saveRedPacketData(packetId, data);
+        // 保存數據：上面已經寫回那張卡的就不再存一次——
+        //   🚨 packetId 可能是模型寫的序號（「1」），拿它再存一次會找不到卡、另開一張別名叫 1 的幽靈紅包
+        if (!(_C && _cid && _card)) saveRedPacketData(packetId, data);
         return grabAmount; // 返回領取的金額
     }
 
@@ -2236,16 +2237,28 @@
                     try { _setCardStatus(null, 'transfer', p.txnId, 'accepted', 'ID_' + p.txnId); } catch (e) {}
                 }
             });
+            // 🚨 轉帳發生在哪一間就記到哪一間的帳本：以前一律傳 null ＝當下開著的那間，
+            //    劇情裡收的轉帳記到別間，原本那間的卡一直停在待收款、還能手動再收一次
+            const _roomCid = function (key) {
+                try {
+                    const room = rooms[key]; if (!room) return null;
+                    const others = _storyOthers(room); if (!others.length) return null;
+                    if (_storyIsGroup(room, others)) return 'grp_story_' + _storyHash(cid) + '_' + String(key).replace(/[^\w一-鿿-]/g, '_').slice(0, 40);
+                    const id = win.WX_CONTACTS.getOrCreateContactID(others[0] || room.name || key, 'user', false);
+                    return (id && id !== 'User') ? id : null;
+                } catch (e) { return null; }
+            };
             moneyEvents.forEach(function (m) {
                 const ev = m.ev;
+                const _mc = _roomCid(m.key);
                 if (!(ev.amount > 0) || !ev.txnId) return;
                 if (_done[ev.txnId]) return;   // 這一筆早就結算過了
                 let rec = null;
-                try { rec = _txnLoad(null, ev.txnId); } catch (e) {}
+                try { rec = _txnLoad(_mc, ev.txnId); } catch (e) {}
                 if (rec && rec.status && rec.status !== 'pending') { _moneyDoneSet(ev.txnId, rec.status); return; }
                 if (!ev.take) {
-                    try { _txnSave(null, ev.txnId, Object.assign({}, rec || { amount: ev.amount, timestamp: Date.now() }, { status: 'returned' })); } catch (e) {}
-                    try { _setCardStatus(null, 'transfer', ev.txnId, 'returned', 'ID_' + ev.txnId); } catch (e) {}
+                    try { _txnSave(_mc, ev.txnId, Object.assign({}, rec || { amount: ev.amount, timestamp: Date.now() }, { status: 'returned' })); } catch (e) {}
+                    try { _setCardStatus(_mc, 'transfer', ev.txnId, 'returned', 'ID_' + ev.txnId); } catch (e) {}
                     _moneyDoneSet(ev.txnId, 'returned');
                     return;
                 }
@@ -2266,8 +2279,8 @@
                     const why = ev.isMe ? ('微信收款 - ' + (m.name || '劇情')) : ('微信轉帳給 ' + (ev.sender || '對方'));
                     try { W.transaction(delta, why); } catch (e) { console.warn('[wx 跑團同步] 錢包沒動成', e); }
                 }
-                try { _txnSave(null, ev.txnId, Object.assign({}, rec || { amount: ev.amount, targetName: ev.sender || '', timestamp: Date.now() }, { status: 'accepted' })); } catch (e) {}
-                try { _setCardStatus(null, 'transfer', ev.txnId, 'accepted', 'ID_' + ev.txnId); } catch (e) {}
+                try { _txnSave(_mc, ev.txnId, Object.assign({}, rec || { amount: ev.amount, targetName: ev.sender || '', timestamp: Date.now() }, { status: 'accepted' })); } catch (e) {}
+                try { _setCardStatus(_mc, 'transfer', ev.txnId, 'accepted', 'ID_' + ev.txnId); } catch (e) {}
                 _moneyDoneSet(ev.txnId, 'accepted');
             });
             // 她手動做的排在那一樓所有劇情事件之後
@@ -4120,7 +4133,7 @@
         
         // 🚨 已經收過／退過／過期的轉帳，點開只能看，不能再按。以前這裡完全沒判斷狀態，
         //    所以她收了款、底下系統訊息也寫了，卡片點開那兩顆還是照按（按下去會再送一次協議給模型）。
-        openTransfer: function(amount, hashId, el) {
+        openTransfer: function(amount, hashId, el, mine) {
             const overlay = doc.querySelector('#wxTransferOverlay');
             const amountEl = doc.querySelector('#wxTransferAmount');
             const btnReceive = doc.querySelector('#wxBtnReceive');
@@ -4139,6 +4152,10 @@
             if (status && DONE[status]) {
                 if (actions) actions.style.display = 'none';
                 if (stateEl) stateEl.innerText = DONE[status];
+            } else if (mine) {
+                // 🚨 自己轉出去的：等對方收，不給自己按收款（以前按得下去，錢包會加錢）
+                if (actions) actions.style.display = 'none';
+                if (stateEl) stateEl.innerText = '等待對方收款';
             } else {
                 if (actions) actions.style.display = '';
                 if (stateEl) stateEl.innerText = '待收款金額';

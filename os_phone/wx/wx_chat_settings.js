@@ -1024,7 +1024,7 @@
                                 return;
                             }
                             box.innerHTML = entries.map(entry => {
-                                const isSelected = personaFromLorebook === entry.uid;
+                                const isSelected = personaFromLorebook != null && String(personaFromLorebook) === String(entry.uid);   // 存的是字串、條目 uid 可能是數字
                                 let content = (entry.content || '').replace(/<[^>]+>/g, '').trim();
                                 if (content.length > 200) content = content.substring(0, 200) + '...';
                                 const comment = (entry.comment || entry.name || `條目 #${entry.uid}`).trim();
@@ -1135,7 +1135,7 @@
                             } else {
                                 const escapeHtml = (t) => { const d = doc.createElement('div'); d.textContent = t; return d.innerHTML; };
                                 entries.forEach(entry => {
-                                    const isSelected = groupNoteFromLorebook === entry.uid;
+                                    const isSelected = groupNoteFromLorebook != null && String(groupNoteFromLorebook) === String(entry.uid);
                                     let content = (entry.content || '').replace(/<[^>]+>/g, '').trim();
                                     if (content.length > 200) content = content.substring(0, 200) + '...';
                                     const comment = (entry.comment || `條目 #${entry.uid}`).trim();
@@ -1206,7 +1206,7 @@
                             saveBtn.onclick = () => {
                                 // 獲取選中的世界書條目
                                 const selectedRadio = personaBody.querySelector('input[name="group-note-lorebook"]:checked');
-                                const selectedUid = selectedRadio ? parseInt(selectedRadio.value) : null;
+                                const selectedUid = selectedRadio ? selectedRadio.value : null;   // 🚨 別 parseInt：手機版條目 id 是 'wb_…'，轉完變 NaN
                                 
                                 // 獲取自定義備註
                                 const customInput = doc.getElementById('inp-group-note-custom');

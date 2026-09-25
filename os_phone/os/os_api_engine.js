@@ -471,7 +471,8 @@
                 const book = bookName || (typeof H.getCurrentCharPrimaryLorebook === 'function' ? H.getCurrentCharPrimaryLorebook() : '');
                 if (!book) return '';
                 const entries = await H.getLorebookEntries(book);
-                const hit = (entries || []).find(e => e && e.uid === uid);
+                // 🚨 存下來的 uid 是字串、酒館條目的 uid 是數字：一律轉字串比，不然永遠對不上、AI 拿不到人設
+                const hit = (entries || []).find(e => e && String(e.uid) === String(uid));
                 return (hit && hit.content) || '';
             }
             if (win.OS_WORLDBOOK && typeof win.OS_WORLDBOOK.getEnabledEntries === 'function') {
@@ -1972,21 +1973,11 @@
                     if (currentChatId) {
                         const apiChat = await win.WX_DB.getApiChat(currentChatId);
                         if (apiChat && !apiChat.isGroup) {
+                            // 🚨 跟手機版同一份（chatNoteOf）：自己打的那段＋世界書挑的那條，兩邊都有才接起來。
+                            //    以前這裡自己另寫一份：不讀新增聯絡人時存的舊欄位 persona，條目讀不到時同一段還送兩次，
+                            //    uid 又用嚴格比對（存的字串 vs 酒館的數字）永遠對不上
                             let personaText = '';
-                            if (apiChat.personaFromLorebook && win.TavernHelper) {
-                                try {
-                                    // 📚 條目是從哪一本挑的就回哪一本讀（她可以指到別的故事那本）；沒記過才用這張卡的主世界書
-                                    const currentLorebook = apiChat.personaLoreBook || win.TavernHelper.getCurrentCharPrimaryLorebook();
-                                    if (currentLorebook) {
-                                        const entries = await win.TavernHelper.getLorebookEntries(currentLorebook);
-                                        const selectedEntry = entries.find(e => e.uid === apiChat.personaFromLorebook);
-                                        if (selectedEntry && selectedEntry.content) personaText = selectedEntry.content;
-                                    }
-                                } catch (e) {}
-                            }
-                            if (!personaText && apiChat.personaCustom) personaText = apiChat.personaCustom;
-                            if (apiChat.personaCustom && apiChat.personaFromLorebook) personaText = `${apiChat.personaCustom}\n\n---\n\n${personaText}`;
-                            
+                            try { personaText = await win.OS_API.chatNoteOf(apiChat); } catch (e) {}
                             if (personaText) apiMessages.push({ role: "system", content: `[Character Persona (Private Chat)]:\n${personaText}\n\n` });
                             // 📒 你們的記事本：每輪只給目錄（見 wx_notebook.js brief）；通話只給目錄、不教怎麼寫
                             try {

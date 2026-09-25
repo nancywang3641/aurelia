@@ -1073,7 +1073,8 @@
             const parts = String(ref || '').split('|');
             const postId = parts[0], idx = parseInt(parts[1], 10);
             if (!postId || isNaN(idx)) return;
-            return _run(scope(), function (st) {
+            // 大廳角色的貼文存在大廳那份：照那則貼文在哪一份找（跟按讚留言同一條），不然生好的圖存不回去
+            return _run(_scopeOfPost(postId), function (st) {
                 const p = _post(st, postId);
                 if (!p || !p.photos[idx]) return false;
                 p.photos[idx].src = url;
