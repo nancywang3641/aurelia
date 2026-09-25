@@ -1276,8 +1276,10 @@
                 };
             }
 
-            if (this.isStandalone() && config.useSystemApi) {
-                config = { ...config, useSystemApi: false };
+            // 手機版沒有酒館可借：酒館連接、酒館原生生成兩種都要關（🚨 以前只關前者，從酒館備份還原過來的設定
+            //    帶著 useGenerateRaw → 每一通都去找酒館後端，所有 AI 功能失敗，要到設置按一次保存才好）
+            if (this.isStandalone() && (config.useSystemApi || config.useGenerateRaw)) {
+                config = { ...config, useSystemApi: false, useGenerateRaw: false };
                 if (!config.url || !config.key) {
                     const err = new Error('獨立模式需填入 API URL 與 Key（設置 → 主模型）');
                     console.error('[OS_API]', err.message);
@@ -2582,7 +2584,7 @@
                 const _vn = [];
                 const _entryMap = Object.fromEntries((win.OS_PROMPTS?.getEntries?.() || []).map(e => [e.id, e]));
                 const _vnBundles = (win.OS_PROMPTS?.getBundles?.() || [])
-                    .filter(b => b.enabled !== false && (b.panels||[]).some(p => 'vn_story' === p || 'vn_story'.startsWith(p + '_') || 'vn_story'.startsWith(p)))
+                    .filter(b => b.enabled !== false && (b.panels||[]).some(p => p === '*' || 'vn_story' === p || 'vn_story'.startsWith(p + '_') || 'vn_story'.startsWith(p)))   // 「全部」也算（同 OS_PROMPTS 的比對）
                     .sort((a, b) => { const ai = _promptOrder.indexOf(a.id), bi = _promptOrder.indexOf(b.id); return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi); });
                 const _injectedSys = new Set(); 
                 for (const _bundle of _vnBundles) {

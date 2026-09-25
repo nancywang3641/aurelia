@@ -104,8 +104,10 @@
                 // 顯示預覽
                 let preview = `--- 🔥 歷史記錄預覽 (共 ${historyCount} 條) ---\n`;
                 preview += `[統計] 總長度: ${totalChars} 字 | ${tokenDisplay}\n`;
-                if(isSummaryOn) preview += `[提示] 摘要模式已開啟。\n\n`;
-                else preview += `[提示] 摘要模式已關閉 (全量讀取)。\n\n`;
+                // 🚨 以前這裡用舊版的 isSummaryOn（已經不存在）→ 整段診斷丟錯、歷史預覽永遠出不來；改看上面算好的 _keepN
+                if (_keepN === null) preview += `[提示] 全送（不限制）。\n\n`;
+                else if (_keepN === 0) preview += `[提示] 全部只讀摘要。\n\n`;
+                else preview += `[提示] 最近 ${_keepN} 則全文，更早的讀摘要。\n\n`;
 
                 if (historyCount > 0) {
                     ctx.history.forEach((msg, i) => {

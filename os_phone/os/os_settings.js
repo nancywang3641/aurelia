@@ -3766,7 +3766,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         return;
                     }
 
-                    let fetchUrl = url.replace(/\/chat\/completions$/, '').replace(/\/$/, '') + '/v1/models';
+                    // 🚨 網址本來就以 /v1 結尾（大多數站台給的都是）就別再接一層，不然變 /v1/v1/models 回 404（同 chat() 的接法）
+                    let _base = url.replace(/\/chat\/completions$/, '').replace(/\/+$/, '');
+                    let fetchUrl = _base + (/\/v1$/.test(_base) ? '' : '/v1') + '/models';
                     const res = await fetch(fetchUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
                     
                     if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
@@ -3835,7 +3837,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         return;
                     }
 
-                    let fetchUrl = url.replace(/\/chat\/completions$/, '').replace(/\/$/, '') + '/v1/models';
+                    // 🚨 網址本來就以 /v1 結尾（大多數站台給的都是）就別再接一層，不然變 /v1/v1/models 回 404（同 chat() 的接法）
+                    let _base = url.replace(/\/chat\/completions$/, '').replace(/\/+$/, '');
+                    let fetchUrl = _base + (/\/v1$/.test(_base) ? '' : '/v1') + '/models';
                     const res = await fetch(fetchUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
                     
                     if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);

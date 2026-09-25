@@ -35,10 +35,13 @@
         try { return JSON.parse(localStorage.getItem(_avsKey()) || '{}'); } catch(e) { return {}; }
     }
 
-    function _avsWrite(state) {
+    // 回傳 Promise：寫完才 resolve、才通知面板。
+    //   🚨 以前酒館那條 writeState 是 async 卻沒 await、也沒 return → 呼叫端的 await write() 其實沒在等，
+    //      事件也比資料落地先發出去，面板讀到舊值
+    async function _avsWrite(state) {
         // 優先走 adapter（酒館：寫 OS_DB.state_data.current / PWA：寫 localStorage）
         if (win.OS_AVS_ADAPTER?.writeState) {
-            try { win.OS_AVS_ADAPTER.writeState(state); } catch(e) {
+            try { await win.OS_AVS_ADAPTER.writeState(state); } catch(e) {
                 console.error('[AVS] adapter 寫入失敗:', e);
             }
         } else {

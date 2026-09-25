@@ -503,8 +503,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             if (sc === 'private' && opts.wxGroup) return false;
             if (sc === 'group' && !opts.wxGroup) return false;
         }
-        if (ps.includes('*')) return true;
-        return ps.some(p => promptKey === p || promptKey.startsWith(p + '_') || promptKey.startsWith(p));
+        if (ps.includes('*') && !(opts && opts.noStar)) return true;   // noStar：子面板只認明確勾了它的包
+        return ps.some(p => p !== '*' && (promptKey === p || promptKey.startsWith(p + '_') || promptKey.startsWith(p)));
     }
 
     // 面板格式協議。VN 的格式協議＝VN 指令（os_vn_rules，程式內建）：這裡只送「最前面」那幾條，
@@ -584,9 +584,14 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             // 🔥 V4.6 終極修復：攔截獨立 API 請求
             // 如果是子面板的 API 請求，直接返回乾淨的硬編碼
             // 只有持續對話的主面板（VN, WX 等）才需要經過 Bundle 打包與世界書注入
+            //   🚨 但她在預設包裡明確勾了這個面板（電話、微博、地圖、塔羅）就照包走——以前一律回硬編碼，勾了等於沒勾。
+            //      只勾「全部」的包不算：那種包是給主劇情的，套到這些要吐固定格式的子面板會把格式帶歪。
             const MAIN_PANELS = ['vn_story', 'wx_chat_system'];
             if (HARDCODED[key] && !MAIN_PANELS.includes(key)) {
-                return HARDCODED[key];
+                const picked = loadBundles().some(b => b.enabled !== false && Array.isArray(b.panels)
+                    && b.panels.some(p => p !== '*' && (key === p || key.startsWith(p + '_'))));
+                if (!picked) return HARDCODED[key];
+                return getSystemPrompt(key, Object.assign({}, opts || {}, { noStar: true }));
             }
 
             return getSystemPrompt(key, opts);   // panel_prompt sys slot 負責在正確位置注入格式提示詞

@@ -245,6 +245,7 @@
     }
     async function _build(opts) {
         if (!_host) return;
+        if (_refreshPending && !_editingValues) { _refreshPending = false; opts = Object.assign({}, opts || {}, { fresh: true }); }
         const eng = win._AVS_ENGINE;
         const chatId = _curChatId();
         // fresh=true（外部事件、資料真的變了）才重讀；換頁沿用快取＝不清空、不 await、不閃
@@ -902,7 +903,13 @@
         _editingValues = false;
         await _build({ fresh: true });
     }
-    function refresh() { _build({ fresh: true }); }   // 對外刷新＝背景事件(抽取完成/開關/生成)→資料可能變了，重讀
+    // 對外刷新＝背景事件(抽取完成/開關/生成)→資料可能變了，重讀。
+    //   🚨 她正在改數值時先不重畫（會把手上填到一半的格子洗掉），記著，改完回到一般畫面再重讀
+    let _refreshPending = false;
+    function refresh() {
+        if (_editingValues) { _refreshPending = true; return; }
+        _build({ fresh: true });
+    }
 
     function startEditField(name) { _editingFieldName = name; _page = 'fields'; _build(); }
     function startAddField() { _editingFieldName = '__new__'; _page = 'fields'; _build(); }
@@ -987,6 +994,6 @@
         });
     })();
 
-    win.OS_AVS_STATE = { renderInto, refresh, openStateManagerModal, startEditField, startAddField, cancelEditField, saveFieldEdit, deleteFieldConfirm };
+    win.OS_AVS_STATE = { renderInto, refresh, isHost: function (el) { return !!el && _host === el && el.isConnected; }, openStateManagerModal, startEditField, startAddField, cancelEditField, saveFieldEdit, deleteFieldConfirm };
     window.OS_AVS_STATE = win.OS_AVS_STATE;
 })();

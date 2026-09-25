@@ -246,9 +246,14 @@
         }
 
         // 監聽 AVS 更新事件，自動刷新狀態頁
+        // 🚨 已經畫著的就原地刷新（refresh 會留在她正在看的那頁、改數值時先不動）；
+        //    以前一律 renderInto → 整個重掛、回首頁：按儲存／還原被踢回首頁，改到一半剛好抽完一輪就全沒了
         win.addEventListener('AVS_VARS_UPDATED', () => {
             const stateView = container.querySelector('#avs-view-state');
-            if (stateView && stateView.classList.contains('active')) renderStateView(container);
+            if (!stateView || !stateView.classList.contains('active')) return;
+            const S = win.OS_AVS_STATE;
+            if (S && S.isHost && S.isHost(stateView) && S.refresh) S.refresh();
+            else renderStateView(container);
         });
 
         // 變數包新增/儲存後重載檔案卡列表——「開始追蹤狀態」在 os_avs_state 那頭生成完只重繪狀態視圖，
@@ -1163,7 +1168,9 @@
                     type: vtype
                 });
             });
-            const pack = activeEditingPack ? { ...activeEditingPack } : { id: 'pack_' + Date.now() };
+            // 🚨 新建的包要綁在這個故事上：以前沒帶 chatId → 清單只列綁這個故事的，看不到它；
+            //    抽取那邊卻把沒有 chatId 的包當全域，套到每一本故事。編輯既有的包照原本的綁定不動
+            const pack = activeEditingPack ? { ...activeEditingPack } : { id: 'pack_' + Date.now(), chatId: win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '' };
             pack.name = name; pack.notes = container.querySelector('#avs-pack-notes').value; pack.variables = variables;
             await win.OS_DB.saveVarPack(pack);
             btnCancel.onclick(); await loadAllData(container);

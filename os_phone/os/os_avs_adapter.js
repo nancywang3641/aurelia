@@ -16,6 +16,7 @@
     // 變數狀態的記憶體 cache（酒館模式用，因為 OS_DB 是 async，
     // 但 engine.read() 是 sync 接口，所以維護一份 sync 可讀的鏡像）
     let _cache = { chatId: null, vars: {}, schema: null, ts: 0 };
+    let _writeQ = Promise.resolve();   // writeState 的 DB 寫入排隊
     let _refreshing = false;
 
     function isStandalone() {
@@ -116,13 +117,21 @@
             if (isStandalone()) { _pwaWriteState(state); return; }
             const cid = getCurrentChatId();
             if (!cid || !win.OS_DB?.getStateData) return;
-            const data = (await win.OS_DB.getStateData(cid)) || {};
-            await win.OS_DB.saveStateData(cid, {
-                ...data,                                      // ← 其餘欄位原封不動帶過去
-                schema: data.schema || _cache.schema,
-                current: state || {}
+            // 🚨 記憶體那份先換掉（readState 是同步讀它的）：以前等 DB 寫完才換，
+            //    一則回覆裡有好幾塊 <vars> 時，後一塊讀到的還是舊值，前一塊的改動被蓋掉
+            _cache = { chatId: cid, vars: { ...(state || {}) }, schema: _cache.chatId === cid ? _cache.schema : null, ts: Date.now() };
+            // 寫 DB 排隊：一次一筆，免得先送的比後送的晚寫完、把新值蓋回舊值
+            const job = _writeQ.then(async () => {
+                const data = (await win.OS_DB.getStateData(cid)) || {};
+                await win.OS_DB.saveStateData(cid, {
+                    ...data,                                      // ← 其餘欄位原封不動帶過去
+                    schema: data.schema || _cache.schema,
+                    current: state || {}
+                });
+                if (_cache.chatId === cid && !_cache.schema) _cache.schema = data.schema;
             });
-            _cache = { chatId: cid, vars: { ...(state || {}) }, schema: data.schema, ts: Date.now() };
+            _writeQ = job.catch(() => {});
+            return job;
         },
 
         /** sync 讀規則陣列 */
