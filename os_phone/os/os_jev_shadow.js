@@ -20,7 +20,9 @@
     const JEV_URL = 'https://ai-gateway.vercel.sh/v1/evaluate';
     const JEV_MODEL = 'typesafe-ai/jev';
     const LOG_LS = 'jev_shadow_log';
-    const ON_LS = 'jev_shadow_on';
+    // 09-26 她：看完比對，Jev 挑的舊事比副模型還多（都市恶宴 170 樓那輪 8 條裡 5 條是已結束的南區線）→ 預設關。
+    //   換新鑰匙：舊的 jev_shadow_on 以前預設當開，就算誰按過「開」也一起作廢；要看再到 DEBUG 面板按「開／關」。
+    const ON_LS = 'jev_shadow_on_v2';
     const LOG_MAX = 30;
     const PER_CALL = 5;           // 一通問 5 條（10 題）
     const TOP_N = 8;              // 實驗：固定分數門檻在兩主角的故事會漏（好東西只拿 1.1～1.3），排名前 8 才全送到
@@ -29,7 +31,7 @@
     const SCENE_MAX = 3000;       // 送給 Jev 的「剛發生的劇情」最多這麼長
 
     function _key() { try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
-    function isOn() { try { return localStorage.getItem(ON_LS) !== '0'; } catch (e) { return true; } }
+    function isOn() { try { return localStorage.getItem(ON_LS) === '1'; } catch (e) { return false; } }
     function setOn(on) { try { localStorage.setItem(ON_LS, on ? '1' : '0'); } catch (e) {} }
     function getLog() { try { return JSON.parse(localStorage.getItem(LOG_LS) || '[]'); } catch (e) { return []; } }
     function _push(entry) {

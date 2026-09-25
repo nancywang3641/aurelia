@@ -759,18 +759,28 @@ ${_memoryRulesText()}
 最終輸出格式：{ "updates": { ... }, "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
     }
     // 🎬 記憶導演：把帶碼全記憶目錄附給副模型，讓它挑「下一輪主模型該被提醒哪幾條」(放進同一個 JSON 的 recall_next)
-    function _recallAddendum(catText) {
+    //   09-26 改：以前只說「挑下一輪最需要的」，它把剛發生那輪順帶提到的舊事全挑回來（都市恶宴每輪挑 3～4 條已結束的南區線，正文就一直重演）。
+    //   拿她 170 樓那通真請求考 4 次：舊寫法平均挑 3.5 條舊線；這版＋結案名單 1.75 條。再附「上一輪挑過哪些」反而 2.25 條，沒放。
+    function _recallAddendum(catText, closedNames) {
+        const closed = (Array.isArray(closedNames) ? closedNames : []).filter(Boolean);
         return `
 
 ═══════════════════════════════════════
 【★ 兼任「記憶導演」→ 放進同一個 JSON 的 "recall_next" 欄位】
-下面是本劇全部過往記憶的「帶碼目錄」。請以導演視角判斷：根據剛發生的這一輪劇情走向，「下一輪」主模型最需要被提醒哪幾條過往記憶，才不會前後矛盾或失憶（主模型常常忘記自己回想，所以由你幫它挑）。
-規則：recall_next 只放代號(目錄裡每行行首那個 A 開頭的編號)、純代號字串、不要改寫內容。挑「這一輪之後主模型真正需要回想」的——**有幾條相關就放幾條，沒有就給 []，最多 6 條**；數量完全看實際需要、不要固定、不要為了湊而填、該挑的也別漏。
+下面是本劇過往記憶的帶碼目錄。你挑出的條目，下一輪會把完整內容附給主模型，提醒它別寫出跟過去矛盾的內容。
+挑的標準只有一個：下一輪很可能會直接寫到某個人、某樣東西、某個地方或某個約定，而主模型不知道這條記憶就會寫錯。
+這些不要挑：
+・剛發生的這一輪只是順帶提到（看到訊息、聽到消息、心裡想起）——被提到不等於下一輪會用到。
+・已經收尾、下一輪不會再碰到的事——再提醒只會讓主模型以為它還沒完，一直把它寫回來。
+・跟目錄裡另一條講的是同一件事——只留最能說清楚那件事的一條。${closed.length ? `
+下面這些事已經結案；跟它們有關的記憶一律不挑，除非剛發生的這一輪主角自己回頭去碰了：
+${closed.map(s => '・' + s).join('\n')}` : ''}
+規則：recall_next 只放代號（目錄每行行首 A 開頭的編號），純代號字串、不要改寫內容。有幾條放幾條，沒有就給 []，最多 6 條。
 
 【全記憶帶碼目錄】
 ${catText}
 
-→ 最終 JSON 需含 "recall_next" 欄位（你挑出的代號字串組成的陣列，數量看實際需要、沒有就 []）`;
+→ 最終 JSON 需含 "recall_next" 欄位（你挑出的代號字串組成的陣列，沒有就 []）`;
     }
     // 只有記憶要抽時的獨立 prompt（沒變數包 / 這則狀態已抽過）
     function _memoryOnlyPrompt(text) {
@@ -1331,7 +1341,9 @@ ${numberedText}`;
                 if ((doState || wantMemory) && win.OS_VECTOR_INJECT?.getCatalogForPicking) {
                     // 把「當下劇情」當 query 傳進去 → 召回端用向量粗篩出相關候選給導演挑（取代全目錄常駐）；沒向量就退回全目錄。
                     _recallCat = await win.OS_VECTOR_INJECT.getCatalogForPicking(lastContent || recentText || '');
-                    if (_recallCat && _recallCat.text) prompt += _recallAddendum(_recallCat.text);
+                    let _closedNames = [];
+                    try { _closedNames = (await win.OS_STORY_TOOLS?.getCurrentClosedNames?.()) || []; } catch (e) {}
+                    if (_recallCat && _recallCat.text) prompt += _recallAddendum(_recallCat.text, _closedNames);
                 }
             } catch (e) {}
 

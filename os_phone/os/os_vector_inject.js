@@ -493,7 +493,7 @@
             } else {
                 const lines = [];
                 pool.forEach(m => _emit(m, lines));
-                if (lines.length) text += `\n〔與當前劇情相關的記憶〕\n` + lines.join('\n');
+                if (lines.length) text += `\n〔跟剛發生的劇情字面相近的記憶（相近不代表下一輪需要）〕\n` + lines.join('\n');   // 09-26：以前寫「相關」，導演照單全收
                 // 另立一區，不混進上面那組：這些是「跟現在的話題不相關」才需要特別撈出來的，
                 // 併在一起的話導演會把它們讀成當下相關而照樣挑不出重點。
                 if (heavy.length) {

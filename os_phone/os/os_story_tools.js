@@ -449,11 +449,16 @@
     //      實測整張表放進去 4 次裡還是 1 次重演、3 次帶過；同位置只點名一句 3 次都沒重演。
     const CLOSED = new Set(['結案表', '结案表']);
     const CLOSED_NOTE = '（下列事情已經結束了。除非主角自己回頭去碰，不要再寫它們的後續，也別讓任何人再提起、當成新消息聊起。）';
-    API.buildClosedBlock = function (fullContent) {
+    API.buildClosedNames = function (fullContent) {
         try {
             const s = _splitSummarySections(_stripSummaryHead(fullContent)).find(x => CLOSED.has(x.header));
-            if (!s) return '';
-            const names = _parseMdTable(s.body).rows.map(r => String(_firstCell(r) || '').trim()).filter(n => n && n !== '-');
+            if (!s) return [];
+            return _parseMdTable(s.body).rows.map(r => String(_firstCell(r) || '').trim()).filter(n => n && n !== '-');
+        } catch (e) { return []; }
+    };
+    API.buildClosedBlock = function (fullContent) {
+        try {
+            const names = API.buildClosedNames(fullContent);
             if (!names.length) return '';
             return `<已結案>\n（${names.join('、')}，這些事已經過去了，這章不要再提，也別讓誰再聊起。）\n</已結案>`;
         } catch (e) { return ''; }
@@ -567,6 +572,15 @@
             if (!rec || !rec.content) return '';
             return API.buildInjectionPayload(rec.content, opts);
         } catch (e) { console.warn('[大總結] getCurrentInjectionPayload 失敗:', e); return ''; }
+    };
+    // 結案事項名單（記憶導演挑記憶時用：已結案的別挑）
+    API.getCurrentClosedNames = async function () {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return [];
+            const rec = await _loadTavernSummary(chatId);
+            return (rec && rec.content) ? API.buildClosedNames(rec.content) : [];
+        } catch (e) { return []; }
     };
     // 只要結案表那一塊（酒館正文把它另外放到下筆前的位置，見 os_summary_inject）
     API.getCurrentClosedBlock = async function () {
