@@ -653,8 +653,12 @@
         }
 
         // 儲存條目
+        // 🚨 奧瑞亞格式會帶著原本的 id：別本書包裡已經有同一個 id（用新名字複製一份）時要換新 id，
+        //    不然存下去是蓋掉原條目，原書包整本被搬空
+        const _taken = new Set(((await win.OS_DB.getAllWorldbookEntries()) || []).map(x => x && x.id));
         for (const e of entries) {
-            if (!e.id) e.id = 'wb_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+            if (!e.id || _taken.has(e.id)) e.id = 'wb_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+            _taken.add(e.id);
             await win.OS_DB.saveWorldbookEntry(e);
         }
         
@@ -821,6 +825,14 @@
             const root = container.querySelector('#wb-root') || container;
             bindEvents(root);
             reload(root);
+        },
+
+        // 所有書包裡開著的條目（手機聊天的人設／群聊備註「從世界書選擇」用；PWA 沒有「角色綁哪本書」，全部列出來讓她挑）
+        //   存下來的是條目 id，送出時再用 id 找回內容（os_api_engine _wxLoreEntryText）
+        getEnabledEntries: async function() {
+            const entries = (await win.OS_DB.getAllWorldbookEntries()) || [];
+            return entries.filter(e => e && e.enabled !== false)
+                .sort((a, b) => String(a.book || '').localeCompare(String(b.book || '')) || ((parseInt(a.order) || 0) - (parseInt(b.order) || 0)));
         },
 
         // 給一般對話使用的默認函數 (只抓當前正在查看的書包)

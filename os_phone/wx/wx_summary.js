@@ -185,12 +185,19 @@
     }
 
     // 寫回：記憶體那份跟 OS_DB 都要寫，不然下一次存檔會把記錄蓋掉
+    //   🚨 總結只改 wxSummary 這一欄：寫回時拿「最新的那份」掛上去，不拿開頭讀的整份蓋回去——
+    //      等模型的這段時間電話、心跳可能又寫了訊息進來
     async function _save(chatId, chat) {
+        let target = chat;
         try {
             const live = win.wxApp && win.wxApp.GLOBAL_CHATS && win.wxApp.GLOBAL_CHATS[chatId];
-            if (live && live !== chat) live.wxSummary = chat.wxSummary;
+            if (live && live !== chat) { live.wxSummary = chat.wxSummary; target = live; }
+            else if (!live && win.OS_DB && win.OS_DB.getApiChat) {
+                const fresh = await win.OS_DB.getApiChat(chatId);
+                if (fresh) { fresh.wxSummary = chat.wxSummary; target = fresh; }
+            }
         } catch (e) {}
-        try { if (win.OS_DB && win.OS_DB.saveApiChat) await win.OS_DB.saveApiChat(chatId, chat); } catch (e) {}
+        try { if (win.OS_DB && win.OS_DB.saveApiChat) await win.OS_DB.saveApiChat(chatId, target); } catch (e) {}
         try { if (win.wxApp && typeof win.wxApp.saveChats === 'function') win.wxApp.saveChats(); } catch (e) {}
     }
 

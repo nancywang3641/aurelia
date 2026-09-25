@@ -535,9 +535,22 @@
                     try {
                         const rec = (await OS_DB.getApiChat(callId)) || { id: callId, name: callName, members: [callName], isGroup: false, messages: [] };
                         if (!Array.isArray(rec.messages)) rec.messages = [];
-                        if (msgId != null && rec.messages.some(function (m) { return m && m._vnCallMsgId === msgId; })) return;   // 這通已寫過 → 跳過(去重)
+                        // 去重認「哪一則＋這段講了什麼」：
+                        //   🚨 以前只認 msgId → 同一則裡的第二段通話（AI 拆兩段、或同章打第二通）被當成寫過跳掉；
+                        //      PWA 的 msgId 是空的，完全不去重 → 每重播一次章節就多寫一遍
+                        let h = 0;
+                        const sig = lines.map(function (l) { return (l.sender || '') + ':' + (l.text || ''); }).join('\n');
+                        for (let i = 0; i < sig.length; i++) h = (h * 31 + sig.charCodeAt(i)) | 0;
+                        const callKey = (msgId == null ? '' : String(msgId)) + '|' + callId + '|' + h;
+                        const first = lines[0] && lines[0].text;
+                        const dup = rec.messages.some(function (m) {
+                            if (!m) return false;
+                            if (m._vnCallKey) return m._vnCallKey === callKey;
+                            return msgId != null && m._vnCallMsgId === msgId && m.content === first;   // 舊記錄沒有 _vnCallKey：同一則、同一句開頭才算
+                        });
+                        if (dup) return;
                         lines.forEach(function (l) {
-                            rec.messages.push({ type: 'msg', isMe: !!l.isMe, content: l.text, sender: l.sender, senderName: l.sender, _vnCallMsgId: msgId, _viaCall: true });
+                            rec.messages.push({ type: 'msg', isMe: !!l.isMe, content: l.text, sender: l.sender, senderName: l.sender, _vnCallMsgId: msgId, _vnCallKey: callKey, _viaCall: true });
                         });
                         if (!rec.name) rec.name = callName;
                         await OS_DB.saveApiChat(callId, rec);

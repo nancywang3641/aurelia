@@ -103,10 +103,12 @@
     }
 
     // 應用那份：存 OS_DB app_data（appId=vnpanel:<tagId>、scope=當前聊天）
-    async function _loadEntries(tagId) {
+    // strict：要改完整份寫回的（新增／修改／刪除）讀失敗就丟錯，別當成空的再寫回把整份清掉
+    async function _loadEntries(tagId, strict) {
         const d = _db(); const cid = _chatId();
-        if (!d || !d.getAppData || !cid) return [];
-        try { const v = await d.getAppData(_appId(tagId), ENTRIES_KEY, cid); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+        if (!d || !d.getAppData || !cid) { if (strict) throw new Error('資料庫還沒載入'); return []; }
+        try { const v = await d.getAppData(_appId(tagId), ENTRIES_KEY, cid); return Array.isArray(v) ? v : []; }
+        catch (e) { if (strict) throw e; return []; }
     }
     async function _saveEntries(tagId, list) {
         const d = _db(); const cid = _chatId();
@@ -148,17 +150,17 @@
     }
 
     async function add(tagId, tag, fields) {
-        const list = await _loadEntries(tagId);
+        let list; try { list = await _loadEntries(tagId, true); } catch (e) { return null; }
         let lastFloor = -1;
         try { lastFloor = (await _fullChat()).length - 1; } catch (e) {}
         const rec = { id: _newId(), tag: String(tag || '').trim(), fields: Array.isArray(fields) ? fields.map(function (s) { return String(s == null ? '' : s); }) : [], ts: Date.now(), afterFloor: lastFloor };
         if (!rec.tag) return null;
         list.push(rec);
-        await _saveEntries(tagId, list);
+        if (!(await _saveEntries(tagId, list))) return null;   // 🚨 存不進去就回 null，別讓面板以為新增成功
         return { id: rec.id, src: 'app', tag: rec.tag, fields: rec.fields.slice(), floor: lastFloor, ts: rec.ts };
     }
     async function update(tagId, id, fields) {
-        const list = await _loadEntries(tagId);
+        let list; try { list = await _loadEntries(tagId, true); } catch (e) { return false; }
         const rec = list.find(function (e) { return e && e.id === id; });
         if (!rec) return false;
         rec.fields = Array.isArray(fields) ? fields.map(function (s) { return String(s == null ? '' : s); }) : rec.fields;
@@ -166,7 +168,7 @@
         return await _saveEntries(tagId, list);
     }
     async function remove(tagId, id) {
-        const list = await _loadEntries(tagId);
+        let list; try { list = await _loadEntries(tagId, true); } catch (e) { return false; }
         const kept = list.filter(function (e) { return e && e.id !== id; });
         if (kept.length === list.length) return false;
         return await _saveEntries(tagId, kept);

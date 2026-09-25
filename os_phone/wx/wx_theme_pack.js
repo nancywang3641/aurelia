@@ -250,8 +250,11 @@
     async function load() {
         if (_list) return _list;
         const db = _db();
-        try { const v = db && db.getAppData ? await db.getAppData(APP_ID, 'list', null) : null; _list = Array.isArray(v) ? v : []; }
-        catch (e) { _list = []; }
+        // 🚨 讀不到（資料庫還沒起來、暫時出錯）就這次當沒有，別把空清單記起來——
+        //    記住的話之後新增會拿空清單加一筆整份寫回，套用也會把正在用的主題清掉（同 wx_tools 的 load）
+        if (!db || !db.getAppData) return [];
+        try { const v = await db.getAppData(APP_ID, 'list', null); _list = Array.isArray(v) ? v : []; }
+        catch (e) { console.warn('[主題] 讀主題清單失敗', e); return []; }
         return _list;
     }
     async function _save() {
@@ -351,6 +354,7 @@
     }
     async function apply(id) {
         await load();
+        if (!_list) return;   // 清單讀不到：正在用的主題別動
         const t = id ? _list.find(function (x) { return x.id === id; }) : null;
         if (id && !t) id = '';
         try { if (id) localStorage.setItem(ACTIVE_KEY, id); else localStorage.removeItem(ACTIVE_KEY); } catch (e) {}
@@ -360,6 +364,7 @@
     }
     async function add(name, css, src) {
         await load();
+        if (!_list) { _toast('主題清單還讀不到，等一下再試'); return null; }
         const t = { id: 'tp' + Date.now().toString(36), name: String(name || '').trim().slice(0, 30) || '我的主題', css: String(css || ''), src: src || 'import', at: Date.now() };
         _list.unshift(t);
         await _save();
@@ -367,6 +372,7 @@
     }
     async function rename(id, name) {
         await load();
+        if (!_list) return;
         const t = _list.find(function (x) { return x.id === id; });
         if (!t || !String(name || '').trim()) return;
         t.name = String(name).trim().slice(0, 30);
@@ -375,6 +381,7 @@
     }
     async function remove(id) {
         await load();
+        if (!_list) return;
         _list = _list.filter(function (x) { return x.id !== id; });
         await _save();
         if (activeId() === id) await apply('');
@@ -977,6 +984,7 @@
         if (!c.kept) { _toast('這份裡面沒有用得上的樣式'); return; }
         if (!c.ours) { _draft.foreign = true; _renderPage(); return; }
         const t = await add(_draft.name || _nameFromText(_draft.text), css, 'import');
+        if (!t) return;   // 清單讀不到，add 已經說過了
         _sheet = '';
         await apply(t.id);
         _toast('已存成「' + t.name + '」並套用');
@@ -988,6 +996,7 @@
         try {
             const r = await generate(want, ref);
             const t = await add(r.name || (ref ? (_draft.name || '改寫的主題') : 'AI 做的主題'), r.css, 'ai');
+            if (!t) { _busy = false; _renderPage(); return; }
             _busy = false; _sheet = '';
             await apply(t.id);
             _toast('做好了：「' + t.name + '」，已經套上');

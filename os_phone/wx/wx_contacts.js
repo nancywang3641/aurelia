@@ -340,7 +340,13 @@
                                         win.wxApp.render();
                                     }
                                     
-                                    (async () => { if (win.WX_DB) { for (const chat of createdChats) { await win.WX_DB.saveApiChat(chat.id, { name: chat.name, id: chat.id, members: chat.members || [chat.name], isGroup: chat.isGroup, messages: [], lastTime: '', unread: false, desc: chat.desc }); } } })();
+                                    // 🚨 推薦到已經在的人（id 是既有的）：DB 裡那份有聊天紀錄，不能拿空的蓋掉——沒有才建
+                                    (async () => { if (win.WX_DB) { for (const chat of createdChats) {
+                                        let _had = null;
+                                        try { _had = win.WX_DB.getApiChat ? await win.WX_DB.getApiChat(chat.id) : null; } catch (e) {}
+                                        if (_had) continue;
+                                        await win.WX_DB.saveApiChat(chat.id, { name: chat.name, id: chat.id, members: chat.members || [chat.name], isGroup: chat.isGroup, messages: [], lastTime: '', unread: false, desc: chat.desc });
+                                    } } })();
                                     setTimeout(() => targetDoc.getElementById('wxActionModal').classList.remove('show'), 800);
                                 }
                             } catch (e) { 

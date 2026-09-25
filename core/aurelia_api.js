@@ -24,8 +24,12 @@
 
     // ===== 世界書轉換工具：酒館原生條目形狀 ↔ TavernHelper 形狀 =====
     //   只映射實際用到的欄位；寫入直接接 getContext().loadWorldInfo / saveWorldInfo。
-    const _POS_ST2TH = { 0: 'before_character_definition', 1: 'after_character_definition', 2: 'before_author_note', 3: 'after_author_note', 4: 'at_depth_as_system' };
-    const _POS_TH2ST = { before_character_definition: 0, after_character_definition: 1, before_example_messages: 0, after_example_messages: 1, before_author_note: 2, after_author_note: 3, at_depth_as_system: 4, at_depth_as_assistant: 4, at_depth_as_user: 4 };
+    // 酒館原生位置：0 角色定義前、1 後、2 作者註前、3 後、4 指定深度（角色看 e.role：0 系統 1 使用者 2 AI）、5 範例訊息前、6 後
+    //   🚨 以前 5、6 沒對照：讀進來一律當成角色定義前，整筆寫回時就被搬過去
+    const _POS_ST2TH = { 0: 'before_character_definition', 1: 'after_character_definition', 2: 'before_author_note', 3: 'after_author_note', 4: 'at_depth_as_system', 5: 'before_example_messages', 6: 'after_example_messages' };
+    const _POS_TH2ST = { before_character_definition: 0, after_character_definition: 1, before_example_messages: 5, after_example_messages: 6, before_author_note: 2, after_author_note: 3, at_depth_as_system: 4, at_depth_as_assistant: 4, at_depth_as_user: 4 };
+    const _DEPTH_ROLE_ST2TH = { 0: 'at_depth_as_system', 1: 'at_depth_as_user', 2: 'at_depth_as_assistant' };
+    const _DEPTH_ROLE_TH2ST = { at_depth_as_system: 0, at_depth_as_user: 1, at_depth_as_assistant: 2 };
     const _loadWI = async (name) => { const c = _ctx(); return (c && typeof c.loadWorldInfo === 'function') ? await c.loadWorldInfo(name) : null; };
     const _saveWI = async (name, data) => { const c = _ctx(); if (c && typeof c.saveWorldInfo === 'function') await c.saveWorldInfo(name, data, true); };
     const _entriesArr = (data) => (data && data.entries) ? Object.keys(data.entries).map((k) => data.entries[k]) : [];
@@ -33,7 +37,8 @@
     const _st2th = (e) => ({
         uid: e.uid, display_index: e.displayIndex, comment: e.comment || '', enabled: !e.disable,
         type: e.constant ? 'constant' : (e.vectorized ? 'vectorized' : 'selective'),
-        position: (_POS_ST2TH[e.position] != null ? _POS_ST2TH[e.position] : 'before_character_definition'),
+        position: (e.position === 4 && _DEPTH_ROLE_ST2TH[e.role] ? _DEPTH_ROLE_ST2TH[e.role]
+            : (_POS_ST2TH[e.position] != null ? _POS_ST2TH[e.position] : (typeof e.position === 'number' ? e.position : 'before_character_definition'))),
         depth: (e.depth == null ? null : e.depth), order: e.order, probability: e.probability,
         keys: Array.isArray(e.key) ? e.key.slice() : [], content: e.content || ''
     });
@@ -47,7 +52,10 @@
         if (p.disable !== undefined) e.disable = !!p.disable;
         if (p.enabled !== undefined) e.disable = !p.enabled;                            // enabled 優先
         if (p.order !== undefined) e.order = p.order;
-        if (p.position !== undefined) e.position = (_POS_TH2ST[p.position] != null ? _POS_TH2ST[p.position] : (typeof p.position === 'number' ? p.position : e.position));
+        if (p.position !== undefined) {
+            e.position = (_POS_TH2ST[p.position] != null ? _POS_TH2ST[p.position] : (typeof p.position === 'number' ? p.position : e.position));
+            if (_DEPTH_ROLE_TH2ST[p.position] != null) e.role = _DEPTH_ROLE_TH2ST[p.position];
+        }
         if (p.type !== undefined) { e.constant = p.type === 'constant'; e.vectorized = p.type === 'vectorized'; e.selective = p.type === 'selective'; }
         if (p.constant !== undefined) e.constant = !!p.constant;
         if (p.selective !== undefined) e.selective = !!p.selective;

@@ -248,7 +248,7 @@
     }
     function _mergeSection(header, prevBody, incBody) {
         const APPEND = ['事件表', '結算清單', '结算清单', '性事紀', '性事记'];
-        const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意規範/記憶事項表', '注意规范/记忆事项表'];
+        const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意规范', '注意規範/記憶事項表', '注意规范/记忆事项表'];   // 簡體「注意规范」以前漏了 → 掉到「取新」，舊規範每合併一次就被蓋掉
         if (APPEND.includes(header)) {
             const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
             const head = (_colCount(ti.header) > _colCount(tp.header)) ? ti.header : (tp.header || ti.header);   // 挑欄數較多的表頭，避免新增欄(如關鍵台詞)被截

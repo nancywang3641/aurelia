@@ -1396,12 +1396,16 @@ ${numberedText}`;
                 const _avsId = _isStandalone() ? String(lastId) : _newAvsId();
                 const _stamped = _isStandalone() ? true : await _stampAvsId(lastId, _avsId);
                 if (!_stamped) console.warn(`🛰️ [State Runtime] msg#${lastId} 釘不上 avs 標記 → 這輪不記 patch（狀態仍會寫入，只是不能單獨回滾）`);
-                const _prev = _patchList(data.patches);
-                const trimmed = trimPatches(_stamped ? [..._prev, { id: _avsId, updates: filtered }] : _prev, data.base);
+                // 🚨 等副模型的這 10～60 秒裡，NPC 檔案、刪樓回溯都可能改過這份資料：
+                //    一律重讀最新的再疊這一輪，不拿送出前讀的舊份整份蓋回去
+                const fresh = (await win.OS_DB.getStateData(chatId)) || data;
+                const curNow = win._AVS_ENGINE?.read?.() || currentState || {};
+                const _prev = _patchList(fresh.patches);
+                const trimmed = trimPatches(_stamped ? [..._prev, { id: _avsId, updates: filtered }] : _prev, fresh.base);
                 // 🔑 新 current 一律「以引擎現有狀態為底、只疊這輪 patch」——不要用 recomputeCurrent 從 base 空白重建。
                 //   因為 patches/base 可能是空的(先前狀態由主模型 <vars> 寫入、沒進 patch 系統)，從空重建會把累積的角色全洗光——這就是覆蓋根因。
                 //   點記法 _setDeep 只動有變化的葉節點、其餘角色與屬性原封保留。
-                const newCurrent = JSON.parse(JSON.stringify(currentState || {}));
+                const newCurrent = JSON.parse(JSON.stringify(curNow));
                 _applyPatchInto(newCurrent, filtered);
                 // 🔁 寫入前先去重：同一角色繁簡/別名重複 → 副模型確認後合併刪除（有候選才花呼叫、無候選 0 成本；sp_avs_dedupe=0 可關）
                 try {
@@ -1413,13 +1417,13 @@ ${numberedText}`;
                 if (_lastExtract) { _lastExtract.updates = filtered; _lastExtract.current = newCurrent; }   // 補上狀態給診斷面板
                 // 📸 寫入前快照「抽取前狀態」→ 狀態面板「還原上一步」能撤掉這輪亂抽（小模型掉鏈子的保險）。
                 //   舊快照只掛在主模型 <vars> 退役路徑上，副模型抽取從沒寫過 → 按鈕永遠是暗的。
-                try { win._AVS_ENGINE?.snapshot?.(currentState || {}); } catch (e) {}
+                try { win._AVS_ENGINE?.snapshot?.(curNow); } catch (e) {}
                 // 🚨 順序與 await 都是關鍵：engine.write 內部是 async 且會「讀 DB→寫回 DB」。
                 //    以前它排在 saveStateData 之前、又沒 await → 它讀到的是還沒寫入新 patch 的舊資料，
                 //    等 saveStateData 存好之後它才慢一步寫回去，把剛存的 patches 蓋成舊值。
                 //    結果就是逐輪紀錄永遠停在 0 筆、回溯永遠沒東西可退。
                 //    正確順序：先把完整資料落地，再 await 引擎（此時它讀到的已是新資料，spread 原樣保留）。
-                await win.OS_DB.saveStateData(chatId, { ...data, patches: trimmed.patches, base: trimmed.base, current: newCurrent, patchFmt: 2 });
+                await win.OS_DB.saveStateData(chatId, { ...fresh, patches: trimmed.patches, base: trimmed.base, current: newCurrent, patchFmt: 2 });
                 try { await win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
                 const changed = Object.keys(filtered).length;
                 if (changed > 0) console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);

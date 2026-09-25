@@ -76,13 +76,28 @@
     //    微信打電話不顯示號碼（現實也不會），掛斷之後回哪裡由呼叫端決定，不要掉進電話 app 的通話紀錄。
     let _exitTo = null;    // 掛斷後回哪：null＝電話 app 自己的通話紀錄
     let _hideNum = false;  // 從微信進來時把號碼那行藏掉
-    function _afterCall() { if (typeof _exitTo === 'function') { const f = _exitTo; _exitTo = null; _hideNum = false; f(); return; } _renderHistory(); }
+    // 第幾通電話：撥號、掛斷都會換號。還在路上的回覆回來時號碼對不上＝那通已經結束，丟掉不念、不改畫面
+    let _callGen = 0;
+    // 這通電話的東西全部收掉（計時、響鈴憑證、還沒送的話、麥克風、等回覆的鎖）
+    function _endCallState() {
+        _callGen++;
+        _clearTimer();
+        _ringToken = null; _curCall = null;
+        _clearPending();
+        _vmStop();
+        _sayBusy = false;
+    }
+    function _afterCall() {
+        // 🚨 從微信撥的那條以前只呼叫 f() 就走：計時、響鈴、還沒送的話、麥克風都沒收，掛掉的電話還在打 API、念台詞
+        _endCallState();
+        if (typeof _exitTo === 'function') { const f = _exitTo; _exitTo = null; _hideNum = false; f(); return; }
+        _renderHistory();
+    }
     function callContact(container, contact, opts) {
         opts = opts || {};
         if (!container || !contact || !contact.id) return false;
         _root = container;
-        _clearTimer();
-        _vmStop();
+        _endCallState();
         _exitTo = (typeof opts.onExit === 'function') ? opts.onExit : null;
         _hideNum = !!opts.hideNumber;
         _dialing(contact);
@@ -91,8 +106,7 @@
 
     function launch(container) {
         _root = container;
-        _clearTimer();
-        _vmStop();
+        _endCallState();
         _renderList();
     }
     function _clearTimer() { if (_timer) { clearInterval(_timer); _timer = null; } }
@@ -188,7 +202,7 @@
     // ── 撥號中動畫 → 撥通 ────────────────────────────────────────
     function _dialing(contact) {
         if (!_root) return;
-        _clearTimer();
+        _endCallState();   // 上一通還在等的回覆作廢，不然新的一通會被「還在忙」擋住、永遠響不停
         const unknown = contact.id === '__unknown__';
         const num = unknown ? (contact._raw || '') : _num(contact.id);
         _root.innerHTML =
@@ -250,11 +264,16 @@
         } catch (e) {}
         return { text: _stamp(), date: null };
     }
+    // 寫通話記錄以微信記憶體裡那份為底（有開過微信的話）：
+    //   🚨 以前只讀寫 DB，記憶體那份沒跟上 → 心跳、大總結拿記憶體那份整份寫回時，把剛寫的通話記錄蓋掉
+    function _liveChat(id) {
+        try { const wx = _w('wxApp'); const c = wx && wx.GLOBAL_CHATS && wx.GLOBAL_CHATS[id]; return (c && Array.isArray(c.messages)) ? c : null; } catch (e) { return null; }
+    }
     async function _writeCallMark(id, content, extra) {
         try {
             const OS_DB = _w('OS_DB');
             if (!OS_DB || !OS_DB.getApiChat || !OS_DB.saveApiChat) return;
-            const rec = (await OS_DB.getApiChat(id)) || { id: id, name: (_curCall && _curCall.name) || id, members: [], isGroup: false, messages: [] };
+            const rec = (_liveChat(id) || await OS_DB.getApiChat(id)) || { id: id, name: (_curCall && _curCall.name) || id, members: [], isGroup: false, messages: [] };
             if (!Array.isArray(rec.messages)) rec.messages = [];
             rec.messages.push(Object.assign({ type: 'system', content: content, timestamp: Date.now() }, extra || {}));
             await OS_DB.saveApiChat(id, rec);
@@ -270,6 +289,7 @@
     }
     // 掛斷：有接通過才寫結束與時長，沒講到話就不留痕跡
     async function _hangUp(contact) {
+        _callGen++;  // 寫結束分隔要等一下：這段時間回來的回覆就已經算掛斷後了
         _vmStop();   // 麥克風一定要在掛斷時關掉，不然狀態列的收音燈會一直亮著
         const c = _curCall;
         _curCall = null;
@@ -301,7 +321,7 @@
         try {
             const OS_DB = _w('OS_DB');
             if (!OS_DB || !OS_DB.getApiChat || !OS_DB.saveApiChat) return;
-            const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
+            const rec = (_liveChat(contact.id) || await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
             if (!Array.isArray(rec.messages)) rec.messages = [];
             const un = _userName();
             // 🚨 通話裡講的話蓋一個章。記錄是跟微信共用的（那是刻意的，AI 才記得電話裡說過什麼），
@@ -398,7 +418,7 @@
         if (writeMissed) try {
             const OS_DB = _w('OS_DB');
             if (OS_DB && OS_DB.getApiChat && OS_DB.saveApiChat) {
-                const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
+                const rec = (_liveChat(contact.id) || await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
                 if (!Array.isArray(rec.messages)) rec.messages = [];
                 const spM = await _storyStamp();
                 rec.messages.push({ type: 'system', content: '未接聽 · ' + spM.text, _missed: true, _storyDate: spM.date, timestamp: Date.now() });
@@ -786,6 +806,8 @@
         const OS_API = _w('OS_API'), OS_DB = _w('OS_DB');
         if (!OS_API || !OS_API.buildContext || !OS_API.chat || !OS_DB) { _appendCallBubble(false, '（通話引擎未載入）', contact.name); return; }
         if (_sayBusy) return;
+        const gen = _callGen;
+        const stale = function () { return gen !== _callGen; };   // 這通已經掛了
         _sayBusy = true; _enableSay(false);
         if (_vm.on) { _vmStopListen(); _vmPhase('waiting'); }   // 輪到對方：麥克風不收
         if (userText && !opts.alreadyShown) _appendCallBubble(true, userText, _userName());   // 排隊那條已經冒過泡泡了
@@ -803,10 +825,15 @@
         let _settled = false;
         let watchdog = null;
         const restore = function () { if (wxApp) wxApp.GLOBAL_ACTIVE_ID = prevActive; };
-        const done = function () { if (_settled) return; _settled = true; if (watchdog) clearTimeout(watchdog); _removeTyping(typing); _sayBusy = false; _enableSay(true); };
+        const done = function () {
+            if (_settled) return; _settled = true; if (watchdog) clearTimeout(watchdog);
+            if (stale()) return;   // 已經換下一通：鎖與畫面是新那通的，不動
+            _removeTyping(typing); _sayBusy = false; _enableSay(true);
+        };
         // 看門狗：40 秒沒回 → 別乾等，給提示
         watchdog = setTimeout(function () {
             done();
+            if (stale()) { restore(); return; }
             if (opts.firstRing) { restore(); _dialFailed(contact); return; }   // 還在響鈴：沒有通話畫面可以冒泡
             _appendCallBubble(false, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）', contact.name);
             restore();
@@ -824,6 +851,7 @@
                 async function (finalText) {
                     const reply = _extractSpoken(finalText) || '……';
                     done();                                   // 先收掉「輸入中…」泡泡
+                    if (stale()) { restore(); return; }       // 掛斷後才回來的：不念、不寫、不改畫面
                     // 響鈴那一句：對方可以不接（系統提示教它只回 [不接]）。接了才進通話畫面；
                     // _inCall 裡的 _renderCallLog 會整份重畫對話區，所以要等它畫完再冒這句泡泡。
                     if (opts.firstRing) {
@@ -843,7 +871,7 @@
                     const said = _splitSpeech(reply);
                     // 先寫進 DB 再開始播：一句一句念要花好幾秒，中途她關掉 app 的話這幾句不能跟著消失
                     try {
-                        const rec = (await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
+                        const rec = (_liveChat(contact.id) || await OS_DB.getApiChat(contact.id)) || { id: contact.id, name: contact.name, members: [contact.name], isGroup: false, messages: [] };
                         if (!Array.isArray(rec.messages)) rec.messages = [];
                         // 她說的那句在送出時就寫進去了（見上面），這裡只補對方的回覆
                         said.lines.forEach(function (t) {
@@ -855,17 +883,19 @@
                     _speaking = true;
                     try {
                         for (let si = 0; si < said.lines.length; si++) {
-                            if (!_root) return;                                  // 中途離開 app
+                            if (!_root || stale()) return;                       // 中途離開 app／掛斷
                             _appendCallBubble(false, said.lines[si], contact.name);
                             const _eng = _speak(contact, said.lines[si]);        // 念出來（當前開哪個引擎就用哪個）
                             await _waitSpoken(said.lines[si], _eng);             // 這句真的講完才接下一句
                         }
                     } finally { _speaking = false; }
+                    if (stale()) return;
                     if (said.hangup) { await _remoteHangUp(contact); return; }   // 他講完自己掛了
                     _vmAfterTurn();                                              // 直接說話：換她講
                 },
                 function (err) {
                     done();
+                    if (stale()) { restore(); return; }
                     if (opts.firstRing) { restore(); _dialFailed(contact); return; }
                     _appendCallBubble(false, '（接不通：' + ((err && err.message) || '錯誤') + '）', contact.name); restore(); _vmAfterTurn();
                 },
@@ -873,6 +903,7 @@
             );
         } catch (e) {
             done();
+            if (stale()) { restore(); return; }
             if (opts.firstRing) { restore(); _dialFailed(contact); return; }
             _appendCallBubble(false, '（通話失敗）', contact.name); restore(); _vmAfterTurn();
         }

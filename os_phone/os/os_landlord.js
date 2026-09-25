@@ -752,8 +752,12 @@
         ].join('\n');
 
         const line = await _askLine(sys, body, '看房訪客留言');
-        v.line = line;
-        try { await saveState(state); } catch (e) { console.warn('[Landlord] 存看房留言失敗', e); }
+        // 🚨 等模型這段時間她可能按了「租給他」「送走」或改了招租：重讀最新的，只把這句話掛上去
+        try {
+            const fresh = await getState();
+            const fv = (fresh.viewings || []).find(function (x) { return x.id === viewingId; });
+            if (fv) { fv.line = line; await saveState(fresh); }
+        } catch (e) { console.warn('[Landlord] 存看房留言失敗', e); }
         return line;
     }
 
@@ -779,8 +783,12 @@
         ].join('\n');
 
         const line = await _askLine(sys, body, '退租留言');
-        o.line = line;
-        try { await saveState(state); } catch (e) { console.warn('[Landlord] 存退租留言失敗', e); }
+        // 同上：重讀最新的，只把這句話掛上去
+        try {
+            const fresh = await getState();
+            const fo = (fresh.moveOuts || []).find(function (x) { return x.id === id; });
+            if (fo) { fo.line = line; await saveState(fresh); }
+        } catch (e) { console.warn('[Landlord] 存退租留言失敗', e); }
         return line;
     }
 

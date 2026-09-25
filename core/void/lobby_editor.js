@@ -828,7 +828,13 @@
     function exitEdit(save) {
         if (!S.edit) return;
         if (save) {
-            try { localStorage.setItem(_b.SCENES[S.scene].cfgKey, JSON.stringify(_exportData())); } catch (e) {}
+            // 🚨 存不進去就留在擺設模式：以前照樣重掛，重掛讀回舊存檔，剛擺好的一按完成就彈回原位
+            try { localStorage.setItem(_b.SCENES[S.scene].cfgKey, JSON.stringify(_exportData())); }
+            catch (e) {
+                console.warn('[LobbyEditor] 擺設存檔失敗：', e);
+                try { AUI.toastr && AUI.toastr.error('本機儲存空間滿了，擺設存不下來', '大廳'); } catch (_) {}
+                return;
+            }
         }
         window.removeEventListener('pointermove', _dragMove);
         window.removeEventListener('pointerup', _dragEnd);

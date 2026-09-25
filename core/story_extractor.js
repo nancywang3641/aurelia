@@ -547,6 +547,10 @@
                     const sub = (t) => { try { const c = window.SillyTavern?.getContext?.(); return c?.substituteParams ? c.substituteParams(t) : t; } catch (e) { return t; } };
                     const have = new Set(swipes.map(s => String(s).trim()));
                     const missing = [];
+                    // 🚨 第 0 樓的開場數已經不少於卡上的開場白數 → 不補。開場白帶 {{random}}／{{time}}／{{roll}} 時
+                    //    每次代換出來都不一樣、永遠比對不到，以前每重畫一次就多補一份、還寫進存檔
+                    const altCount = alts.filter(g => g && String(g).trim()).length;
+                    if (swipes.length >= altCount) alts.length = 0;
                     for (const g of alts) {
                         if (!g || !String(g).trim()) continue;
                         const s = sub(String(g));

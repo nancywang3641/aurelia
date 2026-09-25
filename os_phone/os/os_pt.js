@@ -190,14 +190,18 @@
     }
 
     // ── 結算入口：每份大總結生成後由 os_story_tools fire-and-forget 呼叫 ──
-    let _settling = false;
+    // 🚨 同時只結算一份，但後到的要排隊，不能直接丟掉——以前撞到正在結算就 return，那一份從此不會再結算
+    let _settleQ = Promise.resolve();
     async function settleSummary(finalContent, ctx) {
         ctx = ctx || {};
         const chatId = String(ctx.chatId || '');
         const summaryCount = Number(ctx.summaryCount || 0);
         if (!chatId || !summaryCount) { console.warn('[PT] 結算缺 chatId/summaryCount，跳過'); return; }
-        if (_settling) return;   // 併發閂：同時只結算一份
-        _settling = true;
+        const run = _settleQ.then(() => _settleSummaryOnce(finalContent, chatId, summaryCount));
+        _settleQ = run.catch(() => {});
+        return run;
+    }
+    async function _settleSummaryOnce(finalContent, chatId, summaryCount) {
         try {
             const db = _db();
             // 去重：同一份大總結(chatId+summaryCount)只結算一次
@@ -214,8 +218,6 @@
             try { _showSettleCard({ items, total, balance, fallback: !!raw._fallback }); } catch (e) { console.warn('[PT] 結算卡失敗', e); }
         } catch (e) {
             console.error('[PT] 結算失敗', e);
-        } finally {
-            _settling = false;
         }
     }
 
@@ -358,15 +360,22 @@
             if (!results || !Array.isArray(results)) return { ok: false, msg: '白兔先生沒有回應…' };
 
             const achApi = win.OS_ACHIEVEMENT || window.OS_ACHIEVEMENT;
-            let totalPT = 0;
-            for (const r of results) {
-                const a = pending.find(x => x.name === r.name);
-                if (!a) continue;
-                const pt = Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0));   // 單筆封頂防暴走
-                await achApi.markRedeemed(a.id, pt, 'pt', r.comment);
-                totalPT += pt;
-            }
+            // 對成就：名字一樣 → 洗掉空白標點再比 → 筆數一樣時照順序對（模型常把名字改寫一兩個字）
+            const _nk = (s) => String(s || '').replace(/[\s「」『』""''、，。,.!！?？:：]/g, '').toLowerCase();
+            const used = new Set(), picks = [];
+            results.forEach((r, i) => {
+                if (!r) return;
+                let a = pending.find(x => !used.has(x) && x.name === r.name)
+                    || pending.find(x => !used.has(x) && _nk(x.name) === _nk(r.name));
+                if (!a && results.length === pending.length && pending[i] && !used.has(pending[i])) a = pending[i];
+                if (!a) return;
+                used.add(a);
+                picks.push({ a: a, pt: Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0)), comment: r.comment });   // 單筆封頂防暴走
+            });
+            const totalPT = picks.reduce((s, p) => s + p.pt, 0);
+            // 🚨 先入帳、成功了才把成就標成已兌換：以前先標記再入帳，入帳失敗時成就被收走、PT 卻沒加
             if (totalPT > 0) await addPT(totalPT, { reason: '成就兌換（交易所）' });
+            for (const p of picks) await achApi.markRedeemed(p.a.id, p.pt, 'pt', p.comment);
             console.log(`[PT] 白兔估值完成，共兌換 ${totalPT} PT`);
             return { ok: true, results, totalPT };
         } catch (e) {

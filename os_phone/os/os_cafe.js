@@ -99,6 +99,12 @@
         try { const db = _db(); if (!db?.getAppData) return dflt; const v = await db.getAppData(APP_ID, k); return (v === undefined || v === null) ? dflt : v; }
         catch (e) { return dflt; }
     }
+    // 讀不到就丟錯（不回預設值）：要拿來「合併後整份寫回」的讀取用這支——讀失敗當成空的再寫回，等於把整份清掉
+    async function _getStrict(k, dflt) {
+        const db = _db(); if (!db?.getAppData) throw new Error('資料庫還沒載入');
+        const v = await db.getAppData(APP_ID, k);
+        return (v === undefined || v === null) ? dflt : v;
+    }
     async function _set(k, v) {
         try { const db = _db(); if (!db?.saveAppData) return; await db.saveAppData(APP_ID, k, v); } catch (e) { console.warn('[Cafe] 存檔失敗', k, e); }
     }
@@ -327,6 +333,9 @@
         const menu = await getMenu();
         const logs = await _get(K_LOG, []);
         const evq = await _get(K_EVQ, []);
+        const logs0 = logs.length;   // 這次結算新增的紀錄＝unshift 到前面的那幾筆
+        const pop0 = shop.popularity || 0;
+        const sold0 = new Map(menu.map(m => [m.id, m.sold || 0]));   // 這次賣了幾杯＝結束時減開始時
         let earned = 0, cupsAdded = 0, anyVisit = false, tunedRun = 0;   // 首訪定調每次結算≤3次(名冊變大後防API爆發,沒輪到的自然留到下次)
         for (let day = from; day <= today; day++) {
             let visitToday = false;
@@ -380,11 +389,25 @@
             logs.unshift({ id: _mkId(), day: today, key: ev.key, name: st.name, item: ev.item, line: out.line, said: out.line, price: 0, ev: ev.type });
             evq.shift(); evDone++; anyVisit = true;
         }
-        shop.lastDay = today;
-        shop.revenue = (shop.revenue || 0) + earned;
-        shop.cups = (shop.cups || 0) + cupsAdded;
+        // 🚨 寫回要疊在「最新的那份」上：結算在背景跑、中間等好幾通 API，這段時間她可能上架新飲品、
+        //    聽完留言、改了店況——以前拿開頭讀的整份寫回，這些一結算完就消失
+        let menuNow, logsNow, npcsNow, shopNow;
+        try {
+            menuNow = await _getStrict(K_MENU, []);
+            logsNow = await _getStrict(K_LOG, []);
+            npcsNow = await _getStrict(K_NPC, {});
+            shopNow = await _getStrict(K_SHOP, { popularity: 0, revenue: 0, cups: 0, lastDay: 0 });
+        } catch (e) { console.warn('[Cafe] 結算寫回前讀不到最新資料，這次先不寫（下次重算）', e); return false; }
+        const soldAdd = new Map(menu.map(m => [m.id, (m.sold || 0) - (sold0.get(m.id) || 0)]));
+        menuNow.forEach(x => { const d = soldAdd.get(x.id) || 0; if (d > 0) x.sold = (x.sold || 0) + d; });
+        const logsOut = logs.slice(0, logs.length - logs0).concat(logsNow);
+        Object.assign(npcsNow, npcs);
+        shopNow.lastDay = today;
+        shopNow.popularity = Math.min(999, (shopNow.popularity || 0) + ((shop.popularity || 0) - pop0));
+        shopNow.revenue = (shopNow.revenue || 0) + earned;
+        shopNow.cups = (shopNow.cups || 0) + cupsAdded;
         await _set(K_EVQ, evq);
-        await _set(K_NPC, npcs); await _set(K_MENU, menu); await _set(K_LOG, logs.slice(0, 80)); await _set(K_SHOP, shop);
+        await _set(K_NPC, npcsNow); await _set(K_MENU, menuNow); await _set(K_LOG, logsOut.slice(0, 80)); await _set(K_SHOP, shopNow);
         if (earned > 0) { try { await (win.OS_PT || window.OS_PT)?.addPT?.(earned, { reason: '書咖營業收入' }); } catch (e) {} }
         return anyVisit;
     }

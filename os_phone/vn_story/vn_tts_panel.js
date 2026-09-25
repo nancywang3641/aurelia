@@ -782,6 +782,9 @@ const VN_TTS_Panel = {
     },
 
     _renderBody(tab) {
+        // 分頁改過名：模型表單、儲存、匯入那些還在叫舊名（models＝音色、basic＝主設定）
+        if (tab === 'models') tab = 'voices';
+        else if (tab === 'basic') tab = 'main';
         const body = document.getElementById(this._bodyId);
         if (!body) return;
         const cfg = this._cfg();

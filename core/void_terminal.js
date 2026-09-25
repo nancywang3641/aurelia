@@ -1339,7 +1339,6 @@ const IRIS_IDLE = [
             item.dataset.index = index;
             // 替換顏色：USER 走拿鐵金，AI 依角色配色
             let badgeStyle = isUser ? `background: rgba(26,28,40,0.10); color:#1A1C28; border:1px solid rgba(26,28,40,0.25);` :
-                             isClaude ? `background: rgba(217,81,34,0.18); color:#D95122; border:1px solid #D95122;` :
                              isCheshire ? `background: rgba(0,255,65,0.2); color:#00ff41; border:1px solid #00ff41;` :
                              `background: rgba(226,232,240,0.1); color:#1A1C28; border:1px solid #1A1C28;`;
 
@@ -1431,16 +1430,17 @@ const IRIS_IDLE = [
         const currentText = history[index].content;
 
         textEl.innerHTML = `
-            <textarea class="hist-item-edit-area" style="background:rgba(228,232,245,0.95); color:#1A1C28; border:1px solid rgba(26,28,40,0.20);">${currentText.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+            <textarea class="hist-item-edit-area" style="background:rgba(228,232,245,0.95); color:#1A1C28; border:1px solid rgba(26,28,40,0.20);"></textarea>
             <div class="hist-edit-confirm-row">
                 <button class="hist-edit-confirm-btn" style="background:#1A1C28; color:#EEF0F6;">保存</button>
                 <button class="hist-edit-cancel-btn" style="background:rgba(26,28,40,0.08); color:#1A1C28;">取消</button>
             </div>`;
 
         const ta = textEl.querySelector('textarea');
+        if (ta) ta.value = currentText;   // 直接給值，不經 HTML 轉義（原文裡的 & 才不會變樣）
         if (ta) { ta.style.height = Math.max(60, ta.scrollHeight) + 'px'; ta.focus(); }
 
-        textEl.querySelector('.hist-edit-confirm-btn').addEventListener('click', () => { history[index].content = ta.value; renderHistoryList(); });
+        textEl.querySelector('.hist-edit-confirm-btn').addEventListener('click', () => { history[index].content = ta.value; renderHistoryList(); debouncedSave(); });
         textEl.querySelector('.hist-edit-cancel-btn').addEventListener('click', () => renderHistoryList());
     }
 
@@ -2038,10 +2038,13 @@ ${sections}`;
             await window.OS_DB.saveNpcMemory(npcKey, { name: npcName, summary: merged, lastCompactAt: NPC_MEM_KEEP_LAST });
 
             // 存成功才裁短（guest 動 localStorage；iris/cheshire 動 IRIS_STATE + 觸發存檔）
+            // 🚨 只裁掉「真的壓進去的那幾條」：等副模型的這段時間她可能又聊了幾句，
+            //    照「只留最後 N 條」裁的話，新聊的會把還沒壓的舊話擠掉
             if (track === 'guest') {
-                window.LobbyStage.truncateNpcHistory(npcKey, NPC_MEM_KEEP_LAST);
+                const _now = window.LobbyStage.getNpcHistory(npcKey) || [];
+                window.LobbyStage.truncateNpcHistory(npcKey, Math.max(0, _now.length - toCompact.length));
             } else if (hist === IRIS_STATE.history) {   // 守衛：壓縮期間若已切場景(換了陣列)就不裁，避免裁錯場景歷史
-                IRIS_STATE.history = IRIS_STATE.history.slice(-NPC_MEM_KEEP_LAST);
+                IRIS_STATE.history = IRIS_STATE.history.slice(toCompact.length);
                 debouncedSave();
             }
         } catch (e) { console.warn('[NPC記憶] 壓縮失敗', e); }

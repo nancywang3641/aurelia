@@ -4048,6 +4048,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 } : null;
 
                 saveConfig(llmData, secLlmData, imgData, minimaxData);
+                // 刪掉的 NAI 預設縮圖／Vibe：清單存進去了才從圖庫刪（沒按保存就離開的話，清單還在、圖也還在）
+                try { window._naiFlushDeletes && window._naiFlushDeletes(); } catch (e) {}
 
                 // 換產圖器後：依新 service 自動翻頭像規則三條目的開關（VN 指令；只撥開關，不寫內容）
                 try { (window.parent || window).OS_AVATAR_RULES_INJECTOR?.syncAvatarRuleEntries?.(); } catch (e) {}
@@ -4206,6 +4208,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
 
         let naiPresets = [...(imgConfig.novelai.naiPresets || [])];
+        // 🚨 刪預設／換縮圖／刪 Vibe 時圖先別從圖庫刪：清單要按「保存」才寫回，以前當下就刪，
+        //    沒保存就離開的話清單項目還在，預覽和 Vibe 卻沒了。按保存時才真的刪（_naiFlushDeletes）
+        const _naiDelQ = { thumbs: [], vibes: [] };
+        window._naiFlushDeletes = async function () {
+            const OSDB = (window.parent || window).OS_DB;
+            const q = { thumbs: _naiDelQ.thumbs.splice(0), vibes: _naiDelQ.vibes.splice(0) };
+            if (!OSDB) return;
+            const liveT = new Set(naiPresets.map(p => p && p.thumbId).filter(Boolean));   // 還掛在清單上的不刪
+            const liveV = new Set(naiVibes.map(v => v && v.id).filter(Boolean));
+            for (const t of q.thumbs) { if (liveT.has(t)) continue; try { if (OSDB.deleteNaiThumb) await OSDB.deleteNaiThumb(t); } catch (e) {} }
+            for (const v of q.vibes) { if (liveV.has(v)) continue; try { if (OSDB.deleteNaiVibe) await OSDB.deleteNaiVibe(v); } catch (e) {} }
+        };
         // 拖圖預設用穩定 id 對應 IndexedDB 縮圖；舊預設（沒 id）補一個
         naiPresets.forEach(p => { if (p && !p.id) p.id = 'np_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); });
 
@@ -4303,7 +4317,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const name = naiPresets[idx]?.name || '';
                 if (!await AUI.confirm(`刪除預設「${name}」？`)) return;
                 const tid = naiPresets[idx]?.thumbId;
-                if (tid) { try { (window.parent || window).OS_DB?.deleteNaiThumb(tid); } catch (e) {} }
+                if (tid) _naiDelQ.thumbs.push(tid);
                 naiPresets.splice(idx, 1);
                 refreshNaiPresetDropdown();
                 this.renderGrid();
@@ -4409,7 +4423,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         const idx = naiPresets.findIndex(x => norm(x.name) === norm(clean.name));
                         if (idx >= 0) {
                             const oldTid = naiPresets[idx].thumbId;
-                            if (oldTid && oldTid !== thumbId && OSDB && OSDB.deleteNaiThumb) { try { await OSDB.deleteNaiThumb(oldTid); } catch (e) {} }
+                            if (oldTid && oldTid !== thumbId) _naiDelQ.thumbs.push(oldTid);
                             naiPresets[idx] = entry; updated++; continue;
                         }
                     }
@@ -4423,8 +4437,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             async clearAll() {
                 if (!naiPresets.length) { AUI.alert('目前沒有 NAI 預設可以清空。'); return; }
                 if (!await AUI.confirm('確定清空全部 ' + naiPresets.length + ' 個 NAI 預設？\n（要按底部「保存」後才真的生效）')) return;
-                const OSDB = (window.parent || window).OS_DB;
-                if (OSDB && OSDB.deleteNaiThumb) { for (const p of naiPresets) { if (p.thumbId) { try { await OSDB.deleteNaiThumb(p.thumbId); } catch (e) {} } } }
+                for (const p of naiPresets) { if (p.thumbId) _naiDelQ.thumbs.push(p.thumbId); }
                 naiPresets.length = 0;
                 refreshNaiPresetDropdown();
                 this.renderGrid();
@@ -4560,7 +4573,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             async delIdx(i) {
                 const p = naiPresets[i]; if (!p) return;
                 if (!await AUI.confirm(`刪除預設「${p.name || ''}」？`)) return;
-                if (p.thumbId) { try { await (window.parent || window).OS_DB?.deleteNaiThumb(p.thumbId); } catch (e) {} }
+                if (p.thumbId) _naiDelQ.thumbs.push(p.thumbId);
                 naiPresets.splice(i, 1);
                 refreshNaiPresetDropdown();
                 this.renderGrid();
@@ -4675,7 +4688,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             async del(i) {
                 const v = naiVibes[i]; if (!v) return;
                 if (!await AUI.confirm(`刪除 Vibe「${v.name || ''}」？`)) return;
-                try { await (window.parent || window).OS_DB?.deleteNaiVibe(v.id); } catch (e) {}
+                _naiDelQ.vibes.push(v.id);
                 naiVibes.splice(i, 1);
                 this.renderList();
             }

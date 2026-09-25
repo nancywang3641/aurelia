@@ -2008,7 +2008,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 _sending = false; sendBtn.disabled = false;
                 wait.remove();
                 const bad = _studioBadReply(String(full || ''));
-                if (bad.bad) { _studioConfirmRetry(bad.reason, () => { sayEl.value = text; send(); }); return; }
+                if (bad.bad) { _studioConfirmRetry(bad.reason, () => { sayEl.value = text; send(); }, () => { sayEl.value = text; }); return; }
                 const raw = String(full || '');
                 const got = _vthPickCss(raw);
                 // 版位契約先過一遍：碰到那幾個屬性就地剝掉，別讓它把配件甩到畫面中間
@@ -2035,7 +2035,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             chat(msgs, () => {}, done,
                 (err) => {
                     _sending = false; sendBtn.disabled = false; wait.remove();
-                    _studioConfirmRetry((err && err.message) || err, () => { sayEl.value = text; send(); });
+                    _studioConfirmRetry((err && err.message) || err, () => { sayEl.value = text; send(); }, () => { sayEl.value = text; });
                 });
         };
         sendBtn.onclick = send;
@@ -2744,13 +2744,29 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
     // 一次性 AI 流程（匯入整理/對標世界/換皮/主題生成）的統一壞回覆處置：問一聲就能重試，不用重走整個入口
     //（聊天流不用這個——世界書/人設聊天各自有錯誤泡泡＋重試鈕）
+    // 同一個地方連續重試幾次了（key＝重試函式的原始碼：同一個呼叫點每次傳進來的閉包原始碼都一樣）
+    const _studioRetryStreak = new Map();
+    const STUDIO_AUTO_RETRY_MAX = 2;
     function _studioConfirmRetry(reason, retryFn, fallbackFn) {
         // 🚨 confirm 在 Tauri 不會彈、直接回 false → 這裡原本等於「永遠走 else」：
         //   主題那條沒有傳 fallbackFn，於是送出失敗後什麼都不做，連打的字都不見了，
         //   看起來就是按了沒反應。這裡沒有按鈕可掛兩段式，改成講一聲然後自己重試。
-        try { AUI.toastr?.warning('AI 回覆有問題（' + String(reason || '未知錯誤').slice(0, 80) + '），正在重試…'); } catch (e) {}
-        if (typeof retryFn === 'function') retryFn();
-        else if (typeof fallbackFn === 'function') fallbackFn();
+        // 🚨 自動重試有上限、有間隔：金鑰錯、斷網、上游一直 5xx 時錯誤不會自己消失，
+        //    以前是立刻無限重送（一直燒額度），沒填網址時還會同步遞迴到當掉
+        const why = String(reason || '未知錯誤').slice(0, 80);
+        const key = typeof retryFn === 'function' ? String(retryFn) : '';
+        const now = Date.now();
+        const st = _studioRetryStreak.get(key);
+        const n = (st && now - st.at < 120000) ? st.n + 1 : 1;
+        if (typeof retryFn === 'function' && n <= STUDIO_AUTO_RETRY_MAX) {
+            _studioRetryStreak.set(key, { n: n, at: now });
+            try { AUI.toastr?.warning('AI 回覆有問題（' + why + '），正在重試…'); } catch (e) {}
+            setTimeout(retryFn, 1500 * n);
+            return;
+        }
+        _studioRetryStreak.delete(key);
+        try { AUI.toastr?.error('重試了還是不行：' + why + '。檢查一下連線或金鑰再試。'); } catch (e) {}
+        if (typeof fallbackFn === 'function') fallbackFn();
     }
 
     // 判斷 API「表面成功、實則錯誤/空/截斷」的回應：OS_API 只在「完全空」才 throw，

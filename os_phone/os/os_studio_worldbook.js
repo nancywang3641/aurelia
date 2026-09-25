@@ -507,15 +507,24 @@
             else if (o.op === 'update' && o.uid != null && o.uid >= 0) { const u = { uid: o.uid }; if (o.comment != null) u.comment = o.comment; if (o.keys != null) u.keys = o.keys; if (o.content != null) u.content = o.content; updates.push(u); }
         }
         const btn = host.querySelector('#swb-apply'); if (btn) { btn.disabled = true; btn.textContent = '套用中…'; }
+        // 🚨 三步各自成功就先把那一類從待套用拿掉：以前新增成功、修改失敗時整份還掛著，
+        //    再按一次套用就把那幾條再新增一次
+        const _drop = (op) => { if (_wbPending) _wbPending = _wbPending.filter(o => o.op !== op); };
         try {
-            if (adds.length) await TH.createLorebookEntries(_wbWorking, adds);
-            if (updates.length) await TH.setLorebookEntries(_wbWorking, updates);
-            if (dels.length) await TH.deleteLorebookEntries(_wbWorking, dels);
+            if (adds.length) { await TH.createLorebookEntries(_wbWorking, adds); _drop('add'); }
+            if (updates.length) { await TH.setLorebookEntries(_wbWorking, updates); _drop('update'); }
+            if (dels.length) { await TH.deleteLorebookEntries(_wbWorking, dels); _drop('del'); }
             _wbPending = null; _wbTempUid = -1;
             try { _wbEntries = (await TH.getLorebookEntries(_wbWorking)) || []; } catch (e) {}
             _wbToast('已套用 ' + n + ' 項 ✓');
             _wbView = 'chat'; renderWorldbookPanel();
-        } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '套用 ' + n + ' 項'; } AUI.alert('套用失敗：' + (e && e.message || e)); }
+        } catch (e) {
+            const left = (_wbPending || []).length;
+            if (!left) _wbPending = null;
+            try { _wbEntries = (await TH.getLorebookEntries(_wbWorking)) || []; } catch (x) {}
+            if (btn) { btn.disabled = false; btn.textContent = '套用 ' + left + ' 項'; }
+            AUI.alert('套用失敗：' + (e && e.message || e) + (left < n ? '\n（已經套上 ' + (n - left) + ' 項，剩下的再按一次套用）' : ''));
+        }
     }
 
     // ── 對外入口：核心 switchTopMode 懶解析呼叫 ──

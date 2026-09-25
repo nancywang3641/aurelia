@@ -154,13 +154,15 @@
     function _pt() { return win.OS_PT || window.OS_PT; }
     function _now() { try { return Date.now(); } catch (e) { return 0; } }
 
-    async function _read() {
+    // strict：要改完整份寫回的（買、訂製、搬家）讀失敗就丟錯——
+    //   🚨 以前讀失敗一律當空冊，接著 push 一筆整份寫回 → 之前買的、訂製的藍圖全部不見
+    async function _read(strict) {
         try {
             const db = _db();
-            if (!db || !db.getAppData) return { owned: [], custom: [] };
+            if (!db || !db.getAppData) { if (strict) throw new Error('資料庫還沒載入'); return { owned: [], custom: [] }; }
             const v = await db.getAppData(APP_ID, K_BP);
             return (v && typeof v === 'object') ? v : { owned: [], custom: [] };
-        } catch (e) { console.warn('[Blueprints] 讀藍圖冊失敗', e); return { owned: [], custom: [] }; }
+        } catch (e) { console.warn('[Blueprints] 讀藍圖冊失敗', e); if (strict) throw e; return { owned: [], custom: [] }; }
     }
     async function _write(v) {
         const db = _db();
@@ -188,7 +190,7 @@
     async function buy(bpId) {
         const bp = CATALOG.find(function (b) { return b.id === bpId; });
         if (!bp) return { ok: false, reason: 'gone' };
-        const s = await _read();
+        const s = await _read(true);
         s.owned = Array.isArray(s.owned) ? s.owned : [];
         if (s.owned.indexOf(bpId) >= 0) return { ok: false, reason: 'have' };
         const pt = _pt();
@@ -290,7 +292,7 @@
             });
         } catch (e) { await refund(); throw e; }
         try {
-            const s = await _read();
+            const s = await _read(true);
             s.custom = Array.isArray(s.custom) ? s.custom : [];
             s.custom.push(bp);
             s.custom = s.custom.slice(-40);   // 不無限長
@@ -346,7 +348,8 @@
     // 🚨 順序講究：先清倉、把應退金額記進 furPending，再入帳——
     //    入帳卡住時金額還記著，下次接著退；不會「倉庫還在→再算一次→退兩次」。
     async function migrateFurniture() {
-        const s = await _read();
+        let s;
+        try { s = await _read(true); } catch (e) { return { done: false }; }   // 讀不到就這次先不動
         if (s.furRefunded) return { done: false };
         const db = _db();
         let amount = Number(s.furPending) || 0, count = 0;

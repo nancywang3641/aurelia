@@ -521,8 +521,9 @@
         // 靜態地圖沒 doors→給空陣列，別讓 undefined.map 炸掉整個掛載
         // 🔒 廣場鎖上：通往廣場的門整扇不存在（書咖／大廳的底部大門）。房間的出口不走這裡——
         //    它在 enterRoom 就改好目的地了，濾掉的話會變成一間沒有門的房間。
+        //    占卜小屋、帽匠工坊也不濾：它們唯一的門就是通往廣場那扇，鎖上時由過門判定改送回進門前的場景。
         const doors = (SC.doors || []).map(d => Object.assign({}, d))
-            .filter(d => !(d.to === 'city' && S.scene !== 'room' && _cityLocked()));
+            .filter(d => !(d.to === 'city' && S.scene !== 'room' && S.scene !== 'tarot' && S.scene !== 'workshop' && _cityLocked()));
         let baseOverride = null, maskOverride = null;
         try {
             const saved = SC.cfgKey ? JSON.parse(localStorage.getItem(SC.cfgKey) || 'null') : null;   // 動態場景沒 cfgKey＝不存擺設
@@ -1236,17 +1237,25 @@
     function getNpcHistory(key) {
         try { return JSON.parse(localStorage.getItem('lstage_hist_' + key) || '[]'); } catch (e) { return []; }
     }
+    // NPC 對話存不進去（多半是本機空間滿了）：說一聲，不然她不知道 NPC 下次會忘
+    let _npcHistWarnAt = 0;
+    function _npcHistFail(e) {
+        console.warn('[LobbyStage] NPC 對話存檔失敗：', e);
+        if (Date.now() - _npcHistWarnAt < 60000) return;
+        _npcHistWarnAt = Date.now();
+        try { AUI.toastr && AUI.toastr.error('本機儲存空間滿了，這段對話存不下來', '大廳'); } catch (_) {}
+    }
     function pushNpcHistory(key, msg) {
         try {
             const arr = getNpcHistory(key);
             arr.push(msg);
             while (arr.length > 40) arr.shift();
             localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr));
-        } catch (e) {}
+        } catch (e) { _npcHistFail(e); }
     }
     // 覆寫整條歷史（歷史窗編輯/刪除/回退用）
     function setNpcHistory(key, arr) {
-        try { localStorage.setItem('lstage_hist_' + key, JSON.stringify(Array.isArray(arr) ? arr : [])); } catch (e) {}
+        try { localStorage.setItem('lstage_hist_' + key, JSON.stringify(Array.isArray(arr) ? arr : [])); } catch (e) { _npcHistFail(e); }
     }
     // 壓縮後裁短：只留最近 keepLast 條，回傳被裁掉的舊訊息（供組 chunk）
     function truncateNpcHistory(key, keepLast) {

@@ -1005,19 +1005,22 @@
             const entries = await TH.getLorebookEntries(BOOK_PARA);
             // 🚨認條目要用 uid,不要用名字:名字是 AI 取的,抽到同名就會兩個世界共用一條。
             //   uid 是條目自己的身分證,建好之後記在世界上,之後開關燈、改寫、刪除都照它認。
+            //   還沒記 uid 的舊世界才退回用名字找，而且別的世界已經認領的那條不算
+            const claimed = await _claimedUids(w.id);
             const exist = (w.entryUid != null && (entries || []).find(e => e && e.uid === w.entryUid))
-                || (entries || []).find(e => e && e.comment === entryData.comment);
+                || (entries || []).find(e => e && e.comment === entryData.comment && !claimed.has(e.uid));
             if (exist) {
                 await TH.updateLorebookEntriesWith(BOOK_PARA, list =>
                     list.map(e => (e && e.uid === exist.uid) ? { ...e, ...entryData } : e));
-                if (w.entryUid !== exist.uid) { w.entryUid = exist.uid; await _saveWorld(w); }
+                if (w.entryUid !== exist.uid) { w.entryUid = exist.uid; await _saveWorld(w, ['entryUid']); }
             } else {
+                const before = new Set((entries || []).map(e => e && e.uid));
                 await TH.createLorebookEntries(BOOK_PARA, [entryData]);
-                // 建完回頭把 uid 抓下來記住(建立那支不一定回傳 uid,重讀最保險)
+                // 建完回頭把 uid 抓下來記住(建立那支不一定回傳 uid,重讀最保險)——認「剛多出來的那條」，同名的舊條目不算
                 try {
                     const after = (await TH.getLorebookEntries(BOOK_PARA)) || [];
-                    const mine = after.find(e => e && e.comment === entryData.comment);
-                    if (mine && mine.uid != null) { w.entryUid = mine.uid; await _saveWorld(w); }
+                    const mine = after.find(e => e && e.comment === entryData.comment && !before.has(e.uid));
+                    if (mine && mine.uid != null) { w.entryUid = mine.uid; await _saveWorld(w, ['entryUid']); }
                 } catch (e) {}
             }
             return true;
@@ -1177,10 +1180,18 @@
             }
         } catch (e) { console.warn('[Worldgate③] 同步世界條目燈號失敗', e); }
     }
+    // 別的世界已經認領的條目 uid（照名字找條目時要跳過，不然同名的世界會互相蓋掉／一起被刪）
+    async function _claimedUids(exceptId) {
+        const worlds = await _get(K_WORLDS, []);
+        return new Set(worlds.filter(x => x && x.id !== exceptId && x.entryUid != null).map(x => x.entryUid));
+    }
     async function _deleteEntry(w) {
         const TH = _th();
         if (!TH || !TH.updateLorebookEntriesWith) return;
-        try { await TH.updateLorebookEntriesWith(BOOK_PARA, list => list.filter(e => e.comment !== _entryComment(w))); }
+        const claimed = await _claimedUids(w.id);
+        const mine = (e) => (w.entryUid != null) ? (e && e.uid === w.entryUid)
+            : (e && e.comment === _entryComment(w) && !claimed.has(e.uid));
+        try { await TH.updateLorebookEntriesWith(BOOK_PARA, list => list.filter(e => !mine(e))); }
         catch (e) { console.warn('[Worldgate③] 世界條目刪除失敗', e); }
     }
     // 刪除的完整動作:世界書條目、檔案庫、大廳上的旅人、旅人對話歷史。
@@ -1430,10 +1441,21 @@
         const b = _stage();
         if (b && b.regWin) { b.regWin(_closeMeet); _lobbyRegDone = true; }
     }
-    async function _saveWorld(w) {
+    // fields：只寫這幾欄到「最新的那份」上。背景流程（生圖、召集、記成就）手上拿的 w 是好幾十秒前讀的，
+    //   🚨 整份蓋回去會把這段時間的入隊、成就、生好的圖一起蓋掉；沒給 fields 才整份寫（當下讀當下改的地方）
+    async function _saveWorld(w, fields) {
         const worlds = await _get(K_WORLDS, []);
         const i = worlds.findIndex(x => x.id === w.id);
-        if (i >= 0) { worlds[i] = w; await _set(K_WORLDS, worlds); }
+        if (i < 0) return;
+        if (Array.isArray(fields)) {
+            const cur = worlds[i];
+            fields.forEach(k => { if (w[k] === undefined) delete cur[k]; else cur[k] = w[k]; });
+        } else worlds[i] = w;
+        await _set(K_WORLDS, worlds);
+    }
+    async function _worldById(id) {
+        const worlds = await _get(K_WORLDS, []);
+        return worlds.find(x => x.id === id) || null;
     }
     // ── 世界的兩張圖:概念圖(一幅遠景)＋方位圖(俯瞰全境,墊在降生地九宮格底下) ──
     // 學 map 面板大地圖那條:AI 只在展開世界那一次順便吐內容關鍵詞,不另外呼叫文字模型;
@@ -1575,7 +1597,7 @@
         if (w.art && !w.artFb) delete w.artFb;
         if (w.mapArt && !w.mapFb) delete w.mapFb;
         if (!got) return;
-        await _saveWorld(w);
+        await _saveWorld(w, ['art', 'mapArt', 'artFb', 'mapFb']);
         if (_winEl && _curDetailId === w.id) { try { _renderDetail(w, 2); } catch (e) {} }   // 隊伍變了→回旅人那一步刷新
     }
     function _profRows(t) {
@@ -1954,7 +1976,7 @@
         }
         if (!url) return false;
         w.launchArt = { teamKey: _teamKey(w), url: url };
-        await _saveWorld(w);
+        await _saveWorld(w, ['launchArt']);
         console.log('[Worldgate③] 🚀 啟航圖已存入「' + w.name + '」(' + w.launchArt.teamKey + ')');
         return true;
     }
@@ -2033,8 +2055,8 @@
             if (t && !done[t.name]) { done[t.name] = Date.now(); hit++; }
         });
         if (!hit) return;
-        w.achvDone = done;
-        await _saveWorld(w);
+        w.achvDone = Object.assign({}, ((await _worldById(w.id)) || w).achvDone || {}, done);   // 疊在最新那份上
+        await _saveWorld(w, ['achvDone']);
         console.log('[Worldgate③] 🏅「' + w.name + '」達成 ' + hit + ' 條世界成就');
     }
     // ══ 🩺 每輪自我確認（照 AVS 的作法）══════════════════════════════
@@ -3582,7 +3604,8 @@
         let entryText = '';
         try {
             const entries = await _th()?.getLorebookEntries?.(BOOK_PARA);
-            const e = (entries || []).find(x => x.comment === _entryComment(w));
+            const e = (w.entryUid != null && (entries || []).find(x => x && x.uid === w.entryUid))
+                || (entries || []).find(x => x.comment === _entryComment(w));
             entryText = e ? e.content : '';
         } catch (e) {}
         // 隊伍區只列「確認組隊」的旅人;候選不露臉——他們在大廳裡等妳偶遇(Rae 定案 2026-07-22)
@@ -3809,8 +3832,9 @@
                     else dropped = -1;   // 整批都超線
                 }
                 if (!add.length) { _toast('這批召來的都是已經在的人,再試一次'); _renderDetail(w, 2); return; }
-                w.travelers = (w.travelers || []).concat(add);
-                await _saveWorld(w);
+                // 召集要跑兩百多秒：這段時間可能有人入隊／離隊 → 接在最新那份名單後面
+                w.travelers = (((await _worldById(w.id)) || w).travelers || []).concat(add);
+                await _saveWorld(w, ['travelers']);
                 _spawnTravelers(w, true);   // 名單變了 → 立刻換一批人站上大廳(不 force 會被「同世界不重刷」擋掉)
                 _toast('又來了 ' + add.length + ' 位旅人,去大廳跟他們搭話' +
                     (dropped > 0 ? '（' + dropped + ' 位年齡不合已略過）' : '') +

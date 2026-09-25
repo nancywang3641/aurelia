@@ -16,6 +16,22 @@
 (function() {
     'use strict';
 
+    // 書架清單寫回：走匯入角色卡那支配額安全寫入（空間滿先把舊封面瘦身）。
+    //   🚨 以前這裡是 setItem 包空 catch：封面大、空間一滿，新書／改過的開場白當下看起來存好了，重整就不見
+    function _persistWorlds() {
+        const list = window.AURELIA_CUSTOM_WORLDS || [];
+        const CI = (window.parent && window.parent.OS_CARD_IMPORT) || window.OS_CARD_IMPORT;
+        let r;
+        if (CI && typeof CI.saveWorlds === 'function') r = CI.saveWorlds(list);
+        else { try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(list)); r = { ok: true }; } catch (e) { r = { ok: false }; } }
+        const T = (window.parent && window.parent.AUI && window.parent.AUI.toastr) || (window.AUI && window.AUI.toastr);
+        try {
+            if (!r.ok) T && T.error('本機儲存空間滿了，書架這次的修改存不下來', '書架');
+            else if (r.droppedCovers) T && T.warning('本機空間不夠，把幾本書的封面拿掉騰出空間', '書架');
+        } catch (e) {}
+        return r.ok;
+    }
+
     // ── 自由書籍常數 & 歷史助手 ──────────────────────────────────
     const FREE_SCRIPT_WID        = '__free_script__';
     const FREE_SCRIPT_HISTORY_KEY = 'vn_free_history';
@@ -153,7 +169,7 @@
 
             // 1. 從書架移除
             window.AURELIA_CUSTOM_WORLDS = (window.AURELIA_CUSTOM_WORLDS || []).filter(x => x.id !== w.id);
-            try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
+            _persistWorlds();
 
             if (scope === 'all') {
                 // 2. 刪這本書自帶的追蹤欄位範本（匯入／生成時建的那一份）
@@ -507,7 +523,7 @@ status = "正常"`;
         window.AURELIA_CUSTOM_WORLDS = window.AURELIA_CUSTOM_WORLDS || [];
         window.AURELIA_CUSTOM_WORLDS.push(newWorld);
         // 持久化到 localStorage
-        try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
+        _persistWorlds();
 
         const packNote = autoPackId ? '，變數包也幫你備好了！' : '！';
         window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|smile|「寫好了！這本《${worldTitle}》絕對是我本月的得意之作，快打開看看吧${packNote}」]`);
@@ -1209,7 +1225,7 @@ status = "正常"`;
             const idx = (window.AURELIA_CUSTOM_WORLDS || []).findIndex(x => x.id === w.id);
             if (idx !== -1) {
                 window.AURELIA_CUSTOM_WORLDS[idx].wbPacks = w.wbPacks;
-                try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
+                _persistWorlds();
             }
         }
 
@@ -1313,7 +1329,7 @@ status = "正常"`;
             const idx = (window.AURELIA_CUSTOM_WORLDS || []).findIndex(x => x.id === w.id);
             if (idx !== -1) {
                 window.AURELIA_CUSTOM_WORLDS[idx].greetings = w.greetings;
-                try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(window.AURELIA_CUSTOM_WORLDS)); } catch(e) {}
+                _persistWorlds();
             }
         }
 

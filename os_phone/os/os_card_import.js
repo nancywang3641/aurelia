@@ -585,6 +585,8 @@
         backfillWbPacks,
         /** 把已存的大張書封就地縮成縮圖，把 localStorage 空間要回來 */
         reclaimCoverSpace,
+        /** 書架清單的配額安全寫入（書架那邊也走這支）→ { ok, droppedCovers } */
+        saveWorlds: _saveWorlds,
     };
 
     // ── 🧷 舊書補書包（開機跑一次）────────────────────────────
@@ -622,20 +624,31 @@
         if (!Array.isArray(list) || !list.length) return 0;
         const fat = list.filter(w => w && typeof w.cover === 'string' && w.cover.length > COVER_BUDGET);
         if (!fat.length) return 0;
+        // 縮圖要等（一張一張 await）：這段時間她可能匯入新書、改開場白。
+        //   🚨 縮完要重讀最新那份、只換那幾本的封面，不拿開頭讀的舊清單整份蓋回去
+        const shrunk = new Map();
+        for (const w of fat) shrunk.set(w, await _shrinkCover(w.cover) || null);   // 縮不動就不留封面，絕不把原圖寫回去
+        try { list = JSON.parse(localStorage.getItem('aurelia_custom_worlds') || '[]'); } catch (e) { return 0; }
+        if (!Array.isArray(list)) return 0;
         const before = JSON.stringify(list).length;
-        for (const w of fat) {
-            const small = await _shrinkCover(w.cover);
-            w.cover = small || null;   // 縮不動就不留封面，絕不把原圖寫回去
+        const keyOf = (w) => w && (w.id || w.title);
+        const byKey = new Map([...shrunk.entries()].map(([w, c]) => [keyOf(w) + '|' + w.cover.length, c]));
+        let hit = 0;
+        for (const w of list) {
+            if (!w || typeof w.cover !== 'string' || w.cover.length <= COVER_BUDGET) continue;
+            const k = keyOf(w) + '|' + w.cover.length;
+            if (byKey.has(k)) { w.cover = byKey.get(k); hit++; }
         }
+        if (!hit) return 0;
         const r = _saveWorlds(list);
         if (!r.ok) { console.warn('[CardImport] 書封瘦身後仍寫不回去'); return 0; }
         const saved = before - JSON.stringify(list).length;
         try { win.AURELIA_CUSTOM_WORLDS = list; window.AURELIA_CUSTOM_WORLDS = list; } catch (e) {}
-        console.log('[CardImport] 🧹 書封瘦身 ' + fat.length + ' 本，騰出約 ' + Math.round(saved / 1024) + ' KB');
+        console.log('[CardImport] 🧹 書封瘦身 ' + hit + ' 本，騰出約 ' + Math.round(saved / 1024) + ' KB');
         return saved;
     }
-    setTimeout(() => { reclaimCoverSpace().catch(() => {}); }, 3000);   // 開機忙完再跑，別跟首屏搶
-    setTimeout(() => { backfillWbPacks().catch(() => {}); }, 3500);
+    // 開機忙完再跑，別跟首屏搶；兩支都是「讀整份→改→寫回」，要一支跑完再跑下一支，不然互相蓋掉
+    setTimeout(() => { reclaimCoverSpace().catch(() => {}).then(() => backfillWbPacks()).catch(() => {}); }, 3000);
 
     console.log('[OS_CARD_IMPORT] 已載入 v1.1 - 核心人設轉化世界書支援版');
 })();

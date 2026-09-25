@@ -45,9 +45,11 @@
             const chatId = getChatId();
             if (!chatId) return '';
 
-            const targetComment = `[當前永不出現名單-黑名單角色] - ${chatId}`;
+            // 🚨 寫入端（os_story_tools getChatIdentifier）把空白換成底線，這裡要照同一把鑰匙找；
+            //    沒換底線的舊標題也認
+            const targets = [`[當前永不出現名單-黑名單角色] - ${chatId.replace(/\s+/g, '_')}`, `[當前永不出現名單-黑名單角色] - ${chatId}`];
             const entries = await win.TavernHelper.getLorebookEntries(bookName);
-            const entry = entries.find(e => e.comment === targetComment);
+            const entry = entries.find(e => targets.includes(e.comment));
             if (!entry) return '';
             // 兼容 enabled 欄位可能是 false / 0 / undefined
             if (entry.enabled === false) return '';
