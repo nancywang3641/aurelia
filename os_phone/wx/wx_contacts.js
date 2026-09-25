@@ -648,6 +648,8 @@
             const modal = targetDoc.getElementById('wxActionModal'); if(!modal) return;
             const customContainer = targetDoc.getElementById('wx-custom-modal-content') || this.createModalContainer();
             ['wxModalTitle', 'wxModalInput', 'wxModalInput2'].forEach(id => { const el = targetDoc.getElementById(id); if(el) el.style.display = 'none'; });
+            // 轉帳的收款人下拉、傳照片的選相簿鈕是同一個小窗裡的：這裡用不到，收起來
+            ['wxModalSelect', 'wxModalPick'].forEach(id => { const el = targetDoc.getElementById(id); if (el) el.classList.add('hidden'); });
             const footer = modal.querySelector('.wx-modal-footer'); if(footer) footer.style.display = 'none';
             customContainer.innerHTML = innerHtml; customContainer.style.display = 'block'; modal.classList.add('show');
         },

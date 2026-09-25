@@ -10,6 +10,49 @@
     console.log('✅ [Aurelia Bridge] 啟動正則 CSS 捕捉與數據橋接器...');
 
     // 1. 全局 CSS 捕捉器：抓取聊天室內所有的 <style>，同步到全局，確保移動到其他 TAB 也能正常顯示
+    const SCOPE = '#ue-content-area';
+    // 一個選擇器清單照逗號切（括號裡的逗號不切：:is(a, b)）
+    function _splitSel(s) {
+        const out = []; let depth = 0, cur = '';
+        for (const ch of String(s)) {
+            if (ch === '(' || ch === '[') depth++;
+            else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1);
+            if (ch === ',' && !depth) { out.push(cur); cur = ''; continue; }
+            cur += ch;
+        }
+        out.push(cur);
+        return out.map(x => x.trim()).filter(Boolean);
+    }
+    function _scopeSelector(sel, scope) {
+        return _splitSel(sel).map(one => {
+            let s = one.replace(/(^|\s)#chat(?=[\s.:#[>+~]|$)/g, '$1').replace(/(^|\s)\.mes_text(?=[\s.:#[>+~]|$)/g, '$1').trim();
+            if (!s || /^(html|body|:root)$/i.test(s)) return scope;
+            s = s.replace(/^(html|body|:root)\s+/i, '');
+            return scope + ' ' + s;
+        }).join(', ');
+    }
+    function _scopeRules(rules, scope) {
+        let out = '';
+        for (const r of Array.from(rules || [])) {
+            if (r.type === 1 && r.selectorText != null) {                     // 一般規則：套上範圍
+                out += _scopeSelector(r.selectorText, scope) + ' { ' + r.style.cssText + ' }\n';
+            } else if (r.cssRules && (r.type === 4 || r.type === 12)) {        // @media／@supports：裡面照套
+                const head = r.cssText.slice(0, r.cssText.indexOf('{')).trim();
+                out += head + ' {\n' + _scopeRules(r.cssRules, scope) + '}\n';
+            } else {
+                out += r.cssText + '\n';                                        // @keyframes、@font-face 這些不分範圍
+            }
+        }
+        return out;
+    }
+    function _scopeCss(cssText, scope) {
+        try {
+            const sheet = new CSSStyleSheet();
+            sheet.replaceSync(String(cssText || '').replace(/@import[^;]+;/g, ''));
+            return _scopeRules(sheet.cssRules, scope);
+        } catch (e) { return ''; }   // 解析不了就不套，絕不退回全站樣式
+    }
+
     function syncRegexStyles() {
         const chatContainer = document.getElementById('chat');
         if (!chatContainer) return;
@@ -19,11 +62,10 @@
         let combinedCSS = '/* Aurelia Auto-Captured Regex Styles */\n';
 
         chatStyles.forEach(style => {
-            let cssText = style.innerHTML;
-            // 移除酒館可能自動添加的範圍限制，讓 CSS 在 Extractor 的獨立 TAB 也能完全生效
-            cssText = cssText.replace(/\.mes_text\s+/g, '');
-            cssText = cssText.replace(/#chat\s+/g, '');
-            combinedCSS += cssText + '\n';
+            // 讓 CSS 在檔案庫（html_extractor 的 #ue-content-area）也生效：
+            //   🚨 以前是把 .mes_text／#chat 範圍剝掉直接當全站樣式 → 卡片的 p{}、div{} 把酒館跟奧瑞亞面板一起染色。
+            //      現在改成把範圍換成檔案庫那一格
+            combinedCSS += _scopeCss(style.innerHTML, SCOPE) + '\n';
         });
 
         // 注入到網頁頭部

@@ -605,6 +605,10 @@ ${facilityText}
         // 🔥 V2.0：判斷是否需要初始化此世界
         if (win.WORLD_RUNTIME && win.WORLD_RUNTIME.needsInit && win.WORLD_RUNTIME.needsInit()) {
             title.innerText = "";
+            // 🚨 上一個世界是地圖模式的話，這兩個 class 跟背景還掛著：am-marker-mode 帶 pointer-events:none，
+            //    下面兩顆按鈕會點不動，背景也還是上一個世界的地圖
+            selector.classList.remove('am-marker-mode', 'am-imap-mode');
+            selector.style.backgroundImage = '';
             selector.innerHTML = `
                 <div class="am-navi-entry">
                     <div class="am-navi-left">

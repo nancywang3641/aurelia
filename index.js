@@ -475,6 +475,7 @@ async function initializeExtension() {
     //   只讓先到的一份跑(兩份都是完整奧瑞亞、誰贏都行)，避免雙載重複注入 UI。
     if (window.__AURELIA_INITIALIZED__) { console.warn('[Aurelia] 已有一份在執行 → 這份跳過(避免 native+助手雙載)'); return; }
     window.__AURELIA_INITIALIZED__ = true;
+    window.__AURELIA_LOADED_BASE__ = _AURELIA_CDN_BASE;   // boot.js 靠它判斷「同一版已經在跑」
     try {
         setupEventBridge();
 

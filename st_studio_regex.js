@@ -149,10 +149,10 @@ ${currentData.html || ''}
     // 釋放 AI 生成的純淨 JS 邏輯
     ${currentData.js || ''}
 })();
-<\\/script>`; // 轉義結束標籤避免 F12 報錯
+${'<'}/script>`; // 🚨 結束標籤要是真的 </script>：以前寫成 <\\/script>，存進去就是字面的反斜線，HTML 不認，面板後面的正文整段被吃掉
 
         const newRegex = {
-            id: th.builtin.uuidv4(),
+            id: (th.builtin && th.builtin.uuidv4) ? th.builtin.uuidv4() : (th.uuidv4 ? th.uuidv4() : ('ui_panel_' + Date.now())),
             script_name: `[UI 面板] ${safeTagId}`,
             enabled: true,
             find_regex: `/<${safeTagId}>([\\s\\S]*?)<\\/${safeTagId}>/g`,

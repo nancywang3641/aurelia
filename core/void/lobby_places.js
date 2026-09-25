@@ -142,13 +142,18 @@
             // 🚨 這四個面板都有自己的 ✕，按了是把自己從畫面上拿掉——但沒人告訴外面這個窗格，
             //    窗格就留著、裡面空了，變成一個空的黑窗。盯著它：一離開容器就通知窗格收起來。
             //    （交易所是先淡出、250ms 後才拿掉，所以窗格會晚那一下才收，是正常的）
+            //    🚨 404 黑市的 ✕ 不拿掉自己、只是 display:none → 也要算關掉，不然留一個空窗格
+            const hidden = () => { try { return el.style.display === 'none' || getComputedStyle(el).display === 'none'; } catch (e) { return false; } };
             const mo = new MutationObserver(() => {
-                if (c.contains(el)) return;
+                if (c.contains(el) && !hidden()) return;
                 mo.disconnect();
                 c._pvRestore = null;
+                // 只是藏起來的：搬回原位，下次從別的入口打開還找得到它
+                if (el.isConnected && c.contains(el) && orig) { try { orig.appendChild(el); } catch (e) {} }
                 try { c.dispatchEvent(new CustomEvent('pv-panel-gone')); } catch (e) {}
             });
             mo.observe(c, { childList: true });
+            mo.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
             c._pvRestore = () => {
                 mo.disconnect();   // 是我們自己在收（換地點／回對話），不算它自己關掉
                 try { close && close(); } catch (e) {}

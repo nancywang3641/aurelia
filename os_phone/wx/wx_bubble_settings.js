@@ -658,6 +658,8 @@
                 box.appendChild(customContainer);
             }
             ['wxModalTitle', 'wxModalInput', 'wxModalInput2'].forEach(id => { const el = doc.getElementById(id); if(el) el.style.display = 'none'; });
+            // 轉帳的收款人下拉、傳照片的選相簿鈕是同一個小窗裡的：這裡用不到，收起來（以前會多一條收款人下拉掛在頂上）
+            ['wxModalSelect', 'wxModalPick'].forEach(id => { const el = doc.getElementById(id); if (el) el.classList.add('hidden'); });
             const footer = modal.querySelector('.wx-modal-footer'); if(footer) footer.style.display = 'none';
             customContainer.innerHTML = innerHtml; customContainer.style.display = 'block'; modal.classList.add('show');
             // observer 單例＋善後即拆：這裡每次開面板都會跑，不拆的話同一個 modal 上會疊一堆 observer 越玩越卡

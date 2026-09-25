@@ -3321,7 +3321,59 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
       pay: function(a, w){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var T = ctx.OS_APP_TOOLS; return T ? T.pay(${JSON.stringify(String(data.tagId || ''))}, a, w) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
       badge: function(){},
       notify: function(){ return Promise.resolve(false); },
-      onWake: function(){}
+      onWake: function(){},
+      // 🚨 以下以前酒館版漏了：預覽和手機 app 裡都有，面板用到（說明書要求文字一律過 st.esc）一注入酒館就報「不是函式」
+      esc: function(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
+      toast: function(m, o){ try { var A = ctx.AUI || window.AUI; return A && A.toast ? A.toast(m, o) : undefined; } catch(e){} },
+      confirm: function(m, o){ try { var A = ctx.AUI || window.AUI; return A && A.confirm ? A.confirm(m, o) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      loading: function(target, on, text){
+        try {
+          var host = (typeof target === 'string') ? document.querySelector(target) : (target || container);
+          if (!host) return;
+          if (on === false) { if (host.__stLoad) { host.__stLoad.remove(); host.__stLoad = null; } return; }
+          if (host.__stLoad) return;
+          if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+          var ov = document.createElement('div');
+          ov.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(0,0,0,0.25);z-index:50;';
+          var sp = document.createElement('div');
+          sp.style.cssText = 'width:28px;height:28px;border:3px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:__stspin .8s linear infinite;';
+          ov.appendChild(sp);
+          if (text) { var t = document.createElement('div'); t.textContent = text; t.style.cssText = 'color:#fff;font-size:12px;'; ov.appendChild(t); }
+          if (!document.getElementById('__stspin_kf')) { var k = document.createElement('style'); k.id = '__stspin_kf'; k.textContent = '@keyframes __stspin{to{transform:rotate(360deg)}}'; document.head.appendChild(k); }
+          host.__stLoad = ov; host.appendChild(ov);
+        } catch(e){}
+      },
+      pickPhoto: async function(o){ try { var PI = ctx.OS_PHONE_IMAGE; return (PI && PI.pickPhoto) ? await PI.pickPhoto(o) : ''; } catch(e){ return ''; } },
+      callAI: async function(sysPrompt, opts){
+        try {
+          var OS = ctx.OS_API; if (!OS || !OS.chat) return '';
+          var S = ctx.OS_SETTINGS;
+          var cfg = Object.assign({}, (S && S.getConfig && S.getConfig()) || {});
+          cfg.usePresetPrompts = false; cfg.maxTokens = Math.max(parseInt(cfg.maxTokens) || 0, 8192);
+          var msgs = [];
+          var PI = ctx.OS_PHONE_IMAGE;
+          var imgs = (opts && Array.isArray(opts.images)) ? opts.images : [];
+          msgs.push({ role: 'user', content: (imgs.length && PI && PI.withImages) ? await PI.withImages(String(sysPrompt || ''), imgs, '這是使用者在 app 裡附上的圖片。') : String(sysPrompt || '') });
+          return await new Promise(function(res, rej){ OS.chat(msgs, cfg, null, function(t){ res(typeof t === 'string' ? t : (t && t.message) || ''); }, rej, { task: 'apps', disableTyping: true }); });
+        } catch(e){ console.error('[${safeTagId}] st.callAI', e); return ''; }
+      },
+      getStory: function(n){
+        try {
+          var ST = ctx.SillyTavern; var c = ST && ST.getContext && ST.getContext();
+          if (!c || !Array.isArray(c.chat)) return [];
+          var R = ctx.VN_READER; var CL = (R && R.clean) ? R.clean : function(x){ return x || ''; };
+          return c.chat.filter(function(m){ return m && !m.is_system; }).slice(-(n || 30))
+            .map(function(m){ return { name: String(m.name || (m.is_user ? '我' : '')), text: CL(m.mes || '') }; })
+            .filter(function(o){ return o.text && o.text.trim(); });
+        } catch(e){ return []; }
+      },
+      getChatId: function(){ try { var ST = ctx.SillyTavern; var id = ST && ST.getCurrentChatId ? ST.getCurrentChatId() : ''; return id == null ? '' : String(id); } catch(e){ return ''; } },
+      dbSave: async function(k, v, scope){ try { var DB = ctx.OS_DB; if (!DB || !DB.saveAppData) return false; return await DB.saveAppData(${JSON.stringify('vnpanel:' + String(data.tagId || ''))}, k, v, scope === 'chat' ? (this.getChatId() || null) : null); } catch(e){ return false; } },
+      dbLoad: async function(k, scope){ try { var DB = ctx.OS_DB; if (!DB || !DB.getAppData) return null; return await DB.getAppData(${JSON.stringify('vnpanel:' + String(data.tagId || ''))}, k, scope === 'chat' ? (this.getChatId() || null) : null); } catch(e){ return null; } },
+      // 手機 app 才有的（傳進聊天室、系統提示、寫記憶）：聊天裡的面板不做事，但要有這個名字，不然一呼叫就壞
+      toChat: function(){ return false; },
+      toSystem: function(){ return false; },
+      remember: function(){}
     };
     // ============================================================
     const __onComplete = function(){};
