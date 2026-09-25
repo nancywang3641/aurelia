@@ -16,7 +16,11 @@
     const win = window.parent || window;
 
     const INJECT_ID = 'aurelia_grand_summary';
+    const CLOSED_INJECT_ID = 'aurelia_closed_cases';   // 結案表：從總結裡拆出來，放到下筆前（in_chat 淺層）
+    const CLOSED_DEPTH = 1;
     let _lastUninject = null;
+    let _lastClosedUninject = null;
+    const _closedCache = new Map();   // chatId → 結案表那一塊（同 _cache：只快取非空）
     const _cache = new Map();   // chatId → 壓縮注入字串（避免每輪重讀+重壓；存檔/編輯後由 invalidate 清掉）
     let _lastInjected = null;   // 給 debug/CTX 面板看：{ chatId, text, len }
 
@@ -27,13 +31,31 @@
     async function _payloadFor(chatId) {
         if (_cache.has(chatId)) return _cache.get(chatId);
         let payload = '';
-        try { payload = (await win.OS_STORY_TOOLS?.getCurrentInjectionPayload?.()) || ''; } catch (e) { payload = ''; }
+        try { payload = (await win.OS_STORY_TOOLS?.getCurrentInjectionPayload?.({ withoutClosed: true })) || ''; } catch (e) { payload = ''; }
         // 🔑 只快取「非空」payload：偶發空(OS_DB 還沒 ready / chatId 當下不一致 / 時序)若被釘進快取，
         //    之後每輪都命中空、永遠不注入＝整個 session 失憶，要換 chat 才解。這正是「時有時無→這次又沒了」的元兇。
         //    對照 VN 組件每輪重讀 localStorage 永遠有值、屹立不倒；大總結這層空快取才是病灶。
         //    代價：還沒生成大總結的聊天每輪會重讀一次 OS_DB（getTavernSummary 很快），可接受。
         if (payload) _cache.set(chatId, payload);
         return payload;
+    }
+    async function _closedFor(chatId) {
+        if (_closedCache.has(chatId)) return _closedCache.get(chatId);
+        let block = '';
+        try { block = (await win.OS_STORY_TOOLS?.getCurrentClosedBlock?.()) || ''; } catch (e) { block = ''; }
+        if (block) _closedCache.set(chatId, block);
+        return block;
+    }
+    // 結案表放在總結以外、靠近下筆處：總結在最上面跟一整串預設並排，AI 最注意的是結尾附近。
+    //   09-25 對照：同一句「那件事已經過去了，別再提」放在她那一輪的輸入裡三次都壓住，放總結開頭（一般寫法）壓不住。
+    async function _injectClosed(chatId) {
+        try { _lastClosedUninject?.(); } catch (e) {}
+        _lastClosedUninject = null;
+        const block = await _closedFor(chatId);
+        if (!block) return;
+        const r = win.TavernHelper.injectPrompts([{ id: CLOSED_INJECT_ID, content: block, position: 'in_chat', depth: CLOSED_DEPTH, role: 'system' }], { once: true });
+        _lastClosedUninject = r?.uninject || null;
+        console.log(`🔚 [Grand Summary Injector] 注入結案表（${block.length} 字、depth=${CLOSED_DEPTH}）`);
     }
 
     async function injectSummary() {
@@ -53,6 +75,7 @@
             const chatId = _chatId();
             if (!chatId) return;
 
+            await _injectClosed(chatId);
             const payload = await _payloadFor(chatId);
             if (!payload) return;   // 這個聊天室還沒大總結
 
@@ -116,6 +139,8 @@
         if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
             try { _lastUninject?.(); } catch (e) {}
             _lastUninject = null; _cache.clear(); _lastInjected = null;
+            try { _lastClosedUninject?.(); } catch (e) {}
+            _lastClosedUninject = null; _closedCache.clear();
         });
         console.log('📜 [Grand Summary Injector] Ready（大總結程式注入，OS_DB→壓縮→injectPrompts）');
     }
@@ -124,8 +149,8 @@
         injectSummary,
         // 存檔/編輯大總結後呼叫 → 丟掉該 chat 的快取，下一輪重抓壓縮版
         invalidate(chatId) {
-            try { if (chatId) _cache.delete(chatId); else _cache.clear(); }
-            catch (e) { _cache.clear(); }
+            try { if (chatId) { _cache.delete(chatId); _closedCache.delete(chatId); } else { _cache.clear(); _closedCache.clear(); } }
+            catch (e) { _cache.clear(); _closedCache.clear(); }
         },
         get _lastInjected() { return _lastInjected; },
     };

@@ -16,6 +16,7 @@
         aurelia_vn_rules_pre: 'VN指令開頭',
         aurelia_vn_rules: 'VN指令',
         aurelia_grand_summary: '劇情總結',
+        aurelia_closed_cases: '已結案',
         aurelia_vn_memory: '劇情記憶',
         aurelia_app_memory: '手機記憶',
         aurelia_phone_now: '手機上剛發生的事',

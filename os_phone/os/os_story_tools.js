@@ -138,8 +138,8 @@
 | :--- | :--- | :--- | :--- | :--- |
 
 
-【結算清單】（只记有后续影响的）
-| 結算事件 | 影响/后续 | 參與角色 |
+【結案表】（已經了結的事：衝突平息、麻煩解決、約定做完、人走了不再往來，或主角已經抽身——只是聽別人談起、自己沒再參與，也算抽身。以主角這邊為準，外面的人還在不在意不影響。更早開始、在這段劇情裡看得出已經結束的也算。一件事一列，同一件事別拆成好幾列；沒有就只留表頭）
+| 結案事項 | 怎麼結束的 | 結束時間 |
 | :--- | :--- | :--- |
 
 【注意規範】（跑團中新確立的「世界/區域規則」：村莊規則、城市律法、組織禁忌、特殊機制等，常是 AI 自己補的設定；永久層、绝不删）
@@ -153,7 +153,13 @@
 【結語】(必填，100字以內純文字，只寫「這一段」的核心走向與結束時關鍵狀態；合併時會逐段累積成大廳快覽，所以別重述舊段、別把整個故事重寫一遍；不要加任何標題、序號、表格或裝飾符號)`;
 
     function getSummaryTemplate() {
-        return localStorage.getItem('sp_summary_tpl') || SUMMARY_DEFAULT_TPL;
+        const t = localStorage.getItem('sp_summary_tpl') || SUMMARY_DEFAULT_TPL;
+        if (/【結案表】|【结案表】/.test(t)) return t;
+        // 自訂範本是結案表出現以前抄的 → 補上那一段（排在結語前），其餘照她的
+        const sec = (SUMMARY_DEFAULT_TPL.match(/【結案表】[\s\S]*?\n(?=\n)/) || [''])[0].trim();
+        if (!sec) return t;
+        const i = t.search(/【結語】|【结语】/);
+        return i >= 0 ? t.slice(0, i) + sec + '\n\n' + t.slice(i) : t.trimEnd() + '\n\n' + sec;
     }
 
     // ===== 結構化合併：把「這次增量」疊到「上一份累積總結」，不重濾舊內容 =====
@@ -164,7 +170,7 @@
     //   只認白名單內的才算區塊標題，其餘 【...】 一律當內容留在 body。
     function _knownSectionHeaders() {
         const s = new Set([
-            '事件表','角色表','關係圖譜','关系图谱','結算清單','结算清单','物品表',
+            '事件表','角色表','關係圖譜','关系图谱','結算清單','结算清单','結案表','结案表','物品表',
             '注意規範','注意规范','注意規範/記憶事項表','注意规范/记忆事项表','關鍵狀態/記憶','关键状态/记忆','關鍵狀態','关键状态',
             '性事紀','性事记','結語','结语','故事標題','故事标题',
             '代辦清單','代办清单','場景索引','场景索引'
@@ -248,7 +254,7 @@
     }
     function _mergeSection(header, prevBody, incBody) {
         const APPEND = ['事件表', '結算清單', '结算清单', '性事紀', '性事记'];
-        const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意规范', '注意規範/記憶事項表', '注意规范/记忆事项表'];   // 簡體「注意规范」以前漏了 → 掉到「取新」，舊規範每合併一次就被蓋掉
+        const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意规范', '注意規範/記憶事項表', '注意规范/记忆事项表', '結案表', '结案表'];   // 簡體「注意规范」以前漏了 → 掉到「取新」，舊規範每合併一次就被蓋掉
         if (APPEND.includes(header)) {
             const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
             const head = (_colCount(ti.header) > _colCount(tp.header)) ? ti.header : (tp.header || ti.header);   // 挑欄數較多的表頭，避免新增欄(如關鍵台詞)被截
@@ -335,7 +341,7 @@
             }
             for (const i of incSecs) { if (!used.has(i.header) && !DROP.includes(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
             // 依模板正規化區塊順序：治「結算清單漂到結語後面」這種錯序(增量才有的區塊原本一律被丟到最後)
-            const RANK = { '故事標題': -1, '故事标题': -1, '事件表': 0, '角色表': 1, '關係圖譜': 2, '关系图谱': 2, '結算清單': 3, '结算清单': 3, '注意規範': 4, '注意规范': 4, '注意規範/記憶事項表': 4, '注意规范/记忆事项表': 4, '關鍵狀態/記憶': 4, '关键状态/记忆': 4, '性事紀': 5, '性事记': 5, '結語': 6, '结语': 6 };
+            const RANK = { '故事標題': -1, '故事标题': -1, '事件表': 0, '角色表': 1, '關係圖譜': 2, '关系图谱': 2, '結算清單': 3, '结算清单': 3, '結案表': 3, '结案表': 3, '注意規範': 4, '注意规范': 4, '注意規範/記憶事項表': 4, '注意规范/记忆事项表': 4, '關鍵狀態/記憶': 4, '关键状态/记忆': 4, '性事紀': 5, '性事记': 5, '結語': 6, '结语': 6 };
             out.sort((a, b) => ((a.header in RANK ? RANK[a.header] : 90) - (b.header in RANK ? RANK[b.header] : 90)));   // Array.sort 穩定排序：同序保留原順序
             const body = out.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');   // 內容【】→「」，存進去乾淨不再撞
             return `【大总结(第${summaryCount}次)】${lastTxt}\n\n${body}`;
@@ -382,7 +388,7 @@
             const stripHead = t => String(t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
             const secs = _splitSummarySections(stripHead(rec.content));
             // 角色表/關係圖譜 → 程式原樣保留，等下強制蓋回 AI 輸出，保證一個角色都不漏
-            const PRESERVE = ['角色表', '關係圖譜', '关系图谱'];
+            const PRESERVE = ['角色表', '關係圖譜', '关系图谱', '結案表', '结案表'];
             const preserved = {};
             for (const s of secs) { if (PRESERVE.includes(s.header) && String(s.body || '').trim()) preserved[s.header] = s.body; }
             const preservedBlock = Object.keys(preserved).map(h => `【${h}】\n${preserved[h]}`).join('\n\n');
@@ -396,9 +402,9 @@
                 `- 性事紀 → 整併成一行：跟誰、大概在什麼情況下發生過（不寫兩人是什麼關係、關係怎麼變——關係以關係圖譜為準），但每個發生過性事的角色至少保留一條、絕不刪光。\n` +
                 `- 物品表、結算清單、代辦清單、場景索引 → 整個刪除、不要輸出這些區塊。\n` +
                 `- 故事標題 → 原樣保留、不要改寫。\n` +
-                `- 角色表、關係圖譜 → 直接用我下面附的「完整版」原樣放進去，一個角色都不准刪或漏。\n` +
-                `- 目標：整份壓到 ${target} 字以內(角色表 / 關係圖譜不計)；用原本的【區塊】格式輸出一份，只輸出總結本身、不要解釋。\n` +
-                `\n【附：完整角色表 / 關係圖譜（照抄、不准刪角色）】\n${preservedBlock || '（無）'}\n\n` +
+                `- 角色表、關係圖譜、結案表 → 直接用我下面附的「完整版」原樣放進去，一個角色、一件結案的事都不准刪或漏。\n` +
+                `- 目標：整份壓到 ${target} 字以內(角色表 / 關係圖譜 / 結案表不計)；用原本的【區塊】格式輸出一份，只輸出總結本身、不要解釋。\n` +
+                `\n【附：完整角色表 / 關係圖譜 / 結案表（照抄、不准刪）】\n${preservedBlock || '（無）'}\n\n` +
                 `【要壓縮的大總結】\n${stripHead(rec.content)}`;
 
             const aiOut = await new Promise((res, rej) => {
@@ -434,9 +440,22 @@
     };
 
     // ── 注入壓縮：把「全文存檔」壓成「每輪實際送主模型」的精簡版（存檔保留全部、注入只送活著的狀態）──
-    //   事件表→預設全送(久遠已壓階段節點＝完整劇情線、防失憶；可設 sp_summary_events_keep 上限)；物品表→整塊 DROP 不注入(Rae 拍板：20輪一次對物品太慢沒意義；物品改走向量收斂釘選 os_vector_inject)；結算清單→丟(跟事件/結語重複)；
+    //   事件表→預設全送(久遠已壓階段節點＝完整劇情線、防失憶；可設 sp_summary_events_keep 上限)；物品表→整塊 DROP 不注入(Rae 拍板：20輪一次對物品太慢沒意義；物品改走向量收斂釘選 os_vector_inject)；結算清單→丟(跟事件/結語重複)；結案表→帶說明一起送（酒館正文帶 withoutClosed、另放下筆前）；
     //   性事紀→只留最近數筆；結語(總記憶)/角色表/關係圖譜/注意規範→全送。供 os_summary_inject 每輪呼叫。
     function _stripSummaryHead(t) { return String(t == null ? '' : t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, ''); }
+    // 🔚 結案表：6/22 起結算清單不送了，就沒有任何一處告訴 AI「哪件事已經結束」→ 背景線被當成還在進行、每章交代一次進度（都市恶宴第 46～70 章）。
+    //   09-25 拿她的真請求對照：一般性的「別重提」壓不住，點名「那件事已經過去了，別再提」三次都壓住。這段就是那句話的自動版。
+    const CLOSED = new Set(['結案表', '结案表']);
+    const CLOSED_NOTE = '（下列事情已經結束了。除非主角自己回頭去碰，不要再寫它們的後續，也別讓任何人再提起、當成新消息聊起。）';
+    API.buildClosedBlock = function (fullContent) {
+        try {
+            const s = _splitSummarySections(_stripSummaryHead(fullContent)).find(x => CLOSED.has(x.header));
+            if (!s) return '';
+            const t = _parseMdTable(s.body);
+            if (!t.rows.length) return '';
+            return `<已結案>\n${CLOSED_NOTE}\n${_buildMdTable(t)}\n</已結案>`;
+        } catch (e) { return ''; }
+    };
     API.buildInjectionPayload = function (fullContent, opts) {
         const o = opts || {};
         // 事件表預設「全開」——大總結生成時久遠事件已壓成「階段節點」，這份本來就是壓縮過的完整劇情線，
@@ -452,7 +471,12 @@
                 const h = s.header;
                 if (DROP.has(h)) continue;
                 let body = s.body;
-                if (h === '事件表') {
+                if (CLOSED.has(h)) {
+                    if (o.withoutClosed) continue;   // 酒館正文另外放到下筆前（buildClosedBlock），這裡不重複
+                    const t = _parseMdTable(body);
+                    if (!t.rows.length) continue;
+                    body = CLOSED_NOTE + '\n' + _buildMdTable(t);
+                } else if (h === '事件表') {
                     const t = _parseMdTable(body);
                     if (t.rows.length > eventsKeep) t.rows = t.rows.slice(-eventsKeep);   // 只留最近 N 筆事件(舊的靠結語涵蓋)
                     body = _buildMdTable(t);
@@ -542,6 +566,16 @@
             return API.buildInjectionPayload(rec.content, opts);
         } catch (e) { console.warn('[大總結] getCurrentInjectionPayload 失敗:', e); return ''; }
     };
+    // 只要結案表那一塊（酒館正文把它另外放到下筆前的位置，見 os_summary_inject）
+    API.getCurrentClosedBlock = async function () {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return '';
+            const rec = await _loadTavernSummary(chatId);
+            if (!rec || !rec.content) return '';
+            return API.buildClosedBlock(rec.content);
+        } catch (e) { console.warn('[大總結] getCurrentClosedBlock 失敗:', e); return ''; }
+    };
 
     API.openSummaryTemplateModal = function () {
         document.getElementById('rpg-summary-tpl-modal').classList.add('active');
@@ -629,7 +663,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             const aiChat = (pr) => new Promise((res, rej) => { let g = ''; osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: pr }], osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { task: 'summary', label: '總結重壓', disableTyping: true }); });
 
             // 角色表/關係圖譜 → 程式先合出「完整版」(一個都不少)，等下強制蓋回 AI 輸出，保證不漏角色
-            const PRESERVE = ['角色表', '關係圖譜', '关系图谱'];
+            const PRESERVE = ['角色表', '關係圖譜', '关系图谱', '結案表', '结案表'];
             const preserved = {};
             for (const h of headerOrder) {
                 if (!PRESERVE.includes(h)) continue;
@@ -652,10 +686,10 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 `- 故事標題 → 用第一份的、原樣保留，不要改寫或重下。\n` +
                 `- 代辦清單 → **整個刪除、不要輸出這個區塊**（待辦已改用 AVS 狀態系統管理）。\n` +
                 `- 性事紀 → 整併成一行：跟誰、大概在什麼情況下發生過（不寫兩人是什麼關係、關係怎麼變——關係以關係圖譜為準），但**每個發生過性事的角色至少保留一條、絕不刪光**(防 NPC 後續見面忘記有過性事變 OOC)。\n` +
-                `- 角色表、關係圖譜 → **直接用我下面附的「完整版」原樣放進去，一個角色都不准刪或漏**。\n` +
-                `- 目標：整份壓到 2000 字以內(角色表/關係圖譜不計)；用原本的【區塊】格式輸出一份，開頭寫【大总结(第${newCount}次·合并版)】，只輸出總結本身、不要解釋。\n` +
+                `- 角色表、關係圖譜、結案表 → **直接用我下面附的「完整版」原樣放進去，一個角色、一件結案的事都不准刪或漏**。\n` +
+                `- 目標：整份壓到 2000 字以內(角色表/關係圖譜/結案表不計)；用原本的【區塊】格式輸出一份，開頭寫【大总结(第${newCount}次·合并版)】，只輸出總結本身、不要解釋。\n` +
                 (userNote ? `- 額外要求：${userNote}\n` : '') +
-                `\n【附：完整角色表/關係圖譜（照抄、不准刪角色）】\n${preservedBlock || '（無）'}\n\n` +
+                `\n【附：完整角色表/關係圖譜/結案表（照抄、不准刪）】\n${preservedBlock || '（無）'}\n\n` +
                 `【要合併的 ${selected.length} 份】\n${combinedAll}`;
             let finalContent = String((await aiChat(mergePrompt)) || '');
             if (!/【大总结/.test(finalContent)) finalContent = `【大总结(第${newCount}次·合并版)】\n\n${finalContent}`;
