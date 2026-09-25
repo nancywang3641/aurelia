@@ -170,7 +170,7 @@
     //   只認白名單內的才算區塊標題，其餘 【...】 一律當內容留在 body。
     function _knownSectionHeaders() {
         const s = new Set([
-            '事件表','角色表','關係圖譜','关系图谱','結算清單','结算清单','結案表','结案表','物品表',
+            '事件表','角色表','關係圖譜','关系图谱','結算清單','结算清单','結案表','结案表','配角近況','物品表',
             '注意規範','注意规范','注意規範/記憶事項表','注意规范/记忆事项表','關鍵狀態/記憶','关键状态/记忆','關鍵狀態','关键状态',
             '性事紀','性事记','結語','结语','故事標題','故事标题',
             '代辦清單','代办清单','場景索引','场景索引'
@@ -341,7 +341,7 @@
             }
             for (const i of incSecs) { if (!used.has(i.header) && !DROP.includes(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
             // 依模板正規化區塊順序：治「結算清單漂到結語後面」這種錯序(增量才有的區塊原本一律被丟到最後)
-            const RANK = { '故事標題': -1, '故事标题': -1, '事件表': 0, '角色表': 1, '關係圖譜': 2, '关系图谱': 2, '結算清單': 3, '结算清单': 3, '結案表': 3, '结案表': 3, '注意規範': 4, '注意规范': 4, '注意規範/記憶事項表': 4, '注意规范/记忆事项表': 4, '關鍵狀態/記憶': 4, '关键状态/记忆': 4, '性事紀': 5, '性事记': 5, '結語': 6, '结语': 6 };
+            const RANK = { '故事標題': -1, '故事标题': -1, '事件表': 0, '角色表': 1, '關係圖譜': 2, '关系图谱': 2, '結算清單': 3, '结算清单': 3, '結案表': 3, '结案表': 3, '配角近況': 5.5, '注意規範': 4, '注意规范': 4, '注意規範/記憶事項表': 4, '注意规范/记忆事项表': 4, '關鍵狀態/記憶': 4, '关键状态/记忆': 4, '性事紀': 5, '性事记': 5, '結語': 6, '结语': 6 };
             out.sort((a, b) => ((a.header in RANK ? RANK[a.header] : 90) - (b.header in RANK ? RANK[b.header] : 90)));   // Array.sort 穩定排序：同序保留原順序
             const body = out.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');   // 內容【】→「」，存進去乾淨不再撞
             return `【大总结(第${summaryCount}次)】${lastTxt}\n\n${body}`;
@@ -388,7 +388,7 @@
             const stripHead = t => String(t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
             const secs = _splitSummarySections(stripHead(rec.content));
             // 角色表/關係圖譜 → 程式原樣保留，等下強制蓋回 AI 輸出，保證一個角色都不漏
-            const PRESERVE = ['角色表', '關係圖譜', '关系图谱', '結案表', '结案表'];
+            const PRESERVE = ['角色表', '關係圖譜', '关系图谱', '結案表', '结案表', '配角近況'];
             const preserved = {};
             for (const s of secs) { if (PRESERVE.includes(s.header) && String(s.body || '').trim()) preserved[s.header] = s.body; }
             const preservedBlock = Object.keys(preserved).map(h => `【${h}】\n${preserved[h]}`).join('\n\n');
@@ -478,7 +478,12 @@
                 const h = s.header;
                 if (DROP.has(h)) continue;
                 let body = s.body;
-                if (CLOSED.has(h)) {
+                if (LIFE.has(h)) {
+                    if (o.withoutClosed) continue;   // 酒館正文另外放到下筆前（buildLifeBlock）
+                    const t = _parseMdTable(body);
+                    if (!t.rows.length) continue;
+                    body = LIFE_NOTE + '\n' + _buildMdTable(t);
+                } else if (CLOSED.has(h)) {
                     if (o.withoutClosed) continue;   // 酒館正文另外放到下筆前（buildClosedBlock），這裡不重複
                     const t = _parseMdTable(body);
                     if (!t.rows.length) continue;
@@ -582,6 +587,118 @@
             return (rec && rec.content) ? API.buildClosedNames(rec.content) : [];
         } catch (e) { return []; }
     };
+    // ── 👥 配角近況：每個配角這幾天自己生活裡在發生的事，大總結存檔後另外叫副模型寫一次，存成大總結裡的【配角近況】 ──
+    //   09-26 她：群裡的人只會演一句設定（天天 V 我 50、天天閉嘴、天天炸雞）。原因是 AI 手上每個配角就只有角色表那一格
+    //   （「貧窮日常求飯」「話少冷酷」「炸雞店員工」），人物檔案記的也只是他跟主角發生過什麼，他自己的生活一個字都沒有。
+    //   實測（都市恶宴，她那一輪改成翻群聊）：近況放進角色表一欄 → 3 次都沒用上；放在下筆前 → 艾迪門鎖壞了、丹尼爾寫負評、
+    //   陳彥庭撿到貓（黎昂接話說帶回車廠）這些真的出現在群裡。
+    //   🚨 寫近況那通不給劇情：一起總結時順便寫，一半寫成職業、一半被主線拖回去（陸鳴野跟灰狗幫起衝突）。
+    const LIFE = new Set(['配角近況']);
+    const LIFE_NOTE = '（配角這幾天各自生活裡在發生的事。他們出場或在群裡說話時，可以從這裡找話題。）';
+    function _lifeRows(fullContent) {
+        const s = _splitSummarySections(_stripSummaryHead(fullContent)).find(x => LIFE.has(x.header));
+        if (!s) return [];
+        return _parseMdTable(s.body).rows.map(r => _rowCells(r)).filter(c => c[0] && c[1] && c[1] !== '-').map(c => ({ name: c[0], life: c[1] }));
+    }
+    API.buildLifeBlock = function (fullContent) {
+        try {
+            const rows = _lifeRows(fullContent);
+            if (!rows.length) return '';
+            return `<配角近況>\n${LIFE_NOTE}\n${rows.map(r => '・' + r.name + '：' + r.life).join('\n')}\n</配角近況>`;
+        } catch (e) { return ''; }
+    };
+    API.getCurrentLifeBlock = async function () {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return '';
+            const rec = await _loadTavernSummary(chatId);
+            return (rec && rec.content) ? API.buildLifeBlock(rec.content) : '';
+        } catch (e) { return ''; }
+    };
+    const _lifeBusy = {};
+    // 寫一次近況、存回大總結。opts.onlyIfMissing：已經有就不寫（給「換版後第一輪自動補」用）
+    API.refreshNpcLife = async function (opts) {
+        const o = opts || {};
+        const chatId = getChatIdentifier();
+        if (!chatId || _lifeBusy[chatId]) return false;
+        _lifeBusy[chatId] = true;
+        try {
+            const rec = await _loadTavernSummary(chatId);
+            if (!rec || !rec.content) return false;
+            const prevLife = {}; _lifeRows(rec.content).forEach(r => { prevLife[r.name] = r.life; });
+            if (o.onlyIfMissing && Object.keys(prevLife).length) return false;
+            const secs = _splitSummarySections(_stripSummaryHead(rec.content));
+            const ct = secs.find(s => s.header === '角色表');
+            const t = ct ? _parseMdTable(ct.body) : null;
+            if (!t || !t.header) return false;
+            // 欄位照表頭找（範本可能被她改過，別寫死欄序）
+            const H = _rowCells(t.header);
+            const col = (re) => H.findIndex(h => re.test(h));
+            const cName = col(/姓名|名字/), cId = col(/身[份分]/), cChar = col(/性格/), cNow = col(/当前|當前|状态|狀態/), cRel = col(/关系|關係/);
+            if (cName < 0) return false;
+            const people = [], seen = new Set();
+            let mc = '';
+            t.rows.map(_rowCells).forEach(c => {
+                const name = c[cName];
+                if (!name || seen.has(name)) return;
+                seen.add(name);
+                if (cRel >= 0 && /^\s*(MC|主角)/i.test(String(c[cRel] || ''))) { mc = name; return; }   // 主角那一列（與MC關係欄寫 MC/10）
+                people.push([name, cId >= 0 ? c[cId] : '', cChar >= 0 ? c[cChar] : '', cNow >= 0 ? c[cNow] : ''].map(x => String(x || '-').trim()).join('｜'));
+            });
+            // 群聊裡講過話、角色表沒有的人（卡片自帶的群友常常這樣）：只有名字＋最近說過的一句
+            let date = '';
+            try {
+                const msgs = (await _apiFullChat()) || [];
+                const recent = msgs.slice(-40);
+                const said = {};
+                recent.forEach(m => {
+                    const text = String((m && m.mes) || '');
+                    (text.match(/<chat[\s\S]*?<\/chat>/g) || []).forEach(b => b.split('\n').forEach(l => {
+                        const mm = l.trim().match(/^\[([^\]|]{1,20})\]\s*(.+)$/);
+                        if (!mm || /^(You|Sys|Time|With|Img|Pic|Photo|Voice|Sticker|系统|系統|表情包|图片|圖片|语音|語音|转账|轉賬|撤回)$/i.test(mm[1])) return;
+                        said[mm[1].trim()] = mm[2].trim().slice(0, 40);
+                    }));
+                    if (!m.is_user) { const d = text.match(/日期\|([^\n|<]+)/); if (d) date = d[1].trim(); }
+                });
+                Object.keys(said).forEach(n => { if (seen.has(n) || (mc && n === mc)) return; seen.add(n); people.push(`${n}｜群聊裡的人｜-｜最近在群裡說過：${said[n]}`); });
+            } catch (e) {}
+            if (!people.length) return false;
+            const withPrev = people.map(p => { const n = p.split('｜')[0]; return prevLife[n] ? p + '｜上次近況：' + prevLife[n] : p; });
+            const prompt = `下面是一個故事裡的配角名單（名字｜身分｜性格｜目前狀態${Object.keys(prevLife).length ? '｜上次近況' : ''}）。${date ? '故事裡現在是 ' + date + '。' : ''}
+替每個人寫「近況」：這幾天他自己生活裡正在發生、之後會有下文的一件事。
+- 不能是他的工作、職業、招牌習慣或口頭禪，也不能發生在他上班的地方。
+- 只屬於他自己的事：不牽涉名單裡的其他人，也不牽涉主角。
+- 要跟他的身分、性格、家境、目前狀態合得起來。
+- 日常大小的事就好，不要寫成大事件。
+- 有上次近況的：往前推——那件事有了結果、走到下一步，或換成新的一件；不照抄。
+- 每人一句，二十字以內。
+
+${withPrev.join('\n')}
+
+只輸出 JSON：{"名字":"近況", …}`;
+            const raw = await new Promise((res, rej) => {
+                let g = '';
+                win.OS_API.chatSecondary([{ role: 'user', content: prompt }], (c) => { g = c; }, (f) => { res(String(f || g || '')); }, (err) => rej(err), { task: 'npc_life', disableTyping: true });
+            });
+            let j = null;
+            try { j = JSON.parse((String(raw).match(/\{[\s\S]*\}/) || ['{}'])[0]); } catch (e) {}
+            if (!j || typeof j !== 'object') return false;
+            const rows = Object.keys(j).map(n => [String(n).trim(), String(j[n] || '').replace(/[|\n]/g, ' ').trim()]).filter(r => r[0] && r[1]);
+            if (!rows.length) return false;
+            const body = '| 名字 | 近況 |\n| :--- | :--- |\n' + rows.map(r => `| ${r[0]} | ${r[1]} |`).join('\n');
+            // 存回：重讀最新一份再換掉那一段（寫近況那通要幾秒，這中間她可能編輯過大總結）
+            const cur = await _loadTavernSummary(chatId);
+            if (!cur || !cur.content) return false;
+            const lines = String(cur.content);
+            const re = /【配角近況】[\s\S]*?(?=\n【|$)/;
+            const next = re.test(lines) ? lines.replace(re, '【配角近況】\n' + body + '\n') : lines.trimEnd() + '\n\n【配角近況】\n' + body;
+            await win.OS_DB.saveTavernSummary(chatId, Object.assign({}, cur, { content: next }));
+            try { win.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}
+            console.log('👥 [大總結] 配角近況寫好了（' + rows.length + ' 人）');
+            return true;
+        } catch (e) { console.warn('[大總結] 配角近況沒寫成（不影響其他）:', e); return false; }
+        finally { delete _lifeBusy[chatId]; }
+    };
     // 只要結案表那一塊（酒館正文把它另外放到下筆前的位置，見 os_summary_inject）
     API.getCurrentClosedBlock = async function () {
         try {
@@ -679,7 +796,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             const aiChat = (pr) => new Promise((res, rej) => { let g = ''; osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: pr }], osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { task: 'summary', label: '總結重壓', disableTyping: true }); });
 
             // 角色表/關係圖譜 → 程式先合出「完整版」(一個都不少)，等下強制蓋回 AI 輸出，保證不漏角色
-            const PRESERVE = ['角色表', '關係圖譜', '关系图谱', '結案表', '结案表'];
+            const PRESERVE = ['角色表', '關係圖譜', '关系图谱', '結案表', '结案表', '配角近況'];
             const preserved = {};
             for (const h of headerOrder) {
                 if (!PRESERVE.includes(h)) continue;
@@ -986,6 +1103,8 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 });
                 console.log('[大總結] ✅ 已存 OS_DB tavern_summary（chatId=' + chatId + '、第' + summaryCount + '次）');
                 try { window.parent.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}   // 讓注入器丟掉快取、下輪重抓壓縮版
+                // 👥 配角近況：大總結存好就往前推一次（背景、副模型，失敗不影響存檔）
+                try { if (!_phoneOnly) API.refreshNpcLife(); } catch (e) {}
                 // 🏦 PT 結算（fire-and-forget，不擋存檔）：副模型估值→加 PT→浮結算卡。去重同一份只算一次。
                 try { const _pt = window.parent.OS_PT || window.OS_PT; if (_pt?.settleSummary) _pt.settleSummary(finalContent, { chatId, summaryCount }); } catch (e) {}
 

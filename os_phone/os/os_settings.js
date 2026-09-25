@@ -197,6 +197,7 @@
         { group: '劇情',       id: 'illust',       name: '插圖描述',                   def: 'sec'  },
         { group: '劇情',       id: 'director',     name: '導演模式',                   def: 'main' },
         { group: '劇情',       id: 'avs_design',   name: '狀態欄位設計 / 整理',        def: 'main' },
+        { group: '劇情',       id: 'npc_life',     name: '配角近況',                   def: 'sec'  },
         { group: '手機',       id: 'phone_chat',   name: '手機聊天',                   def: 'main' },
         { group: '手機',       id: 'call',         name: '電話',                       def: 'main' },
         { group: '手機',       id: 'wx_summary',   name: '聊天室記錄整理',             def: 'sec'  },
