@@ -138,7 +138,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 
 
-【結案表】（已經了結的事：衝突平息、麻煩解決、約定做完、人走了不再往來，或主角已經抽身——只是聽別人談起、自己沒再參與，也算抽身。以主角這邊為準，外面的人還在不在意不影響。更早開始、在這段劇情裡看得出已經結束的也算。一件事一列，同一件事別拆成好幾列；沒有就只留表頭）
+【結案表】（已經了結的事：衝突平息、麻煩解決、約定做完、人走了不再往來，或主角已經抽身——只是聽別人談起、自己沒再參與，也算抽身。以主角這邊為準，外面的人還在不在意不影響。更早開始、在這段劇情裡看得出已經結束的也算。一件事一列，同一件事別拆成好幾列；「結案事項」寫出牽涉的人、東西、地方，讓人一看就知道是哪件，別只寫籠統的名字；同一場風波裡不同人各自收尾的事分開列。沒有就只留表頭）
 | 結案事項 | 怎麼結束的 | 結束時間 |
 | :--- | :--- | :--- |
 
@@ -444,16 +444,18 @@
     //   性事紀→只留最近數筆；結語(總記憶)/角色表/關係圖譜/注意規範→全送。供 os_summary_inject 每輪呼叫。
     function _stripSummaryHead(t) { return String(t == null ? '' : t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, ''); }
     // 🔚 結案表：6/22 起結算清單不送了，就沒有任何一處告訴 AI「哪件事已經結束」→ 背景線被當成還在進行、每章交代一次進度（都市恶宴第 46～70 章）。
-    //   09-25 拿她的真請求對照：一般性的「別重提」壓不住，點名「那件事已經過去了，別再提」三次都壓住。這段就是那句話的自動版。
+    //   09-25 拿她的真請求對照：一般性的「別重提」壓不住，點名「那件事已經過去了，別再提」才壓得住。
+    //   🚨 酒館正文那塊只送「結案事項」組成的一句話，不送整張表：表的「怎麼結束的」那欄等於把整件事再講一遍，
+    //      實測整張表放進去 4 次裡還是 1 次重演、3 次帶過；同位置只點名一句 3 次都沒重演。
     const CLOSED = new Set(['結案表', '结案表']);
     const CLOSED_NOTE = '（下列事情已經結束了。除非主角自己回頭去碰，不要再寫它們的後續，也別讓任何人再提起、當成新消息聊起。）';
     API.buildClosedBlock = function (fullContent) {
         try {
             const s = _splitSummarySections(_stripSummaryHead(fullContent)).find(x => CLOSED.has(x.header));
             if (!s) return '';
-            const t = _parseMdTable(s.body);
-            if (!t.rows.length) return '';
-            return `<已結案>\n${CLOSED_NOTE}\n${_buildMdTable(t)}\n</已結案>`;
+            const names = _parseMdTable(s.body).rows.map(r => String(_firstCell(r) || '').trim()).filter(n => n && n !== '-');
+            if (!names.length) return '';
+            return `<已結案>\n（${names.join('、')}，這些事已經過去了，這章不要再提，也別讓誰再聊起。）\n</已結案>`;
         } catch (e) { return ''; }
     };
     API.buildInjectionPayload = function (fullContent, opts) {
