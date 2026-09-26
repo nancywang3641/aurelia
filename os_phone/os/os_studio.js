@@ -1378,6 +1378,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 對話框的左上角掛著一塊名牌，寫著現在是誰在說話；輪到旁白時它會自己隱形。
 對話框的上緣浮著三顆小鈕：翻對話紀錄、跳過、還有一顆漢堡；按漢堡會往上浮出一小疊其他功能。
 每一章開頭，畫面中央會浮出一張章節卡：故事名、第幾章、章名、一段引言、幾格資訊、一顆「開始閱讀」；玩家按了才進正文。
+一章讀完，對話框會收起來，畫面中央直排浮出一組收尾鈕：最上面一顆大的「資料中心」，底下四顆同寬的「CTX」「日誌」「地圖」「重新生成」；右上三顆功能鍵還在。玩家從這裡決定下一步。
+按右上的「設定」，整個畫面暗下來，中央浮出一扇設定視窗：上面一條標題列帶關閉鈕，底下是可以往下捲的內容——一段一段的小標，每段裡有滑桿列（左邊名稱、中間滑桿、右邊數值）、一排排可點選的小籤、幾格選顏色的色塊，最底一顆重置鈕。
 你要做的是把這一整套變成「同一個世界裡真的會有的介面」——那個世界的材質、工藝、時代、階級都該看得出來，而不是在遊戲上套一層皮。
 
 【畫面的結構 — 誰包著誰，這決定了什麼能做什麼不能做】
@@ -1399,6 +1401,22 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
   #vn-chapter-card ......... 章節卡遮罩，只在每章開頭出現
     #vncc-box .............. 卡片本體（內含 #vncc-story／#vncc-num／#vncc-title／
                              #vncc-rule／#vncc-preface／.vncc-cell 三格／#vncc-enter）
+  #vn-end-overlay .......... 章末才出現的全螢幕層（本身透明、不擋點擊）
+    #vn-end-basic .......... 收尾鈕組：直排、置中、按鈕同寬
+      #vn-end-btn-data ..... 資料中心（主鈕，比其他四顆大一號）
+      #vn-end-btn-ctx／#vn-end-btn-journal／#vn-end-btn-map／#vn-end-btn-regen ... 其餘四顆
+    #vn-end-panel .......... 有些世界會在這裡換上它專屬的收尾面板（另外生成的，不歸你管）
+  #game-settings-overlay ... 設定視窗的暗幕（按了設定才出現）
+    #game-settings-window .. 視窗本體：直排，標題列在上、內容區在下可捲動
+      #gs-titlebar ......... 標題列：.gs-title 標題字、.gs-close 關閉鈕
+      #gs-body ............. 內容區
+        .gs-section-title .. 每一段的小標
+        .gs-row ............ 滑桿列：.gs-label 名稱、.gs-slider 滑桿、.gs-val 數值
+        .gs-sub ............ 小籤上方的小字
+        .gs-chips .......... 一排小籤，裡面每顆是 .gs-chip（.gs-chip.on 是選中）
+        .gs-color-row ...... 顏色列：.gs-color-label 名稱、.gs-color-input 色塊
+        .gs-divider ........ 段落之間的分隔
+        .gs-reset-btn ...... 最底的重置鈕
 
 【你的 CSS 會被怎麼使用 — 現況與限制】
 - 現在的預設長相：深色半透明對話框、細金線、襯線字，整體偏古典。你寫的 CSS 會「接在這份預設後面」，
@@ -1421,9 +1439,11 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - #vn-panel-controls 與 .vn-panel-btn：對話框上緣那排小鈕。外面只有三顆：LOG（翻對話紀錄）、SKIP（跳過）、☰（其他功能）；按 ☰ 會往上浮出 #vn-more-menu，裡面是同款的 .vn-panel-btn。你只要把 .vn-panel-btn 設計好，浮窗裡的鈕自動跟著。（.vn-panel-btn.active 為啟用態。）「位置不要動」，只重新上色/造型配合主題。
 - #btn-home、#btn-settings、#btn-phone：畫面右上角的頂部按鈕（返回 / 設定 / 應用）。「位置不要動」，只重新統一它們的外觀配合主題。
 - #vn-chapter-card 與 #vncc-box：章節卡（每一章開頭浮出來的那張卡：故事名 #vncc-story、章號 #vncc-num、章名 #vncc-title、分隔線 #vncc-rule、引言 #vncc-preface、資訊格 .vncc-cell/.vncc-cell-k/.vncc-cell-v、開始閱讀鈕 #vncc-enter）。⚠️這張卡預設會「抄對話框當下的皮」，所以你只寫對話框它也會跟著變；要單獨設計它，對 #vncc-box 的宣告一律加 !important 才蓋得過去。版型維持置中單欄，只重新設計外觀。
+- #vn-end-btn-data 與 #vn-end-btn-ctx／#vn-end-btn-journal／#vn-end-btn-map／#vn-end-btn-regen：章末收尾鈕。這是一章的句點，玩家在這裡停下來選下一步——做成那個世界裡「一章結束時會出現的東西」，跟對話框同一套語言。資料中心那顆要一眼看得出是主鈕，其餘四顆同款。外觀全部開放（底、邊框、造型、clip-path、::before/::after 裝飾都可以，按鈕自己裁自己是安全的）；排列不動：直排、置中、同寬，字維持單行；內距和寬度可以調，五顆要一起調、維持同寬，寬度別超過手機畫面的六成。這組鈕底下沒有對話框墊著，直接疊在明亮雜亂的背景圖上，按鈕本身的底要實心或 alpha ≥ 0.85。
+- #game-settings-window 與裡面的 #gs-titlebar／#gs-body／.gs-*：設定視窗。它跟對話框一樣要是那個世界裡的一件實體物件，標題列、小標、滑桿（.gs-slider 的軌道，與 .gs-slider::-webkit-slider-thumb 滑塊）、小籤（.gs-chip 與選中的 .gs-chip.on）、色塊外框、重置鈕都要跟著換，不要只換視窗外框、裡面還是預設金黑。這扇窗是拿來讀和調的：視窗底要實心或 alpha ≥ 0.9，名稱與數值跟底強對比，選中的小籤要一眼跟沒選中的分得出來。版型不動：視窗置中、標題列在上、內容區捲動、滑桿列左名稱右數值；內距可以調，視窗寬度別比原本寬（原本是畫面寬扣 30px、上限 410px）。滑桿的原生外觀已經關掉了，軌道直接畫在 .gs-slider 本身（高度、底色），滑塊畫在 .gs-slider::-webkit-slider-thumb。色塊 .gs-color-input 只改外框，裡面那格顏色是玩家選的，別蓋。暗幕 #game-settings-overlay 只准改顏色與模糊程度。
 
 【版面骨架 — 先寫下來，再動手寫 CSS】
-先輸出一段 <版面骨架>…</版面骨架>，80~120 字，講清楚：這次的對話框是那個世界裡的什麼實體物件、名牌是掛在它上面的什麼東西、那三顆控制鈕與右上三顆功能鍵在那個世界裡各是什麼、對話框的邊界是怎麼來的、左右內距哪一側寬而那一側被什麼佔住、三態靠什麼結構差異分開。
+先輸出一段 <版面骨架>…</版面骨架>，80~120 字，講清楚：這次的對話框是那個世界裡的什麼實體物件、名牌是掛在它上面的什麼東西、那三顆控制鈕與右上三顆功能鍵在那個世界裡各是什麼、章末那組收尾鈕與設定視窗又各是什麼、對話框的邊界是怎麼來的、左右內距哪一側寬而那一側被什麼佔住、三態靠什麼結構差異分開。
 每個元件都要有現實對應物再動手——講不出「它是什麼」，畫出來就會是三個灰方塊配一個圓角矩形。想過跟寫下來是兩回事，寫下來才會照著做。寫完才開始寫 CSS。
 
 【骨架 — 這一區是關係、不是建議，每一條都要能在你寫的 CSS 裡驗出來】
@@ -1468,6 +1488,13 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 它們的位置是底稿用絕對定位釘好的。你只要寫了其中任何一個屬性——哪怕是 position:relative——
 就會把那份定位打掉，元素會掉回文件流、整排疊到畫面中間。這不是「移動」，是「毀掉版位」。
 唯一的例外是 #text-panel 自己可以寫 position:relative（底板需要它當定位錨點），別的位移屬性一樣不准。
+收尾鈕與設定視窗也一樣：下面這些選擇器「本身」不准寫 position / top / left / right / bottom / display / float / flex——
+  #vn-end-overlay、#vn-end-basic、#vn-end-btn-data 等五顆收尾鈕、
+  #game-settings-overlay、#game-settings-window、#gs-titlebar、#gs-body、.gs-row、.gs-chips、.gs-color-row
+它們是靠 flex 排成直排、置中、左右兩欄的，一寫就散。
+它們、以及 .gs-chip、.gs-reset-btn、.gs-close，本身都已經是定位錨點：掛在它們身上的 ::before / ::after 直接寫 content + position:absolute 就會貼著它們長，不受這條限制。
+（按鈕自己用了 clip-path 的話，它的 ::before / ::after 探出按鈕外的部分會一起被切掉；要往外探的裝飾，那顆按鈕的輪廓就改用 border-image 或漸層畫。）
+#vn-end-overlay（章末那層透明底，要讓背景圖露出來，別給它上底色）與 #game-settings-overlay（設定的暗幕）另外不准寫 opacity / pointer-events / visibility：它們平常是隱形、不擋點擊的，靠這幾個屬性開關；寫了就會一直蓋在畫面上、點什麼都沒反應。
 
 【最重要的鐵則 — 配件一律不准移動】
 - 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
@@ -1480,7 +1507,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - 三態 .char-mode / .nar-mode / .inner-mode 各自都要顧到。
 
 【完成度 — 成套，不准半吊子】
-- 所有元素用「同一套設計語言」做成完整一組，不可以對話框做得很炫、名牌和按鈕卻還停在預設黑。控制鈕和頂部鈕也要呼應對話框的主風格與質感。
+- 所有元素用「同一套設計語言」做成完整一組，不可以對話框做得很炫、名牌和按鈕卻還停在預設黑。控制鈕、頂部鈕、章末收尾鈕、設定視窗也要呼應對話框的主風格與質感。
 
 【裝飾技法 — 鼓勵大膽用，讓設計有記憶點】
 - 善用 ::before / ::after 偽元素在對話框上做「偽容器」裝飾：底部花邊條、四角紋飾、貼紙、徽章、圖標、雙層描邊都可以。可用內聯 SVG（background-image:url("data:image/svg+xml,...")）做 pattern 或圖示，或用 repeating-linear-gradient / radial-gradient 做斜紋、網點、掃描線等紋理。
@@ -1490,10 +1517,10 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 
 規則：
 1. 可用 @import 載字體、用 ::before/::after 加裝飾、用 @keyframes 做動畫。
-2. 「絕對不要」對 #game-char / #game-char-container（角色立繪）或 #game-bg（全螢幕背景圖層，會被劇情背景圖蓋掉、改了也看不到）寫任何樣式——它們不歸主題管。
+2. 「絕對不要」對 #game-char / #game-char-container（角色立繪）或 #game-bg（全螢幕背景圖層，會被劇情背景圖蓋掉、改了也看不到）寫任何樣式——它們不歸主題管。#vn-end-panel 與它裡面的東西也一樣別寫：那是某些世界自己生成的收尾面板，有它自己的樣式。
 3. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條。
 4. #dialogue-text（含三態）一律保持預設的「靠左」對齊，「絕對不要」設 text-align:center 或任何置中——劇情有逐字打字機效果，置中會讓字從中間往兩邊跑，既難看又難讀。
-5. 輸出前自檢一次：把你的設計想成一張圖，用手遮住文字那一塊——遮住的地方如果有你畫的東西（線條、圖案、放射、噴濺、光暈），就是錯的，移到邊緣去。再把整張疊在一張明亮、雜亂的背景圖上——文字一眼可讀嗎？有沒有元素跑出畫面或互相遮住？有沒有不小心把內文置中？另外逐項確認：對話框與名牌的輪廓，是不是又都退回四個直角的矩形了（底板的 inset 還是 0、身上沒有任何 clip-path／不對稱圓角／border-image）？文字底下那一層真的有底嗎（三態的 background，或 ::before 底板上實際畫了背景）——只有一條邊、中間透空就是壞的？#text-panel 身上有沒有 clip-path 或 overflow:hidden（有就是名牌會被切掉）？頂部鈕與控制鈕的字還是單行嗎？內文的可用寬度還有八成嗎？有問題就修好再輸出。
+5. 輸出前自檢一次：把你的設計想成一張圖，用手遮住文字那一塊——遮住的地方如果有你畫的東西（線條、圖案、放射、噴濺、光暈），就是錯的，移到邊緣去。再把整張疊在一張明亮、雜亂的背景圖上——文字一眼可讀嗎？有沒有元素跑出畫面或互相遮住？有沒有不小心把內文置中？另外逐項確認：對話框與名牌的輪廓，是不是又都退回四個直角的矩形了（底板的 inset 還是 0、身上沒有任何 clip-path／不對稱圓角／border-image）？文字底下那一層真的有底嗎（三態的 background，或 ::before 底板上實際畫了背景）——只有一條邊、中間透空就是壞的？#text-panel 身上有沒有 clip-path 或 overflow:hidden（有就是名牌會被切掉）？頂部鈕與控制鈕的字還是單行嗎？內文的可用寬度還有八成嗎？章末收尾鈕和設定視窗（連滑桿、小籤、重置鈕）都換上同一套了嗎，還是停在預設金黑？有問題就修好再輸出。
 6. 先輸出 <版面骨架>…</版面骨架>，接著才是 CSS，CSS 用 \`\`\`css 包起來。骨架那段之外不要別的解釋文字。
 用戶想要的風格：`;
 
@@ -1560,12 +1587,53 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 #vncc-preface{font-size:0.9rem;}
 .vncc-cell{min-width:80px;padding:8px 12px;}
 }
+/* 🏁 章末收尾鈕（跟 css/vn_styles.css 同一套數值；真實 VN 章末會收掉對話框） */
+#text-panel-wrapper.vth-off{display:none;}
+#vn-end-overlay{position:absolute;inset:0;display:none;z-index:15;pointer-events:none;}
+#vn-end-overlay.active{display:block;}
+#vn-end-basic{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
+#vn-end-btn-data,#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-map,#vn-end-btn-regen{box-sizing:border-box;width:200px;text-align:center;pointer-events:auto;cursor:pointer;border:1px solid var(--gold);color:var(--gold);font-family:var(--font-classic);}
+#vn-end-btn-data{padding:14px 44px;background:rgba(5,5,8,0.92);font-size:1rem;letter-spacing:4px;box-shadow:0 0 20px rgba(212,175,55,0.25),0 8px 32px rgba(0,0,0,0.8);text-shadow:0 0 8px rgba(212,175,55,0.5);}
+#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-map,#vn-end-btn-regen{padding:10px 28px;background:rgba(5,5,8,0.88);font-size:0.85rem;letter-spacing:2px;box-shadow:0 0 14px rgba(212,175,55,0.2),0 6px 24px rgba(0,0,0,0.8);text-shadow:0 0 8px rgba(212,175,55,0.45);}
+/* ⚙ 設定視窗（同上，跟真實 VN 同一套數值；預覽沒有開合動畫，直接顯示） */
+#game-settings-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:60;display:flex;justify-content:center;align-items:center;opacity:0;pointer-events:none;}
+#game-settings-overlay.active{opacity:1;pointer-events:auto;}
+#game-settings-window{width:calc(100% - 30px);max-width:410px;max-height:calc(100% - 40px);background:linear-gradient(135deg,#111 0%,#050505 100%);border:1px solid var(--glass-border,rgba(212,175,55,0.3));border-radius:2px;box-shadow:0 20px 60px rgba(0,0,0,0.9);display:flex;flex-direction:column;overflow:hidden;}
+#gs-titlebar{background:rgba(10,10,10,0.8);border-bottom:1px solid var(--gold-dark);padding:15px 20px;display:flex;align-items:center;justify-content:space-between;}
+#gs-titlebar .gs-title{color:var(--gold);font-family:var(--font-classic);font-size:1.2rem;letter-spacing:4px;}
+#gs-titlebar .gs-close{width:32px;height:32px;background:transparent;border:1px solid transparent;color:var(--gold-dark);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+#gs-body{padding:30px 25px;overflow-y:auto;flex:1;}
+.gs-section-title{color:var(--gold);font-size:0.9rem;font-family:var(--font-classic);letter-spacing:3px;margin-bottom:25px;border-bottom:1px solid rgba(212,175,55,0.2);padding-bottom:8px;}
+.gs-row{display:flex;align-items:center;gap:15px;margin-bottom:22px;}
+.gs-label{color:#aaa;font-size:0.9rem;white-space:nowrap;flex-shrink:0;min-width:80px;}
+.gs-val{color:var(--gold-light);font-size:0.85rem;font-family:monospace;min-width:45px;text-align:right;flex-shrink:0;}
+.gs-slider{-webkit-appearance:none;appearance:none;flex:1;height:2px;background:rgba(255,255,255,0.2);outline:none;cursor:pointer;}
+.gs-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--gold);cursor:pointer;border:2px solid #000;}
+.gs-color-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;border-bottom:1px dashed rgba(255,255,255,0.05);padding-bottom:10px;}
+.gs-color-label{color:#aaa;font-size:0.9rem;}
+.gs-color-input{width:40px;height:24px;border:1px solid #555;cursor:pointer;background:none;padding:1px;}
+.gs-divider{border:none;margin:25px 0;}
+.gs-reset-btn{width:100%;background:transparent;border:1px solid var(--gold-dark);color:var(--gold-dark);padding:12px;font-size:0.9rem;cursor:pointer;letter-spacing:2px;font-family:var(--font-classic);text-transform:uppercase;}
+.gs-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+.gs-chip{background:transparent;border:1px solid rgba(212,175,55,0.35);color:#aaa;padding:7px 12px;font-size:0.85rem;cursor:pointer;letter-spacing:1px;font-family:var(--font-classic);}
+.gs-chip.on{background:rgba(212,175,55,0.16);border-color:var(--gold);color:var(--gold-light);}
+.gs-sub{color:#888;font-size:0.8rem;letter-spacing:2px;margin:4px 0 8px;}
+#vn-end-btn-data,#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-map,#vn-end-btn-regen,#game-settings-window,#gs-titlebar,#gs-body,.gs-row,.gs-chips,.gs-color-row,.gs-chip,.gs-reset-btn,#gs-titlebar .gs-close{position:relative;}
+@media(max-width:480px){
+#game-settings-window{width:93vw;}
+#gs-titlebar .gs-title{font-size:1rem;letter-spacing:2px;}
+#gs-body{padding:20px 18px;}
+.gs-section-title{letter-spacing:1px;font-size:0.85rem;}
+.gs-label{font-size:0.82rem;min-width:65px;}
+}
 `;
     let _vthMode = 'char-mode';
 
     function _vthBuildSrcdoc(css, mode, thumb) {
         const m = mode || _vthMode;
         const card = m === 'chapter';   // 📖 章節卡：卡片浮在對話框上（真實 VN 也是這個疊法）
+        const end = m === 'end';        // 🏁 章末：真實 VN 會把對話框收掉，只剩收尾鈕組與右上三顆
+        const gs = m === 'settings';    // ⚙ 設定視窗：暗幕蓋在整個畫面上
         const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-phone,#vn-panel-controls,#top-badge{display:none;}' : '';
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${css || ''}</style></head><body>
 <div id="game-bg"></div>
@@ -1584,7 +1652,38 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 <button id="vncc-enter" type="button">開始閱讀</button>
 </div>
 </div>
-<div id="text-panel-wrapper">
+<div id="vn-end-overlay"${end ? ' class="active"' : ''}>
+<div id="vn-end-basic">
+<button id="vn-end-btn-data" type="button">資料中心</button>
+<button id="vn-end-btn-ctx" type="button">CTX</button>
+<button id="vn-end-btn-journal" type="button">日誌</button>
+<button id="vn-end-btn-map" type="button">地圖</button>
+<button id="vn-end-btn-regen" type="button">重新生成</button>
+</div>
+</div>
+<div id="game-settings-overlay"${gs ? ' class="active"' : ''}>
+<div id="game-settings-window">
+<div id="gs-titlebar"><span class="gs-title">設定</span><button class="gs-close" type="button">✕</button></div>
+<div id="gs-body">
+<div class="gs-section-title">基礎設置</div>
+<div class="gs-row"><span class="gs-label">字體大小</span><input type="range" class="gs-slider" min="12" max="24" value="19"><span class="gs-val">19px</span></div>
+<div class="gs-row"><span class="gs-label">打字速度</span><input type="range" class="gs-slider" min="10" max="100" value="30"><span class="gs-val">30ms</span></div>
+<div class="gs-row"><span class="gs-label">BGM 音量</span><input type="range" class="gs-slider" min="0" max="100" value="60"><span class="gs-val">60%</span></div>
+<hr class="gs-divider">
+<div class="gs-section-title">世界題材</div>
+<div class="gs-chips"><button class="gs-chip on" type="button">都市</button><button class="gs-chip" type="button">奇幻</button><button class="gs-chip" type="button">懸疑</button></div>
+<div class="gs-sub">BGM</div>
+<div class="gs-chips"><button class="gs-chip" type="button">預設</button><button class="gs-chip on" type="button">夜曲</button></div>
+<hr class="gs-divider">
+<div class="gs-section-title">字體顏色設置</div>
+<div class="gs-color-row"><span class="gs-color-label">文章字體顏色</span><input type="color" class="gs-color-input" value="#dcd8d0"></div>
+<div class="gs-color-row"><span class="gs-color-label">名稱標籤字體顏色</span><input type="color" class="gs-color-input" value="#d4af37"></div>
+<hr class="gs-divider">
+<button class="gs-reset-btn" type="button">重置為默認顏色</button>
+</div>
+</div>
+</div>
+<div id="text-panel-wrapper"${end ? ' class="vth-off"' : ''}>
 <div id="vn-panel-controls"><div class="vn-panel-btn">LOG</div><div class="vn-panel-btn">SKIP</div><div class="vn-panel-btn">☰</div>
 <div id="vn-more-menu"><div class="vn-panel-btn">COT</div><div class="vn-panel-btn">CTX</div></div></div>
 <div id="text-panel" class="${card ? 'nar-mode' : m}">
@@ -1689,13 +1788,34 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     const VTH_LOCKED = ['#btn-home', '#btn-settings', '#btn-phone', '#top-badge', '#stream-scene-row',
         '#speaker-name', '#vn-panel-controls', '#vn-more-menu', '.vn-panel-btn', '#text-panel-wrapper'];
     const VTH_LOCK_PROPS = /(^|;)\s*(position|top|left|right|bottom|display|float|flex(?:-[a-z]+)?)\s*:[^;}]*/gi;
+    // 章末收尾鈕與設定視窗：外殼靠 flex 排成直排置中／視窗置中／左右兩欄，碰到 display 或 position 就散。
+    //   這組只認「選擇器最後那一節」是不是它們：掛在它們身上的 ::before/::after 裝飾、
+    //   或它們裡面別的元素（例如 #gs-body .gs-section-title）照樣自由發揮。
+    const VTH_LOCKED_SUBJECT = ['#vn-end-overlay', '#vn-end-basic', '#vn-end-btn-',
+        '#game-settings-overlay', '#game-settings-window', '#gs-titlebar', '#gs-body', '.gs-row', '.gs-chips', '.gs-color-row'];
+    // 兩層暗幕平常是隱形、不擋點擊的，靠這幾個屬性開關；寫了就會一直蓋在畫面上、什麼都點不到
+    const VTH_VEILS = ['#vn-end-overlay', '#game-settings-overlay'];
+    const VTH_VEIL_PROPS = /(^|;)\s*(opacity|pointer-events|visibility)\s*:[^;}]*/gi;
+    function _vthSubjects(sel) {
+        return sel.split(',').map(s => {
+            const parts = s.trim().split(/[\s>+~]+/);
+            return parts[parts.length - 1] || '';
+        }).filter(c => c.indexOf('::') < 0);
+    }
     function _vthStripLayout(css) {
         let hit = 0;
+        const strip = (body, re) => body.replace(re, (m, p1) => { hit++; return p1 || ''; });
         const out = String(css || '').replace(/([^{}]+)\{([^}]*)\}/g, (whole, sel, body) => {
             const sl = sel.trim();
             if (/:hover|:active|:focus/.test(sl)) return whole;            // 互動狀態不碰
-            if (!VTH_LOCKED.some(k => sl.indexOf(k) >= 0)) return whole;   // 不在契約名單裡的自由發揮
-            const nb = body.replace(VTH_LOCK_PROPS, (m, p1) => { hit++; return p1 || ''; });
+            const subj = _vthSubjects(sl);
+            const locked = VTH_LOCKED.some(k => sl.indexOf(k) >= 0)
+                || subj.some(c => VTH_LOCKED_SUBJECT.some(k => c.indexOf(k) >= 0));
+            const veil = subj.some(c => VTH_VEILS.some(k => c.indexOf(k) >= 0));
+            if (!locked && !veil) return whole;                             // 不在契約名單裡的自由發揮
+            let nb = body;
+            if (locked) nb = strip(nb, VTH_LOCK_PROPS);
+            if (veil) nb = strip(nb, VTH_VEIL_PROPS);
             return sel + '{' + nb + '}';
         });
         return { css: hit ? out : String(css || ''), hit };
@@ -1821,6 +1941,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                         <button class="vth-mode" data-mode="nar-mode">旁白</button>
                         <button class="vth-mode" data-mode="inner-mode">內心</button>
                         <button class="vth-mode" data-mode="chapter">章節卡</button>
+                        <button class="vth-mode" data-mode="end">章末</button>
+                        <button class="vth-mode" data-mode="settings">設定</button>
                     </div>
                 </div>
                 <div class="vth-preview-wrap" id="vth-preview-wrap"><div class="vth-preview-box" id="vth-preview-box"><iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe></div></div>

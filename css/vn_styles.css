@@ -1171,6 +1171,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         /* 末尾選單鈕直排 + 同寬 */
         #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map, #vn-end-btn-regen { box-sizing: border-box; width: 200px; text-align: center; }
+        /* 🎨 VN 主題不准碰這幾個的 position（會打散排版），但主題要在它們身上掛 ::before/::after 裝飾 → 錨點由這裡給 */
+        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map, #vn-end-btn-regen, #game-settings-window, #gs-titlebar, #gs-body, .gs-row, .gs-chips, .gs-color-row, .gs-chip, .gs-reset-btn, #gs-titlebar .gs-close { position: relative; }
         #vn-end-btn-data {
             pointer-events: auto;
             padding: 14px 44px; background: rgba(5,5,8,0.92);
