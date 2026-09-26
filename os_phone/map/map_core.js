@@ -1638,10 +1638,16 @@ ${facilityText}
         const fac = STATE.activeFacility || {};
         const guess = SP.guessGround(fac.name, fac.desc);
         const g = sceneMap.ground || guess;
+        const style = typeof SME.paintedStyle === 'function' ? SME.paintedStyle() : 'fantasy';
+        // 零件庫還沒讀進來：先用內建零件畫，讀完再重畫一次（只重畫一次，讀不到就算了）
+        if (typeof SP.libReady === 'function' && !SP.libReady() && !STATE._partsLibWaiting) {
+            STATE._partsLibWaiting = true;
+            SP.loadLibrary().then(() => { if (SP.libReady()) renderScanResults(); });
+        }
         const fixed = sceneMap.landmarks.filter(l => l && !l.isDiscovery && typeof l.x === 'number' && typeof l.y === 'number');
         const res = SP.paint({
-            name: fac.name || '', floor: g.floor, indoor: g.indoor, night: guess.night,
-            items: fixed.map(l => ({ kind: l.kind || SP.guessKind(l.label, l.emoji), label: l.label, x: l.x, y: l.y }))
+            name: fac.name || '', floor: g.floor, indoor: g.indoor, night: guess.night, style,
+            items: fixed.map(l => ({ kind: l.kind || SP.guessKind(l.label, l.emoji), label: l.label, x: l.x, y: l.y, obj: SP.libGet ? SP.libGet(style, l.label) : null }))
         });
         const pos = new Map();
         res.items.forEach(it => {
@@ -2107,6 +2113,10 @@ ${facilityText}
                 }
             } catch (e) {}
             if (_needScene) {
+                // 直接畫的世界：先把零件庫讀進來，要求裡才列得出「已經畫好的東西」，模型不會重畫
+                if (win.SCENE_PAINTER && typeof win.SCENE_PAINTER.loadLibrary === 'function' && typeof _SME.isPaintedWorld === 'function' && _SME.isPaintedWorld()) {
+                    try { await win.SCENE_PAINTER.loadLibrary(); } catch (e) {}
+                }
                 const _sp = _SME.buildScenePrompt(_zid, _fk);   // 把 <scene-map> 生成規則拼進同一次呼叫
                 if (_sp) prompt += '\n\n' + _sp;
             }
@@ -2121,7 +2131,8 @@ ${facilityText}
                 let intro = [];
                 let discoveries = [];
 
-                let cleanText = txt.replace(/<scene-map>[\s\S]*?<\/scene-map>/i, '');   // 剝掉小地圖區塊，免得被當對話播
+                let cleanText = txt.replace(/<scene-map>[\s\S]*?<\/scene-map>/i, '')   // 剝掉小地圖區塊，免得被當對話播
+                    .replace(/<draw[\s>][\s\S]*?(<\/draw>|$)/gi, '');                  // 零件圖若寫在小地圖區塊外面也一併剝掉
 
                 // 1. 解析 NPC
                 const npcRegex = /\[NPC\|([^|]+)\|([^|]+)\|([^|]+)\|([^\]]+)\]/g;

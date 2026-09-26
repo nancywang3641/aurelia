@@ -79,7 +79,7 @@
 {BASEPLATE_RULE}
 
 **(2) 地標物件（地圖上的物體，人物 ≠ 地標物件，不可輸出人物）**
-{LANDMARK_FORMAT}
+{LANDMARK_FORMAT}{PARTS_RULE}
 
 ### 2. 坐標系統說明
 (0,0) 左上角  -------  (100,0) 右上角
@@ -177,6 +177,13 @@
             return !!(w && w.worldMap && w.worldMap.painted && win.SCENE_PAINTER);
         } catch (e) { return false; }
     }
+    // 直接畫的世界用哪個風格（fantasy/wuxia/…，world_painter 定的）：零件庫按風格分，同名東西在武俠和科幻各一份
+    function paintedStyle() {
+        try {
+            const w = win.WORLD_RUNTIME && win.WORLD_RUNTIME.getCurrentWorld ? win.WORLD_RUNTIME.getCurrentWorld() : null;
+            return (w && w.worldMap && w.worldMap.painted && w.worldMap.painted.style) || 'fantasy';
+        } catch (e) { return 'fantasy'; }
+    }
 
     function buildPrompt(facility, zone) {
         const painted = isPaintedWorld();
@@ -185,6 +192,7 @@
             .replace('{BASEPLATE_RULE}', painted ? _baseplateRulePainted() : (natural ? BASEPLATE_RULE_NATURAL : BASEPLATE_RULE_TAGS))
             .replace('{BASEPLATE_EXAMPLE}', painted ? '[地標底板|地面|室內或露天]' : (natural ? BASEPLATE_EX_NATURAL : BASEPLATE_EX_TAGS))
             .replace('{LANDMARK_FORMAT}', painted ? _landmarkFormatPainted() : LANDMARK_FORMAT_IMG)
+            .replace('{PARTS_RULE}', painted ? '\n\n' + win.SCENE_PAINTER.partsRule(paintedStyle()) : '')
             .replace('{CULTURE_RULE}', painted ? '' : CULTURE_RULE)
             .replace('{EXAMPLE_LANDMARKS}', painted ? EXAMPLE_LANDMARKS_PAINTED : EXAMPLE_LANDMARKS_IMG)
             .replace(/\{FAC_NAME\}/g, facility.name || '未命名設施')
@@ -198,7 +206,7 @@
         // 涵蓋常用 emoji 範圍
         const m = label.match(/^([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F2FF}\u{2300}-\u{23FF}])/u);
         if (m) {
-            return { emoji: m[1], text: label.substring(m[1].length).trim() };
+            return { emoji: m[1], text: label.substring(m[1].length).replace(/^[️‍]+/, '').trim() };   // 🗄️ 這種帶變體符號的，剩下的看不見字元不留在名字裡
         }
         return { emoji: '📍', text: label.trim() };
     }
@@ -347,6 +355,13 @@
         const facility = zone.facilities[facKey];
         const sceneMap = parseSceneMap(responseText);
         if (!sceneMap) return null;
+        // 直接畫的世界：同一份回覆裡新畫的零件存進零件庫（之後任何地點再出現同名東西直接用，不再叫模型畫）
+        if (isPaintedWorld() && win.SCENE_PAINTER && typeof win.SCENE_PAINTER.parseDrawBlocks === 'function') {
+            const parts = win.SCENE_PAINTER.parseDrawBlocks(responseText), st = paintedStyle();
+            const names = Object.keys(parts);
+            for (const nm of names) await win.SCENE_PAINTER.libPut(st, nm, parts[nm]);
+            if (names.length) console.log(`[SceneMap] 🧩 新零件 ${names.length} 件：${names.join('、')}`);
+        }
         console.log(`[SceneMap] ✅ ${facility.name}：底板="${sceneMap.backdropPrompt}", 地標 ${sceneMap.landmarks.length} 個`);
         // 開了補圖開關 → 補底板（走「小地圖桶」imgType:'map'，俯視去人物）。NAI 回 blob: 轉 data URL 才能存進世界 DB
         //   「直接畫」的世界不補：它的底板行是地面名，不是生圖句，小地圖由 scene_painter 畫
@@ -379,6 +394,7 @@
         buildScenePrompt,
         applySceneMapFromText,
         generateForFacility,
-        isPaintedWorld
+        isPaintedWorld,
+        paintedStyle
     };
 })();

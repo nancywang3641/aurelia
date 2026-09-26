@@ -6,6 +6,7 @@
 //   畫布 200×100，跟小地圖 .am-scene-stage 一樣 2:1。會貼牆的東西自己貼牆、正面朝房間，重疊的推開，門口留路，
 //   所以畫出來的位置可能跟地標原本的 x/y 差一點——paint() 回傳每件的實際位置，map_core 用它貼名牌。
 //   目前只給「直接畫」的世界用（世界地圖也是程式畫的那種，見 world_painter.js）；生圖世界照舊。
+//   家具有兩種來源：內建零件（KINDS）；模型畫的零件（零件庫 map_parts，畫過存起來、之後直接用），有零件就用零件。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -336,6 +337,10 @@
             var k = KINDS[it.kind] ? it.kind : 'spot', sz = KINDS[k];
             var S = (k === 'ring' || k === 'water' || k === 'stage' || k === 'fountain') ? 1.1 : 1.3;   // 房間 2:1 很寬，家具放大一點才不空
             var o = { kind: k, label: it.label || '', desc: it.desc || '', w: r2(sz.w * S), h: r2(sz.h * S), rot: 0, i: i };
+            if (it.obj) {   // 模型畫的零件：照它寫的實際大小（公尺）與靠不靠牆
+                o.obj = it.obj; o.wall = !!it.obj.wall;
+                o.w = r2(_clampN(it.obj.w * PART_PX, 6, 72)); o.h = r2(_clampN(it.obj.d * PART_PX, 5, 44));
+            }
             if (typeof it.x === 'number' && typeof it.y === 'number') { o.x = it.x / 100 * VW; o.y = it.y / 100 * VH; }
             else { var c = POS9[it.pos] || POS9['中']; o.col = c[0]; o.row = c[1]; o.x = colX[c[0]]; o.y = rowY[c[1]]; var key = c.join(','); (byCell[key] = byCell[key] || []).push(o); }
             return o;
@@ -349,7 +354,7 @@
         });
         // 貼牆：會貼牆的東西靠近哪面牆就貼上去、長邊順著牆
         out.forEach(function (o) {
-            if (!KINDS[o.kind].wall || !indoor) return;
+            if (!(o.obj ? o.wall : KINDS[o.kind].wall) || !indoor) return;
             var dT = o.y, dL = o.x / 2, dR = (VW - o.x) / 2;   // 左右牆用一半權重，畫布是 2:1
             var m = Math.min(dT, dL, dR);
             if (m > 34) return;
@@ -364,7 +369,7 @@
                 var A = out[a], B = out[b], ba = box(A), bb = box(B);
                 var dx = B.x - A.x, dy = B.y - A.y, ox = ba.hw + bb.hw - Math.abs(dx), oy = ba.hh + bb.hh - Math.abs(dy);
                 if (ox > 0 && oy > 0) {
-                    var aw = A.rot && KINDS[A.kind].wall ? 0 : 1, bw = B.rot && KINDS[B.kind].wall ? 0 : 1;   // 貼側牆的不橫推
+                    var aw = A.rot ? 0 : 1, bw = B.rot ? 0 : 1;   // 貼側牆的不橫推（有轉向的都是貼牆的）
                     if (ox / VW < oy / VH) { var sx = (dx >= 0 ? 1 : -1) * ox / 2; A.x -= sx * (aw || 0.2); B.x += sx * (bw || 0.2); }
                     else { var sy = (dy >= 0 ? 1 : -1) * oy / 2; A.y -= sy; B.y += sy; }
                 }
@@ -401,14 +406,17 @@
             rugs = '<g transform="translate(' + r2(t0.x) + ' ' + r2(t0.y) + ')">' + DRAW.rug(Math.max(t0.w, 30) + 12, Math.max(t0.h, 18) + 12, o) + '</g>';
         }
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + VW + ' ' + VH + '" preserveAspectRatio="none">';
-        svg += '<defs>' + floorDefs(f, plan.name, rng) + '</defs>';
+        svg += '<defs>' + floorDefs(f, plan.name, rng) + '<filter id="partsh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="2.6" dy="3.6" stdDeviation="1.4" flood-color="#000" flood-opacity="0.32"/></filter></defs>';
         svg += drawFloor(f, rng) + rugs;
         if (plan.indoor === false) svg += drawOutdoorEdge(rng);
         // 大件先畫（地上的先、會被踩在下面的先）
         var order = ['water', 'ring', 'stage', 'rug', 'fountain', 'car'];
         var all = items.concat(extra).sort(function (a, b) { return (order.indexOf(b.kind) >= 0) - (order.indexOf(a.kind) >= 0) || a.y - b.y; });
         all.forEach(function (it) {
-            svg += '<g transform="translate(' + r2(it.x) + ' ' + r2(it.y) + ') rotate(' + (it.rot || 0) + ')">' + DRAW[it.kind](it.w, it.h, o) + '</g>';
+            const body = it.obj
+                ? '<g transform="translate(' + r2(-it.w / 2) + ' ' + r2(-it.h / 2) + ') scale(' + r2(it.w / 100) + ' ' + r2(it.h / 100) + ')" filter="url(#partsh)">' + partSvg(it.obj, plan.style) + '</g>'
+                : DRAW[it.kind](it.w, it.h, o);
+            svg += '<g transform="translate(' + r2(it.x) + ' ' + r2(it.y) + ') rotate(' + (it.rot || 0) + ')">' + body + '</g>';
         });
         if (night) {   // 夜：先整片壓暗，再在會發光的東西前面補一圈暖光（往房間裡偏，不照進牆）
             svg += '<rect width="' + VW + '" height="' + VH + '" fill="#0b0d24" opacity="0.42"/>';
@@ -424,6 +432,138 @@
         svg += '</svg>';
         return { svg: svg, items: items };
     }
+    // ============================================================
+    // 零件庫：模型畫的東西（CIRCLE/RECT/POLY/LINE 拼的俯視圖），畫過的存 OS_DB 通用資料 map_parts（全域、不分故事），
+    //   鍵＝風格|名字。探索此地那一次呼叫順便畫庫裡還沒有的（見 scene_map_engine 的 {PARTS_RULE}），不另外叫模型。
+    //   🚨 appId 不是 app_ 開頭：app_store 清「已卸載應用的殘留資料」只掃 app_ 開頭，這裡不會被當孤兒刪。
+    // ============================================================
+    const PART_COLORS = ['wood', 'light_wood', 'dark_wood', 'stone', 'dark_stone', 'metal', 'dark_metal', 'gold', 'red', 'blue', 'green', 'yellow', 'purple', 'cloth', 'paper', 'black', 'white', 'fire', 'water', 'leaf', 'glass', 'glow'];
+    const PART_BASE = {
+        wood: '#9a6a40', light_wood: '#c89a64', dark_wood: '#5a3a24', stone: '#a8a296', dark_stone: '#6e6a62', metal: '#a9b1b8', dark_metal: '#4f565d',
+        gold: '#d4af37', red: '#b0463c', blue: '#3f6a9a', green: '#4f7a45', yellow: '#dcb84a', purple: '#6e4a86', cloth: '#b99c7a', paper: '#f1e8d2',
+        black: '#26262a', white: '#f2f0ea', fire: '#ff8a2a', water: '#5fa8c8', leaf: '#5d9a4a', glass: '#bfe0ea', glow: '#ffe27a'
+    };
+    // 同一個顏色名在不同世界風格下的實際顏色（整間房才會是同一套色）；沒列到的用 PART_BASE
+    const PART_TINT = {
+        wuxia:     { red: '#9e2f28', wood: '#7a4f2e', dark_wood: '#3e2a1c', gold: '#c49a3a', cloth: '#a8926e' },
+        japanese:  { red: '#b0392c', wood: '#8e6a44', light_wood: '#d4b88a', paper: '#f5efdf' },
+        modern:    { wood: '#8a6a4c', cloth: '#7d8894', metal: '#b8c0c8', red: '#c24a3f', blue: '#3b6ea8' },
+        scifi:     { metal: '#8fa2b8', dark_metal: '#2e3a4c', glow: '#5ef0ff', blue: '#2f7fd0', purple: '#b04fe0', white: '#dfe8f2', wood: '#5a6678', cloth: '#44516a' },
+        wasteland: { metal: '#8a7d6a', dark_metal: '#4e4436', wood: '#7a5a3a', cloth: '#8a7a5a', white: '#d8ccb4', blue: '#5a6a72', red: '#8e3e2e' }
+    };
+    const PART_STYLE_DESC = { fantasy: '西方奇幻、中世紀', historical: '真實的歷史年代', wuxia: '中式古代、武俠仙俠', japanese: '日式和風', modern: '現代都市', scifi: '未來、賽博', wasteland: '末日廢土' };
+    const PART_PX = 14;   // 1 公尺＝幾個畫布單位（跟內建家具同一個比例：畫布 200×100 ≈ 14×7 公尺的房間）
+
+    function partColor(name, style) {
+        const n = String(name || '').toLowerCase().trim();
+        if (/^#[0-9a-f]{3,6}$/.test(n)) return n;   // 模型硬寫色碼也收
+        const t = PART_TINT[style];
+        return (t && t[n]) || PART_BASE[n] || PART_BASE.wood;
+    }
+    function shadeHex(hex, k) {   // k<0 變暗
+        let m = String(hex).replace('#', ''); if (m.length === 3) m = m.split('').map(function (c) { return c + c; }).join('');
+        const v = parseInt(m, 16);
+        const f = function (c) { return Math.max(0, Math.min(255, Math.round(k < 0 ? c * (1 + k) : c + (255 - c) * k))); };
+        return '#' + ((1 << 24) + (f(v >> 16) << 16) + (f((v >> 8) & 255) << 8) + f(v & 255)).toString(16).slice(1);
+    }
+    function partName(s) {   // 名字當鑰匙：去掉開頭 emoji、空白、引號
+        return String(s || '').replace(/^[\s"'「『]+|[\s"'」』]+$/g, '').replace(/^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}️‍]+/u, '').trim();
+    }
+    function _nums(s) { return String(s || '').match(/-?\d+(?:\.\d+)?/g) || []; }
+    function _clampN(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    function parsePart(body) {
+        const out = { w: 1, d: 1, wall: false, shapes: [] };
+        String(body || '').split(/\n/).forEach(function (line) {
+            const f = line.replace(/^[\s\-*•`]+/, '').split(/[|｜]/).map(function (x) { return x.trim(); }), tag = (f[0] || '').toUpperCase();
+            if (tag === 'SIZE') { out.w = _clampN(parseFloat(f[1]) || 1, 0.2, 12); out.d = _clampN(parseFloat(f[2]) || 1, 0.2, 12); out.wall = /wall/i.test(f[3] || ''); }
+            else if (tag === 'CIRCLE') { const c = _nums(f[1] + ' ' + f[2] + ' ' + f[3]); if (c.length >= 3) out.shapes.push({ t: 'c', x: +c[0], y: +c[1], r: Math.abs(+c[2]), col: f[4] }); }
+            else if (tag === 'RECT') { const r = _nums(f[1] + ' ' + f[2] + ' ' + f[3] + ' ' + f[4]); if (r.length >= 4) out.shapes.push({ t: 'r', x: +r[0], y: +r[1], w: Math.abs(+r[2]), h: Math.abs(+r[3]), col: f[5], rx: parseFloat(f[6]) || 0 }); }
+            else if (tag === 'POLY' || tag === 'LINE') {
+                const n = _nums(f[1]); if (n.length < 4) return;
+                const pts = []; for (let i = 0; i + 1 < n.length; i += 2) pts.push([+n[i], +n[i + 1]]);
+                out.shapes.push(tag === 'POLY' ? { t: 'p', pts: pts, col: f[2] } : { t: 'l', pts: pts, col: f[2], sw: _clampN(parseFloat(f[3]) || 2, 0.5, 12) });
+            }
+        });
+        return out.shapes.length ? out : null;
+    }
+    // 一段回覆裡所有 <draw name="…">…</draw> → { 名字: 零件 }
+    function parseDrawBlocks(txt) {
+        const out = {}, re = /<draw\s+name\s*=\s*["「]?([^"」>]+?)["」]?\s*>([\s\S]*?)(?=<\/draw>|<draw[\s>]|<\/scene-map>|$)/gi;
+        let m;
+        while ((m = re.exec(String(txt || ''))) !== null) {
+            const nm = partName(m[1]), obj = parsePart(m[2]);
+            if (nm && obj) out[nm] = obj;
+        }
+        return out;
+    }
+    // 零件 → SVG（畫在 0-100 方格；描邊統一加，陰影用 paint 裡的 partsh 濾鏡）
+    function partSvg(obj, style) {
+        return obj.shapes.map(function (s) {
+            const c = partColor(s.col, style), st = shadeHex(c, -0.38);
+            if (s.t === 'c') return '<circle cx="' + r2(s.x) + '" cy="' + r2(s.y) + '" r="' + r2(s.r) + '" fill="' + c + '" stroke="' + st + '" stroke-width="1.4"/>';
+            if (s.t === 'r') return '<rect x="' + r2(s.x) + '" y="' + r2(s.y) + '" width="' + r2(s.w) + '" height="' + r2(s.h) + '" rx="' + r2(s.rx) + '" fill="' + c + '" stroke="' + st + '" stroke-width="1.4"/>';
+            const pts = s.pts.map(function (p) { return r2(p[0]) + ',' + r2(p[1]); }).join(' ');
+            if (s.t === 'p') return '<polygon points="' + pts + '" fill="' + c + '" stroke="' + st + '" stroke-width="1.4" stroke-linejoin="round"/>';
+            return '<polyline points="' + pts + '" fill="none" stroke="' + c + '" stroke-width="' + r2(s.sw) + '" stroke-linecap="round" stroke-linejoin="round"/>';
+        }).join('');
+    }
+
+    const LIB_APP = 'map_parts';
+    let _lib = null, _libLoading = null;
+    function libReady() { return !!_lib; }
+    function loadLibrary() {
+        if (_lib) return Promise.resolve(_lib);
+        if (_libLoading) return _libLoading;
+        if (!(win.OS_DB && win.OS_DB.getAppDataByApp)) return Promise.resolve({});   // 資料庫還沒載入：先不快取，下次再讀
+        _libLoading = (async function () {
+            const lib = {};
+            try {
+                const rows = (win.OS_DB && win.OS_DB.getAppDataByApp) ? (await win.OS_DB.getAppDataByApp(LIB_APP)) || [] : [];
+                rows.forEach(function (r) { if (r && r.scope === 'global' && r.value && r.value.shapes) lib[r.key] = r.value; });
+            } catch (e) { console.warn('[ScenePainter] 零件庫讀取失敗:', e); }
+            _lib = lib; _libLoading = null;
+            return lib;
+        })();
+        return _libLoading;
+    }
+    function libGet(style, name) { return _lib ? (_lib[(style || 'fantasy') + '|' + partName(name)] || null) : null; }
+    async function libPut(style, name, obj) {
+        const key = (style || 'fantasy') + '|' + partName(name);
+        if (!partName(name) || !obj) return;
+        await loadLibrary();
+        _lib[key] = obj;
+        try { if (win.OS_DB && win.OS_DB.saveAppData) await win.OS_DB.saveAppData(LIB_APP, key, obj); } catch (e) { console.warn('[ScenePainter] 零件存檔失敗:', e); }
+    }
+    function libNames(style, limit) {
+        if (!_lib) return [];
+        const pre = (style || 'fantasy') + '|';
+        return Object.keys(_lib).filter(function (k) { return k.indexOf(pre) === 0; }).map(function (k) { return k.slice(pre.length); }).slice(-(limit || 200));
+    }
+    // 給探索此地的要求用：怎麼畫零件、庫裡已經有哪些
+    function partsRule(style) {
+        const have = libNames(style, 200);
+        return [
+            '**(3) 零件圖（程式照這個畫出地標物件的樣子）**',
+            '零件庫裡已經畫好的東西：' + (have.length ? have.join('、') : '（還沒有）'),
+            '地標物件如果跟零件庫裡某一樣是同一種東西，短名（emoji 後面那段）就直接照抄那個名字，不用再畫。',
+            '零件庫沒有的地標物件，每件在 </scene-map> 前面各加一段：',
+            '<draw name="短名">',
+            'SIZE|寬幾公尺|深幾公尺|wall 或 free',
+            '形狀行…',
+            '</draw>',
+            '形狀只有下面四種，一行一個，畫在這件東西自己的 100×100 方格裡（(0,0) 左上、(100,100) 右下，東西的正面朝下）；後寫的蓋在先寫的上面：',
+            'CIRCLE|中心x|中心y|半徑|顏色',
+            'RECT|左上x|左上y|寬|高|顏色|圓角',
+            'POLY|x,y x,y x,y …|顏色',
+            'LINE|x,y x,y …|顏色|粗細',
+            '- name 照抄那件地標物件的短名（不含 emoji）。',
+            '- SIZE 是這件東西實際佔地的大小（公尺），第四欄寫 wall（平常靠牆放）或 free（放在房間中間）。',
+            '- 顏色只能從這些英文照抄：' + PART_COLORS.join(', ') + '。形狀和用色要像' + (PART_STYLE_DESC[style] || PART_STYLE_DESC.fantasy) + '世界裡會有的樣子。',
+            '- 每件 4 到 16 個形狀，先畫最大的底，再一層一層往上畫細節；只畫從正上方看得到的那一面，不要側面、不要透視。',
+            '- 外框大約佔方格的八成、置中。陰影和描邊程式會加。不要寫字，不要畫人。'
+        ].join('\n');
+    }
+
     // SVG → data URL：只跳脫必要字元。🚨 單引號一定要跳（%27）：map_core 套背景是 url('…')，出現 ' 整條背景失效。
     function toDataUrl(svg) {
         const body = String(svg).replace(/\s+/g, ' ')
@@ -442,6 +582,8 @@
 
     win.SCENE_PAINTER = {
         paint: paint, toDataUrl: toDataUrl, guessKind: guessKind, guessGround: guessGround, floorKey: floorKey,
+        loadLibrary: loadLibrary, libReady: libReady, libGet: libGet, libPut: libPut, libNames: libNames,
+        parseDrawBlocks: parseDrawBlocks, partsRule: partsRule, partName: partName,
         KINDS: Object.keys(KINDS).filter(function (k) { return k !== 'spot'; }),
         FLOOR_NAMES: Object.keys(FLOORS).map(function (k) { return FLOORS[k].name; }),
         VW: VW, VH: VH
