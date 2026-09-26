@@ -141,6 +141,19 @@
         _jevSfxCatchUp: function() {
             const pl = this._jevSfx; if (!pl || !pl.bgm) return;
             const cur = this.index;
+            // 🎵 09-26 她：「章節卡出來時有個 BGM，關掉章節卡開始第一句又換 BGM」——卡上那首其實是上一章還在放的，
+            //    Jev 塞車、時間表在卡片出來之後才到，第一場那首一到就換。改成：已經開始的那一場、或卡片已經出來，
+            //    而且正在放音樂 → Jev 晚到的這首不插隊，這一場照放；下一場開頭才照 Jev 換。
+            //    整章一首都沒問到 → 沒在放就接著放上一首。
+            if (!pl.bgm.length) { this._bgmResumeLast(); return; }
+            const playing = this._bgmPlaying && this._bgmPlaying();
+            const cardShown = this._ccShownSeq === this._jevStageSeq;
+            // 「開始讀了」＝播過一句旁白或台詞（章節卡片那幾行都是 <…>／[…] 標籤，不算）
+            const started = this.script.slice(0, cur + 1).some(l => { l = String(l || '').trim(); return (l && !/^[<\[]/.test(l)) || /^\[(?:Char|Nar)\|/.test(l); });
+            const hold = playing && (started || cardShown);   // 她已經聽著一首在讀了 → 晚到的不插隊
+            let firstSeg = null;
+            try { const ST = window.OS_JEV_STAGE || (window.parent && window.parent.OS_JEV_STAGE); firstSeg = ST && ST._parse ? ST._parse(this.script).segs[0] : null; } catch (e) {}
+            const isFirstScene = (r) => !!(firstSeg && r.line === firstSeg.line && r.occ === firstSeg.occ);
             let best = null, bestAt = -1;
             pl.bgm.forEach(r => {
                 if (r.done) return;
@@ -152,9 +165,9 @@
             });
             // 還停在章節卡片（一句台詞旁白都還沒演）：第一場的音樂現在就放，卡片跟第一場是同一首，關掉卡片不會再換歌
             if (!best) {
-                const said = this.script.slice(0, cur + 1).some(l => /^\[(?:Char|Nar)\|/.test(String(l || '')));
-                const first = !said && pl.bgm.find(r => !r.done);
-                if (!first) return;
+                const first = !started && pl.bgm.find(r => !r.done);
+                if (!first || !isFirstScene(first)) { if (!playing) this._bgmResumeLast(); return; }   // 第一場沒問到：先放上一首，下一場那首留給它自己的開頭
+                if (hold) { first.done = 1; return; }   // 卡片已經在放上一首：第一場不換
                 first.done = 1;
                 if (this._ccOpen) { this._playBgm(first.id); this._ccSetBgm(first.id); }   // 卡片已經開著在等她按：現在就放，卡上的曲名也換成這首
                 else this.script.splice(cur + 1, 0, '[BGM|' + first.id + '|jev]');
@@ -162,7 +175,16 @@
             }
             // 已經換到下一場了，別放上一場的。🚨 從那一場開頭的「下一行」算：一場常常就是從 [Bg|] 開始的（章節卡片裡那行），
             //    以前從開頭那行本身算，永遠判成換場了 → 時間表晚到的章，第一場的音樂一首都不放。
-            for (let i = bestAt + 1; i <= cur; i++) if (/^\[Bg\|/i.test(String(this.script[i] || ''))) return;
+            //    🚨 章節卡片裡面那行 [Bg|] 不算換場（Jev 分場時 <ChapterCard> 整塊算一格，裡面的 [Bg|] 不算）：
+            //    以前算進去，卡片開著時時間表才到 → 判成第一場已經過了 → 第一場那首永遠不放（09-26 修）。
+            let inCard = false;
+            for (let i = 0; i <= cur; i++) {
+                const l = String(this.script[i] || '').trim();
+                if (/^<chaptercard\b/i.test(l)) { inCard = true; continue; }
+                if (/^<\/chaptercard>/i.test(l)) { inCard = false; continue; }
+                if (i > bestAt && !inCard && /^\[Bg\|/i.test(l)) return;
+            }
+            if (hold) return;   // 這一場已經開始（或卡片已經在放）、正在放音樂：晚到的不中途換歌
             if (this._ccOpen) { this._playBgm(best.id); this._ccSetBgm(best.id); return; }   // 卡片開著在等她按：現在就放
             this.script.splice(cur + 1, 0, '[BGM|' + best.id + '|jev]');   // 下一次推進就播
         },

@@ -175,8 +175,10 @@
                 const todo = ss.filter(s => _isNarr(s) && !_sfxCache.has(s.line) && !_asking.has(s.line));
                 // 還在寫的時候：這場累積滿 10 格才問（省次數）；最後一場整章寫完才一定問
                 const sceneDone = final || i < scenes.length - 1;
-                if (todo.length && (sceneDone || todo.length >= Q_PER_CALL)) await _askSfx(ss, todo);
+                // 🎵 音樂先問（一場一題），再問音效：09-26 她那章叫了 14 通被拒 7 通（429/503），音樂排在一堆音效後面，
+                //    輪到時剛好被拒 → 那幾場沒音樂；時間表也拖到 50 秒，章節卡關掉才換歌。
                 if (sceneDone && ss[0] && !_bgmCache.has(ss[0].line) && !_asking.has('bgm:' + ss[0].line)) await _askBgm(ss);
+                if (todo.length && (sceneDone || todo.length >= Q_PER_CALL)) { try { await _askSfx(ss, todo); } catch (e) { if (i === scenes.length - 1) throw e; } }   // 音效被拒不要擋住後面幾場的音樂
             }
         });
     }

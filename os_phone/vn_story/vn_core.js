@@ -738,7 +738,7 @@
                         if (_self._jevStageSeq !== _seq) return;
                         _self._jevSfxWait = false;
                         const held = _self._aiBgmHeld; _self._aiBgmHeld = null;
-                        if (!held) return;
+                        if (!held) { _self._bgmResumeLast(); return; }   // Jev 整章都沒問到、AI 也沒寫 → 接著放上一首
                         if (_self._ccOpen) { _self._playBgm(held.split('|')[1].replace(']', '').trim().replace(/\.[^.]+$/, '')); return; }   // 卡片開著在等她按：現在就放
                         if (Array.isArray(_self.script)) _self.script.splice(_self.index + 1, 0, held);   // 下一次推進就播
                     };
@@ -3236,6 +3236,19 @@
             }
             return d;
         },
+        // 🎵 現在有沒有音樂在放
+        _bgmPlaying: function() {
+            const a = document.getElementById('bgm-player');
+            return !!(a && a.getAttribute('src') && !a.paused);
+        },
+        // 🎵 音樂交給 Jev 的章，沒有音樂在放 → 先接著放這個故事上一次放的那首。
+        //    09-26 她：Jev 塞車時（一章 14 通被拒 7 通），第一場的音樂問不到 → 整章沒聲音。她說「繼續放上一首」。
+        _bgmResumeLast: function() {
+            if (this._bgmPlaying()) return;
+            let last = '';
+            try { last = localStorage.getItem('vn_last_bgm:' + (this._currentStoryId || '')) || ''; } catch (e) {}
+            if (last) this._playBgm(last);
+        },
         // 回 true＝卡片接管畫面（呼叫端就別再 next()，等「開始閱讀」）
         // 卡片開著時換掉 BGM 那一格（Jev 的時間表在卡片出場之後才回來時用）
         _ccSetBgm: function(id) {
@@ -3257,8 +3270,13 @@
             set('vncc-preface', d.preface);
             // 🎵 音樂交給 Jev 的章：卡上的 BGM 格寫 Jev 選的那首（還沒回來就先空著），不寫 AI 寫的那首 —— 那首根本不會播
             if (this._jevSfx || this._jevSfxWait) {
+                // 卡片出來了 Jev 還沒回來 → 先接著放上一首，卡上寫那首；之後 Jev 才到的那首不插隊（見 _jevSfxCatchUp）
+                if (this._jevSfxWait && !this._jevSfx) this._bgmResumeLast();
+                this._ccShownSeq = this._jevStageSeq;
                 const jb = this._jevSfx && (this._jevSfx.bgm || [])[0];
-                d = Object.assign({}, d, { bgm: jb ? jb.id : '' });
+                let now = '';
+                if (!jb && this._bgmPlaying()) { try { now = localStorage.getItem('vn_last_bgm:' + (this._currentStoryId || '')) || ''; } catch (e) {} }
+                d = Object.assign({}, d, { bgm: jb ? jb.id : now });
             }
             const meta = document.getElementById('vncc-meta');
             if (meta) {
@@ -3412,6 +3430,8 @@
         // 🎵 放一首背景音樂（名字不帶副檔名；'stop' 停）。劇本裡的 [BGM|] 行與 Jev 在章節卡片上補放的那首都走這裡。
         _playBgm: function(name) {
             const audio = document.getElementById('bgm-player');
+            // 記住上一首（每個故事一份）：Jev 塞車問不到音樂時，接著放這首（見 _bgmResumeLast）
+            if (name && name !== 'stop') { try { localStorage.setItem('vn_last_bgm:' + (this._currentStoryId || ''), name); } catch (e) {} }
             if (name === 'stop') {
                 if (audio) audio.pause();
             } else if (!audio) {
