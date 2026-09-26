@@ -9,7 +9,8 @@
 //   比不到的，一章只叫一次 Jev（choice 題：候選＝名字最像的幾個地圖地點＋「新的地方」），答案記在別名表，同一個名字之後不再問。
 //   沒填 Jev 鑰匙：比不到就當新的地方。新的地方加進「劇情去過的地方」（Z_DYNAMIC 那一區）。
 // 還沒生成地圖的聊天：只記「劇情去過的地方」，按「直接畫地圖」時一起交給模型排進地圖（world_painter.buildFormPrompt）。
-// 存：OS_DB 通用資料 vn_map_link，綁這個聊天（刪故事跟著清）：{ here, alias, visited }。
+//   ③ 背景：每一場記下它 Bg 的快取名（第二格原文，VN 背景圖就是用它存的），進那個地點時拿 VN 已經生好的那張當背景（bgFor）。
+// 存：OS_DB 通用資料 vn_map_link，綁這個聊天（刪故事跟著清）：{ here, alias, visited, bg }。
 // 花費：程式比對不叫任何模型；Jev 一章最多一通、只問比不到的名字。帳記在 OS_JEV_USAGE（place）。
 // ----------------------------------------------------------------
 (function () {
@@ -104,7 +105,7 @@
             const mo = l.match(/^<([A-Za-z][\w-]*)(?:\s[^>]*)?>$/);
             if (mo && !/\/>$/.test(l) && lines.slice(i + 1).some(x => x.trim().toLowerCase().indexOf('</' + mo[1].toLowerCase() + '>') === 0)) { block = mo[1].toLowerCase(); return; }
             const mb = l.match(/^\[Bg\|([\s\S]*)\]$/i);
-            if (mb) { cur = { place: placeOf(mb[1].split('|')), desc: (mb[1].split('|')[2] || '').slice(0, 80), who: [] }; scenes.push(cur); return; }
+            if (mb) { const ps = mb[1].split('|'); cur = { place: placeOf(ps), desc: (ps[2] || '').slice(0, 80), bgId: ps[1] || '', who: [] }; scenes.push(cur); return; }   // bgId：原文不修，跟 VN 背景快取的鑰匙一模一樣
             const mc = l.match(/^\[Char\|([^|\]]+)/i);
             if (mc && cur) { const w = mc[1].trim(); if (w && cur.who.indexOf(w) < 0) cur.who.push(w); }
         });
@@ -197,6 +198,9 @@
                 const sid = WR.addDynamicFacility ? await WR.addDynamicFacility(u.name, { keep: true }) : null;   // keep：沒人站著也別清掉（主角去過的地方）
                 if (sid) { resolved[u.name] = sid; st.alias[norm(u.name)] = sid; }
             }
+            // 背景：每個地點記最後一場的 Bg 快取名（同一個地方，最新那張）
+            st.bg = st.bg || {};
+            scenes.forEach(s => { if (s.place && s.bgId && resolved[s.place]) st.bg[resolved[s.place]] = s.bgId; });
             // 主角：最後一場有地點的那一場
             const lastPlaced = scenes.slice().reverse().find(s => s.place && resolved[s.place]);
             if (lastPlaced) st.here = { place: lastPlaced.place, sceneId: resolved[lastPlaced.place], msgId: String(msgId), at: Date.now() };
@@ -231,9 +235,21 @@
         }
         return out;
     }
+    // 地點的背景：劇情在這裡演過的那一場，VN 已經生好的背景圖（沒生好、生失敗、只有應急糊圖都回 ''）
+    async function bgFor(sceneId) {
+        try {
+            const st = await _load();
+            const id = st.bg && st.bg[sceneId];
+            if (!id) return '';
+            const C = win.VN_Cache || window.VN_Cache;
+            if (!C || !C.get) return '';
+            const c = await C.get('bg_cache', id);
+            return (c && c.url && !c.fallback && !/^blob:/.test(c.url)) ? c.url : '';
+        } catch (e) { return ''; }
+    }
     // 生成地圖用：這個故事劇情裡去過的地方
     function visited() { return (_st && _stChat === _chat() && _st.visited) ? _st.visited.slice() : []; }
 
-    win.VN_MAP_LINK = { onChapter, getHere, visited, load: _load, parseScenes, placeOf, norm };
+    win.VN_MAP_LINK = { onChapter, getHere, visited, bgFor, load: _load, parseScenes, placeOf, norm };
     if (win !== window) window.VN_MAP_LINK = win.VN_MAP_LINK;
 })();

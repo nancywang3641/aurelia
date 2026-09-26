@@ -1586,6 +1586,13 @@ ${facilityText}
         // 地標內景載不到才換回區域底圖（不疊兩層：疊的話載入中會先閃一下區域外觀再換成室內）
         const _facBg = facility.imageUrl || '', _zoneBg = zoneData.background || '';
         detailView.style.backgroundImage = (_facBg || _zoneBg) ? `url('${_facBg || _zoneBg}')` : '';
+        // 🗺 劇情在這裡演過：用 VN 那一場已經生好的背景圖（vn_map_link），比地點原本的圖更貼近劇情；拿不到就維持上面那張
+        try {
+            const L = win.VN_MAP_LINK, _sid = facility.sceneId;
+            if (L && L.bgFor && _sid) L.bgFor(_sid).then(u => {
+                if (u && STATE.activeFacility === facility) detailView.style.backgroundImage = `url("${String(u).replace(/"/g, '%22')}")`;
+            }).catch(() => {});
+        } catch (e) {}
         if (_facBg && _zoneBg && _facBg !== _zoneBg) {
             const _probe = new Image();
             _probe.onerror = () => { if (detailView.style.backgroundImage.indexOf(_facBg) !== -1) detailView.style.backgroundImage = `url('${_zoneBg}')`; };
