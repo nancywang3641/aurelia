@@ -38,11 +38,15 @@
         initChat: function(core, line) {
             core.mode = 'chat';
             this.currentCallKey = '';   // 進聊天室＝劇情離開通話 → 之後同人來電要正常響鈴(不誤判續接)
-            const newName = line.match(/chatroom="([^"]+)"/)?.[1] || 'Chat';
-            const newId   = line.match(/\bid\s*=\s*"([^"]+)"/)?.[1] || '';   // VN PHONE <chat ... id="穩定id"> 的接續 id
-            const newKey  = newId || newName;   // 接續 key：ID 優先（AI 改群名也接得回同一間），沒 id 才退回房名
             // 📱 誰的手機（右邊泡泡）：owner="名" 屬性明寫才換視角；沒寫＝主角。不再看 [With] 的排序（AI 守不住順序）
             this.chatOwner = (line.match(/\bowner\s*=\s*"([^"]*)"/)?.[1] || '').trim();
+            const rawName = line.match(/chatroom="([^"]+)"/)?.[1] || 'Chat';
+            const rawId   = line.match(/\bid\s*=\s*"([^"]+)"/)?.[1] || '';   // VN PHONE <chat ... id="穩定id"> 的接續 id
+            // 群的代號被借去寫私聊（見 _misfiledDm）→ 這段當成跟那個人的私聊，標題寫他的名字、不接那個群的畫面
+            const _dm = this._misfiledDm(core, rawName, rawId);
+            const newName = _dm || rawName;
+            const newId   = _dm ? '' : rawId;
+            const newKey  = _dm ? ('dm:' + _dm) : (newId || newName);   // 接續 key：ID 優先（AI 改群名也接得回同一間），沒 id 才退回房名
             // AI 在主角狀態裡自己寫的主角名（常是簡體、不帶星號，跟人設名對不上）也算「我」
             try { const M = win.OS_MC_STATUS; if (M && M.load) M.load().then(st => { this._mcAlias = (st && st.name) ? String(st.name).trim() : ''; }).catch(() => {}); } catch (e) {}
             // 🚨 畫面上不准出現協議字串：AI 常把 chatroom 寫成 msg_chen、grp_01 這種代號（她：「很無語」）。
@@ -52,6 +56,7 @@
             // 👥 群不群在開門這一刻就決定，不等 [With]：AI 常沒寫那行、或只列兩個人，以前就整間當私聊、群裡的人名全不畫
             this.chatParticipants = [];
             this.isGroupChat = this._roomIsGroup(core, newName, newId);
+            if (newId) (this._groupIds = this._groupIds || {})[newId] = this.isGroupChat || !!this._groupIds[newId];
             // 黑夜模式跟聊天 app 那顆同一個開關（顏色本身掛在整頁上，這裡只補外殼那個 class 給既有的深色規則用）
             try { document.getElementById('phone-chat').classList.toggle('wx-dark', localStorage.getItem('wx_dark_mode') === 'true'); } catch (e) {}
 
@@ -298,6 +303,33 @@
                 if (m) add(m[1]);
             }
             return Object.keys(others).length >= 2;
+        },
+
+        // 🚨 群的代號被借走：這個代號是群（這一章前面演過是群、或聊天 app 裡那間是群），這段 [With] 卻只有主角跟一個人、
+        //    名字也不是那個群 ＝ 其實是跟那個人的私聊（09-27 她：羅德的私聊被寫成 <chat chatroom="304养老院" id="group_001">）。
+        //    回傳那個人的名字；不是這種就回空字串。聊天 app 那邊的同步用同一條（wx_core _misfiledDm）。
+        _misfiledDm: function(core, name, id) {
+            if (!id) return '';
+            let groupName = null;
+            if (this._groupIds && this._groupIds[id]) groupName = '';
+            try {
+                const G = (win.wxApp && win.wxApp.GLOBAL_CHATS) || {};
+                const k = Object.keys(G).find(x => G[x] && G[x].isGroup && (x === id || (x.indexOf('grp_story_') === 0 && x.slice(-(id.length + 1)) === '_' + id)));
+                if (k) groupName = G[k].name || '';
+            } catch (e) {}
+            if (groupName === null) return '';
+            const nm = String(name || '').trim();
+            if (!nm || nm === id || (groupName && nm === groupName)) return '';
+            const script = (core && core.script) || [];
+            for (let i = core.index + 1; i < script.length; i++) {
+                const l = String(script[i] || '').trim();
+                if (l.startsWith('</chat>')) break;
+                if (!l.startsWith('[With:')) continue;
+                const ppl = l.slice(6, -1).split(/[,，、]/).map(s => s.trim()).filter((s, j, a) => s && a.indexOf(s) === j);
+                const others = ppl.filter(n => !this._isMe(n));
+                return (ppl.length === 2 && others.length === 1) ? others[0] : '';
+            }
+            return '';
         },
 
         scrollChat: function() {

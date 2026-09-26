@@ -1554,8 +1554,41 @@
         return out;
     }
 
+    // 🚨 代號被借走：這個代號早就是一個群，這一段的 [With] 卻只有主角跟一個人、容器上的名字也不是那個群
+    //   ＝其實是跟那個人的私聊，AI 抄錯了代號（09-27 她：羅德的私聊被寫成 <chat chatroom="304养老院" id="group_001">）。
+    //   → 記到那個人的私聊：已經有一間只跟他聊的就併進去，沒有就另開一間。
+    //   只看 [With] 寫明兩個人的那種；沒寫 [With]、或名字跟群一樣（被踢到只剩一人的群）都不動。
+    function _misfiledDm(key, name, body, attrs, _pn, rooms, known) {
+        const prev = (known && known[key]) || rooms[key];
+        if (!prev) return null;
+        if (!(prev.everGroup || _storyOthers(prev).length >= 2)) return null;
+        const nm = String(name || '').trim();
+        if (!nm || nm === key || nm === (prev.name || '') || nm === (prev.fixedName || '')) return null;
+        const w = String(body || '').match(/^\s*\[\s*With\s*[:：]\s*(.*?)\s*\]/im);
+        if (!w) return null;
+        const owner = _pn((attrs.match(/(?:^|\s)owner\s*=\s*["']?([^"'>]*)["']?/i)?.[1] || '').trim());
+        const myName = _storyMyName();
+        const ppl = w[1].split(/[,，、]/).map(function (s) { return _pn(s.trim()); }).filter(function (s, i, a) { return s && a.indexOf(s) === i; });
+        if (ppl.length !== 2) return null;
+        const others = ppl.filter(function (n) { return n !== myName && n !== owner && !_isMeName(n); });
+        if (others.length !== 1) return null;
+        const person = others[0];
+        const pool = [rooms, known || {}];
+        for (let p = 0; p < pool.length; p++) {
+            const hit = Object.keys(pool[p]).find(function (k) {
+                const r = pool[p][k];
+                if (!r || r.everGroup) return false;
+                const o = _storyOthers(r);
+                return o.length === 1 && o[0] === person;
+            });
+            if (hit) return { key: hit, person: person };
+        }
+        return { key: 'dm:' + person, person: person };
+    }
+
     // 解析酒館正文裡的 <chat chatroom="名">…</chat> 區塊 → {房名:{name,members,msgs}}
-    function _parseVnChatBlocks(fullText) {
+    //   known＝前面幾樓已經收好的房間（逐樓解析時傳進來），用來認出「代號被借走」的那種（見 _misfiledDm）
+    function _parseVnChatBlocks(fullText, known) {
         const rooms = {};
         if (!fullText) return rooms;
         const _remap = _loadRoomRemap();   // AI 整理產出的「舊id→統一id」對應表（沒整理過就空）
@@ -1578,13 +1611,15 @@
             }
             let key = roomId || roomName;
             key = _remap[key] || key;   // AI 整理過：舊亂 id（或名）→ 統一 id，同一間合回一張卡
+            const _dmTo = _misfiledDm(key, nameFromHdr || roomName, body, attrs, _pn, rooms, known);
+            if (_dmTo) key = _dmTo.key;
             // 🚨🚨 名字分兩種來源，差別在「可不可以覆蓋畫面上現在那個名字」：
             //   說了算的（fixedName）＝整理聊天室改的、劇情用 <chat_rename> 改的 → 一定要換上去
             //   隨便寫的（dispName）＝正文容器上的 chatroom 或 [Chat:] 那行 → 只有這間房第一次出現時才當名字
             // 以前 chatroom 每樓都會蓋一次，所以她自己改的群名、整理好的名字，
             // 只要劇情再多一句話就被正文寫的那個蓋回去（她 2026-09-20：「酒館AI跑正文的時候，把chatroom名改了不同的，導致混亂」）。
             const fixedName = _fix.names[key] || '';
-            const dispName = nameFromHdr || roomName;
+            const dispName = _dmTo ? _dmTo.person : (nameFromHdr || roomName);
             // 📱 誰的手機：owner="名" 屬性明寫才換視角，沒寫＝主角（使用者人設名）。[With] 只當名單，順序不算數
             const attrOwner = _pn((attrs.match(/(?:^|\s)owner\s*=\s*["']?([^"'>]*)["']?/i)?.[1] || '').trim());
             if (!rooms[key]) rooms[key] = { id: key, name: fixedName || dispName, fixedName: fixedName, members: [], msgs: [], owner: '' };
@@ -2067,7 +2102,7 @@
             const m = msgs[f];
             const text = (typeof m === 'string') ? m : ((m && (m.mes || m.message)) || '');
             if (!text || text.indexOf('<chat') < 0) continue;
-            const part = _parseVnChatBlocks(text);
+            const part = _parseVnChatBlocks(text, rooms);
             Object.keys(part).forEach(function (key) {
                 const r = part[key];
                 if (!rooms[key]) rooms[key] = { id: key, name: r.name, fixedName: r.fixedName || '', members: [], msgs: [], owner: '' };

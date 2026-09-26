@@ -606,23 +606,34 @@
             // 整理過的正確聊天室名字（正文 AI 把代號寫進名字時）：給它看修好的，不然它看到「代號｜代號」會一直照抄
             var fixNames = {};
             try { var _allFix = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_fix')) || '{}'); fixNames = (_allFix[_appChatId()] || {}).names || {}; } catch (e) {}
-            var map = {}, order = [];
-            // ① WX 內文行格式 [Chat: 名|ID]
-            var re = /\[Chat[:：]\s*([^|\]]+)\|([^\]]+)\]/g, m2;
-            while ((m2 = re.exec(text)) !== null) { var nm = (m2[1] || '').trim(), id = (m2[2] || '').trim(); if (id) { id = remap[id] || id; if (!(id in map)) order.push(id); map[id] = nm; } }
-            // ② VN PHONE 容器屬性格式 <chat chatroom="名" id="穩定id">（與 ① 同併一張表）
-            var re2 = /<chat\s+([^>]*?)>/gi, m3;
+            // 🚨🚨 每個代號的名字＝它第一次出現時的名字（之後只有 [Rename: …] 能改），跟聊天 app 取房名同一條規矩。
+            //    以前是「最後一次寫的名字」：AI 寫錯一次（09-27：新開一個「304养老院」卻借了大群的 group_001），
+            //    這張表下一輪就告訴它「304养老院｜group_001」，它照抄，之後大群、跟羅德的私聊全塞進同一個代號——
+            //    寫錯的東西被當成正確答案送回去，越錯越深。代號本身（chat_003）、範本字（私聊角色账号名/群名）、空名不算名字。
+            //    代號＝英數加底線或數字（chat_003、grp01），或只有標點；純英文字（Zephyr）是人名，算數
+            var _okName = function (n) { n = String(n || '').trim(); return !!n && !(/^[A-Za-z0-9_\-.]+$/.test(n) && /[_\d]|^[.\-]+$/.test(n)) && n.indexOf('/') < 0; };
+            var map = {}, renamed = {}, order = [];
+            var _seen = function (id, nm) { if (!(id in map)) { order.push(id); map[id] = ''; } if (!map[id] && _okName(nm)) map[id] = nm.trim(); };
+            // ① <chat chatroom="名" id="穩定id"> 容器，照正文順序；代號與名字的取法跟聊天 app 同步那邊一樣
+            //   （id 屬性 > 容器裡的 [Chat: 名|ID]；名字先看 [Chat:] 那行再看 chatroom）。容器裡的 [Rename: 新名字] 才准改名
+            var re2 = /<chat\s+([^>]*?)>([\s\S]*?)<\/chat>/gi, m3;
             while ((m3 = re2.exec(text)) !== null) {
-                var a = m3[1] || '';
-                var id3 = ((a.match(/(?:^|\s)id\s*=\s*["']?([^"'>]*)["']?/i) || [])[1] || '').trim();
+                var a = m3[1] || '', inner = m3[2] || '';
+                var hdr = inner.match(/^\s*\[\s*Chat\s*[:：]\s*([^|\]]*)\|?([^\]]*)\]/im);
+                var id3 = ((a.match(/(?:^|\s)id\s*=\s*["']?([^"'>]*)["']?/i) || [])[1] || '').trim() || (hdr ? hdr[2].trim() : '');
                 if (!id3) continue;
                 id3 = remap[id3] || id3;
-                var nm3 = ((a.match(/chatroom\s*=\s*["']?([^"'>]*)["']?/i) || [])[1] || '').trim();
-                if (!(id3 in map)) order.push(id3);
-                if (nm3 || !(id3 in map)) map[id3] = nm3 || map[id3] || '';
+                var nm3 = (hdr && _okName(hdr[1])) ? hdr[1] : (a.match(/chatroom\s*=\s*["']?([^"'>]*)["']?/i) || [])[1];
+                _seen(id3, nm3);
+                var rn = inner.match(/^\s*\[\s*Rename\s*[:：]\s*(.*?)\s*\]\s*$/im);
+                if (rn && _okName(rn[1])) renamed[id3] = rn[1].replace(/^["'「『]+|["'」』]+$/g, '').trim();
             }
-            if (!order.length) return;
-            var table = order.map(function (id) { return (fixNames[id] || map[id]) + '｜' + id; }).join('、');
+            // ② 容器外零散的 [Chat: 名|ID]：只補容器裡從沒出現過的代號
+            var re = /\[Chat[:：]\s*([^|\]]+)\|([^\]]+)\]/g, m2;
+            var outside = text.replace(/<chat\s+[^>]*?>[\s\S]*?<\/chat>/gi, '');
+            while ((m2 = re.exec(outside)) !== null) { var id = remap[(m2[2] || '').trim()] || (m2[2] || '').trim(); if (id && !(id in map)) _seen(id, m2[1]); }
+            var table = order.map(function (id) { var nm = fixNames[id] || renamed[id] || map[id]; return nm ? nm + '｜' + id : ''; }).filter(Boolean).join('、');
+            if (!table) return;
             var result = th.injectPrompts([{
                 id: WX_CHATROOM_INJECT_ID,
                 content: '\n\n【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器時用對 ID：可放 chatroom 旁的 id="…" 屬性，或容器內的 [Chat: 名|ID] 那行）；ID「絕不可」改，只有全新房間才給新 ID。chatroom 照抄下表的名字，不要自己改寫——改 chatroom 不會改到畫面上的名字，劇情裡真的改名要在那間房的容器裡寫 [Rename: 新名字] 那一行。手機預設是主角的；只有換視角（這段是別人在用手機）才在 <chat> 加 owner="那個人的名字"，[With] 只是名單、順序無所謂：\n' + table + '\n\n',
