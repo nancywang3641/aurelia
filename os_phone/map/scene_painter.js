@@ -336,7 +336,8 @@
         var out = items.map(function (it, i) {
             var k = KINDS[it.kind] ? it.kind : 'spot', sz = KINDS[k];
             var S = (k === 'ring' || k === 'water' || k === 'stage' || k === 'fountain') ? 1.1 : 1.3;   // 房間 2:1 很寬，家具放大一點才不空
-            var o = { kind: k, label: it.label || '', desc: it.desc || '', w: r2(sz.w * S), h: r2(sz.h * S), rot: 0, i: i };
+            var o = { kind: k, label: it.label || '', desc: it.desc || '', w: r2(sz.w * S), h: r2(sz.h * S), rot: 0, i: i, decor: !!it.decor };
+            if (it.decor && !it.obj) { o.w = r2(sz.w * 0.8); o.h = r2(sz.h * 0.8); }   // 內建零件頂替的裝飾畫小一點
             if (it.obj) {   // 模型畫的零件：照它寫的實際大小（公尺）與靠不靠牆
                 o.obj = it.obj; o.wall = !!it.obj.wall;
                 o.w = r2(_clampN(it.obj.w * PART_PX, 6, 72)); o.h = r2(_clampN(it.obj.d * PART_PX, 5, 44));
@@ -369,9 +370,10 @@
                 var A = out[a], B = out[b], ba = box(A), bb = box(B);
                 var dx = B.x - A.x, dy = B.y - A.y, ox = ba.hw + bb.hw - Math.abs(dx), oy = ba.hh + bb.hh - Math.abs(dy);
                 if (ox > 0 && oy > 0) {
-                    var aw = A.rot ? 0 : 1, bw = B.rot ? 0 : 1;   // 貼側牆的不橫推（有轉向的都是貼牆的）
-                    if (ox / VW < oy / VH) { var sx = (dx >= 0 ? 1 : -1) * ox / 2; A.x -= sx * (aw || 0.2); B.x += sx * (bw || 0.2); }
-                    else { var sy = (dy >= 0 ? 1 : -1) * oy / 2; A.y -= sy; B.y += sy; }
+                    var aw = A.rot ? 0.2 : 1, bw = B.rot ? 0.2 : 1;   // 貼側牆的不橫推（有轉向的都是貼牆的）
+                    var wa = (A.decor && !B.decor) ? 2 : ((B.decor && !A.decor) ? 0 : 1), wb = 2 - wa;   // 裝飾撞到地標：只有裝飾讓開
+                    if (ox / VW < oy / VH) { var sx = (dx >= 0 ? 1 : -1) * ox / 2; A.x -= sx * aw * wa; B.x += sx * bw * wb; }
+                    else { var sy = (dy >= 0 ? 1 : -1) * oy / 2; A.y -= sy * wa; B.y += sy * wb; }
                 }
             }
             out.forEach(function (o) {
@@ -392,7 +394,13 @@
         var accent = FABRIC[Math.floor(rng() * FABRIC.length)];
         var dark = f === 'dark_wood' || night;
         var o = { rng: rng, night: night, accent: accent, wood: dark ? '#3a2618' : '#8a5a36', woodTop: dark ? '#5a3c28' : '#b98552' };
-        var items = layout(plan.items || [], plan.indoor !== false);
+        // 裝飾（decor）：沒有名牌、點不開，只讓地方不空。數量 >1 的在原位附近撒開（地標排在前面，編號不受影響）
+        var src = [];
+        (plan.items || []).forEach(function (it) {
+            var n = it.decor ? Math.max(1, Math.min(6, it.n | 0 || 1)) : 1;
+            for (var k = 0; k < n; k++) src.push(k === 0 ? it : Object.assign({}, it, { x: it.x + (rng() - 0.5) * 14, y: it.y + (rng() - 0.5) * 22 }));
+        });
+        var items = layout(src, plan.indoor !== false);
         // 自動點綴：室內角落補盆栽；桌子群下面補地毯
         var extra = [];
         if (plan.indoor !== false) {
@@ -545,8 +553,8 @@
         return [
             '**(3) 零件圖（程式照這個畫出地標物件的樣子）**',
             '零件庫裡已經畫好的東西：' + (have.length ? have.join('、') : '（還沒有）'),
-            '地標物件如果跟零件庫裡某一樣是同一種東西，短名（emoji 後面那段）就直接照抄那個名字，不用再畫。',
-            '零件庫沒有的地標物件，每件在 </scene-map> 前面各加一段：',
+            '地標物件或裝飾如果跟零件庫裡某一樣是同一種東西，短名（emoji 後面那段）就直接照抄那個名字，不用再畫。',
+            '零件庫沒有的地標物件和裝飾，每一種在 </scene-map> 前面各加一段（同一種裝飾擺好幾個也只畫一次）：',
             '<draw name="短名">',
             'SIZE|寬幾公尺|深幾公尺|wall 或 free',
             '形狀行…',
@@ -556,7 +564,7 @@
             'RECT|左上x|左上y|寬|高|顏色|圓角',
             'POLY|x,y x,y x,y …|顏色',
             'LINE|x,y x,y …|顏色|粗細',
-            '- name 照抄那件地標物件的短名（不含 emoji）。',
+            '- name 照抄那件地標物件或裝飾的短名（不含 emoji）。',
             '- SIZE 是這件東西實際佔地的大小（公尺），第四欄寫 wall（平常靠牆放）或 free（放在房間中間）。',
             '- 顏色只能從這些英文照抄：' + PART_COLORS.join(', ') + '。形狀和用色要像' + (PART_STYLE_DESC[style] || PART_STYLE_DESC.fantasy) + '世界裡會有的樣子。',
             '- 每件 4 到 16 個形狀，先畫最大的底，再一層一層往上畫細節；只畫從正上方看得到的那一面，不要側面、不要透視。',

@@ -1648,6 +1648,9 @@ ${facilityText}
         const res = SP.paint({
             name: fac.name || '', floor: g.floor, indoor: g.indoor, night: guess.night, style,
             items: fixed.map(l => ({ kind: l.kind || SP.guessKind(l.label, l.emoji), label: l.label, x: l.x, y: l.y, obj: SP.libGet ? SP.libGet(style, l.label) : null }))
+                // 裝飾排在地標後面（地標的編號才對得上名牌）；庫裡沒零件、內建也猜不出來的就不畫
+                .concat((Array.isArray(sceneMap.decor) ? sceneMap.decor : []).map(d => ({ decor: true, n: d.n, label: '', x: d.x, y: d.y, obj: SP.libGet ? SP.libGet(style, d.label) : null, kind: SP.guessKind(d.label) }))
+                    .filter(d => d.obj || d.kind !== 'spot'))
         });
         const pos = new Map();
         res.items.forEach(it => {

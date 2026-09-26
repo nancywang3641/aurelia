@@ -169,7 +169,9 @@
 `[地標物件|🔥壁爐|爐火劈啪作響，幾隻獵犬伏在前方烤火|x:80,y:35|fireplace]
 [地標物件|🍻吧檯|老闆正擦拭著黃銅酒杯，目光犀利地掃視來客|x:50,y:25|counter]
 [地標物件|🪑圓桌|散落著啤酒漬的木桌，三張舊木凳子圍著|x:25,y:75|round_table]
-[地標物件|🪧任務佈告板|布告板附近擠滿了冒險者人群|x:15,y:30|board]`;
+[地標物件|🪧任務佈告板|布告板附近擠滿了冒險者人群|x:15,y:30|board]
+[裝飾|emoji+短名|x:0-100,y:0-100|數量]
+（裝飾照這個骨架再寫 6 到 12 行；零件庫沒有的東西，各加一段 <draw name="短名">…</draw>）`;
     // 現在這個聊天的世界是不是「直接畫」的（世界地圖由 world_painter 畫、不生圖）
     function isPaintedWorld() {
         try {
@@ -177,6 +179,14 @@
             return !!(w && w.worldMap && w.worldMap.painted && win.SCENE_PAINTER);
         } catch (e) { return false; }
     }
+    // 直接畫的世界：地標之外再列一批裝飾，讓小地圖不空（沒名牌、點不開）；零件照 (3) 一起畫
+    const DECOR_RULE =
+`**(2.5) 裝飾（讓這個地方看起來有人在用、不空）**
+格式：\`[裝飾|emoji+中文短名|x:0-100,y:0-100|數量]\`
+- 再列 6 到 12 行：地標以外本來就會在這裡的東西——小家具、雜物、燈、植物、地上的東西、桌上的東西、牆邊的東西。不要跟地標物件重複。
+- 數量：同一種東西在這一帶擺幾個（1 到 6），程式會在那個位置附近撒開。
+- 裝飾不會顯示名字，玩家也點不開，所以不用寫描述。
+- 分散在整個平面上，下方正中間是入口，別堵住。`;
     // 直接畫的世界用哪個風格（fantasy/wuxia/…，world_painter 定的）：零件庫按風格分，同名東西在武俠和科幻各一份
     function paintedStyle() {
         try {
@@ -192,7 +202,7 @@
             .replace('{BASEPLATE_RULE}', painted ? _baseplateRulePainted() : (natural ? BASEPLATE_RULE_NATURAL : BASEPLATE_RULE_TAGS))
             .replace('{BASEPLATE_EXAMPLE}', painted ? '[地標底板|地面|室內或露天]' : (natural ? BASEPLATE_EX_NATURAL : BASEPLATE_EX_TAGS))
             .replace('{LANDMARK_FORMAT}', painted ? _landmarkFormatPainted() : LANDMARK_FORMAT_IMG)
-            .replace('{PARTS_RULE}', painted ? '\n\n' + win.SCENE_PAINTER.partsRule(paintedStyle()) : '')
+            .replace('{PARTS_RULE}', painted ? '\n\n' + DECOR_RULE + '\n\n' + win.SCENE_PAINTER.partsRule(paintedStyle()) : '')
             .replace('{CULTURE_RULE}', painted ? '' : CULTURE_RULE)
             .replace('{EXAMPLE_LANDMARKS}', painted ? EXAMPLE_LANDMARKS_PAINTED : EXAMPLE_LANDMARKS_IMG)
             .replace(/\{FAC_NAME\}/g, facility.name || '未命名設施')
@@ -218,6 +228,7 @@
 
         let backdropPrompt = '';
         let ground = null;
+        const decor = [];
         const landmarks = [];
 
         // 一行一個 [tag|...] 標籤
@@ -228,6 +239,15 @@
             const rest = m[2];
             const fields = rest.split('|').map(s => s.trim());
 
+            if (/裝飾/.test(tag)) {   // 直接畫的世界才會有：[裝飾|emoji+短名|x:..,y:..|數量]
+                const ci = fields.findIndex(f => /x\s*[:：]\s*\d/i.test(f) && /y\s*[:：]\s*\d/i.test(f));
+                if (ci < 0) continue;
+                const xm = fields[ci].match(/x\s*[:：]\s*(\d+(?:\.\d+)?)/i), ym = fields[ci].match(/y\s*[:：]\s*(\d+(?:\.\d+)?)/i);
+                const lab = _splitEmoji(fields[0] || '').text || String(fields[0] || '').trim();
+                const nField = fields.slice(ci + 1).find(f => /^\d+/.test(f));
+                if (lab) decor.push({ label: lab, x: Math.max(0, Math.min(100, parseFloat(xm[1]))), y: Math.max(0, Math.min(100, parseFloat(ym[1]))), n: Math.max(1, Math.min(6, parseInt(nField, 10) || 1)) });
+                continue;
+            }
             if (/底板/.test(tag)) {
                 if (fields[0]) backdropPrompt = fields[0];
                 // 「直接畫」的世界這行是 地面|室內或露天（scene_painter 用）；生圖世界不讀，照舊當生圖句
@@ -282,6 +302,7 @@
             generatedAt: Date.now()
         };
         if (ground) { out.ground = ground; out.backdropPrompt = ''; }   // 地面那行不是生圖句，別拿去補底板圖
+        if (decor.length) out.decor = decor;
         return out;
     }
 
