@@ -3,6 +3,7 @@
 // 路徑：scripts/os_phone/map/world_generator.js
 // 職責：讀取當前世界書 + 角色卡 → AI 生成 zones/facilities JSON
 //        → 跑 pollinations 生設施背景圖 → 灌進 WORLD_RUNTIME + OS_DB
+//        另一條「直接畫」（opts.painted）：只要 <world-plan> 清單，地圖交給 world_painter.js 畫，不生圖
 // 依賴：OS_API.buildContext / OS_API.chat / OS_IMAGE_MANAGER / WORLD_RUNTIME / OS_DB
 // ----------------------------------------------------------------
 (function() {
@@ -232,8 +233,54 @@ ${(win.MAP_ICONS && win.MAP_ICONS.promptList()) || ''}
         };
     }
 
+    // 直接畫：模型只列 <world-plan> 清單（world_painter.js），地圖與每區底圖由程式畫，一張圖都不生。
+    //   走 task 'world_plan'（名冊預設副模型）；回呼可能多次（串流），看到收尾標籤就處理，沒收尾就等靜下來 2.5 秒。
+    function _generatePainted(worldId, messages, progressCb) {
+        const WP = win.WORLD_PAINTER;
+        return new Promise((resolve) => {
+            let processed = false, idle = null, last = '';
+            const finish = async () => {
+                if (processed) return;
+                processed = true; clearTimeout(idle);
+                const plan = WP.parseWorldForm(last);
+                if (!plan) {
+                    console.error('[WorldGen] 清單解析失敗，原始輸出:', String(last).substring(0, 500));
+                    if (progressCb) progressCb('error', 'AI 沒有列出地圖清單');
+                    resolve(false);
+                    return;
+                }
+                if (progressCb) progressCb('image', '正在畫地圖...');
+                let worldData = null;
+                try { worldData = WP.buildWorldData(plan); } catch (e) { console.error('[WorldGen] 畫地圖失敗:', e); }
+                if (!worldData) { if (progressCb) progressCb('error', '世界資料構建失敗'); resolve(false); return; }
+                if (progressCb) progressCb('save', '寫入資料庫...');
+                const ok = await win.WORLD_RUNTIME.setWorld(worldId, worldData);
+                if (progressCb) progressCb(ok ? 'done' : 'error', ok ? '完成！' : '存檔失敗');
+                resolve(ok);
+            };
+            const onFin = (responseText) => {
+                if (processed) return;
+                last = String(responseText || '');
+                if (/<\/world-plan>/i.test(last)) { finish(); return; }
+                clearTimeout(idle); idle = setTimeout(finish, 2500);
+            };
+            const onErr = (err) => {
+                if (processed) return;
+                processed = true; clearTimeout(idle);
+                console.error('[WorldGen] AI 呼叫失敗:', err);
+                if (progressCb) progressCb('error', 'AI 呼叫失敗');
+                resolve(false);
+            };
+            // 清單很短，預設走副模型（名冊那列可以改）；舊環境沒 chatSecondary 才用主模型
+            if (typeof win.OS_API.chatSecondary === 'function') win.OS_API.chatSecondary(messages, null, onFin, onErr, { task: 'world_plan' });
+            else win.OS_API.chat(messages, win.OS_SETTINGS.getConfig(), null, onFin, onErr, { task: 'world_plan' });
+        });
+    }
+
     // 主入口：產生並寫入當前 chatId 對應的世界
-    async function generateForCurrentChat(progressCb) {
+    //   opts.painted：直接畫（不生圖）；沒帶就是原本那條（寫整份 JSON＋一張一張生圖）
+    async function generateForCurrentChat(progressCb, opts) {
+        const painted = !!(opts && opts.painted);
         const worldId = win.WORLD_RUNTIME ? win.WORLD_RUNTIME.detectWorldId() : null;
         if (!worldId || worldId === win.WORLD_RUNTIME.AUREALIS_ID) {
             console.warn('[WorldGen] 沒有可用的 chatId，無法生成');
@@ -247,18 +294,24 @@ ${(win.MAP_ICONS && win.MAP_ICONS.promptList()) || ''}
             return false;
         }
 
+        if (painted && !win.WORLD_PAINTER) {
+            if (progressCb) progressCb('error', '地圖畫家未載入');
+            return false;
+        }
+
         if (progressCb) progressCb('start', '正在掃描世界書...');
 
         let messages;
         try {
-            messages = await win.OS_API.buildContext(STAGE1_PROMPT, 'map_world_gen');
+            messages = await win.OS_API.buildContext(painted ? win.WORLD_PAINTER.buildFormPrompt() : STAGE1_PROMPT, 'map_world_gen');
         } catch (e) {
             console.error('[WorldGen] buildContext 失敗:', e);
             if (progressCb) progressCb('error', 'Context 構建失敗');
             return false;
         }
 
-        if (progressCb) progressCb('ai', 'AI 正在繪製地圖...');
+        if (progressCb) progressCb('ai', painted ? 'AI 正在整理地圖清單...' : 'AI 正在繪製地圖...');
+        if (painted) return _generatePainted(worldId, messages, progressCb);
 
         return new Promise((resolve) => {
             let processed = false;

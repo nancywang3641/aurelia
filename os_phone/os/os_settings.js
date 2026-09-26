@@ -213,6 +213,7 @@
         { group: '手機',       id: 'wx_theme',     name: '聊天 app 主題',              def: 'main' },
         { group: '大廳與世界', id: 'map',          name: '地圖探索',                   def: 'sec'  },
         { group: '大廳與世界', id: 'world_gen',    name: '世界 / 地圖事件 / 行程生成', def: 'main' },
+        { group: '大廳與世界', id: 'world_plan',   name: '直接畫的世界地圖',           def: 'sec'  },
         { group: '大廳與世界', id: 'theater',      name: '小劇場',                     def: 'main' },
         { group: '大廳與世界', id: 'theater_note', name: '小劇場記事 / 角色記憶整理',  def: 'sec'  },
         { group: '大廳與世界', id: 'lobby_chat',   name: '大廳角色對話與小遊戲',       def: 'sec'  },

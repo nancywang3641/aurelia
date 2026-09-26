@@ -410,7 +410,7 @@
 /* ── 底部行動鈕（橫跨三欄） ── */
 .am-navi-actions {
     grid-column: 1 / -1;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
 }
 .am-navi-btn {
     display: flex; align-items: center; gap: 14px;

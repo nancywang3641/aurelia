@@ -693,6 +693,14 @@ ${facilityText}
                             </div>
                             <span class="am-navi-btn-arrow">›</span>
                         </button>
+                        <button class="am-navi-btn primary" onclick="window.AUREALIS_MAP.initCurrentWorld({ painted: true })">
+                            <span class="am-navi-btn-icon"><i class="fa-solid fa-map"></i></span>
+                            <div class="am-navi-btn-text">
+                                <div class="am-navi-btn-title">直接畫地圖</div>
+                                <div class="am-navi-btn-sub">不用生圖，幾秒就好</div>
+                            </div>
+                            <span class="am-navi-btn-arrow">›</span>
+                        </button>
                         <button class="am-navi-btn secondary" onclick="window.AUREALIS_MAP.useAurealisFallback()">
                             <span class="am-navi-btn-icon"><i class="fa-solid fa-city"></i></span>
                             <div class="am-navi-btn-text">
@@ -747,8 +755,12 @@ ${facilityText}
         if (useMarkerMode) {
             selector.classList.add('am-marker-mode');
             // 把 worldMap 直接貼到 selector 上：marker 用 % 浮在這層，座標 100% 對齊
-            if (worldMapUrl) {
-                selector.style.backgroundImage = `url('${worldMapUrl}')`;
+            // 直接畫的世界：照這個容器現在的寬高現畫，圖釘才落在畫出來的區塊上（存的那張是 16:10 備用）
+            const _rect = selector.getBoundingClientRect();
+            const _paintedUrl = (win.WORLD_PAINTER && _world && _world.worldMap && _world.worldMap.painted)
+                ? win.WORLD_PAINTER.homeUrl(_world, _rect.width, _rect.height) : '';
+            if (_paintedUrl || worldMapUrl) {
+                selector.style.backgroundImage = `url('${_paintedUrl || worldMapUrl}')`;
             } else {
                 selector.style.backgroundImage = '';
             }
@@ -872,7 +884,9 @@ ${facilityText}
     }
 
     // 🔥 V2.0：初始化當前 chatId 對應的動態世界
-    async function initCurrentWorld() {
+    // opts.painted：直接畫（模型只列清單、地圖由 world_painter 畫，不生圖）
+    async function initCurrentWorld(opts) {
+        const painted = !!(opts && opts.painted);
         if (blockIfPreview('初始化世界')) return;
         if (!win.WORLD_GENERATOR) {
             if (AUI.toastr) AUI.toastr.error('世界生成器未就緒', 'Map');
@@ -889,7 +903,7 @@ ${facilityText}
                         <span class="am-navi-corner br"></span>
                         <div class="am-navi-loading-spinner"></div>
                         <div class="am-navi-loading-title">GENERATING</div>
-                        <div class="am-navi-loading-sub">AI IS DRAFTING THE WORLD MAP</div>
+                        <div class="am-navi-loading-sub">${painted ? 'AI IS LISTING THE PLACES' : 'AI IS DRAFTING THE WORLD MAP'}</div>
                         <div class="am-navi-divider"></div>
                         <div class="am-navi-loading-status" id="am-gen-status">正在掃描世界書...</div>
                     </div>
@@ -901,7 +915,7 @@ ${facilityText}
             const el = statusEl();
             if (el) el.innerText = msg || stage;
             console.log('[Map] 生成進度:', stage, msg);
-        });
+        }, { painted });
         if (ok) {
             renderHome();
             if (AUI.toastr) AUI.toastr.success('世界已生成', 'Map');
