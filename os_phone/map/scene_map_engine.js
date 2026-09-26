@@ -79,10 +79,7 @@
 {BASEPLATE_RULE}
 
 **(2) 地標物件（地圖上的物體，人物 ≠ 地標物件，不可輸出人物）**
-格式：\`[地標物件|emoji+中文短名|長描述|x:0-100,y:0-100]\`
-- 第 1 欄：emoji + 中文短名（emoji 開頭，短名 4-6 字純名詞，例：🪧任務佈告板）→ 永遠顯示在地標下方
-- 第 2 欄：長描述（一句話描寫此處氛圍 / 細節，10-25 字）→ 玩家點擊地標才彈出
-- 第 3 欄：x/y 座標（0-100）
+{LANDMARK_FORMAT}
 
 ### 2. 坐標系統說明
 (0,0) 左上角  -------  (100,0) 右上角
@@ -92,12 +89,7 @@
 (0,100) 左下角 ------- (100,100) 右下角
 
 ### 3. 生成邏輯要求
-- **🌏 文化畫風必寫明（重要）**：\`[地標底板|...]\` 的英文關鍵詞**開頭第一個詞就要標出本世界的文化／時代畫風**，別讓它預設成歐洲中世紀。依上文世界觀判斷後選對應詞：
-  - 中式武俠／仙俠／古代中國 → \`ancient chinese, wuxia, traditional chinese architecture\`
-  - 現代／都市 → \`modern, contemporary\`；未來科幻／賽博 → \`sci-fi, cyberpunk\`
-  - 西方奇幻／中世紀 → \`medieval european fantasy\`；末日廢土 → \`post-apocalyptic wasteland\`；日式和風 → \`japanese, traditional japanese\`
-  - 例：武俠酒館要寫 \`ancient chinese wuxia tavern, wooden...\` 而**不是** \`fantasy tavern\`。抓不準寧可多寫文化詞也別留白。
-- **底板一致性**：底板必須符合該世界觀（不可中世紀世界給出捷運站，不可末日廢土給出皇家城堡）
+{CULTURE_RULE}- **底板一致性**：底板必須符合該世界觀（不可中世紀世界給出捷運站，不可末日廢土給出皇家城堡）
 - **物件數量**：3-5 個具有代表性的地標物件
 - **布局合理**：物件不要全部重疊，根據描述合理分布在 0-100 平面上
 - **小人活動區留白**：小人會在 y=60~92 範圍走動，重要可看的物件可以放在 y<60 上半部；y=60-92 範圍盡量分散別塞太密（避免擋小人路）
@@ -110,10 +102,7 @@
 ### ✅ 輸出範例（底板行只看格式骨架，內容按世界觀自己寫）
 <scene-map>
 {BASEPLATE_EXAMPLE}
-[地標物件|🔥壁爐|爐火劈啪作響，幾隻獵犬伏在前方烤火|x:80,y:35]
-[地標物件|🍻吧檯|老闆正擦拭著黃銅酒杯，目光犀利地掃視來客|x:50,y:25]
-[地標物件|🪑圓桌|散落著啤酒漬的木桌，三張舊木凳子圍著|x:25,y:75]
-[地標物件|🪧任務佈告板|布告板附近擠滿了冒險者人群|x:15,y:30]
+{EXAMPLE_LANDMARKS}
 </scene-map>
 
 只輸出 <scene-map>...</scene-map> 包裹的內容，不要其他文字、不要 markdown 包裹。`;
@@ -144,11 +133,60 @@
 說明：用「一句完整的英文自然語言」描述這個場所的正俯視畫面：這是什麼場所、地面材質、主要家具大概在哪個方位（上/下/左/右/中）；**不要**逗號堆疊 tag。句子開頭一樣先點名文化/時代畫風。`;
     const BASEPLATE_EX_TAGS    = '[地標底板|文化畫風詞, 場所類型 interior, 家具A at top, 家具B on the left, floor material]';
     const BASEPLATE_EX_NATURAL = '[地標底板|A 文化畫風 場所類型 seen from directly above, with 家具A along the top, 家具B on the left, and 地面材質 floor]';
+    // 模板裡按世界切換的幾段：生圖世界照舊；「直接畫」的世界（worldMap.painted）小地圖由 scene_painter.js 畫，
+    //   底板那行改成地面＋室內外，每個地標多一欄種類，沒有生圖句所以文化畫風那條不給。
+    const CULTURE_RULE = `- **🌏 文化畫風必寫明（重要）**：\`[地標底板|...]\` 的英文關鍵詞**開頭第一個詞就要標出本世界的文化／時代畫風**，別讓它預設成歐洲中世紀。依上文世界觀判斷後選對應詞：
+  - 中式武俠／仙俠／古代中國 → \`ancient chinese, wuxia, traditional chinese architecture\`
+  - 現代／都市 → \`modern, contemporary\`；未來科幻／賽博 → \`sci-fi, cyberpunk\`
+  - 西方奇幻／中世紀 → \`medieval european fantasy\`；末日廢土 → \`post-apocalyptic wasteland\`；日式和風 → \`japanese, traditional japanese\`
+  - 例：武俠酒館要寫 \`ancient chinese wuxia tavern, wooden...\` 而**不是** \`fantasy tavern\`。抓不準寧可多寫文化詞也別留白。
+`;
+    const LANDMARK_FORMAT_IMG =
+`格式：\`[地標物件|emoji+中文短名|長描述|x:0-100,y:0-100]\`
+- 第 1 欄：emoji + 中文短名（emoji 開頭，短名 4-6 字純名詞，例：🪧任務佈告板）→ 永遠顯示在地標下方
+- 第 2 欄：長描述（一句話描寫此處氛圍 / 細節，10-25 字）→ 玩家點擊地標才彈出
+- 第 3 欄：x/y 座標（0-100）`;
+    function _landmarkFormatPainted() {
+        const kinds = (win.SCENE_PAINTER && win.SCENE_PAINTER.KINDS || []).join(', ');
+        return `格式：\`[地標物件|emoji+中文短名|長描述|x:0-100,y:0-100|種類]\`
+- 第 1 欄：emoji + 中文短名（emoji 開頭，短名 4-6 字純名詞，例：🪧任務佈告板）→ 永遠顯示在地標下方
+- 第 2 欄：長描述（一句話描寫此處氛圍 / 細節，10-25 字）→ 玩家點擊地標才彈出
+- 第 3 欄：x/y 座標（0-100）
+- 第 4 欄：種類，程式照這欄畫出那件東西的樣子。從這些英文照抄一個最接近的：${kinds}。都不像就寫 spot`;
+    }
+    function _baseplateRulePainted() {
+        const floors = (win.SCENE_PAINTER && win.SCENE_PAINTER.FLOOR_NAMES || []).join('、');
+        return `**(1) 地面（程式照這行畫小地圖的地板）**
+格式：\`[地標底板|地面|室內或露天]\`
+說明：這張小地圖不生圖，由程式照你給的地面與地標物件畫成正上方俯視的平面圖。地面從這些照抄一個：${floors}；第三欄寫「室內」或「露天」。`;
+    }
+    const EXAMPLE_LANDMARKS_IMG =
+`[地標物件|🔥壁爐|爐火劈啪作響，幾隻獵犬伏在前方烤火|x:80,y:35]
+[地標物件|🍻吧檯|老闆正擦拭著黃銅酒杯，目光犀利地掃視來客|x:50,y:25]
+[地標物件|🪑圓桌|散落著啤酒漬的木桌，三張舊木凳子圍著|x:25,y:75]
+[地標物件|🪧任務佈告板|布告板附近擠滿了冒險者人群|x:15,y:30]`;
+    const EXAMPLE_LANDMARKS_PAINTED =
+`[地標物件|🔥壁爐|爐火劈啪作響，幾隻獵犬伏在前方烤火|x:80,y:35|fireplace]
+[地標物件|🍻吧檯|老闆正擦拭著黃銅酒杯，目光犀利地掃視來客|x:50,y:25|counter]
+[地標物件|🪑圓桌|散落著啤酒漬的木桌，三張舊木凳子圍著|x:25,y:75|round_table]
+[地標物件|🪧任務佈告板|布告板附近擠滿了冒險者人群|x:15,y:30|board]`;
+    // 現在這個聊天的世界是不是「直接畫」的（世界地圖由 world_painter 畫、不生圖）
+    function isPaintedWorld() {
+        try {
+            const w = win.WORLD_RUNTIME && win.WORLD_RUNTIME.getCurrentWorld ? win.WORLD_RUNTIME.getCurrentWorld() : null;
+            return !!(w && w.worldMap && w.worldMap.painted && win.SCENE_PAINTER);
+        } catch (e) { return false; }
+    }
+
     function buildPrompt(facility, zone) {
+        const painted = isPaintedWorld();
         const natural = _mapPromptStyle() === 'natural';
         return PROMPT_TEMPLATE
-            .replace('{BASEPLATE_RULE}', natural ? BASEPLATE_RULE_NATURAL : BASEPLATE_RULE_TAGS)
-            .replace('{BASEPLATE_EXAMPLE}', natural ? BASEPLATE_EX_NATURAL : BASEPLATE_EX_TAGS)
+            .replace('{BASEPLATE_RULE}', painted ? _baseplateRulePainted() : (natural ? BASEPLATE_RULE_NATURAL : BASEPLATE_RULE_TAGS))
+            .replace('{BASEPLATE_EXAMPLE}', painted ? '[地標底板|地面|室內或露天]' : (natural ? BASEPLATE_EX_NATURAL : BASEPLATE_EX_TAGS))
+            .replace('{LANDMARK_FORMAT}', painted ? _landmarkFormatPainted() : LANDMARK_FORMAT_IMG)
+            .replace('{CULTURE_RULE}', painted ? '' : CULTURE_RULE)
+            .replace('{EXAMPLE_LANDMARKS}', painted ? EXAMPLE_LANDMARKS_PAINTED : EXAMPLE_LANDMARKS_IMG)
             .replace(/\{FAC_NAME\}/g, facility.name || '未命名設施')
             .replace(/\{FAC_DESC\}/g, facility.shortName || facility.name || '此地')
             .replace(/\{ZONE_NAME\}/g, zone.name || '此區域');
@@ -171,6 +209,7 @@
         const body = wrap ? wrap[1] : text;
 
         let backdropPrompt = '';
+        let ground = null;
         const landmarks = [];
 
         // 一行一個 [tag|...] 標籤
@@ -183,6 +222,9 @@
 
             if (/底板/.test(tag)) {
                 if (fields[0]) backdropPrompt = fields[0];
+                // 「直接畫」的世界這行是 地面|室內或露天（scene_painter 用）；生圖世界不讀，照舊當生圖句
+                const SP = win.SCENE_PAINTER, fk = (SP && isPaintedWorld()) ? SP.floorKey(fields[0]) : '';
+                if (fk) ground = { floor: fk, indoor: !/露天|戶外|室外|outdoor/i.test(fields[1] || '') };
                 continue;
             }
             if (/物件/.test(tag)) {
@@ -192,10 +234,14 @@
                 const isNewFormat = EMOJI_HEAD.test(fields[0] || '');
 
                 let labelRaw, description, coords;
+                let kind = '';
                 if (isNewFormat) {
                     labelRaw = fields[0] || '';
                     description = fields[1] || '';
                     coords = fields[2] || '';
+                    // 第 4 欄種類（只有「直接畫」的世界會要；沒有就讓 scene_painter 從名字猜）
+                    const k = String(fields[3] || '').toLowerCase().replace(/[^a-z_]/g, '');
+                    if (k && win.SCENE_PAINTER && (win.SCENE_PAINTER.KINDS.indexOf(k) >= 0 || k === 'spot')) kind = k;
                 } else {
                     // 舊存檔相容：第 1 欄是英文 keyword、第 2 欄是 emoji+短名
                     labelRaw = fields[1] || fields[0] || '';
@@ -208,23 +254,27 @@
                 if (!xMatch || !yMatch) continue;
 
                 const { emoji, text } = _splitEmoji(labelRaw);
-                landmarks.push({
+                const lm = {
                     label: text || labelRaw,
                     emoji: emoji,
                     description: description,
                     x: Math.max(0, Math.min(100, parseFloat(xMatch[1]))),
                     y: Math.max(0, Math.min(100, parseFloat(yMatch[1])))
-                });
+                };
+                if (kind) lm.kind = kind;
+                landmarks.push(lm);
             }
         }
 
         if (!backdropPrompt && landmarks.length === 0) return null;
-        return {
+        const out = {
             backdropPrompt,
             backdropUrl: '',
             landmarks,
             generatedAt: Date.now()
         };
+        if (ground) { out.ground = ground; out.backdropPrompt = ''; }   // 地面那行不是生圖句，別拿去補底板圖
+        return out;
     }
 
     // 主入口：為某個 facility 生 sceneMap（走副模型，省主模型 token）
@@ -299,7 +349,8 @@
         if (!sceneMap) return null;
         console.log(`[SceneMap] ✅ ${facility.name}：底板="${sceneMap.backdropPrompt}", 地標 ${sceneMap.landmarks.length} 個`);
         // 開了補圖開關 → 補底板（走「小地圖桶」imgType:'map'，俯視去人物）。NAI 回 blob: 轉 data URL 才能存進世界 DB
-        if (isBackdropAuto() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
+        //   「直接畫」的世界不補：它的底板行是地面名，不是生圖句，小地圖由 scene_painter 畫
+        if (isBackdropAuto() && !isPaintedWorld() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
             try {
                 const fullPrompt = sceneMap.backdropPrompt;   // 風格詞在「小地圖 TAB」底詞欄，不再暗拼固定詞
                 let _bu = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(fullPrompt, { width: 1024, height: 512, imgType: 'map', use: 'map' }) || '';
@@ -327,6 +378,7 @@
         parseSceneMap,
         buildScenePrompt,
         applySceneMapFromText,
-        generateForFacility
+        generateForFacility,
+        isPaintedWorld
     };
 })();

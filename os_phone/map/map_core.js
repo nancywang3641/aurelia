@@ -1629,6 +1629,29 @@ ${facilityText}
         return 'data:image/svg+xml,' + encodeURIComponent(svg);
     }
 
+    // 「直接畫」的世界（世界地圖是程式畫的）：小地圖也由 scene_painter 畫成俯視平面圖，取代線框。
+    //   家具會貼牆、互相推開，畫出來的位置跟地標原本的 x/y 不完全一樣 → 回傳每個地標實際的名牌位置（家具正下方）。
+    //   🔍 小發現（isDiscovery）不畫成家具，照舊用原座標當圖釘。不是這種世界就回 null，照走線框。
+    function _paintSceneMinimap(sceneMap) {
+        const SP = win.SCENE_PAINTER, SME = win.SCENE_MAP_ENGINE;
+        if (!SP || !SME || typeof SME.isPaintedWorld !== 'function' || !SME.isPaintedWorld()) return null;
+        const fac = STATE.activeFacility || {};
+        const guess = SP.guessGround(fac.name, fac.desc);
+        const g = sceneMap.ground || guess;
+        const fixed = sceneMap.landmarks.filter(l => l && !l.isDiscovery && typeof l.x === 'number' && typeof l.y === 'number');
+        const res = SP.paint({
+            name: fac.name || '', floor: g.floor, indoor: g.indoor, night: guess.night,
+            items: fixed.map(l => ({ kind: l.kind || SP.guessKind(l.label, l.emoji), label: l.label, x: l.x, y: l.y }))
+        });
+        const pos = new Map();
+        res.items.forEach(it => {
+            const lm = fixed[it.i]; if (!lm) return;
+            const hh = (Math.abs(it.rot) === 90 ? it.w : it.h) / 2;
+            pos.set(lm, { x: it.x / SP.VW * 100, y: Math.min(95, (it.y + hh + 3) / SP.VH * 100) });
+        });
+        return { url: SP.toDataUrl(res.svg), pos };
+    }
+
     function renderScanResults() {
         const resultsDiv = document.getElementById('am-scan-results');
         const charGrid = document.getElementById('am-char-grid');
@@ -1649,12 +1672,16 @@ ${facilityText}
             // 替換為動態大頭娃娃渲染
             // sceneMap 底板圖（用戶開了 pollinations 補圖才有）
             const sceneMap = STATE.activeFacility && STATE.activeFacility.sceneMap;
+            let _painted = null;   // 直接畫的小地圖：{ url, pos: 地標 → 名牌位置 }
             if (sceneMap && sceneMap.backdropUrl) {
                 charGrid.style.backgroundImage = `url('${sceneMap.backdropUrl}')`;
                 charGrid.style.backgroundSize = 'cover';
             } else if (sceneMap && Array.isArray(sceneMap.landmarks) && sceneMap.landmarks.length) {
-                // 沒生底板圖 → 復古線框小地圖當背景（不再黑）；地標 emoji 照舊疊上層
-                charGrid.style.backgroundImage = `url("${_buildSceneMinimap(sceneMap.landmarks)}")`;
+                // 沒生底板圖 → 「直接畫」的世界用俯視平面圖；其他世界用復古線框小地圖當背景（不再黑）；地標 emoji 照舊疊上層
+                _painted = _paintSceneMinimap(sceneMap);
+                charGrid.style.backgroundImage = _painted
+                    ? `url('${_painted.url}')`   // 畫家的 data URL 裡有雙引號、沒有單引號
+                    : `url("${_buildSceneMinimap(sceneMap.landmarks)}")`;
                 charGrid.style.backgroundSize = '100% 100%';
             } else {
                 charGrid.style.backgroundImage = '';
@@ -1667,6 +1694,8 @@ ${facilityText}
             const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const landmarkHtml = (sceneMap && Array.isArray(sceneMap.landmarks) && sceneMap.landmarks.length > 0)
                 ? sceneMap.landmarks.map(lm => {
+                    const _p = _painted && _painted.pos.get(lm);   // 畫出來的家具：名牌放在它正下方，不另外疊圖示
+                    const lx = _p ? Math.round(_p.x * 10) / 10 : lm.x, ly = _p ? Math.round(_p.y * 10) / 10 : lm.y;
                     const popupHtml = lm.description
                         ? `<div class="am-landmark-popup">${escHtml(lm.description)}</div>`
                         : '';
@@ -1674,11 +1703,12 @@ ${facilityText}
                     // popup 估算 ~100px 高 ≈ stage 40-50%，所以 y<50 都該翻下方
                     const sideClasses = ['am-landmark'];
                     if (lm.isDiscovery) sideClasses.push('am-landmark-disc');   // 🔍 探索找到的發現物：金色強調區分固有地標
-                    if (lm.y < 50) sideClasses.push('popup-below');     // 上半 → popup 改下方
-                    if (lm.x < 28) sideClasses.push('popup-left');      // 太靠左 → popup 對齊左邊
-                    else if (lm.x > 72) sideClasses.push('popup-right'); // 太靠右 → popup 對齊右邊
+                    if (_p) sideClasses.push('am-landmark-painted');
+                    if (ly < 50) sideClasses.push('popup-below');     // 上半 → popup 改下方
+                    if (lx < 28) sideClasses.push('popup-left');      // 太靠左 → popup 對齊左邊
+                    else if (lx > 72) sideClasses.push('popup-right'); // 太靠右 → popup 對齊右邊
                     return `
-                    <div class="${sideClasses.join(' ')}" style="left:${lm.x}%; top:${lm.y}%;" title="${escAttr(lm.label)}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
+                    <div class="${sideClasses.join(' ')}" style="left:${lx}%; top:${ly}%;" title="${escAttr(lm.label)}" onclick="event.stopPropagation(); this.classList.toggle('am-landmark-open');">
                         ${popupHtml}
                         <div class="am-landmark-emoji">${_mi(lm.emoji)}</div>
                         <div class="am-landmark-label">${escHtml(lm.label) || ''}</div>
@@ -2132,7 +2162,7 @@ ${facilityText}
                         const em = String(fields[0]).match(EMOJI_HEAD);
                         if (em) {
                             icon = em[0];
-                            const rest = fields[0].slice(em[0].length).trim();
+                            const rest = fields[0].slice(em[0].length).replace(/^[️‍]+/, '').trim();   // 🗝️ 這種帶變體符號的，剩下的看不見字元不能當標題
                             if (rest) fields[0] = rest; else fields.shift();
                         }
                     }
