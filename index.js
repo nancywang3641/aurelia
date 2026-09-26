@@ -103,7 +103,7 @@ window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 //   CDN(酒館助手，EXT_NAME 為 null) → 加 ?v=版本號 → 同版本內 jsdelivr/瀏覽器照樣快取(載入快)，
 //      但每次「改版 bump _AURELIA_VERSION」後，朋友的瀏覽器會自動重抓模組，不用手動清快取。
 //      （index.js 本身是 ?boot= 強制重抓的，所以這個版本號一改、下次載入就生效。）
-const _AURELIA_VERSION = '2026.07.22.13'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
+const _AURELIA_VERSION = '2026.07.22.14'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
 const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : ('?v=' + _AURELIA_VERSION);
 
 // 🔥 1. 全局通訊狀態
@@ -289,6 +289,7 @@ const PHONE_FILES = [
     'map/schedule_engine.js',
     'map/scene_painter.js', // 🗺 直接畫的世界：進設施的小地圖也由程式畫（俯視平面圖），scene_map_engine 前載
     'map/scene_map_engine.js',
+    'map/vn_map_link.js',   // 🗺 劇情→地圖：每章的地點與在場的人交給地圖（vn_core 新的一章時呼叫），map_core 前載
     'map/map_image.js',     // 🗺 奧瑞亞預設世界的斜俯視圖片地圖（全城＋七區，五時段），map_core 前載
     'map/map_core.js',
 

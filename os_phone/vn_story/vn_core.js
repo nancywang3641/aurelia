@@ -4159,6 +4159,8 @@
                 const _pScript = typeof _pending === 'object' ? _pending.text : _pending;
                 const _pMsgId  = typeof _pending === 'object' ? _pending.messageId : null;
                 window.VN_Core.loadScript(_pScript, _pMsgId);   // loadScript 尾端已 applyLatestFresh()，最新這輪插圖在此插入
+                // 🗺 劇情→地圖（vn_map_link.js）：這章的地點與在場的人交給地圖。只掛在「新的一章」這裡，回頭看舊章節不會把位置拉回過去；不 await
+                try { const _L = window.VN_MAP_LINK || (window.parent && window.parent.VN_MAP_LINK); if (_L) _L.onChapter((window.VN_Core.script || []).slice(), _pMsgId); } catch (e) {}
                 switchPage('page-game');
                 window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
@@ -4328,6 +4330,8 @@
                 if (_vnVisible && document.getElementById('page-game')) {
                     switchPage('page-game');
                     window.VN_Core.loadScript(text, messageId);   // loadScript 尾端已 applyLatestFresh()，最新這輪插圖在此插入
+                    // 🗺 劇情→地圖（vn_map_link.js）：這章的地點與在場的人交給地圖。只掛在「新的一章」這裡，回頭看舊章節不會把位置拉回過去；不 await
+                    try { const _L = window.VN_MAP_LINK || (window.parent && window.parent.VN_MAP_LINK); if (_L) _L.onChapter((window.VN_Core.script || []).slice(), messageId); } catch (e) {}
                     window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
                     console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
                 } else {

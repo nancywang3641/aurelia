@@ -518,7 +518,18 @@ ${facilityText}
         renderStructure();
         updatePreviewBanner();
         renderHome();
+        // 🗺 劇情→地圖（vn_map_link.js）：這個聊天的位置記錄讀進來，主角在這張地圖上就重畫一次（標出「你在這裡」）
+        try {
+            const L = win.VN_MAP_LINK;
+            if (L && L.load) L.load().then(() => { const h = _here(); if (h && h.zoneId && STATE.container === container && STATE.view === 'home') renderHome(); }).catch(() => {});
+        } catch (e) {}
     }
+
+    // 主角現在在哪（劇情最新一章的最後一場）：{ zoneId, facKey, place }；沒接到就 null
+    function _here() { try { const L = win.VN_MAP_LINK; return (L && L.getHere) ? L.getHere() : null; } catch (e) { return null; } }
+    const HERE_BADGE = '<span class="am-here" title="你在這裡"><i class="fa-solid fa-location-crosshairs"></i></span>';
+    function _hereZone(zid) { const h = _here(); return !!(h && h.zoneId && h.zoneId === zid); }
+    function _hereFac(zid, key) { const h = _here(); return !!(h && h.zoneId === zid && h.facKey === key); }
 
     function renderStructure() {
         if (!STATE.container) return;
@@ -778,8 +789,8 @@ ${facilityText}
                 const labelText = (zone && zone.name) ? zone.name : 'ZONE';
 
                 return `
-                <div class="am-zone-marker" style="left:${mx}%; top:${my}%;" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">
-                    ${dotHtml}
+                <div class="am-zone-marker${_hereZone(id) ? ' is-here' : ''}" style="left:${mx}%; top:${my}%;" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">
+                    ${dotHtml}${_hereZone(id) ? HERE_BADGE : ''}
                     <div class="am-zone-marker-emoji">${icon}</div>
                     <div class="am-zone-marker-label">${labelText}</div>
                 </div>
@@ -826,14 +837,14 @@ ${facilityText}
                 const facCount = zone && zone.facilities ? Object.keys(zone.facilities).length : 0;
                 const chip = document.createElement('div');
                 chip.className = 'am-imap-dyn';
-                chip.innerHTML = `<div class="am-zone-entrance am-zone-entrance-dyn" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">${hasEvent ? '<div class="am-zone-dot"></div>' : ''}<div class="am-zone-emoji"><i class="fa-solid fa-hurricane"></i></div><div class="am-zone-label">DRIFT · ${facCount}</div></div>`;
+                chip.innerHTML = `<div class="am-zone-entrance am-zone-entrance-dyn" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">${hasEvent ? '<div class="am-zone-dot"></div>' : ''}${_hereZone(id) ? HERE_BADGE : ''}<div class="am-zone-emoji"><i class="fa-solid fa-hurricane"></i></div><div class="am-zone-label">DRIFT · ${facCount}</div></div>`;
                 selector.appendChild(chip);
                 return;
             }
             const name = (zone && zone.name) ? zone.name : (labels[id] || id);
             pins.push({
                 id, x: coords[id].x, y: coords[id].y,
-                html: `${hasEvent ? '<span class="am-zone-dot"></span>' : ''}<span class="am-imap-pin-letter">${id}</span><span class="am-imap-pin-label">${name}</span>`,
+                html: `${hasEvent ? '<span class="am-zone-dot"></span>' : ''}${_hereZone(id) ? HERE_BADGE : ''}<span class="am-imap-pin-letter">${id}</span><span class="am-imap-pin-label">${name}</span>`,
                 onClick: (zid) => enterZone(zid),
             });
         });
@@ -854,7 +865,7 @@ ${facilityText}
             if (isDynamic) {
                 return `
                 <div class="am-zone-entrance" onclick="window.AUREALIS_MAP.enterZone('${id}')"
-                     style="border-style:dashed; border-color:rgba(255,140,66,0.6); background:rgba(40,15,5,0.4);">
+                     style="border-style:dashed; border-color:rgba(255,140,66,0.6); background:rgba(40,15,5,0.4);">${_hereZone(id) ? HERE_BADGE : ''}
                     <div style="font-size:32px;"><i class="fa-solid fa-hurricane"></i></div>
                     <div class="am-zone-label" style="color:#ffaa50;">DRIFT · ${facCount}</div>
                 </div>`;
@@ -876,7 +887,7 @@ ${facilityText}
 
             return `
             <div class="am-zone-entrance" onclick="window.AUREALIS_MAP.enterZone('${safeId}')">
-                ${dotHtml}
+                ${dotHtml}${_hereZone(id) ? HERE_BADGE : ''}
                 ${topDisplay}
                 <div class="am-zone-label">${labelText}</div>
             </div>
@@ -1462,12 +1473,12 @@ ${facilityText}
             const hasEvent = !!STATE.activeEvents[`${zoneId}_${key}`];
             const c = f.sceneId ? coords[f.sceneId] : null;
             if (!c) {
-                stripHtml += `<div class="am-fac-card${f.isDynamic ? ' am-fac-card-dyn' : ''}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">${hasEvent ? '<div class="am-red-dot"></div>' : ''}<div class="am-fac-icon">${_mi(f.icon)}</div><div class="am-fac-name">${f.shortName || f.name}</div></div>`;
+                stripHtml += `<div class="am-fac-card${f.isDynamic ? ' am-fac-card-dyn' : ''}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">${hasEvent ? '<div class="am-red-dot"></div>' : ''}${_hereFac(zoneId, key) ? HERE_BADGE : ''}<div class="am-fac-icon">${_mi(f.icon)}</div><div class="am-fac-name">${f.shortName || f.name}</div></div>`;
                 return;
             }
             pins.push({
                 id: key, x: c.x, y: c.y,
-                html: `${hasEvent ? '<span class="am-red-dot"></span>' : ''}<span class="am-imap-pin-icon">${_mi(f.icon)}</span><span class="am-imap-pin-label">${f.shortName || f.name}</span>`,
+                html: `${hasEvent ? '<span class="am-red-dot"></span>' : ''}${_hereFac(zoneId, key) ? HERE_BADGE : ''}<span class="am-imap-pin-icon">${_mi(f.icon)}</span><span class="am-imap-pin-label">${f.shortName || f.name}</span>`,
                 onClick: (k) => openFacilityDetail(k),
             });
         });
@@ -1497,7 +1508,7 @@ ${facilityText}
                 return `
                     <div class="am-fac-card" style="${cardStyle}" onclick="window.AUREALIS_MAP.openFacilityDetail('${key}')">
                         ${dotHtml}
-                        ${dynBadge}
+                        ${dynBadge}${_hereFac(zoneId, key) ? HERE_BADGE : ''}
                         <div class="am-fac-icon">${_mi(f.icon)}</div>
                         <div class="am-fac-name">${f.shortName || f.name}</div>
                     </div>

@@ -378,17 +378,23 @@
 
     // 加一個動態 facility，回傳 sceneId
     // 同 displayName 已存在 → 重用，不重複建
-    async function addDynamicFacility(displayName) {
+    //   opts.keep：劇情去過的地方（vn_map_link），沒人站著也不清掉
+    async function addDynamicFacility(displayName, opts) {
         if (!currentWorld) return null;
         const name = _normName(displayName);
         if (!name) return null;
         const zone = ensureDynamicZone();
+        const keep = !!(opts && opts.keep);
+        const painted = !!(currentWorld.worldMap && currentWorld.worldMap.painted);   // 直接畫的世界：不放隨機網路照片
 
         // 同 displayName 已存在的話重用
         const existing = Object.keys(zone.facilities).find(
             k => zone.facilities[k] && _normName(zone.facilities[k].name) === name
         );
-        if (existing) return zone.facilities[existing].sceneId || `${DYNAMIC_ZONE_ID}_${existing}`;
+        if (existing) {
+            if (keep && !zone.facilities[existing].keep) { zone.facilities[existing].keep = true; await persistFullWorld(); }
+            return zone.facilities[existing].sceneId || `${DYNAMIC_ZONE_ID}_${existing}`;
+        }
 
         const facKey = `dyn_${Date.now().toString(36).substring(-4)}_${_hashName(name)}`;
         const sceneId = `${DYNAMIC_ZONE_ID}_${facKey}`;
@@ -399,9 +405,10 @@
             icon: 'hurricane',
             className: 'facility-dynamic',
             characters: [],
-            imageUrl: _loremFlickrUrl(name),
-            fallbackUrl: _loremFlickrUrl(name),
+            imageUrl: painted ? '' : _loremFlickrUrl(name),
+            fallbackUrl: painted ? '' : _loremFlickrUrl(name),
             isDynamic: true,
+            keep: keep,
             createdAt: Date.now()
         };
 
@@ -423,7 +430,7 @@
         let cleaned = 0;
         Object.keys(zone.facilities).forEach(facKey => {
             const f = zone.facilities[facKey];
-            if (!f.isDynamic) return; // 防呆
+            if (!f.isDynamic || f.keep) return; // 防呆；劇情去過的地方（keep）不清
             if (!usedSceneIds.has(f.sceneId)) {
                 delete zone.facilities[facKey];
                 cleaned++;

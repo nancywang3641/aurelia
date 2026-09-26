@@ -317,8 +317,10 @@
     // 三、清單：模型怎麼填、怎麼讀；怎麼變成世界
     // ============================================================
     const TERRAIN_ICON = { city: 'city', palace: 'building-columns', harbor: 'anchor', forest: 'tree', mountain: 'mountain', desert: 'sun', snow: 'snowflake', swamp: 'frog', farmland: 'wheat-awn', ruins: 'monument', lake: 'water', island: 'sailboat', plain: 'leaf' };
-    function buildFormPrompt() {
+    //   visited：這個故事劇情裡已經去過的地方（vn_map_link），要排進地圖，名字照抄
+    function buildFormPrompt(visited) {
         const icons = (win.MAP_ICONS && win.MAP_ICONS.promptList()) || '';
+        const been = (Array.isArray(visited) ? visited : []).filter(Boolean).slice(0, 40);
         return [
             '[替這個故事的世界整理一份地圖清單]',
             '從上面的角色卡、世界書和劇情，整理出這個故事的世界有哪些區域、每一區裡有哪些地方。',
@@ -338,9 +340,10 @@
             '- 地形照抄一個最接近的：' + Object.keys(TERRAINS).join(', ') + '。',
             '- 橫向位置、縱向位置：這一區在整張地圖上的位置，0 到 100 的整數，左上角是 0|0，右下角是 100|100。照世界書的地理放（港口靠邊、中心城放中間）。區與區至少差 20，別疊在一起。',
             '- PLACE 每區 3 到 6 行，是玩家可以走進去的地方，名稱要合這個世界的年代與文化。短名 4 個字以內。不要寫人。',
+            been.length ? '- 劇情裡已經去過這些地方，每一個都要排進某一區當 PLACE，地點名照抄（寫法不同但是同一個地方的，合成一個）：' + been.join('、') : null,
             '- 圖示：從下面清單照抄一個最貼近那個地方的英文名（不加 fa- 前綴，不要寫 emoji）：',
             icons
-        ].join('\n');
+        ].filter(function (l) { return l !== null; }).join('\n');
     }
     function parseWorldForm(txt) {
         let body = String(txt || '');

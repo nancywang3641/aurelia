@@ -303,7 +303,9 @@ ${(win.MAP_ICONS && win.MAP_ICONS.promptList()) || ''}
 
         let messages;
         try {
-            messages = await win.OS_API.buildContext(painted ? win.WORLD_PAINTER.buildFormPrompt() : STAGE1_PROMPT, 'map_world_gen');
+            let been = [];
+            try { if (painted && win.VN_MAP_LINK) { await win.VN_MAP_LINK.load(); been = win.VN_MAP_LINK.visited(); } } catch (e) {}   // 劇情去過的地方一起排進地圖
+            messages = await win.OS_API.buildContext(painted ? win.WORLD_PAINTER.buildFormPrompt(been) : STAGE1_PROMPT, 'map_world_gen');
         } catch (e) {
             console.error('[WorldGen] buildContext 失敗:', e);
             if (progressCb) progressCb('error', 'Context 構建失敗');
