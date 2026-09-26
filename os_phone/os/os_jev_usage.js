@@ -90,6 +90,34 @@
     }
     function clear() { try { localStorage.removeItem(LS); } catch (e) {} }
 
-    win.OS_JEV_USAGE = { add, report, clear };
+    // ── 📌 每章 Jev 排好的答案存起來（立繪 stage、音效音樂 sfx）：重開、重播同一章直接用，不再叫 Jev ──
+    //   09-26 她問「重新調用章節，會不會同等重新調用 jev？需要像插圖那樣做標記保存在酒館嗎？」
+    //   不寫進酒館訊息（下一輪會送回給 AI，它看到音樂標籤會學著自己寫）；存 OS_DB 通用 App 資料，名字 jev_plan（不是 app_ 開頭，
+    //   「清理殘留資料」不會當成孤兒刪掉），綁這個聊天室（刪故事跟著清）。鑰匙＝整章內容的指紋：swipe 換了內容就重問。
+    function _sig(script) {
+        const s = (Array.isArray(script) ? script : []).join('\n');
+        let h = 0x811c9dc5;
+        for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+        return h.toString(36) + '_' + s.length;
+    }
+    function _chat() { try { return (win.OS_STORY_TOOLS && win.OS_STORY_TOOLS.getChatId && win.OS_STORY_TOOLS.getChatId()) || ''; } catch (e) { return ''; } }
+    async function loadPlan(kind, script) {
+        try {
+            const db = win.OS_DB, chat = _chat();
+            if (!db || !db.getAppData || !chat) return null;
+            const v = await db.getAppData('jev_plan', kind + ':' + _sig(script), chat);
+            return (v && typeof v === 'object') ? v : null;
+        } catch (e) { return null; }
+    }
+    async function savePlan(kind, script, plan) {
+        try {
+            const db = win.OS_DB, chat = _chat();
+            if (!db || !db.saveAppData || !chat || !plan) return false;
+            await db.saveAppData('jev_plan', kind + ':' + _sig(script), plan, chat);
+            return true;
+        } catch (e) { return false; }
+    }
+
+    win.OS_JEV_USAGE = { add, report, clear, loadPlan, savePlan };
     if (win !== window) window.OS_JEV_USAGE = win.OS_JEV_USAGE;
 })();

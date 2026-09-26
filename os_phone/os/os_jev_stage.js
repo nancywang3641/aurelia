@@ -183,6 +183,10 @@
         const hit = getLog().find(e => e.key === key && e.removals);
         if (hit) return _toPlan(hit);                     // 同一章重開、重播：用上次的答案，不再叫
         if (_running[key]) return _running[key];
+        const _U = win.OS_JEV_USAGE;
+        const saved = _U && _U.loadPlan ? await _U.loadPlan('stage', script) : null;   // 資料庫裡存過這一章（記錄只留最近 20 章，這裡不限）
+        if (saved && Array.isArray(saved.removals)) return _toPlan(saved);
+        if (_running[key]) return _running[key];
         const job = (async () => {
             const { segs, aiLeave, cols, colMissing } = _parse(script);
             const entry = { at: new Date().toLocaleString(), key, msgId: msgId == null ? null : String(msgId), segs: segs.length, cols, colMissing };
@@ -228,6 +232,7 @@
                 removals.sort((a, b) => a.p - b.p);
                 entry.calls = jobs.length; entry.qs = n; entry.ms = ms; entry.removals = removals;
                 _push(entry);
+                try { if (_U && _U.savePlan) _U.savePlan('stage', script, _toPlan(entry)); } catch (e) {}   // 每一通都成功才走到這裡（有一通失敗整章丟 catch）
                 return _toPlan(entry);
             } catch (e) {
                 entry.error = String((e && e.message) || e);

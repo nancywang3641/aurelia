@@ -199,6 +199,9 @@
         const segs = _segsOf(script);
         if (!segs.length) return null;
         const key = String(msgId == null ? '?' : msgId) + ':' + script.length + ':' + _cut(script.join(' '), 40);
+        const _U = win.OS_JEV_USAGE;
+        const saved = _U && _U.loadPlan ? await _U.loadPlan('sfx', script) : null;   // 重開、重播同一章：用存下來的，一通都不叫
+        if (saved && Array.isArray(saved.sfx) && Array.isArray(saved.bgm)) return saved;
         const t0 = Date.now(); _stats = { calls: 0, ms: 0 };
         const entry = { at: new Date().toLocaleString(), key, msgId: msgId == null ? null : String(msgId), segs: segs.length };
         try {
@@ -220,7 +223,11 @@
         entry.missing = missing;
         _push(entry);
         if (entry.error && !sfx.length && !bgm.length) return null;   // 完全沒問到 → 這章照舊
-        return { sfx: sfx.map(x => ({ line: x.line, occ: x.occ, id: x.id })), bgm: bgm.map(x => ({ line: x.line, occ: x.occ, id: x.id })) };
+        const out = { sfx: sfx.map(x => ({ line: x.line, occ: x.occ, id: x.id })), bgm: bgm.map(x => ({ line: x.line, occ: x.occ, id: x.id })) };
+        // 只存問齊的：有一題被拒（音效沒問到、某一場的音樂沒問到）就不存，下次重開再補問，別把缺音樂的那一版存死
+        const allBgmAsked = Object.keys(bySc).every(k => _bgmCache.has(bySc[k][0].line));
+        if (!entry.error && !missing && allBgmAsked) { try { if (_U && _U.savePlan) _U.savePlan('sfx', script, out); } catch (e) {} }
+        return out;
     }
 
     function report(limit) {
