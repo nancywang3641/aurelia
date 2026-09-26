@@ -49,6 +49,9 @@
             //    代號就先掛著，等下一行 [With: …] 進來再換成人名（見下面 _titleFromWith）。
             this._roomSlug = /^[A-Za-z0-9_\-.]+$/.test(newName) ? newName : '';
             document.getElementById('chat-title').innerText = newName;       // 標題永遠顯示房名（給玩家看）
+            // 👥 群不群在開門這一刻就決定，不等 [With]：AI 常沒寫那行、或只列兩個人，以前就整間當私聊、群裡的人名全不畫
+            this.chatParticipants = [];
+            this.isGroupChat = this._roomIsGroup(core, newName, newId);
             // 黑夜模式跟聊天 app 那顆同一個開關（顏色本身掛在整頁上，這裡只補外殼那個 class 給既有的深色規則用）
             try { document.getElementById('phone-chat').classList.toggle('wx-dark', localStorage.getItem('wx_dark_mode') === 'true'); } catch (e) {}
 
@@ -111,8 +114,9 @@
             }
 
             if (line.startsWith('[With:')) {
-                this.chatParticipants = line.slice(6, -1).split(',').map(s => s.trim()).filter(Boolean);
-                this.isGroupChat = this.chatParticipants.length > 2;
+                this.chatParticipants = line.slice(6, -1).split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+                // 只會把私聊升成群、不會反過來：開門時已經照整段講話的人算過（被踢剩一個人的群還是群）
+                this.isGroupChat = this.isGroupChat || this.chatParticipants.length > 2;
                 if (this._roomSlug) this._titleFromWith();
                 core.next(); return;
             }
@@ -198,13 +202,7 @@
                 if (/^(系統|系统|System|旁白|Narrator)$/i.test(sender)) {
                     this._sys(chatBody, content);
                 } else {
-                    // 右邊泡泡＝①You/主角/我/使用者人設名 ②<chat owner="名"> 點名的人。[With] 只當名單，順序不算數
-                    const mc = (win.OS_PERSONA && win.OS_PERSONA.getName && win.OS_PERSONA.getName()) || (win.OS_API && win.OS_API.getGlobalUserName && win.OS_API.getGlobalUserName()) || '';
-                    const bare = s => String(s || '').replace(/^[*＊_]+|[*＊_]+$/g, '').trim();
-                    const isMe = /^(You|主角|我|User|Self|Me)$/i.test(sender)
-                        || (!!mc && mc !== 'User' && (sender === mc || bare(sender) === bare(mc)))
-                        || (!!this._mcAlias && (sender === this._mcAlias || bare(sender) === bare(this._mcAlias)))
-                        || (!!this.chatOwner && sender === this.chatOwner);
+                    const isMe = this._isMe(sender);
                     // 引用回覆：標記在內容最前面，解析跟微信共用同一份（OS_API.chatQuote）。
                     // 引用完後面沒東西就當它沒引用。灰塊只掛在被貼圖切開後的第一個泡泡上。
                     // ↩ [某某] [recall] 那句：傳了又收回。認法跟聊天 app 同步那邊同一份（WX_GROUP_EV.recallOf，舊寫法 [撤回] 也認）。
@@ -266,6 +264,40 @@
         // 離開聊天室前（畫面要存進 chatroomCache）：還沒換掉的撤回立刻換掉，不然回來這間時那句還掛著
         _recallFlush: function() {
             (this._recallJobs || []).slice().forEach(j => this._recallDone(j));
+        },
+
+        // 右邊泡泡＝①You/主角/我/使用者人設名 ②<chat owner="名"> 點名的人。[With] 只當名單，順序不算數
+        _isMe: function(sender) {
+            const mc = (win.OS_PERSONA && win.OS_PERSONA.getName && win.OS_PERSONA.getName()) || (win.OS_API && win.OS_API.getGlobalUserName && win.OS_API.getGlobalUserName()) || '';
+            const bare = s => String(s || '').replace(/^[*＊_]+|[*＊_]+$/g, '').trim();
+            return /^(You|主角|我|User|Self|Me)$/i.test(sender)
+                || (!!mc && mc !== 'User' && (sender === mc || bare(sender) === bare(mc)))
+                || (!!this._mcAlias && (sender === this._mcAlias || bare(sender) === bare(this._mcAlias)))
+                || (!!this.chatOwner && sender === this.chatOwner);
+        },
+
+        // 👥 這間算不算群：跟聊天 app 同一條（wx_core _storyIsGroup）——對方（[With] 名單＋這段 <chat> 裡講過話的）兩個以上，
+        //    或聊天 app 那邊這間本來就是群。往下看到 </chat> 為止，第一句就知道要不要掛人名。
+        _roomIsGroup: function(core, name, id) {
+            try {
+                const G = (win.wxApp && win.wxApp.GLOBAL_CHATS) || {};
+                if (id && G[id] && G[id].isGroup) return true;
+                if (Object.keys(G).some(k => G[k] && G[k].isGroup && G[k].name === name)) return true;
+            } catch (e) {}
+            const others = {};
+            const add = n => {
+                n = String(n || '').trim();
+                if (n && !/^(系統|系统|System|旁白|Narrator|Time)$/i.test(n) && !this._isMe(n)) others[n] = 1;
+            };
+            const script = (core && core.script) || [];
+            for (let i = core.index + 1; i < script.length; i++) {
+                const l = String(script[i] || '').trim();
+                if (l.startsWith('</chat>')) break;
+                if (l.startsWith('[With:')) { l.slice(6, -1).split(/[,，、]/).forEach(add); continue; }
+                const m = l.match(/^\[([^\]：:]+)\]\s*\S/);   // [名] 話；[Time: …]、[Kick: …] 這類帶冒號的是標籤
+                if (m) add(m[1]);
+            }
+            return Object.keys(others).length >= 2;
         },
 
         scrollChat: function() {
