@@ -236,15 +236,30 @@
         return out;
     }
     // 地點的背景：劇情在這裡演過的那一場，VN 已經生好的背景圖（沒生好、生失敗、只有應急糊圖都回 ''）
-    async function bgFor(sceneId) {
+    //   沒有記錄（這個地點是更新前記下的、或那一章的背景名沒存到）→ 去 VN 背景快取找「時段_地點名」結尾是這個地點的，拿最近用過的那張，並補記下來
+    async function bgFor(sceneId, facName) {
         try {
             const st = await _load();
-            const id = st.bg && st.bg[sceneId];
-            if (!id) return '';
             const C = win.VN_Cache || window.VN_Cache;
             if (!C || !C.get) return '';
-            const c = await C.get('bg_cache', id);
-            return (c && c.url && !c.fallback && !/^blob:/.test(c.url)) ? c.url : '';
+            const ok = c => (c && c.url && !c.fallback && !/^blob:/.test(c.url)) ? c.url : '';
+            const id = st.bg && st.bg[sceneId];
+            if (id) { const u = ok(await C.get('bg_cache', id)); if (u) return u; }
+            if (!C.keys) return '';
+            // 這個地點在劇情裡叫過的名字：別名表對到它的、地點自己的名字
+            const want = {};
+            (st.visited || []).forEach(v => { if (st.alias && st.alias[norm(v)] === sceneId) want[norm(v)] = 1; });
+            if (facName) want[norm(facName)] = 1;
+            if (!Object.keys(want).length) return '';
+            const hits = (await C.keys('bg_cache')).filter(k => { const i = k.indexOf('_'); return want[norm(i >= 0 ? k.slice(i + 1) : k)]; });
+            let best = '', bestT = -1, bestKey = '';
+            for (const k of hits.slice(0, 12)) {
+                const c = await C.get('bg_cache', k), u = ok(c);
+                const t = (c && (c.lastUsed || c.ts || c.timestamp)) || 0;
+                if (u && t >= bestT) { best = u; bestT = t; bestKey = k; }
+            }
+            if (bestKey) { st.bg = st.bg || {}; st.bg[sceneId] = bestKey; await _save(); }
+            return best;
         } catch (e) { return ''; }
     }
     // 生成地圖用：這個故事劇情裡去過的地方

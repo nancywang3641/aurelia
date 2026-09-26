@@ -1589,7 +1589,7 @@ ${facilityText}
         // 🗺 劇情在這裡演過：用 VN 那一場已經生好的背景圖（vn_map_link），比地點原本的圖更貼近劇情；拿不到就維持上面那張
         try {
             const L = win.VN_MAP_LINK, _sid = facility.sceneId;
-            if (L && L.bgFor && _sid) L.bgFor(_sid).then(u => {
+            if (L && L.bgFor && _sid) L.bgFor(_sid, facility.name).then(u => {
                 if (u && STATE.activeFacility === facility) detailView.style.backgroundImage = `url("${String(u).replace(/"/g, '%22')}")`;
             }).catch(() => {});
         } catch (e) {}

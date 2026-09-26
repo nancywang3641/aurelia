@@ -187,6 +187,21 @@
             return _txSet(store, _scoped(store, key), v);
         },
         async delete(store, key) { return _txDel(store, _scoped(store, key)); },
+        // 目前這個世界（故事）在某個圖片 store 裡的所有鑰匙（只讀鑰匙、不讀圖，不會撐爆記憶體）；回的是沒有世界前綴的鑰匙
+        async keys(store) {
+            try {
+                const w = _curWorld(), pre = w + SEP;
+                const db = await _openIDB();
+                return await new Promise(res => {
+                    const out = [];
+                    let req;
+                    try { req = db.transaction(store, 'readonly').objectStore(store).openKeyCursor(IDBKeyRange.bound(pre, pre + '\uffff')); }
+                    catch (e) { res(out); return; }
+                    req.onsuccess = e => { const c = e.target.result; if (!c) { res(out); return; } out.push(String(c.key).slice(pre.length)); c.continue(); };
+                    req.onerror = () => res(out);
+                });
+            } catch (e) { return []; }
+        },
 
         // 原始版（用完整 key、不加世界前綴）→ 給畫廊操作「指定世界的某一筆」用
         async getRaw(store, key) { return _txGet(store, key); },
