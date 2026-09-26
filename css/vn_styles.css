@@ -865,9 +865,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #scene-cg-overlay.active { opacity: 1; }
         #scene-cg-overlay img { width: 100%; height: 100%; object-fit: cover; }
         /* 🔄 重生鈕：撞 NAI 500 後用同 prompt 重打生圖（不碰 LLM）。overlay 是 pointer-events:none，鈕自己開 auto 才點得到 */
-        /*    位置：右側中間偏上。09-26 她：放右上被頂部按鈕遮住；右下也不行——對話框(z10、手機 90% 寬)蓋在插圖(z5)上面，鈕在插圖層裡提不上去 */
-        #scene-cg-retry { position: absolute; top: 38%; right: 12px; width: 40px; height: 40px; border: none; border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff; font-size: 18px; line-height: 1; cursor: pointer; pointer-events: none; opacity: 0; transition: opacity 0.3s ease, background 0.2s ease; display: flex; align-items: center; justify-content: center; }
-        #scene-cg-overlay.active #scene-cg-retry { pointer-events: auto; opacity: 0.85; }
+        /*    09-26 她：放右上被頂部按鈕遮住、移到右側中間又太顯眼 → 插圖正常時畫面上不放這顆，改進對話框 ☰ 選單（#vn-btn-cgretry）；只有生不出來時才出現在正中間 */
+        #scene-cg-retry { position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border: none; border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff; font-size: 18px; line-height: 1; cursor: pointer; pointer-events: none; opacity: 0; transition: opacity 0.3s ease, background 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        #scene-cg-overlay.active.scene-cg-failed #scene-cg-retry { pointer-events: auto; opacity: 0.85; }
+        #vn-btn-cgretry { display: none; }
+        #vn-more-menu.has-cg #vn-btn-cgretry { display: flex; gap: 6px; }
         #scene-cg-retry:hover { background: rgba(0,0,0,0.8); }
         #scene-cg-retry:disabled { cursor: default; opacity: 0.5; }
         #scene-cg-retry.spinning { animation: scene-cg-spin 0.8s linear infinite; }

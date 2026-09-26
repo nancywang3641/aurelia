@@ -3562,6 +3562,8 @@
             if (!menu) return;
             const open = menu.classList.toggle('show');
             if (btn) btn.classList.toggle('active', open);
+            // 插圖正顯示著才給「重新生成插圖」那一項（09-26 她：畫面上那顆轉圈太顯眼，收進這個選單）
+            try { const ov = document.getElementById('scene-cg-overlay'); menu.classList.toggle('has-cg', !!(open && ov && ov.classList.contains('active') && this._sceneCgCur)); } catch (e) {}
             // 點畫面上別的地方也要收：VN 只有對話框接點擊，點背景不會走 handlePanelClick
             if (open) {
                 if (this._moreAway) document.removeEventListener('click', this._moreAway, true);
@@ -3573,6 +3575,11 @@
             }
         },
         // 回傳「剛剛真的收了一個開著的選單」，給 handlePanelClick 判斷要不要吃掉這一下點擊
+        retrySceneCgFromMenu: function() {
+            this.closeMore();
+            try { AUI.toastr.info('插圖重新生成中…'); } catch (e) {}
+            try { this.retrySceneCg(); } catch (e) {}
+        },
         closeMore: function() {
             const menu = document.getElementById('vn-more-menu');
             if (!menu || !menu.classList.contains('show')) return false;

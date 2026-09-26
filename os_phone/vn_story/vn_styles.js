@@ -96,6 +96,7 @@
                                 <button class="vn-panel-btn" id="vn-btn-think" onclick="window.VN_PLAYER.showThinkPopup(); window.VN_Core.closeMore(); event.stopPropagation();" title="本章思考鏈">COT</button>
                                 <button class="vn-panel-btn" id="vn-btn-ctx" onclick="window.VN_Core.toggleCtx(); window.VN_Core.closeMore(); event.stopPropagation();">CTX</button>
                                 <button class="vn-panel-btn" id="vn-btn-regen" style="display:none;color:#f6ad55;" onclick="window.VN_Core.regenCurrentTTS(); window.VN_Core.closeMore(); event.stopPropagation();" title="清除快取並重新生成當前語音">↺ TTS</button>
+                                <button class="vn-panel-btn" id="vn-btn-cgretry" onclick="window.VN_Core.retrySceneCgFromMenu(); event.stopPropagation();" title="重新生成這張插圖（不重跑劇情，只重生圖）"><i class="fa-solid fa-rotate"></i> 插圖</button>
                             </div>
                         </div>
 
