@@ -25,6 +25,25 @@
     }
     function _cfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { return {}; } }
     function _saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} }
+
+    // ❔ 這一頁的說明全放小問號（09-27 她：「對齊劇情是幹嘛的，有點忘記了，是不是都給添上問號解釋會比較好?」）
+    //   面板上不掛成段說明；會變的狀態字（已記幾條、轉入提醒）照舊留在面板上。
+    const _H = (k) => ((win.AUI || window.AUI) && (win.AUI || window.AUI).helpBtn) ? (win.AUI || window.AUI).helpBtn(k) : '';
+    try {
+        (win.AUI || window.AUI).registerHelp({
+            mem_on:       { title: '劇情記憶', body: '每存一章，會自動把重點記下來；AI 下筆前會翻出相關的記憶給它看，避免忘記以前發生過的事。\n關掉就不記、也不翻。' },
+            mem_tidy:     { title: '整理舊記憶', body: '把比較舊、零零碎碎的記憶合併成少量精簡的幾條，每輪送給 AI 的東西會少一點。\n重要的人物、關係、代表台詞不動，最近 40 條不動；原本那些只是藏起來，不會刪。\n會呼叫模型：按下去前會先告訴你叫幾次；用哪個模型在 設置 → API → 通道 的「整理舊記憶」。想定期自動整理，到 CTX 面板打開「自動整理記憶」。' },
+            mem_reconcile:{ title: '對齊劇情', body: '刪掉或重寫劇情之後用。\n把「來源那一樓已經不在了」的記憶清掉，AI 就不會再想起被刪掉的事。現有劇情的記憶一條都不動；讀不到完整劇情會自己停下，不會誤刪。\n不呼叫模型、不花錢。' },
+            mem_backfill: { title: '建立記憶向量', body: '讓記憶可以照「意思」被找出來，不只是比對字面。\n剛開記憶服務、或換了本地模型之後，舊的記憶要補算一次。用的是記憶服務，不是聊天用的模型。' },
+            mem_service:  { title: '記憶服務', body: '用來算「記憶之間像不像」的服務，找相關記憶時用。\n用本地模型：在你電腦裡算，文字不外流。\n用線上服務：填 SiliconFlow 這類服務，免費的 BAAI/bge-m3 就夠用。' },
+            mem_local:    { title: '用本地模型', body: '在你電腦裡算，文字不外流、最安心，也沒有封號風險。\n第一次要從網路下載 30–60MB，之後存在瀏覽器裡不用重下。換模型之後要重新「建立記憶向量」。' },
+            mem_share_key:{ title: '跟主模型共用 Key', body: '主模型也是用 SiliconFlow 的話打勾，就不用再填一次 Key。' },
+            mem_src:      { title: '記憶來源', body: '全文：拿整章去記，完整，但比較花。\n摘要：拿 AI 每輪寫的摘要去記，比較省，但可能漏掉對話細節；那一章沒有摘要時會自動改用全文。' },
+            mem_main_recent:{ title: '只帶近期與角色記憶', body: '打勾後，每輪只把最近的記憶和人物記憶送給 AI，比較省。\n比較舊的記憶交給副模型挑出需要的再補上；沒有在用副模型挑記憶的，別勾。' },
+            mem_move:     { title: '轉入記憶', body: '換了聊天、或改用備份檔之後，記憶會對不上這個聊天。\n在這裡把舊的那份記憶「複製」到目前這個；舊的保留不刪，確認沒問題再自己清。' },
+        });
+    } catch (e) {}
+
     function _storyId() {
         // 隔離鍵：OS_AVS_ADAPTER.getStoryId 在「酒館回 chatId、PWA 回 vn_current_story_id」——一律以它為準。
         //   ❌ 別優先 VN_Core._currentStoryId(全域 storyTitle_timestamp、不隨換聊天室變)→ 會害酒館跨聊天室記憶混同桶。
@@ -142,8 +161,7 @@
         _host.innerHTML = `<div class="avs-mem">
             <div class="avs-card avs-mem-top">
                 <div class="avs-mem-top-text">
-                    <div class="avs-mem-top-name">劇情記憶（防 AI 失憶）</div>
-                    <div class="avs-mem-top-desc">開啟後，每存一個章節會自動把重點記下來；之後 AI 回話前會自動翻出相關記憶餵給它。</div>
+                    <div class="avs-mem-top-name">劇情記憶（防 AI 失憶）${_H('mem_on')}</div>
                 </div>
                 <div class="avs-st-toggle${on ? ' on' : ''}" id="avs-mem-toggle" role="switch"></div>
             </div>
@@ -152,18 +170,18 @@
             ${_migrateHint}
 
             <div class="avs-st-btn-grid">
-                <button class="avs-btn avs-btn-outline" id="avs-mem-tidy"><i class="fa-solid fa-compress"></i> 整理舊記憶</button>
-                <button class="avs-btn avs-btn-outline" id="avs-mem-reconcile"><i class="fa-solid fa-broom"></i> 對齊劇情</button>
-                ${_noVec > 0 ? `<button class="avs-btn avs-btn-outline" id="avs-mem-backfill"><i class="fa-solid fa-list-ol"></i> 建立記憶向量（${_noVec} 待補）</button>` : ''}
+                <span class="avs-mem-bwrap"><button class="avs-btn avs-btn-outline" id="avs-mem-tidy"><i class="fa-solid fa-compress"></i> 整理舊記憶</button>${_H('mem_tidy')}</span>
+                <span class="avs-mem-bwrap"><button class="avs-btn avs-btn-outline" id="avs-mem-reconcile"><i class="fa-solid fa-broom"></i> 對齊劇情</button>${_H('mem_reconcile')}</span>
+                ${_noVec > 0 ? `<span class="avs-mem-bwrap"><button class="avs-btn avs-btn-outline" id="avs-mem-backfill"><i class="fa-solid fa-list-ol"></i> 建立記憶向量（${_noVec} 待補）</button>${_H('mem_backfill')}</span>` : ''}
             </div>
-            <div class="avs-mem-srchint" id="avs-mem-tidy-result">把舊的零碎記憶併成精簡版，省效能；重要角色與關係不會動。</div>
+            <div class="avs-mem-srchint avs-mem-progress" id="avs-mem-tidy-result"></div>
 
             <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn"><i class="fa-solid fa-gear"></i> 進階：記憶服務設定</button>
             <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
                 <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">記憶服務（embeddings）<span class="avs-st-adv-hint">${cfg.embeddingLocal ? '本地模型在你電腦裡算、文字不外流' : 'SiliconFlow 等 OpenAI 相容服務；免費 BAAI/bge-m3 即可'}</span></div>
+                    <div class="avs-st-adv-hd">記憶服務${_H('mem_service')}</div>
                     <div class="avs-mem-cfg">
-                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-local" ${cfg.embeddingLocal ? 'checked' : ''}><span><i class="fa-solid fa-lock"></i> 用本地模型（在你電腦裡算，文字不外流、最安心、零封號風險；首次要下載 30–60MB）</span></label>
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-local" ${cfg.embeddingLocal ? 'checked' : ''}><span><i class="fa-solid fa-lock"></i> 用本地模型${_H('mem_local')}</span></label>
                         ${cfg.embeddingLocal ? `<label class="avs-mem-fld"><span>本地模型</span>
                             <select class="avs-input" id="avs-mem-localmodel">
                                 <option value="Xenova/bge-small-zh-v1.5"${(cfg.localModel || 'Xenova/bge-small-zh-v1.5') === 'Xenova/bge-small-zh-v1.5' ? ' selected' : ''}>中文小模型（快、約 30MB）</option>
@@ -171,20 +189,19 @@
                                 <option value="Xenova/bge-m3"${cfg.localModel === 'Xenova/bge-m3' ? ' selected' : ''}>多語大模型（較準、較大較慢）</option>
                             </select>
                         </label>
-                        <div class="avs-mem-srchint">第一次按「測試本地模型」會從網路下載模型、之後存在瀏覽器免重下；換模型要重新「建立記憶向量」。</div>` : `
+` : `
                         <label class="avs-mem-fld"><span>端點</span><input class="avs-input" id="avs-mem-url" placeholder="https://api.siliconflow.cn/v1" value="${esc(cfg.embeddingUrl || '')}"></label>
                         <label class="avs-mem-fld"><span>模型</span><input class="avs-input" id="avs-mem-model" placeholder="BAAI/bge-m3" value="${esc(cfg.embeddingModel || 'BAAI/bge-m3')}"></label>
-                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-sync" ${cfg.syncKeyWithPrimary !== false ? 'checked' : ''}><span>跟主模型共用 Key（主模型也走 SiliconFlow 就勾，免再填）</span></label>
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-sync" ${cfg.syncKeyWithPrimary !== false ? 'checked' : ''}><span>跟主模型共用 Key${_H('mem_share_key')}</span></label>
                         <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>`}
                         ${(win.OS_API?.isStandalone?.()) ? `<label class="avs-mem-fld"><span>召回條數</span><input class="avs-input avs-mem-num" id="avs-mem-topk" type="number" min="1" max="20" value="${parseInt(cfg.topK) || 5}"></label>` : ''}
-                        <label class="avs-mem-fld"><span>記憶來源</span>
+                        <label class="avs-mem-fld"><span>記憶來源${_H('mem_src')}</span>
                             <select class="avs-input" id="avs-mem-src">
                                 <option value="content"${(cfg.extractSource || 'content') !== 'summary' ? ' selected' : ''}>全文（完整、較花）</option>
                                 <option value="summary"${cfg.extractSource === 'summary' ? ' selected' : ''}>摘要（省、但可能漏對話）</option>
                             </select>
                         </label>
-                        <div class="avs-mem-srchint">「摘要」是拿主模型每輪吐的 &lt;summary&gt; 去記，省 token；那則沒摘要時自動回退全文。</div>
-                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-main-recent" ${cfg.mainRecentOnly ? 'checked' : ''}><span>主模型只注入「近期＋角色」記憶（省 token；舊記憶的精準召回交副模型導演。沒跑副模型導演的別勾）</span></label>
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-main-recent" ${cfg.mainRecentOnly ? 'checked' : ''}><span>只帶近期與角色記憶${_H('mem_main_recent')}</span></label>
                     </div>
                     <div class="avs-st-btn-grid">
                         <button class="avs-btn avs-btn-primary" id="avs-mem-save"><i class="fa-solid fa-floppy-disk"></i> 儲存設定</button>
@@ -193,13 +210,13 @@
                     <div class="avs-mem-test-result" id="avs-mem-test-result"></div>
                 </div>
                 <div class="avs-st-adv-sec">
-                    <div class="avs-st-adv-hd">轉入記憶 <span class="avs-st-adv-hint">換聊天 / 換備份檔(chatId 變了)後，把舊世界的記憶搬過來</span></div>
+                    <div class="avs-st-adv-hd">轉入記憶${_H('mem_move')}</div>
                     ${_srcOptions
                         ? `<div class="avs-mem-move">
                             <select class="avs-input" id="avs-mem-src-world"><option value="">選擇來源世界…</option>${_srcOptions}</select>
                             <button class="avs-btn avs-btn-primary" id="avs-mem-move-btn">轉入到目前</button>
                         </div>
-                        <div class="avs-mem-srchint">把選的世界記憶「複製」到目前世界（來源保留、不刪，確認沒問題再自己清）。</div>`
+`
                         : `<div class="avs-mem-srchint">目前沒有其他世界的記憶可轉。</div>`}
                 </div>
             </div>

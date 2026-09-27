@@ -260,6 +260,11 @@
         .avs-mem-test-result.ok { color: #2e7d32; }
         .avs-mem-test-result.err { color: #c0392b; }
         .avs-mem-srchint { font-size: 11px; color: var(--os-ink-soft); line-height: 1.5; }
+        .avs-mem-progress:empty { display: none; }   /* 平常空著，只在整理／補向量時顯示進度 */
+        /* 按鈕＋右邊的小問號（問號不能塞進按鈕裡） */
+        .avs-mem-bwrap { display: flex; align-items: center; gap: 2px; min-width: 0; }
+        .avs-mem-bwrap > .avs-btn { flex: 1; min-width: 0; }
+        .avs-st-btn-grid > .avs-mem-bwrap { flex: 1; min-width: 130px; }
         .avs-mem-move { display: flex; gap: 8px; align-items: center; }
         .avs-mem-move .avs-input { flex: 1; min-width: 0; }
         .avs-mem-move .avs-btn { flex: 0 0 auto; padding: 8px 14px; font-size: 12px; white-space: nowrap; }
