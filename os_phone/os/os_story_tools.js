@@ -107,6 +107,10 @@
     // ====================================================================
     // A. 大總結
     // ====================================================================
+    // 🧭 關係圖譜要寫主角的每一段關係、寫「現在」：09-27 她說子騫跟趙亦乾睡過兩次、約過會、進過他的私人車庫，
+    //   AI 還寫兩人「狗咬狗」、一下好一下又重來。那一包裡講兩人關係的只有事件（做過什麼）跟角色表一格「炮友」，
+    //   沒有一句說兩人現在怎麼看對方——AI 只好拿人設（性和情感分開、海王）自己解讀，每章解讀回原點。
+    const REL_GUIDE = '（一列是兩個人之間的關係。主角跟誰有持續來往、關係在變，一人一列，不只配角之間。「當前描述」寫兩人現在怎麼看對方、關係走到哪一步——跟剛認識時比變了，就寫出現在變成什麼；一句話，不寫過程）';
     const SUMMARY_DEFAULT_TPL = `要求：
 - 注明这是第{{count}}次大总结。
 - 直接陈述事实、含具体时间、省略冗余；不回避敏感内容、不评价、不修饰、不加粗。
@@ -133,7 +137,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 
 
-【關係圖譜】
+【關係圖譜】${REL_GUIDE}
 | 角色A | 角色B | 關係 | 強度(1-10) | 當前描述 |
 | :--- | :--- | :--- | :--- | :--- |
 
@@ -153,7 +157,9 @@
 【結語】(必填，100字以內純文字，只寫「這一段」的核心走向與結束時關鍵狀態；合併時會逐段累積成大廳快覽，所以別重述舊段、別把整個故事重寫一遍；不要加任何標題、序號、表格或裝飾符號)`;
 
     function getSummaryTemplate() {
-        const t = localStorage.getItem('sp_summary_tpl') || SUMMARY_DEFAULT_TPL;
+        let t = localStorage.getItem('sp_summary_tpl') || SUMMARY_DEFAULT_TPL;
+        // 自訂範本是關係圖譜說明出現以前抄的 → 標題後面補上那句說明，其餘照她的
+        if (t.indexOf(REL_GUIDE) < 0) t = t.replace(/【(關係圖譜|关系图谱)】[^\n]*/, m => m.replace(/（[^）]*）\s*$/, '') + REL_GUIDE);
         if (/【結案表】|【结案表】/.test(t)) return t;
         // 自訂範本是結案表出現以前抄的 → 補上那一段（排在結語前），其餘照她的
         const sec = (SUMMARY_DEFAULT_TPL.match(/【結案表】[\s\S]*?\n(?=\n)/) || [''])[0].trim();
@@ -252,6 +258,9 @@
         }
         return k || String(raw == null ? '' : raw).trim();
     }
+    const REL_HEADERS = new Set(['關係圖譜', '关系图谱']);
+    // 簡繁同形只拿來比對（應子騫＝应子骞），永遠不改寫表裡的字
+    function _fold(s) { try { const Z = win.WX_ZH || window.WX_ZH; return Z && Z.fold ? Z.fold(s) : s; } catch (e) { return s; } }
     function _mergeSection(header, prevBody, incBody) {
         const APPEND = ['事件表', '結算清單', '结算清单', '性事紀', '性事记'];
         const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意规范', '注意規範/記憶事項表', '注意规范/记忆事项表', '結案表', '结案表'];   // 簡體「注意规范」以前漏了 → 掉到「取新」，舊規範每合併一次就被蓋掉
@@ -263,7 +272,10 @@
         if (MERGEKEY.includes(header)) {
             const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
             const order = [], map = {};
-            const add = r => { const k = _normMergeKey(header, _firstCell(r)); if (!(k in map)) order.push(k); map[k] = r; };   // 同(正規化)名更新、新名加後面
+            // 🚨 關係圖譜一列是「兩個人」：以前只拿第一欄當鑰匙，「主角｜游星」跟「主角｜趙亦乾」算同一列、後寫的蓋掉前面的，
+            //    主角永遠只剩一條關係（09-27 都市恶宴：主角跟趙亦乾那條情感線整條不見，AI 只好照人設重來）。現在兩個名字一起當鑰匙、不分先後。
+            const _relKey = r => { const c = _rowCells(r); const f = n => _fold(String(n || '').replace(/[\s*＊]/g, '')); return [f(c[0]), f(c[1])].sort().join('↔'); };
+            const add = r => { const k = REL_HEADERS.has(header) ? _relKey(r) : _normMergeKey(header, _firstCell(r)); if (!(k in map)) order.push(k); map[k] = r; };   // 同(正規化)名更新、新名加後面
             tp.rows.forEach(add); ti.rows.forEach(add);
             // 物品表偏好「新版表頭」(2 欄、無備註)，讓舊 3 欄資料隨新生成收斂；其餘區塊挑欄數較多的表頭(免截掉新增欄)
             const head = (header === '物品表') ? (ti.header || tp.header)
@@ -488,6 +500,13 @@
                     const t = _parseMdTable(body);
                     if (!t.rows.length) continue;
                     body = CLOSED_NOTE + '\n' + _buildMdTable(t);
+                } else if (REL_HEADERS.has(h) && o.withoutClosed) {
+                    // 酒館正文：跟主角有關的那幾列另外放到下筆前（buildRelationBlock），這裡只留配角之間的
+                    const mc = _mcNames(secs);
+                    const t = _parseMdTable(body);
+                    if (mc.size) t.rows = t.rows.filter(r => !_isMcRow(r, mc));
+                    if (!t.rows.length) continue;
+                    body = _buildMdTable(t);
                 } else if (h === '事件表') {
                     const t = _parseMdTable(body);
                     if (t.rows.length > eventsKeep) t.rows = t.rows.slice(-eventsKeep);   // 只留最近 N 筆事件(舊的靠結語涵蓋)
@@ -698,6 +717,51 @@ ${withPrev.join('\n')}
             return true;
         } catch (e) { console.warn('[大總結] 配角近況沒寫成（不影響其他）:', e); return false; }
         finally { delete _lifeBusy[chatId]; }
+    };
+    // ── 🧭 關係現況：關係圖譜裡跟主角有關的那幾列，酒館正文另外放到下筆前（跟結案表、配角近況同一個位置）──
+    //   人設、角色卡寫的是剛出場的樣子，每輪都在、又長；關係走到哪只在總結中間一格。放一起，AI 每章都照人設重來。
+    const REL_NOTE = '（人物設定寫的是他們剛出場時的樣子。下面是他們跟主角現在的關係：寫這幾個人跟主角的互動和心裡想法時，以這裡為準；關係接下來怎麼走，由劇情決定。）';
+    function _mcNames(secs) {
+        const out = [];
+        try { const p = win.OS_PERSONA?.getName?.(); if (p && p !== 'User') out.push(p); } catch (e) {}
+        const ct = secs.find(s => s.header === '角色表');
+        const t = ct ? _parseMdTable(ct.body) : null;
+        if (t && t.header) {
+            const H = _rowCells(t.header);
+            const cName = H.findIndex(h => /姓名|名字/.test(h)), cRel = H.findIndex(h => /关系|關係/.test(h));
+            if (cName >= 0 && cRel >= 0) t.rows.map(_rowCells).forEach(c => { if (/^\s*(MC|主角)/i.test(String(c[cRel] || '')) && c[cName]) out.push(c[cName]); });
+        }
+        const f = n => _fold(String(n || '').replace(/[\s*＊]/g, ''));
+        return new Set(out.map(f).filter(Boolean));
+    }
+    function _isMcRow(row, mc) {
+        const c = _rowCells(row); const f = n => _fold(String(n || '').replace(/[\s*＊]/g, ''));
+        return mc.has(f(c[0])) || mc.has(f(c[1]));
+    }
+    API.buildRelationBlock = function (fullContent) {
+        try {
+            const secs = _splitSummarySections(_stripSummaryHead(fullContent));
+            const s = secs.find(x => REL_HEADERS.has(x.header));
+            if (!s) return '';
+            const mc = _mcNames(secs);
+            if (!mc.size) return '';
+            const lines = _parseMdTable(s.body).rows.filter(r => _isMcRow(r, mc)).map(r => {
+                const c = _rowCells(r);
+                const who = [c[0], c[1]].filter(Boolean).join(' ↔ ');
+                const rel = [c[2], c[3] ? '強度 ' + c[3] : ''].filter(x => x && x !== '-').join('，');
+                return '・' + who + (rel ? '：' + rel : '') + (c[4] && c[4] !== '-' ? '｜' + c[4] : '');
+            });
+            if (!lines.length) return '';
+            return `<關係現況>\n${REL_NOTE}\n${lines.join('\n')}\n</關係現況>`;
+        } catch (e) { return ''; }
+    };
+    API.getCurrentRelationBlock = async function () {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return '';
+            const rec = await _loadTavernSummary(chatId);
+            return (rec && rec.content) ? API.buildRelationBlock(rec.content) : '';
+        } catch (e) { return ''; }
     };
     // 只要結案表那一塊（酒館正文把它另外放到下筆前的位置，見 os_summary_inject）
     API.getCurrentClosedBlock = async function () {

@@ -19,6 +19,9 @@
     const CLOSED_INJECT_ID = 'aurelia_closed_cases';   // 結案表：從總結裡拆出來，放到下筆前（in_chat 淺層）
     const CLOSED_DEPTH = 1;
     const LIFE_INJECT_ID = 'aurelia_npc_life';          // 配角近況：同樣放下筆前（見 os_story_tools buildLifeBlock）
+    const REL_INJECT_ID = 'aurelia_mc_relations';       // 關係現況：主角跟誰現在走到哪，同樣放下筆前（見 os_story_tools buildRelationBlock）
+    let _lastRelUninject = null;
+    const _relCache = new Map();
     let _lastLifeUninject = null;
     const _lifeCache = new Map();
     const _lifeAsked = new Set();   // 這個聊天室這次開著已經叫過「沒有近況就補寫」了
@@ -65,6 +68,16 @@
         const r = win.TavernHelper.injectPrompts([{ id: LIFE_INJECT_ID, content: block, position: 'in_chat', depth: CLOSED_DEPTH, role: 'system' }], { once: true });
         _lastLifeUninject = r?.uninject || null;
     }
+    // 人設、角色卡每輪都在、寫的是剛出場的樣子；關係走到哪要放在離下筆最近的地方，不然 AI 每章照人設重來（09-27 子騫×趙亦乾）
+    async function _injectRel(chatId) {
+        try { _lastRelUninject?.(); } catch (e) {}
+        _lastRelUninject = null;
+        let block = _relCache.get(chatId) || '';
+        if (!block) { try { block = (await win.OS_STORY_TOOLS?.getCurrentRelationBlock?.()) || ''; } catch (e) { block = ''; } if (block) _relCache.set(chatId, block); }
+        if (!block) return;
+        const r = win.TavernHelper.injectPrompts([{ id: REL_INJECT_ID, content: block, position: 'in_chat', depth: CLOSED_DEPTH, role: 'system' }], { once: true });
+        _lastRelUninject = r?.uninject || null;
+    }
     async function _injectClosed(chatId) {
         try { _lastClosedUninject?.(); } catch (e) {}
         _lastClosedUninject = null;
@@ -95,6 +108,7 @@
             await _injectClosed(chatId);
             const payload = await _payloadFor(chatId);
             if (payload) await _injectLife(chatId);   // 有大總結才有近況
+            if (payload) await _injectRel(chatId);
             if (!payload) return;   // 這個聊天室還沒大總結
 
             const block =
@@ -161,6 +175,8 @@
             _lastClosedUninject = null; _closedCache.clear();
             try { _lastLifeUninject?.(); } catch (e) {}
             _lastLifeUninject = null; _lifeCache.clear();
+            try { _lastRelUninject?.(); } catch (e) {}
+            _lastRelUninject = null; _relCache.clear();
         });
         console.log('📜 [Grand Summary Injector] Ready（大總結程式注入，OS_DB→壓縮→injectPrompts）');
     }
@@ -169,8 +185,8 @@
         injectSummary,
         // 存檔/編輯大總結後呼叫 → 丟掉該 chat 的快取，下一輪重抓壓縮版
         invalidate(chatId) {
-            try { if (chatId) { _cache.delete(chatId); _closedCache.delete(chatId); _lifeCache.delete(chatId); } else { _cache.clear(); _closedCache.clear(); _lifeCache.clear(); } }
-            catch (e) { _cache.clear(); _closedCache.clear(); _lifeCache.clear(); }
+            try { if (chatId) { _cache.delete(chatId); _closedCache.delete(chatId); _lifeCache.delete(chatId); _relCache.delete(chatId); } else { _cache.clear(); _closedCache.clear(); _lifeCache.clear(); _relCache.clear(); } }
+            catch (e) { _cache.clear(); _closedCache.clear(); _lifeCache.clear(); _relCache.clear(); }
         },
         get _lastInjected() { return _lastInjected; },
     };
