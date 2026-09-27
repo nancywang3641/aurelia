@@ -218,6 +218,10 @@
 
 type:"item" 的 text 一律寫到「現在」：在誰手上／放在哪／已經沒了（怎麼沒的）。同一件東西這一章換了好幾手，只寫最後的狀態。
 
+type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看對方、關係走到哪一步。這一條會被當成兩人「目前的關係」一直用下去，直到下一次改寫。
+若附了「這一章出場的人，上一次記下的跟主角的關係」，那是到上一章為止的狀態：以它為底，加上這一章發生的事，寫出兩人現在的樣子——已經有過的親密、信任、在意，不會因為這一章吵一架、鬥幾句嘴就歸零。
+這一章兩人的關係沒有真的往前走、也沒有真的倒退，就不要寫 relationship（這一章的互動本身記成 event 就好）。沒附上一次關係的人，照這一章寫。
+
 提取重點：
 - 關鍵事件、角色狀態變化、重要物品、世界規則、人物關係
 - ⭐ type:"dialogue"：每個重要出場角色，抓 1～2 句最能展現其「性格／語氣／口癖」的代表台詞（保留原話），這是用來防止之後 AI 把角色寫 OOC 的依據
@@ -225,7 +229,7 @@ type:"item" 的 text 一律寫到「現在」：在誰手上／放在哪／已�
 跳過：純過場、場景描述、不帶性格的閒聊水詞。
 若無重要內容輸出 []。`;
 
-    async function _extractMemories(chapterContent) {
+    async function _extractMemories(chapterContent, relNow) {
         const secCfg = (win.OS_SETTINGS?.getSecondaryConfig?.()) || (win.OS_SETTINGS?.getConfig?.()) || {};
         secCfg._isSecondary = true;
 
@@ -233,7 +237,7 @@ type:"item" 的 text 一律寫到「現在」：在誰手上／放在哪／已�
             win.OS_API.chat(
                 [
                     { role: 'system', content: EXTRACTION_PROMPT },
-                    { role: 'user',   content: chapterContent.slice(0, 6000) } // 限制長度
+                    { role: 'user',   content: (relNow ? relNow + '\n\n【這一章】\n' : '') + chapterContent.slice(0, 6000) } // 限制長度；關係底稿見 OS_VECTOR_INJECT.relationNow
                 ],
                 secCfg,
                 null,
@@ -277,7 +281,9 @@ type:"item" 的 text 一律寫到「現在」：在誰手上／放在哪／已�
 
         console.log('[VecEngine] 開始 ingest，章節:', chapterId);
         try {
-            const entries = await _extractMemories(cleanContent);
+            let relNow = '';
+            try { relNow = (await win.OS_VECTOR_INJECT?.relationNow?.(cleanContent, storyId)) || ''; } catch (e) {}
+            const entries = await _extractMemories(cleanContent, relNow);
             if (!entries) { console.warn('[VecEngine] 副模型沒抽成，這章舊記憶保留不動:', chapterId); return; }
             await ingestEntries(entries, storyId, chapterId);
         } catch(e) {

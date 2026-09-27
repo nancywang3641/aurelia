@@ -205,6 +205,16 @@
                 } catch (e) {}
             }
 
+            // 最近幾樓（含她剛打的那句）的字：核心角色只給「這一輪會寫到的人」完整關係
+            let _recentKey = '';
+            try {
+                if (win.TavernHelper?.getChatMessages) {
+                    const _lid2 = await win.TavernHelper.getLastMessageId?.();
+                    const _ms2 = (await win.TavernHelper.getChatMessages(Math.max(0, (_lid2 || 0) - 3) + '-' + _lid2)) || [];
+                    _recentKey = _nameKey(_ms2.map(x => String((x && (x.message || x.mes)) || '')).join('\n'));
+                }
+            } catch (e) {}
+
             const _lab = await _chapterLabels(all);            // m → （第N章·6/21），讀不到就空字串
             const _mcKey = _nameKey(_getProtagonist());
             const _labNote = all.some(m => _lab(m)) ? '每條前面的（第幾章·日期）是那件事記下時的章節與故事日期；同一個人或同一樣東西有新舊不同說法時，以章數大的那條為準。\n' : '';
@@ -259,41 +269,49 @@
                 block += `\n\n【角色語氣索引｜下列角色有語氣/說話樣本，需要某角色的說話風格範例就 <recall> 其名】\n・${voiceNames.join('、')}`;
             }
 
-            // ── 🧷 核心角色釘選：npc/relationship 兩類「人」永遠注入完整內文，按角色名去重留最新一條 ──
-            //    防久未出場的夥伴只剩一句乾摘要、被主模型寫成陌生人或遺忘（type 本身就是重要度，不用 AI 另標）。
+            // ── 🧷 核心角色：每個人一格「跟主角到現在的關係」＋「最近的狀態」 ──
+            //   09-27 她：子騫跟趙亦乾睡過、約過會、進過私人車庫，AI 還寫兩人「狗咬狗」、一下好一下重來。
+            //   以前這格是 npc/relationship 裡最新的一條＝最近一章發生的事，吵一架那格就是吵架 → 關係跟著最後一幕擺盪。
+            //   現在 relationship 那條由抽記憶那通「以上一次的關係為底寫到現在」（見 relationNow），這裡分開擺：
+            //   關係＝累積到現在的；最近＝那個人最新的狀態（比關係新才附）。
+            //   她的設計：只有這一輪會寫到的人（最近幾樓、她剛打的那句提到名字）給完整一格，其他人一行摘要——人再多也不擠。
             const CORE_PIN_MAX = 10, CORE_TEXT_MAX = 120;
             const _coreKeys = new Set();
             {
-                const coreByChar = new Map();   // 角色鑰匙(簡繁折一起) → [顯示名, 最新一條]（all 已 createdAt 舊→新排序，後者覆蓋＝留最新）
+                const relBy = new Map(), npcBy = new Map();   // 角色鑰匙(簡繁折一起) → [顯示名, 最新一條]
                 for (const m of all) {
                     if (m.type !== 'npc' && m.type !== 'relationship') continue;
                     const name = _whoOf(m, _mcKey);
-                    if (name) _keepNewest(coreByChar, _nameKey(name), name, m);
+                    if (!name || _nameKey(name) === _mcKey) continue;
+                    _keepNewest(m.type === 'relationship' ? relBy : npcBy, _nameKey(name), name, m);
                 }
-                // 按角色去重留最新一條(收斂)：前 N 個給完整內文、其餘給「最新一句摘要」索引。
-                //   角色/關係改走這裡收斂、不再進零散目錄(facts 已排除)→ 治「舊態度+新態度並存→主模型忽冷忽熱」；
-                //   被擠出前 N 的角色仍有最新摘要一句(不消失、也只給最新不並存舊態度)。
-                const _coreAll = Array.from(coreByChar.values())   // [角色名, 最新一條 m]
-                    .sort((a, b) => (_newer(a[1], b[1]) ? -1 : 1));
-                const core = _coreAll.slice(0, CORE_PIN_MAX);
-                const coreRest = _coreAll.slice(CORE_PIN_MAX);
+                const _txt = (m, max) => { let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim(); return t.length > max ? t.slice(0, max) + '…' : t; };
+                const _sum = m => { let t = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim(); return t.length > MEM_SUM_MAX ? t.slice(0, MEM_SUM_MAX) + '…' : t; };
+                const people = [];
+                new Set([...relBy.keys(), ...npcBy.keys()]).forEach(k => {
+                    const r = relBy.get(k), n = npcBy.get(k);
+                    const rel = r ? r[1] : null, st = n ? n[1] : null;
+                    const newest = rel && st ? (_newer(st, rel) ? st : rel) : (rel || st);
+                    people.push({ k, name: (r || n)[0], rel, st: (st && (!rel || _newer(st, rel))) ? st : null, newest });
+                });
+                people.sort((a, b) => (_newer(a.newest, b.newest) ? -1 : 1));
+                const _hit = p => !!_recentKey && p.k.length >= 2 && _recentKey.indexOf(p.k) >= 0;
+                const core = people.filter(_hit).slice(0, CORE_PIN_MAX);
+                const coreSet = new Set(core.map(p => p.k));
+                const coreRest = people.filter(p => !coreSet.has(p.k));
+                const _mark = m => _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
                 if (core.length) {
-                    block += `\n\n【核心角色｜以下為其「最新」狀態與關係，務必延續、別寫成陌生人、別拿更早的舊態度】\n`;
-                    block += core.map(([name, m]) => {
-                        let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
-                        if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
-                        _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・【${name}】${_lab(m)}${t}`;
+                    block += `\n\n【核心角色｜這一輪劇情提到的人。「關係」是他跟主角累積到現在的關係，「最近」是他最近的狀態；務必延續、別寫成陌生人、別拿更早的舊態度】\n`;
+                    block += core.map(p => {
+                        const parts = [];
+                        if (p.rel) { _mark(p.rel); parts.push(`${_lab(p.rel)}關係：${_txt(p.rel, CORE_TEXT_MAX)}`); }
+                        if (p.st) { _mark(p.st); parts.push(`${_lab(p.st)}${p.rel ? '最近：' : ''}${_txt(p.st, CORE_TEXT_MAX)}`); }
+                        return `・【${p.name}】${parts.join('｜')}`;
                     }).join('\n');
                 }
                 if (coreRest.length) {
-                    block += `\n【其他角色（最新狀態摘要，要細節 <recall> 其名）】\n`;
-                    block += coreRest.map(([name, m]) => {
-                        let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
-                        if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
-                        _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
-                        return `・【${name}】${_lab(m)}${s}`;
-                    }).join('\n');
+                    block += `\n【其他角色（這一輪沒提到；跟主角的關係或最新狀態摘要，要細節 <recall> 其名）】\n`;
+                    block += coreRest.map(p => { const m = p.rel || p.st; _mark(m); return `・【${p.name}】${_lab(m)}${_sum(m)}`; }).join('\n');
                 }
             }
 
@@ -311,7 +329,7 @@
                     const _mc = _getProtagonist();   // 主角名（性事是角色×角色，標頭綁兩個人名才清楚）
                     // 🚨 09-23 她：前期泡友、後期感情加深 → 舊的性事紀錄寫著「泡友」，又每回合喊「務必記得這層關係」，跟核心角色那段最新的關係打架。
                     //    這段只提醒「發生過」，關係一律以核心角色那段（relationship 最新一條）為準；舊紀錄裡寫的關係是當時的，不代表現在。
-                    block += `\n\n【性事紀錄｜主角與下列角色發生過性事，別寫成初次見面或冷淡無情。兩人現在是什麼關係，以上面【核心角色】那段的最新狀態為準；下面紀錄裡若提到關係，那是當時的，不代表現在】\n`;
+                    block += `\n\n【性事紀錄｜主角與下列角色發生過性事，別寫成初次見面或冷淡無情。兩人現在是什麼關係，以上面【核心角色】或【其他角色】裡那個人的關係為準；下面紀錄裡若提到關係，那是當時的，不代表現在】\n`;
                     block += sx.map(([name, m]) => {
                         let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
                         if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
@@ -627,8 +645,26 @@
         } catch (e) { return { ok: false, msg: (e?.message || String(e)) }; }
     }
 
+    // 🧭 給抽記憶那一通：這一章出場的人「上一次記下的跟主角的關係」。抽記憶的只看得到這一章，
+    //   以前 relationship 寫的是這章的互動 → 以這裡為底寫到現在（規則在 os_vector_engine EXTRACTION_PROMPT）。
+    async function relationNow(chapterText, storyId) {
+        try {
+            const sid = storyId || _storyId();
+            if (!sid || !win.OS_DB?.getAllVnMemories) return '';
+            const all = ((await win.OS_DB.getAllVnMemories(sid)) || []).filter(m => m && !m.merged && m.type === 'relationship');
+            if (!all.length) return '';
+            const mcKey = _nameKey(_getProtagonist());
+            const by = new Map();
+            all.forEach(m => { const n = _whoOf(m, mcKey); if (n && _nameKey(n) !== mcKey) _keepNewest(by, _nameKey(n), n, m); });
+            const tk = _nameKey(chapterText);
+            const lines = Array.from(by.entries()).filter(([k]) => k.length >= 2 && tk.indexOf(k) >= 0).slice(0, 10)
+                .map(([, [n, m]]) => `・【${n}】${String(m.text || m.summary || '').replace(/\s+/g, ' ').trim().slice(0, 160)}`);
+            return lines.length ? `【這一章出場的人，上一次記下的跟主角的關係】\n${lines.join('\n')}` : '';
+        } catch (e) { return ''; }
+    }
+
     win.OS_VECTOR_INJECT = {
-        injectMemories, ingestLatest, reconcileToStory,
+        injectMemories, ingestLatest, reconcileToStory, relationNow,
         get _lastRecall() { return _lastRecall; },
         // 結合觸發：state_runtime 取走待處理記憶內容(取走即清，避免重複)
         consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; if (p && p.storyId && p.storyId !== _storyId()) return null; return p; },   // 守衛：不同 chatId 的殘留待處理記憶不給吃(防跨聊天室洩漏)

@@ -748,7 +748,7 @@ ${_fieldChecklist}
             || '從劇情抽出值得長期記住的條目：關鍵事件、角色狀態變化、重要物品、世界規則、人物關係、以及每個重要角色最能代表性格的原句台詞與口癖(防 OOC)。跳過純過場與不帶資訊的閒聊。';
     }
     // 附加在「狀態 prompt」後面：要求同一個 JSON 多吐一個 memories 欄位（共用同一通副模型）
-    function _memoryAddendum() {
+    function _memoryAddendum(relNow) {
         return `
 
 ═══════════════════════════════════════
@@ -757,6 +757,7 @@ ${_fieldChecklist}
 抽取規則：
 ${_memoryRulesText()}
 
+${relNow ? '\n' + relNow + '\n' : ''}
 最終輸出格式：{ "updates": { ... }, "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
     }
     // 🎬 記憶導演：把帶碼全記憶目錄附給副模型，讓它挑「下一輪主模型該被提醒哪幾條」(放進同一個 JSON 的 recall_next)
@@ -784,9 +785,9 @@ ${catText}
 → 最終 JSON 需含 "recall_next" 欄位（你挑出的代號字串組成的陣列，沒有就 []）`;
     }
     // 只有記憶要抽時的獨立 prompt（沒變數包 / 這則狀態已抽過）
-    function _memoryOnlyPrompt(text) {
+    function _memoryOnlyPrompt(text, relNow) {
         return `你是長期記憶抽取器。從下面的劇情抽出值得長期記住的記憶條目。
-
+${relNow ? '\n' + relNow + '\n' : ''}
 【劇情】
 ${text || '（無）'}
 
@@ -1292,11 +1293,16 @@ ${numberedText}`;
                         if (_sum) prompt += '\n\n【劇情大總結（唯讀參照，嚴禁複述進輸出）】\n若「當前狀態」的欄位與下列既成事實不符（例如任務其實已完成、酬勞已領、關係已變化），請在 updates 修正該欄位：\n' + _sum;
                     }
                 } catch (e) {}
-                if (wantMemory) prompt += _memoryAddendum();
+                // 🧭 這一章出場的人上一次記下的關係：relationship 以此為底寫到現在（見 OS_VECTOR_INJECT.relationNow）
+                let _relNow = '';
+                if (wantMemory) { try { _relNow = (await win.OS_VECTOR_INJECT?.relationNow?.(pendingMem.content || recentText || '', pendingMem.storyId)) || ''; } catch (e) {} }
+                if (wantMemory) prompt += _memoryAddendum(_relNow);
                 // 角色去重搭便車：有繁簡/別名候選才把名單塞進這通 prompt（不另開 API）
                 if (localStorage.getItem('sp_avs_dedupe') !== '0') { _dedupe = _buildDedupeBlock(currentState); if (_dedupe) prompt += _dedupe.block; }
             } else if (wantMemory) {
-                prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '');
+                let _relNow2 = '';
+                try { _relNow2 = (await win.OS_VECTOR_INJECT?.relationNow?.(pendingMem.content || recentText || '', pendingMem.storyId)) || ''; } catch (e) {}
+                prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '', _relNow2);
             } else {
                 // 只有插圖：不抽狀態也不抽記憶，這通就純粹是「挑段落 + 寫插圖提示詞」。
                 // 指令本體由下面的 _sceneAddendum 附上（跟搭便車模式同一份規範，不另寫一套）。
