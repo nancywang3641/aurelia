@@ -82,6 +82,31 @@
     // 貼過的頭像：'db:圖庫編號'／'vn:名字' → { url, sprite }；查不到記 { miss: 時間 }（30 秒內再遇到就直接露預設，不空一下）
     const _avtSeen = {};
     const _avtRecentMiss = s => !!(s && s.miss && Date.now() - s.miss < 30000);
+    // 🚨 09-27 她：「點進群聊會卡一下，頭像先是空的，卡一下才載入」。以前每顆泡泡各查一次頭像：
+    //   放养群幾百則＝同時幾百個查詢；圖庫那條每查一次還另外產生一個新的圖片網址（URL.createObjectURL），
+    //   同一張頭像 50 顆泡泡＝50 個網址、解碼 50 次、而且都沒回收。
+    //   現在：一次補頭像先按人分組，每人只查一次（正在查的記在 _avtPending，別處同時要同一個人就等同一個結果），
+    //   同一個網址一次貼給他所有的泡泡。劇情頭像「中途換新」的重查也改成每人 10 秒最多一次。
+    const _avtPending = {};
+    const _avtChecked = {};   // 'vn:名字' → 上次重查的時間
+    // 劇情頭像存的是整張圖的文字編碼（data:，一張常上百 KB）：幾百顆泡泡各塞一份＝同一大串字解析幾百次。
+    //   同一串只轉一次成短網址，之後共用；轉不成就照原樣用。
+    const _shortOf = {};
+    function _shortUrl(hit) {
+        if (!hit || !hit.url || hit.url.indexOf('data:') !== 0 || hit.url.length < 4096) return hit;
+        if (_shortOf[hit.url]) return Object.assign({}, hit, { url: _shortOf[hit.url] });
+        return fetch(hit.url).then(function (r) { return r.blob(); }).then(function (b) {
+            const u = URL.createObjectURL(b);
+            _shortOf[hit.url] = u;
+            return Object.assign({}, hit, { url: u });
+        }).catch(function () { return hit; });
+    }
+    function _avtOnce(k, fn) {
+        if (_avtPending[k]) return _avtPending[k];
+        const p = Promise.resolve().then(fn).finally(function () { delete _avtPending[k]; });
+        _avtPending[k] = p;
+        return p;
+    }
     async function _resolveVNAvatar(name) {
         const win = window.parent || window;
         const vn = win.VN_Core;
@@ -158,37 +183,46 @@
                 if (hit.sprite != null) el.classList.toggle('vn-avt-sprite', !!hit.sprite);
                 el.classList.remove('avt-wait');
             };
-            root.querySelectorAll('.db-load-target:not([data-avt-done])').forEach(async function (el) {
-                const id = el.getAttribute('data-db-bg');
-                if (!id) return;
-                el.setAttribute('data-avt-done', '1');
-                const k = 'db:' + id, seen = _avtSeen[k];
-                if (seen && seen.url) { put(el, seen); return; }   // 圖庫編號一張圖一個（換頭像會換新編號），貼過的就是對的
-                if (!_avtRecentMiss(seen)) el.classList.add('avt-wait');
-                try {
-                    const url = await win.OS_DB.getImage(id);
-                    if (url) { _avtSeen[k] = { url: url }; put(el, _avtSeen[k]); }
-                    else { _avtSeen[k] = { miss: Date.now() }; el.classList.remove('avt-wait'); el.removeAttribute('data-avt-done'); }   // 這次沒拿到，下次還能再試
-                } catch (e) { el.classList.remove('avt-wait'); el.removeAttribute('data-avt-done'); }
-            });
-            root.querySelectorAll('.vn-load-target:not([data-avt-done])').forEach(async function (el) {
-                const name = el.getAttribute('data-vn-name');
-                if (!name) return;
-                el.setAttribute('data-avt-done', '1');
-                const k = 'vn:' + name, seen = _avtSeen[k];
-                if (seen && seen.url) put(el, seen);   // 先貼記得的那張；下面照樣再查一次，劇情中途生了新頭像才換得過去
-                else if (!_avtRecentMiss(seen)) el.classList.add('avt-wait');
-                try {
-                    const hit = await _resolveVNAvatar(name);
+            const giveUp = function (el) { el.classList.remove('avt-wait'); el.removeAttribute('data-avt-done'); };   // 這次沒拿到，下次還能再試
+            // 按人分組：同一個人的泡泡只查一次
+            const groups = {};
+            const collect = function (sel, attr, prefix) {
+                root.querySelectorAll(sel + ':not([data-avt-done])').forEach(function (el) {
+                    const v = el.getAttribute(attr);
+                    if (!v) return;
+                    el.setAttribute('data-avt-done', '1');
+                    const k = prefix + v;
+                    (groups[k] = groups[k] || { v: v, els: [] }).els.push(el);
+                });
+            };
+            collect('.db-load-target', 'data-db-bg', 'db:');
+            collect('.vn-load-target', 'data-vn-name', 'vn:');
+            Object.keys(groups).forEach(function (k) {
+                const g = groups[k], seen = _avtSeen[k], isDb = k.indexOf('db:') === 0;
+                if (seen && seen.url) g.els.forEach(function (el) { put(el, seen); });   // 記得的那張先貼
+                else if (!_avtRecentMiss(seen)) g.els.forEach(function (el) { el.classList.add('avt-wait'); });
+                // 圖庫編號一張圖一個（換頭像會換新編號），貼過的就是對的，不用再查
+                if (isDb && seen && seen.url) return;
+                // 劇情頭像貼過的：照樣再查一次（劇情中途生了新頭像才換得過去），但每人 10 秒最多一次
+                if (!isDb && seen && seen.url && _avtChecked[k] && Date.now() - _avtChecked[k] < 10000) return;
+                _avtOnce(k, function () {
+                    if (!isDb) _avtChecked[k] = Date.now();
+                    return isDb
+                        ? win.OS_DB.getImage(g.v).then(function (url) { return url ? { url: url } : null; })
+                        : _resolveVNAvatar(g.v).then(_shortUrl);
+                }).then(function (hit) {
+                    const cur = _avtSeen[k];
                     if (hit && hit.url) {
-                        if (!seen || seen.url !== hit.url || seen.sprite !== !!hit.sprite) put(el, hit);
-                        _avtSeen[k] = { url: hit.url, sprite: !!hit.sprite };
+                        // 同一張圖別換網址：圖庫每查一次會給新網址，已經有了就沿用舊的、新的立刻回收
+                        if (isDb && cur && cur.url && cur.url !== hit.url) { try { URL.revokeObjectURL(hit.url); } catch (e) {} hit = cur; }
+                        const changed = !cur || cur.url !== hit.url || (!isDb && cur.sprite !== !!hit.sprite);
+                        _avtSeen[k] = isDb ? { url: hit.url } : { url: hit.url, sprite: !!hit.sprite };
+                        g.els.forEach(function (el) { if (changed || el.classList.contains('avt-wait')) put(el, _avtSeen[k]); });
                     } else {
-                        if (!(seen && seen.url)) _avtSeen[k] = { miss: Date.now() };
-                        el.classList.remove('avt-wait');
-                        el.removeAttribute('data-avt-done');
+                        if (!(cur && cur.url)) _avtSeen[k] = { miss: Date.now() };
+                        g.els.forEach(giveUp);
                     }
-                } catch (e) { el.classList.remove('avt-wait'); el.removeAttribute('data-avt-done'); }
+                }).catch(function () { g.els.forEach(giveUp); });
             });
         },
 
