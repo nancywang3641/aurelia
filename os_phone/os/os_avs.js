@@ -1317,6 +1317,95 @@
         return out;
     }
 
+    // ================================================================
+    // 單一角色卡：從啟用中的面板裡，只畫某一個角色那一格（{{#each 容器}} 那段）
+    //   給劇情雙擊立繪的角色卡用——面板做成什麼樣的角色卡，雙擊就顯示什麼樣。
+    //   做法：整張照常畫（同一支渲染引擎），每個角色那段前後插註解當記號，
+    //   畫完只撿這個角色那幾個節點；外面那幾層容器只複製外殼（保留 class，面板 CSS 才對得上），
+    //   版面由呼叫端歸零（class avs-one-anc）。
+    //   回 { css, html } ；沒有啟用的面板、面板沒有逐角色那段、或這個角色不在裡面 → null。
+    // ================================================================
+    function _avsScopeCss(css, scopeSel) {
+        // @keyframes 裡的 from/to/百分比不是選擇器：先整塊抽走，前綴加完再放回去
+        const kept = [];
+        let src = String(css || ''), out = '';
+        for (;;) {
+            const m = /@(?:-webkit-)?keyframes[^{]*\{/i.exec(src);
+            if (!m) { out += src; break; }
+            let i = m.index + m[0].length, depth = 1;
+            while (i < src.length && depth) { if (src[i] === '{') depth++; else if (src[i] === '}') depth--; i++; }
+            out += src.slice(0, m.index) + '/*AVSKF' + kept.length + '*/';
+            kept.push(src.slice(m.index, i));
+            src = src.slice(i);
+        }
+        out = out.replace(/([^{}]+)\{/g, (mm, sel) => {
+            // 抽走的 keyframes 記號會黏在下一段選擇器前面：原樣留著；@media / @supports 這種不是選擇器，不加前綴
+            const lead = (sel.match(/^(?:\s*\/\*AVSKF\d+\*\/)+/) || [''])[0];
+            const rest = sel.slice(lead.length).replace(/\/\*[\s\S]*?\*\//g, '');
+            if (/^\s*@/.test(rest)) return lead + rest + '{';
+            return lead + rest.split(',').map(s => {
+                const t = s.trim();
+                if (!t) return s;
+                if (/^(?::root|html|body)\b/i.test(t)) return t.replace(/^(?::root|html|body)\b/i, scopeSel);
+                return scopeSel + ' ' + t;
+            }).join(', ') + ' {';
+        });
+        return out.replace(/\/\*AVSKF(\d+)\*\//g, (mm, n) => kept[+n] || '');
+    }
+    async function _avsRenderEntityCard(name, scopeSel) {
+        const who = String(name || '').trim();
+        if (!who) return null;
+        let tpls = null;
+        try { if (win.OS_DB?.getAllUITemplates) tpls = ((await win.OS_DB.getAllUITemplates()) || []).filter(t => t.isActive); }
+        catch (e) { tpls = null; }
+        if (!tpls) { try { tpls = JSON.parse(localStorage.getItem('avs_active_ui_templates') || '[]'); } catch (e) { tpls = []; } }
+        tpls = tpls.filter(t => t && t.htmlContent && !t.isVNTag && !t.isBlock && !t.tagId);
+        if (!tpls.length) return null;
+        const state = win._AVS_ENGINE?.read?.() || {};
+        let packs = [];
+        try { packs = (await win.OS_DB?.getAllVarPacks?.()) || []; } catch (e) {}
+        const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v == null ? '' : v));
+        for (const tpl of tpls) {
+            const html = String(tpl.htmlContent);
+            let hitPath = null;
+            html.replace(/\{\{#each\s+([^\s{}]+)\}\}/g, (m, p) => {
+                const c = _avsGetByPath(state, p);
+                if (!hitPath && c && typeof c === 'object' && !Array.isArray(c) && who !== p && Object.prototype.hasOwnProperty.call(c, who)) hitPath = p;
+                return m;
+            });
+            if (!hitPath) continue;
+            const esc = hitPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const marked = html.replace(new RegExp('(\\{\\{#each\\s+' + esc + '\\}\\})([\\s\\S]*?)(\\{\\{\\/each\\}\\})', 'g'),
+                (m, a, inner, b) => a + '<!--avs-one:{{@key}}-->' + inner + '<!--/avs-one-->' + b);
+            const pack = packs.find(p => p.id === tpl.packId);
+            const packVars = pack ? (pack.variables || []) : [];
+            let avMap = {};
+            try { avMap = (await _avsBuildAvatarMap(state, packVars)) || {}; } catch (e) {}
+            let rendered = '';
+            try { rendered = _avsRenderTemplate(marked, state, packVars, fmt, avMap); } catch (e) { continue; }
+            const box = document.createElement('template');
+            box.innerHTML = rendered;
+            const walker = document.createTreeWalker(box.content, NodeFilter.SHOW_COMMENT);
+            let start = null;
+            while (walker.nextNode()) { if (walker.currentNode.data === 'avs-one:' + who) { start = walker.currentNode; break; } }
+            if (!start) continue;
+            const picked = document.createDocumentFragment();
+            for (let n = start.nextSibling; n && !(n.nodeType === 8 && n.data === '/avs-one'); n = n.nextSibling) picked.appendChild(n.cloneNode(true));
+            // 外面那幾層：只要外殼（class、屬性），裡面別的區塊一律不帶
+            let shell = picked;
+            for (let a = start.parentNode; a && a.nodeType === 1; a = a.parentNode) {
+                const c = a.cloneNode(false);
+                c.classList.add('avs-one-anc');
+                c.appendChild(shell);
+                shell = c;
+            }
+            const wrap = document.createElement('div');
+            wrap.appendChild(shell);
+            return { css: _avsScopeCss(tpl.cssContent || '', scopeSel), html: wrap.innerHTML };
+        }
+        return null;
+    }
+
     // 預撈出場角色頭像：{角色名 → 頭像URL}，給模板的 {{@avatar}} 用。async(VN_Cache 是 IndexedDB)。
     async function _avsBuildAvatarMap(state, packVars) {
         const map = {};
@@ -2814,6 +2903,7 @@
     win.OS_AVS = {
         launch: launchApp,
         renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
+        renderEntityCard: _avsRenderEntityCard,   // 只畫某一個角色那張卡(async)：劇情雙擊立繪的角色卡用
         auditTemplate: _auditTemplate,
         classifyObjVar: _classifyObjVar,      // 煉丹前 object 型變數分類＋欄位清單（劇情目標還是 {} 時也要列得出欄位）        // 出爐即校驗：模板接不接得到資料（煉丹後自動跑，也可單獨驗一張舊面板）
         buildAvatarMap: _avsBuildAvatarMap,   // 預撈角色頭像(async) 給 {{@avatar}} 用

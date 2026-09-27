@@ -581,7 +581,7 @@
                 this._lastSpriteTapT   = now;
             }
         },
-        openCharCard: function(idx) {
+        openCharCard: async function(idx) {
             this._stageInit();
             const slot = this._stage[idx];
             if (!slot || !slot.name) return;
@@ -589,10 +589,15 @@
             const st = this._readCharState(name) || {};
             const cv = this._charCV(name);
             const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            // 狀態面板煉過角色卡的話，這張卡就長成面板裡那個角色的樣子（面板有的欄位都在卡上，下面只接固定按鈕與 CV）
+            const SCOPE = '#vn-char-card .vn-cc-avs-body';
+            let avsCard = null;
+            try { avsCard = win.OS_AVS && typeof win.OS_AVS.renderEntityCard === 'function' ? await win.OS_AVS.renderEntityCard(name, SCOPE) : null; } catch (e) { avsCard = null; }
+            if (!this._stage[idx] || this._stage[idx].name !== name) return;   // 等的這一下換人了
 
             let card = document.getElementById('vn-char-card');
             if (!card) { card = document.createElement('div'); card.id = 'vn-char-card'; (document.getElementById('page-game') || document.body).appendChild(card); }
-            card.className = 'vn-cc ' + (idx === 0 ? 'vn-cc-left' : 'vn-cc-right');
+            card.className = 'vn-cc ' + (idx === 0 ? 'vn-cc-left' : 'vn-cc-right') + (avsCard ? ' vn-cc-avs' : '');
             const affRaw = st['好感度'];
             const aff = (affRaw === null || affRaw === undefined || affRaw === '') ? '—' : affRaw;
             const _cvTag = cv ? (cv.source === 'manual' ? '（已綁定·全域）' : (cv.source === 'cardlock' ? '（本卡已鎖）' : '')) : '';
@@ -601,15 +606,22 @@
             let _cvBtn = '';
             if (cv && cv.source === 'session') _cvBtn = '<button class="vn-cc-mini" id="vn-cc-cv-save"><i class="fa-solid fa-floppy-disk"></i> 保存</button>';
             else if (cv && cv.source === 'cardlock') _cvBtn = '<button class="vn-cc-mini" id="vn-cc-cv-unlock"><i class="fa-solid fa-lock-open"></i> 解除</button>';
-            card.innerHTML =
-                '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' +
+            const cvRow = '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + _cvBtn + '</div>';
+            const btns =
                 '<button class="vn-cc-btn" id="vn-cc-gen"><i class="fa-solid fa-palette"></i> 一鍵生立繪（去背）</button>' +
-                '<button class="vn-cc-btn" id="vn-cc-gallery"><i class="fa-solid fa-address-book"></i> 角色圖鑑</button>' +
-                '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + _cvBtn + '</div>' +
-                '<div class="vn-cc-row"><span class="vn-cc-k">形象</span><span class="vn-cc-v">' + esc(st['形象'] || '—') + '</span></div>' +
-                '<div class="vn-cc-row"><span class="vn-cc-k">身分</span><span class="vn-cc-v">' + esc(st['身分'] || st['身份'] || '—') + '</span></div>' +
-                '<div class="vn-cc-row"><span class="vn-cc-k">好感度</span><span class="vn-cc-v">' + esc(aff) + '</span></div>';
-            card.querySelector('.vn-cc-name').textContent = name;
+                '<button class="vn-cc-btn" id="vn-cc-gallery"><i class="fa-solid fa-address-book"></i> 角色圖鑑</button>';
+            if (avsCard) {
+                card.innerHTML =
+                    '<div class="vn-cc-avs-body"><style>' + avsCard.css + '</style>' + avsCard.html + '</div>' +
+                    '<div class="vn-cc-tools">' + btns + cvRow + '</div>';
+            } else {
+                card.innerHTML =
+                    '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' + btns + cvRow +
+                    '<div class="vn-cc-row"><span class="vn-cc-k">形象</span><span class="vn-cc-v">' + esc(st['形象'] || '—') + '</span></div>' +
+                    '<div class="vn-cc-row"><span class="vn-cc-k">身分</span><span class="vn-cc-v">' + esc(st['身分'] || st['身份'] || '—') + '</span></div>' +
+                    '<div class="vn-cc-row"><span class="vn-cc-k">好感度</span><span class="vn-cc-v">' + esc(aff) + '</span></div>';
+                card.querySelector('.vn-cc-name').textContent = name;
+            }
             card.querySelector('#vn-cc-gen').onclick = (e) => this.autoGenSprite(name, e.currentTarget);
             card.querySelector('#vn-cc-gallery').onclick = (e) => {
                 const from = e.currentTarget;   // 劇情可能跑在浮動手機裡，也可能在主窗口：按鈕在哪就開在哪
