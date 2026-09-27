@@ -229,14 +229,16 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
 跳過：純過場、場景描述、不帶性格的閒聊水詞。
 若無重要內容輸出 []。`;
 
-    async function _extractMemories(chapterContent, relNow) {
+    // 回 { entries, recallNext }：entries＝記憶陣列（失敗是 null）；recallNext＝有帶導演時它挑的代號（沒帶或漏寫是 null）
+    const DIRECTOR_FORMAT = '\n\n═══════════════════════════════════════\n【這一通的輸出格式】\n上面兩件事一起做，輸出改成一個 JSON 物件：{ "memories": [ 記憶條目陣列，格式照最上面 ], "recall_next": [ 你挑的代號 ] }\n不要只輸出陣列。';
+    async function _extractMemories(chapterContent, relNow, directorAddendum) {
         const secCfg = (win.OS_SETTINGS?.getSecondaryConfig?.()) || (win.OS_SETTINGS?.getConfig?.()) || {};
         secCfg._isSecondary = true;
 
         return new Promise((resolve) => {
             win.OS_API.chat(
                 [
-                    { role: 'system', content: EXTRACTION_PROMPT },
+                    { role: 'system', content: EXTRACTION_PROMPT + (directorAddendum ? directorAddendum + DIRECTOR_FORMAT : '') },
                     { role: 'user',   content: (relNow ? relNow + '\n\n【這一章】\n' : '') + chapterContent.slice(0, 6000) } // 限制長度；關係底稿見 OS_VECTOR_INJECT.relationNow
                 ],
                 secCfg,
@@ -244,13 +246,22 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
                 // 🚨 失敗一律回 null，不回 []：[] 是「這章真的沒東西好記」，會先清掉同章舊記憶；
                 //    null 讓 ingestEntries 什麼都不動，舊記憶留著
                 (text) => {
+                    const t = String(text || '');
+                    // 帶導演：先試物件 { memories, recall_next }
+                    if (directorAddendum) {
+                        try {
+                            const om = t.replace(/```(?:json)?/gi, '').match(/\{[\s\S]*\}/);
+                            const obj = om ? JSON.parse(om[0]) : null;
+                            if (obj && Array.isArray(obj.memories)) { resolve({ entries: obj.memories, recallNext: Array.isArray(obj.recall_next) ? obj.recall_next : null }); return; }
+                        } catch (e) {}
+                    }
                     try {
-                        const match = (text || '').match(/\[[\s\S]*\]/);
+                        const match = t.match(/\[[\s\S]*\]/);
                         const arr = match ? JSON.parse(match[0]) : null;
-                        resolve(Array.isArray(arr) ? arr : null);
-                    } catch(e) { resolve(null); }
+                        resolve({ entries: Array.isArray(arr) ? arr : null, recallNext: null });
+                    } catch(e) { resolve({ entries: null, recallNext: null }); }
                 },
-                () => resolve(null),
+                () => resolve({ entries: null, recallNext: null }),
                 { task: 'extract', disableTyping: true }
             );
         });
@@ -260,8 +271,9 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
     // 五、Ingest：提取 + 向量化 + 存 IDB
     // ================================================================
 
-    async function ingest(chapterContent, storyId, chapterId) {
-        if (!_isEnabled() || !win.OS_DB?.saveVnMemory) return;
+    // opts.director：這一通順便當記憶導演（AVS 關著時，見 os_vector_inject.directorPlan）。回 { directed }：導演有沒有交出挑選
+    async function ingest(chapterContent, storyId, chapterId, opts) {
+        if (!_isEnabled() || !win.OS_DB?.saveVnMemory) return { directed: false };
 
         // 記憶來源（可在 📝 記憶設定切換）：
         //   'summary' = 讀 PRO 主模型的 <summary>（省 token，但可能漏對話細節）
@@ -277,18 +289,26 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
             const cm = _noCot.match(/<content>([\s\S]*?)<\/content>/i);
             cleanContent = cm ? cm[1] : _noCot;
         }
-        if (!cleanContent.trim()) return;
+        if (!cleanContent.trim()) return { directed: false };
 
         console.log('[VecEngine] 開始 ingest，章節:', chapterId);
+        let directed = false;
         try {
             let relNow = '';
             try { relNow = (await win.OS_VECTOR_INJECT?.relationNow?.(cleanContent, storyId)) || ''; } catch (e) {}
-            const entries = await _extractMemories(cleanContent, relNow);
-            if (!entries) { console.warn('[VecEngine] 副模型沒抽成，這章舊記憶保留不動:', chapterId); return; }
+            let plan = null;
+            if (opts && opts.director) { try { plan = await win.OS_VECTOR_INJECT?.directorPlan?.(cleanContent); } catch (e) {} }
+            const r = await _extractMemories(cleanContent, relNow, plan && plan.addendum);
+            if (plan && r && Array.isArray(r.recallNext)) {
+                try { win.OS_VECTOR_INJECT.applyDirectorPicks(r.recallNext, plan.map); directed = true; } catch (e) {}
+            }
+            const entries = r && r.entries;
+            if (!entries) { console.warn('[VecEngine] 副模型沒抽成，這章舊記憶保留不動:', chapterId); return { directed }; }
             await ingestEntries(entries, storyId, chapterId);
         } catch(e) {
             console.error('[VecEngine] ingest 失敗:', e);
         }
+        return { directed };
     }
 
     // 入庫「已抽好的記憶條目」——給「結合觸發」用：state_runtime 一通副模型同時抽好 memories 後直接丟進來，

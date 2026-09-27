@@ -368,6 +368,13 @@
             //    去重種子帶入 _coreKeys：核心角色已釘在上面，動態細節區不重複佔格。
             let _detailHit = [];
             const _pendingSecCount = _pendingRecallEntries.length, _pendingKwCount = _pendingRecallKeywords.length;
+            try {
+                const _src = [];
+                if (_pendingSecCount) _src.push((_pendingRecallVia === 'auto' ? '自動搜 ' : '記憶導演 ') + _pendingSecCount);
+                if (_pendingRecallMainEntries.length) _src.push('AI 自己點名(代號) ' + _pendingRecallMainEntries.length);
+                if (_pendingKwCount) _src.push('AI 自己點名(關鍵詞) ' + _pendingRecallKeywords.join('、'));
+                console.log('🧠 [Recall] 這輪點名記憶的來源：' + (_src.length ? _src.join('｜') : '沒有'));
+            } catch (e) {}
             {
                 let _cand = [];
                 if (_pendingRecallEntries.length) _cand = _cand.concat(_pendingRecallEntries);          // 副模型導演挑的(主力)
@@ -525,10 +532,32 @@
         } catch (e) { return null; }
     }
     // 副模型挑完的記憶物件 → 存著，下一輪 injectMemories 注入完整內文（最多 8）
-    function setPendingRecall(entries) {
+    //   via：誰挑的（'director' 記憶導演／'auto' 沒導演時自動搜），注入那一刻印出來，查「這條是誰塞進來的」用
+    let _pendingRecallVia = '';
+    function setPendingRecall(entries, via) {
         try { _pendingRecallEntries = (Array.isArray(entries) ? entries : []).filter(Boolean).slice(0, 8); }
         catch (e) { _pendingRecallEntries = []; }
-        if (_pendingRecallEntries.length) console.log('🎬 [Recall導演] 副模型挑了下一輪要回想的記憶 ' + _pendingRecallEntries.length + ' 條');
+        _pendingRecallVia = via || 'director';
+        if (_pendingRecallEntries.length) console.log('🎬 [Recall' + (_pendingRecallVia === 'auto' ? '自動搜' : '導演') + '] 挑了下一輪要回想的記憶 ' + _pendingRecallEntries.length + ' 條');
+    }
+    // 🎬 AVS 關著也要有記憶導演（09-27 她：「開 AVS 或開記憶不應該互相影響，兩者都開就一起合併調用」）。
+    //   以前導演只搭 AVS 那一通；AVS 關著就只剩程式拿整章搜 8 條、沒有任何判斷。
+    //   現在記憶自己那一通（os_vector_engine.ingest）也附同一份候選清單與說明，多回一欄 recall_next——不多叫模型。
+    async function directorPlan(queryText) {
+        try {
+            const RT = win.OS_STATE_RUNTIME;
+            if (!RT || typeof RT.recallAddendum !== 'function') return null;
+            const cat = await getCatalogForPicking(queryText);
+            if (!cat || !cat.text) return null;
+            let closed = [];
+            try { closed = (await win.OS_STORY_TOOLS?.getCurrentClosedNames?.()) || []; } catch (e) {}
+            return { addendum: RT.recallAddendum(cat.text, closed), map: cat.map };
+        } catch (e) { return null; }
+    }
+    function applyDirectorPicks(codes, map) {
+        const picked = (Array.isArray(codes) ? codes : []).map(c => map && map[String(c).trim().toUpperCase()]).filter(Boolean);
+        setPendingRecall(picked, 'director');
+        return picked.length;
     }
 
     // ── 酒館原生生成結束 → 直接 ingest（酒館不走 saveVnChapter，VN_CHAPTER_SAVED 不會發，
@@ -571,8 +600,10 @@
             if (win.OS_STATE_RUNTIME?.isEnabled?.()) {
                 _pendingMemory = { content, storyId, chapterId: cid };
             } else {
-                win.OS_VECTOR_ENGINE.ingest(content, storyId, cid);
-                _selfRecall(content, storyId);   // 沒跑副模型導演 → 自己用本則劇情向量撈相關記憶，存給下一輪注入
+                // 記憶那一通順便當導演（見 directorPlan）；導演沒回才退回「拿本則劇情向量撈 8 條」
+                Promise.resolve(win.OS_VECTOR_ENGINE.ingest(content, storyId, cid, { director: true }))
+                    .then(r => { if (!(r && r.directed)) _selfRecall(content, storyId); })
+                    .catch(() => _selfRecall(content, storyId));
             }
         } catch (e) { console.warn('[Vector Memory Injector] ingestLatest 失敗:', e?.message || e); }
     }
@@ -588,8 +619,9 @@
             const _ok = (m) => m && m.type !== 'dialogue' && !m.merged;
             const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, 8, _ok);   // 先篩再取前 8 名
             const picked = (hits || []).filter(_ok);
-            if (picked.length) setPendingRecall(picked);
-        } catch (e) {}
+            if (picked.length) setPendingRecall(picked, 'auto');
+            else console.warn('[Recall自動搜] 沒搜到任何記憶（向量還沒建好、或這個故事沒有記憶）');
+        } catch (e) { console.warn('[Recall自動搜] 失敗：', e?.message || e); }   // 以前這裡靜默吞掉，09-27 查她那邊為什麼沒生效查不到
     }
 
     // 監聽器把 Promise 交回去 → 酒館 emit 會等注入完才組 prompt；最多等 2.5 秒，免得資料庫卡住連生成一起卡
@@ -670,6 +702,7 @@
         consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; if (p && p.storyId && p.storyId !== _storyId()) return null; return p; },   // 守衛：不同 chatId 的殘留待處理記憶不給吃(防跨聊天室洩漏)
         hasPendingMemory() { return !!_pendingMemory; },
         getCatalogForPicking, setPendingRecall,    // 🎬 記憶導演：給 state_runtime 副模型挑用
+        directorPlan, applyDirectorPicks,          // 🎬 AVS 關著時，記憶那一通順便當導演（os_vector_engine.ingest）
     };
     init();
 })();

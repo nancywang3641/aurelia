@@ -2868,6 +2868,7 @@ _directorSpec(castNames);
         },
         repairOpeningSettings: _repairOpeningSettings,   // 手動補一次開頭 Bg/BGM（測試/救援用）
         compressOldMemories,   // 🗜️ 記憶合併壓縮（治長線過載），給 os_avs_memory 整理鈕呼叫
+        recallAddendum: _recallAddendum,   // 🎬 記憶導演的說明：AVS 關著時記憶那一通（os_vector_engine.ingest）共用同一份
         listAllStateData, removeStateData,
         normalizeChatId,
         getActiveSchema,   // V2：schema 從 AVS 變數包合併（給 status_panel 等外部 UI 用）
