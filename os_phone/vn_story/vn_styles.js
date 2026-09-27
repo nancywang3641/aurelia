@@ -126,6 +126,14 @@
                         <input class="ctx-limit-input ctx-autosum-every" id="ctx-autosum-every" type="number" min="2" max="200" value="20" onchange="window.VN_CtxMonitor._setAutoSum('every', this.value)" />
                         <span class="ctx-autosum-unit">樓</span>
                     </div>
+                    <div class="ctx-autosum-row off" id="ctx-memtidy-row">
+                        <span class="ctx-limit-label"><i class="fa-solid fa-compress"></i> 自動整理記憶</span>
+                        <input type="checkbox" class="ctx-autosum-on" id="ctx-memtidy-on" onchange="window.VN_CtxMonitor._setMemTidy('on', this.checked)" />
+                        <span class="ctx-autosum-unit">每</span>
+                        <input class="ctx-limit-input ctx-autosum-every" id="ctx-memtidy-every" type="number" min="5" max="500" value="30" onchange="window.VN_CtxMonitor._setMemTidy('every', this.value)" />
+                        <span class="ctx-autosum-unit">輪</span>
+                        <span class="ctx-autosum-unit" id="ctx-memtidy-left"></span>
+                    </div>
                     <div class="ctx-row" id="ctx-usage-row"><span class="ctx-label">本輪 API · 生圖</span><span class="ctx-val" id="ctx-usage-cnt">—</span></div>
                     <div id="ctx-breakdown" class="ctx-breakdown">
                         <div class="ctx-bd-head"><span>上下文組成</span><button class="ctx-bd-all" type="button" onclick="window.VN_CtxMonitor.showSegments(); event.stopPropagation();">逐段看 <i class="fa-solid fa-chevron-right"></i></button></div>

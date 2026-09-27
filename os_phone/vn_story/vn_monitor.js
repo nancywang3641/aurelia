@@ -666,11 +666,36 @@
             } catch (e) {}
         },
 
+        // 🗜 自動整理記憶那一行：開關 sp_memtidy_on、輪次 sp_memtidy_every（觸發在 os_story_tools.autoMemTidyTick）
+        _setMemTidy: function(key, val) {
+            try {
+                if (key === 'on') localStorage.setItem('sp_memtidy_on', val ? '1' : '0');
+                else if (key === 'every') {
+                    let n = parseInt(val); if (isNaN(n) || n < 5) n = 30; if (n > 500) n = 500;
+                    localStorage.setItem('sp_memtidy_every', String(n));
+                }
+            } catch (e) {}
+            this._initMemTidyUI();
+        },
+        _initMemTidyUI: function() {
+            try {
+                const T = win.OS_STORY_TOOLS;
+                const on = localStorage.getItem('sp_memtidy_on') === '1';
+                const every = T?.memTidyEvery ? T.memTidyEvery() : 30;
+                const cb = document.getElementById('ctx-memtidy-on'); if (cb) cb.checked = on;
+                const inp = document.getElementById('ctx-memtidy-every'); if (inp && document.activeElement !== inp) inp.value = every;
+                const row = document.getElementById('ctx-memtidy-row'); if (row) row.classList.toggle('off', !on);
+                const left = document.getElementById('ctx-memtidy-left');
+                if (left) left.textContent = on && T?.memTidyCount ? '（還 ' + Math.max(0, every - T.memTidyCount()) + ' 輪）' : '';
+            } catch (e) {}
+        },
+
         // 點開 Ctx 時呼叫（async：原生算 token 是非同步的）
         poll: async function() {
             this.breakdown = null;
             this._bindContentClicks();
             this._initAutoSumUI();
+            this._initMemTidyUI();
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
             if (isStandalone) {
                 this._readFromStandalone();

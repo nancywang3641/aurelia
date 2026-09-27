@@ -475,9 +475,12 @@ ${list}`;
             .filter(m => COMPRESS_TYPES[m.type] && !m.condensed)              // 已壓過的不再壓，避免反覆壓到失真
             .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
         if (compressible.length <= KEEP_RECENT) throw new Error('舊記憶還不夠多、暫時不需要整理');
-        const targets = compressible.slice(0, compressible.length - KEEP_RECENT);
+        let targets = compressible.slice(0, compressible.length - KEEP_RECENT);
         // 按下去之前先告訴她要叫幾次模型（每批一次，失敗的那批會重試）
         if (opts.plan) return { targets: targets.length, calls: Math.ceil(targets.length / CHUNK) };
+        // 自動整理（CTX 面板「自動整理記憶」）：不到一整批不叫模型（叫一次只併兩三條不划算）；一次最多 maxBatches 批、從最舊的開始
+        if (opts.auto && targets.length < CHUNK) throw new Error('舊記憶還不夠多、暫時不需要整理');
+        if (opts.maxBatches > 0) targets = targets.slice(0, opts.maxBatches * CHUNK);
 
         let mergedCount = 0, madeCount = 0;
         for (let i = 0; i < targets.length; i += CHUNK) {

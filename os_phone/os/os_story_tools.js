@@ -1749,6 +1749,39 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             } finally { _autoSumming = false; }
         } catch (e) { _autoSumming = false; console.warn('[自動總結] check 失敗:', e); }
     };
+    // 🗜 自動整理記憶（09-27 她：「像 CTX 面板那樣放一個開關，每幾輪重新整理一下記憶庫，可以關掉，可以輸入輪次」）
+    //   開關 sp_memtidy_on、輪次 sp_memtidy_every（CTX 面板那一行，vn_monitor）；每個故事自己數（sp_memtidy_count）。
+    //   每次都花錢，所以：預設關；一次最多 2 批（2 通）；舊記憶不到一整批不叫；成功失敗都歸零，失敗不會每輪重試。
+    //   到輪了但正在生成／總結 → 計數留著，下一輪再試。
+    const MEMTIDY_CNT = 'sp_memtidy_count';
+    let _memTidying = false, _memTidyTimer = null;
+    function _mtSid() { try { return String(win.OS_AVS_ADAPTER?.getStoryId?.() || ''); } catch (e) { return ''; } }
+    function _mtCounts() { try { return JSON.parse(localStorage.getItem(MEMTIDY_CNT) || '{}') || {}; } catch (e) { return {}; } }
+    function _mtSet(sid, n) { const c = _mtCounts(); if (n) c[sid] = n; else delete c[sid]; try { localStorage.setItem(MEMTIDY_CNT, JSON.stringify(c)); } catch (e) {} }
+    API.memTidyEvery = function () { let n = parseInt(localStorage.getItem('sp_memtidy_every')); if (isNaN(n) || n < 5) n = 30; return Math.min(n, 500); };
+    API.memTidyCount = function () { const s = _mtSid(); return s ? (_mtCounts()[s] || 0) : 0; };
+    API.autoMemTidyTick = async function () {
+        try {
+            if (localStorage.getItem('sp_memtidy_on') !== '1') return;
+            if (win.OS_API?.isStandalone?.()) return;                  // 酒館 only（跟自動總結一樣）
+            if (win.__AURELIA_SUMMARIZING) return;                     // 大總結自己那一通的結束不算一輪
+            const sid = _mtSid(); if (!sid) return;
+            const n = (_mtCounts()[sid] || 0) + 1;
+            _mtSet(sid, n);
+            if (n < API.memTidyEvery()) return;
+            if (_memTidying || _genInProgress || _autoSumming) return; // 到輪了但在忙：計數留著，下一輪再試
+            const RT = win.OS_STATE_RUNTIME;
+            if (!RT?.compressOldMemories || win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) { _mtSet(sid, 0); return; }   // 劇情記憶沒開
+            _memTidying = true;
+            try {
+                const r = await RT.compressOldMemories({ storyId: sid, auto: true, maxBatches: 2 });
+                try { AUI.toastr?.success(`把 ${r.mergedCount} 條舊記憶併成 ${r.madeCount} 條`, '自動整理記憶', { timeOut: 3000 }); } catch (e) {}
+            } catch (e) {
+                const msg = String(e?.message || e);
+                if (!/還不夠多/.test(msg)) { console.warn('[自動整理記憶] 沒整理成:', msg); try { AUI.toastr?.warning('這次沒整理成（' + msg + '），下次到輪再試', '自動整理記憶', { timeOut: 5000 }); } catch (e2) {} }
+            } finally { _memTidying = false; _mtSet(sid, 0); }
+        } catch (e) { _memTidying = false; }
+    };
     // 每輪生成結束 → 延遲檢查(讓 __AURELIA_SUMMARIZING 旗標窗過完、避免總結自己的 GENERATION_ENDED 觸發再總結)
     (function _initAutoSum(tries) {
         try {
@@ -1758,12 +1791,15 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                 win.eventOn(win.tavern_events.GENERATION_ENDED, function () {
                     _genInProgress = false;
                     try { clearTimeout(_autoSumTimer); _autoSumTimer = setTimeout(function () { API.autoSummarizeCheck(); }, 4000); } catch (e) {}
+                    // 自動整理記憶排晚一點：等這一輪的記憶抽完、自動總結跑完
+                    try { clearTimeout(_memTidyTimer); _memTidyTimer = setTimeout(function () { API.autoMemTidyTick(); }, 25000); } catch (e) {}
                 });
                 // 截斷/手動停：stopGeneration 會先發 ENDED(剛排了檢查)再發 STOPPED → 這裡把那輪剛排的檢查取消掉。
                 // 截斷代表這輪要重開、不是完整內容，不能拿去總結；重開那輪正常 ENDED 才會重新排檢查。
                 if (win.tavern_events.GENERATION_STOPPED) win.eventOn(win.tavern_events.GENERATION_STOPPED, function () {
                     _genInProgress = false;
                     try { clearTimeout(_autoSumTimer); _autoSumTimer = null; } catch (e) {}
+                    try { clearTimeout(_memTidyTimer); _memTidyTimer = null; } catch (e) {}   // 停掉的那輪不算
                 });
                 return;
             }
