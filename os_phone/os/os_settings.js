@@ -194,6 +194,7 @@
         { group: '劇情',       id: 'story',        name: '正文（故事）',               def: 'main' },
         { group: '劇情',       id: 'summary',      name: '大總結',                     def: 'main' },
         { group: '劇情',       id: 'extract',      name: '狀態抽取 / 記憶 / 人物檔案', def: 'sec'  },
+        { group: '劇情',       id: 'mem_tidy',     name: '整理舊記憶',                 def: 'sec'  },
         { group: '劇情',       id: 'illust',       name: '插圖描述',                   def: 'sec'  },
         { group: '劇情',       id: 'director',     name: '導演模式',                   def: 'main' },
         { group: '劇情',       id: 'avs_design',   name: '狀態欄位設計 / 整理',        def: 'main' },

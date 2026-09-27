@@ -419,11 +419,12 @@
                 { role: 'user', content: prompt }
             ];
             let done = false;
-            const timer = setTimeout(() => { if (done) return; done = true; reject(new Error('副模型超時')); }, CONFIG.timeoutMs);
+            // 可以在通道換成主模型（09-27 她問），主模型整批寫比較慢：等久一點
+            const timer = setTimeout(() => { if (done) return; done = true; reject(new Error('模型太久沒回應')); }, Math.max(CONFIG.timeoutMs, 180000));
             win.OS_API.chatSecondary(messages, null,
                 (text) => { if (done) return; done = true; clearTimeout(timer); resolve(text); },
                 (err) => { if (done) return; done = true; clearTimeout(timer); reject(err); },
-                { task: 'extract' });
+                { task: 'mem_tidy' });   // 自己一列：換成主模型不會連每輪的記憶抽取一起換過去
         });
     }
     async function _compressRun(prompt) {
@@ -475,6 +476,8 @@ ${list}`;
             .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
         if (compressible.length <= KEEP_RECENT) throw new Error('舊記憶還不夠多、暫時不需要整理');
         const targets = compressible.slice(0, compressible.length - KEEP_RECENT);
+        // 按下去之前先告訴她要叫幾次模型（每批一次，失敗的那批會重試）
+        if (opts.plan) return { targets: targets.length, calls: Math.ceil(targets.length / CHUNK) };
 
         let mergedCount = 0, madeCount = 0;
         for (let i = 0; i < targets.length; i += CHUNK) {

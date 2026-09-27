@@ -316,13 +316,17 @@
             _build();
         };
 
-        // 🗜️ 整理舊記憶（合併壓縮）：交副模型把舊的零碎記憶併成精簡版，治長線過載
+        // 🗜️ 整理舊記憶（合併壓縮）：把舊的零碎記憶併成精簡版，治長線過載。預設副模型，通道「整理舊記憶」可換
         const tidyBtn = q('#avs-mem-tidy');
         if (tidyBtn) tidyBtn.onclick = async () => {
             if (!win.OS_STATE_RUNTIME?.compressOldMemories) { AUI.alert('整理功能尚未載入，請重載擴展'); return; }
             const sid = _storyId();
             if (!sid) { AUI.alert('目前沒有有效的世界（先開著要整理的那個聊天）'); return; }
-            if (!await AUI.confirm('把舊的零碎記憶交副模型併成精簡版？\n\n• 重要角色、關係、代表台詞不會動\n• 最近的記憶保留原樣\n• 原始資料只隱藏不刪、可還原')) return;
+            // 先算要叫幾次模型再問她（每批一次）；用哪個模型在通道的「整理舊記憶」那列選
+            let plan;
+            try { plan = await win.OS_STATE_RUNTIME.compressOldMemories({ storyId: sid, plan: true }); }
+            catch (e) { AUI.alert(e?.message || String(e)); return; }
+            if (!await AUI.confirm(`把 ${plan.targets} 條舊的零碎記憶併成精簡版？會呼叫模型 ${plan.calls} 次。\n\n• 用哪個模型：設置 → API → 通道 的「整理舊記憶」\n• 重要角色、關係、代表台詞不會動\n• 最近的記憶保留原樣\n• 原始資料只隱藏不刪、可還原`)) return;
             const res = q('#avs-mem-tidy-result');
             tidyBtn.disabled = true; const _o = tidyBtn.textContent; tidyBtn.textContent = '整理中…';
             try {
