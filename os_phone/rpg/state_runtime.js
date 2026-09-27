@@ -189,9 +189,68 @@
     }
 
     // 把單筆 patch（key→value）套進 cur：點記法→巢狀；物件→深合併；純值→取新；刪除哨兵→整節點移除；"+=n"→增減量
+    // 🀄 簡繁同名：副模型常把名字寫成繁體、甚至半簡半繁（应子骞 → 应子騫），
+    //   逐字比對會當成新角色，多長出一張只有一兩格的卡。寫入前每一層先找「折成簡體後一樣」的既有鑰匙，
+    //   有就寫回那一個（沿用最早出現的寫法＝正文、立繪用的那個名字）。重算整條時同一條路也會把舊的分身併回去。
+    function _foldKey(obj, k) {
+        if (!obj || typeof obj !== 'object' || Object.prototype.hasOwnProperty.call(obj, k)) return k;
+        const Z = win.OS_ZH;
+        if (!Z || typeof Z.key !== 'function') return k;
+        const fk = Z.key(k);
+        if (!fk) return k;
+        for (const ek of Object.keys(obj)) if (Z.key(ek) === fk) return ek;
+        return k;
+    }
+    function _foldPath(obj, path) {
+        const keys = String(path).split('.');
+        let cur = obj;
+        for (let i = 0; i < keys.length; i++) {
+            keys[i] = _foldKey(cur, keys[i]);
+            cur = (cur && typeof cur === 'object') ? cur[keys[i]] : undefined;
+        }
+        return keys.join('.');
+    }
+    function _foldObjKeys(dst, src) {
+        if (!src || typeof src !== 'object' || Array.isArray(src)) return src;
+        const out = {};
+        for (const k of Object.keys(src)) {
+            const fk = _foldKey(dst, k);
+            const sv = src[k];
+            out[fk] = (sv && typeof sv === 'object' && !Array.isArray(sv)) ? _foldObjKeys(dst && typeof dst === 'object' ? dst[fk] : undefined, sv) : sv;
+        }
+        return out;
+    }
+
+    // 已經長出來的分身（改好之前寫進去的）：同一層裡折成簡體一樣的兩個角色併成一個。
+    //   留先出現的那個名字；分身是後來才長的，它身上的值比較新 → 蓋過去。
+    function _foldMergeDupes(state) {
+        const Z = win.OS_ZH;
+        if (!Z || typeof Z.key !== 'function' || !state || typeof state !== 'object') return 0;
+        let n = 0;
+        for (const ck of Object.keys(state)) {
+            const cont = state[ck];
+            if (!cont || typeof cont !== 'object' || Array.isArray(cont)) continue;
+            const first = {};
+            for (const ek of Object.keys(cont)) {
+                const ev = cont[ek];
+                if (!ev || typeof ev !== 'object' || Array.isArray(ev)) continue;
+                const fk = Z.key(ek);
+                if (!fk) continue;
+                if (!first[fk]) { first[fk] = ek; continue; }
+                const keep = first[fk];
+                cont[keep] = _deepMergeObj(cont[keep], _foldObjKeys(cont[keep], ev));
+                delete cont[ek]; n++;
+                console.log('[State Runtime] 簡繁同名合併：「' + ek + '」併入「' + keep + '」(' + ck + ')');
+            }
+        }
+        return n;
+    }
+
     function _applyPatchInto(cur, p) {
         if (!p || typeof p !== 'object') return;
-        for (const [k, rawV] of Object.entries(p)) {
+        for (const [k0, rawV0] of Object.entries(p)) {
+            const k = _foldPath(cur, k0);
+            const rawV = (rawV0 && typeof rawV0 === 'object' && !Array.isArray(rawV0)) ? _foldObjKeys(cur[k], rawV0) : rawV0;
             const v = _resolveDelta(cur, k, rawV);
             if (v === DEL_SENTINEL) _deleteDeep(cur, k);                       // 退場刪除 → 節點整個移除
             else if (k.includes('.')) _setDeep(cur, k, v);                     // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
@@ -1432,6 +1491,7 @@ ${numberedText}`;
                 //   點記法 _setDeep 只動有變化的葉節點、其餘角色與屬性原封保留。
                 const newCurrent = JSON.parse(JSON.stringify(curNow));
                 _applyPatchInto(newCurrent, filtered);
+                try { _foldMergeDupes(newCurrent); } catch (e) { console.warn('[State Runtime] 簡繁同名合併略過:', e?.message || e); }
                 // 🔁 寫入前先去重：同一角色繁簡/別名重複 → 副模型確認後合併刪除（有候選才花呼叫、無候選 0 成本；sp_avs_dedupe=0 可關）
                 try {
                     if (_dedupe) {   // 這輪有塞去重候選 → 套用主副模型同一通回的 json.dupes（沒併也會記 _dedupeSeen 別再問）

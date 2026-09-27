@@ -136,14 +136,22 @@
                 else { const n = parseFloat(trimmed); parsed = isNaN(n) ? trimmed : n; }
 
                 // 點記法：走巢狀路徑，不存在則自動建立
+                //   每一層先找「折成簡體後一樣」的既有鑰匙（应子騫 → 应子骞），免得長出同一個人的分身
                 const keys = path.split('.');
+                const _fold = (o, k) => {
+                    const Z = win.OS_ZH;
+                    if (!o || typeof o !== 'object' || Object.prototype.hasOwnProperty.call(o, k) || !Z || typeof Z.key !== 'function') return k;
+                    const fk = Z.key(k);
+                    for (const ek of Object.keys(o)) if (Z.key(ek) === fk) return ek;
+                    return k;
+                };
                 let cur = state;
                 for (let i = 0; i < keys.length - 1; i++) {
-                    const k = keys[i];
+                    const k = keys[i] = _fold(cur, keys[i]);
                     if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
                     cur = cur[k];
                 }
-                const lastKey = keys[keys.length - 1];
+                const lastKey = _fold(cur, keys[keys.length - 1]);
                 const existing = cur[lastKey];
                 const curNum = typeof existing === 'number' ? existing : (parseFloat(existing) || 0);
                 const parsedNum = typeof parsed === 'number' ? parsed : 0;
