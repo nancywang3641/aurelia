@@ -258,6 +258,19 @@
         },
 
         /**
+         * 只合成、不播：回 Blob。AI 助手房間的語音泡泡自己播、自己留著重播，同一句不會扣兩次錢。
+         * 沒填金鑰丟 NO_KEY、沒音色丟 NO_VOICE、整句念不出東西（只有標點）丟 NOTHING_TO_SAY。
+         */
+        async synth(text, voiceId, options = {}) {
+            const cfg = this.getConfig();
+            if (!cfg.groupId || !cfg.apiKey) throw new Error('NO_KEY');
+            if (!voiceId) throw new Error('NO_VOICE');
+            const textForTts = cleanTextForTts(text, VOCAL_SUPPORT_MODELS.has(cfg.speechModel || ''));
+            if (!textForTts || !_hasSpeakable(textForTts)) throw new Error('NOTHING_TO_SAY');
+            return _callTtsApi(textForTts, voiceId, options, cfg);
+        },
+
+        /**
          * 合成並播放語音
          * @param {string} text
          * @param {string} voiceId
