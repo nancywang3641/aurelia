@@ -1,4 +1,6 @@
-        .avs-container { width: 100%; height: 100%; background: var(--os-page-bg); color: var(--os-ink); display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; position: relative; }
+        /* contain: layout → 裡面那些 position:fixed 的小窗口（煉丹爐、條件規則、調整貼紙…）以這個面板為準，
+           只蓋住手機畫面；沒有它，電腦上視窗夠高時小窗口會衝出手機、後面露出整支手機框（09-28 她看到的）。 */
+        .avs-container { width: 100%; height: 100%; background: var(--os-page-bg); color: var(--os-ink); display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; position: relative; contain: layout; }
         .avs-header { padding: 15px 20px; background: rgba(var(--os-tint-rgb), 0.92); border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.15); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         .avs-header { padding-top: calc(15px + env(safe-area-inset-top, 0px)); }
         body.layout-pad-ios .avs-header { padding-top: 55px !important; }
