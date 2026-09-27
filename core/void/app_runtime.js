@@ -139,18 +139,7 @@
         const boot = _bridgeScript(opts);
         const src = String(html == null ? '' : html);
         iframe.srcdoc = /<head[^>]*>/i.test(src) ? src.replace(/<head[^>]*>/i, function (m) { return m + boot; }) : (boot + src);
-        // 手機桌面開的 app 會整頁被推到狀態列底下（見 phone_shell.css），上面讓出來那一條要有顏色，
-        // 不然時間訊號電池會坐在一條跟 app 完全無關的白上。進去抄 app 自己的底色塗回外框。
-        iframe.addEventListener('load', function () {
-            try {
-                if (!container.classList || !container.classList.contains('aps-mount')) return;
-                const d = iframe.contentDocument;
-                if (!d || !d.body) return;
-                const bg = win.getComputedStyle(d.body).backgroundColor;
-                const m = String(bg).match(/[\d.]+/g);
-                if (m && (m[3] === undefined || parseFloat(m[3]) > 0.5)) container.style.background = bg;
-            } catch (e) {}
-        });
+        // 狀態列那條的顏色由手機殼進這個窗口裡量（phone_shell.js 的 _syncStatusBar），這裡不用管
         container.appendChild(iframe);
         return function cleanup() { try { iframe.remove(); } catch (e) {} };
     }

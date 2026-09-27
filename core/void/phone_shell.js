@@ -242,30 +242,65 @@
     // 做法：量一次島底下那塊真正的底色。狀態列自己是 pointer-events:none，
     //       elementFromPoint 會直接穿過它拿到底下的 app 標頭，不必每個 app 都來登記一遍。
     // 回主畫面時清掉，讓主題自己那個顏色回來。
+    //   09-27 起還負責「塗色」：app 區整個從狀態列底下開始（phone_shell.css），狀態列那條照正下方那塊塗——
+    //   量的點從「狀態列中間」改成「狀態列正下方」，那裡就是 app 最上面那一列（標頭）。
+    //   橫向漸層（Win98 那種左深右淺的標頭）連漸層一起抄；直向漸層只取最上面那個顏色，接得上標頭頂端。
+    //   商城裝的 app 在自己的窗口裡：伸進窗口裡量同一個位置（同源 srcdoc 讀得到），窗口還沒載完就等它載完再量一次。
+    function _clearSbPaint(frame) {
+        delete frame.dataset.sb; delete frame.dataset.sbPaint;
+        frame.style.removeProperty('--aps-sb-app-bg'); frame.style.removeProperty('--aps-sb-app-img');
+    }
+    function _rgbOf(s) { const m = String(s || '').match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(/[\s,\/]+/).filter(Boolean).map(Number); return (p.length >= 3) ? p : null; }
+    function _sampleTop(doc, x, y) {
+        let hit = doc.elementFromPoint(x, y);
+        if (hit && hit.tagName === 'IFRAME') {
+            let inner = null;
+            try { inner = hit.contentDocument; } catch (e) {}
+            if (!inner || inner.readyState !== 'complete' || !inner.body) return { wait: hit };
+            const ir = hit.getBoundingClientRect();
+            return _sampleTop(inner, Math.max(1, x - ir.left), Math.max(1, y - ir.top));
+        }
+        const view = (doc.defaultView || win);
+        let n = hit, color = null, img = null;
+        while (n && n.nodeType === 1) {
+            const cs = view.getComputedStyle(n);
+            if (!img && /gradient\(/.test(cs.backgroundImage)) img = cs.backgroundImage;
+            const c = _rgbOf(cs.backgroundColor);
+            if (c && (c[3] === undefined || c[3] > 0.85)) { color = c; break; }
+            n = n.parentElement;
+        }
+        return { color: color, img: img };
+    }
     function _syncStatusBar() {
         if (!_el) return;
         const frame = _el.querySelector('.aps-frame');
         if (!frame) return;
         const app = _el.querySelector('#aps-app');
-        if (!app || app.style.display === 'none') { delete frame.dataset.sb; return; }
+        if (!app || app.style.display === 'none') { _clearSbPaint(frame); return; }
         // 等 app 把自己畫出來再量；沒畫完就量會抓到還沒上色的容器
         win.requestAnimationFrame(function () {
             try {
                 const sb = _el.querySelector('.aps-statusbar');
                 const r = sb.getBoundingClientRect();
-                const hit = document.elementFromPoint(Math.round(r.left + 40), Math.round(r.top + r.height / 2));
-                let n = hit, bg = null;
-                while (n && n !== document.documentElement) {
-                    const c = win.getComputedStyle(n).backgroundColor;
-                    const m = String(c).match(/[\d.]+/g);
-                    if (m && (m[3] === undefined || parseFloat(m[3]) > 0.85)) { bg = m.map(Number); break; }
-                    n = n.parentElement;
+                const s = _sampleTop(document, Math.round(r.left + r.width / 2), Math.round(r.bottom + 2));
+                if (s.wait) { s.wait.addEventListener('load', function () { win.setTimeout(_syncStatusBar, 60); }, { once: true }); return; }
+                let tone = s.color;
+                let paintImg = 'none', paintBg = s.color ? 'rgb(' + s.color.slice(0, 3).join(',') + ')' : '';
+                if (s.img) {
+                    const first = _rgbOf(s.img);
+                    const horizontal = /gradient\(\s*(?:to (?:left|right)|-?(?:90|270)deg)/i.test(s.img);
+                    if (horizontal) paintImg = s.img;
+                    else if (first) paintBg = 'rgb(' + first.slice(0, 3).join(',') + ')';
+                    if (first) tone = first;
                 }
-                if (!bg) { delete frame.dataset.sb; return; }
+                if (!tone) { _clearSbPaint(frame); return; }
+                frame.style.setProperty('--aps-sb-app-bg', paintBg || 'transparent');
+                frame.style.setProperty('--aps-sb-app-img', paintImg);
+                frame.dataset.sbPaint = '1';
                 const lin = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-                const lum = 0.2126 * lin(bg[0]) + 0.7152 * lin(bg[1]) + 0.0722 * lin(bg[2]);
+                const lum = 0.2126 * lin(tone[0]) + 0.7152 * lin(tone[1]) + 0.0722 * lin(tone[2]);
                 frame.dataset.sb = lum < 0.45 ? 'light' : 'dark';
-            } catch (e) { delete frame.dataset.sb; }
+            } catch (e) { _clearSbPaint(frame); }
         });
     }
     // app 開起來之後畫面還會再變：創作室、聊天設置那種整頁蓋上來的，底下那塊顏色跟著換
@@ -274,11 +309,17 @@
     let _sbT = 0;
     function _watchStatusBar(body) {
         if (!body || !win.MutationObserver) return;
-        const mo = new win.MutationObserver(function () {
+        const later = function () {
             if (_sbT) return;
             _sbT = win.setTimeout(function () { _sbT = 0; _syncStatusBar(); }, 250);
-        });
+        };
+        const mo = new win.MutationObserver(later);
         mo.observe(body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+        // 沒有固定標頭、整頁一起捲的面板：捲動後頂端那塊換了顏色，狀態列要跟上
+        body.addEventListener('scroll', later, { capture: true, passive: true });
+        // 換主題（聊天 app 主題、泡泡、手機主題…）是把樣式塞進 <head>，app 區裡什麼都沒動 → 也要重量。
+        //   盯 head 一次就好，不必每個主題功能各自來通知。
+        try { new win.MutationObserver(later).observe(document.head, { childList: true, subtree: true, characterData: true }); } catch (e) {}
     }
 
     // ── 狀態列時鐘 ──
