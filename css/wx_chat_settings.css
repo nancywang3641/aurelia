@@ -9,7 +9,10 @@
         
         .ws-header { height: 50px; background: var(--wx-surface); color: var(--wx-ink); display: flex; align-items: center; justify-content: center; padding: 0 15px; border-bottom: 1px solid var(--wx-line); flex-shrink: 0; position: relative; }
         .ws-title { font-weight: bold; font-size: 17px; color: inherit; max-width: calc(100% - 110px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }   /* 標題是聊天室名字，名字長就省略，別撞到左邊的返回 */
-        .ws-close { position: absolute; left: 10px; min-width: 44px; font-size: 16px; color: inherit; cursor: pointer; display: flex; align-items: center; height: 100%; font-weight: 500; }
+        /* 🚨 高度別寫 100%：手機殼會讓標頭往上長一塊讓狀態列（phone_shell .ws-overlay > .ws-header），100% 就連那塊一起吃，
+           從手機最頂端長到標頭底下。沒主題時透明看不出來，主題一畫成按鈕就是一根又高又歪的條（09-27 她的 Win98 主題）。
+           固定一顆、貼在標頭底下那 50px 那一排的正中間。 */
+        .ws-close { position: absolute; left: 10px; bottom: 7px; height: 36px; min-width: 36px; font-size: 16px; color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 500; box-sizing: border-box; }
         .ws-close:before { content: '‹'; font-size: 26px; margin-right: 2px; margin-top: -3px; font-weight: 300; }
         
         .ws-body { flex: 1; overflow-y: auto; padding-bottom: 40px; }
