@@ -243,8 +243,38 @@
     function _curChatId() {
         try { return win.OS_AVS_ADAPTER?.getCurrentChatId?.() || ''; } catch (e) { return ''; }
     }
+    // 第二層（目前狀態／追蹤欄位／資料管理）整屏：收起 app 標頭與分頁列，換上同款標頭，左上那顆就是回上一層。
+    //   以前第二層自己在內容裡放一顆「‹ 返回」，上面 app 標頭的「‹」還在（按了是離開整個 app），
+    //   兩顆返回疊在一起，她一直按到上面那顆。
+    const L2_TITLES = {
+        current: '<i class="fa-solid fa-chart-simple"></i> 目前狀態',
+        fields: '<i class="fa-solid fa-gear"></i> 追蹤欄位',
+        data: '<i class="fa-solid fa-folder-tree"></i> 資料管理',
+    };
+    function _syncL2Bar() {
+        const box = _host && _host.closest('.avs-container');
+        if (!box) return;
+        const on = !!L2_TITLES[_page];
+        box.classList.toggle('avs-l2-full', on);
+        if (!on) return;
+        let bar = box.querySelector(':scope > .avs-l2-bar');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.className = 'avs-header sysh avs-l2-bar';
+            bar.innerHTML = '<div class="avs-back-btn sysh-back avs-l2-back">‹</div><div class="avs-title sysh-title"></div><div class="sysh-act"></div>';
+            const hd = box.querySelector(':scope > .avs-header');
+            if (hd) hd.after(bar); else box.prepend(bar);
+        }
+        bar.querySelector('.sysh-title').innerHTML = L2_TITLES[_page];
+        bar.querySelector('.avs-l2-back').onclick = () => {
+            _page = 'home'; _editingValues = false; _build();
+            try { _host.closest('.avs-content')?.scrollTo?.(0, 0); } catch (e) {}
+        };
+    }
+
     async function _build(opts) {
         if (!_host) return;
+        _syncL2Bar();
         if (_refreshPending && !_editingValues) { _refreshPending = false; opts = Object.assign({}, opts || {}, { fresh: true }); }
         const eng = win._AVS_ENGINE;
         const chatId = _curChatId();
@@ -333,6 +363,7 @@
             </div>` : '';
 
         if (!hasSchema) {
+            if (_page !== 'home') { _page = 'home'; _editingValues = false; _syncL2Bar(); }
             _host.innerHTML = `<div class="avs-st">
                 ${storyHtml}
                 ${directorCardHtml}
@@ -464,10 +495,6 @@
         // ── 第二層：📊 目前狀態 操作頁 ──────────────────────────────
         if (_page === 'current') {
             _host.innerHTML = `<div class="avs-st avs-st-l2">
-                <div class="avs-st-l2hd">
-                    <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
-                    <div class="avs-st-l2title"><i class="fa-solid fa-chart-simple"></i> 目前狀態</div>
-                </div>
                 <div class="avs-st-cur-editbar">
                     ${copyBtnHtml}
                     <div class="avs-st-editbar-r">
@@ -493,10 +520,6 @@
         // ── 第二層：⚙️ 追蹤欄位（只管「AI 要盯著記什麼」，不混資料操作）──
         if (_page === 'fields') {
             _host.innerHTML = `<div class="avs-st avs-st-l2">
-                <div class="avs-st-l2hd">
-                    <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
-                    <div class="avs-st-l2title"><i class="fa-solid fa-gear"></i> 追蹤欄位</div>
-                </div>
                 <div class="avs-st-adv is-page">
                     <div class="avs-st-adv-sec">
                         <div class="avs-st-adv-hd">追蹤欄位（${Object.keys(fields).length}）<span class="avs-st-adv-hint">AI 會盯著這些東西記錄</span></div>
@@ -512,10 +535,6 @@
         // ── 第二層：🗂️ 資料管理（破壞性操作與跨世界，集中一處免得散落）──
         if (_page === 'data') {
             _host.innerHTML = `<div class="avs-st avs-st-l2">
-                <div class="avs-st-l2hd">
-                    <button class="avs-st-back" id="avs-st-back">‹ 返回</button>
-                    <div class="avs-st-l2title"><i class="fa-solid fa-folder-tree"></i> 資料管理</div>
-                </div>
                 <div class="avs-st-adv is-page">
                     ${adoptHtml}
                     <div class="avs-st-adv-sec">
@@ -795,7 +814,6 @@
         { const b = q('#avs-st-nav-cur'); if (b) b.onclick = () => { _page = 'current'; _build(); _goTop(); }; }
         { const b = q('#avs-st-nav-fields'); if (b) b.onclick = () => { _page = 'fields'; _build(); _goTop(); }; }
         { const b = q('#avs-st-nav-data'); if (b) b.onclick = () => { _page = 'data'; _build(); _goTop(); }; }
-        { const b = q('#avs-st-back'); if (b) b.onclick = () => { _page = 'home'; _editingValues = false; _build(); _goTop(); }; }
         // ✏️ 改數值 / 💾 儲存 / 取消（手動修正 AI 填錯的狀態值）
         { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _page = 'current'; _build(); }; }
         { const sb = q('#avs-st-val-save'); if (sb) sb.onclick = () => { _saveStateValues(); }; }

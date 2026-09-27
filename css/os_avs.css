@@ -116,7 +116,7 @@
         .avs-st-section { background: rgba(var(--os-tint-rgb), 0.85); border: 1px solid rgba(var(--os-ink-rgb), 0.12); border-radius: 10px; overflow: hidden; }
         .avs-st-section-hd { font-size: 13px; font-weight: 800; color: var(--os-ink); padding: 10px 14px; background: rgba(var(--os-ink-rgb), 0.05); border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.08); }
         .avs-st-section-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
-        .avs-st-entity { background: rgba(255,255,255,0.55); border: 1px solid rgba(var(--os-ink-rgb), 0.10); border-radius: 8px; padding: 8px 10px; }
+        .avs-st-entity { background: rgba(var(--os-ink-rgb), 0.05); border: 1px solid rgba(var(--os-ink-rgb), 0.10); border-radius: 8px; padding: 8px 10px; }
         .avs-st-entity-hd { font-size: 12.5px; font-weight: 700; color: var(--os-ink-soft); margin-bottom: 6px; }
         .avs-st-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px dashed rgba(var(--os-ink-rgb), 0.07); }
         .avs-st-row:last-child { border-bottom: none; }
@@ -161,6 +161,11 @@
         .avs-st-nav-chev { flex-shrink: 0; font-size: 22px; color: var(--os-ink-soft); }
         /* 第二層：操作頁頭 + 返回 */
         .avs-st-l2hd { display: flex; align-items: center; gap: 12px; }
+        /* 第二層整屏（os_avs_state.js 的 _syncL2Bar）：app 標頭與分頁列收起，換成同款標頭 */
+        /*   🚨 標頭掛著 .sysh.sysh（兩個 class 的權重、寫 display:grid），藏它要比它重 */
+        .avs-container:not(.avs-l2-full) > .avs-l2-bar.sysh { display: none; }
+        .avs-container.avs-l2-full > .avs-header:not(.avs-l2-bar),
+        .avs-container.avs-l2-full > .avs-tabs { display: none; }
         .avs-st-back { flex-shrink: 0; display: inline-flex; align-items: center; padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--os-ink); background: rgba(var(--os-tint-rgb), 0.9); border: 1px solid rgba(var(--os-ink-rgb), 0.12); border-radius: 10px; cursor: pointer; transition: .2s; }
         .avs-st-back:hover { background: var(--os-page-bg); }
         .avs-st-l2title { font-size: 16px; font-weight: 800; color: var(--os-ink); }
