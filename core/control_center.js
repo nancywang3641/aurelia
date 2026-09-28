@@ -727,6 +727,7 @@
             worldbook:  () => window.OS_WORLDBOOK?.launch,
             journal:    () => window.OS_JOURNAL?.launch,
             landlord:   () => window.OS_LANDLORD?.launch,
+            farm:       () => window.OS_FARM?.launch,   // 🌱 後院（農場＋牧場）：手機殼「後院」app 開進來，全螢幕
         };
         const getFn = GAME_APP_MAP[key];
         if (!getFn) return;

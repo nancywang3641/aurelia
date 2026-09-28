@@ -233,6 +233,7 @@ const PHONE_FILES = [
     'os/os_blueprints.js',    // 📘 設計藍圖：整房風格商品（取代家具商城）＋訂製＋套用一條龍（依賴 OS_DB/OS_PT/OS_API/OS_ROOM_GEN/OS_LANDLORD）
     'os/os_landlord_room.js', // 📦 包租婆房間頁＋包裹配送 UI（依賴 OS_LANDLORD/OS_ROOM_GEN）
     'os/os_landlord_book.js', // 🏢 房產手帳窗口：大廳 dock 開啟的獨立窗口＝收租帳+戶卡+藍圖冊（白藍視差皮）
+    'os/os_farm.js',          // 🌱 後院（農場＋牧場）入口：只登記這一支，os_phone/farm/ 那批與 farm.css 第一次打開才自己載
     'os/os_worldgate.js',     // 🌌 世界門③：愛麗絲面板=種子抽選+世界落地視差書+旅人招募+DIVE（依賴 OS_DB/OS_API/AURELIA_WORLDGATE；設計書 docs/parallax_worldgate_design.md）
 
     // === 📖 VN 視覺小說系統 ===

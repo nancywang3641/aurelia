@@ -49,6 +49,10 @@
             const x = document.getElementById('vn-reader-sa-close');
             if (x) x.onclick = _home;   // 統一返回：閱讀 ✕ → 回手機主畫面
         } },
+        // 🌱 後院：阿洛的農場＋牧場（os_phone/os/os_farm.js，第一次打開才載入那批檔）。自己走的舞台，要整個畫面 → out
+        { id: 'farm', name: '後院', icon: 'fa-seedling', mode: 'out', go: function () {
+            if (win.AureliaControlCenter && win.AureliaControlCenter.launchGameApp) win.AureliaControlCenter.launchGameApp('farm');
+        } },
         // 🏪 黑市已搬到 404 號房的柴郡身上（快轉地圖→404→點柴郡→黑市；立繪模式走前往→黑市）；手機不再重複開一個門。
         { id: 'settings', name: '樣式', icon: 'fa-paintbrush', mode: 'inside', go: function (c) { _renderSettings(c); } },
         { id: 'appstore', name: '應用商城', icon: 'fa-bag-shopping', mode: 'inside', go: function (c) { return _need(win.APP_STORE && win.APP_STORE.launch ? win.APP_STORE : null, '應用商城').launch(c); } },

@@ -1066,6 +1066,10 @@
         S.onKey = (e) => {
             const tag = (document.activeElement?.tagName || '').toLowerCase();
             if (tag === 'input' || tag === 'textarea') return;
+            // 🌱 全螢幕 app（後院、故事日誌…走 launchGameApp 開的那一格）蓋在大廳上時，按鍵是它的：
+            //    這裡是捕獲階段又會 stopImmediatePropagation，不讓開的話方向鍵永遠到不了那個 app，大廳的小人還會在後面偷走
+            const appPanel = document.getElementById('aurelia-panel-container');
+            if (appPanel && appPanel.style.display !== 'none' && appPanel.getClientRects().length && appPanel.querySelector('#aurelia-iframe-container > *')) return;   // 那一格是 fixed，offsetParent 永遠是 null，要用 getClientRects
             const k = e.key.toLowerCase();
             // 🎮 對話快捷鍵：走近 NPC 按 E/F 開聊；對話中按 E/F/Esc 收起（省得每次點 ✖）。不做「移動自動關」避免誤觸。
             if (e.type === 'keydown' && (k === 'e' || k === 'f' || k === 'escape')) {
