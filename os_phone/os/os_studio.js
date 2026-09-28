@@ -1404,7 +1404,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
   #vn-end-overlay .......... 章末才出現的全螢幕層（本身透明、不擋點擊）
     #vn-end-basic .......... 收尾鈕組：直排、置中、按鈕同寬
       #vn-end-btn-data ..... 資料中心（主鈕，比其他四顆大一號）
-      #vn-end-btn-ctx／#vn-end-btn-journal／#vn-end-btn-map／#vn-end-btn-regen ... 其餘四顆
+      #vn-end-btn-ctx／#vn-end-btn-journal／#vn-end-btn-threads／#vn-end-btn-map／#vn-end-btn-regen ... 其餘五顆
     #vn-end-panel .......... 有些世界會在這裡換上它專屬的收尾面板（另外生成的，不歸你管）
   #game-settings-overlay ... 設定視窗的暗幕（按了設定才出現）
     #game-settings-window .. 視窗本體：直排，標題列在上、內容區在下可捲動
@@ -1439,7 +1439,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - #vn-panel-controls 與 .vn-panel-btn：對話框上緣那排小鈕。外面只有三顆：LOG（翻對話紀錄）、SKIP（跳過）、☰（其他功能）；按 ☰ 會往上浮出 #vn-more-menu，裡面是同款的 .vn-panel-btn。你只要把 .vn-panel-btn 設計好，浮窗裡的鈕自動跟著。（.vn-panel-btn.active 為啟用態。）「位置不要動」，只重新上色/造型配合主題。
 - #btn-home、#btn-settings、#btn-phone：畫面右上角的頂部按鈕（返回 / 設定 / 應用）。「位置不要動」，只重新統一它們的外觀配合主題。
 - #vn-chapter-card 與 #vncc-box：章節卡（每一章開頭浮出來的那張卡：故事名 #vncc-story、章號 #vncc-num、章名 #vncc-title、分隔線 #vncc-rule、引言 #vncc-preface、資訊格 .vncc-cell/.vncc-cell-k/.vncc-cell-v、開始閱讀鈕 #vncc-enter）。⚠️這張卡預設會「抄對話框當下的皮」，所以你只寫對話框它也會跟著變；要單獨設計它，對 #vncc-box 的宣告一律加 !important 才蓋得過去。版型維持置中單欄，只重新設計外觀。
-- #vn-end-btn-data 與 #vn-end-btn-ctx／#vn-end-btn-journal／#vn-end-btn-map／#vn-end-btn-regen：章末收尾鈕。這是一章的句點，玩家在這裡停下來選下一步——做成那個世界裡「一章結束時會出現的東西」，跟對話框同一套語言。資料中心那顆要一眼看得出是主鈕，其餘四顆同款。外觀全部開放（底、邊框、造型、clip-path、::before/::after 裝飾都可以，按鈕自己裁自己是安全的）；排列不動：直排、置中、同寬，字維持單行；內距和寬度可以調，五顆要一起調、維持同寬，寬度別超過手機畫面的六成。這組鈕底下沒有對話框墊著，直接疊在明亮雜亂的背景圖上，按鈕本身的底要實心或 alpha ≥ 0.85。
+- #vn-end-btn-data 與 #vn-end-btn-ctx／#vn-end-btn-journal／#vn-end-btn-threads／#vn-end-btn-map／#vn-end-btn-regen：章末收尾鈕。這是一章的句點，玩家在這裡停下來選下一步——做成那個世界裡「一章結束時會出現的東西」，跟對話框同一套語言。資料中心那顆要一眼看得出是主鈕，其餘五顆同款。外觀全部開放（底、邊框、造型、clip-path、::before/::after 裝飾都可以，按鈕自己裁自己是安全的）；排列不動：直排、置中、同寬，字維持單行；內距和寬度可以調，六顆要一起調、維持同寬，寬度別超過手機畫面的六成。這組鈕底下沒有對話框墊著，直接疊在明亮雜亂的背景圖上，按鈕本身的底要實心或 alpha ≥ 0.85。
 - #game-settings-window 與裡面的 #gs-titlebar／#gs-body／.gs-*：設定視窗。它跟對話框一樣要是那個世界裡的一件實體物件，標題列、小標、滑桿（.gs-slider 的軌道，與 .gs-slider::-webkit-slider-thumb 滑塊）、小籤（.gs-chip 與選中的 .gs-chip.on）、色塊外框、重置鈕都要跟著換，不要只換視窗外框、裡面還是預設金黑。這扇窗是拿來讀和調的：視窗底要實心或 alpha ≥ 0.9，名稱與數值跟底強對比，選中的小籤要一眼跟沒選中的分得出來。版型不動：視窗置中、標題列在上、內容區捲動、滑桿列左名稱右數值；內距可以調，視窗寬度別比原本寬（原本是畫面寬扣 30px、上限 410px）。滑桿的原生外觀已經關掉了，軌道直接畫在 .gs-slider 本身（高度、底色），滑塊畫在 .gs-slider::-webkit-slider-thumb。色塊 .gs-color-input 只改外框，裡面那格顏色是玩家選的，別蓋。暗幕 #game-settings-overlay 只准改顏色與模糊程度。
 
 【版面骨架 — 先寫下來，再動手寫 CSS】
@@ -1489,7 +1489,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 就會把那份定位打掉，元素會掉回文件流、整排疊到畫面中間。這不是「移動」，是「毀掉版位」。
 唯一的例外是 #text-panel 自己可以寫 position:relative（底板需要它當定位錨點），別的位移屬性一樣不准。
 收尾鈕與設定視窗也一樣：下面這些選擇器「本身」不准寫 position / top / left / right / bottom / display / float / flex——
-  #vn-end-overlay、#vn-end-basic、#vn-end-btn-data 等五顆收尾鈕、
+  #vn-end-overlay、#vn-end-basic、#vn-end-btn-data 等六顆收尾鈕、
   #game-settings-overlay、#game-settings-window、#gs-titlebar、#gs-body、.gs-row、.gs-chips、.gs-color-row
 它們是靠 flex 排成直排、置中、左右兩欄的，一寫就散。
 它們、以及 .gs-chip、.gs-reset-btn、.gs-close，本身都已經是定位錨點：掛在它們身上的 ::before / ::after 直接寫 content + position:absolute 就會貼著它們長，不受這條限制。
@@ -1592,9 +1592,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 #vn-end-overlay{position:absolute;inset:0;display:none;z-index:15;pointer-events:none;}
 #vn-end-overlay.active{display:block;}
 #vn-end-basic{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
-#vn-end-btn-data,#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-map,#vn-end-btn-regen{box-sizing:border-box;width:200px;text-align:center;pointer-events:auto;cursor:pointer;border:1px solid var(--gold);color:var(--gold);font-family:var(--font-classic);}
+#vn-end-btn-data,#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-threads,#vn-end-btn-map,#vn-end-btn-regen{box-sizing:border-box;width:200px;text-align:center;pointer-events:auto;cursor:pointer;border:1px solid var(--gold);color:var(--gold);font-family:var(--font-classic);}
 #vn-end-btn-data{padding:14px 44px;background:rgba(5,5,8,0.92);font-size:1rem;letter-spacing:4px;box-shadow:0 0 20px rgba(212,175,55,0.25),0 8px 32px rgba(0,0,0,0.8);text-shadow:0 0 8px rgba(212,175,55,0.5);}
-#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-map,#vn-end-btn-regen{padding:10px 28px;background:rgba(5,5,8,0.88);font-size:0.85rem;letter-spacing:2px;box-shadow:0 0 14px rgba(212,175,55,0.2),0 6px 24px rgba(0,0,0,0.8);text-shadow:0 0 8px rgba(212,175,55,0.45);}
+#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-threads,#vn-end-btn-map,#vn-end-btn-regen{padding:10px 28px;background:rgba(5,5,8,0.88);font-size:0.85rem;letter-spacing:2px;box-shadow:0 0 14px rgba(212,175,55,0.2),0 6px 24px rgba(0,0,0,0.8);text-shadow:0 0 8px rgba(212,175,55,0.45);}
 /* ⚙ 設定視窗（同上，跟真實 VN 同一套數值；預覽沒有開合動畫，直接顯示） */
 #game-settings-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:60;display:flex;justify-content:center;align-items:center;opacity:0;pointer-events:none;}
 #game-settings-overlay.active{opacity:1;pointer-events:auto;}
@@ -1618,7 +1618,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 .gs-chip{background:transparent;border:1px solid rgba(212,175,55,0.35);color:#aaa;padding:7px 12px;font-size:0.85rem;cursor:pointer;letter-spacing:1px;font-family:var(--font-classic);}
 .gs-chip.on{background:rgba(212,175,55,0.16);border-color:var(--gold);color:var(--gold-light);}
 .gs-sub{color:#888;font-size:0.8rem;letter-spacing:2px;margin:4px 0 8px;}
-#vn-end-btn-data,#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-map,#vn-end-btn-regen,#game-settings-window,#gs-titlebar,#gs-body,.gs-row,.gs-chips,.gs-color-row,.gs-chip,.gs-reset-btn,#gs-titlebar .gs-close{position:relative;}
+#vn-end-btn-data,#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-threads,#vn-end-btn-map,#vn-end-btn-regen,#game-settings-window,#gs-titlebar,#gs-body,.gs-row,.gs-chips,.gs-color-row,.gs-chip,.gs-reset-btn,#gs-titlebar .gs-close{position:relative;}
 @media(max-width:480px){
 #game-settings-window{width:93vw;}
 #gs-titlebar .gs-title{font-size:1rem;letter-spacing:2px;}
@@ -1657,6 +1657,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 <button id="vn-end-btn-data" type="button">資料中心</button>
 <button id="vn-end-btn-ctx" type="button">CTX</button>
 <button id="vn-end-btn-journal" type="button">日誌</button>
+<button id="vn-end-btn-threads" type="button">線索</button>
 <button id="vn-end-btn-map" type="button">地圖</button>
 <button id="vn-end-btn-regen" type="button">重新生成</button>
 </div>

@@ -1189,9 +1189,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-end-panel .vnep-dead { opacity: 0.35; pointer-events: none; filter: grayscale(1); }
 
         /* 末尾選單鈕直排 + 同寬 */
-        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map, #vn-end-btn-regen { box-sizing: border-box; width: 200px; text-align: center; }
+        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-threads, #vn-end-btn-map, #vn-end-btn-regen { box-sizing: border-box; width: 200px; text-align: center; }
         /* 🎨 VN 主題不准碰這幾個的 position（會打散排版），但主題要在它們身上掛 ::before/::after 裝飾 → 錨點由這裡給 */
-        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map, #vn-end-btn-regen, #game-settings-window, #gs-titlebar, #gs-body, .gs-row, .gs-chips, .gs-color-row, .gs-chip, .gs-reset-btn, #gs-titlebar .gs-close { position: relative; }
+        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-threads, #vn-end-btn-map, #vn-end-btn-regen, #game-settings-window, #gs-titlebar, #gs-body, .gs-row, .gs-chips, .gs-color-row, .gs-chip, .gs-reset-btn, #gs-titlebar .gs-close { position: relative; }
         #vn-end-btn-data {
             pointer-events: auto;
             padding: 14px 44px; background: rgba(5,5,8,0.92);
@@ -1202,7 +1202,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             text-shadow: 0 0 8px rgba(212,175,55,0.5);
         }
         #vn-end-btn-data:hover { background: rgba(20,15,5,0.95); box-shadow: 0 0 35px rgba(212,175,55,0.5), 0 8px 32px rgba(0,0,0,0.9); }
-        #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-map, #vn-end-btn-regen {
+        #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-threads, #vn-end-btn-map, #vn-end-btn-regen {
             pointer-events: auto;
             padding: 10px 28px; background: rgba(5,5,8,0.88);
             border: 1px solid var(--gold); color: var(--gold);
@@ -1211,7 +1211,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             box-shadow: 0 0 14px rgba(212,175,55,0.2), 0 6px 24px rgba(0,0,0,0.8);
             text-shadow: 0 0 8px rgba(212,175,55,0.45);
         }
-        #vn-end-btn-ctx:hover, #vn-end-btn-journal:hover, #vn-end-btn-map:hover, #vn-end-btn-regen:hover { background: rgba(20,15,5,0.95); box-shadow: 0 0 26px rgba(212,175,55,0.45), 0 6px 24px rgba(0,0,0,0.9); }
+        #vn-end-btn-ctx:hover, #vn-end-btn-journal:hover, #vn-end-btn-threads:hover, #vn-end-btn-map:hover, #vn-end-btn-regen:hover { background: rgba(20,15,5,0.95); box-shadow: 0 0 26px rgba(212,175,55,0.45), 0 6px 24px rgba(0,0,0,0.9); }
 
         #text-panel {
             backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
@@ -2286,3 +2286,66 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 }
 .vn-qrpay-btn:active { background: #14934b; }
 .vn-qrpay-other .vn-qrpay-btn { background: #5b6472; }
+
+/* =========================================
+   🧵 線索帳（劇情末尾「線索」）：還沒下文的事畫成圖＋清單，想看／先放著在這裡挑
+   跟對話紀錄同一套黑金；class 一律 sthr- 開頭（別用菜市場名，會被酒館全域樣式蓋）
+   ========================================= */
+#vn-threads-overlay { position: absolute; inset: 0; z-index: 62; display: flex; flex-direction: column; background: rgba(10,10,12,0.96); box-sizing: border-box; padding: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 14px) 0 14px; opacity: 0; transition: opacity .25s ease; color: #e6e1d6; font-family: var(--font-sans); }
+#vn-threads-overlay.active { opacity: 1; }
+#vn-threads-overlay .sthr-head { display: flex; align-items: center; gap: 10px; padding: 0 18px 12px; border-bottom: 1px solid rgba(212,175,55,0.25); }
+#vn-threads-overlay .sthr-back { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(212,175,55,0.35); background: transparent; color: var(--gold, #d4af37); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#vn-threads-overlay .sthr-title { flex: 1; min-width: 0; color: var(--gold, #d4af37); font-size: 1.15rem; font-weight: bold; letter-spacing: 3px; display: flex; align-items: center; gap: 6px; }
+#vn-threads-overlay .sthr-title .aui-help { color: #bdb6a8; }
+#vn-threads-overlay .sthr-switch { flex: none; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #bdb6a8; cursor: pointer; user-select: none; }
+#vn-threads-overlay .sthr-switch input { accent-color: #d4af37; margin: 0; }
+#vn-threads-overlay .sthr-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 18px 20px; }
+#vn-threads-overlay .sthr-body::-webkit-scrollbar { width: 6px; }
+#vn-threads-overlay .sthr-body::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+#vn-threads-overlay .sthr-loading { color: #888; text-align: center; padding: 40px 0; font-size: 13px; }
+#vn-threads-overlay .sthr-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 60px 20px; color: #bdb6a8; text-align: center; font-size: 15px; }
+#vn-threads-overlay .sthr-empty > i { font-size: 30px; color: rgba(212,175,55,0.45); }
+#vn-threads-overlay .sthr-empty-sub { font-size: 12.5px; color: #8d877c; line-height: 1.7; max-width: 320px; }
+#vn-threads-overlay .sthr-sum { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; font-size: 11.5px; }
+#vn-threads-overlay .sthr-sum span { padding: 2px 9px; border-radius: 10px; border: 1px solid rgba(230,225,214,0.18); color: #bdb6a8; }
+#vn-threads-overlay .sthr-graph { width: 100%; margin-bottom: 6px; }
+#vn-threads-overlay .sthr-graph svg { display: block; width: 100%; height: auto; user-select: none; }
+#vn-threads-overlay .sthr-e { stroke: rgba(230,225,214,0.22); stroke-width: 1; fill: none; transition: opacity .2s; }
+#vn-threads-overlay .sthr-e-mc { stroke: rgba(216,180,90,0.8); stroke-width: 1.8; }
+#vn-threads-overlay .sthr-e-ll { stroke: rgba(224,88,79,0.7); stroke-width: 1.6; stroke-dasharray: 5 3; }
+#vn-threads-overlay .sthr-nd { cursor: pointer; transition: opacity .2s; }
+#vn-threads-overlay .sthr-nd rect { stroke-width: 1; }
+#vn-threads-overlay .sthr-nd text { font-size: 12px; fill: #e6e1d6; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#vn-threads-overlay .sthr-n-line rect { fill: #1d1c21; stroke: rgba(230,225,214,0.35); }
+#vn-threads-overlay .sthr-n-line.sthr-st-new rect { stroke: #e0584f; stroke-width: 1.8; }
+#vn-threads-overlay .sthr-n-line.sthr-st-chg rect { stroke: #d8b45a; stroke-width: 1.8; }
+#vn-threads-overlay .sthr-n-line.sthr-pk-want rect { stroke: #ef7fae; stroke-width: 2.4; }
+#vn-threads-overlay .sthr-n-line.sthr-pk-hold rect { stroke-dasharray: 4 3; opacity: .55; }
+#vn-threads-overlay .sthr-n-p rect { fill: #26252c; stroke: rgba(230,225,214,0.28); }
+#vn-threads-overlay .sthr-n-p text { font-size: 11.5px; fill: #cfc8ba; }
+#vn-threads-overlay .sthr-n-mc rect { fill: #d8b45a; stroke: #f3dfa6; }
+#vn-threads-overlay .sthr-n-mc text { fill: #1a160c; font-weight: 800; }
+#vn-threads-overlay .sthr-nd.sthr-sel rect { stroke: #fff; stroke-width: 2; }
+#vn-threads-overlay .sthr-dim { opacity: .16; }
+#vn-threads-overlay .sthr-list { display: flex; flex-direction: column; gap: 5px; }
+#vn-threads-overlay .sthr-sec { margin: 12px 0 2px; font-size: 12px; color: #9d978b; letter-spacing: 2px; display: flex; align-items: center; gap: 4px; }
+#vn-threads-overlay .sthr-sec:first-child { margin-top: 2px; }
+#vn-threads-overlay .sthr-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.03); border-left: 2px solid rgba(230,225,214,0.2); cursor: pointer; line-height: 1.55; transition: opacity .2s, background .2s; }
+#vn-threads-overlay .sthr-row.sthr-sel { background: rgba(216,180,90,0.12); border-left-color: #d8b45a; }
+#vn-threads-overlay .sthr-row.sthr-dim { opacity: .35; }
+#vn-threads-overlay .sthr-row.sthr-pk-want { border-left-color: #ef7fae; }
+#vn-threads-overlay .sthr-row.sthr-pk-hold .sthr-tx { opacity: .6; }
+#vn-threads-overlay .sthr-row.sthr-stale .sthr-lb, #vn-threads-overlay .sthr-row.sthr-stale .sthr-tx { opacity: .7; }
+#vn-threads-overlay .sthr-row.sthr-closed { cursor: default; }
+#vn-threads-overlay .sthr-row.sthr-closed .sthr-lb, #vn-threads-overlay .sthr-row.sthr-closed .sthr-tx { opacity: .5; text-decoration: line-through; text-decoration-color: rgba(230,225,214,0.35); }
+#vn-threads-overlay .sthr-row-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#vn-threads-overlay .sthr-lb { flex: 1; min-width: 0; color: #d8b45a; font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#vn-threads-overlay .sthr-tx { color: #d9d3c7; font-size: 13px; word-break: break-word; }
+#vn-threads-overlay .sthr-chip { flex: none; font-size: 10.5px; padding: 1px 6px; border-radius: 8px; border: 1px solid; }
+#vn-threads-overlay .sthr-c-new { color: #ff8d84; border-color: #e0584f; }
+#vn-threads-overlay .sthr-c-chg { color: #e9cd7d; border-color: #d8b45a; }
+#vn-threads-overlay .sthr-c-gone { color: #8fb6d8; border-color: #5f8fb8; }
+#vn-threads-overlay .sthr-pk { flex: none; display: flex; gap: 5px; }
+#vn-threads-overlay .sthr-pkb { font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 10px; cursor: pointer; background: transparent; color: #9d978b; border: 1px solid rgba(230,225,214,0.22); }
+#vn-threads-overlay .sthr-pkb.sthr-pk-want.on { color: #ffc2dc; border-color: #ef7fae; background: rgba(239,127,174,0.16); }
+#vn-threads-overlay .sthr-pkb.sthr-pk-hold.on { color: #b9c6d6; border-color: #7d93ad; background: rgba(125,147,173,0.16); }

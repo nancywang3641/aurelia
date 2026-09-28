@@ -34,6 +34,7 @@
         aurelia_director_brief: '導演提示',
         aurelia_npc_dossier: '人物名冊',
         aurelia_mc_status: '主角狀態',
+        aurelia_story_threads: '線索帳',
         aurelia_blacklist: '黑名單'
     };
     // 自己包好、名字跟上面不同的那幾塊（面板認塊時也要認得）

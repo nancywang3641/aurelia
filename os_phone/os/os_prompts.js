@@ -426,6 +426,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         { type: 'sys', id: 'app_memory' },
         { type: 'sys', id: 'npc_dossier' },
         { type: 'sys', id: 'mc_status' },
+        { type: 'sys', id: 'story_threads' },
         { type: 'sys', id: 'memory_recall' },
         { type: 'sys', id: 'avs_vars' },
     ];
@@ -480,6 +481,13 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                         if (_has(id)) continue;
                         const _hi = _items.findIndex(i => i.type === 'sys' && i.id === 'vn_history');
                         _items.splice(_hi < 0 ? _items.length : _hi + 1, 0, { type: 'sys', id });
+                        _dirty = true;
+                    }
+                    // 🧵 線索帳：酒館是 depth 1 貼著正文結尾 → 補在主角狀態後面（沒有主角狀態就接在歷史後面）
+                    if (!_has('story_threads')) {
+                        let _at = _items.findIndex(i => i.type === 'sys' && i.id === 'mc_status');
+                        if (_at < 0) _at = _items.findIndex(i => i.type === 'sys' && i.id === 'vn_history');
+                        _items.splice(_at < 0 ? _items.length : _at + 1, 0, { type: 'sys', id: 'story_threads' });
                         _dirty = true;
                     }
                     // 這兩格原本寫死在所有包之後 → 補到最後，位置等同以前
@@ -644,6 +652,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         'npc_dossier':  { label: 'NPC 人物檔案',  icon: 'fa-thumbtack', desc: '登場過的人物名冊，被提到的加注完整檔案', type: 'placeholder' },
         'app_memory':   { label: '手機近況',      icon: 'fa-thumbtack', desc: '在場角色最近在手機 app 上跟你的互動', type: 'placeholder' },
         'mc_status':    { label: '主角狀態',      icon: 'fa-thumbtack', desc: '故事時鐘、HP、狀態效果剩幾回合、近期約定', type: 'placeholder' },
+        'story_threads':{ label: '線索帳',        icon: 'fa-thumbtack', desc: '已經發生、還沒有下文的事，加上你挑的想看／先放著', type: 'placeholder' },
     };
     const _LATE_SYS_SLOTS = ['grand_summary', 'memory_recall', 'avs_vars'];   // 舊包遷移用：補進來時要放的位置見 loadBundles
 

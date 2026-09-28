@@ -2491,6 +2491,8 @@
                         data: _actData,
                         ctx: _actCtx,
                         journal: () => _openPhoneAppAboveVN('journal'),
+                        // 🧵 線索帳：還沒下文的事畫成圖，想看／先放著在這裡挑（story_threads.js）
+                        threads: () => { try { win.OS_STORY_THREADS && win.OS_STORY_THREADS.openPanel(); } catch (e) { console.warn('[VN_Core] 開線索失敗', e); } },
                         // 🗺️ 地圖：劇情末尾直接開地圖面板看當前世界（探索/排程/小地圖都在裡面）
                         map: () => _openPhoneAppAboveVN('map'),
                         // 系統鍵：世界活動面板會把右上角那三顆一起重畫，行為指向原本那三顆做的事
@@ -2500,7 +2502,7 @@
                         // 🔁 這章不滿意 → 丟掉重寫（世界面板沒做這顆的話，基本鍵那顆會補上來）
                         regen: () => { try { window.VN_Core.regenerateLatest(); } catch (e) { console.warn('[VN_Core] 重新生成失敗', e); } },
                     };
-                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
+                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', threads: 'vn-end-btn-threads', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
                     Object.keys(BASIC_OF).forEach(k => {
                         const b = document.getElementById(BASIC_OF[k]);
                         if (b) { b.onclick = acts[k]; b.classList.remove('hidden'); }

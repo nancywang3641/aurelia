@@ -274,6 +274,7 @@ const PHONE_FILES = [
     'rpg/state_schema.js',         // Stage 1：主模型生 schema
     'rpg/npc_dossier.js',          // 📇 NPC 長期人物檔案（群像卡防失憶；state_runtime 搭便車建檔＋名冊/名字觸發注入）
     'rpg/mc_status.js',           // 🕰 主角狀態與故事時鐘：模型回報變化、程式記住倒數、下一輪塞回去；日曆 app 讀同一份
+    'rpg/story_threads.js',        // 🧵 線索帳：已經發生、還沒有下文的事；搭副模型那通記、每輪送回、劇情末尾「線索」看圖譜挑線
     'rpg/state_runtime.js',        // Stage 2：副模型抽 + patch + injectPrompts
     'rpg/blacklist_injector.js',   // 每輪 inject 黑名單條目（避免世界書 keys 觸發漏掉）
     'rpg/avatar_rules_injector.js', // 依選的頭像產圖器，自動翻「-VN小說家-」世界書三條目(依名字)的開關

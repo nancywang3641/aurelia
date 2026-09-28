@@ -2555,6 +2555,9 @@
                 let _mcBlock = '';
                 try { _mcBlock = (await win.OS_MC_STATUS?.buildBlock?.()) || ''; }
                 catch (_e) { console.warn('[OS_API vn_story] 主角狀態組裝失敗:', _e); }
+                let _threadsBlock = '';
+                try { _threadsBlock = (await win.OS_STORY_THREADS?.buildBlock?.()) || ''; }
+                catch (_e) { console.warn('[OS_API vn_story] 線索帳組裝失敗:', _e); }
 
                 // 把對話歷史推進去，順便把「設了深度」的世界書條目插到對應位置。
                 //   depth N ＝ 倒數第 N 則之前；0 ＝ 全部歷史之後（最貼近這一輪，最不容易被忘掉）。
@@ -2605,6 +2608,7 @@
                             else if (_item.id === 'npc_dossier'   && _npcBlock)          _vn.push({ role: 'system', content: _npcBlock });
                             else if (_item.id === 'app_memory'    && _appMemBlock)       _vn.push({ role: 'system', content: _appMemBlock });
                             else if (_item.id === 'mc_status'     && _mcBlock)           _vn.push({ role: 'system', content: _mcBlock });
+                            else if (_item.id === 'story_threads' && _threadsBlock)      _vn.push({ role: 'system', content: _threadsBlock });
                         } else if (_item.type === 'entry') {
                             const _e = _entryMap[_item.id];
                             if (_e?.enabled !== false && _e?.content?.trim()) _vn.push({ role: 'system', content: _e.content.trim() });
@@ -2622,6 +2626,7 @@
                     if (_appMemBlock) _vn.push({ role: 'system', content: _appMemBlock });
                     if (_npcBlock)    _vn.push({ role: 'system', content: _npcBlock });
                     if (_mcBlock)     _vn.push({ role: 'system', content: _mcBlock });
+                    if (_threadsBlock) _vn.push({ role: 'system', content: _threadsBlock });
                     if (_recallBlock) _vn.push({ role: 'system', content: _recallBlock });
                     if (avsPrompt)    _vn.push({ role: 'system', content: avsPrompt });
                 }
@@ -2630,7 +2635,7 @@
                 //   靜靜少注入＝整份長期記憶消失、而且畫面上完全看不出來，所以這裡補回去並且出聲，別讓它無聲無息。
                 if (_vnBundles.length) {
                     const _late = [['grand_summary', _grandSummaryBlock], ['memory_recall', _recallBlock], ['avs_vars', avsPrompt],
-                                   ['app_memory', _appMemBlock], ['npc_dossier', _npcBlock], ['mc_status', _mcBlock]];
+                                   ['app_memory', _appMemBlock], ['npc_dossier', _npcBlock], ['mc_status', _mcBlock], ['story_threads', _threadsBlock]];
                     for (const [_id, _content] of _late) {
                         if (!_content || _injectedSys.has(_id)) continue;
                         console.warn(`[OS_API vn_story] 順序表裡找不到「${_id}」這一格 → 補在最後面。去提示詞窗口把它拖到你要的位置。`);

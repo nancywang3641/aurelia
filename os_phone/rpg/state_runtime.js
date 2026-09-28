@@ -1434,6 +1434,15 @@ ${numberedText}`;
                 }
             } catch (e) {}
 
+            // 🧵 線索帳搭便車：這一章輪到這通記（酒館 AVS 開；PWA 記憶關、AVS 開）就附上，不另開一通
+            let _thr = null;
+            try {
+                if ((doState || wantMemory) && win.OS_STORY_THREADS?.siteFor?.() === 'avs') {
+                    _thr = await win.OS_STORY_THREADS.addendum(lastId);
+                    if (_thr && _thr.block) prompt += _thr.block;
+                }
+            } catch (e) {}
+
             const json = await runWithRetry(prompt);
             // 存本輪抽取(原始輸出+memories)，狀態部分等下面算完 filtered/current 再補上 → 給狀態面板診斷/複製
             _lastExtract = { at: Date.now(), msgId: lastId, raw: _lastRawText, updates: null, memories: Array.isArray(json.memories) ? json.memories : null, current: null };
@@ -1518,6 +1527,8 @@ ${numberedText}`;
             // 📇 NPC 檔案落地：必須在上面狀態 saveStateData「之後」寫（否則會被舊 data spread 蓋掉）；
             //    副模型沒吐 npc_files 也要 commit（登場記帳不能丟）
             try { if (_npc && win.OS_NPC_DOSSIER?.commit) await win.OS_NPC_DOSSIER.commit(_npc, json.npc_files); } catch (e) {}
+            // 🧵 線索帳落地（存在自己那一格，不碰 state_data，順序無所謂）
+            try { if (_thr && _thr.handle) await win.OS_STORY_THREADS.commit(_thr.handle, json.threads); } catch (e) {}
 
             // --- 記憶入庫（結合觸發）---
             if (wantMemory) {

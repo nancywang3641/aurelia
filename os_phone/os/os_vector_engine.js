@@ -231,14 +231,22 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
 
     // 回 { entries, recallNext }：entries＝記憶陣列（失敗是 null）；recallNext＝有帶導演時它挑的代號（沒帶或漏寫是 null）
     const DIRECTOR_FORMAT = '\n\n═══════════════════════════════════════\n【這一通的輸出格式】\n上面兩件事一起做，輸出改成一個 JSON 物件：{ "memories": [ 記憶條目陣列，格式照最上面 ], "recall_next": [ 你挑的代號 ] }\n不要只輸出陣列。';
-    async function _extractMemories(chapterContent, relNow, directorAddendum) {
+    // 🧵 線索帳也搭這通（見 OS_STORY_THREADS.siteFor）：有任何一件附加工作，輸出就改成物件，欄位照實際附了哪幾件列
+    function _objectFormat(withDirector, withThreads) {
+        if (withDirector && !withThreads) return DIRECTOR_FORMAT;
+        const f = ['"memories": [ 記憶條目陣列，格式照最上面 ]'];
+        if (withDirector) f.push('"recall_next": [ 你挑的代號 ]');
+        if (withThreads) f.push('"threads": [ 線索的變化，格式照上面 ]');
+        return '\n\n═══════════════════════════════════════\n【這一通的輸出格式】\n上面幾件事一起做，輸出改成一個 JSON 物件：{ ' + f.join(', ') + ' }\n不要只輸出陣列。';
+    }
+    async function _extractMemories(chapterContent, relNow, directorAddendum, threadsAddendum) {
         const secCfg = (win.OS_SETTINGS?.getSecondaryConfig?.()) || (win.OS_SETTINGS?.getConfig?.()) || {};
         secCfg._isSecondary = true;
 
         return new Promise((resolve) => {
             win.OS_API.chat(
                 [
-                    { role: 'system', content: EXTRACTION_PROMPT + (directorAddendum ? directorAddendum + DIRECTOR_FORMAT : '') },
+                    { role: 'system', content: EXTRACTION_PROMPT + (directorAddendum || '') + (threadsAddendum || '') + ((directorAddendum || threadsAddendum) ? _objectFormat(!!directorAddendum, !!threadsAddendum) : '') },
                     { role: 'user',   content: (relNow ? relNow + '\n\n【這一章】\n' : '') + chapterContent.slice(0, 6000) } // 限制長度；關係底稿見 OS_VECTOR_INJECT.relationNow
                 ],
                 secCfg,
@@ -247,12 +255,12 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
                 //    null 讓 ingestEntries 什麼都不動，舊記憶留著
                 (text) => {
                     const t = String(text || '');
-                    // 帶導演：先試物件 { memories, recall_next }
-                    if (directorAddendum) {
+                    // 帶導演／線索：先試物件 { memories, recall_next, threads }
+                    if (directorAddendum || threadsAddendum) {
                         try {
                             const om = t.replace(/```(?:json)?/gi, '').match(/\{[\s\S]*\}/);
                             const obj = om ? JSON.parse(om[0]) : null;
-                            if (obj && Array.isArray(obj.memories)) { resolve({ entries: obj.memories, recallNext: Array.isArray(obj.recall_next) ? obj.recall_next : null }); return; }
+                            if (obj && Array.isArray(obj.memories)) { resolve({ entries: obj.memories, recallNext: Array.isArray(obj.recall_next) ? obj.recall_next : null, threads: Array.isArray(obj.threads) ? obj.threads : null }); return; }
                         } catch (e) {}
                     }
                     try {
@@ -298,10 +306,14 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
             try { relNow = (await win.OS_VECTOR_INJECT?.relationNow?.(cleanContent, storyId)) || ''; } catch (e) {}
             let plan = null;
             if (opts && opts.director) { try { plan = await win.OS_VECTOR_INJECT?.directorPlan?.(cleanContent); } catch (e) {} }
-            const r = await _extractMemories(cleanContent, relNow, plan && plan.addendum);
+            // 🧵 線索帳：這一章輪到記憶這一通記（酒館 AVS 關、PWA 記憶開）就一起記，不另開一通
+            let thr = null;
+            try { if (win.OS_STORY_THREADS?.siteFor?.() === 'vector') thr = await win.OS_STORY_THREADS.addendum(chapterId); } catch (e) {}
+            const r = await _extractMemories(cleanContent, relNow, plan && plan.addendum, thr && thr.block);
             if (plan && r && Array.isArray(r.recallNext)) {
                 try { win.OS_VECTOR_INJECT.applyDirectorPicks(r.recallNext, plan.map); directed = true; } catch (e) {}
             }
+            if (thr && thr.handle) { try { await win.OS_STORY_THREADS.commit(thr.handle, r && r.threads); } catch (e) {} }
             const entries = r && r.entries;
             if (!entries) { console.warn('[VecEngine] 副模型沒抽成，這章舊記憶保留不動:', chapterId); return { directed }; }
             await ingestEntries(entries, storyId, chapterId);
