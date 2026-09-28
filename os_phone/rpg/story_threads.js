@@ -29,8 +29,27 @@
         closedNameFor: 20,             // 收場的線，幾章內還點名「過去了別再提」
         maxItemsPerRound: 5,
         labelMax: 16,
-        factMax: 160
+        factMax: 160,
+        onceStaleAfter: 3              // 一次性小事幾章沒動就不再每輪送（辦完該收；沒收也別一直掛著讓 AI 回頭演）
     };
+
+    // 方向：這條線往下走會是哪一種。副模型開線時挑一個，面板上掛成小標籤給她看；
+    //   🚨 不當任務交給寫正文的 AI（標了「謎團」它就會硬把人寫神秘），只有她按「想看」的線附上方向。
+    const KINDS = [
+        { id: 'once', name: '一次性', re: /一次|小事|once/i, desc: '一件具體的小事，辦完就結束，之後不會再牽出別的事' },
+        { id: 'favor', name: '人情', re: /人情|往來|往来|favor/i, desc: '之後會互相幫忙、欠人情、有來往' },
+        { id: 'love', name: '感情', re: /感情|曖昧|暧昧|戀|恋|love|romance/i, desc: '曖昧、心動、兩個人的關係起變化' },
+        { id: 'trouble', name: '麻煩', re: /麻煩|麻烦|危險|危险|衝突|冲突|trouble|danger/i, desc: '衝突、被人找麻煩、有人會吃虧或受傷' },
+        { id: 'mystery', name: '謎團', re: /謎|谜|秘密|mystery/i, desc: '有沒解開的秘密、來歷不明的人或東西' },
+        { id: 'chance', name: '機會', re: /機會|机会|門路|门路|賺|赚|chance|opportunity/i, desc: '能賺錢、搭上門路、拿到好處' }
+    ];
+    function _normKind(k) {
+        const s = String(k == null ? '' : k).trim();
+        if (!s) return '';
+        const hit = KINDS.find(x => x.re.test(s));
+        return hit ? hit.id : '';
+    }
+    function _kindName(id) { const k = KINDS.find(x => x.id === id); return k ? k.name : ''; }
 
     function _isOn() { try { return localStorage.getItem(CFG.flagKey) !== '0'; } catch (e) { return true; } }
     function _setOn(on) { try { localStorage.setItem(CFG.flagKey, on ? '1' : '0'); } catch (e) {} }
@@ -196,11 +215,13 @@
                 let L = lines.get(key);
                 if (it.act === 'close') {
                     if (!L) L = { label: _labelOf(it.line), fact: '', opened: at };
+                    if (it.kind) L.kind = it.kind;
                     L.closed = true; L.closedAt = at; L.lastAct = 'close'; L.lastKey = k;
                 } else {
                     const isNew = !L;
                     if (!L) L = { label: _labelOf(it.line), fact: '', opened: at };
                     if (it.fact) L.fact = it.fact;
+                    if (it.kind) L.kind = it.kind;   // 開線時標的；之後「續」補標或這條線真的變成另一種事才會換
                     L.closed = false; L.updated = at; L.lastAct = isNew ? 'open' : 'update'; L.lastKey = k;
                 }
                 lines.set(key, L);
@@ -225,7 +246,7 @@
             const ord = order.indexOf(key) >= 0 ? order : order.concat([key]);
             const { lines } = _fold(data, ord, { beforeKey: key });
             const open = [];
-            lines.forEach(L => { if (!L.closed) open.push(`【${L.label}】${L.fact || '（沒有記下現況）'}`); });
+            lines.forEach(L => { if (!L.closed) open.push(`【${L.label}】${L.kind ? '〔' + _kindName(L.kind) + '〕' : '〔還沒標方向〕'}${L.fact || '（沒有記下現況）'}`); });
             const block = `
 
 ═══════════════════════════════════════
@@ -236,11 +257,14 @@ ${open.length ? open.join('\n') : '（空）'}
 讀完這一章，只回報這一章帶來的變化：
 - 帳上的線這一章有了新發展：act 寫「續」，fact 寫這條線現在的樣子，一到兩句，會整句取代舊的現況。
 - 帳上的線這一章結束了（事情說開了、東西還了、有人出面擺平、當事人各自散了、主角已經抽身）：act 寫「收」，fact 可以空著。結束的事就是結束了，不要改寫成「雙方僵持」「暫時平息」接著記。
-- 這一章冒出新的、之後還會有下文的事：act 寫「開」，取一個新線名，fact 寫發生了什麼。
+- 這一章冒出新的、之後還會有下文的事：act 寫「開」，取一個新線名，fact 寫發生了什麼，kind 寫這條線往下走會是哪一種，只能從下面六個挑一個：
+${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
+- 帳上標著〔還沒標方向〕的線，這一章有動到就順便寫 kind。已經標過的不用再寫，除非這條線真的變成另一種事了。
+- 一次性的線，那件事辦完了就寫「收」。之後同一個人再出現、只是碰面聊天，不算這條線的後續，也不要為了他再開一條線。
 - 只寫已經發生的事實：誰做了什麼、留下了什麼沒解決。不寫你猜接下來會怎樣，也不寫誰打算怎樣。
 - 當場就結束的小事、純日常、純心情不記。沒有變化就給 []。一章最多 ${CFG.maxItemsPerRound} 條。
 - 線名用「牽涉的人或事＋線」，四到八個字。帳上已有的線，名字照抄，不要換字、不要簡繁互換。
-格式："threads": [ { "line": "線名", "act": "開／續／收", "fact": "現況" } ]`;
+格式："threads": [ { "line": "線名", "act": "開／續／收", "kind": "方向", "fact": "現況" } ]`;
             return { block, handle: { cid, key } };
         } catch (e) {
             console.warn('[Story Threads] 組記帳指示失敗:', e?.message || e);
@@ -273,8 +297,9 @@ ${open.length ? open.join('\n') : '（空）'}
                 seen.add(k);
                 const act = _normAct(t.act || t.op || t.type);
                 const fact = String(t.fact || t.text || t.state || '').replace(/\s+/g, ' ').trim().slice(0, CFG.factMax);
-                if (act !== 'close' && !fact) continue;   // 開／續卻沒寫現況＝沒東西可記
-                items.push({ line: label, act, fact });
+                const kind = _normKind(t.kind || t.direction || t.category);
+                if (act !== 'close' && !fact && !kind) continue;   // 開／續卻沒寫現況＝沒東西可記（只補標方向也算）
+                items.push(kind ? { line: label, act, fact, kind } : { line: label, act, fact });
             }
             data.deltas[String(handle.key)] = { at: Date.now(), items };
             await _save();
@@ -324,7 +349,7 @@ ${open.length ? open.join('\n') : '（空）'}
         const latestKey = used.length ? used[used.length - 1] : null;
         const out = { open: [], stale: [], closed: [], picks: data.picks, count, latestKey, site: siteFor(), on: _isOn() };
         lines.forEach((L, key) => {
-            const row = { key, label: L.label, fact: L.fact, pick: data.picks[key]?.s || '' };
+            const row = { key, label: L.label, fact: L.fact, kind: L.kind || '', pick: data.picks[key]?.s || '' };
             if (L.closed) {
                 row.age = nowPos - L.closedAt;
                 row.mark = (L.lastKey === latestKey) ? 'closed_now' : '';
@@ -333,7 +358,8 @@ ${open.length ? open.join('\n') : '（空）'}
             }
             row.age = nowPos - (L.updated != null ? L.updated : L.opened);
             row.mark = (L.lastKey === latestKey) ? (L.lastAct === 'open' ? 'new' : 'chg') : 'same';
-            if (row.age >= CFG.staleAfter) out.stale.push(row); else out.open.push(row);
+            row.staleAt = (L.kind === 'once') ? CFG.onceStaleAfter : CFG.staleAfter;
+            if (row.age >= row.staleAt) out.stale.push(row); else out.open.push(row);
         });
         out.closed.sort((a, b) => a.age - b.age);
         // 挑過、但帳上已經沒有這條（章節被刪光了）→ 留給她取消
@@ -361,8 +387,8 @@ ${open.length ? open.join('\n') : '（空）'}
             const all = s.open.concat(s.stale);
             all.forEach(r => {
                 if (r.pick === 'hold') { hold.push(r.label); return; }
-                if (r.pick === 'want') want.push(r.label);
-                if (r.age < CFG.staleAfter || r.pick === 'want') facts.push(`【${r.label}】${r.fact || '（沒有記下現況）'}`);
+                if (r.pick === 'want') want.push(r.label + (r.kind ? '（' + _kindName(r.kind) + '）' : ''));
+                if (r.age < r.staleAt || r.pick === 'want') facts.push(`【${r.label}】${r.fact || '（沒有記下現況）'}`);
             });
             const closed = s.closed.filter(r => r.age < CFG.closedNameFor).map(r => r.label);
             if (!facts.length && !want.length && !hold.length && !closed.length) return '';
@@ -465,9 +491,9 @@ ${open.length ? open.join('\n') : '（空）'}
 
     // ── 5. 面板：劇情末尾「線索」 ─────────────────────────────────────
     const HELP = {
-        threads_what: { title: '線索', body: '副模型每寫完一章就記一次：這章新冒出來、還沒有下文的事，哪一條有了進展，哪一條收場了。還沒下文的線每一輪都會交給寫正文的 AI 參考；收場的線會點名「已經過去了」，不再被拿出來演。\n\n要打開「劇情記憶」或「狀態面板」其中一個才會記，記帳是搭那一通順便做的，不會另外多叫一次模型。\n\n刪掉或重新生成某一章，那一章記下的變化也會一起拿掉。' },
+        threads_what: { title: '線索', body: '副模型每寫完一章就記一次：這章新冒出來、還沒有下文的事，哪一條有了進展，哪一條收場了。還沒下文的線每一輪都會交給寫正文的 AI 參考；收場的線會點名「已經過去了」，不再被拿出來演。\n\n要打開「劇情記憶」或「狀態面板」其中一個才會記，記帳是搭那一通順便做的，不會另外多叫一次模型。\n\n刪掉或重新生成某一章，那一章記下的變化也會一起拿掉。\n\n每條線旁邊的小標籤是這條線往下走的方向，副模型開線時判斷的：一次性、人情、感情、麻煩、謎團、機會。一次性的小事辦完就收場，不會再被翻出來演。方向只給你參考，不會叫寫正文的 AI 照著寫；你按「想看」的線，才會告訴它想往哪個方向走。' },
         threads_pick: { title: '想看／先放著', body: '想看：讓這條線自己找上門。線裡的人照自己的打算出現在主角身邊、把事情往前推一步；主角接不接、怎麼接，照主角自己的個性，不替他決定。\n\n先放著：這段時間線裡的人不主動來找主角，旁人也別聊起。\n\n選了會一直有效，再按一次取消。' },
-        threads_stale: { title: '很久沒動', body: '十章以上沒有進展的線，不再每一輪交給 AI，免得它覺得非處理不可。帳上還留著，劇情自己回頭碰到時會接上；按「想看」也會重新交出去。' }
+        threads_stale: { title: '很久沒動', body: '十章以上沒有進展的線（一次性的小事是三章），不再每一輪交給 AI，免得它覺得非處理不可。帳上還留著，劇情自己回頭碰到時會接上；按「想看」也會重新交出去。' }
     };
     let _helpReg = false;
     function _regHelp() {
@@ -556,7 +582,8 @@ ${open.length ? open.join('\n') : '（空）'}
             d.innerHTML = `
                 <div class="sthr-row-top">
                     ${m ? `<span class="sthr-chip ${m[0]}">${m[1]}</span>` : ''}
-                    <span class="sthr-lb">${_esc(r.label)}</span>
+                    <span class="sthr-lb${r.kind ? ' sthr-lb-k' : ''}">${_esc(r.label)}</span>
+                    ${r.kind ? `<span class="sthr-kd sthr-k-${r.kind}">${_esc(_kindName(r.kind))}</span>` : ''}
                     ${pickable ? `<span class="sthr-pk">
                         <button type="button" class="sthr-pkb sthr-pk-want${r.pick === 'want' ? ' on' : ''}" data-s="want">想看</button>
                         <button type="button" class="sthr-pkb sthr-pk-hold${r.pick === 'hold' ? ' on' : ''}" data-s="hold">先放著</button>
