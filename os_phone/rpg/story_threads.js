@@ -116,6 +116,53 @@
         return { order, alive: null, posOf: k => /^\d+$/.test(String(k)) ? Math.floor(Number(k) / 2) : null };
     }
 
+    // ── 起點：酒館裡帳還是空的時候，拿聊天記錄裡最後一份 Ako 💫伏笔清單當開帳的底 ─────────
+    //   不然剛換過來的第一章，副模型看到的是空帳，以前列過的線全部斷掉，她在圖譜上挑過的線也只剩名字。
+    //   只試一次（seedTried）；之後帳就自己長。線名規則照⑦伏笔圖譜正則：去結尾的「线」，
+    //   「X之线」的「之」看內文——內文寫著「X之…」就是名字的一部分（秦鹤之），否則是「的」。
+    const FB_RE = /<summary>\s*💫\s*伏[笔筆]\s*<\/summary>([\s\S]*?)<\/details>/;
+    function _parseDraftLines(raw) {
+        const out = [], seen = new Set();
+        String(raw || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').split(/\r?\n/).forEach(l => {
+            const m = l.trim().match(/^【([^】]+)】\s*(.*)$/);
+            if (!m) return;
+            let k = m[1].replace(/\s+/g, '').replace(/[线線]$/, '');
+            const text = m[2].trim();
+            if (/之$/.test(k) && text.indexOf(k) < 0) k = k.slice(0, -1);
+            const label = _labelOf(k);
+            const key = _keyOf(label);
+            if (!label || label.length < 2 || !key || seen.has(key)) return;
+            seen.add(key);
+            out.push({ line: label, act: 'open', fact: text.replace(/\s+/g, ' ').slice(0, CFG.factMax) });
+        });
+        return out;
+    }
+    async function _ensureSeed(data) {
+        try {
+            if (_isStandalone() || !data || data.seedTried) return;
+            const hasAny = Object.keys(data.deltas).some(k => (data.deltas[k].items || []).length);
+            if (hasAny) { data.seedTried = true; return; }
+            let msgs = null;
+            try { msgs = await win.VN_READER?.fetchFullChat?.(); } catch (e) {}
+            if (!Array.isArray(msgs) || !msgs.length) return;   // 讀不到就下次再試
+            data.seedTried = true;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                const m = msgs[i];
+                if (!m || m.is_user) continue;
+                const hit = String(m.mes || m.message || '').match(FB_RE);
+                if (!hit) continue;
+                const items = _parseDraftLines(hit[1]);
+                if (items.length) {
+                    const from = String(m.message_id != null ? m.message_id : i);
+                    data.seed = { at: Date.now(), from, items };
+                    console.log(`🧵 [Story Threads] 開帳：從第 ${from} 樓的💫伏笔帶進 ${items.length} 條線`);
+                }
+                break;
+            }
+            await _save();
+        } catch (e) { console.warn('[Story Threads] 開帳失敗:', e?.message || e); }
+    }
+
     // 把各章的變化疊成一本帳。beforeKey：只疊這一章「之前」的（副模型記這一章時看的是它之前的帳）
     //   exclude：這些章不算（酒館 swipe 時正在重寫的那一樓）
     function _fold(data, order, opts) {
@@ -127,6 +174,15 @@
         const seq = stopAt >= 0 ? order.slice(0, stopAt) : order;
         const ex = opts.exclude || null;
         const used = [];
+        // 開帳的底（酒館從 Ako 伏笔帶進來的）排在所有章節前面
+        if (data.seed && Array.isArray(data.seed.items)) {
+            const at0 = opts.posOf ? (opts.posOf(data.seed.from) ?? 0) : 0;
+            data.seed.items.forEach(it => {
+                const key = _keyOf(it.line);
+                if (key && !lines.has(key)) lines.set(key, { label: _labelOf(it.line), fact: it.fact || '', opened: at0, updated: at0, closed: false, lastAct: 'seed', lastKey: 'seed' });
+            });
+            lastPos = Math.max(lastPos, at0);
+        }
         for (const k of seq) {
             if (ex && ex.has(k)) continue;
             const d = data.deltas[k];
@@ -162,7 +218,7 @@
             const cid = _chatId();
             if (!cid || chapterKey == null || chapterKey === '') return null;
             const key = String(chapterKey);
-            const data = await _run(() => _load(cid));
+            const data = await _run(async () => { const d = await _load(cid); await _ensureSeed(d); return d; });
             if (!data) return null;
             const { order } = await _chapterOrder(data);
             // 這一章還沒記過（第一次）或正在被重寫（重生／swipe 同一把鑰匙）→ 都只看它之前的帳
@@ -258,7 +314,7 @@ ${open.length ? open.join('\n') : '（空）'}
     async function snapshot(opts) {
         const cid = _chatId();
         if (!cid) return null;
-        const data = await _run(() => _load(cid));
+        const data = await _run(async () => { const d = await _load(cid); await _ensureSeed(d); return d; });
         if (!data) return null;
         const co = await _chapterOrder(data);
         const { lines, count, used, lastPos } = _fold(data, co.order, { exclude: opts && opts.exclude, posOf: co.posOf });
