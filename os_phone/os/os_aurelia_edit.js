@@ -9,7 +9,9 @@
 //   ・範圍跟查世界書一樣：這個故事開著的書（OS_AURELIA_TOOLS.books）。
 //   ・酒館寫酒館助手的 lorebook；手機寫 OS_WORLDBOOK.lorebookApi（同名函式，書包）。
 //   ・不給刪：要拿掉就關掉（enabled:false），她隨時開得回來。
-//   ・🚫 世界門那三本不給改：開關與條目由世界門程式管，工具去寫會打架。
+//   ・🚫 世界門那三本：【奧瑞亞世界】【奧瑞亞-視差】不給改（開關與條目由世界門程式管，工具去寫會打架）；
+//     【奧瑞亞-人物核心】只准改已經有的條目內容（09-30 開放）——世界門每次現讀這本的標題與內容排熟人名冊，
+//     標題、關鍵字（「僅存放資料」那種標記）、開關會改到名冊，不給動；也不給加新條目。
 //   ・條目在提出之後被改過（她自己改、別張單子先寫了）→ 這張作廢，不蓋掉；改回去也一樣。
 // 暴露：window.OS_AURELIA_EDIT = { note, tools, run(name, args), propose(name, args), apply(prop), undo(prop), text(prop, forModel) }
 //   prop 是普通物件（存在聊天 app 那一則系統訊息上），apply／undo 會改它的 state：
@@ -18,7 +20,8 @@
 (function () {
     'use strict';
     const win = window.parent || window;
-    const LOCKED = ['【奧瑞亞世界】', '【奧瑞亞-視差】', '【奧瑞亞-人物核心】'];
+    const LOCKED = ['【奧瑞亞世界】', '【奧瑞亞-視差】'];
+    const CONTENT_ONLY = ['【奧瑞亞-人物核心】'];
     const CONTENT_MAX = 12000;   // 一條最多幾個字
     const READ_MAX = 2800;       // 看全文最多交回去幾個字（聊天 app 一次結果上限 3000）
 
@@ -39,9 +42,12 @@
     }
     function _newId() { return 'pp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function _locked(book) { return LOCKED.indexOf(book) !== -1; }
+    function _contentOnly(book) { return CONTENT_ONLY.indexOf(book) !== -1; }
+    function _gateNote(book) { return _locked(book) ? '（世界門管的，只能看）' : (_contentOnly(book) ? '（世界門管的，只能改內容）' : ''); }
     function _same(a, b) {
         return a.comment === b.comment && a.content === b.content && a.enabled === b.enabled && _keysArr(a.keys).join(',') === _keysArr(b.keys).join(',');
     }
+    function _onlyContent(a, b) { return a.comment === b.comment && a.enabled === b.enabled && _keysArr(a.keys).join(',') === _keysArr(b.keys).join(','); }
     function _snap(e) { return { comment: e.comment, keys: e.keys.slice(), content: e.content, enabled: e.enabled }; }
 
     // 範圍＝所有的書（跟創作室世界書設計師一樣），這個故事開著的排前面（open）
@@ -90,7 +96,7 @@
     }
 
     // ── 看：有哪些書／某本書有哪些條目／某一條全文（改之前先看）─────────────────
-    function _bookLabel(n, bs) { return n + (bs.open.indexOf(n) !== -1 ? '（這個故事開著）' : '') + (_locked(n) ? '（世界門管的，只能看）' : ''); }
+    function _bookLabel(n, bs) { return n + (bs.open.indexOf(n) !== -1 ? '（這個故事開著）' : '') + _gateNote(n); }
     async function _listBooks() {
         const bs = await _books();
         if (!bs.names.length) return '還沒有任何世界書。';
@@ -119,7 +125,7 @@
             ? e.content.slice(0, READ_MAX) + '\n…（後面還有 ' + (e.content.length - READ_MAX) + ' 字沒列出來。這條太長，只能用 find 和 replace 改上面看得到的部分）'
             : e.content;
         return '【' + e.comment + '】\n'
-            + '書：' + h.book + (f.open.indexOf(h.book) === -1 ? '（這個故事沒開這本）' : '') + (_locked(h.book) ? '（世界門管的書，只能看不能改）' : '') + '\n'
+            + '書：' + h.book + (f.open.indexOf(h.book) === -1 ? '（這個故事沒開這本）' : '') + _gateNote(h.book) + '\n'
             + '關鍵字：' + _keysText(e.keys) + '\n'
             + (e.enabled ? '現在開著' : '現在是關著的（不會送出）') + '\n'
             + '內容：\n' + (body || '（空的）');
@@ -135,7 +141,7 @@
         if (!content) return _no('要給新條目的內容（content）。');
         if (content.length > CONTENT_MAX) return _no('內容太長了（最多 ' + CONTENT_MAX + ' 字），拆成幾條。');
         const bs = await _books();
-        const usable = bs.names.filter(function (n) { return !_locked(n); });
+        const usable = bs.names.filter(function (n) { return !_locked(n) && !_contentOnly(n); });
         const some = function () { return usable.length ? '可以放的書：' + usable.slice(0, 15).join('、') + (usable.length > 15 ? '…（還有 ' + (usable.length - 15) + ' 本）' : '') : ''; };
         let book = _one(args.book);
         if (book) {
@@ -144,10 +150,11 @@
             book = hit;
         } else {
             // 沒寫書：放在這個故事開著的第一本能改的；沒打開故事（或開著的都是世界門的）就要它寫清楚
-            book = bs.open.filter(function (n) { return !_locked(n); })[0] || '';
+            book = bs.open.filter(function (n) { return !_locked(n) && !_contentOnly(n); })[0] || '';
             if (!book) return _no(bs.names.length ? '現在沒有打開的故事可以放，要用 book 寫放在哪本書。' + some() : '還沒有任何世界書，沒地方放。');
         }
         if (_locked(book)) return _no('「' + book + '」是世界門管的書，不能從這裡改。' + some());
+        if (_contentOnly(book)) return _no('「' + book + '」只能改已經有的條目內容，不能加新的。' + some());
         const same = (await _entriesOf(book)).find(function (e) { return _fold(_one(e.comment)) === _fold(title); });
         if (same) return _no('「' + book + '」已經有一條叫「' + title + '」的了，要改那一條用 aurelia_worldbook_edit。');
         return { ok: true, prop: {
@@ -185,6 +192,9 @@
             const b = _bool(args.enabled);
             if (b === undefined) return _no('enabled 只能是 true（打開）或 false（關掉）。');
             after.enabled = b;
+        }
+        if (_contentOnly(h.book) && !_onlyContent(cur, after)) {
+            return _no('「' + h.book + '」只能改條目內容（find 和 replace，或 content）；標題、關鍵字、開關由世界門管，不能從這裡改。');
         }
         if (after.content.length > CONTENT_MAX) return _no('改完太長了（最多 ' + CONTENT_MAX + ' 字）。');
         if (_same(cur, after)) return _no('跟現在一模一樣，沒有要改的地方。');
@@ -229,6 +239,7 @@
         const A = _api();
         if (!A || !A.createLorebookEntries || !A.setLorebookEntries) return { ok: false, text: _pwa() ? '手機的世界書還沒載好' : '酒館助手沒開，改不了世界書' };
         if (_locked(prop.book)) return _stale(prop, '「' + prop.book + '」是世界門管的書，不能從這裡改');
+        if (_contentOnly(prop.book) && (prop.kind !== 'edit' || !_onlyContent(prop.before, prop.after))) return _stale(prop, '「' + prop.book + '」只能改條目內容');
         try {
             if (prop.kind === 'add') {
                 const dup = (await _entriesOf(prop.book)).find(function (e) { return _fold(_one(e.comment)) === _fold(prop.after.comment); });
