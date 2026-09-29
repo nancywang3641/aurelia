@@ -3802,7 +3802,7 @@
         //   最後那個斷點沒有下一句可斷，拿掉，否則框底下多一條空行。
         //   只給 [Sys| 用：對話框寬度本來就是固定的、沒有這個毛病，也不動她習慣的斷句。
         _sysBreakSentences: function (html) {
-            const MARK = ' ';
+            const MARK = '\u0000';   // 用跳脫寫：字面上的 NUL 會讓搜尋工具把整支檔當二進位檔跳過
             const marked = String(html).replace(
                 /(<[^>]+>)|([。！？…‼⁇]+[」』）】》”’"']*)/g,
                 (m, tag, sent) => tag ? tag : sent + MARK
