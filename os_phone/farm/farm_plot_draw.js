@@ -58,10 +58,12 @@
     // 其他九種作物的放大倍數（星露豆已定案，用上面的 PLANT_SCALE）；超過 MAX_H / MAX_W 會自動縮
     var SP_SCALE = { seeded: 1.3, emerging: 1.7, seedling: 1.85, growing: 1.95, mature: 1.95, wilted: 1.8 };
 
+    // 🚨 動畫一律分格播放（steps）：36 株各自在 SVG 裡平滑轉動＝每一格都要重畫整片田，
+    //    鏡頭一移動就一頓一頓（量過：顯示卡工作 1600ms/5 秒 → 270）。幅度只有 ±2.2 度，分六格看起來一樣。
     var CSS = [
-        '.fp-sw{transform-box:fill-box;transform-origin:50% 100%;animation:fp-sway 3.4s ease-in-out infinite;}',
-        '.fp-tw{animation:fp-tw 2.6s ease-in-out infinite;}',
-        '.fp-pulse{animation:fp-pulse 2.2s ease-in-out infinite;}',
+        '.fp-sw{transform-box:fill-box;transform-origin:50% 100%;animation:fp-sway 3.4s steps(6,jump-none) infinite;}',
+        '.fp-tw{animation:fp-tw 2.6s steps(6,jump-none) infinite;}',
+        '.fp-pulse{animation:fp-pulse 2.2s steps(6,jump-none) infinite;}',
         '@keyframes fp-sway{0%,100%{transform:rotate(-2.2deg)}50%{transform:rotate(2.2deg)}}',
         '@keyframes fp-tw{0%,100%{opacity:.25}50%{opacity:.85}}',
         '@keyframes fp-pulse{0%,100%{opacity:.35}50%{opacity:.95}}',
@@ -130,6 +132,23 @@
         return d + 'Z';
     }
 
+    // 土的顆粒（雜訊濾鏡）很貴：每次田重畫（換一塊亮、作物換格）都要重算。
+    // 改成一張 SVG 圖貼上去——瀏覽器畫過一次就記住那張圖，之後重畫直接貼，不再重算雜訊。
+    // 圖跟田用同一個座標框（viewBox＝SOIL_BOX），雜訊是照座標算的，所以長得跟以前直接在田裡算的一樣。
+    var NOISE = {};
+    function noiseImg(kind) {
+        if (NOISE[kind]) return NOISE[kind];
+        var B = SOIL_BOX;
+        var f = kind === 'dk'
+            ? '<feTurbulence type="fractalNoise" baseFrequency=".16 .26" numOctaves="4" seed="7"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.5 -.58"/>'
+            : '<feTurbulence type="fractalNoise" baseFrequency=".45 .7" numOctaves="2" seed="21"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 .9  0 0 0 0 .78  0 0 0 2.6 -1.5"/>';
+        var box = 'x="' + B.x + '" y="' + B.y + '" width="' + B.w + '" height="' + B.h + '"';
+        var doc = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + B.x + ' ' + B.y + ' ' + B.w + ' ' + B.h + '" width="' + B.w + '" height="' + B.h + '">' +
+            '<filter id="n" filterUnits="userSpaceOnUse" ' + box + '>' + f + '</filter><rect ' + box + ' filter="url(#n)"/></svg>';
+        NOISE[kind] = 'data:image/svg+xml,' + encodeURIComponent(doc);
+        return NOISE[kind];
+    }
+
     function frame(id, soilKey) {
         var S = SOIL[soilKey];
         var B = SOIL_BOX;
@@ -154,19 +173,11 @@
             var cx = left ? 6 + sl : 394 - sl;
             return '<g transform="rotate(' + (left ? -ang : ang) + ' ' + r1(cx) + ' ' + yc + ')">' + light(r1(cx - 3), yc - 19, 6, 38) + '</g>';
         };
-        var fr = 'filterUnits="userSpaceOnUse" ' + box;
         return '' +
             '<defs>' +
             '<linearGradient id="' + id + 'st" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3e5c8"/><stop offset="1" stop-color="#d2b98e"/></linearGradient>' +
             '<linearGradient id="' + id + 'in" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(0,0,0,.42)"/><stop offset="1" stop-color="rgba(0,0,0,0)"/></linearGradient>' +
             '<clipPath id="' + id + 'cl"><path d="' + soilD + '"/></clipPath>' +
-            // 土的顆粒：一層暗的土塊、一層亮的碎屑，頻率低一點才像土不像砂紙
-            '<filter id="' + id + 'dk" ' + fr + '>' +
-            '<feTurbulence type="fractalNoise" baseFrequency=".16 .26" numOctaves="4" seed="7"/>' +
-            '<feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.5 -.58"/></filter>' +
-            '<filter id="' + id + 'lt" ' + fr + '>' +
-            '<feTurbulence type="fractalNoise" baseFrequency=".45 .7" numOctaves="2" seed="21"/>' +
-            '<feColorMatrix values="0 0 0 0 1  0 0 0 0 .9  0 0 0 0 .78  0 0 0 2.6 -1.5"/></filter>' +
             '<filter id="' + id + 'gl" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3"/></filter>' +
             '</defs>' +
             // 石框：底下一層深色＝框的厚度（整片往下挪 9，斜邊照同一條線）
@@ -176,8 +187,9 @@
             // 土
             '<path d="' + soilD + '" fill="' + S.base + '"/>' +
             '<g clip-path="url(#' + id + 'cl)">' +
-            '<rect ' + box + ' filter="url(#' + id + 'dk)" opacity=".5"/>' +
-            '<rect ' + box + ' filter="url(#' + id + 'lt)" opacity="' + (soilKey === 'dry' ? '.4' : '.2') + '"/>' +
+            // 土的顆粒：一層暗的土塊、一層亮的碎屑，頻率低一點才像土不像砂紙（雜訊圖見 noiseImg）
+            '<image href="' + noiseImg('dk') + '" ' + box + ' preserveAspectRatio="none" opacity=".5"/>' +
+            '<image href="' + noiseImg('lt') + '" ' + box + ' preserveAspectRatio="none" opacity="' + (soilKey === 'dry' ? '.4' : '.2') + '"/>' +
             '<rect x="' + B.x + '" y="' + B.y + '" width="' + B.w + '" height="20" fill="url(#' + id + 'in)"/>' +
             '</g>' +
             '<path d="' + soilD + '" fill="none" stroke="rgba(60,38,20,.55)" stroke-width="1.5"/>' +

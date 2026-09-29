@@ -50,8 +50,9 @@
 .aurelia-farm .farm-stat.coin strong {color: #96631d;}
 .aurelia-farm .farm-plot {position: absolute; z-index: 10; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; transition: filter .15s ease;}
 .aurelia-farm .farm-plot:hover, .aurelia-farm .farm-plot:focus-visible {outline: none; filter: drop-shadow(0 0 7px rgba(255,236,170,.85));}
-.aurelia-farm .farm-plot.mature {animation: plot-ready 1.7s ease-in-out infinite;}
-.aurelia-farm .farm-plot.wilted {animation: plot-warning 1.35s ease-in-out infinite;}
+/* 分格播放：平滑的光暈動畫＝每一格都重畫整塊田，鏡頭移動時會一頓一頓 */
+.aurelia-farm .farm-plot.mature {animation: plot-ready 1.7s steps(6, jump-none) infinite;}
+.aurelia-farm .farm-plot.wilted {animation: plot-warning 1.35s steps(6, jump-none) infinite;}
 @keyframes plot-ready { 0%,100%{filter:none} 50%{filter:drop-shadow(0 0 10px rgba(255,227,112,.95))} }
 @keyframes plot-warning { 0%,100%{filter:none} 50%{filter:drop-shadow(0 0 9px rgba(215,104,73,.85))} }
 .aurelia-farm .farm-plot:nth-child(1) {left: 21.0%; top: 34.8%; width: 17.8%; height: 14.2%;}
@@ -242,6 +243,10 @@
     background: #fff8e8; color: #557b48; font-size: clamp(9px, 1.4cqw, 14px); box-shadow: 0 3px 8px rgba(35,49,34,.25);
     transition: transform .18s ease, opacity .18s ease;}
 .aurelia-farm .fw-player.is-doing .fw-doing {opacity: 1; transform: translate(-50%, -100%) scale(1);}
+/* 會發金光的東西各自一層：金光加上／拿掉只重畫那一小塊。不分層的話整張後院那一大層全部重畫
+   （背景、房子、每塊田），一次 10～30ms，走到下一塊田就頓一下，鏡頭在動時特別明顯 */
+.aurelia-farm .farm-plot, .aurelia-farm .farm-decor, .aurelia-farm .ranch-obj, .aurelia-farm .ranch-animal,
+.aurelia-farm .ranch-drop, .aurelia-farm .fs-bin {will-change: transform;}
 .aurelia-farm .fw-focus, .aurelia-farm .fw-focus + .ranch-obj, .aurelia-farm .fw-focus + .farm-decor {filter: drop-shadow(2px 0 0 #ffe7a0) drop-shadow(-2px 0 0 #ffe7a0) drop-shadow(0 2px 0 #ffe7a0) drop-shadow(0 -2px 0 #ffe7a0)
             drop-shadow(0 0 10px rgba(255,205,110,.85)) !important;}
 .aurelia-farm .fw-bar {position: absolute; left: 0; top: 0; z-index: 60; will-change: transform;
