@@ -79,12 +79,20 @@
         }).finally(function () { clearTimeout(timer); });
     }
 
-    // 誰玩得比較多：先比第幾日，再比收成次數、金幣（兩邊都還沒對過的第一次才用得到）
+    // 誰玩得比較多（兩邊都還沒對過的第一次才用得到）：先比第幾日，再比日記幾行、收成幾次。
+    // 🚨 不比金幣：買種子、買乾草會讓金幣變少，玩過的反而輸給全新的田（09-29 電腦那塊就這樣被手機的空田蓋掉）。
+    // 全新沒動過的田（第 1 日、日記只有開場那一行、田都空的）一律讓給對方。
+    function untouched(st) {
+        return !st || ((Number(st.day) || 1) <= 1 && (st.logs || []).length <= 1 &&
+            !(st.plots || []).some(function (p) { return p && p.stage && p.stage !== 'empty'; }));
+    }
     function progress(st) {
         if (!st) return [-1, 0, 0];
-        return [Number(st.day) || 0, Number(st.stats && st.stats.totalHarvested) || 0, Number(st.coins) || 0];
+        return [Number(st.day) || 0, (st.logs || []).length, Number(st.stats && st.stats.totalHarvested) || 0];
     }
     function ahead(a, b) {
+        if (untouched(a)) return false;
+        if (untouched(b)) return true;
         var p = progress(a), q = progress(b);
         for (var i = 0; i < p.length; i++) if (p[i] !== q[i]) return p[i] > q[i];
         return false;
