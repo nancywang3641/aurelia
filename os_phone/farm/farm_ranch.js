@@ -45,6 +45,7 @@
             '<button class="ranch-chip" type="button" data-farm="ranch-board"><i class="fa-solid fa-chart-simple"></i> 看板</button>' +
             '<button class="ranch-chip" type="button" data-farm="ranch-report"><i class="fa-solid fa-receipt"></i> 結算單</button>' +
             '<button class="ranch-chip" type="button" data-farm="ranch-cloud" data-farm-cloud><i class="fa-solid fa-cloud"></i> 雲端</button>' +
+            '<button class="ranch-chip" type="button" data-farm="ranch-residents"><i class="fa-solid fa-user-clock"></i> 住戶</button>' +
             '<button class="ranch-chip ranch-btn" type="button" data-farm="ranch-next-day"><i class="fa-solid fa-moon"></i> 結束今天</button>' +
             '</div>' +
             '<div class="farm-toast" data-farm="toast" role="status" aria-live="polite"></div>';
@@ -477,6 +478,8 @@
     $('ranch-board').addEventListener('click', function (ev) { ev.stopPropagation(); board.open(); });
     var cloud = window.FarmCloud.panel({ app: root, onConnected: ctx.resync });
     $('ranch-cloud').addEventListener('click', function (ev) { ev.stopPropagation(); cloud.open(); });
+    var people = window.FarmCloud.residentsPanel({ app: root, openCloud: function () { cloud.open(); } });
+    $('ranch-residents').addEventListener('click', function (ev) { ev.stopPropagation(); people.open(); });
     var bag = window.FarmBag.create({ app: root, scene: 'ranch', state: function () { return state; }, toast: toast });
     render();
     stage = window.FarmWalkStage.create({
@@ -499,7 +502,7 @@
         destroy: function () {
             // 動物各自有停一下再走的計時器：全部停掉，不然換場景後還在背景亂跑
             herd.forEach(function (a) { clearTimeout(a.timer); a.gone = true; });
-            [stage, bag, shipUi, board, cloud].forEach(function (c) { if (c && c.destroy) c.destroy(); });
+            [stage, bag, shipUi, board, cloud, people].forEach(function (c) { if (c && c.destroy) c.destroy(); });
             saveState();
         }
     };

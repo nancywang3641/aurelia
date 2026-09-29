@@ -480,3 +480,24 @@
 .aurelia-farm [data-farm-cloud].is-busy i {color: #6c4a22; animation: fc-pulse 1s steps(2, jump-none) infinite;}
 .aurelia-farm [data-farm-cloud].is-warn i {color: #c0663a;}
 @keyframes fc-pulse { 0%,100% {opacity: 1;} 50% {opacity: .35;} }
+
+/* ── 住戶顧田（farm_cloud 的 residentsPanel）：一人一張卡，開關、醒來時間、上次醒來、現在叫他起來 ── */
+.aurelia-farm .fr-panel {width: min(420px, 100%); max-height: 100%;}
+.aurelia-farm .fr-panel .fc-body {overflow: auto;}
+.aurelia-farm .fr-card {display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #fbeccb; border: 2px solid transparent;}
+.aurelia-farm .fr-card.is-on {border-color: #9dbb7e;}
+.aurelia-farm .fr-card header {display: flex; align-items: center; justify-content: space-between;}
+.aurelia-farm .fr-card header strong {font-size: 15px;}
+.aurelia-farm .fr-switch {position: relative; width: 44px; height: 24px; padding: 0; border: 2px solid #b89a6a; border-radius: 999px; background: #e9d6ae; cursor: pointer;}
+.aurelia-farm .fr-switch i {position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fffaf0; box-shadow: 0 1px 3px rgba(63,42,18,.3); transition: transform .15s ease;}
+.aurelia-farm .fr-switch[aria-checked="true"] {background: #557b48; border-color: #3e5d34;}
+.aurelia-farm .fr-switch[aria-checked="true"] i {transform: translateX(20px);}
+.aurelia-farm .fr-times {display: flex; flex-wrap: wrap; align-items: center; gap: 6px;}
+.aurelia-farm .fr-label {font-size: 12px; color: #8b5a2b; margin-right: 2px;}
+.aurelia-farm .fr-none {font-size: 12px; color: #a8834e;}
+.aurelia-farm .fr-time {display: inline-flex; align-items: center; gap: 4px; padding: 4px 4px 4px 9px; border-radius: 999px; background: #fffaf0; border: 1px solid #d7b27a; font-size: 13px; font-weight: 700; color: #3f2a12;}
+.aurelia-farm .fr-time button {display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: #ead3a4; color: #6c4a22; font-size: 10px; cursor: pointer;}
+.aurelia-farm .fr-add {display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 2px dashed #b89a6a; border-radius: 999px; background: transparent; color: #8b5a2b; cursor: pointer;}
+.aurelia-farm .fr-new {padding: 4px 8px; border: 2px solid #8b5a2b; border-radius: 999px; background: #fffaf0; color: #3f2a12; font-family: inherit; font-size: 13px;}
+.aurelia-farm .fr-last {display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: #6c4a22;}
+.aurelia-farm .fr-foot {display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 12px; color: #a8834e;}

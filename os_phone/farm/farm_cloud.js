@@ -303,10 +303,137 @@
     // 看別人的地（看板排行榜用）：阿洛、丹在 VPS 上顧的那兩塊。只讀。
     function peek(slot) { return enabled() ? api('GET', null, null, false, slot) : Promise.reject(new Error('off')); }
 
+    // ── 住戶醒來時間（她在這裡調，VPS 上每 5 分鐘照這份叫人；伺服器那半見 relay 的 /v1/farm-schedule）──
+    function call(method, p, body) {
+        var c = cfg();
+        var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var t = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} }, TIMEOUT);
+        return fetch(base(c) + p, {
+            method: method,
+            headers: Object.assign({ 'Authorization': 'Bearer ' + String(c.token || '').trim() }, body ? { 'Content-Type': 'application/json' } : {}),
+            body: body ? JSON.stringify(body) : undefined,
+            signal: ctl ? ctl.signal : undefined
+        }).then(function (res) {
+            if (!res.ok) throw new Error(res.status === 401 ? '通行碼不對' : '伺服器回 ' + res.status);
+            return res.json();
+        }).finally(function () { clearTimeout(t); });
+    }
+    var PEOPLE = [{ id: 'aluo', name: '阿洛' }, { id: 'dan', name: '丹' }];
+    try {
+        if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
+            farm_residents: { title: '住戶顧田', body: '打開之後，阿洛和丹會在你排的時間自己醒來，到伺服器上顧他們自己那塊後院，顧完寫日記。\n醒一次會用掉一點你帳號的額度（丹用 Claude，阿洛用 ChatGPT）。\n時間是台灣時間；伺服器每 5 分鐘看一次，所以會晚幾分鐘。「現在叫他起來」也是等下一次看的時候才叫。\n他們要先在伺服器上登入過才叫得起來。每天清晨 4 點結算他們兩塊地。' }
+        });
+    } catch (e) {}
+    function when(sec) {
+        var d = new Date(sec * 1000), now = new Date();
+        var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        if (d.toDateString() === now.toDateString()) return '今天 ' + hm;
+        var y = new Date(now); y.setDate(now.getDate() - 1);
+        if (d.toDateString() === y.toDateString()) return '昨天 ' + hm;
+        return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+    }
+    function lastLine(st, queued) {
+        if (queued) return fa('fa-hourglass-half') + '排好了，幾分鐘內就起來';
+        if (!st) return fa('fa-moon') + '還沒醒過';
+        var what = st.code === 0 ? '顧完了' : st.code === 124 ? '顧太久被叫停了' : '沒叫起來（可能還沒登入）';
+        return fa(st.code === 0 ? 'fa-circle-check' : 'fa-triangle-exclamation') + '上次醒來：' + when(st.at) + '・' + what;
+    }
+    // opts：{ app, openCloud() }
+    function residentsPanel(opts) {
+        var wrap = document.createElement('div');
+        wrap.className = 'fc-wrap';
+        wrap.hidden = true;
+        wrap.setAttribute('data-fw-modal', '');
+        opts.app.appendChild(wrap);
+        var help = (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('farm_residents') : '';
+        var doc = null, err = '', adding = null;
+        function card(p) {
+            var sc = (doc.schedule || {})[p.id] || { on: false, times: [] };
+            var st = (doc.status || {})[p.id], queued = (doc.wakeQueued || {})[p.id];
+            var times = sc.times.map(function (t) {
+                return '<span class="fr-time">' + esc(t) + '<button type="button" data-fr="del" data-who="' + p.id + '" data-t="' + esc(t) + '" aria-label="拿掉 ' + esc(t) + '">' + fa('fa-xmark') + '</button></span>';
+            }).join('');
+            var add = adding === p.id
+                ? '<input type="time" class="fr-new" data-who="' + p.id + '" aria-label="新的醒來時間">'
+                : (sc.times.length < 6 ? '<button type="button" class="fr-add" data-fr="add" data-who="' + p.id + '" aria-label="加一個時間">' + fa('fa-plus') + '</button>' : '');
+            return '<section class="fr-card' + (sc.on ? ' is-on' : '') + '">' +
+                '<header><strong>' + p.name + '</strong>' +
+                '<button type="button" class="fr-switch" role="switch" aria-checked="' + (sc.on ? 'true' : 'false') + '" data-fr="toggle" data-who="' + p.id + '" aria-label="' + p.name + '自己醒來"><i></i></button></header>' +
+                '<div class="fr-times"><span class="fr-label">醒來時間</span>' + (times || '<span class="fr-none">還沒排</span>') + add + '</div>' +
+                '<p class="fr-last">' + lastLine(st, queued) + '</p>' +
+                '<button type="button" class="fc-btn" data-fr="wake" data-who="' + p.id + '"' + (queued ? ' disabled' : '') + '>' + fa('fa-bell') + '現在叫他起來</button>' +
+                '</section>';
+        }
+        function render() {
+            var body;
+            if (!enabled()) {
+                body = '<p class="fc-state is-offline">' + fa('fa-cloud') + '要先開雲端存檔，他們才找得到自己的地。</p>' +
+                    '<div class="fc-acts"><button type="button" class="fc-btn is-main" data-fr="cloud">' + fa('fa-cloud') + '打開雲端存檔</button></div>';
+            } else if (!doc) {
+                body = '<p class="fc-state ' + (err ? 'is-error' : 'is-busy') + '">' + fa(err ? 'fa-triangle-exclamation' : 'fa-cloud-arrow-down') + esc(err || '讀取中…') + '</p>';
+            } else {
+                body = PEOPLE.map(card).join('') + '<p class="fr-foot">' + fa('fa-moon') + '每天清晨 ' + esc(doc.settle || '04:00') + ' 結算他們兩塊地</p>' +
+                    (err ? '<p class="fc-state is-error">' + fa('fa-triangle-exclamation') + esc(err) + '</p>' : '');
+            }
+            wrap.innerHTML = '<section class="fc-card fr-panel" role="dialog" aria-label="住戶顧田">' +
+                '<header class="fc-head"><strong>' + fa('fa-user-clock') + '住戶顧田' + help + '</strong>' +
+                '<button type="button" class="fc-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<div class="fc-body">' + body + '</div></section>';
+            var inp = wrap.querySelector('.fr-new');
+            if (inp) inp.focus({ preventScroll: true });
+        }
+        function load() {
+            err = '';
+            if (!enabled()) { render(); return; }
+            call('GET', '/v1/farm-schedule').then(function (d) { doc = d; render(); }, function (e) { err = errText(e); render(); });
+        }
+        function saveSchedule(who, patch) {
+            var body = {}; body[who] = patch;
+            var sc = doc.schedule[who];
+            Object.assign(sc, patch);   // 先畫出來，伺服器回來再照它的
+            render();
+            call('POST', '/v1/farm-schedule', body).then(function (d) { doc = d; err = ''; render(); }, function (e) { err = '沒存到：' + errText(e); render(); });
+        }
+        function addTime(who, v) {
+            adding = null;
+            if (!/^\d\d:\d\d$/.test(v || '')) { render(); return; }
+            var times = doc.schedule[who].times.concat([v]).filter(function (t, i, a) { return a.indexOf(t) === i; }).sort();
+            saveSchedule(who, { times: times });
+        }
+        function open() { doc = null; adding = null; render(); wrap.hidden = false; load(); }
+        function close() { wrap.hidden = true; }
+        wrap.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (e.target === wrap || e.target.closest('.fc-close')) { close(); return; }
+            var b = e.target.closest('[data-fr]');
+            if (!b || b.disabled) return;
+            var what = b.getAttribute('data-fr'), who = b.getAttribute('data-who');
+            if (what === 'cloud') { close(); if (opts.openCloud) opts.openCloud(); return; }
+            if (!doc) return;
+            if (what === 'toggle') saveSchedule(who, { on: !doc.schedule[who].on });
+            else if (what === 'del') saveSchedule(who, { times: doc.schedule[who].times.filter(function (t) { return t !== b.getAttribute('data-t'); }) });
+            else if (what === 'add') { adding = who; render(); }
+            else if (what === 'wake') {
+                b.disabled = true;
+                call('POST', '/v1/farm-wake/' + who).then(function (d) { doc = d; render(); }, function (e) { err = errText(e); render(); });
+            }
+        });
+        // 時間格：選好（change）或離開格子就收；Enter 也收、Esc 取消
+        wrap.addEventListener('change', function (e) { var i = e.target.closest('.fr-new'); if (i && i.value) addTime(i.getAttribute('data-who'), i.value); });
+        wrap.addEventListener('focusout', function (e) { var i = e.target.closest && e.target.closest('.fr-new'); if (i) setTimeout(function () { if (adding) addTime(i.getAttribute('data-who'), i.value); }, 150); });
+        wrap.addEventListener('keydown', function (e) {
+            e.stopPropagation();
+            var i = e.target.closest && e.target.closest('.fr-new');
+            if (i && e.key === 'Enter') { e.preventDefault(); addTime(i.getAttribute('data-who'), i.value); return; }
+            if (e.key === 'Escape') { e.preventDefault(); if (adding) { adding = null; render(); } else close(); }
+        });
+        return { open: open, close: close, destroy: function () {} };
+    }
+
     window.FarmCloud = {
         cfg: cfg, prefill: prefill, enabled: enabled, base: base, meta: meta,
         status: function () { return status; }, onStatus: onStatus,
         openSync: openSync, changed: changed, flush: flush, setOnNewer: setOnNewer,
-        connect: connect, disconnect: disconnect, panel: panel, peek: peek, BACKUP_KEY: BACKUP_KEY
+        connect: connect, disconnect: disconnect, panel: panel, peek: peek, residentsPanel: residentsPanel, BACKUP_KEY: BACKUP_KEY
     };
 })();
