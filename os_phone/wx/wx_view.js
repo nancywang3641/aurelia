@@ -300,15 +300,22 @@
                     const _nbCall = `event.stopPropagation(); const NB=(window.parent.WX_NOTEBOOK||window.WX_NOTEBOOK); if(NB) NB.open('${String(chatId).replace(/'/g, "\\'")}','${String(msg._noteRef).replace(/'/g, "\\'")}')`;
                     return `<div class="wx-system-notice wxnb-notice ${animClass}" style="${opacityStyle}" ${dataAttr} onclick="${_nbCall}"><i class="fa-solid fa-book-bookmark"></i>${sysText(displayContent)}</div>`;
                 }
-                // ✍ 角色提出要改世界書（wx_tools 會動手的工具）：點了打開那張單子，看改前改後、按同意才寫。
-                //   字由 WX_TOOLS.propNotice 照單子現在的狀態給（已跳脫）；標題是模型寫的，不能直接塞進來。
+                // ✍ 角色提出要改世界書（wx_tools 會動手的工具）：一個框，點了打開那張單子，看改前改後、按同意才寫。
+                //   字由 WX_TOOLS.propNotice 給（已跳脫；標題是模型寫的，不能直接塞進來），右邊小標是狀態，等她決定的那張框會亮。
                 if (msg._prop && msg._prop.id) {
                     const _T = (window.parent.WX_TOOLS || window.WX_TOOLS);
                     const _pid = String(msg._prop.id).replace(/[^\w-]/g, '');
+                    const _st = String(msg._prop.state || 'wait').replace(/[^\w-]/g, '');
                     const _pt = (_T && _T.propNotice) ? _T.propNotice(msg._prop) : String(displayContent).replace(/[&<>"']/g, '');
+                    const _pc = (_T && _T.propChip) ? _T.propChip(msg._prop) : '';
                     const _ppCall = `event.stopPropagation(); const T=(window.parent.WX_TOOLS||window.WX_TOOLS); if(T) T.openProposal('${String(chatId).replace(/'/g, "\\'")}','${_pid}')`;
-                    return `<div class="wx-system-notice wxtl-pp-notice ${animClass}" style="${opacityStyle}" ${dataAttr} data-prop="${_pid}" onclick="${_ppCall}"><i class="fa-solid fa-pen-to-square"></i>${_pt}</div>`;
+                    return `<div class="wx-tool-fold wx-tool-prop is-${_st} ${animClass}" style="${opacityStyle}" ${dataAttr} data-prop="${_pid}" onclick="${_ppCall}">`
+                        + `<div class="wx-tool-head"><i class="fa-solid fa-pen-to-square"></i><span class="wx-tool-t">${_pt}</span>${_pc ? '<b class="wx-tool-chip">' + _pc + '</b>' : ''}</div></div>`;
                 }
+                // 🔧 角色用工具查了東西（wx_core _afterTools）：收成一條，點標題打開看查了什麼、查到什麼。
+                //   以前存的一行字（X 用「…」查了：…）也照這樣畫，只是沒有查到的內容。
+                const _tl = this._toolItems(msg);
+                if (_tl) return this._toolFold(_tl, msg, animClass, opacityStyle, dataAttr);
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(displayContent)}</div>`;
             }
             if (msg.type === 'time') return `<div class="wx-time-stamp ${animClass}" style="${opacityStyle}" ${dataAttr}>${msg.content}</div>`;
@@ -829,6 +836,32 @@
                 if (i >= chars.length) { clearInterval(el._vmsgTimer); el._vmsgTimer = 0; }
             }, 30);
             return true;
+        },
+
+        // 🔧 工具摺疊（跟「思考」那條同一種長相，房間小機「用了工具」那種）：新的存在 msg._tools，舊的只有一行字，照格式拆回來
+        _toolItems: function(msg) {
+            if (Array.isArray(msg._tools) && msg._tools.length) return msg._tools;
+            const m = String(msg.content || '').match(/^\S.*? 用「([^」]+)」查了(?:：([\s\S]*))?$/);
+            return m ? [{ label: m[1], what: (m[2] || '').trim(), tool: '' }] : null;
+        },
+        _toolFold: function(items, msg, animClass, opacityStyle, dataAttr) {
+            const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // 查什麼：奧瑞亞那幾個的寫法（| 是同一個東西的不同說法、空白隔開不同的東西）換成看得懂的，別把 | 原樣印出來
+            const arg = (t) => {
+                let s = String(t.what || '').replace(/\s*[|｜]\s*/g, '／');
+                if (!t.tool || /^aurelia_/.test(t.tool)) s = s.replace(/\s+/g, '、');
+                return s;
+            };
+            const busy = !!msg._toolsBusy;
+            const head = (busy ? '正在查：' : '查了：') + items.map(t => t.label).join('、');
+            const body = items.map(t => '<div class="wx-tool-item"><div class="wx-tool-name">' + esc(t.label)
+                + (t.what ? '<span class="wx-tool-arg">' + esc(arg(t)) + '</span>' : '') + '</div>'
+                + (t.res ? '<div class="wx-tool-res' + (t.ok === false ? ' is-bad' : '') + '">' + esc((t.ok === false ? '沒查成：' : '') + t.res) + '</div>' : '')
+                + '</div>').join('');
+            return `<div class="wx-tool-fold${busy ? ' is-busy' : ''} ${animClass}" style="${opacityStyle}" ${dataAttr}>`
+                + `<div class="wx-tool-head" onclick="event.stopPropagation(); this.parentNode.classList.toggle('open')"><i class="fa-solid fa-chevron-right wx-tool-arrow"></i>`
+                + `<i class="fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-magnifying-glass'}"></i><span class="wx-tool-t">${esc(head)}</span></div>`
+                + `<div class="wx-tool-body">${body}</div></div>`;
         },
 
         // 💭 思考內容的 markdown：模型想的時候很愛用標題、粗體、清單，原樣印出來一堆 # 和 **。

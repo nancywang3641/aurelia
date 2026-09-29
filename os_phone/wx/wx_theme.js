@@ -160,6 +160,7 @@
                （重開走整頁重建，那條路 opacity 是 1）。三個都要涵蓋。 */
             .wx-msg-row.animate,
             .wx-system-notice.animate,
+            .wx-tool-fold.animate,
             .wx-time-stamp.animate { animation: popIn 0.3s ease-out forwards; }
             .wx-msg-row.me { flex-direction: row-reverse; }
             .wx-bubble-avatar { width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; background-size: cover; background-color: #ccc; }
@@ -231,6 +232,23 @@
             .wx-think-body code { font-family: ui-monospace, monospace; font-size: 11px; padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, currentColor 12%, transparent); }
             .wx-think-body hr { border: 0; border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent); margin: 6px 0; }
             .wx-think-fold.open .wx-think-body { display: block; }
+            .wx-tool-fold { clear: both; align-self: flex-start; width: fit-content; box-sizing: border-box; max-width: 72%; margin: 6px 12px 0 58px; padding: 5px 10px; border-radius: 8px; background: var(--wx-surface); border: 1px solid var(--wx-line); color: var(--wx-ink-2); font-size: 12px; }
+            .wx-tool-head { display: flex; align-items: center; gap: 6px; min-width: 0; cursor: pointer; user-select: none; }
+            .wx-tool-head > i { opacity: .7; flex-shrink: 0; }
+            .wx-tool-t { min-width: 0; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .wx-tool-arrow { font-size: 9px; transition: transform .2s; }
+            .wx-tool-fold.open .wx-tool-arrow { transform: rotate(90deg); }
+            .wx-tool-body { display: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent); max-height: 320px; overflow-y: auto; overscroll-behavior: contain; user-select: text; }
+            .wx-tool-fold.open .wx-tool-body { display: block; }
+            .wx-tool-item + .wx-tool-item { margin-top: 8px; }
+            .wx-tool-name { font-weight: 700; line-height: 1.5; }
+            .wx-tool-arg { font-weight: 400; margin-left: 6px; opacity: .8; }
+            .wx-tool-res { margin-top: 2px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; opacity: .85; }
+            .wx-tool-res.is-bad { color: var(--wx-danger); opacity: 1; }
+            .wx-tool-prop { cursor: pointer; }
+            .wx-tool-prop.is-wait { border-color: var(--wx-accent); }
+            .wx-tool-chip { flex-shrink: 0; margin-left: auto; padding-left: 8px; font-weight: 700; opacity: .6; }
+            .wx-tool-prop.is-wait .wx-tool-chip { color: var(--wx-accent); opacity: 1; }
             /* 它現在是一顆真泡泡（.wx-bubble-content），只要調泡泡內的排版就好 */
             .wx-typing-indicator { display: flex; align-items: center; gap: 7px; padding: 12px 14px; }
             .wx-typing-dots-wrap { display: flex; gap: 4px; align-items: center; }

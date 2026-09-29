@@ -1725,6 +1725,23 @@
     //   連續用工具最多 TOOL_CHAIN 輪，免得它一直查不停。
     const _toolCalls = {};
     const TOOL_CHAIN = 3;
+    const TOOL_RES_KEEP = 600;   // 摺疊裡給她看的查到的內容，每樣留幾個字（整段結果在 chat.toolLog，會被新的擠掉）
+    // 那條摺疊給模型看的旁註：誰用了哪些工具、查什麼（查到的內容走 resultsBlock，不放這裡）
+    function _toolsNote(who, tools) {
+        return who + ' 用工具查了：' + tools.map(function (t) { return '「' + t.label + '」' + (t.what ? '（' + t.what + '）' : ''); }).join('、');
+    }
+    // 畫好的那一則就地換掉（摺疊跑完補結果用），點開著的保持點開
+    function _repaintMsg(chat, msg) {
+        if (!APP_CONTAINER || GLOBAL_ACTIVE_ID !== chat.id || !window.WX_VIEW) return;
+        const rc = _getRoomContent();
+        const idx = chat.messages.indexOf(msg);
+        if (!rc || idx < 0) return;
+        const el = rc.querySelector('[data-msg-idx="' + idx + '"]');
+        if (!el) return;
+        const wasOpen = el.classList.contains('open');
+        el.outerHTML = window.WX_VIEW.renderBubble(msg, chat, false, idx);
+        if (wasOpen) { const n = rc.querySelector('[data-msg-idx="' + idx + '"]'); if (n) n.classList.add('open'); }
+    }
     function _stripToolTags(text) {
         try { if (win.WX_TOOLS && win.WX_TOOLS.strip) return win.WX_TOOLS.strip(text); } catch (e) {}
         return String(text == null ? '' : text);
@@ -1739,16 +1756,39 @@
         chat._toolChain = (chat._toolChain || 0) + 1;
         if (chat._toolChain > TOOL_CHAIN) return;
         const who = chat.name || '對方';
-        const ran = await T.run(chat, calls, function (label, what, prop) {
-            // 會動手的（改世界書）不是「查了」：是一張等她決定的單子，那一行點開看改前改後（wx_tools openProposal）
-            if (prop) {
-                prop.by = who;
-                const E = win.OS_AURELIA_EDIT;
-                _sysPush(chat, (E && E.text) ? E.text(prop, true) : who + ' 提出要改世界書「' + prop.title + '」', { _prop: prop });
-                return;
+        // 🔧 這一輪查的東西收成一條可以點開的（wx_view 畫 .wx-tool-fold）：跑的時候寫正在查，跑完補上查到的
+        //   content 是給模型看的那句旁註（系統行送模型時是「（…）」），畫面照 _tools 畫
+        let fold = null;
+        const refs = [];
+        const ran = await (async function () {
+            try {
+                return await T.run(chat, calls, function (label, what, prop, entry) {
+                    // 會動手的（改世界書）不是「查了」：是一張等她決定的單子，點開看改前改後（wx_tools openProposal）
+                    if (prop) {
+                        prop.by = who;
+                        const E = win.OS_AURELIA_EDIT;
+                        _sysPush(chat, (E && E.text) ? E.text(prop, true) : who + ' 提出要改世界書「' + prop.title + '」', { _prop: prop });
+                        return;
+                    }
+                    const item = { label: label, what: what || '', tool: (entry && entry.tool) || '' };
+                    refs.push({ item: item, entry: entry });
+                    if (!fold) { fold = _sysPush(chat, _toolsNote(who, [item]), { _tools: [item], _toolsBusy: true }); return; }
+                    fold._tools.push(item);
+                    fold.content = _toolsNote(who, fold._tools);
+                    _repaintMsg(chat, fold);
+                });
+            } finally {
+                if (fold) {
+                    refs.forEach(function (r) {
+                        if (!r.entry) return;
+                        r.item.ok = !!r.entry.ok;
+                        r.item.res = String(r.entry.text || '').slice(0, TOOL_RES_KEEP);
+                    });
+                    delete fold._toolsBusy;
+                    _repaintMsg(chat, fold);
+                }
             }
-            _sysPush(chat, who + ' 用「' + label + '」查了' + (what ? '：' + what : ''));
-        });
+        })();
         if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
         if (!ran) return;
         // 她人還在這間就接著回；不在的話結果留著，下次回覆時會交給它

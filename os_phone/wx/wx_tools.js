@@ -451,7 +451,7 @@
                 entry.text = (r && r.text) || '失敗';
             } else {
                 entry.args = _parseArgs(c.body, hit.tool.inputSchema);
-                try { if (onNotice) onNotice(entry.label, _argsText(entry.args)); } catch (e) {}
+                try { if (onNotice) onNotice(entry.label, _argsText(entry.args), null, entry); } catch (e) {}   // entry 跑完才有結果，聊天那條摺疊跑完再補上
                 try {
                     entry.text = (hit.srv.builtin && BUILTIN[hit.srv.builtin])
                         ? await BUILTIN[hit.srv.builtin].run(entry.args, hit.srv, hit.tool.name, chat)   // 一個內建底下有好幾個功能時要知道叫的是哪個
@@ -523,8 +523,6 @@
             font-size:13.5px; font-weight:700; cursor:pointer; }
         .wxtl-btn.is-main { flex:2; border-color:#2f8a4c; background:#2f8a4c; color:#fff; }
         .wxtl-btn:disabled { opacity:.5; cursor:default; }
-        .wx-system-notice.wxtl-pp-notice { cursor:pointer; }
-        .wx-system-notice.wxtl-pp-notice i { margin-right:4px; opacity:.7; }
         .wxtl-pp-sub { padding:0 16px 10px; font-size:12px; color:rgba(38,36,31,.55); flex-shrink:0; }
         .wxtl-pp-card { border-radius:12px; background:#fff; padding:10px 12px; box-shadow:0 1px 3px rgba(38,36,31,.07); }
         .wxtl-pp-card + .wxtl-pp-card { margin-top:8px; }
@@ -804,11 +802,13 @@
         try { _pp.root.remove(); } catch (e) {}
         _pp = null;
     }
-    // 聊天裡那一行給她看的字（已經跳脫，wx_view 直接放）
+    // 聊天裡那一條給她看的字（已經跳脫，wx_view 直接放）；右邊那個小標是狀態
     function propNotice(prop) { const E = _edit(); return esc((E && E.text) ? E.text(prop, false) : ''); }
+    const PP_CHIP = { wait: '點開看', no: '沒同意', done: '寫進去了', undone: '改回去了', stale: '作廢了' };
+    function propChip(prop) { return PP_CHIP[(prop && prop.state) || 'wait'] || ''; }
     try { _injectCss(); } catch (e) {}   // 聊天裡那一行的樣式要在打開任何小窗之前就有
 
-    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary, openProposal, closeProposal, propNotice };
+    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary, openProposal, closeProposal, propNotice, propChip };
     win.WX_TOOLS = API;
     window.WX_TOOLS = API;
 })();

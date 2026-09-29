@@ -286,11 +286,9 @@
             if (prop.state === 'stale') return who + ' 提出要' + v + what + '，但那一條後來被改過，沒有寫進去';
             return who + ' 提出要' + v + what + '，還在等對方決定';
         }
-        if (prop.state === 'done') return who + ' ' + v + '了' + what;
-        if (prop.state === 'no') return who + ' 想' + v + what + '・你沒同意';
-        if (prop.state === 'undone') return who + ' ' + v + '的' + what + '已經改回去了';
-        if (prop.state === 'stale') return who + ' 想' + v + '的' + what + '後來被改過，這張作廢了';
-        return who + ' 想' + v + what + '・點開看';
+        // 狀態（點開看／沒同意／寫進去了…）聊天 app 畫在右邊的小標（WX_TOOLS.propChip），這裡只寫是哪一件
+        if (prop.state === 'done' || prop.state === 'undone') return who + ' ' + v + '了' + what;
+        return who + ' 想' + v + what;
     }
 
     // ── 給模型看的清單 ────────────────────────────────────────────────
