@@ -1006,12 +1006,12 @@ ${_memoryRulesText()}
         //      萬一切出來的某段命中 DROP，括號就剩半邊、NAI 語法整條壞掉。
         const keep = [];
         const s = String(p || '').replace(/[（(]([^（()]*)[)）]/g, (m, inner) => {
-            if (/:\s*[\d.]+\s*$/.test(inner)) { keep.push(m); return ' K' + (keep.length - 1) + ' '; }
+            if (/:\s*[\d.]+\s*$/.test(inner)) { keep.push(m); return '\u0000K' + (keep.length - 1) + '\u0000'; }
             return ' ';
         });
         return s.split(',').map(t => t.trim()).filter(t => t && !DROP.some(re => re.test(t)))
                 .join(', ').replace(/\s+([,.])/g, '$1').replace(/(?:\s*with)\s*$/i, '').trim()
-                .replace(/ K(\d+) /g, (m, i) => keep[i] || '');
+                .replace(/\u0000K(\d+)\u0000/g, (m, i) => keep[i] || '');
     }
 
     // {角色名 → 外觀字串}登記表：avatar_cache 頭像生成詞(主，剝肖像框架) + AVS 簡易形象(補漏)。給「##角色名## 佔位模式」展開用。
