@@ -26,7 +26,9 @@
     }
 
     // opts：{ app, state(), ship: FarmShip 那個畫面物件, owner: '我' }
+    var OTHERS = [{ slot: 'aluo', name: '阿洛' }, { slot: 'dan', name: '丹' }];
     function create(opts) {
+        var others = {}, loading = false;
         var wrap = document.createElement('div');
         wrap.className = 'fd-wrap';
         wrap.hidden = true;
@@ -45,12 +47,18 @@
                 tile('現在金幣', st.coins + 'G', '明天早上諾瓦來收的另外算') +
                 tile('收成', st.stats.totalHarvested + ' 次', '牧場產出 ' + rs.produced + ' 樣') +
                 tile('損失', st.stats.deadCrops + ' 株枯死', '跑掉 ' + rs.runaway + ' 隻 · 生了 ' + rs.born + ' 隻', (st.stats.deadCrops || rs.runaway) ? 'down' : '');
-            // 排行榜：現在只有她這一塊地；阿洛和丹的地要等 VPS 那條接通
-            var rank = '<div class="fd-rank">' +
-                '<div class="fd-rank-row"><b>1</b><strong>' + esc(opts.owner) + '</strong><span>淨賺 ' + money(net) + '</span><span>收成 ' + st.stats.totalHarvested + '</span><span>枯死 ' + st.stats.deadCrops + '</span></div>' +
-                ['阿洛', '丹'].map(function (n) {
-                    return '<div class="fd-rank-row is-empty"><b>–</b><strong>' + n + '</strong><span class="fd-wait">還沒有地，等關電腦時也能顧田那條接通才開始比</span></div>';
-                }).join('') + '</div>';
+            // 排行榜：她這塊＋阿洛、丹在 VPS 上顧的兩塊（雲端存檔開著、打開看板時去伺服器拿；拿不到就寫還沒有）
+            var rows = [{ name: opts.owner, net: net, harvested: st.stats.totalHarvested, dead: st.stats.deadCrops, me: true }];
+            OTHERS.forEach(function (o) {
+                var got = others[o.slot];
+                rows.push(got ? Object.assign({ name: o.name }, got) : { name: o.name, empty: true });
+            });
+            var ranked = rows.filter(function (r) { return !r.empty; }).sort(function (a, b) { return b.net - a.net; });
+            var rank = '<div class="fd-rank">' + ranked.map(function (r, i) {
+                return '<div class="fd-rank-row' + (r.me ? ' is-me' : '') + '"><b>' + (i + 1) + '</b><strong>' + esc(r.name) + '</strong><span>淨賺 ' + money(r.net) + '</span><span>收成 ' + r.harvested + '</span><span>枯死 ' + r.dead + '</span></div>';
+            }).join('') + rows.filter(function (r) { return r.empty; }).map(function (r) {
+                return '<div class="fd-rank-row is-empty"><b>–</b><strong>' + esc(r.name) + '</strong><span class="fd-wait">' + (loading ? '讀取中…' : '還沒有地，雲端存檔開著才看得到') + '</span></div>';
+            }).join('') + '</div>';
             var hist = sh.history && sh.history.length ? '<ul class="fd-days">' + sh.history.map(function (r, i) {
                 var bad = window.FarmShip ? window.FarmShip.eventLines(r).filter(function (e) { return e.bad; }).length : 0;
                 return '<li><button type="button" data-rep="' + i + '"><strong>第 ' + r.day + ' 日</strong>' +
@@ -71,7 +79,22 @@
                 '<h4>' + fa('fa-book-open') + '日記</h4><div class="fd-diary">' + diaryHtml + '</div>' +
                 '</div></section>';
         }
-        function open() { render(); wrap.hidden = false; }
+        // 阿洛、丹的地在伺服器上（farm_cloud 的 peek）；數字從存檔原樣算，不用整份載入
+        function sum(doc) {
+            var s = doc && doc.state;
+            if (!s) return null;
+            var T = (s.ship && s.ship.totals) || { income: 0, spent: 0 };
+            return { net: (T.income || 0) + (T.spent || 0), harvested: (s.stats && s.stats.totalHarvested) || 0, dead: (s.stats && s.stats.deadCrops) || 0 };
+        }
+        function fetchOthers() {
+            var C = window.FarmCloud;
+            if (!C || !C.enabled()) return;
+            loading = true;
+            Promise.all(OTHERS.map(function (o) {
+                return C.peek(o.slot).then(function (doc) { others[o.slot] = sum(doc); }, function () {});
+            })).then(function () { loading = false; if (!wrap.hidden) render(); });
+        }
+        function open() { render(); wrap.hidden = false; fetchOthers(); }
         function close() { wrap.hidden = true; }
 
         wrap.addEventListener('click', function (e) {

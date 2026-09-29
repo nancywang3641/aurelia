@@ -412,6 +412,7 @@
 .aurelia-farm .fd-rank-row {display: grid; grid-template-columns: 26px 56px 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; background: #fbeccb; font-size: 12px;}
 .aurelia-farm .fd-rank-row b {display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #f3c969; color: #6c4a22;}
 .aurelia-farm .fd-rank-row strong {font-size: 13px;}
+.aurelia-farm .fd-rank-row.is-me {box-shadow: inset 0 0 0 2px #e3b94f;}
 .aurelia-farm .fd-rank-row.is-empty {background: transparent; border: 2px dashed #d7b27a;}
 .aurelia-farm .fd-rank-row.is-empty b {background: #ead3a4;}
 .aurelia-farm .fd-rank-row .fd-wait {grid-column: 3 / -1; color: #a8834e;}

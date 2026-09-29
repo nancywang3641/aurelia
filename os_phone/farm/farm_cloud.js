@@ -58,11 +58,11 @@
         if (/failed to fetch|networkerror|load failed|network/i.test(m)) return '連不上伺服器';
         return m;
     }
-    function api(method, body, c, keepalive) {
+    function api(method, body, c, keepalive, slot) {
         c = c || cfg();
         var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
         var timer = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} }, TIMEOUT);
-        return fetch(base(c) + '/v1/farm/' + SLOT, {
+        return fetch(base(c) + '/v1/farm/' + (slot || SLOT), {
             method: method,
             headers: Object.assign({ 'Authorization': 'Bearer ' + String(c.token || '').trim() }, body ? { 'Content-Type': 'application/json' } : {}),
             body: body ? JSON.stringify(body) : undefined,
@@ -300,10 +300,13 @@
         return { open: open, close: close, paintButtons: paintButtons, destroy: function () { off(); } };
     }
 
+    // 看別人的地（看板排行榜用）：阿洛、丹在 VPS 上顧的那兩塊。只讀。
+    function peek(slot) { return enabled() ? api('GET', null, null, false, slot) : Promise.reject(new Error('off')); }
+
     window.FarmCloud = {
         cfg: cfg, prefill: prefill, enabled: enabled, base: base, meta: meta,
         status: function () { return status; }, onStatus: onStatus,
         openSync: openSync, changed: changed, flush: flush, setOnNewer: setOnNewer,
-        connect: connect, disconnect: disconnect, panel: panel, BACKUP_KEY: BACKUP_KEY
+        connect: connect, disconnect: disconnect, panel: panel, peek: peek, BACKUP_KEY: BACKUP_KEY
     };
 })();
