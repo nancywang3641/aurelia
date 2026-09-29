@@ -20,7 +20,7 @@
         'farm_core.js', 'ranch_core.js', 'farm_walk_core.js', 'farm_ship_core.js',
         'farm_plot_draw.js', 'farm_item_draw.js', 'ranch_draw.js',
         'farm_walk_ui.js', 'farm_bag.js', 'farm_ship.js', 'farm_board.js', 'farm_cloud.js',
-        'farm_yard.js', 'farm_ranch.js'
+        'farm_yard.js', 'farm_ranch.js', 'farm_visit.js'
     ];
     // 素材圖放 sound-files 的 farm/（跟大廳舞台同一個圖庫，走 jsdelivr）
     var ASSET = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/farm/';
@@ -66,7 +66,7 @@
         }));
     }
     function ensureLoaded() {
-        if (window.FarmYard && window.FarmRanch) return Promise.resolve();
+        if (window.FarmYard && window.FarmRanch && window.FarmVisit) return Promise.resolve();
         if (!loading) loading = Promise.all([loadCss(), loadScripts()]).catch(function (e) { loading = null; throw e; });
         return loading;
     }
@@ -154,16 +154,19 @@
             act: function (a) { return L.walk.act(state, a, L); },
             toast: toast,
             asset: function (name) { return ASSET + name; },
-            goScene: function (name) { go(name); },
+            goScene: function (name, arg) { go(name, arg); },
+            // 去別人家做客（看板排行榜上「去他家」）：slot＝他在伺服器上那塊地（dan／aluo）
+            visit: function (slot, name) { go('visit', { slot: slot, name: name }); },
             exit: function () { end(); if (window.PhoneSystem && window.PhoneSystem.goHome) window.PhoneSystem.goHome(); },
             // 雲端存檔剛連上、按了立即同步：這一格重開一次，開的時候就會跟伺服器對一次
             //   這裡只存這台、不先送：送上去跟重開時的比對會撞在一起，讓重開那一次自己決定要送還是要拿
             resync: function () { var c = root.parentNode; end('local'); if (c) launch(c); }
         };
-        function go(name) {
+        function go(name, arg) {
             if (scene) scene.destroy();
             clearTimeout(toastTimer);
-            scene = (name === 'ranch' ? window.FarmRanch : window.FarmYard).mount(ctx);
+            if (name === 'visit') scene = window.FarmVisit.mount(ctx, arg);
+            else scene = (name === 'ranch' ? window.FarmRanch : window.FarmYard).mount(ctx);
         }
         function onHide() {
             save();
@@ -198,7 +201,27 @@
         });
         go(state.walk && state.walk.scene === 'ranch' ? 'ranch' : 'yard');
         if (note) toast(note);
+        claimSteals();
         return session;
+    }
+
+    // 別人偷吃她的田：打開後院時去伺服器拿還沒看過的那幾筆，寫進她的日記、跳一句（伺服器同時記成看過了）
+    var NAMES = { dan: '丹', aluo: '阿洛', rae: '我' };
+    function claimSteals() {
+        var C = window.FarmCloud;
+        if (!C || !C.enabled() || !C.claimSteals) return;
+        C.claimSteals().then(function (r) {
+            var list = (r && r.list) || [], s = session;
+            if (!list.length || !s) return;
+            var L = libs(), st = s.state();
+            // 舊的先寫：日記新的在上面
+            list.slice().sort(function (a, b) { return a.at - b.at; }).forEach(function (x) { L.farm.bitten(st, NAMES[x.thief] || x.thief, x.crop, x.plot); });
+            s.ctx.save();
+            var one = list[0], crop = L.farm.CROPS[one.crop];
+            s.ctx.toast(list.length === 1 ? (NAMES[one.thief] || one.thief) + '偷吃了你一口' + (crop ? crop.name : '作物') + '（寫在日記裡了）' : '有 ' + list.length + ' 口作物被偷吃了，寫在日記裡');
+            var sc = s.scene();
+            if (sc && sc.render) sc.render();
+        }, function () {});
     }
 
     // given：{ raw, note } 已經決定好用哪份（另一台剛存過、換成最新的那種），就不再問伺服器

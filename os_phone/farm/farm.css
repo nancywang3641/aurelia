@@ -409,7 +409,7 @@
 .aurelia-farm .fd-tile.up strong {color: #3e7a48;}
 .aurelia-farm .fd-tile.down strong {color: #a7613a;}
 .aurelia-farm .fd-rank {display: grid; gap: 5px;}
-.aurelia-farm .fd-rank-row {display: grid; grid-template-columns: 26px 56px 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; background: #fbeccb; font-size: 12px;}
+.aurelia-farm .fd-rank-row {display: grid; grid-template-columns: 26px 56px 1fr auto auto auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; background: #fbeccb; font-size: 12px;}
 .aurelia-farm .fd-rank-row b {display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #f3c969; color: #6c4a22;}
 .aurelia-farm .fd-rank-row strong {font-size: 13px;}
 .aurelia-farm .fd-rank-row.is-me {box-shadow: inset 0 0 0 2px #e3b94f;}
@@ -430,7 +430,7 @@
 .aurelia-farm .fd-diary-day ul {margin: 0; padding: 6px 10px 6px 24px; border-radius: 9px; background: #fbeccb;}
 .aurelia-farm .fd-diary-day li {font-size: 12px; line-height: 1.55; color: #4a3218;}
 @media (max-width: 420px) {
-.aurelia-farm .fd-rank-row {grid-template-columns: 26px 1fr auto;}
+.aurelia-farm .fd-rank-row {grid-template-columns: 26px 1fr auto auto;}
 .aurelia-farm .fd-rank-row span:not(.fd-wait):nth-of-type(n+2) {display: none;}
 .aurelia-farm .fd-days button {grid-template-columns: 64px 70px 1fr 12px;}
 }
@@ -501,3 +501,21 @@
 .aurelia-farm .fr-new {padding: 4px 8px; border: 2px solid #8b5a2b; border-radius: 999px; background: #fffaf0; color: #3f2a12; font-family: inherit; font-size: 13px;}
 .aurelia-farm .fr-last {display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: #6c4a22;}
 .aurelia-farm .fr-foot {display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 12px; color: #a8834e;}
+
+/* ── 做客（farm_visit.js）＋看板「去他家」── */
+.aurelia-farm .fd-visit {display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 2px solid #8b5a2b; border-radius: 9px; background: #fffaf0; color: #5e3b18; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer;}
+.aurelia-farm .fd-visit:hover {background: #fff5dc;}
+.aurelia-farm .fs-bin.fv-deco {pointer-events: none; cursor: default;}
+.aurelia-farm .fv-loading {position: absolute; inset: 0; z-index: 80; justify-content: center; background: linear-gradient(155deg, #dae7ca, #b8cda8);}
+/* 主人：跟她同一套小人外殼（fw-player），名字掛在腳下、說的話冒在頭上 */
+.aurelia-farm .fv-host .fw-img {image-rendering: pixelated;}
+.aurelia-farm .fv-host.is-dot .fw-body {aspect-ratio: 1.2; border-radius: 40%; background: #d97757;}
+.aurelia-farm .fv-name {position: absolute; left: 50%; top: 100%; transform: translate(-50%, 3px); padding: 1px 7px; border-radius: 999px;
+    background: rgba(39,51,36,.82); color: #fffdf2; font-size: clamp(9px, 1.2cqw, 12px); font-weight: 700; white-space: nowrap;}
+.aurelia-farm .fv-say {position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: min(260px, 40cqw);
+    padding: 6px 10px; border: 2px solid #8b5a2b; border-radius: 12px; background: rgba(255,252,241,.97); color: #3f2a12;
+    font-size: clamp(10px, 1.3cqw, 13px); line-height: 1.45; white-space: normal; box-shadow: 0 6px 16px rgba(35,49,34,.25);}
+.aurelia-farm .fv-say::after {content: ''; position: absolute; left: 50%; bottom: -7px; width: 10px; height: 10px; margin-left: -5px;
+    background: rgba(255,252,241,.97); border-right: 2px solid #8b5a2b; border-bottom: 2px solid #8b5a2b; transform: rotate(45deg);}
+.aurelia-farm .fv-say[hidden] {display: none;}
+.aurelia-farm .fv-host.is-doing .fv-say {bottom: calc(100% + 2.6em);}

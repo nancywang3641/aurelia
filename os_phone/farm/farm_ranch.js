@@ -474,7 +474,7 @@
     // 底部快捷列＋背包（跟後院同一套 farm_bag.js）：牧場這邊放手上的、乾草、藥、動物愛吃的、撿到的產品
     var shipUi = window.FarmShip.create({ app: root, world: stageEl, scene: 'ranch', state: function () { return state; }, libs: ctx.libs, toast: toast, onChange: render });
     $('ranch-report').addEventListener('click', function (ev) { ev.stopPropagation(); shipUi.openReport(); });
-    var board = window.FarmBoard.create({ app: root, state: function () { return state; }, ship: shipUi, owner: ctx.owner });
+    var board = window.FarmBoard.create({ app: root, state: function () { return state; }, ship: shipUi, owner: ctx.owner, onVisit: ctx.visit });
     $('ranch-board').addEventListener('click', function (ev) { ev.stopPropagation(); board.open(); });
     var cloud = window.FarmCloud.panel({ app: root, onConnected: ctx.resync });
     $('ranch-cloud').addEventListener('click', function (ev) { ev.stopPropagation(); cloud.open(); });

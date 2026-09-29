@@ -26,7 +26,7 @@
     //   目的是讓「住戶醒來一次能做的事」有上限，不然 AI 會把能做的全做完、比不出誰會顧（她 09-29 擔心的「一鍵收取」）。
     //   農場的動作在這支裡扣，牧場的動作在 ranch_core 扣，同一個 state.stamina。
     var STAMINA_MAX = 50;   // 09-29 從 40 調到 50：走路也要花體力了，路線排得好剛好做得完、排爛就不夠
-    var COST = { water: 2, plant: 2, harvest: 2, fertilize: 1 };
+    var COST = { water: 2, plant: 2, harvest: 2, fertilize: 1, steal: 1 };
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -313,6 +313,29 @@
         return result(true, 'fertilized', crop.name + '施好肥了，收成會多一份。');
     }
 
+    // 偷吃一口（09-29 她要的偷菜）：別人家成熟的作物，每個人每一株只能偷吃一口；主人的作物不會少。
+    //   「能不能偷」（熟了沒、這株偷過沒）只在伺服器判斷（VPS 的 garden/steal.js 看主人那份存檔和偷吃紀錄），
+    //   這裡只管小偷自己這邊：拿半價的錢、花體力、記帳、寫日記——她的瀏覽器和 VPS 上的住戶用同一支。
+    //   先問 canSteal 再去伺服器登記，登記成功才叫 stealBite（不然伺服器記了一口、這邊卻沒體力收錢）。
+    function stealValue(cropId) { var c = CROPS[cropId]; return c ? Math.floor(c.sellPrice / 2) : 0; }
+    function canSteal(state) { return tired(state, COST.steal) ? tiredResult(COST.steal) : result(true, 'can_steal', ''); }
+    function stealBite(state, cropId, coins, whose) {
+        var crop = CROPS[cropId];
+        if (!crop) return result(false, 'unknown_crop', '找不到這種作物。');
+        if (tired(state, COST.steal)) return tiredResult(COST.steal);
+        spend(state, COST.steal);
+        var got = Math.max(0, Math.floor(Number(coins) || 0));
+        state.coins += got;
+        addLedger(state, 'steal', cropId, 1, got, '去' + whose + '家偷吃');
+        addLog(state, '去' + whose + '家偷吃了一口' + crop.name + '，拿到 ' + got + ' 金幣。');
+        return result(true, 'stole', '去' + whose + '家偷吃了一口' + crop.name + '，拿到 ' + got + ' 金幣。', { coins: got });
+    }
+    // 被偷的那邊：主人下次打開後院（住戶是下次醒來或結算）時寫進日記。作物照樣在田裡。
+    function bitten(state, thief, cropId, plotIndex) {
+        var crop = CROPS[cropId];
+        addLog(state, thief + '偷吃了你第 ' + (plotIndex + 1) + ' 塊田的一口' + (crop ? crop.name : '作物') + '。');
+    }
+
     function sellHarvest(state, cropId, quantity) {
         var crop = CROPS[cropId];
         var qty = quantity == null ? 1 : Math.floor(Number(quantity));
@@ -470,6 +493,10 @@
         water: water,
         harvest: harvest,
         sellHarvest: sellHarvest,
+        stealValue: stealValue,
+        canSteal: canSteal,
+        stealBite: stealBite,
+        bitten: bitten,
         advanceDay: advanceDay,
         scheduleNextWake: scheduleNextWake,
         chooseAutonomousAction: chooseAutonomousAction,

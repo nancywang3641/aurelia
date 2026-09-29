@@ -300,8 +300,16 @@
         return { open: open, close: close, paintButtons: paintButtons, destroy: function () { off(); } };
     }
 
-    // 看別人的地（看板排行榜用）：阿洛、丹在 VPS 上顧的那兩塊。只讀。
+    // 看別人的地（看板排行榜、去他家做客用）：阿洛、丹在 VPS 上顧的那兩塊。只讀。
     function peek(slot) { return enabled() ? api('GET', null, null, false, slot) : Promise.reject(new Error('off')); }
+
+    // ── 偷菜（規則只在 VPS 的 garden.js；relay 的 /v1/farm-steal、/v1/farm-steals 轉過去）──
+    // steal：她去 owner 家偷第 plot 塊田（0 起算）。回 { ok, coins, crop, message, record }；偷不了是 ok:false＋message（不是錯誤）
+    function steal(owner, plot) { return call('POST', '/v1/farm-steal', { owner: owner, plot: plot }); }
+    // 最近的偷吃紀錄＋每個人一共偷吃幾口：{ recent: [{ at, thief, owner, plot, crop, plantedDay, coins }], total: { rae, dan, aluo } }
+    function steals() { return enabled() ? call('GET', '/v1/farm-steals') : Promise.reject(new Error('off')); }
+    // 打開後院時：拿「別人偷吃她、她還沒看過」的那幾筆（伺服器同時記成看過了，兩台不會各寫一次日記）
+    function claimSteals() { return enabled() ? call('POST', '/v1/farm-steals/claim', {}) : Promise.resolve({ list: [] }); }
 
     // ── 住戶醒來時間（她在這裡調，VPS 上每 5 分鐘照這份叫人；伺服器那半見 relay 的 /v1/farm-schedule）──
     function call(method, p, body) {
@@ -434,6 +442,7 @@
         cfg: cfg, prefill: prefill, enabled: enabled, base: base, meta: meta,
         status: function () { return status; }, onStatus: onStatus,
         openSync: openSync, changed: changed, flush: flush, setOnNewer: setOnNewer,
-        connect: connect, disconnect: disconnect, panel: panel, peek: peek, residentsPanel: residentsPanel, BACKUP_KEY: BACKUP_KEY
+        connect: connect, disconnect: disconnect, panel: panel, peek: peek, residentsPanel: residentsPanel, BACKUP_KEY: BACKUP_KEY,
+        steal: steal, steals: steals, claimSteals: claimSteals, errText: errText
     };
 })();

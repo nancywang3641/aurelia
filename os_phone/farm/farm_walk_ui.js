@@ -36,10 +36,125 @@
         return 0;
     }
 
+    // ── 繞路：點地板／點東西時，先在 1%×1% 的格子上算一條避開擋路東西的路，再一段一段走 ──
+    // 以前只有「撞到就沿著滑」：東西正好擋在中間時，每一格往旁邊挪一點點、永遠走不到（出貨箱第一次放上去就卡住）。
+    // 門口那塊不當路走（免得繞路經過門口就換區），除非目的地就在門裡。
+    // 一區一個（格子只算一次）：她自己走、做客時看到的住戶走，都用這一份
+    var GW = 101, PLANNERS = {};
+    function planner(scene) {
+        if (PLANNERS[scene]) return PLANNERS[scene];
+        var WC = window.FarmWalkCore, S = WC.SCENES[scene], ASPECT = WC.ASPECT;
+        var GRID = null;
+        function inDoor(x, y) { var d = S.door; return !!d && x > d.x1 && x < d.x2 && y > d.y1 && y < d.y2; }
+        function grid() {
+            if (GRID) return GRID;
+            GRID = new Uint8Array(GW * GW);
+            // 一格要連四周 0.7 都能站才算路：貼著箱子邊的格子不走，不然從格子走到格子時會擦過箱子的角被擋下來
+            var M = .7;
+            var ok = function (x, y) {
+                return WC.walkable(scene, x, y) && WC.walkable(scene, x - M, y) && WC.walkable(scene, x + M, y) &&
+                    WC.walkable(scene, x, y - M) && WC.walkable(scene, x, y + M);
+            };
+            for (var y = 0; y < GW; y++) for (var x = 0; x < GW; x++) {
+                GRID[y * GW + x] = ok(x, y) ? (inDoor(x, y) ? 2 : 1) : 0;
+            }
+            return GRID;
+        }
+        function cellOk(x, y, door) {
+            if (x < 0 || y < 0 || x >= GW || y >= GW) return false;
+            var v = grid()[y * GW + x];
+            return v === 1 || (v === 2 && door);
+        }
+        function nearestCell(x, y, door) {
+            var cx = Math.round(x), cy = Math.round(y);
+            for (var r = 0; r <= 8; r++) for (var dy = -r; dy <= r; dy++) for (var dx = -r; dx <= r; dx++) {
+                if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+                if (cellOk(cx + dx, cy + dy, door)) return [cx + dx, cy + dy];
+            }
+            return null;
+        }
+        function lineClear(a, b, door) {
+            var n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / .4);
+            for (var i = 1; i <= n; i++) {
+                var x = a.x + (b.x - a.x) * i / n, y = a.y + (b.y - a.y) * i / n;
+                if (!WC.walkable(scene, x, y) || (!door && inDoor(x, y))) return false;
+            }
+            return true;
+        }
+        // 從 (fx,fy) 走到 (tx,ty)：回一串轉折點（最後一個是目的地）
+        function plan(fx, fy, tx, ty) {
+            var door = inDoor(tx, ty), from = { x: fx, y: fy }, to = { x: tx, y: ty };
+            if (lineClear(from, to, door)) return [to];
+            var s0 = nearestCell(fx, fy, true), g0 = nearestCell(tx, ty, door);
+            if (!s0 || !g0) return [to];
+            var N = GW * GW, start = s0[1] * GW + s0[0], goal = g0[1] * GW + g0[0];
+            var gs = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), done = new Uint8Array(N);
+            var heap = [];   // [f, 格子]，f 小的在上面
+            function push(f, i) {
+                heap.push([f, i]);
+                for (var k = heap.length - 1; k > 0;) {
+                    var q = Math.floor((k - 1) / 2);
+                    if (heap[q][0] <= heap[k][0]) break;
+                    var t = heap[q]; heap[q] = heap[k]; heap[k] = t; k = q;
+                }
+            }
+            function pop() {
+                var top = heap[0], last = heap.pop();
+                if (heap.length) {
+                    heap[0] = last;
+                    for (var k = 0; ;) {
+                        var l = k * 2 + 1, r = l + 1, m = k;
+                        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+                        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+                        if (m === k) break;
+                        var t = heap[m]; heap[m] = heap[k]; heap[k] = t; k = m;
+                    }
+                }
+                return top[1];
+            }
+            function h(i) { return Math.hypot(i % GW - g0[0], (Math.floor(i / GW) - g0[1]) * ASPECT); }
+            gs[start] = 0;
+            push(h(start), start);
+            var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+            while (heap.length) {
+                var cur = pop();
+                if (cur === goal) break;
+                if (done[cur]) continue;
+                done[cur] = 1;
+                var cx = cur % GW, cy = Math.floor(cur / GW);
+                for (var k = 0; k < 8; k++) {
+                    var nx = cx + DIRS[k][0], ny = cy + DIRS[k][1];
+                    if (!cellOk(nx, ny, door)) continue;
+                    // 斜著走不能切過擋路東西的角
+                    if (DIRS[k][0] && DIRS[k][1] && (!cellOk(cx + DIRS[k][0], cy, door) || !cellOk(cx, cy + DIRS[k][1], door))) continue;
+                    var ni = ny * GW + nx, ng = gs[cur] + Math.hypot(DIRS[k][0], DIRS[k][1] * ASPECT);
+                    if (ng < gs[ni]) { gs[ni] = ng; came[ni] = cur; push(ng + h(ni), ni); }
+                }
+            }
+            if (came[goal] < 0 && goal !== start) return [to];
+            var cells = [];
+            for (var c = goal; c >= 0 && c !== start; c = came[c]) cells.push({ x: c % GW, y: Math.floor(c / GW) });
+            cells.reverse();
+            if (WC.walkable(scene, tx, ty)) cells.push(to);
+            // 拉直：能直直走到的就跳過中間那些格子
+            var out = [], at = from, i = 0;
+            while (i < cells.length) {
+                var j = cells.length - 1;
+                while (j > i && !lineClear(at, cells[j], door)) j--;
+                out.push(cells[j]);
+                at = cells[j];
+                i = j + 1;
+            }
+            return out.length ? out : [to];
+        }
+        return (PLANNERS[scene] = { plan: plan, inDoor: inDoor });
+    }
+
     // opts：{ app, world, scene, state(), targets(), onChange(), onStamina(), onDoor(to), toast(text), look(): Promise<{src}|{sheet}>, zFixed }
     function create(opts) {
         var WC = window.FarmWalkCore;
         var S = WC.SCENES[opts.scene];
+        var P = planner(opts.scene);
         var app = opts.app, world = opts.world;
         var ASPECT = WC.ASPECT;
 
@@ -242,7 +357,7 @@
             // 走路扣體力只換那個數字：整片重畫（田、快捷列、小窗）在酒館肥 DOM 裡每次都是一整頁重排
             if (opts.onStamina) opts.onStamina(); else if (opts.onChange) opts.onChange();
         }
-        function inDoor(x, y) { var d = S.door; return d && x > d.x1 && x < d.x2 && y > d.y1 && y < d.y2; }
+        function inDoor(x, y) { return P.inDoor(x, y); }
         function tryMove(nx, ny) {
             if (WC.walkable(opts.scene, nx, ny)) { p.x = nx; p.y = ny; return true; }
             return false;
@@ -255,112 +370,8 @@
             if (cb) cb();
         }
 
-        // ── 繞路：點地板／點東西時，先在 1%×1% 的格子上算一條避開擋路東西的路，再一段一段走 ──
-        // 以前只有「撞到就沿著滑」：東西正好擋在中間時，每一格往旁邊挪一點點、永遠走不到（出貨箱第一次放上去就卡住）。
-        // 門口那塊不當路走（免得繞路經過門口就換區），除非目的地就在門裡。
-        var GW = 101, GRID = null;
-        function grid() {
-            if (GRID) return GRID;
-            GRID = new Uint8Array(GW * GW);
-            // 一格要連四周 0.7 都能站才算路：貼著箱子邊的格子不走，不然從格子走到格子時會擦過箱子的角被擋下來
-            var M = .7;
-            var ok = function (x, y) {
-                return WC.walkable(opts.scene, x, y) && WC.walkable(opts.scene, x - M, y) && WC.walkable(opts.scene, x + M, y) &&
-                    WC.walkable(opts.scene, x, y - M) && WC.walkable(opts.scene, x, y + M);
-            };
-            for (var y = 0; y < GW; y++) for (var x = 0; x < GW; x++) {
-                GRID[y * GW + x] = ok(x, y) ? (inDoor(x, y) ? 2 : 1) : 0;
-            }
-            return GRID;
-        }
-        function cellOk(x, y, door) {
-            if (x < 0 || y < 0 || x >= GW || y >= GW) return false;
-            var v = grid()[y * GW + x];
-            return v === 1 || (v === 2 && door);
-        }
-        function nearestCell(x, y, door) {
-            var cx = Math.round(x), cy = Math.round(y);
-            for (var r = 0; r <= 8; r++) for (var dy = -r; dy <= r; dy++) for (var dx = -r; dx <= r; dx++) {
-                if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-                if (cellOk(cx + dx, cy + dy, door)) return [cx + dx, cy + dy];
-            }
-            return null;
-        }
-        function lineClear(a, b, door) {
-            var n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / .4);
-            for (var i = 1; i <= n; i++) {
-                var x = a.x + (b.x - a.x) * i / n, y = a.y + (b.y - a.y) * i / n;
-                if (!WC.walkable(opts.scene, x, y) || (!door && inDoor(x, y))) return false;
-            }
-            return true;
-        }
-        function planPath(tx, ty) {
-            var door = inDoor(tx, ty), from = { x: p.x, y: p.y }, to = { x: tx, y: ty };
-            if (lineClear(from, to, door)) return [to];
-            var s0 = nearestCell(p.x, p.y, true), g0 = nearestCell(tx, ty, door);
-            if (!s0 || !g0) return [to];
-            var N = GW * GW, start = s0[1] * GW + s0[0], goal = g0[1] * GW + g0[0];
-            var gs = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), done = new Uint8Array(N);
-            var heap = [];   // [f, 格子]，f 小的在上面
-            function push(f, i) {
-                heap.push([f, i]);
-                for (var k = heap.length - 1; k > 0;) {
-                    var q = Math.floor((k - 1) / 2);
-                    if (heap[q][0] <= heap[k][0]) break;
-                    var t = heap[q]; heap[q] = heap[k]; heap[k] = t; k = q;
-                }
-            }
-            function pop() {
-                var top = heap[0], last = heap.pop();
-                if (heap.length) {
-                    heap[0] = last;
-                    for (var k = 0; ;) {
-                        var l = k * 2 + 1, r = l + 1, m = k;
-                        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
-                        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
-                        if (m === k) break;
-                        var t = heap[m]; heap[m] = heap[k]; heap[k] = t; k = m;
-                    }
-                }
-                return top[1];
-            }
-            function h(i) { return Math.hypot(i % GW - g0[0], (Math.floor(i / GW) - g0[1]) * ASPECT); }
-            gs[start] = 0;
-            push(h(start), start);
-            var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-            while (heap.length) {
-                var cur = pop();
-                if (cur === goal) break;
-                if (done[cur]) continue;
-                done[cur] = 1;
-                var cx = cur % GW, cy = Math.floor(cur / GW);
-                for (var k = 0; k < 8; k++) {
-                    var nx = cx + DIRS[k][0], ny = cy + DIRS[k][1];
-                    if (!cellOk(nx, ny, door)) continue;
-                    // 斜著走不能切過擋路東西的角
-                    if (DIRS[k][0] && DIRS[k][1] && (!cellOk(cx + DIRS[k][0], cy, door) || !cellOk(cx, cy + DIRS[k][1], door))) continue;
-                    var ni = ny * GW + nx, ng = gs[cur] + Math.hypot(DIRS[k][0], DIRS[k][1] * ASPECT);
-                    if (ng < gs[ni]) { gs[ni] = ng; came[ni] = cur; push(ng + h(ni), ni); }
-                }
-            }
-            if (came[goal] < 0 && goal !== start) return [to];
-            var cells = [];
-            for (var c = goal; c >= 0 && c !== start; c = came[c]) cells.push({ x: c % GW, y: Math.floor(c / GW) });
-            cells.reverse();
-            if (WC.walkable(opts.scene, tx, ty)) cells.push(to);
-            // 拉直：能直直走到的就跳過中間那些格子
-            var out = [], at = from, i = 0;
-            while (i < cells.length) {
-                var j = cells.length - 1;
-                while (j > i && !lineClear(at, cells[j], door)) j--;
-                out.push(cells[j]);
-                at = cells[j];
-                i = j + 1;
-            }
-            return out.length ? out : [to];
-        }
         function setDest(x, y, key, cb) {
-            p.path = planPath(x, y);
+            p.path = P.plan(p.x, p.y, x, y);
             p.dest = p.path.shift();
             p.destKey = key;
             p.cb = cb || null;
@@ -583,5 +594,5 @@
         };
     }
 
-    window.FarmWalkStage = { create: create };
+    window.FarmWalkStage = { create: create, planner: planner, measureFootPad: measureFootPad, BODY_H: BODY_H, SPEED: SPEED };
 })();

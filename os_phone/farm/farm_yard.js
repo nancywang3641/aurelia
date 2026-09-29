@@ -5,7 +5,7 @@
 // 走路、鏡頭、頭上那個小窗在 farm_walk_ui.js；位置、走路體力、手上工具的規則在 farm_walk_core.js。
 // 這支只管後院有哪些東西（六塊田、池塘、工具棚、出貨箱、小圍欄）、各自能做什麼，還有上面那些資訊。
 // 澆水要先去工具棚拿水壺、壺空了去池塘裝（一壺三塊田）。
-// ctx（os_farm.js 給的）：{ root, state(), setState(st), libs, save(), act(a), toast(t), goScene(name), exit(), resync(), owner, look(), asset(name) }
+// ctx（os_farm.js 給的）：{ root, state(), setState(st), libs, save(), act(a), toast(t), goScene(name, arg), visit(slot, name), exit(), resync(), owner, look(), asset(name) }
 // ============================================================
 (function () {
     'use strict';
@@ -246,7 +246,7 @@
         var app = root;
         shipUi = window.FarmShip.create({ app: app, world: $('stage'), scene: 'yard', state: S, libs: ctx.libs, toast: ctx.toast, onChange: render });
         $('report').addEventListener('click', function () { shipUi.openReport(); });
-        board = window.FarmBoard.create({ app: app, state: S, ship: shipUi, owner: ctx.owner });
+        board = window.FarmBoard.create({ app: app, state: S, ship: shipUi, owner: ctx.owner, onVisit: ctx.visit });
         $('board').addEventListener('click', function () { board.open(); });
         cloud = window.FarmCloud.panel({ app: app, onConnected: ctx.resync });
         $('cloud').addEventListener('click', function () { cloud.open(); });
