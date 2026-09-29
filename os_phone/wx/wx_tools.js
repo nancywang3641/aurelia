@@ -136,8 +136,26 @@
                 if (!A) throw new Error('奧瑞亞的資料還沒載好');
                 return A.run(name, args, { chat: chat });
             }
+        },
+        // 改世界書：角色提出新增或修改，聊天裡冒一行，她點開看改前改後、按同意才寫（os_aurelia_edit.js）。
+        //   看與找的那幾個照一般工具跑；propose 的那兩個走 propose（做成單子，不接著回）。
+        aurelia_wb: {
+            id: 'tl_aurelia_wb', name: '改世界書',
+            get tools() { const E = _edit(); return (E && E.tools) || []; },
+            get note() { const E = _edit(); return (E && E.note) || ''; },
+            run: function (args, srv, name) {
+                const E = _edit();
+                if (!E) throw new Error('改世界書還沒載好');
+                return E.run(name, args);
+            },
+            propose: function (args, srv, name) {
+                const E = _edit();
+                if (!E) return Promise.resolve({ ok: false, text: '改世界書還沒載好' });
+                return E.propose(name, args);
+            }
         }
     };
+    function _edit() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT; }
 
     // ================================================================
     // 清單（共用）
@@ -276,6 +294,8 @@
         const map = {};
         enabledFor(chat).forEach(function (srv) {
             ((srv.builtin && BUILTIN[srv.builtin]) ? BUILTIN[srv.builtin].tools : (srv.tools || [])).forEach(function (t) {
+                // 兩組內建都有的同一個功能（查世界書：翻資料和改世界書都帶著）只列一次
+                if (srv.builtin && map[t.name] && map[t.name].srv.builtin) return;
                 let key = t.name, n = 2;
                 while (map[key]) key = t.name + '_' + (n++);
                 map[key] = { srv: srv, tool: t };
@@ -372,10 +392,28 @@
         }).replace(LONE_RE, '');
         return { text: out, calls: calls };
     }
-    function _parseArgs(body, schema) {
+    // 模型常把好幾行的內容直接寫進 JSON 字串裡（換行沒寫成跳脫）→ 字串裡的換行、Tab 補成跳脫再試一次
+    function _repairJson(t) {
+        let out = '', inStr = false, bs = false;
+        for (const ch of t) {
+            if (!inStr) { if (ch === '"') inStr = true; out += ch; continue; }
+            if (bs) { bs = false; out += ch; continue; }
+            if (ch === '\\') { bs = true; out += ch; continue; }
+            if (ch === '"') { inStr = false; out += ch; continue; }
+            if (ch === '\n') { out += '\\n'; continue; }
+            if (ch === '\r') continue;
+            if (ch === '\t') { out += '\\t'; continue; }
+            out += ch;
+        }
+        return out;
+    }
+    // strict：會動手的工具不猜，寫壞了回 null（整段塞進第一個參數會變成亂改）
+    function _parseArgs(body, schema, strict) {
         const t = String(body || '').replace(/^```(?:json)?\s*|```\s*$/g, '').trim();
         if (!t) return {};
         try { const j = JSON.parse(t); if (j && typeof j === 'object' && !Array.isArray(j)) return j; } catch (e) {}
+        try { const j = JSON.parse(_repairJson(t)); if (j && typeof j === 'object' && !Array.isArray(j)) return j; } catch (e) {}
+        if (strict) return null;
         // 沒寫成 JSON：只有一個必填的文字參數時，整段當那個參數
         const req = (schema && schema.required) || Object.keys((schema && schema.properties) || {});
         if (req.length) { const o = {}; o[req[0]] = t; return o; }
@@ -393,8 +431,22 @@
             const hit = map[c.name] || map[Object.keys(map).find(function (k) { return k.toLowerCase() === String(c.name).toLowerCase(); })];
             // 一組底下有好幾個功能的（翻奧瑞亞的資料）用功能自己的中文短名，不然結果標頭與畫面上那行都只看得到組名
             const entry = { label: hit ? (hit.tool.label || hit.srv.name) : String(c.name), tool: c.name, args: {}, ok: false, text: '', at: Date.now(), sent: false };
+            const B = hit && hit.srv.builtin && BUILTIN[hit.srv.builtin];
             if (!hit) {
                 entry.text = '沒有叫做「' + c.name + '」的工具';
+            } else if (hit.tool.propose && B && B.propose) {
+                // 會動手的（改世界書）：先檢查，過了做成單子交給她（onNotice 帶 prop，聊天裡冒一行，點開看改前改後）。
+                //   做成了不記結果、不接著回——等她決定，不多叫一次模型；她按了什麼，聊天記錄那一行會跟著改。
+                //   沒過（找不到那一條、JSON 寫壞）照一般結果交回去，讓它改好再提。
+                const args = _parseArgs(c.body, hit.tool.inputSchema, true);
+                let r = null;
+                if (args === null) r = { ok: false, text: '大括號裡不是正確的 JSON（內容裡的雙引號要寫成 \\"，或改用「」）' };
+                else { entry.args = args; try { r = await B.propose(args, hit.srv, hit.tool.name, chat); } catch (e) { r = { ok: false, text: (e && e.message) || '失敗' }; } }
+                if (r && r.ok && r.prop) {
+                    try { if (onNotice) onNotice(entry.label, '', r.prop); } catch (e) {}
+                    continue;
+                }
+                entry.text = (r && r.text) || '失敗';
             } else {
                 entry.args = _parseArgs(c.body, hit.tool.inputSchema);
                 try { if (onNotice) onNotice(entry.label, _argsText(entry.args)); } catch (e) {}
@@ -469,6 +521,24 @@
             font-size:13.5px; font-weight:700; cursor:pointer; }
         .wxtl-btn.is-main { flex:2; border-color:#2f8a4c; background:#2f8a4c; color:#fff; }
         .wxtl-btn:disabled { opacity:.5; cursor:default; }
+        .wx-system-notice.wxtl-pp-notice { cursor:pointer; }
+        .wx-system-notice.wxtl-pp-notice i { margin-right:4px; opacity:.7; }
+        .wxtl-pp-sub { padding:0 16px 10px; font-size:12px; color:rgba(38,36,31,.55); flex-shrink:0; }
+        .wxtl-pp-card { border-radius:12px; background:#fff; padding:10px 12px; box-shadow:0 1px 3px rgba(38,36,31,.07); }
+        .wxtl-pp-card + .wxtl-pp-card { margin-top:8px; }
+        .wxtl-pp-lab { font-size:12px; font-weight:700; color:rgba(38,36,31,.55); margin-bottom:4px; }
+        .wxtl-pp-lab.is-sub { font-weight:400; font-size:11.5px; color:rgba(38,36,31,.45); }
+        .wxtl-pp-val { font-size:13.5px; line-height:1.55; word-break:break-word; }
+        .wxtl-pp-arrow { display:block; margin:2px 0; font-size:11px; color:rgba(38,36,31,.4); }
+        .wxtl-pp-txt { font-size:13px; line-height:1.6; white-space:pre-wrap; word-break:break-word; max-height:180px; overflow-y:auto;
+            padding:8px 10px; border-radius:8px; background:#faf9f7; }
+        .wxtl-pp-txt + .wxtl-pp-lab { margin-top:8px; }
+        .wxtl-pp-txt del { background:#f8dcd8; color:#9b2c1f; text-decoration:line-through; border-radius:3px; }
+        .wxtl-pp-txt ins { background:#d6efdc; color:#1d6b38; text-decoration:none; border-radius:3px; }
+        .wxtl-pp-foot { flex-shrink:0; display:flex; flex-direction:column; gap:8px; padding:10px 14px 14px; border-top:1px solid rgba(38,36,31,.07); }
+        .wxtl-pp-state { font-size:13px; text-align:center; color:rgba(38,36,31,.6); }
+        .wxtl-pp-state.is-bad { color:#c2410c; }
+        .wxtl-pp-bar { display:flex; gap:8px; }
     `;
 
     function _subText(s) {
@@ -477,6 +547,7 @@
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
         // 🚨 別寫「不會花錢」：翻資料本身不叫模型，但角色查完會再回一次（那次照常算錢），勾了的聊天室每輪也多帶工具說明
         if (s.builtin === 'aurelia') return { t: '只看不改，查完多回一次', bad: false };
+        if (s.builtin === 'aurelia_wb') return { t: '每一筆都要你按同意才會改', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
@@ -609,7 +680,133 @@
         return enabledFor(chat).map(function (s) { return s.name; }).join('、');
     }
 
-    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary };
+    // ================================================================
+    // 會動手的單子（改世界書）：聊天裡那一行點開 → 看改前改後 → 同意才寫、寫了還能改回去
+    //   單子存在那一則系統訊息的 _prop 上。她按了什麼，那一則的文字（送模型時是旁註）跟著改，
+    //   角色下一次回覆就知道她同意了沒有——不為這個多叫一次模型。
+    // ================================================================
+    let _pp = null;   // { root, chat, msg, prop, busy }
+    function _ppFind(chatId, propId) {
+        const app = win.wxApp || window.wxApp;
+        const chat = app && app.GLOBAL_CHATS && app.GLOBAL_CHATS[chatId];
+        if (!chat || !Array.isArray(chat.messages)) return null;
+        const msg = chat.messages.find(function (m) { return m && m._prop && m._prop.id === propId; });
+        return msg ? { chat: chat, msg: msg } : null;
+    }
+    // 只標出中間改掉的那一段，前後一樣的部分各留一小段上下文
+    function _diff(a, b) {
+        a = String(a || ''); b = String(b || '');
+        let p = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;
+        let s = 0; while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+        if (p > 0 && /[\uD800-\uDBFF]/.test(a[p - 1])) p--;                   // 別切在表情符號中間
+        if (s > 0 && /[\uDC00-\uDFFF]/.test(a[a.length - s])) s--;
+        const CTX = 80;
+        const head = (p > CTX ? '…' : '') + esc(a.slice(Math.max(0, p - CTX), p));
+        const tail = esc(a.slice(a.length - s, a.length - s + CTX)) + (s > CTX ? '…' : '');
+        const am = a.slice(p, a.length - s), bm = b.slice(p, b.length - s);
+        return { before: head + (am ? '<del>' + esc(am) + '</del>' : '') + tail, after: head + (bm ? '<ins>' + esc(bm) + '</ins>' : '') + tail };
+    }
+    function _ppBody(prop) {
+        const E = _edit();
+        const kt = function (k) { return (E && E.keysText) ? E.keysText(k) : (k || []).join(', '); };
+        const b = prop.before, a = prop.after, cards = [];
+        const card = function (lab, html) { cards.push('<div class="wxtl-pp-card"><div class="wxtl-pp-lab">' + lab + '</div>' + html + '</div>'); };
+        const change = function (x, y) { return '<div class="wxtl-pp-val">' + esc(x) + '<span class="wxtl-pp-arrow"><i class="fa-solid fa-arrow-down"></i></span>' + esc(y) + '</div>'; };
+        if (!b) {
+            card('標題', '<div class="wxtl-pp-val">' + esc(a.comment) + '</div>');
+            card('關鍵字', '<div class="wxtl-pp-val">' + esc(kt(a.keys)) + '</div>');
+            card('內容', '<div class="wxtl-pp-txt">' + esc(a.content) + '</div>');
+            return cards.join('');
+        }
+        if (b.comment !== a.comment) card('標題', change(b.comment, a.comment));
+        if (kt(b.keys) !== kt(a.keys)) card('關鍵字', change(kt(b.keys), kt(a.keys)));
+        if (b.enabled !== a.enabled) card('開關', change(b.enabled ? '開著' : '關著', a.enabled ? '打開' : '關掉'));
+        if (b.content !== a.content) {
+            const df = _diff(b.content, a.content);
+            card('內容', '<div class="wxtl-pp-lab is-sub">改前</div><div class="wxtl-pp-txt">' + df.before + '</div><div class="wxtl-pp-lab is-sub">改後</div><div class="wxtl-pp-txt">' + df.after + '</div>');
+        }
+        return cards.join('');
+    }
+    function _ppRender() {
+        if (!_pp) return;
+        const E = _edit(), prop = _pp.prop, busy = _pp.busy;
+        const verb = (E && E.verb) ? E.verb(prop) : '修改';
+        const btn = function (act, label, main) { return '<button class="wxtl-btn' + (main ? ' is-main' : '') + '" type="button" data-pp="' + act + '"' + (busy ? ' disabled' : '') + '>' + label + '</button>'; };
+        const st = function (t, bad) { return '<div class="wxtl-pp-state' + (bad ? ' is-bad' : '') + '">' + esc(t) + '</div>'; };
+        let foot;
+        if (prop.state === 'wait') foot = '<div class="wxtl-pp-bar">' + btn('no', '不要') + btn('yes', busy === 'yes' ? '寫進去中…' : '同意，寫進去', true) + '</div>';
+        else if (prop.state === 'no') foot = st('你沒有同意，世界書沒有改') + '<div class="wxtl-pp-bar">' + btn('yes', busy === 'yes' ? '寫進去中…' : '還是同意', true) + '</div>';
+        else if (prop.state === 'done') foot = st('已經寫進世界書了') + '<div class="wxtl-pp-bar">' + btn('undo', busy === 'undo' ? '改回去中…' : '改回去') + '</div>';
+        else if (prop.state === 'undone') foot = st('已經改回去了');
+        else foot = st(prop.why || '這張作廢了', true);
+        _pp.root.innerHTML = '<div class="wxtl-box">'
+            + '<div class="wxtl-head"><div class="wxtl-title">' + esc(verb) + '世界書條目</div><button class="wxtl-done" type="button" data-pp="close">關閉</button></div>'
+            + '<div class="wxtl-pp-sub">' + esc((prop.by || '對方') + ' 提出的・' + prop.book) + '</div>'
+            + '<div class="wxtl-scroll">' + _ppBody(prop) + '</div>'
+            + '<div class="wxtl-pp-foot">' + foot + '</div></div>';
+    }
+    // 存檔＋那一則的字跟著改（給模型看的旁註）＋聊天裡那一行重畫
+    async function _ppSave(ctx) {
+        const E = _edit();
+        if (E && E.text) ctx.msg.content = E.text(ctx.prop, true);
+        const W = win.WX_DB || window.WX_DB;
+        try {
+            if (W && W.saveApiChat) await W.saveApiChat(ctx.chat.id, ctx.chat);
+            else if (win.OS_DB && win.OS_DB.saveApiChat) await win.OS_DB.saveApiChat(ctx.chat.id, ctx.chat);
+        } catch (e) { _toast('存不進去，再試一次'); }
+        const V = win.WX_VIEW || window.WX_VIEW, app = win.wxApp || window.wxApp;
+        const idx = ctx.chat.messages.indexOf(ctx.msg);
+        if (!V || !V.renderBubble || idx < 0) return;
+        ((app && app.APP_CONTAINER) || d).querySelectorAll('[data-prop="' + ctx.prop.id + '"]').forEach(function (el) {
+            el.outerHTML = V.renderBubble(ctx.msg, ctx.chat, false, idx);
+        });
+    }
+    async function _ppAct(act) {
+        const ctx = _pp;
+        if (!ctx || ctx.busy) return;
+        if (act === 'close') { closeProposal(); return; }
+        if (act === 'no') { ctx.prop.state = 'no'; await _ppSave(ctx); closeProposal(); return; }
+        const E = _edit();
+        if ((act !== 'yes' && act !== 'undo') || !E) return;
+        ctx.busy = act; _ppRender();
+        let r;
+        try { r = act === 'yes' ? await E.apply(ctx.prop) : await E.undo(ctx.prop); }
+        catch (e) { r = { ok: false, text: (e && e.message) || '失敗' }; }
+        ctx.busy = '';
+        await _ppSave(ctx);   // 她中途關掉小窗也照樣存
+        _toast(r.ok ? (act === 'yes' ? '寫進世界書了' : '改回去了') : r.text);
+        if (_pp === ctx) _ppRender();
+    }
+    function openProposal(chatId, propId) {
+        const hit = _ppFind(chatId, propId);
+        if (!hit) { _toast('找不到這張了'); return false; }
+        const app = win.wxApp || window.wxApp;
+        const host = app && app.APP_CONTAINER;
+        if (!host) return false;
+        closeProposal();
+        _injectCss();
+        const root = d.createElement('div');
+        root.className = 'wxtl-mask';
+        root.addEventListener('click', function (e) {
+            if (e.target === root) { if (!(_pp && _pp.busy)) closeProposal(); return; }
+            const b = e.target.closest('[data-pp]');
+            if (b && !b.disabled) _ppAct(b.getAttribute('data-pp'));
+        });
+        host.appendChild(root);
+        _pp = { root: root, chat: hit.chat, msg: hit.msg, prop: hit.msg._prop, busy: '' };
+        _ppRender();
+        return true;
+    }
+    function closeProposal() {
+        if (!_pp) return;
+        try { _pp.root.remove(); } catch (e) {}
+        _pp = null;
+    }
+    // 聊天裡那一行給她看的字（已經跳脫，wx_view 直接放）
+    function propNotice(prop) { const E = _edit(); return esc((E && E.text) ? E.text(prop, false) : ''); }
+    try { _injectCss(); } catch (e) {}   // 聊天裡那一行的樣式要在打開任何小窗之前就有
+
+    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary, openProposal, closeProposal, propNotice };
     win.WX_TOOLS = API;
     window.WX_TOOLS = API;
 })();

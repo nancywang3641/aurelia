@@ -1180,8 +1180,8 @@
     }
     function _blockName(chat) { return String((chat && (chat.realName || chat.name)) || '').trim(); }
     // 系統行放進這一間；她人在這間就直接畫出來
-    function _sysPush(chat, content) {
-        const m = { type: 'system', isMe: false, content: content, timestamp: Date.now() };
+    function _sysPush(chat, content, extra) {
+        const m = Object.assign({ type: 'system', isMe: false, content: content, timestamp: Date.now() }, extra || {});
         chat.messages.push(m);
         if (APP_CONTAINER && GLOBAL_ACTIVE_ID === chat.id) { try { _appendBubble(m, chat); } catch (e) {} }
         return m;
@@ -1739,7 +1739,14 @@
         chat._toolChain = (chat._toolChain || 0) + 1;
         if (chat._toolChain > TOOL_CHAIN) return;
         const who = chat.name || '對方';
-        const ran = await T.run(chat, calls, function (label, what) {
+        const ran = await T.run(chat, calls, function (label, what, prop) {
+            // 會動手的（改世界書）不是「查了」：是一張等她決定的單子，那一行點開看改前改後（wx_tools openProposal）
+            if (prop) {
+                prop.by = who;
+                const E = win.OS_AURELIA_EDIT;
+                _sysPush(chat, (E && E.text) ? E.text(prop, true) : who + ' 提出要改世界書「' + prop.title + '」', { _prop: prop });
+                return;
+            }
             _sysPush(chat, who + ' 用「' + label + '」查了' + (what ? '：' + what : ''));
         });
         if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }

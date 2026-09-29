@@ -300,6 +300,15 @@
                     const _nbCall = `event.stopPropagation(); const NB=(window.parent.WX_NOTEBOOK||window.WX_NOTEBOOK); if(NB) NB.open('${String(chatId).replace(/'/g, "\\'")}','${String(msg._noteRef).replace(/'/g, "\\'")}')`;
                     return `<div class="wx-system-notice wxnb-notice ${animClass}" style="${opacityStyle}" ${dataAttr} onclick="${_nbCall}"><i class="fa-solid fa-book-bookmark"></i>${sysText(displayContent)}</div>`;
                 }
+                // ✍ 角色提出要改世界書（wx_tools 會動手的工具）：點了打開那張單子，看改前改後、按同意才寫。
+                //   字由 WX_TOOLS.propNotice 照單子現在的狀態給（已跳脫）；標題是模型寫的，不能直接塞進來。
+                if (msg._prop && msg._prop.id) {
+                    const _T = (window.parent.WX_TOOLS || window.WX_TOOLS);
+                    const _pid = String(msg._prop.id).replace(/[^\w-]/g, '');
+                    const _pt = (_T && _T.propNotice) ? _T.propNotice(msg._prop) : String(displayContent).replace(/[&<>"']/g, '');
+                    const _ppCall = `event.stopPropagation(); const T=(window.parent.WX_TOOLS||window.WX_TOOLS); if(T) T.openProposal('${String(chatId).replace(/'/g, "\\'")}','${_pid}')`;
+                    return `<div class="wx-system-notice wxtl-pp-notice ${animClass}" style="${opacityStyle}" ${dataAttr} data-prop="${_pid}" onclick="${_ppCall}"><i class="fa-solid fa-pen-to-square"></i>${_pt}</div>`;
+                }
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(displayContent)}</div>`;
             }
             if (msg.type === 'time') return `<div class="wx-time-stamp ${animClass}" style="${opacityStyle}" ${dataAttr}>${msg.content}</div>`;
