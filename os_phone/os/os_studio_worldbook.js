@@ -15,7 +15,11 @@
     const _sgcEsc = _b._sgcEsc;
     const renderMarkdown = _b.renderMarkdown;
     const _studioBadReply = _b._studioBadReply;
-    const _wbTH = _b._wbTH;
+    // 酒館走酒館助手；PWA 沒有酒館助手（index.html 設成 null），改走手機自己的世界書（書包），
+    //   同一組函式由 OS_WORLDBOOK.lorebookApi 接。「我的角色」那頁仍只走酒館（它要掛全域常駐，PWA 沒這層）。
+    //   只在 PWA 才換：酒館裡酒館助手偶爾還沒就緒，不能因此跳去改手機那套書。
+    const _onPwa = () => { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } };
+    const _wbTH = () => _onPwa() ? ((win.OS_WORLDBOOK && win.OS_WORLDBOOK.lorebookApi) || null) : _b._wbTH();
     const _wbToast = _b._wbToast;
 
     // ══════════════════════════════════════════════════════════════
@@ -100,7 +104,7 @@
         toggle.onclick = () => { newrow.hidden = !newrow.hidden; if (!newrow.hidden) { const i = host.querySelector('#swb-new-name'); i && i.focus(); } };
         host.querySelector('#swb-new-go').onclick = () => _wbCreateNew(host.querySelector('#swb-new-name').value);
         const listEl = host.querySelector('#swb-list');
-        if (!books.length) { listEl.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-globe"></i></div><div>酒館裡還沒有世界書<br>按上面「新增世界書」開一本吧</div></div>`; return; }
+        if (!books.length) { listEl.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-globe"></i></div><div>${_onPwa() ? '' : '酒館裡'}還沒有世界書<br>按上面「新增世界書」開一本吧</div></div>`; return; }
         const _isCopy = (b) => String(b).startsWith('[VN副本]');
         const _bookCard = (b, i) => `<div class="swb-card swb-bookcard${_isCopy(b) ? ' swb-copycard' : ''}" data-book="${_sgcEsc(b)}">
             <div class="swb-card-main"><div class="swb-card-title">${_sgcEsc(b)}</div><div class="swb-card-meta" data-cnt="${i}">… 條目</div></div>
@@ -110,7 +114,7 @@
         books.forEach((b, i) => (_isCopy(b) ? _copies : _origs).push(_bookCard(b, i)));   // 副本(我複製的)跟酒館原檔分區，免選錯
         listEl.innerHTML = (_copies.length
             ? '<div class="swb-seclabel"><i class="fa-solid fa-copy"></i> 我的副本（改這些，原檔不動）</div>' + _copies.join('')
-              + '<div class="swb-seclabel swb-seclabel-div"><i class="fa-solid fa-landmark"></i> 酒館世界書</div>'
+              + '<div class="swb-seclabel swb-seclabel-div"><i class="fa-solid fa-landmark"></i> ' + (_onPwa() ? '世界書' : '酒館世界書') + '</div>'
             : '') + _origs.join('');
         listEl.querySelectorAll('.swb-bookcard').forEach(card => card.onclick = () => _wbBookMenu(card.getAttribute('data-book')));
         books.forEach(async (b, i) => {   // 條目數逐本補（getLorebooks 不給數量）

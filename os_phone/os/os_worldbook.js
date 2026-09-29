@@ -817,8 +817,102 @@
         return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // ── 給創作室世界書設計師用的轉接（PWA）──────────────────────────────
+    //   創作室是照酒館助手的 lorebook 那組函式寫的；PWA 沒有酒館助手，就把同一組函式接到這裡的書包。
+    //   形狀照酒館助手：uid 是數字、comment＝標題、keys 是陣列、type constant＝常駐（PWA 的「關鍵字留空」）。
+    //   🚨 PWA 條目的 id 是字串，uid 在這一頁開著的期間固定不變（id↔uid 各記一份、只增不重用）：
+    //      創作室先抓條目、跟 AI 聊完才套用，中間新增的條目不能讓舊的 uid 對到別條。
+    const _uidOf = new Map(), _idOf = new Map();
+    let _uidNext = 0;
+    function _uid(id) {
+        if (!_uidOf.has(id)) { _uidOf.set(id, _uidNext); _idOf.set(_uidNext, id); _uidNext++; }
+        return _uidOf.get(id);
+    }
+    function _newId() { return 'wb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); }
+    function _keysStr(keys) {
+        return (Array.isArray(keys) ? keys : String(keys || '').split(/[,，、]/)).map(k => String(k).trim()).filter(Boolean).join(',');
+    }
+    async function _bookEntries(name) {
+        const all = (await win.OS_DB.getAllWorldbookEntries()) || [];
+        return all.filter(e => e && (e.book || '預設書包') === name);
+    }
+    // 條目欄位 → PWA 條目（只動有給的欄位；type constant 一律清掉關鍵字＝常駐）
+    function _applyLore(entry, src) {
+        if (src.comment !== undefined) entry.title = String(src.comment || '').trim();
+        if (src.content !== undefined) entry.content = String(src.content || '');
+        if (src.keys !== undefined) entry.keys = _keysStr(src.keys);
+        if (src.type === 'constant') entry.keys = '';
+        if (src.enabled !== undefined) entry.enabled = src.enabled !== false;
+        if (src.order !== undefined) entry.order = parseInt(src.order, 10) || 0;
+        if (src.depth !== undefined) entry.depth = src.depth;
+        if (src.role !== undefined) entry.role = src.role;
+        entry.updatedAt = Date.now();
+        return entry;
+    }
+    const lorebookApi = {
+        getLorebooks: function() { return getBooks(); },
+        getLorebookEntries: async function(name) {
+            return (await _bookEntries(name))
+                .sort((a, b) => (parseInt(a.order) || 0) - (parseInt(b.order) || 0))
+                .map(e => {
+                    const keys = e.keys ? String(e.keys).split(',').map(k => k.trim()).filter(Boolean) : [];
+                    return {
+                        uid: _uid(e.id), comment: e.title || '', keys, content: e.content || '',
+                        enabled: e.enabled !== false, type: keys.length ? 'selective' : 'constant',
+                        order: parseInt(e.order) || 0, depth: e.depth === undefined ? null : e.depth, role: e.role || 0,
+                    };
+                });
+        },
+        createLorebook: async function(name) {
+            const n = String(name || '').trim();
+            if (!n || getBooks().includes(n)) return false;
+            saveBooks(getBooks().concat(n));
+            return true;
+        },
+        deleteLorebook: async function(name) {
+            const n = String(name || '');
+            if (n === '預設書包') throw new Error('系統保留的預設書包無法刪除');
+            for (const e of await _bookEntries(n)) await win.OS_DB.deleteWorldbookEntry(e.id);
+            const books = getBooks().filter(b => b !== n);
+            if (!books.length) books.push('預設書包');
+            saveBooks(books);
+            saveGlobalPacks(getGlobalPacks().filter(p => p !== n));   // 常駐名單別留下不存在的書包
+            return true;
+        },
+        createLorebookEntries: async function(name, list) {
+            const n = String(name || '');
+            if (!getBooks().includes(n)) saveBooks(getBooks().concat(n));
+            const now = Date.now();
+            for (const src of (list || [])) {
+                const entry = _applyLore({ id: _newId(), book: n, title: '', content: '', category: '預設', keys: '',
+                                           enabled: true, order: 0, depth: null, role: 0, createdAt: now }, src || {});
+                await win.OS_DB.saveWorldbookEntry(entry);
+            }
+            return true;
+        },
+        setLorebookEntries: async function(name, list) {
+            const mine = await _bookEntries(String(name || ''));
+            for (const src of (list || [])) {
+                const id = _idOf.get(src && src.uid);
+                const cur = id && mine.find(e => e.id === id);
+                if (!cur) throw new Error('找不到條目 #' + (src && src.uid));
+                await win.OS_DB.saveWorldbookEntry(_applyLore({ ...cur }, src));
+            }
+            return true;
+        },
+        deleteLorebookEntries: async function(name, uids) {
+            const mine = await _bookEntries(String(name || ''));
+            for (const uid of (uids || [])) {
+                const id = _idOf.get(uid);
+                if (id && mine.some(e => e.id === id)) await win.OS_DB.deleteWorldbookEntry(id);
+            }
+            return true;
+        },
+    };
+
     // ── 公開 API ────────────────────────────────────────────────────
     win.OS_WORLDBOOK = {
+        lorebookApi,
         launch: function(container) {
             if (!container) return;
             container.innerHTML = buildHTML();
