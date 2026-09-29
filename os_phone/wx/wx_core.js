@@ -4295,7 +4295,13 @@
             let text = contentOverride; let inputEl = null;
             if (!text) { inputEl = APP_CONTAINER.querySelector('.wx-input-real'); if(inputEl) text = inputEl.value.trim(); }
             if(!text || !GLOBAL_ACTIVE_ID) return;
-            
+
+            // 🚨 記憶體裡沒有這間（聊天 app 還沒打開過、只有 id 被設上）→ 先去存檔讀，讀不到才是真的新房間。
+            //    以前直接建一間空的，下面 saveApiChat 一存就把這間原本的整段記錄蓋掉（shareCard 那條早有這道防呆）。
+            if (!GLOBAL_CHATS[GLOBAL_ACTIVE_ID] && win.WX_DB && win.WX_DB.getApiChat) {
+                try { const saved = await win.WX_DB.getApiChat(GLOBAL_ACTIVE_ID); if (saved) GLOBAL_CHATS[GLOBAL_ACTIVE_ID] = saved; } catch (e) {}
+                if (GLOBAL_CHATS[GLOBAL_ACTIVE_ID] && !Array.isArray(GLOBAL_CHATS[GLOBAL_ACTIVE_ID].messages)) GLOBAL_CHATS[GLOBAL_ACTIVE_ID].messages = [];
+            }
             if (!GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { GLOBAL_CHATS[GLOBAL_ACTIVE_ID] = { name: GLOBAL_ACTIVE_ID, id: GLOBAL_ACTIVE_ID, members:[], messages: [], lastTime: '', unread: false, pushedCount:0, renderedCount:0 }; }
             const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
             
