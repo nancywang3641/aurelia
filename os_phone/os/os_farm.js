@@ -19,7 +19,7 @@
     var FILES = [
         'farm_core.js', 'ranch_core.js', 'farm_walk_core.js', 'farm_ship_core.js',
         'farm_plot_draw.js', 'farm_item_draw.js', 'ranch_draw.js',
-        'farm_walk_ui.js', 'farm_bag.js', 'farm_ship.js', 'farm_board.js',
+        'farm_walk_ui.js', 'farm_bag.js', 'farm_ship.js', 'farm_board.js', 'farm_cloud.js',
         'farm_yard.js', 'farm_ranch.js'
     ];
     // 素材圖放 sound-files 的 farm/（跟大廳舞台同一個圖庫，走 jsdelivr）
@@ -80,13 +80,16 @@
         L.ship.attach(st, raw);
         return L.walk.attach(st, raw);
     }
-    function loadState(L) {
-        var raw = null;
+    function localRaw() {
         try {
-            raw = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+            var raw = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
             // 以前在測試頁玩過：第一次打開就接著那塊田玩（只接一次，之後各存各的）
             if (!raw) raw = JSON.parse(localStorage.getItem(LAB_KEY) || 'null');
-        } catch (e) { raw = null; }
+            return raw;
+        } catch (e) { return null; }
+    }
+    // raw：這次要用的那份（雲端存檔開著時可能是伺服器上的；見 farm_cloud.js）
+    function loadState(L, raw) {
         try { return attachAll(L, L.farm.normalizeState(raw), raw); }
         catch (e) { return attachAll(L, L.farm.createState(), null); }
     }
@@ -126,11 +129,16 @@
 
     // ── 一次打開＝一個 session ────────────────────────
     var session = null;
-    function start(root) {
+    function start(root, raw, note) {
         var L = libs();
-        var state = loadState(L);
+        var state = loadState(L, raw);
         var scene = null, toastTimer = 0, watch = 0;
-        function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
+        var Cloud = window.FarmCloud;
+        // 存在這台；雲端存檔開著的話順便送上去（停手一下才送）
+        function save() {
+            try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+            if (Cloud) Cloud.changed(state);
+        }
         function toast(text) {
             var t = root.querySelector('[data-farm="toast"]');
             if (!t) return;
@@ -147,20 +155,29 @@
             toast: toast,
             asset: function (name) { return ASSET + name; },
             goScene: function (name) { go(name); },
-            exit: function () { end(); if (window.PhoneSystem && window.PhoneSystem.goHome) window.PhoneSystem.goHome(); }
+            exit: function () { end(); if (window.PhoneSystem && window.PhoneSystem.goHome) window.PhoneSystem.goHome(); },
+            // 雲端存檔剛連上、按了立即同步：這一格重開一次，開的時候就會跟伺服器對一次
+            //   這裡只存這台、不先送：送上去跟重開時的比對會撞在一起，讓重開那一次自己決定要送還是要拿
+            resync: function () { var c = root.parentNode; end('local'); if (c) launch(c); }
         };
         function go(name) {
             if (scene) scene.destroy();
             clearTimeout(toastTimer);
             scene = (name === 'ranch' ? window.FarmRanch : window.FarmYard).mount(ctx);
         }
-        function onHide() { save(); }
-        function end() {
+        function onHide() {
+            save();
+            // 切出去／關掉：手上還沒送的立刻送（keepalive，頁面關了也送得出去）
+            if (Cloud && document.visibilityState === 'hidden') Cloud.flush(true);
+        }
+        // how：不給＝存這台＋送上去；'local'＝只存這台；'drop'＝什麼都不存（手上這份已經過時，換成伺服器上的）
+        function end(how) {
             if (!session) return;
             clearInterval(watch);
             if (scene) scene.destroy();
             scene = null;
-            save();
+            if (how === 'local') { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
+            else if (how !== 'drop') { save(); if (Cloud) Cloud.flush(); }
             window.removeEventListener('pagehide', onHide);
             document.removeEventListener('visibilitychange', onHide);
             unparkHasStyleRules();
@@ -172,11 +189,20 @@
         // 農場那一格被關掉（藏起來或換成別的 app）就拆掉：走路那支在攔方向鍵，不能留著
         watch = setInterval(function () { if (!root.isConnected || root.offsetParent === null) end(); }, 800);
         session = { end: end, ctx: ctx, state: function () { return state; }, scene: function () { return scene; } };
+        // 玩到一半另一台裝置存過了：這台手上這份不能再蓋上去，換成最新的重開
+        if (Cloud) Cloud.setOnNewer(function (remote) {
+            var c = root.parentNode;
+            try { localStorage.setItem(STORE_KEY, JSON.stringify(remote)); } catch (e) {}
+            end('drop');
+            if (c) launch(c, { raw: remote, note: '另一台裝置剛存過這塊田，換成最新的了' });
+        });
         go(state.walk && state.walk.scene === 'ranch' ? 'ranch' : 'yard');
+        if (note) toast(note);
         return session;
     }
 
-    function launch(container) {
+    // given：{ raw, note } 已經決定好用哪份（另一台剛存過、換成最新的那種），就不再問伺服器
+    function launch(container, given) {
         if (session) session.end();
         container.innerHTML = '';
         var root = document.createElement('div');
@@ -184,8 +210,13 @@
         root.innerHTML = '<div class="farm-loading"><i class="fa-solid fa-seedling"></i><span>正在走去後院…</span></div>';
         container.appendChild(root);
         ensureLoaded().then(function () {
+            if (given) return given;
+            var mine = localRaw();
+            return window.FarmCloud ? window.FarmCloud.openSync(mine) : { raw: mine };
+        }).then(function (pick) {
             if (!root.isConnected) return;
-            start(root);
+            if (pick.raw) try { localStorage.setItem(STORE_KEY, JSON.stringify(pick.raw)); } catch (e) {}
+            start(root, pick.raw, pick.note);
         }).catch(function (e) {
             root.innerHTML = '<div class="farm-loading is-error"><i class="fa-solid fa-triangle-exclamation"></i><span>後院的檔案沒載到（' + String(e && e.message || e) + '）。</span>' +
                 '<button type="button" data-farm-retry>再試一次</button></div>';

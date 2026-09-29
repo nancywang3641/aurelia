@@ -5,7 +5,7 @@
 // 走路、鏡頭、頭上那個小窗在 farm_walk_ui.js；位置、走路體力、手上工具的規則在 farm_walk_core.js。
 // 這支只管後院有哪些東西（六塊田、池塘、工具棚、出貨箱、小圍欄）、各自能做什麼，還有上面那些資訊。
 // 澆水要先去工具棚拿水壺、壺空了去池塘裝（一壺三塊田）。
-// ctx（os_farm.js 給的）：{ root, state(), setState(st), libs, save(), act(a), toast(t), goScene(name), exit(), owner, look(), asset(name) }
+// ctx（os_farm.js 給的）：{ root, state(), setState(st), libs, save(), act(a), toast(t), goScene(name), exit(), resync(), owner, look(), asset(name) }
 // ============================================================
 (function () {
     'use strict';
@@ -37,6 +37,7 @@
             '<button class="farm-tool economy" type="button" data-farm="shop-open"><i class="fa-solid fa-shop"></i>種子商店</button>' +
             '<button class="farm-tool" type="button" data-farm="board"><i class="fa-solid fa-chart-simple"></i>看板</button>' +
             '<button class="farm-tool" type="button" data-farm="report"><i class="fa-solid fa-receipt"></i>結算單</button>' +
+            '<button class="farm-tool" type="button" data-farm="cloud" data-farm-cloud><i class="fa-solid fa-cloud"></i>雲端</button>' +
             '<button class="farm-tool primary" type="button" data-farm="end-day"><i class="fa-solid fa-moon"></i>結束今天</button>' +
             '</div>' +
             '<aside class="farm-stats" aria-label="農場狀態">' +
@@ -68,7 +69,7 @@
         var $ = function (k) { return root.querySelector('[data-farm="' + k + '"]'); };
         var plotsRoot = $('plots');
         var selectedCrop = 'stardew';
-        var stage = null, shipUi = null, board = null, bag = null;
+        var stage = null, shipUi = null, board = null, bag = null, cloud = null;
         var S = function () { return ctx.state(); };
         var act = ctx.act;
 
@@ -246,6 +247,8 @@
         $('report').addEventListener('click', function () { shipUi.openReport(); });
         board = window.FarmBoard.create({ app: app, state: S, ship: shipUi, owner: ctx.owner });
         $('board').addEventListener('click', function () { board.open(); });
+        cloud = window.FarmCloud.panel({ app: app, onConnected: ctx.resync });
+        $('cloud').addEventListener('click', function () { cloud.open(); });
         bag = window.FarmBag.create({ app: app, scene: 'yard', state: S, ctx: bagCtx, toast: ctx.toast });
         stage = window.FarmWalkStage.create({
             app: app, world: $('stage'), scene: 'yard', state: S, targets: targets, zFixed: 17,
@@ -258,7 +261,7 @@
             stage: stage,
             render: render,
             destroy: function () {
-                [stage, bag, shipUi, board].forEach(function (c) { if (c && c.destroy) c.destroy(); });
+                [stage, bag, shipUi, board, cloud].forEach(function (c) { if (c && c.destroy) c.destroy(); });
                 ctx.save();
             }
         };

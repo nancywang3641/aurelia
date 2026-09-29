@@ -6,7 +6,7 @@
 // 擠奶要先去棚屋拿桶子、剪毛要拿剪刀（一次只拿得動一樣）。
 // 走路、鏡頭、頭上那個小窗在 farm_walk_ui.js；這支管牧場有哪些東西、各自能做什麼、動物怎麼晃。
 // 座標一律用「佔底圖的百分比」，指的是腳底那一點。
-// ctx（os_farm.js 給的）：{ root, state(), libs, save(), act(a), toast(t), goScene(name), exit(), owner, look(), asset(name) }
+// ctx（os_farm.js 給的）：{ root, state(), libs, save(), act(a), toast(t), goScene(name), exit(), resync(), owner, look(), asset(name) }
 // ============================================================
 (function () {
     'use strict';
@@ -44,6 +44,7 @@
             '<span class="ranch-chip" data-farm="ranch-fert"></span>' +
             '<button class="ranch-chip" type="button" data-farm="ranch-board"><i class="fa-solid fa-chart-simple"></i> 看板</button>' +
             '<button class="ranch-chip" type="button" data-farm="ranch-report"><i class="fa-solid fa-receipt"></i> 結算單</button>' +
+            '<button class="ranch-chip" type="button" data-farm="ranch-cloud" data-farm-cloud><i class="fa-solid fa-cloud"></i> 雲端</button>' +
             '<button class="ranch-chip ranch-btn" type="button" data-farm="ranch-next-day"><i class="fa-solid fa-moon"></i> 結束今天</button>' +
             '</div>' +
             '<div class="farm-toast" data-farm="toast" role="status" aria-live="polite"></div>';
@@ -474,6 +475,8 @@
     $('ranch-report').addEventListener('click', function (ev) { ev.stopPropagation(); shipUi.openReport(); });
     var board = window.FarmBoard.create({ app: root, state: function () { return state; }, ship: shipUi, owner: ctx.owner });
     $('ranch-board').addEventListener('click', function (ev) { ev.stopPropagation(); board.open(); });
+    var cloud = window.FarmCloud.panel({ app: root, onConnected: ctx.resync });
+    $('ranch-cloud').addEventListener('click', function (ev) { ev.stopPropagation(); cloud.open(); });
     var bag = window.FarmBag.create({ app: root, scene: 'ranch', state: function () { return state; }, toast: toast });
     render();
     stage = window.FarmWalkStage.create({
@@ -496,7 +499,7 @@
         destroy: function () {
             // 動物各自有停一下再走的計時器：全部停掉，不然換場景後還在背景亂跑
             herd.forEach(function (a) { clearTimeout(a.timer); a.gone = true; });
-            [stage, bag, shipUi, board].forEach(function (c) { if (c && c.destroy) c.destroy(); });
+            [stage, bag, shipUi, board, cloud].forEach(function (c) { if (c && c.destroy) c.destroy(); });
             saveState();
         }
     };
