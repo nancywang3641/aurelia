@@ -124,6 +124,18 @@
             tools: [{ name: 'get_weather', description: '查現在的天氣和接下來三天的預報。不填地點就是對方現在所在的地方。',
                 inputSchema: { type: 'object', properties: { city: { type: 'string', description: '要查的地方（城市名）；問對方那邊的天氣就不要填' } } } }],
             run: _weather
+        },
+        // 翻奧瑞亞的資料：正在玩的故事的劇情、世界書、記憶、人物、現況、其他聊天室、朋友圈微博。
+        //   全部只讀、不叫模型、不花錢；工具本身在 os_aurelia_tools.js（之後小機也用同一份），這裡只是接上。
+        aurelia: {
+            id: 'tl_aurelia', name: '翻奧瑞亞的資料',
+            get tools() { const A = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS; return (A && A.tools) || []; },
+            get note() { const A = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS; return (A && A.note) || ''; },   // 列工具前先講範圍與主角是誰
+            run: function (args, srv, name, chat) {
+                const A = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS;
+                if (!A) throw new Error('奧瑞亞的資料還沒載好');
+                return A.run(name, args, { chat: chat });
+            }
         }
     };
 
@@ -303,8 +315,11 @@
             '不需要就不要用；上面已經查過的事，直接用查到的內容，不要再查一次。一次最多用 ' + MAX_CALLS + ' 個。',
             '工具：'
         ];
+        let lastSrv = null;
         keys.forEach(function (k) {
-            const t = map[k].tool;
+            const t = map[k].tool, srv = map[k].srv;
+            // 一組內建工具有自己的前言（例如翻奧瑞亞的資料：只讀得到故事、主角不是你）→ 那組第一個工具前面寫一次
+            if (srv !== lastSrv) { lastSrv = srv; const B = srv.builtin && BUILTIN[srv.builtin]; if (B && B.note) lines.push('（' + B.note + '）'); }
             lines.push('・' + k + (t.description ? '：' + String(t.description).replace(/\s+/g, ' ').slice(0, 300) : ''));
             _paramLines(t.inputSchema).forEach(function (l) { lines.push(l); });
         });
@@ -320,7 +335,8 @@
         if (fresh.length) {
             out.push('【你剛才用工具拿到的結果】這些是你自己查的，對方看不到，要讓對方知道就用你自己的話講，不要整段照貼。');
             fresh.forEach(function (x, i) {
-                out.push('── 結果 ' + (i + 1) + '：' + x.label + '（' + _argsText(x.args) + '）');
+                const a = _argsText(x.args);
+                out.push('── 結果 ' + (i + 1) + '：' + x.label + (a ? '（' + a + '）' : ''));
                 out.push(x.ok ? String(x.text || '').slice(0, RESULT_MAX) : ('沒有成功：' + x.text + '。不要假裝查到了。'));
                 x.sent = true;
             });
@@ -328,7 +344,8 @@
         if (old.length) {
             out.push('【你之前用工具查過的】');
             old.forEach(function (x) {
-                out.push('・' + x.label + '（' + _argsText(x.args) + '）：' + (x.ok ? String(x.text || '').replace(/\s+/g, ' ').slice(0, 200) + '…' : '沒有成功'));
+                const a = _argsText(x.args);
+                out.push('・' + x.label + (a ? '（' + a + '）' : '') + '：' + (x.ok ? String(x.text || '').replace(/\s+/g, ' ').slice(0, 200) + '…' : '沒有成功'));
             });
         }
         return out.join('\n');
@@ -374,15 +391,16 @@
         let any = false;
         for (const c of calls.slice(0, MAX_CALLS)) {
             const hit = map[c.name] || map[Object.keys(map).find(function (k) { return k.toLowerCase() === String(c.name).toLowerCase(); })];
-            const entry = { label: hit ? hit.srv.name : String(c.name), tool: c.name, args: {}, ok: false, text: '', at: Date.now(), sent: false };
+            // 一組底下有好幾個功能的（翻奧瑞亞的資料）用功能自己的中文短名，不然結果標頭與畫面上那行都只看得到組名
+            const entry = { label: hit ? (hit.tool.label || hit.srv.name) : String(c.name), tool: c.name, args: {}, ok: false, text: '', at: Date.now(), sent: false };
             if (!hit) {
                 entry.text = '沒有叫做「' + c.name + '」的工具';
             } else {
                 entry.args = _parseArgs(c.body, hit.tool.inputSchema);
-                try { if (onNotice) onNotice(hit.srv.name, _argsText(entry.args)); } catch (e) {}
+                try { if (onNotice) onNotice(entry.label, _argsText(entry.args)); } catch (e) {}
                 try {
                     entry.text = (hit.srv.builtin && BUILTIN[hit.srv.builtin])
-                        ? await BUILTIN[hit.srv.builtin].run(entry.args, hit.srv)
+                        ? await BUILTIN[hit.srv.builtin].run(entry.args, hit.srv, hit.tool.name, chat)   // 一個內建底下有好幾個功能時要知道叫的是哪個
                         : await _callTool(hit.srv, hit.tool.name, entry.args);
                     entry.ok = true;
                 }
@@ -457,6 +475,7 @@
         if (_busy === s.id) return { t: '連線中…', bad: false };
         if (s.paused) return { t: '已暫停', bad: false };
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
+        if (s.builtin === 'aurelia') return { t: '只看不改，不會花錢', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
@@ -472,7 +491,7 @@
                 + (picked ? '<i class="fa-solid fa-check"></i>' : '') + '</button>'
                 + '<div class="wxtl-row-t" data-act="pick" data-id="' + esc(s.id) + '"><b>' + esc(s.name) + '</b><span class="' + (sub.bad ? 'is-bad' : '') + '">' + esc(sub.t) + '</span></div>'
                 + (s.builtin
-                    ? '<button class="wxtl-ic" type="button" data-act="city" data-id="' + esc(s.id) + '" title="查哪裡"><i class="fa-solid fa-location-dot"></i></button>'
+                    ? (s.builtin === 'weather' ? '<button class="wxtl-ic" type="button" data-act="city" data-id="' + esc(s.id) + '" title="查哪裡"><i class="fa-solid fa-location-dot"></i></button>' : '<span class="wxtl-ic-pad"></span>')
                     : '<button class="wxtl-ic" type="button" data-act="test" data-id="' + esc(s.id) + '" title="重新連一次"' + (_busy ? ' disabled' : '') + '><i class="fa-solid fa-rotate"></i></button>')
                 + '<button class="wxtl-ic" type="button" data-act="pause" data-id="' + esc(s.id) + '" title="' + (s.paused ? '繼續使用' : '暫停') + '"><i class="fa-solid ' + (s.paused ? 'fa-play' : 'fa-pause') + '"></i></button>'
                 + (s.builtin ? '<span class="wxtl-ic-pad"></span>' : '<button class="wxtl-ic" type="button" data-act="del" data-id="' + esc(s.id) + '" title="刪掉"><i class="fa-solid fa-trash-can"></i></button>')
