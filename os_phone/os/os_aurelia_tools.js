@@ -177,6 +177,163 @@
         })).join('\n');
     }
 
+    // ── 4b. 在這張卡以前玩過的每一次裡找（跨篇章找回憶）──────────────────────
+    //   她 09-30：「我以前玩了這張卡，但我忘記是哪一次了，但我記得XXX某某去過廁所」。
+    //   一次把三層翻完再交回去（分三輪查＝多兩次回話的錢）：劇情記憶 → 大總結 → 劇情原文。
+    //   🚨 沒有記憶或大總結的那幾次不能排除：那只代表沒整理過，事情可能就在原文裡，所以原文每一次都翻。
+    //   全部在本機翻（不叫模型、跟故事長短無關），只有找到的那幾段交給模型，有上限。
+    //   範圍＝這張卡：酒館是目前角色卡的所有聊天檔；手機是同一本書（vn_story_index 的 worldId）的所有篇章，
+    //   自由劇情沒有書，就是所有自由劇情。
+    //   詞的寫法：空白隔開＝都要出現在同一小段（前後兩百多字內，不是整章各出現一次）；| 隔開＝同一個東西的不同說法，任一個就算。
+    function _groups(q) {
+        return String(q || '').split(/[\s,，、;；]+/).map(function (g) {
+            return g.split(/[|｜／/]+/).map(function (x) { return _fold(x.trim()); }).filter(Boolean);
+        }).filter(function (g) { return g.length; }).slice(0, 5);
+    }
+    function _matchGroups(folded, groups) { return groups.every(function (g) { return g.some(function (w) { return folded.indexOf(w) !== -1; }); }); }
+    // 原文切成小段（約 240 字）；比對時相鄰兩段併起來看，才不會因為剛好切在中間而漏掉
+    function _passages(text) {
+        const out = []; let cur = '';
+        String(text || '').split('\n').forEach(function (line) {
+            line = line.trim();
+            if (!line) return;
+            while (line.length > 240) { if (cur) { out.push(cur); cur = ''; } out.push(line.slice(0, 240)); line = line.slice(240); }
+            if (cur && cur.length + line.length > 240) { out.push(cur); cur = ''; }
+            cur = cur ? cur + '\n' + line : line;
+        });
+        if (cur) out.push(cur);
+        return out;
+    }
+    // 取第一個中的詞前後一小段（WX_ZH 是一字對一字，折過的位置就是原文的位置）
+    function _snippet(text, groups, n) {
+        const f = _fold(text);
+        let at = -1;
+        groups.some(function (g) { return g.some(function (w) { const i = f.indexOf(w); if (i !== -1) { at = i; return true; } return false; }); });
+        const s = Math.max(0, (at < 0 ? 0 : at) - Math.floor(n / 3)), e = Math.min(text.length, s + n);
+        return (s > 0 ? '…' : '') + _one(text.slice(s, e)) + (e < text.length ? '…' : '');
+    }
+    // 這張卡玩過的每一次 → [{ name, isNow, memKey, sumKey, when, units: [{ at, text }] }]；讀不到回 null
+    async function _playthroughs() {
+        if (_pwa()) {
+            const now = _storyId();
+            let idx = {};
+            try { idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}') || {}; } catch (e) {}
+            const world = (idx[now] && idx[now].worldId != null) ? idx[now].worldId : (localStorage.getItem('vn_current_world_id') || '');
+            let all = [];
+            try { all = (await win.OS_DB.getAllVnChapters()) || []; } catch (e) {}
+            const byStory = {};
+            all.forEach(function (c) { if (c && c.storyId) (byStory[c.storyId] = byStory[c.storyId] || []).push(c); });
+            const sids = Object.keys(idx).filter(function (sid) { return (idx[sid].worldId || '') === (world || ''); });
+            if (now && sids.indexOf(now) === -1) sids.push(now);
+            return sids.map(function (sid) {
+                const chs = (byStory[sid] || []).sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
+                const meta = idx[sid] || {};
+                return {
+                    name: meta.title || (chs[0] && chs[0].storyTitle) || sid, isNow: sid === now, memKey: sid, sumKey: sid,
+                    when: meta.createdAt || (chs[0] && chs[0].createdAt) || 0,
+                    units: chs.map(function (c, i) {
+                        return { at: '第 ' + (i + 1) + ' 章' + (c.title ? '｜' + c.title : ''), text: (c.request ? '（對方）' + c.request + '\n' : '') + _clean(c.content) };
+                    })
+                };
+            });
+        }
+        const TH = _TH();
+        if (!TH || !TH.getChatHistoryBrief || !TH.getChatHistoryDetail) return null;
+        let detail = null;
+        try { detail = await TH.getChatHistoryDetail(await TH.getChatHistoryBrief('current')); } catch (e) {}
+        if (!detail || typeof detail !== 'object') return null;
+        const now = _storyId();
+        return Object.keys(detail).map(function (file) {
+            // 記憶、狀態那把＝檔名去掉 .jsonl（同 OS_AVS_ADAPTER）；大總結那把再把空白換底線（同 OS_STORY_TOOLS.getChatId）
+            const key = String(file).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim();
+            const msgs = (detail[file] || []).filter(function (m) { return m && typeof m.mes === 'string'; });   // 檔頭那行沒有 mes
+            return {
+                name: key, isNow: key === now, memKey: key, sumKey: key.replace(/\s+/g, '_'), when: 0,
+                units: msgs.map(function (m, i) { return { at: '第 ' + i + ' 樓', text: m.is_user ? '（對方）' + m.mes : _clean(m.mes) }; })
+            };
+        });
+    }
+    async function _summaryText(p) {
+        try {
+            if (_pwa()) {
+                const list = (await win.OS_DB.getGrandSummaries(p.sumKey)) || [];
+                const last = list.reduce(function (a, b) { return (a && (a.count || 0) >= (b.count || 0)) ? a : b; }, null);
+                return (last && last.content) || '';
+            }
+            const rec = win.OS_DB.getTavernSummary ? await win.OS_DB.getTavernSummary(p.sumKey) : null;
+            return (rec && rec.content) || '';
+        } catch (e) { return ''; }
+    }
+    async function searchPast(args) {
+        const words = _one(args && args.words);
+        const groups = _groups(words);
+        if (!groups.length) return '要給要找的詞。';
+        const pts = await _playthroughs();
+        if (pts === null) return '讀不到這張卡的聊天記錄（現在沒有打開角色卡，或酒館助手沒開）。';
+        if (!pts.length) return '這張卡還沒有玩過的記錄。';
+        const name = function (p) { return '「' + _cut(p.name, 40) + '」' + (p.isNow ? '（現在這一次）' : ''); };
+        const byKey = {};
+        pts.forEach(function (p) { byKey[p.memKey] = p; });
+
+        // ① 劇情記憶
+        let mems = [];
+        try { mems = (await win.OS_DB.getAllVnMemories()) || []; } catch (e) {}
+        mems = mems.filter(function (m) { return m && !m.merged && byKey[m.storyId]; });
+        const withMem = new Set(mems.map(function (m) { return m.storyId; }));
+        const memHits = mems.filter(function (m) { return _matchGroups(_fold((m.summary || '') + ' ' + (m.text || '') + ' ' + (m.tags || []).join(' ')), groups); })
+            .sort(function (a, b) { return (b.weight == null ? 0.5 : b.weight) - (a.weight == null ? 0.5 : a.weight); });
+        // ② 大總結
+        const sumHits = [];
+        let withSum = 0;
+        for (const p of pts) {
+            const content = await _summaryText(p);
+            if (!content) continue;
+            withSum++;
+            // 大總結是 markdown（## 標題、| 表格 |），排版符號拿掉再比對與節錄
+            const plain = String(content).replace(/^\s*#+\s*/gm, '').replace(/^\s*\|?[\s:|-]+\|?\s*$/gm, '').replace(/\s*\|\s*/g, ' ');
+            _passages(plain).forEach(function (ps) { if (_matchGroups(_fold(ps), groups)) sumHits.push({ p: p, text: ps }); });
+        }
+        // ③ 劇情原文（每一次都翻）
+        const raw = [];
+        let rawTotal = 0;
+        pts.forEach(function (p) {
+            const hits = [];
+            p.units.forEach(function (u) {
+                const ps = _passages(u.text);
+                for (let i = 0; i < ps.length; i++) {
+                    const two = ps[i] + (ps[i + 1] ? '\n' + ps[i + 1] : '');
+                    if (_matchGroups(_fold(two), groups)) { hits.push({ at: u.at, text: two }); i++; }
+                }
+            });
+            if (hits.length) { raw.push({ p: p, hits: hits }); rawTotal += hits.length; }
+        });
+        raw.sort(function (a, b) { return (b.hits.length - a.hits.length) || ((b.p.when || 0) - (a.p.when || 0)); });
+
+        const out = ['在這張卡玩過的 ' + pts.length + ' 次裡找「' + words + '」'
+            + '（' + withMem.size + ' 次有劇情記憶、' + withSum + ' 次有大總結；原文每一次都翻了）：'];
+        if (memHits.length) {
+            out.push('【劇情記憶】');
+            memHits.slice(0, 5).forEach(function (m) { out.push('・' + name(byKey[m.storyId]) + '：' + _cut(_one(m.text || m.summary), 150)); });
+        }
+        if (sumHits.length) {
+            out.push('【大總結】');
+            sumHits.slice(0, 3).forEach(function (h) { out.push('・' + name(h.p) + '：' + _snippet(h.text, groups, 150)); });
+        }
+        if (rawTotal) {
+            out.push('【劇情原文】共 ' + rawTotal + ' 處，在 ' + raw.length + ' 次裡：');
+            raw.slice(0, 5).forEach(function (r) {
+                out.push('── ' + name(r.p) + '：' + r.hits.length + ' 處');
+                r.hits.slice(0, 2).forEach(function (h) { out.push('  ' + h.at + '：' + _snippet(h.text, groups, 160)); });
+            });
+            if (raw.length > 5) out.push('（還有 ' + (raw.length - 5) + ' 次也有，沒列出來）');
+            if (rawTotal > 10) out.push('找到的地方很多：再加一個那一段裡一定會出現的詞（空白隔開），可以縮小範圍。');
+        }
+        if (!memHits.length && !sumHits.length && !rawTotal) {
+            out.push('劇情記憶、大總結、原文都沒有找到。原文可能用的是別的說法：把想得到的說法用 | 一次寫齊再找一次，或問對方還記得什麼細節。');
+        }
+        return _cut(out.join('\n'), 2900);
+    }
+
     // ── 5. 人物：名冊或某人的檔案 ──────────────────────────────────────
     async function people(args) {
         if (!_storyId()) return NO_STORY;
@@ -318,6 +475,9 @@
         { name: 'aurelia_memory_search', label: '查劇情記憶', run: memorySearch,
           description: '在故事的劇情記憶裡用關鍵字找某件以前發生過的具體事情：誰做過什麼、說過什麼、東西在誰手上、誰知道什麼。',
           inputSchema: { type: 'object', properties: { keyword: { type: 'string', description: '要找的詞，可以寫兩三個詞用空格隔開' } }, required: ['keyword'] } },
+        { name: 'aurelia_search_past', label: '找以前玩過的', run: searchPast,
+          description: '在這張卡（這本書）以前玩過的每一次裡找一件事：一次翻完劇情記憶、大總結和劇情原文，回報在哪一次、第幾章或第幾樓、那一段寫了什麼。對方說以前玩過、但忘了是哪一次時用；只找現在這一次的事用 aurelia_memory_search。',
+          inputSchema: { type: 'object', properties: { words: { type: 'string', description: '要找的詞。不同的東西用空格隔開（每個都要出現在同一小段裡才算）；同一個東西的不同說法用 | 隔開（任一個有就算）。想得到的說法一次寫齊，不要分好幾次查' } }, required: ['words'] } },
         { name: 'aurelia_people', label: '查人物', run: people,
           description: '查故事裡登場過的人的檔案：身分、個性、跟主角之間發生過的事。不填名字就列出登場過的所有人；填名字就看那個人的檔案。',
           inputSchema: { type: 'object', properties: { name: { type: 'string', description: '要查的人的名字；想看有哪些人就不要填' } } } },
