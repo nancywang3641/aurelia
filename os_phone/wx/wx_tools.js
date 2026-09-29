@@ -749,8 +749,10 @@
             + '<div class="wxtl-scroll">' + _ppBody(prop) + '</div>'
             + '<div class="wxtl-pp-foot">' + foot + '</div></div>';
     }
-    // 存檔＋那一則的字跟著改（給模型看的旁註）＋聊天裡那一行重畫
+    // 存檔＋那一則的字跟著改（給模型看的旁註）＋聊天裡那一行重畫。
+    //   從別處打開的（宿舍住戶提的，留言板「等你同意的」，openPropSheet）改叫那邊給的 save。
     async function _ppSave(ctx) {
+        if (ctx.save) { try { await ctx.save(ctx.prop); } catch (e) { _toast('存不進去，再試一次'); } return; }
         const E = _edit();
         if (E && E.text) ctx.msg.content = E.text(ctx.prop, true);
         const W = win.WX_DB || window.WX_DB;
@@ -801,6 +803,23 @@
         _ppRender();
         return true;
     }
+    // 別處的單子（宿舍住戶提的）用同一張小窗：host＝放小窗的那層（要是定位過的容器），onSave(prop) 她按了什麼就叫一次
+    function openPropSheet(prop, host, onSave) {
+        if (!prop || !host) return false;
+        closeProposal();
+        _injectCss();
+        const root = d.createElement('div');
+        root.className = 'wxtl-mask';
+        root.addEventListener('click', function (e) {
+            if (e.target === root) { if (!(_pp && _pp.busy)) closeProposal(); return; }
+            const b = e.target.closest('[data-pp]');
+            if (b && !b.disabled) _ppAct(b.getAttribute('data-pp'));
+        });
+        host.appendChild(root);
+        _pp = { root: root, prop: prop, busy: '', save: onSave || function () {} };
+        _ppRender();
+        return true;
+    }
     function closeProposal() {
         if (!_pp) return;
         try { _pp.root.remove(); } catch (e) {}
@@ -822,7 +841,7 @@
     function propChip(prop) { return PP_CHIP[(prop && prop.state) || 'wait'] || ''; }
     try { _injectCss(); } catch (e) {}   // 聊天裡那一行的樣式要在打開任何小窗之前就有
 
-    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary, openProposal, closeProposal, propNotice, propChip, jumpFrom };
+    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary, openProposal, openPropSheet, closeProposal, propNotice, propChip, jumpFrom };
     win.WX_TOOLS = API;
     window.WX_TOOLS = API;
 })();
