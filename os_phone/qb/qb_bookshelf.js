@@ -868,17 +868,27 @@ status = "正常"`;
             // 自由劇情不屬於任何一本書，但一樣是一條新故事線 → 這裡就生 id
             try { window.VN_Core?.newStoryId?.(title || '自由劇情', ''); } catch(e) {}
 
-            // 設置 pending，讓 VN 頁接收後自動生成
-            window._pendingFreeScriptDive = { title, request };
-
             // 收起書架
             const overlay = document.getElementById('qb-bookshelf-overlay');
             if (overlay) overlay.style.display = 'none';
             panel.style.display = 'none';
             shelves.forEach(s => s.style.display = 'flex');
 
-            // 切換到 VN 頁
-            if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+            // 跟下面六本書同一條路：showVnPanel 建出 VN 舞台，再直接把指令交給生成器。
+            //   🚨 以前是切 nav-story 那一頁、再留一張 _pendingFreeScriptDive 等 VN 啟動時去撿：
+            //      那一頁早就拆了（容器裡只剩大廳與使用者），切過去＝大廳被藏、什麼都沒補上，整片白；
+            //      那張紙條也只有 VN 第一次啟動時才會被讀，VN 開過一次之後按了等於沒按。
+            //   酒館那條照舊（沒驗過、不在這次範圍）。
+            if (!(window.OS_API?.isStandalone?.() ?? false)) {
+                if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                return;
+            }
+            if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel();
+            setTimeout(() => {
+                const P = window.VN_PLAYER || window.VN_Core;
+                if (P && P.runFreeDive) P.runFreeDive({ title, request });
+                else console.warn('[書架] 生成器還沒就緒，這次自由劇情沒跑起來');
+            }, 0);
         };
     }
 

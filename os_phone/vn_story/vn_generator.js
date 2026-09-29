@@ -72,7 +72,9 @@
         return {
             fail: function (msg) {
                 const st = box.querySelector('.vdl-status');
-                if (st) st.innerHTML = '<span class="vdl-err">' + _esc(String(msg || '生成失敗，請重試').replace(/^❌\s*/, '')) + '</span>';
+                // 狀態字有的帶排版標籤（「尚未設定 API」那句有圖示與粗體），拿掉再顯示，不然標籤原樣印出來
+                const _msg = String(msg || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                if (st) st.innerHTML = '<span class="vdl-err">' + _esc((_msg || '生成失敗，請重試').replace(/^❌\s*/, '')) + '</span>';
                 if (!box.querySelector('.vdl-close')) {
                     const b = document.createElement('button');
                     b.type = 'button'; b.className = 'vdl-close'; b.textContent = '關閉';
@@ -112,17 +114,22 @@
     }
 
     //  自由劇情／QB 那類「我自己有輸入介面」的入口：直接把值交進來就好。
+    //  等待畫面跟角色卡那條同一個：以前這條沒有，生成的整段時間 VN 頁一片黑、失敗了也不說，
+    //  看起來就是卡住（書架六本固定書與自由劇情都走這裡）。
     function runFreeDive(opts) {
         opts = opts || {};
         const request = String(opts.request || '').trim();
         if (!request) return false;
+        const ui = _diveLoading({ title: opts.title || '自由劇情' }, '', '');
+        let failed = false;
+        const call = (fn, a, b) => { if (typeof fn === 'function') { try { fn(a, b); } catch (e) {} } };
         generateStory({
             title: opts.title || '',
             request: request,
             targetPackId: opts.targetPackId || null,
-            onStatus: opts.onStatus,
-            onDone: opts.onDone,
-        });
+            onStatus: function (text, cls) { if (cls === 'err') { failed = true; ui.fail(text); } call(opts.onStatus, text, cls); },
+            onDone: function () { if (!failed) ui.done(); call(opts.onDone); },
+        }).then(function () { if (!failed) ui.done(); }, function () {});
         return true;
     }
 

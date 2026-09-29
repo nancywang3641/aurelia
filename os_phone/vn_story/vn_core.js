@@ -4168,18 +4168,7 @@
                 console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
             }, 150);
         }
-
-        // 自由書籍 Dive：從書架自由劇情書過來
-        //  以前這裡是「把值填進生成面板的兩個輸入框，再呼叫 generateStory()」——
-        //  等於拿 DOM 當參數通道。現在直接傳，面板在不在都不影響。
-        if (window._pendingFreeScriptDive && (win.OS_API?.isStandalone?.() ?? false)) {
-            const _free = window._pendingFreeScriptDive;
-            window._pendingFreeScriptDive = null;
-            setTimeout(() => {
-                runFreeDive({ title: _free.title || '', request: _free.request });
-                console.log('[VN] 自由書籍 Dive 觸發生成:', _free.title || '（無標題）');
-            }, 300);
-        }
+        // 自由劇情不再留紙條等這裡撿：書架直接 showVnPanel ＋ VN_PLAYER.runFreeDive（見 qb_bookshelf 踏入故事）
     }
 
     function install() {
