@@ -315,7 +315,7 @@
                 // 🔧 角色用工具查了東西（wx_core _afterTools）：收成一條，點標題打開看查了什麼、查到什麼。
                 //   以前存的一行字（X 用「…」查了：…）也照這樣畫，只是沒有查到的內容。
                 const _tl = this._toolItems(msg);
-                if (_tl) return this._toolFold(_tl, msg, animClass, opacityStyle, dataAttr);
+                if (_tl) return this._toolFold(_tl, msg, animClass, opacityStyle, dataAttr, chatId, msgIndex);
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(displayContent)}</div>`;
             }
             if (msg.type === 'time') return `<div class="wx-time-stamp ${animClass}" style="${opacityStyle}" ${dataAttr}>${msg.content}</div>`;
@@ -844,7 +844,7 @@
             const m = String(msg.content || '').match(/^\S.*? 用「([^」]+)」查了(?:：([\s\S]*))?$/);
             return m ? [{ label: m[1], what: (m[2] || '').trim(), tool: '' }] : null;
         },
-        _toolFold: function(items, msg, animClass, opacityStyle, dataAttr) {
+        _toolFold: function(items, msg, animClass, opacityStyle, dataAttr, chatId, msgIndex) {
             const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             // 查什麼：奧瑞亞那幾個的寫法（| 是同一個東西的不同說法、空白隔開不同的東西）換成看得懂的，別把 | 原樣印出來
             const arg = (t) => {
@@ -854,9 +854,16 @@
             };
             const busy = !!msg._toolsBusy;
             const head = (busy ? '正在查：' : '查了：') + items.map(t => t.label).join('、');
-            const body = items.map(t => '<div class="wx-tool-item"><div class="wx-tool-name">' + esc(t.label)
+            // 找以前玩過的：找到的地方各一顆「跳過去」（酒館換到那個聊天捲到那一樓；手機用閱讀模式看那一章）
+            const cid = String(chatId == null ? '' : chatId).replace(/'/g, "\\'");
+            const jumps = (t, k) => (Array.isArray(t.jumps) && t.jumps.length && typeof msgIndex === 'number')
+                ? '<div class="wx-tool-jumps">' + t.jumps.map((j, n) => '<button type="button" class="wx-tool-jump" onclick="event.stopPropagation(); const T=(window.parent.WX_TOOLS||window.WX_TOOLS); if(T) T.jumpFrom(\'' + cid + '\',' + msgIndex + ',' + k + ',' + n + ')">'
+                    + '<i class="fa-solid fa-arrow-right"></i>' + esc(j.label || '跳過去') + '</button>').join('') + '</div>'
+                : '';
+            const body = items.map((t, k) => '<div class="wx-tool-item"><div class="wx-tool-name">' + esc(t.label)
                 + (t.what ? '<span class="wx-tool-arg">' + esc(arg(t)) + '</span>' : '') + '</div>'
                 + (t.res ? '<div class="wx-tool-res' + (t.ok === false ? ' is-bad' : '') + '">' + esc((t.ok === false ? '沒查成：' : '') + t.res) + '</div>' : '')
+                + jumps(t, k)
                 + '</div>').join('');
             return `<div class="wx-tool-fold${busy ? ' is-busy' : ''} ${animClass}" style="${opacityStyle}" ${dataAttr}>`
                 + `<div class="wx-tool-head" onclick="event.stopPropagation(); this.parentNode.classList.toggle('open')"><i class="fa-solid fa-chevron-right wx-tool-arrow"></i>`

@@ -136,7 +136,9 @@
                 if (!A) throw new Error('奧瑞亞的資料還沒載好');
                 // 這間也勾了「改世界書」→ 查世界書找所有的書（兩組都勾時只列一個查世界書，列的是這組的）
                 const wbAll = enabledFor(chat).some(function (s) { return s.builtin === 'aurelia_wb'; });
-                return A.run(name, args, { chat: chat, wbAll: wbAll });
+                const ctx = { chat: chat, wbAll: wbAll };
+                // 找以前玩過的會順便交回「可以跳過去的地方」（ctx.jumps）：跟結果一起帶出去，聊天那條摺疊畫成按鈕
+                return Promise.resolve(A.run(name, args, ctx)).then(function (text) { return ctx.jumps ? { text: text, jumps: ctx.jumps } : text; });
             }
         },
         // 改世界書：角色提出新增或修改，聊天裡冒一行，她點開看改前改後、按同意才寫（os_aurelia_edit.js）。
@@ -453,9 +455,11 @@
                 entry.args = _parseArgs(c.body, hit.tool.inputSchema);
                 try { if (onNotice) onNotice(entry.label, _argsText(entry.args), null, entry); } catch (e) {}   // entry 跑完才有結果，聊天那條摺疊跑完再補上
                 try {
-                    entry.text = (hit.srv.builtin && BUILTIN[hit.srv.builtin])
+                    const got = (hit.srv.builtin && BUILTIN[hit.srv.builtin])
                         ? await BUILTIN[hit.srv.builtin].run(entry.args, hit.srv, hit.tool.name, chat)   // 一個內建底下有好幾個功能時要知道叫的是哪個
                         : await _callTool(hit.srv, hit.tool.name, entry.args);
+                    if (got && typeof got === 'object') { entry.text = String(got.text == null ? '' : got.text); if (Array.isArray(got.jumps)) entry.jumps = got.jumps.slice(0, 6); }
+                    else entry.text = got;
                     entry.ok = true;
                 }
                 catch (e) { entry.text = (e && e.message) || '失敗'; }
@@ -802,13 +806,23 @@
         try { _pp.root.remove(); } catch (e) {}
         _pp = null;
     }
+    // 工具摺疊裡的「跳過去」（找以前玩過的找到的地方）：照聊天室、第幾則、第幾個工具、第幾個位置找回來，交給 OS_AURELIA_TOOLS.jump
+    function jumpFrom(chatId, msgIdx, k, j) {
+        const app = win.wxApp || window.wxApp;
+        const chat = app && app.GLOBAL_CHATS && app.GLOBAL_CHATS[chatId];
+        const m = chat && chat.messages && chat.messages[msgIdx];
+        const t = m && m._tools && m._tools[k] && m._tools[k].jumps && m._tools[k].jumps[j];
+        const A = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS;
+        if (!t || !A || !A.jump) { _toast('找不到要跳去哪裡了'); return; }
+        A.jump(t);
+    }
     // 聊天裡那一條給她看的字（已經跳脫，wx_view 直接放）；右邊那個小標是狀態
     function propNotice(prop) { const E = _edit(); return esc((E && E.text) ? E.text(prop, false) : ''); }
     const PP_CHIP = { wait: '點開看', no: '沒同意', done: '寫進去了', undone: '改回去了', stale: '作廢了' };
     function propChip(prop) { return PP_CHIP[(prop && prop.state) || 'wait'] || ''; }
     try { _injectCss(); } catch (e) {}   // 聊天裡那一行的樣式要在打開任何小窗之前就有
 
-    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary, openProposal, closeProposal, propNotice, propChip };
+    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary, openProposal, closeProposal, propNotice, propChip, jumpFrom };
     win.WX_TOOLS = API;
     window.WX_TOOLS = API;
 })();

@@ -279,7 +279,7 @@
             // 記憶、狀態那把＝檔名去掉 .jsonl（同 OS_AVS_ADAPTER）；大總結那把再把空白換底線（同 OS_STORY_TOOLS.getChatId）
             const key = String(file).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim();
             const msgs = (detail[file] || []).filter(function (m) { return m && typeof m.mes === 'string'; });   // 檔頭那行沒有 mes
-            return { key: key, units: msgs.map(function (m, i) { return { at: '第 ' + i + ' 樓', text: m.is_user ? '（對方）' + m.mes : _clean(m.mes) }; }) };
+            return { key: key, units: msgs.map(function (m, i) { return { at: '第 ' + i + ' 樓', n: i, text: m.is_user ? '（對方）' + m.mes : _clean(m.mes) }; }) };
         });
     }
     async function _playthroughs(all) {
@@ -304,7 +304,7 @@
                     name: (book && book !== title ? book + '｜' : '') + title, card: meta.worldId || '', isNow: sid === now, memKey: sid, sumKey: sid,
                     when: meta.createdAt || (list[0] && list[0].createdAt) || 0,
                     units: list.map(function (c, i) {
-                        return { at: '第 ' + (i + 1) + ' 章' + (c.title ? '｜' + c.title : ''), text: (c.request ? '（對方）' + c.request + '\n' : '') + _clean(c.content) };
+                        return { at: '第 ' + (i + 1) + ' 章' + (c.title ? '｜' + c.title : ''), n: i, text: (c.request ? '（對方）' + c.request + '\n' : '') + _clean(c.content) };
                     })
                 };
             });
@@ -312,8 +312,10 @@
         const TH = _TH();
         if (!TH || !TH.getChatHistoryBrief || !TH.getChatHistoryDetail) return null;
         const now = _storyId();
+        let curAvatar = '';
+        try { const ctx0 = win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext(); const ch0 = ctx0 && ctx0.characters && ctx0.characters[ctx0.characterId]; curAvatar = (ch0 && ch0.avatar) || ''; } catch (e) {}
         const toPts = function (list) {
-            return list.map(function (x) { return { name: x.key, isNow: x.key === now, memKey: x.key, sumKey: x.key.replace(/\s+/g, '_'), when: 0, units: x.units }; });
+            return list.map(function (x) { return { name: x.key, avatar: curAvatar, isNow: x.key === now, memKey: x.key, sumKey: x.key.replace(/\s+/g, '_'), when: 0, units: x.units }; });
         };
         if (!all) {
             let detail = null;
@@ -340,7 +342,7 @@
                 const key = file.split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim();
                 if (!key) return;
                 pts.push({
-                    name: key, card: c.name || '', isNow: key === now, memKey: key, sumKey: key.replace(/\s+/g, '_'), when: 0,
+                    name: key, card: c.name || '', avatar: c.avatar, isNow: key === now, memKey: key, sumKey: key.replace(/\s+/g, '_'), when: 0,
                     // 同一張卡的聊天檔一次讀完、這張卡翻完就丟（drop）
                     load: async function () {
                         const d = await load();
@@ -365,7 +367,13 @@
         } catch (e) { return ''; }
     }
     function _yes(v) { return v === true || /^(true|1|yes|全部|all)$/i.test(String(v == null ? '' : v).trim()); }
-    async function searchPast(args) {
+    // 找到的地方 → 可以跳過去看（聊天 app 那條摺疊點開有按鈕）。酒館：換到那張卡的那個聊天、捲到那一樓；手機：閱讀模式打開那一篇的那一章。
+    function _jumpOf(p, h) {
+        if (_pwa()) return { t: 'pwa', sid: p.memKey, chapter: h.n, label: '看「' + _cut(p.name, 30) + '」' + String(h.at).split('｜')[0] };
+        if (!p.avatar) return null;
+        return { t: 'tavern', avatar: p.avatar, file: p.memKey, floor: h.n, label: (p.isNow ? '捲到' : '跳到「' + _cut(p.name, 30) + '」') + h.at };
+    }
+    async function searchPast(args, ctx) {
         const words = _one(args && args.words);
         const groups = _groups(words);
         if (!groups.length) return '要給要找的詞。';
@@ -413,7 +421,7 @@
                     const f2 = _fold(two);
                     const hit = groups.map(function (g) { return g.some(function (w) { return f2.indexOf(w) !== -1; }); });
                     const n = hit.filter(Boolean).length;
-                    if (n === groups.length) { hits.push({ at: u.at, text: two }); i++; }
+                    if (n === groups.length) { hits.push({ at: u.at, n: u.n, text: two }); i++; }
                     else if (groups.length >= 3 && n === groups.length - 1 && near.length < 30) { near.push({ p: p, at: u.at, text: two, miss: hit.indexOf(false) }); i++; }
                 }
             });
@@ -422,10 +430,15 @@
             if (p.drop && (pts[pts.indexOf(p) + 1] || {}).card !== p.card) p.drop();
         }
         raw.sort(function (a, b) { return (b.hits.length - a.hits.length) || ((b.p.when || 0) - (a.p.when || 0)); });
+        if (ctx) {
+            const jumps = [];
+            raw.slice(0, 5).forEach(function (r) { r.hits.slice(0, 2).forEach(function (h) { const j = h.n != null ? _jumpOf(r.p, h) : null; if (j) jumps.push(j); }); });
+            if (jumps.length) ctx.jumps = jumps;
+        }
 
         const cards = all ? new Set(pts.map(function (p) { return p.card || ''; })).size : 0;
         const where = !all ? '在這張卡玩過的 ' : (_pwa() ? '在所有的書（' + cards + ' 本）玩過的 ' : '在所有角色卡（' + cards + ' 張）玩過的 ');
-        const out = [where + pts.length + ' 次裡找「' + words + '」'
+        const out = [where + pts.length + ' 次裡找「' + words.replace(/\s*[|｜]\s*/g, '／') + '」'
             + '（' + withMem.size + ' 次有劇情記憶、' + withSum + ' 次有大總結；原文每一次都翻了）：'];
         if (memHits.length) {
             out.push('【劇情記憶】');
@@ -457,6 +470,47 @@
             else out.push('還是找不到的話，問對方還記得什麼別的細節。');
         }
         return _cut(out.join('\n'), 2900);
+    }
+
+    //   酒館換聊天是她的動作（跟自己在角色卡清單點一樣），換之前問一次；現在這個聊天不會刪。
+    //   🚨 /chat-jump 會先把比較早的樓載進來再捲過去；TauriTavern 的聊天是分段載的，太前面載不到時酒館自己會跳一則提示。
+    async function jump(t) {
+        const A = win.AUI || window.AUI;
+        const say = function (m) { try { if (A && A.toast) A.toast(m); } catch (e) {} };
+        if (!t) return false;
+        if (t.t === 'pwa') {
+            const R = win.VN_READER || window.VN_READER;
+            if (!R || !R.show) { say('閱讀器還沒載好'); return false; }
+            await R.show(undefined, { storyId: t.sid, chapter: t.chapter });
+            return true;
+        }
+        const ST = win.SillyTavern;
+        const ctx = ST && ST.getContext && ST.getContext();
+        if (!ctx || !ctx.selectCharacterById || !ctx.openCharacterChat) { say('酒館還沒準備好，跳不過去'); return false; }
+        const idx = (ctx.characters || []).findIndex(function (c) { return c && c.avatar === t.avatar; });
+        if (idx < 0) { say('找不到那張角色卡（可能刪掉或換了）'); return false; }
+        const curChat = String((ctx.getCurrentChatId && ctx.getCurrentChatId()) || ctx.chatId || '').replace(/\.jsonl?$/i, '');
+        const same = String(ctx.characterId) === String(idx) && curChat === String(t.file);
+        if (!same) {
+            const q = '換到「' + t.file + '」這個聊天' + (t.floor != null ? '，捲到第 ' + t.floor + ' 樓' : '') + '？\n現在這個聊天會關起來（不會刪），之後從角色卡的聊天清單可以再打開。';
+            const ok = (A && A.confirm) ? await A.confirm(q) : win.confirm(q);
+            if (!ok) return false;
+            try { if (win.PhoneSystem && win.PhoneSystem.hide) win.PhoneSystem.hide(); } catch (e) {}
+            try {
+                if (String(ctx.characterId) !== String(idx)) await ctx.selectCharacterById(idx);
+                const c2 = ST.getContext();
+                const cur2 = String((c2.getCurrentChatId && c2.getCurrentChatId()) || c2.chatId || '').replace(/\.jsonl?$/i, '');
+                if (cur2 !== String(t.file)) await c2.openCharacterChat(t.file);
+            } catch (e) { say('換聊天沒成功：' + ((e && e.message) || e)); return false; }
+            await new Promise(function (r) { setTimeout(r, 800); });
+        } else {
+            try { if (win.PhoneSystem && win.PhoneSystem.hide) win.PhoneSystem.hide(); } catch (e) {}
+        }
+        if (t.floor != null) {
+            try { if (win.TavernHelper && win.TavernHelper.triggerSlash) await win.TavernHelper.triggerSlash('/chat-jump ' + Number(t.floor)); }
+            catch (e) { say('打開了，第 ' + t.floor + ' 樓要往上翻一下'); }
+        }
+        return true;
     }
 
     // ── 5. 人物：名冊或某人的檔案 ──────────────────────────────────────
@@ -633,6 +687,7 @@
         books: _wbBooks,
         allBooks: _wbAllBooks,
         fold: _fold,
+        jump: jump,
     };
     win.OS_AURELIA_TOOLS = API;
     window.OS_AURELIA_TOOLS = API;

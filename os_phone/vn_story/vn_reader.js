@@ -28,6 +28,8 @@
         _overlay.style.cssText = [
             'position:absolute;inset:0;',
             'background:rgba(6,6,10,0.98);',
+            // 單章全文那顆泡泡沒有自己的字色、跟著外層走：酒館頁面本來是淺色字看不出來，手機版頁面是黑字＝黑字壓在深底上
+            'color:#d8d0c0;',
             'z-index:200;',
             'display:none;flex-direction:column;',
         ].join('');
@@ -645,7 +647,9 @@
         fetchFullChat: _fetchFullMessages,   // 完整讀當前聊天(讀檔繞 lazy-load、不展開不卡死)；給大總結等共用
         getCurrentChars: _getCurrentChars,   // 當前聊天室出現過的角色 [{name,count}]；給 app/面板做角色選單(繞懶載、不等總結)
 
-        async show(mountInto) {
+        // opts（手機版）：{ storyId, chapter }＝打開別的篇章、直接翻到第幾章（0 起算，照建立時間排）。
+        //   找以前玩過的「看那一章」用：只是看，不切換現在進行中的故事。
+        async show(mountInto, opts) {
             const overlay = _ensureDOM(mountInto);
             overlay.style.display = 'flex';
 
@@ -671,7 +675,8 @@
             // PWA 模式：只看「當前這個故事」的章節，跟酒館版只看當前聊天一樣。
             //   以前這裡把所有 storyId 分組、在頂上排一列故事分頁，等於把別本書的章節也端出來；
             //   當前故事沒章節時還會 fallback 到最近那本（畫面上看起來就是「章節跑到別的故事去了」）。
-            const sid = win.OS_AVS_ADAPTER?.getStoryId?.()
+            const sid = (opts && opts.storyId)
+                || win.OS_AVS_ADAPTER?.getStoryId?.()
                 || win.VN_Core?._currentStoryId
                 || localStorage.getItem('vn_current_story_id') || '';
             tabsEl.innerHTML = '';
@@ -693,6 +698,7 @@
             }
 
             _renderChapters(mine, body);
+            if (opts && opts.chapter != null && _readerSorted[Number(opts.chapter)]) _openChapter(Number(opts.chapter));
         },
 
         hide() {

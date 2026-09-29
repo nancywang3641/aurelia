@@ -1783,6 +1783,7 @@
                         if (!r.entry) return;
                         r.item.ok = !!r.entry.ok;
                         r.item.res = String(r.entry.text || '').slice(0, TOOL_RES_KEEP);
+                        if (Array.isArray(r.entry.jumps) && r.entry.jumps.length) r.item.jumps = r.entry.jumps.slice(0, 6);   // 找以前玩過的：可以跳過去的地方
                     });
                     delete fold._toolsBusy;
                     _repaintMsg(chat, fold);

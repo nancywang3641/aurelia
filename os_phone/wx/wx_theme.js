@@ -245,6 +245,9 @@
             .wx-tool-arg { font-weight: 400; margin-left: 6px; opacity: .8; }
             .wx-tool-res { margin-top: 2px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; opacity: .85; }
             .wx-tool-res.is-bad { color: var(--wx-danger); opacity: 1; }
+            .wx-tool-jumps { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+            .wx-tool-jump { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--wx-line); background: var(--wx-surface-2, var(--wx-surface)); color: var(--wx-link, var(--wx-accent)); font-size: 12px; text-align: left; cursor: pointer; }
+            .wx-tool-jump i { font-size: 10px; flex-shrink: 0; }
             .wx-tool-prop { cursor: pointer; }
             .wx-tool-prop.is-wait { border-color: var(--wx-accent); }
             .wx-tool-chip { flex-shrink: 0; margin-left: auto; padding-left: 8px; font-weight: 700; opacity: .6; }
