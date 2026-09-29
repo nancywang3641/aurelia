@@ -475,7 +475,8 @@
         if (_busy === s.id) return { t: '連線中…', bad: false };
         if (s.paused) return { t: '已暫停', bad: false };
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
-        if (s.builtin === 'aurelia') return { t: '只看不改，不會花錢', bad: false };
+        // 🚨 別寫「不會花錢」：翻資料本身不叫模型，但角色查完會再回一次（那次照常算錢），勾了的聊天室每輪也多帶工具說明
+        if (s.builtin === 'aurelia') return { t: '只看不改，查完多回一次', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
