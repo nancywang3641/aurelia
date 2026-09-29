@@ -91,6 +91,39 @@
         catch (e) { return attachAll(L, L.farm.createState(), null); }
     }
 
+    // ── 酒館本體的兩條 :has([style…]) 規則：後院開著時先拿下來 ─────
+    // 🚨 酒館 css/toggle-dependent.css 有 `…:has(> .del_checkbox[style*="display: block"])…`、
+    //    `#adaptive_p_block:has([…][style*="display: none"])…`。:has() 裡面看 style 屬性＝頁面上「任何」元素的 style 一改，
+    //    瀏覽器就把 body 的 :has() 全部重查、整頁掃一遍：她的酒館（七萬多個元素）一次約 5ms。
+    //    後院每一格都在改小人和鏡頭的位置 → 每格多 5ms 以上，鏡頭一動就一頓一頓；手機版沒有這兩條，所以不卡。
+    //    在她的酒館實測同一段走路：拿掉 0 格掉幀、放回去 26 格。
+    //    那兩條管的是「文件模式刪訊息的勾選框」「取樣器設定頁」，後院開著時用不到；關掉後院原樣放回原位。
+    var parked = [];
+    function parkHasStyleRules() {
+        if (parked.length) return;
+        function walk(list) {
+            for (var i = list.length - 1; i >= 0; i--) {
+                var r = list[i];
+                if (r.cssRules && !r.selectorText) walk(r.cssRules);
+                else if (r.selectorText && r.selectorText.indexOf(':has(') >= 0 && r.selectorText.indexOf('[style') >= 0) {
+                    var owner = r.parentRule || r.parentStyleSheet;
+                    parked.push({ owner: owner, i: i, text: r.cssText });
+                    owner.deleteRule(i);
+                }
+            }
+        }
+        Array.prototype.forEach.call(document.styleSheets, function (ss) {
+            try { walk(ss.cssRules); } catch (e) { /* 跨網域的樣式表讀不到，本來就不是它 */ }
+        });
+    }
+    function unparkHasStyleRules() {
+        // 拿的時候是從後面往前拿，放回去從前面往後放，位置才會跟原本一樣
+        parked.slice().reverse().forEach(function (x) {
+            try { x.owner.insertRule(x.text, Math.min(x.i, x.owner.cssRules.length)); } catch (e) {}
+        });
+        parked = [];
+    }
+
     // ── 一次打開＝一個 session ────────────────────────
     var session = null;
     function start(root) {
@@ -130,8 +163,10 @@
             save();
             window.removeEventListener('pagehide', onHide);
             document.removeEventListener('visibilitychange', onHide);
+            unparkHasStyleRules();
             session = null;
         }
+        parkHasStyleRules();
         window.addEventListener('pagehide', onHide);
         document.addEventListener('visibilitychange', onHide);
         // 農場那一格被關掉（藏起來或換成別的 app）就拆掉：走路那支在攔方向鍵，不能留著
