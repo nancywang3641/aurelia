@@ -26,8 +26,16 @@
     var ASSET = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/farm/';
     var STORE_KEY = 'aurelia_farm_v1';
     var LAB_KEY = 'aurelia_farm_lab_v1';
-    var OWNER = '阿洛';                 // 這塊地是阿洛的（之後我也會有一塊）
-    var BODY = { base: 'lorde' };       // 小機的樣子：房間那副洛德
+    var OWNER = '我';                   // 這塊地是她的；阿洛和丹之後在 VPS 各有一塊，排行榜上比
+    // 走的人是她自己＝大廳裡「你」那個小人：裝扮室換過就是那個樣子，沒換過是剪影（大廳沒載到也用剪影）
+    var LOBBY_MC = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_mc_';
+    function look() {
+        var L = window.LobbyStage;
+        if (L && L.playerLook) return L.playerLook();
+        var m = false;
+        try { m = localStorage.getItem('lobby_stage_mc') === 'm'; } catch (e) {}
+        return Promise.resolve({ src: LOBBY_MC + (m ? 'm' : 'f') + '_silhouette.png' });
+    }
 
     // ── 載入 ─────────────────────────────────────────
     var loading = null;
@@ -99,7 +107,7 @@
             toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
         }
         var ctx = {
-            root: root, libs: L, owner: OWNER, body: BODY,
+            root: root, libs: L, owner: OWNER, look: look,
             state: function () { return state; },
             save: save,
             act: function (a) { return L.walk.act(state, a, L); },

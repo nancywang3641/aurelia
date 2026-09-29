@@ -6,7 +6,7 @@
 // 擠奶要先去棚屋拿桶子、剪毛要拿剪刀（一次只拿得動一樣）。
 // 走路、鏡頭、頭上那個小窗在 farm_walk_ui.js；這支管牧場有哪些東西、各自能做什麼、動物怎麼晃。
 // 座標一律用「佔底圖的百分比」，指的是腳底那一點。
-// ctx（os_farm.js 給的）：{ root, state(), libs, save(), act(a), toast(t), goScene(name), exit(), owner, body, asset(name) }
+// ctx（os_farm.js 給的）：{ root, state(), libs, save(), act(a), toast(t), goScene(name), exit(), owner, look(), asset(name) }
 // ============================================================
 (function () {
     'use strict';
@@ -80,11 +80,11 @@
     function rand(a, b) { return a + Math.random() * (b - a); }
     // 越下面越前面，跟 ranch_ui.css 裡物件的 z-index 同一把尺
     function zOf(y) { return Math.round(y); }
+    // 位置寫在外面那層 ra-pos 的 transform（跟畫面一樣大，% ＝畫面的 %）：走路是 transform 的過場，不重排版面
     function place(a, x, y) {
         a.x = x; a.y = y;
-        a.el.style.setProperty('--x', x + '%');
-        a.el.style.setProperty('--y', y + '%');
-        a.el.style.zIndex = zOf(y);
+        a.pos.style.transform = 'translate(' + x.toFixed(3) + '%,' + y.toFixed(3) + '%)';
+        a.pos.style.zIndex = zOf(y);
     }
     function walkTo(a, x, y, speedMul, maxMs) {
         var k = KIND[a.kind];
@@ -95,7 +95,7 @@
         a.el.classList.toggle('to-left', x < a.x);
         a.el.classList.remove('ra-idle');
         a.el.classList.add('ra-walk');
-        a.el.style.transitionDuration = ms + 'ms';
+        a.pos.style.transitionDuration = ms + 'ms';
         a.goal = { x: x, y: y };
         place(a, x, y);
         return ms;
@@ -120,13 +120,13 @@
         clearTimeout(a.timer);
         if (!a.held) a.timer = setTimeout(function () { wander(a); }, rand(k.rest[0], k.rest[1]));
     }
-    // 小機走到旁邊時站住（不然按鈕按下去牠已經走遠了）
+    // 小人走到旁邊時站住（不然按鈕按下去牠已經走遠了）
     function hold(a) {
         a.held = (a.held || 0) + 1;
         clearTimeout(a.timer);
         // 走到一半就停：從畫面上量牠現在真正在哪。頁面縮到看不見時量到 0，就沿用目的地，不然會算出 NaN
         var r = a.el.getBoundingClientRect(), s = stageEl.getBoundingClientRect();
-        a.el.style.transitionDuration = '0ms';
+        a.pos.style.transitionDuration = '0ms';
         if (s.width > 0 && s.height > 0) place(a, (r.left + r.width / 2 - s.left) / s.width * 100, (r.top + r.height * 0.92 - s.top) / s.height * 100);
         a.el.classList.remove('ra-walk');
         a.el.classList.add('ra-idle');
@@ -151,7 +151,7 @@
         setTimeout(function () {
             a.el.classList.remove('ra-walk');
             a.el.classList.add('is-leaving');
-            setTimeout(function () { a.el.remove(); }, 900);
+            setTimeout(function () { a.pos.remove(); }, 900);
         }, ms);
         herd = herd.filter(function (h) { return h !== a; });
     }
@@ -163,10 +163,13 @@
         el.style.setProperty('--w', KIND[kind].w + '%');
         el.setAttribute('data-fw-key', id || 'pet:' + kind);
         el.innerHTML = '<span class="ra-face">' + draw.svg({ kind: kind }) + '</span>' + (id ? '<span class="ra-bubble"></span>' : '');
-        layer.appendChild(el);
-        var a = { kind: kind, id: id, el: el, x: 0, y: 0, timer: 0, held: 0, gone: false };
+        var pos = document.createElement('div');
+        pos.className = 'ra-pos';
+        pos.appendChild(el);
+        layer.appendChild(pos);
+        var a = { kind: kind, id: id, el: el, pos: pos, x: 0, y: 0, timer: 0, held: 0, gone: false };
         var s = from || (id ? WC.herdPos(state, id) : WC.pickSpot());
-        el.style.transitionDuration = '0ms';
+        pos.style.transitionDuration = '0ms';
         place(a, s.x, s.y);
         if (Math.random() < 0.5) el.classList.add('to-left');
         a.timer = setTimeout(function () { wander(a); }, 400 + i * 600 + rand(0, 1500));
@@ -419,13 +422,16 @@
         if (an.ready) return { cls: 'b-ready', html: draw.productSvg(ranch.ANIMALS[an.kind].product, an.ready) };
         return null;
     }
+    function renderStamina() {
+        var st = $('ranch-stamina');
+        st.innerHTML = '<i class="fa-solid fa-bolt"></i> 體力 ' + state.stamina + '/' + core.STAMINA_MAX;
+        st.classList.toggle('is-low', state.stamina < 8);
+    }
     function render() {
         var r = state.ranch;
         $('ranch-day').textContent = '第 ' + state.day + ' 日';
         $('ranch-coins').textContent = state.coins + ' G';
-        var st = $('ranch-stamina');
-        st.innerHTML = '<i class="fa-solid fa-bolt"></i> 體力 ' + state.stamina + '/' + core.STAMINA_MAX;
-        st.classList.toggle('is-low', state.stamina < 8);
+        renderStamina();
         $('ranch-hay').innerHTML = '<i class="fa-solid fa-wheat-awn"></i> 乾草 ' + r.hay;
         $('ranch-fert').innerHTML = '<i class="fa-solid fa-poop"></i> 肥料 ' + (state.inventory.fertilizer || 0);
         var w = $('ranch-water');
@@ -466,7 +472,7 @@
     // 底部快捷列＋背包（跟後院同一套 farm_bag.js）：牧場這邊放手上的、乾草、藥、動物愛吃的、撿到的產品
     var shipUi = window.FarmShip.create({ app: root, world: stageEl, scene: 'ranch', state: function () { return state; }, libs: ctx.libs, toast: toast, onChange: render });
     $('ranch-report').addEventListener('click', function (ev) { ev.stopPropagation(); shipUi.openReport(); });
-    var board = window.FarmBoard.create({ app: root, state: function () { return state; }, ship: shipUi, owner: '阿洛' });
+    var board = window.FarmBoard.create({ app: root, state: function () { return state; }, ship: shipUi, owner: ctx.owner });
     $('ranch-board').addEventListener('click', function (ev) { ev.stopPropagation(); board.open(); });
     var bag = window.FarmBag.create({ app: root, scene: 'ranch', state: function () { return state; }, toast: toast });
     render();
@@ -476,9 +482,10 @@
         scene: 'ranch',
         state: function () { return state; },
         targets: targets,
-        body: ctx.body,
+        look: ctx.look,
         toast: toast,
         onChange: render,
+        onStamina: renderStamina,
         onDoor: function (to) { if (to === 'yard') ctx.goScene('yard'); }
     });
     $('exit').addEventListener('click', function (ev) { ev.stopPropagation(); ctx.exit(); });

@@ -3,25 +3,40 @@
 // ------------------------------------------------------------
 // 走路：方向鍵／WASD；手機左下搖桿；點地板走過去；點東西＝走到它旁邊（不會自己動手）。
 // 做事：走到東西旁邊，下面冒出一排能做的事；按鈕或 E／空白鍵（第一個）、數字鍵（第幾個）。
-// 鏡頭：畫面放大到小機看得清楚，跟著小機走（桌機多半整張放得下，不會動）。
+// 鏡頭：畫面放大到小人看得清楚，跟著小人走（桌機多半整張放得下，不會動）。
 // 規則全在 farm_walk_core.js（走路扣體力、搆不搆得到、手上拿什麼），這支只負責畫面；
 // 走路時每 SYNC_MS 把位置交給規則算一次體力，所以她自己走和 AI 下指令扣的是同一套。
-// 小機的樣子借房間的 ClawdPortrait（claude-codex-room/core/clawd_portrait.js）：跟房間同一副身體。
+// 走的人是她自己：大廳裡「你」那個小人（裝扮室換過的樣子跟著來），opts.look() 給圖。
+// 🚨 每一格會動的東西（小人、鏡頭、頭上小窗）一律只改 transform，不改 left/top：
+//    酒館裡聊天記錄的 DOM 很肥，left/top 每格一改就整頁重排版面，走路會一頓一頓（大廳舞台 placeSheetActor 同一條教訓）。
 // ============================================================
 (function () {
     'use strict';
 
     var MAP_W = 1672, MAP_H = 941;
-    var BODY_W = 12;        // 小機的畫布佔底圖寬的 %（畫布 32×24 格，身體在中間約一半寬）
+    var BODY_H = 15;        // 小人佔底圖高的 %（牛身長 12% 寬，人站旁邊差不多高）
     var SPEED = 19;         // 每秒走「底圖寬」的幾 %
     var SYNC_MS = 300;
     var ZOOM_MAX = 2.4;     // 手機直拿時最多放大到「整張塞滿寬度」的幾倍
-    var FEET = 22 / 24;     // 畫布裡腳底那一列
+    var WALK_FRAMES = [0, 1, 2, 1], WALK_FRAME_MS = 150;   // 走路圖（3×4）的幀序，跟大廳一樣
 
     function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
     function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
-    // opts：{ app, world, scene, state(), targets(), onChange(), onDoor(to), toast(text), body: { base, wear }, zFixed }
+    // 量單張圖腳底下還有多少透明（跟大廳 _measureActorBounds 同一招）：讓看得到的腳踩在站的位置，不是圖的底邊
+    function measureFootPad(img) {
+        try {
+            var sw = 80, sh = Math.max(1, Math.round(img.naturalHeight * 80 / img.naturalWidth));
+            var cv = document.createElement('canvas'); cv.width = sw; cv.height = sh;
+            var c = cv.getContext('2d', { willReadFrequently: true });
+            c.drawImage(img, 0, 0, sw, sh);
+            var d = c.getImageData(0, 0, sw, sh).data;
+            for (var y = sh - 1; y >= 0; y--) for (var x = 0; x < sw; x++) if (d[(y * sw + x) * 4 + 3] >= 40) return (sh - 1 - y) / sh;
+        } catch (e) { /* 跨網域讀不到：就用圖的底邊 */ }
+        return 0;
+    }
+
+    // opts：{ app, world, scene, state(), targets(), onChange(), onStamina(), onDoor(to), toast(text), look(): Promise<{src}|{sheet}>, zFixed }
     function create(opts) {
         var WC = window.FarmWalkCore;
         var S = WC.SCENES[opts.scene];
@@ -40,41 +55,89 @@
         if (S.door && inDoor(p.x, p.y)) { p.x = S.gate.x; p.y = S.gate.y; st.walk.x = p.x; st.walk.y = p.y; }
         var doorArmed = true;
 
-        // ── 小機 ─────────────────────────────────────
+        // ── 小人（她自己）─────────────────────────────
+        // 外面那層 fw-pos 跟底圖一樣大，translate 的 % 就等於底圖的 %；小人本身掛在它左上角、腳底對準那一點
+        var pos = document.createElement('div');
+        pos.className = 'fw-pos';
+        pos.style.setProperty('--fw-h', BODY_H + '%');
         var el = document.createElement('div');
-        el.className = 'fw-player';
-        el.innerHTML = '<canvas width="256" height="192"></canvas><span class="fw-hand" hidden></span><span class="fw-doing"></span>';
-        world.appendChild(el);
-        var canvas = el.querySelector('canvas');
+        el.className = 'fw-player is-loading';
+        el.innerHTML = '<div class="fw-body"></div><span class="fw-hand" hidden></span><span class="fw-doing"></span>';
+        pos.appendChild(el);
+        world.appendChild(pos);
+        var bodyEl = el.querySelector('.fw-body');
         var handEl = el.querySelector('.fw-hand');
         var doingEl = el.querySelector('.fw-doing');
-        var frame = 0, happyUntil = 0, drawing = false;
-        function drawBody() {
-            var CP = window.ClawdPortrait;
-            if (!CP || !CP.renderStill) {
-                // 房間那支沒載到：畫一顆圓，至少看得到人在哪
-                var c = canvas.getContext('2d');
-                c.clearRect(0, 0, 256, 192);
-                c.fillStyle = '#28364c'; c.beginPath(); c.arc(128, 130, 44, 0, Math.PI * 2); c.fill();
-                return;
-            }
-            if (drawing) return;
-            drawing = true;
-            var happy = performance.now() < happyUntil;
-            var action = happy ? 'happy' : 'idle';
-            var f = p.walking && !happy ? 0 : frame;
-            Promise.resolve(CP.renderStill(canvas, (opts.body && opts.body.wear) || null, action, f, (opts.body && opts.body.base) || 'lorde'))
-                .catch(function () {}).then(function () { drawing = false; });
+        // 做成一件事：小人開心跳一下
+        var cheerTimer = 0;
+        function cheer() {
+            el.classList.add('is-happy');
+            clearTimeout(cheerTimer);
+            cheerTimer = setTimeout(function () { el.classList.remove('is-happy'); }, 600);
         }
-        var bodyTimer = setInterval(function () { frame = (frame + 1) % 16; drawBody(); }, 125);
-        drawBody();
+        // 長相：單張立姿（原圖朝左，往右走鏡像＋一跳一跳）或 3×4 走路圖（列＝下/左/右/上，欄＝左步/立/右步）
+        var look = { sheet: false, flip: false, dir: 0, frame: 1, animT: 0 };
+        function showLook(got) {
+            if (dead) return;
+            var src = got && (got.sheet || got.src);
+            if (!src) { el.classList.add('is-dot'); el.classList.remove('is-loading'); return; }
+            var probe = new Image();
+            if (!/^(data|blob):/.test(src)) probe.crossOrigin = 'anonymous';   // 要讀透明度量腳底
+            probe.onload = function () {
+                if (dead) return;
+                if (got.sheet) {
+                    look.sheet = true;
+                    el.classList.add('is-sheet');
+                    bodyEl.innerHTML = '<div class="fw-sheet"></div>';
+                    var sh = bodyEl.firstChild;
+                    sh.style.aspectRatio = (probe.naturalWidth / 3) + ' / ' + (probe.naturalHeight / 4);
+                    sh.style.backgroundImage = 'url("' + src + '")';
+                } else {
+                    bodyEl.innerHTML = '';
+                    probe.className = 'fw-img';
+                    probe.alt = '';
+                    bodyEl.appendChild(probe);
+                    el.style.setProperty('--fw-pad', (measureFootPad(probe) * 100).toFixed(2) + '%');
+                }
+                el.classList.remove('is-loading');
+                drawLook(true);
+            };
+            probe.onerror = function () { el.classList.add('is-dot'); el.classList.remove('is-loading'); };
+            probe.src = src;
+        }
+        Promise.resolve(opts.look ? opts.look() : null).then(showLook, function () { showLook(null); });
 
+        var drawn = {};
+        function drawLook(force) {
+            if (look.sheet) {
+                var sh = bodyEl.firstChild;
+                var bg = (look.frame * 50) + '% ' + (look.dir * 100 / 3).toFixed(3) + '%';
+                if (sh && (force || drawn.bg !== bg)) { sh.style.backgroundPosition = bg; drawn.bg = bg; }
+            } else if (force || drawn.flip !== look.flip) {
+                el.classList.toggle('is-flip', look.flip); drawn.flip = look.flip;
+            }
+        }
+        // 走的方向（每格 step 給這一格真的挪了多少）
+        function faceTo(mx, my, dt) {
+            if (look.sheet) {
+                if (mx || my) {
+                    look.dir = Math.abs(mx) >= Math.abs(my * ASPECT) ? (mx < 0 ? 1 : 2) : (my < 0 ? 3 : 0);
+                    look.animT += dt;
+                    look.frame = WALK_FRAMES[Math.floor(look.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
+                } else { look.frame = 1; look.animT = 0; }
+            } else if (mx) look.flip = mx > 0;
+            drawLook(false);
+        }
+
+        // 只在變了的時候寫（寫一樣的值也會讓瀏覽器重算樣式）
         function placePlayer() {
-            el.style.setProperty('--x', p.x + '%');
-            el.style.setProperty('--y', p.y + '%');
-            el.style.zIndex = opts.zFixed != null ? opts.zFixed : Math.round(p.y) + 1;
-            el.classList.toggle('is-walking', p.walking);
-            el.classList.toggle('is-tired', (opts.state().stamina || 0) <= 0);
+            var tf = 'translate(' + p.x.toFixed(3) + '%,' + p.y.toFixed(3) + '%)';
+            if (drawn.tf !== tf) { pos.style.transform = tf; drawn.tf = tf; }
+            var z = String(opts.zFixed != null ? opts.zFixed : Math.round(p.y) + 1);
+            if (drawn.z !== z) { pos.style.zIndex = z; drawn.z = z; }
+            var tired = (opts.state().stamina || 0) <= 0;
+            if (drawn.walking !== p.walking) { el.classList.toggle('is-walking', p.walking); drawn.walking = p.walking; }
+            if (drawn.tired !== tired) { el.classList.toggle('is-tired', tired); drawn.tired = tired; }
         }
         function renderHand() {
             var w = opts.state().walk;
@@ -99,7 +162,8 @@
             var ww = MAP_W * scale, wh = MAP_H * scale, vw = app.clientWidth, vh = app.clientHeight;
             var tx = ww <= vw ? (vw - ww) / 2 : clamp(vw / 2 - p.x / 100 * ww, vw - ww, 0);
             var ty = wh <= vh ? (vh - wh) / 2 : clamp(vh / 2 - p.y / 100 * wh, vh - wh, 0);
-            world.style.transform = 'translate(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px)';
+            var tf = 'translate(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px)';
+            if (drawn.cam !== tf) { world.style.transform = tf; drawn.cam = tf; }
             placeBar();
         }
         window.addEventListener('resize', layout);
@@ -119,7 +183,7 @@
             if (typing()) return;
             var k = e.key.toLowerCase();
             var move = MOVE_KEYS.indexOf(k) >= 0;
-            // 背包、出貨箱、結算單、看板打開時：按鍵不讓底下的小機走動或做事（方向鍵照樣攔住，不漏給酒館）
+            // 背包、出貨箱、結算單、看板打開時：按鍵不讓底下的小人走動或做事（方向鍵照樣攔住，不漏給酒館）
             if (document.querySelector('[data-fw-modal]:not([hidden])')) { keys = {}; if (move) swallow(e); return; }
             if (move) {
                 keys[k] = e.type === 'keydown';
@@ -174,7 +238,9 @@
             var st2 = opts.state();
             var before = st2.stamina;
             WC.moveTo(st2, opts.scene, p.x, p.y);
-            if (st2.stamina !== before && opts.onChange) opts.onChange();
+            if (st2.stamina === before) return;
+            // 走路扣體力只換那個數字：整片重畫（田、快捷列、小窗）在酒館肥 DOM 裡每次都是一整頁重排
+            if (opts.onStamina) opts.onStamina(); else if (opts.onChange) opts.onChange();
         }
         function inDoor(x, y) { var d = S.door; return d && x > d.x1 && x < d.x2 && y > d.y1 && y < d.y2; }
         function tryMove(nx, ny) {
@@ -322,7 +388,7 @@
                 else { dx = vx / d; dy = vy / d; }
             }
             var len = Math.hypot(dx, dy);
-            var moved = false;
+            var moved = false, ox = p.x, oy = p.y;
             if (len > 0) {
                 var tired = (opts.state().stamina || 0) <= 0;
                 var sp = SPEED * (tired ? .6 : 1) * dt / 1000 * Math.min(1, len);
@@ -345,6 +411,7 @@
                 syncT += dt;
                 if (syncT >= SYNC_MS) { syncT = 0; sync(); }
             }
+            faceTo(p.x - ox, p.y - oy, dt);
             placePlayer();
             camera();
             // 門：走進去才算；剛進場站在門裡的，要先走出來一次
@@ -422,10 +489,12 @@
             var y = top - bh - gap, below = false;
             if (y < TOP_SAFE) { y = bottom + gap; below = true; }
             y = clamp(y, TOP_SAFE, app.clientHeight - bh - pad);
-            bar.style.setProperty('--bx', Math.round(left) + 'px');
-            bar.style.setProperty('--by', Math.round(y) + 'px');
-            bar.style.setProperty('--tail', clamp(cx - left, 16, bw - 16) + 'px');
-            bar.classList.toggle('is-below', below);
+            // 位置走 transform（見開頭 🚨）；尾巴位置、上下翻面很少變，變了才寫
+            var tf = 'translate(' + Math.round(left) + 'px,' + Math.round(y) + 'px)';
+            if (drawn.bar !== tf) { bar.style.transform = tf; drawn.bar = tf; }
+            var tail = Math.round(clamp(cx - left, 16, bw - 16)) + 'px';
+            if (drawn.tail !== tail) { bar.style.setProperty('--tail', tail); drawn.tail = tail; }
+            if (drawn.below !== below) { bar.classList.toggle('is-below', below); drawn.below = below; }
         }
         bar.addEventListener('click', function (e) {
             e.stopPropagation();
@@ -441,7 +510,7 @@
             var out = a.run();
             doing(a.icon);
             if (out && out.message && opts.toast) opts.toast(out.message);
-            if (out && out.ok) happyUntil = performance.now() + 900;
+            if (out && out.ok) cheer();
             if (opts.onChange) opts.onChange();
             return true;
         }
@@ -466,9 +535,9 @@
         // ── 主迴圈 ───────────────────────────────────
         var last = performance.now(), raf = 0;
         // 落後多少就分幾小步補回來（一步最多 60 毫秒，免得一步跨太遠穿過東西）；最多補 2 秒。
-        // 預覽窗在背景、手機切出去再回來時，瀏覽器會把畫面更新壓得很慢，只補 60 毫秒的話小機會走得像烏龜。
+        // 預覽窗在背景、手機切出去再回來時，瀏覽器會把畫面更新壓得很慢，只補 60 毫秒的話小人會走得像烏龜。
         // 🚨 拆掉之後（換場景、關掉）一律不再走：走進門那一格會在 step 裡當場換場景＝拆掉自己，
-        //    拆完 tick 還會替自己排下一格——沒有這個旗標，舊場景的小機就在背景一直走、把位置寫回舊的那一區
+        //    拆完 tick 還會替自己排下一格——沒有這個旗標，舊場景的小人就在背景一直走、把位置寫回舊的那一區
         var dead = false;
         function advance(now) {
             var left = Math.min(2000, now - last);
@@ -499,13 +568,13 @@
             busy: function () { return !!p.dest; },
             teleport: function (x, y) { p.x = x; p.y = y; p.dest = null; p.cb = null; p.path = []; placePlayer(); camera(); },
             sync: sync,
-            happy: function () { happyUntil = performance.now() + 900; },
+            happy: cheer,
             doing: doing,
             layout: layout,
             // 關掉農場、換到另一區時叫：迴圈、計時器、全域監聽全部收掉（畫面元素跟著整個場景一起丟）
             destroy: function () {
                 dead = true;
-                cancelAnimationFrame(raf); clearInterval(backup); clearInterval(bodyTimer); clearTimeout(doingTimer);
+                cancelAnimationFrame(raf); clearInterval(backup); clearTimeout(doingTimer); clearTimeout(cheerTimer);
                 window.removeEventListener('keydown', onKey, true); window.removeEventListener('keyup', onKey, true);
                 window.removeEventListener('blur', onBlur); window.removeEventListener('resize', layout);
                 if (focus && focus.release) focus.release();

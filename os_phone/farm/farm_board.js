@@ -25,7 +25,7 @@
         return out;
     }
 
-    // opts：{ app, state(), ship: FarmShip 那個畫面物件, owner: '阿洛' }
+    // opts：{ app, state(), ship: FarmShip 那個畫面物件, owner: '我' }
     function create(opts) {
         var wrap = document.createElement('div');
         wrap.className = 'fd-wrap';
@@ -45,10 +45,12 @@
                 tile('現在金幣', st.coins + 'G', '明天早上諾瓦來收的另外算') +
                 tile('收成', st.stats.totalHarvested + ' 次', '牧場產出 ' + rs.produced + ' 樣') +
                 tile('損失', st.stats.deadCrops + ' 株枯死', '跑掉 ' + rs.runaway + ' 隻 · 生了 ' + rs.born + ' 隻', (st.stats.deadCrops || rs.runaway) ? 'down' : '');
-            // 排行榜：現在只有這一塊地；另一個人的地要等 VPS 那條接通
+            // 排行榜：現在只有她這一塊地；阿洛和丹的地要等 VPS 那條接通
             var rank = '<div class="fd-rank">' +
                 '<div class="fd-rank-row"><b>1</b><strong>' + esc(opts.owner) + '</strong><span>淨賺 ' + money(net) + '</span><span>收成 ' + st.stats.totalHarvested + '</span><span>枯死 ' + st.stats.deadCrops + '</span></div>' +
-                '<div class="fd-rank-row is-empty"><b>–</b><strong>丹</strong><span class="fd-wait">還沒有地，等關電腦時也能顧田那條接通才開始比</span></div></div>';
+                ['阿洛', '丹'].map(function (n) {
+                    return '<div class="fd-rank-row is-empty"><b>–</b><strong>' + n + '</strong><span class="fd-wait">還沒有地，等關電腦時也能顧田那條接通才開始比</span></div>';
+                }).join('') + '</div>';
             var hist = sh.history && sh.history.length ? '<ul class="fd-days">' + sh.history.map(function (r, i) {
                 var bad = window.FarmShip ? window.FarmShip.eventLines(r).filter(function (e) { return e.bad; }).length : 0;
                 return '<li><button type="button" data-rep="' + i + '"><strong>第 ' + r.day + ' 日</strong>' +

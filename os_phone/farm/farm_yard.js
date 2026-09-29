@@ -5,7 +5,7 @@
 // 走路、鏡頭、頭上那個小窗在 farm_walk_ui.js；位置、走路體力、手上工具的規則在 farm_walk_core.js。
 // 這支只管後院有哪些東西（六塊田、池塘、工具棚、出貨箱、小圍欄）、各自能做什麼，還有上面那些資訊。
 // 澆水要先去工具棚拿水壺、壺空了去池塘裝（一壺三塊田）。
-// ctx（os_farm.js 給的）：{ root, state(), setState(st), libs, save(), act(a), toast(t), goScene(name), exit(), owner, body, asset(name) }
+// ctx（os_farm.js 給的）：{ root, state(), setState(st), libs, save(), act(a), toast(t), goScene(name), exit(), owner, look(), asset(name) }
 // ============================================================
 (function () {
     'use strict';
@@ -144,13 +144,14 @@
             render();
         });
 
+        function renderStamina() { $('stamina').textContent = S().stamina + ' / ' + core.STAMINA_MAX; }
         function render() {
             var st = S();
             $('day').textContent = '第 ' + st.day + ' 日';
             $('coins').textContent = st.coins + ' G';
             $('planted').textContent = st.plots.filter(function (plot) { return !core.isEmpty(plot); }).length + ' / 6';
             $('harvested').textContent = st.stats.totalHarvested;
-            $('stamina').textContent = st.stamina + ' / ' + core.STAMINA_MAX;
+            renderStamina();
             $('log').innerHTML = st.logs.slice(0, 3).map(function (line) {
                 return '<div class="farm-log-line">' + esc(line) + '</div>';
             }).join('');
@@ -248,7 +249,7 @@
         bag = window.FarmBag.create({ app: app, scene: 'yard', state: S, ctx: bagCtx, toast: ctx.toast });
         stage = window.FarmWalkStage.create({
             app: app, world: $('stage'), scene: 'yard', state: S, targets: targets, zFixed: 17,
-            body: ctx.body, toast: ctx.toast, onChange: render,
+            look: ctx.look, toast: ctx.toast, onChange: render, onStamina: renderStamina,
             onDoor: function (to) { if (to === 'ranch') ctx.goScene('ranch'); }
         });
         render();

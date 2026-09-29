@@ -141,9 +141,11 @@
 .aurelia-farm .trough-hay {position: absolute; left: 14%; top: 14%; width: 13%; aspect-ratio: 1; z-index: 30; pointer-events: none;}
 .aurelia-farm .trough-hay svg {display: block; width: 100%; height: 100%;}
 .aurelia-farm .ranch-animals {position: absolute; inset: 0; pointer-events: none;}
-.aurelia-farm .ranch-animal {position: absolute; left: var(--x); top: var(--y); width: var(--w);
-    transform: translate(-50%, -92%);
-    transition-property: left, top; transition-timing-function: linear;}
+/* 動物跟小人同一招：ra-pos 跟畫面一樣大、走路是 transform 的過場（不重排版面），動物掛在它左上角 */
+.aurelia-farm .ra-pos {position: absolute; inset: 0; pointer-events: none;
+    transition-property: transform; transition-timing-function: linear;}
+.aurelia-farm .ranch-animal {position: absolute; left: 0; top: 0; width: var(--w);
+    transform: translate(-50%, -92%);}
 .aurelia-farm .ranch-animal .ra-face {display: block;}
 .aurelia-farm .ranch-animal.to-left .ra-face {transform: scaleX(-1);}
 .aurelia-farm .ranch-animal svg {display: block; width: 100%; height: auto; overflow: visible;}
@@ -215,25 +217,34 @@
 .aurelia-farm.fw-on {display: block; container-type: size;}
 .aurelia-farm.fw-on > .farm-stage {position: absolute; left: 0; top: 0; width: auto; max-height: none; aspect-ratio: auto;
     transform-origin: 0 0; will-change: transform; cursor: pointer;}
-.aurelia-farm .fw-player {position: absolute; left: var(--x); top: var(--y); width: 12%;
-    transform: translate(-50%, -91.7%); pointer-events: none;
+/* 小人：fw-pos 跟底圖一樣大、只動 transform（translate 的 % ＝底圖的 %）；小人掛在它左上角，看得到的腳踩在那一點 */
+.aurelia-farm .fw-pos {position: absolute; inset: 0; pointer-events: none; will-change: transform;}
+.aurelia-farm .fw-player {position: absolute; left: 0; top: 0; height: var(--fw-h, 15%);
+    transform: translate(-50%, calc(-100% + var(--fw-pad, 0%))); pointer-events: none;
     filter: drop-shadow(0 5px 3px rgba(33,43,27,.22));}
-.aurelia-farm .fw-player canvas {display: block; width: 100%; height: auto; image-rendering: pixelated;}
-.aurelia-farm .fw-player.is-walking canvas {animation: fw-hop .24s ease-in-out infinite alternate;}
-.aurelia-farm .fw-player.is-tired canvas {filter: saturate(.55) brightness(.92);}
-@keyframes fw-hop { from { translate: 0 0; } to { translate: 0 -4%; } }
+.aurelia-farm .fw-body {position: relative; height: 100%;}
+.aurelia-farm .fw-img {display: block; height: 100%; width: auto; image-rendering: pixelated; user-select: none; -webkit-user-drag: none;}
+.aurelia-farm .fw-sheet {height: 100%; background-size: 300% 400%; background-repeat: no-repeat; image-rendering: pixelated;}
+.aurelia-farm .fw-player.is-loading .fw-body {visibility: hidden;}
+.aurelia-farm .fw-player.is-dot .fw-body {aspect-ratio: .5; border-radius: 45% 45% 38% 38%; background: #3a4557;}
+.aurelia-farm .fw-player.is-flip .fw-img {transform: scaleX(-1);}
+.aurelia-farm .fw-player.is-walking:not(.is-sheet) .fw-body {animation: fw-bob .35s steps(2) infinite;}
+.aurelia-farm .fw-player.is-happy .fw-body {animation: fw-cheer .5s ease-out;}
+.aurelia-farm .fw-player.is-tired .fw-body {filter: saturate(.55) brightness(.92);}
+@keyframes fw-bob { 0%,100% { translate: 0 0; } 50% { translate: 0 -3%; } }
+@keyframes fw-cheer { 0%,100% { translate: 0 0; } 35% { translate: 0 -10%; } }
 .aurelia-farm .fw-hand {position: absolute; left: 66%; top: 55%; display: flex; align-items: center; gap: 2px;
     padding: 2px 5px; border-radius: 999px; background: #fff8e8; color: #557b48;
     font-size: clamp(9px, 1.4cqw, 13px); box-shadow: 0 2px 6px rgba(35,49,34,.28); white-space: nowrap;}
 .aurelia-farm .fw-hand b {font-size: .85em; color: #3d92c6;}
-.aurelia-farm .fw-doing {position: absolute; left: 50%; top: 30%; transform: translate(-50%, -100%) scale(.4); opacity: 0;
+.aurelia-farm .fw-doing {position: absolute; left: 50%; top: -2%; transform: translate(-50%, -100%) scale(.4); opacity: 0;
     display: grid; place-items: center; width: 2em; height: 2em; border-radius: 50%;
     background: #fff8e8; color: #557b48; font-size: clamp(9px, 1.4cqw, 14px); box-shadow: 0 3px 8px rgba(35,49,34,.25);
     transition: transform .18s ease, opacity .18s ease;}
 .aurelia-farm .fw-player.is-doing .fw-doing {opacity: 1; transform: translate(-50%, -100%) scale(1);}
 .aurelia-farm .fw-focus, .aurelia-farm .fw-focus + .ranch-obj, .aurelia-farm .fw-focus + .farm-decor {filter: drop-shadow(2px 0 0 #ffe7a0) drop-shadow(-2px 0 0 #ffe7a0) drop-shadow(0 2px 0 #ffe7a0) drop-shadow(0 -2px 0 #ffe7a0)
             drop-shadow(0 0 10px rgba(255,205,110,.85)) !important;}
-.aurelia-farm .fw-bar {position: absolute; left: var(--bx, 50%); top: var(--by, 50%); z-index: 60;
+.aurelia-farm .fw-bar {position: absolute; left: 0; top: 0; z-index: 60; will-change: transform;
     width: max-content; max-width: min(360px, calc(100% - 16px)); padding: 8px 9px 9px; border-radius: 13px;
     background: rgba(255,252,241,.97); color: #283324; border: 2px solid #8b5a2b;
     box-shadow: 0 10px 26px rgba(35,49,34,.3); font-size: 12px;}
