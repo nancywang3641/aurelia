@@ -500,6 +500,9 @@
 .aurelia-farm .fr-add {display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 2px dashed #b89a6a; border-radius: 999px; background: transparent; color: #8b5a2b; cursor: pointer;}
 .aurelia-farm .fr-new {padding: 4px 8px; border: 2px solid #8b5a2b; border-radius: 999px; background: #fffaf0; color: #3f2a12; font-family: inherit; font-size: 13px;}
 .aurelia-farm .fr-last {display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: #6c4a22;}
+.aurelia-farm .fr-by {display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #8b5a2b;}
+.aurelia-farm .fr-note {display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 6px 9px; border-radius: 9px; background: #fffaf0; border: 1px dashed #d7b27a; font-size: 12px; line-height: 1.5; color: #4a3218;}
+.aurelia-farm .fr-note i {margin-top: 3px; color: #c9a46a;}
 .aurelia-farm .fr-foot {display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 12px; color: #a8834e;}
 
 /* ── 做客（farm_visit.js）＋看板「去他家」── */

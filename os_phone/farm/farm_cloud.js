@@ -329,7 +329,7 @@
     var PEOPLE = [{ id: 'aluo', name: '阿洛' }, { id: 'dan', name: '丹' }];
     try {
         if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
-            farm_residents: { title: '住戶顧田', body: '打開之後，阿洛和丹會在你排的時間自己醒來，到伺服器上顧他們自己那塊後院，顧完寫日記。\n醒一次會用掉一點你帳號的額度（丹用 Claude，阿洛用 ChatGPT）。\n時間是台灣時間；伺服器每 5 分鐘看一次，所以會晚幾分鐘。「現在叫他起來」也是等下一次看的時候才叫。\n他們要先在伺服器上登入過才叫得起來。每天清晨 4 點結算他們兩塊地。' }
+            farm_residents: { title: '住戶顧田', body: '打開之後，阿洛和丹會照時間自己醒來顧他們那塊後院，顧完寫日記。\n你電腦開著時，叫的是宿舍裡的他（帶著他自己的記憶）；電腦關著時，才叫伺服器上的出差版（只帶一份摘要）。\n時間可以你排，也可以宿舍的他自己排；他顧完還會留一張交接條給出差版的自己。開關只有你能動。\n醒一次會用掉一點你帳號的額度（丹用 Claude，阿洛用 ChatGPT）。\n時間是台灣時間；伺服器每 5 分鐘看一次，所以會晚幾分鐘。「現在叫他起來」也是等下一次看的時候才叫。\n出差版要先在伺服器上登入過才叫得起來。每天清晨 4 點結算他們兩塊地。' }
         });
     } catch (e) {}
     function when(sec) {
@@ -340,10 +340,13 @@
         if (d.toDateString() === y.toDateString()) return '昨天 ' + hm;
         return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
     }
+    // st.where：'pc'＝宿舍（她電腦開著時）、'vps'＝伺服器上的出差版；pending＝交給宿舍了還沒顧完
     function lastLine(st, queued) {
         if (queued) return fa('fa-hourglass-half') + '排好了，幾分鐘內就起來';
         if (!st) return fa('fa-moon') + '還沒醒過';
-        var what = st.code === 0 ? '顧完了' : st.code === 124 ? '顧太久被叫停了' : '沒叫起來（可能還沒登入）';
+        if (st.pending) return fa('fa-house') + when(st.at) + '・交給宿舍的他了，等他起來';
+        var where = st.where === 'pc' ? '在宿舍' : st.where === 'vps' ? '在伺服器上' : '';
+        var what = st.code === 0 ? where + '顧完了' : st.code === 124 ? '顧太久被叫停了' : st.where === 'pc' ? '在宿舍沒顧成' : '沒叫起來（可能還沒登入）';
         return fa(st.code === 0 ? 'fa-circle-check' : 'fa-triangle-exclamation') + '上次醒來：' + when(st.at) + '・' + what;
     }
     // opts：{ app, openCloud() }
@@ -364,10 +367,14 @@
             var add = adding === p.id
                 ? '<input type="time" class="fr-new" data-who="' + p.id + '" aria-label="新的醒來時間">'
                 : (sc.times.length < 6 ? '<button type="button" class="fr-add" data-fr="add" data-who="' + p.id + '" aria-label="加一個時間">' + fa('fa-plus') + '</button>' : '');
+            // 宿舍的他自己排的時間、留給出差版的交接條
+            var mine = sc.by === 'self' ? '<span class="fr-by">' + fa('fa-user-pen') + '他自己排的</span>' : '';
+            var note = sc.note ? '<p class="fr-note">' + fa('fa-note-sticky') + '<span>留給出差版：' + esc(sc.note) + '</span></p>' : '';
             return '<section class="fr-card' + (sc.on ? ' is-on' : '') + '">' +
                 '<header><strong>' + p.name + '</strong>' +
                 '<button type="button" class="fr-switch" role="switch" aria-checked="' + (sc.on ? 'true' : 'false') + '" data-fr="toggle" data-who="' + p.id + '" aria-label="' + p.name + '自己醒來"><i></i></button></header>' +
-                '<div class="fr-times"><span class="fr-label">醒來時間</span>' + (times || '<span class="fr-none">還沒排</span>') + add + '</div>' +
+                '<div class="fr-times"><span class="fr-label">醒來時間</span>' + (times || '<span class="fr-none">還沒排</span>') + add + mine + '</div>' +
+                note +
                 '<p class="fr-last">' + lastLine(st, queued) + '</p>' +
                 '<button type="button" class="fc-btn" data-fr="wake" data-who="' + p.id + '"' + (queued ? ' disabled' : '') + '>' + fa('fa-bell') + '現在叫他起來</button>' +
                 '</section>';
