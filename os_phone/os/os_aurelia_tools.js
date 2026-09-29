@@ -109,6 +109,7 @@
     //   範圍＝這個故事現在開著的書。酒館：角色卡的主書＋附加書＋聊天綁的書＋全域書；
     //   手機：常駐書包＋這本藏書掛的書包（OS_WORLDBOOK.getActivePacks，組 context 也是走這支）。
     //   停用的條目不找（她關掉的就是不要用）。
+    //   例外：那間聊天室也勾了「改世界書」→ 找所有的書（ctx.wbAll，見 _wbAllBooks）。
     //   「這個故事開著哪幾本」查與改（os_aurelia_edit.js）用同一份：_wbBooks。
     //   手機沒掛書包、或掛的書包裡沒有開著的條目 → 所有書（all 標起來，結果要註明）。
     async function _wbBooks() {
@@ -133,43 +134,67 @@
         try { ((TH.getGlobalWorldbookNames && TH.getGlobalWorldbookNames()) || []).forEach(add); } catch (e) {}
         return { names: names, all: false };
     }
-    async function _wbEntries() {
-        const books = await _wbBooks();
-        const note = books.all ? '（這個故事沒有掛世界書，下面是所有書裡找到的）' : '';
+    // 所有的書（改世界書那組用，跟創作室世界書設計師一樣看得到全部）：這個故事開著的排前面，其他接在後面。
+    //   故事角色只勾「翻奧瑞亞的資料」時不走這支——別張卡的設定不該混進這個故事。
+    async function _wbAllBooks() {
+        const mine = await _wbBooks();
+        const open = mine.all ? [] : mine.names.slice();
+        let every = [];
         if (_pwa()) {
-            let all = [];
-            try { all = (await win.OS_DB.getAllWorldbookEntries()) || []; } catch (e) {}
-            const mine = all.filter(function (e) { return e && e.enabled !== false && books.names.indexOf(e.book || '預設書包') !== -1; });
-            return { note: note, list: mine.map(function (e) { return { book: e.book || '預設書包', title: e.title || '', keys: String(e.keys || ''), content: e.content || '' }; }) };
+            const L = win.OS_WORLDBOOK && win.OS_WORLDBOOK.lorebookApi;
+            try { every = ((L && L.getLorebooks) ? L.getLorebooks() : []) || []; } catch (e) {}
+            // 書包清單沒記到、但條目上寫著的書也算
+            try { ((await win.OS_DB.getAllWorldbookEntries()) || []).forEach(function (e) { const b = e && (e.book || '預設書包'); if (b && every.indexOf(b) === -1) every.push(b); }); } catch (e) {}
+        } else {
+            const TH = _TH();
+            try { every = ((TH && TH.getLorebooks) ? TH.getLorebooks() : []) || []; } catch (e) {}
+        }
+        return { names: open.concat(every.filter(function (n) { return open.indexOf(n) === -1; })), open: open };
+    }
+    // all：找所有的書，關著的條目也找（才能再打開），每條標這個故事有沒有開那本
+    async function _wbEntries(all) {
+        let names, open = null, note = '';
+        if (all) { const a = await _wbAllBooks(); names = a.names; open = a.open; }
+        else { const books = await _wbBooks(); names = books.names; if (books.all) note = '（這個故事沒有掛世界書，下面是所有書裡找到的）'; }
+        const pack = function (book, title, keys, content, enabled) {
+            return { book: book, title: title, keys: keys, content: content, enabled: enabled, open: open ? open.indexOf(book) !== -1 : true };
+        };
+        if (_pwa()) {
+            let es = [];
+            try { es = (await win.OS_DB.getAllWorldbookEntries()) || []; } catch (e) {}
+            const mine = es.filter(function (e) { return e && (all || e.enabled !== false) && names.indexOf(e.book || '預設書包') !== -1; });
+            return { note: note, list: mine.map(function (e) { return pack(e.book || '預設書包', e.title || '', String(e.keys || ''), e.content || '', e.enabled !== false); }) };
         }
         const TH = _TH();
         if (!TH || !TH.getLorebookEntries) return { note: '', list: [] };
-        const names = books.names;
         const list = [];
         for (const b of names) {
             let es = [];
             try { es = (await TH.getLorebookEntries(b)) || []; } catch (e) {}
             es.forEach(function (e) {
-                if (!e || e.enabled === false) return;
-                list.push({ book: b, title: e.comment || '', keys: (e.keys || []).join(','), content: e.content || '' });
+                if (!e || (!all && e.enabled === false)) return;
+                list.push(pack(b, e.comment || '', (e.keys || []).join(','), e.content || '', e.enabled !== false));
             });
         }
-        return { note: '', list: list };
+        return { note: note, list: list };
     }
-    async function worldbookSearch(args) {
+    // ctx.wbAll：這間勾了「改世界書」→ 找所有的書（聊天 app 那邊判斷，這裡不認聊天室）
+    async function worldbookSearch(args, ctx) {
         const terms = _terms(args && args.keyword);
         if (!terms.length) return '要給一個關鍵字。';
-        const got = await _wbEntries();
+        const all = !!(ctx && ctx.wbAll);
+        const got = await _wbEntries(all);
         const hits = got.list.map(function (e) {
             if (!_hitAll(e.title + ' ' + e.keys + ' ' + e.content, terms)) return null;
-            // 標題中的排最前，其次關鍵字，最後是只在內容裡出現的
-            const score = (_hitAll(e.title, terms) ? 4 : 0) + (_hitAll(e.keys, terms) ? 2 : 0) + 1;
+            // 標題中的排最前，其次關鍵字，最後是只在內容裡出現的；一樣的話這個故事開著的書排前面
+            const score = (_hitAll(e.title, terms) ? 4 : 0) + (_hitAll(e.keys, terms) ? 2 : 0) + 1 + (e.open ? 0.5 : 0);
             return { e: e, score: score };
         }).filter(Boolean).sort(function (a, b) { return b.score - a.score; });
-        if (!hits.length) return '世界書裡沒有找到「' + terms.join(' ') + '」。' + (got.list.length ? '' : '（這個故事現在沒有開著的世界書）');
-        const out = [got.note ? got.note : '', '找到 ' + hits.length + ' 條' + (hits.length > 5 ? '，列前 5 條' : '') + '：'].filter(Boolean);
+        if (!hits.length) return (all ? '所有的世界書裡都' : '世界書裡') + '沒有找到「' + terms.join(' ') + '」。' + (got.list.length ? '' : (all ? '（還沒有任何世界書）' : '（這個故事現在沒有開著的世界書）'));
+        const out = [got.note ? got.note : '', (all ? '在所有的世界書裡找，' : '') + '找到 ' + hits.length + ' 條' + (hits.length > 5 ? '，列前 5 條' : '') + '：'].filter(Boolean);
         hits.slice(0, 5).forEach(function (h) {
-            out.push('── ' + (h.e.title || '（沒有標題）') + '｜' + h.e.book + (h.e.keys ? '｜關鍵字：' + _cut(h.e.keys, 60) : '｜常駐'));
+            out.push('── ' + (h.e.title || '（沒有標題）') + '｜' + h.e.book + (h.e.open ? '' : '（這個故事沒開這本）')
+                + (h.e.keys ? '｜關鍵字：' + _cut(h.e.keys, 60) : '｜常駐') + (h.e.enabled === false ? '｜現在關著' : ''));
             out.push(_cut(h.e.content, 500));
         });
         return out.join('\n');
@@ -523,6 +548,7 @@
         run: run,
         // 給 os_aurelia_edit.js 用：同一個範圍、同一套繁簡比對
         books: _wbBooks,
+        allBooks: _wbAllBooks,
         fold: _fold,
     };
     win.OS_AURELIA_TOOLS = API;

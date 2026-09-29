@@ -134,7 +134,9 @@
             run: function (args, srv, name, chat) {
                 const A = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS;
                 if (!A) throw new Error('奧瑞亞的資料還沒載好');
-                return A.run(name, args, { chat: chat });
+                // 這間也勾了「改世界書」→ 查世界書找所有的書（兩組都勾時只列一個查世界書，列的是這組的）
+                const wbAll = enabledFor(chat).some(function (s) { return s.builtin === 'aurelia_wb'; });
+                return A.run(name, args, { chat: chat, wbAll: wbAll });
             }
         },
         // 改世界書：角色提出新增或修改，聊天裡冒一行，她點開看改前改後、按同意才寫（os_aurelia_edit.js）。
