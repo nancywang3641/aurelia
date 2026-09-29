@@ -246,7 +246,7 @@
                   '<p class="fc-where">' + fa('fa-server') + esc(base()) + '</p>' +
                   '<div class="fc-acts"><button type="button" class="fc-btn is-main" data-fc="sync">' + fa('fa-rotate') + '立即同步</button>' +
                   '<button type="button" class="fc-btn" data-fc="off">' + fa('fa-power-off') + '關掉</button></div>'
-                : '<label class="fc-field"><span>網址</span><input type="text" data-fc="url" placeholder="例如 relay.你的網域" value="' + esc(pf.url) + '" autocomplete="off" spellcheck="false"></label>' +
+                : '<label class="fc-field"><span>網址</span><input type="text" data-fc="url" value="' + esc(pf.url) + '" autocomplete="off" spellcheck="false"></label>' +
                   '<label class="fc-field"><span>通行碼</span><input type="password" data-fc="token" value="' + esc(pf.token) + '" autocomplete="off"></label>' +
                   (s.kind === 'error' || s.kind === 'busy' ? '<p class="fc-state is-' + esc(s.kind) + '">' + statusLine(s) + '</p>' : '') +
                   '<div class="fc-acts"><button type="button" class="fc-btn is-main" data-fc="connect">' + fa('fa-plug') + '連線</button></div>';
