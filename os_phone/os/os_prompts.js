@@ -619,6 +619,10 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         },
         getEntries: loadEntries,
         getBundles: loadBundles,
+        // 改預設（os_aurelia_preset.js）寫回條目與預設包用；她按同意才會叫
+        saveEntries,
+        saveBundles,
+        get SYS_SLOTS() { return SYS_SLOTS; },   // 包裡位置格的名字（定義在下面，用 getter 才不會在建這個物件時還沒有）
         getBundleTextById,   // 應用指名某一包時用（只回條目的文字）
         // 大廳人設補充（瀅瀅 / 柴郡 / 世界觀）— 給 os_settings「大廳人設」分頁讀寫用
         loadIris, saveIris, loadCheshire, saveCheshire, loadAlice, saveAlice, loadRabbit, saveRabbit, loadZhiwei, saveZhiwei, loadHatter, saveHatter, loadWorld, saveWorld,

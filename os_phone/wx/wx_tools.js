@@ -157,9 +157,27 @@
                 if (!E) return Promise.resolve({ ok: false, text: '改世界書還沒載好' });
                 return E.propose(name, args);
             }
+        },
+        // 改預設：酒館預設（只有酒館有）與奧瑞亞提示詞（兩邊都有）的每一條，同一套單子（os_aurelia_preset.js）。
+        //   單子的同意／改回去／那一行的字照樣經 OS_AURELIA_EDIT（它看 prop.mod 轉過去），下面的單子小窗不用分兩條。
+        aurelia_preset: {
+            id: 'tl_aurelia_preset', name: '改預設',
+            get tools() { const P = _preset(); return (P && P.tools) || []; },
+            get note() { const P = _preset(); return (P && P.note) || ''; },
+            run: function (args, srv, name) {
+                const P = _preset();
+                if (!P) throw new Error('改預設還沒載好');
+                return P.run(name, args);
+            },
+            propose: function (args, srv, name) {
+                const P = _preset();
+                if (!P) return Promise.resolve({ ok: false, text: '改預設還沒載好' });
+                return P.propose(name, args);
+            }
         }
     };
     function _edit() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT; }
+    function _preset() { return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET; }
 
     // ================================================================
     // 清單（共用）
@@ -551,7 +569,7 @@
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
         // 🚨 別寫「不會花錢」：翻資料本身不叫模型，但角色查完會再回一次（那次照常算錢），勾了的聊天室每輪也多帶工具說明
         if (s.builtin === 'aurelia') return { t: '只看不改，查完多回一次', bad: false };
-        if (s.builtin === 'aurelia_wb') return { t: '每一筆都要你按同意才會改', bad: false };
+        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset') return { t: '每一筆都要你按同意才會改', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
@@ -685,7 +703,8 @@
     }
 
     // ================================================================
-    // 會動手的單子（改世界書）：聊天裡那一行點開 → 看改前改後 → 同意才寫、寫了還能改回去
+    // 會動手的單子（改世界書、改預設）：聊天裡那一行點開 → 看改前改後 → 同意才寫、寫了還能改回去
+    //   兩種都經 OS_AURELIA_EDIT（改預設的它轉給 OS_AURELIA_PRESET）；sheet(prop) 給標題、名詞、要畫的格子。
     //   單子存在那一則系統訊息的 _prop 上。她按了什麼，那一則的文字（送模型時是旁註）跟著改，
     //   角色下一次回覆就知道她同意了沒有——不為這個多叫一次模型。
     // ================================================================
@@ -710,12 +729,31 @@
         const am = a.slice(p, a.length - s), bm = b.slice(p, b.length - s);
         return { before: head + (am ? '<del>' + esc(am) + '</del>' : '') + tail, after: head + (bm ? '<ins>' + esc(bm) + '</ins>' : '') + tail };
     }
+    function _ppSheet(prop) {
+        const E = _edit();
+        return (E && E.sheet) ? E.sheet(prop) : { what: '世界書條目', noun: '世界書', cards: null };
+    }
     function _ppBody(prop) {
         const E = _edit();
         const kt = function (k) { return (E && E.keysText) ? E.keysText(k) : (k || []).join(', '); };
         const b = prop.before, a = prop.after, cards = [];
         const card = function (lab, html) { cards.push('<div class="wxtl-pp-card"><div class="wxtl-pp-lab">' + lab + '</div>' + html + '</div>'); };
         const change = function (x, y) { return '<div class="wxtl-pp-val">' + esc(x) + '<span class="wxtl-pp-arrow"><i class="fa-solid fa-arrow-down"></i></span>' + esc(y) + '</div>'; };
+        const diffCard = function (x, y) {
+            const df = _diff(x, y);
+            return '<div class="wxtl-pp-lab is-sub">改前</div><div class="wxtl-pp-txt">' + df.before + '</div><div class="wxtl-pp-lab is-sub">改後</div><div class="wxtl-pp-txt">' + df.after + '</div>';
+        };
+        // 別的模組給好要畫哪幾格（改預設）：一行字／改前改後／一段全文／只標出改掉的那段
+        const S = _ppSheet(prop);
+        if (S.cards) {
+            S.cards.forEach(function (c) {
+                if (c.diff) card(esc(c.lab), diffCard(c.diff[0], c.diff[1]));
+                else if (c.txt != null) card(esc(c.lab), '<div class="wxtl-pp-txt">' + esc(c.txt) + '</div>');
+                else if (c.from != null) card(esc(c.lab), change(c.from, c.to));
+                else card(esc(c.lab), '<div class="wxtl-pp-val">' + esc(c.val) + '</div>');
+            });
+            return cards.join('');
+        }
         if (!b) {
             card('標題', '<div class="wxtl-pp-val">' + esc(a.comment) + '</div>');
             card('關鍵字', '<div class="wxtl-pp-val">' + esc(kt(a.keys)) + '</div>');
@@ -725,26 +763,24 @@
         if (b.comment !== a.comment) card('標題', change(b.comment, a.comment));
         if (kt(b.keys) !== kt(a.keys)) card('關鍵字', change(kt(b.keys), kt(a.keys)));
         if (b.enabled !== a.enabled) card('開關', change(b.enabled ? '開著' : '關著', a.enabled ? '打開' : '關掉'));
-        if (b.content !== a.content) {
-            const df = _diff(b.content, a.content);
-            card('內容', '<div class="wxtl-pp-lab is-sub">改前</div><div class="wxtl-pp-txt">' + df.before + '</div><div class="wxtl-pp-lab is-sub">改後</div><div class="wxtl-pp-txt">' + df.after + '</div>');
-        }
+        if (b.content !== a.content) card('內容', diffCard(b.content, a.content));
         return cards.join('');
     }
     function _ppRender() {
         if (!_pp) return;
         const E = _edit(), prop = _pp.prop, busy = _pp.busy;
         const verb = (E && E.verb) ? E.verb(prop) : '修改';
+        const S = _ppSheet(prop);
         const btn = function (act, label, main) { return '<button class="wxtl-btn' + (main ? ' is-main' : '') + '" type="button" data-pp="' + act + '"' + (busy ? ' disabled' : '') + '>' + label + '</button>'; };
         const st = function (t, bad) { return '<div class="wxtl-pp-state' + (bad ? ' is-bad' : '') + '">' + esc(t) + '</div>'; };
         let foot;
         if (prop.state === 'wait') foot = '<div class="wxtl-pp-bar">' + btn('no', '不要') + btn('yes', busy === 'yes' ? '寫進去中…' : '同意，寫進去', true) + '</div>';
-        else if (prop.state === 'no') foot = st('你沒有同意，世界書沒有改') + '<div class="wxtl-pp-bar">' + btn('yes', busy === 'yes' ? '寫進去中…' : '還是同意', true) + '</div>';
-        else if (prop.state === 'done') foot = st('已經寫進世界書了') + '<div class="wxtl-pp-bar">' + btn('undo', busy === 'undo' ? '改回去中…' : '改回去') + '</div>';
+        else if (prop.state === 'no') foot = st('你沒有同意，' + S.noun + '沒有改') + '<div class="wxtl-pp-bar">' + btn('yes', busy === 'yes' ? '寫進去中…' : '還是同意', true) + '</div>';
+        else if (prop.state === 'done') foot = st('已經寫進' + S.noun + '了') + '<div class="wxtl-pp-bar">' + btn('undo', busy === 'undo' ? '改回去中…' : '改回去') + '</div>';
         else if (prop.state === 'undone') foot = st('已經改回去了');
         else foot = st(prop.why || '這張作廢了', true);
         _pp.root.innerHTML = '<div class="wxtl-box">'
-            + '<div class="wxtl-head"><div class="wxtl-title">' + esc(verb) + '世界書條目</div><button class="wxtl-done" type="button" data-pp="close">關閉</button></div>'
+            + '<div class="wxtl-head"><div class="wxtl-title">' + esc(verb + S.what) + '</div><button class="wxtl-done" type="button" data-pp="close">關閉</button></div>'
             + '<div class="wxtl-pp-sub">' + esc((prop.by || '對方') + ' 提出的・' + prop.book) + '</div>'
             + '<div class="wxtl-scroll">' + _ppBody(prop) + '</div>'
             + '<div class="wxtl-pp-foot">' + foot + '</div></div>';
@@ -780,7 +816,7 @@
         catch (e) { r = { ok: false, text: (e && e.message) || '失敗' }; }
         ctx.busy = '';
         await _ppSave(ctx);   // 她中途關掉小窗也照樣存
-        _toast(r.ok ? (act === 'yes' ? '寫進世界書了' : '改回去了') : r.text);
+        _toast(r.ok ? (act === 'yes' ? '寫進' + _ppSheet(ctx.prop).noun + '了' : '改回去了') : r.text);
         if (_pp === ctx) _ppRender();
     }
     function openProposal(chatId, propId) {

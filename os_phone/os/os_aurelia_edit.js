@@ -13,9 +13,11 @@
 //     【奧瑞亞-人物核心】只准改已經有的條目內容（09-30 開放）——世界門每次現讀這本的標題與內容排熟人名冊，
 //     標題、關鍵字（「僅存放資料」那種標記）、開關會改到名冊，不給動；也不給加新條目。
 //   ・條目在提出之後被改過（她自己改、別張單子先寫了）→ 這張作廢，不蓋掉；改回去也一樣。
-// 暴露：window.OS_AURELIA_EDIT = { note, tools, run(name, args), propose(name, args), apply(prop), undo(prop), text(prop, forModel) }
+// 暴露：window.OS_AURELIA_EDIT = { note, tools, run(name, args), propose(name, args), apply(prop), undo(prop), text(prop, forModel), verb, sheet }
 //   prop 是普通物件（存在聊天 app 那一則系統訊息上），apply／undo 會改它的 state：
 //   wait 等她決定 → done 寫進去了 → undone 改回去了；no 她沒同意（之後還能同意）；stale 條目被改過、作廢。
+//   🔀 所有「會動手」的單子都從這裡進：prop.mod === 'preset'（改預設，os_aurelia_preset.js）的 apply／undo／text／verb／sheet
+//     轉給 OS_AURELIA_PRESET。聊天 app（WX_TOOLS 單子小窗、wx_core、wx_view）與房間留言板都只認這支，不用各接一條。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -49,6 +51,12 @@
     }
     function _onlyContent(a, b) { return a.comment === b.comment && a.enabled === b.enabled && _keysArr(a.keys).join(',') === _keysArr(b.keys).join(','); }
     function _snap(e) { return { comment: e.comment, keys: e.keys.slice(), content: e.content, enabled: e.enabled }; }
+    // 別的模組的單子（改預設）：交給那支處理。回 undefined＝是世界書的單子，照這支自己的走
+    function _other(prop) {
+        if (!prop || !prop.mod) return undefined;
+        if (prop.mod === 'preset') return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET || null;
+        return null;
+    }
 
     // 範圍＝所有的書（跟創作室世界書設計師一樣），這個故事開著的排前面（open）
     async function _books() { const T = _T(); return (T && T.allBooks) ? await T.allBooks() : { names: [], open: [] }; }
@@ -235,6 +243,8 @@
     }
     function _stale(prop, why) { prop.state = 'stale'; prop.why = why; return { ok: false, text: why }; }
     async function apply(prop) {
+        const M = _other(prop);
+        if (M !== undefined) return M ? M.apply(prop) : { ok: false, text: '這張單子的功能還沒載好' };
         if (!prop || (prop.state !== 'wait' && prop.state !== 'no')) return { ok: false, text: '這張已經處理過了' };
         const A = _api();
         if (!A || !A.createLorebookEntries || !A.setLorebookEntries) return { ok: false, text: _pwa() ? '手機的世界書還沒載好' : '酒館助手沒開，改不了世界書' };
@@ -256,6 +266,8 @@
         return { ok: true };
     }
     async function undo(prop) {
+        const M = _other(prop);
+        if (M !== undefined) return M ? M.undo(prop) : { ok: false, text: '這張單子的功能還沒載好' };
         if (!prop || prop.state !== 'done') return { ok: false, text: '這張沒有寫進去過' };
         const A = _api();
         if (!A || !A.setLorebookEntries || !A.deleteLorebookEntries) return { ok: false, text: _pwa() ? '手機的世界書還沒載好' : '酒館助手沒開，改不了世界書' };
@@ -271,6 +283,8 @@
 
     // ── 那一行怎麼寫：給她看的（forModel false）與給模型看的（聊天記錄裡的旁註）─────────
     function _verb(prop) {
+        const M = _other(prop);
+        if (M) return M.verb(prop);
         if (prop.kind === 'add') return '新增';
         const b = prop.before || {}, a = prop.after || {};
         const onlySwitch = b.enabled !== a.enabled && b.comment === a.comment && b.content === a.content && _keysArr(b.keys).join(',') === _keysArr(a.keys).join(',');
@@ -278,6 +292,8 @@
     }
     function text(prop, forModel) {
         if (!prop) return '';
+        const M = _other(prop);
+        if (M) return M.text(prop, forModel);
         const who = prop.by || '對方', v = _verb(prop), what = '世界書「' + prop.title + '」';
         if (forModel) {
             if (prop.state === 'done') return who + ' ' + v + '了' + what + '，對方同意了，已經寫進去';
@@ -351,11 +367,18 @@
         return String(out == null ? '' : out).trim() || '什麼都沒有查到。';
     }
 
+    // 單子小窗要的：標題（動詞後面接的）、按鈕與提示裡的名詞、每一格畫什麼（cards 為 null＝世界書，小窗自己照改前改後畫）
+    function sheet(prop) {
+        const M = _other(prop);
+        if (M) return { what: M.what(prop), noun: M.noun(prop), cards: M.cards(prop) };
+        return { what: '世界書條目', noun: '世界書', cards: null };
+    }
+
     const API = {
         note: NOTE,
         get tools() { const s = _searchTool(); return (s ? [s] : []).concat(_pub); },
         run: run, propose: propose, apply: apply, undo: undo, text: text,
-        verb: _verb, keysText: _keysText,
+        verb: _verb, keysText: _keysText, sheet: sheet,
     };
     win.OS_AURELIA_EDIT = API;
     window.OS_AURELIA_EDIT = API;
