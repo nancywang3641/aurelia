@@ -5,7 +5,7 @@
 // 做事：走到東西旁邊，下面冒出一排能做的事；按鈕或 E／空白鍵（第一個）、數字鍵（第幾個）。
 // 鏡頭：畫面放大到小人看得清楚，跟著小人走（桌機多半整張放得下，不會動）。
 // 規則全在 farm_walk_core.js（走路扣體力、搆不搆得到、手上拿什麼），這支只負責畫面；
-// 走路時每 SYNC_MS 把位置交給規則算一次體力，所以她自己走和 AI 下指令扣的是同一套。
+// 走路時每 SYNC_MS 把位置交給規則記一次（她自己走不扣體力，帶 free；AI 下指令走路才扣，見 farm_walk_core 的 ②）。
 // 走的人是她自己：大廳裡「你」那個小人（裝扮室換過的樣子跟著來），opts.look() 給圖。
 // 🚨 每一格會動的東西（小人、鏡頭、頭上小窗）一律只改 transform，不改 left/top：
 //    酒館裡聊天記錄的 DOM 很肥，left/top 每格一改就整頁重排版面，走路會一頓一頓（大廳舞台 placeSheetActor 同一條教訓）。
@@ -47,7 +47,7 @@
         var st = opts.state();
         // 存檔裡人在別區：從這區門口走進來（照規則扣走到門口那段）
         if (st.walk.scene !== opts.scene) {
-            WC.moveTo(st, opts.scene, S.gate.x, S.gate.y);
+            WC.moveTo(st, opts.scene, S.gate.x, S.gate.y, { free: true });
             if (opts.onChange) opts.onChange();
         }
         var p = { x: st.walk.x, y: st.walk.y, dest: null, destKey: null, lockKey: null, walking: false, cb: null };
@@ -237,7 +237,7 @@
         function sync() {
             var st2 = opts.state();
             var before = st2.stamina;
-            WC.moveTo(st2, opts.scene, p.x, p.y);
+            WC.moveTo(st2, opts.scene, p.x, p.y, { free: true });
             if (st2.stamina === before) return;
             // 走路扣體力只換那個數字：整片重畫（田、快捷列、小窗）在酒館肥 DOM 裡每次都是一整頁重排
             if (opts.onStamina) opts.onStamina(); else if (opts.onChange) opts.onChange();

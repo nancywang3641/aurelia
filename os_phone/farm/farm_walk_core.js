@@ -5,6 +5,8 @@
 // 畫面怎麼操作只影響她自己玩的手感；AI 在 VPS 上是下指令，所以難度一定要寫在規則裡：
 //   ① 位置：小人在哪一區（yard 後院／ranch 牧場）、哪個座標。做事要先走到旁邊（near），不然擋。
 //   ② 走路花體力：走多遠照直線距離算，累積滿 STEP 扣 1 點（不滿的留著下次一起算）；跨區要先走到圍欄門口。
+//      只扣下指令的 AI（goTo）。她自己在畫面上走不扣（09-29 她：「沒幹什麼就沒體力了」——連續走 1.6 秒就 1 點，
+//      滿體力只夠走 80 秒）：畫面那支叫 moveTo 時帶 { free: true }，只更新位置。
 //   ③ 工具要去拿：一次只拿得動一樣。水壺在後院工具棚、桶子剪刀在牧場棚屋（買過才有）；拿新的，手上那樣自動放回原位。
 //      澆水要手上拿水壺、壺裡有水（CAN_MAX 份，一塊田一份），空了去池塘裝。
 // 所以 AI 要自己排路線：先拿什麼、先去哪；排爛了繞一大圈，體力就不夠做完。她打開畫面時，小人照同一套規則走。
@@ -185,10 +187,15 @@
         if (scene === w.scene) return dist(w, to);
         return dist(w, SCENES[w.scene].gate) + dist(SCENES[scene].gate, to);
     }
-    function moveTo(state, scene, x, y) {
+    // opts.free：她自己在畫面上走，只記位置、不扣體力
+    function moveTo(state, scene, x, y, opts) {
         if (!SCENES[scene]) return result(false, 'unknown_scene', '沒有這個地方。');
         var w = W(state);
         var len = pathLength(state, scene, x, y);
+        if (opts && opts.free) {
+            w.scene = scene; w.x = x; w.y = y;
+            return result(true, 'moved', '', { cost: 0, length: len });
+        }
         w.carry += len;
         var cost = Math.floor(w.carry / STEP);
         w.carry -= cost * STEP;
