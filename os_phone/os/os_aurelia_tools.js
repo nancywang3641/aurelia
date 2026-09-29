@@ -214,7 +214,12 @@
         if (!all.length) return '這個故事還沒有劇情記憶（可能還沒開記憶，或還沒演到會記的地方）。';
         const hits = all.filter(function (m) { return _hitAll((m.summary || '') + ' ' + (m.text || '') + ' ' + (m.tags || []).join(' '), terms); })
             .sort(function (a, b) { return ((b.weight == null ? 0.5 : b.weight) - (a.weight == null ? 0.5 : a.weight)) || ((b.createdAt || 0) - (a.createdAt || 0)); });
-        if (!hits.length) return '劇情記憶裡沒有找到「' + terms.join(' ') + '」。';
+        if (!hits.length) {
+            const raw = _rawGroups(args && args.keyword);   // 顯示原字（terms 是折過繁簡的）
+            if (terms.length < 2) return '劇情記憶裡沒有找到「' + (raw[0] || terms[0]) + '」。記憶的寫法可能不一樣，換更短的核心字再找。';
+            const per = terms.map(function (t) { return all.filter(function (m) { return _fold((m.summary || '') + ' ' + (m.text || '') + ' ' + (m.tags || []).join(' ')).indexOf(t) !== -1; }).length; });
+            return '劇情記憶裡沒有同時有這幾個詞的。各自有幾筆：' + terms.map(function (t, k) { return (raw[k] || t) + ' ' + per[k] + ' 筆'; }).join('、') + '。0 筆的換個寫法或拿掉再找。';
+        }
         return ['找到 ' + hits.length + ' 筆' + (hits.length > 8 ? '，列前 8 筆' : '') + '：'].concat(hits.slice(0, 8).map(function (m) {
             return '・［' + (MEM_TYPE[m.type] || '其他') + '］' + _cut(_one(m.text || m.summary), 260);
         })).join('\n');
@@ -232,6 +237,9 @@
         return String(q || '').split(/[\s,，、;；]+/).map(function (g) {
             return g.split(/[|｜／/]+/).map(function (x) { return _fold(x.trim()); }).filter(Boolean);
         }).filter(function (g) { return g.length; }).slice(0, 5);
+    }
+    function _rawGroups(q) {
+        return String(q || '').split(/[\s,，、;；]+/).map(function (g) { return g.trim(); }).filter(Boolean).slice(0, 5);
     }
     function _matchGroups(folded, groups) { return groups.every(function (g) { return g.some(function (w) { return folded.indexOf(w) !== -1; }); }); }
     // 原文切成小段（約 240 字）；比對時相鄰兩段併起來看，才不會因為剛好切在中間而漏掉
@@ -372,7 +380,34 @@
             if (rawTotal > 10) out.push('找到的地方很多：再加一個那一段裡一定會出現的詞（空白隔開），可以縮小範圍。');
         }
         if (!memHits.length && !sumHits.length && !rawTotal) {
-            out.push('劇情記憶、大總結、原文都沒有找到。原文可能用的是別的說法：把想得到的說法用 | 一次寫齊再找一次，或問對方還記得什麼細節。');
+            // 09-30 實測：對方描述外表（衣服顏色、髮色）時，原文的寫法常常跟對方講的不一樣，全部落空。
+            //   只說「沒找到」它不知道該換哪個詞 → 算出每個詞在原文裡各自中幾處（0 處的那個就是寫法不對），
+            //   詞有三個以上時，把「只差一個詞」的段落也列出來，常常就是要找的那段。都在本機算，不多叫模型。
+            const raw = _rawGroups(words);
+            const per = groups.map(function () { return 0; });
+            const near = [];
+            pts.forEach(function (p) {
+                p.units.forEach(function (u) {
+                    const ps = _passages(u.text);
+                    for (let i = 0; i < ps.length; i++) {
+                        const f1 = _fold(ps[i]);
+                        groups.forEach(function (g, k) { if (g.some(function (w) { return f1.indexOf(w) !== -1; })) per[k]++; });
+                        if (groups.length < 3 || near.length >= 30) continue;
+                        const two = ps[i] + (ps[i + 1] ? '\n' + ps[i + 1] : '');
+                        const f2 = _fold(two);
+                        const hit = groups.map(function (g) { return g.some(function (w) { return f2.indexOf(w) !== -1; }); });
+                        if (hit.filter(Boolean).length === groups.length - 1) { near.push({ p: p, at: u.at, text: two, miss: hit.indexOf(false) }); i++; }
+                    }
+                });
+            });
+            out.push('劇情記憶、大總結、原文都沒有找到「每個詞都在同一段」的地方。');
+            out.push('每個詞在原文裡各自出現幾處：' + raw.map(function (r, k) { return r + ' ' + per[k] + ' 處'; }).join('、') + '。');
+            if (per.some(function (n) { return !n; })) out.push('出現 0 處的，原文多半是別的寫法：換成更短的核心字，或用 | 多寫幾種說法再找。');
+            if (near.length) {
+                out.push('只差一個詞就對上的段落：');
+                near.slice(0, 4).forEach(function (h) { out.push('  ' + name(h.p) + h.at + '（少了「' + raw[h.miss] + '」）：' + _snippet(h.text, groups, 140)); });
+            }
+            out.push('還是找不到的話，問對方還記得什麼別的細節。');
         }
         return _cut(out.join('\n'), 2900);
     }
@@ -520,7 +555,7 @@
           inputSchema: { type: 'object', properties: { keyword: { type: 'string', description: '要找的詞，可以寫兩三個詞用空格隔開' } }, required: ['keyword'] } },
         { name: 'aurelia_search_past', label: '找以前玩過的', run: searchPast,
           description: '在這張卡（這本書）以前玩過的每一次裡找一件事：一次翻完劇情記憶、大總結和劇情原文，回報在哪一次、第幾章或第幾樓、那一段寫了什麼。對方說以前玩過、但忘了是哪一次時用；只找現在這一次的事用 aurelia_memory_search。',
-          inputSchema: { type: 'object', properties: { words: { type: 'string', description: '要找的詞。不同的東西用空格隔開（每個都要出現在同一小段裡才算）；同一個東西的不同說法用 | 隔開（任一個有就算）。想得到的說法一次寫齊，不要分好幾次查' } }, required: ['words'] } },
+          inputSchema: { type: 'object', properties: { words: { type: 'string', description: '要找的詞。不同的東西用空格隔開（每個都要出現在同一小段裡才算）；同一個東西的不同說法用 | 隔開（任一個有就算）。想得到的說法一次寫齊，不要分好幾次查。每個詞寫最短的核心字（兩三個字），不要把一整句當一個詞；對方描述的外表、衣著、動作，原文的寫法常常不一樣，每個都多寫幾種說法' } }, required: ['words'] } },
         { name: 'aurelia_people', label: '查人物', run: people,
           description: '查故事裡登場過的人的檔案：身分、個性、跟主角之間發生過的事。不填名字就列出登場過的所有人；填名字就看那個人的檔案。',
           inputSchema: { type: 'object', properties: { name: { type: 'string', description: '要查的人的名字；想看有哪些人就不要填' } } } },
