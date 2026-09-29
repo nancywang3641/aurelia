@@ -2376,7 +2376,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div id="gview-back" class="gen-subview" style="display:none;">
                         <div class="set-group" id="relay-group">
                             <div class="set-label"><i class="fa-solid fa-satellite-dish"></i> 回覆交給伺服器跑${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2443') : ''}</div>
-                            <input class="set-input" id="relay-url" placeholder="托管網址，例如 relay.你的網域" />
+                            <input class="set-input" id="relay-url" placeholder="托管網址" />
                             <input class="set-input" id="relay-token" type="password" placeholder="通行碼" style="margin-top:8px;" />
                             <div style="display:flex; gap:8px; margin-top:10px;">
                                 <div class="btn-save" id="relay-save-btn" style="flex:1; padding:12px; font-size:13px;">開啟並測試</div>
