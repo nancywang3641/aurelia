@@ -309,7 +309,7 @@
 .aurelia-farm .fb-bag-btn:hover {background: #9d6834;}
 .aurelia-farm .fb-more {position: absolute; right: -6px; top: -7px; min-width: 18px; padding: 2px 4px; border-radius: 999px;
     background: #d9412b; color: #fff; font: 800 10px/1.1 system-ui, sans-serif;}
-.aurelia-farm .fb-bag-wrap {position: absolute; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(33,26,16,.32);}
+.aurelia-farm .fb-bag-wrap {position: absolute; inset: 0; z-index: 90; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 16px; background: rgba(33,26,16,.32);}
 .aurelia-farm .fb-bag-wrap[hidden] {display: none;}
 .aurelia-farm .fb-bag {display: flex; flex-direction: column; width: min(460px, 100%); max-height: min(560px, 100%);
     border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
@@ -338,7 +338,7 @@
 .aurelia-farm .fs-bin svg {display: block; width: 100%; height: auto; overflow: visible;}
 .aurelia-farm .fs-bin-yard {left: 13.5%; top: 47.5%; z-index: 12;}
 .aurelia-farm .fs-bin-ranch {left: 66%; top: 79.5%; z-index: 79;}
-.aurelia-farm .fs-wrap {position: absolute; inset: 0; z-index: 92; display: grid; place-items: center; padding: 16px; background: rgba(33,26,16,.32);}
+.aurelia-farm .fs-wrap {position: absolute; inset: 0; z-index: 92; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 16px; background: rgba(33,26,16,.32);}
 .aurelia-farm .fs-wrap[hidden] {display: none;}
 .aurelia-farm .fs-card {display: flex; flex-direction: column; width: min(440px, 100%); max-height: min(620px, 100%);
     border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
@@ -390,7 +390,8 @@
 .aurelia-farm .fs-nova-line {display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0 3px;}
 
 /* ── farm_board ── */
-.aurelia-farm .fd-wrap {position: absolute; inset: 0; z-index: 91; display: grid; place-items: center; padding: 14px; background: rgba(33,26,16,.32);}
+/* 🚨 四個小窗的底（背包、結算單、看板、雲端）都要把格子固定成底那麼大：沒固定時格子照內容長，日記一多木框就被推到畫面下面、底部被切掉（09-30 酒館看板） */
+.aurelia-farm .fd-wrap {position: absolute; inset: 0; z-index: 91; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 14px; background: rgba(33,26,16,.32);}
 .aurelia-farm .fd-wrap[hidden] {display: none;}
 .aurelia-farm .fd-card {display: flex; flex-direction: column; width: min(620px, 100%); height: min(760px, 100%);
     border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
@@ -451,7 +452,7 @@
 .aurelia-farm .farm-loading button { padding: 7px 14px; border: 2px solid #8b5a2b; border-radius: 9px; background: #fbeccb; color: #5e3b18; font-weight: 700; cursor: pointer; }
 
 /* ── farm_cloud：雲端存檔（跟看板同一套木框，小一號）── */
-.aurelia-farm .fc-wrap {position: absolute; inset: 0; z-index: 92; display: grid; place-items: center; padding: 14px; background: rgba(33,26,16,.32);}
+.aurelia-farm .fc-wrap {position: absolute; inset: 0; z-index: 92; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 14px; background: rgba(33,26,16,.32);}
 .aurelia-farm .fc-wrap[hidden] {display: none;}
 .aurelia-farm .fc-card {display: flex; flex-direction: column; width: min(380px, 100%);
     border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
