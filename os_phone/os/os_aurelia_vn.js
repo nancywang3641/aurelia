@@ -366,8 +366,10 @@
     }
 
     // ── 給模型看的清單（寫給沒看過奧瑞亞的模型）─────────────────────────────
+    const SIZE = '面板是在故事畫面正中央、蓋在暗色遮罩上跳出來的一個主體，不是手機 App：故事畫面在電腦上很寬（中間約 1000、全螢幕約 1920），'
+        + '在手機上約 390，三種寬度都要好看——主體限寬置中（max-width 約 520～760），不要吃滿、不要做成手機畫面的樣子。';
     const NOTE = 'aurelia_vn_ 開頭的工具是看和改對方的 VN 組件。VN 組件是對方故事畫面裡的小面板：寫故事的模型在正文裡照某個格式寫一段標籤，'
-        + '畫面就把那段換成這個面板（用 html、css、js 畫出來，例如圖鑑、信件、手機畫面）。list、read、spec 的結果下一輪交給你。'
+        + '畫面就把那段換成這個面板（用 html、css、js 畫出來，例如圖鑑、信件、地圖）。' + SIZE + 'list、read、spec 的結果下一輪交給你。'
         + 'add 和 edit 不會直接改，只會在對方的畫面上出一張單子，附改前改後的預覽，對方按同意才寫進去；你不會拿到結果，寫完這一輪就結束，'
         + '所以那一則要在工具那一行之前用你自己的話說想怎麼做，不要說已經改好了。做新的或大改之前先用 spec 看寫法，一定要照它的規矩；'
         + '改一個之前先用 read 看全文，看到了再在下一輪寫 edit，不要跟 read、spec 寫在同一輪。'
@@ -386,7 +388,7 @@
           description: '看怎麼寫 VN 組件：面板怎麼放、一定要守的規矩、js 裡能用的 st 函式清單、正文裡的寫法怎麼定。做新的或大改之前先看。很長會分段，用 part 看下一段。',
           inputSchema: { type: 'object', properties: { part: { type: 'number', description: '看第幾段（從 1 開始）' } } } },
         { name: 'aurelia_vn_add', label: '新增 VN 組件', propose: true,
-          description: '提出做一個新的 VN 組件（故事裡跳出來的那種；對方看過預覽、按同意才會加）。寫之前先用 aurelia_vn_spec 看寫法。',
+          description: '提出做一個新的 VN 組件（故事裡跳出來的那種；對方看過預覽、按同意才會加）。寫之前先用 aurelia_vn_spec 看寫法。' + SIZE,
           inputSchema: { type: 'object', properties: {
               tag: { type: 'string', description: '標籤：英文字母、數字、底線，正文裡就用這個名字寫，不能跟已經有的重複' },
               title: { type: 'string', description: '給對方看的名字，四個字以內' },

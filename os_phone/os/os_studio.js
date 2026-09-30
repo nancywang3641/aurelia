@@ -4446,15 +4446,55 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     }
     // 預覽：畫進一個 iframe（單子上改前、改後是同一個標籤名，樣式要隔開，不能像創作室直接畫在頁面上）。
     //   跟 renderPreviewPanel 同一套：{{1}}{{2}} 換成參數A／B、demoFormat 當示範資料、預覽版 st（不叫模型、不寫東西）。
+    //   上面一排手機／中間／全螢幕（尺寸同 _attachVpScaler），iframe 真的開成那麼寬再縮放放進來，面板看到的寬度就是那一種；
+    //   同一頁的幾張預覽一起切（改前改後對照），選的記著、預設中間（09-30 她：單子上的預覽沒法切，克語常寫成手機款式）。
     //   回 Promise<{ error }>：面板 js 當場炸了或 0.9 秒內丟出錯誤就帶回來，單子上寫出來。
+    const _VN_PV = [];   // 還在畫面上的預覽：切尺寸時一起套
+    function _vnPvFrames() {
+        return {
+            phone: { w: 390, h: 844, lab: '手機' },
+            center: { w: 1000, h: 660, lab: '中間' },
+            full: { w: (window.screen && screen.width) || 1920, h: (window.screen && screen.height) || 1080, lab: '全螢幕' },
+        };
+    }
+    function _vnPvGet() { try { const v = localStorage.getItem('vn_pv_vp'); return _vnPvFrames()[v] ? v : 'center'; } catch (e) { return 'center'; } }
+    function _vnPvApplyAll() {
+        for (let i = _VN_PV.length - 1; i >= 0; i--) { if (!_VN_PV[i].wrap.isConnected) _VN_PV.splice(i, 1); else _VN_PV[i].apply(); }
+    }
     function _vnPreviewInto(host, data) {
         return new Promise(function (done) {
             if (!host || !data) { done({ error: '' }); return; }
             const safeTagId = String(data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+            const F = _vnPvFrames();
+            const tabs = document.createElement('div');
+            tabs.className = 'vn-pv-tabs';
+            tabs.innerHTML = Object.keys(F).map(function (k) { return '<button type="button" class="vn-pv-tab" data-vp="' + k + '">' + F[k].lab + '</button>'; }).join('');
+            const wrap = document.createElement('div');
+            wrap.className = 'vn-pv-wrap';
             const fr = document.createElement('iframe');
             fr.className = 'vn-pv-frame';
             fr.setAttribute('title', '預覽');
-            host.appendChild(fr);
+            wrap.appendChild(fr);
+            host.appendChild(tabs);
+            host.appendChild(wrap);
+            const one = { wrap: wrap, apply: function () {
+                const vp = _vnPvGet(), f = F[vp];
+                const s = Math.min(1, Math.max(1, wrap.clientWidth || 320) / f.w);
+                fr.style.width = f.w + 'px';
+                fr.style.height = f.h + 'px';
+                fr.style.transform = 'scale(' + s + ')';
+                wrap.style.height = Math.round(f.h * s) + 'px';
+                tabs.querySelectorAll('[data-vp]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-vp') === vp); });
+            } };
+            _VN_PV.push(one);
+            tabs.addEventListener('click', function (e) {
+                const b = e.target.closest('[data-vp]');
+                if (!b) return;
+                try { localStorage.setItem('vn_pv_vp', b.getAttribute('data-vp')); } catch (er) {}
+                _vnPvApplyAll();
+            });
+            one.apply();
+            try { const ro = new ResizeObserver(function () { if (wrap.isConnected) one.apply(); }); ro.observe(wrap); } catch (e) {}
             const d = fr.contentDocument;
             // Font Awesome 那幾支樣式表跟著帶進去，圖示才畫得出來
             const fa = Array.prototype.slice.call(win.document.querySelectorAll('link[rel="stylesheet"]'))
@@ -4481,13 +4521,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     new w.Function('container', 'lines', 'onComplete', 'st', js)(container, lines, function () {}, _buildPreviewSt(lines));
                 } catch (e) { err = String((e && e.message) || e); }
             }
-            setTimeout(function () {
-                try {
-                    const h = Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0);
-                    fr.style.height = Math.max(200, Math.min(560, h)) + 'px';
-                } catch (e) {}
-                done({ error: err });
-            }, 900);
+            setTimeout(function () { one.apply(); done({ error: err }); }, 900);
         });
     }
     // 酒館正則：她匯入過（有 [VN面板] <tagId> 那條）才照新內容重寫一次，沒匯入過不動；不跳視窗

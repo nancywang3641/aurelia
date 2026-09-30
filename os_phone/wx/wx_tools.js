@@ -566,7 +566,11 @@
         .wxtl-pp-card { border-radius:12px; background:#fff; padding:10px 12px; box-shadow:0 1px 3px rgba(38,36,31,.07); }
         .wxtl-pp-card + .wxtl-pp-card { margin-top:8px; }
         /* 單子上的預覽（VN 組件）：各自關在一個 iframe 裡，改前改後同一個標籤名樣式才不會互相蓋 */
-        .wxtl-pp-pv .vn-pv-frame { display:block; width:100%; height:240px; border:0; border-radius:8px; background:#1d1b22; }
+        .wxtl-pp-pv .vn-pv-tabs { display:flex; gap:6px; margin-bottom:6px; }
+        .wxtl-pp-pv .vn-pv-tab { flex:1; padding:5px 0; border:1px solid rgba(38,36,31,.15); border-radius:8px; background:#fff; color:#6b665c; font-size:12px; cursor:pointer; }
+        .wxtl-pp-pv .vn-pv-tab.active { background:#2f7a4a; border-color:#2f7a4a; color:#fff; font-weight:700; }
+        .wxtl-pp-pv .vn-pv-wrap { position:relative; overflow:hidden; border-radius:8px; background:#1d1b22; }
+        .wxtl-pp-pv .vn-pv-frame { display:block; border:0; background:#1d1b22; transform-origin:top left; }
         .wxtl-pp-pverr { margin-top:6px; font-size:12px; line-height:1.5; color:#c0392b; }
         .wxtl-pp-lab { font-size:12px; font-weight:700; color:rgba(38,36,31,.55); margin-bottom:4px; }
         .wxtl-pp-lab.is-sub { font-weight:400; font-size:11.5px; color:rgba(38,36,31,.45); }
