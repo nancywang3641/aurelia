@@ -590,7 +590,10 @@
         .wxtl-pp-pv .vn-pv-frame { display:block; border:0; background:#1d1b22; transform-origin:top left; }
         .wxtl-pp-pverr { margin-top:6px; font-size:12px; line-height:1.5; color:#c0392b; }
         /* 改主題：劇情主題的假 VN 畫面、手機主題的假手機、聊天 app 主題的「先套上看看」 */
-        .wxtl-pp-pv .th-pv-frame { display:block; width:100%; height:440px; border:0; border-radius:8px; background:#111; }
+        .wxtl-pp-pv .th-pv-wrap { display:flex; justify-content:center; }
+        .wxtl-pp-pv .th-pv-box { position:relative; overflow:hidden; border-radius:8px; background:#111; }
+        .wxtl-pp-pv .th-pv-frame { display:block; border:0; background:#111; transform-origin:top left; }
+        .wxtl-pp-pv .vn-pv-tabs + .vn-pv-tabs { margin-top:-2px; }
         .wxtl-pp-pv .th-pv-phone { overflow-x:auto; }
         .wxtl-pp-pv .th-pv-phone .pth-preview { margin-top:0; }
         .wxtl-pp-pv .th-pv-try { width:100%; padding:9px 0; border:1px solid #2f7a4a; border-radius:9px; background:#fff; color:#2f7a4a; font-size:13px; font-weight:700; cursor:pointer; }

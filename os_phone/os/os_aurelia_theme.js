@@ -508,32 +508,69 @@
     }
 
     // ── 預覽 ─────────────────────────────────────────────────────────────
-    // 劇情主題：創作室的假 VN 畫面（iframe srcdoc），上面一排切畫面（對話、旁白、章節卡、章末、設定），幾張一起切
+    // 劇情主題：跟創作室主題編輯器同一套（10-01 她：沒法看不同尺寸、尺寸不像手機端）——
+    //   上面兩排：尺寸（手機／中間／全屏，預設手機、選的記著）與畫面（對話、旁白、章節卡、章末、設定）；
+    //   假 VN 畫面照那個尺寸真的畫、再等比縮小放進來（手機限高 430，同編輯器）；章節卡畫完抄對話框的皮。幾張一起切。
     const MODES = [['char-mode', '對話'], ['nar-mode', '旁白'], ['chapter', '章節卡'], ['end', '章末'], ['settings', '設定']];
     let _mode = 'char-mode';
     const _live = [];
+    function _thFrames() {
+        const S = _SV();
+        return (S && S.frames) ? S.frames() : { phone: { w: 390, h: 844, lab: '手機' }, center: { w: 1000, h: 660, lab: '中間' }, full: { w: 1920, h: 1080, lab: '全屏' } };
+    }
+    function _thVp() { try { const v = localStorage.getItem('vth_pv_vp'); return _thFrames()[v] ? v : 'phone'; } catch (e) { return 'phone'; } }
+    function _storyPaint(fr, css, mode) {
+        const S = _SV();
+        fr.onload = function () { if (mode === 'chapter' && S.skinCard) { try { S.skinCard(fr.contentDocument); } catch (e) {} } };
+        fr.srcdoc = S.doc(css, mode);
+    }
     function _storyPreview(el, css) {
         const S = _SV();
         if (!S || !S.doc) { el.textContent = '創作室還沒載好，畫不出來。'; return; }
+        const F = _thFrames();
+        const sizes = document.createElement('div');
+        sizes.className = 'vn-pv-tabs';
+        sizes.innerHTML = Object.keys(F).map(function (k) { return '<button type="button" class="vn-pv-tab" data-vp="' + k + '">' + F[k].lab + '</button>'; }).join('');
         const tabs = document.createElement('div');
         tabs.className = 'vn-pv-tabs';
         tabs.innerHTML = MODES.map(function (m) { return '<button type="button" class="vn-pv-tab" data-mode="' + m[0] + '">' + m[1] + '</button>'; }).join('');
+        const wrap = document.createElement('div');
+        wrap.className = 'th-pv-wrap';
+        const box = document.createElement('div');   // 縮好的那塊（置中；手機縮得比單子窄）
+        box.className = 'th-pv-box';
         const fr = document.createElement('iframe');
         fr.className = 'th-pv-frame';
         fr.setAttribute('sandbox', 'allow-same-origin');
-        el.appendChild(tabs); el.appendChild(fr);
+        box.appendChild(fr);
+        wrap.appendChild(box);
+        el.appendChild(sizes); el.appendChild(tabs); el.appendChild(wrap);
+        let painted = '';
         const one = { el: el, paint: function () {
-            fr.srcdoc = S.doc(css, _mode);
+            const vp = _thVp(), f = _thFrames()[vp];
+            const avail = Math.max(1, wrap.clientWidth || 320);
+            const s = vp === 'phone' ? Math.min(avail / f.w, 430 / f.h) : Math.min(1, avail / f.w);
+            fr.style.width = f.w + 'px'; fr.style.height = f.h + 'px'; fr.style.transform = 'scale(' + s + ')';
+            box.style.width = Math.round(f.w * s) + 'px'; box.style.height = Math.round(f.h * s) + 'px';
+            if (painted !== _mode) { painted = _mode; _storyPaint(fr, css, _mode); }
+            sizes.querySelectorAll('[data-vp]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-vp') === vp); });
             tabs.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-mode') === _mode); });
         } };
         _live.push(one);
+        const all = function () { for (let i = _live.length - 1; i >= 0; i--) { if (!_live[i].el.isConnected) _live.splice(i, 1); else _live[i].paint(); } };
+        sizes.addEventListener('click', function (e) {
+            const b = e.target.closest('[data-vp]');
+            if (!b) return;
+            try { localStorage.setItem('vth_pv_vp', b.getAttribute('data-vp')); } catch (er) {}
+            all();
+        });
         tabs.addEventListener('click', function (e) {
             const b = e.target.closest('[data-mode]');
             if (!b) return;
             _mode = b.getAttribute('data-mode');
-            for (let i = _live.length - 1; i >= 0; i--) { if (!_live[i].el.isConnected) _live.splice(i, 1); else _live[i].paint(); }
+            all();
         });
         one.paint();
+        try { const ro = new ResizeObserver(function () { if (wrap.isConnected) one.paint(); }); ro.observe(wrap); } catch (e) {}
     }
     // 手機主題：工坊那支假手機，照這套的格子上色（內建的掛它的 class）
     function _phonePreview(el, t) {
@@ -631,8 +668,8 @@
         if (c.err) return { text: c.err, images: [] };
         const lines = [], images = [];
         if (c.tk === 'story') {
-            const SV = _SV(), F = S.vnFrames();
-            const size = SIZES[args.size] ? args.size : 'center', f = F[size];
+            const SV = _SV(), F = _thFrames();
+            const size = F[args.size] ? args.size : 'phone', f = F[size];
             const want = String(args.mode || '').trim();
             const modes = want === 'all' ? MODES.slice(0, 3) : (MODES.find(function (m) { return m[0] === want || m[1] === want; }) ? [MODES.find(function (m) { return m[0] === want || m[1] === want; })] : [MODES[0], MODES[2]]);
             for (const m of modes) {
@@ -641,11 +678,14 @@
                     const fr = document.createElement('iframe');
                     fr.style.cssText = 'display:block;border:0;width:' + f.w + 'px;height:' + f.h + 'px;';
                     host.appendChild(fr);
-                    fr.srcdoc = SV.doc(c.t.css || '', m[0]);
-                    await new Promise(function (r) { fr.onload = r; setTimeout(r, 2000); });
+                    await new Promise(function (r) {
+                        fr.onload = function () { if (m[0] === 'chapter' && SV.skinCard) { try { SV.skinCard(fr.contentDocument); } catch (e) {} } r(); };
+                        fr.srcdoc = SV.doc(c.t.css || '', m[0]);
+                        setTimeout(r, 2000);
+                    });
                     await _wait(500);
                     images.push(await S.shotNode(fr.contentDocument.documentElement, f.w, f.h, '#111'));
-                    lines.push('・' + m[1] + '畫面（' + SIZES[size] + ' ' + f.w + '×' + f.h + '）');
+                    lines.push('・' + m[1] + '畫面（' + f.lab + ' ' + f.w + '×' + f.h + '）');
                 } catch (e) { lines.push('・' + m[1] + '畫面沒截下來（' + ((e && e.message) || e) + '）'); }
                 finally { host.remove(); }
             }
@@ -713,7 +753,7 @@
               replace: { type: 'string', description: '跟 aurelia_theme_edit 一樣' },
               css: { type: 'string', description: 'CSS 那兩種：整份' },
               data: { type: 'string', description: '手機主題：格子（JSON）' },
-              size: { type: 'string', description: '劇情主題用：phone（手機）、center（中間，不填就是這個）、full（全螢幕）' },
+              size: { type: 'string', description: '劇情主題用：phone（手機，不填就是這個）、center（電腦上嵌在聊天區中間）、full（電腦全屏）' },
               mode: { type: 'string', description: '劇情主題用：看哪個畫面，char-mode（對話）、nar-mode（旁白）、chapter（章節卡）、end（章末）、settings（設定），all＝前三個；不填看對話和章節卡' } },
             required: ['kind'] } },
         { name: 'aurelia_theme_add', label: '新做一套主題', propose: true,

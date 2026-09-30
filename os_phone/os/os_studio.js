@@ -4611,6 +4611,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         vnTheme: {
             spec: function () { return VTH_AI_PROMPT.replace('用戶想要的風格：', '').trim(); },
             doc: function (css, mode) { return _vthBuildSrcdoc(css, mode || 'char-mode', false); },
+            skinCard: _vthSkinCard,   // 章節卡：畫完之後把對話框的皮抄到卡上（同編輯器的 frame.onload）
+            // 尺寸同主題編輯器：手機 390×844；中間＝她在編輯器填的嵌入寬（vth_desk_w，預設 1000）×0.66；全屏＝螢幕
+            frames: function () {
+                const dw = Math.max(600, Math.min(2560, parseInt(localStorage.getItem('vth_desk_w')) || 1000));
+                return { phone: { w: 390, h: 844, lab: '手機' }, center: { w: dw, h: Math.round(dw * 0.66), lab: '中間' },
+                    full: { w: (window.screen && screen.width) || 1920, h: (window.screen && screen.height) || 1080, lab: '全屏' } };
+            },
             strip: _vthStripLayout, risky: _vthRisky, flat: _vthFlat, missingVars: _vthMissingVars,
             gallery: _vthGalleryLoad, saveGallery: _vthGallerySave,
         },
