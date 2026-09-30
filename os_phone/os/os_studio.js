@@ -4431,8 +4431,86 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         try { _saveLatestPanelToHistory(); } catch(e) {}
     }
 
+    // ===== 給小機的「改 VN 組件」（os_aurelia_vn.js）用的三個出口（09-30）=====
+    // 說明書：同一份 MODES.vn_ui.prompt，切出某一型那節＋鐵律＋st API＋demoFormat（跟 diff 那條同一招，說明書改了自動跟上）
+    function _vnSpecFor(type) {
+        const P = String((MODES.vn_ui && MODES.vn_ui.prompt) || '');
+        const sec = (head, stop) => {
+            const i = P.indexOf(head); if (i < 0) return '';
+            const rest = P.slice(i + head.length);
+            const m = stop.exec(rest);
+            return (head + (m ? rest.slice(0, m.index) : rest)).trim();
+        };
+        const typeHead = { '純展示': '### 2a.', '純應用': '### 2b.', '共用': '### 2c.', '主畫面組件': '### 2d.' }[type || '純展示'] || '### 2a.';
+        return [sec(typeHead, /\n(?=### 2|## 3\.)/), sec('## 3.', /\n(?=## 4\.)/), sec('## 4.', /\n(?=## 5\.)/), sec('## 5.', /\n(?=## 6\.)/)].filter(Boolean).join('\n\n');
+    }
+    // 預覽：畫進一個 iframe（單子上改前、改後是同一個標籤名，樣式要隔開，不能像創作室直接畫在頁面上）。
+    //   跟 renderPreviewPanel 同一套：{{1}}{{2}} 換成參數A／B、demoFormat 當示範資料、預覽版 st（不叫模型、不寫東西）。
+    //   回 Promise<{ error }>：面板 js 當場炸了或 0.9 秒內丟出錯誤就帶回來，單子上寫出來。
+    function _vnPreviewInto(host, data) {
+        return new Promise(function (done) {
+            if (!host || !data) { done({ error: '' }); return; }
+            const safeTagId = String(data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+            const fr = document.createElement('iframe');
+            fr.className = 'vn-pv-frame';
+            fr.setAttribute('title', '預覽');
+            host.appendChild(fr);
+            const d = fr.contentDocument;
+            // Font Awesome 那幾支樣式表跟著帶進去，圖示才畫得出來
+            const fa = Array.prototype.slice.call(win.document.querySelectorAll('link[rel="stylesheet"]'))
+                .filter(function (l) { return /font-?awesome|fontawesome/i.test(l.href || ''); })
+                .map(function (l) { return '<link rel="stylesheet" href="' + _sgcEsc(l.href) + '">'; }).join('');
+            d.open();
+            d.write('<!doctype html><html><head><meta charset="utf-8">' + fa
+                + '<style>html,body{margin:0;background:#1d1b22;color:#eee;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;}'
+                + '.vn-pv-root{position:relative;width:100%;min-height:200px;display:flex;flex-direction:column;}</style>'
+                + '<style>' + String(data.css || '').replace(/<\/style/gi, '<\\/style') + '</style></head><body>'
+                + '<div class="vn-pv-root vn-dynamic-panel-' + safeTagId + '">'
+                + String(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B') + '</div></body></html>');
+            d.close();
+            let err = '';
+            const w = fr.contentWindow;
+            try { w.addEventListener('error', function (e) { if (!err) err = String((e && (e.message || (e.error && e.error.message))) || '執行時出錯'); }); } catch (e) {}
+            try { w.addEventListener('unhandledrejection', function (e) { if (!err) err = String((e && e.reason && (e.reason.message || e.reason)) || '執行時出錯'); }); } catch (e) {}
+            if (data.isBlock && data.js) {
+                try {
+                    const lines = String(data.demoFormat || '').split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l && !l.startsWith('<'); });
+                    const container = d.querySelector('.vn-dynamic-panel-' + safeTagId);
+                    let js = String(data.js).trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '');
+                    window.__IS_PREVIEW = true;   // 預覽版 st 看這個：不叫模型、生圖給假圖
+                    new w.Function('container', 'lines', 'onComplete', 'st', js)(container, lines, function () {}, _buildPreviewSt(lines));
+                } catch (e) { err = String((e && e.message) || e); }
+            }
+            setTimeout(function () {
+                try {
+                    const h = Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0);
+                    fr.style.height = Math.max(200, Math.min(560, h)) + 'px';
+                } catch (e) {}
+                done({ error: err });
+            }, 900);
+        });
+    }
+    // 酒館正則：她匯入過（有 [VN面板] <tagId> 那條）才照新內容重寫一次，沒匯入過不動；不跳視窗
+    async function _vnRefreshTavernRegex(data) {
+        const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
+        if (!th || !th.updateTavernRegexesWith || !data || !data.tagId) return false;
+        const sn = '[VN面板] ' + String(data.tagId).replace(/[^a-zA-Z0-9_-]/g, '');
+        let hit = false;
+        try {
+            await th.updateTavernRegexesWith(function (regexes) {
+                return regexes.map(function (r) {
+                    if (r.script_name !== sn) return r;
+                    hit = true;
+                    return Object.assign({}, r, { replace_string: generateRegexReplacement(data) });
+                });
+            }, { type: 'global' });
+        } catch (e) { return false; }
+        return hit;
+    }
+
     // ===== 預設模板安裝器 =====
     win.OS_STUDIO = {
+        vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, refreshTavernRegex: _vnRefreshTavernRegex,
         launch, attachVpScaler: _attachVpScaler,
         refreshIface: renderStudioIface,   // 宿舍（房間擴展）是非同步載進來的，載完可以叫這支把「誰來做」那格補出來
         // 展廳拆檔（os_studio_vn_gallery.js）：對外契約不變，懶委派到 win.OS_STUDIO_VC

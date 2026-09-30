@@ -56,6 +56,7 @@
     function _other(prop) {
         if (!prop || !prop.mod) return undefined;
         if (prop.mod === 'preset') return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET || null;
+        if (prop.mod === 'vn') return win.OS_AURELIA_VN || window.OS_AURELIA_VN || null;   // 改 VN 組件（os_aurelia_vn.js）
         return null;
     }
 
@@ -337,6 +338,8 @@
         return [(s > 0 ? '…' : '') + cut(a, a.length - j), (s > 0 ? '…' : '') + cut(b, b.length - j)];
     }
     function _detail(prop) {
+        const M = _other(prop);
+        if (M && M.detail) return M.detail(prop);   // 欄位不一樣的（VN 組件）自己寫
         const b = prop.before || {}, a = prop.after || {}, out = [];
         const nm = prop.mod === 'preset' ? 'name' : 'comment', nmLab = prop.mod === 'preset' ? '名字' : '標題';
         if (prop.kind === 'add') {
@@ -464,6 +467,8 @@
         get tools() { const s = _searchTool(); return (s ? [s] : []).concat(_pub); },
         run: run, propose: propose, apply: apply, undo: undo, text: text,
         verb: _verb, keysText: _keysText, sheet: sheet,
+        // 單子小窗畫完之後放預覽（格子帶 preview 的，目前只有 VN 組件）
+        mountPreview: function (prop, which, el) { const M = _other(prop); if (M && M.mountPreview) M.mountPreview(prop, which, el); },
         // 修改紀錄：改預設那組也帶著「看修改紀錄」（聊天 app 兩組都勾只列一次）
         logTool: { name: LOG_TOOL.name, label: LOG_TOOL.label, description: LOG_TOOL.description, inputSchema: LOG_TOOL.inputSchema },
         readLog: function (args) { return readLog(args || {}); },

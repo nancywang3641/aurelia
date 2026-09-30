@@ -174,9 +174,26 @@
                 if (!P) return Promise.resolve({ ok: false, text: '改預設還沒載好' });
                 return P.propose(name, args);
             }
+        },
+        // 改 VN 組件：故事裡跳出來的那種面板（創作室「純展示」），單子附改前改後的預覽（os_aurelia_vn.js）。
+        aurelia_vn: {
+            id: 'tl_aurelia_vn', name: '改 VN 組件',
+            get tools() { const V = _vn(); return (V && V.tools) || []; },
+            get note() { const V = _vn(); return (V && V.note) || ''; },
+            run: function (args, srv, name) {
+                const V = _vn();
+                if (!V) throw new Error('改 VN 組件還沒載好');
+                return V.run(name, args);
+            },
+            propose: function (args, srv, name) {
+                const V = _vn();
+                if (!V) return Promise.resolve({ ok: false, text: '改 VN 組件還沒載好' });
+                return V.propose(name, args);
+            }
         }
     };
     function _edit() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT; }
+    function _vn() { return win.OS_AURELIA_VN || window.OS_AURELIA_VN; }
     function _preset() { return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET; }
 
     // ================================================================
@@ -548,6 +565,9 @@
         .wxtl-pp-sub { padding:0 16px 10px; font-size:12px; color:rgba(38,36,31,.55); flex-shrink:0; }
         .wxtl-pp-card { border-radius:12px; background:#fff; padding:10px 12px; box-shadow:0 1px 3px rgba(38,36,31,.07); }
         .wxtl-pp-card + .wxtl-pp-card { margin-top:8px; }
+        /* 單子上的預覽（VN 組件）：各自關在一個 iframe 裡，改前改後同一個標籤名樣式才不會互相蓋 */
+        .wxtl-pp-pv .vn-pv-frame { display:block; width:100%; height:240px; border:0; border-radius:8px; background:#1d1b22; }
+        .wxtl-pp-pverr { margin-top:6px; font-size:12px; line-height:1.5; color:#c0392b; }
         .wxtl-pp-lab { font-size:12px; font-weight:700; color:rgba(38,36,31,.55); margin-bottom:4px; }
         .wxtl-pp-lab.is-sub { font-weight:400; font-size:11.5px; color:rgba(38,36,31,.45); }
         .wxtl-pp-val { font-size:13.5px; line-height:1.55; word-break:break-word; }
@@ -569,7 +589,7 @@
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
         // 🚨 別寫「不會花錢」：翻資料本身不叫模型，但角色查完會再回一次（那次照常算錢），勾了的聊天室每輪也多帶工具說明
         if (s.builtin === 'aurelia') return { t: '只看不改，查完多回一次', bad: false };
-        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset') return { t: '每一筆都要你按同意才會改', bad: false };
+        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset' || s.builtin === 'aurelia_vn') return { t: '每一筆都要你按同意才會改', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
@@ -747,7 +767,8 @@
         const S = _ppSheet(prop);
         if (S.cards) {
             S.cards.forEach(function (c) {
-                if (c.diff) card(esc(c.lab), diffCard(c.diff[0], c.diff[1]));
+                if (c.preview) card(esc(c.lab), '<div class="wxtl-pp-pv" data-pp-pv="' + esc(c.preview) + '"></div>');   // 畫完再放預覽（_ppRender）
+                else if (c.diff) card(esc(c.lab), diffCard(c.diff[0], c.diff[1]));
                 else if (c.txt != null) card(esc(c.lab), '<div class="wxtl-pp-txt">' + esc(c.txt) + '</div>');
                 else if (c.from != null) card(esc(c.lab), change(c.from, c.to));
                 else card(esc(c.lab), '<div class="wxtl-pp-val">' + esc(c.val) + '</div>');
@@ -779,11 +800,20 @@
         else if (prop.state === 'done') foot = st('已經寫進' + S.noun + '了') + '<div class="wxtl-pp-bar">' + btn('undo', busy === 'undo' ? '改回去中…' : '改回去') + '</div>';
         else if (prop.state === 'undone') foot = st('已經改回去了');
         else foot = st(prop.why || '這張作廢了', true);
+        // 內容只畫一次（預覽是跑起來的面板，整張重畫會重跑、閃一下）；之後按鈕、狀態變了只換標題與底下那排
+        const box = _pp.root.querySelector('.wxtl-box');
+        if (box && _pp.bodyFor === prop.id) {
+            const tt = box.querySelector('.wxtl-title'), ft = box.querySelector('.wxtl-pp-foot');
+            if (tt) tt.textContent = verb + S.what;
+            if (ft) { ft.innerHTML = foot; return; }
+        }
+        _pp.bodyFor = prop.id;
         _pp.root.innerHTML = '<div class="wxtl-box">'
             + '<div class="wxtl-head"><div class="wxtl-title">' + esc(verb + S.what) + '</div><button class="wxtl-done" type="button" data-pp="close">關閉</button></div>'
             + '<div class="wxtl-pp-sub">' + esc((prop.by || '對方') + ' 提出的・' + prop.book) + '</div>'
             + '<div class="wxtl-scroll">' + _ppBody(prop) + '</div>'
             + '<div class="wxtl-pp-foot">' + foot + '</div></div>';
+        if (E && E.mountPreview) _pp.root.querySelectorAll('[data-pp-pv]').forEach(function (el) { E.mountPreview(prop, el.getAttribute('data-pp-pv'), el); });
     }
     // 存檔＋那一則的字跟著改（給模型看的旁註）＋聊天裡那一行重畫。
     //   從別處打開的（宿舍住戶提的，留言板「等你同意的」，openPropSheet）改叫那邊給的 save。
