@@ -52,6 +52,13 @@
             this.applyStyle(chatId); // 立即套用
         },
 
+        // 只存不貼（小機的「改泡泡」一次改好幾間用，os_aurelia_bubble.js）：貼泡泡的 <style> 整支 app 只有一個，
+        //   saveConfig 會順手貼上被存的那間，存別間就把她正開著那間的泡泡蓋掉了。回 false＝撞 localStorage 上限沒存進去。
+        store: function(chatId, config) {
+            if (!chatId) return false;
+            try { localStorage.setItem(`wx_bubble_style_${chatId}`, JSON.stringify(config)); return true; } catch (e) { return false; }
+        },
+
         // [核心] 根據當前 chatId 產生 CSS 並注入
         applyStyle: function(chatId) {
             this.injectConfig(this.getConfig(chatId));

@@ -238,6 +238,23 @@
                 if (!Q) return Promise.resolve({ ok: false, text: '改指令還沒載好' });
                 return Q.propose(name, args);
             }
+        },
+        // 改泡泡：聊天泡泡的主題庫與每間聊天室的泡泡，新做／修改／換上，單子附樣子（os_aurelia_bubble.js）。
+        //   帶著叫工具的那間聊天室：rooms 寫「這間」就是它。
+        aurelia_bubble: {
+            id: 'tl_aurelia_bubble', name: '改泡泡',
+            get tools() { const U = _bubble(); return (U && U.tools) || []; },
+            get note() { const U = _bubble(); return (U && U.note) || ''; },
+            run: function (args, srv, name, chat) {
+                const U = _bubble();
+                if (!U) throw new Error('改泡泡還沒載好');
+                return U.run(name, args, { chat: chat });
+            },
+            propose: function (args, srv, name, chat) {
+                const U = _bubble();
+                if (!U) return Promise.resolve({ ok: false, text: '改泡泡還沒載好' });
+                return U.propose(name, args, { chat: chat });
+            }
         }
     };
     function _edit() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT; }
@@ -245,6 +262,7 @@
     function _theme() { return win.OS_AURELIA_THEME || window.OS_AURELIA_THEME; }
     function _fx() { return win.OS_AURELIA_FX || window.OS_AURELIA_FX; }
     function _rule() { return win.OS_AURELIA_VNRULE || window.OS_AURELIA_VNRULE; }
+    function _bubble() { return win.OS_AURELIA_BUBBLE || window.OS_AURELIA_BUBBLE; }
     function _preset() { return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET; }
 
     // ================================================================
@@ -654,7 +672,7 @@
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
         // 🚨 別寫「不會花錢」：翻資料本身不叫模型，但角色查完會再回一次（那次照常算錢），勾了的聊天室每輪也多帶工具說明
         if (s.builtin === 'aurelia') return { t: '只看不改，查完多回一次', bad: false };
-        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset' || s.builtin === 'aurelia_vn' || s.builtin === 'aurelia_theme' || s.builtin === 'aurelia_fx' || s.builtin === 'aurelia_vnrule') return { t: '每一筆都要你按同意才會改', bad: false };
+        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset' || s.builtin === 'aurelia_vn' || s.builtin === 'aurelia_theme' || s.builtin === 'aurelia_fx' || s.builtin === 'aurelia_vnrule' || s.builtin === 'aurelia_bubble') return { t: '每一筆都要你按同意才會改', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };

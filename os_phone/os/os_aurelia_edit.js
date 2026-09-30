@@ -60,6 +60,7 @@
         if (prop.mod === 'theme') return win.OS_AURELIA_THEME || window.OS_AURELIA_THEME || null;   // 改主題（os_aurelia_theme.js）
         if (prop.mod === 'fx') return win.OS_AURELIA_FX || window.OS_AURELIA_FX || null;   // 改特效（os_aurelia_fx.js）
         if (prop.mod === 'vnrule') return win.OS_AURELIA_VNRULE || window.OS_AURELIA_VNRULE || null;   // 改指令（os_aurelia_vnrule.js）
+        if (prop.mod === 'bubble') return win.OS_AURELIA_BUBBLE || window.OS_AURELIA_BUBBLE || null;   // 改泡泡（os_aurelia_bubble.js）
         return null;
     }
 
