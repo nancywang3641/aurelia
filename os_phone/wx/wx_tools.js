@@ -190,10 +190,27 @@
                 if (!V) return Promise.resolve({ ok: false, text: '改 VN 組件還沒載好' });
                 return V.propose(name, args);
             }
+        },
+        // 改主題：劇情主題、手機主題、聊天 app 主題，新做／修改／換上，單子附改前改後的樣子（os_aurelia_theme.js）。
+        aurelia_theme: {
+            id: 'tl_aurelia_theme', name: '改主題',
+            get tools() { const T = _theme(); return (T && T.tools) || []; },
+            get note() { const T = _theme(); return (T && T.note) || ''; },
+            run: function (args, srv, name) {
+                const T = _theme();
+                if (!T) throw new Error('改主題還沒載好');
+                return T.run(name, args);
+            },
+            propose: function (args, srv, name) {
+                const T = _theme();
+                if (!T) return Promise.resolve({ ok: false, text: '改主題還沒載好' });
+                return T.propose(name, args);
+            }
         }
     };
     function _edit() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT; }
     function _vn() { return win.OS_AURELIA_VN || window.OS_AURELIA_VN; }
+    function _theme() { return win.OS_AURELIA_THEME || window.OS_AURELIA_THEME; }
     function _preset() { return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET; }
 
     // ================================================================
@@ -572,6 +589,13 @@
         .wxtl-pp-pv .vn-pv-wrap { position:relative; overflow:hidden; border-radius:8px; background:#1d1b22; }
         .wxtl-pp-pv .vn-pv-frame { display:block; border:0; background:#1d1b22; transform-origin:top left; }
         .wxtl-pp-pverr { margin-top:6px; font-size:12px; line-height:1.5; color:#c0392b; }
+        /* 改主題：劇情主題的假 VN 畫面、手機主題的假手機、聊天 app 主題的「先套上看看」 */
+        .wxtl-pp-pv .th-pv-frame { display:block; width:100%; height:440px; border:0; border-radius:8px; background:#111; }
+        .wxtl-pp-pv .th-pv-phone { overflow-x:auto; }
+        .wxtl-pp-pv .th-pv-phone .pth-preview { margin-top:0; }
+        .wxtl-pp-pv .th-pv-try { width:100%; padding:9px 0; border:1px solid #2f7a4a; border-radius:9px; background:#fff; color:#2f7a4a; font-size:13px; font-weight:700; cursor:pointer; }
+        .wxtl-pp-pv .th-pv-try.on { background:#2f7a4a; color:#fff; }
+        .wxtl-pp-pv .th-pv-tip { margin-top:6px; font-size:12px; line-height:1.5; color:#8a857b; }
         .wxtl-pp-lab { font-size:12px; font-weight:700; color:rgba(38,36,31,.55); margin-bottom:4px; }
         .wxtl-pp-lab.is-sub { font-weight:400; font-size:11.5px; color:rgba(38,36,31,.45); }
         .wxtl-pp-val { font-size:13.5px; line-height:1.55; word-break:break-word; }
@@ -593,7 +617,7 @@
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
         // 🚨 別寫「不會花錢」：翻資料本身不叫模型，但角色查完會再回一次（那次照常算錢），勾了的聊天室每輪也多帶工具說明
         if (s.builtin === 'aurelia') return { t: '只看不改，查完多回一次', bad: false };
-        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset' || s.builtin === 'aurelia_vn') return { t: '每一筆都要你按同意才會改', bad: false };
+        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset' || s.builtin === 'aurelia_vn' || s.builtin === 'aurelia_theme') return { t: '每一筆都要你按同意才會改', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
@@ -818,7 +842,12 @@
             + '<div class="wxtl-pp-sub">' + esc((prop.by || '對方') + ' 提出的・' + prop.book) + '</div>'
             + '<div class="wxtl-scroll">' + _ppBody(prop) + '</div>'
             + '<div class="wxtl-pp-foot">' + foot + '</div></div>';
-        if (E && E.mountPreview) _pp.root.querySelectorAll('[data-pp-pv]').forEach(function (el) { E.mountPreview(prop, el.getAttribute('data-pp-pv'), el); });
+        // 放預覽；有的預覽會回一支收尾（先套上看看的換回來），單子關掉時叫
+        _pp.cleanups = [];
+        if (E && E.mountPreview) _pp.root.querySelectorAll('[data-pp-pv]').forEach(function (el) {
+            const c = E.mountPreview(prop, el.getAttribute('data-pp-pv'), el);
+            if (typeof c === 'function') _pp.cleanups.push(c);
+        });
     }
     // 存檔＋那一則的字跟著改（給模型看的旁註）＋聊天裡那一行重畫。
     //   從別處打開的（宿舍住戶提的，留言板「等你同意的」，openPropSheet）改叫那邊給的 save。
@@ -893,6 +922,7 @@
     }
     function closeProposal() {
         if (!_pp) return;
+        (_pp.cleanups || []).forEach(function (c) { try { c(); } catch (e) {} });
         try { _pp.root.remove(); } catch (e) {}
         _pp = null;
     }

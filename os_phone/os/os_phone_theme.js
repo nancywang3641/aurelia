@@ -662,6 +662,19 @@
     }
 
     // clean／prompt 外露是為了驗得到：拿一份假回覆丟進 clean，就能看到程式實際算出哪些格子
-    win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS, LAYOUT: LAYOUT, onInk: _onInk, clean: _clean, prompt: _prompt, PAIRS: PAIRS, contrastIssues: _contrastIssues };
+    // 假手機（工坊那支）：給小機的「改主題」單子畫改前改後（os_aurelia_theme.js）
+    function _previewHtml() {
+        return '<div class="pth-preview">' + ('<div class="pth-phone">'
+            + '<div class="pth-sb"><span>9:41</span><span><i class="fa-solid fa-signal"></i> <i class="fa-solid fa-wifi"></i> <i class="fa-solid fa-battery-full"></i></span></div>'
+            + '<div class="pth-grid">' + _pvCells() + '</div>'
+            + '<div class="pth-w">組件</div>'
+            + '<div class="pth-dock"><span class="pth-ic"><i class="fa-solid fa-comment"></i></span><span class="pth-ic"><i class="fa-solid fa-eye"></i></span><span class="pth-ic"><i class="fa-solid fa-bag-shopping"></i></span></div>'
+            + '</div>'
+            + '<div class="pth-panel"><div class="pth-panel-hd">一個面板</div><div class="pth-panel-tabs"><span class="on">分頁</span><span>分頁</span></div>'
+            + '<div class="pth-panel-body"><div class="pth-card">卡片上的字</div><div class="pth-dim">比較淡的說明字</div></div>'
+            + '<div class="pth-nav"><span class="on"><i class="fa-solid fa-house"></i><em>首頁</em></span><span><i class="fa-solid fa-user"></i><em>我</em></span></div></div>') + '</div>';
+    }
+    win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS, LAYOUT: LAYOUT, onInk: _onInk, clean: _clean, prompt: _prompt, PAIRS: PAIRS, contrastIssues: _contrastIssues,
+        previewHtml: _previewHtml, paint: _paintPreview, missing: _missing, swatch: _swatch, pickJson: _pickJson };
     console.log('✅ OS_PHONE_THEME（手機主題工坊）模組就緒');
 })();

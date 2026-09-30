@@ -1106,7 +1106,36 @@
         await apply(id);
     }
 
-    const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText, fillUp, missingPalette, _unpaired, contrastIssues, PAIRS };
+    // ── 給小機的「改主題」（os_aurelia_theme.js）用（09-30）──────────────────
+    // 說明書：同一份 _aiMessages 的系統說明，輸出格式那段換成「顏色表寫成開頭的 :root」（工具直接交一整份 CSS）
+    function spec() {
+        const s = _aiMessages('', null)[0].content;
+        const i = s.indexOf('輸出格式固定');
+        return (i > 0 ? s.slice(0, i) : s).trim()
+            + '\n\n交的時候是一整份 CSS：第一步的顏色表寫成最開頭的 :root { 格子名: 顏色; … }，後面接第二步的造型。';
+    }
+    // 改一套已經有的（內容與名字）；正在用的就重新套上
+    async function update(id, css, name) {
+        await load();
+        if (!_list) return false;
+        const t = _list.find(function (x) { return x.id === id; });
+        if (!t) return false;
+        t.css = String(css || '');
+        if (name && String(name).trim()) t.name = String(name).trim().slice(0, 30);
+        t.at = Date.now();
+        await _save();
+        if (activeId() === id) await apply(id); else _renderPage();
+        return true;
+    }
+    // 先套上看看：直接蓋在聊天 app 上（不存、不換正在用的），回一支還原（照「正在用的」重新套回去）
+    function tryOn(css) {
+        const c = compile(css);
+        _inject(c.ok ? c.css : '');
+        return function () { apply(activeId()).catch(function () {}); };
+    }
+
+    const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText, fillUp, missingPalette, _unpaired, contrastIssues, PAIRS,
+        spec, update, tryOn };
     win.WX_THEME_PACK = API;
     window.WX_THEME_PACK = API;
     setTimeout(function () { _boot().catch(function (e) { console.warn('[主題] 開機套用失敗', e); }); }, 800);

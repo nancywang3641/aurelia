@@ -1345,6 +1345,7 @@
             if ((_loadTheme().themeId || DEFAULT_THEME) === id) _setThemeId(DEFAULT_THEME);
         },
         useTheme: function (id) { _setThemeId(id); },
+        builtinThemes: function () { return THEMES.map(function (t) { return { id: t.id, name: t.name }; }); },   // 內建那四套（小機的「改主題」列清單用）
         currentThemeId: function () { return _loadTheme().themeId || DEFAULT_THEME; },
         hideWidget: function (id) {
             const L = _loadLayout();

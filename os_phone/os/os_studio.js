@@ -4600,6 +4600,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ===== 預設模板安裝器 =====
     win.OS_STUDIO = {
         vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, vnShot: _vnShot, refreshTavernRegex: _vnRefreshTavernRegex,
+        // 劇情主題給小機的「改主題」（os_aurelia_theme.js）用：說明書、假 VN 畫面、套用前的防呆、藏櫃（09-30）
+        vnTheme: {
+            spec: function () { return VTH_AI_PROMPT.replace('用戶想要的風格：', '').trim(); },
+            doc: function (css, mode) { return _vthBuildSrcdoc(css, mode || 'char-mode', false); },
+            strip: _vthStripLayout, risky: _vthRisky, flat: _vthFlat, missingVars: _vthMissingVars,
+            gallery: _vthGalleryLoad, saveGallery: _vthGallerySave,
+        },
         launch, attachVpScaler: _attachVpScaler,
         refreshIface: renderStudioIface,   // 宿舍（房間擴展）是非同步載進來的，載完可以叫這支把「誰來做」那格補出來
         // 展廳拆檔（os_studio_vn_gallery.js）：對外契約不變，懶委派到 win.OS_STUDIO_VC
