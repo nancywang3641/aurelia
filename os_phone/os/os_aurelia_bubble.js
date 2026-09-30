@@ -23,7 +23,6 @@
     const PART = 2600;
     const CSS_MAX = 60 * 1024;
     const PV_W = 390;           // 假聊天畫面照手機寬畫
-    const STYLE_ID = 'wx-bubble-custom-style';
 
     function _B() { return win.WX_BUBBLE_SETTINGS || window.WX_BUBBLE_SETTINGS || null; }
     function _AI() { return win.WX_BUBBLE_AI || window.WX_BUBBLE_AI || null; }
@@ -35,7 +34,7 @@
         return (T && T.fold) ? T.fold(_one(s)) : _one(s).toLowerCase();
     }
     function _newId() { return 'pb' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-    function _ready() { const B = _B(), AI = _AI(); return !!(B && B.getConfig && B.store && AI && AI.galLoad); }
+    function _ready() { const B = _B(), AI = _AI(); return !!(B && B.getConfig && B.store && B.preview && AI && AI.galLoad); }
     const NOT_READY = '聊天 app 的泡泡設定還沒載好。';
 
     // ── 聊天室 ───────────────────────────────────────────────────────────
@@ -537,12 +536,12 @@
         one.paint();
         try { const ro = new ResizeObserver(function () { if (wrap.isConnected) size(); }); ro.observe(wrap); } catch (e) {}
     }
-    // 直接蓋在聊天 app 上：把貼泡泡的那個 <style> 換掉，回一支換回來的
-    function _tag() { return (win.document || document).getElementById(STYLE_ID); }
-    function _tryOn(css, reset) {
-        const t0 = _tag(), saved = t0 ? t0.innerHTML : null;
-        _B().injectConfig(reset ? { mode: 'default' } : { mode: 'ai', aiCSS: css || '' });
-        return function () { const t = _tag(); if (t) t.innerHTML = saved == null ? '' : saved; };
+    // 直接蓋在聊天 app 上，回一支換回來的。走 WX_BUBBLE_SETTINGS.preview：試套的時候她切到哪一間都先貼這一份
+    //   （🚨以前直接換 <style> 的內容，她一進聊天室就被那間存的蓋回去，按了像沒反應）；alive 回 false 就自己收掉。
+    function _tryOn(css, reset, alive) {
+        const B = _B();
+        B.preview(reset ? { mode: 'default' } : { mode: 'ai', aiCSS: css || '' }, alive);
+        return function () { B.preview(null); };
     }
     function _try(el, prop) {
         if (!_ready()) { el.textContent = NOT_READY; return null; }
@@ -552,22 +551,18 @@
         el.appendChild(btn);
         const tip = document.createElement('div');
         tip.className = 'th-pv-tip';
-        tip.textContent = '直接套在聊天 app 正開著的那間聊天室上給你看（聊天 app 沒開就看不到），關掉這張單子就換回原本的；按同意才會留著。';
+        tip.textContent = '套上之後去聊天 app 看，切到哪一間聊天室都先用這套給你看；按「換回原本的」或關掉這張單子就換回來，按同意才會留著。';
         el.appendChild(tip);
         let restore = null;
         const paint = function () { btn.textContent = restore ? '換回原本的' : '先套上看看'; btn.classList.toggle('on', !!restore); };
         btn.addEventListener('click', function () {
             if (restore) { restore(); restore = null; }
-            else restore = _tryOn(prop.after && prop.after.css, prop.reset);
+            else restore = _tryOn(prop.after && prop.after.css, prop.reset, function () { return el.isConnected; });
             paint();
         });
         paint();
-        return function () {
-            if (!restore) return;
-            if (prop.state === 'done') _refreshActive(null);   // 同意了：照她正開著那間存著的重貼（可能正好是改到的那間）
-            else restore();
-            restore = null;
-        };
+        // 單子關掉：收掉試套，照她最後開的那間存著的貼回去（同意了的話那間可能已經是新的樣子）
+        return function () { if (restore) { restore(); restore = null; } };
     }
     function mountPreview(prop, which, el) {
         if (which === 'try') return _try(el, prop);

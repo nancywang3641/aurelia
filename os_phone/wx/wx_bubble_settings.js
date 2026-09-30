@@ -59,9 +59,33 @@
             try { localStorage.setItem(`wx_bubble_style_${chatId}`, JSON.stringify(config)); return true; } catch (e) { return false; }
         },
 
+        // 單子上的「先套上看看」（小機的改泡泡，os_aurelia_bubble.js）：開著看的時候，不管切到哪一間聊天室都先貼這一份。
+        //   🚨以前只貼一次：她一進聊天室 openChat 就照那間存的貼回去，看起來像按了沒反應，同意之後才看得到（10-01 她抓到）。
+        //   alive 回 false（單子已經不在畫面上）就自己收掉，免得試套一直黏著、她以為已經換了。
+        //   收起來時照最後一次該貼的那間（_last）貼回去。
+        _preview: null,
+        _last: null,
+        preview: function(config, alive) {
+            this._preview = config ? { config: config, alive: alive || null } : null;
+            if (config) { this.injectConfig(config); return; }
+            const L = this._last;
+            if (L && L.chatId) this.applyStyle(L.chatId);
+            else if (L && L.room) this.applyStyleForRoom(L.roomName, L.roomKey);
+            else this.injectConfig(DEFAULT_CONFIG);
+        },
+        _previewing: function() {
+            const p = this._preview;
+            if (!p) return null;
+            let ok = true;
+            if (p.alive) { try { ok = !!p.alive(); } catch (e) { ok = false; } }
+            if (!ok) { this._preview = null; return null; }
+            return p.config;
+        },
+
         // [核心] 根據當前 chatId 產生 CSS 並注入
         applyStyle: function(chatId) {
-            this.injectConfig(this.getConfig(chatId));
+            this._last = { chatId: chatId };
+            this.injectConfig(this._previewing() || this.getConfig(chatId));
         },
 
         // 還原預設：回到「什麼都不注入」。交給 AI 與 CSS 那兩頁的內容留著——
@@ -125,8 +149,9 @@
         applyStyleForRoom: function(roomName, roomKey) {
             const id = this._contactIdByName(roomName);
             if (id) { this.applyStyle(id); return id; }
+            this._last = { room: true, roomName: roomName, roomKey: roomKey };
             const t = this.getRoomTheme(roomKey);
-            this.injectConfig(t ? { mode: 'ai', aiCSS: t.css || '' } : DEFAULT_CONFIG);
+            this.injectConfig(this._previewing() || (t ? { mode: 'ai', aiCSS: t.css || '' } : DEFAULT_CONFIG));
             return '';
         },
 
