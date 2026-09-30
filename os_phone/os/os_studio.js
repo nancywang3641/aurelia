@@ -4600,6 +4600,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ===== 預設模板安裝器 =====
     win.OS_STUDIO = {
         vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, vnShot: _vnShot, refreshTavernRegex: _vnRefreshTavernRegex,
+        fxSpec: function () { return String((MODES.fx && MODES.fx.prompt) || ''); },   // 特效工坊的說明書（小機的「改特效」）
         // 截一個元素（創作室截圖那支，長邊壓到 1024）：給小機的「看看畫出來的樣子」用（改主題也用）
         shotNode: async function (node, w, h, bg) {
             const lib = await _loadShotLib();

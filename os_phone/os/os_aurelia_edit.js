@@ -58,6 +58,7 @@
         if (prop.mod === 'preset') return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET || null;
         if (prop.mod === 'vn') return win.OS_AURELIA_VN || window.OS_AURELIA_VN || null;   // 改 VN 組件（os_aurelia_vn.js）
         if (prop.mod === 'theme') return win.OS_AURELIA_THEME || window.OS_AURELIA_THEME || null;   // 改主題（os_aurelia_theme.js）
+        if (prop.mod === 'fx') return win.OS_AURELIA_FX || window.OS_AURELIA_FX || null;   // 改特效（os_aurelia_fx.js）
         return null;
     }
 

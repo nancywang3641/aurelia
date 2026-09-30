@@ -282,6 +282,16 @@
         // 配方驗證（給創作室存檔前用）
         validate: function (recipe) { return normalizeRecipe(recipe); },
 
+        // 另開一份獨立的播放器（10-01，小機「改特效」的單子試播與截圖用）：狀態全在自己身上，
+        //   畫布掛在別的地方、不會把故事裡正在播的天氣停掉或把畫布搬走。方法照舊從 OS_FX 繼承。
+        sandbox: function () {
+            const o = Object.create(OS_FX);
+            Object.assign(o, { _overlay: null, _canvas: null, _ctx: null, _stageEl: null, _raf: 0, _lastT: 0, _hiddenSince: 0,
+                _fx: [], _particles: [], _emitters: [], _shakeOn: false });
+            return o;
+        },
+        builtinIds: function () { return BUILTINS.map(function (b) { return b.fxId; }); },
+
         // 重新載入創作室已存特效（存檔/刪除後呼叫）
         reloadSaved: async function () {
             try {

@@ -206,11 +206,28 @@
                 if (!T) return Promise.resolve({ ok: false, text: '改主題還沒載好' });
                 return T.propose(name, args);
             }
+        },
+        // 改特效：畫面特效的配方，新增／修改／開關，單子上可以試播（os_aurelia_fx.js）。
+        aurelia_fx: {
+            id: 'tl_aurelia_fx', name: '改特效',
+            get tools() { const X = _fx(); return (X && X.tools) || []; },
+            get note() { const X = _fx(); return (X && X.note) || ''; },
+            run: function (args, srv, name) {
+                const X = _fx();
+                if (!X) throw new Error('改特效還沒載好');
+                return X.run(name, args);
+            },
+            propose: function (args, srv, name) {
+                const X = _fx();
+                if (!X) return Promise.resolve({ ok: false, text: '改特效還沒載好' });
+                return X.propose(name, args);
+            }
         }
     };
     function _edit() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT; }
     function _vn() { return win.OS_AURELIA_VN || window.OS_AURELIA_VN; }
     function _theme() { return win.OS_AURELIA_THEME || window.OS_AURELIA_THEME; }
+    function _fx() { return win.OS_AURELIA_FX || window.OS_AURELIA_FX; }
     function _preset() { return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET; }
 
     // ================================================================
@@ -620,7 +637,7 @@
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
         // 🚨 別寫「不會花錢」：翻資料本身不叫模型，但角色查完會再回一次（那次照常算錢），勾了的聊天室每輪也多帶工具說明
         if (s.builtin === 'aurelia') return { t: '只看不改，查完多回一次', bad: false };
-        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset' || s.builtin === 'aurelia_vn' || s.builtin === 'aurelia_theme') return { t: '每一筆都要你按同意才會改', bad: false };
+        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset' || s.builtin === 'aurelia_vn' || s.builtin === 'aurelia_theme' || s.builtin === 'aurelia_fx') return { t: '每一筆都要你按同意才會改', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
