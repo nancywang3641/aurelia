@@ -59,6 +59,7 @@
         if (prop.mod === 'vn') return win.OS_AURELIA_VN || window.OS_AURELIA_VN || null;   // 改 VN 組件（os_aurelia_vn.js）
         if (prop.mod === 'theme') return win.OS_AURELIA_THEME || window.OS_AURELIA_THEME || null;   // 改主題（os_aurelia_theme.js）
         if (prop.mod === 'fx') return win.OS_AURELIA_FX || window.OS_AURELIA_FX || null;   // 改特效（os_aurelia_fx.js）
+        if (prop.mod === 'vnrule') return win.OS_AURELIA_VNRULE || window.OS_AURELIA_VNRULE || null;   // 改指令（os_aurelia_vnrule.js）
         return null;
     }
 
