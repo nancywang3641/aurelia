@@ -4600,6 +4600,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ===== 預設模板安裝器 =====
     win.OS_STUDIO = {
         vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, vnShot: _vnShot, refreshTavernRegex: _vnRefreshTavernRegex,
+        // 截一個元素（創作室截圖那支，長邊壓到 1024）：給小機的「看看畫出來的樣子」用（改主題也用）
+        shotNode: async function (node, w, h, bg) {
+            const lib = await _loadShotLib();
+            const scale = Math.min(1, IMG_MAX_SIDE / Math.max(w || 1, h || 1));
+            return lib.domToJpeg(node, { width: w, height: h, scale: scale, quality: IMG_QUALITY, backgroundColor: bg || '#111', timeout: 8000 });
+        },
+        vnFrames: _vnPvFrames,
         // 劇情主題給小機的「改主題」（os_aurelia_theme.js）用：說明書、假 VN 畫面、套用前的防呆、藏櫃（09-30）
         vnTheme: {
             spec: function () { return VTH_AI_PROMPT.replace('用戶想要的風格：', '').trim(); },

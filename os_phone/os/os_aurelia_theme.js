@@ -576,11 +576,120 @@
         return null;
     }
 
+    // ── 提單子之前先看看（10-01 她：主題也加先看看截圖吧）─────────────────────
+    //   要看的那一套：名字找得到（草稿優先）就從它開始、再套上這次給的改法；找不到、又給了內容，就當新的一套。
+    //   不出單子、不存任何東西。回 { text, images:[data URL] }（最多三張，橋只收三張）。
+    async function _candidate(args) {
+        const tk = _kind(args.kind);
+        if (!tk) return { err: 'kind 要寫 story、phone 或 chat。' };
+        let t = null;
+        const d = args.name ? _draftFor(tk, args.name) : null;
+        if (d) t = JSON.parse(JSON.stringify(d.after));
+        else if (args.name) { const f = await _find(tk, args.name); if (!f.err) t = JSON.parse(JSON.stringify(f.t)); }
+        const warn = [];
+        if (tk === 'phone') {
+            if (args.data != null && args.data !== '') {
+                if (t && t.builtin) t = null;   // 內建的格子讀不到，給了格子就當新的一套看
+                const c = _checkPhone(args.data, t ? t.vars : null);
+                if (c.err) return { err: c.err };
+                t = { name: (t && t.name) || _one(args.name) || '新的一套', vars: c.vars }; c.warn.forEach(function (w) { warn.push(w); });
+            }
+        } else {
+            let css = t ? (t.css || '') : null;
+            if (args.find != null && args.find !== '') {
+                if (css == null) return { err: '找不到叫「' + _one(args.name) + '」的，find 沒有東西可以換。' };
+                const n = css.split(String(args.find)).length - 1;
+                if (n !== 1) return { err: n ? '「' + _cut(args.find, 60) + '」出現了 ' + n + ' 次，多抄前後幾個字。' : '「' + _cut(args.find, 60) + '」在樣式裡找不到。' };
+                css = css.replace(String(args.find), function () { return String(args.replace == null ? '' : args.replace); });
+            }
+            if (args.css != null) css = String(args.css);
+            if (css != null && (!t || css !== t.css || !d)) {
+                if (css.trim()) {
+                    const c = tk === 'story' ? _checkStory(css) : _checkChat(css);
+                    if (c.err) return { err: c.err };
+                    css = c.css; c.warn.forEach(function (w) { warn.push(w); });
+                }
+                t = Object.assign({}, t || { name: _one(args.name) || '新的一套' }, { css: css });
+            }
+        }
+        if (!t) return { err: '找不到叫「' + _one(args.name) + '」的' + KINDS[tk] + '，要看新的一套就把內容一起給（css 或 data）。' };
+        return { tk: tk, t: t, warn: warn };
+    }
+    function _wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function _offscreen(w, h) {
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:-30000px;top:0;pointer-events:none;width:' + w + 'px;height:' + h + 'px;';
+        document.body.appendChild(host);
+        return host;
+    }
+    const SIZES = { phone: '手機', center: '中間', full: '全螢幕' };
+    async function look(args) {
+        args = args || {};
+        const S = win.OS_STUDIO || window.OS_STUDIO;
+        if (!S || !S.shotNode) return { text: '創作室還沒載好，現在截不了圖。', images: [] };
+        const c = await _candidate(args);
+        if (c.err) return { text: c.err, images: [] };
+        const lines = [], images = [];
+        if (c.tk === 'story') {
+            const SV = _SV(), F = S.vnFrames();
+            const size = SIZES[args.size] ? args.size : 'center', f = F[size];
+            const want = String(args.mode || '').trim();
+            const modes = want === 'all' ? MODES.slice(0, 3) : (MODES.find(function (m) { return m[0] === want || m[1] === want; }) ? [MODES.find(function (m) { return m[0] === want || m[1] === want; })] : [MODES[0], MODES[2]]);
+            for (const m of modes) {
+                const host = _offscreen(f.w, f.h);
+                try {
+                    const fr = document.createElement('iframe');
+                    fr.style.cssText = 'display:block;border:0;width:' + f.w + 'px;height:' + f.h + 'px;';
+                    host.appendChild(fr);
+                    fr.srcdoc = SV.doc(c.t.css || '', m[0]);
+                    await new Promise(function (r) { fr.onload = r; setTimeout(r, 2000); });
+                    await _wait(500);
+                    images.push(await S.shotNode(fr.contentDocument.documentElement, f.w, f.h, '#111'));
+                    lines.push('・' + m[1] + '畫面（' + SIZES[size] + ' ' + f.w + '×' + f.h + '）');
+                } catch (e) { lines.push('・' + m[1] + '畫面沒截下來（' + ((e && e.message) || e) + '）'); }
+                finally { host.remove(); }
+            }
+        } else if (c.tk === 'phone') {
+            const P = _PT(), host = _offscreen(720, 700);
+            try {
+                _phonePreview(host, c.t);
+                const box = host.querySelector('.pth-preview');
+                await _wait(300);
+                const r = box.getBoundingClientRect();
+                images.push(await S.shotNode(box, Math.ceil(r.width), Math.ceil(r.height), '#f4f4f4'));
+                lines.push('・工坊那支假手機（主畫面＋一個面板），照這套的格子上色');
+            } catch (e) { lines.push('・沒截下來（' + ((e && e.message) || e) + '）'); }
+            finally { host.remove(); }
+            if (!P) lines.push('手機主題工坊還沒載好。');
+        } else {
+            // 聊天 app 畫不出假的：她的聊天 app 開著才截得到——先套上、截一張、馬上換回正在用的那套
+            const W = _WX(), app = win.wxApp || window.wxApp, box = app && app.APP_CONTAINER;
+            const r = box && box.getBoundingClientRect ? box.getBoundingClientRect() : null;
+            if (!W || !W.tryOn || !r || r.width < 50 || r.height < 50) {
+                lines.push('・她的聊天 app 現在沒開著，截不到；下面只有檢查的結果。');
+            } else {
+                const restore = W.tryOn(c.t.css || '');
+                try {
+                    await _wait(400);
+                    images.push(await S.shotNode(box, Math.ceil(r.width), Math.ceil(r.height), '#fff'));
+                    lines.push('・她的聊天 app 現在那一頁，套上這套的樣子（截完已經換回正在用的那套）');
+                } catch (e) { lines.push('・沒截下來（' + ((e && e.message) || e) + '）'); }
+                finally { restore(); }
+            }
+        }
+        return {
+            text: KINDS[c.tk] + '「' + (c.t.name || '') + '」畫出來的樣子（這一步沒有出單子，對方看不到）：\n' + lines.join('\n')
+                + (c.warn.length ? '\n檢查抓到的（提單子時也會列給對方看）：\n- ' + c.warn.join('\n- ') : '\n檢查沒抓到問題。'),
+            images: images.slice(0, 3)
+        };
+    }
+
     // ── 給模型看的清單 ─────────────────────────────────────────────────────
     const NOTE = 'aurelia_theme_ 開頭的工具是看和改對方的三種主題：' + KIND_DESC + '。list、read、spec 的結果下一輪交給你。'
         + 'add（新做一套）、edit（改一套）、use（換上某一套）不會直接改，只會在對方的畫面上出一張單子，附改前改後的樣子，對方按同意才換；'
         + '你不會拿到結果，寫完這一輪就結束，所以那一則要在工具那一行之前用你自己的話說想怎麼做，不要說已經換好了。'
         + '做新的或大改之前先用 spec 看那一種的寫法，一定要照它的規矩（三種能改的東西完全不一樣）。改一套之前先用 read 看內容，看到了再在下一輪寫 edit。'
+        + '提單子之前可以先用 look 看畫出來的樣子（截圖＋檢查），看了滿意再提，這一步不會出單子。'
         + '內建的主題只能看、能換上，不能改；要照它的感覺改，就做一套新的。單子還沒被同意之前對方要你再調整：對同一套用 edit，會接著你上一張的內容改、出一張新的，舊的那張作廢。';
     const KIND_ARG = { type: 'string', description: '哪一種：' + KIND_DESC };
     const TOOLS = [
@@ -594,6 +703,19 @@
         { name: 'aurelia_theme_spec', label: '看主題的寫法', run: spec,
           description: '看某一種主題怎麼寫：能改哪些零件、一定要守的規矩、要交什麼格式。做新的或大改之前先看。很長會分段，用 part 看下一段。',
           inputSchema: { type: 'object', properties: { kind: KIND_ARG, part: { type: 'number', description: '看第幾段（從 1 開始）' } }, required: ['kind'] } },
+        { name: 'aurelia_theme_look', label: '看看主題畫出來的樣子',
+          description: '提單子之前先看看：把一套主題畫出來截圖給你（能看圖的才看得到），並列出檢查抓到的問題。不會出單子，對方看不到。'
+            + '只填 kind 和 name＝看已經有的（或你還沒被同意的那張單子）；再加上跟 aurelia_theme_edit 一樣的參數＝看改完的樣子；新的一套就照 aurelia_theme_add 給內容。'
+            + '劇情主題畫故事畫面（size 選寬度、mode 選哪個畫面）；手機主題畫一支假手機；聊天 app 主題要對方的聊天 app 開著才截得到（截完馬上換回去）。',
+          inputSchema: { type: 'object', properties: { kind: KIND_ARG,
+              name: { type: 'string', description: '那一套的名字（新的一套就寫要取的名字）' },
+              find: { type: 'string', description: '跟 aurelia_theme_edit 一樣' },
+              replace: { type: 'string', description: '跟 aurelia_theme_edit 一樣' },
+              css: { type: 'string', description: 'CSS 那兩種：整份' },
+              data: { type: 'string', description: '手機主題：格子（JSON）' },
+              size: { type: 'string', description: '劇情主題用：phone（手機）、center（中間，不填就是這個）、full（全螢幕）' },
+              mode: { type: 'string', description: '劇情主題用：看哪個畫面，char-mode（對話）、nar-mode（旁白）、chapter（章節卡）、end（章末）、settings（設定），all＝前三個；不填看對話和章節卡' } },
+            required: ['kind'] } },
         { name: 'aurelia_theme_add', label: '新做一套主題', propose: true,
           description: '提出新做一套主題（對方看過樣子、按同意才會存）。寫之前先用 aurelia_theme_spec 看那一種的寫法。',
           inputSchema: { type: 'object', properties: { kind: KIND_ARG,
@@ -619,6 +741,8 @@
     function _E() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT || null; }
     async function run(name, args) {
         if (name === 'aurelia_change_log') { const E = _E(); if (!E) throw new Error('修改紀錄還沒載好'); return E.readLog(args); }
+        // 聊天 app 的角色只拿得到字（圖只有宿舍住戶那條會轉過去，走 look）
+        if (name === 'aurelia_theme_look') return (await look(args || {})).text + '\n（這裡看不到截圖，只有檢查的結果。）';
         const t = TOOLS.find(function (x) { return x.name === name && x.run; });
         if (!t) throw new Error('沒有叫做「' + name + '」的工具');
         return String((await t.run(args || {})) || '').trim() || '什麼都沒有查到。';
@@ -630,6 +754,7 @@
         get tools() { const E = _E(); return (E && E.logTool) ? _pub.concat([E.logTool]) : _pub; },
         run: run, propose: propose, apply: apply, undo: undo,
         verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview, superseded: superseded,
+        look: look,
     };
     win.OS_AURELIA_THEME = API;
     window.OS_AURELIA_THEME = API;
