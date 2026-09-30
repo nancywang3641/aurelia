@@ -274,7 +274,7 @@
         .studio-pv-shot i { margin-right: 3px; }
         .studio-pv-shot:disabled { opacity: 0.45; cursor: progress; }
         .studio-pv-wrap { width: 100%; overflow: hidden; background: #000; border: 1px dashed rgba(26,28,40,0.25); border-radius: 6px; }
-        .studio-pv-box { background: #000; transform-origin: top left; min-height: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .studio-pv-box { position: relative; background: #000; transform-origin: top left; min-height: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .tree-project { color: #1A1C28; font-weight: bold; font-size: 13px; margin-bottom: 5px; cursor: pointer; padding: 8px; border-radius: 6px; background: rgba(26,28,40,0.06); transition: 0.2s; }
         .tree-project:hover { background: rgba(26,28,40,0.10); }
         .tree-folder { color: rgba(26,28,40,0.72); font-size: 12px; margin-top: 8px; margin-left: 10px; padding-bottom: 2px; border-bottom: 1px solid rgba(210,215,235,0.3); }
@@ -454,6 +454,7 @@
         .vc-thumb { width:54px; height:54px; flex-shrink:0; border-radius:9px; overflow:hidden; background:var(--jrpg-paper-deep); display:grid; place-items:center; position:relative; }
         .vc-thumb-ph { font-size:22px; }
         .vc-thumb-render { position:absolute; top:0; left:0; width:320px; transform:scale(0.17); transform-origin:top left; pointer-events:none; }
+        .vc-thumb-render.is-story { height:320px; }   /* 故事裡跳出來那型照故事畫面排：遮罩要有高度才置中得起來 */
         .vc-card-main { flex:1; min-width:0; }
         .vc-card-title { font-size:14px; font-weight:700; color:var(--jrpg-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .vc-card-tags { display:flex; gap:5px; margin-top:4px; flex-wrap:wrap; }

@@ -23,6 +23,9 @@
     const _appNameOf = _b._appNameOf || (tpl => (tpl && tpl.tagId) || '面板');   // 手機 app 名＝中文顯示名（最多四字），沒有才用標籤
     const _buildPreviewSt = _b._buildPreviewSt;
     const _attachVpScaler = _b._attachVpScaler;
+    // 照故事畫面的排法包預覽（純展示那型）；舊的核心沒有這支就照原本的樣子
+    const _stage = _b._vnStageHtml || function (tag, inner, tpl, cls) { return '<div class="vn-dynamic-panel-' + tag + (cls ? ' ' + cls : '') + '">' + inner + '</div>'; };
+    function _isStory(tpl) { return ((tpl && tpl.panelType) || '純展示') === '純展示'; }
     const importToSillyTavern = _b.importToSillyTavern;
     const openRawEditModal = _b.openRawEditModal;
     const _removeTavernPanelArtifacts = _b._removeTavernPanelArtifacts;
@@ -135,9 +138,9 @@
         const tpl = box._tpl, safeTagId = box._safeTagId;
         if (!tpl || !tpl.html) return;
         const inner = document.createElement('div');
-        inner.className = 'vc-thumb-render';
+        inner.className = 'vc-thumb-render' + (_isStory(tpl) ? ' is-story' : '');
         inner.innerHTML = (tpl.css ? `<style>${tpl.css}</style>` : '')
-            + `<div class="vn-dynamic-panel-${safeTagId}">${(tpl.html || '').replace(/\{\{1\}\}/g, 'A').replace(/\{\{2\}\}/g, 'B')}</div>`;
+            + _stage(safeTagId, (tpl.html || '').replace(/\{\{1\}\}/g, 'A').replace(/\{\{2\}\}/g, 'B'), tpl);
         box.innerHTML = ''; box.appendChild(inner);
         if (tpl.isBlock && tpl.js) {
             setTimeout(() => {
@@ -325,7 +328,7 @@
                 </div>
                 <div class="sgc-preview"><div class="studio-pv-box">
                     ${tpl.css ? `<style>${tpl.css}</style>` : ''}
-                    <div class="vn-dynamic-panel-${safeTagId} vc-pv-panel">${previewHtml}</div>
+                    ${_stage(safeTagId, previewHtml, tpl, 'vc-pv-panel')}
                 </div></div>
                 <button class="swb-primary vc-full" id="vc-continue" type="button"><i class="fa-solid fa-pen-to-square"></i> 繼續編輯</button>
                 <div class="vc-row2">

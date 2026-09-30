@@ -4358,9 +4358,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     <div class="studio-pv-wrap" id="studio-pv-wrap">
                         <div class="studio-pv-box" id="studio-pv-box">
                             <style>${data.css || ''}</style>
-                            <div class="vn-dynamic-panel-${safeTagId}" style="position:relative; width:100%; height:auto; display:flex; flex-direction:column;">
-                                ${(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B')}
-                            </div>
+                            ${_vnStageHtml(safeTagId, (data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B'), { panelType: data.panelType || _vnPanelType, isBlock: data.isBlock })}
                         </div>
                     </div>
                 </div>
@@ -4430,6 +4428,22 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         // 2. 聊天記錄內隱藏 system 訊息（重整後 localStorage 被清也救得回）
         try { _saveParsedCache(getChatSessionId()); } catch(e) {}
         try { _saveLatestPanelToHistory(); } catch(e) {}
+    }
+
+    // ===== 預覽照故事畫面的排法包（09-30 她：創作室的預覽也一起改）=====
+    // 故事裡跳出來那一型（純展示）在故事裡是這樣排的（vn_dynamic_parser.js）：暗色遮罩吃滿畫面、把外框擺正中間，
+    //   外框 .vn-dynamic-panel-<tag> 吃滿、padding 20、再把主體置中（區塊用直排 _renderBlock、單行標籤用橫排 _showDomBlock）。
+    //   以前創作室、展廳、單子的預覽都讓主體自動撐滿，預覽看起來對、進故事主體沒寫寬度就縮成只剩字寬（克語 09-30 待修 #260）。
+    //   其他型（應用、共用、主畫面組件）不是這樣排的，照舊。外面那層要是定位過、有高度的框（studio-pv-box 由縮放器給高）。
+    function _vnStageHtml(safeTagId, innerHtml, tpl, extraCls) {
+        const type = (tpl && tpl.panelType) || '純展示';
+        const cls = 'vn-dynamic-panel-' + safeTagId + (extraCls ? ' ' + extraCls : '');
+        if (type !== '純展示') return '<div class="' + cls + '" style="position:relative; width:100%; height:auto; display:flex; flex-direction:column;">' + innerHtml + '</div>';
+        const panel = (tpl && tpl.isBlock === false)
+            ? 'position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; box-sizing:border-box; padding:20px;'
+            : 'position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;';
+        return '<div class="vn-pv-stage" style="position:absolute;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;">'
+            + '<div class="' + cls + '" style="' + panel + '">' + innerHtml + '</div></div>';
     }
 
     // ===== 給小機的「改 VN 組件」（os_aurelia_vn.js）用的三個出口（09-30）=====
@@ -4514,9 +4528,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         d.write('<!doctype html><html><head><meta charset="utf-8">' + fa
             + '<style>html,body{margin:0;height:100%;background:#2a2630;color:#eee;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;}</style>'
             + '<style>' + String(data.css || '').replace(/<\/style/gi, '<\\/style') + '</style></head><body>'
-            + '<div class="vn-dyn-overlay block-mode" style="position:absolute;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;">'
-            + '<div class="vn-dynamic-panel-' + safeTagId + '" style="position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;">'
-            + String(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B') + '</div></div></body></html>');
+            + _vnStageHtml(safeTagId, String(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B'), { panelType: '純展示', isBlock: data.isBlock })
+            + '</body></html>');
         d.close();
         let err = '';
         const w = fr.contentWindow;
@@ -4596,7 +4609,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         _b: {
             _sgcEsc, renderMarkdown, _studioBadReply, _wbTH, _wbToast, _studioConfirmRetry,
             // ↓ 展廳（os_studio_vn_gallery.js）用
-            _studioToast, syncActiveTagsToLocal, _templateToPhoneHtml, _appNameOf, _buildPreviewSt, _attachVpScaler,
+            _studioToast, syncActiveTagsToLocal, _templateToPhoneHtml, _appNameOf, _buildPreviewSt, _attachVpScaler, _vnStageHtml,
             importToSillyTavern, openRawEditModal, _removeTavernPanelArtifacts, _purgeLinkedPhoneApp,
             _enterEditMode, _getTplById, launch,
             // ↓ 煉丹 Diff-refine 引擎（os_studio_diff_engine.js）用
