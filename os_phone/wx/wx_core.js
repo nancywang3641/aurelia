@@ -3063,7 +3063,10 @@
             delete chat.wxFriendReqOut;
             _sysPush(chat, '「' + (chat.name || '對方') + '」還沒有回應你的朋友驗證');
         }
-        if (!newMsgs.length && !_othersRelay.length && _rest.trim() && !_sysOnly && !chat.wxBlockedByMe) {
+        // 📮 寫了 <chat> 容器、但寫給的聊天室對不到（寫錯名字、寫給不存在的人）：那段照規矩不送，parseAndProcess 已經跳提示了。
+        //    🚨 以前這裡還是把原文整段塞進這一間，印著 [名字] 的泡泡冒出來，跟「沒有送出」的提示打架（10-01 她測心跳抓到）。
+        //    保底只給完全沒寫容器、又拆不出訊息的那種。
+        if (!newMsgs.length && !_othersRelay.length && _rest.trim() && !_sysOnly && !chat.wxBlockedByMe && !/<chat\b/i.test(_rest)) {
             finalText = _rest;
             const memberNames = convertMemberIdsToNames(chat.members || []);
             const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chat.name;
@@ -4474,7 +4477,8 @@
                 const _rest = _stripFriendTags((win.WX_MOMENTS && win.WX_MOMENTS.strip) ? win.WX_MOMENTS.strip(_stripToolTags(finalText)) : _stripToolTags(finalText));
                 const _sysOnly = /^\s*\[\s*(?:Notice|System|系統|系统)\s*[:：\]]/m.test(_rest);
                 // 只傳到別間（這一間沒話）也算有回覆，不要把原文塞成一顆泡泡
-                if (!newMsgs.length && !(newMsgs.others && newMsgs.others.length) && _rest.trim() && !_sysOnly) {
+                // 📮 寫了 <chat> 容器、但寫給的聊天室對不到：那段是故意不送的（上面已經跟她說了），不要再原文塞進這一間（同 _applyRelayReply）
+                if (!newMsgs.length && !(newMsgs.others && newMsgs.others.length) && _rest.trim() && !_sysOnly && !/<chat\b/i.test(_rest)) {
                     finalText = _rest;
                     const chatName = currentChat.name; const chatId = currentChat.id;
                     const memberNames = convertMemberIdsToNames(currentChat.members || []);

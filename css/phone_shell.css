@@ -699,6 +699,20 @@
 .dlr-typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: rgba(var(--os-ink-rgb), 0.35); animation: dlr-blink 1.2s infinite; }
 .dlr-typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
 .dlr-typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
+/* 電話裡叫了工具：一條「查了：」摺疊，點開看查了什麼、查到什麼（跟聊天室那條同一種；那條吃聊天 app 的色票，這裡照手機的） */
+.dlr-tool-fold { align-self: flex-start; max-width: 80%; box-sizing: border-box; padding: 5px 10px; border-radius: 10px; background: var(--os-surface); border: 0.5px solid rgba(var(--os-ink-rgb), 0.12); color: rgba(var(--os-ink-rgb), 0.7); font-size: 12px; }
+.dlr-tool-head { display: flex; align-items: center; gap: 6px; min-width: 0; cursor: pointer; user-select: none; }
+.dlr-tool-head > i { opacity: .7; flex-shrink: 0; }
+.dlr-tool-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlr-tool-arrow { font-size: 9px; transition: transform .2s; }
+.dlr-tool-fold.open .dlr-tool-arrow { transform: rotate(90deg); }
+.dlr-tool-body { display: none; margin-top: 6px; padding-top: 6px; border-top: 0.5px solid rgba(var(--os-ink-rgb), 0.15); max-height: 240px; overflow-y: auto; overscroll-behavior: contain; user-select: text; }
+.dlr-tool-fold.open .dlr-tool-body { display: block; }
+.dlr-tool-item + .dlr-tool-item { margin-top: 8px; }
+.dlr-tool-name { font-weight: 700; line-height: 1.5; color: var(--os-ink); }
+.dlr-tool-arg { font-weight: 400; margin-left: 6px; opacity: .75; }
+.dlr-tool-res { margin-top: 2px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.dlr-tool-res.is-bad { color: var(--os-danger); }
 
 /* 關閉鈕（手機右上外緣） */
 .aps-close {

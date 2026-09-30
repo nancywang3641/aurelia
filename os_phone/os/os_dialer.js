@@ -471,8 +471,30 @@
         } catch (e) {}
         return s0.replace(/^\[[^\]\n]{1,40}\]\s*/, '').replace(/\s{2,}/g, ' ').trim();
     }
+    // 🔧 電話裡叫了工具：跟聊天室那條「查了：」摺疊同一種，點開看查了什麼、查到什麼（10-01 她：電話窗口看不到調用）。
+    //   存在那一則系統訊息的 _tools，跟通話的每一句一樣帶 _viaCall：聊天室不畫，通話畫面與逐字稿看得到。聊天室那條的樣式吃聊天 app 的色票與左邊讓頭像的位置，這裡自己一份。
+    function _foldHTML(m) {
+        const items = m._tools || [], busy = !!m._toolsBusy;
+        const arg = function (t) {
+            let x = String(t.what || '').replace(/\s*[|｜]\s*/g, '／');
+            if (!t.tool || /^aurelia_/.test(t.tool)) x = x.replace(/\s+/g, '、');
+            return x;
+        };
+        const head = (busy ? '正在查：' : '查了：') + items.map(function (t) { return t.label; }).join('、');
+        const body = items.map(function (t) {
+            return '<div class="dlr-tool-item"><div class="dlr-tool-name">' + _esc(t.label)
+                + (t.what ? '<span class="dlr-tool-arg">' + _esc(arg(t)) + '</span>' : '') + '</div>'
+                + (t.res ? '<div class="dlr-tool-res' + (t.ok === false ? ' is-bad' : '') + '">' + _esc((t.ok === false ? '沒查成：' : '') + t.res) + '</div>' : '')
+                + '</div>';
+        }).join('');
+        return '<div class="dlr-tool-fold' + (busy ? ' is-busy' : '') + '">'
+            + '<div class="dlr-tool-head" onclick="this.parentNode.classList.toggle(\'open\')"><i class="fa-solid fa-chevron-right dlr-tool-arrow"></i>'
+            + '<i class="fa-solid ' + (busy ? 'fa-spinner fa-spin' : 'fa-magnifying-glass') + '"></i><span class="dlr-tool-t">' + _esc(head) + '</span></div>'
+            + '<div class="dlr-tool-body">' + body + '</div></div>';
+    }
     function _bubbleHTML(m, name) {
         if (!m) return '';
+        if (Array.isArray(m._tools) && m._tools.length) return _foldHTML(m);
         if (m.type && m.type !== 'msg') { const tx = m.content || m.time || ''; return tx ? '<div class="dlr-tx-time">' + _esc(_cut(String(tx), 40)) + '</div>' : ''; }
         if (!m.content) return '';
         if (!_stripTags(m.content)) return '';   // 整則只有標籤（純貼圖之類）→ 通話裡不用出現
@@ -875,8 +897,20 @@
                 toolRound++;
                 const E = _w('OS_AURELIA_EDIT');
                 let any = false;
+                // 查的那幾樣收成一條摺疊（存進記錄，逐字稿看得到）：跑的時候寫正在查，跑完補上查到的
+                let fold = null, foldEl = null;
+                const refs = [];
+                const paintFold = function () {
+                    if (!fold || stale()) return;
+                    const d = (win.document || document).createElement('div');
+                    d.innerHTML = _foldHTML(fold);
+                    const el = d.firstChild;
+                    if (foldEl && foldEl.isConnected) { if (foldEl.classList.contains('open')) el.classList.add('open'); foldEl.replaceWith(el); }
+                    else { const l = _callLogEl(); if (!l) return; l.appendChild(el); _scrollCallLog(); }
+                    foldEl = el;
+                };
                 try {
-                    any = await T.run(toolChat, tx.calls, function (label, what, prop) {
+                    any = await T.run(toolChat, tx.calls, function (label, what, prop, entry) {
                         if (stale()) return;
                         if (prop) {
                             prop.by = contact.name; prop.from = '電話';
@@ -885,9 +919,29 @@
                             _appendCallMark(contact.name + ' 提了一張單子（' + label + '），回聊天室點開看');
                             return;
                         }
-                        _appendCallMark(contact.name + ' 查了一下：' + label + (what ? '（' + String(what).slice(0, 30) + '）' : ''));
+                        const item = { label: label, what: what || '', tool: (entry && entry.tool) || '' };
+                        refs.push({ item: item, entry: entry });
+                        if (!fold) {
+                            fold = { type: 'system', content: '', _tools: [], _toolsBusy: true, _viaCall: true, timestamp: Date.now() };
+                            toolChat.messages = Array.isArray(toolChat.messages) ? toolChat.messages : [];
+                            toolChat.messages.push(fold);
+                        }
+                        fold._tools.push(item);
+                        fold.content = contact.name + ' 用工具查了：' + fold._tools.map(function (t) { return '「' + t.label + '」' + (t.what ? '（' + t.what + '）' : ''); }).join('、');
+                        paintFold();
                     });
                 } catch (e) { console.warn('[dialer] 工具跑失敗', e); }
+                finally {
+                    if (fold) {
+                        refs.forEach(function (r) {
+                            if (!r.entry) return;
+                            r.item.ok = !!r.entry.ok;
+                            r.item.res = String(r.entry.text || '').slice(0, 600);
+                        });
+                        delete fold._toolsBusy;
+                        paintFold();
+                    }
+                }
                 try { await OS_DB.saveApiChat(contact.id, toolChat); } catch (e) {}
                 return !!any;
             };
