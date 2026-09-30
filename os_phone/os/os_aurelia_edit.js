@@ -13,7 +13,8 @@
 //     【奧瑞亞-人物核心】只准改已經有的條目內容（09-30 開放）——世界門每次現讀這本的標題與內容排熟人名冊，
 //     標題、關鍵字（「僅存放資料」那種標記）、開關會改到名冊，不給動；也不給加新條目。
 //   ・條目在提出之後被改過（她自己改、別張單子先寫了）→ 這張作廢，不蓋掉；改回去也一樣。
-// 暴露：window.OS_AURELIA_EDIT = { note, tools, run(name, args), propose(name, args), apply(prop), undo(prop), text(prop, forModel), verb, sheet }
+// 暴露：window.OS_AURELIA_EDIT = { note, tools, run(name, args), propose(name, args), apply(prop), undo(prop), text(prop, forModel), verb, sheet, logTool, readLog }
+//   ・修改紀錄（aurelia_change_log）：單子寫進去／改回去時記一筆，誰提的、改了哪一段，給角色與住戶改之前先看。
 //   prop 是普通物件（存在聊天 app 那一則系統訊息上），apply／undo 會改它的 state：
 //   wait 等她決定 → done 寫進去了 → undone 改回去了；no 她沒同意（之後還能同意）；stale 條目被改過、作廢。
 //   🔀 所有「會動手」的單子都從這裡進：prop.mod === 'preset'（改預設，os_aurelia_preset.js）的 apply／undo／text／verb／sheet
@@ -242,7 +243,18 @@
         return p;
     }
     function _stale(prop, why) { prop.state = 'stale'; prop.why = why; return { ok: false, text: why }; }
+    // 同意／改回去成功了就記進修改紀錄（下面「修改紀錄」那段）；改預設的單子也從這裡過
     async function apply(prop) {
+        const r = await _apply(prop);
+        if (r && r.ok) _logPut(prop);
+        return r;
+    }
+    async function undo(prop) {
+        const r = await _undo(prop);
+        if (r && r.ok) _logPut(prop);
+        return r;
+    }
+    async function _apply(prop) {
         const M = _other(prop);
         if (M !== undefined) return M ? M.apply(prop) : { ok: false, text: '這張單子的功能還沒載好' };
         if (!prop || (prop.state !== 'wait' && prop.state !== 'no')) return { ok: false, text: '這張已經處理過了' };
@@ -265,7 +277,7 @@
         prop.state = 'done'; prop.doneAt = Date.now();
         return { ok: true };
     }
-    async function undo(prop) {
+    async function _undo(prop) {
         const M = _other(prop);
         if (M !== undefined) return M ? M.undo(prop) : { ok: false, text: '這張單子的功能還沒載好' };
         if (!prop || prop.state !== 'done') return { ok: false, text: '這張沒有寫進去過' };
@@ -307,6 +319,78 @@
         return who + ' 想' + v + what;
     }
 
+    // ── 修改紀錄 ────────────────────────────────────────────────────────
+    //   09-30 她：「改這些預設/世界書，可以做成紀錄，並標示有誰誰改過，這樣小機們能知道之前有什麼調整?」
+    //   單子寫進去、或改回去的時候記一筆（同一張單子同一筆，改回去補上時間）；沒同意的、作廢的沒改到東西，不記。
+    //   她自己動手改的不經單子，不在這裡。存這一邊的 localStorage：酒館與手機的世界書、預設本來就分開，紀錄跟著分開。
+    const LOG_KEY = 'aurelia_change_log', LOG_MAX = 200;
+    function _logLoad() { try { const a = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+    function _logSave(a) { try { localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(0, LOG_MAX))); } catch (e) {} }
+    // 兩段文字只留改掉的那段（前後各帶幾個字），太長截斷
+    function _diffMid(a, b) {
+        a = String(a || ''); b = String(b || '');
+        let i = 0, j = 0;
+        while (i < a.length && i < b.length && a[i] === b[i]) i++;
+        while (j < a.length - i && j < b.length - i && a[a.length - 1 - j] === b[b.length - 1 - j]) j++;
+        const PAD = 12, s = Math.max(0, i - PAD);
+        const cut = function (t, end) { return _cut(_one(t.slice(s, Math.min(t.length, end + PAD))), 160); };
+        return [(s > 0 ? '…' : '') + cut(a, a.length - j), (s > 0 ? '…' : '') + cut(b, b.length - j)];
+    }
+    function _detail(prop) {
+        const b = prop.before || {}, a = prop.after || {}, out = [];
+        const nm = prop.mod === 'preset' ? 'name' : 'comment', nmLab = prop.mod === 'preset' ? '名字' : '標題';
+        if (prop.kind === 'add') {
+            if (prop.mod !== 'preset') out.push('關鍵字：' + _keysText(_keysArr(a.keys)));
+            out.push('內容：「' + _cut(_one(a.content), 160) + '」');
+            return out;
+        }
+        if (b[nm] !== a[nm]) out.push(nmLab + '：「' + b[nm] + '」改成「' + a[nm] + '」');
+        if (prop.mod !== 'preset' && _keysArr(b.keys).join(',') !== _keysArr(a.keys).join(',')) out.push('關鍵字：' + _keysText(_keysArr(b.keys)) + ' 改成 ' + _keysText(_keysArr(a.keys)));
+        if (b.enabled !== a.enabled) out.push(a.enabled ? '打開了' : '關掉了');
+        if (b.content !== a.content) { const d = _diffMid(b.content, a.content); out.push('內容：原本「' + d[0] + '」改成「' + d[1] + '」'); }
+        return out;
+    }
+    function _logPut(prop) {
+        const arr = _logLoad();
+        let rec = arr.find(function (x) { return x && x.id === prop.id; });
+        if (!rec) {
+            rec = { id: prop.id, by: prop.by || '', from: prop.from || '', book: prop.book || '', title: prop.title || '' };
+            arr.unshift(rec);
+        }
+        if (prop.state === 'done') {
+            rec.line = text(prop, false); rec.detail = _detail(prop);
+            rec.doneAt = prop.doneAt || Date.now(); delete rec.undoneAt;
+        } else if (prop.state === 'undone') {
+            if (!rec.line) { rec.line = text(Object.assign({}, prop, { state: 'done' }), false); rec.detail = _detail(prop); }
+            rec.undoneAt = prop.undoneAt || Date.now();
+        }
+        _logSave(arr);
+    }
+    function _when(t) {
+        const d = new Date(t), p = function (n) { return (n < 10 ? '0' : '') + n; };
+        return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+    function readLog(args) {
+        const n = Math.max(1, Math.min(40, Number(args.count) || 15));
+        const q = _fold(_one(args.about));
+        let arr = _logLoad().filter(function (x) { return x && x.line; });
+        if (q) arr = arr.filter(function (x) { return _fold([x.line, x.book, x.title].join(' ')).indexOf(q) !== -1; });
+        if (!arr.length) {
+            return q ? '修改紀錄裡沒有跟「' + _one(args.about) + '」有關的。'
+                : '還沒有修改紀錄。這裡只記經過單子、對方按同意寫進去的修改；對方自己動手改的不在這裡。';
+        }
+        return '以前經單子改過的（新的在前，只記對方按同意寫進去的；對方自己動手改的不在這裡）：\n' + arr.slice(0, n).map(function (x) {
+            const head = '・' + _when(x.doneAt) + ' ' + x.line + (x.from ? '（在' + x.from + '提的）' : '') + '，對方同意寫進去了'
+                + (x.undoneAt ? '；' + _when(x.undoneAt) + ' 對方改回去了' : '');
+            return head + ((x.detail && x.detail.length) ? '\n  ' + x.detail.join('\n  ') : '');
+        }).join('\n') + (arr.length > n ? '\n（還有更早的 ' + (arr.length - n) + ' 筆，count 填大一點可以看更多）' : '');
+    }
+    const LOG_TOOL = { name: 'aurelia_change_log', label: '看修改紀錄', run: readLog,
+        description: '看以前經單子改過的世界書和預設：誰提的、改了哪一條、改了哪一段、什麼時候、後來有沒有被對方改回去。只記對方按同意寫進去的，對方自己動手改的、沒同意的不在這裡。改一條之前可以先看以前怎麼改過。',
+        inputSchema: { type: 'object', properties: {
+            about: { type: 'string', description: '只看跟這個有關的：條目標題、書名、預設名字裡有這幾個字（不填就是全部）' },
+            count: { type: 'number', description: '看最近幾筆（不填 15，最多 40）' } } } };
+
     // ── 給模型看的清單 ────────────────────────────────────────────────
     //   說明寫給沒看過奧瑞亞的模型。查世界書（aurelia_worldbook_search）跟「翻奧瑞亞的資料」是同一個功能，
     //   這組也帶著它（說明另寫一份，不提這組沒有的 aurelia_people），只勾這組也找得到條目；兩組都勾時聊天 app 只列一次。
@@ -344,6 +428,7 @@
               keys: { type: 'string', description: '新的關鍵字，逗號隔開（要改才填，會整組換掉）' },
               enabled: { type: 'boolean', description: 'true 打開、false 關掉（關掉＝不會再送出，但沒有刪掉）' },
               book: { type: 'string', description: '書名；只有好幾本書都有同名的條目時才要填' } }, required: ['title'] } },
+        LOG_TOOL,
     ];
     let _search = null;
     function _searchTool() {
@@ -379,6 +464,9 @@
         get tools() { const s = _searchTool(); return (s ? [s] : []).concat(_pub); },
         run: run, propose: propose, apply: apply, undo: undo, text: text,
         verb: _verb, keysText: _keysText, sheet: sheet,
+        // 修改紀錄：改預設那組也帶著「看修改紀錄」（聊天 app 兩組都勾只列一次）
+        logTool: { name: LOG_TOOL.name, label: LOG_TOOL.label, description: LOG_TOOL.description, inputSchema: LOG_TOOL.inputSchema },
+        readLog: function (args) { return readLog(args || {}); },
     };
     win.OS_AURELIA_EDIT = API;
     window.OS_AURELIA_EDIT = API;

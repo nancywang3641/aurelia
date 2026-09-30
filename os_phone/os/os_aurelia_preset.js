@@ -592,7 +592,10 @@
             required: ['name'] } },
     ];
 
+    // 看修改紀錄（改世界書那組也有，紀錄是同一份，在 OS_AURELIA_EDIT）
+    function _E() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT || null; }
     async function run(name, args) {
+        if (name === 'aurelia_change_log') { const E = _E(); if (!E) throw new Error('修改紀錄還沒載好'); return E.readLog(args); }
         if (name !== 'aurelia_preset_read') throw new Error('沒有叫做「' + name + '」的工具');
         if (!_tvOK() && !_auOK()) return _notReady();
         return String(readPrompt(args || {}) || '').trim() || '什麼都沒有查到。';
@@ -600,7 +603,7 @@
 
     const API = {
         get note() { return _note(); },
-        tools: TOOLS,
+        get tools() { const E = _E(); return (E && E.logTool) ? TOOLS.concat([E.logTool]) : TOOLS; },
         run: run, propose: propose, apply: apply, undo: undo, text: text,
         verb: verb, cards: cards, what: what, noun: noun,
     };

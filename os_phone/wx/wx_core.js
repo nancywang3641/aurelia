@@ -1766,6 +1766,7 @@
                     // 會動手的（改世界書）不是「查了」：是一張等她決定的單子，點開看改前改後（wx_tools openProposal）
                     if (prop) {
                         prop.by = who;
+                        prop.from = '聊天 app「' + (chat.name || who) + '」';   // 修改紀錄寫在哪提的
                         const E = win.OS_AURELIA_EDIT;
                         _sysPush(chat, (E && E.text) ? E.text(prop, true) : who + ' 提出要改世界書「' + prop.title + '」', { _prop: prop });
                         return;
