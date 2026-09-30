@@ -223,6 +223,14 @@
         if (tk === 'phone') {
             const c = _checkPhone(args.data);
             if (c.err) return _no(c.err);
+            // 新做一套只填了幾格：沒填的全回內建留白相片，她看到的是「只改了一部分」（10-01 她測小熊餅乾，說了要整套還是只改一點）。
+            //   多半是沒看說明書、憑印象寫了幾格（格子名字寫錯的被 clean 丟掉）。缺超過四分之一就退回，點名缺哪些、叫它看完整的表重交；
+            //   聊天 app 那邊退回的原因會交回給它、自動再回一次。改一套（edit）本來就只寫要改的，不擋。
+            const P = _PT(), need = (P && P.missing) ? P.missing({}) : [], miss = (P && P.missing) ? P.missing(c.vars) : [];
+            if (need.length && miss.length > need.length / 4) {
+                return _no('新做一套手機主題要把說明書那張表的格子寫齊：這份認得的必填格只有 ' + (need.length - miss.length) + ' 格，還缺 ' + miss.length + ' 格（例如 ' + miss.slice(0, 6).join('、') + '）。'
+                    + '沒填的會變回內建的樣子，看起來只改了一部分。先用 aurelia_theme_spec（kind: phone）看完整的表，格子名字照表抄，整份重交。');
+            }
             after = { name: name, vars: c.vars, swatch: c.swatch }; warn = c.warn;
         } else {
             const c = tk === 'story' ? _checkStory(args.css) : _checkChat(args.css);
