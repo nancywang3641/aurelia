@@ -725,20 +725,20 @@
     }
 
     // ── 給模型看的清單 ─────────────────────────────────────────────────────
-    const NOTE = 'aurelia_theme_ 開頭的工具是看和改對方的三種主題：' + KIND_DESC + '。list、read、spec 的結果下一輪交給你。'
+    const NOTE = 'aurelia_theme_ 開頭的工具是看和改對方的三種主題：' + KIND_DESC + '。list、read、spec、look 的結果都要下一輪才拿到。'
         + 'add（新做一套）、edit（改一套）、use（換上某一套）不會直接改，只會在對方的畫面上出一張單子，附改前改後的樣子，對方按同意才換；'
-        + '你不會拿到結果，寫完這一輪就結束，所以那一則要在工具那一行之前用你自己的話說想怎麼做，不要說已經換好了。'
+        + '你不會拿到結果，寫完這一輪就結束，所以提單子的那一則，先用你自己的話說想怎麼做再叫工具，不要說已經換好了。'
         + '做新的或大改之前先用 spec 看那一種的寫法，一定要照它的規矩（三種能改的東西完全不一樣）。改一套之前先用 read 看內容，看到了再在下一輪寫 edit。'
         + '提單子之前可以先用 look 看畫出來的樣子（截圖＋檢查），看了滿意再提，這一步不會出單子。'
-        + '內建的主題只能看、能換上，不能改；要照它的感覺改，就做一套新的。單子還沒被同意之前對方要你再調整：對同一套用 edit，會接著你上一張的內容改、出一張新的，舊的那張作廢。';
+        + '內建的主題只能看、能換上，不能改（這點跟特效不同）；要照它的感覺改，就做一套新的。單子還沒被同意之前對方要你再調整：對同一套用 edit，會接著你上一張的內容改、出一張新的，舊的那張作廢。';
     const KIND_ARG = { type: 'string', description: '哪一種：' + KIND_DESC };
     const TOOLS = [
         { name: 'aurelia_theme_list', label: '看有哪些主題', run: list,
           description: '列出對方的主題：每一種有哪幾套、哪一套正在用、哪些是內建的。',
           inputSchema: { type: 'object', properties: { kind: { type: 'string', description: '只看哪一種（story、phone、chat），不填三種都列' } } } },
         { name: 'aurelia_theme_read', label: '看主題內容', run: read,
-          description: '看一套主題的內容（劇情主題與聊天 app 主題是 CSS，手機主題是一組格子）。改之前先看。很長會分段，用 part 看下一段。',
-          inputSchema: { type: 'object', properties: { kind: KIND_ARG, name: { type: 'string', description: '那一套的名字；劇情主題可以寫「這個故事正在用的」' },
+          description: '看一套主題的內容（劇情主題與聊天 app 主題是 CSS，手機主題是一份設定值 JSON）。改之前先看。很長會分段，用 part 看下一段。',
+          inputSchema: { type: 'object', properties: { kind: KIND_ARG, name: { type: 'string', description: '那一套的名字；要看對方現在這個故事自己用的那段劇情主題，一字不差填「這個故事正在用的」' },
               part: { type: 'number', description: '很長時看第幾段（從 1 開始）' } }, required: ['kind', 'name'] } },
         { name: 'aurelia_theme_spec', label: '看主題的寫法', run: spec,
           description: '看某一種主題怎麼寫：能改哪些零件、一定要守的規矩、要交什麼格式。做新的或大改之前先看。很長會分段，用 part 看下一段。',
@@ -752,8 +752,8 @@
               find: { type: 'string', description: '跟 aurelia_theme_edit 一樣' },
               replace: { type: 'string', description: '跟 aurelia_theme_edit 一樣' },
               css: { type: 'string', description: 'CSS 那兩種：整份' },
-              data: { type: 'string', description: '手機主題：格子（JSON）' },
-              size: { type: 'string', description: '劇情主題用：phone（手機，不填就是這個）、center（電腦上嵌在聊天區中間）、full（電腦全屏）' },
+              data: { type: 'string', description: '手機主題：設定值（JSON）；看改完的樣子只寫要改的，看新的一套寫整份' },
+              size: { type: 'string', description: '劇情主題用：phone（手機，不填就是這個）、center（電腦上故事畫面沒開全螢幕時）、full（電腦全屏）' },
               mode: { type: 'string', description: '劇情主題用：看哪個畫面，char-mode（對話）、nar-mode（旁白）、chapter（章節卡）、end（章末）、settings（設定），all＝前三個；不填看對話和章節卡' } },
             required: ['kind'] } },
         { name: 'aurelia_theme_add', label: '新做一套主題', propose: true,
@@ -767,11 +767,11 @@
         { name: 'aurelia_theme_edit', label: '改一套主題', propose: true,
           description: '提出修改已經有的一套主題（對方看過改前改後、按同意才會改；正在用的會直接換成新的樣子）。CSS 那兩種：只改一段用 find 和 replace，整份重寫用 css；手機主題：data 只寫要改的那幾格。也可以用 new_name 改名字。內建的不能改。',
           inputSchema: { type: 'object', properties: { kind: KIND_ARG,
-              name: { type: 'string', description: '要改的那一套現在的名字；劇情主題可以寫「這個故事正在用的」' },
+              name: { type: 'string', description: '要改的那一套現在的名字；要改對方現在這個故事自己用的那段劇情主題，一字不差填「這個故事正在用的」' },
               find: { type: 'string', description: 'CSS 那兩種：要換掉的那一段，照 aurelia_theme_read 看到的原文一字不差抄，要只出現一次' },
               replace: { type: 'string', description: '換成什麼（跟 find 一起用；要刪掉那段就寫空字串）' },
               css: { type: 'string', description: 'CSS 那兩種：整份重寫' },
-              data: { type: 'string', description: '手機主題：要改的格子，寫成 {"vars":{…}} 或加 layout，只寫要改的' },
+              data: { type: 'string', description: '手機主題：要改的設定值（格式照 spec），只寫要改的' },
               new_name: { type: 'string', description: '新的名字（要改名字才填）' } },
             required: ['kind', 'name'] } },
         { name: 'aurelia_theme_use', label: '換上某一套主題', propose: true,

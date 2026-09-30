@@ -26,7 +26,8 @@
 
     function _lists() { const R = _R(); return (R && R.getLists) ? R.getLists() : []; }
     function _findList(key) {
-        const k = _one(key).toLowerCase().replace(/清單$/, '');
+        // list 那一行照抄也認得（「・BGM：偵探（對方改過），17 行」→ bgm偵探）：拿掉括號、逗號後面、清單兩字、標點空白
+        const k = _one(key).toLowerCase().replace(/[（(][^）)]*[）)]/g, '').split(/[，,]/)[0].replace(/清單/g, '').replace(/[：:・\s「」『』]/g, '');
         const all = _lists();
         return all.find(function (l) { return l.id === k; })
             || all.find(function (l) { return (GROUP[l.group] + l.label).toLowerCase() === k || (l.label + GROUP[l.group]).toLowerCase() === k; })
@@ -173,23 +174,23 @@
     }
 
     // ── 給模型看的清單 ─────────────────────────────────────────────────────
-    const NOTE = 'aurelia_vnrule_ 開頭的工具是看和調對方的 VN 指令：對方寫故事時固定送給寫故事的模型的格式規則（程式內建，內容不能改）。'
-        + '能調的只有三樣：BGM／音效清單（寫故事的模型從這裡挑音樂和音效，清單內容可以改）、四個內建格式的開關（手機格式、直播彈幕、戰鬥、主角狀態）、BGM 主題（決定用哪一組音樂清單）。'
-        + 'list、read 的結果下一輪交給你。改的那三個工具不會直接改，只會出一張單子，對方按同意才改；你不會拿到結果，所以那一則要先用你自己的話說想怎麼調。'
+    const NOTE = 'aurelia_vnrule_ 開頭的工具是看和調對方的 VN 指令：對方寫故事時固定送給寫故事的模型的格式規則（程式內建）。指令本身不能改；'
+        + '能調的只有三樣：指令會用到的 BGM／音效清單（寫故事的模型從這裡挑音樂和音效，清單內容可以改）、四個內建格式的開關（手機格式、直播彈幕、戰鬥、主角狀態）、BGM 主題（決定用哪一組音樂清單）。'
+        + 'list、read 的結果下一輪交給你。改的那三個工具不會直接改，只會出一張單子，對方按同意才改；你不會拿到結果，寫完這一輪就結束，所以那一則要先用你自己的話說想怎麼調，不要說已經改好了。'
         + '改清單之前先用 read 看原文，看到了再在下一輪改。';
     const TOOLS = [
         { name: 'aurelia_vnrule_list', label: '看 VN 指令', run: list,
           description: '列出現在的 BGM 主題、四個內建格式開著沒、BGM／音效清單有哪幾份、VN 指令有哪幾條。', inputSchema: { type: 'object', properties: {} } },
         { name: 'aurelia_vnrule_read', label: '看一份清單或一條指令', run: read,
           description: '看一份 BGM／音效清單的內容，或一條 VN 指令的全文（指令只能看）。',
-          inputSchema: { type: 'object', properties: { name: { type: 'string', description: '清單名（例如 BGM偵探、音效現代）或指令名' }, part: { type: 'number', description: '很長時看第幾段' } }, required: ['name'] } },
+          inputSchema: { type: 'object', properties: { name: { type: 'string', description: '清單名或指令名，照 aurelia_vnrule_list 列出來的那一行照抄' }, part: { type: 'number', description: '很長時看第幾段' } }, required: ['name'] } },
         { name: 'aurelia_vnrule_list_edit', label: '改音樂音效清單', propose: true,
           description: '提出修改一份 BGM／音效清單（對方按同意才改）。只改一段用 find 和 replace；整份重寫用 content（清空＝這組不給寫故事的模型挑）。',
-          inputSchema: { type: 'object', properties: { list: { type: 'string', description: '哪一份（例如 BGM偵探、音效通用）' },
+          inputSchema: { type: 'object', properties: { list: { type: 'string', description: '哪一份清單，照 aurelia_vnrule_list 列出來的那一行照抄' },
               find: { type: 'string', description: '要換掉的那一段，照 read 看到的原文抄，只出現一次' },
               replace: { type: 'string', description: '換成什麼' }, content: { type: 'string', description: '整份重寫' } }, required: ['list'] } },
         { name: 'aurelia_vnrule_switch', label: '開關內建格式', propose: true,
-          description: '提出打開或關掉一個內建格式（手機格式、直播彈幕、戰鬥、主角狀態），對方按同意才改。',
+          description: '提出打開或關掉一個內建格式，對方按同意才改。手機格式＝教寫故事的模型怎麼寫故事裡的手機聊天與通話；直播彈幕＝直播場面的彈幕；戰鬥＝戰鬥場面的寫法；主角狀態＝主角的狀態欄。',
           inputSchema: { type: 'object', properties: { name: { type: 'string', description: '哪一個：手機格式、直播彈幕、戰鬥、主角狀態' }, enabled: { type: 'boolean', description: 'true 打開、false 關掉' } }, required: ['name', 'enabled'] } },
         { name: 'aurelia_vnrule_bgm_theme', label: '換 BGM 主題', propose: true,
           description: '提出換一個 BGM 主題（決定寫故事的模型用哪一組音樂清單，連帶那組的音效），對方按同意才換。',
