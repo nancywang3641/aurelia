@@ -1796,6 +1796,9 @@
         // 她人還在這間就接著回；不在的話結果留著，下次回覆時會交給它
         if (APP_CONTAINER && GLOBAL_ACTIVE_ID === chat.id && win.wxApp && win.wxApp.triggerReply) {
             await win.wxApp.triggerReply({ fromTool: true });
+        } else if (chat._hbTools && Date.now() - chat._hbTools < 15 * 60000 && win.OS_HEARTBEAT && win.OS_HEARTBEAT.followUp) {
+            // 心跳（他主動找她）那次叫的工具：她不在這間也接著做完，不然只會停在「我查一下」（10-01）
+            await win.OS_HEARTBEAT.followUp(chat);
         }
     }
     function _isMyName(n) { try { return win.WX_ME.isMine(n); } catch (e) { return false; } }

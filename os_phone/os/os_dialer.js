@@ -830,26 +830,77 @@
             if (stale()) return;   // 已經換下一通：鎖與畫面是新那通的，不動
             _removeTyping(typing); _sayBusy = false; _enableSay(true);
         };
-        // 看門狗：40 秒沒回 → 別乾等，給提示
-        watchdog = setTimeout(function () {
-            done();
-            if (stale()) { restore(); return; }
-            if (opts.firstRing) { restore(); _dialFailed(contact); return; }   // 還在響鈴：沒有通話畫面可以冒泡
-            _appendCallBubble(false, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）', contact.name);
-            restore();
-            _vmAfterTurn();
-        }, 40000);
+        // 看門狗：40 秒沒回 → 別乾等，給提示（查資料那一輪會重新計時，見下面 _armDog）
+        const _armDog = function () {
+            if (watchdog) clearTimeout(watchdog);
+            watchdog = setTimeout(function () {
+                done();
+                if (stale()) { restore(); return; }
+                if (opts.firstRing) { restore(); _dialFailed(contact); return; }   // 還在響鈴：沒有通話畫面可以冒泡
+                _appendCallBubble(false, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）', contact.name);
+                restore();
+                _vmAfterTurn();
+            }, 40000);
+        };
+        _armDog();
 
         // 🚨 她說的話在「送出的當下」就寫進記錄，不等模型回（逾時、掛斷都不會弄丟）。
         //    走排隊那條的已經寫過了（見 _writeMyLine），這裡只補沒走排隊的情況。
         if (userText && !opts.alreadyShown) await _writeMyLine(contact, userText);
 
         try {
-            const messages = await OS_API.buildContext(userText || null, 'call_voice_system');
+            // 🧰 工具（10-01 她：心跳跟電話跟聊天室一樣照勾選）：這間聊天室勾了工具，電話裡也拿得到。
+            //   響鈴那一下不給（接不接不用查）；一句話最多查兩輪（電話要即時）；查的時候冒一行「查了什麼」，提單子放回聊天室。
+            const T = _w('WX_TOOLS');
+            const toolChat = (!opts.firstRing && T) ? (_liveChat(contact.id) || await OS_DB.getApiChat(contact.id)) : null;
+            const useTools = !!(toolChat && Array.isArray(toolChat.tools) && toolChat.tools.length);
+            let toolRound = 0;
+            const _build = async function (fromTool) {
+                const ms = await OS_API.buildContext(userText || null, 'call_voice_system');
+                if (useTools) {
+                    try {
+                        await Promise.race([T.prepare(toolChat), new Promise(function (r) { setTimeout(r, 5000); })]);
+                        const tp = T.promptBlock(toolChat, contact.name); if (tp) ms.push({ role: 'system', content: tp });
+                        const tr = T.resultsBlock(toolChat); if (tr) ms.push({ role: 'system', content: tr });
+                    } catch (e) { console.warn('[dialer] 工具說明接不上（照常講電話）', e); }
+                    if (fromTool) ms.push({ role: 'system', content: '【你剛才用工具查的結果回來了，在上面】接著跟對方講電話，不要再查同一件事，也不要再寫工具那種標籤。' });
+                }
+                return ms;
+            };
+            // 叫了工具：先跑、存起來，回傳要不要再叫一次模型
+            const _runTools = async function (finalText) {
+                if (!useTools || toolRound >= 2) return false;
+                const tx = T.extract(String(finalText || ''));
+                if (!tx.calls || !tx.calls.length) return false;
+                toolRound++;
+                const E = _w('OS_AURELIA_EDIT');
+                let any = false;
+                try {
+                    any = await T.run(toolChat, tx.calls, function (label, what, prop) {
+                        if (stale()) return;
+                        if (prop) {
+                            prop.by = contact.name; prop.from = '電話';
+                            toolChat.messages = Array.isArray(toolChat.messages) ? toolChat.messages : [];
+                            toolChat.messages.push({ type: 'system', content: (E && E.text) ? E.text(prop, true) : (contact.name + ' 提了一張單子'), _prop: prop });
+                            _appendCallMark(contact.name + ' 提了一張單子（' + label + '），回聊天室點開看');
+                            return;
+                        }
+                        _appendCallMark(contact.name + ' 查了一下：' + label + (what ? '（' + String(what).slice(0, 30) + '）' : ''));
+                    });
+                } catch (e) { console.warn('[dialer] 工具跑失敗', e); }
+                try { await OS_DB.saveApiChat(contact.id, toolChat); } catch (e) {}
+                return !!any;
+            };
+            const _ask = async function (messages) {
             await OS_API.chat(messages, cfg,
                 function () {},
                 async function (finalText) {
-                    const reply = _extractSpoken(finalText) || '……';
+                    if (!stale() && await _runTools(finalText)) {
+                        _armDog();
+                        await _ask(await _build(true));
+                        return;
+                    }
+                    const reply = _extractSpoken(T ? T.strip(finalText) : finalText) || '……';
                     done();                                   // 先收掉「輸入中…」泡泡
                     if (stale()) { restore(); return; }       // 掛斷後才回來的：不念、不寫、不改畫面
                     // 響鈴那一句：對方可以不接（系統提示教它只回 [不接]）。接了才進通話畫面；
@@ -901,6 +952,8 @@
                 },
                 { task: 'call', disableTyping: cfg.disableTyping !== false }
             );
+            };
+            await _ask(await _build(false));
         } catch (e) {
             done();
             if (stale()) { restore(); return; }

@@ -63,7 +63,12 @@
     function roll(chance) { return Math.random() * 100 < chance; }
 
     // 要送出去的那一包：跟她自己按送出時同一條路（buildContext），多一段「現在是你主動開口」
-    async function buildPayload(chat, nth) {
+    //   opts.tools：這間有勾工具就把工具說明與查到的結果也帶上（10-01 她：心跳跟聊天室一樣照勾選）。
+    //     只有手機開著、當場跑的那種才帶（fire）；預約到伺服器的（scheduleAhead）一次跑完、中途停不下來查，不帶。
+    //   opts.fromTool：剛才那次叫了工具、結果回來了，接著把原本想做的事做完
+    function _hasTools(chat) { return !!(chat && Array.isArray(chat.tools) && chat.tools.length && win.WX_TOOLS); }
+    async function buildPayload(chat, nth, opts) {
+        opts = opts || {};
         const app = win.wxApp;
         if (!app || !win.WX_API || !win.OS_API) return null;
         const prev = app.GLOBAL_ACTIVE_ID;
@@ -86,6 +91,15 @@
                 : [];
             if (_pend && _pend.length) { hasPending = true; _pend.forEach(function (m) { messages.push(m); }); }
         } catch (e) { console.warn('[心跳] 沒回的訊息接不回來（不影響送出）:', (e && e.message) || e); }
+        // 🧰 工具：跟聊天室回話同一套（WX_TOOLS.promptBlock／resultsBlock），放在最後那句「現在是你自己的時間」前面
+        if (opts.tools && _hasTools(chat)) {
+            try {
+                const T = win.WX_TOOLS;
+                await Promise.race([T.prepare(chat), new Promise(function (r) { setTimeout(r, 8000); })]);
+                const tp = T.promptBlock(chat, chat.name); if (tp) messages.push({ role: 'system', content: tp });
+                const tr = T.resultsBlock(chat); if (tr) messages.push({ role: 'system', content: tr });
+            } catch (e) { console.warn('[心跳] 工具說明接不上（照常送出）:', (e && e.message) || e); }
+        }
         // ⏰ 「上一次講話多久前」是現實時間 —— 跟著這一間的時間感知開關走（聊天設置）。
         //   關著就一個字都不提：她跑去吃飯、或是在跑團，不該回來被數落隔了幾小時。
         const idle = (chat && chat.timeAware && lastTalkAt(chat)) ? Math.round((Date.now() - lastTalkAt(chat)) / 3600000) : 0;
@@ -105,7 +119,8 @@
         }
         messages.push({
             role: 'system',
-            content: (hasPending
+            content: (opts.fromTool ? '【你剛才用工具查的結果回來了，在上面】接著把你原本想做的事做完，不要再查同一件事。\n' : '')
+                + (hasPending
                     ? '【現在是你自己的時間】\n她上面那幾則你還沒回：想回就回，不想回也可以做別的。\n'
                     : '【現在是你自己的時間，不是在回覆她】\n')
                 + (idle ? '你們上一次講話大約是 ' + idle + ' 小時前。\n' : '')
@@ -124,10 +139,14 @@
     }
 
     // 手機開著時：真的生一則出來（走托管或手機自己跑都行，交給 WX_API.chat 決定）
-    async function fire(chat) {
+    async function fire(chat, fromTool) {
         const app = win.wxApp;
         if (!app) return false;
-        const messages = await buildPayload(chat);
+        // 這一輪是心跳：叫了工具、查完後由 wx_core 的 _afterTools 看這個記號接著叫 followUp（她不在這間也接著做完）
+        if (!fromTool) chat._toolChain = 0;
+        const tools = _hasTools(chat);
+        if (tools) chat._hbTools = Date.now(); else delete chat._hbTools;
+        const messages = await buildPayload(chat, 0, { tools: tools, fromTool: !!fromTool });
         if (!messages) return false;
         chat.hbLast = Date.now();
         let apiConfig = {};
@@ -252,7 +271,9 @@
     } catch (e) {}
     setTimeout(start, 8000);
 
-    win.OS_HEARTBEAT = { tickNow: tickNow, scheduleAhead: scheduleAhead, clearAhead: clearAhead, cfgOf: cfgOf, dueOf: dueOf, buildPayload: buildPayload, defaults: function () { return Object.assign({}, DEF); } };
+    // 心跳那次叫了工具、結果回來了：接著再叫一次，讓他把原本想做的事做完（wx_core._afterTools 叫）
+    function followUp(chat) { return fire(chat, true); }
+    win.OS_HEARTBEAT = { followUp: followUp, tickNow: tickNow, scheduleAhead: scheduleAhead, clearAhead: clearAhead, cfgOf: cfgOf, dueOf: dueOf, buildPayload: buildPayload, defaults: function () { return Object.assign({}, DEF); } };
     if (win !== window) window.OS_HEARTBEAT = win.OS_HEARTBEAT;
     console.log('💓 [心跳] 已載入（角色主動找她）');
 })();
