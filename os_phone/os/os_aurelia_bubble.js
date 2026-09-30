@@ -20,7 +20,7 @@
 (function () {
     'use strict';
     const win = window.parent || window;
-    const PART = 2600;
+    const PART = 12000;   // 看樣式一頁幾個字（10-01 她：跑團世界觀都三萬起步，3000 莫名。3000 是 09-19 只有上網搜尋時定的，奧瑞亞工具沿用沒重想過；聊天 app 那邊奧瑞亞的結果放寬到 16000）
     const CSS_MAX = 60 * 1024;
     const PV_W = 390;           // 假聊天畫面照手機寬畫
 

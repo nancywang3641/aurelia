@@ -22,7 +22,7 @@
     'use strict';
     const win = window.parent || window;
     const AUR = '奧瑞亞提示詞';
-    const PART = 2800;          // 一次交回去最多幾個字（聊天 app 一次結果上限 3000）
+    const PART = 12000;         // 一次交回去最多幾個字（10-01 她：跑團世界觀都三萬起步，3000 莫名。3000 是 09-19 只有上網搜尋時定的，奧瑞亞工具沿用沒重想過；聊天 app 那邊奧瑞亞的結果放寬到 16000）
     const CONTENT_MAX = 30000;  // 一條最多幾個字
     const MARK = {
         worldInfoBefore: '世界書（角色描述前）', personaDescription: '使用者人設', charDescription: '角色描述',

@@ -80,7 +80,7 @@
         return chs.map(function (c, i) {
             const latest = i === chs.length - 1;
             const sum = _summaryOf(c.raw);
-            const body = latest ? _tail(_clean(c.raw), 1500) : (sum ? '（摘要）' + _cut(sum, 400) : _tail(_clean(c.raw), 400));
+            const body = latest ? _tail(_clean(c.raw), 4000) : (sum ? '（摘要）' + _cut(sum, 400) : _tail(_clean(c.raw), 400));
             return '── ' + c.head + (latest ? '（最新）' : '') + '\n' + (body || '（沒有內容）');
         }).join('\n\n');
     }
@@ -91,7 +91,7 @@
     async function storyOverview() {
         if (!_storyId()) return NO_STORY;
         const ST = win.OS_STORY_TOOLS, parts = [];
-        try { const s = ST && ST.getCurrentInjectionPayload ? await ST.getCurrentInjectionPayload() : ''; if (s) parts.push('【大總結】\n' + _cut(s, 1400)); } catch (e) {}
+        try { const s = ST && ST.getCurrentInjectionPayload ? await ST.getCurrentInjectionPayload() : ''; if (s) parts.push('【大總結】\n' + _cut(s, 6000)); } catch (e) {}
         try { const s = ST && ST.getCurrentClosedBlock ? await ST.getCurrentClosedBlock() : ''; if (s) parts.push('【已經結束的事】\n' + _cut(s, 500)); } catch (e) {}
         try {
             const T = win.OS_STORY_THREADS;
@@ -469,7 +469,7 @@
             if (!all) out.push('也可能是在別張卡（別本書）玩的：all 填 true，所有角色卡一起找（比較慢）。');
             else out.push('還是找不到的話，問對方還記得什麼別的細節。');
         }
-        return _cut(out.join('\n'), 2900);
+        return _cut(out.join('\n'), 8000);   // 以前 2900 是配聊天 app 一次 3000 的上限；奧瑞亞的結果放寬到 16000 了（10-01）
     }
 
     //   酒館換聊天是她的動作（跟自己在角色卡清單點一樣），換之前問一次；現在這個聊天不會刪。
@@ -532,7 +532,7 @@
         if (!hit.length) return '人物檔案裡沒有「' + q + '」。登場過的人：' + names.slice(0, 20).join('、');
         return hit.slice(0, 3).map(function (n) {
             const x = dos[n] || {};
-            return '【' + n + '】' + (x.hook ? _one(x.hook) + '\n' : '') + _cut(x.file || '（檔案還是空的）', 900);
+            return '【' + n + '】' + (x.hook ? _one(x.hook) + '\n' : '') + _cut(x.file || '（檔案還是空的）', 4000);
         }).join('\n\n');
     }
 
@@ -647,7 +647,7 @@
         try { cur = P.getCurrent ? P.getCurrent() : null; } catch (e) {}
         if (!cur || !cur.name) return '對方還沒有設定主角的人設。';
         const others = list.filter(function (p) { return p && p.name && p.name !== cur.name; }).map(function (p) { return p.name; });
-        return '【對方現在扮演的主角】' + cur.name + '\n' + (cur.desc ? _cut(cur.desc, 1800) : '（沒有寫設定）')
+        return '【對方現在扮演的主角】' + cur.name + '\n' + (cur.desc ? _cut(cur.desc, 6000) : '（沒有寫設定）')
             + (others.length ? '\n\n對方還有這些人設（現在沒在用）：' + others.slice(0, 12).join('、') : '');
     }
     // ── 10. 通訊錄 ─────────────────────────────────────────────────────
@@ -665,7 +665,7 @@
                 || people.find(function (c) { return _fold(c.name).indexOf(q) !== -1 || _fold(c.realName || '').indexOf(q) !== -1; });
             if (!hit) return '通訊錄裡沒有「' + _one(args.name) + '」。有這些人：' + people.slice(0, 30).map(function (c) { return c.name; }).join('、');
             return '【' + hit.name + '】' + (hit.realName && hit.realName !== hit.name ? '（本名 ' + hit.realName + '，主角替他改了備註名）' : '') + (hit.lobby ? '（常駐角色，不分故事）' : '')
-                + '\n' + (hit.desc ? _cut(hit.desc, 1500) : '（沒有介紹）');
+                + '\n' + (hit.desc ? _cut(hit.desc, 6000) : '（沒有介紹）');
         }
         const nameOf = function (id) { if (id === 'User') return '主角'; const c = all.find(function (x) { return x.id === id; }); return c ? c.name : id; };
         return '【主角手機的通訊錄】' + people.length + ' 人：\n' + people.slice(0, 60).map(function (c) {
@@ -683,11 +683,11 @@
         const staff = L.staffKeys().map(function (k) { return L.staff(k); }).filter(Boolean);
         if (q) {
             const s = staff.find(function (x) { return _fold(x.name) === q || x.key === q; });
-            if (s) return '【' + s.name + '】' + (s.subTitle || '') + '\n' + (s.personaFull || s.persona ? PERSONA_NOTE + _cut(s.personaFull || s.persona, 1800) : '（這位的個性由別的地方管，這裡沒有寫）');
+            if (s) return '【' + s.name + '】' + (s.subTitle || '') + '\n' + (s.personaFull || s.persona ? PERSONA_NOTE + _cut(s.personaFull || s.persona, 6000) : '（這位的個性由別的地方管，這裡沒有寫）');
             let guests = [];
             try { guests = L.cafeRoster ? (await L.cafeRoster()) || [] : []; } catch (e) {}
             const g = guests.find(function (x) { return _fold(x.name) === q; }) || guests.find(function (x) { return _fold(x.name).indexOf(q) !== -1; });
-            if (g) return '【' + g.name + '】咖啡廳的客人\n' + PERSONA_NOTE + _cut(g.persona || '', 1800);
+            if (g) return '【' + g.name + '】咖啡廳的客人\n' + PERSONA_NOTE + _cut(g.persona || '', 6000);
             return '大廳裡沒有叫「' + _one(args.name) + '」的。';
         }
         let out = '【大廳的店員】\n' + staff.map(function (s) { return '・' + s.name + (s.subTitle ? '（' + s.subTitle + '）' : ''); }).join('\n');

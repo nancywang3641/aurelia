@@ -26,7 +26,7 @@
     const LOCKED = ['【奧瑞亞世界】', '【奧瑞亞-視差】'];
     const CONTENT_ONLY = ['【奧瑞亞-人物核心】'];
     const CONTENT_MAX = 12000;   // 一條最多幾個字
-    const READ_MAX = 2800;       // 看全文最多交回去幾個字（聊天 app 一次結果上限 3000）
+    const READ_MAX = 12000;      // 看全文最多交回去幾個字（＝一條的上限，整條看得到）（10-01 她：跑團世界觀都三萬起步，3000 莫名。3000 是 09-19 只有上網搜尋時定的，奧瑞亞工具沿用沒重想過；聊天 app 那邊奧瑞亞的結果放寬到 16000）
 
     function _pwa() { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } }
     function _api() { return _pwa() ? ((win.OS_WORLDBOOK && win.OS_WORLDBOOK.lorebookApi) || null) : (win.TavernHelper || null); }

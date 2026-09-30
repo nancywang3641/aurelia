@@ -19,7 +19,7 @@
 (function () {
     'use strict';
     const win = window.parent || window;
-    const PART = 2600;
+    const PART = 12000;   // 看內容一頁幾個字（10-01 她：跑團世界觀都三萬起步，3000 莫名。3000 是 09-19 只有上網搜尋時定的，奧瑞亞工具沿用沒重想過；聊天 app 那邊奧瑞亞的結果放寬到 16000）
     const CSS_MAX = 200 * 1024;
     const KINDS = { story: '劇情主題', phone: '手機主題', chat: '聊天 app 主題' };
     const CUR = '__current__';   // 劇情主題「這個故事正在用的」那段
