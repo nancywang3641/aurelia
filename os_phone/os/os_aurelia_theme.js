@@ -145,10 +145,14 @@
         }
         return parts.join('\n\n');
     }
-    function _paged(text, part, what) {
-        const n = Math.max(1, Math.ceil(text.length / PART));
+    // 寫法（spec）一次給整份：聊天 app 的角色每個結果只完整看一次、下一輪就收成一行，分段的話看到第 3 頁時前兩頁早就不見了，
+    //   永遠湊不齊那張表（10-01 她：gemini 一直跑去看第 3 頁、第 4 頁）。聊天 app 那邊 _spec 結尾的結果也放寬上限（wx_tools SPEC_MAX）。
+    const SPEC_PART = 16000;
+    function _paged(text, part, what, size) {
+        const Z = size || PART;
+        const n = Math.max(1, Math.ceil(text.length / Z));
         const p = Math.min(n, Math.max(1, Math.floor(Number(part) || 1)));
-        return (n > 1 ? what + '（第 ' + p + '／' + n + ' 段' + (p < n ? '，part 填 ' + (p + 1) + ' 看下一段' : '，這是最後一段') + '）\n' : '') + text.slice((p - 1) * PART, p * PART);
+        return (n > 1 ? what + '（第 ' + p + '／' + n + ' 段' + (p < n ? '，part 填 ' + (p + 1) + ' 看下一段' : '，這是最後一段') + '）\n' : '') + text.slice((p - 1) * Z, p * Z);
     }
     async function read(args) {
         const tk = _kind(args.kind);
@@ -176,7 +180,7 @@
             pre = '下面是對方的聊天 app 給模型的主題說明書。交的時候用 aurelia_theme_add（kind: chat）的 css 參數。\n\n';
         }
         if (!txt) return '那一種的說明書還沒載好。';
-        return _paged(pre + txt, args.part, KINDS[tk] + '的寫法');
+        return _paged(pre + txt, args.part, KINDS[tk] + '的寫法', SPEC_PART);
     }
 
     // ── 草稿：還沒被同意的那張（同 VN 組件）────────────────────────────────
@@ -749,7 +753,7 @@
           inputSchema: { type: 'object', properties: { kind: KIND_ARG, name: { type: 'string', description: '那一套的名字；要看對方現在這個故事自己用的那段劇情主題，一字不差填「這個故事正在用的」' },
               part: { type: 'number', description: '很長時看第幾段（從 1 開始）' } }, required: ['kind', 'name'] } },
         { name: 'aurelia_theme_spec', label: '看主題的寫法', run: spec,
-          description: '看某一種主題怎麼寫：能改哪些零件、一定要守的規矩、要交什麼格式。做新的或大改之前先看。很長會分段，用 part 看下一段。',
+          description: '看某一種主題怎麼寫：能改哪些零件、一定要守的規矩、要交什麼格式。做新的或大改之前先看。整份一次給你，寫之前看完。',
           inputSchema: { type: 'object', properties: { kind: KIND_ARG, part: { type: 'number', description: '看第幾段（從 1 開始）' } }, required: ['kind'] } },
         { name: 'aurelia_theme_look', label: '看看主題畫出來的樣子',
           description: '提單子之前先看看：把一套主題畫出來截圖給你（能看圖的才看得到），並列出檢查抓到的問題。不會出單子，對方看不到。'

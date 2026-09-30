@@ -197,10 +197,14 @@
             + '\n\n【每間聊天室現在的泡泡】（這個故事主角手機裡的聊天室，每間各自設定）'
             + (rl.length ? '\n' + rl.join('\n') + (rooms.length > 40 ? '\n（還有 ' + (rooms.length - 40) + ' 間沒列）' : '') : '\n（通訊錄是空的）');
     }
-    function _paged(text, part, what) {
-        const n = Math.max(1, Math.ceil(text.length / PART));
+    // 寫法（spec）一次給整份：聊天 app 的角色每個結果只完整看一次、下一輪就收成一行，分段的話看到第 3 頁時前兩頁早就不見了，
+    //   永遠湊不齊那張表（10-01 她：gemini 一直跑去看第 3 頁、第 4 頁）。聊天 app 那邊 _spec 結尾的結果也放寬上限（wx_tools SPEC_MAX）。
+    const SPEC_PART = 16000;
+    function _paged(text, part, what, size) {
+        const Z = size || PART;
+        const n = Math.max(1, Math.ceil(text.length / Z));
         const p = Math.min(n, Math.max(1, Math.floor(Number(part) || 1)));
-        return (n > 1 ? what + '（第 ' + p + '／' + n + ' 段' + (p < n ? '，part 填 ' + (p + 1) + ' 看下一段' : '，這是最後一段') + '）\n' : '') + text.slice((p - 1) * PART, p * PART);
+        return (n > 1 ? what + '（第 ' + p + '／' + n + ' 段' + (p < n ? '，part 填 ' + (p + 1) + ' 看下一段' : '，這是最後一段') + '）\n' : '') + text.slice((p - 1) * Z, p * Z);
     }
     function read(args, ctx) {
         if (!_ready()) return NOT_READY;
@@ -236,7 +240,7 @@
             + '交之前自檢一次：兩側都設計了嗎？有形狀簽名或材質簽名其中一個嗎？字底下是實底，還是半透明加了模糊？'
             + '.pbub-row 上有沒有不小心寫到 display / flex-direction / justify-content？底色改成漸層了但尖角還是純色嗎？有問題就修好再交。';
         const pre = '下面是對方的聊天 app 給模型的泡泡說明書。想跟對方的聊天 app 主題搭，可以先用 aurelia_theme_read（kind: chat）看那套的配色（沒有這個工具就跳過）。\n\n';
-        return _paged(pre + head + tail, args.part, '泡泡的寫法');
+        return _paged(pre + head + tail, args.part, '泡泡的寫法', SPEC_PART);
     }
 
     // ── 草稿：還沒被同意的那張（同改主題）──────────────────────────────────
@@ -674,7 +678,7 @@
               room: { type: 'string', description: ROOM_ONE },
               part: { type: 'number', description: '很長時看第幾段（從 1 開始）' } } } },
         { name: 'aurelia_bubble_spec', label: '看泡泡的寫法', run: spec,
-          description: '看泡泡怎麼寫：能改哪些零件、一定要守的規矩、要交什麼格式。做新的或大改之前先看。很長會分段，用 part 看下一段。',
+          description: '看泡泡怎麼寫：能改哪些零件、一定要守的規矩、要交什麼格式。做新的或大改之前先看。整份一次給你，寫之前看完。',
           inputSchema: { type: 'object', properties: { part: { type: 'number', description: '看第幾段（從 1 開始）' } } } },
         { name: 'aurelia_bubble_look', label: '看看泡泡畫出來的樣子',
           description: '提單子之前先看看：把一套泡泡畫在假的聊天畫面上截圖給你（亮背景、暗背景各一張；對方的聊天 app 正開著某一間時，多一張套在真畫面上的），能看圖的才看得到，並列出檢查抓到的問題。不會出單子，對方看不到。'

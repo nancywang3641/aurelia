@@ -128,10 +128,14 @@
                 + (o[String(t.tagId || '').toLowerCase()] ? '\n  （有一張改它的單子還沒被同意，read 看到的是那份）' : '');
         })).join('\n');
     }
-    function _paged(text, part, what) {
-        const n = Math.max(1, Math.ceil(text.length / PART));
+    // 寫法（spec）一次給整份：聊天 app 的角色每個結果只完整看一次、下一輪就收成一行，分段的話看到第 3 頁時前兩頁早就不見了，
+    //   永遠湊不齊那張表（10-01 她：gemini 一直跑去看第 3 頁、第 4 頁）。聊天 app 那邊 _spec 結尾的結果也放寬上限（wx_tools SPEC_MAX）。
+    const SPEC_PART = 16000;
+    function _paged(text, part, what, size) {
+        const Z = size || PART;
+        const n = Math.max(1, Math.ceil(text.length / Z));
         const p = Math.min(n, Math.max(1, Math.floor(Number(part) || 1)));
-        const body = text.slice((p - 1) * PART, p * PART);
+        const body = text.slice((p - 1) * Z, p * Z);
         return (n > 1 ? what + '（第 ' + p + '／' + n + ' 段' + (p < n ? '，part 填 ' + (p + 1) + ' 看下一段' : '，這是最後一段') + '）\n' : '') + body;
     }
     async function read(args) {
@@ -156,7 +160,7 @@
         if (!txt) return '創作室還沒載好，現在看不到寫法。';
         const pre = '下面是對方的創作室給模型的 VN 組件說明書（故事裡跳出來的那一型）。說明書裡講的「輸出 <json>」你不用管：'
             + '新增用 aurelia_vn_add 交，tag＝tagId、demo_format＝demoFormat、usage_desc＝usageDesc、is_block＝isBlock，其他照同名參數。\n\n';
-        return _paged(pre + txt, args.part, 'VN 組件的寫法');
+        return _paged(pre + txt, args.part, 'VN 組件的寫法', SPEC_PART);
     }
 
     // ── 提出（做成單子）──────────────────────────────────────────────────
@@ -442,7 +446,7 @@
               tag: { type: 'string', description: '組件的標籤或名字' },
               part: { type: 'number', description: '很長時看第幾段（從 1 開始）' } }, required: ['tag'] } },
         { name: 'aurelia_vn_spec', label: '看 VN 組件的寫法', run: spec,
-          description: '看怎麼寫 VN 組件：面板怎麼放、一定要守的規矩、js 裡能用的 st 函式清單、正文裡的寫法怎麼定。做新的或大改之前先看。很長會分段，用 part 看下一段。',
+          description: '看怎麼寫 VN 組件：面板怎麼放、一定要守的規矩、js 裡能用的 st 函式清單、正文裡的寫法怎麼定。做新的或大改之前先看。整份一次給你，寫之前看完。',
           inputSchema: { type: 'object', properties: { part: { type: 'number', description: '看第幾段（從 1 開始）' } } } },
         { name: 'aurelia_vn_look', label: '看看畫出來的樣子',
           description: '提單子之前先看看：照手機、中間、全螢幕把組件畫出來（能看圖的會拿到截圖），並量面板多大、有沒有超出畫面、有沒有報錯。不會出單子，對方看不到。'

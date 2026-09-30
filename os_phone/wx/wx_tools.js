@@ -26,6 +26,8 @@
     const SEED_KEY = 'wx_tools_seeded';
     const CALL_TIMEOUT = 25000;
     const RESULT_MAX = 3000;     // 一次結果整段送給模型的上限（字）
+    // 寫法（aurelia_*_spec）例外：要照著寫的那張表得一次看齊，結果只完整給一次、下一輪收成一行，切段的話永遠湊不齊（10-01 她：gemini 一直跑去看第 3、4 頁）
+    const SPEC_MAX = 16000;
     const LOG_KEEP = 8;          // 每間留幾筆用過的紀錄
     const MAX_CALLS = 3;         // 一輪最多跑幾個
 
@@ -465,7 +467,7 @@
             fresh.forEach(function (x, i) {
                 const a = _argsText(x.args);
                 out.push('── 結果 ' + (i + 1) + '：' + x.label + (a ? '（' + a + '）' : ''));
-                out.push(x.ok ? String(x.text || '').slice(0, RESULT_MAX) : ('沒有成功：' + x.text + '。不要假裝查到了。'));
+                out.push(x.ok ? String(x.text || '').slice(0, /_spec$/.test(x.tool || '') ? SPEC_MAX : RESULT_MAX) : ('沒有成功：' + x.text + '。不要假裝查到了。'));
                 x.sent = true;
             });
         }

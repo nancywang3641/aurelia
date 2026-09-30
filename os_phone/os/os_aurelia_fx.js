@@ -87,10 +87,14 @@
         Object.keys(o).forEach(function (k) { if (o[k].kind === 'add' && !all.some(function (r) { return r.fxId === k; })) lines.push('・' + k + '「' + (o[k].after.name || '') + '」｜草稿：單子還沒被同意，還沒存進去'); });
         return '對方的畫面特效（正文裡寫 #代號# 就會播）：\n' + lines.join('\n');
     }
-    function _paged(text, part, what) {
-        const n = Math.max(1, Math.ceil(text.length / PART));
+    // 寫法（spec）一次給整份：聊天 app 的角色每個結果只完整看一次、下一輪就收成一行，分段的話看到第 3 頁時前兩頁早就不見了，
+    //   永遠湊不齊那張表（10-01 她：gemini 一直跑去看第 3 頁、第 4 頁）。聊天 app 那邊 _spec 結尾的結果也放寬上限（wx_tools SPEC_MAX）。
+    const SPEC_PART = 16000;
+    function _paged(text, part, what, size) {
+        const Z = size || PART;
+        const n = Math.max(1, Math.ceil(text.length / Z));
         const p = Math.min(n, Math.max(1, Math.floor(Number(part) || 1)));
-        return (n > 1 ? what + '（第 ' + p + '／' + n + ' 段' + (p < n ? '，part 填 ' + (p + 1) + ' 看下一段' : '，這是最後一段') + '）\n' : '') + text.slice((p - 1) * PART, p * PART);
+        return (n > 1 ? what + '（第 ' + p + '／' + n + ' 段' + (p < n ? '，part 填 ' + (p + 1) + ' 看下一段' : '，這是最後一段') + '）\n' : '') + text.slice((p - 1) * Z, p * Z);
     }
     async function read(args) {
         const d = _drafts()[_key(args.id)];
@@ -103,7 +107,7 @@
         const S = _S(), txt = S && S.fxSpec ? S.fxSpec() : '';
         if (!txt) return '創作室還沒載好，現在看不到寫法。';
         const pre = '下面是對方的特效工坊給模型的說明書。說明書說的「輸出被 <json> 包裹的配方」，你把那份 JSON 放進 aurelia_fx_add 的 recipe 參數就好。\n\n';
-        return _paged(pre + txt, args.part, '特效的寫法');
+        return _paged(pre + txt, args.part, '特效的寫法', SPEC_PART);
     }
 
     // ── 草稿（同 VN 組件）────────────────────────────────────────────────
@@ -402,7 +406,7 @@
           description: '看一個特效的配方全文（JSON）。改之前先看。',
           inputSchema: { type: 'object', properties: { id: { type: 'string', description: '特效代號（fx- 開頭）或名字' }, part: { type: 'number', description: '很長時看第幾段' } }, required: ['id'] } },
         { name: 'aurelia_fx_spec', label: '看特效的寫法', run: spec,
-          description: '看怎麼寫特效配方：有哪些積木、每個參數的範圍、瞬發與持續的差別。做新的或大改之前先看。很長會分段，用 part 看下一段。',
+          description: '看怎麼寫特效配方：有哪些積木、每個參數的範圍、瞬發與持續的差別。做新的或大改之前先看。整份一次給你，寫之前看完。',
           inputSchema: { type: 'object', properties: { part: { type: 'number', description: '看第幾段（從 1 開始）' } } } },
         { name: 'aurelia_fx_look', label: '看看特效播出來的樣子',
           description: '提單子之前先看看：把特效在畫面外播一次、截兩張（能看圖的才看得到）。只填 id＝看已經有的（或你還沒被同意的那張）；給 recipe＝看這份新配方。不會出單子。',
