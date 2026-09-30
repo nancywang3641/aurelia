@@ -1748,6 +1748,7 @@
     }
     async function _afterTools(chat) {
         if (!chat) return;
+        chat = _liveCopy(chat);   // 等回覆的時候聊天 app 重開過：工具結果要記在現在那一份上
         const calls = _toolCalls[chat.id];
         delete _toolCalls[chat.id];
         const T = win.WX_TOOLS;
@@ -3036,8 +3037,27 @@
     // 📡 托管跑完的結果回來了 → 變成訊息。她人在那間就照常一條條冒出來，不在就安靜收進去、標未讀。
     //    🚨 parseAndProcess 的上下文（房名／房 id／成員）是看 GLOBAL_ACTIVE_ID 的，
     //       收的可能是別間的結果 → 解析那一下先把它借過去，解析完立刻還回去。
+    // 🚨 等回覆的時候她關掉又打開聊天 app：GLOBAL_CHATS 換成從存檔新讀的那一份，手上拿著的這份變成舊的。
+    //    回覆放進舊的那份：畫面看得到、也存了一次，可是之後新的那份（她正在用的）一存就整個蓋掉，
+    //    再開聊天 app 那幾則就不見了（10-01 她心跳測到：主動找她那一輪等了快半分鐘，中間她關掉又打開）。
+    //    回覆、工具結果回來的地方一律先換成現在那一份；等的時候記在舊那份上的東西搬過去（心跳時間、工具查到的）。
+    function _liveCopy(chat) {
+        if (!chat || !chat.id) return chat;
+        const live = GLOBAL_CHATS[chat.id];
+        if (!live || live === chat) return chat;
+        if ((chat.hbLast || 0) > (live.hbLast || 0)) live.hbLast = chat.hbLast;
+        ['_hbTools', '_toolChain', '_relayJob'].forEach(function (k) { if (chat[k] !== undefined && live[k] === undefined) live[k] = chat[k]; });
+        if (Array.isArray(chat.toolLog) && chat.toolLog.length > ((live.toolLog && live.toolLog.length) || 0)) live.toolLog = chat.toolLog;
+        (chat.messages || []).forEach(function (m) {   // 等的時候塞進舊那份的查工具摺疊（「正在輸入」不搬：新的那份可能已經存著一顆，搬了會多一顆拿不掉）
+            if (m && m._tools && (live.messages || []).indexOf(m) < 0 && !(live.messages || []).some(function (x) { return x && x._tools && x.content === m.content; })) {
+                (live.messages = live.messages || []).push(m);
+            }
+        });
+        return live;
+    }
     async function _applyRelayReply(chat, finalText, thinking) {
         if (!chat) return;
+        chat = _liveCopy(chat);
         const li = chat.messages.findIndex(m => !m.isMe && m.isLoading);
         if (li !== -1) chat.messages.splice(li, 1);
         delete chat._relayJob;
@@ -4441,7 +4461,7 @@
 
             // 🚨 這一輪是哪間發的：等回覆的時候她可能切到別間，存檔一律存回這間，不看當下開著哪間
             const _replyId = GLOBAL_ACTIVE_ID;
-            const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
+            let currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];   // 回來時換成現在那一份（_liveCopy），所以是 let
             if (!_fromTool) { currentChat._toolChain = 0; delete _toolCalls[currentChat.id]; }
             
             // 1. 顯示「對方正在輸入...」的臨時佔位符
@@ -4457,6 +4477,7 @@
 
             // 定義完成回調
             const onFinishReply = async (finalText) => {
+                currentChat = _liveCopy(currentChat);   // 等的時候聊天 app 重開過：放進她現在用的那一份
                 // 回來時她已經切到別間 → 當成「她沒在看的那間收到回覆」：標未讀、存回這間（跟托管收回來同一條）
                 if (GLOBAL_ACTIVE_ID !== _replyId) {
                     IS_STREAMING_REPLY = false;

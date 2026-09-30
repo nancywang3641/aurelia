@@ -176,7 +176,9 @@
             if (!d) continue;
             if (!roll(d.chance)) { chats[id].hbLast = now; continue; }   // 沒中：這一輪跳過，重新計時
             await fire(chats[id]);
-            try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(id, chats[id]); } catch (e) {}
+            // 🚨 存現在那一份：等回覆的時候她關掉又打開聊天 app，GLOBAL_CHATS 換成新讀的一份，回覆放在那份上（wx_core _liveCopy）；
+            //    存手上這份舊的會把剛收到的回覆蓋掉（10-01 她心跳測到回覆冒出來又不見）
+            try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(id, _chats()[id] || chats[id]); } catch (e) {}
             break;   // 一次只讓一個人開口
         }
     }
