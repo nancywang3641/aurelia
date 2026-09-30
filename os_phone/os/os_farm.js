@@ -6,6 +6,7 @@
 //   ② 存檔（localStorage aurelia_farm_v1；以前在測試頁玩過的 aurelia_farm_lab_v1 第一次會接過來）
 //   ③ 後院、牧場兩個場景切換（走進小圍欄／走出牧場缺口）
 //   ④ 關掉時把場景拆乾淨：走路那支在捕獲階段攔方向鍵，不拆的話關掉之後大廳和酒館都收不到方向鍵
+//   ⑤ 照真的時間過日子（09-30）：打開時把沒來的那幾天補上，開著跨過台灣清晨 4 點也補（規則在 farm_ship_core 的 catchUp）
 // 規則、畫面各在 os_phone/farm/ 自己那支，說明寫在各支開頭。
 // 之後：存檔搬到 VPS（手機、電腦同一塊田）、住戶關電腦時也能顧田——見記憶 project_farm_walk_stage_2026_09_29。
 // ============================================================
@@ -129,10 +130,17 @@
 
     // ── 一次打開＝一個 session ────────────────────────
     var session = null;
+    // 補了幾天要跟她說一聲；結算單在右上那顆看
+    function caughtText(n) {
+        if (!n) return '';
+        return (n === 1 ? '過了一天（每天清晨 4 點結算）' : '你不在的時候過了 ' + n + ' 天') + '，右上「結算單」看最新那張';
+    }
     function start(root, raw, note) {
         var L = libs();
         var state = loadState(L, raw);
-        var scene = null, toastTimer = 0, watch = 0;
+        // 這次用哪一份已經決定好了（雲端那份也對過了）才補天數：另一台先補過的，拿到的那份就不會再補一次
+        var caught = L.ship.catchUp(state, L, Date.now()).days;
+        var scene = null, sceneName = '', toastTimer = 0, watch = 0;
         var Cloud = window.FarmCloud;
         // 存在這台；雲端存檔開著的話順便送上去（停手一下才送）
         function save() {
@@ -165,6 +173,7 @@
         function go(name, arg) {
             if (scene) scene.destroy();
             clearTimeout(toastTimer);
+            sceneName = name;
             if (name === 'visit') scene = window.FarmVisit.mount(ctx, arg);
             else scene = (name === 'ranch' ? window.FarmRanch : window.FarmYard).mount(ctx);
         }
@@ -189,8 +198,19 @@
         parkHasStyleRules();
         window.addEventListener('pagehide', onHide);
         document.addEventListener('visibilitychange', onHide);
+        // 開著跨過清晨 4 點：補上那一天，重開這個場景（田、動物照新的一天畫）；在別人家做客時先補、回家就看得到
+        function rollover() {
+            var n = L.ship.catchUp(state, L, Date.now()).days;
+            if (!n) return;
+            save();
+            if (sceneName === 'yard' || sceneName === 'ranch') go(state.walk && state.walk.scene === 'ranch' ? 'ranch' : 'yard');
+            toast(caughtText(n));
+        }
         // 農場那一格被關掉（藏起來或換成別的 app）就拆掉：走路那支在攔方向鍵，不能留著
-        watch = setInterval(function () { if (!root.isConnected || root.offsetParent === null) end(); }, 800);
+        watch = setInterval(function () {
+            if (!root.isConnected || root.offsetParent === null) { end(); return; }
+            if (state.ship && Date.now() >= state.ship.settledTo) rollover();
+        }, 800);
         session = { end: end, ctx: ctx, state: function () { return state; }, scene: function () { return scene; } };
         // 玩到一半另一台裝置存過了：這台手上這份不能再蓋上去，換成最新的重開
         if (Cloud) Cloud.setOnNewer(function (remote) {
@@ -200,7 +220,9 @@
             if (c) launch(c, { raw: remote, note: '另一台裝置剛存過這塊田，換成最新的了' });
         });
         go(state.walk && state.walk.scene === 'ranch' ? 'ranch' : 'yard');
-        if (note) toast(note);
+        if (caught) save();
+        var say = [note, caughtText(caught)].filter(Boolean).join('；');
+        if (say) toast(say);
         claimSteals();
         return session;
     }

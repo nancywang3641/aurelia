@@ -392,7 +392,9 @@
     // ── 結束今天（跟後院那顆同一件事）：出貨箱結算 → 農場、牧場、走路各過一天 → 跳結算單 ──
     $('ranch-next-day').addEventListener('click', function (ev) {
         ev.stopPropagation();
-        var out = shipUi.endDay().report.ranch;
+        var done = shipUi.endDay();
+        if (!done.ok || !done.report) return;   // 今天已經提早結束過，擋下來了
+        var out = done.report.ranch;
         out.ran.forEach(function (id) { runAway(herd.find(function (a) { return a.id === id; })); });
         // 過一天動物重新散開：走到規則排的新位置
         herd.forEach(function (a) {

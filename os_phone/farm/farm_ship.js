@@ -162,9 +162,10 @@
             };
         }
 
-        // 過一天：結算 → 跳結算單
+        // 「結束今天」：提早結束這一天 → 跳結算單。今天已經提早結束過（比真的時間多走一天了）就擋下來跳一句，回 ok:false
         function endDay(extraOpts) {
-            var out = ship.endDay(opts.state(), libs, extraOpts);
+            var out = ship.endEarly(opts.state(), libs, Date.now(), extraOpts);
+            if (!out.ok) { if (opts.toast) opts.toast(out.message); return out; }
             binFull = null;
             renderBin();
             openReport(out.report);
