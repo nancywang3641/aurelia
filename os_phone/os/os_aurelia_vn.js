@@ -160,46 +160,40 @@
     }
 
     // ── 提出（做成單子）──────────────────────────────────────────────────
-    async function _proposeAdd(args) {
+    // 新組件的資料（add 的參數）。回 { data } 或 { err }
+    async function _dataFromAdd(args) {
         const tag = _one(args.tag);
-        if (!tag) return _no('要寫 tag（標籤，英數字）。');
-        if (_safeTag(tag) !== tag) return _no('tag 只能用英文字母、數字、底線、連字號。');
+        if (!tag) return { err: '要寫 tag（標籤，英數字）。' };
+        if (_safeTag(tag) !== tag) return { err: 'tag 只能用英文字母、數字、底線、連字號。' };
         if ((await _all()).some(function (t) { return String(t.tagId || '').toLowerCase() === tag.toLowerCase(); })) {
-            return _no('已經有標籤是「' + tag + '」的組件了，要改它用 aurelia_vn_edit，要做新的換一個標籤。');
+            return { err: '已經有標籤是「' + tag + '」的組件了，要改它用 aurelia_vn_edit，要做新的換一個標籤。' };
         }
         const demo = String(args.demo_format || '');
         const data = { tagId: tag, title: _one(args.title) || tag, html: String(args.html || ''), css: String(args.css || ''), js: String(args.js || ''),
             demoFormat: demo, usageDesc: String(args.usage_desc || ''), keywords: _keys(args.keywords),
             isBlock: _bool(args.is_block) !== undefined ? _bool(args.is_block) : !!demo.trim(), isActive: true };
-        if (!data.usageDesc.trim()) return _no('要寫 usage_desc：給寫故事的模型的一句話說明（什麼時候用、照 demo_format 寫）。');
-        if (['html', 'css', 'js', 'demoFormat', 'usageDesc'].some(function (k) { return data[k].length > TEXT_MAX; })) return _no('有一欄太長了（每欄最多 ' + TEXT_MAX + ' 字）。');
-        const bad = _issues(data);
-        if (bad.length) return _no('這樣做出來會出問題，改好再提：\n- ' + bad.join('\n- '));
-        const prop = { id: _newId(), mod: 'vn', kind: 'add', book: 'VN 組件', title: tag, name: data.title, before: null, after: _snap(data), state: 'wait', at: Date.now() };
-        _draftPut(prop);   // 同一個標籤還沒被同意的舊單子，從這張起作廢
-        return { ok: true, prop: prop };
+        if (['html', 'css', 'js', 'demoFormat', 'usageDesc'].some(function (k) { return data[k].length > TEXT_MAX; })) return { err: '有一欄太長了（每欄最多 ' + TEXT_MAX + ' 字）。' };
+        return { data: _snap(data) };
     }
-    async function _proposeEdit(args) {
-        // 還沒被同意的單子（草稿）→ 接著那份改；新增的草稿改完還是一張「新增」
-        const d = _draftFor(args.tag);
-        let kind, tplId, before, base;
-        if (d) {
-            kind = d.kind; tplId = d.tplId; before = d.before; base = d.after;
-        } else {
-            const f = await _find(args.tag);
-            if (f.err) return _no(f.err);
-            const t = f.t;
-            if (_type(t) !== '純展示') return _no('「' + t.tagId + '」是' + _type(t) + '的組件，這裡只能看；要改請對方在創作室改（這裡只改故事裡跳出來的那種）。');
-            kind = 'edit'; tplId = t.id; before = _snap(t); base = _snap(t);
-        }
-        const after = JSON.parse(JSON.stringify(base));
+    // 要改的是哪一份：還沒被同意的單子（草稿）優先，不然是存著的那個。回 { kind, tplId, before, base } 或 { err }
+    async function _base(key, justLook) {
+        const d = _draftFor(key);
+        if (d) return { kind: d.kind, tplId: d.tplId, before: d.before, base: d.after };
+        const f = await _find(key);
+        if (f.err) return { err: f.err };
+        const t = f.t;
+        if (!justLook && _type(t) !== '純展示') return { err: '「' + t.tagId + '」是' + _type(t) + '的組件，這裡只能看；要改請對方在創作室改（這裡只改故事裡跳出來的那種）。' };
+        return { kind: 'edit', tplId: t.id, before: _snap(t), base: _snap(t) };
+    }
+    // 照 edit 的參數改 after（就地改）。回錯誤訊息，沒錯回空字串
+    function _change(after, args) {
         if (args.find != null && args.find !== '') {
             const key = ARG[String(args.field || '').trim()];
-            if (!key) return _no('用 find 要寫 field：html、css、js、demo_format、usage_desc 其中一個。');
-            if (args[String(args.field).trim()] != null) return _no('同一個欄位不能同時用 find 和整欄重寫。');
+            if (!key) return '用 find 要寫 field：html、css、js、demo_format、usage_desc 其中一個。';
+            if (args[String(args.field).trim()] != null) return '同一個欄位不能同時用 find 和整欄重寫。';
             const find = String(args.find), n = after[key].split(find).length - 1;
-            if (n === 0) return _no('「' + _cut(find, 60) + '」在 ' + args.field + ' 裡找不到，要照 aurelia_vn_read 看到的原文一字不差抄。');
-            if (n > 1) return _no('「' + _cut(find, 60) + '」在 ' + args.field + ' 裡出現了 ' + n + ' 次，多抄前後幾個字，讓它只出現一次。');
+            if (n === 0) return '「' + _cut(find, 60) + '」在 ' + args.field + ' 裡找不到，要照 aurelia_vn_read 看到的原文一字不差抄。';
+            if (n > 1) return '「' + _cut(find, 60) + '」在 ' + args.field + ' 裡出現了 ' + n + ' 次，多抄前後幾個字，讓它只出現一次。';
             after[key] = after[key].replace(find, function () { return String(args.replace == null ? '' : args.replace); });
         }
         Object.keys(ARG).forEach(function (a) { if (args[a] != null) after[ARG[a]] = String(args[a]); });
@@ -207,18 +201,80 @@
         if (args.keywords != null) after.keywords = _keys(args.keywords);
         if (args.enabled != null) {
             const b = _bool(args.enabled);
-            if (b === undefined) return _no('enabled 只能是 true（打開）或 false（關掉）。');
+            if (b === undefined) return 'enabled 只能是 true（打開）或 false（關掉）。';
             after.isActive = b;
         }
-        if (['html', 'css', 'js', 'demoFormat', 'usageDesc'].some(function (k) { return after[k].length > TEXT_MAX; })) return _no('改完有一欄太長了（每欄最多 ' + TEXT_MAX + ' 字）。');
+        if (['html', 'css', 'js', 'demoFormat', 'usageDesc'].some(function (k) { return after[k].length > TEXT_MAX; })) return '改完有一欄太長了（每欄最多 ' + TEXT_MAX + ' 字）。';
+        return '';
+    }
+    async function _proposeAdd(args) {
+        const r = await _dataFromAdd(args);
+        if (r.err) return _no(r.err);
+        const data = r.data;
+        if (!data.usageDesc.trim()) return _no('要寫 usage_desc：給寫故事的模型的一句話說明（什麼時候用、照 demo_format 寫）。');
+        const bad = _issues(data);
+        if (bad.length) return _no('這樣做出來會出問題，改好再提：\n- ' + bad.join('\n- '));
+        const prop = { id: _newId(), mod: 'vn', kind: 'add', book: 'VN 組件', title: data.tagId, name: data.title, before: null, after: data, state: 'wait', at: Date.now() };
+        _draftPut(prop);   // 同一個標籤還沒被同意的舊單子，從這張起作廢
+        return { ok: true, prop: prop };
+    }
+    async function _proposeEdit(args) {
+        // 還沒被同意的單子（草稿）→ 接著那份改；新增的草稿改完還是一張「新增」
+        const b = await _base(args.tag);
+        if (b.err) return _no(b.err);
+        const before = b.before, base = b.base, after = JSON.parse(JSON.stringify(base));
+        const e = _change(after, args);
+        if (e) return _no(e);
         if (JSON.stringify(base) === JSON.stringify(after)) return _no('跟現在一模一樣，沒有要改的地方。');
         if (before && JSON.stringify(before) === JSON.stringify(after)) return _no('改完跟已經存著的那份一模一樣，不用再提單子。');
         // 新增的全部要過；修改只擋這次新冒出來的問題（舊組件本來就有的不算）
         const old = before ? _issues(before) : [], bad = _issues(after).filter(function (m) { return old.indexOf(m) === -1; });
         if (bad.length) return _no('改完會出問題，改好再提：\n- ' + bad.join('\n- '));
-        const prop = { id: _newId(), mod: 'vn', kind: kind, book: 'VN 組件', tplId: tplId, title: after.tagId, name: after.title || '', before: before, after: after, state: 'wait', at: Date.now() };
+        const prop = { id: _newId(), mod: 'vn', kind: b.kind, book: 'VN 組件', tplId: b.tplId, title: after.tagId, name: after.title || '', before: before, after: after, state: 'wait', at: Date.now() };
         _draftPut(prop);
         return { ok: true, prop: prop };
+    }
+
+    // ── 提單子之前先看看（09-30 她：可以加個截圖預覽功能，他們可以先看後准了再提交）──────────
+    //   照手機／中間／全螢幕在她開著的頁面裡畫一次、截圖（OS_STUDIO.vnShot），量面板多大、有沒有超出畫面、有沒有報錯。
+    //   不出單子、不存任何東西。回 { text, images:[data URL] }：宿舍住戶拿得到圖（橋轉成 MCP 的圖片），聊天 app 只拿字。
+    const SIZES = { phone: '手機', center: '中間', full: '全螢幕' };
+    async function look(args) {
+        args = args || {};
+        const S = _S();
+        if (!S || !S.vnShot) return { text: '創作室還沒載好，現在畫不出來。', images: [] };
+        let data;
+        const b = await _base(args.tag, true);
+        if (!b.err) {
+            data = JSON.parse(JSON.stringify(b.base));
+            const e = _change(data, args);
+            if (e) return { text: e, images: [] };
+        } else {
+            if (args.html == null) return { text: b.err, images: [] };
+            const r = await _dataFromAdd(args);
+            if (r.err) return { text: r.err, images: [] };
+            data = r.data;
+        }
+        const want = String(args.size || 'all').trim();
+        const vps = SIZES[want] ? [want] : Object.keys(SIZES);
+        const lines = [], images = [];
+        for (const vp of vps) {
+            const s = await S.vnShot(data, vp);
+            const m = s.m || {};
+            let t = SIZES[vp] + '（畫面 ' + s.w + '×' + s.h + '）：面板主體 ' + (m.bodyW || 0) + '×' + (m.bodyH || 0) + '，左上角在畫面的 (' + (m.bodyX || 0) + ', ' + (m.bodyY || 0) + ')';
+            if (m.bodyW && m.bodyW < Math.min(240, s.w * 0.5)) t += '；主體很窄，可能是沒寫 width:100%（外框把主體擺正中間，沒寫寬度就只跟字一樣寬）';
+            if (m.overX > 0) t += '；內容比畫面寬 ' + m.overX + '，會出現橫向捲軸';
+            if (m.overY > 0) t += '；內容比畫面高 ' + m.overY + '，整個面板會被捲動（長內容要在主體裡捲）';
+            if (s.error) t += '；執行時出錯：' + s.error;
+            if (s.dataUrl) images.push(s.dataUrl); else if (s.shotError) t += '；這張沒截下來（' + s.shotError + '）';
+            lines.push('・' + t);
+        }
+        const bad = _issues(data);
+        return {
+            text: '畫出來的樣子（示範資料照正文裡的寫法；這一步沒有出單子，對方看不到）：\n' + lines.join('\n')
+                + (bad.length ? '\n自己檢查抓到的問題（提單子時會被退回）：\n- ' + bad.join('\n- ') : '\n自己檢查沒抓到問題。'),
+            images: images
+        };
     }
     async function propose(name, args) {
         if (!_D() || !_D().saveVNTagTemplate) return _no('VN 組件的資料還沒載好，現在改不了。');
@@ -367,12 +423,13 @@
 
     // ── 給模型看的清單（寫給沒看過奧瑞亞的模型）─────────────────────────────
     const SIZE = '面板是在故事畫面正中央、蓋在暗色遮罩上跳出來的一個主體，不是手機 App：故事畫面在電腦上很寬（中間約 1000、全螢幕約 1920），'
-        + '在手機上約 390，三種寬度都要好看——主體限寬置中（max-width 約 520～760），不要吃滿、不要做成手機畫面的樣子。';
+        + '在手機上約 390，三種寬度都要好看——主體自己寫 width:100% 再配 max-width（約 520～760；外框是把主體擺正中間的，沒寫寬度就只跟字一樣寬），不要吃滿、不要做成手機畫面的樣子。';
     const NOTE = 'aurelia_vn_ 開頭的工具是看和改對方的 VN 組件。VN 組件是對方故事畫面裡的小面板：寫故事的模型在正文裡照某個格式寫一段標籤，'
         + '畫面就把那段換成這個面板（用 html、css、js 畫出來，例如圖鑑、信件、地圖）。' + SIZE + 'list、read、spec 的結果下一輪交給你。'
         + 'add 和 edit 不會直接改，只會在對方的畫面上出一張單子，附改前改後的預覽，對方按同意才寫進去；你不會拿到結果，寫完這一輪就結束，'
         + '所以那一則要在工具那一行之前用你自己的話說想怎麼做，不要說已經改好了。做新的或大改之前先用 spec 看寫法，一定要照它的規矩；'
         + '改一個之前先用 read 看全文，看到了再在下一輪寫 edit，不要跟 read、spec 寫在同一輪。'
+        + '提單子之前可以先用 look 看畫出來的樣子（三種寬度、有沒有超出、有沒有報錯），看了滿意再提，這一步不會出單子。'
         + '單子還沒被同意之前，對方要你再調整：直接對同一個標籤用 edit，會接著你上一張單子的內容改、出一張新的單子，舊的那張自動作廢，read 看到的也是那份還沒寫進去的內容。'
         + '這裡只能改「故事裡跳出來的」那種組件；裝在手機桌面上的應用、主畫面組件只能看，要對方在創作室改。組件不能刪，要拿掉就用 enabled: false 關掉。';
     const TOOLS = [
@@ -387,6 +444,23 @@
         { name: 'aurelia_vn_spec', label: '看 VN 組件的寫法', run: spec,
           description: '看怎麼寫 VN 組件：面板怎麼放、一定要守的規矩、js 裡能用的 st 函式清單、正文裡的寫法怎麼定。做新的或大改之前先看。很長會分段，用 part 看下一段。',
           inputSchema: { type: 'object', properties: { part: { type: 'number', description: '看第幾段（從 1 開始）' } } } },
+        { name: 'aurelia_vn_look', label: '看看畫出來的樣子',
+          description: '提單子之前先看看：照手機、中間、全螢幕把組件畫出來（能看圖的會拿到截圖），並量面板多大、有沒有超出畫面、有沒有報錯。不會出單子，對方看不到。'
+            + '只填 tag＝看已經有的（或你還沒被同意的那張單子）；再加上跟 aurelia_vn_edit 一樣的參數＝看改完的樣子；新組件就照 aurelia_vn_add 的參數填。看了滿意再提單子。',
+          inputSchema: { type: 'object', properties: {
+              tag: { type: 'string', description: '組件的標籤或名字（新組件就是要用的新標籤）' },
+              size: { type: 'string', description: '看哪一種：phone（手機）、center（中間）、full（全螢幕），不填三種都看' },
+              field: { type: 'string', description: '跟 aurelia_vn_edit 一樣：用 find 時改哪一欄' },
+              find: { type: 'string', description: '跟 aurelia_vn_edit 一樣' },
+              replace: { type: 'string', description: '跟 aurelia_vn_edit 一樣' },
+              title: { type: 'string', description: '名字' },
+              html: { type: 'string', description: 'html（整欄）' },
+              css: { type: 'string', description: '樣式（整欄）' },
+              js: { type: 'string', description: '程式（整欄）' },
+              demo_format: { type: 'string', description: '正文裡的寫法（整欄）' },
+              usage_desc: { type: 'string', description: '說明（整欄）' },
+              is_block: { type: 'boolean', description: '新組件才用，跟 aurelia_vn_add 一樣' } },
+            required: ['tag'] } },
         { name: 'aurelia_vn_add', label: '新增 VN 組件', propose: true,
           description: '提出做一個新的 VN 組件（故事裡跳出來的那種；對方看過預覽、按同意才會加）。寫之前先用 aurelia_vn_spec 看寫法。' + SIZE,
           inputSchema: { type: 'object', properties: {
@@ -421,6 +495,8 @@
     function _E() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT || null; }
     async function run(name, args) {
         if (name === 'aurelia_change_log') { const E = _E(); if (!E) throw new Error('修改紀錄還沒載好'); return E.readLog(args); }
+        // 聊天 app 的角色只拿得到字（圖只有宿舍住戶那條會轉過去，走 look）
+        if (name === 'aurelia_vn_look') return (await look(args || {})).text + '\n（這裡看不到截圖，只有量到的數字。）';
         const t = TOOLS.find(function (x) { return x.name === name && x.run; });
         if (!t) throw new Error('沒有叫做「' + name + '」的工具');
         return String((await t.run(args || {})) || '').trim() || '什麼都沒有查到。';
@@ -432,6 +508,7 @@
         get tools() { const E = _E(); return (E && E.logTool) ? _pub.concat([E.logTool]) : _pub; },
         run: run, propose: propose, apply: apply, undo: undo,
         verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview, superseded: superseded,
+        look: look,
     };
     win.OS_AURELIA_VN = API;
     window.OS_AURELIA_VN = API;

@@ -208,6 +208,7 @@
 ### 2a. 純展示：嵌進劇情正文、蓋在遮罩上的一個主體
 - 落點：劇情播到 <tagId> 區塊時，主體蓋在畫面正中央的暗色遮罩上。
 - 版型：一個限寬置中的主體。加 max-width（約 520~760）和 max-height，絕不吃滿外框。三種外框寬都不破版：手機約 390、桌面中間約 1000、桌面全屏約 1920。長內容在主體內捲。
+- 主體自己寫 width:100% 再配 max-width：外框是把主體擺在正中間的，主體沒寫寬度就只會跟裡面的字一樣寬。
 - 主體是什麼，看這次要展示的東西，兩種都是對的，選錯才是錯：
   ① 要看的是**上面寫了什麼**（說明、清單、記錄、多筆並列的東西）→ 主體是一張卡或一塊板，資訊排在它裡面。
   ② 要看的是**它長什麼樣、它在動**（一個看得見的東西，或那個東西自己的動作）→ 主體就是那個東西本身，它的輪廓就是面板的輪廓，外面不再包一層卡片、標題列或說明區；動作可以超出它的邊界。
@@ -4495,34 +4496,75 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             });
             one.apply();
             try { const ro = new ResizeObserver(function () { if (wrap.isConnected) one.apply(); }); ro.observe(wrap); } catch (e) {}
-            const d = fr.contentDocument;
-            // Font Awesome 那幾支樣式表跟著帶進去，圖示才畫得出來
-            const fa = Array.prototype.slice.call(win.document.querySelectorAll('link[rel="stylesheet"]'))
-                .filter(function (l) { return /font-?awesome|fontawesome/i.test(l.href || ''); })
-                .map(function (l) { return '<link rel="stylesheet" href="' + _sgcEsc(l.href) + '">'; }).join('');
-            d.open();
-            d.write('<!doctype html><html><head><meta charset="utf-8">' + fa
-                + '<style>html,body{margin:0;background:#1d1b22;color:#eee;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;}'
-                + '.vn-pv-root{position:relative;width:100%;min-height:200px;display:flex;flex-direction:column;}</style>'
-                + '<style>' + String(data.css || '').replace(/<\/style/gi, '<\\/style') + '</style></head><body>'
-                + '<div class="vn-pv-root vn-dynamic-panel-' + safeTagId + '">'
-                + String(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B') + '</div></body></html>');
-            d.close();
-            let err = '';
-            const w = fr.contentWindow;
-            try { w.addEventListener('error', function (e) { if (!err) err = String((e && (e.message || (e.error && e.error.message))) || '執行時出錯'); }); } catch (e) {}
-            try { w.addEventListener('unhandledrejection', function (e) { if (!err) err = String((e && e.reason && (e.reason.message || e.reason)) || '執行時出錯'); }); } catch (e) {}
-            if (data.isBlock && data.js) {
-                try {
-                    const lines = String(data.demoFormat || '').split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l && !l.startsWith('<'); });
-                    const container = d.querySelector('.vn-dynamic-panel-' + safeTagId);
-                    let js = String(data.js).trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '');
-                    window.__IS_PREVIEW = true;   // 預覽版 st 看這個：不叫模型、生圖給假圖
-                    new w.Function('container', 'lines', 'onComplete', 'st', js)(container, lines, function () {}, _buildPreviewSt(lines));
-                } catch (e) { err = String((e && e.message) || e); }
-            }
-            setTimeout(function () { one.apply(); done({ error: err }); }, 900);
+            const run = _vnFill(fr, data);
+            setTimeout(function () { one.apply(); done({ error: run.err() }); }, 900);
         });
+    }
+    // 把一個組件畫進 iframe 並跑它的 js（單子預覽與截圖共用）。回 { err() }：到目前為止抓到的錯誤
+    function _vnFill(fr, data) {
+        const safeTagId = String(data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        const d = fr.contentDocument;
+        // Font Awesome 那幾支樣式表跟著帶進去，圖示才畫得出來
+        const fa = Array.prototype.slice.call(win.document.querySelectorAll('link[rel="stylesheet"]'))
+            .filter(function (l) { return /font-?awesome|fontawesome/i.test(l.href || ''); })
+            .map(function (l) { return '<link rel="stylesheet" href="' + _sgcEsc(l.href) + '">'; }).join('');
+        // 外面兩層照故事畫面真的那樣包（vn_dynamic_parser.js 的 _renderBlock：暗色遮罩把外框擺正中間，
+        //   外框吃滿、自己再把主體置中、padding 20）——以前這裡讓主體自動撐滿，預覽看起來對、進故事卻縮成只剩字寬（克語 09-30 待修 #260）
+        d.open();
+        d.write('<!doctype html><html><head><meta charset="utf-8">' + fa
+            + '<style>html,body{margin:0;height:100%;background:#2a2630;color:#eee;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;}</style>'
+            + '<style>' + String(data.css || '').replace(/<\/style/gi, '<\\/style') + '</style></head><body>'
+            + '<div class="vn-dyn-overlay block-mode" style="position:absolute;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;">'
+            + '<div class="vn-dynamic-panel-' + safeTagId + '" style="position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;">'
+            + String(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B') + '</div></div></body></html>');
+        d.close();
+        let err = '';
+        const w = fr.contentWindow;
+        try { w.addEventListener('error', function (e) { if (!err) err = String((e && (e.message || (e.error && e.error.message))) || '執行時出錯'); }); } catch (e) {}
+        try { w.addEventListener('unhandledrejection', function (e) { if (!err) err = String((e && e.reason && (e.reason.message || e.reason)) || '執行時出錯'); }); } catch (e) {}
+        if (data.isBlock && data.js) {
+            try {
+                const lines = String(data.demoFormat || '').split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l && !l.startsWith('<'); });
+                const container = d.querySelector('.vn-dynamic-panel-' + safeTagId);
+                let js = String(data.js).trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '');
+                window.__IS_PREVIEW = true;   // 預覽版 st 看這個：不叫模型、生圖給假圖
+                new w.Function('container', 'lines', 'onComplete', 'st', js)(container, lines, function () {}, _buildPreviewSt(lines));
+            } catch (e) { err = String((e && e.message) || e); }
+        }
+        return { err: function () { return err; } };
+    }
+    // 截圖：照某一種外框大小（phone／center／full）在畫面外畫一次、截下來，順便量尺寸。
+    //   給小機「提單子之前先看看」用（09-30 她：可以加個截圖預覽功能，他們可以先看後准了再提交）。
+    //   回 { vp, w, h, dataUrl, error, shotError, m:{ docW, docH, bodyW, bodyH, bodyX, bodyY } }；截不下來 dataUrl 是空的，量到的照給。
+    async function _vnShot(data, vp) {
+        const F = _vnPvFrames(), f = F[vp] || F.center;
+        const host = document.createElement('div');
+        host.className = 'vn-shot-host';
+        host.style.cssText = 'position:fixed;left:-30000px;top:0;pointer-events:none;';
+        const fr = document.createElement('iframe');
+        fr.style.cssText = 'display:block;border:0;width:' + f.w + 'px;height:' + f.h + 'px;';
+        host.appendChild(fr);
+        document.body.appendChild(host);
+        const out = { vp: F[vp] ? vp : 'center', w: f.w, h: f.h, dataUrl: '', error: '', shotError: '', m: null };
+        try {
+            const run = _vnFill(fr, data);
+            await new Promise(function (r) { setTimeout(r, 900); });
+            out.error = run.err();
+            const d = fr.contentDocument;
+            const root = d.querySelector('.vn-dynamic-panel-' + String(data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, ''));
+            // 面板主體＝容器裡最大的那塊（容器本身吃滿外框，量它沒意義）
+            let body = null, area = 0;
+            if (root) Array.prototype.forEach.call(root.children, function (c) { const r = c.getBoundingClientRect(); if (r.width * r.height > area) { area = r.width * r.height; body = r; } });
+            // 超出＝外框裡被撐出捲軸（外框跟故事畫面一樣會自己捲，所以量它裡面，不量整頁）
+            out.m = { overX: root ? Math.max(0, root.scrollWidth - root.clientWidth) : 0, overY: root ? Math.max(0, root.scrollHeight - root.clientHeight) : 0,
+                bodyW: body ? Math.round(body.width) : 0, bodyH: body ? Math.round(body.height) : 0, bodyX: body ? Math.round(body.left) : 0, bodyY: body ? Math.round(body.top) : 0 };
+            try {
+                const lib = await _loadShotLib();
+                const scale = Math.min(1, IMG_MAX_SIDE / Math.max(f.w, f.h));
+                out.dataUrl = await lib.domToJpeg(d.documentElement, { width: f.w, height: f.h, scale: scale, quality: IMG_QUALITY, backgroundColor: '#1d1b22', timeout: 8000 });
+            } catch (e) { out.shotError = String((e && e.message) || e); }
+        } finally { host.remove(); }
+        return out;
     }
     // 酒館正則：她匯入過（有 [VN面板] <tagId> 那條）才照新內容重寫一次，沒匯入過不動；不跳視窗
     async function _vnRefreshTavernRegex(data) {
@@ -4544,7 +4586,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
     // ===== 預設模板安裝器 =====
     win.OS_STUDIO = {
-        vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, refreshTavernRegex: _vnRefreshTavernRegex,
+        vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, vnShot: _vnShot, refreshTavernRegex: _vnRefreshTavernRegex,
         launch, attachVpScaler: _attachVpScaler,
         refreshIface: renderStudioIface,   // 宿舍（房間擴展）是非同步載進來的，載完可以叫這支把「誰來做」那格補出來
         // 展廳拆檔（os_studio_vn_gallery.js）：對外契約不變，懶委派到 win.OS_STUDIO_VC
