@@ -469,6 +469,8 @@
         verb: _verb, keysText: _keysText, sheet: sheet,
         // 單子小窗畫完之後放預覽（格子帶 preview 的，目前只有 VN 組件）
         mountPreview: function (prop, which, el) { const M = _other(prop); if (M && M.mountPreview) M.mountPreview(prop, which, el); },
+        // 這張是不是已經有新的一版（VN 組件的草稿：她還沒按同意時小機又改了一次）
+        superseded: function (prop) { const M = _other(prop); return !!(M && M.superseded && M.superseded(prop)); },
         // 修改紀錄：改預設那組也帶著「看修改紀錄」（聊天 app 兩組都勾只列一次）
         logTool: { name: LOG_TOOL.name, label: LOG_TOOL.label, description: LOG_TOOL.description, inputSchema: LOG_TOOL.inputSchema },
         readLog: function (args) { return readLog(args || {}); },

@@ -800,6 +800,7 @@
         else if (prop.state === 'done') foot = st('已經寫進' + S.noun + '了') + '<div class="wxtl-pp-bar">' + btn('undo', busy === 'undo' ? '改回去中…' : '改回去') + '</div>';
         else if (prop.state === 'undone') foot = st('已經改回去了');
         else foot = st(prop.why || '這張作廢了', true);
+        if ((prop.state === 'wait' || prop.state === 'no') && E && E.superseded && E.superseded(prop)) foot = st('這張已經有新的一版了，看最新那張', true);
         // 內容只畫一次（預覽是跑起來的面板，整張重畫會重跑、閃一下）；之後按鈕、狀態變了只換標題與底下那排
         const box = _pp.root.querySelector('.wxtl-box');
         if (box && _pp.bodyFor === prop.id) {

@@ -80,16 +80,53 @@
         try { return CK.staticIssues(data, '純展示').map(function (x) { return x.msg; }); } catch (e) { return []; }
     }
 
+    // ── 草稿：還沒按同意的那張單子（09-30 她：「像創建室那樣反覆改動後，再傳進去?」）──────────
+    //   同一個標籤最新那張單子記在這裡（這一邊的 localStorage）。她還沒按同意時小機再改，就接著這份改、出一張新的，
+    //   舊的那張作廢（按同意時比對：不是最新那張就擋下）；read 看到的也是這份。按同意寫進去了就清掉。
+    const DRAFT_KEY = 'aurelia_vn_drafts', DRAFT_DAYS = 14;
+    function _drafts() {
+        let o = {};
+        try { o = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}') || {}; } catch (e) {}
+        const old = Date.now() - DRAFT_DAYS * 86400000;
+        Object.keys(o).forEach(function (k) { if (!o[k] || o[k].at < old) delete o[k]; });
+        return o;
+    }
+    function _draftsSave(o) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(o)); } catch (e) {} }
+    function _draftFor(key) {
+        const k = _one(key).toLowerCase(), o = _drafts();
+        if (!k) return null;
+        if (o[k]) return o[k];
+        return Object.keys(o).map(function (x) { return o[x]; }).find(function (d) { return _one(d.after && d.after.title).toLowerCase() === k; }) || null;
+    }
+    function _draftPut(prop) {
+        const o = _drafts();
+        o[prop.title.toLowerCase()] = { id: prop.id, kind: prop.kind, tag: prop.title, tplId: prop.tplId || null, before: prop.before, after: prop.after, at: Date.now() };
+        _draftsSave(o);
+    }
+    function _draftDrop(tag) { const o = _drafts(); delete o[String(tag || '').toLowerCase()]; _draftsSave(o); }
+    // 這張是不是已經有新的一版（還在等她的才算）
+    function superseded(prop) {
+        if (!prop || (prop.state !== 'wait' && prop.state !== 'no')) return false;
+        const d = _drafts()[String(prop.title || '').toLowerCase()];
+        return !!(d && d.id !== prop.id);
+    }
+
     // ── 看的 ─────────────────────────────────────────────────────────────
     async function list() {
-        const all = await _all();
-        if (!all.length) return '對方還沒有任何 VN 組件。';
-        return '對方的 VN 組件（標籤｜名字｜哪一型｜開著沒）：\n' + all.map(function (t) {
+        const all = await _all(), o = _drafts();
+        const saved = {};
+        all.forEach(function (t) { saved[String(t.tagId || '').toLowerCase()] = 1; });
+        const drafts = Object.keys(o).filter(function (k) { return !saved[k]; }).map(function (k) {
+            return '・' + o[k].tag + '「' + ((o[k].after && o[k].after.title) || '') + '」｜草稿：單子還沒被同意，還沒寫進去';
+        });
+        if (!all.length && !drafts.length) return '對方還沒有任何 VN 組件。';
+        return '對方的 VN 組件（標籤｜名字｜哪一型｜開著沒）：\n' + drafts.concat(all.map(function (t) {
             const ty = _type(t), can = ty === '純展示';
             return '・' + t.tagId + '「' + (t.title || '') + '」｜' + ty + '｜' + (t.isActive !== false ? '開著' : '關著') + (can ? '' : '｜這種只能看，要在創作室改')
                 + (t.usageDesc ? '\n  用途：' + _cut(t.usageDesc, 90) : '')
-                + (t.demoFormat ? '\n  正文裡的寫法：' + _cut(String(t.demoFormat).split('\n')[0], 90) : '');
-        }).join('\n');
+                + (t.demoFormat ? '\n  正文裡的寫法：' + _cut(String(t.demoFormat).split('\n')[0], 90) : '')
+                + (o[String(t.tagId || '').toLowerCase()] ? '\n  （有一張改它的單子還沒被同意，read 看到的是那份）' : '');
+        })).join('\n');
     }
     function _paged(text, part, what) {
         const n = Math.max(1, Math.ceil(text.length / PART));
@@ -98,10 +135,17 @@
         return (n > 1 ? what + '（第 ' + p + '／' + n + ' 段' + (p < n ? '，part 填 ' + (p + 1) + ' 看下一段' : '，這是最後一段') + '）\n' : '') + body;
     }
     async function read(args) {
-        const f = await _find(args.tag);
-        if (f.err) return f.err;
-        const t = f.t, s = _snap(t);
-        const head = '組件 ' + s.tagId + '「' + s.title + '」｜' + _type(t) + '｜' + (s.isActive ? '開著' : '關著') + '｜'
+        const d = _draftFor(args.tag);
+        let s, ty, note = '';
+        if (d) {
+            s = d.after; ty = '純展示';
+            note = '這是你上一張單子的內容，對方還沒按同意、還沒寫進去' + (d.kind === 'edit' ? '（已經存著的那份是改之前的樣子）' : '') + '；要再改就對它用 aurelia_vn_edit。\n';
+        } else {
+            const f = await _find(args.tag);
+            if (f.err) return f.err;
+            s = _snap(f.t); ty = _type(f.t);
+        }
+        const head = note + '組件 ' + s.tagId + '「' + s.title + '」｜' + ty + '｜' + (s.isActive ? '開著' : '關著') + '｜'
             + (s.isBlock ? '區塊（正文裡照 demoFormat 寫一段，js 拿到每一行）' : '單行標籤') + (s.keywords.length ? '｜觸發詞：' + s.keywords.join('、') : '');
         const body = ['usageDesc', 'demoFormat', 'html', 'css', 'js'].map(function (k) { return '【' + LAB[k] + '】\n' + (s[k] || '（空的）'); }).join('\n\n');
         return _paged(head + '\n\n' + body, args.part, '組件 ' + s.tagId + ' 的全文');
@@ -131,14 +175,24 @@
         if (['html', 'css', 'js', 'demoFormat', 'usageDesc'].some(function (k) { return data[k].length > TEXT_MAX; })) return _no('有一欄太長了（每欄最多 ' + TEXT_MAX + ' 字）。');
         const bad = _issues(data);
         if (bad.length) return _no('這樣做出來會出問題，改好再提：\n- ' + bad.join('\n- '));
-        return { ok: true, prop: { id: _newId(), mod: 'vn', kind: 'add', book: 'VN 組件', title: tag, name: data.title, before: null, after: _snap(data), state: 'wait', at: Date.now() } };
+        const prop = { id: _newId(), mod: 'vn', kind: 'add', book: 'VN 組件', title: tag, name: data.title, before: null, after: _snap(data), state: 'wait', at: Date.now() };
+        _draftPut(prop);   // 同一個標籤還沒被同意的舊單子，從這張起作廢
+        return { ok: true, prop: prop };
     }
     async function _proposeEdit(args) {
-        const f = await _find(args.tag);
-        if (f.err) return _no(f.err);
-        const t = f.t;
-        if (_type(t) !== '純展示') return _no('「' + t.tagId + '」是' + _type(t) + '的組件，這裡只能看；要改請對方在創作室改（這裡只改故事裡跳出來的那種）。');
-        const before = _snap(t), after = _snap(t);
+        // 還沒被同意的單子（草稿）→ 接著那份改；新增的草稿改完還是一張「新增」
+        const d = _draftFor(args.tag);
+        let kind, tplId, before, base;
+        if (d) {
+            kind = d.kind; tplId = d.tplId; before = d.before; base = d.after;
+        } else {
+            const f = await _find(args.tag);
+            if (f.err) return _no(f.err);
+            const t = f.t;
+            if (_type(t) !== '純展示') return _no('「' + t.tagId + '」是' + _type(t) + '的組件，這裡只能看；要改請對方在創作室改（這裡只改故事裡跳出來的那種）。');
+            kind = 'edit'; tplId = t.id; before = _snap(t); base = _snap(t);
+        }
+        const after = JSON.parse(JSON.stringify(base));
         if (args.find != null && args.find !== '') {
             const key = ARG[String(args.field || '').trim()];
             if (!key) return _no('用 find 要寫 field：html、css、js、demo_format、usage_desc 其中一個。');
@@ -157,11 +211,14 @@
             after.isActive = b;
         }
         if (['html', 'css', 'js', 'demoFormat', 'usageDesc'].some(function (k) { return after[k].length > TEXT_MAX; })) return _no('改完有一欄太長了（每欄最多 ' + TEXT_MAX + ' 字）。');
-        if (JSON.stringify(before) === JSON.stringify(after)) return _no('跟現在一模一樣，沒有要改的地方。');
-        // 只擋這次新冒出來的問題（舊組件本來就有的不算）
-        const old = _issues(before), bad = _issues(after).filter(function (m) { return old.indexOf(m) === -1; });
+        if (JSON.stringify(base) === JSON.stringify(after)) return _no('跟現在一模一樣，沒有要改的地方。');
+        if (before && JSON.stringify(before) === JSON.stringify(after)) return _no('改完跟已經存著的那份一模一樣，不用再提單子。');
+        // 新增的全部要過；修改只擋這次新冒出來的問題（舊組件本來就有的不算）
+        const old = before ? _issues(before) : [], bad = _issues(after).filter(function (m) { return old.indexOf(m) === -1; });
         if (bad.length) return _no('改完會出問題，改好再提：\n- ' + bad.join('\n- '));
-        return { ok: true, prop: { id: _newId(), mod: 'vn', kind: 'edit', book: 'VN 組件', tplId: t.id, title: t.tagId, name: t.title || '', before: before, after: after, state: 'wait', at: Date.now() } };
+        const prop = { id: _newId(), mod: 'vn', kind: kind, book: 'VN 組件', tplId: tplId, title: after.tagId, name: after.title || '', before: before, after: after, state: 'wait', at: Date.now() };
+        _draftPut(prop);
+        return { ok: true, prop: prop };
     }
     async function propose(name, args) {
         if (!_D() || !_D().saveVNTagTemplate) return _no('VN 組件的資料還沒載好，現在改不了。');
@@ -189,6 +246,7 @@
         if (!prop || (prop.state !== 'wait' && prop.state !== 'no')) return { ok: false, text: '這張已經處理過了' };
         const D = _D();
         if (!D || !D.saveVNTagTemplate) return { ok: false, text: 'VN 組件的資料還沒載好' };
+        if (superseded(prop)) return { ok: false, text: '這張已經有新的一版了，看最新那張' };
         try {
             if (prop.kind === 'add') {
                 if ((await _all()).some(function (t) { return String(t.tagId || '').toLowerCase() === prop.after.tagId.toLowerCase(); })) return _stale(prop, '在那之後已經有同一個標籤的組件了，沒有再加');
@@ -207,6 +265,7 @@
             try { const S = _S(); if (S && S.refreshTavernRegex) await S.refreshTavernRegex(prop.after); } catch (e) {}
         } catch (e) { return { ok: false, text: '寫不進去：' + ((e && e.message) || '不知道為什麼') }; }
         prop.state = 'done'; prop.doneAt = Date.now();
+        _draftDrop(prop.title);
         return { ok: true };
     }
     async function undo(prop) {
@@ -312,6 +371,7 @@
         + 'add 和 edit 不會直接改，只會在對方的畫面上出一張單子，附改前改後的預覽，對方按同意才寫進去；你不會拿到結果，寫完這一輪就結束，'
         + '所以那一則要在工具那一行之前用你自己的話說想怎麼做，不要說已經改好了。做新的或大改之前先用 spec 看寫法，一定要照它的規矩；'
         + '改一個之前先用 read 看全文，看到了再在下一輪寫 edit，不要跟 read、spec 寫在同一輪。'
+        + '單子還沒被同意之前，對方要你再調整：直接對同一個標籤用 edit，會接著你上一張單子的內容改、出一張新的單子，舊的那張自動作廢，read 看到的也是那份還沒寫進去的內容。'
         + '這裡只能改「故事裡跳出來的」那種組件；裝在手機桌面上的應用、主畫面組件只能看，要對方在創作室改。組件不能刪，要拿掉就用 enabled: false 關掉。';
     const TOOLS = [
         { name: 'aurelia_vn_list', label: '看有哪些 VN 組件', run: list,
@@ -369,7 +429,7 @@
         note: NOTE,
         get tools() { const E = _E(); return (E && E.logTool) ? _pub.concat([E.logTool]) : _pub; },
         run: run, propose: propose, apply: apply, undo: undo,
-        verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview,
+        verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview, superseded: superseded,
     };
     win.OS_AURELIA_VN = API;
     window.OS_AURELIA_VN = API;
