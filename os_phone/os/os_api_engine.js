@@ -84,6 +84,76 @@
     }
     win.OS_TO_GEMINI_BODY = _toGeminiBody;
 
+    // OpenAI 形狀的 messages → Anthropic 原生（POST /v1/messages）body。
+    //   為什麼要這條：Anthropic 的 OpenAI 相容入口不支援緩存（官方文件明寫），要省錢只能走原生、自己標 cache_control。
+    //   開頭連著的 system 收成 system；中間冒出來的 system 不搬到最前面（順序會亂、開頭也會跟著變），當成 user 那邊的字留在原位。
+    //   同角色連著的併成一則；第一則不是 user 就補一則（同 Gemini 那句）。圖片 data URL → base64 圖、網址圖 → url 圖。
+    //   緩存斷點兩個：system 尾巴、最後一則的最後一塊（每一通都把到目前為止的開頭存起來，下一通開頭一樣就讀得到）。
+    //   溫度、top_p 只在不是 1 的時候送（Claude 5 那幾顆連送預設值都會退）；懲罰值 Anthropic 沒有，不送。
+    function _toAnthropicBody(messages, o) {
+        o = o || {};
+        const sys = [];
+        const out = [];
+        const blocksOf = (content) => {
+            if (typeof content === 'string') return content ? [{ type: 'text', text: content }] : [];
+            if (!Array.isArray(content)) return content == null ? [] : [{ type: 'text', text: String(content) }];
+            const res = [];
+            for (const p of content) {
+                if (!p) continue;
+                if (p.type === 'text' && p.text) res.push({ type: 'text', text: String(p.text) });
+                else if (p.type === 'image_url') {
+                    const u = String((p.image_url && p.image_url.url) || p.url || '');
+                    const m = u.match(/^data:([^;]+);base64,(.*)$/);
+                    if (m) res.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+                    else if (/^https?:\/\//i.test(u)) res.push({ type: 'image', source: { type: 'url', url: u } });
+                }
+            }
+            return res;
+        };
+        let lead = true;
+        for (const m of (messages || [])) {
+            if (!m) continue;
+            const blocks = blocksOf(m.content);
+            if (!blocks.length) continue;
+            if (m.role === 'system' && lead) { sys.push(...blocks.filter(b => b.text).map(b => b.text)); continue; }
+            lead = false;
+            const role = m.role === 'assistant' ? 'assistant' : 'user';
+            const last = out[out.length - 1];
+            if (last && last.role === role) last.content.push(...blocks);
+            else out.push({ role, content: blocks });
+        }
+        if (!out.length || out[0].role !== 'user') out.unshift({ role: 'user', content: [{ type: 'text', text: "Let's get started." }] });
+        const tail = out[out.length - 1].content;
+        tail[tail.length - 1] = Object.assign({}, tail[tail.length - 1], { cache_control: { type: 'ephemeral' } });
+        const body = { model: o.model, max_tokens: o.maxTokens > 0 ? o.maxTokens : 8192, messages: out };
+        if (sys.length) body.system = [{ type: 'text', text: sys.join('\n\n'), cache_control: { type: 'ephemeral' } }];
+        if (isFinite(o.temperature) && o.temperature !== 1) body.temperature = Math.min(1, Math.max(0, o.temperature));
+        if (o.top_p !== undefined && isFinite(o.top_p) && o.top_p !== 1) body.top_p = o.top_p;
+        if (['low', 'medium', 'high', 'xhigh', 'max'].indexOf(o.effort) !== -1) body.output_config = { effort: o.effort };
+        return body;
+    }
+    win.OS_TO_ANTHROPIC_BODY = _toAnthropicBody;
+
+    // 上游回的用量收成同一種形狀：input＝整包送出去的（含緩存讀到、寫進的）、cacheRead＝讀到緩存的那段、cacheWrite＝這次存進緩存的。
+    //   OpenAI 形狀（含 Gemini 的相容入口）：prompt_tokens_details.cached_tokens；DeepSeek：prompt_cache_hit_tokens；
+    //   Anthropic 原生：input_tokens 只算沒緩存的那段，要加回去；Gemini 原生：usageMetadata.cachedContentTokenCount。拿不到回 null。
+    function _usageOf(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const n = v => (isFinite(+v) ? +v : 0);
+        const u = raw.usage;
+        if (u && (u.input_tokens !== undefined || u.cache_read_input_tokens !== undefined)) {
+            const read = n(u.cache_read_input_tokens), write = n(u.cache_creation_input_tokens);
+            return { input: n(u.input_tokens) + read + write, output: n(u.output_tokens), cacheRead: read, cacheWrite: write };
+        }
+        if (u && u.prompt_tokens !== undefined) {
+            const read = n((u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) || u.prompt_cache_hit_tokens);
+            return { input: n(u.prompt_tokens), output: n(u.completion_tokens), cacheRead: read, cacheWrite: 0 };
+        }
+        const g = raw.usageMetadata;
+        if (g) return { input: n(g.promptTokenCount), output: n(g.candidatesTokenCount), cacheRead: n(g.cachedContentTokenCount), cacheWrite: 0 };
+        return null;
+    }
+
     // AVS 快捷引用（os_avs_engine.js 必須在本檔之前載入）
     const _avsRead  = () => win._AVS_ENGINE?.read?.()       ?? {};
     const _avsApply = (t) => win._AVS_ENGINE?.apply?.(t);
@@ -870,14 +940,14 @@
         // 🔑 自己填網址那幾條的請求標頭。Anthropic 官方（api.anthropic.com）不認網頁直接連：
         //    沒帶 anthropic-dangerous-direct-browser-access 會被 CORS 擋成「Failed to fetch」，帶了才回正常的錯誤或結果。
         //    chat/completions 收 Bearer＝API 金鑰；/models 是原生介面，Bearer 會被當成登入憑證退回，要換 x-api-key。
+        //    anthropic：Claude 原生格式（/v1/messages）不管哪個站都用 x-api-key＋anthropic-version；直連標頭只給官方（中轉站沒放行這個標頭，帶了反而被 CORS 擋）。
         authHeaders: function (url, key, opts) {
             const o = opts || {};
             const h = {};
             if (o.json) h['Content-Type'] = 'application/json';
-            if (/^https?:\/\/api\.anthropic\.com(\/|$)/i.test(String(url || '').trim())) {
-                h['anthropic-dangerous-direct-browser-access'] = 'true';
-                if (o.native) { h['x-api-key'] = String(key || ''); h['anthropic-version'] = '2023-06-01'; return h; }
-            }
+            const official = /^https?:\/\/api\.anthropic\.com(\/|$)/i.test(String(url || '').trim());
+            if (official) h['anthropic-dangerous-direct-browser-access'] = 'true';
+            if (o.anthropic || (official && o.native)) { h['x-api-key'] = String(key || ''); h['anthropic-version'] = '2023-06-01'; return h; }
             h['Authorization'] = 'Bearer ' + String(key || '');
             return h;
         },
@@ -1224,7 +1294,7 @@
                             _channel: _ov._channel || undefined, _channelName: _ov._channelName || undefined
                         }, _ov._channel ? { maxTokens: _ov.maxTokens, temperature: _ov.temperature,
                             // 通道表單沒有的取樣參數：getConfigForTask 已清成不送，這裡也要蓋掉呼叫端自己帶的那份
-                            top_p: _ov.top_p, frequency_penalty: _ov.frequency_penalty, presence_penalty: _ov.presence_penalty } : {});
+                            top_p: _ov.top_p, frequency_penalty: _ov.frequency_penalty, presence_penalty: _ov.presence_penalty, apiFormat: _ov.apiFormat } : {});
                     }
                 } catch (e) {}
             } else {
@@ -1536,12 +1606,13 @@
                 //    擺在 🍎 與直連兩條路之前：伺服器是原生 HTTP 出去的，本來就沒有 iOS 那個 CORS 問題，
                 //    所以只要有 url/key 就走這條。跟著酒館那條沒有 key 可以交給伺服器，不走。
                 const _isGeminiFmt = !useSystemApi && String(config.apiFormat || 'openai') === 'gemini';   // Gemini 原生格式（設置→請求格式）
+                const _isAnthropicFmt = !useSystemApi && String(config.apiFormat || 'openai') === 'anthropic';   // Claude 原生格式（有緩存）
                 if (_apiRec) {   // 記錄補上這一通的參數：她比「正文」跟「應用」兩筆記錄時，看不到字數上限與思考開沒開，差就差在這
                     _apiRec.params = { model: String(config.model || ''), max_tokens: maxTokens, temperature: temperature, top_p: (top_p === undefined ? null : top_p),
-                        thinking: !!config.enableThinking, format: useSystemApi ? 'tavern' : (_isGeminiFmt ? 'gemini' : 'openai') };
+                        thinking: !!config.enableThinking, format: useSystemApi ? 'tavern' : (_isGeminiFmt ? 'gemini' : _isAnthropicFmt ? 'anthropic' : 'openai') };
                     _apiLogFire('tok', _apiRec);
                 }
-                if (options.relayJob && !useSystemApi && !_isGeminiFmt && config.url && config.key && win.OS_RELAY && win.OS_RELAY.enabled()) {
+                if (options.relayJob && !useSystemApi && !_isGeminiFmt && !_isAnthropicFmt && config.url && config.key && win.OS_RELAY && win.OS_RELAY.enabled()) {
                     let _rUrl = String(config.url).replace(/\/$/, '');
                     if (!_rUrl.includes('/chat/completions')) _rUrl += (_rUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
                     try {
@@ -1741,6 +1812,23 @@
                         rawApiResponse = data; 
                         fullText = normalizeResponse(data, _keepFences);
                     }
+                } else if (_isAnthropicFmt) {
+                    // ── Claude 原生格式：POST /v1/messages（緩存斷點在 _toAnthropicBody 標好）。串流先不做，整篇回來再給 ──
+                    //   網址填 https://api.anthropic.com 或 …/v1 都行；中轉站填它給的根網址。
+                    const _base = String(config.url || '').replace(/\/chat\/completions$/, '').replace(/\/messages$/, '').replace(/\/v1$/, '').replace(/\/+$/, '');
+                    const _aUrl = _base + '/v1/messages';
+                    const _aBody = _toAnthropicBody(cleanMessages, { model: config.model, temperature, maxTokens, top_p, effort: config.reasoningEffort });
+                    const _aResp = await fetch(_aUrl, {
+                        method: 'POST', headers: win.OS_API.authHeaders(_aUrl, config.key, { json: true, anthropic: true }),
+                        body: _keepReq(_safeJson(_aBody)),
+                        signal: options.signal || undefined
+                    });
+                    const _aData = await _aResp.json();
+                    rawApiResponse = _aData;
+                    if (!_aResp.ok && _aData && _aData.error) throw new Error('HTTP ' + _aResp.status + '：' + (_aData.error.message || JSON.stringify(_aData.error)));
+                    if (_aData && _aData.stop_reason === 'refusal') throw new Error('模型拒絕回答這一則（refusal）');
+                    const _aText = ((_aData && _aData.content) || []).filter(b => b && b.type === 'text').map(b => b.text).join('');
+                    fullText = normalizeResponse({ choices: [{ message: { content: _aText } }] }, _keepFences);
                 } else if (_isGeminiFmt) {
                     // ── Gemini 原生格式：POST /v1beta/models/{model}:generateContent ──
                     //   接 Gemini CLI 的公益站（例如 gcli 那類）走 OpenAI 相容格式時不吃 Google 的安全欄位，R18 整段被過濾回空；
@@ -1851,6 +1939,13 @@
                 };
 
                 console.log("🧹 [OS_API] 最終清洗文本:", fullText.substring(0, 100).replace(/\n/g, ' ') + "...");
+
+                // 上游有回用量（含緩存讀到多少）就交給呼叫端（小機記進額度面板）；酒館那條、串流那條拿不到，不叫
+                const _usage = _usageOf(rawApiResponse);
+                if (_usage) {
+                    win.OS_API._lastCtx.usage = _usage;
+                    if (typeof options.onUsage === 'function') { try { options.onUsage(_usage); } catch (e) {} }
+                }
 
                 if (onFinish) onFinish(fullText);
             } catch (err) {

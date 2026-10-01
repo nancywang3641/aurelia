@@ -13,7 +13,7 @@
         if (!A || !A.registerHelp) return false;
         A.registerHelp({
             ss_1249: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
-            ss_1269: { title: '請求格式', body: '回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。' },
+            ss_1269: { title: '請求格式', body: '回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。\n接 Claude 官方（或支援 Claude 格式的站）選 Claude 原生：同一段開頭再送一次時會讀緩存，比較省。OpenAI 相容這個格式接 Claude 沒有緩存。' },
             ss_1278: { title: '自訂前置指令', body: '這段會放在主模型每次收到的訊息最前面。直連、托管、酒館連線都有效；用酒館連線時每個連接預設各記一份。\n留空就不放。' },
             ss_1298: { title: '注入 Preset 自訂條目', body: '把你挑的那個 Preset 裡自己寫的條目，放進主模型的指令裡。要裝酒館助手才有。' },
             ss_1354: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
@@ -267,6 +267,7 @@
             maxTokens: parseInt(ch.maxTokens) || base.maxTokens,
             temperature: isFinite(parseFloat(ch.temperature)) ? parseFloat(ch.temperature) : base.temperature,
             top_p: undefined, frequency_penalty: 0, presence_penalty: 0,   // 通道表單沒有這幾格：不沿用預設那頁的值（Sonnet 5.5 那類連 top_p 都不收，會整通退回），不送＝對方自己的預設
+            apiFormat: ch.apiFormat || base.apiFormat || 'openai',          // 通道自己選的請求格式；沒選過的舊通道照舊沿用
             _channel: ch.id, _channelName: ch.name || ''
         });
         if (!cfg.url || !cfg.key) return base;   // 這條還沒填完 → 照舊走預設，不要讓她的對話整個斷掉
@@ -1350,6 +1351,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <select class="set-select" id="os-api-format">
                                 <option value="openai" ${(llmConfig.apiFormat || 'openai') === 'openai' ? 'selected' : ''}>OpenAI 相容（多數站）</option>
                                 <option value="gemini" ${llmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生</option>
+                                <option value="anthropic" ${llmConfig.apiFormat === 'anthropic' ? 'selected' : ''}>Claude 原生（有緩存）</option>
                             </select>
                         </div>
 
@@ -1457,6 +1459,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <select class="set-select" id="sec-api-format">
                                 <option value="openai" ${(secLlmConfig.apiFormat || 'openai') === 'openai' ? 'selected' : ''}>OpenAI 相容（多數站）</option>
                                 <option value="gemini" ${secLlmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生</option>
+                                <option value="anthropic" ${secLlmConfig.apiFormat === 'anthropic' ? 'selected' : ''}>Claude 原生（有緩存）</option>
                             </select>
                         </div>
 
@@ -2754,6 +2757,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             + '<input class="set-input ch-url" placeholder="API 網址" value="' + esc(c.url) + '">'
                             + '<input class="set-input ch-key" type="password" placeholder="金鑰" value="' + esc(c.key) + '">'
                             + '<input class="set-input ch-model" placeholder="模型名稱" value="' + esc(c.model) + '">'
+                            // 請求格式：以前通道沒有這格、偷偷照主模型那頁的；舊通道沒存過就顯示主模型那頁的（就是它一直在用的），改了才存
+                            + '<select class="set-select ch-fmt">' + [['openai', 'OpenAI 相容（多數站）'], ['gemini', 'Gemini 原生'], ['anthropic', 'Claude 原生（有緩存）']].map(function (f) { return '<option value="' + f[0] + '"' + ((c.apiFormat || loadLlmConfig().apiFormat || 'openai') === f[0] ? ' selected' : '') + '>' + f[1] + '</option>'; }).join('') + '</select>'
                             + '<div class="set-channel-row">'
                             +   '<input class="set-input ch-max" type="number" min="256" step="256" placeholder="最大輸出" value="' + esc(c.maxTokens || '') + '">'
                             +   '<input class="set-input ch-temp" type="number" min="0" max="2" step="0.05" placeholder="溫度" value="' + esc(c.temperature == null ? '' : c.temperature) + '">'
@@ -2772,10 +2777,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         list[idx].model = box.querySelector('.ch-model').value.trim();
                         list[idx].maxTokens = box.querySelector('.ch-max').value.trim();
                         list[idx].temperature = box.querySelector('.ch-temp').value.trim();
+                        list[idx].apiFormat = box.querySelector('.ch-fmt').value;
                         saveChannels(list);
                         paintRoutes();
                     };
-                    box.querySelectorAll('input').forEach(function (el) { el.onchange = save; });
+                    box.querySelectorAll('input, select').forEach(function (el) { el.onchange = save; });
                     box.querySelector('.ch-del').onclick = async function () {
                         const list = loadChannels();
                         const gone = list[idx];

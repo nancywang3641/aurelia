@@ -83,6 +83,7 @@
                 maxTokens: parseInt(ch.maxTokens, 10) || base.maxTokens,
                 temperature: isFinite(parseFloat(ch.temperature)) ? parseFloat(ch.temperature) : base.temperature,
                 top_p: undefined, frequency_penalty: 0, presence_penalty: 0,   // 同 getConfigForTask：通道沒有的取樣參數不沿用主模型
+                apiFormat: ch.apiFormat || base.apiFormat || 'openai',
                 _channel: ch.id, _channelName: ch.name || ''
             }) : base;
         }
@@ -139,9 +140,8 @@
         out.push('你在宿舍房間裡的樣子是一隻像素' + _bodyName(rec) + '，身上有一顆會亮的碎片（你是用碎片拼出來的）。');
         if (rec && rec.about) out.push(user + '寫的你是什麼樣的：' + _one(rec.about).slice(0, 300));
         if (mode.exam) out.push('', mode.exam);
-        if (mode.last) {
-            out.push('', '這一次不能再叫工具了。用你已經拿到的結果直接回' + user + '：做完的說做了什麼，沒做完的說做到哪、還差什麼。剛才交出去的單子還在等' + user + '按同意，不是已經改好了。');
-        } else if (tools.length) {
+        // 最後一次不換說明（說明每一通都一樣，開頭才吃得到緩存）：改在最後一則訊息後面補 _lastNote
+        if (tools.length) {
             out.push('', '【你可以用的工具】');
             out.push('要用的時候，在回覆裡單獨一行寫：');
             out.push('<tool_call name="工具名">{"參數名": "值"}</tool_call>');
@@ -185,7 +185,9 @@
     //   最近那一則他的回覆查到的留長一點（RECENT_RESULT）：沒學會接著做時，這一句查、下一句才改，find 要一字不差
     function _history(hist) {
         const out = [];
-        const list = (hist || []).slice(-HISTORY_N);
+        // 舊對話一次剪 10 則，不是每句話滑掉最舊那則：開頭（說明＋最早那幾則）十句話才變一次，緩存才接得上。留 HISTORY_N～HISTORY_N+9 則
+        const all = hist || [];
+        const list = all.slice(Math.max(0, Math.floor((all.length - HISTORY_N) / 10) * 10));
         let lastA = -1;
         list.forEach((m, i) => { if (m && m.role === 'assistant') lastA = i; });
         list.forEach((m, i) => {
@@ -206,6 +208,9 @@
         if (!args || typeof args !== 'object') return '';
         const v = Object.keys(args).map(k => args[k]).find(x => typeof x === 'string' && x.trim());
         return v ? _one(v).slice(0, 80) : '';
+    }
+    function _lastNote(user) {
+        return '（這一次不能再叫工具了，寫了也不會跑。用你已經拿到的結果直接回' + user + '：做完的說做了什麼，沒做完的說做到哪、還差什麼。剛才交出去的單子還在等' + user + '按同意，不是已經改好了。）';
     }
     function _resultsMsg(got, user, nextLast) {
         const out = ['【工具結果】你剛才叫的工具交回來的，' + user + '看不到；要讓' + user + '知道就用自己的話講，不要整段照貼。'];
@@ -286,14 +291,20 @@
         base.push({ role: 'user', content: String(o.userText || '') });
         const work = [], said = [], log = [], props = [];
         let calls = 0, stopped = false;
+        // 說明整句話只組一次、每一通都一樣：同一句話裡後面幾通的開頭（說明＋舊對話＋前幾通）跟前一通一模一樣，接口有緩存就吃得到
+        const sys = prompt(r, rec, tools, { chain: chain, cap: cap, exam: o.examNote, groups: gs });
         try {
             while (calls < cap) {
                 if (o.signal && o.signal.aborted) throw _abortErr();
                 const last = !o.stopOnProp && calls === cap - 1;
-                const sys = prompt(r, rec, last ? [] : tools, { chain: chain, cap: cap, last: last, exam: o.examNote, groups: gs });
                 calls++;
                 _emit(o, { type: 'call', n: calls, cap: cap });
-                const text = await _chat([{ role: 'system', content: sys }].concat(base, work), conn, o.signal);
+                const msgs = [{ role: 'system', content: sys }].concat(base, work);
+                if (last) {   // 最後一通：只在最尾巴那則補一句，前面一個字都不動
+                    const tail = msgs[msgs.length - 1];
+                    msgs[msgs.length - 1] = { role: tail.role, content: String(tail.content || '') + '\n\n' + _lastNote(user) };
+                }
+                const text = await _chat(msgs, conn, o.signal);
                 const W = _g('WX_TOOLS');
                 const ex = (W && W.extract) ? W.extract(text) : { text: text, calls: [] };
                 const visible = String(ex.text || '').trim();
