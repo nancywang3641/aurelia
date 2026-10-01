@@ -3365,11 +3365,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             // 搬進列裡的尺寸下拉先搬回停車格，不然重畫會把它們一起刪掉（存檔讀的就是它們）
             const park = _parking();
             if (park) box.querySelectorAll('#img-avatar-size, #img-scene-size, #img-scene-size-custom, #img-bg-size').forEach(el => park.appendChild(el));
+            try { _pinComfyLegacyRows(); } catch (e) {}   // 刪掉某個包之後，用它的列在這裡接回一模一樣的包
             const routes = M.getRoutes(), styles = M.getStyles(), conns = _connChoices();
             box.innerHTML = M.USES.map(u => {
                 const r = routes[u.id] || {};
                 const legacySvc = M.legacyServiceOf(u.id);
-                const connOpts = '<option value=""' + (r.conn ? '' : ' selected') + '>照原本的（' + _ie(SVC_DISP[legacySvc] || legacySvc) + '）</option>'
+                // 原本是 ComfyUI 的列不給「照原本的」：那份舊設定改不到，選了等於把 LoRA 鎖死；同樣的東西在「○○原本的設定」那個包裡
+                const connOpts = (legacySvc === 'comfyui_direct' ? '' : '<option value=""' + (r.conn ? '' : ' selected') + '>照原本的（' + _ie(SVC_DISP[legacySvc] || legacySvc) + '）</option>')
                     + conns.map(c => '<option value="' + _ie(c.id) + '"' + (c.id === r.conn ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('');
                 const leg = LEGACY_STYLE[u.id];
                 const styleOpts = '<option value=""' + ((!r.style || (!leg && r.style === 'none')) ? ' selected' : '') + '>' + (leg || '不加') + '</option>'
@@ -3610,36 +3612,56 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         //   ③ 房間原本自己那份畫風併進「我的畫風」
         //   ④ 每一列照原本的接口與底詞填好
         //   只跑一次（os_img_routes_migrated）；她已經改過的列不動。
+        // ComfyUI 的一個桶（凍住的舊設定）→ 一個看得到、改得到的包：一模一樣的包已經有就指過去（叫「○○原本的設定」的優先），
+        //   沒有才另存一個。回 { name, created }。
+        const _CFD_BUCKET_LBL = { char: '頭像', scene: '插圖', bg: '背景', map: '小地圖' };
+        const _CFD_KEYS = ['modelType', 'model', 'vae', 'sampler', 'scheduler', 'steps', 'cfg', 'clipSkip', 'basePrompt', 'negPrompt', 'guidance', 'fluxClipL', 'fluxT5', 'fluxAe', 'animaClip', 'animaVae'];
+        const _cfdSameAs = (a, b) => _CFD_KEYS.every(k => String(a[k] == null ? '' : a[k]) === String(b[k] == null ? '' : b[k]))
+            && JSON.stringify((a.loras || []).filter(l => l && l.name)) === JSON.stringify((b.loras || []).filter(l => l && l.name))
+            && String((a.workflowMode === 'custom' && a.customWorkflow) || '') === String(b.customWorkflow || '');
+        const _cfdPresetForBucket = (M, b) => {
+            const presets = _cfdList();
+            const eff = M._comfyCfgFor(b);
+            const own = _CFD_BUCKET_LBL[b] + '原本的設定';
+            const hit = presets.find(p => p && p.name === own && _cfdSameAs(eff, p)) || presets.find(p => p && p.name && _cfdSameAs(eff, p));
+            if (hit) return { name: hit.name, created: false };
+            let name = own, n = 2;
+            while (presets.some(p => p && p.name === name)) name = own + ' ' + (n++);
+            const np = { name: name };
+            _CFD_KEYS.forEach(k => { if (eff[k] !== undefined) np[k] = eff[k]; });
+            np.loras = (eff.loras || []).slice();
+            np.width = eff.width; np.height = eff.height;
+            np.customWorkflow = (eff.workflowMode === 'custom') ? (eff.customWorkflow || '') : '';
+            presets.push(np);
+            return { name: name, created: true };
+        };
+        // 「照原本的」而原本是 ComfyUI 的列：那份舊設定凍住了、面板上哪裡都改不到（她插圖那列清不掉 LoRA 就是這個）
+        //   → 換成指向一模一樣的包，出圖不變、改得到。指到被刪掉的包的列也算（實際走的同樣是那份舊的）。
+        const _pinComfyLegacyRows = () => {
+            const M = _IM();
+            if (!M || !M.USES || !M._resolveConn) return;
+            const routes = M.getRoutes();
+            let created = false;
+            M.USES.forEach(u => {
+                const c = (routes[u.id] || {}).conn;
+                if (c && M._resolveConn(c)) return;
+                if (M.legacyServiceOf(u.id) !== 'comfyui_direct') return;
+                const r = _cfdPresetForBucket(M, M._comfyBucketOf((M.useOf(u.id) || {}).type));
+                if (r.created) created = true;
+                M.setRoute(u.id, { conn: 'comfy:' + r.name });
+            });
+            if (created) _persistImgPresets();
+        };
         const _migrateImgRoutes = () => {
             const M = _IM();
             if (!M || !M.USES) return;
             try { if (localStorage.getItem('os_img_routes_migrated') === '1') return; } catch (e) { return; }
-            const cd = imgConfig.comfyuiDirect || {};
-            const presets = _cfdList();
-            const LBL = { char: '頭像', scene: '插圖', bg: '背景', map: '小地圖' };
-            const KEYS = ['modelType', 'model', 'vae', 'sampler', 'scheduler', 'steps', 'cfg', 'clipSkip', 'basePrompt', 'negPrompt', 'guidance', 'fluxClipL', 'fluxT5', 'fluxAe', 'animaClip', 'animaVae'];
-            const sameAs = (a, b) => KEYS.every(k => String(a[k] == null ? '' : a[k]) === String(b[k] == null ? '' : b[k]))
-                && JSON.stringify((a.loras || []).filter(l => l && l.name)) === JSON.stringify((b.loras || []).filter(l => l && l.name))
-                && String((a.workflowMode === 'custom' && a.customWorkflow) || '') === String(b.customWorkflow || '');
             const bucketPreset = {};   // 桶 → 組合名字
             // 只替原本真的走 ComfyUI 的列用到的桶建（插圖走 NAI 就不必替插圖桶建一組）
             const needBuckets = [];
             M.USES.forEach(u => { if (M.legacyServiceOf(u.id) === 'comfyui_direct') { const bk = M._comfyBucketOf((M.useOf(u.id) || {}).type); if (needBuckets.indexOf(bk) < 0) needBuckets.push(bk); } });
             if (needBuckets.length) {
-                needBuckets.forEach(b => {
-                    const eff = M._comfyCfgFor(b === 'bg' ? 'bg' : b);
-                    const hit = presets.find(p => p && p.name && sameAs(eff, p));
-                    if (hit) { bucketPreset[b] = hit.name; return; }
-                    let name = LBL[b] + '原本的設定', n = 2;
-                    while (presets.some(p => p && p.name === name)) name = LBL[b] + '原本的設定 ' + (n++);
-                    const np = { name: name };
-                    KEYS.forEach(k => { if (eff[k] !== undefined) np[k] = eff[k]; });
-                    np.loras = (eff.loras || []).slice();
-                    np.width = eff.width; np.height = eff.height;
-                    np.customWorkflow = (eff.workflowMode === 'custom') ? (eff.customWorkflow || '') : '';
-                    presets.push(np);
-                    bucketPreset[b] = name;
-                });
+                needBuckets.forEach(b => { bucketPreset[b] = _cfdPresetForBucket(M, b).name; });
                 _persistImgPresets();
             }
             // 畫風包
@@ -3695,6 +3717,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // ComfyUI 那支（wire）在下面才接上 → 等它接完再轉舊設定、畫第一次
         setTimeout(() => {
             try { _migrateImgRoutes(); } catch (e) { console.warn('[圖片設置] 轉舊設定失敗:', e); }
+            try { _pinComfyLegacyRows(); } catch (e) { console.warn('[圖片設置] 照原本的列換成包失敗:', e); }
             try { window._cfdEdit && window._cfdEdit.refresh && window._cfdEdit.refresh(); } catch (e) {}
             window._switchImgTab(imgTab);
             _refreshSpriteBatchNote();
@@ -3942,6 +3965,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 // 桶的接口（serviceChar／serviceScene…）面板上已經沒有格子：每個地方改在「畫風」頁一列一列選（os_img_routes）。
                 //   這幾個值照存檔原樣留著，給還沒改過的列當「照原本的」。
                 const _imgCharSvc  = imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service || 'pollinations';
+                // ComfyUI 頁面板上改了正在改的那個包（例如清掉 LoRA）→ 底部保存一併存回那個包，下面收包庫時就是新的
+                try { window._cfdEdit && window._cfdEdit.commit && window._cfdEdit.commit(); } catch (e) {}
                 const imgData = {
                     serviceInanimate: imgConfig.serviceInanimate || imgConfig.service || 'pollinations',
                     serviceChar:      _imgCharSvc,

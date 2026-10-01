@@ -945,16 +945,25 @@
         // 「起步慢」的錢全花在冷載入＋貼 LoRA 補丁、不在採樣（實測：冷 22 秒、熱 7 秒，採樣只佔 3 秒）。
         // 趁 AI 還在寫劇本的空檔先丟一張極小圖，把即將用到那桶的模型整組拉上顯卡；
         // 進的是同一條 GPU 佇列、同一個桶 tag，所以正式批次到時直接接在它後面連跑。
-        // 沒有桶走 ComfyUI 直連＝無事可做；十分鐘內剛生過圖＝模型還熱著，也不浪費這張。
+        // 沒有一列走 ComfyUI 直連＝無事可做；十分鐘內剛生過圖＝模型還熱著，也不浪費這張。
+        // uses：呼叫端接下來要畫的那幾列（USES 的 id），照先後排。挑第一個實際走 ComfyUI 的列，
+        //   經 _applyUse 拿它選的那個預設包（模型＋LoRA），跟正式那張走同一條。
+        //   🚨 別再照桶問 serviceFor(type)：09-24 起桶凍住了，列改過之後桶說的接口、模型、LoRA 都不準——
+        //      列換成 ComfyUI 而桶不是＝該暖不暖；桶跟列掛不同的包＝暖錯模型。
         _lastComfyJobAt: 0,
-        warmup: function() {
+        warmup: function(uses) {
             try {
-                const t = ['char', 'scene', 'bg'].find((x) => this.serviceFor(x) === 'comfyui_direct');
-                if (!t) return;
+                const list = (Array.isArray(uses) && uses.length) ? uses : ['avatar', 'scene', 'bg'];
+                const use = list.find((u) => this.useOf(u) && this.serviceForUse(u) === 'comfyui_direct');
+                if (!use) return;
                 if (Date.now() - this._lastComfyJobAt < 10 * 60 * 1000) return;
                 this._lastComfyJobAt = Date.now();   // 先佔位：幕布短時間亮兩次也只排一張暖機單
-                console.log('[ImageManager] 🔥 ComfyUI 暖機（' + t + ' 桶）：趁寫稿空檔先把模型拉上顯卡');
-                this._genComfyuiDirect('warmup', t, { width: 128, height: 128, warmup: true }).catch(() => {});
+                const type = this.useOf(use).type;   // 型別決定佇列的桶 tag：跟正式那張同一個，才會接在它後面連跑
+                const opts = { use: use, width: 128, height: 128, warmup: true };
+                this._applyUse('warmup', opts).then((p) => {
+                    console.log('[ImageManager] 🔥 ComfyUI 暖機（' + use + '：' + (opts._comfyPreset ? opts._comfyPreset.name : '原本的' + this._comfyBucketOf(type) + '桶') + '）：趁寫稿空檔先把模型拉上顯卡');
+                    return this._genComfyuiDirect(p, type, opts);
+                }).catch(() => {});
             } catch (e) {}
         },
 

@@ -838,8 +838,9 @@
             const el = this._ensureStartLoaderEl();
             if (!el) return;
             // 🔥 ComfyUI 暖機：AI 寫稿要好幾十秒，正好夠把模型＋LoRA 先拉上顯卡（冷啟動 20 秒藏進這段）。
-            //    只在有桶走 ComfyUI 直連時有動作，其他來源是 no-op；十分鐘內生過圖也不會重複暖。
-            try { win.OS_IMAGE_MANAGER?.warmup?.(); } catch (e) {}
+            //    交給它的是開場接著要畫的那幾列（照先後：角色圖→插圖→背景；開了立繪的話角色圖走「立繪」那列），
+            //    它挑第一個實際走 ComfyUI 的列、用那列選的包暖；都不走 ComfyUI 是 no-op；十分鐘內生過圖也不會重複暖。
+            try { win.OS_IMAGE_MANAGER?.warmup?.([VN_Config.data.spriteDirect === true ? 'sprite' : 'avatar', 'scene', 'bg']); } catch (e) {}
             this._writerCurtain = true;
             el.style.display = 'flex';
             try { win.VN_LoaderChamber?.start(); win.VN_LoaderChamber?.phase('text'); } catch (e) {}

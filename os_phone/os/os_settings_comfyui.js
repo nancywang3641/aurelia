@@ -751,6 +751,9 @@
             //   面板就只編輯包：上面選一個包載進來，改完「存回這個包」或「另存新的包」。
             //   四個桶照存檔原樣留著（還沒改過的列靠它照原本出圖），面板不再讀寫它們。
             let _editing = '';
+            // 載進面板那一刻的樣子：底部「保存」拿它比，面板有改過才存回包（沒動過的包不碰）
+            let _snap = '';
+            const _snapNow = function(){ _snap = _editing ? JSON.stringify(buildCfdPreset(_editing)) : ''; };
             const _editSel = container.querySelector('#img-cfd-edit-sel');
             const _editStatus = container.querySelector('#img-cfd-edit-status');
             function _fillEditSel(){
@@ -764,10 +767,12 @@
                 if (!p) { _fillEditSel(); return; }
                 applyPresetToPanel(p);
                 _editing = name;
+                _snapNow();
                 _fillEditSel();
                 if (_editStatus) _editStatus.textContent = '';
             }
             function _afterEdit(msg){
+                _snapNow();
                 renderPresetGrid(); _fillEditSel();
                 try { window._imgPersistPresets && window._imgPersistPresets(); } catch(e) {}
                 if (_editStatus) _editStatus.textContent = msg;
@@ -788,6 +793,15 @@
                     cfdPresets.push(buildCfdPreset(name));
                     _editing = name;
                     _afterEdit('已另存「' + name + '」');
+                },
+                // 底部「保存」先叫這支：她在面板上改了（清掉 LoRA、換模型…）卻只按底部保存，
+                //   以前改動只留在畫面上、包沒變，重開又被包裡原本的蓋回來。有改才存回，沒改不碰。
+                commit: function(){
+                    if (!_editing || !_snap) return false;
+                    if (JSON.stringify(buildCfdPreset(_editing)) === _snap) return false;
+                    if (cfdPresets.findIndex(function(x){ return x.name === _editing; }) < 0) return false;
+                    this.saveBack();
+                    return true;
                 },
                 // 第一次打開時舊設定才轉成包（畫風頁那支），轉完叫這裡重新列一次
                 refresh: function(){
