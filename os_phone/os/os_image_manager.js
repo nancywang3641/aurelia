@@ -404,6 +404,7 @@
             const nai = this.config.novelai || {};
             out.push({ id: 'nai', svc: 'novelai', name: 'NAI・目前的設定' });
             (nai.naiPresets || []).forEach(p => { if (p && p.id) out.push({ id: 'nai:' + p.id, svc: 'novelai', name: 'NAI・' + (p.name || '未命名') }); });
+            out.push({ id: 'comfy', svc: 'comfyui_direct', name: 'ComfyUI・目前的設定' });
             ((this.config.comfyuiDirect || {}).presets || []).forEach(p => { if (p && p.name) out.push({ id: 'comfy:' + p.name, svc: 'comfyui_direct', name: 'ComfyUI・' + p.name }); });
             out.push({ id: 'tavern', svc: 'tavern_sd', name: '酒館的生圖' });
             out.push({ id: 'capi', svc: 'custom_api', name: '自訂接口・目前那組' });
@@ -420,6 +421,8 @@
             if (conn === 'tavern') return { provider: 'tavern_sd' };
             if (conn === 'nai')    return { provider: 'novelai' };
             if (conn === 'capi')   return { provider: 'custom_api' };
+            // ComfyUI・目前的設定＝ComfyUI 頁面板上存的那份（扁平參數），不經四個凍住的桶
+            if (conn === 'comfy')  return { provider: 'comfyui_direct', _comfyCurrent: true };
             const i = conn.indexOf(':'), kind = conn.slice(0, i), key = conn.slice(i + 1);
             if (kind === 'comfy') {
                 const p = ((this.config.comfyuiDirect || {}).presets || []).find(x => x && x.name === key);
@@ -460,6 +463,7 @@
             const r = this.getRoutes()[use];
             const hit = (r && r.conn) ? this._resolveConn(r.conn) : null;
             if (hit && hit._comfyPreset) return this._comfyCfgFromPreset(hit._comfyPreset);
+            if (hit && hit._comfyCurrent) return this.config.comfyuiDirect || {};
             const u = this.useOf(use);
             return this._comfyCfgFor(u ? u.type : 'scene');
         },
@@ -961,7 +965,7 @@
                 const type = this.useOf(use).type;   // 型別決定佇列的桶 tag：跟正式那張同一個，才會接在它後面連跑
                 const opts = { use: use, width: 128, height: 128, warmup: true };
                 this._applyUse('warmup', opts).then((p) => {
-                    console.log('[ImageManager] 🔥 ComfyUI 暖機（' + use + '：' + (opts._comfyPreset ? opts._comfyPreset.name : '原本的' + this._comfyBucketOf(type) + '桶') + '）：趁寫稿空檔先把模型拉上顯卡');
+                    console.log('[ImageManager] 🔥 ComfyUI 暖機（' + use + '：' + (opts._comfyPreset ? opts._comfyPreset.name : opts._comfyCurrent ? '目前的設定' : '原本的' + this._comfyBucketOf(type) + '桶') + '）：趁寫稿空檔先把模型拉上顯卡');
                     return this._genComfyuiDirect(p, type, opts);
                 }).catch(() => {});
             } catch (e) {}
@@ -976,7 +980,10 @@
                 try { win.OS_USAGE && win.OS_USAGE.note({ source: 'comfyui_direct', type: type }); } catch (e) {}   // 📊 長期用量帳
             }
             // 這一列選了某個組合（預設包）就用它；沒選照舊按桶取（char/scene/bg/map 各自一份，沒設過退共用）
-            const cfg = options._comfyPreset ? this._comfyCfgFromPreset(options._comfyPreset) : this._comfyCfgFor(type);
+            // 目前的設定（_comfyCurrent）＝扁平那份本身，不讓凍住的桶蓋上去
+            const cfg = options._comfyPreset ? this._comfyCfgFromPreset(options._comfyPreset)
+                : options._comfyCurrent ? (this.config.comfyuiDirect || {})
+                : this._comfyCfgFor(type);
             const url = (cfg.url || '').trim();
             if (!url) {
                 if (!options.warmup) { try { AUI.toastr && AUI.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {} }

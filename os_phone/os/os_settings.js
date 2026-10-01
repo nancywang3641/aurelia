@@ -32,7 +32,7 @@
             ss_img_styles: { title: '我的畫風', body: '一包是一段底詞加一段負詞，可以再放一張底圖。上面每個地方挑一包，好幾個地方可以用同一包。' },
             ss_img_style_ref: { title: '底圖', body: '給生圖參考畫風用的一張圖。只有自訂接口收得到參考圖，其他接口會略過。' },
             ss_img_test: { title: '試畫一張', body: '選一個地方，照那一列現在的設定畫一張。ComfyUI 的預設包要先存好才試得到。' },
-            ss_cfd_edit: { title: '正在改的預設包', body: '選一個包，下面的欄位就換成它的設定。改完按「存回這個包」；想留著原本那個，就按「另存新的包」。\n\n哪個地方用哪個包，在「畫風」頁選。' },
+            ss_cfd_edit: { title: '載入預設包', body: '下面這些欄位就是 ComfyUI「目前的設定」。按底部「保存所有設定」存的是它，不會動到任何預設包。\n\n選一個包，欄位就換成那個包的內容。改完按「存回這個包」才會改到那個包；按「另存新的包」存成新的一個。選了包再按底部保存，目前的設定就變成畫面上這一份。\n\n哪個地方用目前的設定、哪個地方用哪個包，在「畫風」頁選。' },
             ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。' },
             ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次讓它把家具和能踩的地板各塗一個顏色，之後小人會被家具擋住、繞過去走，地板照它畫的範圍走。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
@@ -1714,7 +1714,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;"><i class="fa-solid fa-box"></i> 打開預設包 · ${(imgConfig.comfyuiDirect?.presets || []).length} 個</button>
                                 </div>
                                 <div class="set-group" id="img-cfd-edit-group">
-                                    <div class="set-label"><i class="fa-solid fa-pen-to-square"></i> 正在改的預設包${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cfd_edit') : ''}</div>
+                                    <div class="set-label"><i class="fa-solid fa-pen-to-square"></i> 載入預設包${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cfd_edit') : ''}</div>
                                     <select class="set-select" id="img-cfd-edit-sel"></select>
                                     <div class="set-room-style-btns">
                                         <button class="set-btn" type="button" onclick="window._cfdEdit && window._cfdEdit.saveBack()"><i class="fa-solid fa-floppy-disk"></i> 存回這個包</button>
@@ -3348,6 +3348,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const _connChoices = () => {
             const out = [{ id: 'poll', name: 'Pollinations' }, { id: 'nai', name: 'NAI・目前的設定' }];
             _naiList().forEach(p => { if (p && p.id) out.push({ id: 'nai:' + p.id, name: 'NAI・' + (p.name || '未命名') }); });
+            out.push({ id: 'comfy', name: 'ComfyUI・目前的設定' });   // ComfyUI 頁面板上存的那份（底部保存）
             _cfdList().forEach(p => { if (p && p.name) out.push({ id: 'comfy:' + p.name, name: 'ComfyUI・' + p.name }); });
             out.push({ id: 'tavern', name: '酒館的生圖' }, { id: 'capi', name: '自訂接口・目前那組' });
             _imgNodes('capi').forEach(n => { if (n && n.id && n.url) out.push({ id: 'capi:' + n.id, name: '自訂接口・' + (n.name || n.model || n.url) }); });
@@ -3370,7 +3371,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             box.innerHTML = M.USES.map(u => {
                 const r = routes[u.id] || {};
                 const legacySvc = M.legacyServiceOf(u.id);
-                // 原本是 ComfyUI 的列不給「照原本的」：那份舊設定改不到，選了等於把 LoRA 鎖死；同樣的東西在「○○原本的設定」那個包裡
+                // 原本是 ComfyUI 的列不給「照原本的」：那份舊設定改不到，選了等於把 LoRA 鎖死；要跟著面板走選「ComfyUI・目前的設定」
                 const connOpts = (legacySvc === 'comfyui_direct' ? '' : '<option value=""' + (r.conn ? '' : ' selected') + '>照原本的（' + _ie(SVC_DISP[legacySvc] || legacySvc) + '）</option>')
                     + conns.map(c => '<option value="' + _ie(c.id) + '"' + (c.id === r.conn ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('');
                 const leg = LEGACY_STYLE[u.id];
@@ -3636,21 +3637,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             return { name: name, created: true };
         };
         // 「照原本的」而原本是 ComfyUI 的列：那份舊設定凍住了、面板上哪裡都改不到（她插圖那列清不掉 LoRA 就是這個）
-        //   → 換成指向一模一樣的包，出圖不變、改得到。指到被刪掉的包的列也算（實際走的同樣是那份舊的）。
+        //   → 換成「ComfyUI・目前的設定」＝ComfyUI 頁面板上存的那份，改面板按保存就跟著變。指到被刪掉的包的列也算。
+        //   定案：「原本的設定」指的是面板當前保存的，不是某個預設包；要用包就直接選那個包。
         const _pinComfyLegacyRows = () => {
             const M = _IM();
             if (!M || !M.USES || !M._resolveConn) return;
             const routes = M.getRoutes();
-            let created = false;
             M.USES.forEach(u => {
                 const c = (routes[u.id] || {}).conn;
                 if (c && M._resolveConn(c)) return;
                 if (M.legacyServiceOf(u.id) !== 'comfyui_direct') return;
-                const r = _cfdPresetForBucket(M, M._comfyBucketOf((M.useOf(u.id) || {}).type));
-                if (r.created) created = true;
-                M.setRoute(u.id, { conn: 'comfy:' + r.name });
+                M.setRoute(u.id, { conn: 'comfy' });
             });
-            if (created) _persistImgPresets();
         };
         const _migrateImgRoutes = () => {
             const M = _IM();
@@ -3965,8 +3963,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 // 桶的接口（serviceChar／serviceScene…）面板上已經沒有格子：每個地方改在「畫風」頁一列一列選（os_img_routes）。
                 //   這幾個值照存檔原樣留著，給還沒改過的列當「照原本的」。
                 const _imgCharSvc  = imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service || 'pollinations';
-                // ComfyUI 頁面板上改了正在改的那個包（例如清掉 LoRA）→ 底部保存一併存回那個包，下面收包庫時就是新的
-                try { window._cfdEdit && window._cfdEdit.commit && window._cfdEdit.commit(); } catch (e) {}
+                // ComfyUI 頁面板上那一份＝目前的設定（跟 NAI 頁一樣）。🚨 這裡絕不寫回任何預設包——包只有「存回這個包」改得到。
+                let _cfdPanel = {};
+                try { _cfdPanel = (window._cfdEdit && window._cfdEdit.panelFields) ? window._cfdEdit.panelFields() : {}; } catch (e) {}
                 const imgData = {
                     serviceInanimate: imgConfig.serviceInanimate || imgConfig.service || 'pollinations',
                     serviceChar:      _imgCharSvc,
@@ -4018,9 +4017,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             bg:    container.querySelector('#img-nai-vibe-sc-bg')?.checked    ?? true,
                         },
                     },
-                    // ComfyUI：面板現在編輯的是「組合」（預設包），存回組合走 ComfyUI 頁那兩顆鈕；
-                    //   扁平參數與四個桶照存檔原樣留著（給還沒改過的列當「照原本的」），這裡只收網址、組合庫與全域開關。
-                    comfyuiDirect: Object.assign({}, imgConfig.comfyuiDirect || {}, {
+                    // ComfyUI：扁平參數＝目前的設定，收面板上那一份；組合庫照記憶體裡那份原樣帶回（不從面板改）。
+                    //   四個桶照存檔原樣留著（給沒選過的舊列當底）。
+                    comfyuiDirect: Object.assign({}, imgConfig.comfyuiDirect || {}, _cfdPanel, {
                         url:       (container.querySelector('#img-cfd-url')?.value || '').trim(),
                         presets:   (window._cfdGetPresets ? window._cfdGetPresets() : ((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || [])),
                         previewPrompt: (container.querySelector('#img-cfd-preview-prompt')?.value || '').trim(),
@@ -4080,6 +4079,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 } : null;
 
                 saveConfig(llmData, secLlmData, imgData, minimaxData);
+                // ComfyUI 頁的下拉選回「目前的設定」時讀的是這份 → 換成剛存的，不然會載回開面板時的舊值
+                imgConfig.comfyuiDirect = imgData.comfyuiDirect;
                 // 刪掉的 NAI 預設縮圖／Vibe：清單存進去了才從圖庫刪（沒按保存就離開的話，清單還在、圖也還在）
                 try { window._naiFlushDeletes && window._naiFlushDeletes(); } catch (e) {}
 

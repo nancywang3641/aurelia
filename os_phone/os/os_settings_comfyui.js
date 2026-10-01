@@ -1,9 +1,9 @@
 ﻿// ----------------------------------------------------------------
 // [檔案] os_settings_comfyui.js — 系統設置 🧩 ComfyUI 直連設定（2026-07-17 自 os_settings.js 拆出）
 // 職責：LoRA 行＋測試連線/抓模型清單；預設包（modal/grid/另存/覆蓋/匯出入/清空/風格預覽/拖圖還原工作流）；
-//       面板編輯的是「正在改哪個預設包」（2026-09-24 起；四個桶照存檔原樣留著，給還沒改過的列當照原本的，面板不再讀寫）。
+//       面板欄位＝ComfyUI「目前的設定」，底部保存只存它；預設包只有「存回這個包」改得到（2026-10-01 起；四個桶照存檔原樣留著，面板不讀寫）。
 // 依賴：參數注入 ctx = { imgConfig, container }（都是 os_settings.js launchApp 的閉包變數，開面板時組好傳入）；
-//       入口＝window.OS_SETTINGS_COMFY.wire(ctx)。對外發布 window._cfdPreset（預設包牆）／_cfdEdit（正在改哪個包）
+//       入口＝window.OS_SETTINGS_COMFY.wire(ctx)。對外發布 window._cfdPreset（預設包牆）／_cfdEdit（面板上載的是目前的設定還是哪個包）
 //       （HTML onclick 用），
 //       另加 window._cfdGetPresets 給核心存檔收包庫（cfdPresets 原是閉包變數）。
 //       載入順序排 os_settings.js 之後（index.js PHONE_FILES）；wire 在 launchApp 執行期才被呼叫。
@@ -601,9 +601,8 @@
                     } catch(e) {}
                     if (!await AUI.confirm('刪除預設包「' + old.name + '」？' + (used.length ? '\n用它的地方（' + used.join('、') + '）會改回照原本的設定。' : ''))) return;
                     cfdPresets.splice(i, 1);
-                    if (_editing === old.name) _editing = '';
                     renderPresetGrid();
-                    _fillEditSel();
+                    window._cfdEdit._dropped(old.name);
                     try { window._imgPersistPresets && window._imgPersistPresets(); } catch(e) {}
                 },
                 genPreviewIdx: async function(i){
@@ -746,41 +745,38 @@
                 drop.addEventListener('drop', function(e){ e.preventDefault(); drop.classList.remove('is-over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) window._cfdPreset._handleImage(f); });
             })();
 
-            // ===== 正在改哪個預設包（2026-09-24）=====
-            //   以前面板編輯的是四個桶（頭像／插圖／背景／小地圖各一份），跟著子分頁切；現在每個地方在「畫風」頁自己選用哪個包，
-            //   面板就只編輯包：上面選一個包載進來，改完「存回這個包」或「另存新的包」。
-            //   四個桶照存檔原樣留著（還沒改過的列靠它照原本出圖），面板不再讀寫它們。
-            let _editing = '';
-            // 載進面板那一刻的樣子：底部「保存」拿它比，面板有改過才存回包（沒動過的包不碰）
-            let _snap = '';
-            const _snapNow = function(){ _snap = _editing ? JSON.stringify(buildCfdPreset(_editing)) : ''; };
+            // ===== 面板＝目前的設定；上面選包＝載進來改（2026-09-24 起，10-01 改成這樣）=====
+            //   面板上這些欄位＝ComfyUI「目前的設定」（扁平那份，跟 NAI 頁一樣）：底部「保存所有設定」存的就是它，絕不動任何預設包。
+            //   上面選一個包＝把那個包的內容載進面板；預設包只有「存回這個包」（存進選著的那個）／「另存新的包」會改。
+            //   哪個地方用目前的設定、哪個用某個包，在「畫風」頁一列一列選（ComfyUI・目前的設定＝conn 'comfy'）。
+            //   四個桶照存檔原樣留著，只給沒選過的舊列當底；面板不讀寫它們。
+            let _editing = '';   // 空＝面板上是目前的設定；有值＝載進來的那個包的名字
             const _editSel = container.querySelector('#img-cfd-edit-sel');
             const _editStatus = container.querySelector('#img-cfd-edit-status');
+            // 存檔後 os_settings 會把 imgConfig.comfyuiDirect 換成新的那份 → 每次現讀，別抓開面板當下那個物件
+            function _curCfg(){ return (imgConfig && imgConfig.comfyuiDirect) || cfd || {}; }
             function _fillEditSel(){
                 if (!_editSel) return;
-                _editSel.innerHTML = cfdPresets.length
-                    ? (_editing ? '' : '<option value="" selected>（選一個包來改）</option>') + cfdPresets.map(function(p){ return '<option value="' + escAttr(p.name) + '"' + (p.name === _editing ? ' selected' : '') + '>' + escAttr(p.name) + '</option>'; }).join('')
-                    : '<option value="">還沒有預設包</option>';
+                _editSel.innerHTML = '<option value=""' + (_editing ? '' : ' selected') + '>目前的設定</option>'
+                    + cfdPresets.map(function(p){ return '<option value="' + escAttr(p.name) + '"' + (p.name === _editing ? ' selected' : '') + '>' + escAttr(p.name) + '</option>'; }).join('');
             }
             function _pick(name){
-                const p = cfdPresets.find(function(x){ return x.name === name; });
-                if (!p) { _fillEditSel(); return; }
-                applyPresetToPanel(p);
-                _editing = name;
-                _snapNow();
+                const p = name ? cfdPresets.find(function(x){ return x.name === name; }) : null;
+                applyPresetToPanel(p || _curCfg());
+                _editing = p ? name : '';
                 _fillEditSel();
                 if (_editStatus) _editStatus.textContent = '';
             }
             function _afterEdit(msg){
-                _snapNow();
                 renderPresetGrid(); _fillEditSel();
                 try { window._imgPersistPresets && window._imgPersistPresets(); } catch(e) {}
                 if (_editStatus) _editStatus.textContent = msg;
             }
             window._cfdEdit = {
                 pick: _pick,
+                // 面板上載的是哪個包就存回哪個；面板上是目前的設定（沒有包可存回）＝另存新的包
                 saveBack: function(){
-                    const i = cfdPresets.findIndex(function(x){ return x.name === _editing; });
+                    const i = _editing ? cfdPresets.findIndex(function(x){ return x.name === _editing; }) : -1;
                     if (i < 0) { this.saveAs(); return; }
                     const old = cfdPresets[i];
                     cfdPresets[i] = Object.assign(buildCfdPreset(old.name), old.preview ? { preview: old.preview } : {});
@@ -794,26 +790,21 @@
                     _editing = name;
                     _afterEdit('已另存「' + name + '」');
                 },
-                // 底部「保存」先叫這支：她在面板上改了（清掉 LoRA、換模型…）卻只按底部保存，
-                //   以前改動只留在畫面上、包沒變，重開又被包裡原本的蓋回來。有改才存回，沒改不碰。
-                commit: function(){
-                    if (!_editing || !_snap) return false;
-                    if (JSON.stringify(buildCfdPreset(_editing)) === _snap) return false;
-                    if (cfdPresets.findIndex(function(x){ return x.name === _editing; }) < 0) return false;
-                    this.saveBack();
-                    return true;
+                // 底部「保存所有設定」收的：面板上這一份＝目前的設定（不管是不是從某個包載進來的，都不寫回包）
+                panelFields: function(){
+                    const f = buildCfdPreset('');
+                    delete f.name;
+                    const ta = container.querySelector('#img-cfd-custom-wf-text');
+                    f.workflowMode = ((container.querySelector('#img-cfd-wfmode') || {}).value === 'custom') ? 'custom' : 'auto';
+                    f.customWorkflow = ta ? String(ta.value || '').trim() : '';   // 自動模式也留著框裡的字，切回自訂還在
+                    return f;
                 },
-                // 第一次打開時舊設定才轉成包（畫風頁那支），轉完叫這裡重新列一次
+                // 刪掉的包剛好載在面板上 → 面板換回目前的設定，免得下拉寫「目前的設定」、欄位卻是被刪的那包
+                _dropped: function(name){ if (_editing === name) _pick(''); else _fillEditSel(); },
+                // 開面板、第一次轉換完：載目前的設定（已經載了某個包就留著）
                 refresh: function(){
                     if (_editing && cfdPresets.some(function(x){ return x.name === _editing; })) { _fillEditSel(); return; }
-                    let first = '';
-                    try {
-                        const M = (window.parent || window).OS_IMAGE_MANAGER;
-                        const rt = (M && M.getRoutes) ? M.getRoutes() : {};
-                        ['avatar', 'sprite', 'scene', 'bg'].some(function(u){ const c = rt[u] && rt[u].conn; if (c && c.indexOf('comfy:') === 0) { first = c.slice(6); return true; } return false; });
-                    } catch(e) {}
-                    if (!cfdPresets.some(function(x){ return x.name === first; })) first = (cfdPresets[0] || {}).name || '';
-                    if (first) _pick(first); else _fillEditSel();
+                    _pick('');
                 },
             };
             if (_editSel) _editSel.addEventListener('change', function(){ _pick(_editSel.value); });
