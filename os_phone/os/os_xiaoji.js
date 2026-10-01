@@ -290,7 +290,126 @@
             log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text })) };
     }
 
+    // ── 上課：報名、付錢、考試、批改、小劇場；開箱領養 ──────────
+    function _skill(id) { return _L().SKILLS.find(s => s.id === id) || null; }
+    function _fill(s, rid) {
+        const r = _resident(rid);
+        return String(s == null ? '' : s).replace(/\{name\}/g, (r && r.name) || '小機').replace(/\{user\}/g, _userName());
+    }
+    function lines(rid, key, part) {
+        const ln = (_L().LINES || {})[key];
+        const arr = Array.isArray(ln) ? ln : ((ln && ln[part]) || []);
+        return arr.map(s => _fill(s, rid));
+    }
+    const KIND_NAME = { add: '新增', edit: '修改', list: '改清單', use: '換上', toggle: '開關', builtin: '開關', theme: '換主題' };
+    function _afterText(p, field) {
+        const a = p && p.after;
+        if (a == null) return '';
+        if (typeof a === 'string') return a;
+        if (field && a[field] != null) return String(a[field]);
+        return JSON.stringify(a);
+    }
+    function grade(e, props) {
+        const p = (props || [])[0];
+        if (!p) return { pass: false, why: '沒有交出單子' };
+        e = e || {};
+        if (e.kind && p.kind !== e.kind) return { pass: false, why: '交的是' + (KIND_NAME[p.kind] || p.kind) + '，題目要的是' + (KIND_NAME[e.kind] || e.kind) };
+        if (e.any) return { pass: true, why: '' };
+        if (e.title && String(p.title || '') !== e.title) return { pass: false, why: '動到的是「' + (p.title || '') + '」，不是「' + e.title + '」' };
+        const t = _afterText(p, e.field);
+        for (const w of (e.has || [])) if (t.indexOf(w) === -1) return { pass: false, why: '改完的內容裡沒有「' + w + '」' };
+        for (const w of (e.not || [])) if (t.indexOf(w) !== -1) return { pass: false, why: '改完的內容裡還有「' + w + '」' };
+        for (const k of (e.same || [])) {
+            if (JSON.stringify((p.before || {})[k]) !== JSON.stringify((p.after || {})[k])) return { pass: false, why: '不該動的地方也被改了' };
+        }
+        return { pass: true, why: '' };
+    }
+    async function canEnroll(rid, id) {
+        const rec = await get(rid), sk = _skill(id);
+        if (!sk) return { ok: false, why: '沒有這門課' };
+        if (rec.skills[id]) return { ok: false, why: '已經學會了' };
+        if (sk.needAny && !learned(rec).some(k => k !== 'chain')) return { ok: false, why: '要先學會任一門動手的課' };
+        const T = _L().TEACHERS[sk.teacher] || {};
+        return { ok: true, paid: !!rec.paid[id], price: sk.price, money: T.money || 'pt', calls: sk.examCalls + (rec.theater ? 1 : 0) };
+    }
+    async function pay(rid, id) {
+        const c = await canEnroll(rid, id);
+        if (!c.ok) return c;
+        if (c.paid) return { ok: true };
+        const sk = _skill(id);
+        if (c.money === 'pt') {
+            const P = _g('OS_PT');
+            if (!P || !P.spendPT) return { ok: false, why: 'PT 錢包還沒載入' };
+            const r = await P.spendPT(c.price, '小機上課：' + sk.label);
+            if (!r || !r.ok) return { ok: false, why: 'PT 不夠（要 ' + c.price + '，還差 ' + ((r && r.short) || c.price) + '）' };
+        } else {
+            const S = _g('OS_404_STORE');
+            if (!S || !S.spendShards) return { ok: false, why: '碎片還沒載入' };
+            if (!S.spendShards(c.price)) return { ok: false, why: '碎片不夠（要 ' + c.price + '，現在有 ' + (S.getShards ? S.getShards() : 0) + '）' };
+        }
+        const rec = await get(rid);
+        rec.paid[id] = true;
+        await save(rid, { paid: rec.paid });
+        return { ok: true };
+    }
+    async function exam(rid, id, o) {
+        o = o || {};
+        const sk = _skill(id), ex = (_L().EXAMS || {})[id];
+        if (!sk || !ex) throw new Error('沒有這門課的考題');
+        const T = _L().TEACHERS[sk.teacher] || {};
+        const SB = _g('OS_XIAOJI_SANDBOX');
+        if (!SB || !SB.open) throw new Error('考場還沒載入');
+        const box = await SB.open(id, rid);
+        const note = '這是' + (T.name || '老師') + '出的練習題。用的是練習用的資料，不會改到' + _userName() + '真的東西。照題目做，用工具交出來。';
+        const res = await turn({ rid: rid, history: [], userText: _fill(ex.task, rid), tools: box.tools, runTool: box.run,
+            groups: [box.group], cap: sk.make ? 1 : sk.examCalls, stopOnProp: true, examNote: note, signal: o.signal, onProgress: o.onProgress });
+        const g = grade(ex.expect, res.props);
+        if (g.pass) {
+            const rec = await get(rid);
+            rec.skills[id] = { at: Date.now() };
+            await save(rid, { skills: rec.skills });
+        }
+        const made = res.log.filter(x => /_make$/.test(x.tool)).length;   // 大件：專門那一通也算
+        // 沙盒裡的單子沒經過 AureliaLink，沒標是誰提的：補上小機自己（小劇場的由來要寫對人）
+        const me = _resident(rid);
+        if (res.props[0] && !res.props[0].by) res.props[0].by = (me && me.name) || '小機';
+        const E = _g('OS_AURELIA_EDIT');
+        let summary = '';
+        try { summary = res.props[0] ? ((E && E.text) ? E.text(res.props[0], false) : (res.props[0].title || '')) : ''; } catch (e) {}
+        return { pass: g.pass, why: g.why, props: res.props, calls: res.calls + made, summary: _one(summary).slice(0, 200), stopped: res.stopped };
+    }
+    async function theater(rid, id, summary) {
+        const rec = await get(rid);
+        if (!rec.theater) return false;
+        const VT = _g('VoidTerminal'), N = _g('LobbyNpcs');
+        if (!VT || !VT.playDuoScene || !N) return false;
+        const sk = _skill(id);
+        if (!sk) return false;
+        const teacher = sk.teacher === 'dan' ? (N.snResident && N.snResident('dan')) : (N.staff && N.staff(sk.teacher));
+        if (!teacher) return false;
+        const r = _resident(rid), me = (r && r.name) || '小機', user = _userName();
+        const T = _L().TEACHERS[sk.teacher] || {};
+        const xj = { key: 'xiaoji_' + rid, name: me,
+            personaFull: '你現在扮演「' + me + '」——404 號房的柴郡用 LUNA 碎片拼出來、沒有登記的小 AI，住在宿舍，替' + user + '在奧瑞亞裡做事。'
+                + (rec.about ? user + '說它是這樣的：' + _one(rec.about).slice(0, 200) : '') };
+        const extra = me + '剛在' + (T.place || '') + '上完' + (T.name || '') + '的「' + sk.label + '」，考過了。它交的作業：' + (summary || '（沒有記下）') + '。演考完之後他們兩個的一小段。';
+        try { return !!(await VT.playDuoScene(teacher, xj, extra)); } catch (e) { return false; }
+    }
+    async function adopt(o) {
+        o = o || {};
+        const CT = _g('ClaudeTerminal');
+        if (!CT || !CT.saveResident) return { ok: false, why: '宿舍還沒載入' };
+        const name = _one(o.name).slice(0, 20);
+        if (!name) return { ok: false, why: '先給它一個名字' };
+        const r = CT.saveResident({ name: name, provider: 'xiaoji' });
+        if (!r || !r.id) return { ok: false, why: '沒住進去' };
+        await save(r.id, { conn: o.conn || 'route', about: String(o.about || '').slice(0, 300), born: Date.now() });
+        if (o.gift) { const S = _g('OS_404_STORE'); if (S && S.addShards) S.addShards(_L().BOX_GIFT || 0); }
+        return { ok: true, rid: r.id };
+    }
+
     const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
+        grade, lines, canEnroll, pay, exam, theater, adopt,
         LIMITS: { CAP_MIN: CAP_MIN, CAP_MAX: CAP_MAX, NO_CHAIN_CAP: NO_CHAIN_CAP } };
     win.OS_XIAOJI = API;
     if (win !== window) { try { window.OS_XIAOJI = API; } catch (e) {} }
