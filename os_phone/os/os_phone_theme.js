@@ -661,6 +661,23 @@
         });
     }
 
+    // 小機的「做主題」（os_xiaoji_make.js）：一次做好、不開畫面、不存。cur＝要改的那一套現在的值（文字）。
+    async function _gen(want, cur) {
+        const API = win.OS_API;
+        if (!API || !API.chatMain) throw new Error('API 還沒載入');
+        const user = '這次要的是：' + want + (cur ? '\n\n照下面這一套改（沒提到的格子照原本的值）：\n' + cur : '');
+        const messages = [
+            { role: 'system', content: _prompt() },
+            { role: 'user', content: user },
+        ];
+        return await new Promise(function (resolve, reject) {
+            API.chatMain(messages, null,
+                function (full) { resolve(full); },
+                function (err) { reject(err instanceof Error ? err : new Error(String(err || '沒有回應'))); },
+                { task: 'phone_theme', label: '手機主題（小機）', stream: false });
+        });
+    }
+
     // clean／prompt 外露是為了驗得到：拿一份假回覆丟進 clean，就能看到程式實際算出哪些格子
     // 假手機（工坊那支）：給小機的「改主題」單子畫改前改後（os_aurelia_theme.js）
     function _previewHtml() {
@@ -675,6 +692,6 @@
             + '<div class="pth-nav"><span class="on"><i class="fa-solid fa-house"></i><em>首頁</em></span><span><i class="fa-solid fa-user"></i><em>我</em></span></div></div>') + '</div>';
     }
     win.OS_PHONE_THEME = { launch: launch, FIELDS: FIELDS, LAYOUT: LAYOUT, onInk: _onInk, clean: _clean, prompt: _prompt, PAIRS: PAIRS, contrastIssues: _contrastIssues,
-        previewHtml: _previewHtml, paint: _paintPreview, missing: _missing, swatch: _swatch, pickJson: _pickJson };
+        previewHtml: _previewHtml, paint: _paintPreview, missing: _missing, swatch: _swatch, pickJson: _pickJson, generate: _gen };
     console.log('✅ OS_PHONE_THEME（手機主題工坊）模組就緒');
 })();

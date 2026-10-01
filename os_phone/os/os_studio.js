@@ -3037,6 +3037,36 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         }
     }
 
+    // 小機的一次產生器用：從回覆裡挑出 <json> 那個物件（不碰創作室的 currentParsedData／currentMode）
+    function _pickJsonObj(text) {
+        const s = String(text || '');
+        const m = s.match(/<json>([\s\S]*?)<\/json>/i);
+        const area = m ? m[1] : s;
+        const i = area.indexOf('{'), j = area.lastIndexOf('}');
+        if (i < 0 || j <= i) return null;
+        const t = area.slice(i, j + 1)
+            .replace(/[\u0000-\u0009\u000B-\u001F]+/g, '')
+            .replace(/(\\+)`/g, (mm, b) => (b.length % 2 ? b + '\\' + '`' : mm));
+        const W = win.WX_TOOLS || window.WX_TOOLS;
+        if (W && W.parseArgs) return W.parseArgs(t, null, true);   // 字串裡的真換行補成跳脫再試
+        try { return JSON.parse(t); } catch (e) { return null; }
+    }
+    // 跟創作室製作面板同一組連線（純設定：不帶預設條目、不開思考、輸出夾到 32768 以下）
+    function _studioPureConfig(temp) {
+        const base = win.OS_SETTINGS?.getConfig?.() || JSON.parse(localStorage.getItem('os_global_config') || '{}');
+        return { ...base, usePresetPrompts: false, enableThinking: false, temperature: temp, maxTokens: Math.min(parseInt(base.maxTokens) || 8192, 32768) };
+    }
+    function _studioOnce(messages, label, temp) {
+        return new Promise(function (resolve, reject) {
+            const api = win.OS_API || window.OS_API;
+            if (!api || !api.chat) { reject(new Error('找不到 API 引擎')); return; }
+            api.chat(messages, _studioPureConfig(temp), null,
+                function (full) { resolve(String(full || '')); },
+                function (e) { reject(e instanceof Error ? e : new Error(String((e && e.message) || e || '沒有回應'))); },
+                { task: 'studio', label: label, keepCodeFences: true, stream: true });
+        });
+    }
+
     function extractAndParseJson(text) {
         if (!text) return false;
         let cleanStr = "";
@@ -4601,6 +4631,21 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     win.OS_STUDIO = {
         vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, vnShot: _vnShot, refreshTavernRegex: _vnRefreshTavernRegex,
         fxSpec: function () { return String((MODES.fx && MODES.fx.prompt) || ''); },   // 特效工坊的說明書（小機的「改特效」）
+        // 小機的「做組件／做特效」（os_xiaoji_make.js）：一次做好、不開畫面、不存。cur＝要改的那一件現在的內容（文字）
+        vnGenerate: async function (want, cur) {
+            const sys = String((MODES.vn_ui && MODES.vn_ui.prompt) || '');
+            const user = '【類型：純展示】' + want + (cur ? '\n\n照下面這一份改（只改要改的地方，八個鍵整份交回）：\n' + cur : '');
+            const j = _pickJsonObj(await _studioOnce([{ role: 'system', content: sys }, { role: 'user', content: user }], 'VN 組件（小機）', 0.7));
+            if (!j || !j.tagId || !j.html) throw new Error('它沒有交出完整的組件（<json> 裡要有 tagId 和 html）');
+            return j;
+        },
+        fxGenerate: async function (want, cur) {
+            const sys = String((MODES.fx && MODES.fx.prompt) || '');
+            const user = want + (cur ? '\n\n照下面這份配方改（fxId 不變）：\n' + cur : '') + '\n\n需求就這些，不用再問，直接照輸出格式交配方。';
+            const j = _pickJsonObj(await _studioOnce([{ role: 'system', content: sys }, { role: 'user', content: user }], '特效（小機）', 0.7));
+            if (!j || !j.fxId) throw new Error('它沒有交出配方（<json> 裡要有 fxId）');
+            return j;
+        },
         // 截一個元素（創作室截圖那支，長邊壓到 1024）：給小機的「看看畫出來的樣子」用（改主題也用）
         shotNode: async function (node, w, h, bg) {
             const lib = await _loadShotLib();
@@ -4611,6 +4656,15 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         // 劇情主題給小機的「改主題」（os_aurelia_theme.js）用：說明書、假 VN 畫面、套用前的防呆、藏櫃（09-30）
         vnTheme: {
             spec: function () { return VTH_AI_PROMPT.replace('用戶想要的風格：', '').trim(); },
+            // 小機的「做主題」劇情那種：新做＝VTH_AI_PROMPT＋想要的風格；改＝對話版說明＋目前的 CSS＋這次要改
+            generate: async function (want, cur) {
+                const msgs = cur
+                    ? [{ role: 'user', content: VTH_AI_CHAT }, { role: 'user', content: '【目前的 CSS】\n```css\n' + cur + '\n```\n\n【這次要改】' + want }]
+                    : [{ role: 'user', content: VTH_AI_PROMPT + want }];
+                const got = _vthPickCss(await _studioOnce(msgs, '劇情主題（小機）', 0.7));
+                if (!got.css) throw new Error('它沒有交出 CSS');
+                return { css: got.css, note: got.note, cut: got.cut };
+            },
             doc: function (css, mode) { return _vthBuildSrcdoc(css, mode || 'char-mode', false); },
             skinCard: _vthSkinCard,   // 章節卡：畫完之後把對話框的皮抄到卡上（同編輯器的 frame.onload）
             // 尺寸同主題編輯器：手機 390×844；中間＝她在編輯器填的嵌入寬（vth_desk_w，預設 1000）×0.66；全屏＝螢幕
