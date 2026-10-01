@@ -212,8 +212,11 @@
             pre = '下面是對方的聊天 app 給模型的主題說明書。交的時候用 aurelia_theme_add（kind: chat）的 css 參數。\n\n';
         }
         if (!txt) return '那一種的說明書還沒載好。';
-        const tail = '\n\n——說明書到這裡。照它寫好之後用 aurelia_theme_add 交，spec 參數填：' + _specIssue(tk);
-        return _paged(pre + txt + tail, args.part, KINDS[tk] + '的寫法', SPEC_PART);
+    // 號碼開頭也放一份：聊天 app 下一輪就把說明書收成開頭 200 字，只放結尾的話，中間先叫 look 再交時號碼已經看不到、只好再看一次說明書（10-01 公益站 gemini-3.1-pro 實測）
+        const code = _specIssue(tk);
+        const head = '（看完照著寫，用 aurelia_theme_add 交的時候 spec 參數填：' + code + '）\n';
+        const tail = '\n\n——說明書到這裡。照它寫好之後用 aurelia_theme_add 交，spec 參數填：' + code;
+        return _paged(head + pre + txt + tail, args.part, KINDS[tk] + '的寫法', SPEC_PART);
     }
 
     // ── 草稿：還沒被同意的那張（同 VN 組件）────────────────────────────────

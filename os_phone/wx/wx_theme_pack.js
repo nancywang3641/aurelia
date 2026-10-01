@@ -228,11 +228,11 @@
                     const s = _scopeRule(r.selectorText, _ruleBody(r));
                     if (s) {
                         acc.push(s); kept++;
-                        if (/\.(?:wx|ws)-[\w-]+/i.test(r.selectorText)) ours++;   // ours 只算這支 app 的零件：別人的美化也常寫 :root／body，那不算數
+                        if (/\.(?:wx[a-z]*|ws)-[\w-]+/i.test(r.selectorText)) ours++;   // ours 只算這支 app 的零件：別人的美化也常寫 :root／body，那不算數
                         _splitTop(String(r.selectorText), ',').forEach(function (sel) {
                             sel = sel.trim();
                             if (ROOT_RE.test(sel)) { if (/--wx-/i.test(_ruleBody(r))) palette = true; return; }
-                            if (/\.[a-z_][\w-]*/i.test(sel) && !/\.(?:wx|ws)-[\w-]+/i.test(sel) && foreign.length < 20 && foreign.indexOf(sel) < 0) foreign.push(sel);
+                            if (/\.[a-z_][\w-]*/i.test(sel) && !/\.(?:wx[a-z]*|ws)-[\w-]+/i.test(sel) && foreign.length < 20 && foreign.indexOf(sel) < 0) foreign.push(sel);
                         });
                     }
                     else dropped++;

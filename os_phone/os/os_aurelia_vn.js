@@ -171,7 +171,7 @@
         o[code] = { at: Date.now() };
         Object.keys(o).sort(function (a, b) { return o[b].at - o[a].at; }).slice(30).forEach(function (k) { delete o[k]; });
         try { localStorage.setItem(SPEC_CODE_KEY, JSON.stringify(o)); } catch (e) {}
-        return '\n\n——說明書到這裡。照它寫好之後用 aurelia_vn_add 交，spec 參數填：' + code;
+        return code;
     }
     function _specCheck(code) {
         if (_specCodes()[String(code == null ? '' : code).trim().toLowerCase()]) return null;
@@ -185,7 +185,9 @@
         if (!txt) return '創作室還沒載好，現在看不到寫法。';
         const pre = '下面是對方的創作室給模型的 VN 組件說明書（故事裡跳出來的那一型）。說明書裡講的「輸出 <json>」你不用管：'
             + '新增用 aurelia_vn_add 交，tag＝tagId、demo_format＝demoFormat、usage_desc＝usageDesc、is_block＝isBlock，其他照同名參數。\n\n';
-        return _paged(pre + txt + _specIssue(), args.part, 'VN 組件的寫法', SPEC_PART);
+    // 號碼開頭也放一份：聊天 app 下一輪就把說明書收成開頭 200 字，只放結尾的話，中間先叫 look 再交時號碼已經看不到、只好再看一次說明書（10-01 公益站 gemini-3.1-pro 實測）
+        const code = _specIssue();
+        return _paged('（看完照著寫，用 aurelia_vn_add 交的時候 spec 參數填：' + code + '）\n' + pre + txt + '\n\n——說明書到這裡。照它寫好之後用 aurelia_vn_add 交，spec 參數填：' + code, args.part, 'VN 組件的寫法', SPEC_PART);
     }
 
     // ── 提出（做成單子）──────────────────────────────────────────────────

@@ -120,7 +120,7 @@
         o[code] = { at: Date.now() };
         Object.keys(o).sort(function (a, b) { return o[b].at - o[a].at; }).slice(30).forEach(function (k) { delete o[k]; });
         try { localStorage.setItem(SPEC_CODE_KEY, JSON.stringify(o)); } catch (e) {}
-        return '\n\n——說明書到這裡。照它寫好之後用 aurelia_fx_add 交，spec 參數填：' + code;
+        return code;
     }
     function _specCheck(code) {
         if (_specCodes()[String(code == null ? '' : code).trim().toLowerCase()]) return null;
@@ -132,7 +132,9 @@
         const S = _S(), txt = S && S.fxSpec ? S.fxSpec() : '';
         if (!txt) return '創作室還沒載好，現在看不到寫法。';
         const pre = '下面是對方的特效工坊給模型的說明書。說明書說的「輸出被 <json> 包裹的配方」，你把那份 JSON 放進 aurelia_fx_add 的 recipe 參數就好。\n\n';
-        return _paged(pre + txt + _specIssue(), args.part, '特效的寫法', SPEC_PART);
+    // 號碼開頭也放一份：聊天 app 下一輪就把說明書收成開頭 200 字，只放結尾的話，中間先叫 look 再交時號碼已經看不到、只好再看一次說明書（10-01 公益站 gemini-3.1-pro 實測）
+        const code = _specIssue();
+        return _paged('（看完照著寫，用 aurelia_fx_add 交的時候 spec 參數填：' + code + '）\n' + pre + txt + '\n\n——說明書到這裡。照它寫好之後用 aurelia_fx_add 交，spec 參數填：' + code, args.part, '特效的寫法', SPEC_PART);
     }
 
     // ── 草稿（同 VN 組件）────────────────────────────────────────────────

@@ -245,7 +245,7 @@
         o[code] = { at: Date.now() };
         Object.keys(o).sort(function (a, b) { return o[b].at - o[a].at; }).slice(30).forEach(function (k) { delete o[k]; });
         try { localStorage.setItem(SPEC_CODE_KEY, JSON.stringify(o)); } catch (e) {}
-        return '\n\n——說明書到這裡。照它寫好之後用 aurelia_bubble_add 交，spec 參數填：' + code;
+        return code;
     }
     function _specCheck(code) {
         if (_specCodes()[String(code == null ? '' : code).trim().toLowerCase()]) return null;
@@ -265,7 +265,9 @@
             + '交之前自檢一次：兩側都設計了嗎？有形狀簽名或材質簽名其中一個嗎？字底下是實底，還是半透明加了模糊？'
             + '.pbub-row 上有沒有不小心寫到 display / flex-direction / justify-content？底色改成漸層了但尖角還是純色嗎？有問題就修好再交。';
         const pre = '下面是對方的聊天 app 給模型的泡泡說明書。想跟對方的聊天 app 主題搭，可以先用 aurelia_theme_read（kind: chat）看那套的配色（沒有這個工具就跳過）。\n\n';
-        return _paged(pre + head + tail + _specIssue(), args.part, '泡泡的寫法', SPEC_PART);
+    // 號碼開頭也放一份：聊天 app 下一輪就把說明書收成開頭 200 字，只放結尾的話，中間先叫 look 再交時號碼已經看不到、只好再看一次說明書（10-01 公益站 gemini-3.1-pro 實測）
+        const code = _specIssue();
+        return _paged('（看完照著寫，用 aurelia_bubble_add 交的時候 spec 參數填：' + code + '）\n' + pre + head + tail + '\n\n——說明書到這裡。照它寫好之後用 aurelia_bubble_add 交，spec 參數填：' + code, args.part, '泡泡的寫法', SPEC_PART);
     }
 
     // ── 草稿：還沒被同意的那張（同改主題）──────────────────────────────────
