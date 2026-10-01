@@ -11,7 +11,8 @@
     const APP = 'xiaoji';
     const DEF = { conn: 'route', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0 };
     const CAP_MIN = 3, CAP_MAX = 10, NO_CHAIN_CAP = 2;
-    const HISTORY_N = 30, RESULT_MAX = 16000, OLD_RESULT = 200, MAX_PER_ROUND = 3;
+    const HISTORY_N = 30, RESULT_MAX = 16000, OLD_RESULT = 200, RECENT_RESULT = 3000, MAX_PER_ROUND = 3;
+    const GROUP_NAME = { look: '翻資料', wb: '世界書', preset: '預設', rule: 'BGM／音效清單', vn: 'VN 組件', theme: '主題', bubble: '泡泡', fx: '特效' };
     const MODS = ['OS_AURELIA_TOOLS', 'OS_AURELIA_EDIT', 'OS_AURELIA_PRESET', 'OS_AURELIA_VN', 'OS_AURELIA_THEME', 'OS_AURELIA_FX', 'OS_AURELIA_VNRULE', 'OS_AURELIA_BUBBLE'];
 
     function _g(k) { return win[k] || window[k] || null; }
@@ -131,18 +132,18 @@
         if (rec && rec.about) out.push(user + '寫的你是什麼樣的：' + _one(rec.about).slice(0, 300));
         if (mode.exam) out.push('', mode.exam);
         if (mode.last) {
-            out.push('', '這一次不能再叫工具了。用你已經拿到的結果直接回' + user + '：做完的說做了什麼，沒做完的說做到哪、還差什麼。');
+            out.push('', '這一次不能再叫工具了。用你已經拿到的結果直接回' + user + '：做完的說做了什麼，沒做完的說做到哪、還差什麼。剛才交出去的單子還在等' + user + '按同意，不是已經改好了。');
         } else if (tools.length) {
             out.push('', '【你可以用的工具】');
             out.push('要用的時候，在回覆裡單獨一行寫：');
             out.push('<tool_call name="工具名">{"參數名": "值"}</tool_call>');
             out.push('大括號裡要是正確的 JSON，參數照下面每個工具列的寫。標籤名照抄英文，不要翻譯。這一行' + user + '看不到。');
-            out.push('寫了之後這一次就先停，工具的結果下一次交給你。一次最多叫 ' + MAX_PER_ROUND + ' 個；要先看到結果才知道下一步的，分兩次叫。');
-            out.push('會動手的工具（新增、修改、換上、做一個）不會直接改掉' + user + '的東西：它們做成一張單子，' + user + '看過按同意才會寫進去，也能改回去。交出單子之後跟' + user + '說單子放好了，不要說已經改好了。');
-            if (mode.exam) out.push('交出單子就算答完。');
-            else if (mode.chain) out.push('一件事你可以自己接著做：看了結果還沒做完，就再叫工具。這一句話最多叫 ' + mode.cap + ' 次模型（包括最後回' + user + '那一次），快用完了就先回' + user + '。');
-            else out.push('這一句話你最多叫一次工具：拿到結果就回' + user + '，不要再接著查或接著改。');
+            out.push('寫了工具之後這一則就先停，結果會在你的下一則之前交給你。同一則最多寫 ' + MAX_PER_ROUND + ' 個工具，彼此不用等結果的可以一起寫。');
+            out.push('會動手的工具（新增、修改、換上、做一個）不會直接改掉' + user + '的東西：它們做成一張單子，' + user + '看過按同意才會寫進去，也能改回去。交出單子之後，讓' + user + '知道要看過、按同意才會改；不要說已經改好了。');
+            if (mode.chain && !mode.exam) out.push(user + '每說一句話，你最多可以回 ' + mode.cap + ' 則（叫工具的那幾則和最後回' + user + '那一則都算，工具自己另外叫的不算）：看了結果還沒做完，就接著叫工具；到最後一則時會告訴你，那一則就直接回' + user + '。');
+            else if (!mode.exam) out.push(user + '每說一句話，你只有一輪可以叫工具（這一輪可以同時叫幾個）；結果回來就直接回' + user + '，不能再叫。要先看到結果才能做下一步的，這一句只做第一步，回' + user + '時說下一步打算做什麼，等' + user + '下一句話再接著做。');
             out.push('不需要就不要用；前面已經查過的，直接用查到的內容。');
+            if (!mode.exam) out.push('下面幾組工具各有一段前言，講那一組的東西是什麼。前言裡要是提到「結果下一輪才交給你」「寫完這一輪就結束」「先說想怎麼改再叫工具」這類做法，一律以這一段為準。');
             out.push('工具：');
             const A = _g('AureliaLink');
             const notes = (A && A.notes) ? A.notes() : {};
@@ -150,18 +151,22 @@
             let lastG = null;
             tools.forEach(t => {
                 const g = t.group || (t.groups || []).find(x => gs.indexOf(x) !== -1) || '';
-                if (g !== lastG) { lastG = g; if (g && notes[g] && big.indexOf(g) === -1) out.push('（' + _one(notes[g]) + '）'); }
+                if (g !== lastG) { lastG = g; if (!mode.exam && g && notes[g] && big.indexOf(g) === -1) out.push('【' + (GROUP_NAME[g] || g) + '】' + _one(notes[g])); }
                 out.push('・' + t.name + (t.description ? '：' + _one(t.description).slice(0, 300) : ''));
                 _paramLines(t.inputSchema).forEach(l => out.push(l));
             });
         }
         if (!mode.exam) {
             const locked = L.SKILLS.filter(s => !(rec && rec.skills && rec.skills[s.id]));
-            if (locked.length) {
+            const doing = locked.filter(s => s.id !== 'chain');
+            const tName = s => ((L.TEACHERS[s.teacher] || {}).name || s.teacher);
+            if (doing.length) {
                 out.push('', '【你還沒學會的】');
-                locked.forEach(s => out.push('・' + s.label + '（要去找' + ((L.TEACHERS[s.teacher] || {}).name || s.teacher) + '上課）'));
-                out.push(user + '要你做這些的時候，照實說你還沒學、要去找誰學，或請' + user + '自己用創作室做。不要假裝做得到，也不要拿別的工具硬湊。');
+                doing.forEach(s => out.push('・' + (s.what || s.label) + '（要去找' + tName(s) + '上課）'));
+                out.push(user + '要你做這些的時候，照實說你還沒學、要去找誰學，或請' + user + '自己到奧瑞亞的創作室（奧瑞亞裡做這些東西的地方）做。不要假裝做得到，也不要拿別的工具硬湊。');
             }
+            const ch = locked.find(s => s.id === 'chain');
+            if (ch) out.push('', '你還不會' + (ch.what || '自己接著做好幾步') + '（要去找' + tName(ch) + '上課），所以' + user + '每說一句話只有一輪工具。');
         }
         return out.join('\n');
     }
@@ -169,14 +174,19 @@
     // ── 一句話：叫模型 → 拆工具 → 跑 → 結果整份接回去 → 再叫，直到不叫工具或次數用完 ──
     const PROP_STATE = { wait: '還沒處理', no: '沒同意', done: '同意了，已經寫進去', undone: '寫進去之後又改回去了', stale: '作廢了（那一條後來被改過）' };
     // 這段對話之前的：工具結果只留一行、單子帶她按了什麼（她按的時候會改那則訊息上的 prop.state）
+    //   最近那一則他的回覆查到的留長一點（RECENT_RESULT）：沒學會接著做時，這一句查、下一句才改，find 要一字不差
     function _history(hist) {
         const out = [];
-        (hist || []).slice(-HISTORY_N).forEach(m => {
+        const list = (hist || []).slice(-HISTORY_N);
+        let lastA = -1;
+        list.forEach((m, i) => { if (m && m.role === 'assistant') lastA = i; });
+        list.forEach((m, i) => {
             if (!m || (m.role !== 'user' && m.role !== 'assistant')) return;
             let c = String(m.content == null ? '' : m.content);
             if (m.role === 'assistant') {
                 const extra = [];
-                (m.xjlog || []).forEach(x => extra.push('・' + x.label + '：' + (x.ok ? _one(x.text).slice(0, OLD_RESULT) + '…' : '沒有成功')));
+                (m.xjlog || []).forEach(x => extra.push('・' + x.label + '：' + (!x.ok ? '沒有成功'
+                    : (i === lastA ? String(x.text || '').slice(0, RECENT_RESULT) : _one(x.text).slice(0, OLD_RESULT) + '…'))));
                 (m.props || []).forEach(p => { if (p && p.prop) extra.push('・單子「' + _one(p.text) + '」：' + (PROP_STATE[p.prop.state || 'wait'] || p.prop.state)); });
                 if (extra.length) c += '\n（這一句你用過的工具與單子，只有你看得到：\n' + extra.join('\n') + '）';
             }
@@ -360,9 +370,12 @@
         const SB = _g('OS_XIAOJI_SANDBOX');
         if (!SB || !SB.open) throw new Error('考場還沒載入');
         const box = await SB.open(id, rid);
-        const note = '這是' + (T.name || '老師') + '出的練習題。用的是練習用的資料，不會改到' + _userName() + '真的東西。照題目做，用工具交出來。';
+        const cap = sk.make ? 1 : sk.examCalls;
+        const note = '這是' + (T.name || '老師') + '出的練習題。用的是練習用的資料，不會改到' + _userName() + '真的東西。'
+            + (cap === 1 ? '這題只有這一則：直接用會動手的工具交出單子，不能先查，題目已經把要用的都給你了。交出去就算答完。'
+                         : '這題你最多回 ' + cap + ' 則（叫工具的那幾則都算）；交出單子的那一則就算答完。');
         const res = await turn({ rid: rid, history: [], userText: _fill(ex.task, rid), tools: box.tools, runTool: box.run,
-            groups: [box.group], cap: sk.make ? 1 : sk.examCalls, stopOnProp: true, examNote: note, signal: o.signal, onProgress: o.onProgress });
+            groups: [box.group], cap: cap, stopOnProp: true, examNote: note, signal: o.signal, onProgress: o.onProgress });
         const g = grade(ex.expect, res.props);
         if (g.pass) {
             const rec = await get(rid);

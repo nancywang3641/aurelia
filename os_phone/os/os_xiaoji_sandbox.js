@@ -126,6 +126,8 @@
             : (api.tools || []).filter(t => t.name !== 'aurelia_change_log' && !/_look$/.test(t.name))
                 .map(t => ({ name: t.name, label: t.label || t.name, description: t.description, inputSchema: t.inputSchema, propose: !!t.propose, groups: [group] }));
         async function run(t, args) {
+            // 考場的通訊錄是空的：泡泡要換到哪幾間聊天室這一欄不算分，拿掉（不然填了就因為找不到聊天室而沒單子）
+            if (t.name === 'aurelia_bubble_make' && args) { args = Object.assign({}, args); delete args.rooms; }
             if (t.make) return M.run(t.name, args, { rid: rid, mod: api });
             if (t.propose) {
                 const r = await api.propose(t.name, args);
