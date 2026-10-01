@@ -3795,7 +3795,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     // 🚨 網址本來就以 /v1 結尾（大多數站台給的都是）就別再接一層，不然變 /v1/v1/models 回 404（同 chat() 的接法）
                     let _base = url.replace(/\/chat\/completions$/, '').replace(/\/+$/, '');
                     let fetchUrl = _base + (/\/v1$/.test(_base) ? '' : '/v1') + '/models';
-                    const res = await fetch(fetchUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
+                    const res = await fetch(fetchUrl, { method: 'GET', headers: window.OS_API.authHeaders(fetchUrl, key, { native: true }) });
                     
                     if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
                     
@@ -3866,7 +3866,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     // 🚨 網址本來就以 /v1 結尾（大多數站台給的都是）就別再接一層，不然變 /v1/v1/models 回 404（同 chat() 的接法）
                     let _base = url.replace(/\/chat\/completions$/, '').replace(/\/+$/, '');
                     let fetchUrl = _base + (/\/v1$/.test(_base) ? '' : '/v1') + '/models';
-                    const res = await fetch(fetchUrl, { method: 'GET', headers: { 'Authorization': `Bearer ${key}` } });
+                    const res = await fetch(fetchUrl, { method: 'GET', headers: window.OS_API.authHeaders(fetchUrl, key, { native: true }) });
                     
                     if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
                     
@@ -4179,7 +4179,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     if (!targetUrl.includes('/chat/completions')) targetUrl += (targetUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
                     const res = await fetch(targetUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.key}` },
+                        headers: window.OS_API.authHeaders(targetUrl, cfg.key, { json: true }),
                         body: JSON.stringify({ model: modelVal, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 50, stream: false })
                     });
                     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);

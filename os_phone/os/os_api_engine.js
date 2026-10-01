@@ -867,6 +867,21 @@
     // --- 3. OS API 主對象 ---
     win.OS_API = {
 
+        // 🔑 自己填網址那幾條的請求標頭。Anthropic 官方（api.anthropic.com）不認網頁直接連：
+        //    沒帶 anthropic-dangerous-direct-browser-access 會被 CORS 擋成「Failed to fetch」，帶了才回正常的錯誤或結果。
+        //    chat/completions 收 Bearer＝API 金鑰；/models 是原生介面，Bearer 會被當成登入憑證退回，要換 x-api-key。
+        authHeaders: function (url, key, opts) {
+            const o = opts || {};
+            const h = {};
+            if (o.json) h['Content-Type'] = 'application/json';
+            if (/^https?:\/\/api\.anthropic\.com(\/|$)/i.test(String(url || '').trim())) {
+                h['anthropic-dangerous-direct-browser-access'] = 'true';
+                if (o.native) { h['x-api-key'] = String(key || ''); h['anthropic-version'] = '2023-06-01'; return h; }
+            }
+            h['Authorization'] = 'Bearer ' + String(key || '');
+            return h;
+        },
+
         // 👤 聊天設置裡替這間設的人設（私聊）／群聊備註（群聊）：自己打的那段＋從世界書挑的那條。
         //    微信回話用的就是這份；創作室 app 的通訊錄（st.getContacts）也拿這份，同一個人不會兩邊兩種設定。
         chatNoteOf: async function (c) {
@@ -1752,7 +1767,7 @@
                         const streamBody = { ...commonBody, stream: true };
                         const streamResp = await fetch(targetUrl, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+                            headers: win.OS_API.authHeaders(targetUrl, config.key, { json: true }),
                             body: _keepReq(_safeJson(streamBody)),
                             signal: options.signal || undefined
                         });
@@ -1793,12 +1808,14 @@
                     // ── 一般非串流路徑（原邏輯，其他面板走這裡）─────────────
 
                     const response = await fetch(targetUrl, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+                        method: 'POST', headers: win.OS_API.authHeaders(targetUrl, config.key, { json: true }),
                         body: _keepReq(_safeJson(commonBody)),
                         signal: options.signal || undefined
                     });
                     const data = await response.json();
                     rawApiResponse = data;
+                    // 金鑰錯、參數被退：上游回的是錯誤，不是回覆。照 Gemini 那條丟錯，別把一段 JSON 當成角色的話畫出來
+                    if (!response.ok && data && data.error) throw new Error('HTTP ' + response.status + '：' + (data.error.message || JSON.stringify(data.error)));
                     fullText = normalizeResponse(data, _keepFences);
                 }
 
