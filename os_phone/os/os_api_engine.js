@@ -1222,7 +1222,9 @@
                             customCot: _ov._channel ? '' : (_ov.customCot || ''),
                             customCotMap: _ov._channel ? {} : (_ov.customCotMap || {}),
                             _channel: _ov._channel || undefined, _channelName: _ov._channelName || undefined
-                        }, _ov._channel ? { maxTokens: _ov.maxTokens, temperature: _ov.temperature } : {});
+                        }, _ov._channel ? { maxTokens: _ov.maxTokens, temperature: _ov.temperature,
+                            // 通道表單沒有的取樣參數：getConfigForTask 已清成不送，這裡也要蓋掉呼叫端自己帶的那份
+                            top_p: _ov.top_p, frequency_penalty: _ov.frequency_penalty, presence_penalty: _ov.presence_penalty } : {});
                     }
                 } catch (e) {}
             } else {

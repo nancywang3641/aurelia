@@ -266,6 +266,7 @@
             useSystemApi: false, useGenerateRaw: false, stProfileId: '',
             maxTokens: parseInt(ch.maxTokens) || base.maxTokens,
             temperature: isFinite(parseFloat(ch.temperature)) ? parseFloat(ch.temperature) : base.temperature,
+            top_p: undefined, frequency_penalty: 0, presence_penalty: 0,   // 通道表單沒有這幾格：不沿用預設那頁的值（Sonnet 5.5 那類連 top_p 都不收，會整通退回），不送＝對方自己的預設
             _channel: ch.id, _channelName: ch.name || ''
         });
         if (!cfg.url || !cfg.key) return base;   // 這條還沒填完 → 照舊走預設，不要讓她的對話整個斷掉

@@ -77,6 +77,7 @@
                 useSystemApi: false, useGenerateRaw: false, stProfileId: '',
                 maxTokens: parseInt(ch.maxTokens, 10) || base.maxTokens,
                 temperature: isFinite(parseFloat(ch.temperature)) ? parseFloat(ch.temperature) : base.temperature,
+                top_p: undefined, frequency_penalty: 0, presence_penalty: 0,   // 同 getConfigForTask：通道沒有的取樣參數不沿用主模型
                 _channel: ch.id, _channelName: ch.name || ''
             }) : base;
         }
