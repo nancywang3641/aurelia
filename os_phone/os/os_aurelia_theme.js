@@ -172,6 +172,31 @@
         const body = tk === 'phone' ? JSON.stringify({ vars: t.vars || {} }, null, 1) : (t.css || '（空的）');
         return _paged(note + KINDS[tk] + '「' + t.name + '」' + (t.active ? '（正在用）' : '') + '\n' + body, args.part, '這套的內容');
     }
+    // 看過說明書的憑證（10-01）：聊天 app 一輪最多叫三個工具、三個一起跑完才交回結果，
+    //   AI 可以同一輪叫 spec 又叫 add——交出去那份是沒看過說明書、憑印象寫的（她測聊天 app 主題，零件寫成 .header 被退；
+    //   手機主題那次只寫幾格也是同一個病）。說明書最後給一串字，add 要帶著它；同一輪叫的拿不到，一定交不出去。
+    //   每次看都發一串新的（記在這台、留一天），所以不必管說明書每次產生的內容是不是一字不差。
+    const SPEC_CODE_KEY = 'aurelia_theme_spec_codes', SPEC_CODE_TTL = 86400000;
+    function _specCodes() {
+        let o = {};
+        try { o = JSON.parse(localStorage.getItem(SPEC_CODE_KEY) || '{}') || {}; } catch (e) {}
+        const old = Date.now() - SPEC_CODE_TTL;
+        Object.keys(o).forEach(function (k) { if (!o[k] || o[k].at < old) delete o[k]; });
+        return o;
+    }
+    function _specIssue(tk) {
+        const o = _specCodes();
+        const code = Math.random().toString(36).slice(2, 6);
+        o[code] = { tk: tk, at: Date.now() };
+        const keys = Object.keys(o).sort(function (a, b) { return o[b].at - o[a].at; });
+        keys.slice(30).forEach(function (k) { delete o[k]; });
+        try { localStorage.setItem(SPEC_CODE_KEY, JSON.stringify(o)); } catch (e) {}
+        return code;
+    }
+    function _specOk(tk, code) {
+        const c = _specCodes()[String(code == null ? '' : code).trim().toLowerCase()];
+        return !!(c && c.tk === tk);
+    }
     function spec(args) {
         const tk = _kind(args.kind);
         if (!tk) return 'kind 要寫 story、phone 或 chat。';
@@ -187,7 +212,8 @@
             pre = '下面是對方的聊天 app 給模型的主題說明書。交的時候用 aurelia_theme_add（kind: chat）的 css 參數。\n\n';
         }
         if (!txt) return '那一種的說明書還沒載好。';
-        return _paged(pre + txt, args.part, KINDS[tk] + '的寫法', SPEC_PART);
+        const tail = '\n\n——說明書到這裡。照它寫好之後用 aurelia_theme_add 交，spec 參數填：' + _specIssue(tk);
+        return _paged(pre + txt + tail, args.part, KINDS[tk] + '的寫法', SPEC_PART);
     }
 
     // ── 草稿：還沒被同意的那張（同 VN 組件）────────────────────────────────
@@ -227,6 +253,11 @@
     async function _proposeAdd(args) {
         const tk = _kind(args.kind);
         if (!tk) return _no('kind 要寫 story、phone 或 chat。');
+        if (!_specOk(tk, args.spec)) {
+            return _no((args.spec ? 'spec 填的那串字對不上' + KINDS[tk] + '的說明書' : '還沒看過' + KINDS[tk] + '的說明書就交了')
+                + '：先只叫 aurelia_theme_spec（kind: ' + tk + '）看完整份說明書——結果下一輪才會交給你，不要跟交主題同一輪叫；'
+                + '下一輪照說明書寫，交的時候 spec 參數填說明書最後給的那串字。');
+        }
         const name = _one(args.name).slice(0, 30);
         if (!name) return _no('要取一個名字（name）。');
         if ((await _entries(tk)).some(function (t) { return _fold(t.name) === _fold(name); })) return _no('已經有一套叫「' + name + '」的' + KINDS[tk] + '了，要改它用 aurelia_theme_edit，要做新的換一個名字。');
@@ -776,13 +807,14 @@
               mode: { type: 'string', description: '劇情主題用：看哪個畫面，char-mode（對話）、nar-mode（旁白）、chapter（章節卡）、end（章末）、settings（設定），all＝前三個；不填看對話和章節卡' } },
             required: ['kind'] } },
         { name: 'aurelia_theme_add', label: '新做一套主題', propose: true,
-          description: '提出新做一套主題（對方看過樣子、按同意才會存）。寫之前先用 aurelia_theme_spec 看那一種的寫法。',
+          description: '提出新做一套主題（對方看過樣子、按同意才會存）。寫之前先用 aurelia_theme_spec 看那一種的寫法（結果下一輪才會到，不要跟這個同一輪叫），交的時候 spec 填說明書最後給的那串字。',
           inputSchema: { type: 'object', properties: { kind: KIND_ARG,
               name: { type: 'string', description: '這套的名字（中文，十個字以內），不能跟已經有的重複' },
+              spec: { type: 'string', description: '看完 aurelia_theme_spec（同一種 kind）之後，說明書最後給的那串字' },
               css: { type: 'string', description: '劇情主題、聊天 app 主題用：整份 CSS' },
               data: { type: 'string', description: '手機主題用：說明書要的那份 JSON（layout、vars、swatch）' },
               use: { type: 'boolean', description: 'true＝對方同意後直接換上（劇情主題是套到對方現在開著的這個故事）；不填就只存起來' } },
-            required: ['kind', 'name'] } },
+            required: ['kind', 'name', 'spec'] } },
         { name: 'aurelia_theme_edit', label: '改一套主題', propose: true,
           description: '提出修改已經有的一套主題（對方看過改前改後、按同意才會改；正在用的會直接換成新的樣子）。CSS 那兩種：只改一段用 find 和 replace，整份重寫用 css；手機主題：data 只寫要改的那幾格。也可以用 new_name 改名字。內建的不能改。',
           inputSchema: { type: 'object', properties: { kind: KIND_ARG,
