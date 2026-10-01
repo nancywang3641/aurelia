@@ -9,7 +9,11 @@
     'use strict';
     const win = window.parent || window;
     const APP = 'xiaoji';
-    const DEF = { conn: 'route', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0 };
+    const DEF = { conn: 'route', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0, body: 'hamster' };
+    // 房間裡的樣子（畫法在房間的 clawd_portrait.js，id 對得上它的 BASES）。領養時挑，門卡上能換；沒挑過的是倉鼠
+    const BODIES = [{ id: 'hamster', name: '倉鼠' }, { id: 'cat', name: '小貓' }, { id: 'penguin', name: '企鵝' }];
+    function bodyOf(rec) { const id = rec && rec.body; return BODIES.some(b => b.id === id) ? id : DEF.body; }
+    function _bodyName(rec) { const id = bodyOf(rec); return (BODIES.find(b => b.id === id) || BODIES[0]).name; }
     const CAP_MIN = 3, CAP_MAX = 10, NO_CHAIN_CAP = 2;
     const HISTORY_N = 30, RESULT_MAX = 16000, OLD_RESULT = 200, RECENT_RESULT = 12000, MAX_PER_ROUND = 3;
     const GROUP_NAME = { look: '翻資料', wb: '世界書', preset: '預設', rule: 'BGM／音效清單', vn: 'VN 組件', theme: '主題', bubble: '泡泡', fx: '特效' };
@@ -32,6 +36,7 @@
         o.skills = Object.assign({}, o.skills || {});
         o.paid = Object.assign({}, o.paid || {});
         o.cap = _capOf(o.cap);
+        o.body = bodyOf(o);
         return o;
     }
     async function save(rid, patch) {
@@ -131,6 +136,7 @@
         const out = [];
         out.push('你是「' + me + '」，住在奧瑞亞宿舍的小機：一個專門替' + user + '在奧瑞亞裡做事的 AI。奧瑞亞是' + user + '用來玩互動故事的程式，裡面有故事、世界書（故事的設定資料）、預設（送給寫故事的模型的提示詞）、手機、聊天 app，還有各種畫面的樣式。');
         out.push('你不是故事裡的角色，不演戲、不寫故事。' + user + '說要做什麼，你弄清楚、用工具去做，再用一兩句話交代做了什麼、還差什麼。');
+        out.push('你在宿舍房間裡的樣子是一隻像素' + _bodyName(rec) + '，身上有一顆會亮的碎片（你是用碎片拼出來的）。');
         if (rec && rec.about) out.push(user + '寫的你是什麼樣的：' + _one(rec.about).slice(0, 300));
         if (mode.exam) out.push('', mode.exam);
         if (mode.last) {
@@ -419,7 +425,7 @@
         const r = _resident(rid), me = (r && r.name) || '小機', user = _userName();
         const T = _L().TEACHERS[sk.teacher] || {};
         const xj = { key: 'xiaoji_' + rid, name: me,
-            personaFull: '你現在扮演「' + me + '」——404 號房的柴郡用 LUNA 碎片拼出來、沒有登記的小 AI，住在宿舍，替' + user + '在奧瑞亞裡做事。'
+            personaFull: '你現在扮演「' + me + '」——404 號房的柴郡用 LUNA 碎片拼出來、沒有登記的小 AI，樣子是一隻像素' + _bodyName(rec) + '，住在宿舍，替' + user + '在奧瑞亞裡做事。'
                 + (rec.about ? user + '說它是這樣的：' + _one(rec.about).slice(0, 200) : '') };
         const extra = me + '剛在' + (T.place || '') + '上完' + (T.name || '') + '的「' + sk.label + '」，考過了。它交的作業：' + (summary || '（沒有記下）') + '。演考完之後他們兩個的一小段。';
         try { return !!(await VT.playDuoScene(teacher, xj, extra)); } catch (e) { return false; }
@@ -432,13 +438,13 @@
         if (!name) return { ok: false, why: '先給它一個名字' };
         const r = CT.saveResident({ name: name, provider: 'xiaoji' });
         if (!r || !r.id) return { ok: false, why: '沒住進去' };
-        await save(r.id, { conn: o.conn || 'route', about: String(o.about || '').slice(0, 300), born: Date.now() });
+        await save(r.id, { conn: o.conn || 'route', about: String(o.about || '').slice(0, 300), born: Date.now(), body: bodyOf({ body: o.body }) });
         if (o.gift) { const S = _g('OS_404_STORE'); if (S && S.addShards) S.addShards(_L().BOX_GIFT || 0); }
         return { ok: true, rid: r.id };
     }
 
     const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
-        grade, lines, canEnroll, pay, exam, theater, adopt,
+        grade, lines, canEnroll, pay, exam, theater, adopt, BODIES, bodyOf,
         LIMITS: { CAP_MIN: CAP_MIN, CAP_MAX: CAP_MAX, NO_CHAIN_CAP: NO_CHAIN_CAP } };
     win.OS_XIAOJI = API;
     if (win !== window) { try { window.OS_XIAOJI = API; } catch (e) {} }
