@@ -202,7 +202,9 @@
         return (a >= 0 && b > a) ? t.slice(a + 1, b) : '';
     }
 
-    // 回傳 { ok, css, kept, dropped, ours }：ours＝有幾條寫的是這支 app 認得的零件（0＝多半是別的 app 的美化）
+    // 回傳 { ok, css, kept, dropped, ours, palette, foreign }：ours＝有幾條寫的是這支 app 認得的零件（0＝多半是別的 app 的美化）；
+    //   palette＝最外層（:root）寫了 --wx- 顏色表；foreign＝寫了 class 但沒有一個是這支 app 的（.wx-／.ws-），套上去碰不到東西。
+    //   後兩個給小機「改主題」的退件理由點名用（10-01 她：AI 說忘記寫 wx 被退件——寫成 .header 那種，退件沒點名它不知道錯哪）。
     function compile(raw) {
         let text = String(raw || '');
         if (text.length > MAX_CSS) return { ok: false, error: '這份太大了（超過 200KB）' };
@@ -216,14 +218,23 @@
         let sheet;
         try { sheet = new Sheet(); sheet.replaceSync(text); }
         catch (e) { return { ok: false, error: '讀不懂這份樣式' }; }
-        let kept = 0, dropped = 0, ours = 0;
+        let kept = 0, dropped = 0, ours = 0, palette = false;
+        const foreign = [];
         const walk = function (rules) {
             const acc = [];
             for (let i = 0; i < rules.length; i++) {
                 const r = rules[i];
                 if (r.selectorText != null) {                                  // 一般規則
                     const s = _scopeRule(r.selectorText, _ruleBody(r));
-                    if (s) { acc.push(s); kept++; if (/\.(?:wx|ws)-[\w-]+/i.test(r.selectorText)) ours++; }   // ours 只算這支 app 的零件：別人的美化也常寫 :root／body，那不算數
+                    if (s) {
+                        acc.push(s); kept++;
+                        if (/\.(?:wx|ws)-[\w-]+/i.test(r.selectorText)) ours++;   // ours 只算這支 app 的零件：別人的美化也常寫 :root／body，那不算數
+                        _splitTop(String(r.selectorText), ',').forEach(function (sel) {
+                            sel = sel.trim();
+                            if (ROOT_RE.test(sel)) { if (/--wx-/i.test(_ruleBody(r))) palette = true; return; }
+                            if (/\.[a-z_][\w-]*/i.test(sel) && !/\.(?:wx|ws)-[\w-]+/i.test(sel) && foreign.length < 20 && foreign.indexOf(sel) < 0) foreign.push(sel);
+                        });
+                    }
                     else dropped++;
                 } else if (r.media && r.cssRules) {                            // @media
                     const inner = walk(r.cssRules);
@@ -240,7 +251,7 @@
             return acc;
         };
         const body = walk(sheet.cssRules);
-        return { ok: true, css: imports.join('\n') + (imports.length ? '\n' : '') + body.join('\n'), kept: kept, dropped: dropped, ours: ours };
+        return { ok: true, css: imports.join('\n') + (imports.length ? '\n' : '') + body.join('\n'), kept: kept, dropped: dropped, ours: ours, palette: palette, foreign: foreign };
     }
 
     // ================================================================

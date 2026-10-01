@@ -102,7 +102,7 @@
         if (!P || !P.clean) return { err: '手機主題工坊還沒載好。' };
         let raw = data;
         if (typeof raw === 'string') raw = P.pickJson ? P.pickJson(raw) : (function () { try { return JSON.parse(raw); } catch (e) { return null; } })();
-        if (!raw || typeof raw !== 'object') return { err: 'data 要是一份 JSON（格式照 aurelia_theme_spec 看到的）。' };
+        if (!raw || typeof raw !== 'object') return { err: 'data 要是一份 JSON，格式照 aurelia_theme_spec（kind: phone）那份手機主題說明書（不是 kind: chat 那份，chat 才是交 CSS）。' };
         const got = P.clean(raw);
         if (!Object.keys(got).length) return { err: '這份設定裡一格都用不上（格子名稱要照說明書那張表）。' };
         const vars = Object.assign({}, base || {}, got);
@@ -119,9 +119,16 @@
         if (!css) return { err: '樣式是空的。' };
         const c = W.compile(css);
         if (!c.ok) return { err: c.error || '讀不懂這份樣式。' };
-        if (!c.kept) return { err: '這份樣式一條都用不上（零件名字要照說明書那張表）。' };
-        if (!c.ours) return { err: '裡面沒有一條寫到這支聊天 app 的零件（.wx- 開頭那些），套上去什麼都不會變；零件名字照說明書那張表。' };
+        // 退件要點名錯在哪、叫它回去重看那張表：退回後聊天 app 自動再回一次時，上一輪看的說明書已經收成一行（10-01 她：AI 說忘記寫 wx 被退件）
+        const again = '先用 aurelia_theme_spec（kind: chat）再看一次聊天 app 主題的說明書（不是 kind: phone 那份），零件名字照那張表抄，整份重交。';
+        const eg = (c.foreign || []).slice(0, 4).join('、');
+        if (!c.kept) return { err: '這份樣式一條都用不上。' + again };
+        if (!c.ours) {
+            return { err: (c.palette ? '顏色表收到了，可是第二步的零件造型一條都沒有寫到這支聊天 app 的零件' : '裡面沒有一條寫到這支聊天 app 的零件')
+                + (eg ? '：你寫的 ' + eg + ' 這支 app 沒有，零件都是 .wx- 開頭的' : '（零件都是 .wx- 開頭的）') + '。' + again };
+        }
         const warn = [];
+        if (eg) warn.push('有 ' + c.foreign.length + ' 條寫的零件這支 app 沒有，套上去碰不到東西：' + eg);
         if (c.dropped) warn.push('有 ' + c.dropped + ' 條被拿掉了（寫到泡泡、把東西藏起來、固定在螢幕上那種）');
         try { const miss = W.missingPalette ? W.missingPalette(css) : []; if (miss.length) warn.push('顏色表缺 ' + miss.length + ' 格必填的：' + miss.slice(0, 6).join('、')); } catch (e) {}
         try { const bad = W.contrastIssues ? W.contrastIssues(css) : []; if (bad.length) warn.push('有 ' + bad.length + ' 組字壓在底上看不清楚：' + bad.slice(0, 4).map(function (x) { return x.t + '（' + x.r + ' 倍）'; }).join('、')); } catch (e) {}
