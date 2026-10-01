@@ -123,7 +123,7 @@
         const M = _g('OS_XIAOJI_MAKE');
         const tools = sk.make
             ? ((M && M.tools) ? M.tools([group]) : [])
-            : (api.tools || []).filter(t => t.name !== 'aurelia_change_log' && !/_look$/.test(t.name))
+            : (api.tools || []).filter(t => t.name !== 'aurelia_change_log' && t.name !== 'aurelia_worldbook_search' && !/_look$/.test(t.name))   // search 走真的 OS_AURELIA_TOOLS.run（讀她真的世界書），考場不給；read 列得出練習書
                 .map(t => ({ name: t.name, label: t.label || t.name, description: t.description, inputSchema: t.inputSchema, propose: !!t.propose, groups: [group] }));
         async function run(t, args) {
             // 考場的通訊錄是空的：泡泡要換到哪幾間聊天室這一欄不算分，拿掉（不然填了就因為找不到聊天室而沒單子）

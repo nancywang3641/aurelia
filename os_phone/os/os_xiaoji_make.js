@@ -132,17 +132,17 @@
         }
         let got;
         try { got = await GEN[d.group](a, cur); }
-        catch (e) { return { ok: false, text: '負責做的那一位沒做成：' + ((e && e.message) || e) + '。可以把 feel 寫清楚一點再叫一次。' }; }
+        catch (e) { return { ok: false, gen: true, text: '負責做的那一位沒做成：' + ((e && e.message) || e) + '。可以把 feel 寫清楚一點再叫一次。' }; }
         try {
             if (!got.edit) got.args.spec = await _specCode(m, d.group, a.kind);
             const r = await m.propose('aurelia_' + d.group + (got.edit ? '_edit' : '_add'), got.args);
-            if (!r || !r.ok || !r.prop) return { ok: false, text: '做出來了但沒過檢查：' + ((r && r.text) || '不知道為什麼') + '。可以把 feel 寫清楚一點再叫一次。' };
+            if (!r || !r.ok || !r.prop) return { ok: false, gen: true, text: '做出來了但沒過檢查：' + ((r && r.text) || '不知道為什麼') + '。可以把 feel 寫清楚一點再叫一次。' };
             r.prop.by = _who(ctx.rid);
             r.prop.where = _where();
             r.prop.from = '宿舍';
-            return { ok: true, prop: r.prop,
+            return { ok: true, gen: true, prop: r.prop,
                 text: '已經做成單子交給' + _userName() + '了：看過按同意才會存（存了也能改回去）。不要說已經改好了。' };
-        } catch (e) { return { ok: false, text: (e && e.message) || '沒有成功' }; }
+        } catch (e) { return { ok: false, gen: true, text: (e && e.message) || '沒有成功' }; }
     }
 
     const API = { tools: tools, run: run };

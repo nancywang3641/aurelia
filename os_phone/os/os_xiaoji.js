@@ -11,7 +11,7 @@
     const APP = 'xiaoji';
     const DEF = { conn: 'route', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0 };
     const CAP_MIN = 3, CAP_MAX = 10, NO_CHAIN_CAP = 2;
-    const HISTORY_N = 30, RESULT_MAX = 16000, OLD_RESULT = 200, RECENT_RESULT = 3000, MAX_PER_ROUND = 3;
+    const HISTORY_N = 30, RESULT_MAX = 16000, OLD_RESULT = 200, RECENT_RESULT = 12000, MAX_PER_ROUND = 3;
     const GROUP_NAME = { look: '翻資料', wb: '世界書', preset: '預設', rule: 'BGM／音效清單', vn: 'VN 組件', theme: '主題', bubble: '泡泡', fx: '特效' };
     const MODS = ['OS_AURELIA_TOOLS', 'OS_AURELIA_EDIT', 'OS_AURELIA_PRESET', 'OS_AURELIA_VN', 'OS_AURELIA_THEME', 'OS_AURELIA_FX', 'OS_AURELIA_VNRULE', 'OS_AURELIA_BUBBLE'];
 
@@ -80,7 +80,8 @@
                 _channel: ch.id, _channelName: ch.name || ''
             }) : base;
         }
-        return { config: Object.assign({}, cfg || {}, { customCot: '', customCotMap: {} }), options: { task: 'xiaoji', noRoute: true } };
+        // 不帶她的聊天 COT、也不帶酒館預設條目（usePresetPrompts 開著時 OS_API.chat 會把整份預設塞在最前面）
+        return { config: Object.assign({}, cfg || {}, { customCot: '', customCotMap: {}, usePresetPrompts: false }), options: { task: 'xiaoji', noRoute: true } };
     }
 
     // ── 小機看得到的工具 ────────────────────────────────────────
@@ -148,10 +149,10 @@
             const A = _g('AureliaLink');
             const notes = (A && A.notes) ? A.notes() : {};
             const big = _makeGroups(), gs = mode.groups || [];
-            let lastG = null;
+            const shown = {};   // 同一組的工具不一定排在一起：每組前言只印一次
             tools.forEach(t => {
                 const g = t.group || (t.groups || []).find(x => gs.indexOf(x) !== -1) || '';
-                if (g !== lastG) { lastG = g; if (!mode.exam && g && notes[g] && big.indexOf(g) === -1) out.push('【' + (GROUP_NAME[g] || g) + '】' + _one(notes[g])); }
+                if (g && !shown[g]) { shown[g] = 1; if (!mode.exam && notes[g] && big.indexOf(g) === -1) out.push('【' + (GROUP_NAME[g] || g) + '】' + _one(notes[g])); }
                 out.push('・' + t.name + (t.description ? '：' + _one(t.description).slice(0, 300) : ''));
                 _paramLines(t.inputSchema).forEach(l => out.push(l));
             });
@@ -209,6 +210,17 @@
         out.push(nextLast ? ('接著直接回' + user + '，這一句話不能再叫工具了。') : ('接著做：還沒做完就再叫工具，做完了就回' + user + '。'));
         return out.join('\n');
     }
+    function _abortErr() { const e = new Error('aborted'); e.name = 'AbortError'; return e; }
+    // 按停要當場停：工具（尤其大件那一通）跑到一半也不等它
+    function _race(p, signal) {
+        if (!signal) return p;
+        return new Promise((resolve, reject) => {
+            const ab = () => reject(_abortErr());
+            if (signal.aborted) { ab(); return; }
+            signal.addEventListener('abort', ab, { once: true });
+            Promise.resolve(p).then(v => { signal.removeEventListener('abort', ab); resolve(v); }, e => { signal.removeEventListener('abort', ab); reject(e); });
+        });
+    }
     function _isAbort(e, signal) { return !!((signal && signal.aborted) || (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || ''))))); }
     function _chat(messages, conn, signal) {
         return new Promise((resolve, reject) => {
@@ -231,7 +243,7 @@
         if (!A || !A.run) return { ok: false, text: '奧瑞亞工具還沒載好（要在酒館或手機的奧瑞亞裡）' };
         return A.run({ name: t.name, args: args, rid: rid });
     }
-    async function _callOne(c, byName, runTool) {
+    async function _callOne(c, byName, runTool, signal) {
         const key = byName[c.name] ? c.name : Object.keys(byName).find(k => k.toLowerCase() === String(c.name).toLowerCase());
         const t = key ? byName[key] : null;
         const res = { tool: String(c.name), label: t ? (t.label || t.name) : String(c.name), args: {}, ok: false, text: '' };
@@ -241,11 +253,12 @@
         if (args === null) { res.text = '大括號裡不是正確的 JSON（內容裡的雙引號要寫成 \\"，或改用「」）'; return res; }
         res.args = args;
         try {
-            const r = await runTool(t, args);
+            const r = await _race(runTool(t, args), signal);
             res.ok = !!(r && r.ok);
+            if (r && r.gen) res.gen = true;   // 大件：專門那一通真的叫了
             res.text = String((r && r.text) || (res.ok ? '好了' : '沒有成功'));
             if (r && r.ok && r.prop) res.prop = r.prop;
-        } catch (e) { res.text = (e && e.message) || '沒有成功'; }
+        } catch (e) { if (_isAbort(e, signal)) throw e; res.text = (e && e.message) || '沒有成功'; }
         return res;
     }
     function _emit(o, ev) { try { if (o && typeof o.onProgress === 'function') o.onProgress(ev); } catch (e) {} }
@@ -268,6 +281,7 @@
         let calls = 0, stopped = false;
         try {
             while (calls < cap) {
+                if (o.signal && o.signal.aborted) throw _abortErr();
                 const last = !o.stopOnProp && calls === cap - 1;
                 const sys = prompt(r, rec, last ? [] : tools, { chain: chain, cap: cap, last: last, exam: o.examNote, groups: gs });
                 calls++;
@@ -281,7 +295,8 @@
                 work.push({ role: 'assistant', content: text });
                 const got = [];
                 for (const c of ex.calls.slice(0, MAX_PER_ROUND)) {
-                    const res = await _callOne(c, byName, runTool);
+                    if (o.signal && o.signal.aborted) throw _abortErr();
+                    const res = await _callOne(c, byName, runTool, o.signal);
                     log.push(res); got.push(res);
                     if (res.prop) props.push(res.prop);
                     _emit(o, { type: 'tool', label: res.label, ok: res.ok });
@@ -296,8 +311,9 @@
         }
         let reply = said.join('\n\n').trim();
         if (!reply && !props.length) reply = stopped ? '（停下來了）' : '（沒有回話）';
-        return { reply: reply, calls: calls, props: props, stopped: stopped,
-            log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text })) };
+        // calls＝小機自己那幾通＋大件真的叫到的專門那幾通（她付的錢，回覆底下照實寫）
+        return { reply: reply, calls: calls + log.filter(x => x.gen).length, props: props, stopped: stopped,
+            log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text, gen: !!x.gen })) };
     }
 
     // ── 上課：報名、付錢、考試、批改、小劇場；開箱領養 ──────────
@@ -382,14 +398,13 @@
             rec.skills[id] = { at: Date.now() };
             await save(rid, { skills: rec.skills });
         }
-        const made = res.log.filter(x => /_make$/.test(x.tool)).length;   // 大件：專門那一通也算
         // 沙盒裡的單子沒經過 AureliaLink，沒標是誰提的：補上小機自己（小劇場的由來要寫對人）
         const me = _resident(rid);
         if (res.props[0] && !res.props[0].by) res.props[0].by = (me && me.name) || '小機';
         const E = _g('OS_AURELIA_EDIT');
         let summary = '';
         try { summary = res.props[0] ? ((E && E.text) ? E.text(res.props[0], false) : (res.props[0].title || '')) : ''; } catch (e) {}
-        return { pass: g.pass, why: g.why, props: res.props, calls: res.calls + made, summary: _one(summary).slice(0, 200), stopped: res.stopped };
+        return { pass: g.pass, why: g.why, props: res.props, calls: res.calls, summary: _one(summary).slice(0, 200), stopped: res.stopped };
     }
     async function theater(rid, id, summary) {
         const rec = await get(rid);
