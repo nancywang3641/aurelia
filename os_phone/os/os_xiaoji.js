@@ -166,7 +166,131 @@
         return out.join('\n');
     }
 
-    const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt,
+    // ── 一句話：叫模型 → 拆工具 → 跑 → 結果整份接回去 → 再叫，直到不叫工具或次數用完 ──
+    const PROP_STATE = { wait: '還沒處理', no: '沒同意', done: '同意了，已經寫進去', undone: '寫進去之後又改回去了', stale: '作廢了（那一條後來被改過）' };
+    // 這段對話之前的：工具結果只留一行、單子帶她按了什麼（她按的時候會改那則訊息上的 prop.state）
+    function _history(hist) {
+        const out = [];
+        (hist || []).slice(-HISTORY_N).forEach(m => {
+            if (!m || (m.role !== 'user' && m.role !== 'assistant')) return;
+            let c = String(m.content == null ? '' : m.content);
+            if (m.role === 'assistant') {
+                const extra = [];
+                (m.xjlog || []).forEach(x => extra.push('・' + x.label + '：' + (x.ok ? _one(x.text).slice(0, OLD_RESULT) + '…' : '沒有成功')));
+                (m.props || []).forEach(p => { if (p && p.prop) extra.push('・單子「' + _one(p.text) + '」：' + (PROP_STATE[p.prop.state || 'wait'] || p.prop.state)); });
+                if (extra.length) c += '\n（這一句你用過的工具與單子，只有你看得到：\n' + extra.join('\n') + '）';
+            }
+            if (c.trim()) out.push({ role: m.role, content: c });
+        });
+        return out;
+    }
+    function _argsText(args) {
+        if (!args || typeof args !== 'object') return '';
+        const v = Object.keys(args).map(k => args[k]).find(x => typeof x === 'string' && x.trim());
+        return v ? _one(v).slice(0, 80) : '';
+    }
+    function _resultsMsg(got, user, nextLast) {
+        const out = ['【工具結果】你剛才叫的工具交回來的，' + user + '看不到；要讓' + user + '知道就用自己的話講，不要整段照貼。'];
+        got.forEach(x => {
+            const a = _argsText(x.args);
+            out.push('── ' + x.label + (a ? '（' + a + '）' : ''));
+            out.push(x.ok ? String(x.text).slice(0, RESULT_MAX) : ('沒有成功：' + x.text + '。不要假裝做到了。'));
+        });
+        out.push(nextLast ? ('接著直接回' + user + '，這一句話不能再叫工具了。') : ('接著做：還沒做完就再叫工具，做完了就回' + user + '。'));
+        return out.join('\n');
+    }
+    function _isAbort(e, signal) { return !!((signal && signal.aborted) || (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || ''))))); }
+    function _chat(messages, conn, signal) {
+        return new Promise((resolve, reject) => {
+            const A = _g('OS_API');
+            if (!A || !A.chat) { reject(new Error('模型連線還沒載入')); return; }
+            A.chat(messages, Object.assign({}, conn.config), null,
+                t => resolve(String(t == null ? '' : t)),
+                // 別的 realm（iframe）丟來的 Error 不是這邊的 Error：照抄名字，AbortError 才認得出來
+                e => reject(e instanceof Error ? e : Object.assign(new Error(String((e && e.message) || e || '沒有回應')), { name: (e && e.name) || 'Error' })),
+                Object.assign({}, conn.options, { signal: signal, label: 'API 小機' }));
+        });
+    }
+    async function _runReal(rid, t, args) {
+        if (t.make) {
+            const M = _g('OS_XIAOJI_MAKE');
+            if (!M || !M.run) return { ok: false, text: '做大件的那支還沒載好' };
+            return M.run(t.name, args, { rid: rid });
+        }
+        const A = _g('AureliaLink');
+        if (!A || !A.run) return { ok: false, text: '奧瑞亞工具還沒載好（要在酒館或手機的奧瑞亞裡）' };
+        return A.run({ name: t.name, args: args, rid: rid });
+    }
+    async function _callOne(c, byName, runTool) {
+        const key = byName[c.name] ? c.name : Object.keys(byName).find(k => k.toLowerCase() === String(c.name).toLowerCase());
+        const t = key ? byName[key] : null;
+        const res = { tool: String(c.name), label: t ? (t.label || t.name) : String(c.name), args: {}, ok: false, text: '' };
+        if (!t) { res.text = '沒有叫做「' + c.name + '」的工具（還沒學會的工具也叫不到）'; return res; }
+        const W = _g('WX_TOOLS');
+        const args = (W && W.parseArgs) ? W.parseArgs(c.body, t.inputSchema, !!t.propose) : null;
+        if (args === null) { res.text = '大括號裡不是正確的 JSON（內容裡的雙引號要寫成 \\"，或改用「」）'; return res; }
+        res.args = args;
+        try {
+            const r = await runTool(t, args);
+            res.ok = !!(r && r.ok);
+            res.text = String((r && r.text) || (res.ok ? '好了' : '沒有成功'));
+            if (r && r.ok && r.prop) res.prop = r.prop;
+        } catch (e) { res.text = (e && e.message) || '沒有成功'; }
+        return res;
+    }
+    function _emit(o, ev) { try { if (o && typeof o.onProgress === 'function') o.onProgress(ev); } catch (e) {} }
+    async function turn(o) {
+        const rid = o.rid;
+        const r = _resident(rid);
+        const rec = await get(rid);
+        const chain = !!rec.skills.chain;
+        const cap = o.cap || (chain ? rec.cap : NO_CHAIN_CAP);
+        const gs = o.tools ? (o.groups || []) : groups(rec);
+        const tools = o.tools || toolsFor(rec);
+        const byName = {};
+        tools.forEach(t => { byName[t.name] = t; });
+        const runTool = o.runTool || ((t, args) => _runReal(rid, t, args));
+        const conn = connConfig(rec);
+        const user = _userName();
+        const base = _history(o.history);
+        base.push({ role: 'user', content: String(o.userText || '') });
+        const work = [], said = [], log = [], props = [];
+        let calls = 0, stopped = false;
+        try {
+            while (calls < cap) {
+                const last = !o.stopOnProp && calls === cap - 1;
+                const sys = prompt(r, rec, last ? [] : tools, { chain: chain, cap: cap, last: last, exam: o.examNote, groups: gs });
+                calls++;
+                _emit(o, { type: 'call', n: calls, cap: cap });
+                const text = await _chat([{ role: 'system', content: sys }].concat(base, work), conn, o.signal);
+                const W = _g('WX_TOOLS');
+                const ex = (W && W.extract) ? W.extract(text) : { text: text, calls: [] };
+                const visible = String(ex.text || '').trim();
+                if (visible) { said.push(visible); _emit(o, { type: 'text', accumulated: said.join('\n\n') }); }
+                if (last || !ex.calls.length) break;   // 最後一通還寫了工具：不跑（上限就是上限）
+                work.push({ role: 'assistant', content: text });
+                const got = [];
+                for (const c of ex.calls.slice(0, MAX_PER_ROUND)) {
+                    const res = await _callOne(c, byName, runTool);
+                    log.push(res); got.push(res);
+                    if (res.prop) props.push(res.prop);
+                    _emit(o, { type: 'tool', label: res.label, ok: res.ok });
+                }
+                if (o.stopOnProp && props.length) break;
+                work.push({ role: 'user', content: _resultsMsg(got, user, !o.stopOnProp && calls + 1 === cap) });
+            }
+        } catch (e) {
+            if (!_isAbort(e, o.signal)) throw e;
+            if (!said.length && !props.length) throw e;   // 什麼都還沒有：照一般「已停止」處理
+            stopped = true;                                // 已經提的單子留著
+        }
+        let reply = said.join('\n\n').trim();
+        if (!reply && !props.length) reply = stopped ? '（停下來了）' : '（沒有回話）';
+        return { reply: reply, calls: calls, props: props, stopped: stopped,
+            log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text })) };
+    }
+
+    const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
         LIMITS: { CAP_MIN: CAP_MIN, CAP_MAX: CAP_MAX, NO_CHAIN_CAP: NO_CHAIN_CAP } };
     win.OS_XIAOJI = API;
     if (win !== window) { try { window.OS_XIAOJI = API; } catch (e) {} }
