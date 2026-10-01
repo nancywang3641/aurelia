@@ -103,11 +103,36 @@
         if (f.err) return f.err;
         return _paged('特效 ' + f.id + (f.cur.builtin && !f.cur.tpl ? '（內建）' : '') + '｜' + (f.enabled ? '開著' : '關著') + '\n' + JSON.stringify(f.cur.recipe, null, 1), args.part, '這個特效的配方');
     }
+    // 看過說明書的憑證（10-01，跟改主題那組同一套）：聊天 app 一輪最多叫三個工具、一起跑完才交回結果，
+    //   AI 可以同一輪叫 spec 又叫 add——交出去那份是沒看過說明書、憑印象寫的。說明書最後給一串字，add 要帶著它；
+    //   同一輪叫的拿不到，一定交不出去。每次看都發一串新的（記在這台、留一天）。
+    const SPEC_CODE_KEY = 'aurelia_fx_spec_codes', SPEC_CODE_TTL = 86400000;
+    function _specCodes() {
+        let o = {};
+        try { o = JSON.parse(localStorage.getItem(SPEC_CODE_KEY) || '{}') || {}; } catch (e) {}
+        const old = Date.now() - SPEC_CODE_TTL;
+        Object.keys(o).forEach(function (k) { if (!o[k] || o[k].at < old) delete o[k]; });
+        return o;
+    }
+    function _specIssue() {
+        const o = _specCodes();
+        const code = Math.random().toString(36).slice(2, 6);
+        o[code] = { at: Date.now() };
+        Object.keys(o).sort(function (a, b) { return o[b].at - o[a].at; }).slice(30).forEach(function (k) { delete o[k]; });
+        try { localStorage.setItem(SPEC_CODE_KEY, JSON.stringify(o)); } catch (e) {}
+        return '\n\n——說明書到這裡。照它寫好之後用 aurelia_fx_add 交，spec 參數填：' + code;
+    }
+    function _specCheck(code) {
+        if (_specCodes()[String(code == null ? '' : code).trim().toLowerCase()]) return null;
+        return _no((code ? 'spec 填的那串字對不上特效的說明書' : '還沒看過特效的說明書就交了')
+            + '：先只叫 aurelia_fx_spec 看完整份說明書——結果下一輪才會交給你，不要跟交特效同一輪叫；'
+            + '下一輪照說明書寫，交的時候 spec 參數填說明書最後給的那串字。');
+    }
     function spec(args) {
         const S = _S(), txt = S && S.fxSpec ? S.fxSpec() : '';
         if (!txt) return '創作室還沒載好，現在看不到寫法。';
         const pre = '下面是對方的特效工坊給模型的說明書。說明書說的「輸出被 <json> 包裹的配方」，你把那份 JSON 放進 aurelia_fx_add 的 recipe 參數就好。\n\n';
-        return _paged(pre + txt, args.part, '特效的寫法', SPEC_PART);
+        return _paged(pre + txt + _specIssue(), args.part, '特效的寫法', SPEC_PART);
     }
 
     // ── 草稿（同 VN 組件）────────────────────────────────────────────────
@@ -131,6 +156,8 @@
     // ── 提出 ─────────────────────────────────────────────────────────────
     function _prop(kind, id, extra) { return Object.assign({ id: _newId(), mod: 'fx', kind: kind, book: '畫面特效', title: id, state: 'wait', at: Date.now() }, extra); }
     async function _proposeAdd(args) {
+        const sc = _specCheck(args.spec);
+        if (sc) return sc;
         const c = _check(args.recipe);
         if (c.err) return _no(c.err);
         const F = _FX();
@@ -414,8 +441,9 @@
               recipe: { type: 'string', description: '要看的配方（JSON）' },
               size: { type: 'string', description: 'phone（手機，不填就是這個）、center（電腦中間）、full（電腦全屏）' } } } },
         { name: 'aurelia_fx_add', label: '新增特效', propose: true,
-          description: '提出新增一個畫面特效（對方試播過、按同意才會存）。寫之前先用 aurelia_fx_spec 看寫法。',
-          inputSchema: { type: 'object', properties: { recipe: { type: 'string', description: '整份配方（JSON，格式照說明書；fxId 不能跟已經有的重複）' } }, required: ['recipe'] } },
+          description: '提出新增一個畫面特效（對方試播過、按同意才會存）。寫之前先用 aurelia_fx_spec 看寫法（結果下一輪才會到，不要跟這個同一輪叫），交的時候 spec 填說明書最後給的那串字。',
+          inputSchema: { type: 'object', properties: { recipe: { type: 'string', description: '整份配方（JSON，格式照說明書；fxId 不能跟已經有的重複）' },
+              spec: { type: 'string', description: '看完 aurelia_fx_spec 之後，說明書最後給的那串字' } }, required: ['recipe', 'spec'] } },
         { name: 'aurelia_fx_edit', label: '改特效', propose: true,
           description: '提出修改一個已經有的特效（對方試播改前改後、按同意才會改）。recipe 給整份新配方（fxId 不變）；也可以只用 enabled 打開或關掉它（關掉＝正文寫了也不播、寫故事的模型也看不到它）。',
           inputSchema: { type: 'object', properties: { id: { type: 'string', description: '要改的特效代號或名字' },

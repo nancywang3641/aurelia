@@ -228,6 +228,31 @@
         }
         return 'name（主題庫那一套的名字）和 room（聊天室）要填一個。';
     }
+    // 看過說明書的憑證（10-01，跟改主題那組同一套）：聊天 app 一輪最多叫三個工具、一起跑完才交回結果，
+    //   AI 可以同一輪叫 spec 又叫 add——交出去那份是沒看過說明書、憑印象寫的。說明書最後給一串字，add 要帶著它；
+    //   同一輪叫的拿不到，一定交不出去。每次看都發一串新的（記在這台、留一天）。
+    const SPEC_CODE_KEY = 'aurelia_bubble_spec_codes', SPEC_CODE_TTL = 86400000;
+    function _specCodes() {
+        let o = {};
+        try { o = JSON.parse(localStorage.getItem(SPEC_CODE_KEY) || '{}') || {}; } catch (e) {}
+        const old = Date.now() - SPEC_CODE_TTL;
+        Object.keys(o).forEach(function (k) { if (!o[k] || o[k].at < old) delete o[k]; });
+        return o;
+    }
+    function _specIssue() {
+        const o = _specCodes();
+        const code = Math.random().toString(36).slice(2, 6);
+        o[code] = { at: Date.now() };
+        Object.keys(o).sort(function (a, b) { return o[b].at - o[a].at; }).slice(30).forEach(function (k) { delete o[k]; });
+        try { localStorage.setItem(SPEC_CODE_KEY, JSON.stringify(o)); } catch (e) {}
+        return '\n\n——說明書到這裡。照它寫好之後用 aurelia_bubble_add 交，spec 參數填：' + code;
+    }
+    function _specCheck(code) {
+        if (_specCodes()[String(code == null ? '' : code).trim().toLowerCase()]) return null;
+        return _no((code ? 'spec 填的那串字對不上泡泡的說明書' : '還沒看過泡泡的說明書就交了')
+            + '：先只叫 aurelia_bubble_spec 看完整份說明書——結果下一輪才會交給你，不要跟交泡泡同一輪叫；'
+            + '下一輪照說明書寫，交的時候 spec 參數填說明書最後給的那串字。');
+    }
     function spec(args) {
         const AI = _AI();
         const src = String((AI && AI.PROMPT) || '');
@@ -240,7 +265,7 @@
             + '交之前自檢一次：兩側都設計了嗎？有形狀簽名或材質簽名其中一個嗎？字底下是實底，還是半透明加了模糊？'
             + '.pbub-row 上有沒有不小心寫到 display / flex-direction / justify-content？底色改成漸層了但尖角還是純色嗎？有問題就修好再交。';
         const pre = '下面是對方的聊天 app 給模型的泡泡說明書。想跟對方的聊天 app 主題搭，可以先用 aurelia_theme_read（kind: chat）看那套的配色（沒有這個工具就跳過）。\n\n';
-        return _paged(pre + head + tail, args.part, '泡泡的寫法', SPEC_PART);
+        return _paged(pre + head + tail + _specIssue(), args.part, '泡泡的寫法', SPEC_PART);
     }
 
     // ── 草稿：還沒被同意的那張（同改主題）──────────────────────────────────
@@ -279,6 +304,8 @@
         return Object.assign({ id: _newId(), mod: 'bubble', kind: kind, book: '聊天泡泡', title: title, state: 'wait', at: Date.now() }, extra);
     }
     function _proposeAdd(args, ctx) {
+        const sc = _specCheck(args.spec);
+        if (sc) return sc;
         const name = _one(args.name).slice(0, 30);
         if (!name) return _no('要取一個名字（name）。');
         if (RESERVED.test(name)) return _no('「' + name + '」是拿來指「還原成預設」或「每一間」的字，換一個名字。');
@@ -689,12 +716,13 @@
               replace: { type: 'string', description: '換成什麼（跟 find 一起用）' },
               css: { type: 'string', description: '整份 CSS（新的一套，或整份重寫），照 aurelia_bubble_spec 的規矩寫' } } } },
         { name: 'aurelia_bubble_add', label: '新做一套泡泡', propose: true,
-          description: '提出新做一套泡泡收進主題庫，要換到哪幾間聊天室也寫在這張（rooms），不用另外叫 use（對方看過樣子、按同意才會存、才會換）。寫之前先用 aurelia_bubble_spec 看寫法。',
+          description: '提出新做一套泡泡收進主題庫，要換到哪幾間聊天室也寫在這張（rooms），不用另外叫 use（對方看過樣子、按同意才會存、才會換）。寫之前先用 aurelia_bubble_spec 看寫法（結果下一輪才會到，不要跟這個同一輪叫），交的時候 spec 填說明書最後給的那串字。',
           inputSchema: { type: 'object', properties: {
               name: { type: 'string', description: '這套的名字（中文，十個字以內），不能跟主題庫裡已經有的重複，也不能叫「預設」「全部」' },
               css: { type: 'string', description: '整份 CSS，照 aurelia_bubble_spec 的規矩寫' },
-              rooms: { type: 'string', description: ROOMS_DESC + '。不填＝只收進主題庫，先不換到任何一間' } },
-            required: ['name', 'css'] } },
+              rooms: { type: 'string', description: ROOMS_DESC + '。不填＝只收進主題庫，先不換到任何一間' },
+              spec: { type: 'string', description: '看完 aurelia_bubble_spec 之後，說明書最後給的那串字' } },
+            required: ['name', 'css', 'spec'] } },
         { name: 'aurelia_bubble_edit', label: '改一套泡泡', propose: true,
           description: '提出修改主題庫裡的一套泡泡（對方看過改前改後、按同意才會改；正在用這套的聊天室會一起換成新的樣子）。你新做、對方還沒同意的那套也用這個改，要換到的聊天室照上一張。只改一段用 find 和 replace，整份重寫用 css；也可以用 new_name 改名字。',
           inputSchema: { type: 'object', properties: {

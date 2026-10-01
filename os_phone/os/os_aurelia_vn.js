@@ -154,13 +154,38 @@
         const body = ['usageDesc', 'demoFormat', 'html', 'css', 'js'].map(function (k) { return '【' + LAB[k] + '】\n' + (s[k] || '（空的）'); }).join('\n\n');
         return _paged(head + '\n\n' + body, args.part, '組件 ' + s.tagId + ' 的全文');
     }
+    // 看過說明書的憑證（10-01，跟改主題那組同一套）：聊天 app 一輪最多叫三個工具、一起跑完才交回結果，
+    //   AI 可以同一輪叫 spec 又叫 add——交出去那份是沒看過說明書、憑印象寫的。說明書最後給一串字，add 要帶著它；
+    //   同一輪叫的拿不到，一定交不出去。每次看都發一串新的（記在這台、留一天）。
+    const SPEC_CODE_KEY = 'aurelia_vn_spec_codes', SPEC_CODE_TTL = 86400000;
+    function _specCodes() {
+        let o = {};
+        try { o = JSON.parse(localStorage.getItem(SPEC_CODE_KEY) || '{}') || {}; } catch (e) {}
+        const old = Date.now() - SPEC_CODE_TTL;
+        Object.keys(o).forEach(function (k) { if (!o[k] || o[k].at < old) delete o[k]; });
+        return o;
+    }
+    function _specIssue() {
+        const o = _specCodes();
+        const code = Math.random().toString(36).slice(2, 6);
+        o[code] = { at: Date.now() };
+        Object.keys(o).sort(function (a, b) { return o[b].at - o[a].at; }).slice(30).forEach(function (k) { delete o[k]; });
+        try { localStorage.setItem(SPEC_CODE_KEY, JSON.stringify(o)); } catch (e) {}
+        return '\n\n——說明書到這裡。照它寫好之後用 aurelia_vn_add 交，spec 參數填：' + code;
+    }
+    function _specCheck(code) {
+        if (_specCodes()[String(code == null ? '' : code).trim().toLowerCase()]) return null;
+        return _no((code ? 'spec 填的那串字對不上VN 組件的說明書' : '還沒看過VN 組件的說明書就交了')
+            + '：先只叫 aurelia_vn_spec 看完整份說明書——結果下一輪才會交給你，不要跟交VN 組件同一輪叫；'
+            + '下一輪照說明書寫，交的時候 spec 參數填說明書最後給的那串字。');
+    }
     function spec(args) {
         const S = _S();
         const txt = (S && S.vnSpec) ? S.vnSpec('純展示') : '';
         if (!txt) return '創作室還沒載好，現在看不到寫法。';
         const pre = '下面是對方的創作室給模型的 VN 組件說明書（故事裡跳出來的那一型）。說明書裡講的「輸出 <json>」你不用管：'
             + '新增用 aurelia_vn_add 交，tag＝tagId、demo_format＝demoFormat、usage_desc＝usageDesc、is_block＝isBlock，其他照同名參數。\n\n';
-        return _paged(pre + txt, args.part, 'VN 組件的寫法', SPEC_PART);
+        return _paged(pre + txt + _specIssue(), args.part, 'VN 組件的寫法', SPEC_PART);
     }
 
     // ── 提出（做成單子）──────────────────────────────────────────────────
@@ -212,6 +237,8 @@
         return '';
     }
     async function _proposeAdd(args) {
+        const sc = _specCheck(args.spec);
+        if (sc) return sc;
         const r = await _dataFromAdd(args);
         if (r.err) return _no(r.err);
         const data = r.data;
@@ -466,7 +493,7 @@
               is_block: { type: 'boolean', description: '新組件才用，跟 aurelia_vn_add 一樣' } },
             required: ['tag'] } },
         { name: 'aurelia_vn_add', label: '新增 VN 組件', propose: true,
-          description: '提出做一個新的 VN 組件（故事裡跳出來的那種；對方看過預覽、按同意才會加）。寫之前先用 aurelia_vn_spec 看寫法。' + SIZE,
+          description: '提出做一個新的 VN 組件（故事裡跳出來的那種；對方看過預覽、按同意才會加）。寫之前先用 aurelia_vn_spec 看寫法（結果下一輪才會到，不要跟這個同一輪叫），交的時候 spec 填說明書最後給的那串字。' + SIZE,
           inputSchema: { type: 'object', properties: {
               tag: { type: 'string', description: '標籤：英文字母、數字、底線，正文裡就用這個名字寫，不能跟已經有的重複' },
               title: { type: 'string', description: '給對方看的名字，四個字以內' },
@@ -476,8 +503,9 @@
               demo_format: { type: 'string', description: '正文裡怎麼寫這一段（資料的結構，每一行一筆），寫故事的模型照這個寫' },
               usage_desc: { type: 'string', description: '給寫故事的模型的一句話說明：什麼時候用、照正文裡的寫法填' },
               keywords: { type: 'string', description: '選填：三到五個觸發詞，逗號隔開（正文出現這些詞代表需要這個面板）' },
-              is_block: { type: 'boolean', description: '正文裡是不是寫一整段資料（有 demo_format 就是 true，不填照有沒有 demo_format 決定）' } },
-            required: ['tag', 'html', 'js', 'usage_desc'] } },
+              is_block: { type: 'boolean', description: '正文裡是不是寫一整段資料（有 demo_format 就是 true，不填照有沒有 demo_format 決定）' },
+              spec: { type: 'string', description: '看完 aurelia_vn_spec 之後，說明書最後給的那串字' } },
+            required: ['tag', 'html', 'js', 'usage_desc', 'spec'] } },
         { name: 'aurelia_vn_edit', label: '改 VN 組件', propose: true,
           description: '提出修改一個已經有的 VN 組件（對方看過改前改後的預覽、按同意才會改）。只改一段：field 寫哪一欄、find 寫原文、replace 寫換成什麼；整欄重寫：直接給那一欄（html、css、js、demo_format、usage_desc）；也可以改名字、觸發詞，或用 enabled 關掉、打開。',
           inputSchema: { type: 'object', properties: {
