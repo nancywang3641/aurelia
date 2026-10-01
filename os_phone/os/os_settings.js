@@ -212,6 +212,7 @@
         { group: '手機',       id: 'vision',       name: '看圖小模型',                 def: 'sec'  },
         { group: '手機',       id: 'takeout',      name: '外送找店',                   def: 'sec'  },
         { group: '手機',       id: 'wx_theme',     name: '聊天 app 主題',              def: 'main' },
+        { group: '手機',       id: 'wx_bubble',    name: '聊天泡泡',                   def: 'main' },
         { group: '大廳與世界', id: 'map',          name: '地圖探索',                   def: 'sec'  },
         { group: '大廳與世界', id: 'world_gen',    name: '世界 / 地圖事件 / 行程生成', def: 'main' },
         { group: '大廳與世界', id: 'world_plan',   name: '直接畫的世界地圖',           def: 'sec'  },
@@ -225,7 +226,8 @@
         { group: '大廳與世界', id: 'worldgate',    name: '世界門',                     def: 'sec'  },
         { group: '大廳與世界', id: 'pt',           name: 'PT 結算',                    def: 'sec'  },
         { group: '大廳與世界', id: 'achievement',  name: '成就估值',                   def: 'main' },
-        { group: '大廳與世界', id: 'store404',     name: '404 商店',                   def: 'main' }
+        { group: '大廳與世界', id: 'store404',     name: '404 商店',                   def: 'main' },
+        { group: '宿舍',       id: 'xiaoji',       name: 'API 小機',                   def: 'main' }
     ];
 
     function loadChannels() {

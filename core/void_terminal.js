@@ -1761,7 +1761,7 @@ const IRIS_IDLE = [
     //   🚨全程包 __AURELIA_SUMMARIZING：state_runtime(AVS)/VecEngine/dossier 都查此旗標，不設就會拿當前卡 preset 抽小劇場→污染。
     //   🚨不 saveVnChapter：一存成章節就觸發 VecEngine ingest + state_runtime 抽取。改 ephemeral(_startWithLoader/autoload 不存)。
     //   🚨沒 <content> 一律丟棄(照 VN 劇本鐵則，不 wrap 垃圾→黑屏)。立繪/[Scene|]插圖由 VN_Core 引擎處理。
-    VoidTerminal.playDuoScene = async function (npcA, npcB) {
+    VoidTerminal.playDuoScene = async function (npcA, npcB, extra) {
         const _prevSum = window.__AURELIA_SUMMARIZING;
         try {
             const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
@@ -1782,6 +1782,7 @@ const IRIS_IDLE = [
                 { name: npcB.name, personaText: ptB },
                 wv, vnProtocol, theaterCtx);
             if (sharedSum) prompt += '\n\n【兩位角色共同所在故事的完整大總結（你們的一切認知都從這裡來；別複述、自然演出）】\n' + sharedSum;
+            if (extra) prompt += '\n\n【這一場的由來】\n' + String(extra);   // 小機培養室：考過的那一堂（誰教的、交了什麼）
             if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return false; }
             let config = (window.OS_SETTINGS && window.OS_SETTINGS.getConfig) ? window.OS_SETTINGS.getConfig() : {};
             config.route = 'iris_duo';

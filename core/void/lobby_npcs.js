@@ -438,6 +438,11 @@
         init: initNpcs,                     // lobby_stage.tryMount 呼叫（async；掛載時生成本場景 NPC）
         staff: (key) => (STAFF[key] ? Object.assign({ key: key }, STAFF[key]) : null),
         staffKeys: () => Object.keys(STAFF),
+        // SN 住民（雷伊、丹）：小機培養室的「丹」那堂課要他的人設與頭像演小劇場
+        snResident: (key) => {
+            const r = SN_RESIDENTS.find(x => x.key === key);
+            return r ? { key: r.key, name: r.name, personaFull: r.personaFull, portrait: r.portrait, subTitle: r.subTitle } : null;
+        },
         rollGuestPool: _journalGuestPool,   // console 診斷用（LobbyStage.rollGuestPool 懶轉接到這；async 回傳池陣列）
         // ☕ 書咖經營:顧客名冊=SN住民+日誌客人池全員(當前各卡最新輪的角色;key帶chatId=每輪隔離,同場景客人規則)
         // 🚨 key vs stableKey：

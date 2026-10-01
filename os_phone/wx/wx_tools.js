@@ -1002,7 +1002,7 @@
     function propChip(prop) { return PP_CHIP[(prop && prop.state) || 'wait'] || ''; }
     try { _injectCss(); } catch (e) {}   // 聊天裡那一行的樣式要在打開任何小窗之前就有
 
-    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, run, open, close, summary, openProposal, openPropSheet, closeProposal, propNotice, propChip, jumpFrom };
+    const API = { load, enabledFor, refresh, prepare, promptBlock, resultsBlock, extract, strip, parseArgs: _parseArgs, run, open, close, summary, openProposal, openPropSheet, closeProposal, propNotice, propChip, jumpFrom };
     win.WX_TOOLS = API;
     window.WX_TOOLS = API;
 })();

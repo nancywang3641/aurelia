@@ -1192,7 +1192,8 @@
             // 🔌 分流（唯一的一處）：呼叫端用 options.task 說這是哪件事；她在「哪件事走哪個模型」改過這件事，
             //    就把連線那幾欄換成她指定的那條。沒改過就原封不動——呼叫端自己組的設定（副模型沒填退回主模型、
             //    夾 maxTokens、關預設條目…）全部照舊，所以名冊加新的一列不會改到任何既有行為。
-            if (options && options.task) {
+            // noRoute：呼叫端自己已經決定好連線（小機在門卡上選了走哪條），task 照記給控制台看，但不再換連線
+            if (options && options.task && !options.noRoute) {
                 try {
                     const _ov = (win.OS_SETTINGS && win.OS_SETTINGS.getRouteOverride) ? win.OS_SETTINGS.getRouteOverride(options.task) : null;
                     if (_ov) {

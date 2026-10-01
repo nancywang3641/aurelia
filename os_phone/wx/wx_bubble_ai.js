@@ -417,7 +417,7 @@ body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hi
                 });
             },
             (err) => { o.onError && o.onError(err); },
-            { label: '泡泡主題:' + (o.chatId || '') }
+            { task: 'wx_bubble', label: '泡泡主題:' + (o.chatId || '') }
         );
     }
 
