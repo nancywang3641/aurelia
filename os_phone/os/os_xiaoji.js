@@ -234,7 +234,7 @@
         });
     }
     function _isAbort(e, signal) { return !!((signal && signal.aborted) || (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || ''))))); }
-    function _chat(messages, conn, signal) {
+    function _chat(messages, conn, signal, onUsage) {
         return new Promise((resolve, reject) => {
             const A = _g('OS_API');
             if (!A || !A.chat) { reject(new Error('模型連線還沒載入')); return; }
@@ -242,7 +242,7 @@
                 t => resolve(String(t == null ? '' : t)),
                 // 別的 realm（iframe）丟來的 Error 不是這邊的 Error：照抄名字，AbortError 才認得出來
                 e => reject(e instanceof Error ? e : Object.assign(new Error(String((e && e.message) || e || '沒有回應')), { name: (e && e.name) || 'Error' })),
-                Object.assign({}, conn.options, { signal: signal, label: 'API 小機' }));
+                Object.assign({}, conn.options, { signal: signal, label: 'API 小機', onUsage: onUsage }));
         });
     }
     async function _runReal(rid, t, args) {
@@ -291,6 +291,9 @@
         base.push({ role: 'user', content: String(o.userText || '') });
         const work = [], said = [], log = [], props = [];
         let calls = 0, stopped = false;
+        // 這句話幾通加起來的用量（接口有回才有；額度面板與回覆底下那行用）。大件專門那一通不在這裡
+        const use = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, n: 0 };
+        const _addUse = u => { if (!u) return; use.input += u.input || 0; use.output += u.output || 0; use.cacheRead += u.cacheRead || 0; use.cacheWrite += u.cacheWrite || 0; use.n++; };
         // 說明整句話只組一次、每一通都一樣：同一句話裡後面幾通的開頭（說明＋舊對話＋前幾通）跟前一通一模一樣，接口有緩存就吃得到
         const sys = prompt(r, rec, tools, { chain: chain, cap: cap, exam: o.examNote, groups: gs });
         try {
@@ -304,7 +307,7 @@
                     const tail = msgs[msgs.length - 1];
                     msgs[msgs.length - 1] = { role: tail.role, content: String(tail.content || '') + '\n\n' + _lastNote(user) };
                 }
-                const text = await _chat(msgs, conn, o.signal);
+                const text = await _chat(msgs, conn, o.signal, _addUse);
                 const W = _g('WX_TOOLS');
                 const ex = (W && W.extract) ? W.extract(text) : { text: text, calls: [] };
                 const visible = String(ex.text || '').trim();
@@ -331,6 +334,7 @@
         if (!reply && !props.length) reply = stopped ? '（停下來了）' : '（沒有回話）';
         // calls＝小機自己那幾通＋大件真的叫到的專門那幾通（她付的錢，回覆底下照實寫）
         return { reply: reply, calls: calls + log.filter(x => x.gen).length, props: props, stopped: stopped,
+            usage: use.n ? use : null, model: String((conn.config && conn.config.model) || ''),
             log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text, gen: !!x.gen })) };
     }
 
