@@ -321,6 +321,25 @@ ${JSON.stringify({ shards, items: itemsState })}`;
     // ================================================================
     // UI：渲染 404 商店面板內容
     // ================================================================
+    // 🧩 小機（宿舍的 API 小機，os_xiaoji.js）：第一隻是宿舍門口的箱子，第二隻以後在這裡買。
+    //    碎片在宿舍那頁「付碎片帶走」時才扣（取名、選接口之後）；沒裝房間（宿舍）就不出現。
+    function _xjRow(shards) {
+        const XT = win.XiaojiTrain || window.XiaojiTrain, L = win.OS_XIAOJI_LESSONS || window.OS_XIAOJI_LESSONS;
+        if (!XT || !L || !(win.OS_XIAOJI || window.OS_XIAOJI)) return '';
+        const can = shards >= L.ADOPT_PRICE;
+        return `
+<div class="store-item" data-id="xiaoji">
+    <div class="store-item-icon"><i class="fa-solid fa-microchip"></i></div>
+    <div class="store-item-info">
+        <div class="store-item-name">小機</div>
+        <div class="store-item-desc">我拼的，沒登記。帶回宿舍養，要學什麼自己帶它去上課。</div>
+    </div>
+    <div class="store-item-action">
+        <button class="store-buy-btn ${can ? '' : 'disabled'}" data-action="xiaoji" ${can ? '' : 'disabled'}><i class="fa-solid fa-gem"></i> ${L.ADOPT_PRICE}</button>
+    </div>
+</div>`;
+    }
+
     function renderStorePanel(container) {
         if (!container) return;
 
@@ -374,6 +393,7 @@ ${ SHOP_CATALOG.map(item => {
     </div>
 </div>`;
 }).join('')}
+${ _xjRow(shards) }
 </div>
 
 <div class="store-footer">
@@ -381,6 +401,15 @@ ${ SHOP_CATALOG.map(item => {
 </div>`;
 
         // 綁定事件
+        container.querySelectorAll('[data-action="xiaoji"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const XT = win.XiaojiTrain || window.XiaojiTrain, CW = win.ChatWindow || window.ChatWindow;
+                if (!XT || !CW) return;
+                XT.mode = 'adopt';
+                if (CW.openDorm) CW.openDorm();
+                if (CW.openSubPanel) CW.openSubPanel('xiaoji_box');
+            });
+        });
         container.querySelectorAll('[data-action="buy"]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.dataset.id;
