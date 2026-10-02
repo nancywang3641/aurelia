@@ -3,6 +3,7 @@
 // 宿舍裡不經橋的住戶：每一句話由這支在頁面裡直接叫模型、拆 <tool_call>，交給奧瑞亞工具（房間的 AureliaLink）
 // 或大件的專門一通（OS_XIAOJI_MAKE）。技能要上課考試才會（os_xiaoji_lessons.js），考試在沙盒裡跑（os_xiaoji_sandbox.js）。
 // 每隻的存檔：OS_DB app_data 'xiaoji' / <住戶 id>。名冊本身在房間的 cfg.residents（provider 'xiaoji'）。
+// 打扮與衣櫃（rec.wear、rec.closet）的規則在房間的 core/wear_local.js：房間送話時用 turn 的 extraNote 接「你的樣子」，回完照標籤換上。
 // 🚨 叫模型一律清掉 customCot（她的聊天 COT），options.noRoute：門卡上選的連線就是最後的連線。
 // ----------------------------------------------------------------
 (function () {
@@ -176,6 +177,8 @@
             const ch = locked.find(s => s.id === 'chain');
             if (ch) out.push('', '你還不會' + (ch.what || '自己接著做好幾步') + '（要去找' + tName(ch) + '上課），所以' + user + '每說一句話只有一輪工具。');
         }
+        // 房間接在最後的（目前是「你的樣子」：打扮與衣櫃，房間的 core/wear_local.js 寫的）。放最後：前面那一大段不跟著變
+        if (mode.extra) out.push(String(mode.extra));
         return out.join('\n');
     }
 
@@ -295,7 +298,7 @@
         const use = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, n: 0 };
         const _addUse = u => { if (!u) return; use.input += u.input || 0; use.output += u.output || 0; use.cacheRead += u.cacheRead || 0; use.cacheWrite += u.cacheWrite || 0; use.n++; };
         // 說明整句話只組一次、每一通都一樣：同一句話裡後面幾通的開頭（說明＋舊對話＋前幾通）跟前一通一模一樣，接口有緩存就吃得到
-        const sys = prompt(r, rec, tools, { chain: chain, cap: cap, exam: o.examNote, groups: gs });
+        const sys = prompt(r, rec, tools, { chain: chain, cap: cap, exam: o.examNote, groups: gs, extra: o.extraNote });
         try {
             while (calls < cap) {
                 if (o.signal && o.signal.aborted) throw _abortErr();
