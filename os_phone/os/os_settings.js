@@ -57,6 +57,8 @@
             ss_2272: { title: '語音轉文字', body: '微信輸入框按住說話、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。' },
             ss_2308: { title: 'Group ID (必填)', body: '登入 Minimax 平台後，在帳號設定頁面可找到 Group ID。' },
             ss_2349: { title: '角色配音', body: '一格寫名字、選聲音。名字或任何一個別名對得上（大小寫不分），他講話就用這個聲音念。同一個角色可以放好幾格、各選一種語言（例如中文用 Minimax、英文用 ElevenLabs），每句會先看是什麼語言再挑那一格；對不上就用「不限」那格。聲音要先到「雲端」分頁填金鑰、按「抓我的聲音」才選得到。' },
+            ss_vfor_on: { title: '外語角色', body: '打開後，下面名單上的角色在劇情裡會用他的語言講話，對話框下面一行小字放中文翻譯；語音只念原文。關著就跟以前一樣，大家都講中文，也不會多花錢。' },
+            ss_vfor_list: { title: '誰講外語', body: '名字要跟劇情裡出現的角色名字一樣，名單上沒有的人照常講中文。想讓他用外國人的聲音念，到「語音 → 角色配音」幫他加一張同語言的卡。' },
             ss_vc_master: { title: '角色說話的聲音', body: '關掉就全部不念。開著的時候：角色配音名單上的人用他綁的聲音念，其他人照「沒在名單上的人」那格。' },
             ss_vc_others: { title: '沒在名單上的人', body: '隨機 NPC、路人這些沒綁聲音的人。選「本機念」就交給「本機」分頁設定的音色；選「不念」就只顯示字，不花錢也不佔顯卡。' },
             ss_mm_mine: { title: '我的聲音', body: '妳在 Minimax 複製或設計的聲音。按「抓我的聲音」抓下來，角色配音的下拉選單就選得到。官方內建的聲音在「瀏覽官方音色庫」裡，按「加進名單」直接變成一格角色。' },
@@ -2354,6 +2356,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="api-subtab gen-subtab" data-gentab="panel"${stHide}>面板</div>
                             <div class="api-subtab gen-subtab" data-gentab="asset">素材</div>
                             <div class="api-subtab gen-subtab" data-gentab="ctx">上下文</div>
+                            <div class="api-subtab gen-subtab" data-gentab="foreign">外語</div>
                             <div class="api-subtab gen-subtab" data-gentab="back"${!isStandalone ? ' style="display:none"' : ''}>後台</div>
                         </div>
 
@@ -2384,6 +2387,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getAssetHTML() : '<div class="set-desc" style="padding:20px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> vn_settings.js 尚未載入</div>'}
                         </div>
 
+                        <div id="gview-foreign" class="gen-subview" style="display:none;">${(window.parent || window).OS_VN_FOREIGN ? (window.parent || window).OS_VN_FOREIGN.html() : ''}</div>
                         <div id="gview-ctx" class="gen-subview" style="display:none;">
                         ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getCtxHTML() : '<div class="set-desc" style="padding:20px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> vn_settings.js 尚未載入</div>'}
                         </div>
@@ -4824,6 +4828,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // ===== 角色說話的聲音（總開關、角色配音名單、雲端兩家、本機小分頁）：在 os_settings_voice.js（參數注入 ctx＝閉包變數）=====
         //   保存時名單卡片由 OS_SETTINGS_VOICE.collectCast 收（見上面保存鈕）。
+        // 🌐 外語角色名單（一般 → 外語）：改了當場存
+        if ((window.parent || window).OS_VN_FOREIGN) (window.parent || window).OS_VN_FOREIGN.wire(container);
         if (window.OS_SETTINGS_VOICE && window.OS_SETTINGS_VOICE.wire) {
             window.OS_SETTINGS_VOICE.wire({ container: container, minimaxConfig: minimaxConfig });
         } else {

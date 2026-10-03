@@ -648,7 +648,7 @@
                     box.classList.remove('narration');
                     nameEl.style.display = 'block';
                     nameEl.innerText = parts[0];
-                    document.getElementById('call-sub-text').innerHTML = core.parseMarkdown(ex.text);
+                    document.getElementById('call-sub-text').innerHTML = core._tlHtml ? core._tlHtml(ex.text) : core.parseMarkdown(ex.text);   // 外語台詞的翻譯拆到下面一行
                     core.addLog(parts[0], ex.text);
                     if (this._callBuffer) this._callBuffer.push({ sender: parts[0], text: ex.text, isMe: this._isMeName(parts[0]) });   // 收進統一記憶緩衝
                     core.playSFX(ex.sfx);

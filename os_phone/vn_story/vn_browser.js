@@ -308,7 +308,7 @@
             const name = parts[0] || '';
             const ex = core._extractTextAndSFX ? core._extractTextAndSFX(parts.slice(2)) : { text: parts.slice(2).join('|'), sfx: null };
             const box = $('br-nar'); if (!box) return;
-            box.innerHTML = `<b>${esc(name)}</b>` + (core.parseMarkdown ? core.parseMarkdown(ex.text) : esc(ex.text));
+            box.innerHTML = `<b>${esc(name)}</b>` + (core._tlHtml ? core._tlHtml(ex.text) : core.parseMarkdown ? core.parseMarkdown(ex.text) : esc(ex.text));   // 外語台詞的翻譯拆到下面一行
             box.classList.remove('hidden');
             core.addLog(name, ex.text);
             if (ex.sfx) core.playSFX(ex.sfx);

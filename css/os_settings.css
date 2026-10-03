@@ -439,3 +439,11 @@
 .vcast-result { min-height: 16px; font-size: 12px; color: var(--os-ink-soft); }
 .vcast-result:empty { display: none; }
 .btn-test.is-busy { opacity: 0.5; pointer-events: none; }
+
+/* ── 🌐 外語角色名單（os_vn_foreign.js） ── */
+.vfor-list { display: flex; flex-direction: column; gap: 8px; }
+.vfor-list:empty::before { content: '還沒有人。按下面「加角色」。'; display: block; padding: 6px 4px; font-size: 12px; text-align: center; color: var(--os-ink-soft); }
+.vfor-row { display: flex; align-items: center; gap: 6px; }
+.vfor-row .vfor-name { flex: 1; min-width: 0; }
+.vfor-row .vfor-lang { flex: 0 0 38%; max-width: 38%; }
+.vfor-del { flex-shrink: 0; padding: 6px; color: #fc8181; cursor: pointer; }

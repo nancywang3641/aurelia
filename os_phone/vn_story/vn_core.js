@@ -3819,6 +3819,25 @@
                 .replace(new RegExp(MARK + '(?=(?:<[^>]*>|\s)*$)', 'g'), '')
                 .split(MARK).join('<br>');
         },
+        // 🌐 外語台詞「原文」(翻譯)：翻譯拆出來放下面一行小字。只拆「」裡不是中文的那種
+        //    （日文、韓文看假名／韓文字；其他看有沒有漢字），中文台詞後面的（輕笑）這種動作括號不動。
+        _splitTL: function(t) {
+            const s = String(t || '');
+            if (s.indexOf('」') < 0 && s.indexOf('』') < 0) return { orig: s, tl: '' };
+            const foreign = (b) => /[\u3040-\u30ff\uac00-\ud7af]/.test(b) || (!/[\u3400-\u9fff]/.test(b) && /[A-Za-z\u00c0-\u024f\u0400-\u04ff]/.test(b));
+            const tls = [];
+            const orig = s.replace(/(「[^」]*」|『[^』]*』)\s*[（(]([^（）()]*)[)）]/g, (m, q, tl) => {
+                if (!foreign(q.slice(1, -1)) || !/[\u3400-\u9fff]/.test(tl)) return m;
+                tls.push(tl.trim());
+                return q;
+            });
+            return tls.length ? { orig: orig.trim(), tl: tls.join(' ') } : { orig: s, tl: '' };
+        },
+        // 給畫面用：原文照 parseMarkdown，翻譯包成 .vn-tl（下面一行小字）
+        _tlHtml: function(t) {
+            const x = this._splitTL(t);
+            return this.parseMarkdown(x.orig) + (x.tl ? '<span class="vn-tl">' + this.parseMarkdown(x.tl) + '</span>' : '');
+        },
         parseMarkdown: function(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'<em>$1</em>'); },
         renderVN: function(n, t, mode) {
             // 🎬 鋪底式場景插圖：每渲染一句對話 -1，停滿 3 句就淡出（CSS opacity transition）
@@ -3861,7 +3880,7 @@
                 panel.classList.remove('char-mode'); panel.classList.add('nar-mode');
             }
             panel.classList.remove('anim'); void panel.offsetWidth; panel.classList.add('anim');
-            this.typewriter(dtEl, this.parseMarkdown(t));
+            this.typewriter(dtEl, this._tlHtml(t));   // 外語台詞的翻譯拆到下面一行
         },
 
         _nameVariants: function(name) {

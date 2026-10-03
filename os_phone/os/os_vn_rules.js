@@ -89,6 +89,17 @@
         if (id !== 'call_phone' && id !== 'call_phone_free') return '';
         try { const W = win.WX_WALLET || window.WX_WALLET; return (W && W.needsSeed && W.needsSeed()) ? WALLET_SEED_LINE : ''; } catch (e) { return ''; }
     }
+    // 🌐 外語角色：開著又有名單 → 格式總綱（兩版）「- 外語台詞：…」那行底下多一段「誰講哪種語言」（os_vn_foreign.js）
+    //    插在那行底下而不是接在最後：總綱最後是範例，接在範例後面會離那行太遠
+    function _foreignInsert(id, content) {
+        if (id !== 'core_format' && id !== 'core_format_free') return content;
+        let add = '';
+        try { const F = win.OS_VN_FOREIGN || window.OS_VN_FOREIGN; add = (F && F.promptLine) ? F.promptLine() : ''; } catch (e) {}
+        if (!add) return content;
+        const re = /^- 外語台詞：[^\n]*$/m;
+        if (re.test(content)) return content.replace(re, m => m + '\n' + add);
+        return content + '\n\n- 外語台詞：[Char|名|表情|「外语」(翻譯)]\n' + add;   // 她改過總綱、那行不見了：補回來再接
+    }
     function list() {
         const st = _loadState();
         const cu = _loadCustom();
@@ -97,7 +108,7 @@
             id: d.id,
             name: d.name,
             // 🚨 只在交給 Jev 時才拿（a0776a5d 起一直不看開關：沒開 Jev 的時候正文 AI 也沒被教音樂音效的寫法）
-            content: (jev ? _jevSfxStrip : function (i, c) { return c; })(d.id, String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || '')) + _walletSeedLine(d.id),
+            content: _foreignInsert(d.id, (jev ? _jevSfxStrip : function (i, c) { return c; })(d.id, String((Object.prototype.hasOwnProperty.call(cu, d.id) ? cu[d.id] : d.content) || ''))) + _walletSeedLine(d.id),
             depth: _normDepth(d.depth),
             role: _normRole(d.role),
             enabled: Object.prototype.hasOwnProperty.call(st, d.id) ? st[d.id] !== false : d.on !== false,

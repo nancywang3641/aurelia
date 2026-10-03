@@ -19,6 +19,7 @@
         'os_minimax_config',          // Minimax 語音設定
         'os_elevenlabs_config',       // ElevenLabs 語音設定
         'os_voice_cast',              // 角色配音名單（誰用哪個聲音）
+        'os_vn_foreign',              // 外語角色名單（誰講哪種語言）
         'os_worldbook_books',         // 世界書書包清單
         'vn_cfg_v4',                  // VN 面板設定
         'os_personas',                // 人設

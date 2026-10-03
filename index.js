@@ -169,6 +169,7 @@ const PHONE_FILES = [
     'os/os_persona.js',
     'os/os_prompts.js', // 提示詞底層需要保留，但 UI 按鈕已透過 isStandalone 隱藏
     'os/os_vn_rules_data.js', // 🪶 VN 指令的內容（程式內建的 VN 主 prompt，原酒館全域世界書「-VN小說家-」）；須在 os_vn_rules 之前
+    'os/os_vn_foreign.js',    // 🌐 外語角色：名單＋給 VN 指令接一段「誰講哪種語言」
     'os/os_vn_rules.js',      // 🪶 VN 指令：酒館每輪注入、PWA 組 context 讀、自動開關撥這份
     'os/os_lorebook.js',
     'os/os_contacts.js',

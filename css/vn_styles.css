@@ -1382,6 +1382,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 對話內文也是優雅字體 */
         #dialogue-text { font-family: var(--font-classic); font-size: 1.3rem; line-height: 1.9; letter-spacing: 1px; color: var(--text-color, #dcd8d0); font-weight: 300; }
         #dialogue-text em, #call-sub-text em { font-style: italic; color: var(--em-color); }
+        /* 🌐 外語台詞的中文翻譯：原文下面一行小字（VN_Core._tlHtml） */
+        .vn-tl { display: block; margin-top: 0.3em; font-size: 0.82em; line-height: 1.6; letter-spacing: 0.5px; opacity: 0.72; font-style: normal; }
         #dialogue-text strong, #call-sub-text strong { font-weight: bold; color: #fff; }
         .hint-text { display: none; }
 
