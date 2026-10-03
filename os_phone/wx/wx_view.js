@@ -657,7 +657,8 @@
             html = html.replace(tagRe(MSG_TAG.VOICE), (m, t, txt) => {
                 const cleanTxt = txt.replace(/['"]/g, '').trim();
                 const real = !!(msg && msg.voiceAudio);
-                const sec = real ? Math.max(1, Math.round(msg.voiceSec || 1)) : Math.min(60, Math.max(2, Math.ceil(cleanTxt.length / 2)));
+                const _said = (win.OS_VN_FOREIGN && win.OS_VN_FOREIGN.splitTail) ? win.OS_VN_FOREIGN.splitTail(cleanTxt).orig : cleanTxt;   // 外語語音後面的翻譯不算秒數
+                const sec = real ? Math.max(1, Math.round(msg.voiceSec || 1)) : Math.min(60, Math.max(2, Math.ceil(/[㐀-鿿぀-ヿ가-힯]/.test(_said) ? _said.length / 2 : _said.trim().split(/\s+/).length / 2.5)));   // 中日韓照字數、英文這種照單字數（一秒兩個半字）
                 const len = sec <= 5 ? 1 : (sec <= 15 ? 2 : (sec <= 30 ? 3 : 4));
                 const _vAttr = (s) => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
                 const vClick = STATIC
@@ -827,20 +828,34 @@
             if (!box) return false;
             if (el._vmsgTimer) { clearInterval(el._vmsgTimer); el._vmsgTimer = 0; }
             if (box.classList.contains('open')) { box.classList.remove('open'); return false; }
-            const chars = Array.from(String(text || ''));   // Array.from：emoji 是兩格，拆開會變亂碼
+            // 🌐 外語語音「原文 (翻譯)」：翻譯另起一行小字（跟文字泡泡的 .wx-tl 一樣），打完原文再接著打翻譯
+            const F = win.OS_VN_FOREIGN;
+            const sx = (F && F.splitTail) ? F.splitTail(String(text || '')) : { orig: String(text || ''), tl: '' };
             const doc = box.ownerDocument;
             box.textContent = '';
-            const on = doc.createElement('span'), off = doc.createElement('span');
-            off.className = 'wx-vmsg-rest';
-            off.textContent = chars.join('');
-            box.appendChild(on); box.appendChild(off);
+            const segs = [sx.orig].concat(sx.tl ? [sx.tl] : []).map(function (str, k) {
+                const chars = Array.from(str);   // Array.from：emoji 是兩格，拆開會變亂碼
+                const holder = k === 0 ? box : doc.createElement('div');
+                if (k > 0) { holder.className = 'wx-vmsg-tl'; box.appendChild(holder); }
+                const on = doc.createElement('span'), off = doc.createElement('span');
+                off.className = 'wx-vmsg-rest';
+                off.textContent = chars.join('');
+                holder.appendChild(on); holder.appendChild(off);
+                return { chars: chars, on: on, off: off };
+            });
             box.classList.add('open');
+            const total = segs.reduce(function (n, s) { return n + s.chars.length; }, 0);
             let i = 0;
             el._vmsgTimer = setInterval(function () {
                 i++;
-                on.textContent = chars.slice(0, i).join('');
-                off.textContent = chars.slice(i).join('');
-                if (i >= chars.length) { clearInterval(el._vmsgTimer); el._vmsgTimer = 0; }
+                let left = i;
+                segs.forEach(function (s) {
+                    const n = Math.max(0, Math.min(s.chars.length, left));
+                    s.on.textContent = s.chars.slice(0, n).join('');
+                    s.off.textContent = s.chars.slice(n).join('');
+                    left -= s.chars.length;
+                });
+                if (i >= total) { clearInterval(el._vmsgTimer); el._vmsgTimer = 0; }
             }, 30);
             return true;
         },
