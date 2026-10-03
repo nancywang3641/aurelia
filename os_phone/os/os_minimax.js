@@ -9,6 +9,8 @@
 //   ④ play() 支援 options.emotion，傳入 voice_setting.emotion
 //   ⑤ playForChar() 接收 expression 參數，自動轉 emotion 後播放
 // 跨面板通用：VN 面板、wx 面板皆可直接呼叫
+// 2026-10：角色 → 聲音改由 os_voice_cast.js（角色配音名單）決定，這裡多了 speakVoice／prefetchVoice／replayVoice（指定音色、不查名字）。
+//   playForChar／findVoiceId 留著給 AI 助手房間（另一個 repo）用，名單存檔時會把 Minimax 那幾位抄回 voiceProfiles。
 // ----------------------------------------------------------------
 (function() {
     'use strict';
@@ -357,21 +359,34 @@
          */
         prefetchForChar(charName, text, options = {}) {
             const cfg = this.getConfig();
-            if (!cfg.enabled || !cfg.groupId || !cfg.apiKey) return;
-
-            // NSFW 過濾
-            const SKIP_EXPRESSIONS = ['sex', 'nsfw', 'r18', 'erotic', 'lewd'];
-            if (SKIP_EXPRESSIONS.some(k => (options.expression || '').toLowerCase().includes(k))) return;
-
+            if (!cfg.enabled) return;
             const voiceId = this.findVoiceId(charName);
-            if (!voiceId) return;
+            if (voiceId) this.prefetchVoice(voiceId, text, options);
+        },
 
-            // expression → emotion
-            const pfOptions = { ...options };
-            if (options.expression && !options.emotion) {
-                const mapped = this.expressionToEmotion(options.expression);
-                if (mapped) pfOptions.emotion = mapped;
+        // 🔇 含 Sex/NSFW 標記的表情一律不念（VN 那邊的慣例）
+        _skipExpression(expression) {
+            const SKIP_EXPRESSIONS = ['sex', 'nsfw', 'r18', 'erotic', 'lewd'];
+            const exprLower = (expression || '').toLowerCase();
+            return SKIP_EXPRESSIONS.some(k => exprLower.includes(k));
+        },
+        _withEmotion(options) {
+            const o = { ...options };
+            if (o.expression && !o.emotion) {
+                const mapped = this.expressionToEmotion(o.expression);
+                if (mapped) o.emotion = mapped;   // 找不到對標情緒 → 不傳 emotion，讓音色用預設語調
             }
+            return o;
+        },
+
+        /**
+         * 指定音色預取（角色配音名單用：誰配哪個音色由 OS_VOICE_CAST 決定，這裡不查名字）
+         */
+        prefetchVoice(voiceId, text, options = {}) {
+            const cfg = this.getConfig();
+            if (!voiceId || !cfg.groupId || !cfg.apiKey) return;
+            if (this._skipExpression(options.expression)) return;
+            const pfOptions = this._withEmotion(options);
 
             const supportsVocal = VOCAL_SUPPORT_MODELS.has(cfg.speechModel || '');
             const textForTts = cleanTextForTts(text, supportsVocal);
@@ -380,20 +395,29 @@
             const cacheKey = voiceId + '§' + textForTts;
             if (_prefetchCache.has(cacheKey)) return; // 已在預取
 
-            // 快取超量時驅逐最舊的，並釋放 blob URL
+            // 快取超量時驅逐最舊的（存的是 Blob，不用釋放網址）
             if (_prefetchCache.size >= PREFETCH_MAX) {
-                const [oldKey, oldPromise] = _prefetchCache.entries().next().value;
-                _prefetchCache.delete(oldKey);
-                oldPromise.then(url => { if (url) URL.revokeObjectURL(url); }).catch(() => {});
+                _prefetchCache.delete(_prefetchCache.keys().next().value);
             }
 
-            console.log('[OS_MINIMAX] 🔮 預取 →', charName, textForTts.slice(0, 20));
+            console.log('[OS_MINIMAX] 🔮 預取 →', voiceId, textForTts.slice(0, 20));
             _prefetchCache.set(cacheKey,
                 _callTtsApi(textForTts, voiceId, pfOptions, cfg).catch(e => {
                     console.warn('[OS_MINIMAX] 預取失敗:', e.message);
                     return null;
                 })
             );
+        },
+
+        /**
+         * 指定音色念一句（角色配音名單用）：表情 → emotion、NSFW 表情不念
+         */
+        async speakVoice(voiceId, text, options = {}) {
+            if (this._skipExpression(options.expression)) {
+                console.log(`[OS_MINIMAX] 🔇 跳過（含 ${options.expression} 標記）`);
+                return false;
+            }
+            return this.play(text, voiceId, this._withEmotion(options));
         },
 
         /**
@@ -408,26 +432,9 @@
         async playForChar(charName, text, options = {}) {
             const cfg = this.getConfig();
             if (!cfg.enabled) return false;
-
-            // 🔇 過濾含 Sex/NSFW 標記的表情，靜音跳過
-            const SKIP_EXPRESSIONS = ['sex', 'nsfw', 'r18', 'erotic', 'lewd'];
-            const exprLower = (options.expression || '').toLowerCase();
-            if (SKIP_EXPRESSIONS.some(k => exprLower.includes(k))) {
-                console.log(`[OS_MINIMAX] 🔇 跳過（含 ${options.expression} 標記）`);
-                return false;
-            }
-
             const voiceId = this.findVoiceId(charName);
             if (!voiceId) return false;
-
-            // expression → emotion 自動轉換
-            if (options.expression && !options.emotion) {
-                const mapped = this.expressionToEmotion(options.expression);
-                if (mapped) options.emotion = mapped;
-                // 找不到對標情緒 → 不傳 emotion，讓 Minimax 用音色預設語調
-            }
-
-            return this.play(text, voiceId, options);
+            return this.speakVoice(voiceId, text, options);
         },
 
         /**
@@ -436,9 +443,16 @@
          */
         async replayLast(charName, text, options = {}) {
             const cfg = this.getConfig();
-            if (!cfg.enabled || !cfg.groupId || !cfg.apiKey) return false;
+            if (!cfg.enabled) return false;
             const voiceId = this.findVoiceId(charName);
             if (!voiceId) return false;
+            return this.replayVoice(voiceId, text, options);
+        },
+
+        /** 指定音色重播上一句（同一句才算，不打 API） */
+        async replayVoice(voiceId, text, options = {}) {
+            const cfg = this.getConfig();
+            if (!voiceId || !cfg.groupId || !cfg.apiKey) return false;
             const supportsVocal = VOCAL_SUPPORT_MODELS.has(cfg.speechModel || '');
             const textForTts = cleanTextForTts(text, supportsVocal);
             if (!textForTts || !_hasSpeakable(textForTts)) return false;
@@ -472,7 +486,7 @@
                     audio.load();
                 });
                 await audio.play();
-                console.log('[OS_MINIMAX] ♻️ 重播快取 →', charName);
+                console.log('[OS_MINIMAX] ♻️ 重播快取 →', voiceId);
                 return true;
             } catch(error) {
                 console.error('[OS_MINIMAX] ❌ 重播失敗:', error.message);

@@ -79,6 +79,7 @@
                 }
                 if (!typeHint) typeHint = voices[charName] || '';
                 if (!t || (TTS._resolveModel && !TTS._resolveModel(charName, typeHint))) continue;
+                if ((win.parent || win).OS_VOICE_CAST?.has(charName)) continue;   // 名單上的人走雲端，本機不用先生
                 batch.push({ charName, text: t, emotion: VN._mapExprToEmotion ? VN._mapExprToEmotion(rawExp) : '', typeHint });
             }
             if (batch.length) {

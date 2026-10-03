@@ -56,7 +56,12 @@
             ss_2250: { title: '已存立繪', body: '純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。' },
             ss_2272: { title: '語音轉文字', body: '微信輸入框按住說話、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。' },
             ss_2308: { title: 'Group ID (必填)', body: '登入 Minimax 平台後，在帳號設定頁面可找到 Group ID。' },
-            ss_2349: { title: '音色設定檔', body: '每個角色設定顯示名、音色ID 與別名。' },
+            ss_2349: { title: '角色配音', body: '一個角色一格：寫名字、選聲音。名字或任何一個別名對得上（大小寫不分），他講話就用這個聲音念。聲音可以選 Minimax 或 ElevenLabs 的，要先到「雲端」分頁填金鑰、按「抓我的聲音」，這裡才選得到。' },
+            ss_vc_master: { title: '角色說話的聲音', body: '關掉就全部不念。開著的時候：角色配音名單上的人用他綁的聲音念，其他人照「沒在名單上的人」那格。' },
+            ss_vc_others: { title: '沒在名單上的人', body: '隨機 NPC、路人這些沒綁聲音的人。選「本機念」就交給「本機」分頁設定的音色；選「不念」就只顯示字，不花錢也不佔顯卡。' },
+            ss_mm_mine: { title: '我的聲音', body: '妳在 Minimax 複製或設計的聲音。按「抓我的聲音」抓下來，角色配音的下拉選單就選得到。官方內建的聲音在「瀏覽官方音色庫」裡，按「加進名單」直接變成一格角色。' },
+            ss_el_key: { title: 'ElevenLabs 金鑰', body: '在 ElevenLabs 網站左邊選單「開發者 → API Keys」建立。權限開「文字轉語音」跟「聲音（讀取）」就夠了，也可以幫這把金鑰設用量上限。' },
+            ss_el_model: { title: '模型', body: 'v4 最自然，會照角色當下的表情在句子前面加語氣（像是笑、嘆氣、小聲說）。Multilingual v2 跟 Flash 不吃語氣，只照字念。' },
             ss_2413: { title: '顯示位置', body: '換了要重整酒館才會挪過去。' },
             ss_2420: { title: '高度', body: '100 就是跟對話框一樣高。調矮的話窗留在正中間，上下兩截露出聊天，改完當場就變。' },
             ss_2428: { title: '訊息可收合', body: '為每則訊息加上收合按鈕，太長的訊息可以收起來。' },
@@ -1220,53 +1225,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             };
         }
 
-        // 偵測 TTS 當前 mode（minimax / sovits / off）
-        let vttsEnabled = false;
-        try { vttsEnabled = !!(JSON.parse(localStorage.getItem('vn_tts_v1') || '{}').enabled); } catch (e) {}
-        const currentTtsMode = minimaxConfig.enabled ? 'minimax' : (vttsEnabled ? 'sovits' : 'off');
-
-        // 語音 mode 三選一互斥切換
-        if (!window._switchTtsMode) {
-            window._switchTtsMode = function(el, mode) {
-                el.parentElement.querySelectorAll('[data-ttsmode]').forEach(b => {
-                    b.classList.remove('active');
-                    b.style.background = 'transparent';
-                    b.style.color = 'rgba(26,28,40,0.55)';
-                    b.style.fontWeight = '400';
-                    b.style.boxShadow = 'none';
-                });
-                el.classList.add('active');
-                el.style.background = 'rgba(26,28,40,0.09)';
-                el.style.color = '#1A1C28';
-                el.style.fontWeight = '700';
-                el.style.boxShadow = '0 0 0 1px rgba(26,28,40,0.25) inset';
-                document.querySelectorAll('.voice-area').forEach(v => v.style.display = 'none');
-                const target = document.getElementById('voice-area-' + mode);
-                if (target) target.style.display = 'block';
-                // SoVITS lazy init：第一次切到 sovits 才注入 vn_tts_panel
-                if (mode === 'sovits' && window.VN_TTS_Panel?.initInline) {
-                    window.VN_TTS_Panel.initInline('vn-tts-inline-root');
-                }
-                // 同步 checkbox（mode 互斥：被選的 checked、其他 unchecked）
-                const mm = document.getElementById('mm-enabled');
-                const vtts = document.getElementById('vtts-enabled');
-                if (mm)   mm.checked = (mode === 'minimax');
-                if (vtts) vtts.checked = (mode === 'sovits');
-                // 🔥 Immediate apply：立即寫 localStorage（不依賴主保存按鈕）
-                try {
-                    const mmCfg = JSON.parse(localStorage.getItem('os_minimax_config') || '{}');
-                    mmCfg.enabled = (mode === 'minimax');
-                    localStorage.setItem('os_minimax_config', JSON.stringify(mmCfg));
-                } catch (e) {}
-                try {
-                    const ttsCfg = JSON.parse(localStorage.getItem('vn_tts_v1') || '{}');
-                    ttsCfg.enabled = (mode === 'sovits');
-                    localStorage.setItem('vn_tts_v1', JSON.stringify(ttsCfg));
-                } catch (e) {}
-                // 同步 in-memory config（避免背景音不及生效）
-                if (window.VN_TTS?.config) window.VN_TTS.config.enabled = (mode === 'sovits');
-            };
-        }
+        // 🔊 角色說話的聲音：總開關＋角色配音名單（OS_VOICE_CAST）＋ElevenLabs 設定
+        //    以前的「Minimax／本機／全關閉」三選一拆掉了：名單上的人走他綁的雲端聲音，其他人照「沒在名單上的人」那格
+        const _vcW = window.parent || window;
+        const voiceCast = _vcW.OS_VOICE_CAST ? _vcW.OS_VOICE_CAST.getRoster() : { on: false, others: 'local', entries: [] };
+        const elConfig = _vcW.OS_ELEVENLABS ? _vcW.OS_ELEVENLABS.getConfig() : { apiKey: '', modelId: 'eleven_v4', voices: [] };
+        const elModels = (_vcW.OS_ELEVENLABS && _vcW.OS_ELEVENLABS.MODELS) || [{ id: 'eleven_v4', name: 'v4' }];
+        const _vcEsc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
         const isStandalone = !!(window.OS_API && typeof window.OS_API.isStandalone === 'function' && window.OS_API.isStandalone());
         if (isStandalone) {
@@ -2220,26 +2185,49 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="voice-engine-box"></div>
                         </div>
 
-                        <div class="set-label"><i class="fa-solid fa-volume-high"></i> 角色說話的聲音</div>
-                        <!-- 三選一 mode 切換 -->
-                        <div style="display:flex;gap:6px;margin-bottom:16px;padding:4px;background:rgba(var(--os-ink-rgb), 0.06);border-radius:6px;">
-                            <div data-ttsmode="minimax" onclick="_switchTtsMode(this,'minimax')" style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='minimax' ? 'background:rgba(var(--os-ink-rgb), 0.09);color:var(--os-ink);font-weight:700;box-shadow:0 0 0 1px rgba(var(--os-ink-rgb), 0.25) inset;' : 'color:rgba(var(--os-ink-rgb), 0.55);'}">MINIMAX</div>
-                            <div data-ttsmode="sovits"  onclick="_switchTtsMode(this,'sovits')"  style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='sovits' ? 'background:rgba(var(--os-ink-rgb), 0.09);color:var(--os-ink);font-weight:700;box-shadow:0 0 0 1px rgba(var(--os-ink-rgb), 0.25) inset;' : 'color:rgba(var(--os-ink-rgb), 0.55);'}">本機語音</div>
-                            <div data-ttsmode="off"     onclick="_switchTtsMode(this,'off')"     style="flex:1;text-align:center;padding:10px;cursor:pointer;border-radius:4px;font-size:13px;letter-spacing:1.5px;transition:all 0.2s;${currentTtsMode==='off' ? 'background:rgba(var(--os-ink-rgb), 0.09);color:var(--os-ink);font-weight:700;box-shadow:0 0 0 1px rgba(var(--os-ink-rgb), 0.25) inset;' : 'color:rgba(var(--os-ink-rgb), 0.55);'}">全關閉</div>
+                        <div class="set-group">
+                            <div class="vcast-master-row">
+                                <div class="set-label"><i class="fa-solid fa-volume-high"></i> 角色說話的聲音${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_vc_master') : ''}</div>
+                                <label class="toggle-switch"><input type="checkbox" id="vcast-on" ${voiceCast.on ? 'checked' : ''}><span class="slider"></span></label>
+                            </div>
                         </div>
 
-                        <!-- 旁白·系統（跨模式、永遠顯示；旁白與系統音默認都關閉） -->
-                        <div id="vn-narr-inline-root" style="margin-bottom:16px;"></div>
-
-                        <!-- MINIMAX 設定區 -->
-                        <div id="voice-area-minimax" class="voice-area" style="display:${currentTtsMode==='minimax' ? 'block' : 'none'};">
-
-                        <div style="background:rgba(var(--os-ink-rgb), 0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(var(--os-ink-rgb), 0.10); font-size:12px; color:var(--os-ink);">
-                            <i class="fa-solid fa-music"></i> <b>Minimax TTS</b>：配置後，VN 面板 [Char|...] 對話自動合成語音。請至 Minimax 平台取得 API Key。
+                        <div class="api-subtab-row">
+                            <div class="api-subtab vcast-subtab" data-vctab="cast">角色配音</div>
+                            <div class="api-subtab vcast-subtab" data-vctab="cloud">雲端</div>
+                            <div class="api-subtab vcast-subtab" data-vctab="local">本機</div>
                         </div>
 
-                        <!-- mm-enabled 已被三選一頂端按鈕取代，隱藏但保留以維持 save / 切換邏輯 -->
-                        <input type="checkbox" id="mm-enabled" style="display:none;" ${minimaxConfig.enabled ? 'checked' : ''}>
+                        <!-- 角色配音：誰用哪個聲音、沒在名單上的人怎麼辦、旁白與系統音 -->
+                        <div id="vcview-cast" class="vcast-subview">
+                            <div class="set-group">
+                                <div class="set-label"><i class="fa-solid fa-masks-theater"></i> 角色配音${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2349') : ''}</div>
+                                <div id="vcast-cast-list" class="vcast-cast-list"></div>
+                                <div class="btn-test" id="vcast-add-btn"><i class="fa-solid fa-plus"></i> 加角色</div>
+                            </div>
+                            <div class="set-group">
+                                <div class="set-label"><i class="fa-solid fa-users"></i> 沒在名單上的人${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_vc_others') : ''}</div>
+                                <div class="vcast-seg" id="vcast-others">
+                                    <div data-v="local" class="${voiceCast.others === 'local' ? 'active' : ''}">本機念</div>
+                                    <div data-v="none" class="${voiceCast.others === 'none' ? 'active' : ''}">不念</div>
+                                </div>
+                            </div>
+                            <!-- 旁白·系統（vn_tts_panel 注入；旁白與系統音預設都關） -->
+                            <div id="vn-narr-inline-root" class="vcast-narr-root"></div>
+                        </div>
+
+                        <!-- 雲端：每一家一個小分頁，放金鑰、抓自己的聲音、試聽 -->
+                        <div id="vcview-cloud" class="vcast-subview">
+                            <div class="vcast-seg vcast-cloud-seg">
+                                <div data-vccloud="minimax">Minimax</div>
+                                <div data-vccloud="elevenlabs">ElevenLabs</div>
+                            </div>
+
+                            <div id="vccloud-minimax" class="vcast-cloudview">
+
+
+                        <!-- mm-enabled 跟著上面的總開關（保存時寫回 os_minimax_config.enabled） -->
+                        <input type="checkbox" id="mm-enabled" hidden ${voiceCast.on ? 'checked' : ''}>
 
                         <div class="set-group">
                             <div class="set-label">服務區域</div>
@@ -2291,12 +2279,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="VN / wx 面板通用。每個角色可設定顯示名稱、Minimax 音色ID 與多個別名；VN 輸出的角色名會自動比對別名（大小寫不敏感）後播放對應音色。"><i class="fa-solid fa-masks-theater"></i> 音色設定檔${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2349') : ''}</div>
-                            <div id="mm-profile-list" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
-                            <div style="display:flex; gap:8px; margin-top:12px;">
-                                <div class="btn-test" id="mm-add-profile-btn" style="flex:1;">＋ 新增音色設定檔</div>
-                                <div class="btn-test" id="mm-browse-voices-btn" style="flex:1; background:rgba(var(--os-tint-rgb), 0.96);"><i class="fa-solid fa-magnifying-glass"></i> 瀏覽官方音色庫</div>
+                            <div class="set-label"><i class="fa-solid fa-user-astronaut"></i> 我的聲音${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_mm_mine') : ''}</div>
+                            <div id="mm-mine-list" class="vcast-voice-list"></div>
+                            <div class="vcast-row">
+                                <div class="btn-test vcast-grow" id="mm-mine-btn"><i class="fa-solid fa-rotate"></i> 抓我的聲音</div>
+                                <div class="btn-test vcast-grow" id="mm-browse-voices-btn"><i class="fa-solid fa-magnifying-glass"></i> 瀏覽官方音色庫</div>
                             </div>
+                            <div class="vcast-result" id="mm-mine-result"></div>
                         </div>
 
                         <div id="mm-voice-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(26,13,10,0.85); align-items:center; justify-content:center;">
@@ -2321,19 +2310,39 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="mm-test-result" style="display:none; margin-top:10px; background:rgba(var(--os-tint-rgb), 0.90); border-radius:4px; padding:12px; font-size:12px; color:var(--os-ink); font-family:monospace; word-break:break-all;"></div>
                         </div>
 
-                        </div><!-- /voice-area-minimax -->
+                            </div><!-- /vccloud-minimax -->
 
-                        <!-- SoVITS 設定區（vn_tts_panel inline 注入點） -->
-                        <div id="voice-area-sovits" class="voice-area" style="display:${currentTtsMode==='sovits' ? 'block' : 'none'};">
+                            <div id="vccloud-elevenlabs" class="vcast-cloudview">
+                                <div class="set-group">
+                                    <div class="set-label">金鑰${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_el_key') : ''}</div>
+                                    <input class="set-input" id="el-api-key" type="password" autocomplete="off" value="${_vcEsc(elConfig.apiKey)}">
+                                    <div class="set-label">模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_el_model') : ''}</div>
+                                    <select class="set-select" id="el-model">
+                                        ${elModels.map(m => `<option value="${m.id}" ${elConfig.modelId === m.id ? 'selected' : ''}>${_vcEsc(m.name)}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label"><i class="fa-solid fa-user-astronaut"></i> 我的聲音</div>
+                                    <div id="el-voice-list" class="vcast-voice-list"></div>
+                                    <div class="btn-test" id="el-fetch-btn"><i class="fa-solid fa-rotate"></i> 抓我的聲音</div>
+                                    <div class="vcast-result" id="el-fetch-result"></div>
+                                </div>
+                                <div class="set-group">
+                                    <div class="set-label"><i class="fa-solid fa-plug"></i> 測試語音</div>
+                                    <select class="set-select" id="el-test-voice"></select>
+                                    <input class="set-input" id="el-test-text" type="text" value="你好，聽得到我的聲音嗎？">
+                                    <div class="vcast-row">
+                                        <div class="btn-test vcast-grow" id="el-test-btn"><i class="fa-solid fa-play"></i> 播放測試語音</div>
+                                        <div class="btn-test vcast-grow vcast-off" id="el-stop-btn"><i class="fa-solid fa-stop"></i> 停止</div>
+                                    </div>
+                                    <div class="vcast-result" id="el-test-result"></div>
+                                </div>
+                            </div><!-- /vccloud-elevenlabs -->
+                        </div><!-- /vcview-cloud -->
+
+                        <!-- 本機：SoVITS／IndexTTS（vn_tts_panel inline 注入點，第一次切進來才畫） -->
+                        <div id="vcview-local" class="vcast-subview">
                             <div id="vn-tts-inline-root"></div>
-                        </div>
-
-                        <!-- 全關閉 -->
-                        <div id="voice-area-off" class="voice-area" style="display:${currentTtsMode==='off' ? 'block' : 'none'};">
-                            <div style="background:rgba(var(--os-ink-rgb), 0.04);padding:24px;border-radius:6px;text-align:center;color:rgba(var(--os-ink-rgb), 0.72);font-size:13px;line-height:1.9;border:1px solid rgba(var(--os-ink-rgb), 0.06);">
-                                <i class="fa-solid fa-volume-xmark"></i> 已關閉所有語音合成<br>
-                                <span style="font-size:11px;color:var(--os-ink-soft);">VN 面板對話將不會自動朗讀<br>點上方按鈕切換語音引擎</span>
-                            </div>
                         </div>
                     </div>
 
@@ -4065,17 +4074,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const mmEnabled   = container.querySelector('#mm-enabled');
                 const mmSpeed     = container.querySelector('#mm-speed');
                 const mmLangBoost = container.querySelector('#mm-lang-boost');
-                const voiceProfiles = [];
-                container.querySelectorAll('.mm-profile-card').forEach(card => {
-                    const label   = card.querySelector('.mm-p-label')?.value.trim();
-                    const id      = card.querySelector('.mm-p-id')?.value.trim();
-                    const aliases = [];
-                    card.querySelectorAll('.mm-alias-chip').forEach(chip => {
-                        const t = chip.dataset.alias;
-                        if (t) aliases.push(t);
-                    });
-                    if (label && id) voiceProfiles.push({ label, id, aliases });
-                });
+                // 角色配音名單（卡片在 os_settings_voice.js 畫）；Minimax 那幾位照舊抄一份進 voiceProfiles（AI 助手房間用）
+                const castEntries = (window.OS_SETTINGS_VOICE && window.OS_SETTINGS_VOICE.collectCast) ? window.OS_SETTINGS_VOICE.collectCast(container) : [];
+                const voiceProfiles = castEntries.filter(e => e.src === 'minimax').map(e => ({ label: e.label, id: e.voiceId, aliases: e.aliases.slice() }));
+                const _mmPrev = ((window.parent || window).OS_MINIMAX && (window.parent || window).OS_MINIMAX.getConfig()) || {};
                 const minimaxData = mmGroupId ? {
                     enabled:              mmEnabled  ? mmEnabled.checked        : false,
                     groupId:              mmGroupId.value.trim(),
@@ -4084,10 +4086,19 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     speechModel:          mmModel    ? mmModel.value             : 'speech-01-turbo',
                     defaultSpeed:         mmSpeed    ? parseFloat(mmSpeed.value) : 1.0,
                     defaultLanguageBoost: mmLangBoost ? mmLangBoost.value        : '',
-                    voiceProfiles
+                    voiceProfiles,
+                    myVoices:             Array.isArray(_mmPrev.myVoices) ? _mmPrev.myVoices : []   // 「抓我的聲音」存的，整份覆蓋時別弄丟
                 } : null;
 
                 saveConfig(llmData, secLlmData, imgData, minimaxData);
+                {
+                    const VW = window.parent || window;
+                    if (VW.OS_ELEVENLABS) VW.OS_ELEVENLABS.saveConfig({
+                        apiKey:  (container.querySelector('#el-api-key')?.value || '').trim(),
+                        modelId: container.querySelector('#el-model')?.value || 'eleven_v4'
+                    });
+                    if (VW.OS_VOICE_CAST) VW.OS_VOICE_CAST.saveRoster({ entries: castEntries });
+                }
                 // ComfyUI 頁的下拉選回「目前的設定」時讀的是這份 → 換成剛存的，不然會載回開面板時的舊值
                 imgConfig.comfyuiDirect = imgData.comfyuiDirect;
                 // 刪掉的 NAI 預設縮圖／Vibe：清單存進去了才從圖庫刪（沒按保存就離開的話，清單還在、圖也還在）
@@ -4232,11 +4243,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         };
 
 
-        // 若預設 mode 是 sovits，render 後立刻注入 vn_tts_panel inline
-        if (currentTtsMode === 'sovits' && window.VN_TTS_Panel?.initInline) {
-            setTimeout(() => window.VN_TTS_Panel.initInline('vn-tts-inline-root'), 100);
-        }
-        // 旁白·系統選擇器：不分模式都掛（永遠顯示在模式切換下方；旁白/系統默認關閉）
+        // 本機那頁（vn_tts_panel inline）第一次切進「本機」小分頁才畫，見 os_settings_voice.js wireTabs
+        // 旁白·系統選擇器：掛在「角色配音」那頁最下面（旁白/系統默認關閉）
         if (window.VN_TTS_Panel?.mountNarration) {
             setTimeout(() => window.VN_TTS_Panel.mountNarration('vn-narr-inline-root'), 100);
         }
@@ -4814,8 +4822,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             }
         };
 
-        // ===== 語音清單（Minimax 音色檔案卡＋官方音色庫＋測試播放）：已拆到 os_settings_voice.js（參數注入 ctx＝閉包變數）=====
-        //   模組不發布窗口函式——搬走符號沒有外部呼叫點；存檔的 voiceProfiles 收集直接讀 .mm-profile-card DOM、不經模組。
+        // ===== 角色說話的聲音（總開關、角色配音名單、雲端兩家、本機小分頁）：在 os_settings_voice.js（參數注入 ctx＝閉包變數）=====
+        //   保存時名單卡片由 OS_SETTINGS_VOICE.collectCast 收（見上面保存鈕）。
         if (window.OS_SETTINGS_VOICE && window.OS_SETTINGS_VOICE.wire) {
             window.OS_SETTINGS_VOICE.wire({ container: container, minimaxConfig: minimaxConfig });
         } else {

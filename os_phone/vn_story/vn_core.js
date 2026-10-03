@@ -2335,6 +2335,7 @@
                 if (!typeHint) typeHint = this.charVoices[charName] || '';
 
                 if (!text || (VN_TTS._resolveModel && !VN_TTS._resolveModel(charName, typeHint))) continue;
+                if ((window.parent || window).OS_VOICE_CAST?.has(charName)) continue;   // 名單上的人走雲端，本機不用先生
                 lines.push({ charName, text, emotion: this._mapExprToEmotion(rawExp), typeHint });
             }
             if (lines.length) {
@@ -2382,6 +2383,26 @@
             const text = this._cleanTextForSoVITS(rawText);
             if (!text) return;
             VN_TTS.play(charName, text, emotion, typeHint);
+        },
+
+        // 🔊 讓角色念一句：誰用哪個聲音交給角色配音名單（OS_VOICE_CAST）——名單上的人走他綁的雲端聲音，
+        //    其他人照「沒在名單的人」那格交給本機或不念。rawExp 是去掉聲線前綴的表情，typeHint 是聲線。
+        //    回傳誰在念（'minimax'／'elevenlabs'／'sovits'／''）。
+        _speakAs: function(charName, rawText, rawExp, typeHint) {
+            const V = (window.parent || window).OS_VOICE_CAST;
+            if (!V) return '';
+            return V.speakAs(charName, this._speechOnly(rawText), {   // 雲端壓到「」內：混寫的旁白不進 TTS
+                expression: rawExp || '',
+                local: () => this._vnSoVITSPlay(charName, rawText, this._mapExprToEmotion(rawExp || ''), typeHint || '')
+            });
+        },
+        // 下一句先合成（只有名單上的雲端聲音需要）；fullExp 可以帶聲線前綴，這裡拆掉
+        _prefetchAs: function(charName, rawText, fullExp) {
+            const V = (window.parent || window).OS_VOICE_CAST;
+            if (!V || !rawText) return;
+            let exp = fullExp || '';
+            if (exp.includes('_')) exp = exp.split('_').slice(1).join('_').trim();
+            V.prefetchAs(charName, this._speechOnly(rawText), { expression: exp });
         },
 
         // 系統語音播放（[Sys|系統名|訊息]）— 透過 VN_TTS 系統音對應（不同 AI/系統各自的聲音）
@@ -3117,29 +3138,17 @@
                 this.updateControlUI();
                 
                 // 把 typeHint 傳給 TTS（用去 #SFX# 標記的文字，免得念出來）
-                this._vnSoVITSPlay(p[0], _cx.text, this._mapExprToEmotion(rawExp), typeHint);
+                this._speakAs(p[0], _cx.text, rawExp, typeHint);
 
-                (function(charName, text, expression) {
-                    const _mm = (window.parent || window).OS_MINIMAX;
-                    if (_mm) _mm.playForChar(charName, text, { expression });
-                })(p[0], this._speechOnly(_cx.text), rawExp);   // 語音壓到「」內：混寫的旁白不進 TTS
-                
                 (function prefetchNext(script, curIdx) {
-                    const _mm = (window.parent || window).OS_MINIMAX;
-                    if (!_mm?.prefetchForChar) return;
                     for (let i = curIdx + 1; i < script.length; i++) {
                         const nl = script[i];
                         if (nl.startsWith('[Char|')) {
-                            const np = nl.slice(6, -1).split('|');
+                            // ⚠️ 跟播放端同一條 _normCharParts：自由模式 [Char|名|台詞|Stay] 沒表情格，
+                            //    以前直接 split 會把「Stay」當台詞送去付費合成
+                            const np = VN_Core._normCharParts(nl.slice(6, -1).split('|'));
                             const nex = VN_Core._extractTextAndSFX(np.slice(2));
-                            
-                            let nRawExp = np[1] || '';
-                            if (nRawExp.includes('_')) {
-                                const nPts = nRawExp.split('_');
-                                nRawExp = nPts.slice(1).join('_').trim();
-                            }
-                            
-                            if (nex.text) _mm.prefetchForChar(np[0], VN_Core._speechOnly(nex.text), { expression: nRawExp });   // 預取跟播放同文字，快取才對得上
+                            if (nex.text && !/^(stay|leave)$/i.test(nex.text.trim())) VN_Core._prefetchAs(np[0], nex.text, np[1] || '');
                             break;
                         }
                         if (nl.startsWith('[Choice|') || nl.startsWith('[End]') || nl.startsWith('</')) break;
@@ -3690,10 +3699,10 @@
 
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
             if (isStandalone) {
-                // 獨立模式：MiniMax 啟用時才顯示，title 改為重播
-                const mmEnabled = win.OS_MINIMAX?.getConfig().enabled ?? false;
-                btnRegen.style.display = (this._currentChar && mmEnabled) ? 'inline-block' : 'none';
-                btnRegen.title = '重播當前語音（MiniMax TTS）';
+                // 獨立模式：這個角色用雲端聲音念時才顯示（重播上一句不用再花錢）
+                const cloud = !!(this._currentChar && win.OS_VOICE_CAST?.cloudFor(this._currentChar.charName));
+                btnRegen.style.display = cloud ? 'inline-block' : 'none';
+                btnRegen.title = '重播當前語音';
             } else {
                 // ST 模式：有角色行就顯示，title 保持原意
                 btnRegen.style.display = this._currentChar ? 'inline-block' : 'none';
@@ -3710,19 +3719,17 @@
             const btn = document.getElementById('vn-btn-regen');
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
 
-            // ── 獨立模式：優先從 Blob 快取重播（免費），快取失效才呼叫 API ──
-            if (isStandalone) {
-                const _mm = win.OS_MINIMAX;
-                if (!_mm || !_mm.getConfig().enabled) {
-                    console.warn('[VN] MiniMax TTS 未啟用或未載入');
-                    return;
-                }
+            // ── 名單上的雲端聲音：優先從快取重播（免費），快取失效才再合成一次 ──
+            const V = win.OS_VOICE_CAST;
+            if (V && V.cloudFor(charName)) {
                 if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true; }
-                const hit = await _mm.replayLast(charName, text, { expression });
-                if (!hit) await _mm.playForChar(charName, text, { expression });
+                const spoken = this._speechOnly(text);
+                const hit = await V.replayAs(charName, spoken, { expression });
+                if (!hit) V.speakAs(charName, spoken, { expression });
                 if (btn) { btn.textContent = '↺ TTS'; btn.disabled = false; }
                 return;
             }
+            if (isStandalone) return;
 
             // ── ST 模式：透過 VN_TTS 重新生成 ──
             const VN_TTS = (window.parent || window).VN_TTS;

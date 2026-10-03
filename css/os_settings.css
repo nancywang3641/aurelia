@@ -395,3 +395,47 @@
 .bk-row-name { color: var(--os-ink-soft); min-width: 0; }
 .bk-row-num { flex-shrink: 0; text-align: right; color: var(--os-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .bk-row small { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: rgba(var(--os-ink-rgb), 0.5); }
+
+/* ── 🔊 角色說話的聲音：總開關／角色配音名單／雲端兩家（os_settings_voice.js） ── */
+.vcast-off { display: none !important; }
+.vcast-master-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.vcast-master-row .set-label { margin-bottom: 0; }
+.vcast-row { display: flex; gap: 8px; align-items: stretch; }
+.vcast-grow { flex: 1; }
+.vcast-seg { display: flex; gap: 6px; padding: 4px; background: rgba(var(--os-ink-rgb), 0.06); border-radius: 6px; }
+.vcast-seg > div { flex: 1; text-align: center; padding: 9px 6px; border-radius: 4px; cursor: pointer; font-size: 13px; color: rgba(var(--os-ink-rgb), 0.55); user-select: none; transition: background 0.2s, color 0.2s; }
+.vcast-seg > div.active { background: rgba(var(--os-ink-rgb), 0.09); color: var(--os-ink); font-weight: 700; box-shadow: 0 0 0 1px rgba(var(--os-ink-rgb), 0.25) inset; }
+.vcast-cloud-seg { margin-bottom: 16px; }
+.vcast-narr-root { margin-bottom: 16px; }
+.vcast-cast-list { display: flex; flex-direction: column; gap: 10px; }
+.vcast-cast-list:empty::before { content: '還沒有角色。按下面「加角色」，或到「雲端」抓聲音後按「加進名單」。'; display: block; font-size: 12px; line-height: 1.6; color: var(--os-ink-soft); text-align: center; padding: 6px 4px; }
+.vcast-card { background: rgba(var(--os-tint-rgb), 0.6); border: 1px solid rgba(var(--os-ink-rgb), 0.15); border-radius: 8px; overflow: hidden; }
+.vcast-card-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; user-select: none; }
+.vcast-card-caret { flex-shrink: 0; font-size: 12px; color: var(--os-ink-soft); transition: transform 0.2s; transform: rotate(90deg); }
+.vcast-card.is-collapsed .vcast-card-caret { transform: none; }
+.vcast-card-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: var(--os-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vcast-card-voice { flex: 0 1 auto; max-width: 48%; font-size: 11px; color: var(--os-ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vcast-card-del { flex-shrink: 0; color: #fc8181; padding: 2px 4px; cursor: pointer; }
+.vcast-card-body { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.vcast-card.is-collapsed .vcast-card-body { display: none; }
+.vcast-card-body .btn-test { margin-top: 2px; }
+.set-label.vcast-sub { font-size: 12px; margin-bottom: 0; }
+.vcast-chips { display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; padding: 5px; background: rgba(var(--os-tint-rgb), 0.7); border: 1px solid rgba(var(--os-ink-rgb), 0.10); border-radius: 4px; }
+.vcast-alias-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; font-size: 12px; color: var(--os-ink); background: rgba(var(--os-ink-rgb), 0.06); border: 1px solid rgba(var(--os-ink-rgb), 0.18); border-radius: 20px; }
+.vcast-alias-chip i { cursor: pointer; color: var(--os-ink-soft); }
+.vcast-alias-row { display: flex; gap: 6px; }
+.vcast-alias-row .set-input { flex: 1; min-width: 0; }
+.vcast-voice-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
+.vcast-voice-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(var(--os-tint-rgb), 0.7); border: 1px solid rgba(var(--os-ink-rgb), 0.10); border-radius: 6px; }
+.vcast-voice-name { flex: 1; min-width: 0; font-size: 13px; color: var(--os-ink); word-break: break-word; }
+.vcast-voice-cat { margin-top: 2px; font-size: 11px; color: var(--os-ink-soft); }
+.vcast-mono { font-family: monospace; word-break: break-all; }
+.vcast-icon-btn { flex-shrink: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; color: var(--os-ink); background: rgba(var(--os-ink-rgb), 0.06); border: 1px solid rgba(var(--os-ink-rgb), 0.15); }
+.vcast-icon-btn:hover { border-color: var(--os-ink); }
+.vcast-modal-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.vcast-mini-btn { font-size: 11px; padding: 4px 8px; white-space: nowrap; cursor: pointer; color: var(--os-ink); background: rgba(var(--os-ink-rgb), 0.06); border: 1px solid rgba(var(--os-ink-rgb), 0.18); border-radius: 4px; }
+.vcast-empty { padding: 10px; text-align: center; font-size: 12px; color: var(--os-ink-soft); }
+.vcast-empty.is-error, .vcast-result.is-error { color: #fc8181; }
+.vcast-result { min-height: 16px; font-size: 12px; color: var(--os-ink-soft); }
+.vcast-result:empty { display: none; }
+.btn-test.is-busy { opacity: 0.5; pointer-events: none; }

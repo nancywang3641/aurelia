@@ -120,10 +120,12 @@
         },
         _applyTtsVol: function(v) {
             const vol = parseInt(v) / 100;
-            // ① MiniMax 引擎：播放前讀此值
+            // ① 雲端聲音（MiniMax／ElevenLabs）：播放前讀此值
             win._vnTtsVolume = vol;
-            const mmEl = win.document.getElementById('os-minimax-tts-player');
-            if (mmEl) VN_AudioGain.set(mmEl, vol); // 即時更新正在播放的音量（iOS 走 GainNode）
+            ['os-minimax-tts-player', 'os-elevenlabs-tts-player'].forEach(id => {
+                const el = win.document.getElementById(id);
+                if (el) VN_AudioGain.set(el, vol); // 即時更新正在播放的音量（iOS 走 GainNode）
+            });
             // ② GPT-SoVITS（VN_TTS）引擎：有自己的 config.volume，這裡一併同步並即時套到正在播的音訊
             const tts = win.VN_TTS || window.VN_TTS;
             if (tts && tts.config) {

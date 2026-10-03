@@ -61,7 +61,7 @@ function renderSubTabs(engine, tab) {
 
 function renderBasic(cfg) {
     return `
-<!-- 「啟用 TTS 語音」開關已由語音面板頂端三選一(MINIMAX/SoVITS/全關閉)取代，藏卡片但保留 #vtts-enabled 供 _switchTtsMode 同步與 saveBasic 存檔 -->
+<!-- 「啟用 TTS 語音」由語音面板的總開關＋「沒在名單上的人：本機念」決定（OS_VOICE_CAST），藏起來但保留 #vtts-enabled 供 saveBasic 存檔 -->
 <input type="checkbox" id="vtts-enabled" style="display:none" ${cfg.enabled ? 'checked' : ''}>
 
 <div class="vtts-card">

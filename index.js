@@ -202,6 +202,8 @@ const PHONE_FILES = [
     'os/phone_system.js',
     'os/os_monitor.js',
     'os/os_minimax.js',
+    'os/os_elevenlabs.js',       // 🔊 ElevenLabs 語音（瀏覽器直連，不需要伺服器）
+    'os/os_voice_cast.js',       // 🔊 角色配音名單：輪到誰講話用哪個聲音（雲端／本機／不念）的唯一入口
     'os/translation_manager.js',
     'os/os_image_manager.js',
     'os/os_relay.js',            // 📡 回覆交給伺服器跑（請求托管）：手機睡著也跑得完

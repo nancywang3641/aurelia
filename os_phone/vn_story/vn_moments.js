@@ -283,9 +283,7 @@
             try {
                 let rawExp = parts[1] || '', typeHint = '';
                 if (rawExp.includes('_')) { const p = rawExp.split('_'); typeHint = p[0].trim(); rawExp = p.slice(1).join('_').trim(); }
-                if (core._vnSoVITSPlay) core._vnSoVITSPlay(name, ex.text, core._mapExprToEmotion ? core._mapExprToEmotion(rawExp) : rawExp, typeHint);
-                const mm = win.OS_MINIMAX || window.OS_MINIMAX;
-                if (mm) mm.playForChar(name, core._speechOnly ? core._speechOnly(ex.text) : ex.text, { expression: rawExp });
+                if (core._speakAs) core._speakAs(name, ex.text, rawExp, typeHint);   // 誰用哪個聲音交給角色配音名單
             } catch (e) { /* 語音失敗不影響畫面 */ }
         },
         _hideNar: function () { const box = document.querySelector('#phone-moments .vnmo-nar'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; } },

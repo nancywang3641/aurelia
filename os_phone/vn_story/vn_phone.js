@@ -503,8 +503,7 @@
                 this._voiceTimer = setTimeout(() => { el.classList.remove('is-playing'); this._voiceTimer = null; this._voiceEl = null; }, sec * 1000);
             } catch (e) {}
             const core = win.VN_Core || (win.parent && win.parent.VN_Core);
-            try { if (core && core._vnSoVITSPlay) core._vnSoVITSPlay(sender, text, '', ''); } catch (e) {}
-            try { const mm = win.OS_MINIMAX || (win.parent && win.parent.OS_MINIMAX); if (mm && mm.playForChar) mm.playForChar(sender, text, { expression: '' }); } catch (e) {}
+            try { if (core && core._speakAs) core._speakAs(sender, text, '', ''); } catch (e) {}   // 誰用哪個聲音交給角色配音名單
         },
 
         // ==========================================
@@ -653,24 +652,21 @@
                     core.addLog(parts[0], ex.text);
                     if (this._callBuffer) this._callBuffer.push({ sender: parts[0], text: ex.text, isMe: this._isMeName(parts[0]) });   // 收進統一記憶緩衝
                     core.playSFX(ex.sfx);
-                    // 🔊 跟正文一樣：當前開哪個引擎就念哪個（SoVITS／MiniMax 各自看自己的開關）
+                    // 🔊 跟正文一樣：誰用哪個聲音交給角色配音名單（名單上的走雲端，其他人照設定交本機或不念）
                     (function(core2, charName, rawExp, text) {
                         let typeHint = '';
                         if (rawExp && rawExp.includes('_')) { const _p = rawExp.split('_'); typeHint = _p[0].trim(); rawExp = _p.slice(1).join('_').trim(); }
-                        if (core2._vnSoVITSPlay) core2._vnSoVITSPlay(charName, text, core2._mapExprToEmotion(rawExp), typeHint);   // SoVITS 端在 _cleanTextForSoVITS 內已壓「」
-                        const _mm = (window.parent || window).OS_MINIMAX;
-                        if (_mm) _mm.playForChar(charName, (core2._speechOnly ? core2._speechOnly(text) : text), { expression: rawExp });   // 語音壓到「」內：混寫旁白不進 TTS
+                        if (core2._speakAs) core2._speakAs(charName, text, rawExp, typeHint);
                     })(core, parts[0], parts[1] || '', ex.text);
                     // 🔮 預取下一句
                     (function prefetchNext(script, curIdx) {
-                        const _mm = (window.parent || window).OS_MINIMAX;
-                        if (!_mm?.prefetchForChar) return;
+                        if (!core._prefetchAs) return;
                         for (let i = curIdx + 1; i < script.length; i++) {
                             const nl = script[i];
                             if (nl.startsWith('[Char|')) {
                                 const np = core._normCharParts(nl.slice(6, -1).split('|'));   // 跟播放端同一條，自由模式快取 key 才對得上
                                 const nex = core._extractTextAndSFX(np.slice(2));
-                                if (nex.text) _mm.prefetchForChar(np[0], (core._speechOnly ? core._speechOnly(nex.text) : nex.text), { expression: np[1] });   // 預取跟播放同文字，快取才對得上
+                                if (nex.text) core._prefetchAs(np[0], nex.text, np[1] || '');   // 預取跟播放同文字，快取才對得上
                                 break;
                             }
                             if (nl.startsWith('</call>') || nl.startsWith('[Choice|')) break;
