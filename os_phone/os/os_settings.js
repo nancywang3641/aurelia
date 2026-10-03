@@ -1730,7 +1730,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 </div>
                                 <!-- 預設包 modal（可視化卡片牆） -->
                                 <div id="img-cfd-preset-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
-                                    <div style="background:#f5f3ee; width:min(560px,92vw); max-height:86vh; border-radius:12px; padding:16px; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
+                                    <div style="background:#f5f3ee; width:min(560px,92%); max-height:calc(100% - 24px); border-radius:12px; padding:16px; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
                                         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
                                             <div style="font-size:15px; font-weight:700; color:var(--os-ink);"><i class="fa-solid fa-box"></i> 預設包</div>
                                             <span style="cursor:pointer; font-size:18px; color:var(--os-ink); padding:0 6px;" onclick="window._cfdPreset.close()">✕</span>
@@ -2300,7 +2300,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div id="mm-voice-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(26,13,10,0.85); align-items:center; justify-content:center;">
-                            <div style="background:rgba(var(--os-tint-rgb), 0.97); border:1px solid rgba(var(--os-ink-rgb), 0.20); border-radius:8px; padding:16px; width:92%; max-width:480px; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+                            <div style="background:rgba(var(--os-tint-rgb), 0.97); border:1px solid rgba(var(--os-ink-rgb), 0.20); border-radius:8px; padding:16px; width:92%; max-width:480px; max-height:calc(100% - 24px); display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                                     <div style="font-weight:bold; color:var(--os-ink); font-size:14px;"><i class="fa-solid fa-music"></i> 官方音色庫 <span id="mm-voice-count" style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.72); font-weight:normal;"></span></div>
                                     <span id="mm-voice-modal-close" style="cursor:pointer; color:var(--os-ink); font-size:20px; line-height:1; padding:0 4px;">✕</span>
