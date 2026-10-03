@@ -2777,7 +2777,8 @@
     // 事件綁在整個訊息區上做委派，泡泡是每次重畫的，逐顆綁會漏掉重畫後的那些。
     let _lpAt = 0;         // 長按跳出小窗的時間：手指放開那一下的 click 不要再去點到泡泡（用時間窗，不用旗標）
     let _replyTo = null;   // { name, text }：正在回覆誰的哪句話；送出或取消就清掉
-    let _voicePlaying = null;   // { el, audio, url }：正在播的那段錄音，同一時間只播一段
+    let _voicePlaying = null;   // { el, audio, url }：正在播的那段錄音，同一時間只播一段
+    const _aiVoiceCache = new Map();   // 他傳的語音合成好的聲音（來源§音色§字 → Blob），同一句重播不再扣錢
     let _hold = null;           // 輸入框按住說話：{ phase: 'starting'|'recording'|'sending', t0, y0, cancel, released, tick, text, chatId }
     let _holdH = null;          // 按住期間掛在文件上的手指監聽（放開就拔掉）
     const VOICE_MAX_SEC = 60;   // 跟微信一樣一段最長 60 秒，到了自動送出
@@ -3835,13 +3836,59 @@
             }
             // 看字那段跟劇情手機共用一支（WX_VIEW.voiceReveal）：泡泡一打開就定大小，字在裡面長出來
             if (window.WX_VIEW && window.WX_VIEW.voiceReveal) window.WX_VIEW.voiceReveal(el, t);
+            // 🔊 他傳的語音：照「設置 → 語音 → 角色配音」用他的聲音念（按了才合成、才花錢；同一句留著重播）
+            if (msg && !msg.isMe && t) {
+                const who = msg.senderName || msg.sender || (chat && !chat.isGroup ? chat.name : '');
+                this._speakAiVoice(el, who, t);
+            }
+        },
+        // 他傳的語音念出來。總開關不管這裡（她按了就是要聽，跟 AI 助手房間的語音泡泡一樣）；名單上沒有他就提示去哪設。
+        //   手機要在點的那一下就開好播放器，不然等合成回來再播會被擋，所以先放一段無聲的。
+        _speakAiVoice: async function (el, who, text) {
+            const same = !!(_voicePlaying && _voicePlaying.el === el);
+            this._stopVoicePlay();
+            if (same) return;
+            const V = win.OS_VOICE_CAST;
+            const ent = V && V.find ? V.find(who, null, text) : null;
+            if (!ent) { AUI.toast('還沒幫' + (who || '他') + '挑聲音：到設置 → 語音 → 角色配音，加一個叫「' + (who || '他') + '」的角色'); return; }
+            const P = ent.src === 'elevenlabs' ? win.OS_ELEVENLABS : win.OS_MINIMAX;
+            if (!P || typeof P.synth !== 'function') return;
+            const audio = new win.Audio();
+            try { audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='; audio.play().catch(() => {}); } catch (e) {}
+            const mark = { el: el, audio: audio, url: '' };
+            _voicePlaying = mark;
+            el.classList.add('is-playing');
+            try {
+                const key = ent.src + '§' + ent.voiceId + '§' + text;
+                let blob = _aiVoiceCache.get(key);
+                if (!blob) {
+                    blob = await P.synth(text, ent.voiceId);
+                    _aiVoiceCache.set(key, blob);
+                    if (_aiVoiceCache.size > 20) _aiVoiceCache.delete(_aiVoiceCache.keys().next().value);
+                }
+                if (_voicePlaying !== mark) return;        // 合成的時候她又按了別顆或按停
+                mark.url = win.URL.createObjectURL(blob);
+                const vol = typeof win._vnTtsVolume === 'number' ? win._vnTtsVolume : 0.8;
+                if (win.VN_AudioGain) win.VN_AudioGain.set(audio, vol); else audio.volume = vol;
+                audio.onended = () => { if (_voicePlaying === mark) this._stopVoicePlay(); };
+                audio.onerror = () => { if (_voicePlaying === mark) this._stopVoicePlay(); };
+                audio.src = mark.url;
+                await audio.play();
+            } catch (e) {
+                if (_voicePlaying === mark) this._stopVoicePlay();
+                const code = String((e && e.message) || e || '');
+                const svc = ent.src === 'elevenlabs' ? 'ElevenLabs' : 'Minimax';
+                if (code === 'NO_KEY') AUI.toast('語音設定還沒填 ' + svc + ' 的金鑰');
+                else if (code === 'NOTHING_TO_SAY') AUI.toast('這段沒有可以念的字');
+                else AUI.toast('沒念出來：' + code);
+            }
         },
         _stopVoicePlay: function () {
             const p = _voicePlaying;
             _voicePlaying = null;
             if (!p) return;
             try { p.audio.pause(); } catch (e) {}
-            try { win.URL.revokeObjectURL(p.url); } catch (e) {}
+            try { if (p.url) win.URL.revokeObjectURL(p.url); } catch (e) {}
             if (p.el) p.el.classList.remove('is-playing');
         },
         
