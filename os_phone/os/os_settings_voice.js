@@ -17,6 +17,8 @@
     const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     const CUSTOM_MM = 'minimax:__custom';
     const TRY_TEXT = '你好，聽得到我的聲音嗎？';
+    const TRY_BY_LANG = { en: 'Hey, can you hear me?', ja: 'もしもし、聞こえる？', ko: '안녕, 내 목소리 들려?' };
+    const LANG_NAMES = { any: '不限', zh: '中文', en: '英文', ja: '日文', ko: '韓文' };
     const EL_CATEGORY = { premade: '內建', cloned: '複製', generated: '設計', professional: '專業複製', famous: '名人', high_quality: '精選' };
 
     function V() { return W.OS_VOICE_CAST; }
@@ -76,7 +78,8 @@
     function voiceSummary(card) {
         const v = cardVoice(card);
         if (!v.voiceId) return '還沒選聲音';
-        return (v.src === 'elevenlabs' ? 'ElevenLabs' : 'Minimax') + ' · ' + (v.voiceName || v.voiceId);
+        const lang = card.querySelector('.vcast-lang')?.value || 'any';
+        return (v.src === 'elevenlabs' ? 'ElevenLabs' : 'Minimax') + ' · ' + (v.voiceName || v.voiceId) + (lang !== 'any' ? ' · ' + LANG_NAMES[lang] : '');
     }
 
     function aliasChip(alias) {
@@ -105,6 +108,8 @@
                 <div class="set-label vcast-sub">聲音</div>
                 <select class="set-select vcast-voice">${voiceOptionsHtml(entry.src, entry.voiceId, entry.voiceName)}</select>
                 <input class="set-input vcast-mmid vcast-off" type="text" placeholder="Minimax 音色 ID">
+                <div class="set-label vcast-sub">念哪種語言</div>
+                <select class="set-select vcast-lang">${Object.keys(LANG_NAMES).map(k => `<option value="${k}" ${(entry.lang || 'any') === k ? 'selected' : ''}>${LANG_NAMES[k]}</option>`).join('')}</select>
                 <div class="set-label vcast-sub">別名</div>
                 <div class="vcast-chips"></div>
                 <div class="vcast-alias-row">
@@ -127,6 +132,7 @@
         label.addEventListener('input', paint);
         sel.addEventListener('change', () => { paint(); if (sel.value === CUSTOM_MM) mmid.focus({ preventScroll: true }); });
         mmid.addEventListener('input', paint);
+        q('.vcast-lang').addEventListener('change', paint);
         paint();
 
         const addAlias = () => {
@@ -152,13 +158,14 @@
     async function tryVoice(card) {
         const v = cardVoice(card);
         if (!v.voiceId) { toast('先選一個聲音'); return; }
+        const tryText = TRY_BY_LANG[card.querySelector('.vcast-lang')?.value] || TRY_TEXT;
         stashCloudInputs();
         const btn = card.querySelector('.vcast-try');
         btn.classList.add('is-busy');
         let ok = false;
         try {
-            if (v.src === 'elevenlabs') ok = EL() ? await EL().speakVoice(v.voiceId, TRY_TEXT) : false;
-            else ok = MM() ? await MM().play(TRY_TEXT, v.voiceId) : false;
+            if (v.src === 'elevenlabs') ok = EL() ? await EL().speakVoice(v.voiceId, tryText) : false;
+            else ok = MM() ? await MM().play(tryText, v.voiceId) : false;
         } catch (e) { ok = false; }
         btn.classList.remove('is-busy');
         if (!ok) toast(v.src === 'elevenlabs' ? '念不出來：檢查 ElevenLabs 金鑰跟聲音' : '念不出來：檢查 Minimax 的 Group ID、金鑰跟音色 ID', 'error');
@@ -191,7 +198,8 @@
             const v = cardVoice(card);
             const aliases = [];
             card.querySelectorAll('.vcast-alias-chip').forEach(ch => { if (ch.dataset.alias) aliases.push(ch.dataset.alias); });
-            if (label && v.voiceId && v.src) out.push({ label, aliases, src: v.src, voiceId: v.voiceId, voiceName: v.voiceName });
+            const lang = card.querySelector('.vcast-lang')?.value || 'any';
+            if (label && v.voiceId && v.src) out.push({ label, aliases, src: v.src, voiceId: v.voiceId, voiceName: v.voiceName, lang });
         });
         return out;
     }

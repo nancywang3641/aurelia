@@ -14,7 +14,9 @@
 //   現在念台詞的地方一律叫 speakAs()，本機那條由呼叫方用 local 傳進來（各自的 VN_Core 不一定同一個）。
 //
 // 存在 localStorage 'os_voice_cast'：
-//   { on, others: 'local' | 'none', entries: [{ label, aliases: [], src: 'minimax' | 'elevenlabs', voiceId, voiceName }] }
+//   { on, others: 'local' | 'none', entries: [{ label, aliases: [], src: 'minimax' | 'elevenlabs', voiceId, voiceName, lang }] }
+//   lang：'any'（不限）| 'zh' | 'en' | 'ja' | 'ko'。同一個角色可以有好幾格、各標一種語言（例：中文用 Minimax、英文用 ElevenLabs），
+//   念的時候先看這句是什麼語言（detectLang），挑同名＋同語言那格；沒有就挑「不限」那格；再沒有就第一格。
 // 兩個舊開關由這裡推出來寫回去，其他還在讀它們的地方（預熱、系統音、旁白、AI 助手房間）不用改：
 //   vn_tts_v1.enabled          ＝ on 且 others 是本機
 //   os_minimax_config.enabled  ＝ on
@@ -27,6 +29,18 @@
     const KEY = 'os_voice_cast';
     const MM_KEY = 'os_minimax_config';
     const TTS_KEY = 'vn_tts_v1';
+
+    const LANGS = ['any', 'zh', 'en', 'ja', 'ko'];
+
+    // 這句是什麼語言：有假名＝日文、有韓文字＝韓文、有漢字＝中文、只有英文字母＝英文，其他（只有標點數字）＝不判斷
+    function detectLang(text) {
+        const s = String(text || '');
+        if (/[\u3040-\u30ff]/.test(s)) return 'ja';
+        if (/[\uac00-\ud7af\u1100-\u11ff]/.test(s)) return 'ko';
+        if (/[\u3400-\u9fff]/.test(s)) return 'zh';
+        if (/[A-Za-z]/.test(s)) return 'en';
+        return '';
+    }
 
     function readJson(k) { try { return JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch (e) { return {}; } }
     function norm(s) { return String(s || '').trim().toLowerCase(); }
@@ -41,7 +55,7 @@
         const tts = readJson(TTS_KEY);
         const entries = (Array.isArray(mm.voiceProfiles) ? mm.voiceProfiles : [])
             .filter(p => p && p.label && p.id)
-            .map(p => ({ label: p.label, aliases: Array.isArray(p.aliases) ? p.aliases.slice() : [], src: 'minimax', voiceId: p.id, voiceName: '' }));
+            .map(p => ({ label: p.label, aliases: Array.isArray(p.aliases) ? p.aliases.slice() : [], src: 'minimax', voiceId: p.id, voiceName: '', lang: 'any' }));
         return {
             on: !!(mm.enabled || tts.enabled),
             others: tts.enabled ? 'local' : (mm.enabled ? 'none' : 'local'),
@@ -55,7 +69,8 @@
             aliases: (Array.isArray(e.aliases) ? e.aliases : []).map(a => String(a || '').trim()).filter(Boolean),
             src: e.src === 'elevenlabs' ? 'elevenlabs' : 'minimax',
             voiceId: String(e.voiceId || '').trim(),
-            voiceName: String(e.voiceName || '').trim()
+            voiceName: String(e.voiceName || '').trim(),
+            lang: LANGS.indexOf(e.lang) >= 0 ? e.lang : 'any'
         };
     }
 
@@ -107,21 +122,27 @@
         isOn() { return this.getRoster().on; },
         localOn() { const r = this.getRoster(); return r.on && r.others === 'local'; },
 
-        /** 名單上這個名字（或別名）的那一格；沒有回 null。總開關關著也照查（設置頁用） */
-        find(name, roster) {
+        detectLang,
+
+        /**
+         * 名單上這個名字（或別名）要用哪一格；沒有回 null。總開關關著也照查（設置頁、AI 助手房間用）。
+         * 給了 text 就照這句的語言挑：同語言那格 → 「不限」那格 → 第一格（綁了聲音的人永遠走雲端，不會因為語言對不上就換回本機）
+         */
+        find(name, roster, text) {
             const n = norm(name);
             if (!n) return null;
             const r = roster || this.getRoster();
-            for (const e of r.entries) {
-                if (norm(e.label) === n) return e;
-                if (e.aliases.some(a => norm(a) === n)) return e;
-            }
-            return null;
+            // 同名的幾格算同一個人：別名只寫在其中一格，其他語言那格也認得
+            const who = new Set(r.entries.filter(e => norm(e.label) === n || e.aliases.some(a => norm(a) === n)).map(e => norm(e.label)));
+            const hits = r.entries.filter(e => who.has(norm(e.label)));
+            if (!hits.length) return null;
+            const lang = text != null ? detectLang(text) : '';
+            return (lang && hits.find(e => e.lang === lang)) || hits.find(e => e.lang === 'any') || hits[0];
         },
-        /** 現在真的會用雲端聲音念他嗎（總開關開著＋名單上有） */
-        cloudFor(name) {
+        /** 現在真的會用雲端聲音念他嗎（總開關開著＋名單上有）；給 text 就照語言挑那一格 */
+        cloudFor(name, text) {
             const r = this.getRoster();
-            return r.on ? this.find(name, r) : null;
+            return r.on ? this.find(name, r, text) : null;
         },
         /** 本機預熱用：名單上的人不用本機先生（反正會走雲端） */
         has(name) { return !!this.cloudFor(name); },
@@ -143,7 +164,7 @@
         speakAs(name, text, opts = {}) {
             const r = this.getRoster();
             if (!r.on) return '';
-            const e = this.find(name, r);
+            const e = this.find(name, r, text);
             if (e) {
                 const P = e.src === 'elevenlabs' ? EL() : MM();
                 if (!P || !P.speakVoice) return '';
@@ -161,7 +182,7 @@
 
         /** 下一句先合成（只有名單上的雲端聲音需要） */
         prefetchAs(name, text, opts = {}) {
-            const e = this.cloudFor(name);
+            const e = this.cloudFor(name, text);
             if (!e) return;
             const P = e.src === 'elevenlabs' ? EL() : MM();
             if (P && P.prefetchVoice) P.prefetchVoice(e.voiceId, text, { expression: opts.expression || '' });
@@ -169,7 +190,7 @@
 
         /** 重播上一句：雲端有快取就免費重播，回 true；不是雲端或沒快取回 false */
         async replayAs(name, text, opts = {}) {
-            const e = this.cloudFor(name);
+            const e = this.cloudFor(name, text);
             if (!e) return false;
             const P = e.src === 'elevenlabs' ? EL() : MM();
             if (!P || !P.replayVoice) return false;
