@@ -58,12 +58,14 @@
     }
 
     // 送出前清文字：動作描述、系統標籤、引號拿掉；標點（含 …）留著，v3/v4 靠它抓停頓
-    function cleanText(text) {
-        return String(text || '')
+    //   keepTags：AI 助手房間的住戶自己寫的 [laughs] 這種語氣標籤留著（VN 那邊的方括號是劇本標籤，照舊清掉）
+    function cleanText(text, keepTags) {
+        let s = String(text || '')
             .replace(/\([^)]*\)/g, '')
             .replace(/（[^）]*）/g, '')
-            .replace(/【[^】]*】/g, '')
-            .replace(/\[[^\]]*\]/g, '')
+            .replace(/【[^】]*】/g, '');
+        if (!keepTags) s = s.replace(/\[[^\]]*\]/g, '');
+        return s
             .replace(/\*[^*]*\*/g, '')
             .replace(/「|」/g, '')
             .replace(/\s+/g, ' ')
@@ -73,9 +75,10 @@
 
     // 送去 API 的整句：表情標籤 + 清好的字（模型不吃標籤就不加）
     function buildText(text, options, cfg) {
-        const body = cleanText(text);
-        if (!body || !hasSpeakable(body)) return '';
-        const tag = TAG_MODELS.has(cfg.modelId || DEFAULT_CONFIG.modelId) ? expressionToTag(options && options.expression) : '';
+        const tagModel = TAG_MODELS.has(cfg.modelId || DEFAULT_CONFIG.modelId);
+        const body = cleanText(text, !!(options && options.keepTags) && tagModel);
+        if (!body || !hasSpeakable(body.replace(/\[[^\]]*\]/g, ''))) return '';
+        const tag = tagModel ? expressionToTag(options && options.expression) : '';
         return tag ? `[${tag}] ${body}` : body;
     }
 
@@ -151,6 +154,8 @@
             return next;
         },
         hasKey() { return !!this.getConfig().apiKey; },
+        /** 現在選的模型吃不吃 [laughs] 這種語氣標籤（v4／v3 吃，Multilingual v2、Flash 不吃） */
+        tagsSupported() { return TAG_MODELS.has(this.getConfig().modelId || DEFAULT_CONFIG.modelId); },
         isPlaying() { return _isPlaying; },
 
         stop() {
