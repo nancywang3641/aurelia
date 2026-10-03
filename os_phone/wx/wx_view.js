@@ -347,8 +347,15 @@
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(display)}</div>`;
             }
 
+            // 🌐 外語訊息「原文(翻譯)」：翻譯拆到泡泡下面一行小字（只拆前面不是中文、括號裡是中文的；媒體標籤、中文的（輕笑）不動）
+            let _tl = '';
+            if (!msg.isMe && win.OS_VN_FOREIGN && win.OS_VN_FOREIGN.splitTail) {
+                const _sx = win.OS_VN_FOREIGN.splitTail(html);
+                if (_sx.tl) { html = _sx.orig; _tl = _sx.tl; }
+            }
             // 🎭 msg._static：劇情裡的手機借這支畫整則（頭像、泡泡、卡片都同一份），只畫樣子，理由見 processModules 開頭
             html = this.processModules(html, String(chatId), msg.isMe, msgIndex, msg, msg._static ? Object.assign({ static: true }, msg._static) : undefined);
+            if (_tl) html += '<span class="wx-tl">' + _tl.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
             
             let avatarSeed = chatName; 
             let avatarUrl = "";

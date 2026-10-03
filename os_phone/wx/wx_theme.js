@@ -189,6 +189,7 @@
             .wx-bubble-content > * { max-width: 100%; box-sizing: border-box; }
             /* 卡片自己就是造型（泡泡透明無邊），不要泡泡的小尖角 */
             .wx-msg-row .wx-bubble-content.wx-bubble-bare::before { display: none; }
+            .wx-tl { font-size: 12px; line-height: 1.45; opacity: 0.68; }   /* 🌐 外語訊息的中文翻譯（泡泡是直排 flex，自己一行） */
             .wx-group-name { font-size: 10px; color: var(--wx-ink-dim); margin-bottom: 2px; margin-left: 10px; }
             /* 引用回覆：照微信擺在泡泡內、正文下面的一條灰塊。結構由 OS_API.chatQuote 產，兩個 app 共用 */
             .wx-quote { display: flex; gap: 4px; align-items: baseline; margin-top: 2px; padding: 5px 8px; border-radius: 4px; background: rgba(0,0,0,0.06); font-size: 11px; line-height: 1.4; color: #8a8a8a; cursor: pointer; }

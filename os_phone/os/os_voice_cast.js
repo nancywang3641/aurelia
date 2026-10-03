@@ -34,7 +34,8 @@
 
     // 這句是什麼語言：有假名＝日文、有韓文字＝韓文、有漢字＝中文、只有英文字母＝英文，其他（只有標點數字）＝不判斷
     function detectLang(text) {
-        const s = String(text || '');
+        // 括號裡的不算：外語台詞後面會附中文翻譯「Hello (你好)」，算進去就被當成中文、挑錯聲音
+        const s = String(text || '').replace(/[（(][^（）()]*[)）]/g, '');
         if (/[\u3040-\u30ff]/.test(s)) return 'ja';
         if (/[\uac00-\ud7af\u1100-\u11ff]/.test(s)) return 'ko';
         if (/[\u3400-\u9fff]/.test(s)) return 'zh';

@@ -462,7 +462,33 @@
             }
         } catch (e) {}
         push(_wxFriendBlock(chatId));                                             // 刪好友／拉黑／好友申請：不花錢，一律教
+        push(_wxForeignBlock(chatId));                                            // 外語：這一間開了才教
         return out;
+    }
+
+    // 🌐 外語（聊天室設置裡一間一個開關）：誰傳訊息用哪種語言、結尾括號附翻譯。
+    //   聊天規則禁止括號包旁白，這段要講明「翻譯是唯一可以用括號的地方」。泡泡那邊由 OS_VN_FOREIGN.splitTail 拆成兩行。
+    function _wxForeignBlock(chatId) {
+        try {
+            const chat = (win.wxApp && win.wxApp.GLOBAL_CHATS) ? win.wxApp.GLOBAL_CHATS[chatId] : null;
+            const F = win.OS_VN_FOREIGN;
+            if (!chat || !F || !chat.foreign || !chat.foreign.on) return '';
+            const langs = chat.foreign.langs || {};
+            const tail = '每則訊息最後用括號附上中文翻譯，翻譯用跟聊天紀錄同一種中文（繁體就繁體）；這是唯一可以用括號的地方。語音訊息的翻譯寫在語音標籤的方括號裡面、原文後面，不要寫在方括號外。表情包、圖片這些照原本的寫法。';
+            if (!chat.isGroup) {
+                const ln = F.langName(langs[chatId] || 'en');
+                if (!ln) return '';
+                return '【外語】你在這個聊天室傳文字和語音訊息一律用' + ln + '寫，' + tail;
+            }
+            const contacts = win.WX_CONTACTS ? win.WX_CONTACTS.getAllCustomContacts() : [];
+            const rows = Object.keys(langs).filter(mid => F.langName(langs[mid])).map(mid => {
+                const c = contacts.find(x => x.id === mid);
+                const name = c ? c.name : (/^(char|grp|avt|wx)_/.test(mid) ? '' : mid);
+                return name ? '  ' + name + '：' + F.langName(langs[mid]) : '';
+            }).filter(Boolean);
+            if (!rows.length) return '';
+            return '【外語】這個聊天室裡，下列的人傳文字和語音訊息一律用自己的語言寫，' + tail + '名單外的人照常用中文。\n' + rows.join('\n');
+        } catch (e) { return ''; }
     }
 
     // 🔒 刪好友與拉黑（wx_core 的 _applyFriendTags 收這幾個標籤）。私聊才教，照現在是不是好友給不一樣的一段。

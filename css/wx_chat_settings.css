@@ -148,3 +148,6 @@
         .ws-persona-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .ws-persona-btn-cancel { background: var(--wx-surface-2); color: var(--wx-ink-2); }
         .ws-persona-btn-save { background: var(--wx-accent); color: var(--wx-on-accent); }
+
+        /* 🌐 外語：開關關著時每個人的語言那幾列收起來 */
+        .ws-foreign-rows.is-off { display: none; }

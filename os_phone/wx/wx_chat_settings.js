@@ -192,6 +192,7 @@
             ws_back:  { title: '帶回劇情', body: '開著：你們在這裡聊的，回到故事時會排在你下一句話前面交給劇情，只交一次。\n關著：劇情不會知道你們聊了什麼。' },
             ws_lobby: { title: '常駐角色', body: '開了，每個故事的手機裡都找得到他，在哪本故事裡聊都不會被算成那本的人。\n你們聊的預設不帶回劇情，要帶就打開「帶回劇情」。' },
             wx_look:  { title: '外觀', body: '主題：整支聊天 app 的長相，泡泡不在內。\n配色：底下那層顏色。\n黑夜模式：換明暗。\n套了主題之後，長相以主題為準。' },
+            ws_foreign: { title: '講自己的語言', body: '開了，下面選了外語的人會用那個語言傳訊息，泡泡下面一行小字是中文翻譯。只有這個聊天室會這樣，其他聊天室照舊。\n選「中文」的人照常講中文。' },
             ws_hb:    { title: '他會主動找我', body: '開了，他會照「多久來一次」和「來的機率」自己傳訊息給你：時間到、而且你們有一陣子沒講話，才擲一次機率決定要不要開口。\n手機關著時，要先在設置打開「回覆交給伺服器跑」才會找你。' }
         });
     } catch (e) {}
@@ -323,6 +324,41 @@
                 `;
                 membersHtml = `<div class="ws-group"><div class="ws-member-grid">${list}</div></div>`;
             }
+
+            // 🌐 外語：這一間誰講哪種語言（私聊＝他一個；群聊＝我以外的每個成員）。存在 chat.foreign = { on, langs: { 成員id: 'en' } }
+            //    預設語言：這一間設過的 → 設置「一般 → 外語」名單裡同名的 → 私聊英文、群聊中文
+            const _fgn = (function () {
+                const F = win.OS_VN_FOREIGN;
+                if (!F) return { html: '', rows: [] };
+                const fx = chat.foreign || {};
+                const saved = fx.langs || {};
+                const glob = {};
+                try { (F.get().list || []).forEach(x => { if (x.name) glob[x.name] = x.lang; }); } catch (e) {}
+                const contacts = win.WX_CONTACTS ? win.WX_CONTACTS.getAllCustomContacts() : [];
+                const nameOf = (mid) => { const c = contacts.find(x => x.id === mid); return c ? c.name : mid; };
+                const isMe = (mid) => mid === 'User' || mid === 'user' || mid === '我';
+                const rows = isGroup
+                    ? (chat.members || []).filter(m => !isMe(m)).map(m => ({ mid: m, name: nameOf(m) }))
+                    : [{ mid: chatId, name: chatName }];
+                const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                const opts = (cur) => `<option value="zh" ${cur === 'zh' ? 'selected' : ''}>中文</option>`
+                    + F.LANGS.map(([k, v]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${v}</option>`).join('');
+                const rowHtml = rows.map(r => {
+                    const cur = saved[r.mid] || glob[r.name] || (isGroup ? 'zh' : 'en');
+                    return `<div class="ws-cell"><div class="ws-label">${esc(r.name)}</div><div class="ws-right"><select class="ws-input ws-select-plain ws-foreign-lang" data-mid="${esc(r.mid)}">${opts(cur)}</select></div></div>`;
+                }).join('');
+                return {
+                    rows,
+                    html: `<div class="ws-section-header">外語</div>
+                <div class="ws-group">
+                    <label class="ws-cell ws-cell-switch">
+                        <div class="ws-label">${isGroup ? '他們講自己的語言' : '他講自己的語言'}${(win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('ws_foreign') : ''}</div>
+                        <input type="checkbox" class="ws-switch" id="chk-foreign" ${fx.on ? 'checked' : ''}>
+                    </label>
+                    <div id="ws-foreign-rows" class="ws-foreign-rows${fx.on ? '' : ' is-off'}">${rowHtml}</div>
+                </div>`
+                };
+            })();
 
             // 2. 頂部資訊區塊 (根據群聊/私聊變換)
             let infoHtml = '';
@@ -521,6 +557,8 @@
                         <input type="checkbox" class="ws-switch" id="chk-time-aware" ${chat.timeAware ? 'checked' : ''}>
                     </label>
                 </div>
+
+                ${_fgn.html}
 
                 <div class="ws-section-header">隔離</div>
                 <div class="ws-group">
@@ -1347,6 +1385,22 @@
                     if (app.saveChats) app.saveChats();
                     if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
                 };
+            }
+            // 🌐 外語：開關和每個人的語言，切了就存。寫進「現在這份」聊天室物件（app 重開過的話 chat 是舊的，整份存會蓋掉新訊息）
+            {
+                const _fo = doc.getElementById('chk-foreign');
+                const _rowsBox = doc.getElementById('ws-foreign-rows');
+                const _saveForeign = () => {
+                    const c = (app.GLOBAL_CHATS && app.GLOBAL_CHATS[chatId]) || chat;
+                    const langs = {};
+                    doc.querySelectorAll('.ws-foreign-lang').forEach(sel => { langs[sel.dataset.mid] = sel.value; });
+                    c.foreign = { on: !!(_fo && _fo.checked), langs };
+                    if (c !== chat) chat.foreign = c.foreign;
+                    if (_rowsBox) _rowsBox.classList.toggle('is-off', !c.foreign.on);
+                    if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, c);
+                };
+                if (_fo) _fo.onchange = _saveForeign;
+                doc.querySelectorAll('.ws-foreign-lang').forEach(sel => { sel.onchange = _saveForeign; });
             }
             // 🧰 可以用工具（wx_tools.js）：打開就跳小窗勾這間用哪幾個；一個都沒勾就關回去。點旁邊的字再叫出小窗
             {

@@ -100,7 +100,21 @@
         if (on) on.onchange = () => save({ on: on.checked });
     }
 
-    const API = { LANGS, get, save, promptLine, html, wire };
+    // ── 聊天 app 用：訊息「原文(翻譯)」把結尾那個括號拆出來 ──
+    //   只拆「前面不是中文、括號裡是中文」的（日韓看假名／韓文字，其他看有沒有漢字），
+    //   中文訊息後面的（輕笑）、英文的 (lol)、媒體標籤 [图片: …] 都不動。
+    function isForeign(b) {
+        return /[぀-ヿ가-힯]/.test(b) || (!/[㐀-鿿]/.test(b) && /[A-Za-zÀ-ɏЀ-ӿ]/.test(b));
+    }
+    function splitTail(text) {
+        const s = String(text || '');
+        const m = s.match(/^([\s\S]*?\S)\s*[（(]([^（）()]+)[)）]\s*$/);
+        if (!m || !isForeign(m[1]) || !/[㐀-鿿]/.test(m[2])) return { orig: s, tl: '' };
+        return { orig: m[1], tl: m[2].trim() };
+    }
+    function langName(k) { return LANG_NAME[k] || ''; }
+
+    const API = { LANGS, get, save, promptLine, html, wire, splitTail, langName };
     win.OS_VN_FOREIGN = API;
     if (win !== window) window.OS_VN_FOREIGN = API;
 })();
