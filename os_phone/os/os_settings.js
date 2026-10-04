@@ -78,6 +78,7 @@
             ss_2515: { title: '介面佈局', body: '頂部被遮擋時選「強制下移」。' },
             ss_2529: { title: 'GitHub Gist 設定', body: '填 gist 權限的 Token，首次備份後自動存 ID。' },
             ss_2549: { title: '本地全量備份', body: '匯出所有資料成 JSON 檔。' },
+            ss_cloudbk: { title: '自動備份到托管伺服器', body: '用上面「回覆交給伺服器跑」的網址與通行碼。\n\n開著時，打開 app 距離上次超過一天就備份一次，切出 app 時也會補；內容沒變就不上傳。伺服器留最近七份，按「雲端的備份」可以挑一份還原。\n\n不含圖片。勾哪幾塊就傳哪幾塊；「設定」裡有 API 金鑰，預設不傳。\n\n沒有伺服器就不用開：太久沒匯出時，打開 app 會問你要不要匯出一份。' },
         });
         return true;
     }
@@ -2416,6 +2417,21 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="btn-test" id="relay-off-btn" style="flex:1; padding:12px; font-size:13px;">關掉</div>
                             </div>
                             <div id="relay-state" style="font-size:12px; color:var(--os-ink); margin-top:8px;">還沒開。</div>
+                        </div>
+
+                        <!-- ☁️ 自動備份到托管伺服器（os_backup.js 的 cloudBackup；用上面那組網址與通行碼） -->
+                        <div class="set-group" id="cloudbk-group">
+                            <div class="set-label">
+                                <span><i class="fa-solid fa-cloud-arrow-up"></i> 自動備份到托管伺服器${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cloudbk') : ''}</span>
+                                <label class="toggle-switch"><input type="checkbox" id="cloudbk-on"><span class="slider"></span></label>
+                            </div>
+                            <div class="cloudbk-parts" id="cloudbk-parts"></div>
+                            <div class="cloudbk-state" id="cloudbk-state"></div>
+                            <div class="cloudbk-bar">
+                                <div class="btn-save cloudbk-btn" id="cloudbk-now">現在備份</div>
+                                <div class="btn-test cloudbk-btn" id="cloudbk-list-btn">雲端的備份</div>
+                            </div>
+                            <div class="cloudbk-list" id="cloudbk-list"></div>
                         </div>
 
                             <div class="set-group" id="ka-group">
@@ -5399,6 +5415,66 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             } catch(e) { setStatus('匯入失敗：' + e.message, '#fc8181'); }
             e.target.value = '';
         });
+
+        // ☁️ 自動備份到托管伺服器：開關、勾哪幾塊、上次結果、現在備份、雲端那幾份與還原
+        (function wireCloudBackup() {
+            const box = container.querySelector('#cloudbk-group');
+            if (!box || !BACKUP || !BACKUP.autoGet) return;
+            const $ = (s) => box.querySelector(s);
+            const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            const fmtT = (t) => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+            const fmtS = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round((n || 0) / 1024)) + ' KB';
+            const toast = (m) => { try { if (window.AUI && AUI.toast) AUI.toast(m); } catch (e) {} };
+            function paint() {
+                const a = BACKUP.autoGet(), r = BACKUP.relayOf();
+                $('#cloudbk-on').checked = !!a.on;
+                $('#cloudbk-parts').innerHTML = BACKUP.PARTS.map(p => '<label class="cloudbk-part"><input type="checkbox" data-part="' + p.k + '"' + (a.parts[p.k] ? ' checked' : '') + '><span>' + esc(p.label) + '</span></label>').join('');
+                let st;
+                if (!r) st = '先在上面「回覆交給伺服器跑」填好網址和通行碼。';
+                else if (a.lastErr) st = '上次沒成功：' + a.lastErr + (a.lastAt ? '（最後成功 ' + fmtT(a.lastAt) + '）' : '');
+                else if (a.lastAt) st = '上次備份 ' + fmtT(a.lastAt) + '・' + fmtS(a.lastSize);
+                else st = a.on ? '還沒備份過。' : '還沒開。';
+                $('#cloudbk-state').textContent = st;
+            }
+            async function run(force) {
+                const b = $('#cloudbk-now');
+                b.textContent = '備份中…';
+                try { const r = await BACKUP.cloudBackup({ force: force }); toast(r.same ? '內容沒變，不用再傳' : '備份好了'); }
+                catch (e) { toast('備份沒成功：' + e.message); }
+                b.textContent = '現在備份';
+                paint();
+            }
+            box.addEventListener('change', (e) => {
+                const t = e.target;
+                if (t.id === 'cloudbk-on') { BACKUP.autoSave({ on: t.checked }); if (t.checked && BACKUP.relayOf()) run(false); paint(); return; }
+                if (t.dataset && t.dataset.part) {
+                    const a = BACKUP.autoGet(); a.parts[t.dataset.part] = t.checked;
+                    BACKUP.autoSave({ parts: a.parts, lastHash: '' });   // 勾的變了，下次一定要傳
+                }
+            });
+            $('#cloudbk-now').addEventListener('click', () => run(true));
+            $('#cloudbk-list-btn').addEventListener('click', async () => {
+                const L = $('#cloudbk-list');
+                L.textContent = '讀取中…';
+                try {
+                    const items = await BACKUP.cloudList();
+                    L.innerHTML = items.length ? items.map(it => '<div class="cloudbk-row"><span class="cloudbk-row-tx">' + fmtT(it.at * 1000) + '・' + fmtS(it.size) + (it.device ? '・' + esc(it.device) : '') + '</span><span class="btn-test cloudbk-restore" data-id="' + esc(it.id) + '">還原</span></div>').join('')
+                        : '伺服器上還沒有備份。';
+                } catch (e) { L.textContent = e.message; }
+            });
+            $('#cloudbk-list').addEventListener('click', async (e) => {
+                const b = e.target.closest('[data-id]');
+                if (!b) return;
+                if (!await AUI.confirm('用這一份還原？會跟手機上現有的資料合併，同一筆以備份那份為準。', { okText: '還原', title: '從雲端還原' })) return;
+                b.textContent = '還原中…';
+                try {
+                    const res = await BACKUP.applyData(await BACKUP.cloudGet(b.dataset.id));
+                    if (await AUI.confirm('還原好了（聊天 ' + res.chats + '、劇情 ' + res.vn + '、世界書 ' + res.worldbook + '、設定 ' + res.localStorage + '）。重新整理才看得到，現在重新整理？', { okText: '重新整理', title: '從雲端還原' })) location.reload();
+                } catch (e2) { AUI.alert('還原沒成功：' + e2.message); }
+                b.textContent = '還原';
+            });
+            paint();
+        })();
 
         // 🔥 新增：一鍵格式化邏輯
         const btnFormat = container.querySelector('#bk-format-btn');

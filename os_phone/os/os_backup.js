@@ -239,6 +239,7 @@
         a.href = URL.createObjectURL(blob);
         a.download = 'aurelia-full-backup-' + new Date().toISOString().slice(0, 10) + '.json';
         a.click();
+        try { const s = getSettings(); s.lastExportAt = Date.now(); saveSettings(s); } catch (e) {}   // 打開 app 時「多久沒備份」看這個
         return sizeKB;
     }
 
@@ -310,8 +311,179 @@
     }
     try { setTimeout(() => { _bootCheck().catch(() => {}); }, 6000); } catch (e) {}
 
+    // ── 雲端自動備份（托管伺服器，2026-10-04）──────────────────────────
+    //   她：「要不要做一個開關給pwa的備份，自動備份?」「上傳應該是不是可以單向勾選要的部分?」
+    //   用「回覆交給伺服器跑」那組網址與通行碼（aurelia_relay_cfg），伺服器 POST /v1/backup 收、留最近七份。
+    //   一塊一塊勾：設定那塊有 API 金鑰，預設不勾（托管伺服器的原則是不存她的金鑰）。勾選只管上傳，本地匯出照舊整份。
+    //   開著時：打開 app 距離上次超過一天備份一次；切出去時距離上次「看過」超過六小時也備一次。內容沒變不上傳。
+    //   沒伺服器（或沒開）：打開 app 時超過七天沒匯出就問一次要不要匯出，「之後再說」三天後再問（只在手機版）。
+    const AUTO_KEY = 'os_backup_auto';
+    const PARTS = [
+        { k: 'story', label: '劇情（章節、記憶、大總結、書架、人設）', stores: ['vn_chapters', 'vn_memories', 'vn_grand_summaries', 'tavern_summary', 'map_data'],
+          ls: ['aurelia_custom_worlds', 'vn_current_story_id', 'vn_current_story_title', 'os_personas'] },
+        { k: 'phone', label: '手機 app（聊天、微博、各 app 的資料）', stores: ['api_chats', 'wb_posts', 'phone_apps', 'app_memory', 'app_data'] },
+        { k: 'wb', label: '世界書', worldbook: true, ls: ['os_worldbook_books'] },
+        { k: 'avs', label: '狀態與面板', stores: ['var_packs', 'ui_templates', 'state_data'],
+          ls: ['avs_condition_rules', 'aurelia_rules_tavern', 'avs_current_state', 'avs_active_ui_templates'], prefixes: ['avs_state_'] },
+        { k: 'lobby', label: '大廳', stores: ['lobby_history', 'lobby_summary_index', 'lobby_npc_memory'] },
+        { k: 'studio', label: '創作室', stores: ['studio_chats', 'studio_drafts'] },
+        { k: 'ach', label: '成就', achievements: true },
+        { k: 'settings', label: '設定（含 API 金鑰）', off: true,
+          ls: ['os_global_config', 'os_secondary_llm_config', 'os_image_config', 'os_minimax_config', 'os_elevenlabs_config',
+               'os_voice_cast', 'os_vn_foreign', 'vn_cfg_v4', 'vn_prompt_order', 'wx_phone_api_config'] },
+    ];
+    // FULL_STORES 之後新加的倉庫沒排進哪一塊：先跟著「手機 app」走，不要默默漏掉
+    (function () {
+        const claimed = [].concat.apply([], PARTS.map(p => p.stores || []));
+        const phone = PARTS.find(p => p.k === 'phone');
+        FULL_STORES.forEach(s => { if (claimed.indexOf(s) === -1) phone.stores.push(s); });
+    })();
+
+    function autoGet() {
+        let a = {};
+        try { a = JSON.parse(localStorage.getItem(AUTO_KEY) || '{}') || {}; } catch (e) {}
+        const parts = {};
+        PARTS.forEach(p => { parts[p.k] = (a.parts && typeof a.parts[p.k] === 'boolean') ? a.parts[p.k] : !p.off; });
+        return Object.assign({ on: false, lastAt: 0, lastHash: '', lastTryAt: 0, lastErr: '', lastSize: 0 }, a, { parts });
+    }
+    function autoSave(patch) {
+        const a = Object.assign(autoGet(), patch || {});
+        try { localStorage.setItem(AUTO_KEY, JSON.stringify(a)); } catch (e) {}
+        return a;
+    }
+    // 托管伺服器那組（「回覆交給伺服器跑」填的）；網址與通行碼都有才算
+    function relayOf() {
+        try {
+            const c = JSON.parse(localStorage.getItem('aurelia_relay_cfg') || '{}') || {};
+            const url = String(c.url || '').trim().replace(/\/+$/, '').replace(/\/v1$/, '');
+            const token = String(c.token || '').trim();
+            return (url && token) ? { url, token } : null;
+        } catch (e) { return null; }
+    }
+    async function collectParts(parts) {
+        const sel = PARTS.filter(p => parts[p.k]);
+        const db = { stores: {} }, ls = {};
+        for (const p of sel) {
+            if (p.worldbook) db.worldbook = await _getStore('world_book_entries');
+            if (p.achievements) db.achievements = await _getStore('achievements');
+            for (const s of (p.stores || [])) db.stores[s] = await _getStore(s);
+            (p.ls || []).forEach(k => { const v = localStorage.getItem(k); if (v !== null) ls[k] = v; });
+            if (p.prefixes) for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && p.prefixes.some(x => k.startsWith(x))) ls[k] = localStorage.getItem(k);
+            }
+        }
+        return { version: 4, exportedAt: new Date().toISOString(), type: 'cloud', parts: sel.map(p => p.k), db, localStorage: ls };
+    }
+    async function _sha(text) {
+        try {
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (e) { return ''; }   // 不安全的網址沒有 crypto.subtle：照傳，伺服器那邊就不會擋重複
+    }
+    function _device() {
+        const u = (win.navigator && win.navigator.userAgent) || '';
+        return /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows' : 'web';
+    }
+    // 回 { same } 或伺服器那份的 meta；失敗丟錯（中文）
+    let _cloudBusy = null;
+    function cloudBackup(opt) {
+        if (_cloudBusy) return _cloudBusy;
+        _cloudBusy = (async () => {
+            opt = opt || {};
+            const r = relayOf();
+            if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
+            const a = autoGet();
+            if (!PARTS.some(p => a.parts[p.k])) throw new Error('一塊都沒勾');
+            const data = await collectParts(a.parts);
+            const body = JSON.stringify(data);
+            const hash = await _sha(JSON.stringify(Object.assign({}, data, { exportedAt: '' })));
+            autoSave({ lastTryAt: Date.now() });
+            if (!opt.force && hash && hash === a.lastHash) return { same: true, size: body.length };
+            let res, j = {};
+            try {
+                res = await fetch(r.url + '/v1/backup?hash=' + hash + '&device=' + encodeURIComponent(_device()), {
+                    method: 'POST', headers: { 'Authorization': 'Bearer ' + r.token, 'Content-Type': 'application/json' }, body
+                });
+                j = await res.json().catch(() => ({}));
+            } catch (e) { autoSave({ lastErr: '連不上托管伺服器' }); throw new Error('連不上托管伺服器'); }
+            if (!res.ok) {
+                const msg = res.status === 401 ? '通行碼不對' : (j.error || ('伺服器回了 ' + res.status));
+                autoSave({ lastErr: msg });
+                throw new Error(msg);
+            }
+            autoSave({ lastAt: Date.now(), lastHash: hash, lastErr: '', lastSize: body.length });
+            return j;
+        })().finally(() => { _cloudBusy = null; });
+        return _cloudBusy;
+    }
+    async function cloudList() {
+        const r = relayOf();
+        if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
+        const res = await fetch(r.url + '/v1/backups', { headers: { 'Authorization': 'Bearer ' + r.token } }).catch(() => null);
+        if (!res) throw new Error('連不上托管伺服器');
+        if (res.status === 401) throw new Error('通行碼不對');
+        if (res.status === 404) throw new Error('托管伺服器還沒有備份的功能（要更新伺服器那支）');
+        const j = await res.json().catch(() => ({}));
+        return j.items || [];
+    }
+    async function cloudGet(id) {
+        const r = relayOf();
+        if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
+        const res = await fetch(r.url + '/v1/backup/' + encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + r.token } }).catch(() => null);
+        if (!res || !res.ok) throw new Error(res ? '拿不到這一份（' + res.status + '）' : '連不上托管伺服器');
+        const data = await res.json();
+        if (!data.version || !data.db) throw new Error('這一份不是奧瑞亞的備份');
+        return data;
+    }
+
+    // 自動：只在手機版（酒館的資料在電腦資料夾裡，本來就不會被清）
+    function _isPwa() { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } }
+    const DAY = 86400000;
+    const REMIND_KEY = 'os_backup_remind_snooze';
+    async function _autoBoot() {
+        if (!_isPwa()) return;
+        const a = autoGet(), r = relayOf();
+        if (a.on && r) {
+            if (Date.now() - (a.lastAt || 0) > DAY) cloudBackup().catch(e => console.warn('[OS_BACKUP] 自動備份沒成功：', e.message));
+            // 開著卻三天以上沒成功：一天講一次
+            if (a.lastAt && Date.now() - a.lastAt > 3 * DAY && a.lastErr) {
+                const _d = new Date(), today = _d.getFullYear() + '-' + (_d.getMonth() + 1) + '-' + _d.getDate();
+                try { if (localStorage.getItem('os_backup_fail_day') !== today) { localStorage.setItem('os_backup_fail_day', today);
+                    const A = win.AUI || window.AUI; if (A && A.toast) A.toast('自動備份已經 ' + Math.floor((Date.now() - a.lastAt) / DAY) + ' 天沒成功：' + a.lastErr, { type: 'warn' }); } } catch (e) {}
+            }
+            return;
+        }
+        // 沒開自動：太久沒匯出就問一次
+        const s = getSettings();
+        let snooze = 0; try { snooze = Number(localStorage.getItem(REMIND_KEY) || 0); } catch (e) {}
+        if (Date.now() < snooze) return;
+        const last = s.lastExportAt || 0;
+        if (last && Date.now() - last < 7 * DAY) return;
+        if (!last) {   // 從沒匯出過：有玩過東西才問（剛裝好什麼都沒有就別吵）
+            const has = (await _getStore('vn_chapters')).length || (await _getStore('api_chats')).length;
+            if (!has) return;
+        }
+        const A = win.AUI || window.AUI;
+        if (!A || !A.confirm) return;
+        const ok = await A.confirm((last ? '已經 ' + Math.floor((Date.now() - last) / DAY) + ' 天沒備份了。' : '還沒備份過。')
+            + '手機版的資料只存在這支手機的瀏覽器裡，清掉或換手機就沒了。要現在匯出一份嗎？',
+            { title: '備份', okText: '匯出', cancelText: '之後再說', danger: false });   // 句子裡有「清掉」會被判成危險、按鈕變紅
+        if (ok) { try { await exportLocal(); } catch (e) {} }
+        else { try { localStorage.setItem(REMIND_KEY, String(Date.now() + 3 * DAY)); } catch (e) {} }
+    }
+    try { setTimeout(() => { _autoBoot().catch(() => {}); }, 20000); } catch (e) {}
+    try {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'hidden' || !_isPwa()) return;
+            const a = autoGet();
+            if (a.on && relayOf() && Date.now() - (a.lastTryAt || 0) > 6 * 3600000) cloudBackup().catch(() => {});
+        });
+    } catch (e) {}
+
     // ── 對外接口 ──────────────────────────────────────────────────────
     win.OS_BACKUP = {
+        PARTS, autoGet, autoSave, relayOf, cloudBackup, cloudList, cloudGet, collectParts,
         getSettings,
         saveSettings,
         gistBackup,

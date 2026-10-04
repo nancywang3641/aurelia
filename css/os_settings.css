@@ -450,3 +450,13 @@
 .vfor-row .vfor-name { flex: 1; min-width: 0; }
 .vfor-row .vfor-lang { flex: 0 0 38%; max-width: 38%; }
 .vfor-del { flex-shrink: 0; padding: 6px; color: #fc8181; cursor: pointer; }
+/* ☁️ 設置→系統/備份→自動備份到托管伺服器 */
+.cloudbk-parts { display: grid; grid-template-columns: 1fr; gap: 6px; margin: 8px 0; }
+.cloudbk-part { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--os-ink); cursor: pointer; }
+.cloudbk-part input { flex: 0 0 auto; }
+.cloudbk-state { font-size: 12px; color: var(--os-ink-soft); margin: 6px 0; }
+.cloudbk-bar { display: flex; gap: 8px; }
+.cloudbk-bar .cloudbk-btn { flex: 1; padding: 12px; font-size: 13px; margin-top: 0; }
+.cloudbk-list { margin-top: 8px; font-size: 12px; color: var(--os-ink); }
+.cloudbk-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
+.cloudbk-row .cloudbk-restore { flex: 0 0 auto; margin-top: 0; padding: 6px 12px; }
