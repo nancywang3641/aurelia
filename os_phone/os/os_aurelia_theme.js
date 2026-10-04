@@ -172,6 +172,20 @@
         const body = tk === 'phone' ? JSON.stringify({ vars: t.vars || {} }, null, 1) : (t.css || '（空的）');
         return _paged(note + KINDS[tk] + '「' + t.name + '」' + (t.active ? '（正在用）' : '') + '\n' + body, args.part, '這套的內容');
     }
+    // 小機「做主題」改舊的那一套用：直接拿內容（CSS，手機主題是設定值），不經 read 那段寫給模型看的字
+    //   （以前從 read 剪，「這是你上一張單子…要再改就用 aurelia_theme_edit」會跟著送進專門做主題的那一通）
+    async function content(kind, name) {
+        const tk = _kind(kind);
+        if (!tk) return { err: 'kind 要寫 story、phone 或 chat。' };
+        const d = _draftFor(tk, name);
+        let t;
+        if (d) t = Object.assign({ name: d.after.name }, d.after);
+        else { const f = await _find(tk, name); if (f.err) return { err: f.err }; t = f.t; }
+        if (t.builtin) return { err: KINDS[tk] + '「' + t.name + '」是內建的，不能改；要照它的感覺做，就新做一套（from 不填，feel 寫照著它的感覺）。' };
+        const text = tk === 'phone' ? JSON.stringify({ vars: t.vars || {} }, null, 1) : String(t.css || '');
+        if (!text.trim()) return { err: KINDS[tk] + '「' + t.name + '」是空的，沒有可以照著改的內容。' };
+        return { name: t.name, text: text };
+    }
     // 看過說明書的憑證（10-01）：聊天 app 一輪最多叫三個工具、三個一起跑完才交回結果，
     //   AI 可以同一輪叫 spec 又叫 add——交出去那份是沒看過說明書、憑印象寫的（她測聊天 app 主題，零件寫成 .header 被退；
     //   手機主題那次只寫幾格也是同一個病）。說明書最後給一串字，add 要帶著它；同一輪叫的拿不到，一定交不出去。
@@ -858,7 +872,7 @@
     const API = {
         note: NOTE,
         get tools() { const E = _E(); return (E && E.logTool) ? _pub.concat([E.logTool]) : _pub; },
-        run: run, propose: propose, apply: apply, undo: undo,
+        run: run, propose: propose, apply: apply, undo: undo, content: content,
         verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview, superseded: superseded,
         look: look,
     };

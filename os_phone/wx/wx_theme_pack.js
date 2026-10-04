@@ -679,7 +679,8 @@
         });
     }
 
-    function _aiMessages(want, ref) {
+    // base＝這支 app 已經有的一套（要照它改）；ref＝別的 app 的美化（只抓風格）。兩個不會一起給。
+    function _aiMessages(want, ref, base) {
         const sys = [
             '你替一支手機聊天 app 設計「主題」：一整包 CSS，換掉整支 app 的長相。',
             '主題不只是換顏色：要動到形狀（圓角、邊框、陰影）、間距與密度、字型與字級字重、背景（漸層、紋理）、標頭與分頁列與輸入列的造型、清單的排法、圖示的樣子。整體要看得出是一種風格，而不是同一個版面換了顏色。',
@@ -726,8 +727,16 @@
             '第二步的 CSS（顏色表不用再寫一次）',
             '</theme>'
         ].join('\n');
-        let user = '想要的感覺：' + (String(want || '').trim() || '照你的判斷做一套有個性的');
-        if (ref) user += '\n\n底下是別的 app 用的一份美化，零件名字跟這支不一樣、不能直接用；請抓它的風格（配色、形狀、字型、氣氛），用這支 app 的零件重新寫一套：\n' + String(ref).slice(0, 12000);
+        let user;
+        if (base) {
+            // 改這支 app 已經有的一套（小機的「做主題」填 from）：以前借 ref 那條送，被說成「別的 app 的、零件不能用、重新寫一套」，改一點變整套重做
+            user = '這次要改：' + (String(want || '').trim() || '照你的判斷調整')
+                + '\n\n底下是這支 app 現在的這一套主題，零件名字就是這支的、照樣用。照上面寫的改它：沒提到的地方保持原樣，'
+                + '顏色表整張、造型整份都交回來（不是只交改了的那幾條）：\n' + String(base).slice(0, 14000);
+        } else {
+            user = '想要的感覺：' + (String(want || '').trim() || '照你的判斷做一套有個性的');
+            if (ref) user += '\n\n底下是別的 app 用的一份美化，零件名字跟這支不一樣、不能直接用；請抓它的風格（配色、形狀、字型、氣氛），用這支 app 的零件重新寫一套：\n' + String(ref).slice(0, 12000);
+        }
         return [{ role: 'system', content: sys }, { role: 'user', content: user }];
     }
     function _parseAi(text) {
@@ -771,11 +780,11 @@
     }
     // 叫 AI 做一套。🚨 交稿就結束，不自己再打一次 API——缺什麼一起回報，要不要再叫他補由她決定
     //   （她 09-20：「有些人沒法接受反覆觸發」）。補的兩件事：顏色表漏格（missing）、換了底沒寫符號色（ink）。
-    function generate(want, ref) {
+    function generate(want, ref, base) {
         return new Promise(function (resolve, reject) {
             const O = win.OS_API || window.OS_API;
             if (!O || !O.chatMain) { reject(new Error('模型連線還沒載入')); return; }
-            O.chatMain(_aiMessages(want, ref), null,
+            O.chatMain(_aiMessages(want, ref, base), null,
                 function (text) {
                     const r = _parseAi(text);
                     if (!r.css && !r.palette) { reject(new Error('它沒有照格式回')); return; }

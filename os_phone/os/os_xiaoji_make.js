@@ -77,7 +77,8 @@
             if (a.kind === 'chat') {
                 const P = _g('WX_THEME_PACK');
                 if (!P || !P.generate) throw new Error('聊天 app 主題還沒載入');
-                const g = await P.generate(cur ? (a.feel + '\n（照參考那一份改：沒提到的地方保持原樣）') : a.feel, cur);
+                // 改舊的：cur 當「這支 app 現在的這一套」（第三個參數）。第二個參數是「別的 app 的美化、只抓風格」，以前錯放在那裡，改一點變整套重做
+                const g = cur ? await P.generate(a.feel, '', cur) : await P.generate(a.feel);
                 return cur ? { edit: true, args: { kind: 'chat', name: a.from, css: g.css } }
                            : { edit: false, args: { kind: 'chat', name: a.name || g.name || '', css: g.css } };
             }
@@ -125,7 +126,12 @@
         const m = ctx.mod || _g(MOD[d.group]);
         if (!m || !m.propose) return { ok: false, text: '這一組還沒載好' };
         let cur = '';
-        if (a.from) {
+        if (a.from && d.group === 'theme' && m.content) {
+            // 主題直接拿內容（練習題用的假模組沒有 content，照舊走下面讀的那條）
+            const c = await m.content(a.kind, a.from);
+            if (c.err) return { ok: false, text: c.err };
+            cur = c.text;
+        } else if (a.from) {
             const rd = READ[d.group](a);
             cur = await _readAll(m, rd[0], rd[1]);
             if (!cur.trim() || _notFound(cur)) return { ok: false, text: cur.trim() || ('找不到「' + a.from + '」') };
