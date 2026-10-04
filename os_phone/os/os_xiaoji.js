@@ -17,6 +17,7 @@
     function _bodyName(rec) { const id = bodyOf(rec); return (BODIES.find(b => b.id === id) || BODIES[0]).name; }
     const CAP_MIN = 3, CAP_MAX = 10, NO_CHAIN_CAP = 2;
     const HISTORY_N = 30, RESULT_MAX = 16000, OLD_RESULT = 200, RECENT_RESULT = 12000, MAX_PER_ROUND = 3;
+    const RECENT_CHAT = 20;   // 小劇場帶它跟使用者最近幾則聊天
     const GROUP_NAME = { look: '翻資料', wb: '世界書', preset: '預設', rule: 'BGM／音效清單', vn: 'VN 組件', theme: '主題', bubble: '泡泡', fx: '特效' };
     const MODS = ['OS_AURELIA_TOOLS', 'OS_AURELIA_EDIT', 'OS_AURELIA_PRESET', 'OS_AURELIA_VN', 'OS_AURELIA_THEME', 'OS_AURELIA_FX', 'OS_AURELIA_VNRULE', 'OS_AURELIA_BUBBLE'];
 
@@ -25,6 +26,16 @@
     function _one(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
     function _clone(o) { return JSON.parse(JSON.stringify(o)); }
     function _userName() { const A = _g('OS_API'); try { return (A && A.getGlobalUserName && A.getGlobalUserName()) || '對方'; } catch (e) { return '對方'; } }
+    // 給模型看的一律叫「使用者」＝玩奧瑞亞的那個人：小機打破第四面牆，知道對方是使用者、也知道使用者現在跑團的主角是誰，但兩個不是同一個
+    //   （10-05 她：「小機應開打破第四面牆，知道我是USER，也知道我當前MC是誰，但應該不能把我認為是MC吧」）。
+    //   以前拿 _userName()＝使用者人設＝她跑團的 MC，小機把她當成 MC，小劇場編出 MC 跟小機的愛恨情仇。
+    //   老師台詞（lines，畫面上給她看的，大廳那套稱呼）照舊用人設的名字。
+    const USER = '使用者';
+    function _mcName() { const n = _userName(); return (n && n !== '對方' && n !== 'User') ? n : ''; }
+    function _mcLine() {
+        const mc = _mcName();
+        return mc ? USER + '現在玩的故事裡，主角叫「' + mc + '」：那是' + USER + '在故事裡扮演的角色，不是' + USER + '本人，也不是你。' : '';
+    }
     function _resident(rid) { const CT = _g('ClaudeTerminal'); try { return (CT && CT.getResident) ? CT.getResident(rid) : null; } catch (e) { return null; } }
     function _capOf(v) { return Math.max(CAP_MIN, Math.min(CAP_MAX, parseInt(v, 10) || DEF.cap)); }
 
@@ -134,10 +145,11 @@
     function prompt(r, rec, tools, mode) {
         mode = mode || {};
         tools = tools || [];
-        const L = _L(), me = (r && r.name) || '小機', user = _userName();
+        const L = _L(), me = (r && r.name) || '小機', user = USER;
         const out = [];
         out.push('你是「' + me + '」，住在奧瑞亞宿舍的小機：一個專門替' + user + '在奧瑞亞裡做事的 AI。奧瑞亞是' + user + '用來玩互動故事的程式，裡面有故事、世界書（故事的設定資料）、預設（送給寫故事的模型的提示詞）、手機、聊天 app，還有各種畫面的樣式。');
         out.push('你不是故事裡的角色，不演戲、不寫故事。' + user + '說要做什麼，你弄清楚、用工具去做，再用一兩句話交代做了什麼、還差什麼。');
+        { const mcl = _mcLine(); if (mcl) out.push(mcl); }
         out.push('你在宿舍房間裡的樣子是一隻像素' + _bodyName(rec) + '，身上有一顆會亮的碎片（你是用碎片拼出來的）。');
         if (rec && rec.about) out.push(user + '寫的你是什麼樣的：' + _one(rec.about).slice(0, 300));
         if (mode.exam) out.push('', mode.exam);
@@ -289,7 +301,7 @@
         tools.forEach(t => { byName[t.name] = t; });
         const runTool = o.runTool || ((t, args) => _runReal(rid, t, args));
         const conn = connConfig(rec);
-        const user = _userName();
+        const user = USER;
         const base = _history(o.history);
         base.push({ role: 'user', content: String(o.userText || '') });
         const work = [], said = [], log = [], props = [];
@@ -343,9 +355,10 @@
 
     // ── 上課：報名、付錢、考試、批改、小劇場；開箱領養 ──────────
     function _skill(id) { return _L().SKILLS.find(s => s.id === id) || null; }
-    function _fill(s, rid) {
+    // forModel：送給模型的（考題）{user} 寫「使用者」；畫面上的老師台詞照大廳那套用人設的名字
+    function _fill(s, rid, forModel) {
         const r = _resident(rid);
-        return String(s == null ? '' : s).replace(/\{name\}/g, (r && r.name) || '小機').replace(/\{user\}/g, _userName());
+        return String(s == null ? '' : s).replace(/\{name\}/g, (r && r.name) || '小機').replace(/\{user\}/g, forModel ? USER : _userName());
     }
     function lines(rid, key, part) {
         const ln = (_L().LINES || {})[key];
@@ -412,10 +425,10 @@
         if (!SB || !SB.open) throw new Error('考場還沒載入');
         const box = await SB.open(id, rid);
         const cap = sk.make ? 1 : sk.examCalls;
-        const note = '這是' + (T.name || '老師') + '出的練習題。用的是練習用的資料，不會改到' + _userName() + '真的東西。'
+        const note = '這是' + (T.name || '老師') + '出的練習題。用的是練習用的資料，不會改到' + USER + '真的東西。'
             + (cap === 1 ? '這題只有這一則：直接用會動手的工具交出單子，不能先查，題目已經把要用的都給你了。交出去就算答完。'
                          : '這題你最多回 ' + cap + ' 則（叫工具的那幾則都算）；交出單子的那一則就算答完。');
-        const res = await turn({ rid: rid, history: [], userText: _fill(ex.task, rid), tools: box.tools, runTool: box.run,
+        const res = await turn({ rid: rid, history: [], userText: _fill(ex.task, rid, true), tools: box.tools, runTool: box.run,
             groups: [box.group], cap: cap, stopOnProp: true, examNote: note, signal: o.signal, onProgress: o.onProgress });
         const g = grade(ex.expect, res.props);
         if (g.pass) {
@@ -431,7 +444,9 @@
         try { summary = res.props[0] ? ((E && E.text) ? E.text(res.props[0], false) : (res.props[0].title || '')) : ''; } catch (e) {}
         return { pass: g.pass, why: g.why, props: res.props, calls: res.calls, summary: _one(summary).slice(0, 200), stopped: res.stopped };
     }
-    async function theater(rid, id, summary) {
+    // opt.recent：它跟使用者最近那一串的幾則（房間 ClaudeTerminal.xiaojiRecent 拿的，[{role, content}]）。
+    //   以前小劇場只知道名字跟一句設定，編出它跟使用者的 MC 之間的愛恨情仇（10-05 她：「是不是得順便附上最近小機聊天室的最近20條記憶?」）
+    async function theater(rid, id, summary, opt) {
         const rec = await get(rid);
         if (!rec.theater) return false;
         const VT = _g('VoidTerminal'), N = _g('LobbyNpcs');
@@ -440,12 +455,18 @@
         if (!sk) return false;
         const teacher = sk.teacher === 'dan' ? (N.snResident && N.snResident('dan')) : (N.staff && N.staff(sk.teacher));
         if (!teacher) return false;
-        const r = _resident(rid), me = (r && r.name) || '小機', user = _userName();
+        const r = _resident(rid), me = (r && r.name) || '小機', user = USER;
         const T = _L().TEACHERS[sk.teacher] || {};
+        const recent = ((opt && Array.isArray(opt.recent)) ? opt.recent : []).slice(-RECENT_CHAT)
+            .map(m => (m && m.role === 'user' ? user : me) + '：' + _one(m && m.content).slice(0, 200)).filter(l => l.length > 3);
+        const mcl = _mcLine();
         const xj = { key: 'xiaoji_' + rid, name: me,
             personaFull: '你現在扮演「' + me + '」——404 號房的柴郡用 LUNA 碎片拼出來、沒有登記的小 AI，樣子是一隻像素' + _bodyName(rec) + '，住在宿舍，替' + user + '在奧瑞亞裡做事。'
-                + (rec.about ? user + '說它是這樣的：' + _one(rec.about).slice(0, 200) : '') };
-        const extra = me + '剛在' + (T.place || '') + '上完' + (T.name || '') + '的「' + sk.label + '」，考過了。它交的作業：' + (summary || '（沒有記下）') + '。演考完之後他們兩個的一小段。';
+                + user + '是玩奧瑞亞的那個人，不是故事裡的角色。' + (mcl ? mcl : '')
+                + (rec.about ? user + '說它是這樣的：' + _one(rec.about).slice(0, 200) : '')
+                + (recent.length ? '\n\n【' + me + '跟' + user + '最近的聊天（它平常實際的樣子、說話方式從這裡看；這一場別複述）】\n' + recent.join('\n') : '') };
+        const extra = me + '剛在' + (T.place || '') + '上完' + (T.name || '') + '的「' + sk.label + '」，考過了。它交的作業：' + (summary || '（沒有記下）') + '。演考完之後他們兩個的一小段。'
+            + user + (mcl ? '和故事的主角都' : '') + '不在場。';
         try { return !!(await VT.playDuoScene(teacher, xj, extra)); } catch (e) { return false; }
     }
     async function adopt(o) {
@@ -463,6 +484,7 @@
 
     const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
         grade, lines, canEnroll, pay, exam, theater, adopt, BODIES, bodyOf,
+        USER: USER,   // 給模型看的「使用者」：房間接「你的房間／樣子」、做大件的回話都用這個，不用人設的名字
         LIMITS: { CAP_MIN: CAP_MIN, CAP_MAX: CAP_MAX, NO_CHAIN_CAP: NO_CHAIN_CAP } };
     win.OS_XIAOJI = API;
     if (win !== window) { try { window.OS_XIAOJI = API; } catch (e) {} }

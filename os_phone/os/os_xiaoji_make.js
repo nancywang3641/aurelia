@@ -32,7 +32,8 @@
         return DEFS.filter(d => gs.indexOf(d.group) !== -1).map(d => Object.assign({ make: true, propose: true }, d));
     }
 
-    function _userName() { const A = _g('OS_API'); try { return (A && A.getGlobalUserName && A.getGlobalUserName()) || '對方'; } catch (e) { return '對方'; } }
+    // 回給小機看的：一律「使用者」，不用人設的名字（人設＝使用者跑團的主角，見 os_xiaoji.js 的 USER）
+    function _userName() { const X = _g('OS_XIAOJI'); return (X && X.USER) || '使用者'; }
     function _who(rid) { const CT = _g('ClaudeTerminal'); try { const r = CT && CT.getResident && CT.getResident(rid); return (r && r.name) || rid; } catch (e) { return rid; } }
     function _where() { const A = _g('AureliaLink'); try { return (A && A.where) ? A.where() : ''; } catch (e) { return ''; } }
 
