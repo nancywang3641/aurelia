@@ -109,7 +109,7 @@
     //   範圍＝這個故事現在開著的書。酒館：角色卡的主書＋附加書＋聊天綁的書＋全域書；
     //   手機：常駐書包＋這本藏書掛的書包（OS_WORLDBOOK.getActivePacks，組 context 也是走這支）。
     //   停用的條目不找（她關掉的就是不要用）。
-    //   例外：那間聊天室也勾了「改世界書」→ 找所有的書（ctx.wbAll，見 _wbAllBooks）。
+    //   例外：改世界書那組（宿舍、小機，os_aurelia_edit.js 帶 ctx.wbAll）→ 找所有的書（見 _wbAllBooks）。
     //   「這個故事開著哪幾本」查與改（os_aurelia_edit.js）用同一份：_wbBooks。
     //   手機沒掛書包、或掛的書包裡沒有開著的條目 → 所有書（all 標起來，結果要註明）。
     async function _wbBooks() {
@@ -178,7 +178,7 @@
         }
         return { note: note, list: list };
     }
-    // ctx.wbAll：這間勾了「改世界書」→ 找所有的書（聊天 app 那邊判斷，這裡不認聊天室）
+    // ctx.wbAll：改世界書那組叫的 → 找所有的書（聊天 app 10-04 起沒有改世界書，只會找這個故事的）
     async function worldbookSearch(args, ctx) {
         const terms = _terms(args && args.keyword);
         if (!terms.length) return '要給一個關鍵字。';

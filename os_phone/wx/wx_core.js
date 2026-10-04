@@ -1763,15 +1763,7 @@
         const refs = [];
         const ran = await (async function () {
             try {
-                return await T.run(chat, calls, function (label, what, prop, entry) {
-                    // 會動手的（改世界書）不是「查了」：是一張等她決定的單子，點開看改前改後（wx_tools openProposal）
-                    if (prop) {
-                        prop.by = who;
-                        prop.from = '聊天 app「' + (chat.name || who) + '」';   // 修改紀錄寫在哪提的
-                        const E = win.OS_AURELIA_EDIT;
-                        _sysPush(chat, (E && E.text) ? E.text(prop, true) : who + ' 提出要改世界書「' + prop.title + '」', { _prop: prop });
-                        return;
-                    }
+                return await T.run(chat, calls, function (label, what, entry) {
                     const item = { label: label, what: what || '', tool: (entry && entry.tool) || '' };
                     refs.push({ item: item, entry: entry });
                     if (!fold) { fold = _sysPush(chat, _toolsNote(who, [item]), { _tools: [item], _toolsBusy: true }); return; }
@@ -2777,7 +2769,7 @@
     // 事件綁在整個訊息區上做委派，泡泡是每次重畫的，逐顆綁會漏掉重畫後的那些。
     let _lpAt = 0;         // 長按跳出小窗的時間：手指放開那一下的 click 不要再去點到泡泡（用時間窗，不用旗標）
     let _replyTo = null;   // { name, text }：正在回覆誰的哪句話；送出或取消就清掉
-    let _voicePlaying = null;   // { el, audio, url }：正在播的那段錄音，同一時間只播一段
+    let _voicePlaying = null;   // { el, audio, url }：正在播的那段錄音，同一時間只播一段
     const _aiVoiceCache = new Map();   // 他傳的語音合成好的聲音（來源§音色§字 → Blob），同一句重播不再扣錢
     let _hold = null;           // 輸入框按住說話：{ phase: 'starting'|'recording'|'sending', t0, y0, cancel, released, tick, text, chatId }
     let _holdH = null;          // 按住期間掛在文件上的手指監聽（放開就拔掉）

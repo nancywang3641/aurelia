@@ -27,7 +27,7 @@
     const CALL_TIMEOUT = 25000;
     const RESULT_MAX = 3000;     // 一次結果整段送給模型的上限（字）
     // 奧瑞亞的工具（aurelia_ 開頭）例外，放寬到 16000：
-    //   ・寫法要照著寫的那張表得一次看齊（結果只完整給一次、下一輪收成一行，切段的話永遠湊不齊；10-01 她：gemini 一直跑去看第 3、4 頁）
+    //   ・（會動手那幾組的說明書也是這個原因，10-04 那幾組搬去小機了）
     //   ・她自己的資料（世界書、預設、主題）一條就上萬字，3000 是 09-19 只有上網搜尋時定的（網頁大半是雜訊），奧瑞亞工具沿用沒重想過
     //     （10-01 她：跑團世界觀都三萬起步，這 3000 字有點莫名）。上網搜尋那種照舊 3000。
     const AURELIA_MAX = 16000;
@@ -146,136 +146,17 @@
             run: function (args, srv, name, chat) {
                 const A = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS;
                 if (!A) throw new Error('奧瑞亞的資料還沒載好');
-                // 這間也勾了「改世界書」→ 查世界書找所有的書（兩組都勾時只列一個查世界書，列的是這組的）
-                const wbAll = enabledFor(chat).some(function (s) { return s.builtin === 'aurelia_wb'; });
-                const ctx = { chat: chat, wbAll: wbAll };
+                const ctx = { chat: chat };
                 // 找以前玩過的會順便交回「可以跳過去的地方」（ctx.jumps）：跟結果一起帶出去，聊天那條摺疊畫成按鈕
                 return Promise.resolve(A.run(name, args, ctx)).then(function (text) { return ctx.jumps ? { text: text, jumps: ctx.jumps } : text; });
             }
-        },
-        // 改世界書：角色提出新增或修改，聊天裡冒一行，她點開看改前改後、按同意才寫（os_aurelia_edit.js）。
-        //   看與找的那幾個照一般工具跑；propose 的那兩個走 propose（做成單子，不接著回）。
-        aurelia_wb: {
-            id: 'tl_aurelia_wb', name: '改世界書', brief: '看、找世界書的條目，提出新增或修改（她同意才寫進去）',
-            get tools() { const E = _edit(); return (E && E.tools) || []; },
-            get note() { const E = _edit(); return (E && E.note) || ''; },
-            run: function (args, srv, name) {
-                const E = _edit();
-                if (!E) throw new Error('改世界書還沒載好');
-                return E.run(name, args);
-            },
-            propose: function (args, srv, name) {
-                const E = _edit();
-                if (!E) return Promise.resolve({ ok: false, text: '改世界書還沒載好' });
-                return E.propose(name, args);
-            }
-        },
-        // 改預設：酒館預設（只有酒館有）與奧瑞亞提示詞（兩邊都有）的每一條，同一套單子（os_aurelia_preset.js）。
-        //   單子的同意／改回去／那一行的字照樣經 OS_AURELIA_EDIT（它看 prop.mod 轉過去），下面的單子小窗不用分兩條。
-        aurelia_preset: {
-            id: 'tl_aurelia_preset', name: '改預設', brief: '看預設與奧瑞亞提示詞的每一條，提出新增或修改（她同意才寫進去）',
-            get tools() { const P = _preset(); return (P && P.tools) || []; },
-            get note() { const P = _preset(); return (P && P.note) || ''; },
-            run: function (args, srv, name) {
-                const P = _preset();
-                if (!P) throw new Error('改預設還沒載好');
-                return P.run(name, args);
-            },
-            propose: function (args, srv, name) {
-                const P = _preset();
-                if (!P) return Promise.resolve({ ok: false, text: '改預設還沒載好' });
-                return P.propose(name, args);
-            }
-        },
-        // 改 VN 組件：故事裡跳出來的那種面板（創作室「純展示」），單子附改前改後的預覽（os_aurelia_vn.js）。
-        aurelia_vn: {
-            id: 'tl_aurelia_vn', name: '改 VN 組件', brief: '看故事裡跳出來的那種面板，提出新做或修改（她同意才寫進去）',
-            get tools() { const V = _vn(); return (V && V.tools) || []; },
-            get note() { const V = _vn(); return (V && V.note) || ''; },
-            run: function (args, srv, name) {
-                const V = _vn();
-                if (!V) throw new Error('改 VN 組件還沒載好');
-                return V.run(name, args);
-            },
-            propose: function (args, srv, name) {
-                const V = _vn();
-                if (!V) return Promise.resolve({ ok: false, text: '改 VN 組件還沒載好' });
-                return V.propose(name, args);
-            }
-        },
-        // 改主題：劇情主題、手機主題、聊天 app 主題，新做／修改／換上，單子附改前改後的樣子（os_aurelia_theme.js）。
-        aurelia_theme: {
-            id: 'tl_aurelia_theme', name: '改主題', brief: '看劇情、手機、聊天 app 的主題，提出新做、修改或換上（她同意才寫進去）',
-            get tools() { const T = _theme(); return (T && T.tools) || []; },
-            get note() { const T = _theme(); return (T && T.note) || ''; },
-            run: function (args, srv, name) {
-                const T = _theme();
-                if (!T) throw new Error('改主題還沒載好');
-                return T.run(name, args);
-            },
-            propose: function (args, srv, name) {
-                const T = _theme();
-                if (!T) return Promise.resolve({ ok: false, text: '改主題還沒載好' });
-                return T.propose(name, args);
-            }
-        },
-        // 改特效：畫面特效的配方，新增／修改／開關，單子上可以試播（os_aurelia_fx.js）。
-        aurelia_fx: {
-            id: 'tl_aurelia_fx', name: '改特效', brief: '看畫面特效，提出新增、修改或開關（她同意才寫進去）',
-            get tools() { const X = _fx(); return (X && X.tools) || []; },
-            get note() { const X = _fx(); return (X && X.note) || ''; },
-            run: function (args, srv, name) {
-                const X = _fx();
-                if (!X) throw new Error('改特效還沒載好');
-                return X.run(name, args);
-            },
-            propose: function (args, srv, name) {
-                const X = _fx();
-                if (!X) return Promise.resolve({ ok: false, text: '改特效還沒載好' });
-                return X.propose(name, args);
-            }
-        },
-        // 改指令：BGM／音效清單、四個內建格式開關、BGM 主題（VN 指令內容本身不給改；os_aurelia_vnrule.js）。
-        aurelia_vnrule: {
-            id: 'tl_aurelia_vnrule', name: '改指令', brief: '看背景音樂與音效清單、內建格式開關、背景音樂主題，提出修改（她同意才寫進去）',
-            get tools() { const Q = _rule(); return (Q && Q.tools) || []; },
-            get note() { const Q = _rule(); return (Q && Q.note) || ''; },
-            run: function (args, srv, name) {
-                const Q = _rule();
-                if (!Q) throw new Error('改指令還沒載好');
-                return Q.run(name, args);
-            },
-            propose: function (args, srv, name) {
-                const Q = _rule();
-                if (!Q) return Promise.resolve({ ok: false, text: '改指令還沒載好' });
-                return Q.propose(name, args);
-            }
-        },
-        // 改泡泡：聊天泡泡的主題庫與每間聊天室的泡泡，新做／修改／換上，單子附樣子（os_aurelia_bubble.js）。
-        //   帶著叫工具的那間聊天室：rooms 寫「這間」就是它。
-        aurelia_bubble: {
-            id: 'tl_aurelia_bubble', name: '改泡泡', brief: '看聊天泡泡的主題和每間聊天室的泡泡，提出新做、修改或換上（她同意才寫進去）',
-            get tools() { const U = _bubble(); return (U && U.tools) || []; },
-            get note() { const U = _bubble(); return (U && U.note) || ''; },
-            run: function (args, srv, name, chat) {
-                const U = _bubble();
-                if (!U) throw new Error('改泡泡還沒載好');
-                return U.run(name, args, { chat: chat });
-            },
-            propose: function (args, srv, name, chat) {
-                const U = _bubble();
-                if (!U) return Promise.resolve({ ok: false, text: '改泡泡還沒載好' });
-                return U.propose(name, args, { chat: chat });
-            }
         }
     };
+    // 會動手的那七組（改世界書、預設、VN 組件、主題、特效、指令、泡泡）10-04 起不放在聊天 app，只給小機（她選的）：
+    //   角色扮演的那一間拿來改奧瑞亞會出戲；在聊天裡順手做的主題只有主題頁那種專門叫法的三分之一（同模型同說明書量過），
+    //   還會照聊天的習慣先問「這樣好嗎」，每一輪又要重送整份角色扮演設定。
+    //   聊天記錄裡以前提的單子照樣點得開（openProposal，下面那張單子小窗宿舍也在用）。
     function _edit() { return win.OS_AURELIA_EDIT || window.OS_AURELIA_EDIT; }
-    function _vn() { return win.OS_AURELIA_VN || window.OS_AURELIA_VN; }
-    function _theme() { return win.OS_AURELIA_THEME || window.OS_AURELIA_THEME; }
-    function _fx() { return win.OS_AURELIA_FX || window.OS_AURELIA_FX; }
-    function _rule() { return win.OS_AURELIA_VNRULE || window.OS_AURELIA_VNRULE; }
-    function _bubble() { return win.OS_AURELIA_BUBBLE || window.OS_AURELIA_BUBBLE; }
-    function _preset() { return win.OS_AURELIA_PRESET || window.OS_AURELIA_PRESET; }
 
     // ================================================================
     // 清單（共用）
@@ -296,7 +177,10 @@
         } else if (!seeded) {
             try { localStorage.setItem(SEED_KEY, '1'); } catch (e) {}
         }
-        let added = false;
+        // 已經不在聊天 app 的內建組（會動手的那七組，見 BUILTIN 底下）：清單裡存著的拿掉，小窗與送出都不再出現
+        const n0 = _list.length;
+        _list = _list.filter(function (x) { return !x.builtin || BUILTIN[x.builtin]; });
+        let added = _list.length !== n0;
         Object.keys(BUILTIN).forEach(function (k) {
             if (_list.some(function (x) { return x.builtin === k; })) return;
             _list.push({ id: BUILTIN[k].id, name: BUILTIN[k].name, builtin: k, city: '', paused: false });
@@ -414,8 +298,6 @@
         const map = {};
         enabledFor(chat).forEach(function (srv) {
             ((srv.builtin && BUILTIN[srv.builtin]) ? BUILTIN[srv.builtin].tools : (srv.tools || [])).forEach(function (t) {
-                // 兩組內建都有的同一個功能（查世界書：翻資料和改世界書都帶著）只列一次
-                if (srv.builtin && map[t.name] && map[t.name].srv.builtin) return;
                 let key = t.name, n = 2;
                 while (map[key]) key = t.name + '_' + (n++);
                 map[key] = { srv: srv, tool: t };
@@ -515,32 +397,13 @@
         }
         return lines.join('\n');
     }
-    // 說明書（*_spec）：看過之後 OPEN_KEEP_MS 內每一輪都整份帶著，不縮成一行。
-    //   以前同別的結果一樣只給一輪：她說「酒紅蝴蝶風」時，那份說明書早就只剩開頭 200 字（裡面剛好有交件號碼，檢查照過），
-    //   角色憑印象做，只換顏色改一個角（10-04 查呼叫記錄確認：那一輪送出去的沒有說明書本文）。同一份分段的各段分開算。
-    function _manuals(log) {
-        const now = Date.now(), seen = {}, keep = [];
-        for (let i = log.length - 1; i >= 0; i--) {
-            const x = log[i];
-            if (!x || !x.ok || !/_spec$/.test(x.tool || '') || now - (x.at || 0) > OPEN_KEEP_MS) continue;
-            const k = x.tool + '|' + ((x.args && x.args.part) || 1);
-            if (seen[k]) continue;
-            seen[k] = true; keep.unshift(x);
-        }
-        return keep;
-    }
     // 拿到的結果：還沒給它看過的整段給一次，看過的只留一行
     function resultsBlock(chat) {
         const log = (chat && Array.isArray(chat.toolLog)) ? chat.toolLog : [];
         if (!log.length) return '';
         const fresh = log.filter(function (x) { return !x.sent; });
-        const man = _manuals(log).filter(function (x) { return x.sent; });   // 這一輪剛拿到的照一般結果給，不重複
-        const old = log.filter(function (x) { return x.sent && man.indexOf(x) === -1; }).slice(-4);
+        const old = log.filter(function (x) { return x.sent; }).slice(-4);
         const out = [];
-        if (man.length) {
-            out.push('【你叫出來過的寫法說明】做這一類東西時照著寫（' + Math.round(OPEN_KEEP_MS / 60000) + ' 分鐘內一直在這裡）：');
-            man.forEach(function (x) { out.push('── ' + x.label); out.push(String(x.text || '').slice(0, AURELIA_MAX)); });
-        }
         if (fresh.length) {
             out.push('【你剛才用工具拿到的結果】這些是你自己查的，對方看不到，要讓對方知道就用你自己的話講，不要整段照貼。');
             fresh.forEach(function (x, i) {
@@ -628,7 +491,7 @@
                 } else {
                     op.text = '沒有叫做「' + want + '」的工具組。能打開的有：' + enabledFor(chat).map(function (s) { return s.name; }).join('、');
                 }
-                try { if (onNotice) onNotice(op.label, '', null, op); } catch (e) {}
+                try { if (onNotice) onNotice(op.label, '', op); } catch (e) {}
                 chat.toolLog.push(op);
                 any = true;
                 continue;
@@ -640,25 +503,12 @@
             if (hit) _markOpen(chat, hit.srv);   // 用到了＝這組接下來也列全的（沒打開就直接寫對名字也算）
             if (!hit) {
                 entry.text = '沒有叫做「' + c.name + '」的工具';
-            } else if (hit.tool.propose && B && B.propose) {
-                // 會動手的（改世界書）：先檢查，過了做成單子交給她（onNotice 帶 prop，聊天裡冒一行，點開看改前改後）。
-                //   做成了不記結果、不接著回——等她決定，不多叫一次模型；她按了什麼，聊天記錄那一行會跟著改。
-                //   沒過（找不到那一條、JSON 寫壞）照一般結果交回去，讓它改好再提。
-                const args = _parseArgs(c.body, hit.tool.inputSchema, true);
-                let r = null;
-                if (args === null) r = { ok: false, text: '大括號裡不是正確的 JSON（內容裡的雙引號要寫成 \\"，或改用「」）' };
-                else { entry.args = args; try { r = await B.propose(args, hit.srv, hit.tool.name, chat); } catch (e) { r = { ok: false, text: (e && e.message) || '失敗' }; } }
-                if (r && r.ok && r.prop) {
-                    try { if (onNotice) onNotice(entry.label, '', r.prop); } catch (e) {}
-                    continue;
-                }
-                entry.text = (r && r.text) || '失敗';
             } else {
                 entry.args = _parseArgs(c.body, hit.tool.inputSchema);
-                try { if (onNotice) onNotice(entry.label, _argsText(entry.args), null, entry); } catch (e) {}   // entry 跑完才有結果，聊天那條摺疊跑完再補上
+                try { if (onNotice) onNotice(entry.label, _argsText(entry.args), entry); } catch (e) {}   // entry 跑完才有結果，聊天那條摺疊跑完再補上
                 try {
-                    const got = (hit.srv.builtin && BUILTIN[hit.srv.builtin])
-                        ? await BUILTIN[hit.srv.builtin].run(entry.args, hit.srv, hit.tool.name, chat)   // 一個內建底下有好幾個功能時要知道叫的是哪個
+                    const got = B
+                        ? await B.run(entry.args, hit.srv, hit.tool.name, chat)   // 一個內建底下有好幾個功能時要知道叫的是哪個
                         : await _callTool(hit.srv, hit.tool.name, entry.args);
                     if (got && typeof got === 'object') { entry.text = String(got.text == null ? '' : got.text); if (Array.isArray(got.jumps)) entry.jumps = got.jumps.slice(0, 6); }
                     else entry.text = got;
@@ -669,11 +519,7 @@
             chat.toolLog.push(entry);
             any = true;
         }
-        if (chat.toolLog.length > LOG_KEEP) {
-            // 還在用的說明書不跟著剪掉（剪掉就又回到憑印象做）
-            const man = _manuals(chat.toolLog), tail = chat.toolLog.slice(-LOG_KEEP);
-            chat.toolLog = chat.toolLog.filter(function (x) { return tail.indexOf(x) !== -1 || man.indexOf(x) !== -1; });
-        }
+        if (chat.toolLog.length > LOG_KEEP) chat.toolLog = chat.toolLog.slice(-LOG_KEEP);
         return any;
     }
 
@@ -780,7 +626,6 @@
         if (s.builtin === 'weather') return { t: s.city ? '查：' + s.city : '用你手機的位置', bad: false };
         // 🚨 別寫「不會花錢」：翻資料本身不叫模型，但角色查完會再回一次（那次照常算錢），勾了的聊天室每輪也多帶工具說明
         if (s.builtin === 'aurelia') return { t: '只看不改，查完多回一次', bad: false };
-        if (s.builtin === 'aurelia_wb' || s.builtin === 'aurelia_preset' || s.builtin === 'aurelia_vn' || s.builtin === 'aurelia_theme' || s.builtin === 'aurelia_fx' || s.builtin === 'aurelia_vnrule' || s.builtin === 'aurelia_bubble') return { t: '每一筆都要你按同意才會改', bad: false };
         if (s.err) return { t: s.err, bad: true };
         if (s.tools && s.tools.length) return { t: s.tools.length + ' 個功能', bad: false };
         return { t: '還沒連過，第一次用時會自己連', bad: false };
@@ -914,7 +759,7 @@
     }
 
     // ================================================================
-    // 會動手的單子（改世界書、改預設）：聊天裡那一行點開 → 看改前改後 → 同意才寫、寫了還能改回去
+    // 會動手的單子：聊天裡那一行點開 → 看改前改後 → 同意才寫、寫了還能改回去（聊天 app 10-04 起不再提新的，以前提的照樣點得開；宿舍那邊用 openPropSheet）
     //   兩種都經 OS_AURELIA_EDIT（改預設的它轉給 OS_AURELIA_PRESET）；sheet(prop) 給標題、名詞、要畫的格子。
     //   單子存在那一則系統訊息的 _prop 上。她按了什麼，那一則的文字（送模型時是旁註）跟著改，
     //   角色下一次回覆就知道她同意了沒有——不為這個多叫一次模型。
