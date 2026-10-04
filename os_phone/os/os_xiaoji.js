@@ -10,7 +10,8 @@
     'use strict';
     const win = window.parent || window;
     const APP = 'xiaoji';
-    const DEF = { conn: 'route', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0, body: 'hamster' };
+    // makeConn：做大件那一通走哪條（''＝跟說話同一條 conn；10-05 她：「再設置那裏加一條工具模型選項下拉單」）
+    const DEF = { conn: 'route', makeConn: '', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0, body: 'hamster' };
     // 房間裡的樣子（畫法在房間的 clawd_portrait.js，id 對得上它的 BASES）。領養時挑，門卡上能換；沒挑過的是倉鼠
     const BODIES = [{ id: 'hamster', name: '倉鼠' }, { id: 'cat', name: '小貓' }, { id: 'penguin', name: '企鵝' }];
     function bodyOf(rec) { const id = rec && rec.body; return BODIES.some(b => b.id === id) ? id : DEF.body; }
@@ -78,9 +79,10 @@
         ((S.getChannels && S.getChannels()) || []).forEach(c => { if (c && c.id) out.push({ id: c.id, label: c.name || c.model || c.id }); });
         return out;
     }
-    function connConfig(rec) {
+    // which＝'make'：做大件那一通，門卡另外選了就走那條，沒選跟說話同一條
+    function connConfig(rec, which) {
         const S = _g('OS_SETTINGS') || {};
-        const conn = (rec && rec.conn) || 'route';
+        const conn = (which === 'make' && rec && rec.makeConn) ? rec.makeConn : ((rec && rec.conn) || 'route');
         let cfg;
         if (conn === 'route') cfg = S.getConfigFor ? S.getConfigFor('xiaoji') : (S.getConfig ? S.getConfig() : {});
         else if (conn === 'main') cfg = S.getConfig ? S.getConfig() : {};
@@ -480,7 +482,7 @@
      *  →「考試和平常都走小機的接口」）。交給各工坊的 generate 當 via：工坊照舊組自己的說明書、溫度，只是不叫主模型。
      *  回 (messages, {label, temperature}) → Promise<回覆全文>。串流＋留程式碼圍欄同創作室那條（大件很長，不串流會被閘道切掉） */
     async function viaFor(rid, signal) {
-        const conn = connConfig(await get(rid));
+        const conn = connConfig(await get(rid), 'make');
         return (messages, o) => {
             o = o || {};
             return _chat(messages, {
