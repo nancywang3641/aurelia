@@ -1761,6 +1761,18 @@ const IRIS_IDLE = [
     //   🚨全程包 __AURELIA_SUMMARIZING：state_runtime(AVS)/VecEngine/dossier 都查此旗標，不設就會拿當前卡 preset 抽小劇場→污染。
     //   🚨不 saveVnChapter：一存成章節就觸發 VecEngine ingest + state_runtime 抽取。改 ephemeral(_startWithLoader/autoload 不存)。
     //   🚨沒 <content> 一律丟棄(照 VN 劇本鐵則，不 wrap 垃圾→黑屏)。立繪/[Scene|]插圖由 VN_Core 引擎處理。
+    function _playEphemeral(ch) {
+        try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
+        window._lobbyPendingChapter = ch;
+        if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
+        else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(ch.content, null);
+    }
+    // 重看存著的劇本（小機培養室）：同一套 ephemeral 播，不叫模型、不存章節、不記大廳回顧
+    VoidTerminal.playSavedScene = function (saved) {
+        if (!saved || !saved.content) return false;
+        _playEphemeral({ title: saved.title || '小劇場', storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: String(saved.content), createdAt: Date.now() });
+        return true;
+    };
     VoidTerminal.playDuoScene = async function (npcA, npcB, extra) {
         const _prevSum = window.__AURELIA_SUMMARIZING;
         try {
@@ -1803,13 +1815,10 @@ const IRIS_IDLE = [
             if (_sum) brief = _sum[1].replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
             // ephemeral 播：不 saveVnChapter（免觸發 ingest/抽取）；autoload 讀 _lobbyPendingChapter.content 直接 _startWithLoader
             const ch = { title: '小劇場：' + npcA.name + ' & ' + npcB.name, storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: content, createdAt: Date.now() };
-            try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
-            window._lobbyPendingChapter = ch;
-            if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
-            else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(content, null);
+            _playEphemeral(ch);
             if (brief && brief.length >= 20) _saveTheaterBrief(npcA, npcB, brief);   // 同回覆的摘要直接落地，零額外 API
             else _summarizeTheater(npcA, npcB, content);   // 補抽退路：AI 沒照要求附摘要才走（fire-and-forget 不拖播放）
-            return true;   // 回報成敗給大廳偷窺遮罩（true=已丟給 VN 播放器）
+            return ch;   // 回報成敗給大廳偷窺遮罩（有東西＝已丟給 VN 播放器）；小機培養室拿 content 存起來之後重看
         } catch (e) { console.warn('[playDuoScene]', e); return false; }
         finally {
             // 延遲還原旗標：撐過生成後才發的 GENERATION_ENDED（state_runtime debounce 1500ms）再放行，別擋到 VN 播放本身的立繪/場景生圖

@@ -551,6 +551,8 @@
                 const got = [];
                 for (const c of ex.calls.slice(0, MAX_PER_ROUND)) {
                     if (o.signal && o.signal.aborted) throw _abortErr();
+                    const t0 = byName[c.name];   // 培養室「正在做什麼」：開始做就講（大件那一通要等很久，做完才講等於沒講）
+                    _emit(o, { type: 'tool-start', label: t0 ? (t0.label || t0.name) : String(c.name) });
                     const res = await _callOne(c, byName, runTool, o.signal);
                     log.push(res); got.push(res);
                     if (res.prop) props.push(res.prop);
@@ -664,24 +666,50 @@
         const res = await turn({ rid: rid, history: [], userText: _fill(ex.task, rid, true), tools: box.tools, runTool: box.run,
             groups: [box.group], cap: cap, stopOnProp: true, examNote: note, signal: o.signal, onProgress: o.onProgress });
         const g = grade(ex.expect, res.props);
-        if (g.pass) {
-            const rec = await get(rid);
-            rec.skills[id] = { at: Date.now() };
-            await save(rid, { skills: rec.skills });
-        }
         // 沙盒裡的單子沒經過 AureliaLink，沒標是誰提的：補上小機自己（小劇場的由來要寫對人）
         const me = _resident(rid);
         if (res.props[0] && !res.props[0].by) res.props[0].by = (me && me.name) || '小機';
         const E = _g('OS_AURELIA_EDIT');
         let summary = '';
         try { summary = res.props[0] ? ((E && E.text) ? E.text(res.props[0], false) : (res.props[0].title || '')) : ''; } catch (e) {}
-        return { pass: g.pass, why: g.why, props: res.props, calls: res.calls, summary: _one(summary).slice(0, 200), stopped: res.stopped };
+        summary = _one(summary).slice(0, 200);
+        const hw = _homework(res.props[0], sk);
+        const said = String(res.reply || '').trim().slice(0, SAID_MAX);
+        // 考過的那一門記下作業與作業一句話（培養室點那門看得到；小劇場之後才演也拿得到由來）
+        if (g.pass) {
+            const rec = await get(rid);
+            rec.skills[id] = { at: Date.now(), summary: summary, hw: hw };
+            await save(rid, { skills: rec.skills });
+        }
+        return { pass: g.pass, why: g.why, props: res.props, calls: res.calls, summary: summary, stopped: res.stopped, said: said, hw: hw };
+    }
+    // 考試交的作業給她（10-05 她：學技能「也消耗了用戶的API，但感覺好像沒有獎勵或者獲得感」）：
+    //   做東西那四門新做的一件是真的能用的，照單子同一套 apply 收進她的東西；收下不順便換上（use／rooms 拿掉）。
+    //   改世界書／預設／指令三門改的是練習資料，只給看（state practice：單子小窗沒有同意鈕）。
+    const SAID_MAX = 600;
+    function _homework(p, sk) {
+        if (!p || !sk) return null;
+        const hw = JSON.parse(JSON.stringify(p));
+        if (sk.make && hw.kind === 'add') { hw.state = 'wait'; hw.use = false; hw.rooms = []; }
+        else hw.state = 'practice';
+        return hw;
+    }
+    /** 培養室按了收下／改回去：作業那張的新狀態存回那一門 */
+    async function hwSave(rid, id, prop) {
+        const rec = await get(rid);
+        if (!rec.skills[id]) return false;
+        rec.skills[id].hw = prop;
+        await save(rid, { skills: rec.skills });
+        return true;
     }
     // opt.recent：它跟使用者最近那一串的幾則（房間 ClaudeTerminal.xiaojiRecent 拿的，[{role, content}]）。
     //   以前小劇場只知道名字跟一句設定，編出它跟使用者的 MC 之間的愛恨情仇（10-05 她：「是不是得順便附上最近小機聊天室的最近20條記憶?」）
+    //   演完劇本存在那一門（rec.skills[id].theater）：培養室「看小劇場」之後重看照原本那份播，不再叫模型（插圖照 [Scene|] 的編號拿快取）。
+    //   summary 沒給就拿考過時記下的那句（之後才在培養室按演的）。
     async function theater(rid, id, summary, opt) {
         const rec = await get(rid);
         if (!rec.theater) return false;
+        if (!summary && rec.skills[id]) summary = rec.skills[id].summary || '';
         const VT = _g('VoidTerminal'), N = _g('LobbyNpcs');
         if (!VT || !VT.playDuoScene || !N) return false;
         const sk = _skill(id);
@@ -701,7 +729,23 @@
                 + (recent.length ? '\n\n【' + me + '跟' + user + '最近的聊天（它平常實際的樣子、說話方式從這裡看；這一場別複述）】\n' + recent.join('\n') : '') };
         const extra = me + '剛在' + (T.place || '') + '上完' + (T.name || '') + '的「' + sk.label + '」，考過了。它交的作業：' + (summary || '（沒有記下）') + '。演考完之後他們兩個的一小段。'
             + user + (mcl ? '和故事的主角都' : '') + '不在場。';
-        try { return !!(await VT.playDuoScene(teacher, xj, extra)); } catch (e) { return false; }
+        let ch = null;
+        try { ch = await VT.playDuoScene(teacher, xj, extra); } catch (e) { return false; }
+        if (!ch) return false;
+        if (ch.content) {
+            try {
+                const rec2 = await get(rid);
+                if (rec2.skills[id]) { rec2.skills[id].theater = { title: ch.title || '', content: ch.content, at: Date.now() }; await save(rid, { skills: rec2.skills }); }
+            } catch (e) { console.warn('[OS_XIAOJI] 小劇場沒存成：', e); }
+        }
+        return true;
+    }
+    /** 重看存著的那一場（不叫模型）。沒存過回 false */
+    async function replay(rid, id) {
+        const rec = await get(rid), t = rec.skills[id] && rec.skills[id].theater;
+        const VT = _g('VoidTerminal');
+        if (!t || !t.content || !VT || !VT.playSavedScene) return false;
+        return !!VT.playSavedScene({ title: t.title, content: t.content });
     }
     async function adopt(o) {
         o = o || {};
@@ -717,7 +761,7 @@
     }
 
     const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
-        grade, lines, canEnroll, pay, exam, theater, adopt, BODIES, bodyOf,
+        grade, lines, canEnroll, pay, exam, theater, replay, hwSave, adopt, BODIES, bodyOf,
         USER: USER,   // 給模型看的「使用者」：房間接「你的房間／樣子」、做大件的回話都用這個，不用人設的名字
         // 它記得的事（房間「它記得的事」面板用）與舊聊天摘要
         notesOf: rec => _notes(rec).items, noteAct, memParse, memStrip, memApply,

@@ -835,6 +835,7 @@
         else if (prop.state === 'no') foot = st('你沒有同意，' + S.noun + '沒有改') + '<div class="wxtl-pp-bar">' + btn('yes', busy === 'yes' ? '寫進去中…' : '還是同意', true) + '</div>';
         else if (prop.state === 'done') foot = st('已經寫進' + S.noun + '了') + '<div class="wxtl-pp-bar">' + btn('undo', busy === 'undo' ? '改回去中…' : '改回去') + '</div>';
         else if (prop.state === 'undone') foot = st('已經改回去了');
+        else if (prop.state === 'practice') foot = st('這是考試時改練習資料交的，只給你看，不會寫進你的東西');   // 小機培養室的作業
         else foot = st(prop.why || '這張作廢了', true);
         if ((prop.state === 'wait' || prop.state === 'no') && E && E.superseded && E.superseded(prop)) foot = st('這張已經有新的一版了，看最新那張', true);
         // 內容只畫一次（預覽是跑起來的面板，整張重畫會重跑、閃一下）；之後按鈕、狀態變了只換標題與底下那排
@@ -969,7 +970,7 @@
     }
     // 聊天裡那一條給她看的字（已經跳脫，wx_view 直接放）；右邊那個小標是狀態
     function propNotice(prop) { const E = _edit(); return esc((E && E.text) ? E.text(prop, false) : ''); }
-    const PP_CHIP = { wait: '點開看', no: '沒同意', done: '寫進去了', undone: '改回去了', stale: '作廢了' };
+    const PP_CHIP = { wait: '點開看', no: '沒同意', done: '寫進去了', undone: '改回去了', stale: '作廢了', practice: '練習題' };
     function propChip(prop) { return PP_CHIP[(prop && prop.state) || 'wait'] || ''; }
     try { _injectCss(); } catch (e) {}   // 聊天裡那一行的樣式要在打開任何小窗之前就有
 
