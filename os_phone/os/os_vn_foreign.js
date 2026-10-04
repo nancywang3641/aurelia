@@ -117,8 +117,12 @@
     function stripTl(text) {
         return String(text == null ? '' : text).split('\n').map(function (line) {
             line = line.replace(/\[([^\[\]]*)\]/g, function (m, inner) { const s = splitTail(inner); return s.tl ? '[' + s.orig + ']' : m; });
-            const s = splitTail(line);
-            return s.tl ? s.orig : line;
+            // 行首的 [誰] 是誰說的，名字常是中文：不算進「前面是不是外文」，不然整行判成中文、翻譯剝不掉。
+            //   帶冒號的 [Voice: …] 那種是內容，照舊算。
+            const h = line.match(/^\s*\[[^\[\]:：]*\]\s*/);
+            const head = h ? h[0] : '';
+            const s = splitTail(line.slice(head.length));
+            return s.tl ? head + s.orig : line;
         }).join('\n');
     }
     function langName(k) { return LANG_NAME[k] || ''; }
