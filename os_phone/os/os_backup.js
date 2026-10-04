@@ -3,7 +3,7 @@
 // 路徑：os_phone/os/os_backup.js
 // 職責：統一資料備份引擎
 //   - 備份目標：IndexedDB 所有重要倉庫 + localStorage 設定
-//   - 雲端：GitHub Gist（僅限世界書/成就等輕量必要資料）
+//   - 雲端自動備份：托管伺服器或 GitHub 私人倉庫，分塊勾選（cloudBackup；10-04 起，舊的 Gist 拿掉了）
 //   - 本地：JSON 檔案匯出入（100% 包含 AVS、VN章節、聊天紀錄等大型資料）
 // ----------------------------------------------------------------
 (function () {
@@ -32,7 +32,7 @@
         'vn_prompt_order',            // [VN] 提示詞順序
         'wx_phone_api_config'         // 微信設定
     ];
-    // 只有本地全量匯出才收的（可能很大：書的封面、每本故事的狀態；Gist 有 8MB 上限）
+    // 只有本地全量匯出才收的（可能很大：書的封面、每本故事的狀態）
     const LS_FULL_ONLY_KEYS = [
         'aurelia_custom_worlds'       // 書架上的書
     ];
@@ -59,6 +59,8 @@
         try { return JSON.parse(localStorage.getItem(LSKEY) || '{}'); } catch(e) { return {}; }
     }
     function saveSettings(s) { localStorage.setItem(LSKEY, JSON.stringify(s)); }
+    // 10-04 拿掉 Gist：以前存在這裡的 GitHub 金鑰與 Gist 編號清掉，不要留一把沒在用的金鑰在瀏覽器裡
+    try { const _o = getSettings(); if (_o.token || _o.gistId) { delete _o.token; delete _o.gistId; saveSettings(_o); } } catch (e) {}
 
     // ── 通用 IndexedDB 方法 ──────────────────────────────────────────
     function _getStore(storeName) {
@@ -90,7 +92,7 @@
     async function collectDB(opts) {
         const out = {};
         try {
-            // 🌟 1. 輕量資料 (Gist 與本地都會備份)
+            // 🌟 1. 世界書與成就
             if (opts.worldbook !== false) out.worldbook = await _getStore('world_book_entries');
             if (opts.achievements !== false) out.achievements = await _getStore('achievements');
 
@@ -126,18 +128,6 @@
             type: 'full',
             db: dbData,
             localStorage: collectLocalStorage(true)
-        };
-    }
-
-    // ── Gist 備份資料打包（只含輕量必要資料） ─────────────────────────
-    async function collectEssential() {
-        const dbData = await collectDB({ worldbook: true, achievements: true, fullExport: false });
-        return {
-            version: 4,
-            exportedAt: new Date().toISOString(),
-            type: 'essential',
-            db: dbData,
-            localStorage: collectLocalStorage()
         };
     }
 
@@ -181,52 +171,6 @@
         }
 
         return restored;
-    }
-
-    // ── GitHub Gist API ───────────────────────────────────────────────
-    async function gistBackup() {
-        const s = getSettings();
-        if (!s.token) throw new Error('請先填入 GitHub Personal Access Token');
-
-        const data = await collectEssential();
-        const content = JSON.stringify(data, null, 2);
-
-        // 檢查大小（Gist 單檔上限約 10MB）
-        const sizeKB = Math.round(new Blob([content]).size / 1024);
-        if (sizeKB > 8192) throw new Error(`資料量過大（${sizeKB}KB），請改用「本地匯出」備份`);
-
-        const body = { files: { 'aurelia-backup.json': { content } } };
-        let url = 'https://api.github.com/gists', method = 'POST';
-        if (s.gistId) { url += '/' + s.gistId; method = 'PATCH'; }
-        else { body.description = '奧瑞亞系統統一備份 V3'; body.public = false; }
-
-        const res = await fetch(url, {
-            method,
-            headers: { 'Authorization': 'Bearer ' + s.token, 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error('GitHub 錯誤 ' + res.status + ': ' + (err.message || res.statusText));
-        }
-        const json = await res.json();
-        if (!s.gistId) { s.gistId = json.id; saveSettings(s); }
-        return { gistId: json.id, url: json.html_url, sizeKB };
-    }
-
-    async function gistRestore() {
-        const s = getSettings();
-        if (!s.token) throw new Error('請先填入 GitHub Token');
-        if (!s.gistId) throw new Error('尚無 Gist ID，請先備份一次');
-
-        const res = await fetch('https://api.github.com/gists/' + s.gistId, {
-            headers: { 'Authorization': 'Bearer ' + s.token }
-        });
-        if (!res.ok) throw new Error('GitHub 錯誤 ' + res.status);
-        const json = await res.json();
-        const raw = json.files?.['aurelia-backup.json']?.content;
-        if (!raw) throw new Error('Gist 中找不到 aurelia-backup.json');
-        return JSON.parse(raw);
     }
 
     // ── 本地匯出入 ────────────────────────────────────────────────────
@@ -344,7 +288,7 @@
         try { a = JSON.parse(localStorage.getItem(AUTO_KEY) || '{}') || {}; } catch (e) {}
         const parts = {};
         PARTS.forEach(p => { parts[p.k] = (a.parts && typeof a.parts[p.k] === 'boolean') ? a.parts[p.k] : !p.off; });
-        return Object.assign({ on: false, lastAt: 0, lastHash: '', lastTryAt: 0, lastErr: '', lastSize: 0 }, a, { parts });
+        return Object.assign({ on: false, dest: 'relay', lastAt: 0, lastHash: '', lastTryAt: 0, lastErr: '', lastSize: 0 }, a, { parts });
     }
     function autoSave(patch) {
         const a = Object.assign(autoGet(), patch || {});
@@ -385,39 +329,122 @@
         const u = (win.navigator && win.navigator.userAgent) || '';
         return /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows' : 'web';
     }
-    // 回 { same } 或伺服器那份的 meta；失敗丟錯（中文）
+    // ── 備份到哪裡：托管伺服器（relay）或 GitHub 私人倉庫（github）────────
+    //   她：「那朋友沒伺服器，沒辦法自動備份到 github?」→ 舊的 Gist 拿掉（只收一小部分、要自己按；
+    //   Gist 設成秘密也是拿到網址就看得到），改成朋友自己的私人倉庫：每備份一次就是一次更新，以前的版本 GitHub 自己記著。
+    //   金鑰存在這台的瀏覽器裡（跟 API 金鑰一樣），說明叫他們把權限開成只碰那一個倉庫。
+    const GH_KEY = 'os_backup_github';   // { repo: 'owner/name', token }
+    const GH_FILE = 'aurelia-backup.json';
+    function _repoOf(v) {
+        const m = String(v || '').trim().replace(/\.git$/, '').replace(/\/+$/, '').match(/(?:github\.com[\/:])?([\w.-]+)\/([\w.-]+)$/);
+        return m ? m[1] + '/' + m[2] : '';
+    }
+    function ghGet() {
+        let g = {};
+        try { g = JSON.parse(localStorage.getItem(GH_KEY) || '{}') || {}; } catch (e) {}
+        return { repo: _repoOf(g.repo), token: String(g.token || '').trim() };
+    }
+    function ghSave(patch) {
+        const g = Object.assign(ghGet(), patch || {});
+        g.repo = _repoOf(g.repo); g.token = String(g.token || '').trim();
+        try { localStorage.setItem(GH_KEY, JSON.stringify(g)); } catch (e) {}
+        return g;
+    }
+    // 現在選的那個地方填好了沒
+    function destReady(a) {
+        a = a || autoGet();
+        if (a.dest === 'github') { const g = ghGet(); return !!(g.repo && g.token); }
+        return !!relayOf();
+    }
+    async function _gh(path, opt) {
+        opt = opt || {};
+        const g = ghGet();
+        if (!g.repo || !g.token) throw new Error('還沒填 GitHub 倉庫和金鑰');
+        let res;
+        try {
+            res = await fetch('https://api.github.com/repos/' + g.repo + path, {
+                method: opt.method || 'GET', body: opt.body,
+                headers: Object.assign({ 'Authorization': 'Bearer ' + g.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, opt.headers || {})
+            });
+        } catch (e) { throw new Error('連不上 GitHub'); }
+        if (res.status === 401) throw new Error('GitHub 金鑰不對，或已經過期');
+        if (res.status === 403) throw new Error('這把金鑰沒有寫這個倉庫的權限（Contents 要開「讀寫」）');
+        if (res.status === 404 && !opt.allow404) throw new Error('找不到這個倉庫（名字打錯，或金鑰沒開放給它）');
+        return res;
+    }
+    function _b64(str) {
+        const bytes = new TextEncoder().encode(str);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(bin);
+    }
+    async function _ghUpload(body, hash) {
+        // 更新要帶現在那份的 sha；沒有＝倉庫裡還沒有，第一次
+        const r0 = await _gh('/contents/' + GH_FILE, { allow404: true });
+        let sha;
+        if (r0.ok) sha = ((await r0.json().catch(() => ({}))) || {}).sha;
+        else if (r0.status !== 404) throw new Error('GitHub 回了 ' + r0.status);
+        const msg = '奧瑞亞備份 ' + _device() + ' ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + (hash ? ' #' + hash.slice(0, 8) : '');
+        const r = await _gh('/contents/' + GH_FILE, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, content: _b64(body), sha: sha || undefined }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error((r.status === 409 || r.status === 422) ? '另一台剛好也在傳，等一下再試' : (j.message || ('GitHub 回了 ' + r.status)));
+        return { id: j.commit && j.commit.sha, size: body.length };
+    }
+    async function _ghList() {
+        const r = await _gh('/commits?path=' + encodeURIComponent(GH_FILE) + '&per_page=10', { allow404: true });
+        if (r.status === 404) return [];
+        const list = await r.json().catch(() => []);
+        return (Array.isArray(list) ? list : []).map(c => {
+            const m = String((c.commit && c.commit.message) || '').match(/^奧瑞亞備份 (\S+)/);
+            const t = c.commit && (c.commit.committer || c.commit.author);
+            return { id: c.sha, at: t ? Date.parse(t.date) / 1000 : 0, device: m ? m[1] : '' };
+        });
+    }
+    async function _ghFetch(id) {
+        const r = await _gh('/contents/' + GH_FILE + '?ref=' + encodeURIComponent(id), { headers: { 'Accept': 'application/vnd.github.raw+json' } });
+        if (!r.ok) throw new Error('拿不到這一份（' + r.status + '）');
+        return JSON.parse(await r.text());
+    }
+
+    // 回 { same } 或那一份的資料；失敗丟錯（中文）
     let _cloudBusy = null;
     function cloudBackup(opt) {
         if (_cloudBusy) return _cloudBusy;
         _cloudBusy = (async () => {
             opt = opt || {};
-            const r = relayOf();
-            if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
             const a = autoGet();
+            const gh = a.dest === 'github';
+            const r = gh ? null : relayOf();
+            if (gh ? !destReady(a) : !r) throw new Error(gh ? '還沒填 GitHub 倉庫和金鑰' : '還沒填托管伺服器的網址與通行碼');
             if (!PARTS.some(p => a.parts[p.k])) throw new Error('一塊都沒勾');
             const data = await collectParts(a.parts);
             const body = JSON.stringify(data);
             const hash = await _sha(JSON.stringify(Object.assign({}, data, { exportedAt: '' })));
             autoSave({ lastTryAt: Date.now() });
             if (!opt.force && hash && hash === a.lastHash) return { same: true, size: body.length };
-            let res, j = {};
+            let out;
             try {
-                res = await fetch(r.url + '/v1/backup?hash=' + hash + '&device=' + encodeURIComponent(_device()), {
-                    method: 'POST', headers: { 'Authorization': 'Bearer ' + r.token, 'Content-Type': 'application/json' }, body
-                });
-                j = await res.json().catch(() => ({}));
-            } catch (e) { autoSave({ lastErr: '連不上托管伺服器' }); throw new Error('連不上托管伺服器'); }
-            if (!res.ok) {
-                const msg = res.status === 401 ? '通行碼不對' : (j.error || ('伺服器回了 ' + res.status));
-                autoSave({ lastErr: msg });
-                throw new Error(msg);
-            }
+                if (gh) out = await _ghUpload(body, hash);
+                else {
+                    let res, j = {};
+                    try {
+                        res = await fetch(r.url + '/v1/backup?hash=' + hash + '&device=' + encodeURIComponent(_device()), {
+                            method: 'POST', headers: { 'Authorization': 'Bearer ' + r.token, 'Content-Type': 'application/json' }, body
+                        });
+                        j = await res.json().catch(() => ({}));
+                    } catch (e) { throw new Error('連不上托管伺服器'); }
+                    if (!res.ok) throw new Error(res.status === 401 ? '通行碼不對' : (j.error || ('伺服器回了 ' + res.status)));
+                    out = j;
+                }
+            } catch (e) { autoSave({ lastErr: e.message }); throw e; }
             autoSave({ lastAt: Date.now(), lastHash: hash, lastErr: '', lastSize: body.length });
-            return j;
+            return out;
         })().finally(() => { _cloudBusy = null; });
         return _cloudBusy;
     }
     async function cloudList() {
+        if (autoGet().dest === 'github') return _ghList();
         const r = relayOf();
         if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
         const res = await fetch(r.url + '/v1/backups', { headers: { 'Authorization': 'Bearer ' + r.token } }).catch(() => null);
@@ -428,12 +455,16 @@
         return j.items || [];
     }
     async function cloudGet(id) {
-        const r = relayOf();
-        if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
-        const res = await fetch(r.url + '/v1/backup/' + encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + r.token } }).catch(() => null);
-        if (!res || !res.ok) throw new Error(res ? '拿不到這一份（' + res.status + '）' : '連不上托管伺服器');
-        const data = await res.json();
-        if (!data.version || !data.db) throw new Error('這一份不是奧瑞亞的備份');
+        let data;
+        if (autoGet().dest === 'github') data = await _ghFetch(id);
+        else {
+            const r = relayOf();
+            if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
+            const res = await fetch(r.url + '/v1/backup/' + encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + r.token } }).catch(() => null);
+            if (!res || !res.ok) throw new Error(res ? '拿不到這一份（' + res.status + '）' : '連不上托管伺服器');
+            data = await res.json();
+        }
+        if (!data || !data.version || !data.db) throw new Error('這一份不是奧瑞亞的備份');
         return data;
     }
 
@@ -443,8 +474,8 @@
     const REMIND_KEY = 'os_backup_remind_snooze';
     async function _autoBoot() {
         if (!_isPwa()) return;
-        const a = autoGet(), r = relayOf();
-        if (a.on && r) {
+        const a = autoGet();
+        if (a.on && destReady(a)) {
             if (Date.now() - (a.lastAt || 0) > DAY) cloudBackup().catch(e => console.warn('[OS_BACKUP] 自動備份沒成功：', e.message));
             // 開著卻三天以上沒成功：一天講一次
             if (a.lastAt && Date.now() - a.lastAt > 3 * DAY && a.lastErr) {
@@ -477,24 +508,21 @@
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState !== 'hidden' || !_isPwa()) return;
             const a = autoGet();
-            if (a.on && relayOf() && Date.now() - (a.lastTryAt || 0) > 6 * 3600000) cloudBackup().catch(() => {});
+            if (a.on && destReady(a) && Date.now() - (a.lastTryAt || 0) > 6 * 3600000) cloudBackup().catch(() => {});
         });
     } catch (e) {}
 
     // ── 對外接口 ──────────────────────────────────────────────────────
     win.OS_BACKUP = {
-        PARTS, autoGet, autoSave, relayOf, cloudBackup, cloudList, cloudGet, collectParts,
+        PARTS, autoGet, autoSave, relayOf, ghGet, ghSave, destReady, cloudBackup, cloudList, cloudGet, collectParts,
         getSettings,
         saveSettings,
-        gistBackup,
-        gistRestore,
         applyData,
         exportLocal,
         importLocal,
         estimateSize,
         storageStatus,
         requestPersist,
-        collectEssential,
         collectAll,
     };
 

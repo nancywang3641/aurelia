@@ -460,3 +460,9 @@
 .cloudbk-list { margin-top: 8px; font-size: 12px; color: var(--os-ink); }
 .cloudbk-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
 .cloudbk-row .cloudbk-restore { flex: 0 0 auto; margin-top: 0; padding: 6px 12px; }
+.cloudbk-dest { display: flex; gap: 6px; margin: 8px 0 4px; }
+.cloudbk-dest-btn { flex: 1; padding: 8px 6px; border-radius: 6px; border: 1px solid rgba(var(--os-ink-rgb), 0.25); background: transparent; color: var(--os-ink); font: inherit; font-size: 12px; cursor: pointer; }
+.cloudbk-dest-btn.on { background: var(--os-ink); color: var(--os-page-bg); border-color: var(--os-ink); font-weight: 700; }
+.cloudbk-gh { margin: 6px 0; }
+.cloudbk-gh-lab { font-size: 12px; color: var(--os-ink); margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+.cloudbk-gh .cloudbk-gh-token { margin-top: 8px; }

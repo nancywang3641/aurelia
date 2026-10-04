@@ -76,9 +76,9 @@
             ss_2486: { title: '有人找妳就通知', body: '妳沒在看的時候有人開口，就在手機上叮一下。第一次打開會問妳要不要允許通知。' },
             ss_2499: { title: '手機通知', body: '丹自己醒來寫紙條的時候叮妳一下，點通知直接回到板子。' },
             ss_2515: { title: '介面佈局', body: '頂部被遮擋時選「強制下移」。' },
-            ss_2529: { title: 'GitHub Gist 設定', body: '填 gist 權限的 Token，首次備份後自動存 ID。' },
             ss_2549: { title: '本地全量備份', body: '匯出所有資料成 JSON 檔。' },
-            ss_cloudbk: { title: '自動備份到托管伺服器', body: '用上面「回覆交給伺服器跑」的網址與通行碼。\n\n開著時，打開 app 距離上次超過一天就備份一次，切出 app 時也會補；內容沒變就不上傳。伺服器留最近七份，按「雲端的備份」可以挑一份還原。\n\n不含圖片。勾哪幾塊就傳哪幾塊；「設定」裡有 API 金鑰，預設不傳。\n\n沒有伺服器就不用開：太久沒匯出時，打開 app 會問你要不要匯出一份。' },
+            ss_cloudbk: { title: '自動備份', body: '開著時，打開 app 距離上次超過一天就備份一次，切出 app 時也會補；內容沒變就不上傳。按「雲端的備份」可以挑一份還原。\n\n備份到哪裡二選一：\n・托管伺服器：用上面「回覆交給伺服器跑」的網址與通行碼，伺服器留最近七份。\n・GitHub 私人倉庫：沒有伺服器的人用，備份存在你自己的倉庫，只有你看得到；怎麼開看那格的小問號。\n\n不含圖片。勾哪幾塊就傳哪幾塊；「設定」裡有 API 金鑰，預設不傳。\n\n都不想開也沒關係：太久沒匯出時，打開 app 會問你要不要匯出一份。' },
+            ss_cloudbk_gh: { title: 'GitHub 私人倉庫', body: '備份存在你自己的 GitHub 私人倉庫，只有你看得到。每備份一次就是一次更新，以前的版本 GitHub 會記著，「雲端的備份」列最近十份。\n\n第一次要做三件事：\n1. 在 GitHub 開一個新倉庫，選 Private（私人）。\n2. 到 GitHub 右上頭像 → Settings → Developer settings → Personal access tokens → Fine-grained tokens，按 Generate new token。Repository access 選 Only select repositories，只選剛剛那個倉庫；Permissions 裡的 Contents 選 Read and write。產生後複製那串金鑰，它只會顯示一次。\n3. 這裡填「帳號/倉庫名」和那串金鑰。直接貼倉庫的網址也可以。\n\n金鑰存在這台裝置的瀏覽器裡。照第 2 步只開放那一個倉庫，萬一外流也只碰得到備份。' },
         });
         return true;
     }
@@ -2419,11 +2419,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div id="relay-state" style="font-size:12px; color:var(--os-ink); margin-top:8px;">還沒開。</div>
                         </div>
 
-                        <!-- ☁️ 自動備份到托管伺服器（os_backup.js 的 cloudBackup；用上面那組網址與通行碼） -->
+                        <!-- ☁️ 自動備份（os_backup.js 的 cloudBackup）：托管伺服器用上面那組網址與通行碼；GitHub 用自己的私人倉庫 -->
                         <div class="set-group" id="cloudbk-group">
                             <div class="set-label">
-                                <span><i class="fa-solid fa-cloud-arrow-up"></i> 自動備份到托管伺服器${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cloudbk') : ''}</span>
+                                <span><i class="fa-solid fa-cloud-arrow-up"></i> 自動備份${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cloudbk') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="cloudbk-on"><span class="slider"></span></label>
+                            </div>
+                            <div class="cloudbk-dest" id="cloudbk-dest">
+                                <button type="button" class="cloudbk-dest-btn" data-dest="relay">托管伺服器</button>
+                                <button type="button" class="cloudbk-dest-btn" data-dest="github">GitHub 私人倉庫</button>
+                            </div>
+                            <div class="cloudbk-gh" id="cloudbk-gh">
+                                <div class="cloudbk-gh-lab">倉庫與金鑰${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cloudbk_gh') : ''}</div>
+                                <input class="set-input" id="cloudbk-gh-repo" placeholder="帳號/倉庫名" autocomplete="off" />
+                                <input class="set-input cloudbk-gh-token" id="cloudbk-gh-token" type="password" placeholder="金鑰" autocomplete="off" />
                             </div>
                             <div class="cloudbk-parts" id="cloudbk-parts"></div>
                             <div class="cloudbk-state" id="cloudbk-state"></div>
@@ -2494,22 +2503,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <option value="auto" ${localStorage.getItem('aurelia_layout_mode') !== 'pad-ios' ? 'selected' : ''}>自動適配 (Auto/預設)</option>
                                 <option value="pad-ios" ${localStorage.getItem('aurelia_layout_mode') === 'pad-ios' ? 'selected' : ''}>強制下移 (iOS 動態島/瀏海)</option>
                             </select>
-                        </div>
-
-                        <div style="background:rgba(var(--os-ink-rgb), 0.06); padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid rgba(var(--os-ink-rgb), 0.10); font-size:12px; color:var(--os-ink);">
-                            <i class="fa-solid fa-cloud"></i> 備份會將世界書、成就、App 設定等<b>輕量資料</b>同步至 GitHub Gist。
-                            大型資料（VN 章節、聊天紀錄等）請使用「本地全量匯出」。
-                        </div>
-
-                        <div class="set-group">
-                            <div class="set-label" title="申請 gist 權限的 Personal Access Token（Settings → Developer settings → Fine-grained tokens）。首次備份後 Gist ID 自動保存。"><i class="fa-solid fa-key"></i> GitHub Gist 設定${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2529') : ''}</div>
-                            <input class="set-input" id="bk-token" type="password" placeholder="ghp_xxxxxxxxxxxx（不會備份 Token 本身）" />
-                            <input class="set-input" id="bk-gist-id" placeholder="Gist ID（首次留空，備份後自動填入）" style="margin-top:8px;" />
-                            <div id="bk-gist-hint" style="font-size:11px; color:var(--os-ink); margin-top:6px; word-break:break-all;"></div>
-                            <div style="display:flex; gap:8px; margin-top:10px;">
-                                <div class="btn-save" id="bk-gist-save-btn" style="flex:1; padding:12px; font-size:13px;"><i class="fa-solid fa-cloud"></i> 備份到 Gist</div>
-                                <div class="btn-test" id="bk-gist-restore-btn" style="flex:1;"><i class="fa-solid fa-download"></i> 從 Gist 還原</div>
-                            </div>
                         </div>
 
                         <div class="set-group">
@@ -5051,9 +5044,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const win = window.parent || window;
         const BACKUP = win.OS_BACKUP;
 
-        const elToken     = container.querySelector('#bk-token');
-        const elGistId    = container.querySelector('#bk-gist-id');
-        const elGistHint  = container.querySelector('#bk-gist-hint');
         const elStatus    = container.querySelector('#bk-status');
 
         function setStatus(msg, color) {
@@ -5062,13 +5052,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         // 忙完還原成原本的樣子（含圖示）：第一次變忙時先記下原本的 HTML
         function setBtnLoading(btn, text) { if (btn) { if (btn.__html0 == null) btn.__html0 = btn.innerHTML; btn.textContent = text; btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; } }
         function setBtnDone(btn, text) { if (btn) { if (btn.__html0 != null) btn.innerHTML = btn.__html0; else btn.textContent = text; btn.style.opacity = '1'; btn.style.pointerEvents = ''; } }
-
-        if (BACKUP) {
-            const s = BACKUP.getSettings();
-            if (elToken && s.token) elToken.value = s.token;
-            if (elGistId && s.gistId) elGistId.value = s.gistId;
-            if (elGistHint && s.gistId) elGistHint.textContent = '目前 Gist ID: ' + s.gistId;
-        }
 
         // ── 📡 回覆交給伺服器跑（請求托管）：實際的送出與收回在 os_relay.js ──
         (function wireRelay() {
@@ -5305,43 +5288,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             });
         })();
 
-        const btnGistSave = container.querySelector('#bk-gist-save-btn');
-        if (btnGistSave) btnGistSave.addEventListener('click', async () => {
-            if (!BACKUP) { setStatus('OS_BACKUP 模組未載入', '#fc8181'); return; }
-            const token = elToken?.value.trim();
-            const gistId = elGistId?.value.trim() || null;
-            if (!token) { setStatus('請先填入 GitHub Token', '#fc8181'); return; }
-            BACKUP.saveSettings({ token, gistId });
-            setBtnLoading(btnGistSave, '備份中...');
-            setStatus('正在備份到 GitHub Gist...', 'rgba(26,28,40,0.25)');
-            try {
-                const result = await BACKUP.gistBackup();
-                if (elGistId) elGistId.value = result.gistId;
-                if (elGistHint) elGistHint.textContent = '備份成功！Gist ID: ' + result.gistId + '（' + result.sizeKB + ' KB）';
-                BACKUP.saveSettings({ token, gistId: result.gistId });
-                setStatus('備份完成（' + result.sizeKB + ' KB）', 'rgba(26,28,40,0.25)');
-            } catch(e) { setStatus('備份失敗：' + e.message, '#fc8181'); }
-            setBtnDone(btnGistSave, '備份到 Gist');
-        });
-
-        const btnGistRestore = container.querySelector('#bk-gist-restore-btn');
-        if (btnGistRestore) btnGistRestore.addEventListener('click', async () => {
-            if (!BACKUP) { setStatus('OS_BACKUP 模組未載入', '#fc8181'); return; }
-            const token = elToken?.value.trim();
-            const gistId = elGistId?.value.trim() || null;
-            if (!token || !gistId) { setStatus('請先填入 Token 與 Gist ID', '#fc8181'); return; }
-            if (!await AUI.confirm('從 Gist 還原將合併資料（不清空現有），確定繼續？', { danger: false })) return;
-            BACKUP.saveSettings({ token, gistId });
-            setBtnLoading(btnGistRestore, '還原中...');
-            setStatus('正在從 GitHub Gist 還原...', 'rgba(26,28,40,0.25)');
-            try {
-                const data = await BACKUP.gistRestore();
-                const result = await BACKUP.applyData(data);
-                setStatus(`還原完成：世界書 ${result.worldbook} 條、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
-            } catch(e) { setStatus('還原失敗：' + e.message, '#fc8181'); }
-            setBtnDone(btnGistRestore, '從 Gist 還原');
-        });
-
         const btnScan = container.querySelector('#bk-scan-btn');
         const elStorageInfo = container.querySelector('#bk-storage-info');
         if (btnScan) btnScan.addEventListener('click', async () => {
@@ -5426,11 +5372,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const fmtS = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round((n || 0) / 1024)) + ' KB';
             const toast = (m) => { try { if (window.AUI && AUI.toast) AUI.toast(m); } catch (e) {} };
             function paint() {
-                const a = BACKUP.autoGet(), r = BACKUP.relayOf();
+                const a = BACKUP.autoGet(), gh = a.dest === 'github';
                 $('#cloudbk-on').checked = !!a.on;
+                box.querySelectorAll('.cloudbk-dest-btn').forEach(b => b.classList.toggle('on', b.dataset.dest === (gh ? 'github' : 'relay')));
+                $('#cloudbk-gh').classList.toggle('hidden', !gh);
+                if (gh) { const g = BACKUP.ghGet(); if (document.activeElement !== $('#cloudbk-gh-repo')) $('#cloudbk-gh-repo').value = g.repo; if (document.activeElement !== $('#cloudbk-gh-token')) $('#cloudbk-gh-token').value = g.token; }
                 $('#cloudbk-parts').innerHTML = BACKUP.PARTS.map(p => '<label class="cloudbk-part"><input type="checkbox" data-part="' + p.k + '"' + (a.parts[p.k] ? ' checked' : '') + '><span>' + esc(p.label) + '</span></label>').join('');
                 let st;
-                if (!r) st = '先在上面「回覆交給伺服器跑」填好網址和通行碼。';
+                if (!BACKUP.destReady(a)) st = gh ? '填好倉庫和金鑰。' : '先在上面「回覆交給伺服器跑」填好網址和通行碼。';
                 else if (a.lastErr) st = '上次沒成功：' + a.lastErr + (a.lastAt ? '（最後成功 ' + fmtT(a.lastAt) + '）' : '');
                 else if (a.lastAt) st = '上次備份 ' + fmtT(a.lastAt) + '・' + fmtS(a.lastSize);
                 else st = a.on ? '還沒備份過。' : '還沒開。';
@@ -5444,9 +5393,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 b.textContent = '現在備份';
                 paint();
             }
+            // 換地方：下次一定要傳（lastHash 清掉），列表也收起來（列的是另一邊的）
+            box.addEventListener('click', (e) => {
+                const b = e.target.closest('.cloudbk-dest-btn');
+                if (!b) return;
+                BACKUP.autoSave({ dest: b.dataset.dest, lastHash: '', lastErr: '' });
+                $('#cloudbk-list').textContent = '';
+                paint();
+            });
             box.addEventListener('change', (e) => {
                 const t = e.target;
-                if (t.id === 'cloudbk-on') { BACKUP.autoSave({ on: t.checked }); if (t.checked && BACKUP.relayOf()) run(false); paint(); return; }
+                if (t.id === 'cloudbk-gh-repo' || t.id === 'cloudbk-gh-token') {
+                    BACKUP.ghSave(t.id === 'cloudbk-gh-repo' ? { repo: t.value } : { token: t.value });
+                    BACKUP.autoSave({ lastHash: '', lastErr: '' });
+                    paint(); return;
+                }
+                if (t.id === 'cloudbk-on') { BACKUP.autoSave({ on: t.checked }); if (t.checked && BACKUP.destReady()) run(false); paint(); return; }
                 if (t.dataset && t.dataset.part) {
                     const a = BACKUP.autoGet(); a.parts[t.dataset.part] = t.checked;
                     BACKUP.autoSave({ parts: a.parts, lastHash: '' });   // 勾的變了，下次一定要傳
@@ -5458,8 +5420,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 L.textContent = '讀取中…';
                 try {
                     const items = await BACKUP.cloudList();
-                    L.innerHTML = items.length ? items.map(it => '<div class="cloudbk-row"><span class="cloudbk-row-tx">' + fmtT(it.at * 1000) + '・' + fmtS(it.size) + (it.device ? '・' + esc(it.device) : '') + '</span><span class="btn-test cloudbk-restore" data-id="' + esc(it.id) + '">還原</span></div>').join('')
-                        : '伺服器上還沒有備份。';
+                    L.innerHTML = items.length ? items.map(it => '<div class="cloudbk-row"><span class="cloudbk-row-tx">' + fmtT(it.at * 1000) + (it.size ? '・' + fmtS(it.size) : '') + (it.device ? '・' + esc(it.device) : '') + '</span><span class="btn-test cloudbk-restore" data-id="' + esc(it.id) + '">還原</span></div>').join('')
+                        : '雲端還沒有備份。';
                 } catch (e) { L.textContent = e.message; }
             });
             $('#cloudbk-list').addEventListener('click', async (e) => {
