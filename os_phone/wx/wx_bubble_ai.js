@@ -413,12 +413,13 @@ body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hi
     // ── 叫 AI ──────────────────────────────────────────────────────
     // 🚨走「主模型」：這是設計工作，不是照規格填欄位。副模型做這個做出來就是
     //   「兩個矩形換顏色」——跟創作室的 VN 主題同一個道理。
+    // o.via：別人指定這一通走哪條接口（小機做大件走它自己的，os_xiaoji.js 的 viaFor）；沒給照舊走「聊天泡泡」那一列
     function ask(opts) {
         const o = opts || {};
         const api = win.OS_API || window.OS_API;
         const chat = (api && typeof api.chatMain === 'function') ? api.chatMain.bind(api)
             : (api && typeof api.chatSecondary === 'function') ? api.chatSecondary.bind(api) : null;
-        if (!chat) { o.onError && o.onError(new Error('AI 不可用，請先到設置把主模型設好')); return; }
+        if (!chat && typeof o.via !== 'function') { o.onError && o.onError(new Error('AI 不可用，請先到設置把主模型設好')); return; }
 
         const msgs = [{ role: 'user', content: CHAT_PROMPT }];
         (o.log || []).slice(-7, -1).forEach(m => msgs.push(m.role === 'user'
@@ -434,21 +435,20 @@ body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hi
         //   後面每一個都往後錯一格：onFinish 變成 null、我的完成處理被當成 onError。
         //   症狀是 AI 明明回來了（DEBUG 有完整回覆），畫面永遠停在「設計中…」。
         //   跟 OS_API.chat 不一樣，那支才吃 config，別照著它寫。
-        chat(msgs, null,
-            (full) => {
-                const got = pickCss(String(full || ''));
-                const lk = stripLayout(got.css);
-                o.onDone && o.onDone({
-                    css: lk.css,
-                    note: got.note,
-                    cut: got.cut,
-                    stripped: lk.hit,
-                    warns: lk.css ? risky(lk.css) : []
-                });
-            },
-            (err) => { o.onError && o.onError(err); },
-            { task: 'wx_bubble', label: '泡泡主題:' + (o.chatId || '') }
-        );
+        const done = (full) => {
+            const got = pickCss(String(full || ''));
+            const lk = stripLayout(got.css);
+            o.onDone && o.onDone({
+                css: lk.css,
+                note: got.note,
+                cut: got.cut,
+                stripped: lk.hit,
+                warns: lk.css ? risky(lk.css) : []
+            });
+        };
+        const fail = (err) => { o.onError && o.onError(err); };
+        if (typeof o.via === 'function') { Promise.resolve(o.via(msgs, { label: '泡泡主題（小機）' })).then(done, fail); return; }
+        chat(msgs, null, done, fail, { task: 'wx_bubble', label: '泡泡主題:' + (o.chatId || '') });
     }
 
     win.WX_BUBBLE_AI = {

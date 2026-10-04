@@ -780,21 +780,22 @@
     }
     // 叫 AI 做一套。🚨 交稿就結束，不自己再打一次 API——缺什麼一起回報，要不要再叫他補由她決定
     //   （她 09-20：「有些人沒法接受反覆觸發」）。補的兩件事：顏色表漏格（missing）、換了底沒寫符號色（ink）。
-    function generate(want, ref, base) {
+    // via：別人指定這一通走哪條接口（小機做大件走它自己的，os_xiaoji.js 的 viaFor）；沒給照舊走「聊天 app 主題」那一列
+    function generate(want, ref, base, via) {
         return new Promise(function (resolve, reject) {
             const O = win.OS_API || window.OS_API;
+            const done = function (text) {
+                const r = _parseAi(text);
+                if (!r.css && !r.palette) { reject(new Error('它沒有照格式回')); return; }
+                const full = (r.palette ? r.palette + '\n' : '') + r.css;
+                const c = compile(full);
+                if (!c.ok || !c.kept) { reject(new Error(c.error || '寫出來的樣式一條都用不上')); return; }
+                resolve({ name: r.name, css: full, missing: r.missing, ink: _unpaired(full), pairs: contrastIssues(full), raw: text });
+            };
+            const fail = function (e) { reject(e instanceof Error ? e : new Error(String((e && e.message) || e))); };
+            if (typeof via === 'function') { Promise.resolve(via(_aiMessages(want, ref, base), { label: '聊天 app 主題（小機）' })).then(done, fail); return; }
             if (!O || !O.chatMain) { reject(new Error('模型連線還沒載入')); return; }
-            O.chatMain(_aiMessages(want, ref, base), null,
-                function (text) {
-                    const r = _parseAi(text);
-                    if (!r.css && !r.palette) { reject(new Error('它沒有照格式回')); return; }
-                    const full = (r.palette ? r.palette + '\n' : '') + r.css;
-                    const c = compile(full);
-                    if (!c.ok || !c.kept) { reject(new Error(c.error || '寫出來的樣式一條都用不上')); return; }
-                    resolve({ name: r.name, css: full, missing: r.missing, ink: _unpaired(full), pairs: contrastIssues(full), raw: text });
-                },
-                function (e) { reject(e instanceof Error ? e : new Error(String((e && e.message) || e))); },
-                { task: 'wx_theme', label: '聊天 app 主題' });
+            O.chatMain(_aiMessages(want, ref, base), null, done, fail, { task: 'wx_theme', label: '聊天 app 主題' });
         });
     }
     // 叫它只改看不清楚的那幾組（造型、其他顏色都不動）：回它新寫的那幾格，併進原本那張表

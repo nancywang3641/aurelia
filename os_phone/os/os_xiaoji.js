@@ -121,8 +121,9 @@
             const tg = t.groups || [];
             const hit = tg.some(x => gs.indexOf(x) !== -1) || (!only && t.name === 'aurelia_change_log');
             if (!hit) return;
-            // 大件那四組：內容由專門那一通寫，小機不拿說明書、新增、修改（換上、看看、列清單照舊）
-            if (tg.some(x => big.indexOf(x) !== -1) && /_(spec|add|edit)$/.test(t.name)) return;
+            // 大件那四組：新做、整套改由專門那一通寫，小機不拿說明書、新增（換上、看看、列清單照舊）。
+            //   修改（*_edit）給它：只改一兩處自己用 find／replace 改就好，不用再叫專門那一通（10-05 她：「後須修正 就直接讓小機修正，是不是也行」）
+            if (tg.some(x => big.indexOf(x) !== -1) && /_(spec|add)$/.test(t.name)) return;
             out.push(Object.assign({}, t, { label: labels[t.name] || t.label || t.name }));
         });
         const M = _g('OS_XIAOJI_MAKE');
@@ -464,7 +465,7 @@
         });
     }
     function _isAbort(e, signal) { return !!((signal && signal.aborted) || (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || ''))))); }
-    function _chat(messages, conn, signal, onUsage) {
+    function _chat(messages, conn, signal, onUsage, label) {
         return new Promise((resolve, reject) => {
             const A = _g('OS_API');
             if (!A || !A.chat) { reject(new Error('模型連線還沒載入')); return; }
@@ -472,8 +473,21 @@
                 t => resolve(String(t == null ? '' : t)),
                 // 別的 realm（iframe）丟來的 Error 不是這邊的 Error：照抄名字，AbortError 才認得出來
                 e => reject(e instanceof Error ? e : Object.assign(new Error(String((e && e.message) || e || '沒有回應')), { name: (e && e.name) || 'Error' })),
-                Object.assign({}, conn.options, { signal: signal, label: 'API 小機', onUsage: onUsage }));
+                Object.assign({}, conn.options, { signal: signal, label: label || 'API 小機', onUsage: onUsage }));
         });
+    }
+    /** 小機做大件的那一通也走它自己的接口（10-05 她：「考試調用應該拿小機的接口」「同模型有沒有符合資格，直接呼叫主模型會怪怪的」
+     *  →「考試和平常都走小機的接口」）。交給各工坊的 generate 當 via：工坊照舊組自己的說明書、溫度，只是不叫主模型。
+     *  回 (messages, {label, temperature}) → Promise<回覆全文>。串流＋留程式碼圍欄同創作室那條（大件很長，不串流會被閘道切掉） */
+    async function viaFor(rid, signal) {
+        const conn = connConfig(await get(rid));
+        return (messages, o) => {
+            o = o || {};
+            return _chat(messages, {
+                config: Object.assign({}, conn.config, o.temperature != null ? { temperature: o.temperature } : {}),
+                options: Object.assign({}, conn.options, { keepCodeFences: true, stream: true })
+            }, signal, null, o.label || 'API 小機（做大件）');
+        };
     }
     async function _runReal(rid, t, args) {
         if (t.make) {
@@ -761,7 +775,7 @@
     }
 
     const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
-        grade, lines, canEnroll, pay, exam, theater, replay, hwSave, adopt, BODIES, bodyOf,
+        grade, lines, canEnroll, pay, exam, theater, replay, hwSave, adopt, BODIES, bodyOf, viaFor,
         USER: USER,   // 給模型看的「使用者」：房間接「你的房間／樣子」、做大件的回話都用這個，不用人設的名字
         // 它記得的事（房間「它記得的事」面板用）與舊聊天摘要
         notesOf: rec => _notes(rec).items, noteAct, memParse, memStrip, memApply,

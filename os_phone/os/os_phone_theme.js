@@ -662,14 +662,16 @@
     }
 
     // 小機的「做主題」（os_xiaoji_make.js）：一次做好、不開畫面、不存。cur＝要改的那一套現在的值（文字）。
-    async function _gen(want, cur) {
+    // via：別人指定這一通走哪條接口（小機做大件走它自己的，os_xiaoji.js 的 viaFor）；沒給照舊走「手機主題」那一列
+    async function _gen(want, cur, via) {
         const API = win.OS_API;
-        if (!API || !API.chatMain) throw new Error('API 還沒載入');
         const user = '這次要的是：' + want + (cur ? '\n\n照下面這一套改（沒提到的格子照原本的值）：\n' + cur : '');
         const messages = [
             { role: 'system', content: _prompt() },
             { role: 'user', content: user },
         ];
+        if (typeof via === 'function') return String(await via(messages, { label: '手機主題（小機）' }) || '');
+        if (!API || !API.chatMain) throw new Error('API 還沒載入');
         return await new Promise(function (resolve, reject) {
             API.chatMain(messages, null,
                 function (full) { resolve(full); },

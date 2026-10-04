@@ -3056,7 +3056,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const base = win.OS_SETTINGS?.getConfig?.() || JSON.parse(localStorage.getItem('os_global_config') || '{}');
         return { ...base, usePresetPrompts: false, enableThinking: false, temperature: temp, maxTokens: Math.min(parseInt(base.maxTokens) || 8192, 32768) };
     }
-    function _studioOnce(messages, label, temp) {
+    // via：別人指定這一通走哪條接口（小機做大件走它自己的，os_xiaoji.js 的 viaFor）；沒給照舊走創作室的設定
+    function _studioOnce(messages, label, temp, via) {
+        if (typeof via === 'function') return Promise.resolve(via(messages, { label: label, temperature: temp })).then(function (t) { return String(t || ''); });
         return new Promise(function (resolve, reject) {
             const api = win.OS_API || window.OS_API;
             if (!api || !api.chat) { reject(new Error('找不到 API 引擎')); return; }
@@ -4632,17 +4634,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, vnShot: _vnShot, refreshTavernRegex: _vnRefreshTavernRegex,
         fxSpec: function () { return String((MODES.fx && MODES.fx.prompt) || ''); },   // 特效工坊的說明書（小機的「改特效」）
         // 小機的「做組件／做特效」（os_xiaoji_make.js）：一次做好、不開畫面、不存。cur＝要改的那一件現在的內容（文字）
-        vnGenerate: async function (want, cur) {
+        vnGenerate: async function (want, cur, via) {
             const sys = String((MODES.vn_ui && MODES.vn_ui.prompt) || '');
             const user = '【類型：純展示】' + want + (cur ? '\n\n照下面這一份改（只改要改的地方，八個鍵整份交回）：\n' + cur : '');
-            const j = _pickJsonObj(await _studioOnce([{ role: 'system', content: sys }, { role: 'user', content: user }], 'VN 組件（小機）', 0.7));
+            const j = _pickJsonObj(await _studioOnce([{ role: 'system', content: sys }, { role: 'user', content: user }], 'VN 組件（小機）', 0.7, via));
             if (!j || !j.tagId || !j.html) throw new Error('它沒有交出完整的組件（<json> 裡要有 tagId 和 html）');
             return j;
         },
-        fxGenerate: async function (want, cur) {
+        fxGenerate: async function (want, cur, via) {
             const sys = String((MODES.fx && MODES.fx.prompt) || '');
             const user = want + (cur ? '\n\n照下面這份配方改（fxId 不變）：\n' + cur : '') + '\n\n需求就這些，不用再問，直接照輸出格式交配方。';
-            const j = _pickJsonObj(await _studioOnce([{ role: 'system', content: sys }, { role: 'user', content: user }], '特效（小機）', 0.7));
+            const j = _pickJsonObj(await _studioOnce([{ role: 'system', content: sys }, { role: 'user', content: user }], '特效（小機）', 0.7, via));
             if (!j || !j.fxId) throw new Error('它沒有交出配方（<json> 裡要有 fxId）');
             return j;
         },
@@ -4657,11 +4659,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         vnTheme: {
             spec: function () { return VTH_AI_PROMPT.replace('用戶想要的風格：', '').trim(); },
             // 小機的「做主題」劇情那種：新做＝VTH_AI_PROMPT＋想要的風格；改＝對話版說明＋目前的 CSS＋這次要改
-            generate: async function (want, cur) {
+            generate: async function (want, cur, via) {
                 const msgs = cur
                     ? [{ role: 'user', content: VTH_AI_CHAT }, { role: 'user', content: '【目前的 CSS】\n```css\n' + cur + '\n```\n\n【這次要改】' + want }]
                     : [{ role: 'user', content: VTH_AI_PROMPT + want }];
-                const got = _vthPickCss(await _studioOnce(msgs, '劇情主題（小機）', 0.7));
+                const got = _vthPickCss(await _studioOnce(msgs, '劇情主題（小機）', 0.7, via));
                 if (!got.css) throw new Error('它沒有交出 CSS');
                 return { css: got.css, note: got.note, cut: got.cut };
             },

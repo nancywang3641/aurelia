@@ -14,17 +14,17 @@
     const NAME = { type: 'string', description: '新做的這一套叫什麼（中文，十個字以內，不能跟已經有的重複）；改舊的不用填' };
     const DEFS = [
         { name: 'aurelia_vn_make', group: 'vn', label: '做 VN 組件',
-          description: '請專門做組件的那一位，照你寫的需求做一個 VN 組件（故事播到一半跳出來的那種面板），做好直接變成一張單子，對方看過預覽、按同意才加進去。改已經有的組件也用這個（填 from）。這個工具會另外叫一次模型。',
+          description: '請專門做組件的那一位，照你寫的需求做一個 VN 組件（故事播到一半跳出來的那種面板），做好直接變成一張單子，對方看過預覽、按同意才加進去。只改一兩處（換個顏色、大小、一段字）用 aurelia_vn_edit 自己改就好，不用另外叫模型；要換風格、整套重做才用這個（填 from）。這個工具會另外叫一次模型。',
           inputSchema: { type: 'object', properties: { feel: FEEL, from: FROM }, required: ['feel'] } },
         { name: 'aurelia_theme_make', group: 'theme', label: '做主題',
-          description: '請專門做主題的那一位，照你寫的需求做一套主題，做好直接變成一張單子，對方看過樣子、按同意才存。kind：story＝故事畫面、phone＝手機外觀、chat＝聊天 app。改已經有的那一套也用這個（填 from）。這個工具會另外叫一次模型。',
+          description: '請專門做主題的那一位，照你寫的需求做一套主題，做好直接變成一張單子，對方看過樣子、按同意才存。kind：story＝故事畫面、phone＝手機外觀、chat＝聊天 app。只改一兩處（換個顏色、大小、一段字）用 aurelia_theme_edit 自己改就好，不用另外叫模型；要換風格、整套重做才用這個（填 from）。這個工具會另外叫一次模型。',
           inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['story', 'phone', 'chat'], description: '哪一種主題' }, name: NAME, feel: FEEL, from: FROM }, required: ['kind', 'feel'] } },
         { name: 'aurelia_bubble_make', group: 'bubble', label: '做泡泡',
-          description: '請專門做泡泡的那一位，照你寫的需求做一套聊天 app 的對話泡泡，做好直接變成一張單子，對方看過樣子、按同意才收進主題庫。改已經有的那一套也用這個（填 from）。這個工具會另外叫一次模型。',
+          description: '請專門做泡泡的那一位，照你寫的需求做一套聊天 app 的對話泡泡，做好直接變成一張單子，對方看過樣子、按同意才收進主題庫。只改一兩處（換個顏色、大小、一段字）用 aurelia_bubble_edit 自己改就好，不用另外叫模型；要換風格、整套重做才用這個（填 from）。這個工具會另外叫一次模型。',
           inputSchema: { type: 'object', properties: { name: NAME, feel: FEEL, from: FROM,
               rooms: { type: 'string', description: '新做的這一套同意之後要換到哪幾間聊天室（聊天室名字，逗號隔開；寫「全部」＝每一間）；不填＝只收進主題庫' } }, required: ['feel'] } },
         { name: 'aurelia_fx_make', group: 'fx', label: '做特效',
-          description: '請專門做特效的那一位，照你寫的需求做一個畫面特效（下雨、閃光那種會動的），做好直接變成一張單子，對方試播過、按同意才加進去。改已經有的特效也用這個（填 from，寫特效代號或名字）。這個工具會另外叫一次模型。',
+          description: '請專門做特效的那一位，照你寫的需求做一個畫面特效（下雨、閃光那種會動的），做好直接變成一張單子，對方試播過、按同意才加進去。只把它關掉或打開用 aurelia_fx_edit 的 enabled 就好；要改它怎麼動、整個重做才用這個（填 from，寫特效代號或名字）。這個工具會另外叫一次模型。',
           inputSchema: { type: 'object', properties: { feel: FEEL, from: FROM }, required: ['feel'] } }
     ];
     function tools(groups) {
@@ -64,29 +64,29 @@
 
     // 各組的產生器：回 { edit, args }＝要交給模組 propose 的參數
     const GEN = {
-        async vn(a, cur) {
+        async vn(a, cur, via) {
             const S = _g('OS_STUDIO');
             if (!S || !S.vnGenerate) throw new Error('創作室還沒載入');
-            const j = await S.vnGenerate(a.feel, cur);
+            const j = await S.vnGenerate(a.feel, cur, via);
             const f = { html: j.html || '', css: j.css || '', js: j.js || '', demo_format: j.demoFormat || '', usage_desc: j.usageDesc || '' };
             if (cur) return { edit: true, args: Object.assign({ tag: a.from }, f) };
             return { edit: false, args: Object.assign({ tag: j.tagId, title: j.title || '',
                 keywords: Array.isArray(j.keywords) ? j.keywords.join(',') : String(j.keywords || ''),
                 is_block: j.isBlock === undefined ? !!j.demoFormat : !!j.isBlock }, f) };
         },
-        async theme(a, cur) {
+        async theme(a, cur, via) {
             if (a.kind === 'chat') {
                 const P = _g('WX_THEME_PACK');
                 if (!P || !P.generate) throw new Error('聊天 app 主題還沒載入');
                 // 改舊的：cur 當「這支 app 現在的這一套」（第三個參數）。第二個參數是「別的 app 的美化、只抓風格」，以前錯放在那裡，改一點變整套重做
-                const g = cur ? await P.generate(a.feel, '', cur) : await P.generate(a.feel);
+                const g = cur ? await P.generate(a.feel, '', cur, via) : await P.generate(a.feel, '', '', via);
                 return cur ? { edit: true, args: { kind: 'chat', name: a.from, css: g.css } }
                            : { edit: false, args: { kind: 'chat', name: a.name || g.name || '', css: g.css } };
             }
             if (a.kind === 'phone') {
                 const P = _g('OS_PHONE_THEME');
                 if (!P || !P.generate) throw new Error('手機主題還沒載入');
-                const raw = await P.generate(a.feel, cur);
+                const raw = await P.generate(a.feel, cur, via);
                 const j = P.pickJson ? P.pickJson(raw) : null;
                 const data = j ? JSON.stringify(j) : String(raw || '');
                 return cur ? { edit: true, args: { kind: 'phone', name: a.from, data: data } }
@@ -94,23 +94,23 @@
             }
             const S = _g('OS_STUDIO');
             if (!S || !S.vnTheme || !S.vnTheme.generate) throw new Error('創作室還沒載入');
-            const g = await S.vnTheme.generate(a.feel, cur);
+            const g = await S.vnTheme.generate(a.feel, cur, via);
             return cur ? { edit: true, args: { kind: 'story', name: a.from, css: g.css } }
                        : { edit: false, args: { kind: 'story', name: a.name || '', css: g.css } };
         },
-        async bubble(a, cur) {
+        async bubble(a, cur, via) {
             const B = _g('WX_BUBBLE_AI');
             if (!B || !B.ask) throw new Error('泡泡還沒載入');
-            const g = await new Promise((res, rej) => B.ask({ text: a.feel, currentCss: cur, log: [], chatId: 'xiaoji', onDone: res,
+            const g = await new Promise((res, rej) => B.ask({ text: a.feel, currentCss: cur, log: [], chatId: 'xiaoji', via: via, onDone: res,
                 onError: e => rej(e instanceof Error ? e : new Error(String((e && e.message) || e))) }));
             if (!g || !g.css) throw new Error('它沒有交出泡泡的樣式');
             return cur ? { edit: true, args: { name: a.from, css: g.css } }
                        : { edit: false, args: { name: a.name || '', css: g.css, rooms: a.rooms || '' } };
         },
-        async fx(a, cur) {
+        async fx(a, cur, via) {
             const S = _g('OS_STUDIO');
             if (!S || !S.fxGenerate) throw new Error('創作室還沒載入');
-            const j = await S.fxGenerate(a.feel, cur);
+            const j = await S.fxGenerate(a.feel, cur, via);
             return cur ? { edit: true, args: { id: a.from, recipe: JSON.stringify(j) } }
                        : { edit: false, args: { recipe: JSON.stringify(j) } };
         }
@@ -137,8 +137,11 @@
             cur = await _readAll(m, rd[0], rd[1]);
             if (!cur.trim() || _notFound(cur)) return { ok: false, text: cur.trim() || ('找不到「' + a.from + '」') };
         }
+        // 做的那一通走這隻小機自己的接口（考試、平常都一樣；10-05 她：「考試和平常都走小機的接口」）。拿不到才照舊走工坊自己的設定
+        let via = ctx.via || null;
+        if (!via && ctx.rid) { const X = _g('OS_XIAOJI'); try { if (X && X.viaFor) via = await X.viaFor(ctx.rid); } catch (e) { via = null; } }
         let got;
-        try { got = await GEN[d.group](a, cur); }
+        try { got = await GEN[d.group](a, cur, via); }
         catch (e) { return { ok: false, gen: true, text: '負責做的那一位沒做成：' + ((e && e.message) || e) + '。可以把 feel 寫清楚一點再叫一次。' }; }
         try {
             if (!got.edit) got.args.spec = await _specCode(m, d.group, a.kind);
