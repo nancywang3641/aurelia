@@ -150,6 +150,8 @@
   可以伸出泡泡外面。縮在角落、要放大才看得到的小點綴不算。
   圖形跟字不重疊：要嘛整個放在泡泡外面（貼著邊往外長），要嘛把那一側的 padding 加大、讓出一塊空位再放進去。
   字的第一個字跟最後一個字旁邊最容易被蓋到，放之前先想那一行字會落在哪。
+  頭像那一角不放：自己那側泡泡的右上角、對方那側泡泡的左上角，旁邊就貼著頭像（尖角也在那裡），
+  圖形往那邊長會蓋住頭像。要伸出去，就從另外三個角或上下兩邊伸。
   使用者要的是玻璃、液態、水滴、膠囊這一類（東西本身就是質感），簽名改由疊層來擔：
   亮邊、高光、陰影怎麼疊，兩側各自的色調偏哪裡；四個角可以一樣圓（整顆膠囊也行）。
 - 泡泡跟頭像框之間要有一處呼應：同一種圓角語言、同一組邊框厚度、或同一個切角。
@@ -295,6 +297,21 @@
         const tailOff = /--pbub-tail-size\s*:\s*0/i.test(t) || /\.pbub-bubble\s*::?before[^{}]*\{[^}]*content\s*:\s*none/i.test(t);
         const tailRedrawn = /\.pbub-(?:me|other)\s+\.pbub-bubble\s*::?before/i.test(t);
         if (gradBg && !tailOff && !tailRedrawn) out.push('泡泡底色是漸層但尖角還是純色，接縫會露出來');
+        // ::before 是尖角（底稿用邊框畫三角）：在它身上放字或圖，邊框還在，三角會跟著飄走（10-04 她截到翅膀旁邊多一個白三角）
+        const hasContent = (body) => /content\s*:\s*(?:(['"])(?:(?!\1)[^;}])+\1|url\()/i.test(body);
+        if (!tailOff && /\.pbub-bubble\s*::?before[^{}]*\{([^}]*)\}/i.test(t)) {
+            const reB = /\.pbub-bubble\s*::?before[^{}]*\{([^}]*)\}/gi; let mb;
+            while ((mb = reB.exec(t))) { if (hasContent(mb[1])) { out.push('泡泡的 ::before 是畫尖角的，拿去放圖或字，尖角的三角會跟著飄走；裝飾放 ::after，或先把尖角關掉（--pbub-tail-size:0）'); break; } }
+        }
+        // 裝飾往頭像那一角伸出去：自己那側往右、對方那側往左（她：「頭像那邊 用戶的右上，角色的左上，這裡有頭像，會遮住」）
+        //   ::before 沒放東西的是尖角本身（本來就貼著頭像），不算
+        const reS = /\.pbub-(me|other)\s+\.pbub-bubble\s*::?(after|before)[^{}]*\{([^}]*)\}/gi; let ms, toAv = false;
+        while ((ms = reS.exec(t))) {
+            const side = ms[1].toLowerCase(), body = ms[3];
+            if (ms[2].toLowerCase() === 'before' && !hasContent(body)) continue;
+            if ((side === 'me' && /(?:^|;)\s*right\s*:\s*-/i.test(body)) || (side === 'other' && /(?:^|;)\s*left\s*:\s*-/i.test(body))) toAv = true;
+        }
+        if (toAv) out.push('有裝飾往頭像那一邊伸出泡泡（自己那側往右、對方那側往左），會蓋到頭像');
         // 整份沒有任何塑形 ＝ 又退回「兩個圓角矩形換顏色」
         // 🚨圓角走 --pbub-*-radius 變數也算塑形——prompt 推薦的就是這個寫法，
         //   只認 border-radius 會把照著做的那些主題全部誤報成「沒有塑形」。
