@@ -157,7 +157,7 @@
             <input type="checkbox" id="vncfg-jev-sfx" ${this._jevSfxOn() ? 'checked' : ''} onchange="window.VN_SETTINGS_PANEL.setJevSfx(this.checked)">
             <span>開（正文 AI 不再選音效和音樂，也不用每輪讀上面兩張清單）</span>
         </label>
-        <div class="set-desc">開了之後，每一章在寫的時候就由 Jev 照上面的清單配音效、每一場配一首音樂；一章市價約台幣 0.05 元。要先在大廳設置填「決策模型鑰匙」，沒填的話這格開了也不會生效，照舊由正文 AI 選。下一章起生效。</div>
+        <div class="set-desc">開了之後，每一章在寫的時候就由 Jev 照上面的清單配音效、每一場配一首音樂；一章市價約台幣 0.05 元。要先在設置→API→決策模型設好，沒設好的話這格開了也不會生效，照舊由正文 AI 選。下一章起生效。</div>
     </div>
 
     <div class="set-group">
@@ -207,7 +207,7 @@
             const J = this._JX();
             if (!J) { window.AUI?.toastr?.error?.('這個模組還沒載入，先重新整理一次'); return; }
             J.setOn(!!on);
-            if (on && !J.active()) window.AUI?.toastr?.warning?.('還沒填決策模型鑰匙（大廳設置→選項），填了才會生效', '音效交給 Jev');
+            if (on && !J.active()) window.AUI?.toastr?.warning?.('決策模型還沒設好（設置→API→決策模型），設好才會生效', '音效交給 Jev');
         },
         _listNote(group) {
             const VR = this._VR();

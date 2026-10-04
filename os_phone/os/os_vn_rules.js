@@ -66,10 +66,10 @@
         catch (e) { console.warn('[VN指令] 開關狀態存不進去:', e); return false; }
     }
 
-    // 🎵 音效和音樂交給 Jev 配（os_jev_sfx.js）：開著＋有決策模型鑰匙才算。
+    // 🎵 音效和音樂交給 Jev 配（os_jev_sfx.js）：開著＋決策模型三格都填了才算。
     //   生效時 BGM／音效清單和 BGM 規範不送給正文 AI，總綱裡教它寫 #音效# 和 [BGM|] 的那幾行也拿掉（清單還是留在設置裡給 Jev 用）。
     function _jevSfxOn() {
-        try { return localStorage.getItem('jev_sfx_on') === '1' && !!(localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return false; }
+        try { return localStorage.getItem('jev_sfx_on') === '1' && ['npc_decide_url', 'npc_decide_model', 'npc_decide_key'].every(k => (localStorage.getItem(k) || '').trim()); } catch (e) { return false; }
     }
     const JEV_SFX_HIDE = ['bgm_rules'].concat(EDITABLE.map(x => x.id));
     function _jevSfxStrip(id, content) {

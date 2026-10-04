@@ -10,15 +10,13 @@
 //   Jev 取排名前 8 必要的全送到、送出量只有副模型的一半；副模型判「過期」大量冤枉還成立的舊事。
 //   但只考過兩個短故事、Jev 服務又不穩 → 先在她真的玩的時候影子跑，對過再決定要不要接手。
 // 花費：每回合 5 條一通（40 條＝8 通，每通都附同一段劇情），約台幣 0.02 元以下。沒填鑰匙、關掉、或 Jev 掛了 → 這輪不比，不影響任何東西。
-// 鑰匙：沿用大廳設置「決策模型鑰匙」（localStorage npc_decide_key，npc_decide.js 那把）。
+// 連到哪：設置→API→決策模型那三格（os_jev_conn.js）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
     const win = window.parent || window;
     if (win.OS_JEV_SHADOW) return;
 
-    const JEV_URL = 'https://ai-gateway.vercel.sh/v1/evaluate';
-    const JEV_MODEL = 'typesafe-ai/jev';
     const LOG_LS = 'jev_shadow_log';
     // 09-26 她：看完比對，Jev 挑的舊事比副模型還多（都市恶宴 170 樓那輪 8 條裡 5 條是已結束的南區線）→ 預設關。
     //   換新鑰匙：舊的 jev_shadow_on 以前預設當開，就算誰按過「開」也一起作廢；要看再到 DEBUG 面板按「開／關」。
@@ -30,7 +28,9 @@
     const TXT_MAX = 70;           // 記錄裡每條記憶只留前 70 字，免得撐爆 localStorage
     const SCENE_MAX = 3000;       // 送給 Jev 的「剛發生的劇情」最多這麼長
 
-    function _key() { try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
+    // 決策模型連到哪：設置→API→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
+    function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
+    function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) === '1'; } catch (e) { return false; } }
     function setOn(on) { try { localStorage.setItem(ON_LS, on ? '1' : '0'); } catch (e) {} }
     function getLog() { try { return JSON.parse(localStorage.getItem(LOG_LS) || '[]'); } catch (e) { return []; } }
@@ -51,7 +51,7 @@
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 25000);
             try {
-                const res = await fetch(JEV_URL, {
+                const res = await fetch(_jev().url, {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + _key(), 'Content-Type': 'application/json' },
                     body: JSON.stringify(body), signal: ctrl.signal,
@@ -78,7 +78,7 @@
         try {
             if (!isOn()) return;
             if (!codes.length) return;
-            if (!_key()) { entry.skip = '沒填決策模型鑰匙'; _push(entry); return; }
+            if (!_key()) { entry.skip = '決策模型沒設好'; _push(entry); return; }
             const scene = String(o.query || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(-SCENE_MAX);
             // 🚨 一批題目太多 Jev 會回 503（09-23 量的：10 題一批從沒被拒，40 題常被拒）。40 條記憶×2 題＝80 題，以前一次送，改成 5 條一批
             const state = { '剛發生的這一回合劇情': scene, '候選的過往記憶（依時間先後）': codes.map(c => c + '：' + _memText(map[c])) };
@@ -91,7 +91,7 @@
                     qs[c + '_need'] = { type: 'score', instructions: '寫下一回合的劇情時，這條過往記憶「' + t + '」有多需要被提醒？', criteria: ['用不到', '可能有點用', '很有用', '一定要知道'] };
                     qs[c + '_true'] = { type: 'boolean', instructions: '根據剛發生的劇情和其他記憶，這條「' + t + '」現在還成立嗎？' };
                 });
-                const d = await _ask({ model: JEV_MODEL, state, questions: qs });
+                const d = await _ask({ model: _jev().model, state, questions: qs });
                 Object.assign(A, d.answers);
                 tokens += (d.usage && d.usage.inputTokens) || 0;
             }
@@ -123,7 +123,7 @@
     // DEBUG 面板用：把最近幾輪排成給人看的文字
     function report(limit) {
         const log = getLog().slice(0, limit || 10);
-        if (!log.length) return '還沒有比對記錄。在酒館裡照常玩幾回合（要開著記憶功能、填了決策模型鑰匙），這裡就會有。';
+        if (!log.length) return '還沒有比對記錄。在酒館裡照常玩幾回合（要開著記憶功能、設好決策模型），這裡就會有。';
         const L = [];
         L.push('影子比對：' + (isOn() ? '開著' : '關著') + '｜實際送給正文的一律是副模型挑的，這裡只是對照');
         log.forEach((e, i) => {

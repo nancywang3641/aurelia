@@ -12,15 +12,13 @@
 //   AI 的第五欄只收對 1 個；「5 段沒開口自動收」0 個對、收錯 32 次；Jev 選段號 9/9、收錯 2 次。
 //   她說這不用影子跑：只是分類，在某個區塊把人拿掉。
 // 花費：一章大約每句台詞一題，每通最多 12 題、選項加起來 150 個；市價一章約台幣 0.03 元以下，帳記在 OS_JEV_USAGE。
-// 鑰匙：沿用大廳設置「決策模型鑰匙」（localStorage npc_decide_key）。
+// 連到哪：設置→API→決策模型那三格（os_jev_conn.js）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
     const win = window.parent || window;
     if (win.OS_JEV_STAGE) { if (win !== window) window.OS_JEV_STAGE = win.OS_JEV_STAGE; return; }
 
-    const JEV_URL = 'https://ai-gateway.vercel.sh/v1/evaluate';
-    const JEV_MODEL = 'typesafe-ai/jev';
     const LOG_LS = 'jev_stage_log';
     const ON_LS = 'jev_stage_on';
     const LOG_MAX = 20;
@@ -34,7 +32,9 @@
     const TXT_MAX = 50;           // 記錄裡每段只留這麼長
     const STAY = '一直都在';
 
-    function _key() { try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
+    // 決策模型連到哪：設置→API→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
+    function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
+    function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) !== '0'; } catch (e) { return true; } }
     function setOn(on) { try { localStorage.setItem(ON_LS, on ? '1' : '0'); } catch (e) {} }
     function getLog() { try { return JSON.parse(localStorage.getItem(LOG_LS) || '[]'); } catch (e) { return []; } }
@@ -129,7 +129,7 @@
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 30000);
             try {
-                const res = await fetch(JEV_URL, {
+                const res = await fetch(_jev().url, {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + _key(), 'Content-Type': 'application/json' },
                     body: JSON.stringify(body), signal: ctrl.signal,
@@ -216,7 +216,7 @@
                     const questions = {};
                     j.qs.forEach(x => { questions[x.id] = x.q; });
                     const t0 = Date.now();
-                    const d = await _ask({ model: JEV_MODEL, state: j.state, questions });
+                    const d = await _ask({ model: _jev().model, state: j.state, questions });
                     ms += Date.now() - t0;
                     j.qs.forEach(x => {
                         n++;

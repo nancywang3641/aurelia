@@ -20,8 +20,6 @@
     console.log('[PhoneOS] 載入劇情↔地圖連結...');
 
     const APP = 'vn_map_link';
-    const JEV_URL = 'https://ai-gateway.vercel.sh/v1/evaluate';
-    const JEV_MODEL = 'typesafe-ai/jev';
     const NEW = '新的地方';
     const MAX_CAND = 8;          // 每題最多幾個候選地點（加「新的地方」）
     const Q_PER_CALL = 12;       // 一通最多幾題；超過的這章先當新的地方，下一章再問
@@ -30,7 +28,9 @@
 
     let _st = null, _stChat = null;
     function _chat() { try { return (win.OS_STORY_TOOLS && win.OS_STORY_TOOLS.getChatId && win.OS_STORY_TOOLS.getChatId()) || ''; } catch (e) { return ''; } }
-    function _key() { try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
+    // 決策模型連到哪：設置→API→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
+    function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
+    function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     async function _load() {
         const chat = _chat();
         if (_st && _stChat === chat) return _st;
@@ -131,12 +131,12 @@
             qs.push({ id, it, cand });
         });
         if (!qs.length) return {};
-        const body = { model: JEV_MODEL, state: { '這個故事地圖上已有的地點': places.filter(p => !p.short).map(p => p.name + '（' + p.zone + '）').slice(0, 120) }, questions };
+        const body = { model: _jev().model, state: { '這個故事地圖上已有的地點': places.filter(p => !p.short).map(p => p.name + '（' + p.zone + '）').slice(0, 120) }, questions };
         let d = null;
         for (let t = 0; t < 3 && !d; t++) {
             const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 30000);
             try {
-                const res = await fetch(JEV_URL, { method: 'POST', headers: { 'Authorization': 'Bearer ' + _key(), 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
+                const res = await fetch(_jev().url, { method: 'POST', headers: { 'Authorization': 'Bearer ' + _key(), 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
                 const j = await res.json().catch(() => null);
                 try { win.OS_JEV_USAGE && win.OS_JEV_USAGE.add('place', j, !!(res.ok && j && j.answers)); } catch (e) {}
                 if (res.ok && j && j.answers) d = j;

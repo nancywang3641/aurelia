@@ -23,6 +23,7 @@
             ss_1452: { title: '看圖', body: '手機裡傳的照片、頭像、記事本和微博的照片，要不要讓模型看。聊天的模型看不到圖，就選交給看圖小模型，再到下面把「看圖小模型」指到一條看得到圖的連線。' },
             ss_1458: { title: '哪件事走哪個模型', body: '沒動過就跟以前一樣：正文、手機聊天、大總結走主模型，其餘走副模型。要分開再加通道。' },
             ss_1464: { title: '我的通道', body: '主模型、副模型以外的連線，加幾條都行；加完回上面指定哪件事用它。' },
+            ss_jev: { title: '決策模型', body: '只做選擇題、打分數、回答是或不是的小模型，快又便宜，一次不到台幣 0.001 元。\n\n用到它的地方：書咖的丹決定下一步、立繪什麼時候收、音效和音樂、劇情地點對到地圖、記憶比對。\n\n要用 Jev 那種問法的服務。三格都要填；少一格，那些地方照舊用自己原本的辦法。\n\n只存在這台裝置上，電腦和手機要各填一次。' },
             ss_1503: { title: '頭像 來源', body: '角色頭像／立繪用這個來源。' },
             ss_1519: { title: '立繪模式', body: '開＝直接生全身立繪、不生頭像。' },
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
@@ -227,7 +228,7 @@
         { group: '大廳與世界', id: 'theater_note', name: '小劇場記事 / 角色記憶整理',  def: 'sec'  },
         { group: '大廳與世界', id: 'lobby_chat',   name: '大廳角色對話與小遊戲',       def: 'sec'  },
         { group: '大廳與世界', id: 'cafe',         name: '書咖',                       def: 'sec'  },
-        { group: '大廳與世界', id: 'npc_decide',   name: 'NPC 決定下一步（沒填決策模型鑰匙時）', def: 'sec'  },
+        { group: '大廳與世界', id: 'npc_decide',   name: 'NPC 決定下一步（決策模型沒設好時）', def: 'sec'  },
         { group: '大廳與世界', id: 'estate',       name: '房產（租客 / 房間）',        def: 'sec'  },
         { group: '大廳與世界', id: 'blueprint',    name: '造物工坊',                   def: 'sec'  },
         { group: '大廳與世界', id: 'worldgate',    name: '世界門',                     def: 'sec'  },
@@ -1293,6 +1294,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="api-subtab active" data-apitab="llm" onclick="window._switchApiTab && window._switchApiTab('llm')">主模型</div>
                             <div class="api-subtab" data-apitab="sec-llm" onclick="window._switchApiTab && window._switchApiTab('sec-llm')">副模型</div>
                             <div class="api-subtab" data-apitab="chan" onclick="window._switchApiTab && window._switchApiTab('chan')">通道</div>
+                            <div class="api-subtab" data-apitab="jev" onclick="window._switchApiTab && window._switchApiTab('jev')">決策模型</div>
                         </div>
                     <div id="view-llm" class="api-subview">
                         <div class="set-group"${stHide}>
@@ -1509,6 +1511,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-label"><i class="fa-solid fa-plug-circle-plus"></i> 我的通道${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1464') : ''}</div>
                             <div id="channel-list"></div>
                             <div class="btn-test" id="channel-add-btn" style="margin-top:10px;"><i class="fa-solid fa-plus"></i> 加一條通道</div>
+                        </div>
+                    </div>
+
+                    <!-- 🎲 決策模型（Jev 那種）：網址、模型、鑰匙三格，直接寫存檔（os_jev_conn.js），不跟「保存所有設定」綁 -->
+                    <div id="view-jev" class="api-subview" style="display:none;">
+                        <div class="set-group" id="jev-group">
+                            <div class="set-label"><span><i class="fa-solid fa-dice"></i> 決策模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_jev') : ''}</span></div>
+                            <div class="jev-field"><div class="set-label">網址</div><input class="set-input" id="jev-url" autocomplete="off"></div>
+                            <div class="jev-field"><div class="set-label">模型</div><input class="set-input" id="jev-model" autocomplete="off"></div>
+                            <div class="jev-field"><div class="set-label">鑰匙</div><input class="set-input" id="jev-key" type="password" autocomplete="off"></div>
+                            <div class="btn-test" id="jev-test-btn"><i class="fa-solid fa-plug"></i> 測試</div>
+                            <div class="set-desc jev-test-result hidden" id="jev-test-result"></div>
                         </div>
                     </div>
                     </div><!-- /view-api -->
@@ -2680,6 +2694,33 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const btnTest = container.querySelector('#os-test-btn');
         const secTestBtn = container.querySelector('#sec-test-btn');
         const status = container.querySelector('#os-status');
+
+        // ── 🎲 決策模型三格：打字就存（os_jev_conn.js），測試一按一通 ──
+        (function wireJev() {
+            const J = window.OS_JEV_CONN || (window.parent && window.parent.OS_JEV_CONN);
+            const box = container.querySelector('#jev-group');
+            if (!box) return;
+            if (!J) { box.querySelector('#jev-test-btn')?.classList.add('hidden'); return; }
+            const cur = J.get();
+            [['url', '#jev-url'], ['model', '#jev-model'], ['key', '#jev-key']].forEach(([k, sel]) => {
+                const el = box.querySelector(sel);
+                if (!el) return;
+                el.value = cur[k];
+                el.addEventListener('input', () => J.set({ [k]: el.value }));
+            });
+            const btn = box.querySelector('#jev-test-btn');
+            const out = box.querySelector('#jev-test-result');
+            btn?.addEventListener('click', async () => {
+                if (btn.dataset.busy) return;
+                btn.dataset.busy = '1';
+                out.classList.remove('hidden');
+                out.textContent = '問問看…';
+                try {
+                    const r = await J.test();
+                    out.textContent = (r.ok ? '✓ ' : '✗ ') + r.msg + (r.ms ? '（' + (r.ms / 1000).toFixed(1) + ' 秒）' : '');
+                } finally { delete btn.dataset.busy; }
+            });
+        })();
 
         // ── 🔌 分流表 ＋ 我的通道 ──────────────────────────────────
         (function wireChannels() {

@@ -2,22 +2,20 @@
 // [檔案] os_jev_sfx.js
 // 路徑：os_phone/os/os_jev_sfx.js
 // 職責：VN 的音效和背景音樂交給 Jev（決策模型）配，正文 AI 不再選（也不再每輪讀那兩張清單）。
-//   開關：設置→一般→素材「音效和音樂交給 Jev 配」（localStorage jev_sfx_on）。真的生效還要有決策模型鑰匙（npc_decide_key）。
+//   開關：設置→一般→素材「音效和音樂交給 Jev 配」（localStorage jev_sfx_on）。真的生效還要設好決策模型（設置→API→決策模型，os_jev_conn.js）。
 //   生效時 os_vn_rules 會把 BGM／音效清單和那串「翻書≠撕紙」規則從 VN 指令拿掉、vn_core 不理 AI 寫的 #音效# 和 [BGM|]。
 // 怎麼問（她 09-23 拍板 B1）：每一格旁白先問「這格發出哪一類聲音」（類別名附幾個範例，加「不放」），
 //   有的再問「這一類裡哪一個」；一次最多 10 題（Jev 一批題目太多會回 503）。音樂：每一場（換背景算一場）問一題「配哪首」。
 //   考卷（參考資料/STAGE_JEV_LAB）：一定要放的 12/15、硬塞類似的 0、音樂 5/5；一章市價約台幣 0.05 元。
 // 什麼時候問：正文 AI 還在寫的時候就開始（vn_avatar_earlybird 每 1.5 秒把寫到一半的正文餵進 feed），
 //   後面已經有換行的格才問；一場寫完（換背景或整章結束）才問那場的音樂。章節載入時（plan）把還沒問的補問完，排成時間表交給 vn_core。
-// 鑰匙：沿用大廳設置「決策模型鑰匙」。沒鑰匙、關掉、Jev 沒回應 → 那一章照舊聽 AI 寫的（此時清單也照舊送給 AI）。
+// 連到哪：設置→API→決策模型那三格。沒設好、關掉、Jev 沒回應 → 那一章照舊聽 AI 寫的（此時清單也照舊送給 AI）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
     const win = window.parent || window;
     if (win.OS_JEV_SFX) { if (win !== window) window.OS_JEV_SFX = win.OS_JEV_SFX; return; }
 
-    const JEV_URL = 'https://ai-gateway.vercel.sh/v1/evaluate';
-    const JEV_MODEL = 'typesafe-ai/jev';
     const ON_LS = 'jev_sfx_on';
     const LOG_LS = 'jev_sfx_log';
     const LOG_MAX = 20;
@@ -28,7 +26,9 @@
     const MAX_BGM_PER_CHAPTER = 3;   // 她原本的規則「一章最多換 2 次」：第一場一首＋最多換兩次
     const RULE = '只有這一格「真的發出」清單上這個聲音時才選它。清單裡沒有一模一樣的聲音（例如磨豆機、唱歌、吹蠟燭）就選「' + NONE + '」，不要拿類似的來代替；只是提到、回憶、或聲音已經停了也選「' + NONE + '」。大部分的格都應該是「' + NONE + '」。';
 
-    function _key() { try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
+    // 決策模型連到哪：設置→API→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
+    function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
+    function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) === '1'; } catch (e) { return false; } }
     function setOn(on) { try { localStorage.setItem(ON_LS, on ? '1' : '0'); } catch (e) {} }
     function active() { return isOn() && !!_key(); }
@@ -73,7 +73,7 @@
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 30000);
             try {
-                const res = await fetch(JEV_URL, {
+                const res = await fetch(_jev().url, {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + _key(), 'Content-Type': 'application/json' },
                     body: JSON.stringify(body), signal: ctrl.signal,
@@ -123,7 +123,7 @@
                 const part = targets.slice(i, i + Q_PER_CALL);
                 const qs = {}; part.forEach(s => { qs['p' + s.p] = { type: 'choice', criteria: cc, instructions: '第 P' + s.p + ' 格有沒有發出下面哪一類的聲音？' + RULE }; });
                 const t0 = Date.now();
-                const d = await _ask({ model: JEV_MODEL, state, questions: qs });
+                const d = await _ask({ model: _jev().model, state, questions: qs });
                 _stats.calls++; _stats.ms += Date.now() - t0;
                 part.forEach(s => { const c = _pick(d.answers['p' + s.p]); if (c && cats[c]) picked[s.p] = { s, cat: c }; else _sfxCache.set(s.line, null); });
             }
@@ -132,7 +132,7 @@
                 const part = hits.slice(i, i + Q_PER_CALL);
                 const qs = {}; part.forEach(h => { const c = {}; cats[h.cat].forEach(id => { c[id] = id; }); c[NONE] = '這一類裡沒有對的聲音'; qs['p' + h.s.p] = { type: 'choice', criteria: c, instructions: '第 P' + h.s.p + ' 格要配哪個音效？' + RULE }; });
                 const t0 = Date.now();
-                const d = await _ask({ model: JEV_MODEL, state, questions: qs });
+                const d = await _ask({ model: _jev().model, state, questions: qs });
                 _stats.calls++; _stats.ms += Date.now() - t0;
                 part.forEach(h => { _sfxCache.set(h.s.line, _pick(d.answers['p' + h.s.p])); });
             }
@@ -146,7 +146,7 @@
         try {
             const c = {}; bgm.forEach(b => { c[b] = b; });
             const t0 = Date.now();
-            const d = await _ask({ model: JEV_MODEL, state: _stateOf(ss), questions: { bgm: { type: 'choice', criteria: c, instructions: '這一場戲的背景音樂要用哪一首？（只看曲名判斷氣氛）' } } });
+            const d = await _ask({ model: _jev().model, state: _stateOf(ss), questions: { bgm: { type: 'choice', criteria: c, instructions: '這一場戲的背景音樂要用哪一首？（只看曲名判斷氣氛）' } } });
             _stats.calls++; _stats.ms += Date.now() - t0;
             const a = d.answers.bgm;
             _bgmCache.set(first.line, (a && a.choice && bgm.indexOf(a.choice) >= 0) ? a.choice : null);
@@ -232,7 +232,7 @@
 
     function report(limit) {
         const log = getLog().slice(0, limit || 5);
-        const head = '音效和音樂交給 Jev：' + (isOn() ? (_key() ? '開著' : '開著，但沒填決策模型鑰匙 → 沒生效') : '關著（正文 AI 自己選）');
+        const head = '音效和音樂交給 Jev：' + (isOn() ? (_key() ? '開著' : '開著，但決策模型沒設好 → 沒生效') : '關著（正文 AI 自己選）');
         if (!log.length) return head + '\n還沒有記錄。開著的話播一章 VN 就會有。';
         const L = [head, '格號 P 是這一章裡第幾格（一句台詞或一段旁白算一格）'];
         log.forEach((e, i) => {

@@ -373,6 +373,9 @@
 .set-channel-row { display: flex; gap: 6px; align-items: center; }
 .set-channel-row .set-input { flex: 1; }
 .set-channel-row .btn-test { flex: 0 0 auto; padding: 8px 14px; margin: 0; }
+/* 🎲 設置→API→決策模型 */
+.jev-field + .jev-field { margin-top: 10px; }
+.jev-test-result { margin: 10px 0 0; }
 
 /* ── 設置→備份：這台裝置上的空間（用量條／資料有沒有受保護／各佔多少）── */
 .bk-scan-btn { padding: 4px 12px; font-size: 11px; cursor: pointer; margin: 0; flex-shrink: 0; }
