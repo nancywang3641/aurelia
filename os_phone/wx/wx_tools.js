@@ -690,6 +690,12 @@
     }
     // 🚨 這個小窗自己的顏色寫死、不吃聊天 app 主題（跟主題頁一樣：套了壞主題也要看得清楚）
     const CSS = `
+        .wxtl-mask.is-peek { background:transparent; pointer-events:none; animation:none; }
+        .wxtl-mask.is-peek > .wxtl-box { display:none; }
+        .wxtl-peek { position:absolute; left:12px; right:12px; bottom:12px; pointer-events:auto; display:flex; gap:8px; align-items:center;
+            padding:8px 10px; border-radius:12px; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,.25); }
+        .wxtl-peek-tx { flex:1; font-size:13px; color:#333; }
+        .wxtl-peek .wxtl-btn { flex:0 0 auto; }
         .wxtl-mask { position:absolute; inset:0; z-index:560; display:flex; align-items:center; justify-content:center;
             padding:24px 16px; background:rgba(0,0,0,.42); animation:wxtl-fade .15s ease; }
         @keyframes wxtl-fade { from { opacity:0; } to { opacity:1; } }
@@ -1040,6 +1046,28 @@
         _toast(r.ok ? (act === 'yes' ? '寫進' + _ppSheet(ctx.prop).noun + '了' : '改回去了') : r.text);
         if (_pp === ctx) _ppRender();
     }
+    // 「先套上看看」：單子整片蓋在聊天畫面上，套上去也看不到，一關單子又換回去（10-04 她：「按了沒反應，所以有點不懂是幹嘛的」）。
+    //   預覽那邊套上時丟一個 wxtl-peek 事件上來（detail.off＝換回原本的）：單子收成底下一條、露出聊天畫面，
+    //   「回到單子」把單子打開（照樣套著，按同意才留），「換回原本的」叫 off。收起來時聊天照樣能捲能點。
+    function _wirePeek(root) {
+        root.addEventListener('wxtl-peek', function (e) {
+            const off = e.detail && e.detail.off;
+            let bar = root.querySelector('.wxtl-peek');
+            if (!bar) { bar = d.createElement('div'); bar.className = 'wxtl-peek'; root.appendChild(bar); }
+            bar.innerHTML = '<span class="wxtl-peek-tx">正在試套</span>'
+                + '<button type="button" class="wxtl-btn" data-peek="back">回到單子</button>'
+                + '<button type="button" class="wxtl-btn" data-peek="off">換回原本的</button>';
+            root.classList.add('is-peek');
+            bar.onclick = function (ev) {
+                const b = ev.target.closest('[data-peek]');
+                if (!b) return;
+                ev.stopPropagation();
+                if (b.getAttribute('data-peek') === 'off' && typeof off === 'function') off();
+                root.classList.remove('is-peek');
+                bar.remove();
+            };
+        });
+    }
     function openProposal(chatId, propId) {
         const hit = _ppFind(chatId, propId);
         if (!hit) { _toast('找不到這張了'); return false; }
@@ -1055,6 +1083,7 @@
             const b = e.target.closest('[data-pp]');
             if (b && !b.disabled) _ppAct(b.getAttribute('data-pp'));
         });
+        _wirePeek(root);
         host.appendChild(root);
         _pp = { root: root, chat: hit.chat, msg: hit.msg, prop: hit.msg._prop, busy: '' };
         _ppRender();

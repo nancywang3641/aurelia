@@ -585,13 +585,20 @@
         el.appendChild(btn);
         const tip = document.createElement('div');
         tip.className = 'th-pv-tip';
-        tip.textContent = '套上之後去聊天 app 看，切到哪一間聊天室都先用這套給你看；按「換回原本的」或關掉這張單子就換回來，按同意才會留著。';
+        tip.textContent = '按了這張單子先收起來，直接看聊天畫面套上的樣子；底下那條可以回到單子，或換回原本的。按同意才會留著，關掉這張單子就換回來。';
         el.appendChild(tip);
         let restore = null;
         const paint = function () { btn.textContent = restore ? '換回原本的' : '先套上看看'; btn.classList.toggle('on', !!restore); };
         btn.addEventListener('click', function () {
             if (restore) { restore(); restore = null; }
-            else restore = _tryOn(prop.after && prop.after.css, prop.reset, function () { return el.isConnected; });
+            else {
+                restore = _tryOn(prop.after && prop.after.css, prop.reset, function () { return el.isConnected; });
+                // 單子蓋在聊天上看不到：請單子收起來（聊天 app 裡打開的才接，wx_tools _wirePeek）；那條上的「換回原本的」叫回這裡
+                try {
+                    const CE = (el.ownerDocument.defaultView || window).CustomEvent;
+                    el.dispatchEvent(new CE('wxtl-peek', { bubbles: true, detail: { off: function () { if (restore) { restore(); restore = null; paint(); } } } }));
+                } catch (e) {}
+            }
             paint();
         });
         paint();

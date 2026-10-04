@@ -646,13 +646,20 @@
         el.appendChild(btn);
         const tip = document.createElement('div');
         tip.className = 'th-pv-tip';
-        tip.textContent = '直接套在聊天 app 上給你看，關掉這張單子就換回正在用的那套；按同意才會留著。';
+        tip.textContent = '按了這張單子先收起來，直接看聊天 app 套上的樣子；底下那條可以回到單子，或換回原本的。按同意才會留著，關掉這張單子就換回正在用的那套。';
         el.appendChild(tip);
         let restore = null;
         const paint = function () { btn.textContent = restore ? '換回原本的' : '先套上看看'; btn.classList.toggle('on', !!restore); };
         btn.addEventListener('click', function () {
             if (restore) { restore(); restore = null; }
-            else restore = prop.kind === 'use' && !css ? W.tryOn('') : W.tryOn(css);
+            else {
+                restore = prop.kind === 'use' && !css ? W.tryOn('') : W.tryOn(css);
+                // 單子蓋在聊天上看不到：請單子收起來（同 os_aurelia_bubble.js 的先套上看看）
+                try {
+                    const CE = (el.ownerDocument.defaultView || window).CustomEvent;
+                    el.dispatchEvent(new CE('wxtl-peek', { bubbles: true, detail: { off: function () { if (restore) { restore(); restore = null; paint(); } } } }));
+                } catch (e) {}
+            }
             paint();
         });
         paint();
