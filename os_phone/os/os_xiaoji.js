@@ -189,6 +189,9 @@
             const ch = locked.find(s => s.id === 'chain');
             if (ch) out.push('', '你還不會' + (ch.what || '自己接著做好幾步') + '（要去找' + tName(ch) + '上課），所以' + user + '每說一句話只有一輪工具。');
         }
+        // 它記得的事、更早的聊天摘要：會變，放在工具那一大段後面（前面不跟著變，緩存才接得上）；考試不帶
+        if (!mode.exam && mode.memo) out.push(_memSection(rec, user));
+        if (!mode.exam && mode.sum) out.push(mode.sum);
         // 房間接在最後的（目前是「你的房間」「你的樣子」：布置、打扮與衣櫃，房間的 core/wear_local.js 寫的）。放最後：前面那一大段不跟著變
         if (mode.extra) out.push(String(mode.extra));
         return out.join('\n');
@@ -198,11 +201,12 @@
     const PROP_STATE = { wait: '還沒處理', no: '沒同意', done: '同意了，已經寫進去', undone: '寫進去之後又改回去了', stale: '作廢了（那一條後來被改過）' };
     // 這段對話之前的：工具結果只留一行、單子帶她按了什麼（她按的時候會改那則訊息上的 prop.state）
     //   最近那一則他的回覆查到的留長一點（RECENT_RESULT）：沒學會接著做時，這一句查、下一句才改，find 要一字不差
-    function _history(hist) {
+    // from：從第幾則開始照原文帶（有舊聊天摘要時 _sumPlan 給，還沒整理到的多留一點）；沒給就照原本的剪法
+    function _history(hist, from) {
         const out = [];
         // 舊對話一次剪 10 則，不是每句話滑掉最舊那則：開頭（說明＋最早那幾則）十句話才變一次，緩存才接得上。留 HISTORY_N～HISTORY_N+9 則
         const all = hist || [];
-        const list = all.slice(Math.max(0, Math.floor((all.length - HISTORY_N) / 10) * 10));
+        const list = all.slice(from != null ? from : _cutOf(all.length));
         let lastA = -1;
         list.forEach((m, i) => { if (m && m.role === 'assistant') lastA = i; });
         list.forEach((m, i) => {
@@ -219,6 +223,215 @@
         });
         return out;
     }
+    // ── 它自己記的事（抽屜式；10-05 她：「重要的事＞＞自己記，聊天紀錄可以學微信」）──────────
+    //   小機在回覆裡寫標籤記一條、改一條、刪一條（不是工具，不多叫模型），存在 rec.notes＝{ items: [{id, text, at}], nextId }；
+    //   每一句話都整本帶著（_memSection）。她在房間「它記得的事」看得到、能改能刪（noteAct）。考試不帶也不記。
+    const NOTES_MAX = 30, NOTE_LEN = 120, NOTES_PER_REPLY = 3;
+    const MEM_PAIR_RE = /[<＜]\s*(memory_add|memory_edit)\b([^>＞]*)[>＞]([\s\S]*?)[<＜]\s*\/\s*\1\s*[>＞]/gi;
+    const MEM_SINGLE_RE = /[<＜]\s*memory_remove\b([^>＞]*?)\/?\s*[>＞]/gi;
+    const MEM_CODE_RE = /```[\s\S]*?```|`[^`\n]*`/g;
+    function _inCode(pos, text) { let hit = false; String(text).replace(MEM_CODE_RE, (m, off) => { if (pos >= off && pos < off + m.length) hit = true; return m; }); return hit; }
+    function _memId(attrs) { const m = /(?<![\w:-])id\s*=\s*["“”＂']?(\d+)/i.exec(attrs || ''); return m ? parseInt(m[1], 10) : null; }
+    function _notes(rec) {
+        const n = (rec && rec.notes && typeof rec.notes === 'object') ? rec.notes : {};
+        return { items: Array.isArray(n.items) ? n.items.slice() : [], nextId: n.nextId || 1 };
+    }
+    /** 回覆裡記事的標籤，照出現的先後；反引號與程式碼區塊裡的不算（它在講解） */
+    function memParse(text) {
+        text = String(text || '');
+        const found = [], spans = [];
+        let m;
+        MEM_PAIR_RE.lastIndex = 0;
+        while ((m = MEM_PAIR_RE.exec(text))) {
+            spans.push([m.index, m.index + m[0].length]);
+            if (_inCode(m.index, text)) continue;
+            const body = _one(m[3]).slice(0, NOTE_LEN);
+            if (!body) continue;
+            if (m[1].toLowerCase() === 'memory_add') found.push({ at: m.index, verb: 'add', text: body });
+            else { const id = _memId(m[2]); if (id != null) found.push({ at: m.index, verb: 'edit', id: id, text: body }); }
+        }
+        MEM_SINGLE_RE.lastIndex = 0;
+        while ((m = MEM_SINGLE_RE.exec(text))) {
+            const at = m.index;
+            if (_inCode(at, text) || spans.some(([s, e]) => at >= s && at < e)) continue;
+            const id = _memId(m[1]);
+            if (id != null) found.push({ at: at, verb: 'remove', id: id });
+        }
+        return found.sort((a, b) => a.at - b.at);
+    }
+    /** 回話裡的記事標籤拿掉（她看不到標籤本身）；程式碼裡的照留 */
+    function memStrip(text) {
+        const s = String(text == null ? '' : text);
+        if (!/memory_/i.test(s)) return s;
+        const cut = [];
+        let m;
+        MEM_PAIR_RE.lastIndex = 0;
+        while ((m = MEM_PAIR_RE.exec(s))) if (!_inCode(m.index, s)) cut.push([m.index, m.index + m[0].length]);
+        MEM_SINGLE_RE.lastIndex = 0;
+        while ((m = MEM_SINGLE_RE.exec(s))) { const at = m.index; if (!_inCode(at, s) && !cut.some(([a, b]) => at >= a && at < b)) cut.push([at, at + m[0].length]); }
+        if (!cut.length) return s;
+        cut.sort((a, b) => a[0] - b[0]);
+        let out = '', p = 0;
+        cut.forEach(([a, b]) => { out += s.slice(p, a); p = b; });
+        return (out + s.slice(p)).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    /** 照回覆裡的記事標籤動手（先後做，最多 NOTES_PER_REPLY 件，做不成的不算）；rec.notes 就地換。回 { changed, done: [人話…] } */
+    function memApply(rec, text) {
+        const out = { changed: false, done: [] };
+        if (!rec || !/memory_/i.test(String(text || ''))) return out;
+        const n = _notes(rec);
+        for (const a of memParse(text)) {
+            if (out.done.length >= NOTES_PER_REPLY) break;
+            if (a.verb === 'add') {
+                if (n.items.length >= NOTES_MAX || n.items.some(x => x.text === a.text)) continue;
+                const id = n.nextId++;
+                n.items.push({ id: id, text: a.text, at: Date.now() });
+                out.done.push('記下 #' + id);
+            } else {
+                const it = n.items.find(x => x.id === a.id);
+                if (!it) continue;
+                if (a.verb === 'remove') { n.items = n.items.filter(x => x !== it); out.done.push('忘掉 #' + it.id); }
+                else { it.text = a.text; it.at = Date.now(); out.done.push('改了 #' + it.id); }
+            }
+            out.changed = true;
+        }
+        if (out.changed) rec.notes = n;
+        return out;
+    }
+    function _memSection(rec, user) {
+        const n = _notes(rec);
+        const out = ['', '【你記得的事】', '這是你自己記下來的，每一次聊天都帶著；最近的對話之外，' + user + '的事你只記得這些。'];
+        if (n.items.length) n.items.forEach(x => out.push('#' + x.id + ' ' + x.text));
+        else out.push('還沒有記過任何事。');
+        out.push('值得記的：' + user + '希望你怎麼稱呼、是什麼樣的人、喜歡和不喜歡的、交代你做事的方式、你答應過的事、你們之間發生過的重要的事。寒暄和一次性的小事不用記。'
+            + '這些你還不知道的，可以在聊天裡順著話題問，不用一次問完；問到了就記下來。',
+            '要記就在回覆裡另外寫標籤。這不是工具，不用 tool_call，寫在你回' + user + '的話旁邊就好，' + user + '看不到標籤本身。一次回覆最多 ' + NOTES_PER_REPLY + ' 個。標籤名與屬性名照抄英文，不要翻譯、不要改寫：',
+            '<memory_add>一件事，一句話寫清楚</memory_add>',
+            '<memory_edit id="號碼">改成這樣</memory_edit>',
+            '<memory_remove id="號碼"/>',
+            '同一件事有新的說法就改原本那一條，不要再記一條。最多 ' + NOTES_MAX + ' 條，滿了要先刪掉或併掉不重要的。');
+        return out.join('\n');
+    }
+    /** 她在房間「它記得的事」按的：add／edit／remove。回 [做成了嗎, 一句話] */
+    async function noteAct(rid, act, id, text) {
+        const rec = await get(rid), n = _notes(rec);
+        text = _one(text).slice(0, NOTE_LEN);
+        if (act === 'add') {
+            if (!text) return [false, '要寫內容'];
+            if (n.items.length >= NOTES_MAX) return [false, '滿 ' + NOTES_MAX + ' 條了，先刪掉一條'];
+            n.items.push({ id: n.nextId++, text: text, at: Date.now() });
+        } else {
+            const it = n.items.find(x => x.id === id);
+            if (!it) return [false, '沒有這一條'];
+            if (act === 'remove') n.items = n.items.filter(x => x !== it);
+            else if (act === 'edit') { if (!text) return [false, '要寫內容']; it.text = text; it.at = Date.now(); }
+            else return [false, '不認得要做什麼'];
+        }
+        await save(rid, { notes: n });
+        return [true, ''];
+    }
+
+    // ── 更早的聊天：一節一節的摘要（學聊天 app 的 wx_summary）──────────
+    //   最近 HISTORY_N～+9 則照原文帶。比那更早、還沒整理的，每累積 SUM_CHUNK 則就用這隻小機自己的接口整理成一節
+    //   （多一通，回完話才在背景跑，sumRun）；還沒整理到的先照原文留著（最多再多 SUM_GAP 則），不會有一段兩邊都沒帶。
+    //   一串會話一份，存 OS_DB app_data 'xiaoji_sum' / 會話編號＝{ nodes: [{id, text, at}], covered（整理到第幾則）, totalAt }。
+    //   刪過訊息（總數變少）照 wx_summary 往回退 covered：寧可重寫幾則，不跳過。
+    const SUM_APP = 'xiaoji_sum', SUM_CHUNK = 30, SUM_GAP = 30, SUM_BUDGET = 2000, SUM_KEEP_RAW = 3, SUM_LINE = 400;
+    async function sumGet(conv) {
+        const db = _g('OS_DB');
+        let v = null;
+        try { if (conv && db && db.getAppData) v = await db.getAppData(SUM_APP, conv); } catch (e) {}
+        v = (v && typeof v === 'object') ? v : {};
+        return { nodes: Array.isArray(v.nodes) ? v.nodes : [], covered: v.covered || 0, totalAt: v.totalAt == null ? null : v.totalAt };
+    }
+    async function _sumSave(conv, s) {
+        const db = _g('OS_DB');
+        if (!conv || !db || !db.saveAppData) return;
+        await db.saveAppData(SUM_APP, conv, s);
+    }
+    function _cutOf(len) { return Math.max(0, Math.floor((len - HISTORY_N) / 10) * 10); }
+    function _sumPlan(s, hist) {
+        const total = (hist || []).length;
+        let covered = (s && s.covered) || 0;
+        if (s && s.totalAt != null && total < s.totalAt) covered = Math.max(0, covered - (s.totalAt - total));
+        covered = Math.min(covered, total);
+        const cut = _cutOf(total);
+        return { total: total, covered: covered, cut: cut, from: Math.max(Math.min(cut, covered), cut - SUM_GAP), pending: Math.max(0, cut - covered) };
+    }
+    function _sumSection(s, user) {
+        const nodes = ((s && s.nodes) || []).filter(x => x && String(x.text || '').trim());
+        if (!nodes.length) return '';
+        return ['', '【更早以前的聊天（整理過的，由舊到新）】'].concat(nodes.map(x => '・' + String(x.text).trim()),
+            ['上面是你跟' + user + '更早以前聊過的事，整理過、不是逐字紀錄；接下來的對話才是最近的原文。講到以前的事要跟上面對得起來。']).join('\n');
+    }
+    function _plainLine(c) {   // 整理用：標籤（家具、打扮的 svg、記事）拿掉，只留說的話
+        return _one(String(c == null ? '' : c).replace(/<(\w+)\b[^>]*>[\s\S]*?<\/\1\s*>/g, ' ').replace(/<[^>]+>/g, ' ')).slice(0, SUM_LINE);
+    }
+    function _sumPrompt(prev, lines, me) {
+        return '下面是' + USER + '跟「' + me + '」（' + USER + '在奧瑞亞宿舍的小機）由舊到新的一段對話。請把這一段整理成一節記錄。\n\n'
+            + '整理的要求：\n'
+            + '- 用第三人稱客觀敘述，不要分行條列，不要標題。\n'
+            + '- 只留下之後還可能被提起的：' + USER + '交代或拜託的事、做了什麼、還沒做完的、答應的事、' + USER + '說到自己的事與喜好、兩個之間相處的變化。\n'
+            + '- 時間先後要看得出來。寒暄、重複的話不用留。\n'
+            + (prev ? '- 下面附的「上一節」只是讓你接得上，上一節寫過的事不要再寫一次。\n' : '')
+            + '- 控制在 250 字以內。只輸出這一節本身，不要任何說明。\n\n'
+            + (prev ? '【上一節】\n' + prev + '\n\n' : '')
+            + '【這一段對話】\n' + lines.join('\n');
+    }
+    function _sumMergePrompt(texts) {
+        return '下面是同一段聊天由舊到新的幾節記錄。請把它們併成一節，取代這幾節。\n\n'
+            + '要求：第三人稱客觀敘述，不要條列與標題；交代的事、答應的事、沒做完的事、' + USER + '說到自己的事與喜好都要留下，已經被後來推翻的寫成過去；時間先後要看得出來；400 字以內。只輸出併好的這一節。\n\n'
+            + texts.map((t, i) => '【第 ' + (i + 1) + ' 節】\n' + t).join('\n\n');
+    }
+    function _sumClean(t) { return String(t || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s{3,}/g, '\n').trim(); }
+    const _sumBusy = {};
+    /** 背景整理：舊的還沒整理的滿 SUM_CHUNK 則就寫一節（一通），節太長再把最舊的併起來（再一通）。force＝不滿也整理（她按的）。 */
+    async function sumRun(rid, conv, hist, force) {
+        if (!conv || _sumBusy[conv]) return { ok: false, reason: '正在整理' };
+        _sumBusy[conv] = true;
+        try {
+            const rec = await get(rid), conn = connConfig(rec);
+            const r = _resident(rid), me = (r && r.name) || '小機';
+            const s = await sumGet(conv);
+            const p = _sumPlan(s, hist);
+            if (p.pending < (force ? 1 : SUM_CHUNK)) return { ok: false, reason: '還不用整理' };
+            const end = Math.min(p.cut, p.covered + SUM_CHUNK);
+            const lines = (hist || []).slice(p.covered, end)
+                .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content)
+                .map(m => (m.role === 'user' ? USER : me) + '：' + _plainLine(m.content)).filter(l => !/：$/.test(l));
+            s.covered = end; s.totalAt = p.total;
+            if (lines.length) {
+                const prev = s.nodes.length ? String(s.nodes[s.nodes.length - 1].text || '') : '';
+                const text = _sumClean(await _chat([{ role: 'system', content: _sumPrompt(prev, lines, me) }], conn, null, null));
+                if (!text) return { ok: false, reason: '模型回了空的' };
+                s.nodes.push({ id: 'sn' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: text, at: Date.now() });
+            }
+            await _sumSave(conv, s);
+            // 節加起來太長：最新 SUM_KEEP_RAW 節不動，前面的併成一節
+            const chars = s.nodes.reduce((a, x) => a + String(x.text || '').length, 0);
+            if (chars > SUM_BUDGET && s.nodes.length > SUM_KEEP_RAW + 1) {
+                const old = s.nodes.slice(0, s.nodes.length - SUM_KEEP_RAW);
+                const merged = _sumClean(await _chat([{ role: 'system', content: _sumMergePrompt(old.map(x => String(x.text || ''))) }], conn, null, null));
+                if (merged) {
+                    s.nodes = [{ id: 'sn' + Date.now().toString(36), text: merged, at: Date.now(), combined: old.length }].concat(s.nodes.slice(old.length));
+                    await _sumSave(conv, s);
+                }
+            }
+            return { ok: true, nodes: s.nodes.length };
+        } catch (e) {
+            console.warn('[OS_XIAOJI] 整理舊聊天沒成功：', e);
+            return { ok: false, reason: (e && e.message) || '沒成功' };
+        } finally { delete _sumBusy[conv]; }
+    }
+    /** 她在房間刪掉一節（那段就真的忘了，不會重寫） */
+    async function sumRemove(conv, id) {
+        const s = await sumGet(conv), n = s.nodes.length;
+        s.nodes = s.nodes.filter(x => x.id !== id);
+        if (s.nodes.length === n) return false;
+        await _sumSave(conv, s);
+        return true;
+    }
+
     function _argsText(args) {
         if (!args || typeof args !== 'object') return '';
         const v = Object.keys(args).map(k => args[k]).find(x => typeof x === 'string' && x.trim());
@@ -302,7 +515,10 @@
         const runTool = o.runTool || ((t, args) => _runReal(rid, t, args));
         const conn = connConfig(rec);
         const user = USER;
-        const base = _history(o.history);
+        // o.conv：房間那一串會話的編號（有給才有舊聊天摘要；考試、沒給的照原本的剪法）
+        const sumS = (o.conv && !o.examNote) ? await sumGet(o.conv) : null;
+        const sumP = sumS ? _sumPlan(sumS, o.history || []) : null;
+        const base = _history(o.history, sumP ? sumP.from : null);
         base.push({ role: 'user', content: String(o.userText || '') });
         const work = [], said = [], log = [], props = [];
         let calls = 0, stopped = false;
@@ -310,7 +526,8 @@
         const use = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, n: 0 };
         const _addUse = u => { if (!u) return; use.input += u.input || 0; use.output += u.output || 0; use.cacheRead += u.cacheRead || 0; use.cacheWrite += u.cacheWrite || 0; use.n++; };
         // 說明整句話只組一次、每一通都一樣：同一句話裡後面幾通的開頭（說明＋舊對話＋前幾通）跟前一通一模一樣，接口有緩存就吃得到
-        const sys = prompt(r, rec, tools, { chain: chain, cap: cap, exam: o.examNote, groups: gs, extra: o.extraNote });
+        const sys = prompt(r, rec, tools, { chain: chain, cap: cap, exam: o.examNote, groups: gs, extra: o.extraNote,
+            memo: !o.examNote, sum: sumS ? _sumSection(sumS, user) : '' });
         try {
             while (calls < cap) {
                 if (o.signal && o.signal.aborted) throw _abortErr();
@@ -346,9 +563,23 @@
             stopped = true;                                // 已經提的單子留著
         }
         let reply = said.join('\n\n').trim();
+        // 它自己記的事：照標籤記下來、從回話裡拿掉（她看不到標籤本身）。考試不記
+        let memo = null;
+        if (/memory_/i.test(reply)) {
+            if (!o.examNote) {
+                try {
+                    const rec2 = await get(rid);   // 拿最新那份：等模型這段時間她可能在房間改過
+                    const mr = memApply(rec2, reply);
+                    if (mr.changed) { await save(rid, { notes: rec2.notes }); memo = mr.done; }
+                } catch (e) { console.warn('[OS_XIAOJI] 記事沒存成：', e); }
+            }
+            reply = memStrip(reply);
+        }
         if (!reply && !props.length) reply = stopped ? '（停下來了）' : '（沒有回話）';
+        // 舊聊天滿了就在背景整理一節（不等它，回話先交出去）
+        if (sumP && sumP.pending >= SUM_CHUNK) setTimeout(() => { sumRun(rid, o.conv, o.history || []).catch(() => {}); }, 0);
         // calls＝小機自己那幾通＋大件真的叫到的專門那幾通（她付的錢，回覆底下照實寫）
-        return { reply: reply, calls: calls + log.filter(x => x.gen).length, props: props, stopped: stopped,
+        return { reply: reply, calls: calls + log.filter(x => x.gen).length, props: props, stopped: stopped, memo: memo,
             usage: use.n ? use : null, model: String((conn.config && conn.config.model) || ''),
             log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text, gen: !!x.gen })) };
     }
@@ -464,6 +695,7 @@
             personaFull: '你現在扮演「' + me + '」——404 號房的柴郡用 LUNA 碎片拼出來、沒有登記的小 AI，樣子是一隻像素' + _bodyName(rec) + '，住在宿舍，替' + user + '在奧瑞亞裡做事。'
                 + user + '是玩奧瑞亞的那個人，不是故事裡的角色。' + (mcl ? mcl : '')
                 + (rec.about ? user + '說它是這樣的：' + _one(rec.about).slice(0, 200) : '')
+                + (_notes(rec).items.length ? '\n它自己記得的事：' + _notes(rec).items.map(x => x.text).join('；') : '')
                 + (recent.length ? '\n\n【' + me + '跟' + user + '最近的聊天（它平常實際的樣子、說話方式從這裡看；這一場別複述）】\n' + recent.join('\n') : '') };
         const extra = me + '剛在' + (T.place || '') + '上完' + (T.name || '') + '的「' + sk.label + '」，考過了。它交的作業：' + (summary || '（沒有記下）') + '。演考完之後他們兩個的一小段。'
             + user + (mcl ? '和故事的主角都' : '') + '不在場。';
@@ -485,6 +717,10 @@
     const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
         grade, lines, canEnroll, pay, exam, theater, adopt, BODIES, bodyOf,
         USER: USER,   // 給模型看的「使用者」：房間接「你的房間／樣子」、做大件的回話都用這個，不用人設的名字
+        // 它記得的事（房間「它記得的事」面板用）與舊聊天摘要
+        notesOf: rec => _notes(rec).items, noteAct, memParse, memStrip, memApply,
+        sumGet, sumRun, sumRemove, sumPlan: _sumPlan,
+        MEMO: { NOTES_MAX: NOTES_MAX, NOTE_LEN: NOTE_LEN, SUM_CHUNK: SUM_CHUNK },
         LIMITS: { CAP_MIN: CAP_MIN, CAP_MAX: CAP_MAX, NO_CHAIN_CAP: NO_CHAIN_CAP } };
     win.OS_XIAOJI = API;
     if (win !== window) { try { window.OS_XIAOJI = API; } catch (e) {} }
