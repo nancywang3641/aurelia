@@ -713,14 +713,18 @@
         return host;
     }
     const SIZES = { phone: '手機', center: '中間', full: '全螢幕' };
-    async function look(args) {
+    // opt.textOnly：拿不到圖的那條（聊天 app 的角色）只做檢查，不截圖、也不把聊天主題套到她開著的聊天 app 上
+    //   （以前套上、截圖、換回，圖丟掉，她只看到畫面閃一下；同 os_aurelia_bubble.js 的 look）。
+    async function look(args, opt) {
         args = args || {};
+        const textOnly = !!(opt && opt.textOnly);
         const S = win.OS_STUDIO || window.OS_STUDIO;
-        if (!S || !S.shotNode) return { text: '創作室還沒載好，現在截不了圖。', images: [] };
+        if (!textOnly && (!S || !S.shotNode)) return { text: '創作室還沒載好，現在截不了圖。', images: [] };
         const c = await _candidate(args);
         if (c.err) return { text: c.err, images: [] };
         const lines = [], images = [];
-        if (c.tk === 'story') {
+        if (textOnly) { /* 不截圖 */ }
+        else if (c.tk === 'story') {
             const SV = _SV(), F = _thFrames();
             const size = F[args.size] ? args.size : 'phone', f = F[size];
             const want = String(args.mode || '').trim();
@@ -771,7 +775,7 @@
             }
         }
         return {
-            text: KINDS[c.tk] + '「' + (c.t.name || '') + '」畫出來的樣子（這一步沒有出單子，對方看不到）：\n' + lines.join('\n')
+            text: KINDS[c.tk] + '「' + (c.t.name || '') + '」' + (lines.length ? '畫出來的樣子（這一步沒有出單子，對方看不到）：\n' + lines.join('\n') : '的檢查（這一步沒有出單子，對方看不到）：')
                 + (c.warn.length ? '\n檢查抓到的（提單子時也會列給對方看）：\n- ' + c.warn.join('\n- ') : '\n檢查沒抓到問題。'),
             images: images.slice(0, 3)
         };
@@ -836,7 +840,7 @@
     async function run(name, args) {
         if (name === 'aurelia_change_log') { const E = _E(); if (!E) throw new Error('修改紀錄還沒載好'); return E.readLog(args); }
         // 聊天 app 的角色只拿得到字（圖只有宿舍住戶那條會轉過去，走 look）
-        if (name === 'aurelia_theme_look') return (await look(args || {})).text + '\n（這裡看不到截圖，只有檢查的結果。）';
+        if (name === 'aurelia_theme_look') return (await look(args || {}, { textOnly: true })).text + '\n（這裡看不到截圖，只有檢查的結果。）';
         const t = TOOLS.find(function (x) { return x.name === name && x.run; });
         if (!t) throw new Error('沒有叫做「' + name + '」的工具');
         return String((await t.run(args || {})) || '').trim() || '什麼都沒有查到。';

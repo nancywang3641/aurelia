@@ -639,14 +639,17 @@
         return { t: { name: nm, head: (t && t.head && css === t.css) ? t.head : '泡泡「' + nm + '」', css: css }, warn: warn };
     }
     function _wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-    async function look(args, ctx) {
+    // opt.textOnly：拿不到圖的那條（聊天 app 的角色）只做檢查。以前照樣截三張、還把新泡泡套在她開著的那間截一張再換回，
+    //   圖最後丟掉，她只看到畫面閃一下又變回來（10-04：「突然我的酒館瀏覽器好像出現變排版了，手機樣式也被套上展示，但他結束查看後，就又回到原本樣子」）。
+    async function look(args, ctx, opt) {
         args = args || {};
         if (!_ready()) return { text: NOT_READY, images: [] };
         const S = win.OS_STUDIO || window.OS_STUDIO;
         const c = _candidate(args, ctx);
         if (c.err) return { text: c.err, images: [] };
         const lines = [], images = [];
-        if (!S || !S.shotNode) lines.push('・現在截不了圖（創作室還沒載好），下面只有檢查的結果。');
+        if (opt && opt.textOnly) { /* 不截圖 */ }
+        else if (!S || !S.shotNode) lines.push('・現在截不了圖（創作室還沒載好），下面只有檢查的結果。');
         else {
             for (const bg of ['light', 'dark']) {
                 const host = document.createElement('div');
@@ -678,7 +681,7 @@
             } else lines.push('・她的聊天 app 現在沒開著某一間聊天室，真的畫面截不到。');
         }
         return {
-            text: c.t.head + '畫出來的樣子（這一步沒有出單子，對方看不到）：\n' + lines.join('\n')
+            text: c.t.head + (lines.length ? '畫出來的樣子（這一步沒有出單子，對方看不到）：\n' + lines.join('\n') : '的檢查（這一步沒有出單子，對方看不到）：')
                 + (c.warn.length ? '\n檢查抓到的（提單子時也會列給對方看）：\n- ' + c.warn.join('\n- ') : '\n檢查沒抓到問題。'),
             images: images.slice(0, 3)
         };
@@ -745,7 +748,7 @@
     async function run(name, args, ctx) {
         if (name === 'aurelia_change_log') { const E = _E(); if (!E) throw new Error('修改紀錄還沒載好'); return E.readLog(args); }
         // 聊天 app 的角色只拿得到字（圖只有宿舍住戶那條會轉過去，走 look）
-        if (name === 'aurelia_bubble_look') return (await look(args || {}, ctx)).text + '\n（這裡看不到截圖，只有檢查的結果。）';
+        if (name === 'aurelia_bubble_look') return (await look(args || {}, ctx, { textOnly: true })).text + '\n（這裡看不到截圖，只有檢查的結果。）';
         const t = TOOLS.find(function (x) { return x.name === name && x.run; });
         if (!t) throw new Error('沒有叫做「' + name + '」的工具');
         return String((await t.run(args || {}, ctx)) || '').trim() || '什麼都沒有查到。';
