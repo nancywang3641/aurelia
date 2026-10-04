@@ -491,6 +491,22 @@
         } catch (e) { return ''; }
     }
 
+    // 🌐 外語訊息的翻譯不送回去（10-04 她：「雙語模式下，我覺得不要把翻譯 返回成上下文? 不然感覺好像挺耗TOKEN的?」）：
+    //   他講過的話送回模型只留原文；最近那一則留著翻譯，當作「要附翻譯」的樣子（歷史裡全沒翻譯，它會跟著不寫）。
+    //   她講的話不動。畫面上的泡泡照樣有翻譯（那是存著的訊息，這裡只改送出去的那份）。
+    function _wxLastAiIdx(list) {
+        for (let i = (list || []).length - 1; i >= 0; i--) {
+            const m = list[i];
+            if (m && !m.isMe && m.type !== 'system' && m.type !== 'time' && !m.recalled) return i;
+        }
+        return -1;
+    }
+    function _wxNoTl(content, msg, i, lastAi) {
+        if (!msg || msg.isMe || i === lastAi) return content;
+        const F = win.OS_VN_FOREIGN;
+        return (F && F.stripTl) ? F.stripTl(content) : content;
+    }
+
     // 🔒 刪好友與拉黑（wx_core 的 _applyFriendTags 收這幾個標籤）。私聊才教，照現在是不是好友給不一樣的一段。
     //   她正在送朋友驗證的那一輪不給這段（那一輪的指示由 sendFriendRequest 自己帶）。
     function _wxFriendBlock(chatId) {
@@ -2236,6 +2252,7 @@
                             const rawPhoneMsgs = [];
                             // 📞 這一通已經接通：「以上是以前」那句放在這一通開始的地方，不是放在最後
                             const _curCallAt = (promptKey === 'call_voice_system') ? _openCallAt(_histMsgs, apiChat.messages) : -1;
+                            const _lastAi = _wxLastAiIdx(_histMsgs);   // 🌐 這一則留翻譯，其他的剝掉
                             _histMsgs.forEach((msg, _i) => {
                                 if (_i === _curCallAt) {
                                     rawPhoneMsgs.push({ role: 'system', content: _CALL_NOW_NOTE, _source: 'phone' });
@@ -2271,6 +2288,7 @@
                                 try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) _hc = _pt(msg, _hc); } catch (e) {}
                                 // 🧾 紅包／轉帳／禮物的單號不給它看：看得到就會照抄，抄到同一個號碼兩張卡會黏在一起
                                 try { const _sc = win.wxApp && win.wxApp.stripCardIds; if (_sc) _hc = _sc(_hc); } catch (e) {}
+                                _hc = _wxNoTl(_hc, msg, _i, _lastAi);   // 🌐 外語的翻譯不送回去
                                 rawPhoneMsgs.push({
                                     role: msg.isMe ? 'user' : 'assistant',
                                     content: _hc,
@@ -2916,6 +2934,7 @@
                         let _pushedHist = 0;
                         // 📞 這一通已經接通：「以上是以前」那句放在這一通開始的地方（同酒館版）
                         const _curCallAt = _isCall ? _openCallAt(_histMsgs, apiChat.messages) : -1;
+                        const _lastAi = _wxLastAiIdx(_histMsgs);   // 🌐 這一則留翻譯，其他的剝掉（同酒館版）
                         _histMsgs.forEach((msg, _i) => {
                             const useSummary = _i < _cut;
                             if (_i === _curCallAt) {
@@ -2952,6 +2971,7 @@
                             // 📷 相簿照片的圖庫編號 → 它看過寫下的那句（跟酒館版 buildContext 同一支）
                             try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) content = _pt(msg, content); } catch (e) {}
                             try { const _sc = win.wxApp && win.wxApp.stripCardIds; if (_sc) content = _sc(content); } catch (e) {}
+                            content = _wxNoTl(content, msg, _i, _lastAi);   // 🌐 外語的翻譯不送回去（同酒館版）
                             content = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
 
                             if (useSummary) {

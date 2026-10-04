@@ -112,9 +112,18 @@
         if (!m || !isForeign(m[1]) || !/[㐀-鿿]/.test(m[2])) return { orig: s, tl: '' };
         return { orig: m[1], tl: m[2].trim() };
     }
+    // 送回模型的歷史不用翻譯（10-04 她：「雙語模式下，我覺得不要把翻譯 返回成上下文? 不然感覺好像挺耗TOKEN的?」）：
+    //   每一行結尾、還有 [Voice: 原文 (翻譯)] 方括號裡的那個「（中文翻譯）」拿掉，只留原文；拆不出來的照原樣。
+    function stripTl(text) {
+        return String(text == null ? '' : text).split('\n').map(function (line) {
+            line = line.replace(/\[([^\[\]]*)\]/g, function (m, inner) { const s = splitTail(inner); return s.tl ? '[' + s.orig + ']' : m; });
+            const s = splitTail(line);
+            return s.tl ? s.orig : line;
+        }).join('\n');
+    }
     function langName(k) { return LANG_NAME[k] || ''; }
 
-    const API = { LANGS, get, save, promptLine, html, wire, splitTail, langName };
+    const API = { LANGS, get, save, promptLine, html, wire, splitTail, stripTl, langName };
     win.OS_VN_FOREIGN = API;
     if (win !== window) window.OS_VN_FOREIGN = API;
 })();
