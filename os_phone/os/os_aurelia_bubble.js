@@ -263,7 +263,8 @@
             + '動手前先想清楚：這次的泡泡是那個世界裡的什麼東西、兩側各是什麼角色、尖角留不留、頭像框是什麼材質的框。講不出「它是什麼」，畫出來就會是兩個圓角矩形換顏色。\n'
             + '交的時候用 aurelia_bubble_add（或 aurelia_bubble_edit）的 css 參數，只交 CSS 本身，不用 ``` 包起來。\n'
             + '交之前自檢一次：兩側都設計了嗎？遮住字只看泡泡，認得出主題嗎（玻璃那一類就看疊層做了沒）？字底下是實底，還是半透明加了模糊？'
-            + '.pbub-row 上有沒有不小心寫到 display / flex-direction / justify-content？底色改成漸層了但尖角還是純色嗎？有問題就修好再交。';
+            + '.pbub-row 上有沒有不小心寫到 display / flex-direction / justify-content？底色改成漸層了但尖角還是純色嗎？有問題就修好再交。\n'
+            + '你看不到畫面，字會落在哪一行算不準：有放裝飾的話，交之前先用 aurelia_bubble_look（css 參數放這份）量一次，它會告訴你裝飾有沒有蓋到字、疊到頭像，量過沒問題再交。';
         const pre = '下面是對方的聊天 app 給模型的泡泡說明書。想跟對方的聊天 app 主題搭，可以先用 aurelia_theme_read（kind: chat）看那套的配色（沒有這個工具就跳過）。\n\n';
     // 號碼開頭也放一份：聊天 app 下一輪就把說明書收成開頭 200 字，只放結尾的話，中間先叫 look 再交時號碼已經看不到、只好再看一次說明書（10-01 公益站 gemini-3.1-pro 實測）
         const code = _specIssue();
@@ -639,6 +640,76 @@
         return { t: { name: nm, head: (t && t.head && css === t.css) ? t.head : '泡泡「' + nm + '」', css: css }, warn: warn };
     }
     function _wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    // ── 量：裝飾有沒有蓋到字、擋到頭像（10-04 她：「好，做」）────────────────
+    //   模型看不到畫面、算不準字落在哪一行（公益站考出來：報頭的線劃過第一行字、翅膀往頭像那邊長）；
+    //   檢查器只看寫法也看不出來。這裡在畫面外排一次假聊天畫面（不截圖、不碰她的畫面），
+    //   拿裝飾（泡泡與頭像框的 ::before／::after）的外框，對每一行字、對同一列的頭像算有沒有疊到。
+    //   只量得到外框：旋轉、縮放不算；整片鋪在字底下的紋理（佔泡泡六成以上）本來就允許，不算蓋字；
+    //   泡泡 ::before 沒放東西＝底稿的尖角，本來就貼著頭像，不算。
+    function _pseudoBox(el, which) {
+        const cs = el.ownerDocument.defaultView.getComputedStyle(el, which);
+        if (!cs || cs.content === 'none' || cs.content === 'normal' || cs.display === 'none') return null;
+        if (cs.position !== 'absolute' && cs.position !== 'fixed') return null;   // 排在字裡面的不會疊到字
+        const w = parseFloat(cs.width), h = parseFloat(cs.height);
+        if (!(w > 1 && h > 1)) return null;
+        const r = el.getBoundingClientRect(), es = el.ownerDocument.defaultView.getComputedStyle(el);
+        const bl = parseFloat(es.borderLeftWidth) || 0, br = parseFloat(es.borderRightWidth) || 0;
+        const bt = parseFloat(es.borderTopWidth) || 0, bb = parseFloat(es.borderBottomWidth) || 0;
+        const num = function (v) { return v === 'auto' ? null : parseFloat(v); };
+        const L = num(cs.left), R = num(cs.right), T = num(cs.top), B = num(cs.bottom);
+        const x = L != null ? r.left + bl + L : (R != null ? r.right - br - R - w : r.left + bl);
+        const y = T != null ? r.top + bt + T : (B != null ? r.bottom - bb - B - h : r.top + bt);
+        return { left: x, top: y, right: x + w, bottom: y + h, w: w, h: h, empty: /^(["'])\1$/.test(cs.content) };
+    }
+    function _hit(a, b) {
+        const w = Math.min(a.right, b.right) - Math.max(a.left, b.left), h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        return w > 2 && h > 0.5;   // 細線（1～2px 高的劃線）也要算
+    }
+    async function _measure(css) {
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:-30000px;top:0;pointer-events:none;width:' + PV_W + 'px;height:900px;';
+        document.body.appendChild(host);
+        try {
+            const fr = document.createElement('iframe');
+            fr.style.cssText = 'display:block;border:0;width:' + PV_W + 'px;height:900px;';
+            host.appendChild(fr);
+            await new Promise(function (r) { fr.onload = r; fr.srcdoc = _doc(css, 'light'); setTimeout(r, 2000); });
+            const d = fr.contentDocument;
+            try { await Promise.race([d.fonts.ready, _wait(1500)]); } catch (e) {}
+            await _wait(200);
+            const SIDE = { me: '自己那側', other: '對方那側' };
+            const text = {}, band = {}, avatar = {};
+            d.querySelectorAll('.pbub-row').forEach(function (row) {
+                const side = row.classList.contains('pbub-me') ? 'me' : 'other';
+                const bub = row.querySelector('.pbub-bubble'), av = row.querySelector('.pbub-avatar');
+                if (!bub) return;
+                const rg = d.createRange(); rg.selectNodeContents(bub);
+                const lines = Array.prototype.filter.call(rg.getClientRects(), function (q) { return q.width > 1 && q.height > 1; });
+                const br = bub.getBoundingClientRect(), ar = av ? av.getBoundingClientRect() : null;
+                const parts = [[bub, '::before', '泡泡的 ::before'], [bub, '::after', '泡泡的 ::after']];
+                if (av) parts.push([av, '::before', '頭像框的 ::before'], [av, '::after', '頭像框的 ::after']);
+                parts.forEach(function (p) {
+                    const box = _pseudoBox(p[0], p[1]);
+                    if (!box) return;
+                    const isTail = p[0] === bub && p[1] === '::before' && box.empty;
+                    const under = p[0] === bub && box.w * box.h >= 0.6 * br.width * br.height;   // 鋪在字底下的紋理
+                    const key = SIDE[side] + p[2];
+                    // 橫跨整顆泡泡的一條（頂部高光、紋理帶，說明書允許的；也可能是劃過字的線）：交給它自己判斷
+                    const wide = p[0] === bub && box.w >= 0.8 * br.width;
+                    if (!under) lines.forEach(function (q, i) { if (_hit(box, q)) { const m = wide ? band : text; (m[key] = m[key] || new Set()).add(i + 1); } });
+                    if (!isTail && ar && p[0] === bub && _hit(box, ar)) avatar[key] = true;
+                });
+                // 泡泡本體被拖去壓頭像（負的 margin、太寬）
+                if (ar && _hit(br, ar)) avatar[SIDE[side] + '泡泡本體'] = true;
+            });
+            const out = [];
+            Object.keys(text).forEach(function (k) { out.push(k + '蓋到字（第 ' + Array.from(text[k]).sort().join('、') + ' 行）'); });
+            Object.keys(band).forEach(function (k) { out.push(k + '橫跨整顆泡泡、疊在第 ' + Array.from(band[k]).sort().join('、') + ' 行字上（是淡的高光或紋理就沒關係；是線條、花紋、字就移開）'); });
+            Object.keys(avatar).forEach(function (k) { out.push(k + '疊到頭像'); });
+            return out;
+        } finally { host.remove(); }
+    }
     // opt.textOnly：拿不到圖的那條（聊天 app 的角色）只做檢查。以前照樣截三張、還把新泡泡套在她開著的那間截一張再換回，
     //   圖最後丟掉，她只看到畫面閃一下又變回來（10-04：「突然我的酒館瀏覽器好像出現變排版了，手機樣式也被套上展示，但他結束查看後，就又回到原本樣子」）。
     async function look(args, ctx, opt) {
@@ -680,9 +751,16 @@
                 finally { restore(); }
             } else lines.push('・她的聊天 app 現在沒開著某一間聊天室，真的畫面截不到。');
         }
+        // 量：裝飾蓋字、擋頭像（畫面外排一次，不截圖；拿不到圖的那條也量得到）
+        let meas = null;
+        if (c.t.css && c.t.css.trim()) { try { meas = await _measure(c.t.css); } catch (e) { meas = null; } }
+        const measText = !meas ? ''
+            : meas.length ? '\n量過（假聊天畫面，手機寬 ' + PV_W + '，只量外框，旋轉縮放不算）：\n- ' + meas.join('\n- ') + '\n要改：裝飾移到泡泡外面或加大那一側的 padding 讓位；頭像那一角（自己那側右上、對方那側左上）不放。'
+            : '\n量過：裝飾沒有蓋到字，也沒有疊到頭像。';
         return {
             text: c.t.head + (lines.length ? '畫出來的樣子（這一步沒有出單子，對方看不到）：\n' + lines.join('\n') : '的檢查（這一步沒有出單子，對方看不到）：')
-                + (c.warn.length ? '\n檢查抓到的（提單子時也會列給對方看）：\n- ' + c.warn.join('\n- ') : '\n檢查沒抓到問題。'),
+                + (c.warn.length ? '\n檢查抓到的（提單子時也會列給對方看）：\n- ' + c.warn.join('\n- ') : '\n檢查沒抓到問題。')
+                + measText,
             images: images.slice(0, 3)
         };
     }
