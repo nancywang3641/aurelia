@@ -2186,7 +2186,8 @@
             //   相對於這條路一次送三萬字只佔 5%，切開反而容易切錯人。角色狀態哪天長大了再說。
             //   🚨唯讀：這裡只給它看，不要求回報，也明令不准把數字或欄位名寫進訊息——
             //   一寫出來就是原始格式跑到畫面上。
-            if (promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') {
+            //   🧳 這間隔離了「不吃這本的劇情」就不給：AVS 是這本故事此刻的狀態（10-04 她：「隔離全關的話，卻還是保留了當前AVS注入欸」）。
+            if ((promptKey === 'wx_chat_system' || promptKey === 'call_voice_system') && !_iso.story) {
                 const _avsBg = _wxAvsBackground();   // 共用（獨立版同一支），說明見那支
                 if (_avsBg) {
                     apiMessages.push({ role: 'system', content: _avsBg });
@@ -2302,8 +2303,11 @@
 
             try {
                 // 🚫 大廳(iris/cheshire)自足：不吃「當前正在玩的卡」的 AVS 狀態變數，避免跨卡污染（與獨立模式守衛一致）
+                //   手機聊天與通話不走這段：上面已經給過「背景參考」那份（附了別把欄位名寫進訊息），
+                //   以前兩份都給＝同一包送兩次，而且這份不看隔離。
                 const avsState = _avsRead();
-                if (!NO_CARD_ROUTES.includes(promptKey) && Object.keys(avsState).length > 0) {
+                if (!NO_CARD_ROUTES.includes(promptKey) && promptKey !== 'wx_chat_system' && promptKey !== 'call_voice_system'
+                    && Object.keys(avsState).length > 0) {
                     apiMessages.push({ role: "system", content: `[SYSTEM: Current Dynamic Variables (AVS)]\n${JSON.stringify(avsState)}` });
                 }
             } catch(e) {}
@@ -2864,12 +2868,13 @@
                 } catch (e) { console.warn('[OS_API standalone] 劇情正文注入失敗:', e); }
             }
 
-            // 🧭 世界狀態當背景，附上「別把欄位名跟數字寫進訊息」（同酒館版，共用那支）
-            if (_isWxRoute) {
+            // 🧭 世界狀態當背景，附上「別把欄位名跟數字寫進訊息」（同酒館版，共用那支）；這間隔離了劇情就不給
+            if (_isWxRoute && !_iso.story) {
                 const _avsBg = _wxAvsBackground();
                 if (_avsBg) apiMessages.push({ role: 'system', content: _avsBg });
             }
-            if (avsPrompt && !_NO_CARD_STD) apiMessages.push({ role: 'system', content: avsPrompt });
+            // 原始整包：手機聊天與通話已經有上面那份，不再送第二次（同酒館版）
+            if (avsPrompt && !_NO_CARD_STD && !_isWxRoute) apiMessages.push({ role: 'system', content: avsPrompt });
 
             if (_isWxRoute && win.WX_DB?.getApiChat && win.wxApp?.GLOBAL_ACTIVE_ID) {
                 try {
