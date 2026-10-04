@@ -33,6 +33,13 @@
     const AURELIA_MAX = 16000;
     const LOG_KEEP = 8;          // 每間留幾筆用過的紀錄
     const MAX_CALLS = 3;         // 一輪最多跑幾個
+    // 🗂 工具組收起來（10-04）：奧瑞亞八組全勾時，每一則都要多送一萬七千字的工具說明（她：「在微信那邊打開所有奧瑞亞工具好像會13000T欸」）。
+    //   說明超過 FOLD_MIN 字的那組平常只列一行（組名＋能做什麼），角色要用時先寫 open_tools 打開，下一輪才列出每個工具怎麼用；
+    //   打開的那組從最後一次用它起帶 OPEN_KEEP_MS。天氣、上網搜尋這種小的照舊整段列。
+    //   她選的是「讓角色自己打開」，不先問決策模型猜要開哪組：那樣每一則都要多問一次、多等一秒，要用工具的時候才多跑一輪比較準。
+    const FOLD_MIN = 800;
+    const OPEN_KEEP_MS = 30 * 60 * 1000;
+    const OPEN_TOOL = 'open_tools';
 
     const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     function _db() { return win.OS_DB || window.OS_DB; }
@@ -133,7 +140,7 @@
         // 翻奧瑞亞的資料：正在玩的故事的劇情、世界書、記憶、人物、現況、其他聊天室、朋友圈微博。
         //   全部只讀、不叫模型、不花錢；工具本身在 os_aurelia_tools.js（之後小機也用同一份），這裡只是接上。
         aurelia: {
-            id: 'tl_aurelia', name: '翻奧瑞亞的資料',
+            id: 'tl_aurelia', name: '翻奧瑞亞的資料', brief: '查正在玩的故事：劇情、世界書、記憶、人物、現況、其他聊天室、朋友圈和微博、以前玩過的',
             get tools() { const A = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS; return (A && A.tools) || []; },
             get note() { const A = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS; return (A && A.note) || ''; },   // 列工具前先講範圍與主角是誰
             run: function (args, srv, name, chat) {
@@ -149,7 +156,7 @@
         // 改世界書：角色提出新增或修改，聊天裡冒一行，她點開看改前改後、按同意才寫（os_aurelia_edit.js）。
         //   看與找的那幾個照一般工具跑；propose 的那兩個走 propose（做成單子，不接著回）。
         aurelia_wb: {
-            id: 'tl_aurelia_wb', name: '改世界書',
+            id: 'tl_aurelia_wb', name: '改世界書', brief: '看、找世界書的條目，提出新增或修改（她同意才寫進去）',
             get tools() { const E = _edit(); return (E && E.tools) || []; },
             get note() { const E = _edit(); return (E && E.note) || ''; },
             run: function (args, srv, name) {
@@ -166,7 +173,7 @@
         // 改預設：酒館預設（只有酒館有）與奧瑞亞提示詞（兩邊都有）的每一條，同一套單子（os_aurelia_preset.js）。
         //   單子的同意／改回去／那一行的字照樣經 OS_AURELIA_EDIT（它看 prop.mod 轉過去），下面的單子小窗不用分兩條。
         aurelia_preset: {
-            id: 'tl_aurelia_preset', name: '改預設',
+            id: 'tl_aurelia_preset', name: '改預設', brief: '看預設與奧瑞亞提示詞的每一條，提出新增或修改（她同意才寫進去）',
             get tools() { const P = _preset(); return (P && P.tools) || []; },
             get note() { const P = _preset(); return (P && P.note) || ''; },
             run: function (args, srv, name) {
@@ -182,7 +189,7 @@
         },
         // 改 VN 組件：故事裡跳出來的那種面板（創作室「純展示」），單子附改前改後的預覽（os_aurelia_vn.js）。
         aurelia_vn: {
-            id: 'tl_aurelia_vn', name: '改 VN 組件',
+            id: 'tl_aurelia_vn', name: '改 VN 組件', brief: '看故事裡跳出來的那種面板，提出新做或修改（她同意才寫進去）',
             get tools() { const V = _vn(); return (V && V.tools) || []; },
             get note() { const V = _vn(); return (V && V.note) || ''; },
             run: function (args, srv, name) {
@@ -198,7 +205,7 @@
         },
         // 改主題：劇情主題、手機主題、聊天 app 主題，新做／修改／換上，單子附改前改後的樣子（os_aurelia_theme.js）。
         aurelia_theme: {
-            id: 'tl_aurelia_theme', name: '改主題',
+            id: 'tl_aurelia_theme', name: '改主題', brief: '看劇情、手機、聊天 app 的主題，提出新做、修改或換上（她同意才寫進去）',
             get tools() { const T = _theme(); return (T && T.tools) || []; },
             get note() { const T = _theme(); return (T && T.note) || ''; },
             run: function (args, srv, name) {
@@ -214,7 +221,7 @@
         },
         // 改特效：畫面特效的配方，新增／修改／開關，單子上可以試播（os_aurelia_fx.js）。
         aurelia_fx: {
-            id: 'tl_aurelia_fx', name: '改特效',
+            id: 'tl_aurelia_fx', name: '改特效', brief: '看畫面特效，提出新增、修改或開關（她同意才寫進去）',
             get tools() { const X = _fx(); return (X && X.tools) || []; },
             get note() { const X = _fx(); return (X && X.note) || ''; },
             run: function (args, srv, name) {
@@ -230,7 +237,7 @@
         },
         // 改指令：BGM／音效清單、四個內建格式開關、BGM 主題（VN 指令內容本身不給改；os_aurelia_vnrule.js）。
         aurelia_vnrule: {
-            id: 'tl_aurelia_vnrule', name: '改指令',
+            id: 'tl_aurelia_vnrule', name: '改指令', brief: '看背景音樂與音效清單、內建格式開關、背景音樂主題，提出修改（她同意才寫進去）',
             get tools() { const Q = _rule(); return (Q && Q.tools) || []; },
             get note() { const Q = _rule(); return (Q && Q.note) || ''; },
             run: function (args, srv, name) {
@@ -247,7 +254,7 @@
         // 改泡泡：聊天泡泡的主題庫與每間聊天室的泡泡，新做／修改／換上，單子附樣子（os_aurelia_bubble.js）。
         //   帶著叫工具的那間聊天室：rooms 寫「這間」就是它。
         aurelia_bubble: {
-            id: 'tl_aurelia_bubble', name: '改泡泡',
+            id: 'tl_aurelia_bubble', name: '改泡泡', brief: '看聊天泡泡的主題和每間聊天室的泡泡，提出新做、修改或換上（她同意才寫進去）',
             get tools() { const U = _bubble(); return (U && U.tools) || []; },
             get note() { const U = _bubble(); return (U && U.note) || ''; },
             run: function (args, srv, name, chat) {
@@ -416,6 +423,33 @@
         });
         return map;
     }
+    function _isOpen(chat, srv) {
+        const t = chat && chat.toolsOpen && chat.toolsOpen[srv.id];
+        return !!t && Date.now() - t < OPEN_KEEP_MS;
+    }
+    function _markOpen(chat, srv) {
+        if (!chat || !srv) return;
+        if (!chat.toolsOpen || typeof chat.toolsOpen !== 'object') chat.toolsOpen = {};
+        chat.toolsOpen[srv.id] = Date.now();
+    }
+    function _groupBrief(srv) {
+        const B = srv.builtin && BUILTIN[srv.builtin];
+        if (B && B.brief) return B.brief;
+        const names = (srv.tools || []).map(function (t) { return t.name; }).slice(0, 12);
+        return names.length ? '有 ' + names.join('、') : '';
+    }
+    // open_tools 寫的組名 → 這間勾了的那一組（組名、編號都認，空白與大小寫不計）。
+    //   寫不全的（「主題」）只在剛好對到一組時算；對到好幾組或寫了組名以外的字，交回能打開的清單讓它重寫。
+    function _findGroup(chat, want) {
+        const norm = function (v) { return String(v || '').replace(/\s+/g, '').toLowerCase(); };
+        const w = norm(want);
+        if (!w) return null;
+        const list = enabledFor(chat);
+        const exact = list.find(function (s) { return norm(s.name) === w || norm(s.id) === w; });
+        if (exact) return exact;
+        const part = w.length >= 2 ? list.filter(function (s) { return norm(s.name).indexOf(w) !== -1; }) : [];
+        return part.length === 1 ? part[0] : null;
+    }
     function _paramLines(schema) {
         const props = (schema && schema.properties) || {};
         const req = (schema && schema.required) || [];
@@ -445,17 +479,40 @@
             '<tool_call name="工具名">{"參數名": "值"}</tool_call>',
             '大括號裡要是正確的 JSON，參數照下面每個工具列的寫。標籤名照抄英文，不要翻譯、不要改寫。這一行對方看不到。',
             '寫了之後這一輪就先停，工具的結果會在下一輪交給你，你再接著回。想先跟對方說一句（例如說你去查一下）就照平常的格式寫，不想說就只寫那一行。',
-            '不需要就不要用；上面已經查過的事，直接用查到的內容，不要再查一次。一次最多用 ' + MAX_CALLS + ' 個。',
-            '工具：'
+            '不需要就不要用；上面已經查過的事，直接用查到的內容，不要再查一次。一次最多用 ' + MAX_CALLS + ' 個。'
         ];
-        let lastSrv = null;
+        // 照組分段（同一組的工具在 map 裡是連著的）
+        const groups = [], bySrv = new Map();
         keys.forEach(function (k) {
-            const t = map[k].tool, srv = map[k].srv;
-            // 一組內建工具有自己的前言（例如翻奧瑞亞的資料：只讀得到故事、主角不是你）→ 那組第一個工具前面寫一次
-            if (srv !== lastSrv) { lastSrv = srv; const B = srv.builtin && BUILTIN[srv.builtin]; if (B && B.note) lines.push('（' + B.note + '）'); }
-            lines.push('・' + k + (t.description ? '：' + String(t.description).replace(/\s+/g, ' ').slice(0, 300) : ''));
-            _paramLines(t.inputSchema).forEach(function (l) { lines.push(l); });
+            const srv = map[k].srv;
+            if (!bySrv.has(srv)) { bySrv.set(srv, []); groups.push(srv); }
+            bySrv.get(srv).push(k);
         });
+        const full = [], menu = [];
+        groups.forEach(function (srv) {
+            const g = [];
+            // 一組內建工具有自己的前言（例如翻奧瑞亞的資料：只讀得到故事、主角不是你）→ 那組第一個工具前面寫一次
+            const B = srv.builtin && BUILTIN[srv.builtin];
+            if (B && B.note) g.push('（' + B.note + '）');
+            bySrv.get(srv).forEach(function (k) {
+                const t = map[k].tool;
+                g.push('・' + k + (t.description ? '：' + String(t.description).replace(/\s+/g, ' ').slice(0, 300) : ''));
+                _paramLines(t.inputSchema).forEach(function (l) { g.push(l); });
+            });
+            const text = g.join('\n');
+            if (text.length > FOLD_MIN && !_isOpen(chat, srv)) {
+                const brief = _groupBrief(srv);
+                menu.push('・' + srv.name + (brief ? '：' + brief : ''));
+            } else full.push(text);
+        });
+        if (full.length) { lines.push('工具：'); full.forEach(function (t) { lines.push(t); }); }
+        if (menu.length) {
+            lines.push('下面這幾組平常只列能做什麼。要用哪一組，先單獨一行寫：');
+            lines.push('<tool_call name="' + OPEN_TOOL + '">{"group": "組名"}</tool_call>');
+            lines.push('寫了這一輪就先停；下一輪那一組每個工具怎麼用會列在上面「工具：」那段，再照著用。要好幾組就各寫一行。');
+            lines.push('工具組：');
+            menu.forEach(function (m) { lines.push(m); });
+        }
         return lines.join('\n');
     }
     // 拿到的結果：還沒給它看過的整段給一次，看過的只留一行
@@ -541,10 +598,27 @@
         if (!Array.isArray(chat.toolLog)) chat.toolLog = [];
         let any = false;
         for (const c of calls.slice(0, MAX_CALLS)) {
+            if (String(c.name).toLowerCase() === OPEN_TOOL) {
+                const a = _parseArgs(c.body, { required: ['group'], properties: { group: { type: 'string' } } });
+                const want = String((a && a.group) || '').trim();
+                const srv = _findGroup(chat, want);
+                const op = { label: srv ? '打開「' + srv.name + '」' : '打開工具組', tool: OPEN_TOOL, args: { group: want }, ok: !!srv, text: '', at: Date.now(), sent: false };
+                if (srv) {
+                    _markOpen(chat, srv);
+                    op.text = '打開了。「' + srv.name + '」每個工具怎麼用，已經列在上面「工具：」那段，照著用。';
+                } else {
+                    op.text = '沒有叫做「' + want + '」的工具組。能打開的有：' + enabledFor(chat).map(function (s) { return s.name; }).join('、');
+                }
+                try { if (onNotice) onNotice(op.label, '', null, op); } catch (e) {}
+                chat.toolLog.push(op);
+                any = true;
+                continue;
+            }
             const hit = map[c.name] || map[Object.keys(map).find(function (k) { return k.toLowerCase() === String(c.name).toLowerCase(); })];
             // 一組底下有好幾個功能的（翻奧瑞亞的資料）用功能自己的中文短名，不然結果標頭與畫面上那行都只看得到組名
             const entry = { label: hit ? (hit.tool.label || hit.srv.name) : String(c.name), tool: c.name, args: {}, ok: false, text: '', at: Date.now(), sent: false };
             const B = hit && hit.srv.builtin && BUILTIN[hit.srv.builtin];
+            if (hit) _markOpen(chat, hit.srv);   // 用到了＝這組接下來也列全的（沒打開就直接寫對名字也算）
             if (!hit) {
                 entry.text = '沒有叫做「' + c.name + '」的工具';
             } else if (hit.tool.propose && B && B.propose) {
