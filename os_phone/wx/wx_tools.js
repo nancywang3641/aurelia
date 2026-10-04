@@ -515,13 +515,32 @@
         }
         return lines.join('\n');
     }
+    // 說明書（*_spec）：看過之後 OPEN_KEEP_MS 內每一輪都整份帶著，不縮成一行。
+    //   以前同別的結果一樣只給一輪：她說「酒紅蝴蝶風」時，那份說明書早就只剩開頭 200 字（裡面剛好有交件號碼，檢查照過），
+    //   角色憑印象做，只換顏色改一個角（10-04 查呼叫記錄確認：那一輪送出去的沒有說明書本文）。同一份分段的各段分開算。
+    function _manuals(log) {
+        const now = Date.now(), seen = {}, keep = [];
+        for (let i = log.length - 1; i >= 0; i--) {
+            const x = log[i];
+            if (!x || !x.ok || !/_spec$/.test(x.tool || '') || now - (x.at || 0) > OPEN_KEEP_MS) continue;
+            const k = x.tool + '|' + ((x.args && x.args.part) || 1);
+            if (seen[k]) continue;
+            seen[k] = true; keep.unshift(x);
+        }
+        return keep;
+    }
     // 拿到的結果：還沒給它看過的整段給一次，看過的只留一行
     function resultsBlock(chat) {
         const log = (chat && Array.isArray(chat.toolLog)) ? chat.toolLog : [];
         if (!log.length) return '';
         const fresh = log.filter(function (x) { return !x.sent; });
-        const old = log.filter(function (x) { return x.sent; }).slice(-4);
+        const man = _manuals(log).filter(function (x) { return x.sent; });   // 這一輪剛拿到的照一般結果給，不重複
+        const old = log.filter(function (x) { return x.sent && man.indexOf(x) === -1; }).slice(-4);
         const out = [];
+        if (man.length) {
+            out.push('【你叫出來過的寫法說明】做這一類東西時照著寫（' + Math.round(OPEN_KEEP_MS / 60000) + ' 分鐘內一直在這裡）：');
+            man.forEach(function (x) { out.push('── ' + x.label); out.push(String(x.text || '').slice(0, AURELIA_MAX)); });
+        }
         if (fresh.length) {
             out.push('【你剛才用工具拿到的結果】這些是你自己查的，對方看不到，要讓對方知道就用你自己的話講，不要整段照貼。');
             fresh.forEach(function (x, i) {
@@ -650,7 +669,11 @@
             chat.toolLog.push(entry);
             any = true;
         }
-        if (chat.toolLog.length > LOG_KEEP) chat.toolLog = chat.toolLog.slice(-LOG_KEEP);
+        if (chat.toolLog.length > LOG_KEEP) {
+            // 還在用的說明書不跟著剪掉（剪掉就又回到憑印象做）
+            const man = _manuals(chat.toolLog), tail = chat.toolLog.slice(-LOG_KEEP);
+            chat.toolLog = chat.toolLog.filter(function (x) { return tail.indexOf(x) !== -1 || man.indexOf(x) !== -1; });
+        }
         return any;
     }
 
