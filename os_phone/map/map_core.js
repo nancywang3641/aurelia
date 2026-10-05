@@ -2046,7 +2046,8 @@ ${facilityText}
                 else console.warn('[MapTheater] 本次回覆沒附 <theater_summary>，這場番外不留記事');
             } catch (e) {}
             const ch = { title: ((fac && fac.name) || '') + '番外：' + a.name + ' & ' + b.name, storyId: 'map_theater', storyTitle: '地圖小劇場', content: content, createdAt: Date.now() };
-            try { if (win.VN_Core && win.VN_Core._setStoryId) win.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
+            // 記下她原本的故事再換（地圖番外常從故事中途的 VN 末尾開；回大廳時換回去，見 VN_Core._enterTheater）
+            try { const V = win.VN_Core; if (V && V._enterTheater) V._enterTheater(ch.storyId, ch.storyTitle); else if (V && V._setStoryId) V._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
             win._lobbyPendingChapter = ch;
             try { win.PhoneSystem?.goHome?.(); } catch (e) {}   // 先收掉地圖面板（從 VN 末尾開的話面板還蓋在 VN 上面）
             if (win.AureliaControlCenter && win.AureliaControlCenter.showVnPanel) win.AureliaControlCenter.showVnPanel('autoload');

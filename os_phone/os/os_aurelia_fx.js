@@ -469,6 +469,8 @@
         run: run, propose: propose, apply: apply, undo: undo,
         verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview, superseded: superseded,
         look: look,
+        // 做大件那支：產生器取的代號撞了就補編號（跟 _proposeAdd 同一份清單）
+        ids: function () { const F = _FX(); return F ? F.listAll().map(function (r) { return r.fxId; }) : []; },
     };
     win.OS_AURELIA_FX = API;
     window.OS_AURELIA_FX = API;

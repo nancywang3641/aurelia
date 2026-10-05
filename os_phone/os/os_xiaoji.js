@@ -60,7 +60,13 @@
         await db.saveAppData(APP, rid, next);
         return next;
     }
-    async function remove(rid) { const db = _g('OS_DB'); if (db && db.saveAppData) await db.saveAppData(APP, rid, null); }
+    // convs：它那幾串會話的編號（房間搬走時一起給）：每串的舊聊天摘要（xiaoji_sum）也清掉
+    async function remove(rid, convs) {
+        const db = _g('OS_DB');
+        if (!db || !db.saveAppData) return;
+        await db.saveAppData(APP, rid, null);
+        for (const c of (Array.isArray(convs) ? convs : [])) { if (c) { try { await db.saveAppData('xiaoji_sum', c, null); } catch (e) {} } }
+    }
 
     function learned(rec) { const s = (rec && rec.skills) || {}; return Object.keys(s).filter(k => s[k]); }
     function groups(rec) {
@@ -442,8 +448,10 @@
         const v = Object.keys(args).map(k => args[k]).find(x => typeof x === 'string' && x.trim());
         return v ? _one(v).slice(0, 80) : '';
     }
-    function _lastNote(user) {
-        return '（這一次不能再叫工具了，寫了也不會跑。用你已經拿到的結果直接回' + user + '：做完的說做了什麼，沒做完的說做到哪、還差什麼。剛才交出去的單子還在等' + user + '按同意，不是已經改好了。）';
+    // hasProp：這句話真的交了單子才提單子（以前一律提，沒交單子的它也會跟使用者說「單子在等你按同意」）
+    function _lastNote(user, hasProp) {
+        return '（這一次不能再叫工具了，寫了也不會跑。用你已經拿到的結果直接回' + user + '：做完的說做了什麼，沒做完的說做到哪、還差什麼。'
+            + (hasProp ? '剛才交出去的單子還在等' + user + '按同意，不是已經改好了。' : '') + '）';
     }
     function _resultsMsg(got, user, nextLast) {
         const out = ['【工具結果】你剛才叫的工具交回來的，' + user + '看不到；要讓' + user + '知道就用自己的話講，不要整段照貼。'];
@@ -539,7 +547,9 @@
         const base = _history(o.history, sumP ? sumP.from : null);
         base.push({ role: 'user', content: String(o.userText || '') });
         const work = [], said = [], log = [], props = [];
-        let calls = 0, stopped = false;
+        // calls：送出去幾通（決定還能不能再叫）；answered：真的回來幾通（她付的、回覆底下寫的）。
+        //   以前回報 calls，按停時停在半路那一通也算進去，跟用量那行對不起來
+        let calls = 0, answered = 0, stopped = false;
         // 這句話幾通加起來的用量（接口有回才有；額度面板與回覆底下那行用）。大件專門那一通不在這裡
         const use = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, n: 0 };
         const _addUse = u => { if (!u) return; use.input += u.input || 0; use.output += u.output || 0; use.cacheRead += u.cacheRead || 0; use.cacheWrite += u.cacheWrite || 0; use.n++; };
@@ -555,14 +565,16 @@
                 const msgs = [{ role: 'system', content: sys }].concat(base, work);
                 if (last) {   // 最後一通：只在最尾巴那則補一句，前面一個字都不動
                     const tail = msgs[msgs.length - 1];
-                    msgs[msgs.length - 1] = { role: tail.role, content: String(tail.content || '') + '\n\n' + _lastNote(user) };
+                    msgs[msgs.length - 1] = { role: tail.role, content: String(tail.content || '') + '\n\n' + _lastNote(user, props.length > 0) };
                 }
                 const text = await _chat(msgs, conn, o.signal, _addUse);
+                answered++;
                 const W = _g('WX_TOOLS');
                 const ex = (W && W.extract) ? W.extract(text) : { text: text, calls: [] };
                 const visible = String(ex.text || '').trim();
                 if (visible) { said.push(visible); _emit(o, { type: 'text', accumulated: said.join('\n\n') }); }
-                if (last || !ex.calls.length) break;   // 最後一通還寫了工具：不跑（上限就是上限）
+                // 最後一通還寫了工具：不跑（上限就是上限）。工具那行寫到一半被截斷（ex.cut）也算它想叫，告訴它沒跑、讓它重寫
+                if (last || (!ex.calls.length && !ex.cut)) break;
                 work.push({ role: 'assistant', content: text });
                 const got = [];
                 for (const c of ex.calls.slice(0, MAX_PER_ROUND)) {
@@ -574,6 +586,14 @@
                     if (res.prop) props.push(res.prop);
                     _emit(o, { type: 'tool', label: res.label, ok: res.ok });
                 }
+                // 超過一則上限的、寫到一半斷掉的：沒跑，照實告訴它（以前第 4 個起默默丟掉，它以為做了）
+                ex.calls.slice(MAX_PER_ROUND).forEach(c => {
+                    const t1 = byName[c.name];
+                    got.push({ tool: String(c.name), label: t1 ? (t1.label || t1.name) : String(c.name), args: {}, ok: false,
+                        text: '沒有跑：同一則最多 ' + MAX_PER_ROUND + ' 個工具，這個要下一則再叫' });
+                });
+                if (ex.cut) got.push({ tool: '', label: '沒寫完的工具', args: {}, ok: false,
+                    text: '工具那一行寫到一半就斷了（大概是內容太長被截掉），沒有跑。重寫一次；內容很長的話只改要改的那一段（find／replace），或分兩次' });
                 if (o.stopOnProp && props.length) break;
                 work.push({ role: 'user', content: _resultsMsg(got, user, !o.stopOnProp && calls + 1 === cap) });
             }
@@ -598,8 +618,8 @@
         if (!reply && !props.length) reply = stopped ? '（停下來了）' : '（沒有回話）';
         // 舊聊天滿了就在背景整理一節（不等它，回話先交出去）
         if (sumP && sumP.pending >= SUM_CHUNK) setTimeout(() => { sumRun(rid, o.conv, o.history || []).catch(() => {}); }, 0);
-        // calls＝小機自己那幾通＋大件真的叫到的專門那幾通（她付的錢，回覆底下照實寫）
-        return { reply: reply, calls: calls + log.filter(x => x.gen).length, props: props, stopped: stopped, memo: memo,
+        // calls＝小機自己回來的那幾通＋大件真的叫到的專門那幾通（她付的錢，回覆底下照實寫）
+        return { reply: reply, calls: answered + log.filter(x => x.gen).length, props: props, stopped: stopped, memo: memo,
             usage: use.n ? use : null, model: String((conn.config && conn.config.model) || ''),
             log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text, gen: !!x.gen })) };
     }
@@ -681,6 +701,8 @@
                          : '這題你最多回 ' + cap + ' 則（叫工具的那幾則都算）；交出單子的那一則就算答完。');
         const res = await turn({ rid: rid, history: [], userText: _fill(ex.task, rid, true), tools: box.tools, runTool: box.run,
             groups: [box.group], cap: cap, stopOnProp: true, examNote: note, signal: o.signal, onProgress: o.onProgress });
+        // 她按停、它講了幾句還沒交單子：turn 回「停下來了」而不是丟錯。以前照樣拿去批改＝記成沒考過；照「停下來了」處理
+        if (res.stopped && !res.props.length) throw _abortErr();
         const g = grade(ex.expect, res.props);
         // 沙盒裡的單子沒經過 AureliaLink，沒標是誰提的：補上小機自己（小劇場的由來要寫對人）
         const me = _resident(rid);

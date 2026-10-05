@@ -201,6 +201,9 @@
         //    持續型的循環音效會一路播到下一輪劇情換場才停
         try { const _fx = window.OS_FX || (window.parent && window.parent.OS_FX); if (_fx) _fx.stopAll(); } catch (e) {}
 
+        // 🎭 剛播的是小劇場（大廳、地圖番外、小機培養室）：故事編號換回她原本那個（見 VN_Core._enterTheater）
+        try { if (window.VN_Core && window.VN_Core._leaveTheater) window.VN_Core._leaveTheater(); } catch (e) {}
+
         // 🛟 先呼叫 StoryExtractor.hide() 把劫持的 #form_sheld 還回原位，
         // 否則直接藏 storyExtractorContainer 會讓酒館原生輸入框跟著消失
         if (window.StoryExtractor?.hide) {

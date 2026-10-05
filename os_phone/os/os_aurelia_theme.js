@@ -706,7 +706,8 @@
         return function () { if (restore && prop.state !== 'done') restore(); restore = null; };
     }
     function mountPreview(prop, which, el) {
-        if (prop.tk === 'chat') { _chatSample(el, prop.after && prop.after.css); return _chatTry(el, prop); }
+        // which 'sample'＝只畫假群聊（培養室的作業卡：那裡沒有單子可以收尾，不放「先套上看看」）
+        if (prop.tk === 'chat') { _chatSample(el, prop.after && prop.after.css); return which === 'sample' ? null : _chatTry(el, prop); }
         const t = which === 'before' ? prop.before : prop.after;
         if (prop.tk === 'story') { _storyPreview(el, (t && t.css) || ''); return null; }
         _phonePreview(el, t);
@@ -921,6 +922,8 @@
         note: NOTE,
         get tools() { const E = _E(); return (E && E.logTool) ? _pub.concat([E.logTool]) : _pub; },
         run: run, propose: propose, apply: apply, undo: undo, content: content,
+        // 做大件那支（os_xiaoji_make.js）叫產生器之前先查撞名：跟 _proposeAdd 同一份清單
+        names: async function (kind) { const tk = _kind(kind); return tk ? (await _entries(tk)).map(function (t) { return t.name; }) : []; },
         verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview, superseded: superseded,
         look: look,
     };

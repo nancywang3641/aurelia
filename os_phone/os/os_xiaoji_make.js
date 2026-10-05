@@ -40,6 +40,17 @@
         return DEFS.filter(d => gs.indexOf(d.group) !== -1).map(d => Object.assign({ make: true, propose: true }, d));
     }
 
+    function _one(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+    function _fold(s) { return _one(s).toLowerCase(); }   // 跟各模組比撞名同一種比法
+    // 撞名就補編號：name（2）、name（3）…（產生器取的名字、或小機沒給名字時用；它自己給的名字撞了是先擋回去）
+    function _uniq(name, taken, sep) {
+        const has = n => taken.some(t => _fold(t) === _fold(n));
+        if (!has(name)) return name;
+        for (let i = 2; i < 100; i++) { const n = sep ? name + sep + i : name + '（' + i + '）'; if (!has(n)) return n; }
+        return name + (sep || '-') + Date.now().toString(36);
+    }
+    const KIND_NEW = { story: '新的劇情主題', phone: '新的手機主題', chat: '新的聊天 app 主題' };
+
     // 回給小機看的：一律「使用者」，不用人設的名字（人設＝使用者跑團的主角，見 os_xiaoji.js 的 USER）
     function _userName() { const X = _g('OS_XIAOJI'); return (X && X.USER) || '使用者'; }
     function _who(rid) { const CT = _g('ClaudeTerminal'); try { const r = CT && CT.getResident && CT.getResident(rid); return (r && r.name) || rid; } catch (e) { return rid; } }
@@ -76,8 +87,14 @@
             const S = _g('OS_STUDIO');
             if (!S || !S.vnGenerate) throw new Error('創作室還沒載入');
             const j = await S.vnGenerate(a.feel, cur, via);
+            // 改舊的：產生器沒回的那幾欄不送（aurelia_vn_edit 有給的欄位就整欄換掉，以前補成空字串＝沒改的程式、樣式被清空）
+            if (cur) {
+                const f = { tag: a.from };
+                [['html', 'html'], ['css', 'css'], ['js', 'js'], ['demo_format', 'demoFormat'], ['usage_desc', 'usageDesc']]
+                    .forEach(([arg, k]) => { if (j[k] != null) f[arg] = String(j[k]); });
+                return { edit: true, args: f };
+            }
             const f = { html: j.html || '', css: j.css || '', js: j.js || '', demo_format: j.demoFormat || '', usage_desc: j.usageDesc || '' };
-            if (cur) return { edit: true, args: Object.assign({ tag: a.from }, f) };
             return { edit: false, args: Object.assign({ tag: j.tagId, title: j.title || '',
                 keywords: Array.isArray(j.keywords) ? j.keywords.join(',') : String(j.keywords || ''),
                 is_block: j.isBlock === undefined ? !!j.demoFormat : !!j.isBlock }, f) };
@@ -134,6 +151,25 @@
         if (!a.feel) return { ok: false, text: 'feel 要寫想要的感覺' };
         const m = ctx.mod || _g(MOD[d.group]);
         if (!m || !m.propose) return { ok: false, text: '這一組還沒載好' };
+        // 叫產生器之前先查得出來的先擋（以前做完才在交單子那步擋，專門那一通白花）：主題種類、自己給的名字撞名、改的那個能不能改
+        if (d.group === 'theme' && !KIND_NEW[a.kind]) return { ok: false, text: 'kind 要寫 story、phone 或 chat' };
+        a.name = _one(a.name);
+        let genFeel = a.feel;
+        if (!a.from) {
+            if (a.name && d.group === 'bubble' && m.reserved && m.reserved(a.name)) return { ok: false, text: '「' + a.name + '」是拿來指「還原成預設」或「每一間」的字，name 換一個' };
+            if (a.name && m.names && (d.group === 'theme' || d.group === 'bubble')) {
+                const taken = await m.names(a.kind);
+                if (taken.some(n => _fold(n) === _fold(a.name))) return { ok: false, text: '已經有一套叫「' + a.name + '」了：要改它就把名字填在 from，要做新的 name 換一個' };
+            }
+            // VN 組件的標籤是產生器取的：先告訴它哪些已經有了
+            if (d.group === 'vn' && m.tags) {
+                const tg = await m.tags();
+                if (tg.length) genFeel = a.feel + '\n（已經有的組件標籤，新的這個不能跟它們重複：' + tg.slice(0, 80).join('、') + '）';
+            }
+        } else if (d.group === 'vn' && m.canEdit) {
+            const err = await m.canEdit(a.from);
+            if (err) return { ok: false, text: err };
+        }
         let cur = '';
         if (a.from && d.group === 'theme' && m.content) {
             // 主題直接拿內容（練習題用的假模組沒有 content，照舊走下面讀的那條）
@@ -149,8 +185,25 @@
         let via = ctx.via || null;
         if (!via && ctx.rid) { const X = _g('OS_XIAOJI'); try { if (X && X.viaFor) via = await X.viaFor(ctx.rid); } catch (e) { via = null; } }
         let got;
-        try { got = await GEN[d.group](a, cur, via); }
+        try { got = await GEN[d.group](Object.assign({}, a, { feel: genFeel }), cur, via); }
         catch (e) { return { ok: false, gen: true, text: '負責做的那一位沒做成：' + ((e && e.message) || e) + '。可以把 feel 寫清楚一點再叫一次。' }; }
+        // 新做的：名字是產生器取的（或沒取）、特效代號是產生器取的——撞了就補編號，不要因為名字讓這一通白做
+        if (!got.edit) {
+            try {
+                if ((d.group === 'theme' || d.group === 'bubble') && m.names) {
+                    const base = _one(got.args.name) || (d.group === 'theme' ? KIND_NEW[a.kind] : '新的泡泡');
+                    got.args.name = _uniq(base.slice(0, 26), await m.names(a.kind));
+                }
+                if (d.group === 'fx' && m.ids) {
+                    const r = JSON.parse(got.args.recipe);
+                    const ids = m.ids();
+                    if (r && r.fxId && ids.indexOf(String(r.fxId).trim().toLowerCase()) !== -1) {
+                        r.fxId = _uniq(String(r.fxId).trim().toLowerCase(), ids, '-');
+                        got.args.recipe = JSON.stringify(r);
+                    }
+                }
+            } catch (e) { /* 補不了就照原樣交，交單子那步會說原因 */ }
+        }
         try {
             if (!got.edit) got.args.spec = await _specCode(m, d.group, a.kind);
             const r = await m.propose('aurelia_' + d.group + (got.edit ? '_edit' : '_add'), got.args);

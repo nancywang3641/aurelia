@@ -847,6 +847,9 @@
         run: run, propose: propose, apply: apply, undo: undo,
         verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview, superseded: superseded,
         look: look,
+        // 做大件那支叫產生器之前先查撞名：跟 _proposeAdd 同一份主題庫、同一組保留字
+        names: function () { return _gal().map(function (t) { return t.name; }); },
+        reserved: function (name) { return RESERVED.test(_one(name)); },
     };
     win.OS_AURELIA_BUBBLE = API;
     window.OS_AURELIA_BUBBLE = API;

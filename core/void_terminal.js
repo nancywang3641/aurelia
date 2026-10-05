@@ -1762,7 +1762,8 @@ const IRIS_IDLE = [
     //   🚨不 saveVnChapter：一存成章節就觸發 VecEngine ingest + state_runtime 抽取。改 ephemeral(_startWithLoader/autoload 不存)。
     //   🚨沒 <content> 一律丟棄(照 VN 劇本鐵則，不 wrap 垃圾→黑屏)。立繪/[Scene|]插圖由 VN_Core 引擎處理。
     function _playEphemeral(ch) {
-        try { if (window.VN_Core && window.VN_Core._setStoryId) window.VN_Core._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
+        // 記下她原本的故事再換（回大廳時 control_center 叫 _leaveTheater 換回去）；舊版 VN_Core 沒有就照舊直接換
+        try { const V = window.VN_Core; if (V && V._enterTheater) V._enterTheater(ch.storyId, ch.storyTitle); else if (V && V._setStoryId) V._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
         window._lobbyPendingChapter = ch;
         if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
         else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(ch.content, null);

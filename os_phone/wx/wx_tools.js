@@ -434,15 +434,20 @@
     // ================================================================
     const CALL_RE = /[<＜]\s*tool_call\b([^>＞]*)[>＞]([\s\S]*?)[<＜]\s*\/\s*tool_call\s*[>＞]/gi;
     const LONE_RE = /[<＜]\s*\/?\s*tool_call\b[^>＞]*[>＞]/gi;
-    function strip(text) { return String(text == null ? '' : text).replace(CALL_RE, '').replace(LONE_RE, ''); }
+    // 寫到一半被截斷的那一個：開頭標籤後面緊接著 { 或程式碼框，一路到結尾都沒有收尾標籤。
+    //   以前只拿掉開頭標籤，後面那截 JSON 留在畫面上（成對的已經先被 CALL_RE 拿走，剩下的開頭標籤就是沒收尾的）
+    const CUT_RE = /[<＜]\s*tool_call\b[^>＞]*[>＞]\s*(?:\{|```)(?![\s\S]*[<＜]\s*\/\s*tool_call\s*[>＞])[\s\S]*$/i;
+    function strip(text) { return String(text == null ? '' : text).replace(CALL_RE, '').replace(CUT_RE, '').replace(LONE_RE, ''); }
+    // 回 { text, calls, cut }：cut＝最後一個工具沒寫完（沒跑，叫的那邊要告訴它）
     function extract(text) {
         const calls = [];
+        let cut = false;
         const out = String(text == null ? '' : text).replace(CALL_RE, function (_, attrs, body) {
             const m = String(attrs || '').match(/name\s*=\s*["'“”]?([^"'“”\s>＞]+)/i);
             if (m) calls.push({ name: m[1], body: String(body || '').trim() });
             return '';
-        }).replace(LONE_RE, '');
-        return { text: out, calls: calls };
+        }).replace(CUT_RE, function () { cut = true; return ''; }).replace(LONE_RE, '');
+        return { text: out, calls: calls, cut: cut };
     }
     // 模型常把好幾行的內容直接寫進 JSON 字串裡（換行沒寫成跳脫）→ 字串裡的換行、Tab 補成跳脫再試一次
     function _repairJson(t) {

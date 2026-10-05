@@ -545,6 +545,9 @@
         run: run, propose: propose, apply: apply, undo: undo,
         verb: verb, text: text, what: what, noun: noun, cards: cards, detail: detail, mountPreview: mountPreview, superseded: superseded,
         look: look,
+        // 做大件那支叫產生器之前先查：新做的告訴產生器別撞這些標籤；改舊的先看能不能改（不是純展示的只能看），回錯誤或空字串
+        tags: async function () { return (await _all()).map(function (t) { return String(t.tagId || ''); }).filter(Boolean); },
+        canEdit: async function (tag) { const b = await _base(_one(tag), false); return b.err || ''; },
     };
     win.OS_AURELIA_VN = API;
     window.OS_AURELIA_VN = API;

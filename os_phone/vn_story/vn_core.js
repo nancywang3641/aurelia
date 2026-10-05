@@ -34,6 +34,24 @@
     //  那三支的工作（開 UI、用 dataset 傳參數、監看按鈕判斷完成）已經拆進 runCardDive / runFreeDive。
     const { generateStory, runCardDive, runFreeDive } = window.VN_Generator;
 
+    // 🎭 小劇場（大廳、地圖番外、小機培養室）是借 VN 播放器播的一場戲：播的時候換成它自己的故事編號，
+    //   播放中的抽取、快取才不會記到她正在玩的那個故事頭上。🚨 回大廳要換回原本那個——以前沒換回：
+    //   手機版故事中途看一場小劇場，之後記憶、手機資料都寫進小劇場那一格，「繼續」也找不到原本的故事。
+    //   原本那個記在 localStorage（播到一半重整也換得回來：載入時看到還停在小劇場就先換回去）
+    const THEATER_ID = /^(lobby|map)_theater$/;
+    const THEATER_PREV = 'vn_story_before_theater';
+    (function _theaterBootRestore() {
+        try {
+            const cur = localStorage.getItem('vn_current_story_id') || '';
+            const prev = JSON.parse(localStorage.getItem(THEATER_PREV) || 'null');
+            if (prev && THEATER_ID.test(cur)) {
+                localStorage.setItem('vn_current_story_id', prev.id || '');
+                localStorage.setItem('vn_current_story_title', prev.title || '');
+            }
+            if (prev) localStorage.removeItem(THEATER_PREV);
+        } catch (e) {}
+    })();
+
     // === 3. 核心腳本邏輯 ===
     const VN_Core = {
         script: [], index: -1, avatars: {}, charVoices: {}, currentName: '', currentExp: '', mode: 'vn',
@@ -79,6 +97,22 @@
                     win.AureliaControlCenter?.setChatTitle?.(storyTitle);
                 }
             } catch (e) {}
+        },
+        // 播小劇場前叫：記下她原本的故事再換成小劇場的（連播兩場也只記第一次那個真的故事）
+        _enterTheater: function(storyId, storyTitle) {
+            try {
+                if (!THEATER_ID.test(this._currentStoryId || '')) {
+                    localStorage.setItem(THEATER_PREV, JSON.stringify({ id: this._currentStoryId || '', title: this._currentStoryTitle || '' }));
+                }
+            } catch (e) {}
+            this._setStoryId(storyId, storyTitle);
+        },
+        // 回大廳時叫（control_center 的 hideVnPanel）：還停在小劇場就換回原本那個。
+        //   播完她在 VN 裡自己開了別的故事（編號已經不是小劇場）就只清記號、不動
+        _leaveTheater: function() {
+            let prev = null;
+            try { prev = JSON.parse(localStorage.getItem(THEATER_PREV) || 'null'); localStorage.removeItem(THEATER_PREV); } catch (e) { prev = null; }
+            if (prev && THEATER_ID.test(this._currentStoryId || '')) this._setStoryId(prev.id || '', prev.title || '');
         },
 
         // 🆕 開一條新故事線 —— 對應酒館「建立聊天室就產生 chatId」那一刻。

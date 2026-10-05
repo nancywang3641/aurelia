@@ -1339,8 +1339,9 @@
                             top_p: _ov.top_p, frequency_penalty: _ov.frequency_penalty, presence_penalty: _ov.presence_penalty, apiFormat: _ov.apiFormat } : {});
                     }
                 } catch (e) {}
-            } else {
+            } else if (!(options && options.task)) {
                 // 沒帶 task：控制台只能記成「沒有標記的」，也吃不到分流設定。新功能要在 os_settings 的 LLM_TASKS 加一列再帶上 task。
+                //   🚨 帶了 task、只是 noRoute（小機）的不算：以前跟沒帶 task 共用這個 else，小機每一通都誤報
                 console.warn('[OS_API] 這一通沒有說是哪件事（options.task），控制台會記成沒有標記：', (config && config.route) || (options && options.label) || '');
             }
             // 呼叫方要「保留三反引號」（創作室生成 JSON 程式碼）→ 跳過 cleanRawOutput 吃圍欄那步，避免 /```/g 被削成 //g。
