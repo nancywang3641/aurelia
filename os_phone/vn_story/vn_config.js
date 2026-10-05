@@ -260,7 +260,9 @@
         //    提示詞預設是她自己調的那段（拿掉畫風那兩行——畫風交給「立繪」那列的畫風包）；她在設置那格改過就用她的。
         TRIO_LOOK: '【角色外觀】',
         TRIO_TPL: 'a three-panel character sprite sheet featuring the same character in three different formats;\n\n'
-            + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, white background;\n\n'
+            // 🚨 這一格拍到大腿：外觀只寫了上衣（例如一件大帽 T）的話，模型會把它當連身裙、腿光著（10-06 她：「為啥會沒褲褲」）。
+            //    一般立繪是靠前綴的 clothes and pants 補，這條不吃立繪前綴，所以寫在這格：有寫下身就照寫的，沒寫就配一件
+            + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, fully clothed, the outfit includes lower-body clothing (pants, shorts or a skirt) that matches the top, white background;\n\n'
             + 'upper-right panel: the same character taking a casual selfie inside a cluttered room, close-up portrait composition;\n\n'
             + 'right lower panel: a chibi adaptation of the exact same character, preserving the same hairstyle, hair color, eye color, skin tone and facial identity; wearing the exact same plain clothing as in the other panels, with the same garments, cut, colors and proportions adapted only to the chibi body; only the body proportions change into an oversized head and a small 2.5-head-tall body, centered fully inside the panel with clear white margin, plain white background;',
         // 母圖格子：左格 50% 寬、右上 55% 高（她 LAB 試成功的那組）
