@@ -51,6 +51,8 @@
 .pbub-row.pbub-row .pbub-bubble::before { content: ''; position: absolute; top: var(--pbub-tail-top, 14px); width: 0; height: 0; border-top: var(--pbub-tail-size, 6px) solid transparent; border-bottom: var(--pbub-tail-size, 6px) solid transparent; pointer-events: none; }
 .pbub-row.pbub-other .pbub-bubble::before { left: calc(var(--pbub-tail-size, 6px) * -1); border-right: var(--pbub-tail-size, 6px) solid var(--pbub-other-bg, #ffffff); border-left: 0; }
 .pbub-row.pbub-me .pbub-bubble::before { right: calc(var(--pbub-tail-size, 6px) * -1); border-left: var(--pbub-tail-size, 6px) solid var(--pbub-me-bg, #95ec69); border-right: 0; }
+/* 群聊：泡泡上面多一行名字（約 17px）把泡泡往下推，尖角跟著往上提同樣的距離，最高貼到離頂 4px */
+.pbub-row.pbub-other .wx-group-name + .pbub-bubble::before { top: max(4px, calc(var(--pbub-tail-top, 14px) - 17px)); }
 `;
 
     // ── 一次性生成的 prompt ────────────────────────────────────────

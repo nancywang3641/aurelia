@@ -213,6 +213,9 @@
             .wx-dark .wx-replying .chat-quote-name { color: var(--wx-link); }
             .wx-msg-row.you .wx-bubble-content { background: var(--wx-bubble-you-bg); color: var(--wx-bubble-you-ink); margin-left: 10px; border: 1px solid var(--wx-bubble-you-line); }   /* 泡泡自己的格子，主題碰不到 */
             .wx-msg-row.you .wx-bubble-content::before { content: ''; position: absolute; left: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 6px solid var(--wx-bubble-you-bg); }
+            /* 群聊：泡泡上面多一行名字（約 17px），泡泡整顆被往下推，尖角照舊離頂 14px 就落到頭像最底邊。
+               有名字的那顆尖角往上提，貼近頭像中段。泡泡主題那條在 wx_bubble_ai.js 的底稿 */
+            .wx-msg-row.you .wx-group-name + .wx-bubble-content::before { top: 4px; }
             .wx-msg-row.me .wx-bubble-content { background: #95ec69; margin-right: 10px; border: 1px solid #86d45a; }
             .wx-msg-row.me .wx-bubble-content::before { content: ''; position: absolute; right: -6px; top: 14px; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 6px solid #95ec69; }
             /* 寬度跟著字走、置中：有聊天背景圖時它會長出一塊深底，寬度 auto 的話那塊底被撐成整排一條 */
