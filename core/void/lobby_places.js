@@ -216,7 +216,7 @@
         if (!g) return null;
         if (g.src === 'staff') return win.LobbyNpcs?.staff?.(g.key) || null;
         let url = '';
-        try { const v = await win.VN_Cache?.getRaw?.('avatar_cache', g.key); url = (v && v.url) || ''; } catch (e) {}
+        try { const v = await win.VN_Cache?.getRaw?.('avatar_cache', g.key); url = win.VN_Cache.headOf ? win.VN_Cache.headOf(v) : ((v && v.url) || ''); } catch (e) {}
         return { key: 'home_guest_' + g.key, name: g.name || '客人', subTitle: '我的家 · 看板娘', portrait: url };
     }
 
@@ -273,7 +273,7 @@
                     if (!alive) return;
                     if (x.src !== 'cache') continue;
                     let url = '';
-                    try { const v = await win.VN_Cache.getRaw('avatar_cache', x.key); url = (v && v.url) || ''; } catch (e) {}
+                    try { const v = await win.VN_Cache.getRaw('avatar_cache', x.key); url = win.VN_Cache.headOf ? win.VN_Cache.headOf(v) : ((v && v.url) || ''); } catch (e) {}
                     if (!alive || !url) continue;
                     const el = c.querySelector('.lb-guest-c[data-key="' + String(x.key).replace(/"/g, '\\"') + '"] .lb-guest-pic');
                     if (el) el.style.backgroundImage = 'url(' + url + ')';

@@ -26,6 +26,7 @@
             ss_jev: { title: '決策模型', body: '只做選擇題、打分數、回答是或不是的小模型，快又便宜，一次不到台幣 0.001 元。\n\n用到它的地方：書咖的丹決定下一步、立繪什麼時候收、音效和音樂、劇情地點對到地圖、記憶比對。\n\n要用 Jev 那種問法的服務。三格都要填；少一格，那些地方照舊用自己原本的辦法。\n\n只存在這台裝置上，電腦和手機要各填一次。' },
             ss_1503: { title: '頭像 來源', body: '角色頭像／立繪用這個來源。' },
             ss_1519: { title: '立繪模式', body: '開＝直接生全身立繪、不生頭像。' },
+            ss_trio: { title: '一次生三種', body: '要先開立繪模式。新角色要圖時，一次生一張分三格的圖，切開成三張：\n\n・立繪（去背）：劇情舞台\n・頭像（自拍，留背景）：聊天、劇情手機、通話、大廳對話框、日誌、狀態面板\n・Q版（去背）：大廳裡他的小人（裝扮室換過造型的照舊）\n\n「立繪」那列接 GPT 那種時會附上分三格的底圖讓它照著排；ComfyUI 不附（試過附了反而會把底圖的人帶過來）。\n\n開了這個，上面「一次生幾個角色」就不用了。已經有圖的舊角色不會重生。' },
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
@@ -665,8 +666,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const img = await VN._makeCharImage(desc, 'Neutral', true);
                     if (!img || !img.dataUrl) throw new Error('沒有生出圖（檢查圖片來源與額度）');
                     const cur = (await C.get('avatar_cache', r.name)) || {};
-                    await C.set('avatar_cache', r.name, { ...cur, prompt: desc, url: img.dataUrl });
-                    try { delete VN._avatarMemCache[r.name]; } catch (e) {}   // 本輪的記憶體快取也要清，不然畫面上還是舊那張
+                    await C.set('avatar_cache', r.name, VN._charRec ? VN._charRec(desc, img, cur) : { ...cur, prompt: desc, url: img.dataUrl });
+                    try { delete VN._avatarMemCache[r.name]; delete VN._faceMemCache[r.name]; } catch (e) {}   // 本輪的記憶體快取也要清，不然畫面上還是舊那張
                     r.prompt = desc;
                     tip('已重畫「' + r.name + '」');
                 } catch (e) { AUI.alert('重畫失敗：' + (e && e.message || e)); }
@@ -1574,6 +1575,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="set-desc">湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>${_isGptChar(imgConfig)
                                         ? '你現在頭像接的是 <b>' + _charModelName(imgConfig) + '</b>，就是它擅長的事。'
                                         : '會照指令把畫面分成等寬直欄的是 GPT 那種（頭像來源選「自訂接口」、型號名帶 GPT）；畫風鬆散的接口可能把幾個角色糊在一起。'}</div>
+                                </div>
+                                <!-- 🎴 一次生三種（她 2026-10-05：「做一個勾選打開這種模式?」）：一張三格圖切成立繪／頭像／Q版。
+                                     勾選跟立繪模式一樣按底部保存才存；提示詞那格打了就存（同立繪工作室的前後綴）。 -->
+                                <div class="trio-row">
+                                    <label class="set-check"><input type="checkbox" id="vncfg-sprite-trio" ${vnD.spriteTrio ? 'checked' : ''} onchange="window._trioToggle && window._trioToggle(this.checked)"> 一次生三種：立繪＋頭像＋Q版${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_trio') : ''}</label>
+                                    <div id="vncfg-trio-body" class="${vnD.spriteTrio ? '' : 'hidden'}">
+                                        <div class="set-label">三格的提示詞</div>
+                                        <textarea class="set-textarea trio-tpl" id="trio-tpl" rows="9" oninput="window._trioTplSave && window._trioTplSave(this.value)"></textarea>
+                                        <div class="set-desc">【角色外觀】會換成角色的長相；畫風照「立繪」那列。</div>
+                                        <div class="btn-test trio-reset" onclick="window._trioTplReset && window._trioTplReset()">還原預設提示詞</div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="set-group" id="img-room-style-block"></div>
@@ -3668,6 +3680,30 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (!sel) return;
             container.querySelectorAll('#img-room-style-block [data-room-for]').forEach(el => { el.hidden = String(el.getAttribute('data-room-for')).split(' ').indexOf(sel.value) < 0; });
         };
+
+        // 🎴 一次生三種：勾了才攤開提示詞那格；提示詞打了就存，跟預設一樣（或清空）就不存——以後預設改了才跟得上
+        const _trioDefault = () => { const VI = (window.parent || window).VN_Image || window.VN_Image; return (VI && VI.TRIO_TPL) || ''; };
+        window._trioToggle = (on) => { const b = container.querySelector('#vncfg-trio-body'); if (b) b.classList.toggle('hidden', !on); };
+        window._trioTplSave = (v) => {
+            const _w = window.parent || window;
+            try {
+                if (!String(v || '').trim() || v === _trioDefault()) _w.localStorage.removeItem('os_trio_tpl');
+                else _w.localStorage.setItem('os_trio_tpl', v);
+            } catch (e) {}
+        };
+        window._trioTplReset = () => {
+            const _w = window.parent || window;
+            try { _w.localStorage.removeItem('os_trio_tpl'); } catch (e) {}
+            const ta = container.querySelector('#trio-tpl');
+            if (ta) ta.value = _trioDefault();
+        };
+        (function () {
+            const ta = container.querySelector('#trio-tpl');
+            if (!ta) return;
+            let v = null;
+            try { v = (window.parent || window).localStorage.getItem('os_trio_tpl'); } catch (e) {}
+            ta.value = (v && v.trim()) ? v : _trioDefault();
+        })();
 
         // 🚪 世界門旅人：值＝「接口|預設包key」，選了就存（同房間的作風）
         window._saveWgSpritePack = (v) => {

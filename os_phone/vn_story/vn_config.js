@@ -253,6 +253,49 @@
             const _svc = _svcOf('sprite', 'char');
             return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: 1536, height: 1024, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' });
         },
+        // 🎴 一次生三種（設置 → 圖片 → 畫風 → 立繪模式底下那格）：一張三格圖＝左立姿全身／右上自拍／右下 Q版，
+        //    切開的事交給 vn_core_images 的 _makeTrio。回 { raw, withTpl }。
+        //    🚨 母圖只給 GPT 那種（自訂接口）：她在 ComfyUI 五角色×三做法×四種子對照過（2026-10-05），
+        //       ComfyUI 拿母圖圖生圖會把母圖的 Q版人數、長相、衣服帶過來，沒母圖反而最準；GPT 是看懂格子不是靠底色。
+        //    提示詞預設是她自己調的那段（拿掉畫風那兩行——畫風交給「立繪」那列的畫風包）；她在設置那格改過就用她的。
+        TRIO_LOOK: '【角色外觀】',
+        TRIO_TPL: 'a three-panel character sprite sheet featuring the same character in three different formats;\n\n'
+            + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, white background;\n\n'
+            + 'upper-right panel: the same character taking a casual selfie inside a cluttered room, close-up portrait composition;\n\n'
+            + 'right lower panel: a chibi adaptation of the exact same character, preserving the same hairstyle, hair color, eye color, skin tone and facial identity; wearing the exact same plain clothing as in the other panels, with the same garments, cut, colors and proportions adapted only to the chibi body; only the body proportions change into an oversized head and a small 2.5-head-tall body, centered fully inside the panel with clear white margin, plain white background;',
+        // 母圖格子：左格 50% 寬、右上 55% 高（她 LAB 試成功的那組）
+        TRIO_LP: 0.5, TRIO_TP: 0.55,
+        trioLine: function (OW, OH) { return Math.max(6, Math.round(Math.min(OW, OH) * 0.016)); },
+        trioLayoutBlob: function (OW, OH) {
+            const c = document.createElement('canvas'); c.width = OW; c.height = OH;
+            const g = c.getContext('2d'), t = this.trioLine(OW, OH);
+            g.fillStyle = '#fff'; g.fillRect(0, 0, OW, OH);
+            g.fillStyle = '#000';
+            g.fillRect(0, 0, OW, t); g.fillRect(0, OH - t, OW, t); g.fillRect(0, 0, t, OH); g.fillRect(OW - t, 0, t, OH);
+            const vx = Math.round(OW * this.TRIO_LP - t / 2), hy = Math.round(OH * this.TRIO_TP - t / 2);
+            g.fillRect(vx, 0, t, OH);
+            g.fillRect(vx, hy, OW - vx, t);
+            return new Promise(function (r) { c.toBlob(function (b) { r(b); }, 'image/png'); });
+        },
+        getTrio: async function (prompt, force) {
+            if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return null;
+            const _svc = _svcOf('sprite', 'char');
+            let tpl = null;
+            try { tpl = localStorage.getItem('os_trio_tpl'); } catch (e) {}
+            if (!tpl || !tpl.trim()) tpl = this.TRIO_TPL;
+            const look = this._stripForSprite(prompt);
+            const full = tpl.indexOf(this.TRIO_LOOK) >= 0 ? tpl.split(this.TRIO_LOOK).join(look) : _joinTags(tpl, look);
+            // 尺寸：GPT 官方只收那三種，寬的就是 1536×1024；ComfyUI 用她定的 1312×1104（正方形會讓左格太窄、壯碩的被壓扁）
+            const withTpl = (_svc === 'custom_api');
+            const W = withTpl ? 1536 : (_svc === 'comfyui_direct' ? 1312 : 1216);
+            const H = withTpl ? 1024 : (_svc === 'comfyui_direct' ? 1104 : 1024);
+            let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
+            _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
+            const opts = { width: W, height: H, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' };
+            if (withTpl) opts._layoutRef = { name: 'layout', kind: 'layout', blob: await this.trioLayoutBlob(W, H) };
+            const raw = await win.OS_IMAGE_MANAGER.generate(full, 'char', opts);
+            return raw ? { raw: raw, withTpl: withTpl } : null;
+        },
         // 剝掉跟立繪衝突的構圖/背景/視角 tag（與 os_settings studio 的 stripPromptForSprite 同規則）
         _stripForSprite: function(p) {
             if (!p) return '';

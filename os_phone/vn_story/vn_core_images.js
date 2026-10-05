@@ -502,6 +502,176 @@
             return await new Promise(function (r) { C.c.toBlob(function (bl) { r(bl); }, 'image/png'); });
         },
 
+        // 🎴 一次生三種（VN_Image.getTrio）：一張三格圖 → 找分隔線切三塊 → 立繪、Q版去背，自拍留背景當頭像。
+        //   切法跟 參考資料/SPRITE_TRIO_LAB.js 同一套（她 ComfyUI 五角色×四種子 20 張全切對）：
+        //   不照比例硬切——模型會整張挪一點、右上那格高矮差很多（41%~49%）。
+        //   有母圖：找「沿著它亮度不變又夠黑」的線＋外框；沒母圖：找格子之間的縫（一條亮度不變又夠窄的直欄／橫列），
+        //   沒有縫就找左右（上下）亮度差最大那條邊界。🚨 一定要限寬：白底大片空白也是「亮度不變」。
+        _trioCut: function (cv, withTpl) {
+            const w = cv.width, h = cv.height;
+            const d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+            const L = new Float32Array(w * h);
+            for (let p = 0, i = 0; p < w * h; p++, i += 4) L[p] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            const stat = function (vertical, k, a, b) {
+                let s = 0, s2 = 0, n = 0;
+                const step = Math.max(1, Math.floor((b - a) / 120));
+                for (let j = a; j < b; j += step) { const v = L[vertical ? j * w + k : k * w + j]; s += v; s2 += v * v; n++; }
+                const m = s / n; return { m: m, sd: Math.sqrt(Math.max(0, s2 / n - m * m)) };
+            };
+            const findRun = function (isLine, lo, hi, exp, maxW) {
+                const runs = []; let run = null;
+                for (let k = lo; k <= hi; k++) {
+                    if (isLine(k)) { if (!run) run = { a: k, b: k }; else run.b = k; }
+                    else if (run) { runs.push(run); run = null; }
+                }
+                if (run) runs.push(run);
+                const ok = runs.filter(function (r) { return r.b - r.a + 1 <= maxW; });
+                if (!ok.length) return null;
+                ok.sort(function (p, q) { return Math.abs((p.a + p.b) / 2 - exp) - Math.abs((q.a + q.b) / 2 - exp); });
+                return ok[0];
+            };
+            const edgeAt = function (vertical, lo, hi, s0, s1) {
+                let best = 0, at = -1;
+                const step = Math.max(1, Math.floor((s1 - s0) / 160));
+                for (let k = Math.max(1, lo); k <= hi; k++) {
+                    let s = 0, n = 0;
+                    for (let j = s0; j < s1; j += step) {
+                        const p = vertical ? j * w + k : k * w + j, q = vertical ? p - 1 : p - w;
+                        s += Math.abs(L[p] - L[q]); n++;
+                    }
+                    if (s / n > best) { best = s / n; at = k; }
+                }
+                return best >= 12 ? { a: at - 1, b: at } : null;
+            };
+            const line = function (st) { return st.sd < 22 && (!withTpl || st.m < 90); };
+            const maxW = Math.max(4, Math.round(Math.min(w, h) * 0.06));
+            const lp = VN_Image.TRIO_LP, tp = VN_Image.TRIO_TP;
+            let L0 = 0, R0 = w, T0 = 0, B0 = h;
+            if (withTpl) {   // 外框：從四邊往裡找貼邊那段黑線
+                const ey0 = Math.round(h * 0.1), ey1 = Math.round(h * 0.9), ex0 = Math.round(w * 0.1), ex1 = Math.round(w * 0.9);
+                let r;
+                r = findRun(function (x) { return line(stat(true, x, ey0, ey1)); }, 0, Math.round(w * 0.08), 0, maxW); if (r) L0 = r.b + 1;
+                r = findRun(function (x) { return line(stat(true, x, ey0, ey1)); }, w - 1 - Math.round(w * 0.08), w - 1, w - 1, maxW); if (r) R0 = r.a;
+                r = findRun(function (y) { return line(stat(false, y, ex0, ex1)); }, 0, Math.round(h * 0.08), 0, maxW); if (r) T0 = r.b + 1;
+                r = findRun(function (y) { return line(stat(false, y, ex0, ex1)); }, h - 1 - Math.round(h * 0.08), h - 1, h - 1, maxW); if (r) B0 = r.a;
+            }
+            const vExp = Math.round(w * lp), vWin = Math.round(w * 0.12);
+            const yA = T0 + Math.round((B0 - T0) * 0.1), yB = B0 - Math.round((B0 - T0) * 0.1);
+            const vLo = Math.max(L0, vExp - vWin), vHi = Math.min(R0 - 1, vExp + vWin);
+            let v = findRun(function (x) { return line(stat(true, x, yA, yB)); }, vLo, vHi, vExp, maxW);
+            if (!v && !withTpl) v = edgeAt(true, vLo, vHi, T0, B0);
+            const vFound = !!v;
+            if (!v) { const t = VN_Image.trioLine(w, h); v = { a: vExp - Math.ceil(t / 2), b: vExp + Math.floor(t / 2) }; }
+            // 橫的那條只在右半邊找；沒母圖時右上那格高矮差很多，範圍放寬到 25%~80%
+            const hExp = Math.round(h * tp), hWin = Math.round(h * 0.12);
+            const hLo = withTpl ? Math.max(T0, hExp - hWin) : Math.round(h * 0.25), hHi = withTpl ? Math.min(B0 - 1, hExp + hWin) : Math.round(h * 0.80);
+            const xA = v.b + 1 + Math.round((R0 - v.b) * 0.1), xB = R0 - Math.round((R0 - v.b) * 0.1);
+            let hz = findRun(function (y) { return line(stat(false, y, xA, xB)); }, hLo, hHi, hExp, maxW);
+            if (!hz && !withTpl) hz = edgeAt(false, hLo, hHi, v.b + 1, R0);
+            const hFound = !!hz;
+            if (!hz) { const t = VN_Image.trioLine(w, h); hz = { a: hExp - Math.ceil(t / 2), b: hExp + Math.floor(t / 2) }; }
+            const pad = withTpl ? 3 : 0;   // 黑線邊緣常有一兩格灰邊，往裡多切一點
+            const box = function (x0, y0, x1, y1) { return { x: Math.max(0, x0), y: Math.max(0, y0), w: Math.max(1, Math.min(w, x1) - Math.max(0, x0)), h: Math.max(1, Math.min(h, y1) - Math.max(0, y0)) }; };
+            return {
+                vFound: vFound, hFound: hFound, vPct: (v.a + v.b) / 2 / w, hPct: (hz.a + hz.b) / 2 / h,
+                boxes: {
+                    left: box(L0 + pad, T0 + pad, v.a - pad, B0 - pad),
+                    top: box(v.b + 1 + pad, T0 + pad, R0 - pad, hz.a - pad),
+                    bottom: box(v.b + 1 + pad, hz.b + 1 + pad, R0 - pad, B0 - pad),
+                },
+            };
+        },
+        // 去背後只留主體：切的時候萬一帶到隔壁格一小條，去背會把它當前景留下來 → 只留最大那塊（和夠大的幾塊，例如手上拿的東西）
+        _keepMainPiece: async function (blob) {
+            const bmp = await createImageBitmap(blob);
+            const W = bmp.width, H = bmp.height, N = W * H;
+            const c = document.createElement('canvas'); c.width = W; c.height = H;
+            const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
+            const img = g.getImageData(0, 0, W, H), d = img.data;
+            const lab = new Int32Array(N), q = new Int32Array(N), sizes = [0];
+            let id = 0;
+            for (let s = 0; s < N; s++) {
+                if (lab[s] || d[s * 4 + 3] < 64) continue;
+                id++; let qh = 0, qt = 0; lab[s] = id; q[qt++] = s;
+                while (qh < qt) {
+                    const p = q[qh++], x = p % W;
+                    const nb = [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, p >= W ? p - W : -1, p < N - W ? p + W : -1];
+                    for (let k = 0; k < 4; k++) { const n = nb[k]; if (n >= 0 && !lab[n] && d[n * 4 + 3] >= 64) { lab[n] = id; q[qt++] = n; } }
+                }
+                sizes.push(qt);
+            }
+            if (id <= 1) return null;
+            const big = Math.max.apply(null, sizes);
+            let dropped = 0;
+            for (let p = 0; p < N; p++) { const l = lab[p]; if (l && sizes[l] < big * 0.08) { d[p * 4 + 3] = 0; dropped++; } }
+            if (!dropped) return null;
+            g.putImageData(img, 0, 0);
+            return await new Promise(function (r) { c.toBlob(function (b) { r(b); }, 'image/png'); });
+        },
+        // 回 { objUrl, dataUrl(立繪), face(頭像), chibi(Q版) }；失敗回 null（不退成單張立繪：她選的是三種一起）。
+        //   🚨 不准往外丟錯：單張那條（_makeCharImageOne）失敗是回 null，開口時那條靠它退到「最終預設立繪」；丟出去就整個卡住。
+        _makeTrio: async function (prompt, force) {
+            try { return await this._makeTrioRaw(prompt, force); }
+            catch (e) { console.warn('[VN] 一次生三種失敗：', (e && e.message) || e); return null; }
+        },
+        _makeTrioRaw: async function (prompt, force) {
+            const r = await VN_Image.getTrio(prompt, force);
+            if (!r || !r.raw) return null;
+            let blob = null;
+            try { blob = await (await fetch(r.raw)).blob(); }
+            catch (e) { try { const du = await this._toDataUrl(r.raw); if (du) blob = await (await fetch(du)).blob(); } catch (e2) {} }
+            if (!blob) return null;
+            const bmp = await createImageBitmap(blob);
+            const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
+            cv.getContext('2d').drawImage(bmp, 0, 0);
+            let a = this._trioCut(cv, r.withTpl);
+            // 有送母圖但它沒照畫格線（或那個站不收參考圖）→ 照沒母圖的找法再找一次
+            if (r.withTpl && !(a.vFound && a.hFound)) a = this._trioCut(cv, false);
+            console.log('[VN] 一次生三種：直的分界 ' + (a.vPct * 100).toFixed(1) + '%' + (a.vFound ? '' : '（沒找到，照預設）') + '、橫的 ' + (a.hPct * 100).toFixed(1) + '%' + (a.hFound ? '' : '（沒找到，照預設）'));
+            // 切下來的邊上常留一條殘線（線邊緣那圈灰）或白邊（模型把整張挪了一點）：四邊是「一整條亮度不變」的就往裡修，最多修掉 5%
+            const trim = function (b) {
+                const g = cv.getContext('2d', { willReadFrequently: true });
+                const d = g.getImageData(b.x, b.y, b.w, b.h).data, W = b.w, H = b.h;
+                // 只看還沒修掉的那段：左邊那欄底下碰到一點橫線殘色，不該讓左邊整條白邊修不掉 → 一圈一圈修到四邊都不動
+                const flat = function (vertical, k, a, z) {
+                    let s = 0, s2 = 0, n = 0;
+                    const step = Math.max(1, Math.floor((z - a + 1) / 100));
+                    for (let j = a; j <= z; j += step) {
+                        const i = (vertical ? j * W + k : k * W + j) * 4;
+                        const v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; s += v; s2 += v * v; n++;
+                    }
+                    const m = s / n; return Math.sqrt(Math.max(0, s2 / n - m * m)) < 22;
+                };
+                const mx = Math.round(W * 0.05), my = Math.round(H * 0.05);
+                let l = 0, r = W - 1, t = 0, bt = H - 1, moved = true;
+                while (moved) {
+                    moved = false;
+                    while (l < mx && flat(true, l, t, bt)) { l++; moved = true; }
+                    while (W - 1 - r < mx && flat(true, r, t, bt)) { r--; moved = true; }
+                    while (t < my && flat(false, t, l, r)) { t++; moved = true; }
+                    while (H - 1 - bt < my && flat(false, bt, l, r)) { bt--; moved = true; }
+                }
+                return { x: b.x + l, y: b.y + t, w: Math.max(1, r - l + 1), h: Math.max(1, bt - t + 1) };
+            };
+            const crop = function (b0) { const b = trim(b0); const c = document.createElement('canvas'); c.width = b.w; c.height = b.h; c.getContext('2d').drawImage(cv, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h); return c; };
+            const toBlob = function (c, type, qq) { return new Promise(function (res) { c.toBlob(res, type || 'image/png', qq); }); };
+            const toData = function (b) { return new Promise(function (res) { const rd = new FileReader(); rd.onload = function () { res(String(rd.result)); }; rd.onerror = function () { res(''); }; rd.readAsDataURL(b); }); };
+            const self = this;
+            const cutOut = async function (c, what) {
+                const b = await toBlob(c);
+                let o = null;
+                try { o = await self._stripSpriteBgAI(b); } catch (e) {}
+                if (!o) { console.warn('[VN] ⚠️ 一次生三種：' + what + '去背失敗 → 先用帶背景的。往上找「AI 去背失敗」的原因'); return b; }
+                try { o = (await self._keepMainPiece(o)) || o; } catch (e) {}
+                return o;
+            };
+            const spriteBlob = await cutOut(crop(a.boxes.left), '立繪');
+            const chibiBlob = await cutOut(crop(a.boxes.bottom), 'Q版');
+            const faceBlob = await toBlob(crop(a.boxes.top), 'image/jpeg', 0.9);   // 自拍有背景、不用透明，存小一點
+            const out = await Promise.all([toData(spriteBlob), toData(chibiBlob), toData(faceBlob)]);
+            return { objUrl: URL.createObjectURL(spriteBlob), dataUrl: out[0], chibi: out[1], face: out[2] };
+        },
+
         // 去重包裝：同一道具若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
         _safeFetchItem: function(itemName, desc) {
             if (this._itemMemCache[itemName]) return Promise.resolve(this._itemMemCache[itemName]);

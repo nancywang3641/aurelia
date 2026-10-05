@@ -411,7 +411,12 @@
             if (!full || !npc) return;
             npc.avatarCacheKey = hit.key;   // 複合鍵(那輪chatId::名)：裝扮室「生成立繪」拿它呼叫 VN autoGenSprite→立繪存回同鍵的 sprite_cache
             if (full.prompt) npc.avatarPrompt = String(full.prompt);   // ✨ 外觀 ground truth：裝扮室「生成小小人」直接拿這串當 prompt
-            if (full.url && S.npcs.includes(npc)) { npc.portrait = full.url; npc.portraitKind = 'avatar'; }   // avatar_cache=頭像(半身)→對話用浮框擺放
+            const head = VC.headOf ? VC.headOf(full) : full.url;   // 一次生三種的自拍優先（headOf）
+            if (head && S.npcs.includes(npc)) { npc.portrait = head; npc.portraitKind = 'avatar'; }   // avatar_cache=頭像(半身)→對話用浮框擺放
+            // 一次生三種的 Q版＝他在大廳的小人；裝扮室換過皮膚的照她換的（皮膚是她親手選的，不蓋）
+            try {
+                if (full.chibi && S.npcs.includes(npc) && !(_b.skins && _b.skins()[npc.key])) _b.swapActorSrc(npc, full.chibi);
+            } catch (e) {}
             // 裝扮室生過立繪(sprite_cache 同鍵)→ 蓋過頭像當對話立繪(貼底全高)；沒有就維持頭像浮框
             try {
                 const sp = await VC.getRaw('sprite_cache', hit.key);

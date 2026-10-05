@@ -414,6 +414,7 @@
                 if (cached && cached.url && !cached.url.startsWith('blob:')) {
                     const objUrl = await this._toObjectUrl(cached.url);
                     url = objUrl || cached.url; this._avatarMemCache[name] = url;
+                    if (cached.face) this._faceMemCache[name] = cached.face;
                 } else {
                     let d = this._resolveAvatarPrompt(name);
                     // none 路人（有聲線無外觀）：只有立繪模式才合成 prompt 生全身；一般頭像模式往下走剪影
@@ -436,7 +437,8 @@
                         //    「最終預設立繪」，畫面上什麼都不會出現，看起來像卡住。讓 url 保持空的往下走。
                         if (img2) {
                             url = img2.objUrl; this._avatarMemCache[name] = img2.objUrl;
-                            if (img2.dataUrl) { try { await VN_Cache.set('avatar_cache', name, VN_Config.data.spriteDirect === true ? { prompt: d, url: img2.dataUrl, isSprite: true } : { prompt: d, url: img2.dataUrl }); } catch(e) {} }
+                            if (img2.face) this._faceMemCache[name] = img2.face;
+                            if (img2.dataUrl) { try { await VN_Cache.set('avatar_cache', name, this._charRec(d, img2)); } catch(e) {} }
                         }
                     }
                 }

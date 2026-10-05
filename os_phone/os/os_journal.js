@@ -192,7 +192,7 @@
     // 拿單張頭像的圖：只在真的要顯示時才碰那筆資料
     async function _avatarUrlByKey(win, key) {
         if (!key) return '';
-        try { const rec = await win.VN_Cache?.getRaw?.('avatar_cache', key); return (rec && rec.url) || ''; }
+        try { const rec = await win.VN_Cache?.getRaw?.('avatar_cache', key); return win.VN_Cache.headOf ? win.VN_Cache.headOf(rec) : ((rec && rec.url) || ''); }
         catch (e) { return ''; }
     }
 

@@ -122,7 +122,12 @@
             }
         }
 
-        // 2. VN 記憶體快取（已生成的頭像）
+        // 2. VN 記憶體快取（已生成的頭像）。一次生三種切出來的自拍頭像先看（_faceMemCache）——那張本來就是頭像，不用切上半身
+        if (vn._faceMemCache) {
+            for (const v of variants) {
+                if (vn._faceMemCache[v]) return { url: vn._faceMemCache[v], sprite: false };
+            }
+        }
         if (vn._avatarMemCache) {
             for (const v of variants) {
                 if (vn._avatarMemCache[v]) return { url: vn._avatarMemCache[v], sprite: await _isSpriteRec(win.VN_Cache, v) };
@@ -135,6 +140,7 @@
             for (const v of variants) {
                 try {
                     const cached = await VN_Cache.get('avatar_cache', v);
+                    if (cached?.face) return { url: cached.face, sprite: false };
                     if (cached?.url && !cached.url.startsWith('blob:')) return { url: cached.url, sprite: !!cached.isSprite };
                 } catch(e) {}
             }

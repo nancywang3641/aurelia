@@ -669,7 +669,8 @@
                 // 用當前狀態 + 預設值替換佔位符做預覽（支援 object 型 {{#each}} 迴圈）
                 const previewState = win._AVS_ENGINE?.read?.() || {};
                 const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
-                const _avMem = (win.VN_PLAYER || win.VN_Core)?._avatarMemCache || {};   // 預覽用記憶體頭像(best-effort)
+                const _avCore = (win.VN_PLAYER || win.VN_Core) || {};
+                const _avMem = Object.assign({}, _avCore._avatarMemCache || {}, _avCore._faceMemCache || {});   // 預覽用記憶體頭像(best-effort)；一次生三種的自拍頭像蓋過全身立繪
                 let previewHtml = _avsRenderTemplate(activeTpl.htmlContent || '', previewState, pack.variables || [], fmt, _avMem);
 
                 const scopeId = `pack-tpl-preview-${activeTpl.id}`;
@@ -1418,7 +1419,7 @@
                 if (c && typeof c === 'object') Object.keys(c).forEach(k => { if (k !== v.name) names.add(k); });
             });
             for (const n of names) {
-                try { const av = await win.VN_Cache.get('avatar_cache', n); if (av && av.url) map[n] = av.url; } catch (e) {}
+                try { const av = await win.VN_Cache.get('avatar_cache', n); const u = win.VN_Cache.headOf ? win.VN_Cache.headOf(av) : (av && av.url); if (u) map[n] = u; } catch (e) {}
             }
         } catch (e) {}
         return map;
@@ -2211,7 +2212,8 @@
             sel.trim().split(',').map(s => '#' + scopeId + ' ' + s.trim()).join(', ') + ' {');
         const state = win._AVS_ENGINE?.read?.() || {};
         const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
-        const avMem = (win.VN_PLAYER || win.VN_Core)?._avatarMemCache || {};
+        const _avCore2 = (win.VN_PLAYER || win.VN_Core) || {};
+        const avMem = Object.assign({}, _avCore2._avatarMemCache || {}, _avCore2._faceMemCache || {});   // 一次生三種的自拍頭像蓋過全身立繪
         stage.innerHTML = '<style>' + scoped + '</style>' +
             _avsRenderTemplate(tpl.htmlContent || '', state, pack.variables || [], fmt, avMem);
 

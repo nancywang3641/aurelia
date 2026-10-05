@@ -764,13 +764,21 @@
             }
             // 畫風的底圖（_applyUse 讀好的）：不管這個節點有沒有開「帶參考圖」都送——她是在畫風裡特地放的
             if (!isSd && options._styleRef) refs = refs.concat([options._styleRef]);
+            // 一次生三種的母圖（VN_Image.getTrio）：白底、黑線分三格。同畫風底圖，不看節點開關；排第一張
+            if (!isSd && options._layoutRef) refs = [options._layoutRef].concat(refs);
             const _editsEndpoint = endpoint.replace(/\/images\/generations$/, '/images/edits');
             const _buildEditForm = () => {
                 const fd = new FormData();
                 if (model) fd.append('model', model);
-                const _chars = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind !== 'style');
+                const _chars = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind !== 'style' && x.r.kind !== 'layout');
                 const _styles = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind === 'style');
-                const _lead = (_chars.length ? 'Reference images for how the characters look: ' + _chars.map(x => 'image ' + x.n + ' is ' + x.r.name).join('; ') + '. Keep each of them looking like their reference image.\n' : '')
+                const _layouts = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind === 'layout');
+                // 格子那段跟她在 SPRITE_TRIO_LAB 試成功的那段同一套說法（她：「有欸!」）
+                const _lead = (_layouts.length ? 'Image ' + _layouts[0].n + ' is the layout to draw on: a white canvas divided by thick black lines into three framed panels. '
+                        + 'One tall panel on the left runs the full height; on the right there are two panels stacked on top of each other, an upper one and a lower one. '
+                        + 'Keep every black line exactly where it is in that image: straight, unbroken, the same thickness, and keep the black frame around the edge. '
+                        + 'Fill each panel edge to edge with its own picture. Nothing is drawn on the lines and nothing crosses from one panel into another.\n' : '')
+                    + (_chars.length ? 'Reference images for how the characters look: ' + _chars.map(x => 'image ' + x.n + ' is ' + x.r.name).join('; ') + '. Keep each of them looking like their reference image.\n' : '')
                     + (_styles.length ? 'Image ' + _styles.map(x => x.n).join(' and ') + ' shows the art style to follow; match its rendering, colors and line quality, not its content.\n' : '');
                 fd.append('prompt', _lead + '\n' + body.prompt);
                 fd.append('n', '1');

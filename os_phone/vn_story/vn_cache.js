@@ -323,6 +323,9 @@
             return k;
         },
         scopedKey(world, bareKey) { return world ? (world + SEP + bareKey) : bareKey; },
+        // avatar_cache 那一筆要當「頭像」顯示時用哪張：一次生三種切出來的自拍（face）優先，沒有就是原本那張。
+        //   聊天 app／通話／大廳對話框／日誌／狀態面板這些頭像位置都問這支；劇情舞台、插圖參考圖照用 url（全身立繪）。
+        headOf(rec) { return (rec && (rec.face || rec.url)) || ''; },
 
         // 🗑️ 清掉某個世界(chatId)的所有圖片快取（背景/頭像/立繪/場景/物品）→ 給「刪聊天室一鍵清資料」用。
         //    world 可傳 raw ctx.chatId 或正規化後的 chatId 都行——兩邊都正規化(basename/去.jsonl/trim/空白→_)再比，

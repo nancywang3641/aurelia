@@ -54,6 +54,7 @@
         _itemCutOk: {},     // 道具圖去背成功與否(itemName→bool)：彈窗照這個決定「裸物件浮空」還是「退成羽化遮罩」
         _currentWorldTag: '',   // 這一輪 [World|現代] 那一格；none 路人合成立繪 prompt 時當時代感用
         _avatarMemCache: {},
+        _faceMemCache: {},  // 一次生三種切出來的自拍頭像（名字→圖）：舞台用 _avatarMemCache 的立繪，聊天 app／通話／大廳這些「頭像」位置先看這裡
         _pendingAvatars: {},
         _decodedImgs: {},
         _twTimer: null, _twEl: null, _twFull: '', _twSpeed: 30,
@@ -1733,6 +1734,7 @@
                     if (cached && cached.url && !cached.url.startsWith('blob:')) {
                         const objUrl = await this._toObjectUrl(cached.url);
                         this._avatarMemCache[name] = objUrl || cached.url;
+                        if (cached.face) this._faceMemCache[name] = cached.face;
                         console.log(`[VN] 頭像從 IDB 載入：${name}`); continue;
                     }
                     if (cached?.url?.startsWith('blob:')) await VN_Cache.delete('avatar_cache', name);
@@ -1799,8 +1801,9 @@
                     const img = await self._makeCharImage(d, 'Neutral');   // 立繪模式由 _makeCharImage 內部換立繪 prompt + 去背
                     if (!img) { console.warn(`[VN] 角色圖生成失敗：${name}`); return ''; }
                     self._avatarMemCache[name] = img.objUrl;
+                    if (img.face) self._faceMemCache[name] = img.face;
                     // 單一 avatar_cache（切拉桿不重生舊圖＝Rae 拍板，別再往快取加模式判定）；spriteDirect 生的是立繪→只加 isSprite 標記供相簿分類，不換 store
-                    if (img.dataUrl) { try { await VN_Cache.set('avatar_cache', name, VN_Config.data.spriteDirect === true ? { prompt: d, url: img.dataUrl, isSprite: true } : { prompt: d, url: img.dataUrl }); } catch(e) {} }
+                    if (img.dataUrl) { try { await VN_Cache.set('avatar_cache', name, self._charRec(d, img)); } catch(e) {} }
                     console.log(`[VN] 角色圖生成完成：${name}`);
                     return img.objUrl;
                 } catch(e) { console.warn(`[VN] 角色圖生成例外：${name}`, e); return ''; }
@@ -1815,10 +1818,21 @@
         //   立繪模式＝唯二差別：① getSprite 模板取代 getAvatar ② AI 去背。整條 gate/解析/快取/去重由呼叫端
         //   (頭像管線：_genAvatarToCache / fallbackToAI) 共用，這裡只負責「生成那一步」。回 { objUrl, dataUrl }，失敗回 null。
         _makeCharImage: async function(prompt, exp, force) {
+            // 🎴 立繪模式 ＋ 一次生三種：一張三格圖切成立繪、頭像、Q版（vn_core_images 的 _makeTrio）。
+            //    跟「一次生幾個角色」不一起用：一張圖只放一個角色。
+            if (this._trioOn()) return await this._makeTrio(prompt, force);
             // 🎯 立繪模式 ＋ 她設了一次生幾個 ＋ 來源是官方那顆 → 進排隊，湊幾個角色一張寬圖一起生。
             //    force（相簿的「重生」）要的是立刻重畫這一張，不排隊。
             if (!force && this._spriteBatchSize() > 1) return await this._sheetEnqueue(prompt);
             return await this._makeCharImageOne(prompt, exp, force);
+        },
+        _trioOn: function () { return VN_Config.data.spriteDirect === true && VN_Config.data.spriteTrio === true; },
+        // 存進 avatar_cache 的那一筆（四個寫入點共用：預熱、開口時、相簿重生、外觀登記表）。
+        //   一次生三種的 face／chibi 跟著存；沒有就是 undefined——重生成單張時舊的自拍、Q版跟新立繪對不上，不留。
+        _charRec: function (prompt, img, base) {
+            const rec = Object.assign({}, base || {}, { prompt: prompt, url: img.dataUrl, face: img.face || undefined, chibi: img.chibi || undefined });
+            if (VN_Config.data.spriteDirect === true) rec.isSprite = true;
+            return rec;
         },
         _makeCharImageOne: async function(prompt, exp, force) {
             const sprite = (VN_Config.data.spriteDirect === true);
@@ -4082,6 +4096,7 @@
             if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
         }
         window.VN_Core._avatarMemCache = {};
+        window.VN_Core._faceMemCache = {};
         window.VN_Core.avatars = {};
         window.VN_Core.resetState();
         const bgm = document.getElementById('bgm-player');

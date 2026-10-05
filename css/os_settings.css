@@ -466,3 +466,8 @@
 .cloudbk-gh { margin: 6px 0; }
 .cloudbk-gh-lab { font-size: 12px; color: var(--os-ink); margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
 .cloudbk-gh .cloudbk-gh-token { margin-top: 8px; }
+/* 🎴 一次生三種（立繪模式底下那格） */
+.trio-row { margin-top: 12px; }
+.trio-row .set-label { margin-top: 8px; }
+.trio-tpl { min-height: 170px; font-size: 12px; }
+.trio-reset { margin-top: 6px; padding: 8px; font-weight: 600; }
