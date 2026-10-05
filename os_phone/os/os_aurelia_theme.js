@@ -540,7 +540,7 @@
         const a = prop.after || {}, b = prop.before, out = [];
         const warn = (prop.warn || []).length ? { lab: '要注意', txt: prop.warn.join('\n') } : null;
         if (prop.tk === 'chat') {
-            out.push({ lab: '樣子（聊天 app 開著才看得到）', preview: 'try' });
+            out.push({ lab: '樣子', preview: 'try' });
         } else if (prop.kind === 'add') {
             out.push({ lab: '新的樣子', preview: 'after' });
         } else {
@@ -649,7 +649,33 @@
         if (t.vars && Object.keys(t.vars).length) P.paint(box, t.vars);
         else if (t.id) box.classList.add('theme-' + t.id);
     }
-    // 聊天 app 主題：一顆「先套上看看」，蓋在真的聊天 app 上；回還原的那支（單子關掉時叫）
+    // 聊天 app 主題：先畫一間假群聊（每種卡片各一則，WX_THEME_PACK.sampleDoc），套上這套關在 iframe 裡，
+    //   她的聊天 app 不用開著（10-06 她：預覽時順道展示所有卡片樣式，才知道是否正常）。寬照手機殼裡的聊天 app 畫、單子窄就等比縮，裡面自己捲。
+    const SAMPLE_W = 360, SAMPLE_H = 640;   // 聊天 app 在手機殼裡實際約 360 寬
+    function _chatSample(el, css) {
+        const W = _WX();
+        const html = W && W.sampleDoc ? W.sampleDoc(css || '') : '';
+        if (!html) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'th-pv-wrap';
+        const box = document.createElement('div');
+        box.className = 'th-pv-box';
+        const fr = document.createElement('iframe');
+        fr.className = 'th-pv-frame';
+        fr.setAttribute('sandbox', 'allow-same-origin');
+        box.appendChild(fr);
+        wrap.appendChild(box);
+        el.appendChild(wrap);
+        const fit = function () {
+            const s = Math.min(1, Math.max(1, wrap.clientWidth || 320) / SAMPLE_W);
+            fr.style.width = SAMPLE_W + 'px'; fr.style.height = SAMPLE_H + 'px'; fr.style.transform = 'scale(' + s + ')';
+            box.style.width = Math.round(SAMPLE_W * s) + 'px'; box.style.height = Math.round(SAMPLE_H * s) + 'px';
+        };
+        fit();
+        try { const ro = new ResizeObserver(function () { if (wrap.isConnected) fit(); }); ro.observe(wrap); } catch (e) {}
+        fr.srcdoc = html;
+    }
+    // 底下再一顆「先套上看看」，蓋在真的聊天 app 上；回還原的那支（單子關掉時叫）
     function _chatTry(el, prop) {
         const W = _WX();
         if (!W || !W.tryOn) { el.textContent = '聊天 app 的主題還沒載好。'; return null; }
@@ -680,7 +706,7 @@
         return function () { if (restore && prop.state !== 'done') restore(); restore = null; };
     }
     function mountPreview(prop, which, el) {
-        if (prop.tk === 'chat') return _chatTry(el, prop);
+        if (prop.tk === 'chat') { _chatSample(el, prop.after && prop.after.css); return _chatTry(el, prop); }
         const t = which === 'before' ? prop.before : prop.after;
         if (prop.tk === 'story') { _storyPreview(el, (t && t.css) || ''); return null; }
         _phonePreview(el, t);
@@ -780,11 +806,33 @@
             finally { host.remove(); }
             if (!P) lines.push('手機主題工坊還沒載好。');
         } else {
-            // 聊天 app 畫不出假的：她的聊天 app 開著才截得到——先套上、截一張、馬上換回正在用的那套
-            const W = _WX(), app = win.wxApp || window.wxApp, box = app && app.APP_CONTAINER;
+            // 先畫假群聊（每種卡片各一則）：分前後兩張截，整間一張的話太長、字會被縮到看不清
+            const W = _WX();
+            for (const part of [0, 1]) {
+                const html = W && W.sampleDoc ? W.sampleDoc(c.t.css || '', part) : '';
+                if (!html) break;
+                const host = _offscreen(SAMPLE_W, 844);
+                try {
+                    const fr = document.createElement('iframe');
+                    fr.style.cssText = 'display:block;border:0;width:' + SAMPLE_W + 'px;height:844px;';
+                    host.appendChild(fr);
+                    await new Promise(function (r) { fr.onload = r; fr.srcdoc = html; setTimeout(r, 2000); });
+                    await _wait(500);
+                    // 拉高到整段訊息都攤開（不用捲），再整張截
+                    const sc = fr.contentDocument.querySelector('.wx-room-scroll');
+                    const h = Math.min(1800, 844 + (sc ? Math.max(0, sc.scrollHeight - sc.clientHeight) : 0));
+                    fr.style.height = h + 'px'; host.style.height = h + 'px';
+                    await _wait(200);
+                    images.push(await S.shotNode(fr.contentDocument.documentElement, SAMPLE_W, h, '#fff'));
+                    lines.push('・假的群聊' + (part ? '後半' : '前半') + '（' + (part ? '語音、影片、檔案、連結、收款碼、外送、分享卡、通話記錄' : '時間、系統提示、人名、轉帳待收／已收／退回、紅包領取前後、禮物、位置') + '），套上這套的樣子');
+                } catch (e) { lines.push('・假的群聊' + (part ? '後半' : '前半') + '沒截下來（' + ((e && e.message) || e) + '）'); }
+                finally { host.remove(); }
+            }
+            // 她的聊天 app 開著的話，再截一張她現在那一頁——先套上、截一張、馬上換回正在用的那套
+            const app = win.wxApp || window.wxApp, box = app && app.APP_CONTAINER;
             const r = box && box.getBoundingClientRect ? box.getBoundingClientRect() : null;
             if (!W || !W.tryOn || !r || r.width < 50 || r.height < 50) {
-                lines.push('・她的聊天 app 現在沒開著，截不到；下面只有檢查的結果。');
+                lines.push('・她的聊天 app 現在沒開著，她那一頁截不到。');
             } else {
                 const restore = W.tryOn(c.t.css || '');
                 try {
@@ -825,7 +873,7 @@
         { name: 'aurelia_theme_look', label: '看看主題畫出來的樣子',
           description: '提單子之前先看看：把一套主題畫出來截圖給你（能看圖的才看得到），並列出檢查抓到的問題。不會出單子，對方看不到。'
             + '只填 kind 和 name＝看已經有的（或你還沒被同意的那張單子）；再加上跟 aurelia_theme_edit 一樣的參數＝看改完的樣子；新的一套就照 aurelia_theme_add 給內容。'
-            + '劇情主題畫故事畫面（size 選寬度、mode 選哪個畫面）；手機主題畫一支假手機；聊天 app 主題要對方的聊天 app 開著才截得到（截完馬上換回去）。',
+            + '劇情主題畫故事畫面（size 選寬度、mode 選哪個畫面）；手機主題畫一支假手機；聊天 app 主題畫一間假的群聊（每種卡片各一則，分前後兩張），對方的聊天 app 開著的話再多截一張對方現在那一頁（截完馬上換回去）。',
           inputSchema: { type: 'object', properties: { kind: KIND_ARG,
               name: { type: 'string', description: '那一套的名字（新的一套就寫要取的名字）' },
               find: { type: 'string', description: '跟 aurelia_theme_edit 一樣' },

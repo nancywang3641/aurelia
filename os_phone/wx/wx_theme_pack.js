@@ -359,10 +359,12 @@
         // 朋友圈封面的名字與頭像一半凸出去、壓在內容上：主題給內容加了底或定位也不能把它蓋掉（她 09-19）
         + '.wxmo-root .wxmo-cover:not(#_) { position: relative !important; z-index: 2 !important; }';
 
+    // 編好的主題＋墊在後面的保護（套到聊天 app 上、畫假聊天室都用這份）
+    function _full(css) { return css + '\n' + SAFETY + '\n' + _pageFill(css) + '\n' + _frameOwner(css) + '\n' + PANEL_PALETTE; }
     function _inject(css) {
         let st = d.getElementById(STYLE_ID);
         if (!css) { if (st) st.remove(); return; }
-        css = css + '\n' + SAFETY + '\n' + _pageFill(css) + '\n' + _frameOwner(css) + '\n' + PANEL_PALETTE;
+        css = _full(css);
         if (!st) { st = d.createElement('style'); st.id = STYLE_ID; }
         // 永遠排在 head 最後：主題要壓過 app 自己的樣式
         (d.head || d.documentElement).appendChild(st);
@@ -1153,6 +1155,75 @@
         if (activeId() === id) await apply(id); else _renderPage();
         return true;
     }
+    // 🃏 假聊天室：一間群聊，每種卡片各一則（轉帳三種狀態、紅包領取前後），套上一套主題畫出來。
+    //   小機交聊天 app 主題時，單子上和它自己的「先看看」用（os_aurelia_theme.js）——10-06 她：預覽時順道展示所有卡片樣式，才知道是否正常。
+    //   她的聊天 app 不用開著、也不會被換掉：主題的選擇器都是 .wx-shell 開頭，塞進主頁面會連她開著的那支一起換，所以只給 iframe 用。
+    //   訊息交給 WX_VIEW 自己畫（_static：只借長相，不碰帳本、不存紅包）；不放圖片訊息（畫的時候會去生圖）和表情包（要她的庫）。
+    const SAMPLE = [
+        { type: 'time', content: '19:42' },
+        { type: 'system', content: '阿岑 邀請 小魚 加入了群聊' },
+        { isMe: false, sender: '阿岑', content: '晚上的東西都準備好了嗎？' },
+        { isMe: true, content: '差不多了，你們看一下' },
+        { isMe: false, sender: '阿岑', content: '[轉帳: 88|晚餐的錢|TxnPend]' },
+        { isMe: true, content: '[轉帳: 520|生日快樂|TxnOk]', _mark: 'accept' },
+        { isMe: false, sender: '小魚', content: '[轉帳: 200|房租|TxnBack]', _mark: 'return' },
+        { isMe: false, sender: '小魚', content: '[紅包: 66|恭喜發財|RpOpen]' },
+        { isMe: true, content: '[紅包: 10|手慢無|RpEmpty]', _empty: true },
+        { isMe: false, sender: '阿岑', content: '[禮物: 🎁 香水|一點心意|GftA]' },
+        { isMe: false, sender: '小魚', content: '[位置: 港口七號倉庫-東區碼頭路 7 號]' },
+        { isMe: true, content: '[語音: 我快到了，等我五分鐘]' },
+        { isMe: false, sender: '阿岑', content: '[影片: 海邊的煙火]' },
+        { isMe: false, sender: '阿岑', content: '[文件: 企劃書.pdf]' },
+        { isMe: true, content: '[連結: 本週最值得去的十家咖啡館]' },
+        { isMe: false, sender: '小魚', content: '[收款碼: 128|聚餐 AA]' },
+        { isMe: false, sender: '阿岑', content: '[外送代付: 巷口麵館|牛肉麵、滷味|128|阿岑]' },
+        { isMe: true, content: '[外送: 巷口麵館|牛肉麵|95|阿岑|多加辣]' },
+        { isMe: false, sender: '小魚', content: '[WbShare: 城市觀察家|今晚港口有煙火，七點開始，記得早點去佔位置。]' },
+        { isMe: true, content: '[AppShare: 日誌|今天的事|雨停了，大家約好晚上去碼頭。]' },
+        { isMe: false, sender: '阿岑', content: '[通話: 通話時長 03:24]' }
+    ];
+    const SAMPLE_SPLIT = 11;   // 小機截圖分兩張：前半到這一則為止
+    // part：不填＝整間；0／1＝前半／後半（給截圖用，一張太長字會被縮到看不清）
+    function sampleDoc(css, part) {
+        const V = win.WX_VIEW || window.WX_VIEW, T = win.WX_THEME || window.WX_THEME;
+        if (!V || !V.renderShell || !V.renderBubble || !T || !T.css) return '';
+        const list = part === 0 ? SAMPLE.slice(0, SAMPLE_SPLIT) : part === 1 ? SAMPLE.slice(SAMPLE_SPLIT) : SAMPLE;
+        const id = '__wxtp_sample__';
+        const chat = { id: id, name: '週末的局', isGroup: true, members: ['阿岑', '小魚', '我'],
+            messages: list.map(function (m) { return Object.assign({ type: 'msg', senderName: m.sender || '' }, m, { _static: true }); }) };
+        let dark = false, pal = '';
+        try { dark = localStorage.getItem('wx_dark_mode') === 'true'; pal = localStorage.getItem('wx_theme') || ''; } catch (e) {}
+        const tpl = d.createElement('template');
+        tpl.innerHTML = V.renderShell(id, { [id]: chat }, 'chat', dark, pal);
+        // 轉帳、紅包的另外幾種狀態：劇情手機那支翻卡片的同一套
+        list.forEach(function (m) {
+            if (m._mark && V.markTransfer) {
+                const tf = (m.content.match(/\|(Txn\w+)\]/) || [])[1];
+                V.markTransfer(tpl.content.querySelector('.wx-tf-card[data-tf-id="' + tf + '"]'), m._mark, !!m.isMe);
+            }
+        });
+        tpl.content.querySelectorAll('.wx-rpc-card').forEach(function (c) {
+            const memo = c.querySelector('.wx-rpc-memo'), sub = c.querySelector('.wx-rpc-sub');
+            if (memo && memo.textContent === '手慢無') { c.classList.add('is-empty'); if (sub) sub.textContent = '已領完'; }
+        });
+        // 樣式：聊天 app 本身（WX_THEME）、跟它一起載進來的檔（顏色格子、卡片、圖示字型），最後疊這套主題。
+        //   🚨 兩種載法都要抄：PWA 跟酒館自己的圖示字型是 <link>；酒館裡奧瑞亞的檔是 index.js loadCSS 抓下來塞進 <style data-aurelia-css>
+        const WANT = /font-?awesome|\/(solid|brands)\.min\.css|aurelia_theme\.css|vn_styles\.css|\/wx_[\w-]+\.css/i;
+        const links = Array.prototype.slice.call(d.querySelectorAll('link[rel~="stylesheet"]'))
+            .filter(function (l) { return WANT.test(l.href || ''); })
+            .map(function (l) { return '<link rel="stylesheet" href="' + esc(l.href) + '">'; }).join('')
+            + Array.prototype.slice.call(d.querySelectorAll('style[data-aurelia-css]'))
+            .filter(function (s) { return WANT.test(s.getAttribute('data-aurelia-css') || ''); })
+            .map(function (s) { return '<style>' + String(s.textContent || '').replace(/<\/style/gi, '<\\/style') + '</style>'; }).join('');
+        const c = css ? compile(css) : { ok: false };
+        const themed = c.ok ? _full(c.css) : '';
+        const frame = 'html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","Microsoft JhengHei",sans-serif;}'
+            + 'body>.wx-shell{position:relative;width:100%;height:100%;}';
+        return '<!DOCTYPE html><html><head><meta charset="utf-8">' + links
+            + '<style>' + T.css + '\n' + frame + '</style><style>' + themed.replace(/<\/style/gi, '<\\/style') + '</style></head><body>'
+            + tpl.innerHTML + '</body></html>';
+    }
+
     // 先套上看看：直接蓋在聊天 app 上（不存、不換正在用的），回一支還原（照「正在用的」重新套回去）
     function tryOn(css) {
         const c = compile(css);
@@ -1161,7 +1232,7 @@
     }
 
     const API = { compile, load, apply, add, rename, remove, activeId, open, close, generate, exportText, fillUp, missingPalette, _unpaired, contrastIssues, PAIRS,
-        spec, update, tryOn };
+        spec, update, tryOn, sampleDoc };
     win.WX_THEME_PACK = API;
     window.WX_THEME_PACK = API;
     setTimeout(function () { _boot().catch(function (e) { console.warn('[主題] 開機套用失敗', e); }); }, 800);

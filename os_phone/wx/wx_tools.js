@@ -604,6 +604,7 @@
         .wxtl-pp-pv .th-pv-phone .pth-preview { margin-top:0; }
         .wxtl-pp-pv .th-pv-try { width:100%; padding:9px 0; border:1px solid #2f7a4a; border-radius:9px; background:#fff; color:#2f7a4a; font-size:13px; font-weight:700; cursor:pointer; }
         .wxtl-pp-pv .th-pv-try.on { background:#2f7a4a; color:#fff; }
+        .wxtl-pp-pv .th-pv-wrap + .th-pv-try { margin-top:8px; }   /* 聊天 app 主題：假群聊底下那顆 */
         .wxtl-pp-pv .th-pv-tip { margin-top:6px; font-size:12px; line-height:1.5; color:#8a857b; }
         .wxtl-pp-lab { font-size:12px; font-weight:700; color:rgba(38,36,31,.55); margin-bottom:4px; }
         .wxtl-pp-lab.is-sub { font-weight:400; font-size:11.5px; color:rgba(38,36,31,.45); }
