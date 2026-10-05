@@ -579,7 +579,7 @@
         },
 
         // 去重包裝：同一 cacheId 若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
-        _safeFetchScene: function(cacheId, prompt) {
+        _safeFetchScene: function(cacheId, prompt, force) {
             if (this._sceneMemCache[cacheId]) return Promise.resolve(this._sceneMemCache[cacheId]);
             if (this._sceneInflight[cacheId]) return this._sceneInflight[cacheId];
             // 這個 cacheId 剛生圖失敗過(如拼車撞 NAI 429) → 不自動重打：否則「預熱→插入→渲染」序列會同一張各打一次、白燒額度又易被風控。
@@ -588,7 +588,7 @@
             // 本輪已撞失敗(拼車 NAI 429) → 不再自動猛打後續插圖：標記失敗、回空(顯示佔位卡＋重生鈕)。手動重生/新一輪解除。
             if (this._sceneGenBackoff) { this._sceneFailed[cacheId] = Date.now(); return Promise.resolve(''); }
             const self = this;
-            const p = this._doFetchScene(cacheId, prompt);
+            const p = this._doFetchScene(cacheId, prompt, force);
             this._sceneInflight[cacheId] = p;
             p.then(function (url) {
                 if (!url) { self._sceneFailed[cacheId] = Date.now(); self._sceneGenBackoff = Date.now(); }   // 回空＝生失敗 → 記下＋本輪起退避，後續不再猛打
@@ -618,7 +618,8 @@
                     if (_old && Array.isArray(_old.cast) && _old.cast.length && _IM && _IM.setSceneCast) _IM.setSceneCast(prompt, _old.cast);
                 } catch (e) {}
                 try { await VN_Cache.delete('scene_cache', cacheId); } catch (e) {}
-                const url = await this._safeFetchScene(cacheId, prompt);
+                // force：上面清的是這邊兩層，生圖那邊（OS_IMAGE_MANAGER._urlCache）還記著同一句的舊圖
+                const url = await this._safeFetchScene(cacheId, prompt, true);
                 if (url && cgImg) { cgImg.src = url; this._setSceneCgFailed(false); }
                 else { this._setSceneCgFailed(true); }   // 還是失敗(朋友還在生) → 維持佔位卡，可再按
             } finally {
@@ -632,7 +633,7 @@
             this._sceneCgHold = !!on;   // 失敗→hold(renderVN 不遞減 linger、hideOverlays 不關)；成功→解除照常淡出
             this._sceneCgFailLinger = on ? 3 : 0;   // 失敗佔位也給 3 則寬限：沒手動重生就自己淡出、不永遠卡著
         },
-        _doFetchScene: async function(cacheId, prompt) {
+        _doFetchScene: async function(cacheId, prompt, force) {
             if (this._sceneMemCache[cacheId]) return this._sceneMemCache[cacheId];
             const cached = await VN_Cache.get('scene_cache', cacheId);
             if (cached && cached.url) {
@@ -646,7 +647,7 @@
                 }
             }
             if (!prompt) return '';   // 沒 prompt 沒得生（ID-only 標籤走相簿路，正常不會到這；防空 prompt 白燒生圖）
-            const raw = await VN_Image.getScene(prompt);
+            const raw = await VN_Image.getScene(prompt, force);
             if (!raw) return '';
             try {
                 const fetchRes = await fetch(raw);

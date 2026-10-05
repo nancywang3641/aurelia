@@ -273,7 +273,8 @@
                 return await win.OS_IMAGE_MANAGER.generateItem(prompt, { use: 'item' });
             } return "";
         },
-        getScene: async function(prompt) {
+        // force＝插圖上的重生鈕：generate() 記憶體裡還留著這句的舊圖，不帶就原圖奉還
+        getScene: async function(prompt, force) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
                 // 場景插圖尺寸：讀「圖片設置 → 場景插圖尺寸」下拉（獨立設定），預設 1024×1024
                 // 底詞：場景跟角色共用「角色底詞」（generate→_genNovelAI 把 scene 當 char 套 charBasePrompt/charNegPrompt），不另設場景底詞（Rae 拍板：場景只吃角色底詞）
@@ -283,7 +284,7 @@
                     const _p = String(_sz).split('x').map(Number);
                     if (_p[0] && _p[1]) { _sw = _p[0]; _sh = _p[1]; }
                 } catch(e) {}
-                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, use: 'scene' });
+                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: !!force, use: 'scene' });
             } return "";
         }
     };
