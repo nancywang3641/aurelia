@@ -239,10 +239,16 @@
         // options.force = true 可跳過 cache 強制重生。
         _urlCache: new Map(),
 
+        // 快取鍵：帶 use 的另外算（同一句話不同列可能走不同接口）；prompt 是 _applyUse 拼過畫風底詞的那句
+        _cacheKey: function(type, prompt, options) {
+            return (options && options.use ? options.use + '|' : '') + type + '|' + (prompt || '');
+        },
+
         // 釋放某個 cache 項（blob 順手 revoke）→ 圖庫重生轉成持久 dataURL 後呼叫，免暫時 blob URL 永久佔記憶體
-        evict: function(type, prompt) {
+        //   generate 帶了 use 就要帶同一份 options（use／styleDone）：鍵裡有那一列的畫風底詞，照 _applyUse 拼回去才對得上
+        evict: function(type, prompt, options) {
             try {
-                const k = (type || 'scene') + '|' + (prompt || '');
+                const k = this._cacheKey(type || 'scene', this._withStylePos(prompt || '', options), options);
                 const v = this._urlCache.get(k);
                 if (v && typeof v === 'string' && v.startsWith('blob:')) { try { URL.revokeObjectURL(v); } catch (e) {} }
                 this._urlCache.delete(k);
@@ -480,10 +486,8 @@
                 if (hit) Object.assign(options, hit);
             }
             const st = this.styleFor(use);
-            if (st && !options.styleDone) {
-                if (st.pos) prompt = st.pos + ', ' + prompt;
-                if (st.neg && !options.negativePrompt) options.negativePrompt = st.neg;
-            }
+            prompt = this._withStylePos(prompt, options);
+            if (st && !options.styleDone && st.neg && !options.negativePrompt) options.negativePrompt = st.neg;
             // 畫風的底圖：只有自訂接口收得到參考圖
             if (st && st.ref && (options.provider || this.legacyServiceOf(use)) === 'custom_api') {
                 try {
@@ -493,13 +497,18 @@
             }
             return prompt;
         },
+        // 這一列畫風的正向底詞拼在句首（_applyUse 與 evict 共用：快取鍵含這段，兩邊拼法要一樣）
+        _withStylePos: function(prompt, options) {
+            const st = (options && options.use && !options.styleDone) ? this.styleFor(options.use) : null;
+            return (st && st.pos) ? st.pos + ', ' + prompt : prompt;
+        },
 
         // --- 核心生成函數 (整合翻譯 + cache) ---
         generate: async function(prompt, type = 'scene', options = {}) {
             // 🗂 這一列（options.use）改過的接口／畫風先套上；拷一份，不動呼叫端傳進來的物件
             if (options && options.use) { options = Object.assign({}, options); prompt = await this._applyUse(prompt, options); }
             // 🔥 步驟 0: cache 命中（帶 use 的另外算：同一句話不同列可能走不同接口）
-            const cacheKey = (options.use ? options.use + '|' : '') + type + '|' + (prompt || '');
+            const cacheKey = this._cacheKey(type, prompt, options);
             if (!options.force && this._urlCache.has(cacheKey)) {
                 console.log(`[ImageManager] cache hit [${type}]: ${prompt}`);
                 return this._urlCache.get(cacheKey);

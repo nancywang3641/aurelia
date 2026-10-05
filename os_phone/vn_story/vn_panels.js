@@ -473,7 +473,7 @@
         try {
             if (typeof raw === 'string' && raw.startsWith('blob:') && raw !== url) URL.revokeObjectURL(raw);
             const _W = window.parent || window;
-            if (cfg.kind === 'scene' && _W.OS_IMAGE_MANAGER && _W.OS_IMAGE_MANAGER.evict) _W.OS_IMAGE_MANAGER.evict('scene', prompt);
+            if (cfg.kind === 'scene' && _W.OS_IMAGE_MANAGER && _W.OS_IMAGE_MANAGER.evict) _W.OS_IMAGE_MANAGER.evict('scene', prompt, { use: 'scene' });   // 跟上面 generate 同一個 use，鍵才對得上
         } catch (e) {}
         return url;
     }
