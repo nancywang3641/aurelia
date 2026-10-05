@@ -268,15 +268,8 @@
             if (!checkbox) {
                 checkbox = doc.createElement('div');
                 checkbox.className = 'wx-msg-checkbox';
-                
-                if (el.classList.contains('wx-system-notice') || el.classList.contains('wx-time-stamp')) {
-                    checkbox.style.position = 'absolute';
-                    checkbox.style.left = '10px';
-                    checkbox.style.top = '50%';
-                    checkbox.style.transform = 'translateY(-50%)';
-                    el.style.position = 'relative'; 
-                }
-                
+                // 系統提示、時間那兩種的圈怎麼擺寫在 wx_theme.js（多選模式那段），這裡不寫行內位置
+
                 checkbox.onclick = (e) => {
                     e.stopPropagation();
                     toggleMessageSelection(messageIndex);

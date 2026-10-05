@@ -353,7 +353,8 @@
             .wx-dot { width: 7px; height: 7px; padding: 6px; border-radius: 50%; background: var(--wx-line-strong); background-clip: content-box; cursor: pointer; }
             .wx-dot.active { background-color: var(--wx-ink-3); }
             .wx-img-block { max-width: 100%; border-radius: 4px; cursor: pointer; display: block; }
-            .wx-time-stamp { text-align: center; font-size: 12px; color: #cecece; margin: 10px 0; width: 100%; clear: both; }
+            /* 跟 .wx-system-notice 同一個理由：以前 width:100%，沒底色看不出來；主題一替它畫底畫框就是整排一條（她：不管套哪個主題都會變寬） */
+            .wx-time-stamp { text-align: center; font-size: 12px; color: #cecece; margin: 10px auto; width: fit-content; max-width: calc(100% - 40px); box-sizing: border-box; clear: both; }
             /* 🎙 語音泡泡：喇叭＋音波＋秒數，長度四檔；字幕點開才出現。顏色跟著泡泡走（currentColor），換皮不用另外寫 */
             .wx-vmsg { display: flex; flex-direction: column; gap: 6px; cursor: pointer; max-width: 100%; }
             .wx-vmsg-box { display: flex; align-items: center; gap: 8px; min-height: 22px; }
@@ -600,6 +601,10 @@
             .wx-page-room.multi-select-mode .wx-msg-row:active {
                 background: rgba(0, 0, 0, 0.05);
             }
+            /* 系統提示、時間是寬度跟著字走的小標籤：勾選圈掛在標籤左邊外面，掛裡面會壓在字上。多選時標籤再讓出一點寬，圈才不會超出畫面 */
+            .wx-page-room.multi-select-mode :is(.wx-system-notice, .wx-time-stamp) { position: relative; max-width: calc(100% - 80px); }
+            :is(.wx-system-notice, .wx-time-stamp) > .wx-msg-checkbox { position: absolute; right: calc(100% + 8px); top: 50%; margin: 0; transform: translateY(-50%); }
+            :is(.wx-system-notice, .wx-time-stamp) > .wx-msg-checkbox:hover { transform: translateY(-50%) scale(1.1); }
 
             /* ===== 夜間模式完整化（.wx-dark 在 shell 上；補齊所有「寫死淺底/深字、又沒 inline 夜間」的元素。
                有 inline 夜間的(header/list底/me頁)inline 會贏、不受影響）===== */
