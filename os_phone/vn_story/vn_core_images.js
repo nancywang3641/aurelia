@@ -439,8 +439,67 @@
             let out = null;
             try { out = await this._stripSpriteBgAI(blob); } catch (e) {}
             if (!out) { console.warn('[VN] ⚠️ 道具去背失敗 → 用帶底原圖（彈窗退成羽化遮罩）。往上找「AI 去背失敗」的原因，多半是去背模型下載不了'); return { url: srcUrl, cut: false }; }
+            try { out = (await this._fillItemHoles(blob, out)) || out; } catch (e) { console.warn('[VN] 道具去背補洞失敗，照去背結果用:', e); }
             const du = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(String(rd.result)); rd.onerror = () => r(''); rd.readAsDataURL(out); });
             return du ? { url: du, cut: true } : { url: srcUrl, cut: false };
+        },
+
+        // 🕳 去背補洞：isnet 認不出線稿裡大片淺色的「內部」（她的牛皮紙袋：外框留著、袋子裡面整塊挖空，看得到後面的街景）。
+        //   被物件包住（跟圖邊的背景不相連）的透明區塊，原圖那塊顏色跟背景差很多＝其實是物件本體 → 從原圖補回、不透明；
+        //   跟背景差不多＝真的洞（項鍊圈、鑰匙孔、把手中間）→ 照樣透明。
+        //   🚨 一定要拿原圖補：去背結果全透明的地方顏色已經被清成黑的，存起來的舊圖補不回來。回 null＝沒洞可補。
+        _fillItemHoles: async function(origBlob, cutBlob) {
+            const [cb, ob] = await Promise.all([createImageBitmap(cutBlob), createImageBitmap(origBlob)]);
+            const W = cb.width, H = cb.height, N = W * H;
+            const canvasOf = function (bmp, w, h) {
+                const c = document.createElement('canvas'); c.width = W; c.height = H;
+                const x = c.getContext('2d', { willReadFrequently: true });
+                x.drawImage(bmp, 0, 0, w, h);
+                return { c, x, img: x.getImageData(0, 0, W, H) };
+            };
+            const C = canvasOf(cb, W, H), o = canvasOf(ob, W, H).img.data, d = C.img.data;
+            const LOW = 128, DIFF = 48;   // 透明度低於一半算「被挖掉」；原圖顏色跟背景差超過這麼多（RGB 距離）算物件本體
+            const OUT = -1;
+            const lab = new Int32Array(N), q = new Int32Array(N);
+            // 1) 從圖邊往裡走，被挖掉而且連得到圖邊的＝外面的背景
+            let qh = 0, qt = 0;
+            const seed = function (p) { if (!lab[p] && d[p * 4 + 3] < LOW) { lab[p] = OUT; q[qt++] = p; } };
+            for (let x = 0; x < W; x++) { seed(x); seed((H - 1) * W + x); }
+            for (let y = 0; y < H; y++) { seed(y * W); seed(y * W + W - 1); }
+            const nb = function (p, fn) { const x = p % W; if (x > 0) fn(p - 1); if (x < W - 1) fn(p + 1); if (p >= W) fn(p - W); if (p < N - W) fn(p + W); };
+            while (qh < qt) nb(q[qh++], seed);
+            let br = 0, bg = 0, bb = 0, bn = 0;
+            for (let p = 0; p < N; p++) if (lab[p] === OUT) { br += o[p * 4]; bg += o[p * 4 + 1]; bb += o[p * 4 + 2]; bn++; }
+            const bgc = bn ? [br / bn, bg / bn, bb / bn] : [255, 255, 255];
+            // 2) 剩下被挖掉的一塊一塊算：原圖那塊平均顏色跟背景比
+            const fillIds = [];
+            let id = 0;
+            for (let s = 0; s < N; s++) {
+                if (lab[s] || d[s * 4 + 3] >= LOW) continue;
+                id++; qh = 0; qt = 0; lab[s] = id; q[qt++] = s;
+                let r = 0, g = 0, b = 0;
+                while (qh < qt) {
+                    const p = q[qh++];
+                    r += o[p * 4]; g += o[p * 4 + 1]; b += o[p * 4 + 2];
+                    nb(p, function (n) { if (!lab[n] && d[n * 4 + 3] < LOW) { lab[n] = id; q[qt++] = n; } });
+                }
+                const dist = Math.hypot(r / qt - bgc[0], g / qt - bgc[1], b / qt - bgc[2]);
+                if (dist > DIFF) fillIds[id] = 1;
+            }
+            if (!fillIds.length) return null;
+            // 3) 補回原圖、不透明；洞的邊緣那圈半透明也一起補（往外兩格，不碰外面的背景）
+            const fill = new Uint8Array(N);
+            for (let p = 0; p < N; p++) if (lab[p] > 0 && fillIds[lab[p]]) fill[p] = 1;
+            for (let k = 0; k < 2; k++) {
+                const grow = [];
+                for (let p = 0; p < N; p++) if (fill[p]) nb(p, function (n) { if (!fill[n] && lab[n] !== OUT && d[n * 4 + 3] < 255) grow.push(n); });
+                grow.forEach(function (n) { fill[n] = 1; });
+            }
+            let filled = 0;
+            for (let p = 0; p < N; p++) if (fill[p]) { const i = p * 4; d[i] = o[i]; d[i + 1] = o[i + 1]; d[i + 2] = o[i + 2]; d[i + 3] = 255; filled++; }
+            C.x.putImageData(C.img, 0, 0);
+            console.log('[VN] 道具去背補洞：' + Math.round(filled / N * 100) + '% 補回原圖');
+            return await new Promise(function (r) { C.c.toBlob(function (bl) { r(bl); }, 'image/png'); });
         },
 
         // 去重包裝：同一道具若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
