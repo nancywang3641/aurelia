@@ -296,10 +296,15 @@
         return a;
     }
     // 托管伺服器那組（「回覆交給伺服器跑」填的）；網址與通行碼都有才算
+    //   🚨 網址一律照 OS_RELAY.base() 整理：她沒打 https:// 時那邊會補上、回覆照常跑，
+    //      這裡以前自己讀原字串沒補 → 被當成手機版網站底下的路徑，備份打到自己網站回 404（她：「上面交給伺服器跑，正常連了啊」）
     function relayOf() {
         try {
-            const c = JSON.parse(localStorage.getItem('aurelia_relay_cfg') || '{}') || {};
-            const url = String(c.url || '').trim().replace(/\/+$/, '').replace(/\/v1$/, '');
+            const R = win.OS_RELAY;
+            const c = (R && R.cfg) ? R.cfg() : (JSON.parse(localStorage.getItem('aurelia_relay_cfg') || '{}') || {});
+            let url = (R && R.base) ? R.base() : String(c.url || '').trim().replace(/\/+$/, '');
+            if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+            url = url.replace(/\/v1$/, '');
             const token = String(c.token || '').trim();
             return (url && token) ? { url, token } : null;
         } catch (e) { return null; }
