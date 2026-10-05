@@ -1821,8 +1821,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .chat-sticker-mark { font-size: 1rem; color: #d0d0d0; flex-shrink: 0; }
         .chat-sticker-row.selected .chat-sticker-mark { color: #07c160; }
         /* 有自訂背景圖時，群聊人名與系統字的對比：跟聊天 app 同一組（wx_theme.js 的 .wx-page-room.has-bg） */
-        #phone-chat.has-bg .wx-group-name { color: var(--wx-on-accent, #fff); align-self: flex-start; background: rgba(0,0,0,0.46); padding: 1px 8px; border-radius: 9px; text-shadow: 0 1px 2px rgba(0,0,0,0.55); width: fit-content; }
-        #phone-chat.has-bg .wx-system-notice { background: rgba(0,0,0,0.38); color: var(--wx-on-accent, #fff); backdrop-filter: blur(4px); }
+        /* 人名不套膠囊（她嫌突兀），字色也不借主題的 --wx-on-accent（黃色重點色的主題會給深字，疊在深色照片上就隱形） */
+        #phone-chat.has-bg .wx-group-name { color: #fff; text-shadow: 0 0 1px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.6); }
+        #phone-chat.has-bg .wx-system-notice { background: rgba(0,0,0,0.38); color: #fff; backdrop-filter: blur(4px); }
 
         .wx-file-card { background: #fff; border-radius: 6px; padding: 12px; display: flex; align-items: center; gap: 10px; min-width: 190px; max-width: 220px; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
         .wx-file-info { flex: 1; min-width: 0; }

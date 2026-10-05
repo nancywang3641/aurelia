@@ -141,10 +141,14 @@
             .wx-room-bg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0); z-index: 1; pointer-events: none; transition: background 0.3s; }
             .wx-page-room.has-bg .wx-room-bg-overlay { background: rgba(0,0,0,0.22); }
             .wx-room-scroll { flex: 1; overflow-y: auto; position: relative; z-index: 2; padding-bottom: 70px; }
-            /* 🚨 白字＋陰影只在深色背景上讀得到，米黃的底圖上整個糊掉（她在劇情手機的群聊抓到：「群聊字看不到欸」）。
-               名字自己帶一塊底的小膠囊，深底淺底都讀得到。劇情手機那邊同一組（vn_styles.css 的 #phone-chat.has-bg） */
-            .wx-page-room.has-bg .wx-group-name { color: var(--wx-on-accent); width: fit-content; background: rgba(0,0,0,0.46); padding: 1px 8px; border-radius: 9px; text-shadow: 0 1px 2px rgba(0,0,0,0.55); }
-            .wx-page-room.has-bg .wx-system-notice { background: rgba(0,0,0,0.38); color: var(--wx-on-accent); backdrop-filter: blur(4px); }
+            /* 背景是照片時，群聊人名直接坐在照片上：白字＋貼著字的深色描邊光暈，深底淺底都讀得到。
+               🚨 以前只有一道往下偏的淡陰影，米黃底圖上白字整個糊掉（09-13）；改成小膠囊她嫌突兀；
+               🚨 字色也別借 --wx-on-accent——那格是「疊在重點色上的字」，黃色重點色的主題會給深色，
+                  深字疊在深色照片上就隱形（她寶可夢圖鑑主題＋深色背景抓到）。字與光暈是固定的一對，不吃主題格子。
+               劇情手機那邊同一組（vn_styles.css 的 #phone-chat.has-bg） */
+            .wx-page-room.has-bg .wx-group-name { color: #fff; text-shadow: 0 0 1px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.6); }
+            /* 系統提示本來就是一條小灰條：字配它自己那塊深底，一樣不借主題的 --wx-on-accent */
+            .wx-page-room.has-bg .wx-system-notice { background: rgba(0,0,0,0.38); color: #fff; backdrop-filter: blur(4px); }
             .wx-chat-item { display: flex; padding: 12px 16px; border-bottom: 1px solid #f2f2f2; cursor: pointer; background: var(--wx-surface); min-height: 70px; box-sizing: border-box; }
             .wx-chat-item:active { background: var(--wx-surface-2); }
             .wx-avatar { width: 48px; height: 48px; border-radius: 6px; margin-right: 12px; background-size: cover; background-position: center; flex-shrink: 0; background-color: var(--wx-fill); position: relative; }
@@ -530,9 +534,24 @@
             .wx-rpc-foot { background: #fff; padding: 8px 15px; font-size: 11px; color: #999; display: flex; justify-content: space-between; align-items: center; }
 
             .wx-loc-card { width: 230px; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); background: #fff; cursor: default; font-family: sans-serif; }
-            .wx-loc-map { height: 120px; background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/640px-World_map_blank_without_borders.svg.png') center/cover no-repeat; background-color: #e6e6e6; position: relative; }
-            .wx-loc-shade { width: 100%; height: 100%; background: rgba(0,0,0,0.05); }
-            .wx-loc-pin { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -80%); font-size: 32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color: #e64340; }
+            /* 地圖用 CSS 畫一小塊街區（以前外連一張世界地圖，載不到就剩一塊灰）。
+               畫在 .wx-loc-streets 這層：主題替 .wx-loc-map 寫 background 也蓋不掉。
+               越前面的圖層疊越上面：大路（橋）→ 公園 → 河 → 小巷 → 地面色。.wx-loc-v1~v3 照地名鏡射，地方不同長相不同 */
+            .wx-loc-map { height: 120px; background: #ece6d8; position: relative; overflow: hidden; }
+            .wx-loc-streets { position: absolute; inset: 0; background:
+                linear-gradient(180deg, transparent 56%, #d5ccb8 56%, #d5ccb8 57.5%, #fff 57.5%, #fff 65.5%, #d5ccb8 65.5%, #d5ccb8 67%, transparent 67%),
+                linear-gradient(90deg, transparent 28.6%, #d5ccb8 28.6%, #d5ccb8 29.2%, #fff 29.2%, #fff 33%, #d5ccb8 33%, #d5ccb8 33.6%, transparent 33.6%),
+                linear-gradient(118deg, transparent 63.5%, #fff 63.5%, #fff 66.5%, transparent 66.5%),
+                radial-gradient(ellipse 19% 27% at 82% 24%, #c3dfa3 96%, transparent 100%),
+                radial-gradient(circle at -8% 140%, transparent 46%, #a8d1ee 46.5%, #a8d1ee 56%, transparent 56.5%),
+                repeating-linear-gradient(0deg, transparent 0 20px, rgba(255,255,255,0.9) 20px 22px),
+                repeating-linear-gradient(90deg, transparent 0 26px, rgba(255,255,255,0.9) 26px 28px); }
+            .wx-loc-v1 .wx-loc-streets { transform: scaleX(-1); }
+            .wx-loc-v2 .wx-loc-streets { transform: scaleY(-1); }
+            .wx-loc-v3 .wx-loc-streets { transform: scale(-1, -1); }
+            /* 圖釘尖端落在地圖正中，底下一圈淡影當落點 */
+            .wx-loc-map::after { content: ''; position: absolute; left: 50%; top: 50%; width: 16px; height: 6px; margin: 2px 0 0 -8px; border-radius: 50%; background: rgba(0,0,0,0.22); }
+            .wx-loc-pin { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -80%); font-size: 32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); color: #e64340; z-index: 1; }
             .wx-loc-info { background: var(--wx-accent); padding: 10px 12px; color: var(--wx-on-accent); display: flex; flex-direction: column; justify-content: center; }
             .wx-loc-name { font-size: 15px; font-weight: bold; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .wx-loc-addr { font-size: 11px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
