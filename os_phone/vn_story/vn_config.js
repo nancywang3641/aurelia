@@ -204,7 +204,9 @@
             // 🚨 三段之間一定要逗號：以前是 pfx + desc + sfx 直接黏，
             //    角色描述的最後一個 tag 會跟後綴的第一個字黏成一團（white dress + simple → "white dresssimple"），
             //    等於一次毀掉兩個 tag。os_settings 的 studio 那條也是同一個寫法，一起修。
-            let full = _joinTags(_joinTags(pfx, this._stripForSprite(prompt)), sfx);   // = studio 的 prefix + finalPrompt + suffix
+            // 前綴已經寫了 pants（預設那句 clothes and pants）就不重複；她改過前綴拿掉的，看外觀決定要不要補（_lowerWear）
+            const _look = this._stripForSprite(prompt);
+            let full = _joinTags(pfx, _look, /pants/i.test(pfx) ? '' : this._lowerWear(_look), sfx);   // = studio 的 prefix + finalPrompt + suffix
             // 立繪尺寸：跟 studio 共用「立繪比例」設定 os_sprite_size，預設 512×896
             let _w = 512, _h = 896;
             try { const _p = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_p[0] && _p[1]) { _w = _p[0]; _h = _p[1]; } } catch(e) {}
@@ -235,7 +237,8 @@
             if (sfx == null) sfx = 'simple bright background, straight view, no shading';
             const n = list.length;
             const people = list.map(function (d, i) {
-                return 'Panel ' + (i + 1) + ': ' + _joinTags(pfx, this._stripForSprite(d));
+                const look = this._stripForSprite(d);
+                return 'Panel ' + (i + 1) + ': ' + _joinTags(pfx, look, /pants/i.test(pfx) ? '' : this._lowerWear(look));
             }, this).join('\n');
             // 寫給它的排版要求：等寬直欄、每欄一個人、欄與欄之間一條純色帶、人不可以跨欄。
             const full = [
@@ -260,9 +263,7 @@
         //    提示詞預設是她自己調的那段（拿掉畫風那兩行——畫風交給「立繪」那列的畫風包）；她在設置那格改過就用她的。
         TRIO_LOOK: '【角色外觀】',
         TRIO_TPL: 'a three-panel character sprite sheet featuring the same character in three different formats;\n\n'
-            // 🚨 這一格拍到大腿：外觀只寫了上衣（例如一件大帽 T）的話，模型會把它當連身裙、腿光著（10-06 她：「為啥會沒褲褲」）。
-            //    一般立繪是靠前綴的 clothes and pants 補，這條不吃立繪前綴，所以寫在這格：有寫下身就照寫的，沒寫就配一件
-            + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, fully clothed, the outfit includes lower-body clothing (pants, shorts or a skirt) that matches the top, white background;\n\n'
+            + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, white background;\n\n'
             + 'upper-right panel: the same character taking a casual selfie inside a cluttered room, close-up portrait composition;\n\n'
             + 'right lower panel: a chibi adaptation of the exact same character, preserving the same hairstyle, hair color, eye color, skin tone and facial identity; wearing the exact same plain clothing as in the other panels, with the same garments, cut, colors and proportions adapted only to the chibi body; only the body proportions change into an oversized head and a small 2.5-head-tall body, centered fully inside the panel with clear white margin, plain white background;',
         // 母圖格子：左格 50% 寬、右上 55% 高（她 LAB 試成功的那組）
@@ -285,7 +286,9 @@
             let tpl = null;
             try { tpl = localStorage.getItem('os_trio_tpl'); } catch (e) {}
             if (!tpl || !tpl.trim()) tpl = this.TRIO_TPL;
-            const look = this._stripForSprite(prompt);
+            // 一次生三種不吃立繪前綴：左格拍到大腿，外觀沒寫下身又有腿的補一句（_lowerWear；人魚那種不補）
+            const look0 = this._stripForSprite(prompt);
+            const look = _joinTags(look0, this._lowerWear(look0));
             const full = tpl.indexOf(this.TRIO_LOOK) >= 0 ? tpl.split(this.TRIO_LOOK).join(look) : _joinTags(tpl, look);
             // 尺寸：GPT 官方只收那三種，寬的就是 1536×1024；ComfyUI 用她定的 1312×1104（正方形會讓左格太窄、壯碩的被壓扁）
             const withTpl = (_svc === 'custom_api');
@@ -312,6 +315,18 @@
             let s = p;
             patterns.forEach(rx => { s = s.replace(rx, ''); });
             return s.replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
+        },
+        // 🩳 立繪拍到大腿：外觀只寫了上衣（例如一件大帽 T），模型會把它畫成連身裙、腿光著（10-06 她：「為啥會沒褲褲」）。
+        //   但不能寫死 clothes and pants：西幻的人魚也會被補出褲子——她就是因為這樣把立繪前綴那句拿掉的。
+        //   看外觀本身決定：已經寫了下半身、或沒有腿的（人魚、蛇身、半人馬…），不補；有腿又沒寫下身才補一句。
+        //   🚨 生圖模型看不懂「如果」：條件只能在這裡判斷，不能寫進提示詞（寫了 tail 這種字就會長出尾巴）。同帶翼角色的 wideFrame
+        _NO_LEGS: /mer(maid|man|folk)|\bsiren\b|fish[\s-]?tail|tail\s?fin|\bnaga\b|lamia|(snake|serpent(ine)?)[\s-]+(body|tail|lower)|centaur|\btaur\b|arachne|人魚|魚尾|蛇身|蛇尾|半人馬|半人蛇|拉米亞|那伽/i,
+        //   dress 前後可以黏字（sundress、ballgown），但 dressed in（穿著）、dress shirt（襯衫）不算下身
+        _HAS_LOWER: /\b[a-z]*(dress(es)?\b(?!\s*shirt)|skirts?\b|gowns?\b)|\b(pants|trousers|jeans|shorts|kimono|yukata|hakama|robes?|cloak|leggings|tights|stockings|pantyhose|overalls|jumpsuit|bodysuit|leotard|armou?r|uniform|suit|hanfu|qipao|cheongsam|slacks|chinos|sweatpants|joggers|culottes|sarong|kilt|bloomers|swimsuit|bikini)\b|褲|裙|袍|洋裝|和服|浴衣|旗袍|漢服|盔甲|鎧甲|制服|連身|泳裝/i,
+        _lowerWear: function (look) {
+            const s = String(look || '');
+            if (!s.trim() || this._NO_LEGS.test(s) || this._HAS_LOWER.test(s)) return '';
+            return 'fully clothed, wearing pants';
         },
         getItem: async function(prompt) {
             if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateItem === 'function') {
