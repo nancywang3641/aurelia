@@ -154,6 +154,291 @@
     }
     Object.assign(API, { V, USER, head, log, allEvents, withdraw, erase, logTurn, reconcile, page });
 
+    // ── 文字小工具 ──────────────────────────────────────────
+    // 中文兩字一組、英數一個詞（照字找、比相似都用它）
+    function _bigrams(s) {
+        const out = [], re = /[a-z0-9]+|[\u3400-\u9fff\uf900-\ufaff]+/g, t = String(s == null ? '' : s).toLowerCase();
+        let m;
+        while ((m = re.exec(t))) {
+            const w = m[0];
+            if (/^[a-z0-9]+$/.test(w) || w.length === 1) out.push(w);
+            else for (let i = 0; i < w.length - 1; i++) out.push(w.slice(i, i + 2));
+        }
+        return out;
+    }
+    function _sim(a, b) {
+        const A = new Set(_bigrams(a)), B = new Set(_bigrams(b));
+        if (!A.size || !B.size) return 0;
+        let n = 0; A.forEach(x => { if (B.has(x)) n++; });
+        return n / Math.min(A.size, B.size);
+    }
+    function _ago(at) {
+        if (!at) return '';
+        const d = Math.floor((_now() - at) / 86400000);
+        if (d <= 0) return '今天';
+        if (d === 1) return '昨天';
+        if (d < 31) return d + ' 天前';
+        const mo = Math.floor(d / 30);
+        return mo < 12 ? mo + ' 個月前' : Math.floor(d / 365) + ' 年前';
+    }
+    function _shortId(id) { return String(id == null ? '' : id).replace(/^[a-z]/, ''); }
+    function _evIds(x) {
+        return (Array.isArray(x) ? x : String(x == null ? '' : x).split(/[,，、\s]+/))
+            .map(s => { const m = /(\d+)/.exec(String(s)); return m ? 'e' + m[1] : ''; }).filter(Boolean);
+    }
+    function _idOf(prefix, x) { const m = /(\d+)/.exec(String(x == null ? '' : x)); return m ? prefix + m[1] : ''; }
+
+    // ── 記憶（它的筆記）──────────────────────────────────────
+    const MEM_LEN = 120, PER_REPLY = 3, PIN_BUDGET = 1500;
+    const MEM_KINDS = ['user', 'promise', 'event', 'work', 'legacy'];
+    const ABOUTS = ['user', 'self', 'story', 'other'];
+    const ABOUT_ZH = { '使用者': 'user', '用戶': 'user', '自己': 'self', '我': 'self', '故事': 'story', '主角': 'story', '別人': 'other', '其他': 'other' };
+    const KIND_NAME = { user: '是什麼樣的人', promise: '約定', event: '發生過的事', work: '做過的東西', legacy: '以前記的' };
+    const ABOUT_NAME = { user: USER, self: '你自己', story: '故事', other: '別人' };
+
+    async function mems(rid) {
+        const v = await _get(MEMS, rid);
+        return { v: V, nextId: (v && v.nextId) || 1, items: (v && Array.isArray(v.items)) ? v.items : [] };
+    }
+    function isPinned(m) { return !!m && m.state === 'ok' && (m.kind === 'promise' || ((m.kind === 'user' || m.kind === 'legacy') && m.about === 'user')); }
+    // 她改正過（下一版是她的 fix）的舊說法：模型不能改回去
+    function _raeFixed(m, text) {
+        for (let i = 0; i < m.versions.length - 1; i++) {
+            const nx = m.versions[i + 1];
+            if (nx.by === 'rae' && nx.why === 'fix' && m.versions[i].text === text) return true;
+        }
+        return false;
+    }
+    /** 改記憶都經過這裡，每一次都記一行經歷。
+     *  verb：add｜update（以前對、後來變了）｜fix（當初記錯）｜wrong（她標記錯、沒給正確的）｜stow（收起）｜unstow（放回去）｜revert（退回整理改的）
+     *  by：self（它聊天當場）｜tidy（整理那一通）｜rae（她）｜import（搬家）。回 { ok, id, why, prev } */
+    async function memDo(rid, verb, o) {
+        o = o || {};
+        const by = o.by || 'self';
+        if (verb === 'wrong' && by !== 'rae') return { ok: false, why: '只有使用者能標記錯' };
+        if (verb === 'unstow' && by !== 'rae') return { ok: false, why: '只有使用者能放回去' };
+        if (verb === 'stow' && by === 'tidy') return { ok: false, why: '整理不能收起記憶' };
+        if (verb === 'revert' && by !== 'rae') return { ok: false, why: '只有使用者能退回' };
+        const text = _one(o.text).slice(0, MEM_LEN), from = _evIds(o.from), at = o.at || _now();
+        const res = await _lock(rid, async () => {
+            const M = await mems(rid);
+            if (verb === 'add') {
+                if (!text) return { ok: false, why: '沒有內容' };
+                const about = ABOUTS.indexOf(o.about) !== -1 ? o.about : ABOUT_ZH[o.about];
+                if (!about) return { ok: false, why: '沒寫關於誰' };
+                const kind = MEM_KINDS.indexOf(o.kind) !== -1 ? o.kind : (about === 'user' ? 'user' : 'event');
+                if (!from.length) return { ok: false, why: '沒有出處' };
+                if (M.items.some(m => m.state === 'ok' && m.text === text)) return { ok: false, why: '已經記過' };
+                const id = 'm' + M.nextId++;
+                M.items.push({ id, kind, about, text, from, state: 'ok', at, versions: [{ text, at, by, why: 'add', from }] });
+                await _put(MEMS, rid, M);
+                return { ok: true, id, prev: null };
+            }
+            const m = M.items.find(x => x.id === _idOf('m', o.id));
+            if (!m) return { ok: false, why: '沒有這一條' };
+            const prev = { text: m.text, state: m.state, kind: m.kind, about: m.about };
+            if (verb === 'update' || verb === 'fix' || verb === 'revert') {
+                if (verb !== 'revert' && m.state !== 'ok') return { ok: false, why: m.state === 'wrong' ? '這條被標成記錯了' : '這條收起來了' };
+                if (!text) return { ok: false, why: '沒有內容' };
+                if (by === 'tidy' && !from.length) return { ok: false, why: '沒有出處' };
+                if (by !== 'rae' && _raeFixed(m, text)) return { ok: false, why: '使用者改正過，不能改回原本的說法' };
+                const kind = MEM_KINDS.indexOf(o.kind) !== -1 ? o.kind : m.kind;
+                const about = ABOUTS.indexOf(o.about) !== -1 ? o.about : m.about;
+                if (verb !== 'revert' && text === m.text && kind === m.kind && about === m.about) return { ok: false, why: '沒有變' };
+                m.versions.push({ text, at, by, why: verb, from });
+                m.text = text; m.kind = kind; m.about = about; m.at = at;
+                from.forEach(f => { if (m.from.indexOf(f) === -1) m.from.push(f); });
+                if (verb === 'revert') m.state = o.state || 'ok';
+            } else if (verb === 'wrong') {
+                if (m.state === 'wrong') return { ok: false, why: '已經是記錯了' };
+                m.state = 'wrong'; m.at = at;
+            } else if (verb === 'stow') {
+                if (m.state !== 'ok') return { ok: false, why: '這條不是在用的' };
+                m.state = 'stowed'; m.at = at;
+            } else if (verb === 'unstow') {
+                if (m.state === 'ok') return { ok: false, why: '本來就在用' };
+                m.state = 'ok'; m.at = at;
+            } else return { ok: false, why: '不認得要做什麼' };
+            await _put(MEMS, rid, M);
+            return { ok: true, id: m.id, prev };
+        });
+        if (res.ok) { _dirty(rid); await log(rid, { kind: 'mem', mid: res.id, verb, by, text, prev: res.prev }); }
+        return res;
+    }
+
+    // ── 性格（相處出來的樣子）──────────────────────────────
+    const TRAIT_LEN = 60, TRAITS_PER_KIND = 5, RAE_DROP_DAYS = 30, DROP_SIM = 0.6;
+    const TRAIT_KINDS = ['talk', 'taste', 'bond', 'work'];
+    const TRAIT_NAME = { talk: '講話', taste: '喜好', bond: '跟' + USER, work: '做事' };
+    async function traits(rid) {
+        const v = await _get(TRAITS, rid);
+        return { v: V, nextId: (v && v.nextId) || 1, items: (v && Array.isArray(v.items)) ? v.items : [] };
+    }
+    /** verb：add｜update｜drop（它不再這樣，整理那一通看出來的）｜remove（她拿掉）｜revert（她退回整理改的）。回 { ok, id, why, prev } */
+    async function traitDo(rid, verb, o) {
+        o = o || {};
+        const by = o.by || 'tidy';
+        if ((verb === 'remove' || verb === 'revert') && by !== 'rae') return { ok: false, why: '只有使用者能拿掉或退回' };
+        if ((verb === 'add' || verb === 'update' || verb === 'drop') && by === 'rae') return { ok: false, why: '性格只能刪不能改（她定的）' };
+        const text = _one(o.text).slice(0, TRAIT_LEN), from = _evIds(o.from), at = o.at || _now();
+        const res = await _lock(rid, async () => {
+            const T = await traits(rid);
+            if (verb === 'add') {
+                if (TRAIT_KINDS.indexOf(o.kind) === -1) return { ok: false, why: '不認得是哪一欄' };
+                if (!text) return { ok: false, why: '沒有內容' };
+                if (!from.length) return { ok: false, why: '沒有出處' };
+                if (T.items.filter(t => t.state === 'ok' && t.kind === o.kind).length >= TRAITS_PER_KIND) return { ok: false, why: '這一欄滿 ' + TRAITS_PER_KIND + ' 條了' };
+                if (T.items.some(t => t.state === 'removed' && at - (t.at || 0) < RAE_DROP_DAYS * 86400000 && _sim(t.text, text) >= DROP_SIM)) return { ok: false, why: '使用者拿掉過差不多的' };
+                const id = 't' + T.nextId++;
+                T.items.push({ id, kind: o.kind, text, from, state: 'ok', at, versions: [{ text, at, by, why: 'add', from }] });
+                await _put(TRAITS, rid, T);
+                return { ok: true, id, prev: null };
+            }
+            const t = T.items.find(x => x.id === _idOf('t', o.id));
+            if (!t) return { ok: false, why: '沒有這一條' };
+            const prev = { text: t.text, state: t.state };
+            if (verb === 'update') {
+                if (t.state !== 'ok') return { ok: false, why: '這條已經不在了' };
+                if (!text || !from.length) return { ok: false, why: text ? '沒有出處' : '沒有內容' };
+                if (text === t.text) return { ok: false, why: '沒有變' };
+                t.versions.push({ text, at, by, why: 'update', from }); t.text = text; t.at = at;
+                from.forEach(f => { if (t.from.indexOf(f) === -1) t.from.push(f); });
+            } else if (verb === 'drop') {
+                if (t.state !== 'ok') return { ok: false, why: '這條已經不在了' };
+                if (!from.length) return { ok: false, why: '沒有出處' };
+                t.state = 'dropped'; t.at = at; t.versions.push({ text: t.text, at, by, why: 'drop', from });
+            } else if (verb === 'remove') {
+                if (t.state !== 'ok') return { ok: false, why: '這條已經不在了' };
+                t.state = 'removed'; t.at = at; t.versions.push({ text: t.text, at, by, why: 'remove', from: [] });
+            } else if (verb === 'revert') {
+                const back = o.text != null ? text : t.text;
+                t.versions.push({ text: back, at, by, why: 'revert', from: [] });
+                t.text = back; t.state = o.state || 'ok'; t.at = at;
+            } else return { ok: false, why: '不認得要做什麼' };
+            await _put(TRAITS, rid, T);
+            return { ok: true, id: t.id, prev };
+        });
+        if (res.ok) await log(rid, { kind: 'trait', tid: res.id, verb, by, text, prev: res.prev });
+        return res;
+    }
+
+    // ── 聊天當場的記事標籤（不是工具，不多叫模型）──────────────
+    const TAG_PAIR = /[<＜]\s*(memory_add|memory_update|memory_fix|memory_edit)\b([^>＞]*)[>＞]([\s\S]*?)[<＜]\s*\/\s*\1\s*[>＞]/gi;
+    const TAG_ONE = /[<＜]\s*memory_remove\b([^>＞]*?)\/?\s*[>＞]/gi;
+    const CODE_RE = /```[\s\S]*?```|`[^`\n]*`/g;
+    function _codeSpans(t) { const s = []; String(t).replace(CODE_RE, (m, off) => { s.push([off, off + m.length]); return m; }); return s; }
+    function _inSpans(pos, spans) { return spans.some(([a, b]) => pos >= a && pos < b); }
+    function _attr(attrs, name) {
+        const m = new RegExp('(?:^|\\s)' + name + '\\s*=\\s*["“”＂\']?([^"“”＂\'\\s>＞/]+)', 'i').exec(attrs || '');
+        return m ? m[1] : '';
+    }
+    function parse(text) {
+        text = String(text || '');
+        const code = _codeSpans(text), found = [], pairs = [];
+        let m;
+        TAG_PAIR.lastIndex = 0;
+        while ((m = TAG_PAIR.exec(text))) {
+            pairs.push([m.index, m.index + m[0].length]);
+            if (_inSpans(m.index, code)) continue;
+            const body = _one(m[3]).slice(0, MEM_LEN);
+            if (!body) continue;
+            const tag = m[1].toLowerCase();
+            if (tag === 'memory_add') {
+                const a = _attr(m[2], 'about');
+                found.push({ at: m.index, verb: 'add', about: ABOUTS.indexOf(a) !== -1 ? a : (ABOUT_ZH[a] || ''), text: body });
+            } else {
+                const id = _idOf('m', _attr(m[2], 'id'));
+                if (id) found.push({ at: m.index, verb: tag === 'memory_fix' ? 'fix' : 'update', id, text: body });
+            }
+        }
+        TAG_ONE.lastIndex = 0;
+        while ((m = TAG_ONE.exec(text))) {
+            const at = m.index;
+            if (_inSpans(at, code) || _inSpans(at, pairs)) continue;
+            const id = _idOf('m', _attr(m[1], 'id'));
+            if (id) found.push({ at, verb: 'remove', id });
+        }
+        return found.sort((a, b) => a.at - b.at).map(x => { const o = Object.assign({}, x); delete o.at; return o; });
+    }
+    function strip(text) {
+        const s = String(text == null ? '' : text);
+        if (!/memory_/i.test(s)) return s;
+        const code = _codeSpans(s), cut = [];
+        let m;
+        TAG_PAIR.lastIndex = 0;
+        while ((m = TAG_PAIR.exec(s))) if (!_inSpans(m.index, code)) cut.push([m.index, m.index + m[0].length]);
+        TAG_ONE.lastIndex = 0;
+        while ((m = TAG_ONE.exec(s))) if (!_inSpans(m.index, code) && !_inSpans(m.index, cut)) cut.push([m.index, m.index + m[0].length]);
+        if (!cut.length) return s;
+        cut.sort((a, b) => a[0] - b[0]);
+        let out = '', p = 0;
+        cut.forEach(([a, b]) => { out += s.slice(p, a); p = b; });
+        return (out + s.slice(p)).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    /** 照回覆裡的標籤動手（先後做，成功的最多 PER_REPLY 件）；出處＝這一則（evId） */
+    async function applyReply(rid, text, evId) {
+        const out = { changed: false, done: [] };
+        for (const a of parse(text)) {
+            if (out.done.length >= PER_REPLY) break;
+            let r;
+            if (a.verb === 'add') r = await memDo(rid, 'add', { about: a.about, text: a.text, from: [evId], by: 'self' });
+            else if (a.verb === 'remove') r = await memDo(rid, 'stow', { id: a.id, by: 'self' });
+            else r = await memDo(rid, a.verb, { id: a.id, text: a.text, from: [evId], by: 'self' });
+            if (!r.ok) continue;
+            out.changed = true;
+            out.done.push((a.verb === 'add' ? '記下' : a.verb === 'remove' ? '收起' : a.verb === 'fix' ? '更正' : '改了') + ' #' + _shortId(r.id));
+        }
+        return out;
+    }
+
+    // ── 說明裡的兩段：釘住的記憶、相處出來的樣子 ────────────────
+    function _memHowto() {
+        return [
+            '值得記的：' + USER + '希望你怎麼稱呼、是什麼樣的人、喜歡和不喜歡的、交代你做事的方式、你答應過的事、你們之間發生過的重要的事、你做過的東西。寒暄和一次性的小事不用記。這些你還不知道的，可以在聊天裡順著話題問，不用一次問完；問到了就記下來。',
+            '要記、要改，就在回覆裡另外寫標籤。這不是工具，不用 tool_call，寫在回' + USER + '的話旁邊就好，' + USER + '看不到標籤本身。一次回覆最多 ' + PER_REPLY + ' 個。標籤名、屬性名、屬性值都照抄英文，不要翻譯：',
+            '<memory_add about="user">一件事，一句話寫清楚</memory_add>',
+            'about 一定要寫，只能是：user＝' + USER + '本人的事；self＝你自己的事、你答應' + USER + '的事；story＝' + USER + '玩的故事裡的事（包括故事的主角）；other＝別人的事。',
+            '<memory_update id="號碼">改成這樣</memory_update>：以前是對的，後來變了。',
+            '<memory_fix id="號碼">正確的是這樣</memory_fix>：當初就記錯了。' + USER + '糾正你的時候用這個。',
+            '<memory_remove id="號碼"/>：不重要了，收起來（不會刪掉，' + USER + '翻得到）。',
+            '同一件事有新的說法就改原本那一條，不要再記一條。'
+        ].join('\n');
+    }
+    function _memLine(m) { return '#' + _shortId(m.id) + '（' + KIND_NAME[m.kind] + '｜關於' + ABOUT_NAME[m.about] + '｜' + _ago(m.at) + '）' + m.text; }
+    async function pinnedText(rid) {
+        const M = await mems(rid);
+        const pins = M.items.filter(isPinned).sort((a, b) => b.at - a.at);
+        const lines = [], shown = [], over = [];
+        let used = 0;
+        pins.forEach(m => {
+            const l = _memLine(m);
+            if (used + l.length > PIN_BUDGET) { over.push(m.id); return; }
+            used += l.length; lines.push(l); shown.push(m.id);
+        });
+        const text = ['【你記得的事】',
+            '這是你自己記的筆記，每一句話都帶著。筆記可能記錯；「這句話讓你想起的」那段附了原話，筆記跟原話對不上時，以原話為準。']
+            .concat(lines.length ? lines : ['還沒有記過任何事。'], over.length ? ['（還有 ' + over.length + ' 條記得的事沒列在這裡，用得上時會出現在「這句話讓你想起的」。）'] : [], ['', _memHowto()]).join('\n');
+        return { text, shown, over };
+    }
+    async function traitsText(rid) {
+        const T = (await traits(rid)).items.filter(t => t.state === 'ok');
+        if (!T.length) return '';
+        const out = ['【你現在的樣子】', '這是你跟' + USER + '相處下來慢慢長成的樣子，不是規定；自然地照著做，不用講出來。'];
+        TRAIT_KINDS.forEach(k => { const xs = T.filter(t => t.kind === k); if (xs.length) out.push(TRAIT_NAME[k] + '：' + xs.map(t => t.text).join('；')); });
+        return out.join('\n');
+    }
+    /** 小劇場人設用（第三人稱一兩行） */
+    async function personaLines(rid) {
+        const pins = (await mems(rid)).items.filter(isPinned).sort((a, b) => b.at - a.at).slice(0, 20);
+        const T = (await traits(rid)).items.filter(t => t.state === 'ok');
+        const out = [];
+        if (pins.length) out.push('它記得的事：' + pins.map(m => m.text).join('；'));
+        if (T.length) out.push('它現在的樣子：' + TRAIT_KINDS.map(k => { const xs = T.filter(t => t.kind === k); return xs.length ? TRAIT_NAME[k] + '：' + xs.map(t => t.text).join('、') : ''; }).filter(Boolean).join('；'));
+        return out.join('\n');
+    }
+    Object.assign(API, { mems, memDo, isPinned, traits, traitDo, parse, strip, applyReply, pinnedText, traitsText, personaLines,
+        KIND_NAME, ABOUT_NAME, TRAIT_NAME, LIMITS: { MEM_LEN, PER_REPLY, PIN_BUDGET, TRAIT_LEN, TRAITS_PER_KIND } });
+
     // ── (後面的段落接在這行上面) ──
 
     win.OS_XIAOJI_MEM = API;
