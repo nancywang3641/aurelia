@@ -344,8 +344,8 @@
             if (!body) continue;
             const tag = m[1].toLowerCase();
             if (tag === 'memory_add') {
-                const a = _attr(m[2], 'about');
-                found.push({ at: m.index, verb: 'add', about: ABOUTS.indexOf(a) !== -1 ? a : (ABOUT_ZH[a] || ''), text: body });
+                const a = _attr(m[2], 'about'), k = _attr(m[2], 'kind');
+                found.push({ at: m.index, verb: 'add', about: ABOUTS.indexOf(a) !== -1 ? a : (ABOUT_ZH[a] || ''), kind: (MEM_KINDS.indexOf(k) !== -1 && k !== 'legacy') ? k : '', text: body });
             } else {
                 const id = _idOf('m', _attr(m[2], 'id'));
                 if (id) found.push({ at: m.index, verb: tag === 'memory_fix' ? 'fix' : 'update', id, text: body });
@@ -381,7 +381,7 @@
         for (const a of parse(text)) {
             if (out.done.length >= PER_REPLY) break;
             let r;
-            if (a.verb === 'add') r = await memDo(rid, 'add', { about: a.about, text: a.text, from: [evId], by: 'self' });
+            if (a.verb === 'add') r = await memDo(rid, 'add', { about: a.about, kind: a.kind, text: a.text, from: [evId], by: 'self' });
             else if (a.verb === 'remove') r = await memDo(rid, 'stow', { id: a.id, by: 'self' });
             else r = await memDo(rid, a.verb, { id: a.id, text: a.text, from: [evId], by: 'self' });
             if (!r.ok) continue;
@@ -398,6 +398,7 @@
             '要記、要改，就在回覆裡另外寫標籤。這不是工具，不用 tool_call，寫在回' + USER + '的話旁邊就好，' + USER + '看不到標籤本身。一次回覆最多 ' + PER_REPLY + ' 個。標籤名、屬性名、屬性值都照抄英文，不要翻譯：',
             '<memory_add about="user">一件事，一句話寫清楚</memory_add>',
             'about 一定要寫，只能是：user＝' + USER + '本人的事；self＝你自己的事、你答應' + USER + '的事；story＝' + USER + '玩的故事裡的事（包括故事的主角）；other＝別人的事。',
+            '約定、交代、你答應的事，另外加 kind="promise"（這種每一句話都會帶著，不會忘）：<memory_add about="self" kind="promise">答應的事，一句話寫清楚</memory_add>',
             '<memory_update id="號碼">改成這樣</memory_update>：以前是對的，後來變了。',
             '<memory_fix id="號碼">正確的是這樣</memory_fix>：當初就記錯了。' + USER + '糾正你的時候用這個。',
             '<memory_remove id="號碼"/>：不重要了，收起來（不會刪掉，' + USER + '翻得到）。',
@@ -460,7 +461,7 @@
         M.items.forEach(m => {
             if (m.state === 'ok') add({ uid: m.id + '@' + m.versions.length, type: 'mem', ref: m.id, text: m.text, at: m.at });
             if (m.state === 'wrong') return;
-            m.versions.forEach((v, i) => { const nx = m.versions[i + 1]; if (nx && nx.why === 'update') add({ uid: m.id + 'v' + i, type: 'old', ref: m.id, text: v.text, at: v.at, until: nx.at }); });
+            m.versions.forEach((v, i) => { const nx = m.versions[i + 1]; if (nx && nx.why === 'update' && v.text !== nx.text) add({ uid: m.id + 'v' + i, type: 'old', ref: m.id, text: v.text, at: v.at, until: nx.at }); });
         });
         evs.forEach(e => {
             const t = _evText(e);
@@ -580,11 +581,15 @@
             }
         }
         const byUid = new Map(pool.map(u => [u.uid, u]));
-        const memsOut = [], evsOut = [], seenM = new Set(), seenE = new Set();
+        const memsOut = [], evsOut = [], seenM = new Set(), seenE = new Set(), seenT = new Set();
         for (const uid of _rrf([kw, vec])) {
             const u = byUid.get(uid);
             if (!u) continue;
-            if (u.type === 'ev') { if (evsOut.length < RECALL_EV && !seenE.has(u.ref)) { seenE.add(u.ref); evsOut.push(u); } }
+            if (u.type === 'ev') {
+                // 同一則只拿一段；內容一模一樣的經歷（重複的閒聊）只拿一次
+                const t = _one(_evText(evMap.get(u.ref)));
+                if (evsOut.length < RECALL_EV && !seenE.has(u.ref) && !seenT.has(t)) { seenE.add(u.ref); seenT.add(t); evsOut.push(u); }
+            }
             else if (memsOut.length < RECALL_MEM && !seenM.has(u.ref + u.type)) { seenM.add(u.ref + u.type); memsOut.push(u); }
             if (memsOut.length >= RECALL_MEM && evsOut.length >= RECALL_EV) break;
         }
@@ -697,7 +702,7 @@
                 '一、補記：這一批裡值得記、筆記還沒有的。<mem_add kind="種類" about="關於誰" from="編號,編號">一句話</mem_add>。'
                 + 'kind 只能是 user（' + USER + '是什麼樣的人、喜好、習慣）、promise（約定、交代、答應的事）、event（發生過的重要的事）、work（它做過的東西）；'
                 + 'about 只能是 user（' + USER + '本人）、self（它自己）、story（' + USER + '玩的故事裡的事，包括主角）、other（別人）。寒暄和一次性的小事不用記。',
-                '二、更正：這一批跟現在的筆記對不上的。以前對、後來變了：<mem_update id="號碼" from="編號">新的說法</mem_update>；當初就記錯了：<mem_fix id="號碼" from="編號">正確的說法</mem_fix>。對得上就不要動。' + USER + '標成記錯或改正過的，不要改回原本的說法。',
+                '二、更正：這一批跟現在的筆記對不上的。以前對、後來變了：<mem_update id="號碼" from="編號">新的說法</mem_update>；當初就記錯了：<mem_fix id="號碼" from="編號">正確的說法</mem_fix>。對得上就不要動。種類或關於誰標錯的（例如約定被記成發生過的事），也用 mem_update，把屬性寫成對的、內容照抄。' + USER + '標成記錯或改正過的，不要改回原本的說法。',
                 '三、樣子：只有這一批看得出它跟' + USER + '相處時的做法有變化，才寫。<trait_add kind="欄" from="編號,編號">一句做法</trait_add>、<trait_update id="號碼" from="編號">新的做法</trait_update>、<trait_drop id="號碼" from="編號"/>。'
                 + '欄只能是 talk（講話的方式）、taste（它自己的喜好和主見）、bond（跟' + USER + '的相處）、work（做事的習慣）。只寫做出來的樣子，不寫形容詞；寫不出是哪幾行看出來的就不要寫。' + USER + '拿掉的樣子不要再寫回來。',
                 '出處只能寫上面這一批的編號（改舊筆記時也可以寫它原本的出處）。不能收起、不能刪任何一條。標籤名、屬性名、屬性值照抄英文。',
