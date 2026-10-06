@@ -441,8 +441,10 @@
         KIND_NAME, ABOUT_NAME, TRAIT_NAME, LIMITS: { MEM_LEN, PER_REPLY, PIN_BUDGET, TRAIT_LEN, TRAITS_PER_KIND } });
 
     // ── 找回 ────────────────────────────────────────────────
-    const UNIT_LEN = 400, RECALL_MEM = 6, RECALL_EV = 4, EV_SNIP = 300, SRC_SNIP = 120, TOPK = 20, RRF_K = 60;
-    const EMBED_MODEL = 'Xenova/bge-small-zh-v1.5', READY = 0.9, QUERY_WAIT = 1500, VEC_MIN = 0.35, VEC_BLOCK = 200, EMBED_BATCH = 32;
+    const UNIT_LEN = 400, RECALL_MEM = 6, RECALL_EV = 6, EV_SNIP = 300, SRC_SNIP = 120, TOPK = 20, RRF_K = 60;
+    // 照意思找固定用 bge-base-zh（10-06 規模驗收：600 來回換句話問，small 17／20、base 20／20；下載 98MB，small 是 23MB）。
+    //   🚨 transformers.js 跑在畫面那條線上：一批算太多畫面會卡（base 一批 32 段約 4 秒、4 段約 0.4 秒）→ 一次 2 段、每批中間讓出來
+    const EMBED_MODEL = 'Xenova/bge-base-zh-v1.5', READY = 0.9, QUERY_WAIT = 1500, VEC_MIN = 0.35, VEC_BLOCK = 200, EMBED_BATCH = 2, EMBED_YIELD = 30;
     const EV_NAME = { chat: '聊天', prop: '單子', lesson: '上課', exam: '考試', hw: '作業', theater: '小劇場', wear: '打扮', room: '房間', bubble: '泡泡', born: '來到宿舍', sum: '舊聊天整理' };
     function _evText(e, who) {
         if (!e || e.state !== 'ok') return '';
@@ -548,6 +550,7 @@
                 await _put(VEC, rid + ':' + bi, blk);
                 await _put(VEC, rid + ':head', { v: V, model: EMBED_MODEL, blocks: bi + 1 });
                 if (typeof onProgress === 'function') { try { onProgress({ done, total: units.length }); } catch (e) {} }
+                await new Promise(r => setTimeout(r, EMBED_YIELD));   // 讓畫面喘口氣
             }
             return { done, total: units.length };
         })().finally(() => { delete _embedRun[rid]; });
@@ -701,10 +704,10 @@
             out.push('', '要做的：',
                 '一、補記：這一批裡值得記、筆記還沒有的。<mem_add kind="種類" about="關於誰" from="編號,編號">一句話</mem_add>。'
                 + 'kind 只能是 user（' + USER + '是什麼樣的人、喜好、習慣）、promise（約定、交代、答應的事）、event（發生過的重要的事）、work（它做過的東西）；'
-                + 'about 只能是 user（' + USER + '本人）、self（它自己）、story（' + USER + '玩的故事裡的事，包括主角）、other（別人）。寒暄和一次性的小事不用記。',
+                + 'about 只能是 user（' + USER + '本人，和' + USER + '生活裡的人事物：家人、寵物、工作、住的地方）、self（它自己）、story（' + USER + '玩的故事裡的事，包括主角）、other（跟' + USER + '無關的別人）。寒暄和一次性的小事不用記。',
                 '二、更正：這一批跟現在的筆記對不上的。以前對、後來變了：<mem_update id="號碼" from="編號">新的說法</mem_update>；當初就記錯了：<mem_fix id="號碼" from="編號">正確的說法</mem_fix>。對得上就不要動。種類或關於誰標錯的（例如約定被記成發生過的事），也用 mem_update，把屬性寫成對的、內容照抄。' + USER + '標成記錯或改正過的，不要改回原本的說法。',
                 '三、樣子：只有這一批看得出它跟' + USER + '相處時的做法有變化，才寫。<trait_add kind="欄" from="編號,編號">一句做法</trait_add>、<trait_update id="號碼" from="編號">新的做法</trait_update>、<trait_drop id="號碼" from="編號"/>。'
-                + '欄只能是 talk（講話的方式）、taste（它自己的喜好和主見）、bond（跟' + USER + '的相處）、work（做事的習慣）。只寫做出來的樣子，不寫形容詞；寫不出是哪幾行看出來的就不要寫。' + USER + '拿掉的樣子不要再寫回來。',
+                + '欄只能是 talk（講話的方式）、taste（它自己的喜好和主見）、bond（跟' + USER + '的相處）、work（做事的習慣）。一句做法要寫成「它之後遇到這種情況會怎麼做」，不寫它過去怎樣、不寫形容詞和程度、不寫次數；寫不出是哪幾行看出來的就不要寫。' + USER + '拿掉的樣子不要再寫回來。',
                 '出處只能寫上面這一批的編號（改舊筆記時也可以寫它原本的出處）。不能收起、不能刪任何一條。標籤名、屬性名、屬性值照抄英文。',
                 '這一批沒有要做的，就只交 <none/>。');
         }
