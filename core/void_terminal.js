@@ -861,7 +861,6 @@ const IRIS_IDLE = [
             </div>
 
             <div id="achievement-panel-overlay" style="display:none;">
-                <div class="achv2-crest-top"></div>
                 <button class="achv2-close" id="ach-close-btn" title="關閉"><i class="fa-solid fa-xmark"></i></button>
                 <div class="achv2-title">成 就 收 藏 冊</div>
                 <div class="achv2-title-en">MEMORY &amp; MERIT COLLECTION</div>
@@ -882,7 +881,6 @@ const IRIS_IDLE = [
                 <div class="achv2-msg" id="achv2-msg"></div>
                 <div class="achv2-list" id="ach-list"></div>
                 <div class="achv2-foot">白票券由交易所的白兔先生收購換 PT，黑卡是柴郡的異常收藏換碎片。</div>
-                <div class="achv2-crest-bottom"></div>
             </div>
 
             <div id="store-panel-overlay" style="display:none;">

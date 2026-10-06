@@ -105,13 +105,15 @@
 .lsh-text { flex:1; font-size:12px; line-height:1.5; color:#f3ead8; word-break:break-word; white-space:pre-wrap; }
 .lsh-del { flex:0 0 auto; border:none; background:transparent; color:rgba(243,234,216,.45); cursor:pointer; font-size:12px; padding:0 2px; }
 .lsh-del:hover { color:#e88a7a; }
-/* 🎬 小劇場窗口 v2：票券檔案館（阿洛底板；素材＝sound-files aseets/theater_ui/ 外框/票券/播放鈕） */
+/* 🎬 小劇場窗口 v2：票券檔案館（阿洛設計；票券／播放鈕＝sound-files aseets/theater_ui/ 的圖）
+   10-06 外框不再是一張撐滿的圖：core/void/frames.js 照窗的大小畫一層 svg（.aurelia-vframe）墊在最底下，
+   角、拱、花飾固定大小，所以內容區也用固定距離（上 46＝上緣＋花飾、左右 24、下 40＝下緣＋花飾） */
 .lstage-theater-win2 { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3300;
   width:min(340px, 92%); aspect-ratio:794/1653;
-  background:url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/theater_ui/memory-theater-frame-base.png) center/100% 100% no-repeat;
   filter:drop-shadow(0 18px 44px rgba(30,40,80,.35)); }
 @media (max-height:780px) { .lstage-theater-win2 { width:min(300px, 92%); } }
-.ltw2-in { position:absolute; inset:6.5% 7% 5.5%; display:flex; flex-direction:column; }
+.lstage-theater-win2 > .aurelia-vframe { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; z-index:-1; }
+.ltw2-in { position:absolute; inset:46px 24px 40px; display:flex; flex-direction:column; }
 .ltw2-close { position:absolute; top:0; right:0; border:none; background:transparent; color:#8a93ad; cursor:pointer; font-size:17px; padding:2px 6px; z-index:2; }
 .ltw2-close:hover { color:#23315e; }
 .ltw2-title { text-align:center; color:#23315e; font-size:23px; font-weight:800; letter-spacing:6px; text-indent:6px;

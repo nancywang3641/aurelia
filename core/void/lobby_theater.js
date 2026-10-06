@@ -230,6 +230,8 @@
               '<div class="ltw-body ltw2-body"></div>' +
             '</div>';
         S.root.appendChild(box);
+        // 外框照窗的大小畫（core/void/frames.js；以前是一張撐滿的圖）
+        try { const F = window.AURELIA_FRAMES || (window.parent || window).AURELIA_FRAMES; if (F) F.mount(box, 'theater'); } catch (e) { console.warn('[LobbyTheater] 外框沒畫上', e); }
         S.twEl = box;
         S.twTab = (tab === 'review') ? 'review' : 'live';
         box.querySelector('.ltw2-close').addEventListener('click', _closeTheaterWin);

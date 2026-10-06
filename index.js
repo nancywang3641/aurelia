@@ -122,6 +122,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
     { name: 'tavern_bridge', path: _AURELIA_EXT_BASE + '/core/tavern_bridge.js', key: 'bridge' },
     { name: 'panel_manager', path: _AURELIA_EXT_BASE + '/core/panel_manager.js', key: 'panelManager' },
+    { name: 'void_frames', path: _AURELIA_EXT_BASE + '/core/void/frames.js', key: 'voidFrames' },   // 🖼 照窗大小畫的外框（小劇場、成就收藏冊；AURELIA_FRAMES）
     { name: 'void_panels', path: _AURELIA_EXT_BASE + '/core/void/panels.js', key: 'voidPanels' },
     { name: 'void_worldview', path: _AURELIA_EXT_BASE + '/core/void/worldview.js', key: 'voidWorldview' },
     { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },

@@ -42,6 +42,8 @@
         const overlay = document.getElementById('achievement-panel-overlay');
         if (!overlay) return;
         overlay.style.display = 'flex';
+        // 外框照窗的大小畫（core/void/frames.js；以前是一張撐滿的圖＋上下兩顆寶石圖）
+        try { const F = window.AURELIA_FRAMES || (window.parent || window).AURELIA_FRAMES; if (F) F.mount(overlay, 'achievement'); } catch (e) { console.warn('[Panels] 成就外框沒畫上', e); }
         renderAchievementList();
     }
 
