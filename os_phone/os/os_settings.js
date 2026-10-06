@@ -43,10 +43,14 @@
             ss_1733: { title: 'Flux 專用搭配檔', body: 'CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。' },
             ss_1741: { title: 'Anima 專用搭配檔', body: '自然語言提示詞、CFG 自動≈4、採樣 er_sde/simple；上面「模型」要選 diffusion_models 裡的 anima-base（按測試會自動列出）。' },
             ss_1777: { title: '場景插圖品質', body: '需 ComfyUI 裝 Impact Pack（你已裝）。場景小臉/遠景眼睛會清楚很多，代價是每張場景多花十幾秒。' },
-            ss_1809: { title: '工作流模式', body: '用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。前提：先在酒館「圖像生成」擴展設好一個後端來源；沒設好會跳提示，不會偷偷換成別的來源。' },
-            ss_1840: { title: '模型', body: '角色頭像在「頭像」、背景在「背景」、場景在「插圖」分頁各自調。' },
+            // 10-06：09-19 把段落說明搬進小問號時，沒掛在欄位上的三段被掛到前一個欄位（酒館那頁的說明跑到 ComfyUI 工作流模式、
+            //   自訂接口位址那段跑到底詞、Pollinations 模型掛了一段早就拆掉的分頁說明）；各自換回欄位自己的那句，搬走的放回原處。
+            ss_1809: { title: '工作流模式', body: '想用自己的工作流再開，否則不用碰。' },
+            ss_tavern_sd: { title: '酒館的生圖', body: '用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。這頁沒有要填的，下面那行是酒館那邊現在選的後端。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。前提：先在酒館「圖像生成」擴展設好一個後端來源；沒設好會跳提示，不會偷偷換成別的來源。手機版沒有酒館，這條用不了。' },
+            ss_1840: { title: '模型', body: '按價格排序。' },
             ss_1878: { title: '帶參考圖', body: '插圖附上出場角色的立繪，最多四個。只用角色圖鑑裡你放的圖。' },
-            ss_1893: { title: '底詞', body: '貼站方給的位址就好，兩種送法會自己認：網址帶 /sdapi 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟上面的 Pollinations 都不是同一種送法，所以各佔一格、不能只換網址。' },
+            ss_capi_url: { title: '接口位址', body: '貼站方給的位址就好，兩種送法會自己認：網址帶 /sdapi 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟上面的 Pollinations 都不是同一種送法，所以各佔一格、不能只換網址。' },
+            ss_1893: { title: '底詞', body: '選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。' },
             ss_1919: { title: '防超免費尺寸', body: '超過免費上限自動縮回。' },
             ss_2095: { title: '場景插圖', body: '設定套用於所有場景插圖。' },
             ss_2116: { title: '場景插圖尺寸', body: '插圖底詞／負詞跟著上面選的「插圖來源」走該接口那份；跟頭像同接口時就是同一份。在接口設定區調整即可。' },
@@ -1849,8 +1853,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
 
                             <div id="img-group-tavernsd" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'tavern_sd') ? '' : 'hidden'}">
-                                <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
+                                <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_tavern_sd') : ''}</div>
                                 <div class="set-group">
+                                    <div class="field-row">
+                                        <div class="set-label">酒館那邊用的</div>
+                                        <div class="img-tavern-src" id="img-tavern-src"></div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1897,7 +1905,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div class="set-desc" id="img-capi-node-status"></div>
                                     </div>
                                     <div class="field-row">
-                                        <div class="set-label" title="站方給的那條位址，通常以 /v1 結尾。整條貼進來也可以。">接口位址 <span class="lbl-req">(必填)</span></div>
+                                        <div class="set-label" title="站方給的那條位址，通常以 /v1 結尾。整條貼進來也可以。">接口位址${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_capi_url') : ''} <span class="lbl-req">(必填)</span></div>
                                         <input class="set-input" id="img-capi-url" type="text" placeholder="https://……/v1" value="${(imgConfig.customApi?.url || '').replace(/"/g,'&quot;')}">
                                     </div>
                                     <div class="field-row">
@@ -3426,7 +3434,37 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const itB = container.querySelector('#img-nai-item-block');
             if (itB) itB.classList.remove('hidden');
             if (imgTab === 'style') { _renderImgUses(); _renderImgStyles(); _renderRoomBlock(); }
+            if (imgTab === 'tavern_sd') _paintTavernSd();
         };
+        // 🍺 酒館那頁沒有要填的（生圖全照酒館「圖像生成」擴充那邊）：顯示那邊現在選的後端，名字照酒館自己下拉單上的字。
+        //   10-06 以前這格是空的（09-19 說明搬進小問號時搬錯地方），她以為壞了。
+        function _paintTavernSd() {
+            const el = container.querySelector('#img-tavern-src');
+            if (!el) return;
+            const pw = window.parent || window;
+            let ctx = null;
+            try { ctx = (pw.SillyTavern && pw.SillyTavern.getContext) ? pw.SillyTavern.getContext() : null; } catch (e) {}
+            const ext = ctx && ctx.extensionSettings;
+            let text, off = true;
+            if (!ext) text = '這裡沒有酒館，用不了';
+            else if ((ext.disabledExtensions || []).indexOf('stable-diffusion') >= 0) text = '酒館的「圖像生成」擴充是關著的';
+            else {
+                const sd = ext.sd || {};
+                const src = String(sd.source || '');
+                if (!src) text = '酒館的「圖像生成」還沒選後端';
+                else {
+                    let name = src;
+                    try {
+                        const o = pw.document.querySelector('#sd_source option[value="' + src.replace(/["\\]/g, '') + '"]');
+                        if (o && o.textContent.trim()) name = o.textContent.trim();
+                    } catch (e) {}
+                    text = name + (sd.model ? '・' + sd.model : '');
+                    off = false;
+                }
+            }
+            el.textContent = text;
+            el.classList.toggle('is-off', off);
+        }
 
         // ── 「用哪組」的選項：各接口頁存好的組合 ──
         const _connChoices = () => {

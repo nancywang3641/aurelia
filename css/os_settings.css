@@ -49,6 +49,9 @@
         .img-srctab-row { display: flex; gap: 8px; padding: 0 0 12px; border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.08); margin-bottom: 16px; flex-wrap: wrap; }
         .img-srctab { cursor: pointer; padding: 6px 14px; font-size: 14px; color: var(--os-ink-soft); border-bottom: 2px solid transparent; font-weight: 600; user-select: none; }
         .img-srctab.active { color: var(--os-ink); border-bottom-color: var(--os-ink-soft); font-weight: 800; }
+        /* 🍺 酒館那頁：酒館「圖像生成」現在選的後端（只看、不能改） */
+        .img-tavern-src { font-size: 14px; font-weight: 700; color: var(--os-ink); line-height: 1.5; overflow-wrap: anywhere; }
+        .img-tavern-src.is-off { font-weight: 500; color: var(--os-ink-soft); }
 
         /* 組件 */
         .set-group { background: rgba(var(--os-tint-rgb), 0.85); border-radius: 8px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px; border: 1px solid rgba(var(--os-ink-rgb), 0.15); box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
