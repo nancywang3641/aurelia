@@ -868,6 +868,8 @@
     async function _maintain(rid, o) {
         {
             const d = await _due(rid, o);
+            // 她按「再試一次」但這時沒有要整理的：停下來的狀態清掉（不然那行字一直掛著），不叫模型
+            if (o.force && !d.tidy && d.h.tidyFails) await _setHead(rid, { tidyFails: 0, tidyErr: '' });
             if (!d.tidy && !d.sum && !d.merge) return { ran: false, why: '還不用整理' };
             const relMems = d.tidy ? await _relMems(rid, d.tidy.batch) : [];
             const T = d.tidy ? (await traits(rid)).items.filter(t => t.state === 'ok') : [];
