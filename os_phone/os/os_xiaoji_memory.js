@@ -1022,6 +1022,8 @@
         const convMap = {};
         (data.convs || []).forEach(c => { const id = c.meta.id; convMap[id] = opt.asNew ? 'xc_' + _now().toString(36) + Math.random().toString(36).slice(2, 6) : id; });
         const mapConv = id => convMap[id] || id;
+        // 整隻蓋掉：先把原本那隻清乾淨（多出來的經歷塊、記憶、向量不能殘留，向量的編號會對到別的經歷）
+        if (!opt.asNew) await drop(rid, []);
         for (let b = 0; b < data.life.blocks.length; b++) {
             const blk = JSON.parse(JSON.stringify(data.life.blocks[b]));
             blk.items.forEach(e => { if (e.conv) e.conv = mapConv(e.conv); });
