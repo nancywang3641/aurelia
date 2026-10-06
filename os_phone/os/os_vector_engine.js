@@ -105,7 +105,8 @@
         'https://esm.sh/@xenova/transformers@2.17.2',                       // esm.sh 一定是 ESM
         'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2'          // 官方文件用的裸 URL（多數情況也行）
     ];
-    let _tfModP = null, _localPipeP = null, _localPipeModel = '';
+    let _tfModP = null;
+    const _pipes = {};   // 模型名 → 載入中的 pipeline（跑團用她選的那顆，小機固定一顆；同一顆共用）
 
     async function _loadTF() {
         if (_tfModP) return _tfModP;
@@ -124,11 +125,11 @@
         return _tfModP;
     }
 
-    async function _getLocalPipe() {
-        const model = _localModel();
-        if (_localPipeP && _localPipeModel === model) return _localPipeP;
-        _localPipeModel = model;
-        _localPipeP = (async () => {
+    // modelOverride：指定哪一顆（小機的記憶固定用一顆，os_xiaoji_memory.js；10-06）。沒給照跑團設定那顆
+    async function _getLocalPipe(modelOverride) {
+        const model = modelOverride || _localModel();
+        if (_pipes[model]) return _pipes[model];
+        _pipes[model] = (async () => {
             const T = await _loadTF();
             try {
                 T.env.allowLocalModels = false;   // 不找本機檔，只從 HF 下載一次後快取
@@ -136,11 +137,12 @@
             } catch (e) {}
             return await T.pipeline('feature-extraction', model, { quantized: true });
         })();
-        return _localPipeP;
+        _pipes[model].catch(() => { delete _pipes[model]; });   // 載失敗下次重試，不要卡一個壞掉的 promise
+        return _pipes[model];
     }
 
-    async function _embedLocal(text) {
-        const pipe = await _getLocalPipe();
+    async function _embedLocal(text, modelOverride) {
+        const pipe = await _getLocalPipe(modelOverride);
         const input = Array.isArray(text) ? text.map(t => String(t || '')) : String(text || '');
         const out = await pipe(input, { pooling: 'mean', normalize: true });   // mean-pool + L2 normalize → 餘弦可直接比
         const dims = out.dims || [];
@@ -446,7 +448,7 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
     // 八、公開 API
     // ================================================================
 
-    win.OS_VECTOR_ENGINE = { embed, ingest, ingestEntries, backfillVectors, search, vectorReady, isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
+    win.OS_VECTOR_ENGINE = { embed, embedLocal: (text, model) => _embedLocal(text, model), _setTF: (T) => { _tfModP = Promise.resolve(T); }, ingest, ingestEntries, backfillVectors, search, vectorReady, isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
         // 把章節原文清成「要餵給抽取的內容」(跟 ingest 同邏輯：summary 或 <content>)，給結合觸發共用
         const src = _cfg().extractSource || 'content';
         let c = '';
