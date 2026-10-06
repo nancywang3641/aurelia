@@ -114,6 +114,16 @@
             try { prev = JSON.parse(localStorage.getItem(THEATER_PREV) || 'null'); localStorage.removeItem(THEATER_PREV); } catch (e) { prev = null; }
             if (prev && THEATER_ID.test(this._currentStoryId || '')) this._setStoryId(prev.id || '', prev.title || '');
         },
+        // 🔒 小劇場裡的管理員／SN 住民：奧瑞亞官方立繪（大廳那張，名冊在 LobbyNpcs.official）。舞台排第一、有它就不生圖。
+        //   只在小劇場：她的故事卡也可能有叫愛麗絲、柴郡的別人（她 10-06 定：只用在奧瑞亞自己的場景）。
+        _officialSprite: function(name) {
+            if (!THEATER_ID.test(this._currentStoryId || '')) return '';
+            try {
+                const N = win.LobbyNpcs || window.LobbyNpcs;
+                const o = N && N.officialOf && N.officialOf(name);
+                return (o && o.portrait) || '';
+            } catch (e) { return ''; }
+        },
 
         // 🆕 開一條新故事線 —— 對應酒館「建立聊天室就產生 chatId」那一刻。
         //   酒館的 chatId 是 角色卡-建立時間，聊天室建好時就存在、內容還是空的；
@@ -2154,6 +2164,8 @@
         _staticAvatarExists: async function(name) {
             if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
             const urls = [];
+            const off = this._officialSprite(name);   // 小劇場的管理員有官方立繪 → 算自備圖，預熱／早鳥都不生
+            if (off) urls.push(off);
             this._nameVariants(name).forEach(v => {
                 const e = this._lorebookExpCache[`${v}_Neutral`]; if (e) urls.push(e);
                 const s = this._lorebookSpriteCache[v]; if (s) urls.push(s);

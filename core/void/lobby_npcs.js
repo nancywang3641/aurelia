@@ -439,10 +439,28 @@
         cheshire: { name: '柴郡',     persona: null,                subTitle: '系統異常部門 · 灰色夢魘組', portrait: ASSET.cheshire },
     };
 
+    // 🔒 奧瑞亞官方立繪＝管理員＋SN 住民在大廳那張（她修過的那批，寫死在 ASSET）。用的地方：
+    //   小劇場（大廳、地圖番外、小機培養室）的舞台遇到這幾位先拿這張、不另外生圖（VN_Core._officialSprite）；
+    //   角色圖鑑「奧瑞亞官方」那區（只能看、不能換）。她的故事卡裡同名的別人不吃這張（她 10-06 定：只用在奧瑞亞自己的場景）。
+    //   比對只認全名和這裡寫的別名，不做包含比對（「丹」不能吃到「丹尼爾」）。
+    const OFFICIAL_ALIAS = { rabbit: ['白兔'], zhiwei: ['紫薇'] };
+    const _offNorm = (n) => String(n || '').replace(/[·・•\s]/g, '');
+    function _official() {
+        const one = (key, r) => ({ key: key, name: r.name, subTitle: r.subTitle, portrait: r.portrait, aliases: OFFICIAL_ALIAS[key] || [] });
+        return Object.keys(STAFF).map(k => one(k, STAFF[k])).concat(SN_RESIDENTS.map(r => one(r.key, r)));
+    }
+    function _officialOf(name) {
+        const n = _offNorm(name);
+        if (!n) return null;
+        return _official().find(o => [o.name].concat(o.aliases).some(a => _offNorm(a) === n)) || null;
+    }
+
     window.LobbyNpcs = {
         init: initNpcs,                     // lobby_stage.tryMount 呼叫（async；掛載時生成本場景 NPC）
         staff: (key) => (STAFF[key] ? Object.assign({ key: key }, STAFF[key]) : null),
         staffKeys: () => Object.keys(STAFF),
+        official: _official,                // 奧瑞亞官方立繪名冊（管理員＋SN 住民）
+        officialOf: _officialOf,            // 名字（含別名）→ 那一筆，沒有回 null
         // SN 住民（雷伊、丹）：小機培養室的「丹」那堂課要他的人設與頭像演小劇場
         snResident: (key) => {
             const r = SN_RESIDENTS.find(x => x.key === key);

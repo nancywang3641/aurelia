@@ -75,11 +75,23 @@
 .acg-mark-empty { background: rgba(var(--os-ink-rgb), 0.28); }
 .acg-mark-stranger { background: var(--acg-warn); }
 .acg-empty-list, .acg-loading { padding: 20px 8px; text-align: center; color: var(--acg-sub); font-size: 13px; }
+/* 名單最後一區：奧瑞亞官方（管理員那幾張，只能看） */
+.acg-group {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    margin-top: 10px; padding: 10px 8px 4px; border-top: 1px solid var(--acg-line);
+    font-size: 12px; font-weight: 700; letter-spacing: 1px; color: var(--acg-sub);
+}
+.acg-group i { font-size: 11px; }
+.acg-group:first-child { margin-top: 0; border-top: 0; }
+.acg-item-official .acg-item-thumb { background: rgba(var(--os-ink-rgb), 0.04); }
 
 /* ── 右：這個角色 ── */
 .acg-main { flex: 1; min-width: 0; overflow-y: auto; padding: 18px 20px 40px; }
 .acg-main-head { margin-bottom: 14px; }
 .acg-name { font-size: 22px; font-weight: 800; word-break: break-word; }
+.acg-name-row { display: flex; align-items: center; gap: 6px; }
+.acg-name-row .aui-help { color: var(--acg-sub); font-size: 16px; }
+.acg-sub { margin-top: 2px; font-size: 13px; color: var(--acg-sub); }
 .acg-note { margin-top: 4px; font-size: 12px; }
 .acg-note-stranger { color: var(--acg-warn); }
 
@@ -107,6 +119,8 @@
     background: rgba(var(--os-ink-rgb), 0.07); color: var(--acg-sub);
 }
 .acg-src-local { background: color-mix(in srgb, var(--acg-accent) 14%, transparent); color: var(--acg-accent); }
+.acg-src-official { display: inline-flex; align-items: center; gap: 4px; }
+.acg-src-official i { font-size: 9px; }
 .acg-slot-state { font-size: 11px; color: var(--acg-sub); }
 .acg-state-bad { color: var(--acg-bad); }
 /* 上傳／網址／垃圾桶排一行：上傳與網址平分，垃圾桶只佔圖示寬 */
@@ -188,6 +202,10 @@
     .acg-item-name { width: 100%; font-size: 12px; }
     .acg-mark { position: absolute; top: 6px; right: 8px; }
     .acg-empty-list, .acg-loading { padding: 10px 0; }
+    /* 橫排時「奧瑞亞官方」只剩一條直線＋鎖頭隔開 */
+    .acg-group { margin: 0 2px; padding: 0 0 0 8px; border-top: 0; border-left: 1px solid var(--acg-line); }
+    .acg-group span { display: none; }
+    .acg-group:first-child { border-left: 0; padding-left: 4px; }
     .acg-main { padding: 14px 14px 32px; }
     .acg-slots { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
     .acg-wb-row, .acg-wb-row-exp { grid-template-columns: minmax(0, 1fr) auto; }

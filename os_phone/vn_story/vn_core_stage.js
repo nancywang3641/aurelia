@@ -285,6 +285,10 @@
             // 世界書【素材-角色表情立繪】(名字_表情→URL) → spriteBase 拼檔名；全走探測制，掛一個自動下一個
             if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
             const urls = [];
+            // 小劇場（大廳、地圖番外、小機培養室）裡的管理員：奧瑞亞官方立繪排最前（不是小劇場、不是管理員就回空的）。
+            //   圖鑑的 resolveChar 不照抄這層：圖鑑看的是她的故事，官方那幾位在圖鑑另外一區。
+            const off = this._officialSprite ? this._officialSprite(name) : '';
+            if (off) urls.push(off);
             // 角色圖鑑的本地上傳最先（她在圖鑑裡親手放的）
             const _cg = win.OS_CHAR_GALLERY;
             if (_cg && _cg.localUrl) { const lu = await _cg.localUrl(name, exp); if (_stale()) return; if (lu) urls.push(lu); }

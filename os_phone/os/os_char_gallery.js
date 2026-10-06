@@ -45,6 +45,18 @@
     }
     const expLabel = (exp) => (exp === DEFAULT_EXP ? '預設' : exp);
 
+    // 🔒 奧瑞亞官方立繪（管理員＋丹、雷伊在大廳那張）：名冊在 LobbyNpcs.official，名單最後一區，只能看、不能換。
+    //   跟上面那套找圖順序無關：官方那張只在小劇場的舞台用（VN_Core._officialSprite），她故事裡同名的別人照舊。
+    function officialList() {
+        try { const N = win.LobbyNpcs || window.LobbyNpcs; return (N && N.official) ? N.official() : []; } catch (e) { return []; }
+    }
+    try {
+        const A = AUIx();
+        if (A && A.registerHelp) A.registerHelp({
+            acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' }
+        });
+    } catch (e) {}
+
     // ================================================================
     // 本地上傳（跟生成的圖分開放，不分故事）
     // ================================================================
@@ -391,7 +403,7 @@
           + '<input class="acg-file" type="file" accept="image/*">';
         (host || doc.body).appendChild(root);
         S = { root, sel: null, want: name || '', names: [], cast: [], wb: { exp: [], preset: [] }, wbOk: wbAvailable(),
-              info: {}, marks: {}, draft: null, extra: [], changed: false, token: 0, filter: '' };
+              info: {}, marks: {}, draft: null, extra: [], changed: false, token: 0, filter: '', offSel: null };
         root.classList.toggle('acg-has-wb', S.wbOk);
         root.addEventListener('click', onClick);
         root.addEventListener('input', onInput);
@@ -458,17 +470,25 @@
         const list = S.root.querySelector('.acg-list');
         const f = S.filter.trim();
         const names = f ? S.names.filter(n => n.indexOf(f) >= 0 || sameChar(n, f)) : S.names;
-        if (!S.names.length) {
-            list.innerHTML = '<div class="acg-empty-list">還沒有角色</div>';
-            return;
-        }
-        if (!names.length) { list.innerHTML = '<div class="acg-empty-list">找不到「' + esc(f) + '」</div>'; return; }
-        list.innerHTML = names.map(n =>
-            '<button class="acg-item' + (n === S.sel ? ' is-on' : '') + '" type="button" data-act="pick" data-name="' + esc(n) + '">'
+        const offs = officialList().filter(o => !f || [o.name].concat(o.aliases).some(a => a.indexOf(f) >= 0));
+        let h;
+        if (!S.names.length) h = (f || offs.length) ? '' : '<div class="acg-empty-list">還沒有角色</div>';   // 有官方那區時右邊會寫「還沒有角色」，名單不重複
+        else h = names.map(n =>
+            '<button class="acg-item' + (!S.offSel && n === S.sel ? ' is-on' : '') + '" type="button" data-act="pick" data-name="' + esc(n) + '">'
           +   '<span class="acg-item-thumb">' + itemThumb(n) + '</span>'
           +   '<span class="acg-item-name">' + esc(n) + '</span>'
           +   '<span class="acg-mark' + (S.marks[n] ? ' acg-mark-' + S.marks[n] : '') + '" title="' + esc(MARK_TXT[S.marks[n]] || '') + '"></span>'
           + '</button>').join('');
+        if (offs.length) {
+            h += '<div class="acg-group"><i class="fa-solid fa-lock"></i><span>奧瑞亞官方</span></div>'
+               + offs.map(o =>
+                    '<button class="acg-item acg-item-official' + (S.offSel === o.key ? ' is-on' : '') + '" type="button" data-act="pick-official" data-key="' + esc(o.key) + '">'
+                  +   '<span class="acg-item-thumb"><img src="' + esc(o.portrait) + '" alt="" loading="lazy"></span>'
+                  +   '<span class="acg-item-name">' + esc(o.name) + '</span>'
+                  + '</button>').join('');
+        }
+        if (!h) h = '<div class="acg-empty-list">找不到「' + esc(f) + '」</div>';
+        list.innerHTML = h;
     }
     function paintItem(n) {
         if (!S) return;
@@ -480,8 +500,26 @@
         m.title = MARK_TXT[S.marks[n]] || '';
     }
 
+    // 官方那位：一張圖、鎖頭、小問號，沒有上傳／網址／世界書
+    function renderOfficial(main) {
+        const o = officialList().find(x => x.key === S.offSel);
+        if (!o) { S.offSel = null; return false; }
+        const A = AUIx();
+        main.innerHTML = '<div class="acg-main-head">'
+          +   '<div class="acg-name-row"><div class="acg-name">' + esc(o.name) + '</div>' + (A && A.helpBtn ? A.helpBtn('acg_official') : '') + '</div>'
+          +   (o.subTitle ? '<div class="acg-sub">' + esc(o.subTitle) + '</div>' : '')
+          + '</div>'
+          + '<div class="acg-slots"><div class="acg-slot">'
+          +   '<div class="acg-slot-img" data-act="view-official"><img src="' + esc(o.portrait) + '" alt=""></div>'
+          +   '<div class="acg-slot-meta"><span class="acg-slot-exp">預設</span><span class="acg-src acg-src-official"><i class="fa-solid fa-lock"></i> 奧瑞亞官方</span></div>'
+          + '</div></div>';
+        main.scrollTop = 0;
+        return true;
+    }
+
     async function renderMain() {
         const main = S.root.querySelector('.acg-main');
+        if (S.offSel && renderOfficial(main)) return;
         const ch = S.sel;
         if (!ch) {
             main.innerHTML = '<div class="acg-empty-main"><i class="fa-solid fa-user-plus"></i><div class="acg-empty-title">還沒有角色</div>'
@@ -601,13 +639,20 @@
         const ch = S.sel;
         try {
             if (act === 'close') { close(); return; }
-            if (act === 'pick') { S.sel = b.dataset.name; renderList(); await renderMain(); return; }
+            if (act === 'pick') { S.sel = b.dataset.name; S.offSel = null; renderList(); await renderMain(); return; }
+            if (act === 'pick-official') { S.offSel = b.dataset.key; renderList(); await renderMain(); return; }
+            if (act === 'view-official') {
+                const o = officialList().find(x => x.key === S.offSel);
+                const PV = win.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER;
+                if (PV && o) PV.open([{ src: o.portrait, who: o.name, desc: '奧瑞亞官方' }], 0, { fromEl: b.querySelector('img') });
+                return;
+            }
             if (act === 'add-char') {
                 const n = A && await A.prompt('角色叫什麼名字', '');
                 if (n == null || !String(n).trim()) return;
                 const nm = String(n).trim();
                 if (!S.names.some(x => sameChar(x, nm))) { S.names.push(nm); S.extra.push(nm); }
-                S.sel = S.names.find(x => sameChar(x, nm));
+                S.sel = S.names.find(x => sameChar(x, nm)); S.offSel = null;
                 renderList(); await renderMain(); return;
             }
             if (act === 'view') {
