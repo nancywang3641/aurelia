@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 821;                        // ← 每次部署 +1
+const CACHE_VERSION = 822;                        // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -194,17 +194,21 @@ self.addEventListener('notificationclick', event => {
     event.waitUntil((async () => {
         const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         // 已經開著就直接帶過去，不要每次都開新視窗
-        const abs = new URL(target, self.registration.scope).href;
+        let abs = new URL(target, self.registration.scope).href;
+        // 一律落在自己家：網址不在這個 PWA 底下（舊通知帶著舊家 GitHub Pages 的絕對網址）就開自己的首頁，
+        //   不然 iOS 會把它丟去瀏覽器開別人家（10-07 她：「打開的都不是我之前放到主畫面的面板，而是直接開一個新的到手機瀏覽器上面」）。
+        //   送的那邊（cc-bridge push.py）也改成相對網址了。
+        if (abs.indexOf(self.registration.scope) !== 0) abs = self.registration.scope;
         for (const w of wins) {
             try {
                 await w.focus();
                 // 已經停在同一頁就只聚焦：再 navigate 一次等於整個 PWA 重載，
                 // 托管跑完的通知每次都重載一遍會讓她等白畫面（回到前台本來就會自己收結果）
                 const same = w.url && (w.url === abs || w.url.split('#')[0] === abs.split('#')[0]);
-                if (!same && 'navigate' in w) await w.navigate(target);
+                if (!same && 'navigate' in w) await w.navigate(abs);
                 return;
             } catch (_) {}
         }
-        if (self.clients.openWindow) await self.clients.openWindow(target);
+        if (self.clients.openWindow) await self.clients.openWindow(abs);
     })());
 });
