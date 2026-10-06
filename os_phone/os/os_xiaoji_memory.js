@@ -692,36 +692,44 @@
     function maintainPrompt(o) {
         const out = ['你在替「' + o.me + '」整理它的記憶。' + o.me + '是住在奧瑞亞宿舍、替' + USER + '做事的小 AI；' + USER + '是玩奧瑞亞的那個人。照下面要做的事，只交標籤，不要寫別的話。'];
         if (o.batch) {
-            out.push('', '【這一批經歷】（每一行開頭是編號，出處就寫這個編號）');
+            out.push('', '【這一批經歷】（每一行開頭的 e 編號就是出處，寫出處時照抄，例如 from="e12,e15"）');
             o.batch.forEach(e => out.push(_batchLine(e)));
-            out.push('', '【它現在的筆記】（跟這一批可能有關的）');
+            out.push('', '【它現在的筆記】（跟這一批可能有關的。改的時候 id 寫 # 後面的數字）');
             if (o.mems.length) o.mems.forEach(m => out.push('#' + _shortId(m.id) + '［' + KIND_NAME[m.kind] + '｜關於' + ABOUT_NAME[m.about] + '］' + m.text + '（出處 ' + m.from.join(',') + '）'));
             else out.push('還沒有。');
-            out.push('', '【它現在的樣子】');
+            out.push('', '【它現在的樣子】（改的時候 id 照抄 t 開頭那個）');
             if (o.traits.length) o.traits.forEach(t => out.push(t.id + '［' + TRAIT_NAME[t.kind] + '］' + t.text + '（出處 ' + t.from.join(',') + '）'));
             else out.push('還沒有。');
-            if (o.rae.length) { out.push('', '【' + USER + '這一批做的事】（要特別照顧）'); o.rae.forEach(l => out.push(l)); }
-            out.push('', '要做的：',
-                '一、補記：這一批裡值得記、筆記還沒有的。<mem_add kind="種類" about="關於誰" from="編號,編號">一句話</mem_add>。'
+            if (o.rae.length) {
+                out.push('', '【' + USER + '這一批做的事】（這幾行的 e 編號也可以當出處）');
+                o.rae.forEach(l => out.push(l));
+                out.push(USER + '標成記錯、改正過的，不要再記回原本的說法；' + USER + '拿掉的樣子，不要再寫回來。');
+            }
+            out.push('', '要做的（三件都可能沒有，沒有就跳過）：',
+                '一、補記：這一批裡值得記、筆記還沒有的。<mem_add kind="種類" about="關於誰" from="e編號">一句話</mem_add>。'
                 + 'kind 只能是 user（' + USER + '是什麼樣的人、喜好、習慣）、promise（約定、交代、答應的事）、event（發生過的重要的事）、work（它做過的東西）；'
-                + 'about 只能是 user（' + USER + '本人，和' + USER + '生活裡的人事物：家人、寵物、工作、住的地方）、self（它自己）、story（' + USER + '玩的故事裡的事，包括主角）、other（跟' + USER + '無關的別人）。寒暄和一次性的小事不用記。',
-                '二、更正：這一批跟現在的筆記對不上的。以前對、後來變了：<mem_update id="號碼" from="編號">新的說法</mem_update>；當初就記錯了：<mem_fix id="號碼" from="編號">正確的說法</mem_fix>。對得上就不要動。種類或關於誰標錯的（例如約定被記成發生過的事），也用 mem_update，把屬性寫成對的、內容照抄。' + USER + '標成記錯或改正過的，不要改回原本的說法。',
-                '三、樣子：只有這一批看得出它跟' + USER + '相處時的做法有變化，才寫。<trait_add kind="欄" from="編號,編號">一句做法</trait_add>、<trait_update id="號碼" from="編號">新的做法</trait_update>、<trait_drop id="號碼" from="編號"/>。'
-                + '欄只能是 talk（講話的方式）、taste（它自己的喜好和主見）、bond（跟' + USER + '的相處）、work（做事的習慣）。一句做法要寫成「它之後遇到這種情況會怎麼做」，不寫它過去怎樣、不寫形容詞和程度、不寫次數；寫不出是哪幾行看出來的就不要寫。' + USER + '拿掉的樣子不要再寫回來。',
-                '出處只能寫上面這一批的編號（改舊筆記時也可以寫它原本的出處）。不能收起、不能刪任何一條。標籤名、屬性名、屬性值照抄英文。',
-                '這一批沒有要做的，就只交 <none/>。');
+                + 'about 只能是 user（' + USER + '本人，和' + USER + '生活裡的人事物：家人、寵物、工作、住的地方）、self（它自己）、story（' + USER + '玩的故事裡的事，包括主角）、other（跟' + USER + '無關的別人）。'
+                + '同一件事只記一條，挑最貼切的種類。寒暄和一次性的小事不用記。',
+                '二、更正：這一批跟現在的筆記對不上的，改那一條。' + USER + '明白說過「記錯了／不是這樣」的，用 <mem_fix id="數字" from="e編號">正確的說法</mem_fix>；其他所有的改變（後來變了、多了細節）都用 <mem_update id="數字" from="e編號">新的說法</mem_update>。'
+                + '種類或關於誰標錯的，也用 mem_update，多寫 kind="對的種類" 或 about="對的關於誰"，內容照抄。對得上就不要動。',
+                '三、樣子：要看得到它真的這樣做過，或' + USER + '對它的做法有反應（誇它、嫌它、教它），才寫；只是答應過、還沒做的，記成約定就好。'
+                + '<trait_add kind="欄" from="e編號">一句做法</trait_add>、<trait_update id="t編號" from="e編號">新的做法</trait_update>；它已經不再這樣了用 <trait_drop id="t編號" from="e編號"/>。'
+                + '欄只能是 talk（講話的方式）、taste（它自己的喜好和主見）、bond（跟' + USER + '的相處）、work（做事的習慣）。一句做法寫它之後會照著做的事，不寫它過去怎樣、不寫形容詞和程度、不寫次數；寫不出是哪幾行看出來的就不要寫。',
+                '出處只能寫上面列出來的 e 編號（改舊筆記時也可以寫它原本的出處）。筆記不能收起、不能刪。標籤名、屬性名、屬性值照抄英文。',
+                '一、二、三都沒有要做的，就交一個 <none/>。');
         }
         if (o.sum) {
-            out.push('', '【這一串要整理成一節的舊對話】' + (o.sum.prev ? '（下面附上一節，只是讓你接得上，上一節寫過的不要再寫）' : ''));
-            if (o.sum.prev) out.push('上一節：' + o.sum.prev);
+            out.push('', '【這一串要整理成一節的舊對話】');
+            if (o.sum.prev) out.push('（這一串的前一節記錄，只是讓你接得上，裡面寫過的不要再寫：' + o.sum.prev + '）');
             o.sum.lines.forEach(l => out.push(l));
-            out.push('把這一段整理成一節，放在 <conv_summary>…</conv_summary> 裡：第三人稱客觀敘述，不要條列與標題；只留之後還可能被提起的（交代或拜託的事、做了什麼、還沒做完的、答應的事、' + USER + '說到自己的事與喜好、兩個之間相處的變化）；時間先後要看得出來；250 字以內。');
+            out.push('把上面這幾行對話整理成一節，放在 <conv_summary>…</conv_summary> 裡（不管前面有沒有交 <none/>，這一節都要交；整段都是寒暄就寫一句帶過）：第三人稱客觀敘述，不要條列與標題；只留之後還可能被提起的（交代或拜託的事、做了什麼、還沒做完的、答應的事、' + USER + '說到自己的事與喜好、兩個之間相處的變化）；時間先後要看得出來；250 字以內。');
         }
         if (o.merge) {
             out.push('', '【要併成一節的舊記錄】');
             o.merge.forEach((t, i) => out.push('第 ' + (i + 1) + ' 節：' + t));
             out.push('把這幾節併成一節，放在 <conv_merge>…</conv_merge> 裡：第三人稱，不要條列；交代的事、答應的事、沒做完的事、' + USER + '說到自己的事與喜好都要留下，已經被後來推翻的寫成過去；400 字以內。');
         }
+        if ((o.batch ? 1 : 0) + (o.sum ? 1 : 0) + (o.merge ? 1 : 0) > 1) out.push('', '交的時候：補記、更正、樣子的標籤（或 <none/>）先寫，' + (o.sum ? 'conv_summary' : '') + (o.sum && o.merge ? '、' : '') + (o.merge ? 'conv_merge' : '') + ' 放最後。');
         return out.join('\n');
     }
     const T_MEM = /[<＜]\s*(mem_add|mem_update|mem_fix)\b([^>＞]*)[>＞]([\s\S]*?)[<＜]\s*\/\s*\1\s*[>＞]/gi;
@@ -815,7 +823,7 @@
         } finally { delete _mBusy[rid]; }
     }
     async function _applyTidy(rid, tidy, text, callErr, usage, withSum) {
-        const inBatch = new Set(tidy.batch.map(e => e.id));
+        const inBatch = new Set(tidy.batch.map(e => e.id).concat((tidy.rae || []).map(e => e.id)));
         const changes = [], rejected = [];
         const cnt = { add: 0, fix: 0, trait: 0 };
         const tags = callErr ? [] : _tags(text);
