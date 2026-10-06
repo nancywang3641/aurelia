@@ -524,17 +524,11 @@
                     if (!d && this._isNoneChar(name)) d = await this._buildNonePrompt(name);
                     rawP = String(d || name);
                 }
-                // 完整清洗（同工作檯 stripPromptForSprite）：剝掉構圖/背景/燈光/視角詞(from behind/side/front…)→不再生出背面、側面、亂加背景
-                rawP = rawP
-                    .replace(/\bbust(\s+|-)?shot\b/gi, '').replace(/\bportrait\b/gi, '').replace(/\bheadshot\b/gi, '').replace(/\bhead\s+shot\b/gi, '')
-                    .replace(/\bclose[\s-]?up\b/gi, '').replace(/\bcowboy(\s+|-)?shot\b/gi, '')
-                    .replace(/\bupper(\s+|-)?body\b/gi, '').replace(/\bfull(\s+|-)?body\b/gi, '')
-                    .replace(/\bhead\s+and\s+shoulders\b/gi, '').replace(/\bwaist[\s-]?up\b/gi, '').replace(/\bchest[\s-]?up\b/gi, '')
+                // 完整清洗：構圖/背景/燈光/視角詞照 VN_Image._stripForSprite（只有那一份，立繪工作室也叫它）→不再生出背面、側面、亂加背景；
+                //   這條另外多剝 looking at viewer、face focus（頭像用的詞，全身立繪不要）
+                rawP = win.VN_Image._stripForSprite(rawP)
                     .replace(/\blooking\s+at\s+viewer\b/gi, '').replace(/\bface\s+focus\b/gi, '')
-                    .replace(/\b[a-z]*\s*background\b/gi, '').replace(/\bisolated\b/gi, '').replace(/\bno\s+bg\b/gi, '')
-                    .replace(/\bsoft\s+lighting\b/gi, '').replace(/\bstudio\s+lighting\b/gi, '').replace(/\bflat\s+lighting\b/gi, '')
-                    .replace(/\bfrom\s+(above|below|side|behind|front)\b/gi, '')
-                    .replace(/\s*,\s*,+/g, ', ').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
+                    .replace(/\s+,/g, ',').replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
                 // 🚨 三段之間一定要逗號（同 VN_Image.getSprite）：直接相接會把角色描述的最後一個 tag
                 //    跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"），一次毀掉兩個 tag
                 let prompt = win.VN_Image._joinTags(pfx, rawP, sfx);

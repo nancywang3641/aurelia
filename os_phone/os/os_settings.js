@@ -846,26 +846,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             // 清洗頭像 prompt：剝掉跟立繪衝突的構圖 / 背景 / 視角 tag
             // 原 prompt 可能含 "bust shot, soft background, looking at viewer"，會跟模板的 upper body / dark background 打架
             function stripPromptForSprite(p) {
-                if (!p) return '';
-                const patterns = [
-                    // 構圖類
-                    /\bbust(\s+|-)?shot\b/gi, /\bportrait\b/gi, /\bheadshot\b/gi, /\bhead\s+shot\b/gi,
-                    /\bclose[\s-]?up\b/gi, /\bcowboy(\s+|-)?shot\b/gi,
-                    /\bupper(\s+|-)?body\b/gi, /\bfull(\s+|-)?body\b/gi,
-                    /\bhead\s+and\s+shoulders\b/gi, /\bwaist[\s-]?up\b/gi, /\bchest[\s-]?up\b/gi,
-                    // 背景類（白底/簡單/純色/任意 *background*）
-                    /\b[a-z]*\s*background\b/gi,
-                    /\bisolated\b/gi, /\bno\s+bg\b/gi,
-                    // 燈光（避免跟模板的 dramatic lighting 重複）
-                    /\bsoft\s+lighting\b/gi, /\bstudio\s+lighting\b/gi, /\bflat\s+lighting\b/gi,
-                    // 視角
-                    /\bfrom\s+(above|below|side|behind|front)\b/gi,
-                ];
-                let s = p;
-                patterns.forEach(rx => { s = s.replace(rx, ''); });
-                // 清理多餘逗號 / 空白
-                s = s.replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
-                return s;
+                // 規則只有一份在 VN_Image._stripForSprite（vn_config.js，開機就載）；以前這裡自己抄一套，背景只剝一個字的毛病三份一起錯
+                const VI = (window.parent || window).VN_Image || window.VN_Image;
+                return (VI && VI._stripForSprite) ? VI._stripForSprite(p) : String(p || '').trim();
             }
 
             async function spriteGenerate(name, finalPrompt) {

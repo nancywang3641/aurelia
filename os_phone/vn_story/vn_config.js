@@ -301,20 +301,26 @@
             const raw = await win.OS_IMAGE_MANAGER.generate(full, 'char', opts);
             return raw ? { raw: raw, withTpl: withTpl } : null;
         },
-        // 剝掉跟立繪衝突的構圖/背景/視角 tag（與 os_settings studio 的 stripPromptForSprite 同規則）
+        // 剝掉跟立繪衝突的構圖/背景/視角 tag。只有這一份：設置的立繪工作室（os_settings stripPromptForSprite）、
+        //   舞台的一鍵生立繪（vn_core_stage）都叫這支（以前三份各抄一次，一起錯）。
         _stripForSprite: function(p) {
             if (!p) return '';
+            // 背景：整個「…background」詞組一起拿掉，前面的 in/against/with + a/the 也一起。
+            //   以前只吃 background 前面一個字，「dark room background」剩「dark」留在外觀裡（10-06 看到）。
+            //   往前最多吃三個字、遇到冠詞／介系詞／動詞就停：沒逗號的句子（wearing a black hoodie against background）衣服不會被吃掉。
+            const STOP = '(?:a|an|the|and|or|in|on|at|of|with|against|over|under|behind|before|near|by|from|into|wearing|holding|standing|sitting|posing|is|are)';
+            const bg = new RegExp('(?:\\b(?:in\\s+front\\s+of|against|on|in|at|over|before|behind|with)\\s+)?(?:\\b(?:a|an|the)\\s+)?(?:\\b(?!' + STOP + '\\b)[a-z][a-z-]*\\s+){0,3}background\\b', 'gi');
             const patterns = [
                 /\bbust(\s+|-)?shot\b/gi, /\bportrait\b/gi, /\bheadshot\b/gi, /\bhead\s+shot\b/gi,
                 /\bclose[\s-]?up\b/gi, /\bcowboy(\s+|-)?shot\b/gi, /\bupper(\s+|-)?body\b/gi, /\bfull(\s+|-)?body\b/gi,
                 /\bhead\s+and\s+shoulders\b/gi, /\bwaist[\s-]?up\b/gi, /\bchest[\s-]?up\b/gi,
-                /\b[a-z]*\s*background\b/gi, /\bisolated\b/gi, /\bno\s+bg\b/gi,
+                bg, /\bisolated\b/gi, /\bno\s+bg\b/gi,
                 /\bsoft\s+lighting\b/gi, /\bstudio\s+lighting\b/gi, /\bflat\s+lighting\b/gi,   // 同 studio：剝燈光詞避免跟後綴 no shading 打架
                 /\bfrom\s+(above|below|side|behind|front)\b/gi,
             ];
             let s = p;
             patterns.forEach(rx => { s = s.replace(rx, ''); });
-            return s.replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
+            return s.replace(/\s+,/g, ',').replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
         },
         // 🩳 立繪拍到大腿：外觀只寫了上衣（例如一件大帽 T），模型會把它畫成連身裙、腿光著（10-06 她：「為啥會沒褲褲」）。
         //   但不能寫死 clothes and pants：西幻的人魚也會被補出褲子——她就是因為這樣把立繪前綴那句拿掉的。
