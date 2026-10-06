@@ -79,7 +79,17 @@
             Object.keys(r.active || {}).forEach(k => { if (localStorage.getItem(k) === null) localStorage.setItem(k, r.active[k]); });
             return n;
         },
-        skip(store, e) { return store === 'app_data' && /^xiaoji_vec::/.test(String((e && e.id) || '')); }
+        skip(store, e) { return store === 'app_data' && /^xiaoji_vec::/.test(String((e && e.id) || '')); },
+        // 還原到一台已經有同一隻小機的裝置（終審 #3）：備份裡有它的經歷簿，就先把這台的那隻整隻清掉再寫——
+        //   不然這台比備份多出來的經歷塊、對不上的向量會殘留，編號跟著錯。回清了幾隻
+        async dropBeforeRestore(entries) {
+            const M = win.OS_XIAOJI_MEM;
+            if (!M || !M.drop) return 0;
+            const rids = [];
+            (entries || []).forEach(e => { const m = /^xiaoji_life::global::(.+):head$/.exec(String((e && e.id) || '')); if (m && rids.indexOf(m[1]) === -1) rids.push(m[1]); });
+            for (const rid of rids) await M.drop(rid, []);
+            return rids.length;
+        }
     };
     // 舊版備份檔（V3）用的欄位名 → 倉庫名；還原舊檔時用
     const LEGACY_FIELDS = {
@@ -186,6 +196,7 @@
             // 其他倉庫：新檔在 d.stores，舊檔（V3）是幾個分開的欄位
             const stores = Object.assign({}, d.stores || {});
             Object.keys(LEGACY_FIELDS).forEach(f => { if (Array.isArray(d[f]) && !stores[LEGACY_FIELDS[f]]) stores[LEGACY_FIELDS[f]] = d[f]; });
+            if (Array.isArray(stores.app_data)) { try { await XJ.dropBeforeRestore(stores.app_data); } catch (e) { console.warn('[OS_BACKUP] 小機還原前清不乾淨:', e); } }
             for (const name of Object.keys(stores)) {
                 if (!FULL_STORES.includes(name) || !Array.isArray(stores[name])) continue;
                 for (const e of stores[name]) await _putStore(name, e).catch(()=>{});

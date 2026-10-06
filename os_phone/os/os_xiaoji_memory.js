@@ -47,9 +47,29 @@
         return run;
     }
     // 這一頁的快取：經歷簿的塊、找回用的單位、向量。寫入時跟著換或作廢
+    //   別的分頁也會寫（終審 #2）：head 帶一個 rev，每次寫入加一；讀的時候 rev 對不上就整份丟掉重讀
     const _cache = {};
-    function _c(rid) { return _cache[rid] || (_cache[rid] = { blocks: {}, units: null, evMap: null, vecs: null }); }
+    function _c(rid) { return _cache[rid] || (_cache[rid] = { blocks: {}, units: null, evMap: null, vecs: null, rev: -1 }); }
     function _dirty(rid) { _c(rid).units = null; }
+    function _fresh(rid, h) {
+        const c = _c(rid), rev = (h && h.rev) || 0;
+        if (c.rev !== rev) { c.blocks = {}; c.units = null; c.evMap = null; c.rev = rev; }
+        return c;
+    }
+    // 在 _lock 裡面叫：head 的 rev 加一（自己這頁的快取跟著對上）
+    async function _bump(rid) {
+        const h = await head(rid);
+        h.rev = (h.rev || 0) + 1;
+        await _put(LIFE, rid + ':head', h);
+        const c = _c(rid); c.rev = h.rev;
+        return h;
+    }
+    // 另一把鎖（整理、搬家各一把）：同一台的兩個分頁不會同時做。ifAvailable＝別頁正在做就不等、直接跳過
+    function _wlock(name, opts, fn) {
+        const L = (win.navigator && win.navigator.locks) || null;
+        if (!L || !L.request) return fn(true);
+        return L.request(name, opts || {}, lock => fn(!!lock));
+    }
 
     // ── 經歷簿 ──────────────────────────────────────────────
     function _head0() { return { v: V, nextId: 1, blocks: 0, tidyAt: 0, tidyFails: 0, tidyErr: '', lastTidy: '', migrated: 0 }; }
@@ -78,15 +98,17 @@
             const row = Object.assign({}, ev, { id: 'e' + n, at: ev.at || _now(), state: 'ok' });
             blk.items.push(row);
             await _put(LIFE, rid + ':' + b, blk);   // 先寫那一塊再寫 head：head 沒寫成，下一次照上面那段補回來
-            _c(rid).blocks[b] = blk; _dirty(rid);
-            h.nextId = n + 1; h.blocks = Math.max(h.blocks, b + 1);
+            const c = _fresh(rid, h);
+            c.blocks[b] = blk; _dirty(rid);
+            h.nextId = n + 1; h.blocks = Math.max(h.blocks, b + 1); h.rev = (h.rev || 0) + 1;
             await _put(LIFE, rid + ':head', h);
+            c.rev = h.rev;
             return row.id;
         });
     }
     /** 整本（舊到新）。最後一塊每次重讀（別的分頁可能剛寫過），其他用快取 */
     async function allEvents(rid) {
-        const h = await head(rid), c = _c(rid), out = [];
+        const h = await head(rid), c = _fresh(rid, h), out = [];
         // head 落後（上一次 head 沒寫成）時，下一塊可能已經有東西
         let blocks = h.blocks;
         if (blocks && (await _readBlock(rid, blocks)).items.length) blocks++;
@@ -111,12 +133,27 @@
                 blk.items.forEach(row => { if (want.has(row.id) && fn(row) !== false) { hit = true; changed++; } });
                 if (hit) { await _put(LIFE, rid + ':' + b, blk); _c(rid).blocks[b] = blk; }
             }
-            if (changed) _dirty(rid);
+            if (changed) { _dirty(rid); await _bump(rid); }
             return changed;
         });
     }
     /** 撤回（不算數，但不刪）：在還在的對話裡刪了那一則、或重生了回話 */
-    function withdraw(rid, ids) { return _patch(rid, ids, row => { if (row.state !== 'ok') return false; row.state = 'withdrawn'; }); }
+    async function withdraw(rid, ids) {
+        const n = await _patch(rid, ids, row => { if (row.state !== 'ok') return false; row.state = 'withdrawn'; });
+        if (n) await _undoFrom(rid, ids);
+        return n;
+    }
+    // 終審 #6：重生掉、刪掉的那一則裡它當場記的，不能留著當真的（收起、退回，都不是刪）
+    async function _undoFrom(rid, ids) {
+        const gone = new Set((ids || []).map(String));
+        for (const m of (await mems(rid)).items) {
+            if (m.state !== 'ok') continue;
+            const last = m.versions[m.versions.length - 1];
+            if (!last || last.by !== 'self' || !(last.from || []).length || !last.from.every(f => gone.has(f))) continue;
+            if (last.why === 'add') await memDo(rid, 'stow', { id: m.id, by: 'auto' });
+            else if (m.versions.length > 1) await memDo(rid, 'revert', { id: m.id, text: m.versions[m.versions.length - 2].text, by: 'auto' });
+        }
+    }
     /** 抹掉（只有她能按）：內容清掉，只留編號、時間、種類 */
     async function erase(rid, ids) {
         const n = await _patch(rid, ids, row => {
@@ -126,6 +163,14 @@
         });
         if (n) await log(rid, { kind: 'erase', ids: (ids || []).map(String), by: 'rae' });
         return n;
+    }
+    // 終審 #4：回話裡打扮、房間、泡泡、小面板的標籤和整段 svg 不進經歷簿（只留她看得到的話）
+    const PLAIN_PAIR = /[<＜]\s*([a-z]+(?:_[a-z]+)+|svg|widget)\b[^>＞]*[>＞][\s\S]*?[<＜]\s*\/\s*\1\s*[>＞]/gi;
+    const PLAIN_ONE = /[<＜]\s*\/?\s*[a-z]+(?:_[a-z]+)+\b[^>＞]*?\/?\s*[>＞]/gi;
+    function plain(text) {
+        let s = String(text == null ? '' : text), prev;
+        do { prev = s; s = s.replace(PLAIN_PAIR, ''); } while (s !== prev);
+        return s.replace(PLAIN_ONE, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     }
     /** 一來回。同一串同一則（重生）記第二次時，舊那行撤回 */
     async function logTurn(rid, t) {
@@ -152,7 +197,7 @@
         const to = end < 0 ? all.length : end;
         return all.slice(Math.max(0, to - (n || 30)), to).reverse();
     }
-    Object.assign(API, { V, USER, head, log, allEvents, withdraw, erase, logTurn, reconcile, page });
+    Object.assign(API, { V, USER, head, log, allEvents, withdraw, erase, logTurn, reconcile, page, plain });
 
     // ── 文字小工具 ──────────────────────────────────────────
     // 中文兩字一組、英數一個詞（照字找、比相似都用它）
@@ -172,6 +217,15 @@
         let n = 0; A.forEach(x => { if (B.has(x)) n++; });
         return n / Math.min(A.size, B.size);
     }
+    // 「是不是同一件事」（她標記錯的別再記回來用）：拿掉每句都有的稱呼與虛字，重疊的兩字組除以長的那句——
+    //   短的那句整個被包在長的裡面不算一樣（「沒有養狗」不是「養狗」）
+    function _wsim(a, b) {
+        const norm = t => String(t || '').replace(/使用者|用戶|[她他它你我的了]/g, '');
+        const A = new Set(_bigrams(norm(a))), B = new Set(_bigrams(norm(b)));
+        if (!A.size || !B.size) return 0;
+        let n = 0; A.forEach(x => { if (B.has(x)) n++; });
+        return n / Math.max(A.size, B.size);
+    }
     function _ago(at) {
         if (!at) return '';
         const d = Math.floor((_now() - at) / 86400000);
@@ -189,7 +243,7 @@
     function _idOf(prefix, x) { const m = /(\d+)/.exec(String(x == null ? '' : x)); return m ? prefix + m[1] : ''; }
 
     // ── 記憶（它的筆記）──────────────────────────────────────
-    const MEM_LEN = 120, PER_REPLY = 3, PIN_BUDGET = 1500;
+    const MEM_LEN = 120, PER_REPLY = 3, PIN_BUDGET = 1500, WRONG_SIM = 0.85;
     const MEM_KINDS = ['user', 'promise', 'event', 'work', 'legacy'];
     const ABOUTS = ['user', 'self', 'story', 'other'];
     const ABOUT_ZH = { '使用者': 'user', '用戶': 'user', '自己': 'self', '我': 'self', '故事': 'story', '主角': 'story', '別人': 'other', '其他': 'other' };
@@ -218,7 +272,7 @@
         if (verb === 'wrong' && by !== 'rae') return { ok: false, why: '只有使用者能標記錯' };
         if (verb === 'unstow' && by !== 'rae') return { ok: false, why: '只有使用者能放回去' };
         if (verb === 'stow' && by === 'tidy') return { ok: false, why: '整理不能收起記憶' };
-        if (verb === 'revert' && by !== 'rae') return { ok: false, why: '只有使用者能退回' };
+        if (verb === 'revert' && by !== 'rae' && by !== 'auto') return { ok: false, why: '只有使用者能退回' };
         const text = _one(o.text).slice(0, MEM_LEN), from = _evIds(o.from), at = o.at || _now();
         const res = await _lock(rid, async () => {
             const M = await mems(rid);
@@ -229,9 +283,15 @@
                 const kind = MEM_KINDS.indexOf(o.kind) !== -1 ? o.kind : (about === 'user' ? 'user' : 'event');
                 if (!from.length) return { ok: false, why: '沒有出處' };
                 if (M.items.some(m => m.state === 'ok' && m.text === text)) return { ok: false, why: '已經記過' };
+                // 終審 #5：她標成記錯的、她改正過的舊說法，它和整理都不能再記一條差不多的回來（她自己要記照收）
+                if (by !== 'rae' && by !== 'import' && M.items.some(m => (m.state === 'wrong' && _wsim(m.text, text) >= WRONG_SIM)
+                    || m.versions.some((v, i) => { const nx = m.versions[i + 1]; return nx && nx.by === 'rae' && nx.why === 'fix' && _wsim(v.text, text) >= WRONG_SIM; }))) {
+                    return { ok: false, why: '使用者說過這件記錯了' };
+                }
                 const id = 'm' + M.nextId++;
                 M.items.push({ id, kind, about, text, from, state: 'ok', at, versions: [{ text, at, by, why: 'add', from }] });
                 await _put(MEMS, rid, M);
+                await _bump(rid);
                 return { ok: true, id, prev: null };
             }
             const m = M.items.find(x => x.id === _idOf('m', o.id));
@@ -260,6 +320,7 @@
                 m.state = 'ok'; m.at = at;
             } else return { ok: false, why: '不認得要做什麼' };
             await _put(MEMS, rid, M);
+            await _bump(rid);
             return { ok: true, id: m.id, prev };
         });
         if (res.ok) { _dirty(rid); await log(rid, { kind: 'mem', mid: res.id, verb, by, text, prev: res.prev }); }
@@ -292,6 +353,7 @@
                 const id = 't' + T.nextId++;
                 T.items.push({ id, kind: o.kind, text, from, state: 'ok', at, versions: [{ text, at, by, why: 'add', from }] });
                 await _put(TRAITS, rid, T);
+                await _bump(rid);
                 return { ok: true, id, prev: null };
             }
             const t = T.items.find(x => x.id === _idOf('t', o.id));
@@ -316,6 +378,7 @@
                 t.text = back; t.state = o.state || 'ok'; t.at = at;
             } else return { ok: false, why: '不認得要做什麼' };
             await _put(TRAITS, rid, T);
+            await _bump(rid);
             return { ok: true, id: t.id, prev };
         });
         if (res.ok) await log(rid, { kind: 'trait', tid: res.id, verb, by, text, prev: res.prev });
@@ -455,14 +518,14 @@
         return '';
     }
     async function _units(rid) {
-        const c = _c(rid);
+        const c = _fresh(rid, await head(rid));
         if (c.units) return c.units;
         const evs = await allEvents(rid), M = await mems(rid);
         const out = [];
         const add = u => { const t = _bigrams(u.text), tf = {}; t.forEach(w => { tf[w] = (tf[w] || 0) + 1; }); u.tf = tf; u.len = t.length; out.push(u); };
         M.items.forEach(m => {
-            if (m.state === 'ok') add({ uid: m.id + '@' + m.versions.length, type: 'mem', ref: m.id, text: m.text, at: m.at });
-            if (m.state === 'wrong') return;
+            if (m.state !== 'ok') return;   // 記錯的、收起的：連以前的版本都不拿出來
+            add({ uid: m.id + '@' + m.versions.length, type: 'mem', ref: m.id, text: m.text, at: m.at });
             m.versions.forEach((v, i) => { const nx = m.versions[i + 1]; if (nx && nx.why === 'update' && v.text !== nx.text) add({ uid: m.id + 'v' + i, type: 'old', ref: m.id, text: v.text, at: v.at, until: nx.at }); });
         });
         evs.forEach(e => {
@@ -609,7 +672,7 @@
         const lines = [];
         R.mems.forEach(u => {
             const m = M.items.find(x => x.id === u.ref);
-            if (!m) return;
+            if (!m || m.state !== 'ok') return;   // 單位是舊的（另一頁剛標記錯／收起）：照現在的狀態
             if (u.type === 'old') { lines.push('・以前（到' + _ago(u.until) + '為止）#' + _shortId(m.id) + '：' + u.text); return; }
             const src = (m.from || []).map(id => evMap.get(id)).find(e => e && e.state === 'ok');
             const s = src ? _snip(_evText(src), R.q + ' ' + m.text, SRC_SNIP) : '';
@@ -640,7 +703,7 @@
     async function sumGet(conv) {
         let v = null;
         try { v = conv ? await _get(SUM, conv) : null; } catch (e) { v = null; }
-        return { nodes: (v && Array.isArray(v.nodes)) ? v.nodes : [], covered: (v && v.covered) || 0, totalAt: (v && v.totalAt != null) ? v.totalAt : null };
+        return { nodes: (v && Array.isArray(v.nodes)) ? v.nodes : [], covered: (v && v.covered) || 0, totalAt: (v && v.totalAt != null) ? v.totalAt : null, fails: (v && v.fails) || 0 };
     }
     async function _sumSave(conv, s) { if (conv) await _put(SUM, conv, s); }
     function sumPlan(s, hist, cut) {
@@ -668,7 +731,9 @@
     function _plainLine(c) { return _one(String(c == null ? '' : c).replace(/<(\w+)\b[^>]*>[\s\S]*?<\/\1\s*>/g, ' ').replace(/<[^>]+>/g, ' ')).slice(0, SUM_LINE); }
 
     // ── 整理（唯一叫模型的那一通）────────────────────────────
-    const TIDY_EVERY = 20, TIDY_MAX_BATCH = 40, CHAT_CLIP = 1500, TIDY_CAP = { add: 10, fix: 5, trait: 3 }, REL_MEMS = 40;
+    // 終審 #1：失敗了不是每句話都再叫一次——第 n 次失敗後要多累積 n 輪件數才再試，連續 3 次就停到她按「再試一次」（force）；
+    //   這一批的字數也有上限（TIDY_CHAR_CAP），放不下的下次再整理
+    const TIDY_EVERY = 20, TIDY_MAX_BATCH = 40, CHAT_CLIP = 1500, TIDY_CHAR_CAP = 16000, TIDY_STOP = 3, TIDY_CAP = { add: 10, fix: 5, trait: 3 }, REL_MEMS = 40;
     const COUNTED = ['chat', 'prop', 'lesson', 'exam', 'hw', 'theater', 'wear', 'room', 'bubble', 'born'];
     function _isRae(e) { return (e.kind === 'mem' || e.kind === 'trait') ? e.by === 'rae' : e.kind === 'erase'; }
     function _mdate(at) { const d = new Date(at || 0); return (d.getMonth() + 1) + '/' + d.getDate(); }
@@ -751,10 +816,17 @@
     async function _due(rid, o) {
         const h = await head(rid), all = await allEvents(rid);
         const after = all.filter(e => _num(e.id) > h.tidyAt);
-        const counted = after.filter(e => e.state === 'ok' && COUNTED.indexOf(e.kind) !== -1);
+        const counted = after.filter(e => e.state === 'ok' && !e.imported && COUNTED.indexOf(e.kind) !== -1);   // 搬來的不整理（她定的：性格之後長）
+        const fails = h.tidyFails || 0;
         let tidy = null;
-        if (counted.length >= TIDY_EVERY || (o.force && counted.length)) {
-            const batch = counted.slice(0, TIDY_MAX_BATCH);
+        if (o.force ? counted.length : (fails < TIDY_STOP && counted.length >= TIDY_EVERY * (fails + 1))) {
+            const batch = [];
+            let chars = 0;
+            for (const e of counted.slice(0, TIDY_MAX_BATCH)) {
+                const len = _batchLine(e).length;
+                if (batch.length && chars + len > TIDY_CHAR_CAP) break;
+                batch.push(e); chars += len;
+            }
             const upto = _num(batch[batch.length - 1].id);
             tidy = { batch, upto, rae: after.filter(e => _num(e.id) <= upto && _isRae(e)) };
         }
@@ -762,7 +834,8 @@
         if (o.conv && Array.isArray(o.hist)) {
             s = await sumGet(o.conv);
             const p = sumPlan(s, o.hist, o.cut || 0);
-            if (p.pending >= SUM_CHUNK || (o.force && p.pending)) {
+            const sf = s.fails || 0;
+            if (o.force ? p.pending : (sf < TIDY_STOP && p.pending >= SUM_CHUNK * (sf + 1))) {
                 const end = Math.min(p.cut, p.covered + SUM_CHUNK);
                 const lines = o.hist.slice(p.covered, end).filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content)
                     .map(m => (m.role === 'user' ? USER : (o.me || '小機')) + '：' + _plainLine(m.content)).filter(l => !/：$/.test(l));
@@ -782,12 +855,18 @@
         return hit;
     }
     const _mBusy = {};
-    /** 該整理的整理、該摘要的摘要，塞同一通。o：{ conv, hist, cut, me, call(messages) → {text, usage}, force } */
+    /** 該整理的整理、該摘要的摘要，塞同一通。o：{ conv, hist, cut, me, call(messages) → {text, usage}, force（她按再試一次） }
+     *  同一台別的分頁正在整理就跳過（不會兩頁各叫一次模型） */
     async function maintain(rid, o) {
         o = o || {};
         if (_mBusy[rid]) return { ran: false, why: '正在整理' };
         _mBusy[rid] = true;
         try {
+            return await _wlock('xiaoji_tidy_' + rid, { ifAvailable: true }, got => got ? _maintain(rid, o) : { ran: false, why: '別的分頁正在整理' });
+        } finally { delete _mBusy[rid]; }
+    }
+    async function _maintain(rid, o) {
+        {
             const d = await _due(rid, o);
             if (!d.tidy && !d.sum && !d.merge) return { ran: false, why: '還不用整理' };
             const relMems = d.tidy ? await _relMems(rid, d.tidy.batch) : [];
@@ -804,11 +883,15 @@
                 if (body) {
                     const s = d.s;
                     s.nodes.push({ id: 'sn' + _now().toString(36) + Math.random().toString(36).slice(2, 6), text: body, at: _now() });
-                    s.covered = d.sum.end; s.totalAt = d.sum.plan.total;
+                    s.covered = d.sum.end; s.totalAt = d.sum.plan.total; s.fails = 0;
                     await _sumSave(o.conv, s);
                     await log(rid, { kind: 'sum', conv: o.conv, text: body });
                     res.sum = { ok: true };
-                } else res.sum = { ok: false, why: callErr || '沒交這一節' };
+                } else {
+                    const s = d.s; s.fails = (s.fails || 0) + 1;
+                    await _sumSave(o.conv, s);
+                    res.sum = { ok: false, why: callErr || '沒交這一節' };
+                }
             }
             if (d.merge) {
                 const m = T_MERGE.exec(text), body = m ? _clean(m[1]).replace(/<[^>]+>/g, ' ').trim() : '';
@@ -820,7 +903,7 @@
                 }
             }
             return res;
-        } finally { delete _mBusy[rid]; }
+        }
     }
     async function _applyTidy(rid, tidy, text, callErr, usage, withSum) {
         const inBatch = new Set(tidy.batch.map(e => e.id).concat((tidy.rae || []).map(e => e.id)));
@@ -884,12 +967,12 @@
     }
     async function status(rid) {
         const h = await head(rid), all = await allEvents(rid);
-        const pending = all.filter(e => _num(e.id) > h.tidyAt && e.state === 'ok' && COUNTED.indexOf(e.kind) !== -1).length;
+        const pending = all.filter(e => _num(e.id) > h.tidyAt && e.state === 'ok' && !e.imported && COUNTED.indexOf(e.kind) !== -1).length;
         const last = h.lastTidy ? all.find(e => e.id === h.lastTidy) : null;
         const M = await mems(rid), T = await traits(rid);
         let embed = { done: 0, total: 0, ready: false };
         try { embed = await embedStatus(rid); } catch (e) {}
-        return { pending, every: TIDY_EVERY, lastTidy: last, tidyFails: h.tidyFails || 0, tidyErr: h.tidyErr || '', embed,
+        return { pending, every: TIDY_EVERY, lastTidy: last, tidyFails: h.tidyFails || 0, tidyStopped: (h.tidyFails || 0) >= TIDY_STOP, tidyErr: h.tidyErr || '', embed,
             counts: { events: all.length, mems: M.items.filter(m => m.state === 'ok').length, traits: T.items.filter(t => t.state === 'ok').length } };
     }
     Object.assign(API, { SUM_CHUNK, sumGet, sumPlan, sumSection, sumRemove, maintain, maintainPrompt, revertTidy, status, _setHead });
@@ -917,46 +1000,50 @@
             if (m.role !== 'assistant') return;
             const ts = users.length ? (users[users.length - 1].timestamp || 0) : 0;
             out.push({ kind: 'chat', conv, ts, at: ts || m.timestamp || 0, imported: true,
-                user: users.map(u => String(u.content || '')).join('\n'), reply: String(m.content || ''),
+                user: users.map(u => plain(u.content)).join('\n'), reply: plain(m.content),
                 tools: (m.xjlog || []).map(x => ({ name: x.tool || '', label: x.label || '', ok: !!x.ok })),
                 props: (m.props || []).map(p => ({ id: p.id || (p.prop && p.prop.id) || '', text: p.text || '' })) });
             users = [];
         });
         if (users.length) {
             const ts = users[users.length - 1].timestamp || 0;
-            out.push({ kind: 'chat', conv, ts, at: ts, imported: true, user: users.map(u => String(u.content || '')).join('\n'), reply: '', tools: [], props: [] });
+            out.push({ kind: 'chat', conv, ts, at: ts, imported: true, user: users.map(u => plain(u.content)).join('\n'), reply: '', tools: [], props: [] });
         }
         return out;
     }
-    function _migKey(ev) { return ev.kind + '|' + (ev.conv || '') + '|' + (ev.ts || '') + '|' + (ev.what || '') + '|' + (ev.skill || '') + '|' + String(ev.text || ev.user || '').slice(0, 40); }
-    async function migrate(rid, convs) {
+    // 一來回用「哪一串＋她那則的時間」認（舊房間時期已經記過的也認得）；其他照內容認
+    function _migKey(ev) {
+        if (ev.kind === 'chat' && ev.ts) return 'chat|' + (ev.conv || '') + '|' + ev.ts;
+        return ev.kind + '|' + (ev.conv || '') + '|' + (ev.ts || '') + '|' + (ev.what || '') + '|' + (ev.skill || '') + '|' + String(ev.text || ev.user || '').slice(0, 40);
+    }
+    /** 搬家。同一台兩個分頁同時開也只搬一次（搬家那把鎖）；讀資料出錯就丟錯、不標搬完（終審 #8） */
+    function migrate(rid, convs) { return _wlock('xiaoji_mig_' + rid, {}, () => _migrate(rid, convs)); }
+    async function _migrate(rid, convs) {
         const h0 = await head(rid);
         if (h0.migrated >= V) return { ran: false };
         const all0 = await allEvents(rid);
-        // 中途壞掉再來一次：已經搬過的那幾行不再搬
-        const seen = new Set(all0.filter(e => e.imported).map(_migKey));
+        // 中途壞掉再來一次、或舊房間時期已經記過：那幾行不再搬
+        const seen = new Set(all0.map(_migKey));
         const once = async ev => {
             const row = Object.assign({ imported: true }, ev), k = _migKey(row);
             if (seen.has(k)) return null;
             seen.add(k);
             return log(rid, row);
         };
-        const X = _g('OS_XIAOJI');
-        const rec = (X && X.get) ? await X.get(rid) : {};
+        const rec = (await _get('xiaoji', rid)) || {};   // 直接讀：OS_XIAOJI.get 會把讀不到吞成預設值
         let nEv = 0, nMem = 0;
         // 1. 對話（全部會話照時間排）
-        const D = _g('OS_DB'), rows = [];
+        const D = _db(), rows = [];
         for (const c of (convs || [])) {
-            let msgs = null;
-            try { msgs = (D && D.getStudioChat) ? await D.getStudioChat('xiaoji_conv_' + c.id) : null; } catch (e) { msgs = null; }
+            const msgs = D.getStudioChat ? await D.getStudioChat('xiaoji_conv_' + c.id) : null;
             _pairs(c.id, msgs).forEach(p => { if (!p.at) p.at = c.created || rec.born || 1; rows.push(p); });
         }
         rows.sort((a, b) => a.at - b.at);
         for (const p of rows) if (await once(p)) nEv++;
         // 2. 舊聊天摘要
         for (const c of (convs || [])) {
-            const s = await sumGet(c.id);
-            for (const n of s.nodes) if (await once({ kind: 'sum', conv: c.id, text: String(n.text || ''), at: n.at || 1 })) nEv++;
+            const s = (await _get(SUM, c.id)) || {};
+            for (const n of (Array.isArray(s.nodes) ? s.nodes : [])) if (await once({ kind: 'sum', conv: c.id, text: String(n.text || ''), at: n.at || 1 })) nEv++;
         }
         // 3. 領養、上過的課、作業、小劇場
         if (rec.born && await once({ kind: 'born', text: '來到宿舍住下', at: rec.born })) nEv++;
@@ -981,9 +1068,11 @@
                 const r = await memDo(rid, 'add', { kind: 'legacy', about: 'user', text: t, from: [imp], by: 'import', at: n.at || _now() });
                 if (r.ok) nMem++;
             }
-            if (X && X.save) await X.save(rid, { notes: undefined });
+            const raw = await _get('xiaoji', rid);
+            if (raw) { delete raw.notes; await _put('xiaoji', rid, raw); }
         }
-        await _lock(rid, async () => { const h = await head(rid); h.migrated = V; h.tidyAt = h.nextId - 1; await _put(LIFE, rid + ':head', h); });
+        // 搬來的那幾行帶 imported，整理不算它們（不用動整理游標，舊房間時期已經記的照常整理）
+        await _lock(rid, async () => { const h = await head(rid); h.migrated = V; await _put(LIFE, rid + ':head', h); });
         return { ran: true, events: nEv, mems: nMem };
     }
     const _migRun = {};
@@ -1013,9 +1102,22 @@
         return { v: V, kind: 'aurelia-xiaoji', at: _now(), resident: extra.resident || { id: rid },
             rec: (X && X.get) ? await X.get(rid) : null, life: { head: h, blocks }, mem: await mems(rid), trait: await traits(rid), sums, convs, props };
     }
+    // 終審 #9：檔案裡的編號會被畫進面板的屬性裡——長得不對就整份不收（防有人做假檔塞程式）
+    const ID_RID = /^[\w-]{1,64}$/, ID_E = /^e\d{1,9}$/, ID_M = /^m\d{1,9}$/, ID_T = /^t\d{1,9}$/, ID_CONV = /^[\w-]{1,64}$/;
+    function _checkFile(data) {
+        const bad = why => { throw new Error('這不是小機的檔案（' + why + '）'); };
+        if (!data || data.kind !== 'aurelia-xiaoji' || !data.life || !Array.isArray(data.life.blocks) || !data.life.head) bad('格式不對');
+        if (!data.resident || !ID_RID.test(String(data.resident.id || ''))) bad('編號不對');
+        const ev = x => ID_E.test(String(x));
+        data.life.blocks.forEach(b => { if (!b || !Array.isArray(b.items)) bad('格式不對'); b.items.forEach(e => { if (!e || !ev(e.id) || (e.conv && !ID_CONV.test(String(e.conv))) || (e.ids && !e.ids.every(ev))) bad('編號不對'); }); });
+        ((data.mem && data.mem.items) || []).forEach(m => { if (!m || !ID_M.test(String(m.id)) || !(m.from || []).every(ev)) bad('編號不對'); });
+        ((data.trait && data.trait.items) || []).forEach(t => { if (!t || !ID_T.test(String(t.id)) || !(t.from || []).every(ev)) bad('編號不對'); });
+        (data.convs || []).forEach(c => { if (!c || !c.meta || !ID_CONV.test(String(c.meta.id))) bad('編號不對'); });
+        Object.keys(data.props || {}).forEach(k => { if (!ID_CONV.test(k)) bad('編號不對'); });
+    }
     async function importOne(data, opt) {
         opt = opt || {};
-        if (!data || data.kind !== 'aurelia-xiaoji' || !data.life) throw new Error('這不是小機的檔案');
+        _checkFile(data);   // 先整份檢查：不對就丟錯，原本那隻一點都沒動
         const D = _db();
         const oldRid = (data.resident && data.resident.id) || 'r_' + _now().toString(36);
         const rid = opt.asNew ? 'r_' + _now().toString(36) + Math.random().toString(36).slice(2, 5) : oldRid;

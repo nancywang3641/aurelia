@@ -290,6 +290,22 @@
     /** 小機做大件的那一通也走它自己的接口（10-05 她：「考試調用應該拿小機的接口」「同模型有沒有符合資格，直接呼叫主模型會怪怪的」
      *  →「考試和平常都走小機的接口」）。交給各工坊的 generate 當 via：工坊照舊組自己的說明書、溫度，只是不叫主模型。
      *  回 (messages, {label, temperature}) → Promise<回覆全文>。串流＋留程式碼圍欄同創作室那條（大件很長，不串流會被閘道切掉） */
+    // 它的會話清單（房間存在 localStorage xiaoji_convs；搬家用）
+    function _convsOf(rid) {
+        try {
+            const ls = win.localStorage || window.localStorage;
+            return (JSON.parse(ls.getItem('xiaoji_convs') || '[]') || []).filter(c => c && c.residentId === rid)
+                .map(c => ({ id: c.id, title: c.title || '', created: c.createdAt || c.created || c.lastActive || 0 }));
+        } catch (e) { return []; }
+    }
+    /** 羽毛筆那本「再試一次」：整理一直失敗停下來之後，她按了才再叫一通（走小機說話那條） */
+    async function tidyNow(rid) {
+        const M = _M();
+        if (!M || !M.maintain) return { ran: false, why: '奧瑞亞的記憶還沒載入' };
+        const rec = await get(rid), conn = connConfig(rec), r = _resident(rid);
+        return M.maintain(rid, { me: (r && r.name) || '小機', force: true,
+            call: msgs => { let u = null; return _chat(msgs, conn, null, x => { u = x; }, 'API 小機（整理記憶）').then(t => ({ text: t, usage: u })); } });
+    }
     async function viaFor(rid, signal) {
         const conn = connConfig(await get(rid), 'make');
         return (messages, o) => {
@@ -345,20 +361,25 @@
         // o.conv：房間那一串會話的編號（有給才有舊聊天摘要；考試、沒給的照原本的剪法）；o.userTs：她那一則的時間（經歷簿對帳用）
         const mem = (!o.examNote && _M()) ? _M() : null;
         const H0 = o.history || [];
-        let sumS = null, sumP = null, memory = '', memErr = '';
+        let sumS = null, sumP = null, memory = '', recallText = '', memErr = '';
         if (mem) {
             try {
+                // 新版第一次一句話：奧瑞亞自己把它以前的記事、對話搬進經歷簿（房間還是舊版也會搬；會話清單直接讀 localStorage）
+                if (mem.ensureMigrated) await mem.ensureMigrated(rid, () => _convsOf(rid));
                 if (o.conv) { sumS = await mem.sumGet(o.conv); sumP = mem.sumPlan(sumS, H0, _cutOf(H0.length)); }
                 if (o.conv) await mem.reconcile(rid, o.conv, H0, o.userTs);
                 const winFrom = mem.windowFrom(H0, sumP ? sumP.from : _cutOf(H0.length));
                 const lastA = H0.slice().reverse().find(m => m && m.role === 'assistant');
                 const q = String(o.userText || '') + (lastA ? '\n' + String(lastA.content || '').slice(-200) : '');
                 const sec = await mem.sections(rid, { query: q, conv: o.conv, windowFromTs: winFrom });
-                memory = [sec.pinned, sec.traits, sumS ? mem.sumSection(sumS) : '', sec.recall].filter(Boolean).join('\n\n');
+                // 說明裡只放不常變的（釘住的、樣子、舊聊天摘要）；「這句話讓你想起的」每句都變，放在她這一句前面——
+                //   放在說明裡的話，模型那邊的快取每句都斷在說明後面、整段歷史都要重算（終審 #10）。她的話照樣排最後
+                memory = [sec.pinned, sec.traits, sumS ? mem.sumSection(sumS) : ''].filter(Boolean).join('\n\n');
+                recallText = sec.recall || '';
             } catch (e) { memErr = '這一句沒帶到記憶：' + ((e && e.message) || e); console.warn('[OS_XIAOJI] ' + memErr); }
         }
         const base = _history(H0, sumP ? sumP.from : null);
-        base.push({ role: 'user', content: String(o.userText || '') });
+        base.push({ role: 'user', content: (recallText ? recallText + '\n\n' : '') + String(o.userText || '') });
         const work = [], said = [], log = [], props = [];
         // calls：送出去幾通（決定還能不能再叫）；answered：真的回來幾通（她付的、回覆底下寫的）。
         //   以前回報 calls，按停時停在半路那一通也算進去，跟用量那行對不起來
@@ -424,7 +445,7 @@
         if (mem) {
             try {
                 const E = _g('OS_AURELIA_EDIT');
-                const evId = await mem.logTurn(rid, { conv: o.conv || '', ts: o.userTs || 0, user: String(o.userText || ''), reply: reply,
+                const evId = await mem.logTurn(rid, { conv: o.conv || '', ts: o.userTs || 0, user: mem.plain(o.userText), reply: mem.plain(reply),
                     tools: log.map(x => ({ name: x.tool, label: x.label, ok: x.ok, args: _argsText(x.args), brief: _one(x.text).slice(0, 500) })),
                     props: props.map(p => { let t = ''; try { t = (E && E.text) ? E.text(p, false) : (p.title || ''); } catch (e) {} return { id: p.id, mod: p.mod, text: _one(t).slice(0, 200) }; }) });
                 if (/memory_/i.test(raw)) { const mr = await mem.applyReply(rid, raw, evId); if (mr.changed) memo = mr.done; }
@@ -628,7 +649,7 @@
     }
 
     const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
-        grade, lines, canEnroll, pay, exam, theater, replay, hwSave, adopt, BODIES, bodyOf, viaFor,
+        grade, lines, canEnroll, pay, exam, theater, replay, hwSave, adopt, BODIES, bodyOf, viaFor, tidyNow,
         USER: USER,   // 給模型看的「使用者」：房間接「你的房間／樣子」、做大件的回話都用這個，不用人設的名字
         LIMITS: { CAP_MIN: CAP_MIN, CAP_MAX: CAP_MAX, NO_CHAIN_CAP: NO_CHAIN_CAP } };
     win.OS_XIAOJI = API;
