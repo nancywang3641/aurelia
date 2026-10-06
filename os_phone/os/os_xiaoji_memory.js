@@ -891,6 +891,144 @@
     }
     Object.assign(API, { drop });
 
+    // ── 搬家（新版第一次載入，每隻做一次；她定的：搬現有的、不花錢、性格之後長）────────
+    function _pairs(conv, msgs) {
+        const out = [];
+        let users = [];
+        (msgs || []).forEach(m => {
+            if (!m || m.held) return;
+            if (m.role === 'user') { users.push(m); return; }
+            if (m.role !== 'assistant') return;
+            const ts = users.length ? (users[users.length - 1].timestamp || 0) : 0;
+            out.push({ kind: 'chat', conv, ts, at: ts || m.timestamp || 0, imported: true,
+                user: users.map(u => String(u.content || '')).join('\n'), reply: String(m.content || ''),
+                tools: (m.xjlog || []).map(x => ({ name: x.tool || '', label: x.label || '', ok: !!x.ok })),
+                props: (m.props || []).map(p => ({ id: p.id || (p.prop && p.prop.id) || '', text: p.text || '' })) });
+            users = [];
+        });
+        if (users.length) {
+            const ts = users[users.length - 1].timestamp || 0;
+            out.push({ kind: 'chat', conv, ts, at: ts, imported: true, user: users.map(u => String(u.content || '')).join('\n'), reply: '', tools: [], props: [] });
+        }
+        return out;
+    }
+    function _migKey(ev) { return ev.kind + '|' + (ev.conv || '') + '|' + (ev.ts || '') + '|' + (ev.what || '') + '|' + (ev.skill || '') + '|' + String(ev.text || ev.user || '').slice(0, 40); }
+    async function migrate(rid, convs) {
+        const h0 = await head(rid);
+        if (h0.migrated >= V) return { ran: false };
+        const all0 = await allEvents(rid);
+        // 中途壞掉再來一次：已經搬過的那幾行不再搬
+        const seen = new Set(all0.filter(e => e.imported).map(_migKey));
+        const once = async ev => {
+            const row = Object.assign({ imported: true }, ev), k = _migKey(row);
+            if (seen.has(k)) return null;
+            seen.add(k);
+            return log(rid, row);
+        };
+        const X = _g('OS_XIAOJI');
+        const rec = (X && X.get) ? await X.get(rid) : {};
+        let nEv = 0, nMem = 0;
+        // 1. 對話（全部會話照時間排）
+        const D = _g('OS_DB'), rows = [];
+        for (const c of (convs || [])) {
+            let msgs = null;
+            try { msgs = (D && D.getStudioChat) ? await D.getStudioChat('xiaoji_conv_' + c.id) : null; } catch (e) { msgs = null; }
+            _pairs(c.id, msgs).forEach(p => { if (!p.at) p.at = c.created || rec.born || 1; rows.push(p); });
+        }
+        rows.sort((a, b) => a.at - b.at);
+        for (const p of rows) if (await once(p)) nEv++;
+        // 2. 舊聊天摘要
+        for (const c of (convs || [])) {
+            const s = await sumGet(c.id);
+            for (const n of s.nodes) if (await once({ kind: 'sum', conv: c.id, text: String(n.text || ''), at: n.at || 1 })) nEv++;
+        }
+        // 3. 領養、上過的課、作業、小劇場
+        if (rec.born && await once({ kind: 'born', text: '來到宿舍住下', at: rec.born })) nEv++;
+        const L = _g('OS_XIAOJI_LESSONS') || { SKILLS: [] };
+        for (const id of Object.keys(rec.skills || {})) {
+            const sk = rec.skills[id];
+            if (!sk) continue;
+            const label = ((L.SKILLS || []).find(x => x.id === id) || {}).label || id;
+            if (await once({ kind: 'exam', skill: id, label, pass: true, text: sk.summary || '', at: sk.at || rec.born || 1 })) nEv++;
+            if (sk.hw && await once({ kind: 'hw', skill: id, label, state: sk.hw.state, text: (sk.hw.state === 'done' ? '收下了作業' : '作業') + '：' + (sk.summary || ''), at: sk.at || 1 })) nEv++;
+            if (sk.theater && await once({ kind: 'theater', skill: id, label, text: '演了一場：' + (sk.theater.title || ''), at: sk.theater.at || sk.at || 1 })) nEv++;
+        }
+        // 4. 舊記事 → 以前記的（釘住）。原本整份留在 import 那一行
+        const notes = (rec.notes && Array.isArray(rec.notes.items)) ? rec.notes.items : [];
+        if (notes.length) {
+            const have = new Set((await mems(rid)).items.map(m => m.text));
+            const imp = (await once({ kind: 'import', what: 'notes', data: rec.notes, at: _now(), text: '' }))
+                || ((await allEvents(rid)).find(e => e.kind === 'import' && e.what === 'notes') || {}).id;
+            for (const n of notes) {
+                const t = _one(n.text).slice(0, MEM_LEN);
+                if (!t || have.has(t)) continue;
+                const r = await memDo(rid, 'add', { kind: 'legacy', about: 'user', text: t, from: [imp], by: 'import', at: n.at || _now() });
+                if (r.ok) nMem++;
+            }
+            if (X && X.save) await X.save(rid, { notes: undefined });
+        }
+        await _lock(rid, async () => { const h = await head(rid); h.migrated = V; h.tidyAt = h.nextId - 1; await _put(LIFE, rid + ':head', h); });
+        return { ran: true, events: nEv, mems: nMem };
+    }
+    const _migRun = {};
+    /** 房間送話前叫：沒搬過才搬（getConvs 只在要搬時叫一次） */
+    async function ensureMigrated(rid, getConvs) {
+        if ((await head(rid)).migrated >= V) return { ran: false };
+        if (!_migRun[rid]) _migRun[rid] = Promise.resolve().then(() => migrate(rid, typeof getConvs === 'function' ? getConvs() : getConvs)).finally(() => { delete _migRun[rid]; });
+        return _migRun[rid];
+    }
+
+    // ── 單隻匯出匯入（換電腦、酒館搬手機版）──────────────────
+    async function exportOne(rid, extra) {
+        extra = extra || {};
+        const D = _db(), h = await head(rid), blocks = [];
+        for (let b = 0; b < h.blocks; b++) blocks.push(await _readBlock(rid, b));
+        const X = _g('OS_XIAOJI');
+        const convs = [], sums = {}, props = {};
+        for (const c of (extra.convs || [])) {
+            const msgs = (D.getStudioChat ? await D.getStudioChat('xiaoji_conv_' + c.id) : null) || [];
+            convs.push({ meta: c, messages: msgs });
+            sums[c.id] = await sumGet(c.id);
+            for (const m of msgs) for (const p of (m.props || [])) {
+                const pr = p.prop || p;
+                if (pr && pr._big && pr.id && !props[pr.id]) { const full = await _get('xiaoji_prop', pr.id); if (full) props[pr.id] = full; }
+            }
+        }
+        return { v: V, kind: 'aurelia-xiaoji', at: _now(), resident: extra.resident || { id: rid },
+            rec: (X && X.get) ? await X.get(rid) : null, life: { head: h, blocks }, mem: await mems(rid), trait: await traits(rid), sums, convs, props };
+    }
+    async function importOne(data, opt) {
+        opt = opt || {};
+        if (!data || data.kind !== 'aurelia-xiaoji' || !data.life) throw new Error('這不是小機的檔案');
+        const D = _db();
+        const oldRid = (data.resident && data.resident.id) || 'r_' + _now().toString(36);
+        const rid = opt.asNew ? 'r_' + _now().toString(36) + Math.random().toString(36).slice(2, 5) : oldRid;
+        const convMap = {};
+        (data.convs || []).forEach(c => { const id = c.meta.id; convMap[id] = opt.asNew ? 'xc_' + _now().toString(36) + Math.random().toString(36).slice(2, 6) : id; });
+        const mapConv = id => convMap[id] || id;
+        for (let b = 0; b < data.life.blocks.length; b++) {
+            const blk = JSON.parse(JSON.stringify(data.life.blocks[b]));
+            blk.items.forEach(e => { if (e.conv) e.conv = mapConv(e.conv); });
+            await _put(LIFE, rid + ':' + b, blk);
+        }
+        await _put(LIFE, rid + ':head', Object.assign({}, data.life.head));
+        await _put(MEMS, rid, data.mem || { v: V, nextId: 1, items: [] });
+        await _put(TRAITS, rid, data.trait || { v: V, nextId: 1, items: [] });
+        if (data.rec) await _put('xiaoji', rid, data.rec);
+        const convs = [];
+        for (const c of (data.convs || [])) {
+            const id = mapConv(c.meta.id);
+            if (D.saveStudioChat) await D.saveStudioChat('xiaoji_conv_' + id, c.messages || []);
+            const s = (data.sums || {})[c.meta.id];
+            if (s) await _put(SUM, id, s);
+            convs.push(Object.assign({}, c.meta, { id, residentId: rid }));
+        }
+        for (const pid of Object.keys(data.props || {})) await _put('xiaoji_prop', pid, data.props[pid]);
+        delete _cache[rid];
+        return { rid, resident: Object.assign({}, data.resident, { id: rid }), convs };
+    }
+    Object.assign(API, { migrate, ensureMigrated, exportOne, importOne });
+
     // ── (後面的段落接在這行上面) ──
 
     win.OS_XIAOJI_MEM = API;

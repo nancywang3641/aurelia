@@ -48,6 +48,39 @@
         'map_data', 'studio_chats', 'studio_drafts', 'vn_memories', 'vn_grand_summaries', 'state_data',
         'lobby_summary_index', 'phone_apps', 'app_memory', 'tavern_summary', 'app_data', 'lobby_npc_memory'
     ];
+    // 🧩 小機（宿舍的 API 小機）：記憶與對話在 app_data／studio_chats 裡會跟著備份，
+    //   但「宿舍名冊上有這隻」（os_claude_room_config 的 residents）和「它有哪幾串對話」（xiaoji_convs）在房間的 localStorage，
+    //   以前沒備到——從備份還原，小機會不見（10-06 查到）。這裡只收小機那幾筆，不整份備份那個共用設定（裡面有橋的設定）。
+    //   照意思找的向量（app_data 的 xiaoji_vec::）不收：還原後在本機重新算（不花錢），算完之前照字找照常。
+    const XJ = {
+        roster() {
+            let cfg = null, convs = [];
+            try { cfg = JSON.parse(localStorage.getItem('os_claude_room_config') || 'null'); } catch (e) {}
+            try { convs = JSON.parse(localStorage.getItem('xiaoji_convs') || '[]') || []; } catch (e) {}
+            const residents = ((cfg && Array.isArray(cfg.residents)) ? cfg.residents : []).filter(r => r && r.provider === 'xiaoji');
+            const ids = new Set(residents.map(r => r.id));
+            const active = {};
+            ids.forEach(id => { const v = localStorage.getItem('xiaoji_active__' + id); if (v !== null) active['xiaoji_active__' + id] = v; });
+            return { residents, convs: (Array.isArray(convs) ? convs : []).filter(c => c && ids.has(c.residentId)), active };
+        },
+        restore(r) {
+            if (!r || !Array.isArray(r.residents) || !r.residents.length) return 0;
+            let cfg = {};
+            try { cfg = JSON.parse(localStorage.getItem('os_claude_room_config') || '{}') || {}; } catch (e) {}
+            const list = Array.isArray(cfg.residents) ? cfg.residents : [];
+            let n = 0;
+            r.residents.forEach(x => { if (x && x.id && !list.some(y => y && y.id === x.id)) { list.push(x); n++; } });
+            cfg.residents = list;
+            localStorage.setItem('os_claude_room_config', JSON.stringify(cfg));
+            let convs = [];
+            try { convs = JSON.parse(localStorage.getItem('xiaoji_convs') || '[]') || []; } catch (e) {}
+            (r.convs || []).forEach(c => { if (c && c.id && !convs.some(y => y && y.id === c.id)) convs.push(c); });
+            localStorage.setItem('xiaoji_convs', JSON.stringify(convs));
+            Object.keys(r.active || {}).forEach(k => { if (localStorage.getItem(k) === null) localStorage.setItem(k, r.active[k]); });
+            return n;
+        },
+        skip(store, e) { return store === 'app_data' && /^xiaoji_vec::/.test(String((e && e.id) || '')); }
+    };
     // 舊版備份檔（V3）用的欄位名 → 倉庫名；還原舊檔時用
     const LEGACY_FIELDS = {
         varPacks: 'var_packs', uiTemplates: 'ui_templates', vnChapters: 'vn_chapters',
@@ -70,7 +103,7 @@
                 const db = await win.OS_DB.init();
                 const tx = db.transaction(storeName, 'readonly');
                 const req = tx.objectStore(storeName).getAll();
-                req.onsuccess = () => resolve(req.result || []);
+                req.onsuccess = () => resolve((req.result || []).filter(e => !XJ.skip(storeName, e)));
                 req.onerror = e => reject(e.target.error);
             } catch(e) { resolve([]); } // 若該倉庫不存在則回傳空陣列
         });
@@ -100,6 +133,7 @@
             if (opts.fullExport) {
                 out.stores = {};
                 for (const name of FULL_STORES) out.stores[name] = await _getStore(name);
+                out.xiaoji_roster = XJ.roster();
             }
         } catch(e) { console.warn('[OS_BACKUP] DB 收集部分失敗:', e); }
         return out;
@@ -160,6 +194,7 @@
                 else if (name === 'vn_chapters' || name === 'vn_memories' || name === 'vn_grand_summaries') restored.vn += n;
                 else if (name === 'api_chats') restored.chats += n;
             }
+            if (d.xiaoji_roster) { try { restored.xiaoji = XJ.restore(d.xiaoji_roster); } catch (e) { console.warn('[OS_BACKUP] 小機名冊沒還原成:', e); } }
         }
 
         // LocalStorage 恢復
@@ -322,6 +357,7 @@
                 if (k && p.prefixes.some(x => k.startsWith(x))) ls[k] = localStorage.getItem(k);
             }
         }
+        if (sel.some(p => (p.stores || []).indexOf('app_data') !== -1)) db.xiaoji_roster = XJ.roster();
         return { version: 4, exportedAt: new Date().toISOString(), type: 'cloud', parts: sel.map(p => p.k), db, localStorage: ls };
     }
     async function _sha(text) {
@@ -519,6 +555,7 @@
 
     // ── 對外接口 ──────────────────────────────────────────────────────
     win.OS_BACKUP = {
+        _xj: XJ,
         PARTS, autoGet, autoSave, relayOf, ghGet, ghSave, destReady, cloudBackup, cloudList, cloudGet, collectParts,
         getSettings,
         saveSettings,
