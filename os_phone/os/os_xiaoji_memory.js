@@ -878,6 +878,19 @@
     }
     Object.assign(API, { SUM_CHUNK, sumGet, sumPlan, sumSection, sumRemove, maintain, maintainPrompt, revertTidy, status, _setHead });
 
+    // ── 刪整隻（宿舍請它搬走）──────────────────────────────
+    async function drop(rid, convs) {
+        const h = await head(rid), vh = await _get(VEC, rid + ':head');
+        for (let b = 0; b <= h.blocks; b++) await _put(LIFE, rid + ':' + b, null);
+        await _put(LIFE, rid + ':head', null);
+        await _put(MEMS, rid, null); await _put(TRAITS, rid, null);
+        for (let b = 0; b < ((vh && vh.blocks) || 0); b++) await _put(VEC, rid + ':' + b, null);
+        await _put(VEC, rid + ':head', null);
+        for (const c of (Array.isArray(convs) ? convs : [])) if (c) await _put(SUM, c, null);
+        delete _cache[rid];
+    }
+    Object.assign(API, { drop });
+
     // ── (後面的段落接在這行上面) ──
 
     win.OS_XIAOJI_MEM = API;
