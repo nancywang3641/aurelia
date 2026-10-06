@@ -439,6 +439,194 @@
     Object.assign(API, { mems, memDo, isPinned, traits, traitDo, parse, strip, applyReply, pinnedText, traitsText, personaLines,
         KIND_NAME, ABOUT_NAME, TRAIT_NAME, LIMITS: { MEM_LEN, PER_REPLY, PIN_BUDGET, TRAIT_LEN, TRAITS_PER_KIND } });
 
+    // ── 找回 ────────────────────────────────────────────────
+    const UNIT_LEN = 400, RECALL_MEM = 6, RECALL_EV = 4, EV_SNIP = 300, SRC_SNIP = 120, TOPK = 20, RRF_K = 60;
+    const EMBED_MODEL = 'Xenova/bge-small-zh-v1.5', READY = 0.9, QUERY_WAIT = 1500, VEC_MIN = 0.35, VEC_BLOCK = 200, EMBED_BATCH = 32;
+    const EV_NAME = { chat: '聊天', prop: '單子', lesson: '上課', exam: '考試', hw: '作業', theater: '小劇場', wear: '打扮', room: '房間', bubble: '泡泡', born: '來到宿舍', sum: '舊聊天整理' };
+    function _evText(e, who) {
+        if (!e || e.state !== 'ok') return '';
+        const me = who || '你';
+        if (e.kind === 'chat') return [e.user ? USER + '：' + e.user : '', e.reply ? me + '：' + e.reply : ''].filter(Boolean).join('\n');
+        if (e.kind === 'exam') return '考「' + (e.label || e.skill || '') + '」' + (e.pass ? '考過了' : '沒考過' + (e.why ? '（' + e.why + '）' : '')) + (e.text ? '。交的作業：' + e.text : '');
+        if (EV_NAME[e.kind]) return EV_NAME[e.kind] + '：' + String(e.text || '');
+        return '';
+    }
+    async function _units(rid) {
+        const c = _c(rid);
+        if (c.units) return c.units;
+        const evs = await allEvents(rid), M = await mems(rid);
+        const out = [];
+        const add = u => { const t = _bigrams(u.text), tf = {}; t.forEach(w => { tf[w] = (tf[w] || 0) + 1; }); u.tf = tf; u.len = t.length; out.push(u); };
+        M.items.forEach(m => {
+            if (m.state === 'ok') add({ uid: m.id + '@' + m.versions.length, type: 'mem', ref: m.id, text: m.text, at: m.at });
+            if (m.state === 'wrong') return;
+            m.versions.forEach((v, i) => { const nx = m.versions[i + 1]; if (nx && nx.why === 'update') add({ uid: m.id + 'v' + i, type: 'old', ref: m.id, text: v.text, at: v.at, until: nx.at }); });
+        });
+        evs.forEach(e => {
+            const t = _evText(e);
+            if (!t) return;
+            for (let i = 0, k = 0; i < t.length; i += UNIT_LEN, k++) add({ uid: e.id + '#' + k, type: 'ev', ref: e.id, text: t.slice(i, i + UNIT_LEN), at: e.at, conv: e.conv || '', ts: e.ts || 0 });
+        });
+        c.units = out; c.evMap = new Map(evs.map(e => [e.id, e]));
+        return out;
+    }
+    function _bm25(units, q) {
+        const qt = Array.from(new Set(_bigrams(q)));
+        if (!qt.length || !units.length) return [];
+        const N = units.length, df = {};
+        qt.forEach(w => { df[w] = 0; units.forEach(u => { if (u.tf[w]) df[w]++; }); });
+        const avg = units.reduce((a, u) => a + u.len, 0) / N || 1, k1 = 1.2, b = 0.75;
+        return units.map((u, i) => {
+            let s = 0;
+            qt.forEach(w => { const f = u.tf[w]; if (!f) return; const idf = Math.log(1 + (N - df[w] + 0.5) / (df[w] + 0.5)); s += idf * f * (k1 + 1) / (f + k1 * (1 - b + b * u.len / avg)); });
+            return { i, s };
+        }).filter(x => x.s > 0).sort((a, b) => b.s - a.s);
+    }
+    function _rrf(lists) {
+        const s = {};
+        lists.forEach(l => l.forEach((uid, r) => { s[uid] = (s[uid] || 0) + 1 / (RRF_K + r + 1); }));
+        return Object.keys(s).sort((a, b) => s[b] - s[a]);
+    }
+    function _dot(a, b) { let d = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) d += a[i] * b[i]; return d; }
+    // 截一段給模型看：從第一個對到的字前面一點開始截（只截開頭的話，很長一則中間那句會被截掉）
+    function _snip(text, q, n) {
+        const t = _one(text);
+        if (t.length <= n) return t;
+        const low = t.toLowerCase();
+        let at = -1;
+        _bigrams(q).forEach(w => { const i = low.indexOf(w); if (i !== -1 && (at === -1 || i < at)) at = i; });
+        const s = Math.max(0, Math.min(at === -1 ? 0 : at - Math.floor(n / 3), t.length - n));
+        return (s > 0 ? '…' : '') + t.slice(s, s + n) + (s + n < t.length ? '…' : '');
+    }
+    function _timeout(p, ms) { return Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]); }
+
+    // 向量：Float32 打包成 base64 字串（JSON 安全、比數字陣列省一半以上）
+    function _pack(vec) { const b = new Uint8Array(new Float32Array(vec).buffer); let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
+    function _unpack(s) { const bin = atob(s), b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return new Float32Array(b.buffer); }
+    async function _vecHead(rid) { const h = await _get(VEC, rid + ':head'); return (h && h.model === EMBED_MODEL) ? h : { v: V, model: EMBED_MODEL, blocks: 0 }; }
+    async function _vecs(rid) {
+        const c = _c(rid);
+        if (c.vecs) return c.vecs;
+        const h = await _vecHead(rid), map = new Map();
+        for (let b = 0; b < h.blocks; b++) {
+            const blk = await _get(VEC, rid + ':' + b);
+            if (blk && blk.model === EMBED_MODEL && Array.isArray(blk.items)) blk.items.forEach(([uid, s]) => map.set(uid, _unpack(s)));
+        }
+        c.vecs = map;
+        return map;
+    }
+    async function embedStatus(rid) {
+        const units = await _units(rid), vecs = await _vecs(rid);
+        const done = units.filter(u => vecs.has(u.uid)).length;
+        return { done, total: units.length, ready: units.length > 0 && done >= units.length * READY };
+    }
+    const _embedRun = {};
+    /** 背景把還沒算的單位算好（回完話後叫；遷移、還原之後從頭算）。小模型載不到就丟錯（叫的那邊吞掉，下次再試） */
+    function embedPending(rid, onProgress) {
+        if (_embedRun[rid]) return _embedRun[rid];
+        _embedRun[rid] = (async () => {
+            const VE = _g('OS_VECTOR_ENGINE');
+            const units = await _units(rid), vecs = await _vecs(rid);
+            const todo = units.filter(u => !vecs.has(u.uid));
+            let done = units.length - todo.length;
+            if (!todo.length || !VE || !VE.embedLocal) return { done, total: units.length };
+            const h = await _vecHead(rid);
+            let bi = Math.max(0, h.blocks - 1);
+            let blk = h.blocks ? await _get(VEC, rid + ':' + bi) : null;
+            if (!blk || blk.model !== EMBED_MODEL || !Array.isArray(blk.items) || blk.items.length >= VEC_BLOCK) { blk = { v: V, model: EMBED_MODEL, items: [] }; bi = h.blocks; }
+            for (let i = 0; i < todo.length; i += EMBED_BATCH) {
+                const part = todo.slice(i, i + EMBED_BATCH);
+                const out = await VE.embedLocal(part.map(u => u.text), EMBED_MODEL);
+                for (let j = 0; j < part.length; j++) {
+                    if (!out || !out[j]) continue;
+                    if (blk.items.length >= VEC_BLOCK) { await _put(VEC, rid + ':' + bi, blk); bi++; blk = { v: V, model: EMBED_MODEL, items: [] }; }
+                    blk.items.push([part[j].uid, _pack(out[j])]);
+                    vecs.set(part[j].uid, new Float32Array(out[j]));
+                    done++;
+                }
+                await _put(VEC, rid + ':' + bi, blk);
+                await _put(VEC, rid + ':head', { v: V, model: EMBED_MODEL, blocks: bi + 1 });
+                if (typeof onProgress === 'function') { try { onProgress({ done, total: units.length }); } catch (e) {} }
+            }
+            return { done, total: units.length };
+        })().finally(() => { delete _embedRun[rid]; });
+        return _embedRun[rid];
+    }
+
+    /** 這句話讓它想起的：照字＋照意思（向量就緒才用）合併；最近原文窗裡的經歷、已經釘住的記憶不重複拿 */
+    async function recall(rid, o) {
+        o = o || {};
+        const units = await _units(rid), evMap = _c(rid).evMap;
+        const q = String(o.query || '');
+        const pinIds = new Set(o.pinIds || []);
+        const winFrom = o.windowFromTs == null ? Infinity : o.windowFromTs;
+        const inWin = e => !!(e && o.conv && e.conv === o.conv && e.ts && e.ts >= winFrom);
+        const pool = units.filter(u => u.type === 'ev' ? !inWin(evMap.get(u.ref)) : !(u.type === 'mem' && pinIds.has(u.ref)));
+        const kw = _bm25(pool, q).slice(0, TOPK).map(x => pool[x.i].uid);
+        let vec = [], usedVec = false;
+        const VE = _g('OS_VECTOR_ENGINE');
+        if (q.trim() && VE && VE.embedLocal) {
+            const vecs = await _vecs(rid);
+            const have = units.filter(u => vecs.has(u.uid)).length;
+            if (units.length && have >= units.length * READY) {
+                let qv = null;
+                try { qv = await _timeout(Promise.resolve(VE.embedLocal(q, EMBED_MODEL)).catch(() => null), QUERY_WAIT); } catch (e) { qv = null; }
+                if (qv) {
+                    usedVec = true;
+                    const qf = new Float32Array(qv);
+                    vec = pool.filter(u => vecs.has(u.uid)).map(u => ({ uid: u.uid, s: _dot(qf, vecs.get(u.uid)) }))
+                        .filter(x => x.s >= VEC_MIN).sort((a, b) => b.s - a.s).slice(0, TOPK).map(x => x.uid);
+                }
+            }
+        }
+        const byUid = new Map(pool.map(u => [u.uid, u]));
+        const memsOut = [], evsOut = [], seenM = new Set(), seenE = new Set();
+        for (const uid of _rrf([kw, vec])) {
+            const u = byUid.get(uid);
+            if (!u) continue;
+            if (u.type === 'ev') { if (evsOut.length < RECALL_EV && !seenE.has(u.ref)) { seenE.add(u.ref); evsOut.push(u); } }
+            else if (memsOut.length < RECALL_MEM && !seenM.has(u.ref + u.type)) { seenM.add(u.ref + u.type); memsOut.push(u); }
+            if (memsOut.length >= RECALL_MEM && evsOut.length >= RECALL_EV) break;
+        }
+        return { mems: memsOut, evs: evsOut, usedVec, q };
+    }
+    function windowFrom(hist, fromIdx) {
+        const h = hist || [];
+        for (let i = Math.max(0, fromIdx || 0); i < h.length; i++) if (h[i] && h[i].timestamp) return h[i].timestamp;
+        return Infinity;
+    }
+    async function _recallText(rid, R) {
+        if (!R.mems.length && !R.evs.length) return '';
+        const M = await mems(rid), evMap = _c(rid).evMap || new Map();
+        const lines = [];
+        R.mems.forEach(u => {
+            const m = M.items.find(x => x.id === u.ref);
+            if (!m) return;
+            if (u.type === 'old') { lines.push('・以前（到' + _ago(u.until) + '為止）#' + _shortId(m.id) + '：' + u.text); return; }
+            const src = (m.from || []).map(id => evMap.get(id)).find(e => e && e.state === 'ok');
+            const s = src ? _snip(_evText(src), R.q + ' ' + m.text, SRC_SNIP) : '';
+            lines.push('・' + _memLine(m) + (s ? '　原話：「' + s + '」' : ''));
+        });
+        R.evs.forEach(u => {
+            const e = evMap.get(u.ref);
+            if (!e) return;
+            lines.push('・經歷（' + _ago(e.at) + '，' + (EV_NAME[e.kind] || e.kind) + '）' + _snip(u.text, R.q, EV_SNIP));
+        });
+        if (!lines.length) return '';
+        return ['【這句話讓你想起的】',
+            '從你的筆記和以前的經歷裡，照這句話找出來的；用不上就當沒看到。標「以前」的是過去的事，現在不一定還是這樣。筆記跟附的原話對不上時，以原話為準。']
+            .concat(lines).join('\n');
+    }
+    /** 一句話要帶的三段（考試不叫這支）。recall 段每句會變，放說明最後 */
+    async function sections(rid, o) {
+        o = o || {};
+        const P = await pinnedText(rid);
+        const T = await traitsText(rid);
+        const R = await recall(rid, { query: o.query, conv: o.conv, windowFromTs: o.windowFromTs, pinIds: P.shown });
+        return { pinned: P.text, traits: T, recall: await _recallText(rid, R), usedVec: R.usedVec, over: P.over };
+    }
+    Object.assign(API, { EMBED_MODEL, recall, sections, windowFrom, embedPending, embedStatus, evText: _evText });
+
     // ── (後面的段落接在這行上面) ──
 
     win.OS_XIAOJI_MEM = API;
