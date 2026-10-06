@@ -5393,7 +5393,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             setStatus('正在匯入...', 'rgba(26,28,40,0.25)');
             try {
                 const result = await BACKUP.importLocal(file);
-                setStatus(`匯入完成：世界書 ${result.worldbook} 條、設定 ${result.localStorage} 項`, 'rgba(26,28,40,0.25)');
+                setStatus(`匯入完成：世界書 ${result.worldbook} 條、設定 ${result.localStorage} 項` + (result.favVoices ? `、收藏的語音 ${result.favVoices} 段` : ''), 'rgba(26,28,40,0.25)');
             } catch(e) { setStatus('匯入失敗：' + e.message, '#fc8181'); }
             e.target.value = '';
         });
@@ -5467,7 +5467,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 b.textContent = '還原中…';
                 try {
                     const res = await BACKUP.applyData(await BACKUP.cloudGet(b.dataset.id));
-                    if (await AUI.confirm('還原好了（聊天 ' + res.chats + '、劇情 ' + res.vn + '、世界書 ' + res.worldbook + '、設定 ' + res.localStorage + '）。重新整理才看得到，現在重新整理？', { okText: '重新整理', title: '從雲端還原' })) location.reload();
+                    if (await AUI.confirm('還原好了（聊天 ' + res.chats + '、劇情 ' + res.vn + '、世界書 ' + res.worldbook + '、設定 ' + res.localStorage + (res.favVoices ? '、收藏的語音 ' + res.favVoices : '') + '）。重新整理才看得到，現在重新整理？', { okText: '重新整理', title: '從雲端還原' })) location.reload();
                 } catch (e2) { AUI.alert('還原沒成功：' + e2.message); }
                 b.textContent = '還原';
             });

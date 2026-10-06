@@ -91,6 +91,49 @@
             return rids.length;
         }
     };
+    // ⭐ 收藏的語音（房間長按語音泡泡「收藏語音」，10-06）：清單在 app_data（room_fav_voice::global::<住戶 id>），
+    //   聲音在 images 倉庫（aud_fav_…，二進位，上面那條「圖片不收」本來會漏掉）。她：「收藏語音可以跟備份走吧」
+    //   → 只收清單上點名的那幾段，轉成 base64 放在 db.fav_voices，跟著清單那塊（手機 app）走；
+    //   還原時這台沒有的才寫回 images（同 OS_DB.saveImage 的格式 {id, data: Blob}）。其他圖片照舊不收。
+    const FAV = {
+        PRE: 'room_fav_voice::',
+        ids(appData) {
+            const out = [];
+            (appData || []).forEach(e => {
+                if (String((e && e.id) || '').indexOf(FAV.PRE) !== 0 || !Array.isArray(e.value)) return;
+                e.value.forEach(v => { const a = v && v.audio; if (a && /^aud_fav_/.test(a) && out.indexOf(a) === -1) out.push(a); });
+            });
+            return out;
+        },
+        async collect(appData) {
+            const out = [];
+            for (const id of FAV.ids(appData)) {
+                try {
+                    const e = await _getOne('images', id);
+                    if (!e || !(e.data instanceof Blob)) continue;
+                    const bytes = new Uint8Array(await e.data.arrayBuffer());
+                    let bin = '';
+                    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+                    out.push({ id: id, type: e.data.type || 'audio/mpeg', b64: btoa(bin) });
+                } catch (err) { console.warn('[OS_BACKUP] 收藏的語音讀不出來，這段沒帶：', id, err); }
+            }
+            return out;
+        },
+        async restore(list) {
+            let n = 0;
+            for (const v of (list || [])) {
+                if (!v || !/^aud_fav_/.test(String(v.id || '')) || typeof v.b64 !== 'string') continue;
+                try {
+                    if (await _getOne('images', v.id)) continue;   // 這台已經有
+                    const bin = atob(v.b64), bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    await _putStore('images', { id: v.id, data: new Blob([bytes], { type: v.type || 'audio/mpeg' }) });
+                    n++;
+                } catch (err) { console.warn('[OS_BACKUP] 收藏的語音沒還原成：', v.id, err); }
+            }
+            return n;
+        }
+    };
     // 舊版備份檔（V3）用的欄位名 → 倉庫名；還原舊檔時用
     const LEGACY_FIELDS = {
         varPacks: 'var_packs', uiTemplates: 'ui_templates', vnChapters: 'vn_chapters',
@@ -119,6 +162,18 @@
         });
     }
 
+    function _getOne(storeName, key) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                if (!win.OS_DB) return resolve(null);
+                const db = await win.OS_DB.init();
+                const req = db.transaction(storeName, 'readonly').objectStore(storeName).get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = e => reject(e.target.error);
+            } catch (e) { resolve(null); }
+        });
+    }
+
     function _putStore(storeName, entry) {
         return new Promise(async (resolve, reject) => {
             try {
@@ -144,6 +199,7 @@
                 out.stores = {};
                 for (const name of FULL_STORES) out.stores[name] = await _getStore(name);
                 out.xiaoji_roster = XJ.roster();
+                out.fav_voices = await FAV.collect(out.stores.app_data);
             }
         } catch(e) { console.warn('[OS_BACKUP] DB 收集部分失敗:', e); }
         return out;
@@ -206,6 +262,7 @@
                 else if (name === 'api_chats') restored.chats += n;
             }
             if (d.xiaoji_roster) { try { restored.xiaoji = XJ.restore(d.xiaoji_roster); } catch (e) { console.warn('[OS_BACKUP] 小機名冊沒還原成:', e); } }
+            if (Array.isArray(d.fav_voices)) restored.favVoices = await FAV.restore(d.fav_voices);
         }
 
         // LocalStorage 恢復
@@ -311,7 +368,7 @@
     const PARTS = [
         { k: 'story', label: '劇情（章節、記憶、大總結、書架、人設）', stores: ['vn_chapters', 'vn_memories', 'vn_grand_summaries', 'tavern_summary', 'map_data'],
           ls: ['aurelia_custom_worlds', 'vn_current_story_id', 'vn_current_story_title', 'os_personas'] },
-        { k: 'phone', label: '手機 app（聊天、微博、各 app 的資料）', stores: ['api_chats', 'wb_posts', 'phone_apps', 'app_memory', 'app_data'] },
+        { k: 'phone', label: '手機 app（聊天、微博、各 app 的資料、收藏的語音）', stores: ['api_chats', 'wb_posts', 'phone_apps', 'app_memory', 'app_data'] },
         { k: 'wb', label: '世界書', worldbook: true, ls: ['os_worldbook_books'] },
         { k: 'avs', label: '狀態與面板', stores: ['var_packs', 'ui_templates', 'state_data'],
           ls: ['avs_condition_rules', 'aurelia_rules_tavern', 'avs_current_state', 'avs_active_ui_templates'], prefixes: ['avs_state_'] },
@@ -368,7 +425,10 @@
                 if (k && p.prefixes.some(x => k.startsWith(x))) ls[k] = localStorage.getItem(k);
             }
         }
-        if (sel.some(p => (p.stores || []).indexOf('app_data') !== -1)) db.xiaoji_roster = XJ.roster();
+        if (sel.some(p => (p.stores || []).indexOf('app_data') !== -1)) {
+            db.xiaoji_roster = XJ.roster();
+            db.fav_voices = await FAV.collect(db.stores.app_data);   // ⭐ 收藏的語音跟著它的清單走
+        }
         return { version: 4, exportedAt: new Date().toISOString(), type: 'cloud', parts: sel.map(p => p.k), db, localStorage: ls };
     }
     async function _sha(text) {
@@ -567,6 +627,7 @@
     // ── 對外接口 ──────────────────────────────────────────────────────
     win.OS_BACKUP = {
         _xj: XJ,
+        _fav: FAV,
         PARTS, autoGet, autoSave, relayOf, ghGet, ghSave, destReady, cloudBackup, cloudList, cloudGet, collectParts,
         getSettings,
         saveSettings,
