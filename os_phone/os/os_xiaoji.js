@@ -276,7 +276,7 @@
         });
     }
     function _isAbort(e, signal) { return !!((signal && signal.aborted) || (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || ''))))); }
-    function _chat(messages, conn, signal, onUsage, label) {
+    function _chat(messages, conn, signal, onUsage, label, onThinking) {
         return new Promise((resolve, reject) => {
             const A = _g('OS_API');
             if (!A || !A.chat) { reject(new Error('模型連線還沒載入')); return; }
@@ -284,7 +284,8 @@
                 t => resolve(String(t == null ? '' : t)),
                 // 別的 realm（iframe）丟來的 Error 不是這邊的 Error：照抄名字，AbortError 才認得出來
                 e => reject(e instanceof Error ? e : Object.assign(new Error(String((e && e.message) || e || '沒有回應')), { name: (e && e.name) || 'Error' })),
-                Object.assign({}, conn.options, { signal: signal, label: label || 'API 小機', onUsage: onUsage }));
+                Object.assign({}, conn.options, { signal: signal, label: label || 'API 小機', onUsage: onUsage },
+                    onThinking ? { showThinking: true, onThinking: onThinking } : {}));   // 聊天那通要看他在想什麼（官方給的摘要）
         });
     }
     /** 小機做大件的那一通也走它自己的接口（10-05 她：「考試調用應該拿小機的接口」「同模型有沒有符合資格，直接呼叫主模型會怪怪的」
@@ -357,6 +358,7 @@
         tools.forEach(t => { byName[t.name] = t; });
         const runTool = o.runTool || ((t, args) => _runReal(rid, t, args));
         const conn = connConfig(rec);
+        const thinks = [];   // 這一輪每一通官方給的思考摘要（房間畫成「思考」摺疊）
         const user = USER;
         // o.conv：房間那一串會話的編號（有給才有舊聊天摘要；考試、沒給的照原本的剪法）；o.userTs：她那一則的時間（經歷簿對帳用）
         const mem = (!o.examNote && _M()) ? _M() : null;
@@ -401,7 +403,7 @@
                     const tail = msgs[msgs.length - 1];
                     msgs[msgs.length - 1] = { role: tail.role, content: String(tail.content || '') + '\n\n' + _lastNote(user, props.length > 0) };
                 }
-                const text = await _chat(msgs, conn, o.signal, _addUse);
+                const text = await _chat(msgs, conn, o.signal, _addUse, undefined, t => { thinks.push(t); });
                 answered++;
                 const W = _g('WX_TOOLS');
                 const ex = (W && W.extract) ? W.extract(text) : { text: text, calls: [] };
@@ -462,6 +464,7 @@
         }, 0);
         // calls＝小機自己回來的那幾通＋大件真的叫到的專門那幾通（她付的錢，回覆底下照實寫）
         return { reply: reply, calls: answered + log.filter(x => x.gen).length, props: props, stopped: stopped, memo: memo, memErr: memErr,
+            thinking: thinks.length ? thinks.join('\n\n') : null,
             usage: use.n ? use : null, model: String((conn.config && conn.config.model) || ''),
             log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text, gen: !!x.gen })) };
     }

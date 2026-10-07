@@ -130,7 +130,22 @@
         if (isFinite(o.temperature) && o.temperature !== 1) body.temperature = Math.min(1, Math.max(0, o.temperature));
         if (o.top_p !== undefined && isFinite(o.top_p) && o.top_p !== 1) body.top_p = o.top_p;
         if (['low', 'medium', 'high', 'xhigh', 'max'].indexOf(o.effort) !== -1) body.output_config = { effort: o.effort };
+        if (o.thinkingSummary) body.thinking = { type: 'adaptive', display: 'summarized' };   // 回傳思考摘要（原始思考官方從來不給）
         return body;
+    }
+    // Claude 原生格式的回覆 → { text, thinking, refusal }
+    //   thinking＝官方給的思考摘要（要 display:'summarized' 才有字，不然是空字串）
+    //   refusal＝官方的自動安全檢查擋下（HTTP 200、stop_reason 'refusal'），category 例如 reasoning_extraction（在挖他的思考過程）
+    function _fromAnthropicData(d) {
+        const blocks = (d && Array.isArray(d.content)) ? d.content : [];
+        const text = blocks.filter(b => b && b.type === 'text').map(b => b.text).join('');
+        const thinking = blocks.filter(b => b && b.type === 'thinking' && b.thinking).map(b => String(b.thinking).trim()).filter(Boolean).join('\n\n');
+        const refusal = (d && d.stop_reason === 'refusal') ? { category: (d.stop_details && d.stop_details.category) || '' } : null;
+        return { text, thinking, refusal };
+    }
+    // 這幾顆不管開不開都會先想（思考照樣算錢），差別只在回不回傳摘要，所以開摘要不多花錢。
+    //   其他型號（Opus 4.8 以前、Haiku）沒寫 thinking 就不想，這裡不替她多開
+    function _thinksAnyway(model) { return /claude-(?:sonnet-5|opus-5|fable|mythos)/i.test(String(model || ''));
     }
     win.OS_TO_ANTHROPIC_BODY = _toAnthropicBody;
 
@@ -1860,7 +1875,8 @@
                     //   網址填 https://api.anthropic.com 或 …/v1 都行；中轉站填它給的根網址。
                     const _base = String(config.url || '').replace(/\/chat\/completions$/, '').replace(/\/messages$/, '').replace(/\/v1$/, '').replace(/\/+$/, '');
                     const _aUrl = _base + '/v1/messages';
-                    const _aBody = _toAnthropicBody(cleanMessages, { model: config.model, temperature, maxTokens, top_p, effort: config.reasoningEffort });
+                    const _aBody = _toAnthropicBody(cleanMessages, { model: config.model, temperature, maxTokens, top_p, effort: config.reasoningEffort,
+                        thinkingSummary: !!options.showThinking && _thinksAnyway(config.model) });   // 小機那條要看他在想什麼
                     const _aResp = await fetch(_aUrl, {
                         method: 'POST', headers: win.OS_API.authHeaders(_aUrl, config.key, { json: true, anthropic: true }),
                         body: _keepReq(_safeJson(_aBody)),
@@ -1869,9 +1885,11 @@
                     const _aData = await _aResp.json();
                     rawApiResponse = _aData;
                     if (!_aResp.ok && _aData && _aData.error) throw new Error('HTTP ' + _aResp.status + '：' + (_aData.error.message || JSON.stringify(_aData.error)));
-                    if (_aData && _aData.stop_reason === 'refusal') throw new Error('模型拒絕回答這一則（refusal）');
-                    const _aText = ((_aData && _aData.content) || []).filter(b => b && b.type === 'text').map(b => b.text).join('');
-                    fullText = normalizeResponse({ choices: [{ message: { content: _aText } }] }, _keepFences);
+                    const _aOut = _fromAnthropicData(_aData);
+                    // 被擋：類別帶在字裡（房間照類別講人話；跨分頁的錯誤物件屬性會掉，字不會）
+                    if (_aOut.refusal) throw new Error('模型拒絕回答這一則（refusal' + (_aOut.refusal.category ? '：' + _aOut.refusal.category : '') + '）');
+                    if (_aOut.thinking && typeof options.onThinking === 'function') { try { options.onThinking(_aOut.thinking); } catch (e) {} }
+                    fullText = normalizeResponse({ choices: [{ message: { content: _aOut.text } }] }, _keepFences);
                 } else if (_isGeminiFmt) {
                     // ── Gemini 原生格式：POST /v1beta/models/{model}:generateContent ──
                     //   接 Gemini CLI 的公益站（例如 gcli 那類）走 OpenAI 相容格式時不吃 Google 的安全欄位，R18 整段被過濾回空；
