@@ -1005,16 +1005,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 enableBtn('sprite-removebg-btn', false);
                 setStatus('載入 AI 模型（第一次 ~40MB，之後快）...');
                 try {
-                    if (!state.bgRemover) {
-                        const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
-                        state.bgRemover = m.removeBackground;
-                    }
-                    setStatus('AI 去背中（單執行緒約 10–30 秒）...');
-                    const removed = await state.bgRemover(state.blob, {
-                        model: 'isnet_fp16',
-                        output: { format: 'image/png', quality: 1.0 },
+                    // 走劇情立繪那支共用的（有顯卡用顯卡、跟其他去背排隊；見 vn_core.js _stripSpriteBgAI）
+                    const VC = (window.parent || window).VN_Core || window.VN_Core;
+                    if (!VC || !VC._stripSpriteBgAI) throw new Error('去背工具還沒載入，稍等再按一次');
+                    setStatus('AI 去背中...');
+                    const removed = await VC._stripSpriteBgAI(state.blob, {
                         progress: (k, c, t) => { if (t > 0) setStatus(k + ': ' + Math.round(c/t*100) + '%'); }
                     });
+                    if (!removed) throw new Error('去背沒成功');
                     _applyRemovedBlob(removed);
                     setStatus('AI 去背完成');
                 } catch (e) {

@@ -2060,13 +2060,21 @@
             return out;
         },
 
-        // 🤖 AI 去背（@imgly isnet，靠 AI 認人形、吃任何背景）：立繪模式唯一去背路徑（同典籍「一鍵生立繪」）。
-        //   首次下載 ~40MB 模型(之後快取)、單張 ~10–30 秒(WASM 單執行緒)。模型函式快取在 _bgRemoverFn。失敗回 null。
+        // 🤖 AI 去背（@imgly isnet，靠 AI 認人形、吃任何背景）：立繪、物品、一鍵生立繪、立繪工作室全走這一支。
+        //   首次下載 ~40MB 模型(之後快取)。模型函式快取在 _bgRemoverFn。失敗回 null。
+        //   🎮 10-07 改用顯卡（device:'gpu'＝WebGPU）：她「大總結生成的立繪…一疊圖送去給小模型去背，簡直要卡成屎」。
+        //   以前是 CPU 跑在跟畫面同一條線上，預覽實測一張 12.5 秒、其中 11.4 秒整頁卡死；用顯卡一張 1.4 秒、最多頓 0.13 秒，品質一樣
+        //   （tmp/bg_remove_compare.html）。沒有顯卡可用時套件自己退回 CPU；顯卡起得來卻失敗就記下來，之後改走 CPU。
+        //   🚨 不要加 proxyToWorker：onnxruntime 的背景工人在這裡起不來（worker not ready），而且會連帶把同一頁之後的去背全弄壞。
+        //   🚨 畫布 flood-fill 去背試過：白髮白裙白背景時光環中間整塊白色留著、頭髮一圈白邊，別換回去。
         _bgRemoverFn: null,
-        _bgRemoveChain: Promise.resolve(),   // 去背序列化鏈（同 NAI _naiQueue 思路）：WASM 單執行緒，全程一張一張跑
-        _stripSpriteBgAI: function(blob) {
-            // ⚠️ WASM 去背是單執行緒 / CPU-bound，並行只會互搶 CPU + 吃爆記憶體 → 用 promise 鏈強制串行：
-            //   不管上游生成是並行(Pollinations)還是串行，去背永遠一張跑完才下一張；模型只載一次。
+        _bgGpuBroken: false,
+        _bgRemoveChain: Promise.resolve(),   // 去背序列化鏈（同 NAI _naiQueue 思路）：一張一張跑，顯卡記憶體與 CPU 都不互搶
+        _bgRemoveOpts: function(extra) {
+            return Object.assign({ model: 'isnet_fp16', device: this._bgGpuBroken ? 'cpu' : 'gpu', output: { format: 'image/png', quality: 1.0 } }, extra || {});
+        },
+        _stripSpriteBgAI: function(blob, extra) {
+            // 不管上游生成是並行(Pollinations)還是串行，去背永遠一張跑完才下一張；模型只載一次。
             const self = this;
             const run = async () => {
                 try {
@@ -2074,7 +2082,13 @@
                         const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
                         self._bgRemoverFn = m.removeBackground;
                     }
-                    return await self._bgRemoverFn(blob, { model: 'isnet_fp16', output: { format: 'image/png', quality: 1.0 } });
+                    try { return await self._bgRemoverFn(blob, self._bgRemoveOpts(extra)); }
+                    catch (e) {
+                        if (self._bgGpuBroken) throw e;
+                        console.warn('[VN] 顯卡去背失敗，之後改用 CPU:', e?.message || e);
+                        self._bgGpuBroken = true;
+                        return await self._bgRemoverFn(blob, self._bgRemoveOpts(extra));
+                    }
                 } catch (e) { console.warn('[VN] AI 去背失敗:', e?.message || e); return null; }
             };
             const next = self._bgRemoveChain.then(run, run);   // 前一個成敗都接著跑

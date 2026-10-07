@@ -551,8 +551,8 @@
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
                 setT('去背中…');
-                const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
-                const removed = await m.removeBackground(blob, { model: 'isnet_fp16', output: { format: 'image/png', quality: 1.0 } });
+                const removed = await this._stripSpriteBgAI(blob);   // 共用那支（顯卡、一張一張排隊；見 vn_core.js）
+                if (!removed) throw new Error('去背失敗');
                 const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(removed); });
                 if (!win.VN_Cache) throw new Error('VN_Cache 未就緒');
                 await win.VN_Cache.set('sprite_cache', name, { url: dataUrl, isRemoved: true, createdAt: Date.now() });
