@@ -1970,7 +1970,16 @@ _directorSpec(castNames);
                 }
             } catch(e) { /* fallback：activePackIds 留 null，走 worldId filter */ }
 
-            const ctx = win.OS_AVS_RULES.getActiveContext(state, activePackIds) || '';
+            // 只送在場的人的規則：最近 3 則正文（含她剛送出的那句）提到名字才算在場；角色卡設成「想靠近」的人照送
+            let sceneText = '';
+            try {
+                const ctxST = win.SillyTavern?.getContext?.();
+                if (ctxST && Array.isArray(ctxST.chat)) sceneText = ctxST.chat.slice(-3).filter(m => m && !m.is_system).map(m => m.mes || m.message || '').join('\n');
+            } catch (e) {}
+            let keep = [];
+            try { keep = ((await win.OS_STORY_THREADS?.leanList?.()) || {}).near || []; } catch (e) {}
+
+            const ctx = win.OS_AVS_RULES.getActiveContext(state, activePackIds, { sceneText, keep }) || '';
             if (!ctx.trim()) return;   // 沒命中任何規則就不 inject
 
             const result = win.TavernHelper.injectPrompts([{

@@ -84,7 +84,7 @@
     }
 
     // ── 存取 ────────────────────────────────────────────────────────
-    function _blank() { return { v: 1, deltas: {}, picks: {} }; }
+    function _blank() { return { v: 1, deltas: {}, picks: {}, lean: {} }; }
     let _cache = null, _cacheChat = '';
     let _q = Promise.resolve();
     function _run(fn) { const p = _q.then(fn, fn); _q = p.catch(function () {}); return p; }
@@ -98,14 +98,17 @@
         _cache = Object.assign(_blank(), d || {});
         if (!_cache.deltas || typeof _cache.deltas !== 'object') _cache.deltas = {};
         if (!_cache.picks || typeof _cache.picks !== 'object') _cache.picks = {};
+        if (!_cache.lean || typeof _cache.lean !== 'object') _cache.lean = {};
         _cacheChat = cid;
         return _cache;
     }
     async function _save() {
-        if (!_cache || !_cacheChat) return;
+        if (!_cache || !_cacheChat) return false;
+        let ok = true;
         try { await win.OS_DB?.saveAppData?.(APP_ID, 'ledger', _cache, _cacheChat); }
-        catch (e) { console.warn('[Story Threads] 存檔失敗:', e); }
+        catch (e) { ok = false; console.warn('[Story Threads] 存檔失敗:', e); }
         try { win.dispatchEvent(new CustomEvent('aurelia:story-threads')); } catch (e) {}
+        return ok;
     }
 
     // ── 章節順序與存活 ───────────────────────────────────────────────
@@ -377,29 +380,69 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         });
     }
 
+    // ── 💗 主角對他：想靠近／疏遠（劇情裡雙擊立繪那張角色卡上的三選一）──────────────
+    //   10-07 她：想攻略的人 AI 常常找不到、或把他當路人；也想讓 AI 知道主角對誰有好感、對誰好感在掉。
+    //   存在這本帳（每個故事一份），送出時接在〈線索帳〉裡，不另開一塊。線索帳關掉也照送：這是她親手挑的。
+    //   near＝想靠近（可攻略），far＝疏遠，沒有＝普通。鑰匙簡繁折成一把（狀態裡「赵亦乾」、立繪名可能是「趙亦乾」）。
+    function _leanKey(name) {
+        const n = String(name == null ? '' : name).trim();
+        try { if (n && win.OS_ZH?.key) return win.OS_ZH.key(n); } catch (e) {}
+        return n.toLowerCase();
+    }
+    async function getLean(name) {
+        const d = await _run(() => _load());
+        const v = d && d.lean && d.lean[_leanKey(name)];
+        return (v && v.s) || '';
+    }
+    // 回 true＝存好了；false＝沒有故事可存、或存檔失敗（呼叫端要讓她看到）
+    function setLean(name, s) {
+        return _run(async () => {
+            const d = await _load();
+            const k = _leanKey(name);
+            if (!d || !k) return false;
+            if (s === 'near' || s === 'far') d.lean[k] = { s, name: String(name).trim() };
+            else delete d.lean[k];
+            return _save();
+        });
+    }
+    async function leanList() {
+        const d = await _run(() => _load());
+        const out = { near: [], far: [] };
+        Object.keys((d && d.lean) || {}).forEach(k => { const v = d.lean[k]; if (v && out[v.s]) out[v.s].push(v.name); });
+        return out;
+    }
+    async function _leanText() {
+        const L = await leanList();
+        const parts = [];
+        if (L.near.length) parts.push(`主角想靠近的人：${L.near.join('、')}\n玩家（螢幕前的人，不是主角）想跟這幾個人走感情線，主角對他們也有好感。讓他們照自己的日子過、在合理的場合出現在主角身邊，給主角接得住的機會；別讓他們消失，也別寫成只路過一次的人。關係怎麼走、走多快，照兩人之間實際發生過的事。`);
+        if (L.far.length) parts.push(`主角在疏遠的人：${L.far.join('、')}\n主角對這幾個人的好感在往下掉。寫到主角跟他們的互動時照這個心意；他們怎麼反應，照他們自己的個性。`);
+        return parts.join('\n\n');
+    }
+
     // 送給寫正文的那一塊（不含外框標籤；酒館 injectPrompts 會照 NAMES 包成 <線索帳>，PWA 自己叫 wrap）
     async function buildText(opts) {
         try {
-            if (!_isOn()) return '';
-            const s = await snapshot(opts);
-            if (!s) return '';
-            const want = [], hold = [], facts = [];
-            const all = s.open.concat(s.stale);
-            all.forEach(r => {
-                if (r.pick === 'hold') { hold.push(r.label); return; }
-                if (r.pick === 'want') want.push(r.label + (r.kind ? '（' + _kindName(r.kind) + '）' : ''));
-                if (r.age < r.staleAt || r.pick === 'want') facts.push(`【${r.label}】${r.fact || '（沒有記下現況）'}`);
-            });
-            const closed = s.closed.filter(r => r.age < CFG.closedNameFor).map(r => r.label);
-            if (!facts.length && !want.length && !hold.length && !closed.length) return '';
             const parts = [];
-            if (facts.length) {
-                parts.push('這個故事裡已經發生、還沒有下文的事。這是背景紀錄，不是這一章非處理不可的清單：碰不碰、碰哪一條，照這一章的場面自然決定；沒碰到的線，線裡的人照樣在過自己的日子。');
-                parts.push(facts.join('\n'));
+            const s = _isOn() ? await snapshot(opts) : null;
+            if (s) {
+                const want = [], hold = [], facts = [];
+                const all = s.open.concat(s.stale);
+                all.forEach(r => {
+                    if (r.pick === 'hold') { hold.push(r.label); return; }
+                    if (r.pick === 'want') want.push(r.label + (r.kind ? '（' + _kindName(r.kind) + '）' : ''));
+                    if (r.age < r.staleAt || r.pick === 'want') facts.push(`【${r.label}】${r.fact || '（沒有記下現況）'}`);
+                });
+                const closed = s.closed.filter(r => r.age < CFG.closedNameFor).map(r => r.label);
+                if (facts.length) {
+                    parts.push('這個故事裡已經發生、還沒有下文的事。這是背景紀錄，不是這一章非處理不可的清單：碰不碰、碰哪一條，照這一章的場面自然決定；沒碰到的線，線裡的人照樣在過自己的日子。');
+                    parts.push(facts.join('\n'));
+                }
+                if (want.length) parts.push(`玩家想看的線：${want.join('、')}\n玩家（螢幕前的人，不是主角）想看這幾條往下走。讓線裡的人照自己的打算行動，出現在主角身邊、把事情往前推一步，給主角一個可以接的機會。主角接不接、怎麼接，照主角自己的個性，不替主角決定。`);
+                if (hold.length) parts.push(`先放著的線：${hold.join('、')}\n這段時間線裡的人不主動來找主角，旁人也別聊起。`);
+                if (closed.length) parts.push(`已經收場：${closed.join('、')}\n這些事已經過去了，這一章不要再提，也別讓誰再聊起。`);
             }
-            if (want.length) parts.push(`玩家想看的線：${want.join('、')}\n玩家（螢幕前的人，不是主角）想看這幾條往下走。讓線裡的人照自己的打算行動，出現在主角身邊、把事情往前推一步，給主角一個可以接的機會。主角接不接、怎麼接，照主角自己的個性，不替主角決定。`);
-            if (hold.length) parts.push(`先放著的線：${hold.join('、')}\n這段時間線裡的人不主動來找主角，旁人也別聊起。`);
-            if (closed.length) parts.push(`已經收場：${closed.join('、')}\n這些事已經過去了，這一章不要再提，也別讓誰再聊起。`);
+            const lean = await _leanText();
+            if (lean) parts.push(lean);
             return parts.join('\n\n');
         } catch (e) {
             console.warn('[Story Threads] 組注入文字失敗:', e?.message || e);
@@ -814,6 +857,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
 
     win.OS_STORY_THREADS = {
         siteFor, addendum, commit, reconcile, snapshot, setPick, buildText, buildBlock,
+        getLean, setLean, leanList,
         openPanel, closePanel: _closePanel,
         isOn: _isOn, setOn: _setOn,
         INJECT_ID, CFG,

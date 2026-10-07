@@ -72,7 +72,27 @@
     // 三、公開 API
     // ================================================================
 
-    function getActiveContext(state, activePackIds = null) {
+    // 名字比對用：簡繁折成同一種、不分大小寫（狀態裡是「赵亦乾」，正文可能寫「趙亦乾」）
+    function _fold(s) {
+        let t = String(s == null ? '' : s);
+        try { if (win.OS_ZH?.toSimp) t = win.OS_ZH.toSimp(t); } catch (e) {}
+        return t.toLowerCase();
+    }
+    // 規則綁的是哪個角色：path 是「容器.名字.屬性」、而且狀態裡那個容器底下真的有這個名字＝綁人；其他（場域風險、劇情目標…）回 ''
+    function _ruleWho(r, state) {
+        const seg = String(r.path || '').split('.');
+        if (seg.length < 3) return '';
+        const box = state && state[seg[0]];
+        if (!box || typeof box !== 'object' || Array.isArray(box)) return '';
+        const one = box[seg[1]];
+        return (one && typeof one === 'object') ? seg[1] : '';
+    }
+
+    // opts.sceneText：給了就只送「這段文字裡提到的人」的規則（不綁人的規則照送）；opts.keep：不管在不在場都送的名字。
+    //   10-07 起：以前不看誰在場，她跟嚴序在食堂吃麵，每輪照送趙亦乾、方盡、崔泫真、沈喜喜四條，還要 AI「嚴格遵循」，
+    //   其中一條是方盡「讓馳翊把人弄走」——等於每輪把不在場的人往劇情裡拉。keep＝角色卡上設成「想靠近」的人（要 AI 帶他出場，得知道走到哪一步）。
+    //   沒給 sceneText（舊的叫法）＝照舊全送。
+    function getActiveContext(state, activePackIds = null, opts = null) {
         if (!state || typeof state !== 'object') return '';
 
         // V1.4：worldId 走 adapter（酒館：當前 chatId / PWA：vn_current_world_id）
@@ -89,10 +109,18 @@
             return r.worldId === currentWorldId;
         });
 
-        const matched = rules
+        let matched = rules
             .filter(r => r.path && r.op && r.content && _evalRule(r, state))
             .sort((a, b) => (a.priority || 50) - (b.priority || 50));
-            
+        if (opts && typeof opts.sceneText === 'string') {
+            const scene = _fold(opts.sceneText);
+            const keep = new Set((opts.keep || []).map(_fold).filter(Boolean));
+            matched = matched.filter(r => {
+                const who = _fold(_ruleWho(r, state));
+                return !who || keep.has(who) || scene.indexOf(who) !== -1;
+            });
+        }
+
         if (!matched.length) return '';
         const body = matched
             .map(r => `【${r.name || r.path}】\n${r.content}`)
@@ -100,10 +128,14 @@
         return `<behavior_rules>\n以下行為規範當前生效，請在回應中嚴格遵循，不要在 <content> 中提及規則本身：\n\n${body}\n</behavior_rules>`;
     }
 
-    async function generateRulesForWorld({ worldId, packId, worldTitle, worldDesc, variables, callApi }) {
+    // only：{ name, path }＝只替這一個人生三條好感規則（角色卡設「想靠近」時用），生好就換掉這個檔案裡他原本那幾條同 path 的
+    async function generateRulesForWorld({ worldId, packId, worldTitle, worldDesc, variables, callApi, only }) {
         if (!callApi || (!worldId && !packId) || !variables?.length) return 0;
         try {
             const varList = variables.map(v => `· ${v.name}${v.desc ? '：' + v.desc : (v.defaultValue !== undefined && v.defaultValue !== '' ? '（預設 ' + v.defaultValue + '）' : '')}`).join('\n');
+            const onlyLine = only && only.name && only.path
+                ? `\n\n這次只替「${only.name}」一個人寫：<plan> 只想他一個人，規則只寫他的好感度三條，變數路徑一律寫 ${only.path}；其他角色、其他變數都不用寫。`
+                : '';
             // 🧠 10-07 改：先在 <plan> 裡替每個重要角色想一遍（參考她 Ako 預設「讀卡情感推演」問的那幾題，用自己的話寫、不搬條目），再寫規則。
             //   改之前高檔寫的是「曖昧→戀人那種／把主角放第幾位、佔有與否」→ 惡劣的角色好感一高全變成更用力的佔有、
             //   掌控、排他，不然就是對主角百依百順（她：「惡劣之人好感度高會不會只是變成更激烈的惡劣情感?」）。
@@ -112,7 +144,7 @@
 追蹤的變數：
 ${varList}
 
-任務：為這些變數設計「條件規則」——當變數到某個門檻，角色跟主角的關係與相處方式跟著改變。這些規則之後會在劇情進行中送給寫正文的 AI，讓它知道這個人現在跟主角走到哪一步。
+任務：為這些變數設計「條件規則」——當變數到某個門檻，角色跟主角的關係與相處方式跟著改變。這些規則之後會在劇情進行中送給寫正文的 AI，讓它知道這個人現在跟主角走到哪一步。${onlyLine}
 
 【先想再寫】
 寫規則之前，先在 <plan></plan> 裡替每個重要角色（主要登場、跟主角有關係線的人，通常 2～6 人；一次性路人不算）各想一遍。依據是你手上的世界書、人物關係、角色設定與目前狀態：
@@ -169,8 +201,20 @@ ${varList}
                 });
             });
 
+            // 只替一個人生：別人的、別的變數的一律不收（模型偶爾順手多寫），path 統一成指定那條（簡繁寫法不同也算他的）
+            if (only && only.path) {
+                const want = _fold(only.path);
+                const mine = newRules.filter(r => _fold(r.path) === want);
+                mine.forEach(r => { r.path = only.path; });
+                newRules.splice(0, newRules.length, ...mine);
+            }
+
             if (newRules.length > 0) {
-                const existing = _loadRules();
+                let existing = _loadRules();
+                if (only && only.path) {
+                    const want = _fold(only.path);
+                    existing = existing.filter(r => !((r.packId || '') === (packId || '') && (r.worldId || '') === (worldId || '') && _fold(r.path) === want));
+                }
                 _saveRules([...existing, ...newRules]);
                 console.log(`[AVS Rules] 自動生成 ${newRules.length} 條規則（世界：${worldTitle}）`);
             }
@@ -527,8 +571,39 @@ ${varList}
         return r.enabled;
     }
 
+    // ── 角色卡「主角對他：想靠近」：替這一個人生三條好感規則 ─────────────
+    // 回 { pack, path, existing }；這個故事沒有放角色的狀態欄位、或他的狀態裡沒有好感度 → null
+    async function affinityTarget(name) {
+        name = String(name || '').trim();
+        if (!name || !win.OS_DB?.getAllVarPacks) return null;
+        let st = {};
+        try { st = win.OS_AVS_ADAPTER?.readState?.() || win._AVS_ENGINE?.read?.() || {}; } catch (e) {}
+        const boxName = Object.keys(st).find(k => /^角色[狀状]態$|^角色状态$/.test(k) && st[k] && typeof st[k] === 'object' && st[k][name] && typeof st[k][name] === 'object');
+        if (!boxName || !Object.prototype.hasOwnProperty.call(st[boxName][name], '好感度')) return null;
+        const chatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+        const packs = ((await win.OS_DB.getAllVarPacks()) || [])
+            .filter(p => p && (!p.chatId || p.chatId === chatId) && (p.variables || []).some(v => v && _fold(v.name) === _fold(boxName)))
+            .sort((a, b) => ((b.chatId === chatId) - (a.chatId === chatId)) || String(b.id).localeCompare(String(a.id)));   // 綁這個聊天的優先、再來最新建的
+        const pack = packs[0];
+        if (!pack) return null;
+        const path = boxName + '.' + name + '.好感度';
+        const want = _fold(path);
+        const existing = _loadRules().filter(r => r.packId === pack.id && _fold(r.path) === want).length;
+        return { pack, path, existing };
+    }
+    async function generateAffinityFor(name, target) {
+        const t = target || await affinityTarget(name);
+        if (!t || !win.OS_API_ENGINE?.generateText) return 0;
+        return generateRulesForWorld({
+            packId: t.pack.id, worldId: '', worldTitle: t.pack.name || '', worldDesc: t.pack.notes || t.pack.name || '',
+            variables: t.pack.variables, only: { name: String(name).trim(), path: t.path },
+            callApi: (k, p) => win.OS_API_ENGINE.generateText(k, p, { task: 'avs_design' })   // 跟規則窗口那顆同一條路（主模型）
+        });
+    }
+
     win.OS_AVS_RULES = {
         getActiveContext, generateRulesForWorld, renderTab,
+        affinityTarget, generateAffinityFor,
         // CRUD（V1.4 加入，給外部 UI 用）
         loadRules: _loadRules,
         saveRules: _saveRules,

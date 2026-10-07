@@ -2564,7 +2564,10 @@
             } catch(e) { console.warn('[OS_API standalone] 世界書載入失敗:', e); }
 
             try {
-                const _avsRulesCtx = win.OS_AVS_RULES?.getActiveContext?.(_avsRead());
+                // 只送在場的人的規則（scanText＝這次輸入＋最近幾章）；角色卡設成「想靠近」的人照送。見 os_avs_rules getActiveContext
+                let _leanKeep = [];
+                try { _leanKeep = ((await win.OS_STORY_THREADS?.leanList?.()) || {}).near || []; } catch (e) {}
+                const _avsRulesCtx = win.OS_AVS_RULES?.getActiveContext?.(_avsRead(), null, { sceneText: String(scanText || ''), keep: _leanKeep });
                 if (_avsRulesCtx) {
                     lore = lore ? lore + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;
                     _lorePre = _lorePre ? _lorePre + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;

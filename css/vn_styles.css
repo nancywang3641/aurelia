@@ -877,6 +877,16 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .vn-cc-v { color: #e8dfc8; flex: 1; word-break: break-word; }
         .vn-cc-mini { background: rgba(80,180,120,0.18); border: 1px solid rgba(80,200,120,0.5); border-radius: 6px; color: #aef0c8; font-size: 0.72rem; padding: 2px 7px; cursor: pointer; flex-shrink: 0; }
         .vn-cc-mini:disabled { opacity: 0.6; }
+        /* 💗 主角對他：想靠近／普通／疏遠（三選一） */
+        .vn-cc-lean { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 0.82rem; }
+        .vn-cc-seg { display: flex; flex: 1; gap: 4px; min-width: 0; }
+        .vn-cc-seg button { flex: 1; min-width: 0; padding: 6px 2px; border-radius: 8px; border: 1px solid rgba(212,175,55,0.28); background: rgba(212,175,55,0.06); color: rgba(232,223,200,0.7); font-size: 0.78rem; white-space: nowrap; cursor: pointer; transition: background 0.2s; }
+        .vn-cc-seg button:hover { background: rgba(212,175,55,0.14); }
+        .vn-cc-seg button:disabled { opacity: 0.6; cursor: default; }
+        .vn-cc-seg button.on[data-s="near"] { background: rgba(225,90,125,0.24); border-color: rgba(240,125,155,0.7); color: #ffc8d6; }
+        .vn-cc-seg button.on[data-s=""] { background: rgba(212,175,55,0.2); border-color: rgba(212,175,55,0.6); color: #e8dfc8; }
+        .vn-cc-seg button.on[data-s="far"] { background: rgba(120,140,175,0.24); border-color: rgba(155,175,210,0.65); color: #cfd9ea; }
+        .vn-cc-lean .aui-help { flex-shrink: 0; }
 
         /* 🎬 場景CG overlay（人物+場景合圖，z-index 5 = sprites之上、text-panel之下）*/
         /* 鋪底式場景插圖：z5 在背景/立繪之上、對話框(z10)之下；opacity 淡入淡出、不擋點擊(劇情在上面走) */

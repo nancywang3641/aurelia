@@ -487,6 +487,8 @@
                 if (LIFE.has(h)) {
                     if (o.withoutClosed) continue;   // 酒館正文另外放到下筆前（buildLifeBlock）
                     const t = _parseMdTable(body);
+                    const mcK = _mcLifeKey();
+                    if (mcK) t.rows = t.rows.filter(r => _lifeKey(_rowCells(r)[0]) !== mcK);   // 主角不是配角（見 _mcLifeKey）
                     if (!t.rows.length) continue;
                     body = LIFE_NOTE + '\n' + _buildMdTable(t);
                 } else if (CLOSED.has(h)) {
@@ -606,9 +608,24 @@
         if (!s) return [];
         return _parseMdTable(s.body).rows.map(r => _rowCells(r)).filter(c => c[0] && c[1] && c[1] !== '-').map(c => ({ name: c[0], life: c[1] }));
     }
+    // 主角不是配角：10-07 她那包〈配角近況〉第一行是主角自己（「耳塞卡在轉運倉」）。
+    //   以前只靠角色表「與MC關係」欄開頭寫 MC/主角 來認，那格沒這樣寫就漏進來；再拿主角名字比一次（簡繁、** 都折掉）。
+    function _lifeKey(n) {
+        const s = String(n == null ? '' : n).replace(/[*_`]/g, '').trim();
+        try { if (s && win.OS_ZH?.key) return win.OS_ZH.key(s); } catch (e) {}
+        return s.toLowerCase();
+    }
+    function _mcLifeKey() {
+        let n = '';
+        try { n = String(win.SillyTavern?.getContext?.()?.name1 || '').trim(); } catch (e) {}
+        if (!n || n === 'User') { try { n = String(win.OS_API?.getGlobalUserName?.() || '').trim(); } catch (e) {} }
+        const k = _lifeKey(n);
+        return k === 'user' ? '' : k;
+    }
     API.buildLifeBlock = function (fullContent) {
         try {
-            const rows = _lifeRows(fullContent);
+            const mcK = _mcLifeKey();
+            const rows = _lifeRows(fullContent).filter(r => !mcK || _lifeKey(r.name) !== mcK);
             if (!rows.length) return '';
             return `<配角近況>\n${LIFE_NOTE}\n${rows.map(r => '・' + r.name + '：' + r.life).join('\n')}\n</配角近況>`;
         } catch (e) { return ''; }
@@ -644,11 +661,13 @@
             if (cName < 0) return false;
             const people = [], seen = new Set();
             let mc = '';
+            const mcK = _mcLifeKey();
             t.rows.map(_rowCells).forEach(c => {
                 const name = c[cName];
                 if (!name || seen.has(name)) return;
                 seen.add(name);
                 if (cRel >= 0 && /^\s*(MC|主角)/i.test(String(c[cRel] || ''))) { mc = name; return; }   // 主角那一列（與MC關係欄寫 MC/10）
+                if (mcK && _lifeKey(name) === mcK) { mc = name; return; }   // 那格沒寫 MC，就拿主角名字認
                 people.push([name, cId >= 0 ? c[cId] : '', cChar >= 0 ? c[cChar] : '', cNow >= 0 ? c[cNow] : ''].map(x => String(x || '-').trim()).join('｜'));
             });
             // 群聊裡講過話、角色表沒有的人（卡片自帶的群友常常這樣）：只有名字＋最近說過的一句
@@ -666,7 +685,7 @@
                     }));
                     if (!m.is_user) { const d = text.match(/日期\|([^\n|<]+)/); if (d) date = d[1].trim(); }
                 });
-                Object.keys(said).forEach(n => { if (seen.has(n) || (mc && n === mc)) return; seen.add(n); people.push(`${n}｜群聊裡的人｜-｜最近在群裡說過：${said[n]}`); });
+                Object.keys(said).forEach(n => { if (seen.has(n) || (mc && n === mc) || (mcK && _lifeKey(n) === mcK)) return; seen.add(n); people.push(`${n}｜群聊裡的人｜-｜最近在群裡說過：${said[n]}`); });
             } catch (e) {}
             if (!people.length) return false;
             const withPrev = people.map(p => { const n = p.split('｜')[0]; return prevLife[n] ? p + '｜上次近況：' + prevLife[n] : p; });

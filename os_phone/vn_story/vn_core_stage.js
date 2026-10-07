@@ -610,13 +610,20 @@
             const btns =
                 '<button class="vn-cc-btn" id="vn-cc-gen"><i class="fa-solid fa-palette"></i> 一鍵生立繪（去背）</button>' +
                 '<button class="vn-cc-btn" id="vn-cc-gallery"><i class="fa-solid fa-address-book"></i> 角色圖鑑</button>';
+            const A = win.AUI || window.AUI;
+            if (A && A.registerHelp) A.registerHelp({ vn_cc_lean: { title: '主角對他', body: '想靠近：你想攻略這個人，主角對他也有好感。寫劇情的 AI 會讓他照自己的日子過、在合理的場合出現在主角身邊，不讓他消失或只當路人。第一次選的時候會替他生三條好感規則（叫一次模型），存進狀態面板這個故事的條件規則裡，規則窗口看得到、改得動。\n\n疏遠：主角對他的好感在往下掉，寫到兩人互動時照這個心意。\n\n普通：都不提。\n\n每個故事各記各的。' } });
+            const leanRow = this._isMcName(name) ? '' : '<div class="vn-cc-lean"><span class="vn-cc-k">主角對他</span><div class="vn-cc-seg">' +
+                '<button type="button" data-s="near"><i class="fa-solid fa-heart"></i> 想靠近</button>' +
+                '<button type="button" data-s="">普通</button>' +
+                '<button type="button" data-s="far"><i class="fa-solid fa-heart-crack"></i> 疏遠</button>' +
+                '</div>' + (A && A.helpBtn ? A.helpBtn('vn_cc_lean') : '') + '</div>';
             if (avsCard) {
                 card.innerHTML =
                     '<div class="vn-cc-avs-body"><style>' + avsCard.css + '</style>' + avsCard.html + '</div>' +
-                    '<div class="vn-cc-tools">' + btns + cvRow + '</div>';
+                    '<div class="vn-cc-tools">' + leanRow + btns + cvRow + '</div>';
             } else {
                 card.innerHTML =
-                    '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' + btns + cvRow +
+                    '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' + leanRow + btns + cvRow +
                     '<div class="vn-cc-row"><span class="vn-cc-k">形象</span><span class="vn-cc-v">' + esc(st['形象'] || '—') + '</span></div>' +
                     '<div class="vn-cc-row"><span class="vn-cc-k">身分</span><span class="vn-cc-v">' + esc(st['身分'] || st['身份'] || '—') + '</span></div>' +
                     '<div class="vn-cc-row"><span class="vn-cc-k">好感度</span><span class="vn-cc-v">' + esc(aff) + '</span></div>';
@@ -633,12 +640,75 @@
             if (cvSaveBtn) cvSaveBtn.onclick = (e) => this.saveCharCV(name, e.currentTarget);
             const cvUnlockBtn = card.querySelector('#vn-cc-cv-unlock');
             if (cvUnlockBtn) cvUnlockBtn.onclick = (e) => this.unlockCharCV(name, e.currentTarget);
+            card.querySelectorAll('.vn-cc-seg button').forEach(b => { b.onclick = () => this._pickLean(name, b.getAttribute('data-s') || '', card); });
+            this._paintLean(card, name);
             card.style.display = 'block';
             this._ccIdx = idx;
-            // 點卡片外面自動關（延遲一拍掛載，避免開卡這次的點擊立刻把它關掉）
+            // 點卡片外面自動關（延遲一拍掛載，避免開卡這次的點擊立刻把它關掉）；按卡片叫出來的確認窗不算外面
             if (this._ccOutside) document.removeEventListener('pointerdown', this._ccOutside, true);
-            this._ccOutside = (ev) => { const c = document.getElementById('vn-char-card'); if (c && c.style.display !== 'none' && !c.contains(ev.target)) this.closeCharCard(); };
+            this._ccOutside = (ev) => {
+                const c = document.getElementById('vn-char-card');
+                if (ev.target && ev.target.closest && ev.target.closest('.aud-mask')) return;
+                if (c && c.style.display !== 'none' && !c.contains(ev.target)) this.closeCharCard();
+            };
             setTimeout(() => { document.addEventListener('pointerdown', this._ccOutside, true); }, 0);
+        },
+        // 主角自己的卡不出「主角對他」那排（名字可能帶 **、簡繁不同）
+        _isMcName: function(name) {
+            let mc = '';
+            try { mc = String(win.OS_PERSONA?.getName?.() || win.OS_API?.getGlobalUserName?.() || '').replace(/[*_`]/g, '').trim(); } catch (e) {}
+            if (!mc || mc === 'User') return false;
+            const k = s => { const t = String(s == null ? '' : s).replace(/[*_`]/g, '').trim(); try { if (win.OS_ZH?.key) return win.OS_ZH.key(t); } catch (e) {} return t.toLowerCase(); };
+            return k(mc) === k(name);
+        },
+        // 💗 主角對他（想靠近／普通／疏遠）：存在線索帳那本，送出時接在〈線索帳〉裡（見 story_threads.js 的 setLean）
+        _paintLean: async function(card, name) {
+            const T = win.OS_STORY_THREADS;
+            const row = card && card.querySelector('.vn-cc-lean');
+            if (!row) return;
+            if (!T || !T.getLean) { row.remove(); return; }   // 線索帳那支沒載到＝存不了，別擺一排按了沒反應的鈕
+            let s = '';
+            try { s = await T.getLean(name); } catch (e) {}
+            row.querySelectorAll('.vn-cc-seg button').forEach(b => b.classList.toggle('on', (b.getAttribute('data-s') || '') === s));
+        },
+        _pickLean: async function(name, s, card) {
+            const T = win.OS_STORY_THREADS;
+            const R = win.OS_AVS_RULES;
+            const A = win.AUI || window.AUI;
+            if (!T || !T.setLean) return;
+            const btns = card.querySelectorAll('.vn-cc-seg button');
+            let cur = '';
+            try { cur = await T.getLean(name); } catch (e) {}
+            if (s === cur) return;
+            let gen = false, target = null;
+            if (s === 'near') {
+                try { target = R && R.affinityTarget ? await R.affinityTarget(name) : null; } catch (e) { target = null; }
+                let ok;
+                if (!target) {
+                    ok = await A.confirm('把' + name + '當成可攻略角色？\n\n寫劇情的 AI 會知道你想攻略他。他在狀態面板裡沒有好感度，所以不會生好感規則。', { title: '想靠近' });
+                } else if (target.existing) {
+                    // 已經有好感規則：問要不要照新寫法重生；不要也照樣設成想靠近
+                    gen = await A.confirm('把' + name + '當成可攻略角色？\n\n他已經有 ' + target.existing + ' 條好感規則。要照新寫法重新生三條、換掉原本那幾條嗎？（叫一次模型）', { title: '想靠近', okText: '重新生成', cancelText: '照用原本的' });
+                    ok = true;
+                } else {
+                    ok = gen = await A.confirm('把' + name + '當成可攻略角色？\n\n會替他生三條好感規則，存進這個故事的條件規則（叫一次模型）。', { title: '想靠近' });
+                }
+                if (!ok) return;
+            }
+            const saved = await T.setLean(name, s);
+            if (!saved) { A.toastr.error('沒存起來：找不到目前這個故事，或存檔失敗'); return; }
+            this._paintLean(card, name);
+            if (!gen) return;
+            const nearBtn = card.querySelector('.vn-cc-seg button[data-s="near"]');
+            const orig = nearBtn ? nearBtn.innerHTML : '';
+            btns.forEach(b => { b.disabled = true; });
+            if (nearBtn) nearBtn.textContent = '生成中…';
+            let n = 0;
+            try { n = await R.generateAffinityFor(name, target); } catch (e) { console.warn('[CharCard] 生好感規則失敗', e); }
+            btns.forEach(b => { b.disabled = false; });
+            if (nearBtn) nearBtn.innerHTML = orig;
+            if (n > 0) A.toastr.success('已替' + name + '生好 ' + n + ' 條好感規則');
+            else A.toastr.warning('這次沒生出規則；想靠近已經設好了，可以到狀態面板的規則窗口再生一次');
         },
         closeCharCard: function() {
             const card = document.getElementById('vn-char-card');
