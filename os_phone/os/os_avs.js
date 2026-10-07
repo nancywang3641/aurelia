@@ -263,9 +263,10 @@
         });
     }
 
-    // 🧬 共用：AI 生成 schema → 轉變數 → 存變數包 → 存規則 → 同步世界書 → 觸發初始填充。
+    // 🧬 共用：AI 生成 schema → 轉變數 → 存變數包 → 同步世界書 → 觸發初始填充。
     // 兩個入口共用（變數包「AI 從世界生成」按鈕 + AVS 狀態「開始追蹤狀態」按鈕）；UI 更新由各呼叫端自己做。
-    // 回傳 { pack, ruleCount } 成功 / null 失敗（generate 內部已 toast 失敗訊息）。
+    // 條件規則不在這裡生（10-07 起）：檔案卡的「規則」窗口按 AI 生成，見 aiGenRulesForCurrentPack。
+    // 回傳 { pack } 成功 / null 失敗（generate 內部已 toast 失敗訊息）。
     async function _aiGenerateAndSavePack(userPrompt) {
         if (!win.OS_STATE_SCHEMA?.generate) {
             AUI.alert('OS_STATE_SCHEMA 不可用（請確認 state_schema.js 已載入）');
@@ -273,7 +274,6 @@
         }
         const result = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true, userPrompt });
         const schema = result?.fields || result;   // 向前兼容舊版只返回 fields
-        const aiRules = Array.isArray(result?.rules) ? result.rules : [];
         if (!schema || !Object.keys(schema).length) return null;
         const variables = Object.entries(schema).map(([name, def]) => {
             const init = def?.init;
@@ -311,28 +311,9 @@
             chatId: currentChatId
         };
         await win.OS_DB.saveVarPack(pack);
-        let savedRuleCount = 0;
-        if (aiRules.length && win.OS_AVS_RULES?.addRule) {
-            for (const r of aiRules) {
-                if (!r || !r.path || !r.op || !r.content) continue;
-                let val = r.value;
-                const n = parseFloat(val);
-                if (!isNaN(n) && String(n) === String(val)) val = n;
-                win.OS_AVS_RULES.addRule({
-                    name: r.name || `${r.path} ${r.op} ${r.value}`,
-                    path: String(r.path).trim(),
-                    op: String(r.op).trim(),
-                    value: val,
-                    content: String(r.content).trim(),
-                    enabled: true,
-                    packId: pack.id
-                });
-                savedRuleCount++;
-            }
-        }
         await syncVarPackToLorebook();
         try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
-        if (AUI.toastr) AUI.toastr.success(`已生成「${pack.name}」（${variables.length} 個項目 / ${savedRuleCount} 條規則），世界書已同步`);
+        if (AUI.toastr) AUI.toastr.success(`已生成「${pack.name}」（${variables.length} 個項目），世界書已同步`);
         if (win.OS_STATE_RUNTIME?.extractOnce) {
             setTimeout(() => {
                 try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch(e) {
@@ -340,7 +321,7 @@
                 }
             }, 500);
         }
-        return { pack, ruleCount: savedRuleCount };
+        return { pack };
     }
 
     async function loadAllData(container) {

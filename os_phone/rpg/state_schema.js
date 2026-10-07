@@ -246,16 +246,7 @@ ${materials.headMessages || '（無）'}
       "desc": "<這欄位記什麼，何時會變>",
       "init": <初始值>
     }
-  },
-  "rules": [
-    {
-      "name": "<規則名>",
-      "path": "<變數名，object 型用點記法如 角色狀態.瑟琳.理智值>",
-      "op": "<>= | <= | > | < | = | !=>",
-      "value": <比較值>,
-      "content": "<當條件成立時主模型該如何調整劇情/對話>"
-    }
-  ]
+  }
 }
 
 【⚠️ 同類多實體 → 必須用 object 型（最重要）】
@@ -300,23 +291,6 @@ ${materials.headMessages || '（無）'}
 - **倒計時類**註明起始值與終止條件，例：「末日倒計時 (90 開始，可變負，-30 完全末日)」
 - **絕對禁止**寫沒上限的 desc，例「好感度，互動上升」← 這種寫法會讓 AI 累加到 999999
 - enum 型 desc 必須列出**完整可選值**，例：「狀態。可選值: 健康/受傷/重傷/死亡」
-
-【rules 設計規則】
-- 規則數 8-15 條（核心變數要分階段，條數要夠）
-- **挑開頭劇情中 3-5 個最重要的角色**深做規則，次要 / 路人角色不必（之後使用者可在創作室自己補）
-- **核心變數必須「分階段」**：同一角色的同一核心屬性（好感度 / 信任度 / HP / 理智值 / 倒計時…），
-  設 3~4 條遞進閾值規則，每階段 content 不同、一階比一階深。
-  例：瑟琳的好感度設 4 條 → value=20 / 50 / 80 / 95，content 從「稍有鬆動」遞進到「完全交付」
-- path 用點記法綁**特定角色**（角色狀態.瑟琳.好感度），**每個角色各自的規則，絕不共用**
-  —— 因為同樣是「好感度 80」，不同角色的人格決定完全不同的行為模式，共用規則會抹平個性
-- ⚠️【content 是規則有沒有深度的關鍵】必須「讀該角色人設 → 寫出他特有的反應」：
-  ❌ 敷衍（沒讀人設、通用空話）：「角色對主角變得親密」「語氣變溫柔」
-  ✅ 有深度（貼復仇者瑟琳）：「瑟琳的親近帶著佔有與危險，主角受威脅時她會先一步露出殺意，私下用近乎偏執的方式守著，但仍不輕易吐露真心」
-  ✅ 有深度（貼偶像葉亭）：「葉亭用舞台般明亮的笑容回應，主動製造肢體接觸卻拿捏分寸，把在意藏進玩笑話，獨處時才露出疲憊的真實一面」
-  → 同一個好感度階段，瑟琳和葉亭的 content **必須完全不同**，各自死貼人格
-- content 用 50~100 字，寫「具體會做什麼動作、語氣、肢體、心理」，**禁止空泛形容詞**
-- 規則依世界觀題材取捨重點（戀愛 → 好感階段細分；末日 → 倒計時階段；推理 → 線索觸發）
-- 不要用 markdown 符號、不要分項列點，純文字一段話
 
 【整體規則】
 - 欄位數 ${CONFIG.minFields}-${CONFIG.maxFields} 個（object 型容器算一個欄位，內含多角色不另計）
@@ -411,14 +385,15 @@ ${materials.headMessages || '（無）'}
             const json = await runWithRetry(prompt);
 
             // V2 之後：generate 不再寫 state_data.schema（schema 已搬到 AVS 變數包）
-            // 純生成並回傳；呼叫端（os_avs.js）負責寫 var_pack + rules
-            // V3：同時返回 fields 跟 rules（AI 生成階段同步出條件規則，跟變數包綁定）
+            // 純生成並回傳；呼叫端（os_avs.js）負責寫 var_pack
+            // 🚨 這一通不生條件規則（10-07 拿掉）：規則只從檔案的「規則」窗口生（OS_AVS_RULES.generateRulesForWorld）。
+            //   這裡生的規則夾在「只准吐 JSON 的規格設計師」那份大任務裡，挑的全是敵意／算計這種一路往壞的梯子，
+            //   她看了說「非常死氣沉沉」；規則窗口那條帶整份世界書與目前數值，寫得出會變暖的關係。別再加回來。
             const count = Object.keys(json.fields).length;
-            const ruleCount = Array.isArray(json.rules) ? json.rules.length : 0;
-            showToast(`Schema 生成完成（${count} 個欄位 / ${ruleCount} 條規則）`, 'success');
-            try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: json.fields, rules: json.rules }); } catch(e) {}
+            showToast(`Schema 生成完成（${count} 個欄位）`, 'success');
+            try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: json.fields }); } catch(e) {}
 
-            return { fields: json.fields, rules: Array.isArray(json.rules) ? json.rules : [] };
+            return { fields: json.fields };
         } catch(e) {
             console.error('[State Schema] 生成失敗:', e);
             showToast(`Schema 生成失敗：${e.message || e}`, 'error');
