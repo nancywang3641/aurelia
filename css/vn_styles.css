@@ -1759,6 +1759,12 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #br-nar { position: absolute; left: 12px; right: 12px; bottom: 14px; background: rgba(17,17,17,0.82); color: #fff; font-size: 0.82rem; line-height: 1.5; padding: 10px 12px; border-radius: 10px; backdrop-filter: blur(6px); z-index: 5; }
         #br-nar b { color: #fbbf24; margin-right: 6px; }
         #br-nar.hidden { display: none; }
+        /* 停下來等點的小箭頭：停了一下才浮出來（連點時不閃），在字幕上就坐在字幕右下角 */
+        #br-nar { padding-right: 34px; }
+        #br-hint { position: absolute; right: 20px; bottom: 20px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #6b7280; background: rgba(17,17,17,0.07); opacity: 0; pointer-events: none; z-index: 6; transition: opacity 0.2s; }
+        #br-hint.br-hint-on { opacity: 1; transition: opacity 0.4s 0.7s; animation: br-bob 1.4s ease-in-out 0.7s infinite; }
+        #br-nar:not(.hidden) ~ #br-hint { color: #fbbf24; background: transparent; }
+        @keyframes br-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
 
         /* --- Nav 模式（手機導航；程式畫的通用向量地圖＋路線；開場：慢推近→圖釘落→描邊帶光頭相機跟→拉遠出卡） --- */
         #phone-nav { display: flex; flex-direction: column; height: 100%; background: #e9ecef; color: #111; position: relative; overflow: hidden; }

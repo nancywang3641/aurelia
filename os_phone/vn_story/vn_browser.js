@@ -5,6 +5,8 @@
 //   正文：<browser query="搜尋字"> … </browser>
 //   每行一項：[Result: 標題|站名|摘要]、[Open: 標題]、[Page: 標題|站名]、[Text: 段落]、[Img: 描述]、[Nar|…]、[Char|…]
 //   開場動效：主畫面搜尋框長成網址列 → 逐字打出查詢 → 骨架閃爍 → 結果一張張長出來
+//   節奏：瀏覽器自己會動的步驟（結果一條條載入、點開、換頁）不等點，接著播；要讀的東西（內文、圖、旁白、台詞、整份結果清單）才停。
+//     停下來等點時畫面上不留骨架（骨架＝還在載入，人會乾等），右下角出一個小箭頭
 // ⚠️ 請確保在載入 vn_core.js 之後載入此檔案
 // ----------------------------------------------------------------
 (function () {
@@ -31,6 +33,10 @@
         _core: null,
         _openingSeq: 0,
         _opened: {},   // 已經演過開場的 <browser> 行：同一則訊息重載就直接到位不重演
+        _chainTimer: null,   // 自己接著播的下一步
+        _rush: false,        // 自己播的途中她點了：剩下的步驟不等，一口氣播到該停的地方
+        _openTimer: null,    // [Open] 卡片按下去到換頁中間那一下
+        _pendingOpen: null,
 
         resetState: function () {
             this.query = '';
@@ -38,6 +44,9 @@
             this.busy = false;
             this.resultCount = 0;
             this._openingSeq++;
+            this._stopChain();
+            this._cancelOpen();
+            this._setHint(false);
             const r = $('br-results'), b = $('br-page-body');
             if (r) r.innerHTML = '';
             if (b) b.innerHTML = '';
@@ -87,10 +96,35 @@
             return script.length;
         },
 
+        // 下一行是哪種（跳過空行）；收尾行、會被當成容器已關的正文行都算 end
+        peekKind: function (script, index, escapeRe) {
+            for (let i = index + 1; i < script.length; i++) {
+                const l = String(script[i] || '').trim();
+                if (!l) continue;
+                if (/^<\/browser\s*>/i.test(l) || (escapeRe && escapeRe.test(l))) return 'end';
+                return this.classify(l).kind;
+            }
+            return 'end';
+        },
+
+        // 這一行畫完要不要自己接著播：回等幾毫秒，null＝停下來等她點
+        //   結果：後面還有結果就接著長（像搜尋結果陸續出來），最後一條停（整份清單讓她看）
+        //   點開、換頁：骨架閃一下就接著出內文；後面沒東西了就停（不然會在骨架上直接收掉）
+        autoDelay: function (kind, nextKind, wasPage) {
+            if (kind === 'result') return nextKind === 'result' ? 380 : null;
+            if (nextKind === 'end') return null;
+            if (kind === 'open') return 800;
+            if (kind === 'page') return wasPage ? 300 : 650;
+            return null;
+        },
+
         // ---------- 進出 ----------
         initBrowser: function (core, line) {
             core.mode = 'browser';
             this._core = core;
+            this._stopChain();
+            this._cancelOpen();
+            this._setHint(false);
             const { query } = this.parseOpen(line);
             this.query = query;
             this.resultCount = 0;
@@ -169,27 +203,35 @@
         exitBrowser: function (core) {
             this.view = 'home';
             this.busy = false;
+            this._stopChain();
+            this._cancelOpen();
+            this._setHint(false);
             this._hideNar();
             core.mode = 'vn';
             core.toggleUI('vn');
             core.next();
         },
 
-        // 手機殼上的點擊：開場動效期間不理，其他時候等於下一句
+        // 手機殼上的點擊：開場動效期間不理；自己在播的途中點＝剩下的一口氣播完；其他時候等於下一句
         tap: function () {
             if (this.busy) return;
             const core = this._core || win.VN_Core || window.VN_Core;
-            if (core) core.next();
+            if (!core) return;
+            if (this._chainTimer) { this._rush = true; this._stopChain(true); }
+            core.next();
         },
 
         // 返回鍵：文章頁回結果頁（跳過這頁剩下的行）；結果頁跳過整段回 VN（同 closeChat）
         back: function () {
             const core = this._core || win.VN_Core || window.VN_Core;
             if (!core || this.busy) return;
+            this._stopChain();
+            this._cancelOpen();
             const stop = this.skipTarget(core.script, core.index, this.view);
             if (this.view === 'page') {
                 core.index = stop - 1;
                 this._showResults();
+                this._settle();
                 return;   // 停在結果頁，等她自己點
             }
             core.index = Math.min(stop, core.script.length) - 1;
@@ -200,19 +242,51 @@
         // ---------- 每行 ----------
         handleBrowserLine: function (line, core) {
             core.toggleUI('phone-browser');
+            this._stopChain(true);
+            this._flushOpen();   // 上一行的點開還在卡片按下去那一下：先換頁，這一行才接得上
+            this._setHint(false);
             const it = this.classify(line);
+            if (it.kind === 'skip') { core.next(); return; }   // 畫不出東西的行（時間、其他標籤）不必等她點
+            const wasPage = this.view === 'page';
             switch (it.kind) {
                 case 'result': this._addResult(it); break;
                 case 'open':   this._openResult(it.title); break;
-                case 'page':   this._showPage(it.title, it.site); break;
+                case 'page':   this._showPage(it.title, it.site, true); break;
                 case 'text':   this._addParagraph(it.text); break;
                 case 'img':    this._addImage(it.desc); break;
                 case 'nar':    this._narrate(core, '', it.text); break;
                 case 'char':   this._speak(core, it.raw); break;
                 default: break;
             }
-            core.checkAutoNext();
+            if (core.isSkip) { this._rush = false; core.checkAutoNext(); return; }
+            const ms = this.autoDelay(it.kind, this.peekKind(core.script || [], core.index, core._phoneEscapeRe), wasPage);
+            if (ms != null) { this._chain(core, ms); return; }
+            this._settle();
         },
+
+        _chain: function (core, ms) {
+            const idx = core.index, seq = this._openingSeq;
+            this._chainTimer = setTimeout(() => {
+                this._chainTimer = null;
+                if (seq !== this._openingSeq || core.mode !== 'browser' || core.index !== idx) return;   // 她已經自己往下了（鍵盤、返回鍵），或已經離開瀏覽器
+                core.next();
+            }, this._rush ? 0 : ms);
+        },
+
+        _stopChain: function (keepRush) {
+            if (this._chainTimer) { clearTimeout(this._chainTimer); this._chainTimer = null; }
+            if (!keepRush) this._rush = false;
+        },
+
+        // 停下來等她點：「還在載入」的骨架收掉，右下角出小箭頭
+        _settle: function () {
+            this._rush = false;
+            const r = $('br-results'); if (r && this.resultCount === 0) r.innerHTML = '';
+            const b = $('br-page-body'); if (b) { const sk = b.querySelector('.br-p-skel'); if (sk) sk.remove(); }
+            this._setHint(true);
+        },
+
+        _setHint: function (on) { const h = $('br-hint'); if (h) h.classList.toggle('br-hint-on', !!on); },
 
         _showSkeleton: function () {
             const r = $('br-results'); if (!r) return;
@@ -242,6 +316,7 @@
         },
 
         _openResult: function (title) {
+            if (this.view === 'page') this._showResults();   // 看完一篇又點開另一條：先回結果頁再點，新的一頁才不會接在上一篇後面
             const r = $('br-results');
             let card = null;
             if (r) {
@@ -250,8 +325,20 @@
             }
             if (card) card.classList.add('br-tap');
             const site = card ? card.querySelector('.br-site')?.textContent : '';
-            const self = this;
-            setTimeout(() => self._showPage(title, site || '', true), card ? 260 : 0);
+            this._pendingOpen = { title, site: site || '' };
+            if (!card || this._rush) { this._flushOpen(); return; }
+            this._openTimer = setTimeout(() => this._flushOpen(), 260);   // 卡片按下去那一下再換頁
+        },
+
+        _flushOpen: function () {
+            if (this._openTimer) { clearTimeout(this._openTimer); this._openTimer = null; }
+            const p = this._pendingOpen; this._pendingOpen = null;
+            if (p) this._showPage(p.title, p.site, true);
+        },
+
+        _cancelOpen: function () {
+            if (this._openTimer) { clearTimeout(this._openTimer); this._openTimer = null; }
+            this._pendingOpen = null;
         },
 
         _showPage: function (title, site, skeleton) {

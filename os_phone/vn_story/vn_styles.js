@@ -320,6 +320,7 @@
                                     <div id="br-page-body"></div>
                                 </div>
                                 <div id="br-nar" class="hidden"></div>
+                                <div id="br-hint"><i class="fa-solid fa-chevron-down"></i></div>
                             </div>
                         </div>
                         <div id="phone-nav" class="hidden" onclick="window.VN_Nav && window.VN_Nav.tap()">
