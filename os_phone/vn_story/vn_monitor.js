@@ -423,10 +423,7 @@
                 const name = String(w.comment || (Array.isArray(w.key) ? w.key.join('、') : w.key) || ('條目 ' + (w.uid != null ? w.uid : ''))).trim();
                 add('wi', name, w.content, w.world || '');
             });
-            try {
-                const ps = (ctx.chatCompletionSettings && ctx.chatCompletionSettings.prompts) || [];
-                ps.forEach(function(p){ if (p && !p.marker && p.content) add('preset', p.name || p.identifier || '預設條目', p.content); });
-            } catch (e) {}
+            try { this._presetPieces(ctx).forEach(function(x){ out.push(x); }); } catch (e) { console.warn('[CTX] 預設條目展開失敗', e); }
             try {
                 const ch = ctx.characters && ctx.characters[ctx.characterId];
                 if (ch) {
@@ -442,6 +439,81 @@
             try { const pu = ctx.powerUserSettings; if (pu) add('persona', '使用者角色', pu.persona_description); } catch (e) {}
             out.sort(function(a, b){ return b.text.length - a.text.length; });   // 長的先認，免得短的咬掉長的中間
             return out;
+        },
+
+        // ── 預設條目：照預設排的順序一條一條展開，跟酒館組 prompt 時一樣 ──
+        //   10-07 她：逐段看常有「沒認出」，點開明明是預設作者的。原因是 Ako 這類預設用 {{setvar}}／{{getvar}}
+        //   在條目之間傳東西（「别动·注入变量」先全部設空，後面勾的條目再設值，COT 條目 getvar 拿），原文對不上送出的字。
+        //   以前補救是拿 substituteParams 再展開，但那是照條目「定義」的順序、不是預設排的順序，拿到的值不一樣；
+        //   而且 setvar 會真的寫進她的聊天變數。現在變數自己記一份（起點＝聊天裡現在存的，也就是上一輪組完的樣子），只讀不寫。
+        //   {{random}}／{{roll}} 每次抽的不一樣，對不上的交給 _alignPreset 照順序對。
+        _presetPieces: function(ctx) {
+            const cs = (ctx && ctx.chatCompletionSettings) || {};
+            const ps = Array.isArray(cs.prompts) ? cs.prompts : [];
+            const byId = {};
+            ps.forEach(function(p){ if (p && p.identifier) byId[p.identifier] = p; });
+            const orders = Array.isArray(cs.prompt_order) ? cs.prompt_order : [];
+            const ord = orders.find(function(o){ return o && String(o.character_id) === '100001'; }) || orders[0];
+            const list = (ord && Array.isArray(ord.order))
+                ? ord.order.filter(function(o){ return o && o.enabled !== false; }).map(function(o){ return byId[o.identifier]; })
+                : ps;
+            const local = Object.assign({}, (ctx.chatMetadata && ctx.chatMetadata.variables) || {});
+            const global = Object.assign({}, (ctx.extensionSettings && ctx.extensionSettings.variables && ctx.extensionSettings.variables.global) || {});
+            const name1 = String(ctx.name1 || ''), name2 = String(ctx.name2 || '');
+            const sub = function(t){ try { return ctx.substituteParams ? ctx.substituteParams(t) : t; } catch (e) { return t; } };
+            const self = this, out = [];
+            list.forEach(function(p, order){
+                if (!p || p.marker || !p.content) return;
+                let t = self._expandVars(p.content, local, global);
+                // {{user}}／<user> 自己先換：酒館的 substituteParams 萬一沒有也認得到；變數巨集已經換掉了，剩下的交給它不會改到任何東西
+                if (name1) t = t.replace(/\{\{user\}\}|<user>/gi, name1);
+                if (name2) t = t.replace(/\{\{char\}\}|<char>|<bot>/gi, name2);
+                t = String(sub(t) || '').trim();
+                if (!t) return;   // 只有 setvar 的條目展開是空的，酒館不送
+                out.push({ kind: 'preset', name: p.name || p.identifier || '預設條目', sub: '', text: t, order: order,
+                    inChat: p.injection_position === 1,          // 插在聊天記錄裡某個深度的，不照順序排
+                    line: t.length < 12 });                      // 很短的（單獨一個 <char_info>）只認整行，免得咬到別人中間
+            });
+            return out;
+        },
+        // 變數巨集由左到右照順序算（同一條裡先設後拿）；只動傳進來的兩份副本
+        _expandVars: function(s, local, global) {
+            const num = function(v){ return v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v)); };
+            const str = function(v){ return v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v)); };
+            let t = String(s == null ? '' : s).replace(/\{\{\/\/[\s\S]*?\}\}/g, '');   // {{// 註解}}
+            t = t.replace(/\{\{\s*(setvar|addvar|getvar|incvar|decvar|setglobalvar|addglobalvar|getglobalvar|incglobalvar|decglobalvar)\s*::([^:}]*)(?:::([\s\S]*?))?\}\}/gi, function(m, op, name, val){
+                op = op.toLowerCase(); name = String(name).trim();
+                const box = op.indexOf('global') >= 0 ? global : local;
+                const cur = box[name];
+                if (op === 'setvar' || op === 'setglobalvar') { box[name] = val == null ? '' : val; return ''; }
+                if (op === 'addvar' || op === 'addglobalvar') { box[name] = (num(cur) && num(val)) ? Number(cur) + Number(val) : str(cur) + str(val); return ''; }
+                if (op === 'incvar' || op === 'incglobalvar') { box[name] = (Number(cur) || 0) + 1; return str(box[name]); }
+                if (op === 'decvar' || op === 'decglobalvar') { box[name] = (Number(cur) || 0) - 1; return str(box[name]); }
+                return str(cur);
+            });
+            return t.replace(/(?:\r?\n)*\{\{trim\}\}(?:\r?\n)*/gi, '');
+        },
+        // 展開了還是對不上的預設條目（裡面有 {{random}}、{{roll}}，或變數跟送出那刻不一樣）：
+        //   兩條認出來的預設條目中間夾著幾段「沒認出」，預設裡這兩條中間又剛好有同樣多條沒被認領的 → 照順序一對一對上。數目不一樣就不猜。
+        _alignPreset: function(segs, pieces) {
+            const seen = {};
+            segs.forEach(function(s){ if (s.kind === 'preset' && s.order != null) seen[s.order] = 1; });
+            const left = [];
+            pieces.forEach(function(p){ if (p.kind === 'preset' && p.order != null && !p.inChat && !seen[p.order]) { seen[p.order] = 1; left.push(p); } });
+            if (!left.length) return;
+            left.sort(function(a, b){ return a.order - b.order; });
+            let lastOrder = -1, run = [];
+            const flush = function(nextOrder){
+                if (!run.length) return;
+                const cand = left.filter(function(p){ return p.order > lastOrder && p.order < nextOrder; });
+                if (cand.length === run.length) run.forEach(function(s, i){ s.kind = 'preset'; s.name = cand[i].name; s.sub = '照順序對上'; s.order = cand[i].order; });
+                run = [];
+            };
+            segs.forEach(function(s){
+                if (s.kind === 'preset' && s.order != null && s.sub !== '照順序對上') { flush(s.order); lastOrder = s.order; }
+                else if (s.kind === 'unknown') run.push(s);
+            });
+            flush(Infinity);
         },
 
         _msgText: function(m) {
@@ -479,9 +551,10 @@
                     let from = 0, i;
                     while ((i = text.indexOf(p.text, from)) >= 0) {
                         const end = i + p.text.length;
+                        from = end;
+                        if (p.line && !((i === 0 || text[i - 1] === '\n') && (end === text.length || text[end] === '\n'))) continue;
                         const hit = claimed.some(function(c){ return i < c.end && end > c.start; });
                         if (!hit) claimed.push({ start: i, end: end, p: p });
-                        from = end;
                     }
                 });
                 claimed.sort(function(a, b){ return a.start - b.start; });
@@ -494,11 +567,12 @@
                 };
                 claimed.forEach(function(c){
                     gap(text.slice(pos, c.start));
-                    segs.push({ kind: c.p.kind, name: c.p.name, sub: c.p.sub, text: text.slice(c.start, c.end), mi: mi });
+                    segs.push({ kind: c.p.kind, name: c.p.name, sub: c.p.sub, text: text.slice(c.start, c.end), mi: mi, order: c.p.order });
                     pos = c.end;
                 });
                 gap(text.slice(pos));
             });
+            this._alignPreset(segs, pieces);
             // 最後一則你說的話單獨拿出來（模型最看重最後那段）
             for (let i = segs.length - 1; i >= 0; i--) {
                 if (segs[i].kind === 'chat') { if (segs[i].role === 'user') segs[i].kind = 'now'; break; }
