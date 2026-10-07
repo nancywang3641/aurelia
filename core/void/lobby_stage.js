@@ -1063,12 +1063,22 @@
         S.player = Object.assign(spawnActor(src, sp.x, sp.y, PLAYER_H), { dest: null, key: 'player', name: '你', defaultSrc: src });
         if (_skins()['player']) S.player._skinPending = true;   // 玩家有自訂皮膚→預設圖先藏著(免閃)
         _applySkin(S.player, 'player');
+        // ⌨ 方向鍵歸「最後一下點的地方」：點在大廳上歸小人，點在酒館的面板（世界書、設定…）就還給那邊。
+        //   10-07 她：方向鍵穿透到酒館面板，世界書輸入框左右移不動游標、Shift 圈不了字。以前只認 input／textarea，
+        //   別的可以打字的框（contenteditable 那種編輯器）不算；大廳沒在畫面上也照搶。
+        S.keysHome = true;
+        S.onPtr = (e) => {
+            const home = S.root && (S.root.closest('#aurelia-home-tab') || S.root.parentElement);
+            S.keysHome = !!(home && e.target && home.contains(e.target));
+        };
+        window.addEventListener('pointerdown', S.onPtr, true);
         S.onKey = (e) => {
-            const tag = (document.activeElement?.tagName || '').toLowerCase();
-            if (tag === 'input' || tag === 'textarea') return;
+            if (_keyTyping(e)) return;
             // 🌱 全螢幕 app 蓋在大廳上時，按鍵是它的：
             //    這裡是捕獲階段又會 stopImmediatePropagation，不讓開的話方向鍵永遠到不了那個 app，大廳的小人還會在後面偷走
             if (_appCovering()) return;
+            // 大廳沒在畫面上（切去別的分頁、VN 蓋著…）或最後一下點在別處：鍵不是大廳的，放回去
+            if (_stageHidden() || !S.keysHome) { S.keys = {}; return; }
             const k = e.key.toLowerCase();
             // 🎮 對話快捷鍵：走近 NPC 按 E/F 開聊；對話中按 E/F/Esc 收起（省得每次點 ✖）。不做「移動自動關」避免誤觸。
             if (e.type === 'keydown' && (k === 'e' || k === 'f' || k === 'escape')) {
@@ -1518,6 +1528,12 @@
     // → 60fps 迴圈降成每 500ms 探一次「能醒了嗎」，不跟 VN 的打字機/生圖/語音搶主執行緒。
     // 🌱 全螢幕 app（後院、故事日誌、房產…走 launchGameApp／showOsApp 開的那一格）蓋在大廳上
     //    那一格是 fixed，offsetParent 永遠是 null，要用 getClientRects
+    // 這一下按鍵是不是在打字：輸入框、下拉選單、可以直接打字的編輯器（contenteditable）都算；shadow DOM 裡的也看得到
+    function _keyTyping(e) {
+        const ed = (x) => !!x && x.nodeType === 1 && (/^(input|textarea|select)$/i.test(x.tagName) || x.isContentEditable);
+        const t = (e && e.composedPath && e.composedPath()[0]) || (e && e.target);
+        return ed(t) || ed(document.activeElement);
+    }
     function _appCovering() {
         const appPanel = document.getElementById('aurelia-panel-container');
         return !!(appPanel && appPanel.style.display !== 'none' && appPanel.getClientRects().length && appPanel.querySelector('#aurelia-iframe-container > *'));
@@ -2456,6 +2472,7 @@
             window.removeEventListener('keyup', S.onKey, true);
             S.onKey = null;
         }
+        if (S.onPtr) { window.removeEventListener('pointerdown', S.onPtr, true); S.onPtr = null; }
         S.root?.remove();
         const _left = document.querySelector('.lobby-left');
         if (_left) {

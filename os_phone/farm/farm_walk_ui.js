@@ -285,17 +285,24 @@
 
         // ── 輸入 ─────────────────────────────────────
         var keys = {}, joy = null;
-        function typing() {
-            var t = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
-            return t === 'input' || t === 'textarea' || t === 'select';
+        // 在打字就不搶：輸入框、下拉選單、可以直接打字的編輯器（contenteditable）都算（10-07，同大廳舞台）
+        function typing(e) {
+            function ed(x) { return !!x && x.nodeType === 1 && (/^(input|textarea|select)$/i.test(x.tagName) || x.isContentEditable); }
+            var t = (e && e.composedPath && e.composedPath()[0]) || (e && e.target);
+            return ed(t) || ed(document.activeElement);
         }
+        // 方向鍵歸「最後一下點的地方」：點在農田上歸小人，點在別處（酒館面板、世界書）就還回去
+        var keysHome = true;
+        function onPtr(e) { keysHome = !!(e.target && app.contains(e.target)); }
+        window.addEventListener('pointerdown', onPtr, true);
         // 🚨 酒館本體綁了 ↑＝編輯訊息、←→＝swipe（會重新生成＝花她的錢）：走路用的鍵一律在捕獲階段整條攔死（同大廳舞台）
         var MOVE_KEYS = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'];
         function swallow(e) { e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
         function onKey(e) {
             // 農場被藏起來（關掉了、換成別的 app）就不接任何按鍵：方向鍵要還給大廳和酒館
             if (!app.isConnected || app.offsetParent === null) return;
-            if (typing()) return;
+            if (typing(e)) return;
+            if (!keysHome) { keys = {}; return; }
             var k = e.key.toLowerCase();
             var move = MOVE_KEYS.indexOf(k) >= 0;
             // 背包、出貨箱、結算單、看板打開時：按鍵不讓底下的小人走動或做事（方向鍵照樣攔住，不漏給酒館）
@@ -587,6 +594,7 @@
                 dead = true;
                 cancelAnimationFrame(raf); clearInterval(backup); clearTimeout(doingTimer); clearTimeout(cheerTimer);
                 window.removeEventListener('keydown', onKey, true); window.removeEventListener('keyup', onKey, true);
+                window.removeEventListener('pointerdown', onPtr, true);
                 window.removeEventListener('blur', onBlur); window.removeEventListener('resize', layout);
                 if (focus && focus.release) focus.release();
                 keys = {};
