@@ -53,6 +53,8 @@
     const K_LOG = 'visits';    // 訪客紀錄 [{id,day,key,name,item,line,price,said?,ev?}]
     const K_EVQ = 'evq';       // A級事件佇列 [{type,key,item,itemId}](單次結算最多消化2件,超過留隊)
     const K_SHIFT = 'shift';   // 值班小遊戲紀錄 {best,games,bestStreak}
+    const K_PEND = 'pending';  // 今天還沒到時間的客人 [{day,t,key,name,itemId,item,line,price}](到點才進紀錄、進帳)
+    const OPEN_MIN = 9 * 60, CLOSE_MIN = 22 * 60;   // 客人上門的時段(分鐘):照時段陸續出現,店員一天上好幾班才各有客人
     const EV_LABEL = { devotion: '本命認證', dropout: '吃膩告別' };
     const ING_ICONS = {
         coffee: '☕', tea: '🍵', soda: '🫧',
@@ -93,6 +95,8 @@
     };
     const DAY_MS = 86400000;
     function _dayNum(ts) { return Math.floor((ts - new Date(ts).getTimezoneOffset() * 60000) / DAY_MS); }   // 本地午夜換日(UTC算的話台灣要早上8點才換,反直覺)
+    function _minOf(ts) { const d = new Date(ts); return d.getHours() * 60 + d.getMinutes(); }
+    function _hm(t) { return t == null ? '' : String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); }
 
     function _db() { return win.OS_DB || window.OS_DB; }
     async function _get(k, dflt) {
@@ -233,8 +237,8 @@
             return { tags: tags.length ? tags : fallback.tags, incl, book };
         } catch (e) { console.warn('[Cafe] 首訪定調失敗,退本地隨機', e); return fallback; }
     }
-    // 挑品項:偏好tag加權+狀態機權重(嚐鮮1.5/上癮2/習慣1/吃膩0.3)+一點隨機
-    function _pickItem(menu, st, day) {
+    // 挑品項:偏好tag加權+狀態機權重(嚐鮮1.5/上癮2/習慣1/吃膩0.3)+店員推薦+1+一點隨機
+    function _pickItem(menu, st, day, recId) {
         const avail = menu.filter(m => !((st.items[m.id] || {}).coolUntil > day));
         if (!avail.length) return null;
         let best = null, bestW = 0;
@@ -246,6 +250,7 @@
             else if (it.streak >= 3) { state = 'addict'; w = 2; }
             else if (it.count >= 6) { state = 'habit'; w = 1; }
             w += (m.tags || []).filter(t => (st.prefs || []).includes(t)).length * 0.8;
+            if (recId && m.id === recId) w += 1;   // 店員推薦的那杯
             w *= 0.7 + Math.random() * 0.6;   // 一點隨機,別天天同一杯
             if (w > bestW) { bestW = w; best = { m, state }; }
         }
@@ -321,49 +326,68 @@
         return _settling;
     }
     async function _settleInner() {
-        try { if ((win.localStorage || localStorage).getItem('cafe_offline_visits') === '0') return false; } catch (e) {}
-        const roster = await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []);
-        if (!roster.length) return false;
+        let off = false;   // 關掉「書咖離線訪客」＝不再擲新的客人；已經排隊的照樣到時間進帳（狀態早就算過了）
+        try { off = (win.localStorage || localStorage).getItem('cafe_offline_visits') === '0'; } catch (e) {}
+        const roster = off ? [] : await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []);
         const shop = await getShop();
-        const today = _dayNum(Date.now());
-        if (!shop.lastDay) { shop.lastDay = today; await _set(K_SHOP, shop); return false; }   // 開張日:從明天開始營業
-        if (shop.lastDay >= today) return false;
+        const nowTs = Date.now();
+        const today = _dayNum(nowTs), nowMin = _minOf(nowTs);
+        if (!shop.lastDay) { if (roster.length) { shop.lastDay = today; await _set(K_SHOP, shop); } return false; }   // 開張日:從明天開始營業
+        const rosterEv = off ? await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []) : roster;
+        const pend0 = await _get(K_PEND, []);
+        const isDue = p => p.day < today || p.t <= nowMin;
+        const rollDays = roster.length > 0 && shop.lastDay < today;
+        if (!rollDays && !pend0.some(isDue)) return false;
         const from = Math.max(shop.lastDay + 1, today - 7);
         const npcs = await _get(K_NPC, {});
         const menu = await getMenu();
-        const logs = await _get(K_LOG, []);
         const evq = await _get(K_EVQ, []);
-        const logs0 = logs.length;   // 這次結算新增的紀錄＝unshift 到前面的那幾筆
+        const recId = shop.recommend?.id || null;   // 店員推薦的那杯
         const pop0 = shop.popularity || 0;
         const sold0 = new Map(menu.map(m => [m.id, m.sold || 0]));   // 這次賣了幾杯＝結束時減開始時
+        const fresh = [];   // 這次新進紀錄的(到時間的客人、事件卡)
+        const pend = pend0.filter(p => !isDue(p));   // 還沒到時間的照舊排隊
         let earned = 0, cupsAdded = 0, anyVisit = false, tunedRun = 0;   // 首訪定調每次結算≤3次(名冊變大後防API爆發,沒輪到的自然留到下次)
-        for (let day = from; day <= today; day++) {
+        // 客人上門:到時間的進紀錄、進帳;今天比現在晚的先排隊(npc 狀態照算,錢與紀錄等到時間)
+        const arrive = (e, m) => {
+            if (e.day === today && e.t > nowMin) { pend.push(Object.assign({ itemId: m ? m.id : null }, e)); return; }
+            if (m) m.sold = (m.sold || 0) + 1;
+            if (e.price) { earned += e.price; cupsAdded++; }
+            fresh.push(Object.assign({ id: _mkId() }, e));
+            anyVisit = true;
+        };
+        pend0.filter(isDue).forEach(p => {
+            const m = menu.find(x => x.id === p.itemId) || null;
+            const e = Object.assign({}, p); delete e.itemId;
+            arrive(e, m);
+        });
+        if (rollDays) for (let day = from; day <= today; day++) {
             let visitToday = false;
             for (const r of roster) {
                 const st = npcs[r.key] || (npcs[r.key] = { name: r.name, prefs: null, incl: 0.5, visits: 0, spend: 0, items: {} });
+                const t = OPEN_MIN + Math.floor(Math.random() * (CLOSE_MIN - OPEN_MIN));
                 if (!st.prefs) {   // 還沒定調=還沒第一次上門
                     if (tunedRun < 3 && Math.random() < 0.55) {
                         tunedRun++;
                         const tuned = await _tuneNpc(r);
                         st.prefs = tuned.tags; st.incl = tuned.incl;
                         if (tuned.book) { try { await addBook({ title: tuned.book.title, by: r.name, note: tuned.book.note }); } catch (e) {} }
-                        st.visits++; visitToday = anyVisit = true;
-                        logs.unshift({ id: _mkId(), day, key: r.key, name: r.name, line: TPL.first, price: 0 });
+                        st.visits++; visitToday = true;
+                        arrive({ day, t, key: r.key, name: r.name, line: TPL.first, price: 0 }, null);
                     }
                     continue;
                 }
                 const p = Math.min(0.9, Math.max(0.12, st.incl * (0.45 + Math.min(0.45, (shop.popularity || 0) / 150))));
                 if (Math.random() >= p) continue;
-                visitToday = anyVisit = true; st.visits++;
-                const pick = _pickItem(menu, st, day);
-                if (!pick) { if (Math.random() < 0.4) logs.unshift({ id: _mkId(), day, key: r.key, name: r.name, line: TPL.browse, price: 0 }); continue; }
+                visitToday = true; st.visits++;
+                const pick = _pickItem(menu, st, day, recId);
+                if (!pick) { if (Math.random() < 0.4) arrive({ day, t, key: r.key, name: r.name, line: TPL.browse, price: 0 }, null); continue; }
                 const m = pick.m;
                 const it = st.items[m.id] || (st.items[m.id] = { count: 0, streak: 0, lastDay: 0, boredHits: 0, coolUntil: 0 });
                 const gap = it.lastDay ? day - it.lastDay : 0;
                 it.streak = (day - it.lastDay === 1) ? it.streak + 1 : 1;
                 it.count++; it.lastDay = day;
-                m.sold = (m.sold || 0) + 1;
-                earned += m.price; cupsAdded++; st.spend += m.price;
+                st.spend += m.price;
                 let lineKey = pick.state;
                 if (gap > 7 && it.count > 1) lineKey = 'comeback';
                 if (pick.state === 'bored') {
@@ -371,24 +395,26 @@
                     if (it.boredHits >= 2) { it.coolUntil = day + 7; it.boredHits = 0; evq.push({ type: 'dropout', key: r.key, item: m.name, itemId: m.id }); }   // 🎬 吃膩棄坑
                 }
                 if (it.count === 10 && !it.devoted) { it.devoted = true; evq.push({ type: 'devotion', key: r.key, item: m.name, itemId: m.id }); }   // 🎬 本命認證
-                logs.unshift({ id: _mkId(), day, key: r.key, name: r.name, item: m.name, line: (TPL[lineKey] || TPL.normal).replace('{item}', m.name), price: m.price });
+                arrive({ day, t, key: r.key, name: r.name, item: m.name, line: (TPL[lineKey] || TPL.normal).replace('{item}', m.name), price: m.price }, m);
             }
             if (visitToday) shop.popularity = Math.min(999, (shop.popularity || 0) + 1);
         }
         // 🎬 A級事件消化:單次結算最多2件(敘事節點才燒API),API掛了整隊留到下次
+        //   只在換日那次處理（一天一次，同改版前）：排隊客人到時間放出來、店員上班先結算，都不另外叫模型
         let evDone = 0;
-        while (evq.length && evDone < 2) {
+        while (rollDays && evq.length && evDone < 2) {
             const ev = evq[0];
-            const r = roster.find(x => x.key === ev.key);
+            const r = rosterEv.find(x => x.key === ev.key);
             const st = npcs[ev.key];
             if (!r || !st) { evq.shift(); continue; }
             const out = await _eventScene(r, ev);
             if (!out) break;
             if (ev.type === 'devotion' && out.addTags.length) st.prefs = Array.from(new Set([].concat(st.prefs || [], out.addTags))).slice(0, 4);
             if (ev.type === 'dropout' && out.newTags.length) st.prefs = out.newTags;   // 口味轉向:整組改寫
-            logs.unshift({ id: _mkId(), day: today, key: ev.key, name: st.name, item: ev.item, line: out.line, said: out.line, price: 0, ev: ev.type });
+            fresh.push({ id: _mkId(), day: today, t: nowMin, key: ev.key, name: st.name, item: ev.item, line: out.line, said: out.line, price: 0, ev: ev.type });
             evq.shift(); evDone++; anyVisit = true;
         }
+        fresh.sort((a, b) => (b.day - a.day) || ((b.t || 0) - (a.t || 0)));   // 紀錄由新到舊
         // 🚨 寫回要疊在「最新的那份」上：結算在背景跑、中間等好幾通 API，這段時間她可能上架新飲品、
         //    聽完留言、改了店況——以前拿開頭讀的整份寫回，這些一結算完就消失
         let menuNow, logsNow, npcsNow, shopNow;
@@ -400,13 +426,14 @@
         } catch (e) { console.warn('[Cafe] 結算寫回前讀不到最新資料，這次先不寫（下次重算）', e); return false; }
         const soldAdd = new Map(menu.map(m => [m.id, (m.sold || 0) - (sold0.get(m.id) || 0)]));
         menuNow.forEach(x => { const d = soldAdd.get(x.id) || 0; if (d > 0) x.sold = (x.sold || 0) + d; });
-        const logsOut = logs.slice(0, logs.length - logs0).concat(logsNow);
+        const logsOut = fresh.concat(logsNow);
         Object.assign(npcsNow, npcs);
-        shopNow.lastDay = today;
+        if (rollDays) shopNow.lastDay = today;
         shopNow.popularity = Math.min(999, (shopNow.popularity || 0) + ((shop.popularity || 0) - pop0));
         shopNow.revenue = (shopNow.revenue || 0) + earned;
         shopNow.cups = (shopNow.cups || 0) + cupsAdded;
         await _set(K_EVQ, evq);
+        await _set(K_PEND, pend);
         await _set(K_NPC, npcsNow); await _set(K_MENU, menuNow); await _set(K_LOG, logsOut.slice(0, 80)); await _set(K_SHOP, shopNow);
         if (earned > 0) { try { await (win.OS_PT || window.OS_PT)?.addPT?.(earned, { reason: '書咖營業收入' }); } catch (e) {} }
         return anyVisit;
@@ -436,9 +463,10 @@
             '.oc-brand-copy{display:flex;flex-direction:column;line-height:1.05;white-space:nowrap;}.oc-brand-copy b{font-size:15px;letter-spacing:.06em;}.oc-brand-copy small{margin-top:4px;color:#a18869;font-size:8px;letter-spacing:.18em;font-weight:700;}' +
             '.oc-head-stats{display:flex;gap:5px;margin-left:auto;}.oc-stat-pill{display:flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid #dfceb2;border-radius:8px;background:rgba(255,255,255,.58);color:#816143;font-size:11px;white-space:nowrap;}.oc-stat-pill b{color:#5e4028;font-size:12px;}' +
             '.oc-head .oc-close{background:none;border:none;color:#765638;cursor:pointer;font-size:15px;padding:5px 6px;border-radius:8px;}.oc-head .oc-close:hover{background:rgba(122,82,48,.1);}' +
-            '.oc-tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:9px 12px 0;}' +
+            '.oc-tabs{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:9px 12px 0;}' +
             '.oc-tab{min-width:0;background:rgba(255,255,255,.45);border:1px solid #dcc9aa;color:#735437;border-radius:8px;padding:6px 2px;cursor:pointer;font-size:10px;white-space:nowrap;}.oc-tab i{display:block;margin-bottom:3px;font-size:12px;}' +
             '.oc-tab.on{background:#8a5c34;border-color:#8a5c34;color:#fff8ed;font-weight:700;box-shadow:0 3px 8px rgba(105,67,35,.18);}' +
+            '.oc-tab{position:relative;}.oc-tab.has-dot:after{content:"";position:absolute;top:4px;right:6px;width:7px;height:7px;border-radius:50%;background:#c4573f;box-shadow:0 0 0 2px rgba(255,250,240,.9);}' +
             '.oc-body{overflow-y:auto;padding:11px 13px 14px;flex:1;display:flex;flex-direction:column;scrollbar-color:#c9ae88 transparent;scrollbar-width:thin;}' +
             '.oc-body .oc-empty{margin:auto;}' +
             '.oc-section-head{display:flex;align-items:center;justify-content:space-between;margin:0 1px 8px;color:#6a4b30;}.oc-section-title{font-weight:800;font-size:13px;letter-spacing:.04em;}.oc-section-note{color:#a18465;font-size:10px;}' +
@@ -491,6 +519,25 @@
         if (pop) pop.textContent = String(shop.popularity || 0);
         if (cups) cups.textContent = String(shop.cups || 0);
     }
+    async function _saveSaid(id, said) {
+        const cur = await _getStrict(K_LOG, []);
+        const x = cur.find(v => v && v.id === id);
+        if (!x) return false;
+        x.said = said;
+        await _set(K_LOG, cur);
+        return true;
+    }
+    // 店員頁上的小紅點:店員上完一班、她還沒看
+    function _paintStaffDot() {
+        if (!_winEl) return;
+        _get('staff', null).then(st => { _winEl?.querySelector('.oc-tab[data-tab="staff"]')?.classList.toggle('has-dot', !!(st && st.unread)); }).catch(() => {});
+    }
+    // 直接開到某一頁(舞台上點店員＝開櫃台窗到店員頁)
+    async function _openTab(tab) {
+        if (!_winEl) await openWorkshop();
+        const t = _winEl?.querySelector('.oc-tab[data-tab="' + tab + '"]');
+        if (t) t.click();
+    }
     function closeWorkshop() {
         if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
         _winEl?.remove(); _winEl = null;
@@ -520,6 +567,7 @@
               '<button class="oc-tab" data-tab="free"><i class="fa-solid fa-wand-magic-sparkles"></i>創想</button>' +
               '<button class="oc-tab" data-tab="books"><i class="fa-solid fa-book-open"></i>書單</button>' +
               '<button class="oc-tab" data-tab="log"><i class="fa-solid fa-users"></i>訪客</button>' +
+              '<button class="oc-tab" data-tab="staff"><i class="fa-solid fa-id-badge"></i>店員</button>' +
             '</div>' +
             '<div class="oc-body"></div>';
         host.appendChild(box);
@@ -537,6 +585,7 @@
         }));
         _renderTab('menu', body);
         _refreshHeaderStats();
+        _paintStaffDot();
         // ☕ 開窗=補算離線天數(有新動靜就刷新當前頁;背景跑不擋開窗)
         _settle().then(changed => {
             if (!changed || !_winEl) return;
@@ -570,7 +619,7 @@
                         return '<div class="oc-item ev"><span><span class="oc-name"><i class="fa-solid fa-star"></i> ' + md(l.day) + '・' + l.name + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + l.item + '」' : '') + '</span>' +
                             '<span class="oc-said">「' + l.line + '」</span></span></div>';
                     }
-                    return '<div class="oc-item oc-click" data-id="' + l.id + '"><span><span class="oc-name">' + md(l.day) + '・' + l.name + '</span>' +
+                    return '<div class="oc-item oc-click" data-id="' + l.id + '"><span><span class="oc-name">' + md(l.day) + (l.t != null ? ' ' + _hm(l.t) : '') + '・' + l.name + '</span>' +
                         '<span class="oc-blurb">' + l.line + '</span>' +
                         (l.said ? '<span class="oc-said">「' + l.said + '」</span>' : '') + '</span>' +
                         '<span class="oc-price">' + (l.price ? '+' + l.price + ' PT ' : '') +
@@ -591,7 +640,7 @@
                 const loading = el.querySelector('.oc-loading');
                 if (!said) { if (loading) loading.textContent = '他沒搭理你,再點一次試試。'; return; }
                 l.said = said;
-                await _set(K_LOG, cur);
+                await _saveSaid(id, said);   // 等模型這幾秒,店員可能剛標完處理過、結算可能剛放出客人:疊在最新的那份上只改這一筆
                 if (loading) { loading.classList.remove('oc-loading'); loading.textContent = '「' + said + '」'; }
                 el.querySelector('.oc-hear')?.classList.add('has');
             }));
@@ -606,6 +655,10 @@
             _renderFree(body);
         } else if (tab === 'shift') {
             await _renderShift(body);
+        } else if (tab === 'staff') {
+            const S = win.OS_CAFE_STAFF || window.OS_CAFE_STAFF;
+            if (S && S.renderTab) { await S.renderTab(body); _paintStaffDot(); }
+            else body.innerHTML = '<div class="oc-empty"><i class="fa-solid fa-id-badge"></i>店員還沒準備好，等一下再來看。</div>';
         } else {
             _renderLab(body);
         }
@@ -916,6 +969,18 @@
         });
     }
 
-    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, _settle };   // _settle=console 診斷用
+    // 🧑‍🍳 給店員那支(os_cafe_staff.js)用的橋:同一份帳本、同一條結算
+    function _refresh() {
+        if (!_winEl) return;
+        _refreshHeaderStats();
+        _paintStaffDot();
+        const on = _winEl.querySelector('.oc-tab.on');
+        const tab = on ? on.dataset.tab : 'menu';
+        if (tab !== 'shift' && tab !== 'lab' && tab !== 'free') _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、小遊戲正在操作,別重畫
+    }
+    const _b = { get: _get, getStrict: _getStrict, set: _set, settle: _settle, dayNum: _dayNum, hm: _hm,
+        menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
+        isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid };
+    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, _settle, _b };   // _settle=console 診斷用
     console.log('[Cafe] 書咖經營系統就緒');
 })();

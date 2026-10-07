@@ -119,6 +119,38 @@
                      noWander:true, decider, avoidBlocks:true, homeRect:zone });
         });
     }
+    // 🧑‍🍳 書咖店員：她在櫃台窗「店員」頁挑的人，上班中就站在櫃台旁；點他＝開櫃台窗到店員頁
+    //   🚨 大廳常比這兩支先建好（店員那支、宿舍的像素畫像那支走網路來）：等它們最多 8 秒，期間換了場景或重掛就不站
+    async function _spawnCafeStaff() {
+        try {
+            const W = window.parent || window;
+            const world = S.world;
+            const alive = () => S.scene === 'cafe' && S.world === world;
+            const until = async (fn) => { for (let i = 0; i < 27 && !fn() && alive(); i++) await new Promise(r => setTimeout(r, 300)); return fn(); };
+            const ST = await until(() => W.OS_CAFE_STAFF || window.OS_CAFE_STAFF);
+            if (!ST || !ST.get || !alive()) return;
+            const st = await ST.get();
+            const pick = st.pick;
+            const z = _b.CFG.points.yingZone;
+            if (!st.on || !pick || !z || !alive()) return;
+            const x = z.x + z.w + 80, y = z.y + z.h / 2;   // 櫃台右邊的走道（站在瀅瀅那條裡會被櫃台整個擋住）
+            const open = () => { try { (W.OS_CAFE || window.OS_CAFE)._b.openTab('staff'); } catch (e) {} };
+            const base = { name: pick.name, subTitle: '書咖店員 · 值班中', x, y, noWander: true, homeRect: { x, y, w: 0, h: 0 }, onInteract: open };
+            if (pick.type === 'xiaoji') {
+                if (!(await ST.candidates()).xiaoji.some(x => x.id === pick.id) || !alive()) return;   // 宿舍名冊上已經沒有他（請他搬走了）
+                await until(() => W.ClawdPortrait || window.ClawdPortrait);   // 沒有宿舍那支就畫不出他，不站
+                const src = await ST.lookOf(pick);
+                if (!src || !alive()) return;
+                _b.addNpc(Object.assign({ key: 'cafe_staff', h: 130, src, portrait: src }, base));
+                return;
+            }
+            const pool = await _journalGuestPool();
+            const g = pool.find(p => p.rawName === pick.rawName && (!pick.chatId || p.chatId === pick.chatId)) || pool.find(p => p.rawName === pick.rawName);
+            if (!g || !alive()) return;
+            const npc = _b.addNpc(Object.assign({ key: 'cafe_staff', h: 200, src: ASSET.mcM, persona: _guestPersona(g) }, base));
+            _attachGuestPortrait(npc, g);   // 那一輪的Q版／頭像（撈不到就維持像素小人）
+        } catch (e) { console.warn('[LobbyNpcs] 書咖店員沒站上去', e); }
+    }
     async function initNpcs() {
         const CFG = _b.CFG;
         const SC = _b.SCENES[S.scene];
@@ -188,6 +220,7 @@
         if (z) _b.addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
                  src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });   // 城市街區沒有 yingZone：瀅瀅顧店不上街
         _spawnSnResidents();   // 雷伊有機率在書咖出沒（放 guest 池早 return 之前）
+        if (S.scene === 'cafe') _spawnCafeStaff();   // 書咖店員（她挑的人，上班中才站）
         try {
             // 客人出沒區刷位＝站位評分制（Rae 的遮罩點子）：撒 24 個候選點，
             //   用 whiteRatio 挑「周圍最開闊(最多%白)」的，疊到已放的人重罰——不再貼牆/卡家具邊/擠成一坨。
@@ -388,27 +421,33 @@
     }
     // 那一輪(chatId)的頭像 → 對話立繪。avatar_cache key=`chatId::角色名`；chatId 兩邊都正規化再比
     //   （lobby_summary_index 存的是正規化 chatId、VN_Cache 存 raw ctx.chatId，直接比對會 miss）。
+    // 頭像快取裡找「那一輪的他」：回 { VC, key, full } 或 null（_attachGuestPortrait 與書咖店員共用同一套認名字）
+    async function _guestCacheHit(g) {
+        const VC = window.VN_Cache || (window.parent || window).VN_Cache;
+        if (!VC?.getAllMeta || !VC.getRaw || !g) return null;
+        const norm = w => !w ? '' : String(w).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
+        const wn = norm(g.chatId);
+        if (!wn) return null;
+        const metas = (await VC.getAllMeta('avatar_cache')).filter(e => norm(VC.worldOf(e)) === wn);
+        if (!metas.length) return null;
+        const bare = (e) => String(VC.bareKeyOf(e) || '').trim();
+        // 名字候選：原始「名_姓」→ 顯示名 → 姓名各種拼法 → 只有名
+        const parts = String(g.rawName).split('_').map(s => s.trim()).filter(s => s && s !== '無' && s !== '无');
+        const cands = [g.rawName, g.name];
+        if (parts.length >= 2) cands.push(parts[1] + parts[0], parts[1] + '·' + parts[0], parts[0] + parts[1], parts[0] + '·' + parts[1]);
+        if (parts.length) cands.push(parts[0]);
+        let hit = null;
+        for (const c of cands) { hit = metas.find(e => bare(e) === c); if (hit) break; }
+        if (!hit && parts[0]) hit = metas.find(e => bare(e).includes(parts[0]));
+        if (!hit) return null;
+        const full = await VC.getRaw('avatar_cache', hit.key);
+        return full ? { VC, key: hit.key, full } : null;
+    }
     async function _attachGuestPortrait(npc, g) {
         try {
-            const VC = window.VN_Cache || (window.parent || window).VN_Cache;
-            if (!VC?.getAllMeta || !VC.getRaw) return;
-            const norm = w => !w ? '' : String(w).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
-            const wn = norm(g.chatId);
-            if (!wn) return;
-            const metas = (await VC.getAllMeta('avatar_cache')).filter(e => norm(VC.worldOf(e)) === wn);
-            if (!metas.length) return;
-            const bare = (e) => String(VC.bareKeyOf(e) || '').trim();
-            // 名字候選：原始「名_姓」→ 顯示名 → 姓名各種拼法 → 只有名
-            const parts = String(g.rawName).split('_').map(s => s.trim()).filter(s => s && s !== '無' && s !== '无');
-            const cands = [g.rawName, g.name];
-            if (parts.length >= 2) cands.push(parts[1] + parts[0], parts[1] + '·' + parts[0], parts[0] + parts[1], parts[0] + '·' + parts[1]);
-            if (parts.length) cands.push(parts[0]);
-            let hit = null;
-            for (const c of cands) { hit = metas.find(e => bare(e) === c); if (hit) break; }
-            if (!hit && parts[0]) hit = metas.find(e => bare(e).includes(parts[0]));
-            if (!hit) return;
-            const full = await VC.getRaw('avatar_cache', hit.key);
-            if (!full || !npc) return;
+            const h = await _guestCacheHit(g);
+            if (!h || !npc) return;
+            const VC = h.VC, hit = { key: h.key }, full = h.full;
             npc.avatarCacheKey = hit.key;   // 複合鍵(那輪chatId::名)：裝扮室「生成立繪」拿它呼叫 VN autoGenSprite→立繪存回同鍵的 sprite_cache
             if (full.prompt) npc.avatarPrompt = String(full.prompt);   // ✨ 外觀 ground truth：裝扮室「生成小小人」直接拿這串當 prompt
             const head = VC.headOf ? VC.headOf(full) : full.url;   // 一次生三種的自拍優先（headOf）
@@ -466,6 +505,8 @@
             const r = SN_RESIDENTS.find(x => x.key === key);
             return r ? { key: r.key, name: r.name, personaFull: r.personaFull, portrait: r.portrait, subTitle: r.subTitle } : null;
         },
+        // 那一輪的他的頭像與Q版（書咖店員頁用）：{ head, chibi } 或 null
+        guestLook: async (g) => { try { const h = await _guestCacheHit(g); return h ? { head: (h.VC.headOf ? h.VC.headOf(h.full) : h.full.url) || '', chibi: h.full.chibi || '' } : null; } catch (e) { return null; } },
         rollGuestPool: _journalGuestPool,   // console 診斷用（LobbyStage.rollGuestPool 懶轉接到這；async 回傳池陣列）
         // ☕ 書咖經營:顧客名冊=SN住民+日誌客人池全員(當前各卡最新輪的角色;key帶chatId=每輪隔離,同場景客人規則)
         // 🚨 key vs stableKey：

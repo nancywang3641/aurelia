@@ -508,7 +508,7 @@
     // 照意思找固定用 bge-base-zh（10-06 規模驗收：600 來回換句話問，small 17／20、base 20／20；下載 98MB，small 是 23MB）。
     //   🚨 transformers.js 跑在畫面那條線上：一批算太多畫面會卡（base 一批 32 段約 4 秒、4 段約 0.4 秒）→ 一次 2 段、每批中間讓出來
     const EMBED_MODEL = 'Xenova/bge-base-zh-v1.5', READY = 0.9, QUERY_WAIT = 1500, VEC_MIN = 0.35, VEC_BLOCK = 200, EMBED_BATCH = 2, EMBED_YIELD = 30;
-    const EV_NAME = { chat: '聊天', prop: '單子', lesson: '上課', exam: '考試', hw: '作業', theater: '小劇場', wear: '打扮', room: '房間', bubble: '泡泡', born: '來到宿舍', sum: '舊聊天整理' };
+    const EV_NAME = { chat: '聊天', prop: '單子', lesson: '上課', exam: '考試', hw: '作業', theater: '小劇場', wear: '打扮', room: '房間', bubble: '泡泡', born: '來到宿舍', sum: '舊聊天整理', cafe: '書咖值班' };
     function _evText(e, who) {
         if (!e || e.state !== 'ok') return '';
         const me = who || '你';
@@ -734,7 +734,7 @@
     // 終審 #1：失敗了不是每句話都再叫一次——第 n 次失敗後要多累積 n 輪件數才再試，連續 3 次就停到她按「再試一次」（force）；
     //   這一批的字數也有上限（TIDY_CHAR_CAP），放不下的下次再整理
     const TIDY_EVERY = 20, TIDY_MAX_BATCH = 40, CHAT_CLIP = 1500, TIDY_CHAR_CAP = 16000, TIDY_STOP = 3, TIDY_CAP = { add: 10, fix: 5, trait: 3 }, REL_MEMS = 40;
-    const COUNTED = ['chat', 'prop', 'lesson', 'exam', 'hw', 'theater', 'wear', 'room', 'bubble', 'born'];
+    const COUNTED = ['chat', 'prop', 'lesson', 'exam', 'hw', 'theater', 'wear', 'room', 'bubble', 'born', 'cafe'];
     function _isRae(e) { return (e.kind === 'mem' || e.kind === 'trait') ? e.by === 'rae' : e.kind === 'erase'; }
     function _mdate(at) { const d = new Date(at || 0); return (d.getMonth() + 1) + '/' + d.getDate(); }
     function _batchLine(e) {
