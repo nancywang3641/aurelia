@@ -52,7 +52,7 @@
     const K_NPC = 'npc';       // 每位顧客 {name,prefs,incl,visits,spend,items:{menuId:{count,streak,lastDay,boredHits,coolUntil,devoted}}}
     const K_LOG = 'visits';    // 訪客紀錄 [{id,day,key,name,item,line,price,said?,ev?}]
     const K_EVQ = 'evq';       // A級事件佇列 [{type,key,item,itemId}](單次結算最多消化2件,超過留隊)
-    const K_SHIFT = 'shift';   // 值班小遊戲紀錄 {best,games,bestStreak}
+    // 'shift'＝舊的點單小遊戲紀錄（10-08 拿掉小遊戲；資料留在原地不動）
     const K_PEND = 'pending';  // 今天還沒到時間的客人 [{day,t,key,name,itemId,item,line,price}](到點才進紀錄、進帳)
     const OPEN_MIN = 9 * 60, CLOSE_MIN = 22 * 60;   // 客人上門的時段(分鐘):照時段陸續出現,店員一天上好幾班才各有客人
     const EV_LABEL = { devotion: '本命認證', dropout: '吃膩告別' };
@@ -463,7 +463,7 @@
             '.oc-brand-copy{display:flex;flex-direction:column;line-height:1.05;white-space:nowrap;}.oc-brand-copy b{font-size:15px;letter-spacing:.06em;}.oc-brand-copy small{margin-top:4px;color:#a18869;font-size:8px;letter-spacing:.18em;font-weight:700;}' +
             '.oc-head-stats{display:flex;gap:5px;margin-left:auto;}.oc-stat-pill{display:flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid #dfceb2;border-radius:8px;background:rgba(255,255,255,.58);color:#816143;font-size:11px;white-space:nowrap;}.oc-stat-pill b{color:#5e4028;font-size:12px;}' +
             '.oc-head .oc-close{background:none;border:none;color:#765638;cursor:pointer;font-size:15px;padding:5px 6px;border-radius:8px;}.oc-head .oc-close:hover{background:rgba(122,82,48,.1);}' +
-            '.oc-tabs{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:9px 12px 0;}' +
+            '.oc-tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:9px 12px 0;}' +
             '.oc-tab{min-width:0;background:rgba(255,255,255,.45);border:1px solid #dcc9aa;color:#735437;border-radius:8px;padding:6px 2px;cursor:pointer;font-size:10px;white-space:nowrap;}.oc-tab i{display:block;margin-bottom:3px;font-size:12px;}' +
             '.oc-tab.on{background:#8a5c34;border-color:#8a5c34;color:#fff8ed;font-weight:700;box-shadow:0 3px 8px rgba(105,67,35,.18);}' +
             '.oc-tab{position:relative;}.oc-tab.has-dot:after{content:"";position:absolute;top:4px;right:6px;width:7px;height:7px;border-radius:50%;background:#c4573f;box-shadow:0 0 0 2px rgba(255,250,240,.9);}' +
@@ -493,12 +493,6 @@
             '.oc-tried{display:flex;justify-content:space-between;color:#a18a70;font-size:10px;margin-top:7px;}.oc-progress-line{height:4px;margin-top:5px;border-radius:5px;background:#eadcc8;overflow:hidden;}.oc-progress-line i{display:block;height:100%;background:#bd854c;border-radius:5px;}' +
             '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:195px;overflow-y:auto;padding-right:2px;}.oc-sym{width:37px;height:37px;font-size:17px;background:rgba(255,255,255,.6);border:1px solid #d3bf9f;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}.oc-sym.on{background:rgba(214,158,84,.3);border-color:#a9744a;}' +
             '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.75);border:1px solid #d3bf9f;border-radius:9px;color:#4a3a2a;padding:8px 10px;font-size:11px;}.oc-free-input::placeholder{color:#a3906f;}' +
-            '.oc-shift-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:9px;}.oc-shift-stat{padding:7px 5px;border:1px solid #dfceb2;border-radius:9px;background:rgba(255,255,255,.5);text-align:center;color:#8d7257;font-size:9px;}.oc-shift-stat b{display:block;margin-bottom:2px;color:#66482f;font-size:14px;}' +
-            '.oc-receipt{position:relative;margin:2px 0 10px;padding:11px 12px;border:1px dashed #c4a67c;border-radius:9px;background:rgba(255,254,248,.82);box-shadow:0 3px 9px rgba(88,57,30,.07);}.oc-receipt-head{display:flex;justify-content:space-between;align-items:center;color:#68492f;font-weight:800;}.oc-timer{color:#9c6335;font-size:13px;}.oc-timer.danger{color:#c45243;animation:oc-pulse .8s infinite;}' +
-            '.oc-order-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px;}.oc-order-part{padding:7px 3px;border:1px solid #e2d2b9;border-radius:9px;background:rgba(248,240,227,.7);text-align:center;color:#76583b;font-size:9px;}.oc-order-part .oc-order-icon{display:grid;place-items:center;height:48px;margin-bottom:4px;font-size:24px;}.oc-order-part .oc-order-icon .oc-sprite{width:48px;height:48px;}.oc-order-part.hidden .oc-order-icon{filter:grayscale(1);opacity:.45;}' +
-            '.oc-intro-pad{padding:14px 4px 8px;}.oc-shift-hint{text-align:center;color:#92785d;font-size:10px;line-height:1.5;margin:1px 0 8px;}.oc-ing-row{display:grid;grid-template-columns:44px repeat(4,minmax(0,1fr));gap:5px;align-items:stretch;margin-bottom:6px;}.oc-ing-row.three{grid-template-columns:44px repeat(3,minmax(0,1fr));}.oc-ing-row-label{display:grid;place-items:center;color:#84613f;font-size:10px;font-weight:800;}.oc-ing-btn{min-width:0;padding:5px 2px;border:1px solid #dbc7a7;border-radius:9px;background:rgba(255,255,255,.58);color:#72563c;cursor:pointer;font-size:9px;line-height:1.15;}.oc-ing-btn>.oc-sprite{display:block;width:32px;height:32px;margin:0 auto 2px;}.oc-ing-btn.on{border-color:#b6783f;background:#f1ddc3;color:#5e3e23;font-weight:800;}.oc-ing-btn:disabled{opacity:.45;cursor:default;}' +
-            '.oc-peek{display:block;margin:5px auto 0;border:none;background:none;color:#9a7959;text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-size:9px;}.oc-shift-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:6px 8px;border-top:1px dotted #cbb28f;color:#8e7255;font-size:10px;}.oc-shift-result{text-align:center;padding:12px 8px;}.oc-intro-sprite,.oc-result-mark .oc-sprite{width:58px;height:58px;border-radius:10px;}.oc-intro-sprite{display:block;margin:0 auto 7px;}.oc-result-mark{min-height:58px;}.oc-shift-result h3{margin:4px 0;color:#66462d;}.oc-compare{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px;text-align:left;}.oc-compare>div{padding:7px;border-radius:8px;background:rgba(239,226,207,.55);font-size:9px;color:#8a6c4f;}.oc-compare b{display:block;margin-bottom:4px;color:#65482f;}.oc-final-score{font-size:28px;font-weight:900;color:#86572f;margin:4px 0;}' +
-            '@keyframes oc-pulse{50%{transform:scale(1.08)}}' +
             '@media (max-width:760px){.oc-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;min-height:min(500px,72%);}.oc-brand-copy small{display:none}.oc-stat-pill{padding:4px 5px}.oc-tab{font-size:9px}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
         try {
@@ -563,11 +557,10 @@
             '<div class="oc-tabs">' +
               '<button class="oc-tab on" data-tab="menu"><i class="fa-solid fa-receipt"></i>菜單</button>' +
               '<button class="oc-tab" data-tab="lab"><i class="fa-solid fa-blender"></i>調配</button>' +
-              '<button class="oc-tab" data-tab="shift"><i class="fa-solid fa-bell-concierge"></i>值班</button>' +
               '<button class="oc-tab" data-tab="free"><i class="fa-solid fa-wand-magic-sparkles"></i>創想</button>' +
               '<button class="oc-tab" data-tab="books"><i class="fa-solid fa-book-open"></i>書單</button>' +
               '<button class="oc-tab" data-tab="log"><i class="fa-solid fa-users"></i>訪客</button>' +
-              '<button class="oc-tab" data-tab="staff"><i class="fa-solid fa-id-badge"></i>店員</button>' +
+              '<button class="oc-tab" data-tab="staff"><i class="fa-solid fa-bell-concierge"></i>值班</button>' +   // 店員：挑人、排時間、值班紀錄（10-08 取代點單小遊戲）
             '</div>' +
             '<div class="oc-body"></div>';
         host.appendChild(box);
@@ -591,7 +584,7 @@
             if (!changed || !_winEl) return;
             const on = _winEl.querySelector('.oc-tab.on');
             _refreshHeaderStats();
-            if (on?.dataset.tab !== 'shift') _renderTab(on ? on.dataset.tab : 'menu', _winEl.querySelector('.oc-body'));
+            _renderTab(on ? on.dataset.tab : 'menu', _winEl.querySelector('.oc-body'));
         }).catch(() => {});
     }
 
@@ -653,8 +646,6 @@
                 : '<div class="oc-empty"><i class="fa-solid fa-book"></i>書架還空著。<br>之後來店裡的客人會留下他們的推薦書。</div>');
         } else if (tab === 'free') {
             _renderFree(body);
-        } else if (tab === 'shift') {
-            await _renderShift(body);
         } else if (tab === 'staff') {
             const S = win.OS_CAFE_STAFF || window.OS_CAFE_STAFF;
             if (S && S.renderTab) { await S.renderTab(body); _paintStaffDot(); }
@@ -664,201 +655,6 @@
         }
     }
 
-    // 🔔 值班頁：三杯制點單記憶遊戲。全程零 API，也不碰 PT 經濟。
-    async function _renderShift(body) {
-        const record = await _get(K_SHIFT, { best: 0, games: 0, bestStreak: 0 });
-        if (!body.isConnected) return;
-        const state = {
-            round: 0,
-            score: 0,
-            streak: 0,
-            maxStreak: 0,
-            time: 18,
-            phase: 'idle',
-            target: null,
-            sel: { base: null, flavor: null, top: null },
-            peekUsed: false,
-            used: new Set(),
-        };
-        let phaseTimer = null;
-        let clock = null;
-        let peekTimer = null;
-        let disposed = false;
-
-        const clearTimers = () => {
-            if (phaseTimer) clearTimeout(phaseTimer);
-            if (clock) clearInterval(clock);
-            if (peekTimer) clearTimeout(peekTimer);
-            phaseTimer = clock = peekTimer = null;
-        };
-        _viewCleanup = () => { disposed = true; clearTimers(); };
-
-        const partHtml = (slot, id, hidden) => {
-            const ing = _ing(slot, id);
-            return '<div class="oc-order-part' + (hidden ? ' hidden' : '') + '">' +
-                '<span class="oc-order-icon">' + (hidden ? '❔' : _sprite(id)) + '</span>' +
-                (hidden ? SLOT_LABEL[slot] + '已摺起' : ing.name) + '</div>';
-        };
-        const orderHtml = (hidden) => ['base', 'flavor', 'top'].map(slot => partHtml(slot, state.target[slot], hidden)).join('');
-        const comboNames = (combo) => ['base', 'flavor', 'top'].map(slot => combo[slot] ? _ing(slot, combo[slot])?.name : '未選').join('＋');
-        const newTarget = () => {
-            let target;
-            let key;
-            do {
-                target = {};
-                Object.keys(CAFE_CFG.pantry).forEach(slot => {
-                    const list = CAFE_CFG.pantry[slot];
-                    target[slot] = list[Math.floor(Math.random() * list.length)].id;
-                });
-                key = _comboKey(target.base, target.flavor, target.top);
-            } while (state.used.has(key) && state.used.size < 3);
-            state.used.add(key);
-            return target;
-        };
-        const summaryHtml = () =>
-            '<div class="oc-shift-summary">' +
-              '<div class="oc-shift-stat"><b>' + (record.best || 0) + '</b>最高分</div>' +
-              '<div class="oc-shift-stat"><b>' + (record.bestStreak || 0) + '</b>最高連勝</div>' +
-              '<div class="oc-shift-stat"><b>' + (record.games || 0) + '</b>值班次數</div>' +
-            '</div>';
-
-        const renderIntro = () => {
-            body.innerHTML =
-                '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-bell-concierge"></i> 今日值班</span><span class="oc-section-note">離線小遊戲・不呼叫 API</span></div>' +
-                summaryHtml() +
-                '<div class="oc-receipt"><div class="oc-receipt-head"><span>點單記憶測驗</span><span>3 杯制</span></div>' +
-                  '<div class="oc-empty oc-intro-pad">' + _sprite('receipt', 'oc-intro-sprite') + '客人的點單只會攤開幾秒。<br>記住基底、風味與點綴，再照單完成飲品。</div>' +
-                '</div>' +
-                '<button class="oc-action"><i class="fa-solid fa-door-open"></i> 開始接單</button>' +
-                '<div class="oc-shift-foot"><span>答對越快，分數越高</span><span>偷看點單會扣 15 分</span></div>';
-            body.querySelector('.oc-action').addEventListener('click', startRound);
-        };
-
-        const pickerHtml = (disabled) => Object.keys(CAFE_CFG.pantry).map(slot => {
-            const list = CAFE_CFG.pantry[slot];
-            return '<div class="oc-ing-row' + (list.length === 3 ? ' three' : '') + '">' +
-                '<span class="oc-ing-row-label">' + SLOT_LABEL[slot] + '</span>' +
-                list.map(x => '<button class="oc-ing-btn" data-slot="' + slot + '" data-id="' + x.id + '"' + (disabled ? ' disabled' : '') + '>' +
-                    _sprite(x.id) + x.name + '</button>').join('') + '</div>';
-        }).join('');
-
-        const bindPickers = () => {
-            const action = body.querySelector('.oc-action');
-            body.querySelectorAll('.oc-ing-btn').forEach(btn => btn.addEventListener('click', () => {
-                if (state.phase !== 'pick') return;
-                const slot = btn.dataset.slot;
-                state.sel[slot] = btn.dataset.id;
-                body.querySelectorAll('.oc-ing-btn[data-slot="' + slot + '"]').forEach(x => x.classList.toggle('on', x === btn));
-                action.disabled = !(state.sel.base && state.sel.flavor && state.sel.top);
-            }));
-            action?.addEventListener('click', () => {
-                const ok = ['base', 'flavor', 'top'].every(slot => state.sel[slot] === state.target[slot]);
-                finishRound(ok, ok ? '完美照單完成' : '配方對不上點單');
-            });
-            const peek = body.querySelector('.oc-peek');
-            peek?.addEventListener('click', () => {
-                if (state.phase !== 'pick' || state.peekUsed) return;
-                state.peekUsed = true;
-                peek.disabled = true;
-                peek.textContent = '點單偷看中…（本杯 -15 分）';
-                const grid = body.querySelector('.oc-order-grid');
-                if (grid) grid.innerHTML = orderHtml(false);
-                peekTimer = setTimeout(() => {
-                    if (disposed || state.phase !== 'pick') return;
-                    const current = body.querySelector('.oc-order-grid');
-                    if (current) current.innerHTML = orderHtml(true);
-                    if (peek) peek.textContent = '點單已經摺回去了';
-                }, 1200);
-            });
-        };
-
-        const renderRound = (preview) => {
-            body.innerHTML =
-                '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-bell-concierge"></i> 今日值班</span><span class="oc-section-note">分數 ' + state.score + '・連勝 ' + state.streak + '</span></div>' +
-                '<div class="oc-receipt"><div class="oc-receipt-head"><span>今日點單・第 ' + state.round + ' 杯</span>' +
-                  '<span class="oc-timer">' + (preview ? '記住！' : state.time + 's') + '</span></div>' +
-                  '<div class="oc-order-grid">' + orderHtml(!preview) + '</div>' +
-                '</div>' +
-                '<div class="oc-shift-hint">' + (preview ? '客人正在確認點單，先把三樣材料記下來。' : '點單收起來了，請依照記憶選擇正確材料。') + '</div>' +
-                pickerHtml(preview) +
-                (preview ? '' : '<button class="oc-peek">偷看點單一次（本杯 -15 分）</button>') +
-                '<button class="oc-action" disabled><i class="fa-solid fa-mug-hot"></i> 完成飲品</button>' +
-                '<div class="oc-shift-foot"><span>第 ' + state.round + ' / 3 杯</span><span>連勝 ' + state.streak + '</span></div>';
-            if (!preview) bindPickers();
-        };
-
-        const beginPick = () => {
-            if (disposed || state.phase !== 'preview') return;
-            state.phase = 'pick';
-            state.time = 18;
-            renderRound(false);
-            clock = setInterval(() => {
-                state.time -= 1;
-                const timer = body.querySelector('.oc-timer');
-                if (timer) {
-                    timer.textContent = state.time + 's';
-                    timer.classList.toggle('danger', state.time <= 5);
-                }
-                if (state.time <= 0) finishRound(false, '時間到，客人等不下去了');
-            }, 1000);
-        };
-
-        async function finishRound(ok, reason) {
-            if (disposed || state.phase !== 'pick') return;
-            state.phase = 'result';
-            clearTimers();
-            const gained = ok ? Math.max(0, 100 + state.time * 5 - (state.peekUsed ? 15 : 0)) : 0;
-            state.score += gained;
-            if (ok) state.streak += 1; else state.streak = 0;
-            state.maxStreak = Math.max(state.maxStreak, state.streak);
-            const last = state.round >= 3;
-            if (last) {
-                record.best = Math.max(Number(record.best) || 0, state.score);
-                record.bestStreak = Math.max(Number(record.bestStreak) || 0, state.maxStreak);
-                record.games = (Number(record.games) || 0) + 1;
-                await _set(K_SHIFT, record);
-            }
-            if (disposed) return;
-            body.innerHTML =
-                '<div class="oc-section-head"><span class="oc-section-title">第 ' + state.round + ' 杯結果</span><span class="oc-section-note">目前 ' + state.score + ' 分</span></div>' +
-                '<div class="oc-receipt oc-shift-result"><div class="oc-result-mark">' + _sprite(ok ? 'coffee' : 'receipt') + '</div>' +
-                  '<h3>' + reason + '</h3><div class="oc-shift-hint">' + (ok ? '+' + gained + ' 分，咖啡香穩穩落地。' : '這杯先由瀅瀅接手，下一杯再追回來。') + '</div>' +
-                  '<div class="oc-compare"><div><b>客人點單</b>' + comboNames(state.target) + '</div><div><b>你的飲品</b>' + comboNames(state.sel) + '</div></div>' +
-                '</div>' +
-                '<button class="oc-action">' + (last ? '<i class="fa-solid fa-flag-checkered"></i> 查看結算' : '<i class="fa-solid fa-bell"></i> 下一位客人') + '</button>' +
-                '<div class="oc-shift-foot"><span>第 ' + state.round + ' / 3 杯</span><span>連勝 ' + state.streak + '</span></div>';
-            body.querySelector('.oc-action').addEventListener('click', last ? renderFinal : startRound);
-        }
-
-        function startRound() {
-            if (disposed) return;
-            clearTimers();
-            state.round += 1;
-            state.phase = 'preview';
-            state.target = newTarget();
-            state.sel = { base: null, flavor: null, top: null };
-            state.peekUsed = false;
-            renderRound(true);
-            phaseTimer = setTimeout(beginPick, 3200);
-        }
-
-        function renderFinal() {
-            body.innerHTML =
-                '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-stamp"></i> 值班結算</span><span class="oc-section-note">三杯完成</span></div>' +
-                '<div class="oc-receipt oc-shift-result"><div class="oc-result-mark">' + _sprite('bell') + '</div><h3>今日值班完成</h3>' +
-                  '<div class="oc-final-score">' + state.score + '</div><div class="oc-shift-hint">本輪最高連勝 ' + state.maxStreak + '・歷史最高分 ' + record.best + '</div></div>' +
-                summaryHtml() +
-                '<button class="oc-action"><i class="fa-solid fa-rotate-right"></i> 再值一班</button>';
-            body.querySelector('.oc-action').addEventListener('click', () => {
-                state.round = 0; state.score = 0; state.streak = 0; state.maxStreak = 0; state.used.clear();
-                startRound();
-            });
-        }
-
-        renderIntro();
-    }
-
-    // ✨ 創想頁:符號庫丟鍋(上限 symbolMax)+備用詞→「請店長特調」
     async function _renderFree(body) {
         const picked = [];
         body.innerHTML =
@@ -976,7 +772,7 @@
         _paintStaffDot();
         const on = _winEl.querySelector('.oc-tab.on');
         const tab = on ? on.dataset.tab : 'menu';
-        if (tab !== 'shift' && tab !== 'lab' && tab !== 'free') _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、小遊戲正在操作,別重畫
+        if (tab !== 'lab' && tab !== 'free') _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想正在操作,別重畫
     }
     const _b = { get: _get, getStrict: _getStrict, set: _set, settle: _settle, dayNum: _dayNum, hm: _hm,
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
