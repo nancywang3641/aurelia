@@ -507,3 +507,26 @@
     .am-navi-cn-title { font-size: 22px; letter-spacing: 5px; }
     .am-navi-no-data { font-size: 18px; letter-spacing: 5px; }
 }
+
+/* 📒 委託完成卡（報酬真的入帳時跳，map_core _showMissionDone）＋ 設施頁「在這裡辦過」（_renderMissionLog） */
+.am-mdone-mask { position: fixed; inset: 0; z-index: 100050; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; animation: amMdoneIn .25s ease-out; }
+@keyframes amMdoneIn { from { opacity: 0; } to { opacity: 1; } }
+.am-mdone-card { width: min(340px, 100%); background: linear-gradient(160deg, #1b1610, #0d0b08); border: 1px solid rgba(212,175,55,.55); border-radius: 14px; padding: 18px 18px 16px; color: #eee; text-align: center; box-shadow: 0 18px 44px rgba(0,0,0,.55), 0 0 0 4px rgba(212,175,55,.08); animation: amMdonePop .35s cubic-bezier(.2,1.3,.4,1); font-family: 'Noto Sans TC', sans-serif; }
+@keyframes amMdonePop { from { transform: scale(.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.am-mdone-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; letter-spacing: 2px; color: #1a1408; background: #D4AF37; border-radius: 999px; padding: 3px 12px; font-weight: 700; }
+.am-mdone-title { margin: 12px 0 8px; font-size: 18px; font-weight: 700; color: #fff; line-height: 1.4; word-break: break-word; }
+.am-mdone-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px; font-size: 12px; color: #b9b2a3; margin-bottom: 14px; }
+.am-mdone-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.am-mdone-meta i { color: #D4AF37; }
+.am-mdone-pay { display: flex; align-items: baseline; justify-content: space-between; border-top: 1px dashed rgba(212,175,55,.35); border-bottom: 1px dashed rgba(212,175,55,.35); padding: 10px 4px; margin-bottom: 14px; font-size: 13px; color: #b9b2a3; }
+.am-mdone-pay b { font-size: 22px; color: #ffd76a; font-variant-numeric: tabular-nums; }
+.am-mdone-ok { width: 100%; border: 0; border-radius: 10px; padding: 10px; background: #D4AF37; color: #1a1408; font-weight: 700; font-size: 14px; cursor: pointer; }
+.am-mdone-ok:hover { filter: brightness(1.1); }
+.am-mission-card.am-mission-card-log { background: rgba(10,10,14,.82); border-color: rgba(212,175,55,.35); box-shadow: none; }
+.am-mlog { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(212,175,55,.2); }
+.am-mission-card-log .am-mlog { margin-top: 0; padding-top: 0; border-top: 0; }
+.am-mlog-head { font-size: 12px; color: #D4AF37; letter-spacing: 1px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.am-mlog-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: #ddd; padding: 4px 0; }
+.am-mlog-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.am-mlog-amt { flex-shrink: 0; color: #ffd76a; font-variant-numeric: tabular-nums; }
+.am-mlog-amt.am-mlog-run { color: #888; }

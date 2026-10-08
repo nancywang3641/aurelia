@@ -1617,6 +1617,7 @@ ${facilityText}
         const event = STATE.activeEvents[eventKey];
         const missionCard = document.getElementById('am-mission-area');
 
+        missionCard.classList.remove('am-mission-card-log');
         if (event) {
             missionCard.classList.add('active');
             missionCard.innerHTML = `
@@ -1631,7 +1632,9 @@ ${facilityText}
             `;
         } else {
             missionCard.classList.remove('active');
+            missionCard.innerHTML = '';   // 不清的話，下面補「辦過的委託」會把上一個設施的情報卡一起翻出來
         }
+        _renderMissionLog(missionCard, STATE.currentZoneId, facKey, facility, !!event);
 
         detailView.classList.add('active');
 
@@ -1904,6 +1907,8 @@ ${facilityText}
             type: event.type,
             title: event.title,
             zoneId: event.zoneId,
+            facKey: event.facKey,
+            sceneId: event.sceneId,
             facName: event.facName,
             desc: event.desc,
             objective: event.objective,
@@ -1935,8 +1940,12 @@ ${facilityText}
 3. 任務成功時，在收尾那一章的正文裡獨立寫一行：[QrPay|in|委託人|金額|委託報酬・${eventData.title}|${eventData.id}]
    委託人＝付這筆錢的人或組織的名字（不要寫主角的名字）；金額只寫數字，照完成的程度給，最多 ${eventData.money}；最後一格單號照抄，不要改。
    任務失敗或放棄就不寫這一行。只在旁白說收到報酬，錢不會進錢包。
+4. 寫完收款那一行（或任務失敗）這份委託就結束了：那一章收在委託辦完的那一刻，最後給的選項是主角接下來要去做什麼，不要再接著這份工作。
 
 (現在，請開始演出任務開頭...)`;
+
+        // 📒 記一筆「接了」：報酬入帳時才翻成辦完（見下面委託紀錄）
+        try { await _missionRecord(eventData); } catch (e) {}
 
         // 3. 發送給酒館
         if (win.TavernHelper) {
@@ -1954,6 +1963,112 @@ ${facilityText}
 
         // 4. 關閉手機
         exitMap();
+    }
+
+    // 📒 委託紀錄：接了哪些、辦完沒、拿了多少。跟錢包一樣「一條聊天一本帳」，存 OS_DB 通用資料（備份會帶走）。
+    //   接取時記一筆 running；報酬真的入帳時（錢包同步廣播 aurelia:story-paid，單號＝委託編號 evt_…）翻成 done、跳「委託完成」卡。
+    //   🚨 只認錢包真的動到錢的那一次：重讀、重新生成同一章不會再廣播，卡也不會再跳。
+    //   🚨 'map_missions' 不是 app_ 開頭：創作室清孤兒資料不會掃到它（零件庫 map_parts 同理）。
+    const MISSION_APP = 'map_missions', MISSION_KEY = 'log', MISSION_MAX = 40;
+    function _escM(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function _missionScope() {
+        try { const d = win.OS_DB; if (d && d.currentChatId) { const c = d.currentChatId(); if (c != null && String(c)) return String(c); } } catch (e) {}
+        return null;
+    }
+    async function _missionLoad() {
+        try {
+            const d = win.OS_DB;
+            const v = (d && d.getAppData) ? await d.getAppData(MISSION_APP, MISSION_KEY, _missionScope()) : null;
+            return Array.isArray(v) ? v : [];
+        } catch (e) { return []; }
+    }
+    async function _missionSave(list) {
+        try {
+            const d = win.OS_DB;
+            if (d && d.saveAppData) await d.saveAppData(MISSION_APP, MISSION_KEY, list.slice(-MISSION_MAX), _missionScope());
+        } catch (e) { console.warn('[Map] 委託紀錄存不進去', e); }
+    }
+    async function _missionRecord(ev) {
+        const list = await _missionLoad();
+        if (list.some(r => r.id === ev.id)) return;
+        list.push({ id: ev.id, title: ev.title, facName: ev.facName, zoneId: ev.zoneId, facKey: ev.facKey || '', sceneId: ev.sceneId || '',
+            type: ev.type, difficulty: ev.difficulty, money: ev.money, acceptedAt: Date.now(), status: 'running' });
+        await _missionSave(list);
+    }
+    // 跑了幾章：從付款那一則往回找接委託那則（同時有委託編號和 Start RPG Mission），數中間 AI 回了幾則
+    async function _missionChapters(id, floor) {
+        try {
+            const msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? await win.VN_READER.fetchFullChat() : null;
+            if (!Array.isArray(msgs) || !msgs.length) return 0;
+            const end = (typeof floor === 'number' && floor >= 0 && floor < msgs.length) ? floor : msgs.length - 1;
+            let start = -1;
+            for (let i = end; i >= 0; i--) {
+                const t = String((msgs[i] && (msgs[i].mes || msgs[i].message)) || '');
+                if (t.indexOf(id) >= 0 && t.indexOf('Start RPG Mission') >= 0) { start = i; break; }
+            }
+            if (start < 0) return 0;
+            let n = 0;
+            for (let i = start + 1; i <= end; i++) if (msgs[i] && !msgs[i].is_user) n++;
+            return n;
+        } catch (e) { return 0; }
+    }
+    // 錢包同步說「這筆入帳了」→ 是委託的報酬就記成辦完、跳卡
+    async function _onMissionPaid(d) {
+        d = d || {};
+        const id = String(d.txnId || '');
+        if (!d.inbound || !/^evt_/.test(id)) return;
+        const list = await _missionLoad();
+        let rec = list.find(r => r.id === id);
+        if (rec && rec.status === 'done') return;
+        // 錢包那筆的說明長這樣：「掃碼收款 - 委託人 - 委託報酬・任務名」（沒寫委託人就少中間那段）
+        const parts = String(d.why || '').split(' - ');
+        const tail = parts[parts.length - 1] || '';
+        if (!rec) {   // 加紀錄以前接的委託：從說明拆出任務名
+            rec = { id, title: tail.indexOf('委託報酬・') === 0 ? tail.slice(5) : (tail || '委託'), facName: '', zoneId: '', facKey: '', sceneId: '', money: 0, acceptedAt: 0, status: 'running' };
+            list.push(rec);
+        }
+        if (parts.length >= 3 && parts[1]) rec.client = parts[1];
+        rec.status = 'done';
+        rec.paid = Number(d.amount) || 0;
+        rec.doneAt = Date.now();
+        rec.chapters = await _missionChapters(id, d.floor);
+        await _missionSave(list);
+        _showMissionDone(rec);
+    }
+    function _showMissionDone(rec) {
+        const D = win.document;
+        const old = D.getElementById('am-mdone');
+        if (old) old.remove();
+        const meta = [
+            rec.client ? `<span><i class="fa-solid fa-user"></i>${_escM(rec.client)}</span>` : '',
+            rec.facName ? `<span><i class="fa-solid fa-location-dot"></i>${_escM(rec.facName)}</span>` : '',
+            rec.chapters ? `<span><i class="fa-solid fa-book-open"></i>跑了 ${rec.chapters} 章</span>` : ''
+        ].filter(Boolean).join('');
+        const el = D.createElement('div');
+        el.id = 'am-mdone';
+        el.className = 'am-mdone-mask';
+        el.innerHTML = `<div class="am-mdone-card">`
+            + `<div class="am-mdone-tag"><i class="fa-solid fa-stamp"></i> 委託完成</div>`
+            + `<div class="am-mdone-title">${_escM(rec.title)}</div>`
+            + (meta ? `<div class="am-mdone-meta">${meta}</div>` : '')
+            + `<div class="am-mdone-pay"><span>報酬入帳</span><b>+$${(Number(rec.paid) || 0).toLocaleString()}</b></div>`
+            + `<button class="am-mdone-ok">收下</button></div>`;
+        el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('.am-mdone-ok')) el.remove(); });
+        D.body.appendChild(el);
+    }
+    // 設施頁：「在這裡辦過」的委託（最近 6 張）。有進行中的情報卡就排在它下面，沒有就單獨一塊。
+    async function _renderMissionLog(card, zoneId, facKey, fac, hasEvent) {
+        const list = (await _missionLoad()).filter(r => (r.sceneId && fac.sceneId && r.sceneId === fac.sceneId) || (r.zoneId === zoneId && r.facKey === facKey));
+        if (STATE.activeFacility !== fac) return;   // 讀資料庫這段時間她已經點去別的設施
+        const old = card.querySelector('.am-mlog');
+        if (old) old.remove();
+        if (!list.length) return;
+        const rows = list.slice().reverse().slice(0, 6).map(r => `<div class="am-mlog-row"><span class="am-mlog-title">${_escM(r.title)}</span>`
+            + (r.status === 'done' ? `<span class="am-mlog-amt">+$${(Number(r.paid) || 0).toLocaleString()}</span>` : '<span class="am-mlog-amt am-mlog-run">還沒結算</span>')
+            + `</div>`).join('');
+        card.insertAdjacentHTML('beforeend', `<div class="am-mlog"><div class="am-mlog-head"><i class="fa-solid fa-clipboard-check"></i> 在這裡辦過</div>${rows}</div>`);
+        if (!hasEvent) card.classList.add('am-mission-card-log');
+        card.classList.add('active');
     }
 
     // 🎭 番外記事存檔：按 chatId 分卡（跨卡隔離），每卡上限 10 條；正文注入在 os_app_memory_inject.injectMapTheater
@@ -2424,7 +2539,17 @@ ${facilityText}
         // console 診斷用（無 F12 環境）：底板→可站遮罩 / 白率打分
         buildBackdropMask: _buildBackdropMask,
         bdWhiteRatio: _bdWhiteRatio,
+        _onMissionPaid,
     };
+
+    // 📒 錢包同步說「劇情裡這筆入帳了」→ 委託報酬就記成辦完（wx_core 的 _storySyncNow 發）。
+    //   聽一次就好；透過 AUREALIS_MAP 轉，本支重載後叫到的是新的那份
+    if (!win.__amMissionPaidHooked) {
+        win.__amMissionPaidHooked = true;
+        win.addEventListener('aurelia:story-paid', (ev) => {
+            try { const M = window.AUREALIS_MAP || win.AUREALIS_MAP; if (M && M._onMissionPaid) M._onMissionPaid(ev && ev.detail); } catch (e) {}
+        });
+    }
 
     // 🔥 註冊到 OS 系統
     win.OS_MAP = { launchApp: launchMap };

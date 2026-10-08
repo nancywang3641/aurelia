@@ -2118,7 +2118,7 @@
                     }
                     cardAmts[amt] = true;
                     payEvents.push({
-                        amount: amt, txnId: id, inbound: dir === 'in',
+                        amount: amt, txnId: id, inbound: dir === 'in', floor: f,
                         why: [dir === 'in' ? '掃碼收款' : '掃碼付款', who, what].filter(Boolean).join(' - '),
                     });
                 }
@@ -2312,6 +2312,9 @@
                 try { ok = W.transaction(p.inbound ? p.amount : -p.amount, p.why || '劇情消費'); }
                 catch (e) { console.warn('[wx 跑團同步] 錢沒動成', e); }
                 if (ok) _moneyDoneSet(p.txnId, p.inbound ? 'received' : 'paid');
+                // 📒 真的動到錢的這一次廣播一聲（地圖的委託紀錄靠它知道「這張委託辦完了」、跳完成卡）。
+                //    重讀、重新生成同一章時上面 _done 已經擋掉，不會再發。
+                if (ok) { try { win.dispatchEvent(new win.CustomEvent('aurelia:story-paid', { detail: { txnId: p.txnId, amount: p.amount, inbound: !!p.inbound, why: p.why || '', floor: p.floor } })); } catch (e) {} }
                 if (ok && _rec) {
                     try { _txnSave(null, p.txnId, Object.assign({}, _rec, { status: 'accepted' })); } catch (e) {}
                     try { _setCardStatus(null, 'transfer', p.txnId, 'accepted', 'ID_' + p.txnId); } catch (e) {}
