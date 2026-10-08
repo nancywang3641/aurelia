@@ -297,7 +297,7 @@ ${facilityText}
             // 🔥 使用 OS_API 調用 AI
             const messages = await win.OS_API.buildContext(prompt, 'map_event_gen');
             
-            win.OS_API.chat(messages, win.OS_SETTINGS.getConfig(), null, (responseText) => {
+            const _evtCall = win.OS_API.chat(messages, win.OS_SETTINGS.getConfig(), null, (responseText) => {
                 // 🔒 防止重複處理（流式響應會多次調用回調）
                 if (STATE.eventResponseProcessed) {
                     return;
@@ -449,7 +449,20 @@ ${facilityText}
                     if (STATE.view === 'home') renderHome();
                     else if (STATE.view === 'zone') enterZone(STATE.currentZoneId);
                 }
-            }, null, { task: 'world_gen' });
+            }, { task: 'world_gen' });
+            // 🚨 chat 是 async：第六格是 options。以前這裡多塞一個 null，task 被擠到第七格，
+            //    chat 一開頭讀 options.keepCodeFences 就在送出前出錯——兩個回呼都不會被叫，只丟一個沒人接的錯，
+            //    isGeneratingEvents 永遠放不下，之後按「情報」全被當成「生成中」跳過（10-09 她：「情報案沒反應」）。
+            //    之後若再在送出前出錯，至少把旗子放下、跳提示，不要卡死。
+            if (_evtCall && typeof _evtCall.catch === 'function') {
+                _evtCall.catch((e) => {
+                    console.error('[Map] ❌ 情報呼叫在送出前就出錯:', e);
+                    if (!STATE.isGeneratingEvents) return;
+                    STATE.isGeneratingEvents = false;
+                    STATE.eventResponseProcessed = false;
+                    if (force && AUI.toastr) AUI.toastr.error('情報網絡連接失敗', 'System');
+                });
+            }
         } catch (e) {
             console.error('[Map] ❌ 事件生成錯誤:', e);
             if (force && AUI.toastr) AUI.toastr.error('事件生成失敗', 'System');
