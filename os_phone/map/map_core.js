@@ -1887,6 +1887,7 @@ ${facilityText}
 
         // 📋 複製事件數據（避免刪除後丟失引用）
         const eventData = {
+            id: event.id || ('evt_' + Date.now()),
             type: event.type,
             title: event.title,
             zoneId: event.zoneId,
@@ -1918,7 +1919,9 @@ ${facilityText}
 **指令**: 
 1. 先執行開場白，並慢慢展開，最多十章內收尾(短篇)。
 2. 根據難度設置障礙或敵人。
-3. 當任務完成或失敗時，請務必輸出 JSON 格式的「任務結算小票」以觸發銀行轉帳。
+3. 任務成功時，在收尾那一章的正文裡獨立寫一行：[QrPay|in|委託人|金額|委託報酬・${eventData.title}|${eventData.id}]
+   委託人＝付這筆錢的人或組織的名字（不要寫主角的名字）；金額只寫數字，照完成的程度給，最多 ${eventData.money}；最後一格單號照抄，不要改。
+   任務失敗或放棄就不寫這一行。只在旁白說收到報酬，錢不會進錢包。
 
 (現在，請開始演出任務開頭...)`;
 
