@@ -1966,8 +1966,9 @@ ${facilityText}
     }
 
     // 📒 委託紀錄：接了哪些、辦完沒、拿了多少。跟錢包一樣「一條聊天一本帳」，存 OS_DB 通用資料（備份會帶走）。
-    //   接取時記一筆 running；報酬真的入帳時（錢包同步廣播 aurelia:story-paid，單號＝委託編號 evt_…）翻成 done、跳「委託完成」卡。
-    //   🚨 只認錢包真的動到錢的那一次：重讀、重新生成同一章不會再廣播，卡也不會再跳。
+    //   接取時記一筆 running；報酬真的入帳時（錢包同步廣播 aurelia:story-paid，單號＝委託編號 evt_…）翻成 done。
+    //   🚨 只認錢包真的動到錢的那一次：重讀、重新生成同一章不會再廣播。
+    //   「委託完成」卡是播放器播到收款單那一刻才跳（missionDoneFromStory），每張只跳一次。
     //   🚨 'map_missions' 不是 app_ 開頭：創作室清孤兒資料不會掃到它（零件庫 map_parts 同理）。
     const MISSION_APP = 'map_missions', MISSION_KEY = 'log', MISSION_MAX = 40;
     function _escM(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -2012,7 +2013,9 @@ ${facilityText}
             return n;
         } catch (e) { return 0; }
     }
-    // 錢包同步說「這筆入帳了」→ 是委託的報酬就記成辦完、跳卡
+    // 錢包同步說「這筆入帳了」→ 是委託的報酬就記成辦完（卡不在這裡跳）
+    //   🚨 錢包是 AI 那一章「一送到」就整章掃過入帳的，那時劇情才剛從第一句開始播；在這裡跳卡＝還沒讀到就先劇透。
+    //   卡改由播放器播到那張收款單、按「完成」之後叫 missionDoneFromStory 跳。
     async function _onMissionPaid(d) {
         d = d || {};
         const id = String(d.txnId || '');
@@ -2033,9 +2036,35 @@ ${facilityText}
         rec.doneAt = Date.now();
         rec.chapters = await _missionChapters(id, d.floor);
         await _missionSave(list);
-        _showMissionDone(rec);
     }
-    function _showMissionDone(rec) {
+    // 播放器播到 [QrPay|in|…|evt_…] 那張收款單、她按「完成」→ 跳「委託完成」卡，按「收下」才 onClose（播放器接著播）。
+    //   每張委託只跳一次（cardShown）：重新生成、回放同一章都不再跳。回傳有沒有跳，沒跳的話播放器自己接著播。
+    //   錢包那邊可能還沒掃到（剛送到就快轉到這裡）：先用收款單上的資料把這筆記成辦完，錢包晚到看到 done 就不再動它。
+    async function missionDoneFromStory(info, onClose) {
+        info = info || {};
+        const id = String(info.txnId || '');
+        if (!/^evt_/.test(id)) return false;
+        const list = await _missionLoad();
+        let rec = list.find(r => r.id === id);
+        if (rec && rec.cardShown) return false;
+        if (!rec) {
+            const what = String(info.what || '');
+            rec = { id, title: what.indexOf('委託報酬・') === 0 ? what.slice(5) : (what || '委託'), facName: '', zoneId: '', facKey: '', sceneId: '', money: 0, acceptedAt: 0, status: 'running' };
+            list.push(rec);
+        }
+        if (info.who && !rec.client) rec.client = String(info.who);
+        if (rec.status !== 'done') {
+            rec.status = 'done';
+            rec.paid = Number(info.amount) || 0;
+            rec.doneAt = Date.now();
+            rec.chapters = await _missionChapters(id);
+        }
+        rec.cardShown = true;
+        await _missionSave(list);
+        _showMissionDone(rec, onClose);
+        return true;
+    }
+    function _showMissionDone(rec, onClose) {
         const D = win.document;
         const old = D.getElementById('am-mdone');
         if (old) old.remove();
@@ -2053,7 +2082,11 @@ ${facilityText}
             + (meta ? `<div class="am-mdone-meta">${meta}</div>` : '')
             + `<div class="am-mdone-pay"><span>報酬入帳</span><b>+$${(Number(rec.paid) || 0).toLocaleString()}</b></div>`
             + `<button class="am-mdone-ok">收下</button></div>`;
-        el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('.am-mdone-ok')) el.remove(); });
+        el.addEventListener('click', (e) => {
+            if (e.target !== el && !e.target.closest('.am-mdone-ok')) return;
+            el.remove();
+            if (typeof onClose === 'function') { try { onClose(); } catch (err) {} }
+        });
         D.body.appendChild(el);
     }
     // 設施頁：「在這裡辦過」的委託（最近 6 張）。有進行中的情報卡就排在它下面，沒有就單獨一塊。
@@ -2540,6 +2573,7 @@ ${facilityText}
         buildBackdropMask: _buildBackdropMask,
         bdWhiteRatio: _bdWhiteRatio,
         _onMissionPaid,
+        missionDoneFromStory,
     };
 
     // 📒 錢包同步說「劇情裡這筆入帳了」→ 委託報酬就記成辦完（wx_core 的 _storySyncNow 發）。

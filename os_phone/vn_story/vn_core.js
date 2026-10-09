@@ -1243,6 +1243,7 @@
         },
 
         _showDomBlock: function(tagHint, rawBlockOverride, precomputedHtml) {
+            this._domBlockAfter = null;   // 上一張留下的「收起來之後改做什麼」不能帶到這張（見 _hideDomBlock）
             const _win = window.parent || window;
             const _doc = _win.document || document;
 
@@ -1516,6 +1517,10 @@
                     try { _CR.stopMedia(_body, true); _body.innerHTML = ''; } catch (e) {}
                 }, 420);
             }
+            // 收起來之後通常直接播下一句；這張卡有交代別的事（委託收款單→先跳委託完成卡）就換成做那件事，由它負責接著播
+            const _after = this._domBlockAfter;
+            this._domBlockAfter = null;
+            if (typeof _after === 'function') { _after(); return; }
             this.next();
         },
 
@@ -3178,6 +3183,18 @@
                     const btn = document.querySelector('#vn-dom-block-body .vn-qrpay-btn');
                     if (btn) btn.addEventListener('click', () => this._hideDomBlock());
                 } catch (e) {}
+                // 📒 地圖委託的報酬（單號 evt_…）：收款單收起來後跳「委託完成」卡，按「收下」才接著播。
+                //    錢早在這章送到時就入帳了，卡等播到這裡才跳，才不會一開章就劇透。每張委託只跳一次（地圖那邊記）。
+                if (q.dir === 'in' && /^evt_/.test(q.txnId) && document.querySelector('#vn-dom-block-overlay.active')) {
+                    this._domBlockAfter = () => {
+                        const M = window.AUREALIS_MAP || (window.parent && window.parent.AUREALIS_MAP);
+                        let went = false;
+                        const go = () => { if (!went) { went = true; this.next(); } };
+                        if (!M || !M.missionDoneFromStory) { go(); return; }
+                        Promise.resolve(M.missionDoneFromStory({ txnId: q.txnId, amount: q.amount, who: q.who, what: q.what }, go))
+                            .then(shown => { if (!shown) go(); }, go);
+                    };
+                }
                 this.addLog(q.dir === 'in' ? '收款' : (q.dir === 'out' ? '付款' : '轉帳'), who + '　¥' + q.amount.toFixed(2) + (q.what ? '　' + q.what : ''));
                 return;
             }
