@@ -2376,3 +2376,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 #vn-threads-overlay .sthr-pkb { font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 10px; cursor: pointer; background: transparent; color: #9d978b; border: 1px solid rgba(230,225,214,0.22); }
 #vn-threads-overlay .sthr-pkb.sthr-pk-want.on { color: #ffc2dc; border-color: #ef7fae; background: rgba(239,127,174,0.16); }
 #vn-threads-overlay .sthr-pkb.sthr-pk-hold.on { color: #b9c6d6; border-color: #7d93ad; background: rgba(125,147,173,0.16); }
+
+/* 📌 選項框：還沒結算的地圖委託，點了亮起來、送出時接在那句後面一行 [結算委託] 名字（vn_inspect._choicesHtml） */
+.ue-mission-chips { display: none; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ue-mission-chips.on { display: flex; }
+.ue-mission-chip { font: inherit; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; cursor: pointer; color: #b9ad86; background: transparent; border: 1px dashed rgba(212,175,55,0.38); transition: background .2s, color .2s, border-color .2s; }
+.ue-mission-chip:hover { color: #e0d4a8; border-color: rgba(212,175,55,0.6); }
+.ue-mission-chip.picked { color: #1a1408; background: #D4AF37; border: 1px solid #D4AF37; }

@@ -222,9 +222,31 @@
                     };
                 });
 
+                // 📌 還沒結算的地圖委託：選項上面一排「結算委託・名字」。點了只是亮起來，送出時接在她那句後面一行
+                //    （[結算委託] 名字），送完就清；不碰輸入框。這行是什麼意思寫在每輪帶給 AI 的「進行中的委託」那段裡。
+                //    她 10-09：委託做完 AI 沒寫收款那行，「在選項那裏多加個按鈕做提醒」「黏著user注入會不會比較大聲」。
+                const settle = new Set();
+                const chipBox = document.getElementById('ue-mission-chips');
+                const M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+                if (chipBox && M && M.missionsRunning) {
+                    Promise.resolve(M.missionsRunning()).then(list => {
+                        if (!list || !list.length || !document.body.contains(chipBox)) return;
+                        chipBox.innerHTML = list.map((m, i) => `<button type="button" class="ue-mission-chip" data-i="${i}"><i class="fa-solid fa-stamp"></i>結算委託・${esc(m.title)}</button>`).join('');
+                        chipBox.classList.add('on');
+                        chipBox.querySelectorAll('.ue-mission-chip').forEach(btn => {
+                            btn.onclick = () => {
+                                const t = list[+btn.dataset.i].title;
+                                if (settle.has(t)) settle.delete(t); else settle.add(t);
+                                btn.classList.toggle('picked', settle.has(t));
+                            };
+                        });
+                    }).catch(() => {});
+                }
+
                 const doSend = () => {
-                    const val = inp?.value?.trim();
+                    let val = inp?.value?.trim();
                     if (!val) return;
+                    if (settle.size) val += '\n[結算委託] ' + [...settle].join('、');
                     this._pendingChoices = null;
 
                     // 生成中的進度畫面：卡片面板「送出一句話」也要一模一樣 → 收成 VN_Core 一支
@@ -243,6 +265,7 @@
                 <div style="display:flex;flex-direction:column;justify-content:center;
                             height:100%;padding:20px 12px;box-sizing:border-box;gap:0;">
                     <div>${btns}</div>
+                    <div id="ue-mission-chips" class="ue-mission-chips"></div>
                     <div style="display:flex;gap:8px;align-items:center;
                                 margin-top:14px;padding-top:12px;
                                 border-top:1px solid rgba(212,175,55,0.12);">
