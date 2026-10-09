@@ -791,6 +791,27 @@
         } catch (e) { console.warn('[Map Theater Injector] 失敗:', (e && e.message) || e); }
     }
 
+    // 📌 進行中的委託：每一輪都帶單號和「辦成時寫收款那一行」的要求（內容由 map_core 的委託紀錄給）。
+    //    接委託那則訊息只發一次，大總結藏掉舊樓、預設把舊樓剝成摘要以後，AI 就看不到單號，收尾時不會寫收款那行、報酬進不了錢包。
+    //    接委託只在酒館發生（PWA 沒有這條路），所以只有酒館端要注。
+    var MAP_MISSION_INJECT_ID = 'aurelia_map_mission';
+    var _lastMapMissionUninject = null;
+    async function injectMapMission() {
+        try {
+            try { _lastMapMissionUninject && _lastMapMissionUninject(); } catch (e) {}
+            _lastMapMissionUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+            if (!M || !M.missionReminderText) return;
+            var text = await M.missionReminderText();
+            if (!text) return;
+            var result = win.TavernHelper.injectPrompts([{ id: MAP_MISSION_INJECT_ID, content: text, position: 'in_chat', depth: 2, role: 'system' }], { once: true });
+            _lastMapMissionUninject = (result && result.uninject) || null;
+            console.log('📌 [Map Mission Injector] 帶上進行中的委託');
+        } catch (e) { console.warn('[Map Mission Injector] 失敗:', (e && e.message) || e); }
+    }
+
     // 🚨 酒館會 await 監聽器回傳的 Promise，組 prompt 前就等注入做完；以前監聽器沒 return，
     //    注入是在背景跑，讀資料庫慢一點就趕不上這一輪 prompt（once 的注入還會在下一輪開頭被清掉＝整輪沒送到）。
     //    現在把 Promise 交回去讓酒館等，但最多等 WAIT_MS，免得資料庫卡住害生成跟著卡。
@@ -806,10 +827,11 @@
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectStickers); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectWxChatrooms); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectMapMission); });
         }
         // 劇情真的回來了才把這一批記成送過（生成失敗或按停，下一輪會再送一次）
         if (win.tavern_events.MESSAGE_RECEIVED) win.eventOn(win.tavern_events.MESSAGE_RECEIVED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.commit(); });
-        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.cancel(); try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.cancel(); try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} try { _lastMapMissionUninject && _lastMapMissionUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; _lastMapMissionUninject = null; });
         console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件 + app資料回傳 + 地圖番外記事）');
     }
 

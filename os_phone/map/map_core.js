@@ -1993,8 +1993,46 @@ ${facilityText}
         const list = await _missionLoad();
         if (list.some(r => r.id === ev.id)) return;
         list.push({ id: ev.id, title: ev.title, facName: ev.facName, zoneId: ev.zoneId, facKey: ev.facKey || '', sceneId: ev.sceneId || '',
-            type: ev.type, difficulty: ev.difficulty, money: ev.money, acceptedAt: Date.now(), status: 'running' });
+            type: ev.type, difficulty: ev.difficulty, money: ev.money, desc: ev.desc || '', objective: ev.objective || '', acceptedAt: Date.now(), status: 'running' });
         await _missionSave(list);
+    }
+    // 收款單號 evt_… 是不是真的委託：帳上有這張，或說明寫著「委託報酬・」（加紀錄以前接的）。
+    //   🚨 AI 會照抄 evt_ 這個樣子替一般付款編單號（10-09 真檔：買咖啡寫成 evt_…），只看開頭會把普通收款當委託報酬。
+    function _isMissionPay(rec, what) {
+        return !!rec || String(what || '').indexOf('委託報酬・') === 0;
+    }
+    // 📌 進行中的委託，每一輪生成前另外帶給 AI（os_app_memory_inject 叫）。
+    //   接委託那則訊息只發一次，大總結把舊樓藏起來、或預設把舊樓剝成摘要之後，AI 就再也看不到單號和收款那行的要求
+    //   （10-09 真檔：「靜默的實體盤」第一章之後接取那則就被藏了，收尾那章送出去的整包裡沒有單號，報酬沒入帳）。
+    //   只帶還在跑的（running）；入帳＝done、她按「不辦了」＝dropped 就不再帶。
+    async function missionReminderText() {
+        const run = (await _missionLoad()).filter(r => r.status === 'running').slice(-3);
+        if (!run.length) return '';
+        const lines = [];
+        lines.push('主角手上還有' + (run.length > 1 ? ' ' + run.length + ' 份' : '一份') + '沒結算的委託：');
+        run.forEach(r => {
+            const goal = String(r.objective || r.desc || '').trim();
+            const cap = Number(r.money) || 0;
+            lines.push('・「' + r.title + '」' + (r.facName ? '（' + r.facName + '）' : '') + (goal ? '：' + goal : '') + (cap ? '。報酬最多 ' + cap : ''));
+            lines.push('  辦成、拿到報酬的那一章，正文裡獨立寫一行：[QrPay|in|委託人|金額|委託報酬・' + r.title + '|' + r.id + ']');
+        });
+        lines.push('委託人＝付這筆錢的人或組織的名字（不要寫主角的名字）；金額只寫數字，照完成的程度給，不超過上面的報酬；最後一格單號照抄，不要改。只在旁白說收到報酬，錢不會進錢包。');
+        lines.push('寫完收款那一行這份委託就結束了：那一章收在辦完的那一刻，最後給的選項是主角接下來要去做什麼。');
+        lines.push('委託還沒辦完就照劇情演，不要為了結算提早收尾；任務失敗或放棄就不寫這一行。');
+        return lines.join('\n');
+    }
+    // 設施頁「還沒結算」那張按「不辦了」：之後不再提醒 AI 結算。真的入帳的話照樣翻成辦完。
+    async function _missionDrop(id) {
+        const list = await _missionLoad();
+        const rec = list.find(r => r.id === id);
+        if (!rec || rec.status !== 'running') return;
+        if (!(await AUI.confirm('「' + rec.title + '」不辦了？\n之後不會再提醒 AI 結算這張委託。', { okText: '不辦了' }))) return;
+        rec.status = 'dropped';
+        rec.droppedAt = Date.now();
+        await _missionSave(list);
+        const card = document.getElementById('am-mission-area');
+        const fac = STATE.activeFacility;
+        if (card && fac) _renderMissionLog(card, STATE.currentZoneId, STATE.activeFacilityKey, fac, !!STATE.activeEvents[`${STATE.currentZoneId}_${STATE.activeFacilityKey}`]);
     }
     // 跑了幾章：從付款那一則往回找接委託那則（同時有委託編號和 Start RPG Mission），數中間 AI 回了幾則
     async function _missionChapters(id, floor) {
@@ -2026,6 +2064,7 @@ ${facilityText}
         // 錢包那筆的說明長這樣：「掃碼收款 - 委託人 - 委託報酬・任務名」（沒寫委託人就少中間那段）
         const parts = String(d.why || '').split(' - ');
         const tail = parts[parts.length - 1] || '';
+        if (!_isMissionPay(rec, tail)) return;
         if (!rec) {   // 加紀錄以前接的委託：從說明拆出任務名
             rec = { id, title: tail.indexOf('委託報酬・') === 0 ? tail.slice(5) : (tail || '委託'), facName: '', zoneId: '', facKey: '', sceneId: '', money: 0, acceptedAt: 0, status: 'running' };
             list.push(rec);
@@ -2047,6 +2086,7 @@ ${facilityText}
         const list = await _missionLoad();
         let rec = list.find(r => r.id === id);
         if (rec && rec.cardShown) return false;
+        if (!_isMissionPay(rec, info.what)) return false;
         if (!rec) {
             const what = String(info.what || '');
             rec = { id, title: what.indexOf('委託報酬・') === 0 ? what.slice(5) : (what || '委託'), facName: '', zoneId: '', facKey: '', sceneId: '', money: 0, acceptedAt: 0, status: 'running' };
@@ -2097,7 +2137,9 @@ ${facilityText}
         if (old) old.remove();
         if (!list.length) return;
         const rows = list.slice().reverse().slice(0, 6).map(r => `<div class="am-mlog-row"><span class="am-mlog-title">${_escM(r.title)}</span>`
-            + (r.status === 'done' ? `<span class="am-mlog-amt">+$${(Number(r.paid) || 0).toLocaleString()}</span>` : '<span class="am-mlog-amt am-mlog-run">還沒結算</span>')
+            + (r.status === 'done' ? `<span class="am-mlog-amt">+$${(Number(r.paid) || 0).toLocaleString()}</span>`
+                : r.status === 'dropped' ? '<span class="am-mlog-amt am-mlog-run">沒辦成</span>'
+                : `<span class="am-mlog-amt am-mlog-run">還沒結算<button type="button" class="am-mlog-drop" onclick="window.AUREALIS_MAP._missionDrop('${_escM(r.id)}')">不辦了</button></span>`)
             + `</div>`).join('');
         card.insertAdjacentHTML('beforeend', `<div class="am-mlog"><div class="am-mlog-head"><i class="fa-solid fa-clipboard-check"></i> 在這裡辦過</div>${rows}</div>`);
         if (!hasEvent) card.classList.add('am-mission-card-log');
@@ -2574,6 +2616,8 @@ ${facilityText}
         bdWhiteRatio: _bdWhiteRatio,
         _onMissionPaid,
         missionDoneFromStory,
+        missionReminderText,
+        _missionDrop,
     };
 
     // 📒 錢包同步說「劇情裡這筆入帳了」→ 委託報酬就記成辦完（wx_core 的 _storySyncNow 發）。

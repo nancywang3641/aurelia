@@ -529,4 +529,6 @@
 .am-mlog-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: #ddd; padding: 4px 0; }
 .am-mlog-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .am-mlog-amt { flex-shrink: 0; color: #ffd76a; font-variant-numeric: tabular-nums; }
-.am-mlog-amt.am-mlog-run { color: #888; }
+.am-mlog-amt.am-mlog-run { color: #888; display: inline-flex; align-items: center; gap: 8px; }
+.am-mlog-drop { font: inherit; font-size: 11px; color: #bbb; background: transparent; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 1px 9px; cursor: pointer; }
+.am-mlog-drop:hover { color: #fff; border-color: rgba(212,175,55,.6); }

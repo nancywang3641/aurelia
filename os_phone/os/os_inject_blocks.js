@@ -27,6 +27,7 @@
         aurelia_fx_list: '畫面特效清單',
         aurelia_wx_chatroom_ids: '聊天室代號對照',
         aurelia_map_theater: '地圖小劇場',
+        aurelia_map_mission: '進行中的委託',
         aurelia_state_brief: '狀態面板',
         aurelia_avs_rules: '狀態面板規則',
         aurelia_avatar_reminder: '頭像提醒',
