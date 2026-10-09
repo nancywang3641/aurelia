@@ -252,18 +252,42 @@
         if (url) _faceMemo.set(k, url);
         return url;
     }
-    // 站在書咖櫃台的樣子：小機穿上它在宿舍換的衣服（衣櫃那套），拿不到就用沒打扮的
+    // 站進場景的小機描一圈深色外框，粗細＝宿舍畫像一格像素（8px）。
+    //   倉鼠的身體色跟書咖木地板同一色系，沒框會融進地板（她 10-09 看了三種小樣挑這個：tmp/staff_outline_LAB.html）。
+    //   宿舍房間裡的樣子不動（房間的底不撞色），只有站進大廳場景的這張加。腳下的淡影子不算身體、不描。
+    const OUTLINE_PX = 8, OUTLINE_COLOR = '#2b211c';
+    function _outlined(src) {
+        const D = win.document || document;
+        const w = src.width, h = src.height, pad = OUTLINE_PX + 2;
+        const px = src.getContext('2d').getImageData(0, 0, w, h).data;
+        const mask = D.createElement('canvas'); mask.width = w; mask.height = h;
+        const mc = mask.getContext('2d'), md = mc.createImageData(w, h);
+        for (let i = 3; i < px.length; i += 4) if (px[i] > 60) md.data[i] = 255;
+        mc.putImageData(md, 0, 0);
+        mc.globalCompositeOperation = 'source-in'; mc.fillStyle = OUTLINE_COLOR; mc.fillRect(0, 0, w, h);
+        const out = D.createElement('canvas'); out.width = w + pad * 2; out.height = h + pad * 2;
+        const o = out.getContext('2d'); o.imageSmoothingEnabled = false;
+        [[OUTLINE_PX, 0], [-OUTLINE_PX, 0], [0, OUTLINE_PX], [0, -OUTLINE_PX]].forEach(([dx, dy]) => o.drawImage(mask, pad + dx, pad + dy));
+        o.drawImage(src, pad, pad);
+        return out;
+    }
+    // 站在書咖櫃台的樣子：小機穿上它在宿舍換的衣服（衣櫃那套），拿不到就用沒打扮的（一樣描框）
     async function lookOf(pick) {
         if (!pick || pick.type !== 'xiaoji') return faceOf(pick);
         const CP = _g('ClawdPortrait'), RW = _g('RoomWear'), X = _g('OS_XIAOJI');
         if (!CP || !CP.renderStill || !CP.crop) return '';
+        const stand = async (wear) => {
+            const cv = (win.document || document).createElement('canvas');
+            await CP.renderStill(cv, wear, 'idle', 1, pick.body || 'hamster');
+            return CP.crop(_outlined(cv)) || '';
+        };
         try {
             const rec = (X && X.get) ? await X.get(pick.id) : null;
             const wear = (RW && RW.client && rec && rec.wear) ? RW.client(rec.wear) : null;
-            const cv = (win.document || document).createElement('canvas');
-            await CP.renderStill(cv, wear, 'idle', 1, pick.body || 'hamster');
-            return CP.crop(cv) || '';
-        } catch (e) { return faceOf(pick); }
+            return await stand(wear);
+        } catch (e) {
+            try { return await stand(null); } catch (e2) { return faceOf(pick); }
+        }
     }
 
     // 上班當下找人：還在不在、用什麼身分說話、走哪個接口
