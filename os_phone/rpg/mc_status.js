@@ -9,7 +9,9 @@
 //   回朔：每則訊息處理前存一張快照（帶內容簽名）。最新那則換了內容（swipe／重生）先退回快照再套新內容；
 //        處理過的內容再進來（重看舊章）什麼都不動。每輪生成前對帳：內容已經不在完整聊天檔裡的，退回最早那則的快照。
 //        她手動記的約定不跟著回朔。
-//   約定：AI 寫「(已完成)」「(取消)」就打勾；日曆那行每輪整份重寫，沒再寫的劇情約定不再當成「還沒到」。
+//   約定：AI 寫「(已完成)」「(取消)」就打勾；日曆那行每輪整份重寫，連著兩輪沒再寫的劇情約定不再當成「還沒到」。
+//        每件約定記哪天＋幾點（或早上／中午／下午／晚上／深夜哪個時段）；同一天時間不打架、換個說法的算同一件（10-10）。
+//   委託卡：地圖接了委託就在日曆佔一格（進行中），收到報酬／不辦了收掉；跟約定排在同一條時間線上送給 AI。
 //   注入：每輪生成前把現在幾點、HP、還在身上的效果、七天內的約定組成一小段：
 //     酒館走 TavernHelper.injectPrompts（once、不貼回 chat）；PWA 走提示詞順序表的 mc_status 那一格。
 //   資料：OS_DB.app_data（appId=mc_status、chat scope）。跟狀態系統／副模型完全無關——她拍板不給副模型加負擔。
@@ -24,6 +26,7 @@
     const REVIVE_BLOCK = 8;      // 效果到期後這麼多回合內，AI 又寫回同一個（或換說法的同一個）不收——防它從聊天紀錄抄回來復活
     const UPCOMING_DAYS = 7;     // 注入「近期約定」看幾天內
     const SNAP_MAX = 40;         // 快照留最近幾則
+    const MISS_GONE = 2;         // 劇情寫的約定，連著這麼多輪日曆都沒寫才算「劇情沒再提」
 
     let _cache = null, _cacheChat = '';
     let _lastUninject = null;
@@ -62,7 +65,13 @@
         if (!Array.isArray(_cache.seenSigs)) _cache.seenSigs = [];
         if (!(_cache.turn >= 0)) _cache.turn = 0;
         delete _cache.seen;   // 舊版欄位
+        // 10-10 起約定多一個 time 欄、換說法不再多一列：舊資料補時間、把已經堆出來的重複收掉（有動才存）
+        let fixed = false;
+        _cache.events.forEach(e => { if (e.time == null) { _fillTime(e); fixed = true; } });
+        if (_dedupe(_cache)) fixed = true;
+        if (fixed) _sortEvents(_cache);
         _cacheChat = cid;
+        if (fixed) await save();
         return _cache;
     }
     async function save() {
@@ -120,6 +129,51 @@
         }
         return s.slice(0, 8);
     }
+    // ── 約定的時間：說得出幾點就記 18:00，說不準就記時段（晚上），都沒有就空著 ──
+    //   她 10-10：「日歷要不要再擴展至日時段，然後分成時段來放」。時段由程式分，AI 只要寫時間。
+    //   分得出幾點，程式才算得出「還有 40 分鐘」「已經過了」；同一天同一個時間＝同一件事，換了說法也不會多一列。
+    const SLOTS = [
+        { id: '早上', re: /早上|上午|早晨|清晨|一早|今早|明早/, from: 5 * 60, to: 11 * 60 },
+        { id: '中午', re: /中午|午間|午间/, from: 11 * 60, to: 13 * 60 },
+        { id: '下午', re: /下午|午後|午后/, from: 13 * 60, to: 17 * 60 },
+        { id: '晚上', re: /傍晚|晚上|晚間|晚间|夜晚|今晚|明晚/, from: 17 * 60, to: 23 * 60 },
+        { id: '深夜', re: /深夜|半夜|凌晨|午夜/, from: 23 * 60, to: 29 * 60 },   // 跨過午夜到隔天 5 點
+    ];
+    const CN_H = '[零一二兩两三四五六七八九十]{1,3}';
+    const DAYPART = '早上|上午|早晨|清晨|中午|下午|傍晚|晚上|晚間|晚间|夜晚|今晚|明晚|今早|明早|深夜|半夜|凌晨';
+    // 「18:00」「18點」「晚上六點」「下午三點半」「十點十五分」→ 18:00；認不出回 ''（不留原字，跟主角現在幾點那格不同）
+    //   loose＝日期那格（本來就在寫時間）：國字鐘點直接認。標題裡要前面有早上／晚上這類才認——不然「多帶一點錢」會變 01:00
+    function clockOf(s, loose) {
+        s = String(s || '');
+        let m = s.match(/(\d{1,2})\s*[:：點点時时]\s*(半|\d{1,2})?/);
+        if (!m) m = s.match(new RegExp((loose ? '' : '(?:' + DAYPART + ')\\s*') + '(' + CN_H + ')\\s*[點点時时]\\s*(半|' + CN_H + '(?=\\s*分))?'));
+        if (!m) return '';
+        let h = cnNum(m[1]);
+        let mi = !m[2] ? 0 : (m[2] === '半' ? 30 : cnNum(m[2]));
+        if (!(h >= 0 && h <= 24) || !(mi >= 0 && mi < 60)) return '';
+        const before = s.slice(0, m.index + m[0].indexOf(m[1]));
+        if (/下午|晚上|晚間|晚间|傍晚|夜晚|今晚|明晚/.test(before) && h < 12) h += 12;
+        else if (/中午/.test(before) && h < 11) h += 12;
+        else if (/晚上|深夜|半夜/.test(before) && h === 12) h = 0;   // 晚上 12 點＝半夜
+        if (h === 24) h = 0;
+        return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
+    }
+    function slotWordOf(s) { const x = SLOTS.find(z => z.re.test(String(s || ''))); return x ? x.id : ''; }
+    // 約定的 time 欄（18:00 或 晚上）→ 一天裡的第幾分鐘；時段給它的開頭
+    function minsOf(t) {
+        const m = String(t || '').match(/^(\d{2}):(\d{2})$/);
+        return m ? (+m[1]) * 60 + (+m[2]) : null;
+    }
+    function slotOf(t) {
+        const n = minsOf(t);
+        if (n == null) { const x = SLOTS.find(z => z.id === t); return x ? x.id : ''; }
+        const x = SLOTS.find(z => (n >= z.from && n < z.to) || (n + 1440 >= z.from && n + 1440 < z.to));
+        return x ? x.id : '';
+    }
+    function _slotRange(t) { const n = minsOf(t); if (n != null) return { from: n, to: n }; const x = SLOTS.find(z => z.id === t); return x ? { from: x.from, to: x.to } : null; }
+    // 同一天照時間排：寫了鐘點的照鐘點、只寫時段的排在那個時段開頭、沒寫時間的排最後
+    function _dayMins(e) { const r = _slotRange(e && e.time); return r ? r.from : 9999; }
+    function _sortEvents(st) { st.events.sort((a, b) => (dateKey(a.date) - dateKey(b.date)) || (_dayMins(a) - _dayMins(b))); }
     function fmtDate(d) { return d ? ((d.y ? d.y + '/' : '') + d.m + '/' + d.d) : ''; }
     function dateKey(d) { return d ? ((d.y || 0) * 10000 + d.m * 100 + d.d) : 0; }
     // a 到 b 差幾天（沒寫年份的一律當同一年）
@@ -131,11 +185,13 @@
     }
 
     // ── 快照：回朔用 ──
+    // 不跟著劇情回朔的：她自己記的、委託卡（委託紀錄本來就不回朔：重新生成那章，錢不會再進一次）
+    function _keepOnRollback(e) { return e.src === 'me' || e.src === 'mission'; }
     function snapshotOf(st) {
         return JSON.parse(JSON.stringify({
             date: st.date, time: st.time, hp: st.hp, name: st.name,
             buffs: st.buffs, turn: st.turn | 0, expired: st.expired || [],
-            events: st.events.filter(e => e.src !== 'me'),   // 她手動記的不進快照、也不被回朔
+            events: st.events.filter(e => !_keepOnRollback(e)),   // 她手動記的、委託卡不進快照、也不被回朔
         }));
     }
     function restoreSnapshot(st, snap) {
@@ -143,9 +199,10 @@
         st.buffs = JSON.parse(JSON.stringify(snap.buffs || []));
         st.turn = snap.turn | 0;
         st.expired = JSON.parse(JSON.stringify(snap.expired || []));
-        const mine = st.events.filter(e => e.src === 'me');
+        const mine = st.events.filter(_keepOnRollback);
         st.events = JSON.parse(JSON.stringify(snap.events || [])).concat(mine);
-        st.events.sort((a, b) => dateKey(a.date) - dateKey(b.date));
+        st.events.forEach(_fillTime);   // 改之前存的快照，約定沒有 time 欄
+        _sortEvents(st);
     }
     function dropSnapsFrom(st, idx) {
         const gone = st.snapOrder.splice(idx);
@@ -332,31 +389,153 @@
         const Z = win.OS_ZH || window.OS_ZH;
         return Z && Z.key ? Z.key(s) : s.replace(/\s+/g, '');
     }
+    // 日期那格「6/25 18:00」「6/25 晚上」「今晚」「明天」＋標題「晚上六點去吃飯」→ 哪天、幾點（或哪個時段）
+    //   今天／明天這類照故事時鐘換成日期（AI 常寫「今晚」）；她自己打「18:00 吃飯」開頭那個鐘點從標題拿掉
+    const REL_DAY = [[/^(今天|今日|今晚|今早|今夜|今天晚上|今天下午|今天早上)/, 0], [/^(明天|明日|明晚|明早|隔天)/, 1], [/^(後天|后天)/, 2]];
+    // 日曆那行少寫一個「|」：「日曆|今天 早上 晨跑(取消)」「日曆|6/20 買一束花(已完成)」→ 開頭的日期／時間切下來當日期那格
+    //   10-10 公益站 flash 真的這樣寫（四行裡兩行），不切的話整行讀不到、那件事永遠收不掉
+    const WHEN_HEAD = new RegExp('^((?:\\d{4}\\s*[\\/\\-年.]\\s*)?\\d{1,2}\\s*[\\/\\-月.]\\s*\\d{1,2}\\s*[日號号]?|今天|今日|今晚|今早|今夜|明天|明日|明晚|明早|隔天|後天|后天)' +
+        '((?:\\s*(?:\\d{1,2}\\s*[:：]\\s*\\d{2}|(?:' + DAYPART + ')(?:\\s*[零一二兩两三四五六七八九十\\d]{1,3}\\s*[點点時时]半?)?))?)\\s+(.+)$');
+    function _peelWhen(s) {
+        const m = String(s || '').trim().match(WHEN_HEAD);
+        return m ? { when: (m[1] + ' ' + (m[2] || '')).trim(), rest: m[3].trim() } : null;
+    }
+    function _whenOf(st, dateStr, title) {
+        const ds = String(dateStr || '').trim();
+        let date = parseDate(ds), rest = ds;
+        if (date) rest = ds.replace(/(\d{4}\s*[\/\-年.]\s*)?\d{1,2}\s*[\/\-月.]\s*\d{1,2}\s*[日號号]?/, '');
+        else if (st && st.date) {
+            const r = REL_DAY.find(x => x[0].test(ds));
+            if (r) { date = _addDays(st.date, r[1]); rest = ds; }
+        }
+        title = String(title || '').trim();
+        const lead = title.match(/^\s*(\d{1,2}\s*[:：]\s*\d{2})\s*/);
+        if (lead) title = title.slice(lead[0].length).trim();
+        const time = clockOf(rest, true) || (lead ? clockOf(lead[1], true) : '') || slotWordOf(rest) || clockOf(title) || slotWordOf(title);
+        return { date, time, title };
+    }
+    function _addDays(d, n) {
+        const y = d.y || 2001;
+        const t = new Date(y, d.m - 1, d.d + n);
+        const out = { m: t.getMonth() + 1, d: t.getDate() };
+        if (d.y) out.y = t.getFullYear();
+        return out;
+    }
+    // 換了說法的同一件（多寫一個人、多寫地點、把兩步併成一句）：字大半一樣
+    //   她 10-10 截圖：同一頓晚餐多寫了一個人、同一趟送貨寫了三種說法，每換一次就多一列
+    //   「和小明吃午餐」對「和小明吃晚餐」不算（只有一半一樣，而且多半時段也不同）
+    function _bigrams(k) { const o = []; for (let i = 0; i + 1 < k.length; i++) o.push(k.slice(i, i + 2)); return o; }
+    function _alike(a, b, sameClock) {
+        const A = _bigrams(a), B = _bigrams(b);
+        if (!A.length || !B.length) return false;
+        const left = new Map();
+        B.forEach(x => left.set(x, (left.get(x) || 0) + 1));
+        let hit = 0;
+        A.forEach(x => { const n = left.get(x) || 0; if (n > 0) { hit++; left.set(x, n - 1); } });
+        const dice = 2 * hit / (A.length + B.length), short = Math.min(A.length, B.length), cover = hit / short;
+        if (sameClock) return dice >= 0.4 || cover >= 0.5;   // 同一天同一個鐘點：只要有一點像就是同一件
+        return dice >= 0.75 || (short >= 4 && cover >= 0.8);
+    }
+    // 兩個時間撞不撞：都寫了鐘點、差超過一小時，或時段不同，就不是同一件
+    function _timeClash(a, b) {
+        if (!a || !b) return false;
+        const ma = minsOf(a), mb = minsOf(b);
+        if (ma != null && mb != null) return Math.abs(ma - mb) > 60;
+        return slotOf(a) !== slotOf(b);
+    }
+    //   她自己記的、微信說好的、委託卡也找：日曆要 AI 每輪整份重寫，它會把「近期約定」裡她記的那筆、進行中的委託也抄進來，
+    //   不找的話每抄一次就多一列 AI 的分身（失憶檢查抓到的）。劇情寫的優先。
+    function _findAlike(st, d, time, k) {
+        const hit = e => e.date && dateKey(e.date) === dateKey(d) && _evKey(e.title) !== k && !_timeClash(e.time, time)
+            && _alike(_evKey(e.title), k, !!(time && e.time && minsOf(time) != null && minsOf(time) === minsOf(e.time)));
+        return st.events.find(e => e.src === 'ai' && hit(e)) || st.events.find(e => e.src !== 'ai' && !e.done && hit(e)) || null;
+    }
+    // 認成同一列時：劇情寫的、還沒結束的換成 AI 最新的說法（她自己改過標題的不蓋）；這次有寫時間就以這次為準。
+    //   她記的、微信說好的、委託卡是別人的那一列：AI 抄過來只當「有寫到」，不改它的字和時間
+    function _settle(ev, w) {
+        if (ev.src !== 'ai') return;
+        if (!ev.done && !ev.edited && w.title && ev.title !== w.title) ev.title = w.title;
+        if (w.time) ev.time = w.time;
+    }
     function addEventTo(st, dateStr, title, note, src, msgId) {
-        const d = parseDate(dateStr);
         const sm = _splitMark(title);
-        title = sm.base;
+        const w = _whenOf(st, dateStr, sm.base);
+        const d = w.date;
+        title = w.title;
         if (!d || !title || NONE_RE.test(title)) return null;
         const k = _evKey(title);
         const same = st.events.filter(e => _evKey(e.title) === k);
         const sameDay = (e) => e.date && dateKey(e.date) === dateKey(d);
-        // 'gone'＝某一輪日曆沒寫它（見 applyStatusBlock）；之後又寫回來就不算結束
+        const alike = () => ((src || 'ai') === 'ai' ? _findAlike(st, d, w.time, k) : null);
+        // 'gone'＝連著幾輪日曆都沒寫它（見 applyStatusBlock）；之後又寫回來就不算結束
         const open = (e) => !e.done || e.done === 'gone';
         if (sm.status) {
-            const target = same.find(e => open(e) && sameDay(e)) || same.find(open);
-            if (target) { target.done = sm.status; target.doneTs = Date.now(); return target; }
+            let target = same.find(e => open(e) && sameDay(e)) || same.find(open);
+            if (!target) { const a = alike(); if (a && open(a)) target = a; }
+            if (target && target.src === 'mission') return target;   // 委託只認錢真的進來（或她按不辦了），AI 寫已完成不算
+            if (target) { _settle(target, w); target.done = sm.status; target.doneTs = Date.now(); target.miss = 0; return target; }
             const already = same.find(e => e.done);
             if (already) return already;
         } else {
-            const dup = same.find(sameDay);
-            if (dup) { if (dup.done === 'gone') { delete dup.done; delete dup.doneTs; } return dup; }
+            const dup = same.find(sameDay) || alike();
+            if (dup && dup.src !== 'ai') return dup;
+            if (dup) { if (dup.done === 'gone') { delete dup.done; delete dup.doneTs; } _settle(dup, w); dup.miss = 0; return dup; }
         }
-        const ev = { id: 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), date: d, title: title, note: String(note || ''), src: src || 'ai', ts: Date.now() };
+        const ev = { id: 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), date: d, time: w.time || '', title: title, note: String(note || ''), src: src || 'ai', ts: Date.now() };
         if (sm.status) { ev.done = sm.status; ev.doneTs = Date.now(); }
         if (msgId != null) ev.msg = String(msgId);
         st.events.push(ev);
-        st.events.sort((a, b) => dateKey(a.date) - dateKey(b.date));
+        _sortEvents(st);
         return ev;
+    }
+    // 已經堆出來的重複（改之前留下的、或同一輪先後寫了兩種說法）：同一天、時間不打架、字大半一樣的「劇情沒再提」那列拿掉，
+    //   留還在的那列（兩列都是沒再提的，留後寫的那列）。只動劇情寫的；她自己記的、微信說好的、委託卡不碰。
+    function _dedupe(st) {
+        const all = st.events.slice();
+        const twin = (e, g) => e !== g && e.src === 'ai' && e.date && g.date && dateKey(e.date) === dateKey(g.date) && !_timeClash(e.time, g.time)
+            && (_evKey(e.title) === _evKey(g.title) || _alike(_evKey(e.title), _evKey(g.title), !!(e.time && g.time && minsOf(e.time) != null && minsOf(e.time) === minsOf(g.time))));
+        const drop = new Set();
+        all.forEach(g => {
+            if (g.src !== 'ai' || g.done !== 'gone') return;
+            if (all.some(e => twin(e, g) && (e.done !== 'gone' || (e.ts || 0) > (g.ts || 0)))) drop.add(g);
+        });
+        if (!drop.size) return false;
+        st.events = st.events.filter(e => !drop.has(e));
+        return true;
+    }
+    // 改之前記的約定沒有 time 欄：從標題補（「晚上六點…」→ 18:00）
+    function _fillTime(e) { if (e && e.time == null) e.time = e.title ? (clockOf(e.title) || slotWordOf(e.title)) : ''; }
+
+    // ── 委託卡：接了委託就在日曆上佔一格（從接的那個時間開始、進行中），收到報酬＝辦完了、按「不辦了」＝不辦了 ──
+    //   她 10-10：「委託卡似乎也能卡上去當時段」。地圖（map_core）接取／入帳／不辦了的時候叫；AI 不用寫，
+    //   也不會被算成「劇情沒再提」（那條只看劇情寫的）。跟委託紀錄一樣不跟著劇情回朔。
+    function missionStart(m) {
+        return run(async () => {
+            const st = await load();
+            if (!m || !m.id || !st.date) return null;
+            const id = String(m.id);
+            const had = st.events.find(e => e.src === 'mission' && e.mission === id);
+            if (had) return had;
+            const ev = { id: 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), date: Object.assign({}, st.date), time: minsOf(st.time) != null ? st.time : '',
+                title: String(m.title || '委託').trim() || '委託', note: '', src: 'mission', mission: id, ts: Date.now() };
+            st.events.push(ev);
+            _sortEvents(st);
+            await save();
+            return ev;
+        });
+    }
+    function missionEnd(id, how) {
+        return run(async () => {
+            const st = await load();
+            const ev = st.events.find(e => e.src === 'mission' && e.mission === String(id));
+            if (!ev || ev.done) return false;
+            ev.done = how === 'cancel' ? 'cancel' : 'done';
+            ev.doneTs = Date.now();
+            if (st.date) ev.endDate = Object.assign({}, st.date);
+            if (minsOf(st.time) != null) ev.endTime = st.time;
+            await save();
+            return true;
+        });
     }
     function addEvent(dateStr, title, note, src, msgId) {
         return run(async () => { const st = await load(); const ev = addEventTo(st, dateStr, title, note, src, msgId); if (ev) await save(); return ev; });
@@ -366,10 +545,11 @@
             const st = await load();
             const ev = st.events.find(e => e.id === id);
             if (!ev) return false;
-            if (patch && patch.title != null) ev.title = String(patch.title).trim() || ev.title;
+            // 日曆的「改一下」帶著鐘點給她改（18:00 與某某聚餐）：開頭的鐘點拿出來當時間
+            if (patch && patch.title != null) { const w = _whenOf(st, '', String(patch.title)); if (w.title) { ev.title = w.title; ev.time = w.time || ''; } }
             if (patch && patch.date) { const d = parseDate(patch.date); if (d) ev.date = d; }
             ev.edited = true;
-            st.events.sort((a, b) => dateKey(a.date) - dateKey(b.date));
+            _sortEvents(st);
             await save();
             return true;
         });
@@ -399,7 +579,7 @@
                 const val = parts.slice(1).join('|').trim();
                 // 日曆那行後面用 <br> 接的「明天(6/22)|下午两点拍摄」：開頭是日期就當同一張日曆的下一筆
                 if (inCal && !/^(日期|日期時間|日期时间|date|時間|时间|主角名|主角|mc|name|hp|體力|体力|生命|buff\/debuff|buff|debuff|狀態|状态|狀態效果|状态效果)$/.test(key)) {
-                    if (parseDate(parts[0])) { addCal(parts[0], val); return; }
+                    if (parseDate(parts[0]) || REL_DAY.some(x => x[0].test(parts[0]))) { addCal(parts[0], val); return; }   // 「明天 下午|搬家」也是下一筆
                 }
                 inCal = false;
                 if (/^(日期|日期時間|日期时间|date|時間|时间)$/.test(key)) {
@@ -415,6 +595,7 @@
                 } else if (/^(日曆|日历|行事曆|行事历|calendar|約定|约定|event)$/.test(key)) {
                     inCal = true; hadCal = true;
                     if (parts.length >= 3) addCal(parts[1], parts.slice(2).join('|'));
+                    else if (parts.length === 2) { const pw = _peelWhen(parts[1]); if (pw) addCal(pw.when, pw.rest); }
                 }
             });
             if (buffLine != null) {
@@ -444,22 +625,68 @@
             // 日曆跟狀態效果一樣是每輪整份重寫：劇情寫的約定這份日曆沒再寫＝AI 認為結束了，不再當成「還沒到」送回去。
             //   09-24 那本：6/20 把「周末」記成 6/25，隔天改寫成 6/21 另一種說法，舊的 6/25 那筆沒人收，一直掛著。
             //   只收劇情寫的（src ai）；微信說好的、她自己記的不動。這份沒有日曆那行就什麼都不收。
+            //   10-10 改：漏寫一輪不算結束，連著 MISS_GONE 輪沒寫才算（她怕接委託那幾輪 AI 只寫委託、晚上的約就被當成結束、之後不再提醒）
             if (hadCal) {
                 st.events.forEach(e => {
-                    if (e.src === 'ai' && !e.done && !calIds.has(e.id)) { e.done = 'gone'; e.doneTs = Date.now(); touched = true; }
+                    if (e.src !== 'ai' || e.done) return;
+                    if (calIds.has(e.id)) { e.miss = 0; return; }
+                    e.miss = (e.miss | 0) + 1;
+                    if (e.miss >= MISS_GONE) { e.done = 'gone'; e.doneTs = Date.now(); }
+                    touched = true;
                 });
+                if (_dedupe(st)) touched = true;
             }
             if (touched) await save();
             return touched;
         });
     }
 
+    // 還沒到的約定（委託卡不算約定，另外列）；時間已經過了的不算（見 _passed）
     function upcoming(st, days) {
-        const open = st.events.filter(e => !e.done);
+        const open = st.events.filter(e => !e.done && e.src !== 'mission');
         if (!st.date) return open.slice(0, 5);
-        return open.filter(e => { const dd = dayDiff(st.date, e.date); return dd >= 0 && dd <= (days || UPCOMING_DAYS); });
+        return open.filter(e => { const dd = dayDiff(st.date, e.date); return dd >= 0 && dd <= (days || UPCOMING_DAYS) && !_passed(st, e); });
     }
-    function doneLabel(e) { return e.done === 'cancel' ? '（取消了）' : (e.done === 'gone' ? '（劇情沒再提）' : (e.done ? '（已完成）' : '')); }
+    // 過了沒：前幾天的、今天寫了鐘點而且過了一小時以上的（剛到時間＝正在赴約）、今天只寫時段而時段已經過了的
+    const PASS_GRACE = 60;
+    function _passed(st, e) {
+        if (!st.date || !e.date) return false;
+        const dd = dayDiff(st.date, e.date);
+        if (dd !== 0) return dd < 0;
+        const now = minsOf(st.time), r = _slotRange(e.time);
+        if (now == null || !r) return false;
+        return minsOf(e.time) != null ? now > r.from + PASS_GRACE : now >= r.to;
+    }
+    // 「今天 18:00」「明天 晚上」「6/23」
+    function _whenText(st, e, date) {
+        date = date || e.date;
+        const dd = st.date && date ? dayDiff(st.date, date) : null;
+        const day = dd === 0 ? '今天' : (dd === 1 ? '明天' : (dd === -1 ? '昨天' : fmtDate(date)));
+        return day + (e.time ? ' ' + e.time : '');
+    }
+    // 今天寫了鐘點的：還有多久／就是現在
+    function _untilText(st, e) {
+        if (!st.date || !e.date || dayDiff(st.date, e.date) !== 0) return '';
+        const now = minsOf(st.time), t = minsOf(e.time);
+        if (now == null || t == null) return '';
+        const left = t - now;
+        if (left <= 0) return '時間到了';
+        if (left < 60) return '還有 ' + left + ' 分鐘';
+        if (left <= 360) return '還有 ' + Math.floor(left / 60) + ' 小時' + (left % 60 >= 30 ? '半' : '');
+        return '';
+    }
+    function doneLabel(e) {
+        if (e.src === 'mission') return e.done === 'cancel' ? '（不辦了）' : (e.done ? '（辦完了）' : '（進行中）');
+        return e.done === 'cancel' ? '（取消了）' : (e.done === 'gone' ? '（劇情沒再提）' : (e.done ? '（已完成）' : ''));
+    }
+    // 委託開場要知道主角今天還有哪些約（還沒過的）：「18:00 與某某聚餐；晚上 去看展」
+    async function todayPlansText() {
+        if (!_on()) return '';
+        const st = await load();
+        if (!st.date) return '';
+        return st.events.filter(e => !e.done && e.src !== 'mission' && e.date && dayDiff(st.date, e.date) === 0 && !_passed(st, e))
+            .map(e => (e.time ? e.time + ' ' : '') + e.title).join('；');
+    }
     function summary(st) {
         const parts = [];
         if (st.date) parts.push(fmtDate(st.date) + (st.time ? ' ' + st.time : ''));
@@ -485,13 +712,19 @@
         if (st.hp) L.push('HP：' + st.hp);
         L.push('狀態效果：' + (st.buffs.length ? st.buffs.map(b => b.name + '（剩 ' + b.left + ' 回合）').join('、') : '無'));
         const up = upcoming(st, UPCOMING_DAYS);
-        if (up.length) L.push('近期約定：' + up.map(e => fmtDate(e.date) + ' ' + e.title).join('；'));
+        if (up.length) L.push('近期約定：' + up.map(e => { const u = _untilText(st, e); return _whenText(st, e) + ' ' + e.title + (u ? '（' + u + '）' : ''); }).join('；'));
+        // 委託卡：跟約定排在同一條時間線上，AI 才看得出委託會不會撞到約（怎麼結算另外由委託那段交代）
+        const runMis = st.events.filter(e => e.src === 'mission' && !e.done).slice(-3);
+        if (runMis.length) L.push('進行中的委託：' + runMis.map(e => '「' + e.title + '」（' + _whenText(st, e) + ' 接的）').join('；') + '（委託不用寫進日曆，系統會記）');
+        // 時間過了、劇情還沒交代的：讓 AI 寫清楚去了沒，不要無聲無息地不見（她 10-10：「會不會晚上約定擱置?」）
+        const late = st.events.filter(e => !e.done && e.src !== 'mission' && _passed(st, e)).slice(-3);
+        if (late.length) L.push('時間已經過了、劇情還沒交代的約定：' + late.map(e => _whenText(st, e) + ' ' + e.title).join('；') + '（照前面的劇情判斷主角去了沒：去了在日曆寫(已完成)，沒去寫(取消)；不用為了它倒回去補演）');
         // 做完／取消的也放這裡（按做完的先後），AI 才知道那件事已經過去了，不會再提
         const past = st.events
-            .filter(e => (e.done && e.done !== 'gone') || (!e.done && st.date && dayDiff(st.date, e.date) < 0))
+            .filter(e => e.done && e.done !== 'gone')
             .sort((a, b) => ((a.doneTs || 0) - (b.doneTs || 0)) || (dateKey(a.date) - dateKey(b.date)))
             .slice(-3);
-        if (past.length) L.push('已過的約定：' + past.map(e => fmtDate(e.date) + ' ' + e.title + doneLabel(e)).join('；'));
+        if (past.length) L.push('已過的約定：' + past.map(e => fmtDate(e.date) + ' ' + (e.src === 'mission' ? '委託「' + e.title + '」' : e.title) + doneLabel(e)).join('；'));
         L.push('（狀態效果的剩餘回合以這裡為準往下數；時間只能往前走。）');
         return L.join('\n');
     }
@@ -545,6 +778,8 @@
         setDate: setDate, setHp: setHp, setBuff: setBuff, addEvent: addEvent, updateEvent: updateEvent, removeEvent: removeEvent, applyStatusBlock: applyStatusBlock,
         upcoming: upcoming, doneLabel: doneLabel, sigOf: sigOf, summary: summary, buildBlock: buildBlock, injectStatus: injectStatus, renderHud: renderHud,
         parseDate: parseDate, parseTime: parseTime, fmtDate: fmtDate, dateKey: dateKey, dayDiff: dayDiff, getChatId: getChatId,
+        missionStart: missionStart, missionEnd: missionEnd, todayPlansText: todayPlansText,
+        clockOf: clockOf, slotOf: slotOf, slotWordOf: slotWordOf, minsOf: minsOf, SLOTS: SLOTS.map(x => x.id),
         resetCache: function () { _cache = null; _cacheChat = ''; },
     };
     win.OS_MC_STATUS = API;

@@ -280,7 +280,7 @@ st 只有下面這些，一個不多。沒列的一律不存在，不准自己�
 - st.getStory(n) → 最近 n 條劇情 [{ name, text }]，預設 30。純應用要讀劇情時用；純展示、共用不用。
 - st.getCurrentChars() → Promise<[{ name, count }]>。當前聊天出現過的角色，做角色選單用。
 - st.getContacts() → Promise<[{ id, name, desc, avatar, isGroup, persona }]>。手機微信通訊錄裡的人和群（當前故事那本），做「選一個聯絡人」的清單用。isGroup 為 true 是群聊；使用者本人不在裡面；desc、avatar、persona 可能是空字串，avatar 空的就畫首字圓框。劇情還沒演到、但微信裡已經加過的人也在這裡。persona 是使用者替這個人設的人設（群聊是群的備註）：App 要讓 AI 寫到某個人（替他發文、留言、回話）時，把他的 persona 一起放進 st.callAI 的提示，不要只給名字。
-- st.clock() → Promise<{ date, time, upcoming:[{ date, title }] }>。故事裡現在的日期（例如 6/20）與時間（例如 18:30），upcoming 是接下來幾天跟使用者約好的事。故事還沒有時間時 date、time 是空字串；要顯示今天幾號、排行程、算倒數用它，不要自己猜或拿現實時間。
+- st.clock() → Promise<{ date, time, upcoming:[{ date, time, title }] }>。故事裡現在的日期（例如 6/20）與時間（例如 18:30），upcoming 是接下來幾天跟使用者約好的事（time 是幾點，例如 18:00，或只說了時段：早上／中午／下午／晚上／深夜，沒說就是空字串）。故事還沒有時間時 date、time 是空字串；要顯示今天幾號、排行程、算倒數用它，不要自己猜或拿現實時間。
 - st.getChatId() → 當前聊天 id 字串。
 - st.user() → Promise<{ name, nickname, avatar, signature, desc }>。使用者本人。寫法固定：const me = await st.user(); 之後用 me.nickname、me.avatar。面板裡凡是「我」發的東西（留言、貼文、發言、簽到）作者一律用它：顯示名用 nickname、沒有再用 name；頭像用 avatar、空的就畫首字圓框。禁寫死 User、我、匿名；禁做登入或選身分頁面。
 

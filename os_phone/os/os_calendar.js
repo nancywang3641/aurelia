@@ -3,6 +3,7 @@
 // 職責：手機的日曆 app。讀寫 OS_MC_STATUS（主角狀態與故事時鐘）同一份資料：
 //   月曆格、有約定的日子打點、今天照故事時鐘標亮；點某天看當天約定，能自己加一筆或刪掉。
 //   AI 從劇情寫進來的（[Event|]）跟你手動加的一起放，來源用小標區分。
+//   一天照時段（早上／中午／下午／晚上／深夜）分段、左欄寫鐘點；地圖接的委託也佔一格（10-10）。
 //   點標頭的「今天」可以改故事日期，時鐘從那裡接下去。
 // ----------------------------------------------------------------
 (function () {
@@ -47,6 +48,11 @@
         .cal-ev.cal-ev-done .cal-ev-bar { opacity: 0.35; }
         .cal-ev-state { font-size: 12px; margin-left: 4px; }
         .cal-ev-src { font-size: 11px; color: var(--os-ink-soft); margin-top: 2px; }
+        .cal-slot { padding: 12px 16px 2px; font-size: 11px; font-weight: bold; color: var(--os-ink-soft); letter-spacing: 1px; }
+        .cal-ev-time { width: 40px; flex-shrink: 0; font-size: 12px; color: var(--os-ink-soft); font-variant-numeric: tabular-nums; }
+        .cal-ev.cal-ev-mis { background: rgba(214, 150, 40, 0.10); }
+        .cal-ev.cal-ev-mis .cal-ev-bar { background: #d69628; }
+        .cal-ev-ico { margin-right: 6px; color: #d69628; font-size: 12px; }
         .cal-ev-del { color: rgba(var(--os-ink-rgb), 0.25); padding: 6px; cursor: pointer; font-size: 14px; }
         .cal-ev-del:active { color: #ff4444; }
         .cal-empty-note { text-align: center; color: var(--os-ink-soft); font-size: 13px; padding: 24px 0 8px; }
@@ -85,6 +91,44 @@
         return dd > 0 ? (dd + ' 天後') : (Math.abs(dd) + ' 天前');
     }
 
+    // 一天照時段分段（她 10-10：「日歷要不要再擴展至日時段，然後分成時段來放」）：早上／中午／下午／晚上／深夜，沒說幾點的放最後。
+    //   左邊那欄寫鐘點（只說了時段的空著，段名就是時段）；委託卡另一個顏色，寫幾點接的、幾點辦完。
+    function srcText(e) {
+        if (e.src === 'me') return '自己記的';
+        if (e.src === 'wx') return e.edited ? '在微信說好的，改過' : '在微信說好的';
+        return e.edited ? '劇情裡說好的，改過' : '劇情裡說好的';
+    }
+    function rowHtml(e) {
+        const clock = S().minsOf && S().minsOf(e.time) != null ? e.time : '';
+        const state = e.done || e.src === 'mission' ? '<span class="cal-ev-state">' + esc(S().doneLabel ? S().doneLabel(e) : '') + '</span>' : '';
+        if (e.src === 'mission') {
+            const span = (clock ? clock + ' 接的' : '從地圖接的') + (e.endTime ? '，' + e.endTime + (e.done === 'cancel' ? ' 不辦了' : ' 辦完') : '');
+            return `
+            <div class="cal-ev cal-ev-mis${e.done ? ' cal-ev-done' : ''}">
+                <div class="cal-ev-time">${esc(clock)}</div>
+                <div class="cal-ev-bar"></div>
+                <div class="cal-ev-text"><div class="cal-ev-title"><i class="fa-solid fa-briefcase cal-ev-ico"></i>委託：${esc(e.title)}${state}</div><div class="cal-ev-src">${esc(span)}</div></div>
+                <div class="cal-ev-del" data-id="${esc(e.id)}"><i class="fa-solid fa-trash"></i></div>
+            </div>`;
+        }
+        return `
+            <div class="cal-ev${e.src === 'me' ? ' cal-ev-me' : ''}${e.done ? ' cal-ev-done' : ''}">
+                <div class="cal-ev-time">${esc(clock)}</div>
+                <div class="cal-ev-bar"></div>
+                <div class="cal-ev-text" data-edit="${esc(e.id)}"><div class="cal-ev-title">${esc(e.title)}${state}</div><div class="cal-ev-src">${srcText(e)}</div></div>
+                <div class="cal-ev-del" data-id="${esc(e.id)}"><i class="fa-solid fa-trash"></i></div>
+            </div>`;
+    }
+    function dayHtml(st, evs) {
+        const slots = (S().SLOTS || []).concat(['']);
+        const slotOf = e => (S().slotOf ? S().slotOf(e.time) : '');
+        return slots.map(id => {
+            const list = evs.filter(e => slotOf(e) === id);
+            if (!list.length) return '';
+            return `<div class="cal-slot">${id || '沒說幾點'}</div>` + list.map(rowHtml).join('');
+        }).join('');
+    }
+
     function render() {
         if (!_root || !_state) return;
         const st = _state;
@@ -103,12 +147,7 @@
         }
         const sel = _sel || (today ? { y: today.y || y, m: today.m, d: today.d } : { y: y, m: m, d: 1 });
         const evs = eventsOn(st, sel.y, sel.m, sel.d);
-        const evHtml = evs.length ? evs.map(e => `
-            <div class="cal-ev${e.src === 'me' ? ' cal-ev-me' : ''}${e.done ? ' cal-ev-done' : ''}">
-                <div class="cal-ev-bar"></div>
-                <div class="cal-ev-text" data-edit="${esc(e.id)}"><div class="cal-ev-title">${esc(e.title)}${e.done ? '<span class="cal-ev-state">' + esc(S().doneLabel ? S().doneLabel(e) : '') + '</span>' : ''}</div><div class="cal-ev-src">${e.src === 'me' ? '自己記的' : (e.src === 'wx' ? (e.edited ? '在微信說好的，改過' : '在微信說好的') : (e.edited ? '劇情裡說好的，改過' : '劇情裡說好的'))}</div></div>
-                <div class="cal-ev-del" data-id="${esc(e.id)}"><i class="fa-solid fa-trash"></i></div>
-            </div>`).join('') : '<div class="cal-empty-note">這天沒有約定</div>';
+        const evHtml = evs.length ? dayHtml(st, evs) : '<div class="cal-empty-note">這天沒有約定</div>';
 
         _root.innerHTML = `
             <div class="cal-shell">
@@ -154,7 +193,7 @@
         if (edit) {
             const ev = (_state.events || []).find(x => x.id === edit.dataset.edit);
             if (!ev) return;
-            const v = await prompt('改一下', ev.title, '');
+            const v = await prompt('改一下', (S().minsOf && S().minsOf(ev.time) != null ? ev.time + ' ' : '') + ev.title, '');
             if (v == null || !v.trim()) return;
             await S().updateEvent(ev.id, { title: v.trim() });
             _state = await S().load();

@@ -31,7 +31,7 @@
             if (!st) return out;
             out.date = st.date ? M.fmtDate(st.date) : '';
             out.time = st.time || '';
-            out.upcoming = (M.upcoming ? M.upcoming(st) : []).map(function (e) { return { date: M.fmtDate(e.date), title: String(e.title || '') }; });
+            out.upcoming = (M.upcoming ? M.upcoming(st) : []).map(function (e) { return { date: M.fmtDate(e.date), time: String(e.time || ''), title: String(e.title || '') }; });
         } catch (e) {}
         return out;
     }

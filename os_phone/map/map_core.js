@@ -1922,6 +1922,11 @@ ${facilityText}
         // 1. 移除該事件（避免重複接取）
         delete STATE.activeEvents[eventKey];
 
+        // 📅 主角今天還有哪些約（日曆）：委託開場才不會把晚上的約默默擠掉（她 10-10：「會不會晚上約定擱置?」）
+        let plans = '';
+        try { const MC = win.OS_MC_STATUS; if (MC && MC.todayPlansText) plans = await MC.todayPlansText(); } catch (e) {}
+        const plansLine = plans ? '\n   主角今天還有約：' + plans + '。委託的時間跟這些約撞到的話，正文裡要寫出主角怎麼處理，不要讓約定無聲無息地不見。' : '';
+
         // 2. 構建酒館跑團指令
         const modeText = STATE.selectedMode === 'vn' ? 'VN格式' : '小說模式';
         const systemPrompt = `[System Command: Start RPG Mission]
@@ -1936,7 +1941,7 @@ ${facilityText}
 
 **指令**:
 1. 先執行開場白，並慢慢展開，最多十章內收尾(短篇)。
-   這是一份新接的委託，跟主角前面辦過的事是分開的，不要寫成上一件事的下一段。開場先交代主角是怎麼接到它的（透過什麼管道、在哪裡、什麼時候）；時間從上一章往後接，主角如果剛連續奔波過，先讓他休息過再接到這份委託，不用硬接在上一章的同一刻。
+   這是一份新接的委託，跟主角前面辦過的事是分開的，不要寫成上一件事的下一段。開場先交代主角是怎麼接到它的（透過什麼管道、在哪裡、什麼時候）；時間從上一章往後接，主角如果剛連續奔波過，先讓他休息過再接到這份委託，不用硬接在上一章的同一刻。${plansLine}
 2. 根據難度設置障礙或敵人。
 3. 任務成功時，在收尾那一章的正文裡獨立寫一行：[QrPay|in|委託人|金額|委託報酬・${eventData.title}|${eventData.id}]
    委託人＝付這筆錢的人或組織的名字（不要寫主角的名字）；金額只寫數字，照完成的程度給，最多 ${eventData.money}；最後一格單號照抄，不要改。
@@ -1996,6 +2001,8 @@ ${facilityText}
         list.push({ id: ev.id, title: ev.title, facName: ev.facName, zoneId: ev.zoneId, facKey: ev.facKey || '', sceneId: ev.sceneId || '',
             type: ev.type, difficulty: ev.difficulty, money: ev.money, desc: ev.desc || '', objective: ev.objective || '', acceptedAt: Date.now(), status: 'running' });
         await _missionSave(list);
+        // 📅 日曆上佔一格（從主角現在的時間起、進行中）；收到報酬／不辦了時收掉（她 10-10：「委託卡似乎也能卡上去當時段」）
+        try { const MC = win.OS_MC_STATUS; if (MC && MC.missionStart) await MC.missionStart({ id: ev.id, title: ev.title }); } catch (e) {}
     }
     // 收款單號 evt_… 是不是真的委託：帳上有這張，或說明寫著「委託報酬・」（加紀錄以前接的）。
     //   🚨 AI 會照抄 evt_ 這個樣子替一般付款編單號（10-09 真檔：買咖啡寫成 evt_…），只看開頭會把普通收款當委託報酬。
@@ -2035,6 +2042,7 @@ ${facilityText}
         if (!rec || rec.status !== 'running') return;
         if (!(await AUI.confirm('「' + rec.title + '」不辦了？\n之後不會再提醒 AI 結算這張委託。', { okText: '不辦了' }))) return;
         rec.status = 'dropped';
+        try { const MC = win.OS_MC_STATUS; if (MC && MC.missionEnd) MC.missionEnd(id, 'cancel'); } catch (e) {}
         rec.droppedAt = Date.now();
         await _missionSave(list);
         const card = document.getElementById('am-mission-area');
@@ -2078,6 +2086,7 @@ ${facilityText}
         }
         if (parts.length >= 3 && parts[1]) rec.client = parts[1];
         rec.status = 'done';
+        try { const MC = win.OS_MC_STATUS; if (MC && MC.missionEnd) MC.missionEnd(id, 'done'); } catch (e) {}
         rec.paid = Number(d.amount) || 0;
         rec.doneAt = Date.now();
         rec.chapters = await _missionChapters(id, d.floor);
@@ -2102,6 +2111,7 @@ ${facilityText}
         if (info.who && !rec.client) rec.client = String(info.who);
         if (rec.status !== 'done') {
             rec.status = 'done';
+            try { const MC = win.OS_MC_STATUS; if (MC && MC.missionEnd) MC.missionEnd(id, 'done'); } catch (e) {}
             rec.paid = Number(info.amount) || 0;
             rec.doneAt = Date.now();
             rec.chapters = await _missionChapters(id);
