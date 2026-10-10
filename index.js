@@ -233,6 +233,8 @@ const PHONE_FILES = [
     'os/os_pt.js',            // 🏦 交易區 PT 經濟：錢包+大總結結算估值+VN 結算卡+交易所面板（依賴 OS_DB/OS_API，排它們後面）
     'os/os_cafe.js',          // ☕ 書咖經營：調配台研發+上架命名+菜單/書單（依賴 OS_DB/OS_API；設計書 docs/book_cafe_design.md）
     'os/os_cafe_staff.js',    // 🧑‍🍳 書咖店員：她挑人、照時間上班、值班日記（要排在 os_cafe.js 後面）
+    'os/os_sn_board.js',      // 🧑‍💼 SN 32 樓研討白板：值班、規則、收進世界（要排在 os_cafe_staff.js 後面：借它的時間表與描框）
+    'os/os_sn_board_ui.js',   // 🧑‍💼 白板的畫面（要排在 os_sn_board.js 後面）
     'os/os_room_svg.js',      // 🏠 SVG 房間產生器（純幾何，無相依；供包租婆/城市共用）
     'os/os_room_gen.js',      // 📦 整房生圖引擎：包裹訂單→英文布置提示詞→空房母圖一次 inpaint（依賴 OS_ROOM_SVG/OS_IMAGE_MANAGER/OS_API）
     'os/os_landlord.js',      // 🏘️ 包租婆①：招租/入住/離線收租（依賴 OS_DB/OS_API/OS_PT/OS_ROOM_SVG/LobbyNpcs；設計書 docs/landlord_design.md）
@@ -540,6 +542,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/wx_chat_settings.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/map_core.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/void_achievement.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_sn_board.css');
 
         // 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後才蓋得掉各自的舊頭
         await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_theme.css');   // 主題一包（要在各面板樣式之前）

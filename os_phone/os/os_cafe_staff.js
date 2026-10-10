@@ -709,6 +709,9 @@
         INCIDENTS, get, save, pickStaff, setOn, setTimes, candidates, faceOf, lookOf, runShift, tick, start, renderTab, _cfg,
         onChange(f) { _listeners.add(f); return () => _listeners.delete(f); },
         isBusy: () => !!_busy,
+        // 給 SN 32 樓白板共用：上班時間怎麼整理、到點沒；站進大廳場景的小機描框（同一套才長得一樣）
+        times: { normTimes, dueSlot },
+        outline: _outlined,
         _pure: { normTimes, dueSlot, parseReply, applyHandles, pickIncident, rankIncidents, localIncidents, jevQuestions, INCIDENTS },
     };
     win.OS_CAFE_STAFF = OS_CAFE_STAFF;

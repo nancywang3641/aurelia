@@ -1854,7 +1854,7 @@
         // 🧭 chip 與熱點都讀 lobby_places 的地點清單（單一真相）——以前寫死在這裡，
         //    加一個地方就要記得回來改，占卜小屋上線時就漏過一次。
         const PLACES = (window.LobbyPlaces && window.LobbyPlaces.list()) || [];
-        const chips = PLACES.filter(p => p.scene).map(p => [p.id, p.name]);
+        const chips = PLACES.filter(p => p.scene || p.chip).map(p => [p.id, p.name]);   // chip：沒有場景的地點（SN 32 樓）也給一顆，點了直接開面板
         // 🚪 統一跳場口：進 404 走 enter404Room（glitch 特效+音效+柴郡開場）；從 404 離開走 restoreLobby 還原流程再落到目標
         const jump = (to, spawn) => {
             if (to === 'room404' && S.scene !== 'room404') {
@@ -1936,7 +1936,12 @@
             });
         }
         box.querySelector('.lcm-close').addEventListener('click', () => box.remove());
-        box.querySelectorAll('.lcm-chip').forEach(b => b.addEventListener('click', () => { box.remove(); jump(b.dataset.go); }));
+        box.querySelectorAll('.lcm-chip').forEach(b => b.addEventListener('click', () => {
+            box.remove();
+            const P = PLACES.find(p => p.id === b.dataset.go);
+            if (P && !P.scene && P.open) { P.open(); return; }   // chip:true 那種：沒有場景，直接開面板
+            jump(b.dataset.go);
+        }));
         S.root.appendChild(box);
         _regWin(() => box.remove());
     }

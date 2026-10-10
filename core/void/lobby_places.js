@@ -40,6 +40,8 @@
     // ready()  這個面板現在開得起來嗎（模組載入了沒）
     //          🚨 一定要有：open 裡面全是 `?.`，模組沒載入時呼叫不會報錯也不會有反應，
     //             那顆鈕就變成「點了什麼都沒發生」的死鈕。寧可不顯示也不要給死鈕。
+    // chip     沒有 scene 也要在快轉地圖給一顆（點了直接 open）
+    // who()    地點卡上那行字（沒有管理員的地點用這個講現況）；沒給就用管理員名字
     const PLACES = [
         {
             id: 'cafe', name: '書咖', flatName: '書咖櫃檯', icon: 'fa-mug-hot', npc: 'ying', bg: 'lobby_pv_bg_cafe_v1.jpg',
@@ -85,6 +87,15 @@
             guest: () => _guestNpc(),
             open: () => _fire('lstage-open-myhome'),
             openIn: (c) => _mountHomeGuest(c),
+        },
+        {
+            // 🧑‍💼 SN 32 樓研討白板（os_sn_board.js）：沒有走得進去的場景，快轉地圖那顆、立繪模式那張卡都直接開白板
+            id: 'sn32', name: 'SN 32 樓', flatName: '研討白板', icon: 'fa-building', bg: 'lobby_pv_bg_sn32_v1.jpg',
+            chip: true,
+            who: () => { const n = win.OS_SN_BOARD?.waitingNow?.() || 0; return n ? n + ' 份等妳看' : '研討白板'; },
+            ready: () => !!win.OS_SN_BOARD?.open,
+            open: () => win.OS_SN_BOARD.open(),
+            openIn: (c) => _mountFloating(c, () => win.OS_SN_BOARD.open(), '.snb-win', () => win.OS_SN_BOARD.close && win.OS_SN_BOARD.close()),
         },
         {
             id: 'room404', name: '404', flatName: '黑市', icon: 'fa-ghost', npc: 'cheshire', bg: 'lobby_pv_bg_room404_v1.jpg',
@@ -336,7 +347,7 @@
             // 模組晚一步載好不該讓地點看起來像沒解鎖，按進去那一刻自然會知道開不開得了。
             p, on: _standable(p), npc: _npcMeta(p),
             // 我的家沒人的時候要明講，不然那行空白看起來像沒載出來
-            emptyWho: p.guest ? '還沒有人' : '',
+            emptyWho: p.guest ? '還沒有人' : (p.who ? (() => { try { return p.who() || ''; } catch (e) { return ''; } })() : ''),
         }));
     }
 
@@ -785,6 +796,16 @@
     // reprime()：把對話框換回眼前這位的（大廳開場流程比地點視圖晚一步時，會把書咖的開場旁白蓋上來）。
     const speaker = () => (_speakerOf ? _speakerOf() : undefined);
     const reprime = () => (_reprime ? _reprime() : false);
-    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, openScenePicker, closeScenePicker, openMoreSheet, closeMoreSheet, speaker, reprime, HOME_ID, PLACES };
+    // 地點卡那行字會變的地點（SN 32 樓的「幾份等妳看」）：那邊一通知（lobby-place-who）就只改那行，不重畫整排
+    function refreshWho() {
+        PLACES.forEach(p => {
+            if (!p.who) return;
+            let t = '';
+            try { t = p.who() || ''; } catch (e) {}
+            document.querySelectorAll('.lb-rail-card[data-id="' + p.id + '"] .lb-rail-who').forEach(el => { el.textContent = t || '　'; });
+        });
+    }
+    try { win.addEventListener('lobby-place-who', refreshWho); } catch (e) {}
+    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, openScenePicker, closeScenePicker, openMoreSheet, closeMoreSheet, speaker, reprime, refreshWho, HOME_ID, PLACES };
     console.log('✅ LobbyPlaces（地點清單）模組就緒');
 })();

@@ -210,7 +210,7 @@
   box-shadow:0 2px 8px rgba(20,22,40,.14);
   display:flex; align-items:center; justify-content:center; font-size:13px; }
 .lb-pv-x:hover { background:#fff; }
-.lb-pv-pane:has(> .lb-pv-body > .wg-win, > .lb-pv-body > #os-pt-shop-dock, > .lb-pv-body > #store-panel-overlay, > .lb-pv-body > .oc-win) .lb-pv-x { display:none; }
+.lb-pv-pane:has(> .lb-pv-body > .wg-win, > .lb-pv-body > #os-pt-shop-dock, > .lb-pv-body > #store-panel-overlay, > .lb-pv-body > .oc-win, > .lb-pv-body > .snb-win) .lb-pv-x { display:none; }
 
 /* 立繪：貼左下、不吃點擊。
    🚨 寬度直接從「窗格左緣」算出來，不要另外給一個百分比——
@@ -248,7 +248,8 @@
 .lb-pv-body > .wg-win,
 .lb-pv-body > #os-pt-shop-dock,
 .lb-pv-body > #store-panel-overlay,
-.lb-pv-body > .oc-win {
+.lb-pv-body > .oc-win,
+.lb-pv-body > .snb-win {
   position:absolute !important; left:0 !important; right:0 !important; top:0 !important; bottom:0 !important;
   width:auto !important; height:auto !important; margin:0 !important; transform:none !important;
   max-width:none !important; max-height:none !important; min-height:0 !important;
@@ -1031,6 +1032,7 @@
           泡泡沒有因此消失——它的 z-index 3400 比面板的 3350 高，NPC 真的說話時會浮在面板上，
           說完就收；輸入列也照樣留在最下面可以打字。52px＝頂部那排鈕（top:10 高 34）再讓 8px。 */
     .lobby-left.void-dock-open .oc-win,
+    .lobby-left.void-dock-open .snb-win,
     .lobby-left.void-dock-open .wg-win,
     .lobby-left.void-dock-open .lstage-tarotwin,
     .lobby-left.void-dock-open .lstage-wswin,
@@ -1128,6 +1130,7 @@
     /* 對話收起時（點了 ▾ 或還沒開聊）：面板自己長高吃滿螢幕，專心操作；
        💬 浮鈕要浮在面板之上才點得到（面板 z-index 3350） */
     .lobby-left.void-dock-open.lstage-dlg-hidden .oc-win,
+    .lobby-left.void-dock-open.lstage-dlg-hidden .snb-win,
     .lobby-left.void-dock-open.lstage-dlg-hidden .wg-win,
     .lobby-left.void-dock-open.lstage-dlg-hidden .lstage-tarotwin,
     .lobby-left.void-dock-open.lstage-dlg-hidden .lstage-wswin,
@@ -1382,7 +1385,7 @@
 /* 搬進來的四個浮窗自己會捲，外層不必捲。世界門「底下疊的圖紙」那兩層裝飾會往右下多伸十幾 px，
    外層是 overflow:auto 就會長出兩條捲軸（面板底下那條灰條就是它）。
    只限這四個：塔羅、工坊、我的家是畫進容器的，可能要靠外層捲。 */
-.lb-pv-body:has(> .wg-win, > #os-pt-shop-dock, > #store-panel-overlay, > .oc-win) { overflow:hidden; }
+.lb-pv-body:has(> .wg-win, > #os-pt-shop-dock, > #store-panel-overlay, > .oc-win, > .snb-win) { overflow:hidden; }
 .lb-pv.is-focus .lb-pv-portrait { display:none; }
 @media (min-width:761px) {
     /* 面板左右都貼 --lb-edge 那條留白，整個撐滿 */
