@@ -333,13 +333,13 @@
         const U = user || '她';
         const songs = plan.songs.filter(s => s.lyrics);
         const sys = '你在幫' + U + '的白板剪素材：她丟來一支影片，下面是它的字幕。是歌的話字幕就是歌詞，' + U + '要的就是歌詞——從歌詞剪「之後可能長成故事」的素材卡。\n\n' + RULES +
-            '\n卡片不用整段抄歌詞：寫這首歌在講什麼故事、有什麼畫面、什麼情緒，最多帶一兩句最抓人的詞。不是歌的話，寫它在講什麼。\n' + REAL_CASE +
+            '\n卡片不用整段抄歌詞：寫這首歌在講什麼故事、有什麼畫面、什麼情緒，最多帶一兩句最抓人的詞。不是歌的話，寫它在講什麼。\n' + REAL_CASE + '\n' + PLAIN +
             (plan.auto ? '\n字幕是 YouTube 自動聽出來的，會有聽錯的字，照上下文讀。' : '');
         const L = ['影片：' + (plan.title || '（沒標題）') + (plan.channel ? '（' + plan.channel + '）' : ''),
             note ? U + '丟的時候說：「' + note + '」' : U + '丟的時候沒有多說什麼。'];
         songs.forEach(s => L.push('── ' + (s.title || '字幕') + '（' + _mmss(s.start) + ' 起）', s.lyrics));
         L.push(songs.length > 1 ? '挑最有故事的 1～' + CAPS.CLIP_MAX + ' 首（她那句有提到喜歡哪首、哪種的，照她說的挑），一首剪一張；source 寫歌名。' : '剪一張；source 寫' + (songs[0].title ? '歌名' : '影片標題') + '。',
-            '格式（每張一行，只交這幾行）：', '<material source="歌名" why="哪裡有意思">這首在講什麼故事、什麼畫面、什麼情緒（一句話，連引的詞在內 ' + LEN.MAT + ' 字以內，可以帶一句最抓人的詞）</material>');
+            '格式（每張一行，只交這幾行）：', '<material source="歌名" why="哪裡有意思">用白話講這首在講什麼故事、什麼情緒（一句話，連引的詞在內 ' + LEN.MAT + ' 字以內，可以帶一句最抓人的詞）</material>');
         return [{ role: 'system', content: sys }, { role: 'user', content: L.join('\n') }];
     }
     // 看過影片：一句話用它看到的、哪裡有趣用她那句（她的口味最準）；沒看：她那句就是素材
@@ -357,15 +357,15 @@
     function watchMessages(link, note, user, clip) {
         const U = user || '她';
         const sys = '你在幫' + U + '的白板剪素材：看她丟來的一支影片，剪成一張「之後可能長成故事」的素材卡。\n\n' + RULES +
-            '\n是歌的話，' + U + '要的是歌詞：重點聽歌詞在講什麼（故事、畫面、情緒），不是 MV 畫面；不用整段抄歌詞，最多帶一兩句最抓人的詞。不是歌的話，寫發生了什麼、畫面跟感覺。\n' + REAL_CASE;
+            '\n是歌的話，' + U + '要的是歌詞：重點聽歌詞在講什麼（故事、畫面、情緒），不是 MV 畫面；不用整段抄歌詞，最多帶一兩句最抓人的詞。不是歌的話，寫發生了什麼、畫面跟感覺。\n' + REAL_CASE + '\n' + PLAIN;
         const video = { url: link };
         if (clip) { video.start = Math.floor(clip.start); video.end = Math.ceil(clip.end); }
         const txt = [
             note ? U + '丟這支影片的時候說：「' + note + '」' : U + '丟了這支影片，沒有多說什麼。',
             clip ? '只看 ' + _mmss(video.start) + '～' + _mmss(video.end) + ' 這一段' + (clip.title ? '（〈' + clip.title + '〉）' : '') + '。' : '',
-            '看完剪一張素材卡：一句話講它是什麼；why 寫哪裡有意思、可能長成什麼；source 寫' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '。',
+            '看完剪一張素材卡：用白話講它是什麼；why 寫哪裡有意思、可能長成什麼；source 寫' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '。',
             '格式（只交這一行）：',
-            '<material source="' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '" why="哪裡有意思">一句話（' + LEN.MAT + ' 字以內）</material>',
+            '<material source="' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '" why="哪裡有意思">用白話講它是什麼（' + LEN.MAT + ' 字以內）</material>',
         ].filter(Boolean).join('\n');
         return [{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'video_url', video_url: video }, { type: 'text', text: txt }] }];
     }
@@ -428,6 +428,9 @@
         '白板上的東西只留在家裡，不准貼到任何外面的社群。',
     ].join('\n');
     // 她丟的影片是真案（10-10 她丟了一支法庭實錄）：照 10-09 講好的「拿辦案結構，不拿人名和案情」剪，卡才在界線內、湊點子時不會被跳過
+    // 寫白話（10-10 她看克語剪的「兩代人各自在外面撞一扇不認得自己的門…」：「是不是有點過於文言文XD 到底什麼是門」「改吧，白話一點」）
+    //   只寫「一句話」的話，模型要一句裝下一整個故事，就壓成比喻、越壓越像謎語；格式那格也改成寫明要什麼
+    const PLAIN = '寫白話：直接講是誰、發生了什麼、為什麼，不要用比喻、象徵，也不要寫成謎語。';
     const REAL_CASE = '是真實發生的案件的話：卡片不寫真名、不重講那件真事，只留它是怎麼被拆穿的（哪句話露了餡、哪個證據翻了盤），寫成以後故事裡借得走的辦案手法。';
     const SAY_FMT = '<say>站在白板旁冒出來的一句，' + LEN.SAY + ' 個字以內（可以不寫）</say>';
     function _list(arr, f, none) { return arr.length ? arr.map(f).join('\n') : none; }
@@ -440,25 +443,25 @@
         const U = user || '她';
         const sys = (who.sys ? who.sys + '\n\n' : '你是' + who.name + '。\n') +
             '今天你在 SN 公司 32 樓的研討室值白板的班。白板是' + U + '的：大家在上面剪素材、湊點子、寫世界觀的稿；' + U + '看過說好，稿裡的東西才會寫進她的世界書。\n' +
-            '這一班只做下面交代的那一件事，照格式交回來就下班，格式以外的話不用寫。\n\n' + RULES;
+            '這一班只做下面交代的那一件事，照格式交回來就下班，格式以外的話不用寫。\n\n' + RULES + '\n' + PLAIN;
         const dropped = _list(b.dropped.slice(0, 10), x => '・' + x.title, '（沒有）');
         const L = [];
         if (job.kind === 'clip') {
             L.push('【這班：剪素材】',
                 '從你自己最近的經歷、讀到看到的東西裡，剪 1～' + CAPS.CLIP_MAX + ' 張「之後可能長成故事」的素材。',
-                '每張：一句話講那件事；why 寫哪裡有趣；source 寫出處（在哪裡看到、聽誰說的、你自己的哪段經歷）。',
+                '每張：用白話講那件事（誰、在哪裡、做了什麼）；why 寫哪裡有趣；source 寫出處（在哪裡看到、聽誰說的、你自己的哪段經歷）。',
                 '白板上已經有這些素材，別重複：', _list(b.materials.slice(-10), m => '・' + m.text, '（還沒有）'),
                 U + '放棄過這些，別提類似的：', dropped,
-                '格式（每張一個）：', '<material source="出處" why="哪裡有趣">一句話</material>', SAY_FMT);
+                '格式（每張一個）：', '<material source="出處" why="哪裡有趣">用白話講發生了什麼（誰、在哪裡、做了什麼）</material>', SAY_FMT);
         } else if (job.kind === 'combine') {
             const mats = (job.matIds || []).map(id => b.materials.find(m => m.id === id)).filter(Boolean);
             L.push('【這班：湊點子】',
                 '下面是還沒用過的素材（標「' + U + '丟的」是她自己丟的，優先用）：',
                 mats.map((m, i) => (i + 1) + '. ' + m.text + '（' + [m.by === 'rae' ? U + '丟的' : '', m.why, m.source, m.link].filter(Boolean).join('｜') + '）').join('\n'),
-                '挑 2～3 張湊成一個點子：一兩句話，能長成一段世界觀或一條劇情線。湊之前再看一次素材界線，碰到界線外的那張就不要用。',
+                '挑 2～3 張湊成一個點子：用白話寫一兩句，講清楚是誰、想做什麼、會發生什麼，能長成一段世界觀或一條劇情線。湊之前再看一次素材界線，碰到界線外的那張就不要用。',
                 '現有的野生點子，別重複：', _list(b.ideas, i => '・' + i.text, '（還沒有）'),
                 U + '放棄過這些，別提類似的：', dropped,
-                '格式：', '<idea from="用到的素材編號，逗號隔開" keys="跟這個點子有關的兩三個詞，逗號隔開">一兩句話</idea>', SAY_FMT);
+                '格式：', '<idea from="用到的素材編號，逗號隔開" keys="跟這個點子有關的兩三個詞，逗號隔開">用白話講這個點子（一兩句）</idea>', SAY_FMT);
         } else if (job.kind === 'write') {
             const i = b.ideas.find(x => x.id === job.ideaId) || { text: '', from: [] };
             L.push('【這班：寫稿】', U + '孵化了這個點子：' + i.text);
