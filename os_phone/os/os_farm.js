@@ -135,11 +135,14 @@
         if (!n) return '';
         return (n === 1 ? '過了一天（每天清晨 4 點結算）' : '你不在的時候過了 ' + n + ' 天') + '，右上「結算單」看最新那張';
     }
+    function restText(n) { return '中午休息過了，體力回了 ' + n + ' 點'; }
     function start(root, raw, note) {
         var L = libs();
         var state = loadState(L, raw);
         // 這次用哪一份已經決定好了（雲端那份也對過了）才補天數：另一台先補過的，拿到的那份就不會再補一次
         var caught = L.ship.catchUp(state, L, Date.now()).days;
+        // 過了中午、今天還沒休息過：體力回 25（跟住戶一樣；規則在 farm_ship_core.noonCheck）
+        var rested = L.ship.noonCheck(state, L, Date.now());
         var scene = null, sceneName = '', toastTimer = 0, watch = 0;
         var pullNote = '';   // 換成伺服器那份重開時要說的話（雇的人做完了、剛雇人扣了錢）
         var Cloud = window.FarmCloud;
@@ -229,6 +232,9 @@
             if (!root.isConnected || root.offsetParent === null) { end(); return; }
             root.classList.toggle('is-night', isNight());
             if (state.ship && Date.now() >= state.ship.settledTo) rollover();
+            // 開著跨過中午 12 點：休息一次
+            var got = L.ship.noonCheck(state, L, Date.now());
+            if (got) { save(); if (scene && scene.render) scene.render(); toast(restText(got)); }
         }, 800);
         session = { end: end, ctx: ctx, state: function () { return state; }, scene: function () { return scene; } };
         // 玩到一半另一台裝置存過了：這台手上這份不能再蓋上去，換成最新的重開
@@ -239,8 +245,8 @@
             if (c) launch(c, { raw: remote, note: pullNote || '另一台裝置剛存過這塊田，換成最新的了' });
         });
         go(state.walk && state.walk.scene === 'ranch' ? 'ranch' : 'yard');
-        if (caught) save();
-        var say = [note, caughtText(caught)].filter(Boolean).join('；');
+        if (caught || rested) save();
+        var say = [note, caughtText(caught), rested ? restText(rested) : ''].filter(Boolean).join('；');
         if (say) toast(say);
         claimSteals();
         return session;

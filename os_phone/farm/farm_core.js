@@ -76,6 +76,7 @@
             plots: Array.from({ length: PLOT_COUNT }, emptyPlot),
             inventory: { seeds: seeds, harvest: harvest, fertilizer: 0, scroll: 0 },
             stats: { totalHarvested: 0, deadCrops: 0 },
+            noonDone: 0,      // 她這塊地中午休息過的是哪一天（那天的 ship.settledTo；farm_ship_core.noonCheck 用）
             ledger: [],
             logs: ['後院剛整理好。六塊土地都在等第一顆種子。']
         };
@@ -236,6 +237,7 @@
             state.inventory.scroll = Math.max(0, Math.floor(Number(raw.inventory.scroll) || 0));
         }
         state.stamina = raw.stamina == null ? STAMINA_MAX : Math.max(0, Math.min(STAMINA_MAX, Math.floor(Number(raw.stamina) || 0)));
+        state.noonDone = Number(raw.noonDone) > 0 ? Number(raw.noonDone) : 0;
         state.stats.totalHarvested = raw.stats && Number.isFinite(Number(raw.stats.totalHarvested))
             ? Math.max(0, Math.floor(Number(raw.stats.totalHarvested)))
             : Math.max(0, Math.floor(Number(raw.harvested) || 0));
