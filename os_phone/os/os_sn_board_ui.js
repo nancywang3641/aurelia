@@ -35,6 +35,7 @@
                 '點開一份稿：左邊是方向，右邊封起來的是真正會寫進世界書的內容。「我要當玩家」不按偷看就看不到；「我要當作者」整份攤開。\n' +
                 '「好，收進世界」會先給妳看單子，同意了才寫進【奧瑞亞-白板】這本世界書。\n' +
                 '「回爐」寫一句為什麼，他們會照著重寫；放棄的點子，他們之後不會再提類似的。\n' +
+                '「丟素材」寫一句妳的感覺，可以再貼一個連結。貼的是 YouTube 影片、而且設置「哪件事走哪個模型」的「白板看影片」指到妳的一條通道（例如 Gemini 原生），會先看一遍影片再寫成素材卡，一支影片叫一次；沒指到就只放妳那句跟連結。\n' +
                 '等妳看最多 3 份，滿了就先不孵新的；兩週沒打開白板，白板會睡著、不排班，按「叫醒」再繼續。' },
             sn_board_staff: { title: '值班', body:
                 '挑一位或兩位值班的人。小機用他自己的門卡（會花錢）；宿舍住戶要宿舍的連線開著才叫得到（用會員額度）。\n' +
@@ -195,6 +196,7 @@
         return '<div class="snb-page">' + _pageHead('素材 ' + b.materials.length + '／' + S.CAPS.MATS, '<button class="snb-pill" data-snb="add-mat"><i class="fa-solid fa-plus"></i>丟素材</button>') +
             (b.materials.length ? '<div class="snb-list">' + b.materials.map(m =>
                 '<div class="snb-row-item"><div class="snb-row-main"><span>' + esc(m.text) + '</span><small>' + esc([m.by === 'rae' ? '' : m.byName, m.why, m.source].filter(Boolean).join('・')) + '</small></div>' +
+                (m.link ? '<a class="snb-link" href="' + esc(m.link) + '" target="_blank" rel="noopener noreferrer" title="打開連結"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>' : '') +
                 (m.by === 'rae' ? '<button class="snb-mini-x" data-snb="drop-mat" data-id="' + esc(m.id) + '" title="拿掉"><i class="fa-solid fa-xmark"></i></button>' : '') + '</div>').join('') + '</div>'
                 : '<div class="snb-mini"><i class="fa-solid fa-layer-group"></i><p>還沒有素材</p><small>值班的人上班時會剪；妳也可以丟一句話</small></div>') +
             '<p class="snb-foot">攢到 10 張，值班的人會挑 2～3 張湊成點子；妳丟的先用。</p></div>';
@@ -253,6 +255,37 @@
             ((w.props || []).length
                 ? '<div class="snb-acts"><button class="snb-drop" data-snb="undo-world" data-id="' + esc(w.id) + '"><i class="fa-solid fa-rotate-left"></i>改回去</button></div><p class="snb-foot">改回去會把這幾條從那本世界書拿掉，稿回到「等妳看」。</p>'
                 : '') + '</div>';
+    }
+
+    // ── 丟素材：一句話＋連結（YouTube 的會先看一遍，要等一下）──
+    function _dropSheet() {
+        if (!_win || _win.querySelector('.snb-sheet-wrap')) return;
+        const a = A();
+        const sheet = win.document.createElement('div');
+        sheet.className = 'snb-sheet-wrap';
+        sheet.innerHTML = '<div class="snb-sheet"><h3>丟素材</h3>' +
+            '<label class="snb-field"><span>一句話</span><input class="snb-in" data-f="note" maxlength="80"></label>' +
+            '<label class="snb-field"><span>連結</span><input class="snb-in" data-f="link" maxlength="300" inputmode="url"></label>' +
+            '<div class="snb-drop-status"></div>' +
+            '<div class="snb-acts"><button class="snb-go" data-snb="drop-ok"><i class="fa-solid fa-thumbtack"></i>丟上去</button><button class="snb-drop" data-snb="drop-no">先不要</button></div></div>';
+        _win.appendChild(sheet);
+        const note = sheet.querySelector('[data-f="note"]'), link = sheet.querySelector('[data-f="link"]'), st = sheet.querySelector('.snb-drop-status');
+        try { note.focus({ preventScroll: true }); } catch (e) {}
+        const lock = on => sheet.querySelectorAll('input,button').forEach(x => { x.disabled = on; });
+        sheet.addEventListener('click', async ev => {
+            const t = ev.target.closest('[data-snb]');
+            if (!t) return;
+            if (t.dataset.snb === 'drop-no') { sheet.remove(); return; }
+            if (t.dataset.snb !== 'drop-ok') return;
+            const watching = !!S._pure.youTubeUrl(link.value) && S.canWatch();
+            lock(true);
+            st.innerHTML = watching ? '<i class="fa-solid fa-spinner fa-spin"></i> 正在看影片…' : '';
+            const r = await S.act.dropMaterial({ note: note.value, link: link.value });
+            if (!r || !r.ok) { st.textContent = (r && r.why) || '沒丟上去'; lock(false); return; }
+            sheet.remove();
+            if (a) a.toast(r.watched ? '看完了，素材放上白板' : (r.why || '素材放上白板了'), { type: (r.why && !r.watched) ? 'warn' : 'success' });
+            _render();
+        });
     }
 
     // ── 收進世界的單子 ──
@@ -355,11 +388,7 @@
             if (a) a.toast('改回去了', { type: 'success' });
             _view = null; return _render();
         }
-        if (k === 'add-mat') {
-            const text = a ? await a.prompt('丟一句話當素材（在哪裡看到、哪裡有趣都可以寫）', '') : '';
-            if (text) said(await S.act.addMaterial(text));
-            return _render();
-        }
+        if (k === 'add-mat') return _dropSheet();
         if (k === 'drop-mat') { said(await S.act.drop('material', id)); return _render(); }
         if (k === 'hatch') { said(await S.act.hatch(id)); return _render(); }
         if (k === 'drop-idea') {

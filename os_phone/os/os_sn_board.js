@@ -198,12 +198,50 @@
     }
 
     // 她的動作（純）：改好的白板在 .board，畫面那邊包進 _lockData 寫回去
-    function addMaterial(b, text, now) {
-        const t = _cut(text, LEN.MAT);
+    // m＝一句話，或 materialFrom 合好的 { text, why, source, link }
+    function addMaterial(b, m, now) {
+        const o = (m && typeof m === 'object') ? m : { text: m };
+        const t = _cut(o.text, LEN.MAT);
         if (!t) return { ok: false, why: '先打一句話' };
         if (b.materials.length >= CAPS.MATS) return { ok: false, why: '素材滿 ' + CAPS.MATS + ' 張了，等他們湊成點子再丟' };
-        b.materials.push({ id: _mkId('m'), text: t, why: '', source: '妳丟的', by: 'rae', byName: '妳', at: now });
+        b.materials.push({ id: _mkId('m'), text: t, why: _cut(o.why || '', LEN.MAT), source: o.source || '妳丟的', by: 'rae', byName: '妳', at: now, link: safeLink(o.link) });
         return { ok: true, board: b };
+    }
+
+    // ── 丟素材貼連結：YouTube 的先叫 Gemini 看一遍（畫面＋聲音）再剪成素材卡；其他連結當出處 ──
+    const LINK_MAX = 300;
+    function safeLink(s) {
+        const t = String(s == null ? '' : s).trim();
+        return (t && t.length <= LINK_MAX && /^https?:\/\/[^\s<>"']+$/i.test(t)) ? t : '';
+    }
+    // 公開的 YouTube 影片（一般、短網址、手機版、YouTube Music、Shorts）→ 正式網址；不是 YouTube 回空字串
+    function youTubeUrl(s) {
+        const t = safeLink(s);
+        const m = t.match(/^https?:\/\/(?:www\.|m\.|music\.)?(?:youtu\.be\/([\w-]+)|youtube\.com\/(?:watch\?(?:[^#]*&)?v=([\w-]+)|(?:shorts|live|embed)\/([\w-]+)))/i);
+        const id = m && (m[1] || m[2] || m[3]);
+        return id ? 'https://www.youtube.com/watch?v=' + id : '';
+    }
+    // 看過影片：一句話用它看到的、哪裡有趣用她那句（她的口味最準）；沒看：她那句就是素材
+    function materialFrom(o) {
+        o = o || {};
+        const note = _cut(o.note, LEN.MAT), link = safeLink(o.link), card = o.card;
+        // 出處留影片標題（值班的人才知道那是什麼）；它沒寫標題就寫看過影片
+        if (card && card.text) return { ok: true, text: _cut(card.text, LEN.MAT), why: note || _cut(card.why, LEN.WHY), source: card.source ? '妳丟的影片：' + _cut(card.source, LEN.SRC) : '妳丟的・看過影片', link };
+        if (!note) return { ok: false, why: '寫一句妳的感覺再丟' };
+        return { ok: true, text: note, why: '', source: '妳丟的', link };
+    }
+    // 送給 Gemini 的：影片在前、她那句和要交的格式在後（最後一段要是要它做的事）
+    function watchMessages(link, note, user) {
+        const U = user || '她';
+        const sys = '你在幫' + U + '的白板剪素材：看她丟來的一支影片，剪成一張「之後可能長成故事」的素材卡。\n\n' + RULES +
+            '\n歌詞、台詞不要整段抄，只寫發生了什麼、畫面跟感覺。';
+        const txt = [
+            note ? U + '丟這支影片的時候說：「' + note + '」' : U + '丟了這支影片，沒有多說什麼。',
+            '看完這支影片，剪一張素材卡：一句話講它是什麼（畫面、故事、氣氛）；why 寫哪裡有意思、可能長成什麼；source 寫影片標題或頻道。',
+            '格式（只交這一行）：',
+            '<material source="影片標題或頻道" why="哪裡有意思">一句話</material>',
+        ].join('\n');
+        return [{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'video_url', video_url: { url: link } }, { type: 'text', text: txt }] }];
     }
     function hatch(b, ideaId) {
         const i = b.ideas.find(x => x.id === ideaId && x.state === 'wild');
@@ -288,7 +326,7 @@
             const mats = (job.matIds || []).map(id => b.materials.find(m => m.id === id)).filter(Boolean);
             L.push('【這班：湊點子】',
                 '下面是還沒用過的素材（標「' + U + '丟的」是她自己丟的，優先用）：',
-                mats.map((m, i) => (i + 1) + '. ' + m.text + '（' + [m.by === 'rae' ? U + '丟的' : '', m.why, m.source].filter(Boolean).join('｜') + '）').join('\n'),
+                mats.map((m, i) => (i + 1) + '. ' + m.text + '（' + [m.by === 'rae' ? U + '丟的' : '', m.why, m.source, m.link].filter(Boolean).join('｜') + '）').join('\n'),
                 '挑 2～3 張湊成一個點子：一兩句話，能長成一段世界觀或一條劇情線。湊之前再看一次素材界線，碰到界線外的那張就不要用。',
                 '現有的野生點子，別重複：', _list(b.ideas, i => '・' + i.text, '（還沒有）'),
                 U + '放棄過這些，別提類似的：', dropped,
@@ -320,7 +358,8 @@
     // ── 資料（OS_DB 通用資料，不升版）──────────────────────────────
     const DEF_STAFF = { slots: [null, null], times: ['12:00', '20:00'], next: 0, on: false, lastAt: 0, running: 0, runningJob: '', runningWho: '', lastVisit: 0, unread: false, says: {}, fail: null };
     const RUN_STALE = 10 * 60000;   // 「上班中」超過這麼久當作沒在跑（分頁中途被關）。要比兩種逾時都長
-    const _cfg = { XIAOJI_TIMEOUT: 180000, DORM_TIMEOUT: 480000 };
+    const _cfg = { XIAOJI_TIMEOUT: 180000, DORM_TIMEOUT: 480000, VIDEO_TIMEOUT: 240000 };
+    const VIDEO_TASK = 'sn_board_video';   // 名冊 LLM_TASKS 那一列「白板看影片」
     const _listeners = new Set();
     function _emit() { _listeners.forEach(f => { try { f(); } catch (e) {} }); }
     function onChange(f) { _listeners.add(f); return () => _listeners.delete(f); }
@@ -376,6 +415,7 @@
     }
     const act = {
         addMaterial: text => _edit((b, now) => addMaterial(b, text, now)),
+        dropMaterial: o => dropMaterial(o),
         hatch: id => _edit(b => hatch(b, id)),
         redo: (id, reason) => _edit((b, now) => redo(b, id, reason, now)),
         drop: (kind, id) => _edit((b, now) => drop(b, kind, id, now)),
@@ -543,6 +583,42 @@
         const CT = _g('ClaudeTerminal');
         if (!CT || !CT.sendAs) return Promise.reject(new Error('宿舍還沒載入'));
         return _withTimeout(_cfg.DORM_TIMEOUT, signal => CT.sendAs(who.id, msgs, { signal }).then(r => (r && r.reply) || ''));
+    }
+    // 看影片只在「白板看影片」那列指到她的某一條通道時才看（主／副模型多半是看不了影片的中轉站，不猜）
+    function canWatch() {
+        const S = _g('OS_SETTINGS');
+        try { const c = (S && S.getConfigFor) ? S.getConfigFor(VIDEO_TASK) : null; return !!(c && c._channel && c.url && c.key); } catch (e) { return false; }
+    }
+    function _watch(link, note) {
+        const A = _g('OS_API'), S = _g('OS_SETTINGS'), X = _g('OS_XIAOJI');
+        if (!A || !A.chat || !S || !S.getConfigFor) return Promise.reject(new Error('沒有模型可以叫'));
+        const config = Object.assign({}, S.getConfigFor(VIDEO_TASK), { route: VIDEO_TASK });
+        config.maxTokens = Math.max(parseInt(config.maxTokens, 10) || 0, 8192);   // Gemini 會先想一下，想的也算在上限裡
+        const user = (X && X.USER) || '她';
+        return _withTimeout(_cfg.VIDEO_TIMEOUT, signal => new Promise((res, rej) => {
+            A.chat(watchMessages(link, note, user), config, null, t => res(t), e => rej(e),
+                { task: VIDEO_TASK, label: '白板看影片', keepCodeFences: true, signal });   // 🚨 第六格就是 options
+        }));
+    }
+    async function dropMaterial(o) {
+        o = o || {};
+        const note = _cut(o.note, LEN.MAT), raw = String(o.link || '').trim(), link = safeLink(raw);
+        if (raw && !link) return { ok: false, why: '這個連結看不懂（要 http 或 https 開頭）' };
+        const yt = youTubeUrl(link);
+        let card = null, why = '';
+        if (yt) {
+            if (!canWatch()) why = '這支影片沒看：設置「哪件事走哪個模型」的「白板看影片」還沒指到妳的通道';
+            else {
+                try {
+                    const p = parseReply(await _watch(yt, note), { kind: 'clip' });
+                    if (p.ok) card = p.materials[0]; else why = '這支影片沒看成：' + p.why;
+                } catch (e) { why = '這支影片沒看成：' + String((e && e.message) || e).slice(0, 80); }
+            }
+        }
+        const mf = materialFrom({ note, link: yt || link, card });
+        if (!mf.ok) return { ok: false, why: why ? why + '；寫一句妳的感覺再丟' : mf.why };
+        const r = await _edit((b, now) => addMaterial(b, mf, now));
+        return (r && r.ok) ? { ok: true, watched: !!card, why } : r;
     }
     function _notify(text, warn) {
         let hidden = false;
@@ -809,12 +885,13 @@
     const OS_SN_BOARD = {
         BOOK, KINDS, JOBS, CAPS, _cfg,
         getStaff, saveStaff, getBoard, waitingNow, shifts, act, visit, wake, candidates, setSlot, setOn, setTimes, resolve, faceOf, lookOf, onChange,
-        waitCount, canHatch, countText, isAsleep,
+        waitCount, canHatch, countText, isAsleep, canWatch,
         runShift, tick, start, worldRefs, isBusy: () => !!_busy,
         prepareWorld, commitWorld, undoWorld, attach, isAttached,
         _lockDataForTest: _lockData, _saveBoardForTest: saveBoard,
         _pure: { emptyBoard, normBoard, waitCount, canHatch, isAsleep, nextSlot, unstick, pickJob, parseReply, applyResult,
             addMaterial, hatch, redo, drop, countKinds, countText, markWorld, refTerms, pickRefs, buildMessages,
+            safeLink, youTubeUrl, materialFrom, watchMessages,
             BOOK, REF_BOOKS, CAPS, LEN, KINDS, JOBS, SLEEP_MS },
     };
     win.OS_SN_BOARD = OS_SN_BOARD;

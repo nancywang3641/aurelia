@@ -57,10 +57,15 @@
                     const m = u.match(/^data:([^;]+);base64,(.*)$/);
                     if (m) out.push({ inline_data: { mime_type: m[1], data: m[2] } });
                     else if (u) out.push({ text: '[圖片: ' + u + ']' });
+                } else if (p.type === 'video_url') {
+                    // 公開的 YouTube 連結：Gemini 自己去看（畫面＋聲音）。OpenAI 相容那條（OpenRouter）原樣送 video_url
+                    const u = String((p.video_url && p.video_url.url) || p.url || '');
+                    if (u) { out.push({ file_data: { file_uri: u } }); hasVideo = true; }
                 }
             }
             return out;
         };
+        let hasVideo = false;
         for (const m of (messages || [])) {
             if (!m) continue;
             const role = m.role === 'assistant' ? 'model' : (m.role === 'system' ? 'system' : 'user');
@@ -79,6 +84,8 @@
         if (o.maxTokens > 0) gc.maxOutputTokens = o.maxTokens;
         if (o.top_p !== undefined && isFinite(o.top_p)) gc.topP = o.top_p;
         if (o.thinking && o.budget > 0) gc.thinkingConfig = { thinkingBudget: o.budget };
+        // 影片一秒一秒算份量：用低畫質（每格少很多），長一點的討論會也吃得下、免費額度撐得久
+        if (hasVideo) gc.mediaResolution = 'MEDIA_RESOLUTION_LOW';
         if (Object.keys(gc).length) body.generationConfig = gc;
         return body;
     }

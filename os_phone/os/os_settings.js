@@ -234,6 +234,7 @@
         { group: '大廳與世界', id: 'theater_note', name: '小劇場記事 / 角色記憶整理',  def: 'sec'  },
         { group: '大廳與世界', id: 'lobby_chat',   name: '大廳角色對話與小遊戲',       def: 'sec'  },
         { group: '大廳與世界', id: 'cafe',         name: '書咖',                       def: 'sec'  },
+        { group: '大廳與世界', id: 'sn_board_video', name: '白板看影片',                 def: 'sec'  },   // SN 32 樓白板丟素材貼 YouTube 連結：Gemini 原生通道或 OpenRouter 看得了影片；主／副多半看不了，所以沒指到通道就不看
         { group: '大廳與世界', id: 'npc_decide',   name: 'NPC 決定下一步（決策模型沒設好時）', def: 'sec'  },
         { group: '大廳與世界', id: 'estate',       name: '房產（租客 / 房間）',        def: 'sec'  },
         { group: '大廳與世界', id: 'blueprint',    name: '造物工坊',                   def: 'sec'  },
