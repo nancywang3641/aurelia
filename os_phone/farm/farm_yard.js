@@ -3,7 +3,9 @@
 // ------------------------------------------------------------
 // 09-29 她要：像大廳那樣自己走，走到田邊才能種／澆／收，不是點田就自動做完。
 // 走路、鏡頭、頭上那個小窗在 farm_walk_ui.js；位置、走路體力、手上工具的規則在 farm_walk_core.js。
-// 這支只管後院有哪些東西（六塊田、池塘、工具棚、出貨箱、小圍欄）、各自能做什麼，還有上面那些資訊。
+// 這支只管後院有哪些東西（田、池塘、工具棚、出貨箱、小圍欄、蜂箱）、各自能做什麼，還有上面那些資訊。
+// 10-11 大件：田可以再開墾兩塊（下一塊沒開的畫成一圈繩子的草地，走過去按「開墾」）、右下角花叢邊可以放蜂箱；
+//   商店最底下「大件」那段也買得到（棚屋擴建也在那裡，牧場的棚屋旁邊也有）。
 // 澆水要先去工具棚拿水壺、壺空了去池塘裝（一壺三塊田）。
 // ctx（os_farm.js 給的）：{ root, state(), setState(st), libs, save(), act(a), toast(t), goScene(name, arg), visit(slot, name), exit(), resync(), owner, look(), asset(name) }
 // ============================================================
@@ -26,7 +28,8 @@
             '<a class="pen-gate" data-fw-key="gate:ranch" aria-label="進牧場" title="進牧場"></a>' +
             '<img class="farm-decor decor-pen" src="' + A('farm_obj_pen_v1.webp') + '" alt="">' +
             '<img class="farm-decor decor-bench" src="' + A('farm_obj_bench_v1.webp') + '" alt="">' +
-            '<div class="farm-plots" data-farm="plots" aria-label="六塊農田"></div>' +
+            '<div class="farm-plots" data-farm="plots" aria-label="農田"></div>' +
+            '<div class="yard-hive" data-farm="hive" data-fw-key="hive" hidden></div>' +
             '<div class="farm-shade"></div>' +
             '</section>' +
             '<header class="farm-title">' +
@@ -95,7 +98,12 @@
         function renderPlots() {
             // 亮哪一塊問走路那支（現在搆得到的是哪一個）；別照抄畫面上原本誰在亮——舊的亮光會一直被抄下去
             var fk = stage ? stage.focusKey() : null;
-            plotsRoot.innerHTML = S().plots.map(function (plot, index) {
+            var st = S(), next = st.plots.length;
+            // 下一塊還沒開墾的：排在田後面，第幾格就落在第幾塊田的位置（farm.css 照 nth-child 擺）
+            var wild = core.plotPrice(st) != null
+                ? '<button class="farm-plot wild' + (fk === 'plot:' + next ? ' fw-focus' : '') + '" type="button" data-fw-key="plot:' + next + '" aria-label="還沒開墾的草地">' +
+                    window.FarmPlotDraw.wildSvg().replace('class="fp-plot', 'class="plot-art fp-plot') + '</button>' : '';
+            plotsRoot.innerHTML = st.plots.map(function (plot, index) {
                 var classes = ['farm-plot'];
                 if (plot.wateredToday) classes.push('watered');
                 if (plot.stage === 'mature') classes.push('mature');
@@ -103,7 +111,22 @@
                 if (fk === 'plot:' + index) classes.push('fw-focus');
                 return '<button class="' + classes.join(' ') + '" type="button" data-plot="' + index + '" data-fw-key="plot:' + index + '" aria-label="' + esc(plotLabel(plot)) + '">' +
                     plotArt(plot) + '</button>';
-            }).join('');
+            }).join('') + wild;
+        }
+
+        // 蜂箱：買了才出現；幾隻蜜蜂繞著飛，裡面有蜂蜜就冒一顆泡泡寫幾罐
+        var hiveEl = $('hive'), hiveSig = '';
+        function renderHive() {
+            var h = S().ranch && S().ranch.hive;
+            var sig = h ? 'h' + h.jars : '';
+            if (sig === hiveSig) return;
+            hiveSig = sig;
+            hiveEl.hidden = !h;
+            if (!h) { hiveEl.innerHTML = ''; return; }
+            var bee = window.FarmAnimalDraw.beeSvg();
+            hiveEl.innerHTML = '<img class="hive-img" src="' + ctx.asset('farm_obj_beehive_v1.webp') + '" alt="">' +
+                '<span class="hive-bee hb1">' + bee + '</span><span class="hive-bee hb2">' + bee + '</span><span class="hive-bee hb3">' + bee + '</span>' +
+                (h.jars ? '<span class="hive-jar">' + window.FarmAnimalDraw.productSvg('honey') + '<b>' + h.jars + '</b></span>' : '');
         }
 
         // 選的種子用完了就自動換成還有的那種，不然走到田邊只看到「沒種子了」
@@ -137,13 +160,38 @@
             var hay = ranch && st.ranch ? '<article class="shop-card"><span class="shop-fa"><i class="fa-solid fa-wheat-awn"></i></span>' +
                 '<div><h3>乾草</h3><p>牧場裡 ' + st.ranch.hay + ' 捆<br>一捆餵一隻吃一天</p></div>' +
                 '<div class="shop-actions"><button type="button" data-buy-hay="1"' + (st.coins < ranch.HAY_PRICE ? ' disabled' : '') + '>買一捆 ' + ranch.HAY_PRICE + 'G</button></div></article>' : '';
-            $('shop-list').innerHTML = seeds + hay;
+            $('shop-list').innerHTML = seeds + hay + bigItems(st);
+        }
+        // 大件：買一次就一直在（開墾、蜂箱、擴建棚屋）；買過的寫「已經有了」
+        function bigItems(st) {
+            var A = ctx.asset, r = st.ranch, out = '';
+            var card = function (img, name, desc, btn, key, price, done) {
+                return '<article class="shop-card shop-big">' + img + '<div><h3>' + esc(name) + '</h3><p>' + desc + '</p></div>' +
+                    '<div class="shop-actions">' + (done
+                        ? '<button type="button" disabled>' + esc(done) + '</button>'
+                        : '<button type="button" data-big="' + key + '"' + (st.coins < price ? ' disabled' : '') + '>' + esc(btn) + ' ' + price + 'G</button>') + '</div></article>';
+            };
+            var pp = core.plotPrice(st);
+            out += card('<span class="shop-big-art">' + window.FarmPlotDraw.wildSvg() + '</span>', '開墾新田',
+                '現在 ' + st.plots.length + '/' + core.PLOT_MAX + ' 塊<br>' + (pp != null ? '下一塊在後院' + (st.plots.length === 6 ? '左邊' : '右邊') : '後院已經開滿了'),
+                '開墾第 ' + (st.plots.length + 1) + ' 塊', 'plot', pp, pp == null ? '開滿了' : '');
+            if (ranch && r) {
+                out += card('<img class="shop-big-art" src="' + A('farm_obj_beehive_v1.webp') + '" alt="">', '蜂箱',
+                    '放在後院右下角花叢邊<br>田裡有 ' + ranch.HIVE_FLOWERS + ' 塊以上在長就每天一罐蜂蜜，不然兩天一罐（一罐 ' + ranch.PRODUCTS.honey.price + 'G）',
+                    '買蜂箱', 'hive', ranch.HIVE_PRICE, r.hive ? '已經有了' : '');
+                var nb = ranch.barnNext(r);
+                out += card('<img class="shop-big-art" src="' + A('ranch_obj_barn_v' + Math.min(ranch.BARN_TOP, r.barn + 1) + '.webp') + '" alt="">', '擴建棚屋',
+                    nb ? '擴建後最多養：' + ranch.capsText(nb) + ' 隻<br>（現在 ' + ranch.capsText(ranch.BARN_LEVELS[r.barn]) + '）' : '已經擴建到最大了<br>最多養：' + ranch.capsText(ranch.BARN_LEVELS[r.barn]) + ' 隻',
+                    '擴建', 'barn', nb ? nb.price : 0, nb ? '' : '最大了');
+            }
+            return '<h4 class="shop-sec">大件（買一次就一直在）</h4>' + out;
         }
         $('shop-list').addEventListener('click', function (e) {
             var b = e.target.closest('button');
             if (!b || b.disabled) return;
             if (b.getAttribute('data-buy')) ctx.toast(act({ type: 'buy_seed', crop: b.getAttribute('data-buy'), quantity: 1 }).message);
             else if (b.getAttribute('data-buy-hay')) ctx.toast(ranch.buyHay(S(), 1).message);
+            else if (b.getAttribute('data-big')) ctx.toast(act({ type: ({ plot: 'buy_plot', hive: 'buy_hive', barn: 'upgrade_barn' })[b.getAttribute('data-big')] }).message);
             render();
         });
 
@@ -152,13 +200,14 @@
             var st = S();
             $('day').textContent = '第 ' + st.day + ' 日';
             $('coins').textContent = st.coins + ' G';
-            $('planted').textContent = st.plots.filter(function (plot) { return !core.isEmpty(plot); }).length + ' / 6';
+            $('planted').textContent = st.plots.filter(function (plot) { return !core.isEmpty(plot); }).length + ' / ' + st.plots.length;
             $('harvested').textContent = st.stats.totalHarvested;
             renderStamina();
             $('log').innerHTML = st.logs.slice(0, 3).map(function (line) {
                 return '<div class="farm-log-line">' + esc(line) + '</div>';
             }).join('');
             renderPlots();
+            renderHive();
             if (bag) bag.render();
             if (!$('shop').hidden) renderShop();
             if (shipUi) shipUi.render();
@@ -210,6 +259,35 @@
                     actions: function () { return plotActions(i); }
                 };
             });
+            var st0 = S(), next = st0.plots.length, price = core.plotPrice(st0);
+            if (price != null) {
+                var ws = SP['plot' + next];
+                list.push({
+                    key: 'plot:' + next, x: ws.x, y: ws.y, reach: ws.reach, el: plotsRoot.children[next],
+                    anchor: function () { var b = plotsRoot.children[next]; return b && b.querySelector('svg'); },
+                    title: function () { return '第 ' + (next + 1) + ' 塊田（還沒開墾）'; },
+                    info: function () { return '翻成田之後就能種東西'; },
+                    actions: function () {
+                        var short = S().coins < price;
+                        return [{ icon: 'fa-trowel', label: '開墾', sub: price + 'G', cls: 'fav', disabled: short, why: '金幣不夠（要 ' + price + 'G）。', run: function () { return act({ type: 'buy_plot' }); } }];
+                    }
+                });
+            }
+            if (st0.ranch && st0.ranch.hive) {
+                list.push({
+                    key: 'hive', x: SP.hive.x, y: SP.hive.y, reach: SP.hive.reach, el: hiveEl,
+                    anchor: function () { return hiveEl.querySelector('.hive-img'); },
+                    title: function () { return '蜂箱'; },
+                    info: function () {
+                        var r = S().ranch, f = ranch.flowersOf(S());
+                        return '裡面 ' + r.hive.jars + '/' + ranch.HIVE_MAX + ' 罐蜂蜜・田裡 ' + f + ' 塊在長（' + ranch.HIVE_FLOWERS + ' 塊以上每天一罐，不然兩天一罐）';
+                    },
+                    actions: function () {
+                        var jars = S().ranch.hive.jars;
+                        return [{ icon: 'fa-jar', label: '收蜂蜜', sub: jars ? jars + ' 罐・體力 ' + ranch.COST.honey : '還沒有', cls: 'fav', disabled: !jars, why: '蜂箱裡還沒有蜂蜜。', run: function () { return act({ type: 'honey' }); } }];
+                    }
+                });
+            }
             list.push({
                 key: 'pond', x: SP.pond.x, y: SP.pond.y, reach: SP.pond.reach, el: root.querySelector('.decor-pond'),
                 title: function () { return '池塘'; },

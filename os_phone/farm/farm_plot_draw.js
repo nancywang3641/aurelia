@@ -635,5 +635,48 @@
         return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + VIEWBOX + '" class="fp-plot" role="img" aria-label="農田">' + body + '</svg>';
     }
 
-    root.FarmPlotDraw = { svg: svg, ensureCss: ensureCss, CROPS: ['stardew'].concat(Object.keys(SP)), STATES: ['dry', 'wet', 'seeded', 'emerging', 'seedling', 'growing', 'mature', 'wilted'] };
+    // 還沒開墾的那塊（10-11 大件）：跟田同一個框（放同一格一樣大），草地上四根木樁圍一圈繩子、
+    //   裡面幾叢長高的野草，左前方插一塊小木牌（牌上畫一把鋤頭）。走過去按「開墾」才變成田。
+    function wildSvg() {
+        var stake = function (x, y, s) {
+            return '<g transform="translate(' + r1(x) + ',' + r1(y) + ') scale(' + s + ')">' +
+                '<ellipse cy="3" rx="9" ry="3" fill="rgba(40,50,25,.25)"/>' +
+                '<path d="M-5 2V-30L0 -35L5 -30V2Z" fill="#b8874f" stroke="#6e4a26" stroke-width="2"/>' +
+                '<path d="M-5 -30L0 -35L5 -30Z" fill="#d9b07a"/><path d="M-1.5 -26V-2" stroke="#d9b07a" stroke-width="2" opacity=".7"/></g>';
+        };
+        var tuft = function (x, y, s, flip) {
+            var bl = [[-9, 20], [-4, 26], [1, 30], [6, 25], [11, 19]].map(function (b, i) {
+                return '<path d="M0 0Q' + r1(b[0] * .4) + ' ' + r1(-b[1] * .6) + ' ' + b[0] + ' ' + (-b[1]) + '" stroke="' + (i % 2 ? '#4f8a2e' : '#6aa83a') + '" stroke-width="3.4" fill="none" stroke-linecap="round"/>';
+            }).join('');
+            return '<g transform="translate(' + r1(x) + ',' + r1(y) + ') scale(' + (flip ? -s : s) + ',' + s + ')">' + bl + '</g>';
+        };
+        var c = [[px(26, 22), 22], [px(374, 22), 22], [px(374, 212), 212], [px(26, 212), 212]];
+        // 繩子：木樁之間各垂一點（二次曲線），先描深色邊再蓋米色
+        var rope = '';
+        for (var i = 0; i < 4; i++) {
+            var p = c[i], q = c[(i + 1) % 4], top = -46;
+            var mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2 + top + (i % 2 ? 6 : 12);
+            rope += 'M' + p[0] + ' ' + (p[1] + top) + 'Q' + r1(mx) + ' ' + r1(my) + ' ' + q[0] + ' ' + (q[1] + top);
+        }
+        var body = '<path d="' + trap(10, 8, 380, 210, 24) + '" fill="rgba(58,98,32,.24)"/>' +
+            '<path d="' + trap(34, 30, 332, 166, 18) + '" fill="none" stroke="rgba(255,248,222,.7)" stroke-width="5" stroke-dasharray="16 12" stroke-linecap="round"/>' +
+            tuft(120, 92, 1.7) + tuft(262, 80, 1.5, 1) + tuft(318, 170, 1.8) + tuft(196, 168, 1.6, 1);
+        // 四根木樁：後面兩根先畫（小一點），前面兩根後畫；繩子夾在中間
+        body += stake(c[0][0], c[0][1], 1.6) + stake(c[1][0], c[1][1], 1.6) +
+            '<path d="' + rope + '" fill="none" stroke="#6e4a26" stroke-width="8" stroke-linecap="round"/>' +
+            '<path d="' + rope + '" fill="none" stroke="#f1e2bb" stroke-width="4.5" stroke-linecap="round"/>' +
+            stake(c[2][0], c[2][1], 1.9) + stake(c[3][0], c[3][1], 1.9);
+        // 小木牌（左前）：一根柱子＋一塊板子，板子上一把鋤頭
+        body += '<g transform="translate(96,206) scale(1.55)">' +
+            '<ellipse cy="4" rx="16" ry="4" fill="rgba(40,50,25,.28)"/>' +
+            '<rect x="-4" y="-62" width="8" height="66" rx="2" fill="#a77a45" stroke="#6e4a26" stroke-width="2"/>' +
+            '<rect x="-34" y="-96" width="68" height="40" rx="7" fill="#e3c08a" stroke="#6e4a26" stroke-width="2.4"/>' +
+            '<path d="M-28 -90H28" stroke="#f3dcb2" stroke-width="2.4" stroke-linecap="round"/>' +
+            '<g transform="translate(0,-76) rotate(-30)"><rect x="-2.2" y="-14" width="4.4" height="30" rx="2" fill="#8a5a2e"/>' +
+            '<path d="M-3 -14H11C12 -14 12 -12 11 -10L6 -6H-3Z" fill="#9fb4c2" stroke="#4d6270" stroke-width="1.6" stroke-linejoin="round"/></g>' +
+            '</g>';
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + VIEWBOX + '" class="fp-plot fp-wild" role="img" aria-label="還沒開墾的草地">' + body + '</svg>';
+    }
+
+    root.FarmPlotDraw = { svg: svg, wildSvg: wildSvg, ensureCss: ensureCss, CROPS: ['stardew'].concat(Object.keys(SP)), STATES: ['dry', 'wet', 'seeded', 'emerging', 'seedling', 'growing', 'mature', 'wilted'] };
 })(typeof window !== 'undefined' ? window : this);

@@ -56,7 +56,9 @@
             '<img class="farm-decor decor-bench" src="' + A('farm_obj_bench_v1.webp') + '" alt="">' +
             // 他的出貨箱（只是擺著，他顧田時會走過去；做客不能碰）
             '<span class="fs-bin fs-bin-yard fv-deco" data-farm="bin" aria-hidden="true"></span>' +
-            '<div class="farm-plots" data-farm="plots" aria-label="' + esc(who.name) + '的六塊田"></div>' +
+            '<div class="farm-plots" data-farm="plots" aria-label="' + esc(who.name) + '的田"></div>' +
+            // 他買了蜂箱就擺出來（10-11 大件；只看不能碰）
+            '<div class="yard-hive fv-deco" data-farm="hive" hidden></div>' +
             '<div class="farm-shade"></div>' +
             '</section>' +
             '<header class="farm-title fv-title">' +
@@ -144,6 +146,13 @@
                 if (fk === 'plot:' + i) cls.push('fw-focus');
                 return '<button class="' + cls.join(' ') + '" type="button" data-plot="' + i + '" data-fw-key="plot:' + i + '" aria-label="' + esc(plotLabel(plot)) + '">' + plotArt(plot) + '</button>';
             }).join('');
+            var hv = $('hive'), has = !!(guest && guest.ranch && guest.ranch.hive);
+            if (hv.hidden === has) {
+                hv.hidden = !has;
+                var bee = window.FarmAnimalDraw ? window.FarmAnimalDraw.beeSvg() : '';
+                hv.innerHTML = has ? '<img class="hive-img" src="' + ctx.asset('farm_obj_beehive_v1.webp') + '" alt="">' +
+                    '<span class="hive-bee hb1">' + bee + '</span><span class="hive-bee hb2">' + bee + '</span><span class="hive-bee hb3">' + bee + '</span>' : '';
+            }
         }
         function whereLine() {
             var away = host && !host.visible() ? '・他在牧場那邊' : '';
@@ -223,7 +232,8 @@
         // ── 他（主人）──────────────────────────────────
         function makeHost() {
             var world = $('stage');
-            var P = window.FarmWalkStage.planner('yard');
+            // 他家買了蜂箱擋路的地方不一樣：每次照他現在的存檔拿
+            var P = { plan: function (fx, fy, tx, ty) { return window.FarmWalkStage.planner('yard', guest).plan(fx, fy, tx, ty); } };
             var pos = document.createElement('div');
             pos.className = 'fw-pos fv-host-pos';
             pos.style.setProperty('--fw-h', HOST_H + '%');

@@ -8,6 +8,10 @@
 
     var VERSION = 2;
     var PLOT_COUNT = 6;
+    // 開墾（10-11 她要錢有地方花：「開搞大件項目」）：後院再塞得下兩塊（左邊長椅那裡、右邊小圍欄下面），
+    //   一塊一塊買、照順序。田有幾塊就看 plots 有幾格（存檔裡多出來的那兩格就是買過的）。
+    var PLOT_MAX = 8;
+    var PLOT_PRICES = [300, 450];
     var ACTIVE_STAGES = ['seeded', 'emerging', 'seedling', 'growing', 'mature'];
     var CROPS = {
         stardew:    { id: 'stardew',    name: '星露豆',   buyPrice: 12, sellPrice: 28, growDays: 4 },
@@ -157,6 +161,12 @@
     function validPlotIndex(state, index) {
         return Number.isInteger(index) && index >= 0 && index < state.plots.length;
     }
+    function noPlot(state, index) {
+        if (Number.isInteger(index) && index >= state.plots.length && index < PLOT_MAX) {
+            return result(false, 'plot_locked', '第 ' + (index + 1) + ' 塊田還沒開墾' + (index === state.plots.length ? '（開墾要 ' + plotPrice(state) + ' 金幣）' : '（要先開第 ' + (state.plots.length + 1) + ' 塊）') + '。');
+        }
+        return result(false, 'invalid_plot', '找不到這塊田。');
+    }
 
     function normalizeCountMap(source) {
         var out = emptyCounts();
@@ -215,7 +225,8 @@
         state.day = Math.max(1, Math.floor(Number(raw.day) || 1));
         state.coins = Number.isFinite(Number(raw.coins)) ? Math.max(0, Math.floor(Number(raw.coins))) : state.coins;
         state.nextWakeAt = typeof raw.nextWakeAt === 'string' ? raw.nextWakeAt : null;
-        state.plots = Array.from({ length: PLOT_COUNT }, function (_, index) {
+        var count = legacy ? PLOT_COUNT : Math.max(PLOT_COUNT, Math.min(PLOT_MAX, raw.plots.length));
+        state.plots = Array.from({ length: count }, function (_, index) {
             return legacy ? migrateLegacyPlot(raw.plots[index]) : normalizePlot(raw.plots[index]);
         });
         if (!legacy && raw.inventory) {
@@ -250,9 +261,26 @@
         return result(true, 'bought', '買到 ' + qty + ' 顆' + crop.name + '種子。', { cost: cost });
     }
 
+    // 下一塊要開墾的田多少錢（全開完了回 null）
+    function plotPrice(state) {
+        var n = state.plots.length;
+        return n < PLOT_MAX ? PLOT_PRICES[n - PLOT_COUNT] : null;
+    }
+    function buyPlot(state) {
+        var price = plotPrice(state);
+        if (price == null) return result(false, 'plots_full', '後院已經開滿 ' + PLOT_MAX + ' 塊田，沒地方再開了。');
+        if (state.coins < price) return result(false, 'insufficient_coins', '金幣不夠，還差 ' + (price - state.coins) + '。');
+        state.coins -= price;
+        state.plots.push(emptyPlot());
+        var no = state.plots.length;
+        addLedger(state, 'build', null, 1, -price, '開墾第 ' + no + ' 塊田');
+        addLog(state, '把後院一角的草地翻成田，開墾了第 ' + no + ' 塊田，花費 ' + price + ' 金幣。');
+        return result(true, 'bought_plot', '開墾好第 ' + no + ' 塊田了。', { cost: price, plot: no - 1 });
+    }
+
     function plant(state, index, cropId, prefix) {
         var crop = CROPS[cropId];
-        if (!validPlotIndex(state, index)) return result(false, 'invalid_plot', '找不到這塊田。');
+        if (!validPlotIndex(state, index)) return noPlot(state, index);
         if (!crop) return result(false, 'unknown_crop', '找不到這種作物。');
         if (!isEmpty(state.plots[index])) return result(false, 'plot_occupied', '這塊田已經有作物。');
         if (state.inventory.seeds[cropId] <= 0) return result(false, 'no_seed', crop.name + '種子用完了。');
@@ -281,7 +309,7 @@
     }
 
     function water(state, index, prefix) {
-        if (!validPlotIndex(state, index)) return result(false, 'invalid_plot', '找不到這塊田。');
+        if (!validPlotIndex(state, index)) return noPlot(state, index);
         var plot = state.plots[index];
         // 已經澆過的會在下面被擋掉、不扣體力；只有真的要澆才扣
         if (!plot.wateredToday) {
@@ -313,7 +341,7 @@
     }
 
     function harvest(state, index, prefix) {
-        if (!validPlotIndex(state, index)) return result(false, 'invalid_plot', '找不到這塊田。');
+        if (!validPlotIndex(state, index)) return noPlot(state, index);
         var plot = state.plots[index];
         if (!isMature(plot)) return result(false, 'not_mature', '作物還不能收成。');
         if (tired(state, COST.harvest)) return tiredResult(COST.harvest);
@@ -332,7 +360,7 @@
 
     // 施肥：牧場清出來的糞便變成肥料（state.inventory.fertilizer），施在一塊還沒收的田上，收成多一份
     function fertilize(state, index, prefix) {
-        if (!validPlotIndex(state, index)) return result(false, 'invalid_plot', '找不到這塊田。');
+        if (!validPlotIndex(state, index)) return noPlot(state, index);
         var plot = state.plots[index];
         if (isEmpty(plot)) return result(false, 'plot_empty', '先種東西再施肥。');
         if (plot.fertilized) return result(false, 'already_fertilized', '這塊田已經施過肥了。');
@@ -504,6 +532,10 @@
     return {
         VERSION: VERSION,
         PLOT_COUNT: PLOT_COUNT,
+        PLOT_MAX: PLOT_MAX,
+        PLOT_PRICES: PLOT_PRICES.slice(),
+        plotPrice: plotPrice,
+        buyPlot: buyPlot,
         ACTIVE_STAGES: ACTIVE_STAGES.slice(),
         CROPS: CROPS,
         CROP_IDS: CROP_IDS.slice(),

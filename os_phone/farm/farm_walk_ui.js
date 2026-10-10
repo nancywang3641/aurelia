@@ -41,9 +41,13 @@
     // 門口那塊不當路走（免得繞路經過門口就換區），除非目的地就在門裡。
     // 一區一個（格子只算一次）：她自己走、做客時看到的住戶走，都用這一份
     var GW = 101, PLANNERS = {};
-    function planner(scene) {
-        if (PLANNERS[scene]) return PLANNERS[scene];
-        var WC = window.FarmWalkCore, S = WC.SCENES[scene], ASPECT = WC.ASPECT;
+    // state：大件（蜂箱、棚屋側屋）買了沒會改擋路的地方，照擋路的樣子各記一份格子
+    function planner(scene, state) {
+        var WC = window.FarmWalkCore, sig = WC.blockSig(scene, state), KEY = scene + ':' + sig;
+        if (PLANNERS[KEY]) return PLANNERS[KEY];
+        var S = WC.SCENES[scene], ASPECT = WC.ASPECT;
+        // 只留擋路要看的那兩樣（存檔之後會變，格子不能跟著變）
+        var BS = { ranch: state && state.ranch ? { hive: state.ranch.hive, barn: state.ranch.barn } : null };
         var GRID = null;
         function inDoor(x, y) { var d = S.door; return !!d && x > d.x1 && x < d.x2 && y > d.y1 && y < d.y2; }
         function grid() {
@@ -52,8 +56,8 @@
             // 一格要連四周 0.7 都能站才算路：貼著箱子邊的格子不走，不然從格子走到格子時會擦過箱子的角被擋下來
             var M = .7;
             var ok = function (x, y) {
-                return WC.walkable(scene, x, y) && WC.walkable(scene, x - M, y) && WC.walkable(scene, x + M, y) &&
-                    WC.walkable(scene, x, y - M) && WC.walkable(scene, x, y + M);
+                return WC.walkable(scene, x, y, BS) && WC.walkable(scene, x - M, y, BS) && WC.walkable(scene, x + M, y, BS) &&
+                    WC.walkable(scene, x, y - M, BS) && WC.walkable(scene, x, y + M, BS);
             };
             for (var y = 0; y < GW; y++) for (var x = 0; x < GW; x++) {
                 GRID[y * GW + x] = ok(x, y) ? (inDoor(x, y) ? 2 : 1) : 0;
@@ -77,7 +81,7 @@
             var n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / .4);
             for (var i = 1; i <= n; i++) {
                 var x = a.x + (b.x - a.x) * i / n, y = a.y + (b.y - a.y) * i / n;
-                if (!WC.walkable(scene, x, y) || (!door && inDoor(x, y))) return false;
+                if (!WC.walkable(scene, x, y, BS) || (!door && inDoor(x, y))) return false;
             }
             return true;
         }
@@ -135,7 +139,7 @@
             var cells = [];
             for (var c = goal; c >= 0 && c !== start; c = came[c]) cells.push({ x: c % GW, y: Math.floor(c / GW) });
             cells.reverse();
-            if (WC.walkable(scene, tx, ty)) cells.push(to);
+            if (WC.walkable(scene, tx, ty, BS)) cells.push(to);
             // 拉直：能直直走到的就跳過中間那些格子
             var out = [], at = from, i = 0;
             while (i < cells.length) {
@@ -147,14 +151,16 @@
             }
             return out.length ? out : [to];
         }
-        return (PLANNERS[scene] = { plan: plan, inDoor: inDoor });
+        return (PLANNERS[KEY] = { plan: plan, inDoor: inDoor });
     }
 
     // opts：{ app, world, scene, state(), targets(), onChange(), onStamina(), onDoor(to), toast(text), look(): Promise<{src}|{sheet}>, zFixed }
     function create(opts) {
         var WC = window.FarmWalkCore;
         var S = WC.SCENES[opts.scene];
-        var P = planner(opts.scene);
+        // 買了大件擋路的地方會變：每次用都照現在的存檔拿
+        var P = { plan: function (fx, fy, tx, ty) { return planner(opts.scene, opts.state()).plan(fx, fy, tx, ty); },
+            inDoor: function (x, y) { return planner(opts.scene, opts.state()).inDoor(x, y); } };
         var app = opts.app, world = opts.world;
         var ASPECT = WC.ASPECT;
 
@@ -366,7 +372,7 @@
         }
         function inDoor(x, y) { return P.inDoor(x, y); }
         function tryMove(nx, ny) {
-            if (WC.walkable(opts.scene, nx, ny)) { p.x = nx; p.y = ny; return true; }
+            if (WC.walkable(opts.scene, nx, ny, opts.state())) { p.x = nx; p.y = ny; return true; }
             return false;
         }
         function arrive() {

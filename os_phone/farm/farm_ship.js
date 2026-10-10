@@ -47,6 +47,8 @@
             else if (r.wolf) out.push({ icon: 'fa-feather', text: '狗不在家，野狼來繞了一圈，沒找到雞' });
             if (r.dog && r.dog.left) out.push({ icon: 'fa-dog', text: '狗好幾天沒人理，離家出走了（今晚沒人守夜）', bad: true });
             if (r.dog && r.dog.back) out.push({ icon: 'fa-dog', text: '離家的狗自己回來了（好感 ' + r.dog.love + '/5）' });
+            if (r.hive && r.hive.made) out.push({ icon: 'fa-jar', text: '蜂箱多了一罐蜂蜜（裡面 ' + r.hive.jars + ' 罐，去後院右下角收）' });
+            if (r.hive && r.hive.full) out.push({ icon: 'fa-jar', text: '蜂箱裝滿了沒收，這一罐浪費掉了', bad: true });
         }
         return out;
     }

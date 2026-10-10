@@ -27,7 +27,7 @@
 .aurelia-farm .decor-pond {left: 7.1%; top: 18.2%; width: 16.9%;}
 .aurelia-farm .decor-shed {left: 73.8%; top: 0.7%; width: 17.6%;}
 .aurelia-farm .decor-pen {left: 78.2%; top: 29.3%; width: 15.6%;}
-.aurelia-farm .decor-bench {left: 1.5%; top: 47.7%; width: 8.2%;}
+.aurelia-farm .decor-bench {left: 2.4%; top: 70.5%; width: 8.2%;}   /* 10-11 原本的位置（1.5%, 47.7%）讓給第 7 塊田 */
 .aurelia-farm .pen-gate {position: absolute; left: 80%; top: 32%; width: 12%; height: 16%; z-index: 9; cursor: pointer; border-radius: 12px;}
 .aurelia-farm .yard-spot {position: absolute; z-index: 9; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 12px;}
 .aurelia-farm .spot-pond {left: 8%; top: 20%; width: 15%; height: 17%;}
@@ -139,6 +139,8 @@
 .aurelia-farm .ranch-stage {container-type: inline-size;}
 .aurelia-farm .ranch-obj {position: absolute; height: auto; pointer-events: none; filter: drop-shadow(0 7px 5px rgba(39,50,31,.18));}
 .aurelia-farm .obj-barn {left: 66%; top: 6%;  width: 20%; z-index: 38;}
+/* 擴建過的棚屋（阿洛照原本那間畫的 1536×1024）：原本那間落在同一個位置，側屋往左長、穀倉塔在右後方 */
+.aurelia-farm .obj-barn.lv2, .aurelia-farm .obj-barn.lv3 {left: 56.6%; top: 6.64%; width: 29.66%;}
 .aurelia-farm .obj-trough {left: 14%; top: 14%; width: 13%; z-index: 30;}
 .aurelia-farm .obj-water {left: 28%; top: 12%; width: 11%; z-index: 24;}
 .aurelia-farm .obj-hay {left: 8%;  top: 52%; width: 11%; z-index: 62;}
@@ -181,6 +183,7 @@
 .aurelia-farm .gate-hay {left: 9%; top: 57%; width: 9%; height: 10%;}
 .aurelia-farm .gate-water {left: 29%; top: 16%; width: 9%; height: 11%;}
 .aurelia-farm .gate-barn {left: 68%; top: 9%; width: 16%; height: 27%;}
+.aurelia-farm .gate-barn.is-big {left: 58%; width: 26%;}
 .aurelia-farm .gate-doghouse {left: 6%; top: 31%; width: 10%; height: 15%;}
 .aurelia-farm .water-fill {position: absolute; left: 28%; top: 12%; width: 11%; aspect-ratio: 1; z-index: 24; pointer-events: none;
     -webkit-mask-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/farm/ranch_obj_water_surface_v1.webp); mask-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/farm/ranch_obj_water_surface_v1.webp);
@@ -580,3 +583,37 @@
     background: rgba(255,252,241,.97); border-right: 2px solid #8b5a2b; border-bottom: 2px solid #8b5a2b; transform: rotate(45deg);}
 .aurelia-farm .fv-say[hidden] {display: none;}
 .aurelia-farm .fv-host.is-doing .fv-say {bottom: calc(100% + 2.6em);}
+
+/* ── 10-11 大件：開墾的兩塊田、蜂箱、商店的大件 ── */
+/* 第 7 塊在左邊（原本長椅那裡）、第 8 塊在右邊小圍欄下面；田的圖照格子寬縮放，這兩塊窄一點、作物也小一點 */
+.aurelia-farm .farm-plot:nth-child(7) {left: 6.5%; top: 52.3%; width: 15.5%; height: 16.0%;}
+.aurelia-farm .farm-plot:nth-child(8) {left: 76.2%; top: 53.8%; width: 15.5%; height: 16.0%;}
+.aurelia-farm .farm-plot.wild {opacity: .96;}
+/* 蜂箱：右下角花叢邊 */
+.aurelia-farm .yard-hive {position: absolute; left: 86.4%; top: 69.2%; width: 8.6%; z-index: 12; cursor: pointer; will-change: transform;}
+.aurelia-farm .yard-hive[hidden] {display: none;}
+.aurelia-farm .yard-hive.fv-deco {pointer-events: none; cursor: default;}
+.aurelia-farm .yard-hive .hive-img {display: block; width: 100%; height: auto; pointer-events: none; filter: drop-shadow(0 6px 5px rgba(39,50,31,.18));}
+.aurelia-farm .hive-bee {position: absolute; width: 24%; pointer-events: none; animation: hive-bee 5s linear infinite;}
+.aurelia-farm .hive-bee svg {display: block; width: 100%; height: auto;}
+.aurelia-farm .hive-bee.hb1 {left: 14%; top: 18%;}
+.aurelia-farm .hive-bee.hb2 {left: 58%; top: 4%; animation-duration: 6.4s; animation-delay: -2.1s;}
+.aurelia-farm .hive-bee.hb3 {left: 38%; top: 30%; animation-duration: 4.3s; animation-delay: -1.2s;}
+@keyframes hive-bee {
+    0%, 100% { transform: translate(0, 0); }
+    24% { transform: translate(-70%, -45%) scaleX(-1); }
+    50% { transform: translate(-25%, -120%) scaleX(-1); }
+    74% { transform: translate(60%, -55%); }
+}
+.aurelia-farm.is-night .hive-bee {display: none;}
+/* 蜂箱裡有蜂蜜：頭上一顆泡泡寫幾罐 */
+.aurelia-farm .hive-jar {position: absolute; left: 50%; top: 0; display: flex; align-items: center; gap: 2px; padding: 2px 7px 2px 3px; border-radius: 999px;
+    background: #fff; box-shadow: 0 3px 8px rgba(35,49,34,.25); pointer-events: none; animation: hive-jar 1.6s ease-in-out infinite;}
+.aurelia-farm .hive-jar svg {width: clamp(14px, 2.2cqw, 26px); height: auto;}
+.aurelia-farm .hive-jar b {color: #a8761a; font-size: clamp(8px, 1.1cqw, 12px);}
+@keyframes hive-jar { 0%,100% { transform: translate(-50%, -100%); } 50% { transform: translate(-50%, -115%); } }
+/* 商店最底下的大件 */
+.aurelia-farm .shop-sec {grid-column: 1 / -1; margin: 8px 2px 0; color: #76521f; font-size: 11px;}
+.aurelia-farm .shop-card .shop-big-art {display: grid; place-items: center; width: 48px; height: 48px; object-fit: contain;}
+.aurelia-farm .shop-card span.shop-big-art svg {width: 100%; height: auto;}
+.aurelia-farm .shop-big .shop-actions {grid-template-columns: 1fr;}

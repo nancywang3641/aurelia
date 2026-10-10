@@ -290,11 +290,11 @@
         list.push({ icon: 'fa-syringe', label: '買藥', sub: ranch.MEDICINE_PRICE + 'G · 有 ' + r.medicine, disabled: state.coins < ranch.MEDICINE_PRICE, why: '金幣不夠。',
             run: function () { return act({ type: 'buy_medicine', quantity: 1 }); } });
         ranch.ANIMAL_IDS.forEach(function (k) {
-            var info = ranch.ANIMALS[k];
+            var info = ranch.ANIMALS[k], cap = ranch.capOf(r, k);
             var have = r.animals.filter(function (x) { return x.kind === k; }).length;
             list.push({
-                icon: 'fa-plus', label: '買一隻' + info.name, sub: info.price + 'G · ' + have + '/' + info.max,
-                disabled: have >= info.max || state.coins < info.price, why: have >= info.max ? info.name + '已經滿了，棚屋住不下。' : '金幣不夠。',
+                icon: 'fa-plus', label: '買一隻' + info.name, sub: info.price + 'G · ' + have + '/' + cap,
+                disabled: have >= cap || state.coins < info.price, why: have >= cap ? info.name + '已經滿了，棚屋住不下' + (r.barn < ranch.BARN_TOP ? '（擴建棚屋就住得下）' : '') + '。' : '金幣不夠。',
                 run: function () {
                     var o = act({ type: 'buy_animal', kind: k });
                     if (o.ok) heart(spawn(k, o.animal.id, 0, BARN_DOOR));   // 從棚屋門口走出來
@@ -302,6 +302,10 @@
                 }
             });
         });
+        // 大件（10-11）：擴建棚屋（商店的大件那段也買得到）
+        var nb = ranch.barnNext(r);
+        if (nb) list.push({ icon: 'fa-hammer', label: '擴建棚屋', sub: nb.price + 'G · 雞 ' + nb.max.chicken + '／羊 ' + nb.max.sheep + '／牛 ' + nb.max.cow,
+            disabled: state.coins < nb.price, why: '金幣不夠（要 ' + nb.price + 'G）。', run: function () { return act({ type: 'upgrade_barn' }); } });
         return list;
     }
 
@@ -540,6 +544,15 @@
         var hayAmt = hayFed ? Math.round((.2 + .8 * hayFed / big) * 10) / 10 : 0;
         var hayEl = $('trough-hay');
         if (hayEl.dataset.amt !== String(hayAmt)) { hayEl.dataset.amt = String(hayAmt); hayEl.innerHTML = draw.troughHaySvg(hayAmt); }
+        // 棚屋：擴建過換成阿洛畫的那張（變了才換圖）；點的範圍跟著往左長
+        var bl = r.barn || 1, bImg = root.querySelector('.obj-barn');
+        if (bImg.dataset.lv !== String(bl)) {
+            bImg.dataset.lv = String(bl);
+            bImg.src = ctx.asset('ranch_obj_barn_v' + bl + '.webp');
+            bImg.classList.toggle('lv2', bl === 2);
+            bImg.classList.toggle('lv3', bl === 3);
+            root.querySelector('.gate-barn').classList.toggle('is-big', bl >= 2);
+        }
         // 狗屋：飯碗滿不滿（變了才重畫）
         var dh = $('doghouse'), dkey = r.dog.bowl ? 'full' : 'empty';
         if (dh.dataset.k !== dkey) { dh.dataset.k = dkey; dh.innerHTML = draw.doghouseSvg({ bowl: r.dog.bowl }); }

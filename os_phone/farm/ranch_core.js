@@ -43,8 +43,24 @@
     var PRODUCTS = {
         egg: { name: '雞蛋', unit: '顆', price: 10 },
         wool: { name: '羊毛', unit: '團', price: 40 },
-        milk: { name: '牛奶', unit: '瓶', price: 22 }
+        milk: { name: '牛奶', unit: '瓶', price: 22 },
+        honey: { name: '蜂蜜', unit: '罐', price: 35 }
     };
+    // ── 大件（10-11 她：「開搞大件項目」，錢屯著沒地方花）──
+    // 棚屋擴建：一級加一間側屋（雞窩）、二級再加穀倉塔，每種動物住得下更多隻（生小孩也照這個上限）。
+    //   圖是阿洛照原本那間畫的（ranch_obj_barn_v2／v3），原本那間的位置一格都沒動。
+    var BARN_LEVELS = {
+        1: { name: '棚屋', max: { chicken: 6, sheep: 4, cow: 2 } },
+        2: { name: '棚屋（加了側屋）', price: 600, max: { chicken: 9, sheep: 6, cow: 3 } },
+        3: { name: '棚屋（加了側屋和穀倉塔）', price: 1200, max: { chicken: 12, sheep: 8, cow: 4 } }
+    };
+    var BARN_TOP = 3;
+    // 蜂箱：放在後院右下角花叢邊。田裡有 HIVE_FLOWERS 塊以上在長東西（蜜蜂有花採）就每天一罐，不然兩天一罐；
+    //   沒收就在蜂箱裡放著，存到 HIVE_MAX 罐就不再多（浪費）。要走到蜂箱旁邊收，體力 COST.honey。
+    //   資料放 state.ranch.hive（產品跟雞蛋牛奶同一套：倉庫、出貨箱、結算單、背包都不用另外接）。
+    var HIVE_PRICE = 400;
+    var HIVE_MAX = 3;
+    var HIVE_FLOWERS = 3;
     var PRODUCT_IDS = Object.keys(PRODUCTS);
     var TOOLS = {
         bucket: { name: '桶子', use: '擠牛奶', price: 50 },
@@ -64,7 +80,7 @@
     var BREED_STREAK = 3;     // 連續幾天吃飽喝足才可能生
     var BREED_CHANCE = 0.3;
     var RUNAWAY_DAYS = 2;
-    var COST = { feed: 1, refill: 3, pull: 2, clean: 2, collect: 1, milk: 3, shear: 4, medicine: 1, bowl: 1 };
+    var COST = { feed: 1, refill: 3, pull: 2, clean: 2, collect: 1, milk: 3, shear: 4, medicine: 1, bowl: 1, honey: 1 };
     var DOG_LOVE_MAX = 5;
     var DOG_BACK_LOVE = 2;        // 離家一天自己回來時剩幾顆心
     var WOLF_CHANCE = 0.25;       // 狗在家：野狼來的機率（來了會被趕跑）
@@ -133,6 +149,8 @@
             weeds: [],
             products: emptyProducts(),
             dog: newDog(),
+            barn: 1,                   // 棚屋等級（1～BARN_TOP）
+            hive: null,                // 蜂箱：沒買是 null；買了 { jars（裡面幾罐還沒收）, days（離上一罐過了幾天） }
             wolf: null,                // 最近一次野狼來的那晚：{ day（結算後那天）, took（叼走誰，沒有就 null）, chased }
             stats: { produced: 0, runaway: 0, born: 0, eaten: 0 }
         };
@@ -182,6 +200,9 @@
             pet: !!dg.pet, bowl: !!dg.bowl, away: !!dg.away
         };
         r.wolf = raw.wolf && raw.wolf.day ? { day: int(raw.wolf.day), took: raw.wolf.took ? String(raw.wolf.took) : null, chased: !!raw.wolf.chased } : null;
+        r.barn = Math.max(1, Math.min(BARN_TOP, int(raw.barn, 1)));
+        r.hive = raw.hive && typeof raw.hive === 'object'
+            ? { jars: Math.max(0, Math.min(HIVE_MAX, int(raw.hive.jars))), days: Math.max(0, int(raw.hive.days)) } : null;
         return r;
     }
 
@@ -197,6 +218,11 @@
         return state.ranch.animals.find(function (a) { return a.id === id; }) || null;
     }
     function countKind(r, kind) { return r.animals.filter(function (a) { return a.kind === kind; }).length; }
+    // 這種動物現在最多養幾隻（看棚屋等級）
+    function capOf(r, kind) {
+        var lv = BARN_LEVELS[(r && r.barn) || 1] || BARN_LEVELS[1];
+        return lv.max[kind] || 0;
+    }
 
     // 餵一隻：food 是 'hay' 或 'fav'（牠最愛的作物）
     function feed(state, id, food) {
@@ -408,8 +434,8 @@
     function buyAnimal(state, kind) {
         var info = ANIMALS[kind];
         if (!info) return result(false, 'unknown_animal', '牧場沒賣這種動物。');
-        var r = state.ranch;
-        if (countKind(r, kind) >= info.max) return result(false, 'ranch_full', info.name + '已經 ' + info.max + ' 隻了，棚屋住不下。');
+        var r = state.ranch, cap = capOf(r, kind);
+        if (countKind(r, kind) >= cap) return result(false, 'ranch_full', info.name + '已經 ' + cap + ' 隻了，棚屋住不下' + (r.barn < BARN_TOP ? '（擴建棚屋就住得下更多）' : '') + '。');
         if (state.coins < info.price) return result(false, 'insufficient_coins', '金幣不夠，還差 ' + (info.price - state.coins) + '。');
         state.coins -= info.price;
         var a = newAnimal(r, kind);
@@ -417,6 +443,46 @@
         addLedger(state, 'buy', 1, -info.price, '買了一隻' + info.name);
         addLog(state, '牧場來了一隻新的' + info.name + '。');
         return result(true, 'bought_animal', '牧場來了一隻新的' + info.name + '。', { animal: a, cost: info.price });
+    }
+
+    // ── 大件：擴建棚屋、蜂箱 ──
+    function barnNext(r) { return r.barn < BARN_TOP ? BARN_LEVELS[r.barn + 1] : null; }
+    function capsText(lv) { return ANIMAL_IDS.map(function (k) { return ANIMALS[k].name + ' ' + lv.max[k]; }).join('、'); }
+    function upgradeBarn(state) {
+        var r = state.ranch, next = barnNext(r);
+        if (!next) return result(false, 'barn_top', '棚屋已經擴建到最大了。');
+        if (state.coins < next.price) return result(false, 'insufficient_coins', '金幣不夠，還差 ' + (next.price - state.coins) + '。');
+        state.coins -= next.price;
+        r.barn += 1;
+        addLedger(state, 'build', 1, -next.price, '擴建棚屋（' + (r.barn - 1) + ' 級）');
+        addLog(state, '棚屋擴建好了，' + (r.barn === 2 ? '旁邊多了一間側屋' : '後面多了一座穀倉塔') + '，花費 ' + next.price + ' 金幣。現在最多養：' + capsText(next) + ' 隻。');
+        return result(true, 'barn_up', '棚屋擴建好了！現在最多養：' + capsText(next) + ' 隻。', { cost: next.price, level: r.barn });
+    }
+    function buyHive(state) {
+        var r = state.ranch;
+        if (r.hive) return result(false, 'have_hive', '後院已經有蜂箱了。');
+        if (state.coins < HIVE_PRICE) return result(false, 'insufficient_coins', '金幣不夠，還差 ' + (HIVE_PRICE - state.coins) + '。');
+        state.coins -= HIVE_PRICE;
+        r.hive = { jars: 0, days: 0 };
+        addLedger(state, 'build', 1, -HIVE_PRICE, '買了蜂箱');
+        addLog(state, '在後院右下角的花叢邊放了蜂箱，蜜蜂住進去了，花費 ' + HIVE_PRICE + ' 金幣。');
+        return result(true, 'bought_hive', '蜂箱放好了！田裡有 ' + HIVE_FLOWERS + ' 塊以上在長東西就每天一罐蜂蜜，不然兩天一罐。', { cost: HIVE_PRICE });
+    }
+    function collectHoney(state) {
+        var r = state.ranch, h = r.hive;
+        if (!h) return result(false, 'no_hive', '還沒有蜂箱。');
+        if (!h.jars) return result(false, 'no_honey', '蜂箱裡還沒有蜂蜜。');
+        if (tired(state, COST.honey)) return tiredResult(COST.honey);
+        spend(state, COST.honey);
+        var n = h.jars;
+        h.jars = 0;
+        r.products.honey.normal += n;
+        addLog(state, '從蜂箱收了 ' + n + ' 罐蜂蜜。');
+        return result(true, 'collected_honey', '收了 ' + n + ' 罐蜂蜜。', { n: n });
+    }
+    // 田裡現在有幾塊在長東西（枯萎的不算）：蜜蜂採得到的花
+    function flowersOf(state) {
+        return (state.plots || []).filter(function (p) { return p && p.cropId && p.stage !== 'empty' && p.stage !== 'wilted'; }).length;
     }
 
     // ── 狗：摸摸、裝飯碗 ──
@@ -510,7 +576,7 @@
         ANIMAL_IDS.forEach(function (kind) {
             var info = ANIMALS[kind];
             var parents = r.animals.filter(function (a) { return a.kind === kind && !(a.baby > 0) && !a.sick && a.streak >= BREED_STREAK; });
-            if (parents.length < 2 || countKind(r, kind) >= info.max) return;
+            if (parents.length < 2 || countKind(r, kind) >= capOf(r, kind)) return;
             if (rand() >= BREED_CHANCE) return;
             parents[0].streak = 0;
             parents[1].streak = 0;
@@ -521,6 +587,20 @@
         });
         if (!thirsty) r.water -= 1;
         if (r.weeds.length < WEED_CAP && rand() < WEED_CHANCE) { r.weeds.push({ id: 'w' + (r.nextId++) }); newWeeds += 1; }
+
+        // 蜂箱：花多（田裡有 HIVE_FLOWERS 塊以上在長）每天一罐，不然兩天一罐；滿了就不再多
+        var hiveOut = null;
+        if (r.hive) {
+            var flowers = flowersOf(state), need = flowers >= HIVE_FLOWERS ? 1 : 2;
+            hiveOut = { made: 0, full: false, flowers: flowers };
+            r.hive.days += 1;
+            if (r.hive.days >= need) {
+                r.hive.days = 0;
+                if (r.hive.jars < HIVE_MAX) { r.hive.jars += 1; hiveOut.made = 1; }
+                else hiveOut.full = true;
+            }
+            hiveOut.jars = r.hive.jars;
+        }
 
         // 狗與野狼：先看昨晚狗在不在家，再算好感
         var dogOut = null, wolf = null;
@@ -556,6 +636,8 @@
 
         if (thirsty) addLog(state, '水槽昨天是乾的，動物們渴了一整天，什麼都沒產。');
         if (made.length) addLog(state, '牧場昨天產出：' + made.join('、') + '。');
+        if (hiveOut && hiveOut.made) addLog(state, '蜂箱多了一罐蜂蜜（裡面 ' + hiveOut.jars + '/' + HIVE_MAX + ' 罐）。');
+        if (hiveOut && hiveOut.full) addLog(state, '蜂箱裡的 ' + HIVE_MAX + ' 罐蜂蜜一直沒收，裝滿了，這一罐浪費掉了。');
         if (wasted.length) addLog(state, wasted.join('、') + '昨天的還沒收，這一份浪費掉了。');
         if (downgraded) addLog(state, '牧場太髒了，' + downgraded + ' 樣上等產出降成普通。');
         if (fellSick.length) addLog(state, '牧場太髒，' + fellSick.join('、') + '生病了。');
@@ -575,7 +657,7 @@
             made: made.length, hungry: hungry, thirsty: thirsty, dirty: dirty, downgraded: downgraded,
             ran: ran.map(function (a) { return a.id; }), ranNames: ranNames, newPoops: newPoops, newWeeds: newWeeds,
             fellSick: fellSick, healed: healed, grown: grown, born: born, wasted: wasted,
-            dog: dogOut, wolf: wolf
+            dog: dogOut, wolf: wolf, hive: hiveOut
         });
     }
 
@@ -604,8 +686,10 @@
         TOOLS: TOOLS, MEDICINE_PRICE: MEDICINE_PRICE, HAY_PRICE: HAY_PRICE, PORTIONS_PER_CROP: PORTIONS_PER_CROP, GOOD_MULT: GOOD_MULT,
         WATER_MAX: WATER_MAX, DIRTY_AT: DIRTY_AT, WEED_CAP: WEED_CAP, RUNAWAY_DAYS: RUNAWAY_DAYS, BREED_STREAK: BREED_STREAK, COST: COST,
         DOG_LOVE_MAX: DOG_LOVE_MAX, DOG_BACK_LOVE: DOG_BACK_LOVE, WOLF_CHANCE: WOLF_CHANCE, WOLF_AWAY_CHANCE: WOLF_AWAY_CHANCE,
+        BARN_LEVELS: BARN_LEVELS, BARN_TOP: BARN_TOP, HIVE_PRICE: HIVE_PRICE, HIVE_MAX: HIVE_MAX, HIVE_FLOWERS: HIVE_FLOWERS,
         createRanch: createRanch, normalizeRanch: normalizeRanch, attach: attach,
-        label: label, findAnimal: findAnimal,
+        label: label, findAnimal: findAnimal, countKind: countKind, capOf: capOf, barnNext: barnNext, capsText: capsText,
+        upgradeBarn: upgradeBarn, buyHive: buyHive, collectHoney: collectHoney, flowersOf: flowersOf,
         feed: feed, feedAllHay: feedAllHay, buyHay: buyHay, refillWater: refillWater,
         pullWeed: pullWeed, cleanPoop: cleanPoop, collect: collect, collectAll: collectAll, cleanAll: cleanAll, pullAll: pullAll, milk: milk, shear: shear,
         buyTool: buyTool, buyMedicine: buyMedicine, giveMedicine: giveMedicine, buyAnimal: buyAnimal, petDog: petDog, fillBowl: fillBowl,

@@ -409,8 +409,30 @@
                 '<path d="M21.5 36H42.5V54C42.5 56 41 56.6 40 56.6H24C23 56.6 21.5 56 21.5 54Z" fill="#fffdf6"/>' +
                 '<rect x="25" y="10" width="14" height="7" rx="2" fill="' + (good ? '#e8b53a' : '#5a9bd4') + '" stroke="' + (good ? '#a8761a' : '#2f6a9e') + '" stroke-width="1"/>' +
                 '<path d="M25 30v20" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>';
+        },
+        // 蜂蜜（10-11 蜂箱）：玻璃罐裝琥珀色的蜜，布蓋綁繩、罐口流下一滴、標籤上一格蜂巢
+        honey: function (id, good) {
+            return '<ellipse cx="32" cy="59" rx="14" ry="3" fill="rgba(40,50,25,.25)"/>' +
+                '<path d="M19 26C19 23 21 22 23 22H41C43 22 45 23 45 26V53C45 56 43 57 41 57H23C21 57 19 56 19 53Z" fill="#fbe7b4" stroke="#b07a2a" stroke-width="1.5"/>' +
+                '<path d="M20.5 31H43.5V53C43.5 55 42.4 55.6 41 55.6H23C21.6 55.6 20.5 55 20.5 53Z" fill="' + (good ? '#f5a623' : '#eda733') + '"/>' +
+                '<path d="M20.5 31H43.5V35C36 37 28 33 20.5 36Z" fill="#f7c35a" opacity=".8"/>' +
+                '<path d="M23.5 34v17" stroke="#fff6dc" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>' +
+                '<path d="M17 21C17 16 22 14 32 14S47 16 47 21C47 23 45 24 43 24H21C19 24 17 23 17 21Z" fill="#e8d2a6" stroke="#a87a44" stroke-width="1.3"/>' +
+                '<path d="M19 22.5C24 25 40 25 45 22.5" stroke="#b0783a" stroke-width="1.8" fill="none" stroke-linecap="round"/>' +
+                '<path d="M40 24C40 27 41.5 28 41.5 30C41.5 31.5 40 32 39.2 31C38.6 30 39 28 40 24Z" fill="#eda733" stroke="#b07a2a" stroke-width=".8"/>' +
+                '<rect x="26" y="39" width="12" height="10" rx="2.2" fill="#fffaf0" stroke="#b07a2a" stroke-width="1"/>' +
+                '<path d="M32 41.2L34.3 42.5V45.1L32 46.4L29.7 45.1V42.5Z" fill="#eda733" stroke="#a8761a" stroke-width=".8"/>';
         }
     };
+    // 蜜蜂（蜂箱旁邊飛來飛去的那幾隻）：圓滾滾黃身體兩條黑紋、兩片透明翅膀
+    function beeSvg() {
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20" class="ra-bee" aria-hidden="true">' +
+            '<ellipse cx="9" cy="6" rx="5" ry="4" fill="rgba(235,248,255,.85)" stroke="#7fa6bd" stroke-width=".8"/>' +
+            '<ellipse cx="14" cy="5.5" rx="4" ry="3.4" fill="rgba(235,248,255,.85)" stroke="#7fa6bd" stroke-width=".8"/>' +
+            '<ellipse cx="12" cy="12.5" rx="7.5" ry="5.5" fill="#f6c443" stroke="#4a3418" stroke-width="1.3"/>' +
+            '<path d="M10 7.6Q8.6 12.5 10 17.4M14 7.4Q15.4 12.5 14 17.6" stroke="#3a2a14" stroke-width="2.2" fill="none"/>' +
+            '<circle cx="18.2" cy="11.4" r="1.1" fill="#3a2a14"/></svg>';
+    }
     function productSvg(product, quality) {
         var id = 'rp' + (++uid) + '_';
         var good = quality === 'good';
@@ -571,5 +593,5 @@
             '</svg>';
     }
 
-    root.FarmAnimalDraw = { svg: svg, productSvg: productSvg, litterSvg: litterSvg, troughHaySvg: troughHaySvg, doghouseSvg: doghouseSvg, wolfSignSvg: wolfSignSvg, KINDS: ['chicken', 'chick', 'sheep', 'cow', 'cat', 'dog'] };
+    root.FarmAnimalDraw = { svg: svg, productSvg: productSvg, beeSvg: beeSvg, litterSvg: litterSvg, troughHaySvg: troughHaySvg, doghouseSvg: doghouseSvg, wolfSignSvg: wolfSignSvg, KINDS: ['chicken', 'chick', 'sheep', 'cow', 'cat', 'dog'] };
 })(typeof window !== 'undefined' ? window : this);

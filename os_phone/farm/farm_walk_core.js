@@ -41,9 +41,11 @@
         yard: {
             name: '後院',
             walk: { x1: 8, x2: 92, y1: 31, y2: 84 },
+            // 有 when 的只在買了那樣大件之後才擋路（blockOn）
             blocks: [
                 { x1: 8, x2: 23, y1: 20, y2: 38 },    // 池塘
-                { x1: 9, x2: 18, y1: 40, y2: 48 }     // 出貨箱
+                { x1: 9, x2: 18, y1: 40, y2: 48 },    // 出貨箱
+                { x1: 87.5, x2: 96, y1: 77, y2: 86, when: 'hive' }   // 蜂箱（右下角花叢邊）
             ],
             // 小圍欄（牧場入口）：走進去就到牧場
             door: { x1: 81, x2: 95, y1: 33, y2: 49, to: 'ranch' },
@@ -58,7 +60,11 @@
                 plot2: { x: 67, y: 56.5, reach: 10, name: '第 3 塊田' },
                 plot3: { x: 29, y: 75, reach: 10, name: '第 4 塊田' },
                 plot4: { x: 49, y: 75, reach: 10, name: '第 5 塊田' },
-                plot5: { x: 67, y: 75, reach: 10, name: '第 6 塊田' }
+                plot5: { x: 67, y: 75, reach: 10, name: '第 6 塊田' },
+                // 開墾的兩塊（10-11）：左邊長椅那裡、右邊小圍欄下面；沒開墾前站過去是看那塊荒地
+                plot6: { x: 14.5, y: 73, reach: 10, name: '第 7 塊田' },
+                plot7: { x: 83, y: 73.5, reach: 10, name: '第 8 塊田' },
+                hive: { x: 84, y: 80.5, reach: 8, name: '蜂箱' }
             }
         },
         ranch: {
@@ -68,6 +74,7 @@
             corridor: { x1: 41, x2: 58, y1: 84, y2: 97 },
             blocks: [
                 { x1: 66, x2: 86, y1: 6, y2: 37 },    // 棚屋
+                { x1: 57.5, x2: 66, y1: 14, y2: 37, when: 'barn2' },   // 擴建的側屋（棚屋左邊）
                 { x1: 13, x2: 27, y1: 12, y2: 31 },   // 飼料槽
                 { x1: 27, x2: 39, y1: 10, y2: 28 },   // 水槽
                 { x1: 8, x2: 20, y1: 56, y2: 68 },    // 乾草堆
@@ -86,9 +93,10 @@
                 doghouse: { x: 20, y: 48, reach: 8, name: '狗屋' }       // 飯碗在門口右邊
             },
             // 動物自己晃的範圍（比小人能走的小一圈，身體比腳寬）與禁區
+            // 棚屋那格一律照擴建到最大的範圍擋（地上東西的位置不看存檔算，兩邊才會同一點）
             area: { x1: 11, x2: 89, y1: 24, y2: 80 },
             animalBlocks: [
-                { x1: 63, x2: 88, y1: 8, y2: 40 },
+                { x1: 55, x2: 88, y1: 8, y2: 40 },
                 { x1: 12, x2: 29, y1: 14, y2: 33 },
                 { x1: 26, x2: 41, y1: 12, y2: 29 },
                 { x1: 5, x2: 25, y1: 50, y2: 74 },
@@ -118,14 +126,28 @@
     function inRect(r, x, y) { return x > r.x1 && x < r.x2 && y > r.y1 && y < r.y2; }
 
     // ── 能不能站 ──────────────────────────────────────
-    function walkable(scene, x, y) {
+    // 大件買了才擋路的那幾格（蜂箱、棚屋側屋）：沒給 state 就當沒買
+    function blockOn(b, state) {
+        if (!b.when) return true;
+        var r = state && state.ranch;
+        if (!r) return false;
+        if (b.when === 'hive') return !!r.hive;
+        if (b.when === 'barn2') return (r.barn || 1) >= 2;
+        return false;
+    }
+    // 這一區擋路的樣子（走路那支照這個分開記格子）
+    function blockSig(scene, state) {
+        var S = SCENES[scene];
+        return S ? S.blocks.map(function (b) { return blockOn(b, state) ? 1 : 0; }).join('') : '';
+    }
+    function walkable(scene, x, y, state) {
         var S = SCENES[scene];
         if (!S) return false;
         var inside = inRect({ x1: S.walk.x1 - .01, x2: S.walk.x2 + .01, y1: S.walk.y1 - .01, y2: S.walk.y2 + .01 }, x, y)
             || (S.corridor && inRect(S.corridor, x, y))
             || (S.door && inRect(S.door, x, y));
         if (!inside) return false;
-        return !S.blocks.some(function (b) { return inRect(b, x, y); });
+        return !S.blocks.some(function (b) { return blockOn(b, state) && inRect(b, x, y); });
     }
 
     // ── 亂數：照字串算，同一個編號永遠落在同一個點 ──
@@ -157,13 +179,13 @@
         var s = SCENES.yard.start;
         return { scene: 'yard', x: s.x, y: s.y, carry: 0, hand: null, can: CAN_MAX, herd: {} };
     }
-    function normalizeWalk(raw) {
+    function normalizeWalk(raw, state) {
         var w = createWalk();
         if (!raw || !SCENES[raw.scene]) return w;
         w.scene = raw.scene;
         w.x = num(raw.x, w.x);
         w.y = num(raw.y, w.y);
-        if (!walkable(w.scene, w.x, w.y)) { var s = SCENES[w.scene].start; w.x = s.x; w.y = s.y; }
+        if (!walkable(w.scene, w.x, w.y, state)) { var s = SCENES[w.scene].start; w.x = s.x; w.y = s.y; }
         w.carry = Math.max(0, Math.min(STEP, num(raw.carry, 0)));
         w.hand = TOOLS[raw.hand] ? raw.hand : null;
         w.can = Math.max(0, Math.min(CAN_MAX, Math.floor(num(raw.can, CAN_MAX))));
@@ -176,7 +198,7 @@
         return w;
     }
     function attach(state, raw) {
-        state.walk = normalizeWalk(raw && raw.walk);
+        state.walk = normalizeWalk(raw && raw.walk, state);
         return state;
     }
     function W(state) { if (!state.walk) state.walk = createWalk(); return state.walk; }
@@ -401,6 +423,14 @@
             case 'buy_animal':
                 if (!near(state, 'barn')) return tooFar(state, 'barn');
                 return ranch.buyAnimal(state, a.kind);
+            // 大件（10-11）：開墾、蜂箱、擴建棚屋跟種子一樣在哪都能買；蜂蜜要走到蜂箱旁邊收
+            case 'buy_plot': return farm.buyPlot(state);
+            case 'buy_hive': return ranch.buyHive(state);
+            case 'upgrade_barn': return ranch.upgradeBarn(state);
+            case 'honey':
+                if (!state.ranch || !state.ranch.hive) return result(false, 'no_hive', '還沒有蜂箱。');
+                if (!near(state, 'hive')) return tooFar(state, 'hive');
+                return ranch.collectHoney(state);
             default:
                 return result(false, 'unknown_action', '不認識的行動：' + a.type);
         }
@@ -419,7 +449,7 @@
 
     return {
         ASPECT: ASPECT, STEP: STEP, CAN_MAX: CAN_MAX, SCENES: SCENES, TOOLS: TOOLS, ANIMAL_REACH: ANIMAL_REACH, ITEM_REACH: ITEM_REACH,
-        dist: dist, walkable: walkable, seeded: seeded, pickSpot: pickSpot, itemSpot: itemSpot, animalBlocked: animalBlocked,
+        dist: dist, walkable: walkable, blockOn: blockOn, blockSig: blockSig, seeded: seeded, pickSpot: pickSpot, itemSpot: itemSpot, animalBlocked: animalBlocked,
         createWalk: createWalk, normalizeWalk: normalizeWalk, attach: attach,
         pathLength: pathLength, moveTo: moveTo, targetOf: targetOf, goTo: goTo, near: near,
         herdPos: herdPos, setHerdPos: setHerdPos, hasTool: hasTool, takeTool: takeTool, dropTool: dropTool, refillCan: refillCan,
