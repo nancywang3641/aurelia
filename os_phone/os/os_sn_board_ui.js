@@ -35,7 +35,8 @@
                 '點開一份稿：左邊是方向，右邊封起來的是真正會寫進世界書的內容。「我要當玩家」不按偷看就看不到；「我要當作者」整份攤開。\n' +
                 '「好，收進世界」會先給妳看單子，同意了才寫進【奧瑞亞-白板】這本世界書。\n' +
                 '「回爐」寫一句為什麼，他們會照著重寫；放棄的點子，他們之後不會再提類似的。\n' +
-                '「丟素材」寫一句妳的感覺，可以再貼一個連結。貼的是 YouTube 影片、而且設置「哪件事走哪個模型」的「白板看影片」指到妳的一條通道（例如 Gemini 原生），會先看一遍影片再寫成素材卡，一支影片叫一次；沒指到就只放妳那句跟連結。\n' +
+                '「丟素材」寫一句妳的感覺，可以再貼一個連結。貼 YouTube 的歌，會先讀歌詞（字幕）剪成素材卡：連結停在哪首就剪那首，沒停在哪首就整張歌單挑最有故事的一到三首，後面重播的不算。讀歌詞要宿舍的連線開著。\n' +
+                '有的歌沒有字幕（例如英文歌單裡夾一首韓文歌），讀不到歌詞；設置「哪件事走哪個模型」的「白板看影片／讀歌詞」指到看得了影片的通道（例如 Gemini）的話，連結停在那首再丟一次，會叫它只聽那首。一次丟只叫一次模型。\n' +
                 '等妳看最多 3 份，滿了就先不孵新的；兩週沒打開白板，白板會睡著、不排班，按「叫醒」再繼續。' },
             sn_board_staff: { title: '值班', body:
                 '挑一位或兩位值班的人。小機用他自己的門卡（會花錢）；宿舍住戶要宿舍的連線開著才叫得到（用會員額度）。\n' +
@@ -277,13 +278,14 @@
             if (!t) return;
             if (t.dataset.snb === 'drop-no') { sheet.remove(); return; }
             if (t.dataset.snb !== 'drop-ok') return;
-            const watching = !!S._pure.youTubeUrl(link.value) && S.canWatch();
+            const yt = !!S._pure.youTubeUrl(link.value);
             lock(true);
-            st.innerHTML = watching ? '<i class="fa-solid fa-spinner fa-spin"></i> 正在看影片…' : '';
+            st.innerHTML = yt ? '<i class="fa-solid fa-spinner fa-spin"></i> 正在讀這支…（要用聽的會等一兩分鐘）' : '';
             const r = await S.act.dropMaterial({ note: note.value, link: link.value });
             if (!r || !r.ok) { st.textContent = (r && r.why) || '沒丟上去'; lock(false); return; }
             sheet.remove();
-            if (a) a.toast(r.watched ? '看完了，素材放上白板' : (r.why || '素材放上白板了'), { type: (r.why && !r.watched) ? 'warn' : 'success' });
+            const done = r.read ? '讀了歌詞，' + r.n + ' 張素材放上白板' : r.watched ? '看完了，素材放上白板' : '';
+            if (a) a.toast(done ? done + (r.why ? '。' + r.why : '') : (r.why || '素材放上白板了'), { type: r.why ? 'warn' : 'success' });
             _render();
         });
     }

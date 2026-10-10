@@ -59,8 +59,16 @@
                     else if (u) out.push({ text: '[圖片: ' + u + ']' });
                 } else if (p.type === 'video_url') {
                     // 公開的 YouTube 連結：Gemini 自己去看（畫面＋聲音）。OpenAI 相容那條（OpenRouter）原樣送 video_url
-                    const u = String((p.video_url && p.video_url.url) || p.url || '');
-                    if (u) { out.push({ file_data: { file_uri: u } }); hasVideo = true; }
+                    //   video_url 帶 start／end（秒）＝只看那一段（白板丟歌單只聽一首）
+                    const v = p.video_url || {};
+                    const u = String(v.url || p.url || '');
+                    if (u) {
+                        const part = { file_data: { file_uri: u } };
+                        const st = Number(v.start), en = Number(v.end);
+                        if (isFinite(en) && en > 0 && !(st >= en)) part.video_metadata = Object.assign(st > 0 ? { start_offset: Math.floor(st) + 's' } : {}, { end_offset: Math.ceil(en) + 's' });
+                        else if (st > 0) part.video_metadata = { start_offset: Math.floor(st) + 's' };
+                        out.push(part); hasVideo = true;
+                    }
                 }
             }
             return out;

@@ -208,7 +208,8 @@
         return { ok: true, board: b };
     }
 
-    // ── 丟素材貼連結：YouTube 的先叫 Gemini 看一遍（畫面＋聲音）再剪成素材卡；其他連結當出處 ──
+    // ── 丟素材貼連結：YouTube 的先讀歌詞（橋讀字幕）剪成素材卡，讀不到才叫 Gemini 聽；其他連結當出處 ──
+    //   她 10-10：「我丟音樂其實是想丟歌詞啦」——要的是歌詞，不是讓模型聽聲音。歌的字幕就是歌詞。
     const LINK_MAX = 300;
     function safeLink(s) {
         const t = String(s == null ? '' : s).trim();
@@ -221,6 +222,97 @@
         const id = m && (m[1] || m[2] || m[3]);
         return id ? 'https://www.youtube.com/watch?v=' + id : '';
     }
+    // 連結上的時間（她按分享或複製網址時 YouTube 加的 t=871s；也認 1h2m3s、start=）→ 秒；沒有回 null
+    function youTubeStart(s) {
+        const m = String(s == null ? '' : s).match(/[?&#](?:t|start)=([0-9hms]+)/i);
+        if (!m) return null;
+        const v = m[1].toLowerCase();
+        const part = k => { const x = v.match(new RegExp('(\\d+)' + k)); return x ? parseInt(x[1], 10) : 0; };
+        const n = /^\d+s?$/.test(v) ? parseInt(v, 10) : part('h') * 3600 + part('m') * 60 + part('s');
+        return n > 0 ? n : null;
+    }
+    function _mmss(sec) { sec = Math.max(0, Math.floor(sec || 0)); const m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+
+    // ── 歌詞：橋讀來的章節（歌單每首的開始時間）＋原文字幕 → 要剪的那幾首 ──
+    //   連結帶時間＝她停在哪首就那首；沒帶＝整張（後面重播的不算）。
+    //   字幕稀到不像在唱＝那首沒讀到（多半是別的語言：YouTube 只照影片的語言聽，10-10 她那張第 5 首韓文歌只剩雜音）→ 叫 Gemini 只聽那首。
+    const LYR = { WPM: 25, MIN_WORDS: 30, CHARS: 24000, CLIP: 240, SIG: 8 };   // CHARS：她那張 10 首英文歌整份約 1.9 萬字
+    const CJK = /[\u3040-\u30ff\u3400-\u9fff]/g;   // 日文假名、中日漢字（沒空白分字的那幾種）
+    function _lyrClean(t) { return String(t == null ? '' : t).replace(/\[[^\]]*\]/g, ' ').replace(/>>/g, ' ').replace(/\s+/g, ' ').trim(); }
+    // 字數：英文、韓文照空白分；中日文一個字算半個（沒空白）。自動字幕把聽不懂的標成 Foreign speech，那不算
+    function _lyrWords(t) {
+        const s = _lyrClean(t).replace(/\b(?:foreign|speech)\b/gi, ' ');
+        const cjk = (s.match(CJK) || []).length;
+        return s.replace(CJK, ' ').split(/\s+/).filter(w => /[^.,!?'"“”‘’()\-–—…:;]/.test(w)).length + Math.ceil(cjk / 2);
+    }
+    function _lyrKeys(lines) {
+        const out = [];
+        lines.forEach(l => _lyrClean(l[1]).toLowerCase().replace(CJK, c => ' ' + c + ' ').split(/\s+/).forEach(w => {
+            w = w.replace(/[.,!?'"“”‘’()\-–—…:;]/g, '');
+            if (w && w !== 'foreign' && w !== 'speech') out.push({ t: l[0], w });
+        }));
+        return out;
+    }
+    // 歌單後半重播：開頭那幾個字在 after 之後又一模一樣出現的地方
+    function _loopAt(lines, after) {
+        const ws = _lyrKeys(lines);
+        if (ws.length < LYR.SIG * 2) return null;
+        const sig = ws.slice(0, LYR.SIG).map(x => x.w).join(' ');
+        for (let i = LYR.SIG; i + LYR.SIG <= ws.length; i++) {
+            if (ws[i].t < after) continue;
+            if (ws.slice(i, i + LYR.SIG).map(x => x.w).join(' ') === sig) return ws[i].t;
+        }
+        return null;
+    }
+    function lyricPlan(info, at) {
+        if (!info || !info.ok) return null;
+        const lines = (Array.isArray(info.lines) ? info.lines : []).filter(l => Array.isArray(l) && isFinite(l[0]) && l[1]);
+        const dur = +info.duration || (lines.length ? lines[lines.length - 1][0] + 5 : 0);
+        let songs = (Array.isArray(info.chapters) ? info.chapters : []).filter(c => c && isFinite(c.start))
+            .map((c, i) => ({ n: i + 1, title: _cut(c.title, LEN.SRC), start: +c.start, end: +c.end || dur }));
+        if (!songs.length) songs = [{ n: 0, title: '', start: 0, end: dur }];
+        // 最後一首常常一路算到影片結尾（後面是重播）：在重播開始的地方收尾，最長也只跟其他首差不多。
+        //   只看有章節的歌單：一首歌的 MV 開頭那句副歌又唱一次很正常，不能當重播切掉；
+        //   最後一首開頭一分鐘內對到的也不算（最後一首是第 1 首的另一個版本時，開頭本來就一樣）
+        const last = songs[songs.length - 1];
+        if (songs.length > 1) {
+            const loop = _loopAt(lines, last.start + 60);
+            if (loop != null) last.end = Math.min(last.end, loop);
+            last.end = Math.min(last.end, last.start + Math.ceil(Math.max(...songs.slice(0, -1).map(s => s.end - s.start)) * 1.3));
+        }
+        let pick = songs;
+        if (at != null) pick = [songs.find(s => at >= s.start && at < s.end) || { n: 0, title: '', start: at, end: at + LYR.CLIP }];
+        const out = pick.map(s => {
+            const ls = lines.filter(l => l[0] >= s.start && l[0] < s.end);
+            const words = _lyrWords(ls.map(l => l[1]).join(' '));
+            const sung = words >= LYR.MIN_WORDS && words / Math.max((s.end - s.start) / 60, 0.5) >= LYR.WPM;
+            return { n: s.n, title: s.title, start: s.start, end: s.end, lyrics: sung ? _lyrClean(ls.map(l => l[1]).join(' ')) : '' };
+        });
+        const each = Math.floor(LYR.CHARS / Math.max(1, out.filter(s => s.lyrics).length));   // 很長的（講話的長片）才會被切
+        out.forEach(s => { s.lyrics = s.lyrics.slice(0, each); });
+        return { title: _cut(info.title, LEN.SRC * 3), channel: _cut(info.channel, LEN.SRC), auto: !!info.capAuto, one: at != null || songs.length === 1, songs: out };
+    }
+    // 剪出來的卡寫的是哪首（source 寫歌名）→ 那首的開始秒數，卡上的連結直接跳到那首
+    function songAt(songs, source) {
+        if (songs.length === 1) return songs[0].start;
+        const f = s => String(s || '').toLowerCase().replace(/^\s*\d+\s*[.)、]\s*/, '').replace(/[\s〈〉《》「」"'’]/g, '');
+        const k = f(source);
+        const hit = k && songs.find(s => f(s.title) && (f(s.title).includes(k) || k.includes(f(s.title))));
+        return hit ? hit.start : null;
+    }
+    function lyricsMessages(plan, note, user) {
+        const U = user || '她';
+        const songs = plan.songs.filter(s => s.lyrics);
+        const sys = '你在幫' + U + '的白板剪素材：她丟來一支影片，下面是它的字幕。是歌的話字幕就是歌詞，' + U + '要的就是歌詞——從歌詞剪「之後可能長成故事」的素材卡。\n\n' + RULES +
+            '\n卡片不用整段抄歌詞：寫這首歌在講什麼故事、有什麼畫面、什麼情緒，最多帶一兩句最抓人的詞。不是歌的話，寫它在講什麼。' +
+            (plan.auto ? '\n字幕是 YouTube 自動聽出來的，會有聽錯的字，照上下文讀。' : '');
+        const L = ['影片：' + (plan.title || '（沒標題）') + (plan.channel ? '（' + plan.channel + '）' : ''),
+            note ? U + '丟的時候說：「' + note + '」' : U + '丟的時候沒有多說什麼。'];
+        songs.forEach(s => L.push('── ' + (s.title || '字幕') + '（' + _mmss(s.start) + ' 起）', s.lyrics));
+        L.push(songs.length > 1 ? '挑最有故事的 1～' + CAPS.CLIP_MAX + ' 首，一首剪一張；source 寫歌名。' : '剪一張；source 寫' + (songs[0].title ? '歌名' : '影片標題') + '。',
+            '格式（每張一行，只交這幾行）：', '<material source="歌名" why="哪裡有意思">這首在講什麼故事、什麼畫面、什麼情緒（一句話，可以帶一句最抓人的詞）</material>');
+        return [{ role: 'system', content: sys }, { role: 'user', content: L.join('\n') }];
+    }
     // 看過影片：一句話用它看到的、哪裡有趣用她那句（她的口味最準）；沒看：她那句就是素材
     function materialFrom(o) {
         o = o || {};
@@ -231,17 +323,21 @@
         return { ok: true, text: note, why: '', source: '妳丟的', link };
     }
     // 送給 Gemini 的：影片在前、她那句和要交的格式在後（最後一段要是要它做的事）
-    function watchMessages(link, note, user) {
+    //   clip＝只聽那一段（歌單裡的一首）：start／end 秒數掛在 video_url 上，os_api_engine 轉成 Gemini 的 video_metadata
+    function watchMessages(link, note, user, clip) {
         const U = user || '她';
         const sys = '你在幫' + U + '的白板剪素材：看她丟來的一支影片，剪成一張「之後可能長成故事」的素材卡。\n\n' + RULES +
-            '\n歌詞、台詞不要整段抄，只寫發生了什麼、畫面跟感覺。';
+            '\n是歌的話，' + U + '要的是歌詞：重點聽歌詞在講什麼（故事、畫面、情緒），不是 MV 畫面；不用整段抄歌詞，最多帶一兩句最抓人的詞。不是歌的話，寫發生了什麼、畫面跟感覺。';
+        const video = { url: link };
+        if (clip) { video.start = Math.floor(clip.start); video.end = Math.ceil(clip.end); }
         const txt = [
             note ? U + '丟這支影片的時候說：「' + note + '」' : U + '丟了這支影片，沒有多說什麼。',
-            '看完這支影片，剪一張素材卡：一句話講它是什麼（畫面、故事、氣氛）；why 寫哪裡有意思、可能長成什麼；source 寫影片標題或頻道。',
+            clip ? '只看 ' + _mmss(video.start) + '～' + _mmss(video.end) + ' 這一段' + (clip.title ? '（〈' + clip.title + '〉）' : '') + '。' : '',
+            '看完剪一張素材卡：一句話講它是什麼；why 寫哪裡有意思、可能長成什麼；source 寫' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '。',
             '格式（只交這一行）：',
-            '<material source="影片標題或頻道" why="哪裡有意思">一句話</material>',
-        ].join('\n');
-        return [{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'video_url', video_url: { url: link } }, { type: 'text', text: txt }] }];
+            '<material source="' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '" why="哪裡有意思">一句話</material>',
+        ].filter(Boolean).join('\n');
+        return [{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'video_url', video_url: video }, { type: 'text', text: txt }] }];
     }
     function hatch(b, ideaId) {
         const i = b.ideas.find(x => x.id === ideaId && x.state === 'wild');
@@ -358,8 +454,8 @@
     // ── 資料（OS_DB 通用資料，不升版）──────────────────────────────
     const DEF_STAFF = { slots: [null, null], times: ['12:00', '20:00'], next: 0, on: false, lastAt: 0, running: 0, runningJob: '', runningWho: '', lastVisit: 0, unread: false, says: {}, fail: null };
     const RUN_STALE = 10 * 60000;   // 「上班中」超過這麼久當作沒在跑（分頁中途被關）。要比兩種逾時都長
-    const _cfg = { XIAOJI_TIMEOUT: 180000, DORM_TIMEOUT: 480000, VIDEO_TIMEOUT: 240000 };
-    const VIDEO_TASK = 'sn_board_video';   // 名冊 LLM_TASKS 那一列「白板看影片」
+    const _cfg = { XIAOJI_TIMEOUT: 180000, DORM_TIMEOUT: 480000, VIDEO_TIMEOUT: 240000, YT_TIMEOUT: 30000 };
+    const VIDEO_TASK = 'sn_board_video';   // 名冊 LLM_TASKS 那一列「白板看影片／讀歌詞」
     const _listeners = new Set();
     function _emit() { _listeners.forEach(f => { try { f(); } catch (e) {} }); }
     function onChange(f) { _listeners.add(f); return () => _listeners.delete(f); }
@@ -589,36 +685,78 @@
         const S = _g('OS_SETTINGS');
         try { const c = (S && S.getConfigFor) ? S.getConfigFor(VIDEO_TASK) : null; return !!(c && c._channel && c.url && c.key); } catch (e) { return false; }
     }
-    function _watch(link, note) {
-        const A = _g('OS_API'), S = _g('OS_SETTINGS'), X = _g('OS_XIAOJI');
+    // 讀歌詞、看影片都走名冊「白板看影片／讀歌詞」那列；讀歌詞是純文字，主／副模型也讀得了，不用指到通道
+    function _ask(msgs, label) {
+        const A = _g('OS_API'), S = _g('OS_SETTINGS');
         if (!A || !A.chat || !S || !S.getConfigFor) return Promise.reject(new Error('沒有模型可以叫'));
         const config = Object.assign({}, S.getConfigFor(VIDEO_TASK), { route: VIDEO_TASK });
         config.maxTokens = Math.max(parseInt(config.maxTokens, 10) || 0, 8192);   // Gemini 會先想一下，想的也算在上限裡
-        const user = (X && X.USER) || '她';
         return _withTimeout(_cfg.VIDEO_TIMEOUT, signal => new Promise((res, rej) => {
-            A.chat(watchMessages(link, note, user), config, null, t => res(t), e => rej(e),
-                { task: VIDEO_TASK, label: '白板看影片', keepCodeFences: true, signal });   // 🚨 第六格就是 options
+            A.chat(msgs, config, null, t => res(t), e => rej(e),
+                { task: VIDEO_TASK, label, keepCodeFences: true, signal });   // 🚨 第六格就是 options
         }));
     }
+    function _user() { const X = _g('OS_XIAOJI'); return (X && X.USER) || '她'; }
+    function _watch(link, note, clip) { return _ask(watchMessages(link, note, _user(), clip), '白板看影片'); }
+    // 橋讀這支的章節和原文字幕（瀏覽器自己讀不到 YouTube 的）。橋沒開、舊橋沒這條、讀不到都回 null
+    async function _ytInfo(link) {
+        const CT = _g('ClaudeTerminal');
+        let c = null;
+        try { c = CT && CT.getConfig ? CT.getConfig() : null; } catch (e) {}
+        const f = win.fetch || (typeof fetch !== 'undefined' ? fetch : null);
+        if (!c || !c.url || !c.key || !f) return null;
+        const base = String(c.url).replace(/\/v1\/chat\/completions\/?$/, '');
+        try {
+            const r = await _withTimeout(_cfg.YT_TIMEOUT, signal => f.call(win, base + '/v1/youtube?url=' + encodeURIComponent(link), { headers: { Authorization: 'Bearer ' + c.key }, signal }));
+            if (!r || !r.ok) return null;
+            const j = await r.json();
+            return (j && j.ok) ? j : null;
+        } catch (e) { return null; }
+    }
+    const _err = e => String((e && e.message) || e).slice(0, 80);
     async function dropMaterial(o) {
         o = o || {};
         const note = _cut(o.note, LEN.MAT), raw = String(o.link || '').trim(), link = safeLink(raw);
         if (raw && !link) return { ok: false, why: '這個連結看不懂（要 http 或 https 開頭）' };
-        const yt = youTubeUrl(link);
-        let card = null, why = '';
+        const yt = youTubeUrl(link), at = yt ? youTubeStart(link) : null;
+        let cards = [], why = '', how = '';
         if (yt) {
-            if (!canWatch()) why = '這支影片沒看：設置「哪件事走哪個模型」的「白板看影片」還沒指到妳的通道';
-            else {
+            const plan = lyricPlan(await _ytInfo(yt), at);
+            const read = plan ? plan.songs.filter(s => s.lyrics) : [];
+            if (read.length) {
                 try {
-                    const p = parseReply(await _watch(yt, note), { kind: 'clip' });
-                    if (p.ok) card = p.materials[0]; else why = '這支影片沒看成：' + p.why;
-                } catch (e) { why = '這支影片沒看成：' + String((e && e.message) || e).slice(0, 80); }
+                    const p = parseReply(await _ask(lyricsMessages(plan, note, _user()), '白板讀歌詞'), { kind: 'clip' });
+                    if (p.ok) { cards = p.materials.map(c => Object.assign(c, { at: songAt(read, c.source) })); how = 'read'; }
+                    else why = '這支的歌詞沒剪成：' + p.why;
+                } catch (e) { why = '這支的歌詞沒剪成：' + _err(e); }
+                const missed = plan.songs.filter(s => !s.lyrics);
+                if (cards.length && missed.length) why = (missed.length > 1 ? '這幾首' : '這首') + '沒有字幕、沒讀到：' + missed.map(s => s.title || _mmss(s.start)).join('、') + '（要的話，連結停在那首再丟一次）';
+            } else if (plan && !plan.one) {
+                why = '這張歌單讀不到歌詞；連結停在想要的那首再丟一次，會只聽那首';   // 不整張叫 Gemini 聽：一小時的片聽不完
+            } else if (!canWatch()) {
+                why = plan ? '這首沒有字幕、讀不到歌詞；要聽的話，設置「哪件事走哪個模型」的「白板看影片／讀歌詞」指到看得了影片的通道（例如 Gemini）'
+                    : '這支影片沒看：設置「哪件事走哪個模型」的「白板看影片／讀歌詞」還沒指到妳的通道';
+            } else {
+                // 橋讀到了就只聽那首；橋沒開但連結帶時間，就從那裡聽一段；都沒有才整支看（原本的做法）
+                const clip = plan ? plan.songs[0] : (at != null ? { title: '', start: at, end: at + LYR.CLIP } : null);
+                try {
+                    const p = parseReply(await _watch(yt, note, clip), { kind: 'clip' });
+                    if (p.ok) { cards = [Object.assign(p.materials[0], { at: clip ? clip.start : null })]; how = 'watch'; }
+                    else why = '這支影片沒看成：' + p.why;
+                } catch (e) { why = '這支影片沒看成：' + _err(e); }
             }
         }
-        const mf = materialFrom({ note, link: yt || link, card });
-        if (!mf.ok) return { ok: false, why: why ? why + '；寫一句妳的感覺再丟' : mf.why };
-        const r = await _edit((b, now) => addMaterial(b, mf, now));
-        return (r && r.ok) ? { ok: true, watched: !!card, why } : r;
+        const ytAt = s => yt + (s > 0 ? '&t=' + Math.floor(s) + 's' : '');
+        const mfs = cards.length ? cards.map(c => materialFrom({ note, link: ytAt(c.at), card: c })) : [materialFrom({ note, link: yt || link })];
+        if (!mfs[0].ok) return { ok: false, why: why ? why + '；寫一句妳的感覺再丟' : mfs[0].why };
+        let n = 0;
+        const r = await _edit((b, now) => {
+            let last = null;
+            n = 0;
+            for (const mf of mfs) { last = addMaterial(b, mf, now); if (!last.ok) break; n++; }
+            return n ? { ok: true, board: b } : last;
+        });
+        return (r && r.ok) ? { ok: true, read: how === 'read', watched: how === 'watch', n, why } : r;
     }
     function _notify(text, warn) {
         let hidden = false;
@@ -891,8 +1029,8 @@
         _lockDataForTest: _lockData, _saveBoardForTest: saveBoard,
         _pure: { emptyBoard, normBoard, waitCount, canHatch, isAsleep, nextSlot, unstick, pickJob, parseReply, applyResult,
             addMaterial, hatch, redo, drop, countKinds, countText, markWorld, refTerms, pickRefs, buildMessages,
-            safeLink, youTubeUrl, materialFrom, watchMessages,
-            BOOK, REF_BOOKS, CAPS, LEN, KINDS, JOBS, SLEEP_MS },
+            safeLink, youTubeUrl, youTubeStart, materialFrom, watchMessages, lyricPlan, lyricsMessages, songAt,
+            BOOK, REF_BOOKS, CAPS, LEN, LYR, KINDS, JOBS, SLEEP_MS },
     };
     win.OS_SN_BOARD = OS_SN_BOARD;
     if (win !== window) { try { window.OS_SN_BOARD = OS_SN_BOARD; } catch (e) {} }
