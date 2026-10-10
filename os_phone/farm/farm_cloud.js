@@ -198,6 +198,13 @@
         });
     }
     function setOnNewer(fn) { onNewer = fn; }
+    // 伺服器上這塊田最新那份（雇的人動過、剛雇人扣了錢）：拿回來、版號對上，os_farm 換成它重開
+    function latest() {
+        return api('GET').then(function (doc) {
+            if (doc && doc.state) { setMeta({ rev: doc.rev || 0, dirty: false, syncedAt: Date.now() }); lastJson = JSON.stringify(doc.state); }
+            return doc;
+        });
+    }
 
     // 面板按「連線」：先試這組網址通行碼，通了才開
     function connect(url, token) {
@@ -326,6 +333,11 @@
             return res.json();
         }).finally(function () { clearTimeout(t); });
     }
+    // ── 雇人打工（10-11）：規則、扣錢、付工錢都在伺服器（VPS garden.js 的「雇人打工」那段），這裡只送單子、拿單子 ──
+    // hires：{ list: [單子，新的在前], earned: { dan, aluo, keyu }, pcAlive }；hire 回 { ok, message, job }（錢不夠、他手上有單子是 ok:false）
+    function hires() { return enabled() ? call('GET', '/v1/farm-hires') : Promise.reject(new Error('off')); }
+    function hire(worker, size, ask) { return call('POST', '/v1/farm-hire', { worker: worker, size: size, ask: ask || '' }); }
+    function hireCancel(id) { return call('POST', '/v1/farm-hire/cancel', { id: id }); }
     var PEOPLE = [{ id: 'aluo', name: '阿洛' }, { id: 'dan', name: '丹' }];
     try {
         if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
@@ -450,6 +462,7 @@
         status: function () { return status; }, onStatus: onStatus,
         openSync: openSync, changed: changed, flush: flush, setOnNewer: setOnNewer,
         connect: connect, disconnect: disconnect, panel: panel, peek: peek, residentsPanel: residentsPanel, BACKUP_KEY: BACKUP_KEY,
-        steal: steal, steals: steals, claimSteals: claimSteals, errText: errText
+        steal: steal, steals: steals, claimSteals: claimSteals, errText: errText,
+        latest: latest, hires: hires, hire: hire, hireCancel: hireCancel
     };
 })();

@@ -99,6 +99,7 @@
         }
     };
     var ANIMAL_REACH = { cow: 11, sheep: 9, chicken: 7 };
+    var KIND_NAME = { cow: '牛', sheep: '羊', chicken: '雞' };
     var ITEM_REACH = 6;
     // 工具放哪裡：水壺在後院工具棚，桶子剪刀在牧場棚屋
     var TOOLS = {
@@ -232,12 +233,13 @@
             var a = r.animals.find(function (x) { return x.id === key; });
             if (a) {
                 var p = herdPos(state, a.id);
-                return { scene: 'ranch', x: p.x, y: p.y, reach: ANIMAL_REACH[a.kind] || 8, name: a.kind, animal: a };
+                // name 給 goTo 那句「走到 … 旁邊」用（以前寫 cow，住戶看到的是英文代號）
+                return { scene: 'ranch', x: p.x, y: p.y, reach: ANIMAL_REACH[a.kind] || 8, name: (KIND_NAME[a.kind] || a.kind) + '（' + a.id + '）', animal: a };
             }
             var kinds = [['drops', 'drop'], ['poops', 'poop'], ['weeds', 'weed']];
             for (var k = 0; k < kinds.length; k++) {
                 var it = r[kinds[k][0]].find(function (x) { return x.id === key; });
-                if (it) { var s = itemSpot(it.id, kinds[k][1]); return { scene: 'ranch', x: s.x, y: s.y, reach: ITEM_REACH, name: kinds[k][1] }; }
+                if (it) { var s = itemSpot(it.id, kinds[k][1]); return { scene: 'ranch', x: s.x, y: s.y, reach: ITEM_REACH, name: ({ drop: '地上的產出', poop: '那坨糞', weed: '那叢草' })[kinds[k][1]] + '（' + it.id + '）' }; }
             }
         }
         return null;

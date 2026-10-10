@@ -49,6 +49,7 @@
             '<button class="ranch-chip" type="button" data-farm="ranch-report"><i class="fa-solid fa-receipt"></i> 結算單</button>' +
             '<button class="ranch-chip" type="button" data-farm="ranch-cloud" data-farm-cloud><i class="fa-solid fa-cloud"></i> 雲端</button>' +
             '<button class="ranch-chip" type="button" data-farm="ranch-residents"><i class="fa-solid fa-user-clock"></i> 住戶</button>' +
+            '<button class="ranch-chip" type="button" data-farm="ranch-hire"><i class="fa-solid fa-handshake"></i> 雇人</button>' +
             '<button class="ranch-chip ranch-btn" type="button" data-farm="ranch-next-day"><i class="fa-solid fa-moon"></i> 結束今天</button>' +
             '</div>' +
             '<div class="farm-toast" data-farm="toast" role="status" aria-live="polite"></div>';
@@ -585,6 +586,8 @@
     $('ranch-cloud').addEventListener('click', function (ev) { ev.stopPropagation(); cloud.open(); });
     var people = window.FarmCloud.residentsPanel({ app: root, openCloud: function () { cloud.open(); } });
     $('ranch-residents').addEventListener('click', function (ev) { ev.stopPropagation(); people.open(); });
+    var hire = window.FarmHire.create({ app: root, state: function () { return state; }, ctx: ctx, openCloud: function () { cloud.open(); } });
+    $('ranch-hire').addEventListener('click', function (ev) { ev.stopPropagation(); hire.open(); });
     var bag = window.FarmBag.create({ app: root, scene: 'ranch', state: function () { return state; }, toast: toast });
     render();
     stage = window.FarmWalkStage.create({
@@ -615,7 +618,7 @@
             // 動物各自有停一下再走的計時器：全部停掉，不然換場景後還在背景亂跑
             clearInterval(nightTimer);
             herd.forEach(function (a) { clearTimeout(a.timer); a.gone = true; });
-            [stage, bag, shipUi, board, cloud, people].forEach(function (c) { if (c && c.destroy) c.destroy(); });
+            [stage, bag, shipUi, board, cloud, people, hire].forEach(function (c) { if (c && c.destroy) c.destroy(); });
             saveState();
         }
     };

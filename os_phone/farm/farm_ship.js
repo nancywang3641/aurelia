@@ -116,6 +116,10 @@
             var stolenHtml = rep.stolen && rep.stolen.length ? '<h4>偷吃來的<b>+' + rep.stolenTotal + 'G</b></h4><ul class="fs-spent">' + rep.stolen.map(function (s) {
                 return '<li><span>' + esc(s.note) + '</span><b>+' + s.amount + 'G</b></li>';
             }).join('') + '</ul>' : '';
+            // 打工賺的、雇人退回來的（10-11；沒有就整段不出現）
+            var earnedHtml = rep.earned && rep.earned.length ? '<h4>打工、退回來的<b>+' + rep.earnedTotal + 'G</b></h4><ul class="fs-spent">' + rep.earned.map(function (s) {
+                return '<li><span>' + esc(s.note) + '</span><b>+' + s.amount + 'G</b></li>';
+            }).join('') + '</ul>' : '';
             var ev = eventLines(rep);
             var evHtml = ev.length ? '<h4>昨天發生的事</h4><ul class="fs-events">' + ev.map(function (e) {
                 return '<li' + (e.bad ? ' class="bad"' : '') + '>' + fa(e.icon) + '<span>' + esc(e.text) + '</span></li>';
@@ -127,7 +131,7 @@
                 '<h4>出貨<b>+' + rep.income + 'G</b></h4>' +
                 '<div class="fs-buyer"><span class="fs-nova">' + window.FarmItemDraw.buyerSvg() + '</span><div><strong>' + BUYER.name + '</strong>' +
                 (rep.buyer && rep.buyer.say ? '<p>' + esc(rep.buyer.say) + '</p>' : '<p>' + (rep.sold.length ? '照牌價收走了這些。' : '今天沒有收到貨。') + '</p>') + '</div></div>' +
-                '<ul class="fs-sold">' + sold + '</ul>' + stolenHtml +
+                '<ul class="fs-sold">' + sold + '</ul>' + stolenHtml + earnedHtml +
                 '<h4>花掉的<b class="minus">' + money(rep.spentTotal) + '</b></h4><ul class="fs-spent">' + spent + '</ul>' +
                 evHtml + '</div>' +
                 '<footer class="fs-foot"><button type="button" class="fs-ok">知道了</button></footer></section>';

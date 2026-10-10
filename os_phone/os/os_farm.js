@@ -20,7 +20,7 @@
     var FILES = [
         'farm_core.js', 'ranch_core.js', 'farm_walk_core.js', 'farm_ship_core.js',
         'farm_plot_draw.js', 'farm_item_draw.js', 'ranch_draw.js',
-        'farm_walk_ui.js', 'farm_bag.js', 'farm_ship.js', 'farm_board.js', 'farm_cloud.js',
+        'farm_walk_ui.js', 'farm_bag.js', 'farm_ship.js', 'farm_board.js', 'farm_cloud.js', 'farm_hire.js',
         'farm_yard.js', 'farm_ranch.js', 'farm_visit.js'
     ];
     // 素材圖放 sound-files 的 farm/（跟大廳舞台同一個圖庫，走 jsdelivr）
@@ -141,6 +141,7 @@
         // 這次用哪一份已經決定好了（雲端那份也對過了）才補天數：另一台先補過的，拿到的那份就不會再補一次
         var caught = L.ship.catchUp(state, L, Date.now()).days;
         var scene = null, sceneName = '', toastTimer = 0, watch = 0;
+        var pullNote = '';   // 換成伺服器那份重開時要說的話（雇的人做完了、剛雇人扣了錢）
         var Cloud = window.FarmCloud;
         // 存在這台；雲端存檔開著的話順便送上去（停手一下才送）
         function save() {
@@ -168,7 +169,23 @@
             exit: function () { end(); if (window.PhoneSystem && window.PhoneSystem.goHome) window.PhoneSystem.goHome(); },
             // 雲端存檔剛連上、按了立即同步：這一格重開一次，開的時候就會跟伺服器對一次
             //   這裡只存這台、不先送：送上去跟重開時的比對會撞在一起，讓重開那一次自己決定要送還是要拿
-            resync: function () { var c = root.parentNode; end('local'); if (c) launch(c); }
+            resync: function () { var c = root.parentNode; end('local'); if (c) launch(c); },
+            // 伺服器上這塊田被動過（剛雇人扣了錢、雇的人做完了）：手上沒送的先送，再換成伺服器上最新那份重開，跳 note 那句
+            //   送的時候撞到（另一份比較新）會走 setOnNewer 那條重開，用的也是 note
+            pull: function (note) {
+                if (!Cloud || !Cloud.enabled()) return;
+                pullNote = note || '';
+                var mine = session;
+                Cloud.flush().then(function () {
+                    return session === mine ? Cloud.latest() : null;
+                }).then(function (doc) {
+                    if (!doc || !doc.state || session !== mine) return;
+                    var c = root.parentNode;
+                    try { localStorage.setItem(STORE_KEY, JSON.stringify(doc.state)); } catch (e) {}
+                    end('drop');
+                    if (c) launch(c, { raw: doc.state, note: pullNote });
+                }).catch(function () { if (session === mine && pullNote) toast(pullNote); });
+            }
         };
         function go(name, arg) {
             if (scene) scene.destroy();
@@ -219,7 +236,7 @@
             var c = root.parentNode;
             try { localStorage.setItem(STORE_KEY, JSON.stringify(remote)); } catch (e) {}
             end('drop');
-            if (c) launch(c, { raw: remote, note: '另一台裝置剛存過這塊田，換成最新的了' });
+            if (c) launch(c, { raw: remote, note: pullNote || '另一台裝置剛存過這塊田，換成最新的了' });
         });
         go(state.walk && state.walk.scene === 'ranch' ? 'ranch' : 'yard');
         if (caught) save();

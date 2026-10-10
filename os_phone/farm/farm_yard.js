@@ -39,6 +39,7 @@
             '<button class="farm-tool" type="button" data-farm="report"><i class="fa-solid fa-receipt"></i>結算單</button>' +
             '<button class="farm-tool" type="button" data-farm="cloud" data-farm-cloud><i class="fa-solid fa-cloud"></i>雲端</button>' +
             '<button class="farm-tool" type="button" data-farm="residents"><i class="fa-solid fa-user-clock"></i>住戶</button>' +
+            '<button class="farm-tool" type="button" data-farm="hire"><i class="fa-solid fa-handshake"></i>雇人</button>' +
             '<button class="farm-tool primary" type="button" data-farm="end-day"><i class="fa-solid fa-moon"></i>結束今天</button>' +
             '</div>' +
             '<aside class="farm-stats" aria-label="農場狀態">' +
@@ -70,7 +71,7 @@
         var $ = function (k) { return root.querySelector('[data-farm="' + k + '"]'); };
         var plotsRoot = $('plots');
         var selectedCrop = 'stardew';
-        var stage = null, shipUi = null, board = null, bag = null, cloud = null, people = null;
+        var stage = null, shipUi = null, board = null, bag = null, cloud = null, people = null, hire = null;
         var S = function () { return ctx.state(); };
         var act = ctx.act;
 
@@ -252,6 +253,8 @@
         $('cloud').addEventListener('click', function () { cloud.open(); });
         people = window.FarmCloud.residentsPanel({ app: app, openCloud: function () { cloud.open(); } });
         $('residents').addEventListener('click', function () { people.open(); });
+        hire = window.FarmHire.create({ app: app, state: S, ctx: ctx, openCloud: function () { cloud.open(); } });
+        $('hire').addEventListener('click', function () { hire.open(); });
         bag = window.FarmBag.create({ app: app, scene: 'yard', state: S, ctx: bagCtx, toast: ctx.toast });
         stage = window.FarmWalkStage.create({
             app: app, world: $('stage'), scene: 'yard', state: S, targets: targets, zFixed: 17,
@@ -264,7 +267,7 @@
             stage: stage,
             render: render,
             destroy: function () {
-                [stage, bag, shipUi, board, cloud, people].forEach(function (c) { if (c && c.destroy) c.destroy(); });
+                [stage, bag, shipUi, board, cloud, people, hire].forEach(function (c) { if (c && c.destroy) c.destroy(); });
                 ctx.save();
             }
         };

@@ -464,8 +464,9 @@
 .aurelia-farm .farm-loading.is-error { color: #8a3b2b; }
 .aurelia-farm .farm-loading button { padding: 7px 14px; border: 2px solid #8b5a2b; border-radius: 9px; background: #fbeccb; color: #5e3b18; font-weight: 700; cursor: pointer; }
 
-/* ── farm_cloud：雲端存檔（跟看板同一套木框，小一號）── */
-.aurelia-farm .fc-wrap {position: absolute; inset: 0; z-index: 92; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 14px; background: rgba(33,26,16,.32);}
+/* ── farm_cloud：雲端存檔（跟看板同一套木框，小一號）──
+   z-index 140：要蓋過牧場右上那排（.ranch-hud／.ranch-lead 130），不然牧場裡打開雲端、住戶、雇人，木框最上面那條被那排壓住（10-11 雇人面板抓到） */
+.aurelia-farm .fc-wrap {position: absolute; inset: 0; z-index: 140; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 14px; background: rgba(33,26,16,.32);}
 .aurelia-farm .fc-wrap[hidden] {display: none;}
 .aurelia-farm .fc-card {display: flex; flex-direction: column; width: min(380px, 100%);
     border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
@@ -518,6 +519,49 @@
 .aurelia-farm .fr-note {display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 6px 9px; border-radius: 9px; background: #fffaf0; border: 1px dashed #d7b27a; font-size: 12px; line-height: 1.5; color: #4a3218;}
 .aurelia-farm .fr-note i {margin-top: 3px; color: #c9a46a;}
 .aurelia-farm .fr-foot {display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 12px; color: #a8834e;}
+
+/* ── 雇人（farm_hire.js）：誰來、做多少、交代、最近的單子（木框跟住戶面板同一套）── */
+.aurelia-farm .fh-panel {width: min(440px, 100%); max-height: 100%;}
+.aurelia-farm .fh-panel .fc-body {overflow: auto; min-height: 0;}
+.aurelia-farm .fh-block {display: grid; gap: 7px;}
+.aurelia-farm .fh-block h4 {margin: 0; font-size: 12px; font-weight: 700; color: #8b5a2b; letter-spacing: .08em;}
+.aurelia-farm .fh-people, .aurelia-farm .fh-sizes {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px;}
+.aurelia-farm .fh-who, .aurelia-farm .fh-size {display: grid; justify-items: center; gap: 3px; padding: 9px 6px 8px; border: 2px solid #d7b27a; border-radius: 11px;
+    background: #fffaf0; color: #3f2a12; font-family: inherit; cursor: pointer; text-align: center; min-width: 0;}
+.aurelia-farm .fh-who:hover, .aurelia-farm .fh-size:hover {border-color: #b88a4e;}
+.aurelia-farm .fh-who.is-on, .aurelia-farm .fh-size.is-on {border-color: #557b48; background: #eef5df; box-shadow: inset 0 0 0 1px #557b48;}
+.aurelia-farm .fh-who b {display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff; font-size: 16px; font-weight: 800;
+    border: 2px solid rgba(63,42,18,.25);}
+.aurelia-farm .fh-dan b {background: #e0884a;}
+.aurelia-farm .fh-aluo b {background: #4f8f86;}
+.aurelia-farm .fh-keyu b {background: #8a70b8;}
+.aurelia-farm .fh-who strong, .aurelia-farm .fh-size strong {font-size: 14px;}
+.aurelia-farm .fh-who small, .aurelia-farm .fh-size small {font-size: 11px; color: #8b6a3e; line-height: 1.3;}
+.aurelia-farm .fh-size b {font-size: 14px; color: #8a5a14;}
+.aurelia-farm .fh-ask {width: 100%; box-sizing: border-box; resize: none; padding: 8px 10px; border: 2px solid #d7b27a; border-radius: 9px;
+    background: #fffaf0; color: #3f2a12; font-family: inherit; font-size: 13px; line-height: 1.5; outline: none;}
+.aurelia-farm .fh-ask:focus {border-color: #8b5a2b;}
+.aurelia-farm .fh-chips {display: flex; flex-wrap: wrap; gap: 6px;}
+.aurelia-farm .fh-chip {padding: 5px 10px; border: 1px solid #d7b27a; border-radius: 999px; background: #fbeccb; color: #6c4a22; font-family: inherit; font-size: 12px; cursor: pointer;}
+.aurelia-farm .fh-chip.is-on {background: #557b48; border-color: #3e5d34; color: #fff;}
+.aurelia-farm .fh-send {flex: 1 1 auto;}
+.aurelia-farm .fh-coins {display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin: -4px 2px 0; font-size: 12px; color: #8a5a14;}
+.aurelia-farm .fh-jobs {display: grid; gap: 6px; margin: 0; padding: 0; list-style: none;}
+.aurelia-farm .fh-job {display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: #fbeccb; border-left: 4px solid #d7b27a;}
+.aurelia-farm .fh-job.is-wait {border-left-color: #c9a046;}
+.aurelia-farm .fh-job.is-work {border-left-color: #4f8f86;}
+.aurelia-farm .fh-job.is-done {border-left-color: #557b48;}
+.aurelia-farm .fh-job.is-back {border-left-color: #b9a58a; opacity: .85;}
+.aurelia-farm .fh-job header {display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;}
+.aurelia-farm .fh-job header strong {font-size: 14px;}
+.aurelia-farm .fh-job header span {font-size: 12px; color: #8b6a3e;}
+.aurelia-farm .fh-job header em {display: inline-flex; align-items: center; gap: 4px; font-style: normal; font-size: 12px; font-weight: 700; color: #4a3218;}
+.aurelia-farm .fh-job header time {margin-left: auto; font-size: 11px; color: #a8834e;}
+.aurelia-farm .fh-job p {display: grid; gap: 2px; margin: 0; font-size: 12px; line-height: 1.5; color: #4a3218; word-break: break-word;}
+.aurelia-farm .fh-job p small {font-size: 11px; color: #8b6a3e;}
+.aurelia-farm .fh-cancel {justify-self: start; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid #b88a4e; border-radius: 8px;
+    background: #fffaf0; color: #6c4a22; font-family: inherit; font-size: 12px; cursor: pointer;}
+.aurelia-farm .fh-empty {margin: 0; font-size: 12px; color: #a8834e;}
 
 /* ── 做客（farm_visit.js）＋看板「去他家」── */
 .aurelia-farm .fd-visit {display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 2px solid #8b5a2b; border-radius: 9px; background: #fffaf0; color: #5e3b18; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer;}

@@ -32,7 +32,7 @@
     // history：以前的結算單（新的在前，留 HISTORY_KEEP 天）；totals：從第一天一路加上來的（看板最上面那幾格）
     var HISTORY_KEEP = 60;
     // settledTo：這塊地「現在這一天」在哪個時間點結束（毫秒）；0＝照真時間以前的舊存檔
-    function createShip() { return { bin: [], report: null, history: [], totals: { days: 0, income: 0, spent: 0, stolen: 0 }, settledTo: 0 }; }
+    function createShip() { return { bin: [], report: null, history: [], totals: { days: 0, income: 0, spent: 0, stolen: 0, earned: 0 }, settledTo: 0 }; }
     function normalizeShip(raw) {
         var s = createShip();
         if (!raw) return s;
@@ -43,7 +43,7 @@
         }
         if (raw.report && typeof raw.report === 'object') s.report = raw.report;
         if (Array.isArray(raw.history)) s.history = raw.history.filter(function (r) { return r && typeof r === 'object' && Number.isFinite(Number(r.day)); }).slice(0, HISTORY_KEEP);
-        if (raw.totals) ['days', 'income', 'spent', 'stolen'].forEach(function (k) { s.totals[k] = int(raw.totals[k]); });
+        if (raw.totals) ['days', 'income', 'spent', 'stolen', 'earned'].forEach(function (k) { s.totals[k] = int(raw.totals[k]); });
         if (Number(raw.settledTo) > 0) s.settledTo = Number(raw.settledTo);
         // 看板之前的舊存檔只有上一張：先放進歷史，總額從那張開始算
         if (!s.history.length && s.report) {
@@ -146,13 +146,18 @@
             return { note: crop ? e.note + '：' + crop.name : e.note, amount: e.amount };
         }).reverse();
         var stolenTotal = stolen.reduce(function (s, x) { return s + x.amount; }, 0);
+        // 打工賺的、雇人退回來的（10-11 雇人打工：伺服器記一筆 wage／refund）：也上結算單，金幣起訖才對得上
+        var earned = (state.ledger || []).filter(function (e) { return e.day === day && (e.type === 'wage' || e.type === 'refund') && e.amount > 0; }).map(function (e) {
+            return { note: e.note, amount: e.amount };
+        }).reverse();
+        var earnedTotal = earned.reduce(function (s, x) { return s + x.amount; }, 0);
         var farmOut = libs.farm.advanceDay(state);
         var ranchOut = libs.ranch ? libs.ranch.advanceDay(state, opts) : null;
         if (libs.walk) libs.walk.advanceDay(state, opts);
         var report = {
             day: day, sold: sold, income: income, spent: spent, spentTotal: spentTotal,
-            stolen: stolen, stolenTotal: stolenTotal, net: income + spentTotal + stolenTotal,
-            coinsStart: coinsBefore - spentTotal - stolenTotal, coinsEnd: state.coins,
+            stolen: stolen, stolenTotal: stolenTotal, earned: earned, earnedTotal: earnedTotal, net: income + spentTotal + stolenTotal + earnedTotal,
+            coinsStart: coinsBefore - spentTotal - stolenTotal - earnedTotal, coinsEnd: state.coins,
             farm: farmOut.report, ranch: ranchOut, buyer: null
         };
         var sh = S(state);
@@ -163,6 +168,7 @@
         sh.totals.income += income;
         sh.totals.spent += spentTotal;
         sh.totals.stolen += stolenTotal;
+        sh.totals.earned += earnedTotal;
         return result(true, 'day_ended', '第 ' + day + ' 日結算完成。', { report: report });
     }
 
