@@ -1,32 +1,86 @@
 // ============================================================
-// ranch_draw.js — 牧場動物用程式畫（局外 LAB）
+// ranch_draw.js — 牧場動物用程式畫
 // ------------------------------------------------------------
-// FarmAnimalDraw.svg({ kind }) → '<svg …>'，一律面朝右（往左走時外層水平翻過來）。
-//   kind：chicken 雞 / sheep 羊 / cow 牛 / cat 寵物貓
-//   腳分 a、b 兩組，走路時交替擺動（class ra-leg-a / ra-leg-b）；身體有一點上下晃（ra-body）。
-//   陰影畫在最底下，不跟著晃。
+// FarmAnimalDraw.svg({ kind }) → '<svg …>'，一律面朝右（往左走時外層水平翻過來），腳底在畫面 92% 的高度。
+//   kind：chicken 雞 / chick 小雞（小的雞用這張）/ sheep 羊 / cow 牛 / cat 貓 / dog 狗
+// 10-11 照阿洛那張 Q 版參考表重畫：頭大腳短、大眼睛兩點高光、腮紅、暖棕描線（她：「可愛多了」）。
+//   羊毛照 09-29 她挑的棉花糖（邊幾乎平滑）；狗是垂耳、離臉一點。
+// 動作掛在外層（.ranch-animal）的 class，一次只掛一個：
+//   ra-idle 站著（呼吸、眨眼、抬頭看看）／ra-walk 走路／ra-run 跑／ra-eat 低頭吃
+//   ra-happy 開心（蹦、瞇眼、冒愛心）／ra-sleep 睡覺（腳收起來趴著、閉眼、冒 z）
+// 🚨 給 CSS 動的那個元素本身不能有 transform 屬性（會被 CSS 蓋掉）：愛心、zzz 外面包一層 g 放位置就是為這個。
+// 另外：產出（蛋／毛／奶）、地上的雜草糞便、飼料槽的乾草、狗屋、野狼來過的痕跡。
 // ============================================================
 (function (root) {
     'use strict';
 
     var uid = 0;
+    var OL = '#5b3c2c';      // 描線：暖深棕
+    var EYE = '#2a1912';
 
     var CSS = [
-        '.ra-leg-a,.ra-leg-b{transform-box:fill-box;transform-origin:50% 0;}',
-        '.ra-body{transform-box:view-box;}',
-        '.ra-walk .ra-leg-a{animation:ra-step .42s ease-in-out infinite alternate;}',
-        '.ra-walk .ra-leg-b{animation:ra-step .42s ease-in-out infinite alternate-reverse;}',
-        '.ra-walk .ra-body{animation:ra-bob .21s ease-in-out infinite alternate;}',
-        '.ra-idle .ra-head{transform-box:fill-box;transform-origin:30% 90%;animation:ra-peck 3.2s ease-in-out infinite;}',
-        '.ra-idle .ra-tail{transform-box:fill-box;transform-origin:90% 20%;animation:ra-wag 2.4s ease-in-out infinite;}',
-        '@keyframes ra-step{from{transform:rotate(-16deg)}to{transform:rotate(16deg)}}',
-        '@keyframes ra-bob{from{transform:translateY(0)}to{transform:translateY(-1.2px)}}',
-        '@keyframes ra-peck{0%,70%,100%{transform:rotate(0)}78%{transform:rotate(14deg)}86%{transform:rotate(0)}}',
-        '@keyframes ra-wag{0%,100%{transform:rotate(0)}50%{transform:rotate(-10deg)}}',
-        // 狗的尾巴：不管走著停著都在搖，搖得比較快
-        '.ra-wag-fast{transform-box:fill-box;transform-origin:90% 90%;animation:ra-wagf .32s ease-in-out infinite alternate!important;}',
-        '@keyframes ra-wagf{from{transform:rotate(-14deg)}to{transform:rotate(12deg)}}',
-        '@media (prefers-reduced-motion:reduce){.ra-walk *,.ra-idle *{animation:none!important;}}'
+        '.ra-animal .ra-leg-a,.ra-animal .ra-leg-b{transform-box:fill-box;transform-origin:50% 0;}',
+        '.ra-animal .ra-all,.ra-animal .ra-body{transform-box:view-box;transform-origin:50% 92%;}',
+        '.ra-animal .ra-shadow{transform-box:fill-box;transform-origin:50% 50%;}',
+        '.ra-animal .ra-head{transform-box:fill-box;transform-origin:var(--ho,30% 90%);}',
+        '.ra-animal .ra-tail{transform-box:fill-box;transform-origin:var(--to,90% 20%);}',
+        '.ra-animal .ra-eo{transform-box:fill-box;transform-origin:50% 50%;}',
+        '.ra-animal .ra-fx-heart,.ra-animal .ra-fx-z{transform-box:fill-box;transform-origin:50% 50%;}',
+        '.ra-animal .ra-eh,.ra-animal .ra-es,.ra-animal .ra-fx-heart,.ra-animal .ra-fx-z{display:none;}',
+        // 站著：呼吸、眨眼、偶爾抬頭看看
+        '.ra-idle .ra-animal .ra-body{animation:ra-breathe 2.4s ease-in-out infinite;}',
+        '.ra-idle .ra-animal .ra-head{animation:ra-look 6.5s ease-in-out infinite;}',
+        '.ra-idle .ra-animal .ra-tail{animation:ra-wag 2.4s ease-in-out infinite;}',
+        '.ra-idle .ra-animal .ra-eo,.ra-walk .ra-animal .ra-eo,.ra-eat .ra-animal .ra-eo,.ra-run .ra-animal .ra-eo{animation:ra-blink 4.6s infinite;}',
+        // 走路：腳交替、身體一顛一顛
+        '.ra-walk .ra-animal .ra-leg-a{animation:ra-step .36s ease-in-out infinite alternate;}',
+        '.ra-walk .ra-animal .ra-leg-b{animation:ra-step .36s ease-in-out infinite alternate-reverse;}',
+        '.ra-walk .ra-animal .ra-body{animation:ra-bob .18s ease-in-out infinite alternate;}',
+        '.ra-walk .ra-animal .ra-tail{animation:ra-wag .6s ease-in-out infinite;}',
+        // 跑：腳甩更開、身體往前傾
+        '.ra-run .ra-animal .ra-leg-a{animation:ra-stride .2s linear infinite alternate;}',
+        '.ra-run .ra-animal .ra-leg-b{animation:ra-stride .2s linear infinite alternate-reverse;}',
+        '.ra-run .ra-animal .ra-all{animation:ra-gallop .2s ease-in-out infinite alternate;}',
+        '.ra-run .ra-animal .ra-tail{animation:ra-wag .3s ease-in-out infinite;}',
+        // 吃：低頭啃幾口
+        '.ra-eat .ra-animal .ra-head{animation:ra-eat var(--eatd,1.4s) ease-in-out infinite;}',
+        '.ra-eat .ra-animal .ra-body{animation:ra-breathe 2.4s ease-in-out infinite;}',
+        '.ra-eat .ra-animal .ra-tail{animation:ra-wag 1.2s ease-in-out infinite;}',
+        // 開心：原地蹦、瞇眼、冒愛心
+        '.ra-happy .ra-animal .ra-all{animation:ra-hop .6s ease-in-out infinite;}',
+        '.ra-happy .ra-animal .ra-shadow{animation:ra-shadow .6s ease-in-out infinite;}',
+        '.ra-happy .ra-animal .ra-tail{animation:ra-wag .3s ease-in-out infinite;}',
+        '.ra-happy .ra-animal .ra-eo,.ra-sleep .ra-animal .ra-eo{display:none;}',
+        '.ra-happy .ra-animal .ra-eh{display:inline;}',
+        '.ra-happy .ra-animal .ra-fx-heart{display:inline;animation:ra-float 1.2s ease-out infinite;}',
+        // 睡覺：腳收起來趴著、閉眼、慢慢呼吸、冒 z
+        '.ra-sleep .ra-animal .ra-leg-a,.ra-sleep .ra-animal .ra-leg-b{transform:scaleY(.22);}',
+        '.ra-sleep .ra-animal .ra-all{transform:translateY(var(--sit,4px));}',
+        '.ra-sleep .ra-animal .ra-body{animation:ra-breathe 3.2s ease-in-out infinite;}',
+        '.ra-sleep .ra-animal .ra-head{transform:rotate(var(--nod,6deg));}',
+        '.ra-sleep .ra-animal .ra-es{display:inline;}',
+        '.ra-sleep .ra-animal .ra-fx-z{display:inline;animation:ra-z 2.4s ease-out infinite;}',
+        '.ra-sleep .ra-animal .ra-fx-z.z2{animation-delay:.8s;}',
+        '.ra-sleep .ra-animal .ra-fx-z.z3{animation-delay:1.6s;}',
+        '.ra-sleep .ra-animal .ra-shadow{transform:scale(1.08,.9);}',
+        // 狗尾巴：醒著就一直搖
+        '.ra-animal .ra-wag-fast{animation:ra-wagf .3s ease-in-out infinite alternate!important;}',
+        '.ra-sleep .ra-animal .ra-wag-fast{animation:none!important;}',
+        '@keyframes ra-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,1.03)}}',
+        '@keyframes ra-blink{0%,93%,100%{transform:scaleY(1)}95.5%{transform:scaleY(.08)}}',
+        '@keyframes ra-look{0%,40%,100%{transform:rotate(0)}48%,68%{transform:rotate(-6deg)}76%{transform:rotate(3deg)}84%{transform:rotate(0)}}',
+        '@keyframes ra-step{from{transform:rotate(-22deg)}to{transform:rotate(22deg)}}',
+        '@keyframes ra-stride{from{transform:rotate(-36deg)}to{transform:rotate(36deg)}}',
+        '@keyframes ra-bob{from{transform:translateY(0)}to{transform:translateY(calc(var(--bob,1.5px) * -1))}}',
+        '@keyframes ra-gallop{from{transform:translateY(0) rotate(0)}to{transform:translateY(calc(var(--bob,1.5px) * -2.2)) rotate(5deg)}}',
+        '@keyframes ra-wag{0%,100%{transform:rotate(0)}50%{transform:rotate(-12deg)}}',
+        '@keyframes ra-wagf{from{transform:rotate(-16deg)}to{transform:rotate(14deg)}}',
+        '@keyframes ra-eat{0%,100%{transform:rotate(0)}22%,78%{transform:rotate(var(--eat,24deg))}36%,64%{transform:rotate(calc(var(--eat,24deg) - 6deg))}50%{transform:rotate(var(--eat,24deg))}}',
+        '@keyframes ra-hop{0%,100%{transform:translateY(0) scale(1.05,.94)}15%{transform:translateY(0) scale(1,1)}45%{transform:translateY(calc(var(--jump,8px) * -1)) scale(.97,1.04)}75%{transform:translateY(0) scale(1.04,.95)}}',
+        '@keyframes ra-shadow{0%,15%,75%,100%{transform:scale(1);opacity:1}45%{transform:scale(.72);opacity:.6}}',
+        '@keyframes ra-float{0%{transform:translateY(0) scale(.4);opacity:0}25%{transform:translateY(-3px) scale(1.12);opacity:1}100%{transform:translateY(-13px) scale(1);opacity:0}}',
+        '@keyframes ra-z{0%{transform:translate(0,0) scale(.5);opacity:0}30%{opacity:1}100%{transform:translate(6px,-11px) scale(1.15);opacity:0}}',
+        '@media (prefers-reduced-motion:reduce){.ra-animal *{animation:none!important;}}'
     ].join('');
 
     function ensureCss(doc) {
@@ -38,164 +92,284 @@
         (doc.head || doc.documentElement).appendChild(st);
     }
 
+    function n(v) { return Math.round(v * 100) / 100; }
+    // 有描線的形狀
+    function o(sw) { return ' class="o" stroke="' + OL + '" stroke-width="' + sw + '" stroke-linejoin="round" stroke-linecap="round"'; }
+    function lg(id, a, b) {
+        return '<linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + a + '"/><stop offset="1" stop-color="' + b + '"/></linearGradient>';
+    }
+    // 產出圖示用的圓形漸層（亮面在左上）
     function grad(id, a, b) {
         return '<radialGradient id="' + id + '" cx=".38" cy=".3" r=".8"><stop offset="0" stop-color="' + a + '"/><stop offset="1" stop-color="' + b + '"/></radialGradient>';
     }
-    function leg(x, y1, y2, w, fill, hoof, cls) {
-        return '<g class="' + cls + '"><rect x="' + (x - w / 2) + '" y="' + y1 + '" width="' + w + '" height="' + (y2 - y1) + '" rx="' + (w / 2) + '" fill="' + fill + '"/>' +
-            (hoof ? '<rect x="' + (x - w / 2) + '" y="' + (y2 - 2.4) + '" width="' + w + '" height="2.6" rx="1" fill="' + hoof + '"/>' : '') + '</g>';
+    // 好幾塊疊成一隻（頭＋身體）：先畫一層加粗的描線色、再蓋一層填色＝只有外圍一圈線，接縫看不到
+    function merge(shapes, fill, sw) {
+        return '<g class="ra-ol" fill="' + OL + '" stroke="' + OL + '" stroke-width="' + (sw * 2) + '" stroke-linejoin="round">' + shapes + '</g>' +
+            '<g fill="' + fill + '">' + shapes + '</g>';
     }
-
-    // 一團毛的外形：沿著橢圓繞一圈，每一段往外拱一點（大小不一），裡面不畫線。
-    // n＝拱幾段、amp＝拱多高（0 幾乎是平滑的橢圓）、seed＝固定亂數，同一隻每次長一樣。
-    function cloudPath(cx, cy, rx, ry, n, amp, seed) {
+    // 眼睛：睜開（兩點高光）／開心瞇眼 ∩／睡著 ∪
+    function eyes(list, sw, col, shut) {
+        col = col || EYE;
+        shut = shut || col;
+        var open = '', happy = '', sleep = '';
+        list.forEach(function (e) {
+            var x = e[0], y = e[1], rx = e[2], ry = e[3];
+            open += '<ellipse cx="' + x + '" cy="' + y + '" rx="' + rx + '" ry="' + ry + '" fill="' + col + '"/>' +
+                '<ellipse cx="' + n(x + rx * .28) + '" cy="' + n(y - ry * .36) + '" rx="' + n(rx * .44) + '" ry="' + n(ry * .37) + '" fill="#fff"/>' +
+                '<circle cx="' + n(x - rx * .32) + '" cy="' + n(y + ry * .44) + '" r="' + n(rx * .19) + '" fill="#fff" opacity=".85"/>';
+            happy += '<path d="M' + n(x - rx * 1.05) + ' ' + n(y + ry * .3) + 'Q' + x + ' ' + n(y - ry * 1.05) + ' ' + n(x + rx * 1.05) + ' ' + n(y + ry * .3) + '"/>';
+            sleep += '<path d="M' + n(x - rx * 1.05) + ' ' + n(y - ry * .05) + 'Q' + x + ' ' + n(y + ry * .85) + ' ' + n(x + rx * 1.05) + ' ' + n(y - ry * .05) + '"/>';
+        });
+        var st = ' fill="none" stroke="' + shut + '" stroke-width="' + n(sw * 1.25) + '" stroke-linecap="round"';
+        return '<g class="ra-eo">' + open + '</g><g class="ra-eh"' + st + '>' + happy + '</g><g class="ra-es"' + st + '>' + sleep + '</g>';
+    }
+    function blush(list) {
+        return list.map(function (b) {
+            return '<ellipse cx="' + b[0] + '" cy="' + b[1] + '" rx="' + b[2] + '" ry="' + b[3] + '" fill="#ff8a8a" opacity=".5"/>';
+        }).join('');
+    }
+    // 頭頂冒的東西：愛心、zzz（外面包一層 g 放位置，裡面那個才給 CSS 動，不然 transform 會被蓋掉）
+    function fx(x, y, s) {
+        return '<g transform="translate(' + x + ' ' + y + ') scale(' + s + ')">' +
+            '<path class="ra-fx-heart" d="M0 3.2C-1.6 -.6 -6.4 -.4 -6.4 3.4C-6.4 6.6 -2.6 8.6 0 11C2.6 8.6 6.4 6.6 6.4 3.4C6.4 -.4 1.6 -.6 0 3.2Z" fill="#ff6f86" stroke="#c43c56" stroke-width=".9"/>' +
+            '<g font-family="Arial Rounded MT Bold,Arial,sans-serif" font-weight="900" fill="#8193d6" stroke="#fff" stroke-width="1.2" paint-order="stroke">' +
+            '<text class="ra-fx-z z1" x="-2" y="8" font-size="7">z</text>' +
+            '<text class="ra-fx-z z2" x="3" y="3" font-size="8.5">z</text>' +
+            '<text class="ra-fx-z z3" x="8.5" y="-3" font-size="10">Z</text></g></g>';
+    }
+    function leg(x, y1, y2, w, fill, foot, sw, cls) {
+        return '<g class="' + cls + '"><rect x="' + n(x - w / 2) + '" y="' + y1 + '" width="' + w + '" height="' + n(y2 - y1) + '" rx="' + n(w / 2) + '" fill="' + fill + '"' + o(sw) + '/>' +
+            (foot ? '<path d="M' + n(x - w / 2 + sw / 2) + ' ' + n(y2 - w * .55) + 'h' + n(w - sw) + 'v' + n(w * .3) + 'a' + n(w / 2 - sw / 2) + ' ' + n(w * .25) + ' 0 0 1 -' + n(w - sw) + ' 0z" fill="' + foot + '"/>' : '') + '</g>';
+    }
+    // 羊毛的外形：沿著橢圓繞一圈、每段往外拱一點（09-29 她挑的棉花糖：邊幾乎平滑，裡面不畫一圈一圈的線）
+    function cloudPath(cx, cy, rx, ry, segs, amp, seed) {
         var s = seed || 1;
         var rnd = function () { s = (s * 9301 + 49297) % 233280; return s / 233280; };
         var ph = -Math.PI / 2 + .3;
         var at = function (t, grow) { return [cx + (rx + grow) * Math.cos(t), cy + (ry + grow) * Math.sin(t)]; };
         var f = function (p) { return p[0].toFixed(2) + ' ' + p[1].toFixed(2); };
         var d = 'M' + f(at(ph, 0));
-        for (var i = 0; i < n; i++) {
-            var t0 = ph + i / n * Math.PI * 2, t1 = ph + (i + 1) / n * Math.PI * 2;
+        for (var i = 0; i < segs; i++) {
+            var t0 = ph + i / segs * Math.PI * 2, t1 = ph + (i + 1) / segs * Math.PI * 2;
             var p0 = at(t0, 0), p1 = at(t1, 0), top = at((t0 + t1) / 2, amp * (.65 + .7 * rnd()));
-            // 二次曲線的中點＝(p0＋2C＋p1)/4，要它剛好落在 top：C＝2·top－(p0＋p1)/2
             d += 'Q' + f([2 * top[0] - (p0[0] + p1[0]) / 2, 2 * top[1] - (p0[1] + p1[1]) / 2]) + ' ' + f(p1);
         }
         return d + 'Z';
     }
-    // 羊毛：棉花糖——邊幾乎是平滑的，靠一塊高光和底下的陰影做出蓬鬆感（09-29 她在三種裡挑的 B）
-    function sheepWool(W, id) {
-        var d = cloudPath(45, 37, 25, 16, 18, 1.1, 5);
-        return '<path d="' + d + '" fill="' + W + '" stroke="#d6ccb8" stroke-width="1"/><path d="' + d + '" fill="url(#' + id + 'ws)"/>' +
-            '<ellipse cx="38" cy="29" rx="11" ry="5" transform="rotate(-8 38 29)" fill="#fff" opacity=".6"/>';
-    }
 
-    var DRAW = {
-        // 雞：白身、紅冠、黃嘴，尾巴翹起來
-        chicken: function (id) {
-            return {
-                vb: '0 0 60 60',
-                body:
-                    '<g class="ra-leg-a"><path d="M27 44L26 54M26 54l-3 1M26 54l3 1" stroke="#e3962c" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>' +
-                    '<g class="ra-leg-b"><path d="M33 44L34 54M34 54l-3 1M34 54l3 1" stroke="#e3962c" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>' +
-                    '<g class="ra-body">' +
-                    '<g class="ra-tail"><path d="M18 32C9 26 8 15 13 12C15 19 18 22 22 25C20 18 21 13 25 11C25 19 26 24 28 28Z" fill="#fbf8f2" stroke="#c9c1b4" stroke-width="1"/></g>' +
-                    '<ellipse cx="31" cy="36" rx="15" ry="11" fill="url(#' + id + 'b)" stroke="#c9c1b4" stroke-width="1"/>' +
-                    '<path d="M22 34C27 30 34 31 37 36C33 41 26 42 22 38Z" fill="#efe8dc" stroke="#d3cabb" stroke-width=".8"/>' +
-                    '<g class="ra-head"><circle cx="42" cy="24" r="7.5" fill="url(#' + id + 'b)" stroke="#c9c1b4" stroke-width="1"/>' +
-                    '<path d="M37 18.5C37 14 40 13 41 16C41.5 12 45 12 45 16C46 13.5 49 14.5 47.5 18.5Z" fill="#e0413a" stroke="#a82a25" stroke-width=".7"/>' +
-                    '<path d="M48.5 22.5L55 24.8L48.5 27Z" fill="#f2b233" stroke="#b97a17" stroke-width=".6"/>' +
-                    '<ellipse cx="47.5" cy="29.5" rx="1.6" ry="2.6" fill="#e0413a"/>' +
-                    '<circle cx="44.5" cy="22" r="1.3" fill="#2a2522"/><circle cx="44.9" cy="21.6" r=".4" fill="#fff"/></g>' +
-                    '</g>',
-                defs: grad(id + 'b', '#ffffff', '#e9e2d6'),
-                shadow: '<ellipse cx="30" cy="55" rx="14" ry="3" fill="rgba(40,50,25,.28)"/>'
-            };
-        },
-        // 羊：一團米白羊毛、黑臉黑腳
-        // 09-29 她：「那個泡泡的毛，我不太喜歡…有點起雞皮」——舊版是八顆小圓各自描邊疊起來，一顆顆輪廓＝泡泡群。
-        // 改成一整團毛：邊幾乎平滑，裡面不畫一圈一圈的線（見 sheepWool）。
-        sheep: function (id) {
-            var W = 'url(#' + id + 'w)';
-            return {
-                vb: '0 0 90 70',
-                body:
-                    leg(30, 44, 63, 4.2, '#3b342f', '#1f1a17', 'ra-leg-a') + leg(38, 45, 63, 4.2, '#3b342f', '#1f1a17', 'ra-leg-b') +
-                    leg(55, 45, 63, 4.2, '#3b342f', '#1f1a17', 'ra-leg-b') + leg(63, 44, 63, 4.2, '#3b342f', '#1f1a17', 'ra-leg-a') +
-                    '<g class="ra-body">' + sheepWool(W, id) +
-                    '<g class="ra-tail"><path d="' + cloudPath(18, 34, 5, 4.4, 6, .8, 3) + '" fill="' + W + '" stroke="#d6ccb8" stroke-width=".9"/></g>' +
-                    '<g class="ra-head"><ellipse cx="72" cy="31" rx="8" ry="10.5" transform="rotate(18 72 31)" fill="#3b342f"/>' +
-                    '<ellipse cx="64.5" cy="25" rx="5" ry="2.4" transform="rotate(-25 64.5 25)" fill="#2e2824"/>' +
-                    '<path d="' + cloudPath(70, 20.5, 6.2, 3.6, 5, .8, 9) + '" fill="' + W + '" stroke="#d6ccb8" stroke-width=".8"/>' +
-                    '<circle cx="74.5" cy="28" r="1.8" fill="#fff"/><circle cx="75" cy="28.3" r="1" fill="#1b1714"/>' +
-                    '<ellipse cx="77.5" cy="37" rx="2.2" ry="1.4" fill="#5a4f48"/></g>' +
-                    '</g>',
-                defs: grad(id + 'w', '#fffdf6', '#e8dfcb') +
-                    '<linearGradient id="' + id + 'ws" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#e4d9c3" stop-opacity="0"/><stop offset="1" stop-color="#d6c8ad" stop-opacity=".9"/></linearGradient>',
-                shadow: '<ellipse cx="46" cy="64" rx="26" ry="4" fill="rgba(40,50,25,.28)"/>'
-            };
-        },
-        // 牛：白底黑斑、粉鼻子、小角，肚子下一點粉紅
-        cow: function (id) {
-            return {
-                vb: '0 0 110 80',
-                body:
-                    leg(30, 50, 74, 6, '#f4f1ea', '#3a302a', 'ra-leg-a') + leg(40, 51, 74, 6, '#f4f1ea', '#3a302a', 'ra-leg-b') +
-                    leg(66, 51, 74, 6, '#f4f1ea', '#3a302a', 'ra-leg-b') + leg(76, 50, 74, 6, '#f4f1ea', '#3a302a', 'ra-leg-a') +
-                    '<g class="ra-body">' +
-                    '<g class="ra-tail"><path d="M24 32C17 38 16 48 17 55" stroke="#e8e2d6" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M15 53c1 4 4 5 5 1z" fill="#3a302a"/></g>' +
-                    '<clipPath id="' + id + 'c"><rect x="22" y="26" width="62" height="32" rx="15"/></clipPath>' +
-                    '<rect x="22" y="26" width="62" height="32" rx="15" fill="url(#' + id + 'h)" stroke="#cfc7b8" stroke-width="1.1"/>' +
-                    '<g clip-path="url(#' + id + 'c)" fill="#2f2926"><path d="M30 24C40 26 42 36 36 42C30 46 24 40 22 34Z"/><path d="M52 30C60 28 66 34 62 40C58 44 50 42 49 36Z"/><path d="M70 46C76 44 84 48 84 58L68 58C66 52 66 48 70 46Z"/></g>' +
-                    '<ellipse cx="48" cy="58" rx="6" ry="3.4" fill="#f2b3b0" stroke="#d98c88" stroke-width=".8"/>' +
-                    '<g class="ra-head">' +
-                    '<path d="M86 20L84 13M97 20L100 14" stroke="#efe3c6" stroke-width="2.6" stroke-linecap="round"/>' +
-                    '<ellipse cx="80.5" cy="24" rx="5" ry="2.6" transform="rotate(-20 80.5 24)" fill="#2f2926"/>' +
-                    '<rect x="81" y="17" width="20" height="26" rx="9" fill="url(#' + id + 'h)" stroke="#cfc7b8" stroke-width="1.1"/>' +
-                    '<path d="M81 26C85 20 92 19 94 24C92 28 86 30 81 30Z" fill="#2f2926"/>' +
-                    '<ellipse cx="94" cy="39" rx="8.5" ry="6" fill="#f2b3b0" stroke="#d98c88" stroke-width=".9"/>' +
-                    '<ellipse cx="91.5" cy="39.5" rx="1.3" ry="1.8" fill="#b86a66"/><ellipse cx="96.5" cy="39.5" rx="1.3" ry="1.8" fill="#b86a66"/>' +
-                    '<circle cx="93" cy="28" r="1.9" fill="#1b1714"/><circle cx="93.5" cy="27.4" r=".6" fill="#fff"/></g>' +
-                    '</g>',
-                defs: grad(id + 'h', '#ffffff', '#ece6da'),
-                shadow: '<ellipse cx="54" cy="75" rx="33" ry="4.5" fill="rgba(40,50,25,.28)"/>'
-            };
-        },
-        // 寵物：一隻橘色虎斑貓，尾巴豎起來
-        cat: function (id) {
-            return {
-                vb: '0 0 64 52',
-                body:
-                    leg(22, 32, 46, 3.6, '#e8913c', '#f6e2c8', 'ra-leg-a') + leg(28, 33, 46, 3.6, '#e8913c', '#f6e2c8', 'ra-leg-b') +
-                    leg(40, 33, 46, 3.6, '#e8913c', '#f6e2c8', 'ra-leg-b') + leg(46, 32, 46, 3.6, '#e8913c', '#f6e2c8', 'ra-leg-a') +
-                    '<g class="ra-body">' +
-                    '<g class="ra-tail"><path d="M17 28C9 24 8 14 12 8" stroke="#e8913c" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M10.5 13l3 1M9.5 18l3.4.6" stroke="#c46a22" stroke-width="1.4" stroke-linecap="round"/></g>' +
-                    '<ellipse cx="33" cy="30" rx="16" ry="8.5" fill="url(#' + id + 'f)" stroke="#c46a22" stroke-width="1"/>' +
-                    '<path d="M26 22.5v5M32 22v6M38 22.5v5" stroke="#c46a22" stroke-width="1.5" stroke-linecap="round"/>' +
-                    '<g class="ra-head"><path d="M42 16L44 7L49 13L55 13L59 7L60 17Z" fill="#e8913c" stroke="#c46a22" stroke-width="1" stroke-linejoin="round"/>' +
-                    '<path d="M45 11l1-2 2 3zM58 11l-.6-2-2 3z" fill="#f6b6a8"/>' +
-                    '<circle cx="51.5" cy="21" r="9" fill="url(#' + id + 'f)" stroke="#c46a22" stroke-width="1"/>' +
-                    '<path d="M48 13.5v3M51.5 13v3.4M55 13.5v3" stroke="#c46a22" stroke-width="1.2" stroke-linecap="round"/>' +
-                    '<ellipse cx="47.8" cy="21" rx="1.4" ry="1.9" fill="#2a2522"/><ellipse cx="55.2" cy="21" rx="1.4" ry="1.9" fill="#2a2522"/>' +
-                    '<path d="M50.4 24.6h2.2l-1.1 1.2z" fill="#e0706a"/><path d="M51.5 25.8q-1.6 1.8 -3 .6M51.5 25.8q1.6 1.8 3 .6" stroke="#8a4a22" stroke-width=".8" fill="none"/>' +
-                    '<path d="M44 24.5l-4-.8M44 26l-4 .6M59 24.5l4-.8M59 26l4 .6" stroke="#fff" stroke-width=".6" opacity=".85"/></g>' +
-                    '</g>',
-                defs: grad(id + 'f', '#ffc07a', '#e8913c'),
-                shadow: '<ellipse cx="34" cy="47" rx="17" ry="3" fill="rgba(40,50,25,.28)"/>'
-            };
-        }
+    var DRAW = {};
+
+    // ── 雞：白色圓滾滾一團、紅冠三顆、黃嘴、紅肉垂、一隻大眼睛 ──
+    DRAW.chicken = function (id) {
+        var sw = 1.5;
+        var blob = '<circle cx="40" cy="21" r="12.5"/><ellipse cx="31" cy="39.5" rx="18.5" ry="14.5"/>';
+        var comb = '<circle cx="34.6" cy="10.4" r="3.5"/><circle cx="39.6" cy="8" r="4"/><circle cx="45" cy="10" r="3.4"/>';
+        return {
+            vb: '0 0 64 64', vars: '--ho:50% 95%;--to:80% 90%;--bob:1.6px;--jump:7px;--sit:4.6px;--eat:30deg;--eatd:.9s;--nod:8deg',
+            defs: lg(id + 'b', '#ffffff', '#ece4d8') + lg(id + 'c', '#ff6a5e', '#de3d3a'),
+            shadow: '<ellipse class="ra-shadow" cx="31" cy="59" rx="15" ry="3.2" fill="rgba(52,64,24,.26)"/>',
+            legs:
+                '<g class="ra-leg-a"><path d="M27 51.5V57.5M27 57.5l-3.2 1.4M27 57.5l3.4 1.2" stroke="#e48c1f" stroke-width="2.3" stroke-linecap="round" fill="none"/></g>' +
+                '<g class="ra-leg-b"><path d="M35 51.5V57.5M35 57.5l-3.2 1.4M35 57.5l3.4 1.2" stroke="#e48c1f" stroke-width="2.3" stroke-linecap="round" fill="none"/></g>',
+            body:
+                '<g class="ra-tail"><path d="M15 36C8 32 6 23 9.5 17C12.5 20.5 15 22.5 18 24C16 18 18 13 22.5 10.5C23.5 17 24.5 21.5 27 25.5Z" fill="url(#' + id + 'b)"' + o(sw) + '/></g>' +
+                '<g class="ra-head">' +
+                merge(comb, 'url(#' + id + 'c)', sw) +
+                merge(blob, 'url(#' + id + 'b)', sw) +
+                '<path d="M21 37.5C25.5 33.5 34.5 33.5 38.5 38.5C37.5 44.5 32.5 48 27 47.2C24 46.8 22.6 44.6 24.4 42.6C21.4 42.4 20 40 21 37.5Z" fill="#f2ebe1"' + o(sw * .8) + '/>' +
+                '<path d="M27 40.5q4 1.6 7.5 -.2M26.6 43.6q3.4 1.2 6 0" stroke="#d9cfc0" stroke-width="1" fill="none" stroke-linecap="round"/>' +
+                '<ellipse cx="51.6" cy="27.6" rx="2.3" ry="3.1" fill="url(#' + id + 'c)"' + o(sw * .8) + '/>' +
+                '<path d="M51.2 18.4Q58 20.2 59 22Q58 24 51.2 25Z" fill="#f7b02e"' + o(sw * .85) + '/>' +
+                '<path d="M52.4 22h5.2" stroke="#d98a1a" stroke-width=".8" stroke-linecap="round"/>' +
+                eyes([[45.6, 18.4, 2.6, 3.2]], sw) +
+                blush([[46.4, 24.6, 3, 1.7]]) +
+                '</g>' +
+                fx(50, 1, .9)
+        };
     };
 
-    // 寵物二號：咖啡色小土狗，垂耳朵、米色口鼻、紅項圈，尾巴一直搖
-    DRAW.dog = function (id) {
+    // ── 小雞：一顆黃色毛球、頭頂兩根毛 ──
+    DRAW.chick = function (id) {
+        var sw = 1.3;
+        var blob = '<circle cx="27" cy="19.5" r="9.5"/><ellipse cx="23" cy="29" rx="12.5" ry="11"/>';
         return {
-            vb: '0 0 72 58',
+            vb: '0 0 48 48', vars: '--ho:50% 95%;--to:80% 90%;--bob:1.4px;--jump:6px;--sit:2.4px;--eat:28deg;--eatd:.8s;--nod:8deg',
+            defs: lg(id + 'y', '#ffe680', '#f6c331'),
+            shadow: '<ellipse class="ra-shadow" cx="23" cy="44.2" rx="11" ry="2.6" fill="rgba(52,64,24,.26)"/>',
+            legs:
+                '<g class="ra-leg-a"><path d="M20.5 39.5V43.2M20.5 43.2l-2.4 1M20.5 43.2l2.6 .9" stroke="#e48c1f" stroke-width="1.9" stroke-linecap="round" fill="none"/></g>' +
+                '<g class="ra-leg-b"><path d="M26.5 39.5V43.2M26.5 43.2l-2.4 1M26.5 43.2l2.6 .9" stroke="#e48c1f" stroke-width="1.9" stroke-linecap="round" fill="none"/></g>',
             body:
-                leg(24, 34, 51, 4.2, '#8f5f3b', '#f1dfc2', 'ra-leg-a') + leg(31, 35, 51, 4.2, '#8f5f3b', '#f1dfc2', 'ra-leg-b') +
-                leg(44, 35, 51, 4.2, '#8f5f3b', '#f1dfc2', 'ra-leg-b') + leg(51, 34, 51, 4.2, '#8f5f3b', '#f1dfc2', 'ra-leg-a') +
-                '<g class="ra-body">' +
-                // 尾巴：月牙形往前捲到背上（貓是一根直直豎起來的，狗要捲），淺色毛在捲過來的尖端
-                '<g class="ra-tail ra-wag-fast">' +
-                '<path d="M21 31C10 28 8 11 20 6.5Q26 4.5 28.5 9.5C22 9 16.5 13 17.5 20C18 24 20 26 22.5 27Z" fill="url(#' + id + 'd)" stroke="#6e4527" stroke-width="1"/>' +
-                '<path d="M20 6.5Q26 4.5 28.5 9.5C25.5 9.3 22.5 10.2 20.5 12C19.2 10.5 19 8.2 20 6.5Z" fill="#f1dfc2"/>' +
-                '</g>' +
-                '<ellipse cx="36" cy="31" rx="18" ry="10" fill="url(#' + id + 'd)" stroke="#6e4527" stroke-width="1"/>' +
-                '<path d="M43 36C47 40 53 39 55 33C52 36 47 36 43 36Z" fill="#f1dfc2"/>' +
+                '<g class="ra-tail"><path d="M11.5 27.5C8 25.5 7.4 21.6 9 19.4C10.5 21.6 12.4 22.6 14.4 23Z" fill="url(#' + id + 'y)"' + o(sw) + '/></g>' +
                 '<g class="ra-head">' +
-                '<path d="M49 29.5C53 32 58 31.5 61 29" stroke="#d6453c" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
-                '<circle cx="56.5" cy="33" r="2" fill="#f2c14a" stroke="#b98a1f" stroke-width=".6"/>' +
-                '<circle cx="56" cy="20" r="10" fill="url(#' + id + 'd)" stroke="#6e4527" stroke-width="1"/>' +
-                '<ellipse cx="63.5" cy="24.5" rx="6.5" ry="4.8" fill="#f1dfc2" stroke="#caa87c" stroke-width=".8"/>' +
-                '<ellipse cx="68.4" cy="22.6" rx="2.3" ry="1.8" fill="#2a2320"/>' +
-                '<path d="M64 27.8q1.5 3.2 3.6 .4" fill="#e77f8a" stroke="#b9545f" stroke-width=".5"/>' +
-                '<circle cx="59.5" cy="17.5" r="1.6" fill="#1f1a17"/><circle cx="60" cy="17" r=".5" fill="#fff"/>' +
-                // 垂耳：形狀照原本那片，只從耳根往外抬一點（rotate 以耳根為軸），下半截離開臉頰留一條小縫。
-                //   她說過：不要尖耳、不要翹起來，就是垂耳，只是別貼頭皮
-                '<path d="M50 12C45 13 44 22 47 26C50 25 52 19 53 14Z" transform="rotate(22 52 13)" fill="#6e4527" stroke="#5a3820" stroke-width=".7"/>' +
+                '<path d="M26 10.5C25 7 26.5 5.2 28.5 5M27.4 10.2C28.4 7.6 30.6 6.8 32 7.4" stroke="' + OL + '" stroke-width="' + sw + '" fill="none" stroke-linecap="round" class="o"/>' +
+                merge(blob, 'url(#' + id + 'y)', sw) +
+                '<path d="M14.5 28.5C17.5 25.8 23.5 26 26 29.6C25 33.6 21.2 35.6 17.6 34.6C15.4 33.8 14 31.4 14.5 28.5Z" fill="#ffd650"' + o(sw * .8) + '/>' +
+                '<path d="M35.6 17.6Q40.6 19 41.2 20.2Q40.6 21.6 35.6 22.4Z" fill="#f79b22"' + o(sw * .85) + '/>' +
+                eyes([[31.4, 16.6, 2.2, 2.7]], sw) +
+                blush([[32.4, 22, 2.6, 1.5]]) +
                 '</g>' +
-                '</g>',
-            defs: grad(id + 'd', '#c58e5f', '#8f5f3b'),
-            shadow: '<ellipse cx="38" cy="52" rx="19" ry="3.2" fill="rgba(40,50,25,.28)"/>'
+                fx(33, 0, .8)
+        };
+    };
+
+    // ── 羊：棉花糖一大團、臉黑黑的朝前、頭頂一撮毛、耳朵往兩邊 ──
+    DRAW.sheep = function (id) {
+        var sw = 1.6;
+        var W = 'url(#' + id + 'w)';
+        var wool = cloudPath(40, 38, 27, 18.5, 18, 1.4, 5);
+        var face = '#4b4240';
+        return {
+            vb: '0 0 92 72', vars: '--ho:20% 80%;--to:80% 50%;--bob:1.8px;--jump:8px;--sit:9.5px;--eat:22deg;--eatd:1.6s;--nod:7deg',
+            defs: lg(id + 'w', '#fffbf2', '#eadcc2') + lg(id + 'f', '#5a504d', '#3a3230') +
+                '<linearGradient id="' + id + 'ws" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#e2d4b8" stop-opacity="0"/><stop offset="1" stop-color="#d2c09f" stop-opacity=".95"/></linearGradient>',
+            shadow: '<ellipse class="ra-shadow" cx="44" cy="66.2" rx="29" ry="4.4" fill="rgba(52,64,24,.26)"/>',
+            legs:
+                leg(25, 50, 66, 6, '#45393a', '#2a2221', sw, 'ra-leg-a') + leg(34, 51, 66, 6, '#45393a', '#2a2221', sw, 'ra-leg-b') +
+                leg(50, 51, 66, 6, '#45393a', '#2a2221', sw, 'ra-leg-b') + leg(59, 50, 66, 6, '#45393a', '#2a2221', sw, 'ra-leg-a'),
+            body:
+                '<g class="ra-tail"><path d="' + cloudPath(13.5, 33, 5.4, 4.8, 6, .9, 3) + '" fill="' + W + '"' + o(sw) + '/></g>' +
+                '<path d="' + wool + '" fill="' + W + '"' + o(sw) + '/><path d="' + wool + '" fill="url(#' + id + 'ws)"/>' +
+                '<ellipse cx="31" cy="28" rx="13" ry="5.4" transform="rotate(-8 31 28)" fill="#fff" opacity=".65"/>' +
+                '<g class="ra-head">' +
+                '<ellipse cx="55.5" cy="33.5" rx="7" ry="3.4" transform="rotate(-22 55.5 33.5)" fill="' + face + '"' + o(sw) + '/>' +
+                '<ellipse cx="55.2" cy="33.8" rx="4" ry="1.5" transform="rotate(-22 55.2 33.8)" fill="#e9a3a0"/>' +
+                '<ellipse cx="85.5" cy="33.5" rx="7" ry="3.4" transform="rotate(22 85.5 33.5)" fill="' + face + '"' + o(sw) + '/>' +
+                '<ellipse cx="85.8" cy="33.8" rx="4" ry="1.5" transform="rotate(22 85.8 33.8)" fill="#e9a3a0"/>' +
+                '<ellipse cx="70.5" cy="39" rx="13" ry="13.6" fill="url(#' + id + 'f)"' + o(sw) + '/>' +
+                '<path d="' + cloudPath(70.5, 26.5, 10.5, 6, 7, 1.1, 9) + '" fill="' + W + '"' + o(sw) + '/>' +
+                '<ellipse cx="67" cy="24.6" rx="4.6" ry="2" fill="#fff" opacity=".7"/>' +
+                eyes([[65.4, 38.4, 2.7, 3.3], [75.6, 38.4, 2.7, 3.3]], sw, '#120c0a', '#f1e6dd') +
+                blush([[62, 44, 2.8, 1.5], [79, 44, 2.8, 1.5]]) +
+                '<path d="M70.5 44.2v1.6M68.4 46.6q2.1 1.6 4.2 0" stroke="#8d7b77" stroke-width="1" fill="none" stroke-linecap="round"/>' +
+                '</g>' +
+                fx(80, 10, 1.1)
+        };
+    };
+
+    // ── 牛：白底咖啡斑、大頭朝前、粉鼻子、奶油色小角、紅項圈金鈴鐺 ──
+    DRAW.cow = function (id) {
+        var sw = 1.7;
+        var BR = '#9a6240';
+        return {
+            vb: '0 0 112 86', vars: '--ho:25% 85%;--to:90% 8%;--bob:1.8px;--jump:9px;--sit:12px;--eat:22deg;--eatd:1.8s;--nod:6deg',
+            defs: lg(id + 'h', '#ffffff', '#eee4d6') + lg(id + 'm', '#ffc4bd', '#f29a95') + lg(id + 'g', '#ffe27a', '#e7ad2a') +
+                '<clipPath id="' + id + 'c"><rect x="15" y="36" width="66" height="32" rx="16"/></clipPath>' +
+                '<clipPath id="' + id + 'hc"><ellipse cx="84" cy="37" rx="17" ry="16"/></clipPath>',
+            shadow: '<ellipse class="ra-shadow" cx="52" cy="79.2" rx="38" ry="5" fill="rgba(52,64,24,.26)"/>',
+            legs:
+                leg(27, 61, 79, 8, 'url(#' + id + 'h)', '#7a5543', sw, 'ra-leg-a') + leg(38, 62, 79, 8, 'url(#' + id + 'h)', '#7a5543', sw, 'ra-leg-b') +
+                leg(59, 62, 79, 8, 'url(#' + id + 'h)', '#7a5543', sw, 'ra-leg-b') + leg(70, 61, 79, 8, 'url(#' + id + 'h)', '#7a5543', sw, 'ra-leg-a'),
+            body:
+                '<g class="ra-tail">' +
+                '<path d="M17 43C11 47 9 54 10.5 61" stroke="' + OL + '" stroke-width="' + (2.4 + sw * 2) + '" fill="none" stroke-linecap="round" class="o"/>' +
+                '<path d="M17 43C11 47 9 54 10.5 61" stroke="#f6f1e8" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+                '<ellipse cx="10.8" cy="63" rx="3" ry="4" fill="' + BR + '"' + o(sw) + '/></g>' +
+                '<rect x="15" y="36" width="66" height="32" rx="16" fill="url(#' + id + 'h)"' + o(sw) + '/>' +
+                '<ellipse cx="40" cy="40.6" rx="14" ry="2.6" fill="#fff" opacity=".7"/>' +
+                '<g clip-path="url(#' + id + 'c)" fill="' + BR + '">' +
+                '<path d="M24 33C38 32 43 45 35 52C29 57 20 51 17 44Z"/>' +
+                '<path d="M50 41C58 37 67 42 63.5 49C60 54.5 51.5 52 49.5 47Z"/>' +
+                '<ellipse cx="40" cy="69" rx="8" ry="4"/></g>' +
+                                '<ellipse cx="50" cy="68.4" rx="5.4" ry="2.8" fill="url(#' + id + 'm)"' + o(sw * .8) + '/>' +
+                '<path d="M66 51Q76 59 90 54" stroke="' + OL + '" stroke-width="' + (3.8 + sw * 2) + '" fill="none" stroke-linecap="round" class="o"/>' +
+                '<path d="M66 51Q76 59 90 54" stroke="#e04a48" stroke-width="3.8" fill="none" stroke-linecap="round"/>' +
+                '<g class="ra-head">' +
+                '<ellipse cx="66.5" cy="31" rx="7.6" ry="3.8" transform="rotate(-18 66.5 31)" fill="' + BR + '"' + o(sw) + '/>' +
+                '<ellipse cx="67" cy="31.3" rx="4.4" ry="1.7" transform="rotate(-18 67 31.3)" fill="#f2aaa5"/>' +
+                '<ellipse cx="101.5" cy="31" rx="7.6" ry="3.8" transform="rotate(18 101.5 31)" fill="' + BR + '"' + o(sw) + '/>' +
+                '<ellipse cx="101" cy="31.3" rx="4.4" ry="1.7" transform="rotate(18 101 31.3)" fill="#f2aaa5"/>' +
+                '<ellipse cx="76.5" cy="20.5" rx="2.6" ry="4.2" transform="rotate(-22 76.5 20.5)" fill="#f7e7bf"' + o(sw) + '/>' +
+                '<ellipse cx="91.5" cy="20.5" rx="2.6" ry="4.2" transform="rotate(22 91.5 20.5)" fill="#f7e7bf"' + o(sw) + '/>' +
+                '<ellipse cx="84" cy="37" rx="17" ry="16" fill="url(#' + id + 'h)"' + o(sw) + '/>' +
+                '<g clip-path="url(#' + id + 'hc)"><path d="M66 31C67 21 78 18 84 24C83 30 76 34 68 34Z" fill="' + BR + '"/></g>' +
+                '<path d="M81 22.5c1.5-3 4.5-3.2 5.6-.8c-1.6-.6-2.8 0-3 1.6" fill="' + BR + '"' + o(sw * .7) + '/>' +
+                '<ellipse cx="84" cy="46.5" rx="12.6" ry="8" fill="url(#' + id + 'm)"' + o(sw) + '/>' +
+                '<ellipse cx="79.6" cy="46" rx="1.5" ry="2.1" fill="#c96d69"/><ellipse cx="88.4" cy="46" rx="1.5" ry="2.1" fill="#c96d69"/>' +
+                '<path d="M81.4 50.4Q84 52.4 86.6 50.4" stroke="#b7605d" stroke-width="1.1" fill="none" stroke-linecap="round"/>' +
+                '<ellipse cx="80" cy="42" rx="4" ry="1.4" fill="#fff" opacity=".5"/>' +
+                eyes([[77, 34.6, 2.9, 3.5], [91, 34.6, 2.9, 3.5]], sw) +
+                blush([[72.4, 41, 3.1, 1.6], [95.6, 41, 3.1, 1.6]]) +
+                '</g>' +
+                '<circle cx="77" cy="59" r="3.8" fill="url(#' + id + 'g)"' + o(sw * .9) + '/>' +
+                '<path d="M75.2 59.6h3.6M77 60.2v1.8" stroke="#9c6a12" stroke-width=".9" stroke-linecap="round"/>' +
+                fx(98, 8, 1.2)
+        };
+    };
+
+    // ── 貓：橘色虎斑、白口鼻、大頭三分之二朝前、尾巴豎起來捲一下 ──
+    DRAW.cat = function (id) {
+        var sw = 1.4;
+        var OR = '#e9853a', ST = '#cf6a24';
+        return {
+            vb: '0 0 70 58', vars: '--ho:30% 88%;--to:85% 95%;--bob:1.4px;--jump:7px;--sit:6px;--eat:20deg;--eatd:1.4s;--nod:8deg',
+            defs: lg(id + 'f', '#ffbf6e', '#ee8c3a') +
+                '<clipPath id="' + id + 'b"><ellipse cx="34" cy="40" rx="17" ry="10"/></clipPath>',
+            shadow: '<ellipse class="ra-shadow" cx="35" cy="53.4" rx="19" ry="3.2" fill="rgba(52,64,24,.26)"/>',
+            legs:
+                leg(23.5, 42, 53.4, 5.2, 'url(#' + id + 'f)', '#fff6ea', sw, 'ra-leg-a') + leg(29.5, 43, 53.4, 5.2, 'url(#' + id + 'f)', '#fff6ea', sw, 'ra-leg-b') +
+                leg(40, 43, 53.4, 5.2, 'url(#' + id + 'f)', '#fff6ea', sw, 'ra-leg-b') + leg(46, 42, 53.4, 5.2, 'url(#' + id + 'f)', '#fff6ea', sw, 'ra-leg-a'),
+            body:
+                '<g class="ra-tail">' +
+                '<path d="M19 38C10 35 6.5 25 10 17.5C11.6 14 15.6 13.8 16.4 16.6" stroke="' + OL + '" stroke-width="' + (5.4 + sw * 2) + '" fill="none" stroke-linecap="round" class="o"/>' +
+                '<path d="M19 38C10 35 6.5 25 10 17.5C11.6 14 15.6 13.8 16.4 16.6" stroke="' + OR + '" stroke-width="5.4" fill="none" stroke-linecap="round"/>' +
+                '<path d="M8.2 26.5l4.2.4M8.6 21.4l3.8 1.2" stroke="' + ST + '" stroke-width="1.5" stroke-linecap="round"/></g>' +
+                '<ellipse cx="34" cy="40" rx="17" ry="10" fill="url(#' + id + 'f)"' + o(sw) + '/>' +
+                '<g clip-path="url(#' + id + 'b)"><ellipse cx="46" cy="45" rx="7" ry="7" fill="#fff6ea"/>' +
+                '<path d="M25 30.5v5.5M30.5 30v6M36 30.5v5.5" stroke="' + ST + '" stroke-width="1.6" stroke-linecap="round"/></g>' +
+                '<g class="ra-head">' +
+                '<path d="M40.5 19.5L41.6 6.2L50.4 14Z" fill="url(#' + id + 'f)"' + o(sw) + '/>' +
+                '<path d="M43 14.6L43.6 9.6L47.4 13.2Z" fill="#ffb1a4"/>' +
+                '<path d="M54 14L62.4 6.4L63.4 19.5Z" fill="url(#' + id + 'f)"' + o(sw) + '/>' +
+                '<path d="M57 13.2L60.8 9.8L61.2 14.6Z" fill="#ffb1a4"/>' +
+                '<ellipse cx="52" cy="25" rx="14.2" ry="12.6" fill="url(#' + id + 'f)"' + o(sw) + '/>' +
+                '<path d="M48 13.8l.4 3.6M52 13.2v3.8M56 13.8l-.4 3.6" stroke="' + ST + '" stroke-width="1.4" stroke-linecap="round"/>' +
+                '<ellipse cx="52.4" cy="31" rx="6.6" ry="4.6" fill="#fff6ea"/>' +
+                eyes([[46.4, 25.4, 2.5, 3.1], [58, 25.4, 2.5, 3.1]], sw) +
+                blush([[43.2, 30, 2.6, 1.4], [61.4, 30, 2.6, 1.4]]) +
+                '<path d="M51.2 28.6h2.4l-1.2 1.3z" fill="#f2737c" stroke="#c4505a" stroke-width=".5" stroke-linejoin="round"/>' +
+                '<path d="M50 31.2Q51.2 32.9 52.4 31.4Q53.6 32.9 54.8 31.2" stroke="#8a4a2a" stroke-width=".9" fill="none" stroke-linecap="round"/>' +
+                '<path d="M44.5 31l-4.4-.6M44.6 32.6l-4.2.9M60.4 31l4.4-.6M60.3 32.6l4.2.9" stroke="#8a4a2a" stroke-width=".55" opacity=".7" stroke-linecap="round"/>' +
+                '</g>' +
+                fx(60, 2, .9)
+        };
+    };
+
+    // ── 狗：咖啡色、米白口鼻、深色垂耳（離開臉一點，不貼頭皮）、紅項圈金牌、吐舌頭 ──
+    DRAW.dog = function (id) {
+        var sw = 1.4;
+        var BR = '#c98a52', EAR = '#8a5533', CR = '#fff1dc';
+        return {
+            vb: '0 0 76 62', vars: '--ho:28% 88%;--to:85% 90%;--bob:1.6px;--jump:8px;--sit:6.5px;--eat:22deg;--eatd:1.2s;--nod:8deg',
+            defs: lg(id + 'd', '#dca36b', '#b87742') +
+                '<clipPath id="' + id + 'b"><ellipse cx="36" cy="42" rx="19" ry="11"/></clipPath>',
+            shadow: '<ellipse class="ra-shadow" cx="38" cy="57" rx="21" ry="3.4" fill="rgba(52,64,24,.26)"/>',
+            legs:
+                leg(24.5, 45, 57, 5.8, 'url(#' + id + 'd)', CR, sw, 'ra-leg-a') + leg(31, 46, 57, 5.8, 'url(#' + id + 'd)', CR, sw, 'ra-leg-b') +
+                leg(43, 46, 57, 5.8, 'url(#' + id + 'd)', CR, sw, 'ra-leg-b') + leg(49.5, 45, 57, 5.8, 'url(#' + id + 'd)', CR, sw, 'ra-leg-a'),
+            body:
+                '<g class="ra-tail ra-wag-fast">' +
+                '<path d="M19.5 38C12 35 9.5 26 12 19.5" stroke="' + OL + '" stroke-width="' + (5 + sw * 2) + '" fill="none" stroke-linecap="round" class="o"/>' +
+                '<path d="M19.5 38C12 35 9.5 26 12 19.5" stroke="' + BR + '" stroke-width="5" fill="none" stroke-linecap="round"/>' +
+                '<path d="M11 24.5C10.6 22.4 11 20.8 12 19.5" stroke="' + CR + '" stroke-width="5" fill="none" stroke-linecap="round"/></g>' +
+                '<ellipse cx="36" cy="42" rx="19" ry="11" fill="url(#' + id + 'd)"' + o(sw) + '/>' +
+                '<g clip-path="url(#' + id + 'b)"><ellipse cx="42" cy="51.5" rx="13" ry="5" fill="' + CR + '"/><ellipse cx="49" cy="44" rx="6" ry="8" fill="' + CR + '"/></g>' +
+                '<g class="ra-head">' +
+                '<path d="M64.5 16C69 17 70.5 23 69 28C67 28.6 65.4 25 64 21Z" fill="' + EAR + '"' + o(sw) + '/>' +
+                '<path d="M44 37.5Q51.5 43 60 40" stroke="' + OL + '" stroke-width="' + (3.4 + sw * 2) + '" fill="none" stroke-linecap="round" class="o"/>' +
+                '<path d="M44 37.5Q51.5 43 60 40" stroke="#e04a48" stroke-width="3.4" fill="none" stroke-linecap="round"/>' +
+                '<circle cx="51.6" cy="43.6" r="2.7" fill="#ffd257" stroke="#a87418" stroke-width=".8"/>' +
+                '<ellipse cx="54.5" cy="26.5" rx="14" ry="13" fill="url(#' + id + 'd)"' + o(sw) + '/>' +
+                '<path d="M54 14.2C56.4 18 56.6 22.4 56 26.5L52.5 26.5C52.4 22 52.5 17.6 54 14.2Z" fill="' + CR + '"/>' +
+                '<ellipse cx="60.5" cy="32" rx="9.4" ry="6.6" fill="' + CR + '"' + o(sw) + '/>' +
+                '<ellipse cx="66.6" cy="29.2" rx="3" ry="2.2" fill="#3a2620"/><ellipse cx="65.8" cy="28.4" rx="1" ry=".6" fill="#fff" opacity=".8"/>' +
+                '<path d="M62.4 35.8Q63 40.8 65.4 40.4Q67 39.6 66 35.2Z" fill="#ff8e9b" stroke="#c9505f" stroke-width=".8" stroke-linejoin="round"/>' +
+                '<path d="M60 34.4Q63.2 37.4 67.4 34" stroke="#6b3f2a" stroke-width="1" fill="none" stroke-linecap="round"/>' +
+                eyes([[50.6, 24.8, 2.5, 3.1], [60.2, 23.8, 2.5, 3.1]], sw) +
+                blush([[47.4, 30.6, 2.6, 1.4]]) +
+                '<path d="M46.5 14.5C40 14.8 37.4 22.5 38.6 30C39.2 33.8 43 34.6 44.6 31.4C46.2 27.6 47.6 21 49.6 16.4Z" fill="' + EAR + '"' + o(sw) + '/>' +
+                '</g>' +
+                fx(64, 3, 1)
         };
     };
 
@@ -203,9 +377,10 @@
         opts = opts || {};
         ensureCss(opts.doc);
         var id = 'ra' + (++uid) + '_';
-        var d = (DRAW[opts.kind] || DRAW.chicken)(id);
-        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + d.vb + '" class="ra-animal" aria-hidden="true">' +
-            '<defs>' + d.defs + '</defs>' + d.shadow + d.body + '</svg>';
+        var kind = DRAW[opts.kind] ? opts.kind : 'chicken';
+        var d = DRAW[kind](id);
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + d.vb + '" class="ra-animal rk-' + kind + '" style="' + d.vars + '" aria-hidden="true">' +
+            '<defs>' + d.defs + '</defs>' + d.shadow + '<g class="ra-all">' + d.legs + '<g class="ra-body">' + d.body + '</g></g></svg>';
     }
 
     // ── 產出：雞蛋／羊毛／牛奶。上等的多一顆金色小星星、顏色暖一點 ──
@@ -350,5 +525,51 @@
         return out + '</g></svg>';
     }
 
-    root.FarmAnimalDraw = { svg: svg, productSvg: productSvg, litterSvg: litterSvg, troughHaySvg: troughHaySvg, KINDS: ['chicken', 'sheep', 'cow', 'cat', 'dog'] };
+    // ── 狗屋：紅屋頂、木牆、拱門、門牌一個腳印，門口右邊一個飯碗（bowl＝今天裝過了，裡面有飼料）──
+    // 腳底在 viewBox 的 y 88（92%）。夜裡狗睡在門口、貓睡在屋頂（位置在 farm_ranch.js）
+    function doghouseSvg(opts) {
+        opts = opts || {};
+        var id = 'rh' + (++uid) + '_', sw = 1.6;
+        var kib = opts.bowl ? [[92.6, 80.4], [96, 79.6], [99.6, 80.2], [97.8, 81.6], [94.4, 81.8], [101.4, 81.4]].map(function (k) {
+            return '<circle cx="' + k[0] + '" cy="' + k[1] + '" r="1.6" fill="#c7854c" stroke="#7a4a28" stroke-width=".6"/>';
+        }).join('') : '';
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 96" class="ra-doghouse" aria-hidden="true"><defs>' +
+            lg(id + 'w', '#f7d6a0', '#dca566') + lg(id + 'r', '#f27667', '#d6463d') + lg(id + 'b', '#ff8173', '#d9443c') + '</defs>' +
+            '<ellipse cx="54" cy="88.4" rx="47" ry="5.4" fill="rgba(52,64,24,.26)"/>' +
+            '<rect x="17" y="44" width="66" height="44.4" rx="4" fill="url(#' + id + 'w)"' + o(sw) + '/>' +
+            '<path d="M18.5 66H81.5M18.5 77.5H81.5" stroke="#c48a4e" stroke-width="1.2" opacity=".75"/>' +
+            '<path d="M29 54.5v11.5M71 54.5v11.5M33 66.5v11M67 66.5v11M27 78v10M73 78v10" stroke="#c48a4e" stroke-width="1" opacity=".55"/>' +
+            '<path d="M38 88.4V74Q38 64 50 64Q62 64 62 74V88.4Z" fill="#4b3024"' + o(sw) + '/>' +
+            '<path d="M41.6 87V74.4Q41.6 67.6 50 67.6" stroke="#6e4838" stroke-width="2" fill="none" stroke-linecap="round" opacity=".7"/>' +
+            '<rect x="42.5" y="55.6" width="15" height="6.8" rx="2.2" fill="#fff6e4"' + o(sw * .8) + '/>' +
+            '<g fill="#c48a4e"><ellipse cx="50" cy="60.2" rx="1.9" ry="1.4"/><circle cx="47.8" cy="58.2" r=".8"/><circle cx="49.3" cy="57.4" r=".8"/><circle cx="50.7" cy="57.4" r=".8"/><circle cx="52.2" cy="58.2" r=".8"/></g>' +
+            '<path d="M5.6 49L50 12.6L94.4 49Q96 53.6 91.4 54.2H8.6Q4 53.6 5.6 49Z" fill="url(#' + id + 'r)"' + o(sw) + '/>' +
+            '<path d="M20.5 42.4H79.5M32.5 32.6H67.5M43 24H57" stroke="#bd3a32" stroke-width="1.2" opacity=".55" stroke-linecap="round"/>' +
+            '<path d="M16 46.4L50 18.6" stroke="#fff" stroke-width="2.2" opacity=".35" stroke-linecap="round"/>' +
+            '<circle cx="50" cy="13" r="3.1" fill="#ffd257"' + o(sw * .8) + '/>' +
+            '<path d="M87 81.6H107L104.2 88.6Q103.6 90.2 102 90.2H92Q90.4 90.2 89.8 88.6Z" fill="url(#' + id + 'b)"' + o(sw) + '/>' +
+            '<ellipse cx="97" cy="81.6" rx="10" ry="2.6" fill="' + (opts.bowl ? '#a5673a' : '#7d3a33') + '"' + o(sw * .8) + '/>' + kib +
+            '<path d="M93 86h8" stroke="#fff" stroke-width="1.2" opacity=".5" stroke-linecap="round"/>' +
+            '</svg>';
+    }
+
+    // ── 野狼來過、叼走了雞：一撮雞毛＋一串腳印往圍欄去（那一天才擺）──
+    function wolfSignSvg() {
+        var feather = function (x, y, r, s) {
+            return '<g transform="translate(' + x + ' ' + y + ') rotate(' + r + ') scale(' + s + ')">' +
+                '<path d="M-7 0C-3 -3.2 4 -3.4 8 0C4 3.2 -3 3 -7 0Z" fill="#fffdf8" stroke="#cfc4b4" stroke-width=".8"/>' +
+                '<path d="M-8.5 .4L7 0" stroke="#d9cfc0" stroke-width=".7" stroke-linecap="round"/></g>';
+        };
+        var paw = function (x, y, r) {
+            return '<g transform="translate(' + x + ' ' + y + ') rotate(' + r + ')" fill="rgba(92,70,48,.5)">' +
+                '<ellipse cx="0" cy="1.6" rx="2.4" ry="1.9"/><ellipse cx="-2.6" cy="-1.6" rx=".9" ry="1.2"/><ellipse cx="-.9" cy="-2.7" rx=".9" ry="1.2"/>' +
+                '<ellipse cx=".9" cy="-2.7" rx=".9" ry="1.2"/><ellipse cx="2.6" cy="-1.6" rx=".9" ry="1.2"/></g>';
+        };
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40" class="ra-wolfsign" aria-hidden="true">' +
+            paw(38, 30, 70) + paw(50, 24, 64) + paw(62, 19, 70) + paw(73, 13, 64) +
+            feather(12, 26, -20, 1) + feather(22, 31, 25, .85) + feather(17, 34, 160, .7) + feather(28, 25, -60, .75) + feather(8, 32, 100, .6) +
+            '</svg>';
+    }
+
+    root.FarmAnimalDraw = { svg: svg, productSvg: productSvg, litterSvg: litterSvg, troughHaySvg: troughHaySvg, doghouseSvg: doghouseSvg, wolfSignSvg: wolfSignSvg, KINDS: ['chicken', 'chick', 'sheep', 'cow', 'cat', 'dog'] };
 })(typeof window !== 'undefined' ? window : this);

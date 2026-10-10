@@ -42,6 +42,11 @@
             var stillHungry = (r.hungry || 0) - ((r.ran && r.ran.length) || 0);
             if (stillHungry > 0) out.push({ icon: 'fa-wheat-awn', text: stillHungry + ' 隻昨天沒吃到東西', bad: true });
             if (r.ranNames && r.ranNames.length) out.push({ icon: 'fa-person-running', text: r.ranNames.join('、') + '餓了兩天，翻圍欄跑了', bad: true });
+            if (r.wolf && r.wolf.chased) out.push({ icon: 'fa-shield-dog', text: '半夜野狼來過，被狗趕跑了' });
+            else if (r.wolf && r.wolf.took) out.push({ icon: 'fa-feather', text: '狗不在家，野狼叼走了' + r.wolf.took, bad: true });
+            else if (r.wolf) out.push({ icon: 'fa-feather', text: '狗不在家，野狼來繞了一圈，沒找到雞' });
+            if (r.dog && r.dog.left) out.push({ icon: 'fa-dog', text: '狗好幾天沒人理，離家出走了（今晚沒人守夜）', bad: true });
+            if (r.dog && r.dog.back) out.push({ icon: 'fa-dog', text: '離家的狗自己回來了（好感 ' + r.dog.love + '/5）' });
         }
         return out;
     }

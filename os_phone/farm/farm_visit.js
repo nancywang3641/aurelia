@@ -49,7 +49,7 @@
         var A = ctx.asset;
         var help = (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('farm_visit') : '';
         return '<section class="farm-stage" data-farm="stage" aria-label="' + esc(who.name) + '的後院">' +
-            '<img class="farm-bg" src="' + A('farm_base_v1.webp') + '" alt="">' +
+            '<img class="farm-bg" src="' + A('farm_base_v2.webp') + '" alt="">' +
             '<img class="farm-decor decor-pond" src="' + A('farm_obj_pond_v1.webp') + '" alt="">' +
             '<img class="farm-decor decor-shed" src="' + A('farm_obj_shed_v1.webp') + '" alt="">' +
             '<img class="farm-decor decor-pen" src="' + A('farm_obj_pen_v1.webp') + '" alt="">' +

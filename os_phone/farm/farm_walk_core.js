@@ -71,7 +71,8 @@
                 { x1: 13, x2: 27, y1: 12, y2: 31 },   // 飼料槽
                 { x1: 27, x2: 39, y1: 10, y2: 28 },   // 水槽
                 { x1: 8, x2: 20, y1: 56, y2: 68 },    // 乾草堆
-                { x1: 62, x2: 70, y1: 72, y2: 80 }    // 出貨箱
+                { x1: 62, x2: 70, y1: 72, y2: 80 },   // 出貨箱
+                { x1: 6, x2: 17, y1: 37, y2: 47 }     // 狗屋
             ],
             door: { x1: 41, x2: 58, y1: 91, y2: 100, to: 'yard' },
             gate: { x: 50, y: 85 },
@@ -81,7 +82,8 @@
                 water: { x: 34, y: 32, reach: 9, name: '水槽' },
                 hay: { x: 23, y: 66, reach: 9, name: '乾草堆' },
                 barn: { x: 76, y: 42, reach: 9, name: '棚屋' },
-                ranchbin: { x: 59.5, y: 80, reach: 9, name: '出貨箱' }   // 站在箱子左邊
+                ranchbin: { x: 59.5, y: 80, reach: 9, name: '出貨箱' },  // 站在箱子左邊
+                doghouse: { x: 20, y: 48, reach: 8, name: '狗屋' }       // 飯碗在門口右邊
             },
             // 動物自己晃的範圍（比小人能走的小一圈，身體比腳寬）與禁區
             area: { x1: 11, x2: 89, y1: 24, y2: 80 },
@@ -90,7 +92,8 @@
                 { x1: 12, x2: 29, y1: 14, y2: 33 },
                 { x1: 26, x2: 41, y1: 12, y2: 29 },
                 { x1: 5, x2: 25, y1: 50, y2: 74 },
-                { x1: 59, x2: 73, y1: 68, y2: 84 }
+                { x1: 59, x2: 73, y1: 68, y2: 84 },
+                { x1: 4, x2: 21, y1: 32, y2: 51 }
             ],
             eggArea: { x1: 58, x2: 84, y1: 42, y2: 54 }
         }
@@ -379,6 +382,14 @@
                 if (w.scene !== 'ranch') return result(false, 'too_far', '要先走進牧場。');
                 return a.type === 'collect_all' ? ranch.collectAll(state) : a.type === 'clean_all' ? ranch.cleanAll(state) : ranch.pullAll(state);
             case 'use_scroll': return farm.useScroll(state);
+            // 狗：摸摸在牧場裡就行（叫一聲牠就跑過來）；飯碗在狗屋門口
+            case 'pet':
+                if (w.scene !== 'ranch') return result(false, 'too_far', '要先走進牧場。');
+                if (a.pet === 'cat') return result(true, 'pet_cat', '貓瞇起眼睛蹭了蹭你。');
+                return ranch.petDog(state);
+            case 'bowl':
+                if (!near(state, 'doghouse')) return tooFar(state, 'doghouse');
+                return ranch.fillBowl(state);
             case 'buy_tool':
                 if (!near(state, 'barn')) return tooFar(state, 'barn');
                 return ranch.buyTool(state, a.tool);

@@ -16,7 +16,11 @@
 //        小的也要吃，吃飽幾天才長大；長大前不產出。
 // 雜草：牧場偶爾冒雜草（最多 6 叢）。拔起來變成 1 捆乾草。
 // 逃跑：連餓兩天（hungryDays 到 2）就翻圍欄跑了。可以在棚屋再買。
-// 寵物（貓、狗）不吃飼料、不產出，只在牧場晃。
+// 寵物（貓、狗）不吃飼料、不產出。貓只給摸。
+// 狗有好感（最多 5 顆心）：摸摸（不花體力）、到狗屋裝飯碗（不花錢、體力 1），一天各一次、各加 1 顆。
+//   一天都沒摸也沒裝飯碗，結算時掉 1 顆；掉光就離家出走一天（狗屋空的），隔天結算時自己回來、剩 2 顆。
+// 野狼：每晚都可能來。狗在家就被趕跑；狗不在家那晚很可能來，叼走一隻雞（一晚最多一隻，牛羊太大叼不走）。
+//   妳沒開後院的日子也照算（10-11 她：「照掉」），住戶兩塊地同一套（她：「一樣的」）。
 // 隨機的部分都走 advanceDay 的 opts.rand，測試可以塞固定值。
 // ⚠️ farm_core.normalizeState 只保留農場認得的欄位——載入存檔後一定要呼叫 attach(state, raw)，
 //    不然牧場整份會在下一次存檔時被洗掉。
@@ -60,7 +64,11 @@
     var BREED_STREAK = 3;     // 連續幾天吃飽喝足才可能生
     var BREED_CHANCE = 0.3;
     var RUNAWAY_DAYS = 2;
-    var COST = { feed: 1, refill: 3, pull: 2, clean: 2, collect: 1, milk: 3, shear: 4, medicine: 1 };
+    var COST = { feed: 1, refill: 3, pull: 2, clean: 2, collect: 1, milk: 3, shear: 4, medicine: 1, bowl: 1 };
+    var DOG_LOVE_MAX = 5;
+    var DOG_BACK_LOVE = 2;        // 離家一天自己回來時剩幾顆心
+    var WOLF_CHANCE = 0.25;       // 狗在家：野狼來的機率（來了會被趕跑）
+    var WOLF_AWAY_CHANCE = 0.75;  // 狗不在家那晚
     var STAMINA_MAX_FALLBACK = 50;
     var START_HERD = ['cow', 'sheep', 'sheep', 'chicken', 'chicken', 'chicken'];
     var START_PETS = ['cat', 'dog'];
@@ -107,6 +115,9 @@
         };
     }
 
+    // 狗的好感：pet／bowl＝今天摸過／飯碗裝過；away＝離家出走中（隔天結算回來）
+    function newDog() { return { love: DOG_LOVE_MAX, pet: false, bowl: false, away: false }; }
+
     function createRanch() {
         var r = {
             nextId: 1,
@@ -121,7 +132,9 @@
             poops: [],
             weeds: [],
             products: emptyProducts(),
-            stats: { produced: 0, runaway: 0, born: 0 }
+            dog: newDog(),
+            wolf: null,                // 最近一次野狼來的那晚：{ day（結算後那天）, took（叼走誰，沒有就 null）, chased }
+            stats: { produced: 0, runaway: 0, born: 0, eaten: 0 }
         };
         START_HERD.forEach(function (kind) { r.animals.push(newAnimal(r, kind)); });
         return r;
@@ -162,6 +175,13 @@
         r.stats.produced = Math.max(0, int(raw.stats && raw.stats.produced));
         r.stats.runaway = Math.max(0, int(raw.stats && raw.stats.runaway));
         r.stats.born = Math.max(0, int(raw.stats && raw.stats.born));
+        r.stats.eaten = Math.max(0, int(raw.stats && raw.stats.eaten));
+        var dg = raw.dog;
+        if (dg) r.dog = {
+            love: dg.love == null ? DOG_LOVE_MAX : Math.max(0, Math.min(DOG_LOVE_MAX, int(dg.love))),
+            pet: !!dg.pet, bowl: !!dg.bowl, away: !!dg.away
+        };
+        r.wolf = raw.wolf && raw.wolf.day ? { day: int(raw.wolf.day), took: raw.wolf.took ? String(raw.wolf.took) : null, chased: !!raw.wolf.chased } : null;
         return r;
     }
 
@@ -399,6 +419,32 @@
         return result(true, 'bought_animal', '牧場來了一隻新的' + info.name + '。', { animal: a, cost: info.price });
     }
 
+    // ── 狗：摸摸、裝飯碗 ──
+    function hasDog(r) { return r.pets.indexOf('dog') >= 0; }
+    function hearts(n) { return '好感 ' + n + '/' + DOG_LOVE_MAX; }
+    function petDog(state) {
+        var r = state.ranch, d = r.dog;
+        if (!hasDog(r)) return result(false, 'no_dog', '牧場沒有狗。');
+        if (d.away) return result(false, 'dog_away', '狗離家出走了，明天清晨結算時會自己回來。');
+        if (d.pet) return result(false, 'already_pet', '今天已經摸過狗了（' + hearts(d.love) + '）。');
+        var full = d.love >= DOG_LOVE_MAX;
+        d.pet = true;
+        d.love = Math.min(DOG_LOVE_MAX, d.love + 1);
+        return result(true, 'pet', '摸了摸狗，尾巴搖個不停（' + hearts(d.love) + (full ? '，本來就滿了' : '') + '）。', { love: d.love });
+    }
+    function fillBowl(state) {
+        var r = state.ranch, d = r.dog;
+        if (!hasDog(r)) return result(false, 'no_dog', '牧場沒有狗。');
+        if (d.away) return result(false, 'dog_away', '狗離家出走了，飯碗裝了也沒人吃；明天清晨結算時牠會自己回來。');
+        if (d.bowl) return result(false, 'bowl_full', '飯碗今天裝過了（' + hearts(d.love) + '）。');
+        if (tired(state, COST.bowl)) return tiredResult(COST.bowl);
+        spend(state, COST.bowl);
+        var full = d.love >= DOG_LOVE_MAX;
+        d.bowl = true;
+        d.love = Math.min(DOG_LOVE_MAX, d.love + 1);
+        return result(true, 'bowl', '把狗的飯碗裝滿了，牠埋頭吃得很香（' + hearts(d.love) + (full ? '，本來就滿了' : '') + '）。', { love: d.love });
+    }
+
     // 一天結束。跟 farm_core.advanceDay 一起叫（先叫農場，day 已經 +1、體力也回滿了）。
     // opts.rand：0～1 的亂數函式，測試時可以塞固定值
     function advanceDay(state, opts) {
@@ -476,6 +522,38 @@
         if (!thirsty) r.water -= 1;
         if (r.weeds.length < WEED_CAP && rand() < WEED_CHANCE) { r.weeds.push({ id: 'w' + (r.nextId++) }); newWeeds += 1; }
 
+        // 狗與野狼：先看昨晚狗在不在家，再算好感
+        var dogOut = null, wolf = null;
+        if (hasDog(r)) {
+            var d = r.dog, home = !d.away;
+            if (rand() < (home ? WOLF_CHANCE : WOLF_AWAY_CHANCE)) {
+                wolf = { day: state.day, took: null, chased: home };
+                if (!home) {
+                    var hens = r.animals.filter(function (a) { return a.kind === 'chicken'; });
+                    if (hens.length) {
+                        var prey = hens[Math.min(hens.length - 1, Math.floor(rand() * hens.length))];
+                        wolf.took = label(prey, r.animals);
+                        wolf.id = prey.id;
+                        r.animals = r.animals.filter(function (a) { return a !== prey; });
+                        r.stats.eaten += 1;
+                    }
+                }
+                r.wolf = { day: wolf.day, took: wolf.took, chased: wolf.chased };
+            }
+            dogOut = { left: false, back: false, lost: false };
+            if (d.away) {
+                d.away = false;
+                d.love = DOG_BACK_LOVE;
+                dogOut.back = true;
+            } else {
+                if (!d.pet && !d.bowl && d.love > 0) { d.love -= 1; dogOut.lost = true; }
+                if (d.love <= 0) { d.away = true; dogOut.left = true; }
+            }
+            d.pet = false;
+            d.bowl = false;
+            dogOut.love = d.love;
+        }
+
         if (thirsty) addLog(state, '水槽昨天是乾的，動物們渴了一整天，什麼都沒產。');
         if (made.length) addLog(state, '牧場昨天產出：' + made.join('、') + '。');
         if (wasted.length) addLog(state, wasted.join('、') + '昨天的還沒收，這一份浪費掉了。');
@@ -487,10 +565,17 @@
         if (hungry - ran.length > 0) addLog(state, '牧場有 ' + (hungry - ran.length) + ' 隻動物昨天餓肚子，什麼都沒產。');
         var ranNames = ran.map(function (a) { return label(a, before); });
         if (ranNames.length) addLog(state, ranNames.join('、') + '連著餓了兩天，翻過圍欄跑掉了。');
+        if (wolf && wolf.chased) addLog(state, '半夜野狼摸到圍欄邊，被狗吠跑了。');
+        else if (wolf && wolf.took) addLog(state, '狗不在家，半夜野狼摸進牧場叼走了' + wolf.took + '，地上剩一撮雞毛。');
+        else if (wolf) addLog(state, '狗不在家，半夜野狼在牧場繞了一圈，沒找到雞，走了。');
+        if (dogOut && dogOut.back) addLog(state, '離家出走的狗自己回來了，看起來還有點不開心（' + hearts(r.dog.love) + '）。');
+        if (dogOut && dogOut.lost && !dogOut.left) addLog(state, '狗昨天整天沒人摸、也沒人裝飯碗，好感掉到 ' + r.dog.love + '/' + DOG_LOVE_MAX + '。');
+        if (dogOut && dogOut.left) addLog(state, '狗好幾天沒人摸、也沒人裝飯碗，離家出走了；牠不在的這一晚，野狼可能會來叼雞。');
         return result(true, 'ranch_day', '', {
             made: made.length, hungry: hungry, thirsty: thirsty, dirty: dirty, downgraded: downgraded,
             ran: ran.map(function (a) { return a.id; }), ranNames: ranNames, newPoops: newPoops, newWeeds: newWeeds,
-            fellSick: fellSick, healed: healed, grown: grown, born: born, wasted: wasted
+            fellSick: fellSick, healed: healed, grown: grown, born: born, wasted: wasted,
+            dog: dogOut, wolf: wolf
         });
     }
 
@@ -518,11 +603,12 @@
         ANIMALS: ANIMALS, ANIMAL_IDS: ANIMAL_IDS, PETS: PETS, PRODUCTS: PRODUCTS, PRODUCT_IDS: PRODUCT_IDS, CROP_NAMES: CROP_NAMES,
         TOOLS: TOOLS, MEDICINE_PRICE: MEDICINE_PRICE, HAY_PRICE: HAY_PRICE, PORTIONS_PER_CROP: PORTIONS_PER_CROP, GOOD_MULT: GOOD_MULT,
         WATER_MAX: WATER_MAX, DIRTY_AT: DIRTY_AT, WEED_CAP: WEED_CAP, RUNAWAY_DAYS: RUNAWAY_DAYS, BREED_STREAK: BREED_STREAK, COST: COST,
+        DOG_LOVE_MAX: DOG_LOVE_MAX, DOG_BACK_LOVE: DOG_BACK_LOVE, WOLF_CHANCE: WOLF_CHANCE, WOLF_AWAY_CHANCE: WOLF_AWAY_CHANCE,
         createRanch: createRanch, normalizeRanch: normalizeRanch, attach: attach,
         label: label, findAnimal: findAnimal,
         feed: feed, feedAllHay: feedAllHay, buyHay: buyHay, refillWater: refillWater,
         pullWeed: pullWeed, cleanPoop: cleanPoop, collect: collect, collectAll: collectAll, cleanAll: cleanAll, pullAll: pullAll, milk: milk, shear: shear,
-        buyTool: buyTool, buyMedicine: buyMedicine, giveMedicine: giveMedicine, buyAnimal: buyAnimal,
+        buyTool: buyTool, buyMedicine: buyMedicine, giveMedicine: giveMedicine, buyAnimal: buyAnimal, petDog: petDog, fillBowl: fillBowl,
         advanceDay: advanceDay, priceOf: priceOf, sellProduct: sellProduct
     };
 });

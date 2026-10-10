@@ -20,6 +20,9 @@
 .aurelia-farm .farm-stage {position: relative; width: min(100vw, calc(100dvh * 1.7779)); aspect-ratio: 1672 / 941; max-height: 100dvh; overflow: hidden; background: #b8ca9d; box-shadow: 0 18px 70px rgba(44,62,38,.25); user-select: none; touch-action: manipulation;}
 .aurelia-farm .farm-bg {position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none;}
 .aurelia-farm .farm-shade {position: absolute; inset: 0; z-index: 18; pointer-events: none; background: linear-gradient(180deg, rgba(33,46,31,.10), transparent 15%, transparent 78%, rgba(30,42,28,.13));}
+/* 夜裡（台灣 20:00～06:00，os_farm 掛 is-night）：整片場景蓋一層藍黑。場景自己隔成一層，蓋不到上面的按鈕、小窗、背包 */
+.aurelia-farm .farm-stage {isolation: isolate;}
+.aurelia-farm.is-night .farm-stage .farm-shade {z-index: 120; background: linear-gradient(180deg, rgba(22,28,72,.40), rgba(26,32,80,.24) 45%, rgba(18,22,60,.42));}
 .aurelia-farm .farm-decor {position: absolute; z-index: 4; height: auto; object-fit: contain; pointer-events: none; filter: drop-shadow(0 8px 6px rgba(39,50,31,.16));}
 .aurelia-farm .decor-pond {left: 7.1%; top: 18.2%; width: 16.9%;}
 .aurelia-farm .decor-shed {left: 73.8%; top: 0.7%; width: 17.6%;}
@@ -139,6 +142,13 @@
 .aurelia-farm .obj-trough {left: 14%; top: 14%; width: 13%; z-index: 30;}
 .aurelia-farm .obj-water {left: 28%; top: 12%; width: 11%; z-index: 24;}
 .aurelia-farm .obj-hay {left: 8%;  top: 52%; width: 11%; z-index: 62;}
+/* 狗屋（程式畫，farm_ranch.js 依飯碗滿不滿重畫）：腳底在 46%，門口在 x 10.6% */
+.aurelia-farm .obj-doghouse {left: 5%; top: 29%; width: 12%; z-index: 46;}
+.aurelia-farm .obj-doghouse svg {display: block; width: 100%; height: auto;}
+/* 昨晚野狼叼走了雞：那一天地上一撮雞毛＋一串腳印 */
+.aurelia-farm .ranch-wolfsign {position: absolute; left: 80%; top: 62%; width: 8%; z-index: 21; pointer-events: none; display: none;}
+.aurelia-farm .ranch-wolfsign.is-on {display: block;}
+.aurelia-farm .ranch-wolfsign svg {display: block; width: 100%; height: auto;}
 .aurelia-farm .trough-hay {position: absolute; left: 14%; top: 14%; width: 13%; aspect-ratio: 1; z-index: 30; pointer-events: none;}
 .aurelia-farm .trough-hay svg {display: block; width: 100%; height: 100%;}
 .aurelia-farm .ranch-animals {position: absolute; inset: 0; pointer-events: none;}
@@ -171,6 +181,7 @@
 .aurelia-farm .gate-hay {left: 9%; top: 57%; width: 9%; height: 10%;}
 .aurelia-farm .gate-water {left: 29%; top: 16%; width: 9%; height: 11%;}
 .aurelia-farm .gate-barn {left: 68%; top: 9%; width: 16%; height: 27%;}
+.aurelia-farm .gate-doghouse {left: 6%; top: 31%; width: 10%; height: 15%;}
 .aurelia-farm .water-fill {position: absolute; left: 28%; top: 12%; width: 11%; aspect-ratio: 1; z-index: 24; pointer-events: none;
     -webkit-mask-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/farm/ranch_obj_water_surface_v1.webp); mask-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/farm/ranch_obj_water_surface_v1.webp);
     -webkit-mask-size: 100% 100%; mask-size: 100% 100%;}
@@ -191,6 +202,8 @@
 .aurelia-farm .ra-bubble.b-sick {color: #4f7a2e;}
 .aurelia-farm .ra-bubble.b-ready, .aurelia-farm .ra-bubble.b-ready::after {background: #fff;}
 .aurelia-farm .ra-bubble.b-ready svg {width: 90%; height: 90%;}
+.aurelia-farm .ra-bubble.b-sad, .aurelia-farm .ra-bubble.b-sad::after {background: #ffe3e8;}
+.aurelia-farm .ra-bubble.b-sad {color: #d24a64;}
 .aurelia-farm .ranch-animal.is-sick .ra-face svg {filter: sepia(.6) hue-rotate(45deg) saturate(1.7) brightness(.93);}
 .aurelia-farm .ranch-animal.is-leaving {pointer-events: none; animation: ra-leave .9s ease-in forwards;}
 @keyframes ra-leave {

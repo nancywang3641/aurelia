@@ -18,7 +18,7 @@
     function template(ctx) {
         var A = ctx.asset;
         return '<section class="farm-stage" data-farm="stage" aria-label="' + esc(ctx.owner) + '的後院">' +
-            '<img class="farm-bg" src="' + A('farm_base_v1.webp') + '" alt="">' +
+            '<img class="farm-bg" src="' + A('farm_base_v2.webp') + '" alt="">' +
             '<button class="yard-spot spot-pond" type="button" data-fw-key="pond" aria-label="池塘"></button>' +
             '<img class="farm-decor decor-pond" src="' + A('farm_obj_pond_v1.webp') + '" alt="">' +
             '<button class="yard-spot spot-shed" type="button" data-fw-key="shed" aria-label="工具棚"></button>' +

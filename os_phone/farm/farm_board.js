@@ -46,7 +46,7 @@
                 tile('總共淨賺', money(net), '出貨 +' + T.income + 'G · 花掉 ' + money(T.spent) + (T.stolen ? ' · 偷吃 +' + T.stolen + 'G' : '') + ' · ' + T.days + ' 天', net >= 0 ? 'up' : 'down') +
                 tile('現在金幣', st.coins + 'G', '明天早上諾瓦來收的另外算') +
                 tile('收成', st.stats.totalHarvested + ' 次', '牧場產出 ' + rs.produced + ' 樣') +
-                tile('損失', st.stats.deadCrops + ' 株枯死', '跑掉 ' + rs.runaway + ' 隻 · 生了 ' + rs.born + ' 隻', (st.stats.deadCrops || rs.runaway) ? 'down' : '');
+                tile('損失', st.stats.deadCrops + ' 株枯死', '跑掉 ' + rs.runaway + ' 隻' + (rs.eaten ? ' · 野狼叼走 ' + rs.eaten + ' 隻' : '') + ' · 生了 ' + rs.born + ' 隻', (st.stats.deadCrops || rs.runaway || rs.eaten) ? 'down' : '');
             // 排行榜：她這塊＋阿洛、丹在 VPS 上顧的兩塊（雲端存檔開著、打開看板時去伺服器拿；拿不到就寫還沒有）
             var rows = [{ slot: 'rae', name: opts.owner, net: net, harvested: st.stats.totalHarvested, dead: st.stats.deadCrops, me: true }];
             OTHERS.forEach(function (o) {

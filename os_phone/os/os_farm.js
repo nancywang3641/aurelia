@@ -156,7 +156,7 @@
             toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
         }
         var ctx = {
-            root: root, libs: L, owner: OWNER, look: look,
+            root: root, libs: L, owner: OWNER, look: look, night: isNight,
             state: function () { return state; },
             save: save,
             act: function (a) { return L.walk.act(state, a, L); },
@@ -207,8 +207,10 @@
             toast(caughtText(n));
         }
         // 農場那一格被關掉（藏起來或換成別的 app）就拆掉：走路那支在攔方向鍵，不能留著
+        root.classList.toggle('is-night', isNight());
         watch = setInterval(function () {
             if (!root.isConnected || root.offsetParent === null) { end(); return; }
+            root.classList.toggle('is-night', isNight());
             if (state.ship && Date.now() >= state.ship.settledTo) rollover();
         }, 800);
         session = { end: end, ctx: ctx, state: function () { return state; }, scene: function () { return scene; } };
@@ -245,6 +247,9 @@
             if (sc && sc.render) sc.render();
         }, function () {});
     }
+
+    // 夜裡＝台灣 20:00～06:00（跟結算同一個時區）：畫面暗一點，牧場動物趴下睡、貓狗回狗屋
+    function isNight() { var h = new Date(Date.now() + 8 * 3600 * 1000).getUTCHours(); return h >= 20 || h < 6; }
 
     // given：{ raw, note } 已經決定好用哪份（另一台剛存過、換成最新的那種），就不再問伺服器
     function launch(container, given) {
