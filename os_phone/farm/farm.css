@@ -617,3 +617,8 @@
 .aurelia-farm .shop-card .shop-big-art {display: grid; place-items: center; width: 48px; height: 48px; object-fit: contain;}
 .aurelia-farm .shop-card span.shop-big-art svg {width: 100%; height: auto;}
 .aurelia-farm .shop-big .shop-actions {grid-template-columns: 1fr;}
+
+/* ── 10-11 雇來的人在畫面上走（farm_worker.js）：跟做客看到的主人同一套樣子 ── */
+.aurelia-farm .fw-pos.fk-pos {z-index: 17;}
+.aurelia-farm .fk-worker {--fw-h: 11%;}
+.aurelia-farm .fh-replay {color: #557b48;}

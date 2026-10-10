@@ -6,7 +6,8 @@
 // 他醒來用「打工體力」在她地上做事，收工寫一句進她的日記、拿工錢；一件都沒做成錢退回來。
 // 規則、扣錢、付工錢全在伺服器（VPS garden.js 的「雇人打工」那段）；這支只送單子、看單子：
 //   · 面板：誰、多大、交代（快捷那排點了只是選上，送出時接在她那句後面，不碰輸入框）、最近的單子（還沒人來的可以取消）。
-//   · 看著：有單子在等或在做，每 20 秒問一次；做完了就換成伺服器上最新那份重開（ctx.pull），跳他那句。
+//   · 看著：有單子在等或在做，每 20 秒問一次（有人在做時 7 秒）；做完了就換成伺服器上最新那份重開（ctx.pull），跳他那句。
+//   · 畫面上看得到他：清單丟給 farm_worker.js（opts.worker）照他做的每一步演；還在演就等演完才重開。做完的單子可以按「看他怎麼做」再演一次。
 // 雲端存檔沒開＝什麼都不做（雇的人要找得到她的地）。
 // ============================================================
 (function () {
@@ -21,6 +22,7 @@
     var CHIPS = ['澆水', '餵動物', '清糞撿蛋', '收成出貨', '摸狗裝飯碗'];
     var SEEN_KEY = 'aurelia_farm_hire_seen';   // 做完的單子跳過一次就不再跳（這台）
     var POLL = 20000;
+    var POLL_WORK = 7000;   // 有人在做：問勤一點，畫面上才跟得上他（同做客）
 
     function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function fa(icon) { return '<i class="fa-solid ' + icon + '"></i>'; }
@@ -51,7 +53,7 @@
         });
     } catch (e) {}
 
-    // opts：{ app, state(), ctx（os_farm 給場景的那個：toast、pull）, openCloud() }
+    // opts：{ app, state(), ctx（os_farm 給場景的那個：toast、pull）, openCloud(), worker（farm_worker.js 那個：畫面上演他做事） }
     function create(opts) {
         var C = window.FarmCloud;
         var wrap = document.createElement('div');
@@ -83,6 +85,10 @@
             var line = j.status === 'done' ? (j.note ? '「' + esc(j.note) + '」' : '') + '<small>做了 ' + j.done + ' 件・用掉打工體力 ' + j.used + '/' + j.stamina + '</small>'
                 : (j.ask ? '交代：' + esc(j.ask) : '沒交代，看哪裡需要');
             var cancel = j.status === 'waiting' ? '<button type="button" class="fh-cancel" data-fh="cancel" data-id="' + esc(j.id) + '">' + fa('fa-xmark') + '取消</button>' : '';
+            // 做完的（兩小時內，伺服器才帶得到那一串）：從頭再演一次他怎麼做的
+            if ((j.status === 'done' || j.status === 'refunded') && j.trail && j.trail.steps && j.trail.steps.length && opts.worker) {
+                cancel = '<button type="button" class="fh-cancel fh-replay" data-fh="replay" data-id="' + esc(j.id) + '">' + fa('fa-clock-rotate-left') + '看他怎麼做</button>';
+            }
             return '<li class="fh-job ' + cls + '"><header><strong>' + esc(j.name) + '</strong><span>' + size + '</span><em>' + badge + '</em><time>' + ago(j.doneAt || j.startAt || j.at) + '</time></header>' +
                 '<p>' + line + '</p>' + cancel + '</li>';
         }
@@ -137,6 +143,8 @@
                 if (dead) return;
                 doc = d;
                 err = '';
+                // 畫面上演他做事（在做的、剛做完的）
+                if (opts.worker) opts.worker.update(d.list || []);
                 var fresh = (d.list || []).filter(function (j) {
                     return (j.status === 'done' || j.status === 'refunded') && j.doneAt && Date.now() / 1000 - j.doneAt < 2 * 86400 && seen().indexOf(j.id) < 0;
                 });
@@ -148,8 +156,15 @@
                 var lines = fresh.map(doneLine).filter(Boolean);
                 var say = lines.length ? lines[0] + (lines.length > 1 ? '（還有 ' + (lines.length - 1) + ' 張單子結束了，雇人那裡看）' : '') : '';
                 // 打開之後才做完的：他動過她的地（做完、退錢都會改金幣），換成伺服器那份重開，重開時跳這句
-                var late = fresh.some(function (j) { return j.doneAt > born - 10; });
-                if (late && opts.ctx && opts.ctx.pull) opts.ctx.pull(say);
+                //   畫面上還在演他：等他演完、走出去才重開（重開會把他收掉）
+                var late = fresh.filter(function (j) { return j.doneAt > born - 10; });
+                if (late.length && opts.ctx && opts.ctx.pull) {
+                    var go = function () { if (opts.ctx) opts.ctx.pull(say); };
+                    if (opts.worker) {
+                        var left = late.length;
+                        late.forEach(function (j) { opts.worker.after(j.id, function () { if (--left === 0) go(); }); });
+                    } else go();
+                }
                 else if (say && opts.ctx) opts.ctx.toast(say);
             }, function (e) {
                 if (dead) return;
@@ -161,7 +176,7 @@
         function schedule() {
             clearTimeout(timer);
             if (dead || !doc || !active(doc.list).length) return;
-            timer = setTimeout(refresh, POLL);
+            timer = setTimeout(refresh, doc.list.some(function (j) { return j.status === 'working'; }) ? POLL_WORK : POLL);
         }
 
         function send() {
@@ -193,6 +208,10 @@
             else if (what === 'size') { pick.size = id; render(); }
             else if (what === 'chip') { var i = pick.chips.indexOf(id); if (i >= 0) pick.chips.splice(i, 1); else pick.chips.push(id); render(); }
             else if (what === 'send') send();
+            else if (what === 'replay') {
+                var job = doc && doc.list.filter(function (j) { return j.id === id; })[0];
+                if (job && opts.worker && opts.worker.replay(job)) { close(); if (opts.ctx) opts.ctx.toast(job.name + '上次怎麼做的，從頭演一次'); }
+            }
             else if (what === 'cancel') {
                 b.disabled = true;
                 C.hireCancel(id).then(function (r) {

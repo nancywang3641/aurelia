@@ -20,7 +20,7 @@
     var FILES = [
         'farm_core.js', 'ranch_core.js', 'farm_walk_core.js', 'farm_ship_core.js',
         'farm_plot_draw.js', 'farm_item_draw.js', 'ranch_draw.js',
-        'farm_walk_ui.js', 'farm_bag.js', 'farm_ship.js', 'farm_board.js', 'farm_cloud.js', 'farm_hire.js',
+        'farm_walk_ui.js', 'farm_bag.js', 'farm_ship.js', 'farm_board.js', 'farm_cloud.js', 'farm_worker.js', 'farm_hire.js',
         'farm_yard.js', 'farm_ranch.js', 'farm_visit.js'
     ];
     // 素材圖放 sound-files 的 farm/（跟大廳舞台同一個圖庫，走 jsdelivr）

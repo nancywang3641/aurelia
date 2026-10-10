@@ -599,7 +599,9 @@
     $('ranch-cloud').addEventListener('click', function (ev) { ev.stopPropagation(); cloud.open(); });
     var people = window.FarmCloud.residentsPanel({ app: root, openCloud: function () { cloud.open(); } });
     $('ranch-residents').addEventListener('click', function (ev) { ev.stopPropagation(); people.open(); });
-    var hire = window.FarmHire.create({ app: root, state: function () { return state; }, ctx: ctx, openCloud: function () { cloud.open(); } });
+    // 雇來的人在牧場裡走（farm_worker.js）：雇人那支看著單子、把清單丟給它演
+    var workers = window.FarmWorkers ? window.FarmWorkers.create({ world: stageEl, scene: 'ranch', state: function () { return state; } }) : null;
+    var hire = window.FarmHire.create({ app: root, state: function () { return state; }, ctx: ctx, worker: workers, openCloud: function () { cloud.open(); } });
     $('ranch-hire').addEventListener('click', function (ev) { ev.stopPropagation(); hire.open(); });
     var bag = window.FarmBag.create({ app: root, scene: 'ranch', state: function () { return state; }, toast: toast });
     render();
@@ -631,7 +633,7 @@
             // 動物各自有停一下再走的計時器：全部停掉，不然換場景後還在背景亂跑
             clearInterval(nightTimer);
             herd.forEach(function (a) { clearTimeout(a.timer); a.gone = true; });
-            [stage, bag, shipUi, board, cloud, people, hire].forEach(function (c) { if (c && c.destroy) c.destroy(); });
+            [stage, bag, shipUi, board, cloud, people, hire, workers].forEach(function (c) { if (c && c.destroy) c.destroy(); });
             saveState();
         }
     };

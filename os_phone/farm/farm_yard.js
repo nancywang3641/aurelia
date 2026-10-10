@@ -74,7 +74,9 @@
         var $ = function (k) { return root.querySelector('[data-farm="' + k + '"]'); };
         var plotsRoot = $('plots');
         var selectedCrop = 'stardew';
-        var stage = null, shipUi = null, board = null, bag = null, cloud = null, people = null, hire = null;
+        var stage = null, shipUi = null, board = null, bag = null, cloud = null, people = null, hire = null, workers = null;
+        // 雇來的人做過的田：畫面上先換成他做完的樣子（伺服器那份；演完會整份換成伺服器的重開）。她自己動那塊田就拿掉
+        var plotOverride = {};
         var S = function () { return ctx.state(); };
         var act = ctx.act;
 
@@ -103,7 +105,8 @@
             var wild = core.plotPrice(st) != null
                 ? '<button class="farm-plot wild' + (fk === 'plot:' + next ? ' fw-focus' : '') + '" type="button" data-fw-key="plot:' + next + '" aria-label="還沒開墾的草地">' +
                     window.FarmPlotDraw.wildSvg().replace('class="fp-plot', 'class="plot-art fp-plot') + '</button>' : '';
-            plotsRoot.innerHTML = st.plots.map(function (plot, index) {
+            plotsRoot.innerHTML = st.plots.map(function (real, index) {
+                var plot = plotOverride[index] || real;
                 var classes = ['farm-plot'];
                 if (plot.wateredToday) classes.push('watered');
                 if (plot.stage === 'mature') classes.push('mature');
@@ -224,28 +227,30 @@
             var water = {
                 icon: 'fa-droplet', label: plot.stage === 'wilted' ? '澆水搶救' : '澆水',
                 sub: canWhy || '水壺 ' + w.can + '/' + walkCore.CAN_MAX, disabled: !!canWhy, why: canWhy,
-                run: function () { return act({ type: 'water', plot: i, prefix: '' }); }
+                run: function () { return actPlot({ type: 'water', plot: i, prefix: '' }); }
             };
             if (core.isMature(plot)) {
-                list.push({ icon: 'fa-basket-shopping', label: '收成', sub: '體力 ' + core.COST.harvest, cls: 'fav', run: function () { return act({ type: 'harvest', plot: i }); } });
+                list.push({ icon: 'fa-basket-shopping', label: '收成', sub: '體力 ' + core.COST.harvest, cls: 'fav', run: function () { return actPlot({ type: 'harvest', plot: i }); } });
                 if (!plot.wateredToday) list.push(water);
             } else if (core.isEmpty(plot)) {
                 var cid = plantCrop(), crop = core.CROPS[cid], n = st.inventory.seeds[cid];
                 list.push({
                     icon: 'fa-seedling', label: '種' + crop.name, sub: n > 0 ? '種子 × ' + n : '沒種子了', cls: 'fav',
                     disabled: n <= 0, why: '種子用完了，去商店買。',
-                    run: function () { return act({ type: 'plant', plot: i, crop: cid }); }
+                    run: function () { return actPlot({ type: 'plant', plot: i, crop: cid }); }
                 });
                 if (!plot.wateredToday) { water.label = '先澆濕'; list.push(water); }
             } else {
                 if (!plot.wateredToday) list.push(water);
                 if (!plot.fertilized && plot.stage !== 'wilted') {
                     var fert = st.inventory.fertilizer || 0;
-                    list.push({ icon: 'fa-poop', label: '施肥', sub: '剩 ' + fert + ' 份', disabled: !fert, why: '沒有肥料，去牧場清糞便就有。', run: function () { return act({ type: 'fertilize', plot: i }); } });
+                    list.push({ icon: 'fa-poop', label: '施肥', sub: '剩 ' + fert + ' 份', disabled: !fert, why: '沒有肥料，去牧場清糞便就有。', run: function () { return actPlot({ type: 'fertilize', plot: i }); } });
                 }
             }
             return list;
         }
+        // 她自己動了那塊田：照她手上這份畫（雇的人那份拿掉）
+        function actPlot(a) { delete plotOverride[a.plot]; return act(a); }
         function targets() {
             var w = S().walk;
             var list = S().plots.map(function (plot, i) {
@@ -331,7 +336,12 @@
         $('cloud').addEventListener('click', function () { cloud.open(); });
         people = window.FarmCloud.residentsPanel({ app: app, openCloud: function () { cloud.open(); } });
         $('residents').addEventListener('click', function () { people.open(); });
-        hire = window.FarmHire.create({ app: app, state: S, ctx: ctx, openCloud: function () { cloud.open(); } });
+        // 雇來的人在畫面上走（farm_worker.js）：雇人那支看著單子、把清單丟給它演
+        workers = window.FarmWorkers ? window.FarmWorkers.create({
+            world: $('stage'), scene: 'yard', state: S,
+            onPlot: function (i, p) { plotOverride[i] = core.normalizeState({ version: core.VERSION, plots: [p] }).plots[0]; renderPlots(); if (stage) stage.refresh(); }
+        }) : null;
+        hire = window.FarmHire.create({ app: app, state: S, ctx: ctx, worker: workers, openCloud: function () { cloud.open(); } });
         $('hire').addEventListener('click', function () { hire.open(); });
         bag = window.FarmBag.create({ app: app, scene: 'yard', state: S, ctx: bagCtx, toast: ctx.toast });
         stage = window.FarmWalkStage.create({
@@ -345,7 +355,7 @@
             stage: stage,
             render: render,
             destroy: function () {
-                [stage, bag, shipUi, board, cloud, people, hire].forEach(function (c) { if (c && c.destroy) c.destroy(); });
+                [stage, bag, shipUi, board, cloud, people, hire, workers].forEach(function (c) { if (c && c.destroy) c.destroy(); });
                 ctx.save();
             }
         };
