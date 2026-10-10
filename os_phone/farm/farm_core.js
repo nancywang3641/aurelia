@@ -132,12 +132,14 @@
     function tiredResult(cost) { return result(false, 'tired', '體力不夠了（這件事要 ' + cost + ' 點），明天再做。'); }
 
     // 中午休息：體力回 NOON_REST（不超過上限）。一天叫一次是叫的那邊管（VPS 的 garden_admin 記著哪天叫過）
-    function noonRest(state) {
+    // amount：回幾點（不給＝NOON_REST；她那塊地回得少一點，見 farm_ship_core.noonCheck）
+    function noonRest(state, amount) {
+        var n = amount == null ? NOON_REST : amount;
         var before = staminaOf(state);
-        state.stamina = Math.min(STAMINA_MAX, before + NOON_REST);
+        state.stamina = Math.min(STAMINA_MAX, before + n);
         var gained = state.stamina - before;
         // 頂到上限要講「回滿了」：只寫「回了 2 點」會被當成休息沒用（10-10 試玩）
-        var full = state.stamina >= STAMINA_MAX && gained < NOON_REST ? '，回滿了' : '';
+        var full = state.stamina >= STAMINA_MAX && gained < n ? '，回滿了' : '';
         if (gained > 0) addLog(state, '中午吃過飯歇了一下，體力回了 ' + gained + ' 點' + full + '（' + state.stamina + '/' + STAMINA_MAX + '）。');
         return result(true, 'rested', gained > 0 ? '中午休息過，體力回了 ' + gained + ' 點' + full + '。' : '體力本來就是滿的。', { gained: gained });
     }

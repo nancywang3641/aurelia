@@ -141,7 +141,7 @@
         var state = loadState(L, raw);
         // 這次用哪一份已經決定好了（雲端那份也對過了）才補天數：另一台先補過的，拿到的那份就不會再補一次
         var caught = L.ship.catchUp(state, L, Date.now()).days;
-        // 過了中午、今天還沒休息過：體力回 25（跟住戶一樣；規則在 farm_ship_core.noonCheck）
+        // 過了中午、今天還沒休息過：體力回 15（住戶 25，她走路不扣；規則在 farm_ship_core.noonCheck）
         var rested = L.ship.noonCheck(state, L, Date.now());
         var scene = null, sceneName = '', toastTimer = 0, watch = 0;
         var pullNote = '';   // 換成伺服器那份重開時要說的話（雇的人做完了、剛雇人扣了錢）

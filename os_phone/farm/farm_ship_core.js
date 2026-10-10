@@ -206,15 +206,17 @@
     }
     // ── 中午休息（10-11 她：「好，補上中午回 25 點」）──
     //   住戶那兩塊地由 VPS 每天台灣中午叫一次 noonRest；她這塊以前沒有，一天只有 50 點，大件買下去就做不完。
-    //   這一天（清晨 4 點起算）過了中午 12 點、還沒休息過：回 farm_core.NOON_REST 點。哪一天休息過記在 state.noonDone（那天的 settledTo）。
+    //   這一天（清晨 4 點起算）過了中午 12 點、還沒休息過：回 NOON_OWNER 點。哪一天休息過記在 state.noonDone（那天的 settledTo）。
+    //   她回 15、住戶回 25（她：「好，那我就+15?」）：她自己走路不扣體力，住戶走路一天大約扣 10～20 點，先扣掉這段差距。
     //   提早結束今天的話，settledTo 已經往後推一天，要等「明天」的中午。回這一次回了幾點（0＝還沒到／休息過了）。
     var NOON_MS = 8 * 3600000;   // 清晨 4 點起算 8 小時＝中午 12 點
+    var NOON_OWNER = 15;
     function noonCheck(state, libs, nowMs) {
         var sh = S(state), now = now_(nowMs);
         if (!(sh.settledTo > 0) || state.noonDone === sh.settledTo) return 0;
         if (now < sh.settledTo - DAY_MS + NOON_MS) return 0;
         state.noonDone = sh.settledTo;
-        return libs.farm.noonRest(state).gained || 0;
+        return libs.farm.noonRest(state, NOON_OWNER).gained || 0;
     }
     // 現在按「結束今天」會不會被擋（今天已經提早結束過了）
     function canEndEarly(state, nowMs) {
@@ -240,6 +242,6 @@
         createShip: createShip, normalizeShip: normalizeShip, attach: attach,
         info: info, sellables: sellables, binList: binList, binTotal: binTotal,
         ship: ship, unshipAll: unshipAll, endDay: endDay,
-        nextSettle: nextSettle, catchUp: catchUp, canEndEarly: canEndEarly, endEarly: endEarly, noonCheck: noonCheck
+        nextSettle: nextSettle, catchUp: catchUp, canEndEarly: canEndEarly, endEarly: endEarly, noonCheck: noonCheck, NOON_OWNER: NOON_OWNER
     };
 });
