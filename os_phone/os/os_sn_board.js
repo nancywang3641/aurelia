@@ -17,7 +17,7 @@
     const BOOK = '【奧瑞亞-白板】';
     const REF_BOOKS = ['【奧瑞亞世界】', '【奧瑞亞-視差】', '【奧瑞亞-人物核心】', BOOK];
     const CAPS = { WAIT: 3, IDEAS: 5, MATS: 20, COMBINE_AT: 10, COMBINE_SHOW: 8, CLIP_MAX: 3, DROPPED: 30, SHIFTS: 40, REFS: 8, REF_CUT: 600, ENTRIES: 8 };
-    const LEN = { MAT: 80, WHY: 60, SRC: 40, IDEA: 60, KEY: 12, KEYS: 6, TITLE: 24, FRONT: 300, NAME: 30, ENTRY: 1200, NOTE: 120, SAY: 20, REDO: 200 };
+    const LEN = { MAT: 80, CARD: 120, WHY: 60, SRC: 40, IDEA: 60, KEY: 12, KEYS: 6, TITLE: 24, FRONT: 300, NAME: 30, ENTRY: 1200, NOTE: 120, SAY: 20, REDO: 200 };
     const KINDS = { faction: '勢力', place: '地點', person: '人物', conflict: '衝突', rule: '規矩' };
     const JOBS = { check: '挑毛病', write: '寫稿', combine: '湊點子', clip: '剪素材', idle: '沒事做' };
     const SLEEP_MS = 14 * 86400000;
@@ -26,6 +26,20 @@
     function _mkId(p) { return (p || 'x') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function _one(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
     function _cut(s, n) { s = _one(s); return s.length > n ? s.slice(0, n) : s; }
+    // 模型寫的素材卡太長：在句子邊上切；引的詞被切到一半（引號開了沒關）就整段引的拿掉，不留「I k」那種半截
+    //   10-10 她截圖：讀歌詞剪的卡寫了說明＋一句英文歌詞，超過就被硬切在字中間
+    const QUOTES = [['「', '」'], ['『', '』'], ['“', '”']];
+    function _cutNice(s, n) {
+        s = _one(s);
+        if (s.length <= n) return s;
+        let t = s.slice(0, n);
+        let open = -1;
+        QUOTES.forEach(([a, b]) => { const i = t.lastIndexOf(a); if (i > t.lastIndexOf(b) && i > open) open = i; });
+        if ((t.match(/"/g) || []).length % 2) open = Math.max(open, t.lastIndexOf('"'));
+        if (open > 0) t = t.slice(0, open);
+        else { const m = t.match(/^[\s\S]*[。！？；，」』”）.!?]/); if (m && m[0].length >= n / 2) t = m[0]; }
+        return t.replace(/[\s—–\-:：，、；,]+$/, '');
+    }
     function _cutBlock(s, n) { s = String(s == null ? '' : s).replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim(); return s.length > n ? s.slice(0, n) : s; }
     function _keys(s) { return String(s == null ? '' : s).split(/[,，、;；]/).map(x => _cut(x, LEN.KEY)).filter(Boolean).slice(0, LEN.KEYS); }
     function _plain(s) { return String(s == null ? '' : s).replace(/<[^>]+>/g, ''); }
@@ -119,7 +133,7 @@
         const no = why => ({ ok: false, why });
         const kind = job && job.kind;
         if (kind === 'clip') {
-            const mats = _all(t, 'material').map(x => ({ text: _cut(_plain(x.body), LEN.MAT), why: _cut(_attr(x.attrs, 'why'), LEN.WHY), source: _cut(_attr(x.attrs, 'source'), LEN.SRC) }))
+            const mats = _all(t, 'material').map(x => ({ text: _cutNice(_plain(x.body), LEN.CARD), why: _cut(_attr(x.attrs, 'why'), LEN.WHY), source: _cut(_attr(x.attrs, 'source'), LEN.SRC) }))
                 .filter(m => m.text).slice(0, CAPS.CLIP_MAX);
             return mats.length ? { ok: true, materials: mats, say } : no('沒剪出素材');
         }
@@ -201,7 +215,7 @@
     // m＝一句話，或 materialFrom 合好的 { text, why, source, link }
     function addMaterial(b, m, now) {
         const o = (m && typeof m === 'object') ? m : { text: m };
-        const t = _cut(o.text, LEN.MAT);
+        const t = _cut(o.text, LEN.CARD);   // 她打的那格本來就限 80；模型剪的卡在 parseReply 已經好好切過
         if (!t) return { ok: false, why: '先打一句話' };
         if (b.materials.length >= CAPS.MATS) return { ok: false, why: '素材滿 ' + CAPS.MATS + ' 張了，等他們湊成點子再丟' };
         b.materials.push({ id: _mkId('m'), text: t, why: _cut(o.why || '', LEN.MAT), source: o.source || '妳丟的', by: 'rae', byName: '妳', at: now, link: safeLink(o.link) });
@@ -230,6 +244,21 @@
         const part = k => { const x = v.match(new RegExp('(\\d+)' + k)); return x ? parseInt(x[1], 10) : 0; };
         const n = /^\d+s?$/.test(v) ? parseInt(v, 10) : part('h') * 3600 + part('m') * 60 + part('s');
         return n > 0 ? n : null;
+    }
+    // 她那句寫「第五首」「第 3 首」「第十二首」→ 幾；沒寫回 null。連結沒帶時間時當作停在那首
+    //   10-10 她貼整張、寫「第五首歌詞好聽」，結果剪了另外三首、她那句還貼在那三張上
+    const ZH_NUM = { 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+    function noteSong(note) {
+        const m = String(note == null ? '' : note).match(/第\s*([0-9０-９]+|[一二兩三四五六七八九十]+)\s*首/);
+        if (!m) return null;
+        const v = m[1].replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+        if (/^\d+$/.test(v)) return parseInt(v, 10) || null;
+        const i = v.indexOf('十');
+        if (i < 0) return v.length === 1 ? ZH_NUM[v] : null;
+        if (v.indexOf('十', i + 1) >= 0 || i > 1) return null;
+        const tens = i === 0 ? 1 : ZH_NUM[v[0]], rest = v.slice(i + 1);
+        const ones = rest ? (rest.length === 1 ? ZH_NUM[rest] : undefined) : 0;
+        return (tens && ones !== undefined) ? tens * 10 + ones : null;
     }
     function _mmss(sec) { sec = Math.max(0, Math.floor(sec || 0)); const m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
 
@@ -309,16 +338,17 @@
         const L = ['影片：' + (plan.title || '（沒標題）') + (plan.channel ? '（' + plan.channel + '）' : ''),
             note ? U + '丟的時候說：「' + note + '」' : U + '丟的時候沒有多說什麼。'];
         songs.forEach(s => L.push('── ' + (s.title || '字幕') + '（' + _mmss(s.start) + ' 起）', s.lyrics));
-        L.push(songs.length > 1 ? '挑最有故事的 1～' + CAPS.CLIP_MAX + ' 首，一首剪一張；source 寫歌名。' : '剪一張；source 寫' + (songs[0].title ? '歌名' : '影片標題') + '。',
-            '格式（每張一行，只交這幾行）：', '<material source="歌名" why="哪裡有意思">這首在講什麼故事、什麼畫面、什麼情緒（一句話，可以帶一句最抓人的詞）</material>');
+        L.push(songs.length > 1 ? '挑最有故事的 1～' + CAPS.CLIP_MAX + ' 首（她那句有提到喜歡哪首、哪種的，照她說的挑），一首剪一張；source 寫歌名。' : '剪一張；source 寫' + (songs[0].title ? '歌名' : '影片標題') + '。',
+            '格式（每張一行，只交這幾行）：', '<material source="歌名" why="哪裡有意思">這首在講什麼故事、什麼畫面、什麼情緒（一句話，連引的詞在內 ' + LEN.MAT + ' 字以內，可以帶一句最抓人的詞）</material>');
         return [{ role: 'system', content: sys }, { role: 'user', content: L.join('\n') }];
     }
     // 看過影片：一句話用它看到的、哪裡有趣用她那句（她的口味最準）；沒看：她那句就是素材
+    //   many＝一次剪了好幾首：她那句是講整次的（10-10「第五首歌詞好聽」被貼在另外三首上），每張用它自己的 why
     function materialFrom(o) {
         o = o || {};
         const note = _cut(o.note, LEN.MAT), link = safeLink(o.link), card = o.card;
         // 出處留影片標題（值班的人才知道那是什麼）；它沒寫標題就寫看過影片
-        if (card && card.text) return { ok: true, text: _cut(card.text, LEN.MAT), why: note || _cut(card.why, LEN.WHY), source: card.source ? '妳丟的影片：' + _cut(card.source, LEN.SRC) : '妳丟的・看過影片', link };
+        if (card && card.text) return { ok: true, text: _cutNice(card.text, LEN.CARD), why: (o.many ? '' : note) || _cut(card.why, LEN.WHY), source: card.source ? '妳丟的影片：' + _cut(card.source, LEN.SRC) : '妳丟的・看過影片', link };
         if (!note) return { ok: false, why: '寫一句妳的感覺再丟' };
         return { ok: true, text: note, why: '', source: '妳丟的', link };
     }
@@ -335,7 +365,7 @@
             clip ? '只看 ' + _mmss(video.start) + '～' + _mmss(video.end) + ' 這一段' + (clip.title ? '（〈' + clip.title + '〉）' : '') + '。' : '',
             '看完剪一張素材卡：一句話講它是什麼；why 寫哪裡有意思、可能長成什麼；source 寫' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '。',
             '格式（只交這一行）：',
-            '<material source="' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '" why="哪裡有意思">一句話</material>',
+            '<material source="' + (clip && clip.title ? '歌名' : '影片標題或頻道') + '" why="哪裡有意思">一句話（' + LEN.MAT + ' 字以內）</material>',
         ].filter(Boolean).join('\n');
         return [{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'video_url', video_url: video }, { type: 'text', text: txt }] }];
     }
@@ -718,10 +748,14 @@
         o = o || {};
         const note = _cut(o.note, LEN.MAT), raw = String(o.link || '').trim(), link = safeLink(raw);
         if (raw && !link) return { ok: false, why: '這個連結看不懂（要 http 或 https 開頭）' };
-        const yt = youTubeUrl(link), at = yt ? youTubeStart(link) : null;
+        const yt = youTubeUrl(link);
+        let at = yt ? youTubeStart(link) : null;
         let cards = [], why = '', how = '';
         if (yt) {
-            const plan = lyricPlan(await _ytInfo(yt), at);
+            const info = await _ytInfo(yt);
+            const k = at == null ? noteSong(note) : null;   // 連結沒停在哪首、她那句寫了第幾首：就那首
+            if (k && info && Array.isArray(info.chapters) && info.chapters[k - 1] && isFinite(info.chapters[k - 1].start)) at = +info.chapters[k - 1].start;
+            const plan = lyricPlan(info, at);
             const read = plan ? plan.songs.filter(s => s.lyrics) : [];
             if (read.length) {
                 try {
@@ -730,9 +764,10 @@
                     else why = '這支的歌詞沒剪成：' + p.why;
                 } catch (e) { why = '這支的歌詞沒剪成：' + _err(e); }
                 const missed = plan.songs.filter(s => !s.lyrics);
-                if (cards.length && missed.length) why = (missed.length > 1 ? '這幾首' : '這首') + '沒有字幕、沒讀到：' + missed.map(s => s.title || _mmss(s.start)).join('、') + '（要的話，連結停在那首再丟一次）';
+                if (cards.length && missed.length) why = (missed.length > 1 ? '這幾首' : '這首') + '沒有字幕、沒讀到：' + missed.map(s => s.title || _mmss(s.start)).join('、') +
+                    (missed[0].n ? '（要的話，一句話裡寫「第 ' + missed[0].n + ' 首」再丟一次）' : '（要的話，連結停在那首再丟一次）');
             } else if (plan && !plan.one) {
-                why = '這張歌單讀不到歌詞；連結停在想要的那首再丟一次，會只聽那首';   // 不整張叫 Gemini 聽：一小時的片聽不完
+                why = '這張歌單讀不到歌詞；一句話裡寫想要第幾首、或連結停在那首再丟一次，會只聽那首';   // 不整張叫 Gemini 聽：一小時的片聽不完
             } else if (!canWatch()) {
                 why = plan ? '這首沒有字幕、讀不到歌詞；要聽的話，設置「哪件事走哪個模型」的「白板看影片／讀歌詞」指到看得了影片的通道（例如 Gemini）'
                     : '這支影片沒看：設置「哪件事走哪個模型」的「白板看影片／讀歌詞」還沒指到妳的通道';
@@ -747,7 +782,7 @@
             }
         }
         const ytAt = s => yt + (s > 0 ? '&t=' + Math.floor(s) + 's' : '');
-        const mfs = cards.length ? cards.map(c => materialFrom({ note, link: ytAt(c.at), card: c })) : [materialFrom({ note, link: yt || link })];
+        const mfs = cards.length ? cards.map(c => materialFrom({ note, link: ytAt(c.at), card: c, many: cards.length > 1 })) : [materialFrom({ note, link: yt || link })];
         if (!mfs[0].ok) return { ok: false, why: why ? why + '；寫一句妳的感覺再丟' : mfs[0].why };
         let n = 0;
         const r = await _edit((b, now) => {
@@ -1029,7 +1064,7 @@
         _lockDataForTest: _lockData, _saveBoardForTest: saveBoard,
         _pure: { emptyBoard, normBoard, waitCount, canHatch, isAsleep, nextSlot, unstick, pickJob, parseReply, applyResult,
             addMaterial, hatch, redo, drop, countKinds, countText, markWorld, refTerms, pickRefs, buildMessages,
-            safeLink, youTubeUrl, youTubeStart, materialFrom, watchMessages, lyricPlan, lyricsMessages, songAt,
+            safeLink, youTubeUrl, youTubeStart, noteSong, cutNice: _cutNice, materialFrom, watchMessages, lyricPlan, lyricsMessages, songAt,
             BOOK, REF_BOOKS, CAPS, LEN, LYR, KINDS, JOBS, SLEEP_MS },
     };
     win.OS_SN_BOARD = OS_SN_BOARD;
