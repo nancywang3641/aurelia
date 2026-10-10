@@ -276,6 +276,11 @@
         weed: { icon: 'fa-seedling', label: '拔草', type: 'pull', sub: '變 1 捆乾草' },
         poop: { icon: 'fa-broom', label: '清掉', type: 'clean', sub: '變 1 份肥料' }
     };
+    var ALL = {
+        drop: { icon: 'fa-basket-shopping', label: '全部撿完' },
+        weed: { icon: 'fa-seedling', label: '全部拔完' },
+        poop: { icon: 'fa-broom', label: '全部清完' }
+    };
     function renderItems() {
         var have = {};
         itemsLayer.querySelectorAll('.ranch-item').forEach(function (n) { have[n.dataset.id] = n; });
@@ -380,7 +385,15 @@
                     return p.name + (it.d.quality === 'good' ? '（上等）' : '');
                 },
                 info: function () { return ''; },
-                actions: function () { return [{ icon: I.icon, label: I.label, sub: I.sub || '體力 ' + ranch.COST[I.type === 'collect' ? 'collect' : I.type === 'pull' ? 'pull' : 'clean'], run: function () { return act({ type: I.type, item: it.key }); } }]; }
+                actions: function () {
+                    var unit = ranch.COST[I.type === 'collect' ? 'collect' : I.type === 'pull' ? 'pull' : 'clean'];
+                    var list = [{ icon: I.icon, label: I.label, sub: I.sub || '體力 ' + unit, run: function () { return act({ type: I.type, item: it.key }); } }];
+                    // 地上同一種還有別的：一次做完，每件體力減半（10-10 她：「一次撿完蛋、一次清完糞」）
+                    var R = state.ranch, n = (it.kind === 'drop' ? R.drops : it.kind === 'weed' ? R.weeds : R.poops).length;
+                    if (n > 1) list.push({ icon: ALL[it.kind].icon, label: ALL[it.kind].label + '（' + n + '）', sub: '體力 ' + Math.ceil(n * unit / 2), cls: 'fav',
+                        run: function () { return act({ type: I.type + '_all' }); } });
+                    return list;
+                }
             });
         });
         // 下面圍欄的缺口＝回後院：點了走出去（走到缺口就換回後院）；不冒按鈕

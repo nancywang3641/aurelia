@@ -7,6 +7,8 @@
 //   ② 走路花體力：走多遠照直線距離算，累積滿 STEP 扣 1 點（不滿的留著下次一起算）；跨區要先走到圍欄門口。
 //      只扣下指令的 AI（goTo）。她自己在畫面上走不扣（09-29 她：「沒幹什麼就沒體力了」——連續走 1.6 秒就 1 點，
 //      滿體力只夠走 80 秒）：畫面那支叫 moveTo 時帶 { free: true }，只更新位置。
+//      10-10 她發現住戶因此一直「吃不滿」（她不扣、他們扣）：選了「走路照扣＋中午回一半」（farm_core.noonRest）＋
+//      地上的東西一次撿完（ranch_core.collectAll 等），不是拿掉走路——拿掉的話一班就做完、路線排得好壞沒差。
 //   ③ 工具要去拿：一次只拿得動一樣。水壺在後院工具棚、桶子剪刀在牧場棚屋（買過才有）；拿新的，手上那樣自動放回原位。
 //      澆水要手上拿水壺、壺裡有水（CAN_MAX 份，一塊田一份），空了去池塘裝。
 // 所以 AI 要自己排路線：先拿什麼、先去哪；排爛了繞一大圈，體力就不夠做完。她打開畫面時，小人照同一套規則走。
@@ -370,6 +372,13 @@
             case 'clean':
                 if (!near(state, a.item)) return tooFar(state, a.item);
                 return a.type === 'collect' ? ranch.collect(state, a.item) : a.type === 'pull' ? ranch.pullWeed(state, a.item) : ranch.cleanPoop(state, a.item);
+            // 一次撿完／清完／拔完：人在牧場裡就行（拿籃子一路掃過去，不用一顆一顆走），每件體力減半
+            case 'collect_all':
+            case 'clean_all':
+            case 'pull_all':
+                if (w.scene !== 'ranch') return result(false, 'too_far', '要先走進牧場。');
+                return a.type === 'collect_all' ? ranch.collectAll(state) : a.type === 'clean_all' ? ranch.cleanAll(state) : ranch.pullAll(state);
+            case 'use_scroll': return farm.useScroll(state);
             case 'buy_tool':
                 if (!near(state, 'barn')) return tooFar(state, 'barn');
                 return ranch.buyTool(state, a.tool);

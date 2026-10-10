@@ -22,10 +22,14 @@
         silverwheat:{ id: 'silverwheat',name: '銀穗麥',   buyPrice: 18, sellPrice: 45, growDays: 5 }
     };
     var CROP_IDS = Object.keys(CROPS);
-    // 體力：一天 50，做事扣、走路也扣（farm_walk_core），過一天回滿。買賣不花體力。
+    // 體力：一天 50，做事扣、AI 下指令走路也扣（farm_walk_core；她在畫面上走不扣），過一天回滿。買賣不花體力。
     //   目的是讓「住戶醒來一次能做的事」有上限，不然 AI 會把能做的全做完、比不出誰會顧（她 09-29 擔心的「一鍵收取」）。
     //   農場的動作在這支裡扣，牧場的動作在 ranch_core 扣，同一個 state.stamina。
-    var STAMINA_MAX = 50;   // 09-29 從 40 調到 50：走路也要花體力了，路線排得好剛好做得完、排爛就不夠
+    //   中午休息回一半（noonRest，住戶的地由 VPS 那支每天台灣中午叫一次）：不然早班用完、晚班醒來只剩 0～2 點，
+    //   丹寫了四次「晚班沒得做」最後自己把晚班刪了（10-10 她：「回復確實是個好辦法」）。
+    //   回復卷（inventory.scroll）：用了體力回滿。10-10 她送住戶的賠禮——之前只有她走路不扣體力，住戶一直吃虧。
+    var STAMINA_MAX = 50;
+    var NOON_REST = 25;
     var COST = { water: 2, plant: 2, harvest: 2, fertilize: 1, steal: 1 };
 
     function clone(value) {
@@ -66,7 +70,7 @@
             nextWakeAt: null,
             stamina: STAMINA_MAX,
             plots: Array.from({ length: PLOT_COUNT }, emptyPlot),
-            inventory: { seeds: seeds, harvest: harvest, fertilizer: 0 },
+            inventory: { seeds: seeds, harvest: harvest, fertilizer: 0, scroll: 0 },
             stats: { totalHarvested: 0, deadCrops: 0 },
             ledger: [],
             logs: ['後院剛整理好。六塊土地都在等第一顆種子。']
@@ -121,6 +125,34 @@
     function tired(state, cost) { return staminaOf(state) < cost; }
     function spend(state, cost) { state.stamina = Math.max(0, staminaOf(state) - cost); }
     function tiredResult(cost) { return result(false, 'tired', '體力不夠了（這件事要 ' + cost + ' 點），明天再做。'); }
+
+    // 中午休息：體力回 NOON_REST（不超過上限）。一天叫一次是叫的那邊管（VPS 的 garden_admin 記著哪天叫過）
+    function noonRest(state) {
+        var before = staminaOf(state);
+        state.stamina = Math.min(STAMINA_MAX, before + NOON_REST);
+        var gained = state.stamina - before;
+        // 頂到上限要講「回滿了」：只寫「回了 2 點」會被當成休息沒用（10-10 試玩）
+        var full = state.stamina >= STAMINA_MAX && gained < NOON_REST ? '，回滿了' : '';
+        if (gained > 0) addLog(state, '中午吃過飯歇了一下，體力回了 ' + gained + ' 點' + full + '（' + state.stamina + '/' + STAMINA_MAX + '）。');
+        return result(true, 'rested', gained > 0 ? '中午休息過，體力回了 ' + gained + ' 點' + full + '。' : '體力本來就是滿的。', { gained: gained });
+    }
+    // 回復卷：用一張體力回滿
+    function giveScroll(state, n, note) {
+        n = Math.max(0, Math.floor(Number(n) || 0));
+        if (!n) return result(false, 'invalid_quantity', '要送幾張？');
+        state.inventory.scroll = (state.inventory.scroll || 0) + n;
+        addLog(state, note || ('收到 ' + n + ' 張回復卷。'));
+        return result(true, 'got_scroll', '收到 ' + n + ' 張回復卷（現在 ' + state.inventory.scroll + ' 張）。');
+    }
+    function useScroll(state) {
+        if (!(state.inventory.scroll > 0)) return result(false, 'no_scroll', '沒有回復卷了。');
+        if (staminaOf(state) >= STAMINA_MAX) return result(false, 'stamina_full', '體力已經是滿的，先留著。');
+        var before = staminaOf(state);
+        state.inventory.scroll -= 1;
+        state.stamina = STAMINA_MAX;
+        addLog(state, '用了一張回復卷，體力從 ' + before + ' 回滿到 ' + STAMINA_MAX + '。');
+        return result(true, 'used_scroll', '用了一張回復卷，體力回滿（' + STAMINA_MAX + '/' + STAMINA_MAX + '），還剩 ' + state.inventory.scroll + ' 張。');
+    }
 
     function validPlotIndex(state, index) {
         return Number.isInteger(index) && index >= 0 && index < state.plots.length;
@@ -190,6 +222,7 @@
             state.inventory.seeds = normalizeCountMap(raw.inventory.seeds);
             state.inventory.harvest = normalizeCountMap(raw.inventory.harvest);
             state.inventory.fertilizer = Math.max(0, Math.floor(Number(raw.inventory.fertilizer) || 0));
+            state.inventory.scroll = Math.max(0, Math.floor(Number(raw.inventory.scroll) || 0));
         }
         state.stamina = raw.stamina == null ? STAMINA_MAX : Math.max(0, Math.min(STAMINA_MAX, Math.floor(Number(raw.stamina) || 0)));
         state.stats.totalHarvested = raw.stats && Number.isFinite(Number(raw.stats.totalHarvested))
@@ -475,8 +508,12 @@
         CROPS: CROPS,
         CROP_IDS: CROP_IDS.slice(),
         STAMINA_MAX: STAMINA_MAX,
+        NOON_REST: NOON_REST,
         LOG_KEEP: LOG_KEEP,
         COST: COST,
+        noonRest: noonRest,
+        giveScroll: giveScroll,
+        useScroll: useScroll,
         tired: tired,
         spend: spend,
         tiredResult: tiredResult,

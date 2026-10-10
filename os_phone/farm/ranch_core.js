@@ -93,11 +93,12 @@
     function spend(state, cost) { state.stamina = Math.max(0, staminaOf(state) - cost); }
     function tiredResult(cost) { return result(false, 'tired', '體力不夠了（這件事要 ' + cost + ' 點），明天再做。'); }
 
+    // 幾號照同一種的先來後到算，小的也算一個號（10-10 試玩：小雞長大那天插進大雞的號，後面的大雞全部往後挪一號）
     function label(animal, list) {
         var info = ANIMALS[animal.kind];
-        if (animal.baby > 0) return info.baby;
-        var same = list.filter(function (a) { return a.kind === animal.kind && !(a.baby > 0); });
-        return info.name + (same.length > 1 ? ' ' + (same.indexOf(animal) + 1) + ' 號' : '');
+        var same = list.filter(function (a) { return a.kind === animal.kind; });
+        var no = same.length > 1 ? ' ' + (same.indexOf(animal) + 1) + ' 號' : '';
+        return (animal.baby > 0 ? info.baby : info.name) + no;
     }
     function newAnimal(r, kind, baby) {
         return {
@@ -274,6 +275,53 @@
         r.products[d.product][d.quality] += 1;
         var p = PRODUCTS[d.product];
         return result(true, 'collected', '撿到一' + p.unit + p.name + (d.quality === 'good' ? '（上等）' : '') + '。', { drop: d });
+    }
+
+    // 一次撿完／清完／拔完（10-10 她要的：「一次撿完蛋、一次清完糞」）：每件的體力減半（加起來的零頭進位），
+    //   體力不夠就做到哪算哪、剩下的留著。一顆一顆撿的時候，住戶地上堆了十幾二十顆蛋、十坨糞，牧場一髒動物就天天生病。
+    function _batchCount(state, n, unit) {
+        var half = unit / 2;
+        var k = Math.min(n, Math.floor(staminaOf(state) / half + 1e-9));
+        return { k: k, cost: Math.ceil(k * half - 1e-9) };
+    }
+    function collectAll(state) {
+        var r = state.ranch;
+        if (!r.drops.length) return result(false, 'no_drop', '地上沒有東西可以撿。');
+        var b = _batchCount(state, r.drops.length, COST.collect);
+        if (!b.k) return tiredResult(Math.ceil(COST.collect / 2));
+        var got = {};
+        r.drops.splice(0, b.k).forEach(function (d) {
+            r.products[d.product][d.quality] += 1;
+            var p = PRODUCTS[d.product], key = p.name + (d.quality === 'good' ? '（上等）' : '');
+            got[key] = (got[key] || 0) + 1;
+        });
+        spend(state, b.cost);
+        var left = r.drops.length;
+        return result(true, 'collected_all', '一次撿了 ' + b.k + ' 樣：' + Object.keys(got).map(function (k) { return k + ' × ' + got[k]; }).join('、') +
+            '（體力 -' + b.cost + '）' + (left ? '，地上還有 ' + left + ' 樣（體力不夠）。' : '。'), { n: b.k, cost: b.cost, left: left });
+    }
+    function cleanAll(state) {
+        var r = state.ranch;
+        if (!r.poops.length) return result(false, 'no_poop', '牧場已經是乾淨的。');
+        var b = _batchCount(state, r.poops.length, COST.clean);
+        if (!b.k) return tiredResult(Math.ceil(COST.clean / 2));
+        r.poops.splice(0, b.k);
+        state.inventory.fertilizer = (state.inventory.fertilizer || 0) + b.k;
+        spend(state, b.cost);
+        var left = r.poops.length;
+        return result(true, 'cleaned_all', '一次清了 ' + b.k + ' 坨，換成 ' + b.k + ' 份肥料（肥料 ' + state.inventory.fertilizer + ' 份；體力 -' + b.cost + '）' +
+            (left ? '，地上還剩 ' + left + ' 坨（體力不夠）。' : '，牧場乾淨了。'), { n: b.k, cost: b.cost, left: left });
+    }
+    function pullAll(state) {
+        var r = state.ranch;
+        if (!r.weeds.length) return result(false, 'no_weed', '沒有雜草。');
+        var b = _batchCount(state, r.weeds.length, COST.pull);
+        if (!b.k) return tiredResult(Math.ceil(COST.pull / 2));
+        r.weeds.splice(0, b.k);
+        r.hay += b.k;
+        spend(state, b.cost);
+        var left = r.weeds.length;
+        return result(true, 'pulled_all', '一次拔了 ' + b.k + ' 叢草，曬成 ' + b.k + ' 捆乾草（體力 -' + b.cost + '）' + (left ? '，還剩 ' + left + ' 叢（體力不夠）。' : '。'), { n: b.k, cost: b.cost, left: left });
     }
 
     // 擠奶／剪毛：要工具，牛奶或羊毛要「好了」
@@ -473,7 +521,7 @@
         createRanch: createRanch, normalizeRanch: normalizeRanch, attach: attach,
         label: label, findAnimal: findAnimal,
         feed: feed, feedAllHay: feedAllHay, buyHay: buyHay, refillWater: refillWater,
-        pullWeed: pullWeed, cleanPoop: cleanPoop, collect: collect, milk: milk, shear: shear,
+        pullWeed: pullWeed, cleanPoop: cleanPoop, collect: collect, collectAll: collectAll, cleanAll: cleanAll, pullAll: pullAll, milk: milk, shear: shear,
         buyTool: buyTool, buyMedicine: buyMedicine, giveMedicine: giveMedicine, buyAnimal: buyAnimal,
         advanceDay: advanceDay, priceOf: priceOf, sellProduct: sellProduct
     };
