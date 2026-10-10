@@ -450,23 +450,50 @@
             (rec && rec.about ? '\n' + user + '對你的描述：' + String(rec.about).slice(0, 300) : '') + (lines ? '\n' + lines : '');
         return Object.assign({}, me, { sys, conn: X.connConfig(rec), user });
     }
-    // 臉、站姿：小機借書咖那套（穿衣服＋描框）；宿舍住戶用預設樣子（丹＝小螃蟹、阿洛＝洛德）＋同一個描框
-    async function faceOf(pick) {
-        const CP = _g('ClawdPortrait');
-        if (!pick || !CP || !CP.faceOf) return '';
-        try { return (await CP.faceOf(pick.base || 'crab')) || ''; } catch (e) { return ''; }
-    }
-    async function lookOf(pick) {
-        if (!pick) return '';
-        const CS = _g('OS_CAFE_STAFF'), CP = _g('ClawdPortrait');
-        if (pick.type === 'xiaoji') return (CS && CS.lookOf) ? CS.lookOf({ type: 'xiaoji', id: pick.id, body: pick.base }) : '';
-        if (!CP || !CP.renderStill || !CP.crop || !CS || !CS.outline) return '';
+    // 臉、站姿：一律畫成他現在的打扮（她 10-10：「不過形象似乎是預設齁」）
+    //   衣服：小機＝它在宿舍衣櫃換的（OS_XIAOJI 存檔的 wear，RoomWear.client 轉）；宿舍住戶＝橋上那份（房間的 DormPanel.wearOf）。
+    //   頭像＝畫一格裁掉空白（同宿舍門卡）；站在 32 樓場景那張再描一圈框（同書咖店員）。小螃蟹沒打扮過用預設臉（同門卡）。
+    //   五分鐘內同一位不重畫（白板開著時每次重畫都會來要）。
+    const LOOK_TTL = 5 * 60000;
+    const _lookMemo = new Map();   // type:id → { at, face, look }
+    async function _wearFor(pick) {
         try {
-            const cv = (win.document || document).createElement('canvas');
-            await CP.renderStill(cv, null, 'idle', 1, pick.base || 'crab');
-            return CP.crop(CS.outline(cv)) || '';
-        } catch (e) { return ''; }
+            if (pick.type === 'xiaoji') {
+                const X = _g('OS_XIAOJI'), RW = _g('RoomWear');
+                const rec = (X && X.get) ? await X.get(pick.id) : null;
+                return (RW && RW.client && rec && rec.wear) ? RW.client(rec.wear) : null;
+            }
+            const D = _g('DormPanel');
+            return (D && D.wearOf) ? ((await D.wearOf(pick.id)) || null) : null;
+        } catch (e) { return null; }
     }
+    async function _draw(pick, outlined) {
+        const CP = _g('ClawdPortrait'), CS = _g('OS_CAFE_STAFF');
+        if (!pick || !CP || !CP.renderStill || !CP.crop) return '';
+        const key = pick.type + ':' + pick.id, slot = outlined ? 'look' : 'face';
+        const m = _lookMemo.get(key);
+        const fresh = m && Date.now() - m.at < LOOK_TTL;
+        if (fresh && m[slot]) return m[slot];
+        const base = pick.base || (pick.type === 'xiaoji' ? 'hamster' : 'crab');
+        const wear = await _wearFor(pick);
+        let url = '';
+        if (!outlined && base === 'crab' && !(wear && wear.own)) {
+            try { url = (CP.faceOf && (await CP.faceOf(base))) || ''; } catch (e) {}
+        } else {
+            const paint = async w => {
+                const cv = (win.document || document).createElement('canvas');
+                await CP.renderStill(cv, w, 'idle', 1, base);
+                return CP.crop(outlined && CS && CS.outline ? CS.outline(cv) : cv) || '';
+            };
+            try { url = await paint(wear); } catch (e) { try { url = await paint(null); } catch (e2) {} }   // 那套衣服畫不出來就畫沒打扮的
+        }
+        const nm = fresh ? m : { at: Date.now() };
+        nm[slot] = url;
+        _lookMemo.set(key, nm);
+        return url;
+    }
+    function faceOf(pick) { return _draw(pick, false); }
+    function lookOf(pick) { return _draw(pick, true); }
 
     // ── 世界書裡跟這件事有關的條目（世界門那三本＋白板那本；字面找，最多 8 條）──
     function _pwa() { try { const A = _g('OS_API'); return !!(A && A.isStandalone && A.isStandalone()); } catch (e) { return false; } }
