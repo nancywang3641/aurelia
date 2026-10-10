@@ -28,7 +28,7 @@
     function _cut(s, n) { s = _one(s); return s.length > n ? s.slice(0, n) : s; }
     // 模型寫的素材卡太長：在句子邊上切；引的詞被切到一半（引號開了沒關）就整段引的拿掉，不留「I k」那種半截
     //   10-10 她截圖：讀歌詞剪的卡寫了說明＋一句英文歌詞，超過就被硬切在字中間
-    const QUOTES = [['「', '」'], ['『', '』'], ['“', '”']];
+    const QUOTES = [['「', '」'], ['『', '』'], ['“', '”'], ['（', '）'], ['【', '】'], ['《', '》'], ['(', ')']];   // 括號開了沒關一樣（影片標題被切成「…（警」）
     function _cutNice(s, n) {
         s = _one(s);
         if (s.length <= n) return s;
@@ -133,7 +133,7 @@
         const no = why => ({ ok: false, why });
         const kind = job && job.kind;
         if (kind === 'clip') {
-            const mats = _all(t, 'material').map(x => ({ text: _cutNice(_plain(x.body), LEN.CARD), why: _cut(_attr(x.attrs, 'why'), LEN.WHY), source: _cut(_attr(x.attrs, 'source'), LEN.SRC) }))
+            const mats = _all(t, 'material').map(x => ({ text: _cutNice(_plain(x.body), LEN.CARD), why: _cut(_attr(x.attrs, 'why'), LEN.WHY), source: _cutNice(_attr(x.attrs, 'source'), LEN.SRC) }))
                 .filter(m => m.text).slice(0, CAPS.CLIP_MAX);
             return mats.length ? { ok: true, materials: mats, say } : no('沒剪出素材');
         }
@@ -333,7 +333,7 @@
         const U = user || '她';
         const songs = plan.songs.filter(s => s.lyrics);
         const sys = '你在幫' + U + '的白板剪素材：她丟來一支影片，下面是它的字幕。是歌的話字幕就是歌詞，' + U + '要的就是歌詞——從歌詞剪「之後可能長成故事」的素材卡。\n\n' + RULES +
-            '\n卡片不用整段抄歌詞：寫這首歌在講什麼故事、有什麼畫面、什麼情緒，最多帶一兩句最抓人的詞。不是歌的話，寫它在講什麼。' +
+            '\n卡片不用整段抄歌詞：寫這首歌在講什麼故事、有什麼畫面、什麼情緒，最多帶一兩句最抓人的詞。不是歌的話，寫它在講什麼。\n' + REAL_CASE +
             (plan.auto ? '\n字幕是 YouTube 自動聽出來的，會有聽錯的字，照上下文讀。' : '');
         const L = ['影片：' + (plan.title || '（沒標題）') + (plan.channel ? '（' + plan.channel + '）' : ''),
             note ? U + '丟的時候說：「' + note + '」' : U + '丟的時候沒有多說什麼。'];
@@ -348,7 +348,7 @@
         o = o || {};
         const note = _cut(o.note, LEN.MAT), link = safeLink(o.link), card = o.card;
         // 出處留影片標題（值班的人才知道那是什麼）；它沒寫標題就寫看過影片
-        if (card && card.text) return { ok: true, text: _cutNice(card.text, LEN.CARD), why: (o.many ? '' : note) || _cut(card.why, LEN.WHY), source: card.source ? '妳丟的影片：' + _cut(card.source, LEN.SRC) : '妳丟的・看過影片', link };
+        if (card && card.text) return { ok: true, text: _cutNice(card.text, LEN.CARD), why: (o.many ? '' : note) || _cut(card.why, LEN.WHY), source: card.source ? '妳丟的影片：' + _cutNice(card.source, LEN.SRC) : '妳丟的・看過影片', link };
         if (!note) return { ok: false, why: '寫一句妳的感覺再丟' };
         return { ok: true, text: note, why: '', source: '妳丟的', link };
     }
@@ -357,7 +357,7 @@
     function watchMessages(link, note, user, clip) {
         const U = user || '她';
         const sys = '你在幫' + U + '的白板剪素材：看她丟來的一支影片，剪成一張「之後可能長成故事」的素材卡。\n\n' + RULES +
-            '\n是歌的話，' + U + '要的是歌詞：重點聽歌詞在講什麼（故事、畫面、情緒），不是 MV 畫面；不用整段抄歌詞，最多帶一兩句最抓人的詞。不是歌的話，寫發生了什麼、畫面跟感覺。';
+            '\n是歌的話，' + U + '要的是歌詞：重點聽歌詞在講什麼（故事、畫面、情緒），不是 MV 畫面；不用整段抄歌詞，最多帶一兩句最抓人的詞。不是歌的話，寫發生了什麼、畫面跟感覺。\n' + REAL_CASE;
         const video = { url: link };
         if (clip) { video.start = Math.floor(clip.start); video.end = Math.ceil(clip.end); }
         const txt = [
@@ -427,6 +427,8 @@
         '・可以：一般謀殺案、警匪對峙、追捕、開槍、有人中彈——寫發生了什麼、人怎麼反應、怎麼查出來，手法只到推理需要的程度。',
         '白板上的東西只留在家裡，不准貼到任何外面的社群。',
     ].join('\n');
+    // 她丟的影片是真案（10-10 她丟了一支法庭實錄）：照 10-09 講好的「拿辦案結構，不拿人名和案情」剪，卡才在界線內、湊點子時不會被跳過
+    const REAL_CASE = '是真實發生的案件的話：卡片不寫真名、不重講那件真事，只留它是怎麼被拆穿的（哪句話露了餡、哪個證據翻了盤），寫成以後故事裡借得走的辦案手法。';
     const SAY_FMT = '<say>站在白板旁冒出來的一句，' + LEN.SAY + ' 個字以內（可以不寫）</say>';
     function _list(arr, f, none) { return arr.length ? arr.map(f).join('\n') : none; }
     function _refsText(refs) { return refs.length ? refs.map(r => '── ' + r.title + '｜' + r.book + '\n' + r.content).join('\n') : '（沒找到相關的）'; }
