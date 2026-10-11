@@ -131,7 +131,8 @@
         // 停下來的地方記進規則：AI 看到的動物位置就是這裡
         if (a.id) WC.setHerdPos(state, a.id, a.x, a.y);
         clearTimeout(a.timer);
-        if (night && !a.held) { sleep(a); return; }
+        // 夜裡：被她站在旁邊（小窗開著）就原地繼續睡，走開了才照常（貓狗走回狗屋）
+        if (night) { if (a.held) setMove(a, 'sleep'); else sleep(a); return; }
         setMove(a, 'idle');
         if (a.held) return;
         // 停下來偶爾低頭啃幾口草（寵物不吃）
@@ -155,9 +156,12 @@
         setMove(a, 'sleep');
     }
     // 小人走到旁邊時站住（不然按鈕按下去牠已經走遠了）
+    // 夜裡已經睡著的不叫醒、也不重量位置（趴著的框比站著矮，量了會把牠往上挪）
+    // （10-12 她：「動物睡覺就一直給睡覺動作，不要因為我靠近後，打開狀態窗口，又變回站姿了」）
     function hold(a) {
         a.held = (a.held || 0) + 1;
         clearTimeout(a.timer);
+        if (night && a.el.classList.contains('ra-sleep')) return;
         // 走到一半就停：從畫面上量牠現在真正在哪。頁面縮到看不見時量到 0，就沿用目的地，不然會算出 NaN
         var r = a.el.getBoundingClientRect(), s = stageEl.getBoundingClientRect();
         a.pos.style.transitionDuration = '0ms';
