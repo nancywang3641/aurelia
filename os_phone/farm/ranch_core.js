@@ -77,6 +77,14 @@
     var WEED_CHANCE = 0.35;
     var SICK_CHANCE = 0.25;   // 太髒那天，每隻生病的機率
     var HEAL_DAYS = 2;        // 牧場乾淨連幾天自己好
+    // 夜裡吵醒餵（10-12 她：「可以吵醒他們餵飯，但會導致生病機率微量提升，如果一直這種習慣吵醒餵飯，就會導致動物睡眠質量下降，太晚吃飯，胃不好生病之類的」）
+    //   吵醒那晚結算時多一點生病機率，最近 WAKE_DAYS 天裡每多吵醒一次再多一些；吵醒滿 POOR_SLEEP_AT 次＝睡不好，沒吵醒的晚上也比較容易病，過幾天沒再吵才回來
+    var WAKE_DAYS = 7;
+    var WAKE_SICK = 0.08;
+    var WAKE_HABIT = 0.07;
+    var WAKE_SICK_MAX = 0.45;
+    var POOR_SLEEP_AT = 3;
+    var POOR_SLEEP_SICK = 0.05;
     var BREED_STREAK = 3;     // 連續幾天吃飽喝足才可能生
     var BREED_CHANCE = 0.3;
     var RUNAWAY_DAYS = 2;
@@ -127,9 +135,14 @@
     function newAnimal(r, kind, baby) {
         return {
             id: 'a' + (r.nextId++), kind: kind, fedToday: false, fedWith: null, hungryDays: 0, fullDays: 0,
-            ready: null, baby: baby || 0, streak: 0, sick: false, cleanDays: 0
+            ready: null, baby: baby || 0, streak: 0, sick: false, cleanDays: 0, wokeToday: false, wokeDays: []
         };
     }
+    // 最近 WAKE_DAYS 天被吵醒餵了幾次（day 那天也算）
+    function wakesIn(a, day) {
+        return (a.wokeDays || []).filter(function (d) { return d > day - WAKE_DAYS; }).length;
+    }
+    function sleepsPoorly(a, day) { return wakesIn(a, day) >= POOR_SLEEP_AT; }
 
     // 狗的好感：pet／bowl＝今天摸過／飯碗裝過；away＝離家出走中（隔天結算回來）
     function newDog() { return { love: DOG_LOVE_MAX, pet: false, bowl: false, away: false }; }
@@ -171,7 +184,9 @@
                 hungryDays: Math.max(0, int(a.hungryDays)), fullDays: Math.max(0, int(a.fullDays)),
                 ready: a.ready === 'good' || a.ready === 'normal' ? a.ready : null,
                 baby: Math.max(0, int(a.baby)), streak: Math.max(0, int(a.streak)),
-                sick: !!a.sick, cleanDays: Math.max(0, int(a.cleanDays))
+                sick: !!a.sick, cleanDays: Math.max(0, int(a.cleanDays)),
+                wokeToday: !!a.wokeToday,
+                wokeDays: Array.isArray(a.wokeDays) ? a.wokeDays.map(function (d) { return int(d); }).filter(function (d) { return d > 0; }).slice(-WAKE_DAYS) : []
             };
         });
         r.nextId = Math.max(int(raw.nextId, 1), r.animals.length + 1);
@@ -225,7 +240,8 @@
     }
 
     // 餵一隻：food 是 'hay' 或 'fav'（牠最愛的作物）
-    function feed(state, id, food) {
+    // opts.woke：夜裡把睡著的牠吵醒來吃（farm_walk_core 夜裡才會帶）
+    function feed(state, id, food, opts) {
         var r = state.ranch;
         var a = findAnimal(state, id);
         if (!a) return result(false, 'unknown_animal', '找不到這隻動物。');
@@ -248,22 +264,28 @@
         a.fedWith = food;
         a.hungryDays = 0;
         var what = food === 'hay' ? '乾草' : CROP_NAMES[info.fav];
+        if (opts && opts.woke) {
+            a.wokeToday = true;
+            if ((a.wokeDays || (a.wokeDays = [])).indexOf(state.day) < 0) a.wokeDays.push(state.day);
+            addLog(state, '半夜把' + name + '吵醒，餵牠吃' + what + '。');
+            return result(true, 'fed', name + '被吵醒，迷迷糊糊吃了' + what + '，又睡回去了。', { woke: true });
+        }
         addLog(state, '餵' + name + '吃' + what + '。');
         return result(true, 'fed', name + '吃了' + what + '。');
     }
 
     // 飼料槽：沒吃的全部餵乾草，乾草或體力不夠就餵到沒有為止
-    function feedAllHay(state) {
+    function feedAllHay(state, opts) {
         var r = state.ranch;
         var hungry = r.animals.filter(function (a) { return !a.fedToday; });
         if (!hungry.length) return result(false, 'all_fed', '大家今天都吃飽了。');
         if (r.hay <= 0) return result(false, 'no_hay', '乾草用完了。');
         if (tired(state, COST.feed)) return tiredResult(COST.feed);
         var n = 0;
-        hungry.forEach(function (a) { if (r.hay > 0 && !tired(state, COST.feed) && feed(state, a.id, 'hay').ok) n++; });
+        hungry.forEach(function (a) { if (r.hay > 0 && !tired(state, COST.feed) && feed(state, a.id, 'hay', opts).ok) n++; });
         var left = hungry.length - n;
         var why = r.hay <= 0 ? '乾草不夠' : '體力不夠';
-        return result(true, 'fed_all', '倒了乾草，' + n + ' 隻吃到了' + (left ? '，還有 ' + left + ' 隻沒吃到（' + why + '）。' : '。'), { fed: n, left: left });
+        return result(true, 'fed_all', (opts && opts.woke ? '把大家吵醒，' : '') + '倒了乾草，' + n + ' 隻吃到了' + (left ? '，還有 ' + left + ' 隻沒吃到（' + why + '）。' : '。'), { fed: n, left: left });
     }
 
     function buyHay(state, qty) {
@@ -519,7 +541,7 @@
         var thirsty = r.water <= 0;
         var dirty = r.poops.length >= DIRTY_AT;
         var made = [], hungry = 0, ran = [], newPoops = 0, newWeeds = 0, downgraded = 0;
-        var fellSick = [], healed = [], grown = [], born = [], wasted = [];
+        var fellSick = [], healed = [], grown = [], born = [], wasted = [], upset = [];
         var before = r.animals.slice();
         r.animals.forEach(function (a) {
             var info = ANIMALS[a.kind];
@@ -555,16 +577,22 @@
                 if (a.hungryDays >= RUNAWAY_DAYS) ran.push(a);
             }
             a.streak = ok && !a.sick ? a.streak + 1 : 0;
-            // 生病：太髒那天有機會病；病了的在牧場乾淨時慢慢好
+            // 生病：太髒那天有機會病；半夜被吵醒吃東西、最近常被吵醒睡不好也會（機率疊起來，只擲一次）；病了的在牧場乾淨時慢慢好
+            var wakes = wakesIn(a, state.day);
+            var wakeP = a.wokeToday ? Math.min(WAKE_SICK_MAX, WAKE_SICK + WAKE_HABIT * Math.max(0, wakes - 1)) : 0;
+            var poorP = wakes >= POOR_SLEEP_AT ? POOR_SLEEP_SICK : 0;
+            var sickP = 1 - (1 - (dirty ? SICK_CHANCE : 0)) * (1 - wakeP) * (1 - poorP);
             if (a.sick) {
                 if (!dirty) { a.cleanDays += 1; if (a.cleanDays >= HEAL_DAYS) { a.sick = false; a.cleanDays = 0; healed.push(name); } }
                 else a.cleanDays = 0;
-            } else if (dirty && rand() < SICK_CHANCE) {
+            } else if (sickP > 0 && rand() < sickP) {
                 a.sick = true;
                 a.cleanDays = 0;
                 a.streak = 0;
-                fellSick.push(name);
+                (dirty ? fellSick : upset).push(name);
             }
+            a.wokeToday = false;
+            a.wokeDays = (a.wokeDays || []).filter(function (d) { return d > state.day - WAKE_DAYS; });
             a.fedToday = false;
             a.fedWith = null;
         });
@@ -641,6 +669,7 @@
         if (wasted.length) addLog(state, wasted.join('、') + '昨天的還沒收，這一份浪費掉了。');
         if (downgraded) addLog(state, '牧場太髒了，' + downgraded + ' 樣上等產出降成普通。');
         if (fellSick.length) addLog(state, '牧場太髒，' + fellSick.join('、') + '生病了。');
+        if (upset.length) addLog(state, upset.join('、') + '最近半夜被吵醒吃東西，睡不好、胃不舒服，生病了。');
         if (healed.length) addLog(state, healed.join('、') + '的病自己好了。');
         if (grown.length) addLog(state, grown.join('、') + '了！');
         if (born.length) addLog(state, '牧場生了' + born.map(function (b) { return '一隻' + b.name; }).join('、') + '！');
@@ -656,7 +685,7 @@
         return result(true, 'ranch_day', '', {
             made: made.length, hungry: hungry, thirsty: thirsty, dirty: dirty, downgraded: downgraded,
             ran: ran.map(function (a) { return a.id; }), ranNames: ranNames, newPoops: newPoops, newWeeds: newWeeds,
-            fellSick: fellSick, healed: healed, grown: grown, born: born, wasted: wasted,
+            fellSick: fellSick, upset: upset, healed: healed, grown: grown, born: born, wasted: wasted,
             dog: dogOut, wolf: wolf, hive: hiveOut
         });
     }
@@ -685,6 +714,7 @@
         ANIMALS: ANIMALS, ANIMAL_IDS: ANIMAL_IDS, PETS: PETS, PRODUCTS: PRODUCTS, PRODUCT_IDS: PRODUCT_IDS, CROP_NAMES: CROP_NAMES,
         TOOLS: TOOLS, MEDICINE_PRICE: MEDICINE_PRICE, HAY_PRICE: HAY_PRICE, PORTIONS_PER_CROP: PORTIONS_PER_CROP, GOOD_MULT: GOOD_MULT,
         WATER_MAX: WATER_MAX, DIRTY_AT: DIRTY_AT, WEED_CAP: WEED_CAP, RUNAWAY_DAYS: RUNAWAY_DAYS, BREED_STREAK: BREED_STREAK, COST: COST,
+        WAKE_DAYS: WAKE_DAYS, POOR_SLEEP_AT: POOR_SLEEP_AT, wakesIn: wakesIn, sleepsPoorly: sleepsPoorly,
         DOG_LOVE_MAX: DOG_LOVE_MAX, DOG_BACK_LOVE: DOG_BACK_LOVE, WOLF_CHANCE: WOLF_CHANCE, WOLF_AWAY_CHANCE: WOLF_AWAY_CHANCE,
         BARN_LEVELS: BARN_LEVELS, BARN_TOP: BARN_TOP, HIVE_PRICE: HIVE_PRICE, HIVE_MAX: HIVE_MAX, HIVE_FLOWERS: HIVE_FLOWERS,
         createRanch: createRanch, normalizeRanch: normalizeRanch, attach: attach,

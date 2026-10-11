@@ -36,6 +36,7 @@
             if (r.wasted && r.wasted.length) out.push({ icon: 'fa-hourglass-end', text: r.wasted.join('、') + '前一天的沒收，浪費了一份', bad: true });
             if (r.downgraded) out.push({ icon: 'fa-broom', text: '牧場太髒，' + r.downgraded + ' 樣上等品降成普通', bad: true });
             if (r.fellSick && r.fellSick.length) out.push({ icon: 'fa-face-dizzy', text: r.fellSick.join('、') + '生病了', bad: true });
+            if (r.upset && r.upset.length) out.push({ icon: 'fa-face-dizzy', text: r.upset.join('、') + '最近半夜被吵醒吃東西，睡不好、胃不舒服，生病了', bad: true });
             if (r.healed && r.healed.length) out.push({ icon: 'fa-heart', text: r.healed.join('、') + '病好了' });
             if (r.born && r.born.length) out.push({ icon: 'fa-baby', text: '生了' + r.born.map(function (b) { return b.name; }).join('、') });
             if (r.grown && r.grown.length) out.push({ icon: 'fa-arrow-up', text: r.grown.join('、') });
