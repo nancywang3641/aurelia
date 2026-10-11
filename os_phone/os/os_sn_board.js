@@ -715,6 +715,33 @@
         if (!CT || !CT.sendAs) return Promise.reject(new Error('宿舍還沒載入'));
         return _withTimeout(_cfg.DORM_TIMEOUT, signal => CT.sendAs(who.id, msgs, { signal }).then(r => (r && r.reply) || ''));
     }
+    // 橋停著哪一池（會員額度到上限，重置前背景都不叫；橋的 /v1/quota 給 parked 跟 rid_account）。
+    // 停著回幾點（同一天「19:00」、跨天「10/14 15:00」）；橋沒開、舊橋沒這兩欄都回 null＝照舊叫
+    async function _dormParked(rid) {
+        const CT = _g('ClaudeTerminal');
+        let c = null;
+        try { c = CT && CT.getConfig ? CT.getConfig() : null; } catch (e) {}
+        const f = win.fetch || (typeof fetch !== 'undefined' ? fetch : null);
+        if (!c || !c.url || !c.key || !f) return null;
+        const base = String(c.url).replace(/\/v1\/chat\/completions\/?$/, '');
+        try {
+            const r = await _withTimeout(_cfg.YT_TIMEOUT, signal => f.call(win, base + '/v1/quota', { headers: { Authorization: 'Bearer ' + c.key }, signal }));
+            if (!r || !r.ok) return null;
+            const j = await r.json();
+            const acct = j && j.rid_account && j.rid_account[rid];
+            const p = acct && j.parked && j.parked[acct];
+            if (!p || !(p.until * 1000 > Date.now())) return null;
+            const d = new Date(p.until * 1000), hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            return d.toDateString() === new Date().toDateString() ? hm : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+        } catch (e) { return null; }
+    }
+    // 叫了才撞到上限：錯誤整段看；回覆只看開頭就是上限那句的短回覆（他平常講到額度不算）
+    const CAP_ERR = /額度到上限|usage limit|limit reached|hit your [\w -]{0,24}limit|try again (?:in|at) /i;
+    const CAP_REPLY = /^\s*(?:Claude AI usage limit reached|You(?:'|’)ve hit your [\w -]{0,24}limit|(?:5-hour|five-hour|weekly|session|usage) limit reached)/i;
+    function _isCapped(err, reply) {
+        const r = String(reply || '');
+        return CAP_ERR.test(String(err || '')) || (r.length < 400 && CAP_REPLY.test(r));
+    }
     // 看影片只在「白板看影片」那列指到她的某一條通道時才看（主／副模型多半是看不了影片的中轉站，不猜）
     function canWatch() {
         const S = _g('OS_SETTINGS');
@@ -871,14 +898,24 @@
             await saveStaff({ lastAt: Date.now(), next: after });
             return rec;
         }
+        // 宿舍住戶那個帳號額度到上限（橋停著那一池，到重置前背景都不叫）：這班不叫、不算失敗，下一班照輪
+        if (pick.type === 'dorm') {
+            const until = await _dormParked(pick.id);
+            if (until) {
+                rec.ok = true; rec.text = '額度到上限（' + until + ' 前先不叫），這班沒叫';
+                await _logShift(rec);
+                await saveStaff({ lastAt: Date.now(), next: after });
+                return rec;
+            }
+        }
         await saveStaff({ running: Date.now(), runningJob: rec.did, runningWho: pick.id });
-        let waitTitle = '';
+        let waitTitle = '', reply = '';
         try {
             const who = await resolve(pick);
             if (!who) throw new Error('找不到' + pick.name);
             const refs = (rec.did === 'write' || rec.did === 'check') ? await worldRefs(refTerms(plan.job, plan.board)) : [];
             const msgs = buildMessages(plan.job, who, plan.board, refs, who.user);
-            const reply = who.type === 'xiaoji' ? await _callXiaoji(who, msgs, rec.did) : await _callDorm(who, msgs);
+            reply = who.type === 'xiaoji' ? await _callXiaoji(who, msgs, rec.did) : await _callDorm(who, msgs);
             const p = parseReply(reply, plan.job);
             if (!p.ok) throw new Error(p.why);
             // 叫模型那幾分鐘她可能按了東西：鎖住、重讀、再套
@@ -892,11 +929,14 @@
         } catch (e) {
             rec.error = String((e && e.message) || e).replace(/^[A-Z_]+:/, '').slice(0, 120);
         }
+        // 撞到額度上限不是稿的問題：不算這份寫不成（不然連兩班就被放回去），只跟她說一聲
+        const capped = !rec.ok && pick.type === 'dorm' && _isCapped(rec.error, reply);
+        if (capped) rec.error = '額度到上限，這班沒上成（不算這份寫不成）';
         await _logShift(rec);
         // 寫稿／挑毛病那種「同一件」連著失敗：每一班都會挑到同一件、每一班都花一通 → 連兩班就停手（放回去、告訴她）
         const failKey = rec.did === 'write' ? 'write:' + plan.job.ideaId : rec.did === 'check' ? 'check:' + plan.job.draftId : '';
-        let fail = null, gaveUp = '';
-        if (!rec.ok && failKey) {
+        let fail = capped ? (st.fail || null) : null, gaveUp = '';   // 撞上限那班不動之前的失敗次數
+        if (!rec.ok && failKey && !capped) {
             const n = (st.fail && st.fail.key === failKey ? st.fail.n : 0) + 1;
             if (n >= FAIL_GIVEUP) { try { gaveUp = await _giveUp(plan.job); } catch (e) {} }
             else fail = { key: failKey, n };
