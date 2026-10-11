@@ -249,11 +249,13 @@
 .aurelia-farm .fw-player.is-tired .fw-body {filter: saturate(.55) brightness(.92);}
 @keyframes fw-bob { 0%,100% { translate: 0 0; } 50% { translate: 0 -3%; } }
 @keyframes fw-cheer { 0%,100% { translate: 0 0; } 35% { translate: 0 -10%; } }
-.aurelia-farm .fw-hand {position: absolute; left: 66%; top: 55%; display: flex; align-items: center; gap: 2px;
-    padding: 2px 5px; border-radius: 999px; background: #fff8e8; color: #557b48;
-    font-size: clamp(9px, 1.4cqw, 13px); box-shadow: 0 2px 6px rgba(35,49,34,.28); white-space: nowrap;}
-.aurelia-farm .fw-hand b {font-size: .85em; color: #3d92c6;}
-.aurelia-farm .fw-hand svg {width: 1.8em; height: 1.8em; margin: -.2em 0; display: block;}
+/* 手上拿的工具：只有畫的工具＋旁邊的數字，不墊底板（10-12 她：「能不能不要框? 不然看著好怪喔，像拿個板子」）；
+   直接壓在草地上，工具加一點影子、數字照快捷列那樣白字描深邊才看得清 */
+.aurelia-farm .fw-hand {position: absolute; left: 66%; top: 55%; display: flex; align-items: flex-end; gap: 1px;
+    font-size: clamp(9px, 1.4cqw, 13px); white-space: nowrap;}
+.aurelia-farm .fw-hand b {font: 800 .95em/1 system-ui, sans-serif; color: #fff;
+    text-shadow: -1px 0 #2c4a63, 1px 0 #2c4a63, 0 -1px #2c4a63, 0 1px #2c4a63;}
+.aurelia-farm .fw-hand svg {width: 2em; height: 2em; display: block; filter: drop-shadow(0 1px 1.5px rgba(30,40,20,.5));}
 .aurelia-farm .fw-doing {position: absolute; left: 50%; top: -2%; transform: translate(-50%, -100%) scale(.4); opacity: 0;
     display: grid; place-items: center; width: 2em; height: 2em; border-radius: 50%;
     background: #fff8e8; color: #557b48; font-size: clamp(9px, 1.4cqw, 14px); box-shadow: 0 3px 8px rgba(35,49,34,.25);
