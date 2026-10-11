@@ -372,11 +372,15 @@
                 if (!libs.ship) return result(false, 'no_ship', '出貨箱還沒裝好。');
                 if (!near(state, 'yardbin') && !near(state, 'ranchbin')) return result(false, 'too_far', '要先走到出貨箱旁邊（後院左邊、牧場門口右邊）。');
                 return a.type === 'ship' ? libs.ship.ship(state, a.item, a.quantity, libs) : libs.ship.unshipAll(state, libs);
+            // 夜裡動物在睡覺，不能餵（10-12 她：「睡覺就不要有餵食物的功能了吧?…睡覺餵食也很怪」）；
+            //   夜裡由呼叫的那邊給 libs.night()（台灣 20:00～06:00），沒給＝不擋
             case 'feed':
                 if (!near(state, a.animal)) return tooFar(state, a.animal);
+                if (libs.night && libs.night()) return result(false, 'asleep', '牠在睡覺（夜裡 20:00～06:00 動物都在睡），餵不了。');
                 return ranch.feed(state, a.animal, a.food);
             case 'feed_all':
                 if (!near(state, 'trough')) return tooFar(state, 'trough');
+                if (libs.night && libs.night()) return result(false, 'asleep', '動物都在睡覺（夜裡 20:00～06:00），餵不了。');
                 return ranch.feedAllHay(state);
             case 'refill':
                 if (!near(state, 'water')) return tooFar(state, 'water');

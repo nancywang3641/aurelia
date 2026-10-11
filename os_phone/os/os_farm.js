@@ -74,7 +74,8 @@
 
     // ── 存檔 ─────────────────────────────────────────
     function libs() {
-        return { farm: window.AureliaFarmCore, ranch: window.RanchCore, walk: window.FarmWalkCore, ship: window.FarmShipCore };
+        // night：夜裡動物在睡覺、餵不了（規則在 FarmWalkCore.act 擋；沒給就不擋，測試照舊）
+        return { farm: window.AureliaFarmCore, ranch: window.RanchCore, walk: window.FarmWalkCore, ship: window.FarmShipCore, night: isNight };
     }
     function attachAll(L, st, raw) {
         L.ranch.attach(st, raw);

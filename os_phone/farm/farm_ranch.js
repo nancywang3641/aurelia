@@ -259,7 +259,8 @@
         var portions = r.feed[info.fav], stock = state.inventory.harvest[info.fav] || 0;
         var favLeft = portions ? '剩 ' + portions + ' 份' : (stock ? '倉庫 ' + stock + ' 份收成' : '倉庫沒有');
         var done = function (out) { if (out && out.ok) heart(a, out.code === 'fed'); return out; };
-        var list = [
+        // 夜裡在睡覺：沒有餵的按鈕（規則那層也擋）
+        var list = night ? [] : [
             { icon: 'fa-wheat-awn', label: '餵乾草', sub: '剩 ' + r.hay + ' 捆', disabled: an.fedToday || !r.hay,
                 why: an.fedToday ? '今天吃飽了。' : '乾草用完了，去乾草堆買。', run: function () { return done(act({ type: 'feed', animal: a.id, food: 'hay' })); } },
             { icon: 'fa-star', label: '餵' + favName, sub: favLeft, cls: 'fav', disabled: an.fedToday || (!portions && !stock),
@@ -397,9 +398,10 @@
             });
         });
         list.push(spotTarget('trough', root.querySelector('.obj-trough'), '飼料槽',
-            function () { var n = r.animals.filter(function (x) { return !x.fedToday; }).length; return n ? '還有 ' + n + ' 隻沒吃，乾草 ' + r.hay + ' 捆。' : '大家今天都吃飽了。'; },
+            function () { var n = r.animals.filter(function (x) { return !x.fedToday; }).length; return (night ? '動物都在睡覺。' : '') + (n ? '還有 ' + n + ' 隻沒吃，乾草 ' + r.hay + ' 捆。' : '大家今天都吃飽了。'); },
             function () {
                 var n = r.animals.filter(function (x) { return !x.fedToday; }).length;
+                if (night) return [];
                 return [{
                     icon: 'fa-wheat-awn', label: '倒乾草給大家', sub: n ? n + ' 隻 · 體力 ' + n * ranch.COST.feed : '都吃飽了', cls: 'fav',
                     disabled: !n || !r.hay, why: !n ? '大家今天都吃飽了。' : '乾草用完了，去乾草堆買。',
