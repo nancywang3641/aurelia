@@ -812,6 +812,24 @@
             if (MEM.embedPending) MEM.embedPending(rid).catch(() => {});
         } catch (e) { console.warn('[SNBoard] 寫進經歷簿失敗', e); }
     }
+    // 宿舍住戶值完班：記進橋的醒來紀錄（10-11 她：「每個喚醒都是時間線，只是在不同的地方做了不同的事」）。
+    //   他在房間聊天、自己醒來、顧田時，會在「你最近的時間線」看到這一班。橋沒開、舊橋沒這條都算了，不擋值班。
+    async function _rememberDorm(pick, rec, startedAt) {
+        const CT = _g('ClaudeTerminal');
+        let c = null;
+        try { c = CT && CT.getConfig ? CT.getConfig() : null; } catch (e) {}
+        const f = win.fetch || (typeof fetch !== 'undefined' ? fetch : null);
+        if (!c || !c.url || !c.key || !f) return;
+        const base = String(c.url).replace(/\/v1\/chat\/completions\/?$/, '');
+        try {
+            await f.call(win, base + '/v1/wake-log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.key },
+                body: JSON.stringify({ rid: pick.id, name: pick.name, kind: 'sn', started: startedAt / 1000, ended: Date.now() / 1000,
+                    ok: true, actions: [rec.text], reply: rec.say || '' })
+            });
+        } catch (e) { console.warn('[SNBoard] 記不進醒來紀錄', e); }
+    }
 
     // ── 上一班 ──
     let _busy = null;
@@ -890,6 +908,7 @@
             await saveStaff({ running: 0, runningJob: '', runningWho: '', lastAt: Date.now(), next: after, unread: true, says, fail });
         } catch (e) { try { await saveStaff({ running: 0 }); } catch (e2) {} }
         if (rec.ok && pick.type === 'xiaoji') _remember(pick.id, rec);
+        if (rec.ok && pick.type === 'dorm') _rememberDorm(pick, rec, now);
         if (waitTitle) _notify('白板多一份等妳看：「' + waitTitle + '」');
         else if (gaveUp) _notify(gaveUp, true);
         else if (rec.error) _notify(pick.name + '這班沒上成：' + rec.error, true);
