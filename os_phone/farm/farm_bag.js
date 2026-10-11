@@ -6,13 +6,13 @@
 // 快捷列：一排固定大小的格子（照螢幕寬度決定幾格），第一格是手上拿的東西，後面是這一區用得到、而且有的東西；
 //         沒有的不佔格，塞不下的收進背包——永遠不會出現捲軸。
 // 背包：全部家當一格一格擺，分成工具／種子／收成／牧場；點格子下面寫名稱與數量，種子點了就選它來種。
-// 圖示：種子與收成用 farm_item_draw（程式畫）、牧場產品用 ranch_draw，其他用 Font Awesome。
+// 圖示：種子、收成、道具（工具、肥料、乾草、藥、空手、背包鈕）用 farm_item_draw（程式畫）、牧場產品用 ranch_draw。
 // ============================================================
 (function () {
     'use strict';
 
     function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-    function fa(icon, cls) { return '<i class="fa-solid ' + icon + (cls ? ' ' + cls : '') + '"></i>'; }
+    function fa(icon) { return '<i class="fa-solid ' + icon + '"></i>'; }
 
     // ── 東西清單（兩頁共用）─────────────────────────
     // 每一格：{ key, name, icon(html), count, note, selected, click }
@@ -20,9 +20,9 @@
 
     function handSlot(state) {
         var L = libs(), w = state.walk, t = w.hand && L.walk.TOOLS[w.hand];
-        if (!t) return { key: 'hand', name: '空手', icon: fa('fa-hand', 'fb-faint'), count: null, note: '工具要去放它的地方拿：水壺在後院工具棚，桶子剪刀在牧場棚屋。', hand: true };
+        if (!t) return { key: 'hand', name: '空手', icon: L.item.stuffSvg('hand'), count: null, note: '工具要去放它的地方拿：水壺在後院工具棚，桶子剪刀在牧場棚屋。', hand: true };
         return {
-            key: 'hand', name: '手上：' + t.name, icon: fa(t.icon), count: w.hand === 'can' ? w.can : null,
+            key: 'hand', name: '手上：' + t.name, icon: L.item.stuffSvg(w.hand), count: w.hand === 'can' ? w.can : null,
             note: w.hand === 'can' ? '還有 ' + w.can + '/' + L.walk.CAN_MAX + ' 份水，一塊田用一份，空了去池塘裝。' : '一次只拿得動一樣，拿別的它就放回原位。',
             hand: true
         };
@@ -68,9 +68,9 @@
     }
     function stuffSlots(state) {
         var L = libs(), out = [], r = state.ranch;
-        if ((state.inventory.fertilizer || 0) > 0) out.push({ key: 'fert', name: '肥料', icon: fa('fa-poop', 'fb-brown'), count: state.inventory.fertilizer, note: '施在有作物的田上，收成多一份。' });
-        if (r && r.hay > 0) out.push({ key: 'hay', name: '乾草', icon: fa('fa-wheat-awn', 'fb-gold'), count: r.hay, note: '一捆餵一隻吃一天。' });
-        if (r && r.medicine > 0) out.push({ key: 'medicine', name: '藥', icon: fa('fa-syringe', 'fb-green'), count: r.medicine, note: '替生病的動物打一針，馬上好。' });
+        if ((state.inventory.fertilizer || 0) > 0) out.push({ key: 'fert', name: '肥料', icon: L.item.stuffSvg('fert'), count: state.inventory.fertilizer, note: '施在有作物的田上，收成多一份。' });
+        if (r && r.hay > 0) out.push({ key: 'hay', name: '乾草', icon: L.item.stuffSvg('hay'), count: r.hay, note: '一捆餵一隻吃一天。' });
+        if (r && r.medicine > 0) out.push({ key: 'medicine', name: '藥', icon: L.item.stuffSvg('medicine'), count: r.medicine, note: '替生病的動物打一針，馬上好。' });
         return out;
     }
     function toolSlots(state) {
@@ -79,7 +79,7 @@
             if (!L.walk.hasTool(state, k)) return;
             var t = L.walk.TOOLS[k], where = L.walk.SCENES[t.scene].spots[t.spot].name;
             out.push({
-                key: 'tool:' + k, name: t.name, icon: fa(t.icon), count: k === 'can' ? w.can : null, selected: w.hand === k,
+                key: 'tool:' + k, name: t.name, icon: L.item.stuffSvg(k), count: k === 'can' ? w.can : null, selected: w.hand === k,
                 note: w.hand === k ? '拿在手上。' : '放在' + where + '。'
             });
         });
@@ -140,7 +140,7 @@
             var more = all.length - hotItems.length;
             var html = hotItems.map(function (it, i) { return slotHtml(it, i, 'hot'); }).join('');
             for (var k = hotItems.length; k < n; k++) html += '<span class="fb-slot is-empty"></span>';
-            html += '<button type="button" class="fb-bag-btn" aria-label="打開背包" title="背包">' + fa('fa-bag-shopping') + (more > 0 ? '<b class="fb-more">+' + more + '</b>' : '') + '</button>';
+            html += '<button type="button" class="fb-bag-btn" aria-label="打開背包" title="背包">' + window.FarmItemDraw.stuffSvg('bag') + (more > 0 ? '<b class="fb-more">+' + more + '</b>' : '') + '</button>';
             bar.innerHTML = html;
         }
         function renderBag() {

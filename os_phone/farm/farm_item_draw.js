@@ -3,6 +3,7 @@
 // ------------------------------------------------------------
 // 取代舊的商店 PNG（09-29 已刪）。
 // FarmItemDraw.svg({ kind: 'seed' | 'harvest', crop }) → '<svg …>'（viewBox 64×64）
+// FarmItemDraw.stuffSvg(key) → 道具（水壺、桶子、剪刀、肥料、乾草、藥、空手、背包），同樣 64×64
 //   圖示很小：形狀要一眼認得出，靠漸層＋一點高光做出亮面立體感。
 // ============================================================
 (function (root) {
@@ -223,6 +224,125 @@
         }
     };
 
+    // ── 道具（10-11 她：「把道具都畫出來，現在都用符號，有點醜」）──
+    // 快捷列、背包、商店用；取代原本的 Font Awesome 符號。腳下一圈影子跟牛奶、雞蛋那套一樣。
+    function shadow(cx, rx) { return '<ellipse cx="' + cx + '" cy="58.5" rx="' + rx + '" ry="3" fill="rgba(40,50,25,.25)"/>'; }
+    // 剪刀的半邊：刀刃朝上、握圈在下面偏一邊，(0,0)＝中間那顆螺絲
+    function shearHalf(K, rot, flip) {
+        var blade = K.lg('#ffffff', '#9aa6b4', 1, 0);
+        return '<g transform="rotate(' + rot + ')' + (flip ? ' scale(-1,1)' : '') + '">' +
+            path('M-1.6 3L-1 -23Q.4 -27.5 2.8 -22.5L3.4 3Z', blade, '#55606e', 1.1) +
+            '<path d="M.6 -20V-2" stroke="#fff" stroke-width=".9" opacity=".8"/>' +
+            '<path d="M1 3L-4.5 9" stroke="#a8301f" stroke-width="4" stroke-linecap="round"/>' +
+            '<ellipse cx="-6.5" cy="15" rx="5.6" ry="6.8" fill="none" stroke="#8c2416" stroke-width="5"/>' +
+            '<ellipse cx="-6.5" cy="15" rx="5.6" ry="6.8" fill="none" stroke="#e8553c" stroke-width="2.8"/>' +
+            '<path d="M-10 11.5q1.5 -2.5 4 -3" stroke="#ffb3a0" stroke-width="1.2" fill="none" stroke-linecap="round"/></g>';
+    }
+    var STUFF = {
+        // 水壺：漆成藍色的鐵壺，壺嘴斜斜往右上、尖端一個蓮蓬頭，後面一個把手
+        can: function (K) {
+            return shadow(31, 18) +
+                path('M38 46L52 25L56.5 28L43 50Z', K.lg('#7cc3e8', '#2f78b0', 1, 0), '#1f5680', 1.3) +
+                at(54.5, 25, -34, 1, '<ellipse rx="5" ry="3" fill="' + K.rg('#d8f0ff', '#5aa0d0') + '" stroke="#1f5680" stroke-width="1.2"/>' +
+                    '<circle cx="-1.8" cy="-.6" r=".7" fill="#1f5680"/><circle cx=".6" cy=".5" r=".7" fill="#1f5680"/><circle cx="2.4" cy="-.8" r=".7" fill="#1f5680"/>') +
+                '<path d="M17 31C5 30 5 49 16 48" stroke="#1f5680" stroke-width="5.2" fill="none" stroke-linecap="round"/>' +
+                '<path d="M17 31C5 30 5 49 16 48" stroke="#4f9bd0" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
+                path('M18 28H40Q42 28 42.3 30L44.5 53Q44.5 57 40.5 57H17.5Q13.5 57 13.5 53L15.7 30Q16 28 18 28Z', K.lg('#9ad6f2', '#2f78b0', 1, 0), '#1f5680', 1.5) +
+                '<path d="M15.4 35H42.6M14.4 50.5H43.6" stroke="#1f5680" stroke-width="1.4" opacity=".55"/>' +
+                '<ellipse cx="29" cy="28.5" rx="11.5" ry="3" fill="' + K.lg('#c6ebff', '#6ab2dc') + '" stroke="#1f5680" stroke-width="1.3"/>' +
+                '<ellipse cx="25" cy="28.3" rx="4" ry="1.3" fill="#1f5680" opacity=".75"/>' +
+                '<path d="M19.5 38V48" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".7"/>';
+        },
+        // 桶子：木頭桶、兩圈鐵箍、上面一條提把（擠奶用）
+        bucket: function (K) {
+            return shadow(32, 16) +
+                path('M13.5 26L50.5 26L46 54.5Q45.6 57 43 57H21Q18.4 57 18 54.5Z', K.lg('#e2b475', '#a26c36', 1, 0), '#6b4320', 1.5) +
+                '<path d="M23 27L24.6 56M32 27V57M41 27L39.4 56" stroke="#8a5a2b" stroke-width="1.1" opacity=".55"/>' +
+                path('M14.6 33H49.4L48.9 37.4H15.1Z', K.lg('#c3cad3', '#6f7680'), '#4a5059', 1) +
+                path('M16.7 47.5H47.3L46.8 51.9H17.2Z', K.lg('#c3cad3', '#6f7680'), '#4a5059', 1) +
+                '<ellipse cx="32" cy="26" rx="18.5" ry="5" fill="#c99358" stroke="#6b4320" stroke-width="1.5"/>' +
+                '<ellipse cx="32" cy="26.4" rx="15.6" ry="3.4" fill="#5a3818"/>' +
+                '<path d="M14 30C11 4 53 4 50 30" stroke="#4a5059" stroke-width="3.6" fill="none" stroke-linecap="round"/>' +
+                '<path d="M14 30C11 4 53 4 50 30" stroke="#b6bec8" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +
+                '<circle cx="14" cy="30" r="2.2" fill="#8a929c" stroke="#4a5059" stroke-width=".9"/><circle cx="50" cy="30" r="2.2" fill="#8a929c" stroke="#4a5059" stroke-width=".9"/>' +
+                '<path d="M19 39.5V46M18 29.5V31.5" stroke="#fff3d6" stroke-width="2" stroke-linecap="round" opacity=".6"/>';
+        },
+        // 剪刀（剪羊毛）：銀色刀刃微微張開、紅色握圈，斜放
+        shears: function (K) {
+            return shadow(32, 17) + '<g transform="translate(33 30) rotate(38)">' + shearHalf(K, -15, true) + shearHalf(K, 15, false) +
+                '<circle r="2.6" fill="#e6eaef" stroke="#4a5059" stroke-width="1.1"/><circle r=".9" fill="#4a5059"/></g>';
+        },
+        // 肥料：綁口的麻布袋，正面一棵小芽，袋口露出一點黑土
+        fert: function (K) {
+            return shadow(32, 18) +
+                path('M26.5 24C21 26.5 14 34 14 46C14 54 20 57.5 32 57.5C44 57.5 50 54 50 46C50 34 43 26.5 37.5 24Z', K.rg('#efd7aa', '#b48a52', 0.4, 0.35), '#6b4a24', 1.5) +
+                '<path d="M19 38Q32 42 45 38M17 47Q32 51 47 47" stroke="#8a6436" stroke-width=".9" fill="none" opacity=".35"/>' +
+                path('M27 25.5L21.5 13.5Q27 16.5 32 12.5Q37 16.5 42.5 13.5L37 25.5Z', K.lg('#f2dcb0', '#c49a5e'), '#6b4a24', 1.3) +
+                '<ellipse cx="32" cy="14.6" rx="7.5" ry="2" fill="#4a3220"/>' +
+                '<circle cx="29" cy="13.8" r="1.1" fill="#6e4a2e"/><circle cx="34" cy="14.2" r="1" fill="#6e4a2e"/>' +
+                '<path d="M25 25.5Q32 28.5 39 25.5" stroke="#7a4f22" stroke-width="2.8" fill="none" stroke-linecap="round"/>' +
+                '<path d="M38.5 25.5q4 -3 4.5 1q-.5 3 -4.5 -1M38.5 25.5l2.5 5" stroke="#7a4f22" stroke-width="1.5" fill="none" stroke-linecap="round"/>' +
+                '<ellipse cx="32" cy="44.5" rx="9.5" ry="8" fill="#fbf1da" stroke="#a8803a" stroke-width="1.1"/>' +
+                '<path d="M32 50V42.5" stroke="#3f7a2a" stroke-width="1.5" stroke-linecap="round"/>' +
+                leaf(32, 44.5, 7, 3.4, -55, '#78c850', '#2f7a2a') + leaf(32, 43.5, 7, 3.4, 55, '#5cad3a', '#2f7a2a') +
+                '<path d="M19 33Q17.5 40 19 47" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".5"/>';
+        },
+        // 乾草：一捆從斜上方看的草捆，兩條細麻繩綁著；四邊翹出一圈草、正面滿滿的草紋（縮小時才不會像寶箱）
+        hay: function (K) {
+            var straws = '', fringe = '';
+            [[11, 36], [18, 41], [26, 35], [33, 44], [40, 37], [48, 43], [12, 47], [24, 49], [36, 51], [47, 50], [52, 36]].forEach(function (p, i) {
+                straws += '<path d="M' + p[0] + ' ' + p[1] + 'q2.5 ' + (i % 2 ? -1.4 : 1.2) + ' 6 ' + (i % 3 - 1) + '" stroke="' + (i % 2 ? '#9a6a18' : '#b9862a') + '" stroke-width="1.3" fill="none" stroke-linecap="round"/>';
+            });
+            [[14, 18, -2, -4], [19, 17.6, 1, -4.5], [26, 17.5, -1, -3.5], [31, 17.5, 1.5, -4.5], [37, 17.5, -1.5, -4], [43, 17.6, 1, -3.5], [49, 18, 2, -4],
+                [8.5, 26, -3.5, -1], [7.5, 36, -4, 1], [7.5, 46, -3.5, -1.5], [56, 26, 3.5, -1], [56.5, 36, 4, 1.5], [56.5, 46, 3.5, -1],
+                [15, 55, -1, 3.5], [29, 55, 1, 3.5], [41, 55, -1.5, 3], [51, 55, 1.5, 3.5]].forEach(function (p, i) {
+                fringe += '<path d="M' + p[0] + ' ' + p[1] + 'l' + p[2] + ' ' + p[3] + '" stroke="' + (i % 2 ? '#d9a93e' : '#b9862a') + '" stroke-width="1.6" stroke-linecap="round"/>';
+            });
+            return '<ellipse cx="32" cy="57.5" rx="25" ry="3.5" fill="rgba(40,50,25,.25)"/>' + fringe +
+                path('M14 18H50Q53 18 54 21L56.5 31H7.5L10 21Q11 18 14 18Z', K.lg('#fbe7a2', '#e9c867'), '#8a6420', 1.5) +
+                '<path d="M14 21.5h7M25 20.5h8M36 21.5h6M45 21h5M12 25.5h6M22 26h9M35 25h7M46 26.5h6M17 29h5M29 29.5h7" stroke="#c0902e" stroke-width="1.2" stroke-linecap="round"/>' +
+                path('M7.5 31H56.5V51Q56.5 55 52.5 55H11.5Q7.5 55 7.5 51Z', K.lg('#efcb67', '#c58f2c'), '#8a6420', 1.5) + straws +
+                '<path d="M10 33.5H54" stroke="#fff6cc" stroke-width="1.5" opacity=".75"/>' +
+                '<path d="M22 18L20.5 31V55M43 18L44.5 31V55" stroke="#8a4a1e" stroke-width="1.7" fill="none"/>';
+        },
+        // 藥：圓肚玻璃瓶裝綠色藥水，木塞，瓶上一顆粉紅愛心
+        medicine: function (K) {
+            return shadow(32, 13) +
+                path('M27 16H37V27C43 29 47 35 47 42A15 15 0 0 1 17 42C17 35 21 29 27 27Z', 'rgba(228,246,255,.92)', '#5f8fa8', 1.4) +
+                path('M18.55 40Q25 37 32 40T45.45 40A13.6 13.6 0 1 1 18.55 40Z', K.lg('#9af2c6', '#2c9e70'), null) +
+                '<path d="M18.55 40Q25 37 32 40T45.45 40" stroke="#c8ffe4" stroke-width="1.2" fill="none"/>' +
+                '<circle cx="39" cy="50" r="1.6" fill="#fff" opacity=".7"/><circle cx="41.5" cy="45.5" r="1" fill="#fff" opacity=".7"/>' +
+                shape(HEART, 31, 47, 6, 0, '#ff8fab', '#fff') +
+                '<rect x="25.5" y="15" width="13" height="3.4" rx="1.6" fill="#e6f5fc" stroke="#5f8fa8" stroke-width="1.1"/>' +
+                '<rect x="26.5" y="8.5" width="11" height="7.5" rx="2" fill="' + K.lg('#dcab6c', '#a26c36') + '" stroke="#6b4320" stroke-width="1.2"/>' +
+                '<path d="M21.5 35Q19.5 41 22.5 48" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".8"/>';
+        },
+        // 空手：一隻淡淡的工作手套（手上沒拿東西）
+        hand: function () {
+            var f = '#f8ecd4', e = '#c9ad82', o = '';
+            [[22, 15, 6], [28.4, 11.5, 6], [34.8, 12.5, 6], [41.2, 16.5, 5.6]].forEach(function (p) {
+                o += '<rect x="' + p[0] + '" y="' + p[1] + '" width="' + p[2] + '" height="' + (32 - p[1]) + '" rx="' + (p[2] / 2) + '" fill="' + f + '" stroke="' + e + '" stroke-width="1.3"/>';
+            });
+            return '<g opacity=".85">' + o +
+                '<rect x="-3.6" y="-15" width="7.2" height="17" rx="3.6" transform="translate(22.5 39) rotate(-52)" fill="' + f + '" stroke="' + e + '" stroke-width="1.3"/>' +
+                '<rect x="20.5" y="26" width="27.5" height="21" rx="7" fill="' + f + '" stroke="' + e + '" stroke-width="1.3"/>' +
+                '<path d="M25 27.5V31M31.4 27.5V31M37.8 27.5V31" stroke="' + e + '" stroke-width="1" stroke-linecap="round" opacity=".7"/>' +
+                '<rect x="21.5" y="45" width="25.5" height="11" rx="3" fill="#ead6ae" stroke="' + e + '" stroke-width="1.3"/>' +
+                '<path d="M22.5 50.5H46" stroke="#d9a07a" stroke-width="2" opacity=".7"/></g>';
+        },
+        // 背包（快捷列最右邊那顆鈕）：綠帆布背包、深綠翻蓋、金色扣子
+        bag: function (K) {
+            return '<path d="M25 22C25 12 39 12 39 22" stroke="#3a2a14" stroke-width="4.4" fill="none" stroke-linecap="round"/>' +
+                '<path d="M25 22C25 12 39 12 39 22" stroke="#f0dcb0" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+                '<rect x="14.5" y="20.5" width="35" height="37" rx="9" fill="' + K.lg('#b2d68e', '#6c9a4a', 1, 1) + '" stroke="#2f4a20" stroke-width="1.6"/>' +
+                '<rect x="21" y="40.5" width="22" height="13" rx="4" fill="#80ad5c" stroke="#2f4a20" stroke-width="1.2"/>' +
+                '<path d="M24 44.5H40" stroke="#2f4a20" stroke-width="1" stroke-dasharray="2 1.6" opacity=".6"/>' +
+                path('M14.5 30.5Q14.5 20.5 24 20.5H40Q49.5 20.5 49.5 30.5V33.5Q32 40.5 14.5 33.5Z', K.lg('#6f9c4c', '#4f7a32'), '#2f4a20', 1.4) +
+                '<rect x="29.3" y="33.5" width="5.4" height="7" rx="1.2" fill="#f3c969" stroke="#8a6420" stroke-width="1"/>' +
+                '<path d="M18.5 37V51" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".4"/>';
+        }
+    };
+
     function svg(opts) {
         opts = opts || {};
         var table = opts.kind === 'harvest' ? HARVEST : SEED;
@@ -230,6 +350,15 @@
         var K = kit();
         var body = draw(K);
         return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="fi-icon" role="img" aria-hidden="true">' +
+            '<defs>' + K.defs.join('') + '</defs>' + body + '</svg>';
+    }
+    // 道具：key＝can／bucket／shears（工具，跟 FarmWalkCore.TOOLS 同名）、fert、hay、medicine、hand（空手）、bag（背包鈕）
+    function stuffSvg(key) {
+        var draw = STUFF[key];
+        if (!draw) return '';
+        var K = kit();
+        var body = draw(K);
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="fi-icon fi-stuff" role="img" aria-hidden="true">' +
             '<defs>' + K.defs.join('') + '</defs>' + body + '</svg>';
     }
 
@@ -303,5 +432,5 @@
             '</svg>';
     }
 
-    root.FarmItemDraw = { svg: svg, binSvg: binSvg, buyerSvg: buyerSvg };
+    root.FarmItemDraw = { svg: svg, stuffSvg: stuffSvg, binSvg: binSvg, buyerSvg: buyerSvg, STUFF_IDS: Object.keys(STUFF) };
 })(typeof window !== 'undefined' ? window : this);

@@ -96,7 +96,6 @@
 .aurelia-farm .shop-list {flex:1; display:grid; grid-template-columns:1fr 1fr; gap:7px; overflow:auto; padding-right:3px;}
 .aurelia-farm .shop-card {display:grid; grid-template-columns:48px 1fr; gap:7px; padding:8px; border:1px solid var(--line); border-radius:13px; background:#f8f7eb;}
 .aurelia-farm .shop-card img, .aurelia-farm .shop-card .fi-icon, .aurelia-farm .shop-card .ra-product {width:48px; height:48px; object-fit:contain; flex:none;}
-.aurelia-farm .shop-card .shop-fa {display:grid; place-items:center; width:48px; height:48px; flex:none; border-radius:14px; background:#f6e7bf; color:#b0761e; font-size:22px;}
 .aurelia-farm .shop-card h3 {margin:1px 0 3px; font-size:11px;}
 .aurelia-farm .shop-card p {margin:0 0 5px; color:var(--muted); font-size:8px; line-height:1.35;}
 .aurelia-farm .shop-actions {grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:5px;}
@@ -254,6 +253,7 @@
     padding: 2px 5px; border-radius: 999px; background: #fff8e8; color: #557b48;
     font-size: clamp(9px, 1.4cqw, 13px); box-shadow: 0 2px 6px rgba(35,49,34,.28); white-space: nowrap;}
 .aurelia-farm .fw-hand b {font-size: .85em; color: #3d92c6;}
+.aurelia-farm .fw-hand svg {width: 1.8em; height: 1.8em; margin: -.2em 0; display: block;}
 .aurelia-farm .fw-doing {position: absolute; left: 50%; top: -2%; transform: translate(-50%, -100%) scale(.4); opacity: 0;
     display: grid; place-items: center; width: 2em; height: 2em; border-radius: 50%;
     background: #fff8e8; color: #557b48; font-size: clamp(9px, 1.4cqw, 14px); box-shadow: 0 3px 8px rgba(35,49,34,.25);
@@ -308,20 +308,15 @@
 .aurelia-farm .fb-slot.is-selected {border-color: #d9412b; box-shadow: 0 0 0 2px rgba(217,65,43,.35), inset 0 2px 0 rgba(255,255,255,.55);}
 .aurelia-farm .fb-slot.is-picked {border-color: #3d7fb3; box-shadow: 0 0 0 2px rgba(61,127,179,.35);}
 .aurelia-farm .fb-slot.is-hand {margin-right: 5px; background: #fff6de; border-color: #8b5a2b;}
-.aurelia-farm .fb-ico {display: grid; place-items: center; width: 32px; height: 32px; font-size: 19px; color: #6c4a22;}
+.aurelia-farm .fb-ico {display: grid; place-items: center; width: 32px; height: 32px;}
 .aurelia-farm .fb-ico svg {width: 32px; height: 32px; display: block; overflow: visible;}
-.aurelia-farm .fb-ico .fb-faint {color: #c9ad82;}
-.aurelia-farm .fb-ico .fb-brown {color: #8a5a36;}
-.aurelia-farm .fb-ico .fb-gold {color: #c08a2c;}
-.aurelia-farm .fb-ico .fb-green {color: #4f8a3a;}
-.aurelia-farm .fb-slot .fa-bottle-water, .aurelia-farm .fb-slot .fa-bucket {color: #3d85b8;}
-.aurelia-farm .fb-slot .fa-scissors {color: #7a7f8a;}
 .aurelia-farm .fb-count {position: absolute; right: 2px; bottom: 0; font: 800 11px/1 system-ui, sans-serif; color: #fff;
     text-shadow: -1px 0 #4a3015, 1px 0 #4a3015, 0 -1px #4a3015, 0 1px #4a3015;}
 .aurelia-farm .fb-slot.is-good::after {content: ''; position: absolute; left: 3px; top: 3px; width: 7px; height: 7px; border-radius: 50%;
     background: #f3c969; box-shadow: 0 0 0 1px #a8741e;}
 .aurelia-farm .fb-bag-btn {position: relative; display: grid; place-items: center; width: 42px; height: 42px; margin-left: 4px; padding: 0; flex: none;
-    border: 2px solid #5e3b18; border-radius: 8px; background: #8b5a2b; color: #fbeccb; font-size: 18px; cursor: pointer;}
+    border: 2px solid #5e3b18; border-radius: 8px; background: #8b5a2b; cursor: pointer;}
+.aurelia-farm .fb-bag-btn svg {width: 32px; height: 32px; display: block;}
 .aurelia-farm .fb-bag-btn:hover {background: #9d6834;}
 .aurelia-farm .fb-more {position: absolute; right: -6px; top: -7px; min-width: 18px; padding: 2px 4px; border-radius: 999px;
     background: #d9412b; color: #fff; font: 800 10px/1.1 system-ui, sans-serif;}
@@ -343,8 +338,7 @@
 .aurelia-farm .fb-bag-foot span {color: #6c4a22; line-height: 1.45;}
 @media (max-width: 420px) {
 .aurelia-farm .fb-slot, .aurelia-farm .fb-bag-btn {width: 38px; height: 38px;}
-.aurelia-farm .fb-ico, .aurelia-farm .fb-ico svg {width: 28px; height: 28px;}
-.aurelia-farm .fb-ico {font-size: 17px;}
+.aurelia-farm .fb-ico, .aurelia-farm .fb-ico svg, .aurelia-farm .fb-bag-btn svg {width: 28px; height: 28px;}
 .aurelia-farm .fb-grid {grid-template-columns: repeat(auto-fill, 38px);}
 }
 

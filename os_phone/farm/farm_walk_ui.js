@@ -264,7 +264,7 @@
             var w = opts.state().walk;
             var t = w.hand && WC.TOOLS[w.hand];
             handEl.hidden = !t;
-            if (t) handEl.innerHTML = '<i class="fa-solid ' + t.icon + '"></i>' + (w.hand === 'can' ? '<b>' + w.can + '</b>' : '');
+            if (t) handEl.innerHTML = window.FarmItemDraw.stuffSvg(w.hand) + (w.hand === 'can' ? '<b>' + w.can + '</b>' : '');
             handEl.title = t ? '手上：' + t.name : '';
         }
 

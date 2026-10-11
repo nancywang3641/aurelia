@@ -160,7 +160,7 @@
                     '<div><h3>' + esc(crop.name) + '</h3><p>有 ' + st.inventory.seeds[id] + ' 顆 · ' + crop.growDays + ' 次澆水成熟<br>收成一份賣 ' + crop.sellPrice + 'G</p></div>' +
                     '<div class="shop-actions"><button type="button" data-buy="' + id + '"' + (st.coins < crop.buyPrice ? ' disabled' : '') + '>買一顆 ' + crop.buyPrice + 'G</button></div></article>';
             }).join('');
-            var hay = ranch && st.ranch ? '<article class="shop-card"><span class="shop-fa"><i class="fa-solid fa-wheat-awn"></i></span>' +
+            var hay = ranch && st.ranch ? '<article class="shop-card">' + window.FarmItemDraw.stuffSvg('hay') +
                 '<div><h3>乾草</h3><p>牧場裡 ' + st.ranch.hay + ' 捆<br>一捆餵一隻吃一天</p></div>' +
                 '<div class="shop-actions"><button type="button" data-buy-hay="1"' + (st.coins < ranch.HAY_PRICE ? ' disabled' : '') + '>買一捆 ' + ranch.HAY_PRICE + 'G</button></div></article>' : '';
             $('shop-list').innerHTML = seeds + hay + bigItems(st);
