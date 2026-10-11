@@ -98,6 +98,17 @@
             openIn: (c) => _mountFloating(c, () => win.OS_SN_BOARD.open(), '.snb-win', () => win.OS_SN_BOARD.close && win.OS_SN_BOARD.close()),
         },
         {
+            // 🌱 LUNA 苗圃＝小機的家，走進去就是後院（os_farm.js）。廣場上那棟在帽匠工坊左邊（原本 npc01 那塊地），
+            //    門是 panel 型（lstage-open-garden，下面接）；快轉地圖點那棟或那顆、立繪模式那張卡都直接開後院。
+            //    後院是自己走的舞台、要整個畫面（同手機殼那顆 mode:'out'），不搬進窗格。
+            id: 'garden', name: 'LUNA 苗圃', flatName: '後院', icon: 'fa-seedling', bg: 'farm/farm_base_v2.webp',
+            obj: 'luna_nursery', chip: true,
+            who: () => '後院',
+            ready: () => !!(win.OS_FARM?.launch && win.AureliaControlCenter?.launchGameApp),
+            open: () => win.AureliaControlCenter.launchGameApp('farm'),
+            openIn: (c) => _openFull(c, () => win.AureliaControlCenter.launchGameApp('farm')),
+        },
+        {
             id: 'room404', name: '404', flatName: '黑市', icon: 'fa-ghost', npc: 'cheshire', bg: 'lobby_pv_bg_room404_v1.jpg',
             scene: 'room404',
             when: () => !!_st404().unlocked,
@@ -185,6 +196,18 @@
         try { open(); } catch (e) { console.warn('[LobbyPlaces] 面板開啟失敗', sel, e); }
         tick();
     }
+
+    // 🖥 要整個畫面的地方（後院）：直接開，窗格當場收回去——不然它關掉之後，這裡還留著一個空的窗格。
+    //    pv-panel-gone 就是面板自己關掉時通知窗格收起來的那個事件（見 _mountFloating）。
+    function _openFull(c, open) {
+        open();
+        try { c.dispatchEvent(new CustomEvent('pv-panel-gone')); } catch (e) {}
+    }
+    // 🚪 廣場上 LUNA 苗圃的門（lobby_stage 的 panel 型門）→ 開後院
+    win.addEventListener('lstage-open-garden', () => {
+        const p = get('garden');
+        try { if (p && (!p.ready || p.ready())) p.open(); } catch (e) { console.warn('[LobbyPlaces] 後院開不起來', e); }
+    });
 
     // 🔮 把塔羅畫進窗格：OS_TAROT.launch 本來就吃容器，只差它的 ❮ 返回鈕。
     //    那顆鈕寫死呼叫 PhoneSystem.goHome（它原本住手機殼裡）→ 暫借成「回主頁」，關掉時還原。

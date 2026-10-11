@@ -329,14 +329,15 @@
                 { file: "city/obj/book_cafe_day.png", x: 173, y: 90, w: 424, h: 346, footH: 194, s: 0.77, layer: "floor" },   // 書咖建築
                 { file: "city/obj/lobby_day.png", x: 976, y: 308, w: 468, h: 350, footH: 155, s: 0.827 },   // 大廳建築（回大廳門接這棟）
                 { file: "city/obj/player_house_lv1.png", x: 97, y: 565, w: 1284, h: 750, footH: 350, footW: 1272, s: 0.402, plot: "player" },   // MC家（跟白兔買了才蓋起來；狀態=OS_PT）
-                { file: "city/obj/npc_house_01.png", x: 874, y: 638, w: 1095, h: 839, footH: 445, s: 0.274, plot: "npc01" },
+                // 🌱 LUNA 苗圃＝小機的家，門口走進去就是後院（原 npc01 那塊地；同占卜小屋、工坊，永遠都在、不吃 plot 開關）。
+                //    圖是阿洛 10-11 照廣場這幾棟畫的；舊存檔裡的鄰居房＋空地框由 _fixCityLayout 換成這棟。
+                { file: "city/obj/luna_nursery_day.png", x: 860, y: 664, w: 1070, h: 683, footH: 330, s: 0.29 },
                 { file: "city/obj/npc_house_03.png", x: 990, y: 128, w: 1030, h: 814, footH: 288, s: 0.281, plot: "npc03" },
                 // 🔮 占卜小屋（原 npc04 那塊地；鄰居系統不做了→這棟永遠都在，不吃 plot 開關）
                 { file: "city/obj/tarot_hut_day.png", x: 164, y: 327, w: 1428, h: 1024, footH: 360, s: 0.231 },
                 // 🎩 帽匠的奇想工坊（原 npc02 那塊地；同上，永遠都在、不吃 plot 開關）。廣場左邊占卜小屋、右邊工坊，一邊一間店。
                 { file: "city/obj/hatter_shop_day.png", x: 1177, y: 619, w: 1010, h: 898, footH: 300, s: 0.267 },
                 { file: "city/obj/plot_frame_day_player.png", x: 156, y: 619, w: 1342, h: 836, footH: 0, s: 0.308, layer: "floor", noCollide: true, plotFrame: "player" },   // MC家空地框(沒買房時顯示)
-                { file: "city/obj/plot_frame_day_npc01.png", x: 889, y: 639, w: 357, h: 342, footH: 0, s: 0.673, layer: "floor", noCollide: true, plotFrame: "npc01" },
                 { file: "city/obj/plot_frame_day_npc03.png", x: 992, y: 152, w: 398, h: 300, footH: 0, s: 0.657, layer: "floor", noCollide: true, plotFrame: "npc03" },
                 { file: "city/obj/fountain_node_day.png", x: 706, y: 325, w: 180, h: 222, footH: 67, s: 0.799 },
                 { file: "city/obj/crystal_monument_day.png", x: 1086, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
@@ -388,6 +389,8 @@
                 { x: 279, y: 566, w: 100, h: 42, to: 'tarot', spawn: { x: 768, y: 800 } },
                 // 🎩 帽匠工坊門口（同上，壓在工坊下緣外側）
                 { x: 1262, y: 861, w: 100, h: 42, to: 'workshop', spawn: { x: 768, y: 800 } },
+                // 🌱 LUNA 苗圃門口→後院（panel 型：不切場景，lobby_places 收 lstage-open-garden 開後院；同上壓在苗圃下緣外側）
+                { x: 940, y: 864, w: 100, h: 42, panel: 'garden' },
             ],
         },
     };
@@ -406,6 +409,7 @@
         'city/obj/npc_house_04.png': 'city/obj/npc_house_04_night.png',
         'city/obj/tarot_hut_day.png': 'city/obj/tarot_hut_night.png',
         'city/obj/hatter_shop_day.png': 'city/obj/hatter_shop_night.png',
+        'city/obj/luna_nursery_day.png': 'city/obj/luna_nursery_night.png',
         'city/obj/city_bench_01_day.png': 'city/obj/city_bench_01_night.png',
         'city/obj/city_bench_horizontal_02_day.png': 'city/obj/city_bench_horizontal_02_night.png',
         'city/obj/city_bench_horizontal_03_day.png': 'city/obj/city_bench_horizontal_03_night.png',
@@ -437,6 +441,17 @@
         'city/obj/plot_frame_small_04_day.png': { file: 'city/obj/plot_frame_day_npc03.png', w: 398, h: 300 },
         'city/obj/plot_frame_small_05_day.png': { file: 'city/obj/plot_frame_day_npc04.png', w: 411, h: 305 },
     };
+    // 🌱 10-11 npc01 那塊地蓋成 LUNA 苗圃：舊存檔（layoutFull）裡還是那間鄰居房＋空地框 → 換成苗圃，她調過的其他東西照留。
+    //    走進廣場（_loadCfg）跟快轉縮圖（_openCityMap）各自讀存檔，兩邊都要過這支。
+    const NURSERY_FILE = 'city/obj/luna_nursery_day.png';
+    const NPC01_OLD = ['city/obj/npc_house_01.png', 'city/obj/plot_frame_day_npc01.png', 'city/obj/plot_frame_small_02_day.png'];
+    function _fixCityLayout(layout) {
+        if (layout.some(o => o.file === NURSERY_FILE)) return layout;
+        const def = (SCENES.city.layout || []).find(o => o.file === NURSERY_FILE);
+        const out = layout.filter(o => NPC01_OLD.indexOf(o.file) < 0);
+        if (def) out.push(Object.assign({}, def));
+        return out;
+    }
     // 🌗 城市日夜：跟大廳 BG 同時段律（ambient.js：6-18=day）；場景有 nightBase 才生效
     function _isNightNow() {
         const h = new Date().getHours();
@@ -543,6 +558,7 @@
                         if (o.file === 'city/obj/player_house_lv1.png' && !o.plot) o.plot = 'player';
                         if (o.file === 'city/obj/plot_frame_day_player.png' && !o.plotFrame) o.plotFrame = 'player';
                     });
+                    if (S.scene === 'city') layout = _fixCityLayout(layout);
                 } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
                     if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; if (s.noCollide != null) t.noCollide = s.noCollide; }
@@ -1847,7 +1863,7 @@
         let layout = SCENES.city.layout || [];
         try {
             const saved = JSON.parse(localStorage.getItem(SCENES.city.cfgKey) || 'null');
-            if (saved && Array.isArray(saved.layoutFull) && saved.layoutFull.length) layout = saved.layoutFull;
+            if (saved && Array.isArray(saved.layoutFull) && saved.layoutFull.length) layout = _fixCityLayout(saved.layoutFull);
         } catch (e) {}
         const _vt = window.VoidTerminal || {};   // jump() 進出 404 要用（enter404Room/restoreLobby）
         const locked = _cityLocked();   // 🔒 廣場鎖上：不給「廣場」這個目的地，地圖本身還是照畫（它就是這張快轉圖）
