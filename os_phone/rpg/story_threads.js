@@ -102,12 +102,12 @@
         _cacheChat = cid;
         return _cache;
     }
-    async function _save() {
+    async function _save(quiet) {
         if (!_cache || !_cacheChat) return false;
         let ok = true;
         try { await win.OS_DB?.saveAppData?.(APP_ID, 'ledger', _cache, _cacheChat); }
         catch (e) { ok = false; console.warn('[Story Threads] 存檔失敗:', e); }
-        try { win.dispatchEvent(new CustomEvent('aurelia:story-threads')); } catch (e) {}
+        if (!quiet) { try { win.dispatchEvent(new CustomEvent('aurelia:story-threads')); } catch (e) {} }
         return ok;
     }
 
@@ -549,6 +549,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
 
     let _panel = null, _sel = null, _ro = null;
     function _closePanel() {
+        _rvEnd();
         try { _ro?.disconnect(); } catch (e) {}
         _ro = null;
         if (_panel) { try { _panel.remove(); } catch (e) {} }
@@ -563,11 +564,13 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         const el = document.createElement('div');
         el.className = 'sthr-embed';
         el.innerHTML = `
-            <div class="sthr-head">
-                <div class="sthr-title">線索 ${_help('threads_what')}</div>
-                <label class="sthr-switch"><input type="checkbox" class="sthr-on"><span>每章記一次</span></label>
-            </div>
-            <div class="sthr-body"><div class="sthr-loading">讀取中…</div></div>`;
+            <div class="sthr-stage">
+                <div class="sthr-head">
+                    <div class="sthr-title">線索 ${_help('threads_what')}</div>
+                    <label class="sthr-switch"><input type="checkbox" class="sthr-on"><span>每章記一次</span></label>
+                </div>
+                <div class="sthr-body"><div class="sthr-loading">讀取中…</div></div>
+            </div>`;
         host.innerHTML = '';
         host.appendChild(el);
         _panel = el;
@@ -579,10 +582,12 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
 
     async function _render() {
         if (!_panel) return;
-        const body = _panel.querySelector('.sthr-body');
+        _rvEnd();
+        const panel = _panel;
+        const body = panel.querySelector('.sthr-body');
         let s = null;
         try { s = await snapshot(); } catch (e) {}
-        if (!_panel) return;
+        if (!_panel || _panel !== panel) return;
         if (!s) { body.innerHTML = '<div class="sthr-empty">這裡要在劇情裡打開才看得到。</div>'; return; }
 
         const total = s.open.length + s.stale.length;
@@ -600,13 +605,19 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         const nNew = s.open.filter(r => r.mark === 'new').length, nChg = s.open.filter(r => r.mark === 'chg').length;
         const nClosedNow = s.closed.filter(r => r.mark === 'closed_now').length;
         if (nNew) chips.push(`這章新線 ${nNew}`);
+        // 🎬 這章新冒出來、還沒演過的線（開始演就記住，再打開不重播）
+        let pend = [];
+        if (nNew && _revealOn() && panel.getBoundingClientRect().width > 0) {
+            try { pend = await _takeReveal(s.latestKey, s.open.filter(r => r.mark === 'new').map(r => r.key)); } catch (e) { pend = []; }
+            if (_panel !== panel) return;
+        }
         if (nChg) chips.push(`這章有變化 ${nChg}`);
         if (nClosedNow) chips.push(`這章收場 ${nClosedNow}`);
         if (cnt.want) chips.push(`想看 ${cnt.want}`);
         if (cnt.hold) chips.push(`先放著 ${cnt.hold}`);
 
         body.innerHTML = `
-            <div class="sthr-sum">${chips.map(c => `<span>${_esc(c)}</span>`).join('')}</div>
+            <div class="sthr-sum">${chips.map(c => `<span${/^這章新線/.test(c) ? ' class="sthr-sum-new"' : ''}>${_esc(c)}</span>`).join('')}</div>
             ${s.open.length ? '<div class="sthr-graph"></div>' : ''}
             <div class="sthr-list"></div>`;
         const list = body.querySelector('.sthr-list');
@@ -614,7 +625,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
 
         const row = (r, kind) => {
             const d = document.createElement('div');
-            d.className = 'sthr-row' + (kind ? ' sthr-' + kind : '') + (r.pick ? ' sthr-pk-' + r.pick : '');
+            d.className = 'sthr-row' + (kind ? ' sthr-' + kind : '') + (r.pick ? ' sthr-pk-' + r.pick : '') + (pend.indexOf(r.key) >= 0 ? ' sthr-rv-wait' : '');   // 演到它之前先不佔位子
             d.dataset.key = r.key;
             const m = MARK[r.mark];
             const pickable = kind !== 'closed';
@@ -646,7 +657,8 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
 
         if (s.open.length) {
             section('還沒有下文', 'threads_pick');
-            s.open.slice().sort((a, b) => a.age - b.age).forEach(r => list.appendChild(row(r, '')));
+            // 同一章的線，這章新冒出來的排最上面（新線索演出的卡片收進清單第一格）
+            s.open.slice().sort((a, b) => (a.age - b.age) || ((b.mark === 'new') - (a.mark === 'new'))).forEach(r => list.appendChild(row(r, '')));
         }
         if (s.stale.length) {
             section('很久沒動', 'threads_stale');
@@ -663,12 +675,16 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
 
         if (s.open.length) {
             _graphData = await _buildGraphData(s.open);
-            _drawGraph();
+            if (_panel !== panel) return;
             const g = body.querySelector('.sthr-graph');
-            let lastW = 0;
-            try { _ro = new ResizeObserver(() => { const w = Math.round(g.clientWidth); if (w && Math.abs(w - lastW) > 8) { lastW = w; _drawGraph(); } }); _ro.observe(g); } catch (e) {}
+            let lastW = Math.round(g.clientWidth);
+            _drawGraph();
+            // 演出中寬度變了（例如捲軸剛冒出來）先不重畫：手上拿著的節點會變成舊的，演完再補畫（圖會跟著寬度縮放，差一點看不出來）
+            try { _ro = new ResizeObserver(() => { const w = Math.round(g.clientWidth); if (w && Math.abs(w - lastW) > 8) { lastW = w; if (_rv && _rv.panel === panel) _rv.redraw = true; else _drawGraph(); } }); _ro.observe(g); } catch (e) {}
         }
         _paint();
+        if (pend.length && _graphData) _reveal(panel, pend);
+        else panel.querySelectorAll('.sthr-rv-wait').forEach(r => r.classList.remove('sthr-rv-wait'));
     }
 
     // ── 圖譜：線是節點；線裡提到別條線的主人＝兩條線連起來；誰的線都不是的人掛在外圈 ──
@@ -736,6 +752,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
     let _nodes = [];
     function _drawGraph() {
         if (!_panel || !_graphData) return;
+        _rvEnd();
         const graph = _panel.querySelector('.sthr-graph');
         if (!graph) return;
         const { mc, lines, links, people } = _graphData;
@@ -848,6 +865,256 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         });
     }
 
+    // ── 🎬 新線索演出 ──────────────────────────────────────────────────
+    //   10-13 她：章節結束打開線索頁，新冒出來的線不要直接躺在清單裡，要「突然 PO 出來 → 整個窗拉近看它連到誰 →
+    //   小卡片打字講內容 → 卡片收回清單變新的一列」。小樣在本機 參考資料/THREADS_REVEAL_LAB.html。
+    //   只演「最新一章新冒出來、這個故事還沒演過的線」，開始演就記在帳本（revealed），再打開不重播。
+    //   大廳設置 → 選項「演出動畫」關掉＝不演。演的時候點一下＝跳下一步，右下「跳過」＝直接演完；捲動也算跳過。
+    const REVEAL_FLAG = 'aurelia_reveal_fx';   // '0'＝關，預設開（之後委託結案之類的演出也看這一格）
+    function _revealOn() { try { return localStorage.getItem(REVEAL_FLAG) !== '0'; } catch (e) { return true; } }
+    function _setRevealOn(on) { try { localStorage.setItem(REVEAL_FLAG, on ? '1' : '0'); } catch (e) {} }
+
+    // 回這次要演的線（鑰匙），同時記成演過了；不廣播（廣播會讓面板重畫、把正在演的洗掉）
+    function _takeReveal(at, keys) {
+        return _run(async () => {
+            const d = await _load();
+            if (!d || at == null || !keys.length) return [];
+            const rv = (d.revealed && d.revealed.at === String(at) && Array.isArray(d.revealed.keys)) ? d.revealed : { at: String(at), keys: [] };
+            const fresh = keys.filter(k => rv.keys.indexOf(k) < 0);
+            if (!fresh.length) return [];
+            d.revealed = { at: String(at), keys: rv.keys.concat(fresh) };
+            await _save(true);
+            return fresh;
+        });
+    }
+
+    function _sfx(kind) { try { (win.VoidUiSfx || window.VoidUiSfx)?.play?.(kind); } catch (e) {} }
+
+    // 這一格在畫面上真正看得到的範圍（被捲動容器、視窗切掉的不算）
+    function _visRect(el) {
+        const r = el.getBoundingClientRect();
+        let L = r.left, T = r.top, R = r.right, B = r.bottom;
+        const view = el.ownerDocument.defaultView || window;
+        for (let p = el.parentElement; p && p !== el.ownerDocument.documentElement; p = p.parentElement) {
+            const cs = view.getComputedStyle(p);
+            if (!/(auto|scroll|hidden|clip)/.test(cs.overflowX + ' ' + cs.overflowY)) continue;
+            const q = p.getBoundingClientRect();
+            L = Math.max(L, q.left); T = Math.max(T, q.top); R = Math.min(R, q.right); B = Math.min(B, q.bottom);
+        }
+        L = Math.max(L, 0); T = Math.max(T, 0); R = Math.min(R, view.innerWidth); B = Math.min(B, view.innerHeight);
+        return { left: L, top: T, width: Math.max(0, R - L), height: Math.max(0, B - T), right: R, bottom: B };
+    }
+
+    let _rv = null;   // 正在演的那一場：{ panel, stage, card, flash, shield, skipBtn, anims:Set, step, keys, done }
+    function _rvEnd() {
+        const rv = _rv;
+        if (!rv) return;
+        _rv = null;
+        rv.done = true;
+        try { rv.step && rv.step(); } catch (e) {}
+        rv.anims.forEach(a => { try { a.cancel(); } catch (e) {} });
+        rv.anims.clear();
+        [rv.card, rv.flash, rv.shield, rv.skipBtn].forEach(n => { try { n && n.remove(); } catch (e) {} });
+        rv.panel.classList.remove('sthr-rv-on');
+        rv.panel.querySelectorAll('.sthr-rv-hide').forEach(n => n.classList.remove('sthr-rv-hide'));
+        rv.panel.querySelectorAll('.sthr-rv-wait, .sthr-rv-ghost').forEach(n => n.classList.remove('sthr-rv-wait', 'sthr-rv-ghost'));
+        rv.panel.querySelectorAll('.sthr-rv-ring').forEach(n => n.remove());
+        rv.panel.querySelectorAll('line.sthr-e').forEach(n => { n.style.strokeDasharray = ''; n.style.strokeDashoffset = ''; });
+        rv.panel.querySelectorAll('.sthr-nd').forEach(n => { n.style.transformBox = ''; n.style.transformOrigin = ''; });
+        if (_panel === rv.panel && _sel && rv.keys.indexOf(_sel) >= 0) { _sel = null; _paint(); }
+        if (rv.redraw && _panel === rv.panel) _drawGraph();
+    }
+
+    async function _reveal(panel, keys) {
+        _rvEnd();
+        const gd = _graphData;
+        const idx = keys.map(k => gd.lines.findIndex(L => L.key === k)).filter(i => i >= 0);
+        if (!idx.length) { panel.querySelectorAll('.sthr-rv-wait').forEach(r => r.classList.remove('sthr-rv-wait')); return; }
+        const doc = panel.ownerDocument;
+        const rv = _rv = { panel, keys: idx.map(i => gd.lines[i].key), anims: new Set(), step: null, done: false };
+        rv.stage = panel.querySelector('.sthr-stage');
+        const alive = () => _rv === rv && !rv.done && _panel === panel && panel.isConnected;
+        const wait = (ms) => new Promise(res => { const t = setTimeout(() => { rv.step = null; res(); }, ms); rv.step = () => { clearTimeout(t); rv.step = null; res(); }; });
+        const anim = (elm, kf, ms, opt) => {
+            const a = elm.animate(kf, Object.assign({ duration: ms, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }, opt || {}));
+            rv.anims.add(a);
+            return a.finished.catch(() => {});
+        };
+
+        // 先把要演的那幾顆、跟它們的連線藏起來（只連到新線的外圈人物也一起）
+        const nodeOf = (i) => _nodes.find(o => o.kind === 'line' && o.i === i);
+        const soloPeople = Object.keys(gd.people).filter(p => gd.people[p].every(j => idx.indexOf(j) >= 0));
+        const peopleNodeOf = (p) => _nodes.find(o => o.kind === 'p' && o.n === p);
+        const edgesOf = (i) => Array.from(panel.querySelectorAll('line.sthr-e')).filter(e => +e.dataset.l === i);
+        const llOf = (i) => Array.from(panel.querySelectorAll('path.sthr-e-ll')).filter(e => +e.dataset.a === i || +e.dataset.b === i);
+        idx.forEach(i => {
+            const o = nodeOf(i); if (o) o.g.classList.add('sthr-rv-hide');
+            edgesOf(i).concat(llOf(i)).forEach(e => e.classList.add('sthr-rv-hide'));
+        });
+        soloPeople.forEach(p => { const o = peopleNodeOf(p); if (o) o.g.classList.add('sthr-rv-hide'); });
+
+        // 擋板（點一下跳下一步、捲動＝直接演完）、跳過鈕、「新線索」標、小卡片
+        panel.classList.add('sthr-rv-on');
+        const mk = (tag, cls, html) => { const n = doc.createElement(tag); n.className = cls; if (html) n.innerHTML = html; panel.appendChild(n); return n; };
+        rv.shield = mk('div', 'sthr-rv-shield');
+        rv.flash = mk('div', 'sthr-rv-flash', '新線索' + (idx.length > 1 ? ' ×' + idx.length : ''));
+        rv.card = mk('div', 'sthr-rv-card');
+        rv.skipBtn = mk('button', 'sthr-rv-skip', '<i class="fa-solid fa-forward"></i> 跳過');
+        rv.skipBtn.type = 'button';
+        rv.skipBtn.addEventListener('click', (e) => { e.stopPropagation(); _rvEnd(); });
+        rv.shield.addEventListener('click', (e) => { e.stopPropagation(); if (rv.step) rv.step(); });
+        rv.shield.addEventListener('wheel', () => _rvEnd(), { passive: true });
+        let ty0 = null;
+        rv.shield.addEventListener('touchstart', (e) => { ty0 = e.touches[0] ? e.touches[0].clientY : null; }, { passive: true });
+        rv.shield.addEventListener('touchmove', (e) => { if (ty0 != null && e.touches[0] && Math.abs(e.touches[0].clientY - ty0) > 12) _rvEnd(); }, { passive: true });
+
+        // 位置：擋板、「新線索」標、跳過鈕都對著「看得到的那一塊」擺
+        //   k＝外面被縮放了多少（量到的是螢幕上的大小，寫進 style 的是縮放前的大小，兩邊要換算）
+        const place = () => {
+            const E = panel.getBoundingClientRect(), P = _visRect(panel);
+            const k = (panel.offsetWidth && E.width) ? E.width / panel.offsetWidth : 1;
+            const top = (P.top - E.top) / k, left = (P.left - E.left) / k, w = P.width / k, h = P.height / k;
+            Object.assign(rv.shield.style, { top: top + 'px', left: left + 'px', width: w + 'px', height: h + 'px' });
+            Object.assign(rv.flash.style, { top: (top + 46) + 'px', left: (left + w / 2) + 'px' });
+            Object.assign(rv.skipBtn.style, { top: (top + h - 12) + 'px', left: (left + w - 12) + 'px' });
+            return { E, P, k };
+        };
+        place();
+
+        await wait(450); if (!alive()) return;
+
+        // ① 「新線索」閃一下，上面那排「這章新線」跟著跳
+        anim(rv.flash, [{ opacity: 0, transform: 'translate(-50%,-6px) scale(.8)' }, { opacity: 1, transform: 'translate(-50%,0) scale(1.08)', offset: .5 }, { opacity: 1, transform: 'translate(-50%,0) scale(1)' }], 420);
+        const chip = panel.querySelector('.sthr-sum-new');
+        if (chip) anim(chip, [{ transform: 'scale(1)' }, { transform: 'scale(1.18)', offset: .4 }, { transform: 'scale(1)' }], 520, { fill: 'none' });
+        await wait(350); if (!alive()) return;
+
+        // ② 新的那幾顆從無到有彈出來＋一圈波紋，連線一條一條畫出去
+        const gE = panel.querySelector('.sthr-graph svg > g');
+        const popNode = (o, x, y) => {
+            o.g.style.transformBox = 'fill-box'; o.g.style.transformOrigin = 'center';
+            o.g.classList.remove('sthr-rv-hide');
+            anim(o.g, [{ transform: `translate(${x}px,${y}px) scale(0)` }, { transform: `translate(${x}px,${y}px) scale(1.25)`, offset: .6 }, { transform: `translate(${x}px,${y}px) scale(1)` }], 520);
+        };
+        idx.forEach((i, n) => {
+            const L = gd.lines[i];
+            setTimeout(() => {
+                if (!alive()) return;
+                const o = nodeOf(i);
+                if (o) popNode(o, L.x, L.y);
+                _sfx('thread_new');
+                if (gE) {
+                    const ring = _svg('circle', { cx: L.x, cy: L.y, r: 56, 'class': 'sthr-rv-ring' }, gE);
+                    ring.style.transformBox = 'fill-box'; ring.style.transformOrigin = 'center';
+                    anim(ring, [{ transform: 'scale(.18)', opacity: 1 }, { transform: 'scale(1)', opacity: 0 }], 900, { easing: 'ease-out' }).then(() => ring.remove());
+                }
+                edgesOf(i).forEach((e, k) => {
+                    const len = Math.hypot(e.x2.baseVal.value - e.x1.baseVal.value, e.y2.baseVal.value - e.y1.baseVal.value) || 1;
+                    // 主角那條是從主角畫向這條線的（起點在主角），要反過來才會從新的這顆長出去
+                    const from = e.dataset.p ? len : -len;
+                    e.style.strokeDasharray = len; e.style.strokeDashoffset = from;
+                    e.classList.remove('sthr-rv-hide');
+                    anim(e, [{ strokeDashoffset: from }, { strokeDashoffset: 0 }], 500, { delay: 300 + k * 160, fill: 'both' });
+                });
+                llOf(i).forEach(e => { e.classList.remove('sthr-rv-hide'); anim(e, [{ opacity: 0 }, { opacity: 1 }], 500, { delay: 300, fill: 'both' }); });
+                soloPeople.forEach(p => {
+                    if (gd.people[p][0] !== i) return;
+                    const q = peopleNodeOf(p);
+                    if (!q) return;
+                    const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(q.g.getAttribute('transform') || '');
+                    if (m) setTimeout(() => { if (alive()) popNode(q, +m[1], +m[2]); }, 380);
+                });
+            }, n * 160);
+        });
+        await wait(1000 + (idx.length - 1) * 160); if (!alive()) return;
+        anim(rv.flash, [{ opacity: 1, transform: 'translate(-50%,0) scale(1)' }, { opacity: 0, transform: 'translate(-50%,-8px) scale(.9)' }], 260);
+
+        // ③～⑤ 一條一條：整個窗往那顆拉近 → 小卡片打字 → 拉回來，卡片收進清單變成新的一列
+        for (let n = 0; n < idx.length; n++) {
+            if (!alive()) return;
+            const i = idx[n], L = gd.lines[i], o = nodeOf(i);
+            const row = Array.from(panel.querySelectorAll('.sthr-row')).find(r => r.dataset.key === L.key);
+            if (!o || !row) continue;
+            const later = n > 0;
+
+            // ③ 拉近（新的那顆放在看得到那塊的上面兩成，下面留給卡片）；跟它沒關係的變暗
+            let { E, P, k } = place();
+            const S0 = rv.stage.getBoundingClientRect();
+            const NR0 = o.g.getBoundingClientRect();
+            const s = 2.3;
+            const lx = NR0.left + NR0.width / 2 - S0.left, ly = NR0.top + NR0.height / 2 - S0.top;
+            const tx = (P.left + P.width / 2 - S0.left - lx * s) / k, ty = (P.top + P.height * 0.22 - S0.top - ly * s) / k;
+            const ZOOM = `translate(${tx}px,${ty}px) scale(${s})`;
+            _sel = L.key; _paint();
+            await anim(rv.stage, [{ transform: 'translate(0,0) scale(1)' }, { transform: ZOOM }], 700);
+            if (!alive()) return;
+
+            // ④ 小卡片從那顆正下方長出來，字一個一個打
+            const who = [];
+            if (L.mcIn && gd.mc) who.push(gd.mc);
+            gd.links.forEach(k => { if (k[0] === i) who.push(gd.lines[k[1]].label); else if (k[1] === i) who.push(gd.lines[k[0]].label); });
+            L.people.forEach(p => who.push(p));
+            const fact = L.text || '（沒有記下現況）';
+            rv.card.innerHTML = `
+                <div class="sthr-rv-tag"><i class="fa-solid fa-diagram-project"></i> 這一章冒出來的</div>
+                <div class="sthr-rv-name"><b>${_esc(L.label)}</b>${L.kind ? `<span class="sthr-kd sthr-k-${L.kind}">${_esc(_kindName(L.kind))}</span>` : ''}</div>
+                <div class="sthr-rv-tx"><span class="sthr-rv-typed"></span><span class="sthr-rv-caret"></span><span class="sthr-rv-rest">${_esc(fact)}</span></div>
+                ${who.length ? `<div class="sthr-rv-who">${who.slice(0, 5).map(w => `<span>${_esc(w)}</span>`).join('')}</div>` : ''}
+                <div class="sthr-rv-hint">點一下收進清單</div>`;
+            rv.card.getAnimations().forEach(a => a.cancel());
+            const NR = o.g.getBoundingClientRect();
+            ({ E, P, k } = place());
+            const cw = Math.min(320, P.width / k - 32);
+            rv.card.style.width = cw + 'px';
+            rv.card.style.left = ((P.left - E.left) / k + (P.width / k - cw) / 2) + 'px';
+            const ch = rv.card.offsetHeight;
+            const want = (NR.bottom - E.top) / k + 22;   // 跟那顆要有點間隙
+            rv.card.style.top = Math.max((P.top - E.top) / k + 8, Math.min(want, (P.bottom - E.top) / k - ch - 12)) + 'px';
+            await anim(rv.card, [{ opacity: 0, transform: 'translateY(-40px) scale(.3)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }], 420);
+            if (!alive()) return;
+            const typed = rv.card.querySelector('.sthr-rv-typed'), rest = rv.card.querySelector('.sthr-rv-rest');
+            const chars = Array.from(fact);
+            const per = Math.max(14, Math.min(later ? 30 : 38, Math.round(2600 / chars.length)));   // 長的打快一點，最多兩秒半多
+            await new Promise(res => {
+                let k = 0, t = 0;
+                rv.step = () => { clearTimeout(t); k = chars.length; typed.textContent = fact; rest.textContent = ''; rv.step = null; res(); };
+                const tick = () => {
+                    if (!alive()) return res();
+                    k++; typed.textContent = chars.slice(0, k).join(''); rest.textContent = chars.slice(k).join('');
+                    if (k >= chars.length) { rv.step = null; return res(); }
+                    t = setTimeout(tick, per);
+                };
+                tick();
+            });
+            if (!alive()) return;
+            await wait(later ? 1000 : 1400); if (!alive()) return;
+            rv.card.querySelector('.sthr-rv-caret')?.remove();
+
+            // ⑤ 拉回來（清單回到畫面）；卡片晚一秒再縮小飛進清單那一格
+            //   那一列這時才讓出位子（畫面還拉近著、清單在畫面外，看不到底下的列被往下推）
+            row.classList.remove('sthr-rv-wait');
+            row.classList.add('sthr-rv-ghost');
+            rv.anims.forEach(a => { if (a.effect && a.effect.target === rv.stage) { a.cancel(); rv.anims.delete(a); } });   // 先回原位量那一格在哪（同一格畫面內量完，不會閃）
+            const b = row.getBoundingClientRect();
+            anim(rv.stage, [{ transform: ZOOM }, { transform: 'translate(0,0) scale(1)' }], 650);
+            _sel = null; _paint();
+            await wait(later ? 700 : 1000); if (!alive()) return;
+            const a = rv.card.getBoundingClientRect();
+            const dx = ((b.left + b.width / 2) - (a.left + a.width / 2)) / k, dy = (b.top - a.top) / k;
+            await anim(rv.card, [{ opacity: 1, transform: 'translate(0,0) scale(1)' }, { opacity: .9, transform: `translate(${dx}px,${dy}px) scale(${b.width / a.width},${b.height / a.height})` }], 620, { easing: 'cubic-bezier(.5,0,.2,1)' });
+            if (!alive()) return;
+            row.classList.remove('sthr-rv-ghost');
+            row.classList.add('sthr-rv-just');
+            setTimeout(() => row.classList.remove('sthr-rv-just'), 1600);
+            _sfx('thread_slot');
+            rv.card.getAnimations().forEach(x => x.cancel());
+            rv.card.style.opacity = '0';
+            if (n < idx.length - 1) { await wait(450); if (!alive()) return; }
+        }
+        _rvEnd();
+    }
+
+
     // PWA：章節存好 → 事件晚一點再畫（面板開著時刷新）
     win.addEventListener('aurelia:story-threads', () => { if (_panel) _render(); });
 
@@ -856,6 +1123,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         getLean, setLean, leanList,
         mountInto, closePanel: _closePanel,   // 10-13 起線索只畫在資訊中心／資料中心的分頁裡（舊的獨立窗 openPanel 拿掉了）
         isOn: _isOn, setOn: _setOn,
+        revealOn: _revealOn, setRevealOn: _setRevealOn,   // 🎬 新線索演出（大廳設置 → 選項「演出動畫」）
         INJECT_ID, CFG,
         // 診斷：印出目前帳本
         dump: async () => { const s = await snapshot(); console.table((s?.open || []).concat(s?.stale || [])); return s; }

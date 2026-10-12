@@ -31,6 +31,9 @@
         pen_write:  'ui-pen_write',    // 落筆（開編輯器）
         book_stamp: 'ui-stamp',        // 書放到桌上（保存成功）
         paper_tear: 'ui-paper_tear',   // 撕頁（清空劇情）
+        // 新線索演出（story_threads.js 的 _reveal 直接點播）：新的線冒出來「啾」、卡片收進清單「喀擦」
+        thread_new:  'ui-thread_new',
+        thread_slot: 'ui-thread_slot',
     };
     // 各音效的相對音量：滑過最輕，提示音最響（總音量之外再乘一層）
     const GAIN = {
@@ -39,6 +42,7 @@
         // 紙質音本身錄得比介面音小聲，整體往上帶；滑過那顆維持最輕
         paper_slide: 0.55, card_pick: 0.6, page_turn: 0.9, book_riffle: 0.9, pen_write: 1,
         book_open: 1, book_close: 1, book_stamp: 0.9, paper_tear: 0.9,
+        thread_new: 0.8, thread_slot: 1,
     };
 
     // 大廳 tab 之外，只多放行章節選擇面板 —— 它是 VN 層的全屏 overlay，不在大廳 tab 裡

@@ -2375,6 +2375,34 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 :is(#vn-threads-overlay, .sthr-embed) .sthr-pkb { font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 10px; cursor: pointer; background: transparent; color: #9d978b; border: 1px solid rgba(230,225,214,0.22); }
 :is(#vn-threads-overlay, .sthr-embed) .sthr-pkb.sthr-pk-want.on { color: #ffc2dc; border-color: #ef7fae; background: rgba(239,127,174,0.16); }
 :is(#vn-threads-overlay, .sthr-embed) .sthr-pkb.sthr-pk-hold.on { color: #b9c6d6; border-color: #7d93ad; background: rgba(125,147,173,0.16); }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-sum span.sthr-sum-new { border-color: #e0584f; color: #ff8d84; display: inline-block; }
+
+/* 🎬 新線索演出（story_threads.js 的 _reveal）：拉近的是 .sthr-stage 整層，卡片、「新線索」標、跳過鈕掛在外面不跟著放大 */
+.sthr-embed { position: relative; }
+.sthr-embed > .sthr-stage { display: flex; flex-direction: column; flex: 1; min-height: 0; transform-origin: 0 0; }
+.sthr-embed.sthr-rv-on { overflow: hidden; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-nd.sthr-rv-hide, :is(#vn-threads-overlay, .sthr-embed) .sthr-e.sthr-rv-hide { opacity: 0; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-row.sthr-rv-wait { display: none; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-row.sthr-rv-ghost { visibility: hidden; }
+:is(#vn-threads-overlay, .sthr-embed).sthr-rv-on .sthr-n-line.sthr-st-new rect { fill: #2a1513; stroke: #e0584f; stroke-width: 2; }   /* 演的時候新的那顆維持紅色（被選中也不換成白框） */
+:is(#vn-threads-overlay, .sthr-embed) .sthr-row.sthr-rv-just { border-left-color: #e0584f; background: rgba(224,88,79,0.12); transition: background 1.2s, border-color 1.2s; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-ring { fill: none; stroke: #ff8d84; stroke-width: 2; pointer-events: none; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-shield { position: absolute; z-index: 4; cursor: pointer; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-flash { position: absolute; z-index: 6; transform: translateX(-50%); padding: 5px 14px; border-radius: 999px; background: #e0584f; color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 3px; pointer-events: none; opacity: 0; white-space: nowrap; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-card { position: absolute; z-index: 5; box-sizing: border-box; padding: 14px 16px 12px; border-radius: 14px; border: 1px solid #e0584f; background: linear-gradient(160deg, #24120f, #0d0b08); box-shadow: 0 16px 40px rgba(0,0,0,0.6), 0 0 0 4px rgba(224,88,79,0.08); transform-origin: 50% 0; pointer-events: none; opacity: 0; text-align: left; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; letter-spacing: 2px; color: #ff8d84; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-name { margin: 6px 0 4px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-name b { color: #f3dfa6; font-size: 16px; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-name .sthr-kd { margin-right: 0; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-tx { color: #e6e1d6; font-size: 13.5px; line-height: 1.7; word-break: break-word; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-rest { color: transparent; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-caret { display: inline-block; width: 7px; height: 14px; margin-left: 1px; background: #ff8d84; vertical-align: -2px; animation: sthr-rv-blink .8s steps(1) infinite; }
+@keyframes sthr-rv-blink { 50% { opacity: 0; } }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-who { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: #bdb6a8; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-who span { padding: 1px 8px; border-radius: 9px; border: 1px solid rgba(230,225,214,0.2); }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-hint { margin-top: 8px; text-align: right; font-size: 10.5px; color: #6f6a61; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-skip { position: absolute; z-index: 7; transform: translate(-100%, -100%); display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(230,225,214,0.25); background: rgba(10,10,12,0.82); color: #bdb6a8; font: inherit; font-size: 12.5px; line-height: 1.2; cursor: pointer; white-space: nowrap; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-rv-skip:hover { color: #f3dfa6; border-color: rgba(212,175,55,0.5); }
 
 /* 📌 選項框：還沒結算的地圖委託，點了亮起來、送出時接在那句後面一行 [結算委託] 名字（vn_inspect._choicesHtml） */
 .ue-mission-chips { display: none; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
