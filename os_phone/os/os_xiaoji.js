@@ -231,6 +231,9 @@
                 (m.props || []).forEach(p => { if (p && p.prop) extra.push('・單子「' + _one(p.text) + '」：' + (PROP_STATE[p.prop.state || 'wait'] || p.prop.state)); });
                 if (extra.length) c += '\n（這一句你用過的工具與單子，只有你看得到：\n' + extra.join('\n') + '）';
             }
+            // 她以前那則附的圖：模型只在那一輪看過，之後只說一聲附過（圖本身不再送，太貴）
+            const nImg = m.role === 'user' && Array.isArray(m.attachments) ? m.attachments.filter(a => a && /^image\//.test(a.mime || '')).length : 0;
+            if (nImg) c = (c ? c + '\n' : '') + '（這則附了 ' + nImg + ' 張圖）';
             if (c.trim()) out.push({ role: m.role, content: c });
         });
         return out;
@@ -381,7 +384,13 @@
             } catch (e) { memErr = '這一句沒帶到記憶：' + ((e && e.message) || e); console.warn('[OS_XIAOJI] ' + memErr); }
         }
         const base = _history(H0, sumP ? sumP.from : null);
-        base.push({ role: 'user', content: (recallText ? recallText + '\n\n' : '') + String(o.userText || '') });
+        const userLine = (recallText ? recallText + '\n\n' : '') + String(o.userText || '');
+        // 🖼 她這輪傳的圖（房間縮好的 JPEG data URL，10-13）：接在她那句後面，OS_API.chat 照各家格式換（Gemini 換 inline_data）。
+        //   只有這一輪帶圖；之後那幾輪的舊對話只留「附了幾張圖」那行字（_history）
+        const imgs = (o.images || []).filter(u => /^data:image\//.test(String(u || ''))).slice(0, 4);
+        base.push({ role: 'user', content: imgs.length
+            ? [{ type: 'text', text: userLine || '（看圖）' }].concat(imgs.map(u => ({ type: 'image_url', image_url: { url: u } })))
+            : userLine });
         const work = [], said = [], log = [], props = [];
         // calls：送出去幾通（決定還能不能再叫）；answered：真的回來幾通（她付的、回覆底下寫的）。
         //   以前回報 calls，按停時停在半路那一通也算進去，跟用量那行對不起來
@@ -401,7 +410,10 @@
                 const msgs = [{ role: 'system', content: sys }].concat(base, work);
                 if (last) {   // 最後一通：只在最尾巴那則補一句，前面一個字都不動
                     const tail = msgs[msgs.length - 1];
-                    msgs[msgs.length - 1] = { role: tail.role, content: String(tail.content || '') + '\n\n' + _lastNote(user, props.length > 0) };
+                    const note = '\n\n' + _lastNote(user, props.length > 0);
+                    msgs[msgs.length - 1] = { role: tail.role, content: Array.isArray(tail.content)   // 這輪帶圖：字接在文字那格
+                        ? tail.content.map((p, i) => (i === 0 && p.type === 'text') ? { type: 'text', text: p.text + note } : p)
+                        : String(tail.content || '') + note };
                 }
                 const text = await _chat(msgs, conn, o.signal, _addUse, undefined, t => { thinks.push(t); });
                 answered++;
