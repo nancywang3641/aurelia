@@ -17,7 +17,7 @@
     const BOOK = '【奧瑞亞-白板】';
     const REF_BOOKS = ['【奧瑞亞世界】', '【奧瑞亞-視差】', '【奧瑞亞-人物核心】', BOOK];
     const CAPS = { WAIT: 3, IDEAS: 5, MATS: 20, COMBINE_AT: 10, COMBINE_SHOW: 8, CLIP_MAX: 3, DROPPED: 30, SHIFTS: 40, REFS: 8, REF_CUT: 600, ENTRIES: 8 };
-    const LEN = { MAT: 80, CARD: 120, WHY: 60, SRC: 40, IDEA: 60, KEY: 12, KEYS: 6, TITLE: 24, FRONT: 300, NAME: 30, ENTRY: 1200, NOTE: 120, SAY: 20, REDO: 200 };
+    const LEN = { MAT: 80, CARD: 120, WHY: 60, SRC: 40, IDEA: 140, KEY: 12, KEYS: 6, TITLE: 24, FRONT: 300, NAME: 30, ENTRY: 1200, NOTE: 120, SAY: 20, REDO: 200 };
     const KINDS = { faction: '勢力', place: '地點', person: '人物', conflict: '衝突', rule: '規矩' };
     const JOBS = { check: '挑毛病', write: '寫稿', combine: '湊點子', clip: '剪素材', idle: '沒事做' };
     const SLEEP_MS = 14 * 86400000;
@@ -140,7 +140,8 @@
         if (kind === 'combine') {
             const x = _tag(t, 'idea');
             if (!x) return no('沒湊出點子');
-            const text2 = _cut(_plain(x.body), LEN.IDEA);
+            // 10-13 她截圖：點子被硬切在 60 字、斷在「仍記得怎」→ 放寬，超過就切在句子邊上
+            const text2 = _cutNice(_plain(x.body), LEN.IDEA);
             const ids = job.matIds || [];
             const nums = _nums(_attr(x.attrs, 'from')).filter(n => n >= 1 && n <= ids.length);
             const from = Array.from(new Set(nums)).map(n => ids[n - 1]);
