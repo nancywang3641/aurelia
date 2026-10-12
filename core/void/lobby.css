@@ -1015,6 +1015,45 @@
 .lobby-left.lstage-on.lstage-dlg-hidden.lstage-picking .lstage-chat-fab { display: none; }
 .lobby-left.lstage-on.lstage-picking .lstage-joy { display: none; }
 
+/* 💬 選擇卡浮在那位頭上（10-13 起，lobby_stage.js 的 _showTalkPick／_placeTalkPick）：
+   兩顆小鈕並排、底下一個尖角對準他；頭上放不下時放腳下（.lstage-pick-below，尖角朝上）。
+   位置是程式量好的 --pick-x／--pick-y／--pick-tail。墊子（.lstage-pick-scrim）看不見、鋪滿大廳，點到它＝取消。
+   🚨 要排在上面那幾條 .lstage-pick 規則後面，而且多帶一個 class 才蓋得過桌機那條置中貼底。 */
+.lstage-pick-scrim { position: absolute; inset: 0; z-index: 3590; background: transparent; cursor: default; }
+.lstage-pick.lstage-pick-float {
+    left: var(--pick-x, 50%); top: var(--pick-y, 50%); right: auto; bottom: auto; width: auto;
+    gap: 0; padding: 6px; border-radius: 16px;
+    animation: lstage-pick-pop 0.2s cubic-bezier(.2, .9, .3, 1.2) both;
+    transform-origin: var(--pick-tail, 50%) 100%;
+}
+.lstage-pick.lstage-pick-float.lstage-pick-below { transform-origin: var(--pick-tail, 50%) 0; }
+@keyframes lstage-pick-pop {
+    from { opacity: 0; transform: translateY(6px) scale(0.9); }
+    to   { opacity: 1; transform: none; }
+}
+.lstage-pick-float .lstage-pick-row { gap: 6px; }
+.lstage-pick-float .lstage-pick-btn {
+    flex: 0 0 auto; flex-direction: row; gap: 7px;
+    padding: 10px 16px; border-radius: 12px;
+    font-size: 13.5px; white-space: nowrap;
+}
+.lstage-pick-float .lstage-pick-btn i { font-size: 15px; }
+.lstage-pick-float .lstage-pick-btn:hover { background: #ffffff; border-color: rgba(168, 132, 92, 0.7); }
+.lstage-pick-float::after {
+    content: ''; position: absolute; left: var(--pick-tail, 50%); bottom: -7px;
+    width: 12px; height: 12px; margin-left: -6px;
+    background: rgb(255, 253, 248);
+    border-right: 1px solid rgba(190, 163, 126, 0.5); border-bottom: 1px solid rgba(190, 163, 126, 0.5);
+    transform: rotate(45deg);
+}
+.lstage-pick-float.lstage-pick-below::after {
+    bottom: auto; top: -7px;
+    border-right: none; border-bottom: none;
+    border-left: 1px solid rgba(190, 163, 126, 0.5); border-top: 1px solid rgba(190, 163, 126, 0.5);
+}
+.void-tab.mode-404 .lstage-pick-float::after { background: rgb(8, 12, 8); border-color: rgba(74, 222, 128, 0.35); }
+.void-tab.mode-404 .lstage-pick-float .lstage-pick-btn:hover { background: rgba(24, 36, 24, 0.95); border-color: rgba(74, 222, 128, 0.6); }
+
 /* =========================================================
    📱 手機：NPC 停靠面板開著時的版型
    桌機是 16:9「左立繪＋右面板」；手機直立沒有左右，面板一開就整個

@@ -1385,6 +1385,9 @@
     // 📱 岔路：手機上這兩件事會互相擠，先問要哪一個，選了就整個畫面給它。
     //    面板那條沿用既有的「對話收起」版型(lstage-dlg-hidden)——那個狀態本來就是為了讓面板長高吃滿螢幕，
     //    不另外做一套全屏樣式。要邊看面板邊講話仍然按 💬 浮鈕，跟原本一樣。
+    // 10-13 她：「每個管理員的對話選項總在底部，感覺好醜」「點空白處應該就取消才對，而不是必須點開吧?」
+    //   → 卡片改成浮在那位頭上（兩顆小鈕＋指向他的小尖角），底下鋪一層看不見的墊子：點畫面上其他任何地方＝取消（等於走開）。
+    //     以前靠「點地板」那層取消，但書咖地板擺滿桌椅，點下去其實點到家具，什麼都沒發生。
     function _showTalkPick(npc, panel) {
         _closeTalkPick();
         const left = document.querySelector('.lobby-left');
@@ -1394,10 +1397,14 @@
         left.classList.add('lstage-dlg-hidden', 'lstage-picking');
         const rb = document.getElementById('iris-reaction-box');
         if (rb) rb.style.display = 'none';
+        const scrim = document.createElement('div');
+        scrim.className = 'lstage-pick-scrim';
+        scrim.addEventListener('click', (e) => { e.stopPropagation(); endTalk(); });   // 點旁邊＝不找他了
+        left.appendChild(scrim);
+        S.pickScrim = scrim;
         const box = document.createElement('div');
-        box.className = 'lstage-pick';
+        box.className = 'lstage-pick lstage-pick-float';
         box.innerHTML =
-            '<div class="lstage-pick-who">' + npc.name + '</div>' +
             '<div class="lstage-pick-row">' +
               '<button class="lstage-pick-btn" data-go="talk"><i class="fa-solid fa-comment-dots"></i><span>對話</span></button>' +
               '<button class="lstage-pick-btn" data-go="panel"><i class="fa-solid ' + panel.icon + '"></i><span>' + panel.label + '</span></button>' +
@@ -1415,9 +1422,35 @@
         });
         left.appendChild(box);
         S.pickEl = box;
+        S.pickNpc = npc;
+        _placeTalkPick();
+        if (!S._pickOnResize) { S._pickOnResize = () => _placeTalkPick(); window.addEventListener('resize', S._pickOnResize); }
+    }
+    // 卡片擺在那位頭頂上方、尖角對準他；頭上放不下（人站在畫面最上面）就改放腳下。位置用 --pick-x／--pick-y／--pick-tail 給 CSS
+    function _placeTalkPick() {
+        const box = S.pickEl, npc = S.pickNpc;
+        const left = document.querySelector('.lobby-left');
+        if (!box || !npc || !npc.el || !left) return;
+        const L = left.getBoundingClientRect(), r = npc.el.getBoundingClientRect();
+        // 每一格都會叫：位置沒變就不動，免得每格都重排
+        const sig = Math.round(r.left - L.left) + ',' + Math.round(r.top - L.top) + ',' + Math.round(r.width) + ',' + Math.round(L.width) + ',' + Math.round(L.height);
+        if (box._sig === sig) return;
+        box._sig = sig;
+        const w = box.offsetWidth, h = box.offsetHeight, gap = 12;
+        const cx = r.left + r.width / 2 - L.left;
+        let x = Math.max(8, Math.min(cx - w / 2, L.width - w - 8));
+        let y = r.top - L.top - h - gap;
+        const below = y < 8;
+        if (below) y = Math.min(r.bottom - L.top + gap, L.height - h - 8);
+        box.classList.toggle('lstage-pick-below', below);
+        box.style.setProperty('--pick-x', Math.round(x) + 'px');
+        box.style.setProperty('--pick-y', Math.round(y) + 'px');
+        box.style.setProperty('--pick-tail', Math.round(Math.max(18, Math.min(cx - x, w - 18))) + 'px');
     }
     function _closeTalkPick() {
-        S.pickEl?.remove(); S.pickEl = null;
+        S.pickEl?.remove(); S.pickEl = null; S.pickNpc = null;
+        S.pickScrim?.remove(); S.pickScrim = null;
+        if (S._pickOnResize) { window.removeEventListener('resize', S._pickOnResize); S._pickOnResize = null; }
         document.querySelector('.lobby-left')?.classList.remove('lstage-picking');
     }
 
@@ -1426,6 +1459,9 @@
         showDialog();
         // 瀅瀅/柴郡=對話目標，但管線走各自原生軌道（void_terminal 對這兩位不走 NPC 分支）
         if (npc.key === 'ying' || npc.key === 'cheshire') {
+            // 🚨 10-13 她：「跟丹的聊天，怎麼跑到瀅瀅這裡了，感覺對話框總是這樣互相滲透」——招呼那句是另一個小框，
+            //   主對話框沒人重寫，留著上一位（丹）的最後一句，名牌卻換成瀅瀅。先清殘留（換成她自己的最後一句）再招呼
+            window.VoidTerminal?.primeStageDialog?.(npc);
             window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句(404房自動用柴郡池)
             return;
         }
@@ -1654,6 +1690,7 @@
         const dt = Math.min(50, now - S.last); S.last = now;
         update(dt);
         _weatherTick(dt);
+        if (S.pickEl) _placeTalkPick();   // 選擇卡跟著那位：鏡頭還在移（開場對準玩家、視窗變大小）時卡片才不會留在原地
         S.raf = requestAnimationFrame(tick);
     }
     function update(dt) {

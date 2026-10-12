@@ -846,7 +846,7 @@ const IRIS_IDLE = [
             <div id="iris-history-overlay" style="display:none; background:rgba(228,232,245,0.97);">
                 <div class="hist-header" style="border-bottom: 1px solid rgba(26,28,40,0.15);">
                     <div style="display:flex;align-items:center;">
-                        <span class="hist-title" id="hist-title" style="color:#1A1C28;">故事素材紀錄</span>
+                        <span class="hist-title" id="hist-title" style="color:#1A1C28;">對話紀錄</span>
                         <span class="hist-char-badge iris" id="hist-char-badge" style="background:rgba(26,28,40,0.10); color:#1A1C28; border:1px solid rgba(26,28,40,0.25);">瀅瀅</span>
                     </div>
                     <button class="hist-close" id="hist-close-btn" style="color:#1A1C28;">✕</button>
@@ -1035,12 +1035,15 @@ const IRIS_IDLE = [
             const irisHistBtn = tab.querySelector('#iris-hist-btn');
             const cheshireHistBtn = tab.querySelector('#cheshire-hist-btn');
             if (irisHistBtn) irisHistBtn.addEventListener('click', () => {
-                // 對話模式站在別人面前（愛麗絲／白兔／紫薇／帽匠／我的家的客人）→ 開那位自己的紀錄；
-                // 以前這顆只會開瀅瀅的（故事素材紀錄），在誰面前按都一樣
+                // 站在誰面前就開誰的紀錄（愛麗絲／白兔／紫薇／帽匠／丹／書裡的客人…）；瀅瀅、柴郡開她們那份。
+                // 🚨 10-13 她：在舞台跟愛麗絲打招呼，按這顆卻是空的瀅瀅紀錄——以前只認對話模式（地點視圖）的對象，
+                //   舞台模式一律當成瀅瀅。跟送出那邊（sendIrisMessage）同一套：舞台上沒在跟誰講，就是這個場景的預設對象
+                const onStage = !!window.LobbyStage?.isActive?.();
                 const sp = window.LobbyPlaces?.speaker?.();
-                const t = (sp && sp !== 'ying' && sp !== 'cheshire') ? window.LobbyStage?.getTalkTarget?.() : null;
-                if (t && window.LobbyDress?.openHistory) { window.LobbyDress.openHistory(t); return; }
-                openHistoryPanel('iris');
+                const t = (onStage || sp) ? (window.LobbyStage?.getTalkTarget?.() || (onStage ? window.LobbyStage?.getDefaultTarget?.() : null) || null) : null;
+                if (t && t.key === 'cheshire') { openHistoryPanel('cheshire'); return; }
+                if (t && t.key !== 'ying' && window.LobbyDress?.openHistory) { window.LobbyDress.openHistory(t); return; }
+                openHistoryPanel(is404Room ? 'cheshire' : 'iris');
             });
             if (cheshireHistBtn) cheshireHistBtn.addEventListener('click', () => openHistoryPanel('cheshire'));
 
@@ -1291,13 +1294,13 @@ const IRIS_IDLE = [
         const titleEl = document.getElementById('hist-title');
         if (char === 'iris') {
             if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = 'rgba(26,28,40,0.25)'; badgeEl.style.borderColor = 'rgba(26,28,40,0.25)'; badgeEl.style.background = 'rgba(26,28,40,0.10)'; }
-            if (titleEl) titleEl.textContent = '故事素材紀錄';
+            if (titleEl) titleEl.textContent = '對話紀錄';   // 10-13 以前叫「故事素材紀錄」，她看不出是什麼；誰的看旁邊名牌
             if (delBtn) delBtn.style.display = '';
             if (clearBtn) clearBtn.style.display = '';
             if (checkAllLabel) checkAllLabel.style.display = '';
         } else {
             if (badgeEl) { badgeEl.className = 'hist-char-badge cheshire'; badgeEl.textContent = '柴郡 · 404'; badgeEl.style.color = '#00ff41'; badgeEl.style.borderColor = '#00ff41'; badgeEl.style.background = 'rgba(0,255,65,0.2)'; }
-            if (titleEl) titleEl.textContent = '故事素材紀錄';
+            if (titleEl) titleEl.textContent = '對話紀錄';
             if (delBtn) delBtn.style.display = '';
             if (clearBtn) clearBtn.style.display = '';
             if (checkAllLabel) checkAllLabel.style.display = '';
@@ -2085,6 +2088,9 @@ ${sections}`;
     function primeStageDialog(npc) {
         try {
             if (!npc) return;
+            // 上一位的回覆還在一個字一個字打：停掉，不然打字機會把他的話繼續打進這位的框裡
+            if (IRIS_STATE.timer) { clearInterval(IRIS_STATE.timer); IRIS_STATE.timer = null; }
+            IRIS_STATE.queue = []; IRIS_STATE.isTyping = false; IRIS_STATE._onComplete = null;
             if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
             if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
             if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
@@ -2097,8 +2103,9 @@ ${sections}`;
             try { hist = (npc.key === 'ying' || npc.key === 'cheshire') ? IRIS_STATE.history : (window.LobbyStage.getNpcHistory(npc.key) || []); } catch (e) {}
             const last = [...hist].reverse().find(m => m && m.role === 'assistant' && m.content);
             if (last) {
-                const mm = String(last.content).match(/「([\s\S]*?)」/);
-                const plain = (mm ? mm[1] : String(last.content).replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, '')).trim();
+                // 一則回覆常有好幾句，框裡停在最後那句（跟打字機演完時一樣）
+                const qs = String(last.content).match(/「[\s\S]*?」/g);
+                const plain = (qs ? qs[qs.length - 1].slice(1, -1) : String(last.content).replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, '')).trim();
                 box.textContent = plain || ('和' + npc.name + '繼續聊聊…');
             } else {
                 box.textContent = '（和 ' + npc.name + ' 說點什麼吧…）';
@@ -2427,6 +2434,21 @@ ${sections}`;
                 } else if (window.LobbyStage?.isActive?.()) {
                     if (is404Room) _compactNpcMemory('cheshire', '柴郡', 'cheshire');
                     else _compactNpcMemory('ying', '瀅瀅', 'iris');
+                }
+            } catch (e) {}
+
+            // 🚨 等回覆的時候換人講了（例如話送給丹、還沒回就點去瀅瀅）：不打進現在這位的框裡，只記在丹自己的紀錄。
+            //   10-13 她：「對話框總是這樣互相滲透」
+            try {
+                const onStageNow = !!window.LobbyStage?.isActive?.();
+                const pvNow = window.LobbyPlaces?.speaker?.();
+                const nowT = (!is404Room && (onStageNow || pvNow)) ? (window.LobbyStage?.getTalkTarget?.() || (onStageNow ? window.LobbyStage.getDefaultTarget?.() : null) || null) : null;
+                const keyOf = (t) => (t && t.key) || '';
+                if (keyOf(nowT) !== keyOf(_stageTarget)) {
+                    const who = npcTarget ? npcTarget.name : (is404Room ? '柴郡' : '瀅瀅');
+                    try { window.AUI?.toast?.(who + '回了你，記在' + who + '的對話紀錄裡'); } catch (e) {}
+                    if (shouldRestoreLobby) pendingRestoreLobby = true;
+                    return;
                 }
             } catch (e) {}
 

@@ -112,8 +112,9 @@
         list.innerHTML = '';
         hist.forEach((m, i) => {
             const isMe = m.role === 'user';
-            const mm = String(m.content || '').match(/「([\s\S]*?)」/);
-            const plain = (mm ? mm[1] : String(m.content || '').replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, '')).trim();
+            // 一則回覆常有好幾句 [Char|名|表情|「…」]：每一句都列出來（10-13 她：「只給第一句」——以前只抓第一個「」）
+            const qs = String(m.content || '').match(/「[\s\S]*?」/g);
+            const plain = (qs ? qs.map(q => q.slice(1, -1).trim()).filter(Boolean).join('\n') : String(m.content || '').replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, '')).trim();
             const row = document.createElement('div');
             row.className = 'lsh-row' + (isMe ? ' me' : '');
             row.innerHTML = '<span class="lsh-who"></span><div class="lsh-text"></div>'
@@ -134,7 +135,9 @@
         //   對話模式（沒有舞台，S.root 是 null）＝跟霧白右欄同一套的大卡，蓋一層遮罩在大廳上。
         //   🚨 以前對話模式直接借舞台那個 300px 深色小窗，在桌面上又小又黑、跟整個主畫面不搭。
         const flat = !S.root;
-        const host = S.root || document.querySelector('.lobby-left');
+        // 舞台那種也掛在 .lobby-left（跟對話立繪同一層）：舞台那層自己是一整層（z-index:1），掛在裡面的窗再高都蓋不過立繪。
+        //   10-13 起輸入框旁的紀錄鈕在舞台上也開這個窗，跟誰聊著的時候立繪正站在那裡，會把紀錄窗蓋掉一半
+        const host = document.querySelector('.lobby-left') || S.root;
         if (!host) return;
         let box, root;
         if (flat) {
