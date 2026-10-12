@@ -252,9 +252,21 @@
             };
             const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
 
+            // 🚨 大廳常比資料庫那支（os_phone/os/os_db.js）先建好：酒館先載 core/void 那批，手機那批排在後面。
+            //   以前這裡一看 OS_DB 不在就當「沒有客人」，之後也不會再撈 → 打開大廳空空的，
+            //   要換場景或進出擺設模式重掛一次才有人（10-13 她回報）。跟店員、常客同一招等它載進來，客人是店裡主要的人，等到 20 秒
+            //   （酒館走網路拉檔時手機那批可能超過 8 秒才到）；
+            //   等的期間（還有下面讀資料庫的期間）換了場景或重掛了，這一輪就不刷，免得客人刷進新的那一場、變兩份
+            const world = S.world;
+            const alive = () => S.active && S.world === world;
+            const db = () => { const D = window.OS_DB || (window.parent || window).OS_DB; return (D && D.getLobbySummaryForPrompt) ? D : null; };
+            for (let i = 0; i < 67 && !db() && alive(); i++) await new Promise(r => setTimeout(r, 300));
+            if (!alive()) return;
+
             // ① 主池：日誌制（每卡挑一輪：pin 指定 > 最新；同輪角色表=那一輪的記憶，絕不跨輪混）
             let pool = [];
             try { pool = await _journalGuestPool(); } catch (e) {}
+            if (!alive()) return;
             if (pool.length) {
                 const picked = shuffle(pool).slice(0, 2 + Math.floor(Math.random() * 3));
                 picked.forEach((g, i) => {
@@ -277,8 +289,10 @@
             }
 
             // ② 墊底：日誌沒資料（還沒跑過大總結）→ 舊制掃全部 VN 章節 [Char|]
-            if (!window.OS_DB?.getAllVnChapters) return;
-            const chapters = await window.OS_DB.getAllVnChapters();
+            const D = db();
+            if (!D || !D.getAllVnChapters) return;
+            const chapters = await D.getAllVnChapters();
+            if (!alive()) return;
             const byName = new Map();
             chapters.forEach(ch => {
                 const text = String(ch.content || '');
