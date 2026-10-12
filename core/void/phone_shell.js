@@ -1084,7 +1084,7 @@
         document.body.appendChild(ov);
 
         ov.addEventListener('click', function (e) { if (e.target === ov) close(); });   // 點背景關閉
-        ov.querySelector('#aps-close').addEventListener('click', close);
+        ov.querySelector('#aps-close').addEventListener('click', function () { close(); });   // 別把 click 事件當成 instant 傳進去
         ov.querySelector('#aps-home-btn').addEventListener('click', _home);
         _bindHome(ov.querySelector('#aps-home'));
         // 📄 滑到哪一頁就把那顆點亮起來。捲動事件很密，用一次 rAF 收斂。
@@ -1198,8 +1198,8 @@
         const app = APPS.find(function (a) { return a.id === id; });
         if (!app || !_el) return;
         if (app.mode === 'out') {
-            // 大面板：關掉手機殼、開它自己的全屏面板
-            close();
+            // 大面板：關掉手機殼、開它自己的全屏面板（不演滑下去，馬上讓位）
+            close(true);
             try { app.go(); } catch (e) { console.warn('[PhoneShell] 開啟失敗', id, e); }
             return;
         }
@@ -1291,27 +1291,80 @@
         } catch (e) { fail(e); }
     }
 
+    // 📱 出場：從畫面底下直直滑上來，關的時候滑回底下、背景跟著淡進淡出
+    //    （10-13 她從三種小樣挑了 A，小樣在 參考資料/PHONE_OPEN_SLIDE_LAB.html）。
+    //    動的是外框的 translate，不是 transform：電腦版螢幕矮的時候用 transform: scale 把整支縮小，
+    //    寫 transform 會把縮小蓋掉；translate 是另一個屬性，兩個疊在一起。
+    const SLIDE_IN_MS = 380, SLIDE_OUT_MS = 260, SLIDE_ID = 'aps-slide';
+    let _closing = 0;   // 退場跑到一半：收尾計時器。中途又被打開就取消它
+    function _calm() {
+        try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
+    }
+    function _stopSlide(ov) {
+        if (_closing) { clearTimeout(_closing); _closing = 0; }
+        [ov, ov.querySelector('.aps-frame')].forEach(function (el) {
+            if (el && el.getAnimations) el.getAnimations().forEach(function (a) { if (a.id === SLIDE_ID) a.cancel(); });
+        });
+        ov.style.pointerEvents = '';
+    }
+    // 外框要往下推多少才整支離開畫面（含電腦版置中後上面那段空白、手機版的安全區）
+    function _slideDown(fr) {
+        const h = window.innerHeight || document.documentElement.clientHeight || 800;
+        return '0 ' + Math.ceil(h - fr.getBoundingClientRect().top + 24) + 'px';
+    }
+
     function open() {
         const ov = _el || _build();
+        const wasShown = ov.style.display !== 'none' && !_closing;   // 已經開著（劇情的手機鈕再按一次）就不重演
+        _stopSlide(ov);
         _home();
         _applyTheme();
         _tickClock();
         _paintMood();   // 心情是綁日期的，每次開都要重讀——只在 _build 畫一次的話跨日還掛著昨天那個
         _paintBadges(); // 紅點一個故事一份：換了故事再打開要重讀
         ov.style.display = 'flex';
+        if (wasShown || _calm() || !ov.animate) return;
+        const fr = ov.querySelector('.aps-frame');
+        const bg = getComputedStyle(ov).backgroundColor;
+        try {
+            fr.animate([{ translate: _slideDown(fr) }, { translate: '0 0' }],
+                { id: SLIDE_ID, duration: SLIDE_IN_MS, easing: 'cubic-bezier(.2,.8,.2,1)' });
+            ov.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: bg }],
+                { id: SLIDE_ID, duration: 240, easing: 'ease-out' });
+        } catch (e) {}   // 不支援就照舊直接出現
     }
-    function close() {
+    // instant＝不演、馬上收（開「大面板」那種 app：手機殼要立刻讓位給它）
+    function close(instant) {
         if (!_el) return;
+        const ov = _el;
         _setEditing(false);
-        _runLeave();
-        _restoreGoHome();
-        const body = _el.querySelector('#aps-app-body');
-        if (body) body.innerHTML = '';
-        _el.querySelector('#aps-app').style.display = 'none';
-        _el.style.display = 'none';
         try { window.AUI?.kbReset?.(); } catch (e) {}   // 打字打到一半關掉：別讓下次打開還縮在鍵盤上面（AUI 的鍵盤跟隨）
+        // 收尾（清掉 app）放在滑完之後：滑下去的那一路畫面還是她剛剛在看的那個 app，不是先變空白
+        const finish = function () {
+            _stopSlide(ov);
+            _runLeave();
+            _restoreGoHome();
+            const body = ov.querySelector('#aps-app-body');
+            if (body) body.innerHTML = '';
+            ov.querySelector('#aps-app').style.display = 'none';
+            ov.style.display = 'none';
+        };
+        if (instant === true || ov.style.display === 'none' || _calm() || !ov.animate) { finish(); return; }
+        if (_closing) return;   // 已經在滑下去了
+        _stopSlide(ov);         // 滑上來到一半就被關：從現在的位置改成往下
+        const fr = ov.querySelector('.aps-frame');
+        const bg = getComputedStyle(ov).backgroundColor;
+        try {
+            fr.animate([{ translate: '0 0' }, { translate: _slideDown(fr) }],
+                { id: SLIDE_ID, duration: SLIDE_OUT_MS, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
+            ov.animate([{ backgroundColor: bg }, { backgroundColor: 'rgba(0, 0, 0, 0)' }],
+                { id: SLIDE_ID, duration: SLIDE_OUT_MS, easing: 'ease-in', fill: 'forwards' });
+        } catch (e) { finish(); return; }
+        ov.style.pointerEvents = 'none';   // 滑下去的這一下就讓底下的大廳點得到
+        // 用計時器收尾、不等動畫的 finished：畫面藏著時動畫不前進，等它的話手機殼會永遠關不掉
+        _closing = setTimeout(finish, SLIDE_OUT_MS + 40);
     }
-    function toggle() { if (_el && _el.style.display !== 'none') close(); else open(); }
+    function toggle() { if (_el && _el.style.display !== 'none' && !_closing) close(); else open(); }
 
     // 系統面板（控制室、狀態檔案那些）可以完全不開手機就被叫出來，而手機殼是第一次開才建。
     // 所以色票在載入時就先套一次，不能等 _applyTheme —— 那支沒有手機殼就直接跳出去了。
