@@ -3183,7 +3183,7 @@
                     const btn = document.querySelector('#vn-dom-block-body .vn-qrpay-btn');
                     if (btn) btn.addEventListener('click', () => this._hideDomBlock());
                 } catch (e) {}
-                // 📒 地圖委託的報酬（單號 evt_…）：收款單收起來後跳「委託完成」卡，按「收下」才接著播。
+                // 📒 地圖委託的報酬（單號 evt_…）：收款單收起來後跳「委託完成」卡，點一下卡片滑走才接著播。
                 //    錢早在這章送到時就入帳了，卡等播到這裡才跳，才不會一開章就劇透。每張委託只跳一次（地圖那邊記）。
                 if (q.dir === 'in' && /^evt_/.test(q.txnId) && document.querySelector('#vn-dom-block-overlay.active')) {
                     this._domBlockAfter = () => {

@@ -2092,7 +2092,7 @@ ${facilityText}
         rec.chapters = await _missionChapters(id, d.floor);
         await _missionSave(list);
     }
-    // 播放器播到 [QrPay|in|…|evt_…] 那張收款單、她按「完成」→ 跳「委託完成」卡，按「收下」才 onClose（播放器接著播）。
+    // 播放器播到 [QrPay|in|…|evt_…] 那張收款單、她按「完成」→ 跳「委託完成」卡（往上滑進來），點一下往下滑走才 onClose（播放器接著播）。
     //   每張委託只跳一次（cardShown）：重新生成、回放同一章都不再跳。回傳有沒有跳，沒跳的話播放器自己接著播。
     //   錢包那邊可能還沒掃到（剛送到就快轉到這裡）：先用收款單上的資料把這筆記成辦完，錢包晚到看到 done 就不再動它。
     async function missionDoneFromStory(info, onClose) {
@@ -2137,12 +2137,17 @@ ${facilityText}
             + `<div class="am-mdone-tag"><i class="fa-solid fa-stamp"></i> 委託完成</div>`
             + `<div class="am-mdone-title">${_escM(rec.title)}</div>`
             + (meta ? `<div class="am-mdone-meta">${meta}</div>` : '')
-            + `<div class="am-mdone-pay"><span>報酬入帳</span><b>+$${(Number(rec.paid) || 0).toLocaleString()}</b></div>`
-            + `<button class="am-mdone-ok">收下</button></div>`;
-        el.addEventListener('click', (e) => {
-            if (e.target !== el && !e.target.closest('.am-mdone-ok')) return;
-            el.remove();
-            if (typeof onClose === 'function') { try { onClose(); } catch (err) {} }
+            + `<div class="am-mdone-pay"><span>報酬入帳</span><b>+$${(Number(rec.paid) || 0).toLocaleString()}</b></div></div>`;
+        // 10-13 她：拿掉「收下」，點一下（卡片或旁邊都行）就往下滑出淡掉
+        let closing = false;
+        el.addEventListener('click', () => {
+            if (closing) return;
+            closing = true;
+            el.classList.add('out');
+            setTimeout(() => {   // 等滑出的動畫跑完（不靠 animationend：動畫被關掉時它不會來）
+                el.remove();
+                if (typeof onClose === 'function') { try { onClose(); } catch (err) {} }
+            }, 280);
         });
         D.body.appendChild(el);
     }
