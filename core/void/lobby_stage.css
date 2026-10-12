@@ -61,10 +61,10 @@
 
 /* 💬 聊天符號浮鈕：自由漫遊（對話框收起）時顯示，點了浮出對話框＋輸入列 */
 .lstage-chat-fab { display:none; position:absolute; right:14px; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); width:46px; height:46px;
-  border:none; border-radius:50%; background:rgba(26,24,20,.85); color:#f3ead8; cursor:pointer;
+  border:1px solid rgba(60,80,130,.28); border-radius:50%; background:rgba(255,255,255,.88); color:#2b3652; cursor:pointer;
   font-size:19px; align-items:center; justify-content:center; z-index:6;
-  box-shadow:0 3px 10px rgba(0,0,0,.4); transition:background .2s, transform .2s; }
-.lstage-chat-fab:hover { background:#c8874a; transform:translateY(-2px); }
+  box-shadow:0 4px 14px rgba(40,60,110,.22); transition:background .2s, transform .2s; }
+.lstage-chat-fab:hover { background:#fff; color:#23315e; transform:translateY(-2px); }
 .lobby-left.lstage-on.lstage-dlg-hidden .lstage-chat-fab { display:flex; }
 /* 對話立繪：兩種擺放，跟 VN 面板同一套 —— 預設=立繪(全身貼底)；加 .is-avatar=頭像(半身浮框) */
 /* 立繪(全身)：腳貼「對話框那疊之上」而非視窗底 —— 大廳比 VN 多一個輸入框，貼視窗底(bottom:0)會讓立繪下半身
@@ -80,31 +80,37 @@
 @keyframes lstage-portrait-in { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
 .lstage-toggle-btn.off { opacity:.45; }
 
-/* 👗 右鍵角色下拉單 + 裝扮室 */
-.lstage-actor-menu { position:absolute; z-index:3300; width:140px; background:rgba(26,24,20,.95);
-  border:1px solid rgba(243,234,216,.25); border-radius:10px; padding:6px; display:flex; flex-direction:column; gap:4px; }
-.lam-title { color:#d8cdb4; font-size:11px; padding:2px 6px 4px; border-bottom:1px solid rgba(243,234,216,.15); }
-.lam-item { border:none; border-radius:7px; padding:8px 6px; font-size:13px; cursor:pointer; text-align:left;
-  background:transparent; color:#f3ead8; }
-.lam-item:hover { background:rgba(243,234,216,.18); }
+/* 👗 右鍵角色下拉單 + 裝扮室（＋對話紀錄小窗、生成預覽、擺設模式面板、圖層小窗）
+   10-13 起全部是大廳設置那套白色（視差系統）：白底、深藍字、淡藍鈕、藍色主鈕。她：「黑配綠，感覺可以全部跟隨大廳設置的白色樣式」。
+   404 房自己那套黑綠皮在這段最下面（.void-tab.mode-404）。 */
+.lstage-actor-menu { position:absolute; z-index:3300; width:140px; background:rgba(255,255,255,.96);
+  border:1px solid rgba(60,80,130,.28); border-radius:12px; padding:6px; display:flex; flex-direction:column; gap:2px;
+  box-shadow:0 10px 26px rgba(40,60,110,.24); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.lam-title { color:#8a93ad; font-size:11px; padding:2px 6px 5px; border-bottom:1px solid rgba(35,49,94,.12); margin-bottom:2px; }
+.lam-item { border:none; border-radius:8px; padding:8px 8px; font-size:13px; cursor:pointer; text-align:left;
+  background:transparent; color:#23315e; }
+.lam-item i { color:#4f74c8; width:16px; text-align:center; margin-right:2px; }
+.lam-item:hover { background:rgba(74,120,216,.10); }
 .lstage-dress { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3300; width:250px;
-  background:rgba(26,24,20,.95); border:1px solid rgba(243,234,216,.25); border-radius:14px; padding:14px;
-  display:flex; flex-direction:column; gap:8px; }
-.lsd-title { color:#f3ead8; font-size:14px; font-weight:bold; }
-.lsd-hint { color:#d8cdb4; font-size:11px; line-height:1.5; }
+  background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28); border-radius:14px; padding:14px;
+  box-shadow:0 12px 34px rgba(40,60,110,.28); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  display:flex; flex-direction:column; gap:8px; color:#23315e; }
+.lsd-title { color:#23315e; font-size:14px; font-weight:bold; }
+.lsd-title i { color:#4f74c8; }
+.lsd-hint { color:#8a93ad; font-size:11px; line-height:1.5; }
 .lstage-dress .lep-btn { padding:9px 6px; }
 .lstage-dress .lep-btn[disabled] { opacity:.35; cursor:default; }
 /* 💬 NPC 對話紀錄小面板（複用 lstage-dress 容器樣式） */
 .lstage-history { width:300px; }
-.lsh-count { color:#c8bfa6; font-size:11px; font-weight:normal; margin-left:4px; }
+.lsh-count { color:#8a93ad; font-size:11px; font-weight:normal; margin-left:4px; }
 .lsh-list { display:flex; flex-direction:column; gap:6px; overflow-y:auto; max-height:52vh; padding-right:2px; }
-.lsh-empty { color:#d8cdb4; font-size:12px; text-align:center; padding:16px; }
-.lsh-row { display:flex; gap:6px; align-items:flex-start; background:rgba(243,234,216,.06); border-radius:8px; padding:6px 8px; }
-.lsh-row.me { background:rgba(243,234,216,.12); }
-.lsh-who { flex:0 0 auto; font-size:11px; color:#c8bfa6; min-width:30px; }
-.lsh-text { flex:1; font-size:12px; line-height:1.5; color:#f3ead8; word-break:break-word; white-space:pre-wrap; }
-.lsh-del { flex:0 0 auto; border:none; background:transparent; color:rgba(243,234,216,.45); cursor:pointer; font-size:12px; padding:0 2px; }
-.lsh-del:hover { color:#e88a7a; }
+.lsh-empty { color:#8a93ad; font-size:12px; text-align:center; padding:16px; }
+.lsh-row { display:flex; gap:6px; align-items:flex-start; background:rgba(35,49,94,.05); border-radius:8px; padding:6px 8px; }
+.lsh-row.me { background:rgba(74,120,216,.10); }
+.lsh-who { flex:0 0 auto; font-size:11px; color:#8a93ad; min-width:30px; }
+.lsh-text { flex:1; font-size:12px; line-height:1.5; color:#23315e; word-break:break-word; white-space:pre-wrap; }
+.lsh-del { flex:0 0 auto; border:none; background:transparent; color:rgba(35,49,94,.35); cursor:pointer; font-size:12px; padding:0 2px; }
+.lsh-del:hover { color:#c0504a; }
 /* 🎬 小劇場窗口 v2：票券檔案館（阿洛設計；票券／播放鈕＝sound-files aseets/theater_ui/ 的圖）
    10-06 外框不再是一張撐滿的圖：core/void/frames.js 照窗的大小畫一層 svg（.aurelia-vframe）墊在最底下，
    角、拱、花飾固定大小，所以內容區也用固定距離（上 46＝上緣＋花飾、左右 24、下 40＝下緣＋花飾） */
@@ -174,42 +180,43 @@
 .lstage-theater-win2 .lep-btn:hover { border-color:#23315e; }
 .lstage-theater-win2 .lep-danger { border-color:rgba(200,80,70,.4); color:#b05555; background:#fff; }
 /* ✨ 裝扮室內建生成（接口+預設包+生成鈕） */
-.lsd-gen { display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid rgba(243,234,216,.18);
-  border-radius:10px; background:rgba(243,234,216,.06); }
-.lsd-gen-title { color:#e8d9a8; font-size:11px; letter-spacing:.5px; }
+.lsd-gen { display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid rgba(60,80,130,.18);
+  border-radius:10px; background:rgba(35,49,94,.04); }
+.lsd-gen-title { color:#4f74c8; font-size:11px; font-weight:700; letter-spacing:.5px; }
 .lsd-gen-row { display:flex; gap:6px; }
-.lsd-gen-row select { flex:1; min-width:0; border:1px solid rgba(243,234,216,.25); border-radius:7px;
-  background:rgba(0,0,0,.35); color:#f3ead8; font-size:12px; padding:6px 4px; }
+.lsd-gen-row select { flex:1; min-width:0; border:1px solid rgba(60,80,130,.25); border-radius:7px;
+  background:#fff; color:#23315e; font-size:12px; padding:6px 4px; }
 .lsd-gen-row .lsd-gen-src { flex:0 0 92px; }
 
 /* 👁 生成預覽（套用前先看圖；棋盤底＝透明區） */
 .lstage-genprev { position:absolute; inset:0; z-index:3400; display:flex; align-items:center; justify-content:center;
   background:rgba(0,0,0,.55); }
-.lgp-box { background:rgba(26,24,20,.97); border:1px solid rgba(243,234,216,.25); border-radius:14px; padding:14px;
+.lgp-box { background:rgba(255,255,255,.97); border:1px solid rgba(60,80,130,.28); border-radius:14px; padding:14px;
+  box-shadow:0 12px 34px rgba(40,60,110,.28);
   display:flex; flex-direction:column; gap:10px; max-width:86%; max-height:86%; overflow-y:auto; scrollbar-width:thin; }
-.lgp-title { color:#f3ead8; font-size:14px; font-weight:bold; text-align:center; }
+.lgp-title { color:#23315e; font-size:14px; font-weight:bold; text-align:center; }
 .lgp-img { max-width:260px; max-height:300px; align-self:center; image-rendering:pixelated;
-  border:1px solid rgba(243,234,216,.2); border-radius:6px;
-  background-image:linear-gradient(45deg,#3a352c 25%,transparent 25%),linear-gradient(-45deg,#3a352c 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3a352c 75%),linear-gradient(-45deg,transparent 75%,#3a352c 75%);
+  border:1px solid rgba(60,80,130,.2); border-radius:6px; background-color:#fff;
+  background-image:linear-gradient(45deg,#e3e8f2 25%,transparent 25%),linear-gradient(-45deg,#e3e8f2 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e3e8f2 75%),linear-gradient(-45deg,transparent 75%,#e3e8f2 75%);
   background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0; }
-.lgp-hint { color:#d8cdb4; font-size:11px; line-height:1.5; text-align:center; max-width:260px; }
+.lgp-hint { color:#8a93ad; font-size:11px; line-height:1.5; text-align:center; max-width:260px; }
 .lgp-btns { display:flex; gap:8px; justify-content:center; }
 /* 走路圖調框器：圖上疊紅格 + 上下左右邊界滑桿 */
 .lgp-sheetwrap { position:relative; align-self:center; line-height:0; }
 .lgp-grid { position:absolute; left:0; top:0; pointer-events:none; }
 .lgp-sliders { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; max-width:280px; }
-.lgp-srow { display:flex; align-items:center; gap:6px; color:#d8cdb4; font-size:11px; }
+.lgp-srow { display:flex; align-items:center; gap:6px; color:#5a6784; font-size:11px; }
 .lgp-srow > span { flex:0 0 14px; text-align:center; }
-.lgp-srow input[type=range] { flex:1; min-width:0; accent-color:#c8874a; }
+.lgp-srow input[type=range] { flex:1; min-width:0; accent-color:#4a78d8; }
 .lgp-flips { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:center; }
-.lgp-flips > span { color:#d8cdb4; font-size:11px; }
+.lgp-flips > span { color:#8a93ad; font-size:11px; }
 .lgp-flip { display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:7px; cursor:pointer; font-size:12px;
-  border:1px solid rgba(243,234,216,.25); background:rgba(0,0,0,.3); color:#d8cdb4; }
-.lgp-flip.on { background:#c8874a; border-color:#c8874a; color:#fff; }
-.lgp-reslabel { color:#e8d9a8; font-size:11px; text-align:center; }
+  border:1px solid rgba(60,80,130,.25); background:rgba(240,244,252,.8); color:#23315e; }
+.lgp-flip.on { background:#23315e; border-color:#23315e; color:#fff; }
+.lgp-reslabel { color:#5a6784; font-size:11px; text-align:center; }
 .lgp-result { align-self:center; max-width:260px; max-height:300px; image-rendering:pixelated;
-  border:1px solid rgba(243,234,216,.2); border-radius:6px;
-  background-image:linear-gradient(45deg,#3a352c 25%,transparent 25%),linear-gradient(-45deg,#3a352c 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3a352c 75%),linear-gradient(-45deg,transparent 75%,#3a352c 75%);
+  border:1px solid rgba(60,80,130,.2); border-radius:6px; background-color:#fff;
+  background-image:linear-gradient(45deg,#e3e8f2 25%,transparent 25%),linear-gradient(-45deg,#e3e8f2 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e3e8f2 75%),linear-gradient(-45deg,transparent 75%,#e3e8f2 75%);
   background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0; }
 
 /* ✖ 對話框關閉鈕（舞台模式限定，showDialog 動態掛上）
@@ -248,6 +255,8 @@
 /* 🏙 快轉地圖：接在小劇場右邊(94+42)，跟其他控制鈕成同一排 */
 .lstage-city-btn { right:136px; }
 .lstage-editing .lstage-city-btn { display:none; }
+/* 擺設模式：左上角場景名牌、底下那條動態在舞台那層外面、圖層比較高，會疊在工具面板的標題上（10-13 面板改白色後很明顯），擺設時先藏 */
+.lobby-left:has(> .lstage-root.lstage-editing) :is(#lb-scene-badge, #lb-feed) { display:none; }
 /* 404 房：跟 dock 同款暗綠皮 */
 .void-tab.mode-404 .lstage-edit-btn, .void-tab.mode-404 .lstage-set-btn,
 .void-tab.mode-404 .lstage-city-btn, .void-tab.mode-404 .lstage-theater-btn {
@@ -422,25 +431,26 @@
 .lstage-weather.snow { background:rgba(175,190,215,.10); }
 /* 🗂 圖層列表小窗(擺設模式)：PS式,上=前;拖列調前後/換組,點列選中 */
 .lstage-layers-win { position:absolute; right:12px; top:56px; width:236px; max-height:64%; display:flex; flex-direction:column;
-  background:rgba(20,22,30,.94); border:1px solid rgba(255,255,255,.14); border-radius:10px; z-index:2900;
-  box-shadow:0 6px 20px rgba(0,0,0,.5); color:#dde; font-size:12px; }
-.llw-head { display:flex; align-items:center; gap:6px; padding:8px 10px; cursor:grab; border-bottom:1px solid rgba(255,255,255,.1); }
-.llw-head .llw-close { margin-left:auto; background:none; border:none; color:#dde; cursor:pointer; font-size:14px; padding:2px 6px; }
+  background:rgba(255,255,255,.96); border:1px solid rgba(60,80,130,.28); border-radius:12px; z-index:2900;
+  box-shadow:0 10px 26px rgba(40,60,110,.24); color:#23315e; font-size:12px; }
+.llw-head { display:flex; align-items:center; gap:6px; padding:8px 10px; cursor:grab; border-bottom:1px solid rgba(35,49,94,.12); font-weight:700; }
+.llw-head i { color:#4f74c8; }
+.llw-head .llw-close { margin-left:auto; background:none; border:none; color:#5a6784; cursor:pointer; font-size:14px; padding:2px 6px; }
 .llw-list { overflow-y:auto; padding:2px 0 8px; }
-.llw-group { padding:8px 10px 3px; color:#98a2b8; font-size:11px; }
+.llw-group { padding:8px 10px 3px; color:#8a93ad; font-size:11px; }
 .llw-row { display:flex; align-items:center; gap:8px; padding:4px 10px; cursor:grab; touch-action:none; user-select:none; }
-.llw-row img { width:30px; height:30px; object-fit:contain; background:rgba(255,255,255,.06); border-radius:5px; pointer-events:none; flex:none; }
+.llw-row img { width:30px; height:30px; object-fit:contain; background:rgba(35,49,94,.05); border-radius:5px; pointer-events:none; flex:none; }
 .llw-row span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.llw-row:hover { background:rgba(255,255,255,.07); }
-.llw-row.sel { background:rgba(74,182,255,.18); box-shadow:inset 2px 0 0 #4ab6ff; }
+.llw-row:hover { background:rgba(74,120,216,.08); }
+.llw-row.sel { background:rgba(74,120,216,.14); box-shadow:inset 2px 0 0 #4a78d8; }
 .llw-row.off { opacity:.45; }
 /* 👤 人物列：站位快照標記（不可拖,當基準用） */
-.llw-row.llw-actor { cursor:default; color:#ffd98a; background:rgba(255,210,110,.06);
-  border-top:1px dashed rgba(255,210,110,.3); border-bottom:1px dashed rgba(255,210,110,.3); }
+.llw-row.llw-actor { cursor:default; color:#9a6418; background:rgba(230,170,70,.10);
+  border-top:1px dashed rgba(200,140,50,.35); border-bottom:1px dashed rgba(200,140,50,.35); }
 .llw-actor-ic { width:30px; height:30px; flex:none; display:flex; align-items:center; justify-content:center;
-  border:1px dashed rgba(255,210,110,.45); border-radius:50%; color:#ffd98a; font-size:13px; }
-.llw-row.llw-drop, .llw-group.llw-drop { box-shadow:inset 0 2px 0 #4ab6ff; }
-.llw-list.llw-drop-end { box-shadow:inset 0 -2px 0 #4ab6ff; }
+  border:1px dashed rgba(200,140,50,.5); border-radius:50%; color:#9a6418; font-size:13px; }
+.llw-row.llw-drop, .llw-group.llw-drop { box-shadow:inset 0 2px 0 #4a78d8; }
+.llw-list.llw-drop-end { box-shadow:inset 0 -2px 0 #4a78d8; }
 /* 遮罩視覺化（擺設模式）：不可走區半透明紅 */
 .lstage-maskview { position:absolute; left:0; top:0; z-index:2300; pointer-events:none; }
 /* 過門觸發區（擺設模式）：橘色虛線框，可拖/右下角調大小 */
@@ -470,27 +480,53 @@
   cursor:nwse-resize; box-shadow:0 2px 6px rgba(0,0,0,.45); touch-action:none; }
 .lstage-edit-panel { position:absolute; left:10px; top:10px; z-index:5000; width:230px;
   max-height:calc(100% - 20px); overflow-y:auto;
-  background:rgba(26,24,20,.88); border:1px solid rgba(243,234,216,.25); border-radius:12px; padding:10px;
-  display:flex; flex-direction:column; gap:8px; }
+  background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28); border-radius:12px; padding:10px;
+  box-shadow:0 10px 26px rgba(40,60,110,.24); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  display:flex; flex-direction:column; gap:8px; color:#23315e; }
 .lep-collapse-bar { display:flex; align-items:center; gap:8px; cursor:move; touch-action:none; user-select:none; }
-.lep-collapse-bar > i { color:#c9b98a; font-size:12px; }
-.lep-collapse-bar .lep-title { font-weight:700; font-size:13px; color:#f3ead8; opacity:.9; }
+.lep-collapse-bar > i { color:#4f74c8; font-size:12px; }
+.lep-collapse-bar .lep-title { font-weight:700; font-size:13px; color:#23315e; }
 .lep-collapse-btn { flex:0 0 auto !important; width:36px; margin-left:auto; }
 .lstage-edit-panel.lep-collapsed { gap:0; width:150px; }
 .lstage-edit-panel.lep-collapsed .lep-hint,
 .lstage-edit-panel.lep-collapsed .lep-row,
 .lstage-edit-panel.lep-collapsed .lep-out { display:none !important; }
-.lep-hint { color:#d8cdb4; font-size:11px; line-height:1.5; }
+.lep-hint { color:#8a93ad; font-size:11px; line-height:1.5; }
 .lep-row { display:flex; gap:6px; }
-.lep-btn { flex:1; border:none; border-radius:8px; padding:7px 4px; font-size:12px; cursor:pointer;
-  background:rgba(243,234,216,.14); color:#f3ead8; }
-.lep-btn:hover { background:rgba(243,234,216,.28); }
-.lep-done { background:#4aa06a; }
-.lep-danger { background:rgba(200,80,70,.4); }
-.lep-danger:hover { background:rgba(220,90,75,.65); }
-.lep-done:hover { background:#5cb87e; }
-.lep-out { width:100%; height:56px; resize:none; border:none; border-radius:8px; font-size:10px;
-  background:rgba(0,0,0,.4); color:#cfe3c8; padding:6px; }
+.lep-btn { flex:1; border:1px solid rgba(60,80,130,.25); border-radius:8px; padding:7px 4px; font-size:12px; cursor:pointer;
+  background:rgba(240,244,252,.8); color:#23315e; }
+.lep-btn:hover { background:#fff; border-color:#23315e; }
+.lep-btn i { color:inherit; }
+.lep-done { background:linear-gradient(135deg,#6a9be0,#4a78d8); color:#fff; border-color:transparent; }
+.lep-done:hover { background:linear-gradient(135deg,#7aa8e8,#5a86e0); border-color:transparent; }
+.lep-danger { background:#fff; color:#b05555; border-color:rgba(200,80,70,.4); }
+.lep-danger:hover { background:rgba(200,80,70,.08); border-color:#b05555; }
+.lep-out { width:100%; height:56px; resize:none; border:1px solid rgba(60,80,130,.2); border-radius:8px; font-size:10px;
+  background:rgba(35,49,94,.04); color:#23315e; padding:6px; }
+
+/* 404 房：這幾個窗跟著 dock 那套暗綠皮（404 房自己的系統，不跟大廳的白）。
+   🚨 大廳設置（.lstage-dress.lstage-settings）不算：它在 404 也是白的，裡面的字是深藍；對話模式那張白卡（.lsh-pv）也不碰——規則只寫在這幾個窗裡面 */
+.void-tab.mode-404 .lstage-chat-fab,
+.void-tab.mode-404 .lstage-actor-menu,
+.void-tab.mode-404 .lstage-dress:not(.lstage-settings),
+.void-tab.mode-404 .lgp-box,
+.void-tab.mode-404 .lstage-edit-panel,
+.void-tab.mode-404 .lstage-layers-win { background:rgba(0,10,2,.92); border-color:rgba(0,255,65,.3); color:#c9f5d4;
+  box-shadow:0 8px 22px rgba(0,0,0,.55); }
+.void-tab.mode-404 .lstage-chat-fab { color:#7de89a; }
+.void-tab.mode-404 :is(.lstage-actor-menu, .lstage-dress:not(.lstage-settings), .lgp-box, .lstage-edit-panel, .lstage-layers-win) :is(.lsd-title, .lep-title, .lgp-title, .lsh-text, .lam-item) { color:#d3f9d8; }
+.void-tab.mode-404 :is(.lstage-actor-menu, .lstage-dress:not(.lstage-settings), .lstage-edit-panel, .lstage-layers-win) :is(.lsd-title i, .lam-item i, .lep-collapse-bar > i, .llw-head i) { color:#4ade80; }
+.void-tab.mode-404 :is(.lstage-actor-menu, .lstage-dress:not(.lstage-settings), .lgp-box, .lstage-edit-panel, .lstage-layers-win) :is(.lsd-hint, .lam-title, .lsh-who, .lsh-count, .lsh-empty, .lep-hint, .lgp-hint, .llw-group) { color:rgba(125,232,154,.6); }
+.void-tab.mode-404 :is(.lstage-dress:not(.lstage-settings), .lstage-layers-win) :is(.lsh-row, .llw-row img) { background:rgba(0,255,65,.05); }
+.void-tab.mode-404 .lstage-dress:not(.lstage-settings) .lsh-row.me { background:rgba(0,255,65,.10); }
+.void-tab.mode-404 :is(.lstage-actor-menu .lam-item, .lstage-layers-win .llw-row):hover { background:rgba(0,255,65,.10); }
+.void-tab.mode-404 :is(.lstage-dress:not(.lstage-settings), .lgp-box, .lstage-edit-panel) .lep-btn { background:rgba(16,24,16,.9); border-color:rgba(74,222,128,.3); color:#d3f9d8; }
+.void-tab.mode-404 :is(.lstage-dress:not(.lstage-settings), .lgp-box, .lstage-edit-panel) .lep-btn:hover { border-color:rgba(74,222,128,.7); background:rgba(24,36,24,.95); }
+.void-tab.mode-404 :is(.lstage-dress:not(.lstage-settings), .lgp-box, .lstage-edit-panel) .lep-done { background:rgba(22,101,52,.9); border-color:rgba(74,222,128,.6); color:#eafff0; }
+.void-tab.mode-404 .lstage-dress:not(.lstage-settings) .lsd-gen { border-color:rgba(74,222,128,.25); background:rgba(0,255,65,.04); }
+.void-tab.mode-404 .lstage-dress:not(.lstage-settings) .lsd-gen-title { color:#4ade80; }
+.void-tab.mode-404 .lstage-dress:not(.lstage-settings) .lsd-gen-row select { background:rgba(16,24,16,.9); border-color:rgba(74,222,128,.3); color:#d3f9d8; }
+.void-tab.mode-404 :is(.lstage-dress:not(.lstage-settings), .lgp-box, .lstage-edit-panel) .lep-danger { background:rgba(40,10,10,.85); border-color:rgba(255,110,110,.4); color:#ff9a9a; }
 
 /* 🎭 小劇場：兩人中間的共用「聊天中」泡泡（白玻璃＋打字三點；帶小尾巴） */
 .lstage-theater-pair { position:absolute; transform:translateX(-50%); z-index:3200;
