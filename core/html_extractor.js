@@ -368,21 +368,9 @@
             const _panelFix = `#tab-pane-aurelia_state_panel.active{display:block;flex:0 0 auto;height:auto;min-height:100%;}`
                 + `#tab-pane-aurelia_state_panel>.custom-status-panel,#tab-pane-aurelia_state_panel .custom-status-panel{height:auto;max-height:none;}`;
             html = `<style>${_panelFix}\n${activeTpl.cssContent || ''}</style>${html}`;
-            // 🔬 本輪更新了什麼：只顯示這輪副模型「改動的欄位」(delta)，不是整碗當前狀態。摺疊、預設收起。
-            const _stEsc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const _le = win.OS_STATE_RUNTIME?.getLastExtract?.();
-            const _upd = (_le && _le.updates) ? _le.updates : null;
-            let _updBody;
-            if (_upd && Object.keys(_upd).length) {
-                _updBody = Object.entries(_upd).map(([k, v]) => {
-                    const kk = String(k).replace(/^[^.]+\./, '');   // 去掉容器前綴(角色狀態.)，只留 角色.屬性
-                    const vv = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
-                    return _stEsc(kk + ' → ' + vv);
-                }).join('\n');
-            } else {
-                _updBody = _le ? '本輪沒有更新任何欄位' : '本輪沒有抽取記錄（可能用 <vars> 或尚未生成）';
-            }
-            html = html + '<details class="ue-keep-closed" style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#a99;padding:8px 0;"><i class="fa-solid fa-microscope"></i> 本輪更新了什麼（點開看）</summary><pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.18);border-radius:8px;padding:10px;font-size:11px;line-height:1.7;color:#ccc;margin:6px 0 0;max-height:280px;overflow:auto;">' + _updBody + '</pre></details>';
+            // 🔬 本輪更新了什麼：面板右上角一顆小鈕，點了跳小窗（10-13 她：以前摺在最底下不美觀）；鈕和小窗是 os_avs 那份，PWA 資料中心同一份
+            const _AV = win.OS_AVS;
+            if (_AV && _AV.updatesBtnHtml) html = _AV.updatesBtnHtml() + html;
 
             // 建 tab（重複建立會留下舊的，先清掉）
             const doc = win.document || document;
@@ -394,6 +382,7 @@
             if (oldPane) oldPane.remove();
 
             this.createTab('aurelia_state_panel', '狀態面板', html);
+            if (_AV && _AV.bindUpdatesBtn) _AV.bindUpdatesBtn(overlay.querySelector('#tab-pane-aurelia_state_panel'), overlay);
 
             // 把這個 tab 推到第一個位置（不在預設 tabOrder 內，加完是最後一個）
             const tabBar = overlay.querySelector('#ue-tab-bar');

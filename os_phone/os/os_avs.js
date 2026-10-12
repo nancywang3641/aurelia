@@ -2883,8 +2883,50 @@
         renderRulesModalList(_ruleModalContainer());
     }
 
+    // 🔬 本輪更新了什麼：狀態面板右上角一顆小鈕，點了跳小窗看這輪副模型改了哪些欄位
+    //   10-13 她：以前摺在面板最底下「不美觀」，而且每次打開資訊中心都被攤開。資訊中心（酒館）、資料中心（PWA）都叫這幾支
+    function _updEsc(s) { return String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
+    function _updList() {
+        const le = win.OS_STATE_RUNTIME?.getLastExtract?.();
+        const upd = le && le.updates;
+        if (!upd || typeof upd !== 'object' || !Object.keys(upd).length) {
+            return { n: 0, rows: [], empty: le ? '這輪沒有更新任何欄位' : '這輪沒有抽取紀錄（狀態是正文自己用 <vars> 寫的，或還沒生成過）' };
+        }
+        const rows = Object.entries(upd).map(([k, v]) => ({
+            k: String(k).replace(/^[^.]+\./, ''),   // 去掉容器前綴（角色狀態.），只留 角色.欄位
+            v: (v && typeof v === 'object') ? JSON.stringify(v) : String(v),
+        }));
+        return { n: rows.length, rows };
+    }
+    function updatesBtnHtml() {
+        const u = _updList();
+        return '<div class="avs-upd-dock"><button type="button" class="avs-upd-btn"><i class="fa-solid fa-microscope"></i>本輪更新' +
+            (u.n ? '<b>' + u.n + '</b>' : '') + '</button></div>';
+    }
+    // host＝小窗蓋在誰上面（資訊中心那一整個窗）
+    function openUpdates(host) {
+        const doc = (host && host.ownerDocument) || document;
+        const box = host || doc.body;
+        box.querySelectorAll(':scope > .avs-upd-mask').forEach(x => x.remove());
+        const u = _updList();
+        const m = doc.createElement('div');
+        m.className = 'avs-upd-mask';
+        m.innerHTML = '<div class="avs-upd-card"><div class="avs-upd-head"><span><i class="fa-solid fa-microscope"></i> 本輪更新了什麼</span>' +
+            '<button type="button" class="avs-upd-x" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
+            (u.n ? '<div class="avs-upd-list">' + u.rows.map(r => '<div class="avs-upd-row"><span class="avs-upd-k">' + _updEsc(r.k) + '</span><span class="avs-upd-v">' + _updEsc(r.v) + '</span></div>').join('') + '</div>'
+                 : '<div class="avs-upd-empty">' + _updEsc(u.empty) + '</div>') +
+            '</div>';
+        m.addEventListener('click', (e) => { if (e.target === m || e.target.closest('.avs-upd-x')) m.remove(); });
+        box.appendChild(m);
+    }
+    function bindUpdatesBtn(root, host) {
+        const btn = root && root.querySelector('.avs-upd-btn');
+        if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); openUpdates(host); });
+    }
+
     win.OS_AVS = {
         launch: launchApp,
+        updatesBtnHtml, openUpdates, bindUpdatesBtn,   // 🔬 狀態面板右上角「本輪更新」鈕＋小窗（資訊中心／資料中心共用）
         renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
         renderEntityCard: _avsRenderEntityCard,   // 只畫某一個角色那張卡(async)：劇情雙擊立繪的角色卡用
         auditTemplate: _auditTemplate,

@@ -116,7 +116,9 @@
             if (this._rerollHandler) overlay.removeEventListener('click', this._rerollHandler);
             this._rerollHandler = async (e) => {
                 const _btn = e.target && e.target.closest ? e.target.closest('button') : null;   // 按鈕裡有圖示時 e.target 會是 <i>
-                if (_btn && _btn.id === 'avs-reroll-btn' && !_btn.disabled) {
+                if (_btn && _btn.classList.contains('avs-upd-btn')) {
+                    win.OS_AVS?.openUpdates?.(overlay);
+                } else if (_btn && _btn.id === 'avs-reroll-btn' && !_btn.disabled) {
                     _btn.disabled = true;
                     _btn.textContent = '回朔中...';
                     await this._avsReroll();
@@ -348,7 +350,8 @@
                     catch (e) { html = ''; }
                     rendered += `<style>${css}</style>${html}`;
                 }
-                panelHtml = `<div class="native-render-wrapper">${rendered}</div>`;
+                // 🔬 右上角「本輪更新」鈕（os_avs 那份，跟酒館資訊中心同一份長相）；點了在下面的委派裡開小窗
+                panelHtml = (win.OS_AVS?.updatesBtnHtml ? win.OS_AVS.updatesBtnHtml() : '') + `<div class="native-render-wrapper">${rendered}</div>`;
             } else if (entries.length === 0) {
                 panelHtml = `<div style="padding:24px 0;text-align:center;color:#666;font-size:12px;">
                     目前沒有追蹤中的變數<br>
