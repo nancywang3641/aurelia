@@ -1,9 +1,10 @@
 // ----------------------------------------------------------------
 // [檔案] os_cafe.js
 // 路徑：os_phone/os/os_cafe.js
-// 職責：📖☕ 書咖經營系統 ①——調配台(研發小遊戲)+上架命名+菜單/書單資料層。
-//   循環：研發(零成本試錯,品質=寫死隱藏矩陣)→上架(燒1次副模型:命名+文案)→菜單。
-//   ②之後接：NPC每日消費模擬/訪客紀錄/事件表/好感度(見 docs/book_cafe_design.md)。
+// 職責：📖☕ 書咖經營系統——調配台(研發)+上架命名+菜單/書單+客人上門結算。
+//   10-12 改經營版：書咖自己的帳戶(跟 PT 錢包分開)+每天體力；研發花錢花體力、等幾小時才揭曉；
+//   上架的飲品要「做一批」才有庫存，客人到店那一刻只點得到已經做好的；隔天倒掉前一天剩的。
+//   客人＝書裡的角色(名冊)＋12 位照腳本跑的常客(os_cafe_regulars.js)。
 //   存 OS_DB app_data(appId=book_cafe,不動 schema);副模型直連仿 os_pt._valuate(不發 GENERATION_*)。
 // ----------------------------------------------------------------
 (function () {
@@ -36,6 +37,10 @@
             '♾️', '☯️', '⚗️', '🧪', '📡', '🧲', '🔋', '🛰️', '🕳️', '🎇', '🧩', '🪄',
         ],
         symbolMax: 4,       // 一鍋最多丟幾顆
+        // 💰 書咖自己的帳（跟 PT 錢包分開）：做一批、研發都從這裡扣，客人付的錢進這裡
+        //   每份材料錢＝售價三分之一；前一天沒賣完的隔天倒掉
+        fund: { start: 300, staminaMax: 12, batchStamina: 2, batchMax: 8, rdCost: 30, rdStamina: 3, rdHours: 4 },
+        socialBring: 0.35,  // 愛揪人的常客上門時，帶另一位常客一起來的機率
     };
     const TIER_TEXT = {
         S: { label: '靈感之作', cls: 's', note: '這杯有靈魂——值得掛上菜單最顯眼的位置。' },
@@ -53,7 +58,11 @@
     const K_LOG = 'visits';    // 訪客紀錄 [{id,day,key,name,item,line,price,said?,ev?}]
     const K_EVQ = 'evq';       // A級事件佇列 [{type,key,item,itemId}](單次結算最多消化2件,超過留隊)
     // 'shift'＝舊的點單小遊戲紀錄（10-08 拿掉小遊戲；資料留在原地不動）
-    const K_PEND = 'pending';  // 今天還沒到時間的客人 [{day,t,key,name,itemId,item,line,price}](到點才進紀錄、進帳)
+    const K_PEND = 'pending';  // 今天還沒到時間的客人 [{day,t,key,name,seq,friend?,withName?}](到點才照庫存決定點什麼)
+    //   改版前排的隊帶著 {itemId,item,line,price}(點什麼早就算過了)：照舊進紀錄
+    const K_FUND = 'fund';     // 書咖帳戶 {coins,stamina,staminaDay,openDay,openMin,lastWaste:{day,qty,cost}}
+    const K_STOCK = 'stock';   // 做好的批 {menuId:[{id,qty,day,t,unit}]}(day/t＝哪天幾點做好；隔天倒掉)
+    const K_RD = 'rd';         // 研發中的那杯 {b,f,t,key,startAt,doneAt,cost} | null
     const OPEN_MIN = 9 * 60, CLOSE_MIN = 22 * 60;   // 客人上門的時段(分鐘):照時段陸續出現,店員一天上好幾班才各有客人
     const EV_LABEL = { devotion: '本命認證', dropout: '吃膩告別' };
     const ING_ICONS = {
@@ -111,6 +120,104 @@
     }
     async function _set(k, v) {
         try { const db = _db(); if (!db?.saveAppData) return; await db.saveAppData(APP_ID, k, v); } catch (e) { console.warn('[Cafe] 存檔失敗', k, e); }
+    }
+    // 🔒 動到錢、庫存、研發的寫入一律排隊：結算在背景跑時她按「做一批」，兩邊都讀到舊的再寫回會互相蓋掉
+    let _chain = Promise.resolve();
+    function _locked(fn) {
+        const p = _chain.then(fn, fn);
+        _chain = p.catch(() => {});
+        return p;
+    }
+
+    // ── 💰 書咖帳戶、庫存、研發(資料層)──
+    function _REG() { return win.OS_CAFE_REGULARS || window.OS_CAFE_REGULARS || null; }
+    function _unitCost(m) { return Math.round((Number(m && m.price) || 0) / 3); }   // 每份材料錢＝售價三分之一
+    // 跨日＝體力回滿（讀的時候就算好，不用等結算寫回）
+    function _freshFund(f, today) {
+        const F = CAFE_CFG.fund;
+        const out = Object.assign({ coins: F.start, stamina: F.staminaMax, staminaDay: today }, f || {});
+        if (out.staminaDay !== today) { out.stamina = F.staminaMax; out.staminaDay = today; }
+        return out;
+    }
+    // 鎖裡面用：讀最新的帳戶，沒有就建（記下開張那一刻：之前的客人不算，舊存檔第一次打開才不會整串「賣完了」）
+    //   讀失敗會丟錯，不拿預設值頂——頂了再寫回＝把她的錢重設成 300
+    async function _fundLoad() {
+        const now = Date.now(), today = _dayNum(now);
+        let f = await _getStrict(K_FUND, null);
+        if (!f) {
+            const F = CAFE_CFG.fund;
+            f = { coins: F.start, stamina: F.staminaMax, staminaDay: today, openDay: today, openMin: _minOf(now) };
+            await _set(K_FUND, f);
+        }
+        return _freshFund(f, today);
+    }
+    function getFund() { return _locked(_fundLoad); }
+    async function _fundOrNull() { try { return await getFund(); } catch (e) { return null; } }   // 畫面用：讀不到就顯示「—」
+    // 這杯在某天某時刻「已經做好、還沒賣掉」的份數（只算那天做的、做好時間不晚於那一刻的）
+    function _avail(stock, used, id, day, t) {
+        return (stock[id] || []).filter(b => b.day === day && b.t <= t).reduce((n, b) => n + Math.max(0, b.qty - (used[b.id] || 0)), 0);
+    }
+    // 賣一份：先做的先用
+    function _take(stock, used, id, day, t) {
+        const b = (stock[id] || []).filter(x => x.day === day && x.t <= t && x.qty - (used[x.id] || 0) > 0).sort((x, y) => x.t - y.t)[0];
+        if (!b) return false;
+        used[b.id] = (used[b.id] || 0) + 1;
+        return true;
+    }
+    function _stockToday(stock, id, today) { return (stock[id] || []).filter(b => b.day === today).reduce((n, b) => n + Math.max(0, b.qty), 0); }
+    // 做一批：花材料錢＋體力，庫存多 qty 份（今天賣不完，隔天倒掉）
+    function makeBatch(menuId, qty) {
+        return _locked(async () => {
+            const F = CAFE_CFG.fund;
+            const now = Date.now(), today = _dayNum(now);
+            const n = Math.max(1, Math.min(F.batchMax, Math.floor(Number(qty) || 0)));
+            const menu = await _getStrict(K_MENU, []);
+            const m = menu.find(x => x.id === menuId);
+            if (!m) return { ok: false, why: '這杯已經不在菜單上了' };
+            const fd = await _fundLoad();
+            if (fd.stamina < F.batchStamina) return { ok: false, why: '體力不夠（剩 ' + fd.stamina + '，做一批要 ' + F.batchStamina + '）' };
+            const unit = _unitCost(m), cost = unit * n;
+            if (fd.coins < cost) return { ok: false, why: '錢不夠（做 ' + n + ' 份要 ' + cost + '，帳戶剩 ' + fd.coins + '）' };
+            const stock = await _getStrict(K_STOCK, {});
+            (stock[m.id] || (stock[m.id] = [])).push({ id: _mkId(), qty: n, day: today, t: _minOf(now), unit });
+            fd.coins -= cost; fd.stamina -= F.batchStamina;
+            await _set(K_STOCK, stock);
+            await _set(K_FUND, fd);
+            return { ok: true, fund: fd, qty: n, cost };
+        });
+    }
+    // 研發開工：花錢＋體力，等幾個小時才知道做出什麼；同時只能一杯
+    function startRd(b, f, t) {
+        return _locked(async () => {
+            const F = CAFE_CFG.fund;
+            if (!_ing('base', b) || !_ing('flavor', f) || !_ing('top', t)) return { ok: false, why: '三樣材料要選齊' };
+            const key = _comboKey(b, f, t);
+            const lab = await _getStrict(K_LAB, {});
+            if (lab[key]) return { ok: false, why: '這個組合試過了' };
+            if (await _getStrict(K_RD, null)) return { ok: false, why: '已經有一杯在研發了' };
+            const fd = await _fundLoad();
+            if (fd.coins < F.rdCost) return { ok: false, why: '錢不夠（研發要 ' + F.rdCost + '，帳戶剩 ' + fd.coins + '）' };
+            if (fd.stamina < F.rdStamina) return { ok: false, why: '體力不夠（剩 ' + fd.stamina + '，研發要 ' + F.rdStamina + '）' };
+            const now = Date.now();
+            const rd = { b, f, t, key, startAt: now, doneAt: now + F.rdHours * 3600000, cost: F.rdCost };
+            fd.coins -= F.rdCost; fd.stamina -= F.rdStamina;
+            await _set(K_RD, rd);
+            await _set(K_FUND, fd);
+            return { ok: true, rd, fund: fd };
+        });
+    }
+    // 時間到了才揭曉：寫進配方圖鑑、清掉研發中；還沒到回 null
+    function revealRd() {
+        return _locked(async () => {
+            const rd = await _getStrict(K_RD, null);
+            if (!rd || rd.doneAt > Date.now()) return null;
+            const lab = await _getStrict(K_LAB, {});
+            const tier = lab[rd.key] || _tierOf(rd.key);
+            lab[rd.key] = tier;
+            await _set(K_LAB, lab);
+            await _set(K_RD, null);
+            return { key: rd.key, tier, b: rd.b, f: rd.f, t: rd.t };
+        });
     }
 
     // ── 品質判定(寫死矩陣+雜湊,零 API=真解謎)──
@@ -238,24 +345,63 @@
         } catch (e) { console.warn('[Cafe] 首訪定調失敗,退本地隨機', e); return fallback; }
     }
     // 挑品項:偏好tag加權+狀態機權重(嚐鮮1.5/上癮2/習慣1/吃膩0.3)+店員推薦+1+一點隨機
-    function _pickItem(menu, st, day, recId) {
-        const avail = menu.filter(m => !((st.items[m.id] || {}).coolUntil > day));
+    //   opt.traits＝常客的習性(見 os_cafe_regulars.js)；opt.only＝只在這幾杯裡挑(賣完了改點有庫存的)
+    function _boredAt(traits) { return (traits || []).includes('picky') ? 7 : 10; }   // 挑剔的比較快喝膩
+    function _pickItem(menu, st, day, recId, opt) {
+        opt = opt || {};
+        const tr = opt.traits || [];
+        const prefs = st.prefs || [];
+        let avail = menu.filter(m => !((st.items[m.id] || {}).coolUntil > day));
+        if (opt.only) avail = avail.filter(m => opt.only.has(m.id));
+        if (tr.includes('picky')) avail = avail.filter(m => (m.tags || []).some(t => prefs.includes(t)));   // 挑剔：不對口味的不點
         if (!avail.length) return null;
+        const boredAt = _boredAt(tr);
+        const stateOf = (m) => {
+            const it = st.items[m.id];
+            if (!it || !it.count) return 'fresh';
+            if (it.count >= boredAt) return 'bored';
+            if (it.streak >= 3) return 'addict';
+            if (it.count >= 6) return 'habit';
+            return 'normal';
+        };
+        if (tr.includes('loyal') && !opt.only) {   // 固定派：有了本命(點過 3 次以上、最多的那杯)就只想喝那杯
+            let fav = null, most = 2;
+            for (const m of avail) { const c = (st.items[m.id] || {}).count || 0; if (c > most) { most = c; fav = m; } }
+            if (fav) return { m: fav, state: stateOf(fav), fav: true };
+        }
+        const pool = _tagPool();
+        const craving = tr.includes('moody') ? pool[_hash(String(opt.key) + ':' + day) % pool.length] : null;   // 看心情：今天特別想喝這個口味
+        const W = { fresh: tr.includes('novelty') ? 3 : 1.5, bored: 0.3, addict: 2, habit: 1, normal: 1 };
         let best = null, bestW = 0;
         for (const m of avail) {
-            const it = st.items[m.id];
-            let state = 'normal', w = 1;
-            if (!it || !it.count) { state = 'fresh'; w = 1.5; }
-            else if (it.count >= 10) { state = 'bored'; w = 0.3; }
-            else if (it.streak >= 3) { state = 'addict'; w = 2; }
-            else if (it.count >= 6) { state = 'habit'; w = 1; }
-            w += (m.tags || []).filter(t => (st.prefs || []).includes(t)).length * 0.8;
+            const state = stateOf(m);
+            let w = W[state];
+            w += (m.tags || []).filter(t => prefs.includes(t)).length * 0.8;
+            if (craving && (m.tags || []).includes(craving)) w += 1.2;
+            if (tr.includes('thrifty')) w *= (m.price <= CAFE_CFG.prices.A ? 1.5 : 0.6);   // 省錢：偏便宜的
             if (recId && m.id === recId) w += 1;   // 店員推薦的那杯
             w *= 0.7 + Math.random() * 0.6;   // 一點隨機,別天天同一杯
             if (w > bestW) { bestW = w; best = { m, state }; }
         }
         return best;
     }
+    // 常客建檔：口味兩個——一個照類型、另一個類型的另一個或標籤池隨機(建檔時定下來)
+    function _newRegular(g, ty) {
+        const pool = _tagPool();
+        const a = ty.tags[Math.floor(Math.random() * ty.tags.length)];
+        let b = Math.random() < 0.5 ? ty.tags.find(x => x !== a) : pool[Math.floor(Math.random() * pool.length)];
+        if (!b || b === a) b = ty.tags.find(x => x !== a);
+        return { name: g.name, type: g.type, traits: (g.traits || []).slice(), prefs: [a, b].filter(Boolean), incl: ty.freq, visits: 0, spend: 0, items: {} };
+    }
+    // 愛揪人：帶一位今天還沒要來的常客(同類型那位優先)
+    function _pickMate(REG, g, coming) {
+        const free = REG.PEOPLE.filter(x => x.key !== g.key && !coming.has(x.key) && REG.TYPES[x.type]);
+        if (!free.length) return null;
+        const same = free.filter(x => x.type === g.type);
+        return (same.length && Math.random() < 0.6) ? same[0] : free[Math.floor(Math.random() * free.length)];
+    }
+    function _fill(s, o) { return String(s).replace(/\{(\w+)\}/g, (_, k) => (o[k] == null ? '' : o[k])); }
+    function _oneOf(list) { return Array.isArray(list) ? list[Math.floor(Math.random() * list.length)] : list; }
     // 🎧 點開紀錄→角色親口留言(一則只燒一次,存回該筆)
     async function _hearNpc(l) {
         const roster = await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []);
@@ -326,78 +472,169 @@
         return _settling;
     }
     async function _settleInner() {
-        let off = false;   // 關掉「書咖離線訪客」＝不再擲新的客人；已經排隊的照樣到時間進帳（狀態早就算過了）
+        let off = false;   // 關掉「書咖離線訪客」＝不再擲新的客人；已經排隊的照樣到時間進店
         try { off = (win.localStorage || localStorage).getItem('cafe_offline_visits') === '0'; } catch (e) {}
         const roster = off ? [] : await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []);
+        const REG = off ? null : _REG();
         const shop = await getShop();
         const nowTs = Date.now();
         const today = _dayNum(nowTs), nowMin = _minOf(nowTs);
-        if (!shop.lastDay) { if (roster.length) { shop.lastDay = today; await _set(K_SHOP, shop); } return false; }   // 開張日:從明天開始營業
+        let fund0;
+        try { fund0 = await getFund(); } catch (e) { console.warn('[Cafe] 讀不到書咖帳戶，這次先不結算', e); return false; }
+        if (!shop.lastDay) { shop.lastDay = today - 1; await _set(K_SHOP, shop); }   // 開張日：今天就營業(開張那一刻之前的客人不算)
         const rosterEv = off ? await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []) : roster;
         const pend0 = await _get(K_PEND, []);
         const isDue = p => p.day < today || p.t <= nowMin;
-        const rollDays = roster.length > 0 && shop.lastDay < today;
-        if (!rollDays && !pend0.some(isDue)) return false;
-        const from = Math.max(shop.lastDay + 1, today - 7);
+        const dayChanged = shop.lastDay < today;   // 換日：前一天剩的要倒掉，客人沒開也一樣
+        const rollDays = dayChanged && (roster.length > 0 || !!REG);
+        if (!dayChanged && !pend0.some(isDue)) return false;
+        const from = Math.max(shop.lastDay + 1, today - 7, fund0.openDay || 0);
         const npcs = await _get(K_NPC, {});
         const menu = await getMenu();
         const evq = await _get(K_EVQ, []);
+        const stock = await _get(K_STOCK, {});   // 照這份算誰點得到；寫回時照批次 id 疊在最新那份上
+        const used = {};   // 批次 id → 這次賣掉幾份
         const recId = shop.recommend?.id || null;   // 店員推薦的那杯
         const pop0 = shop.popularity || 0;
         const sold0 = new Map(menu.map(m => [m.id, m.sold || 0]));   // 這次賣了幾杯＝結束時減開始時
-        const fresh = [];   // 這次新進紀錄的(到時間的客人、事件卡)
+        const fresh = [];   // 這次新進紀錄的(到店的客人、事件卡)
         const pend = pend0.filter(p => !isDue(p));   // 還沒到時間的照舊排隊
-        let earned = 0, cupsAdded = 0, anyVisit = false, tunedRun = 0;   // 首訪定調每次結算≤3次(名冊變大後防API爆發,沒輪到的自然留到下次)
-        // 客人上門:到時間的進紀錄、進帳;今天比現在晚的先排隊(npc 狀態照算,錢與紀錄等到時間)
-        const arrive = (e, m) => {
-            if (e.day === today && e.t > nowMin) { pend.push(Object.assign({ itemId: m ? m.id : null }, e)); return; }
-            if (m) m.sold = (m.sold || 0) + 1;
-            if (e.price) { earned += e.price; cupsAdded++; }
-            fresh.push(Object.assign({ id: _mkId() }, e));
-            anyVisit = true;
-        };
-        pend0.filter(isDue).forEach(p => {
-            const m = menu.find(x => x.id === p.itemId) || null;
-            const e = Object.assign({}, p); delete e.itemId;
-            arrive(e, m);
-        });
+        const queue = pend0.filter(isDue);   // 這次要放進店裡的
+        let earned = 0, cupsAdded = 0, anyVisit = false, tunedRun = 0, seq = 0;   // 首訪定調每次結算≤3次(名冊變大後防API爆發,沒輪到的自然留到下次)
+        // 換日只決定「誰、幾點來」；今天比現在晚的先排隊，到點那一刻才看庫存決定點什麼
+        const book = (e) => { e.seq = seq++; if (e.day === today && e.t > nowMin) pend.push(e); else queue.push(e); };
         if (rollDays) for (let day = from; day <= today; day++) {
-            let visitToday = false;
+            const openCut = day === fund0.openDay ? (fund0.openMin || 0) : -1;   // 開張那天，開張前的客人不算
+            const coming = new Set();
             for (const r of roster) {
                 const st = npcs[r.key] || (npcs[r.key] = { name: r.name, prefs: null, incl: 0.5, visits: 0, spend: 0, items: {} });
                 const t = OPEN_MIN + Math.floor(Math.random() * (CLOSE_MIN - OPEN_MIN));
+                if (t < openCut) continue;
                 if (!st.prefs) {   // 還沒定調=還沒第一次上門
                     if (tunedRun < 3 && Math.random() < 0.55) {
                         tunedRun++;
                         const tuned = await _tuneNpc(r);
                         st.prefs = tuned.tags; st.incl = tuned.incl;
                         if (tuned.book) { try { await addBook({ title: tuned.book.title, by: r.name, note: tuned.book.note }); } catch (e) {} }
-                        st.visits++; visitToday = true;
-                        arrive({ day, t, key: r.key, name: r.name, line: TPL.first, price: 0 }, null);
+                        st.visits++; coming.add(r.key);
+                        book({ day, t, key: r.key, name: r.name, line: TPL.first, price: 0, first: true });
                     }
                     continue;
                 }
                 const p = Math.min(0.9, Math.max(0.12, st.incl * (0.45 + Math.min(0.45, (shop.popularity || 0) / 150))));
                 if (Math.random() >= p) continue;
-                visitToday = true; st.visits++;
-                const pick = _pickItem(menu, st, day, recId);
-                if (!pick) { if (Math.random() < 0.4) arrive({ day, t, key: r.key, name: r.name, line: TPL.browse, price: 0 }, null); continue; }
-                const m = pick.m;
-                const it = st.items[m.id] || (st.items[m.id] = { count: 0, streak: 0, lastDay: 0, boredHits: 0, coolUntil: 0 });
-                const gap = it.lastDay ? day - it.lastDay : 0;
-                it.streak = (day - it.lastDay === 1) ? it.streak + 1 : 1;
-                it.count++; it.lastDay = day;
-                st.spend += m.price;
-                let lineKey = pick.state;
-                if (gap > 7 && it.count > 1) lineKey = 'comeback';
-                if (pick.state === 'bored') {
-                    it.boredHits = (it.boredHits || 0) + 1;
-                    if (it.boredHits >= 2) { it.coolUntil = day + 7; it.boredHits = 0; evq.push({ type: 'dropout', key: r.key, item: m.name, itemId: m.id }); }   // 🎬 吃膩棄坑
-                }
-                if (it.count === 10 && !it.devoted) { it.devoted = true; evq.push({ type: 'devotion', key: r.key, item: m.name, itemId: m.id }); }   // 🎬 本命認證
-                arrive({ day, t, key: r.key, name: r.name, item: m.name, line: (TPL[lineKey] || TPL.normal).replace('{item}', m.name), price: m.price }, m);
+                st.visits++; coming.add(r.key);
+                book({ day, t, key: r.key, name: r.name });
             }
-            if (visitToday) shop.popularity = Math.min(999, (shop.popularity || 0) + 1);
+            // 🧑‍🤝‍🧑 12 位常客：照類型的時段來；愛揪人的有時帶另一位常客
+            if (REG) for (const g of REG.PEOPLE) {
+                const ty = REG.TYPES[g.type];
+                if (!ty) continue;
+                const st = npcs[g.key] || (npcs[g.key] = _newRegular(g, ty));
+                st.name = g.name; st.type = g.type; st.traits = (g.traits || []).slice();   // 名冊改了照名冊
+                if (coming.has(g.key)) continue;   // 已經被揪來了
+                const t = ty.from + Math.floor(Math.random() * Math.max(1, ty.to - ty.from));
+                if (t < openCut) continue;
+                const p = Math.min(0.9, Math.max(0.12, (st.incl || ty.freq) * (0.45 + Math.min(0.45, (shop.popularity || 0) / 150))));
+                if (Math.random() >= p) continue;
+                st.visits++; coming.add(g.key);
+                const e = { day, t, key: g.key, name: g.name };
+                book(e);
+                if (st.traits.includes('social') && Math.random() < CAFE_CFG.socialBring) {
+                    const mate = _pickMate(REG, g, coming);
+                    if (mate) {
+                        const ms = npcs[mate.key] || (npcs[mate.key] = _newRegular(mate, REG.TYPES[mate.type]));
+                        ms.visits++; coming.add(mate.key);
+                        e.friend = mate.name;
+                        book({ day, t, key: mate.key, name: mate.name, withName: g.name });
+                    }
+                }
+            }
+            if (coming.size) shop.popularity = Math.min(999, (shop.popularity || 0) + 1);
+        }
+        // 🚪 客人照到店時間先後進來：想喝的那杯有做好(那天做的、做好時間不晚於他到店)就點；賣完了照習性改點或走
+        queue.sort((a, b) => (a.day - b.day) || (a.t - b.t) || ((a.seq || 0) - (b.seq || 0)));
+        const reg = (key) => String(key || '').indexOf('g_') === 0;
+        const L = (REG && REG.LINES) || {};
+        for (const a of queue) {
+            const e = Object.assign({}, a); delete e.seq;
+            if (e.line) {   // 第一次上門(句子早就定好)、改版前排的隊(點什麼早就算過了)：照舊進紀錄
+                const m = e.itemId ? menu.find(x => x.id === e.itemId) : null;
+                delete e.itemId; delete e.first;
+                if (m) m.sold = (m.sold || 0) + 1;
+                if (e.price) { earned += e.price; cupsAdded++; }
+                fresh.push(Object.assign({ id: _mkId() }, e));
+                anyVisit = true;
+                continue;
+            }
+            const st = npcs[e.key];
+            if (!st) continue;
+            const isReg = reg(e.key);
+            const traits = isReg ? (st.traits || []) : [];
+            const pre = e.friend ? _fill(L.bring || '', { friend: e.friend }) : (e.withName ? _fill(L.brought || '', { friend: e.withName }) : '');
+            const log = (x) => {
+                fresh.push(Object.assign({ id: _mkId(), day: e.day, t: e.t, key: e.key, name: e.name }, isReg ? { g: st.type } : {}, x));
+                anyVisit = true;
+            };
+            const opt = { traits, key: e.key };
+            const want = _pickItem(menu, st, e.day, recId, opt);
+            if (!want) {
+                if (traits.includes('picky') && menu.length) log({ line: pre + (L.pickyNone || TPL.browse), price: 0 });
+                else if (pre || Math.random() < 0.4) log({ line: pre + TPL.browse, price: 0 });
+                continue;
+            }
+            let pick = want, missed = null;
+            if (!_take(stock, used, want.m.id, e.day, e.t)) {
+                missed = want.m.name;
+                const lock = traits.includes('loyal') && want.fav;   // 固定派只要本命
+                const pSwitch = lock ? 0 : (traits.includes('novelty') ? 0.85 : 0.5);
+                let alt = null;
+                if (Math.random() < pSwitch) {
+                    const only = new Set(menu.filter(m => m.id !== want.m.id && _avail(stock, used, m.id, e.day, e.t) > 0).map(m => m.id));
+                    if (only.size) alt = _pickItem(menu, st, e.day, recId, Object.assign({ only }, opt));
+                }
+                if (!alt) {
+                    const tpl = lock ? (L.loyalLeave || L.soldLeave) : L.soldLeave;
+                    log({ line: pre + _fill(tpl || '想點{want},賣完了,看了看就走了。', { want: missed }), price: 0, want: missed, miss: true });
+                    continue;
+                }
+                _take(stock, used, alt.m.id, e.day, e.t);
+                pick = alt;
+            }
+            const m = pick.m, day = e.day;
+            const it = st.items[m.id] || (st.items[m.id] = { count: 0, streak: 0, lastDay: 0, boredHits: 0, coolUntil: 0 });
+            const gap = it.lastDay ? day - it.lastDay : 0;
+            it.streak = (day - it.lastDay === 1) ? it.streak + 1 : 1;
+            it.count++; it.lastDay = day;
+            st.spend = (st.spend || 0) + m.price;
+            let lineKey = pick.state;
+            if (gap > 7 && it.count > 1) lineKey = 'comeback';
+            const evs = [];
+            if (pick.state === 'bored') {
+                it.boredHits = (it.boredHits || 0) + 1;
+                if (it.boredHits >= 2) { it.coolUntil = day + 7; it.boredHits = 0; evs.push('dropout'); }   // 🎬 吃膩棄坑
+            }
+            if (it.count === 10 && !it.devoted) { it.devoted = true; evs.push('devotion'); }   // 🎬 本命認證
+            m.sold = (m.sold || 0) + 1;
+            earned += m.price; cupsAdded++;
+            const line = missed ? _fill(L.soldSwitch || '想點{want},賣完了,改點了{item}。', { want: missed, item: m.name }) : (TPL[lineKey] || TPL.normal).replace('{item}', m.name);
+            log(Object.assign({ item: m.name, line: pre + line, price: m.price }, missed ? { want: missed } : {}));
+            for (const type of evs) {
+                if (!isReg) { evq.push({ type, key: e.key, item: m.name, itemId: m.id }); continue; }   // 書裡的角色：換日時請他親口說
+                // 常客：照模板記一筆，口味照規則轉向(不叫模型)
+                const pool = _tagPool();
+                if (type === 'devotion') {
+                    const add = (m.tags || []).find(t => !(st.prefs || []).includes(t));
+                    if (add) st.prefs = [].concat(st.prefs || [], add).slice(0, 4);
+                } else {
+                    const keep = (st.prefs || []).slice();
+                    const turn = pool.filter(t => !keep.includes(t));
+                    if (keep.length && turn.length) keep[Math.floor(Math.random() * keep.length)] = turn[Math.floor(Math.random() * turn.length)];
+                    st.prefs = keep;
+                }
+                const said = _fill(_oneOf(L[type]) || '', { item: m.name });
+                log({ item: m.name, line: said, said, price: 0, ev: type });
+            }
         }
         // 🎬 A級事件消化:單次結算最多2件(敘事節點才燒API),API掛了整隊留到下次
         //   只在換日那次處理（一天一次，同改版前）：排隊客人到時間放出來、店員上班先結算，都不另外叫模型
@@ -414,29 +651,48 @@
             fresh.push({ id: _mkId(), day: today, t: nowMin, key: ev.key, name: st.name, item: ev.item, line: out.line, said: out.line, price: 0, ev: ev.type });
             evq.shift(); evDone++; anyVisit = true;
         }
-        fresh.sort((a, b) => (b.day - a.day) || ((b.t || 0) - (a.t || 0)));   // 紀錄由新到舊
+        fresh.sort((a, b) => (b.day - a.day) || ((b.t || 0) - (a.t || 0)) || ((b.ev ? 1 : 0) - (a.ev ? 1 : 0)));   // 紀錄由新到舊(同一刻的事件卡排在點單上面)
         // 🚨 寫回要疊在「最新的那份」上：結算在背景跑、中間等好幾通 API，這段時間她可能上架新飲品、
-        //    聽完留言、改了店況——以前拿開頭讀的整份寫回，這些一結算完就消失
-        let menuNow, logsNow, npcsNow, shopNow;
-        try {
-            menuNow = await _getStrict(K_MENU, []);
-            logsNow = await _getStrict(K_LOG, []);
-            npcsNow = await _getStrict(K_NPC, {});
-            shopNow = await _getStrict(K_SHOP, { popularity: 0, revenue: 0, cups: 0, lastDay: 0 });
-        } catch (e) { console.warn('[Cafe] 結算寫回前讀不到最新資料，這次先不寫（下次重算）', e); return false; }
-        const soldAdd = new Map(menu.map(m => [m.id, (m.sold || 0) - (sold0.get(m.id) || 0)]));
-        menuNow.forEach(x => { const d = soldAdd.get(x.id) || 0; if (d > 0) x.sold = (x.sold || 0) + d; });
-        const logsOut = fresh.concat(logsNow);
-        Object.assign(npcsNow, npcs);
-        if (rollDays) shopNow.lastDay = today;
-        shopNow.popularity = Math.min(999, (shopNow.popularity || 0) + ((shop.popularity || 0) - pop0));
-        shopNow.revenue = (shopNow.revenue || 0) + earned;
-        shopNow.cups = (shopNow.cups || 0) + cupsAdded;
-        await _set(K_EVQ, evq);
-        await _set(K_PEND, pend);
-        await _set(K_NPC, npcsNow); await _set(K_MENU, menuNow); await _set(K_LOG, logsOut.slice(0, 80)); await _set(K_SHOP, shopNow);
-        if (earned > 0) { try { await (win.OS_PT || window.OS_PT)?.addPT?.(earned, { reason: '書咖營業收入' }); } catch (e) {} }
-        return anyVisit;
+        //    做了一批、聽完留言、改了店況——以前拿開頭讀的整份寫回，這些一結算完就消失
+        return _locked(async () => {
+            let menuNow, logsNow, npcsNow, shopNow, stockNow, fundNow;
+            try {
+                menuNow = await _getStrict(K_MENU, []);
+                logsNow = await _getStrict(K_LOG, []);
+                npcsNow = await _getStrict(K_NPC, {});
+                shopNow = await _getStrict(K_SHOP, { popularity: 0, revenue: 0, cups: 0, lastDay: 0 });
+                stockNow = await _getStrict(K_STOCK, {});
+                fundNow = await _fundLoad();
+            } catch (e) { console.warn('[Cafe] 結算寫回前讀不到最新資料，這次先不寫（下次重算）', e); return false; }
+            // 庫存：照批次 id 扣掉這次賣的；前一天以前做的倒掉
+            let wasteQty = 0, wasteCost = 0;
+            for (const id of Object.keys(stockNow)) {
+                const keep = [];
+                for (const b of (stockNow[id] || [])) {
+                    const left = (b.qty || 0) - (used[b.id] || 0);
+                    if (left <= 0) continue;
+                    if (b.day < today) { wasteQty += left; wasteCost += left * (b.unit || 0); continue; }
+                    keep.push(Object.assign({}, b, { qty: left }));
+                }
+                if (keep.length) stockNow[id] = keep; else delete stockNow[id];
+            }
+            fundNow.coins += earned;
+            if (dayChanged) fundNow.lastWaste = { day: today, qty: wasteQty, cost: wasteCost };
+            else if (wasteQty) fundNow.lastWaste = { day: today, qty: ((fundNow.lastWaste && fundNow.lastWaste.day === today) ? fundNow.lastWaste.qty : 0) + wasteQty, cost: ((fundNow.lastWaste && fundNow.lastWaste.day === today) ? fundNow.lastWaste.cost : 0) + wasteCost };
+            const soldAdd = new Map(menu.map(m => [m.id, (m.sold || 0) - (sold0.get(m.id) || 0)]));
+            menuNow.forEach(x => { const d = soldAdd.get(x.id) || 0; if (d > 0) x.sold = (x.sold || 0) + d; });
+            const logsOut = fresh.concat(logsNow);
+            Object.assign(npcsNow, npcs);
+            if (dayChanged) shopNow.lastDay = today;
+            shopNow.popularity = Math.min(999, (shopNow.popularity || 0) + ((shop.popularity || 0) - pop0));
+            shopNow.revenue = (shopNow.revenue || 0) + earned;
+            shopNow.cups = (shopNow.cups || 0) + cupsAdded;
+            await _set(K_EVQ, evq);
+            await _set(K_PEND, pend);
+            await _set(K_NPC, npcsNow); await _set(K_MENU, menuNow); await _set(K_LOG, logsOut.slice(0, 80)); await _set(K_SHOP, shopNow);
+            await _set(K_STOCK, stockNow); await _set(K_FUND, fundNow);
+            return anyVisit || dayChanged;
+        });
     }
 
     // ── 對外資料 API(事件/好感度後續掛這)──
@@ -493,7 +749,24 @@
             '.oc-tried{display:flex;justify-content:space-between;color:#a18a70;font-size:10px;margin-top:7px;}.oc-progress-line{height:4px;margin-top:5px;border-radius:5px;background:#eadcc8;overflow:hidden;}.oc-progress-line i{display:block;height:100%;background:#bd854c;border-radius:5px;}' +
             '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:195px;overflow-y:auto;padding-right:2px;}.oc-sym{width:37px;height:37px;font-size:17px;background:rgba(255,255,255,.6);border:1px solid #d3bf9f;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}.oc-sym.on{background:rgba(214,158,84,.3);border-color:#a9744a;}' +
             '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.75);border:1px solid #d3bf9f;border-radius:9px;color:#4a3a2a;padding:8px 10px;font-size:11px;}.oc-free-input::placeholder{color:#a3906f;}' +
-            '@media (max-width:760px){.oc-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;min-height:min(500px,72%);}.oc-brand-copy small{display:none}.oc-stat-pill{padding:4px 5px}.oc-tab{font-size:9px}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
+            /* 💰 經營：今天的數字、庫存與做一批、研發倒數、賣完沒點到 */
+            '.oc-today{display:flex;flex-wrap:wrap;gap:4px 12px;margin:0 1px 9px;padding:7px 10px;border-radius:9px;background:rgba(186,134,79,.1);color:#7a5a3c;font-size:11px;}.oc-today b{color:#5e4028;font-size:12px;}' +
+            '.oc-menu-ops{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding-top:7px;border-top:1px dashed rgba(160,120,80,.25);}' +
+            '.oc-stock{color:#7a5a3c;font-size:11px;}.oc-stock b{color:#4f3520;font-size:13px;}.oc-stock.zero b{color:#b65050;}' +
+            '.oc-make{margin-left:auto;background:rgba(122,79,45,.08);border:1px solid #c9a476;color:#6d4425;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:700;}.oc-make.on{background:#7a4f2d;border-color:#6d4425;color:#fff8ed;}' +
+            '.oc-batch{grid-column:1/-1;display:flex;flex-direction:column;gap:7px;}' +
+            '.oc-batch-nums{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;}' +
+            '.oc-num{min-width:0;background:rgba(255,255,255,.72);border:1px solid #d8c3a1;border-radius:7px;padding:6px 0;cursor:pointer;color:#5a4634;font-size:12px;font-weight:700;}.oc-num.on{background:#f2dfc6;border-color:#b77b42;color:#674224;}.oc-num:disabled{opacity:.35;cursor:default;}' +
+            '.oc-batch-row{display:flex;align-items:center;gap:8px;}.oc-batch-cost{flex:1;color:#7a5a3c;font-size:11px;line-height:1.4;}' +
+            '.oc-batch-go{background:#7a4f2d;border:1px solid #6d4425;color:#fff8ed;border-radius:8px;padding:6px 16px;cursor:pointer;font-size:12px;font-weight:800;}.oc-batch-go:disabled{opacity:.42;cursor:default;}' +
+            '.oc-why{color:#b65050;font-size:11px;line-height:1.5;margin-top:6px;}' +
+            '.oc-rd{margin:2px 0 6px;padding:10px 12px;border:1px dashed #c9a476;border-radius:11px;background:rgba(255,248,236,.85);}' +
+            '.oc-rd-title{display:flex;align-items:center;gap:6px;font-weight:800;color:#6d4425;}.oc-rd-left{display:block;margin-top:4px;color:#9d6638;font-weight:700;font-size:12px;}' +
+            '.oc-locked{opacity:.45;pointer-events:none;}' +
+            '.oc-cost-note{margin-top:6px;color:#a18465;font-size:10px;line-height:1.5;text-align:center;}' +
+            '.oc-item.miss{background:rgba(240,232,222,.45);border-style:dashed;}.oc-item.miss .oc-blurb{color:#a58b70;}' +
+            '.oc-g-type{margin-left:5px;padding:1px 6px;border-radius:8px;background:#efe3d2;color:#896b4d;font-size:9px;font-style:normal;font-weight:400;vertical-align:1px;}' +
+            '@media (max-width:760px){.oc-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;min-height:min(500px,72%);}.oc-brand-copy{display:none}.oc-stat-pill{padding:4px 5px}.oc-tab{font-size:9px}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
         try {
             const probe = new win.Image();
@@ -507,11 +780,31 @@
     let _viewCleanup = null;
     async function _refreshHeaderStats() {
         if (!_winEl) return;
-        const shop = await getShop();
-        const pop = _winEl.querySelector('[data-cafe-stat="pop"]');
-        const cups = _winEl.querySelector('[data-cafe-stat="cups"]');
-        if (pop) pop.textContent = String(shop.popularity || 0);
-        if (cups) cups.textContent = String(shop.cups || 0);
+        const [shop, fund] = await Promise.all([getShop(), _fundOrNull()]);
+        if (!_winEl) return;
+        const put = (k, v) => { const el = _winEl.querySelector('[data-cafe-stat="' + k + '"]'); if (el) el.textContent = v; };
+        put('pop', String(shop.popularity || 0));
+        put('coins', fund ? String(fund.coins) : '—');
+        put('sta', fund ? fund.stamina + '/' + CAFE_CFG.fund.staminaMax : '—');
+    }
+    // 調配分頁的小紅點：研發的那杯時間到了、她還沒打開看
+    function _paintLabDot() {
+        if (!_winEl) return;
+        _get(K_RD, null).then(rd => { _winEl?.querySelector('.oc-tab[data-tab="lab"]')?.classList.toggle('has-dot', !!(rd && rd.doneAt <= Date.now())); }).catch(() => {});
+    }
+    // 窗開著每分鐘補算一次：客人照時間進來、庫存跟著少、研發倒數會走
+    let _tickTimer = null;
+    async function _tickOnce() {
+        let changed = false;
+        try { changed = await _settle(); } catch (e) {}
+        if (!_winEl) return;
+        _refreshHeaderStats();
+        _paintLabDot();
+        const on = _winEl.querySelector('.oc-tab.on');
+        const tab = on ? on.dataset.tab : 'menu';
+        const body = _winEl.querySelector('.oc-body');
+        if (tab === 'lab') { if (_winEl.querySelector('.oc-rd')) _renderTab('lab', body); return; }   // 研發中那格鎖著，重畫不會打斷她
+        if (changed && (tab === 'menu' || tab === 'log') && !_winEl.querySelector('.oc-batch')) _renderTab(tab, body);   // 正在挑份數就別重畫
     }
     async function _saveSaid(id, said) {
         const cur = await _getStrict(K_LOG, []);
@@ -533,6 +826,7 @@
         if (t) t.click();
     }
     function closeWorkshop() {
+        if (_tickTimer) { clearInterval(_tickTimer); _tickTimer = null; }
         if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
         _winEl?.remove(); _winEl = null;
         try { win.document.querySelector('.lobby-left')?.classList.remove('void-dock-open'); } catch (e) {}
@@ -550,8 +844,9 @@
               '<div class="oc-brand"><span class="oc-brand-icon"><i class="fa-solid fa-mug-hot"></i></span>' +
                 '<span class="oc-brand-copy"><b>書咖櫃檯</b><small>PARALLAX CAFE</small></span></div>' +
               '<div class="oc-head-stats">' +
+                '<span class="oc-stat-pill"><i class="fa-solid fa-coins"></i> 帳戶 <b data-cafe-stat="coins">—</b></span>' +
+                '<span class="oc-stat-pill"><i class="fa-solid fa-bolt"></i> 體力 <b data-cafe-stat="sta">—</b></span>' +
                 '<span class="oc-stat-pill"><i class="fa-solid fa-heart"></i> 人氣 <b data-cafe-stat="pop">0</b></span>' +
-                '<span class="oc-stat-pill"><i class="fa-solid fa-mug-saucer"></i> 售出 <b data-cafe-stat="cups">0</b></span>' +
               '</div>' +
               '<button class="oc-close" title="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
             '<div class="oc-tabs">' +
@@ -579,44 +874,72 @@
         _renderTab('menu', body);
         _refreshHeaderStats();
         _paintStaffDot();
+        _paintLabDot();
         // ☕ 開窗=補算離線天數(有新動靜就刷新當前頁;背景跑不擋開窗)
         _settle().then(changed => {
             if (!changed || !_winEl) return;
             const on = _winEl.querySelector('.oc-tab.on');
             _refreshHeaderStats();
-            _renderTab(on ? on.dataset.tab : 'menu', _winEl.querySelector('.oc-body'));
+            const tab = on ? on.dataset.tab : 'menu';
+            if (tab !== 'lab' && tab !== 'free' && !_winEl.querySelector('.oc-batch')) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數正在操作，別重畫
         }).catch(() => {});
+        _tickTimer = setInterval(_tickOnce, 60000);
     }
 
     async function _renderTab(tab, body) {
         if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
         if (tab === 'menu') {
-            const [menu, shop] = await Promise.all([getMenu(), getShop()]);
-            body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-mug-hot"></i> 今日菜單</span><span class="oc-section-note">' + menu.length + ' 款・累計 ' + (shop.revenue || 0) + ' PT</span></div>' + (menu.length
+            const [menu, shop, fund, stock, logs] = await Promise.all([getMenu(), getShop(), _fundOrNull(), _get(K_STOCK, {}), _get(K_LOG, [])]);
+            const today = _dayNum(Date.now());
+            const tl = logs.filter(l => l && l.day === today && !l.ev);
+            const waste = fund && fund.lastWaste && fund.lastWaste.day === today ? fund.lastWaste : null;
+            body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-mug-hot"></i> 今日菜單</span><span class="oc-section-note">' + menu.length + ' 款・累計 ' + (shop.revenue || 0) + ' PT</span></div>' +
+                '<div class="oc-today"><span>今天賣出 <b>' + tl.filter(l => l.price).length + '</b> 杯</span>' +
+                '<span>想點的賣完了 <b>' + tl.filter(l => l.want).length + '</b> 位</span>' +
+                '<span>昨天倒掉 <b>' + (waste ? waste.qty : 0) + '</b> 份' + (waste && waste.cost ? '（白花 ' + waste.cost + '）' : '') + '</span></div>' + (menu.length
                 ? menu.map(m => {
                     const iconId = (m.ings || []).find(id => SPRITE_POS[id]) || (m.free ? 'receipt' : 'coffee');
-                    return '<div class="oc-menu-card"><span class="oc-drink-icon">' + _sprite(iconId) + '</span>' +
+                    const left = _stockToday(stock, m.id, today);
+                    return '<div class="oc-menu-card" data-id="' + m.id + '"><span class="oc-drink-icon">' + _sprite(iconId) + '</span>' +
                     '<span class="oc-menu-main"><span class="oc-menu-title">' + m.name + '</span><span class="oc-blurb">' + (m.blurb || '') + '</span>' +
                     '<span class="oc-mini-tags">' + (m.tags || []).map(t => '<i class="oc-mini-tag">' + t + '</i>').join('') + '</span></span>' +
                     '<span class="oc-menu-side"><span class="oc-badge ' + (TIER_TEXT[m.tier]?.cls || 'a') + '">' + (TIER_TEXT[m.tier]?.label || '') + '</span>' +
-                    '<span class="oc-menu-price">' + m.price + ' PT</span><span class="oc-menu-sold">售出 ' + (m.sold || 0) + '</span></span></div>';
+                    '<span class="oc-menu-price">' + m.price + ' PT</span><span class="oc-menu-sold">售出 ' + (m.sold || 0) + '</span></span>' +
+                    '<span class="oc-menu-ops"><span class="oc-stock' + (left ? '' : ' zero') + '">庫存 <b>' + left + '</b> 份</span>' +
+                    '<button class="oc-make" data-id="' + m.id + '"><i class="fa-solid fa-kitchen-set"></i> 做一批</button></span></div>';
                 }).join('')
                 : '<div class="oc-empty"><i class="fa-solid fa-mug-hot"></i>菜單還是空的。<br>去「調配」研發出好東西再上架吧。</div>');
+            // 🍳 做一批：點了展開 1～8 份，選好看花多少，按「做」才扣
+            body.querySelectorAll('.oc-make').forEach(btn => btn.addEventListener('click', () => {
+                const card = btn.closest('.oc-menu-card');
+                const open = card.querySelector('.oc-batch');
+                body.querySelectorAll('.oc-batch').forEach(x => x.remove());
+                body.querySelectorAll('.oc-make.on').forEach(x => x.classList.remove('on'));
+                if (open) return;   // 再按一次＝收起來
+                const m = menu.find(x => x.id === btn.dataset.id);
+                if (!m) return;
+                btn.classList.add('on');
+                _openBatch(card, m);
+            }));
         } else if (tab === 'log') {
             let logs = await _get(K_LOG, []);
             if (logs.some(l => !l.id)) { logs.forEach(l => { if (!l.id) l.id = _mkId(); }); await _set(K_LOG, logs); }   // 舊紀錄補id
             const md = (d) => { const t = new Date(d * DAY_MS); return (t.getMonth() + 1) + '/' + t.getDate(); };
+            const REG = _REG();
+            const typeTag = (l) => { const ty = l.g && REG && REG.TYPES[l.g]; return ty ? '<i class="oc-g-type">' + ty.label + '</i>' : ''; };
             body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-users"></i> 訪客手札</span><span class="oc-section-note">最近 ' + logs.length + ' 筆</span></div>' + (logs.length
                 ? logs.map(l => {
                     if (l.ev) {   // 🎬 事件卡:角色親口說的,直接攤開
-                        return '<div class="oc-item ev"><span><span class="oc-name"><i class="fa-solid fa-star"></i> ' + md(l.day) + '・' + l.name + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + l.item + '」' : '') + '</span>' +
+                        return '<div class="oc-item ev"><span><span class="oc-name"><i class="fa-solid fa-star"></i> ' + md(l.day) + '・' + l.name + typeTag(l) + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + l.item + '」' : '') + '</span>' +
                             '<span class="oc-said">「' + l.line + '」</span></span></div>';
                     }
-                    return '<div class="oc-item oc-click" data-id="' + l.id + '"><span><span class="oc-name">' + md(l.day) + (l.t != null ? ' ' + _hm(l.t) : '') + '・' + l.name + '</span>' +
+                    // 常客照腳本跑、沒有人設，不給「聽他說」(不叫模型)
+                    const hear = !!l.key && !l.g;
+                    return '<div class="oc-item' + (hear ? ' oc-click' : '') + (l.miss ? ' miss' : '') + '" data-id="' + l.id + '"><span><span class="oc-name">' + md(l.day) + (l.t != null ? ' ' + _hm(l.t) : '') + '・' + l.name + typeTag(l) + '</span>' +
                         '<span class="oc-blurb">' + l.line + '</span>' +
                         (l.said ? '<span class="oc-said">「' + l.said + '」</span>' : '') + '</span>' +
                         '<span class="oc-price">' + (l.price ? '+' + l.price + ' PT ' : '') +
-                        (l.key ? '<i class="fa-solid fa-comment-dots oc-hear' + (l.said ? ' has' : '') + '"></i>' : '') + '</span></div>';
+                        (hear ? '<i class="fa-solid fa-comment-dots oc-hear' + (l.said ? ' has' : '') + '"></i>' : '') + '</span></div>';
                 }).join('')
                 : '<div class="oc-empty"><i class="fa-solid fa-door-open"></i>還沒有客人來過。<br>上架點好東西，常客們就會自己上門了。</div>');
             // 🎧 點一筆=請那位客人親口說(一筆只燒一次,說過的存起來、再點只是收合/展開)
@@ -653,6 +976,50 @@
         } else {
             _renderLab(body);
         }
+    }
+
+    async function _openBatch(card, m) {
+        const F = CAFE_CFG.fund;
+        const unit = _unitCost(m);
+        const fund = await _fundOrNull();
+        const coins = fund ? fund.coins : 0, sta = fund ? fund.stamina : 0;
+        let why = '';
+        if (!fund) why = '讀不到書咖帳戶，等一下再試';
+        else if (sta < F.batchStamina) why = '體力不夠（剩 ' + sta + '，做一批要 ' + F.batchStamina + '），明天會回滿';
+        else if (coins < unit) why = '錢不夠（一份材料要 ' + unit + '，帳戶剩 ' + coins + '）';
+        const nums = [];
+        for (let n = 1; n <= F.batchMax; n++) nums.push('<button class="oc-num" data-n="' + n + '"' + (why || unit * n > coins ? ' disabled' : '') + '>' + n + '</button>');
+        card.insertAdjacentHTML('beforeend',
+            '<span class="oc-batch">' +
+              '<span class="oc-batch-nums">' + nums.join('') + '</span>' +
+              '<span class="oc-batch-row"><span class="oc-batch-cost">' + (why ? '' : '要做幾份？一份材料 ' + unit + '，做一批花 ' + F.batchStamina + ' 體力') + '</span>' +
+              '<button class="oc-batch-go" disabled>做</button></span>' +
+              (why ? '<span class="oc-why">' + why + '</span>' : '') +
+            '</span>');
+        const box = card.querySelector('.oc-batch');
+        const go = box.querySelector('.oc-batch-go');
+        const cost = box.querySelector('.oc-batch-cost');
+        let pick = 0;
+        box.querySelector('.oc-batch-nums').addEventListener('click', (e) => {
+            const b = e.target.closest('.oc-num');
+            if (!b || b.disabled) return;
+            pick = Number(b.dataset.n);
+            box.querySelectorAll('.oc-num').forEach(x => x.classList.toggle('on', x === b));
+            cost.textContent = '做 ' + pick + ' 份：材料 ' + (unit * pick) + '，體力 ' + F.batchStamina;
+            go.disabled = false;
+        });
+        go.addEventListener('click', async () => {
+            if (!pick) return;
+            go.disabled = true;
+            const r = await makeBatch(m.id, pick);
+            if (!r.ok) {
+                box.querySelector('.oc-why')?.remove();
+                box.insertAdjacentHTML('beforeend', '<span class="oc-why">' + r.why + '</span>');
+                return;
+            }
+            _refreshHeaderStats();
+            if (_winEl) _renderTab('menu', _winEl.querySelector('.oc-body'));
+        });
     }
 
     async function _renderFree(body) {
@@ -704,64 +1071,107 @@
         });
     }
 
+    // 結果卡(研發揭曉、試過的組合都用這張)：好的可以上架，上架起名照舊叫一次副模型
+    async function _labResult(slot, key, tier, b, f, t) {
+        const ings = [_ing('base', b), _ing('flavor', f), _ing('top', t)];
+        const tags = _tagsOf(b, f, t);
+        const T = TIER_TEXT[tier];
+        const menu = await getMenu();
+        const already = menu.some(m => m.key === key);
+        slot.innerHTML =
+            '<div class="oc-result"><span class="oc-badge ' + T.cls + '">' + T.label + '</span> ' +
+            ings.map(x => x.name).join(' + ') +
+            '<div class="oc-note">' + (already ? '這款已經在菜單上了。' : T.note) + '</div>' +
+            ((tier === 'S' || tier === 'A') && !already ? '<button class="oc-shelf"><i class="fa-solid fa-arrow-up-from-bracket"></i> 上架(取名交給店長)</button>' : '') +
+            '</div>';
+        const shelfBtn = slot.querySelector('.oc-shelf');
+        if (shelfBtn) shelfBtn.addEventListener('click', async () => {
+            shelfBtn.disabled = true;
+            shelfBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 店長命名中…';
+            const named = await _nameDrink(ings, tier, tags);
+            const fresh = await getMenu();
+            if (!fresh.some(m => m.key === key)) {
+                fresh.unshift({ id: 'drink_' + Date.now(), key, name: named.name, blurb: named.blurb, tier, price: CAFE_CFG.prices[tier], tags, ings: ings.map(x => x.id), ts: Date.now(), sold: 0 });
+                await _set(K_MENU, fresh);
+            }
+            shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-mug-hot"></i>「' + named.name + '」上架了!到「菜單」頁看看。</div>';
+        });
+    }
     async function _renderLab(body) {
-        const lab = await _get(K_LAB, {});
+        const F = CAFE_CFG.fund;
+        let rd = await _get(K_RD, null);
+        let revealed = null;
+        if (rd && rd.doneAt <= Date.now()) { try { revealed = await revealRd(); } catch (e) {} rd = null; }   // 時間到了＝打開就揭曉
+        const [lab, fund] = await Promise.all([_get(K_LAB, {}), _fundOrNull()]);
         const sel = { base: null, flavor: null, top: null };
         const tried = Object.keys(lab).length;
         const total = Object.values(CAFE_CFG.pantry).reduce((n, list) => n * list.length, 1);
+        const nameOf = (x) => [_ing('base', x.b), _ing('flavor', x.f), _ing('top', x.t)].filter(Boolean).map(i => i.name).join(' + ');
+        let busy = '';
+        if (rd) {
+            const mins = Math.max(1, Math.ceil((rd.doneAt - Date.now()) / 60000));
+            const h = Math.floor(mins / 60), mi = mins % 60;
+            busy = '<div class="oc-rd"><span class="oc-rd-title"><i class="fa-solid fa-hourglass-half"></i> 研發中：' + nameOf(rd) + '</span>' +
+                '<span class="oc-rd-left">還要 ' + (h ? h + ' 小時' + (mi ? ' ' : '') : '') + (mi || !h ? mi + ' 分' : '') + '</span></div>';
+        }
         body.innerHTML =
             '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-flask"></i> 飲品調配</span><span class="oc-section-note">配方圖鑑 ' + tried + ' / ' + total + '</span></div>' +
+            (revealed ? '<div class="oc-slot-label">研發好了</div><div class="oc-reveal-slot"></div>' : '') +
+            busy +
+            '<div class="oc-lab-pick' + (rd ? ' oc-locked' : '') + '">' +
             Object.keys(CAFE_CFG.pantry).map(slot =>
                 '<div class="oc-slot-label">' + SLOT_LABEL[slot] + '</div>' +
                 '<div class="oc-chips' + (CAFE_CFG.pantry[slot].length === 3 ? ' three' : '') + '" data-slot="' + slot + '">' +
                 CAFE_CFG.pantry[slot].map(x => '<button class="oc-chip" data-id="' + x.id + '">' + _sprite(x.id, 'oc-ing-icon') + x.name + '</button>').join('') +
                 '</div>').join('') +
-            '<button class="oc-brew" disabled><i class="fa-solid fa-blender"></i> 開始調配</button>' +
+            '</div>' +
+            '<button class="oc-brew" disabled><i class="fa-solid fa-blender"></i> 開始研發</button>' +
+            '<div class="oc-cost-note">研發一杯花 ' + F.rdCost + ' PT 和 ' + F.rdStamina + ' 點體力，等 ' + F.rdHours + ' 小時才知道做出什麼；試過的組合直接看結果</div>' +
             '<div class="oc-tried"><span>已研發 ' + tried + ' 種</span><span>' + Math.round(tried / total * 100) + '%</span></div>' +
             '<div class="oc-progress-line"><i></i></div>' +
             '<div class="oc-result-slot"></div>';
         body.querySelector('.oc-progress-line i').style.width = Math.min(100, tried / total * 100) + '%';
+        if (revealed) { _paintLabDot(); _refreshHeaderStats(); _labResult(body.querySelector('.oc-reveal-slot'), revealed.key, revealed.tier, revealed.b, revealed.f, revealed.t); }
         const brew = body.querySelector('.oc-brew');
+        const slotEl = body.querySelector('.oc-result-slot');
+        // 按鈕跟著選的東西變：沒選齊／試過了看結果／新組合要花錢花體力(不夠就灰掉寫為什麼)
+        const paint = () => {
+            const full = sel.base && sel.flavor && sel.top;
+            const key = full ? _comboKey(sel.base, sel.flavor, sel.top) : '';
+            slotEl.querySelector('.oc-why')?.remove();
+            if (rd) { brew.disabled = true; brew.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 研發中，等它好了再來'; return; }
+            if (!full) { brew.disabled = true; brew.innerHTML = '<i class="fa-solid fa-blender"></i> 開始研發'; return; }
+            if (lab[key]) { brew.disabled = false; brew.innerHTML = '<i class="fa-solid fa-eye"></i> 看結果（試過了）'; return; }
+            brew.innerHTML = '<i class="fa-solid fa-blender"></i> 開始研發（' + F.rdCost + ' PT・體力 ' + F.rdStamina + '）';
+            let why = '';
+            if (!fund) why = '讀不到書咖帳戶，等一下再試';
+            else if (fund.coins < F.rdCost) why = '錢不夠（研發要 ' + F.rdCost + '，帳戶剩 ' + fund.coins + '）';
+            else if (fund.stamina < F.rdStamina) why = '體力不夠（剩 ' + fund.stamina + '，研發要 ' + F.rdStamina + '），明天會回滿';
+            brew.disabled = !!why;
+            if (why) slotEl.insertAdjacentHTML('afterbegin', '<div class="oc-why">' + why + '</div>');
+        };
+        paint();
         body.querySelectorAll('.oc-chips').forEach(row => row.addEventListener('click', (e) => {
             const chip = e.target.closest('.oc-chip');
-            if (!chip) return;
+            if (!chip || rd) return;
             sel[row.dataset.slot] = chip.dataset.id;
             row.querySelectorAll('.oc-chip').forEach(c => c.classList.toggle('on', c === chip));
-            brew.disabled = !(sel.base && sel.flavor && sel.top);
+            slotEl.querySelector('.oc-result')?.remove();
+            paint();
         }));
         brew.addEventListener('click', async () => {
+            if (!(sel.base && sel.flavor && sel.top) || rd) return;
             const key = _comboKey(sel.base, sel.flavor, sel.top);
-            const tier = _tierOf(key);
-            const ings = [_ing('base', sel.base), _ing('flavor', sel.flavor), _ing('top', sel.top)];
-            const tags = _tagsOf(sel.base, sel.flavor, sel.top);
-            lab[key] = tier;
-            await _set(K_LAB, lab);
-            const nowTried = Object.keys(lab).length;
-            body.querySelector('.oc-tried').innerHTML = '<span>已研發 ' + nowTried + ' 種</span><span>' + Math.round(nowTried / total * 100) + '%</span>';
-            const progress = body.querySelector('.oc-progress-line i');
-            if (progress) progress.style.width = Math.min(100, nowTried / total * 100) + '%';
-            const T = TIER_TEXT[tier];
-            const menu = await getMenu();
-            const already = menu.some(m => m.key === key);
-            const slot = body.querySelector('.oc-result-slot');
-            slot.innerHTML =
-                '<div class="oc-result"><span class="oc-badge ' + T.cls + '">' + T.label + '</span> ' +
-                ings.map(x => x.name).join(' + ') +
-                '<div class="oc-note">' + (already ? '這款已經在菜單上了。' : T.note) + '</div>' +
-                ((tier === 'S' || tier === 'A') && !already ? '<button class="oc-shelf"><i class="fa-solid fa-arrow-up-from-bracket"></i> 上架(取名交給店長)</button>' : '') +
-                '</div>';
-            const shelfBtn = slot.querySelector('.oc-shelf');
-            if (shelfBtn) shelfBtn.addEventListener('click', async () => {
-                shelfBtn.disabled = true;
-                shelfBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 店長命名中…';
-                const named = await _nameDrink(ings, tier, tags);
-                const fresh = await getMenu();
-                if (!fresh.some(m => m.key === key)) {
-                    fresh.unshift({ id: 'drink_' + Date.now(), key, name: named.name, blurb: named.blurb, tier, price: CAFE_CFG.prices[tier], tags, ings: ings.map(x => x.id), ts: Date.now(), sold: 0 });
-                    await _set(K_MENU, fresh);
-                }
-                shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-mug-hot"></i>「' + named.name + '」上架了!到「菜單」頁看看。</div>';
-            });
+            if (lab[key]) { _labResult(slotEl, key, lab[key], sel.base, sel.flavor, sel.top); return; }
+            brew.disabled = true;
+            const r = await startRd(sel.base, sel.flavor, sel.top);
+            if (!r.ok) {
+                slotEl.querySelector('.oc-why')?.remove();
+                slotEl.insertAdjacentHTML('afterbegin', '<div class="oc-why">' + r.why + '</div>');
+                return;
+            }
+            _refreshHeaderStats();
+            if (_winEl) _renderTab('lab', _winEl.querySelector('.oc-body'));
         });
     }
 
@@ -770,13 +1180,14 @@
         if (!_winEl) return;
         _refreshHeaderStats();
         _paintStaffDot();
+        _paintLabDot();
         const on = _winEl.querySelector('.oc-tab.on');
         const tab = on ? on.dataset.tab : 'menu';
-        if (tab !== 'lab' && tab !== 'free') _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想正在操作,別重畫
+        if (tab !== 'lab' && tab !== 'free' && !_winEl.querySelector('.oc-batch')) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數正在操作,別重畫
     }
     const _b = { get: _get, getStrict: _getStrict, set: _set, settle: _settle, dayNum: _dayNum, hm: _hm,
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
         isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid };
-    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, _settle, _b };   // _settle=console 診斷用
+    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, makeBatch, startRd, revealRd, _settle, _b };   // _settle=console 診斷用
     console.log('[Cafe] 書咖經營系統就緒');
 })();
