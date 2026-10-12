@@ -729,6 +729,7 @@
             map:        () => window.OS_MAP?.launchApp,
             worldbook:  () => window.OS_WORLDBOOK?.launch,
             journal:    () => window.OS_JOURNAL?.launch,
+            calendar:   () => window.OS_CALENDAR?.launch,   // 📅 VN 末尾的「日曆」鍵（手機殼的日曆 app 照留）
             landlord:   () => window.OS_LANDLORD?.launch,
             farm:       () => window.OS_FARM?.launch,   // 🌱 後院（農場＋牧場）：手機殼「後院」app 開進來，全螢幕
         };

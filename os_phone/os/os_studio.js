@@ -1638,7 +1638,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 <button id="vn-end-btn-data" type="button">資料中心</button>
 <button id="vn-end-btn-ctx" type="button">CTX</button>
 <button id="vn-end-btn-journal" type="button">日誌</button>
-<button id="vn-end-btn-threads" type="button">線索</button>
+<button id="vn-end-btn-threads" type="button">日曆</button>
 <button id="vn-end-btn-map" type="button">地圖</button>
 <button id="vn-end-btn-regen" type="button">重新生成</button>
 </div>

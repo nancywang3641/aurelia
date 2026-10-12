@@ -34,8 +34,10 @@
         },
 
 
-        show() {
+        // opt.tab='threads'＝直接開到線索那頁（VN 末尾、世界面板的「線索」鍵）
+        show(opt) {
             console.log('[Extractor] 🔍 show() 被調用');
+            this._wantTab = (opt && opt.tab) || null;
             const win = window.parent || window;
             const doc = win.document || document;
 
@@ -201,6 +203,8 @@
 
             if (this._scanning) return;   // 防連點刷新疊兩條等待迴圈
             this._scanning = true;
+            const wantThreads = this._wantTab === 'threads' || this.activeTab === 'aurelia_threads';   // 指名要線索、或上次停在線索
+            this._wantTab = null;
             contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
                 <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-hourglass-half"></i></div>讀取劇情數據中...
             </div>`;
@@ -218,6 +222,7 @@
                 contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
                     <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-inbox"></i></div>無對話數據。
                 </div>`;
+                this._injectThreadsTab(wantThreads);
                 return;
             }
 
@@ -282,6 +287,7 @@
                     <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-magnifying-glass"></i></div>
                     未提取到符合規格的內容或面板。
                 </div>`;
+                this._injectThreadsTab(wantThreads);
                 return;
             }
 
@@ -297,6 +303,32 @@
             // 異步注入「狀態面板」固定 tab（從展廳啟用的 UI 模板渲染 + 當前變數值）
             // chatId-aware：不同 chat 對應不同 pack 的 active 模板
             this._injectStatePanelTab().catch(e => console.warn('[Extractor] 狀態面板注入失敗:', e));
+            this._injectThreadsTab(wantThreads);
+        },
+
+        // 🧵 線索：跟狀態、選擇放同一個窗（10-13 她：拆成獨立窗口，一邊看線索一邊要回資訊中心，很卡手）
+        //   點到這頁才畫（線索要讀資料庫、畫關係圖）；沒有面板只有一行提示時，點過來順便把那行收掉
+        _injectThreadsTab(want) {
+            const win = window.parent || window;
+            const T = win.OS_STORY_THREADS || window.OS_STORY_THREADS;
+            if (!T || typeof T.mountInto !== 'function') return;
+            const doc = win.document || document;
+            const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
+            if (!overlay) return;
+            overlay.querySelector('#tab-btn-aurelia_threads')?.remove();
+            overlay.querySelector('#tab-pane-aurelia_threads')?.remove();
+            this.createTab('aurelia_threads', '線索', '');
+            const btn = overlay.querySelector('#tab-btn-aurelia_threads');
+            const pane = overlay.querySelector('#tab-pane-aurelia_threads');
+            if (!btn || !pane) return;
+            let mounted = false;
+            const go = () => {
+                overlay.querySelectorAll('#ue-content-area > :not(.ue-tab-pane)').forEach(n => n.remove());
+                this.switchTab('aurelia_threads');
+                if (!mounted) { mounted = true; T.mountInto(pane); }
+            };
+            btn.onclick = go;
+            if (want) go();
         },
 
         async _injectStatePanelTab() {
@@ -350,7 +382,7 @@
             } else {
                 _updBody = _le ? '本輪沒有更新任何欄位' : '本輪沒有抽取記錄（可能用 <vars> 或尚未生成）';
             }
-            html = html + '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#a99;padding:8px 0;"><i class="fa-solid fa-microscope"></i> 本輪更新了什麼（點開看）</summary><pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.18);border-radius:8px;padding:10px;font-size:11px;line-height:1.7;color:#ccc;margin:6px 0 0;max-height:280px;overflow:auto;">' + _updBody + '</pre></details>';
+            html = html + '<details class="ue-keep-closed" style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:#a99;padding:8px 0;"><i class="fa-solid fa-microscope"></i> 本輪更新了什麼（點開看）</summary><pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.18);border-radius:8px;padding:10px;font-size:11px;line-height:1.7;color:#ccc;margin:6px 0 0;max-height:280px;overflow:auto;">' + _updBody + '</pre></details>';
 
             // 建 tab（重複建立會留下舊的，先清掉）
             const doc = win.document || document;
@@ -392,7 +424,8 @@
             pane.id = `tab-pane-${id}`;
             pane.innerHTML = contentHtml;
 
-            pane.querySelectorAll('details:not([open])').forEach(el => el.setAttribute('open', 'true'));
+            // 卡片面板裡的摺疊一律攤開（原本的設計）；ue-keep-closed 是我們自己加的（本輪更新了什麼），維持收著
+            pane.querySelectorAll('details:not([open]):not(.ue-keep-closed)').forEach(el => el.setAttribute('open', 'true'));
             contentArea.appendChild(pane);
         },
 

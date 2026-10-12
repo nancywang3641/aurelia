@@ -2524,11 +2524,11 @@
                     endOverlay.classList.add('active');
                     // 四個功能鍵的行為集中在這裡：基本鍵組與世界活動面板共用同一份，
                     //   面板裡的按鈕用 data-act 認，不在那邊再寫一份開 app 的邏輯。
-                    const _actData = () => {
+                    const _actData = (opt) => {
                             if (win.OS_API?.isStandalone?.() ?? false) {
-                                VN_StandaloneArchive.show();
+                                VN_StandaloneArchive.show(opt);
                             } else if (win.AureliaHtmlExtractor && typeof win.AureliaHtmlExtractor.show === 'function') {
-                                win.AureliaHtmlExtractor.show();
+                                win.AureliaHtmlExtractor.show(opt);
                             } else if (win.toggleHtmlExtractor) {
                                 win.toggleHtmlExtractor();
                             } else {
@@ -2589,11 +2589,13 @@
                         }
                     };
                     const acts = {
-                        data: _actData,
+                        data: () => _actData(),
                         ctx: _actCtx,
                         journal: () => _openPhoneAppAboveVN('journal'),
-                        // 🧵 線索帳：還沒下文的事畫成圖，想看／先放著在這裡挑（story_threads.js）
-                        threads: () => { try { win.OS_STORY_THREADS && win.OS_STORY_THREADS.openPanel(); } catch (e) { console.warn('[VN_Core] 開線索失敗', e); } },
+                        // 🧵 線索帳搬進資料中心當一頁（10-13 她：跟狀態、選擇放同一個窗）；有人按到線索就直接開到那頁
+                        threads: () => _actData({ tab: 'threads' }),
+                        // 📅 日曆：開手機的日曆 app（手機上那個照留）
+                        calendar: () => _openPhoneAppAboveVN('calendar'),
                         // 🗺️ 地圖：劇情末尾直接開地圖面板看當前世界（探索/排程/小地圖都在裡面）
                         map: () => _openPhoneAppAboveVN('map'),
                         // 系統鍵：世界活動面板會把右上角那三顆一起重畫，行為指向原本那三顆做的事
@@ -2603,7 +2605,8 @@
                         // 🔁 這章不滿意 → 丟掉重寫（世界面板沒做這顆的話，基本鍵那顆會補上來）
                         regen: () => { try { window.VN_Core.regenerateLatest(); } catch (e) { console.warn('[VN_Core] 重新生成失敗', e); } },
                     };
-                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', threads: 'vn-end-btn-threads', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
+                    // 🚨 日曆用的是原本「線索」那顆的位子和編號：VN 外觀設計（創作室）是照這些編號上樣式的，換新編號舊外觀就套不到它
+                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', calendar: 'vn-end-btn-threads', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
                     Object.keys(BASIC_OF).forEach(k => {
                         const b = document.getElementById(BASIC_OF[k]);
                         if (b) { b.onclick = acts[k]; b.classList.remove('hidden'); }

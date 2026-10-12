@@ -548,10 +548,6 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
     function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
     let _panel = null, _sel = null, _ro = null;
-    function _host() {
-        const end = document.getElementById('vn-end-overlay');
-        return (end && end.parentElement) || document.body;
-    }
     function _closePanel() {
         try { _ro?.disconnect(); } catch (e) {}
         _ro = null;
@@ -559,25 +555,25 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         _panel = null; _sel = null;
     }
 
-    async function openPanel() {
+    // 畫在資訊中心／資料中心的「線索」分頁裡（不是自己開一個窗）：沒有返回鍵，其他照舊
+    async function mountInto(host) {
+        if (!host) return;
         _regHelp();
         _closePanel();
         const el = document.createElement('div');
-        el.id = 'vn-threads-overlay';
+        el.className = 'sthr-embed';
         el.innerHTML = `
             <div class="sthr-head">
-                <button type="button" class="sthr-back" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="sthr-title">線索 ${_help('threads_what')}</div>
                 <label class="sthr-switch"><input type="checkbox" class="sthr-on"><span>每章記一次</span></label>
             </div>
             <div class="sthr-body"><div class="sthr-loading">讀取中…</div></div>`;
-        _host().appendChild(el);
+        host.innerHTML = '';
+        host.appendChild(el);
         _panel = el;
-        el.querySelector('.sthr-back').addEventListener('click', _closePanel);
         const sw = el.querySelector('.sthr-on');
         sw.checked = _isOn();
         sw.addEventListener('change', () => { _setOn(sw.checked); _render(); });
-        requestAnimationFrame(() => el.classList.add('active'));
         await _render();
     }
 
@@ -858,7 +854,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
     win.OS_STORY_THREADS = {
         siteFor, addendum, commit, reconcile, snapshot, setPick, buildText, buildBlock,
         getLean, setLean, leanList,
-        openPanel, closePanel: _closePanel,
+        mountInto, closePanel: _closePanel,   // 10-13 起線索只畫在資訊中心／資料中心的分頁裡（舊的獨立窗 openPanel 拿掉了）
         isOn: _isOn, setOn: _setOn,
         INJECT_ID, CFG,
         // 診斷：印出目前帳本

@@ -16,7 +16,9 @@
     const VN_StandaloneArchive = {
         _pendingChoices: null,  // [Choice|] 帶入的選項陣列
         _choiceCallback: null,  // 選項選定後的回調
-        show() {
+        // opt.tab='threads'＝直接開到線索那頁
+        show(opt) {
+            this._wantTab = (opt && opt.tab) || null;
             const parentEl = document.getElementById('page-game') || document.body;
             let overlay = document.getElementById('aurelia-extractor-phone-overlay');
             if (!overlay) {
@@ -88,6 +90,16 @@
                     (pane) => this._mountCard(contentArea, pane, c.html));
             });
             this._addTab(tabBar, contentArea, 'avs',      '狀態',      await this._avsHtml(),       !hasChoices && !cards.length, _dropCards);
+            // 🧵 線索：跟狀態、選擇放同一個窗（10-13 她：拆成獨立窗口要來回切很卡手）；點到才畫
+            const T = win.OS_STORY_THREADS || window.OS_STORY_THREADS;
+            if (T && typeof T.mountInto === 'function') {
+                this._addTab(tabBar, contentArea, 'threads', '線索', '', false, (pane) => {
+                    _dropCards();
+                    if (!pane._sthrMounted) { pane._sthrMounted = true; T.mountInto(pane); }
+                });
+                if (this._wantTab === 'threads') tabBar.lastElementChild.click();
+            }
+            this._wantTab = null;
             // 💰 錢包分頁已移除：OS_ECONOMY 早就退役到 _archive/dead-code、任何載入清單都不再載它，
             //    這頁在畫面上永遠只有一行「OS_ECONOMY 未載入」。經濟現在是 OS_PT（視差城市 PT）那一套。
 
