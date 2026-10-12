@@ -466,12 +466,15 @@
         } catch (e) { console.warn('[Cafe] 事件生成失敗,留隊下次', e); return null; }
     }
     let _settling = null;   // 重入閂:開窗連點別疊跑
-    async function _settle() {
+    // opt.quiet＝大廳舞台每隔一陣子補算一次（看誰在店裡）：這條路一律不叫模型——
+    //   書裡角色第一次上門的定調留在排隊裡、事件卡留到她打開櫃台那次（一天一次）才處理
+    async function _settle(opt) {
         if (_settling) return _settling;
-        _settling = _settleInner().finally(() => { _settling = null; });
+        _settling = _settleInner(opt).finally(() => { _settling = null; });
         return _settling;
     }
-    async function _settleInner() {
+    async function _settleInner(opt) {
+        const quiet = !!(opt && opt.quiet);
         let off = false;   // 關掉「書咖離線訪客」＝不再擲新的客人；已經排隊的照樣到時間進店
         try { off = (win.localStorage || localStorage).getItem('cafe_offline_visits') === '0'; } catch (e) {}
         const roster = off ? [] : await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []);
@@ -484,10 +487,13 @@
         if (!shop.lastDay) { shop.lastDay = today - 1; await _set(K_SHOP, shop); }   // 開張日：今天就營業(開張那一刻之前的客人不算)
         const rosterEv = off ? await Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []) : roster;
         const pend0 = await _get(K_PEND, []);
-        const isDue = p => p.day < today || p.t <= nowMin;
+        const isDue = p => (p.day < today || p.t <= nowMin) && !(quiet && p.tune);   // 等定調的那筆不叫模型就放不進來
         const dayChanged = shop.lastDay < today;   // 換日：前一天剩的要倒掉，客人沒開也一樣
         const rollDays = dayChanged && (roster.length > 0 || !!REG);
-        if (!dayChanged && !pend0.some(isDue)) return false;
+        // 事件卡一天處理一次：她當天第一次「不是大廳悄悄補算」的那次（舊存檔沒記過＝看上次換日是哪天）
+        const evDay0 = shop.evDay != null ? shop.evDay : (shop.lastDay || 0);
+        const evOk = !quiet && evDay0 < today;
+        if (!dayChanged && !pend0.some(isDue) && !evOk) return false;
         const from = Math.max(shop.lastDay + 1, today - 7, fund0.openDay || 0);
         const npcs = await _get(K_NPC, {});
         const menu = await getMenu();
@@ -501,6 +507,7 @@
         const pend = pend0.filter(p => !isDue(p));   // 還沒到時間的照舊排隊
         const queue = pend0.filter(isDue);   // 這次要放進店裡的
         let earned = 0, cupsAdded = 0, anyVisit = false, tunedRun = 0, seq = 0;   // 首訪定調每次結算≤3次(名冊變大後防API爆發,沒輪到的自然留到下次)
+        const tuneWait = new Set(pend0.filter(p => p.tune).map(p => p.key));   // 已經排好第一次上門、還沒定調的
         // 換日只決定「誰、幾點來」；今天比現在晚的先排隊，到點那一刻才看庫存決定點什麼
         const book = (e) => { e.seq = seq++; if (e.day === today && e.t > nowMin) pend.push(e); else queue.push(e); };
         if (rollDays) for (let day = from; day <= today; day++) {
@@ -510,14 +517,11 @@
                 const st = npcs[r.key] || (npcs[r.key] = { name: r.name, prefs: null, incl: 0.5, visits: 0, spend: 0, items: {} });
                 const t = OPEN_MIN + Math.floor(Math.random() * (CLOSE_MIN - OPEN_MIN));
                 if (t < openCut) continue;
-                if (!st.prefs) {   // 還沒定調=還沒第一次上門
-                    if (tunedRun < 3 && Math.random() < 0.55) {
-                        tunedRun++;
-                        const tuned = await _tuneNpc(r);
-                        st.prefs = tuned.tags; st.incl = tuned.incl;
-                        if (tuned.book) { try { await addBook({ title: tuned.book.title, by: r.name, note: tuned.book.note }); } catch (e) {} }
+                if (!st.prefs) {   // 還沒定調=還沒第一次上門：只排時間，到店那一刻才叫模型定調（大廳補算時不叫，留著排隊）
+                    if (!tuneWait.has(r.key) && Math.random() < 0.55) {
+                        tuneWait.add(r.key);
                         st.visits++; coming.add(r.key);
-                        book({ day, t, key: r.key, name: r.name, line: TPL.first, price: 0, first: true });
+                        book({ day, t, key: r.key, name: r.name, first: true, tune: true });
                     }
                     continue;
                 }
@@ -558,6 +562,21 @@
         const L = (REG && REG.LINES) || {};
         for (const a of queue) {
             const e = Object.assign({}, a); delete e.seq;
+            if (e.tune) {   // 書裡的角色第一次上門：這時才叫模型定調（每次結算最多 3 位，沒輪到的留著排隊）
+                if (quiet) { pend.push(a); continue; }   // 大廳悄悄補算：不叫模型，等她開櫃台
+                const r = roster.find(x => x.key === e.key) || rosterEv.find(x => x.key === e.key);
+                const st = npcs[e.key];
+                if (!r || !st) continue;
+                if (st.prefs) continue;   // 已經定過了（別條路先定了）
+                if (tunedRun >= 3) { pend.push(a); continue; }
+                tunedRun++;
+                const tuned = await _tuneNpc(r);
+                st.prefs = tuned.tags; st.incl = tuned.incl;
+                if (tuned.book) { try { await addBook({ title: tuned.book.title, by: r.name, note: tuned.book.note }); } catch (err) {} }
+                fresh.push({ id: _mkId(), day: e.day, t: e.t, key: e.key, name: e.name, line: TPL.first, price: 0 });
+                anyVisit = true;
+                continue;
+            }
             if (e.line) {   // 第一次上門(句子早就定好)、改版前排的隊(點什麼早就算過了)：照舊進紀錄
                 const m = e.itemId ? menu.find(x => x.id === e.itemId) : null;
                 delete e.itemId; delete e.first;
@@ -638,8 +657,9 @@
         }
         // 🎬 A級事件消化:單次結算最多2件(敘事節點才燒API),API掛了整隊留到下次
         //   只在換日那次處理（一天一次，同改版前）：排隊客人到時間放出來、店員上班先結算，都不另外叫模型
+        //   換日那次可能是大廳悄悄補算的（不叫模型）→ 改記「今天處理過沒」，她當天第一次打開櫃台時處理
         let evDone = 0;
-        while (rollDays && evq.length && evDone < 2) {
+        while (evOk && evq.length && evDone < 2) {
             const ev = evq[0];
             const r = rosterEv.find(x => x.key === ev.key);
             const st = npcs[ev.key];
@@ -684,6 +704,7 @@
             const logsOut = fresh.concat(logsNow);
             Object.assign(npcsNow, npcs);
             if (dayChanged) shopNow.lastDay = today;
+            if (evOk) shopNow.evDay = today;
             shopNow.popularity = Math.min(999, (shopNow.popularity || 0) + ((shop.popularity || 0) - pop0));
             shopNow.revenue = (shopNow.revenue || 0) + earned;
             shopNow.cups = (shopNow.cups || 0) + cupsAdded;
@@ -1185,7 +1206,7 @@
         const tab = on ? on.dataset.tab : 'menu';
         if (tab !== 'lab' && tab !== 'free' && !_winEl.querySelector('.oc-batch')) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數正在操作,別重畫
     }
-    const _b = { get: _get, getStrict: _getStrict, set: _set, settle: _settle, dayNum: _dayNum, hm: _hm,
+    const _b = { get: _get, getStrict: _getStrict, set: _set, settle: _settle, settleQuiet: () => _settle({ quiet: true }), dayNum: _dayNum, hm: _hm, minOf: _minOf,
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
         isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid };
     win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, makeBatch, startRd, revealRd, _settle, _b };   // _settle=console 診斷用

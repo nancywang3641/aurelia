@@ -243,7 +243,7 @@
     const THEATER_FREQ = { low: 0.08, mid: 0.18, high: 0.35 };
     function _theaterOn()   { try { return localStorage.getItem('lobby_theater_on') !== '0'; } catch (e) { return true; } }
     function _theaterFreq() { try { return THEATER_FREQ[localStorage.getItem('lobby_theater_freq')] || THEATER_FREQ.mid; } catch (e) { return THEATER_FREQ.mid; } }
-    function _theaterEligible() { return S.npcs.filter(n => n && n !== S.player && n.name && !n.follow); }   // 跟隨玩家中的客人不抓來配對（免打斷跟隨、也免 follow 態被凍結卡住）
+    function _theaterEligible() { return S.npcs.filter(n => n && n !== S.player && n.name && !n.follow && !n.scriptOnly); }   // 跟隨玩家中的客人不抓來配對（免打斷跟隨、也免 follow 態被凍結卡住）；書咖常客照腳本跑、沒人設，不配對
     // 配對只凍結原地、不強迫轉向（面對面交給偷窺 overlay 的分身動畫演；地圖上的人保持原姿勢）
     function _theaterHold(a, b) {
         a._theaterFrozen = b._theaterFrozen = true;

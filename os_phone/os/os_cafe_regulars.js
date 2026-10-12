@@ -31,19 +31,21 @@
         moody:   { label: '看心情' },
     };
 
+    // look＝在大廳書咖裡長什麼樣（三視圖長條圖的檔名，放在素材庫 cafe_guests_v1/）
+    //   同類型兩位挑不一樣的圖：沒用到的 fashion-man、street-woman、trades-man、trades-woman、traveler-man、wealthy-woman 留給以後的新客人
     const PEOPLE = [
-        { key: 'g_lin',      name: '林伯伯',   type: 'senior',    traits: ['loyal'] },
-        { key: 'g_xiuqin',   name: '秀琴阿姨', type: 'senior',    traits: ['social', 'thrifty'] },
-        { key: 'g_yijun',    name: '怡君',     type: 'office_f',  traits: ['loyal'] },
-        { key: 'g_peishan',  name: '佩珊',     type: 'office_f',  traits: ['novelty', 'picky'] },
-        { key: 'g_zhiming',  name: '志明',     type: 'civil_m',   traits: ['thrifty'] },
-        { key: 'g_junhong',  name: '俊宏',     type: 'civil_m',   traits: ['loyal', 'social'] },
-        { key: 'g_azhe',     name: '阿哲',     type: 'freelance', traits: ['moody'] },
-        { key: 'g_xiaokui',  name: '小葵',     type: 'freelance', traits: ['novelty'] },
-        { key: 'g_yating',   name: '雅婷',     type: 'student_f', traits: ['social', 'novelty'] },
-        { key: 'g_shihan',   name: '詩涵',     type: 'student_f', traits: ['picky'] },
-        { key: 'g_guanyu',   name: '冠宇',     type: 'student_m', traits: ['thrifty', 'social'] },
-        { key: 'g_jiahao',   name: '家豪',     type: 'student_m', traits: ['moody'] },
+        { key: 'g_lin',      name: '林伯伯',   type: 'senior',    traits: ['loyal'], look: 'retired-man' },
+        { key: 'g_xiuqin',   name: '秀琴阿姨', type: 'senior',    traits: ['social', 'thrifty'], look: 'retired-woman' },
+        { key: 'g_yijun',    name: '怡君',     type: 'office_f',  traits: ['loyal'], look: 'office-woman' },
+        { key: 'g_peishan',  name: '佩珊',     type: 'office_f',  traits: ['novelty', 'picky'], look: 'fashion-woman' },
+        { key: 'g_zhiming',  name: '志明',     type: 'civil_m',   traits: ['thrifty'], look: 'office-man' },
+        { key: 'g_junhong',  name: '俊宏',     type: 'civil_m',   traits: ['loyal', 'social'], look: 'wealthy-man' },
+        { key: 'g_azhe',     name: '阿哲',     type: 'freelance', traits: ['moody'], look: 'creative-man' },
+        { key: 'g_xiaokui',  name: '小葵',     type: 'freelance', traits: ['novelty'], look: 'creative-woman' },
+        { key: 'g_yating',   name: '雅婷',     type: 'student_f', traits: ['social', 'novelty'], look: 'student-girl' },
+        { key: 'g_shihan',   name: '詩涵',     type: 'student_f', traits: ['picky'], look: 'traveler-woman' },
+        { key: 'g_guanyu',   name: '冠宇',     type: 'student_m', traits: ['thrifty', 'social'], look: 'student-boy' },
+        { key: 'g_jiahao',   name: '家豪',     type: 'student_m', traits: ['moody'], look: 'street-man' },
     ];
 
     // 訪客手札上的句子（{want} 想點的、{item} 點到的、{friend} 一起來的那位）
