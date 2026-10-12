@@ -5,6 +5,7 @@
 //   AI 從劇情寫進來的（[Event|]）跟你手動加的一起放，來源用小標區分。
 //   一天照時段（早上／中午／下午／晚上／深夜）分段、左欄寫鐘點；地圖接的委託也佔一格（10-10）。
 //   點標頭的「今天」可以改故事日期，時鐘從那裡接下去。
+//   openToday()：劇情結束那排「日曆」鍵開的小卡，只看今天的行程（10-13）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -60,6 +61,45 @@
         .cal-add-input { flex: 1; min-width: 0; border: none; outline: none; font-size: 14px; background: var(--os-page-bg); border-radius: 10px; padding: 10px 12px; font-family: inherit; color: var(--os-ink); }
         .cal-add-btn { width: 40px; border-radius: 10px; background: #e05a3d; color: var(--os-surface); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; }
         .cal-add-btn:active { opacity: 0.75; }
+
+        /* 📅 今天的行程（openToday，劇情結束那排「日曆」鍵）：疊在劇情畫面上，黑金跟劇情末尾那排鍵同一套；進出照委託完成卡 */
+        .caltd-mask { position: fixed; inset: 0; z-index: 100050; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; animation: caltdIn .3s ease-out; cursor: pointer; font-family: 'Noto Sans TC', sans-serif; }
+        .caltd-mask.out { animation: caltdOut .28s ease-in forwards; }
+        .caltd-mask.out .caltd-card { animation: caltdDown .28s ease-in forwards; }
+        @keyframes caltdIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes caltdOut { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes caltdUp { from { transform: translateY(32px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes caltdDown { from { transform: translateY(0); opacity: 1; } to { transform: translateY(32px); opacity: 0; } }
+        .caltd-card { width: min(360px, 100%); max-height: min(78vh, 640px); display: flex; flex-direction: column; box-sizing: border-box; background: linear-gradient(160deg, #1b1610, #0d0b08); border: 1px solid rgba(212,175,55,.55); border-radius: 14px; color: #eee; box-shadow: 0 18px 44px rgba(0,0,0,.55), 0 0 0 4px rgba(212,175,55,.08); animation: caltdUp .4s cubic-bezier(.2,.9,.3,1); cursor: default; overflow: hidden; }
+        .caltd-head { flex-shrink: 0; display: flex; align-items: flex-start; gap: 10px; padding: 16px 16px 12px; border-bottom: 1px solid rgba(212,175,55,.22); }
+        .caltd-head-main { flex: 1; min-width: 0; }
+        .caltd-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; letter-spacing: 2px; color: #1a1408; background: #D4AF37; border-radius: 999px; padding: 3px 12px; font-weight: 700; }
+        .caltd-date { margin-top: 10px; font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .caltd-now { font-size: 14px; font-weight: 600; color: #ffd76a; font-variant-numeric: tabular-nums; }
+        .caltd-x { flex-shrink: 0; width: 30px; height: 30px; margin: -4px -6px 0 0; padding: 0; border: none; border-radius: 50%; background: transparent; color: #b9b2a3; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .caltd-x:hover { color: #fff; background: rgba(255,255,255,.08); }
+        .caltd-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 0 12px; scrollbar-width: thin; scrollbar-color: rgba(212,175,55,.35) transparent; }
+        .caltd-body::-webkit-scrollbar { width: 4px; }
+        .caltd-body::-webkit-scrollbar-thumb { background: rgba(212,175,55,.35); border-radius: 2px; }
+        .caltd-body::-webkit-scrollbar-track { background: transparent; }
+        .caltd-slot { padding: 12px 16px 4px; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #D4AF37; }
+        .caltd-ev { display: flex; align-items: center; gap: 10px; padding: 8px 16px; }
+        .caltd-time { width: 40px; flex-shrink: 0; font-size: 12px; color: #b9b2a3; font-variant-numeric: tabular-nums; }
+        .caltd-bar { width: 3px; align-self: stretch; min-height: 26px; border-radius: 2px; background: #e05a3d; flex-shrink: 0; }
+        .caltd-ev.caltd-me .caltd-bar { background: #3d8be0; }
+        .caltd-ev.caltd-mis .caltd-bar { background: #d69628; }
+        .caltd-text { flex: 1; min-width: 0; }
+        .caltd-title { font-size: 14px; color: #f2ede3; line-height: 1.45; word-break: break-word; }
+        .caltd-title i { margin-right: 6px; color: #d69628; font-size: 12px; }
+        .caltd-state { margin-left: 4px; font-size: 12px; color: #b9b2a3; }
+        .caltd-src { margin-top: 2px; font-size: 11px; color: #8f887b; }
+        .caltd-ev.caltd-past .caltd-title, .caltd-ev.caltd-done .caltd-title { color: #8f887b; }
+        .caltd-ev.caltd-past .caltd-bar, .caltd-ev.caltd-done .caltd-bar { opacity: .35; }
+        .caltd-nowline { display: flex; align-items: center; gap: 8px; padding: 6px 16px; font-size: 11px; font-weight: 700; color: #ffd76a; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+        .caltd-nowline::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,215,106,.8), rgba(255,215,106,0)); }
+        .caltd-empty { padding: 34px 20px 26px; text-align: center; color: #b9b2a3; font-size: 14px; }
+        .caltd-empty i { display: block; font-size: 26px; color: rgba(212,175,55,.5); margin-bottom: 10px; }
+        .caltd-empty-sub { margin-top: 6px; font-size: 12px; color: #8f887b; line-height: 1.6; }
     `;
     function injectCss(d) {
         if (!d || d.getElementById('os-calendar-css')) return;
@@ -235,6 +275,104 @@
     function prompt(title, value, hint) { return AUI.prompt(title, value, { placeholder: hint || '' }); }
     function toast(msg) { AUI.toast(msg); }
 
+    // ── 📅 今天的行程 ───────────────────────────────────────────────
+    //   10-13 她：「VN結束畫面那裡的日曆可不可以簡化成當天的行程表就好? 不需要到每日?」
+    //   只看今天：照時段分段、左邊鐘點、過了的淡掉、「現在」那條線擺在接下來那一件前面。只讀——
+    //   要翻別天、自己加一筆，去手機上的日曆 app（那個照留）。進出跟委託完成卡同一套：往上滑進來，點旁邊或 ✕ 往下滑走。
+    let _todayEl = null;
+    function todayHtml(st) {
+        const head = (inner) => `
+            <div class="caltd-head">
+                <div class="caltd-head-main">
+                    <div class="caltd-tag"><i class="fa-solid fa-calendar-day"></i>今天的行程</div>
+                    ${inner}
+                </div>
+                <button type="button" class="caltd-x" data-act="close" title="關閉"><i class="fa-solid fa-xmark"></i></button>
+            </div>`;
+        if (!st || !st.date) {
+            return head('') + '<div class="caltd-body"><div class="caltd-empty"><i class="fa-regular fa-calendar"></i>這個故事還沒有日期<div class="caltd-empty-sub">劇情寫到日期就會自己記上；也可以在手機的日曆點「今天」自己設</div></div></div>';
+        }
+        const d = st.date;
+        const dateLine = `<div class="caltd-date">${d.m} 月 ${d.d} 日${st.time ? `<span class="caltd-now">${esc(st.time)}</span>` : ''}</div>`;
+        const evs = eventsOn(st, d.y || anchorYear(st), d.m, d.d);
+        if (!evs.length) {
+            return head(dateLine) + '<div class="caltd-body"><div class="caltd-empty"><i class="fa-regular fa-calendar-check"></i>今天沒有約定<div class="caltd-empty-sub">劇情裡說好的事、接的委託，會自己記進來</div></div></div>';
+        }
+        const M = S();
+        const slots = (M.SLOTS || []).concat(['']);
+        const slotOf = e => (M.slotOf ? M.slotOf(e.time) : '');
+        const minsOf = e => (M.minsOf ? M.minsOf(e.time) : null);
+        const now = M.minsOf ? M.minsOf(st.time) : null;
+        const nowSlot = st.time ? slots.indexOf(slotOf({ time: st.time })) : -1;
+        // 過了：寫了鐘點的看鐘點；只寫時段的看那個時段是不是已經過去
+        const past = e => {
+            if (now == null) return false;
+            const m = minsOf(e);
+            if (m != null) return m < now;
+            const si = slots.indexOf(slotOf(e));
+            return si >= 0 && nowSlot >= 0 && si < nowSlot && slotOf(e) !== '';
+        };
+        // 同一段裡照時間排（只寫時段的排在那段最前面）
+        const items = [];
+        slots.forEach(id => {
+            const list = evs.filter(e => slotOf(e) === id).sort((a, b) => (minsOf(a) == null ? -1 : minsOf(a)) - (minsOf(b) == null ? -1 : minsOf(b)));
+            if (!list.length) return;
+            items.push({ slot: id || '沒說幾點' });
+            list.forEach(e => items.push({ e: e }));
+        });
+        // 「現在」那條線：擺在第一件還沒過、還沒辦完的前面（那件是一段的第一件就擺在段名前面）；全部都過了就擺最後
+        if (now != null) {
+            let at = items.findIndex(it => it.e && !past(it.e) && !it.e.done && slotOf(it.e) !== '');
+            if (at < 0) at = items.length;
+            else if (at > 0 && items[at - 1].slot) at--;
+            items.splice(at, 0, { now: true });
+        }
+        const row = (e) => {
+            const clock = minsOf(e) != null ? e.time : '';
+            const cls = 'caltd-ev' + (e.src === 'me' ? ' caltd-me' : '') + (e.src === 'mission' ? ' caltd-mis' : '') + (e.done ? ' caltd-done' : '') + (past(e) ? ' caltd-past' : '');
+            const state = (e.done || e.src === 'mission') && M.doneLabel ? `<span class="caltd-state">${esc(M.doneLabel(e))}</span>` : '';
+            const title = e.src === 'mission' ? `<i class="fa-solid fa-briefcase"></i>委託：${esc(e.title)}` : esc(e.title);
+            const sub = e.src === 'mission'
+                ? (clock ? clock + ' 接的' : '從地圖接的') + (e.endTime ? '，' + e.endTime + (e.done === 'cancel' ? ' 不辦了' : ' 辦完') : '')
+                : srcText(e);
+            return `<div class="${cls}"><div class="caltd-time">${esc(clock)}</div><div class="caltd-bar"></div>`
+                + `<div class="caltd-text"><div class="caltd-title">${title}${state}</div><div class="caltd-src">${esc(sub)}</div></div></div>`;
+        };
+        const body = items.map(it => it.now ? `<div class="caltd-nowline">現在 ${esc(st.time)}</div>`
+            : it.slot ? `<div class="caltd-slot">${esc(it.slot)}</div>` : row(it.e)).join('');
+        return head(dateLine) + '<div class="caltd-body">' + body + '</div>';
+    }
+    function paintToday(el, st) {
+        const card = el.querySelector('.caltd-card');
+        if (!card) return;
+        card.innerHTML = todayHtml(st);
+        const body = card.querySelector('.caltd-body'), line = card.querySelector('.caltd-nowline');
+        if (body && line && body.scrollHeight > body.clientHeight + 4) body.scrollTop = Math.max(0, line.offsetTop - body.offsetTop - 56);
+    }
+    function closeToday() {
+        const el = _todayEl;
+        if (!el || el._closing) return;
+        el._closing = true;
+        el.classList.add('out');
+        setTimeout(() => { try { el.remove(); } catch (e) {} if (_todayEl === el) _todayEl = null; }, 280);
+    }
+    async function openToday() {
+        if (!S()) { toast('日曆還在載入，等一下再按'); return; }
+        injectCss(doc);
+        if (_todayEl) { try { _todayEl.remove(); } catch (e) {} }
+        const mask = doc.createElement('div');
+        mask.className = 'caltd-mask';
+        mask.innerHTML = '<div class="caltd-card"><div class="caltd-body"><div class="caltd-empty">讀取中…</div></div></div>';
+        mask.addEventListener('click', e => {
+            if (e.target === mask || e.target.closest('[data-act="close"]')) closeToday();
+        });
+        doc.body.appendChild(mask);
+        _todayEl = mask;
+        const st = await S().load();
+        if (_todayEl !== mask) return;
+        paintToday(mask, st);
+    }
+
     async function launch(container) {
         if (!container) return;
         injectCss(doc); if (doc !== document) injectCss(document);
@@ -249,8 +387,14 @@
     }
     // 劇情那邊寫了新東西（AI 的 [Event|]／[Date|]）→ 開著的日曆跟著更新
     try { win.addEventListener('aurelia:mc-status', async () => { if (_root && _root.isConnected && _root.querySelector('.cal-shell')) { _state = await S().load(); render(); } }); } catch (e) {}
+    try { win.addEventListener('aurelia:mc-status', async () => {
+        const el = _todayEl;
+        if (!el || el._closing || !el.isConnected) return;
+        const st = await S().load();
+        if (_todayEl === el) paintToday(el, st);
+    }); } catch (e) {}
 
-    win.OS_CALENDAR = { launch: launch };
+    win.OS_CALENDAR = { launch: launch, openToday: openToday, closeToday: closeToday };
     if (win !== window) window.OS_CALENDAR = win.OS_CALENDAR;
 
     // 登記進手機（跟微博同一條路：PhoneSystem.install → __PHONE_APPS，手機殼與 PWA 都從那裡開）

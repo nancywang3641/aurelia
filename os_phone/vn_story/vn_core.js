@@ -2594,8 +2594,12 @@
                         journal: () => _openPhoneAppAboveVN('journal'),
                         // 🧵 線索帳搬進資料中心當一頁（10-13 她：跟狀態、選擇放同一個窗）；有人按到線索就直接開到那頁
                         threads: () => _actData({ tab: 'threads' }),
-                        // 📅 日曆：開手機的日曆 app（手機上那個照留）
-                        calendar: () => _openPhoneAppAboveVN('calendar'),
+                        // 📅 日曆：只看今天的行程（10-13 她：「簡化成當天的行程表就好，不需要到每日」）；整個月、自己加一筆在手機上的日曆 app
+                        calendar: () => {
+                            const C = win.OS_CALENDAR || window.OS_CALENDAR;
+                            if (C && C.openToday) C.openToday();
+                            else { try { (win.AUI || window.AUI).toast('日曆還在載入，等一下再按'); } catch (e) {} }
+                        },
                         // 🗺️ 地圖：劇情末尾直接開地圖面板看當前世界（探索/排程/小地圖都在裡面）
                         map: () => _openPhoneAppAboveVN('map'),
                         // 系統鍵：世界活動面板會把右上角那三顆一起重畫，行為指向原本那三顆做的事
