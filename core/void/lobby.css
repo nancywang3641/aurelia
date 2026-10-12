@@ -1444,7 +1444,7 @@
    層級壓過地點視圖(3355)、右側欄(3357)、對話框(3358)。 */
 .lsh-pv { position:absolute; inset:0; z-index:3359; display:flex; align-items:center; justify-content:center;
   padding:24px; background:rgba(20,18,36,.38); }
-.lsh-pv-card { width:min(620px, 100%); max-height:min(78%, 760px); display:flex; flex-direction:column; overflow:hidden;
+.lsh-pv-card { width:min(620px, 100%); height:min(78%, 760px); display:flex;   /* 10-13 起固定高（同舞台那個紀錄窗）：紀錄少也一樣大，不再一下大一下小 */ flex-direction:column; overflow:hidden;
   border-radius:18px; background:rgba(249,249,255,.97); border:1px solid rgba(255,255,255,.9);
   box-shadow:0 18px 50px rgba(30,28,60,.28); color:#343962; }
 .lsh-pv-hd { display:flex; align-items:center; gap:10px; padding:16px 18px 14px; border-bottom:1px solid rgba(86,92,145,.14); }
@@ -1479,7 +1479,7 @@
 .lsh-pv-clear:hover { background:rgba(208,86,111,.08); }
 @media (max-width:760px) {
   .lsh-pv { padding:14px; }
-  .lsh-pv-card { max-height:86%; }
+  .lsh-pv-card { height:86%; }
   .lsh-pv .lsh-row { max-width:86%; }
 }
 
