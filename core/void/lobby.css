@@ -1460,6 +1460,14 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
 }
 /* 全屏了就不必拖 */
 html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedded) .cw-titlebar { cursor:default; }
+/* ⌨️ 手機鍵盤升起來（core/aurelia_dialog.js 的鍵盤跟隨，AUI）：整個窗縮到鍵盤上面，輸入框貼著鍵盤、標題列不被推走。
+   頂和高是程式照「看得到的那塊」量好放進 --aui-kb-top／--aui-kb-h；底下讓 iPhone 橫條的那段鍵盤蓋住了，收掉
+   （10-13 她截圖裡輸入框和鍵盤中間那條深藍就是它）。上面那條全屏規則是 !important，這裡也要。 */
+html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedded).aui-kb-open {
+    top:var(--aui-kb-top, 0px) !important; bottom:auto !important; height:var(--aui-kb-h, 100%) !important;
+    padding-bottom:0;
+}
+html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedded).aui-kb-slide { transition:top 220ms ease-out, height 220ms ease-out; }   /* 220＝AUI 的 KB_SLIDE_MS */
 /* 桌機的 PWA：標題列照樣滿寬，底下的宿舍與對話限寬置中，不然一行字會拉到一千多 px */
 @media (min-width:1100px) {
     html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedded) > .cw-dorm,

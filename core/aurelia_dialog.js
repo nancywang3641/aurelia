@@ -262,5 +262,84 @@
         return !isTouchKeyboard();
     }
 
-    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard };
+    // ⌨️ 手機螢幕鍵盤升起來：撐滿螢幕的那層縮到鍵盤上面（輸入框貼著鍵盤、上面的標題不被推走）
+    //   10-13 她：小機聊天室在電腦上很舒服，手機上就卡卡的；Claude、ChatGPT 的 app 聊起來很順。
+    //   原因是 iPhone 叫出鍵盤時不把畫面縮矮，而是把整頁往上推：標題被推出畫面，
+    //   最底下讓給 iPhone 橫條的那段空白夾在輸入框和鍵盤中間，收鍵盤時整頁再掉回來。
+    //   這裡照「看得到的那塊」（visualViewport）把那層釘在鍵盤上面：掛上 .aui-kb-open，頂和高放在
+    //   --aui-kb-top／--aui-kb-h，怎麼用由那層自己的 CSS 決定（底部讓位收掉之類）；
+    //   本來捲在最底下的那一格（聊天訊息區）縮的時候一直貼著最底。
+    //   會跟著走的層登記在 KB_LAYERS。電腦沒有螢幕鍵盤，量出來的差是 0，什麼都不做。
+    //   🚨 鍵盤上那條「上、下、打勾」是 iPhone 給網頁加的，網頁拿不掉。
+    const KB_LAYERS = [
+        '#aurelia-phone-shell',                               // 手機殼：css/phone_shell.css（只有 ≤768px 撐滿螢幕那版有規則）
+        '#aurelia-chat-window.cw-window:not(.cw-embedded)'    // 小機聊天室 PWA 全屏那份：core/void/lobby.css
+    ].join(',');
+    const KB_SLIDE_MS = 220;   // 跟各層 CSS 的 .aui-kb-slide 同一個數
+    let _kbReset = function () {};
+    (function _bindKeyboard() {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        let raf = 0, layer = null, pinUntil = 0, pinRaf = 0, keep = [];
+        const editable = (el) => !!el && (el.isContentEditable || el.tagName === 'TEXTAREA'
+            || (el.tagName === 'INPUT' && !/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(el.type || '')));
+        // 從打字那格往上找，旁邊「本來就捲在最底下」的格子（聊天訊息區）記下來，縮的時候一直貼著最底
+        const bottomScrollers = (a, L) => {
+            const out = [];
+            for (let p = a.parentElement; p && p !== L.parentElement; p = p.parentElement) {
+                for (const c of p.children) {
+                    if (c === a || c.scrollHeight <= c.clientHeight + 2) continue;
+                    const oy = getComputedStyle(c).overflowY;
+                    if ((oy === 'auto' || oy === 'scroll') && c.scrollHeight - c.scrollTop - c.clientHeight < 24) out.push(c);
+                }
+            }
+            return out;
+        };
+        const pin = () => {
+            pinRaf = 0;
+            keep.forEach(c => { c.scrollTop = c.scrollHeight; });
+            if (performance.now() < pinUntil) pinRaf = requestAnimationFrame(pin);
+        };
+        const reset = () => {
+            if (!layer) return;
+            const L = layer;
+            layer = null; keep = [];
+            L.classList.remove('aui-kb-open', 'aui-kb-slide');
+            L.style.removeProperty('--aui-kb-top');
+            L.style.removeProperty('--aui-kb-h');
+        };
+        _kbReset = reset;
+        const apply = () => {
+            raf = 0;
+            const a = document.activeElement;
+            const L = editable(a) ? a.closest(KB_LAYERS) : null;
+            // 版面視窗高（鍵盤出來不會變）減掉看得到的高＝鍵盤加上面那條；平常三個數一樣（index.html 頭上量過）
+            const full = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+            if (!L || full - vv.height < 100 || !L.getClientRects().length) return reset();
+            if (layer && layer !== L) reset();
+            keep = bottomScrollers(a, L);
+            if (!layer) {
+                // 第一次：先停在現在的位置（頂 0、整個視窗高），下一格再滑到鍵盤上面，才滑得起來
+                layer = L;
+                L.style.setProperty('--aui-kb-top', '0px');
+                L.style.setProperty('--aui-kb-h', full + 'px');
+                L.classList.add('aui-kb-open');
+                void L.offsetHeight;
+                L.classList.add('aui-kb-slide');
+            }
+            L.style.setProperty('--aui-kb-top', vv.offsetTop + 'px');
+            L.style.setProperty('--aui-kb-h', vv.height + 'px');
+            pinUntil = performance.now() + KB_SLIDE_MS + 60;
+            if (!pinRaf) pin();
+        };
+        const kick = () => { if (!raf) raf = requestAnimationFrame(apply); };
+        vv.addEventListener('resize', kick);
+        vv.addEventListener('scroll', kick);
+        document.addEventListener('focusin', kick, true);
+        // 點送出鍵之類的會先失焦、程式再把焦點放回輸入框；晚一點再看，不然版面會閃一下
+        document.addEventListener('focusout', () => setTimeout(kick, 150), true);
+    })();
+    function kbReset() { _kbReset(); }
+
+    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset };
 })();

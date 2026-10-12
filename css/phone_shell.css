@@ -812,6 +812,18 @@
     /* 主畫面底下那排：浮窗版有螢幕邊框隔開，撐滿版沒有 → 橫槓（回主畫面那顆）會壓在底排的字上，
        底部多讓出橫槓那格。app 裡面的內容區早就讓了（os_sys_chrome），主畫面自己這裡才是漏掉的那個。 */
     .aps-home { padding-bottom: calc(var(--aps-safe-bottom, 26px) + 8px); }
+
+    /* ⌨️ 鍵盤升起來（core/aurelia_dialog.js 的鍵盤跟隨，AUI）：整個手機殼縮到鍵盤上面，輸入框貼著鍵盤。
+       頂和高是程式照「看得到的那塊」量好放進 --aui-kb-top／--aui-kb-h 的；底下那段安全區、
+       回主畫面橫槓、它讓的那條空白，鍵盤都蓋住了，全部收掉。下緣不留圓角（直接接鍵盤）。 */
+    .aps-overlay.aui-kb-open {
+        top: var(--aui-kb-top, 0px); bottom: auto; height: var(--aui-kb-h, 100%);
+        padding-bottom: 0;
+    }
+    .aps-overlay.aui-kb-slide { transition: top 220ms ease-out, height 220ms ease-out; }   /* 220＝AUI 的 KB_SLIDE_MS */
+    .aps-overlay.aui-kb-open, .aps-overlay.aui-kb-open .aps-frame { --aps-safe-bottom: 0px; }
+    .aps-overlay.aui-kb-open .aps-frame { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .aps-overlay.aui-kb-open .aps-homebar { display: none; }
 }
 
 /* ── 白瓷玻璃 ──

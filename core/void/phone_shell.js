@@ -1309,6 +1309,7 @@
         if (body) body.innerHTML = '';
         _el.querySelector('#aps-app').style.display = 'none';
         _el.style.display = 'none';
+        try { window.AUI?.kbReset?.(); } catch (e) {}   // 打字打到一半關掉：別讓下次打開還縮在鍵盤上面（AUI 的鍵盤跟隨）
     }
     function toggle() { if (_el && _el.style.display !== 'none') close(); else open(); }
 
