@@ -1027,3 +1027,163 @@
     background: rgba(252, 228, 231, 0.8); color: #b25260;
     font-size: max(12px, 0.55cqw); border-radius: 0.4cqw;
 }
+
+/* ============================================================
+   🕮 開書／翻頁動效(只在書裝 .jrnl-desk;2026-10-13 從 Vproject 的 JOURNAL_OPEN_LAB 搬進來,她看過選定)
+   - .jrnl-bk 跟 .jrnl-book-art 是同一塊(書殼範圍),裡面的百分比全是「佔書殼圖」的比例,照 LAB 原值:
+     書溝 49.61%、右頁紙 50.6~94.3% × 4.05~94.75%、左頁紙 6.9~50.6%
+   - 書本那幾層(.jrnl-bk-book:封面、右半書殼、書頁厚度、緞帶尾)只在開／闔的那一下露臉;
+     翻開後換回原本那張整頁的 .jrnl-book-art,平常攤開的樣子一點都不變
+   - 翻頁紙(.jrnl-bk-leaf)帶著頁面的複本翻,起落都剛好疊在真的那一頁上
+   ============================================================ */
+.jrnl-bk { display: none; }
+.jrnl-root.jrnl-desk {
+    --jrnl-bk-paper: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v2/aseets/story_journal/book-paper.webp');
+}
+.jrnl-desk .jrnl-bk {
+    display: block; position: absolute; z-index: 3;
+    left: 3.8%; right: 4.8%; top: 7.2%; bottom: 5.2%;
+    pointer-events: none;
+}
+/* 闔著:整本往左挪、縮一點,封面落在畫面正中;頁面、書籤、整頁書殼先藏起來 */
+.jrnl-desk.jrnl-bk-closed .jrnl-bk { transform: translateX(-24.2%) scale(0.94); }
+.jrnl-desk.jrnl-bk-closed .jrnl-book-art,
+.jrnl-desk.jrnl-bk-closed .jrnl-left,
+.jrnl-desk.jrnl-bk-closed .jrnl-right,
+.jrnl-desk.jrnl-bk-closed .jrnl-tabs { visibility: hidden; }
+/* 翻開了:書本那幾層收掉,只留翻頁紙那層,墊到書頁與書籤上面 */
+.jrnl-desk.jrnl-bk-open .jrnl-bk { z-index: 7; }
+.jrnl-desk.jrnl-bk-open .jrnl-bk-book { display: none; }
+/* 往前翻那一下:真的右頁先藏,換成舊內容的複本頂著,紙落下來才露出新的 */
+.jrnl-desk.jrnl-bk-holding .jrnl-stage > .jrnl-right { visibility: hidden; }
+
+.jrnl-bk-book { position: absolute; inset: 0; }
+.jrnl-bk-shadow {
+    position: absolute; z-index: 0;
+    left: 49.6%; right: 1.2%; top: 3%; bottom: -1.4%;
+    border-radius: 1.3cqw; background: rgba(38, 30, 26, 0.30); filter: blur(1.3cqw);
+}
+.jrnl-bk-thick {
+    position: absolute; z-index: 1;
+    left: 49.61%; right: 1.27%; top: 1.86%; bottom: 1.75%;
+    border-radius: 0.3cqw 1.3cqw 1.3cqw 0.3cqw;
+    transform: translate(0.24cqw, 0.28cqw);
+    background: linear-gradient(90deg, #efe6d9, #e6dccd);
+    box-shadow: 0.24cqw 0.3cqw 0 0 #23252a;
+}
+.jrnl-bk-base {
+    position: absolute; z-index: 1; inset: 0;
+    background: var(--jrnl-bk-paper) center / 100% 100% no-repeat;
+    clip-path: inset(0 0 0 49.61%);
+}
+.jrnl-bk-cast {
+    position: absolute; z-index: 2;
+    left: 49.61%; right: 5.5%; top: 4%; bottom: 5%;
+    opacity: 0; pointer-events: none;
+    background: linear-gradient(90deg, rgba(28,22,18,0.6), rgba(28,22,18,0.2) 40%, rgba(28,22,18,0) 85%);
+}
+/* 闔著時從書底下垂出來的那截緞帶 */
+.jrnl-bk-tail {
+    position: absolute; z-index: 2;
+    left: 83%; top: 96.6%; width: 1.7%; height: 9%;
+    transform-origin: 50% 0;
+    background: linear-gradient(90deg, #8e3641, #c16a76 45%, #a2434f 70%, #86333e);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%);
+    animation: jrnlBkSway 3.4s ease-in-out infinite;
+}
+@keyframes jrnlBkSway { 0%, 100% { transform: rotate(2.5deg); } 50% { transform: rotate(-2.5deg); } }
+
+/* 封面跟翻頁紙各自一個透視框,不跟頁面內容同一個 3D 環境,上下靠 z-index 排 */
+.jrnl-bk-coverwrap, .jrnl-bk-leafwrap {
+    position: absolute; inset: 0;
+    perspective: 220cqw; perspective-origin: 50% 42%;
+    pointer-events: none;
+}
+.jrnl-bk-coverwrap { z-index: 3; }
+.jrnl-bk-leafwrap { z-index: 6; }
+.jrnl-bk-cover {
+    position: absolute; left: 49.61%; top: 0; width: 50.39%; height: 100%;
+    transform-origin: 0 50%; transform-style: preserve-3d; transform: rotateY(0deg);
+    pointer-events: auto; cursor: pointer;
+}
+.jrnl-bk-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.jrnl-bk-face.jrnl-bk-back { transform: rotateY(180deg); overflow: hidden; }
+/* 封面內側 = 書殼圖的左半:翻到底剛好疊回原位 */
+.jrnl-bk-pimg {
+    position: absolute; top: 0; height: 100%; left: 1.55%; width: 198.45%;
+    background: var(--jrnl-bk-paper) 0 0 / 100% 100% no-repeat;
+}
+.jrnl-bk-pshade {
+    position: absolute; inset: 0; opacity: 0;
+    -webkit-mask: var(--jrnl-bk-paper) 0 0 / 100% 100% no-repeat;
+    mask: var(--jrnl-bk-paper) 0 0 / 100% 100% no-repeat;
+    background: linear-gradient(90deg, rgba(20,16,12,0.15), rgba(20,16,12,0.55) 50%, rgba(20,16,12,0.2));
+}
+
+/* 封面正面:皮革 + 燙金框 + 金字(闔著的封面從來沒有圖,整面用 CSS 畫,所以能翻、能打光) */
+.jrnl-bk-leather {
+    position: absolute; top: 1.86%; bottom: 1.75%; left: 0; right: 2.52%;
+    border-radius: 0.3cqw 1.3cqw 1.3cqw 0.3cqw; overflow: hidden;
+    background:
+        url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  .16 0 0 0 -.05'/></filter><rect width='220' height='220' filter='url(%23n)'/></svg>"),
+        url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.32' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  .5 0 0 0 -.18'/></filter><rect width='260' height='260' filter='url(%23n)'/></svg>"),
+        radial-gradient(90% 60% at 35% 16%, rgba(255,255,255,0.08), rgba(255,255,255,0) 60%),
+        radial-gradient(120% 90% at 70% 112%, rgba(0,0,0,0.32), rgba(0,0,0,0) 60%),
+        linear-gradient(90deg, #121316 0, #23252a 2.4%, #474a52 3.1%, #25272c 3.9%, #30333a 9%, #2c2f35 55%, #26292e 100%);
+    box-shadow: inset 0 0.07cqw 0 rgba(255,255,255,0.13), inset -0.08cqw 0 0 rgba(255,255,255,0.07), inset 0 -0.2cqw 0.4cqw rgba(0,0,0,0.35);
+}
+.jrnl-bk-lthshade { position: absolute; inset: 0; opacity: 0; background: linear-gradient(90deg, rgba(0,0,0,0.1), rgba(0,0,0,0.6)); }
+.jrnl-bk-frame {
+    position: absolute; left: 10%; right: 7%; top: 6%; bottom: 6%;
+    border: 0.07cqw solid rgba(205,170,118,0.55); border-radius: 0.25cqw; pointer-events: none;
+}
+.jrnl-bk-frame::before {
+    content: ''; position: absolute; inset: 0.42cqw;
+    border: 0.05cqw solid rgba(205,170,118,0.3); border-radius: 0.15cqw;
+}
+.jrnl-bk-corner { position: absolute; width: 2.8cqw; height: 2.8cqw; color: #caa56d; opacity: 0.85; }
+.jrnl-bk-corner.jrnl-bk-tl { left: -0.6cqw; top: -0.6cqw; }
+.jrnl-bk-corner.jrnl-bk-tr { right: -0.6cqw; top: -0.6cqw; transform: scaleX(-1); }
+.jrnl-bk-corner.jrnl-bk-bl { left: -0.6cqw; bottom: -0.6cqw; transform: scaleY(-1); }
+.jrnl-bk-corner.jrnl-bk-br { right: -0.6cqw; bottom: -0.6cqw; transform: scale(-1, -1); }
+.jrnl-bk-center {
+    position: absolute; left: 10%; right: 7%; top: 0; bottom: 4%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1cqw; text-align: center;
+}
+.jrnl-bk-orn { width: 12cqw; height: 1.4cqw; color: #c9a46c; }
+.jrnl-bk-en { font-family: Georgia, serif; font-size: 0.8cqw; letter-spacing: 0.5cqw; padding-left: 0.5cqw; color: #c3a273; }
+.jrnl-bk-title {
+    font-size: 3.2cqw; font-weight: 700; letter-spacing: 0.6cqw; padding-left: 0.6cqw; line-height: 1.2;
+    background: linear-gradient(180deg, #f7e9c8 0%, #dcbb7e 36%, #a7814a 52%, #e6ca94 70%, #b38e57 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0.07cqw 0 rgba(0,0,0,0.6));
+}
+.jrnl-bk-name { font-size: 1.05cqw; letter-spacing: 0.9cqw; padding-left: 0.9cqw; color: #b89a72; }
+.jrnl-bk-emblem { width: 4.4cqw; height: 4.4cqw; color: #c9a46c; opacity: 0.8; margin-top: 1.4cqw; }
+
+/* ── 翻頁的那張紙(右頁紙那塊):正面＝右頁那塊圖＋舊內容的複本,背面＝左頁那塊圖＋目錄的複本 ── */
+.jrnl-bk-leaf {
+    position: absolute; left: 50.6%; top: 4.05%; width: 43.7%; height: 90.7%;
+    transform-origin: 0 50%; transform-style: preserve-3d;
+}
+.jrnl-bk-leaf .jrnl-bk-face { overflow: hidden; }
+.jrnl-bk-limg {
+    position: absolute; top: -4.465%; height: 110.25%; width: 228.83%;
+    background: var(--jrnl-bk-paper) 0 0 / 100% 100% no-repeat;
+}
+.jrnl-bk-front .jrnl-bk-limg { left: -115.79%; }
+.jrnl-bk-back .jrnl-bk-limg { left: -15.79%; }
+.jrnl-bk-lshade { position: absolute; inset: 0; opacity: 0; pointer-events: none; z-index: 9; }
+.jrnl-bk-front .jrnl-bk-lshade { background: linear-gradient(90deg, rgba(40,30,22,0.34), rgba(40,30,22,0.1) 45%, rgba(40,30,22,0.04) 80%, rgba(40,30,22,0.16)); }
+.jrnl-bk-back .jrnl-bk-lshade { background: linear-gradient(270deg, rgba(40,30,22,0.34), rgba(40,30,22,0.1) 45%, rgba(40,30,22,0.04) 80%, rgba(40,30,22,0.16)); }
+.jrnl-bk-lcast { position: absolute; top: 4.05%; height: 90.7%; width: 43.7%; opacity: 0; pointer-events: none; }
+.jrnl-bk-lcast.jrnl-bk-r { left: 50.6%; background: linear-gradient(90deg, rgba(30,22,16,0.4), rgba(30,22,16,0.12) 35%, rgba(30,22,16,0) 75%); }
+.jrnl-bk-lcast.jrnl-bk-l { left: 6.9%; background: linear-gradient(270deg, rgba(30,22,16,0.4), rgba(30,22,16,0.12) 35%, rgba(30,22,16,0) 75%); }
+/* 紙上帶著的頁面複本:對齊到紙上,跟真的那一頁同一個位置 */
+.jrnl-desk .jrnl-bk-leaf .jrnl-right { left: -0.618%; top: 2.966%; width: 100.137%; height: 93.264%; }
+.jrnl-desk .jrnl-bk-leaf .jrnl-left { left: 0; top: 2.966%; width: 92.906%; height: 93.264%; }
+/* 🚨 z-index 要壓回 0:真的右頁在書裝裡是 z-index 4,複本照抄的話會蓋在翻過來的紙上面,兩頁的字疊在一起 */
+.jrnl-desk .jrnl-bk .jrnl-right.jrnl-bk-hold { left: 50.33%; top: 6.74%; width: 43.76%; height: 84.59%; z-index: 0; }
+/* 複本定格在複製那一刻:換書籤是靠 root 上的 class 切區塊,不鎖住的話複本會跟著變成新的那頁 */
+.jrnl-desk .jrnl-bk .jrnl-d-section.jrnl-bk-keep { display: block; }

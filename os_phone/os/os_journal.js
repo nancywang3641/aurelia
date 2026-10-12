@@ -477,15 +477,20 @@
         `;
 
         // 🕮 書裝開關:看「容器」寬(手機殼/窄窗維持原版型),同入場精靈的判定思路
+        const rootEl = container.querySelector('.jrnl-root');
+        const launchedAt = Date.now();
         try {
-            const rootEl = container.querySelector('.jrnl-root');
             const ro = new ResizeObserver(() => {
-                if (rootEl.isConnected) rootEl.classList.toggle('jrnl-desk', rootEl.clientWidth >= 960);
+                if (!rootEl.isConnected) return;
+                rootEl.classList.toggle('jrnl-desk', rootEl.clientWidth >= 960);
+                // 一打開時容器還沒量好寬度的話，書裝晚一點才掛上：剛打開那一下才補演開書，之後拉寬視窗不演
+                if (!BK.inited && Date.now() - launchedAt < 1500) _bkInit();
             });
             ro.observe(rootEl);
             rootEl.classList.toggle('jrnl-desk', rootEl.clientWidth >= 960);
         } catch (e) { /* 沒 ResizeObserver 就永遠原版型 */ }
 
+        const leftEl   = container.querySelector('.jrnl-left');
         const listEl   = container.querySelector('#jrnl-list');
         const rightEl  = container.querySelector('#jrnl-right');
         const searchEl = container.querySelector('#jrnl-search');
@@ -891,13 +896,247 @@
             document.addEventListener('keydown', onKey);
         }
 
+        // ── 🕮 開書／翻頁動效（只在書裝；2026-10-13 從 Vproject 的 JOURNAL_OPEN_LAB 搬進來，她看過選定）──
+        //    打開＝先看到闔著的皮面封面，自己翻開；換故事／換書籤＝翻一頁；✕＝闔上再回大廳。
+        //    書本那幾層（封面、右半書殼、紙）只在演的時候用，演完換回原本那張整頁書殼圖，攤開的樣子跟以前一樣。
+        //    大廳設置「演出動畫」關掉、或系統要求減少動態效果＝全部照舊直接出現。
+        //    🚨 收尾一律用計時器、不等動畫的 finished：畫面藏著時動畫不前進，等它的話會卡在演到一半。
+        const BK = { inited: false, state: 'none', leaf: null, hold: null, turnTimer: 0, introTimer: 0, openSfx: false };
+        const _bkDesk = () => rootEl.classList.contains('jrnl-desk');
+        function _bkFxOn() {
+            try {
+                if (localStorage.getItem('aurelia_reveal_fx') === '0') return false;   // 大廳設置的「演出動畫」
+                if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+                return !!(window.Element && Element.prototype.animate);
+            } catch (e) { return false; }
+        }
+        const _bkAnim = (el, kf, o) => el ? el.animate(kf, Object.assign({ fill: 'forwards', easing: 'ease' }, o)) : null;
+        // 收掉自己掛的動畫（緞帶尾巴那種 CSS 自己的擺動留著）
+        const _bkClear = (els) => els.forEach(el => el && el.getAnimations && el.getAnimations().forEach(a => {
+            if (!(window.CSSAnimation && a instanceof CSSAnimation)) a.cancel();
+        }));
+        const _bkStripIds = (el) => { el.removeAttribute('id'); el.querySelectorAll('[id]').forEach(n => n.removeAttribute('id')); return el; };
+
+        const BK_CORNER = (pos) => `<svg class="jrnl-bk-corner jrnl-bk-${pos}" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round">`
+            + '<path d="M3 37V14C3 7.9 7.9 3 14 3H37"/><path d="M8.5 30C8.5 18 18 8.5 30 8.5" stroke-width=".7" opacity=".7"/>'
+            + '<path d="M3 14c4.5 0 7.5 3 7.5 7.5M14 3c0 4.5 3 7.5 7.5 7.5" stroke-width=".8"/><circle cx="12.6" cy="12.6" r="1.7" fill="currentColor" stroke="none"/></svg>';
+        const BK_HTML = `
+            <div class="jrnl-bk" aria-hidden="true">
+                <div class="jrnl-bk-book">
+                    <div class="jrnl-bk-shadow"></div>
+                    <div class="jrnl-bk-thick"></div>
+                    <div class="jrnl-bk-base"></div>
+                    <div class="jrnl-bk-cast"></div>
+                    <div class="jrnl-bk-tail"></div>
+                    <div class="jrnl-bk-coverwrap">
+                        <div class="jrnl-bk-cover">
+                            <div class="jrnl-bk-face jrnl-bk-front">
+                                <div class="jrnl-bk-leather">
+                                    <div class="jrnl-bk-frame">${BK_CORNER('tl')}${BK_CORNER('tr')}${BK_CORNER('bl')}${BK_CORNER('br')}</div>
+                                    <div class="jrnl-bk-center">
+                                        <svg class="jrnl-bk-orn" viewBox="0 0 160 18" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M4 9h56M100 9h56"/><path d="M60 9c6-6 12-6 14 0-2 6-8 6-14 0zM100 9c-6-6-12-6-14 0 2 6 8 6 14 0z"/><path d="M80 2l2.2 7L80 16l-2.2-7z" fill="currentColor"/></svg>
+                                        <div class="jrnl-bk-en">STORY JOURNAL</div>
+                                        <div class="jrnl-bk-title">故事日誌</div>
+                                        <div class="jrnl-bk-name">瀅瀅</div>
+                                        <svg class="jrnl-bk-emblem" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width=".8"><circle cx="24" cy="24" r="14"/><circle cx="24" cy="24" r="10.5" stroke-dasharray="1.2 2.2"/><path d="M24 3l2.6 18.4L45 24l-18.4 2.6L24 45l-2.6-18.4L3 24l18.4-2.6z" fill="currentColor" stroke="none"/></svg>
+                                    </div>
+                                    <div class="jrnl-bk-lthshade"></div>
+                                </div>
+                            </div>
+                            <div class="jrnl-bk-face jrnl-bk-back"><div class="jrnl-bk-pimg"><div class="jrnl-bk-pshade"></div></div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="jrnl-bk-leafwrap"><div class="jrnl-bk-lcast jrnl-bk-r"></div><div class="jrnl-bk-lcast jrnl-bk-l"></div></div>
+            </div>`;
+
+        // 一打開：書裝的話先擺一本闔著的書，停一下自己翻開（點封面就馬上翻）
+        function _bkInit() {
+            if (BK.inited || !_bkDesk()) return;
+            BK.inited = true;
+            if (!_bkFxOn()) return;
+            rootEl.querySelector('.jrnl-stage').insertAdjacentHTML('beforeend', BK_HTML);
+            rootEl.classList.add('jrnl-bk-closed');
+            BK.state = 'closed';
+            rootEl.querySelector('.jrnl-bk-cover').addEventListener('click', _bkOpen);
+            BK.introTimer = setTimeout(_bkOpen, 450);
+        }
+        const _bkQ = (sel) => rootEl.querySelector('.jrnl-bk ' + sel);
+
+        function _bkOpen() {
+            if (BK.state !== 'closed') return;
+            clearTimeout(BK.introTimer);
+            BK.state = 'opening';
+            const bk = rootEl.querySelector('.jrnl-bk');
+            const T = 1300;
+            if (!BK.openSfx) _sfx('book_open');
+            _bkAnim(_bkQ('.jrnl-bk-cover'), [{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(-180deg)' }], { duration: T, easing: 'cubic-bezier(.55,.06,.3,1)' });
+            _bkAnim(bk, [{ transform: 'translateX(-24.2%) scale(.94)' }, { transform: 'translateX(0%) scale(1)' }], { duration: T * 1.05, easing: 'cubic-bezier(.5,0,.25,1)' });
+            _bkAnim(_bkQ('.jrnl-bk-shadow'), [{ left: '49.6%' }, { left: '49.6%', offset: .4 }, { left: '1.2%' }], { duration: T, easing: 'cubic-bezier(.5,0,.25,1)' });
+            _bkAnim(_bkQ('.jrnl-bk-thick'), [{ opacity: 1 }, { opacity: 0 }], { duration: 260 });
+            _bkAnim(_bkQ('.jrnl-bk-tail'), [{ opacity: 1 }, { opacity: 0 }], { duration: 300 });
+            _bkAnim(_bkQ('.jrnl-bk-lthshade'), [{ opacity: 0 }, { opacity: .8, offset: .45 }, { opacity: .8 }], { duration: T });
+            _bkAnim(_bkQ('.jrnl-bk-pshade'), [{ opacity: .8 }, { opacity: .8, offset: .5 }, { opacity: 0 }], { duration: T });
+            _bkAnim(_bkQ('.jrnl-bk-cast'), [{ opacity: 0 }, { opacity: .85, offset: .3 }, { opacity: 0, offset: .62 }, { opacity: 0 }], { duration: T });
+            // 封面過了垂直線才讓兩張紙嘩啦帶過，紙才不會疊在還沒翻過去的封面上
+            setTimeout(_bkRiffle, T * .52);
+            setTimeout(_bkRiffle, T * .63);
+            setTimeout(() => {
+                if (BK.state !== 'opening') return;
+                // 封面落地：換回原本那張整頁書殼圖＋真的頁面，書本那幾層收起來
+                rootEl.classList.remove('jrnl-bk-closed');
+                rootEl.classList.add('jrnl-bk-open');
+                _bkClear([bk, ...bk.querySelectorAll('.jrnl-bk-book *')]);
+                BK.state = 'open';
+                _bkReveal();
+            }, T * 1.03);
+        }
+
+        // 攤開後頁面上的東西一樣一樣浮出來：左頁往右、右頁往上、書籤從書裡抽出來
+        function _bkReveal() {
+            const ease = 'cubic-bezier(.2,.7,.3,1)';
+            const CAP = 9;   // 條目很多時，第 9 個之後一起出來，不要排到好幾秒後
+            const shown = (el) => el.offsetParent !== null;
+            try {   // 左頁標題「目 錄」是 ::before 畫的
+                leftEl.animate([{ opacity: 0, transform: 'translateX(-.8cqw)' }, { opacity: 1, transform: 'none' }],
+                    { duration: 420, easing: ease, fill: 'backwards', pseudoElement: '::before' });
+            } catch (e) {}
+            [...leftEl.querySelectorAll('.jrnl-search, .jrnl-toolbar, .jrnl-card')].forEach((el, i) =>
+                _bkAnim(el, [{ opacity: 0, transform: 'translateX(-.8cqw)' }, { opacity: 1, transform: 'none' }],
+                    { duration: 420, delay: Math.min(i + 1, CAP) * 55, easing: ease, fill: 'backwards' }));
+            [...rightEl.querySelectorAll('.jrnl-d-head, .jrnl-volume, .jrnl-d-section-head, .jrnl-tl-item, .jrnl-char-card, .jrnl-mg-row, .jrnl-empty')]
+                .filter(shown).forEach((el, i) =>
+                    _bkAnim(el, [{ opacity: 0, transform: 'translateY(.8cqw)' }, { opacity: 1, transform: 'none' }],
+                        { duration: 480, delay: 120 + Math.min(i, CAP) * 75, easing: ease, fill: 'backwards' }));
+            [...container.querySelectorAll('.jrnl-tab')].forEach((el, i) =>
+                _bkAnim(el, [{ opacity: 0, transform: 'translateX(-75%)' }, { opacity: 1, transform: 'none' }],
+                    { duration: 440, delay: 280 + i * 90, easing: 'cubic-bezier(.3,1.35,.5,1)', fill: 'backwards' }));
+        }
+
+        // 一張紙：正面帶右頁那塊圖、背面帶左頁那塊圖；frontPg/backPg 是要跟著紙一起翻的頁面複本
+        function _bkLeaf(frontPg, backPg) {
+            const wrap = _bkQ('.jrnl-bk-leafwrap');
+            if (!wrap) return null;
+            const leaf = document.createElement('div');
+            leaf.className = 'jrnl-bk-leaf';
+            leaf.innerHTML = '<div class="jrnl-bk-face jrnl-bk-front"><div class="jrnl-bk-limg"></div><div class="jrnl-bk-lshade"></div></div>'
+                + '<div class="jrnl-bk-face jrnl-bk-back"><div class="jrnl-bk-limg"></div><div class="jrnl-bk-lshade"></div></div>';
+            if (frontPg) leaf.children[0].insertBefore(frontPg, leaf.children[0].lastChild);
+            if (backPg) leaf.children[1].insertBefore(backPg, leaf.children[1].lastChild);
+            wrap.appendChild(leaf);
+            return leaf;
+        }
+        const BK_FLIP_FWD = [{ transform: 'translateZ(0) rotateY(0deg)' }, { transform: 'translateZ(1.4cqw) rotateY(-90deg)', offset: .5 }, { transform: 'translateZ(0) rotateY(-180deg)' }];
+        const BK_FLIP_BACK = [{ transform: 'translateZ(0) rotateY(-180deg)' }, { transform: 'translateZ(1.4cqw) rotateY(-90deg)', offset: .5 }, { transform: 'translateZ(0) rotateY(0deg)' }];
+        // dir>0 從右翻到左（往後翻），dir<0 從左翻回右；紙上的陰影、兩邊書頁上的投影跟著走
+        function _bkFlipLeaf(leaf, dir, T, easing) {
+            const [fs, bs] = leaf.querySelectorAll('.jrnl-bk-lshade');
+            const up = [{ opacity: 0 }, { opacity: .9, offset: .5 }, { opacity: .9 }];
+            const down = [{ opacity: .9 }, { opacity: .9, offset: .5 }, { opacity: 0 }];
+            _bkAnim(fs, dir > 0 ? up : down, { duration: T });
+            _bkAnim(bs, dir > 0 ? down : up, { duration: T });
+            const near = [{ opacity: 0 }, { opacity: 1, offset: .3 }, { opacity: 0, offset: .6 }, { opacity: 0 }];
+            const far = [{ opacity: 0 }, { opacity: 0, offset: .45 }, { opacity: .9, offset: .82 }, { opacity: 0 }];
+            _bkAnim(_bkQ('.jrnl-bk-lcast.jrnl-bk-r'), dir > 0 ? near : far, { duration: T });
+            _bkAnim(_bkQ('.jrnl-bk-lcast.jrnl-bk-l'), dir > 0 ? far : near, { duration: T });
+            _bkAnim(leaf, dir > 0 ? BK_FLIP_FWD : BK_FLIP_BACK, { duration: T, easing });
+        }
+        // 開書時嘩啦帶過的空白紙
+        function _bkRiffle() {
+            if (BK.state !== 'opening') return;
+            const leaf = _bkLeaf(null, null);
+            if (!leaf) return;
+            _bkFlipLeaf(leaf, 1, 560, 'cubic-bezier(.45,.05,.3,1)');
+            setTimeout(() => leaf.remove(), 600);
+        }
+
+        // 頁面複本。右頁要定格在複製這一刻：換書籤是 root 上換 class 切區塊，不鎖的話複本會跟著變成新的那頁
+        function _bkCloneRight() {
+            const c = _bkStripIds(rightEl.cloneNode(true));
+            const src = rightEl.querySelectorAll('.jrnl-d-section');
+            c.querySelectorAll('.jrnl-d-section').forEach((s, i) => {
+                if (src[i] && getComputedStyle(src[i]).display === 'none') s.remove();
+                else s.classList.add('jrnl-bk-keep');
+            });
+            return c;
+        }
+        const _bkCloneLeft = () => _bkStripIds(leftEl.cloneNode(true));
+
+        // 換故事／換書籤＝翻一頁。apply() 換掉底下的內容
+        //   往後翻（dir>0）：底下先換成新的，紙的正面帶著舊的右頁掀到左邊
+        //   往前翻（dir<0）：紙從左邊翻回來、正面帶著新的右頁，落下後才露出底下新的那頁
+        function _bkTurn(dir, apply) {
+            if (BK.state !== 'open' || !_bkDesk()) { apply(); return; }
+            _bkSettle();   // 上一頁還沒翻完：直接翻完，接著翻這一頁
+            const T = 880, easing = 'cubic-bezier(.42,0,.28,1)';
+            const listTop = listEl.scrollTop, rightTop = rightEl.scrollTop;
+            const wrap = _bkQ('.jrnl-bk-leafwrap');
+            let front;
+            if (dir > 0) front = _bkCloneRight();
+            else {
+                BK.hold = _bkCloneRight();
+                BK.hold.classList.add('jrnl-bk-hold');
+                wrap.insertBefore(BK.hold, wrap.firstChild);
+                BK.hold.scrollTop = rightTop;
+                rootEl.classList.add('jrnl-bk-holding');
+            }
+            apply();
+            listEl.scrollTop = listTop;
+            rightEl.scrollTop = 0;
+            if (dir < 0) front = _bkCloneRight();
+            const back = _bkCloneLeft();
+            BK.leaf = _bkLeaf(front, back);
+            if (dir > 0) front.scrollTop = rightTop;
+            const backList = back.querySelector('.jrnl-list');
+            if (backList) backList.scrollTop = listTop;
+            _bkFlipLeaf(BK.leaf, dir, T, easing);
+            BK.turnTimer = setTimeout(_bkSettle, T + 30);
+        }
+        function _bkSettle() {
+            clearTimeout(BK.turnTimer); BK.turnTimer = 0;
+            if (BK.leaf) { BK.leaf.remove(); BK.leaf = null; }
+            if (BK.hold) { BK.hold.remove(); BK.hold = null; }
+            rootEl.classList.remove('jrnl-bk-holding');
+        }
+
+        // ✕：頁面淡掉、封面闔回來、整本挪回正中，然後才回大廳
+        function _bkClose(done) {
+            _bkSettle();
+            BK.state = 'closing';
+            _sfx('book_close');
+            const fades = [leftEl, rightEl, container.querySelector('.jrnl-tabs')].map(el =>
+                _bkAnim(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 220 }));
+            setTimeout(() => {
+                if (BK.state !== 'closing') return;
+                rootEl.classList.remove('jrnl-bk-open');
+                rootEl.classList.add('jrnl-bk-closed');
+                fades.forEach(a => a && a.cancel());
+                const bk = rootEl.querySelector('.jrnl-bk');
+                const T = 1150;
+                _bkAnim(_bkQ('.jrnl-bk-cover'), [{ transform: 'rotateY(-180deg)' }, { transform: 'rotateY(0deg)' }], { duration: T, easing: 'cubic-bezier(.55,0,.35,1)' });
+                _bkAnim(bk, [{ transform: 'translateX(0%) scale(1)' }, { transform: 'translateX(-24.2%) scale(.94)' }], { duration: T * 1.05, easing: 'cubic-bezier(.5,0,.3,1)' });
+                _bkAnim(_bkQ('.jrnl-bk-shadow'), [{ left: '1.2%' }, { left: '49.6%', offset: .6 }, { left: '49.6%' }], { duration: T, easing: 'cubic-bezier(.5,0,.3,1)' });
+                _bkAnim(_bkQ('.jrnl-bk-lthshade'), [{ opacity: .8 }, { opacity: .8, offset: .5 }, { opacity: 0 }], { duration: T });
+                _bkAnim(_bkQ('.jrnl-bk-pshade'), [{ opacity: 0 }, { opacity: .8, offset: .5 }, { opacity: .8 }], { duration: T });
+                _bkAnim(_bkQ('.jrnl-bk-cast'), [{ opacity: 0 }, { opacity: 0, offset: .45 }, { opacity: .85, offset: .8 }, { opacity: 0 }], { duration: T });
+                _bkAnim(_bkQ('.jrnl-bk-thick'), [{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: T * .9, fill: 'both' });
+                _bkAnim(_bkQ('.jrnl-bk-tail'), [{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: T * .9, fill: 'both' });
+                setTimeout(done, T * 1.06);
+            }, 230);
+        }
+
         // 卡片點擊：切換 active；手機自動切到詳情頁
         listEl.addEventListener('click', (e) => {
             const card = e.target.closest('.jrnl-card');
             if (!card) return;
-            if (card.dataset.key !== activeKey) _sfx('page_turn');   // 換故事線＝翻一頁
-            activeKey = card.dataset.key;
-            _renderList();
+            const key = card.dataset.key;
+            const apply = () => { activeKey = key; _renderList(); };
+            if (key !== activeKey) {
+                _sfx('page_turn');   // 換故事線＝翻一頁
+                const cards = [...listEl.querySelectorAll('.jrnl-card')];
+                const from = cards.findIndex(c => c.dataset.key === activeKey);
+                _bkTurn(cards.indexOf(card) > from ? 1 : -1, apply);
+            } else apply();
             if (window.matchMedia('(max-width: 720px)').matches) {
                 container.querySelector('.jrnl-root')?.classList.add('show-detail-mobile');
             }
@@ -921,11 +1160,14 @@
             container.querySelectorAll('.jrnl-tab').forEach(b =>
                 b.classList.toggle('active', b.dataset.tab === activeTab));
         }
+        const TAB_ORDER = ['story', 'chars', 'manage'];
         container.querySelectorAll('.jrnl-tab').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (btn.dataset.tab !== activeTab) _sfx('book_riffle');   // 切書籤＝快速翻書
-                activeTab = btn.dataset.tab;
-                _applyTab();
+                const to = btn.dataset.tab;
+                if (to === activeTab) { _applyTab(); return; }
+                _sfx('book_riffle');   // 切書籤＝快速翻書
+                // 書籤在下面的往後翻、在上面的往前翻
+                _bkTurn(TAB_ORDER.indexOf(to) > TAB_ORDER.indexOf(activeTab) ? 1 : -1, () => { activeTab = to; _applyTab(); });
             });
         });
         _applyTab();
@@ -962,12 +1204,16 @@
         // 關閉 → 回大廳（走 PhoneSystem.goHome，跟 spend 面板同套）
         //   不能用 AureliaControlCenter.hide()，那會關整支手機 + 下次打開 state 還在 → 回不去大廳
         closeEl.addEventListener('click', () => {
+            const home = () => { if (win.PhoneSystem?.goHome) win.PhoneSystem.goHome(); };
+            if (BK.state === 'open' && _bkDesk()) { _bkClose(home); return; }   // 書裝：先闔上再走
+            if (BK.state === 'closing') { home(); return; }                    // 闔到一半又按一次＝不等了
             _sfx('book_close');
-            if (win.PhoneSystem?.goHome) win.PhoneSystem.goHome();
+            home();
         });
 
-        _sfx('book_open');   // 日誌開場＝翻開書
         _renderList();
+        _bkInit();
+        if (BK.state !== 'closed') { _sfx('book_open'); BK.openSfx = true; }   // 日誌開場＝翻開書（要演開書的話，等封面翻起來那一下才響）
     }
 
     win.OS_JOURNAL = { launch };

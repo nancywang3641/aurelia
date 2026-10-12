@@ -2186,7 +2186,7 @@
                 '<div class="lset-hint">大廳按鈕的點擊、滑過、開關面板提示音。點音量會馬上放一聲給你聽。</div>' +
                 '<label class="lset-row"><span class="lset-tx">演出動畫</span>' +
                   '<input type="checkbox" class="lset-chk" data-k="revealfx"' + (localStorage.getItem('aurelia_reveal_fx') !== '0' ? ' checked' : '') + '></label>' +
-                '<div class="lset-hint">劇情冒出新線索時，線索頁會先拉近、用小卡片講一遍再收進清單（每條只演一次）。關掉＝新線直接出現在清單裡。</div>' +
+                '<div class="lset-hint">劇情冒出新線索時，線索頁會先拉近、用小卡片講一遍再收進清單（每條只演一次）；電腦上打開故事日誌會先翻開封面，換故事、換書籤時翻一頁。關掉＝都直接出現。</div>' +
                 '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
                   '<input type="checkbox" class="lset-chk" data-k="lore"' + (useLore ? ' checked' : '') + '></label>' +
                 '<div class="lset-hint">預設用大總結摘要的世界觀。勾選＝改讀角色卡的完整世界書（含角色之間的橫向關係，大總結不會寫）。</div>' +
