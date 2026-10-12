@@ -733,7 +733,9 @@
         st.id = 'os-cafe-style';
         st.textContent =
             /* ☕ 奶油紙張＋點單票：保持書咖木質暖色，但把玩法層級拉出來 */
-            '.oc-win{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3350;width:420px;max-width:52%;min-height:min(520px,76%);max-height:82%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(rgba(250,244,234,.975),rgba(247,237,222,.975)),repeating-linear-gradient(0deg,transparent 0 7px,rgba(112,76,42,.018) 8px);border:1px solid #cbb58f;border-radius:18px;color:#4a3828;font-size:13px;box-shadow:0 16px 42px rgba(69,46,27,.34),inset 0 0 0 3px rgba(255,255,255,.35);backdrop-filter:blur(8px);}' +
+            /* 📏 電腦上窗高固定（10-13 她：「每個TAB，有些地方高度不一…能不能不要再自適應高度?」）：以前最矮 520、最高八成二、中間照內容長短，
+               切分頁窗口就一下高一下矮。現在每頁一樣高，內容多的在 .oc-body 裡捲。手機那份本來就是上下釘住（lobby.css），這裡讓回 auto */
+            '.oc-win{position:absolute;right:max(2.2%,calc(50% - 410px));top:50%;transform:translateY(-50%);z-index:3350;width:420px;max-width:52%;height:min(720px,82%);display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(rgba(250,244,234,.975),rgba(247,237,222,.975)),repeating-linear-gradient(0deg,transparent 0 7px,rgba(112,76,42,.018) 8px);border:1px solid #cbb58f;border-radius:18px;color:#4a3828;font-size:13px;box-shadow:0 16px 42px rgba(69,46,27,.34),inset 0 0 0 3px rgba(255,255,255,.35);backdrop-filter:blur(8px);}' +
             '.oc-head{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid rgba(139,101,61,.18);background:rgba(255,252,245,.55);color:#65492f;}' +
             '.oc-brand{display:flex;align-items:center;gap:9px;min-width:0;}.oc-brand-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#7a5230;color:#fff8ed;font-size:18px;box-shadow:0 3px 9px rgba(88,55,28,.18);}' +
             '.oc-sprite{display:inline-block;width:32px;height:32px;flex:none;background-image:url("' + CAFE_ITEM_SHEET + '");background-repeat:no-repeat;background-size:400% 300%;border-radius:7px;font-size:0;vertical-align:middle;}.oc-assets-missing .oc-sprite{display:inline-grid;place-items:center;background-image:none!important;color:inherit;font-size:18px;}' + _spritePosCss() +
@@ -787,7 +789,7 @@
             '.oc-cost-note{margin-top:6px;color:#a18465;font-size:10px;line-height:1.5;text-align:center;}' +
             '.oc-item.miss{background:rgba(240,232,222,.45);border-style:dashed;}.oc-item.miss .oc-blurb{color:#a58b70;}' +
             '.oc-g-type{margin-left:5px;padding:1px 6px;border-radius:8px;background:#efe3d2;color:#896b4d;font-size:9px;font-style:normal;font-weight:400;vertical-align:1px;}' +
-            '@media (max-width:760px){.oc-win{right:10px;left:10px;width:auto;max-width:none;max-height:76%;min-height:min(500px,72%);}.oc-brand-copy{display:none}.oc-stat-pill{padding:4px 5px}.oc-tab{font-size:9px}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
+            '@media (max-width:760px){.oc-win{right:10px;left:10px;width:auto;max-width:none;height:auto;max-height:76%;min-height:min(500px,72%);}.oc-brand-copy{display:none}.oc-stat-pill{padding:4px 5px}.oc-tab{font-size:9px}.void-dock-open #iris-avatar{opacity:.22;filter:brightness(.55) blur(1px);transition:opacity .25s;}}';
         doc.head.appendChild(st);
         try {
             const probe = new win.Image();
