@@ -901,6 +901,8 @@
         //    書本那幾層（封面、右半書殼、紙）只在演的時候用，演完換回原本那張整頁書殼圖，攤開的樣子跟以前一樣。
         //    大廳設置「演出動畫」關掉、或系統要求減少動態效果＝全部照舊直接出現。
         //    🚨 收尾一律用計時器、不等動畫的 finished：畫面藏著時動畫不前進，等它的話會卡在演到一半。
+        // 開書、闔書的快慢：1＝小樣的「正常」；10-13 她說「闔上和打開可以加快」→ 用小樣的「快」那檔（六成時間）。翻頁不算在內
+        const BK_FAST = 0.6;
         const BK = { inited: false, state: 'none', leaf: null, hold: null, turnTimer: 0, introTimer: 0, openSfx: false };
         const _bkDesk = () => rootEl.classList.contains('jrnl-desk');
         function _bkFxOn() {
@@ -959,7 +961,7 @@
             rootEl.classList.add('jrnl-bk-closed');
             BK.state = 'closed';
             rootEl.querySelector('.jrnl-bk-cover').addEventListener('click', _bkOpen);
-            BK.introTimer = setTimeout(_bkOpen, 450);
+            BK.introTimer = setTimeout(_bkOpen, 450 * BK_FAST);
         }
         const _bkQ = (sel) => rootEl.querySelector('.jrnl-bk ' + sel);
 
@@ -968,13 +970,13 @@
             clearTimeout(BK.introTimer);
             BK.state = 'opening';
             const bk = rootEl.querySelector('.jrnl-bk');
-            const T = 1300;
+            const T = 1300 * BK_FAST;
             if (!BK.openSfx) _sfx('book_open');
             _bkAnim(_bkQ('.jrnl-bk-cover'), [{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(-180deg)' }], { duration: T, easing: 'cubic-bezier(.55,.06,.3,1)' });
             _bkAnim(bk, [{ transform: 'translateX(-24.2%) scale(.94)' }, { transform: 'translateX(0%) scale(1)' }], { duration: T * 1.05, easing: 'cubic-bezier(.5,0,.25,1)' });
             _bkAnim(_bkQ('.jrnl-bk-shadow'), [{ left: '49.6%' }, { left: '49.6%', offset: .4 }, { left: '1.2%' }], { duration: T, easing: 'cubic-bezier(.5,0,.25,1)' });
-            _bkAnim(_bkQ('.jrnl-bk-thick'), [{ opacity: 1 }, { opacity: 0 }], { duration: 260 });
-            _bkAnim(_bkQ('.jrnl-bk-tail'), [{ opacity: 1 }, { opacity: 0 }], { duration: 300 });
+            _bkAnim(_bkQ('.jrnl-bk-thick'), [{ opacity: 1 }, { opacity: 0 }], { duration: 260 * BK_FAST });
+            _bkAnim(_bkQ('.jrnl-bk-tail'), [{ opacity: 1 }, { opacity: 0 }], { duration: 300 * BK_FAST });
             _bkAnim(_bkQ('.jrnl-bk-lthshade'), [{ opacity: 0 }, { opacity: .8, offset: .45 }, { opacity: .8 }], { duration: T });
             _bkAnim(_bkQ('.jrnl-bk-pshade'), [{ opacity: .8 }, { opacity: .8, offset: .5 }, { opacity: 0 }], { duration: T });
             _bkAnim(_bkQ('.jrnl-bk-cast'), [{ opacity: 0 }, { opacity: .85, offset: .3 }, { opacity: 0, offset: .62 }, { opacity: 0 }], { duration: T });
@@ -999,18 +1001,18 @@
             const shown = (el) => el.offsetParent !== null;
             try {   // 左頁標題「目 錄」是 ::before 畫的
                 leftEl.animate([{ opacity: 0, transform: 'translateX(-.8cqw)' }, { opacity: 1, transform: 'none' }],
-                    { duration: 420, easing: ease, fill: 'backwards', pseudoElement: '::before' });
+                    { duration: 420 * BK_FAST, easing: ease, fill: 'backwards', pseudoElement: '::before' });
             } catch (e) {}
             [...leftEl.querySelectorAll('.jrnl-search, .jrnl-toolbar, .jrnl-card')].forEach((el, i) =>
                 _bkAnim(el, [{ opacity: 0, transform: 'translateX(-.8cqw)' }, { opacity: 1, transform: 'none' }],
-                    { duration: 420, delay: Math.min(i + 1, CAP) * 55, easing: ease, fill: 'backwards' }));
+                    { duration: 420 * BK_FAST, delay: Math.min(i + 1, CAP) * 55 * BK_FAST, easing: ease, fill: 'backwards' }));
             [...rightEl.querySelectorAll('.jrnl-d-head, .jrnl-volume, .jrnl-d-section-head, .jrnl-tl-item, .jrnl-char-card, .jrnl-mg-row, .jrnl-empty')]
                 .filter(shown).forEach((el, i) =>
                     _bkAnim(el, [{ opacity: 0, transform: 'translateY(.8cqw)' }, { opacity: 1, transform: 'none' }],
-                        { duration: 480, delay: 120 + Math.min(i, CAP) * 75, easing: ease, fill: 'backwards' }));
+                        { duration: 480 * BK_FAST, delay: (120 + Math.min(i, CAP) * 75) * BK_FAST, easing: ease, fill: 'backwards' }));
             [...container.querySelectorAll('.jrnl-tab')].forEach((el, i) =>
                 _bkAnim(el, [{ opacity: 0, transform: 'translateX(-75%)' }, { opacity: 1, transform: 'none' }],
-                    { duration: 440, delay: 280 + i * 90, easing: 'cubic-bezier(.3,1.35,.5,1)', fill: 'backwards' }));
+                    { duration: 440 * BK_FAST, delay: (280 + i * 90) * BK_FAST, easing: 'cubic-bezier(.3,1.35,.5,1)', fill: 'backwards' }));
         }
 
         // 一張紙：正面帶右頁那塊圖、背面帶左頁那塊圖；frontPg/backPg 是要跟著紙一起翻的頁面複本
@@ -1046,8 +1048,8 @@
             if (BK.state !== 'opening') return;
             const leaf = _bkLeaf(null, null);
             if (!leaf) return;
-            _bkFlipLeaf(leaf, 1, 560, 'cubic-bezier(.45,.05,.3,1)');
-            setTimeout(() => leaf.remove(), 600);
+            _bkFlipLeaf(leaf, 1, 560 * BK_FAST, 'cubic-bezier(.45,.05,.3,1)');
+            setTimeout(() => leaf.remove(), 600 * BK_FAST);
         }
 
         // 頁面複本。右頁要定格在複製這一刻：換書籤是 root 上換 class 切區塊，不鎖的話複本會跟著變成新的那頁
@@ -1105,24 +1107,24 @@
             BK.state = 'closing';
             _sfx('book_close');
             const fades = [leftEl, rightEl, container.querySelector('.jrnl-tabs')].map(el =>
-                _bkAnim(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 220 }));
+                _bkAnim(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 220 * BK_FAST }));
             setTimeout(() => {
                 if (BK.state !== 'closing') return;
                 rootEl.classList.remove('jrnl-bk-open');
                 rootEl.classList.add('jrnl-bk-closed');
                 fades.forEach(a => a && a.cancel());
                 const bk = rootEl.querySelector('.jrnl-bk');
-                const T = 1150;
+                const T = 1150 * BK_FAST;
                 _bkAnim(_bkQ('.jrnl-bk-cover'), [{ transform: 'rotateY(-180deg)' }, { transform: 'rotateY(0deg)' }], { duration: T, easing: 'cubic-bezier(.55,0,.35,1)' });
                 _bkAnim(bk, [{ transform: 'translateX(0%) scale(1)' }, { transform: 'translateX(-24.2%) scale(.94)' }], { duration: T * 1.05, easing: 'cubic-bezier(.5,0,.3,1)' });
                 _bkAnim(_bkQ('.jrnl-bk-shadow'), [{ left: '1.2%' }, { left: '49.6%', offset: .6 }, { left: '49.6%' }], { duration: T, easing: 'cubic-bezier(.5,0,.3,1)' });
                 _bkAnim(_bkQ('.jrnl-bk-lthshade'), [{ opacity: .8 }, { opacity: .8, offset: .5 }, { opacity: 0 }], { duration: T });
                 _bkAnim(_bkQ('.jrnl-bk-pshade'), [{ opacity: 0 }, { opacity: .8, offset: .5 }, { opacity: .8 }], { duration: T });
                 _bkAnim(_bkQ('.jrnl-bk-cast'), [{ opacity: 0 }, { opacity: 0, offset: .45 }, { opacity: .85, offset: .8 }, { opacity: 0 }], { duration: T });
-                _bkAnim(_bkQ('.jrnl-bk-thick'), [{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: T * .9, fill: 'both' });
-                _bkAnim(_bkQ('.jrnl-bk-tail'), [{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: T * .9, fill: 'both' });
+                _bkAnim(_bkQ('.jrnl-bk-thick'), [{ opacity: 0 }, { opacity: 1 }], { duration: 200 * BK_FAST, delay: T * .9, fill: 'both' });
+                _bkAnim(_bkQ('.jrnl-bk-tail'), [{ opacity: 0 }, { opacity: 1 }], { duration: 300 * BK_FAST, delay: T * .9, fill: 'both' });
                 setTimeout(done, T * 1.06);
-            }, 230);
+            }, 230 * BK_FAST);
         }
 
         // 卡片點擊：切換 active；手機自動切到詳情頁
