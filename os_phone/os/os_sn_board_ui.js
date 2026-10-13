@@ -31,17 +31,19 @@
         if (a && a.registerHelp) a.registerHelp({
             sn_board: { title: 'SN 32 樓白板', body:
                 '值班的人照時間來上班，一次只做一件事：先剪素材，攢到 10 張再湊成點子。\n' +
-                '妳覺得哪個點子有意思就按「孵化」，他們才會寫成一份稿；另一位挑過毛病，稿才放進「等妳看」。\n' +
-                '點開一份稿：左邊是方向，右邊封起來的是真正會寫進世界書的內容。「我要當玩家」不按偷看就看不到；「我要當作者」整份攤開。\n' +
-                '「好，收進世界」會先給妳看單子，同意了才寫進【奧瑞亞-白板】這本世界書。\n' +
+                '妳覺得哪個點子有意思就按「孵化」，挑這份企劃要交到哪裡（現在先開世界門）。兩位值班的人會輪流討論幾段，妳可以在點子頁插一句話；討論完寫成企劃書，另一位挑過毛病，才放進「等妳看」。\n' +
+                '企劃書不是劇本：寫的是那個世界裡有誰、有哪幾個岔路、可能怎麼收（好的、壞的、出乎意料的都有），讓演故事的 AI 照妳的選擇走。\n' +
+                '點開一份企劃書：左邊是方向，右邊封起來的是整份內容。「我要當玩家」不按偷看就看不到；「我要當作者」整份攤開。\n' +
+                '「好，交給愛麗絲」會放進世界門「調出新世界」那頁；妳點了它，愛麗絲才照它展開成世界（會叫模型）。進到那個世界以後，每一輪都會把岔路和結局帶給演故事的 AI。\n' +
+                '以前寫的稿照舊：「好，收進世界」寫進【奧瑞亞-白板】這本世界書。\n' +
                 '「回爐」寫一句為什麼，他們會照著重寫；放棄的點子，他們之後不會再提類似的。\n' +
                 '「丟素材」寫一句妳的感覺，可以再貼一個連結。貼 YouTube 的歌，會先讀歌詞（字幕）剪成素材卡：連結停在哪首（或一句話裡寫「第五首」）就剪那首，都沒有就整張歌單挑最有故事的一到三首，後面重播的不算。讀歌詞要宿舍的連線開著。\n' +
                 '有的歌沒有字幕（例如英文歌單裡夾一首韓文歌），讀不到歌詞；設置「哪件事走哪個模型」的「白板看影片／讀歌詞」指到看得了影片的通道（例如 Gemini）的話，連結停在那首（或寫第幾首）再丟一次，會叫它只聽那首。一次丟只叫一次模型。\n' +
-                '等妳看最多 3 份，滿了就先不孵新的；兩週沒打開白板，白板會睡著、不排班，按「叫醒」再繼續。' },
+                '等妳看最多 3 份（討論中的也算），滿了就先不孵新的；兩週沒打開白板，白板會睡著、不排班，按「叫醒」再繼續。' },
             sn_board_staff: { title: '值班', body:
                 '挑一位或兩位值班的人。小機用他自己的門卡（會花錢）；宿舍住戶要宿舍的連線開著才叫得到（用會員額度）。\n' +
                 '每個上班時間只叫一個人，兩位輪流。一班只叫一次；沒事做的那班不叫。\n' +
-                '只排一位的話，他寫的稿沒人挑毛病，會直接放進「等妳看」。\n' +
+                '只排一位的話，沒人跟他討論、也沒人挑毛病，他寫好的企劃書會直接放進「等妳看」。\n' +
                 '奧瑞亞關著的時候不上班；下次打開，錯過的只補一班。' },
         });
     } catch (e) {}
@@ -141,9 +143,15 @@
     }
 
     // ── 第一層：白板 ──
+    function _hatchingLabel(i) {
+        if (i.prev) return '回爐重寫中';
+        if (!i.dest) return '寫稿中';
+        if (i.talkDone) return '寫企劃書中';
+        return '討論中 ' + (i.talk || []).filter(t => t.role === 'talk').length + '／' + S.CAPS.TALK;
+    }
     function _ideaCard(i, b) {
         const can = S.canHatch(b);
-        const tag = i.state === 'hatching' ? '<span class="snb-tag snb-t-run">' + (i.prev ? '回爐重寫中' : '寫稿中') + '</span>' : '';
+        const tag = i.state === 'hatching' ? '<span class="snb-tag snb-t-run">' + _hatchingLabel(i) + '</span>' : '';
         return '<div class="snb-note ' + (i.state === 'hatching' ? 'snb-w is-pending' : 'snb-y') + '"><button class="snb-note-hit" data-snb="open-idea" data-id="' + esc(i.id) + '">' + tag + '<span class="snb-note-tx">' + esc(i.text) + '</span>' +
             '<span class="snb-meta">' + esc(i.byName || '') + '・' + _ago(i.at) + '</span></button>' +
             (i.state === 'wild' ? '<button class="snb-hatch" data-snb="hatch" data-id="' + esc(i.id) + '"' + (can ? '' : ' disabled') + '><i class="fa-solid fa-egg"></i>' + (can ? '孵化' : '先看完再孵') + '</button>' : '') + '</div>';
@@ -151,7 +159,7 @@
     function _draftCard(d) {
         const tag = d.state === 'check' ? '<span class="snb-tag snb-t-run">挑毛病中</span>' : d.unchecked ? '<span class="snb-tag snb-t-hot">沒人挑過</span>' : '<span class="snb-tag snb-t-hot">等妳看</span>';
         return '<div class="snb-note snb-w"><button class="snb-note-hit" data-snb="open-draft" data-id="' + esc(d.id) + '">' + tag + '<span class="snb-note-tx">' + esc(d.title) + '</span>' +
-            '<span class="snb-meta">' + esc(d.writer && d.writer.name) + ' 寫' + (d.checker ? '・' + esc(d.checker.name) + ' 挑過' : '') + '・' + _ago(d.at) + '</span></button></div>';
+            '<span class="snb-meta">' + (d.dest ? esc(S.DESTS[d.dest] || '') + '企劃書・' : '') + esc(d.writer && d.writer.name) + ' 寫' + (d.checker ? '・' + esc(d.checker.name) + ' 挑過' : '') + '・' + _ago(d.at) + '</span></button></div>';
     }
     async function _boardPage() {
         const st = await S.getStaff(), b = await S.getBoard();
@@ -181,8 +189,8 @@
                         (wc ? hatching.map(i => _ideaCard(i, b)).join('') + b.drafts.map(_draftCard).join('') : '<div class="snb-slot">孵化一個點子，他們會寫成稿</div>') +
                         (wc >= S.CAPS.WAIT ? '<div class="snb-quiet"><i class="fa-solid fa-circle-pause"></i>滿了，先看完再孵</div>' : '') + '</section>' +
                     '<section class="snb-col snb-c-done"><div class="snb-ch"><i class="fa-solid fa-book-bookmark"></i>收進世界<small>' + b.world.length + '</small></div>' +
-                        (b.world.length ? b.world.map(w => '<div class="snb-note snb-g"><button class="snb-note-hit" data-snb="open-world" data-id="' + esc(w.id) + '"><span class="snb-tag snb-t-ok">已進世界書</span><span class="snb-note-tx">' + esc(w.title) + '</span>' +
-                            '<span class="snb-meta">' + esc(S.countText(w.count)) + '・' + _when(w.at) + '</span></button></div>').join('') : '<div class="snb-slot">還沒有</div>') + '</section>' +
+                        (b.world.length ? b.world.map(w => '<div class="snb-note snb-g"><button class="snb-note-hit" data-snb="open-world" data-id="' + esc(w.id) + '"><span class="snb-tag snb-t-ok">' + (w.dest ? '交給愛麗絲' : '已進世界書') + '</span><span class="snb-note-tx">' + esc(w.title) + '</span>' +
+                            '<span class="snb-meta">' + esc(w.dest ? S.planCountText(w.plan || {}) : S.countText(w.count)) + '・' + _when(w.at) + '</span></button></div>').join('') : '<div class="snb-slot">還沒有</div>') + '</section>' +
                     '</div>';
             }
             h += '</div>';
@@ -204,16 +212,64 @@
     }
 
     // ── 第二層：一個點子（從哪幾張素材來、放棄）──
+    function _talkHtml(talk) {
+        return (talk || []).map(t => '<div class="snb-msg' + (t.role === 'rae' ? ' is-rae' : '') + '"><span class="snb-ava">' + esc(t.role === 'rae' ? '妳' : String(t.name || '?').slice(0, 1)) + '</span><div><u>' +
+            (t.role === 'rae' ? '妳插一句' : esc(t.name) + (t.ready ? '・可以開始寫了' : '')) + '</u>' + esc(t.text) + '</div></div>').join('');
+    }
     async function _ideaPage(id) {
         const b = await S.getBoard();
         const i = b.ideas.find(x => x.id === id);
         if (!i) return null;
-        return '<div class="snb-page">' + _pageHead(i.state === 'hatching' ? (i.prev ? '回爐重寫中' : '寫稿中的點子') : '野生點子') +
-            '<div class="snb-front"><p>' + esc(i.text) + '</p>' + (i.keys && i.keys.length ? '<div class="snb-adds">' + i.keys.map(k => '<span>' + esc(k) + '</span>').join('') + '</div>' : '') + '</div>' +
+        const talking = i.state === 'hatching' && i.dest;
+        if (talking) _after = body => {
+            const inp = body.querySelector('[data-f="talk"]');
+            if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); const go = body.querySelector('[data-snb="talk-send"]'); if (go) go.click(); } });
+        };
+        return '<div class="snb-page">' + _pageHead(i.state === 'hatching' ? (i.dest ? _hatchingLabel(i).replace(/ \d.*$/, '') : (i.prev ? '回爐重寫中' : '寫稿中的點子')) : '野生點子') +
+            '<div class="snb-front"><p>' + esc(i.text) + '</p>' + (i.keys && i.keys.length ? '<div class="snb-adds">' + i.keys.map(k => '<span>' + esc(k) + '</span>').join('') + '</div>' : '') +
+                (i.dest ? '<p class="snb-dest-line"><i class="fa-solid fa-door-open"></i>交到：' + esc(S.DESTS[i.dest] || '') + '</p>' : '') + '</div>' +
             (i.redo ? '<div class="snb-msg"><span class="snb-ava">妳</span><div><u>回爐的理由</u>' + esc(i.redo) + '</div></div>' : '') +
+            (talking ? '<h4 class="snb-h4"><i class="fa-solid fa-comments"></i>討論</h4>' +
+                ((i.talk || []).length ? '<div class="snb-talk">' + _talkHtml(i.talk) + '</div>' : '<div class="snb-quiet">還沒開始，下一班的人會先講</div>') +
+                '<div class="snb-talk-in"><input class="snb-in" data-f="talk" maxlength="200" aria-label="插一句"><button class="snb-pill" data-snb="talk-send" data-id="' + esc(i.id) + '"><i class="fa-solid fa-paper-plane"></i>插一句</button></div>' +
+                '<p class="snb-foot">' + (i.talkDone ? '討論完了，下一班會寫企劃書；現在插的話，寫的人會照妳說的寫。' : '下一班討論的人會先回應妳這句。') + '</p>' : '') +
             '<h4 class="snb-h4"><i class="fa-solid fa-layer-group"></i>用了這幾張素材</h4>' +
             (i.from && i.from.length ? '<div class="snb-list">' + i.from.map(m => '<div class="snb-row-item"><div class="snb-row-main"><span>' + esc(m.text) + '</span><small>' + esc([m.why, m.source].filter(Boolean).join('・')) + '</small></div></div>').join('') + '</div>' : '<div class="snb-quiet">沒有記到</div>') +
             '<div class="snb-acts"><button class="snb-drop" data-snb="drop-idea" data-id="' + esc(i.id) + '"><i class="fa-solid fa-xmark"></i>放棄這個點子</button></div></div>';
+    }
+
+    // 企劃書整份（後台打開時、交出去那頁）
+    function _planHtml(d) {
+        const ek = S.ENDING_KINDS || {};
+        return '<div class="snb-entry"><b>世界種子</b><p>' + esc(S.seedText(d.seed || {}).split('｜').join('\n')) + '</p></div>' +
+            (d.player ? '<h5>妳在裡面是誰</h5><div class="snb-entry"><p>' + esc(d.player) + '</p></div>' : '') +
+            '<h5>人物</h5>' + (d.people || []).map(p => '<div class="snb-entry"><b>' + esc(p.name) + '</b><p>' + esc(p.content) + '</p></div>').join('') +
+            '<h5>岔路</h5>' + (d.nodes || []).map(n => '<div class="snb-entry"><b>' + esc(n.name) + '</b>' + (n.when ? '<small>什麼情況下會碰到：' + esc(n.when) + '</small>' : '') + '<p>' + esc(n.content) + '</p></div>').join('') +
+            '<h5>可能的結局</h5>' + (d.endings || []).map(e => '<div class="snb-entry"><b>' + esc(e.name) + '</b>' + (ek[e.kind] ? '<small>' + ek[e.kind] + '的結局</small>' : '') + '<p>' + esc(e.content) + '</p></div>').join('') +
+            (d.secret ? '<h5>祕密與真相</h5><div class="snb-entry"><p>' + esc(d.secret) + '</p></div>' : '');
+    }
+    async function _planPage(d) {
+        const opened = _mode() === 'author' || d.peeked;
+        const back = opened
+            ? '<div class="snb-back is-open"><h4><i class="fa-solid fa-lock-open"></i>整份企劃書</h4>' + _planHtml(d) + '</div>'
+            : '<div class="snb-back"><h4><i class="fa-solid fa-lock"></i>整份企劃書（封起來）</h4><div class="snb-seal"><div class="snb-wax"><i class="fa-solid fa-feather"></i></div>' +
+                '<button class="snb-peek" data-snb="peek" data-id="' + esc(d.id) + '"><i class="fa-solid fa-eye"></i>偷看</button>' +
+                '<small>' + (d.checker ? esc(d.checker.name) + ' 挑過毛病：岔路、結局走不走得到都看過了' : d.state === 'check' ? '還在等另一位挑毛病' : '沒人挑過毛病') + '</small></div></div>';
+        const c = S.countPlan(d);
+        const tags = [d.untalked ? '沒討論過' : '', d.unchecked ? '沒人挑過' : ''].filter(Boolean);
+        return '<div class="snb-page snb-open">' + _pageHead(d.title, _modeHtml()) +
+            '<div class="snb-two"><div class="snb-front"><h4><i class="fa-solid fa-compass"></i>方向</h4><p>' + esc(d.front) + '</p>' +
+                '<p class="snb-dest-line"><i class="fa-solid fa-door-open"></i>交到：' + esc(S.DESTS[d.dest] || '') + (tags.length ? '・' + tags.join('・') : '') + '</p>' +
+                '<h4><i class="fa-solid fa-diagram-project"></i>企劃書裡有</h4><div class="snb-adds">' +
+                '<span><b>' + c.people + '</b>位人物</span><span><b>' + c.nodes + '</b>個岔路</span><span><b>' + c.endings + '</b>種結局</span></div></div>' + back + '</div>' +
+            ((d.talk || []).length ? '<h4 class="snb-h4"><i class="fa-solid fa-comments"></i>討論過的</h4><div class="snb-talk">' + _talkHtml(d.talk) + '</div>' : '') +
+            (d.notes.length ? '<div class="snb-talk">' + d.notes.map(n => '<div class="snb-msg"><span class="snb-ava">' + esc(String(n.name || '?').slice(0, 1)) + '</span><div><u>' + (n.role === 'check' ? '挑毛病的' : '寫的') + '・' + esc(n.name) + '</u>' + esc(n.text) + '</div></div>').join('') + '</div>' : '') +
+            (d.state === 'wait'
+                ? '<div class="snb-acts"><button class="snb-go" data-snb="approve" data-id="' + esc(d.id) + '"><i class="fa-solid fa-door-open"></i>好，交給愛麗絲</button>' +
+                  '<button class="snb-redo" data-snb="redo" data-id="' + esc(d.id) + '"><i class="fa-solid fa-rotate"></i>回爐</button>' +
+                  '<button class="snb-drop" data-snb="drop-draft" data-id="' + esc(d.id) + '"><i class="fa-solid fa-xmark"></i>放棄</button></div>'
+                : '<div class="snb-quiet"><i class="fa-solid fa-hourglass-half"></i>還在等另一位挑毛病</div>' +
+                  '<div class="snb-acts"><button class="snb-drop" data-snb="drop-draft" data-id="' + esc(d.id) + '"><i class="fa-solid fa-xmark"></i>放棄</button></div>') + '</div>';
     }
 
     // ── 第二層：一份稿 ──
@@ -221,6 +277,7 @@
         const b = await S.getBoard();
         const d = b.drafts.find(x => x.id === id);
         if (!d) return null;
+        if (d.dest) return _planPage(d);
         const author = _mode() === 'author', opened = author || d.peeked;
         const back = opened
             ? '<div class="snb-back is-open"><h4><i class="fa-solid fa-lock-open"></i>後台</h4>' + d.entries.map(e =>
@@ -243,10 +300,23 @@
     }
 
     // ── 第二層：收進世界的一份（看寫了什麼、改回去）──
+    async function _gatePage(w) {
+        const d = w.draft || null;
+        const st = await S.gateStatus(w.id);
+        const showAll = _mode() === 'author' || !!(d && d.peeked);
+        const where = !st ? '' : st.state === 'inbox' ? '在愛麗絲那裡：到大廳找愛麗絲，「調出新世界」那頁點它，就會展開成世界。'
+            : st.state === 'world' ? '愛麗絲已經把它展開成「' + st.name + '」，在世界門的檔案庫裡。' : '愛麗絲那邊已經沒有這份了。';
+        return '<div class="snb-page">' + _pageHead(w.title, _modeHtml()) +
+            '<p class="snb-foot">' + _when(w.at) + ' 交給愛麗絲：' + esc(S.planCountText(w.plan || {})) + '</p>' +
+            (where ? '<p class="snb-dest-line"><i class="fa-solid fa-door-open"></i>' + esc(where) + '</p>' : '') +
+            (d && showAll ? '<div class="snb-back is-open">' + _planHtml(d) + '</div>' : '<p class="snb-quiet">內容先不給妳看，免得劇透。</p>') +
+            (st && st.state === 'inbox' ? '<div class="snb-acts"><button class="snb-drop" data-snb="take-back" data-id="' + esc(w.id) + '"><i class="fa-solid fa-rotate-left"></i>收回來</button></div><p class="snb-foot">收回來會從愛麗絲那裡拿掉，企劃書回到「等妳看」。</p>' : '') + '</div>';
+    }
     async function _worldPage(id) {
         const b = await S.getBoard();
         const w = b.world.find(x => x.id === id);
         if (!w) return null;
+        if (w.dest) return _gatePage(w);
         const d = w.draft || null;
         const showAll = _mode() === 'author' || !!(d && d.peeked);
         return '<div class="snb-page">' + _pageHead(w.title, _modeHtml()) +
@@ -288,6 +358,40 @@
             if (a) a.toast(done ? done + (r.why ? '。' + r.why : '') : (r.why || '素材放上白板了'), { type: r.why ? 'warn' : 'success' });
             _render();
         });
+    }
+
+    // ── 孵化：挑這份企劃要交到哪裡（這版只開世界門）──
+    function _hatchSheet(id) {
+        if (!_win || _win.querySelector('.snb-sheet-wrap')) return;
+        const a = A();
+        const hint = { gate: '一個玩家走得進去的異世界，交給愛麗絲展開', aurelia: '奧瑞亞城裡的委託、刑偵事件', card: '角色卡地圖上的委託' };
+        const sheet = win.document.createElement('div');
+        sheet.className = 'snb-sheet-wrap';
+        sheet.innerHTML = '<div class="snb-sheet"><h3>這份企劃要交到哪裡？</h3><div class="snb-dests">' +
+            Object.keys(S.DESTS).map(k => {
+                const open = S.OPEN_DESTS.indexOf(k) >= 0;
+                return '<button class="snb-dest" data-snb="dest" data-k="' + k + '"' + (open ? '' : ' disabled') + '><b>' + esc(S.DESTS[k]) + (open ? '' : '<em>之後</em>') + '</b><small>' + esc(hint[k] || '') + '</small></button>';
+            }).join('') + '</div>' +
+            '<div class="snb-acts"><button class="snb-drop" data-snb="dest-no">先不要</button></div></div>';
+        _win.appendChild(sheet);
+        sheet.addEventListener('click', async ev => {
+            const t = ev.target.closest('[data-snb]');
+            if (!t) return;
+            if (t.dataset.snb === 'dest-no') { sheet.remove(); return; }
+            if (t.dataset.snb !== 'dest' || t.disabled) return;
+            const r = await S.act.hatch(id, t.dataset.k);
+            sheet.remove();
+            if (r && !r.ok && a) a.toast(r.why, { type: 'warn' });
+            _render();
+        });
+    }
+    async function _approveGate(id) {
+        const a = A();
+        if (a && !(await a.confirm('交給愛麗絲？\n會放進世界門「調出新世界」那頁；妳去點它，愛麗絲才照它展開成世界（會叫模型）。', { okText: '交給愛麗絲' }))) return;
+        const r = await S.deliverGate(id);
+        if (!r || !r.ok) { if (a) a.alert((r && r.why) || '交不過去'); return; }
+        if (a) a.toast('交給愛麗絲了：到大廳找愛麗絲，「調出新世界」那頁就看得到', { type: 'success' });
+        _view = null; _render();
     }
 
     // ── 收進世界的單子 ──
@@ -392,13 +496,32 @@
         }
         if (k === 'add-mat') return _dropSheet();
         if (k === 'drop-mat') { said(await S.act.drop('material', id)); return _render(); }
-        if (k === 'hatch') { said(await S.act.hatch(id)); return _render(); }
+        if (k === 'hatch') return _hatchSheet(id);
+        if (k === 'talk-send') {
+            const inp = _win.querySelector('[data-f="talk"]');
+            const text = inp ? inp.value.trim() : '';
+            if (!text) return;
+            t.disabled = true;
+            if (said(await S.act.talk(id, text)).ok && inp) inp.value = '';
+            return _render();
+        }
+        if (k === 'take-back') {
+            if (a && !(await a.confirm('從愛麗絲那裡收回來？企劃書會回到「等妳看」。'))) return;
+            t.disabled = true;
+            const r = await S.takeBackGate(id);
+            if (!r.ok) { if (a) a.alert(r.why); return _render(); }
+            if (a) a.toast('收回來了', { type: 'success' });
+            _view = null; return _render();
+        }
         if (k === 'drop-idea') {
             if (a && !(await a.confirm('放棄這個點子？他們之後不會再提類似的。'))) return;
             said(await S.act.drop('idea', id)); _view = null; return _render();
         }
         if (k === 'peek') { said(await S.act.peek(id)); return _render(); }
-        if (k === 'approve') return _approve(id);
+        if (k === 'approve') {
+            const d = (await S.getBoard()).drafts.find(x => x.id === id);
+            return (d && d.dest) ? _approveGate(id) : _approve(id);
+        }
         if (k === 'redo') {
             const why = a ? await a.prompt('哪裡不對？寫一句，他們會照著重寫', '') : '';
             if (!why) return;

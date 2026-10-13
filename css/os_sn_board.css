@@ -138,3 +138,15 @@
 body.snb-harness{margin:0;background:#1d2633}
 body.snb-harness .lobby-left{position:fixed;inset:0}
 .snb-note.is-pending{background:rgba(255,253,248,.7);box-shadow:none;border:1.5px dashed var(--line)}
+/* 二版企劃室：去處、討論、企劃書（os_sn_board_ui _hatchSheet／_ideaPage／_planPage） */
+.snb-win p.snb-dest-line{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--blue-d);margin:6px 0 10px}
+.snb-msg.is-rae div{background:#fff4c2}
+.snb-talk-in{display:flex;gap:6px;align-items:center}.snb-talk-in .snb-in{flex:1}
+.snb-talk-in .snb-pill{flex:none;height:36px;background:var(--ink);color:#fff}
+.snb-dests{display:flex;flex-direction:column;gap:8px}
+.snb-dest{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:10px 12px;cursor:pointer;color:var(--ink)}
+.snb-dest b{font-size:14px;display:flex;align-items:center;gap:8px}.snb-dest small{font-size:12px;color:var(--muted)}
+.snb-dest em{font-style:normal;font-size:11px;background:var(--cream);color:var(--muted);border-radius:999px;padding:1px 8px}
+.snb-dest:not(:disabled):hover{border-color:var(--blue)}
+.snb-dest:disabled{opacity:.55;cursor:default}
+.snb-back h5{margin:12px 0 6px;font-size:12px;opacity:.8}

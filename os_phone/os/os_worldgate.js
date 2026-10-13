@@ -19,6 +19,7 @@
     const K_FOLK = 'folk';       // 她自己在面板裡加的角色簿（跨聊天室共用，跟 K_WORLDS 同層）
                                  // 🚨刻意不存世界書：她討厭的就是建條目那套儀式（開書、填 comment、
                                  //   填鑰匙、選插入位置，然後條目一多就再也找不到）。這裡建完立刻能勾。
+    const K_PLANS = 'sn_plans';  // 🧑‍💼 SN 32 樓白板送來、還沒展開的企劃：[{id,title,front,seed,people,nodes,endings,secret,by,at}]（跨聊天室，跟 K_WORLDS 同層）
     const K_CURRENT = 'current'; // 這個聊天室目前在哪個世界（世界 id；撤離清空）— world_rules_injector 依此翻模組條目
     const BOOK_PARA = '【奧瑞亞-視差】';
     const BOOK_CORE = '【奧瑞亞-人物核心】';   // 她的熟人檔案庫（視差模式刻意不掛這本＝認知隔離，
@@ -262,7 +263,21 @@
             '——這是玩家指定要有的東西。上面所有規格與鐵則若與它衝突,一律以這裡為準。' +
             '必須落實在世界裡並貫穿相關章節,不可以只在某一句話裡提一下就算數。\n';
     }
-    async function _expandWorldText(seed, note) {
+    // 🧑‍💼 白板企劃：人物照它寫進第九節；岔路要讓世界裡有發生的條件，但不寫成必定發生的事；結局和祕密不寫進檔案（另外附在條目最後給主持AI）
+    function _planLine(plan) {
+        if (!plan) return '';
+        const people = (plan.people || []).map(x => '- ' + x.name + ':' + x.content).join('\n');
+        const nodes = (plan.nodes || []).map(x => '- ' + x.name + (x.when ? '(什麼情況下會碰到:' + x.when + ')' : '') + ':' + x.content).join('\n');
+        const endings = (plan.endings || []).map(x => '- ' + x.name + ':' + x.content).join('\n');
+        return '【白板企劃·照這份寫】這個世界是 SN 32 樓的企劃室事先討論、規劃好的。\n' +
+            (plan.player ? '玩家進來以後是:' + plan.player + '——第三節的降生與身分照這個寫。\n' : '') +
+            '下面的人物要寫成第九節的核心人物:名字與背景照這份寫,可以補細節,不要改掉。祕密與真相那段是瞞著別人的事,世界檔案裡不要寫出來。\n' +
+            '岔路與可能的結局是之後劇情可能怎麼走:世界檔案裡要有讓它們能發生的人、地方、勢力與條件,埋進相關章節;' +
+            '但不要把岔路寫成必定發生的事件或主線,結局與祕密也不要寫進檔案(它們另外交給主持AI)。\n' +
+            '人物:\n' + people + '\n岔路:\n' + nodes + '\n可能的結局:\n' + endings +
+            (plan.secret ? '\n祕密與真相:' + plan.secret : '') + '\n';
+    }
+    async function _expandWorldText(seed, note, plan) {
         const prompt =
             '你是一位資深的跑團世界觀設計師。請把以下世界種子擴寫成一份可以直接拿來跑團的世界檔案。\n' +
             _genreLine(seed) +
@@ -289,6 +304,7 @@
             '聚落與建築是照住在裡面的多數人的身體蓋的,只有少數例外才需要另外準備設施。' +
             '這一項不必獨立成段,融進相關章節就好。\n' +
             '寧可少一個區域,不可少掉價格、循環與常識。\n' +
+            _planLine(plan) +
             // 🚨玩家的追加要求放最後:放前面的話後面隔著兩千多字規格才輪到下筆,權重被稀釋到等於沒寫。
             _noteLine(note) +
             // 給程式讀的四行分成前後兩個區塊。
@@ -989,7 +1005,22 @@
             (w.twist ? '核心法則:' + w.twist + '\n' : '') + '\n' + entryText +
             (trav ? '\n\n## 這趟同行的旅人(視差玩家,非本世界NPC)\n' + trav + '\n' + travRules : '') +
             homeBlock +
-            _lookBlock(recruited) + _pcBlock(w) + _achvBlock(w);
+            _lookBlock(recruited) + _pcBlock(w) + _achvBlock(w) + _planBlock(w);
+    }
+    const _ENDING_KIND = { good: '好', bad: '壞', surprise: '意外', twist: '意外' };
+    function _planBlock(w) {
+        const p = w && w.plan;
+        if (!p || !((p.nodes || []).length || (p.endings || []).length)) return '';
+        return '\n\n## 這個世界事先規劃的岔路與可能結局(SN 白板企劃,給主持AI的導演參考,玩家看不到)\n' +
+            '以下是可能性,不是劇本:\n' +
+            '- 走到哪個岔路由玩家的行動決定;岔路裡寫的做法只是舉例,玩家用別的辦法也算數。玩家沒碰到的岔路可以永遠不發生,不要為了讓它發生去製造巧合。\n' +
+            '- 結局不只這幾個:玩家走出清單以外的路就照著演,不要拉回清單裡,也不要把劇情推向任何一個結局。\n' +
+            '- 壞的結局與失敗是真的可以發生的,不要在最後一刻替玩家救回來。\n' +
+            '- 玩家什麼都不碰、只在這裡過日子也可以。\n' +
+            '- 祕密等條件到了才揭露:在那之前旁白不提,知情的角色也不會自己說出來。\n' +
+            '### 岔路\n' + (p.nodes || []).map(n => '- ' + n.name + (n.when ? '(什麼情況下會碰到:' + n.when + ')' : '') + ':' + n.content).join('\n') +
+            '\n### 可能的結局\n' + (p.endings || []).map(e => '- ' + e.name + (_ENDING_KIND[e.kind] ? '(' + _ENDING_KIND[e.kind] + ')' : '') + ':' + e.content).join('\n') +
+            (p.secret ? '\n### 祕密與真相\n' + p.secret : '');
     }
     async function _writeEntry(w, entryText) {
         const TH = _th();
@@ -2642,7 +2673,7 @@
             //   換頁不動窗,只把單欄內容限寬置中——視覺上就是同一張圖紙翻頁,不是換了一個面板。
             // 🚨 只有種子頁(單欄表單)限寬置中;詳情三頁一律吃滿圖紙寬度——
             //    窗開了 900+ 卻把內容關在 620 裡、左右各留一大塊白,就是 Rae 說的「有空間幹嘛不利用」。
-            '.wg-win.wgbp.wgbp-sub .wg-body.wgd-narrow > *{max-width:620px;width:100%;margin-left:auto;margin-right:auto;}' +
+            '.wg-win.wgbp.wgbp-sub .wg-body.wgd-narrow > *{max-width:620px;width:100%;box-sizing:border-box;margin-left:auto;margin-right:auto;}' +
             '.wgd-split{display:grid;grid-template-columns:1.12fr .88fr;gap:16px;align-items:stretch;min-height:0;}' +
             // 左:大概念圖,名字/概念/標籤壓在圖上(海報)
             '.wgd-art{position:relative;overflow:hidden;border:1.4px solid #2a4a80;background:#1c3358;min-height:230px;}' +
@@ -2896,6 +2927,7 @@
         const b = _body(); if (!b) return;
         _curDetailId = null;
         const worlds = await _get(K_WORLDS, []);
+        const planN = (await _get(K_PLANS, [])).length;
         if (!worlds.length) _mgrOff();   // 空檔案庫沒東西可管
         _selIds.forEach(id => { if (!worlds.some(w => w.id === id)) _selIds.delete(id); });   // 別留已被刪掉的殘影
         const inPara = !!_gate()?.isInParallax?.();
@@ -2968,6 +3000,7 @@
                 '<div class="wgbp-blk empty click" data-act="draw">' +
                   '<i class="fa-solid fa-compass-drafting big"></i>' +
                   '<div class="wgbp-empty-nm">請愛麗絲調出新世界</div>' +
+                  (planN ? '<div class="wgbp-empty-cc"><i class="fa-solid fa-chalkboard"></i> 白板送來 ' + planN + ' 份企劃,點進去看</div>' : '') +
                   '<div class="wgbp-empty-cc">' + (worlds.length ? '這一格還沒測繪。' : '檔案庫還是空的。') +
                     '調出新世界會呼叫 AI(抽選+展開共兩次);重進已有世界不呼叫。</div>' +
                 '</div>') +
@@ -3037,12 +3070,33 @@
     }
 
     // ── P2 種子抽選 ──
+    let _plans = [];        // 白板送來的企劃(種子頁打開時讀一次;種子卡那頁也排在最上面)
+    function _planCardsHtml() {
+        if (!_plans.length) return '';
+        return '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-chalkboard"></i> 白板送來的企劃</span><span class="wg-section-note">' + _plans.length + ' 份</span></div>' +
+            _plans.map(p => {
+                const s = p.seed || {};
+                return '<div class="wg-card click" data-plan="' + _esc(p.id) + '">' +
+                    '<div class="wg-card-title"><i class="fa-solid fa-chalkboard"></i> ' + _esc(s.name || p.title) + '</div>' +
+                    '<div class="wg-card-sub">' + _esc(p.front || s.concept || '') + '</div>' +
+                    (s.twist ? '<div class="wg-card-sub"><i class="fa-solid fa-scale-unbalanced"></i> ' + _esc(s.twist) + '</div>' : '') +
+                    '<div class="wg-tags">' + (s.type ? '<span class="wg-tag">' + _esc(s.type) + '</span>' : '') +
+                      '<span class="wg-tag">' + (p.nodes || []).length + ' 個岔路</span>' +
+                      '<span class="wg-tag">' + (p.endings || []).length + ' 種結局</span></div>' +
+                '</div>';
+            }).join('') +
+            '<div class="wg-note">點企劃會照它展開成完整世界並存進檔案庫(呼叫 AI)。</div>';
+    }
+    function _bindPlanCards(b) {
+        b.querySelectorAll('[data-plan]').forEach(el => el.addEventListener('click', () => _pickPlan(el.dataset.plan)));
+    }
     async function _renderSeedPage() {
         const b = _body(); if (!b) return;
+        _plans = await _get(K_PLANS, []);
         _winEl?.classList.add('wgbp', 'wgbp-sub');   // 同一疊圖紙抽出的一頁
         b.classList.add('wgd-narrow');               // 種子頁是單欄表單:限寬置中才不會拉成一條
         b.classList.remove('wgd-st1');
-        b.innerHTML =
+        b.innerHTML = _planCardsHtml() +
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-dice"></i> 世界種子</span><span class="wg-section-note">此頁功能會呼叫 AI</span></div>' +
             '<div class="wg-empty" data-wg-seedhint><i class="fa-solid fa-wand-magic-sparkles"></i>填了題材,四顆種子都會是那個題材,<br>留空就讓愛麗絲隨手抽一把。</div>' +
             // 30 字連一句完整的題材都寫不完(實測「…挖掘海洋世界的秘」就是在第 30 字被切掉的)
@@ -3053,6 +3107,7 @@
             '</div>';
         b.querySelector('[data-act="back"]').addEventListener('click', _renderList);
         b.querySelector('[data-act="roll"]').addEventListener('click', () => _rollSeeds());
+        _bindPlanCards(b);
         if (_seeds.length) _renderSeedCards();   // 上次抽的還在就直接顯示(不重燒)
     }
     async function _rollSeeds() {
@@ -3073,7 +3128,7 @@
     }
     function _renderSeedCards() {
         const b = _body(); if (!b) return;
-        b.innerHTML =
+        b.innerHTML = _planCardsHtml() +
             '<div class="wg-section-head"><span class="wg-section-title"><i class="fa-solid fa-dice"></i> 選一個世界展開</span><span class="wg-section-note">' + _seeds.length + ' 顆種子</span></div>' +
             _seeds.map((s, i) =>
                 '<div class="wg-card click" data-i="' + i + '">' +
@@ -3097,20 +3152,30 @@
             '<div class="wg-note">先填上面那格再點種子,展開時會照著加進去。點選種子後會展開成完整世界並存進檔案庫(呼叫一次 AI)。</div>';
         b.querySelector('[data-act="back"]').addEventListener('click', _renderSeedPage);
         b.querySelector('[data-act="reroll"]').addEventListener('click', () => { _seeds = []; _renderSeedPage(); });
+        _bindPlanCards(b);
         b.querySelectorAll('.wg-card.click').forEach(el => el.addEventListener('click', () => {
             // 備註要在 innerHTML 被 _loading 洗掉之前先讀出來
             _pickSeed(Number(el.dataset.i), b.querySelector('[data-wg-note]')?.value?.trim() || '');
         }));
     }
-    async function _pickSeed(i, note) {
-        if (_busy) return;
+    function _pickSeed(i, note) {
         const seed = _seeds[i];
         if (!seed) return;
+        return _expandFrom(seed, note, null, _renderSeedCards);
+    }
+    // 🧑‍💼 白板企劃：種子用企劃那份，人物、岔路、結局、祕密一起帶進展開；展開好了才從「白板送來的企劃」拿掉
+    async function _pickPlan(id) {
+        const p = (await _get(K_PLANS, [])).find(x => x && x.id === id);
+        if (!p || !p.seed || !p.seed.name) { _toast('這份企劃不見了'); _renderSeedPage(); return; }
+        return _expandFrom(p.seed, '', p, _renderSeedPage);
+    }
+    async function _expandFrom(seed, note, plan, onFail) {
+        if (_busy) return;
         _busy = true;
         note = String(note || '').trim();
         _loading('正在建構「' + _esc(seed.name) + '」的世界檔案…');
-        const r = await _expandWorldText(seed, note);
-        if (!r || !r.text) { _busy = false; _toast('世界建構失敗,請重試'); _renderSeedCards(); return; }
+        const r = await _expandWorldText(seed, note, plan);
+        if (!r || !r.text) { _busy = false; _toast('世界建構失敗,請重試'); onFail(); return; }
         _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
         // 旅人與面板兩支並行:各自只吃世界檔案節錄、彼此不相干,牆鐘時間等於慢的那一支。
         // 連接設定是逐次隨請求帶的(不是切全域),兩支同時在跑不會互相踩。
@@ -3130,20 +3195,24 @@
             note: note,             // 展開時的追加要求——重新召集旅人時要跟著帶,不然新旅人會不符合當初的設定
             spawns: r.spawns || [], // 可選的降生地(展開時同一次 API 順便帶回來的,不另外呼叫)
             spawn: '',              // 玩家選的那個(空=交給主持AI自己安排,維持舊行為)
+            pc: (plan && plan.player) ? String(plan.player).slice(0, 400) : '',   // 🧑‍💼 白板企劃寫的「玩家是誰」先填進玩家指定的身分(詳情頁可以改)
             artPrompt: r.artPrompt || '', mapPrompt: r.mapPrompt || '',   // 兩張圖的關鍵詞,同一次 API 順便帶回來的
             art: '', mapArt: '',    // 圖在世界存好之後才在背景生,不擋畫面
             travelers: _normTravelers(trav),
             panel: panel || null,   // 🎴 VN 劇情末尾那一頁的外觀;null=沒生成到,末尾退回原本那幾顆鍵
             achv: achv || null,     // 🏅 這個世界的成就清單;解鎖仍走既有的成就標記,這裡只是清單
             visits: 0, ts: Date.now(),
+            // 🧑‍💼 白板企劃的岔路、結局、祕密：寫進條目最後面（在這個世界裡每一輪都送）。人物已經寫進世界檔案第九節
+            plan: plan ? { from: plan.id, title: plan.title || '', front: plan.front || '', nodes: plan.nodes || [], endings: plan.endings || [], secret: plan.secret || '', people: plan.people || [] } : null,
         };
         const wrote = await _writeEntry(w, r.text);
-        if (!wrote) { _toast('世界條目寫入失敗(確認已匯入' + BOOK_PARA + ')'); _renderSeedCards(); return; }
+        if (!wrote) { _toast('世界條目寫入失敗(確認已匯入' + BOOK_PARA + ')'); onFail(); return; }
         if (!w.travelers.length) _toast('世界已建好,但旅人沒召集到——詳情頁可重新召集');
         const worlds = await _get(K_WORLDS, []);
         worlds.unshift(w);
         await _set(K_WORLDS, worlds);
-        _seeds = [];
+        if (plan) await _set(K_PLANS, (await _get(K_PLANS, [])).filter(x => x && x.id !== plan.id));
+        else _seeds = [];   // 抽的種子用掉了；展開白板企劃的話，上次抽的種子還留著
         _toast('「' + w.name + '」已存入檔案庫');
         _renderDetail(w);
         _fillArt(w);   // 不 await:兩張圖在背景慢慢生,好了會自己寫回檔案庫並重繪
@@ -3951,6 +4020,33 @@
         } catch (e) { return null; }
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, getWorldPanel, getBattleAllies, resolveAchvCode };
+    // ── 🧑‍💼 給 SN 32 樓白板的（os_sn_board deliverGate／takeBackGate／gateStatus）──
+    async function receivePlan(p) {
+        if (!p || !p.id || !p.seed || !p.seed.name) return { ok: false, why: '企劃書缺世界種子' };
+        const list = await _get(K_PLANS, []);
+        if (list.some(x => x && x.id === p.id)) return { ok: true };
+        list.unshift(Object.assign({}, p, { at: Date.now() }));
+        await _set(K_PLANS, list);
+        return { ok: true };
+    }
+    async function takeBackPlan(id) {
+        const list = await _get(K_PLANS, []);
+        if (list.some(x => x && x.id === id)) { await _set(K_PLANS, list.filter(x => x && x.id !== id)); return { ok: true }; }
+        const w = (await _get(K_WORLDS, [])).find(x => x && x.plan && x.plan.from === id);
+        return w ? { ok: false, why: '愛麗絲已經把它展開成「' + w.name + '」了,收不回來(不要的話去世界門刪那個世界)' } : { ok: true };
+    }
+    async function planStatus(id) {
+        if ((await _get(K_PLANS, [])).some(x => x && x.id === id)) return { state: 'inbox' };
+        const w = (await _get(K_WORLDS, [])).find(x => x && x.plan && x.plan.from === id);
+        return w ? { state: 'world', name: w.name } : { state: 'gone' };
+    }
+    async function usedNames() {
+        const a = (await _get(K_WORLDS, [])).map(w => w && w.name);
+        const b = (await _get(K_PLANS, [])).map(p => p && p.seed && p.seed.name);
+        return Array.from(new Set(a.concat(b).filter(Boolean)));
+    }
+
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, getWorldPanel, getBattleAllies, resolveAchvCode,
+        receivePlan, takeBackPlan, planStatus, usedNames };
     console.log('[Worldgate③] 世界門面板就緒');
 })();
