@@ -1769,22 +1769,62 @@
         if (to === 'workshop' && S.scene !== 'workshop') S.workshopFrom = S.scene;   // 記住從哪進工坊的（出口要用）
         S.transitioning = true;
         const left = document.querySelector('.lobby-left');
+        // 🧱 切塊換場（10-13 她：「轉地圖都可以用」，選了換場景那一下）：見 _sceneTileSwap；不演的時候照舊白光
+        const TF = window.AURELIA_TILEFX;
+        if (TF && TF.canRun() && S.root && S.root.parentNode) { _sceneTileSwap(to, spawn, spawnMode, TF); return; }
+        if (_tileSnap) { _tileSnap.remove(); _tileSnap = null; }   // 上一趟切塊還沒收完就改走白光（演出動畫剛關掉之類）：定格別留著
         const fade = document.createElement('div');
         fade.className = 'lstage-fade';
         (left || S.root).appendChild(fade);
         requestAnimationFrame(() => fade.classList.add('on'));
         setTimeout(() => {
-            unmount();
-            S.scene = to;
-            // 門帶 spawn={x,y} 就落在指定點（每扇門各自的門口）；沒帶才用目標場景的「落」圓點
-            S.spawnOverride = spawn || ((spawnMode === 'player') ? null : 'arrive');
-            S.doorCd = performance.now() + 900;   // 落地冷卻，防止秒回
-            tryMount();
-            _emitScene();   // 廣播「現在站在哪個場景」→ void_terminal 據此對齊 404 皮
+            _swapScene(to, spawn, spawnMode);
             S.transitioning = false;
             fade.classList.remove('on');
             setTimeout(() => fade.remove(), 400);
         }, 320);
+    }
+    // 真的換場景那一步（白光、切塊兩條路共用）
+    function _swapScene(to, spawn, spawnMode) {
+        S._inSwap = true;   // 換場這一下的 unmount 不准收掉剛拍的定格
+        try { unmount(); } finally { S._inSwap = false; }
+        S.scene = to;
+        // 門帶 spawn={x,y} 就落在指定點（每扇門各自的門口）；沒帶才用目標場景的「落」圓點
+        S.spawnOverride = spawn || ((spawnMode === 'player') ? null : 'arrive');
+        S.doorCd = performance.now() + 900;   // 落地冷卻，防止秒回
+        tryMount();
+        _emitScene();   // 廣播「現在站在哪個場景」→ void_terminal 據此對齊 404 皮
+    }
+    // 🧱 切塊換場：舊場景拍一張定格（整棵 DOM 複製一份，畫布那層像天氣會是空的，不影響）墊在底下，
+    //    新場景照常掛上去、先整格藏著，等它的底圖載好（最多等 0.6 秒）再從中間往外一格格蓋上去，蓋完把定格拿掉。
+    //    換場當下就放行走路（跟白光那條一樣）；換到一半又換：上一趟的格線、定格先收掉，再拍新的定格。
+    let _tileSnap = null;
+    function _sceneTileSwap(to, spawn, spawnMode, TF) {
+        if (_tileSnap) { _tileSnap.remove(); _tileSnap = null; }
+        TF.clear(S.root);   // 上一趟還在拼的話先停掉，定格才會是整張
+        const snap = S.root.cloneNode(true);
+        snap.classList.add('lstage-snap');
+        snap.removeAttribute('id'); snap.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));   // 別讓 getElementById 先找到定格裡的
+        S.root.parentNode.insertBefore(snap, S.root);
+        _tileSnap = snap;
+        const dropSnap = () => { if (_tileSnap === snap) { snap.remove(); _tileSnap = null; } };
+        _swapScene(to, spawn, spawnMode);
+        S.transitioning = false;
+        const root = S.root;
+        if (!root) { dropSnap(); return; }
+        TF.hide(root);
+        let started = false;
+        const go = () => {
+            if (started) return;
+            started = true;
+            if (S.root !== root || !root.isConnected) { TF.clear(root); dropSnap(); return; }   // 等底圖時又換走了
+            TF.run(root, 'in', dropSnap);
+        };
+        const img = root.querySelector('.lstage-map');
+        if (!img || !img.getAttribute('src') || img.complete) { go(); return; }
+        img.addEventListener('load', go, { once: true });
+        img.addEventListener('error', go, { once: true });
+        setTimeout(go, 600);   // 底圖太慢就不等了
     }
     // 404 進出（void_terminal 的 enter404Room/restoreLobby 呼叫；stage 關著時只記場景）
     function enter404Stage() {
@@ -2518,6 +2558,9 @@
     }
     function unmount() {
         if (!S.active) return;
+        // 🧱 切塊換場演到一半就離開舞台：這一趟的格線收掉；不是換場那一下的話，墊在底下的舊場景定格也拿掉
+        try { window.AURELIA_TILEFX?.clear?.(S.root); } catch (e) {}
+        if (!S._inSwap && _tileSnap) { _tileSnap.remove(); _tileSnap = null; }
         if (S._theaterTimer) { clearInterval(S._theaterTimer); S._theaterTimer = null; }
         window.LobbyTheater?.end();
         if (S.edit) window.LobbyEditor?.exit(false);
