@@ -1777,7 +1777,8 @@
                 const needGen = [];
                 for (const name of names) {
                     if (this._avatarMemCache[name]) continue;
-                    const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
+                    const _sf = this._spriteFirst(name);   // 開了跳過頭像、這個人有外觀可生：頭像那兩種（世界書頭像素材、人設頭像）不搶在立繪前面
+                    const lbUrl = _sf ? null : (this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])]);
                     if (lbUrl) { this._avatarMemCache[name] = lbUrl; console.log(`[VN] 頭像使用世界書素材：${name}`); continue; }
                     const cached = await VN_Cache.get('avatar_cache', name);
                     if (cached && cached.url && !cached.url.startsWith('blob:')) {
@@ -1789,7 +1790,7 @@
                     if (cached?.url?.startsWith('blob:')) await VN_Cache.delete('avatar_cache', name);
                     // persona 橋接：名字是主角且自己設了頭像圖 → 直接用那張。
                     // 🚫 沒圖就跟其他沒外觀的角色一樣走剪影：不拿人設 desc 去生圖（那是給 AI 讀的長文，不是外觀詞）
-                    const pf = this._getPersonaFallback(name);
+                    const pf = _sf ? null : this._getPersonaFallback(name);
                     if (pf?.url) { this._avatarMemCache[name] = pf.url; console.log(`[VN] 頭像使用 Persona URL：${name}`); continue; }
                     // 自備靜態立繪/預設圖存在 → 播放時直接讀，不必生
                     if (await this._staticAvatarExists(name)) { console.log(`[VN] 頭像使用自備靜態圖：${name}`); continue; }
@@ -2225,11 +2226,12 @@
                 try {
                     // 與預熱第一輪同序的快速快取檢查：世界書素材 → IDB → persona URL，命中就不生
                     if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
-                    const lbUrl = this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])];
+                    const _sf = this._spriteFirst(name);   // 同預熱：開了跳過頭像、有外觀可生，頭像那兩種不算現成來源
+                    const lbUrl = _sf ? null : (this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])]);
                     if (lbUrl) continue;
                     const cached = await VN_Cache.get('avatar_cache', name);
                     if (cached?.url && !cached.url.startsWith('blob:')) continue;
-                    if (this._getPersonaFallback(name)?.url) continue;
+                    if (!_sf && this._getPersonaFallback(name)?.url) continue;
                     // 自備靜態立繪/預設圖存在 → 播放時直接讀靜態檔，不用生
                     if (await this._staticAvatarExists(name)) { console.log(`[VN] 頭像早鳥：${name} 有自備靜態圖，跳過生成`); continue; }
                 } catch(e) {}
@@ -3994,6 +3996,15 @@
         // 解決 AI profile 用全名（卡蜜拉·洛爾德）但 VN tag 用短名（卡蜜拉）的對齊問題
         // 取 OS_PERSONA 的頭像資料：先 URL，再 desc（作為生圖 prompt）
         // 只在 name 與當前 persona 名稱吻合時才返回資料
+        // 🎴 開了「跳過頭像」（立繪直生；一次生三種也在它底下）而且這個人有外觀可生 → 要的是立繪：
+        //   頭像那兩種（世界書【素材-角色頭像素材】、酒館人設清單的頭像）不准排在生立繪前面，只在沒外觀可生時墊底（舞台那條本來就是這樣）。
+        //   頭像模式照舊：她放的頭像最先。她放的立繪（表情／預設立繪條目、立繪目錄）在哪個模式都還是最先。
+        //   10-14 她：「放的圖最先的權利是在於我當前要求的是頭像當立繪，如果我打開跳過頭像或者三種模式，那為什麼這個頭像會比立繪先行?」
+        //   （酒館的人設一定有一張頭像，就算是問號剪影 → 以前主角每次都被它頂掉、永遠不生立繪）
+        _spriteFirst: function(name) {
+            const C = window.VN_Config;
+            return !!(C && C.data && C.data.spriteDirect === true) && !!this._resolveAvatarPrompt(name);
+        },
         _getPersonaFallback: function(name) {
             try {
                 const userName = win.OS_PERSONA?.getName?.() || win.OS_API?.getGlobalUserName?.();
