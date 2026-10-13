@@ -47,15 +47,45 @@
     //    不在了就把 is-tool 拿掉；輪詢跟 rAF 都不適合（分頁在背景時 rAF 不會 fire）。
     let _toolObs = null;
     function _enterTool(root) {
-        root.classList.add('is-tool');
+        _resize(root, () => root.classList.add('is-tool'));
         if (_toolObs) { _toolObs.disconnect(); _toolObs = null; }
         if (!window.MutationObserver) return;
         _toolObs = new MutationObserver(() => {
             if (root.querySelector('#os_studio_app, .vncomp-app')) return;
-            root.classList.remove('is-tool');
+            _resize(root, () => root.classList.remove('is-tool'));
             if (_toolObs) { _toolObs.disconnect(); _toolObs = null; }
         });
         _toolObs.observe(root, { childList: true, subtree: true });
+    }
+
+    // 🎞 浮窗放寬／縮回的過場（10-13 她：「伸縮窗口的時候常常掉幀」）
+    //   以前是 CSS 在寬、高、左邊位置上跑 transition：每一幀創作室整片（聊天、預覽畫布）都要重排一次，
+    //   創作室看容器寬度排版的那幾塊也跟著每幀重算；寬跟左邊是從 auto 起跳，根本不會動，只有高度在慢慢長。
+    //   現在：窗口一次換成最後的大小（創作室只排一次版），再用 transform 從舊的框縮放過去——顯示卡做，不重排。
+    //   大廳設置「演出動畫」關掉、或系統要求減少動態，就直接換、不演。手機版窗口大小不變，量到一樣就不演。
+    function _canAnim() {
+        try {
+            if (localStorage.getItem('aurelia_reveal_fx') === '0') return false;
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+            return true;
+        } catch (e) { return false; }
+    }
+    function _resize(root, change) {
+        const box = root.closest && root.closest('.lstage-wswin');
+        if (!box || typeof box.animate !== 'function' || !_canAnim()) { change(); return; }
+        (box.getAnimations ? box.getAnimations() : []).forEach(a => { try { a.finish(); } catch (e) {} });   // 上一段還沒演完：先收尾，量到的才是真的框
+        const a = box.getBoundingClientRect();
+        change();
+        const b = box.getBoundingClientRect();
+        if (!b.width || !b.height || (Math.abs(a.left - b.left) < 1 && Math.abs(a.top - b.top) < 1 && Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1)) return;
+        // 窗口本身有 translateY(-50%)（置中）：過場時接在它前後，以左上角為原點縮放
+        let base = '';
+        try { const t = getComputedStyle(box).transform; if (t && t !== 'none') base = t; } catch (e) {}
+        const from = 'translate(' + (a.left - b.left) + 'px,' + (a.top - b.top) + 'px) ' + base + ' scale(' + (a.width / b.width) + ',' + (a.height / b.height) + ')';
+        try {
+            box.animate([{ transformOrigin: '0 0', transform: from }, { transformOrigin: '0 0', transform: base || 'none' }],
+                { duration: 240, easing: 'cubic-bezier(.2,.7,.2,1)' });
+        } catch (e) {}
     }
 
     // 卡片點下去＝那件事整個蓋上來（創作室與 VN 組件本來就是這個作法：

@@ -301,8 +301,10 @@
             // 🎯 造物儀＝可點的互動點（點了開造物工坊面板；走近帽匠是純聊天，兩件事分開，同占卜小屋那條規則）。
             //    obj 讓熱點跟著家具走：擺設模式挪造物儀，熱點自己跟上，不用回來改座標。
             hotspots: [
+                // 10-13 她嫌手繪描邊圖那圈橘框「突兀」、喜歡書咖世界書那種跟背景一體的光 → 改成造物儀自己鑲一圈光（lit），
+                //   顏色換成工坊的淡紫細邊＋紫光（litCls；三個小樣裡青銅邊太橘、只有柔光又看不出被點亮）
                 { obj: 'obj_loom', label: '開始造物', icon: 'fa-wand-magic-sparkles', open: 'workshop', cls: 'hs-workshop',
-                  hoverImg: 'lobby_workshop_obj_loom_glow_v1.png' },   // 描邊沿造物儀真實輪廓，中間透明
+                  lit: true, litCls: 'lstage-obj-lit-violet' },
             ],
         },
         room: {   // 🏠 房間：底圖與碰撞遮罩不是素材，是「進門當下」餵進來的（見 enterRoom）
@@ -2452,8 +2454,9 @@
             //    光是照圖片本身的形狀長出來的，所以沙發亮沙發、圓几亮圓几，各是各的輪廓。
             //    🚨 前提是一張圖只畫一件東西 —— 一張圖畫三件，一圈光會把三件一起框起來。
             if (litEl) {
-                el.addEventListener('mouseenter', () => litEl.classList.add('lstage-obj-lit'));
-                el.addEventListener('mouseleave', () => litEl.classList.remove('lstage-obj-lit'));
+                const litCls = ['lstage-obj-lit'].concat(hs.litCls ? [hs.litCls] : []);   // litCls＝這間的光換顏色（帽匠工坊是紫的）
+                el.addEventListener('mouseenter', () => litEl.classList.add(...litCls));
+                el.addEventListener('mouseleave', () => litEl.classList.remove(...litCls));
             }
             if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid ' +
                 (hs.icon || 'fa-door-open') + '"></i> ' + hs.label + '</span>';
