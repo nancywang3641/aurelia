@@ -25,15 +25,18 @@
     };
 
     // 這次要不要演：大廳設置「演出動畫」開著、系統沒要求減少動態、畫面夠寬（電腦）、
-    // 劇情全螢幕那層沒開著（從劇情末尾開的窗口走劇情自己那套淡入淡出，兩套疊在一起會打架）
-    function canRun() {
+    // 劇情全螢幕那層沒開著（從劇情末尾開的窗口走劇情自己那套淡入淡出，兩套疊在一起會打架）。
+    // opts.ignoreVn＝要演的就是劇情那一格自己（藏書、章節從大廳開／關），不看它開沒開著
+    function canRun(opts) {
         try {
             if (localStorage.getItem('aurelia_reveal_fx') === '0') return false;
             if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
             if ((window.innerWidth || 0) < 960) return false;
             if (!(window.CSS && CSS.supports && CSS.supports('clip-path', HIDE_ALL))) return false;
-            const vn = document.getElementById('aurelia-vn-panel');
-            if (vn && vn.style.display !== 'none' && vn.offsetParent !== null) return false;
+            if (!(opts && opts.ignoreVn)) {
+                const vn = document.getElementById('aurelia-vn-panel');
+                if (vn && vn.style.display !== 'none' && vn.offsetParent !== null) return false;
+            }
             return true;
         } catch (e) { return false; }
     }

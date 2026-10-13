@@ -138,6 +138,39 @@
 
     }
 
+    // ── 🧱 藏書（酒館版）／章節：劇情那一格（#aurelia-vn-panel）也照大廳窗口那套切塊進出場 ──
+    //    10-13 她問「酒館版的藏書和章節也是?」。只管這兩個：從大廳按藏書、章節打開，按它們自己的關閉回大廳。
+    //    播劇情、小劇場、從書架開的照舊（那幾條各自有 loading／轉場），劇情播到一半開章節再關也不演（關掉是回劇情不是回大廳）。
+    //    進場等面板內容出來才開始拼（這一格底色是黑的，先拼會先蓋一片黑）；出場在使用者按關閉鈕那一下攔下來，
+    //    先一格格收掉、露回大廳，再交回原本的關閉（原本的關閉會先清內容，等它清完再收就只剩黑格子在退）。
+    let _vnSeq = 0;
+    const _vnTF = () => window.AURELIA_TILEFX || null;
+    function _vnBackToLobby() {
+        const pg = document.getElementById('page-game');
+        return !!(pg && pg.classList.contains('hidden'));   // 劇情頁沒在顯示＝這一關就是回大廳
+    }
+    function _vnCloseCapture(e) {
+        const btn = e.target && e.target.closest && e.target.closest('.chx-close, #se-btn-close');
+        if (!btn) return;
+        const vnPanel = e.currentTarget, TF = _vnTF();
+        if (!TF || vnPanel.style.display === 'none' || vnPanel.dataset.tileOut === '1' || !_vnBackToLobby() || !TF.canRun({ ignoreVn: true })) return;
+        e.preventDefault(); e.stopPropagation();
+        const isChapter = btn.classList.contains('chx-close');
+        vnPanel.dataset.tileOut = '1';
+        const seq = _vnSeq;
+        { const h = document.querySelector('.void-top-bar'); if (h) h.style.display = ''; }   // 收的時候底下要是完整的大廳（頂欄先回來）
+        TF.run(vnPanel, 'out', () => {
+            if (seq !== _vnSeq) return;   // 收到一半又被打開了
+            vnPanel.dataset.tileGone = '1';
+            try {
+                if (isChapter) window.VN_PLAYER?.closeChapterPanel?.();
+                else window.StoryExtractor?.hide?.();
+            } catch (err) { console.warn('[ControlCenter] 關閉失敗', err); }
+            // 原本的關閉照理會叫 hideVnPanel 把這一格收掉；沒收（例外情況）就把剪裁放掉，別讓它整格隱形卡著
+            if (vnPanel.dataset.tileGone === '1') { delete vnPanel.dataset.tileGone; delete vnPanel.dataset.tileOut; TF.clear(vnPanel); }
+        });
+    }
+
     function showVnPanel(action) {
         const root = isEmbedded ? embeddedRoot : phoneModal;
         if (!root && !isEmbedded) return;
@@ -149,12 +182,27 @@
 
         if (window.VoidTerminal && window.VoidTerminal.suspendIdle) window.VoidTerminal.suspendIdle();
 
+        // 🧱 切塊進場（只有從大廳開藏書、章節；見上面那段）
+        const TF = _vnTF();
+        const wasHidden = vnPanel.style.display === 'none';
+        _vnSeq++;
+        delete vnPanel.dataset.tileOut; delete vnPanel.dataset.tileGone;
+        if (TF) TF.clear(vnPanel);
+        const tiles = !!(TF && wasHidden && (action === 'story' || action === 'chapter') && TF.canRun({ ignoreVn: true }));
+        if (tiles) TF.hide(vnPanel);   // 先整格藏著，內容出來再拼（3 秒沒開始拼會自己放出來）
+        let _tileStarted = false;   // 一次就好：等太久先拼了，內容出來那一下別再從頭拼一次
+        const _tileGo = () => { if (!tiles || _tileStarted || vnPanel.style.display === 'none') return; _tileStarted = true; TF.run(vnPanel, 'in'); };
+        if (!vnPanel.dataset.tileHooked) {
+            vnPanel.addEventListener('click', _vnCloseCapture, true);   // 抓在關閉鈕自己的 onclick 之前
+            vnPanel.dataset.tileHooked = '1';
+        }
+
         function _runAction(delay) {
             if (!action) return;
             setTimeout(() => {
-                if (action === 'story' && window.StoryExtractor) window.StoryExtractor.show();
+                if (action === 'story' && window.StoryExtractor) { window.StoryExtractor.show(); _tileGo(); }
                 // 'generate' 這個動作已經沒有對應面板：生成入口統一在書架的自由劇情
-                else if (action === 'chapter' && window.VN_PLAYER) window.VN_PLAYER.openChapterPanel();
+                else if (action === 'chapter' && window.VN_PLAYER) { window.VN_PLAYER.openChapterPanel(); _tileGo(); }
                 else if (action === 'autoload' && window._lobbyPendingChapter && window.VN_Core) {
                     const p = window._lobbyPendingChapter;
                     window._lobbyPendingChapter = null;
@@ -178,7 +226,9 @@
                 window.VN_PLAYER.launchApp(vnContainer);
                 vnContainer.dataset.vnInited = 'true';
                 if (!hasPendingScript) _runAction(150);
+                else _tileGo();   // 有暫存劇本要播：不會開藏書／章節，照樣把這一格拼出來
             } else {
+                _tileGo();   // 劇情模組還沒載好要等兩秒：先把這一格拼出來，別讓她按了什麼都沒看到
                 setTimeout(() => {
                     if (window.VN_PLAYER && window.VN_PLAYER.launchApp) {
                         const stillPending = !!window._pendingAutoScript;
@@ -195,7 +245,13 @@
 
     function hideVnPanel() {
         const vnPanel = document.getElementById('aurelia-vn-panel');
-        if (vnPanel) vnPanel.style.display = 'none';
+        if (vnPanel) {
+            vnPanel.style.display = 'none';
+            // 🧱 切塊收完才走到這裡、或中途被別的路收掉：剪裁一定清掉，下次打開才不會整格隱形
+            delete vnPanel.dataset.tileGone; delete vnPanel.dataset.tileOut;
+            const TF = _vnTF();
+            if (TF) TF.clear(vnPanel);
+        }
 
         // ⚡ 回大廳 → 畫面特效全停。面板是 display:none 不是移除，引擎的「斷線自停」看不到，
         //    持續型的循環音效會一路播到下一輪劇情換場才停
