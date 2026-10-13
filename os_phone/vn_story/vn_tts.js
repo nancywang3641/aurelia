@@ -275,6 +275,13 @@ const VN_TTS = {
         } catch(e){}
         return 'card_default';
     },
+    // 在「名字 → 聲音」的表裡找這個人：先一字不差，再簡繁折成同一把鑰匙（劇情寫繁體、設定存簡體也是同一個人；10-13）
+    _nameIn(obj, name) {
+        if (!obj || typeof obj !== 'object' || name == null) return null;
+        const Z = (window.parent || window).OS_ZH || window.OS_ZH;
+        if (Z && Z.pick) return Z.pick(obj, name);
+        return Object.prototype.hasOwnProperty.call(obj, name) ? name : null;
+    },
     _cardLocks() {
         const id = this._cardId();
         if (!this.config.npcLocks) this.config.npcLocks = {};
@@ -283,12 +290,14 @@ const VN_TTS = {
     },
     lockNpcVoice(charName, modelId) {
         if (!charName || !modelId) return;
-        this._cardLocks()[charName] = modelId;
+        const locks = this._cardLocks();
+        locks[this._nameIn(locks, charName) || charName] = modelId;   // 已經有另一種寫法的那筆就改那筆，不長第二筆
         this.save();
     },
     unlockNpcVoice(charName) {
         const locks = this._cardLocks();
-        if (locks[charName]) { delete locks[charName]; this.save(); }
+        const k = this._nameIn(locks, charName);
+        if (k != null && locks[k]) { delete locks[k]; this.save(); }
     },
     clearCardLocks() {
         const id = this._cardId();
@@ -376,7 +385,7 @@ const VN_TTS = {
     _resolveModel(charName, typeHint) {
         // 0. 別名 → 主名 normalize（不分大小寫；AI 流口水用全名/小名都能對到）
         let lookupName = charName;
-        if (charName && !this.config.charMappings[charName] && this.config.charAliases) {
+        if (charName && this._nameIn(this.config.charMappings, charName) == null && this.config.charAliases) {
             const lc = String(charName).toLowerCase();
             for (const [main, aliases] of Object.entries(this.config.charAliases)) {
                 if (Array.isArray(aliases) && aliases.some(a => String(a).toLowerCase() === lc)) {
@@ -390,22 +399,26 @@ const VN_TTS = {
         //    或本局稍早抽到的）一律當作沒有，繼續往下找，不會拿去打另一個引擎的埠。
 
         // 1. 直接對應 (最優先：你手動綁死的角色，全域、面板顯示)
-        const mid = this.config.charMappings[lookupName];
+        const _mk = this._nameIn(this.config.charMappings, lookupName);
+        const mid = _mk != null ? this.config.charMappings[_mk] : undefined;
         const midM = this._curModel(mid);
         if (midM) {
             return { id: mid, ...midM };
         }
 
         // 1.5 本卡 NPC 聲線鎖（立繪 save CV，按角色卡 id；換卡不算）
-        const lid = this._cardLocks()[charName] || this._cardLocks()[lookupName];
+        const _locks = this._cardLocks();
+        const _lk = this._nameIn(_locks, charName) ?? this._nameIn(_locks, lookupName);
+        const lid = _lk != null ? _locks[_lk] : undefined;
         const lidM = this._curModel(lid);
         if (lidM) {
             return { id: lid, ...lidM };
         }
 
         // 2. 檢查記憶體：這個 NPC 剛剛是不是已經抽過聲音了？
-        if (this._npcSessionCache[charName]) {
-            const cachedId = this._npcSessionCache[charName];
+        const _sk = this._nameIn(this._npcSessionCache, charName);
+        if (_sk != null && this._npcSessionCache[_sk]) {
+            const cachedId = this._npcSessionCache[_sk];
             const cachedM = this._curModel(cachedId);
             if (cachedM) {
                 return { id: cachedId, ...cachedM };

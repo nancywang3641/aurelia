@@ -468,16 +468,25 @@
             try {
                 const cur = win._AVS_ENGINE?.read?.() || {};
                 const box = cur['角色狀態'] || cur['角色状态'] || {};
-                return box[name] || null;
+                const k = this._nameIn(box, name);   // 簡繁寫法不同也是同一個人
+                return k != null ? box[k] : null;
             } catch (e) { return null; }
+        },
+        // 在「名字 → 資料」的表裡找這個人（先一字不差，再簡繁折成同一把鑰匙；見 os_zh_fold.js 的 pick）
+        _nameIn: function(obj, name) {
+            if (!obj || typeof obj !== 'object') return null;
+            const Z = win.OS_ZH || window.OS_ZH;
+            if (Z && Z.pick) return Z.pick(obj, name);
+            return Object.prototype.hasOwnProperty.call(obj, name) ? name : null;
         },
         _charCV: function(name) {
             try {
                 const T = win.VN_TTS;
                 if (!T || !T.config) return null;
-                const manual = T.config.charMappings && T.config.charMappings[name];
-                const locked = (typeof T._cardLocks === 'function') ? T._cardLocks()[name] : null;
-                const id = manual || locked || (T._npcSessionCache && T._npcSessionCache[name]) || null;
+                const at = (obj) => { const k = this._nameIn(obj, name); return k != null ? obj[k] : null; };
+                const manual = at(T.config.charMappings);
+                const locked = (typeof T._cardLocks === 'function') ? at(T._cardLocks()) : null;
+                const id = manual || locked || at(T._npcSessionCache) || null;
                 if (!id) return null;
                 const model = T.config.models && T.config.models[id];
                 // source：manual=面板手動綁(全域) / cardlock=本卡NPC鎖(立繪save) / session=本局抽到還沒鎖

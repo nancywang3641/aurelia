@@ -24,7 +24,20 @@
         return toSimp(str).replace(/[\s·・•．.\-_]/g, '').toLowerCase();
     }
 
-    const API = { toSimp: toSimp, key: key };
+    // 在一張「名字 → 資料」的表裡找這個人：先找一字不差的，沒有再找折成同一把鑰匙的。
+    //   回傳表裡實際那把鑰匙（拿它去讀、去寫，才不會長出第二份）；找不到回 null。
+    //   10-13：劇情寫繁體（應子騫）、狀態面板存的是簡體（应子骞）→ 雙擊立繪的角色卡、CV 一直對不上
+    function pick(obj, name) {
+        if (!obj || typeof obj !== 'object' || name == null) return null;
+        const n = String(name);
+        if (Object.prototype.hasOwnProperty.call(obj, n)) return n;
+        const k = key(n);
+        if (!k) return null;
+        for (const ek of Object.keys(obj)) if (key(ek) === k) return ek;
+        return null;
+    }
+
+    const API = { toSimp: toSimp, key: key, pick: pick };
     win.OS_ZH = API;
     if (win !== window) window.OS_ZH = API;
 })();

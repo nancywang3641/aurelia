@@ -1347,12 +1347,15 @@
         let packs = [];
         try { packs = (await win.OS_DB?.getAllVarPacks?.()) || []; } catch (e) {}
         const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v == null ? '' : v));
+        // 名字照狀態裡實際存的那把鑰匙找：劇情寫繁體（應子騫）、面板存簡體（应子骞）也是同一個人（10-13）
+        const Z = win.OS_ZH || window.OS_ZH;
+        const pickIn = (c) => (Z && Z.pick) ? Z.pick(c, who) : (Object.prototype.hasOwnProperty.call(c, who) ? who : null);
         for (const tpl of tpls) {
             const html = String(tpl.htmlContent);
-            let hitPath = null;
+            let hitPath = null, hitKey = null;
             html.replace(/\{\{#each\s+([^\s{}]+)\}\}/g, (m, p) => {
                 const c = _avsGetByPath(state, p);
-                if (!hitPath && c && typeof c === 'object' && !Array.isArray(c) && who !== p && Object.prototype.hasOwnProperty.call(c, who)) hitPath = p;
+                if (!hitPath && c && typeof c === 'object' && !Array.isArray(c)) { const k = pickIn(c); if (k != null && k !== p) { hitPath = p; hitKey = k; } }
                 return m;
             });
             if (!hitPath) continue;
@@ -1363,13 +1366,17 @@
             const packVars = pack ? (pack.variables || []) : [];
             let avMap = {};
             try { avMap = (await _avsBuildAvatarMap(state, packVars)) || {}; } catch (e) {}
+            // 頭像是照劇情台上的名字存的：面板鑰匙是另一種寫法時，用台上那個名字再找一次
+            if (!avMap[hitKey] && hitKey !== who) {
+                try { const av = await win.VN_Cache?.get?.('avatar_cache', who); const u = win.VN_Cache?.headOf ? win.VN_Cache.headOf(av) : (av && av.url); if (u) avMap[hitKey] = u; } catch (e) {}
+            }
             let rendered = '';
             try { rendered = _avsRenderTemplate(marked, state, packVars, fmt, avMap); } catch (e) { continue; }
             const box = document.createElement('template');
             box.innerHTML = rendered;
             const walker = document.createTreeWalker(box.content, NodeFilter.SHOW_COMMENT);
             let start = null;
-            while (walker.nextNode()) { if (walker.currentNode.data === 'avs-one:' + who) { start = walker.currentNode; break; } }
+            while (walker.nextNode()) { if (walker.currentNode.data === 'avs-one:' + hitKey) { start = walker.currentNode; break; } }
             if (!start) continue;
             const picked = document.createDocumentFragment();
             for (let n = start.nextSibling; n && !(n.nodeType === 8 && n.data === '/avs-one'); n = n.nextSibling) picked.appendChild(n.cloneNode(true));
