@@ -812,6 +812,42 @@
         } catch (e) { console.warn('[Map Mission Injector] 失敗:', (e && e.message) || e); }
     }
 
+    // 📮 地圖「確認接取」的委託先收著：她下一句送出時接在同一則訊息裡，不另外多一樓
+    //    （多一樓的話最新一樓變成委託，資料中心只抓最新一樓，上一章的選項就拿不到了）。
+    //    酒館順序：GENERATION_STARTED → 讀輸入框 → 推進聊天 → MESSAGE_SENT（等監聽器做完）→ 畫出來 → 組 prompt，
+    //    所以在 MESSAGE_SENT 改那則的 mes，畫面、這一輪送出去的、存檔都是併好的版本。
+    async function mergeHeldMission(mesId) {
+        try {
+            var M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+            if (!M || !M.missionMergeHeld) return;
+            var ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            var msg = ctx && ctx.chat && ctx.chat[Number(mesId)];
+            if (!msg || !msg.is_user) return;
+            var merged = await M.missionMergeHeld(msg.mes);
+            if (!merged) return;
+            msg.mes = merged;
+            try { if (ctx.saveChat) await ctx.saveChat(); } catch (e) {}
+            console.log('📮 [Map Mission] 收著的委託併進這一句送出');
+        } catch (e) { console.warn('[Map Mission] 併委託失敗:', (e && e.message) || e); }
+    }
+    //    沒打字直接按送出：酒館不會推一則她的訊息（MESSAGE_SENT 不來），委託就送不出去 →
+    //    在讀輸入框之前把收著的委託整段填進去，酒館就把它當這一句送出。只認她按的一般送出。
+    async function fillHeldMissionOnEmptySend(type, opts) {
+        try {
+            if (type && type !== 'normal') return;
+            opts = opts || {};
+            if (opts.automatic_trigger || opts.quiet_prompt || win.__AURELIA_SUMMARIZING) return;
+            var ta = win.document.getElementById('send_textarea');
+            if (!ta || String(ta.value || '').trim()) return;
+            var M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+            if (!M || !M.missionHeldText) return;
+            var text = await M.missionHeldText();
+            if (!text || String(ta.value || '').trim()) return;
+            ta.value = text;
+            console.log('📮 [Map Mission] 空送出：收著的委託當這一句送出');
+        } catch (e) {}
+    }
+
     // 🚨 酒館會 await 監聽器回傳的 Promise，組 prompt 前就等注入做完；以前監聽器沒 return，
     //    注入是在背景跑，讀資料庫慢一點就趕不上這一輪 prompt（once 的注入還會在下一輪開頭被清掉＝整輪沒送到）。
     //    現在把 Promise 交回去讓酒館等，但最多等 WAIT_MS，免得資料庫卡住害生成跟著卡。
@@ -828,7 +864,10 @@
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectWxChatrooms); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectMapMission); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(function () { return fillHeldMissionOnEmptySend(type, opts); }); });
         }
+        // 第二格 'extension'＝酒館助手 createChatMessages 塞的（聊天 app 的協議訊息那類），不是她送的話，不接委託
+        if (win.tavern_events.MESSAGE_SENT) win.eventOn(win.tavern_events.MESSAGE_SENT, function (mesId, src) { if (src === 'extension') return; return _waitFor(function () { return mergeHeldMission(mesId); }); });
         // 劇情真的回來了才把這一批記成送過（生成失敗或按停，下一輪會再送一次）
         if (win.tavern_events.MESSAGE_RECEIVED) win.eventOn(win.tavern_events.MESSAGE_RECEIVED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.commit(); });
         if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.cancel(); try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} try { _lastMapMissionUninject && _lastMapMissionUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; _lastMapMissionUninject = null; });

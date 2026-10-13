@@ -1946,26 +1946,17 @@ ${facilityText}
 3. 任務成功時，在收尾那一章的正文裡獨立寫一行：[QrPay|in|委託人|金額|委託報酬・${eventData.title}|${eventData.id}]
    委託人＝付這筆錢的人或組織的名字（不要寫主角的名字）；金額只寫數字，照完成的程度給，最多 ${eventData.money}；最後一格單號照抄，不要改。
    任務失敗或放棄就不寫這一行。只在旁白說收到報酬，錢不會進錢包。
-4. 寫完收款那一行（或任務失敗）這份委託就結束了：那一章收在委託辦完的那一刻，最後給的選項是主角接下來要去做什麼，不要再接著這份工作。
-
-(現在，請開始演出任務開頭...)`;
+4. 寫完收款那一行（或任務失敗）這份委託就結束了：那一章收在委託辦完的那一刻，最後給的選項是主角接下來要去做什麼，不要再接著這份工作。`;
 
         // 📒 記一筆「接了」：報酬入帳時才翻成辦完（見下面委託紀錄）
-        try { await _missionRecord(eventData); } catch (e) {}
-
-        // 3. 發送給酒館
-        if (win.TavernHelper) {
-            await win.TavernHelper.createChatMessages([
-                { 
-                    role: 'user',
-                    name: 'System',
-                    message: systemPrompt
-                }
-            ], { refresh: 'affected' });
-            console.log('[Map] ✅ 已發送給酒館');
-        } else {
-            console.error('[Map] ❌ TavernHelper 不存在');
-        }
+        // 3. 先收著不送（held）：她下一句從酒館輸入框送出時，才接在那則訊息前面一起送（missionMergeHeld）。
+        //    以前這裡直接塞一則 System 訊息當最新一樓，資料中心只抓最新一樓 → 上一章的選項就拿不到了
+        //    （10-14 她：「最新層變委託了，這樣資訊中心窗口的選擇就拿不到了」「只在輸入框用戶輸出下一個行動時，一起合併?」）。
+        //    網頁版沒有酒館可送（以前也只是印錯誤），照舊只記帳。
+        const tavern = !!win.TavernHelper;
+        try { await _missionRecord(eventData, tavern ? systemPrompt : ''); } catch (e) {}
+        if (tavern) AUI.toast('接下「' + eventData.title + '」了，下一句話送出時會一起帶給劇情');
+        else console.error('[Map] ❌ TavernHelper 不存在');
 
         // 4. 關閉手機
         exitMap();
@@ -1995,11 +1986,12 @@ ${facilityText}
             if (d && d.saveAppData) await d.saveAppData(MISSION_APP, MISSION_KEY, list.slice(-MISSION_MAX), _missionScope());
         } catch (e) { console.warn('[Map] 委託紀錄存不進去', e); }
     }
-    async function _missionRecord(ev) {
+    async function _missionRecord(ev, startText) {
         const list = await _missionLoad();
         if (list.some(r => r.id === ev.id)) return;
         list.push({ id: ev.id, title: ev.title, facName: ev.facName, zoneId: ev.zoneId, facKey: ev.facKey || '', sceneId: ev.sceneId || '',
-            type: ev.type, difficulty: ev.difficulty, money: ev.money, desc: ev.desc || '', objective: ev.objective || '', acceptedAt: Date.now(), status: 'running' });
+            type: ev.type, difficulty: ev.difficulty, money: ev.money, desc: ev.desc || '', objective: ev.objective || '', acceptedAt: Date.now(), status: 'running',
+            held: !!startText, startText: startText || '' });
         await _missionSave(list);
         // 📅 日曆上佔一格（從主角現在的時間起、進行中）；收到報酬／不辦了時收掉（她 10-10：「委託卡似乎也能卡上去當時段」）
         try { const MC = win.OS_MC_STATUS; if (MC && MC.missionStart) await MC.missionStart({ id: ev.id, title: ev.title }); } catch (e) {}
@@ -2013,8 +2005,9 @@ ${facilityText}
     //   接委託那則訊息只發一次，大總結把舊樓藏起來、或預設把舊樓剝成摘要之後，AI 就再也看不到單號和收款那行的要求
     //   （10-09 真檔：「靜默的實體盤」第一章之後接取那則就被藏了，收尾那章送出去的整包裡沒有單號，報酬沒入帳）。
     //   只帶還在跑的（running）；入帳＝done、她按「不辦了」＝dropped 就不再帶。
+    //   還收著沒送的（held）也不帶：這一輪她那句會接上整段委託，前面先提醒「手上有一份」反而像已經在辦了。
     async function missionReminderText() {
-        const run = (await _missionLoad()).filter(r => r.status === 'running').slice(-3);
+        const run = (await _missionLoad()).filter(r => r.status === 'running' && !r.held).slice(-3);
         if (!run.length) return '';
         const lines = [];
         lines.push('主角手上還有' + (run.length > 1 ? ' ' + run.length + ' 份' : '一份') + '沒結算的委託：');
@@ -2031,16 +2024,39 @@ ${facilityText}
         lines.push('使用者那句話後面帶了「[結算委託] 委託名」，是使用者要你在這一章把那份委託收掉，這條比「不要提早收尾」優先：報酬已經到手的直接補寫那一行；還沒到手的，讓委託在這一章照目前做到的程度結束、報酬送到並寫那一行。');
         return lines.join('\n');
     }
-    // 選項框上那顆「結算委託」要列哪幾張：這條聊天還沒結算的（最多 3 張，新的在後）
+    // 選項框上那顆「結算委託」要列哪幾張：這條聊天還沒結算的（最多 3 張，新的在後；還沒送出去的不算）
     async function missionsRunning() {
-        return (await _missionLoad()).filter(r => r.status === 'running').slice(-3).map(r => ({ id: r.id, title: r.title }));
+        return (await _missionLoad()).filter(r => r.status === 'running' && !r.held).slice(-3).map(r => ({ id: r.id, title: r.title }));
+    }
+    // 📮 接了還收著的委託（held）：她下一句從酒館送出時（MESSAGE_SENT，os_app_memory_inject 叫），接在那則訊息裡一起送。
+    //   委託排前面、她那句排最後（模型看最後一段決定在回什麼）；回傳併好的整則，沒有收著的回空字串。
+    //   🚨 那則訊息裡已經有單號＝委託已經在裡面了（沒打字直接送出時，委託整段先填進輸入框），只翻旗標不再接一次。
+    async function missionMergeHeld(userText) {
+        const list = await _missionLoad();
+        const held = list.filter(r => r.status === 'running' && r.held && r.startText);
+        if (!held.length) return '';
+        const text = String(userText || '');
+        held.forEach(r => { r.held = false; r.sentAt = Date.now(); });
+        await _missionSave(list);
+        const todo = held.filter(r => text.indexOf(r.id) < 0);
+        if (!todo.length) return '';
+        const blocks = todo.map(r => r.startText).join('\n\n');
+        if (!text.trim()) return blocks + '\n\n(現在，請開始演出任務開頭...)';
+        return blocks + '\n\n這一章先照下面這句演主角接下來做的事，再讓主角接到' + (todo.length > 1 ? '上面這幾份委託' : '這份委託') + '、演出任務開頭。\n\n' + text;
+    }
+    // 沒打字直接按送出時要填進輸入框的整段（只讀不改旗標；真的送出去由 missionMergeHeld 認單號翻旗標）
+    async function missionHeldText() {
+        const held = (await _missionLoad()).filter(r => r.status === 'running' && r.held && r.startText);
+        if (!held.length) return '';
+        return held.map(r => r.startText).join('\n\n') + '\n\n(現在，請開始演出任務開頭...)';
     }
     // 設施頁「還沒結算」那張按「不辦了」：之後不再提醒 AI 結算。真的入帳的話照樣翻成辦完。
     async function _missionDrop(id) {
         const list = await _missionLoad();
         const rec = list.find(r => r.id === id);
         if (!rec || rec.status !== 'running') return;
-        if (!(await AUI.confirm('「' + rec.title + '」不辦了？\n之後不會再提醒 AI 結算這張委託。', { okText: '不辦了' }))) return;
+        const ask = rec.held ? '「' + rec.title + '」不接了？\n這份委託還沒送出去，之後也不會送給劇情。' : '「' + rec.title + '」不辦了？\n之後不會再提醒 AI 結算這張委託。';
+        if (!(await AUI.confirm(ask, { okText: '不辦了' }))) return;
         rec.status = 'dropped';
         try { const MC = win.OS_MC_STATUS; if (MC && MC.missionEnd) MC.missionEnd(id, 'cancel'); } catch (e) {}
         rec.droppedAt = Date.now();
@@ -2161,7 +2177,7 @@ ${facilityText}
         const rows = list.slice().reverse().slice(0, 6).map(r => `<div class="am-mlog-row"><span class="am-mlog-title">${_escM(r.title)}</span>`
             + (r.status === 'done' ? `<span class="am-mlog-amt">+$${(Number(r.paid) || 0).toLocaleString()}</span>`
                 : r.status === 'dropped' ? '<span class="am-mlog-amt am-mlog-run">沒辦成</span>'
-                : `<span class="am-mlog-amt am-mlog-run">還沒結算<button type="button" class="am-mlog-drop" onclick="window.AUREALIS_MAP._missionDrop('${_escM(r.id)}')">不辦了</button></span>`)
+                : `<span class="am-mlog-amt am-mlog-run">${r.held ? '下一句送出時開始' : '還沒結算'}<button type="button" class="am-mlog-drop" onclick="window.AUREALIS_MAP._missionDrop('${_escM(r.id)}')">不辦了</button></span>`)
             + `</div>`).join('');
         card.insertAdjacentHTML('beforeend', `<div class="am-mlog"><div class="am-mlog-head"><i class="fa-solid fa-clipboard-check"></i> 在這裡辦過</div>${rows}</div>`);
         if (!hasEvent) card.classList.add('am-mission-card-log');
@@ -2640,6 +2656,8 @@ ${facilityText}
         missionDoneFromStory,
         missionReminderText,
         missionsRunning,
+        missionMergeHeld,
+        missionHeldText,
         _missionDrop,
     };
 
