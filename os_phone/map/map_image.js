@@ -11,6 +11,9 @@
     const win = window.parent || window;
 
     const BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@dee0b2a/aseets/map3d/';
+    // 換過圖的那幾張各自鎖新的 commit（其餘照舊，不用整批換網址、整批預熱）。
+    //   CITY：10-14 換成 v2 五時段（海面沒有網格、虛線投影），原檔在 參考資料/aurelia_city_map_v2_20260909；七區入口座標照舊，畫上去核對過。
+    const BASE_OF = { CITY: 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@96b591f/aseets/map3d/' };
     const TIME_LABELS = { morning: '早晨', day: '白天', dusk: '黃昏', night: '夜晚', predawn: '凌晨' };
 
     // 座標來源：tmp/aurelia_site/img/map3d_coords.json（阿洛 2026-09-09 交付）烤進來的快照。
@@ -111,7 +114,7 @@
         } catch (e) { /* 沒有狀態模組就退回真實時間 */ }
         return slotFromHour(new Date().getHours());
     }
-    function imageUrl(mapId, time) { return BASE + 'MAP3D-' + mapId + '-' + time + '.webp'; }
+    function imageUrl(mapId, time) { return (BASE_OF[mapId] || BASE) + 'MAP3D-' + mapId + '-' + time + '.webp'; }
     function has(mapId) { return Object.prototype.hasOwnProperty.call(MAPS, mapId); }
     function pinsOf(mapId) { return has(mapId) ? MAPS[mapId].pins : []; }
 
