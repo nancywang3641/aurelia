@@ -79,6 +79,8 @@
                 { file: "lobby_cafe_obj_chair_r_v3.png", x: 1364, y: 681, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
                 { file: "lobby_cafe_obj_table_v3.png", x: 1266, y: 659, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
                 { file: "lobby_cafe_obj_chair_l_v3.png", x: 1215, y: 683, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                // 🎯 菜單立牌(互動點＝書咖櫃檯)：站在點心櫃檯桌面上、點心櫃左邊。zb 把它擠到櫃檯前面一層（不然底邊比櫃檯高、會被櫃檯蓋住）
+                { file: "lobby_cafe_obj_menu_v1.png", x: 408, y: 392, w: 289, h: 300, footH: 0, s: 0.16, zb: 81, noCollide: true },
             ],
             points: {
                 yingZone: { x: 342, y: 447, w: 380, h: 30 },      // 瀅瀅在點心櫃檯前那一條
@@ -106,6 +108,9 @@
                   open: 'persona', cls: 'hs-cafe', lit: true },
                 { obj: 'obj_teatable_v4', label: '世界書', icon: 'fa-book-open',
                   open: 'worldbook', cls: 'hs-cafe', lit: true },
+                // 10-14 她：「新東西，菜單，放書咖櫃台上面，這樣也能像核心那樣直接打開面板」
+                //   菜單在櫃檯桌面上，人只能站到櫃檯前面（腳離它約 80px）→ reach 多給 50，站在櫃檯前就亮
+                { obj: 'obj_menu_v1', label: '菜單', icon: 'fa-receipt', open: 'cafeCounter', cls: 'hs-cafe', lit: true, reach: 50 },
             ],
         },
         hall: {
@@ -536,6 +541,25 @@
         return null;
     }
 
+    // 🩹 書咖菜單立牌（10-14 新加的）：存檔是整份家具清單，她排過書咖的話裡面沒有這件 → 照她櫃檯現在的位置補上（有了就不重複）。
+    //   不升 cfgKey：升了她排好的整間書咖就作廢了
+    function _addCafeMenu(layout, defs) {
+        const MENU = 'lobby_cafe_obj_menu_v1.png', COUNTER = 'lobby_cafe_obj_counter_v3.png';
+        if (layout.some(o => o.file === MENU)) return;
+        const def = defs.find(o => o.file === MENU), dc = defs.find(o => o.file === COUNTER);
+        if (!def) return;
+        const m = Object.assign({}, def);
+        const c = layout.find(o => o.file === COUNTER);
+        if (c && dc) {
+            const k = (c.s || 1) / (dc.s || 1);   // 她把櫃檯縮放過：菜單跟著同比例
+            m.s = def.s * k;
+            m.x = c.x + (def.x - dc.x) * k;
+            m.y = c.y + (def.y - dc.y) * k;
+            m.zb = Math.ceil((c.y + c.h * (c.s || 1) + (c.zb || 0)) - (m.y + m.h * m.s)) + 1;   // 疊在櫃檯前面一層
+        }
+        layout.push(m);
+    }
+
     // 讀取佈局：本機調過的蓋過預設（每場景各存各的）
     // 新版存 layoutFull=完整家具清單（可增刪）；舊版 layout=按 file 名對位覆蓋（相容）
     function _loadCfg() {
@@ -568,6 +592,7 @@
                         if (o.file === 'city/obj/plot_frame_day_player.png' && !o.plotFrame) o.plotFrame = 'player';
                     });
                     if (S.scene === 'city') layout = _fixCityLayout(layout);
+                    if (S.scene === 'cafe') _addCafeMenu(layout, SC.layout || []);
                 } else (saved.layout || []).forEach(s => {
                     const t = layout.find(o => o.file === s.file);
                     if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; if (s.noCollide != null) t.noCollide = s.noCollide; }
@@ -1170,7 +1195,7 @@
             const dx = Math.max(r.x - px, 0, px - (r.x + r.w));
             const dy = Math.max(r.y - py, 0, py - (r.y + r.h));
             const d = Math.hypot(dx, dy);
-            if (d < pad && d < bestD) { bestD = d; best = i; }
+            if (d < pad + (list[i].reach || 0) && d < bestD) { bestD = d; best = i; }   // reach＝這件家具搆得比較遠（書咖菜單在櫃檯桌面上）
         }
         return best;
     }
@@ -1404,9 +1429,9 @@
     // win＝這個面板的浮窗選擇器。有寫的是右側停靠窗（左邊空著），面板態把立繪留下來，
     //   跟占卜／造物工坊同一套長相。
     const PANEL_OF = {
-        alice:  { label: '世界門',   icon: 'fa-globe',   win: '.wg-win',     open: () => window.OS_WORLDGATE?.openGate?.() },
+        alice:  { label: '世界門',   icon: 'fa-globe',   win: '.wg-win',     open: () => window.OS_WORLDGATE?.openGate?.(), close: () => window.OS_WORLDGATE?.closeGate?.() },
         rabbit: { label: '交易所',   icon: 'fa-house',   win: '.os-pt-dock', open: () => window.OS_PT?.openExchange?.() },
-        ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), when: () => S.scene === 'cafe' },
+        ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), close: () => window.OS_CAFE?.closeWorkshop?.(), when: () => S.scene === 'cafe' },
         // 🎬 柴郡＝混沌片場（他是那台導演機的主人）。窗位與規矩照世界門那扇：右側停靠、左邊留立繪。
         //    他身上原本掛的是黑市，2026-09-02 黑市改點 404 房的圓桌，這個位置讓給片場。
         cheshire: { label: '混沌片場', icon: 'fa-clapperboard', win: '#chaos-modal-root.chaos-dock',
@@ -2461,30 +2486,36 @@
         //    當初那兩張卡的註解就寫著「書咖還沒做，現在搬過去會變孤兒」——書咖做好了，兌現。
         persona:   () => _openCafeStudio('persona',   '我的角色'),
         worldbook: () => _openCafeStudio('worldbook', '整理世界書'),
-        worldgate: () => _openWorldgateFromCore(),
+        worldgate:   () => _openPanelFromObject('alice'),   // 純白大廳中央的核心
+        cafeCounter: () => _openPanelFromObject('ying'),    // 書咖櫃檯上的菜單立牌（櫃檯窗本來就開在「菜單」那頁）
     };
-    // 🌌 點大廳中央的核心開世界門：跟走近愛麗絲選「世界門」同一個面板，人一樣留著（桌機把她留在圖紙前面）。
-    //   世界門的 ✕ 只會叫 endTalk，沒在跟她聊就不會收立繪 → 窗一被拿掉就把她收掉。
+    // 🎯 點家具開某位管理員的面板（大廳核心＝愛麗絲的世界門、書咖菜單＝瀅瀅的櫃檯）：
+    //   跟走近他選面板那條同一個面板（PANEL_OF），人一樣留著（桌機把他留在面板旁邊；手機的窗吃滿寬，不放）。
+    //   那些面板的 ✕ 只叫 endTalk，沒在聊就不會收立繪 → 窗一被拿掉就收掉。
     //   🚨 用 MutationObserver 不用輪詢：它在畫面重畫之前就跑。10-14 先用 0.4 秒輪詢，她看到關窗後愛麗絲立繪多閃一下。
-    //      subtree：立繪模式下窗會被搬進窗格，不一定是 .lobby-left 的直屬孩子。
-    function _openWorldgateFromCore() {
+    //      subtree：立繪模式下窗會被搬進窗格，不一定是 .lobby-left 的直屬孩子；seen：窗出現過才開始等它不見（面板可能晚一步才掛上）。
+    function _openPanelFromObject(npcKey) {
+        const panel = PANEL_OF[npcKey];
+        if (!panel) return;
         _closeWins();
         endTalk();
         hideDialog();
-        const alice = S.npcs.find(n => n.key === 'alice');
-        if (alice && !_narrowScreen()) _showPortraitOnly(alice);
-        try { window.OS_WORLDGATE?.openGate?.(); }
-        catch (e) { console.warn('[LobbyStage] 世界門開啟失敗', e); }
+        const npc = S.npcs.find(n => n.key === npcKey);
+        if (npc && panel.win && !_narrowScreen()) _showPortraitOnly(npc);
+        try { panel.open(); }
+        catch (e) { console.warn('[LobbyStage] 開面板失敗', npcKey, e); }
         const left = document.querySelector('.lobby-left');
-        if (!left) return;
+        if (!left || !panel.win) return;
         const dropPortrait = () => { if (!S.talkTarget) left.querySelector('.lstage-talk-portrait')?.remove(); };
+        let seen = !!left.querySelector(panel.win);
         const obs = new MutationObserver(() => {
-            if (left.querySelector('.wg-win')) return;
+            if (left.querySelector(panel.win)) { seen = true; return; }
+            if (!seen) return;
             obs.disconnect();
             dropPortrait();
         });
         obs.observe(left, { childList: true, subtree: true });
-        _regWin(() => { obs.disconnect(); try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {} dropPortrait(); });
+        _regWin(() => { obs.disconnect(); try { panel.close && panel.close(); } catch (e) {} dropPortrait(); });
     }
     function _mountHotspots(isStatic) {
         S.hotspots = []; S.hsNear = null;
@@ -2520,7 +2551,7 @@
             //    光是照圖片本身的形狀長出來的，所以沙發亮沙發、圓几亮圓几，各是各的輪廓。
             //    🚨 前提是一張圖只畫一件東西 —— 一張圖畫三件，一圈光會把三件一起框起來。
             const litCls = ['lstage-obj-lit'].concat(hs.litCls ? [hs.litCls] : []);   // litCls＝這間的光換顏色（帽匠工坊是紫的）
-            const H = { el, box, litEl, litCls };
+            const H = { el, box, litEl, litCls, reach: hs.reach || 0 };
             if (litEl) {
                 el.addEventListener('mouseenter', () => litEl.classList.add(...litCls));
                 el.addEventListener('mouseleave', () => { if (!el.classList.contains('is-near') && !el.classList.contains('is-flash')) litEl.classList.remove(...litCls); });
