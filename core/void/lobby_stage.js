@@ -2464,7 +2464,9 @@
         worldgate: () => _openWorldgateFromCore(),
     };
     // 🌌 點大廳中央的核心開世界門：跟走近愛麗絲選「世界門」同一個面板，人一樣留著（桌機把她留在圖紙前面）。
-    //   世界門的 ✕ 只會叫 endTalk，沒在跟她聊就不會收立繪 → 窗不見了自己把她收掉。
+    //   世界門的 ✕ 只會叫 endTalk，沒在跟她聊就不會收立繪 → 窗一被拿掉就把她收掉。
+    //   🚨 用 MutationObserver 不用輪詢：它在畫面重畫之前就跑。10-14 先用 0.4 秒輪詢，她看到關窗後愛麗絲立繪多閃一下。
+    //      subtree：立繪模式下窗會被搬進窗格，不一定是 .lobby-left 的直屬孩子。
     function _openWorldgateFromCore() {
         _closeWins();
         endTalk();
@@ -2474,13 +2476,15 @@
         try { window.OS_WORLDGATE?.openGate?.(); }
         catch (e) { console.warn('[LobbyStage] 世界門開啟失敗', e); }
         const left = document.querySelector('.lobby-left');
-        const dropPortrait = () => { if (!S.talkTarget) left?.querySelector('.lstage-talk-portrait')?.remove(); };
-        const watch = setInterval(() => {
-            if (left && left.querySelector('.wg-win')) return;
-            clearInterval(watch);
+        if (!left) return;
+        const dropPortrait = () => { if (!S.talkTarget) left.querySelector('.lstage-talk-portrait')?.remove(); };
+        const obs = new MutationObserver(() => {
+            if (left.querySelector('.wg-win')) return;
+            obs.disconnect();
             dropPortrait();
-        }, 400);
-        _regWin(() => { clearInterval(watch); try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {} dropPortrait(); });
+        });
+        obs.observe(left, { childList: true, subtree: true });
+        _regWin(() => { obs.disconnect(); try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {} dropPortrait(); });
     }
     function _mountHotspots(isStatic) {
         S.hotspots = []; S.hsNear = null;
