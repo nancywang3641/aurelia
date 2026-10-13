@@ -236,6 +236,7 @@ const PHONE_FILES = [
     'os/os_cafe_regulars.js', // ☕ 書咖 12 位常客（只有資料：類型、習性、句子；要排在 os_cafe.js 前面）
     'os/os_cafe.js',          // ☕ 書咖經營：調配台研發+上架命名+菜單/書單（依賴 OS_DB/OS_API；設計書 docs/book_cafe_design.md）
     'os/os_cafe_staff.js',    // 🧑‍🍳 書咖店員：她挑人、照時間上班、值班日記（要排在 os_cafe.js 後面）
+    'os/os_cafe_hire.js',     // 🧑‍🍳 書咖員工：徵人、面試、早班／晚班看帳備料（要排在 os_cafe.js 後面；結算時找它）
     'os/os_sn_board.js',      // 🧑‍💼 SN 32 樓研討白板：值班、規則、收進世界（要排在 os_cafe_staff.js 後面：借它的時間表與描框）
     'os/os_sn_board_ui.js',   // 🧑‍💼 白板的畫面（要排在 os_sn_board.js 後面）
     'os/os_room_svg.js',      // 🏠 SVG 房間產生器（純幾何，無相依；供包租婆/城市共用）

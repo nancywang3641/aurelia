@@ -3,7 +3,8 @@
 // 路徑：os_phone/os/os_cafe.js
 // 職責：📖☕ 書咖經營系統——調配台(研發)+上架命名+菜單/書單+客人上門結算。
 //   10-12 改經營版：書咖自己的帳戶(跟 PT 錢包分開)+每天體力；研發花錢花體力、等幾小時才揭曉；
-//   上架的飲品要「做一批」才有庫存，客人到店那一刻只點得到已經做好的；隔天倒掉前一天剩的。
+//   上架的飲品要「備料」才有料，客人到店那一刻有料才點得到（點了才當場做）；10-13 起備的料等下一次 9 點開店才上架、放兩天才倒。
+//   雇來的早班／晚班員工（os_cafe_hire.js）在結算裡跟客人照時間交錯跑：上班先看帳備料、賣完補貨、領薪水。
 //   客人＝書裡的角色(名冊)＋12 位照腳本跑的常客(os_cafe_regulars.js)。
 //   存 OS_DB app_data(appId=book_cafe,不動 schema);副模型直連仿 os_pt._valuate(不發 GENERATION_*)。
 // ----------------------------------------------------------------
@@ -37,9 +38,9 @@
             '♾️', '☯️', '⚗️', '🧪', '📡', '🧲', '🔋', '🛰️', '🕳️', '🎇', '🧩', '🪄',
         ],
         symbolMax: 4,       // 一鍋最多丟幾顆
-        // 💰 書咖自己的帳（跟 PT 錢包分開）：做一批、研發都從這裡扣，客人付的錢進這裡
-        //   每份材料錢＝售價三分之一；前一天沒賣完的隔天倒掉
-        fund: { start: 300, staminaMax: 12, batchStamina: 2, batchMax: 8, rdCost: 30, rdStamina: 3, rdHours: 4 },
+        // 💰 書咖自己的帳（跟 PT 錢包分開）：備料、研發都從這裡扣，客人付的錢進這裡
+        //   每份材料錢＝售價三分之一；10-13 起備料＝料等下一次 9 點開店才上架、能放兩天（那天＋隔天），第三天早上倒掉
+        fund: { start: 300, staminaMax: 12, batchStamina: 2, batchMax: 8, rdCost: 30, rdStamina: 3, rdHours: 4, shelfDays: 2 },
         socialBring: 0.35,  // 愛揪人的常客上門時，帶另一位常客一起來的機率
     };
     const TIER_TEXT = {
@@ -63,6 +64,8 @@
     const K_FUND = 'fund';     // 書咖帳戶 {coins,stamina,staminaDay,openDay,openMin,lastWaste:{day,qty,cost}}
     const K_STOCK = 'stock';   // 做好的批 {menuId:[{id,qty,day,t,unit}]}(day/t＝哪天幾點做好；隔天倒掉)
     const K_RD = 'rd';         // 研發中的那杯 {b,f,t,key,startAt,doneAt,cost} | null
+    const K_TALLY = 'tally';   // 每天每杯賣幾份、幾位想點沒點到 {day:{menuId:[sold,miss]}}（只留最近 8 天；店員看帳備料用）
+    const K_STAFF2 = 'staff2'; // 雇來的員工（os_cafe_hire.js）{slots:{am,pm},duty,crewQ,diary,applicants,ad}；舊的 'staff' 是小機值班
     const OPEN_MIN = 9 * 60, CLOSE_MIN = 22 * 60;   // 客人上門的時段(分鐘):照時段陸續出現,店員一天上好幾班才各有客人
     const EV_LABEL = { devotion: '本命認證', dropout: '吃膩告別' };
     const ING_ICONS = {
@@ -153,37 +156,48 @@
     }
     function getFund() { return _locked(_fundLoad); }
     async function _fundOrNull() { try { return await getFund(); } catch (e) { return null; } }   // 畫面用：讀不到就顯示「—」
-    // 這杯在某天某時刻「已經做好、還沒賣掉」的份數（只算那天做的、做好時間不晚於那一刻的）
-    function _avail(stock, used, id, day, t) {
-        return (stock[id] || []).filter(b => b.day === day && b.t <= t).reduce((n, b) => n + Math.max(0, b.qty - (used[b.id] || 0)), 0);
+    // 一批料在某天某時刻能不能用：那批上架那天起放 shelfDays 天；上架那天要到上架時間（她備的＝9 點、店員當天補的＝補好那刻）
+    function _usable(b, day, t) {
+        return b.day <= day && day - b.day < CAFE_CFG.fund.shelfDays && (b.day < day || b.t <= t);
     }
-    // 賣一份：先做的先用
+    // 這杯在某天某時刻「料備好了、還沒用掉」的份數
+    function _avail(stock, used, id, day, t) {
+        return (stock[id] || []).filter(b => _usable(b, day, t)).reduce((n, b) => n + Math.max(0, b.qty - (used[b.id] || 0)), 0);
+    }
+    // 客人點一杯＝當場用掉一份料：先用舊的
     function _take(stock, used, id, day, t) {
-        const b = (stock[id] || []).filter(x => x.day === day && x.t <= t && x.qty - (used[x.id] || 0) > 0).sort((x, y) => x.t - y.t)[0];
+        const b = (stock[id] || []).filter(x => _usable(x, day, t) && x.qty - (used[x.id] || 0) > 0).sort((x, y) => (x.day - y.day) || (x.t - y.t))[0];
         if (!b) return false;
         used[b.id] = (used[b.id] || 0) + 1;
         return true;
     }
-    function _stockToday(stock, id, today) { return (stock[id] || []).filter(b => b.day === today).reduce((n, b) => n + Math.max(0, b.qty), 0); }
-    // 做一批：花材料錢＋體力，庫存多 qty 份（今天賣不完，隔天倒掉）
+    // 菜單頁：現在能賣幾份／備好了、等開店才上架的幾份
+    function _stockNow(stock, id, day, t) { return _avail(stock, {}, id, day, t); }
+    function _stockNext(stock, id, day, t) { return (stock[id] || []).filter(b => b.day > day || (b.day === day && b.t > t)).reduce((n, b) => n + Math.max(0, b.qty), 0); }
+    // 她自己備的料什麼時候上架：下一次 9 點開店（還沒到 9 點＝今天，過了＝明天）
+    function _nextOpen(ts) {
+        const today = _dayNum(ts);
+        return { day: _minOf(ts) < OPEN_MIN ? today : today + 1, t: OPEN_MIN };
+    }
+    // 備料：花材料錢＋體力，料等下一次開店才上架（10-13 她：「備料要在一個節點備料，這個備料是明天的」——快打烊才備的不會當天上架、隔天就倒）
     function makeBatch(menuId, qty) {
         return _locked(async () => {
             const F = CAFE_CFG.fund;
-            const now = Date.now(), today = _dayNum(now);
+            const now = Date.now(), at = _nextOpen(now);
             const n = Math.max(1, Math.min(F.batchMax, Math.floor(Number(qty) || 0)));
             const menu = await _getStrict(K_MENU, []);
             const m = menu.find(x => x.id === menuId);
             if (!m) return { ok: false, why: '這杯已經不在菜單上了' };
             const fd = await _fundLoad();
-            if (fd.stamina < F.batchStamina) return { ok: false, why: '體力不夠（剩 ' + fd.stamina + '，做一批要 ' + F.batchStamina + '）' };
+            if (fd.stamina < F.batchStamina) return { ok: false, why: '體力不夠（剩 ' + fd.stamina + '，備料一次要 ' + F.batchStamina + '）' };
             const unit = _unitCost(m), cost = unit * n;
-            if (fd.coins < cost) return { ok: false, why: '錢不夠（做 ' + n + ' 份要 ' + cost + '，帳戶剩 ' + fd.coins + '）' };
+            if (fd.coins < cost) return { ok: false, why: '錢不夠（備 ' + n + ' 份要 ' + cost + '，帳戶剩 ' + fd.coins + '）' };
             const stock = await _getStrict(K_STOCK, {});
-            (stock[m.id] || (stock[m.id] = [])).push({ id: _mkId(), qty: n, day: today, t: _minOf(now), unit });
+            (stock[m.id] || (stock[m.id] = [])).push({ id: _mkId(), qty: n, day: at.day, t: at.t, unit });
             fd.coins -= cost; fd.stamina -= F.batchStamina;
             await _set(K_STOCK, stock);
             await _set(K_FUND, fd);
-            return { ok: true, fund: fd, qty: n, cost };
+            return { ok: true, fund: fd, qty: n, cost, day: at.day, t: at.t };
         });
     }
     // 研發開工：花錢＋體力，等幾個小時才知道做出什麼；同時只能一杯
@@ -493,13 +507,26 @@
         // 事件卡一天處理一次：她當天第一次「不是大廳悄悄補算」的那次（舊存檔沒記過＝看上次換日是哪天）
         const evDay0 = shop.evDay != null ? shop.evDay : (shop.lastDay || 0);
         const evOk = !quiet && evDay0 < today;
-        if (!dayChanged && !pend0.some(isDue) && !evOk) return false;
+        // 🧑‍🍳 雇來的員工：照時間上班、備料、補貨（照規則算，不叫模型；大廳悄悄補算也跑）
+        const HIRE = win.OS_CAFE_HIRE || window.OS_CAFE_HIRE;
+        let staff2 = null;
+        try { staff2 = HIRE && HIRE._pure ? await _getStrict(K_STAFF2, null) : null; } catch (e) { staff2 = null; }
+        const crewFrom = Math.max(today - 7, fund0.openDay || 0);
+        const crewDue = !!(staff2 && HIRE._pure.hasDue(staff2, crewFrom, today, nowMin));
+        if (!dayChanged && !pend0.some(isDue) && !evOk && !crewDue) return false;
         const from = Math.max(shop.lastDay + 1, today - 7, fund0.openDay || 0);
         const npcs = await _get(K_NPC, {});
         const menu = await getMenu();
         const evq = await _get(K_EVQ, []);
         const stock = await _get(K_STOCK, {});   // 照這份算誰點得到；寫回時照批次 id 疊在最新那份上
         const used = {};   // 批次 id → 這次賣掉幾份
+        const tallyAdd = {};   // 這次結算的銷售統計（寫回時加到最新那份上）
+        const tallyLive = JSON.parse(JSON.stringify(await _get(K_TALLY, {})));   // 店員看的帳：存著的＋這次算到的（補算好幾天時，前一天的客人算完才輪到隔天早班看帳）
+        const tal = (day, id, k) => {
+            for (const T of [tallyAdd, tallyLive]) { const d = T[day] || (T[day] = {}); (d[id] || (d[id] = [0, 0]))[k]++; }
+        };
+        const crew = staff2 ? HIRE._pure.crewSession({ staff2, tally: tallyLive, menu, stock, used, coins: fund0.coins, today, nowMin, from: crewFrom,
+            unitCost: _unitCost, avail: _avail, mkId: _mkId, rand: Math.random }) : null;
         const recId = shop.recommend?.id || null;   // 店員推薦的那杯
         const pop0 = shop.popularity || 0;
         const sold0 = new Map(menu.map(m => [m.id, m.sold || 0]));   // 這次賣了幾杯＝結束時減開始時
@@ -561,6 +588,7 @@
         const reg = (key) => String(key || '').indexOf('g_') === 0;
         const L = (REG && REG.LINES) || {};
         for (const a of queue) {
+            if (crew) crew.until(a.day, a.t);   // 這位客人到店之前，店員該上的班、該補的料先做完
             const e = Object.assign({}, a); delete e.seq;
             if (e.tune) {   // 書裡的角色第一次上門：這時才叫模型定調（每次結算最多 3 位，沒輪到的留著排隊）
                 if (quiet) { pend.push(a); continue; }   // 大廳悄悄補算：不叫模型，等她開櫃台
@@ -581,7 +609,7 @@
                 const m = e.itemId ? menu.find(x => x.id === e.itemId) : null;
                 delete e.itemId; delete e.first;
                 if (m) m.sold = (m.sold || 0) + 1;
-                if (e.price) { earned += e.price; cupsAdded++; }
+                if (e.price) { earned += e.price; cupsAdded++; if (m) tal(e.day, m.id, 0); }
                 fresh.push(Object.assign({ id: _mkId() }, e));
                 anyVisit = true;
                 continue;
@@ -606,12 +634,14 @@
             if (!_take(stock, used, want.m.id, e.day, e.t)) {
                 missed = want.m.name;
                 const lock = traits.includes('loyal') && want.fav;   // 固定派只要本命
-                const pSwitch = lock ? 0 : (traits.includes('novelty') ? 0.85 : 0.5);
+                const pSwitch = lock ? 0 : Math.min(1, (traits.includes('novelty') ? 0.85 : 0.5) + (crew ? crew.sweet(e.day, e.t) : 0));   // 在班上的店員嘴甜＝比較會推銷別杯
                 let alt = null;
                 if (Math.random() < pSwitch) {
                     const only = new Set(menu.filter(m => m.id !== want.m.id && _avail(stock, used, m.id, e.day, e.t) > 0).map(m => m.id));
                     if (only.size) alt = _pickItem(menu, st, e.day, recId, Object.assign({ only }, opt));
                 }
+                tal(e.day, want.m.id, 1);   // 想點的沒料了＝這杯少備了（改點別的也算）
+                if (crew) crew.missed(want.m.id, e.day, e.t);
                 if (!alt) {
                     const tpl = lock ? (L.loyalLeave || L.soldLeave) : L.soldLeave;
                     log({ line: pre + _fill(tpl || '想點{want},賣完了,看了看就走了。', { want: missed }), price: 0, want: missed, miss: true });
@@ -636,6 +666,8 @@
             if (it.count === 10 && !it.devoted) { it.devoted = true; evs.push('devotion'); }   // 🎬 本命認證
             m.sold = (m.sold || 0) + 1;
             earned += m.price; cupsAdded++;
+            tal(day, m.id, 0);
+            if (crew) crew.sold(m.id, day, e.t);
             const line = missed ? _fill(L.soldSwitch || '想點{want},賣完了,改點了{item}。', { want: missed, item: m.name }) : (TPL[lineKey] || TPL.normal).replace('{item}', m.name);
             log(Object.assign({ item: m.name, line: pre + line, price: m.price }, missed ? { want: missed } : {}));
             for (const type of evs) {
@@ -655,6 +687,8 @@
                 log({ item: m.name, line: said, said, price: 0, ev: type });
             }
         }
+        if (crew) crew.until(today, nowMin);   // 最後一位客人之後到現在，店員該做的也做完
+        const crewR = crew ? crew.result() : null;
         // 🎬 A級事件消化:單次結算最多2件(敘事節點才燒API),API掛了整隊留到下次
         //   只在換日那次處理（一天一次，同改版前）：排隊客人到時間放出來、店員上班先結算，都不另外叫模型
         //   換日那次可能是大廳悄悄補算的（不叫模型）→ 改記「今天處理過沒」，她當天第一次打開櫃台時處理
@@ -675,7 +709,7 @@
         // 🚨 寫回要疊在「最新的那份」上：結算在背景跑、中間等好幾通 API，這段時間她可能上架新飲品、
         //    做了一批、聽完留言、改了店況——以前拿開頭讀的整份寫回，這些一結算完就消失
         return _locked(async () => {
-            let menuNow, logsNow, npcsNow, shopNow, stockNow, fundNow;
+            let menuNow, logsNow, npcsNow, shopNow, stockNow, fundNow, tallyNow, staff2Now = null;
             try {
                 menuNow = await _getStrict(K_MENU, []);
                 logsNow = await _getStrict(K_LOG, []);
@@ -683,20 +717,41 @@
                 shopNow = await _getStrict(K_SHOP, { popularity: 0, revenue: 0, cups: 0, lastDay: 0 });
                 stockNow = await _getStrict(K_STOCK, {});
                 fundNow = await _fundLoad();
+                tallyNow = await _getStrict(K_TALLY, {});
+                if (crewR) staff2Now = await _getStrict(K_STAFF2, null);
             } catch (e) { console.warn('[Cafe] 結算寫回前讀不到最新資料，這次先不寫（下次重算）', e); return false; }
-            // 庫存：照批次 id 扣掉這次賣的；前一天以前做的倒掉
+            // 庫存：照批次 id 扣掉這次賣的；放超過 shelfDays 天的料倒掉
             let wasteQty = 0, wasteCost = 0;
             for (const id of Object.keys(stockNow)) {
                 const keep = [];
                 for (const b of (stockNow[id] || [])) {
                     const left = (b.qty || 0) - (used[b.id] || 0);
                     if (left <= 0) continue;
-                    if (b.day < today) { wasteQty += left; wasteCost += left * (b.unit || 0); continue; }
+                    if (b.day <= today - CAFE_CFG.fund.shelfDays) { wasteQty += left; wasteCost += left * (b.unit || 0); continue; }
                     keep.push(Object.assign({}, b, { qty: left }));
                 }
                 if (keep.length) stockNow[id] = keep; else delete stockNow[id];
             }
-            fundNow.coins += earned;
+            // 店員這次備的料：扣掉這次賣的放進最新那份（補算好幾天時，放超過兩天的一樣倒）
+            if (crewR) for (const x of crewR.batches) {
+                const left = x.batch.qty - (used[x.batch.id] || 0);
+                if (left <= 0) continue;
+                if (x.batch.day <= today - CAFE_CFG.fund.shelfDays) { wasteQty += left; wasteCost += left * (x.batch.unit || 0); continue; }
+                (stockNow[x.menuId] || (stockNow[x.menuId] = [])).push(Object.assign({}, x.batch, { qty: left }));
+            }
+            fundNow.coins += earned - (crewR ? crewR.spent : 0);
+            if (fundNow.coins < 0) { console.warn('[Cafe] 帳戶算到負的（結算途中她也花了錢），歸零', fundNow.coins); fundNow.coins = 0; }
+            // 員工：只疊這次上班的紀錄；辭職、欠薪只在那格還是同一個人時才動（結算途中她可能開除、錄取了別人）
+            if (crewR && staff2Now) {
+                const s2 = staff2Now;
+                s2.slots = s2.slots || { am: null, pm: null };
+                s2.duty = Object.assign({}, s2.duty || {}, crewR.dutyAdd);
+                for (const k of Object.keys(s2.duty)) if (Number(k.split(':')[0]) < today - 7) delete s2.duty[k];
+                s2.crewQ = crewR.crewQ;
+                for (const slot of Object.keys(crewR.unpaid)) { const u = crewR.unpaid[slot], m = s2.slots[slot]; if (m && m.sid === u.sid) m.unpaid = u.n; }
+                for (const q of crewR.quit) { const m = s2.slots[q.slot]; if (m && m.sid === q.sid) s2.slots[q.slot] = null; }
+                if (crewR.diary.length) { s2.diary = crewR.diary.slice().reverse().concat(s2.diary || []).slice(0, 60); s2.unread = true; }
+            }
             if (dayChanged) fundNow.lastWaste = { day: today, qty: wasteQty, cost: wasteCost };
             else if (wasteQty) fundNow.lastWaste = { day: today, qty: ((fundNow.lastWaste && fundNow.lastWaste.day === today) ? fundNow.lastWaste.qty : 0) + wasteQty, cost: ((fundNow.lastWaste && fundNow.lastWaste.day === today) ? fundNow.lastWaste.cost : 0) + wasteCost };
             const soldAdd = new Map(menu.map(m => [m.id, (m.sold || 0) - (sold0.get(m.id) || 0)]));
@@ -711,8 +766,14 @@
             await _set(K_EVQ, evq);
             await _set(K_PEND, pend);
             await _set(K_NPC, npcsNow); await _set(K_MENU, menuNow); await _set(K_LOG, logsOut.slice(0, 80)); await _set(K_SHOP, shopNow);
-            await _set(K_STOCK, stockNow); await _set(K_FUND, fundNow);
-            return anyVisit || dayChanged;
+            for (const d of Object.keys(tallyAdd)) {
+                const into = tallyNow[d] || (tallyNow[d] = {});
+                for (const id of Object.keys(tallyAdd[d])) { const v = into[id] || (into[id] = [0, 0]); v[0] += tallyAdd[d][id][0]; v[1] += tallyAdd[d][id][1]; }
+            }
+            for (const d of Object.keys(tallyNow)) if (Number(d) < today - 7) delete tallyNow[d];
+            await _set(K_STOCK, stockNow); await _set(K_FUND, fundNow); await _set(K_TALLY, tallyNow);
+            if (crewR && staff2Now) await _set(K_STAFF2, staff2Now);
+            return anyVisit || dayChanged || !!(crewR && (crewR.diary.length || crewR.batches.length));
         });
     }
 
@@ -742,7 +803,7 @@
             '.oc-brand-copy{display:flex;flex-direction:column;line-height:1.05;white-space:nowrap;}.oc-brand-copy b{font-size:15px;letter-spacing:.06em;}.oc-brand-copy small{margin-top:4px;color:#a18869;font-size:8px;letter-spacing:.18em;font-weight:700;}' +
             '.oc-head-stats{display:flex;gap:5px;margin-left:auto;}.oc-stat-pill{display:flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid #dfceb2;border-radius:8px;background:rgba(255,255,255,.58);color:#816143;font-size:11px;white-space:nowrap;}.oc-stat-pill b{color:#5e4028;font-size:12px;}' +
             '.oc-head .oc-close{background:none;border:none;color:#765638;cursor:pointer;font-size:15px;padding:5px 6px;border-radius:8px;}.oc-head .oc-close:hover{background:rgba(122,82,48,.1);}' +
-            '.oc-tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:9px 12px 0;}' +
+            '.oc-tabs{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:9px 12px 0;}' +
             '.oc-tab{min-width:0;background:rgba(255,255,255,.45);border:1px solid #dcc9aa;color:#735437;border-radius:8px;padding:6px 2px;cursor:pointer;font-size:10px;white-space:nowrap;}.oc-tab i{display:block;margin-bottom:3px;font-size:12px;}' +
             '.oc-tab.on{background:#8a5c34;border-color:#8a5c34;color:#fff8ed;font-weight:700;box-shadow:0 3px 8px rgba(105,67,35,.18);}' +
             '.oc-tab{position:relative;}.oc-tab.has-dot:after{content:"";position:absolute;top:4px;right:6px;width:7px;height:7px;border-radius:50%;background:#c4573f;box-shadow:0 0 0 2px rgba(255,250,240,.9);}' +
@@ -772,10 +833,10 @@
             '.oc-tried{display:flex;justify-content:space-between;color:#a18a70;font-size:10px;margin-top:7px;}.oc-progress-line{height:4px;margin-top:5px;border-radius:5px;background:#eadcc8;overflow:hidden;}.oc-progress-line i{display:block;height:100%;background:#bd854c;border-radius:5px;}' +
             '.oc-sym-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:195px;overflow-y:auto;padding-right:2px;}.oc-sym{width:37px;height:37px;font-size:17px;background:rgba(255,255,255,.6);border:1px solid #d3bf9f;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}.oc-sym.on{background:rgba(214,158,84,.3);border-color:#a9744a;}' +
             '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.75);border:1px solid #d3bf9f;border-radius:9px;color:#4a3a2a;padding:8px 10px;font-size:11px;}.oc-free-input::placeholder{color:#a3906f;}' +
-            /* 💰 經營：今天的數字、庫存與做一批、研發倒數、賣完沒點到 */
+            /* 💰 經營：今天的數字、庫存與備料、研發倒數、賣完沒點到 */
             '.oc-today{display:flex;flex-wrap:wrap;gap:4px 12px;margin:0 1px 9px;padding:7px 10px;border-radius:9px;background:rgba(186,134,79,.1);color:#7a5a3c;font-size:11px;}.oc-today b{color:#5e4028;font-size:12px;}' +
             '.oc-menu-ops{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding-top:7px;border-top:1px dashed rgba(160,120,80,.25);}' +
-            '.oc-stock{color:#7a5a3c;font-size:11px;}.oc-stock b{color:#4f3520;font-size:13px;}.oc-stock.zero b{color:#b65050;}' +
+            '.oc-stock{color:#7a5a3c;font-size:11px;}.oc-stock b{color:#4f3520;font-size:13px;}.oc-stock.zero b{color:#b65050;}.oc-stock-next{color:#a18465;}.oc-stock-next b{color:#7a5a3c;}' +
             '.oc-make{margin-left:auto;background:rgba(122,79,45,.08);border:1px solid #c9a476;color:#6d4425;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:700;}.oc-make.on{background:#7a4f2d;border-color:#6d4425;color:#fff8ed;}' +
             '.oc-batch{grid-column:1/-1;display:flex;flex-direction:column;gap:7px;}' +
             '.oc-batch-nums{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;}' +
@@ -826,7 +887,9 @@
         const on = _winEl.querySelector('.oc-tab.on');
         const tab = on ? on.dataset.tab : 'menu';
         const body = _winEl.querySelector('.oc-body');
+        _paintCrewDot();
         if (tab === 'lab') { if (_winEl.querySelector('.oc-rd')) _renderTab('lab', body); return; }   // 研發中那格鎖著，重畫不會打斷她
+        if (tab === 'crew') { if (!_busy()) _renderTab('crew', body); return; }   // 員工頁：啟事倒數、上班中／下班了每分鐘會變；面試、打電話中不重畫
         if (changed && (tab === 'menu' || tab === 'log') && !_winEl.querySelector('.oc-batch')) _renderTab(tab, body);   // 正在挑份數就別重畫
     }
     async function _saveSaid(id, said) {
@@ -842,6 +905,15 @@
         if (!_winEl) return;
         _get('staff', null).then(st => { _winEl?.querySelector('.oc-tab[data-tab="staff"]')?.classList.toggle('has-dot', !!(st && st.unread)); }).catch(() => {});
     }
+    // 員工頁上的小紅點：有新日記、或應徵者到了
+    function _paintCrewDot() {
+        if (!_winEl) return;
+        const H = win.OS_CAFE_HIRE || window.OS_CAFE_HIRE;
+        if (!H || !H.hasNews) return;
+        H.hasNews().then(on => { _winEl?.querySelector('.oc-tab[data-tab="crew"]')?.classList.toggle('has-dot', !!on); }).catch(() => {});
+    }
+    // 正在操作、別重畫：挑份數、面試、打電話
+    function _busy() { return !!(_winEl && _winEl.querySelector('.oc-batch, .och-iv, .och-call')); }
     // 直接開到某一頁(舞台上點店員＝開櫃台窗到店員頁)
     async function _openTab(tab) {
         if (!_winEl) await openWorkshop();
@@ -851,6 +923,7 @@
     function closeWorkshop() {
         if (_tickTimer) { clearInterval(_tickTimer); _tickTimer = null; }
         if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
+        try { (win.OS_CAFE_HIRE || window.OS_CAFE_HIRE)?.leave?.(); } catch (e) {}   // 下次打開回員工頁列表，不卡在面試裡
         _winEl?.remove(); _winEl = null;
         try { win.document.querySelector('.lobby-left')?.classList.remove('void-dock-open'); } catch (e) {}
     }
@@ -879,6 +952,7 @@
               '<button class="oc-tab" data-tab="books"><i class="fa-solid fa-book-open"></i>書單</button>' +
               '<button class="oc-tab" data-tab="log"><i class="fa-solid fa-users"></i>訪客</button>' +
               '<button class="oc-tab" data-tab="staff"><i class="fa-solid fa-bell-concierge"></i>值班</button>' +   // 店員：挑人、排時間、值班紀錄（10-08 取代點單小遊戲）
+              '<button class="oc-tab" data-tab="crew"><i class="fa-solid fa-id-card"></i>員工</button>' +   // 雇來的早班／晚班、徵人、面試（10-13，os_cafe_hire.js）
             '</div>' +
             '<div class="oc-body"></div>';
         host.appendChild(box);
@@ -892,19 +966,23 @@
         const tabs = box.querySelectorAll('.oc-tab');
         tabs.forEach(t => t.addEventListener('click', () => {
             tabs.forEach(x => x.classList.toggle('on', x === t));
+            try { (win.OS_CAFE_HIRE || window.OS_CAFE_HIRE)?.leave?.(); } catch (e) {}   // 換頁＝離開面試（回來看到員工頁列表）
+            box.querySelector('.och-call')?.remove();
             _renderTab(t.dataset.tab, body);
         }));
         _renderTab('menu', body);
         _refreshHeaderStats();
         _paintStaffDot();
         _paintLabDot();
+        _paintCrewDot();
         // ☕ 開窗=補算離線天數(有新動靜就刷新當前頁;背景跑不擋開窗)
         _settle().then(changed => {
             if (!changed || !_winEl) return;
             const on = _winEl.querySelector('.oc-tab.on');
             _refreshHeaderStats();
             const tab = on ? on.dataset.tab : 'menu';
-            if (tab !== 'lab' && tab !== 'free' && !_winEl.querySelector('.oc-batch')) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數正在操作，別重畫
+            _paintCrewDot();
+            if (tab !== 'lab' && tab !== 'free' && !_busy()) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數、面試正在操作，別重畫
         }).catch(() => {});
         _tickTimer = setInterval(_tickOnce, 60000);
     }
@@ -913,26 +991,27 @@
         if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
         if (tab === 'menu') {
             const [menu, shop, fund, stock, logs] = await Promise.all([getMenu(), getShop(), _fundOrNull(), _get(K_STOCK, {}), _get(K_LOG, [])]);
-            const today = _dayNum(Date.now());
+            const nowTs = Date.now(), today = _dayNum(nowTs), nowMin = _minOf(nowTs);
             const tl = logs.filter(l => l && l.day === today && !l.ev);
             const waste = fund && fund.lastWaste && fund.lastWaste.day === today ? fund.lastWaste : null;
             body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-mug-hot"></i> 今日菜單</span><span class="oc-section-note">' + menu.length + ' 款・累計 ' + (shop.revenue || 0) + ' PT</span></div>' +
                 '<div class="oc-today"><span>今天賣出 <b>' + tl.filter(l => l.price).length + '</b> 杯</span>' +
-                '<span>想點的賣完了 <b>' + tl.filter(l => l.want).length + '</b> 位</span>' +
-                '<span>昨天倒掉 <b>' + (waste ? waste.qty : 0) + '</b> 份' + (waste && waste.cost ? '（白花 ' + waste.cost + '）' : '') + '</span></div>' + (menu.length
+                '<span>想點的沒料了 <b>' + tl.filter(l => l.want).length + '</b> 位</span>' +
+                '<span>今早倒掉的料 <b>' + (waste ? waste.qty : 0) + '</b> 份' + (waste && waste.cost ? '（白花 ' + waste.cost + '）' : '') + '</span></div>' + (menu.length
                 ? menu.map(m => {
                     const iconId = (m.ings || []).find(id => SPRITE_POS[id]) || (m.free ? 'receipt' : 'coffee');
-                    const left = _stockToday(stock, m.id, today);
+                    const left = _stockNow(stock, m.id, today, nowMin), next = _stockNext(stock, m.id, today, nowMin);
                     return '<div class="oc-menu-card" data-id="' + m.id + '"><span class="oc-drink-icon">' + _sprite(iconId) + '</span>' +
                     '<span class="oc-menu-main"><span class="oc-menu-title">' + m.name + '</span><span class="oc-blurb">' + (m.blurb || '') + '</span>' +
                     '<span class="oc-mini-tags">' + (m.tags || []).map(t => '<i class="oc-mini-tag">' + t + '</i>').join('') + '</span></span>' +
                     '<span class="oc-menu-side"><span class="oc-badge ' + (TIER_TEXT[m.tier]?.cls || 'a') + '">' + (TIER_TEXT[m.tier]?.label || '') + '</span>' +
                     '<span class="oc-menu-price">' + m.price + ' PT</span><span class="oc-menu-sold">售出 ' + (m.sold || 0) + '</span></span>' +
-                    '<span class="oc-menu-ops"><span class="oc-stock' + (left ? '' : ' zero') + '">庫存 <b>' + left + '</b> 份</span>' +
-                    '<button class="oc-make" data-id="' + m.id + '"><i class="fa-solid fa-kitchen-set"></i> 做一批</button></span></div>';
+                    '<span class="oc-menu-ops"><span class="oc-stock' + (left ? '' : ' zero') + '">現在有料 <b>' + left + '</b> 份</span>' +
+                    (next ? '<span class="oc-stock oc-stock-next">等開店 <b>' + next + '</b> 份</span>' : '') +
+                    '<button class="oc-make" data-id="' + m.id + '"><i class="fa-solid fa-basket-shopping"></i> 備料</button></span></div>';
                 }).join('')
                 : '<div class="oc-empty"><i class="fa-solid fa-mug-hot"></i>菜單還是空的。<br>去「調配」研發出好東西再上架吧。</div>');
-            // 🍳 做一批：點了展開 1～8 份，選好看花多少，按「做」才扣
+            // 🧺 備料：點了展開 1～8 份，選好看花多少，按「備」才扣
             body.querySelectorAll('.oc-make').forEach(btn => btn.addEventListener('click', () => {
                 const card = btn.closest('.oc-menu-card');
                 const open = card.querySelector('.oc-batch');
@@ -992,6 +1071,10 @@
                 : '<div class="oc-empty"><i class="fa-solid fa-book"></i>書架還空著。<br>之後來店裡的客人會留下他們的推薦書。</div>');
         } else if (tab === 'free') {
             _renderFree(body);
+        } else if (tab === 'crew') {
+            const H = win.OS_CAFE_HIRE || window.OS_CAFE_HIRE;
+            if (H && H.renderTab) { await H.renderTab(body); _paintCrewDot(); _refreshHeaderStats(); }
+            else body.innerHTML = '<div class="oc-empty"><i class="fa-solid fa-id-card"></i>員工頁還沒準備好，等一下再來看。</div>';
         } else if (tab === 'staff') {
             const S = win.OS_CAFE_STAFF || window.OS_CAFE_STAFF;
             if (S && S.renderTab) { await S.renderTab(body); _paintStaffDot(); }
@@ -1008,15 +1091,17 @@
         const coins = fund ? fund.coins : 0, sta = fund ? fund.stamina : 0;
         let why = '';
         if (!fund) why = '讀不到書咖帳戶，等一下再試';
-        else if (sta < F.batchStamina) why = '體力不夠（剩 ' + sta + '，做一批要 ' + F.batchStamina + '），明天會回滿';
-        else if (coins < unit) why = '錢不夠（一份材料要 ' + unit + '，帳戶剩 ' + coins + '）';
+        else if (sta < F.batchStamina) why = '體力不夠（剩 ' + sta + '，備料一次要 ' + F.batchStamina + '），明天會回滿';
+        else if (coins < unit) why = '錢不夠（一份料要 ' + unit + '，帳戶剩 ' + coins + '）';
+        const at = _nextOpen(Date.now());
+        const when = at.day === _dayNum(Date.now()) ? '今天 9 點開店上架' : '明天 9 點開店上架';
         const nums = [];
         for (let n = 1; n <= F.batchMax; n++) nums.push('<button class="oc-num" data-n="' + n + '"' + (why || unit * n > coins ? ' disabled' : '') + '>' + n + '</button>');
         card.insertAdjacentHTML('beforeend',
             '<span class="oc-batch">' +
               '<span class="oc-batch-nums">' + nums.join('') + '</span>' +
-              '<span class="oc-batch-row"><span class="oc-batch-cost">' + (why ? '' : '要做幾份？一份材料 ' + unit + '，做一批花 ' + F.batchStamina + ' 體力') + '</span>' +
-              '<button class="oc-batch-go" disabled>做</button></span>' +
+              '<span class="oc-batch-row"><span class="oc-batch-cost">' + (why ? '' : '要備幾份？一份料 ' + unit + '，備一次花 ' + F.batchStamina + ' 體力；' + when) + '</span>' +
+              '<button class="oc-batch-go" disabled>備</button></span>' +
               (why ? '<span class="oc-why">' + why + '</span>' : '') +
             '</span>');
         const box = card.querySelector('.oc-batch');
@@ -1028,7 +1113,7 @@
             if (!b || b.disabled) return;
             pick = Number(b.dataset.n);
             box.querySelectorAll('.oc-num').forEach(x => x.classList.toggle('on', x === b));
-            cost.textContent = '做 ' + pick + ' 份：材料 ' + (unit * pick) + '，體力 ' + F.batchStamina;
+            cost.textContent = '備 ' + pick + ' 份：材料 ' + (unit * pick) + '，體力 ' + F.batchStamina + '；' + when;
             go.disabled = false;
         });
         go.addEventListener('click', async () => {
@@ -1204,11 +1289,16 @@
         _refreshHeaderStats();
         _paintStaffDot();
         _paintLabDot();
+        _paintCrewDot();
         const on = _winEl.querySelector('.oc-tab.on');
         const tab = on ? on.dataset.tab : 'menu';
-        if (tab !== 'lab' && tab !== 'free' && !_winEl.querySelector('.oc-batch')) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數正在操作,別重畫
+        if (tab !== 'lab' && tab !== 'free' && !_busy()) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數、面試正在操作,別重畫
     }
     const _b = { get: _get, getStrict: _getStrict, set: _set, settle: _settle, settleQuiet: () => _settle({ quiet: true }), dayNum: _dayNum, hm: _hm, minOf: _minOf,
+        stockNow: _stockNow, stockNext: _stockNext, avail: _avail, usable: _usable, nextOpen: _nextOpen, unitCost: _unitCost, mkId: _mkId, OPEN_MIN, CLOSE_MIN,
+        tally: () => _get(K_TALLY, {}),
+        locked: _locked, fundLoad: _fundLoad,   // 員工那支寫 staff2、扣帳戶（貼徵人啟事）跟結算同一條排隊；fundLoad 只能在 locked 裡面叫
+        refreshStats: () => _refreshHeaderStats(),
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
         isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid };
     win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, makeBatch, startRd, revealRd, _settle, _b };   // _settle=console 診斷用

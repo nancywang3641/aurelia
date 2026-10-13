@@ -151,6 +151,26 @@
             _attachGuestPortrait(npc, g);   // 那一輪的Q版／頭像（撈不到就維持像素小人）
         } catch (e) { console.warn('[LobbyNpcs] 書咖店員沒站上去', e); }
     }
+    // 🧑‍🍳 書咖雇來的員工（os_cafe_hire.js）：現在是誰的班、他有來，就穿制服站在點心櫃檯後面、咖啡機前（瀅瀅那條的左端、往後一點，櫃檯擋住腳）；
+    //   點他跳一行今天做了什麼（不叫模型）。大廳常比書咖那幾支先建好，等它們最多 8 秒
+    async function _spawnCafeCrew() {
+        try {
+            const W = window.parent || window;
+            const world = S.world;
+            const alive = () => S.scene === 'cafe' && S.world === world;
+            const ready = () => (W.OS_CAFE_HIRE || window.OS_CAFE_HIRE) && (W.OS_CAFE || window.OS_CAFE)?._b;
+            for (let i = 0; i < 27 && alive() && !ready(); i++) await new Promise(r => setTimeout(r, 300));
+            const H = W.OS_CAFE_HIRE || window.OS_CAFE_HIRE;
+            if (!H || !H.onDutyNow || !alive()) return;
+            const on = await H.onDutyNow();
+            const z = _b.CFG.points.yingZone;
+            if (!on || !z || !alive()) return;
+            const x = z.x + 50, y = z.y - 22;   // 10-13 照書咖底圖＋櫃檯合成看過：這裡頭到腿都看得到、腳被櫃檯擋住
+            const say = () => { try { (W.AUI || window.AUI)?.toast?.(on.line); } catch (e) {} };
+            _b.addNpc({ key: 'cafe_crew', name: on.m.name, subTitle: '書咖' + on.label + ' · 上班中', x, y, h: 200, src: on.src, portrait: on.src,
+                noWander: true, homeRect: { x, y, w: 0, h: 0 }, onInteract: say });
+        } catch (e) { console.warn('[LobbyNpcs] 書咖員工沒站上去', e); }
+    }
     // ☕ 書咖常客：大廳常比書咖那幾支先建好（酒館走網路拉檔），等它們最多 8 秒；期間換了場景就不掛
     async function _mountCafeRegulars() {
         const W = window.parent || window;
@@ -231,6 +251,7 @@
                  src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });   // 城市街區沒有 yingZone：瀅瀅顧店不上街
         _spawnSnResidents();   // 雷伊有機率在書咖出沒（放 guest 池早 return 之前）
         if (S.scene === 'cafe') _spawnCafeStaff();   // 書咖店員（她挑的人，上班中才站）
+        if (S.scene === 'cafe') _spawnCafeCrew();    // 書咖雇來的員工（早班／晚班，有來才站）
         if (S.scene === 'cafe') _mountCafeRegulars();   // 書咖 12 位常客：照到店紀錄進出（lobby_cafe_regulars.js）
         try {
             // 客人出沒區刷位＝站位評分制（Rae 的遮罩點子）：撒 24 個候選點，
