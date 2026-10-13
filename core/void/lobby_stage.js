@@ -149,6 +149,13 @@
             ],
             doorsV: 3,
             alice: { x: 1072, y: 331 },   // 愛麗絲：不漫步、正面站
+            // 🌌 中央的核心＝世界門（10-14 她：「要不要順道把世界門放到這個核心? 類似帽匠那樣」）。
+            //    愛麗絲身上那顆「世界門」照留（新入口加在旁邊）；兩邊開的是同一個面板。
+            //    光用淡藍細邊＋藍光（lit-cyan），跟底座那幾圈藍光同一個調（小樣 tmp/hall_core_glow_lab.html：青銅邊在銀色核心上是一圈橘框、深藍邊像描框）
+            hotspots: [
+                { obj: 'obj_core_v5', label: '世界門', icon: 'fa-globe', open: 'worldgate', cls: 'hs-core',
+                  lit: true, litCls: 'lstage-obj-lit-cyan' },
+            ],
         },
         room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
             base: 'lobby_404_base_v1.png',
@@ -1547,7 +1554,7 @@
     // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
     const SCENE_HEADER = {
         cafe:    { name: '瀅瀅',   badge: '視差書咖', ph: '提供故事素材或與瀅瀅對話...' },
-        hall:    { name: '愛麗絲', badge: '純白大廳', ph: '與愛麗絲對話，或走向大門出去街區...' },
+        hall:    { name: '愛麗絲', badge: '純白大廳', ph: '與愛麗絲對話、點中央的核心開世界門，或走向大門出去街區...' },
         room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
         city:    { name: '街區',   badge: '視差城市', ph: '在街區走走、點路人聊聊，或走進書咖／純白大廳...' },
         exchange:{ name: '白兔先生', badge: '交易所', ph: '走近白兔先生，兌換屬於你的一席之地...' },
@@ -2454,7 +2461,27 @@
         //    當初那兩張卡的註解就寫著「書咖還沒做，現在搬過去會變孤兒」——書咖做好了，兌現。
         persona:   () => _openCafeStudio('persona',   '我的角色'),
         worldbook: () => _openCafeStudio('worldbook', '整理世界書'),
+        worldgate: () => _openWorldgateFromCore(),
     };
+    // 🌌 點大廳中央的核心開世界門：跟走近愛麗絲選「世界門」同一個面板，人一樣留著（桌機把她留在圖紙前面）。
+    //   世界門的 ✕ 只會叫 endTalk，沒在跟她聊就不會收立繪 → 窗不見了自己把她收掉。
+    function _openWorldgateFromCore() {
+        _closeWins();
+        endTalk();
+        hideDialog();
+        const alice = S.npcs.find(n => n.key === 'alice');
+        if (alice && !_narrowScreen()) _showPortraitOnly(alice);
+        try { window.OS_WORLDGATE?.openGate?.(); }
+        catch (e) { console.warn('[LobbyStage] 世界門開啟失敗', e); }
+        const left = document.querySelector('.lobby-left');
+        const dropPortrait = () => { if (!S.talkTarget) left?.querySelector('.lstage-talk-portrait')?.remove(); };
+        const watch = setInterval(() => {
+            if (left && left.querySelector('.wg-win')) return;
+            clearInterval(watch);
+            dropPortrait();
+        }, 400);
+        _regWin(() => { clearInterval(watch); try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {} dropPortrait(); });
+    }
     function _mountHotspots(isStatic) {
         S.hotspots = []; S.hsNear = null;
         (SCENES[S.scene].hotspots || []).forEach(hs => {

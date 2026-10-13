@@ -819,3 +819,20 @@
   filter:drop-shadow(1.5px 0 0 #e9d5ff) drop-shadow(-1.5px 0 0 #e9d5ff)
          drop-shadow(0 1.5px 0 #e9d5ff) drop-shadow(0 -1.5px 0 #e9d5ff)
          drop-shadow(0 0 14px rgba(186,120,255,.85)); }
+
+/* 🌌 純白大廳中央的核心＝世界門（10-14）：滑過／走近／第一次進場亮的是核心本身（lit＋淡藍那組），熱點框不畫東西；
+   標籤用大廳的冷色（深藍底、淡藍字），平常藏著、亮的時候才淡出（同書咖、帽匠那兩組） */
+.lstage-hotspot.hs-core { padding-bottom:16px; }
+.lstage-hotspot.hs-core:hover, .lstage-hotspot.hs-core.is-near, .lstage-hotspot.hs-core.is-flash { background:none; box-shadow:none; }
+.lstage-hotspot.hs-core .lstage-hotspot-chip {
+  background:rgba(16,34,62,.86); color:#e6f4ff; border:1px solid rgba(120,190,255,.6);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(20,60,120,.35);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-core:hover .lstage-hotspot-chip, .lstage-hotspot.hs-core.is-near .lstage-hotspot-chip, .lstage-hotspot.hs-core.is-flash .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-core .lstage-hotspot-chip i { color:#9fd6ff; font-size:11px; }
+/* 核心的光：淡藍細邊＋藍光，跟底座那幾圈藍光同一個調（小樣 tmp/hall_core_glow_lab.html 比過青銅、深藍、金） */
+.lstage-obj.lstage-obj-lit.lstage-obj-lit-cyan {
+  filter:drop-shadow(1.5px 0 0 #d6f1ff) drop-shadow(-1.5px 0 0 #d6f1ff)
+         drop-shadow(0 1.5px 0 #d6f1ff) drop-shadow(0 -1.5px 0 #d6f1ff)
+         drop-shadow(0 0 14px rgba(70,165,255,.85)); }
