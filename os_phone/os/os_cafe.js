@@ -609,7 +609,7 @@
                 const m = e.itemId ? menu.find(x => x.id === e.itemId) : null;
                 delete e.itemId; delete e.first;
                 if (m) m.sold = (m.sold || 0) + 1;
-                if (e.price) { earned += e.price; cupsAdded++; if (m) tal(e.day, m.id, 0); }
+                if (e.price) { earned += e.price; cupsAdded++; if (m) tal(e.day, m.id, 0); if (crew) crew.earn(e.price); }
                 fresh.push(Object.assign({ id: _mkId() }, e));
                 anyVisit = true;
                 continue;
@@ -667,6 +667,7 @@
             m.sold = (m.sold || 0) + 1;
             earned += m.price; cupsAdded++;
             tal(day, m.id, 0);
+            if (crew) crew.earn(m.price);   // 店員看的帳要算進這筆（不然晚班會以為付不起薪水）
             if (crew) crew.sold(m.id, day, e.t);
             const line = missed ? _fill(L.soldSwitch || '想點{want},賣完了,改點了{item}。', { want: missed, item: m.name }) : (TPL[lineKey] || TPL.normal).replace('{item}', m.name);
             log(Object.assign({ item: m.name, line: pre + line, price: m.price }, missed ? { want: missed } : {}));

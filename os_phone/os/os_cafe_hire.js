@@ -101,7 +101,7 @@
         const menuById = new Map((o.menu || []).map(m => [m.id, m]));
         const fcCache = {};
         const fc = (day) => fcCache[day] || (fcCache[day] = forecast(o.tally || {}, o.menu || [], day));
-        const capOf = {};   // 一天備料總花費 ≤ 當天第一次花錢時帳戶的一半
+        const capOf = {};   // 一天備料總花費 ≤ 當天第一次花錢時帳戶的一半（記在 duty[day+':cap']，同一天打開好幾次也照同一個上限）
         const setDuty = (k, v) => { duty[k] = v; dutyAdd[k] = v; };
         const memberOf = (slot, sid) => (!gone[slot] && slots[slot] && slots[slot].sid === sid) ? slots[slot] : null;
         const note = (day, t, slot, m, kind, text) => diary.push({ id: (o.mkId ? o.mkId() : 'd' + (seqN++)), day, t, slot, sid: m.sid, name: m.name, kind, text });
@@ -143,7 +143,8 @@
                 if (qty > 0) want.push({ id, qty });
             }
             if (!want.length) return { made: [], short: false, cost: 0 };
-            const cap = capOf[day] || (capOf[day] = { cap: Math.floor(Math.max(0, coins) / 2), used: 0 });
+            const saved = duty[day + ':cap'];
+            const cap = capOf[day] || (capOf[day] = saved ? { cap: saved.cap, used: saved.used } : { cap: Math.floor(Math.max(0, coins) / 2), used: 0 });
             const made = []; let short = false, cost = 0;
             for (const w of want) {
                 const mi = menuById.get(w.id);
@@ -157,6 +158,7 @@
                 cap.used += q * unit; coins -= q * unit; spent += q * unit; cost += q * unit;
                 made.push({ id: w.id, qty: q });
             }
+            setDuty(day + ':cap', { cap: cap.cap, used: cap.used });
             return { made, short, cost };
         }
         function work(day, t, slot, m) {
@@ -235,6 +237,7 @@
             sold(id, day, t) { if (o.avail(o.stock, o.used, id, day, t) <= 0) trigger(id, day, t); },
             missed(id, day, t) { trigger(id, day, t); },
             sweet(day, t) { const on = onDuty(day, t); return on ? SWEET[_clamp(on.m.stats.sweet, 1, 5) - 1] : 0; },
+            earn(n) { coins += Number(n) || 0; },   // 客人付的錢：店員付薪水、算一半上限看的是「到這一刻」的帳
             result() {
                 const later = events.filter(e => e.kind !== 'start').map(e => Object.assign({}, e));
                 return { spent, coins, batches: batches.slice(), diary: diary.slice(), duty: Object.assign({}, duty), dutyAdd: Object.assign({}, dutyAdd), unpaid: Object.assign({}, unpaid), quit: quit.slice(), crewQ: later };
@@ -308,7 +311,8 @@
             const list = [];
             for (let i = 0; i < APPLY_N; i++) {
                 const a = rollApplicant(Math.random, taken.concat(list.map(x => x.name)), b.mkId);
-                Object.assign(a, { arrivedAt: s2.ad.readyAt, expireAt: s2.ad.readyAt + KEEP_DAYS * DAY_MS, state: 'new', interview: [], resume: '' });
+                Object.assign(a, { arrivedAt: s2.ad.readyAt, expireAt: s2.ad.readyAt + KEEP_DAYS * DAY_MS, state: 'new', interview: [] });
+                a.resume = _tplResume(a); a.resumeTpl = true;   // 先放照字卡寫的，模型那通回來再換（中途關網頁也不會一直空白）
                 list.push(a);
             }
             s2.applicants = s2.applicants.concat(list);
@@ -318,7 +322,7 @@
         if (!fresh || !fresh.length) return false;
         const resumes = await _writeResumes(fresh);
         await _mut(async (s2) => {
-            for (const a of s2.applicants) if (!a.resume && fresh.some(f => f.id === a.id)) a.resume = resumes[a.id] || _tplResume(a);
+            for (const a of s2.applicants) if (a.resumeTpl && fresh.some(f => f.id === a.id)) { if (resumes[a.id]) a.resume = resumes[a.id]; delete a.resumeTpl; }
             return [true, true];
         });
         return true;
@@ -601,19 +605,27 @@
             '<span><b>' + _esc(x.name) + '</b> ' + _esc(x.text) + '</span></div>';
     }
     let _openIv = null;   // 正在看哪位的面試（重畫時接著顯示，不跳回列表）
+    let _renderSeq = 0;   // 每次重畫一個號碼：等存檔／等模型回來時她可能已經切頁、開了面試、或又重畫了一次，舊的那次就別寫畫面
+    function _crewTabOn(body) { const w = body.closest && body.closest('.oc-win'); const on = w && w.querySelector('.oc-tab.on'); return !on || on.dataset.tab === 'crew'; }
     async function renderTab(body) {
         const doc = body.ownerDocument || win.document;
         _ensureStyle(doc); _registerHelp();
         if (_openIv) return _renderInterview(body, _openIv);
+        const my = ++_renderSeq;
+        const mine = () => my === _renderSeq && !_openIv && body.isConnected && _crewTabOn(body);
         const keepY = body.scrollTop;
         try { await expire(); } catch (e) {}
         let s2 = await get();
         if (s2.ad && s2.ad.readyAt <= Date.now()) {
-            body.innerHTML = '<div class="oc-empty"><i class="fa-solid fa-spinner fa-spin"></i>應徵者來了，正在看履歷…</div>';
-            try { await arrive(); } catch (e) { console.warn('[CafeHire] 應徵者沒進來', e); }
+            if (mine()) body.innerHTML = '<div class="oc-empty"><i class="fa-solid fa-spinner fa-spin"></i>應徵者來了，正在看履歷…</div>';
+            let came = false;
+            try { came = await arrive(); } catch (e) { console.warn('[CafeHire] 應徵者沒進來', e); }
+            // 等模型這幾秒畫面被別次重畫接手了（先顯示模板履歷）：她還停在員工頁列表就再畫一次，換上模型寫的
+            if (came && !mine() && body.isConnected && !_openIv && _crewTabOn(body)) return renderTab(body);
             s2 = await get();
         }
         if (s2.unread) { try { await _mut(async (x) => { x.unread = false; return [true, true]; }); } catch (e) {} }
+        if (!mine()) return;
         const b = _B();
         const A = win.AUI || window.AUI;
         const ad = s2.ad;
@@ -664,7 +676,9 @@
         return out;
     }
     async function _renderInterview(body, id) {
+        const my = ++_renderSeq;
         const s2 = await get();
+        if (my !== _renderSeq || _openIv !== id || !body.isConnected || !_crewTabOn(body)) return;
         const a = s2.applicants.find(x => x.id === id);
         if (!a) { _openIv = null; return renderTab(body); }
         const live = a.state === 'new' && (a.interview || []).length < ASK_MAX;
