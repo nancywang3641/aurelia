@@ -118,6 +118,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'debug_console', path: _AURELIA_EXT_BASE + '/core/debug_console.js', key: 'debugConsole' }, // 🐛 螢幕 console（無 devtools 環境用）— 最先載才攔得到後續 log
     { name: 'aurelia_api', path: _AURELIA_EXT_BASE + '/core/aurelia_api.js', key: 'aureliaApi' }, // 📦 統一資料入口(備用版插座)— 必須最先載
     { name: 'aurelia_dialog', path: _AURELIA_EXT_BASE + '/core/aurelia_dialog.js', key: 'aureliaDialog' },   // 💬 全站提示條/對話窗 AUI（取代原生 alert/confirm/prompt；酒館會攔 confirm），排前面讓各模組都用得到
+    { name: 'aurelia_tilefx', path: _AURELIA_EXT_BASE + '/core/aurelia_tilefx.js', key: 'aureliaTileFx' },   // 🧱 全螢幕窗口切塊進出場（control_center 開的窗口、故事日誌共用）
     { name: 'loader_core', path: _AURELIA_EXT_BASE + '/core/loader_core.js', key: 'core' },
     { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
     { name: 'tavern_bridge', path: _AURELIA_EXT_BASE + '/core/tavern_bridge.js', key: 'bridge' },
@@ -550,6 +551,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_theme.css');   // 主題一包（要在各面板樣式之前）
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_sys_chrome.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_dialog.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_tilefx.css');   // 全螢幕窗口切塊進出場的格線畫布
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_char_gallery.css');   // 角色圖鑑
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_chat_tidy.css');      // 聊天記錄整理
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_photo_viewer.css');   // 點圖放大看   // 全站提示條/對話窗（取代原生 alert/confirm/prompt）

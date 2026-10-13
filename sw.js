@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 885;                        // ← 每次部署 +1
+const CACHE_VERSION = 886;                        // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -23,6 +23,7 @@ const SHELL_ASSETS = [
     './css/story_entry_wizard.css',
     './css/html_extractor.css',
     './css/aurelia_dialog.css',
+    './css/aurelia_tilefx.css',
     './css/os_dashboard.css',
     './css/os_keepalive.css',
     './css/wx_profile.css',
@@ -54,6 +55,7 @@ const SHELL_ASSETS = [
     './css/void_achievement.css',
     './css/os_sn_board.css',
     './core/aurelia_dialog.js',
+    './core/aurelia_tilefx.js',
     './core/panel_manager.js',
     './core/ui_utilities.js',
     './core/void_terminal.js',

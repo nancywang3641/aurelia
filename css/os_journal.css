@@ -1187,6 +1187,3 @@
 .jrnl-desk .jrnl-bk .jrnl-right.jrnl-bk-hold { left: 50.33%; top: 6.74%; width: 43.76%; height: 84.59%; z-index: 0; }
 /* 複本定格在複製那一刻:換書籤是靠 root 上的 class 切區塊,不鎖住的話複本會跟著變成新的那頁 */
 .jrnl-desk .jrnl-bk .jrnl-d-section.jrnl-bk-keep { display: block; }
-
-/* 🧱 日誌窗口切塊進出場時亮的淡藍格線:疊在窗口正上方的畫布(位置、大小、層級由 os_journal.js 照窗口量好放進來) */
-.jrnl-tilefx { position: absolute; pointer-events: none; display: block; }

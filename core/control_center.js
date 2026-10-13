@@ -723,6 +723,43 @@
         if (homeEl) { homeEl.textContent = `[Session] ${title}`; homeEl.title = title; }
     };
 
+    // ── 🧱 全螢幕窗口（大廳上那一整格 #aurelia-panel-container）的切塊進出場 ──
+    //    10-13 她：「大廳開的全螢幕窗口都一樣」——地圖（出門）、後院、房產、日曆、設置…打開時從中間往外一格格蓋到大廳上，
+    //    關時一格格收掉露回大廳。引擎在 core/aurelia_tilefx.js；演不演它自己判斷（演出動畫開關、電腦寬、劇情層沒開著）。
+    //    故事日誌自己演（它多了開書闔書，切塊要配書的時間），這裡跳過。
+    let _panelSeq = 0;   // 每開一次窗口 +1：收到一半又開了別的窗口，舊的那趟收完不准把新的藏掉
+    function _panelOpening(panel) {
+        _panelSeq++;
+        delete panel.dataset.tileOut;
+        const TF = window.AURELIA_TILEFX;
+        if (TF) TF.clear(panel);   // 上一個窗口收到一半就換人：先清乾淨（要在新 app 自己藏窗口之前）
+    }
+    function _panelShown(panel, selfAnimated) {
+        const TF = window.AURELIA_TILEFX;
+        if (!TF || selfAnimated || !TF.canRun()) return;
+        TF.run(panel, 'in');   // 這一下同步就先剪成全藏，所以不會先閃一整格再開始拼
+    }
+    function _panelHideNow(panel) {
+        delete panel.dataset.tileOut;
+        panel.style.display = 'none';
+        const TF = window.AURELIA_TILEFX;
+        if (TF) TF.clear(panel);   // 清掉剪裁，下一個開在這格的 app 才不會被剪
+        if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
+    }
+    // 關窗口：要演就一格格收掉再藏；selfAnimated＝那個 app 自己已經演完了（故事日誌），直接藏
+    function _panelClosing(panel, selfAnimated) {
+        if (!panel) return;
+        const TF = window.AURELIA_TILEFX;
+        if (selfAnimated || !TF || panel.style.display === 'none' || !TF.canRun()) { _panelHideNow(panel); return; }
+        if (panel.dataset.tileOut === '1') return;   // 已經在收了（連按兩下關閉）
+        panel.dataset.tileOut = '1';
+        const seq = _panelSeq;
+        TF.run(panel, 'out', () => {
+            if (seq !== _panelSeq) return;   // 收到一半又開了別的窗口：不要藏
+            _panelHideNow(panel);
+        });
+    }
+
     AureliaControlCenter.launchGameApp = function(key) {
         const GAME_APP_MAP = {
             tarot:      () => window.OS_TAROT?.launch,
@@ -746,15 +783,14 @@
         const panel = root.querySelector('#aurelia-panel-container');
         if (!appContainer || !panel) return;
 
+        _panelOpening(panel);
         appContainer.innerHTML = '';
         const div = document.createElement('div');
         div.style.cssText = 'position:relative; width:100%; height:100%; overflow:auto;';
         appContainer.appendChild(div);
 
-        const doClose = () => {
-            panel.style.display = 'none';
-            if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
-        };
+        const selfAnimated = key === 'journal';   // 故事日誌自己演切塊（配開書闔書）
+        const doClose = () => _panelClosing(panel, selfAnimated);
 
         if (window.PhoneSystem) window.PhoneSystem.goHome = doClose;
 
@@ -767,6 +803,7 @@
 
         launchFn(div);
         panel.style.display = 'flex';
+        _panelShown(panel, selfAnimated);
         if (window.VoidTerminal && window.VoidTerminal.suspendLobbyActivity) window.VoidTerminal.suspendLobbyActivity();
     };
 
@@ -783,6 +820,7 @@
         const container = root.querySelector(containerId);
         const panel = root.querySelector(panelId);
 
+        if (panel) _panelOpening(panel);
         if (container) {
             container.innerHTML = '';
             const div = document.createElement('div');
@@ -807,10 +845,7 @@
                 '電子錢包':{ launch: (c) => window.__PHONE_APPS?.['電子錢包']?.(c) },
             };
 
-            const _panelClose = () => {
-                if (panel) panel.style.display = 'none';
-                if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
-            };
+            const _panelClose = () => _panelClosing(panel, false);
             if (window.PhoneSystem) window.PhoneSystem.goHome = _panelClose;
 
             const originalLaunchApp = map[appName]?.launchApp || map[appName]?.launch;
@@ -824,10 +859,9 @@
                             const shouldHijack = selector === '[onclick*=\"goHome\"]' || selector === '#nav-home' || selector.includes('back-btn') || selector === '#avs-nav-home' || (onclickAttr && onclickAttr.includes('goHome'));
                             if (shouldHijack) {
                                 btn.removeAttribute('onclick');
-                                btn.onclick = (e) => { 
-                                    e.preventDefault(); e.stopPropagation(); 
-                                    if (panel) panel.style.display = 'none'; 
-                                    if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
+                                btn.onclick = (e) => {
+                                    e.preventDefault(); e.stopPropagation();
+                                    _panelClosing(panel, false);   // 一格格收掉再藏（會順便叫大廳醒來）
                                 };
                             }
                         });
@@ -837,7 +871,7 @@
                 div.innerHTML = `<div style=\"color:#e06060;padding:20px;\">App 未就緒 (${appName})</div>`;
             }
         }
-        if (panel) panel.style.display = 'flex';
+        if (panel) { panel.style.display = 'flex'; _panelShown(panel, false); }
         if (window.VoidTerminal && window.VoidTerminal.suspendLobbyActivity) window.VoidTerminal.suspendLobbyActivity();
     };
 

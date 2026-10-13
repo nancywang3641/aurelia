@@ -387,99 +387,19 @@
 
         let avatarPool = []; // 頭像快取池：_hydrateVnImages 填，角色詳情 modal 共用
 
-        // ── 🧱 日誌窗口切塊進出場（10-13 她從 參考資料/JOURNAL_BG_BUILD_LAB.html 選的「上下層」：下層大廳、上層日誌窗口）──
-        //    窗口＝裝日誌的那一整格（酒館／PWA 是手機框裡的 #aurelia-panel-container），底下露出來的就是大廳。
-        //    進場：從中間往外一格格蓋上來，每格先亮淡藍框再填上；出場：反過來，外圈先收、中間（書）最後。
-        //    露出哪幾格靠窗口的 clip-path（一格一個方塊路徑）；框畫在窗口「外面」那層畫布上，畫在窗口裡會被一起剪掉。
-        //    只在書裝（電腦寬）＋演出動畫開著時演；劇情末尾開的日誌照舊走劇情那套淡入淡出（兩套疊在一起會打架）。
-        //    🚨 窗口在演的時候是被剪掉的：任何一條路沒收尾都會讓整格消失，所以一律有保險計時器把 clip 清掉。
-        const TILE = { on: false, host: null, cv: null, raf: 0, timer: 0, guard: 0, run: 0 };
-        const TILE_IN_MS = 900, TILE_OUT_MS = 850, TILE_COLS = 24;
+        // ── 🧱 日誌窗口切塊進出場：引擎在 core/aurelia_tilefx.js（大廳開的全螢幕窗口共用同一套）──
+        //    日誌自己演、control_center 開日誌時跳過它那一套，因為日誌多了開書／闔書：
+        //    進場時書晚 0.3 秒才翻開；出場跟闔書同時跑，兩邊都好了才回大廳。
+        //    🚨 演的時候窗口是被剪掉的：引擎自己有保險計時器；回大廳之後一定 _tileClear，下一個開在這格的 app 才不會被剪。
+        const TF = win.AURELIA_TILEFX || window.AURELIA_TILEFX || null;
+        const TILE = { on: false, host: null };
         const BK_LATE = 300;   // 切塊進場時，書晚 0.3 秒才翻開（她在小樣裡試了 1 秒、0.5 秒、0.3 秒，定 0.3）
-        function _tileStop() {
-            cancelAnimationFrame(TILE.raf); clearTimeout(TILE.timer);
-            if (TILE.cv) { TILE.cv.remove(); TILE.cv = null; }
-            TILE.run++;
-        }
-        function _tileClear() {
-            _tileStop(); clearTimeout(TILE.guard);
-            if (TILE.host) TILE.host.style.clipPath = '';
-        }
-        // dir='in' 蓋上來、'out' 收掉；done 在演完（或保險計時器到）時叫一次
-        function _tileRun(dir, done) {
-            const host = TILE.host, par = host && host.parentElement;
-            _tileStop();
-            if (!host || !par || !host.offsetWidth) { done(); return; }
-            const run = TILE.run, ms = dir === 'in' ? TILE_IN_MS : TILE_OUT_MS;
-            const W = host.offsetWidth, H = host.offsetHeight;
-            const DPR = Math.min(2, window.devicePixelRatio || 1);
-            // 畫布疊在窗口正上方、跟窗口一樣大（窗口的父層是定位的那層時用 offset，不然用畫面座標相減）
-            let L = host.offsetLeft, T = host.offsetTop;
-            if (host.offsetParent !== par) {
-                const hr = host.getBoundingClientRect(), pr = par.getBoundingClientRect();
-                L = hr.left - pr.left - par.clientLeft; T = hr.top - pr.top - par.clientTop;
-            }
-            const cv = document.createElement('canvas');
-            cv.className = 'jrnl-tilefx';
-            cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
-            cv.style.left = L + 'px'; cv.style.top = T + 'px'; cv.style.width = W + 'px'; cv.style.height = H + 'px';
-            cv.style.zIndex = String((parseInt(getComputedStyle(host).zIndex, 10) || 0) + 1);
-            par.appendChild(cv);
-            TILE.cv = cv;
-            const ctx = cv.getContext('2d');
-            const s = W / TILE_COLS, rows = Math.ceil(H / s), cx = W / 2, cy = H / 2, far = Math.hypot(cx, cy);
-            const cells = [];
-            for (let r = 0; r < rows; r++) for (let c = 0; c < TILE_COLS; c++) {
-                const x = c * s, y = r * s;
-                const d = Math.hypot(x + s / 2 - cx, y + s / 2 - cy) / far;
-                // 進場越靠中間越早；出場越靠外圈越早。每格各跑 34% 的時間
-                cells.push({ x, y, at: (dir === 'in' ? d : 1 - d) * .62 + Math.random() * .04 });
-            }
-            const easeOut = (t) => 1 - Math.pow(1 - t, 3);
-            const draw = (t) => {
-                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-                ctx.clearRect(0, 0, W, H);
-                let path = '';
-                for (const c of cells) {
-                    let p = (t - c.at) / .34;
-                    if (dir === 'out') p = 1 - p;
-                    if (p <= 0) continue;
-                    // 前 30% 只亮框（框從小一點長到剛好一格），之後這格窗口露出來、框退掉
-                    const fill = Math.max(0, Math.min(1, (p - .3) / .7));
-                    if (fill > 0) {
-                        const w = s * (.6 + .4 * easeOut(fill)) + .6, o = (s - w) / 2;   // +.6 補縫，格子之間不留細線
-                        path += `M${(c.x + o).toFixed(1)} ${(c.y + o).toFixed(1)}h${w.toFixed(1)}v${w.toFixed(1)}h${(-w).toFixed(1)}Z`;
-                    }
-                    const edge = p < .3 ? p / .3 : 1 - fill;
-                    if (edge > 0) {
-                        const g = s * (1 - .25 * (1 - Math.min(1, p / .3)));
-                        ctx.globalAlpha = Math.min(1, edge) * .85; ctx.strokeStyle = '#7fa6db'; ctx.lineWidth = 1;
-                        ctx.strokeRect(c.x + (s - g) / 2 + .5, c.y + (s - g) / 2 + .5, g - 1, g - 1);
-                    }
-                }
-                ctx.globalAlpha = 1;
-                host.style.clipPath = path ? `path('${path}')` : 'path("M0 0Z")';
-            };
-            const t0 = performance.now();
-            const finish = () => { if (run !== TILE.run) return; _tileStop(); done(); };
-            const tick = (now) => {
-                if (run !== TILE.run) return;
-                const t = Math.min(1, (now - t0) / ms);
-                draw(t);
-                if (t < 1) TILE.raf = requestAnimationFrame(tick); else finish();
-            };
-            draw(0);
-            TILE.raf = requestAnimationFrame(tick);
-            TILE.timer = setTimeout(finish, ms + 400);   // 畫面藏著時 rAF 不跑，也一定收尾
-        }
-        // 一開始就先把窗口整格藏起來：等資料、畫好之前那一下不要先露一整片空窗口
+        const _tileClear = () => { if (TF && TILE.host) TF.clear(TILE.host); };
+        // 一開始就先把窗口整格藏起來：等資料、畫好之前那一下不要先露一整片空窗口（3 秒內沒開始演，引擎會自己放出來）
         try {
-            const vnPanel = document.getElementById('aurelia-vn-panel');
-            const vnUp = !!(vnPanel && vnPanel.style.display !== 'none' && vnPanel.offsetParent !== null);
-            if (_bkFxOn() && !vnUp && window.innerWidth >= 960) {
+            if (TF && TF.canRun()) {
                 TILE.host = container.closest('#aurelia-panel-container') || container;
-                TILE.host.style.clipPath = 'path("M0 0Z")';
-                TILE.guard = setTimeout(() => { if (!TILE.on) _tileClear(); }, 3000);   // 沒走到進場那一步（讀資料出錯之類）就別讓窗口一直藏著
+                TF.hide(TILE.host);
             }
         } catch (e) { }
 
@@ -1060,8 +980,7 @@
             // 窗口一開始藏起來的話（見最上面切塊那段），現在從中間往外蓋上來；書晚一點才翻開
             if (TILE.host && !TILE.on) {
                 TILE.on = true;
-                clearTimeout(TILE.guard);
-                _tileRun('in', () => { TILE.host.style.clipPath = ''; });
+                TF.run(TILE.host, 'in');
             }
             BK.introTimer = setTimeout(_bkOpen, 450 * BK_FAST + (TILE.on ? BK_LATE : 0));
         }
@@ -1323,7 +1242,7 @@
                 let left = 2;
                 const one = () => { if (--left === 0) home(); };
                 _bkClose(one);
-                _tileRun('out', one);
+                TF.run(TILE.host, 'out', one);
                 return;
             }
             if (BK.state === 'closing') { home(); return; }                    // 闔到一半又按一次＝不等了
