@@ -1109,6 +1109,7 @@
                         if (d < bestD) { bestD = d; best = n; }
                     }
                     if (best) { if (best.onInteract) best.onInteract(best); else startTalk(best); e.preventDefault(); e.stopPropagation(); return; }
+                    if (S.hsNear && S.hsNear.el.isConnected) { S.hsNear.el.click(); e.preventDefault(); e.stopPropagation(); return; }   // 🪑 旁邊沒人、只有家具：開那件
                 }
             }
             if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) {
@@ -1152,6 +1153,38 @@
         const dx = Math.max(r.x - px, 0, px - (r.x + r.w));
         const dy = Math.max(r.y - py, 0, py - (r.y + r.h));
         return Math.hypot(dx, dy);
+    }
+    // 🪑 家具熱點也照 NPC 那套「搆得到」：腳到家具下半截（人站的那一帶）的距離 < pad，取最近的那件（10-13：手機沒有滑鼠）
+    function _hsNearest(list, px, py, pad) {
+        let best = -1, bestD = Infinity;
+        for (let i = 0; i < list.length; i++) {
+            const b = list[i].box;
+            const r = { x: b.x, y: b.y + b.h * 0.45, w: b.w, h: b.h * 0.55 };
+            const dx = Math.max(r.x - px, 0, px - (r.x + r.w));
+            const dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+            const d = Math.hypot(dx, dy);
+            if (d < pad && d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+    }
+    const HS_PAD = 60;   // 同 NPC talkRect 的預設 talkPad
+    // 亮／不亮：熱點掛 is-near（走近）或 is-flash（第一次進場閃一下），家具本身照 lit 那套鑲光
+    function _hsLight(h, on, cls) {
+        if (on) { h.el.classList.add(cls); if (h.litEl) h.litEl.classList.add(...h.litCls); return; }
+        h.el.classList.remove(cls);
+        const still = h.el.classList.contains('is-near') || h.el.classList.contains('is-flash') || (h.el.matches && h.el.matches(':hover'));
+        if (h.litEl && !still) h.litEl.classList.remove(...h.litCls);
+    }
+    // 每一幀：最近、搆得到的那件浮出名字＋亮起來（跟 NPC 頭上的對話泡泡同一個時機）；講話中、擺設模式不冒
+    function _hsProximity(p) {
+        const list = S.hotspots || [];
+        if (!list.length && !S.hsNear) return;
+        const i = (S.talkTarget || S.edit || !p) ? -1 : _hsNearest(list, p.x, p.y, HS_PAD);
+        const h = i < 0 ? null : list[i];
+        if (h === S.hsNear) return;
+        if (S.hsNear) _hsLight(S.hsNear, false, 'is-near');
+        S.hsNear = h;
+        if (h) _hsLight(h, true, 'is-near');
     }
     function _npcInReach(n) {
         if (!S.player || !n) return false;
@@ -1754,6 +1787,7 @@
                 } else S.doorArm = true;
             }
         }
+        if (S.player) _hsProximity(S.player);   // 🪑 走近能點的家具＝浮出名字（手機沒有滑鼠）
         updateNpcs(dt);
         window.LobbyTheater?.follow?.();   // 🎭 配對泡泡跟著當事人頭頂走（有人走開就不會留在原地）
         applyCamera();
@@ -2399,7 +2433,7 @@
         if (isStatic || SCENES[S.scene].dynamic) editBtn.style.display = 'none';   // 靜態地圖／房間沒有可拖佈局→藏擺設鈕
         else editBtn.addEventListener('click', () => window.LobbyEditor?.toggle());   // 🖊 擺設模式（實作在 lobby_editor.js）
         // 🗺️ 靜態點擊地圖：畫建築點擊區（點了白光過場進室內），跳過所有走路系統
-        _mountHotspots();
+        _mountHotspots(isStatic);
         if (isStatic) {
             _applySceneHeader();
             fitCamera();
@@ -2421,7 +2455,8 @@
         persona:   () => _openCafeStudio('persona',   '我的角色'),
         worldbook: () => _openCafeStudio('worldbook', '整理世界書'),
     };
-    function _mountHotspots() {
+    function _mountHotspots(isStatic) {
+        S.hotspots = []; S.hsNear = null;
         (SCENES[S.scene].hotspots || []).forEach(hs => {
             let box = hs;
             let litEl = null;   // hs.lit＝滑過時亮的是家具本身（見下面 lstage-obj-lit）
@@ -2453,11 +2488,13 @@
             // ✨ hs.lit＝不用另外畫描邊圖：滑過去的時候讓「那張家具圖自己」鑲一圈光。
             //    光是照圖片本身的形狀長出來的，所以沙發亮沙發、圓几亮圓几，各是各的輪廓。
             //    🚨 前提是一張圖只畫一件東西 —— 一張圖畫三件，一圈光會把三件一起框起來。
+            const litCls = ['lstage-obj-lit'].concat(hs.litCls ? [hs.litCls] : []);   // litCls＝這間的光換顏色（帽匠工坊是紫的）
+            const H = { el, box, litEl, litCls };
             if (litEl) {
-                const litCls = ['lstage-obj-lit'].concat(hs.litCls ? [hs.litCls] : []);   // litCls＝這間的光換顏色（帽匠工坊是紫的）
                 el.addEventListener('mouseenter', () => litEl.classList.add(...litCls));
-                el.addEventListener('mouseleave', () => litEl.classList.remove(...litCls));
+                el.addEventListener('mouseleave', () => { if (!el.classList.contains('is-near') && !el.classList.contains('is-flash')) litEl.classList.remove(...litCls); });
             }
+            if (!isStatic) S.hotspots.push(H);
             if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid ' +
                 (hs.icon || 'fa-door-open') + '"></i> ' + hs.label + '</span>';
             el.addEventListener('click', (e) => {
@@ -2467,6 +2504,16 @@
             });
             S.world.appendChild(el);
         });
+        // 🌟 第一次走進這個場景：能點的家具一起亮一下、浮出名字，2.4 秒後收掉（10-13 她：「第一次會錯過?」手機沒有滑鼠，不知道哪裡能點）
+        try {
+            const seenKey = 'lstage_hs_seen_' + S.scene;
+            if (S.hotspots.length && !localStorage.getItem(seenKey)) {
+                localStorage.setItem(seenKey, '1');
+                const list = S.hotspots.slice();
+                list.forEach(h => _hsLight(h, true, 'is-flash'));
+                setTimeout(() => list.forEach(h => _hsLight(h, false, 'is-flash')), 2400);
+            }
+        } catch (e) {}
     }
 
     // 座標命中角色（不動角色 pointer-events）：桌機右鍵、手機長按共用
@@ -2591,7 +2638,7 @@
         }
         _closeTalkPick();
         S.root = S.world = null;
-        S.player = null; S.npcs = []; S.talkTarget = null; S.followers = []; S.keys = {}; S.objEls = [];
+        S.player = null; S.npcs = []; S.talkTarget = null; S.followers = []; S.keys = {}; S.objEls = []; S.hotspots = []; S.hsNear = null;
         S.mask = null;
         S.active = false;
         console.log('[LobbyStage] unmounted');
