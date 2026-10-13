@@ -266,6 +266,30 @@
             + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, white background;\n\n'
             + 'upper-right panel: the same character taking a casual selfie inside a cluttered room, close-up portrait composition;\n\n'
             + 'right lower panel: a chibi adaptation of the exact same character, preserving the same hairstyle, hair color, eye color, skin tone and facial identity; wearing the exact same plain clothing as in the other panels, with the same garments, cut, colors and proportions adapted only to the chibi body; only the body proportions change into an oversized head and a small 2.5-head-tall body, centered fully inside the panel with clear white margin, plain white background;',
+        // 🦭 動物形體的角色（幼海豹、小黑貓那種，不是貓耳少女、擬人狼）換這套：上面那套寫的是人的身體——
+        //   「從頭髮拍到大腿、直立站好」「同樣的髮型、穿一樣的衣服」，海豹會被畫成人的身體（10-14 她：「差點被嚇死了，看到鬼了」）。
+        //   🚨 不要寫「not humanoid」「no human body」：生圖模型看不懂否定，寫了反而畫出來；不想要的放負詞（BEAST_NEG）
+        TRIO_TPL_BEAST: 'a three-panel character sprite sheet featuring the same creature in three different formats;\n\n'
+            + 'left panel: a full-body illustration of the same creature in its natural animal form and animal anatomy, the whole body visible and centered, 【角色外觀】, white background;\n\n'
+            + 'upper-right panel: a close-up portrait of the same creature\'s face inside a cozy cluttered room;\n\n'
+            + 'right lower panel: a chibi adaptation of the exact same creature, preserving the same fur or skin color, markings, eye color and face; only the proportions change into a rounder, cuter version with an oversized head, centered fully inside the panel with clear white margin, plain white background;',
+        BEAST_NEG: 'humanoid, human body, human torso, muscular, abs, clothes, pants',
+        // 判斷是不是動物形體：要有明確的動物身體字樣、或描述一開頭就是那隻動物，而且沒有人的字樣（女孩、男人、獸耳、擬人…）。
+        //   寧可漏判（照舊用人的那套）也不要誤判：把龍騎士當成龍，畫出來的是一隻龍。
+        _BEAST_SPECIES: '(?:seal|cat|kitten|dog|puppy|fox|wolf|rabbit|bunny|bear|dragon|bird|owl|penguin|otter|hamster|mouse|squirrel|ferret|hedgehog|pig|piglet|cow|sheep|lamb|goat|horse|pony|deer|fawn|lion|tiger|leopard|panda|monkey|duck|duckling|chick|frog|turtle|tortoise|snake|lizard|whale|dolphin|shark|octopus|slime|griffin|gryphon|unicorn|phoenix)s?',
+        _BEAST_HUMAN: /\b(girls?|boys?|m[ae]n|wom[ae]n|person|people|human|humanoid|anthro|anthropomorphic|kemonomimi|furry\s+(?:character|person)|lady|gentleman|maiden|knight|warrior|witch|wizard|mage|elf|prince(?:ss)?|king|queen|child|kid|teen(?:ager)?|student|(?:cat|fox|wolf|dog|bunny|rabbit|animal)\s+ears)\b|獸耳|貓耳|狐耳|犬耳|人形|擬人|獸人|少女|少年|男人|女人|女孩|男孩/i,
+        _isBeast: function (look) {
+            const s = String(look || '');
+            if (!s.trim() || this._BEAST_HUMAN.test(s)) return false;
+            const sp = this._BEAST_SPECIES;
+            const mark = new RegExp('\\b(?:feral|quadruped|four[\\s-]legged|on\\s+all\\s+fours|creature|animal\\s+(?:form|body|anatomy))\\b'
+                + '|\\bbeast\\b(?!\\s*(?:man|men|kin|tamer|master|hunter|ears?))'
+                + '|\\b' + sp + '\\s+(?:pup|cub|kit|body|form)\\b|\\b(?:kitten|puppy|piglet|fawn|duckling|cub)s?\\b'
+                + '|動物形態|動物的樣子|原形|獸形|四足|四腳', 'i');
+            if (mark.test(s)) return true;
+            // 一開頭就是那隻動物（a small black cat…、red dragon with…）：前面最多四個形容詞，中間不能有 with（witch with a black cat 是人）
+            return new RegExp('^\\s*(?:\\(\\s*)?(?:a|an|the)?\\s*(?:(?!with\\b)[\\w-]+\\s+){0,4}' + sp + '\\b', 'i').test(s);
+        },
         // 母圖格子：左格 50% 寬、右上 55% 高（她 LAB 試成功的那組）
         TRIO_LP: 0.5, TRIO_TP: 0.55,
         trioLine: function (OW, OH) { return Math.max(6, Math.round(Math.min(OW, OH) * 0.016)); },
@@ -286,9 +310,12 @@
             let tpl = null;
             try { tpl = localStorage.getItem('os_trio_tpl'); } catch (e) {}
             if (!tpl || !tpl.trim()) tpl = this.TRIO_TPL;
-            // 一次生三種不吃立繪前綴：左格拍到大腿，外觀沒寫下身又有腿的補一句（_lowerWear；人魚那種不補）
+            // 一次生三種不吃立繪前綴：左格拍到大腿，外觀沒寫下身又有腿的補一句（_lowerWear；人魚、動物那種不補）
             const look0 = this._stripForSprite(prompt);
             const look = _joinTags(look0, this._lowerWear(look0));
+            // 🦭 動物形體：換動物那套（她改過的那格是照人寫的，動物一樣換），負詞加 BEAST_NEG
+            const beast = this._isBeast(look0);
+            if (beast) tpl = this.TRIO_TPL_BEAST;
             const full = tpl.indexOf(this.TRIO_LOOK) >= 0 ? tpl.split(this.TRIO_LOOK).join(look) : _joinTags(tpl, look);
             // 尺寸：GPT 官方只收那三種，寬的就是 1536×1024；ComfyUI 用她定的 1312×1104（正方形會讓左格太窄、壯碩的被壓扁）
             const withTpl = (_svc === 'custom_api');
@@ -296,6 +323,7 @@
             const H = withTpl ? 1024 : (_svc === 'comfyui_direct' ? 1104 : 1024);
             let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
+            if (beast) _neg = _neg ? _neg + ', ' + this.BEAST_NEG : this.BEAST_NEG;
             const opts = { width: W, height: H, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' };
             if (withTpl) opts._layoutRef = { name: 'layout', kind: 'layout', blob: await this.trioLayoutBlob(W, H) };
             const raw = await win.OS_IMAGE_MANAGER.generate(full, 'char', opts);
@@ -331,7 +359,7 @@
         _HAS_LOWER: /\b[a-z]*(dress(es)?\b(?!\s*shirt)|skirts?\b|gowns?\b)|\b(pants|trousers|jeans|shorts|kimono|yukata|hakama|robes?|cloak|leggings|tights|stockings|pantyhose|overalls|jumpsuit|bodysuit|leotard|armou?r|uniform|suit|hanfu|qipao|cheongsam|slacks|chinos|sweatpants|joggers|culottes|sarong|kilt|bloomers|swimsuit|bikini)\b|褲|裙|袍|洋裝|和服|浴衣|旗袍|漢服|盔甲|鎧甲|制服|連身|泳裝/i,
         _lowerWear: function (look) {
             const s = String(look || '');
-            if (!s.trim() || this._NO_LEGS.test(s) || this._HAS_LOWER.test(s)) return '';
+            if (!s.trim() || this._NO_LEGS.test(s) || this._HAS_LOWER.test(s) || this._isBeast(s)) return '';   // 動物形體不穿褲子（幼海豹被補了 wearing pants）
             return 'fully clothed, wearing pants';
         },
         getItem: async function(prompt) {
