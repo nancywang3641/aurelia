@@ -26,7 +26,7 @@
             ss_jev: { title: '決策模型', body: '只做選擇題、打分數、回答是或不是的小模型，快又便宜，一次不到台幣 0.001 元。\n\n用到它的地方：書咖的丹決定下一步、立繪什麼時候收、音效和音樂、劇情地點對到地圖、記憶比對。\n\n要用 Jev 那種問法的服務。三格都要填；少一格，那些地方照舊用自己原本的辦法。\n\n只存在這台裝置上，電腦和手機要各填一次。' },
             ss_1503: { title: '頭像 來源', body: '角色頭像／立繪用這個來源。' },
             ss_1519: { title: '立繪模式', body: '開＝直接生全身立繪、不生頭像。' },
-            ss_trio: { title: '一次生三種', body: '要先開立繪模式。新角色要圖時，一次生一張分三格的圖，切開成三張：\n\n・立繪（去背）：劇情舞台\n・頭像（自拍，留背景）：聊天、劇情手機、通話、大廳對話框、日誌、狀態面板\n・Q版（去背）：大廳裡他的小人（裝扮室換過造型的照舊）\n\n「立繪」那列接 GPT 那種時會附上分三格的底圖讓它照著排；ComfyUI 不附（試過附了反而會把底圖的人帶過來）。\n\n開了這個，上面「一次生幾個角色」就不用了。已經有圖的舊角色不會重生。' },
+            ss_trio: { title: '一次生三種', body: '只在立繪模式下有作用：勾了會順便勾上面的「跳過頭像」，取消「跳過頭像」它也會一起取消。新角色要圖時，一次生一張分三格的圖，切開成三張：\n\n・立繪（去背）：劇情舞台\n・頭像（自拍，留背景）：聊天、劇情手機、通話、大廳對話框、日誌、狀態面板\n・Q版（去背）：大廳裡他的小人（裝扮室換過造型的照舊）\n\n「立繪」那列接 GPT 那種時會附上分三格的底圖讓它照著排；ComfyUI 不附（試過附了反而會把底圖的人帶過來）。\n\n開了這個，上面「一次生幾個角色」就不用了。已經有圖的舊角色不會重生。' },
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
@@ -766,11 +766,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
         // 🎯 頭像那桶現在接的型號名（自訂接口那條才有）。節點只是預設組，選了之後值就在這幾格裡。
         const _charModelName = function (cfg) { try { return String((cfg.customApi && cfg.customApi.model) || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); } catch (e) { return ''; } };
-        // 判「是不是 GPT 那種」＝自訂接口 ＋ 型號名帶 GPT（她定的規則）。只拿來寫說明那一行，不鎖任何東西。
+        // 判「是不是一張圖畫得準好幾個角色的那種」＝自訂接口型號名帶 GPT、Gemini、Banana，或 Pollinations 選 NanoBanana／GPT Image。
+        //   只拿來寫說明那一行，不鎖任何東西。（10-15 她：「只有 gemini 或者 banana 才有這種準確可以一次幾個角色的準確度」）
+        const _MULTI_OK = /gpt|gemini|banana/i;
         const _isGptChar = function (cfg) {
             try {
-                if (((cfg.serviceChar || cfg.serviceLiving || cfg.service) || '') !== 'custom_api') return false;
-                return /gpt/i.test(_charModelName(cfg));
+                const svc = (cfg.serviceChar || cfg.serviceLiving || cfg.service) || '';
+                if (svc === 'pollinations') return _MULTI_OK.test(String((cfg.pollinations && cfg.pollinations.model) || ''));
+                if (svc !== 'custom_api') return false;
+                return _MULTI_OK.test(_charModelName(cfg));
             } catch (e) { return false; }
         };
         const tavernExt = loadTavernExtSettings();
@@ -1560,8 +1564,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <option value="3" ${vnD.spriteBatch === 3 ? 'selected' : ''}>三個一起（每個 512×1024）</option>
                                     </select>
                                     <div class="set-desc">湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>${_isGptChar(imgConfig)
-                                        ? '你現在頭像接的是 <b>' + _charModelName(imgConfig) + '</b>，就是它擅長的事。'
-                                        : '會照指令把畫面分成等寬直欄的是 GPT 那種（頭像來源選「自訂接口」、型號名帶 GPT）；畫風鬆散的接口可能把幾個角色糊在一起。'}</div>
+                                        ? '你現在頭像接的是 <b>' + (_charModelName(imgConfig) || String((imgConfig.pollinations && imgConfig.pollinations.model) || '')) + '</b>，就是它擅長的事。'
+                                        : '會照指令把畫面分成等寬直欄的是 GPT、Gemini（NanoBanana）那幾種；畫風鬆散的接口可能把幾個角色糊在一起。'}</div>
                                 </div>
                                 <!-- 🎴 一次生三種（她 2026-10-05：「做一個勾選打開這種模式?」）：一張三格圖切成立繪／頭像／Q版。
                                      勾選跟立繪模式一樣按底部保存才存；提示詞那格打了就存（同立繪工作室的前後綴）。 -->
@@ -3529,10 +3533,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const hit = r.conn ? M._resolveConn(r.conn) : null;
                 const svc = hit ? hit.provider : M.legacyServiceOf('sprite');
                 if (svc === 'custom_api') model = String(((hit && hit.customApi) || M.config.customApi || {}).model || '');
+                else if (svc === 'pollinations') model = String(((hit && hit.pollinations) || M.config.pollinations || {}).model || '');
             } catch (e) {}
-            el.innerHTML = '湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>' + (/gpt/i.test(model)
+            el.innerHTML = '湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>' + (_MULTI_OK.test(model)
                 ? '立繪現在接的是 <b>' + _ie(model) + '</b>，就是它擅長的事。'
-                : '會照指令把畫面分成等寬直欄的是 GPT 那種（「立繪」那列選自訂接口、型號名帶 GPT）；畫風鬆散的接口可能把幾個角色糊在一起。');
+                : '會照指令把畫面分成等寬直欄的是 GPT、Gemini（NanoBanana）那幾種；畫風鬆散的接口可能把幾個角色糊在一起。');
         }
 
         // ── 我的畫風：一包＝名字＋底詞＋負詞＋（可選）一張底圖 ──
@@ -3704,7 +3709,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // 🎴 一次生三種：勾了才攤開提示詞那格；提示詞打了就存，跟預設一樣（或清空）就不存——以後預設改了才跟得上
         const _trioDefault = () => { const VI = (window.parent || window).VN_Image || window.VN_Image; return (VI && VI.TRIO_TPL) || ''; };
-        window._trioToggle = (on) => { const b = container.querySelector('#vncfg-trio-body'); if (b) b.classList.toggle('hidden', !on); };
+        // 三種一起生只在立繪模式下有作用：勾三種＝順便勾「跳過頭像」；取消「跳過頭像」＝三種也一起取消，兩格不會對不上
+        //   （10-15 她：「我只勾一次生三種，他回給我的只有頭像，是不是因為還得開跳過頭像勾勾?」）
+        window._trioToggle = (on) => {
+            const b = container.querySelector('#vncfg-trio-body'); if (b) b.classList.toggle('hidden', !on);
+            const sd = container.querySelector('#vncfg-sprite-direct'); if (on && sd) sd.checked = true;
+        };
+        container.querySelector('#vncfg-sprite-direct')?.addEventListener('change', (e) => {
+            const tr = container.querySelector('#vncfg-sprite-trio');
+            if (!e.target.checked && tr && tr.checked) { tr.checked = false; window._trioToggle(false); }
+        });
         window._trioTplSave = (v) => {
             const _w = window.parent || window;
             try {
