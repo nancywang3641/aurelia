@@ -253,6 +253,7 @@
    直接壓在草地上，工具加一點影子、數字照快捷列那樣白字描深邊才看得清 */
 .aurelia-farm .fw-hand {position: absolute; left: 66%; top: 55%; display: flex; align-items: flex-end; gap: 1px;
     font-size: clamp(9px, 1.4cqw, 13px); white-space: nowrap;}
+.aurelia-farm .fw-hand[hidden] {display: none;}   /* 上面的 display:flex 會蓋掉 hidden：放下工具後手上還留著那把 */
 .aurelia-farm .fw-hand b {font: 800 .95em/1 system-ui, sans-serif; color: #fff;
     text-shadow: -1px 0 #2c4a63, 1px 0 #2c4a63, 0 -1px #2c4a63, 0 1px #2c4a63;}
 .aurelia-farm .fw-hand svg {width: 2em; height: 2em; display: block; filter: drop-shadow(0 1px 1.5px rgba(30,40,20,.5));}
