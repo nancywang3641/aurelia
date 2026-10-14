@@ -67,6 +67,7 @@
             '</header>' +
             '<div class="farm-tools">' +
             '<button class="farm-tool" type="button" data-farm="replay" hidden>' + fa('fa-clock-rotate-left') + '<span data-farm="replay-label">看他上次怎麼顧</span></button>' +
+            '<button class="farm-tool" type="button" data-farm="diary" hidden>' + fa('fa-book-open') + '<span>日記本</span></button>' +
             '</div>' +
             '<aside class="farm-stats" aria-label="我的狀態">' +
             '<div class="farm-stat coin"><span>我的金幣</span><strong data-farm="coins"></strong></div>' +
@@ -74,7 +75,7 @@
             '<div class="farm-stat"><span>在這裡偷吃</span><strong data-farm="bites"></strong></div>' +
             '</aside>' +
             '<aside class="farm-log" aria-live="polite">' +
-            '<div class="farm-log-head"><strong>' + esc(who.name) + '的日記</strong></div>' +
+            '<div class="farm-log-head"><strong>' + esc(who.name) + '的日記</strong><span>完整的在日記本</span></div>' +
             '<div data-farm="log"></div>' +
             '</aside>' +
             '<div class="farm-toast" data-farm="toast" role="status" aria-live="polite"></div>' +
@@ -183,9 +184,44 @@
             rb.hidden = !(t && t.steps && t.steps.length);
             $('replay-label').textContent = play && !play.live ? '跳過' : '看他上次怎麼顧';
             rb.classList.toggle('primary', !!(play && !play.live));
+            $('diary').hidden = false;
+            if (diaryWrap && !diaryWrap.hidden) renderDiary();
             renderPlots();
             if (stage) stage.refresh();
         }
+        // 他的日記本（整本，照日期分段，跟她自己看板裡的日記同一套）：右下角那格只放最近三行、一行太長會被切掉，手機上整格不顯示（10-14 她：「後院日記在哪看?」）
+        var diaryWrap = null, diarySig = '';
+        function renderDiary() {
+            var logs = guest.logs || [], sig = logs.length + '|' + (logs[0] || '');
+            if (sig === diarySig && diaryWrap.firstChild) return;   // 開著的時候每次拉他存檔都會叫到：日記沒變就不重畫，捲到一半不會跳回最上面
+            diarySig = sig;
+            var days = window.FarmBoard.diaryByDay(logs);
+            var body = days.length ? days.map(function (d) {
+                return '<div class="fd-diary-day"><h5>' + (d.day != null ? '第 ' + d.day + ' 日' : '更早') + '</h5><ul>' +
+                    d.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></div>';
+            }).join('') : '<p class="fd-empty">還沒有日記。</p>';
+            diaryWrap.innerHTML = '<section class="fd-card" role="dialog" aria-label="' + esc(who.name) + '的日記本">' +
+                '<header class="fd-head"><strong>' + fa('fa-book-open') + esc(who.name) + '的日記本</strong><button type="button" class="fd-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<div class="fd-body"><div class="fd-diary">' + body + '</div></div></section>';
+        }
+        function openDiary() {
+            if (!guest) return;
+            if (!diaryWrap) {
+                diaryWrap = document.createElement('div');
+                diaryWrap.className = 'fd-wrap';
+                diaryWrap.setAttribute('data-fw-modal', '');
+                diaryWrap.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (e.target === diaryWrap || e.target.closest('.fd-close')) diaryWrap.hidden = true;
+                });
+                root.appendChild(diaryWrap);
+            }
+            diarySig = '';
+            renderDiary();
+            diaryWrap.hidden = false;
+        }
+        function onDiaryKey(e) { if (e.key === 'Escape' && diaryWrap && !diaryWrap.hidden) diaryWrap.hidden = true; }
+        window.addEventListener('keydown', onDiaryKey);
 
         // ── 偷吃一口 ─────────────────────────────────
         function stealActions(i) {
@@ -480,6 +516,7 @@
         function goHome() { ctx.goScene(mine().walk && mine().walk.scene === 'ranch' ? 'ranch' : 'yard'); }
         $('home').addEventListener('click', goHome);
         $('replay').addEventListener('click', function () { if (play && !play.live) endPlay(); else replay(); });
+        $('diary').addEventListener('click', openDiary);
 
         if (!Cloud || !Cloud.enabled()) fail('要先開雲端存檔，才找得到' + who.name + '家。');
         else Promise.all([Cloud.peek(who.slot), Cloud.steals().catch(function () { return null; })]).then(function (r) {
@@ -497,6 +534,7 @@
             destroy: function () {
                 dead = true;
                 clearTimeout(pollT);
+                window.removeEventListener('keydown', onDiaryKey);
                 if (stage) stage.destroy();
                 if (host) host.destroy();
             }
