@@ -12,7 +12,8 @@
     const win = window.parent || window;
     const APP = 'xiaoji';
     // makeConn：做大件那一通走哪條（''＝跟說話同一條 conn；10-05 她：「再設置那裏加一條工具模型選項下拉單」）
-    const DEF = { conn: 'route', makeConn: '', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0, body: 'hamster' };
+    // tidyConn：整理記憶那一通走哪條（''＝跟說話同一條；10-15 她：「幫小五郎的門卡加第三格『整理記憶走哪條』」，想讓雜事走便宜的模型）
+    const DEF = { conn: 'route', makeConn: '', tidyConn: '', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0, body: 'hamster' };
     // 房間裡的樣子（畫法在房間的 clawd_portrait.js，id 對得上它的 BASES）。領養時挑，門卡上能換；沒挑過的是倉鼠
     const BODIES = [{ id: 'hamster', name: '倉鼠' }, { id: 'cat', name: '小貓' }, { id: 'penguin', name: '企鵝' }];
     function bodyOf(rec) { const id = rec && rec.body; return BODIES.some(b => b.id === id) ? id : DEF.body; }
@@ -87,10 +88,11 @@
         ((S.getChannels && S.getChannels()) || []).forEach(c => { if (c && c.id) out.push({ id: c.id, label: c.name || c.model || c.id }); });
         return out;
     }
-    // which＝'make'：做大件那一通，門卡另外選了就走那條，沒選跟說話同一條
+    // which＝'make'：做大件那一通；'tidy'：整理記憶那一通。門卡另外選了就走那條，沒選跟說話同一條
     function connConfig(rec, which) {
         const S = _g('OS_SETTINGS') || {};
-        const conn = (which === 'make' && rec && rec.makeConn) ? rec.makeConn : ((rec && rec.conn) || 'route');
+        const pick = !rec ? '' : which === 'make' ? rec.makeConn : which === 'tidy' ? rec.tidyConn : '';
+        const conn = pick || ((rec && rec.conn) || 'route');
         let cfg;
         if (conn === 'route') cfg = S.getConfigFor ? S.getConfigFor('xiaoji') : (S.getConfig ? S.getConfig() : {});
         else if (conn === 'main') cfg = S.getConfig ? S.getConfig() : {};
@@ -302,11 +304,11 @@
                 .map(c => ({ id: c.id, title: c.title || '', created: c.createdAt || c.created || c.lastActive || 0 }));
         } catch (e) { return []; }
     }
-    /** 羽毛筆那本「再試一次」：整理一直失敗停下來之後，她按了才再叫一通（走小機說話那條） */
+    /** 羽毛筆那本「再試一次」：整理一直失敗停下來之後，她按了才再叫一通（走門卡「整理記憶」那條，沒選＝說話那條） */
     async function tidyNow(rid) {
         const M = _M();
         if (!M || !M.maintain) return { ran: false, why: '奧瑞亞的記憶還沒載入' };
-        const rec = await get(rid), conn = connConfig(rec), r = _resident(rid);
+        const rec = await get(rid), conn = connConfig(rec, 'tidy'), r = _resident(rid);
         return M.maintain(rid, { me: (r && r.name) || '小機', force: true,
             call: msgs => { let u = null; return _chat(msgs, conn, null, x => { u = x; }, 'API 小機（整理記憶）').then(t => ({ text: t, usage: u })); } });
     }
@@ -466,12 +468,13 @@
             } catch (e) { memErr = memErr || ('這一句沒記進經歷簿：' + ((e && e.message) || e)); console.warn('[OS_XIAOJI] ' + memErr); }
         }
         if (!reply && !props.length) reply = stopped ? '（停下來了）' : '（沒有回話）';
-        // 回話先交出去；背景算向量、該整理就整理（整理走小機說話那條，一通；舊聊天摘要也在那一通）
+        // 回話先交出去；背景算向量、該整理就整理（整理走門卡「整理記憶」那條，沒選＝說話那條，一通；舊聊天摘要也在那一通）
         if (mem) setTimeout(() => {
             mem.embedPending(rid).catch(() => {});
             const me = (r && r.name) || '小機';
+            const tconn = connConfig(rec, 'tidy');
             mem.maintain(rid, { conv: o.conv, hist: H0, cut: _cutOf(H0.length), me: me,
-                call: msgs => { let u = null; return _chat(msgs, conn, null, x => { u = x; }, 'API 小機（整理記憶）').then(t => ({ text: t, usage: u })); } })
+                call: msgs => { let u = null; return _chat(msgs, tconn, null, x => { u = x; }, 'API 小機（整理記憶）').then(t => ({ text: t, usage: u })); } })
                 .catch(e => console.warn('[OS_XIAOJI] 整理記憶沒成功：', e));
         }, 0);
         // calls＝小機自己回來的那幾通＋大件真的叫到的專門那幾通（她付的錢，回覆底下照實寫）
