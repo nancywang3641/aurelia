@@ -169,6 +169,7 @@ const PHONE_FILES = [
     'os/app_store.js',
     'os/os_widgets.js',
     'os/os_sync.js',
+    'os/os_wb_mount.js',    // 「關於我」的世界書分頁（只有酒館版）；排在 os_persona 前面，它建分頁時要看得到這支
     'os/os_persona.js',
     'os/os_prompts.js', // 提示詞底層需要保留，但 UI 按鈕已透過 isStandalone 隱藏
     'os/os_vn_rules_data.js', // 🪶 VN 指令的內容（程式內建的 VN 主 prompt，原酒館全域世界書「-VN小說家-」）；須在 os_vn_rules 之前
@@ -523,6 +524,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_studio.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_worldbook.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_persona.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_wb_mount.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_prompts.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs_rules.css');

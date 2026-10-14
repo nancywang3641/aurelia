@@ -141,8 +141,47 @@
         return { ok: true, msg: '已掛上奧瑞亞的世界書' };
     }
 
+    // 🩺 給「關於我 → 世界書」分頁看的：照這段聊天該在哪（inWorld＝世界門記著這室在某個異世界）比對現在實際掛的。
+    //   她怕程式換書卡住自己沒發現（10-14），所以列的是「哪本不該在／哪本沒掛」這種看得懂的句子，不是狀態碼。
+    function diagnose(inWorld) {
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return null;
+        if (!s.ours) return { ours: false, problems: [] };
+        const missing = _missingBooks(TH) || [];
+        const problems = [];
+        if (missing.length) problems.push('還沒匯入：' + missing.join('、'));
+        const has = (b) => s.additional.indexOf(b) >= 0;
+        if (inWorld) {
+            if (s.primary === BOOK_MAIN) problems.push('人在異世界，奧瑞亞世界卻還掛著');
+            if (has(BOOK_CORE)) problems.push('人在異世界，人物核心卻還掛著');
+            if (!has(BOOK_PARA)) problems.push('人在異世界，視差沒掛上');
+        } else {
+            if (s.primary !== BOOK_MAIN) problems.push('奧瑞亞世界沒掛上');
+            if (!has(BOOK_CORE)) problems.push('人物核心沒掛上');
+            if (has(BOOK_PARA)) problems.push('人在奧瑞亞，視差卻還掛著');
+        }
+        return { ours: true, problems, missing };
+    }
+    // 照這段聊天該在哪，整組重掛一次（不走 enter/exit 的「已經是這樣就不寫」守衛：那兩支只認主書與視差，少了人物核心時會以為沒事）
+    async function repair(inWorld) {
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return { ok: false, msg: '世界書 API 不可用' };
+        if (!s.ours) return { ok: false, msg: '當前角色卡不是奧瑞亞卡，不動它的世界書' };
+        const missing = _missingBooks(TH);
+        if (missing === null) return { ok: false, msg: '世界書清單讀取失敗' };
+        if (missing.length) return { ok: false, msg: '還沒匯入：' + missing.join('、') };
+        const add = s.additional.filter(b => b !== BOOK_PARA && b !== BOOK_CORE);
+        add.push(inWorld ? BOOK_PARA : BOOK_CORE);
+        try { await TH.setCurrentCharLorebooks({ primary: inWorld ? null : BOOK_MAIN, additional: add }); }
+        catch (e) { return { ok: false, msg: '重掛失敗：' + (e && e.message || e) }; }
+        console.log('[Worldgate] 🩺 依這段聊天重掛世界書：' + (inWorld ? '異世界' : '奧瑞亞'));
+        return { ok: true, msg: '掛好了' };
+    }
+
     window.AURELIA_WORLDGATE = {
-        isInParallax, enterParallax, exitParallax, reconcile, status, bindMain,
+        isInParallax, enterParallax, exitParallax, reconcile, status, bindMain, diagnose, repair,
         BOOKS: { main: BOOK_MAIN, core: BOOK_CORE, para: BOOK_PARA },
     };
     console.log('[Worldgate] 視差切書模組已載入');

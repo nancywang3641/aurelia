@@ -4,7 +4,14 @@
         .ps-header { display:flex; align-items:center; justify-content:center; height:56px; background:rgba(228,232,245,0.92); border-bottom:1px solid rgba(26,28,40,0.10); flex-shrink:0; box-shadow:0 2px 10px rgba(0,0,0,0.3); position:relative; z-index:2; }
         .ps-title { font-size:15px; font-weight:800; color:#1A1C28; letter-spacing:1px; text-transform:uppercase; }
         
+        /* 酒館版的兩個分頁：關於我／世界書 */
+        .ps-tabs { display:flex; gap:4px; padding:4px; border-radius:10px; background:rgba(26,28,40,0.06); }
+        .ps-tab { border:0; border-radius:7px; background:none; color:rgba(26,28,40,0.62); font:inherit; font-size:13px; font-weight:800; letter-spacing:1px; padding:7px 16px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:background .15s, color .15s; }
+        .ps-tab:hover { color:#1A1C28; }
+        .ps-tab.on { background:#1A1C28; color:#EEF0F6; }
+
         .ps-body { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; position:relative; z-index:2; }
+        .ps-body[hidden] { display:none; }   /* 上一行的 display:flex 會蓋掉 hidden，兩個分頁會疊在一起 */
         .ps-body::-webkit-scrollbar { width:4px; }
         .ps-body::-webkit-scrollbar-thumb { background:rgba(26,28,40,0.20); border-radius:4px; }
         
@@ -68,6 +75,9 @@ html:has(.mode-404) .ps-app::before { background-image:linear-gradient(rgba(0,25
 
 html:has(.mode-404) .ps-header { background:rgba(0,15,5,0.92) !important; border-bottom-color:rgba(0,255,65,0.25) !important; }
 html:has(.mode-404) .ps-title { color:#00ff41 !important; text-shadow:0 0 8px rgba(0,255,65,0.4) !important; font-family:'Courier New',monospace !important; }
+html:has(.mode-404) .ps-tabs { background:rgba(0,255,65,0.06) !important; }
+html:has(.mode-404) .ps-tab { color:rgba(0,255,65,0.6) !important; font-family:'Courier New',monospace !important; }
+html:has(.mode-404) .ps-tab.on { background:#001a00 !important; color:#00ff41 !important; box-shadow:inset 0 0 0 1px rgba(0,255,65,0.5) !important; }
 
 html:has(.mode-404) .ps-body::-webkit-scrollbar-thumb { background:rgba(0,255,65,0.30) !important; }
 

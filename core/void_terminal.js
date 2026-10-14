@@ -1096,6 +1096,8 @@ const IRIS_IDLE = [
                     if (!_launched && window.OS_PERSONA && window.OS_PERSONA.launch) {
                         window.OS_PERSONA.launch(inner);
                         _launched = true;
+                    } else if (_launched && window.OS_PERSONA && window.OS_PERSONA.onShow) {
+                        window.OS_PERSONA.onShow();   // 停在「世界書」分頁的話重讀現在掛了哪幾本
                     }
                     dropdown.classList.add('open');
                     userBox.classList.add('active');

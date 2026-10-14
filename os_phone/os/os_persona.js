@@ -115,18 +115,37 @@
         return null;
     }
 
+    // 酒館版多一個「世界書」分頁（os_wb_mount.js）：這段聊天讀了哪幾本書、掛上拿掉。PWA 沒有酒館的掛書，只留關於我。
+    let _tab = 'me';
+    function _hasWbTab() { return !isStandalone() && !!(win.OS_WB_MOUNT || window.OS_WB_MOUNT); }
+    function _showTab(tab) {
+        if (!_rootContainer) return;
+        _tab = tab === 'wb' && _hasWbTab() ? 'wb' : 'me';
+        _rootContainer.querySelectorAll('.ps-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === _tab));
+        const me = _rootContainer.querySelector('#ps-list-container');
+        const wb = _rootContainer.querySelector('#ps-wb-container');
+        if (me) me.hidden = _tab !== 'me';
+        if (wb) wb.hidden = _tab !== 'wb';
+        if (_tab === 'wb') (win.OS_WB_MOUNT || window.OS_WB_MOUNT).render(wb);
+    }
+
     function renderApp(container) {
         _rootContainer = container;
         if (_editEl && _editEl.isConnected && !container.contains(_editEl)) _editEl.remove();   // 上一次搬出去還沒搬回來的
+        const head = _hasWbTab()
+            ? `<div class="ps-tabs">
+                    <button class="ps-tab" type="button" data-tab="me"><i class="fa-solid fa-address-card"></i> 關於我</button>
+                    <button class="ps-tab" type="button" data-tab="wb"><i class="fa-solid fa-book"></i> 世界書</button>
+               </div>`
+            : `<div class="ps-title"><i class="fa-solid fa-address-card"></i> PERSONA / 關於我</div>`;
         container.innerHTML = `
             <div class="ps-app" id="ps-app-root">
-                <div class="ps-header">
-                    <div class="ps-title"><i class="fa-solid fa-address-card"></i> PERSONA / 關於我</div>
-                </div>
+                <div class="ps-header">${head}</div>
                 <div class="ps-body" id="ps-list-container">
                     <div style="text-align:center; padding:40px; color:rgba(26,28,40,0.72);">載入中...</div>
                 </div>
-                
+                <div class="ps-body" id="ps-wb-container" hidden></div>
+
                 <!-- 編輯頁：打開時搬到整個手機螢幕上（手機上小窗改不動長設定），自帶返回鍵 -->
                 <div class="ps-edit" id="ps-modal">
                     <div class="ps-edit-hd">
@@ -162,6 +181,8 @@
             </div>
         `;
         _editEl = container.querySelector('#ps-modal');
+        container.querySelectorAll('.ps-tab').forEach(b => b.addEventListener('click', () => _showTab(b.dataset.tab)));
+        _showTab(_tab);
 
         if (!isStandalone()) {
             win.postMessage({ type: 'REQUEST_USER_PERSONA_LIST', source: 'PHONE_OS' }, '*');
@@ -450,7 +471,9 @@
                 win._os_persona_sync_interval = setInterval(() => { if (!document.hidden) syncFromST(); }, 1500);
             }
         },
-        launchApp: function(container) { API.launch(container); }, 
+        launchApp: function(container) { API.launch(container); },
+        // 大廳右上角的下拉窗只建一次、之後只是收起打開：打開時叫這支，停在世界書分頁就重讀一次（換過卡、換過聊天都要是現在的）
+        onShow: function() { if (_rootContainer && _tab === 'wb') _showTab('wb'); },
         
         openPersonaList: function(container) { 
             if (container) {
