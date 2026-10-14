@@ -1803,8 +1803,11 @@
                 // ComfyUI 端本來就一張一張跑，串行零損失，還讓「語音紅綠燈」插得進空檔
                 const _svc = (typeof win.OS_IMAGE_MANAGER?.serviceForUse === 'function') ? win.OS_IMAGE_MANAGER.serviceForUse((window.VN_Config && window.VN_Config.data && window.VN_Config.data.spriteDirect === true) ? 'sprite' : 'avatar') : (typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (win.OS_IMAGE_MANAGER?.config?.service || '');
                 const _localGpu = (_svc === 'comfyui_direct' || _svc === 'tavern_sd');
-                console.log(`[VN] ${_localGpu ? '串行' : '並行'}生成 ${needGen.length} 個頭像...`);
-                if (_localGpu) {
+                // 📱 手機也串行：雲端一次全部回來＝每張大圖同時解碼、切格、排去背，iPhone 撐不住就被 Safari 整頁重開
+                //   （10-14 她：奧瑞亞那本第一章出場的人多，「跑圖時」「會中途重整」）
+                const _serial = _localGpu || this._lowMemDevice();
+                console.log(`[VN] ${_serial ? '串行' : '並行'}生成 ${needGen.length} 個頭像...`);
+                if (_serial) {
                     for (const name of needGen) { await this._genAvatarToCache(name); }
                 } else {
                     await Promise.all(needGen.map(name => this._genAvatarToCache(name)));
@@ -2062,7 +2065,9 @@
                 const c2 = doc.createElement('canvas'); c2.width = w; c2.height = H;
                 c2.getContext('2d').drawImage(cv, a, 0, w, H, 0, 0, w, H);
                 out.push(await new Promise(function (r) { c2.toBlob(function (bl) { r(bl); }, 'image/png'); }));
+                VN_Core._freeCanvas(c2);
             }
+            VN_Core._freeCanvas(cv);
             return out;
         },
 
@@ -2073,6 +2078,40 @@
         //   （tmp/bg_remove_compare.html）。沒有顯卡可用時套件自己退回 CPU；顯卡起得來卻失敗就記下來，之後改走 CPU。
         //   🚨 不要加 proxyToWorker：onnxruntime 的背景工人在這裡起不來（worker not ready），而且會連帶把同一頁之後的去背全弄壞。
         //   🚨 畫布 flood-fill 去背試過：白髮白裙白背景時光環中間整塊白色留著、頭髮一圈白邊，別換回去。
+        // 📱 記憶體小的裝置（iPhone／iPad，或瀏覽器自己報 4GB 以下）：生圖改一張一張來
+        _lowMemDevice: function() {
+            try {
+                const ua = navigator.userAgent || '';
+                if (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return true;
+                return !!(navigator.deviceMemory && navigator.deviceMemory <= 4);
+            } catch (e) { return false; }
+        },
+        // 畫布用完就把它縮成 0：iPhone 的 Safari 要等很久才還畫布的記憶體，一次切好幾張大圖就會被整頁重開
+        _freeCanvas: function() {
+            for (let i = 0; i < arguments.length; i++) { const c = arguments[i]; if (c) { try { c.width = 0; c.height = 0; } catch (e) {} } }
+        },
+        // 🧷 跑圖記號：切圖、去背這種吃記憶體的步驟開始前記一筆、全部做完才擦掉。
+        //   手機被 Safari 整頁重開時程式來不及說話，下次打開還看到這筆＝上次是在這一步斷掉的（10-14 她 iPhone「跑圖時」「會中途重整」，要查是哪一步）
+        _heavyOps: 0,
+        _heavyBgN: 0,
+        _heavyBegin: function(step) {
+            this._heavyOps++;
+            if (step === 'bg') this._heavyBgN++;
+            try { localStorage.setItem('vn_heavy_step', JSON.stringify({ step: step, bg: this._heavyBgN, at: Date.now() })); } catch (e) {}
+        },
+        _heavyEnd: function() {
+            this._heavyOps = Math.max(0, this._heavyOps - 1);
+            if (!this._heavyOps) { try { localStorage.removeItem('vn_heavy_step'); } catch (e) {} }
+        },
+        _heavyReport: function() {
+            let m = null;
+            try { m = JSON.parse(localStorage.getItem('vn_heavy_step') || 'null'); localStorage.removeItem('vn_heavy_step'); } catch (e) {}
+            if (!m || !m.at || Date.now() - m.at > 30 * 60 * 1000) return;
+            const what = m.step === 'trio' ? '把一次生三種的圖切成三格' : '幫立繪去背';
+            const msg = '上次畫面關掉或重開的時候，還在' + what + '（那次打開之後的第 ' + (m.bg || 0) + ' 張去背）。';
+            console.warn('[VN] 🧷 ' + msg);
+            try { const A = win.AUI || window.AUI; if (A && A.alert) A.alert(msg); } catch (e) {}
+        },
         _bgRemoverFn: null,
         _bgGpuBroken: false,
         _bgRemoveChain: Promise.resolve(),   // 去背序列化鏈（同 NAI _naiQueue 思路）：一張一張跑，顯卡記憶體與 CPU 都不互搶
@@ -2083,6 +2122,7 @@
             // 不管上游生成是並行(Pollinations)還是串行，去背永遠一張跑完才下一張；模型只載一次。
             const self = this;
             const run = async () => {
+                self._heavyBegin('bg');
                 try {
                     if (!self._bgRemoverFn) {
                         const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
@@ -2096,6 +2136,7 @@
                         return await self._bgRemoverFn(blob, self._bgRemoveOpts(extra));
                     }
                 } catch (e) { console.warn('[VN] AI 去背失敗:', e?.message || e); return null; }
+                finally { self._heavyEnd(); }
             };
             const next = self._bgRemoveChain.then(run, run);   // 前一個成敗都接著跑
             self._bgRemoveChain = next.catch(() => {});          // 鏈不因單張失敗而斷
@@ -4207,6 +4248,8 @@
     VN_Core.showTruncBanner = _vnTruncBannerShow;
     VN_Core.hideTruncBanner = _vnTruncBannerHide;
     window.VN_Core = VN_Core;
+    // 🧷 上次跑圖跑到一半被整頁重開的話，打開幾秒後講一聲是哪一步（等提示框 AUI 載好）
+    setTimeout(function () { try { VN_Core._heavyReport(); } catch (e) {} }, 5000);
 
     window.VN_PLAYER = {
         launchApp,

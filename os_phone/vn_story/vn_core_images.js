@@ -457,7 +457,13 @@
                 x.drawImage(bmp, 0, 0, w, h);
                 return { c, x, img: x.getImageData(0, 0, W, H) };
             };
-            const C = canvasOf(cb, W, H), o = canvasOf(ob, W, H).img.data, d = C.img.data;
+            const C = canvasOf(cb, W, H), O = canvasOf(ob, W, H), o = O.img.data, d = C.img.data;
+            this._freeCanvas(O.c);                       // 原圖只要像素，畫布先還（iPhone 畫布記憶體很小）
+            try { cb.close(); ob.close(); } catch (e) {}
+            try { return await this._fillItemHolesOn(C, o, d, W, H, N); }
+            finally { this._freeCanvas(C.c); }
+        },
+        _fillItemHolesOn: async function (C, o, d, W, H, N) {
             const LOW = 128, DIFF = 48;   // 透明度低於一半算「被挖掉」；原圖顏色跟背景差超過這麼多（RGB 距離）算物件本體
             const OUT = -1;
             const lab = new Int32Array(N), q = new Int32Array(N);
@@ -587,6 +593,11 @@
             const W = bmp.width, H = bmp.height, N = W * H;
             const c = document.createElement('canvas'); c.width = W; c.height = H;
             const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
+            try { bmp.close(); } catch (e) {}
+            try { return await this._keepMainPieceOn(c, g, W, H, N); }
+            finally { this._freeCanvas(c); }
+        },
+        _keepMainPieceOn: async function (c, g, W, H, N) {
             const img = g.getImageData(0, 0, W, H), d = img.data;
             const lab = new Int32Array(N), q = new Int32Array(N), sizes = [0];
             let id = 0;
@@ -621,9 +632,16 @@
             try { blob = await (await fetch(r.raw)).blob(); }
             catch (e) { try { const du = await this._toDataUrl(r.raw); if (du) blob = await (await fetch(du)).blob(); } catch (e2) {} }
             if (!blob) return null;
+            // 🧷 切格這段在 iPhone 上最吃記憶體：記一筆（被整頁重開的話下次會講是這一步），用完的點陣圖、畫布馬上還
+            this._heavyBegin('trio');
+            try { return await this._trioSplit(blob, r); }
+            finally { this._heavyEnd(); }
+        },
+        _trioSplit: async function (blob, r) {
             const bmp = await createImageBitmap(blob);
             const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
             cv.getContext('2d').drawImage(bmp, 0, 0);
+            try { bmp.close(); } catch (e) {}
             let a = this._trioCut(cv, r.withTpl);
             // 有送母圖但它沒照畫格線（或那個站不收參考圖）→ 照沒母圖的找法再找一次
             if (r.withTpl && !(a.vFound && a.hFound)) a = this._trioCut(cv, false);
@@ -659,15 +677,20 @@
             const self = this;
             const cutOut = async function (c, what) {
                 const b = await toBlob(c);
+                self._freeCanvas(c);
                 let o = null;
                 try { o = await self._stripSpriteBgAI(b); } catch (e) {}
                 if (!o) { console.warn('[VN] ⚠️ 一次生三種：' + what + '去背失敗 → 先用帶背景的。往上找「AI 去背失敗」的原因'); return b; }
                 try { o = (await self._keepMainPiece(o)) || o; } catch (e) {}
                 return o;
             };
-            const spriteBlob = await cutOut(crop(a.boxes.left), '立繪');
-            const chibiBlob = await cutOut(crop(a.boxes.bottom), 'Q版');
-            const faceBlob = await toBlob(crop(a.boxes.top), 'image/jpeg', 0.9);   // 自拍有背景、不用透明，存小一點
+            // 三塊先從大圖裁好，大圖就能先還；去背一張一張排在後面
+            const cLeft = crop(a.boxes.left), cBottom = crop(a.boxes.bottom), cTop = crop(a.boxes.top);
+            this._freeCanvas(cv);
+            const faceBlob = await toBlob(cTop, 'image/jpeg', 0.9);   // 自拍有背景、不用透明，存小一點
+            this._freeCanvas(cTop);
+            const spriteBlob = await cutOut(cLeft, '立繪');
+            const chibiBlob = await cutOut(cBottom, 'Q版');
             const out = await Promise.all([toData(spriteBlob), toData(chibiBlob), toData(faceBlob)]);
             return { objUrl: URL.createObjectURL(spriteBlob), dataUrl: out[0], chibi: out[1], face: out[2] };
         },
