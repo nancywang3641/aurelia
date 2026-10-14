@@ -66,6 +66,7 @@
     <link rel="stylesheet" href="css/wx_takeout.css" />
     <link rel="stylesheet" href="css/wx_theme_pack.css" />
     <link rel="stylesheet" href="css/wx_moments.css" />
+    <link rel="stylesheet" href="css/os_sims.css" />
     <link rel="stylesheet" href="css/vn_ui_workshop.css" />
     <link rel="stylesheet" href="css/qb_core.css" />
     <link rel="stylesheet" href="css/qb_os_404_chaos.css" />
@@ -324,6 +325,8 @@
     <script src="os_phone/wx/wx_tools.js"></script>
     <script src="os_phone/wx/wx_moments.js"></script>
     <script src="os_phone/wx/wx_core.js"></script>
+    <!-- 🎮 模擬市民模式：網址帶 ?sims=1 才動（遊戲外的 SimTalk 小程式開的小窗），平常什麼都不做 -->
+    <script src="os_phone/os/os_sims.js"></script>
     <script src="os_phone/wx/wx_tavern_api_bridge.js"></script>
 
     <script src="os_phone/wb/wb_user_profile.js"></script>
@@ -426,12 +429,17 @@
             if (window.OS_SETTINGS)  PS.install('設置',      '⚙️', '#4c4c4c', window.OS_SETTINGS.launchApp);
         }
 
+        // 🎮 模擬市民模式（os_sims.js）：疊在遊戲上的小窗，只要手機，不掛大廳（也就沒有大廳音樂）
+        const SIMS_MODE = !!(window.OS_SIMS && window.OS_SIMS.active);
+
         // ── 主初始化流程 ──
         function init() {
             setProgress(20, 'MOUNTING LOBBY');
 
             const root = document.getElementById('aurelia-standalone-root');
-            if (window.AureliaControlCenter && root) {
+            if (SIMS_MODE) {
+                // 不掛大廳：手機殼自己蓋在整個畫面上，開機完由 OS_SIMS.boot 打開
+            } else if (window.AureliaControlCenter && root) {
                 window.AureliaControlCenter.mountEmbedded(root, 'bottom');
             } else {
                 console.error('[Aurelia] AureliaControlCenter 未載入，請檢查 core/ 路徑');
@@ -450,11 +458,19 @@
                 window.eventEmit('CHAT_CHANGED');
                 setProgress(100, 'READY');
                 setTimeout(hideBoot, 300);
+                if (SIMS_MODE) window.OS_SIMS.boot();
             }, 1500);
         }
 
         // ── Service Worker 註冊（iOS PWA 背景恢復快取）──
-        if ('serviceWorker' in navigator) {
+        //   模擬市民模式不裝：小窗開的是她電腦上的本機檔，離線快取只會讓她看到舊版。
+        //   小窗哪天被用一般模式開過一次就會裝上（同一個網址、一直接管），所以這裡順手拆掉
+        if ('serviceWorker' in navigator && SIMS_MODE) {
+            navigator.serviceWorker.getRegistrations()
+                .then(rs => rs.forEach(r => r.unregister().then(ok => { if (ok) console.log('[SW] 模擬市民模式：拆掉離線快取', r.scope); })))
+                .catch(() => {});
+        }
+        if ('serviceWorker' in navigator && !SIMS_MODE) {
             // 當新 SW 取得控制權時，強制重新整理頁面以確保加載最新的 JS/CSS
             // （舊 SW 可能已用 Cache-First 提供了舊檔案，換 SW 後必須 reload）
             navigator.serviceWorker.addEventListener('controllerchange', () => {

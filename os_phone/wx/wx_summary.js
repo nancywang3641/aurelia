@@ -50,7 +50,11 @@
     function _clampKeep(n) { return Math.max(KEEP_MIN, Math.min(KEEP_MAX, n)); }
     function _newId() { return 'sn' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
-    function isEnabled() { try { return localStorage.getItem(ON_KEY) !== '0'; } catch (e) { return true; } }
+    function isEnabled() {
+        // 🎮 模擬市民模式（os_sims.js）：市民的記憶是遊戲外小程式在記（每輪背景一通），這裡再整理一次＝同一件事花兩份錢
+        if (win.OS_SIMS && win.OS_SIMS.active) return false;
+        try { return localStorage.getItem(ON_KEY) !== '0'; } catch (e) { return true; }
+    }
 
     function keepOf(apiChat) {
         const per = apiChat && apiChat.summaryKeepRecent;

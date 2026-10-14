@@ -3119,6 +3119,8 @@
             _refreshLobbyUnread();
         }
         if (win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(chat.id, chat); } catch (e) {} }
+        // 🎮 模擬市民的聊天室：這一輪交回遊戲外的小程式（記進他的記憶、送進遊戲跳通知），見 os_sims.js
+        try { const _S = win.OS_SIMS; if (_S && _S.active) _S.afterReply(chat, newMsgs); } catch (e) {}
 
         // 🔔 她沒在看的時候有人開口 → 本機通知。
         //    有伺服器的人是伺服器推（os_relay 的 notify），這一條是給沒有伺服器的人用的；
@@ -3539,6 +3541,24 @@
 
         // ── 跑團同步（正文 <chat> 區塊 → 聊天列表 + 通訊錄）；整理入口在右上「＋」選單 ──
         storySync: function() { _storySyncDebounced(0); },
+        // 🎮 模擬市民模式（os_sims.js）：遊戲裡的市民＝聯絡人。沒有就開一間，有就只補 extra 帶來的欄位、跟著遊戲改名。
+        //   🚨 記憶體裡沒有的先讀存檔：聊天 app 是打開時才把聊天室讀進來，直接新開一間會把舊紀錄蓋掉
+        ensureContactChat: async function (id, name, extra) {
+            if (!id) return null;
+            let c = GLOBAL_CHATS[id];
+            if (!c && win.WX_DB && win.WX_DB.getApiChat) {
+                try { const saved = await win.WX_DB.getApiChat(id); if (saved) { GLOBAL_CHATS[id] = saved; c = saved; } } catch (e) {}
+            }
+            if (!c) { _storyEnsureContactChat(id, name, ''); c = GLOBAL_CHATS[id]; }
+            if (!c) return null;
+            let changed = false;
+            Object.keys(extra || {}).forEach(function (k) {
+                if (extra[k] !== undefined && JSON.stringify(c[k]) !== JSON.stringify(extra[k])) { c[k] = extra[k]; changed = true; }
+            });
+            if (name && c.name !== name) { c.name = name; c.realName = name; c.members = [name]; changed = true; _storyUpsertUnified(id, name, ''); }
+            if (changed && win.WX_DB && win.WX_DB.saveApiChat) { try { await win.WX_DB.saveApiChat(id, c); } catch (e) {} }
+            return c;
+        },
 
         // 🧹 AI 整理：寫正文的 AI 同時要寫故事、VN 格式與組件，聊天室資料偶爾寫錯很正常，收拾交給這裡。
         //    修三種：①同一間裂成多張卡 ②聊天室名字寫成代號 ③同一個人好幾種寫法（簡繁／錯字／全名簡稱）。
@@ -3759,6 +3779,8 @@
             }
             // 🫂 朋友圈的紅點（「我」分頁＋朋友圈那格）：整頁重畫之後補上
             try { const _mo = win.WX_MOMENTS; if (_mo && _mo.paintBadges) _mo.paintBadges(APP_CONTAINER); } catch (e) {}
+            // 🎮 模擬市民的聊天室：標題下面那條狀態卡（心情、你們是、遊戲時間），見 os_sims.js
+            try { const _S = win.OS_SIMS; if (_S && _S.active) _S.decorate(APP_CONTAINER, GLOBAL_ACTIVE_ID ? GLOBAL_CHATS[GLOBAL_ACTIVE_ID] : null); } catch (e) {}
             // 🎙 按住說話中整頁重畫：卡片與麥克風的樣子掛回去；換了聊天室就當取消（轉字中的那段會自己判斷不送）
             if (_hold) {
                 if (_hold.chatId !== GLOBAL_ACTIVE_ID && _hold.phase === 'recording') win.wxApp._holdEnd(true);
@@ -4565,6 +4587,8 @@
 
                 IS_STREAMING_REPLY = false; // 解鎖
                 if (win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { await win.WX_DB.saveApiChat(_replyId, currentChat); }
+                // 🎮 模擬市民的聊天室：這一輪交回遊戲外的小程式（記進他的記憶、送進遊戲跳通知），見 os_sims.js
+                try { const _S = win.OS_SIMS; if (_S && _S.active) _S.afterReply(currentChat, newMsgs); } catch (e) {}
                 await _afterTools(currentChat);   // 🧰 這一輪叫了工具 → 去跑，跑完接著回
             };
 

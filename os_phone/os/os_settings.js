@@ -243,7 +243,9 @@
         { group: '大廳與世界', id: 'pt',           name: 'PT 結算',                    def: 'sec'  },
         { group: '大廳與世界', id: 'achievement',  name: '成就估值',                   def: 'main' },
         { group: '大廳與世界', id: 'store404',     name: '404 商店',                   def: 'main' },
-        { group: '宿舍',       id: 'xiaoji',       name: 'API 小機',                   def: 'main' }
+        { group: '宿舍',       id: 'xiaoji',       name: 'API 小機',                   def: 'main' },
+        // only:'sims'＝只有模擬市民模式（os_sims.js，網址帶 ?sims=1）才列出來；聊天本身走上面的「手機聊天」
+        { group: '模擬市民',   id: 'sims_memory',  name: '市民記性（每輪背景整理記憶）', def: 'main', only: 'sims' }
     ];
 
     function loadChannels() {
@@ -2793,7 +2795,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const routes = loadRoutes();
                 const chans = loadChannels();
                 let _grp = '';
-                routeBox.innerHTML = LLM_TASKS.map(function (t) {
+                const _simsOn = !!((window.parent || window).OS_SIMS && (window.parent || window).OS_SIMS.active);
+                routeBox.innerHTML = LLM_TASKS.filter(function (t) { return !t.only || (t.only === 'sims' && _simsOn); }).map(function (t) {
                     const head = (t.group && t.group !== _grp) ? '<div class="set-row-group">' + t.group + '</div>' : '';
                     if (t.group) _grp = t.group;
                     const opts = ['<option value="main"' + (routes[t.id] === 'main' ? ' selected' : '') + '>主模型</option>',

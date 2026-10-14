@@ -2504,6 +2504,15 @@
                     _groupNote = _n.group;
                 } catch(e) {}
             }
+            // 🎮 模擬市民模式（os_sims.js）：這間是遊戲裡的市民 → 跟遊戲外的小程式要他的設定、記憶、遊戲現況，
+            //   「我」換成現在操作的那位市民。拿不到就照常聊（不擋送出），只是這一輪他不知道遊戲裡的事。
+            let _simsBlock = '';
+            if (_isWxRoute && _wxChat && win.OS_SIMS && win.OS_SIMS.active && win.OS_SIMS.isSimsChat(_wxChat)) {
+                try { _simsBlock = await win.OS_SIMS.contextFor(_wxChat); }
+                catch (e) { console.warn('[OS_API standalone] 模擬市民情境拿不到（照常聊）:', e); }
+                const _simMe = win.OS_SIMS.meName();
+                if (_simMe) { userName = _simMe; userDesc = ''; }
+            }
             // 🔑 {{char}}/{{user}} 換成真名（同酒館版）：直連 API 沒有人替它換，以前 PWA 送出去的就是字面上的 {{char}}
             if (_isWxRoute) {
                 const _charName = (_wxChat && !_wxChat.isGroup && _wxChat.name) ? _wxChat.name : (_wxChat && _wxChat.isGroup ? '群裡的角色' : 'AI');
@@ -2888,6 +2897,7 @@
                 if (lore && !_iso.lore) contextBlock += `[World Info]:\n${lore}\n\n`;
             }
             if (contextBlock) apiMessages.push({ role: 'system', content: contextBlock });
+            if (_simsBlock) apiMessages.push({ role: 'system', content: '<aurelia_sims>\n' + _simsBlock + '\n</aurelia_sims>' });
 
             // 📒 記事本目錄：一對一的微信與通話（同酒館版，見 wx_notebook.js brief）
             if (_isWxRoute && win.wxApp?.GLOBAL_ACTIVE_ID) {

@@ -1323,7 +1323,8 @@
         _paintMood();   // 心情是綁日期的，每次開都要重讀——只在 _build 畫一次的話跨日還掛著昨天那個
         _paintBadges(); // 紅點一個故事一份：換了故事再打開要重讀
         ov.style.display = 'flex';
-        if (wasShown || _calm() || !ov.animate) return;
+        // 🎮 模擬市民模式：小窗本身就是手機，不演滑上來（小窗藏著時動畫不前進，叫出來會看到手機卡在半路）
+        if (wasShown || _calm() || !ov.animate || (win.OS_SIMS && win.OS_SIMS.active)) return;
         const fr = ov.querySelector('.aps-frame');
         const bg = getComputedStyle(ov).backgroundColor;
         try {
@@ -1336,6 +1337,8 @@
     // instant＝不演、馬上收（開「大面板」那種 app：手機殼要立刻讓位給它）
     function close(instant) {
         if (!_el) return;
+        // 🎮 模擬市民模式（os_sims.js）：疊在遊戲上的小窗本身就是手機，收起來只剩一片空白、也沒有大廳可回 → 回主畫面
+        if (win.OS_SIMS && win.OS_SIMS.active) { _home(); return; }
         const ov = _el;
         _setEditing(false);
         try { window.AUI?.kbReset?.(); } catch (e) {}   // 打字打到一半關掉：別讓下次打開還縮在鍵盤上面（AUI 的鍵盤跟隨）
@@ -1373,6 +1376,14 @@
     try { _applyThemeClass(_loadTheme().themeId || DEFAULT_THEME); } catch (e) {}
 
     win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide,
+        // 🎮 模擬市民模式（os_sims.js）用：開機直接打開聊天 app、第一次把桌面收成只剩那幾個
+        openApp: _openApp, appIds: function () { return APPS.map(function (a) { return a.id; }); },
+        //   系統自己的 app（不是創作室做的，不存進「我的應用」、不走 app 執行環境）：go(c) 直接畫進手機螢幕
+        addSystemApp: function (app) {
+            if (!app || !app.id || APPS.find(function (a) { return a.id === app.id; })) return;
+            APPS.push({ id: app.id, name: app.name || app.id, icon: app.icon || '', mode: 'inside', go: app.go });
+            _renderGrid();
+        },
         renderHome: _renderGrid, repaintMood: _paintMood, paintBadges: _paintBadges,
         // 📷 拍立得那張照片：樣式面板與組件是「同一份資料」的兩個入口。
         //    她嫌樣式面板換照片很煩，所以組件上也能換 —— 但不可以各存一份，不然兩邊會是兩張照片。

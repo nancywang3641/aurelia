@@ -1,0 +1,134 @@
+/* ----------------------------------------------------------------
+   os_sims.css — 模擬市民模式（os_phone/os/os_sims.js，網址帶 ?sims=1）
+   聊天室標題下面那條狀態卡、桌面「最近發生的事」那一頁。
+   顏色一律吃聊天 app（--wx-*）與手機殼的格子，跟著她選的主題走。
+   ---------------------------------------------------------------- */
+
+/* 小窗本身就是手機：沒有可以收起來的地方，右上角那顆叉叉拿掉 */
+html.aurelia-sims #aps-close { display: none; }
+
+/* ── 聊天室標題下面那條狀態卡 ── */
+.sims-status {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--wx-surface-2, #f4f4f6);
+    border-bottom: 1px solid var(--wx-line, rgba(0, 0, 0, .08));
+    color: var(--wx-ink, #222);
+    font-size: 12px;
+}
+.sims-status-cell {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.sims-status-cell span {
+    color: var(--wx-ink-3, #888);
+    font-size: 11px;
+}
+.sims-status-cell b {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sims-status.is-off {
+    align-items: center;
+    gap: 8px;
+    color: var(--wx-ink-dim, #777);
+}
+
+/* ── 桌面「最近發生的事」 ── */
+.sims-notes {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--wx-page, #f2f2f5);
+    color: var(--wx-ink, #222);
+    padding-top: var(--aps-safe-top, 0px);
+    box-sizing: border-box;
+}
+.sims-notes-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    background: var(--wx-bar, #ededed);
+    border-bottom: 1px solid var(--wx-line, rgba(0, 0, 0, .08));
+    font-size: 15px;
+}
+.sims-notes-back {
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 16px;
+    cursor: pointer;
+}
+.sims-notes-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    color: var(--wx-ink-3, #888);
+    text-align: center;
+}
+.sims-notes-empty i { font-size: 28px; }
+.sims-notes-list {
+    flex: 1;
+    overflow-y: auto;
+    margin: 0;
+    padding: 8px 10px 16px;
+    list-style: none;
+}
+.sims-note {
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    background: var(--wx-surface, #fff);
+    border: 1px solid var(--wx-line, rgba(0, 0, 0, .06));
+    border-radius: 10px;
+}
+.sims-note p {
+    margin: 0 0 8px;
+    line-height: 1.5;
+    font-size: 14px;
+}
+.sims-note.is-used p { color: var(--wx-ink-dim, #777); }
+.sims-note-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.sims-note-foot small { color: var(--wx-ink-3, #999); }
+.sims-note-btns {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.sims-note-btn {
+    padding: 5px 10px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--wx-accent, #07c160);
+    color: var(--wx-on-accent, #fff);
+    font-size: 12px;
+    cursor: pointer;
+}
+.sims-note-none {
+    font-size: 12px;
+    color: var(--wx-ink-3, #999);
+}
