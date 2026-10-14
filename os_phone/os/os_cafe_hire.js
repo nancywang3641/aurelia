@@ -95,6 +95,7 @@
         const dutyAdd = {};
         const diary = [], batches = [], quit = [];
         const unpaid = {};
+        const came = {};   // 這次結算裡第一次（或又一次）來上班的那格 → 結算寫回 m.came
         const gone = {};   // 這次結算裡辭職的那格
         let coins = o.coins, spent = 0, seqN = 0;
         const rand = o.rand || Math.random;
@@ -182,7 +183,8 @@
                 if (n >= 3) { gone[ev.slot] = true; quit.push({ slot: ev.slot, sid: m.sid }); note(ev.day, ev.t, ev.slot, m, 'quit', '連 3 天沒領到薪水，辭職了'); }
                 return;
             }
-            const skip = rand() < ABSENT[_clamp(m.stats.dili, 1, 5) - 1];
+            // 第一次上班一定準時到（新人第一天就請假太怪），之後才照勤快抽
+            const skip = !!m.came && rand() < ABSENT[_clamp(m.stats.dili, 1, 5) - 1];
             const late = skip && rand() >= 0.5;
             if (skip && !late) {
                 setDuty(key, { sid: m.sid, off: 'absent' });
@@ -191,6 +193,7 @@
             }
             coins -= m.wage; spent += m.wage;
             m.unpaid = 0; unpaid[ev.slot] = { sid: m.sid, n: 0 };
+            m.came = true; came[ev.slot] = m.sid;
             const from = late ? ev.t + 60 : ev.t;
             setDuty(key, { sid: m.sid, from, to: SHIFT[ev.slot].end });
             if (late) { note(ev.day, from, ev.slot, m, 'late', lab + '遲到了一小時'); push({ kind: 'work', day: ev.day, t: from, slot: ev.slot, sid: m.sid }); return; }
@@ -240,7 +243,7 @@
             earn(n) { coins += Number(n) || 0; },   // 客人付的錢：店員付薪水、算一半上限看的是「到這一刻」的帳
             result() {
                 const later = events.filter(e => e.kind !== 'start').map(e => Object.assign({}, e));
-                return { spent, coins, batches: batches.slice(), diary: diary.slice(), duty: Object.assign({}, duty), dutyAdd: Object.assign({}, dutyAdd), unpaid: Object.assign({}, unpaid), quit: quit.slice(), crewQ: later };
+                return { spent, coins, batches: batches.slice(), diary: diary.slice(), duty: Object.assign({}, duty), dutyAdd: Object.assign({}, dutyAdd), unpaid: Object.assign({}, unpaid), came: Object.assign({}, came), quit: quit.slice(), crewQ: later };
             },
         };
     }
@@ -558,7 +561,7 @@
         A.registerHelp({ cafe_crew: { title: '員工', body:
             '貼一張徵人啟事（' + AD_COST + '），' + AD_HOURS + ' 小時後會來 ' + APPLY_N + ' 位應徵者，每位寫了一份履歷。\n' +
             '可以約面試：直接點旁邊的建議問題，或自己打，最多問 ' + ASK_MAX + ' 句。每問一句會叫一次模型（設置裡「書咖應聘」那一列）；履歷是一批一次。\n' +
-            '每個人都有看不到的本事：備料準不準、手腳快不快、會不會請假、會不會推銷、說話老不老實。履歷跟面試只是他說的，要上班之後才看得出來。\n' +
+            '每個人都有看不到的本事：備料準不準、手腳快不快、會不會請假（第一班一定準時到）、會不會推銷、說話老不老實。履歷跟面試只是他說的，要上班之後才看得出來。\n' +
             '想要就「打電話錄取」，挑早班或晚班。面完一天內打一定會來；拖太久，好的人可能已經去別家了。不打的話，' + KEEP_DAYS + ' 天後他會自己去找別的工作。\n' +
             '早班 08:30 上班，先看前幾天賣得怎樣，把當天的料備好；晚班 15:30 上班，看剩多少再補。哪杯在他班上賣完了，他會過一陣子補一些。備料一天最多花帳戶的一半。\n' +
             '薪水在他上班時從書咖帳戶付；付不起那天他就不來，連 ' + 3 + ' 天沒領到就辭職。\n' +

@@ -750,6 +750,7 @@
                 for (const k of Object.keys(s2.duty)) if (Number(k.split(':')[0]) < today - 7) delete s2.duty[k];
                 s2.crewQ = crewR.crewQ;
                 for (const slot of Object.keys(crewR.unpaid)) { const u = crewR.unpaid[slot], m = s2.slots[slot]; if (m && m.sid === u.sid) m.unpaid = u.n; }
+                for (const slot of Object.keys(crewR.came || {})) { const m = s2.slots[slot]; if (m && m.sid === crewR.came[slot]) m.came = true; }
                 for (const q of crewR.quit) { const m = s2.slots[q.slot]; if (m && m.sid === q.sid) s2.slots[q.slot] = null; }
                 if (crewR.diary.length) { s2.diary = crewR.diary.slice().reverse().concat(s2.diary || []).slice(0, 60); s2.unread = true; }
             }
