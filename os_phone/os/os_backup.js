@@ -586,6 +586,9 @@
     const REMIND_KEY = 'os_backup_remind_snooze';
     async function _autoBoot() {
         if (!_isPwa()) return;
+        // 🎮 模擬市民模式（os_sims.js）：疊在遊戲上的小窗，市民的記憶和來往遊戲外的小程式都記一份、自己有備份；
+        //   這裡跳「還沒備份過」只會擋在遊戲畫面上
+        if (win.OS_SIMS && win.OS_SIMS.active) return;
         const a = autoGet();
         if (a.on && destReady(a)) {
             if (Date.now() - (a.lastAt || 0) > DAY) cloudBackup().catch(e => console.warn('[OS_BACKUP] 自動備份沒成功：', e.message));

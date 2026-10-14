@@ -34,6 +34,10 @@
     // 她從「最近發生的事」挑的那則，等這一輪講完才清：市民 id → 通知 id。
     //   🚨 不能記在聊天室物件上——聊天 app 一打開就從存檔重讀聊天室、整個換成新物件，記號會跟著不見
     const _pendingNote = {};
+    // 這一輪送進 /context 的她那幾句（市民 id → 字）：/after 的 user 一律用這份，兩邊一致。
+    //   🚨 不能回完再從聊天室往前數：上一輪模型失敗會留一顆「AI 回應失敗」泡泡，往前數會被它擋住，
+    //   她沒被回的那句就永遠進不了他的記憶（Vproject 用假遊戲跑整條線抓到的：失敗後按「讓他傳訊息來」）
+    const _ctxText = {};
 
     function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
     function _toast(s) { try { win.AUI.toast(s); } catch (e) {} }
@@ -130,13 +134,15 @@
     }
 
     // ── 講話前：這位市民的情境（os_api_engine 組內容時叫） ───────────────
-    // 她剛傳、他還沒回的那幾則（從最後面往前數，數到他上一次說話為止；「對方正在輸入」那顆不算）
+    // 模型沒回時聊天 app 塞的那顆錯誤泡泡（wx_core triggerReply 的 errMsg／引擎例外）：不是他說的話，往前數要跳過
+    function _isFailBubble(m) { return !m.isMe && /^(AI 回應失敗|引擎例外)：/.test(String(m.content || '')); }
+    // 她剛傳、他還沒回的那幾則（從最後面往前數，數到他上一次說話為止；「對方正在輸入」、錯誤泡泡不算）
     function _pendingUserText(chat) {
         const ms = (chat && chat.messages) || [];
         const out = [];
         for (let i = ms.length - 1; i >= 0; i--) {
             const m = ms[i];
-            if (!m || m.isLoading) continue;
+            if (!m || m.isLoading || _isFailBubble(m)) continue;
             if (m.type && m.type !== 'msg') continue;
             if (!m.isMe) break;
             out.unshift(String(m.content || ''));
@@ -147,6 +153,7 @@
         if (!isSimsChat(chat)) return '';
         const body = { simId: String(chat.sims.id), text: _pendingUserText(chat) };
         if (_pendingNote[body.simId]) body.noteId = _pendingNote[body.simId];
+        _ctxText[body.simId] = body.text;
         const r = await _post('/context', body);
         const blocks = (Array.isArray(r.blocks) ? r.blocks : []).filter(function (b) { return b && b.text; });
         if (!blocks.length) return '';
@@ -162,21 +169,26 @@
         const sid = String(chat.sims.id);
         const noteId = _pendingNote[sid] || null;
         delete _pendingNote[sid];
+        // 她這一輪說的＝這一輪送進 /context 的那份（見 _ctxText）；沒經過 /context 的（拿不到情境照常聊的那種）才往前數
+        let userText = Object.prototype.hasOwnProperty.call(_ctxText, sid) ? _ctxText[sid] : null;
+        delete _ctxText[sid];
         if (!reply) return;
-        // 她這一輪說的：第一顆新泡泡前面、連著的那幾則她的話
-        const ms = chat.messages || [];
-        let at = mine.length ? ms.indexOf(mine[0]) : -1;
-        if (at < 0) at = ms.length - mine.length;
-        const user = [];
-        for (let i = at - 1; i >= 0; i--) {
-            const m = ms[i];
-            if (!m || m.isLoading) continue;
-            if (m.type && m.type !== 'msg') continue;
-            if (!m.isMe) break;
-            user.unshift(String(m.content || ''));
+        if (userText == null) {
+            const ms = chat.messages || [];
+            let at = mine.length ? ms.indexOf(mine[0]) : -1;
+            if (at < 0) at = ms.length - mine.length;
+            const user = [];
+            for (let i = at - 1; i >= 0; i--) {
+                const m = ms[i];
+                if (!m || m.isLoading || _isFailBubble(m)) continue;
+                if (m.type && m.type !== 'msg') continue;
+                if (!m.isMe) break;
+                user.unshift(String(m.content || ''));
+            }
+            userText = user.join('\n');
         }
         let r = null;
-        try { r = await _post('/after', { simId: String(chat.sims.id), user: user.join('\n'), reply: reply, noteId: noteId, at: Date.now() }); }
+        try { r = await _post('/after', { simId: sid, user: userText, reply: reply, noteId: noteId, at: Date.now() }); }
         catch (e) { console.warn('[OS_SIMS] 交回小程式失敗（這一輪沒記進他的記憶）:', e); _toast('這一輪沒交回遊戲外的小程式：' + ((e && e.message) || e)); return; }
         if (r && r.memJob) _runMemJob(r.memJob);
     }
