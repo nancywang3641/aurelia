@@ -343,13 +343,30 @@ function _absolutizeCssUrls(css, cssPath) {
     });
 }
 
+// CDN 重試：jsdelivr 各節點的邊緣快取各自獨立。剛 push 的 commit 在某節點冷快取時會連續回錯(錯誤也會被快取一下)，
+//   只加 ?rt= 參數騙不過邊緣 → 重試時輪流換節點(同一個 commit、同一份檔，內容一模一樣)。覆寫成別家 CDN 的只加參數。
+//   以前 3 次共等 2.4 秒就放棄，冷快取還沒暖好 → wx_core 這種整支沒載到；現在共等約 15 秒。
+const _JSD_NODES = ['testingcf.jsdelivr.net', 'fastly.jsdelivr.net', 'cdn.jsdelivr.net'];
+const _CDN_RETRY_WAITS = [500, 1000, 2000, 4000, 8000];
+function _cdnRetryUrl(url, attempt) {
+    if (attempt <= 0) return url;
+    let out = url;
+    const m = out.match(/^https:\/\/([a-z0-9.-]+\.jsdelivr\.net)\//i);
+    if (m) {
+        const i = Math.max(0, _JSD_NODES.indexOf(m[1].toLowerCase()));
+        out = 'https://' + _JSD_NODES[(i + attempt) % _JSD_NODES.length] + out.slice(m[0].length - 1);
+    }
+    return out + (out.indexOf('?') >= 0 ? '&' : '?') + 'rt=' + attempt;
+}
+
 // 載入 CSS 工具 (🔥 修復酒館模式破圖的關鍵)
 //   改 fetch→inline <style> 而非 <link rel=stylesheet>：酒館某些版本把 .css 回成 text/plain，
 //   瀏覽器開 strict MIME(nosniff) 後 <link> 會被拒套("Refused to apply style")；純文字注入 <style>
 //   不做 MIME 檢查，繞過。同時相容本地/CDN(jsdelivr 帶 CORS)。
 function loadCSS(path) {
     return new Promise((resolve) => {
-        const MAX = 3;
+        const WAITS = _AURELIA_EXT_NAME ? [600, 1200] : _CDN_RETRY_WAITS;   // 本機照舊短等；CDN 換節點等久一點
+        const MAX = WAITS.length + 1;
         let attempt = 0;
         // 先同步插空 <style> 佔位 → 保 cascade 順序＝呼叫順序(平行 fetch 完成順序不定)
         const style = document.createElement('style');
@@ -357,14 +374,14 @@ function loadCSS(path) {
         document.head.appendChild(style);
         const tryLoad = () => {
             attempt++;
-            // 重試時加唯一參數：繞過瀏覽器對「上次失敗」的快取，也給 jsdelivr 新 commit 冷快取暖機時間
-            const url = path + _AURELIA_CACHE_BUST + (attempt > 1 ? ('&_retry=' + attempt) : '');
+            // 重試時加唯一參數繞過瀏覽器對「上次失敗」的快取；CDN 再換節點(見 _cdnRetryUrl)
+            const url = _cdnRetryUrl(path + _AURELIA_CACHE_BUST, attempt - 1);
             fetch(url)
                 .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
                 .then(css => { style.textContent = _absolutizeCssUrls(css, path); resolve(); })
                 .catch(() => {
                     if (attempt < MAX) {
-                        setTimeout(tryLoad, 600 * attempt);   // 退避重試(jsdelivr 新 commit 並行冷載常少數檔噴錯，稍等就好)
+                        setTimeout(tryLoad, WAITS[attempt - 1]);   // 退避重試(jsdelivr 新 commit 並行冷載常少數檔噴錯，稍等就好)
                     } else {
                         console.error(`[Aurelia] 核心樣式載入失敗(已重試 ${MAX} 次): ${path}`);
                         resolve();
@@ -401,25 +418,23 @@ function loadPhoneScript(path) {
 
 // CDN 並行載入器：一次插入全部 <script>，async=false → 平行下載、依插入順序執行(保留依賴順序)
 //   ⚠️ jsdelivr 對「剛 push 的新 commit」冷啟動抓檔時，並行請求會隨機 403/限流掉幾個檔
-//      → 那個模組整個沒了→大廳死。故失敗要自動重試(退避 + cache-bust 繞開 jsdelivr 負快取)，
-//        而非一次 onerror 就放掉。重試是自我註冊型 IIFE、依賴在 runtime 才解，遲到幾百ms無妨。
+//      → 那個模組整個沒了→大廳死。故失敗要自動重試(退避 + 換 jsdelivr 節點，見 _cdnRetryUrl)，
+//        而非一次 onerror 就放掉。重試是自我註冊型 IIFE、依賴在 runtime 才解，遲到幾秒無妨。
 function _loadOne(item, attempt) {
     return new Promise((resolve) => {
         const s = document.createElement('script');
-        // 重試時加 cache-bust 參數，避免 jsdelivr/瀏覽器把上次的 403 當負快取回放
-        let src = item.src;
-        if (attempt > 0) src += (src.indexOf('?') >= 0 ? '&' : '?') + 'rt=' + attempt;
+        const src = _cdnRetryUrl(item.src, attempt);
         s.src = src;
         s.async = false;
         s.onload = () => { if (item.key) window.PANEL_COMMUNICATION.modulesLoaded[item.key] = true; resolve(true); };
         s.onerror = () => {
             try { s.remove(); } catch (e) {}
-            if (attempt < 3) {
-                const wait = 400 * (attempt + 1);   // 400 / 800 / 1200 ms 退避
-                console.warn(`[Aurelia] 載入失敗(第${attempt + 1}次)，${wait}ms 後重試:`, item.src);
+            if (attempt < _CDN_RETRY_WAITS.length) {
+                const wait = _CDN_RETRY_WAITS[attempt];
+                console.warn(`[Aurelia] 載入失敗(第${attempt + 1}次)，${wait}ms 後換節點重試:`, src);
                 setTimeout(() => { _loadOne(item, attempt + 1).then(resolve); }, wait);
             } else {
-                console.error('[Aurelia] 並行載入失敗(重試3次仍失敗):', item.src);
+                console.error(`[Aurelia] 並行載入失敗(重試${_CDN_RETRY_WAITS.length}次仍失敗):`, item.src);
                 resolve(false);
             }
         };
