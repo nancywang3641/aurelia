@@ -2558,6 +2558,13 @@
             //   lore 本身維持「全部」不變 —— 手機 app／大廳那些沒有深度概念的路徑照舊整包拿。
             let _lorePre = '';
             let _loreDepths = [];
+            // 🌌 內建世界書（os_builtin_lore.js）：每本藏書都帶「視差」那份，藏書裡的「奧瑞亞」再多帶奧瑞亞那份。
+            //   不佔書包、朋友不用匯入；排在書包前面（書包是這本書自己的設定，離生成點近一點）
+            let _wid = '';
+            try { _wid = localStorage.getItem('vn_current_world_id') || ''; } catch (e) {}
+            let _builtinLore = '';
+            try { _builtinLore = win.OS_BUILTIN_LORE?.forBook?.(_wid, scanText) || ''; } catch (e) { console.warn('[OS_API standalone] 內建世界書載入失敗:', e); }
+            const _isAureliaBook = !!win.OS_BUILTIN_LORE?.isAureliaBook?.(_wid);
             try {
                 // 常駐書包(每本都用) ∪ 這本藏書自己掛的 —— 前者是酒館「全域世界書」的對應物，
                 //   格式協議/BGM/音效清單那種跨故事的同一份放在那裡，不必每開一本新書重掛一次。
@@ -2585,7 +2592,8 @@
                 } else if (_activePacks && _activePacks.length && win.OS_WORLDBOOK?.getContextByPacks) {
                     lore = await win.OS_WORLDBOOK.getContextByPacks(_activePacks, scanText);
                     _lorePre = lore;
-                } else if (win.OS_WORLDBOOK?.getEnabledContext) {
+                } else if (win.OS_WORLDBOOK?.getEnabledContext && !_isAureliaBook) {
+                    // 藏書裡的「奧瑞亞」本來就不掛書包（設定全在內建那份），不走這條退路
                     // 🚨 這條退路濾的是「世界書 app 當下正在看的那本書」，跟你正在玩的故事沒有關係。
                     //    走到這裡代表「這本書沒掛世界書書包」——以前它靜靜地把別本書的設定餵給主模型，
                     //    畫面上完全看不出來（症狀是 AI 一直提到另一個世界的人事物）。現在講清楚。
@@ -2595,6 +2603,10 @@
                     _lorePre = lore;
                 }
             } catch(e) { console.warn('[OS_API standalone] 世界書載入失敗:', e); }
+            if (_builtinLore) {
+                lore = lore ? _builtinLore + '\n\n---\n\n' + lore : _builtinLore;
+                _lorePre = _lorePre ? _builtinLore + '\n\n---\n\n' + _lorePre : _builtinLore;
+            }
 
             try {
                 // 只送在場的人的規則（scanText＝這次輸入＋最近幾章）；角色卡設成「想靠近」的人照送。見 os_avs_rules getActiveContext
