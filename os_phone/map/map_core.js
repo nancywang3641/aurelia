@@ -531,6 +531,12 @@ ${facilityText}
         renderStructure();
         updatePreviewBanner();
         renderHome();
+        // 打開時重新認一次這段聊天該用哪張：同一段聊天從世界門進出異世界不會換聊天，
+        // 回到奧瑞亞的奧瑞亞卡要換回預設地圖（10-16）；換好了 onChange 會重畫
+        try {
+            const WR = win.WORLD_RUNTIME;
+            if (WR && !WR.isPreview() && WR.getRealChatId() !== WR.AUREALIS_ID) WR.switchTo(WR.getRealChatId());
+        } catch (e) {}
         // 🗺 劇情→地圖（vn_map_link.js）：這個聊天的位置記錄讀進來，主角在這張地圖上就重畫一次（標出「你在這裡」）
         try {
             const L = win.VN_MAP_LINK;

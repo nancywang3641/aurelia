@@ -7,7 +7,8 @@
 //        - 角色排程：schedule_engine 寫入後存活在 currentWorld.schedules
 //        - 即時狀態：liveStates / patches 機制（VN→Map 連動已移除，目前永遠空跑）
 //        - 動態地點：DYNAMIC: 前綴自動加成 Z_DYNAMIC 虛擬設施
-//        - chatId 變動時自動切換，找不到就標記為「待初始化」
+//        - chatId 變動時自動切換：奧瑞亞卡人在奧瑞亞→奧瑞亞；這段聊天存過地圖→那張；
+//          按過「使用奧瑞亞預設城市」→奧瑞亞；都沒有才標記為「待初始化」（10-16）
 //        - 預覽模式：使用者可暫時觀察別的世界，互動全鎖
 // ----------------------------------------------------------------
 (function() {
@@ -45,6 +46,46 @@
         return AUREALIS_ID;
     }
 
+    // 這段聊天現在在奧瑞亞嗎（10-16 她：「奧瑞亞的卡片總是不會自動套用預設地圖」）：
+    //   卡歸奧瑞亞管＝綁了奧瑞亞那幾本書（跟「關於我→世界書」那格、切書機制同一個判斷，AURELIA_WORLDGATE.status），
+    //   而且這段聊天沒有從世界門進異世界（OS_WORLDGATE.getCurrentWorld 是空的、視差書沒掛）。
+    //   回 true／false；酒館助手還沒好、問不到就回 null（不判定，等一下再問）。
+    async function _aureliaHere() {
+        const G = win.AURELIA_WORLDGATE || window.AURELIA_WORLDGATE;
+        let st = null;
+        try { st = G && typeof G.status === 'function' ? G.status() : null; } catch (e) {}
+        if (!st) return null;
+        if (!st.ours) return false;
+        if (st.inParallax) return false;
+        const WG = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        try { if (WG && typeof WG.getCurrentWorld === 'function' && await WG.getCurrentWorld()) return false; } catch (e) {}
+        return true;
+    }
+
+    // 這段聊天按過「使用奧瑞亞預設城市」（記在 app_data，一段聊天一筆）
+    const _USE_AUREALIS = ['map', 'use_aurealis'];
+    async function _usesAurealis(chatId) {
+        if (!chatId || !win.OS_DB || typeof win.OS_DB.getAppData !== 'function') return false;
+        try { return !!(await win.OS_DB.getAppData(_USE_AUREALIS[0], _USE_AUREALIS[1], chatId)); } catch (e) { return false; }
+    }
+
+    function _useAurealisFor(worldId, why) {
+        currentWorld = buildAurealisWorld();
+        console.log('[WorldRuntime] 🏛️ 這段聊天用奧瑞亞地圖（' + why + '）');
+        if (onWorldChanged) onWorldChanged(currentWorld);
+        return currentWorld;
+    }
+
+    // 開機時酒館助手可能還沒好、問不到這張卡歸誰：停在「待初始化」的話過一下再問（最多幾次）
+    let _recheckLeft = 0;
+    function _recheckLater(worldId) {
+        if (_recheckLeft <= 0) return;
+        _recheckLeft--;
+        setTimeout(() => {
+            if (worldId === realChatId && worldId === currentWorldId && !isPreview && !currentWorld) switchTo(worldId);
+        }, 3000);
+    }
+
     // 切到指定 worldId
     async function switchTo(worldId) {
         if (!worldId || worldId === AUREALIS_ID) {
@@ -56,6 +97,15 @@
         }
 
         currentWorldId = worldId;
+
+        // 奧瑞亞卡、人在奧瑞亞 → 直接用預設地圖，不看這段聊天存過的（那多半是進異世界時生的，回到奧瑞亞就該換回來）。
+        // 只管「這段聊天自己的世界」：在世界管理裡預覽別段聊天的世界不套。
+        let here = null;
+        if (!isPreview && worldId === realChatId) {
+            here = await _aureliaHere();
+            if (worldId !== currentWorldId) return currentWorld;   // 等的時候又換了聊天
+            if (here) return _useAurealisFor(worldId, '奧瑞亞卡、在奧瑞亞');
+        }
 
         // 查 OS_DB
         if (win.OS_DB && typeof win.OS_DB.getWorldData === 'function') {
@@ -88,10 +138,19 @@
             }
         }
 
+        if (worldId !== currentWorldId) return currentWorld;
+        // 沒存過地圖、但這段聊天按過「使用奧瑞亞預設城市」→ 照用
+        if (await _usesAurealis(worldId)) {
+            if (worldId !== currentWorldId) return currentWorld;
+            return _useAurealisFor(worldId, '這段聊天選過');
+        }
+        if (worldId !== currentWorldId) return currentWorld;
+
         // 沒資料 → 等使用者初始化
         currentWorld = null;
         console.log('[WorldRuntime] ⚠️ 此世界尚未生成，等待初始化:', worldId);
         if (onWorldChanged) onWorldChanged(null);
+        if (here === null && !isPreview && worldId === realChatId) _recheckLater(worldId);
         return null;
     }
 
@@ -553,11 +612,14 @@
         return true;
     }
 
-    // 用奧瑞亞當這個 chatId 的世界（不存 DB，純記憶體 fallback）
+    // 「使用奧瑞亞預設城市」那顆：這段聊天用奧瑞亞，而且記住（她 10-16：「按了「使用奧瑞亞預設城市」也記住」；以前只用這一次，換聊天、重整就又要按）。
+    // 奧瑞亞本身還是不存 DB（它是固定世界），記的只是「這段聊天選了它」；之後替這段聊天生了別的地圖，生的那張優先。
     function useAurealisAsFallback() {
-        currentWorld = buildAurealisWorld();
-        console.log('[WorldRuntime] 🏛️ 此聊天使用奧瑞亞當作預設世界');
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        const id = currentWorldId;
+        _useAurealisFor(id, '按了使用奧瑞亞預設城市');
+        if (id && id !== AUREALIS_ID && win.OS_DB && typeof win.OS_DB.saveAppData === 'function') {
+            win.OS_DB.saveAppData(_USE_AUREALIS[0], _USE_AUREALIS[1], true, id).catch(e => console.warn('[WorldRuntime] 記不住這段聊天要用奧瑞亞:', e));
+        }
         return currentWorld;
     }
 
@@ -633,6 +695,7 @@
                 console.log('[WorldRuntime] 🔄 chatId 變動:', realChatId, '→', newChatId);
                 realChatId = newChatId;
                 isPreview = false; // 切聊天 = 強制退出預覽
+                _recheckLeft = 3;
                 await switchTo(newChatId);
             }
         };
@@ -643,6 +706,7 @@
             const initialChatId = detectWorldId();
             realChatId = initialChatId;
             isPreview = false;
+            _recheckLeft = 3;
             await switchTo(initialChatId);
         }, 1500);
     }
