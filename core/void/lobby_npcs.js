@@ -153,22 +153,46 @@
     }
     // 🧑‍🍳 書咖雇來的員工（os_cafe_hire.js）：現在是誰的班、他有來，就穿制服站在點心櫃檯後面、咖啡機前（瀅瀅那條的左端、往後一點，櫃檯擋住腳）；
     //   點他跳一行今天做了什麼（不叫模型）。大廳常比書咖那幾支先建好，等它們最多 8 秒
+    //   🚨 人待在書咖裡班表也會走：跟常客同樣每 30 秒再看一次——下班了收掉、換班換人、人在店裡時才上班的也會出現
+    //   （10-16 她：晚班 22:00 下班了，家瑋還站在櫃檯後面；以前只在走進書咖那一刻看一次）
+    const CREW_TICK_MS = 30000;
     async function _spawnCafeCrew() {
         try {
             const W = window.parent || window;
             const world = S.world;
-            const alive = () => S.scene === 'cafe' && S.world === world;
+            const alive = () => S.active && S.scene === 'cafe' && S.world === world;
             const ready = () => (W.OS_CAFE_HIRE || window.OS_CAFE_HIRE) && (W.OS_CAFE || window.OS_CAFE)?._b;
             for (let i = 0; i < 27 && alive() && !ready(); i++) await new Promise(r => setTimeout(r, 300));
             const H = W.OS_CAFE_HIRE || window.OS_CAFE_HIRE;
             if (!H || !H.onDutyNow || !alive()) return;
-            const on = await H.onDutyNow();
-            const z = _b.CFG.points.yingZone;
-            if (!on || !z || !alive()) return;
-            const x = z.x + 50, y = z.y - 22;   // 10-13 照書咖底圖＋櫃檯合成看過：這裡頭到腿都看得到、腳被櫃檯擋住
-            const say = () => { try { (W.AUI || window.AUI)?.toast?.(on.line); } catch (e) {} };
-            _b.addNpc({ key: 'cafe_crew', name: on.m.name, subTitle: '書咖' + on.label + ' · 上班中', x, y, h: 200, src: on.src, portrait: on.src,
-                noWander: true, homeRect: { x, y, w: 0, h: 0 }, onInteract: say });
+            let npc = null, on = null, busy = false, timer = null;
+            const remove = () => {
+                if (!npc) return;
+                [npc.el, npc.tag, npc.hint].forEach(el => { try { el && el.remove(); } catch (e) {} });
+                const i = S.npcs.indexOf(npc); if (i >= 0) S.npcs.splice(i, 1);
+                npc = null;
+            };
+            const check = async () => {
+                if (!alive()) { clearInterval(timer); return; }
+                if (busy) return;
+                busy = true;
+                try {
+                    const now = await H.onDutyNow();
+                    const z = _b.CFG.points.yingZone;
+                    if (!alive()) { clearInterval(timer); return; }
+                    if (npc && (!now || now.m.sid !== npc._sid || S.npcs.indexOf(npc) < 0)) remove();   // 下班、換班、或被別人收掉
+                    on = now;
+                    if (!on || !z || npc) return;
+                    const x = z.x + 50, y = z.y - 22;   // 10-13 照書咖底圖＋櫃檯合成看過：這裡頭到腿都看得到、腳被櫃檯擋住
+                    const say = () => { try { if (on) (W.AUI || window.AUI)?.toast?.(on.line); } catch (e) {} };
+                    npc = _b.addNpc({ key: 'cafe_crew', name: on.m.name, subTitle: '書咖' + on.label + ' · 上班中', x, y, h: 200, src: on.src, portrait: on.src,
+                        noWander: true, homeRect: { x, y, w: 0, h: 0 }, onInteract: say });
+                    npc._sid = on.m.sid;
+                } catch (e) { console.warn('[LobbyNpcs] 書咖員工班表沒看成', e); }
+                finally { busy = false; }
+            };
+            await check();
+            if (alive()) timer = setInterval(check, CREW_TICK_MS);
         } catch (e) { console.warn('[LobbyNpcs] 書咖員工沒站上去', e); }
     }
     // ☕ 書咖常客：大廳常比書咖那幾支先建好（酒館走網路拉檔），等它們最多 8 秒；期間換了場景就不掛
