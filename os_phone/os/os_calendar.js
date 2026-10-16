@@ -6,6 +6,7 @@
 //   一天照時段（早上／中午／下午／晚上／深夜）分段、左欄寫鐘點；地圖接的委託也佔一格（10-10）。
 //   點標頭的「今天」可以改故事日期，時鐘從那裡接下去。
 //   openToday()：劇情結束那排「日曆」鍵開的小卡，只看今天的行程（10-13）。
+//   今天那條底下一區「還沒定日子」：劇情約了「改天」「下次」、還沒說哪天的，約好日子就搬到那天；右邊可以自己定日子（10-16）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -56,6 +57,14 @@
         .cal-ev-ico { margin-right: 6px; color: #d69628; font-size: 12px; }
         .cal-ev-del { color: rgba(var(--os-ink-rgb), 0.25); padding: 6px; cursor: pointer; font-size: 14px; }
         .cal-ev-del:active { color: #ff4444; }
+        /* 還沒定日子（10-16）：今天那條底下、月曆上面；左邊那條用虛線表示還沒有日子 */
+        .cal-und { background: var(--os-surface); border-bottom: 8px solid rgba(var(--os-ink-rgb), 0.10); padding-bottom: 4px; }
+        .cal-und-head { padding: 12px 16px 4px; font-size: 13px; font-weight: bold; color: var(--os-ink); display: flex; align-items: center; gap: 6px; }
+        .cal-und-head i { color: #e05a3d; }
+        .cal-ev.cal-ev-und .cal-ev-bar { background: repeating-linear-gradient(180deg, #e05a3d 0 4px, transparent 4px 7px); }
+        .cal-ev.cal-ev-und.cal-ev-me .cal-ev-bar { background: repeating-linear-gradient(180deg, #3d8be0 0 4px, transparent 4px 7px); }
+        .cal-ev-date { color: rgba(var(--os-ink-rgb), 0.45); padding: 6px; cursor: pointer; font-size: 15px; }
+        .cal-ev-date:active { color: #e05a3d; }
         .cal-empty-note { text-align: center; color: var(--os-ink-soft); font-size: 13px; padding: 24px 0 8px; }
         .cal-add { display: flex; gap: 8px; padding: 12px 16px 0; }
         .cal-add-input { flex: 1; min-width: 0; border: none; outline: none; font-size: 14px; background: var(--os-page-bg); border-radius: 10px; padding: 10px 12px; font-family: inherit; color: var(--os-ink); }
@@ -159,6 +168,28 @@
                 <div class="cal-ev-del" data-id="${esc(e.id)}"><i class="fa-solid fa-trash"></i></div>
             </div>`;
     }
+    // 還沒定日子的一筆：左邊不寫鐘點（虛線那條就是「還沒日子」），右邊多一顆「定日子」
+    function undRow(e) {
+        const id = esc(e.id);
+        const state = e.done ? '<span class="cal-ev-state">' + esc(S().doneLabel ? S().doneLabel(e) : '') + '</span>' : '';
+        return `
+            <div class="cal-ev cal-ev-und${e.src === 'me' ? ' cal-ev-me' : ''}${e.done ? ' cal-ev-done' : ''}">
+                <div class="cal-ev-bar"></div>
+                <div class="cal-ev-text" data-edit="${id}"><div class="cal-ev-title">${esc(e.title)}${state}</div><div class="cal-ev-src">${srcText(e)}${e.when ? '・' + esc(e.when) : ''}</div></div>
+                ${e.done ? '' : `<div class="cal-ev-date" data-setdate="${id}" title="定日子"><i class="fa-solid fa-calendar-plus"></i></div>`}
+                <div class="cal-ev-del" data-id="${id}"><i class="fa-solid fa-trash"></i></div>
+            </div>`;
+    }
+    // 「還沒定日子」那區（她 10-16 選的：同一本日曆最上面多一區，之後約好日子就自己搬過去）：
+    //   還沒結束的照最近提過的排；做完／取消的留最近三件、淡掉。都沒有就整區不出現。
+    function undatedHtml(st) {
+        const open = S().undated ? S().undated(st) : [];
+        const done = (st.events || []).filter(e => !e.date && e.done && e.done !== 'gone' && e.src !== 'mission')
+            .sort((a, b) => (b.doneTs || 0) - (a.doneTs || 0)).slice(0, 3);
+        if (!open.length && !done.length) return '';
+        return `<div class="cal-und"><div class="cal-und-head"><i class="fa-regular fa-calendar"></i>還沒定日子</div>${open.map(undRow).join('')}${done.map(undRow).join('')}</div>`;
+    }
+
     function dayHtml(st, evs) {
         const slots = (S().SLOTS || []).concat(['']);
         const slotOf = e => (S().slotOf ? S().slotOf(e.time) : '');
@@ -203,6 +234,7 @@
                         </div>
                         <div class="cal-today-edit"><i class="fa-solid fa-pen"></i></div>
                     </div>
+                    ${undatedHtml(st)}
                     <div class="cal-month-nav">
                         <div class="cal-nav-btn" data-act="prev"><i class="fa-solid fa-chevron-left"></i></div>
                         <div class="cal-month-title">${y} 年 ${m} 月</div>
@@ -229,6 +261,20 @@
         if (cell) { _sel = { y: _view.y, m: _view.m, d: parseInt(cell.dataset.d, 10) }; render(); return; }
         const del = e.target.closest('.cal-ev-del');
         if (del) { await S().removeEvent(del.dataset.id); _state = await S().load(); render(); return; }
+        const setd = e.target.closest('[data-setdate]');
+        if (setd) {
+            const id = setd.dataset.setdate;
+            const v = await prompt('定在哪一天', '', '例如 10/20 18:00、明天晚上');
+            if (v == null || !v.trim()) return;
+            await S().updateEvent(id, { date: v.trim() });
+            _state = await S().load();
+            const ev = (_state.events || []).find(x => x.id === id);
+            if (!ev || !ev.date) { toast('看不懂這個日期'); return; }
+            _view = { y: ev.date.y || anchorYear(_state), m: ev.date.m };   // 跳到那天，看得到它搬過去了
+            _sel = { y: ev.date.y || _view.y, m: ev.date.m, d: ev.date.d };
+            render();
+            return;
+        }
         const edit = e.target.closest('[data-edit]');
         if (edit) {
             const ev = (_state.events || []).find(x => x.id === edit.dataset.edit);
