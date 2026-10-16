@@ -95,7 +95,7 @@
     };
 
     // === 時段 ===
-    // 故事時鐘有時間就照它，沒有就照真實時間（跟首頁底圖 getHomeBackground 同一種判斷）。
+    // 故事時鐘有時間就照它，沒有就照真實時間（跟首頁底圖 getHomeBackground、排程同一個「現在」：OS_MC_STATUS.nowDate）。
     function slotFromHour(h) {
         if (h >= 2 && h <= 4) return 'predawn';
         if (h >= 5 && h <= 9) return 'morning';
@@ -107,9 +107,9 @@
         try {
             const api = win.OS_MC_STATUS;
             if (api && typeof api.load === 'function') {
-                const st = await api.load();
-                const m = String((st && st.time) || '').match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/);
-                if (m) return slotFromHour(parseInt(m[1], 10) % 24);
+                await api.load();
+                const d = typeof api.nowDate === 'function' ? api.nowDate() : null;   // 只寫「晚上」這種時段也認
+                if (d) return slotFromHour(d.getHours());
             }
         } catch (e) { /* 沒有狀態模組就退回真實時間 */ }
         return slotFromHour(new Date().getHours());

@@ -744,6 +744,21 @@
         } catch (e) { console.warn('[MC Status] 注入失敗:', e); }
     }
 
+    // 故事裡現在是哪一刻（Date），給地圖這種要同步回答的（10-16 她：「地圖時間直接默認跟著 VN劇情走」）。
+    //   只看已經讀進來的那份（呼叫的人先 load 過）；狀態欄關著、還沒有故事時間、只有日期不知道幾點 → null，讓呼叫的人退回真實時間。
+    //   只寫了時段（晚上）取那個時段中間；年份沒寫用今年（只拿來分時段、換天，不顯示）。
+    function nowDate() {
+        const st = _on() ? _cache : null;
+        if (!st) return null;
+        let mins = minsOf(st.time);
+        if (mins == null) { const x = SLOTS.find(z => z.re.test(String(st.time || ''))); if (x) mins = Math.round((x.from + x.to) / 2) % 1440; }
+        if (mins == null) return null;
+        const t = new Date();
+        const d = st.date ? new Date(st.date.y || t.getFullYear(), st.date.m - 1, st.date.d) : new Date(t.getFullYear(), t.getMonth(), t.getDate());
+        d.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
+        return d;
+    }
+
     // ── VN 畫面上方的窄狀態列 ──
     function renderHud() {
         const docs = [typeof document !== 'undefined' ? document : null, win.document].filter((d, i, a) => d && d.getElementById && a.indexOf(d) === i);
@@ -778,7 +793,7 @@
         setDate: setDate, setHp: setHp, setBuff: setBuff, addEvent: addEvent, updateEvent: updateEvent, removeEvent: removeEvent, applyStatusBlock: applyStatusBlock,
         upcoming: upcoming, doneLabel: doneLabel, sigOf: sigOf, summary: summary, buildBlock: buildBlock, injectStatus: injectStatus, renderHud: renderHud,
         parseDate: parseDate, parseTime: parseTime, fmtDate: fmtDate, dateKey: dateKey, dayDiff: dayDiff, getChatId: getChatId,
-        missionStart: missionStart, missionEnd: missionEnd, todayPlansText: todayPlansText,
+        missionStart: missionStart, missionEnd: missionEnd, todayPlansText: todayPlansText, nowDate: nowDate,
         clockOf: clockOf, slotOf: slotOf, slotWordOf: slotWordOf, minsOf: minsOf, SLOTS: SLOTS.map(x => x.id),
         resetCache: function () { _cache = null; _cacheChat = ''; },
     };

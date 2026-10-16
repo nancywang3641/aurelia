@@ -503,7 +503,9 @@ ${facilityText}
     }
 
     function getHomeBackground() {
-        const hour = new Date().getHours();
+        // 跟著故事時鐘（沒有才真實時間），跟排程、圖片地圖同一個「現在」
+        const SE = win.SCHEDULE_ENGINE;
+        const hour = (SE && typeof SE.now === 'function' ? SE.now() : new Date()).getHours();
         const isNight = hour >= 18 || hour < 6;
         return isNight 
             ? 'https://nancywang3641.github.io/aurelia/district/AURELIA-NIGHT.jpg' 
@@ -531,11 +533,16 @@ ${facilityText}
         renderStructure();
         updatePreviewBanner();
         renderHome();
-        // 打開時重新認一次這段聊天該用哪張：同一段聊天從世界門進出異世界不會換聊天，
-        // 回到奧瑞亞的奧瑞亞卡要換回預設地圖（10-16）；換好了 onChange 會重畫
+        // 打開時：先把故事時鐘讀進來（地圖的時段跟著劇情走，排程、底圖要同步拿得到，10-16），
+        // 再重新認一次這段聊天該用哪張：同一段聊天從世界門進出異世界不會換聊天，回到奧瑞亞的奧瑞亞卡要換回預設地圖（10-16）。
+        // switchTo 換好了 onChange 會重畫；不用換的（奧瑞亞預設、預覽中）這裡自己重畫一次，讓時段換成故事的
         try {
-            const WR = win.WORLD_RUNTIME;
-            if (WR && !WR.isPreview() && WR.getRealChatId() !== WR.AUREALIS_ID) WR.switchTo(WR.getRealChatId());
+            const MC = win.OS_MC_STATUS, WR = win.WORLD_RUNTIME;
+            Promise.resolve(MC && typeof MC.load === 'function' ? MC.load().catch(() => null) : null).then(() => {
+                if (STATE.container !== container) return;
+                if (WR && !WR.isPreview() && WR.getRealChatId() !== WR.AUREALIS_ID) WR.switchTo(WR.getRealChatId());
+                else if (STATE.view === 'home') renderHome();
+            });
         } catch (e) {}
         // 🗺 劇情→地圖（vn_map_link.js）：這個聊天的位置記錄讀進來，主角在這張地圖上就重畫一次（標出「你在這裡」）
         try {

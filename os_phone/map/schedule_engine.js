@@ -21,8 +21,19 @@
         { name: '凌晨', start: 2,  end: 5  }
     ];
 
+    // 地圖的「現在」：故事時鐘有時間就跟著劇情走，沒有才用真實時間（10-16 她：「地圖時間直接默認跟著 VN劇情走」）。
+    //   故事時鐘在主角狀態（OS_MC_STATUS.nowDate），要先 load 過才拿得到——地圖打開時 map_core 會先讀。
+    function storyNow() {
+        try {
+            const MC = win.OS_MC_STATUS;
+            const d = MC && typeof MC.nowDate === 'function' ? MC.nowDate() : null;
+            if (d) return d;
+        } catch (e) {}
+        return new Date();
+    }
+
     function getTimePeriod(date) {
-        const h = (date || new Date()).getHours();
+        const h = (date || storyNow()).getHours();
         if (h >= 5  && h < 8 ) return '黎明';
         if (h >= 8  && h < 12) return '上午';
         if (h >= 12 && h < 17) return '下午';
@@ -339,7 +350,7 @@ ${facilityText}
         const sched = world.schedules[charName];
         if (!sched) return null;
 
-        const now = time || new Date();
+        const now = time || storyNow();
         const period = getTimePeriod(now);
         const branches = sched[period];
         if (!Array.isArray(branches) || branches.length === 0) return null;
@@ -411,6 +422,7 @@ ${facilityText}
     win.SCHEDULE_ENGINE = {
         PERIODS,
         getTimePeriod,
+        now: storyNow,
         getMainUserName,
         loadProfileChars,
         generateSchedules,
