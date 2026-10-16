@@ -6,6 +6,10 @@
 //   長相＝三視圖長條圖（素材庫 cafe_guests_v1/，[正面｜側面朝右｜背面]），這裡拼成 3×4 走路圖：
 //   往下走看正面、往上走看背面、左右看側面；走路那兩格往上提一點＝跳（她 10-13 定：先用跳的當走路）。
 //   誰、長什麼樣在 os_cafe_regulars.js；幾點到店在 os_cafe.js 的結算——這裡每 30 秒叫一次「悄悄補算」，不叫模型。
+//   🪑 10-16 有坐姿了（阿洛畫的 18 張，素材庫 cafe_guests_sit_v1/，朝右斜正面；她：「是不是可以砍到椅子上?」）：
+//   進門走到一張空椅子坐下、要走了站起來走出去；椅子坐滿了才照舊站在客人出沒區。
+//   椅子照她現在的擺設找（擺設模式搬過、翻過都認）：chair_l 椅背在左＝朝右坐；chair_r 朝左＝坐姿翻過來。
+//   坐著＝換一張「每格都是坐姿」的走路圖（舞台只認走路圖），圖底多留一段透明：腳底那條線壓到椅子前面才畫在椅子前面，屁股才對得到椅面。
 // 依賴：window.LobbyStage._b 橋（必須排在 lobby_stage.js 後面）；lobby_npcs.js 的 initNpcs 在書咖場景叫 mount()。
 // ----------------------------------------------------------------
 (function () {
@@ -17,6 +21,11 @@
     const TICK_MS = 30000;      // 多久看一次誰到、誰走
     const MAX_IN = 6;           // 店裡最多同時幾位常客
     const STAY_PEND = 30;       // 還沒結算到的（只知道幾點到）先當待 30 分
+    const SIT_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@5352eb1/cafe_guests_sit_v1/';
+    const SIT_H = 152;          // 坐著多高（跟站著的同一顆頭大小：站著那格 200、身體約 174）
+    const SEAT_X = 0.62;        // 椅面中心在椅子圖的哪裡（朝右那張；朝左的取 1−）
+    const SEAT_Y = 0.55;
+    const HIP_AT = 0.86;        // 坐姿圖從上往下多少是屁股（對到椅面）
 
     // 長條圖 → 3×4 走路圖（列：往下／往左／往右／往上；欄：跳起來／站著／跳起來）
     const _sheets = new Map();
@@ -48,6 +57,54 @@
         _sheets.set(look, p);
         p.then(v => { if (!v) _sheets.delete(look); });   // 沒拿到圖下次再試
         return p;
+    }
+    // 坐姿 → 每格都是坐姿的 3×4 走路圖；mirror＝朝左坐；padF＝圖底多留幾成透明（見檔頭）
+    const _sitImgs = new Map(), _sitSheets = new Map();
+    function _sitImgOf(look) {
+        if (_sitImgs.has(look)) return _sitImgs.get(look);
+        const p = new Promise((res) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => res(img);
+            img.onerror = () => res(null);
+            img.src = SIT_BASE + look + '.webp';
+        });
+        _sitImgs.set(look, p);
+        p.then(v => { if (!v) _sitImgs.delete(look); });
+        return p;
+    }
+    function _sitSheetOf(look, mirror, padF) {
+        const key = look + '|' + (mirror ? 1 : 0) + '|' + padF;
+        if (_sitSheets.has(key)) return _sitSheets.get(key);
+        const p = _sitImgOf(look).then(img => new Promise((res) => {
+            if (!img) { res(null); return; }
+            try {
+                const cw = img.naturalWidth, ih = img.naturalHeight, ch = ih + Math.round(ih * padF);
+                const cv = document.createElement('canvas'); cv.width = cw * 3; cv.height = ch * 4;
+                const g = cv.getContext('2d');
+                for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
+                    g.save();
+                    if (mirror) { g.translate(c * cw + cw, r * ch); g.scale(-1, 1); g.drawImage(img, 0, 0); }
+                    else g.drawImage(img, c * cw, r * ch);
+                    g.restore();
+                }
+                cv.toBlob(b => res(b ? URL.createObjectURL(b) : null), 'image/png');
+            } catch (e) { console.warn('[CafeRegulars] 拼坐姿圖失敗', look, e); res(null); }
+        }));
+        _sitSheets.set(key, p);
+        p.then(v => { if (!v) _sitSheets.delete(key); });
+        return p;
+    }
+    // 書咖現在的椅子（她的擺設）：坐哪裡、朝哪邊、椅子底邊、站起來站哪
+    function _seatsOf(CFG) {
+        return (CFG.layout || []).map((o, i) => {
+            const m = String(o.file || '').match(/chair_([lr])_/);
+            if (!m || o._plotOff) return null;
+            const s = o.s || 1, w = o.w * s, h = o.h * s;
+            const right = (m[1] === 'l') !== !!o.flipX;
+            return { i, right, sx: o.x + w * (right ? SEAT_X : 1 - SEAT_X), sy: o.y + h * SEAT_Y,
+                bottom: o.y + h + (o.zb || 0), stand: { x: o.x + w / 2, y: o.y + h + 16 } };
+        }).filter(Boolean);
     }
     function _hash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h; }
     // 待多久（分鐘）：賣完走掉的一下下、沒點東西的一會兒、有點的 25～44 分
@@ -94,9 +151,44 @@
             const what = (n._entry && n._entry.line) || '剛進來，還在看菜單。';
             try { (W.AUI || window.AUI).toast(p.name + '（' + (ty.label || '常客') + (tr ? '・' + tr : '') + '）' + what); } catch (e) {}
         };
+        // 空椅子：別的常客坐著或正走過去的不算；挑一張隨機的（每次進來不會都擠同一張）
+        const freeSeat = () => {
+            const used = new Set();
+            mine.forEach(n => { const s = n._seat || n._seatWant; if (s) used.add(s.i); });
+            const free = _seatsOf(_b.CFG).filter(s => !used.has(s.i));
+            return free.length ? free[Math.floor(Math.random() * free.length)] : null;
+        };
+        // 坐下：換成坐姿那張圖，腳底線壓到椅子底邊前面一點（才畫在椅子前面），多出來的高度留成圖底透明
+        const sitDown = async (n, seat) => {
+            n._sitting = true;
+            try {
+                const sitH = SIT_H * (n._standH / NPC_H);
+                const feetY = seat.sy + sitH * (1 - HIP_AT);
+                const padF = Math.max(0, Math.ceil(((seat.bottom + 2 - feetY) / sitH) * 50) / 50);   // 0.02 一格，同樣留白的共用一張圖
+                const sheet = await _sitSheetOf(n._look, !seat.right, padF);
+                if (!sheet) { n._seatWant = null; return false; }   // 坐姿圖拿不到：站在椅子前面就好，別每 0.4 秒重抓
+                if (!alive() || n._leaving || S.npcs.indexOf(n) < 0) return false;
+                n._seat = seat; n._seatWant = null;
+                n.dest = null; n.walking = false; n.dir = 0; n.frame = 1;
+                n.x = seat.sx; n.y = feetY + padF * sitH;
+                n.h = Math.round(sitH * (1 + padF));
+                _b.swapActorSrc(n, { sheet });
+                return true;
+            } finally { n._sitting = false; }
+        };
+        // 站起來：換回走路圖、站到椅子前面（她換過他的外觀就套回去）
+        const standUp = (n) => {
+            const seat = n._seat;
+            n._seat = null;
+            n.h = n._standH;
+            if (seat) { n.x = seat.stand.x; n.y = seat.stand.y; }
+            _b.swapActorSrc(n, n.defaultSrc);
+            try { if (_b.skins && _b.skins()[n.key]) _b.applySkin(n, n.key); } catch (e) {}
+        };
         const spawn = (p, e, sheet, walkIn) => {
             const ty = REG.TYPES[p.type] || {};
-            const to = spot(), from = walkIn ? door() : to;
+            const seat = freeSeat();
+            const to = seat ? seat.stand : spot(), from = walkIn ? door() : to;
             const n = _b.addNpc({
                 key: 'cafe_reg_' + p.key, name: p.name, subTitle: (ty.label || '常客') + ' · 書咖常客',
                 x: from.x, y: from.y, h: NPC_H, src: { sheet },
@@ -105,10 +197,18 @@
             });
             n.wanderT = Infinity;   // 不亂晃：只照進門、出門走
             n._entry = e;
+            n._look = p.look;
+            n._standH = n.h;
+            n._seatWant = seat;     // 走到椅子前面（poll 看到走到了）就坐下；本來就在店裡的直接坐好
             if (walkIn) n.dest = { x: to.x, y: to.y };
+            else if (seat) sitDown(n, seat);
             return n;
         };
-        const leave = (n) => { n._leaving = true; const d = door(); n.dest = { x: d.x, y: d.y + 40 }; };
+        const leave = (n) => {
+            n._leaving = true; n._seatWant = null;
+            if (n._seat) standUp(n);
+            const d = door(); n.dest = { x: d.x, y: d.y + 40 };
+        };
 
         const tick = async () => {
             if (busy) return;
@@ -146,13 +246,14 @@
             } catch (e) { console.warn('[CafeRegulars] 看誰在店裡失敗', e); }
             finally { busy = false; }
         };
-        // 走到了就轉回正面站好；要走的走到門口就收掉
+        // 走到了：有椅子的坐下，沒有的轉回正面站好；要走的走到門口就收掉
         const poll = () => {
             if (!alive()) { stop(); return; }
             for (const [k, n] of mine) {
                 if (S.npcs.indexOf(n) < 0) { mine.delete(k); continue; }
                 if (n._leaving) { if (!n.dest) { remove(n); mine.delete(k); } continue; }
-                if (!n.dest && n.dir !== 0) { n.dir = 0; n.frame = 1; n.animT = 0; _b.placeActor(n); }
+                if (!n.dest && n._seatWant && !n._seat && !n._sitting) { sitDown(n, n._seatWant); continue; }
+                if (!n.dest && !n._seat && n.dir !== 0) { n.dir = 0; n.frame = 1; n.animT = 0; _b.placeActor(n); }
             }
         };
         tickT = setInterval(tick, TICK_MS);
