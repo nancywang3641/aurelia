@@ -188,7 +188,7 @@
         _root.innerHTML =
             '<div class="dsh-book">' +
             '  <button class="dsh-close" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
-            '  <div class="dsh-title-row"><div class="dsh-wing"></div><h1 class="dsh-h1">控制台<span class="dsh-ver" id="dsh-ver" title="這台裝置現在跑的版本"></span></h1><div class="dsh-wing r"></div></div>' +
+            '  <div class="dsh-title-row"><div class="dsh-wing"></div><h1 class="dsh-h1">控制台<span class="dsh-ver" id="dsh-ver" title="這台裝置現在跑的版本"></span><button type="button" class="dsh-upd" id="dsh-upd" hidden><i class="fa-solid fa-arrows-rotate"></i><span>有新版</span></button></h1><div class="dsh-wing r"></div></div>' +
             '  <div class="dsh-head">' +
             '    <div class="dsh-tabs">' +
             Object.keys(TAB_NAME).map(function (k) {
@@ -206,6 +206,7 @@
             b.onclick = function () { _switch(b.dataset.tab); };
         });
         _render();
+        _checkUpdate();
         // 🚨 記錄與訊息是一直在長的東西，但**不要**定時整頁重畫：重畫＝捲動的框從頭開始，
         //    她在讀的東西會被拉回頂端。改成新的來一筆就補一筆（跟本機 DEBUG.js 一樣），
         //    狀態變了只改那一列的那兩個字。今天／通道是統計快照，切過去的時候畫一次就好。
@@ -255,6 +256,121 @@
             el.textContent = m ? ('v' + m[1]) : '';
         } catch (e) { el.textContent = ''; }
     }
+
+    // 🔄 換新版：酒館助手一行 import 鎖號碼載的（boot.js@<號碼>）才有。開控制台時問 GitHub 這個號碼之後 main 多了幾個，
+    //   有的話版本號旁邊出「有新版」；按了列出多了什麼，同意就把酒館助手那支腳本裡的號碼換成最新、等酒館存好再重新整理。
+    //   以前要自己開酒館助手、改號碼、記得開關打開（10-17 她：「以後有沒有快速改的辦法」）。
+    //   🚨 存檔：酒館助手改腳本後是酒館「停 1 秒再存」，不能直接 import 酒館的存檔函式（TauriTavern 打包過，拿到的是另一份空設定，存下去會蓋掉）。
+    //      全域腳本改完讀回存檔確認新號碼在了才重開；角色卡、預設底下的腳本讀不回來，就等 3 秒。
+    //   🚨 換號碼那一下酒館助手會馬上跑新的 boot.js，它看到舊版還在跑會自己重新整理——可能比存檔早。
+    //      所以先在主頁面立 __AURELIA_SWAPPING__，新 boot.js 看到就先不動（這版之後的 boot.js 都認）。
+    let _upd = null;   // { pin, head, list } 這次打開查到的
+    function _pinInfo() {
+        let base = '';
+        try { base = String(win.__AURELIA_LOADED_BASE__ || ''); } catch (e) {}
+        const m = /^(https?:\/\/[^/]+)\/gh\/([^/]+)\/([^/@]+)@([0-9a-f]{7,40})$/i.exec(base);
+        const TH = win.TavernHelper || window.TavernHelper;
+        if (!m || !TH || typeof TH.getScriptTrees !== 'function' || typeof TH.updateScriptTreesWith !== 'function') return null;
+        return { host: m[1], owner: m[2], repo: m[3], hash: m[4], TH: TH };
+    }
+    function _firstLine(msg) {
+        const s = String(msg || '').split('\n')[0];
+        const cut = s.search(/[：。（(]/);
+        const t = (cut > 0 ? s.slice(0, cut) : s).trim();
+        return t.length > 38 ? t.slice(0, 37) + '…' : t;
+    }
+    async function _checkUpdate() {
+        const btn = _root && _root.querySelector('#dsh-upd');
+        const pin = _pinInfo();
+        if (!btn || !pin) return;
+        _upd = null;
+        try {
+            const r = await fetch('https://api.github.com/repos/' + pin.owner + '/' + pin.repo + '/compare/' + pin.hash + '...main', { cache: 'no-store' });
+            if (!r.ok) return;
+            const j = await r.json();
+            const cs = Array.isArray(j.commits) ? j.commits : [];
+            if (!(j.ahead_by > 0) || !cs.length) return;
+            _upd = { pin: pin, head: cs[cs.length - 1].sha, n: j.ahead_by, list: cs.map(function (c) { return _firstLine(c.commit && c.commit.message); }).reverse() };
+        } catch (e) { return; }
+        if (!_root || !btn.isConnected) return;
+        btn.querySelector('span').textContent = '有新版';
+        btn.title = '多了 ' + _upd.n + ' 個更新';
+        btn.hidden = false;
+        btn.onclick = _askSwap;
+    }
+    async function _askSwap() {
+        const u = _upd;
+        const A = win.AUI || window.AUI;
+        if (!u || !A || !A.confirm) return;
+        const show = u.list.slice(0, 6);
+        const more = u.list.length - show.length;
+        const ok = await A.confirm('這次多了 ' + u.n + ' 個更新：\n' + show.map(function (t) { return '• ' + t; }).join('\n') + (more > 0 ? '\n…還有 ' + more + ' 個' : '') + '\n\n換好會自己重新整理一次。',
+            { title: '換到新版', okText: '換好重開', cancelText: '先不要', danger: false, left: true });
+        if (ok) _swapTo(u);
+    }
+    async function _swapTo(u) {
+        const pin = u.pin, to = u.head.slice(0, 8);
+        const btn = _root && _root.querySelector('#dsh-upd');
+        const say = function (t) { if (btn) btn.querySelector('span').textContent = t; };
+        if (btn) btn.disabled = true;
+        const fail = function (t) { _toast(t); say('有新版'); if (btn) btn.disabled = false; try { win.__AURELIA_SWAPPING__ = false; } catch (e) {} };
+        // ① 新版下載得到才換（剛更新完幾分鐘內，下載點常常還沒拿到）
+        say('確認新版…');
+        const newBase = pin.host + '/gh/' + pin.owner + '/' + pin.repo + '@' + to;
+        const probe = async function (f) {
+            const ac = new AbortController(); const tm = setTimeout(function () { ac.abort(); }, 25000);
+            try { const r = await fetch(newBase + '/' + f, { cache: 'no-store', signal: ac.signal }); return r.ok; }
+            catch (e) { return false; } finally { clearTimeout(tm); }
+        };
+        if (!(await probe('boot.js')) || !(await probe('index.js'))) { fail('新版還在送到下載點，過幾分鐘再按一次'); return; }
+        // ② 找載奧瑞亞的那支腳本，換號碼
+        const needle = pin.owner + '/' + pin.repo + '@' + pin.hash;
+        const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=/)', 'i');
+        let where = '';
+        try { win.__AURELIA_SWAPPING__ = true; } catch (e) {}
+        for (const type of ['global', 'character', 'preset']) {
+            try {
+                let hit = false;
+                const has = (pin.TH.getScriptTrees({ type: type }) || []).some(function (t) {
+                    return (t.type === 'folder' ? (t.scripts || []) : [t]).some(function (s) { return re.test(String(s.content || '')); });
+                });
+                if (!has) continue;
+                pin.TH.updateScriptTreesWith(function (trees) {
+                    const fix = function (s) {
+                        if (hit || !re.test(String(s.content || ''))) return s;
+                        hit = true;
+                        return Object.assign({}, s, { content: String(s.content).replace(re, pin.owner + '/' + pin.repo + '@' + to) });
+                    };
+                    return trees.map(function (t) { return t.type === 'folder' ? Object.assign({}, t, { scripts: (t.scripts || []).map(fix) }) : fix(t); });
+                }, { type: type });
+                if (hit) { where = type; break; }
+            } catch (e) { console.warn('[控制台] 換新版：改酒館助手腳本失敗', type, e); }
+        }
+        if (!where) { fail('找不到載奧瑞亞的那支腳本，這次請到酒館助手自己換號碼：' + to); return; }
+        // ③ 等酒館存好
+        say('存檔中…');
+        const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+        if (where === 'global') {
+            let saved = false, readable = false;
+            for (let i = 0; i < 6 && !saved; i++) {
+                await wait(i ? 1000 : 1600);
+                try {
+                    const ctx = (win.SillyTavern || window.SillyTavern).getContext();
+                    const r = await win.fetch('/api/settings/get', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({}), cache: 'no-cache' });
+                    const j = r.ok ? await r.json() : null;
+                    const st = j && j.settings ? (typeof j.settings === 'string' ? j.settings : JSON.stringify(j.settings)) : '';
+                    if (st) { readable = true; saved = st.indexOf(pin.owner + '/' + pin.repo + '@' + to) >= 0; }
+                } catch (e) {}
+                if (!readable) break;
+            }
+            if (!readable) await wait(3000);
+            else if (!saved) { fail('新號碼還沒存進去，先別重新整理，到酒館助手看看那支腳本現在是不是 ' + to); return; }
+        } else await wait(3000);
+        say('重新整理…');
+        try { win.sessionStorage.removeItem('aurelia_boot_reload'); } catch (e) {}
+        win.location.reload();
+    }
+
     async function _render() {
         if (!_root) return;
         _showVersion();

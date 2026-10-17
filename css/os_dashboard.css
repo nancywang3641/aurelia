@@ -67,6 +67,16 @@
 .dsh-wing.r { background: linear-gradient(270deg, transparent, rgba(42, 74, 128, .45)); }
 .dsh-wing.r::after { right: auto; left: -2px; }
 .dsh-ver { font-size: 11px; font-weight: 400; letter-spacing: 0; text-indent: 0; opacity: .55; margin-left: 8px; vertical-align: middle; }
+/* 換新版：酒館鎖號碼載的、而且 main 有更新才出現 */
+.dsh-upd {
+    display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 3px 10px; vertical-align: middle;
+    font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0; text-indent: 0; line-height: 1.4;
+    color: #fdfdfc; background: #b9924f; border: none; border-radius: 12px; cursor: pointer;
+}
+.dsh-upd[hidden] { display: none; }
+.dsh-upd:disabled { opacity: .7; cursor: default; }
+.dsh-upd:disabled i { animation: dsh-upd-spin 1s linear infinite; }
+@keyframes dsh-upd-spin { to { transform: rotate(360deg); } }
 .dsh-h1 {
     margin: 0; font-size: 27px; font-weight: 700; letter-spacing: .35em; text-indent: .35em;
     white-space: nowrap; color: #1f3a68 !important; font-family: inherit; line-height: 1.4;

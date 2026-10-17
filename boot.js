@@ -18,9 +18,12 @@ try {
     //    換了版 → 重新整理頁面，重整後乾淨地載入新版（同 index.js 換 ref 的做法），不在舊版上面疊新版
     let P = window;
     try { if (window.parent && window.parent !== window) P = window.parent; } catch (e) {}
-    let running = false, runningBase = '';
-    try { running = !!P.__AURELIA_INITIALIZED__; runningBase = P.__AURELIA_LOADED_BASE__ || ''; } catch (e) {}
-    if (running && runningBase === base) {
+    let running = false, runningBase = '', swapping = false;
+    try { running = !!P.__AURELIA_INITIALIZED__; runningBase = P.__AURELIA_LOADED_BASE__ || ''; swapping = !!P.__AURELIA_SWAPPING__; } catch (e) {}
+    if (swapping) {
+        // 控制台的「換新版」剛把號碼換掉：酒館助手會馬上跑這支，但酒館還沒存檔。重新整理交給它，等存好再整理
+        console.log('[Aurelia boot] 控制台正在換版，等它存好再重新整理');
+    } else if (running && runningBase === base) {
         console.log('[Aurelia boot] 同一版已經在跑，這次不再載入');
     } else if (running && runningBase && runningBase !== base) {
         // 同一個新版只重整一次：本地安裝那份跟 CDN 這份網址本來就不同，重整後本地那份又先跑起來的話，別一直重整下去
