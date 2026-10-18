@@ -43,12 +43,32 @@
         try { if (localStorage.getItem(FLAG) === '1') return; } catch (e) {}
         try {
             const names = ['investigation_data', 'pets', 'pet_logs', 'child_chat_history'].filter(function (n) { return db.objectStoreNames.contains(n); });
-            const done = function () { try { localStorage.setItem(FLAG, '1'); } catch (e) {} };
+            const done = function () { win.AUI.lsSet(FLAG, '1', '舊面板資料已清的記號'); };
             if (!names.length) { done(); return; }
             const tx = db.transaction(names, 'readwrite');
             names.forEach(function (n) { tx.objectStore(n).clear(); });
             tx.oncomplete = function () { done(); console.log('[OS_DB] 清空已拆面板的舊資料：' + names.join('、')); };
         } catch (e) { console.warn('[OS_DB] 清舊面板資料失敗（不影響其他功能）', e); }
+    }
+
+    // 刪掉某個倉庫裡符合條件的那幾筆：用游標一筆一筆走，不先 getAll 整個倉庫。
+    //   這幾個倉庫只有 id 沒有別的索引（加索引要升版，升版會卡死大廳，所以不加），只能整個走一遍；
+    //   但游標手上一次只有一筆，向量記憶那種每筆帶一長串數字的，不會為了刪幾筆把整庫讀進記憶體
+    function _deleteWhere(db, storeName, pred) {
+        return new Promise((r, j) => {
+            try {
+                const tx = db.transaction(storeName, 'readwrite');
+                const req = tx.objectStore(storeName).openCursor();
+                req.onsuccess = () => {
+                    const cur = req.result;
+                    if (!cur) return;
+                    try { if (pred(cur.value)) cur.delete(); } catch (e) {}
+                    cur.continue();
+                };
+                tx.oncomplete = () => r(true);
+                tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+            } catch (e) { j(e); }
+        });
     }
 
     // 取得當前 tavern 劇情存檔 id（與 state_runtime 同款正規化）→ 給 app 紀錄蓋章做 chatId 隔離
@@ -235,6 +255,36 @@
                     const req = db.transaction(STORE_NAME_APP_DATA, 'readonly').objectStore(STORE_NAME_APP_DATA).get(id);
                     req.onsuccess = () => resolve(req.result ? req.result.value : null);
                     req.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 刪掉一筆 app_data（10-19：以前要刪只能寫 null 進去，資料庫裡留著空殼）。
+        deleteAppData: async function(appId, key, chatId) {
+            const db = await this.init();
+            const id = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(key || '');
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_APP_DATA).delete(id);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止'));
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 刪掉某 app 底下 key 開頭是 keyPrefix 的那幾筆（小機刪整隻：經歷簿、向量一塊一塊的 <rid>:0、<rid>:1…）。
+        //   照編號範圍刪，不用整個 store 掃過去；keyPrefix 不能是空的（要整個 app 清掉用 deleteAppDataByApp）
+        deleteAppDataByPrefix: async function(appId, keyPrefix, chatId) {
+            if (!keyPrefix) throw new Error('deleteAppDataByPrefix 要給 keyPrefix');
+            const db = await this.init();
+            const pre = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(keyPrefix);
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_APP_DATA).delete(IDBKeyRange.bound(pre, pre + '￿'));
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止'));
+                    tx.onerror = (e) => reject(e.target.error);
                 } catch (e) { reject(e); }
             });
         },
@@ -817,18 +867,13 @@
         },
         clearAchievements: async function(chatId) {
             const db = await this.init();
+            if (chatId) return _deleteWhere(db, STORE_NAME_ACH, a => a && a.chatId === chatId);   // 只刪這一卡的：不先把整個成就庫讀出來
             return new Promise((r, j) => {
                 try {
                     const tx = db.transaction(STORE_NAME_ACH, 'readwrite');
-                    const store = tx.objectStore(STORE_NAME_ACH);
                     tx.onabort = () => j(tx.error || new Error('資料庫寫入中止'));
-                    if (!chatId) { store.clear(); tx.oncomplete = () => r(true); return; }
-                    const req = store.getAll();
-                    req.onsuccess = () => {
-                        (req.result || []).filter(a => a.chatId === chatId).forEach(a => store.delete(a.id));
-                        tx.oncomplete = () => r(true);
-                        tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                    };
+                    tx.objectStore(STORE_NAME_ACH).clear();
+                    tx.oncomplete = () => r(true);
                 } catch(e) { j(e); }
             });
         }
@@ -1002,18 +1047,7 @@
         },
         deleteVnChaptersByStoryId: async function(storyId) {
             const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_VN_CHAPTERS, 'readwrite');
-                    const store = tx.objectStore(STORE_NAME_VN_CHAPTERS);
-                    const req = store.getAll();
-                    req.onsuccess = () => {
-                        (req.result || []).filter(ch => ch.storyId === storyId).forEach(ch => store.delete(ch.id));
-                        tx.oncomplete = () => r(true);
-                        tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                    };
-                } catch(e) { j(e); }
-            });
+            return _deleteWhere(db, STORE_NAME_VN_CHAPTERS, ch => ch && ch.storyId === storyId);   // 不先 getAll 整個章節庫
         },
 
         // ── vn_grand_summaries：大總結 CRUD ─────────────────────────
@@ -1386,18 +1420,7 @@
         },
         deleteVnMemoriesByStoryId: async function(storyId) {
             const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
-                    const store = tx.objectStore(STORE_NAME_VN_MEMORIES);
-                    const req = store.getAll();
-                    req.onsuccess = () => {
-                        (req.result || []).filter(m => m.storyId === storyId).forEach(m => store.delete(m.id));
-                        tx.oncomplete = () => r(true);
-                        tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                    };
-                } catch(e) { j(e); }
-            });
+            return _deleteWhere(db, STORE_NAME_VN_MEMORIES, m => m && m.storyId === storyId);   // 每筆帶向量：游標走，不整庫讀進來
         },
         // 刪除單筆記憶（給 AVS 📝 記憶分頁的「刪除這條」用）
         deleteVnMemory: async function(id) {
@@ -1412,22 +1435,10 @@
             });
         },
         // 刪除某一則訊息/章節(chapterId)的所有記憶 —— 重 roll / 重生 / 刪訊息時自動清，讓記憶跟著現存劇情走
+        //   每存一章都會跑一次：以前先 getAll 整個記憶庫（每筆帶向量）再挑，庫大了每章都是一次記憶體尖峰 → 改游標走
         deleteVnMemoriesByChapter: async function(chapterId, storyId) {
             const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
-                    const store = tx.objectStore(STORE_NAME_VN_MEMORIES);
-                    const req = store.getAll();
-                    req.onsuccess = () => {
-                        (req.result || []).filter(m =>
-                            String(m.chapterId) === String(chapterId) && (!storyId || m.storyId === storyId)
-                        ).forEach(m => store.delete(m.id));
-                    };
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                } catch(e) { j(e); }
-            });
+            return _deleteWhere(db, STORE_NAME_VN_MEMORIES, m => m && String(m.chapterId) === String(chapterId) && (!storyId || m.storyId === storyId));
         },
         // 把某世界的記憶「複製」到另一個世界 —— 換聊天 / 換備份檔(chatId 變了)後，把舊世界記憶搬過來。來源保留。
         copyVnMemoriesToStory: async function(fromStoryId, toStoryId) {

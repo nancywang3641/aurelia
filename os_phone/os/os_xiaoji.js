@@ -645,12 +645,19 @@
         await _memLog(rid, { kind: 'theater', skill: id, label: sk.label, text: '跟' + (T.name || '老師') + '演了一場：' + (ch.title || '') });
         return true;
     }
-    /** 重看存著的那一場（不叫模型）。沒存過回 false */
+    /** 重看存著的那一場（不叫模型）。沒存過回 false。
+     *  重看也記一行經歷（10-19，終審 Minor：以前只有第一次演記了，她陪它重看幾次它都不知道） */
     async function replay(rid, id) {
         const rec = await get(rid), t = rec.skills[id] && rec.skills[id].theater;
         const VT = _g('VoidTerminal');
         if (!t || !t.content || !VT || !VT.playSavedScene) return false;
-        return !!VT.playSavedScene({ title: t.title, content: t.content });
+        const ok = !!VT.playSavedScene({ title: t.title, content: t.content });
+        if (ok) {
+            const sk = _skill(id), T = (sk && _L().TEACHERS[sk.teacher]) || {};
+            await _memLog(rid, { kind: 'theater', skill: id, label: (sk && sk.label) || id, replay: true,
+                text: USER + '重看了你跟' + (T.name || '老師') + '演的那一場：' + (t.title || '') });
+        }
+        return ok;
     }
     async function adopt(o) {
         o = o || {};
