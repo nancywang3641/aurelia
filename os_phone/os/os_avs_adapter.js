@@ -79,10 +79,11 @@
     function _pwaReadState() {
         try { return JSON.parse(localStorage.getItem(_pwaStateKey()) || '{}'); } catch(e) { return {}; }
     }
+    // 以前失敗只印 console：劇情狀態沒存下來，她要到重整後數值退回去才發現
     function _pwaWriteState(state) {
-        try { localStorage.setItem(_pwaStateKey(), JSON.stringify(state)); } catch(e) {
-            console.error('[AVS Adapter] PWA 寫入失敗:', e);
-        }
+        let s;
+        try { s = JSON.stringify(state); } catch (e) { console.error('[AVS Adapter] PWA 狀態轉不成文字:', e); return; }
+        win.AUI.lsSet(_pwaStateKey(), s, '劇情狀態');
     }
 
     // ===== 規則 storage（兩端各自 key，PWA 沿用原 avs_condition_rules）=====

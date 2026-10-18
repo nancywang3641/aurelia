@@ -20,12 +20,10 @@
         try { return JSON.parse(localStorage.getItem(LSKEY) || '[]'); } catch(e) { return []; }
     }
 
+    // 回傳有沒有存成功（兩條路失敗時都會自己跳提示）
     function _saveRules(rules) {
-        if (win.OS_AVS_ADAPTER?.saveRules) {
-            win.OS_AVS_ADAPTER.saveRules(rules);
-        } else {
-            localStorage.setItem(LSKEY, JSON.stringify(rules));
-        }
+        if (win.OS_AVS_ADAPTER?.saveRules) return win.OS_AVS_ADAPTER.saveRules(rules) !== false;
+        return win.AUI.lsSet(LSKEY, JSON.stringify(rules), '條件規則');
     }
 
 
@@ -128,6 +126,16 @@
         return `<behavior_rules>\n以下行為規範當前生效，請在回應中嚴格遵循，不要在 <content> 中提及規則本身：\n\n${body}\n</behavior_rules>`;
     }
 
+    // 這段聊天／這本故事用得到哪些變數包：綁這段的＋沒綁任何一段的（全域）。getActiveContext 的 activePackIds 就是要這份。
+    //   🚨 不傳＝不認包、只剩 worldId 過濾；規則窗口和「想靠近」生的規則 worldId 都是空的 → 別本故事的規則也跟著注入。
+    //   PWA 的變數包 chatId＝那本故事的 storyId（見 os_avs_adapter getCurrentChatId），兩端同一套比法。
+    async function activePackIds(chatId) {
+        if (!win.OS_DB?.getAllVarPacks) return null;
+        const cid = (chatId != null) ? String(chatId) : (win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '');
+        const all = (await win.OS_DB.getAllVarPacks()) || [];
+        return all.filter(p => p && (!p.chatId || p.chatId === cid)).map(p => p.id);
+    }
+
     // only：{ name, path }＝只替這一個人生三條好感規則（角色卡設「想靠近」時用），生好就換掉這個檔案裡他原本那幾條同 path 的
     async function generateRulesForWorld({ worldId, packId, worldTitle, worldDesc, variables, callApi, only }) {
         if (!callApi || (!worldId && !packId) || !variables?.length) return 0;
@@ -215,7 +223,7 @@ ${varList}
                     const want = _fold(only.path);
                     existing = existing.filter(r => !((r.packId || '') === (packId || '') && (r.worldId || '') === (worldId || '') && _fold(r.path) === want));
                 }
-                _saveRules([...existing, ...newRules]);
+                if (!_saveRules([...existing, ...newRules])) return 0;   // 沒存下來就不報「生好 N 條」（存檔那邊已經跳過提示）
                 console.log(`[AVS Rules] 自動生成 ${newRules.length} 條規則（世界：${worldTitle}）`);
             }
             return newRules.length;
@@ -332,7 +340,7 @@ ${varList}
                 if (e.target.closest('.avsr-del-group')) return;
                 const key = hdr.dataset.collapse;
                 collapsed[key] = !collapsed[key];
-                try { localStorage.setItem('avsr_collapsed', JSON.stringify(collapsed)); } catch(e) {}
+                win.AUI.lsSet('avsr_collapsed', JSON.stringify(collapsed), '規則分組的收合狀態');
                 _renderList(el);
             };
         });
@@ -346,7 +354,7 @@ ${varList}
                 const remaining = _loadRules().filter(r => (r.worldId || '__global__') !== key);
                 _saveRules(remaining);
                 delete collapsed[key];
-                try { localStorage.setItem('avsr_collapsed', JSON.stringify(collapsed)); } catch(e) {}
+                win.AUI.lsSet('avsr_collapsed', JSON.stringify(collapsed), '規則分組的收合狀態');
                 _renderList(el);
             };
         });
@@ -502,7 +510,7 @@ ${varList}
             const idx = rules2.findIndex(x => x.id === rule.id);
             const updated = { ...rule, name, path, op, value, content, folder: folder || undefined, priority };
             if (idx >= 0) rules2[idx] = updated; else rules2.push(updated);
-            _saveRules(rules2);
+            if (!_saveRules(rules2)) return;   // 沒存下來就留著編輯窗，打的字不丟
             editor.className = 'avsr-editor hidden';
             _renderList(el);
         };
@@ -546,7 +554,7 @@ ${varList}
             folder: rule.folder || ''
         };
         rules.push(r);
-        _saveRules(rules);
+        if (!_saveRules(rules)) return null;   // 沒存下來：呼叫端拿 null 就別收掉表單
         return r;
     }
     function updateRule(id, patch) {
@@ -554,13 +562,11 @@ ${varList}
         const idx = rules.findIndex(r => r.id === id);
         if (idx < 0) return false;
         rules[idx] = { ...rules[idx], ...patch };
-        _saveRules(rules);
-        return true;
+        return _saveRules(rules);
     }
     function deleteRule(id) {
         const rules = _loadRules().filter(r => r.id !== id);
-        _saveRules(rules);
-        return true;
+        return _saveRules(rules);
     }
     function toggleRule(id) {
         const rules = _loadRules();
@@ -602,7 +608,7 @@ ${varList}
     }
 
     win.OS_AVS_RULES = {
-        getActiveContext, generateRulesForWorld, renderTab,
+        getActiveContext, activePackIds, generateRulesForWorld, renderTab,
         affinityTarget, generateAffinityFor,
         // CRUD（V1.4 加入，給外部 UI 用）
         loadRules: _loadRules,

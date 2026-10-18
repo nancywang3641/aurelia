@@ -1118,8 +1118,22 @@
         if (!_appContainer) return false;
         try { _appContainer.querySelector('#avs-view-packs')?.classList.add('active'); } catch (e) {}
         openPackEditor(_appContainer, null);
-        try { _appContainer.querySelector('#avs-pack-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+        try { _scrollToTopInBox(_appContainer.querySelector('#avs-pack-editor')); } catch (e) {}
         return true;
+    }
+    // 只捲編輯器所在那一格，讓它頂端對齊（＝scrollIntoView 的 block:start）。
+    //   scrollIntoView 會連外層一起捲：編輯器剛打開、狀態面板可能還在滑進來，整個面板會卡在兩頁中間
+    function _scrollToTopInBox(el) {
+        if (!el) return;
+        let box = el.parentElement;
+        while (box && box !== document.body && box !== document.documentElement) {
+            const oy = getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box || box === document.body || box === document.documentElement) return;
+        const top = box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop;
+        box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     }
 
     function bindPackEditorEvents(container) {
@@ -1751,7 +1765,7 @@
         catch (e) { return {}; }
     }
     function _stkSave(patch) {
-        try { localStorage.setItem(STK_CFG, JSON.stringify(Object.assign(_stkCfg(), patch))); } catch (e) {}
+        win.AUI.lsSet(STK_CFG, JSON.stringify(Object.assign(_stkCfg(), patch)), '貼紙生圖的設定');
     }
     function _stkPresets(src) {
         const LD = win.LobbyDress || window.LobbyDress;
@@ -2413,7 +2427,7 @@
                 const id = btn.dataset.delPreset;
                 let all = [];
                 try { all = JSON.parse(localStorage.getItem('avs_furnace_presets') || '[]'); } catch(e) {}
-                localStorage.setItem('avs_furnace_presets', JSON.stringify(all.filter(p => p.id !== id)));
+                if (!win.AUI.lsSet('avs_furnace_presets', JSON.stringify(all.filter(p => p.id !== id)), '風格建議清單')) return;
                 _refreshFurnacePresets(container, packId);
             };
         });
@@ -2881,11 +2895,8 @@
         const n = parseFloat(rawVal);
         const value = (!isNaN(n) && String(n) === rawVal) ? n : rawVal;
         const data = { name: name || path, path, op, value, content, enabled: true, packId: pack.id };
-        if (isNew) {
-            win.OS_AVS_RULES?.addRule?.(data);
-        } else {
-            win.OS_AVS_RULES?.updateRule?.(id, data);
-        }
+        const saved = isNew ? win.OS_AVS_RULES?.addRule?.(data) : win.OS_AVS_RULES?.updateRule?.(id, data);
+        if (saved === null || saved === false) return;   // 沒存下來：留著這張編輯卡，打的字不丟（存檔那邊已經跳過提示）
         _editingRuleIdInModal = null;
         renderRulesModalList(_ruleModalContainer());
     }

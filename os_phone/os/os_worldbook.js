@@ -22,7 +22,7 @@
         try { return JSON.parse(localStorage.getItem(LSKEY_BOOKS)) || [...DEFAULT_BOOKS]; }
         catch(e) { return [...DEFAULT_BOOKS]; }
     }
-    function saveBooks(books) { localStorage.setItem(LSKEY_BOOKS, JSON.stringify(books)); }
+    function saveBooks(books) { return win.AUI.lsSet(LSKEY_BOOKS, JSON.stringify(books), '世界書書包清單'); }
 
     // ── 常駐書包（＝酒館的「全域世界書」）─────────────────────────────
     //   藏書自己掛的書包存在 vn_active_wb_packs（每本一份，開書時由書架寫入）。
@@ -35,7 +35,7 @@
         catch(e) { return []; }
     }
     function saveGlobalPacks(list) {
-        try { localStorage.setItem(LSKEY_GLOBAL, JSON.stringify([...new Set(list || [])])); } catch(e) {}
+        return win.AUI.lsSet(LSKEY_GLOBAL, JSON.stringify([...new Set(list || [])]), '常駐書包名單');
     }
     function getStoryPacks() {
         try { const a = JSON.parse(localStorage.getItem('vn_active_wb_packs') || '[]'); return Array.isArray(a) ? a : []; }
@@ -43,6 +43,30 @@
     }
 
     // ── 格式匯入 ────────────────────────────────────────────────────
+    // 酒館條目 → PWA 條目的「關鍵字／常駐／開關／順序」。世界書 JSON 匯入、角色卡自帶的書、importFromCard 三條路共用這一支：
+    //   以前各寫一份 —— 角色卡那份不看 constant，卡片裡的常駐條目只要填了 keys 就變成要打到關鍵字才注入；
+    //   預設順序一邊 0、一邊 50；欄位名有的只認 key、有的只認 keys。
+    //   三種來源的欄位名：世界書 JSON＝key／order／disable；角色卡 character_book＝keys／insertion_order／enabled；
+    //   酒館助手＝keys／type:'constant'（更早的叫 keyword）。
+    function _stEntryBase(e) {
+        e = e || {};
+        // 🚨 觸發關鍵字：酒館「匯出世界書」的欄位叫 `key`，只有助手 API 那條路才叫 `keyword`。
+        //    以前只讀 keyword → 匯入真的酒館檔案時每一條的關鍵字都被靜靜丟掉，
+        //    而 PWA 的規則是「沒填關鍵字＝常駐」→ 整本書每輪全部注入（五種曲風的 BGM 清單一起送）。
+        // 🔵 constant（藍燈）＝酒館的無條件常駐，語意剛好就是 PWA 的「關鍵字留空」→ 不帶 keys。
+        let keyStr = '';
+        if (!(e.constant === true || e.type === 'constant')) {
+            const k = [e.keys, e.key, e.keyword].find(v => v !== undefined && v !== null);
+            if (Array.isArray(k)) keyStr = k.map(x => String(x).trim()).filter(Boolean).join(',');
+            else if (typeof k === 'string') keyStr = k.trim();
+        }
+        // order 0 也是合法值（酒館裡最先插、最弱），不能當成「沒填」再去找別的欄位
+        const num = v => { const n = parseInt(v, 10); return isNaN(n) ? null : n; };
+        const order = num(e.order) ?? num(e.insertion_order) ?? 0;
+        const enabled = (e.enabled !== undefined) ? e.enabled !== false : !(e.disable || e.disabled);
+        return { keys: keyStr, enabled, order };
+    }
+
     function importFromST(json, targetBookName) {
         const entries = [];
         const src = json.entries || json;
@@ -50,16 +74,7 @@
         
         items.forEach((e, i) => {
             const cat = e.group && e.group.trim() ? e.group.trim() : '預設';
-            // 🚨 觸發關鍵字：酒館「匯出世界書」的欄位叫 `key`，只有助手 API 那條路才叫 `keyword`。
-            //    以前只讀 keyword → 匯入真的酒館檔案時每一條的關鍵字都被靜靜丟掉，
-            //    而 PWA 的規則是「沒填關鍵字＝常駐」→ 整本書每輪全部注入（五種曲風的 BGM 清單一起送）。
-            // 🔵 constant（藍燈）＝酒館的無條件常駐，語意剛好就是 PWA 的「關鍵字留空」→ 不帶 keys。
-            let keyStr = '';
-            if (!e.constant) {
-                const k = (e.keyword !== undefined) ? e.keyword : e.key;
-                if (Array.isArray(k)) keyStr = k.join(',');
-                else if (typeof k === 'string') keyStr = k;
-            }
+            const base = _stEntryBase(e);
 
             entries.push({
                 id: 'wb_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2,6),
@@ -67,9 +82,9 @@
                 title: (e.comment || e.name || `條目 ${i + 1}`).trim(),
                 content: (e.content || '').trim(),
                 category: cat,
-                keys: keyStr.trim(),
-                enabled: !(e.disable || e.disabled || false),
-                order: parseInt(e.order) || parseInt(e.displayIndex) || 0,
+                keys: base.keys,
+                enabled: base.enabled,
+                order: base.order,
                 depth: _stDepth(e),   // 酒館 @D 的深度；null＝跟著「世界書」那一格
                 role: _stRole(e),     // @D 的身分：0系統 1使用者 2AI
                 createdAt: Date.now(),
@@ -189,7 +204,7 @@
                 
                 <div class="wb-field">
                   <label>觸發關鍵字 (輸入後按 Enter 建立標籤，留空則常駐)</label>
-                  <div class="wb-tag-box" id="wb-tag-box" onclick="document.getElementById('wb-f-keys-input').focus()">
+                  <div class="wb-tag-box" id="wb-tag-box" onclick="document.getElementById('wb-f-keys-input').focus({preventScroll:true})">
                     <input type="text" class="wb-tag-input" id="wb-f-keys-input" placeholder="新增標籤..." autocomplete="off" />
                   </div>
                   <details class="wb-tag-fold">
@@ -649,7 +664,7 @@
         const books = getBooks();
         if (!books.includes(newBookName)) {
             books.push(newBookName);
-            saveBooks(books);
+            if (!saveBooks(books)) return;   // 書包名沒進清單，條目存了也看不到、生成時也撈不到 → 這次不匯
         }
 
         // 儲存條目
@@ -724,7 +739,7 @@
                 const books = getBooks();
                 if (!books.includes(name)) {
                     books.push(name);
-                    saveBooks(books);
+                    if (!saveBooks(books)) return;   // 清單沒存進去＝下拉看不到這本，別切過去
                 }
                 _activeBook = name;
                 renderBookSelector(root);
@@ -866,8 +881,7 @@
         createLorebook: async function(name) {
             const n = String(name || '').trim();
             if (!n || getBooks().includes(n)) return false;
-            saveBooks(getBooks().concat(n));
-            return true;
+            return saveBooks(getBooks().concat(n));
         },
         deleteLorebook: async function(name) {
             const n = String(name || '');
@@ -1052,6 +1066,7 @@
         // 換算工具對外開放：匯入端不必各自再寫一份（character_book 的欄位藏在 extensions 裡）
         stDepthOf: function(e) { return _stDepth(e); },
         stRoleOf:  function(e) { return _stRole(e); },
+        stEntryOf: function(e) { return _stEntryBase(e); },   // { keys, enabled, order }：常駐、關鍵字、順序的換算
         registerBook: function(name) {
             const n = String(name || '').trim();
             if (!n) return;
@@ -1122,15 +1137,16 @@
             
             for (let i = 0; i < entriesData.length; i++) {
                 const e = entriesData[i];
+                const base = _stEntryBase(e);
                 const entry = {
                     id: 'wb_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2,6),
                     book: cardName,
                     title: (e.comment || e.name || `條目 ${i + 1}`).trim(),
                     content: (e.content || '').trim(),
                     category: '角色自帶設定', // 統一放在一個專屬分類裡
-                    keys: e.keyword ? (Array.isArray(e.keyword) ? e.keyword.join(',') : String(e.keyword)).trim() : '',
-                    enabled: !(e.disable || e.disabled || false),
-                    order: parseInt(e.order) || parseInt(e.displayIndex) || 0,
+                    keys: base.keys,
+                    enabled: base.enabled,
+                    order: base.order,
                     depth: _stDepth(e),   // 同上：角色卡自帶的書也保留深度
                     role: _stRole(e),
                     createdAt: Date.now(),

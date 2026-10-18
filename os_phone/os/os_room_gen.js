@@ -59,7 +59,7 @@
         try { return win.localStorage.getItem(K_STYLE) || ''; } catch (e) { return ''; }
     }
     function setStyleName(name) {
-        try { win.localStorage.setItem(K_STYLE, String(name || '')); } catch (e) {}
+        win.AUI.lsSet(K_STYLE, String(name || ''), '房間生圖的畫風');
     }
     function pickStylePreset() {
         const list = listStylePresets();
@@ -275,7 +275,7 @@
     }
     function setRoute(patch) {
         const r = Object.assign(getRoute(), patch || {});
-        try { win.localStorage.setItem(K_ROUTE, JSON.stringify(r)); } catch (e) {}
+        win.AUI.lsSet(K_ROUTE, JSON.stringify(r), '房間生圖的設定');
         return r;
     }
     // 自訂接口的選項：'' ＝圖片設置裡現在填的那組；其他是存起來的節點

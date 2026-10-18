@@ -183,16 +183,19 @@
                     ? entry.keys.join(',')
                     : String(entry.key || entry.keys || '');
                 // 確定性 ID：同一角色卡同一條目永遠是同一個 ID → 重複匯入只會覆蓋不會複製
+                //   （hash 照舊拿卡片原本寫的關鍵字算：常駐條目存進去的 keys 是空的，但 ID 不能跟著變，不然重新匯入會多一份）
                 const stableId = 'wb_' + _simpleHash(card.name + '|' + keys + '|' + (entry.comment || ''));
+                // 關鍵字／常駐／開關／順序跟世界書 JSON 匯入同一支換算：常駐（constant）條目不帶 keys＝每輪都注入
+                const base = win.OS_WORLDBOOK.stEntryOf(entry);
                 await win.OS_DB.saveWorldbookEntry({
                     id: stableId,
                     book: cardCategory,   // 🚨 同上：少了它，整本卡片世界書在生成時一條都撈不到
                     title: entry.comment || entry.title || keys.slice(0, 20) || '條目',
-                    keys,
+                    keys: base.keys,
                     content: entry.content || '',
                     category: cardCategory,   // 角色名作為分類資料夾
-                    enabled: entry.enabled !== false,
-                    order: entry.insertion_order ?? 50,
+                    enabled: base.enabled,
+                    order: base.order,
                     // 酒館 @D 的深度／身分：character_book 把這些塞在 entry.extensions 裡，
                     //   換算統一交給 OS_WORLDBOOK（那支兩種形狀都吃得到）
                     depth: win.OS_WORLDBOOK?.stDepthOf?.(entry) ?? null,

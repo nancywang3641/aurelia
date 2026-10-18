@@ -198,7 +198,7 @@
         const errCb = (err) => _studioConfirmRetry((err && err.message) || err, () => _mcImportRefine(p, req), fallback);
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true, task: 'studio', label: '我的角色' }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504；名冊上算「創作室」
     }
     // 對標當前世界：一個 AI call 直接把現有人設改寫成這張卡世界的版本(現代→古代)，存成新變體
     async function _mcImportToWorld(p) {
@@ -227,7 +227,7 @@
         const errCb = (err) => _studioConfirmRetry((err && err.message) || err, () => _mcImportToWorld(p));
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true, task: 'studio', label: '我的角色' }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504；名冊上算「創作室」
     }
 
     const _MC_SYS = `你是「我的角色」人設寫作助手，幫使用者寫他自己在故事裡扮演的主角（MC/OC）。可能含成人/NSFW 設定，照常專業協助、不要拒絕、不要說教。
@@ -326,7 +326,7 @@
         const errCb = (err) => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '送出'; } _mcLastError = (err && err.message) || String(err || '未知錯誤'); _mcPaintChat(host); };
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true, task: 'studio', label: '我的角色' }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504；名冊上算「創作室」
     }
 
     function _mcRenderPreview(host) {
@@ -484,7 +484,7 @@
         const errCb = (err) => _studioConfirmRetry((err && err.message) || err, () => _mcDoAdapt(host, mode, desc));
         const useMain = _mcModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true, task: 'studio', label: '我的角色' }); } catch (e) { errCb(e); }   // 長輸出開串流防閘道504；名冊上算「創作室」
     }
 
     // ── 對外入口：核心 switchTopMode 懶解析呼叫 ──

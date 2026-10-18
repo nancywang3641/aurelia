@@ -24,7 +24,7 @@
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
     function _cfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { return {}; } }
-    function _saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} }
+    function _saveCfg(c) { return win.AUI.lsSet(CFG_KEY, JSON.stringify(c), '記憶設定'); }
 
     // ❔ 這一頁的說明全放小問號（09-27 她：「對齊劇情是幹嘛的，有點忘記了，是不是都給添上問號解釋會比較好?」）
     //   面板上不掛成段說明；會變的狀態字（已記幾條、轉入提醒）照舊留在面板上。
@@ -274,7 +274,7 @@
             const _lm = q('#avs-mem-localmodel'); if (_lm) cfg.localModel = _lm.value || 'Xenova/bge-small-zh-v1.5';   // 本地模型只在開本地時顯示
             cfg.extractSource = q('#avs-mem-src')?.value || 'content';
             const _mr = q('#avs-mem-main-recent'); if (_mr) cfg.mainRecentOnly = !!_mr.checked;   // 主模型只注入近期+角色記憶
-            _saveCfg(cfg);
+            if (!_saveCfg(cfg)) return;   // 沒存下來就不說「已儲存」
             const b = saveBtn; const o = b.textContent; b.textContent = '✓ 已儲存'; setTimeout(() => { b.textContent = o; }, 1200);
         };
 

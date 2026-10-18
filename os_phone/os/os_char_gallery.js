@@ -727,7 +727,21 @@
                 S.draft[kind].push({ entryKey: '', name: ch, exp: '', url: '', aliases: '' });
                 rerenderEditor(kind);
                 const ins = S.root.querySelectorAll('.acg-wb[data-kind="' + kind + '"] .acg-in');
-                if (ins.length) ins[kind === 'exp' ? ins.length - 3 : ins.length - 2].focus();
+                if (ins.length) {
+                    const el = ins[kind === 'exp' ? ins.length - 3 : ins.length - 2];
+                    // focus 自己會連外層一起捲（整個圖鑑窗被帶歪）：不讓它捲，改成只把新的那行所在那一格捲到看得見
+                    el.focus({ preventScroll: true });
+                    let box = el.parentElement;
+                    while (box && box !== S.root.parentElement) {
+                        const oy = getComputedStyle(box).overflowY;
+                        if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+                        box = box.parentElement;
+                    }
+                    if (box && box !== S.root.parentElement) {
+                        const off = el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop;
+                        if (off < 0 || off + el.offsetHeight > box.clientHeight) box.scrollTop += off - (off < 0 ? 0 : box.clientHeight - el.offsetHeight);
+                    }
+                }
                 return;
             }
             if (act === 'wb-del') { S.draft[b.dataset.kind].splice(+b.dataset.i, 1); rerenderEditor(b.dataset.kind); return; }

@@ -275,7 +275,7 @@
         try {
             const a = _recent().filter(x => x && x.s !== styleId);
             a.unshift({ s: styleId, l: layoutId });
-            win.localStorage.setItem(K_RECENT, JSON.stringify(a.slice(0, RECENT_MAX)));
+            win.AUI.lsSet(K_RECENT, JSON.stringify(a.slice(0, RECENT_MAX)), '最近用過的面板風格');
         } catch (e) {}
     }
     function _rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }

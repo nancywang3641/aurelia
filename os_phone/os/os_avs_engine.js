@@ -278,7 +278,7 @@
             try { stack = JSON.parse(localStorage.getItem(skey) || '[]'); } catch(e) {}
             if (!stack.length) return null;
             const prev = stack.pop();
-            try { localStorage.setItem(skey, JSON.stringify(stack)); } catch(e){}
+            win.AUI.lsSet(skey, JSON.stringify(stack), '狀態的回溯紀錄');
             _avsWrite(prev.state);
             return prev.state;
         },

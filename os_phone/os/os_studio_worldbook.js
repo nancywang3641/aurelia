@@ -101,7 +101,7 @@
         </div>`;
         const toggle = host.querySelector('#swb-new-toggle');
         const newrow = host.querySelector('#swb-newrow');
-        toggle.onclick = () => { newrow.hidden = !newrow.hidden; if (!newrow.hidden) { const i = host.querySelector('#swb-new-name'); i && i.focus(); } };
+        toggle.onclick = () => { newrow.hidden = !newrow.hidden; if (!newrow.hidden) { const i = host.querySelector('#swb-new-name'); i && i.focus({ preventScroll: true }); } };
         host.querySelector('#swb-new-go').onclick = () => _wbCreateNew(host.querySelector('#swb-new-name').value);
         const listEl = host.querySelector('#swb-list');
         if (!books.length) { listEl.innerHTML = `<div class="swb-empty"><div class="swb-empty-art"><i class="fa-solid fa-globe"></i></div><div>${_onPwa() ? '' : '酒館裡'}還沒有世界書<br>按上面「新增世界書」開一本吧</div></div>`; return; }
@@ -329,8 +329,8 @@
     }
     function _wbAdvSheet() {
         _wbSheet('進階設定 · AI 用哪個模型寫', [
-            { label: '主模型寫（品質好，預設）' + (_wbModel === 'main' ? ' <i class="fa-solid fa-check"></i>' : ''), cls: _wbModel === 'main' ? 'safe' : '', onClick: () => { _wbModel = 'main'; localStorage.setItem('swb_model', 'main'); } },
-            { label: '副模型寫（快、省）' + (_wbModel === 'sec' ? ' <i class="fa-solid fa-check"></i>' : ''), cls: _wbModel === 'sec' ? 'safe' : '', onClick: () => { _wbModel = 'sec'; localStorage.setItem('swb_model', 'sec'); } },
+            { label: '主模型寫（品質好，預設）' + (_wbModel === 'main' ? ' <i class="fa-solid fa-check"></i>' : ''), cls: _wbModel === 'main' ? 'safe' : '', onClick: () => { _wbModel = 'main'; win.AUI.lsSet('swb_model', 'main', '整理世界書用哪個模型'); } },
+            { label: '副模型寫（快、省）' + (_wbModel === 'sec' ? ' <i class="fa-solid fa-check"></i>' : ''), cls: _wbModel === 'sec' ? 'safe' : '', onClick: () => { _wbModel = 'sec'; win.AUI.lsSet('swb_model', 'sec', '整理世界書用哪個模型'); } },
         ]);
     }
     function _wbEntriesForPrompt() {
@@ -391,7 +391,8 @@
         // 主模型＝chatMain（品質好、世界書二改首選）；副模型＝chatSecondary。選的入口若不存在則退另一個。
         const useMain = _wbModel === 'main' && typeof api.chatMain === 'function';
         const callFn = useMain ? api.chatMain : (typeof api.chatSecondary === 'function' ? api.chatSecondary : api.chatMain);
-        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true }); }   // 長輸出開串流防閘道504
+        // 名冊上算「創作室」；走主或副是這頁「進階設定」自己選的，noRoute＝不再被「哪件事走哪個模型」換掉（同小機門卡）
+        try { callFn.call(api, messages, () => {}, done, errCb, { stream: true, task: 'studio', noRoute: true, label: '整理世界書' }); }   // 長輸出開串流防閘道504
         catch (e) { errCb(e); }
     }
     function _wbParseOps(text) {

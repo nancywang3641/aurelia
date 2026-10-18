@@ -631,7 +631,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         try {
             const ta = document.createElement('textarea');
             ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-            document.body.appendChild(ta); ta.focus(); ta.select();
+            document.body.appendChild(ta); ta.focus({ preventScroll: true }); ta.select();
             document.execCommand('copy'); document.body.removeChild(ta);
             done && done();
         } catch (e) { AUI.alert('複製失敗，請手動全選複製。'); }
@@ -710,7 +710,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     // 功能 chip（feature:true）＝toggle 啟用：用法在送出時併進請求(apiPayload 的 system)、不貼輸入框；話術 chip 照舊貼輸入框
     const _studioActiveFeatures = new Set();
     function _studioLoadActiveFeatures() { try { (JSON.parse(localStorage.getItem('studio_active_features') || '[]') || []).forEach(k => _studioActiveFeatures.add(k)); } catch (e) {} }
-    function _studioSaveActiveFeatures() { try { localStorage.setItem('studio_active_features', JSON.stringify([..._studioActiveFeatures])); } catch (e) {} }
+    function _studioSaveActiveFeatures() { win.AUI.lsSet('studio_active_features', JSON.stringify([..._studioActiveFeatures]), '創作室啟用的功能'); }
     _studioLoadActiveFeatures();
     function _studioInjectActiveFeatures(apiPayload) {
         try {
@@ -719,7 +719,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         } catch (e) {}
     }
     function _studioLoadChips() { try { return JSON.parse(localStorage.getItem('studio_quick_chips') || '[]') || []; } catch (e) { return []; } }
-    function _studioSaveChips(list) { try { localStorage.setItem('studio_quick_chips', JSON.stringify(list)); } catch (e) {} }
+    function _studioSaveChips(list) { return win.AUI.lsSet('studio_quick_chips', JSON.stringify(list), '自訂的要求'); }
     // 元素 chip 的選取狀態（一次性：送出即清）；存的是要送給 AI 的字
     const _studioSelectedChips = new Set();
     function _studioTakeSelectedChips() {
@@ -820,7 +820,8 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         const labEl = document.getElementById('studio-chip-label'), txtEl = document.getElementById('studio-chip-text');
         const lab = ((labEl && labEl.value) || '').trim(), txt = ((txtEl && txtEl.value) || '').trim();
         if (!lab) { AUI.alert('要有名字'); return; }
-        const u = _studioLoadChips(); u.push({ label: lab.slice(0, 12), text: txt }); _studioSaveChips(u);   // 說明留空＝送出時只送名字
+        const u = _studioLoadChips(); u.push({ label: lab.slice(0, 12), text: txt });   // 說明留空＝送出時只送名字
+        if (!_studioSaveChips(u)) return;   // 沒存下來就別清掉她打的字
         if (labEl) labEl.value = ''; if (txtEl) txtEl.value = '';
         _studioRenderChipList(); renderStudioChips();
     }
@@ -885,7 +886,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             afBtn.classList.toggle('on', _studioAutoFix);
             afBtn.onclick = () => {
                 _studioAutoFix = !_studioAutoFix;
-                try { localStorage.setItem('studio_autofix', _studioAutoFix ? '1' : '0'); } catch (e) {}
+                win.AUI.lsSet('studio_autofix', _studioAutoFix ? '1' : '0', '「檢查到問題自動叫它修」開關');
                 afBtn.classList.toggle('on', _studioAutoFix);
             };
         }
@@ -994,8 +995,10 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     }
 
     // ── 統一存檔（IDB + localStorage 雙重備份，只存 user/assistant，不存龐大的 system prompt）
+    //   例外：[LATEST_PANEL_STATE] 那則（_isLatestPanel）也是 system，但它就是為了「快取不見時從聊天記錄撈回最新版」才塞的，
+    //   以前跟著被濾掉 → 快取一不見，撈回來的永遠是初版，之前的修改全部退回去
     function _studioSave(chatId) {
-        const toSave = chatMessages.filter(m => m.role !== 'system');
+        const toSave = chatMessages.filter(m => m.role !== 'system' || m._isLatestPanel === true);
         // IDB 主存
         if (win.OS_DB && win.OS_DB.saveStudioChat) {
             win.OS_DB.saveStudioChat(chatId, toSave).catch(e => console.warn('[Studio] IDB存檔失敗:', e));
@@ -1015,8 +1018,9 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 localStorage.setItem(`os_studio_parsed_${chatId}`, JSON.stringify(currentParsedData));
             }
             // ⚠️ currentParsedData 為 null（如存檔後 line654 會清空）時「不動快取」，保留「最後一版」當耐久底。
-            //   以前這裡 removeItem → 存檔後快取被砍 → 下次編輯撈不到 → 退聊天歷史 → [LATEST_PANEL_STATE] 是
-            //   system 訊息不持久化(line818) → 只撈到初版 → 把之前所有 diff 修改全還原（Rae 踩的「上次修改又彈回」bug）。
+            //   以前這裡 removeItem → 存檔後快取被砍 → 下次編輯撈不到 → 退聊天歷史 → 當時 [LATEST_PANEL_STATE] 是
+            //   system 訊息、存檔時被濾掉 → 只撈到初版 → 把之前所有 diff 修改全還原（Rae 踩的「上次修改又彈回」bug）。
+            //   （現在 _studioSave 會把那則一起存進 IDB，這份快取寫不進去時聊天記錄還撈得回最新版）
             //   真要清空走「清空對話」鈕的 _clearParsedCache。
         } catch(e) { console.warn('[Studio] 預覽狀態存檔失敗:', e); }
     }
@@ -1125,7 +1129,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
             // 手機上預覽是蓋住整個創作室的抽屜：收起來，她才看得到圖已經放進輸入框上面
             try { togglePreviewDrawer(false); } catch (e) {}
             const inputEl = document.getElementById('studio-input');
-            if (inputEl) inputEl.focus();
+            if (inputEl) inputEl.focus({ preventScroll: true });   // 抽屜正在收，別讓它把外層捲歪
             _studioToast('截好了，打一句哪裡不對再送出', 'success', '截圖');
         } catch (e) {
             console.warn('[Studio] 截預覽失敗:', e);
@@ -1247,10 +1251,10 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 if (lsRaw) history = JSON.parse(lsRaw);
             } catch(e) { history = null; }
         }
-        // 3. 永遠補上最新 system prompt（不依賴舊的存檔版本）
+        // 3. 永遠補上最新 system prompt（不依賴舊的存檔版本）；最新面板那則照留（見 _studioSave）
         const sysMsg = { role: 'system', content: MODES[currentMode].prompt };
         chatMessages = (history && history.length > 0)
-            ? [sysMsg, ...history.filter(m => m.role !== 'system')]
+            ? [sysMsg, ...history.filter(m => m.role !== 'system' || m._isLatestPanel === true)]
             : [sysMsg];
 
         // 類型跟對話一起回來（畫面上那三顆與設定列的標籤也跟著切，HTML 裡寫死的 active 只是初始）
@@ -1835,13 +1839,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // 對話紀錄與版本備份都按世界分開存（改 A 世界的主題不該影響 B 世界）
     function _vthChatKey(w) { return 'vn_theme_chat::' + (w || 'lobby_default'); }
     function _vthChatLoad(w) { try { return JSON.parse(localStorage.getItem(_vthChatKey(w)) || '[]'); } catch (e) { return []; } }
-    function _vthChatSave(w, arr) { try { localStorage.setItem(_vthChatKey(w), JSON.stringify((arr || []).slice(-40))); } catch (e) {} }
+    function _vthChatSave(w, arr) { return win.AUI.lsSet(_vthChatKey(w), JSON.stringify((arr || []).slice(-40)), '主題對話紀錄'); }
     function _vthUndoKey(w) { return 'vn_theme_undo::' + (w || 'lobby_default'); }
     function _vthUndoLoad(w) { try { return JSON.parse(localStorage.getItem(_vthUndoKey(w)) || '[]'); } catch (e) { return []; } }
-    function _vthUndoSave(w, arr) { try { localStorage.setItem(_vthUndoKey(w), JSON.stringify((arr || []).slice(-10))); } catch (e) {} }
+    function _vthUndoSave(w, arr) { return win.AUI.lsSet(_vthUndoKey(w), JSON.stringify((arr || []).slice(-10)), '主題的還原版本'); }
 
     function _vthGalleryLoad() { try { return JSON.parse(localStorage.getItem('vn_theme_gallery') || '[]'); } catch (e) { return []; } }
-    function _vthGallerySave(arr) { try { localStorage.setItem('vn_theme_gallery', JSON.stringify(arr || [])); } catch (e) {} }
+    function _vthGallerySave(arr) { return win.AUI.lsSet('vn_theme_gallery', JSON.stringify(arr || []), '主題收藏'); }
 
     // ══════════════════════════════════════════════════════════════
     // 🌍 世界書 tab 已拆檔 → os/os_studio_worldbook.js（2026-07-16）
@@ -1885,7 +1889,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         if (!VT) { host.innerHTML = '<div style="color:#fc8181;padding:10px;">VN_Theme 未載入，請先進 VN 一次再回來</div>'; return; }
         const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
-        const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const esc = _sgcEsc;   // 也會放進 placeholder="…"、data-id="…"，引號要一起轉
         const ph = '手寫 / 貼上，或用上面的「AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n#vn-chapter-card / #vncc-box（章節卡；預設抄對話框的皮，要單獨設計就對 #vncc-box 寫規則加 !important）\n  #vncc-story #vncc-num #vncc-title #vncc-rule #vncc-preface｜.vncc-cell .vncc-cell-k .vncc-cell-v｜#vncc-enter（開始閱讀鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
         host.innerHTML = `<div class="vth-wrap">
             <div class="vth-col-work">
@@ -1989,7 +1993,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         if (wInput) wInput.onchange = () => {
             _deskW = Math.max(600, Math.min(2560, parseInt(wInput.value) || 1000));
             wInput.value = _deskW;
-            try { localStorage.setItem('vth_desk_w', String(_deskW)); } catch (e) {}
+            win.AUI.lsSet('vth_desk_w', String(_deskW), '預覽的中間寬度');
             if (_curVp === 'center') applyVp();
         };
         let _t = null;
@@ -2140,7 +2144,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 (err) => {
                     _sending = false; sendBtn.disabled = false; wait.remove();
                     _studioConfirmRetry((err && err.message) || err, () => { sayEl.value = text; send(); }, () => { sayEl.value = text; });
-                });
+                }, { task: 'studio', label: 'VN 主題' });   // 名冊上算「創作室」（預設主模型，跟上面 chatMain 同一條）
         };
         sendBtn.onclick = send;
         sayEl.onkeydown = (e) => { if (_enterSends(e)) { e.preventDefault(); send(); } };
@@ -2184,7 +2188,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     area.value = t.css || ''; refreshPreview(); VT.setCss(chatId, t.css || '');
                     const bb = card.querySelector('[data-act="apply"]'); const oo = bb.textContent; bb.textContent = '✓'; setTimeout(() => { bb.textContent = oo; }, 1000);
                 };
-                card.querySelector('[data-act="edit"]').onclick = () => { area.value = t.css || ''; refreshPreview(); area.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+                card.querySelector('[data-act="edit"]').onclick = () => { area.value = t.css || ''; refreshPreview(); _scrollInBox(area, 'center', 'smooth'); };
                 _armOnce(card.querySelector('[data-act="del"]'), '再按一次', () => {
                     _vthGallerySave(_vthGalleryLoad().filter(x => x.id !== t.id)); renderGal();
                 });
@@ -2193,11 +2197,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         host.querySelector('#vth-gal-add').onclick = () => {
             const nameEl = host.querySelector('#vth-gal-name');
             const name = (nameEl.value || '').trim();
-            if (!name) { AUI.alert('幫主題取個名字'); nameEl.focus(); return; }
+            if (!name) { AUI.alert('幫主題取個名字'); nameEl.focus({ preventScroll: true }); return; }
             if (!area.value.trim()) { AUI.alert('CSS 是空的，先生成或貼一段再收藏'); return; }
             const arr = _vthGalleryLoad();
             arr.unshift({ id: 'th_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), name: name, css: area.value });
-            _vthGallerySave(arr);
+            if (!_vthGallerySave(arr)) return;   // 沒收進去就留著名字，別清掉
             nameEl.value = '';
             renderGal();
         };
@@ -2421,8 +2425,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 collapseToSelected('自己輸入');
                 const inputEl = document.getElementById('studio-input');
                 if (inputEl) {
-                    inputEl.focus();
-                    inputEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    inputEl.focus({ preventScroll: true });
+                    _scrollInBox(inputEl, 'nearest', 'smooth');
                 }
             };
             btnRow.appendChild(otherBtn);
@@ -2682,7 +2686,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             sendBtn.disabled = false;
             sendBtn.innerText = '發送';
             sendBtn.onclick = handleSend; // 恢復發送功能
-            inputEl.focus();
+            inputEl.focus({ preventScroll: true });
         }
     }
 
@@ -3045,30 +3049,46 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             feedRemove: async function (id) { const i = _pvAdded.findIndex(r => r.id === id); if (i < 0) return false; _pvAdded.splice(i, 1); return true; },
             md(text) {
                 if (!text) return '';
+                text = String(text).replace(/\\n/g, '\n');   // AI 常寫「字面 \n」當換行：先轉真換行（劇情裡、手機 app 裡那兩份都有這步，預覽漏了）
                 try {
                     const P = window.parent, S = (P && P.showdown) || window.showdown;
                     if (S) {
-                        const h = new S.Converter({ simpleLineBreaks: true, tables: true, strikethrough: true }).makeHtml(String(text));
+                        const h = new S.Converter({ simpleLineBreaks: true, tables: true, strikethrough: true }).makeHtml(text);
                         const D = (P && P.DOMPurify) || window.DOMPurify;
                         return D ? D.sanitize(h) : h;
                     }
                 } catch (e) {}
-                return String(text)
+                // 沒有 showdown（手機版網頁沒載）：照劇情裡那份（vn_dynamic_parser 的 st.md），換行要變 <br>，不然整段擠成一行
+                return text
                     .replace(new RegExp('[*][*](.+?)[*][*]', 'g'), (_, p1) => '<b>' + p1 + '</b>')
                     .replace(new RegExp('[*](.+?)[*]', 'g'), (_, p1) => '<i>' + p1 + '</i>')
-                    .replace(new RegExp('[`](.+?)[`]', 'g'), (_, p1) => '<code>' + p1 + '</code>');
+                    .replace(new RegExp('[`](.+?)[`]', 'g'), (_, p1) => '<code>' + p1 + '</code>')
+                    .replace(/\n/g, '<br>')
+                    .replace(/(<br>\s*){3,}/g, '<br><br>');
             },
             parse() {
+                // 跟劇情裡那份（vn_dynamic_parser 的 st.parse）同一套：AI 把一筆 [Tag|…] 拆成好幾段時先縫回一行，忘了收尾的 ] 幫它補上
                 const result = {};
-                (lines || []).forEach(line => {
-                    line = String(line || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');   // 容錯：全形分隔符/方括號→半形
-                    if (line.charAt(0) !== '[' || line.charAt(line.length-1) !== ']') return;
-                    const inner = line.slice(1, -1);
-                    const parts = inner.split('|');
+                const stitched = [];
+                let buf = null;
+                (lines || []).forEach(raw => {
+                    const line = String(raw || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');   // 容錯：全形分隔符/方括號→半形
+                    if (!line) return;
+                    if (buf !== null) {
+                        buf += '\n\n' + line;
+                        if (line.charAt(line.length - 1) === ']') { stitched.push(buf); buf = null; }
+                        return;
+                    }
+                    if (/^\[[A-Za-z0-9_一-鿿-]+\|/.test(line) && line.charAt(line.length - 1) !== ']') { buf = line; return; }
+                    stitched.push(line);
+                });
+                if (buf !== null) stitched.push(buf + ']');
+                stitched.forEach(line => {
+                    if (line.charAt(0) !== '[' || line.charAt(line.length - 1) !== ']') return;
+                    const parts = line.slice(1, -1).split('|');
                     const tag = parts[0];
-                    const fields = parts.slice(1);
                     if (!result[tag]) result[tag] = [];
-                    result[tag].push(fields);
+                    result[tag].push(parts.slice(1));
                 });
                 return result;
             },
@@ -3118,6 +3138,9 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             },
             remember() { /* 預覽不寫真實記憶 */ },
             toStory() { return Promise.resolve(false); },   // 預覽不記進事件簿
+            // 手機 app、注入酒館那兩份都有這兩支，預覽以前漏了：面板一呼叫就報「不是函式」，預覽整個停在那裡
+            toChat() { try { AUI.toast('預覽不會真的貼進輸入框'); } catch (e) {} return false; },
+            toSystem() { try { AUI.toast('預覽不會真的插進對話'); } catch (e) {} return false; },
             // 手機本身的東西：讀的照真的讀；會動到東西的（分享、扣錢、紅點、通知）預覽只提示不做
             clock() { const T = window.OS_APP_TOOLS || (window.parent && window.parent.OS_APP_TOOLS); return T ? T.clock() : Promise.resolve({ date: '', time: '', upcoming: [] }); },
             balance() { const T = window.OS_APP_TOOLS || (window.parent && window.parent.OS_APP_TOOLS); return T ? T.balance() : Promise.resolve(0); },
@@ -3165,7 +3188,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 } catch (e) {}
             },
             // 預覽用 localStorage stub（裝成 app 後由 app_runtime 的 window.saveData 接管真持久化）；scope 用 tplId 隔離
-            saveData(k, v, scope) { try { localStorage.setItem('aurelia_studio_preview_' + (scope === 'chat' ? 'chat_' : '') + k, JSON.stringify(v)); } catch (e) {} },
+            saveData(k, v, scope) { try { win.AUI.lsSet('aurelia_studio_preview_' + (scope === 'chat' ? 'chat_' : '') + k, JSON.stringify(v), '預覽裡面板存的資料'); } catch (e) {} },
             loadData(k, scope) { try { const s = localStorage.getItem('aurelia_studio_preview_' + (scope === 'chat' ? 'chat_' : '') + k); return s == null ? null : JSON.parse(s); } catch (e) { return null; } },
             async dbSave(k, v, scope) { try { const DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; return await DB.saveAppData('studio_preview', k, v, scope === 'chat' ? this.getChatId() : null); } catch (e) { return false; } },
             async dbLoad(k, scope) { try { const DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; return await DB.getAppData('studio_preview', k, scope === 'chat' ? this.getChatId() : null); } catch (e) { return null; } },
@@ -3188,7 +3211,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             + '<scr' + 'ipt>(function(){'
             + 'var container=document.getElementById("app-root");var lines=[];'
             + 'var st={'
-            +   'md:function(t){if(!t)return "";t=String(t).replace(/\\\\n/g,"\\n");try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return D?D.sanitize(h):h;}}catch(e){}return String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";});},'
+            +   'md:function(t){if(!t)return "";t=String(t).replace(/\\\\n/g,"\\n");try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return D?D.sanitize(h):h;}}catch(e){}return String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";}).replace(/\\n/g,"<br>").replace(/(<br>\\s*){3,}/g,"<br><br>");},'   // 沒有 showdown（手機版網頁）時照劇情裡那份：換行→<br>
             +   'parse:function(){return {};},'
             +   'setImage:async function(el,p,type,provider){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene",provider);if(u)el.src=u;}}catch(e){}},'
             +   'callAI:async function(s,o){try{return window.callAI?await window.callAI(s,o):"";}catch(e){return "";}},'
@@ -3265,7 +3288,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 let p = `# [📱模式｜VN組件] 清單\n使用場景: 可在正文內穿插的特殊 TAG。依下列格式填寫，{…} 佔位符換成實際內容、不可照抄佔位符字面。\n`;
                 if (cS.length) { p += `\n## 單行標籤格式（直接穿插在對話內，無須換行）\n`; cS.forEach(t => { p += `\n${snippetOf(t)}`; }); }
                 if (cB.length) { p += `\n## 區塊標籤格式（整段獨立輸出，與 <content> 並列；只在區塊內穿插，不可掉出區塊）\n`; cB.forEach(t => { p += `\n${snippetOf(t)}`; }); }
-                localStorage.setItem('os_vn_extra_tags_prompt', p);
+                win.AUI.lsSet('os_vn_extra_tags_prompt', p, '給劇情 AI 的組件清單');
             }
 
             // 關鍵字組件 → 結構化存 os_vn_tags_keyword（注入器每輪抓最近正文+使用者輸入、命中才注入這幾個，省 token）
@@ -3273,7 +3296,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 localStorage.removeItem('os_vn_tags_keyword');
             } else {
                 const arr = keywords.map(t => ({ tagId: t.tagId, isBlock: !!t.isBlock, keywords: t.keywords.filter(Boolean), snippet: snippetOf(t) }));
-                localStorage.setItem('os_vn_tags_keyword', JSON.stringify(arr));
+                win.AUI.lsSet('os_vn_tags_keyword', JSON.stringify(arr), '給劇情 AI 的組件清單');
             }
         } catch(e) { console.warn('[Studio] syncActiveTagsToLocal 失敗', e); }
     }
@@ -3332,16 +3355,28 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
           .replace(/(<br>\\s*){3,}/g, '<br><br>');
       },
       parse: function(){
+        // 跟劇情裡那份同一套：一筆記錄被 AI 拆成好幾段時先縫回一行，忘了收尾的右方括號幫它補上
         var result = {};
-        lines.forEach(function(line){
-          line = String(line || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');
-          if (line.charAt(0) !== '[' || line.charAt(line.length-1) !== ']') return;
-          var inner = line.slice(1, -1);
-          var parts = inner.split('|');
+        var stitched = [];
+        var buf = null;
+        lines.forEach(function(raw){
+          var line = String(raw || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');
+          if (!line) return;
+          if (buf !== null) {
+            buf += '\\n\\n' + line;
+            if (line.charAt(line.length - 1) === ']') { stitched.push(buf); buf = null; }
+            return;
+          }
+          if (/^\\[[A-Za-z0-9_一-鿿-]+\\|/.test(line) && line.charAt(line.length - 1) !== ']') { buf = line; return; }
+          stitched.push(line);
+        });
+        if (buf !== null) stitched.push(buf + ']');
+        stitched.forEach(function(line){
+          if (line.charAt(0) !== '[' || line.charAt(line.length - 1) !== ']') return;
+          var parts = line.slice(1, -1).split('|');
           var tag = parts[0];
-          var fields = parts.slice(1);
           if (!result[tag]) result[tag] = [];
-          result[tag].push(fields);
+          result[tag].push(parts.slice(1));
         });
         return result;
       },
@@ -3409,7 +3444,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
           var OS = ctx.OS_API; if (!OS || !OS.chat) return '';
           var S = ctx.OS_SETTINGS;
           var cfg = Object.assign({}, (S && S.getConfig && S.getConfig()) || {});
-          cfg.usePresetPrompts = false; cfg.maxTokens = Math.max(parseInt(cfg.maxTokens) || 0, 8192);
+          cfg.usePresetPrompts = false; cfg.maxTokens = Math.min(Math.max(parseInt(cfg.maxTokens) || 0, 8192), 32768);   // 同預覽那份：上限夾在 32768，免得某些接口報「輸出上限超過」
           var msgs = [];
           var PI = ctx.OS_PHONE_IMAGE;
           var imgs = (opts && Array.isArray(opts.images)) ? opts.images : [];
@@ -3562,7 +3597,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 kill.forEach(k => localStorage.removeItem(k));
                 localStorage.removeItem('os_app_mem_plugin_' + aid);
                 const L = JSON.parse(localStorage.getItem('aurelia_phone_apps') || '[]') || [];
-                localStorage.setItem('aurelia_phone_apps', JSON.stringify(L.filter(m => m && m.id !== aid)));
+                win.AUI.lsSet('aurelia_phone_apps', JSON.stringify(L.filter(m => m && m.id !== aid)), '手機 app 清單');
             } catch (e) {}
         } catch (e) { console.warn('[Studio] 清連結手機 app 失敗', e); }
     }
@@ -3701,7 +3736,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     function _setPanelType(t) {
         if (!t) return;
         _vnPanelType = t;
-        try { localStorage.setItem(_panelTypeKey(getChatSessionId()), t); } catch (e) {}   // 跟這個對話一起記，重開讀回來
+        win.AUI.lsSet(_panelTypeKey(getChatSessionId()), t, '這個對話選的面板類型');   // 跟這個對話一起記，重開讀回來
         document.querySelectorAll('#studio-type-row .studio-type').forEach(function (x) {
             x.classList.toggle('active', x.dataset.type === t);
         });
@@ -3769,6 +3804,28 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // ────────────────────────────────────────────────────────────────
     // HTML 轉義（核心＋全拆檔子模組共用；_b 橋成員）
     function _sgcEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    // 只捲它自己那格：scrollIntoView 會連外層每一層一起捲（滑進來到一半的面板會卡在兩頁中間，overflow:hidden 的父層也會被程式捲歪）。
+    //   找最近一層真的捲得動的祖先，只動它的 scrollTop；block 照 scrollIntoView 的 start／center／end／nearest 算
+    function _scrollInBox(el, block, behavior) {
+        if (!el) return;
+        let box = el.parentElement;
+        while (box && box !== document.body && box !== document.documentElement) {
+            const oy = getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box || box === document.body || box === document.documentElement) return;
+        const er = el.getBoundingClientRect(), br = box.getBoundingClientRect();
+        const off = er.top - br.top - box.clientTop;   // 目標上緣離這格可視區頂端多遠
+        let top;
+        if (block === 'center') top = box.scrollTop + off - (box.clientHeight - er.height) / 2;
+        else if (block === 'end') top = box.scrollTop + off - (box.clientHeight - er.height);
+        else if (block === 'nearest') {
+            if (off >= 0 && off + er.height <= box.clientHeight) return;   // 已經整個看得到
+            top = (off < 0 || er.height > box.clientHeight) ? box.scrollTop + off : box.scrollTop + off - (box.clientHeight - er.height);
+        } else top = box.scrollTop + off;
+        box.scrollTo({ top: Math.max(0, top), behavior: behavior || 'auto' });
+    }
     // 視覺回饋：走全站提示條（core/aurelia_dialog.js）。
     // TauriTavern 下載會直接存本機、但「不彈任何通知」→ 一定要自己給可見回饋。
     function _studioToast(msg, type) {
@@ -3947,7 +4004,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             sendBtn.disabled = false;
             sendBtn.innerText = '發送';
             sendBtn.onclick = handleSend;
-            inputEl.focus();
+            inputEl.focus({ preventScroll: true });
         }
     }
 
@@ -4037,7 +4094,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const fxEngine = window.OS_FX || win.OS_FX;
         if (!fxEngine) { container.innerHTML = '<div class="studio-empty">特效引擎還沒載入，稍等幾秒再進來</div>'; return; }
         try { await fxEngine.reloadSaved(); } catch (e) {}
-        const _esc = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const _esc = _sgcEsc;   // 分組名會放進 data-fx-chip="…"：& 和引號都要轉，不然名字帶引號時屬性被截斷、篩選對不上
         let saved = [];
         try {
             const all = await win.OS_DB.getAllUITemplates();
@@ -4252,7 +4309,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 
         if (currentMode === 'fx') {   // ⚡ 特效配方預覽：試播台 + 播放鈕
             const _r = displayData;
-            const _esc = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const _esc = _sgcEsc;
             previewMain.innerHTML = `
                 <div class="studio-card">
                     <div class="studio-card-title">${_esc(_r.name || _r.fxId || '特效')} <span class="fx-lib-kind">${_r.kind === 'loop' ? '持續氛圍' : '瞬間效果'}</span></div>
@@ -4441,7 +4498,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             tabs.addEventListener('click', function (e) {
                 const b = e.target.closest('[data-vp]');
                 if (!b) return;
-                try { localStorage.setItem('vn_pv_vp', b.getAttribute('data-vp')); } catch (er) {}
+                win.AUI.lsSet('vn_pv_vp', b.getAttribute('data-vp'), '預覽尺寸');
                 _vnPvApplyAll();
             });
             one.apply();

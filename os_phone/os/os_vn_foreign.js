@@ -35,7 +35,7 @@
     }
     function save(patch) {
         const next = { ...get(), ...(patch || {}) };
-        try { localStorage.setItem(KEY, JSON.stringify(next)); } catch (e) { console.warn('[OS_VN_FOREIGN] 存不進去', e); }
+        win.AUI.lsSet(KEY, JSON.stringify(next), '外語角色名單');   // 以前失敗只印 console，她看不到
         return next;
     }
 

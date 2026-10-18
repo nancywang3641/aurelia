@@ -62,8 +62,7 @@
         catch (e) { return {}; }
     }
     function _saveState(s) {
-        try { localStorage.setItem(STATE_KEY, JSON.stringify(s || {})); return true; }
-        catch (e) { console.warn('[VN指令] 開關狀態存不進去:', e); return false; }
+        return win.AUI.lsSet(STATE_KEY, JSON.stringify(s || {}), 'VN 指令的開關');   // 以前失敗只印 console，開關看起來切了、重整又跳回去
     }
 
     // 🎵 音效和音樂交給 Jev 配（os_jev_sfx.js）：開著＋決策模型三格都填了才算。
@@ -305,7 +304,7 @@
                 catch (e) { console.warn('[VN指令] 關掉「' + book + '」同名條目失敗:', e); }
             }
         }
-        try { localStorage.setItem(MIGRATE_KEY, String(Date.now())); } catch (e) {}
+        win.AUI.lsSet(MIGRATE_KEY, String(Date.now()), 'VN 指令的設定');
         if (closed) {
             console.log('🪶 [VN指令] 世界書同名條目已關掉 ' + closed + ' 條：' + where.join('、'));
             _toast('info', '「' + where.join('、') + '」裡同名的 ' + closed + ' 條已關掉，內容沒動', 'VN 指令改由程式內建');
@@ -361,7 +360,7 @@
             if (!phones.some(e => e.enabled)) return _empty();
             const snap = {};
             phones.forEach(e => { snap[e.id] = !!e.enabled; });
-            try { localStorage.setItem(PHONE_SAVED_KEY, JSON.stringify(snap)); } catch (e) {}
+            win.AUI.lsSet(PHONE_SAVED_KEY, JSON.stringify(snap), 'VN 指令的開關');
             return apply(e => PHONE_IDS.indexOf(e.id) >= 0 ? false : undefined);
         }
         let saved = null;

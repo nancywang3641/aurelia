@@ -52,7 +52,7 @@
     function _kindName(id) { const k = KINDS.find(x => x.id === id); return k ? k.name : ''; }
 
     function _isOn() { try { return localStorage.getItem(CFG.flagKey) !== '0'; } catch (e) { return true; } }
-    function _setOn(on) { try { localStorage.setItem(CFG.flagKey, on ? '1' : '0'); } catch (e) {} }
+    function _setOn(on) { win.AUI.lsSet(CFG.flagKey, on ? '1' : '0', '線索開關'); }
     function _isStandalone() { try { return !!win.OS_API?.isStandalone?.(); } catch (e) { return false; } }
     function _chatId() {
         try {
@@ -872,7 +872,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
     //   大廳設置 → 選項「演出動畫」關掉＝不演。演的時候點一下＝跳下一步，右下「跳過」＝直接演完；捲動也算跳過。
     const REVEAL_FLAG = 'aurelia_reveal_fx';   // '0'＝關，預設開（之後委託結案之類的演出也看這一格）
     function _revealOn() { try { return localStorage.getItem(REVEAL_FLAG) !== '0'; } catch (e) { return true; } }
-    function _setRevealOn(on) { try { localStorage.setItem(REVEAL_FLAG, on ? '1' : '0'); } catch (e) {} }
+    function _setRevealOn(on) { win.AUI.lsSet(REVEAL_FLAG, on ? '1' : '0', '「演出動畫」開關'); }
 
     // 回這次要演的線（鑰匙），同時記成演過了；不廣播（廣播會讓面板重畫、把正在演的洗掉）
     function _takeReveal(at, keys) {

@@ -90,6 +90,22 @@
     }
     function _mkId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function _esc(s) { return String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
+    // 只把最近那一層捲得動的格子捲到看得見（block:nearest）。scrollIntoView 會連外層一起捲，大廳的窗口會被帶歪
+    function _scrollNearest(el) {
+        if (!el) return;
+        let box = el.parentElement;
+        while (box && box !== document.body && box !== document.documentElement) {
+            const oy = getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box || box === document.body || box === document.documentElement) return;
+        const er = el.getBoundingClientRect(), br = box.getBoundingClientRect();
+        const off = er.top - br.top - box.clientTop;
+        if (off >= 0 && off + er.height <= box.clientHeight) return;   // 已經整個看得到
+        const top = (off < 0 || er.height > box.clientHeight) ? box.scrollTop + off : box.scrollTop + off - (box.clientHeight - er.height);
+        box.scrollTo({ top: Math.max(0, top) });
+    }
 
     // ── 副模型呼叫(仿 os_cafe:優先副模型 config,失敗回 null 讓 UI 給重試) ──
     function _extractJSON(raw) {
@@ -1843,7 +1859,7 @@
             if (!ta) return 'nofield';
             ta.value = text;
             ta.dispatchEvent(new Event('input', { bubbles: true }));
-            try { ta.focus(); } catch (e) {}
+            try { ta.focus({ preventScroll: true }); } catch (e) {}
             if (!btn) return 'stuck';
             btn.click();
             // 送出後酒館會把輸入框清空。等一下再看:還留著就是被擋下來了（送出鍵鎖住）
@@ -3432,7 +3448,7 @@
             if (r !== false) close();
         });
         host.appendChild(m);
-        if (focusSel) m.querySelector(focusSel)?.focus();
+        if (focusSel) m.querySelector(focusSel)?.focus({ preventScroll: true });   // 小卡剛疊上來，別讓 focus 把圖紙窗捲走
         return m;
     }
     function _openFolkModal(onSaved) {
@@ -3813,7 +3829,7 @@
                 const free = box && box.querySelector('.wgt-p-go');
                 if (free) {
                     box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
-                    free.scrollIntoView({ block: 'nearest' });
+                    _scrollNearest(free);
                     _toast('從右邊挑一位「去找他」，聊得投機才會答應同行');
                 } else {
                     const rec = b.querySelector('[data-act="rec-modal"]');

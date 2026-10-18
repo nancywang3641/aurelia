@@ -76,7 +76,7 @@
     }
 
     function setEnabled(on) {
-        localStorage.setItem(CONFIG.storageKey, on ? '1' : '0');
+        win.AUI.lsSet(CONFIG.storageKey, on ? '1' : '0', '即時記錄開關');
         if (!on) {
             try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
         }
@@ -1759,7 +1759,7 @@ ${numberedText}`;
     const DIRECTOR_MAX_PATCHES = 40;
 
     function directorOn() { try { return localStorage.getItem('sp_director_on') === '1'; } catch (e) { return false; } }
-    function setDirectorOn(v) { try { localStorage.setItem('sp_director_on', v ? '1' : '0'); } catch (e) {} if (!v) { try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch (e) {} } }
+    function setDirectorOn(v) { win.AUI.lsSet('sp_director_on', v ? '1' : '0', '導演模式開關'); if (!v) { try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch (e) {} } }
 
     // 導演稿也走身分制：[{id, text}] 時序陣列，最新一份＝最後一筆（不再有樓號可比大小）
     function _latestDirectorText(director) {
@@ -1959,15 +1959,10 @@ _directorSpec(castNames);
             if (!state || !Object.keys(state).length) return;
 
             // V3：拿當前 chat 對應的 active pack IDs，傳給 getActiveContext 做 packId filter
+            //   （比法收在 OS_AVS_RULES.activePackIds，兩端共用一份）
             let activePackIds = null;
             try {
-                if (win.OS_DB?.getAllVarPacks) {
-                    const chatId = getChatId();
-                    const allPacks = await win.OS_DB.getAllVarPacks();
-                    activePackIds = (allPacks || [])
-                        .filter(p => !p.chatId || p.chatId === chatId)
-                        .map(p => p.id);
-                }
+                activePackIds = win.OS_AVS_RULES.activePackIds ? await win.OS_AVS_RULES.activePackIds(getChatId()) : null;
             } catch(e) { /* fallback：activePackIds 留 null，走 worldId filter */ }
 
             // 只送在場的人的規則：最近 3 則正文（含她剛送出的那句）提到名字才算在場；角色卡設成「想靠近」的人照送

@@ -741,7 +741,8 @@ ${withPrev.join('\n')}
     };
 
     API.saveSummaryTemplate = function () {
-        localStorage.setItem('sp_summary_tpl', document.getElementById('sp-summary-tpl-area').value);
+        // 沒存下來就留著窗，改好的模板還在框裡
+        if (!win.AUI.lsSet('sp_summary_tpl', document.getElementById('sp-summary-tpl-area').value, '大總結模板')) return;
         document.getElementById('rpg-summary-tpl-modal').classList.remove('active');
     };
 
@@ -956,9 +957,9 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         // 存「自動隱藏 / 預留樓層」設定(給 _doSave 讀)
         try {
             const _ah = document.getElementById('sum_autohide');
-            localStorage.setItem('sp_summary_autohide', (_ah && _ah.checked) ? '1' : '0');
+            win.AUI.lsSet('sp_summary_autohide', (_ah && _ah.checked) ? '1' : '0', '「自動隱藏」設定');
             const _kr = parseInt(document.getElementById('range-keep-recent')?.value);
-            localStorage.setItem('sp_summary_keep_recent', isNaN(_kr) ? '5' : String(Math.max(0, _kr)));
+            win.AUI.lsSet('sp_summary_keep_recent', isNaN(_kr) ? '5' : String(Math.max(0, _kr)), '預留樓層設定');
         } catch (e) {}
         document.getElementById('rpg-range-modal').classList.remove('active');
         API._generateSummary(start, end, sourceType, mergePrev);
@@ -1776,7 +1777,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
     let _memTidying = false, _memTidyTimer = null;
     function _mtSid() { try { return String(win.OS_AVS_ADAPTER?.getStoryId?.() || ''); } catch (e) { return ''; } }
     function _mtCounts() { try { return JSON.parse(localStorage.getItem(MEMTIDY_CNT) || '{}') || {}; } catch (e) { return {}; } }
-    function _mtSet(sid, n) { const c = _mtCounts(); if (n) c[sid] = n; else delete c[sid]; try { localStorage.setItem(MEMTIDY_CNT, JSON.stringify(c)); } catch (e) {} }
+    function _mtSet(sid, n) { const c = _mtCounts(); if (n) c[sid] = n; else delete c[sid]; win.AUI.lsSet(MEMTIDY_CNT, JSON.stringify(c), '整理舊記憶的計數'); }
     API.memTidyEvery = function () { let n = parseInt(localStorage.getItem('sp_memtidy_every')); if (isNaN(n) || n < 5) n = 30; return Math.min(n, 500); };
     API.memTidyCount = function () { const s = _mtSid(); return s ? (_mtCounts()[s] || 0) : 0; };
     API.autoMemTidyTick = async function () {

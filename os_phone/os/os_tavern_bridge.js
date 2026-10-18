@@ -95,11 +95,13 @@
         // 📥 收到：切換用戶請求
         if (event.data.type === 'REQUEST_SWITCH_USER_PERSONA') {
             const personaId = event.data.personaId;
+            let ok = true, why = '';
             try {
                 const $ = win.$;
                 if (!$) throw new Error('jQuery not available');
 
                 const container = $('#user_avatar_block');
+                if (!container.length) throw new Error('找不到酒館的人設清單');   // 假元素掛不上去，點了也不會有人接
                 let el = container.find(`.avatar-container[data-avatar-id="${CSS.escape(personaId)}"]`);
 
                 if (el.length === 0) {
@@ -114,11 +116,14 @@
                 container.find('._os-temp').remove();
 
             } catch(e) {
+                // 以前這裡吞掉錯誤、照樣回 success:true：畫面說切好了，酒館其實還是原本那個人設
+                ok = false; why = (e && e.message) || String(e);
                 console.error('[Bridge] 切換人設失敗', e);
+                try { win.AUI.toast('人設沒切換成功，到酒館的人設清單手動選一次', { type: 'error' }); } catch (e2) {}
             }
 
             const target = event.source || window;
-            target.postMessage({ type: 'SWITCH_USER_PERSONA_RESPONSE', success: true }, '*');
+            target.postMessage({ type: 'SWITCH_USER_PERSONA_RESPONSE', success: ok, error: ok ? undefined : why }, '*');
         }
     });
 

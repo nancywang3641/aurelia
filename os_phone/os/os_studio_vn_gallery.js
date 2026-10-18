@@ -682,7 +682,7 @@
         if (!arr.some(g => g && g.id === LOBBY_GROUP_ID)) { arr.unshift({ id: LOBBY_GROUP_ID, name: '大廳', builtin: true }); _saveGroups(arr); }   // 內建大廳組永遠在
         return arr;
     }
-    function _saveGroups(arr) { try { localStorage.setItem(VN_GROUPS_KEY, JSON.stringify(arr || [])); } catch (e) {} }
+    function _saveGroups(arr) { return win.AUI.lsSet(VN_GROUPS_KEY, JSON.stringify(arr || []), '組件分組'); }
     // 一次性遷移：舊「大廳顯示」開關(lobbyEnabled) → 丟進大廳組、清掉舊旗標（之後成員關係為唯一真相）
     async function _migrateLobbyFlag(tpls) {
         if (localStorage.getItem('vn_lobby_group_migrated') === '1') return;
@@ -697,7 +697,7 @@
                     if (db && db.saveVNTagTemplate) await db.saveVNTagTemplate(t);
                 }
             }
-            localStorage.setItem('vn_lobby_group_migrated', '1');
+            win.AUI.lsSet('vn_lobby_group_migrated', '1', '組件分組');
         } catch (e) {}
     }
     function _newGroupId() { return 'g_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3); }

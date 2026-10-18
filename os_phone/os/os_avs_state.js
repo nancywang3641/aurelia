@@ -32,7 +32,7 @@
         catch (e) { return []; }
     }
     function _saveMyChips(arr) {
-        try { localStorage.setItem(MY_CHIPS_KEY, JSON.stringify(arr || [])); } catch (e) {}
+        return win.AUI.lsSet(MY_CHIPS_KEY, JSON.stringify(arr || []), '常用項');
     }
     // 標籤只顯示前幾個字（完整內容放 title / data-k，送 AI 的是完整的）
     function _chipLabel(v) {
@@ -419,7 +419,7 @@
             if (_addBtn && _tagWrap) _addBtn.onclick = () => {
                 const ta = _host.querySelector('#avs-st-init-prompt');
                 const v = (ta?.value || '').trim();
-                if (!v) { ta?.focus(); return; }
+                if (!v) { ta?.focus({ preventScroll: true }); return; }
                 const arr = _loadMyChips();
                 if (!arr.includes(v)) { arr.push(v); _saveMyChips(arr); }
                 if (!_tagWrap.querySelector(`.avs-st-chip.is-mine[data-k="${CSS.escape(v)}"]`)) {
@@ -825,7 +825,7 @@
         const toggle = q('#avs-st-toggle');
         if (toggle) toggle.onclick = function () {
             const on = this.classList.toggle('on');
-            localStorage.setItem('aurelia_state_runtime_enabled', on ? '1' : '0');
+            win.AUI.lsSet('aurelia_state_runtime_enabled', on ? '1' : '0', '即時記錄開關');
             try { win.OS_STATE_RUNTIME?.setEnabled?.(on); } catch (e) {}
         };
 
