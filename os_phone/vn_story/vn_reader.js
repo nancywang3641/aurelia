@@ -759,7 +759,9 @@
             const ta = wrap.querySelector('#vrd-edit-ta');
             ta.value = ch.content || '';
             body.querySelectorAll('.vn-reader-bubble').forEach(el => el.classList.add('hidden'));
-            ta.focus();
+            // 只捲閱讀器自己那格回頂端（編輯框現在是裡面唯一一塊）；focus 不帶 preventScroll 會連外層面板一起捲
+            body.scrollTop = 0;
+            ta.focus({ preventScroll: true });
         },
         _editCancel() {
             document.getElementById('vrd-edit-wrap')?.remove();

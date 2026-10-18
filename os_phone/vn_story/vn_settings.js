@@ -78,15 +78,19 @@
                 })()
             };
 
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            const _A = (window.parent || window).AUI;
+            let ok = _A.lsSet(STORAGE_KEY, JSON.stringify(data), 'VN 設定');
 
             // 摘要標記存回 VN_READER 讀的那兩個 key（全系統抓摘要都走它）——留空＝恢復預設 <summary>
-            try {
-                const so = (container.querySelector('#vncfg-sum-open')?.value || '').trim();
-                const sc = (container.querySelector('#vncfg-sum-close')?.value || '').trim();
-                if (so && sc) { localStorage.setItem('vn_reader_sum_open', so); localStorage.setItem('vn_reader_sum_close', sc); }
-                else { localStorage.removeItem('vn_reader_sum_open'); localStorage.removeItem('vn_reader_sum_close'); }
-            } catch (e) {}
+            const so = (container.querySelector('#vncfg-sum-open')?.value || '').trim();
+            const sc = (container.querySelector('#vncfg-sum-close')?.value || '').trim();
+            if (so && sc) {
+                if (!_A.lsSet('vn_reader_sum_open', so, '摘要標記')) ok = false;
+                if (!_A.lsSet('vn_reader_sum_close', sc, '摘要標記')) ok = false;
+            }
+            else { try { localStorage.removeItem('vn_reader_sum_open'); localStorage.removeItem('vn_reader_sum_close'); } catch (e) {} }
+            // 沒存成：丟出去讓設置頁那邊的 catch 寫「保存失敗」，不要亮「已保存 ✓」
+            if (!ok) throw new Error('VN 設定沒存下來');
 
             // 若 VN_Config 正在運行，即時同步（下次開啟 VN 時也會重新 load）
             try { if (window.VN_Config?.load) window.VN_Config.load(); } catch (e) {}

@@ -518,11 +518,6 @@
             try {
                 if (btn) btn.disabled = true;
                 setT('生成中…');
-                // 跟頭像 tab 的🎨同一套：套「全身框」前後綴(full body…) + 剝掉頭像特寫詞，512×896 直立全身比例
-                const DEF_PREFIX = 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ';
-                const DEF_SUFFIX = 'simple bright background, straight view, no shading';
-                const pfx = localStorage.getItem('os_sprite_tpl_prefix') || DEF_PREFIX;
-                const sfx = localStorage.getItem('os_sprite_tpl_suffix') || DEF_SUFFIX;
                 // 跟工作檯同邏輯：優先用「這張頭像當初存的 prompt」(avatar_cache)→立繪跟頭像同一個人；沒有才退回腳本描述
                 let rawP = '';
                 try { const _av = await win.VN_Cache?.get?.('avatar_cache', name); if (_av && _av.prompt) rawP = String(_av.prompt); } catch (e) {}
@@ -533,30 +528,10 @@
                     if (!d && this._isNoneChar(name)) d = await this._buildNonePrompt(name);
                     rawP = String(d || name);
                 }
-                // 完整清洗：構圖/背景/燈光/視角詞照 VN_Image._stripForSprite（只有那一份，立繪工作室也叫它）→不再生出背面、側面、亂加背景；
-                //   這條另外多剝 looking at viewer、face focus（頭像用的詞，全身立繪不要）
-                rawP = win.VN_Image._stripForSprite(rawP)
-                    .replace(/\blooking\s+at\s+viewer\b/gi, '').replace(/\bface\s+focus\b/gi, '')
-                    .replace(/\s+,/g, ',').replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
-                // 🚨 三段之間一定要逗號（同 VN_Image.getSprite）：直接相接會把角色描述的最後一個 tag
-                //    跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"），一次毀掉兩個 tag
-                let prompt = win.VN_Image._joinTags(pfx, rawP, sfx);
+                // 前後綴、清洗、補下身、尺寸、帶翼加寬、負詞全交給 VN_Image.getSprite（劇情裡自動生立繪走的就是它）：
+                //   以前這裡自己抄一份，空前綴當預設、還多剝 looking at viewer，同一個人兩邊生出來的構圖不一樣。force＝這顆就是要重生
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
-                const imCfg = win.OS_IMAGE_MANAGER.config;
-                const _spriteSvc = (typeof win.OS_IMAGE_MANAGER.serviceForUse === 'function') ? win.OS_IMAGE_MANAGER.serviceForUse('sprite') : ((typeof win.OS_IMAGE_MANAGER.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (imCfg && imCfg.service));
-                const useNAI = !!(_spriteSvc === 'novelai' && imCfg && imCfg.novelai && imCfg.novelai.token);
-                const _svc2 = _spriteSvc || (imCfg && imCfg.service) || '';   // raw 的判斷要看來源（見 VN_Image._spriteRaw）
-                let _bw = 512, _bh = 896;
-                try { const _bp = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_bp[0] && _bp[1]) { _bw = _bp[0]; _bh = _bp[1]; } } catch(e) {}
-                // 🪽 帶翼角色加寬畫框（同 VN_Image.getSprite）：判定看角色描述 rawP，模板裡沒有翅膀詞
-                try {
-                    const _wf = win.OS_IMAGE_MANAGER.wideFrame(_bw, _bh, rawP);
-                    if (_wf.extra) { _bw = _wf.width; _bh = _wf.height; prompt += ', ' + _wf.extra; }
-                } catch (e) {}
-                // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面。空＝不送。
-                let _spriteNeg = null; try { _spriteNeg = localStorage.getItem('os_sprite_tpl_neg'); } catch(e) {}
-                _spriteNeg = (_spriteNeg && _spriteNeg.trim()) ? _spriteNeg.trim() : undefined;
-                const url = await win.OS_IMAGE_MANAGER.generate(prompt, 'char', { force: true, width: _bw, height: _bh, raw: (win.VN_Image && win.VN_Image._spriteRaw) ? win.VN_Image._spriteRaw(_svc2) : !useNAI, extraNegative: _spriteNeg, use: 'sprite' });
+                const url = await win.VN_Image.getSprite(rawP, true);
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
                 setT('去背中…');

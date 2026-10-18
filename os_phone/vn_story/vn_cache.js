@@ -207,6 +207,8 @@
         async getRaw(store, key) { return _txGet(store, key); },
         async setRaw(store, key, value) { return _txSet(store, key, value); },
         async deleteRaw(store, key) { return _txDel(store, key); },
+        // 某個 store 的全部完整鑰匙（含世界前綴、只讀鑰匙不讀值）：給沒有小帳的 store（chat_bg）列清單用，值要用時再一筆一筆 getRaw
+        async rawKeys(store) { try { return await _txKeys(store); } catch (e) { return []; } },
 
         async getAll(store) {
             try {

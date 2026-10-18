@@ -106,6 +106,8 @@
                     else pos = Math.min(cEnd, cStart + 1 + Math.round((cEnd - cStart - 1) * ((e.idx || 0) + 1) / (todo.length + 1)));   // 沒錨點/命中在區塊外 → 區塊內平均分散
                     lines.splice(pos, 0, '[Scene|' + e.cacheId + ']');
                     if (pos <= cEnd) cEnd++;
+                    // 插進一行後，後面那幾張事先找好的錨點行號都往下挪一格；不跟著挪，第二張起就插到錨點的上一行
+                    Object.keys(hits).forEach(id => { if (hits[id] >= pos) hits[id]++; });
                     written++;
                 });
                 if (!written) return;
@@ -247,8 +249,15 @@
             try {
                 const L = this._latest;
                 if (!L || !L.entries || !L.entries.length) { return; }   // 圖還沒生好(VN 先載)→不動，等晚到那條(fromExtract 即時插)補
-                const n = this._spliceInto(L.entries);
-                if (n) console.log('[VN_SceneInsert] 最新這輪：直接 splice ' + n + ' 張(不靠ID)，往下點即播');
+                // 正在重看舊章（章節選擇載進來的）：這份劇本不是最新這輪，插進來就是新圖亂入舊章。
+                //   只跳過插入；存檔照寫、用完照清——最新那章的圖已經寫回正文 [Scene|] 標籤／章節存檔，回到那章自己會帶出來
+                const _vn = win.VN_Core;
+                if (_vn && _vn._scriptIsReplay) {
+                    console.log('[VN_SceneInsert] 正在重看舊章，最新這輪的 ' + L.entries.length + ' 張不插進這份劇本');
+                } else {
+                    const n = this._spliceInto(L.entries);
+                    if (n) console.log('[VN_SceneInsert] 最新這輪：直接 splice ' + n + ' 張(不靠ID)，往下點即播');
+                }
                 // 寫回「最新這章」存檔（章節選擇/重整後回放也看得到，不丟）；圖檔本就在硬碟，只補「插哪一段」的資訊
                 this._persistToLatestChapter(L.entries, L.msgId);
                 // ★用完即清：下一個「沒出插圖的輪」載 script 時 _latest 會是 null → 不會把這張舊圖誤插進新劇本

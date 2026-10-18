@@ -24,6 +24,24 @@
     const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const $ = id => document.getElementById(id);
+    // 新的一條／一段長出來時捲到看得見（等同 block:'nearest'），但只捲它自己那格：
+    //   scrollIntoView 會連所有外層一起捲，手機正滑進來時整個框被拖歪，overflow:hidden 的外層也會被程式捲動
+    function scrollNearest(el) {
+        if (!el) return;
+        let box = el.parentElement;
+        while (box && box !== document.body && box !== document.documentElement) {
+            const oy = getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box || box === document.body || box === document.documentElement) return;
+        const br = box.getBoundingClientRect(), er = el.getBoundingClientRect();
+        let top;
+        if (er.top < br.top) top = box.scrollTop + (er.top - br.top);
+        else if (er.bottom > br.bottom) top = box.scrollTop + Math.min(er.bottom - br.bottom, er.top - br.top);   // 比整格還高就對齊上緣
+        else return;
+        box.scrollTo({ top: top });
+    }
 
     const VN_Browser = {
         query: '',
@@ -312,7 +330,7 @@
             el.dataset.title = it.title;
             el.innerHTML = `<div class="br-site">${esc(it.site)}</div><div class="br-title">${esc(it.title)}</div><div class="br-snip">${esc(it.snip)}</div>`;
             r.appendChild(el);
-            el.scrollIntoView({ block: 'nearest' });
+            scrollNearest(el);
         },
 
         _openResult: function (title) {
@@ -366,7 +384,7 @@
             const core = this._core;
             const html = core && core.parseMarkdown ? core.parseMarkdown(text) : esc(text);
             b.insertAdjacentHTML('beforeend', `<p class="br-p br-in">${html}</p>`);
-            b.lastElementChild?.scrollIntoView({ block: 'nearest' });
+            scrollNearest(b.lastElementChild);
         },
 
         _addImage: function (desc) {
@@ -375,7 +393,7 @@
             const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
             const inner = PI ? PI.render(desc, { app: 'vn_phone' }) : `<div class="br-fig-alt">${esc(desc)}</div>`;
             b.insertAdjacentHTML('beforeend', `<figure class="br-fig br-in">${inner}</figure>`);
-            b.lastElementChild?.scrollIntoView({ block: 'nearest' });
+            scrollNearest(b.lastElementChild);
         },
 
         // 主角看著螢幕的旁白／自語：底部一條半透明字幕，不佔頁面

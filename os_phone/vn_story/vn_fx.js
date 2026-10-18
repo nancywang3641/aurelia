@@ -309,22 +309,18 @@
         },
         isEnabled: function (id) { return !this._disabled().has(String(id || '').trim().toLowerCase()); },
         setEnabled: function (id, on) {
-            try {
-                const s = this._disabled();
-                const key = String(id || '').trim().toLowerCase();
-                if (on) s.delete(key); else s.add(key);
-                localStorage.setItem('os_fx_disabled', JSON.stringify(Array.from(s)));
-            } catch (e) {}
+            const s = this._disabled();
+            const key = String(id || '').trim().toLowerCase();
+            if (on) s.delete(key); else s.add(key);
+            return (window.parent || window).AUI.lsSet('os_fx_disabled', JSON.stringify(Array.from(s)), '特效的開關');
         },
         _groups: function () { try { return JSON.parse(localStorage.getItem('os_fx_groups') || '{}') || {}; } catch (e) { return {}; } },
         getGroup: function (id) { return this._groups()[String(id || '').trim().toLowerCase()] || ''; },
         setGroup: function (id, group) {
-            try {
-                const g = this._groups();
-                const key = String(id || '').trim().toLowerCase();
-                if (group && String(group).trim()) g[key] = String(group).trim().slice(0, 12); else delete g[key];
-                localStorage.setItem('os_fx_groups', JSON.stringify(g));
-            } catch (e) {}
+            const g = this._groups();
+            const key = String(id || '').trim().toLowerCase();
+            if (group && String(group).trim()) g[key] = String(group).trim().slice(0, 12); else delete g[key];
+            return (window.parent || window).AUI.lsSet('os_fx_groups', JSON.stringify(g), '特效的分組');
         },
 
         // 全清單（內建 + 已存、含開關/群組標註），給工坊瀏覽用

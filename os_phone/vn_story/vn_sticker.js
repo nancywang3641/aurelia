@@ -38,7 +38,8 @@
                 if (Array.isArray(old) && old.length) {
                     const libs = _load().slice();
                     old.forEach(l => { if (l && l.name && !libs.some(x => x.name === l.name)) libs.push(l); });
-                    localStorage.setItem(LIBS_KEY, JSON.stringify(libs));
+                    // 併進去沒存成就別刪舊的：下次開機再併一次，舊包才不會跟著不見
+                    if (!(window.parent || window).AUI.lsSet(LIBS_KEY, JSON.stringify(libs), '表情包庫')) { _load(); return; }
                     console.log('[VN_Sticker] 舊的 VN 表情包庫已併進共用那一份');
                 }
                 localStorage.removeItem('vn_sticker_libs');

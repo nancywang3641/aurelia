@@ -66,7 +66,7 @@
         r.push(k);
         while (r.length > RECENT_MAX) r.shift();
         _recent = r;
-        try { localStorage.setItem(RECENT_KEY, JSON.stringify(r)); } catch (e) {}
+        (window.parent || window).AUI.lsSet(RECENT_KEY, JSON.stringify(r), '最近看過的小提示');
     }
 
     function _th() {

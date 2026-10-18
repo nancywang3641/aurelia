@@ -92,7 +92,7 @@
         const w = (window.AURELIA_CUSTOM_WORLDS || []).find(x => x && x.id === p.worldId);
         if (!w) { console.warn('[VN] 找不到這張角色卡：', p.worldId); return false; }
         const greeting = p.greeting || '', userReply = p.userReply || '';
-        localStorage.setItem('vn_current_world_id', w.id);
+        win.AUI.lsSet('vn_current_world_id', w.id, '目前在讀哪一本');
         localStorage.removeItem('vn_pending_first_mes');
         if (w.autoPackId && win.OS_AVS && win.OS_AVS.activateTemplateForPack) {
             try { win.OS_AVS.activateTemplateForPack(w.autoPackId); } catch (e) {}

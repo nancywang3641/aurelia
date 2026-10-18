@@ -23,7 +23,7 @@
         },
         saveLimit: function(val) {
             const n = Math.max(1000, parseInt(val) || 50000);
-            localStorage.setItem('vn_ctx_limit', String(n));
+            win.AUI.lsSet('vn_ctx_limit', String(n), '上下文警戒上限');
             this._refreshDisplay();
         },
 
@@ -720,12 +720,12 @@
         _setAutoSum: function(key, val) {
             try {
                 if (key === 'on') {
-                    localStorage.setItem('sp_autosum_on', val ? '1' : '0');
+                    win.AUI.lsSet('sp_autosum_on', val ? '1' : '0', '自動總結的開關');
                     const row = document.getElementById('ctx-autosum-row');
                     if (row) row.classList.toggle('off', !val);
                 } else if (key === 'every') {
                     let n = parseInt(val); if (isNaN(n) || n < 2) n = 20; if (n > 200) n = 200;
-                    localStorage.setItem('sp_autosum_every', String(n));
+                    win.AUI.lsSet('sp_autosum_every', String(n), '自動總結的輪數');
                     const inp = document.getElementById('ctx-autosum-every'); if (inp) inp.value = n;
                 }
             } catch (e) {}
@@ -743,10 +743,10 @@
         // 🗜 自動整理記憶那一行：開關 sp_memtidy_on、輪次 sp_memtidy_every（觸發在 os_story_tools.autoMemTidyTick）
         _setMemTidy: function(key, val) {
             try {
-                if (key === 'on') localStorage.setItem('sp_memtidy_on', val ? '1' : '0');
+                if (key === 'on') win.AUI.lsSet('sp_memtidy_on', val ? '1' : '0', '自動整理記憶的開關');
                 else if (key === 'every') {
                     let n = parseInt(val); if (isNaN(n) || n < 5) n = 30; if (n > 500) n = 500;
-                    localStorage.setItem('sp_memtidy_every', String(n));
+                    win.AUI.lsSet('sp_memtidy_every', String(n), '自動整理記憶的輪數');
                 }
             } catch (e) {}
             this._initMemTidyUI();

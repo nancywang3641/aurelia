@@ -40,7 +40,7 @@
             return (win.OS_PROMPTS?.getBundles?.() || []).map(b => b.id);
         },
 
-        saveOrder(order) { localStorage.setItem(this.STORAGE_KEY, JSON.stringify(order)); },
+        saveOrder(order) { return win.AUI.lsSet(this.STORAGE_KEY, JSON.stringify(order), '提示詞的排列順序'); },
         reset()          { localStorage.removeItem(this.STORAGE_KEY); }
     };
 
@@ -180,6 +180,17 @@
         //     （她的說法：「風格沒送，連自動立繪的底圖都沒送」。）
         //   ・Pollinations／酒館原生／ComfyUI：它們的底詞是內建那套動漫底詞，會跟立繪模板打架 → 維持 true。
         _spriteRaw: function (svc) { return !(svc === 'novelai' || svc === 'custom_api'); },
+        // 立繪前綴／後綴：她在立繪工作室存的那兩格（os_sprite_tpl_prefix/suffix）。只有「沒存過」才退預設，
+        //   存了空字串＝她清掉了、就是不要（工作室另有「還原預設」鈕）。單張、多人一張、舞台一鍵生立繪都問這支，
+        //   以前三處各抄一份預設、空字串一處當預設一處當空，清掉前綴後兩邊生出來的構圖不一樣。
+        SPRITE_DEF_PFX: 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ',
+        SPRITE_DEF_SFX: 'simple bright background, straight view, no shading',
+        _spriteTpl: function () {
+            let pfx = null, sfx = null;
+            try { pfx = localStorage.getItem('os_sprite_tpl_prefix'); } catch (e) {}
+            try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
+            return { pfx: pfx == null ? this.SPRITE_DEF_PFX : pfx, sfx: sfx == null ? this.SPRITE_DEF_SFX : sfx };
+        },
         // 立繪模式專用：直接從角色描述生「全身站姿立繪」(跟 studio 頭像轉立繪同套邏輯)。
         // 清掉跟立繪衝突的構圖/背景/視角 tag → 套全身模板 → 512×896 直立 → 非 NAI 走 raw(純模板)，NAI 套頭像同畫風底詞避免太裸。
         getSprite: async function(prompt, force) {
@@ -193,14 +204,8 @@
             // ⚠️ 預設必須跟 studio「一鍵生立繪」的 DEF_PREFIX/DEF_SUFFIX 一字不差(os_settings.js _initSpriteUI)——
             //    studio 手動生讀的是「框裡的值」(沒存過也預填這預設,所以永遠帶 no shading→不出陰影);
             //    getSprite 讀 localStorage,沒存過就退這裡的預設。以前這裡前綴不同、後綴是空字串→少了 no shading + simple bright background
-            //    → spriteDirect 才會跑出陰影(手動不會)。改成一字不差,兩條路才真的一樣。改 studio 預設記得同步這裡。
-            const DEF_PFX = 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ';
-            const DEF_SFX = 'simple bright background, straight view, no shading';
-            let pfx = null, sfx = null;
-            try { pfx = localStorage.getItem('os_sprite_tpl_prefix'); } catch (e) {}
-            try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
-            if (pfx == null) pfx = DEF_PFX;
-            if (sfx == null) sfx = DEF_SFX;
+            //    → spriteDirect 才會跑出陰影(手動不會)。改成一字不差,兩條路才真的一樣。改 studio 預設記得同步 SPRITE_DEF_PFX/SFX。
+            const { pfx, sfx } = this._spriteTpl();
             // 🚨 三段之間一定要逗號：以前是 pfx + desc + sfx 直接黏，
             //    角色描述的最後一個 tag 會跟後綴的第一個字黏成一團（white dress + simple → "white dresssimple"），
             //    等於一次毀掉兩個 tag。os_settings 的 studio 那條也是同一個寫法，一起修。
@@ -230,11 +235,7 @@
             if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return '';
             const list = (descs || []).filter(Boolean);
             if (!list.length) return '';
-            let pfx = null, sfx = null;
-            try { pfx = localStorage.getItem('os_sprite_tpl_prefix'); } catch (e) {}
-            try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
-            if (pfx == null) pfx = 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ';
-            if (sfx == null) sfx = 'simple bright background, straight view, no shading';
+            const { pfx, sfx } = this._spriteTpl();
             const n = list.length;
             const people = list.map(function (d, i) {
                 const look = this._stripForSprite(d);

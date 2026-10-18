@@ -836,7 +836,13 @@ const VN_TTS_Panel = {
         num('vtts-topp',  'topP',        F);
         num('vtts-temp',  'temperature', F);
         num('vtts-steps', 'sampleSteps', I);
-        const vol = el('vtts-vol'); if (vol) tts.config.volume = F(vol.value);
+        const vol = el('vtts-vol');
+        if (vol) {
+            tts.config.volume = F(vol.value);
+            // 遊戲內設定也有一顆語音音量，開 VN 時拿它蓋回這裡：兩份寫成同一個值，這裡調的才留得住
+            const VS = (window.parent || window).VN_Settings || window.VN_Settings;
+            if (VS && VS.syncTtsVolume && !isNaN(tts.config.volume)) VS.syncTtsVolume(tts.config.volume);
+        }
         num('vtts-idxemo', 'indexEmoAlpha', F);   // IndexTTS 頁才有這顆，SoVITS 頁沒有就跳過
 
         if (!tts.save()) return;   // 存不進去（空間滿）→ save 自己會喊，別再報成功

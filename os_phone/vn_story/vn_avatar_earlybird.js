@@ -70,7 +70,9 @@
                 const parts = VN._normCharParts ? VN._normCharParts(_sp) : _sp;
                 const charName = parts[0];
                 const ex = VN._extractTextAndSFX(parts.slice(2));
-                const t = VN._cleanTextForSoVITS(ex.text);
+                // 同 _prewarmSoVITS：先剝正文 #音效# 標記（播放端念的是剝過的字），快取鍵才對得上；silent＝不先放特效
+                const _ix = VN._extractInlineSFX ? VN._extractInlineSFX(ex.text, { silent: true }).text : ex.text;
+                const t = VN._cleanTextForSoVITS(_ix);
                 let rawExp = parts[1] || '', typeHint = '';
                 if (rawExp.includes('_')) {
                     const p = rawExp.split('_');

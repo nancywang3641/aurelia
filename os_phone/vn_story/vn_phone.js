@@ -463,7 +463,7 @@
             content = this._normalizeAliasTags(this._normalizeImageTag(content));
             const WV = win.WX_VIEW || window.WX_VIEW;
             if (!WV || !WV.renderBubble) {
-                const esc = String(content).replace(/</g, '&lt;');
+                const esc = String(content).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');   // 只轉 < 的話 & 開頭的字會被當成實體吃掉
                 return `<div class="wx-msg-row ${isMe ? 'me' : 'you'} pbub-row ${isMe ? 'pbub-me' : 'pbub-other'}"><div class="wx-bubble-avatar pbub-avatar"></div><div class="pbub-wrap wx-bubble-wrap"><div class="wx-bubble-content pbub-bubble">${esc}</div></div></div>`;
             }
             const roomName = (document.getElementById('chat-title') || {}).innerText || '';

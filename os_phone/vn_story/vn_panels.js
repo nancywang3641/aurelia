@@ -13,6 +13,8 @@
     const win = window.parent || window;
     const VN_Cache = window.VN_Cache;
     const VN_Image = window.VN_Image;
+    // 放進 HTML 的外來字（標題、id、錯誤訊息）一律過這支：引號也要轉，不然名字帶 " 會把 data-id 這種屬性截斷
+    const _esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
     /* =========================================
        🔊 iOS 音量修正：Web Audio GainNode
@@ -97,7 +99,18 @@
         defaults: { fontSize: 19, twSpeed: 30, danmuSpeed: 18, bgmVolume: 10, sfxVolume: 50, ttsVolume: 80, textColor: '#dddddd', innerColor: '#c9aaff', nameColor: '#d4af37' },
         data: {},
         load: function() { const saved = localStorage.getItem('vn_game_settings'); this.data = saved ? { ...this.defaults, ...JSON.parse(saved) } : { ...this.defaults }; this._syncUI(); this._applyAll(); },
-        save: function() { localStorage.setItem('vn_game_settings', JSON.stringify(this.data)); },
+        save: function() { return win.AUI.lsSet('vn_game_settings', JSON.stringify(this.data), '遊戲內設定'); },
+        // 🔊 語音面板（VN_TTS_Panel）那顆音量也寫進這裡：語音音量以這份為準，每次開 VN 都拿它蓋回本機語音的設定，
+        //    以前語音面板只改自己那份，下次開 VN 就被這裡的舊值蓋掉。這份還沒讀過（沒開過 VN）就先從存檔讀，別拿空的蓋存檔
+        syncTtsVolume: function(vol) {
+            if (!this.data || this.data.ttsVolume == null) {
+                try { const s = localStorage.getItem('vn_game_settings'); this.data = s ? { ...this.defaults, ...JSON.parse(s) } : { ...this.defaults }; }
+                catch (e) { this.data = { ...this.defaults }; }
+            }
+            this.data.ttsVolume = Math.round(Math.max(0, Math.min(1, Number(vol) || 0)) * 100);
+            win._vnTtsVolume = this.data.ttsVolume / 100;
+            return this.save();
+        },
         _syncUI: function() {
             const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
             const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -198,7 +211,8 @@
        📱 聊天背景面板
        ========================================= */
     async function openChatBgPanel() {
-        await _refreshChatBgThumbs();
+        // 不等縮圖：舊圖第一次要現做縮圖，面板先開、縮圖一張張補上
+        _refreshChatBgThumbs().catch(e => console.warn('[VN_PLAYER] 聊天背景縮圖讀取失敗', e));
         // 停在泡泡分頁時要重畫：換了一間聊天室，「使用中」那張就不一樣了
         const bub = document.getElementById('chat-more-bubble');
         if (bub && !bub.hidden) _renderBubbleList();
@@ -207,17 +221,64 @@
         document.getElementById('chat-bg-panel').classList.add('active');
     }
     function closeChatBgPanel() { document.getElementById('chat-bg-panel').classList.remove('active'); }
+    // 🖼 縮圖另存一筆（鑰匙 thumb:原鑰匙）：從相簿上傳的是整張原圖 dataURL，一張幾 MB。
+    //    以前每次打開面板就 getAll 把每張原圖一起讀進記憶體，存越多張越容易撐爆。
+    //    現在列表只拿鑰匙、一張一張讀縮圖；沒縮圖的舊圖讀一次原圖做好存起來，下次就不用再讀；原圖等按下去才讀。
+    //    「使用中」那張用指紋比（原圖長度＋結尾一段），不必為了比對把原圖讀回來。
+    const _BG_THUMB = 'thumb:';
+    let _bgThumbGen = 0;
+    function _bgSig(url) { const s = String(url || ''); return s.length + ':' + s.slice(-48); }
+    function _makeBgThumb(src) {
+        return new Promise(res => {
+            const im = new Image();
+            im.onload = () => {
+                try {
+                    const k = Math.min(1, 240 / Math.max(im.naturalWidth || 1, im.naturalHeight || 1));
+                    const c = document.createElement('canvas');
+                    c.width = Math.max(1, Math.round((im.naturalWidth || 1) * k));
+                    c.height = Math.max(1, Math.round((im.naturalHeight || 1) * k));
+                    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+                    res(c.toDataURL('image/jpeg', 0.75));
+                } catch (e) { res(''); }
+            };
+            im.onerror = () => res('');
+            im.src = src;
+        });
+    }
+    async function _bgThumbFor(key, keySet) {
+        if (keySet.has(_BG_THUMB + key)) {
+            const t = await VN_Cache.getRaw('chat_bg', _BG_THUMB + key);
+            if (t && t.url) return t;
+        }
+        const v = await VN_Cache.getRaw('chat_bg', key);
+        const url = (v && v.url) || '';
+        if (!url) return null;
+        if (!url.startsWith('data:')) return { url: url, sig: _bgSig(url) };   // 貼網址的那種本身就只是一行字，不用縮
+        const thumb = await _makeBgThumb(url);
+        if (!thumb) return { url: url, sig: _bgSig(url) };                      // 縮不出來就照舊放原圖
+        const rec = { url: thumb, sig: _bgSig(url) };
+        await VN_Cache.setRaw('chat_bg', _BG_THUMB + key, rec);
+        return rec;
+    }
     async function _refreshChatBgThumbs() {
+        const my = ++_bgThumbGen;   // 上傳完會再叫一次：舊的那趟還在一張張讀的話就停手，免得縮圖重複
         const grid = document.getElementById('chat-bg-grid'); const addBtn = grid.querySelector('.chat-bg-add');
         grid.querySelectorAll('.chat-bg-thumb').forEach(t => t.remove());
-        const current = await VN_Cache.get('chat_bg', '_current'); const currentUrl = current ? current.url : '';
-        const entries = await VN_Cache.getAll('chat_bg');
-        entries.filter(e => e.key !== '_current').forEach(entry => {
-            const img = document.createElement('img'); img.className = 'chat-bg-thumb'; img.src = entry.url || '';
-            if (entry.url && entry.url === currentUrl) img.classList.add('selected');
-            img.onclick = () => _setChatBg(entry.url);
+        const current = await VN_Cache.get('chat_bg', '_current'); const curSig = (current && current.url) ? _bgSig(current.url) : '';
+        const keys = (await VN_Cache.rawKeys('chat_bg')).map(String);
+        if (my !== _bgThumbGen) return;
+        const keySet = new Set(keys);
+        for (const key of keys) {
+            if (key === '_current' || key.startsWith(_BG_THUMB)) continue;
+            const img = document.createElement('img'); img.className = 'chat-bg-thumb';
+            img.onclick = async () => { const v = await VN_Cache.getRaw('chat_bg', key); if (v && v.url) _setChatBg(v.url); };
             grid.insertBefore(img, addBtn);
-        });
+            const t = await _bgThumbFor(key, keySet);
+            if (my !== _bgThumbGen) return;
+            if (!t) { img.remove(); continue; }
+            img.src = t.url;
+            if (curSig && t.sig === curSig) img.classList.add('selected');
+        }
     }
     async function handleChatBgFile(input) {
         const file = input.files[0]; if (!file) return;
@@ -310,7 +371,7 @@
         }
         const on = W.storyLibId();
         hint.textContent = '這個故事裡，角色的手機用哪一包';
-        const esc = x => String(x || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const esc = _esc;
         const rows = [{ id: '', name: '不用表情包', count: '' }].concat(libs.map(l => ({ id: l.id, name: l.name, count: (l.stickers || []).length + ' 張' })));
         list.innerHTML = rows.map(r => `<div class="chat-sticker-row${r.id === on ? ' selected' : ''}" data-id="${esc(r.id)}">` +
             `<span class="chat-sticker-name">${esc(r.name)}</span><span class="chat-sticker-count">${esc(r.count)}</span>` +
@@ -335,7 +396,7 @@
         const st = B.roomState(room.name, room.key);
         if (st.via === 'contact') hint.textContent = `跟微信的「${room.name}」同一套，這裡換了那邊也會換`;
 
-        const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const esc = _esc;
         const gal = AI.galLoad();
         // 第一張是預設；其餘照主題庫的順序
         const items = [{ id: '', name: '預設', css: '' }].concat(gal);
@@ -436,7 +497,7 @@
         acts.appendChild(cancel); acts.appendChild(ok);
         box.appendChild(h); box.appendChild(ta); box.appendChild(acts);
         ov.appendChild(box); ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
-        document.body.appendChild(ov); setTimeout(() => ta.focus(), 50);
+        document.body.appendChild(ov); setTimeout(() => ta.focus({ preventScroll: true }), 50);
     }
     async function _vngRegen(cfg, fullKey, val, prompt) {
         // force=true：頭像走 generate() 會查記憶體快取(_urlCache)，同 prompt 會吐舊圖 → 重生必須強制繞過
@@ -518,7 +579,9 @@
         }
         add('刪除', async () => {
             await VN_Cache.deleteRaw(store, fullKey);
-            if (store === 'avatar_cache' && window.VN_PLAYER) { try { delete window.VN_PLAYER._avatarMemCache[bare]; delete window.VN_PLAYER._faceMemCache[bare]; } catch (e) {} }
+            // 本局的頭像記憶體快取在 VN_Core 上（VN_PLAYER 只是對外的按鈕集合，沒有這份）：不清的話這一局還是顯示舊圖
+            const _vc = window.VN_Core || (window.parent || window).VN_Core;
+            if (store === 'avatar_cache' && _vc) { try { delete _vc._avatarMemCache[bare]; delete _vc._faceMemCache[bare]; } catch (e) {} }
             if (cfg.kind === 'scene' && window.VN_Core) { try { delete window.VN_Core._sceneMemCache[bare]; } catch (e) {} }
             rerender();
         }, true);
@@ -897,7 +960,7 @@
                 const header = document.createElement('div');
                 header.className = 'ch-story-header active';
                 header.innerHTML = `
-                    <span class="ch-story-title">${storyTitle}</span>
+                    <span class="ch-story-title">${_esc(storyTitle)}</span>
                     <span class="ch-story-meta">${dateStr}${dateStr ? ' · ' : ''}${mine.length} 章</span>
                     <button class="ch-story-del" title="刪除整個劇情"><i class="fa-solid fa-trash-can"></i></button>
                 `;
@@ -918,8 +981,8 @@
                     const item = document.createElement('div');
                     item.className = 'ch-item';
                     item.innerHTML = `
-                        <span class="ch-name">${ch.title}</span>
-                        <button class="ch-item-del" data-id="${ch.id}" title="刪除此章"><i class="fa-solid fa-trash-can"></i></button>
+                        <span class="ch-name">${_esc(ch.title)}</span>
+                        <button class="ch-item-del" data-id="${_esc(ch.id)}" title="刪除此章"><i class="fa-solid fa-trash-can"></i></button>
                     `;
                     // 點擊載入
                     item.onclick = (e) => {
@@ -928,7 +991,7 @@
                         if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
                         closeChapterPanel();
                         try { window.VN_Core.earlybirdFromText(ch.content); } catch (e) {}  // 頭像早鳥：先開生
-                        window.VN_Core._startWithLoader(ch.content, null);   // 載入→loading 等全部圖片→開播
+                        window.VN_Core._startWithLoader(ch.content, null, { replay: true });   // 載入→loading 等全部圖片→開播；replay＝最新這輪的插圖不插進舊章
                         // 獨立版章節的插圖存在 ch.scenes（生成時 _persistToLatestChapter 寫的）→ 載入後插回
                         try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
                     };
@@ -955,7 +1018,7 @@
 
             } catch(e) {
                 console.error('[VN_PLAYER] 讀取本地存檔失敗:', e);
-                list.innerHTML = `<div class="chx-empty"><i class="fa-solid fa-triangle-exclamation"></i><div>讀取失敗: ${e.message}</div></div>`;
+                list.innerHTML = `<div class="chx-empty"><i class="fa-solid fa-triangle-exclamation"></i><div>讀取失敗: ${_esc(e && e.message)}</div></div>`;
             }
             return;
         }
@@ -1010,7 +1073,7 @@
             };
             const doLoad = () => {
                 if (!window.VN_Core) throw new Error('劇情引擎未載入');
-                _step('解析劇本', () => window.VN_Core.loadScript(ch.content, ch.message_id));
+                _step('解析劇本', () => window.VN_Core.loadScript(ch.content, ch.message_id, { replay: true }));   // replay＝最新這輪的插圖不插進舊章
                 // 回放也把這章存檔的插圖插回（生成當時已寫進 ch.scenes）；圖檔在硬碟、不重生
                 try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
                 _step('切到劇情頁', () => { if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game'); });
@@ -1107,7 +1170,7 @@
                     <div class="chx-card-cap">CHAPTER</div>
                     <div class="chx-card-num">${String(ch.index).padStart(2, '0')}</div>
                     <div class="chx-thumb"></div>
-                    <div class="chx-card-title">${ch.title}</div>
+                    <div class="chx-card-title">${_esc(ch.title)}</div>
                     <div class="chx-card-bar"><i></i></div>
                     <img class="chx-card-node" src="${CHX}09-node-completed.png" alt="">`;
                 card.onclick = () => {
@@ -1177,7 +1240,7 @@
 
         } catch (e) {
             console.error('[VN_PLAYER] 讀取酒館歷史失敗:', e);
-            list.innerHTML = `<div class="chx-empty"><i class="fa-solid fa-triangle-exclamation"></i><div>讀取失敗: ${e.message}</div></div>`;
+            list.innerHTML = `<div class="chx-empty"><i class="fa-solid fa-triangle-exclamation"></i><div>讀取失敗: ${_esc(e && e.message)}</div></div>`;
         }
     }
 

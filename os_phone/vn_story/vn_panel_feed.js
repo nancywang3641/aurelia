@@ -381,7 +381,7 @@
             const d = _db();
             if (!d || !d.deleteAppDataByApp) return;
             await d.deleteAppDataByApp(LEGACY_BUCKET);
-            win.localStorage.setItem(LEGACY_FLAG, '1');
+            (window.parent || window).AUI.lsSet(LEGACY_FLAG, '1', '舊資料清過的記號');
             console.log('[VN_PANEL_FEED] 舊制 pwa_panel 通用桶已清');
         } catch (e) {}
     }

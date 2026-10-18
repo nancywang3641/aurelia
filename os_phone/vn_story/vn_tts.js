@@ -589,18 +589,21 @@ const VN_TTS = {
                         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                         const reader   = resp.body.getReader();
                         let firstChunk = true;
+                        let complete   = false;
 
                         while (true) {
                             const { done, value } = await reader.read();
-                            if (done) { try { ms.endOfStream(); } catch (e) {} break; }
+                            if (done) { complete = true; try { ms.endOfStream(); } catch (e) {} break; }
                             chunks.push(value);
                             if (sb.updating) {
                                 await new Promise(r => sb.addEventListener('updateend', r, { once: true }));
                             }
-                            try { sb.appendBuffer(value); } catch (e) { break; }
+                            // 塞不進去＝這段播放被 stop() 拆掉了（點了下一句）：後面不收，連線也放掉
+                            try { sb.appendBuffer(value); } catch (e) { reader.cancel().catch(() => {}); break; }
                             if (firstChunk) { firstChunk = false; audio.play().catch(() => {}); }
                         }
-                        if (cacheKey && chunks.length) {
+                        // 只收完整的：半截存進去，之後同一句就永遠從快取播那半截、也不會再重生
+                        if (complete && cacheKey && chunks.length) {
                             const blob = new Blob(chunks, { type: 'audio/ogg' });
                             this._cache[cacheKey] = URL.createObjectURL(blob);
                         }
@@ -956,8 +959,9 @@ const VN_TTS = {
     },
 
     // ── 清除快取 ─────────────────────────────────────────────────────────
-    clearCache(charName, text) {
-        const model = this._resolveModel(charName);
+    //   typeHint 要跟 play 帶的一樣：同一個人有聲線前綴時解析到的是另一副音色，鍵也就不同
+    clearCache(charName, text, typeHint) {
+        const model = this._resolveModel(charName, typeHint);
         if (!model) return;
         const k = this._cacheKey(model.id, this._cleanForModel(model, text));
         if (this._cache[k]) { URL.revokeObjectURL(this._cache[k]); delete this._cache[k]; }

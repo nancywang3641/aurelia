@@ -1140,7 +1140,13 @@
                         { side: 'foe', maxHp: e.hp, hp: e.hp, dead: false }));
                 }
             });
-            if (!S.foes.length) { console.warn('[VN_Battle] 沒有有效敵人，取消'); return null; }
+            if (!S.foes.length) {
+                console.warn('[VN_Battle] 沒有有效敵人，取消');
+                // 呼叫端靠 onEnd 才往下推進，不回呼它就永遠等在這裡：照「沒有結果」收場
+                S.onEnd = null;
+                if (onEnd) { try { onEnd(null); } catch (e) { console.warn('[VN_Battle] onEnd 失敗', e); } }
+                return null;
+            }
 
             // 玩家：AI 用 [MC] 配這一場的身手（職業、裝備、有沒有帶傷、是不是被綁著），蓋掉那組寫死的預設。
             // 🚨但「還剩幾成血」必須從上一場延續，不能跟著新的 maxHp 一起重置 ——

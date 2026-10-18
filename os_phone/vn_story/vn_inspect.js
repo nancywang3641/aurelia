@@ -225,7 +225,7 @@
                     const b = document.getElementById(`ue-choice-btn-${i}`);
                     if (!b) return;
                     b.onclick = () => {
-                        if (inp) { inp.value = opt; inp.focus(); }
+                        if (inp) { inp.value = opt; inp.focus({ preventScroll: true }); }
                         // 高亮選中
                         options.forEach((_, j) => {
                             const bj = document.getElementById(`ue-choice-btn-${j}`);

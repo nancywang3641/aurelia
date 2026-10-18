@@ -45,8 +45,8 @@
             const cur = localStorage.getItem('vn_current_story_id') || '';
             const prev = JSON.parse(localStorage.getItem(THEATER_PREV) || 'null');
             if (prev && THEATER_ID.test(cur)) {
-                localStorage.setItem('vn_current_story_id', prev.id || '');
-                localStorage.setItem('vn_current_story_title', prev.title || '');
+                win.AUI.lsSet('vn_current_story_id', prev.id || '', '換回原本的故事');
+                win.AUI.lsSet('vn_current_story_title', prev.title || '', '換回原本的故事');
             }
             if (prev) localStorage.removeItem(THEATER_PREV);
         } catch (e) {}
@@ -88,8 +88,9 @@
         _setStoryId: function(storyId, storyTitle) {
             this._currentStoryId    = storyId;
             this._currentStoryTitle = storyTitle || '';
-            localStorage.setItem('vn_current_story_id',    storyId    || '');
-            localStorage.setItem('vn_current_story_title', storyTitle || '');
+            // 寫不進去時記憶體這份照用（這一局能玩），提示會說沒存下來；回傳成不成功給要確認的呼叫端
+            const _okId    = win.AUI.lsSet('vn_current_story_id',    storyId    || '', '目前在玩哪個故事');
+            const _okTitle = win.AUI.lsSet('vn_current_story_title', storyTitle || '', '目前在玩哪個故事');
             // 大廳左上角顯示「現在在玩哪一條」。酒館那條線在 index.js（讀 SillyTavern 的 chatId），
             //   PWA 根本沒載那支 → 標題一直停在預設字串。獨立版由這裡餵，換篇章就跟著換。
             try {
@@ -97,14 +98,13 @@
                     win.AureliaControlCenter?.setChatTitle?.(storyTitle);
                 }
             } catch (e) {}
+            return _okId && _okTitle;
         },
         // 播小劇場前叫：記下她原本的故事再換成小劇場的（連播兩場也只記第一次那個真的故事）
         _enterTheater: function(storyId, storyTitle) {
-            try {
-                if (!THEATER_ID.test(this._currentStoryId || '')) {
-                    localStorage.setItem(THEATER_PREV, JSON.stringify({ id: this._currentStoryId || '', title: this._currentStoryTitle || '' }));
-                }
-            } catch (e) {}
+            if (!THEATER_ID.test(this._currentStoryId || '')) {
+                win.AUI.lsSet(THEATER_PREV, JSON.stringify({ id: this._currentStoryId || '', title: this._currentStoryTitle || '' }), '看小劇場前在玩的故事');
+            }
             this._setStoryId(storyId, storyTitle);
         },
         // 回大廳時叫（control_center 的 hideVnPanel）：還停在小劇場就換回原本那個。
@@ -142,8 +142,8 @@
                     worldId: worldId || localStorage.getItem('vn_current_world_id') || '',
                     title: t, createdAt: Date.now()
                 };
-                localStorage.setItem('vn_story_index', JSON.stringify(idx));
-            } catch (e) {}
+                win.AUI.lsSet('vn_story_index', JSON.stringify(idx), '故事清單');
+            } catch (e) { console.warn('[VN] 故事清單讀不出來，這條沒登記進去:', e); }
             console.log(`[VN] 新故事線 ${id}（書：${worldId || '(自由劇情)'}）`);
             return id;
         },
@@ -170,8 +170,8 @@
             // 書架「歷史篇章」的清單來源
             try {
                 const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');
-                if (idx[id]) { delete idx[id]; localStorage.setItem('vn_story_index', JSON.stringify(idx)); }
-            } catch (e) {}
+                if (idx[id]) { delete idx[id]; win.AUI.lsSet('vn_story_index', JSON.stringify(idx), '故事清單'); }
+            } catch (e) { console.warn('[VN] 故事清單讀不出來，沒從清單拿掉:', e); }
             // 刪的就是正在玩的這條 → 放掉當前指標，免得下一輪寫進已經不存在的桶
             if (this._currentStoryId === id) this._setStoryId('', '');
             console.log(`[VN] 🗑️ 已刪除故事線：${id}`);
@@ -185,8 +185,8 @@
             this._setStoryId(this._currentStoryId, t);
             try {
                 const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');
-                if (idx[this._currentStoryId]) { idx[this._currentStoryId].title = t; localStorage.setItem('vn_story_index', JSON.stringify(idx)); }
-            } catch (e) {}
+                if (idx[this._currentStoryId]) { idx[this._currentStoryId].title = t; win.AUI.lsSet('vn_story_index', JSON.stringify(idx), '故事清單'); }
+            } catch (e) { console.warn('[VN] 故事清單讀不出來，標題沒更新:', e); }
         },
         
         // 音效管理參數
@@ -495,16 +495,18 @@
             return {};
         },
         _saveCharVoices: function() {
-            try { localStorage.setItem(this._charVoicesKey(), JSON.stringify(this.charVoices || {})); } catch(e){}
+            win.AUI.lsSet(this._charVoicesKey(), JSON.stringify(this.charVoices || {}), '角色的固定聲線');
         },
 
-        loadScript: function (txt, messageId) {
+        // opts.replay：從章節選擇重看舊章。最新這輪的副模型插圖（VN_SceneInsert.applyLatestFresh）看到它就不插進這份
+        loadScript: function (txt, messageId, opts) {
             // 新一輪劇本載入時，自動關閉檔案庫面板
             if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) {
                 window.AureliaHtmlExtractor.hide();
             }
             this.resetState();
             this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
+            this._scriptIsReplay = !!(opts && opts.replay);
             // 🕰 主角狀態：每則訊息處理前存快照、讓效果倒數一回合；同一則再進來（swipe／重生）先退回快照。
             //    她自己那套 <os_status> 區塊也在這裡整塊撈給狀態模組（動作都排隊，一定在下面的標籤之前跑），
             //    然後從劇本剝掉——不然會被當旁白念出來、或被未知區塊過濾器吃掉。
@@ -834,9 +836,9 @@
          * 章節卡片/開場指令照常顯示（卡片就是天然等待室）；
          * 「第一行劇情文本」要渲染時若圖片還沒全好，next() 內建的開場閘門才會彈 loading 攔住。
          */
-        _startWithLoader: function(text, msgId) {
+        _startWithLoader: function(text, msgId, opts) {
             // 獨立版場景分析已退役（2026-06-13）：直接載入開播；場景插圖走 主模型 [Scene|] tag / 副模型版(接記憶)
-            this.loadScript(text, msgId);
+            this.loadScript(text, msgId, opts);
             this.next();
         },
 
@@ -2097,7 +2099,7 @@
         _heavyBegin: function(step) {
             this._heavyOps++;
             if (step === 'bg') this._heavyBgN++;
-            try { localStorage.setItem('vn_heavy_step', JSON.stringify({ step: step, bg: this._heavyBgN, at: Date.now() })); } catch (e) {}
+            win.AUI.lsSet('vn_heavy_step', JSON.stringify({ step: step, bg: this._heavyBgN, at: Date.now() }), '跑圖進度記號');
         },
         _heavyEnd: function() {
             this._heavyOps = Math.max(0, this._heavyOps - 1);
@@ -2391,13 +2393,15 @@
         },
         // 正文內穿插的 #SFXID# 音效標記（旁白不帶 Nar 後的新格式）：抽出第一個當音效、其餘標記一律從顯示文字剝掉。
         //   回 { text: 去標記後的文字, sfx: 第一個ID或'NA' }。與 tag 尾格 SFX 並存(呼叫端 inline 優先、沒有才用尾格)。
-        _extractInlineSFX: function(text) {
+        //   opts.silent：只要剝好的字、不播 fx-（語音預取／預熱用：還沒播到那句，特效不能先跑）
+        _extractInlineSFX: function(text, opts) {
             if (!text || text.indexOf('#') === -1) return { text: text || '', sfx: 'NA' };
+            const silent = !!(opts && opts.silent);
             let sfx = 'NA';
             const cleaned = String(text).replace(/#([A-Za-z0-9_\-&]+)#/g, (_m, id) => {
                 const _id = id.trim();
                 if (/^fx-/i.test(_id)) {   // ⚡ fx- 開頭 = 畫面特效標記 → 交 OS_FX 播，不當音效
-                    try { if (window.OS_FX) window.OS_FX.play(_id); } catch (e) {}
+                    if (!silent) { try { if (window.OS_FX) window.OS_FX.play(_id); } catch (e) {} }
                     return '';
                 }
                 if (sfx === 'NA') sfx = _id;   // 一行取第一個(playSFX 一次一個、後者會蓋前者)
@@ -2443,7 +2447,8 @@
                 const parts = this._normCharParts(line.slice(6, -1).split('|'));
                 const charName = parts[0];
                 const ex = this._extractTextAndSFX(parts.slice(2));
-                const text = this._cleanTextForSoVITS(ex.text);
+                // 播放端念的是剝掉正文 #音效# 標記之後的字（_extractInlineSFX），預熱也要先剝，快取鍵才對得上
+                const text = this._cleanTextForSoVITS(this._extractInlineSFX(ex.text, { silent: true }).text);
                 
                 // 🎭 拆解 Type 與 Expression
                 let rawExp = parts[1] || '';
@@ -2681,7 +2686,7 @@
                     const _settle = (r) => {
                         _endDecided = true;
                         clearTimeout(_holdTimer);
-                        try { localStorage.setItem('vn_end_panel_hit', r ? '1' : '0'); } catch (e) {}
+                        win.AUI.lsSet('vn_end_panel_hit', r ? '1' : '0', '末尾面板的記號');
                         if (!r || !basic) { _showBasic(); return; }
                         let left = 0;
                         Object.keys(BASIC_OF).forEach(k => {
@@ -2828,6 +2833,13 @@
                 // 這裡不准靜默：空區塊＝上游把內容剝掉了（loadScript 的區塊過濾就幹過一次），沒警告根本查不到
                 if (!window.VN_Battle) { console.warn('[VN_Battle] 模組未載入，跳過戰鬥'); this.next(); return; }
                 if (!_bRaw.trim()) { console.warn('[VN_Battle] <BattleStart> 區塊是空的（內容被上游過濾掉？），跳過戰鬥'); this.next(); return; }
+                // 讀不到任何 [Foe|…]＝這場開不起來。要在 _runBattle 之前擋：它一進去就先剪掉後面的劇本和正文，
+                //   這時才發現沒敵人，劇情已經被剪斷、面板也沒開，畫面就停在這一行。
+                if (!window.VN_Battle.parse(_bRaw).enemies.length) {
+                    console.warn('[VN_Battle] <BattleStart> 裡讀不到敵人，跳過戰鬥：', _bRaw);
+                    try { AUI.toast('這場戰鬥讀不到敵人，沒開打，劇情照原本寫的往下播', { type: 'error' }); } catch (e) {}
+                    this.next(); return;
+                }
                 this._runBattle(_bRaw);
                 return;
             }
@@ -3275,7 +3287,7 @@
                 //    這章 Jev 有回答就不聽第五欄（整章聽 Jev，見 os_jev_stage.js）
                 if (ex.stage === 'leave' && !this._jevStage) (this._pendingLeave = this._pendingLeave || []).push(p[0]);
                 this._lastChar = p[0];
-                this._currentChar = { charName: p[0], text: _cx.text, emotion: this._mapExprToEmotion(rawExp), expression: rawExp };
+                this._currentChar = { charName: p[0], text: _cx.text, emotion: this._mapExprToEmotion(rawExp), expression: rawExp, typeHint: typeHint };
                 this.updateControlUI();
                 
                 // 把 typeHint 傳給 TTS（用去 #SFX# 標記的文字，免得念出來）
@@ -3289,7 +3301,9 @@
                             //    以前直接 split 會把「Stay」當台詞送去付費合成
                             const np = VN_Core._normCharParts(nl.slice(6, -1).split('|'));
                             const nex = VN_Core._extractTextAndSFX(np.slice(2));
-                            if (nex.text && !/^(stay|leave)$/i.test(nex.text.trim())) VN_Core._prefetchAs(np[0], nex.text, np[1] || '');
+                            // 播到那句時念的是剝掉 #音效# 標記的字：這裡不剝，帶標記的那句就預取了一份永遠用不到的
+                            const ntext = VN_Core._extractInlineSFX(nex.text, { silent: true }).text;
+                            if (ntext && !/^(stay|leave)$/i.test(ntext.trim())) VN_Core._prefetchAs(np[0], ntext, np[1] || '');
                             break;
                         }
                         if (nl.startsWith('[Choice|') || nl.startsWith('[End]') || nl.startsWith('</')) break;
@@ -3584,7 +3598,7 @@
         _playBgm: function(name) {
             const audio = document.getElementById('bgm-player');
             // 記住上一首（每個故事一份）：Jev 塞車問不到音樂時，接著放這首（見 _bgmResumeLast）
-            if (name && name !== 'stop') { try { localStorage.setItem('vn_last_bgm:' + (this._currentStoryId || ''), name); } catch (e) {} }
+            if (name && name !== 'stop') win.AUI.lsSet('vn_last_bgm:' + (this._currentStoryId || ''), name, '上一首背景音樂');
             if (name === 'stop') {
                 if (audio) audio.pause();
             } else if (!audio) {
@@ -3854,7 +3868,7 @@
         // 重新生成/重播當前 [Char|] 行的 TTS
         // 獨立模式 → MiniMax 重播；ST 模式 → GPT-SoVITS 重新生成（原邏輯不動）
         regenCurrentTTS: async function() {
-            const { charName, text, emotion, expression } = this._currentChar || {};
+            const { charName, text, emotion, expression, typeHint } = this._currentChar || {};
             if (!charName || !text) return;
 
             const btn = document.getElementById('vn-btn-regen');
@@ -3876,9 +3890,13 @@
             const VN_TTS = (window.parent || window).VN_TTS;
             if (!VN_TTS?.config?.enabled) { console.warn('[VN] VN_TTS 不可用或未啟用'); return; }
 
+            // 跟播放那條（_vnSoVITSPlay）用同一份清好的字和同一個聲線：快取鍵是「音色＋清好的字」，
+            //   拿原文去清會對不到鍵（舊檔刪不掉），也會把旁白、括號裡的動作一起念出來；少了聲線還可能換一副嗓子
+            const spoken = this._cleanTextForSoVITS(text);
+            if (!spoken) return;
             if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true; }
-            VN_TTS.clearCache(charName, text);
-            VN_TTS.play(charName, text, emotion);
+            VN_TTS.clearCache(charName, spoken, typeHint || '');
+            VN_TTS.play(charName, spoken, emotion, typeHint || '');
             if (btn) { btn.textContent = '↺ TTS'; btn.disabled = false; }
         },
         addLog: function(name, text) { this.logHistory.push({ name, text: text.replace(/\*/g, '') }); },

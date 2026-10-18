@@ -23,8 +23,10 @@
         getCss(chatId) { try { return localStorage.getItem(_key(chatId || _curWorld())) || ''; } catch (e) { return ''; } },
         setCss(chatId, css) {
             const id = chatId || _curWorld();
-            try { localStorage.setItem(_key(id), css || ''); } catch (e) {}
-            this.apply(id);
+            const ok = win.AUI.lsSet(_key(id), css || '', '劇情面板的自訂樣式');
+            // 沒存成也先套上剛給的這份：apply 是回存檔讀，讀到的會是舊樣式，畫面就退回去了
+            if (ok) this.apply(id); else this._paint(css || '');
+            return ok;
         },
         clear(chatId) {
             const id = chatId || _curWorld();
@@ -32,11 +34,12 @@
             this.apply(id);
         },
         // 把該世界的自訂 CSS 注入 <style id="vn-theme-css">（沒有就清空 → 回預設黑金）
-        apply(chatId) {
+        apply(chatId) { this._paint(this.getCss(chatId || _curWorld())); },
+        _paint(css) {
             const doc = (win.document || document);
             let st = doc.getElementById('vn-theme-css');
             if (!st) { st = doc.createElement('style'); st.id = 'vn-theme-css'; (doc.head || doc.documentElement).appendChild(st); }
-            st.textContent = this.getCss(chatId || _curWorld());
+            st.textContent = css;
         }
     };
 

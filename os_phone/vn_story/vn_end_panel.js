@@ -355,10 +355,12 @@
         const root = _el();
         if (!root) return null;
         clear();
+        const my = _gen;     // clear() 剛換過號：等面板資料這段期間又被 clear／render 一次，這一趟就作廢
         const WG = _wg();
         if (!WG || typeof WG.getWorldPanel !== 'function') return null;    // 舊版世界門＝優雅跳過
         let w = null;
         try { w = await WG.getWorldPanel(); } catch (e) { w = null; }
+        if (_stale(root, my)) return null;                                 // 不擋的話兩趟都往同一個面板塞，內容疊兩層
         if (!w || !w.panel || !w.panel.html) return null;                  // 沒生成過面板＝走原本那四顆按鈕
 
         // 🚨面板是在「上一次演完」之後才可能被換掉的東西：每次都重建，不要沿用上一個世界的節點。

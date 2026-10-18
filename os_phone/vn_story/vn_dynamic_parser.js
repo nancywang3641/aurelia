@@ -455,7 +455,9 @@
                 runMicroApp(panel, lines, onComplete, st);
             } catch(e) {
                 console.error(`[VN Parser] 執行標籤腳本失敗 [${tagId}]:`, e);
-                panel.innerHTML += `<div style="color:red; background:#000; padding:10px;">腳本執行錯誤: ${e.message}</div>`;
+                // 用追加不用 innerHTML +=：後者會整塊重建，腳本出錯前已經綁好的按鈕監聽全部掉光
+                const _msg = String((e && e.message) || e).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                panel.insertAdjacentHTML('beforeend', `<div style="color:red; background:#000; padding:10px;">腳本執行錯誤: ${_msg}</div>`);
                 overlay.onclick = onComplete; // 防卡死
             }
         },
@@ -485,8 +487,11 @@
                 _fs.textContent = `.vn-dynamic-panel-${tpl.tagId}, .vn-dynamic-panel-${tpl.tagId} *{font-family:${tpl.appearFont} !important}`;
                 overlay.appendChild(_fs);
             }
-            overlay.onclick = () => { 
-                overlay.style.opacity = '0'; 
+            // 淡出那 300ms 裡再點一下，會再排一次 next()＝下一句被跳過：只收第一下
+            let _done = false;
+            overlay.onclick = () => {
+                if (_done) return; _done = true;
+                overlay.style.opacity = '0';
                 setTimeout(() => { 
                     overlay.remove(); 
                     if (vnCore.showVNPanel) vnCore.showVNPanel();

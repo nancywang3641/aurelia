@@ -139,6 +139,8 @@
             this.to = o.to; this.from = o.from; this.mode = o.mode;
             this.steps = Math.max(1, this.countSteps(core.script, core.index));
             this.stepIdx = 0; this.arrived = false; this._eta = null;
+            // 新的一趟：上一趟的最後一步／「已到達」標記不清掉，_renderCard 就不會換成這趟的「前往 ○○」
+            const _step = $('nv-step'); if (_step) delete _step.dataset.filled;
             this._hideNar();
             core.toggleUI('phone-nav');
             core.addLog('手機', `導航到「${o.to}」`);
