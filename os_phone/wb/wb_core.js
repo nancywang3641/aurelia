@@ -25,9 +25,17 @@
     function _hydrateImgs(root) {
         try { const PI = win.OS_PHONE_IMAGE; if (PI && PI.hydrate) PI.hydrate(root); } catch (e) {}
     }
+    // 轉發名單裡的名字是她或模型取的：放進 HTML 前轉掉，塞進 onclick 的字串參數再多轉一層 JS（\ ' 換行）
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function _jsArg(s) {
+        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n'));
+    }
     let CURRENT_TAB = 'home';
     let APP_CONTAINER = null;
-    let LAST_USER_HASH = "";
     let CURRENT_OPEN_POST_ID = null;
     let DARK_MODE = localStorage.getItem('wb_dark_mode') === 'true';
 
@@ -119,7 +127,7 @@
             holder.innerHTML = win.WB_VIEW.renderCompose(this._compose);
             host.appendChild(holder.firstElementChild);
             const ta = host.querySelector('#wb-compose-text');
-            if (ta) ta.focus();
+            if (ta) ta.focus({ preventScroll: true });   // 發文小窗剛蓋上來，別讓 focus 把外層捲歪
         },
         _readCompose: function() {
             if (!this._compose) return;
@@ -301,15 +309,14 @@
             const newName = await this._prompt('微博暱稱', account.weiboNickname || '', '想叫什麼');
 
             if (newName !== null && newName.trim() !== '') {
-                wbAccount.updateCurrentNickname(newName.trim());
-                this._showToast(`暱稱改成 ${newName.trim()}`);
+                if (wbAccount.updateCurrentNickname(newName.trim())) this._showToast(`暱稱改成 ${newName.trim()}`);   // 沒存成就不報
                 this.render();
             }
         },
 
         toggleDarkMode: function() {
             DARK_MODE = !DARK_MODE;
-            localStorage.setItem('wb_dark_mode', DARK_MODE);
+            win.AUI.lsSet('wb_dark_mode', DARK_MODE ? 'true' : 'false', '微博的深色模式');
             this.render();
         },
 
@@ -324,15 +331,19 @@
         _unfollowed: function() {
             try { const a = JSON.parse(localStorage.getItem(this._unfollowKey()) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
         },
-        followList: function() {
+        // 微信通訊錄（當前故事那本）裡的人，扣掉群和自己。關注列表、轉發名單都從這裡拿，兩邊才不會是兩本名冊。
+        _wxFriends: function() {
             const C = win.WX_CONTACTS;
             let all = [];
             try { all = (C && C.getAllCustomContacts) ? (C.getAllCustomContacts() || []) : []; } catch (e) { all = []; }
-            const off = this._unfollowed();
             const me = ['我', 'User'];
             try { const u = win.VN_PANEL_FEED && win.VN_PANEL_FEED.userSync ? win.VN_PANEL_FEED.userSync() : null; if (u) me.push(u.name, u.nickname); } catch (e) {}
             try { if (win.WX_ME && win.WX_ME.name) me.push(win.WX_ME.name()); } catch (e) {}
-            return all.filter(c => c && c.id && !c.isGroup && c.name && off.indexOf(c.id) < 0 && me.indexOf(c.name) < 0);
+            return all.filter(c => c && c.id && !c.isGroup && c.name && me.indexOf(c.name) < 0);
+        },
+        followList: function() {
+            const off = this._unfollowed();
+            return this._wxFriends().filter(c => off.indexOf(c.id) < 0);
         },
         // 粉絲數沒有真的資料：用名字算一個固定的數，每次打開都一樣，不再亂跳
         _fansOf: function(name) {
@@ -394,7 +405,7 @@
                 if (!(await this._ask('取消關注這 ' + ids.length + ' 個人？微信好友不會被刪。', '取消關注'))) return;
                 const next = this._unfollowed();
                 ids.forEach(id => { if (next.indexOf(id) < 0) next.push(id); });
-                try { localStorage.setItem(this._unfollowKey(), JSON.stringify(next)); } catch (err) {}
+                if (!win.AUI.lsSet(this._unfollowKey(), JSON.stringify(next), '取消關注')) return;
                 this.render();          // 「我」頁的關注數跟著變
                 this.showContacts();
             };
@@ -412,18 +423,12 @@
                 return;
             }
 
-            const osContacts = win.OS_CONTACTS;
-            if (!osContacts) { AUI.alert('無法讀取聯繫人'); return; }
-
+            // 名單跟關注列表同一本（微信通訊錄、當前故事）：以前讀的是不分故事的舊總表，別張卡的人也混進來
+            //   取消關注只是微博這邊不看他，微信好友還在，所以照樣轉發得到
             const existing = doc.getElementById('wb-share-modal');
             if (existing) existing.remove();
 
-            const allContacts = osContacts.getAll();
-            const contactList = [];
-            for (let id in allContacts) {
-                const c = allContacts[id];
-                if (!c.isNPC) contactList.push(c);
-            }
+            const contactList = this._wxFriends();
 
             if (contactList.length === 0) {
                 AUI.alert('尚無微信聯繫人可分享');
@@ -444,12 +449,12 @@
             </div>`;
 
             const listHtml = contactList.map(c => {
-                const name = c.wx?.nickname || c.realName;
-                const initial = name.charAt(0);
+                const name = String(c.name);
+                const initial = _esc(Array.from(name)[0] || '');
                 return `<div style="display:flex; align-items:center; padding:12px 15px; border-bottom:1px solid ${border}; gap:10px;">
                     <div style="width:40px; height:40px; border-radius:6px; background:linear-gradient(135deg,#07c160,#05a050); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:16px;">${initial}</div>
-                    <div style="flex:1; font-size:14px; color:${textC}; font-weight:500;">${name}</div>
-                    <div onclick="(window.parent.wbApp||window.wbApp)._doShare('${c.id}','${postId}',this)" style="background:#07c160; color:#fff; font-size:13px; padding:5px 14px; border-radius:14px; cursor:pointer; font-weight:500; white-space:nowrap;">傳送</div>
+                    <div style="flex:1; font-size:14px; color:${textC}; font-weight:500;">${_esc(name)}</div>
+                    <div onclick="(window.parent.wbApp||window.wbApp)._doShare('${_jsArg(c.id)}','${_jsArg(postId)}',this)" style="background:#07c160; color:#fff; font-size:13px; padding:5px 14px; border-radius:14px; cursor:pointer; font-weight:500; white-space:nowrap;">傳送</div>
                 </div>`;
             }).join('');
 
@@ -485,9 +490,9 @@
             if (ok) {
                 const modal = doc.getElementById('wb-share-modal');
                 if (modal) modal.remove();
-                // 獲取聯繫人名稱
-                const contact = win.OS_CONTACTS ? win.OS_CONTACTS.getById(contactId) : null;
-                const name = contact ? (contact.wx?.nickname || contact.realName) : contactId;
+                // 獲取聯繫人名稱（跟轉發名單同一本）
+                const contact = this._wxFriends().find(c => c.id === contactId);
+                const name = contact ? contact.name : contactId;
                 this._showToast(`已轉發給 ${name}`);
             } else {
                 AUI.alert('轉發失敗');
@@ -570,10 +575,10 @@
                 const done = (v) => { mask.remove(); resolve(v); };
                 mask.querySelector('.wb-prompt-ok').onclick = (e) => { e.stopPropagation(); done(collect()); };
                 mask.querySelector('.wb-ask-cancel').onclick = (e) => { e.stopPropagation(); done(null); };
-                inputs.forEach((inp, k) => { inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (k < inputs.length - 1) inputs[k + 1].focus(); else done(collect()); } }; });
+                inputs.forEach((inp, k) => { inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (k < inputs.length - 1) inputs[k + 1].focus({ preventScroll: true }); else done(collect()); } }; });
                 mask.onclick = (e) => { if (e.target === mask) done(null); };
                 host.appendChild(mask);
-                setTimeout(() => { try { inputs[0].focus(); inputs[0].select(); } catch (e) {} }, 30);
+                setTimeout(() => { try { inputs[0].focus({ preventScroll: true }); inputs[0].select(); } catch (e) {} }, 30);
             });
         },
 
@@ -950,25 +955,14 @@
             return { newPosts, replies };
         },
 
-        checkUserUpdate: function() {
-            if (win.OS_USER && typeof win.OS_USER.getHash === 'function') {
-                const currentHash = win.OS_USER.getHash();
-                if (currentHash !== LAST_USER_HASH) {
-                    LAST_USER_HASH = currentHash;
-                    if (CURRENT_TAB === 'me') this.render();
-                }
-            }
-        },
-
         install: async function() {
             if (win.PhoneSystem) {
                 await win.wbApp.init();
                 win.PhoneSystem.install('微博', '<i class="fa-solid fa-eye"></i>', '#ff8200', (c) => {
                     APP_CONTAINER = c;
+                    // 每次打開微博都照現在的帳號整頁重畫，「我」頁的暱稱、頭像就是最新的，不用另外輪詢人設換了沒
+                    //   （OS_USER 沒有 getHash 這種東西，以前那支每秒輪詢的計時器其實什麼都沒做）
                     win.wbApp.render();
-                    // 這個 callback 每次開微博 app 都會跑：interval 必須單例，否則輪詢一支一支疊上去越玩越卡
-                    if (win.wbApp._userTimer) clearInterval(win.wbApp._userTimer);
-                    win.wbApp._userTimer = setInterval(() => win.wbApp.checkUserUpdate(), 1000);
                 });
             } else { setTimeout(win.wbApp.install, 500); }
         }

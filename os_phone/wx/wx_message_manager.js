@@ -95,7 +95,8 @@
         const seen = new Set();
         (messages || []).forEach(m => {
             const text = String((m && (m.content || m.raw)) || '');
-            const ids = text.match(/(?:Gft|Gift|rp|RedPacket|Txn|Tnx|Transfer)[_-][A-Za-z0-9_]+/gi) || [];
+            // 最後那種 Txn42（沒底線）是她自己發的轉帳以前的單號寫法（wx_core confirmModal），舊記錄裡還有
+            const ids = text.match(/(?:Gft|Gift|rp|RedPacket|Txn|Tnx|Transfer)[_-][A-Za-z0-9_]+|T(?:xn|nx)\d+/gi) || [];
             ids.forEach(id => {
                 if (seen.has(id)) return;
                 seen.add(id);

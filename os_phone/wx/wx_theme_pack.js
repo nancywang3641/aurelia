@@ -375,7 +375,10 @@
         if (!_list) return;   // 清單讀不到：正在用的主題別動
         const t = id ? _list.find(function (x) { return x.id === id; }) : null;
         if (id && !t) id = '';
-        try { if (id) localStorage.setItem(ACTIVE_KEY, id); else localStorage.removeItem(ACTIVE_KEY); } catch (e) {}
+        if (id) {
+            // 記不住正在用哪一套就先別套：不然這次看起來換好了，重整又變回去（lsSet 會跳「沒存下來」）
+            if (!win.AUI.lsSet(ACTIVE_KEY, id, '正在用的聊天 app 主題')) return false;
+        } else { try { localStorage.removeItem(ACTIVE_KEY); } catch (e) {} }
         _inject(t ? compile(t.css).css : '');
         _renderPage();
         return !!t || !id;
@@ -972,7 +975,7 @@
         if (!b || !_root || !_root.contains(b)) return;
         const act = b.dataset.act, id = b.dataset.id;
         if (act === 'close') return close();
-        if (act === 'use') { await apply(id || ''); _toast(id ? '已套用' : '回到原本的樣子'); return; }
+        if (act === 'use') { if ((await apply(id || '')) === false) return; _toast(id ? '已套用' : '回到原本的樣子'); return; }   // false＝沒存成，別報已套用
         if (act === 'open-import') { _sheet = 'import'; _draft = { text: '', name: '', want: _draft.want, foreign: false }; return _renderPage(); }
         if (act === 'open-ai') { _sheet = 'ai'; return _renderPage(); }
         if (act === 'sheet-close') { _sheet = ''; return _renderPage(); }

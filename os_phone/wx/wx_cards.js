@@ -35,9 +35,9 @@
             return { seq: Number(b.seq) || 0, list: b.list };
         } catch (e) { return { seq: 0, list: [] }; }
     }
+    // 存不進去要讓她看到：這本帳記的是紅包／轉帳收了沒，靜靜沒存到的話重整後同一筆又能再收一次
     function save(chatId, book) {
-        try { localStorage.setItem(KEY(chatId), JSON.stringify(book)); return true; }
-        catch (e) { console.warn('[WX_CARDS] 存不進去（空間可能滿了）', e); return false; }
+        return win.AUI.lsSet(KEY(chatId), JSON.stringify(book), '紅包和轉帳的領取紀錄');
     }
 
     // 模型寫的單號拿來比對前先正規化：大小寫、前後空白、ID_ 前綴都不算數
@@ -218,7 +218,7 @@
             const seen = new Set();
             (messages || []).forEach(m => {
                 const text = String((m && (m.content || m.raw)) || '');
-                const ids = text.match(/(?:Gft|Gift|rp|RedPacket|Txn|Tnx|Transfer)[_-][A-Za-z0-9_]+/gi) || [];
+                const ids = text.match(/(?:Gft|Gift|rp|RedPacket|Txn|Tnx|Transfer)[_-][A-Za-z0-9_]+|T(?:xn|nx)\d+/gi) || [];   // Txn42：她自己發的轉帳以前沒底線
                 ids.forEach(id => {
                     if (seen.has(id)) return;
                     seen.add(id);

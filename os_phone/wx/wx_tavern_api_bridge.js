@@ -499,13 +499,6 @@
         },
 
         /**
-         * 手动触发一次轮询
-         */
-        poll: function() {
-            pollNewMessages();
-        },
-
-        /**
          * 重置消息 ID（用于测试）
          */
         reset: function() {

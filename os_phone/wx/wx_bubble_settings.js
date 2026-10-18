@@ -45,11 +45,13 @@
         },
 
         // 儲存特定 ID 的設定
+        // 回 true/false。存不進去（本機空間滿了）lsSet 會跳提示，這次就不套：套上去也只是假的，重開又變回存著的那份
         saveConfig: function(chatId, config) {
-            if (!chatId) return;
+            if (!chatId) return false;
             const key = `wx_bubble_style_${chatId}`;
-            localStorage.setItem(key, JSON.stringify(config));
+            if (!win.AUI.lsSet(key, JSON.stringify(config), '泡泡樣式')) return false;
             this.applyStyle(chatId); // 立即套用
+            return true;
         },
 
         // 只存不貼（小機的「改泡泡」一次改好幾間用，os_aurelia_bubble.js）：貼泡泡的 <style> 整支 app 只有一個，
@@ -93,7 +95,7 @@
         resetConfig: function(chatId) {
             if (!chatId) return;
             const cur = this.getConfig(chatId);
-            this.saveConfig(chatId, { ...DEFAULT_CONFIG, aiCSS: cur.aiCSS || '', customCSS: cur.customCSS || DEFAULT_CONFIG.customCSS });
+            return this.saveConfig(chatId, { ...DEFAULT_CONFIG, aiCSS: cur.aiCSS || '', customCSS: cur.customCSS || DEFAULT_CONFIG.customCSS });
         },
 
         // VN 劇情裡演出來的手機聊天：那邊的聊天室只有房名（或 AI 自己寫的 id），
@@ -132,8 +134,8 @@
         setRoomTheme: function(roomName, roomKey, theme) {
             const id = this._contactIdByName(roomName);
             if (id) {
-                if (!theme) this.resetConfig(id);
-                else this.saveConfig(id, { ...this.getConfig(id), mode: 'ai', aiCSS: theme.css || '' });
+                const ok = !theme ? this.resetConfig(id) : this.saveConfig(id, { ...this.getConfig(id), mode: 'ai', aiCSS: theme.css || '' });
+                if (!ok) return false;   // 撞上限沒存進去：跟下面那條一樣回 false 讓面板講出來
             } else if (roomKey) {
                 try {
                     if (!theme) localStorage.removeItem(this._roomKey(roomKey));
@@ -429,7 +431,7 @@
             doc.getElementById('inp-css').oninput = (e) => { tempConfig.customCSS = e.target.value; };
             doc.getElementById('wx-bubble-close').onclick = () => { doc.getElementById('wxActionModal').classList.remove('show'); };
             doc.getElementById('wx-bubble-save').onclick = () => {
-                this.saveConfig(chatId, tempConfig);
+                if (!this.saveConfig(chatId, tempConfig)) return;   // 沒存成就留在這頁（lsSet 已經跳提示），調好的別跟著窗一起丟掉
                 doc.getElementById('wxActionModal').classList.remove('show');
             };
 
@@ -444,7 +446,7 @@
                     return;
                 }
                 resetArmed = false; clearTimeout(resetTimer);
-                this.resetConfig(chatId);
+                if (!this.resetConfig(chatId)) { resetBtn.textContent = '還原預設'; return; }   // 沒存成：別寫「還原了」
                 // tempConfig 要原地改：交給 AI／主題庫那兩頁手上拿的是同一個物件
                 const fresh = this.getConfig(chatId);
                 Object.keys(tempConfig).forEach(k => { delete tempConfig[k]; });
@@ -641,9 +643,9 @@
                     card.querySelector('[data-act="apply"]').onclick = (e) => {
                         tempConfig.aiCSS = t.css || '';
                         tempConfig.mode = 'ai';
-                        this.saveConfig(chatId, tempConfig);
+                        const ok = this.saveConfig(chatId, tempConfig);
                         updatePreview();
-                        flash(e.currentTarget, '✓ 套好了');
+                        if (ok) flash(e.currentTarget, '✓ 套好了');   // 沒存成就別說套好了（lsSet 已經跳提示）
                     };
                     // 🚨window.confirm 在 Tauri 會被攔掉（按了完全沒反應），一律兩段式
                     const delBtn = card.querySelector('[data-act="del"]');

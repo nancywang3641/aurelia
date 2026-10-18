@@ -215,7 +215,7 @@
 
                     // 回覆按鈕：點擊後在輸入框填入 "回覆 名字: "
                     const escapedName = cName.replace(/'/g, "\\'");
-                    const replyHtml = `<span class="wb-cmt-reply" onclick="const inp=(window.parent&&window.parent.document||document).getElementById('wb-comment-input'); if(inp){inp.value='回覆 ${escapedName}: '; inp.focus(); const btn=inp.parentElement&&inp.parentElement.nextElementSibling; if(btn)btn.classList.add('active');}">回覆</span>`;
+                    const replyHtml = `<span class="wb-cmt-reply" onclick="const inp=(window.parent&&window.parent.document||document).getElementById('wb-comment-input'); if(inp){inp.value='回覆 ${escapedName}: '; inp.focus({preventScroll:true}); const btn=inp.parentElement&&inp.parentElement.nextElementSibling; if(btn)btn.classList.add('active');}">回覆</span>`;
 
                     return `
                         <div class="wb-comment-item">

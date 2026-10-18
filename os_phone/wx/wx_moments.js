@@ -705,7 +705,7 @@
         return { count: count, actor: last ? last.who : '', replies: replies };
     }
     function markSeen() {
-        try { localStorage.setItem(SEEN_KEY(scope()), String(_now())); } catch (e) {}
+        win.AUI.lsSet(SEEN_KEY(scope()), String(_now()), '朋友圈看到哪裡');
         try { paintBadges(); } catch (e) {}
     }
 
@@ -862,7 +862,7 @@
         bar.hidden = false;
         inp.value = '';
         inp.placeholder = toName ? '回覆 ' + toName : '評論';
-        try { inp.focus(); } catch (e) {}
+        try { inp.focus({ preventScroll: true }); } catch (e) {}   // 留言列剛冒出來，別讓 focus 把朋友圈整頁捲走
     }
     function _stopInput() {
         if (!_root) return;

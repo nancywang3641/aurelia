@@ -45,7 +45,8 @@
             id: (c && c.id) || (chat && chat.id) || k,
             name: (c && c.name) || (chat && chat.name) || k,
             bio: (c && (c.desc || c.bio)) || (chat && chat.desc) || '',
-            avatar: (c && c.customAvatar) || (chat && chat.customAvatar) || '',
+            // 通訊錄那份的頭像欄位叫 avatarId（聊天室那份才叫 customAvatar）；只在群裡出現、沒有一對一聊天室的人只查得到通訊錄
+            avatar: (c && (c.avatarId || c.customAvatar)) || (chat && chat.customAvatar) || '',
             vnName: (c && c.realName) || (chat && chat.realName) || '',
             isGroup: !!((c && c.isGroup) || (chat && chat.isGroup))
         };

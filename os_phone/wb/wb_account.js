@@ -130,8 +130,7 @@
             Object.assign(allAccounts[userId], updates);
             // 補全 ID
             if (!allAccounts[userId].weiboId) allAccounts[userId].weiboId = userId;
-            this.saveAllAccounts(allAccounts);
-            return true;
+            return this.saveAllAccounts(allAccounts);   // false＝沒存成（lsSet 已經跳提示），呼叫端別報改好了
         },
 
         getAllAccounts: function() {
@@ -142,10 +141,7 @@
         },
 
         saveAllAccounts: function(accounts) {
-            try {
-                localStorage.setItem('wb_accounts', JSON.stringify(accounts));
-                return true;
-            } catch(e) { return false; }
+            return win.AUI.lsSet('wb_accounts', JSON.stringify(accounts), '微博帳號');
         },
 
         getDefaultAccount: function() {

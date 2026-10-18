@@ -407,10 +407,10 @@ body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hi
     const _chatKey = (id) => 'wx_bubble_chat::' + (id || 'default');
     const _undoKey = (id) => 'wx_bubble_undo::' + (id || 'default');
     function chatLoad(id) { try { return JSON.parse(localStorage.getItem(_chatKey(id)) || '[]'); } catch (e) { return []; } }
-    function chatSave(id, arr) { try { localStorage.setItem(_chatKey(id), JSON.stringify((arr || []).slice(-30))); } catch (e) {} }
+    function chatSave(id, arr) { return win.AUI.lsSet(_chatKey(id), JSON.stringify((arr || []).slice(-30)), '調泡泡的對話紀錄'); }
     function chatClear(id) { try { localStorage.removeItem(_chatKey(id)); } catch (e) {} }
     function undoLoad(id) { try { return JSON.parse(localStorage.getItem(_undoKey(id)) || '[]'); } catch (e) { return []; } }
-    function undoSave(id, arr) { try { localStorage.setItem(_undoKey(id), JSON.stringify((arr || []).slice(-8))); } catch (e) {} }
+    function undoSave(id, arr) { return win.AUI.lsSet(_undoKey(id), JSON.stringify((arr || []).slice(-8)), '泡泡的上一步'); }
 
     // ── 叫 AI ──────────────────────────────────────────────────────
     // 🚨走「主模型」：這是設計工作，不是照規格填欄位。副模型做這個做出來就是

@@ -49,15 +49,11 @@
 
         // 更新個人資料
         update: function(data) {
-            try {
-                const current = this.get();
-                const updated = { ...current, ...data };
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-                return updated;
-            } catch(e) {
-                console.error('[WB_PROFILE] 更新失敗:', e);
-                return null;
-            }
+            let current;
+            try { current = this.get(); } catch (e) { console.error('[WB_PROFILE] 更新失敗:', e); return null; }
+            const updated = { ...current, ...data };
+            // 存不進去 lsSet 會跳「微博個人資料沒存下來」；回 null 跟以前失敗時一樣
+            return win.AUI.lsSet(STORAGE_KEY, JSON.stringify(updated), '微博個人資料') ? updated : null;
         },
 
         // 清除資料（重置為默認）

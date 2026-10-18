@@ -173,9 +173,9 @@
         try { seeded = !!localStorage.getItem(SEED_KEY); } catch (e) {}
         if (!seeded && !_list.length) {
             _list.push({ id: 'tl_search', name: '上網搜尋', url: 'https://mcp.exa.ai/mcp', key: '', paused: false, tools: [], err: '', at: 0 });
-            if (await _save()) { try { localStorage.setItem(SEED_KEY, '1'); } catch (e) {} }
+            if (await _save()) win.AUI.lsSet(SEED_KEY, '1', '工具清單');
         } else if (!seeded) {
-            try { localStorage.setItem(SEED_KEY, '1'); } catch (e) {}
+            win.AUI.lsSet(SEED_KEY, '1', '工具清單');
         }
         // 已經不在聊天 app 的內建組（會動手的那七組，見 BUILTIN 底下）：清單裡存著的拿掉，小窗與送出都不再出現
         const n0 = _list.length;

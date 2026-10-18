@@ -74,7 +74,7 @@
     //   沒設過時 os_vn_rules 會叫正文 AI 在章節卡寫一行 [Wallet|金額]，vn_core 讀到交給 seedFromStory。
     const SEED_LS = 'wx_wallet_seeded';
     function _seededMap() { try { const m = JSON.parse(localStorage.getItem(SEED_LS) || '{}'); return (m && typeof m === 'object') ? m : {}; } catch (e) { return {}; } }
-    function _markSeeded() { try { const m = _seededMap(); const k = _scope(); if (!m[k]) { m[k] = 1; localStorage.setItem(SEED_LS, JSON.stringify(m)); } } catch (e) {} }
+    function _markSeeded() { const m = _seededMap(); const k = _scope(); if (!m[k]) { m[k] = 1; win.AUI.lsSet(SEED_LS, JSON.stringify(m), '錢包設過起始金額的紀錄'); } }
     function needsSeed() { return !_seededMap()[_scope()]; }
     // 正文寫的起始金額：錢包真的是空的（沒錢、也沒有任何一筆明細）才設，已經有錢或有紀錄的故事只記「設過了」
     async function seedFromStory(amount) {

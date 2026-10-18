@@ -26,14 +26,16 @@
     // 一次性遷移(Rae 選「遷移到當前卡」)：把舊全域聯絡人歸到「第一次帶 storyId 開啟」的那張卡；
     //   其他卡空白開始；舊全域 key 保留當備份(不刪)，os_sync/os_contacts 仍讀得到。
     function _migrateGlobalOnce(sid) {
+        let globalRaw = null, scopedRaw = null;
         try {
             if (localStorage.getItem('wx_custom_contacts_migrated_v1') === '1') return;
-            const globalRaw = localStorage.getItem(CONTACTS_BASE_KEY);
-            const scopedKey = CONTACTS_BASE_KEY + '__' + sid;
-            if (globalRaw && !localStorage.getItem(scopedKey)) localStorage.setItem(scopedKey, globalRaw);
-            localStorage.setItem('wx_custom_contacts_migrated_v1', '1');
-            console.log('[WX_CONTACTS] 通訊錄一次性遷移到當前卡 ' + sid + '（舊全域保留備份）');
-        } catch (e) {}
+            globalRaw = localStorage.getItem(CONTACTS_BASE_KEY);
+            scopedRaw = localStorage.getItem(CONTACTS_BASE_KEY + '__' + sid);
+        } catch (e) { return; }
+        // 搬不進去就先別記「搬過了」，下次再搬（lsSet 會跳提示）
+        if (globalRaw && !scopedRaw && !win.AUI.lsSet(CONTACTS_BASE_KEY + '__' + sid, globalRaw, '通訊錄')) return;
+        if (!win.AUI.lsSet('wx_custom_contacts_migrated_v1', '1', '通訊錄')) return;
+        console.log('[WX_CONTACTS] 通訊錄一次性遷移到當前卡 ' + sid + '（舊全域保留備份）');
     }
     // 🏷 標籤：一份 { 標籤名: [聯絡人id] }，跟通訊錄同一個分艙鍵（換一張卡就是另一本）
     const TAGS_BASE_KEY = 'wx_contact_tags';
@@ -42,20 +44,30 @@
     // 🏠 常駐角色（大廳加的、或聊天設置打開「常駐角色」）另外存一份，每一本都併進來。
     //    每筆帶 lobby:true；寫回時照這個記號分兩份存，不會混進哪一本故事。
     const LOBBY_CONTACTS_KEY = CONTACTS_BASE_KEY + '__lobby';
+    // 名字、世界書條目是她或模型寫的：放進 HTML（尤其 value="…"、data-*="…"）前轉掉，引號才不會把屬性截斷
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
     function _parse(k) { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
     function _readAll() {
         const own = _parse(_contactsKey());
         const ids = {};
-        own.forEach(function (c) { if (c && c.id) ids[c.id] = 1; });
+        // 這本裡帶 lobby 記號的是以前跑團同步整份直接寫進來的副本（見 saveAll），不算數：
+        //   算進來的話大廳那份同 id 的常駐角色會被擋掉，通訊錄裡就看不到他
+        own.forEach(function (c) { if (c && c.id && !c.lobby) ids[c.id] = 1; });
         const lob = _parse(LOBBY_CONTACTS_KEY).filter(function (c) { return c && c.id && !ids[c.id]; })
             .map(function (c) { return Object.assign({}, c, { lobby: true }); });
         return own.filter(function (c) { return c && !c.lobby; }).concat(lob);
     }
+    // 回 true/false：兩份都存進去才算存好。空間滿了 lsSet 會跳「通訊錄沒存下來」，不會丟錯打斷後面的步驟
     function _writeAll(list) {
         const own = [], lob = [];
         (list || []).forEach(function (c) { if (c) (c.lobby ? lob : own).push(c); });
-        localStorage.setItem(_contactsKey(), JSON.stringify(own));
-        localStorage.setItem(LOBBY_CONTACTS_KEY, JSON.stringify(lob));
+        const okOwn = win.AUI.lsSet(_contactsKey(), JSON.stringify(own), '通訊錄');
+        const okLob = win.AUI.lsSet(LOBBY_CONTACTS_KEY, JSON.stringify(lob), '通訊錄（常駐角色）');
+        return okOwn && okLob;
     }
 
     function _contactsKey() {
@@ -67,6 +79,9 @@
 
     win.WX_CONTACTS = {
         _key: function() { return _contactsKey(); },   // 當前卡的通訊錄 storage key（給 wx_view 清空鈕用）
+        // 整份寫回（getAllCustomContacts 拿到的那份改完交回來）。🚨 別自己 setItem(_key(), …)：
+        //   拿到的清單混著常駐角色（帶 lobby 記號），整份寫進這本的鍵，讀的時候常駐角色就被同 id 的那份擋掉、從通訊錄消失。
+        saveAll: function(list) { return _writeAll(list); },
 
         // ── 🏷 標籤 ──────────────────────────────────────────────
         getTags: function () {
@@ -74,7 +89,7 @@
             catch (e) { return {}; }
         },
         saveTags: function (obj) {
-            try { localStorage.setItem(_tagsKey(), JSON.stringify(obj || {})); } catch (e) {}
+            return win.AUI.lsSet(_tagsKey(), JSON.stringify(obj || {}), '通訊錄標籤');
         },
         tagsOf: function (id) {
             const all = this.getTags();
@@ -128,6 +143,8 @@
                                 name: c.name, id: c.id, members: c.members || [c.id], isGroup: !!c.isGroup,
                                 messages: [], lastTime: '', unread: false, customAvatar: c.avatarId || null, desc: c.desc || c.bio || '...'
                             };
+                            // 手動加好友時填的人設只存在通訊錄這份：還沒聊過就重整，聊天室是從這裡重建的，要抄回去
+                            if (c.persona) globalChats[c.id].persona = c.persona;
                         }
                     });
                 } catch(e) { console.error("通訊錄讀取錯誤", e); }
@@ -256,7 +273,7 @@
                                             members   // 群組成員 id 列表（私聊為空）
                                         };
                                     });
-                                    statusEl.innerHTML += `<br><span class="wx-modal-hint">(標籤格式)</span>`;
+                                    statusEl.insertAdjacentHTML('beforeend', `<br><span class="wx-modal-hint">(標籤格式)</span>`);
                                 }
 
                                 // --- 方案 B：JSON 格式（備用）---
@@ -264,7 +281,7 @@
                                     const startIdx = finalText.indexOf('[');
                                     if (startIdx === -1) throw new Error("無效格式 (找不到 [ 或 [Contact|)");
                                     let candidate = finalText.substring(startIdx);
-                                    try { const match = candidate.match(/\[[\s\S]*\]/); contacts = JSON.parse(match ? match[0] : candidate); } catch (e1) { const lastComma = candidate.lastIndexOf('},'); if (lastComma !== -1) { contacts = JSON.parse(candidate.substring(0, lastComma + 1) + "]"); statusEl.innerHTML += `<br><span style="color:#ff9800">(自動修復 JSON)</span>`; } else throw e1; }
+                                    try { const match = candidate.match(/\[[\s\S]*\]/); contacts = JSON.parse(match ? match[0] : candidate); } catch (e1) { const lastComma = candidate.lastIndexOf('},'); if (lastComma !== -1) { contacts = JSON.parse(candidate.substring(0, lastComma + 1) + "]"); statusEl.insertAdjacentHTML('beforeend', `<br><span style="color:#ff9800">(自動修復 JSON)</span>`); } else throw e1; }
                                 }
 
                                 console.log("🔥 [Parsed Contacts]:", contacts);
@@ -336,7 +353,7 @@
                                     if (win.wxApp && win.wxApp.GLOBAL_CHATS) {
                                         createdChats.forEach(chat => {
                                             if (!win.wxApp.GLOBAL_CHATS[chat.id]) {
-                                                win.wxApp.GLOBAL_CHATS[chat.id] = { id: chat.id, name: chat.name, desc: chat.desc, aiKeyword: chat.aiKeyword, members: chat.members || [chat.id], isGroup: chat.isGroup, messages: [], unread: false, lastTime: Date.now() };
+                                                win.wxApp.GLOBAL_CHATS[chat.id] = { id: chat.id, name: chat.name, desc: chat.desc, aiKeyword: chat.aiKeyword, members: chat.members || [chat.id], isGroup: chat.isGroup, messages: [], unread: false, lastTime: '' };   // lastTime 是列表上那格字（「剛剛」），不是時間戳
                                             }
                                         });
                                         win.wxApp.render();
@@ -398,7 +415,7 @@
             const allContacts = this.getAllCustomContacts().filter(c => !c.isGroup);
             const candidates = allContacts.filter(c => !currentMemberIds.includes(c.id));
             if (candidates.length === 0) { AUI.alert('通訊錄裡沒有其他好友可邀請了！'); return; }
-            let listHtml = candidates.map(c => `<label style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; cursor:pointer;"><input type="checkbox" class="wx-invite-check" value="${c.id}" style="margin-right:10px;"><div style="font-weight:bold;">${c.name}</div></label>`).join('');
+            let listHtml = candidates.map(c => `<label style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; cursor:pointer;"><input type="checkbox" class="wx-invite-check" value="${_esc(c.id)}" style="margin-right:10px;"><div style="font-weight:bold;">${_esc(c.name)}</div></label>`).join('');
             const html = `<div class="wx-modal-title">邀請成員</div><div style="padding:10px;"><div style="max-height:250px; overflow-y:auto; border:1px solid #eee; border-radius:4px;">${listHtml}</div></div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-cancel">取消</button><button class="wx-btn wx-btn-confirm" id="wx-btn-invite-confirm">邀請</button></div>`;
             this.showModal(html);
             targetDoc.getElementById('wx-btn-cancel').onclick = () => targetDoc.getElementById('wxActionModal').classList.remove('show');
@@ -534,7 +551,7 @@
             menu.innerHTML = `<div class="wx-menu-item" id="wx-menu-create-group"><span class="icon"><i class="fa-solid fa-comments"></i></span> 發起群聊</div><div class="wx-menu-item" id="wx-menu-add"><span class="icon"><i class="fa-solid fa-user-plus"></i></span> 添加朋友</div><div class="wx-menu-item" id="wx-menu-search"><span class="icon"><i class="fa-solid fa-magnifying-glass"></i></span> AI 搜尋</div><div class="wx-menu-item" id="wx-menu-tidy"><span class="icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span> 整理聊天室</div>`;
             // 整理過才有東西可以還原；沒整理過不擺這顆
             const app = win.wxApp;
-            if (app && app.storyTidyHasRemap && app.storyTidyHasRemap()) menu.innerHTML += `<div class="wx-menu-item" id="wx-menu-tidy-reset"><span class="icon"><i class="fa-solid fa-arrow-rotate-left"></i></span> 還原整理</div>`;
+            if (app && app.storyTidyHasRemap && app.storyTidyHasRemap()) menu.insertAdjacentHTML('beforeend', `<div class="wx-menu-item" id="wx-menu-tidy-reset"><span class="icon"><i class="fa-solid fa-arrow-rotate-left"></i></span> 還原整理</div>`);
             const rect = btn.getBoundingClientRect(); this._popIn(menu, rect.right, rect.bottom + 5, true);
             menu.querySelector('#wx-menu-create-group').onclick = () => this.openCreateGroupWindow();
             menu.querySelector('#wx-menu-add').onclick = () => this.openAddWindow();
@@ -548,7 +565,7 @@
         openCreateGroupWindow: function() {
             const allContacts = this.getAllCustomContacts().filter(c => !c.isGroup);
             if (allContacts.length === 0) { AUI.alert('通訊錄目前沒有好友，無法建群！'); return; }
-            let listHtml = allContacts.map(c => `<label style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; cursor:pointer;"><input type="checkbox" class="wx-group-check" value="${c.id}" style="margin-right:10px;"><div style="font-weight:bold;">${c.name}</div></label>`).join('');
+            let listHtml = allContacts.map(c => `<label style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; cursor:pointer;"><input type="checkbox" class="wx-group-check" value="${_esc(c.id)}" style="margin-right:10px;"><div style="font-weight:bold;">${_esc(c.name)}</div></label>`).join('');
             const html = `<div class="wx-modal-title">發起群聊</div><div style="padding:10px;"><input type="text" id="wx-group-create-name" class="wx-modal-input" placeholder="請輸入群聊名稱"><div class="wx-modal-label is-gap">選擇群成員:</div><div style="max-height:200px; overflow-y:auto; border:1px solid #eee; border-radius:4px; margin-top:5px;">${listHtml}</div></div><div class="wx-modal-footer"><button class="wx-btn wx-btn-cancel" id="wx-btn-cancel">取消</button><button class="wx-btn wx-btn-confirm" id="wx-btn-create-group">創建</button></div>`;
             this.showModal(html);
             targetDoc.getElementById('wx-btn-cancel').onclick = () => targetDoc.getElementById('wxActionModal').classList.remove('show');
@@ -557,7 +574,7 @@
                 if (!name) { AUI.alert('群名不能為空'); return; } if (checks.length === 0) { AUI.alert('至少選擇一個成員'); return; }
                 const groupId = 'group_' + Date.now(); const memberIds = Array.from(checks).map(c => c.value); memberIds.push("User");
                 this.addContactToStorage({ id: groupId, name: name, isGroup: true, members: memberIds });
-                if (win.wxApp && win.wxApp.GLOBAL_CHATS) { win.wxApp.GLOBAL_CHATS[groupId] = { id: groupId, name: name, isGroup: true, members: memberIds, messages: [], lastTime: Date.now(), unread: false }; win.wxApp.render(); }
+                if (win.wxApp && win.wxApp.GLOBAL_CHATS) { win.wxApp.GLOBAL_CHATS[groupId] = { id: groupId, name: name, isGroup: true, members: memberIds, messages: [], lastTime: '', unread: false }; win.wxApp.render(); }
                 targetDoc.getElementById('wxActionModal').classList.remove('show');
             };
         },
@@ -607,15 +624,15 @@
                         listEl.innerHTML = '<div style="padding:8px 12px;color:#999;font-size:12px;">當前角色沒有綁定世界書，或世界書沒有條目</div>';
                         return;
                     }
-                    const esc = (t) => String(t || '').replace(/"/g, '&quot;');
+                    // 以前這裡只轉 "：條目裡寫了 &amp; 這種字，拿回來就變成 &；標題裡的 < 會變成標籤
                     listEl.innerHTML = entries.map(e => {
                         const title = e.comment || ('條目 #' + e.uid);
                         const keys = (e.keys && e.keys.length) ? e.keys.filter(Boolean).join(', ') : '';
                         return `
-                        <div data-uid="${e.uid}" data-title="${esc(title)}" data-content="${esc(e.content || '')}"
+                        <div data-uid="${_esc(e.uid)}" data-title="${_esc(title)}" data-content="${_esc(e.content || '')}"
                              style="padding:10px 14px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:13px;">
-                            <div style="font-weight:600;color:#1a1a1a;">${title || '(無標題)'}</div>
-                            <div style="color:#999;font-size:11px;margin-top:2px;">${keys ? keys + ' · ' : ''}${(e.content || '').length} 字</div>
+                            <div style="font-weight:600;color:#1a1a1a;">${_esc(title) || '(無標題)'}</div>
+                            <div style="color:#999;font-size:11px;margin-top:2px;">${keys ? _esc(keys) + ' · ' : ''}${(e.content || '').length} 字</div>
                         </div>`;
                     }).join('');
                     listEl.querySelectorAll('[data-uid]').forEach(item => {
@@ -632,7 +649,7 @@
                         };
                     });
                 } catch(e) {
-                    listEl.innerHTML = `<div style="padding:8px 12px;color:#e06060;font-size:12px;">載入失敗：${e.message}</div>`;
+                    listEl.innerHTML = `<div style="padding:8px 12px;color:#e06060;font-size:12px;">載入失敗：${_esc(e.message)}</div>`;
                 }
             };
 
@@ -647,7 +664,8 @@
                 const newContact = { id: 'char_' + Date.now(), name, desc: desc || '這個人很懶，什麼都沒寫', avatarId, isGroup: false, persona: persona || '' };
                 this.addContactToStorage(newContact);
                 if (win.wxApp && win.wxApp.GLOBAL_CHATS) {
-                    win.wxApp.GLOBAL_CHATS[newContact.id] = { id: newContact.id, name: newContact.name, desc: newContact.desc, customAvatar: newContact.avatarId, persona: newContact.persona, isGroup: false, members: [newContact.id], messages: [], lastTime: Date.now(), unread: false };
+                    // 這份聊天室只在記憶體；人設另外存在通訊錄那筆（newContact.persona），還沒聊就重整時 init／openChat 會抄回來
+                    win.wxApp.GLOBAL_CHATS[newContact.id] = { id: newContact.id, name: newContact.name, desc: newContact.desc, customAvatar: newContact.avatarId, persona: newContact.persona, isGroup: false, members: [newContact.id], messages: [], lastTime: '', unread: false };
                     win.wxApp.render();
                 }
                 targetDoc.getElementById('wxActionModal').classList.remove('show');

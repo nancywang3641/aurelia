@@ -27,6 +27,16 @@
     let IS_STREAMING_REPLY = false; // 🔥 防止重複觸發
     let DARK_MODE = localStorage.getItem('wx_dark_mode') === 'true';
 
+    // 名字（群成員、表情包名）是她或模型取的：放進 HTML 屬性前轉掉；塞進 onclick 的字串參數再多轉一層 JS（\ ' 換行）
+    function _escAttr(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function _jsArg(s) {
+        return _escAttr(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n'));
+    }
+
     // ── 微信的皮 ────────────────────────────────────────────────────
     // 顏色一個都不在這裡，全部在 css/aurelia_theme.css 的 .wx-shell.wxtheme-<代號>。
     // 這裡只留代號與顯示名字。一套皮自己帶淺色與深色兩半，所以跟「黑夜模式」那顆不衝突：
@@ -138,7 +148,7 @@
             const card = C.find(cid, kind, alias);
             if (card) { C.update(cid, card.key, { status: status }); return card; }
         }
-        if (legacyKey) { try { localStorage.setItem(legacyKey, status); } catch (e) {} }
+        if (legacyKey) win.AUI.lsSet(legacyKey, status, '紅包和轉帳的領取狀態');
         return null;
     }
 
@@ -185,7 +195,7 @@
             C.update(cid, card.key, { data: data, status: data && data.status ? data.status : undefined });
             return;
         }
-        try { localStorage.setItem('wx_transfer_' + txnId, JSON.stringify(data)); } catch (e) {}
+        win.AUI.lsSet('wx_transfer_' + txnId, JSON.stringify(data), '轉帳紀錄');
     }
 
     // 🧧 紅包領完了沒：錢領光、或份數領光，其中一個就算完（資料還沒建好的不算完）
@@ -411,7 +421,8 @@
     //    🚨 它會重用單號，正是因為歷史裡看得到舊的就照抄（她 2026-09-12 實測：第二包一發出來就已領完）。
     //    但單號是指標：還沒被領完的紅包、還沒收的轉帳與禮物，它得指得到才能讓人去領／去收，
     //    所以只剝「已經沒事可做」的那些（她說的：已經收掉的隱藏，還沒收掉的繼續給）。
-    const CARD_ID_RE = /(\[\s*(?:紅包|红包|RedPacket|轉帳|转账|轉賬|Transfer|Gift|禮物|礼物|系統|系统|System|Notice)\s*[:：][^\]]*?)\s*[|｜]\s*((?:ID_)?(?:rp|txn|tnx|gft|gift|transfer|redpacket)[_-][A-Za-z0-9_]+)/gi;
+    //   最後那種 txn42（沒底線）是她自己發的轉帳以前的單號寫法，舊記錄裡還有
+    const CARD_ID_RE = /(\[\s*(?:紅包|红包|RedPacket|轉帳|转账|轉賬|Transfer|Gift|禮物|礼物|系統|系统|System|Notice)\s*[:：][^\]]*?)\s*[|｜]\s*((?:ID_)?(?:(?:rp|txn|tnx|gft|gift|transfer|redpacket)[_-][A-Za-z0-9_]+|t(?:xn|nx)\d+))/gi;
     // 這個單號還有事情可做嗎？（有＝留著給模型指）
     function _refStillOpen(ref, chatId) {
         const C = _cards(); const cid = _cardChat(chatId);
@@ -483,7 +494,7 @@
             _rpMarkIfDone(C, cid, card, data);
             return;
         }
-        try { localStorage.setItem(`wx_redpacket_${packetId}`, JSON.stringify(data)); } catch(e) { console.error('[RedPacket] 保存失敗:', e); }
+        win.AUI.lsSet(`wx_redpacket_${packetId}`, JSON.stringify(data), '紅包紀錄');
     }
 
     function getRedPacketData(packetId, chatId) {
@@ -803,13 +814,16 @@
             if (newBio && GLOBAL_CHATS[ctx.chatId]) {
                 GLOBAL_CHATS[ctx.chatId].desc = newBio;
                 GLOBAL_CHATS[ctx.chatId].bio = newBio;
-                try {
+                {
                     const key = `wx_chat_settings_${ctx.chatId}`;
-                    const settings = localStorage.getItem(key) ? JSON.parse(localStorage.getItem(key)) : {};
-                    if (GLOBAL_CHATS[ctx.chatId].isGroup) settings.groupNotice = newBio;
-                    else settings.targetBio = newBio;
-                    localStorage.setItem(key, JSON.stringify(settings));
-                } catch(e) {}
+                    let settings = null;
+                    try { settings = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) {}
+                    if (settings) {   // 讀不懂的那份別拿空的蓋掉
+                        if (GLOBAL_CHATS[ctx.chatId].isGroup) settings.groupNotice = newBio;
+                        else settings.targetBio = newBio;
+                        win.AUI.lsSet(key, JSON.stringify(settings), '聊天室的簽名');
+                    }
+                }
                 return { type: 'system', content: `${ctx.chatName} 更新了簽名：${newBio}`, isMe: false }; 
             }
         }
@@ -1494,8 +1508,12 @@
     function _loadRoomRemap() {
         try { var all = JSON.parse(localStorage.getItem('wx_room_id_remap') || '{}'); return all[_wxRemapChatId()] || {}; } catch (e) { return {}; }
     }
+    // 回 true/false：存不進去時 lsSet 會跳提示，呼叫端別再報「整理好了」
     function _saveRoomRemap(map) {
-        try { var all = JSON.parse(localStorage.getItem('wx_room_id_remap') || '{}'); all[_wxRemapChatId()] = map || {}; localStorage.setItem('wx_room_id_remap', JSON.stringify(all)); } catch (e) {}
+        var all = {};
+        try { all = JSON.parse(localStorage.getItem('wx_room_id_remap') || '{}') || {}; } catch (e) {}
+        all[_wxRemapChatId()] = map || {};
+        return win.AUI.lsSet('wx_room_id_remap', JSON.stringify(all), '聊天室整理的結果');
     }
     // ── AI 整理的另外兩種修正（跟上面的 id 對應表分開一把鑰匙，舊的讀者照舊能讀那張）──
     //    names：聊天室 id → 正確的顯示名（正文 AI 把代號寫進聊天室名，像 msg_chen）
@@ -1506,7 +1524,10 @@
         try { var all = JSON.parse(localStorage.getItem('wx_room_fix') || '{}'); var f = all[_wxRemapChatId()] || {}; return { names: f.names || {}, people: f.people || {} }; } catch (e) { return { names: {}, people: {} }; }
     }
     function _saveRoomFix(fix) {
-        try { var all = JSON.parse(localStorage.getItem('wx_room_fix') || '{}'); all[_wxRemapChatId()] = fix || {}; localStorage.setItem('wx_room_fix', JSON.stringify(all)); } catch (e) {}
+        var all = {};
+        try { all = JSON.parse(localStorage.getItem('wx_room_fix') || '{}') || {}; } catch (e) {}
+        all[_wxRemapChatId()] = fix || {};
+        return win.AUI.lsSet('wx_room_fix', JSON.stringify(all), '聊天室整理的結果');
     }
     // 人名換成正確寫法；整理過好幾次可能串成 a→b→c，照著走到底（最多幾步防繞圈）
     function _fixPerson(n, fix) {
@@ -1549,8 +1570,9 @@
             const name = _fixPerson(nm, fix);
             if (name !== id && fix.names[id] !== name) { fix.names[id] = name; out.rename++; }
         });
-        if (out.merge) _saveRoomRemap(remap);
-        if (out.rename || out.people) _saveRoomFix(fix);
+        out.saved = true;   // 兩張表有沒有真的存進去（本機空間滿了會是 false）
+        if (out.merge && !_saveRoomRemap(remap)) out.saved = false;
+        if ((out.rename || out.people) && !_saveRoomFix(fix)) out.saved = false;
         return out;
     }
 
@@ -1753,6 +1775,9 @@
         delete _toolCalls[chat.id];
         const T = win.WX_TOOLS;
         if (!calls || !calls.length || !T || !T.run) return;
+        // 🚨 工具清單是第一次用到才從資料庫讀進來的（WX_TOOLS.load）：重整後第一個回來的是托管結果、或心跳那一輪，
+        //    送出前的 prepare 沒跑過，清單還是空的，enabledFor 就回 []——角色寫了要查，卻什麼都沒跑、也沒有下一輪。先讀好再問。
+        if (T.load) await T.load();
         if (!T.enabledFor(chat).length) return;   // 這間沒開工具：標籤照樣拿掉，不跑
         chat._toolChain = (chat._toolChain || 0) + 1;
         if (chat._toolChain > TOOL_CHAIN) return;
@@ -1847,7 +1872,7 @@
         try { const o = JSON.parse(localStorage.getItem(_rmKey()) || '{}') || {}; return { manual: o.manual || {} }; }
         catch (e) { return { manual: {} }; }
     }
-    function _rmSave(o) { try { localStorage.setItem(_rmKey(), JSON.stringify(o)); } catch (e) {} }
+    function _rmSave(o) { return win.AUI.lsSet(_rmKey(), JSON.stringify(o), '刪好友的紀錄'); }
     let _rmRemovedNow = {};   // 上一次同步算出來「現在是刪掉的」那些鍵
     function _rmKeyOf(chat) {
         if (!chat) return '';
@@ -1938,13 +1963,13 @@
         catch (e) { return {}; }
     }
     function _moneyDoneSet(txnId, how) {
-        try {
-            const all = JSON.parse(localStorage.getItem('wx_story_money_done') || '{}');
-            const k = _wxRemapChatId();
-            all[k] = all[k] || {};
-            all[k][txnId] = how;
-            localStorage.setItem('wx_story_money_done', JSON.stringify(all));
-        } catch (e) {}
+        let all = {};
+        try { all = JSON.parse(localStorage.getItem('wx_story_money_done') || '{}') || {}; } catch (e) {}
+        const k = _wxRemapChatId();
+        all[k] = all[k] || {};
+        all[k][txnId] = how;
+        // 沒記到的話下次同步會把同一筆錢再算一次，所以失敗要講出來
+        win.AUI.lsSet('wx_story_money_done', JSON.stringify(all), '劇情裡收付款的紀錄');
     }
 
     function _moneyEventOf(text) {
@@ -2540,7 +2565,8 @@
                     delete GLOBAL_CHATS[id];
                     try { await win.WX_DB.deleteApiChat(id); } catch (e) {}
                     // 通訊錄裡這個群的登記也拿掉，不留同名殘影
-                    try { const list = win.WX_CONTACTS.getAllCustomContacts(); const kept = list.filter(function (x) { return x && x.id !== id; }); if (kept.length !== list.length) localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(kept)); } catch (e) {}
+                    //   整份交回 WX_CONTACTS.saveAll（它照常駐記號分兩份存；自己 setItem 會讓常駐角色從通訊錄消失）
+                    try { const list = win.WX_CONTACTS.getAllCustomContacts(); const kept = list.filter(function (x) { return x && x.id !== id; }); if (kept.length !== list.length) win.WX_CONTACTS.saveAll(kept); } catch (e) {}
                     if (GLOBAL_ACTIVE_ID === id) GLOBAL_ACTIVE_ID = null;
                     continue;
                 }
@@ -2555,7 +2581,7 @@
             try {
                 const list = win.WX_CONTACTS.getAllCustomContacts();
                 const kept = list.filter(function (c) { return !(c && !c.isGroup && _isMeName(c.name)); });
-                if (kept.length !== list.length) localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(kept));
+                if (kept.length !== list.length) win.WX_CONTACTS.saveAll(kept);
             } catch (e) {}
             // 舊帳：以前「同群就隱形註冊」留下來的路人（出租車司機、老張那種），要三個條件同時成立才動手 ——
             //   ① 這一輪只以群成員身分出現，沒在好友申請裡、也沒有一對一的房
@@ -2568,6 +2594,7 @@
                 const drop = {};
                 list.forEach(function (c) {
                     if (!c || c.isGroup || c.id === 'User') return;
+                    if (c.lobby) return;   // 常駐角色是她在大廳加的，不是這本故事隱形註冊的路人
                     if (!groupOnlyNames[c.name] || realContactNames[c.name]) return;
                     if ((c.desc || '') !== DEFAULT_DESC) return;
                     if (c.avatarId || c.avatar || c.persona) return;
@@ -2577,8 +2604,7 @@
                     drop[c.id] = c.name;
                 });
                 const dropIds = Object.keys(drop);
-                if (dropIds.length) {
-                    localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(list.filter(function (c) { return !drop[c.id]; })));
+                if (dropIds.length && win.WX_CONTACTS.saveAll(list.filter(function (c) { return !drop[c.id]; }))) {   // 通訊錄沒存成就整段先不動，下次同步再清
                     for (let di = 0; di < dropIds.length; di++) {
                         const did = dropIds[di];
                         delete GLOBAL_CHATS[did];
@@ -2609,7 +2635,7 @@
                         const cl = win.WX_CONTACTS.getAllCustomContacts();
                         let clChanged = false;
                         cl.forEach(function (c) { if (c && c.isGroup) { const fixed = fixMembers(c.members); if (fixed) { c.members = fixed; clChanged = true; } } });
-                        if (clChanged) localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(cl));
+                        if (clChanged) win.WX_CONTACTS.saveAll(cl);
                     } catch (e) {}
                     console.log('[wx 跑團同步] 清掉只因同群被隱形註冊的聯絡人 ' + dropIds.length + ' 位：' + dropIds.map(function (i) { return drop[i]; }).join('、'));
                 }
@@ -2629,6 +2655,9 @@
                     if (!nm) continue;
                     (byName[nm] = byName[nm] || []).push({ id: pid, msgs: (pc.messages || []).length });
                 }
+                // 常駐角色（大廳那份）不收：它每一本都在，刪了就是所有故事一起沒了
+                const lobbyIds = {};
+                try { (win.WX_CONTACTS.getAllCustomContacts() || []).forEach(function (c) { if (c && c.lobby) lobbyIds[c.id] = 1; }); } catch (e) {}
                 const dupDrop = [];
                 for (const nm in byName) {
                     const arr = byName[nm];
@@ -2636,13 +2665,11 @@
                     const withMsg = arr.filter(function (x) { return x.msgs > 0; });
                     const empties = arr.filter(function (x) { return x.msgs === 0; });
                     if (!empties.length) continue;                     // 全都有訊息 → 一筆都不動
-                    const keep = withMsg.length ? null : empties[0];    // 全空 → 留第一筆當本尊
-                    empties.forEach(function (x) { if (!keep || x.id !== keep.id) dupDrop.push(x.id); });
+                    const keep = withMsg.length ? null : (empties.find(function (x) { return lobbyIds[x.id]; }) || empties[0]);    // 全空 → 留一筆當本尊（有常駐的就留常駐那筆）
+                    empties.forEach(function (x) { if (lobbyIds[x.id]) return; if (!keep || x.id !== keep.id) dupDrop.push(x.id); });
                 }
-                if (dupDrop.length) {
-                    const dropSet = {}; dupDrop.forEach(function (i) { dropSet[i] = 1; });
-                    const list2 = win.WX_CONTACTS.getAllCustomContacts();
-                    localStorage.setItem(win.WX_CONTACTS._key(), JSON.stringify(list2.filter(function (c) { return !dropSet[c.id]; })));
+                const dropSet = {}; dupDrop.forEach(function (i) { dropSet[i] = 1; });
+                if (dupDrop.length && win.WX_CONTACTS.saveAll(win.WX_CONTACTS.getAllCustomContacts().filter(function (c) { return !dropSet[c.id]; }))) {   // 沒存成就先不動
                     for (let qi = 0; qi < dupDrop.length; qi++) {
                         const qid = dupDrop[qi];
                         delete GLOBAL_CHATS[qid];
@@ -2848,7 +2875,7 @@
             const bye = function () { box.remove(); };
             box.querySelector('button').onclick = bye;
             box.addEventListener('click', function (e) { if (e.target === box) bye(); });
-            setTimeout(function () { try { ta.focus(); ta.select(); ta.setSelectionRange(0, text.length); } catch (e) {} }, 30);
+            setTimeout(function () { try { ta.focus({ preventScroll: true }); ta.select(); ta.setSelectionRange(0, text.length); } catch (e) {} }, 30);
         };
         const fallback = function () {
             try {
@@ -3413,7 +3440,7 @@
                 if (!GLOBAL_CHATS[chatId]) {
                     const customs = win.WX_CONTACTS ? win.WX_CONTACTS.getAllCustomContacts() : [];
                     const target = customs.find(c => c.id === chatId);
-                    if (target) { GLOBAL_CHATS[chatId] = { name: target.name, id: target.id, realName: target.realName || target.name, members: [target.name], isGroup: target.isGroup, messages: [], lastTime: '', unread: false, pushedCount: 0, renderedCount: 0, customAvatar: target.avatarId || null }; }
+                    if (target) { GLOBAL_CHATS[chatId] = { name: target.name, id: target.id, realName: target.realName || target.name, members: [target.name], isGroup: target.isGroup, messages: [], lastTime: '', unread: false, pushedCount: 0, renderedCount: 0, customAvatar: target.avatarId || null }; if (target.persona) GLOBAL_CHATS[chatId].persona = target.persona; }   // 手動加好友時填的人設存在通訊錄那份，重建時抄回來
                     else { GLOBAL_CHATS[chatId] = { name: chatId, id: chatId, members: [], isGroup: false, messages: [], lastTime: '', unread: false, pushedCount: 0, renderedCount: 0 }; }
                 }
                 GLOBAL_CHATS[chatId].unread = false;
@@ -3478,8 +3505,9 @@
             const A = win.WX_AVATAR_AI;
             if (!A) { try { AUI.toastr && AUI.toastr.info('模塊還沒載入完，等一下再試'); } catch (e) {} return; }
             const next = !A.isEnabled();
-            A.setEnabled(next);
+            const ok = A.setEnabled(next);
             this.render();
+            if (ok === false) return;   // 沒存成：lsSet 已經跳提示，開關畫面照存著的那個值
             try { AUI.toastr && (next ? AUI.toastr.success('角色可以自己換頭像了', '微信') : AUI.toastr.info('已關閉', '微信')); } catch (e) {}
         },
         // 👁 讓角色看我的頭像：開了之後，換頭像的下一輪會夾一張圖給它，看完它自己寫一句記著。
@@ -3487,8 +3515,9 @@
             const A = win.WX_AVATAR_AI;
             if (!A) { try { AUI.toastr && AUI.toastr.info('模塊還沒載入完，等一下再試'); } catch (e) {} return; }
             const next = !A.seeEnabled();
-            A.setSeeEnabled(next);
+            const ok = A.setSeeEnabled(next);
             this.render();
+            if (ok === false) return;   // 沒存成：lsSet 已經跳提示
             const PI = win.OS_PHONE_IMAGE;
             const visionOff = !(PI && PI.visionMode) || PI.visionMode() === 'off';
             try {
@@ -3691,6 +3720,7 @@
                         const obj = JSON.parse(s);
                         const n = _storyTidyApply(obj, { rooms: rooms });
                         if (!n.merge && !n.rename && !n.people) { try { tr && tr.info('沒有要修的地方', '聊天室整理'); } catch (e) {} return; }
+                        if (!n.saved) return;   // 存不進去：lsSet 已經跳了「沒存下來」，別再報整理好了
                         await _storySyncNow();
                         const parts = [];
                         if (n.merge) parts.push('合併了 ' + n.merge + ' 間重複的聊天室');
@@ -3704,7 +3734,8 @@
 
         // 清掉本聊天的 AI 整理結果（id 對應表＋名字／人名修正，還原成原始分群）再重新同步
         storyTidyReset: async function() {
-            try { _saveRoomRemap({}); _saveRoomFix({}); } catch (e) {}
+            const okRemap = _saveRoomRemap({}), okFix = _saveRoomFix({});
+            if (!okRemap || !okFix) return;   // 沒清成：lsSet 已經跳提示，別報已還原
             await _storySyncNow();
             try { AUI.toastr && AUI.toastr.info('已還原成整理前的聊天室', '聊天室整理'); } catch (e) {}
         },
@@ -3733,14 +3764,14 @@
         },
         toggleDarkMode: function() {
             DARK_MODE = !DARK_MODE;
-            localStorage.setItem('wx_dark_mode', DARK_MODE ? 'true' : 'false');   // 明確寫字串，不要丟布林讓它自己轉
+            win.AUI.lsSet('wx_dark_mode', DARK_MODE ? 'true' : 'false', '聊天 app 的深色模式');   // 明確寫字串，不要丟布林讓它自己轉
             this.render();
         },
         // 換皮：只記一個代號，畫面那邊把它接到外殼的 class 上
         setWxTheme: function (id) {
             const ok = WX_THEMES.some(function (t) { return t.id === id; });
             WX_THEME = ok ? id : '';
-            try { localStorage.setItem('wx_theme', WX_THEME); } catch (e) {}
+            win.AUI.lsSet('wx_theme', WX_THEME, '聊天 app 的外觀');
             this.render();
         },
         getWxTheme: function () { return WX_THEME; },
@@ -3925,7 +3956,7 @@
             _replyTo = { name: who, text: raw.slice(0, 30) };
             _renderReplyingBar();
             const inputEl = APP_CONTAINER ? APP_CONTAINER.querySelector('.wx-input-real') : null;
-            if (inputEl) inputEl.focus();
+            if (inputEl) inputEl.focus({ preventScroll: true });   // 只把游標放進去，別讓外層跟著捲
         },
         cancelQuote: function () { _replyTo = null; _renderReplyingBar(); },
         
@@ -3978,7 +4009,7 @@
         onScrollDot: function(el) { const dots = APP_CONTAINER.querySelectorAll('.wx-dot'); const pageIndex = Math.round(el.scrollLeft / el.clientWidth); dots.forEach((d, i) => { if(i === pageIndex) d.classList.add('active'); else d.classList.remove('active'); }); },
         
         // ＋ 面板的每一格。🚨「語音」是打字寫入的小窗（[Voice: 打的字]），真的錄音在輸入框的麥克風按住說話——兩種都要，別再把這格換成錄音
-        action: function(type) { if (type === 'takeout') { const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT; this.togglePanel(); if (_TO) _TO.open(GLOBAL_ACTIVE_ID); return; } PENDING_ACTION_TYPE = type; const _cc = doc.getElementById('wx-custom-modal-content'); if (_cc) { _cc.innerHTML = ''; _cc.style.display = 'none'; } /* 同一個小窗也被通訊錄／氣泡設定拿去放自己的內容：先清掉，不然邀請名單跟輸入框會一起出現 */ const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.style.display = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { selectEl.innerHTML = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; selectEl.innerHTML += `<option value="${memberName}">${memberName}</option>`; }); selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${chat.name || chat.id}">${chat.name || chat.id}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus(); this.togglePanel(); },
+        action: function(type) { if (type === 'takeout') { const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT; this.togglePanel(); if (_TO) _TO.open(GLOBAL_ACTIVE_ID); return; } PENDING_ACTION_TYPE = type; const _cc = doc.getElementById('wx-custom-modal-content'); if (_cc) { _cc.innerHTML = ''; _cc.style.display = 'none'; } /* 同一個小窗也被通訊錄／氣泡設定拿去放自己的內容：先清掉，不然邀請名單跟輸入框會一起出現 */ const modal = doc.querySelector('#wxActionModal'); const title = doc.querySelector('#wxModalTitle'); const input1 = doc.querySelector('#wxModalInput'); const input2 = doc.querySelector('#wxModalInput2'); const selectEl = doc.querySelector('#wxModalSelect'); if (!modal) return; if (title) title.style.display = 'block'; if (input1) input1.style.display = 'block'; const footer = modal.querySelector('.wx-modal-footer'); if (footer) footer.style.display = 'flex'; input1.value = ''; if(input2) { input2.value = ''; input2.style.display = ''; input2.classList.add('hidden'); } if(selectEl) { selectEl.innerHTML = ''; selectEl.classList.add('hidden'); } const pickBtn = doc.querySelector('#wxModalPick'); if (pickBtn) { pickBtn.classList.toggle('hidden', type !== 'photo'); pickBtn.disabled = false; } let hint = "請輸入..."; switch(type) { case 'photo': hint = "或貼上圖片網址"; break; case 'video_file': hint = "請輸入視頻描述或檔名"; break; case 'file_card': hint = "請輸入檔名"; break; case 'voice_msg': hint = "請輸入語音消息內容"; break; case 'call': hint = "通話記錄寫什麼（例如：聊了半小時）"; break; case 'location': title.innerText = "發送位置"; input1.placeholder = "地點名稱"; input2.placeholder = "詳細地址"; input2.classList.remove('hidden'); break; case 'redpacket': title.innerText = "發送紅包"; input1.placeholder = "金額"; input2.placeholder = "備註（選填，如：恭喜發財）"; input2.classList.remove('hidden'); break; case 'transfer': hint = "請輸入轉帳金額"; title.innerText = "轉帳"; input1.placeholder = "金額"; input2.placeholder = "備註（選填）"; input2.classList.remove('hidden'); if(selectEl && GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) { const chat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID]; const allContacts = (win.WX_CONTACTS && typeof win.WX_CONTACTS.getAllCustomContacts === 'function') ? win.WX_CONTACTS.getAllCustomContacts() : []; let currentUserName = "User"; if (win.WX_USER && typeof win.WX_USER.getInfo === 'function') { const userInfo = win.WX_USER.getInfo(); currentUserName = userInfo.name || "User"; } if (chat.isGroup && chat.members && chat.members.length > 0) { /* 選項先組好一次放進去；名字放進 value 和字之前轉義（有引號的名字會截斷 value） */ let _opts = '<option value="">選擇接收者</option>'; chat.members.forEach(memberId => { if (memberId === "User" || memberId === "user") return; const contact = allContacts.find(c => c.id === memberId); const memberName = contact ? contact.name : memberId; _opts += `<option value="${_escAttr(memberName)}">${_escAttr(memberName)}</option>`; }); selectEl.innerHTML = _opts; selectEl.classList.remove('hidden'); } else { selectEl.innerHTML = `<option value="${_escAttr(chat.name || chat.id)}">${_escAttr(chat.name || chat.id)}</option>`; selectEl.classList.remove('hidden'); } } break; case 'gift': title.innerText = "贈送禮物"; input1.placeholder = "格式: 🍗雞腿x1"; input2.placeholder = "價格: 50元"; input2.classList.remove('hidden'); break; } if (type !== 'location' && type !== 'gift' && type !== 'transfer') { title.innerText = hint; input1.placeholder = hint; } if (type === 'photo') title.innerText = '傳照片'; modal.classList.add('show'); if (type !== 'photo') input1.focus({ preventScroll: true }); this.togglePanel(); },
 
         // 📷 從相簿選一張照片傳出去：壓成 JPEG 存進圖庫，訊息裡只放圖庫編號。
         //    對方要「看」這張照片的話，在 triggerReply 那邊照頭像的做法只送一次（_photoOnceMessage）。
@@ -4233,7 +4264,9 @@
                             return;
                         }
                     }
-                    const txnId = "Txn" + Math.floor(Math.random() * 90 + 10);
+                    // 單號照協議寫成 Txn_xxx：以前是 Txn 加兩位數，只有 90 種、轉幾次就撞號（同一間的帳本會被舊單蓋掉），
+                    //   又少了底線，刪訊息、清空時清狀態的那條（認 Txn_ 或 Txn-）對不到，給模型的歷史也剝不掉已處理的單號
+                    const txnId = 'Txn_' + Date.now().toString(36);
                     const targetName = selectVal || (GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID] ? (GLOBAL_CHATS[GLOBAL_ACTIVE_ID].name || GLOBAL_ACTIVE_ID) : '');
                     // 🔥 保存轉帳信息（有時效，見 TXN_TTL）
                     const transferData = {
@@ -4832,8 +4865,10 @@
 
             // 確保 chat 存在
             if (!GLOBAL_CHATS[chatId]) {
-                const contact = win.OS_CONTACTS ? win.OS_CONTACTS.getById(chatId) : null;
-                const chatName = contact ? (contact.wx?.nickname || contact.realName) : chatId;
+                // 名字查微信通訊錄（微博轉發名單也是從這本挑的，id 對得上）
+                let contact = null;
+                try { contact = (win.WX_CONTACTS.getAllCustomContacts() || []).find(function (c) { return c && c.id === chatId; }) || null; } catch (e) {}
+                const chatName = contact ? contact.name : chatId;
                 GLOBAL_CHATS[chatId] = {
                     id: chatId,
                     name: chatName,
@@ -4925,7 +4960,8 @@
             try { this._libs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]'); } catch(e) { this._libs = []; }
             this._currentLib = this._libs[0]?.id || null;
         },
-        _save() { localStorage.setItem('os_sticker_libs', JSON.stringify(this._libs)); },
+        // 回 true/false：表情包庫可能很大，空間滿了 lsSet 會跳「表情包庫沒存下來」，不會丟錯把匯入打斷在一半
+        _save() { return win.AUI.lsSet('os_sticker_libs', JSON.stringify(this._libs), '表情包庫'); },
 
         // 🚨 表情包不能整批倒給 AI：載十幾包就是幾百個名字，每一輪都在燒字數。
         //    所以「AI 可以用的」一次只有一包（在表情包設定裡挑），只送那一包的名字，上限 AI_MAX 個。
@@ -4933,8 +4969,9 @@
         AI_MAX: 40,
         aiLibId() { try { return localStorage.getItem('os_sticker_ai_lib') || ''; } catch (e) { return ''; } },
         setAiLib(id) {
-            try { localStorage.setItem('os_sticker_ai_lib', id || ''); } catch (e) {}
+            const ok = win.AUI.lsSet('os_sticker_ai_lib', id || '', 'AI 用哪一包表情包');
             this.renderManage();
+            if (!ok) return;   // 沒存成：lsSet 已經跳提示，下面那句「之後只會用…」就別講了
             try { AUI.toast(id ? ('AI 之後只會用「' + ((this._libs.find(l => l.id === id) || {}).name || '') + '」裡的表情') : 'AI 不會再發表情包'); } catch (e) {}
         },
         // 劇情正文裡的手機用哪一包：一個故事一個選擇（在劇情手機「···」→ 表情包 挑）。
@@ -4948,7 +4985,8 @@
         storyLibId() { const k = this.storyLibKey(); if (!k) return ''; try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
         setStoryLib(id) {
             const k = this.storyLibKey(); if (!k) return;
-            try { if (id) localStorage.setItem(k, id); else localStorage.removeItem(k); } catch (e) {}
+            if (id) win.AUI.lsSet(k, id, '這個故事用哪一包表情包');
+            else { try { localStorage.removeItem(k); } catch (e) {} }
         },
         // 給模型看的那段：只有名字，沒有網址（它寫 [表情包: 名字]，畫面自己去查圖）。
         //   沒給 libId 就用微信那個選擇；正文那邊傳 storyLibId()。
@@ -5022,7 +5060,7 @@
         renderTabs() {
             const el = document.getElementById('wxStickerTabs'); if (!el) return;
             el.innerHTML = this._libs.map(lib =>
-                `<button class="wx-stk-tab${lib.id === this._currentLib ? ' active' : ''}" onclick="(window.parent||window).WX_STICKER.switchLib('${lib.id}')">${lib.name}</button>`
+                `<button class="wx-stk-tab${lib.id === this._currentLib ? ' active' : ''}" onclick="(window.parent||window).WX_STICKER.switchLib('${_jsArg(lib.id)}')">${lib.name}</button>`
             ).join('');
         },
         renderGrid(id) {
@@ -5031,9 +5069,8 @@
             if (!lib || !lib.stickers.length) { grid.innerHTML = `<div class="wx-stk-empty">尚無表情包，點 <i class="fa-solid fa-gear"></i> 匯入 TXT</div>`; return; }
             grid.innerHTML = lib.stickers.map(s => {
                 const url = this._resolveUrl(lib, s.file).replace(/[^\x00-\x7F]/g, c => encodeURIComponent(c));
-                const safe = url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                const nameSafe = s.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                return `<div class="wx-stk-item" title="${s.name}" onclick="(window.parent||window).WX_STICKER.pickSticker('${nameSafe}','${safe}')"><img src="${url}" alt="${s.name}" loading="lazy" onerror="this.outerHTML='<span class=\\'wx-stk-fallback\\'>${s.name}</span>'"></div>`;
+                // 名字是匯入的 TXT 寫的：有引號會把 title、onclick 截斷。圖載不到時的替代字改用 alt 走 textContent，不再把名字拼進一段 HTML
+                return `<div class="wx-stk-item" title="${_escAttr(s.name)}" onclick="(window.parent||window).WX_STICKER.pickSticker('${_jsArg(s.name)}','${_jsArg(url)}')"><img src="${_escAttr(url)}" alt="${_escAttr(s.name)}" loading="lazy" onerror="var t=this.ownerDocument.createElement('span');t.className='wx-stk-fallback';t.textContent=this.alt;this.replaceWith(t)"></div>`;
             }).join('');
         },
         renderManage() {
@@ -5041,8 +5078,8 @@
             const _ai = this.aiLibId();
             el.innerHTML = this._libs.length
                 ? this._libs.map(lib => `<div class="wx-stk-lib-row"><span class="wx-stk-lib-name">${lib.name}</span><span class="wx-stk-lib-count">${lib.stickers.length}張</span>` +
-                    `<button class="wx-stk-ai${lib.id === _ai ? ' on' : ''}" onclick="(window.parent||window).WX_STICKER.setAiLib('${lib.id === _ai ? '' : lib.id}')">${lib.id === _ai ? '角色在用這包' : '給角色用'}</button>` +
-                    `<button class="wx-stk-lib-del" onclick="(window.parent||window).WX_STICKER.deleteLib('${lib.id}')">✕</button></div>`).join('')
+                    `<button class="wx-stk-ai${lib.id === _ai ? ' on' : ''}" onclick="(window.parent||window).WX_STICKER.setAiLib('${lib.id === _ai ? '' : _jsArg(lib.id)}')">${lib.id === _ai ? '角色在用這包' : '給角色用'}</button>` +
+                    `<button class="wx-stk-lib-del" onclick="(window.parent||window).WX_STICKER.deleteLib('${_jsArg(lib.id)}')">✕</button></div>`).join('')
                 : '<div class="wx-stk-empty">尚無庫</div>';
         },
         pickSticker(name, url) {
@@ -5061,7 +5098,7 @@
     try {
         const _wxk = 'wx_phone_api_config';
         const _wxc = JSON.parse(localStorage.getItem(_wxk) || '{}');
-        if (_wxc.directMode !== true) { _wxc.directMode = true; localStorage.setItem(_wxk, JSON.stringify(_wxc)); }
+        if (_wxc.directMode !== true) { _wxc.directMode = true; win.AUI.lsSet(_wxk, JSON.stringify(_wxc), '聊天 app 的連線設定'); }
     } catch (e) {}
 
     win.wxApp.installToPhone();

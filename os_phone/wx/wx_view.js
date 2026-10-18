@@ -9,6 +9,23 @@
 (function() {
     const win = window.parent || window;   // 模組層級的 win：processModules 等沒自己宣告的地方用（之前圖片訊息那行裸用 win → 房裡一有圖就打不開）
 
+    // 名字、單號、網址多半是模型寫的或她自己取的，什麼字都可能有：放進 HTML 屬性前一律轉掉，
+    //   不然一個引號就把屬性截斷，那一列點了沒反應、版面跟著亂。
+    //   _attr：放進 class/data-*/title 這種屬性值；_jsArg：塞進 onclick="…('這裡')" 的字串參數，
+    //   先照 JS 字串轉（\ 和 ' 和換行），再照屬性轉。點下去拿到的還是原本那串字。
+    function _attr(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function _jsArg(s) {
+        return _attr(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'));
+    }
+    // style="background-image: url('這裡')" 的網址：CSS 字串裡的 \ 和 ' 先轉，再照屬性轉
+    function _cssUrl(s) {
+        return _attr(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ''));
+    }
+
     // 訊息裡「自帶造型」的區塊標籤。切區塊（blockRegex）與泡泡讓位（bubbleStyle）共用這一份。
     // 🚨兩邊各寫各的就會漂移：實測讓位那份漏了繁體「圖片」跟「視頻」，於是繁體寫的圖片卡
     //   外面套了一層泡泡框——白泡泡時幾乎看不出來，換上深色泡泡主題就很明顯（Rae 實機抓到）。
@@ -303,7 +320,7 @@
                 }
                 // 📒 「○○記了一筆」：點了打開記事本的那一則
                 if (msg._noteRef) {
-                    const _nbCall = `event.stopPropagation(); const NB=(window.parent.WX_NOTEBOOK||window.WX_NOTEBOOK); if(NB) NB.open('${String(chatId).replace(/'/g, "\\'")}','${String(msg._noteRef).replace(/'/g, "\\'")}')`;
+                    const _nbCall = `event.stopPropagation(); const NB=(window.parent.WX_NOTEBOOK||window.WX_NOTEBOOK); if(NB) NB.open('${_jsArg(chatId)}','${_jsArg(msg._noteRef)}')`;
                     return `<div class="wx-system-notice wxnb-notice ${animClass}" style="${opacityStyle}" ${dataAttr} onclick="${_nbCall}"><i class="fa-solid fa-book-bookmark"></i>${sysText(displayContent)}</div>`;
                 }
                 // ✍ 角色提出要改世界書（wx_tools 會動手的工具）：一個框，點了打開那張單子，看改前改後、按同意才寫。
@@ -314,7 +331,7 @@
                     const _st = String(msg._prop.state || 'wait').replace(/[^\w-]/g, '');
                     const _pt = (_T && _T.propNotice) ? _T.propNotice(msg._prop) : String(displayContent).replace(/[&<>"']/g, '');
                     const _pc = (_T && _T.propChip) ? _T.propChip(msg._prop) : '';
-                    const _ppCall = `event.stopPropagation(); const T=(window.parent.WX_TOOLS||window.WX_TOOLS); if(T) T.openProposal('${String(chatId).replace(/'/g, "\\'")}','${_pid}')`;
+                    const _ppCall = `event.stopPropagation(); const T=(window.parent.WX_TOOLS||window.WX_TOOLS); if(T) T.openProposal('${_jsArg(chatId)}','${_pid}')`;
                     return `<div class="wx-tool-fold wx-tool-prop is-${_st} ${animClass}" style="${opacityStyle}" ${dataAttr} data-prop="${_pid}" onclick="${_ppCall}">`
                         + `<div class="wx-tool-head"><i class="fa-solid fa-pen-to-square"></i><span class="wx-tool-t">${_pt}</span>${_pc ? '<b class="wx-tool-chip">' + _pc + '</b>' : ''}</div></div>`;
                 }
@@ -387,7 +404,7 @@
                     avatarStyle = `background-image: url('${defaultUrl}');`;
                     dbDataAttr = `data-db-bg="${avatarUrl}" class="wx-bubble-avatar db-load-target"`;
                 } else {
-                    avatarStyle = `background-image: url('${avatarUrl}')`;
+                    avatarStyle = `background-image: url('${_cssUrl(avatarUrl)}')`;
                     dbDataAttr = `class="wx-bubble-avatar"`;
                 }
             } else {
@@ -395,7 +412,7 @@
                 // userVnName：劇情手機用別人的手機當視角（owner="名"）時，右邊那顆是那個角色，不是她
                 const vnName = msg.isMe ? (safeChat.userVnName || '') : (safeChat.isGroup && msg.sender ? msg.sender : safeChat.realName || '');
                 if (vnName) {
-                    dbDataAttr = `data-vn-name="${vnName}" class="wx-bubble-avatar vn-load-target"`;
+                    dbDataAttr = `data-vn-name="${_attr(vnName)}" class="wx-bubble-avatar vn-load-target"`;
                 } else {
                     dbDataAttr = `class="wx-bubble-avatar"`;
                 }
@@ -437,8 +454,8 @@
             // 👤 點頭像＝看那個人的個人檔案（LINE 那種）。群聊點誰就開誰，自己那顆不開。
             //    stopPropagation：聊天區有「點一下收面板」的處理，不擋住會連帶被吃掉。
             if (!msg.isMe && !msg._static) {
-                const _who = String((safeChat.isGroup && msg.sender) ? msg.sender : (safeChat.name || safeChat.id || '')).replace(/'/g, "\\'");
-                if (_who) avatarAttr += ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${_who}')"`;
+                const _who = String((safeChat.isGroup && msg.sender) ? msg.sender : (safeChat.name || safeChat.id || ''));
+                if (_who) avatarAttr += ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${_jsArg(_who)}')"`;
             }
             // 貼圖／圖片／轉帳這些卡片，泡泡本來就被 bubbleStyle 設成透明無邊（卡片自己就是造型），
             // 掛上去只會讓主題把卡片外面又糊一層底 → 只有純文字泡泡才吃主題
@@ -525,7 +542,7 @@
                 let icon = "¥";
                 let title = targetName ? `轉帳給${targetName}` : "轉帳給朋友";
                 let sub = memo || "微信轉帳";
-                let clickAction = `onclick="${app}.openTransfer('${amount}', '${uniqueId}', this, ${isMe ? 1 : 0})"`;   // 帶上是不是自己發的：自己轉出去的不能自己收
+                let clickAction = `onclick="${app}.openTransfer('${_jsArg(amount)}', '${_jsArg(uniqueId)}', this, ${isMe ? 1 : 0})"`;   // 帶上是不是自己發的：自己轉出去的不能自己收
                 
                 if (isMe) {
                     if (status === 'accepted') {
@@ -557,7 +574,8 @@
                     }
                 }
                 // 劇情手機：不能點，改掛單號與金額——後面那行「收下了／退回」要靠它找回這一張（markTransfer）
-                if (STATIC) clickAction = `data-tf-id="${String(txnId).replace(/"/g, '')}" data-tf-amt="${String(amount).replace(/"/g, '')}"`;
+                //   拿掉 " 是跟 vn_phone 找卡那邊對好的（它查的時候也先拿掉 "），其他字照常轉
+                if (STATIC) clickAction = `data-tf-id="${_attr(String(txnId).replace(/"/g, ''))}" data-tf-amt="${_attr(String(amount).replace(/"/g, ''))}"`;
                 return `<div class="wx-tf-card ${state}" ${clickAction}><div class="wx-tf-row"><div class="wx-tf-icon">${icon}</div><div class="wx-tf-text"><div class="wx-tf-title">${title}</div><div class="wx-tf-sub">${sub}${(!isMe && !status) ? ' ¥' + amount : ''}</div></div></div></div>`; });
             html = html.replace(tagRe(MSG_TAG.GIFT), (m, t, content) => {
                 // 解析新格式：[Gift: emoji+物品名|備註|Gft_ID] 或舊格式 [Gift: 物品名-价格]
@@ -609,7 +627,8 @@
                 let opacity = "1";
                 let extraClass = "";
                 let statusLabel = "微信禮物";
-                let clickAction = `onclick="${app}.openGift('${encodeURIComponent(giftName)}', '${encodeURIComponent(price)}', '${uniqueId}', this)"`;
+                // encodeURIComponent 不轉 '（禮物名寫 Valentine's 這種就會截斷），外面再包一層 _jsArg
+                let clickAction = `onclick="${app}.openGift('${_jsArg(encodeURIComponent(giftName))}', '${_jsArg(encodeURIComponent(price))}', '${_jsArg(uniqueId)}', this)"`;
                 
                 if (isMe) {
                     if (status === 'accepted') {
@@ -624,7 +643,7 @@
                         opacity = "0.9";
                         statusLabel = "已送出";
                     }
-                    clickAction = `onclick="${app}.openGift('${encodeURIComponent(giftName)}', '${encodeURIComponent(price)}', 'VIEW_ONLY', this)"`;
+                    clickAction = `onclick="${app}.openGift('${_jsArg(encodeURIComponent(giftName))}', '${_jsArg(encodeURIComponent(price))}', 'VIEW_ONLY', this)"`;
                 } else {
                     if (status === 'accepted') {
                         opacity = "0.8";
@@ -749,10 +768,10 @@
                         else if (_list.some(function (x) { try { return x && win.WX_ME.isMine(x.name); } catch (e) { return false; } })) { rpSub = '已領取'; }
                     }
                 } catch (e) {}
-                return `<div class="wx-rpc-card ${rpDim}" onclick="${app}.openRedPacketById('${rpRef}')"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${memo}</div><div class="wx-rpc-sub">${rpSub}</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
+                return `<div class="wx-rpc-card ${rpDim}" onclick="${app}.openRedPacketById('${_jsArg(rpRef)}')"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${memo}</div><div class="wx-rpc-sub">${rpSub}</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
             });
             html = html.replace(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; let v = 0; for (const ch of name) v = (v * 31 + ch.codePointAt(0)) % 4; return `<div class="wx-loc-card"><div class="wx-loc-map wx-loc-v${v}"><div class="wx-loc-streets"></div><div class="wx-loc-pin"><i class="fa-solid fa-location-dot"></i></div></div><div class="wx-loc-info"><div class="wx-loc-name">${name}</div><div class="wx-loc-addr">${address}</div></div></div>`; });
-            html = html.replace(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${content}')"` : ''; return `<div ${vidClick} class="wx-vcard${isUrl ? ' is-link' : ''}"><div class="wx-vcard-bg"></div><div class="wx-vcard-play"></div><div class="wx-vcard-title"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div class="wx-vcard-dur">00:15</div></div>`; });
+            html = html.replace(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${_jsArg(content)}')"` : ''; return `<div ${vidClick} class="wx-vcard${isUrl ? ' is-link' : ''}"><div class="wx-vcard-bg"></div><div class="wx-vcard-play"></div><div class="wx-vcard-title"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div class="wx-vcard-dur">00:15</div></div>`; });
             html = html.replace(tagRe(MSG_TAG.FILE), (m, t, filename) => { filename = filename.trim(); let ext = filename.split('.').pop().toLowerCase(); let iconColor = '#999'; let iconText = '?'; if (ext.match(/ppt|pptx/)) { iconColor = '#f4511e'; iconText = 'P'; } else if (ext.match(/doc|docx/)) { iconColor = '#4b89dc'; iconText = 'W'; } else if (ext.match(/xls|xlsx/)) { iconColor = '#2e7d32'; iconText = 'X'; } else if (ext.match(/pdf/)) { iconColor = '#e53935'; iconText = '<span style="font-size:10px">PDF</span>'; } else if (ext.match(/txt/)) { iconColor = '#999'; iconText = 'T'; } let size = (Math.random() * 5 + 1).toFixed(1) + " MB"; return `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${filename}</div><div class="wx-file-size">${size}</div></div><div class="wx-file-icon" style="background:${iconColor}">${iconText}</div></div>`; });
             html = html.replace(tagRe(MSG_TAG.STICKER), (match, tag, content) => {
                 content = content.trim();
@@ -770,9 +789,9 @@
                     }
                 }
                 const label = content.replace(/^.*\//, '').replace(/\.(gif|jpg|jpeg|png)$/i, '') || content;
-                const safeLabel = label.replace(/</g,'&lt;').replace(/"/g,'&quot;');
+                const safeLabel = _attr(label);
                 if (src) {
-                    return `<img src="${src}" class="wx-img-block" data-stk-label="${safeLabel}" style="max-width:120px; border-radius:4px;" alt="${safeLabel}" onerror="(function(el){el.style.display='none';var d=el.ownerDocument.createElement('div');d.className='wx-stk-fallback-box';d.textContent=el.dataset.stkLabel;el.parentNode.insertBefore(d,el.nextSibling);})(this)">`;
+                    return `<img src="${_attr(src)}" class="wx-img-block" data-stk-label="${safeLabel}" style="max-width:120px; border-radius:4px;" alt="${safeLabel}" onerror="(function(el){el.style.display='none';var d=el.ownerDocument.createElement('div');d.className='wx-stk-fallback-box';d.textContent=el.dataset.stkLabel;el.parentNode.insertBefore(d,el.nextSibling);})(this)">`;
                 }
                 return `<div class="wx-stk-fallback-box">${safeLabel}</div>`;
             });
@@ -798,7 +817,7 @@
                 const lp = String(body || '').split(/[|｜]/);
                 const title = lp[0], lUrl = (lp[1] || '').trim();
                 const isUrl = /^(https?:\/\/|www\.)/i.test(lUrl);
-                const click = isUrl ? ` onclick="event.stopPropagation(); window.open('${encodeURI(lUrl).replace(/'/g, '%27')}')"` : '';
+                const click = isUrl ? ` onclick="event.stopPropagation(); window.open('${_jsArg(lUrl)}')"` : '';
                 const safe = (String(title || '').trim() || '網頁連結').replace(/&/g,'&amp;').replace(/</g,'&lt;');
                 return `<div class="wx-link-msg${isUrl ? ' clickable' : ''}"${click}><div class="wx-link-body"><div class="wx-link-title">${safe}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
             });
@@ -883,7 +902,7 @@
             const busy = !!msg._toolsBusy;
             const head = (busy ? '正在查：' : '查了：') + items.map(t => t.label).join('、');
             // 找以前玩過的：找到的地方各一顆「跳過去」（酒館換到那個聊天捲到那一樓；手機用閱讀模式看那一章）
-            const cid = String(chatId == null ? '' : chatId).replace(/'/g, "\\'");
+            const cid = _jsArg(chatId);
             const jumps = (t, k) => (Array.isArray(t.jumps) && t.jumps.length && typeof msgIndex === 'number')
                 ? '<div class="wx-tool-jumps">' + t.jumps.map((j, n) => '<button type="button" class="wx-tool-jump" onclick="event.stopPropagation(); const T=(window.parent.WX_TOOLS||window.WX_TOOLS); if(T) T.jumpFrom(\'' + cid + '\',' + msgIndex + ',' + k + ',' + n + ')">'
                     + '<i class="fa-solid fa-arrow-right"></i>' + esc(j.label || '跳過去') + '</button>').join('') + '</div>'
@@ -947,16 +966,18 @@
                         avatarStyle = `background-image: url('${defaultUrl}');`;
                         dataAttr = `data-db-bg="${c.customAvatar}" class="wx-avatar db-load-target"`;
                     } else {
-                        avatarStyle = `background-image: url('${c.customAvatar}')`;
+                        avatarStyle = `background-image: url('${_cssUrl(c.customAvatar)}')`;
                         dataAttr = `class="wx-avatar"`;
                     }
                 } else if (!c.isGroup && c.realName) {
-                    dataAttr = `data-vn-name="${c.realName}" class="wx-avatar vn-load-target"`;
+                    dataAttr = `data-vn-name="${_attr(c.realName)}" class="wx-avatar vn-load-target"`;
                 } else {
                     dataAttr = `class="wx-avatar"`;
                 }
-                
-                return `<div class="wx-chat-item" id="chat-item-${id}" onclick="(window.parent.wxApp || window.wxApp).openChat('${id}')"><div style="${avatarStyle}" ${dataAttr}>${badgeHTML}</div><div class="wx-info"><div style="display:flex; justify-content:space-between;"><span class="wx-name">${displayName}</span><span class="wx-meta">${c.lastTime || ''}</span></div><div class="wx-last-msg">${c.lastPreview || ''}</div></div></div>`;
+                // 時間那格是「剛剛」這種字。以前新建聊天室、電話未接寫進去的是毫秒數，舊資料裡還留著，數字就不印
+                const _lt = (typeof c.lastTime === 'number') ? '' : (c.lastTime || '');
+
+                return `<div class="wx-chat-item" id="chat-item-${_attr(id)}" onclick="(window.parent.wxApp || window.wxApp).openChat('${_jsArg(id)}')"><div style="${avatarStyle}" ${dataAttr}>${badgeHTML}</div><div class="wx-info"><div style="display:flex; justify-content:space-between;"><span class="wx-name">${displayName}</span><span class="wx-meta">${_lt}</span></div><div class="wx-last-msg">${c.lastPreview || ''}</div></div></div>`;
             }).join('');
         },
 
@@ -994,20 +1015,20 @@
                             dataAttr = `data-db-bg="${c.customAvatar}" class="wx-avatar db-load-target"`;
                         } else if (c.customAvatar.startsWith('blob:') || c.customAvatar.startsWith('data:') || c.customAvatar.startsWith('http')) {
                             // 這是標準網址
-                            avatarStyle = `width:38px; height:38px; margin-right:12px; background-image: url('${c.customAvatar}')`;
+                            avatarStyle = `width:38px; height:38px; margin-right:12px; background-image: url('${_cssUrl(c.customAvatar)}')`;
                             dataAttr = `class="wx-avatar"`;
                         }
                     } else if (c.realName) {
-                        dataAttr = `data-vn-name="${c.realName}" class="wx-avatar vn-load-target"`;   // 跑團來的人：照名字對 VN 頭像庫
+                        dataAttr = `data-vn-name="${_attr(c.realName)}" class="wx-avatar vn-load-target"`;   // 跑團來的人：照名字對 VN 頭像庫
                     } else {
                         dataAttr = `class="wx-avatar"`;
                     }
 
-                    const contextAction = `oncontextmenu="(window.parent.WX_CONTACTS || window.WX_CONTACTS).showContextMenu(event, '${c.id}', '${c.name}'); return false;"`;
+                    const contextAction = `oncontextmenu="(window.parent.WX_CONTACTS || window.WX_CONTACTS).showContextMenu(event, '${_jsArg(c.id)}', '${_jsArg(c.name)}'); return false;"`;
                     // 注意：這裡將 dataAttr 注入到 div class="wx-avatar..." 結構中
                     // 👤 頭像開個人檔案、整列照舊直接進聊天——最常做的事不要多一步
-                    const avatarTap = ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${c.id}')"`;
-                    html += `<div class="wx-contact-item" id="contact-item-${c.id}" ${contextAction} onclick="(window.parent.wxApp || window.wxApp).openChat('${c.id}')"><div style="${avatarStyle}" ${dataAttr}${avatarTap}></div><div class="wx-contact-name">${c.name}</div></div>`;
+                    const avatarTap = ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${_jsArg(c.id)}')"`;
+                    html += `<div class="wx-contact-item" id="contact-item-${_attr(c.id)}" ${contextAction} onclick="(window.parent.wxApp || window.wxApp).openChat('${_jsArg(c.id)}')"><div style="${avatarStyle}" ${dataAttr}${avatarTap}></div><div class="wx-contact-name">${c.name}</div></div>`;
                 });
             } else { html += `<div class="wx-list-empty">暫無聯絡人</div>`; }
             return html;
@@ -1021,9 +1042,9 @@
             let style = `width:${px}px; height:${px}px; margin-right:12px; background-image: url('${def}')`;
             let attr = 'class="wx-avatar"';
             const a = String(customAvatar || '');
-            if (a.startsWith('img_') || a.startsWith('avt_')) attr = `data-db-bg="${a}" class="wx-avatar db-load-target"`;
-            else if (a.startsWith('blob:') || a.startsWith('data:') || a.startsWith('http')) style = `width:${px}px; height:${px}px; margin-right:12px; background-image: url('${a}')`;
-            else if (realName) attr = `data-vn-name="${realName}" class="wx-avatar vn-load-target"`;
+            if (a.startsWith('img_') || a.startsWith('avt_')) attr = `data-db-bg="${_attr(a)}" class="wx-avatar db-load-target"`;
+            else if (a.startsWith('blob:') || a.startsWith('data:') || a.startsWith('http')) style = `width:${px}px; height:${px}px; margin-right:12px; background-image: url('${_cssUrl(a)}')`;
+            else if (realName) attr = `data-vn-name="${_attr(realName)}" class="wx-avatar vn-load-target"`;
             return { style: style, attr: attr };
         },
         _alive: function (chats) {
@@ -1065,7 +1086,7 @@
         _personRow: function (id, name, chats, right) {
             const c = chats[id] || {};
             const av = this._avatarBits(name, c.customAvatar, c.isGroup ? '' : (c.realName || ''));
-            return `<div class="wx-contact-item" onclick="${'(window.parent.wxApp || window.wxApp)'}.openChat('${id}')">` +
+            return `<div class="wx-contact-item" onclick="${'(window.parent.wxApp || window.wxApp)'}.openChat('${_jsArg(id)}')">` +
                 `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${name}</div>${right || ''}</div>`;
         },
 
@@ -1087,8 +1108,8 @@
                 const note = String((c.wxFriendReqIn && c.wxFriendReqIn.note) || '').trim();
                 return `<div class="wx-contact-item wx-req-item"><div style="${av.style}" ${av.attr}></div>` +
                     `<div class="wx-req-text"><div class="wx-contact-name">${esc(c.name || id)}</div>${note ? `<div class="wx-req-note">${esc(note)}</div>` : ''}</div>` +
-                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); ${app}.ignoreFriendRequest('${id}')">忽略</button>` +
-                    `<button class="wx-sub-btn solid" onclick="event.stopPropagation(); ${app}.acceptFriendRequest('${id}')">接受</button></div></div>`;
+                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); ${app}.ignoreFriendRequest('${_jsArg(id)}')">忽略</button>` +
+                    `<button class="wx-sub-btn solid" onclick="event.stopPropagation(); ${app}.acceptFriendRequest('${_jsArg(id)}')">接受</button></div></div>`;
             }).join('');
             return reqHTML + ids.map(function (id) { return self._personRow(id, chats[id].name || id, chats, '<div class="wx-contact-side">還沒聊過</div>'); }).join('');
         },
@@ -1100,7 +1121,7 @@
             if (!ids.length) return this._emptyBox('fa-user-lock', '黑名單裡沒有人。', '在聊天詳情打開「加入黑名單」，那個人就會列在這裡。');
             return ids.map(function (id) {
                 return self._personRow(id, chats[id].name || id, chats,
-                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); ${app}.unblockContact('${id}')">移出</button></div>`);
+                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); ${app}.unblockContact('${_jsArg(id)}')">移出</button></div>`);
             }).join('');
         },
         getChatOnlyHTML: function (chats) {
@@ -1109,9 +1130,8 @@
             const self = this;
             return names.map(function (n) {
                 const av = self._avatarBits(n, '', n);
-                const esc = String(n).replace(/'/g, "\\'");
                 return `<div class="wx-contact-item"><div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${n}</div>` +
-                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); (window.parent.wxApp || window.wxApp).addFriendFromGroup('${esc}')">加為朋友</button></div></div>`;
+                    `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); (window.parent.wxApp || window.wxApp).addFriendFromGroup('${_jsArg(n)}')">加為朋友</button></div></div>`;
             }).join('');
         },
         getGroupsHTML: function (chats) {
@@ -1135,8 +1155,7 @@
             }
             names.forEach(function (t) {
                 const ids = (tags[t] || []).filter(function (i) { return chats[i] && !chats[i].wxRemoved; });
-                const esc = String(t).replace(/'/g, "\\'");
-                html += `<div class="wx-contact-item" onclick="${app}.openContactSub('c_tag', '${esc}')">` +
+                html += `<div class="wx-contact-item" onclick="${app}.openContactSub('c_tag', '${_jsArg(t)}')">` +
                     `<div class="wx-contact-icon icon-tags" style="margin-right:12px;"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div>` +
                     `<div class="wx-contact-name">${t}</div><div class="wx-contact-side">${ids.length} 人</div></div>`;
             });
@@ -1149,7 +1168,7 @@
             let tags = {};
             try { tags = (win.WX_CONTACTS || window.WX_CONTACTS).getTags(); } catch (e) {}
             const picked = (tags[tag] || []);
-            const esc = String(tag).replace(/'/g, "\\'");
+            const esc = _jsArg(tag);
             if (editing) {
                 const ids = this._alive(chats).filter(function (k) { return !chats[k].isGroup; });
                 let html = `<div class="wx-sub-bar"><span class="wx-sub-note">點一下加進「${tag}」，再點一下拿掉</span></div>`;
@@ -1158,7 +1177,7 @@
                     const on = picked.indexOf(id) >= 0;
                     const c = chats[id];
                     const av = self._avatarBits(c.name || id, c.customAvatar, c.realName || '');
-                    return `<div class="wx-contact-item" onclick="${app}.tagToggle('${esc}', '${id}')">` +
+                    return `<div class="wx-contact-item" onclick="${app}.tagToggle('${esc}', '${_jsArg(id)}')">` +
                         `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${c.name || id}</div>` +
                         `<div class="wx-contact-side"><i class="fa-solid ${on ? 'fa-circle-check wx-tag-on' : 'fa-circle'} wx-tag-mark"></i></div></div>`;
                 }).join('');
@@ -1185,7 +1204,7 @@
                 if (profile.avatar.startsWith('img_') || profile.avatar.startsWith('avt_')) {
                     dataAttr = `data-db-bg="${profile.avatar}" class="wx-me-avatar db-load-target"`;
                 } else {
-                    avatarStyle = `background-image: url('${profile.avatar}')`;
+                    avatarStyle = `background-image: url('${_cssUrl(profile.avatar)}')`;
                     dataAttr = `class="wx-me-avatar"`;
                 }
             } else {
@@ -1439,7 +1458,7 @@
                 const c = chats[activeId];
                 headerTitle = c.name + (c.isGroup ? ` (${c.members.length})` : '');
                 // 👤 點標題上的名字也看得到個人檔案（LINE 是點頭像或名字都行）
-                if (!c.isGroup) headerTitleAction = `onclick="const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${String(activeId).replace(/'/g, "\\'")}')" class="wx-header-title wx-header-title-tap"`;
+                if (!c.isGroup) headerTitleAction = `onclick="const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${_jsArg(activeId)}')" class="wx-header-title wx-header-title-tap"`;
                 const msgs = c.messages;
                 // 📞 通話裡講的話不畫成聊天泡泡。它們跟微信共用同一份記錄（刻意的，AI 才記得
                 //    電話裡說過什麼），但那是另一個管道的東西，鋪在聊天室裡會很怪。
@@ -1456,16 +1475,16 @@
                         if (savedSettings.bgImage.startsWith('img_')) {
                             bgDbId = savedSettings.bgImage;
                         } else {
-                            roomBgImageStyle = `background-image: url('${savedSettings.bgImage}')`;
+                            roomBgImageStyle = `background-image: url('${_cssUrl(savedSettings.bgImage)}')`;
                         }
                     }
                 } catch(e) {}
 
                 headerRightBtn = `
                     <div style="display:flex; align-items:center; gap:8px;">
-                        ${(chats[activeId] && chats[activeId].isGroup) ? '' : `<div id="wx-msg-note-btn" class="wxnb-head-btn${isDark ? ' is-dark' : ''}" onclick="event.stopPropagation(); const nb = (window.parent.WX_NOTEBOOK || window.WX_NOTEBOOK); if(nb) nb.open('${activeId}');"><i class="fa-solid fa-book-bookmark"></i></div>`}
+                        ${(chats[activeId] && chats[activeId].isGroup) ? '' : `<div id="wx-msg-note-btn" class="wxnb-head-btn${isDark ? ' is-dark' : ''}" onclick="event.stopPropagation(); const nb = (window.parent.WX_NOTEBOOK || window.WX_NOTEBOOK); if(nb) nb.open('${_jsArg(activeId)}');"><i class="fa-solid fa-book-bookmark"></i></div>`}
                         <div id="wx-msg-menu-btn" class="wx-head-menu-btn"
-                             onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${activeId}');"><i class="fa-solid fa-ellipsis"></i></div>
+                             onclick="event.stopPropagation(); const ws = (window.parent.WX_CHAT_SETTINGS || window.WX_CHAT_SETTINGS); if(ws) ws.open('${_jsArg(activeId)}');"><i class="fa-solid fa-ellipsis"></i></div>
                         <div id="wx-msg-confirm-btn" class="wx-head-confirm-btn" style="display:none;"
                              onclick="event.stopPropagation(); const mm = (window.parent.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER); if(mm) mm.deleteSelectedMessages();">刪除</div>
                     </div>

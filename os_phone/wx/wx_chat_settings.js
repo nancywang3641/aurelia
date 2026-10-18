@@ -1285,7 +1285,7 @@
                     chat.messages = []; chat.pushedCount = 0; chat.renderedCount = 0;
                     if (app.GLOBAL_ACTIVE_ID === chatId && app.render) app.render();
                     if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
-                    app.saveChats();
+                    // 存檔只靠上面那行 saveApiChat。wxApp 沒有 saveChats，直接叫會丟錯，下一行收面板就跑不到
                     panel.classList.remove('show');
                 }
             };
@@ -1546,7 +1546,7 @@
                     if (settings.bgImage !== bgImage) {
                         settings.bgImage = bgImage;
                         localStorage.setItem(storageKey, JSON.stringify(settings));
-                        if (win.WX_THEME && win.WX_THEME.applyChatSettings) win.WX_THEME.applyChatSettings(chatId);
+                        // 換背景一定伴隨上傳（pendingUploads 有東西），下面存檔那段的 app.render() 會照 localStorage 重畫聊天室背景
                     }
 
                     // 4. 存檔

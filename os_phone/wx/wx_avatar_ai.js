@@ -30,11 +30,11 @@
     const _last = {};
 
     function isEnabled() { try { return localStorage.getItem(ON_KEY) === '1'; } catch (e) { return false; } }
-    function setEnabled(on) { try { localStorage.setItem(ON_KEY, on ? '1' : '0'); } catch (e) {} }
+    function setEnabled(on) { return win.AUI.lsSet(ON_KEY, on ? '1' : '0', '角色自己換頭像的開關'); }
     function getProvider() {
         try { const v = localStorage.getItem(SRC_KEY) || ''; return PROVIDERS.includes(v) ? v : ''; } catch (e) { return ''; }
     }
-    function setProvider(v) { try { localStorage.setItem(SRC_KEY, PROVIDERS.includes(v) ? v : ''); } catch (e) {} }
+    function setProvider(v) { return win.AUI.lsSet(SRC_KEY, PROVIDERS.includes(v) ? v : '', '換頭像用哪個畫圖接口'); }
 
     // 開著的時候才教 AI。這段會被 buildContext 塞進 system prompt。
     function instruction() {
@@ -138,7 +138,7 @@
     const SEE_MAX_PX = 256;                  // 送出去之前縮到這個邊長，頭像不需要更大
 
     function seeEnabled() { try { return localStorage.getItem(SEE_ON_KEY) === '1'; } catch (e) { return false; } }
-    function setSeeEnabled(on) { try { localStorage.setItem(SEE_ON_KEY, on ? '1' : '0'); } catch (e) {} }
+    function setSeeEnabled(on) { return win.AUI.lsSet(SEE_ON_KEY, on ? '1' : '0', '讓角色看我頭像的開關'); }
 
     // 🚨 頭像是「每間聊天室各自一個」（聊天詳情裡的『我的頭像』＝chat.userAvatar），
     //    不是人設那顆。她第一次測就撞到：在聊天室換了自己的頭像，角色看到的還是預設問號，
@@ -149,7 +149,7 @@
         try { const o = JSON.parse(localStorage.getItem(_memKey(chatId)) || 'null'); return (o && typeof o === 'object') ? o : null; } catch (e) { return null; }
     }
     function setSeeMemory(chatId, src, desc) {
-        try { localStorage.setItem(_memKey(chatId), JSON.stringify({ src: String(src || ''), desc: String(desc || ''), ts: Date.now() })); } catch (e) {}
+        return win.AUI.lsSet(_memKey(chatId), JSON.stringify({ src: String(src || ''), desc: String(desc || ''), ts: Date.now() }), '角色對你頭像的印象');
     }
     function clearSeeMemory(chatId) { try { localStorage.removeItem(_memKey(chatId)); } catch (e) {} }
 
@@ -245,8 +245,7 @@
     function rememberSeen(chatId, desc) {
         const d = String(desc || '').trim();
         if (!d) return false;
-        setSeeMemory(chatId, myAvatarSrc(chatId), d);
-        return true;
+        return setSeeMemory(chatId, myAvatarSrc(chatId), d);
     }
 
     win.WX_AVATAR_AI = {
